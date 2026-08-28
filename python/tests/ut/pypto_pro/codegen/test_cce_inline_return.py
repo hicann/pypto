@@ -15,10 +15,10 @@ import pypto_pro.language as pl
 import pytest
 
 
-def _compile_to_cce(kernel_def) -> str:
+def _compile_to_cce(kernel) -> str:
     from pypto_pro.runtime.jit import _assemble_cv_source, _parse_and_codegen_targets
 
-    cube, vector = _parse_and_codegen_targets(kernel_def, "a5", "")
+    cube, vector = _parse_and_codegen_targets(kernel.to_kernel_def(), "a5", "")
     return _assemble_cv_source(cube, vector).content
 
 
@@ -59,7 +59,7 @@ def _consume_pair(bundle, index):
     return
 
 
-@pl.kernel
+@pl.jit
 def _inline_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
     extent = _choose_extent(_choose_in_loop(a.shape[0]))
     start, stop = _pair(0, extent)
@@ -251,7 +251,7 @@ def _ret_void_twice(value):
 # its single use, or clobbered on the way out of the wrapper, would show up here.
 
 
-@pl.kernel
+@pl.jit
 def _named_tuple_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
     bounds = _ret_named_tuple(a.shape[0])
     total = bounds.lo + bounds.hi
@@ -259,7 +259,7 @@ def _named_tuple_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16
         pl.system.bar_all()
 
 
-@pl.kernel
+@pl.jit
 def _struct_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
     bounds = _ret_struct(a.shape[0])
     total = bounds.v + bounds.w
@@ -267,7 +267,7 @@ def _struct_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
         pl.system.bar_all()
 
 
-@pl.kernel
+@pl.jit
 def _struct_in_tuple_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
     bundle = _ret_struct_in_tuple(a.shape[0])
     bounds = bundle[0]
@@ -276,7 +276,7 @@ def _struct_in_tuple_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_
         pl.system.bar_all()
 
 
-@pl.kernel
+@pl.jit
 def _struct_array_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
     first, second = _ret_struct_array(a.shape[0])
     total = first.v + second.w
@@ -284,7 +284,7 @@ def _struct_array_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP1
         pl.system.bar_all()
 
 
-@pl.kernel
+@pl.jit
 def _tile_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
     tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
     tile_a = pl.make_tile(tile_type, addr=0x0000, size=16384)
@@ -294,7 +294,7 @@ def _tile_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
     pl.store(a, picked, [0, 0])
 
 
-@pl.kernel
+@pl.jit
 def _void_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
     _ret_void_twice(a.shape[0])
     for _i in pl.range(0, a.shape[0], 1):
@@ -440,7 +440,7 @@ def _both_branches_return(value):
 
 
 def _make_shape_kernel(helper):
-    @pl.kernel
+    @pl.jit
     def kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
         limit = helper(a.shape[0])
         doubled = limit + limit
@@ -450,7 +450,7 @@ def _make_shape_kernel(helper):
     return kernel
 
 
-@pl.kernel
+@pl.jit
 def _for_if_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
     limit = _for_if_return(a.shape[0])
     doubled = limit + limit
@@ -458,7 +458,7 @@ def _for_if_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
         pl.system.bar_all()
 
 
-@pl.kernel
+@pl.jit
 def _if_for_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
     limit = _if_for_return(a.shape[0], a.shape[1])
     doubled = limit + limit

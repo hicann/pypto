@@ -34,13 +34,15 @@ def test_inline_helper_multiple_value_returns_use_one_wrapper():
             return value + 1
         return value - 1
 
-    @pl.function
-    def caller(value: pl.DT_INT64) -> pl.DT_INT64:
-        return choose(value)
+    @pl.jit(auto_mutex=False)
+    def caller(value: pl.DT_INT64):
+        _test_result = choose(value)
+
+    caller_program, _ = caller.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    caller = caller_program.get_function(caller.__name__)
 
     statements = list(_walk_statements(caller.body))
     helper_loops = [stmt for stmt in statements if isinstance(stmt, ir.WhileStmt)]
-    helper_returns = [stmt for stmt in statements if isinstance(stmt, ir.ReturnStmt)]
     return_assigns = [
         stmt
         for stmt in statements
@@ -48,7 +50,6 @@ def test_inline_helper_multiple_value_returns_use_one_wrapper():
     ]
 
     assert len(helper_loops) == 1
-    assert len(helper_returns) == 1
     assert len(return_assigns) == 3  # Unknown init plus the two concrete return assignments.
     assert len({stmt.var.name for stmt in return_assigns}) == 1
 
@@ -62,9 +63,12 @@ def test_inline_helper_return_inside_loop_adds_propagation_guard():
             index = index + 1
         return value
 
-    @pl.function
-    def caller(value: pl.DT_INT64) -> pl.DT_INT64:
-        return choose(value)
+    @pl.jit(auto_mutex=False)
+    def caller(value: pl.DT_INT64):
+        _test_result = choose(value)
+
+    caller_program, _ = caller.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    caller = caller_program.get_function(caller.__name__)
 
     wrapper = next(stmt for stmt in caller.body.stmts if isinstance(stmt, ir.WhileStmt))
     nested_loop_index = next(i for i, stmt in enumerate(wrapper.body.stmts) if isinstance(stmt, ir.WhileStmt))
@@ -95,9 +99,12 @@ def test_inline_helper_loop_guard_folds_constant_false():
             return doubled
         return result
 
-    @pl.function
-    def caller(value: pl.DT_INT64) -> pl.DT_INT64:
-        return outer(value)
+    @pl.jit(auto_mutex=False)
+    def caller(value: pl.DT_INT64):
+        _test_result = outer(value)
+
+    caller_program, _ = caller.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    caller = caller_program.get_function(caller.__name__)
 
     outer_wrapper = next(stmt for stmt in caller.body.stmts if isinstance(stmt, ir.WhileStmt))
     outer_for_index = next(i for i, stmt in enumerate(outer_wrapper.body.stmts) if isinstance(stmt, ir.ForStmt))
@@ -112,10 +119,13 @@ def test_inline_helper_bare_returns_share_return_state():
             return
         return None
 
-    @pl.function
-    def caller(value: pl.DT_INT64) -> pl.DT_INT64:
+    @pl.jit(auto_mutex=False)
+    def caller(value: pl.DT_INT64):
         stop_early(value)
-        return value
+        _test_result = value
+
+    caller_program, _ = caller.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    caller = caller_program.get_function(caller.__name__)
 
     statements = list(_walk_statements(caller.body))
     assert sum(isinstance(stmt, ir.WhileStmt) for stmt in statements) == 1
@@ -130,9 +140,12 @@ def test_inline_helper_mixed_bare_and_value_returns_share_return_val():
             return value
         return
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def caller(value: pl.DT_INT64):
-        return choose(value)
+        _test_result = choose(value)
+
+    caller_program, _ = caller.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    caller = caller_program.get_function(caller.__name__)
 
     statements = list(_walk_statements(caller.body))
     assert sum(
@@ -146,9 +159,12 @@ def test_inline_helper_without_return_uses_default_return_val():
         for _ in pl.range(1):
             result = result + 1
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def caller(value: pl.DT_INT64):
-        return update(value)
+        _test_result = update(value)
+
+    caller_program, _ = caller.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    caller = caller_program.get_function(caller.__name__)
 
     statements = list(_walk_statements(caller.body))
     wrapper = next(stmt for stmt in caller.body.stmts if isinstance(stmt, ir.WhileStmt))
@@ -164,36 +180,41 @@ def test_inline_helper_value_return_can_fall_through():
         if value > 0:
             return value
 
-    @pl.function
-    def caller(value: pl.DT_INT64) -> pl.DT_INT64:
-        return choose(value)
+    @pl.jit(auto_mutex=False)
+    def caller(value: pl.DT_INT64):
+        _test_result = choose(value)
+
+    caller_program, _ = caller.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    caller = caller_program.get_function(caller.__name__)
 
     assert any(isinstance(stmt, ir.WhileStmt) for stmt in caller.body.stmts)
 
 
 def test_kernel_uses_runtime_tile_valid_shape_ir():
-    @pl.function(type=pl.FunctionType.InCore)
-    def caller():
+    @pl.jit(auto_mutex=False)
+    def caller(_jit_entry: pl.DT_INT64):
         tile_type = pl.TileType(shape=[16, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         tile = pl.make_tile(tile_type, addr=0, size=1024)
         _kernel_rows = tile.valid_shape[0]
         _kernel_cols = tile.valid_shape[1]
 
+    caller_program, _ = caller.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    caller = caller_program.get_function(caller.__name__)
+
     function_ir = str(caller)
     assert function_ir.count("block.tile_valid_shape") == 2
 
 
-@pytest.mark.parametrize("index", ["True", "0.0", "2", "-3"])
+@pytest.mark.parametrize("index", [True, 0.0, 2, -3])
 def test_tile_valid_shape_rejects_invalid_index(index):
-    code = f"""
-@pl.function(type=pl.FunctionType.InCore)
-def invalid_valid_shape():
-    tile_type = pl.TileType(shape=[16, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile = pl.make_tile(tile_type, addr=0, size=1024)
-    value = tile.valid_shape[{index}]
-"""
     with pytest.raises((ParserSyntaxError, ParserTypeError)):
-        pl.parse(code)
+        @pl.jit(auto_mutex=False)
+        def invalid_valid_shape(_jit_entry: pl.DT_INT64):
+            tile_type = pl.TileType(shape=[16, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+            tile = pl.make_tile(tile_type, addr=0, size=1024)
+            value = tile.valid_shape[index]  # noqa: F841
+
+        invalid_valid_shape.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_vector_function_rejects_explicit_return():
@@ -203,10 +224,12 @@ def test_vector_function_rejects_explicit_return():
 
     with pytest.raises(ParserSyntaxError, match="cannot contain return"):
 
-        @pl.function
-        def caller(value: pl.DT_INT64) -> pl.DT_INT64:
+        @pl.jit(auto_mutex=False)
+        def caller(value: pl.DT_INT64):
             invalid_vf()
-            return value
+            _test_result = value
+
+        caller.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_vector_function_rejects_non_vector_helper_call():
@@ -219,7 +242,9 @@ def test_vector_function_rejects_non_vector_helper_call():
 
     with pytest.raises(ParserSyntaxError, match="cannot call non-vector inline function 'helper'"):
 
-        @pl.function
-        def caller(value: pl.DT_INT64) -> pl.DT_INT64:
+        @pl.jit(auto_mutex=False)
+        def caller(value: pl.DT_INT64):
             invalid_vf(value)
-            return value
+            _test_result = value
+
+        caller.to_kernel_def().parse_target_program(ir.SectionKind.Vector)

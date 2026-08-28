@@ -21,10 +21,10 @@ import re
 import pypto_pro.language as pl
 
 
-def _compile_to_cce(kernel_def) -> str:
+def _compile_to_cce(kernel) -> str:
     from pypto_pro.runtime.jit import _assemble_cv_source, _parse_and_codegen_targets
 
-    cube, vector = _parse_and_codegen_targets(kernel_def, "a5", "")
+    cube, vector = _parse_and_codegen_targets(kernel.to_kernel_def(), "a5", "")
     return _assemble_cv_source(cube, vector).content
 
 
@@ -55,7 +55,7 @@ def _assert_materialized_jump_guard(cpp: str, condition_fragment: str, jump: str
 # ---------------------------------------------------------------------------
 
 
-@pl.kernel
+@pl.jit
 def _while_basic_kernel(
     a: pl.Tensor[[64, 128], pl.DT_FP16],
     b: pl.Tensor[[64, 128], pl.DT_FP16],
@@ -74,7 +74,7 @@ def _while_basic_kernel(
         i = i + 1
 
 
-@pl.kernel
+@pl.jit
 def _while_continue_kernel(
     a: pl.Tensor[[64, 128], pl.DT_FP16],
     b: pl.Tensor[[64, 128], pl.DT_FP16],
@@ -96,7 +96,7 @@ def _while_continue_kernel(
         i = i + 1
 
 
-@pl.kernel
+@pl.jit
 def _while_break_kernel(
     a: pl.Tensor[[64, 128], pl.DT_FP16],
     b: pl.Tensor[[64, 128], pl.DT_FP16],
@@ -117,7 +117,7 @@ def _while_break_kernel(
         i = i + 1
 
 
-@pl.kernel
+@pl.jit
 def _while_break_carry_kernel(
     a: pl.Tensor[[64, 128], pl.DT_FP16],
     b: pl.Tensor[[64, 128], pl.DT_FP16],
@@ -137,7 +137,7 @@ def _while_break_carry_kernel(
         acc = acc + i
 
 
-@pl.kernel
+@pl.jit
 def _while_accumulate_kernel(
     a: pl.Tensor[[64, 128], pl.DT_FP16],
     b: pl.Tensor[[64, 128], pl.DT_FP16],
@@ -158,7 +158,7 @@ def _while_accumulate_kernel(
         i = i + 1
 
 
-@pl.kernel(auto_mutex=True)
+@pl.jit(auto_mutex=True)
 def _while_getval_condition_kernel(
     a: pl.Tensor[[64, 128], pl.DT_FP16],
 ):
@@ -174,7 +174,7 @@ def _while_getval_condition_kernel(
                 break
 
 
-@pl.kernel
+@pl.jit
 def _for_continue_kernel(
     a: pl.Tensor[[64, 128], pl.DT_FP16],
     b: pl.Tensor[[64, 128], pl.DT_FP16],
@@ -186,7 +186,7 @@ def _for_continue_kernel(
         acc = acc + i
 
 
-@pl.kernel
+@pl.jit
 def _for_break_kernel(
     a: pl.Tensor[[64, 128], pl.DT_FP16],
     b: pl.Tensor[[64, 128], pl.DT_FP16],

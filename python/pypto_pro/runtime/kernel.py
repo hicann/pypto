@@ -10,52 +10,117 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """
-Kernel decorator for PyPTO Runtime.
+Internal kernel representation used by the PyPTO Pro JIT.
 
-The @kernel decorator provides a simplified API that wraps a single function
-into a KernelDef, deferring AST parsing to compile time.
-
-Usage:
-    import pypto_pro.language as pl
-
-    @pl.jit()
-    def vector_add(
-        x: pl.Tensor[[1024], pl.DT_FP32],
-        y: pl.Tensor[[1024], pl.DT_FP32],
-    ) -> pl.Tensor[[1024], pl.DT_FP32]:
-        tile_x = pl.load(x, [0], [1024])
-        tile_y = pl.load(y, [0], [1024])
-        result = pl.add(tile_x, tile_y)
-        out = pl.create([1024], dtype=pl.DT_FP32)
-        return pl.store(result, [0], [1024], out)
-
-    # Direct call (default stream, block_dim=1):
-    vector_add(x, y)
-
-    # Bracket-launch syntax:
-    vector_add[stream, block_dim](x, y)
+Public kernels are defined with @pl.jit. KernelDef stores the captured source
+and parser state for one specialization after the JIT frontend has resolved its
+compile-time configuration.
 """
 
 from __future__ import annotations
 
-__all__ = ["kernel"]
+__all__ = ["KernelDef"]
 
 
 import ast
 import inspect
-import sys
 import textwrap
-from typing import Any, Callable, Optional
+from typing import Any, Callable, TypeVar
 
 from pypto.pypto_impl import ir
 from pypto_pro.language.parser._ast_parser import ASTParser
-from pypto_pro.language.parser.decorator import (
-    _attach_source_lines_to_error,
-    _calculate_col_offset,
-    _find_ast_node,
-    _parse_ast_tree,
-)
 from pypto_pro.language.parser.diagnostics import ParserError, ParserSyntaxError
+
+
+def _calculate_col_offset(source_lines: list[str]) -> int:
+    """Calculate the column offset (indentation) of the first non-empty line.
+
+    This is needed because ast.parse() requires code starting at column 0,
+    but we need to report errors at the correct column in the original file.
+
+    Args:
+        source_lines: List of source code lines
+
+    Returns:
+        Column offset (number of leading spaces/tabs in first non-empty line)
+    """
+    for line in source_lines:
+        if line.strip():  # Skip empty lines
+            return len(line) - len(line.lstrip())
+    return 0
+
+
+def _parse_ast_tree(source_code: str, entity_type: str) -> ast.AST:
+    """Parse source code into an AST tree with proper error handling.
+
+    Args:
+        source_code: Python source code to parse
+        entity_type: Type of entity being parsed ("function" or "class") for error messages
+
+    Returns:
+        Parsed AST tree
+
+    Raises:
+        ParserSyntaxError: If the source code has syntax errors
+    """
+    try:
+        return ast.parse(source_code)
+    except SyntaxError as e:
+        raise ParserSyntaxError(
+            f"Failed to parse {entity_type} source: {e.msg}",
+            hint=f"Check for Python syntax errors in your {entity_type}",
+        ) from e
+
+
+TypeASTNode = TypeVar("TypeASTNode", ast.FunctionDef, ast.ClassDef)
+
+
+def _find_ast_node(tree: ast.AST, node_type: type[TypeASTNode], name: str, entity_type: str) -> TypeASTNode:
+    """Find a specific AST node by type and name.
+
+    Args:
+        tree: AST tree to search
+        node_type: Type of AST node to find (ast.FunctionDef or ast.ClassDef)
+        name: Name of the node to find
+        entity_type: Type of entity for error messages ("function" or "class")
+
+    Returns:
+        Found AST node
+
+    Raises:
+        ParserSyntaxError: If the node cannot be found
+    """
+    for node in ast.walk(tree):
+        if isinstance(node, node_type) and node.name == name:
+            return node
+
+    raise ParserSyntaxError(
+        f"Could not find {entity_type} definition for {name}",
+        hint=f"Ensure the {entity_type} is properly defined",
+    )
+
+
+def _attach_source_lines_to_error(error: ParserError, source_file: str, source_lines_raw: list[str]) -> None:
+    """Attach source lines to a ParserError if not already present.
+
+    Args:
+        error: ParserError to attach source lines to
+        source_file: Path to the source file
+        source_lines_raw: Raw source lines as fallback
+    """
+    if error.source_lines is None:
+        # Use the span's filename if it differs (e.g., error in an inline function)
+        target_file = source_file
+        if error.span and isinstance(error.span, dict):
+            span_file = error.span.get("filename")
+            if span_file and span_file != source_file:
+                target_file = span_file
+        try:
+            with open(target_file, encoding="utf-8") as f:
+                error.source_lines = f.read().split("\n")
+        except Exception:
+            # Fallback to the raw source lines if we can't read the file
+            error.source_lines = source_lines_raw
 
 
 def extract_func_source_info(f: Callable):
@@ -180,7 +245,7 @@ class KernelDef:
                 bound_signature=bound_signature,
                 # Kernels use a void ABI: they may early-return, but cannot return values.
                 void_return_only=True,
-                void_return_context="@pl.jit/@pl.kernel",
+                void_return_context="@pl.jit",
                 allow_early_return=True,
             )
 
@@ -218,91 +283,3 @@ class KernelDef:
         except ParserError as e:
             _attach_source_lines_to_error(e, self._source_file, self._source_lines_raw)
             raise
-
-
-def _call_meta_and_capture_env(meta_fn):
-    """Run meta_fn() and capture its local namespace (for types etc.). Returns (return_value, env dict)."""
-    env = {}
-
-    if meta_fn is None:
-        return None, env
-
-    def trace(frame, event, arg):
-        if event == "return":
-            env.clear()
-            env.update(frame.f_locals)
-        return trace
-
-    old_trace = sys.gettrace()
-    sys.settrace(trace)
-    try:
-        result = meta_fn()
-    finally:
-        sys.settrace(old_trace)
-    return result, env
-
-
-def kernel(
-    func: Optional[Callable] = None,
-    meta_data=None,
-    *,
-    name: Optional[str] = None,
-    func_type: ir.FunctionType = ir.FunctionType.Opaque,
-    strict_ssa: bool = False,
-    auto_mutex: bool = True,
-    pipeline=None,
-) -> "KernelDef":
-    """Decorator that captures a DSL function for deferred compilation.
-
-    The decorated function becomes a :class:`KernelDef` — a lazy definition
-    that records the source code, AST, and closure at decoration time but
-    defers parsing until JIT codegen runs.  This allows the target
-    architecture to be specified once at compile time.
-
-    Args:
-        func: Python function to capture.
-        name: Optional program name (defaults to function name).
-        func_type: Function type (Opaque, InCore, or Helper).
-        strict_ssa: If True, enforce SSA (single assignment per variable).
-
-    Returns:
-        KernelDef consumed by the JIT codegen path.
-
-    Example:
-        >>> @pl.kernel
-        ... def my_kernel(x: pl.Tensor[[64], pl.DT_FP32]) -> pl.Tensor[[64], pl.DT_FP32]:
-        ...     tile = pl.load(x, [0], [64])
-        ...     result = pl.add(tile, tile)
-        ...     return pl.store(result, [0], [64], x)
-        >>> isinstance(my_kernel, KernelDef)
-        True
-    """
-    # Capture caller's scope so the parser can resolve names like `pl`, etc.
-    # Must be captured here (not inside _decorator) to get the correct call-site frame.
-    caller_frame = inspect.currentframe().f_back
-    closure_vars = {**caller_frame.f_globals, **caller_frame.f_locals}
-
-    def _decorator(f: Callable) -> KernelDef:
-        (source_file, source_lines, source_lines_raw, line_offset, col_offset, func_def) = extract_func_source_info(f)
-
-        return KernelDef(
-            func=f,
-            source_file=source_file,
-            source_lines=source_lines,
-            source_lines_raw=source_lines_raw,
-            line_offset=line_offset,
-            col_offset=col_offset,
-            func_def=func_def,
-            closure_vars=closure_vars,
-            name=name,
-            func_type=func_type,
-            strict_ssa=strict_ssa,
-            meta_data=meta_data,
-            auto_mutex=auto_mutex,
-            pipeline=pipeline,
-        )
-
-    if func is None:
-        return _decorator
-    else:
-        return _decorator(func)

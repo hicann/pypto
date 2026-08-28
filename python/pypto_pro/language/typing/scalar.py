@@ -33,13 +33,14 @@ class Scalar:
     Examples:
         >>> import pypto_pro.language as pl
         >>>
-        >>> @pl.function
+        >>> @pl.jit
         ... def add_scalar(
         ...     x: pl.Tensor[[64], pl.DT_FP32],
-        ...     scalar: pl.DT_FP32
-        ... ) -> pl.Tensor[[64], pl.DT_FP32]:
-        ...     result: pl.Tensor[[64], pl.DT_FP32] = pl.add(x, scalar)
-        ...     return result
+        ...     scalar: pl.DT_FP32,
+        ...     out: pl.Tensor[[64], pl.DT_FP32],
+        ... ):
+        ...     # Build the kernel body with explicit tile operations.
+        ...     ...
     """
 
     def __init__(

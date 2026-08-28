@@ -9,10 +9,8 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """Unit tests for TypeResolver."""
-from __future__ import annotations
-
 # DSL function bodies are parsed as AST, not executed -suppress pyright errors
-# from type-checking the annotations and kwargs inside @pl.function bodies.
+# from type-checking the annotations and kwargs inside kernel bodies.
 import ast
 from typing import TYPE_CHECKING, Any
 
@@ -33,6 +31,7 @@ def _make_resolver(
     """Create a TypeResolver with ExprEvaluator from closure_vars."""
     ev = ExprEvaluator(closure_vars=closure_vars or {})
     return TypeResolver(expr_evaluator=ev, scope_lookup=scope_lookup)
+
 
 
 @pytest.mark.parametrize(
@@ -131,13 +130,16 @@ def test_resolve_tensor_layout_with_shape_variable():
 
 
 def test_function_with_tensor_layout():
-    """@pl.function with layout in parameter and return type."""
+    """Kernel parameter annotations preserve tensor layout."""
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(
         x: pl.Tensor[[64, 128], pl.DT_FP16, pl.NZ],
-    ) -> pl.Tensor[[64, 128], pl.DT_FP16, pl.NZ]:
-        return x
+    ):
+        _test_result = x
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
     param_type = func.params[0].type
@@ -146,21 +148,19 @@ def test_function_with_tensor_layout():
     assert param_type.tensor_view is not None
     assert param_type.tensor_view.layout == ir.TensorLayout.NZ
 
-    ret_type = func.return_types[0]
-    assert isinstance(ret_type, ir.TensorType)
-    assert ret_type.tensor_view is not None
-    assert ret_type.tensor_view.layout == ir.TensorLayout.NZ
-
 
 def test_function_mixed_layout_and_no_layout():
-    """@pl.function with some params having layout and some not."""
+    """Kernel with some params having layout and some not."""
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(
         a: pl.Tensor[[64, 128], pl.DT_FP16, pl.NZ],
         b: pl.Tensor[[64, 128], pl.DT_FP16],
-    ) -> pl.Tensor[[64, 128], pl.DT_FP16]:
-        return a
+    ):
+        _test_result = a
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     a_type = func.params[0].type
     b_type = func.params[1].type
@@ -172,34 +172,35 @@ def test_function_mixed_layout_and_no_layout():
 
 
 def test_program_with_tensor_layout():
-    """@pl.program with layout annotations."""
+    """Kernel with layout annotations."""
 
-    @pl.program
-    class MyProgram:
-        @pl.function
-        def compute(
-            self,
-            x: pl.Tensor[[64, 128], pl.DT_FP16, pl.NZ],
-        ) -> pl.Tensor[[64, 128], pl.DT_FP16, pl.NZ]:
-            return x
+    @pl.jit(auto_mutex=False)
+    def compute(
+        x: pl.Tensor[[64, 128], pl.DT_FP16, pl.NZ],
+    ):
+        _test_result = x
 
-    assert isinstance(MyProgram, ir.Program)
-    func = list(MyProgram.functions.values())[0]
-    param_type = func.params[0].type
+    compute_program, _ = compute.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    compute = compute_program.get_function(compute.__name__)
+
+    param_type = compute.params[0].type
     assert isinstance(param_type, ir.TensorType)
     assert param_type.tensor_view is not None
     assert param_type.tensor_view.layout == ir.TensorLayout.NZ
 
 
 def test_function_layout_from_closure_variable():
-    """@pl.function with layout from closure variable."""
+    """Kernel with layout from closure variable."""
     layout = pl.NZ
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(
         x: pl.Tensor[[64, 128], pl.DT_FP16, layout],
-    ) -> pl.Tensor[[64, 128], pl.DT_FP16, layout]:
-        return x
+    ):
+        _test_result = x
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     param_type = func.params[0].type
     assert isinstance(param_type, ir.TensorType)
@@ -217,11 +218,14 @@ def test_function_layout_from_closure_variable():
 def test_parametrized_layout(layout, expected):
     """pytest.mark.parametrize with layout."""
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(
         x: pl.Tensor[[64, 128], pl.DT_FP16, layout],
-    ) -> pl.Tensor[[64, 128], pl.DT_FP16, layout]:
-        return x
+    ):
+        _test_result = x
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     param_type = func.params[0].type
     assert isinstance(param_type, ir.TensorType)
@@ -230,13 +234,16 @@ def test_parametrized_layout(layout, expected):
 
 
 def test_function_with_dn_layout():
-    """@pl.function with DN layout for column-major tensors."""
+    """Kernel with DN layout for column-major tensors."""
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(
         x: pl.Tensor[[16, 1], pl.DT_FP16, pl.DN],
-    ) -> pl.Tensor[[16, 1], pl.DT_FP16, pl.DN]:
-        return x
+    ):
+        _test_result = x
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     param_type = func.params[0].type
     assert isinstance(param_type, ir.TensorType)

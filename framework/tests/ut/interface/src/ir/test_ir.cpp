@@ -369,7 +369,7 @@ TEST_F(IRStmtStrTest, TestFunctionStr)
     auto func = std::make_shared<Function>("test_func", std::vector<VarPtr>{x}, std::vector<TypePtr>{st}, assign, sp);
 
     ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(func)),
-              "@ir.function\ndef test_func(x: ir.Scalar[ir.INT32]) -> ir.Scalar[ir.INT32]:\n"
+              "def test_func(x: ir.Scalar[ir.INT32]) -> ir.Scalar[ir.INT32]:\n"
               "    x: ir.Scalar[ir.INT32] = 42");
 }
 
@@ -383,10 +383,8 @@ TEST_F(IRStmtStrTest, TestProgramStr)
     auto prog = std::make_shared<Program>(std::vector<FunctionPtr>{func1, func2}, "test_prog", sp);
 
     std::string expected = "# ir.program: test_prog\n"
-                           "@ir.function\n"
                            "def test_func(x: ir.Scalar[ir.INT32]) -> ir.Scalar[ir.INT32]:\n"
                            "    x: ir.Scalar[ir.INT32] = 42\n"
-                           "@ir.function\n"
                            "def test_func2(x: ir.Scalar[ir.INT32]) -> ir.Scalar[ir.INT32]:\n"
                            "    x: ir.Scalar[ir.INT32] = 42";
     ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(prog)), expected);

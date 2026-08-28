@@ -32,11 +32,11 @@ def _ir_to_str(prog: ir.Program) -> str:
 
 
 def _parse_kernel(kernel_def) -> ir.Program:
-    return kernel_def.parse_target_program(ir.SectionKind.Vector)[0]
+    return kernel_def.to_kernel_def().parse_target_program(ir.SectionKind.Vector)[0]
 
 
 def test_constant_mutex_lock_unlock_uses_dynamic_ir():
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=0, size=128)
@@ -50,7 +50,7 @@ def test_constant_mutex_lock_unlock_uses_dynamic_ir():
 
 
 def test_keyword_form():
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=0, size=128)
@@ -64,7 +64,7 @@ def test_keyword_form():
 
 
 def test_contiguous_addr_auto_offset():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(a: pl.Tensor[[128, 128], pl.DT_FP16]):
         tt = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         db = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])
@@ -80,7 +80,7 @@ def test_contiguous_addr_auto_offset():
 
 
 def test_discrete_addrs_list():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(a: pl.Tensor[[128, 128], pl.DT_FP16]):
         tt = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         db = pl.make_tile_group(type=tt, addrs=[0, 0x10000], mutex_ids=[0, 1])
@@ -97,7 +97,7 @@ def test_discrete_addrs_list():
 def test_addrs_from_kernel_local_constant():
     """addrs=/mutex_ids= accept kernel-local constants, not just literals."""
 
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(a: pl.Tensor[[128, 128], pl.DT_FP16]):
         tt = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         base_addr = 0x10000
@@ -114,7 +114,7 @@ def test_addrs_from_kernel_local_constant():
 
 
 def test_discrete_addrs_list_from_kernel_local_constant():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(a: pl.Tensor[[128, 128], pl.DT_FP16]):
         tt = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         base_addr = 0x10000
@@ -131,7 +131,7 @@ def test_discrete_addrs_list_from_kernel_local_constant():
 
 
 def test_runtime_addr_rejected_with_compile_time_hint():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(a: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP16]):
         tt = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         addr = a.shape[0] * 2
@@ -147,7 +147,7 @@ def test_runtime_addr_rejected_with_compile_time_hint():
 def test_slot_stride_matches_a_standalone_tile_of_the_same_type():
     """A group slot is exactly as wide as pl.make_tile() of the same TileType."""
 
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(a: pl.Tensor[[64, 96], pl.DT_FP32]):
         tt = pl.TileType(shape=[64, 96], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat)
         standalone = pl.make_tile(tt, addr=0x40000)
@@ -166,7 +166,7 @@ def test_slot_stride_matches_a_standalone_tile_of_the_same_type():
 def test_slot_stride_rounds_a_sub_byte_dtype_up_to_one_byte_per_element():
     """A 4-bit element cannot reserve half a byte, so each slot over-reserves."""
 
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(a: pl.Tensor[[64, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[64, 64], dtype=pl.DT_INT4, target_memory=pl.MemorySpace.Mat)
         db = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])  # noqa: F841
@@ -178,7 +178,7 @@ def test_slot_stride_rounds_a_sub_byte_dtype_up_to_one_byte_per_element():
 def test_tile_type_with_a_runtime_shape_rejected():
     """The slot stride is a compile-time byte count, so the shape has to be one too."""
 
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(a: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP16]):
         # A tuple (not a list) skips the TileType compile-time check, so the
         # runtime dimension survives into the TileType.
@@ -191,7 +191,7 @@ def test_tile_type_with_a_runtime_shape_rejected():
 
 
 def test_auto_mutex_single_tile():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[3])
@@ -205,7 +205,7 @@ def test_auto_mutex_single_tile():
 
 
 def test_auto_mutex_group_loop():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[128, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         q_l1_db = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])
@@ -220,7 +220,7 @@ def test_auto_mutex_group_loop():
 
 
 def test_next_advances():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[32, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])
@@ -237,7 +237,7 @@ def test_next_advances():
 
 
 def test_current_does_not_advance():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[32, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])
@@ -253,7 +253,7 @@ def test_current_does_not_advance():
 
 
 def test_previous_no_advance():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[64, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])
@@ -269,7 +269,7 @@ def test_previous_no_advance():
 
 
 def test_single_tile_group_fast_path():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[32, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[5])
@@ -286,7 +286,7 @@ def test_single_tile_group_fast_path():
 
 
 def test_depth_creates_group_without_mutex_ids():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[32, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=None, depth=2)
@@ -298,7 +298,7 @@ def test_depth_creates_group_without_mutex_ids():
 
 
 def test_depth_keyword_with_explicit_none_mutex_ids():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[32, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=None, depth=2)
@@ -310,7 +310,7 @@ def test_depth_keyword_with_explicit_none_mutex_ids():
 
 
 def test_depth_must_equal_mutex_ids_length():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[32, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1], depth=3)
@@ -328,7 +328,7 @@ def test_depth_must_equal_mutex_ids_length():
 def test_subscript_const_index_materializes_mutex_companions():
     """A literal index keeps its slot while mutex IDs use companion variables."""
 
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[32, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[6, 7])
@@ -345,7 +345,7 @@ def test_subscript_const_index_materializes_mutex_companions():
 def test_subscript_negative_index_rejected():
     """Negative indices are outside the supported [0, depth) interval."""
 
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[32, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[6, 7, 8])
@@ -358,7 +358,7 @@ def test_subscript_negative_index_rejected():
 def test_subscript_does_not_touch_cursor():
     """Subscript is random access: the rotation state stays where next() left it."""
 
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[32, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])
@@ -377,7 +377,7 @@ def test_subscript_does_not_touch_cursor():
 def test_subscript_dynamic_index_is_not_implicitly_wrapped():
     """A runtime index is used unchanged and locked through the dyn if-chain."""
 
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[128, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])
@@ -396,7 +396,7 @@ def test_subscript_dynamic_index_is_not_implicitly_wrapped():
 def test_subscript_dynamic_index_expression():
     """The index may be any scalar expression, e.g. a look-ahead slot."""
 
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[128, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])
@@ -413,7 +413,7 @@ def test_subscript_dynamic_index_expression():
 def test_subscript_single_tile_group_requires_bounded_index():
     """A dynamic index for a one-slot group must explicitly reduce to zero."""
 
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[128, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[5])
@@ -433,7 +433,7 @@ def test_subscript_two_slots_in_one_op_dedup():
     ids go into one mutex_lock_dyn whose codegen guards the second with `!=`.
     """
 
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[128, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[10, 11])
@@ -449,7 +449,7 @@ def test_subscript_two_slots_in_one_op_dedup():
 def test_subscript_mixes_with_next():
     """Subscript and cursor access address the same slots of the same group."""
 
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[128, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])
@@ -464,7 +464,7 @@ def test_subscript_mixes_with_next():
 
 
 def test_subscript_const_index_out_of_range():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[32, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])
@@ -475,7 +475,7 @@ def test_subscript_const_index_out_of_range():
 
 
 def test_subscript_slice_rejected():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[32, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])
@@ -486,7 +486,7 @@ def test_subscript_slice_rejected():
 
 
 def test_subscript_multi_dim_index_rejected():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[32, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])
@@ -504,7 +504,7 @@ def test_subscript_multi_dim_index_rejected():
 def test_dynamic_slot_assignment_does_not_leak_from_branch():
     """A branch-local tile assignment does not replace the outer tile binding."""
 
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[128, 32], pl.DT_FP16], n: pl.DT_INT32):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])
@@ -520,7 +520,7 @@ def test_dynamic_slot_assignment_does_not_leak_from_branch():
 
 
 def test_dynamic_slot_assignment_does_not_leak_from_loop():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[128, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])
@@ -538,7 +538,7 @@ def test_dynamic_slot_assignment_does_not_leak_from_loop():
 def test_const_slot_assignment_merges_from_branch():
     """A reassigned tile and its mutex ID are merged across control flow."""
 
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[128, 32], pl.DT_FP16], n: pl.DT_INT32):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])
@@ -554,7 +554,7 @@ def test_const_slot_assignment_merges_from_branch():
 
 
 def test_dynamic_slot_used_inside_its_own_block_is_fine():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[128, 32], pl.DT_FP16], n: pl.DT_INT32):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])
@@ -569,7 +569,7 @@ def test_dynamic_slot_used_inside_its_own_block_is_fine():
 def test_dynamic_slot_selected_outside_and_used_inside_a_loop():
     """An enclosing block dominates the loop body, so the index is still in scope."""
 
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[128, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])
@@ -584,7 +584,7 @@ def test_dynamic_slot_selected_outside_and_used_inside_a_loop():
 def test_next_inside_loop_still_accepted():
     """A cursor-selected tile remains usable inside the loop scope that defines it."""
 
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[128, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])
@@ -605,7 +605,7 @@ def test_subscript_inside_inline_helper():
     def take(group, idx):
         return group[idx]
 
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[128, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])
@@ -623,7 +623,7 @@ def test_set_validshape_covers_every_tile_of_the_group():
     set_validshape per slot, not just for slot 0.
     """
 
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[128, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1, 2, 3])
@@ -640,7 +640,7 @@ def test_set_validshape_covers_every_tile_of_the_group():
 
 
 def test_const_multi_mutex_ids_use_one_dedup_op():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[32, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[[2, 3]])
@@ -654,7 +654,7 @@ def test_const_multi_mutex_ids_use_one_dedup_op():
 
 
 def test_dynamic_multi_mutex_ids_use_one_dedup_op():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[96, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[[0, 1], [2, 3], [4, 5]])
@@ -669,7 +669,7 @@ def test_dynamic_multi_mutex_ids_use_one_dedup_op():
 
 
 def test_single_and_multi_id_groups_can_share_one_op():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[96, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         g1 = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1, 2])
@@ -683,7 +683,7 @@ def test_single_and_multi_id_groups_can_share_one_op():
 
 
 def test_multi_mutex_ids_survive_ternary_merge():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[32, 32], pl.DT_FP16], choose: pl.DT_INT32):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[[0, 1], [2, 3]])
@@ -697,7 +697,7 @@ def test_multi_mutex_ids_survive_ternary_merge():
 
 
 def test_same_name_control_flow_rejects_different_mutex_id_counts():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[32, 32], pl.DT_FP16], choose: pl.DT_INT32):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g1 = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0])
@@ -715,7 +715,7 @@ def test_same_name_control_flow_rejects_different_mutex_id_counts():
 
 
 def test_same_name_control_flow_merges_equal_mutex_id_counts():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[32, 32], pl.DT_FP16], choose: pl.DT_INT32):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g1 = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[[0, 1]])
@@ -732,7 +732,7 @@ def test_same_name_control_flow_merges_equal_mutex_id_counts():
 
 
 def test_ternary_rejects_different_mutex_id_counts():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[32, 32], pl.DT_FP16], choose: pl.DT_INT32):
         tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         g1 = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0])
@@ -748,7 +748,7 @@ def test_ternary_rejects_different_mutex_id_counts():
 
 
 def test_make_tile_group_rejects_different_mutex_id_counts():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[1, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[1, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, [1, 2]])
@@ -761,7 +761,7 @@ def test_make_tile_group_rejects_different_mutex_id_counts():
 
 
 def test_make_tile_group_rejects_duplicate_id_for_one_tile():
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[1, 32], pl.DT_FP16]):
         tt = pl.TileType(shape=[1, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         pl.make_tile_group(type=tt, addrs=0, mutex_ids=[[2, 2]])
@@ -772,7 +772,7 @@ def test_make_tile_group_rejects_duplicate_id_for_one_tile():
 
 @pytest.mark.parametrize("mutex_ids", [[True], [[0, False]]])
 def test_make_tile_group_rejects_bool_mutex_id(mutex_ids):
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         pl.make_tile_group(type=tt, addrs=0, mutex_ids=mutex_ids)
@@ -783,7 +783,7 @@ def test_make_tile_group_rejects_bool_mutex_id(mutex_ids):
 
 @pytest.mark.parametrize("mutex_ids", [1, {0, 1}], ids=["integer", "set"])
 def test_make_tile_group_rejects_wrong_mutex_ids_container_type(mutex_ids):
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         pl.make_tile_group(type=tt, addrs=0, mutex_ids=mutex_ids)

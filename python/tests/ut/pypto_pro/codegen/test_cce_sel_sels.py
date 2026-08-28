@@ -23,14 +23,14 @@ import logging
 import pypto_pro.language as pl
 
 
-def _compile_to_cce(kernel_def) -> str:
+def _compile_to_cce(kernel) -> str:
     from pypto_pro.runtime.jit import _assemble_cv_source, _parse_and_codegen_targets
 
-    cube, vector = _parse_and_codegen_targets(kernel_def, "a5", "")
+    cube, vector = _parse_and_codegen_targets(kernel.to_kernel_def(), "a5", "")
     return _assemble_cv_source(cube, vector).content
 
 
-@pl.kernel
+@pl.jit
 def _sel_kernel(x: pl.Tensor[[64, 128], pl.DT_FP16]):
     tt = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
     lhs = pl.make_tile(tt, addr=0x0000, size=16384)
@@ -43,7 +43,7 @@ def _sel_kernel(x: pl.Tensor[[64, 128], pl.DT_FP16]):
     pl.select(out, mask, lhs, rhs, tmp)
 
 
-@pl.kernel
+@pl.jit
 def _sels_kernel(x: pl.Tensor[[64, 128], pl.DT_FP16]):
     tt = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
     src = pl.make_tile(tt, addr=0x0000, size=16384)
@@ -55,7 +55,7 @@ def _sels_kernel(x: pl.Tensor[[64, 128], pl.DT_FP16]):
     pl.select(out, mask, src, 0.0, tmp)
 
 
-@pl.kernel(auto_mutex=True)
+@pl.jit(auto_mutex=True)
 def _sel_auto_mutex_kernel(
     x: pl.Tensor[[64, 128], pl.DT_FP16],
 ):

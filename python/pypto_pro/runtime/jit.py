@@ -1697,9 +1697,8 @@ class _TileJitKernel:
         and the bound signature reaches codegen through ``parse_target_program`` and
         ``probe_kernel_facts`` instead (see :func:`_codegen`).
         """
-        # Create KernelDef directly with the captured closure_vars
-        # (cannot call @kernel decorator here because inspect.currentframe().f_back
-        # would point to this method instead of the user's module scope)
+        # Create KernelDef directly with the closure captured by @pl.jit at
+        # the user's decoration site.
         from pypto_pro.runtime.kernel import KernelDef, extract_func_source_info
 
         f = self._func

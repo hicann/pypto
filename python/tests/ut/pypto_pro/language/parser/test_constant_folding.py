@@ -41,8 +41,8 @@ def _assert_constant(expr, expected, dtype):
 
 
 def test_all_binary_and_comparison_operators_fold():
-    @pl.function(type=pl.FunctionType.Opaque)
-    def folded_ops():
+    @pl.jit(auto_mutex=False)
+    def folded_ops(_jit_entry: pl.DT_INT64):
         add = 7 + 3
         sub = 7 - 3
         mul = 7 * 3
@@ -60,6 +60,9 @@ def test_all_binary_and_comparison_operators_fold():
         le = 3 <= 3
         gt = 4 > 3
         ge = 4 >= 4
+
+    folded_ops_program, _ = folded_ops.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    folded_ops = folded_ops_program.get_function(folded_ops.__name__)
 
     values = _assignments(folded_ops)
     int_expected = {
@@ -82,14 +85,17 @@ def test_all_binary_and_comparison_operators_fold():
 
 
 def test_mixed_numeric_constants_fold_to_fp32():
-    @pl.function(type=pl.FunctionType.Opaque)
-    def folded_numeric():
+    @pl.jit(auto_mutex=False)
+    def folded_numeric(_jit_entry: pl.DT_INT64):
         float_add = 1.25 + 2.5
         mixed_add = pl.const(2, pl.DT_INT32) + 0.5
         mixed_mul = 2 * pl.const(1.5, pl.DT_FP16)
         mixed_compare = pl.const(2, pl.DT_INT32) < 2.5
         typed_float = pl.const(2, pl.DT_FP32)
         typed_bool = pl.const(0, pl.DT_BOOL)
+
+    folded_numeric_program, _ = folded_numeric.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    folded_numeric = folded_numeric_program.get_function(folded_numeric.__name__)
 
     values = _assignments(folded_numeric)
     _assert_constant(values["float_add"], 3.75, ir.DataType.FP32)
@@ -101,8 +107,8 @@ def test_mixed_numeric_constants_fold_to_fp32():
 
 
 def test_bool_numeric_and_unary_result_dtypes():
-    @pl.function(type=pl.FunctionType.Opaque)
-    def folded_bool_numeric():
+    @pl.jit(auto_mutex=False)
+    def folded_bool_numeric(_jit_entry: pl.DT_INT64):
         add = True + True
         mixed_add = True + 0.5
         truediv = True / 2
@@ -120,6 +126,9 @@ def test_bool_numeric_and_unary_result_dtypes():
         int_not = not 3
         int_invert = ~3
         compare = False < 1
+
+    folded_bool_numeric_program, _ = folded_bool_numeric.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    folded_bool_numeric = folded_bool_numeric_program.get_function(folded_bool_numeric.__name__)
 
     values = _assignments(folded_bool_numeric)
     _assert_constant(values["add"], 2, ir.DataType.INT64)
@@ -142,14 +151,17 @@ def test_bool_numeric_and_unary_result_dtypes():
 
 
 def test_bool_ops_accept_bool_int_and_float_truthiness_but_return_bool():
-    @pl.function(type=pl.FunctionType.Opaque)
-    def folded_truth():
+    @pl.jit(auto_mutex=False)
+    def folded_truth(_jit_entry: pl.DT_INT64):
         int_and = 2 and 0
         int_or = 0 or 3
         float_and = 1.5 and 0.0
         float_or = 0.0 or -2.5
         short_and = False and missing_name  # noqa: F821
         short_or = True or missing_name  # noqa: F821
+
+    folded_truth_program, _ = folded_truth.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    folded_truth = folded_truth_program.get_function(folded_truth.__name__)
 
     values = _assignments(folded_truth)
     _assert_constant(values["int_and"], False, ir.DataType.BOOL)
@@ -161,12 +173,15 @@ def test_bool_ops_accept_bool_int_and_float_truthiness_but_return_bool():
 
 
 def test_pl_and_builtin_min_max_fold_with_numeric_promotion():
-    @pl.function(type=pl.FunctionType.Opaque)
-    def folded_min_max():
+    @pl.jit(auto_mutex=False)
+    def folded_min_max(_jit_entry: pl.DT_INT64):
         pl_min = pl.min(3, 2)
         pl_max = pl.max(1.5, 2)
         builtin_min = min(True, 2)
         builtin_max = max(pl.const(1, pl.DT_INT32), 2.5)
+
+    folded_min_max_program, _ = folded_min_max.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    folded_min_max = folded_min_max_program.get_function(folded_min_max.__name__)
 
     values = _assignments(folded_min_max)
     _assert_constant(values["pl_min"], 2, ir.DataType.INDEX)
@@ -176,13 +191,16 @@ def test_pl_and_builtin_min_max_fold_with_numeric_promotion():
 
 
 def test_unsafe_folds_keep_validated_ir_nodes():
-    @pl.function(type=pl.FunctionType.Opaque)
-    def unsafe_constants():
+    @pl.jit(auto_mutex=False)
+    def unsafe_constants(_jit_entry: pl.DT_INT64):
         zero_div = 1 / 0
         zero_floordiv = 1 // 0
         negative_shift = 1 << -1
         float_floordiv = 3.0 // 2.0
         float_mod = 3.0 % 2.0
+
+    unsafe_constants_program, _ = unsafe_constants.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    unsafe_constants = unsafe_constants_program.get_function(unsafe_constants.__name__)
 
     values = _assignments(unsafe_constants)
     assert isinstance(values["zero_div"], ir.FloatDiv)
@@ -193,13 +211,16 @@ def test_unsafe_folds_keep_validated_ir_nodes():
 
 
 def test_nonconstant_operands_keep_runtime_ir():
-    @pl.function(type=pl.FunctionType.Opaque)
+    @pl.jit(auto_mutex=False)
     def runtime_ops(value: pl.DT_INT32, flag: pl.DT_BOOL):
         add = value + 1
         minimum = pl.min(value, 2)
         truth = value and 1.0
         positive = +value
         positive_bool = +flag
+
+    runtime_ops_program, _ = runtime_ops.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    runtime_ops = runtime_ops_program.get_function(runtime_ops.__name__)
 
     values = _assignments(runtime_ops)
     assert isinstance(values["add"], ir.Add)
@@ -213,9 +234,12 @@ def test_nonconstant_operands_keep_runtime_ir():
 
 
 def test_unary_plus_is_identity_for_non_scalar_operand():
-    @pl.function(type=pl.FunctionType.Opaque)
+    @pl.jit(auto_mutex=False)
     def identity_pos(value: pl.Tensor[[1], pl.DT_FP32]):
         result = +value
+
+    identity_pos_program, _ = identity_pos.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    identity_pos = identity_pos_program.get_function(identity_pos.__name__)
 
     result = _assignments(identity_pos)["result"]
     assert isinstance(result, ir.Var)
@@ -225,12 +249,16 @@ def test_unary_plus_is_identity_for_non_scalar_operand():
 def test_invalid_constant_operand_types_raise_from_ir_builders():
     with pytest.raises(pl.parser.ParserError, match="bit_not.*integer dtype"):
 
-        @pl.function(type=pl.FunctionType.Opaque)
-        def invalid_invert():
+        @pl.jit(auto_mutex=False)
+        def invalid_invert(_jit_entry: pl.DT_INT64):
             value = ~1.5
+
+        invalid_invert.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
     with pytest.raises(pl.parser.ParserError, match="bit_and.*integer dtype"):
 
-        @pl.function(type=pl.FunctionType.Opaque)
-        def invalid_bit_and():
+        @pl.jit(auto_mutex=False)
+        def invalid_bit_and(_jit_entry: pl.DT_INT64):
             value = 1.5 & 1
+
+        invalid_bit_and.to_kernel_def().parse_target_program(ir.SectionKind.Vector)

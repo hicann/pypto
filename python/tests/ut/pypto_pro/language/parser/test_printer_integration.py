@@ -18,10 +18,13 @@ import pypto_pro.language as pl
 def test_function_printed_with_subscript_types():
     """Test that function parameters use subscript notation."""
 
-    @pl.function
-    def test_func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+    @pl.jit(auto_mutex=False)
+    def test_func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=pl.DT_FP32)
-        return result
+        _test_result = result
+
+    test_func_program, _ = test_func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    test_func = test_func_program.get_function(test_func.__name__)
 
     # Print the function
     printed = pypto_pro.ir.python_print(test_func)
@@ -36,14 +39,17 @@ def test_function_printed_with_subscript_types():
 def test_parsed_function_printer_round_trip():
     """Test that parsed functions can be printed correctly."""
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def round_trip(
         x: pl.Tensor[[64], pl.DT_FP32],
         y: pl.Tensor[[64], pl.DT_FP32],
-    ) -> pl.Tensor[[64], pl.DT_FP32]:
+    ):
         sum_val: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, y)
         result: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.mul(sum_val, 2.0)
-        return result
+        _test_result = result
+
+    round_trip_program, _ = round_trip.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    round_trip = round_trip_program.get_function(round_trip.__name__)
 
     # Print and check syntax
     printed = pypto_pro.ir.python_print(round_trip)
@@ -57,12 +63,15 @@ def test_parsed_function_printer_round_trip():
 def test_while_loop_natural_syntax():
     """Test that natural while loop can be parsed and printed."""
 
-    @pl.function
-    def while_natural(n: pl.DT_INT64) -> pl.DT_INT64:
+    @pl.jit(auto_mutex=False)
+    def while_natural(n: pl.DT_INT64):
         x: pl.DT_INT64 = 0
         while x < n:
             x = x + 1
-        return x
+        _test_result = x
+
+    while_natural_program, _ = while_natural.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    while_natural = while_natural_program.get_function(while_natural.__name__)
 
     # Print the function
     printed = pypto_pro.ir.python_print(while_natural)
@@ -79,14 +88,17 @@ def test_while_loop_natural_syntax():
 def test_while_with_tensor_operations_round_trip():
     """Test while loop with tensor operations."""
 
-    @pl.function
-    def while_tensors(n: pl.DT_INT64, x: pl.Tensor[[64], pl.DT_FP32]) -> pl.Tensor[[64], pl.DT_FP32]:
+    @pl.jit(auto_mutex=False)
+    def while_tensors(n: pl.DT_INT64, x: pl.Tensor[[64], pl.DT_FP32]):
         i: pl.DT_INT64 = 0
         acc: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.create_tensor([64], dtype=pl.DT_FP32)
         while i < n:
             i = i + 1
             acc = pl.tensor.add(acc, x)
-        return acc
+        _test_result = acc
+
+    while_tensors_program, _ = while_tensors.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    while_tensors = while_tensors_program.get_function(while_tensors.__name__)
 
     # Print the function
     printed = pypto_pro.ir.python_print(while_tensors)

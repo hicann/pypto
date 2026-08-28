@@ -29,7 +29,7 @@ class Ptr:
 
     Example::
 
-        @pl.function
+        @pl.jit
         def kernel(ptr: pl.Ptr[pl.DT_FP32]):
             view: pl.Tensor[[32, 32], pl.DT_FP32] = pl.make_tensor(ptr, [32, 32], [32, 1])
 

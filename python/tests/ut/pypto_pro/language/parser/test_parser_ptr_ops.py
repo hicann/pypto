@@ -21,24 +21,24 @@ def _ir_str(kernel_def) -> str:
 
 
 def _parse_kernel(kernel_def) -> ir.Program:
-    return kernel_def.parse_target_program(ir.SectionKind.Vector)[0]
+    return kernel_def.to_kernel_def().parse_target_program(ir.SectionKind.Vector)[0]
 
 
-@pl.kernel
+@pl.jit
 def _make_ptr_change_dtype_kernel(p: pl.Ptr[pl.DT_UINT8]):
     # Reinterpret a raw uint8 GM pointer as fp16, then view it as a 2D tensor.
     fp16_ptr = pl.make_ptr(p, dtype=pl.DT_FP16)
     view = pl.make_tensor(fp16_ptr, [64, 128], [128, 1])  # noqa: F841
 
 
-@pl.kernel
+@pl.jit
 def _make_ptr_identity_kernel(p: pl.Ptr[pl.DT_FP16]):
     # No dtype kwarg -> identity reinterpret (keeps the source dtype).
     same = pl.make_ptr(p)
     view = pl.make_tensor(same, [32, 32], [32, 1])  # noqa: F841
 
 
-@pl.kernel
+@pl.jit
 def _make_ptr_then_addptr_kernel(p: pl.Ptr[pl.DT_UINT8]):
     # make_ptr first, then advance with element (fp16) semantics.
     fp16_ptr = pl.make_ptr(p, dtype=pl.DT_FP16)
@@ -79,7 +79,7 @@ def test_make_ptr_then_addptr_ir():
     assert "ptr.addptr" in s
 
 
-@pl.kernel
+@pl.jit
 def _ptr_plus_offset_kernel(p: pl.Ptr[pl.DT_UINT8]):
     # `ptr + offset` is sugar for pl.addptr(ptr, offset).
     fp16_ptr = pl.make_ptr(p, dtype=pl.DT_FP16)
@@ -101,19 +101,19 @@ def test_ptr_plus_offset_result_type_is_ptr():
     assert found.var.type.dtype == pl.DT_FP16
 
 
-@pl.kernel
+@pl.jit
 def _retensor_shape_kernel(src: pl.Tensor[[64, 128], pl.DT_FP16]):
     # Same dtype, new shape/stride, reusing src's pointer.
     reshaped = pl.make_tensor(src, [128, 64], [64, 1])  # noqa: F841
 
 
-@pl.kernel
+@pl.jit
 def _retensor_dtype_kernel(src: pl.Tensor[[64, 128], pl.DT_FP16]):
     # Reinterpret an fp16 tensor as a wider uint8 view (2x columns).
     as_u8 = pl.make_tensor(src, [64, 256], [256, 1], dtype=pl.DT_UINT8)  # noqa: F841
 
 
-@pl.kernel
+@pl.jit
 def _retensor_view_of_view_kernel(src: pl.Tensor[[64, 128], pl.DT_FP16]):
     # A view of a view: both derive from the same underlying pointer.
     v1 = pl.make_tensor(src, [128, 64], [64, 1])
@@ -146,7 +146,7 @@ def test_make_tensor_view_of_view_ir():
 
 
 def test_make_ptr_accepts_tensor_argument():
-    @pl.kernel
+    @pl.jit
     def k(t: pl.Tensor[[64], pl.DT_FP16]):
         bad = pl.make_ptr(t, dtype=pl.DT_FP32)  # noqa: F841
 
@@ -183,17 +183,17 @@ def _find_assign_by_call(stmt, op_name):
     return None
 
 
-@pl.kernel
+@pl.jit
 def _addptr_int4_kernel(p: pl.Ptr[pl.DT_INT4]):
     bumped = pl.addptr(p, 8)  # noqa: F841
 
 
-@pl.kernel
+@pl.jit
 def _plus_offset_fp4_kernel(p: pl.Ptr[pl.DT_FP4]):
     bumped = p + 8  # noqa: F841
 
 
-@pl.kernel
+@pl.jit
 def _make_ptr_to_int4_then_addptr_kernel(p: pl.Ptr[pl.DT_UINT8]):
     # A legitimate uint8 pointer reinterpreted as int4 must still reject addptr.
     i4 = pl.make_ptr(p, dtype=pl.DT_INT4)

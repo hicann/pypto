@@ -12,7 +12,7 @@
 from __future__ import annotations
 
 # DSL function bodies are parsed as AST, not executed -suppress pyright errors
-# from type-checking the annotations and kwargs inside @pl.function bodies.
+# from type-checking the annotations and kwargs inside parsed DSL bodies.
 import ast
 from typing import TYPE_CHECKING, Any
 
@@ -54,11 +54,14 @@ def test_ptr_int_dtype():
 
 
 def test_ptr_via_pl_function():
-    """@pl.function with pl.Ptr[pl.DT_FP32] parameter resolves to PtrType."""
+    """Kernel with pl.Ptr[pl.DT_FP32] parameter resolves to PtrType."""
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(ptr: pl.Ptr[pl.DT_FP32]):
         pass
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func.params[0].type, ir.PtrType)
     assert func.params[0].type.dtype == DataType.FP32

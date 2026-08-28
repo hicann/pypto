@@ -38,10 +38,13 @@ _VF_TILE_SIZE = _VF_N * _VF_M * 4  # 32-byte aligned
 def test_dtype_kwarg_enum_literal():
     """A dtype kwarg written directly as pl.DT_* resolves to a DataType."""
 
-    @pl.function
-    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+    @pl.jit(auto_mutex=False)
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=pl.DT_FP32)
-        return result
+        _test_result = result
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
 
@@ -50,12 +53,15 @@ def test_dtype_kwarg_enum_literal():
 def test_mode_kwarg_enum_literal():
     """A non-dtype enum kwarg (RoundMode) written directly is accepted."""
 
-    @pl.function
-    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+    @pl.jit(auto_mutex=False)
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(
             x, target_type=pl.DT_FP32, mode=pl.RoundMode.CAST_ROUND
         )
-        return result
+        _test_result = result
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
 
@@ -68,10 +74,13 @@ def test_dtype_kwarg_closure_enum_var():
     """A dtype kwarg captured from a one-level closure enum variable is accepted."""
     dt = pl.DT_FP32
 
-    @pl.function
-    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+    @pl.jit(auto_mutex=False)
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=dt)
-        return result
+        _test_result = result
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
 
@@ -81,12 +90,15 @@ def test_mode_kwarg_closure_enum_var():
     """A RoundMode kwarg captured from a closure enum variable is accepted."""
     rounding = pl.RoundMode.CAST_FLOOR
 
-    @pl.function
-    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+    @pl.jit(auto_mutex=False)
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(
             x, target_type=pl.DT_FP32, mode=rounding
         )
-        return result
+        _test_result = result
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
 
@@ -100,10 +112,13 @@ def test_dtype_kwarg_multilevel_closure_assignment():
     dt_a = pl.DT_FP32
     dt_b = dt_a
 
-    @pl.function
-    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+    @pl.jit(auto_mutex=False)
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=dt_b)
-        return result
+        _test_result = result
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
 
@@ -116,10 +131,13 @@ def test_kernel_factory_closure_dtype():
     """A dtype closure parameter drives both the annotation and a dtype kwarg."""
 
     def make_kernel(dtype):
-        @pl.function
-        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], dtype]:
+        @pl.jit(auto_mutex=False)
+        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
             result: pl.Tensor[[64, 128], dtype] = pl.tensor.cast(x, target_type=dtype)
-            return result
+            _test_result = result
+
+        func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+        func = func_program.get_function(func.__name__)
 
         return func
 
@@ -135,10 +153,12 @@ def test_dtype_kwarg_int_literal_rejected():
     """A dtype kwarg given a raw int literal raises ParserTypeError."""
     with pytest.raises(ParserTypeError, match="expects an enum value"):
 
-        @pl.function
-        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+        @pl.jit(auto_mutex=False)
+        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
             result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=1)
-            return result
+            _test_result = result
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 @pytest.mark.soc("950")
@@ -146,12 +166,14 @@ def test_mode_kwarg_int_literal_rejected():
     """A RoundMode kwarg given a raw int literal raises ParserTypeError."""
     with pytest.raises(ParserTypeError, match="expects an enum value"):
 
-        @pl.function
-        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+        @pl.jit(auto_mutex=False)
+        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
             result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(
                 x, target_type=pl.DT_FP32, mode=1
             )
-            return result
+            _test_result = result
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 # ---------------------------------------------------------------------------
@@ -167,10 +189,12 @@ def test_dtype_kwarg_int_closure_var_rejected():
     iv = 1
     with pytest.raises(ParserTypeError, match="expects an enum value"):
 
-        @pl.function
-        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+        @pl.jit(auto_mutex=False)
+        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
             result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=iv)
-            return result
+            _test_result = result
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 # ---------------------------------------------------------------------------
@@ -180,12 +204,15 @@ def test_dtype_kwarg_int_closure_var_rejected():
 def test_target_memory_enum_literal():
     """A MemorySpace kwarg written as an enum literal is accepted."""
 
-    @pl.function
-    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+    @pl.jit(auto_mutex=False)
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         a = pl.make_tile(tile_type, addr=0, size=16384)  # noqa: F841
         result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=pl.DT_FP32)
-        return result
+        _test_result = result
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
 
@@ -195,11 +222,13 @@ def test_target_memory_int_rejected():
     """A MemorySpace kwarg given a raw int raises ParserTypeError."""
     with pytest.raises(ParserTypeError, match="expects an enum value"):
 
-        @pl.function
-        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+        @pl.jit(auto_mutex=False)
+        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
             tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=1)  # noqa: F841
             result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=pl.DT_FP32)
-            return result
+            _test_result = result
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 # ---------------------------------------------------------------------------
@@ -209,10 +238,13 @@ def test_target_memory_int_rejected():
 def test_dtype_positional_enum_literal():
     """A dtype enum passed positionally (cast(x, pl.DT_FP32)) is accepted."""
 
-    @pl.function
-    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+    @pl.jit(auto_mutex=False)
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, pl.DT_FP32)
-        return result
+        _test_result = result
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
 
@@ -227,10 +259,13 @@ def test_dtype_positional_int_not_guarded():
     dtype is validated later at the C++ boundary, not here).
     """
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, 1)
-        return result
+        _test_result = result
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
 
@@ -255,12 +290,15 @@ def test_cmp_mode_is_not_an_enum_kwarg():
 def test_fractal_int_kwarg_still_allowed():
     """A numeric kwarg (fractal) still accepts a raw int (not an enum kwarg)."""
 
-    @pl.function
-    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+    @pl.jit(auto_mutex=False)
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Acc)
         a = pl.make_tile(tile_type, addr=0, size=16384, fractal=1024)  # noqa: F841
         result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=pl.DT_FP32)
-        return result
+        _test_result = result
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
 
@@ -319,10 +357,13 @@ def test_vf_enum_kwarg_int_rejected():
 def test_const_valid_dtype_enum_literal():
     """pl.const() with a valid dtype enum literal (pl.DT_INT32) is accepted."""
 
-    @pl.function
-    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP16]:
+    @pl.jit(auto_mutex=False)
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         c = pl.const(42, pl.DT_INT32)  # noqa: F841
-        return x
+        _test_result = x
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
 
@@ -332,10 +373,13 @@ def test_const_valid_dtype_closure_var():
     """pl.const() with a dtype from a closure variable is accepted."""
     dt = pl.DT_FP32
 
-    @pl.function
-    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP16]:
+    @pl.jit(auto_mutex=False)
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         c = pl.const(1.0, dt)  # noqa: F841
-        return x
+        _test_result = x
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
 
@@ -345,10 +389,12 @@ def test_const_dtype_int_literal_rejected():
     """pl.const() with an int instead of a dtype raises ParserSyntaxError."""
     with pytest.raises(ParserSyntaxError, match="must be a dtype"):
 
-        @pl.function
-        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP16]:
+        @pl.jit(auto_mutex=False)
+        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
             c = pl.const(42, 1)  # noqa: F841
-            return x
+            _test_result = x
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 @pytest.mark.soc("950")
@@ -358,10 +404,12 @@ def test_const_dtype_int_closure_var_rejected():
 
     with pytest.raises(ParserSyntaxError, match="must be a dtype"):
 
-        @pl.function
-        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP16]:
+        @pl.jit(auto_mutex=False)
+        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
             c = pl.const(42, bad_dtype)  # noqa: F841
-            return x
+            _test_result = x
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 @pytest.mark.soc("950")
@@ -369,10 +417,12 @@ def test_const_dtype_string_rejected():
     """pl.const() with a string instead of a dtype raises ParserSyntaxError."""
     with pytest.raises(ParserSyntaxError, match="must be a dtype"):
 
-        @pl.function
-        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP16]:
+        @pl.jit(auto_mutex=False)
+        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
             c = pl.const(42, "fp32")  # noqa: F841
-            return x
+            _test_result = x
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 # ---------------------------------------------------------------------------
@@ -382,11 +432,14 @@ def test_const_dtype_string_rejected():
 def test_enum_compare_eq():
     """Enum == enum folds to a compile-time ConstBool (True case)."""
 
-    @pl.function
-    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP16]:
+    @pl.jit(auto_mutex=False)
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         if pl.DT_FP16 == pl.DT_FP16:
             pass
-        return x
+        _test_result = x
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
 
@@ -395,11 +448,14 @@ def test_enum_compare_eq():
 def test_enum_compare_eq_false():
     """Enum == enum folds to a compile-time ConstBool (False case)."""
 
-    @pl.function
-    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP16]:
+    @pl.jit(auto_mutex=False)
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         if pl.DT_FP16 == pl.DT_FP32:
             pass
-        return x
+        _test_result = x
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
 
@@ -408,11 +464,14 @@ def test_enum_compare_eq_false():
 def test_enum_compare_ne():
     """Enum != enum folds to a compile-time ConstBool."""
 
-    @pl.function
-    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP16]:
+    @pl.jit(auto_mutex=False)
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         if pl.DT_FP16 != pl.DT_FP32:
             pass
-        return x
+        _test_result = x
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
 
@@ -422,11 +481,13 @@ def test_enum_compare_lt_rejected():
     """Enum < enum raises UnsupportedFeatureError (only == and != allowed)."""
     with pytest.raises(UnsupportedFeatureError, match="Only == and != are supported"):
 
-        @pl.function
-        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP16]:
+        @pl.jit(auto_mutex=False)
+        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
             if pl.DT_FP16 < pl.DT_FP32:
                 pass
-            return x
+            _test_result = x
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 @pytest.mark.soc("950")
@@ -434,11 +495,13 @@ def test_enum_compare_gt_rejected():
     """Enum > enum raises UnsupportedFeatureError."""
     with pytest.raises(UnsupportedFeatureError, match="Only == and != are supported"):
 
-        @pl.function
-        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP16]:
+        @pl.jit(auto_mutex=False)
+        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
             if pl.DT_FP16 > pl.DT_FP32:
                 pass
-            return x
+            _test_result = x
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 @pytest.mark.soc("950")
@@ -446,11 +509,13 @@ def test_enum_compare_le_rejected():
     """Enum <= enum raises UnsupportedFeatureError."""
     with pytest.raises(UnsupportedFeatureError, match="Only == and != are supported"):
 
-        @pl.function
-        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP16]:
+        @pl.jit(auto_mutex=False)
+        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
             if pl.DT_FP16 <= pl.DT_FP32:
                 pass
-            return x
+            _test_result = x
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 @pytest.mark.soc("950")
@@ -458,11 +523,13 @@ def test_enum_compare_ge_rejected():
     """Enum >= enum raises UnsupportedFeatureError."""
     with pytest.raises(UnsupportedFeatureError, match="Only == and != are supported"):
 
-        @pl.function
-        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP16]:
+        @pl.jit(auto_mutex=False)
+        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
             if pl.DT_FP16 >= pl.DT_FP32:
                 pass
-            return x
+            _test_result = x
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 @pytest.mark.soc("950")
@@ -471,11 +538,14 @@ def test_enum_compare_closure_vars():
     dt_a = pl.DT_FP32
     dt_b = pl.DT_FP32
 
-    @pl.function
-    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP16]:
+    @pl.jit(auto_mutex=False)
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         if dt_a == dt_b:
             pass
-        return x
+        _test_result = x
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
 
@@ -506,11 +576,14 @@ def test_dtype_kwarg_enum_ternary_const_condition():
     """A dtype kwarg fed by a ternary over a constant condition is accepted."""
     data_type = 0
 
-    @pl.function
-    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+    @pl.jit(auto_mutex=False)
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         target = pl.DT_FP32 if data_type == 0 else pl.DT_INT32
         result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=target)
-        return result
+        _test_result = result
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
 
@@ -519,12 +592,15 @@ def test_dtype_kwarg_enum_ternary_const_condition():
 def test_dtype_kwarg_enum_ternary_inline():
     """The ternary may sit inline in the kwarg, not only behind a local name."""
 
-    @pl.function
-    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+    @pl.jit(auto_mutex=False)
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(
             x, target_type=pl.DT_FP32 if True else pl.DT_INT32
         )
-        return result
+        _test_result = result
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
 
@@ -539,11 +615,14 @@ def test_enum_ternary_constexpr_condition():
     """
     data_type = 0
 
-    @pl.function
-    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+    @pl.jit(auto_mutex=False)
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         target = pl.DT_FP32 if pl.constexpr(data_type == 0) else pl.DT_INT32
         result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=target)
-        return result
+        _test_result = result
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
 
@@ -557,11 +636,14 @@ def test_enum_ternary_condition_is_an_enum_comparison():
     """
 
     def make(in_dtype):
-        @pl.function
+        @pl.jit(auto_mutex=False)
         def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
             acc = pl.DT_FP32 if in_dtype == pl.DT_FP16 else pl.DT_INT32
             result = pl.tensor.cast(x, target_type=acc)
-            return result
+            _test_result = result
+
+        func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+        func = func_program.get_function(func.__name__)
 
         return func
 
@@ -579,13 +661,16 @@ def test_non_dtype_enum_ternary():
     """
     use_vec = True
 
-    @pl.function
-    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+    @pl.jit(auto_mutex=False)
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         space = pl.MemorySpace.Vec if use_vec else pl.MemorySpace.Acc
         tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=space)
         a = pl.make_tile(tile_type, addr=0, size=16384)  # noqa: F841
         result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=pl.DT_FP32)
-        return result
+        _test_result = result
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
 
@@ -600,11 +685,14 @@ def test_enum_ternary_unselected_branch_not_parsed():
     undefined name would raise and this case would catch it.
     """
 
-    @pl.function
-    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+    @pl.jit(auto_mutex=False)
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         target = pl.DT_FP32 if True else undefined_name_in_dead_branch  # noqa: F821
         result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=target)
-        return result
+        _test_result = result
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
 
@@ -619,7 +707,7 @@ def test_enum_ternary_runtime_condition_is_rejected():
     """
     with pytest.raises(ParserTypeError) as excinfo:
 
-        @pl.function
+        @pl.jit(auto_mutex=False)
         def func(x: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP16]):
             tile_type = pl.TileType(
                 shape=[64, 128],
@@ -628,6 +716,8 @@ def test_enum_ternary_runtime_condition_is_rejected():
                 pad=pl.TilePad.zero if x.shape[0] else 0,
             )
             tile = pl.make_tile(tile_type, addr=0, size=16384)  # noqa: F841
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
     message = str(excinfo.value)
     # the value that cannot be selected, quoted from the source
@@ -646,10 +736,12 @@ def test_enum_ternary_runtime_condition_rejected_in_the_else_branch():
     """
     with pytest.raises(ParserTypeError, match="'pl.MemorySpace.Acc' has no runtime value"):
 
-        @pl.function
+        @pl.jit(auto_mutex=False)
         def func(x: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP16]):
             n = x.shape[0]
             space = n if n else pl.MemorySpace.Acc  # noqa: F841
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 @pytest.mark.soc("950")
@@ -662,12 +754,14 @@ def test_int_via_ternary_still_rejected_by_enum_kwarg_guard():
     """
     with pytest.raises(ParserTypeError, match="expects an enum value"):
 
-        @pl.function
-        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+        @pl.jit(auto_mutex=False)
+        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
             result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(
                 x, target_type=1 if True else 2
             )
-            return result
+            _test_result = result
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 @pytest.mark.soc("950")
@@ -678,21 +772,26 @@ def test_mixed_enum_int_branches_follow_the_selected_branch():
     asymmetry is the point: validity is decided by the chosen branch alone.
     """
 
-    @pl.function
-    def picks_enum(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+    @pl.jit(auto_mutex=False)
+    def picks_enum(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         target = pl.DT_FP32 if True else 1
         result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=target)
-        return result
+        _test_result = result
+
+    picks_enum_program, _ = picks_enum.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    picks_enum = picks_enum_program.get_function(picks_enum.__name__)
 
     assert isinstance(picks_enum, ir.Function)
 
     with pytest.raises(ParserTypeError, match="expects an enum value"):
 
-        @pl.function
-        def picks_int(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+        @pl.jit(auto_mutex=False)
+        def picks_int(x: pl.Tensor[[64, 128], pl.DT_FP16]):
             target = pl.DT_FP32 if False else 1
             result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=target)
-            return result
+            _test_result = result
+
+        picks_int.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 # ---------------------------------------------------------------------------
@@ -714,10 +813,13 @@ def test_dtype_kwarg_from_closure_enum_list():
     evaluated at parse time and the enum is used as if written literally.
     """
 
-    @pl.function
-    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+    @pl.jit(auto_mutex=False)
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=_DTYPE_TABLE[1])
-        return result
+        _test_result = result
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
     assert "target_type=float" in str(func)
@@ -727,10 +829,13 @@ def test_dtype_kwarg_from_closure_enum_list():
 def test_dtype_kwarg_from_helper_returning_enum():
     """A Python helper may return the enum for an enum kwarg."""
 
-    @pl.function
-    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+    @pl.jit(auto_mutex=False)
+    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=_pick_dtype(True))
-        return result
+        _test_result = result
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
     assert "target_type=float" in str(func)
@@ -749,10 +854,12 @@ def test_helper_returning_int_still_rejected_for_enum_kwarg():
 
     with pytest.raises(ParserTypeError, match="expects an enum value"):
 
-        @pl.function
-        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
+        @pl.jit(auto_mutex=False)
+        def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
             result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=_pick_int(True))
-            return result
+            _test_result = result
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 if __name__ == "__main__":

@@ -16,203 +16,200 @@ from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeE
 import pytest
 
 
-@pl.program
-class AddKernelDynamic:
-    """Add kernel with dynamic shape tensor parameters."""
+@pl.jit(auto_mutex=False)
+def add_kernel_dynamic(
+    a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    b: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    output: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+):
+    """Adds two tensors element-wise with dynamic shapes: result = a + b"""
+    tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+    a_tile = pl.make_tile(tile_type, addr=0x0000, size=65536)
+    b_tile = pl.make_tile(tile_type, addr=0x10000, size=65536)
+    result = pl.make_tile(tile_type, addr=0x20000, size=65536)
+    pl.load(a_tile, a, [0, 0])
+    pl.load(b_tile, b, [0, 0])
+    pl.add(result, a_tile, b_tile)
+    out = pl.store(output, result, [0, 0])
+    _test_result = out
 
-    @pl.function(type=pl.FunctionType.InCore)
-    def add_kernel(
-        self,
-        a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
-        b: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
-        output: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
-    ):
-        """Adds two tensors element-wise with dynamic shapes: result = a + b"""
-        tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        a_tile = pl.make_tile(tile_type, addr=0x0000, size=65536)
-        b_tile = pl.make_tile(tile_type, addr=0x10000, size=65536)
-        result = pl.make_tile(tile_type, addr=0x20000, size=65536)
-        pl.load(a_tile, a, [0, 0])
-        pl.load(b_tile, b, [0, 0])
+
+add_kernel_dynamic_program, _ = add_kernel_dynamic.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+add_kernel_dynamic = add_kernel_dynamic_program.get_function(add_kernel_dynamic.__name__)
+
+
+@pl.jit(auto_mutex=False)
+def add_kernel_valid_shape(
+    a: pl.Tensor[[128, 128], pl.DT_FP32],
+    b: pl.Tensor[[128, 128], pl.DT_FP32],
+    output: pl.Tensor[[128, 128], pl.DT_FP32],
+    m_var: pl.DT_INT64,
+    n_var: pl.DT_INT64,
+):
+    """Loads 128x128 tiles but marks only [M, N] as valid: result = a + b"""
+    tile_type = pl.TileType(
+        shape=[128, 128],
+        dtype=pl.DT_FP32,
+        target_memory=pl.MemorySpace.Vec,
+        valid_shape=[-1, -1],
+    )
+    a_tile = pl.make_tile(tile_type, addr=0x0000, size=65536)
+    b_tile = pl.make_tile(tile_type, addr=0x10000, size=65536)
+    result = pl.make_tile(tile_type, addr=0x20000, size=65536)
+    pl.set_validshape(a_tile, [m_var, n_var])
+    pl.set_validshape(b_tile, [m_var, n_var])
+    pl.set_validshape(result, [m_var, n_var])
+    pl.load(a_tile, a, [0, 0])
+    pl.load(b_tile, b, [0, 0])
+    pl.add(result, a_tile, b_tile)
+    pl.set_validshape(a_tile, [m_var, n_var])
+    pl.set_validshape(b_tile, [m_var, n_var])
+    pl.set_validshape(result, [m_var, n_var])
+    out = pl.store(output, result, [0, 0])
+    _test_result = out
+
+
+add_kernel_valid_shape_program, _ = add_kernel_valid_shape.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+add_kernel_valid_shape = add_kernel_valid_shape_program.get_function(add_kernel_valid_shape.__name__)
+
+
+@pl.jit(auto_mutex=False)
+def add_kernel_shape_subscript(
+    a: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP32],
+    b: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP32],
+    output: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP32],
+):
+    """Uses the canonical dynamic dimension stored in a TensorType."""
+    m_var = a.shape[0]
+    tile_type = pl.TileType(shape=[2, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+    a_tile = pl.make_tile(tile_type, addr=0x0000, size=1024)
+    b_tile = pl.make_tile(tile_type, addr=0x0400, size=1024)
+    result = pl.make_tile(tile_type, addr=0x0800, size=1024)
+    for i in pl.range(0, m_var, 2):
+        offset_1 = i * 2
+        pl.load(a_tile, a, [offset_1, 0])
+        pl.load(b_tile, b, [offset_1, 0])
         pl.add(result, a_tile, b_tile)
-        out = pl.store(output, result, [0, 0])
-        return out
+        out = pl.store(output, result, [offset_1, 0])
+    _test_result = out
 
 
-@pl.program
-class AddKernelValidShape:
-    """Add kernel with static tensors but dynamic valid_shapes passed at runtime."""
-
-    @pl.function(type=pl.FunctionType.InCore)
-    def add_kernel(
-        self,
-        a: pl.Tensor[[128, 128], pl.DT_FP32],
-        b: pl.Tensor[[128, 128], pl.DT_FP32],
-        output: pl.Tensor[[128, 128], pl.DT_FP32],
-        m_var: pl.DT_INT64,
-        n_var: pl.DT_INT64,
-    ) -> pl.Tensor[[128, 128], pl.DT_FP32]:
-        """Loads 128x128 tiles but marks only [M, N] as valid: result = a + b"""
-        tile_type = pl.TileType(
-            shape=[128, 128],
-            dtype=pl.DT_FP32,
-            target_memory=pl.MemorySpace.Vec,
-            valid_shape=[-1, -1],
-        )
-        a_tile = pl.make_tile(tile_type, addr=0x0000, size=65536)
-        b_tile = pl.make_tile(tile_type, addr=0x10000, size=65536)
-        result = pl.make_tile(tile_type, addr=0x20000, size=65536)
-        pl.set_validshape(a_tile, [m_var, n_var])
-        pl.set_validshape(b_tile, [m_var, n_var])
-        pl.set_validshape(result, [m_var, n_var])
-        pl.load(a_tile, a, [0, 0])
-        pl.load(b_tile, b, [0, 0])
-        pl.add(result, a_tile, b_tile)
-        pl.set_validshape(a_tile, [m_var, n_var])
-        pl.set_validshape(b_tile, [m_var, n_var])
-        pl.set_validshape(result, [m_var, n_var])
-        out = pl.store(output, result, [0, 0])
-        return out
+add_kernel_shape_subscript_program, _ = add_kernel_shape_subscript.to_kernel_def().parse_target_program(
+    ir.SectionKind.Vector
+)
+add_kernel_shape_subscript = add_kernel_shape_subscript_program.get_function(add_kernel_shape_subscript.__name__)
 
 
-@pl.program
-class AddKernelShapeSubscript:
-    """Add kernel using tensor.shape[i] for a dynamic loop bound."""
-
-    @pl.function(type=pl.FunctionType.InCore)
-    def add_kernel(
-        self,
-        a: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP32],
-        b: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP32],
-        output: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP32],
-    ):
-        """Uses the canonical dynamic dimension stored in a TensorType."""
-        m_var = a.shape[0]
-        tile_type = pl.TileType(shape=[2, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        a_tile = pl.make_tile(tile_type, addr=0x0000, size=1024)
-        b_tile = pl.make_tile(tile_type, addr=0x0400, size=1024)
-        result = pl.make_tile(tile_type, addr=0x0800, size=1024)
-        for i in pl.range(0, m_var, 2):
-            offset_1 = i * 2
-            pl.load(a_tile, a, [offset_1, 0])
-            pl.load(b_tile, b, [offset_1, 0])
-            pl.add(result, a_tile, b_tile)
-            out = pl.store(output, result, [offset_1, 0])
-        return out
+@pl.jit(auto_mutex=False)
+def static_shape_negative_subscript(
+    a: pl.Tensor[[2, 128], pl.DT_FP32],
+    output: pl.Tensor[[2, 128], pl.DT_FP32],
+):
+    n = a.shape[-1]
+    for _ in pl.range(0, n, 1):
+        out = output
+    _test_result = out
 
 
-@pl.program
-class StaticShapeNegativeSubscript:
-    """Exercise Python-style negative indexing for a fixed tensor shape."""
-
-    @pl.function(type=pl.FunctionType.InCore)
-    def shape_kernel(
-        self,
-        a: pl.Tensor[[2, 128], pl.DT_FP32],
-        output: pl.Tensor[[2, 128], pl.DT_FP32],
-    ) -> pl.Tensor[[2, 128], pl.DT_FP32]:
-        n = a.shape[-1]
-        for _ in pl.range(0, n, 1):
-            out = output
-        return out
+static_shape_negative_subscript_program, _ = static_shape_negative_subscript.to_kernel_def().parse_target_program(
+    ir.SectionKind.Vector
+)
+static_shape_negative_subscript = static_shape_negative_subscript_program.get_function(
+    static_shape_negative_subscript.__name__
+)
 
 
-@pl.program
-class DynamicShapeTupleUnpack:
-    """Exercise complete tensor.shape tuple access and repeated discard targets."""
-
-    @pl.function(type=pl.FunctionType.InCore)
-    def shape_kernel(
-        self,
-        a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC, 128, 64], pl.DT_FP32],
-    ):
-        m, n, _, _ = a.shape
-        for _ in pl.range(0, m, 1):
-            out = a
-        return out
+@pl.jit(auto_mutex=False)
+def dynamic_shape_tuple_unpack(
+    a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC, 128, 64], pl.DT_FP32],
+):
+    m, n, _, _ = a.shape
+    for _ in pl.range(0, m, 1):
+        out = a
+    _test_result = out
 
 
-@pl.program
-class CompileTimeShapeAxis:
-    """Exercise a compile-time integer expression as a shape index."""
+dynamic_shape_tuple_unpack_program, _ = dynamic_shape_tuple_unpack.to_kernel_def().parse_target_program(
+    ir.SectionKind.Vector
+)
+dynamic_shape_tuple_unpack = dynamic_shape_tuple_unpack_program.get_function(dynamic_shape_tuple_unpack.__name__)
 
-    @pl.function(type=pl.FunctionType.InCore)
-    def shape_kernel(
-        self,
-        a: pl.Tensor[[2, 128], pl.DT_FP32],
-        output: pl.Tensor[[2, 128], pl.DT_FP32],
-    ) -> pl.Tensor[[2, 128], pl.DT_FP32]:
-        n = a.shape[0]
-        for _ in pl.range(0, n, 1):
-            out = output
-        return out
+
+@pl.jit(auto_mutex=False)
+def compile_time_shape_axis(
+    a: pl.Tensor[[2, 128], pl.DT_FP32],
+    output: pl.Tensor[[2, 128], pl.DT_FP32],
+):
+    n = a.shape[0]
+    for _ in pl.range(0, n, 1):
+        out = output
+    _test_result = out
+
+
+compile_time_shape_axis_program, _ = compile_time_shape_axis.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+compile_time_shape_axis = compile_time_shape_axis_program.get_function(compile_time_shape_axis.__name__)
 
 
 def test_dynamic_shape_subscript_uses_parameter_shape_var():
-    func = AddKernelShapeSubscript.functions["add_kernel"]
-    dynamic_dim = func.params[0].type.shape[0]
+    dynamic_dim = add_kernel_shape_subscript.params[0].type.shape[0]
 
     assert isinstance(dynamic_dim, ir.Var)
     assert dynamic_dim.name == "__pypto_dyn_a_0"
     assert dynamic_dim.type.dtype == DataType.INDEX
-    assert dynamic_dim.name in ir.python_print(AddKernelShapeSubscript)
+    assert dynamic_dim.name in ir.python_print(add_kernel_shape_subscript)
 
 
 def test_negative_shape_subscript_uses_fixed_dimension():
-    func = StaticShapeNegativeSubscript.functions["shape_kernel"]
-
-    assert isinstance(func.params[0].type.shape[-1], ir.ConstInt)
-    assert func.params[0].type.shape[-1].value == 128
+    assert isinstance(static_shape_negative_subscript.params[0].type.shape[-1], ir.ConstInt)
+    assert static_shape_negative_subscript.params[0].type.shape[-1].value == 128
 
 
 def test_shape_tuple_unpack_uses_canonical_tensor_dimensions():
-    func = DynamicShapeTupleUnpack.functions["shape_kernel"]
-
-    assert isinstance(func.params[0].type.shape[0], ir.Var)
-    assert func.params[0].type.shape[0].name == "__pypto_dyn_a_0"
+    assert isinstance(dynamic_shape_tuple_unpack.params[0].type.shape[0], ir.Var)
+    assert dynamic_shape_tuple_unpack.params[0].type.shape[0].name == "__pypto_dyn_a_0"
 
 
 def test_shape_tuple_unpack_rejects_arity_mismatch():
-    code = """
-@pl.function
-def shape_unpack(x: pl.Tensor[[2, 128], pl.DT_FP32]) -> pl.Tensor[[2, 128], pl.DT_FP32]:
-    m, n, k = x.shape
-    return x
-"""
     with pytest.raises(ParserTypeError, match="unpack"):
-        pl.parse(code)
+
+        @pl.jit(auto_mutex=False)
+        def shape_unpack(x: pl.Tensor[[2, 128], pl.DT_FP32]):
+            m, n, k = x.shape
+            _test_result = x
+
+        shape_unpack.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
-@pytest.mark.parametrize("index", ["True", "0.0", "2", "-3"])
+@pytest.mark.parametrize("index", [True, 0.0, 2, -3])
 def test_shape_subscript_rejects_invalid_constant_index(index):
-    code = f"""
-@pl.function
-def shape_index(x: pl.Tensor[[2, 128], pl.DT_FP32]) -> pl.Tensor[[2, 128], pl.DT_FP32]:
-    n = x.shape[{index}]
-    return x
-"""
     with pytest.raises((ParserSyntaxError, ParserTypeError)):
-        pl.parse(code)
+
+        @pl.jit(auto_mutex=False)
+        def shape_index(x: pl.Tensor[[2, 128], pl.DT_FP32]):
+            n = x.shape[index]  # noqa: F841
+            _test_result = x
+
+        shape_index.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_shape_subscript_rejects_non_tensor_base():
-    code = """
-@pl.function
-def shape_index(x: pl.DT_INT64) -> pl.DT_INT64:
-    return x.shape[0]
-"""
     with pytest.raises((ParserSyntaxError, ParserTypeError, UnsupportedFeatureError)):
-        pl.parse(code)
+
+        @pl.jit(auto_mutex=False)
+        def shape_index(x: pl.DT_INT64):
+            _test_result = x.shape[0]
+
+        shape_index.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_shape_subscript_rejects_runtime_axis():
-    code = """
-@pl.function
-def shape_index(
-    x: pl.Tensor[[2, 128], pl.DT_FP32],
-    axis: pl.DT_INT64,
-) -> pl.DT_INT64:
-    return x.shape[axis]
-"""
     with pytest.raises(ParserSyntaxError, match="tensor.shape index must be a compile-time integer"):
-        pl.parse(code)
+
+        @pl.jit(auto_mutex=False)
+        def shape_index(
+            x: pl.Tensor[[2, 128], pl.DT_FP32],
+            axis: pl.DT_INT64,
+        ):
+            _test_result = x.shape[axis]
+
+        shape_index.to_kernel_def().parse_target_program(ir.SectionKind.Vector)

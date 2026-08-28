@@ -40,10 +40,13 @@ class Tensor:
     Examples:
         >>> import pypto_pro.language as pl
         >>>
-        >>> @pl.function
-        ... def my_func(x: pl.Tensor[[64, 128], pl.DT_FP16, pl.NZ]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
-        ...     result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.create_tensor([64, 128], dtype=pl.DT_FP32)
-        ...     return result
+        >>> @pl.jit
+        ... def my_func(
+        ...     x: pl.Tensor[[64, 128], pl.DT_FP16, pl.NZ],
+        ...     out: pl.Tensor[[64, 128], pl.DT_FP32],
+        ... ):
+        ...     # Build the kernel body with explicit tile operations.
+        ...     ...
     """
 
     def __init__(

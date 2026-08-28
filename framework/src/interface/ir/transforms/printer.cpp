@@ -1090,17 +1090,12 @@ void IRPrinter::VisitFunctionBody(const StmtPtr& body)
 
 void IRPrinter::VisitFunction(const FunctionPtr& func)
 {
-    // Print decorator
+    // Print decorator: only SIMT functions carry a decorator
     if (func->funcType_ == FunctionType::SIMT_VF || func->funcType_ == FunctionType::SIMT_CALLEE) {
         stream_ << GetIndent() << "@" << prefix_ << ".simt.function(type=" << prefix_ << ".FunctionType."
                 << FunctionTypeToString(func->funcType_) << ")";
-    } else {
-        stream_ << GetIndent() << "@" << prefix_ << ".function";
-        if (func->funcType_ != FunctionType::OPAQUE) {
-            stream_ << "(type=" << prefix_ << ".FunctionType." << FunctionTypeToString(func->funcType_) << ")";
-        }
+        stream_ << "\n";
     }
-    stream_ << "\n";
 
     // Print function signature
     stream_ << GetIndent() << "def " << func->name_ << "(";

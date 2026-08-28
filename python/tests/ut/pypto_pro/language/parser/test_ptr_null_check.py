@@ -10,6 +10,7 @@
 # -----------------------------------------------------------------------------------------------------------
 """Parser tests for pointer null-check syntax on optional pl.Ptr parameters."""
 
+from pypto_pro import ir
 import pypto_pro.language as pl
 from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError
 import pytest
@@ -18,11 +19,13 @@ import pytest
 def test_is_none_requires_simple_variable():
     """'is None' must be used on simple variable names, not complex expressions."""
     with pytest.raises(ParserSyntaxError, match="only supported on simple variable names"):
-        @pl.function
-        def bad_is_none():
+        @pl.jit(auto_mutex=False)
+        def bad_is_none(_jit_entry: pl.DT_INT64):
             x: pl.DT_INT32 = 42
             if (x + 1) is None:  # Complex expression not allowed
                 pass
+
+        bad_is_none.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_is_none_on_tensor_rejected():
@@ -34,10 +37,12 @@ def test_is_none_on_tensor_rejected():
     tensor with no argument has no meaningful shape).
     """
     with pytest.raises(ParserTypeError, match="pl.Ptr"):
-        @pl.function
+        @pl.jit(auto_mutex=False)
         def bad_tensor_none(
             src: pl.Tensor[[4], pl.DT_FP16],
             bias: pl.Tensor[[4], pl.DT_FP16],  # should be pl.Ptr[pl.DT_FP16]
         ):
             if bias is None:
                 pass
+
+        bad_tensor_none.to_kernel_def().parse_target_program(ir.SectionKind.Vector)

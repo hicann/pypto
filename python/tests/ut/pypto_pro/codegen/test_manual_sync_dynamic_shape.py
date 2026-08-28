@@ -49,7 +49,7 @@ def _assert_in_order(source: str, *snippets: str) -> None:
         assert position >= 0, f"missing or reordered CCE snippet: {snippet}\n{source}"
 
 
-@pl.kernel
+@pl.jit
 def _vector_pipeline_kernel(
     x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
@@ -74,7 +74,7 @@ def _vector_pipeline_kernel(
             pl.system.sync_dst(set_pipe=pl.PipeType.MTE3, wait_pipe=pl.PipeType.MTE2, event_id=4)
 
 
-@pl.kernel
+@pl.jit
 def _cube_pipeline_kernel(
     a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
     b: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
@@ -113,7 +113,7 @@ def _cube_pipeline_kernel(
             pl.system.sync_dst(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.FIX, event_id=6)
 
 
-@pl.kernel
+@pl.jit
 def _scalar_pipeline_kernel(
     x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT32],
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT32],
@@ -133,7 +133,7 @@ def _scalar_pipeline_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE3, wait_pipe=pl.PipeType.MTE2, event_id=0)
 
 
-@pl.kernel
+@pl.jit
 def _static_event_kernel(
     x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
 ):
@@ -179,7 +179,7 @@ def _datatype_static_event_kernel(x: pl.Ptr[pl.DT_UINT8]):
             pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=6)
 
 
-@pl.kernel
+@pl.jit
 def _dynamic_event_kernel(
     x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
     event_id: pl.DT_INT64,
@@ -207,7 +207,7 @@ def _dynamic_event_kernel(
             pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=ping_pong)
 
 
-@pl.kernel
+@pl.jit
 def _control_flow_kernel(
     x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
     condition: pl.DT_BOOL,
@@ -238,7 +238,7 @@ def _control_flow_kernel(
             index = index + 1
 
 
-@pl.kernel
+@pl.jit
 def _barrier_kernel(
     x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
     condition: pl.DT_BOOL,
@@ -258,7 +258,7 @@ def _barrier_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
 
 
-@pl.kernel
+@pl.jit
 def _sync_all_hard_kernel(
     x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
 ):
@@ -270,7 +270,7 @@ def _sync_all_hard_kernel(
         pl.system.sync_all(core_type=pl.SyncCoreType.MIX)
 
 
-@pl.kernel
+@pl.jit
 def _mutex_kernel(
     x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
@@ -313,7 +313,7 @@ def _mutex_kernel(
             pl.system.mutex_unlock(pipe=pl.PipeType.M, mutex_id=11)
 
 
-@pl.kernel(auto_mutex=True)
+@pl.jit(auto_mutex=True)
 def _auto_mutex_combination_kernel(
     x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
@@ -343,8 +343,8 @@ def _auto_mutex_combination_kernel(
 
 
 def test_a01_a03_a04_a06_a07_a08_vector_and_scalar_pipeline_order():
-    vector = _compile_to_cce(_vector_pipeline_kernel)
-    scalar = _compile_to_cce(_scalar_pipeline_kernel)
+    vector = _compile_to_cce(_vector_pipeline_kernel.to_kernel_def())
+    scalar = _compile_to_cce(_scalar_pipeline_kernel.to_kernel_def())
 
     _assert_in_order(
         vector,
@@ -371,7 +371,7 @@ def test_a01_a03_a04_a06_a07_a08_vector_and_scalar_pipeline_order():
 
 
 def test_a02_a05_a09_a10_a11_cube_forward_and_reverse_reuse_order():
-    cpp = _compile_to_cce(_cube_pipeline_kernel)
+    cpp = _compile_to_cce(_cube_pipeline_kernel.to_kernel_def())
     _assert_in_order(
         cpp,
         "set_flag(PIPE_MTE2, PIPE_MTE1, (event_t)0);",
@@ -404,7 +404,7 @@ def test_a02_a05_a09_a10_a11_cube_forward_and_reverse_reuse_order():
     ],
 )
 def test_b01_b07_static_event_id_generalization(event_token):
-    cpp = _compile_to_cce(_static_event_kernel)
+    cpp = _compile_to_cce(_static_event_kernel.to_kernel_def())
     assert event_token in cpp
     if event_token == "(event_t)2":
         assert cpp.count("(event_t)2") >= 2
@@ -431,7 +431,7 @@ def test_b07_datatype_branch_folds_selected_event_id(dtype, event_id):
 
 
 def test_b06_b10_runtime_event_id_generalization():
-    cpp = _compile_to_cce(_dynamic_event_kernel)
+    cpp = _compile_to_cce(_dynamic_event_kernel.to_kernel_def())
     sync_calls = re.findall(r"(?:set_flag|wait_flag)\([^;\n]+\);", cpp)
     assert sum(call.startswith("set_flag(") for call in sync_calls) >= 4
     assert sum(call.startswith("wait_flag(") for call in sync_calls) >= 4
@@ -452,7 +452,7 @@ def test_b06_b10_runtime_event_id_generalization():
     ids=["C01-C02-runtime-if-else", "C03-C05-nested-for-if", "C06-while"],
 )
 def test_c01_c06_sync_is_preserved_in_control_flow(control_token, inner_sync):
-    cpp = _compile_to_cce(_control_flow_kernel)
+    cpp = _compile_to_cce(_control_flow_kernel.to_kernel_def())
     assert control_token in cpp
     assert cpp.count("set_flag(") == cpp.count("wait_flag(")
     _assert_in_order(cpp, control_token, inner_sync)
@@ -471,7 +471,7 @@ def test_c01_c06_sync_is_preserved_in_control_flow(control_token, inner_sync):
 )
 def test_d02_d11_barrier_codegen(case_id, barrier, minimum_count, container):
     del case_id
-    cpp = _compile_to_cce(_barrier_kernel)
+    cpp = _compile_to_cce(_barrier_kernel.to_kernel_def())
     assert cpp.count(barrier) >= minimum_count
     if container is not None:
         _assert_in_order(cpp, container, barrier)
@@ -493,11 +493,11 @@ def test_d02_d11_barrier_codegen(case_id, barrier, minimum_count, container):
     ids=["E01-hard-aiv", "E02-hard-aic", "E03-hard-mix"],
 )
 def test_e01_e03_hard_sync_all(syncall):
-    assert syncall in _compile_to_cce(_sync_all_hard_kernel)
+    assert syncall in _compile_to_cce(_sync_all_hard_kernel.to_kernel_def())
 
 
 def test_f01_f09_static_dynamic_and_control_flow_mutex():
-    cpp = _compile_to_cce(_mutex_kernel)
+    cpp = _compile_to_cce(_mutex_kernel.to_kernel_def())
     assert "get_buf(PIPE_MTE2, 0, 0);" in cpp
     assert "rls_buf(PIPE_MTE2, 0, 0);" in cpp
     assert "get_buf(PIPE_MTE3" in cpp
@@ -515,7 +515,7 @@ def test_f01_f09_static_dynamic_and_control_flow_mutex():
 
 
 def test_h01_h05_auto_mutex_with_all_manual_sync_forms():
-    cpp = _compile_to_cce(_auto_mutex_combination_kernel)
+    cpp = _compile_to_cce(_auto_mutex_combination_kernel.to_kernel_def())
     assert "get_buf(" in cpp
     assert "rls_buf(" in cpp
     assert "set_flag(PIPE_MTE2, PIPE_V, (event_t)4);" in cpp

@@ -34,13 +34,16 @@ def test_tiling_field_named_shape_uses_struct_field_access():
     class Tiling:
         shape: int[4]
 
-    @pl.function
-    def kernel(tiling: Tiling) -> pl.DT_INT64:
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64, tiling: Tiling):
         result: pl.DT_INT64 = tiling.shape[3]
-        return result
+        _test_result = result
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
-    assert isinstance(kernel.params[0].type, ir.TupleType)
+    assert isinstance(kernel.params[1].type, ir.TupleType)
 
 
 def test_tiling_param_lowered_to_single_struct():
@@ -49,17 +52,20 @@ def test_tiling_param_lowered_to_single_struct():
         x: int
         y: float
 
-    @pl.function
-    def kernel(tiling: Tiling) -> pl.DT_INT64:
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64, tiling: Tiling):
         result: pl.DT_INT64 = tiling.x
-        return result
+        _test_result = result
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
     # The tiling class is lowered to a single struct (TupleType) parameter.
-    assert len(kernel.params) == 1
-    assert kernel.params[0].name == "tiling"
-    assert isinstance(kernel.params[0].type, ir.TupleType)
-    assert len(kernel.params[0].type.types) == 2
+    assert len(kernel.params) == 2
+    assert kernel.params[1].name == "tiling"
+    assert isinstance(kernel.params[1].type, ir.TupleType)
+    assert len(kernel.params[1].type.types) == 2
 
 
 def test_tiling_scalar_dtypes_are_correct():
@@ -69,14 +75,17 @@ def test_tiling_scalar_dtypes_are_correct():
         scale: float
         flag: bool
 
-    @pl.function
-    def kernel(tiling: Tiling) -> pl.DT_INT64:
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64, tiling: Tiling):
         result: pl.DT_INT64 = tiling.n
-        return result
+        _test_result = result
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
-    assert len(kernel.params) == 1
-    tuple_type = kernel.params[0].type
+    assert len(kernel.params) == 2
+    tuple_type = kernel.params[1].type
     assert isinstance(tuple_type, ir.TupleType)
     elem_types = tuple_type.types
     # Scalar fields become scalar tuple elements in declaration order.
@@ -92,19 +101,21 @@ def test_tensors_plus_tiling_last():
         m: int
         arr: float[3]
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def kernel(
         x: pl.Tensor[[64], pl.DT_FP32],
         y: pl.Tensor[[64], pl.DT_FP32],
         tiling: Tiling,
-    ) -> pl.Tensor[[64], pl.DT_FP32]:
+    ):
         n = tiling.n  # noqa: F841
         m = tiling.m  # noqa: F841
         tmp1 = tiling.arr[1]  # noqa: F841
-        return x
+        _test_result = x
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     logging.info("%s", kernel)
-
     assert isinstance(kernel, ir.Function)
     # Tensors stay individual params; tiling collapses to one struct param last.
     assert len(kernel.params) == 3
@@ -121,16 +132,19 @@ def test_tiling_name_registered_as_struct_in_scope():
         x: int
         y: int
 
-    @pl.function
-    def kernel(tiling: Tiling) -> pl.DT_INT64:
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64, tiling: Tiling):
         a: pl.DT_INT64 = tiling.x
         b: pl.DT_INT64 = tiling.y  # noqa: F841
-        return a
+        _test_result = a
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
-    assert len(kernel.params) == 1
-    assert kernel.params[0].name == "tiling"
-    assert isinstance(kernel.params[0].type, ir.TupleType)
+    assert len(kernel.params) == 2
+    assert kernel.params[1].name == "tiling"
+    assert isinstance(kernel.params[1].type, ir.TupleType)
 
 
 def test_tiling_field_access_lowers_to_getitem():
@@ -140,14 +154,17 @@ def test_tiling_field_access_lowers_to_getitem():
     class Tiling:
         x: int
 
-    @pl.function
-    def kernel(tiling: Tiling) -> pl.DT_INT64:
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64, tiling: Tiling):
         result: pl.DT_INT64 = tiling.x
-        return result
+        _test_result = result
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
-    assert len(kernel.params) == 1
-    assert kernel.params[0].name == "tiling"
+    assert len(kernel.params) == 2
+    assert kernel.params[1].name == "tiling"
     # tiling.x lowers to tiling[0] (field index 0 of the struct).
     assert "getitem(%tiling, 0)" in str(kernel)
 
@@ -159,15 +176,21 @@ def test_tiling_registry_reset_between_functions():
     class Tiling:
         n: int
 
-    @pl.function
-    def func1(tiling: Tiling):
+    @pl.jit(auto_mutex=False)
+    def func1(_jit_entry: pl.DT_INT64, tiling: Tiling):
         x: pl.DT_INT64 = tiling.n
-        return x
+        _test_result = x
+
+    func1_program, _ = func1.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func1 = func1_program.get_function(func1.__name__)
 
     # Second function should not see tiling from first function
-    @pl.function
-    def func2(x: pl.Tensor[[64], pl.DT_FP32]) -> pl.Tensor[[64], pl.DT_FP32]:
-        return x
+    @pl.jit(auto_mutex=False)
+    def func2(x: pl.Tensor[[64], pl.DT_FP32]):
+        _test_result = x
+
+    func2_program, _ = func2.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func2 = func2_program.get_function(func2.__name__)
 
     assert isinstance(func1, ir.Function)
     assert isinstance(func2, ir.Function)
@@ -182,12 +205,14 @@ def test_tiling_not_last_raises_parser_syntax_error():
 
     with pytest.raises(ParserSyntaxError, match="must be the last parameter"):
 
-        @pl.function
+        @pl.jit(auto_mutex=False)
         def kernel(
             tiling: Tiling,  # Not last!
             x: pl.Tensor[[64], pl.DT_FP32],
         ):
             pass
+
+        kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_multiple_tiling_params_raises_parser_syntax_error():
@@ -203,12 +228,15 @@ def test_multiple_tiling_params_raises_parser_syntax_error():
 
     with pytest.raises(ParserSyntaxError, match="at most 1"):
 
-        @pl.function
+        @pl.jit(auto_mutex=False)
         def kernel(
+            _jit_entry: pl.DT_INT64,
             ta: TilingA,
             tb: TilingB,
         ):
             pass
+
+        kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_nonexistent_tiling_field_raises_error():
@@ -224,10 +252,12 @@ def test_nonexistent_tiling_field_raises_error():
 
     with pytest.raises(UnsupportedFeatureError, match="Standalone attribute access not supported"):
 
-        @pl.function
-        def kernel(tiling: Tiling) -> pl.DT_INT64:
+        @pl.jit(auto_mutex=False)
+        def kernel(_jit_entry: pl.DT_INT64, tiling: Tiling):
             result: pl.DT_INT64 = tiling.nonexistent  # type: ignore[attr-defined]
-            return result
+            _test_result = result
+
+        kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_array_field_lowers_to_nested_tuple():
@@ -235,14 +265,17 @@ def test_array_field_lowers_to_nested_tuple():
     class Tiling:
         offsets: int[3]
 
-    @pl.function
-    def kernel(tiling: Tiling) -> pl.DT_INT64:
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64, tiling: Tiling):
         result: pl.DT_INT64 = tiling.offsets[0]
-        return result
+        _test_result = result
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
-    assert len(kernel.params) == 1
-    tuple_type = kernel.params[0].type
+    assert len(kernel.params) == 2
+    tuple_type = kernel.params[1].type
     assert isinstance(tuple_type, ir.TupleType)
     # An int[3] field becomes a nested TupleType of 3 scalars.
     assert len(tuple_type.types) == 1
@@ -258,14 +291,17 @@ def test_array_field_dtypes():
         floats: float[2]
         bools: bool[2]
 
-    @pl.function
-    def kernel(tiling: Tiling) -> pl.DT_INT64:
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64, tiling: Tiling):
         result: pl.DT_INT64 = tiling.ints[0]
-        return result
+        _test_result = result
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
-    assert len(kernel.params) == 1
-    elem_types = kernel.params[0].type.types
+    assert len(kernel.params) == 2
+    elem_types = kernel.params[1].type.types
     assert all(t.dtype == DataType.INDEX for t in elem_types[0].types)
     assert all(t.dtype == DataType.FP32 for t in elem_types[1].types)
     assert all(t.dtype == DataType.BOOL for t in elem_types[2].types)
@@ -278,14 +314,17 @@ def test_mixed_scalar_and_array_fields():
         offsets: int[2]
         scale: float
 
-    @pl.function
-    def kernel(tiling: Tiling) -> pl.DT_INT64:
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64, tiling: Tiling):
         result: pl.DT_INT64 = tiling.n
-        return result
+        _test_result = result
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
-    assert len(kernel.params) == 1
-    tuple_type = kernel.params[0].type
+    assert len(kernel.params) == 2
+    tuple_type = kernel.params[1].type
     assert len(tuple_type.types) == 3
     # Scalar field -> scalar element; array field -> nested tuple element.
     assert isinstance(tuple_type.types[0], ir.ScalarType)
@@ -299,13 +338,16 @@ def test_array_subscript_access():
     class Tiling:
         offsets: int[3]
 
-    @pl.function
-    def kernel(tiling: Tiling) -> pl.DT_INT64:
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64, tiling: Tiling):
         result: pl.DT_INT64 = tiling.offsets[1]
-        return result
+        _test_result = result
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
-    assert len(kernel.params) == 1
+    assert len(kernel.params) == 2
     assignments = [stmt for stmt in kernel.body.stmts if isinstance(stmt, ir.AssignStmt)]
     result = next(stmt for stmt in assignments if stmt.var.name == "result")
     assert isinstance(result.value, ir.GetItemExpr)
@@ -326,20 +368,29 @@ def test_array_all_indices_accessible():
     class Tiling:
         vals: int[3]
 
-    @pl.function
-    def kernel0(tiling: Tiling) -> pl.DT_INT64:
+    @pl.jit(auto_mutex=False)
+    def kernel0(_jit_entry: pl.DT_INT64, tiling: Tiling):
         result: pl.DT_INT64 = tiling.vals[0]
-        return result
+        _test_result = result
 
-    @pl.function
-    def kernel1(tiling: Tiling) -> pl.DT_INT64:
+    kernel0_program, _ = kernel0.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel0 = kernel0_program.get_function(kernel0.__name__)
+
+    @pl.jit(auto_mutex=False)
+    def kernel1(_jit_entry: pl.DT_INT64, tiling: Tiling):
         result: pl.DT_INT64 = tiling.vals[1]
-        return result
+        _test_result = result
 
-    @pl.function
-    def kernel2(tiling: Tiling) -> pl.DT_INT64:
+    kernel1_program, _ = kernel1.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel1 = kernel1_program.get_function(kernel1.__name__)
+
+    @pl.jit(auto_mutex=False)
+    def kernel2(_jit_entry: pl.DT_INT64, tiling: Tiling):
         result: pl.DT_INT64 = tiling.vals[2]
-        return result
+        _test_result = result
+
+    kernel2_program, _ = kernel2.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel2 = kernel2_program.get_function(kernel2.__name__)
 
     assert isinstance(kernel0, ir.Function)
     assert isinstance(kernel1, ir.Function)
@@ -353,11 +404,14 @@ def test_array_bare_name_resolves_to_nested_tuple():
     class Tiling:
         offsets: int[3]
 
-    @pl.function
-    def kernel(tiling: Tiling) -> pl.DT_INT64:
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64, tiling: Tiling):
         vals = tiling.offsets
         result: pl.DT_INT64 = vals[0]
-        return result
+        _test_result = result
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
     # tiling.offsets lowers to tiling[0], the nested tuple holding the array elements.
@@ -371,10 +425,12 @@ def test_array_out_of_bounds_raises_error():
 
     with pytest.raises(ParserSyntaxError, match="out of bounds"):
 
-        @pl.function
-        def kernel(tiling: Tiling) -> pl.DT_INT64:
+        @pl.jit(auto_mutex=False)
+        def kernel(_jit_entry: pl.DT_INT64, tiling: Tiling):
             result: pl.DT_INT64 = tiling.offsets[99]
-            return result
+            _test_result = result
+
+        kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_array_non_literal_index_allowed():
@@ -384,12 +440,15 @@ def test_array_non_literal_index_allowed():
     class Tiling:
         offsets: int[3]
 
-    @pl.function
-    def kernel(tiling: Tiling) -> pl.DT_INT64:
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64, tiling: Tiling):
         # Use a previously-computed value as subscript (non-literal).
         first: pl.DT_INT64 = tiling.offsets[0]
         result: pl.DT_INT64 = tiling.offsets[first]  # type: ignore[index]
-        return result
+        _test_result = result
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
 
@@ -401,7 +460,9 @@ def test_scalar_subscript_raises_type_error():
 
     with pytest.raises(ParserTypeError, match="Subscript requires tuple, tile, or tensor type"):
 
-        @pl.function
-        def kernel(tiling: Tiling) -> pl.DT_INT64:
+        @pl.jit(auto_mutex=False)
+        def kernel(_jit_entry: pl.DT_INT64, tiling: Tiling):
             result: pl.DT_INT64 = tiling.n[0]  # type: ignore[index]
-            return result
+            _test_result = result
+
+        kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)

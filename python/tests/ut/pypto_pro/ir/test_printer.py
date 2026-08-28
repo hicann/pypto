@@ -37,7 +37,7 @@ def test_python_print_block_tensor_and_tile_types():
     assert "ir.MemRef(ir.MemorySpace.Vec" in printed_tile
 
 
-def test_python_print_program_preserves_block_function_type():
+def test_python_print_program_omits_block_function_decorator():
     span = ir.Span.unknown()
     x = ir.Var("x", ir.ScalarType(DataType.INT64), span)
     fn = ir.Function(
@@ -52,8 +52,9 @@ def test_python_print_program_preserves_block_function_type():
 
     result = ir.python_print(program)
 
+    assert fn.func_type == ir.FunctionType.InCore
     assert "# ir.program: BlockProgram" in result
-    assert "@ir.function(type=ir.FunctionType.InCore)" in result
+    assert "@ir.function" not in result
     assert "def f" in result
 
 

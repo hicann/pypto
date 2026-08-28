@@ -12,8 +12,7 @@
 """
 PyPTO Runtime module - High-level kernel programming API.
 
-This module provides:
-- @kernel decorator: combines @pl.program + @pl.function for single-kernel use cases
+This module provides the @pl.jit kernel frontend and:
 - Extended Tile/Tensor types with manual MemRef specification for address control
 - Re-exports of common pypto_pro.language symbols for convenience
 
@@ -21,19 +20,13 @@ Typical usage:
     import pypto_pro.language as pl
 
     @pl.jit
-    def my_kernel(x: pl.Tensor[[64, 128], pl.DT_FP16]) -> pl.Tensor[[64, 128], pl.DT_FP32]:
-        tile = pl.load(x, [0, 0], [64, 64])
-        result = pl.add(tile, tile)
-        return pl.store(result, [0, 0], [64, 64], x)
+    def my_kernel(x: pl.Tensor[[64, 128], pl.DT_FP16]):
+        pl.system.bar_all()
 
-    # my_kernel is an ir.Program with a single function
+    # my_kernel is lazily compiled on first launch.
 """
 
-__all__ = [
-    "kernel",
-    "KernelDef",
-    "jit",
-]
+__all__ = ["jit"]
 
 
 from pypto.pypto_impl.ir import MemorySpace  # noqa: F401
@@ -42,4 +35,3 @@ from pypto.pypto_impl.ir import MemorySpace  # noqa: F401
 # (e.g. pl.pipeline.PipelineConfig), not exposed as top-level framework API.
 from . import pipeline  # noqa: F401
 from .jit import jit
-from .kernel import KernelDef, kernel

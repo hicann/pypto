@@ -15,7 +15,10 @@ import ast
 from collections import namedtuple
 import copy
 from dataclasses import dataclass
+import inspect
+import linecache
 import logging
+import sys
 from typing import Any, Callable
 
 from pypto.pypto_impl import ir
@@ -30,14 +33,192 @@ from .diagnostics import (
     FinalRejectionError,
     ParserSyntaxError,
     ParserTypeError,
-    UndefinedVariableError,
     UnsupportedFeatureError,
 )
 
 logger = logging.getLogger(__name__)
 
 
-# Tile reference for auto mutex (optional mutex metadata, memory, dedup id).
+def _get_source_file(entity: Callable | type) -> str:
+    """Get source filename for an entity, with fallback to code object attributes.
+
+    Args:
+        entity: Function or class to get source file for
+
+    Returns:
+        Source filename string
+    """
+    try:
+        return inspect.getfile(entity)
+    except (OSError, TypeError):
+        pass
+
+    # Fallback: extract from code object
+    if callable(entity) and hasattr(entity, "__code__"):
+        return entity.__code__.co_filename
+
+    # For classes, find a method with a code object
+    if isinstance(entity, type):
+        for attr in entity.__dict__.values():
+            if callable(attr) and hasattr(attr, "__code__"):
+                return attr.__code__.co_filename
+
+    return "<unknown>"
+
+
+def _find_entity_in_source(
+    all_lines: list[str], name: str, entity_type: str, start_line_hint: int | None = None
+) -> tuple[list[str], int] | None:
+    """Find an entity definition in source lines using AST parsing.
+
+    Args:
+        all_lines: All source lines from the file
+        name: Name of the entity to find
+        entity_type: "function" or "class"
+        start_line_hint: Optional line number to disambiguate entities with the same name
+
+    Returns:
+        Tuple of (source_lines, starting_line_1based) or None if not found
+    """
+    source_text = "".join(all_lines)
+    try:
+        tree = ast.parse(source_text)
+    except SyntaxError:
+        return None
+
+    node_type = ast.FunctionDef if entity_type == "function" else ast.ClassDef
+    candidates = [node for node in ast.walk(tree) if isinstance(node, node_type) and node.name == name]
+
+    if not candidates:
+        return None
+
+    if len(candidates) == 1:
+        node = candidates[0]
+    elif start_line_hint is not None:
+        # Disambiguate using the code object's line number
+        node = min(candidates, key=lambda n: abs(n.lineno - start_line_hint))
+    else:
+        node = candidates[0]
+
+    # Start from the first decorator line if present
+    start_line = node.decorator_list[0].lineno if node.decorator_list else node.lineno
+    end_line = node.end_lineno or node.lineno
+    # Lines are 1-based in AST
+    source_lines = all_lines[start_line - 1:end_line]
+    return source_lines, start_line
+
+
+def _source_from_inspect(entity: Callable | type) -> tuple[str, list[str], int] | None:
+    """Get source information via inspect, returning None when unavailable."""
+    try:
+        source_file = inspect.getfile(entity)
+        source_lines_raw, starting_line = inspect.getsourcelines(entity)
+        return source_file, source_lines_raw, starting_line
+    except (OSError, TypeError):
+        return None
+
+
+def _source_from_linecache(
+    source_file: str,
+    name: str,
+    entity_type: str,
+    start_line_hint: int | None,
+) -> tuple[str, list[str], int] | None:
+    """Get source information from linecache."""
+    all_lines = linecache.getlines(source_file)
+    if not all_lines:
+        return None
+    result = _find_entity_in_source(all_lines, name, entity_type, start_line_hint)
+    return None if result is None else (source_file, result[0], result[1])
+
+
+def _restore_linecache_entry(prev_entry) -> None:
+    """Restore the synthetic <string> linecache entry used for python -c parsing."""
+    if prev_entry is not None:
+        linecache.cache["<string>"] = prev_entry
+    else:
+        linecache.cache.pop("<string>", None)
+
+
+def _source_from_python_c(
+    source_file: str,
+    name: str,
+    entity_type: str,
+    start_line_hint: int | None,
+) -> tuple[str, list[str], int] | None:
+    """Get source information from sys.orig_argv for python -c invocations."""
+    if source_file != "<string>" or not hasattr(sys, "orig_argv"):
+        return None
+    try:
+        c_index = sys.orig_argv.index("-c")
+    except ValueError:
+        return None
+    if c_index + 1 >= len(sys.orig_argv):
+        return None
+
+    code_str = sys.orig_argv[c_index + 1]
+    code_lines = code_str.splitlines(keepends=True)
+    prev_entry = linecache.cache.get("<string>")
+    linecache.cache["<string>"] = (len(code_str), None, code_lines, "<string>")
+    try:
+        result = _find_entity_in_source(code_lines, name, entity_type, start_line_hint)
+        return None if result is None else (source_file, result[0], result[1])
+    finally:
+        _restore_linecache_entry(prev_entry)
+
+
+def _get_source_info(entity: Callable | type, entity_type: str) -> tuple[str, list[str], int]:
+    """Get source file, source lines, and starting line for an entity.
+
+    Tries multiple strategies:
+    1. Standard inspect.getsourcelines()
+    2. linecache fallback (handles IPython, pre-populated cache)
+    3. sys.orig_argv for `python -c` invocations
+    4. Clear error with actionable hint
+
+    Args:
+        entity: Function or class to get source for
+        entity_type: "function" or "class"
+
+    Returns:
+        Tuple of (source_file, source_lines_raw, starting_line)
+
+    Raises:
+        ParserSyntaxError: If source cannot be retrieved by any strategy
+    """
+    name = entity.__name__ if hasattr(entity, "__name__") else str(entity)
+
+    # Get a line number hint from the code object to disambiguate same-name entities
+    start_line_hint: int | None = None
+    if callable(entity) and hasattr(entity, "__code__"):
+        start_line_hint = entity.__code__.co_firstlineno
+
+    # Strategy 1: Standard inspect
+    inspect_result = _source_from_inspect(entity)
+    if inspect_result is not None:
+        return inspect_result
+
+    # Get source file via fallback for strategies 2-3
+    source_file = _get_source_file(entity)
+
+    # Strategy 2: linecache fallback
+    linecache_result = _source_from_linecache(source_file, name, entity_type, start_line_hint)
+    if linecache_result is not None:
+        return linecache_result
+
+    # Strategy 3: sys.orig_argv for `python -c`
+    python_c_result = _source_from_python_c(source_file, name, entity_type, start_line_hint)
+    if python_c_result is not None:
+        return python_c_result
+
+    # Strategy 4: Clear error
+    raise ParserSyntaxError(
+        f"Cannot retrieve source code for {entity_type} '{name}'",
+        hint="Define the callable in a Python source file so its AST can be inspected",
+    )
+
+
+# Mutex carrier for tile-group tiles (buf_id IR expr tuple, candidate values, memory, dedup id).
 _MutexRef = namedtuple("_MutexRef", "buf_ids mutex_ids memory slot_id")
 
 
@@ -604,8 +785,6 @@ class CallParserMixin:
         """
         import textwrap as _tw
 
-        from .decorator import _get_source_info
-
         try:
             source_file, source_lines_raw, starting_line = _get_source_info(fn, "function")
         except Exception as e:
@@ -737,28 +916,7 @@ class CallParserMixin:
         """
         func = call.func
 
-        # Handle cross-function calls via self.method_name() in @pl.program classes
         if isinstance(func, ast.Attribute):
-            # Check for self.method_name pattern
-            if isinstance(func.value, ast.Name) and func.value.id == "self":
-                method_name = func.attr
-                if method_name in self.global_vars:
-                    func_obj = self.gvar_to_func.get(method_name)
-                    args = [self.parse_expression(arg) for arg in call.args]
-                    span = self.span_tracker.get_span(call)
-
-                    # Use return type from the parsed function if available
-                    return_types = func_obj.return_types if func_obj else []
-                    op = ir.Op(method_name)
-                    return self._make_call_with_return_type(op, args, return_types, span)
-                else:
-                    raise UndefinedVariableError(
-                        f"Function '{method_name}' not defined in program",
-                        span=self.span_tracker.get_span(call),
-                        hint=f"Available functions: {sorted(self.global_vars)}",
-                    )
-
-            # Handle pl.tensor.*, pl.system.*, and pl.* operation calls
             return self.parse_op_call(call)
 
         # Handle bare-name calls to external IR functions or inline Python callables.
@@ -778,7 +936,7 @@ class CallParserMixin:
         raise UnsupportedFeatureError(
             f"Unsupported function call: {ast.unparse(call)}",
             span=self.span_tracker.get_span(call),
-            hint="Use pl.* operations, self.method() for cross-function calls, or call an inline Python helper by name",
+            hint="Use pl.* operations or call an inline Python helper by name",
         )
 
     def parse_op_call(self, call: ast.Call) -> Any:
@@ -918,40 +1076,6 @@ class CallParserMixin:
             return self._parse_vf_op(op_name[3:], call)
         return self._parse_block_default(op_name, call)
 
-    def _parse_external_function_call(self, _local_name: str, ext_func: ir.Function, call: ast.Call) -> ir.Expr:
-        """Parse a call to an externally-defined ir.Function.
-
-        Args:
-            _local_name: The name used in the caller's scope (may be aliased)
-            ext_func: The external ir.Function object
-            call: The AST Call node
-        """
-        func_name = ext_func.name
-        span = self.span_tracker.get_span(call)
-
-        # Validate no naming conflict with internal program functions
-        if func_name in self.global_vars:
-            raise ParserSyntaxError(
-                f"External function '{func_name}' conflicts with program function '{func_name}'",
-                span=span,
-                hint="Rename either the external or program function to avoid the name conflict",
-            )
-
-        # Check for conflicting externals with same .name but different objects
-        if func_name in self.external_funcs and self.external_funcs[func_name] is not ext_func:
-            raise ParserSyntaxError(
-                f"Conflicting external functions with name '{func_name}'",
-                span=span,
-                hint="External functions must have unique names; rename one of the functions",
-            )
-
-        # Track the external function
-        self.external_funcs[func_name] = ext_func
-
-        args = [self.parse_expression(arg) for arg in call.args]
-        op = ir.Op(func_name)
-        return self._make_call_with_return_type(op, args, ext_func.return_types, span)
-
     def _parse_simt_template_call(self, local_name: str, fn: Callable, call: ast.Call) -> ir.Expr:
         """Instantiate and call one helper @pl.simt.function template."""
         span = self.span_tracker.get_span(call)
@@ -1030,7 +1154,6 @@ class CallParserMixin:
             ir.SectionKind.Vector,
             line_offset,
             col_offset,
-            global_vars=self.global_vars,
             closure_vars=self._build_function_closure(fn),
             debug_info=self.debug_info,
             tilingkey_consts=self._tilingkey_consts,
@@ -1096,11 +1219,6 @@ class CallParserMixin:
 
     def _register_simt_external(self, func: ir.Function, span) -> None:
         """Register one instantiated SIMT function in the enclosing Program."""
-        if func.name in self.global_vars:
-            raise ParserSyntaxError(
-                f"SIMT function '{func.name}' conflicts with an internal program function",
-                span=span,
-            )
         if func.name in self.external_funcs and self.external_funcs[func.name] is not func:
             raise ParserSyntaxError(
                 f"Conflicting external functions with name '{func.name}'",

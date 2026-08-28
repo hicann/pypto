@@ -16,10 +16,10 @@ import re
 import pypto_pro.language as pl
 
 
-def _compile_to_cce(kernel_def) -> str:
+def _compile_to_cce(kernel) -> str:
     from pypto_pro.runtime.jit import _add_kernel_header, _assemble_cv_source, _parse_and_codegen_targets
 
-    cube, vector = _parse_and_codegen_targets(kernel_def, "a5", "")
+    cube, vector = _parse_and_codegen_targets(kernel.to_kernel_def(), "a5", "")
     return _add_kernel_header(_assemble_cv_source(cube, vector)).content
 
 
@@ -40,7 +40,7 @@ def _scalar_cast_intrinsics(
     plain_out[0, 0] = pl.simt.cast(integer, pl.DT_INT32)
 
 
-@pl.kernel
+@pl.jit
 def _scalar_cast_codegen_kernel(value: pl.DT_FP32, integer: pl.DT_INT64):
     half_type = pl.TileType(shape=[1, 1], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
     bfloat_type = pl.TileType(shape=[1, 1], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec)
@@ -125,7 +125,7 @@ def _scalar_cast_all_intrinsics(
     int32_out[0, 0] = pl.simt.cast(int64_value, pl.DT_INT32)
 
 
-@pl.kernel
+@pl.jit
 def _scalar_cast_all_codegen_kernel(
     value: pl.DT_FP32,
     int32_value: pl.DT_INT32,

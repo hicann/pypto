@@ -10,7 +10,7 @@
 # -----------------------------------------------------------------------------------------------------------
 """Unit tests for compact mode propagation through Block tile creation."""
 
-from pypto_pro import DataType
+from pypto_pro import DataType, ir
 from pypto_pro.ir.op.block_ops import make_tile_expr
 import pypto_pro.language as pl
 import pytest
@@ -78,7 +78,7 @@ def test_compact_stored_in_make_tile_type(compact, expected):
 )
 def test_compact_propagated_by_parser(compact, expected):
     if compact is None:
-        @pl.function
+        @pl.jit(auto_mutex=False)
         def func(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
             tile_type = pl.TileType(
                 shape=[128, 128],
@@ -87,8 +87,11 @@ def test_compact_propagated_by_parser(compact, expected):
                 layout=pl.NZ,
             )
             tile_a = pl.make_tile(tile_type, addr=0x00000, size=32768)  # noqa: F841
+
+        func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+        func = func_program.get_function(func.__name__)
     else:
-        @pl.function
+        @pl.jit(auto_mutex=False)
         def func(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
             tile_type = pl.TileType(
                 shape=[128, 128],
@@ -98,6 +101,9 @@ def test_compact_propagated_by_parser(compact, expected):
                 compact=compact,
             )
             tile_a = pl.make_tile(tile_type, addr=0x00000, size=32768)  # noqa: F841
+
+        func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+        func = func_program.get_function(func.__name__)
 
     stmt = func.body.stmts[0] if hasattr(func.body, "stmts") else func.body
     tile_type = stmt.var.type

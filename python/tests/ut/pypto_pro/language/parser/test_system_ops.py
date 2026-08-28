@@ -11,6 +11,7 @@
 """Tests for system operation DSL parsing and unified printing."""
 
 import pypto_pro
+from pypto_pro import ir
 import pypto_pro.language as pl
 from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError
 import pytest
@@ -23,14 +24,15 @@ def _const_int(value: int):
 def test_sync_src_print_style():
     """Test unified printing for pl.system.sync_src."""
 
-    @pl.program
-    class Before:
-        @pl.function
-        def main(self, x: pl.Tensor[[64], pl.DT_FP32]) -> pl.Tensor[[64], pl.DT_FP32]:
-            pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-            return x
+    @pl.jit(auto_mutex=False)
+    def main(x: pl.Tensor[[64], pl.DT_FP32]):
+        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
+        _test_result = x
 
-    printed = pypto_pro.ir.python_print(Before)
+    main_program, _ = main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    main = main_program.get_function(main.__name__)
+
+    printed = pypto_pro.ir.python_print(main)
     assert "ir.call @system.sync_src_dyn(" in printed
     assert "set_pipe" in printed
     assert "MTE2" in printed
@@ -42,30 +44,32 @@ def test_sync_src_print_style():
 def test_bar_all_print_style():
     """Test unified printing for pl.system.bar_all."""
 
-    @pl.program
-    class Before:
-        @pl.function
-        def main(self, x: pl.Tensor[[64], pl.DT_FP32]) -> pl.Tensor[[64], pl.DT_FP32]:
-            pl.system.bar_all()
-            return x
+    @pl.jit(auto_mutex=False)
+    def main(x: pl.Tensor[[64], pl.DT_FP32]):
+        pl.system.bar_all()
+        _test_result = x
 
-    printed = pypto_pro.ir.python_print(Before)
+    main_program, _ = main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    main = main_program.get_function(main.__name__)
+
+    printed = pypto_pro.ir.python_print(main)
     assert "ir.call @system.bar_all()" in printed
 
 
 def test_multiple_system_ops_print_style():
     """Test unified printing with multiple system ops in a single function."""
 
-    @pl.program
-    class Before:
-        @pl.function
-        def main(self, x: pl.Tensor[[64], pl.DT_FP32]) -> pl.Tensor[[64], pl.DT_FP32]:
-            pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-            pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=0)
-            pl.system.bar_all()
-            return x
+    @pl.jit(auto_mutex=False)
+    def main(x: pl.Tensor[[64], pl.DT_FP32]):
+        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
+        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=0)
+        pl.system.bar_all()
+        _test_result = x
 
-    printed = pypto_pro.ir.python_print(Before)
+    main_program, _ = main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    main = main_program.get_function(main.__name__)
+
+    printed = pypto_pro.ir.python_print(main)
     assert "ir.call @system.sync_src_dyn(" in printed
     assert "ir.call @system.sync_dst_dyn(" in printed
     assert "ir.call @system.bar_all()" in printed
@@ -74,15 +78,16 @@ def test_multiple_system_ops_print_style():
 def test_sync_with_different_pipe_types():
     """Test sync ops with various PipeType enum values."""
 
-    @pl.program
-    class Before:
-        @pl.function
-        def main(self, x: pl.Tensor[[64], pl.DT_FP32]) -> pl.Tensor[[64], pl.DT_FP32]:
-            pl.system.sync_src(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.M, event_id=1)
-            pl.system.sync_dst(set_pipe=pl.PipeType.MTE3, wait_pipe=pl.PipeType.S, event_id=2)
-            return x
+    @pl.jit(auto_mutex=False)
+    def main(x: pl.Tensor[[64], pl.DT_FP32]):
+        pl.system.sync_src(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.M, event_id=1)
+        pl.system.sync_dst(set_pipe=pl.PipeType.MTE3, wait_pipe=pl.PipeType.S, event_id=2)
+        _test_result = x
 
-    printed = pypto_pro.ir.python_print(Before)
+    main_program, _ = main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    main = main_program.get_function(main.__name__)
+
+    printed = pypto_pro.ir.python_print(main)
     assert "ir.PipeType.MTE1" in printed
     assert "ir.PipeType.M" in printed
     assert "ir.PipeType.MTE3" in printed
@@ -92,25 +97,34 @@ def test_sync_with_different_pipe_types():
 def test_sync_src_pipe_kwarg_rejects_plain_integer():
     with pytest.raises(ParserTypeError, match="'set_pipe' expects an enum value"):
 
-        @pl.function
-        def func():
+        @pl.jit(auto_mutex=False)
+        def func(_jit_entry: pl.DT_INT64):
             pl.system.sync_src(set_pipe=1, wait_pipe=pl.PipeType.V, event_id=0)
+
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_sync_dst_pipe_kwarg_rejects_plain_integer():
     with pytest.raises(ParserTypeError, match="'wait_pipe' expects an enum value"):
 
-        @pl.function
-        def func():
+        @pl.jit(auto_mutex=False)
+        def func(_jit_entry: pl.DT_INT64):
             pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=5, event_id=0)
+
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_mutex_lock_pipe_kwarg_rejects_plain_integer():
     with pytest.raises(ParserTypeError, match="'pipe' expects an enum value"):
 
-        @pl.function
-        def func():
+        @pl.jit(auto_mutex=False)
+        def func(_jit_entry: pl.DT_INT64):
             pl.system.mutex_lock(pipe=5, mutex_id=0)
+
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 @pytest.mark.parametrize("builder", [pl.system.sync_src, pl.system.sync_dst])
@@ -130,17 +144,23 @@ def test_mutex_ir_builder_requires_pipe_type(builder, pipe):
 def test_sync_all_core_type_rejects_plain_integer():
     with pytest.raises(ParserTypeError, match="'core_type' expects an enum value"):
 
-        @pl.function
-        def func():
+        @pl.jit(auto_mutex=False)
+        def func(_jit_entry: pl.DT_INT64):
             pl.system.sync_all(core_type=2)
+
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_sync_all_mode_rejects_plain_integer():
     with pytest.raises(ParserTypeError, match="'mode' expects an enum value"):
 
-        @pl.function
-        def func():
+        @pl.jit(auto_mutex=False)
+        def func(_jit_entry: pl.DT_INT64):
             pl.system.sync_all(mode=0)
+
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 @pytest.mark.parametrize("builder", [pl.system.sync_src, pl.system.sync_dst])
@@ -254,9 +274,12 @@ def test_mutex_candidate_ids_are_validated_by_frontend(builder, mutex_ids, dynam
 def test_empty_mutex_ids_rejected_after_kwarg_resolution():
     with pytest.raises(ParserSyntaxError, match="mutex_ids must not be empty"):
 
-        @pl.function
-        def func():
+        @pl.jit(auto_mutex=False)
+        def func(_jit_entry: pl.DT_INT64):
             pl.system.mutex_lock(pipe=pl.PipeType.MTE2, mutex_id=0, mutex_ids=[])
+
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 @pytest.mark.parametrize("builder", [pl.system.mutex_lock, pl.system.mutex_unlock])
@@ -277,7 +300,7 @@ def test_sync_all_soft_mode_requires_workspaces_in_frontend():
 
 
 def test_complex_integer_event_id_expression_is_accepted():
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(base: pl.DT_INT64):
         event_id = (base * 3 + 1) % 8
         pl.system.sync_src(
@@ -286,12 +309,17 @@ def test_complex_integer_event_id_expression_is_accepted():
             event_id=event_id,
         )
 
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+    func = func_program.get_function(func.__name__)
+
     assert "system.sync_src_dyn" in str(func)
 
 
 def test_constant_integer_event_id_expression_is_folded_to_operand():
-    @pl.function
-    def func():
+    @pl.jit(auto_mutex=False)
+    def func(_jit_entry: pl.DT_INT64):
         pl.system.sync_src(
             set_pipe=pl.PipeType.MTE2,
             wait_pipe=pl.PipeType.V,
@@ -303,6 +331,11 @@ def test_constant_integer_event_id_expression_is_folded_to_operand():
             event_id=(1 + 2) % 8,
         )
 
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+    func = func_program.get_function(func.__name__)
+
     calls = [stmt.expr for stmt in func.body.stmts if isinstance(stmt, pypto_pro.ir.EvalStmt)]
     assert [call.name for call in calls] == ["system.sync_src_dyn", "system.sync_dst_dyn"]
     for call in calls:
@@ -311,8 +344,8 @@ def test_constant_integer_event_id_expression_is_folded_to_operand():
 
 
 def test_constant_integer_mutex_id_expression_is_folded_to_operand():
-    @pl.function
-    def func():
+    @pl.jit(auto_mutex=False)
+    def func(_jit_entry: pl.DT_INT64):
         pl.system.mutex_lock(
             pipe=pl.PipeType.MTE2,
             mutex_id=(5 * 2 + 1) % 32,
@@ -324,6 +357,11 @@ def test_constant_integer_mutex_id_expression_is_folded_to_operand():
             max_mutex_id=12,
         )
 
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+    func = func_program.get_function(func.__name__)
+
     calls = [stmt.expr for stmt in func.body.stmts if isinstance(stmt, pypto_pro.ir.EvalStmt)]
     assert [call.name for call in calls] == ["system.mutex_lock_dyn", "system.mutex_unlock_dyn"]
     for call in calls:
@@ -334,7 +372,7 @@ def test_constant_integer_mutex_id_expression_is_folded_to_operand():
 def test_bool_event_id_expression_is_rejected_by_parser():
     with pytest.raises(ParserSyntaxError, match="event_id must be an integer scalar expression"):
 
-        @pl.function
+        @pl.jit(auto_mutex=False)
         def func(event_id: pl.DT_BOOL):
             pl.system.sync_src(
                 set_pipe=pl.PipeType.MTE2,
@@ -343,10 +381,13 @@ def test_bool_event_id_expression_is_rejected_by_parser():
             )
 
 
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
 def test_bool_mutex_id_expression_is_rejected_by_parser():
     with pytest.raises(ParserSyntaxError, match="mutex_id must be an integer scalar expression"):
 
-        @pl.function
+        @pl.jit(auto_mutex=False)
         def func(mutex_id: pl.DT_BOOL):
             pl.system.mutex_lock(
                 pipe=pl.PipeType.MTE2,
@@ -354,10 +395,13 @@ def test_bool_mutex_id_expression_is_rejected_by_parser():
             )
 
 
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
 def test_complex_float_event_id_expression_is_rejected_by_parser():
     with pytest.raises(ParserSyntaxError, match="event_id must be an integer scalar expression"):
 
-        @pl.function
+        @pl.jit(auto_mutex=False)
         def func(base: pl.DT_INT64):
             event_id = (base * 3 + 1) / 2
             pl.system.sync_src(
@@ -367,10 +411,13 @@ def test_complex_float_event_id_expression_is_rejected_by_parser():
             )
 
 
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
 def test_complex_float_mutex_id_expression_is_rejected_by_parser():
     with pytest.raises(ParserSyntaxError, match="mutex_id must be an integer scalar expression"):
 
-        @pl.function
+        @pl.jit(auto_mutex=False)
         def func(base: pl.DT_INT64):
             mutex_id = (base * 3 + 1) / 2
             pl.system.mutex_lock(
@@ -380,8 +427,11 @@ def test_complex_float_mutex_id_expression_is_rejected_by_parser():
             )
 
 
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
 def test_control_flow_integer_event_id_expression_is_accepted():
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(base: pl.DT_INT64):
         event_id = base % 8
         if base > 4:
@@ -394,13 +444,18 @@ def test_control_flow_integer_event_id_expression_is_accepted():
             event_id=event_id,
         )
 
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+    func = func_program.get_function(func.__name__)
+
     assert "system.sync_src_dyn" in str(func)
 
 
 def test_control_flow_float_event_id_expression_is_rejected_by_parser():
     with pytest.raises(ParserSyntaxError, match="event_id must be an integer scalar expression"):
 
-        @pl.function
+        @pl.jit(auto_mutex=False)
         def func(base: pl.DT_INT64):
             event_id = (base + 1) / 2
             if base > 4:
@@ -412,6 +467,9 @@ def test_control_flow_float_event_id_expression_is_rejected_by_parser():
                 wait_pipe=pl.PipeType.V,
                 event_id=event_id,
             )
+
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 @pytest.mark.parametrize("builder", [pl.system.mutex_lock, pl.system.mutex_unlock])
@@ -446,14 +504,15 @@ def test_mutex_candidate_ids_reject_wrong_container_type(builder, mutex_ids):
 def test_dcci_gm_tensor_with_offset_print_style():
     """Test unified printing for pl.system.dcci with GM tensor and offset."""
 
-    @pl.program
-    class Before:
-        @pl.function
-        def main(self, x: pl.Tensor[[16, 16], pl.DT_FP32]) -> pl.Tensor[[16, 16], pl.DT_FP32]:
-            pl.system.dcci(x, [0, 0], cache_line=pl.CacheLine.SINGLE_CACHE_LINE, dst=pl.DcciDst.CACHELINE_OUT)
-            return x
+    @pl.jit(auto_mutex=False)
+    def main(x: pl.Tensor[[16, 16], pl.DT_FP32]):
+        pl.system.dcci(x, [0, 0], cache_line=pl.CacheLine.SINGLE_CACHE_LINE, dst=pl.DcciDst.CACHELINE_OUT)
+        _test_result = x
 
-    printed = pypto_pro.ir.python_print(Before)
+    main_program, _ = main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    main = main_program.get_function(main.__name__)
+
+    printed = pypto_pro.ir.python_print(main)
     assert "ir.call @system.dcci(" in printed
     assert "cache_line=" in printed
     assert "dst=" in printed
@@ -462,38 +521,39 @@ def test_dcci_gm_tensor_with_offset_print_style():
 def test_dcci_gm_tensor_rejects_float_scalar_offset():
     """Test pl.system.dcci rejects float scalar offset for GM tensor."""
 
-    with pytest.raises(RuntimeError, match="scalar integer element offset"):
+    with pytest.raises(ParserSyntaxError, match="scalar integer element offset"):
 
-        @pl.program
-        class Before:
-            @pl.function
-            def main(self, x: pl.Tensor[[16, 16], pl.DT_FP32]) -> pl.Tensor[[16, 16], pl.DT_FP32]:
-                pl.system.dcci(x, 1.5)
-                return x
+        @pl.jit(auto_mutex=False)
+        def main(x: pl.Tensor[[16, 16], pl.DT_FP32]):
+            pl.system.dcci(x, 1.5)
+            _test_result = x
+
+        main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_dcci_gm_tensor_rejects_float_tuple_offset():
     """Test pl.system.dcci rejects float tuple element offset for GM tensor."""
 
-    with pytest.raises(RuntimeError, match="per-dimension list/tuple"):
+    with pytest.raises(ParserSyntaxError, match="per-dimension list/tuple"):
 
-        @pl.program
-        class Before:
-            @pl.function
-            def main(self, x: pl.Tensor[[16, 16], pl.DT_FP32]) -> pl.Tensor[[16, 16], pl.DT_FP32]:
-                pl.system.dcci(x, [1.5, 0])
-                return x
+        @pl.jit(auto_mutex=False)
+        def main(x: pl.Tensor[[16, 16], pl.DT_FP32]):
+            pl.system.dcci(x, [1.5, 0])
+            _test_result = x
+
+        main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_dcci_with_tuple_offset_print_style():
     """Test unified printing for pl.system.dcci with tuple offset."""
 
-    @pl.program
-    class Before:
-        @pl.function
-        def main(self, x: pl.Tensor[[16, 16], pl.DT_FP32]) -> pl.Tensor[[16, 16], pl.DT_FP32]:
-            pl.system.dcci(x, (1, 2))
-            return x
+    @pl.jit(auto_mutex=False)
+    def main(x: pl.Tensor[[16, 16], pl.DT_FP32]):
+        pl.system.dcci(x, (1, 2))
+        _test_result = x
 
-    printed = pypto_pro.ir.python_print(Before)
+    main_program, _ = main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    main = main_program.get_function(main.__name__)
+
+    printed = pypto_pro.ir.python_print(main)
     assert "ir.call @system.dcci(" in printed

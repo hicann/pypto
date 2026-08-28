@@ -86,7 +86,7 @@ def validate_single_tail_return(func_def: ast.FunctionDef, context: str) -> tupl
         return (
             returns[1],
             f"{context} only supports a single return statement.",
-            "Keep one top-level return at the end of the function. Only @pl.jit/@pl.kernel supports early return.",
+            "Keep one top-level return at the end of the function. Only @pl.jit supports early return.",
         )
 
     body = _body_without_docstring(func_def)
@@ -95,7 +95,7 @@ def validate_single_tail_return(func_def: ast.FunctionDef, context: str) -> tupl
         return (
             returns[0],
             f"{context} only supports return as the final top-level statement.",
-            "Move the return to the end of the function body, or use @pl.jit/@pl.kernel when early return is required.",
+            "Move the return to the end of the function body, or use @pl.jit when early return is required.",
         )
 
     return None

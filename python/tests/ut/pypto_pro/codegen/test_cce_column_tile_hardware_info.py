@@ -34,10 +34,10 @@ ROWS = 64
 COLS = 64
 
 
-def _compile_to_cce(kernel_def) -> str:
+def _compile_to_cce(kernel) -> str:
     from pypto_pro.runtime.jit import _assemble_cv_source, _parse_and_codegen_targets
 
-    cube, vector = _parse_and_codegen_targets(kernel_def, "a5", "")
+    cube, vector = _parse_and_codegen_targets(kernel.to_kernel_def(), "a5", "")
     return _assemble_cv_source(cube, vector).content
 
 
@@ -55,7 +55,7 @@ def _bare_tile_decl(source: str, var: str) -> str:
     return match.group(1)
 
 
-@pl.kernel
+@pl.jit
 def _compact_tiles_kernel(x: pl.Tensor[[ROWS, COLS], pl.DT_FP32]):
     """One column tile and one ordinary tile, both asking for compact=1."""
     column_type = pl.TileType(
@@ -71,7 +71,7 @@ def _compact_tiles_kernel(x: pl.Tensor[[ROWS, COLS], pl.DT_FP32]):
         pl.load(column.current(), x, [0, 0])
 
 
-@pl.kernel
+@pl.jit
 def _column_tile_declared_nd_kernel(x: pl.Tensor[[ROWS, COLS], pl.DT_FP32]):
     """A column tile asking for pl.ND, which the ISA cannot honour for a 1-wide tile."""
     column_type = pl.TileType(
@@ -82,7 +82,7 @@ def _column_tile_declared_nd_kernel(x: pl.Tensor[[ROWS, COLS], pl.DT_FP32]):
         pl.load(column.current(), x, [0, 0])
 
 
-@pl.kernel
+@pl.jit
 def _if_merged_column_tile_kernel(x: pl.Tensor[[ROWS, COLS], pl.DT_FP32], flag: pl.Tensor[[1, 1], pl.DT_INT32]):
     """A column tile merged out of an if, which has no memref of its own."""
     column_type = pl.TileType(shape=[ROWS, 1], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
@@ -145,7 +145,7 @@ def test_fractal_layout_on_a_column_tile_is_rejected():
     """
     with pytest.raises(Exception, match="requires layout ND or DN"):
 
-        @pl.kernel
+        @pl.jit
         def _fractal_column_kernel(x: pl.Tensor[[ROWS, COLS], pl.DT_FP16]):
             column_type = pl.TileType(
                 shape=[ROWS, 1], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN

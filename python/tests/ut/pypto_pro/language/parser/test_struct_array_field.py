@@ -5,8 +5,8 @@
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
-# See the License in the root of the software repository for the full text of the License.
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """Unit tests for array field support in pl.struct and pl.struct_array."""
 
@@ -21,11 +21,14 @@ from pypto.pypto_impl.ir import DataType
 def test_struct_array_field_lowers_to_nested_tuple():
     """A list-valued field in pl.struct becomes a nested TupleType."""
 
-    @pl.function
-    def kernel():
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64):
         s = pl.struct("S", x=0, arr=[0, 0, 0, 0])
         val: pl.DT_INT64 = s.arr[0]
-        return val
+        _test_result = val
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
     assignments = [stmt for stmt in kernel.body.stmts if isinstance(stmt, ir.AssignStmt)]
@@ -41,11 +44,14 @@ def test_struct_array_field_lowers_to_nested_tuple():
 def test_struct_array_field_read_produces_nested_getitem():
     """s.arr[idx] lowers to GetItemExpr(GetItemExpr(s, field_idx), elem_idx)."""
 
-    @pl.function
-    def kernel():
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64):
         s = pl.struct("S", x=0, arr=[0, 0, 0, 0])
         val: pl.DT_INT64 = s.arr[2]
-        return val
+        _test_result = val
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
     assignments = [stmt for stmt in kernel.body.stmts if isinstance(stmt, ir.AssignStmt)]
@@ -56,11 +62,14 @@ def test_struct_array_field_read_produces_nested_getitem():
 def test_struct_mixed_scalar_and_array_fields():
     """pl.struct with both scalar and array fields."""
 
-    @pl.function
-    def kernel():
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64):
         s = pl.struct("S", n=0, offsets=[0, 0, 0], scale=0.0)
         val: pl.DT_INT64 = s.offsets[1]
-        return val
+        _test_result = val
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
     assignments = [stmt for stmt in kernel.body.stmts if isinstance(stmt, ir.AssignStmt)]
@@ -76,11 +85,14 @@ def test_struct_mixed_scalar_and_array_fields():
 def test_struct_multiple_array_fields():
     """pl.struct with multiple array fields."""
 
-    @pl.function
-    def kernel():
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64):
         s = pl.struct("S", a=[0, 0], b=[0, 0, 0, 0], c=0)
         val: pl.DT_INT64 = s.b[3]
-        return val
+        _test_result = val
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
     assignments = [stmt for stmt in kernel.body.stmts if isinstance(stmt, ir.AssignStmt)]
@@ -96,11 +108,14 @@ def test_struct_multiple_array_fields():
 def test_struct_array_with_array_field():
     """pl.struct_array with array fields creates N struct.create slots."""
 
-    @pl.function
-    def kernel():
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64):
         arr = pl.struct_array(2, "Slot", x=0, vals=[0, 0, 0, 0])
         val: pl.DT_INT64 = arr[0].vals[1]
-        return val
+        _test_result = val
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
     assignments = [stmt for stmt in kernel.body.stmts if isinstance(stmt, ir.AssignStmt)]
@@ -112,11 +127,14 @@ def test_struct_array_with_array_field():
 def test_struct_array_array_field_read():
     """arr[0].arr_field[idx] read access on struct_array."""
 
-    @pl.function
-    def kernel():
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64):
         arr = pl.struct_array(3, "Slot", x=0, data=[0, 0, 0])
         val: pl.DT_INT64 = arr[1].data[2]
-        return val
+        _test_result = val
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
     assignments = [stmt for stmt in kernel.body.stmts if isinstance(stmt, ir.AssignStmt)]
@@ -127,11 +145,14 @@ def test_struct_array_array_field_read():
 def test_struct_array_attribute_on_subscript_read():
     """arr[0].field read access on struct_array (scalar field)."""
 
-    @pl.function
-    def kernel():
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64):
         arr = pl.struct_array(2, "Slot", x=0, y=0)
         val: pl.DT_INT64 = arr[0].x
-        return val
+        _test_result = val
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
     assignments = [stmt for stmt in kernel.body.stmts if isinstance(stmt, ir.AssignStmt)]
@@ -142,13 +163,16 @@ def test_struct_array_attribute_on_subscript_read():
 def test_struct_array_field_dynamic_index_read():
     """s.arr[i] with a loop variable as index."""
 
-    @pl.function
-    def kernel():
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64):
         s = pl.struct("S", arr=[0, 0, 0, 0])
         total: pl.DT_INT64 = 0
         for i in pl.range(0, 4):
             total = total + s.arr[i]
-        return total
+        _test_result = total
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
 
@@ -156,13 +180,16 @@ def test_struct_array_field_dynamic_index_read():
 def test_struct_array_field_all_indices_accessible():
     """All indices of an array field are accessible."""
 
-    @pl.function
-    def kernel():
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64):
         s = pl.struct("S", arr=[0, 0, 0])
         a: pl.DT_INT64 = s.arr[0]
         b: pl.DT_INT64 = s.arr[1]
         c: pl.DT_INT64 = s.arr[2]
-        return a + b + c
+        _test_result = a + b + c
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
 
@@ -170,11 +197,14 @@ def test_struct_array_field_all_indices_accessible():
 def test_struct_float_array_field():
     """pl.struct with a float array field."""
 
-    @pl.function
-    def kernel():
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64):
         s = pl.struct("S", x=0, farr=[0.0, 0.0, 0.0])
         val: pl.DT_FP32 = s.farr[1]
-        return val
+        _test_result = val
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
     assignments = [stmt for stmt in kernel.body.stmts if isinstance(stmt, ir.AssignStmt)]
@@ -187,11 +217,14 @@ def test_struct_float_array_field():
 def test_struct_bool_array_field():
     """pl.struct with a bool array field."""
 
-    @pl.function
-    def kernel():
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64):
         s = pl.struct("S", x=0, barr=[True, False, True])
         val: pl.DT_INT64 = s.barr[0]
-        return val
+        _test_result = val
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
     assignments = [stmt for stmt in kernel.body.stmts if isinstance(stmt, ir.AssignStmt)]
@@ -204,13 +237,16 @@ def test_struct_bool_array_field():
 def test_struct_mixed_dtype_array_fields():
     """pl.struct with int, float, and bool array fields simultaneously."""
 
-    @pl.function
-    def kernel():
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64):
         s = pl.struct("S", ints=[0, 0], floats=[0.0, 0.0], bools=[True, False])
         iv: pl.DT_INT64 = s.ints[0]
         fv: pl.DT_FP32 = s.floats[1]
         bv: pl.DT_INT64 = s.bools[0]
-        return iv + fv + bv
+        _test_result = iv + fv + bv
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
     assignments = [stmt for stmt in kernel.body.stmts if isinstance(stmt, ir.AssignStmt)]
@@ -224,11 +260,14 @@ def test_struct_mixed_dtype_array_fields():
 def test_struct_array_field_length_1():
     """Single-element array field produces a TupleType of length 1."""
 
-    @pl.function
-    def kernel():
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64):
         s = pl.struct("S", x=0, arr=[0])
         val: pl.DT_INT64 = s.arr[0]
-        return val
+        _test_result = val
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
     assignments = [stmt for stmt in kernel.body.stmts if isinstance(stmt, ir.AssignStmt)]
@@ -241,11 +280,14 @@ def test_struct_array_field_length_1():
 def test_struct_array_field_length_8():
     """Eight-element array field produces a TupleType of length 8."""
 
-    @pl.function
-    def kernel():
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64):
         s = pl.struct("S", arr=[0, 0, 0, 0, 0, 0, 0, 0])
         val: pl.DT_INT64 = s.arr[7]
-        return val
+        _test_result = val
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
     assignments = [stmt for stmt in kernel.body.stmts if isinstance(stmt, ir.AssignStmt)]
@@ -258,11 +300,14 @@ def test_struct_array_field_length_8():
 def test_struct_array_field_read_last_index():
     """The last index of an array field is accessible."""
 
-    @pl.function
-    def kernel():
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64):
         s = pl.struct("S", arr=[10, 20, 30, 40])
         val: pl.DT_INT64 = s.arr[3]
-        return val
+        _test_result = val
+
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
 
     assert isinstance(kernel, ir.Function)
     assignments = [stmt for stmt in kernel.body.stmts if isinstance(stmt, ir.AssignStmt)]

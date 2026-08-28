@@ -9,10 +9,8 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """Unit tests for TypeResolver."""
-from __future__ import annotations
-
 # DSL function bodies are parsed as AST, not executed -suppress pyright errors
-# from type-checking the annotations and kwargs inside @pl.function bodies.
+# from type-checking annotations and kwargs inside parsed function bodies.
 import ast
 from typing import TYPE_CHECKING, Any
 
@@ -209,14 +207,17 @@ def test_resolve_tensor_with_expression_dims():
 
 
 def test_function_with_int_variable_shape():
-    """@pl.function with int variables from enclosing scope."""
+    """Parse a function with int variables from enclosing scope."""
     rows, cols = 128, 64
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(
         x: pl.Tensor[[rows, cols], pl.DT_FP32],
-    ) -> pl.Tensor[[rows, cols], pl.DT_FP32]:
-        return x
+    ):
+        _test_result = x
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
     param_type = func.params[0].type
@@ -224,32 +225,16 @@ def test_function_with_int_variable_shape():
     assert len(param_type.shape) == 2
 
 
-def test_program_with_int_variable_shape():
-    """@pl.program with int variables from enclosing scope."""
-    rows, cols = 256, 128
-
-    @pl.program
-    class MyProgram:
-        @pl.function
-        def add(self, a: pl.Tensor[[rows, cols], pl.DT_FP32]) -> pl.Tensor[[rows, cols], pl.DT_FP32]:
-            return a
-
-    assert isinstance(MyProgram, ir.Program)
-    func = list(MyProgram.functions.values())[0]
-    param_type = func.params[0].type
-    assert isinstance(param_type, ir.TensorType)
-    assert len(param_type.shape) == 2
-    assert param_type.shape[0] == rows
-    assert param_type.shape[1] == cols
-
-
 def test_function_with_var_shape():
-    """@pl.function with a DYNAMIC policy."""
-    @pl.function
+    """Parse a function with a DYNAMIC policy."""
+    @pl.jit(auto_mutex=False)
     def func(
         x: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP32],
     ):
-        return x
+        _test_result = x
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     param_type = func.params[0].type
     assert isinstance(param_type, ir.TensorType)
@@ -262,12 +247,15 @@ def test_function_with_var_shape():
 
 def test_function_with_multiple_vars():
     """Each DYNAMIC parameter axis receives an independent ABI name."""
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(
         a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
         b: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
     ):
-        return a
+        _test_result = a
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     a_type = func.params[0].type
     b_type = func.params[1].type
@@ -283,32 +271,17 @@ def test_function_with_multiple_vars():
     assert b_type.shape[1].name == "__pypto_dyn_b_1"
 
 
-def test_program_with_var_shape():
-    """@pl.program supports DYNAMIC parameter policies."""
-    @pl.program
-    class MyProgram:
-        @pl.function
-        def process(
-            self,
-            x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
-        ):
-            return x
-
-    func = list(MyProgram.functions.values())[0]
-    param_type = func.params[0].type
-    assert isinstance(param_type, ir.TensorType)
-    assert isinstance(param_type.shape[0], ir.Var)
-    assert param_type.shape[0].name == "__pypto_dyn_x_0"
-
-
 def test_function_with_shape_variable():
-    """@pl.function with shape as a list variable (issue #205)."""
+    """Parse a function with shape as a list variable (issue #205)."""
     shape = [128, 128]
     dtype = pl.DT_FP32
 
-    @pl.function
-    def func(t: pl.Tensor[shape, dtype]) -> pl.Tensor[shape, dtype]:
-        return t
+    @pl.jit(auto_mutex=False)
+    def func(t: pl.Tensor[shape, dtype]):
+        _test_result = t
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
     param_type = func.params[0].type
@@ -318,16 +291,19 @@ def test_function_with_shape_variable():
 
 
 def test_function_with_multiple_shape_variables():
-    """@pl.function with different shape variables per param (issue #205 pattern)."""
+    """Parse a function with different shape variables per param (issue #205 pattern)."""
     tensor_shape = [128, 128]
     tile_shape = [64, 64]
     dtype = pl.DT_FP32
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(
         t: pl.Tensor[tensor_shape, dtype], tile: pl.Tensor[tile_shape, dtype]
-    ) -> pl.Tensor[tensor_shape, dtype]:
-        return t
+    ):
+        _test_result = t
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
     assert isinstance(func.params[0].type, ir.TensorType)
@@ -336,33 +312,18 @@ def test_function_with_multiple_shape_variables():
     assert len(func.params[1].type.shape) == 2
 
 
-def test_program_with_shape_variable():
-    """@pl.program with shape as a list variable."""
-    shape = [256, 128]
-    dtype = pl.DT_FP16
-
-    @pl.program
-    class MyProgram:
-        @pl.function
-        def process(self, x: pl.Tensor[shape, dtype]) -> pl.Tensor[shape, dtype]:
-            return x
-
-    func = list(MyProgram.functions.values())[0]
-    param_type = func.params[0].type
-    assert isinstance(param_type, ir.TensorType)
-    assert len(param_type.shape) == 2
-    assert param_type.dtype == DataType.FP16
-
-
 def test_arithmetic_shape_dims():
     """User computes shape dims from a base size."""
     base = 64
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(
         x: pl.Tensor[[base * 2, base], pl.DT_FP32],
-    ) -> pl.Tensor[[base * 2, base], pl.DT_FP32]:
-        return x
+    ):
+        _test_result = x
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     param_type = func.params[0].type
     assert isinstance(param_type, ir.TensorType)
@@ -373,11 +334,14 @@ def test_floor_division_in_shape():
     """User splits a dimension with //."""
     total = 256
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(
         x: pl.Tensor[[total // 4, total], pl.DT_FP32],
-    ) -> pl.Tensor[[total // 4, total], pl.DT_FP32]:
-        return x
+    ):
+        _test_result = x
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     param_type = func.params[0].type
     assert isinstance(param_type, ir.TensorType)
@@ -390,11 +354,14 @@ def test_multi_variable_arithmetic():
     heads = 8
     seq_len = 128
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(
         x: pl.Tensor[[batch * heads, seq_len], pl.DT_FP16],
-    ) -> pl.Tensor[[batch * heads, seq_len], pl.DT_FP16]:
-        return x
+    ):
+        _test_result = x
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     param_type = func.params[0].type
     assert isinstance(param_type, ir.TensorType)
@@ -405,11 +372,14 @@ def test_shape_from_dict_config():
     """User stores config in a dict, uses subscript for dims."""
     config = {"rows": 128, "cols": 64}
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(
         x: pl.Tensor[[config["rows"], config["cols"]], pl.DT_FP32],  # noqa: F821
-    ) -> pl.Tensor[[config["rows"], config["cols"]], pl.DT_FP32]:  # noqa: F821
-        return x
+    ):  # noqa: F821
+        _test_result = x
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     param_type = func.params[0].type
     assert isinstance(param_type, ir.TensorType)
@@ -420,11 +390,14 @@ def test_shape_from_list_indexing():
     """User picks dims from a list of predefined sizes."""
     sizes = [32, 64, 128, 256]
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(
         x: pl.Tensor[[sizes[2], sizes[1]], pl.DT_FP32],
-    ) -> pl.Tensor[[sizes[2], sizes[1]], pl.DT_FP32]:
-        return x
+    ):
+        _test_result = x
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     param_type = func.params[0].type
     assert isinstance(param_type, ir.TensorType)
@@ -435,9 +408,12 @@ def test_tuple_variable_as_shape():
     """User passes shape as a tuple (not list)."""
     shape = (128, 64)
 
-    @pl.function
-    def func(x: pl.Tensor[shape, pl.DT_FP32]) -> pl.Tensor[shape, pl.DT_FP32]:
-        return x
+    @pl.jit(auto_mutex=False)
+    def func(x: pl.Tensor[shape, pl.DT_FP32]):
+        _test_result = x
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     param_type = func.params[0].type
     assert isinstance(param_type, ir.TensorType)
@@ -449,14 +425,18 @@ def test_different_shapes_per_param():
     input_shape = [256, 128]
     output_shape = [256, 64]
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(
         x: pl.Tensor[input_shape, pl.DT_FP32],
-    ) -> pl.Tensor[output_shape, pl.DT_FP32]:
-        return x
+        out: pl.Tensor[output_shape, pl.DT_FP32],
+    ):
+        _test_result = x
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     in_type = func.params[0].type
-    out_type = func.return_types[0]
+    out_type = func.params[1].type
     assert isinstance(in_type, ir.TensorType)
     assert isinstance(out_type, ir.TensorType)
     assert len(in_type.shape) == 2
@@ -468,14 +448,18 @@ def test_different_dtypes_per_param():
     dtype_in = pl.DT_FP16
     dtype_out = pl.DT_FP32
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(
         x: pl.Tensor[[128, 64], dtype_in],
-    ) -> pl.Tensor[[128, 64], dtype_out]:
-        return pl.tensor.cast(x, target_type=dtype_out)
+        out: pl.Tensor[[128, 64], dtype_out],
+    ):
+        _test_result = pl.tensor.cast(x, target_type=dtype_out)
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     in_type = func.params[0].type
-    out_type = func.return_types[0]
+    out_type = func.params[1].type
     assert isinstance(in_type, ir.TensorType)
     assert isinstance(out_type, ir.TensorType)
     assert in_type.dtype == DataType.FP16
@@ -492,11 +476,14 @@ def test_different_dtypes_per_param():
 def test_parametrized_shape_and_dtype(rows, cols, dtype):
     """User parametrizes both shape and dtype together."""
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(
         x: pl.Tensor[[rows, cols], dtype],
-    ) -> pl.Tensor[[rows, cols], dtype]:
-        return x
+    ):
+        _test_result = x
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     param_type = func.params[0].type
     assert isinstance(param_type, ir.TensorType)
@@ -510,15 +497,18 @@ def test_tile_shape_and_dtype_from_closure():
     tile_shape = [64, 64]
     dtype = pl.DT_FP32
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(
         t: pl.Tensor[tensor_shape, dtype], out: pl.Tensor[tensor_shape, dtype]
-    ) -> pl.Tensor[tensor_shape, dtype]:
+    ):
         tile_type = pl.TileType(shape=tile_shape, dtype=dtype)
         a = pl.make_tile(tile_type, addr=0, size=16384)
         pl.load(a, t, [0, 0])
         result: pl.Tensor[tensor_shape, dtype] = pl.store(out, a, [0, 0])
-        return result
+        _test_result = result
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
 
@@ -527,15 +517,18 @@ def test_shapes_kwarg_from_variable():
     """User passes shapes= kwarg as a closure variable (t.py pattern)."""
     tile_shape = [32, 32]
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(
         t: pl.Tensor[[128, 128], pl.DT_FP32], out: pl.Tensor[[128, 128], pl.DT_FP32]
-    ) -> pl.Tensor[[128, 128], pl.DT_FP32]:
+    ):
         tile_type = pl.TileType(shape=tile_shape, dtype=pl.DT_FP32)
         a = pl.make_tile(tile_type, addr=0, size=4096)
         pl.load(a, t, [0, 0])
         result: pl.Tensor[[128, 128], pl.DT_FP32] = pl.store(out, a, [0, 0])
-        return result
+        _test_result = result
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
 
@@ -544,12 +537,15 @@ def test_int_kwarg_from_closure():
     """User passes an int kwarg (like axis) from closure."""
     swap_axis = 1
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(
         x: pl.Tensor[[64, 128], pl.DT_FP32],
-    ) -> pl.Tensor[[128, 64], pl.DT_FP32]:
+    ):
         result: pl.Tensor[[128, 64], pl.DT_FP32] = pl.tensor.transpose(x, axis1=0, axis2=swap_axis)
-        return result
+        _test_result = result
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
 
@@ -558,10 +554,13 @@ def test_dtype_kwarg_from_closure():
     """User passes dtype= kwarg from closure variable."""
     out_dtype = pl.DT_FP16
 
-    @pl.function
-    def func(x: pl.Tensor[[64, 64], pl.DT_FP32]) -> pl.Tensor[[64, 64], pl.DT_FP16]:
+    @pl.jit(auto_mutex=False)
+    def func(x: pl.Tensor[[64, 64], pl.DT_FP32]):
         result: pl.Tensor[[64, 64], pl.DT_FP16] = pl.tensor.cast(x, target_type=out_dtype)
-        return result
+        _test_result = result
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
 
@@ -573,15 +572,18 @@ def test_full_parametrized_kernel():
     shape = [128, 128]
     tile_shape = [64, 64]
 
-    @pl.function
-    def kernel_add(t: pl.Tensor[[x, y], dtype], out: pl.Tensor[shape, dtype]) -> pl.Tensor[shape, dtype]:
+    @pl.jit(auto_mutex=False)
+    def kernel_add(t: pl.Tensor[[x, y], dtype], out: pl.Tensor[shape, dtype]):
         tile_type = pl.TileType(shape=tile_shape, dtype=dtype)
         a = pl.make_tile(tile_type, addr=0, size=16384)
         b = pl.make_tile(tile_type, addr=16384, size=16384)
         pl.load(a, t, [0, 0])
         pl.add(b, a, 5)
         result: pl.Tensor[shape, dtype] = pl.store(out, b, [0, 0])
-        return result
+        _test_result = result
+
+    kernel_add_program, _ = kernel_add.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel_add = kernel_add_program.get_function(kernel_add.__name__)
 
     assert isinstance(kernel_add, ir.Function)
     assert len(kernel_add.params) == 2
@@ -590,34 +592,38 @@ def test_full_parametrized_kernel():
         assert p.type.dtype == DataType.FP32
 
 
-def test_program_with_closure_shapes_in_body():
-    """User uses closure shapes inside @pl.program methods."""
+def test_function_with_closure_shapes_in_body():
+    """Function bodies resolve closure-provided shapes and dtypes."""
     shape = [128, 128]
     tile_shape = [64, 64]
     dtype = pl.DT_FP32
 
-    @pl.program
-    class Prog:
-        @pl.function
-        def compute(
-            self, t: pl.Tensor[shape, dtype], out: pl.Tensor[shape, dtype]
-        ) -> pl.Tensor[shape, dtype]:
-            tile_type = pl.TileType(shape=tile_shape, dtype=dtype)
-            a = pl.make_tile(tile_type, addr=0, size=16384)
-            pl.load(a, t, [0, 0])
-            result: pl.Tensor[shape, dtype] = pl.store(out, a, [0, 0])
-            return result
+    @pl.jit(auto_mutex=False)
+    def compute(
+        t: pl.Tensor[shape, dtype], out: pl.Tensor[shape, dtype]
+    ):
+        tile_type = pl.TileType(shape=tile_shape, dtype=dtype)
+        a = pl.make_tile(tile_type, addr=0, size=16384)
+        pl.load(a, t, [0, 0])
+        result: pl.Tensor[shape, dtype] = pl.store(out, a, [0, 0])
+        _test_result = result
 
-    assert isinstance(Prog, ir.Program)
+    compute_program, _ = compute.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    compute = compute_program.get_function(compute.__name__)
+
+    assert isinstance(compute, ir.Function)
 
 
 def test_var_with_variable_shape():
     """A shape variable may contain DYNAMIC policies."""
     shape = [pl.DYNAMIC, pl.DYNAMIC]
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(x: pl.Tensor[shape, pl.DT_FP32]):
-        return x
+        _test_result = x
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     param_type = func.params[0].type
     assert isinstance(param_type, ir.TensorType)
@@ -631,9 +637,12 @@ def test_var_mixed_with_int_in_variable_shape():
     """A shape variable may mix DYNAMIC and a fixed integer."""
     shape = [pl.DYNAMIC, 128]
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(x: pl.Tensor[shape, pl.DT_FP32]):
-        return x
+        _test_result = x
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     param_type = func.params[0].type
     assert isinstance(param_type, ir.TensorType)
@@ -647,11 +656,14 @@ def test_var_mixed_with_computed_dim():
     """A DYNAMIC axis may be mixed with a constant expression."""
     base = 64
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(
         x: pl.Tensor[[pl.DYNAMIC, base * 2], pl.DT_FP32],
     ):
-        return x
+        _test_result = x
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     param_type = func.params[0].type
     assert isinstance(param_type, ir.TensorType)
@@ -663,19 +675,23 @@ def test_var_mixed_with_computed_dim():
     assert param_type.shape[1].value == 128
 
 
-def test_same_shape_reused_across_params_and_return():
-    """User uses same shape variable everywhere -should produce consistent types."""
+def test_same_shape_reused_across_params():
+    """A reused shape variable produces consistent parameter types."""
     shape = [64, 64]
     dtype = pl.DT_FP32
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(
         a: pl.Tensor[shape, dtype],
         b: pl.Tensor[shape, dtype],
-    ) -> pl.Tensor[shape, dtype]:
-        return a
+        out: pl.Tensor[shape, dtype],
+    ):
+        _test_result = a
 
-    all_types = [p.type for p in func.params] + func.return_types
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
+
+    all_types = [p.type for p in func.params]
     for t in all_types:
         assert isinstance(t, ir.TensorType)
         assert len(t.shape) == 2
@@ -686,15 +702,18 @@ def test_tile_type_with_variable_shape():
     """User uses a variable for Tile shape annotation."""
     tile_shape = [32, 32]
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(
         t: pl.Tensor[[128, 128], pl.DT_FP32], out: pl.Tensor[[128, 128], pl.DT_FP32]
-    ) -> pl.Tensor[[128, 128], pl.DT_FP32]:
+    ):
         tile_type = pl.TileType(shape=tile_shape, dtype=pl.DT_FP32)
         a = pl.make_tile(tile_type, addr=0, size=4096)
         pl.load(a, t, [0, 0])
         result: pl.Tensor[[128, 128], pl.DT_FP32] = pl.store(out, a, [0, 0])
-        return result
+        _test_result = result
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assert isinstance(func, ir.Function)
 
@@ -705,9 +724,11 @@ def test_shape_variable_not_defined_raises_error():
 
     with pytest.raises(Exception, match="shaep|Cannot resolve|Unknown|undefined"):
 
-        @pl.function
-        def func(x: pl.Tensor[shaep, pl.DT_FP32]) -> pl.Tensor[shaep, pl.DT_FP32]:  # noqa: F821
-            return x
+        @pl.jit(auto_mutex=False)
+        def func(x: pl.Tensor[shaep, pl.DT_FP32]):  # noqa: F821
+            _test_result = x
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_non_list_shape_variable_raises_error():
@@ -716,9 +737,11 @@ def test_non_list_shape_variable_raises_error():
 
     with pytest.raises(Exception, match="must be a list or tuple|Failed to evaluate"):
 
-        @pl.function
-        def func(x: pl.Tensor[shape, pl.DT_FP32]) -> pl.Tensor[shape, pl.DT_FP32]:
-            return x
+        @pl.jit(auto_mutex=False)
+        def func(x: pl.Tensor[shape, pl.DT_FP32]):
+            _test_result = x
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_float_in_shape_raises_error():
@@ -727,20 +750,25 @@ def test_float_in_shape_raises_error():
 
     with pytest.raises(Exception, match="positive integer"):
 
-        @pl.function
-        def func(x: pl.Tensor[shape, pl.DT_FP32]) -> pl.Tensor[shape, pl.DT_FP32]:
-            return x
+        @pl.jit(auto_mutex=False)
+        def func(x: pl.Tensor[shape, pl.DT_FP32]):
+            _test_result = x
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_nested_function_captures_correct_scope():
-    """Shape variables from outer function are captured by inner @pl.function."""
+    """Shape variables from an outer function are captured by the parsed helper."""
 
     def make_kernel(rows, cols, dtype):
-        @pl.function
+        @pl.jit(auto_mutex=False)
         def kernel(
             x: pl.Tensor[[rows, cols], dtype],
-        ) -> pl.Tensor[[rows, cols], dtype]:
-            return x
+        ):
+            _test_result = x
+
+        kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+        kernel = kernel_program.get_function(kernel.__name__)
 
         return kernel
 
@@ -761,9 +789,12 @@ def test_factory_with_shape_variable():
     """User writes a factory function that parametrizes shape."""
 
     def make_kernel(shape, dtype):
-        @pl.function
-        def kernel(x: pl.Tensor[shape, dtype]) -> pl.Tensor[shape, dtype]:
-            return x
+        @pl.jit(auto_mutex=False)
+        def kernel(x: pl.Tensor[shape, dtype]):
+            _test_result = x
+
+        kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+        kernel = kernel_program.get_function(kernel.__name__)
 
         return kernel
 

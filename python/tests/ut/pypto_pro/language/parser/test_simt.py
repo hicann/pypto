@@ -116,7 +116,7 @@ def _tile_valid_shape_access(
         dst[row, col] = src[row, col]
 
 
-@pl.kernel
+@pl.jit
 def _simt_tile_kernel(n: pl.DT_UINT32, delta: pl.DT_FP32):
     tile_type = pl.TileType(shape=[1, 256], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     src = pl.make_tile(tile_type, addr=0x0000, size=1024)
@@ -125,7 +125,7 @@ def _simt_tile_kernel(n: pl.DT_UINT32, delta: pl.DT_FP32):
         pl.simt.launch(_tile_add, threads=256, args=(dst, src, n, delta))
 
 
-@pl.kernel
+@pl.jit
 def _simt_gm_kernel(
     x: pl.Tensor[[1, 256], pl.DT_FP32],
     out: pl.Tensor[[1, 256], pl.DT_FP32],
@@ -136,15 +136,15 @@ def _simt_gm_kernel(
         pl.simt.launch(_gm_add, threads=256, args=(out, x, n, delta))
 
 
-@pl.kernel
-def _simt_context_kernel():
+@pl.jit
+def _simt_context_kernel(_jit_entry: pl.DT_INT64):
     tile_type = pl.TileType(shape=[1, 256], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
     dst = pl.make_tile(tile_type, addr=0x0000, size=1024)
     with pl.section_vector():
         pl.simt.launch(_context_probe, threads=(8, 4, 8), args=(dst,))
 
 
-@pl.kernel
+@pl.jit
 def _simt_callee_kernel(delta: pl.DT_INT32):
     tile_type = pl.TileType(shape=[1, 32], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
     dst = pl.make_tile(tile_type, addr=0x0000, size=128)
@@ -154,7 +154,7 @@ def _simt_callee_kernel(delta: pl.DT_INT32):
 
 
 def _make_tile_launch_kernel(shape, dtype, target_memory, layout):
-    @pl.kernel
+    @pl.jit
     def kernel(n: pl.DT_UINT32, delta: pl.DT_FP32):
         tile_type = pl.TileType(
             shape=shape,
@@ -181,7 +181,7 @@ def test_legacy_simt_decorators_are_not_exported():
 
 
 def test_simt_tile_function_and_launch_build_vector_program():
-    program, matched = _simt_tile_kernel.parse_target_program(ir.SectionKind.Vector)
+    program, matched = _simt_tile_kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     function = program.get_function("_tile_add")
 
     assert matched
@@ -199,7 +199,7 @@ def test_simt_tile_function_and_launch_build_vector_program():
 
 
 def test_simt_callee_records_type_calls_and_reachable_dependencies():
-    program, matched = _simt_callee_kernel.parse_target_program(ir.SectionKind.Vector)
+    program, matched = _simt_callee_kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     callee = program.get_function("_callee_add")
 
     assert matched
@@ -220,7 +220,7 @@ def test_simt_callee_records_type_calls_and_reachable_dependencies():
 
 
 def test_simt_gm_tensor_function_and_launch_reuse_scalar_tensor_access():
-    program, matched = _simt_gm_kernel.parse_target_program(ir.SectionKind.Vector)
+    program, matched = _simt_gm_kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     function = program.get_function("_gm_add")
     function_ir = str(function)
 
@@ -237,17 +237,17 @@ def test_simt_function_rejects_nested_launch():
     def nested_launch():
         pl.simt.launch(_tile_add, threads=32, args=())
 
-    @pl.kernel
-    def kernel():
+    @pl.jit
+    def kernel(_jit_entry: pl.DT_INT64):
         with pl.section_vector():
             pl.simt.launch(nested_launch, threads=32, args=())
 
     with pytest.raises(ParserSyntaxError, match="Nested pl.simt.launch"):
-        kernel.parse_target_program(ir.SectionKind.Vector)
+        kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_simt_context_exposes_xyz_components_and_three_dimensional_launch():
-    program, matched = _simt_context_kernel.parse_target_program(ir.SectionKind.Vector)
+    program, matched = _simt_context_kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     function_ir = str(program.get_function("_context_probe"))
 
     assert matched
@@ -271,14 +271,14 @@ def test_simt_context_direct_call_uses_named_tuple_field_lowering():
         )
         dst[0, 0] = value
 
-    @pl.kernel
-    def kernel():
+    @pl.jit
+    def kernel(_jit_entry: pl.DT_INT64):
         tile_type = pl.TileType(shape=[1, 32], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
         dst = pl.make_tile(tile_type, addr=0, size=128)
         with pl.section_vector():
             pl.simt.launch(direct_context, threads=32, args=(dst,))
 
-    program, _ = kernel.parse_target_program(ir.SectionKind.Vector)
+    program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     function_ir = str(program.get_function("direct_context"))
 
     assert function_ir.count("simt.thread_idx") >= 1
@@ -292,15 +292,15 @@ def test_simt_context_rejects_unknown_named_tuple_field():
     def invalid_context_field(dst):
         dst[0, 0] = pl.simt.thread_idx().w
 
-    @pl.kernel
-    def kernel():
+    @pl.jit
+    def kernel(_jit_entry: pl.DT_INT64):
         tile_type = pl.TileType(shape=[1, 32], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
         dst = pl.make_tile(tile_type, addr=0, size=128)
         with pl.section_vector():
             pl.simt.launch(invalid_context_field, threads=32, args=(dst,))
 
     with pytest.raises(UnsupportedFeatureError, match="Standalone attribute access not supported"):
-        kernel.parse_target_program(ir.SectionKind.Vector)
+        kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 @pytest.mark.parametrize(
@@ -328,7 +328,7 @@ def test_simt_launch_requires_compatible_tile(shape, dtype, target_memory, layou
     kernel = _make_tile_launch_kernel(shape, dtype, target_memory, layout)
 
     with pytest.raises(ParserTypeError, match=message):
-        kernel.parse_target_program(ir.SectionKind.Vector)
+        kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_simt_function_rejects_block_operation_before_default_dispatch():
@@ -340,8 +340,8 @@ def test_simt_function_rejects_block_operation_before_default_dispatch():
     ):
         pl.add(dst, lhs, rhs)
 
-    @pl.kernel
-    def kernel():
+    @pl.jit
+    def kernel(_jit_entry: pl.DT_INT64):
         tile_type = pl.TileType(shape=[1, 32], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
         dst = pl.make_tile(tile_type, addr=0, size=128)
         lhs = pl.make_tile(tile_type, addr=128, size=128)
@@ -350,7 +350,7 @@ def test_simt_function_rejects_block_operation_before_default_dispatch():
             pl.simt.launch(block_add, threads=32, args=(dst, lhs, rhs))
 
     with pytest.raises(UnsupportedFeatureError, match="not supported inside a SIMT function"):
-        kernel.parse_target_program(ir.SectionKind.Vector)
+        kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_simt_function_rejects_tile_subview():
@@ -358,27 +358,27 @@ def test_simt_function_rejects_tile_subview():
     def tile_subview(src):
         _ = src[0:4, 0:32]
 
-    @pl.kernel
-    def kernel():
+    @pl.jit
+    def kernel(_jit_entry: pl.DT_INT64):
         tile_type = pl.TileType(shape=[8, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
         src = pl.make_tile(tile_type, addr=0, size=2048)
         with pl.section_vector():
             pl.simt.launch(tile_subview, threads=32, args=(src,))
 
     with pytest.raises(UnsupportedFeatureError, match="Tile subview"):
-        kernel.parse_target_program(ir.SectionKind.Vector)
+        kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_simt_tile_parameter_exposes_runtime_valid_shape():
-    @pl.kernel
-    def kernel():
+    @pl.jit
+    def kernel(_jit_entry: pl.DT_INT64):
         tile_type = pl.TileType(shape=[8, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
         dst = pl.make_tile(tile_type, addr=0, size=2048)
         src = pl.make_tile(tile_type, addr=2048, size=2048)
         with pl.section_vector():
             pl.simt.launch(_tile_valid_shape_access, threads=32, args=(dst, src))
 
-    program, _ = kernel.parse_target_program(ir.SectionKind.Vector)
+    program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     function_ir = str(program.get_function("_tile_valid_shape_access"))
 
     assert function_ir.count("block.tile_valid_shape") == 2
@@ -387,13 +387,15 @@ def test_simt_tile_parameter_exposes_runtime_valid_shape():
 def test_thread_idx_rejected_outside_simt_function():
     with pytest.raises(ParserSyntaxError, match="only be used inside"):
 
-        @pl.function
-        def bad_thread_idx() -> pl.DT_UINT32:
-            return pl.simt.thread_idx().x
+        @pl.jit(auto_mutex=False)
+        def bad_thread_idx(_jit_entry: pl.DT_INT64):
+            _test_result = pl.simt.thread_idx().x
+
+        bad_thread_idx.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_simt_launch_rejects_threads_above_bound():
-    @pl.kernel
+    @pl.jit
     def too_many_threads(n: pl.DT_UINT32, delta: pl.DT_FP32):
         tile_type = pl.TileType(shape=[1, 256], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
         src = pl.make_tile(tile_type, addr=0x0000, size=1024)
@@ -402,11 +404,11 @@ def test_simt_launch_rejects_threads_above_bound():
             pl.simt.launch(_tile_add, threads=288, args=(dst, src, n, delta))
 
     with pytest.raises(ParserTypeError, match="exceed"):
-        too_many_threads.parse_target_program(ir.SectionKind.Vector)
+        too_many_threads.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_simt_launch_rejects_runtime_tuple_component():
-    @pl.kernel
+    @pl.jit
     def runtime_dimension(n: pl.DT_UINT32, delta: pl.DT_FP32):
         tile_type = pl.TileType(shape=[1, 256], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
         src = pl.make_tile(tile_type, addr=0x0000, size=1024)
@@ -415,7 +417,7 @@ def test_simt_launch_rejects_runtime_tuple_component():
             pl.simt.launch(_tile_add, threads=(8, 4, n), args=(dst, src, n, delta))
 
     with pytest.raises(ParserTypeError, match=r"compile-time integers.*\[1, 2048\]"):
-        runtime_dimension.parse_target_program(ir.SectionKind.Vector)
+        runtime_dimension.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 @pytest.mark.parametrize("max_threads", [0, 2049])
@@ -424,7 +426,7 @@ def test_simt_function_rejects_invalid_launch_bound(max_threads):
     def invalid_bound(n: pl.DT_UINT32):
         return
 
-    @pl.kernel
+    @pl.jit
     def kernel(n: pl.DT_UINT32):
         with pl.section_vector():
             pl.simt.launch(invalid_bound, threads=1, args=(n,))
@@ -432,7 +434,7 @@ def test_simt_function_rejects_invalid_launch_bound(max_threads):
     from pypto_pro.language.parser.diagnostics import ParserSyntaxError
 
     with pytest.raises(ParserSyntaxError, match=r"\[1, 2048\]"):
-        kernel.parse_target_program(ir.SectionKind.Vector)
+        kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_simt_launch_rejects_thread_count_above_hardware_limit():
@@ -440,13 +442,13 @@ def test_simt_launch_rejects_thread_count_above_hardware_limit():
     def wide_function():
         return
 
-    @pl.kernel
-    def too_wide():
+    @pl.jit
+    def too_wide(_jit_entry: pl.DT_INT64):
         with pl.section_vector():
             pl.simt.launch(wide_function, threads=(2048, 2), args=())
 
     with pytest.raises(ParserTypeError, match="must not exceed 2048"):
-        too_wide.parse_target_program(ir.SectionKind.Vector)
+        too_wide.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_simt_function_infers_parameter_and_callee_return_types_at_call_site():
@@ -458,14 +460,14 @@ def test_simt_function_infers_parameter_and_callee_return_types_at_call_site():
     def inferred_entry(dst, value):
         dst[0, 0] = inferred_callee(value)
 
-    @pl.kernel
+    @pl.jit
     def kernel(value: pl.DT_INT32):
         tile_type = pl.TileType(shape=[1, 32], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
         dst = pl.make_tile(tile_type, addr=0, size=128)
         with pl.section_vector():
             pl.simt.launch(inferred_entry, threads=32, args=(dst, value))
 
-    program, _ = kernel.parse_target_program(ir.SectionKind.Vector)
+    program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     callee = program.get_function("inferred_callee")
     entry = program.get_function("inferred_entry")
 
@@ -486,12 +488,12 @@ def test_simt_function_annotations_do_not_override_callsite_types():
     def annotated_entry(value: pl.DT_INT32):
         annotated_callee(value)
 
-    @pl.kernel
+    @pl.jit
     def kernel(value: pl.DT_INT64):
         with pl.section_vector():
             pl.simt.launch(annotated_entry, threads=32, args=(value,))
 
-    program, _ = kernel.parse_target_program(ir.SectionKind.Vector)
+    program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     callee = program.get_function("annotated_callee")
     entry = program.get_function("annotated_entry")
 
@@ -509,13 +511,13 @@ def test_simt_callee_rejects_return_incompatible_with_annotation():
     def entry(value: pl.DT_FP32):
         bad_return(value)
 
-    @pl.kernel
+    @pl.jit
     def kernel(value: pl.DT_FP32):
         with pl.section_vector():
             pl.simt.launch(entry, threads=32, args=(value,))
 
     with pytest.raises(ParserTypeError, match="Return 'bad_return' annotated as"):
-        kernel.parse_target_program(ir.SectionKind.Vector)
+        kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_simt_function_rejects_argument_incompatible_with_annotation():
@@ -523,13 +525,13 @@ def test_simt_function_rejects_argument_incompatible_with_annotation():
     def entry(value: pl.DT_INT32):
         return
 
-    @pl.kernel
+    @pl.jit
     def kernel(value: pl.DT_FP32):
         with pl.section_vector():
             pl.simt.launch(entry, threads=32, args=(value,))
 
     with pytest.raises(ParserTypeError, match="SIMT parameter 'value' annotated as"):
-        kernel.parse_target_program(ir.SectionKind.Vector)
+        kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_cached_simt_function_rejects_incompatible_argument_type():
@@ -537,14 +539,14 @@ def test_cached_simt_function_rejects_incompatible_argument_type():
     def entry(value):
         return
 
-    @pl.kernel
+    @pl.jit
     def kernel(integer: pl.DT_INT32, floating: pl.DT_FP32):
         with pl.section_vector():
             pl.simt.launch(entry, threads=32, args=(integer,))
             pl.simt.launch(entry, threads=32, args=(floating,))
 
     with pytest.raises(ParserTypeError, match="SIMT parameter 'value' annotated as"):
-        kernel.parse_target_program(ir.SectionKind.Vector)
+        kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_simt_entry_rejects_value_return():
@@ -552,13 +554,13 @@ def test_simt_entry_rejects_value_return():
     def entry(value: pl.DT_INT32):
         return value
 
-    @pl.kernel
+    @pl.jit
     def kernel(value: pl.DT_INT32):
         with pl.section_vector():
             pl.simt.launch(entry, threads=32, args=(value,))
 
     with pytest.raises(ParserSyntaxError, match="only supports bare return or return None"):
-        kernel.parse_target_program(ir.SectionKind.Vector)
+        kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_scalar_simt_callee_accepts_early_return_when_all_paths_return():
@@ -572,25 +574,25 @@ def test_scalar_simt_callee_accepts_early_return_when_all_paths_return():
     def entry(value: pl.DT_INT32):
         absolute(value)
 
-    @pl.kernel
+    @pl.jit
     def kernel(value: pl.DT_INT32):
         with pl.section_vector():
             pl.simt.launch(entry, threads=32, args=(value,))
 
-    program, _ = kernel.parse_target_program(ir.SectionKind.Vector)
+    program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     function = program.get_function("absolute")
     assert function.func_type == ir.FunctionType.SimtCallee
     assert str(function).count("return") == 2
 
 
 def test_simt_callee_cannot_be_launched_directly():
-    @pl.kernel
+    @pl.jit
     def invalid_launch(value: pl.DT_INT32):
         with pl.section_vector():
             pl.simt.launch(_callee_add, threads=32, args=(value, value))
 
     with pytest.raises(ParserTypeError, match="not a launchable @pl.simt.function"):
-        invalid_launch.parse_target_program(ir.SectionKind.Vector)
+        invalid_launch.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_recursive_simt_callee_is_rejected_during_instantiation():
@@ -602,13 +604,13 @@ def test_recursive_simt_callee_is_rejected_during_instantiation():
     def entry(value: pl.DT_INT32):
         recursive(value)
 
-    @pl.kernel
+    @pl.jit
     def kernel(value: pl.DT_INT32):
         with pl.section_vector():
             pl.simt.launch(entry, threads=32, args=(value,))
 
     with pytest.raises(ParserSyntaxError, match="Recursive helper"):
-        kernel.parse_target_program(ir.SectionKind.Vector)
+        kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_simt_launch_auto_mutex_inserts_pipe_v_lock_unlock():
@@ -617,7 +619,7 @@ def test_simt_launch_auto_mutex_inserts_pipe_v_lock_unlock():
         tid = pl.simt.linear_thread_idx()
         data[0, tid] = data[0, tid] + delta
 
-    @pl.kernel
+    @pl.jit
     def kernel(
         x: pl.Tensor[[1, 256], pl.DT_FP32],
         out: pl.Tensor[[1, 256], pl.DT_FP32],
@@ -630,7 +632,7 @@ def test_simt_launch_auto_mutex_inserts_pipe_v_lock_unlock():
             pl.simt.launch(inplace_add, threads=256, args=(data.current(), delta))
             pl.store(out, data.current(), [0, 0])
 
-    program, _ = kernel.parse_target_program(ir.SectionKind.Vector)
+    program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     ir_str = str(program)
 
     assert "system.mutex_lock_dyn" in ir_str

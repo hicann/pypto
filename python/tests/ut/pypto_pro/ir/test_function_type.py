@@ -10,6 +10,8 @@
 # -----------------------------------------------------------------------------------------------------------
 """Tests for function type attribute feature."""
 
+import inspect
+
 from pypto_pro import DataType, ir
 from pypto_pro.ir import IRBuilder
 import pypto_pro.language as pl
@@ -38,7 +40,7 @@ def test_function_type_python_print():
     span = ir.Span.unknown()
     dtype = DataType.INT64
 
-    # Opaque function should not print type parameter
+    # Ordinary functions print without a frontend decorator.
     with ib.function("default_func", span=span) as f:
         x = f.param("x", ir.ScalarType(dtype), span=span)
         f.return_type(ir.ScalarType(dtype))
@@ -46,10 +48,11 @@ def test_function_type_python_print():
 
     func_opaque = f.get_result()
     printed = ir.python_print(func_opaque, "pl")
-    assert "@pl.function\n" in printed
-    assert "type=" not in printed  # Opaque should not print type parameter
+    assert printed.startswith("def default_func")
+    assert "@pl.function" not in printed
+    assert "type=" not in printed
 
-    # InCore function should print type parameter
+    # FunctionType remains IR metadata and is not serialized as a removed decorator.
     with ib.function("kernel", span=span, func_type=ir.FunctionType.InCore) as f:
         x = f.param("x", ir.ScalarType(dtype), span=span)
         f.return_type(ir.ScalarType(dtype))
@@ -57,27 +60,24 @@ def test_function_type_python_print():
 
     func_incore = f.get_result()
     printed_incore = ir.python_print(func_incore, "pl")
-    assert "@pl.function(type=pl.FunctionType.InCore)" in printed_incore
+    assert printed_incore.startswith("def kernel")
+    assert "@pl.function" not in printed_incore
+    assert "type=" not in printed_incore
 
 
-def test_function_type_decorator_parsing():
-    """Test parsing functions with type parameter in decorator."""
+def test_jit_kernel_uses_opaque_function_type():
+    """pl.jit captures only Opaque kernel entries."""
+    assert "func_type" not in inspect.signature(pl.jit).parameters
 
-    # Test Opaque (default)
-    @pl.function
-    def default_func(x: pl.Tensor[[4], pl.DT_INT64]) -> pl.Tensor[[4], pl.DT_INT64]:
-        return x
+    @pl.jit(auto_mutex=False)
+    def kernel(x: pl.Tensor[[4], pl.DT_INT64]):
+        _test_result = x
 
-    assert default_func.name == "default_func"
-    assert default_func.func_type == ir.FunctionType.Opaque
-
-    # Test InCore
-    @pl.function(type=pl.FunctionType.InCore)
-    def kernel(x: pl.Tensor[[4], pl.DT_INT64]) -> pl.Tensor[[4], pl.DT_INT64]:
-        return x
+    program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = program.get_function(kernel.__name__)
 
     assert kernel.name == "kernel"
-    assert kernel.func_type == ir.FunctionType.InCore
+    assert kernel.func_type == ir.FunctionType.Opaque
 
 
 def test_function_type_language_export():

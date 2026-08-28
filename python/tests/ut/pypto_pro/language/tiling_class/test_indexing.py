@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from pypto_pro import ir
 import pypto_pro.language as pl
 from pypto_pro.language.parser.diagnostics import (
     ParserSyntaxError,
@@ -34,61 +35,77 @@ class MyTiling:
 
 
 def test_literal_index_0():
-    @pl.function
-    def kernel(tiling: MyTiling) -> pl.DT_INT32:
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64, tiling: MyTiling):
         result: pl.DT_INT32 = tiling.arr[0]
-        return result
+        _test_result = result
 
-    assert kernel is not None
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
+
+    assert isinstance(kernel, ir.Function)
 
 
 def test_literal_index_5():
-    @pl.function
-    def kernel(tiling: MyTiling) -> pl.DT_INT32:
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64, tiling: MyTiling):
         result: pl.DT_INT32 = tiling.arr[5]
-        return result
+        _test_result = result
 
-    assert kernel is not None
+    kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    kernel = kernel_program.get_function(kernel.__name__)
+
+    assert isinstance(kernel, ir.Function)
 
 
 def test_slice_colon_raises():
     with pytest.raises((ParserSyntaxError, ParserTypeError, TypeError, UnsupportedFeatureError)):
-        @pl.function
-        def kernel(tiling: MyTiling) -> pl.DT_INT32:
+        @pl.jit(auto_mutex=False)
+        def kernel(_jit_entry: pl.DT_INT64, tiling: MyTiling):
             result: pl.DT_INT32 = tiling.arr[:]
-            return result
+            _test_result = result
+
+        kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_slice_range_raises():
     with pytest.raises((ParserSyntaxError, ParserTypeError, TypeError, UnsupportedFeatureError)):
-        @pl.function
-        def kernel(tiling: MyTiling) -> pl.DT_INT32:
+        @pl.jit(auto_mutex=False)
+        def kernel(_jit_entry: pl.DT_INT64, tiling: MyTiling):
             result: pl.DT_INT32 = tiling.arr[1:3]
-            return result
+            _test_result = result
+
+        kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_slice_step_raises():
     with pytest.raises((ParserSyntaxError, ParserTypeError, TypeError, UnsupportedFeatureError)):
-        @pl.function
-        def kernel(tiling: MyTiling) -> pl.DT_INT32:
+        @pl.jit(auto_mutex=False)
+        def kernel(_jit_entry: pl.DT_INT64, tiling: MyTiling):
             result: pl.DT_INT32 = tiling.arr[::2]
-            return result
+            _test_result = result
+
+        kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_multi_dim_index_raises():
     with pytest.raises((ParserSyntaxError, ParserTypeError, TypeError)):
-        @pl.function
-        def kernel(tiling: MyTiling) -> pl.DT_INT32:
+        @pl.jit(auto_mutex=False)
+        def kernel(_jit_entry: pl.DT_INT64, tiling: MyTiling):
             result: pl.DT_INT32 = tiling.arr[1, 2]
-            return result
+            _test_result = result
+
+        kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_string_index_raises():
     with pytest.raises((ParserSyntaxError, ParserTypeError, TypeError)):
-        @pl.function
-        def kernel(tiling: MyTiling) -> pl.DT_INT32:
+        @pl.jit(auto_mutex=False)
+        def kernel(_jit_entry: pl.DT_INT64, tiling: MyTiling):
             result: pl.DT_INT32 = tiling.arr["x"]
-            return result
+            _test_result = result
+
+        kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_string_element_type_raises():

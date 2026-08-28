@@ -10,6 +10,7 @@
 # -----------------------------------------------------------------------------------------------------------
 """Shared fixtures for unit tests."""
 
+from __future__ import annotations
 
 
 def duration_estimate(seconds: float):

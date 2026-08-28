@@ -10,7 +10,7 @@
 # -----------------------------------------------------------------------------------------------------------
 """CCE codegen smoke tests for system.sync_all.
 
-Each test compiles a @pl.kernel with pl.system.sync_all() and verifies that the
+Each test compiles a @pl.jit with pl.system.sync_all() and verifies that the
 generated CCE C++ output contains the expected SYNCALL calls with the correct
 mode and core_type attributes. Covered cases include the default Mix/hard mode
 plus explicit AIVOnly/Mix and soft mode variants.
@@ -21,10 +21,10 @@ import logging
 import pypto_pro.language as pl
 
 
-def _compile_to_cce(kernel_def) -> str:
+def _compile_to_cce(kernel) -> str:
     from pypto_pro.runtime.jit import _assemble_cv_source, _parse_and_codegen_targets
 
-    cube, vector = _parse_and_codegen_targets(kernel_def, "a5", "")
+    cube, vector = _parse_and_codegen_targets(kernel.to_kernel_def(), "a5", "")
     return _assemble_cv_source(cube, vector).content
 
 
@@ -33,7 +33,7 @@ def _compile_to_cce(kernel_def) -> str:
 # ---------------------------------------------------------------------------
 
 
-@pl.kernel
+@pl.jit
 def _sync_all_mix_kernel(
     a: pl.Tensor[[64, 128], pl.DT_FP16],
 ):
@@ -43,7 +43,7 @@ def _sync_all_mix_kernel(
     pl.system.sync_all()
 
 
-@pl.kernel
+@pl.jit
 def _sync_all_aiv_only_kernel(
     a: pl.Tensor[[64, 128], pl.DT_FP16],
 ):
@@ -58,7 +58,7 @@ def _sync_all_aiv_only_kernel(
 # ---------------------------------------------------------------------------
 
 
-@pl.kernel
+@pl.jit
 def _sync_all_soft_aiv_only_kernel(
     a: pl.Tensor[[64, 128], pl.DT_FP16],
     sync_gm: pl.Tensor[[384], pl.DT_INT32],
@@ -71,7 +71,7 @@ def _sync_all_soft_aiv_only_kernel(
     pl.system.sync_all([sync_gm, sync_ub], mode=pl.SyncAllMode.SOFT, core_type=pl.SyncCoreType.AIV_ONLY)
 
 
-@pl.kernel
+@pl.jit
 def _sync_all_soft_mix_kernel(
     a: pl.Tensor[[64, 128], pl.DT_FP16],
     sync_gm: pl.Tensor[[384], pl.DT_INT32],

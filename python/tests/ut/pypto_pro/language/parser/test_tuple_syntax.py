@@ -19,81 +19,96 @@ import pytest
 def test_parse_empty_tuple():
     """Test parsing empty tuple literal."""
 
-    @pl.function
-    def func():
+    @pl.jit(auto_mutex=False)
+    def func(_jit_entry: pl.DT_INT64):
         _ = ()
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     # Verify function was created
     assert func is not None
-    assert isinstance(func, ir.Function)
 
 
 def test_parse_tuple_with_two_elements():
     """Test parsing tuple with two elements."""
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(x: pl.Tensor[[10], pl.DT_FP32], y: pl.DT_INT64):
         _ = (x, y)
 
-    assert func is not None
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
+
     assert isinstance(func, ir.Function)
 
 
 def test_parse_tuple_with_constants():
     """Test parsing tuple with constant values."""
 
-    @pl.function
-    def func():
+    @pl.jit(auto_mutex=False)
+    def func(_jit_entry: pl.DT_INT64):
         _ = (1, 2, 3)
 
-    assert func is not None
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
+
     assert isinstance(func, ir.Function)
 
 
 def test_parse_nested_tuple():
     """Test parsing nested tuples."""
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(x: pl.DT_INT64):
         inner = (x, x)
         _ = (inner, x)
 
-    assert func is not None
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
+
     assert isinstance(func, ir.Function)
 
 
 def test_parse_singleton_tuple():
     """Test parsing single element tuple."""
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(x: pl.DT_INT64):
         _ = (x,)
 
-    assert func is not None
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
+
     assert isinstance(func, ir.Function)
 
 
 def test_parse_nested_subscript():
     """Test parsing nested tuple subscript."""
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(x: pl.DT_INT64, y: pl.DT_FP32):
         inner = (x, x)
         nested = (inner, y)
         _ = nested[0]
         _ = nested[0][1]
 
-    assert func is not None
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
+
     assert isinstance(func, ir.Function)
 
 
 def test_static_subscript_of_let_bound_tuple_is_folded():
     """Immutable tuples retain static-element folding after let binding."""
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(x: pl.DT_INT64):
         values = (x, 7)
         selected = values[1]  # noqa: F841
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     selected = next(
         stmt for stmt in func.body.stmts
@@ -105,10 +120,13 @@ def test_static_subscript_of_let_bound_tuple_is_folded():
 def test_struct_array_static_subscript_remains_getitem():
     """Struct arrays must share CCE's backing array for static and dynamic access."""
 
-    @pl.function
-    def func():
+    @pl.jit(auto_mutex=False)
+    def func(_jit_entry: pl.DT_INT64):
         slots = pl.struct_array(2, "Slot", value=0)
         slot = slots[0]  # noqa: F841
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     slot = next(
         stmt for stmt in func.body.stmts
@@ -122,7 +140,7 @@ def test_struct_array_static_subscript_remains_getitem():
 def test_named_tuple_static_field_is_folded_with_runtime_fields():
     """A static named-tuple field folds even when another field is runtime."""
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(x: pl.DT_INT64):
         info = pl.make_tuple(flag=False, size=x)
         if info.flag:
@@ -130,18 +148,23 @@ def test_named_tuple_static_field_is_folded_with_runtime_fields():
         else:
             selected = info.size  # noqa: F841
 
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
+
     assert all(not isinstance(stmt, ir.IfStmt) for stmt in func.body.stmts)
 
 
 def test_variable_index_homogeneous_tuple():
     """Variable index on a homogeneous tuple generates valid IR."""
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(x: pl.DT_INT64, y: pl.DT_INT64, idx: pl.DT_INT64):
         my_tuple = (x, y)
         _ = my_tuple[idx]
 
-    assert func is not None
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
+
     assert isinstance(func, ir.Function)
 
 
@@ -149,10 +172,12 @@ def test_variable_index_heterogeneous_tuple_raises():
     """Variable index on heterogeneous tuple raises an error."""
     with pytest.raises(Exception):
 
-        @pl.function
+        @pl.jit(auto_mutex=False)
         def func(x: pl.DT_INT64, y: pl.DT_FP32, idx: pl.DT_INT64):
             my_tuple = (x, y)
             _ = my_tuple[idx]
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_variable_index_generates_get_item_expr():
@@ -161,12 +186,14 @@ def test_variable_index_generates_get_item_expr():
     The CCE codegen handles this via array pre-declaration.
     """
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(x: pl.DT_INT64, y: pl.DT_INT64, idx: pl.DT_INT64):
         my_tuple = (x, y)
         _ = my_tuple[idx]
 
-    assert func is not None
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
+
     body_stmts = func.body.stmts
     # Find AssignStmts whose RHS is a GetItemExpr with a dynamic (non-ConstInt) slice
     dyn_gi = []
@@ -179,10 +206,13 @@ def test_variable_index_generates_get_item_expr():
 
 
 def test_constant_tuple_dynamic_index_uses_folded_make_tuple_base():
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(idx: pl.DT_INT64):
         event_ids = (3, 7)
         _ = event_ids[idx]
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     body_stmts = func.body.stmts
     tuple_assignments = [
@@ -202,13 +232,16 @@ def test_constant_tuple_dynamic_index_uses_folded_make_tuple_base():
 
 
 def test_dynamic_index_keeps_folded_tuple_through_base_expression():
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(x: pl.DT_INT64, y: pl.DT_INT64, idx: pl.DT_INT64):
         primary = (x, y)
         fallback = (x, y)
         pair = (primary, fallback)
         selector = 0
         selected = pair[selector][idx]  # noqa: F841
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     dynamic_read = None
     for stmt in func.body.stmts:
@@ -221,9 +254,12 @@ def test_dynamic_index_keeps_folded_tuple_through_base_expression():
 
 
 def test_nested_tuple_has_anchor_but_remains_make_tuple_expression():
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def func(x: pl.DT_INT64, y: pl.DT_INT64):
         outer = (x, (x, y))  # noqa: F841
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assignments = [stmt for stmt in func.body.stmts if isinstance(stmt, ir.AssignStmt)]
     outer = next(stmt for stmt in assignments if stmt.var.name == "outer")
@@ -236,10 +272,13 @@ def test_nested_tuple_has_anchor_but_remains_make_tuple_expression():
 
 
 def test_constant_tuple_index_is_direct_element():
-    @pl.function
-    def func():
+    @pl.jit(auto_mutex=False)
+    def func(_jit_entry: pl.DT_INT64):
         event_ids = (3, 7)
         selected = event_ids[1]  # noqa: F841
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     assignments = [stmt for stmt in func.body.stmts if isinstance(stmt, ir.AssignStmt)]
     assert isinstance(assignments[-1].value, ir.ConstInt)
@@ -249,8 +288,8 @@ def test_constant_tuple_index_is_direct_element():
 def test_tile_factories_accept_propagated_constant_kwargs():
     """Tile factory kwargs accept parser-propagated dtype and shape constants."""
 
-    @pl.function
-    def func():
+    @pl.jit(auto_mutex=False)
+    def func(_jit_entry: pl.DT_INT64):
         dtype_selector = 0
         if dtype_selector == 0:
             if dtype_selector + 1 == 1:
@@ -280,6 +319,9 @@ def test_tile_factories_accept_propagated_constant_kwargs():
         tile_type = pl.TileType(shape=shape, valid_shape=valid_shape, dtype=dtype)
         tile = pl.make_tile(tile_type, addr=0, size=8192)  # noqa: F841
         group = pl.make_tile_group(type=tile_type, addrs=0x2000, mutex_ids=[0, 1])  # noqa: F841
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
 
     tile_assignments = [
         stmt
@@ -319,19 +361,21 @@ def test_tile_type_shape_rejects_runtime_value():
     """A runtime tensor dimension is not a usable TileType shape."""
     with pytest.raises(ParserTypeError, match="must be a compile-time integer"):
 
-        @pl.function
+        @pl.jit(auto_mutex=False)
         def func(x: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP16]):
             m = x.shape[0]
             tile_type = pl.TileType(  # noqa: F841
                 shape=[m, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat
             )
 
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
 
 def test_tile_type_valid_shape_rejects_runtime_value():
     """Same for valid_shape — pl.set_validshape() is the runtime form."""
     with pytest.raises(ParserTypeError, match="must be a compile-time integer"):
 
-        @pl.function
+        @pl.jit(auto_mutex=False)
         def func(x: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP16]):
             m = x.shape[0]
             tile_type = pl.TileType(  # noqa: F841
@@ -341,15 +385,17 @@ def test_tile_type_valid_shape_rejects_runtime_value():
                 target_memory=pl.MemorySpace.Mat,
             )
 
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
 
 def _parse_order_kernel(kernel_def):
-    return kernel_def.parse_target_program(ir.SectionKind.Vector)[0]
+    return kernel_def.to_kernel_def().parse_target_program(ir.SectionKind.Vector)[0]
 
 
 def test_order_kwarg_selects_the_tensor_axes():
     """A constant `order` reaches the builder and becomes the load's tile_dims."""
 
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(a: pl.Tensor[[2, 128, 128], pl.DT_FP16]):
         tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         group = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[0, 1])
@@ -361,7 +407,7 @@ def test_order_kwarg_selects_the_tensor_axes():
 def test_order_kwarg_accepts_a_kernel_local_axis_list():
     """The axes only have to be known while parsing, not spelled as a literal."""
 
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(a: pl.Tensor[[2, 128, 128], pl.DT_FP16]):
         axes = [0, 2]
         tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
@@ -374,7 +420,7 @@ def test_order_kwarg_accepts_a_kernel_local_axis_list():
 def test_load_without_order_is_left_alone():
     """The order hook is a no-op when the call does not pass the kwarg."""
 
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(a: pl.Tensor[[2, 128, 128], pl.DT_FP16]):
         tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         group = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[0, 1])
@@ -388,7 +434,7 @@ def test_load_without_order_is_left_alone():
 def test_order_kwarg_rejects_bool_axes():
     """bool subclasses int, but ``True`` is not an axis."""
 
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(a: pl.Tensor[[2, 128, 128], pl.DT_FP16]):
         tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         group = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[0, 1])
@@ -401,7 +447,7 @@ def test_order_kwarg_rejects_bool_axes():
 def test_order_kwarg_rejects_runtime_axis():
     """`order` selects tensor axes at parse time, so an axis may not be runtime."""
 
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(a: pl.Tensor[[2, 128, 128], pl.DT_FP16], axis: pl.DT_INT32):
         tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         group = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[0, 1])
@@ -414,7 +460,7 @@ def test_order_kwarg_rejects_runtime_axis():
 def test_order_kwarg_rejects_float_axes():
     """A constant `order` still has to be integral."""
 
-    @pl.kernel(auto_mutex=True)
+    @pl.jit(auto_mutex=True)
     def k(a: pl.Tensor[[2, 128, 128], pl.DT_FP16]):
         tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
         group = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[0, 1])

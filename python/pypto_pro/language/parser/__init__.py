@@ -17,7 +17,7 @@ builder programs.
 Part of the pypto_pro.language package - use via:
     import pypto_pro.language as pl
 
-    @pl.function
+    @pl.jit
     def my_func(...):
         ...
 """
@@ -25,19 +25,12 @@ Part of the pypto_pro.language package - use via:
 from __future__ import annotations
 
 __all__ = [
-    "function",
     "inline",
-    "program",
-    "parse",
-    "loads",
-    "parse_program",
-    "loads_program",
     "Tensor",
     "Scalar",
 ]
 
 
 from ..typing import Scalar, Tensor
-from .decorator import function, inline, program
+from .decorator import inline
 from .diagnostics import ParserError  # noqa: F401
-from .text_parser import loads, loads_program, parse, parse_program

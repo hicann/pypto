@@ -13,14 +13,14 @@
 import pypto_pro.language as pl
 
 
-def _compile_to_cce(kernel_def) -> str:
+def _compile_to_cce(kernel) -> str:
     from pypto_pro.runtime.jit import _assemble_cv_source, _parse_and_codegen_targets
 
-    cube, vector = _parse_and_codegen_targets(kernel_def, "a5", "")
+    cube, vector = _parse_and_codegen_targets(kernel.to_kernel_def(), "a5", "")
     return _assemble_cv_source(cube, vector).content
 
 
-@pl.kernel(auto_mutex=True)
+@pl.jit(auto_mutex=True)
 def _mixed_multi_mutex_ids_kernel(x: pl.Tensor[[64, 32], pl.DT_FP16]):
     tile_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
     source_group = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])

@@ -17,10 +17,10 @@ import pypto_pro.language as pl
 import pytest
 
 
-def _compile_to_cce(kernel_def, arch: str = "a5") -> str:
+def _compile_to_cce(kernel, arch: str = "a5") -> str:
     from pypto_pro.runtime.jit import _assemble_cv_source, _parse_and_codegen_targets
 
-    cube, vector = _parse_and_codegen_targets(kernel_def, arch, "")
+    cube, vector = _parse_and_codegen_targets(kernel.to_kernel_def(), arch, "")
     return _assemble_cv_source(cube, vector).content
 
 
@@ -127,7 +127,7 @@ def _tile_valid_shape_access(
         dst[row, col] = src[row, col]
 
 
-@pl.kernel
+@pl.jit
 def _simt_tile_codegen_kernel(
     x: pl.Tensor[[1, 256], pl.DT_FP32],
     out: pl.Tensor[[1, 256], pl.DT_FP32],
@@ -148,7 +148,7 @@ def _simt_tile_codegen_kernel(
         pl.store(out, dst, [0, 0])
 
 
-@pl.kernel
+@pl.jit
 def _simt_gm_codegen_kernel(
     x: pl.Tensor[[1, 256], pl.DT_FP32],
     out: pl.Tensor[[1, 256], pl.DT_FP32],
@@ -159,15 +159,15 @@ def _simt_gm_codegen_kernel(
         pl.simt.launch(_gm_add, threads=256, args=(out, x, n, delta))
 
 
-@pl.kernel
-def _simt_context_codegen_kernel():
+@pl.jit
+def _simt_context_codegen_kernel(_jit_entry: pl.DT_INT64):
     tile_type = pl.TileType(shape=[1, 256], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
     dst = pl.make_tile(tile_type, addr=0x0000, size=1024)
     with pl.section_vector():
         pl.simt.launch(_context_probe, threads=(8, 4, 8), args=(dst,))
 
 
-@pl.kernel
+@pl.jit
 def _simt_callee_codegen_kernel(src: pl.Tensor[[1, 32], pl.DT_INT32], delta: pl.DT_INT32):
     tile_type = pl.TileType(shape=[1, 32], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
     dst = pl.make_tile(tile_type, addr=0x0000, size=128)
@@ -175,7 +175,7 @@ def _simt_callee_codegen_kernel(src: pl.Tensor[[1, 32], pl.DT_INT32], delta: pl.
         pl.simt.launch(_callee_entry, threads=32, args=(dst, src, delta))
 
 
-@pl.kernel
+@pl.jit
 def _simt_valid_shape_codegen_kernel(valid_rows: pl.DT_UINT32, valid_cols: pl.DT_UINT32):
     tile_type = pl.TileType(
         shape=[8, 64],
@@ -251,7 +251,7 @@ def _atomic_rmw_discard(
     pl.simt.atomic_dec(counter[0, 0], limit)
 
 
-@pl.kernel
+@pl.jit
 def _atomic_add_ub_codegen_kernel(value: pl.DT_INT32):
     tile_type = pl.TileType(shape=[1, 32], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
     dst = pl.make_tile(tile_type, addr=0x0000, size=128)
@@ -260,7 +260,7 @@ def _atomic_add_ub_codegen_kernel(value: pl.DT_INT32):
         pl.simt.launch(_atomic_add_ub, threads=32, args=(dst, old_values, value))
 
 
-@pl.kernel
+@pl.jit
 def _atomic_add_gm_codegen_kernel(
     dst: pl.Tensor[[1, 32], pl.DT_INT64],
     old_values: pl.Tensor[[1, 32], pl.DT_INT64],
@@ -270,7 +270,7 @@ def _atomic_add_gm_codegen_kernel(
         pl.simt.launch(_atomic_add_gm, threads=32, args=(dst, old_values, value))
 
 
-@pl.kernel
+@pl.jit
 def _atomic_add_discard_codegen_kernel(value: pl.DT_INT32):
     tile_type = pl.TileType(shape=[1, 1], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
     dst = pl.make_tile(tile_type, addr=0x0000, size=4)
@@ -278,7 +278,7 @@ def _atomic_add_discard_codegen_kernel(value: pl.DT_INT32):
         pl.simt.launch(_atomic_add_discard, threads=1, args=(dst, value))
 
 
-@pl.kernel
+@pl.jit
 def _atomic_half_discard_codegen_kernel(gm: pl.Tensor[[1, 3], pl.DT_BF16]):
     tile_type = pl.TileType(shape=[1, 3], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
     ub = pl.make_tile(tile_type, addr=0x0000, size=32)
@@ -286,7 +286,7 @@ def _atomic_half_discard_codegen_kernel(gm: pl.Tensor[[1, 3], pl.DT_BF16]):
         pl.simt.launch(_atomic_half_discard, threads=1, args=(ub, gm))
 
 
-@pl.kernel
+@pl.jit
 def _atomic_rmw_discard_codegen_kernel(
     compare: pl.DT_INT32,
     replacement: pl.DT_INT32,
@@ -493,7 +493,7 @@ def _simt_inplace_add(data, delta: pl.DT_FP32):
     data[0, tid] = data[0, tid] + delta
 
 
-@pl.kernel
+@pl.jit
 def _simt_auto_mutex_kernel(
     x: pl.Tensor[[1, 256], pl.DT_FP32],
     out: pl.Tensor[[1, 256], pl.DT_FP32],

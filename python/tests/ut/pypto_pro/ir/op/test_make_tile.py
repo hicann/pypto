@@ -52,14 +52,14 @@ def _dynamic_tuple() -> ir.MakeTuple:
 
 
 def _parse_kernel(kernel_def) -> ir.Program:
-    return kernel_def.parse_target_program(ir.SectionKind.Vector)[0]
+    return kernel_def.to_kernel_def().parse_target_program(ir.SectionKind.Vector)[0]
 
 
 def _kernel_ir(kernel_def) -> str:
     return str(_parse_kernel(kernel_def))
 
 
-# ``@pl.kernel`` re-raises a builder ValueError (alignment, underivable size) as a
+# ``@pl.jit`` re-raises a builder ValueError (alignment, underivable size) as a
 # ParserSyntaxError that carries the original message, so those cases are matched
 # on the message rather than on ValueError itself.
 _WRAPPED = ParserSyntaxError
@@ -189,7 +189,7 @@ def test_builder_leaves_unaligned_spaces_alone():
 
 
 def test_addr_zero_is_accepted_in_a_kernel():
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=0)
@@ -201,7 +201,7 @@ def test_addr_zero_is_accepted_in_a_kernel():
 def test_addr_none_is_rejected():
     """``addr=None`` parses to IR, not to Python None, so it fails the int check."""
 
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=None)
@@ -214,7 +214,7 @@ def test_addr_none_is_rejected():
 def test_bool_addr_is_rejected():
     """bool subclasses int, but ``addr=False`` is a mistake, not address 0."""
 
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=False)
@@ -225,7 +225,7 @@ def test_bool_addr_is_rejected():
 
 
 def test_float_addr_is_rejected():
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=0.0)
@@ -238,7 +238,7 @@ def test_float_addr_is_rejected():
 def test_loop_index_addr_is_rejected():
     """A tile's address is fixed while parsing, so it cannot follow a loop."""
 
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         for i in pl.range(2):
@@ -254,7 +254,7 @@ def test_loop_index_addr_is_rejected():
 def test_addr_from_a_kernel_local_constant_is_folded():
     """addr accepts any expression with a parse-time value, not just literals."""
 
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         base = 0x100
         tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
@@ -270,7 +270,7 @@ def test_addr_from_a_kernel_local_constant_is_folded():
 
 
 def test_size_is_derived_when_omitted():
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=0)
@@ -282,7 +282,7 @@ def test_size_is_derived_when_omitted():
 def test_size_none_is_rejected_rather_than_derived():
     """``size=None`` is a value that is not an integer, not an omitted argument."""
 
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=0, size=None)
@@ -293,7 +293,7 @@ def test_size_none_is_rejected_rather_than_derived():
 
 
 def test_negative_size_is_rejected():
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=0, size=-32)
@@ -306,7 +306,7 @@ def test_negative_size_is_rejected():
 def test_zero_size_is_rejected():
     """Zero is held to the same contract as a negative byte count."""
 
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=0, size=0)
@@ -317,7 +317,7 @@ def test_zero_size_is_rejected():
 
 
 def test_runtime_size_is_rejected():
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[pl.DYNAMIC, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=0, size=x.shape[0] * 2)
@@ -335,7 +335,7 @@ def test_runtime_size_is_rejected():
 def test_a_shape_in_place_of_a_tile_type_is_rejected():
     """A tile's shape only reaches make_tile through a TileType."""
 
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[64], pl.DT_FP16]):
         t = pl.make_tile([64], pl.DT_FP16, pl.MemorySpace.Vec, 0, 128)
         pl.load(t, x, [0])
@@ -350,7 +350,7 @@ def test_a_shape_in_place_of_a_tile_type_is_rejected():
 def test_tile_type_may_be_built_inline():
     """The leading TileType is recognised by value, not by being a named variable."""
 
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         t = pl.make_tile(
             pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec), addr=0x40
@@ -365,7 +365,7 @@ def test_tile_type_may_be_built_inline():
 def test_a_tile_type_is_required_even_when_addr_is_given():
     """The builder's spread-out form is not a DSL spelling of make_tile."""
 
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[64], pl.DT_FP16]):
         t = pl.make_tile([64], pl.DT_FP16, pl.MemorySpace.Vec, 0x40)
         pl.load(t, x, [0])
@@ -375,7 +375,7 @@ def test_a_tile_type_is_required_even_when_addr_is_given():
 
 
 def test_a_call_with_no_positional_argument_is_rejected():
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[64], pl.DT_FP16]):
         t = pl.make_tile(addr=0x40)
         pl.load(t, x, [0])
@@ -387,7 +387,7 @@ def test_a_call_with_no_positional_argument_is_rejected():
 def test_addr_and_size_given_positionally_are_rejected():
     """A bare pair of ints reads the same swapped, so neither position binds."""
 
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, 0, 128)
@@ -402,7 +402,7 @@ def test_addr_and_size_given_positionally_are_rejected():
 def test_a_positional_addr_is_not_silently_shadowed_by_a_keyword_one():
     """Two addrs used to resolve to the positional one, dropping the keyword."""
 
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, 0x100, addr=0x2000)
@@ -416,7 +416,7 @@ def test_a_positional_addr_is_not_silently_shadowed_by_a_keyword_one():
 def test_a_non_tile_type_first_argument_is_rejected():
     """Anything that is not a TileType is reported, not silently treated as addr."""
 
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[64], pl.DT_FP16]):
         t = pl.make_tile(0x40)
         pl.load(t, x, [0])
@@ -431,7 +431,7 @@ def test_a_non_tile_type_first_argument_is_rejected():
 
 
 def test_valid_shape_pad_and_compact_are_spread_from_the_tile_type():
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[128, 128], pl.DT_FP16]):
         tt = pl.TileType(
             shape=[128, 128],
@@ -451,7 +451,7 @@ def test_valid_shape_pad_and_compact_are_spread_from_the_tile_type():
 
 
 def test_layout_and_fractal_are_spread_from_the_tile_type():
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[128, 128], pl.DT_FP16]):
         tt = pl.TileType(
             shape=[128, 128],
@@ -471,7 +471,7 @@ def test_layout_and_fractal_are_spread_from_the_tile_type():
 
 
 def test_an_explicit_kwarg_wins_over_the_tile_type_field():
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[128, 128], pl.DT_FP16]):
         tt = pl.TileType(
             shape=[128, 128],
@@ -490,7 +490,7 @@ def test_an_explicit_kwarg_wins_over_the_tile_type_field():
 def test_size_is_derived_from_the_shape_not_the_valid_shape():
     """valid_shape narrows what the tile reads; the tile still occupies its full shape."""
 
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[128, 128], pl.DT_FP16]):
         tt = pl.TileType(
             shape=[128, 128],
@@ -507,7 +507,7 @@ def test_size_is_derived_from_the_shape_not_the_valid_shape():
 def test_sub_byte_tile_reserves_one_byte_per_element():
     """INT4 has no Vec op to consume it, so only the reservation is checked."""
 
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[64], pl.DT_FP16]):
         tt = pl.TileType(shape=[64, 64], dtype=pl.DT_INT4, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=0)  # noqa: F841
@@ -518,7 +518,7 @@ def test_sub_byte_tile_reserves_one_byte_per_element():
 def test_a_tile_type_with_a_runtime_shape_cannot_derive_its_size():
     """A tuple shape skips the TileType const check, so make_tile_expr reports it."""
 
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[pl.DYNAMIC, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=(x.shape[0], 64), dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=0)
@@ -534,7 +534,7 @@ def test_a_tile_type_with_a_runtime_shape_cannot_derive_its_size():
 
 
 def test_misaligned_acc_addr_is_rejected():
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[128, 128], pl.DT_FP32]):
         tt = pl.TileType(shape=[128, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc)
         t = pl.make_tile(tt, addr=0x20)
@@ -545,7 +545,7 @@ def test_misaligned_acc_addr_is_rejected():
 
 
 def test_misaligned_left_addr_is_rejected():
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[128, 128], pl.DT_FP16]):
         tt = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left)
         t = pl.make_tile(tt, addr=0x100)
@@ -558,7 +558,7 @@ def test_misaligned_left_addr_is_rejected():
 def test_a_folded_addr_is_checked_for_alignment():
     """The alignment check sees the folded value, not the source expression."""
 
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         base = 0x40
         tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
@@ -575,7 +575,7 @@ def test_a_folded_addr_is_checked_for_alignment():
 
 
 def test_tile_type_shape_accepts_a_constant_expression():
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         rows = 8
         tt = pl.TileType(shape=[1, rows * 8], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
@@ -586,7 +586,7 @@ def test_tile_type_shape_accepts_a_constant_expression():
 
 
 def test_tile_type_shape_rejects_a_bool_element():
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[64], pl.DT_FP16]):
         tt = pl.TileType(shape=[True, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=0)
@@ -597,7 +597,7 @@ def test_tile_type_shape_rejects_a_bool_element():
 
 
 def test_pad_need_compile_time_value():
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[64], pl.DT_FP16], pad_mode: pl.DT_INT64):
         tt = pl.TileType(
             shape=[64],
@@ -614,7 +614,7 @@ def test_pad_need_compile_time_value():
 def test_tile_type_valid_shape_rejects_a_runtime_element():
     """set_validshape() is the runtime path; the TileType field is parse-time only."""
 
-    @pl.kernel
+    @pl.jit
     def k(x: pl.Tensor[[pl.DYNAMIC, 64], pl.DT_FP16]):
         tt = pl.TileType(
             shape=[64, 64],

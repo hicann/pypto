@@ -93,8 +93,6 @@ class ASTParser(
         target: ir.SectionKind,
         line_offset: int = 0,
         col_offset: int = 0,
-        global_vars: set[str] | None = None,
-        gvar_to_func: dict[str, ir.Function] | None = None,
         strict_ssa: bool = False,
         closure_vars: dict[str, Any] | None = None,
         auto_mutex: bool = False,
@@ -113,16 +111,14 @@ class ASTParser(
             source_lines: Lines of source code (dedented for parsing)
             line_offset: Line number offset to add to AST line numbers (for dedented code)
             col_offset: Column offset to add to AST column numbers (for dedented code)
-            global_vars: Optional set of function names for cross-function calls
-            gvar_to_func: Optional map of function names to parsed Functions for type inference
             strict_ssa: If True, enforce SSA (single assignment). If False (default), allow reassignment.
             closure_vars: Optional variables from the enclosing scope for dynamic shape resolution
             auto_mutex: If True, automatically insert mutex lock/unlock around buffer-managed tile ops.
             void_return_only: If True, reject return values and non-None return annotations.
             void_return_context: User-facing name used only in diagnostics
-                (for example, "@pl.jit/@pl.kernel" or "@pl.vector_function").
+                (for example, "@pl.jit" or "@pl.vector_function").
             allow_early_return: If True, skip the single-tail-return restriction.
-                This is intentionally separate from void_return_only: @pl.jit/@pl.kernel
+                This is intentionally separate from void_return_only: @pl.jit
                 are void-only but allow early/multiple returns, while @pl.vector_function
                 and @pl.pipeline.stage are void-only and still require a single tail return.
             target: Required Cube/Vector target for target-specific parsing.
@@ -169,8 +165,6 @@ class ASTParser(
         # by the caller (kernel / decorator). Not created here; may be None for parses that
         # do not feed a Program.
         self.debug_info = debug_info
-        self.global_vars = global_vars or set()  # Track function names for cross-function calls
-        self.gvar_to_func = gvar_to_func or {}  # Track parsed functions for type inference
         self.external_funcs: dict[str, ir.Function] = {}  # Track external functions referenced
 
         # Track active control-flow builders while parsing nested statements.

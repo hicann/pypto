@@ -22,16 +22,19 @@ from pypto.pypto_impl import ir
 def test_scalar_min():
     """Test pl.min(scalar, scalar) dispatches to ir.min_."""
 
-    @pl.function(type=pl.FunctionType.Opaque)
+    @pl.jit(auto_mutex=False)
     def test_min(
         config: pl.Tensor[[2], pl.DT_INT64],
         out: pl.Tensor[[2, 16, 128], pl.DT_FP32],
-    ) -> pl.Tensor[[2, 16, 128], pl.DT_FP32]:
+    ):
         a: pl.DT_UINT64 = pl.getval(config, 0)
         b: pl.DT_UINT64 = pl.getval(config, 1)
         c = pl.min(a, b)
         _ = c + 1
-        return out
+        _test_result = out
+
+    test_min_program, _ = test_min.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    test_min = test_min_program.get_function(test_min.__name__)
 
     assert isinstance(test_min, ir.Function)
     ir_text = ir.python_print(test_min)
@@ -41,16 +44,19 @@ def test_scalar_min():
 def test_scalar_max():
     """Test pl.max(scalar, scalar) dispatches to ir.max_."""
 
-    @pl.function(type=pl.FunctionType.Opaque)
+    @pl.jit(auto_mutex=False)
     def test_max(
         config: pl.Tensor[[2], pl.DT_INT64],
         out: pl.Tensor[[2, 16, 128], pl.DT_FP32],
-    ) -> pl.Tensor[[2, 16, 128], pl.DT_FP32]:
+    ):
         a: pl.DT_UINT64 = pl.getval(config, 0)
         b: pl.DT_UINT64 = pl.getval(config, 1)
         c = pl.max(a, b)
         _ = c + 1
-        return out
+        _test_result = out
+
+    test_max_program, _ = test_max.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    test_max = test_max_program.get_function(test_max.__name__)
 
     assert isinstance(test_max, ir.Function)
     ir_text = ir.python_print(test_max)
@@ -60,15 +66,18 @@ def test_scalar_max():
 def test_scalar_min_with_literal():
     """Test pl.min(scalar, int_literal) -the paged_attention use case."""
 
-    @pl.function(type=pl.FunctionType.Opaque)
+    @pl.jit(auto_mutex=False)
     def test_min_lit(
         config: pl.Tensor[[2], pl.DT_INT64],
         out: pl.Tensor[[2, 16, 128], pl.DT_FP32],
-    ) -> pl.Tensor[[2, 16, 128], pl.DT_FP32]:
+    ):
         a: pl.DT_UINT64 = pl.getval(config, 0)
         c = pl.min(a, 128)
         _ = c + 1
-        return out
+        _test_result = out
+
+    test_min_lit_program, _ = test_min_lit.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    test_min_lit = test_min_lit_program.get_function(test_min_lit.__name__)
 
     assert isinstance(test_min_lit, ir.Function)
     ir_text = ir.python_print(test_min_lit)
@@ -78,10 +87,10 @@ def test_scalar_min_with_literal():
 def test_tile_min_still_works():
     """Ensure pl.min(tile, axis=...) still works as tile reduction."""
 
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def test_tile_min(
         x: pl.Tensor[[32, 32], pl.DT_FP32],
-    ) -> pl.Tensor[[32, 32], pl.DT_FP32]:
+    ):
         tile_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32)
         reduced_type = pl.TileType(shape=[32, 1], dtype=pl.DT_FP32)
         tile_a = pl.make_tile(tile_type, addr=0, size=4096)
@@ -90,6 +99,9 @@ def test_tile_min_still_works():
         pl.load(tile_a, x, [0, 0])
         pl.minimum(tile_a, tmp, tile_c, dim=0)
         out: pl.Tensor[[32, 32], pl.DT_FP32] = pl.store(x, tile_c, [0, 0])
-        return out
+        _test_result = out
+
+    test_tile_min_program, _ = test_tile_min.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    test_tile_min = test_tile_min_program.get_function(test_tile_min.__name__)
 
     assert isinstance(test_tile_min, ir.Function)

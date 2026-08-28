@@ -33,10 +33,10 @@ DIM = 16
 TILE = 64
 
 
-def _compile_to_cce(kernel_def) -> str:
+def _compile_to_cce(kernel) -> str:
     from pypto_pro.runtime.jit import _assemble_cv_source, _parse_and_codegen_targets
 
-    cube, vector = _parse_and_codegen_targets(kernel_def, "a5", "")
+    cube, vector = _parse_and_codegen_targets(kernel.to_kernel_def(), "a5", "")
     return _assemble_cv_source(cube, vector).content
 
 
@@ -57,7 +57,7 @@ def _instance_strides(source: str, name: str) -> str:
     return match.group(1)
 
 
-@pl.kernel
+@pl.jit
 def _mixed_row_axis_kernel(
     x: pl.Tensor[[DIM, DIM, DIM, DIM], pl.DT_FP16],
     inner: pl.Tensor[[DIM, DIM, DIM, DIM], pl.DT_FP16],
@@ -75,7 +75,7 @@ def _mixed_row_axis_kernel(
         pl.store(middle, middle_tile, [0, 0, 0, 0], order=[2, 3])
 
 
-@pl.kernel
+@pl.jit
 def _single_order_kernel(
     x: pl.Tensor[[DIM, DIM, DIM, DIM], pl.DT_FP16],
     out: pl.Tensor[[DIM, DIM, DIM, DIM], pl.DT_FP16],
@@ -89,7 +89,7 @@ def _single_order_kernel(
         pl.store(out, tile, [0, 0, 0, 0], order=[2, 3])
 
 
-@pl.kernel
+@pl.jit
 def _transposed_only_kernel(x: pl.Tensor[[TILE, TILE], pl.DT_FP16], out: pl.Tensor[[TILE, TILE], pl.DT_FP32]):
     l1 = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),

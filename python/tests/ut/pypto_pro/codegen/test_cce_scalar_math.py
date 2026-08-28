@@ -14,10 +14,10 @@
 import pypto_pro.language as pl
 
 
-def _compile_to_cce(kernel_def) -> str:
+def _compile_to_cce(kernel) -> str:
     from pypto_pro.runtime.jit import _add_kernel_header, _assemble_cv_source, _parse_and_codegen_targets
 
-    cube, vector = _parse_and_codegen_targets(kernel_def, "a5", "")
+    cube, vector = _parse_and_codegen_targets(kernel.to_kernel_def(), "a5", "")
     return _add_kernel_header(_assemble_cv_source(cube, vector)).content
 
 
@@ -50,7 +50,7 @@ def _fp32_math_intrinsics(
     flags[0, 1] = pl.simt.isinf(value)
 
 
-@pl.kernel
+@pl.jit
 def _fp32_math_codegen_kernel(value: pl.DT_FP32):
     out_type = pl.TileType(shape=[1, 19], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     flags_type = pl.TileType(shape=[1, 2], dtype=pl.DT_BOOL, target_memory=pl.MemorySpace.Vec)
@@ -89,8 +89,8 @@ def _fp16_math_intrinsics(
     flags[0, 1] = pl.simt.isinf(value)
 
 
-@pl.kernel
-def _fp16_math_codegen_kernel():
+@pl.jit
+def _fp16_math_codegen_kernel(_jit_entry: pl.DT_INT64):
     out_type = pl.TileType(shape=[1, 18], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
     flags_type = pl.TileType(shape=[1, 2], dtype=pl.DT_BOOL, target_memory=pl.MemorySpace.Vec)
     source_type = pl.TileType(shape=[1, 1], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
@@ -130,8 +130,8 @@ def _bf16_math_intrinsics(
     flags[0, 1] = pl.simt.isinf(value)
 
 
-@pl.kernel
-def _bf16_math_codegen_kernel():
+@pl.jit
+def _bf16_math_codegen_kernel(_jit_entry: pl.DT_INT64):
     out_type = pl.TileType(shape=[1, 18], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec)
     flags_type = pl.TileType(shape=[1, 2], dtype=pl.DT_BOOL, target_memory=pl.MemorySpace.Vec)
     source_type = pl.TileType(shape=[1, 1], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec)
@@ -152,8 +152,8 @@ def _int64_math_intrinsics(
     out[0, 2] = pl.simt.max(source[0, 0], source[0, 1])
 
 
-@pl.kernel
-def _int64_math_codegen_kernel():
+@pl.jit
+def _int64_math_codegen_kernel(_jit_entry: pl.DT_INT64):
     out_type = pl.TileType(shape=[1, 3], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Vec)
     source_type = pl.TileType(shape=[1, 2], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Vec)
     out = pl.make_tile(out_type, addr=0x0000, size=24)

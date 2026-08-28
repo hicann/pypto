@@ -12,7 +12,7 @@
 from __future__ import annotations
 
 # DSL function bodies are parsed as AST, not executed -suppress pyright errors
-# from type-checking the annotations and kwargs inside @pl.function bodies.
+# from type-checking the annotations and kwargs inside parsed DSL bodies.
 import ast
 from typing import TYPE_CHECKING, Any
 

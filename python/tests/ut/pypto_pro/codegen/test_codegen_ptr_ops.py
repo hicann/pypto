@@ -13,14 +13,14 @@
 import pypto_pro.language as pl
 
 
-def _compile_to_cce(kernel_def) -> str:
+def _compile_to_cce(kernel) -> str:
     from pypto_pro.runtime.jit import _assemble_cv_source, _parse_and_codegen_targets
 
-    cube, vector = _parse_and_codegen_targets(kernel_def, "a5", "")
+    cube, vector = _parse_and_codegen_targets(kernel.to_kernel_def(), "a5", "")
     return _assemble_cv_source(cube, vector).content
 
 
-@pl.kernel
+@pl.jit
 def _make_ptr_cce_kernel(p: pl.Ptr[pl.DT_UINT8], out: pl.Tensor[[64, 128], pl.DT_FP16]):
     fp16_ptr = pl.make_ptr(p, dtype=pl.DT_FP16)
     ws = pl.make_tensor(fp16_ptr, [64, 128], [128, 1])
@@ -34,7 +34,7 @@ def _make_ptr_cce_kernel(p: pl.Ptr[pl.DT_UINT8], out: pl.Tensor[[64, 128], pl.DT
         pl.store(out, tile, [0, 0])
 
 
-@pl.kernel
+@pl.jit
 def _retensor_cce_kernel(src: pl.Tensor[[64, 128], pl.DT_FP16], out: pl.Tensor[[64, 128], pl.DT_FP16]):
     reshaped = pl.make_tensor(src, [64, 128], [128, 1])
     tile = pl.make_tile(
@@ -47,7 +47,7 @@ def _retensor_cce_kernel(src: pl.Tensor[[64, 128], pl.DT_FP16], out: pl.Tensor[[
         pl.store(out, tile, [0, 0])
 
 
-@pl.kernel
+@pl.jit
 def _retensor_cce_dtype_kernel(src: pl.Tensor[[64, 128], pl.DT_FP16], out: pl.Tensor[[64, 256], pl.DT_UINT8]):
     as_u8 = pl.make_tensor(src, [64, 256], [256, 1], dtype=pl.DT_UINT8)
     tile = pl.make_tile(

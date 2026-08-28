@@ -10,15 +10,9 @@
 """PyPTO Language module - Type-safe DSL API for writing IR functions."""
 
 __all__ = [
-    "function",
     "inline",
-    "program",
     "vector_function",
-    "parse",
     "parser",
-    "loads",
-    "parse_program",
-    "loads_program",
     "Tensor",
     "Ptr",
     "Scalar",
@@ -203,8 +197,6 @@ __all__ = [
     "get_subblock_num",
     "make_tile_group",
     # Frontend (runtime) aliases
-    "kernel",
-    "KernelDef",
     "jit",
     "pipeline",
     # VF enums
@@ -279,7 +271,7 @@ from pypto_pro.ir.op.block_ops import FillPadMode, TileType
 from pypto_pro.ir.op.ptr_ops import addptr, make_ptr, make_tensor
 from pypto_pro.ir.op.system_ops import mutex_lock as _mutex_lock
 from pypto_pro.ir.op.system_ops import mutex_unlock as _mutex_unlock
-from pypto_pro.runtime import KernelDef, jit, kernel, pipeline
+from pypto_pro.runtime import jit, pipeline
 
 from . import parser
 from ._api import (
@@ -389,8 +381,7 @@ from ._api import (
 )
 from ._simt_api import Simt as simt  # noqa: N813
 from ._vf_api import Vf
-from .parser.decorator import function, inline, program, vector_function
-from .parser.text_parser import loads, loads_program, parse, parse_program
+from .parser.decorator import inline, vector_function
 from .typing import DYNAMIC, STATIC, Ptr, Scalar, Tensor
 
 mutex = SimpleNamespace(mutex_lock=_mutex_lock, mutex_unlock=_mutex_unlock)

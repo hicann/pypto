@@ -11,9 +11,9 @@
 
 """Parser tests for public ``pl.simt`` scalar math APIs.
 
-Operation-level tests use eager SIMT IR parsing so diagnostics and generated IR
-are observable at function definition time. Delayed ``pl.simt.function`` parsing
-is covered by ``test_simt.py``.
+Operation-level pl.simt scalar math tests parse a captured kernel through
+``KernelDef.parse_target_program`` so diagnostics and generated IR use the
+same parser entry as production kernels.
 """
 
 import pypto_pro.language as pl
@@ -31,8 +31,8 @@ def _parse_tile_function(function, tile_specs):
         def entry(tile0):
             function(tile0)
 
-        @pl.kernel
-        def kernel():
+        @pl.jit
+        def kernel(_jit_entry: pl.DT_INT64):
             tile0 = pl.make_tile(
                 pl.TileType(shape=shape0, dtype=dtype0, target_memory=pl.MemorySpace.Vec),
                 addr=0,
@@ -48,8 +48,8 @@ def _parse_tile_function(function, tile_specs):
         def entry(tile0, tile1):
             function(tile0, tile1)
 
-        @pl.kernel
-        def kernel():
+        @pl.jit
+        def kernel(_jit_entry: pl.DT_INT64):
             tile0 = pl.make_tile(
                 pl.TileType(shape=shape0, dtype=dtype0, target_memory=pl.MemorySpace.Vec),
                 addr=0,
@@ -70,8 +70,8 @@ def _parse_tile_function(function, tile_specs):
         def entry(tile0, tile1, tile2):
             function(tile0, tile1, tile2)
 
-        @pl.kernel
-        def kernel():
+        @pl.jit
+        def kernel(_jit_entry: pl.DT_INT64):
             tile0 = pl.make_tile(
                 pl.TileType(shape=shape0, dtype=dtype0, target_memory=pl.MemorySpace.Vec),
                 addr=0,
@@ -93,13 +93,13 @@ def _parse_tile_function(function, tile_specs):
     else:
         raise ValueError("Only one to three Tile parameters are supported")
 
-    program, _ = kernel.parse_target_program(ir.SectionKind.Vector)
+    program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     return program.get_function(function.__name__)
 
 
 def test_scalar_math_is_available_in_simt_functions():
-    @pl.function(type=pl.FunctionType.SimtCallee)
-    def scalar_math(value: pl.DT_FP32, rhs: pl.DT_FP32, addend: pl.DT_FP32) -> pl.DT_FP32:
+    @pl.simt.function(max_threads=1)
+    def scalar_math(value: pl.DT_FP32, rhs: pl.DT_FP32, addend: pl.DT_FP32):
         transformed = pl.simt.max(pl.simt.min(value, rhs), pl.simt.abs(addend))
         transformed = pl.simt.rsqrt(pl.simt.sqrt(transformed))
         transformed = pl.simt.exp2(pl.simt.exp(transformed))
@@ -111,7 +111,15 @@ def test_scalar_math_is_available_in_simt_functions():
         classified = pl.simt.isnan(transformed) or pl.simt.isinf(transformed)
         if classified:
             transformed = value
-        return pl.simt.fma(transformed, rhs, addend)
+        _test_result = pl.simt.fma(transformed, rhs, addend)
+
+    @pl.jit(auto_mutex=False)
+    def kernel(value: pl.DT_FP32, rhs: pl.DT_FP32, addend: pl.DT_FP32):
+        with pl.section_vector():
+            pl.simt.launch(scalar_math, threads=1, args=(value, rhs, addend))
+
+    program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    scalar_math = program.get_function(scalar_math.__name__)
 
     function_ir = str(scalar_math)
     for name in (
@@ -192,9 +200,11 @@ def test_scalar_math_supports_int64_abs_and_integer_min_max():
 def test_scalar_math_rejects_ordinary_function():
     with pytest.raises(ParserSyntaxError, match="can only be used inside a SIMT function"):
 
-        @pl.function(type=pl.FunctionType.Orchestration)
-        def unsupported(value: pl.DT_FP32) -> pl.DT_FP32:
-            return pl.simt.exp(value)
+        @pl.jit(auto_mutex=False)
+        def unsupported(value: pl.DT_FP32):
+            _test_result = pl.simt.exp(value)
+
+        unsupported.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_scalar_math_rejects_unsupported_dtype_and_mixed_operands():
@@ -232,12 +242,26 @@ def test_scalar_math_rejects_tile_operand():
 def test_scalar_math_rejects_wrong_arity_and_keywords():
     with pytest.raises(ParserSyntaxError, match="requires exactly 3 positional arguments"):
 
-        @pl.function(type=pl.FunctionType.SimtCallee)
-        def missing_addend(value: pl.DT_FP32) -> pl.DT_FP32:
-            return pl.simt.fma(value, value)
+        @pl.simt.function(max_threads=1)
+        def missing_addend(value: pl.DT_FP32):
+            _test_result = pl.simt.fma(value, value)
+
+        @pl.jit(auto_mutex=False)
+        def kernel(value: pl.DT_FP32):
+            with pl.section_vector():
+                pl.simt.launch(missing_addend, threads=1, args=(value,))
+
+        kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
     with pytest.raises(ParserSyntaxError, match="requires exactly 1 positional argument"):
 
-        @pl.function(type=pl.FunctionType.SimtCallee)
-        def keyword_argument(value: pl.DT_FP32) -> pl.DT_FP32:
-            return pl.simt.exp(value=value)
+        @pl.simt.function(max_threads=1)
+        def keyword_argument(value: pl.DT_FP32):
+            _test_result = pl.simt.exp(value=value)
+
+        @pl.jit(auto_mutex=False)
+        def kernel(value: pl.DT_FP32):
+            with pl.section_vector():
+                pl.simt.launch(keyword_argument, threads=1, args=(value,))
+
+        kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)

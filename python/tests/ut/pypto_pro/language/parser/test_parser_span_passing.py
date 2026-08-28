@@ -23,14 +23,17 @@ def _call_spans(func):
 
 
 def test_parser_passes_valid_spans_to_tensor_operations():
-    @pl.function
+    @pl.jit(auto_mutex=False)
     def parsed_ops(
         x: pl.Tensor[[64], pl.DT_FP32],
         y: pl.Tensor[[64], pl.DT_FP32],
-    ) -> pl.Tensor[[64], pl.DT_FP32]:
+    ):
         a: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, y)
         b: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.mul(a, 2.0)
-        return b
+        _test_result = b
+
+    parsed_ops_program, _ = parsed_ops.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    parsed_ops = parsed_ops_program.get_function(parsed_ops.__name__)
 
     spans = _call_spans(parsed_ops)
 

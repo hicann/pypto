@@ -871,7 +871,7 @@ def probe_kernel_facts(kernel_def, bound_signature=None) -> tuple[dict, dict]:
             datatype_consts=kernel_def._datatype_consts,
             bound_signature=bound_signature,
             void_return_only=True,
-            void_return_context="@pl.jit/@pl.kernel",
+            void_return_context="@pl.jit",
             allow_early_return=True,
         )
         parser.collect_if_const = True
