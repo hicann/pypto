@@ -105,6 +105,41 @@ static DataType GetExprDtype(const ir::ExprPtr& expr, DataType fallback = DataTy
     return fallback;
 }
 
+// Coerce a float-constant scalar to an integer literal matching the src type,
+// so that the emitted intrinsic (vmuls/vadds/vmins/vmaxs/vcmps_*/vaxpy)
+// receives a correctly-typed integer literal instead of a float literal
+// that would trigger -Wliteral-conversion. Matches AscendC's implicit
+// float→int truncation behavior (silent, mod 2^N wrap).
+static std::string CoerceScalarToInt(const ir::ExprPtr& scalar_expr, const DataType& src_dt,
+                                     const std::string& original_str)
+{
+    if (!src_dt.IsInt()) {
+        return original_str;
+    }
+    if (auto cf = ir::As<ir::ConstFloat>(scalar_expr)) {
+        int64_t v = static_cast<int64_t>(cf->value_);
+        if (src_dt == DataType::INT16) {
+            return std::to_string(static_cast<int64_t>(static_cast<int16_t>(v)));
+        }
+        if (src_dt == DataType::UINT16) {
+            return std::to_string(static_cast<uint64_t>(static_cast<uint16_t>(v))) + "u";
+        }
+        if (src_dt == DataType::INT32) {
+            return std::to_string(static_cast<int64_t>(static_cast<int32_t>(v)));
+        }
+        if (src_dt == DataType::UINT32) {
+            return std::to_string(static_cast<uint64_t>(static_cast<uint32_t>(v))) + "u";
+        }
+        if (src_dt == DataType::INT64) {
+            return std::to_string(v);
+        }
+        if (src_dt == DataType::UINT64) {
+            return std::to_string(static_cast<uint64_t>(v)) + "u";
+        }
+    }
+    return original_str;
+}
+
 // For ops that only support ZEROING: return "MODE_ZEROING", reject MERGING.
 static std::string VFZeroingOnly(const ir::CallPtr& op, const std::string& op_name)
 {
@@ -400,6 +435,15 @@ static std::string EmitVFLoadAlign(const ir::CallPtr& op, codegen::CodegenBase& 
             << "vf.load_align 4-arg (de-interleave) form does not support block_stride";
         CHECK(!op->HasKwarg("repeat_stride"))
             << "vf.load_align 4-arg (de-interleave) form does not support repeat_stride";
+        // 4-arg de-interleave form requires both dsts to be RegTensor (not MaskReg)
+        for (int i = 0; i < 2; i++) {
+            auto dst_v = ir::As<ir::Var>(op->args_[i]);
+            if (dst_v != nullptr) {
+                CHECK(!codegen.IsMaskRegVar(codegen.GetVarName(dst_v)))
+                    << "vf.load_align 4-arg (de-interleave) form requires RegTensor dst, "
+                    << "but args[" << i << "] is a MaskReg";
+            }
+        }
         std::string dst0 = codegen.GetExprAsCode(op->args_[0]);
         std::string dst1 = codegen.GetExprAsCode(op->args_[1]);
         std::string offset_str = ResolveOffsetArg(codegen, op->args_[3], op->args_[2]);
@@ -419,6 +463,8 @@ static std::string EmitVFLoadAlign(const ir::CallPtr& op, codegen::CodegenBase& 
         std::string dintlv_mode;
         if (op->HasKwarg("dist")) {
             dintlv_mode = VFEnumValueName(ir::EnumToString(static_cast<ir::LoadDist>(op->GetKwarg<int>("dist"))));
+            CHECK(dintlv_mode == "DINTLV_B8" || dintlv_mode == "DINTLV_B16" || dintlv_mode == "DINTLV_B32")
+                << "vf.load_align 4-arg (de-interleave) form requires dist=DINTLV_B8/B16/B32, got " << dintlv_mode;
         } else {
             if (IsB8Type(dst_dt))
                 dintlv_mode = "DINTLV_B8";
@@ -509,6 +555,10 @@ static std::string EmitVFLoadAlign(const ir::CallPtr& op, codegen::CodegenBase& 
     std::string mode = "NORM";
     if (op->HasKwarg("dist"))
         mode = VFEnumValueName(ir::EnumToString(static_cast<ir::LoadDist>(op->GetKwarg<int>("dist"))));
+    // 3-arg form (single dst) cannot use DINTLV modes (de-interleave requires 2 dsts)
+    CHECK(mode != "DINTLV_B8" && mode != "DINTLV_B16" && mode != "DINTLV_B32")
+        << "vf.load_align with 3 args (single dst) does not support DINTLV dist, "
+        << "use 4-arg form: dst0, dst1 = vf.load_align(src, offset, dist=...)";
     // AddrReg offset path: MaskReg dst -> pld, RegTensor dst -> vld
     if (codegen.IsAddrRegVar(offset_str)) {
         std::string ub_ptr = GetUBufPtr(codegen, op->args_[1], dst_is_mask ? "uint32_t" : ptr_type);
@@ -539,6 +589,13 @@ static std::string EmitVFLoadAlign(const ir::CallPtr& op, codegen::CodegenBase& 
         CHECK(mask_var != nullptr)
             << "vf.load_align with data_copy_mode=DATA_BLOCK_COPY requires args[2] to be a "
             << "mask register, but got an offset value (offset is not supported in DataBlock mode)";
+        // Verify args[2] is actually a MaskReg, not a Tile or other Var type
+        std::string mask_name = codegen.GetVarName(mask_var);
+        CHECK(codegen.IsMaskRegVar(mask_name))
+            << "vf.load_align with data_copy_mode=DATA_BLOCK_COPY requires args[2] to be a "
+            << "mask register, but got a non-mask variable '" << mask_name << "'";
+        // DataBlock mode requires RegTensor dst (not MaskReg)
+        CHECK(!dst_is_mask) << "vf.load_align with data_copy_mode=DATA_BLOCK_COPY does not support MaskReg dst";
         // vsldb only supports b8/b16/b32 (not b64)
         // vsldb path: load_align(dst, ptr, mask, data_copy_mode=..., block_stride=N, ...)
         std::string mask_reg = codegen.GetExprAsCode(op->args_[2]);
@@ -663,6 +720,7 @@ static std::string EmitVFStoreAlign(const ir::CallPtr& op, codegen::CodegenBase&
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     // args: [dst_ptr, src_reg, mask, (optional) block_stride, (optional) repeat_stride]
+    CHECK(op->args_.size() >= 2) << "vf.store_align requires at least 2 args (dst_ptr, src_reg)";
     DataType src_dt = GetExprDtype(op->args_[1]);
     // vsts supports b8/b16/b32/b64 element widths
     CHECK(IsB8Type(src_dt) || src_dt.GetBit() == 16 || src_dt.GetBit() == 32 || src_dt.GetBit() == 64)
@@ -674,6 +732,9 @@ static std::string EmitVFStoreAlign(const ir::CallPtr& op, codegen::CodegenBase&
     if (auto src_v = ir::As<ir::Var>(op->args_[1])) {
         src_is_mask = codegen.IsMaskRegVar(codegen.GetVarName(src_v));
     }
+    // vsts stores raw register bits; GetUBufPtr already casts the dst pointer
+    // to the src register type (equivalent to AscendC's (RegTensor<T>&) cast),
+    // so no runtime dtype compatibility check is needed here.
     if (src_is_mask) {
         CHECK(!op->HasKwarg("data_copy_mode")) << "vf.store_align (MaskReg src) does not support data_copy_mode";
         CHECK(!op->HasKwarg("block_stride")) << "vf.store_align (MaskReg src) does not support block_stride";
@@ -714,6 +775,12 @@ static std::string EmitVFStoreAlign(const ir::CallPtr& op, codegen::CodegenBase&
     if (op->args_.size() >= 4) {
         std::string addr_reg = codegen.GetExprAsCode(op->args_[3]);
         if (codegen.IsAddrRegVar(addr_reg)) {
+            // Verify args[2] is a MaskReg
+            auto mask_var_4 = ir::As<ir::Var>(op->args_[2]);
+            CHECK(mask_var_4 != nullptr)
+                << "vf.store_align (AddrReg) requires args[2] to be a mask register, but got non-Var type";
+            CHECK(codegen.IsMaskRegVar(codegen.GetVarName(mask_var_4)))
+                << "vf.store_align (AddrReg) requires args[2] to be a mask register";
             std::string mask_reg = codegen.GetExprAsCode(op->args_[2]);
             std::string ptr_type = "float";
             if (auto scalar_type = ir::As<ir::ScalarType>(op->args_[1]->GetType())) {
@@ -808,12 +875,28 @@ static std::string EmitVFStoreAlign(const ir::CallPtr& op, codegen::CodegenBase&
     }
     // INTLV modes need two src registers: args = [dst_ptr, src_reg, src1, mask]
     bool is_intlv = (dist == "INTLV_B8" || dist == "INTLV_B16" || dist == "INTLV_B32");
+    // INTLV requires 4 args; 4-arg with args[2] as register (not mask) requires INTLV
+    // Skip this check for post_update path (4 args = dst, src, mask, stride is valid)
+    if (is_intlv) {
+        CHECK(op->args_.size() == 4) << "vf.store_align INTLV requires 4 args (dst_ptr, src_reg, src1, mask)";
+    } else if (op->args_.size() == 4 && !src_is_mask && !post_update) {
+        auto third_arg_var = ir::As<ir::Var>(op->args_[2]);
+        CHECK(third_arg_var == nullptr || codegen.IsMaskRegVar(codegen.GetVarName(third_arg_var)))
+            << "vf.store_align with 4 args where args[2] is a register (not mask) requires INTLV dist, "
+            << "got " << dist;
+    }
     if (is_intlv) {
         CHECK(op->args_.size() == 4) << "vf.store_align INTLV requires 4 args (dst_ptr, src_reg, src1, mask)";
         CHECK(!op->HasKwarg("data_copy_mode")) << "vf.store_align INTLV mode is incompatible with data_copy_mode";
         CHECK(!op->HasKwarg("post_update")) << "vf.store_align INTLV mode does not support post_update";
         CHECK(!op->HasKwarg("block_stride")) << "vf.store_align INTLV mode does not support block_stride";
         CHECK(!op->HasKwarg("repeat_stride")) << "vf.store_align INTLV mode does not support repeat_stride";
+        // INTLV mode: args[2] is src1 (second source register), args[3] is mask
+        auto intlv_mask_var = ir::As<ir::Var>(op->args_[3]);
+        CHECK(intlv_mask_var != nullptr)
+            << "vf.store_align INTLV requires args[3] to be a mask register, but got non-Var type";
+        CHECK(codegen.IsMaskRegVar(codegen.GetVarName(intlv_mask_var)))
+            << "vf.store_align INTLV requires args[3] to be a mask register";
         std::string src1 = codegen.GetExprAsCode(op->args_[2]);
         std::string mask_reg = codegen.GetExprAsCode(op->args_[3]);
         // vsts 2-source overload (__VF_VSTSX2) does not exist for FP32;
@@ -834,6 +917,14 @@ static std::string EmitVFStoreAlign(const ir::CallPtr& op, codegen::CodegenBase&
         DataType dc_src_dt = GetExprDtype(op->args_[1]);
         CHECK(dc_src_dt.GetBit() == 8 || dc_src_dt.GetBit() == 16 || dc_src_dt.GetBit() == 32)
             << "vf.store_align (DATA_BLOCK_COPY) only supports b8/b16/b32, got " << DTypeStr(dc_src_dt);
+        // In DataBlock mode, args[2] is a mask register
+        CHECK(op->args_.size() >= 3)
+            << "vf.store_align (DATA_BLOCK_COPY) requires at least 3 args (dst_ptr, src_reg, mask)";
+        auto db_mask_var = ir::As<ir::Var>(op->args_[2]);
+        CHECK(db_mask_var != nullptr)
+            << "vf.store_align (DATA_BLOCK_COPY) requires args[2] to be a mask register, but got non-Var type";
+        CHECK(codegen.IsMaskRegVar(codegen.GetVarName(db_mask_var)))
+            << "vf.store_align (DATA_BLOCK_COPY) requires args[2] to be a mask register";
         std::string mask_reg = codegen.GetExprAsCode(op->args_[2]);
         std::string block_stride = "0";
         std::string repeat_stride = "0";
@@ -857,6 +948,12 @@ static std::string EmitVFStoreAlign(const ir::CallPtr& op, codegen::CodegenBase&
                          repeat_stride + " & 0xFFFFU), " + mask_reg + ");");
         }
     } else if (post_update) {
+        CHECK(op->args_.size() >= 3)
+            << "vf.store_align (post_update) requires at least 3 args (dst_ptr, src_reg, mask)";
+        auto pu_mask_var = ir::As<ir::Var>(op->args_[2]);
+        CHECK(pu_mask_var != nullptr) << "vf.store_align requires args[2] to be a mask register, but got non-Var type";
+        CHECK(codegen.IsMaskRegVar(codegen.GetVarName(pu_mask_var)))
+            << "vf.store_align requires args[2] to be a mask register";
         std::string mask_reg = codegen.GetExprAsCode(op->args_[2]);
         std::string stride = (op->args_.size() >= 4) ? codegen.GetExprAsCode(op->args_[3]) : "0";
         // B64 register types need stride doubled (postUpdateStride * 2)
@@ -877,6 +974,11 @@ static std::string EmitVFStoreAlign(const ir::CallPtr& op, codegen::CodegenBase&
                          mask_reg + ", POST_UPDATE);");
         }
     } else {
+        CHECK(op->args_.size() >= 3) << "vf.store_align requires at least 3 args (dst_ptr, src_reg, mask)";
+        auto def_mask_var = ir::As<ir::Var>(op->args_[2]);
+        CHECK(def_mask_var != nullptr) << "vf.store_align requires args[2] to be a mask register, but got non-Var type";
+        CHECK(codegen.IsMaskRegVar(codegen.GetVarName(def_mask_var)))
+            << "vf.store_align requires args[2] to be a mask register";
         std::string mask_reg = codegen.GetExprAsCode(op->args_[2]);
         std::string dst_ptr = GetUBufPtr(codegen, op->args_[0], ptr_type);
         std::string offset_str = "0";
@@ -1272,13 +1374,16 @@ static std::string EmitVFMuls(const ir::CallPtr& op, codegen::CodegenBase& codeg
     // Parser args order: [dst, src, scalar, mask]
     CHECK(op->args_.size() == 4) << "vf.muls requires 4 args (dst, src, scalar, mask)";
     DataType src_dt = GetExprDtype(op->args_[1]);
-    CHECK((src_dt.IsInt() || src_dt == DataType::FP16 || src_dt == DataType::FP32))
-        << "vf.muls src only supports INT/UINT/FP16/FP32, got " << DTypeStr(src_dt);
+    CHECK((src_dt == DataType::INT16 || src_dt == DataType::UINT16 || src_dt == DataType::INT32 ||
+           src_dt == DataType::UINT32 || src_dt == DataType::FP16 || src_dt == DataType::FP32))
+        << "vf.muls src only supports INT16/UINT16/INT32/UINT32/FP16/FP32, got " << DTypeStr(src_dt);
     DataType scalar_dt = GetExprDtype(op->args_[2]);
+    if (scalar_dt == DataType::INDEX) {
+        scalar_dt = src_dt;
+    }
     CHECK((scalar_dt == DataType::INT16 || scalar_dt == DataType::UINT16 || scalar_dt == DataType::INT32 ||
-           scalar_dt == DataType::UINT32 || scalar_dt == DataType::INT64 || scalar_dt == DataType::UINT64 ||
-           scalar_dt == DataType::FP16 || scalar_dt == DataType::FP32))
-        << "vf.muls scalar only supports INT16/UINT16/INT32/UINT32/INT64/UINT64/FP16/FP32, got " << DTypeStr(scalar_dt);
+           scalar_dt == DataType::UINT32 || scalar_dt == DataType::FP16 || scalar_dt == DataType::FP32))
+        << "vf.muls scalar only supports INT16/UINT16/INT32/UINT32/FP16/FP32, got " << DTypeStr(scalar_dt);
     DataType vf_muls_dst_dt = GetExprDtype(op->args_[0]);
     CHECK(src_dt == vf_muls_dst_dt) << "vf.muls requires src and dst to have the same type, got dst="
                                     << DTypeStr(vf_muls_dst_dt) << " src=" << DTypeStr(src_dt);
@@ -1287,6 +1392,7 @@ static std::string EmitVFMuls(const ir::CallPtr& op, codegen::CodegenBase& codeg
     std::string scalar_str = codegen.GetExprAsCode(op->args_[2]);
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
     std::string mode = VFZeroingOnly(op, "vf.muls");
+    scalar_str = CoerceScalarToInt(op->args_[2], src_dt, scalar_str);
     codegen.Emit("vmuls(" + dst + ", " + src + ", " + scalar_str + ", " + mask + ", " + mode + ");");
     return "";
 }
@@ -1549,6 +1655,7 @@ static std::string EmitVFAdds(const ir::CallPtr& op, codegen::CodegenBase& codeg
     std::string scalar_str = codegen.GetExprAsCode(op->args_[2]);
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
     std::string mode = VFZeroingOnly(op, "vf.adds");
+    scalar_str = CoerceScalarToInt(op->args_[2], src_dt, scalar_str);
     codegen.Emit("vadds(" + dst + ", " + src + ", " + scalar_str + ", " + mask + ", " + mode + ");");
     return "";
 }
@@ -1576,6 +1683,7 @@ static std::string EmitVFSubs(const ir::CallPtr& op, codegen::CodegenBase& codeg
     std::string scalar_str = codegen.GetExprAsCode(op->args_[2]);
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
     std::string mode = VFZeroingOnly(op, "vf.subs");
+    scalar_str = CoerceScalarToInt(op->args_[2], src_dt, scalar_str);
     codegen.Emit("vadds(" + dst + ", " + src + ", -(" + scalar_str + "), " + mask + ", " + mode + ");");
     return "";
 }
@@ -1604,6 +1712,7 @@ static std::string EmitVFMins(const ir::CallPtr& op, codegen::CodegenBase& codeg
     std::string scalar_str = codegen.GetExprAsCode(op->args_[2]);
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
     std::string mode = VFZeroingOnly(op, "vf.mins");
+    scalar_str = CoerceScalarToInt(op->args_[2], src_dt, scalar_str);
     codegen.Emit("vmins(" + dst + ", " + src + ", " + scalar_str + ", " + mask + ", " + mode + ");");
     return "";
 }
@@ -1632,6 +1741,7 @@ static std::string EmitVFMaxs(const ir::CallPtr& op, codegen::CodegenBase& codeg
     std::string scalar_str = codegen.GetExprAsCode(op->args_[2]);
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
     std::string mode = VFZeroingOnly(op, "vf.maxs");
+    scalar_str = CoerceScalarToInt(op->args_[2], src_dt, scalar_str);
     codegen.Emit("vmaxs(" + dst + ", " + src + ", " + scalar_str + ", " + mask + ", " + mode + ");");
     return "";
 }
@@ -1773,7 +1883,7 @@ static std::string EmitVFAxpy(const ir::CallPtr& op, codegen::CodegenBase& codeg
     // vaxpy supports half/float/uint64_t/int64_t
     DataType scalar_dt = GetExprDtype(op->args_[2]);
     CHECK(scalar_dt == DataType::FP16 || scalar_dt == DataType::FP32 || scalar_dt == DataType::UINT64 ||
-          scalar_dt == DataType::INT64)
+          scalar_dt == DataType::INT64 || scalar_dt == DataType::INDEX)
         << "vf.axpy scalar only supports FP16/FP32/UINT64/INT64, got " << DTypeStr(scalar_dt);
     DataType vf_axpy_dst_dt = GetExprDtype(op->args_[0]);
     CHECK(src_dt == vf_axpy_dst_dt) << "vf.axpy requires src and dst to have the same type, got dst="
@@ -1783,6 +1893,7 @@ static std::string EmitVFAxpy(const ir::CallPtr& op, codegen::CodegenBase& codeg
     std::string scalar_str = codegen.GetExprAsCode(op->args_[2]);
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
     std::string mode = VFZeroingOnly(op, "vf.axpy");
+    scalar_str = CoerceScalarToInt(op->args_[2], src_dt, scalar_str);
     codegen.Emit("vaxpy(" + dst + ", " + src + ", " + scalar_str + ", " + mask + ", " + mode + ");");
     return "";
 }
@@ -2913,6 +3024,7 @@ static std::string EmitVFCompareImpl(const ir::CallPtr& op, codegen::CodegenBase
     else if (cmp_mode == "LE")
         suffix = "le";
     if (is_scalar_src) {
+        src1 = CoerceScalarToInt(op->args_[2], s0_dt, src1);
         codegen.Emit("vcmps_" + suffix + "(" + mask_dst + ", " + src0 + ", " + src1 + ", " + mask_src + ");");
     } else {
         DataType canonical = GetExprDtype(op->args_[1]);

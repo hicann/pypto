@@ -1627,9 +1627,7 @@ def test_sum_fp32_row():
     a = torch.randn(TILE_M, TILE_N, device=ST_DEVICE, dtype=torch.float32)
     out = torch.empty(TILE_M, TILE_N, device=ST_DEVICE, dtype=torch.float32)
     _run(kernel_sum_fp32_row, a, out)
-    ref = torch.zeros(TILE_M, TILE_N, device=ST_DEVICE, dtype=torch.float32)
-    ref[0, 0] = a.sum(dim=1).item()
-    torch.testing.assert_close(out, ref, rtol=1e-3, atol=1e-3)
+    torch.testing.assert_close(out[0, 0], a.sum(dim=1).squeeze(0), rtol=1e-3, atol=1e-3)
 
 
 @pytest.mark.soc("950")
@@ -1640,9 +1638,7 @@ def test_sum_fp32_row_unaligned():
     a = torch.randn(TILE_M, UNALIGN_N, device=ST_DEVICE, dtype=torch.float32)
     out = torch.empty(TILE_M, UNALIGN_N, device=ST_DEVICE, dtype=torch.float32)
     _run(kernel_sum_fp32_row_unaligned, a, out)
-    ref = torch.zeros(TILE_M, UNALIGN_N, device=ST_DEVICE, dtype=torch.float32)
-    ref[0, 0] = a.sum(dim=1).item()
-    torch.testing.assert_close(out, ref, rtol=1e-3, atol=1e-3)
+    torch.testing.assert_close(out[0, 0], a.sum(dim=1).squeeze(0), rtol=1e-3, atol=1e-3)
 
 
 # =============================================================================

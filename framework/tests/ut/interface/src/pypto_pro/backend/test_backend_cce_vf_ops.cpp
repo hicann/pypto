@@ -93,6 +93,11 @@ ir::ExprPtr Float(double value)
     return std::make_shared<const ir::ConstFloat>(value, ir::DataType::FP32, ir::Span::Unknown());
 }
 
+ir::ExprPtr IndexVal(int64_t value)
+{
+    return std::make_shared<const ir::ConstInt>(value, ir::DataType::INDEX, ir::Span::Unknown());
+}
+
 int EnumValue(ir::MergeMode value) { return static_cast<int>(value); }
 
 template <typename Enum>
@@ -902,6 +907,7 @@ TEST(BackendCCEVFOpsTest, EmitsB64LoadStoreAndNewCastPaths)
     auto fp32 = MakeVar("fp32", ir::DataType::FP32);
     auto bf16 = MakeVar("bf16", ir::DataType::BF16);
     auto mask = MakeVar("mask", ir::DataType::UINT32);
+    codegen.RegisterMaskRegVar("mask");
     for (const auto& var : {i64, u64, i32, u32, u16, u8, i16, i8, fp16, fp32, bf16}) {
         codegen.RegisterRegTensorVar(var->name_);
     }
@@ -1042,6 +1048,319 @@ TEST(BackendCCEVFOpsTest, EmitsB64LoadStoreAndNewCastPaths)
                   {"round_mode", EnumValue(ir::VFRoundMode::CAST_RINT)},
                   {"saturate", EnumValue(ir::SaturateMode::ON)},
                   {"dtype", ir::DataType::INT8}});
+}
+
+// ============================================================================
+// Tests for load_align/store_align validation CHECKs
+// ============================================================================
+
+TEST(BackendCCEVFOpsTest, LoadAlignDataBlockRequiresMaskRegNotOffset)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP16);
+    auto fp16 = MakeVar("fp16", ir::DataType::FP16);
+    codegen.RegisterRegTensorVar("fp16");
+
+    // DataBlock mode with integer offset instead of mask → should reject
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.load_align", {fp16, tile, Int(0)},
+                            {{"data_copy_mode", EnumValue(ir::DataCopyMode::DATA_BLOCK_COPY)}}));
+}
+
+TEST(BackendCCEVFOpsTest, LoadAlignDataBlockRejectsNonMaskVar)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP16);
+    auto fp16 = MakeVar("fp16", ir::DataType::FP16);
+    codegen.RegisterRegTensorVar("fp16");
+
+    // DataBlock mode with a RegTensor (not MaskReg) as args[2] → should reject
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.load_align", {fp16, tile, fp16},
+                            {{"data_copy_mode", EnumValue(ir::DataCopyMode::DATA_BLOCK_COPY)}}));
+}
+
+TEST(BackendCCEVFOpsTest, LoadAlignDataBlockRejectsMaskRegDst)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::UINT32);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    codegen.RegisterMaskRegVar("mask");
+
+    // DataBlock mode with MaskReg dst → should reject
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.load_align", {mask, tile, mask},
+                            {{"data_copy_mode", EnumValue(ir::DataCopyMode::DATA_BLOCK_COPY)}}));
+}
+
+TEST(BackendCCEVFOpsTest, LoadAlign3ArgRejectsDintlvDist)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP16);
+    auto fp16 = MakeVar("fp16", ir::DataType::FP16);
+    codegen.RegisterRegTensorVar("fp16");
+
+    // 3-arg form with DINTLV_B16 dist → should reject
+    EXPECT_ANY_THROW(
+        Invoke(codegen, "vf.load_align", {fp16, tile, Int(0)}, {{"dist", EnumValue(ir::LoadDist::DINTLV_B16)}}));
+}
+
+TEST(BackendCCEVFOpsTest, LoadAlign4ArgRejectsNonDintlvDist)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP16);
+    auto fp16 = MakeVar("fp16", ir::DataType::FP16);
+    auto fp16b = MakeVar("fp16b", ir::DataType::FP16);
+
+    // 4-arg form with NORM dist → should reject
+    EXPECT_ANY_THROW(
+        Invoke(codegen, "vf.load_align", {fp16, fp16b, tile, Int(0)}, {{"dist", EnumValue(ir::LoadDist::NORM)}}));
+}
+
+TEST(BackendCCEVFOpsTest, LoadAlign4ArgRejectsMaskRegDst)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::UINT32);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    auto mask2 = MakeVar("mask2", ir::DataType::UINT32);
+    codegen.RegisterMaskRegVar("mask");
+    codegen.RegisterMaskRegVar("mask2");
+
+    // 4-arg form with MaskReg dst → should reject
+    EXPECT_ANY_THROW(
+        Invoke(codegen, "vf.load_align", {mask, mask2, tile, Int(0)}, {{"dist", EnumValue(ir::LoadDist::DINTLV_B16)}}));
+}
+
+TEST(BackendCCEVFOpsTest, StoreAlignDataBlockRejectsNonMaskArg)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP16);
+    auto fp16 = MakeVar("fp16", ir::DataType::FP16);
+    codegen.RegisterRegTensorVar("fp16");
+
+    // DataBlock mode with RegTensor (not MaskReg) as args[2] → should reject
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.store_align", {tile, fp16, fp16},
+                            {{"data_copy_mode", EnumValue(ir::DataCopyMode::DATA_BLOCK_COPY)}}));
+}
+
+TEST(BackendCCEVFOpsTest, StoreAlignIntlvRejectsNonMaskArg3)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP16);
+    auto fp16 = MakeVar("fp16", ir::DataType::FP16);
+    auto fp16b = MakeVar("fp16b", ir::DataType::FP16);
+    codegen.RegisterRegTensorVar("fp16");
+    codegen.RegisterRegTensorVar("fp16b");
+
+    // INTLV mode with RegTensor (not MaskReg) as args[3] → should reject
+    EXPECT_ANY_THROW(
+        Invoke(codegen, "vf.store_align", {tile, fp16, fp16b, fp16}, {{"dist", EnumValue(ir::StoreDist::INTLV)}}));
+}
+
+TEST(BackendCCEVFOpsTest, StoreAlign4ArgNonIntlvRejectsRegArg)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP16);
+    auto fp16 = MakeVar("fp16", ir::DataType::FP16);
+    auto fp16b = MakeVar("fp16b", ir::DataType::FP16);
+    codegen.RegisterRegTensorVar("fp16");
+    codegen.RegisterRegTensorVar("fp16b");
+
+    // 4-arg non-INTLV, non-post_update with RegTensor as args[2] → should reject
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.store_align", {tile, fp16, fp16b, fp16}));
+}
+
+TEST(BackendCCEVFOpsTest, StoreAlignPostUpdateAccepts4Args)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::INT64);
+    auto i64 = MakeVar("i64", ir::DataType::INT64);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    codegen.RegisterRegTensorVar("i64");
+    codegen.RegisterMaskRegVar("mask");
+
+    // 4-arg post_update path (dst, src, mask, stride) → should succeed
+    ExpectInvoke(codegen, "vf.store_align", {"POST_UPDATE"}, {tile, i64, mask, Int(2)}, {{"post_update", true}});
+}
+
+TEST(BackendCCEVFOpsTest, StoreAlignRejectsTooFewArgs)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP16);
+    auto fp16 = MakeVar("fp16", ir::DataType::FP16);
+
+    // Only 2 args (dst_ptr, src_reg) without MaskReg src → should reject
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.store_align", {tile, fp16}));
+}
+
+// ============================================================================
+// CoerceScalarToInt: float-constant scalar coerced to int literal for int src
+// ============================================================================
+
+TEST(BackendCCEVFOpsTest, CoercesFloatScalarToIntForInt32Src)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto i32_dst = MakeVar("i32_dst", ir::DataType::INT32);
+    auto i32_src = MakeVar("i32_src", ir::DataType::INT32);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    codegen.RegisterRegTensorVar("i32_dst");
+    codegen.RegisterRegTensorVar("i32_src");
+    const Kwargs zeroing = {{"mode", EnumValue(ir::MergeMode::ZEROING)}};
+
+    // Float 3.5 should be truncated to 3 in the emitted code, not "3.500000"
+    ExpectInvoke(codegen, "vf.muls", {"vmuls(", ", 3, "}, {i32_dst, i32_src, Float(3.5), mask}, zeroing);
+    ExpectInvoke(codegen, "vf.adds", {"vadds(", ", 3, "}, {i32_dst, i32_src, Float(3.5), mask}, zeroing);
+    ExpectInvoke(codegen, "vf.mins", {"vmins(", ", 3, "}, {i32_dst, i32_src, Float(3.5), mask}, zeroing);
+    ExpectInvoke(codegen, "vf.maxs", {"vmaxs(", ", 3, "}, {i32_dst, i32_src, Float(3.5), mask}, zeroing);
+    // subs emits -(scalar), so 3.5→3 → "-(3)"
+    ExpectInvoke(codegen, "vf.subs", {"vadds(", ", -(3), "}, {i32_dst, i32_src, Float(3.5), mask}, zeroing);
+    // 0.9 should be truncated to 0
+    ExpectInvoke(codegen, "vf.muls", {"vmuls(", ", 0, "}, {i32_dst, i32_src, Float(0.9), mask}, zeroing);
+    // 1e10 should wrap to int32: static_cast<int32_t>(10000000000) = 1410065408
+    ExpectInvoke(codegen, "vf.muls", {"vmuls(", ", 1410065408, "}, {i32_dst, i32_src, Float(1e10), mask}, zeroing);
+}
+
+TEST(BackendCCEVFOpsTest, CoercesFloatScalarForUintAndInt16)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto u16_dst = MakeVar("u16_dst", ir::DataType::UINT16);
+    auto u16_src = MakeVar("u16_src", ir::DataType::UINT16);
+    auto u32_dst = MakeVar("u32_dst", ir::DataType::UINT32);
+    auto u32_src = MakeVar("u32_src", ir::DataType::UINT32);
+    auto i16_dst = MakeVar("i16_dst", ir::DataType::INT16);
+    auto i16_src = MakeVar("i16_src", ir::DataType::INT16);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    codegen.RegisterRegTensorVar("u16_dst");
+    codegen.RegisterRegTensorVar("u16_src");
+    codegen.RegisterRegTensorVar("u32_dst");
+    codegen.RegisterRegTensorVar("u32_src");
+    codegen.RegisterRegTensorVar("i16_dst");
+    codegen.RegisterRegTensorVar("i16_src");
+    const Kwargs zeroing = {{"mode", EnumValue(ir::MergeMode::ZEROING)}};
+
+    // UINT16: 3.5→3, emitted with "u" suffix
+    ExpectInvoke(codegen, "vf.muls", {"vmuls(", ", 3u, "}, {u16_dst, u16_src, Float(3.5), mask}, zeroing);
+    // UINT32: 3.5→3u
+    ExpectInvoke(codegen, "vf.muls", {"vmuls(", ", 3u, "}, {u32_dst, u32_src, Float(3.5), mask}, zeroing);
+    // INT16: 3.5→3 (no suffix)
+    ExpectInvoke(codegen, "vf.muls", {"vmuls(", ", 3, "}, {i16_dst, i16_src, Float(3.5), mask}, zeroing);
+    // INT16: 700.0 wraps to static_cast<int16_t>(700) = 700
+    ExpectInvoke(codegen, "vf.muls", {"vmuls(", ", 700, "}, {i16_dst, i16_src, Float(700.0), mask}, zeroing);
+}
+
+TEST(BackendCCEVFOpsTest, DoesNotCoerceForFloatSrc)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto fp32_dst = MakeVar("fp32_dst", ir::DataType::FP32);
+    auto fp32_src = MakeVar("fp32_src", ir::DataType::FP32);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    codegen.RegisterRegTensorVar("fp32_dst");
+    codegen.RegisterRegTensorVar("fp32_src");
+    const Kwargs zeroing = {{"mode", EnumValue(ir::MergeMode::ZEROING)}};
+
+    // FP32 src: float scalar should NOT be coerced — stays as float literal
+    auto emitted = Invoke(codegen, "vf.muls", {fp32_dst, fp32_src, Float(3.5), mask}, zeroing);
+    ExpectContains(emitted, {"vmuls("});
+    // Should contain the float value, not truncated integer
+    EXPECT_NE(emitted.find("3.5"), std::string::npos) << emitted;
+}
+
+TEST(BackendCCEVFOpsTest, MulsAcceptsIndexScalarConvertedToSrcType)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto i32_dst = MakeVar("i32_dst", ir::DataType::INT32);
+    auto i32_src = MakeVar("i32_src", ir::DataType::INT32);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    codegen.RegisterRegTensorVar("i32_dst");
+    codegen.RegisterRegTensorVar("i32_src");
+    const Kwargs zeroing = {{"mode", EnumValue(ir::MergeMode::ZEROING)}};
+
+    // Python int 3 → ConstInt(INDEX) → converted to src_dt (INT32) → emits "3"
+    ExpectInvoke(codegen, "vf.muls", {"vmuls("}, {i32_dst, i32_src, IndexVal(3), mask}, zeroing);
+}
+
+TEST(BackendCCEVFOpsTest, MulsRejectsUnlistedIntTypes)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto i8_src = MakeVar("i8_src", ir::DataType::INT8);
+    auto i64_src = MakeVar("i64_src", ir::DataType::INT64);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    codegen.RegisterRegTensorVar("i8_src");
+    codegen.RegisterRegTensorVar("i64_src");
+    const Kwargs zeroing = {{"mode", EnumValue(ir::MergeMode::ZEROING)}};
+
+    // INT8 src not in the 6-type list → should reject
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.muls", {i8_src, i8_src, Float(2.0), mask}, zeroing));
+    // INT64 src not in the 6-type list → should reject
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.muls", {i64_src, i64_src, Float(2.0), mask}, zeroing));
+}
+
+TEST(BackendCCEVFOpsTest, CompareScalarCoercesFloatToInt)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto i32_dst = MakeVar("i32_dst", ir::DataType::UINT32);
+    auto i32_src = MakeVar("i32_src", ir::DataType::INT32);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    codegen.RegisterMaskRegVar("i32_dst");
+    codegen.RegisterRegTensorVar("i32_src");
+    codegen.RegisterMaskRegVar("mask");
+
+    // vcmps_eq with INT32 src + float 3.5 scalar → should emit "3" not "3.500000"
+    ExpectInvoke(codegen, "vf.eq", {"vcmps_eq("}, {i32_dst, i32_src, Float(3.5), mask});
+    auto emitted = Invoke(codegen, "vf.eq", {i32_dst, i32_src, Float(3.5), mask});
+    EXPECT_NE(emitted.find(", 3,"), std::string::npos) << "Expected int 3 in: " << emitted;
+    EXPECT_EQ(emitted.find("3.5"), std::string::npos) << "Should not have float literal: " << emitted;
+}
+
+TEST(BackendCCEVFOpsTest, StoreAlignAcceptsCompatibleIntDtypes)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile_i32 = MakeTile("tile_i32", ir::DataType::INT32);
+    auto u32_reg = MakeVar("u32_reg", ir::DataType::UINT32);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    codegen.RegisterRegTensorVar("u32_reg");
+    codegen.RegisterMaskRegVar("mask");
+
+    // INT32 dst + UINT32 src: GetUBufPtr casts dst pointer to src type
+    ExpectInvoke(codegen, "vf.store_align", {"vsts("}, {tile_i32, u32_reg, mask});
+}
+
+TEST(BackendCCEVFOpsTest, AxpyAcceptsIndexScalar)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto i64_dst = MakeVar("i64_dst", ir::DataType::INT64);
+    auto i64_src = MakeVar("i64_src", ir::DataType::INT64);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    codegen.RegisterRegTensorVar("i64_dst");
+    codegen.RegisterRegTensorVar("i64_src");
+    const Kwargs zeroing = {{"mode", EnumValue(ir::MergeMode::ZEROING)}};
+
+    // Python int 2 → ConstInt(INDEX) → allowed for axpy
+    ExpectInvoke(codegen, "vf.axpy", {"vaxpy("}, {i64_dst, i64_src, Int(2), mask}, zeroing);
+}
+
+TEST(BackendCCEVFOpsTest, AxpyCoercesFloatScalarToInt64)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto i64_dst = MakeVar("i64_dst", ir::DataType::INT64);
+    auto i64_src = MakeVar("i64_src", ir::DataType::INT64);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    codegen.RegisterRegTensorVar("i64_dst");
+    codegen.RegisterRegTensorVar("i64_src");
+    const Kwargs zeroing = {{"mode", EnumValue(ir::MergeMode::ZEROING)}};
+
+    // INT64 src + float 3.5 → coerced to "3"
+    ExpectInvoke(codegen, "vf.axpy", {"vaxpy(", ", 3, "}, {i64_dst, i64_src, Float(3.5), mask}, zeroing);
+}
+
+TEST(BackendCCEVFOpsTest, StoreAlignAddrRegRejectsNonMaskArg2)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP16);
+    auto fp16 = MakeVar("fp16", ir::DataType::FP16);
+    auto fp16b = MakeVar("fp16b", ir::DataType::FP16);
+    codegen.RegisterRegTensorVar("fp16");
+    codegen.RegisterRegTensorVar("fp16b");
+
+    // AddrReg path: 4 args with RegTensor (not MaskReg) as args[2] → reject
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.store_align", {tile, fp16, fp16b, fp16b}));
 }
 
 } // namespace

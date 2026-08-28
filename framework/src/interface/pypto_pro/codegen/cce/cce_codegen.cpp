@@ -11,6 +11,7 @@
 #include "codegen/cce/cce_codegen.h"
 
 #include <cctype>
+#include <cmath>
 #include <cstddef>
 #include <functional>
 #include <ios>
@@ -1831,9 +1832,16 @@ void CCECodegen::VisitExpr_(const ir::ConstIntPtr& op)
 void CCECodegen::VisitExpr_(const ir::ConstFloatPtr& op)
 {
     INTERNAL_CHECK(op != nullptr) << "Internal error: null ConstFloat";
-    std::string literal = std::to_string(op->value_);
-    literal += "f";
-    current_expr_value_ = literal;
+    double val = op->value_;
+    if (std::isnan(val)) {
+        current_expr_value_ = "__builtin_nanf(\"\")";
+    } else if (std::isinf(val)) {
+        current_expr_value_ = val > 0 ? "__builtin_huge_valf()" : "(-__builtin_huge_valf())";
+    } else {
+        std::string literal = std::to_string(val);
+        literal += "f";
+        current_expr_value_ = literal;
+    }
 }
 
 void CCECodegen::VisitExpr_(const ir::ConstBoolPtr& op)

@@ -428,8 +428,8 @@ class Vf:
             for each active lane.
 
         Note:
-            Does not support UINT8/INT8 types directly. For 1-byte types,
-            the backend automatically expands to vdup+vmul.
+            Does not support UINT8/INT8/BF16/INT64/UINT64 types.
+            MERGING mode is not supported; only ZEROING (default).
         """
 
     @staticmethod
