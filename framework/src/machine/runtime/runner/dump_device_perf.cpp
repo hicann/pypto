@@ -100,7 +100,7 @@ void ConstructTaskInfo(const uint32_t& index, json& rootTaskStats, const std::ve
     json coreObj;
     coreObj["blockIdx"] = index;
     coreObj["coreType"] = coreType;
-    if (aicpuMetric->coreType != -1) {
+    if (!IsAicoreResolveEnabled() && aicpuMetric->coreType != -1) {
         coreObj["coreType"] = aicpuMetric->coreType == static_cast<int16_t>(CoreType::AIC) ? "AIC" : "AIV";
     }
     json tasksArr = json::array();
@@ -259,6 +259,9 @@ inline void DumpAicoreDevTask(DeviceArgs& args, json& aicpuPrefArray, const std:
         }
         Metrics* aicoreMetric = reinterpret_cast<Metrics*>(hostBuffer.data());
         std::string coreType = aicoreMetric->coreType == static_cast<int16_t>(CoreType::AIC) ? "AIC" : "AIV";
+        if (IsAicoreResolveEnabled()) {
+            coreType = i < args.nrValidAic ? "AIC" : "AIV";
+        }
         json aicoreTask;
         aicoreTask["blockIdx"] = i + 1;
         aicoreTask["coreType"] = "SCHED" + std::to_string(aicoreMetric->scheCpuIdx) + "-" + coreType;

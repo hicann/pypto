@@ -366,6 +366,9 @@ INLINE void ExecDrcoResolve(ExecuteContext* ctx, __gm__ npu::tile_fwk::DrcoRootF
                 if (succCoreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::HUB)) {
                     if (hubStackTop + 1 < HUB_STACK_SIZE) {
                         hubStack[++hubStackTop] = succTaskId;
+                    } else {
+                        GlobalReadyQueueHandler::Push(rootFuncList, succTaskId,
+                                                      static_cast<uint32_t>(npu::tile_fwk::drcoCoreType));
                     }
                 } else if (succCoreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::HUB_MIX)) {
                     GlobalReadyQueueHandler::Push(rootFuncList, succTaskId, npu::tile_fwk::DRCO_QUEUE_MIX);
@@ -399,6 +402,9 @@ INLINE void ExecDrcoResolve(ExecuteContext* ctx, __gm__ npu::tile_fwk::DrcoRootF
                         if (succCoreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::HUB)) {
                             if (hubStackTop + 1 < HUB_STACK_SIZE) {
                                 hubStack[++hubStackTop] = succTaskId;
+                            } else {
+                                GlobalReadyQueueHandler::Push(rootFuncList, succTaskId,
+                                                              static_cast<uint32_t>(npu::tile_fwk::drcoCoreType));
                             }
                         } else if (succCoreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::HUB_MIX)) {
                             GlobalReadyQueueHandler::Push(rootFuncList, succTaskId, npu::tile_fwk::DRCO_QUEUE_MIX);
@@ -710,6 +716,16 @@ INLINE void ExecDrcoPerCoreTasks(ExecuteContext* ctx, __gm__ npu::tile_fwk::PerC
     }
 }
 
+INLINE bool IsHubTask(ExecuteContext* ctx, uint32_t taskId)
+{
+    uint32_t funcIdx = npu::tile_fwk::FuncID(taskId);
+    uint32_t opIdx = npu::tile_fwk::TaskID(taskId);
+    auto& fd = ctx->cachedDevTasks[ctx->curLeafTaskParallelIdx].funcDataList[funcIdx];
+    int binIdx = fd.cceBinaryIndexList[opIdx];
+    uint32_t taskCoreType = ctx->cachedDevTasks[ctx->curLeafTaskParallelIdx].cceBinary[binIdx].coreType;
+    return taskCoreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::HUB);
+}
+
 template <typename GlobalReadyQueueHandler>
 INLINE void ExecDrcoReadyQueueTasks(ExecuteContext* ctx, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
                                     [[maybe_unused]] __gm__ npu::tile_fwk::PerCorePendingQueue* myPerCoreQueue,
@@ -728,17 +744,23 @@ INLINE void ExecDrcoReadyQueueTasks(ExecuteContext* ctx, __gm__ npu::tile_fwk::D
         }
 #endif
         if ((taskId & AICORE_FIN_MASK) == 0) {
-            DRCO_LOGD(ctx, "gq exec=%u", taskId);
-            if (devTaskReadyQueFirstTask) {
-                PerfTraceRecord(ctx->SeqNo(), ctx->aicoreDevTaskMetric.devTaskMetric,
-                                PERF_TRACE_CORE_DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK);
-                devTaskReadyQueFirstTask = false;
-            }
-            ExecCoreFunctionKernel(ctx, taskId, lastMixResourceType);
+            if (IsHubTask(ctx, taskId)) {
 #ifdef __HAS_SUB_FUNC__
-            ExecDrcoResolve<GlobalReadyQueueHandler>(ctx, rootFuncList, taskId);
+                ExecDrcoResolve<GlobalReadyQueueHandler>(ctx, rootFuncList, taskId);
 #endif
-            DrcoAtomicAddTo(&rootFuncList->executedTaskCount, 1);
+            } else {
+                DRCO_LOGD(ctx, "gq exec=%u", taskId);
+                if (devTaskReadyQueFirstTask) {
+                    PerfTraceRecord(ctx->SeqNo(), ctx->aicoreDevTaskMetric.devTaskMetric,
+                                    PERF_TRACE_CORE_DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK);
+                    devTaskReadyQueFirstTask = false;
+                }
+                ExecCoreFunctionKernel(ctx, taskId, lastMixResourceType);
+#ifdef __HAS_SUB_FUNC__
+                ExecDrcoResolve<GlobalReadyQueueHandler>(ctx, rootFuncList, taskId);
+#endif
+                DrcoAtomicAddTo(&rootFuncList->executedTaskCount, 1);
+            }
         }
         taskId = DrcoDynFuncDataListGetFirstTask(rootFuncList, blockIdx, outCoreType);
     }
