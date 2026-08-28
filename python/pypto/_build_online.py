@@ -88,10 +88,17 @@ class _BuildOnlineManager:
 
         @classmethod
         def _which_cmake(cls) -> Optional[Path]:
-            """查找系统级 CMake 可执行文件路径, 委托至 _which_cmake 公共模块."""
-            from ._which_cmake import which_cmake
+            """查找系统级 CMake 可执行文件路径, 排除 cmake pip 包."""
+            import importlib.util
 
-            return which_cmake()
+            src_root = Path(__file__).resolve().parents[2]
+            mod_path = src_root / "cmake" / "scripts" / "_which_cmake.py"
+            if mod_path.exists():
+                spec = importlib.util.spec_from_file_location("_which_cmake_rt", mod_path)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                return mod.which_cmake()
+            return shutil.which("cmake") and Path(shutil.which("cmake")) or None
 
         def compile(self, ctx: CompileContext) -> Path:
             """执行编译流程(包含 CMake 的 Configure, Build 及 Install 阶段)

@@ -68,9 +68,10 @@ from typing import Any, Dict, List, Optional, Tuple
 from packaging import requirements
 
 try:
-    from setup import _find_system_cmake
+    from setup import _find_system_cmake, get_job_num
 except ImportError:
     _find_system_cmake = None
+    get_job_num = None
 
 
 class CMakeParam(abc.ABC):
@@ -473,7 +474,14 @@ class BuildParam(CMakeParam):
             "If you specify more than one, all targets within the specified range are built.",
         )
         parser.add_argument(
-            "-j", "--job_num", nargs="?", type=int, default=-1, help="job num, specific job num of build."
+            "-j",
+            "--job_num",
+            nargs="?",
+            type=int,
+            default=-1,
+            help="job num, specific job num of build. "
+            "If unset, parallelism is auto-derived from CPU count and available memory "
+            "(env PYPTO_BUILD_JOB_NUM overrides the default).",
         )
 
     @staticmethod
@@ -506,7 +514,9 @@ class BuildParam(CMakeParam):
     def _get_job_num(job_num: Optional[int], generator: Optional[str]) -> Optional[int]:
         """获取构建并行任务数
 
-        根据系统 CPU 核数和构建生成器类型确定合适的并行任务数. 如果使用 Ninja 生成器, 则由 Ninja 自动决定并行度.
+        委托至 cmake/scripts/_job_num 公共模块, 综合考虑 CPU 核数、可用内存(含 cgroup 上限)
+        及 PYPTO_BUILD_JOB_NUM 环境变量确定并行度. Ninja 生成器时由 Ninja 自身决定.
+        若公共模块不可用, 则回退到仅基于 CPU 核数的旧逻辑.
 
         :param job_num: 用户指定的并行任务数
         :type job_num: Optional[int]
@@ -515,6 +525,9 @@ class BuildParam(CMakeParam):
         :return: 最终的并行任务数, None 表示由构建工具自动决定
         :rtype: Optional[int]
         """
+        if get_job_num is not None:
+            return get_job_num(job_num=job_num, generator=generator)
+        # Fallback: CPU-only calculation (kept for environments where setup.py import fails)
         def_job_num = min(int(math.ceil(float(multiprocessing.cpu_count()) * 0.9)), 128)  # 128 为缺省最大核数
         def_job_num = (
             None
@@ -564,7 +577,7 @@ class BuildParam(CMakeParam):
             _p = Path(self.clang_install_path, _b)
             if _p.exists():
                 return True, self._cfg_require(opt=_opt, tv=str(_p))
-            logging.error("Clang Toolchain %s does not exist.", _p)
+            logging.error("Clang Toolchain %s not exist.", _p)
             return False, ""
 
         def _gen_clang_cmd() -> Tuple[bool, str]:
@@ -1542,7 +1555,7 @@ class BuildCtrl(CMakeParam):
             try:
                 _, duration = self.run_build_cmd(cmd=c, update_env=update_env)
             except subprocess.CalledProcessError as e:
-                logging.error("CMake Build(%s/%s) failed, ERROR CODE: %s", i, len(cmd_list), e.returncode)
+                logging.info("CMake Build(%s/%s) failed, ERROR CODE: %s", i, len(cmd_list), e.returncode)
                 raise e
             logging.info("CMake Build(%s/%s) success, %s", i, len(cmd_list), duration)
 
@@ -1831,7 +1844,7 @@ class BuildCtrl(CMakeParam):
         whl_files = [Path(f) for f in whl_glob]
         whl_file = whl_files[0] if whl_files else None
         if whl_file:
-            logging.info("Successfully found match %s from %s", whl_file, path)
+            logging.info("Success find match %s from %s", whl_file, path)
         else:
             logging.error("Failed to find match %s whl from %s, pattern=%s", name, path, pattern)
         return whl_file

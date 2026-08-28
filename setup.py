@@ -25,8 +25,6 @@ import importlib
 from importlib import metadata
 import json
 import logging
-import math
-import multiprocessing
 import os
 from pathlib import Path
 import re
@@ -45,17 +43,24 @@ from setuptools.command.develop import develop
 from setuptools.command.editable_wheel import editable_wheel
 from setuptools.command.egg_info import egg_info
 
-# 从 python/pypto/_which_cmake.py 加载公共模块 (不依赖 sys.path)
+# 从 cmake/scripts/_which_cmake.py 加载公共模块 (不依赖 sys.path)
 _script_dir = Path(__file__).resolve().parent
-_which_cmake_path = _script_dir / "python" / "pypto" / "_which_cmake.py"
+_which_cmake_path = _script_dir / "cmake" / "scripts" / "_which_cmake.py"
 _spec = importlib.util.spec_from_file_location("_which_cmake", _which_cmake_path)
 _which_cmake_mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_which_cmake_mod)
 which_cmake = _which_cmake_mod.which_cmake
 
+# 从 cmake/scripts/_job_num.py 加载公共模块 (不依赖 sys.path)
+_job_num_path = _script_dir / "cmake" / "scripts" / "_job_num.py"
+_job_num_spec = importlib.util.spec_from_file_location("_job_num", _job_num_path)
+_job_num_mod = importlib.util.module_from_spec(_job_num_spec)
+_job_num_spec.loader.exec_module(_job_num_mod)
+get_job_num = _job_num_mod.get_job_num
+
 
 def _find_system_cmake() -> Optional[Path]:
-    """查找系统级 CMake 可执行文件路径, 委托至 pypto._which_cmake 公共模块."""
+    """查找系统级 CMake 可执行文件路径, 委托至 cmake/scripts/_which_cmake 公共模块."""
     return which_cmake()
 
 
@@ -435,7 +440,8 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
     def _get_job_num(job_num: Optional[int], generator: Optional[str]) -> Optional[int]:
         """获取构建并行任务数
 
-        根据系统 CPU 核数和构建生成器类型确定合适的并行任务数. 如果使用 Ninja 生成器, 则由 Ninja 自动决定并行度.
+        委托至 cmake/scripts/_job_num 公共模块, 综合考虑 CPU 核数、可用内存(含 cgroup 上限)
+        及 PYPTO_BUILD_JOB_NUM 环境变量确定并行度. Ninja 生成器时由 Ninja 自身决定.
 
         :param job_num: 用户指定的并行任务数
         :type job_num: Optional[int]
@@ -444,18 +450,7 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         :return: 并行任务数, None 表示由构建工具自动决定
         :rtype: Optional[int]
         """
-        def_job_num = min(int(math.ceil(float(multiprocessing.cpu_count()) * 0.9)), 128)  # 128 为缺省最大核数
-        def_job_num = (
-            None
-            if generator
-            and generator.lower()
-            in [
-                "ninja",
-            ]
-            else def_job_num
-        )  # ninja 自身决定缺省核数
-        job_num = job_num if job_num and job_num > 0 else def_job_num
-        return job_num
+        return get_job_num(job_num=job_num, generator=generator)
 
     @staticmethod
     def _get_cmake_install_manifest(build_dir: Path, file_name: str = "install_manifest.txt") -> List[str]:

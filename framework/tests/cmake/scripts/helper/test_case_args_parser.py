@@ -28,6 +28,7 @@ class TestCaseArgsParser:
         logging.info("End index : %s", args.end_index)
         logging.info("Device : %s", args.device)
         logging.info("Clean : %s", args.clean)
+        logging.info("Job Num : %s", args.job_num)
         logging.info("Is python case : %s", args.python)
         logging.info("Save data : %s", args.save_data)
         logging.info("Is json only : %s", args.json_only)
@@ -111,6 +112,15 @@ class TestCaseArgsParser:
             "--clean",
             action="store_true",
             help="clean the compile result.",
+        )
+        self._parser.add_argument(
+            "-j",
+            "--job_num",
+            nargs="?",
+            type=int,
+            default=None,
+            help="Build parallelism (job num) passed through to build_ci.py. "
+            "If unset, the build_ci.py default (CPU + memory aware) is used.",
         )
 
     def add_run_args(self):

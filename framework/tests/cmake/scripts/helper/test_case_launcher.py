@@ -36,6 +36,7 @@ class TestCaseLauncher:
         self.model = config.model
         self.json_only = config.json_only
         self.clean = config.clean
+        self.job_num = config.job_num
         self.save_data = config.save_data
         self.log_path = os.path.dirname(self.report_file) + "/test_case_log"
         self.plog_cache_path = f"{self.work_path}/plog"
@@ -76,6 +77,8 @@ class TestCaseLauncher:
     def compile_if_need(self):
         clean_str = "-c" if self.clean else ""
         cmd = f"{sys.executable} build_ci.py {clean_str}"
+        if self.job_num and self.job_num > 0:
+            cmd += f" -j {self.job_num}"
         if self.python:
             cmd += " -f=python3"
         elif not self.distributed_op:

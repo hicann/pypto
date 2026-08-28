@@ -47,6 +47,12 @@ python3 build_ci.py --clean --no_isolation
 | `--just_build_whl` | 只构建whl包，不打包进入run安装包。 |
 | `--py_abi` | 指定whl包的Python ABI tag数字部分，例如`37`对应`cp37`（`--just_build_whl`时有效）。 |
 | `--plat_name` | 指定whl包的平台标签，例如`manylinux2014`（`--just_build_whl`时有效）。 |
+| `-j` / `--job_num` | 指定编译并行度。不指定时根据CPU核数和可用内存（含cgroup内存上限）自动计算。 |
+
+> [!NOTE] 并行度与内存
+>
+> - 若未指定编译并行度，将默认根据 CPU 核数和可用内存（含 cgroup 内存上限）自动计算。
+> - 也可通过 `-j` 参数或环境变量 `PYPTO_BUILD_JOB_NUM` 显式覆盖，两者在 `pip install .` 和 `build_ci.py` 入口均生效。
 
 ### 安装
 
