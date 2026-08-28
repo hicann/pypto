@@ -29,6 +29,7 @@
 #include "machine/utils/dynamic/dev_encode_tensor.h"
 #include "machine/utils/machine_ws_intf.h"
 #include "adapter/api/runtime_define.h"
+#include "adapter/api/acl_define.h"
 #include "machine/runtime/runner/host_prof.h"
 #include "machine/runtime/runner/device_perf.h"
 
@@ -66,6 +67,15 @@ public:
     uint64_t GetRuntimeDynamicCellMatchCapacity() const;
     auto& GetHostCtrlFlowCaches() { return hostCtrlFlowCaches_; }
 
+    void SetCtrlFlowCacheReplay(bool replay) { ctrlFlowCacheReplay_ = replay; }
+    bool IsCtrlFlowCacheReplay() const { return ctrlFlowCacheReplay_; }
+
+    int64_t NextRingSequence() { return ++ringSequence_; }
+    bool EnsureRingEventsCreated();
+    AclRtEvent RingEvent(int64_t idx) const { return ringEvents_[idx]; }
+
+    static constexpr int64_t kRingPingPongCount = 2;
+
     void SetSyncMode(uint8_t syncModel);
     uint8_t GetSyncMode();
 
@@ -98,6 +108,10 @@ private:
     std::vector<ControlFlowCache> inferShapeCaches;
     std::vector<ControlFlowCache> originShapeCaches;
     std::vector<HostControlFlowCache> hostCtrlFlowCaches_;
+    bool ctrlFlowCacheReplay_{false};
+    int64_t ringSequence_{0};
+    AclRtEvent ringEvents_[kRingPingPongCount]{};
+    bool ringEventsCreated_{false};
 
     std::vector<int64_t> aicpuArgBuf;
     uint64_t l2Offset{0};

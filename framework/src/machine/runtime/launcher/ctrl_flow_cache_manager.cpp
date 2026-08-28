@@ -40,6 +40,7 @@ uint8_t* CtrlFlowCacheManager::FindOrBuildDevCache(KernelBinary* kernel, std::ve
     // Actual Emulation build path is separately gated in EmulationLauncher.
     if (kernel->DisableHostCtrlFlowCacheBuild()) {
         COMPILER_LOGI("Skip host control flow cache build due to disableCtrlFlowCache.");
+        kernel->SetCtrlFlowCacheReplay(false);
         return nullptr;
     }
     auto devCache = kernel->FindCtrlFlowCache(tensors, true);
@@ -47,6 +48,8 @@ uint8_t* CtrlFlowCacheManager::FindOrBuildDevCache(KernelBinary* kernel, std::ve
         AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
         devCache = kernel->BuildControlFlowCache(tensors, true);
     }
+    // Host-built cache is already isActivated when copied to device; restore runs on first launch.
+    kernel->SetCtrlFlowCacheReplay(devCache != nullptr);
     COMPILER_LOGD("find ctrlflow cache: %p", devCache);
     return devCache;
 }

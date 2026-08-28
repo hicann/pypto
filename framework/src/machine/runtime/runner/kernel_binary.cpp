@@ -112,6 +112,21 @@ KernelBinary::~KernelBinary()
 
 ToSubMachineConfig& KernelBinary::GetMachineConfig() { return toSubMachineConfig_; }
 
+bool KernelBinary::EnsureRingEventsCreated()
+{
+    if (ringEventsCreated_) {
+        return true;
+    }
+    for (int64_t i = 0; i < kRingPingPongCount; ++i) {
+        if (AclRtCreateEventExWithFlag(&ringEvents_[i], ACL_EVENT_SYNC) < 0) {
+            MACHINE_LOGE(RtErr::RT_EVENT_FAILED, "AclRtCreateEvent failed for ping-pong event %ld.", i);
+            return false;
+        }
+    }
+    ringEventsCreated_ = true;
+    return true;
+}
+
 uint8_t* KernelBinary::FindCtrlFlowCache(std::vector<std::vector<int64_t>>& inputs, bool isOriginShape)
 {
     int64_t inHash = ControlFlowCache::Hash(inputs);
