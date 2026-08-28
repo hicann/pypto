@@ -17,7 +17,7 @@ from ..test_common import _ssa_verify, check_snapshot
 
 _GOLDEN_DIR = Path(__file__).parent
 
-IR = (_GOLDEN_DIR / "test_assemble_outcast_versions.pypto").read_text()
+IR = _GOLDEN_DIR / "test_assemble_outcast_versions.pypto"
 
 
 def _run_root_builder(func, *args):

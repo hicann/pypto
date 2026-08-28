@@ -9,11 +9,15 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 """Tests for removing redundant token dependencies after MergeStmtsIntoIf."""
 
+from pathlib import Path
+
 import pypto
 from pypto import ir
 from pypto.pil.compile_pipeline import compile_new_ir
 
 from ..test_common import check_snapshot
+
+_GOLDEN_DIR = Path(__file__).parent / "test_remove_redundant_pass_data"
 
 
 class _Snapshot:
@@ -54,22 +58,10 @@ def _tensor(shape, name):
 
 
 
-BEFORE_IR_0 = """
-function foo incast(v0_logical_tensor %x@0 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]), v0_logical_tensor %out@1 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %$0@2 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]), token %$0_w, token %x_r = !10000 ADDS(%x@0) token();
-    v0_logical_tensor %out_1@1 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]), token %out_1_w, token %$0_r = !10001 ASSEMBLE(%$0@2) token(%$0_w) #toOffset(Unsupported);
-    return %x@0, %out_1@1;
-}
-"""
+BEFORE_IR_0 = _GOLDEN_DIR / "BEFORE_IR_0.pypto"
 
 
-IR_0 = """
-function foo incast(v0_logical_tensor %x@0 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]), v0_logical_tensor %out@1 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %$0@2 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10003 ADDS(%x@0) token();
-    v0_logical_tensor %out_1@1 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10004 ASSEMBLE(%$0@2) token() #toOffset(Unsupported);
-    return %x@0, %out_1@1;
-}
-"""
+IR_0 = _GOLDEN_DIR / "IR_0.pypto"
 
 
 def test_remove_ssa_dependency():
@@ -82,24 +74,10 @@ def test_remove_ssa_dependency():
     check_snapshot(after_remove, IR_0)
 
 
-BEFORE_IR_1 = """
-function foo incast(v0_logical_tensor %src@0 #dtype(float) #shape([8, 16]) #offset([0, 0]) #dynvalidshape([8, 16]), v0_logical_tensor %aux@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), v0_logical_tensor %result@2 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_1_w, token %src_r = !10000 ASSEMBLE(%src@0) token() #toOffset(Unsupported);
-    v0_logical_tensor %aux_3@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_3_w, token %src_r = !10001 ASSEMBLE(%src@0) token(%aux_1_w) #toOffset(Unsupported);
-    v0_logical_tensor %$0@3 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %$0_w, token %aux_3_r = !10002 ADDS(%aux_3@1) token(%aux_3_w);
-    return %src@0, %aux_3@1, %$0@3;
-}
-"""
+BEFORE_IR_1 = _GOLDEN_DIR / "BEFORE_IR_1.pypto"
 
 
-IR_1 = """
-function foo incast(v0_logical_tensor %src@0 #dtype(float) #shape([8, 16]) #offset([0, 0]) #dynvalidshape([8, 16]), v0_logical_tensor %aux@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), v0_logical_tensor %result@2 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_1_w = !10005 ASSEMBLE(%src@0) token() #toOffset(Unsupported);
-    v0_logical_tensor %aux_3@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]) = !10006 ASSEMBLE(%src@0) token() #toOffset(Unsupported);
-    v0_logical_tensor %$0@3 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]) = !10007 ADDS(%aux_3@1) token(%aux_1_w);
-    return %src@0, %aux_3@1, %$0@3;
-}
-"""
+IR_1 = _GOLDEN_DIR / "IR_1.pypto"
 
 
 def test_forward_disjoint_write_dependency():
@@ -118,24 +96,10 @@ def test_forward_disjoint_write_dependency():
     check_snapshot(after_remove, IR_1)
 
 
-BEFORE_IR_2 = """
-function foo incast(v0_logical_tensor %src@0 #dtype(float) #shape([8, 16]) #offset([0, 0]) #dynvalidshape([8, 16]), v0_logical_tensor %aux@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), v0_logical_tensor %result@2 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_1_w, token %src_r = !10000 ASSEMBLE(%src@0) token() #toOffset(Unsupported);
-    v0_logical_tensor %aux_3@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_3_w, token %src_r = !10001 ASSEMBLE(%src@0) token(%aux_1_w) #toOffset(Unsupported);
-    v0_logical_tensor %$0@3 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %$0_w, token %aux_3_r = !10002 ADDS(%aux_3@1) token(%aux_3_w);
-    return %src@0, %aux_3@1, %$0@3;
-}
-"""
+BEFORE_IR_2 = _GOLDEN_DIR / "BEFORE_IR_2.pypto"
 
 
-IR_2 = """
-function foo incast(v0_logical_tensor %src@0 #dtype(float) #shape([8, 16]) #offset([0, 0]) #dynvalidshape([8, 16]), v0_logical_tensor %aux@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), v0_logical_tensor %result@2 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_1_w = !10004 ASSEMBLE(%src@0) token() #toOffset(Unsupported);
-    v0_logical_tensor %aux_3@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]) = !10005 ASSEMBLE(%src@0) token(%aux_1_w) #toOffset(Unsupported);
-    v0_logical_tensor %$0@3 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]) = !10006 ADDS(%aux_3@1) token();
-    return %src@0, %aux_3@1, %$0@3;
-}
-"""
+IR_2 = _GOLDEN_DIR / "IR_2.pypto"
 
 
 def test_keep_overlapping_write_dependency():
@@ -154,22 +118,10 @@ def test_keep_overlapping_write_dependency():
     check_snapshot(after_remove, IR_2)
 
 
-BEFORE_IR_3 = """
-function foo incast(v0_logical_tensor %src@0 #dtype(float) #shape([8, 16]) #offset([0, 0]) #dynvalidshape([8, 16]), v0_logical_tensor %aux@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), v0_logical_tensor %shape@2 #dtype(float) #shape([-1]) #offset([0]) #dynvalidshape([v0call(RUNTIME_GetInputShapeDim, ARG_shape, 0)])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_1_w, token %src_r = !10000 ASSEMBLE(%src@0) token() #toOffset(Unsupported);
-    v0_logical_tensor %aux_3@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_3_w, token %src_r = !10001 ASSEMBLE(%src@0) token(%aux_1_w) #toOffset(Unsupported);
-    return %src@0, %aux_3@1, %shape@2;
-}
-"""
+BEFORE_IR_3 = _GOLDEN_DIR / "BEFORE_IR_3.pypto"
 
 
-IR_3 = """
-function foo incast(v0_logical_tensor %src@0 #dtype(float) #shape([8, 16]) #offset([0, 0]) #dynvalidshape([8, 16]), v0_logical_tensor %aux@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), v0_logical_tensor %shape@2 #dtype(float) #shape([-1]) #offset([0]) #dynvalidshape([v0call(RUNTIME_GetInputShapeDim, ARG_shape, 0)])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_1_w = !10002 ASSEMBLE(%src@0) token() #toOffset(Unsupported);
-    v0_logical_tensor %aux_3@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]) = !10003 ASSEMBLE(%src@0) token(%aux_1_w) #toOffset(Unsupported);
-    return %src@0, %aux_3@1, %shape@2;
-}
-"""
+IR_3 = _GOLDEN_DIR / "IR_3.pypto"
 
 
 def test_keep_dynamic_write_dependency():
@@ -187,30 +139,10 @@ def test_keep_dynamic_write_dependency():
     check_snapshot(after_remove, IR_3)
 
 
-BEFORE_IR_4 = """
-function foo incast(v0_logical_tensor %a@0 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %aux@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %out@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %$0@3 #dtype(float) #shape([64, 128]) #offset([0, 0]) #dynvalidshape([64, 128]), token %$0_w = !10000 VEC_DUP() token();
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_1_w, token %$0_r = !10001 ASSEMBLE(%$0@3) token(%$0_w) #toOffset(Unsupported);
-    v0_logical_tensor %$1@4 #dtype(float) #shape([64, 128]) #offset([0, 0]) #dynvalidshape([64, 128]), token %$1_w = !10002 VEC_DUP() token();
-    v0_logical_tensor %aux_3@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_3_w, token %$1_r = !10003 ASSEMBLE(%$1@4) token(%$1_w, %aux_1_w) #toOffset(Unsupported);
-    v0_logical_tensor %$2@5 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %$2_w, token %a_r, token %aux_3_r = !10004 ADD(%a@0, %aux_3@1) token(%aux_3_w);
-    v0_logical_tensor %out_1@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %out_1_w, token %$2_r = !10005 ASSEMBLE(%$2@5) token(%$2_w) #toOffset(Unsupported);
-    return %a@0, %aux_3@1, %out_1@2;
-}
-"""
+BEFORE_IR_4 = _GOLDEN_DIR / "BEFORE_IR_4.pypto"
 
 
-IR_4 = """
-function foo incast(v0_logical_tensor %a@0 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %aux@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %out@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %$0@3 #dtype(float) #shape([64, 128]) #offset([0, 0]) #dynvalidshape([64, 128]) = !10010 VEC_DUP() token();
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_1_w = !10011 ASSEMBLE(%$0@3) token() #toOffset(Unsupported);
-    v0_logical_tensor %$1@4 #dtype(float) #shape([64, 128]) #offset([0, 0]) #dynvalidshape([64, 128]) = !10012 VEC_DUP() token();
-    v0_logical_tensor %aux_3@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10013 ASSEMBLE(%$1@4) token() #toOffset(Unsupported);
-    v0_logical_tensor %$2@5 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10014 ADD(%a@0, %aux_3@1) token(%aux_1_w);
-    v0_logical_tensor %out_1@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10015 ASSEMBLE(%$2@5) token() #toOffset(Unsupported);
-    return %a@0, %aux_3@1, %out_1@2;
-}
-"""
+IR_4 = _GOLDEN_DIR / "IR_4.pypto"
 
 
 def test_assemble_scenario_1_parallel_non_overlapping_writes():
@@ -225,32 +157,10 @@ def test_assemble_scenario_1_parallel_non_overlapping_writes():
     check_snapshot(after_remove, IR_4)
 
 
-BEFORE_IR_5 = """
-function foo incast(v0_logical_tensor %a@0 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %aux@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %out@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %$0@3 #dtype(float) #shape([64, 128]) #offset([0, 0]) #dynvalidshape([64, 128]), token %$0_w = !10000 VEC_DUP() token();
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_1_w, token %$0_r = !10001 ASSEMBLE(%$0@3) token(%$0_w) #toOffset(Unsupported);
-    v0_logical_tensor %$1@4 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %$1_w, token %aux_1_r = !10002 ADDS(%aux_1@1) token(%aux_1_w);
-    v0_logical_tensor %$2@5 #dtype(float) #shape([64, 128]) #offset([0, 0]) #dynvalidshape([64, 128]), token %$2_w = !10003 VEC_DUP() token();
-    v0_logical_tensor %aux_3@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_3_w, token %$2_r = !10004 ASSEMBLE(%$2@5) token(%$2_w, %aux_1_r) #toOffset(Unsupported);
-    v0_logical_tensor %$3@6 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %$3_w, token %$1_r, token %aux_3_r = !10005 ADD(%$1@4, %aux_3@1) token(%$1_w, %aux_3_w);
-    v0_logical_tensor %out_1@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %out_1_w, token %$3_r = !10006 ASSEMBLE(%$3@6) token(%$3_w) #toOffset(Unsupported);
-    return %a@0, %aux_3@1, %out_1@2;
-}
-"""
+BEFORE_IR_5 = _GOLDEN_DIR / "BEFORE_IR_5.pypto"
 
 
-IR_5 = """
-function foo incast(v0_logical_tensor %a@0 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %aux@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %out@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %$0@3 #dtype(float) #shape([64, 128]) #offset([0, 0]) #dynvalidshape([64, 128]) = !10012 VEC_DUP() token();
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10013 ASSEMBLE(%$0@3) token() #toOffset(Unsupported);
-    v0_logical_tensor %$1@4 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_1_r = !10014 ADDS(%aux_1@1) token();
-    v0_logical_tensor %$2@5 #dtype(float) #shape([64, 128]) #offset([0, 0]) #dynvalidshape([64, 128]) = !10015 VEC_DUP() token();
-    v0_logical_tensor %aux_3@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10016 ASSEMBLE(%$2@5) token(%aux_1_r) #toOffset(Unsupported);
-    v0_logical_tensor %$3@6 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10017 ADD(%$1@4, %aux_3@1) token();
-    v0_logical_tensor %out_1@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10018 ASSEMBLE(%$3@6) token() #toOffset(Unsupported);
-    return %a@0, %aux_3@1, %out_1@2;
-}
-"""
+IR_5 = _GOLDEN_DIR / "IR_5.pypto"
 
 
 def test_assemble_scenario_2_war_between_non_overlapping_writes():
@@ -266,30 +176,10 @@ def test_assemble_scenario_2_war_between_non_overlapping_writes():
     check_snapshot(after_remove, IR_5)
 
 
-BEFORE_IR_6 = """
-function foo incast(v0_logical_tensor %a@0 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %aux@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %out@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %$0@3 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %$0_w = !10000 VEC_DUP() token();
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_1_w, token %$0_r = !10001 ASSEMBLE(%$0@3) token(%$0_w) #toOffset(Unsupported);
-    v0_logical_tensor %$1@4 #dtype(float) #shape([64, 128]) #offset([0, 0]) #dynvalidshape([64, 128]), token %$1_w = !10002 VEC_DUP() token();
-    v0_logical_tensor %aux_3@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_3_w, token %$1_r = !10003 ASSEMBLE(%$1@4) token(%$1_w, %aux_1_w) #toOffset(Unsupported);
-    v0_logical_tensor %$2@5 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %$2_w, token %a_r, token %aux_3_r = !10004 ADD(%a@0, %aux_3@1) token(%aux_3_w);
-    v0_logical_tensor %out_1@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %out_1_w, token %$2_r = !10005 ASSEMBLE(%$2@5) token(%$2_w) #toOffset(Unsupported);
-    return %a@0, %aux_3@1, %out_1@2;
-}
-"""
+BEFORE_IR_6 = _GOLDEN_DIR / "BEFORE_IR_6.pypto"
 
 
-IR_6 = """
-function foo incast(v0_logical_tensor %a@0 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %aux@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %out@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %$0@3 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10010 VEC_DUP() token();
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_1_w = !10011 ASSEMBLE(%$0@3) token() #toOffset(Unsupported);
-    v0_logical_tensor %$1@4 #dtype(float) #shape([64, 128]) #offset([0, 0]) #dynvalidshape([64, 128]) = !10012 VEC_DUP() token();
-    v0_logical_tensor %aux_3@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10013 ASSEMBLE(%$1@4) token(%aux_1_w) #toOffset(Unsupported);
-    v0_logical_tensor %$2@5 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10014 ADD(%a@0, %aux_3@1) token();
-    v0_logical_tensor %out_1@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10015 ASSEMBLE(%$2@5) token() #toOffset(Unsupported);
-    return %a@0, %aux_3@1, %out_1@2;
-}
-"""
+IR_6 = _GOLDEN_DIR / "IR_6.pypto"
 
 
 def test_assemble_scenario_3_overlapping_waw():
@@ -304,40 +194,10 @@ def test_assemble_scenario_3_overlapping_waw():
     check_snapshot(after_remove, IR_6)
 
 
-BEFORE_IR_7 = """
-function foo incast(v0_logical_tensor %a@0 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %aux@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %out@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %$0@3 #dtype(float) #shape([32, 128]) #offset([0, 0]) #dynvalidshape([32, 128]), token %$0_w = !10000 VEC_DUP() token();
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_1_w, token %$0_r = !10001 ASSEMBLE(%$0@3) token(%$0_w) #toOffset(Unsupported);
-    v0_logical_tensor %$1@4 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %$1_w, token %aux_1_r = !10002 ADDS(%aux_1@1) token(%aux_1_w);
-    v0_logical_tensor %$2@5 #dtype(float) #shape([32, 128]) #offset([0, 0]) #dynvalidshape([32, 128]), token %$2_w = !10003 VEC_DUP() token();
-    v0_logical_tensor %aux_3@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_3_w, token %$2_r = !10004 ASSEMBLE(%$2@5) token(%$2_w, %aux_1_r) #toOffset(Unsupported);
-    v0_logical_tensor %$3@6 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %$3_w, token %aux_3_r = !10005 ADDS(%aux_3@1) token(%aux_3_w);
-    v0_logical_tensor %$4@7 #dtype(float) #shape([64, 128]) #offset([0, 0]) #dynvalidshape([64, 128]), token %$4_w = !10006 VEC_DUP() token();
-    v0_logical_tensor %aux_5@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_5_w, token %$4_r = !10007 ASSEMBLE(%$4@7) token(%$4_w, %aux_3_r) #toOffset(Unsupported);
-    v0_logical_tensor %$5@8 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %$5_w, token %$1_r, token %$3_r = !10008 ADD(%$1@4, %$3@6) token(%$1_w, %$3_w);
-    v0_logical_tensor %$6@9 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %$6_w, token %$5_r, token %aux_5_r = !10009 ADD(%$5@8, %aux_5@1) token(%$5_w, %aux_5_w);
-    v0_logical_tensor %out_1@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %out_1_w, token %$6_r = !10010 ASSEMBLE(%$6@9) token(%$6_w) #toOffset(Unsupported);
-    return %a@0, %aux_5@1, %out_1@2;
-}
-"""
+BEFORE_IR_7 = _GOLDEN_DIR / "BEFORE_IR_7.pypto"
 
 
-IR_7 = """
-function foo incast(v0_logical_tensor %a@0 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %aux@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %out@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %$0@3 #dtype(float) #shape([32, 128]) #offset([0, 0]) #dynvalidshape([32, 128]) = !10019 VEC_DUP() token();
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10020 ASSEMBLE(%$0@3) token() #toOffset(Unsupported);
-    v0_logical_tensor %$1@4 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_1_r = !10021 ADDS(%aux_1@1) token();
-    v0_logical_tensor %$2@5 #dtype(float) #shape([32, 128]) #offset([0, 0]) #dynvalidshape([32, 128]) = !10022 VEC_DUP() token();
-    v0_logical_tensor %aux_3@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10023 ASSEMBLE(%$2@5) token(%aux_1_r) #toOffset(Unsupported);
-    v0_logical_tensor %$3@6 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_3_r = !10024 ADDS(%aux_3@1) token();
-    v0_logical_tensor %$4@7 #dtype(float) #shape([64, 128]) #offset([0, 0]) #dynvalidshape([64, 128]) = !10025 VEC_DUP() token();
-    v0_logical_tensor %aux_5@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10026 ASSEMBLE(%$4@7) token(%aux_3_r) #toOffset(Unsupported);
-    v0_logical_tensor %$5@8 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10027 ADD(%$1@4, %$3@6) token();
-    v0_logical_tensor %$6@9 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10028 ADD(%$5@8, %aux_5@1) token();
-    v0_logical_tensor %out_1@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10029 ASSEMBLE(%$6@9) token() #toOffset(Unsupported);
-    return %a@0, %aux_5@1, %out_1@2;
-}
-"""
+IR_7 = _GOLDEN_DIR / "IR_7.pypto"
 
 
 def test_assemble_scenario_4_all_versions_consumed():
@@ -355,34 +215,10 @@ def test_assemble_scenario_4_all_versions_consumed():
     check_snapshot(after_remove, IR_7)
 
 
-BEFORE_IR_8 = """
-function foo incast(v0_logical_tensor %a@0 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %aux@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %out@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %$0@3 #dtype(float) #shape([32, 128]) #offset([0, 0]) #dynvalidshape([32, 128]), token %$0_w = !10000 VEC_DUP() token();
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_1_w, token %$0_r = !10001 ASSEMBLE(%$0@3) token(%$0_w) #toOffset(Unsupported);
-    v0_logical_tensor %$1@4 #dtype(float) #shape([32, 128]) #offset([0, 0]) #dynvalidshape([32, 128]), token %$1_w = !10002 VEC_DUP() token();
-    v0_logical_tensor %aux_3@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_3_w, token %$1_r = !10003 ASSEMBLE(%$1@4) token(%$1_w, %aux_1_w) #toOffset(Unsupported);
-    v0_logical_tensor %$2@5 #dtype(float) #shape([64, 128]) #offset([0, 0]) #dynvalidshape([64, 128]), token %$2_w = !10004 VEC_DUP() token();
-    v0_logical_tensor %aux_5@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_5_w, token %$2_r = !10005 ASSEMBLE(%$2@5) token(%$2_w, %aux_3_w) #toOffset(Unsupported);
-    v0_logical_tensor %$3@6 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %$3_w, token %a_r, token %aux_5_r = !10006 ADD(%a@0, %aux_5@1) token(%aux_5_w);
-    v0_logical_tensor %out_1@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %out_1_w, token %$3_r = !10007 ASSEMBLE(%$3@6) token(%$3_w) #toOffset(Unsupported);
-    return %a@0, %aux_5@1, %out_1@2;
-}
-"""
+BEFORE_IR_8 = _GOLDEN_DIR / "BEFORE_IR_8.pypto"
 
 
-IR_8 = """
-function foo incast(v0_logical_tensor %a@0 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %aux@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %out@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %$0@3 #dtype(float) #shape([32, 128]) #offset([0, 0]) #dynvalidshape([32, 128]) = !10013 VEC_DUP() token();
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_1_w = !10014 ASSEMBLE(%$0@3) token() #toOffset(Unsupported);
-    v0_logical_tensor %$1@4 #dtype(float) #shape([32, 128]) #offset([0, 0]) #dynvalidshape([32, 128]) = !10015 VEC_DUP() token();
-    v0_logical_tensor %aux_3@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_3_w = !10016 ASSEMBLE(%$1@4) token() #toOffset(Unsupported);
-    v0_logical_tensor %$2@5 #dtype(float) #shape([64, 128]) #offset([0, 0]) #dynvalidshape([64, 128]) = !10017 VEC_DUP() token();
-    v0_logical_tensor %aux_5@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10018 ASSEMBLE(%$2@5) token(%aux_1_w) #toOffset(Unsupported);
-    v0_logical_tensor %$3@6 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10019 ADD(%a@0, %aux_5@1) token(%aux_3_w);
-    v0_logical_tensor %out_1@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10020 ASSEMBLE(%$3@6) token() #toOffset(Unsupported);
-    return %a@0, %aux_5@1, %out_1@2;
-}
-"""
+IR_8 = _GOLDEN_DIR / "IR_8.pypto"
 
 
 def test_assemble_scenario_5_no_intermediate_version_consumed():
@@ -398,36 +234,10 @@ def test_assemble_scenario_5_no_intermediate_version_consumed():
     check_snapshot(after_remove, IR_8)
 
 
-BEFORE_IR_9 = """
-function foo incast(v0_logical_tensor %a@0 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %aux@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %out@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %$0@3 #dtype(float) #shape([32, 128]) #offset([0, 0]) #dynvalidshape([32, 128]), token %$0_w = !10000 VEC_DUP() token();
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_1_w, token %$0_r = !10001 ASSEMBLE(%$0@3) token(%$0_w) #toOffset(Unsupported);
-    v0_logical_tensor %$1@4 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %$1_w, token %aux_1_r = !10002 ADDS(%aux_1@1) token(%aux_1_w);
-    v0_logical_tensor %$2@5 #dtype(float) #shape([32, 128]) #offset([0, 0]) #dynvalidshape([32, 128]), token %$2_w = !10003 VEC_DUP() token();
-    v0_logical_tensor %aux_3@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_3_w, token %$2_r = !10004 ASSEMBLE(%$2@5) token(%$2_w, %aux_1_r) #toOffset(Unsupported);
-    v0_logical_tensor %$3@6 #dtype(float) #shape([64, 128]) #offset([0, 0]) #dynvalidshape([64, 128]), token %$3_w = !10005 VEC_DUP() token();
-    v0_logical_tensor %aux_5@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_5_w, token %$3_r = !10006 ASSEMBLE(%$3@6) token(%$3_w, %aux_3_w) #toOffset(Unsupported);
-    v0_logical_tensor %$4@7 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %$4_w, token %$1_r, token %aux_5_r = !10007 ADD(%$1@4, %aux_5@1) token(%$1_w, %aux_5_w);
-    v0_logical_tensor %out_1@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %out_1_w, token %$4_r = !10008 ASSEMBLE(%$4@7) token(%$4_w) #toOffset(Unsupported);
-    return %a@0, %aux_5@1, %out_1@2;
-}
-"""
+BEFORE_IR_9 = _GOLDEN_DIR / "BEFORE_IR_9.pypto"
 
 
-IR_9 = """
-function foo incast(v0_logical_tensor %a@0 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %aux@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %out@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %$0@3 #dtype(float) #shape([32, 128]) #offset([0, 0]) #dynvalidshape([32, 128]) = !10015 VEC_DUP() token();
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10016 ASSEMBLE(%$0@3) token() #toOffset(Unsupported);
-    v0_logical_tensor %$1@4 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_1_r = !10017 ADDS(%aux_1@1) token();
-    v0_logical_tensor %$2@5 #dtype(float) #shape([32, 128]) #offset([0, 0]) #dynvalidshape([32, 128]) = !10018 VEC_DUP() token();
-    v0_logical_tensor %aux_3@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_3_w = !10019 ASSEMBLE(%$2@5) token(%aux_1_r) #toOffset(Unsupported);
-    v0_logical_tensor %$3@6 #dtype(float) #shape([64, 128]) #offset([0, 0]) #dynvalidshape([64, 128]) = !10020 VEC_DUP() token();
-    v0_logical_tensor %aux_5@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10021 ASSEMBLE(%$3@6) token(%aux_1_r) #toOffset(Unsupported);
-    v0_logical_tensor %$4@7 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10022 ADD(%$1@4, %aux_5@1) token(%aux_3_w);
-    v0_logical_tensor %out_1@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10023 ASSEMBLE(%$4@7) token() #toOffset(Unsupported);
-    return %a@0, %aux_5@1, %out_1@2;
-}
-"""
+IR_9 = _GOLDEN_DIR / "IR_9.pypto"
 
 
 def test_assemble_scenario_6_middle_version_not_consumed():
@@ -444,36 +254,10 @@ def test_assemble_scenario_6_middle_version_not_consumed():
     check_snapshot(after_remove, IR_9)
 
 
-BEFORE_IR_10 = """
-function foo incast(v0_logical_tensor %a@0 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %aux@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %out@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %$0@3 #dtype(float) #shape([32, 128]) #offset([0, 0]) #dynvalidshape([32, 128]), token %$0_w = !10000 VEC_DUP() token();
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_1_w, token %$0_r = !10001 ASSEMBLE(%$0@3) token(%$0_w) #toOffset(Unsupported);
-    v0_logical_tensor %$1@4 #dtype(float) #shape([32, 128]) #offset([0, 0]) #dynvalidshape([32, 128]), token %$1_w = !10002 VEC_DUP() token();
-    v0_logical_tensor %aux_3@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_3_w, token %$1_r = !10003 ASSEMBLE(%$1@4) token(%$1_w, %aux_1_w) #toOffset(Unsupported);
-    v0_logical_tensor %$2@5 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %$2_w, token %aux_3_r = !10004 ADDS(%aux_3@1) token(%aux_3_w);
-    v0_logical_tensor %$3@6 #dtype(float) #shape([64, 128]) #offset([0, 0]) #dynvalidshape([64, 128]), token %$3_w = !10005 VEC_DUP() token();
-    v0_logical_tensor %aux_5@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_5_w, token %$3_r = !10006 ASSEMBLE(%$3@6) token(%$3_w, %aux_3_r) #toOffset(Unsupported);
-    v0_logical_tensor %$4@7 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %$4_w, token %$2_r, token %aux_5_r = !10007 ADD(%$2@5, %aux_5@1) token(%$2_w, %aux_5_w);
-    v0_logical_tensor %out_1@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %out_1_w, token %$4_r = !10008 ASSEMBLE(%$4@7) token(%$4_w) #toOffset(Unsupported);
-    return %a@0, %aux_5@1, %out_1@2;
-}
-"""
+BEFORE_IR_10 = _GOLDEN_DIR / "BEFORE_IR_10.pypto"
 
 
-IR_10 = """
-function foo incast(v0_logical_tensor %a@0 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %aux@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %out@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %$0@3 #dtype(float) #shape([32, 128]) #offset([0, 0]) #dynvalidshape([32, 128]) = !10015 VEC_DUP() token();
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_1_w = !10016 ASSEMBLE(%$0@3) token() #toOffset(Unsupported);
-    v0_logical_tensor %$1@4 #dtype(float) #shape([32, 128]) #offset([0, 0]) #dynvalidshape([32, 128]) = !10017 VEC_DUP() token();
-    v0_logical_tensor %aux_3@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10018 ASSEMBLE(%$1@4) token() #toOffset(Unsupported);
-    v0_logical_tensor %$2@5 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_3_r = !10019 ADDS(%aux_3@1) token(%aux_1_w);
-    v0_logical_tensor %$3@6 #dtype(float) #shape([64, 128]) #offset([0, 0]) #dynvalidshape([64, 128]) = !10020 VEC_DUP() token();
-    v0_logical_tensor %aux_5@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10021 ASSEMBLE(%$3@6) token(%aux_3_r) #toOffset(Unsupported);
-    v0_logical_tensor %$4@7 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10022 ADD(%$2@5, %aux_5@1) token();
-    v0_logical_tensor %out_1@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10023 ASSEMBLE(%$4@7) token() #toOffset(Unsupported);
-    return %a@0, %aux_5@1, %out_1@2;
-}
-"""
+IR_10 = _GOLDEN_DIR / "IR_10.pypto"
 
 
 def test_assemble_scenario_7_first_version_not_consumed():
@@ -490,30 +274,10 @@ def test_assemble_scenario_7_first_version_not_consumed():
     check_snapshot(after_remove, IR_10)
 
 
-BEFORE_IR_11 = """
-function foo incast(v0_logical_tensor %a@0 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %aux@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %out@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %$0@3 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %$0_w, token %a_r, token %aux_r = !10000 ADD(%a@0, %aux@1) token();
-    v0_logical_tensor %$1@4 #dtype(float) #shape([64, 128]) #offset([0, 0]) #dynvalidshape([64, 128]), token %$1_w = !10001 VEC_DUP() token();
-    v0_logical_tensor %a_1@0 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %a_1_w, token %$1_r = !10002 ASSEMBLE(%$1@4) token(%$1_w, %a_r) #toOffset(Unsupported);
-    v0_logical_tensor %$2@5 #dtype(float) #shape([64, 128]) #offset([0, 0]) #dynvalidshape([64, 128]), token %$2_w = !10003 VEC_DUP() token();
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %aux_1_w, token %$2_r = !10004 ASSEMBLE(%$2@5) token(%$2_w, %aux_r) #toOffset(Unsupported);
-    v0_logical_tensor %out_1@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %out_1_w, token %$0_r = !10005 ASSEMBLE(%$0@3) token(%$0_w) #toOffset(Unsupported);
-    return %a_1@0, %aux_1@1, %out_1@2;
-}
-"""
+BEFORE_IR_11 = _GOLDEN_DIR / "BEFORE_IR_11.pypto"
 
 
-IR_11 = """
-function foo incast(v0_logical_tensor %a@0 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %aux@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), v0_logical_tensor %out@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %$0@3 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]), token %a_r, token %aux_r = !10009 ADD(%a@0, %aux@1) token();
-    v0_logical_tensor %$1@4 #dtype(float) #shape([64, 128]) #offset([0, 0]) #dynvalidshape([64, 128]) = !10010 VEC_DUP() token();
-    v0_logical_tensor %a_1@0 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10011 ASSEMBLE(%$1@4) token(%a_r) #toOffset(Unsupported);
-    v0_logical_tensor %$2@5 #dtype(float) #shape([64, 128]) #offset([0, 0]) #dynvalidshape([64, 128]) = !10012 VEC_DUP() token();
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10013 ASSEMBLE(%$2@5) token(%aux_r) #toOffset(Unsupported);
-    v0_logical_tensor %out_1@2 #dtype(float) #shape([129, 128]) #offset([0, 0]) #dynvalidshape([129, 128]) = !10014 ASSEMBLE(%$0@3) token() #toOffset(Unsupported);
-    return %a_1@0, %aux_1@1, %out_1@2;
-}
-"""
+IR_11 = _GOLDEN_DIR / "IR_11.pypto"
 
 
 def test_assemble_scenario_8_separate_writes_after_shared_read():
@@ -529,26 +293,10 @@ def test_assemble_scenario_8_separate_writes_after_shared_read():
     check_snapshot(after_remove, IR_11)
 
 
-BEFORE_IR_12 = """
-function foo incast(v0_logical_tensor %src@0 #dtype(float) #shape([8, 16]) #offset([0, 0]) #dynvalidshape([8, 16]), v0_logical_tensor %aux@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), v0_logical_tensor %result@2 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_1_w, token %src_r = !10000 ASSEMBLE(%src@0) token() #toOffset(Unsupported);
-    v0_logical_tensor %aux_3@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_3_w, token %src_r = !10001 ASSEMBLE(%src@0) token(%aux_1_w) #toOffset(Unsupported);
-    v0_logical_tensor %aux_5@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_5_w, token %src_r = !10002 ASSEMBLE(%src@0) token(%aux_3_w) #toOffset(Unsupported);
-    v0_logical_tensor %$0@3 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %$0_w, token %aux_5_r = !10003 ADDS(%aux_5@1) token(%aux_5_w);
-    return %src@0, %aux_5@1, %$0@3;
-}
-"""
+BEFORE_IR_12 = _GOLDEN_DIR / "BEFORE_IR_12.pypto"
 
 
-IR_12 = """
-function foo incast(v0_logical_tensor %src@0 #dtype(float) #shape([8, 16]) #offset([0, 0]) #dynvalidshape([8, 16]), v0_logical_tensor %aux@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), v0_logical_tensor %result@2 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_1_w = !10007 ASSEMBLE(%src@0) token() #toOffset(Unsupported);
-    v0_logical_tensor %aux_3@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_3_w = !10008 ASSEMBLE(%src@0) token() #toOffset(Unsupported);
-    v0_logical_tensor %aux_5@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]) = !10009 ASSEMBLE(%src@0) token(%aux_1_w) #toOffset(Unsupported);
-    v0_logical_tensor %$0@3 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]) = !10010 ADDS(%aux_5@1) token(%aux_3_w);
-    return %src@0, %aux_5@1, %$0@3;
-}
-"""
+IR_12 = _GOLDEN_DIR / "IR_12.pypto"
 
 
 def test_rewire_four_op_token_chain():
@@ -572,26 +320,10 @@ def test_rewire_four_op_token_chain():
     check_snapshot(after_remove, IR_12)
 
 
-BEFORE_IR_13 = """
-function foo incast(v0_logical_tensor %src_a@0 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), v0_logical_tensor %src_b@1 #dtype(float) #shape([8, 16]) #offset([0, 0]) #dynvalidshape([8, 16]), v0_logical_tensor %src_c@2 #dtype(float) #shape([8, 16]) #offset([0, 0]) #dynvalidshape([8, 16]), v0_logical_tensor %aux@3 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), v0_logical_tensor %result@4 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %aux_1@3 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_1_w, token %src_a_r = !10000 ASSEMBLE(%src_a@0) token() #toOffset(Unsupported);
-    v0_logical_tensor %aux_3@3 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_3_w, token %src_b_r = !10001 ASSEMBLE(%src_b@1) token(%aux_1_w) #toOffset(Unsupported);
-    v0_logical_tensor %aux_5@3 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_5_w, token %src_c_r = !10002 ASSEMBLE(%src_c@2) token(%aux_3_w) #toOffset(Unsupported);
-    v0_logical_tensor %$0@5 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %$0_w, token %aux_5_r = !10003 ADDS(%aux_5@3) token(%aux_5_w);
-    return %src_a@0, %src_b@1, %src_c@2, %aux_5@3, %$0@5;
-}
-"""
+BEFORE_IR_13 = _GOLDEN_DIR / "BEFORE_IR_13.pypto"
 
 
-IR_13 = """
-function foo incast(v0_logical_tensor %src_a@0 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), v0_logical_tensor %src_b@1 #dtype(float) #shape([8, 16]) #offset([0, 0]) #dynvalidshape([8, 16]), v0_logical_tensor %src_c@2 #dtype(float) #shape([8, 16]) #offset([0, 0]) #dynvalidshape([8, 16]), v0_logical_tensor %aux@3 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), v0_logical_tensor %result@4 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %aux_1@3 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_1_w = !10006 ASSEMBLE(%src_a@0) token() #toOffset(Unsupported);
-    v0_logical_tensor %aux_3@3 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_3_w = !10007 ASSEMBLE(%src_b@1) token(%aux_1_w) #toOffset(Unsupported);
-    v0_logical_tensor %aux_5@3 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]) = !10008 ASSEMBLE(%src_c@2) token(%aux_1_w) #toOffset(Unsupported);
-    v0_logical_tensor %$0@5 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]) = !10009 ADDS(%aux_5@3) token(%aux_3_w);
-    return %src_a@0, %src_b@1, %src_c@2, %aux_5@3, %$0@5;
-}
-"""
+IR_13 = _GOLDEN_DIR / "IR_13.pypto"
 
 
 def test_rewire_middle_edge_to_diamond():
@@ -614,32 +346,10 @@ def test_rewire_middle_edge_to_diamond():
     check_snapshot(after_remove, IR_13)
 
 
-BEFORE_IR_14 = """
-function foo incast(v0_logical_tensor %src@0 #dtype(float) #shape([8, 16]) #offset([0, 0]) #dynvalidshape([8, 16]), v0_logical_tensor %aux@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), v0_logical_tensor %out@2 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_1_w, token %src_r = !10000 ASSEMBLE(%src@0) token() #toOffset(Unsupported);
-    v0_logical_tensor %aux_3@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_3_w, token %src_r = !10001 ASSEMBLE(%src@0) token(%aux_1_w) #toOffset(Unsupported);
-    v0_logical_tensor %value_0@3 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %value_0_w_for = for %loop_idx_21 inrange 0, 2, 1 iter { none %value = %None; token %value_0_w_for_iter = %None; } #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
-        v0_logical_tensor %$0@3 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %$0_w, token %aux_3_r = !10002 ADDS(%aux_3@1) token(%aux_3_w);
-        continue %$0@3, %$0_w;
-    }
-    v0_logical_tensor %out_1@2 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %out_1_w, token %value_0_r = !10003 ASSEMBLE(%value_0@3) token(%value_0_w_for) #toOffset(Unsupported);
-    return %src@0, %aux_3@1, %out_1@2;
-}
-"""
+BEFORE_IR_14 = _GOLDEN_DIR / "BEFORE_IR_14.pypto"
 
 
-IR_14 = """
-function foo incast(v0_logical_tensor %src@0 #dtype(float) #shape([8, 16]) #offset([0, 0]) #dynvalidshape([8, 16]), v0_logical_tensor %aux@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), v0_logical_tensor %out@2 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %aux_1@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_1_w = !10004 ASSEMBLE(%src@0) token() #toOffset(Unsupported);
-    v0_logical_tensor %aux_3@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_3_w = !10005 ASSEMBLE(%src@0) token(%aux_1_w) #toOffset(Unsupported);
-    v0_logical_tensor %value_0@3 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %value_0_w_for = for %loop_idx_21 inrange 0, 2, 1 iter { none %value = %None; token %value_0_w_for_iter = %None; } #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
-        v0_logical_tensor %$0@3 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %$0_w = !10006 ADDS(%aux_3@1) token(%aux_3_w);
-        continue %$0@3, %$0_w;
-    }
-    v0_logical_tensor %out_1@2 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]) = !10007 ASSEMBLE(%value_0@3) token(%value_0_w_for) #toOffset(Unsupported);
-    return %src@0, %aux_3@1, %out_1@2;
-}
-"""
+IR_14 = _GOLDEN_DIR / "IR_14.pypto"
 
 
 def test_keep_dependency_when_result_is_read_in_loop():
@@ -660,32 +370,10 @@ def test_keep_dependency_when_result_is_read_in_loop():
     check_snapshot(after_remove, IR_14)
 
 
-BEFORE_IR_15 = """
-function foo incast(v0_logical_tensor %src@0 #dtype(float) #shape([8, 16]) #offset([0, 0]) #dynvalidshape([8, 16]), v0_logical_tensor %aux@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), v0_logical_tensor %out@2 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %aux_7@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_7_w_for = for %loop_idx_5 inrange 0, 2, 1 iter { v0_logical_tensor %aux_1@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]) = %aux@1; token %aux_7_w_for_iter = %None; } #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
-        v0_logical_tensor %aux_3@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_3_w, token %src_r = !10000 ASSEMBLE(%src@0) token() #toOffset(Unsupported);
-        v0_logical_tensor %aux_5@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_5_w, token %src_r = !10001 ASSEMBLE(%src@0) token(%aux_3_w) #toOffset(Unsupported);
-        continue %aux_5@1, %aux_5_w;
-    }
-    v0_logical_tensor %$0@3 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %$0_w, token %aux_7_r = !10002 ADDS(%aux_7@1) token(%aux_7_w_for);
-    v0_logical_tensor %out_1@2 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %out_1_w, token %$0_r = !10003 ASSEMBLE(%$0@3) token(%$0_w) #toOffset(Unsupported);
-    return %src@0, %aux_7@1, %out_1@2;
-}
-"""
+BEFORE_IR_15 = _GOLDEN_DIR / "BEFORE_IR_15.pypto"
 
 
-IR_15 = """
-function foo incast(v0_logical_tensor %src@0 #dtype(float) #shape([8, 16]) #offset([0, 0]) #dynvalidshape([8, 16]), v0_logical_tensor %aux@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), v0_logical_tensor %out@2 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16])) outcast() #type(Opaque) #entry(false) {
-    v0_logical_tensor %aux_7@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_7_w_for = for %loop_idx_5 inrange 0, 2, 1 iter { v0_logical_tensor %aux_1@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]) = %aux@1; token %aux_7_w_for_iter = %None; } #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
-        v0_logical_tensor %aux_3@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_3_w = !10005 ASSEMBLE(%src@0) token() #toOffset(Unsupported);
-        v0_logical_tensor %aux_5@1 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]), token %aux_5_w = !10006 ASSEMBLE(%src@0) token(%aux_3_w) #toOffset(Unsupported);
-        continue %aux_5@1, %aux_5_w;
-    }
-    v0_logical_tensor %$0@3 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]) = !10007 ADDS(%aux_7@1) token(%aux_7_w_for);
-    v0_logical_tensor %out_1@2 #dtype(float) #shape([32, 16]) #offset([0, 0]) #dynvalidshape([32, 16]) = !10008 ASSEMBLE(%$0@3) token() #toOffset(Unsupported);
-    return %src@0, %aux_7@1, %out_1@2;
-}
-"""
+IR_15 = _GOLDEN_DIR / "IR_15.pypto"
 
 
 def test_keep_dependency_when_loop_writes_are_read_after_loop():

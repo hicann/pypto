@@ -9,8 +9,15 @@
 Tests targeting RootFunctionBuilder (ir_func_builder.cpp) coverage gaps.
 """
 
+import os
+from pathlib import Path
+
 import pypto
 from pypto import ir, pil
+
+from .test_common import check_snapshot
+
+_GOLDEN_DIR = Path(__file__).parent / "test_ir_func_builder_data"
 
 
 def _collect_stmts(stmt, cls):
@@ -31,7 +38,7 @@ def _collect_stmts(stmt, cls):
     return result
 
 
-def _run_root_only(func, *args):
+def _run_root_only(golden_name, func, *args):
     """Run canonicalize + dce + create_root_functions (skip finalize).
 
     Returns (program, dyn_func) so the caller can inspect the IR
@@ -40,6 +47,13 @@ def _run_root_only(func, *args):
     b = ir.IRBuilder()
     compiled = pil.compile(func, *args)
     prog = b.create_program([compiled], "main", ir.Span.unknown())
+    golden_path = _GOLDEN_DIR / f"{golden_name}.pypto"
+    if os.environ.get("PYPTO_RENDER_IR"):
+        _GOLDEN_DIR.mkdir(parents=True, exist_ok=True)
+        golden_path.write_text(str(prog).strip() + "\n")
+        print(f"Updated: {golden_path}")
+    else:
+        check_snapshot(prog, golden_path)
     prog = ir.Pass.canonicalize()(prog)
     prog = ir.Pass.aggressive_dce()(prog)
     prog = ir.Pass.create_root_functions()(prog)
@@ -88,7 +102,7 @@ def test_incast_outcast_correctness():
     a = pypto.Tensor([32, 16], pypto.DT_FP32, name="a")
     b = pypto.Tensor([32, 16], pypto.DT_FP32, name="b")
     c = pypto.Tensor([32, 16], pypto.DT_FP32, name="c")
-    prog, dyn_func = _run_root_only(foo, a, b, c)
+    prog, dyn_func = _run_root_only("test_incast_outcast_correctness", foo, a, b, c)
 
     _assert_func_counts(prog, 1)
 
@@ -113,7 +127,7 @@ def test_multiple_path_funcs():
     a = pypto.Tensor([32, 16], pypto.DT_FP32, name="a")
     b = pypto.Tensor([32, 16], pypto.DT_FP32, name="b")
     c = pypto.Tensor([32, 16], pypto.DT_FP32, name="c")
-    prog, _ = _run_root_only(foo, a, b, c)
+    prog, _ = _run_root_only("test_multiple_path_funcs", foo, a, b, c)
 
     _assert_func_counts(prog, 2)
 
@@ -136,7 +150,7 @@ def test_if_without_else():
 
     x = pypto.Tensor([64, 16], pypto.DT_FP32, name="x")
     out = pypto.Tensor([64, 16], pypto.DT_FP32, name="out")
-    prog, _ = _run_root_only(foo, x, out)
+    prog, _ = _run_root_only("test_if_without_else", foo, x, out)
 
     _assert_func_counts(prog, 3)
 
@@ -159,7 +173,7 @@ def test_intermediate_tensor_cross_path_func():
     a = pypto.Tensor([16, 16], pypto.DT_FP32, name="a")
     b = pypto.Tensor([16, 16], pypto.DT_FP32, name="b")
     c = pypto.Tensor([32, 16], pypto.DT_FP32, name="c")
-    prog, _ = _run_root_only(foo, a, b, c)
+    prog, _ = _run_root_only("test_intermediate_tensor_cross_path_func", foo, a, b, c)
 
     _assert_func_counts(prog, 2)
 
@@ -180,7 +194,7 @@ def test_multi_level_nested_loop():
 
     x = pypto.Tensor([64, 16], pypto.DT_FP32, name="x")
     out = pypto.Tensor([64, 16], pypto.DT_FP32, name="out")
-    prog, dyn_func = _run_root_only(foo, x, out)
+    prog, dyn_func = _run_root_only("test_multi_level_nested_loop", foo, x, out)
 
     _assert_func_counts(prog, 1)
 
@@ -204,7 +218,7 @@ def test_func_param_as_assemble_dst():
 
     x = pypto.Tensor([32, 16], pypto.DT_FP32, name="x")
     out = pypto.Tensor([32, 16], pypto.DT_FP32, name="out")
-    prog, _ = _run_root_only(foo, x, out)
+    prog, _ = _run_root_only("test_func_param_as_assemble_dst", foo, x, out)
 
     _assert_func_counts(prog, 1)
 
@@ -229,7 +243,7 @@ def test_two_segments_separated_by_if():
 
     x = pypto.Tensor([32, 16], pypto.DT_FP32, name="x")
     out = pypto.Tensor([32, 16], pypto.DT_FP32, name="out")
-    prog, dyn_func = _run_root_only(foo, x, out)
+    prog, dyn_func = _run_root_only("test_two_segments_separated_by_if", foo, x, out)
 
     _assert_func_counts(prog, 3)
 
@@ -258,7 +272,7 @@ def test_assemble_dedup_and_param_exclude():
 
     a = pypto.Tensor([16, 16], pypto.DT_FP32, name="a")
     out = pypto.Tensor([16, 16], pypto.DT_FP32, name="out")
-    prog, _ = _run_root_only(foo, a, out)
+    prog, _ = _run_root_only("test_assemble_dedup_and_param_exclude", foo, a, out)
 
     _assert_func_counts(prog, 2)
 
@@ -280,7 +294,7 @@ def test_sequential_loops():
 
     x = pypto.Tensor([64, 16], pypto.DT_FP32, name="x")
     out = pypto.Tensor([64, 16], pypto.DT_FP32, name="out")
-    prog, _ = _run_root_only(foo, x, out)
+    prog, _ = _run_root_only("test_sequential_loops", foo, x, out)
 
     _assert_func_counts(prog, 2)
 
@@ -294,7 +308,7 @@ def test_pure_tensor_op_single_path_func():
     a = pypto.Tensor([16, 16], pypto.DT_FP32, name="a")
     b = pypto.Tensor([16, 16], pypto.DT_FP32, name="b")
     out = pypto.Tensor([16, 16], pypto.DT_FP32, name="out")
-    prog, _ = _run_root_only(foo, a, b, out)
+    prog, _ = _run_root_only("test_pure_tensor_op_single_path_func", foo, a, b, out)
 
     _assert_func_counts(prog, 1)
 
@@ -320,7 +334,7 @@ def test_if_else_both_branches():
     x = pypto.Tensor([32, 16], pypto.DT_FP32, name="x")
     y = pypto.Tensor([32, 16], pypto.DT_FP32, name="y")
     out = pypto.Tensor([32, 16], pypto.DT_FP32, name="out")
-    prog, dyn_func = _run_root_only(foo, x, y, out)
+    prog, dyn_func = _run_root_only("test_if_else_both_branches", foo, x, y, out)
 
     _assert_func_counts(prog, 4)
 

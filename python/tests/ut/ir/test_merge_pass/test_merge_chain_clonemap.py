@@ -16,7 +16,7 @@ from ..test_common import check_snapshot
 
 _GOLDEN_DIR = Path(__file__).parent
 
-IR = (_GOLDEN_DIR / "test_merge_chain_clonemap.pypto").read_text()
+IR = _GOLDEN_DIR / "test_merge_chain_clonemap.pypto"
 
 
 def test_merge_chain_clonemap():

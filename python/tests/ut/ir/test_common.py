@@ -10,12 +10,22 @@
 
 import difflib
 import logging
+import os
+from pathlib import Path
+from typing import Any
 
 from pypto import ir, pil
 
 
-def check_snapshot(func, golden):
+def check_snapshot(func: Any, golden_path: Path) -> None:
+    if os.environ.get("PYPTO_RENDER_IR"):
+        golden_path.parent.mkdir(parents=True, exist_ok=True)
+        golden_path.write_text(str(func).strip() + "\n")
+        print(f"Updated: {golden_path}")
+        return
+
     actual = str(func)
+    golden = golden_path.read_text()
     if golden.strip() != actual.strip():
         diff = "".join(
             difflib.unified_diff(

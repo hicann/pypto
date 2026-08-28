@@ -52,7 +52,7 @@ def test_attr_move():
     x = pypto.Tensor((32, 32), pypto.DT_FP32, 'x')
     y = pypto.Tensor((32, 32), pypto.DT_FP32, 'y')
     func = pil.compile(foo, x, y)
-    check_snapshot(func, IR1.read_text())
+    check_snapshot(func, IR1)
 
 
 @dataclass
@@ -75,7 +75,7 @@ def test_attr_move_pair():
     x = pypto.Tensor((32, 32), pypto.DT_FP32, 'x')
     y = pypto.Tensor((32, 32), pypto.DT_FP32, 'y')
     func = pil.compile(foo, x, y)
-    check_snapshot(func, IR2.read_text())
+    check_snapshot(func, IR2)
 
 
 def test_attr_assign():
@@ -90,7 +90,7 @@ def test_attr_assign():
     x = pypto.Tensor((32, 32), pypto.DT_FP32, 'x')
     y = pypto.Tensor((32, 32), pypto.DT_FP32, 'y')
     func = pil.compile(foo, x, y)
-    check_snapshot(func, IR3.read_text())
+    check_snapshot(func, IR3)
 
 
 @dataclass
@@ -113,7 +113,7 @@ def test_attr_move_multi_level():
     x = pypto.Tensor((32, 32), pypto.DT_FP32, 'x')
     y = pypto.Tensor((32, 32), pypto.DT_FP32, 'y')
     func = pil.compile(foo, x, y)
-    check_snapshot(func, IR4.read_text())
+    check_snapshot(func, IR4)
 
 
 @dataclass
@@ -143,7 +143,7 @@ def test_cross_func_attr_carry():
     x = pypto.Tensor((32, 32), pypto.DT_FP32, 'x')
     y = pypto.Tensor((32, 32), pypto.DT_FP32, 'y')
     func = pil.compile(foo, x, y)
-    check_snapshot(func, IR5.read_text())
+    check_snapshot(func, IR5)
 
 
 def test_cross_func_dotted_arg_carry():
@@ -163,7 +163,7 @@ def test_cross_func_dotted_arg_carry():
     x = pypto.Tensor((32, 32), pypto.DT_FP32, 'x')
     y = pypto.Tensor((32, 32), pypto.DT_FP32, 'y')
     func = pil.compile(foo, x, y)
-    check_snapshot(func, IR6.read_text())
+    check_snapshot(func, IR6)
 
 
 def test_cross_func_move_carry():
@@ -183,4 +183,4 @@ def test_cross_func_move_carry():
     x = pypto.Tensor((32, 32), pypto.DT_FP32, 'x')
     y = pypto.Tensor((32, 32), pypto.DT_FP32, 'y')
     func = pil.compile(foo, x, y)
-    check_snapshot(func, IR7.read_text())
+    check_snapshot(func, IR7)

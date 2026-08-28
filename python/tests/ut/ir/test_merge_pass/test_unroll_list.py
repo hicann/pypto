@@ -15,7 +15,7 @@ from ..test_common import check_snapshot, run_merge_pass
 
 _GOLDEN_DIR = Path(__file__).parent
 
-IR = (_GOLDEN_DIR / "test_unroll_list.pypto").read_text()
+IR = _GOLDEN_DIR / "test_unroll_list.pypto"
 
 
 def test_unroll_list():

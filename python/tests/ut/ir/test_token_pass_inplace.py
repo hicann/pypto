@@ -55,7 +55,7 @@ def test_index_put_keeps_write_after_read_dependency():
         _tensor((8, 16), "values"),
         _tensor((16, 16), "out"),
     )
-    check_snapshot(after_remove, (_GOLDEN_DIR / "test_index_put_keeps_write_after_read_dependency.pypto").read_text())
+    check_snapshot(after_remove, _GOLDEN_DIR / "test_index_put_keeps_write_after_read_dependency.pypto")
 
 
 def test_index_add_keeps_write_after_read_dependency():
@@ -71,7 +71,7 @@ def test_index_add_keeps_write_after_read_dependency():
         _tensor((8, 16), "source"),
         _tensor((16, 16), "out"),
     )
-    check_snapshot(after_remove, (_GOLDEN_DIR / "test_index_add_keeps_write_after_read_dependency.pypto").read_text())
+    check_snapshot(after_remove, _GOLDEN_DIR / "test_index_add_keeps_write_after_read_dependency.pypto")
 
 
 def test_scatter_update_keeps_write_after_read_dependency():
@@ -88,7 +88,7 @@ def test_scatter_update_keeps_write_after_read_dependency():
         _tensor((16, 16), "out"),
     )
     check_snapshot(
-        after_remove, (_GOLDEN_DIR / "test_scatter_update_keeps_write_after_read_dependency.pypto").read_text())
+        after_remove, _GOLDEN_DIR / "test_scatter_update_keeps_write_after_read_dependency.pypto")
 
 
 def test_axpy_keeps_write_after_read_dependency():
@@ -103,7 +103,7 @@ def test_axpy_keeps_write_after_read_dependency():
         _tensor((16, 16), "source"),
         _tensor((16, 16), "out"),
     )
-    check_snapshot(after_remove, (_GOLDEN_DIR / "test_axpy_keeps_write_after_read_dependency.pypto").read_text())
+    check_snapshot(after_remove, _GOLDEN_DIR / "test_axpy_keeps_write_after_read_dependency.pypto")
 
 
 def test_inplace_reshape_keeps_write_after_read_dependency():
@@ -118,7 +118,7 @@ def test_inplace_reshape_keeps_write_after_read_dependency():
         _tensor((16, 16), "out"),
     )
     check_snapshot(
-        after_remove, (_GOLDEN_DIR / "test_inplace_reshape_keeps_write_after_read_dependency.pypto").read_text())
+        after_remove, _GOLDEN_DIR / "test_inplace_reshape_keeps_write_after_read_dependency.pypto")
 
 
 def test_inplace_scatter_keeps_write_after_read_dependency():
@@ -152,7 +152,7 @@ def test_atomic_add_target_is_carried_through_loop():
         _tensor((8, 16), "source"),
         _tensor((16, 16), "out"),
     )
-    check_snapshot(after_remove, (_GOLDEN_DIR / "test_atomic_add_target_is_carried_through_loop.pypto").read_text())
+    check_snapshot(after_remove, _GOLDEN_DIR / "test_atomic_add_target_is_carried_through_loop.pypto")
 
 
 def test_continuous_inplace_updates_latest_alias_state():
@@ -170,7 +170,7 @@ def test_continuous_inplace_updates_latest_alias_state():
         pipeline=[("infer_token_pass", ir.Pass.infer_token_pass())],
         create_new_logical_tensor=True,
     )
-    check_snapshot(after_infer, (_GOLDEN_DIR / "test_continuous_inplace_updates_latest_alias_state.pypto").read_text())
+    check_snapshot(after_infer, _GOLDEN_DIR / "test_continuous_inplace_updates_latest_alias_state.pypto")
 
 
 def test_read_alias_then_write_origin_keeps_war():
@@ -191,7 +191,7 @@ def test_read_alias_then_write_origin_keeps_war():
         pipeline=[("infer_token_pass", ir.Pass.infer_token_pass())],
         create_new_logical_tensor=True,
     )
-    check_snapshot(after_infer, (_GOLDEN_DIR / "test_read_alias_then_write_origin_keeps_war.pypto").read_text())
+    check_snapshot(after_infer, _GOLDEN_DIR / "test_read_alias_then_write_origin_keeps_war.pypto")
     tensor_ops = [stmt for stmt in after_infer.body if isinstance(stmt, ir.TensorOpStmt)]
     adds = next(op for op in tensor_ops if op.opcode == "ADDS")
     index_put = next(op for op in tensor_ops if op.opcode == "INDEX_PUT")
@@ -216,7 +216,7 @@ def test_read_origin_after_inplace_on_alias_keeps_raw():
         pipeline=[("infer_token_pass", ir.Pass.infer_token_pass())],
         create_new_logical_tensor=True,
     )
-    check_snapshot(after_infer, (_GOLDEN_DIR / "test_read_origin_after_inplace_on_alias_keeps_raw.pypto").read_text())
+    check_snapshot(after_infer, _GOLDEN_DIR / "test_read_origin_after_inplace_on_alias_keeps_raw.pypto")
     tensor_ops = [stmt for stmt in after_infer.body if isinstance(stmt, ir.TensorOpStmt)]
     index_add = next(op for op in tensor_ops if op.opcode == "INDEX_ADD")
     adds = next(op for op in tensor_ops if op.opcode == "ADDS")
@@ -242,7 +242,7 @@ def test_write_alias_then_write_origin_keeps_waw():
         pipeline=[("infer_token_pass", ir.Pass.infer_token_pass())],
         create_new_logical_tensor=True,
     )
-    check_snapshot(after_infer, (_GOLDEN_DIR / "test_write_alias_then_write_origin_keeps_waw.pypto").read_text())
+    check_snapshot(after_infer, _GOLDEN_DIR / "test_write_alias_then_write_origin_keeps_waw.pypto")
     tensor_ops = [stmt for stmt in after_infer.body if isinstance(stmt, ir.TensorOpStmt)]
     index_add = next(op for op in tensor_ops if op.opcode == "INDEX_ADD")
     index_put = next(op for op in tensor_ops if op.opcode == "INDEX_PUT")

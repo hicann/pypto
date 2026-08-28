@@ -15,7 +15,7 @@ from ..test_common import check_snapshot, run_merge_pass
 
 _GOLDEN_DIR = Path(__file__).parent
 
-IR = (_GOLDEN_DIR / "test_merge_pass7.pypto").read_text()
+IR = _GOLDEN_DIR / "test_merge_pass7.pypto"
 
 
 def test_merge_pass7():

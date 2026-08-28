@@ -10,7 +10,6 @@
 """Tests for ir.Pass.infer_token_pass."""
 
 from pathlib import Path
-import re
 
 import pypto
 from pypto import ir
@@ -34,33 +33,7 @@ def _condition():
     return pypto.Tensor(shape=(-1,), dtype=pypto.DT_INT32, name="condition")
 
 
-class _NormalizedSnapshot:
-    def __init__(self, func):
-        self._func = func
-        self.name = func.name
-
-    def __str__(self):
-        return _normalize_token_names(str(self._func))
-
-
-def _normalize_token_names(text):
-    token_names = {}
-    pattern = re.compile(r"(_[A-Za-z0-9]+_token_|__token_|_if_token_|_for_token_)\d+")
-
-    def replace(match):
-        name = match.group(0)
-        if name not in token_names:
-            token_names[name] = match.group(1) + str(len(token_names) + 1)
-        return token_names[name]
-
-    return re.sub(r"loop_idx_\d+", "loop_idx_N", pattern.sub(replace, text))
-
-
-def _check_snapshot(func, golden):
-    check_snapshot(_NormalizedSnapshot(func), _normalize_token_names(golden))
-
-
-IR_0 = (_GOLDEN_DIR / "test_infer_pass_test_repeated_input.pypto").read_text()
+IR_0 = _GOLDEN_DIR / "test_infer_pass_test_repeated_input.pypto"
 def test_repeated_input():
     def foo(x):
         pypto.add(x, x)
@@ -69,7 +42,7 @@ def test_repeated_input():
     check_snapshot(func, IR_0)
 
 
-IR_1 = (_GOLDEN_DIR / "test_infer_pass_test_multiple_outputs.pypto").read_text()
+IR_1 = _GOLDEN_DIR / "test_infer_pass_test_multiple_outputs.pypto"
 def test_multiple_outputs():
     def foo(x):
         pypto.topk(x, 2)
@@ -78,7 +51,7 @@ def test_multiple_outputs():
     check_snapshot(func, IR_1)
 
 
-IR_2 = (_GOLDEN_DIR / "test_infer_pass_test_multiple_reads.pypto").read_text()
+IR_2 = _GOLDEN_DIR / "test_infer_pass_test_multiple_reads.pypto"
 def test_multiple_reads():
     def foo(x):
         lhs = x + 1.0
@@ -89,7 +62,7 @@ def test_multiple_reads():
     check_snapshot(func, IR_2)
 
 
-IR_3 = (_GOLDEN_DIR / "test_infer_pass_test_read_after_write.pypto").read_text()
+IR_3 = _GOLDEN_DIR / "test_infer_pass_test_read_after_write.pypto"
 def test_read_after_write():
     def foo(a, b):
         value = pypto.exp(b)
@@ -101,7 +74,7 @@ def test_read_after_write():
     check_snapshot(func, IR_3)
 
 
-IR_4 = (_GOLDEN_DIR / "test_infer_pass_test_write_after_read.pypto").read_text()
+IR_4 = _GOLDEN_DIR / "test_infer_pass_test_write_after_read.pypto"
 def test_write_after_read():
     def foo(x):
         pypto.set_vec_tile_shapes(16, 16)
@@ -115,7 +88,7 @@ def test_write_after_read():
     check_snapshot(func, IR_4)
 
 
-IR_5 = (_GOLDEN_DIR / "test_infer_pass_test_read_read_write.pypto").read_text()
+IR_5 = _GOLDEN_DIR / "test_infer_pass_test_read_read_write.pypto"
 def test_read_read_write():
     def foo(a):
         value = pypto.exp(a)
@@ -126,7 +99,7 @@ def test_read_read_write():
     check_snapshot(func, IR_5)
 
 
-IR_6 = (_GOLDEN_DIR / "test_infer_pass_test_write_write_read.pypto").read_text()
+IR_6 = _GOLDEN_DIR / "test_infer_pass_test_write_write_read.pypto"
 def test_write_write_read():
     def foo(a, b, c):
         first = pypto.exp(b)
@@ -139,7 +112,7 @@ def test_write_write_read():
     check_snapshot(func, IR_6)
 
 
-IR_7 = (_GOLDEN_DIR / "test_infer_pass_test_if_input.pypto").read_text()
+IR_7 = _GOLDEN_DIR / "test_infer_pass_test_if_input.pypto"
 def test_if_input():
     def foo(x, aux, out, condition):
         pypto.set_vec_tile_shapes(16, 16)
@@ -152,10 +125,10 @@ def test_if_input():
         pypto.assemble(result, [0, 0], out)
 
     func = _run_infer_token_pass(foo, _tensor(), _tensor("aux"), _tensor("out"), _condition())
-    _check_snapshot(func, IR_7)
+    check_snapshot(func, IR_7)
 
 
-IR_8 = (_GOLDEN_DIR / "test_infer_pass_test_if_output.pypto").read_text()
+IR_8 = _GOLDEN_DIR / "test_infer_pass_test_if_output.pypto"
 def test_if_output():
     def foo(x, aux, out, condition):
         pypto.set_vec_tile_shapes(16, 16)
@@ -169,10 +142,10 @@ def test_if_output():
         pypto.assemble(result, [0, 0], out)
 
     func = _run_infer_token_pass(foo, _tensor(), _tensor("aux"), _tensor("out"), _condition())
-    _check_snapshot(func, IR_8)
+    check_snapshot(func, IR_8)
 
 
-IR_9 = (_GOLDEN_DIR / "test_infer_pass_test_if_passthrough.pypto").read_text()
+IR_9 = _GOLDEN_DIR / "test_infer_pass_test_if_passthrough.pypto"
 def test_if_passthrough():
     def foo(x, aux, out, condition):
         pypto.set_vec_tile_shapes(16, 16)
@@ -185,10 +158,10 @@ def test_if_passthrough():
         pypto.assemble(result, [0, 0], out)
 
     func = _run_infer_token_pass(foo, _tensor(), _tensor("aux"), _tensor("out"), _condition())
-    _check_snapshot(func, IR_9)
+    check_snapshot(func, IR_9)
 
 
-IR_10 = (_GOLDEN_DIR / "test_infer_pass_test_if_multiple_reads.pypto").read_text()
+IR_10 = _GOLDEN_DIR / "test_infer_pass_test_if_multiple_reads.pypto"
 def test_if_multiple_reads():
     def foo(x, aux, out, condition):
         pypto.set_vec_tile_shapes(16, 16)
@@ -203,10 +176,10 @@ def test_if_multiple_reads():
         pypto.assemble(result, [0, 0], out)
 
     func = _run_infer_token_pass(foo, _tensor(), _tensor("aux"), _tensor("out"), _condition())
-    _check_snapshot(func, IR_10)
+    check_snapshot(func, IR_10)
 
 
-IR_11 = (_GOLDEN_DIR / "test_infer_pass_test_for_input.pypto").read_text()
+IR_11 = _GOLDEN_DIR / "test_infer_pass_test_for_input.pypto"
 def test_for_input():
     def foo(x, aux, out):
         pypto.set_vec_tile_shapes(16, 16)
@@ -217,10 +190,10 @@ def test_for_input():
         pypto.assemble(result, [0, 0], out)
 
     func = _run_infer_token_pass(foo, _tensor(), _tensor("aux"), _tensor("out"))
-    _check_snapshot(func, IR_11)
+    check_snapshot(func, IR_11)
 
 
-IR_12 = (_GOLDEN_DIR / "test_infer_pass_test_for_output.pypto").read_text()
+IR_12 = _GOLDEN_DIR / "test_infer_pass_test_for_output.pypto"
 def test_for_output():
     def foo(x, aux, out):
         pypto.set_vec_tile_shapes(16, 16)
@@ -231,10 +204,10 @@ def test_for_output():
         pypto.assemble(result, [0, 0], out)
 
     func = _run_infer_token_pass(foo, _tensor(), _tensor("aux"), _tensor("out"))
-    _check_snapshot(func, IR_12)
+    check_snapshot(func, IR_12)
 
 
-IR_13 = (_GOLDEN_DIR / "test_infer_pass_test_if_none.pypto").read_text()
+IR_13 = _GOLDEN_DIR / "test_infer_pass_test_if_none.pypto"
 def test_if_none():
     def foo(x, aux, out, condition):
         pypto.set_vec_tile_shapes(16, 16)
@@ -245,10 +218,10 @@ def test_if_none():
         pypto.assemble(result, [0, 0], out)
 
     func = _run_infer_token_pass(foo, _tensor(), _tensor("aux"), _tensor("out"), _condition())
-    _check_snapshot(func, IR_13)
+    check_snapshot(func, IR_13)
 
 
-IR_14 = (_GOLDEN_DIR / "test_infer_pass_test_for_read_output.pypto").read_text()
+IR_14 = _GOLDEN_DIR / "test_infer_pass_test_for_read_output.pypto"
 def test_for_read_output():
     def foo(x, aux, out):
         pypto.set_vec_tile_shapes(16, 16)
@@ -259,4 +232,4 @@ def test_for_read_output():
         pypto.assemble(read, [0, 0], out)
 
     func = _run_infer_token_pass(foo, _tensor(), _tensor("aux"), _tensor("out"))
-    _check_snapshot(func, IR_14)
+    check_snapshot(func, IR_14)

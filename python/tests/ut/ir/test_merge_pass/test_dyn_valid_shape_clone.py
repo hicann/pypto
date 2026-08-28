@@ -24,8 +24,8 @@ from ..test_common import check_snapshot, run_merge_pass
 
 _GOLDEN_DIR = Path(__file__).parent
 
-IR_THEN_ELSE = (_GOLDEN_DIR / "test_dyn_valid_shape_clone_then_else.pypto").read_text()
-IR_NO_CROSS = (_GOLDEN_DIR / "test_dyn_valid_shape_no_cross_branch_contamination.pypto").read_text()
+IR_THEN_ELSE = _GOLDEN_DIR / "test_dyn_valid_shape_clone_then_else.pypto"
+IR_NO_CROSS = _GOLDEN_DIR / "test_dyn_valid_shape_no_cross_branch_contamination.pypto"
 
 
 def test_view_dyn_valid_shape_clone_then_else():
