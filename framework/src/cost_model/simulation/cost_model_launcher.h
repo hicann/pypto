@@ -196,8 +196,6 @@ private:
         RunModel(inputs, outputs);
     }
 
-    static void RunStatic() {}
-
     void RunModel(const std::vector<RawTensorDataPtr>& inputs, const std::vector<RawTensorDataPtr>& outputs)
     {
         DeviceKernelArgs kArgs;

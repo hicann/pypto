@@ -171,8 +171,6 @@ uint64_t TileOp::GetSize()
 
 bool TileOp::IsCall() { return opcode.find("CALL") != std::string::npos; }
 
-bool TileOp::IsNOP() { return opcode.find("NOP") != std::string::npos; }
-
 bool TileOp::IsSpecial()
 {
     if (opcode == "RESHAPE" || opcode == "VIEW" || opcode == "ASSEMBLE") {

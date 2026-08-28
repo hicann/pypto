@@ -24,8 +24,6 @@ struct DataIDType {
 
     bool operator==(const DataIDType& oth) const { return id == oth.id; }
     bool operator<(const DataIDType& oth) const { return id < oth.id; }
-
-    std::string Dump() const;
 };
 
 /**

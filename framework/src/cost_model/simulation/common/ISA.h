@@ -15,7 +15,6 @@
 
 #pragma once
 
-#include <iostream>
 #include <sstream>
 #include <memory>
 #include <vector>
@@ -474,7 +473,6 @@ public:
     uint64_t GetAddress();
     uint64_t GetSize();
     bool IsCall();
-    bool IsNOP();
     bool IsSpecial();
     std::string Dump(bool outDetail = false);
 };

@@ -81,10 +81,4 @@ void Machine::SubmitTask(TaskPack task, uint64_t extraDelay)
     lastCycles = GetSim()->GetCycles();
     submissionQueue.Enqueue(task, extraDelay);
 }
-
-void Machine::ResponseData(CachePacket pkt, uint64_t extraDelay)
-{
-    lastCycles = GetSim()->GetCycles();
-    cacheRespQueue.Enqueue(pkt, extraDelay);
-}
 } // namespace CostModel

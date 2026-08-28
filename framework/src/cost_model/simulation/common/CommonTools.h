@@ -15,7 +15,6 @@
 
 #pragma once
 
-#include <iostream>
 #include <cstdio>
 #include <fcntl.h>
 #include "cost_model/simulation/common/CommonType.h"

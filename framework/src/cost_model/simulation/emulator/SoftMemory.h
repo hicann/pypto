@@ -14,7 +14,7 @@
  */
 
 #pragma once
-#include <iostream>
+#include <string>
 #include <map>
 #include <vector>
 #include <cstdint>
@@ -71,51 +71,6 @@ public:
         stackEnd = stackStart;
     }
 
-    // 分配堆内存
-    uintptr_t AllocateHeap(size_t size)
-    {
-        if (!enable) {
-            return 0;
-        }
-        // 堆向上增长
-        uintptr_t addr = heapEnd;
-        heapEnd += size;
-
-        // 检查是否有足够的空间
-        if (heapEnd >= stackEnd) {
-            throw std::runtime_error("Out of memory: heap exhausted");
-        }
-
-        // 添加到内存映射
-        memoryMap[addr] = std::vector<uint8_t>(size, 0);
-        memoryBlocks.emplace_back(addr, size, false, "heap");
-
-        return addr;
-    }
-
-    // 分配栈内存
-    uintptr_t AllocateStack(size_t size)
-    {
-        if (!enable) {
-            return 0;
-        }
-        // 栈向下增长
-        stackEnd -= size;
-
-        // 检查是否有足够的空间
-        if (stackEnd <= heapEnd) {
-            throw std::runtime_error("Out of memory: stack exhausted");
-        }
-
-        uintptr_t addr = stackEnd;
-
-        // 添加到内存映射
-        memoryMap[addr] = std::vector<uint8_t>(size, 0);
-        memoryBlocks.emplace_back(addr, size, false, "stack");
-
-        return addr;
-    }
-
     // 分配数据块
     uintptr_t AllocateData(size_t size, const std::vector<uint8_t>& data)
     {
@@ -157,49 +112,6 @@ public:
         memoryBlocks.emplace_back(addr, size, false, "data");
         return addr;
     }
-
-    // 释放内存
-    void Deallocate(uintptr_t addr)
-    {
-        auto it = memoryMap.find(addr);
-        if (it != memoryMap.end()) {
-            // 标记为空闲
-            for (auto& block : memoryBlocks) {
-                if (block.startAddr == addr) {
-                    block.isFree = true;
-                    break;
-                }
-            }
-
-            // 从内存映射中移除
-            memoryMap.erase(it);
-        }
-    }
-
-    // 打印内存布局
-    void PrintMemoryLayout() const
-    {
-        std::cout << "Memory Layout:\n";
-        std::cout << "--------------------------------------------------\n";
-
-        // 按地址排序内存块
-        std::vector<MemoryBlock> sorted_blocks = memoryBlocks;
-        std::sort(sorted_blocks.begin(), sorted_blocks.end(),
-                  [](const MemoryBlock& a, const MemoryBlock& b) { return a.startAddr < b.startAddr; });
-
-        for (const auto& block : sorted_blocks) {
-            std::cout << "0x" << std::hex << block.startAddr << " - 0x" << (block.startAddr + block.size) << " ("
-                      << std::dec << block.size << " bytes) " << block.regionType
-                      << (block.isFree ? " [FREE]" : " [USED]") << "\n";
-        }
-
-        std::cout << "--------------------------------------------------\n";
-        std::cout << "Heap top: 0x" << std::hex << heapEnd << "\n";
-        std::cout << "Stack bottom: 0x" << std::hex << stackEnd << "\n";
-        std::cout << "--------------------------------------------------\n";
-    }
-
-    void Enable() { enable = true; }
 
 private:
     std::map<uintptr_t, std::vector<uint8_t>> memoryMap;

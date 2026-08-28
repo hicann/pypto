@@ -74,12 +74,4 @@ uint64_t TileState::Load(TileStateKeyTy& key)
 
     return 0;
 }
-
-size_t TileState::Order(TileStateKeyTy& key)
-{
-    if (store_.find(key) == store_.end()) {
-        return 0;
-    }
-    return store_[key]->Order();
-}
 } // namespace CostModel

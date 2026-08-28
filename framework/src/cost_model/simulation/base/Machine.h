@@ -74,6 +74,5 @@ public:
     void LoggerRecordTileOp(std::string name, size_t pipeId, size_t sTime, size_t eTime);
     virtual void SetQueueCounter(); // Called after the sim pointer is initialized
     void SubmitTask(TaskPack task, uint64_t extraDelay = 0);
-    void ResponseData(CachePacket pkt, uint64_t extraDelay = 0);
 };
 } // namespace CostModel

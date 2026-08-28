@@ -49,10 +49,6 @@ private:
 
 struct UnifiedDeleter {
     void operator()(PipeMachineImpl* ptr) const { delete ptr; }
-    static void SetCustomDeleter(void (*destroy)(PipeMachineImpl*)) { customDestroy = destroy; }
-
-private:
-    static inline void (*customDestroy)(PipeMachineImpl*) = nullptr;
 };
 
 using UnifiedPipeMachinePtr = std::shared_ptr<PipeMachineImpl>;

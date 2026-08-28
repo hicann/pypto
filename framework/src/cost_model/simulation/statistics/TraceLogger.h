@@ -198,11 +198,7 @@ public:
     void GetFunctionCacheSize(TimeStamp interval,
                               const std::pair<const PTid, std::vector<CounterEvent>>& threadCounter);
     void GetTotalFunctionCacheSize(TimeStamp interval);
-    void GetCounters();
     void GetDeviceReadyQ();
-    void OutEachMachineQueueSize(std::ofstream& os, const uint64_t sysClockTicks);
-    void OutCounters(std::ofstream& os, std::vector<CounterEvent>& counterQ, std::string prefix, std::string suffix,
-                     const uint64_t sysClockTicks);
     Json QSizeToJson(std::vector<CounterEvent>& counterQ);
     // Output Trace
     Json ToJson();

@@ -87,7 +87,6 @@ public:
     void AllocIncCounter();
     void GenTaskDependency(uint64_t taskId);
     void GenCounterDepencency();
-    void CheckRedundantDependency();
     void PrintTask(CalendarEntry& entry, std::ofstream& os);
     void PrintStat(std::ofstream& os);
     void OutputCalendar(std::ofstream& os);

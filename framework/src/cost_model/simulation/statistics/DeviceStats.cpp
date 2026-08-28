@@ -16,7 +16,7 @@
 #include "cost_model/simulation/statistics/DeviceStats.h"
 
 #include <climits>
-#include <iostream>
+#include <string>
 
 void DeviceStats::Report(std::string& name)
 {

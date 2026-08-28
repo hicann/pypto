@@ -19,7 +19,6 @@
 
 #include <climits>
 #include <queue>
-#include <iostream>
 #include "cost_model/simulation/base/SimObj.h"
 #include "cost_model/simulation/statistics/TraceLogger.h"
 

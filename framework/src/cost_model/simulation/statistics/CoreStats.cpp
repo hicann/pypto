@@ -16,7 +16,7 @@
 #include "cost_model/simulation/statistics/CoreStats.h"
 #include <utility>
 #include <algorithm>
-#include <iostream>
+#include <string>
 #include <map>
 #include <vector>
 

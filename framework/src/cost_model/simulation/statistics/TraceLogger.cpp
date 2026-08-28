@@ -625,48 +625,6 @@ void TraceLogger::GetTotalFunctionCacheSize(TimeStamp interval)
     GetFunctionCacheSize(interval, {{pid, tid}, totalCounterVec});
 }
 
-void TraceLogger::GetCounters()
-{
-    const uint32_t intervalLen = 100;
-    TimeStamp interval = TimeStamp(intervalLen);
-    for (auto& threadCounter : mCounts) {
-        if (threadCounter.first.tid == sim->pidToMachineMp[threadCounter.first.pid]->functionCacheTid) {
-            GetFunctionCacheSize(intervalLen, threadCounter);
-            continue;
-        }
-        if (!sim->IsQueue(threadCounter.first.tid)) {
-            continue;
-        }
-
-        int totalCount = 0;
-        TimeStamp lastTime = 0;
-        for (auto& count : threadCounter.second) {
-            if (count.type == CounterType::QUEUE_PUSH) {
-                totalCount++;
-            } else {
-                totalCount--;
-            }
-            if ((count.timestamp / interval) != (lastTime / interval)) {
-                mCounterEventIdPtr++;
-                auto sizeCount = CounterEvent{
-                    .id = mCounterEventIdPtr,
-                    .catagory = "count",
-                    .phase = "C",
-                    .type = CounterType::COUNT_SIZE,
-                    .size = totalCount,
-                    .timestamp = count.timestamp,
-                    .pid = threadCounter.first.pid,
-                    .tid = threadCounter.first.tid,
-                };
-                eachMachineQueueSize[threadCounter.first].emplace_back(sizeCount);
-            }
-            lastTime = count.timestamp;
-        }
-    }
-    GetTotalFunctionCacheSize(intervalLen);
-    GetTotalMachineQueueSize(intervalLen);
-}
-
 void TraceLogger::GetDeviceReadyQ()
 {
     if (processDeviceReadyQueue) {
@@ -711,55 +669,6 @@ void TraceLogger::GetDeviceReadyQ()
         }
     }
     processDeviceReadyQueue = true;
-}
-
-void TraceLogger::OutEachMachineQueueSize(std::ofstream& os, const uint64_t sysClockTicks)
-{
-    std::string title = "queueCounter-0";
-    for (auto& machineQCounter : eachMachineQueueSize) {
-        auto& ptid = machineQCounter.first;
-        std::string queueName = mProcesses[ptid.pid].name + mThreads[ptid].name;
-        std::string cpuInfo = "(   0) [000] ....";
-        for (auto& count : machineQCounter.second) {
-            std::ostringstream cyc1;
-            cyc1 << std::fixed << std::setprecision(precision) << (double(count.timestamp) / sysClockTicks);
-            std::string cycle = cyc1.str();
-            std::string workInfo = ": clock_set_rate: " + queueName + " state=" + std::to_string(count.size) +
-                                   " cpu_id=0";
-            os << std::setw(width) << std::left << title << std::setw(width) << std::right << cpuInfo;
-            os << std::setw(width2) << std::right << cycle << workInfo << std::endl;
-        }
-    }
-}
-
-void TraceLogger::OutCounters(std::ofstream& os, std::vector<CounterEvent>& counterQ, std::string prefix,
-                              std::string suffix, const uint64_t sysClockTicks)
-{
-    std::string title = "queueCounter-0";
-    for (auto& counter : counterQ) {
-        auto ptid = PTid{counter.pid, counter.tid};
-        if (ptid.pid != sim->machines[0]->machineId) {
-            std::string queueName = prefix + mThreads[ptid].name + suffix;
-            std::string cpuInfo = "(" + to_string(ptid.pid) + ") [" + to_string(ptid.pid % 10000) + "] ....";
-            std::ostringstream cyc1;
-            cyc1 << std::fixed << std::setprecision(precision) << (double(counter.timestamp) / sysClockTicks);
-            std::string cycle = cyc1.str();
-            std::string workInfo = ": tracing_mark_write: C|" + to_string(ptid.pid) + "|" + queueName + '|' +
-                                   std::to_string(counter.size);
-            os << std::setw(width) << std::left << title << std::setw(width) << std::right << cpuInfo;
-            os << std::setw(width2) << std::right << cycle << workInfo << std::endl;
-        } else {
-            std::string queueName = prefix + mThreads[ptid].name + suffix;
-            std::string cpuInfo = "(   0) [000] ....";
-            std::ostringstream cyc1;
-            cyc1 << std::fixed << std::setprecision(precision) << (double(counter.timestamp) / sysClockTicks);
-            std::string cycle = cyc1.str();
-            std::string workInfo = ": clock_set_rate: " + queueName + " state=" + std::to_string(counter.size) +
-                                   " cpu_id=0";
-            os << std::setw(width) << std::left << title << std::setw(width) << std::right << cpuInfo;
-            os << std::setw(width2) << std::right << cycle << workInfo << std::endl;
-        }
-    }
 }
 
 Json TraceLogger::QSizeToJson(std::vector<CounterEvent>& counterQ)

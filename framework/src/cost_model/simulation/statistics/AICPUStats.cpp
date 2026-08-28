@@ -16,7 +16,7 @@
 #include "cost_model/simulation/statistics/AICPUStats.h"
 
 #include <climits>
-#include <iostream>
+#include <string>
 
 void AICPUStats::Report(std::string& name)
 {

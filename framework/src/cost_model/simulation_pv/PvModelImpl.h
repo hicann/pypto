@@ -209,10 +209,9 @@ public:
     explicit DynPvModelImpl()
     {
         dir_ = npu::tile_fwk::config::LogTopFolder() + "/PvModelOutput";
-        if (npu::tile_fwk::IsPathExist(dir_)) {
-            npu::tile_fwk::DeleteDir(dir_, true);
+        if (!npu::tile_fwk::IsPathExist(dir_)) {
+            npu::tile_fwk::CreateDir(dir_);
         }
-        npu::tile_fwk::CreateDir(dir_);
     }
 
     void InitPv()

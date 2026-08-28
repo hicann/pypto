@@ -228,17 +228,6 @@ SimSys::SimSys()
 }
 std::shared_ptr<SimSys> SimSys::GetShared() { return shared_from_this(); }
 
-bool SimSys::IsMachine(CostModel::Pid pid, CostModel::Tid tid)
-{
-    if (pid == topMachineViewPid) {
-        return false;
-    }
-    if (tid <= machines[0]->coreTid || tid >= machines[0]->reversedTidNum) {
-        return false;
-    }
-    return true;
-}
-
 bool SimSys::IsQueue(CostModel::Tid tid)
 {
     if (tid <= machines[0]->coreTid || tid >= machines[0]->reversedTidNum) {

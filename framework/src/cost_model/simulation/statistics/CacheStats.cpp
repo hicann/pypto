@@ -14,7 +14,7 @@
  */
 
 #include "cost_model/simulation/statistics/CacheStats.h"
-#include <iostream>
+#include <string>
 
 void CacheStats::Reset()
 {

@@ -144,7 +144,6 @@ public:
     std::shared_ptr<TraceLogger> GetLogger();
     std::shared_ptr<GenCalendar> GetCalendarGenerator();
     CostModel::Reporter* GetReporter();
-    bool IsMachine(CostModel::Pid pid, CostModel::Tid tid);
     bool IsQueue(CostModel::Tid tid);
     bool IsWorkPipe(CostModel::Pid pid, CostModel::Tid tid, std::string& name);
 

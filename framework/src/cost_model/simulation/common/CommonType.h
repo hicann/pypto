@@ -95,7 +95,6 @@ inline DataType ToDataType(std::string& name)
         {"DT_FP4_E1M2", DataType::DT_FP4_E1M2}, {"DT_FP4_E1M2X2", DataType::DT_FP4_E1M2X2}};
     auto it = type_map.find(name);
     if (it == type_map.end()) {
-        std::cout << "Unrecognized DataType" << name << std::endl;
         return DataType::DT_FP16;
     }
     return it->second;

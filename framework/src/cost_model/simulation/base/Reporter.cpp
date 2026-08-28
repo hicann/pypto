@@ -14,6 +14,7 @@
  */
 
 #include <iomanip>
+#include <iostream>
 #include <sstream>
 #include <vector>
 #include "cost_model/simulation/base/Reporter.h"

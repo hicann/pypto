@@ -54,29 +54,6 @@ public:
                    offset == other.offset;
         }
 
-        std::string Dump()
-        {
-            std::stringstream oss;
-            oss << rawMagic << ", " << OperandTypeToStr(bufType) << ", ";
-            oss << "offset = (";
-            for (size_t i = 0; i < offset.size(); ++i) {
-                oss << offset[i];
-                if (i != offset.size() - 1) {
-                    oss << ",";
-                }
-            }
-            oss << "), ";
-            oss << "shape = (";
-            for (size_t i = 0; i < shape.size(); ++i) {
-                oss << shape[i];
-                if (i != shape.size() - 1) {
-                    oss << ",";
-                }
-            }
-            oss << ")";
-            return oss.str();
-        }
-
     public:
         int rawMagic;
         OperandType bufType;
@@ -103,8 +80,6 @@ public:
     void Store(TileStateKeyTy& key, uint64_t value);
 
     uint64_t Load(TileStateKeyTy& key);
-
-    size_t Order(TileStateKeyTy& key);
 
     void Ref(TileStateKeyTy& dst, TileStateKeyTy& src);
 };

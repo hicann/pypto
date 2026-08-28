@@ -42,8 +42,6 @@ struct EventId {
     bool operator!=(const EventId& oth) const { return !(*this == oth); }
 
     bool operator<(const EventId& oth) const { return ptid != oth.ptid ? ptid < oth.ptid : eid < oth.eid; }
-
-    bool Valid() const { return *this != EventId{}; }
 };
 
 struct LogData {

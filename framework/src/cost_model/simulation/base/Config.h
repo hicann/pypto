@@ -93,18 +93,6 @@ public:
         return false;
     }
 
-    virtual void ParseIntVec(std::string const& v, std::vector<uint64_t>& array) final
-    {
-        std::size_t pos = 0;
-        array.clear();
-        std::string vv = v;
-        while ((pos = vv.find(':')) != std::string::npos) {
-            array.push_back(stoull(vv.substr(0, pos)));
-            vv.erase(0, pos + 1);
-        }
-        array.push_back(stoull(vv.substr(0, pos)));
-    }
-
     virtual void ParseStrVec(std::string const& v, std::vector<std::string>& array) final
     {
         std::size_t pos = 0;
@@ -120,19 +108,6 @@ public:
     virtual std::string ParameterToStr(bool parameter) final { return std::to_string(parameter); }
 
     virtual std::string ParameterToStr(uint64_t parameter) final { return std::to_string(parameter); }
-
-    virtual std::string ParameterToStr(std::vector<uint64_t>& parameter) final
-    {
-        std::stringstream oss;
-        oss << "[";
-        for (auto& it : parameter) {
-            oss << it << ",";
-        }
-        oss << "]";
-        return oss.str();
-    }
-
-    virtual std::string ParameterToStr(const std::string& parameter) final { return parameter; }
 
     virtual std::string ParameterToStr(std::vector<std::string>& parameter) final
     {

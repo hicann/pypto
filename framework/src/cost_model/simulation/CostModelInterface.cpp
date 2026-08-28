@@ -15,7 +15,7 @@
 
 #include "CostModelInterface.h"
 
-#include <iostream>
+#include <string>
 
 #include "utils/file_utils.h"
 #include "cost_model/simulation/tools/ParseArgs.h"

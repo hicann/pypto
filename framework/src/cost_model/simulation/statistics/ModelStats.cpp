@@ -15,7 +15,7 @@
 
 #include "cost_model/simulation/statistics/ModelStats.h"
 
-#include <iostream>
+#include <string>
 
 void ModelStats::Reset()
 {
