@@ -174,7 +174,7 @@ std::string CodeGenOpNPU::GenDupOp() const
             << "SCALAR attribute must be float value, data type: " << DataType2String(extOperandVal.GetDataType());
         dupV = FormatFloat(extOperandVal.Cast<float>(), operandDtype[ToUnderlying(MISOIdx::DST_IDX)]);
     } else if (dstDtypeStr == "bool" || dstDtypeStr == "int8_t" || dstDtypeStr == "int16_t" ||
-               dstDtypeStr == "int32_t") {
+               dstDtypeStr == "int32_t" || dstDtypeStr == "int64_t") {
         ASSERT(OperErr::ATTRIBUTE_INVALID, extOperandVal.IsSigned())
             << "SCALAR attribute has to be int value, data type: " << DataType2String(extOperandVal.GetDataType());
         dupV = std::to_string(extOperandVal.Cast<int64_t>());

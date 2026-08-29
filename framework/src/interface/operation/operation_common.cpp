@@ -341,4 +341,17 @@ const std::unordered_set<DataType>& GetSupportedDataTypesByArch(const std::unord
     bool isA5Architecture = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510);
     return isA5Architecture ? a5Types : a2a3Types;
 }
+
+void CheckInt64Broadcast(const LogicalTensorPtr& tensor1, const LogicalTensorPtr& tensor2, const std::string& opName)
+{
+    auto dtype = tensor1->Datatype();
+    if (dtype != DT_INT64 && dtype != DT_UINT64) {
+        return;
+    }
+    auto broadcastAxes = GetBroadcastAxes(tensor1->shape, tensor2->shape);
+    if (!broadcastAxes.empty()) {
+        CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, false)
+            << opName << ": broadcast is not supported for int64/uint64 dtype on current device";
+    }
+}
 } // namespace npu::tile_fwk

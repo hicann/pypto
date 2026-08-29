@@ -197,8 +197,11 @@ Tensor Expand(const Tensor& self, const std::vector<int64_t>& dstShape, std::vec
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Expand");
 
-    std::unordered_set<DataType> supportedTypes = {DT_BF16,  DT_FP32,  DT_FP16,   DT_INT8,   DT_INT16,
-                                                   DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_BOOL};
+    static const std::unordered_set<DataType> EXPAND_A2A3_TYPES = {DT_BF16,  DT_FP32,  DT_FP16,   DT_INT8,   DT_INT16,
+                                                                   DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_BOOL};
+    static const std::unordered_set<DataType> EXPAND_A5_TYPES = {DT_BF16,  DT_FP32,  DT_FP16,   DT_INT8,   DT_INT16,
+                                                                 DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_BOOL};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(EXPAND_A2A3_TYPES, EXPAND_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "EXPAND");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "EXPAND");
     CheckTensorShapeSize(self.GetStorage(), "EXPAND");
@@ -2033,8 +2036,12 @@ Tensor Full(const Element& src, DataType dtype, const std::vector<int64_t>& dstS
             std::vector<SymbolicScalar> validShape)
 {
     DECLARE_TRACER();
-    std::unordered_set<DataType> supportedTypes = {DT_FP32,  DT_FP16,  DT_BF16,   DT_INT8,   DT_INT16,
-                                                   DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_BOOL};
+    static const std::unordered_set<DataType> FULL_A2A3_TYPES = {DT_FP32,  DT_FP16,  DT_BF16,   DT_INT8,   DT_INT16,
+                                                                 DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_BOOL};
+    static const std::unordered_set<DataType> FULL_A5_TYPES = {DT_FP32,   DT_FP16,  DT_BF16,  DT_INT8,
+                                                               DT_INT16,  DT_INT32, DT_UINT8, DT_UINT16,
+                                                               DT_UINT32, DT_BOOL,  DT_INT64, DT_UINT64};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(FULL_A2A3_TYPES, FULL_A5_TYPES);
     CheckTensorDataType(dtype, supportedTypes, "FULL");
     CheckDstShapeDimRange(dstShape, 1, 4, "FULL");
     CheckDstShapeSize(dstShape, "FULL");
@@ -2050,8 +2057,12 @@ Tensor Full(const SymbolicScalar& dynSrc, DataType dtype, const std::vector<int6
             std::vector<SymbolicScalar> validShape)
 {
     DECLARE_TRACER();
-    std::unordered_set<DataType> supportedTypes = {DT_FP32,  DT_FP16,  DT_BF16,   DT_INT8,   DT_INT16,
-                                                   DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_BOOL};
+    static const std::unordered_set<DataType> FULL_A2A3_TYPES = {DT_FP32,  DT_FP16,  DT_BF16,   DT_INT8,   DT_INT16,
+                                                                 DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_BOOL};
+    static const std::unordered_set<DataType> FULL_A5_TYPES = {DT_FP32,   DT_FP16,  DT_BF16,  DT_INT8,
+                                                               DT_INT16,  DT_INT32, DT_UINT8, DT_UINT16,
+                                                               DT_UINT32, DT_BOOL,  DT_INT64, DT_UINT64};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(FULL_A2A3_TYPES, FULL_A5_TYPES);
     CheckTensorDataType(dtype, supportedTypes, "FULL");
     CheckDstShapeDimRange(dstShape, 1, 4, "FULL");
     CheckDstShapeSize(dstShape, "FULL");

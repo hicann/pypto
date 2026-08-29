@@ -164,7 +164,8 @@ template <typename T, typename SrcTileType, typename DstTileType, typename CmpTi
           typename AddrUBTileType>
 TILEOP void PostProcessMode0(DstTileType& bitResTile, CmpTileType& cmpResTile, SrcTileType& vselResultTile,
                              SrcTileType& oneConditionTile, SrcTileType& zeroConditionTile,
-                             AddrUBTileType& startAddrUBTile, TmpTileType& tmpTile, __ubuf__ T* zeroCondition)
+                             AddrUBTileType& startAddrUBTile, TmpTileType& tmpTile, __ubuf__ T* zeroCondition,
+                             __ubuf__ T* vselResult)
 {
     pto::TEXPANDS(zeroConditionTile, 0.000000e+00f);
     pto::TEXPANDS(oneConditionTile, 1.000000e+00f);
@@ -184,6 +185,21 @@ TILEOP void PostProcessMode0(DstTileType& bitResTile, CmpTileType& cmpResTile, S
         pipe_barrier(PIPE_V);
 #endif
         pto::TCVT(bitResTile, tmpTile, pto::RoundMode::CAST_NONE);
+#ifdef __DAV_V310
+    } else if constexpr (sizeof(typename T::Type) == 8) {
+        // int64/uint64: device TCVT has no direct 64-bit -> 8-bit path, so convert through int32.
+        // TSEL only writes 0/1, whose bit pattern is identical between int64 and uint64, hence the
+        // source can be safely reinterpreted as int64 to share a single conversion path.
+        constexpr int64_t cmpTileCols = 1024;
+        using Int64Tile = pto::Tile<pto::TileType::Vec, int64_t, 1, cmpTileCols, pto::BLayout::RowMajor, -1, -1>;
+        using Int32Tile = pto::Tile<pto::TileType::Vec, int32_t, 1, cmpTileCols, pto::BLayout::RowMajor, -1, -1>;
+        Int64Tile int64SrcTile(1, vselResultTile.GetValidCol());
+        Int32Tile int32TmpTile(1, vselResultTile.GetValidCol());
+        pto::TASSIGN(int64SrcTile, reinterpret_cast<uint64_t>(vselResult));
+        pto::TASSIGN(int32TmpTile, reinterpret_cast<uint64_t>(zeroCondition));
+        pto::TCVT(int32TmpTile, int64SrcTile, pto::RoundMode::CAST_NONE);
+        pto::TCVT(bitResTile, int32TmpTile, pto::RoundMode::CAST_NONE);
+#endif
     }
 }
 
@@ -280,7 +296,8 @@ TILEOP void TCompare(TDst dst, T0 src0, T1 src1, TTmp tmpbuf)
 
                         if constexpr (mode == 0) {
                             PostProcessMode0<T0>(bitResTile, cmpResTile, vselResultTile, oneConditionTile,
-                                                 zeroConditionTile, startAddrUBTile, tmpTile, buffers.zeroCondition);
+                                                 zeroConditionTile, startAddrUBTile, tmpTile, buffers.zeroCondition,
+                                                 buffers.vselResult);
                         }
                     }
 
@@ -313,7 +330,8 @@ TILEOP void TCompare(TDst dst, T0 src0, T1 src1, TTmp tmpbuf)
 
                         if constexpr (mode == 0) {
                             PostProcessMode0<T0>(bitResTile, cmpResTile, vselResultTile, oneConditionTile,
-                                                 zeroConditionTile, startAddrUBTile, tmpTile, buffers.zeroCondition);
+                                                 zeroConditionTile, startAddrUBTile, tmpTile, buffers.zeroCondition,
+                                                 buffers.vselResult);
                         }
                     }
                 }
@@ -380,7 +398,8 @@ TILEOP void TCompareScalar(TDst dst, T src, TTmp tmpbuf, TVal scalarVal)
 
                         if constexpr (mode == 0) {
                             PostProcessMode0<T>(bitResTile, cmpResTile, vselResultTile, oneConditionTile,
-                                                zeroConditionTile, startAddrUBTile, tmpTile, buffers.zeroCondition);
+                                                zeroConditionTile, startAddrUBTile, tmpTile, buffers.zeroCondition,
+                                                buffers.vselResult);
                         }
                     }
 
@@ -410,7 +429,8 @@ TILEOP void TCompareScalar(TDst dst, T src, TTmp tmpbuf, TVal scalarVal)
 
                         if constexpr (mode == 0) {
                             PostProcessMode0<T>(bitResTile, cmpResTile, vselResultTile, oneConditionTile,
-                                                zeroConditionTile, startAddrUBTile, tmpTile, buffers.zeroCondition);
+                                                zeroConditionTile, startAddrUBTile, tmpTile, buffers.zeroCondition,
+                                                buffers.vselResult);
                         }
                     }
                 }

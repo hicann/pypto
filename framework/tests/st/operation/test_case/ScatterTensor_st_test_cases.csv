@@ -34,3 +34,4 @@ ScatterNonInplace_test_31,"[3,10],[1,9],[2,9]","int8,int64,int8","ND,ND,ND","[-1
 ScatterNonInplace_test_32,"[3,10],[1,9],[2,9]","uint8,int64,uint8","ND,ND,ND","[0,10],[0,3],[0,10]","[3,10]",uint8,ND,"[3,8]","[3,8]",0,add
 ScatterNonInplace_test_33,"[3,10],[1,9],[2,9]","int16,int64,int16","ND,ND,ND","[-100,100],[0,3],[-100,100]","[3,10]",int16,ND,"[3,8]","[3,8]",0,multiply
 ScatterNonInplace_test_34,"[3,10],[1,9],[2,9]","int32,int64,int32","ND,ND,ND","[-100,100],[0,3],[-100,100]","[3,10]",int32,ND,"[3,8]","[3,8]",0,
+ScatterTensor_int64,"[3,10],[1,9],[2,9]","int64,int64,int64","ND,ND,ND","[-100,100],[0,3],[-100,100]","[3,10]",int64,ND,"[3,8]","[3,8]",0,

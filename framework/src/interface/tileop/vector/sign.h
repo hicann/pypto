@@ -99,7 +99,8 @@ template <typename LastUse, typename T, typename DstTile, typename SrcTile, type
 TILEOP void SignImpl(DstTile dstTile, SrcTile srcTile, WorkTile workTile, MaskTile maskTile,
                      ScalarTmpTile scalarTmpTile)
 {
-    if constexpr (std::is_same<T, int32_t>::value || std::is_same<T, int16_t>::value) {
+    if constexpr (std::is_same<T, int32_t>::value || std::is_same<T, int16_t>::value ||
+                  std::is_same<T, int64_t>::value) {
         SignInt<LastUse, T, DstTile, SrcTile>(dstTile, srcTile);
     } else if constexpr (std::is_same<T, half>::value || std::is_same<T, float>::value) {
         SignFloat<LastUse, T>(dstTile, srcTile, workTile, maskTile, scalarTmpTile);

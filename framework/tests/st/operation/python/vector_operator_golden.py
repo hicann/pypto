@@ -3299,7 +3299,7 @@ def gen_uniform_op_golden(case_name: str, output: Path, case_index: int = None) 
 
 
 def safe_tensor_conversion(arr):
-    if isinstance(arr, np.ndarray) and arr.dtype == np.dtype('bfloat16'):
+    if isinstance(arr, np.ndarray) and arr.dtype == bfloat16:
         return torch.tensor(arr.astype(np.float32), dtype=torch.bfloat16)
     else:
         return torch.tensor(arr)

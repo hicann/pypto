@@ -119,3 +119,13 @@ RowMax_uint8_4D_dim1_non32_nokeepdim,"[7, 95, 17, 9]",uint8,ND,"[-5e4, 5e4]","[7
 RowMax_uint8_3D_dim1_32align_keepdim,"[15, 255, 31]",uint8,ND,"[-10, 10]","[15, 1, 31]",uint8,ND,"[15, 255, 31]","[4, 128, 32]",[1],TRUE
 RowMax_uint8_3D_dim1_non32_nokeepdim,"[31, 99, 63]",uint8,ND,"[-9999, 9999]","[31, 63]",uint8,ND,"[31, 99, 63]","[8, 32, 64]",[-2],FALSE
 RowMax_uint8_2D_dim0_non32_keepdim,"[127, 129]",uint8,ND,"[-1e6, 1e6]","[1, 129]",uint8,ND,"[127, 129]","[64, 136]",[0],TRUE
+Amax_int64,"[32, 32]",int64,ND,"[-100, 100]","[32, 1]",int64,ND,"[16, 32]","[16, 32]",[-1],TRUE
+Amax_uint64,"[32, 32]",uint64,ND,"[1, 100]","[32, 1]",uint64,ND,"[16, 32]","[16, 32]",[-1],TRUE
+Amax_tail_int64,"[107, 145]",int64,ND,"[-100, 100]","[107, 1]",int64,ND,"[32, 145]","[32, 145]",[-1],TRUE
+Amax_tail_uint64,"[107, 145]",uint64,ND,"[1, 100]","[107, 1]",uint64,ND,"[32, 145]","[32, 145]",[-1],TRUE
+Amax_3d_dim0_nokeep_int64,"[31, 17, 63]",int64,ND,"[-128, 127]","[17, 63]",int64,ND,"[31, 17, 31]","[16, 17, 32]",[0],FALSE
+Amax_3d_dim0_nokeep_uint64,"[31, 17, 63]",uint64,ND,"[1, 100]","[17, 63]",uint64,ND,"[31, 17, 31]","[16, 17, 32]",[0],FALSE
+Amax_2d_last_nokeep_int64,"[32, 64]",int64,ND,"[-100, 100]","[32]",int64,ND,"[16, 64]","[16, 32]",[-1],FALSE
+Amax_2d_last_nokeep_uint64,"[32, 64]",uint64,ND,"[1, 100]","[32]",uint64,ND,"[16, 64]","[16, 32]",[-1],FALSE
+Amax_2d_dim0_keep_int64,"[16, 64]",int64,ND,"[-100, 100]","[1, 64]",int64,ND,"[16, 32]","[16, 32]",[0],TRUE
+Amax_2d_dim0_keep_uint64,"[16, 64]",uint64,ND,"[1, 100]","[1, 64]",uint64,ND,"[16, 32]","[16, 32]",[0],TRUE

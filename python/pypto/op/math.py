@@ -30,8 +30,11 @@ _INT_DTYPE_MAP = {
     DataType.DT_INT8: np.int8,
     DataType.DT_INT16: np.int16,
     DataType.DT_INT32: np.int32,
+    DataType.DT_INT64: np.int64,
     DataType.DT_UINT8: np.uint8,
     DataType.DT_UINT16: np.uint16,
+    DataType.DT_UINT32: np.uint32,
+    DataType.DT_UINT64: np.uint64,
 }
 
 

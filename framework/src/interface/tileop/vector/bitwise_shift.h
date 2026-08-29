@@ -58,7 +58,7 @@ TILEOP void GetValidShiftTile(T& dst, U& src1, V& tmp, USigned& src1Signed, VSig
     SyncV();
     pto::TOR(tmp, tmp, src1);
     SyncV();
-    pto::TSHRS(tmpSigned, tmpSigned, MAX_SHIFT_NUM);
+    pto::TSHRS(tmpSigned, tmpSigned, MAX_SHIFT_NUM - 1);
     SyncV();
     pto::TNOT(dst, tmp);
     SyncV();

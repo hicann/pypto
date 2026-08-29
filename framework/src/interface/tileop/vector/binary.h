@@ -1196,6 +1196,27 @@ TILEOP void FloorDivNonV220Int32Compute(DstTile dstTile, Src0Tile src0Tile, Src1
     IntFloorDiv<(int32_t)0x7FFF7F7F, (int32_t)0x80008080>(dstTile, src0Tile, src1Tile, tmp0DataTile, tmp1DataTile,
                                                           tmp2DataTile, tmp3MaskTile, tmp4MaskTile);
 }
+
+template <typename T0, typename T3, auto tileH, auto tileW, typename SrcTile, typename DstTile>
+TILEOP void FloorDivNonV220Int64Compute(DstTile dstTile, SrcTile src0Tile, SrcTile src1Tile, T3 tmp, size_t offset,
+                                        size_t dstShape3, size_t dstShape4, size_t tileShapeSize)
+{
+    using Int64TileDefine = pto::Tile<pto::TileType::Vec, int64_t, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    using MaskTileDefine = pto::Tile<pto::TileType::Vec, uint8_t, tileH, 8 * tileW, pto::BLayout::RowMajor, -1, -1>;
+    Int64TileDefine tmp0DataTile(dstShape3, dstShape4);
+    Int64TileDefine tmp1DataTile(dstShape3, dstShape4);
+    Int64TileDefine tmp2DataTile(dstShape3, dstShape4);
+    MaskTileDefine tmp3MaskTile(dstShape3, dstShape4);
+    MaskTileDefine tmp4MaskTile(dstShape3, dstShape4);
+    pto::TASSIGN(tmp0DataTile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 0, sizeof(int64_t)));
+    pto::TASSIGN(tmp1DataTile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 1, sizeof(int64_t)));
+    pto::TASSIGN(tmp2DataTile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 3, sizeof(int64_t)));
+    pto::TASSIGN(tmp3MaskTile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 2, sizeof(int64_t)));
+    pto::TASSIGN(tmp4MaskTile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 3, sizeof(int64_t)));
+
+    IntFloorDiv<(int64_t)0x7FFFFFFFFFFFFFFF, (int64_t)0x8000000000000000>(
+        dstTile, src0Tile, src1Tile, tmp0DataTile, tmp1DataTile, tmp2DataTile, tmp3MaskTile, tmp4MaskTile);
+}
 #endif
 
 #define OP_TILE_OP_FLOORDIV TFloorDiv
@@ -1258,6 +1279,9 @@ TILEOP void TFloorDiv(T0 dst, T1 src0, T2 src1, T3 tmp)
                         dstTile, src0ExecTile, src1ExecTile, tmp, tmpByteOffset, dstShape3, dstShape4, tileShapeSize);
                 } else if constexpr (std::is_same_v<typename T0::Type, int32_t>) {
                     FloorDivNonV220Int32Compute<T0, T3, tileH, tileW>(
+                        dstTile, src0ExecTile, src1ExecTile, tmp, tmpByteOffset, dstShape3, dstShape4, tileShapeSize);
+                } else if constexpr (std::is_same_v<typename T0::Type, int64_t>) {
+                    FloorDivNonV220Int64Compute<T0, T3, tileH, tileW>(
                         dstTile, src0ExecTile, src1ExecTile, tmp, tmpByteOffset, dstShape3, dstShape4, tileShapeSize);
                 }
 #endif

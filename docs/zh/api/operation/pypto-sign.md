@@ -34,7 +34,7 @@ sign(input: Tensor) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_FP16，DT_BF16，DT_FP32，DT_INT8，DT_INT16，DT_INT32。<br>不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input   | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型不同型号有所差异，详细请参见[约束说明](#约束说明)。<br>不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
 
 ## 返回值说明
 
@@ -51,10 +51,20 @@ sign(input: Tensor) -> Tensor
    | `DT_FP16` | `DT_FP16` | `W_align = CeilAlign(W, 16)` | `2 * H * W_align * sizeof(DT_FP16) + 32` |
    | `DT_BF16` | `DT_FP32` | `W_align = CeilAlign(W, 8)` | `2 * H * W_align * sizeof(DT_FP32) + 32` |
    | `DT_FP32` | `DT_FP32` | `W_align = CeilAlign(W, 8)` | `2 * H * W_align * sizeof(DT_FP32) + 32` |
-   | `DT_INT16`、`DT_INT32` | 与输入一致 | 不涉及 | `32` |
+   | `DT_INT16`、`DT_INT32`、`DT_INT64` | 与输入一致 | 不涉及 | `32` |
 
    浮点计算路径中的两块等大临时空间分别用于工作数据和比较掩码，额外的32字节用于标量临时块。`DT_BF16`输入在进入Sign TileOp前会通过AutoCast转换为`DT_FP32`，因此按`DT_FP32`路径申请临时空间；计算完成后，结果再转换回`DT_BF16`。
-3. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+3. Tensor数据类型说明：
+   <!-- npu="950" id4 -->
+   - Ascend 950PR/Ascend 950DT：DT_FP16，DT_BF16，DT_FP32，DT_INT8，DT_INT16，DT_INT32，DT_INT64。
+   <!-- end id4 -->
+   <!-- npu="A3" id5 -->
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP16，DT_BF16，DT_FP32，DT_INT8，DT_INT16，DT_INT32。
+   <!-- end id5 -->
+   <!-- npu="910b" id6 -->
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_FP16，DT_BF16，DT_FP32，DT_INT8，DT_INT16，DT_INT32。
+   <!-- end id6 -->
+4. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
 ## 调用示例
 

@@ -433,13 +433,10 @@ Tensor Amax(const Tensor& self, int axis, bool keepDim)
 {
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Amax");
-
-    std::unordered_set<DataType> supportedTypes;
-    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) {
-        supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32, DT_INT8, DT_UINT8};
-    } else {
-        supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
-    }
+    static const std::unordered_set<DataType> AMAX_A2A3_TYPES = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    static const std::unordered_set<DataType> AMAX_A5_TYPES = {DT_FP16, DT_BF16,  DT_INT16, DT_INT32, DT_FP32,
+                                                               DT_INT8, DT_UINT8, DT_INT64, DT_UINT64};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(AMAX_A2A3_TYPES, AMAX_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "AMAX");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "AMAX");
     CheckTensorShapeSize(self.GetStorage(), "AMAX");
@@ -512,13 +509,11 @@ Tensor Amin(const Tensor& self, int axis, bool keepDim)
 {
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Amin");
-
-    std::unordered_set<DataType> supportedTypes;
-    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) {
-        supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32, DT_INT8, DT_UINT8};
-    } else {
-        supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
-    }
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Amax");
+    static const std::unordered_set<DataType> AMIN_A2A3_TYPES = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    static const std::unordered_set<DataType> AMIN_A5_TYPES = {DT_FP16, DT_BF16,  DT_INT16, DT_INT32, DT_FP32,
+                                                               DT_INT8, DT_UINT8, DT_INT64, DT_UINT64};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(AMIN_A2A3_TYPES, AMIN_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "AMIN");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "AMIN");
     CheckTensorShapeSize(self.GetStorage(), "AMIN");
@@ -538,7 +533,10 @@ Tensor Sum(const Tensor& self, int axis, bool keepDim)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Sum");
 
-    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_BF16, DT_INT32, DT_INT16};
+    static const std::unordered_set<DataType> SUM_A2A3_TYPES = {DT_FP32, DT_BF16, DT_INT32, DT_INT16};
+    static const std::unordered_set<DataType> SUM_A5_TYPES = {DT_FP32,  DT_BF16,  DT_INT32,
+                                                              DT_INT16, DT_INT64, DT_UINT64};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(SUM_A2A3_TYPES, SUM_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "SUM");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "SUM");
     CheckTensorShapeSize(self.GetStorage(), "SUM");

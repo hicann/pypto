@@ -27,8 +27,8 @@ full(size: List[int], fill_value: Union[int, float, Element], dtype: DataType, *
 | 参数名       | 输入/输出 | 说明                                                                 |
 |--------------|-----------|----------------------------------------------------------------------|
 | size         | 输入      | 源操作数，用于定义输出Tensor的Shape。<br>支持的数据类型为：List[int]。<br>支持的维度范围为：1维到4维。 |
-| fill_value   | 输入      | 源操作数，用于填充输出Tensor的值。<br>支持的数据类型为：int，float，Element。<br>当为int或者float类型时会自动转换为Element类型，其中int对应DT_INT32，float对应DT_FP32。当需要使用其他数据类型时，可以通过Element构建。<br>Element支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT8，DT_INT16，DT_INT32，DT_UINT8，DT_UINT16，DT_UINT32，DT_BOOL。<br>输入需要和dtype类型相同，不支持隐式转化。 |
-| dtype        | 输入      | 源操作数，用于定义输出Tensor的类型。<br>支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT8，DT_INT16，DT_INT32，DT_UINT8，DT_UINT16，DT_UINT32，DT_BOOL。<br>输入需要和fill_value类型相同，不支持隐式转化。 |
+| fill_value   | 输入      | 源操作数，用于填充输出Tensor的值。<br>支持的数据类型为：int，float，Element。<br>当为int或者float类型时会自动转换为Element类型，其中int对应DT_INT32，float对应DT_FP32。当需要使用其他数据类型时，可以通过Element构建。<br>Element支持的数据类型不同型号有所差异，详细请参见[约束说明](#约束说明)。<br>输入需要和dtype类型相同，不支持隐式转化。 |
+| dtype        | 输入      | 源操作数，用于定义输出Tensor的类型。<br>支持的数据类型不同型号有所差异，详细请参见[约束说明](#约束说明)。<br>输入需要和fill_value类型相同，不支持隐式转化。 |
 | valid_shape  | 输入      | 源操作数，用于定义输出Tensor的动态Shape，关键字参数，用于动态图，静态图可以省略。<br>支持的类型为List[SymbolicScalar]，List[int]。 |
 
 ## 返回值说明
@@ -46,6 +46,17 @@ full(size: List[int], fill_value: Union[int, float, Element], dtype: DataType, *
     pypto.full\(\[2, 2\], 1, pypto.DT\_INT32, valid\_shape=\[pypto.min\(2, 5 - 2 \* b\_idx\), pypto.min\(2, 5 - 2 \* s\_idx\)\]\)，其中b\_idx和s\_idx表示循环索引。
 
 2. size的维度范围为1维到4维，即size的长度范围为\[1, 4\]。
+
+3. Tensor数据类型说明：
+   <!-- npu="950" id4 -->
+   - Ascend 950PR/Ascend 950DT：DT_FP32，DT_FP16，DT_BF16，DT_INT8，DT_INT16，DT_INT32，DT_UINT8，DT_UINT16，DT_UINT32，DT_BOOL，DT_INT64，DT_UINT64。
+   <!-- end id4 -->
+   <!-- npu="A3" id5 -->
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP32，DT_FP16，DT_BF16，DT_INT8，DT_INT16，DT_INT32，DT_UINT8，DT_UINT16，DT_UINT32，DT_BOOL。
+   <!-- end id5 -->
+   <!-- npu="910b" id6 -->
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_FP32，DT_FP16，DT_BF16，DT_INT8，DT_INT16，DT_INT32，DT_UINT8，DT_UINT16，DT_UINT32，DT_BOOL。
+   <!-- end id6 -->
 
 ## 调用示例
 

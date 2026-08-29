@@ -7,3 +7,5 @@ SBitwiseRightShift_test_4,"[0, 384]",int16,ND,"[-10, 10]","[0, 384]",int16,ND,"[
 SBitwiseRightShift_test_5,"[3072, 384]",int16,ND,"[-10, 10]","[3072, 384]",int16,ND,"[128, 128]","[32, 32]",17,int16
 SBitwiseRightShift_test_6,"[98304, 384]",int16,ND,"[-10, 10]","[98304, 384]",int16,ND,"[6144, 96]","[128, 32]",50,int16
 SBitwiseRightShift_test_7,"[64, 36864]",int16,ND,"[-10, 10]","[64, 36864]",int16,ND,"[32, 1024]","[32, 128]",17,int16
+SBitwiseRightShift_int64,"[32, 32]",int64,ND,"[1, 5]","[32, 32]",int64,ND,"[16, 16]","[16, 16]",100,int64
+SBitwiseRightShift_uint64,"[32, 32]",uint64,ND,"[1, 5]","[32, 32]",uint64,ND,"[16, 16]","[16, 16]",100,uint64

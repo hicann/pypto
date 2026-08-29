@@ -176,6 +176,21 @@ TEST_F(OperationOpsTest, Axpy_UnsupportedSelfDim)
     FUNCTION("AxpyUnsupportedSelfDim", {self, other}) { EXPECT_THROW(Axpy(self, other, 1.0f), std::exception); }
 }
 
+TEST_F(OperationOpsTest, Add_Int64BroadcastRejected)
+{
+    Tensor self(DT_INT64, {4, 8});
+    Tensor other(DT_INT64, {1, 8}); // broadcast on axis 0
+    FUNCTION("AddInt64Broadcast", {self, other}) { EXPECT_THROW(Add(self, other), std::exception); }
+}
+
+TEST_F(OperationOpsTest, Clip_Int64BroadcastRejected)
+{
+    Tensor input(DT_INT64, {4, 8});
+    Tensor minT(DT_INT64, {4, 1}); // broadcast on axis 0
+    Tensor maxT(DT_INT64, {1, 8}); // broadcast on axis 1
+    FUNCTION("ClipInt64Broadcast", {input, minT, maxT}) { EXPECT_THROW(Clip(input, minT, maxT), std::exception); }
+}
+
 TEST_F(OperationOpsTest, Axpy_UnsupportedOtherDim)
 {
     std::vector<int64_t> shape4d = {4, 8, 16, 32};

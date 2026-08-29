@@ -21,6 +21,7 @@
 #include "interface/configs/config_manager.h"
 #include "interface/operation/operation.h"
 #include "tilefwk/data_type.h"
+#include "tilefwk/platform.h"
 #include "codegen/codegen.h"
 #include "codegen/symbol_mgr/codegen_symbol.h"
 #include "codegen/npu/cloudnpu/codegen_cloudnpu.h"
@@ -126,5 +127,50 @@ TEST_F(TestCodegenDynScalar, TestAddsTileTensor)
     std::string expect = R"!!!(TAddS<LastUse2Dim<0, 0>, float>(ubTensor_0, ubTensor_0, 3.f);
 )!!!";
     CheckStringExist(expect, res);
+}
+
+TEST_F(TestCodegenDynScalar, TestDivsTileTensor)
+{
+    const bool isA5 = Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510;
+    int s = 32;
+    if (isA5) {
+        Tensor t0(DT_INT64, {-1, s}, "t0"); // [32*8, 32]
+        Tensor out(DT_INT64, {-1, s}, "out");
+        TileShape::Current().SetVecTile({128, 64});
+
+        auto funcName = "DIVS_TILETENSOR";
+        FUNCTION(funcName, {t0}, {out})
+        {
+            auto shape0 = GetInputShape(t0, 0);
+            auto loop1 = (shape0 + s - 1) / s;
+            LOOP(funcName, FunctionType::DYNAMIC_LOOP, idx, LoopRange(loop1))
+            {
+                Tensor t0s = View(t0, {s, s}, {idx * s, 0});
+                auto t = Div(t0s, Element(DT_INT64, 3.0));
+                Assemble(t, {idx * s, 0}, out);
+            }
+        }
+
+#if ENABLE_HIDDENLOOP
+        auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                    HIDDEN_FUNC_SUFFIX);
+#else
+        auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX);
+#endif
+        std::string res = GenCodeByFunction(*function);
+        std::string
+            expect = R"!!!(TDivS<pto::DivAlgorithm::DEFAULT, LastUse2Dim<0, 1>, int64_t>(ubTensor_2, ubTensor_0, 3);
+)!!!";
+        CheckStringExist(expect, res);
+    } else {
+        Tensor t1(DT_INT64, {-1, s}, "t1");
+        Tensor out1(DT_INT64, {-1, s}, "out1");
+        EXPECT_THROW(
+            FUNCTION("DIVS_TILETENSOR_A3", {t1}, {out1}) {
+                auto t = Div(t1, Element(DT_INT64, 3.0));
+                (void)t;
+            },
+            npu::tile_fwk::Error);
+    }
 }
 } // namespace npu::tile_fwk

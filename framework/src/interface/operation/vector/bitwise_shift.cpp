@@ -262,8 +262,17 @@ LogicalTensorPtr TensorBitwiseShiftOperationSelfScalar(Function& function, const
 namespace {
 // TODO i8/u8/i32/u32: pending pto-isa additions on a2a3.
 const std::unordered_set<DataType> BITWISESHIFT_A2A3_TYPES = {DT_INT16, DT_UINT16};
-const std::unordered_set<DataType> BITWISESHIFT_A5_TYPES = {DT_INT16,  DT_UINT16, DT_INT32,
-                                                            DT_UINT32, DT_INT8,   DT_UINT8};
+const std::unordered_set<DataType> BITWISESHIFT_A5_TYPES = {DT_INT16, DT_UINT16, DT_INT32, DT_UINT32,
+                                                            DT_INT8,  DT_UINT8,  DT_INT64, DT_UINT64};
+
+// 按目标 dtype 构造位移标量 Element：uint64 不经 int64 中转，避免大值符号翻转。
+Element CastShiftScalarToDtype(const Element& scalar, DataType dtype)
+{
+    if (dtype == DT_UINT64) {
+        return Element(dtype, scalar.Cast<uint64_t>());
+    }
+    return Element(dtype, scalar.Cast<int64_t>());
+}
 } // namespace
 
 Tensor BitwiseRightShift(const Tensor& self, const Tensor& other)
@@ -287,7 +296,7 @@ Tensor BitwiseRightShift(const Tensor& self, const Element& other)
     CheckTensorDataType(self.GetStorage(), supportedTypes, "BitwiseRightShift");
     Element newOther = other;
     if (self.GetDataType() != other.GetDataType()) {
-        newOther = Element(self.GetDataType(), other.Cast<int32_t>());
+        newOther = CastShiftScalarToDtype(other, self.GetDataType());
     }
     RETURN_CALL(BitwiseShiftOperationScalar<BitwiseShiftOpType::BITWISERIGHTSHIFT>,
                 *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), newOther);
@@ -302,7 +311,7 @@ Tensor BitwiseRightShift(const Element& self, const Tensor& other)
     CheckTensorDataType(other.GetStorage(), supportedTypes, "BitwiseRightShift");
     Element newSelf = self;
     if (self.GetDataType() != other.GetDataType()) {
-        newSelf = Element(other.GetDataType(), self.Cast<int32_t>());
+        newSelf = CastShiftScalarToDtype(self, other.GetDataType());
     }
     RETURN_CALL(BitwiseShiftOperationSelfScalar<BitwiseShiftOpType::SBITWISERIGHTSHIFT>,
                 *Program::GetInstance().GetCurrentFunction(), newSelf, other.GetStorage());
@@ -328,7 +337,7 @@ Tensor BitwiseLeftShift(const Tensor& self, const Element& other)
     CheckTensorDataType(self.GetStorage(), supportedTypes, "BitwiseLeftShift");
     Element newOther = other;
     if (self.GetDataType() != other.GetDataType()) {
-        newOther = Element(self.GetDataType(), other.Cast<int32_t>());
+        newOther = CastShiftScalarToDtype(other, self.GetDataType());
     }
     RETURN_CALL(BitwiseShiftOperationScalar<BitwiseShiftOpType::BITWISELEFTSHIFT>,
                 *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), newOther);
@@ -343,7 +352,7 @@ Tensor BitwiseLeftShift(const Element& self, const Tensor& other)
     CheckTensorDataType(other.GetStorage(), supportedTypes, "BitwiseLeftShift");
     Element newSelf = self;
     if (self.GetDataType() != other.GetDataType()) {
-        newSelf = Element(other.GetDataType(), self.Cast<int32_t>());
+        newSelf = CastShiftScalarToDtype(self, other.GetDataType());
     }
     RETURN_CALL(BitwiseShiftOperationSelfScalar<BitwiseShiftOpType::SBITWISELEFTSHIFT>,
                 *Program::GetInstance().GetCurrentFunction(), newSelf, other.GetStorage());

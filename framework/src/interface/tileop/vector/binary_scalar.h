@@ -816,6 +816,41 @@ TILEOP void TFloorDivS(T0 dst, T1 src0, Scalar src1, T2 tmp)
                         pto::TADDS(tmp1DataTile, dstTile, -1);
                         pto::TSEL(dstTile, tmp2MaskTile, tmp1DataTile, dstTile, tmp0DataTile);
                     }
+                } else if constexpr (std::is_same_v<typename T0::Type, int64_t>) {
+                    using Int64TileDefine = pto::Tile<pto::TileType::Vec, int64_t, tileH, tileW, pto::BLayout::RowMajor,
+                                                      -1, -1>;
+                    using MaskTileDefine = pto::Tile<pto::TileType::Vec, uint8_t, tileH, 8 * tileW,
+                                                     pto::BLayout::RowMajor, -1, -1>;
+                    Int64TileDefine tmp0DataTile(dstShape3, dstShape4);
+                    Int64TileDefine tmp1DataTile(dstShape3, dstShape4);
+                    MaskTileDefine tmp2MaskTile(dstShape3, dstShape4);
+                    MaskTileDefine tmp3MaskTile(dstShape3, dstShape4);
+                    pto::TASSIGN(tmp0DataTile, FloorDivTmpAddr(tmp, dstOffset, tileShapeSize, 0, sizeof(int64_t)));
+                    pto::TASSIGN(tmp1DataTile, FloorDivTmpAddr(tmp, dstOffset, tileShapeSize, 1, sizeof(int64_t)));
+                    pto::TASSIGN(tmp2MaskTile, FloorDivTmpAddr(tmp, dstOffset, tileShapeSize, 2, sizeof(int64_t)));
+                    pto::TASSIGN(tmp3MaskTile, FloorDivTmpAddr(tmp, dstOffset, tileShapeSize, 3, sizeof(int64_t)));
+
+                    if (src1 == 0) {
+                        constexpr int64_t pos = 0x7FFFFFFFFFFFFFFF;
+                        constexpr int64_t neg = 0x8000000000000000;
+                        pto::TCMPS(tmp2MaskTile, src0Tile, 0, pto::CmpMode::LT);
+                        pto::TSELS(dstTile, tmp2MaskTile, dstTile, tmp0DataTile, pos);
+                        pto::TCMPS(tmp2MaskTile, src0Tile, 0, pto::CmpMode::GE);
+                        pto::TSELS(dstTile, tmp2MaskTile, dstTile, tmp0DataTile, neg);
+                    } else {
+                        if (src1 < 0) {
+                            pto::TCMPS(tmp2MaskTile, src0Tile, 0, pto::CmpMode::GE);
+                        } else {
+                            pto::TCMPS(tmp2MaskTile, src0Tile, 0, pto::CmpMode::LT);
+                        }
+                        pto::TDIVS(dstTile, src0Tile, static_cast<int64_t>(src1));
+                        pto::TMULS(tmp0DataTile, dstTile, static_cast<int64_t>(src1));
+                        pto::TSUB(tmp0DataTile, src0Tile, tmp0DataTile);
+                        pto::TCMPS(tmp3MaskTile, tmp0DataTile, 0, pto::CmpMode::NE);
+                        pto::TAND(tmp2MaskTile, tmp2MaskTile, tmp3MaskTile);
+                        pto::TADDS(tmp1DataTile, dstTile, -1);
+                        pto::TSEL(dstTile, tmp2MaskTile, tmp1DataTile, dstTile, tmp0DataTile);
+                    }
                 }
 #endif
             }

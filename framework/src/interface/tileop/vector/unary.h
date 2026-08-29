@@ -71,7 +71,7 @@ TILEOP void UnaryComputeImpl(T0 dst, T1 src)
         return;
     }
     if constexpr (op == UnaryOp::RELU) {
-        pto::TMAXS(dst, src, 0.0f);
+        pto::TMAXS(dst, src, static_cast<typename T1::DType>(0));
         return;
     }
     if constexpr (op == UnaryOp::LN) {
@@ -132,7 +132,8 @@ TILEOP void UnaryCompute(T0 dst, T1 src)
     }
 
     using SrcExecDtype = typename ElementwiseOperandExecConfig<T0, T1>::OperandDtype;
-    if constexpr (TileOp::IsConstContinous<T0, T1>()) {
+    if constexpr (TileOp::IsConstContinous<T0, T1>() && !std::is_same_v<typename T0::Type, int64_t> &&
+                  !std::is_same_v<typename T0::Type, uint64_t>) {
         auto dstTile = PtoTile<T0, pto::BLayout::RowMajor, true>().Data();
         auto srcTile = PtoTile<T0, pto::BLayout::RowMajor, true, SrcExecDtype>().Data();
         pto::TASSIGN(dstTile, (uint64_t)dst.GetAddr());
@@ -665,7 +666,11 @@ TILEOP void TRound(T0 dst, T1 tmp, T2 src, Scalar powDecimals)
 
                 if constexpr (std::is_integral_v<typename T2::Type>) {
                     if (powDecimals >= 1.0f) {
-                        pto::TMOV(dstTile.Data(), srcExecTile);
+                        if constexpr (std::is_same_v<typename T2::Type, int64_t>) {
+                            pto::TADDS(dstTile.Data(), srcExecTile, static_cast<typename T2::Type>(0));
+                        } else {
+                            pto::TMOV(dstTile.Data(), srcExecTile);
+                        }
                         continue;
                     }
                 }

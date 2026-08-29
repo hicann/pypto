@@ -101,8 +101,11 @@ Tensor LogicalNot(const Tensor& self)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "LogicalNot");
 
-    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16,  DT_UINT8, DT_INT8,   DT_BOOL,
-                                                   DT_BF16, DT_INT16, DT_INT32, DT_UINT16, DT_UINT32};
+    static const std::unordered_set<DataType> LOGICALNOT_A2A3_TYPES = {
+        DT_FP32, DT_FP16, DT_UINT8, DT_INT8, DT_BOOL, DT_BF16, DT_INT16, DT_INT32, DT_UINT16, DT_UINT32};
+    static const std::unordered_set<DataType> LOGICALNOT_A5_TYPES = {
+        DT_FP32, DT_FP16, DT_UINT8, DT_INT8, DT_BOOL, DT_BF16, DT_INT16, DT_INT32, DT_UINT16, DT_UINT32, DT_INT64};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(LOGICALNOT_A2A3_TYPES, LOGICALNOT_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "LOGICALNOT");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "LOGICALNOT");
     CheckTensorShapeSize(self.GetStorage(), "LOGICALNOT");
@@ -219,7 +222,11 @@ Tensor Sign(const Tensor& self)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Sign");
 
-    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32, DT_INT8};
+    static const std::unordered_set<DataType> SIGN_A2A3_TYPES = {DT_FP16,  DT_BF16, DT_INT16,
+                                                                 DT_INT32, DT_FP32, DT_INT8};
+    static const std::unordered_set<DataType> SIGN_A5_TYPES = {DT_FP16, DT_BF16, DT_INT16, DT_INT32,
+                                                               DT_FP32, DT_INT8, DT_INT64};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(SIGN_A2A3_TYPES, SIGN_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "SIGN");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "SIGN");
     CheckTensorShapeSize(self.GetStorage(), "SIGN");
@@ -315,7 +322,9 @@ Tensor Neg(const Tensor& self)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Neg");
 
-    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    static const std::unordered_set<DataType> NEG_A2A3_TYPES = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    static const std::unordered_set<DataType> NEG_A5_TYPES = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32, DT_INT64};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(NEG_A2A3_TYPES, NEG_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "NEG");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "NEG");
     CheckTensorShapeSize(self.GetStorage(), "NEG");
@@ -1168,8 +1177,8 @@ void TiledTriUL(Function& function, const TileShape& tileShape, const TriULPara&
 void CheckTriULOperationParams(const Tensor& input, const std::string& opName)
 {
     static const std::unordered_set<DataType> a2a3Types = {DT_FP32, DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_INT8};
-    static const std::unordered_set<DataType> a5Types = {DT_FP32,  DT_FP16, DT_BF16,   DT_INT16,
-                                                         DT_INT32, DT_INT8, DT_UINT16, DT_UINT32};
+    static const std::unordered_set<DataType> a5Types = {DT_FP32, DT_FP16,   DT_BF16,   DT_INT16, DT_INT32,
+                                                         DT_INT8, DT_UINT16, DT_UINT32, DT_INT64, DT_UINT64};
     const auto& supportedTypes = GetSupportedDataTypesByArch(a2a3Types, a5Types);
     CheckTensorDataType(input.GetStorage(), supportedTypes, opName);
     CheckTensorDimRange(input.GetStorage(), 2, 5, opName);
@@ -1241,7 +1250,9 @@ Tensor Clip(const Tensor& self, const Element& min, const Element& max)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Clip");
 
-    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16};
+    static const std::unordered_set<DataType> CLIP_A2A3_TYPES = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16};
+    static const std::unordered_set<DataType> CLIP_A5_TYPES = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16, DT_INT64};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(CLIP_A2A3_TYPES, CLIP_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "CLIP");
     CheckTensorShapeSize(self.GetStorage(), "CLIP");
 
@@ -1267,7 +1278,9 @@ Tensor Clip(const Tensor& self, const Tensor& min, const Tensor& max)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Clip");
 
-    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16};
+    static const std::unordered_set<DataType> CLIP_A2A3_TYPES = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16};
+    static const std::unordered_set<DataType> CLIP_A5_TYPES = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16, DT_INT64};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(CLIP_A2A3_TYPES, CLIP_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "CLIP");
     CheckTensorShapeSize(self.GetStorage(), "CLIP");
 
@@ -1279,6 +1292,7 @@ Tensor Clip(const Tensor& self, const Tensor& min, const Tensor& max)
         std::vector minBroadcastAxes = GetBroadcastAxes(min.GetShape(), self.GetShape());
         CHECK(VectorErrorCode::ERR_PARAM_INVALID, minBroadcastAxes.size() <= 1)
             << "minBroadcastAxes size should be <= 1";
+        CheckInt64Broadcast(self.GetStorage(), min.GetStorage(), "CLIP");
         result = Maximum(result, min);
     }
     if (max.GetStorage() != nullptr) {
@@ -1288,6 +1302,7 @@ Tensor Clip(const Tensor& self, const Tensor& min, const Tensor& max)
         std::vector maxBroadcastAxes = GetBroadcastAxes(max.GetShape(), self.GetShape());
         CHECK(VectorErrorCode::ERR_PARAM_INVALID, maxBroadcastAxes.size() <= 1)
             << "maxBroadcastAxes size should be <= 1";
+        CheckInt64Broadcast(self.GetStorage(), max.GetStorage(), "CLIP");
         result = Minimum(result, max);
     }
     result.GetStorage()->UpdateDynValidShape(self.GetStorage()->GetDynValidShape());
@@ -1509,7 +1524,10 @@ Tensor Round(const Tensor& self, const int& decimals)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Round");
 
-    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16};
+    static const std::unordered_set<DataType> ROUND_A2A3_TYPES = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16};
+    static const std::unordered_set<DataType> ROUND_A5_TYPES = {DT_FP32,  DT_FP16,  DT_BF16,
+                                                                DT_INT32, DT_INT16, DT_INT64};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(ROUND_A2A3_TYPES, ROUND_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "ROUND");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "ROUND");
     CheckTensorShapeSize(self.GetStorage(), "ROUND");

@@ -23,6 +23,7 @@
 #include "interface/operation/operation_common.h"
 #include "tensor_transformation.h"
 #include "tilefwk/error_code.h"
+#include "tilefwk/platform.h"
 
 namespace npu::tile_fwk {
 
@@ -679,8 +680,8 @@ Tensor GatherElements(const Tensor& params, const Tensor& indices, int axis)
     }
     static const std::unordered_set<DataType> a2a3Types = {DT_FP32,   DT_FP16,  DT_BF16,  DT_INT32,
                                                            DT_UINT32, DT_INT16, DT_UINT16};
-    static const std::unordered_set<DataType> a5Types = {DT_FP32,   DT_FP16,  DT_BF16,  DT_INT32,
-                                                         DT_UINT32, DT_INT16, DT_UINT16};
+    static const std::unordered_set<DataType> a5Types = {DT_FP32,  DT_FP16,   DT_BF16,  DT_INT32, DT_UINT32,
+                                                         DT_INT16, DT_UINT16, DT_INT64, DT_UINT64};
     const auto& supportedTypes = GetSupportedDataTypesByArch(a2a3Types, a5Types);
     CheckTensorDataType(params.GetStorage(), supportedTypes, "GATHERELEMENTS");
     std::unordered_set<DataType> indexSupportedTypes = {DT_INT32, DT_INT64};
@@ -797,7 +798,11 @@ void TensorScatterElementS(Function& function, const ScatterElementSPara& scatte
 static void CheckScatterElementSParamsInvalid(const Tensor& self, const Tensor& indices, int axis,
                                               const ScatterMode reduce)
 {
-    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16, DT_INT8, DT_UINT8, DT_INT16, DT_INT32};
+    static const std::unordered_set<DataType> SCATTER_A2A3_TYPES = {DT_FP32,  DT_FP16,  DT_BF16,  DT_INT8,
+                                                                    DT_UINT8, DT_INT16, DT_INT32, DT_INT64};
+    static const std::unordered_set<DataType> SCATTER_A5_TYPES = {DT_FP32,  DT_FP16,  DT_BF16,  DT_INT8,
+                                                                  DT_UINT8, DT_INT16, DT_INT32, DT_INT64};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(SCATTER_A2A3_TYPES, SCATTER_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "SCATTER");
     std::unordered_set<DataType> indexSupportedTypes = {DT_INT32, DT_INT64};
     CheckTensorDataType(indices.GetStorage(), indexSupportedTypes, "SCATTER");
@@ -964,7 +969,11 @@ void TensorScatter(Function& function, const ScatterPara& scatterPara)
 static void CheckScatterParamsInvalid(const Tensor& self, const Tensor& indices, const Tensor& src, int axis,
                                       const ScatterMode reduce)
 {
-    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16, DT_INT8, DT_UINT8, DT_INT16, DT_INT32};
+    const std::unordered_set<DataType> SCATTER_A2A3_TYPES = {DT_FP32,  DT_FP16,  DT_BF16,  DT_INT8,
+                                                             DT_UINT8, DT_INT16, DT_INT32, DT_INT64};
+    const std::unordered_set<DataType> SCATTER_A5_TYPES = {DT_FP32,  DT_FP16,  DT_BF16,  DT_INT8,
+                                                           DT_UINT8, DT_INT16, DT_INT32, DT_INT64};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(SCATTER_A2A3_TYPES, SCATTER_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "SCATTER");
     CheckTensorsDataTypeConsistency(self.GetStorage(), src.GetStorage(), "SCATTER");
     std::unordered_set<DataType> indexSupportedTypes = {DT_INT32, DT_INT64};
@@ -1602,6 +1611,10 @@ DataType GetComputeDataType(const Element& start, const Element& end, const Elem
     if (startIsFloat || endIsFloat || stepIsFloat) {
         return DT_FP32;
     }
+    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510 &&
+        (startType == DT_INT64 || endType == DT_INT64 || stepType == DT_INT64)) {
+        return DT_INT64;
+    }
     int64_t startValue = start.GetSignedData();
     int64_t endValue = end.GetSignedData();
     int64_t stepValue = step.GetSignedData();
@@ -1631,6 +1644,10 @@ DataType GetOutputDataType(const Element& start, const Element& end, const Eleme
     if (startType == DT_BF16 || endType == DT_BF16 || stepType == DT_BF16) {
         return DT_BF16;
     }
+    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510 &&
+        (startType == DT_INT64 || endType == DT_INT64 || stepType == DT_INT64)) {
+        return DT_INT64;
+    }
     return DT_INT32;
 }
 
@@ -1651,10 +1668,13 @@ Element GetElementWithDataType(const Element& element, DataType dataType)
 Tensor Range(const Element& start, const Element& end, const Element& step)
 {
     DataType dataType = GetComputeDataType(start, end, step);
-    if (dataType != DT_FP32 && dataType != DT_INT32) {
+    if (dataType != DT_FP32 && dataType != DT_INT32 && dataType != DT_INT64) {
         CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, false)
             << "Unsupported Output DataType " << DataType2String(dataType);
     }
+    CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
+          dataType != DT_INT64 || Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510)
+        << "RANGE: DT_INT64 is only supported on Ascend 950PR/Ascend 950DT architecture.";
     DataType outputDataType = DT_INT32;
     outputDataType = GetOutputDataType(start, end, step);
 

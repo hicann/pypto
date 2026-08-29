@@ -34,7 +34,7 @@ sum(input: Tensor, dim: int, keepdim: bool = False) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_FP32，DT_BF16，DT_INT32，DT_INT16。<br>不支持空Tensor；Shape仅支持1-4维，Shape Size不大于2147483647（即INT32_MAX）。 |
+| input   | 输入      | 源操作数。<br>支持的类型为：Tensor。不同型号支持的数据类型有所差异，详细请参见[约束说明](#约束说明)。<br>不支持空Tensor；Shape仅支持1-4维，Shape Size不大于2147483647（即INT32_MAX）。 |
 | dim     | 输入      | 指定进行归约的维度。<br>支持任意单轴。 |
 | keepdim | 输入      | 归约后是否保留被归约的维度。<br>默认值为False。 |
 
@@ -50,7 +50,18 @@ sum(input: Tensor, dim: int, keepdim: bool = False) -> Tensor
 
 1. TileShape大小不超过64KB；
 
-2. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+2. Tensor数据类型说明：
+   <!-- npu="950" id4 -->
+   - Ascend 950PR/Ascend 950DT：DT_FP32，DT_BF16，DT_INT32，DT_INT16，DT_INT64，DT_UINT64。
+   <!-- end id4 -->
+   <!-- npu="A3" id5 -->
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP32，DT_BF16，DT_INT32，DT_INT16。
+   <!-- end id5 -->
+   <!-- npu="910b" id6 -->
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_FP32，DT_BF16，DT_INT32，DT_INT16。
+   <!-- end id6 -->
+
+3. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
 ## 调用示例
 

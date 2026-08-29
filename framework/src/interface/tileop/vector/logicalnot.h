@@ -77,6 +77,22 @@ TILEOP void LogicalNotImplInt(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile)
         pto::TASSIGN(srcView, (uint64_t)(unsignedSrcTile.data()));
         pto::TASSIGN(gatherDst, (uint64_t)(dstTile.data()));
         pto::TGATHER<U8DstTile, U8ViewTile, pto::MaskPattern::P0001>(gatherDst, srcView);
+    } else if constexpr (sizeof(UnsignedT) == 8) {
+        // 8-byte elements: extract the low byte via a two-step gather.
+        // Step 1 (P0001): each 8-byte element -> byte0 and byte4, buffered into the reused tmp area.
+        using U8ViewTile = pto::Tile<pto::TileType::Vec, uint8_t, 1, COUNT_MAX_BYTES, pto::BLayout::RowMajor, -1, -1>;
+        using U8DstTile = pto::Tile<pto::TileType::Vec, uint8_t, 1, 2048, pto::BLayout::RowMajor, -1, -1>;
+        U8ViewTile srcView(1, dstValid * sizeof(UnsignedT));
+        U8DstTile step1Dst(1, dstValid * 2);
+        pto::TASSIGN(srcView, (uint64_t)(unsignedSrcTile.data()));
+        pto::TASSIGN(step1Dst, (uint64_t)(tmpTile.data()));
+        pto::TGATHER<U8DstTile, U8ViewTile, pto::MaskPattern::P0001>(step1Dst, srcView);
+        // Step 2 (P0101): each 2-byte pair -> low byte, written to the dst.
+        U8ViewTile step2View(1, dstValid * 2);
+        U8DstTile gatherDst(1, dstValid);
+        pto::TASSIGN(step2View, (uint64_t)(tmpTile.data()));
+        pto::TASSIGN(gatherDst, (uint64_t)(dstTile.data()));
+        pto::TGATHER<U8DstTile, U8ViewTile, pto::MaskPattern::P0101>(gatherDst, step2View);
     }
 }
 
@@ -202,7 +218,8 @@ TILEOP void LogicalNotProcessTile(T0 dst, T1 src, __ubuf__ int8_t* tmpBuffer, __
                                   TileStartAddrUBT startAddrUBTile, unsigned count, uint64_t dstOff, uint64_t srcOff)
 {
     if constexpr (std::is_same_v<typename T1::Type, int16_t> || std::is_same_v<typename T1::Type, uint16_t> ||
-                  std::is_same_v<typename T1::Type, int32_t> || std::is_same_v<typename T1::Type, uint32_t>) {
+                  std::is_same_v<typename T1::Type, int32_t> || std::is_same_v<typename T1::Type, uint32_t> ||
+                  std::is_same_v<typename T1::Type, int64_t>) {
         LogicalNotProcessTileInt(dst, src, tmpBuffer, count, dstOff, srcOff);
     } else {
         LogicalNotProcessTileGeneric(dst, src, compareCondition, oneCondition, castCondition, vcmpResTile,
@@ -216,7 +233,8 @@ TILEOP void LogicalNotPrepareState(T2 tmp, __ubuf__ int8_t*& tmpBuffer, __ubuf__
                                    VcmpResTileT& vcmpResTile, TileStartAddrUBT& startAddrUBTile)
 {
     if constexpr (std::is_same_v<typename T1::Type, int16_t> || std::is_same_v<typename T1::Type, uint16_t> ||
-                  std::is_same_v<typename T1::Type, int32_t> || std::is_same_v<typename T1::Type, uint32_t>) {
+                  std::is_same_v<typename T1::Type, int32_t> || std::is_same_v<typename T1::Type, uint32_t> ||
+                  std::is_same_v<typename T1::Type, int64_t>) {
         tmpBuffer = reinterpret_cast<__ubuf__ int8_t*>(tmp.GetAddr());
     } else {
         LogicalNotGenericSetup<T1>(tmp, compareCondition, oneCondition, castCondition, vcmpResTile, startAddrUBTile);

@@ -2417,7 +2417,7 @@ TEST_F(DynamicOpsTest, BitwiseRightShifts)
         int64_t b = 8;
         int64_t s = 8;
         Tensor self(DT_INT16, {b, s}, "self");
-        Element other(DT_INT16, 1);
+        Element other(DT_INT32, 1);
         Tensor out(DT_INT16, {b, s}, "out");
 
         ProgramData::GetInstance().AppendInputs({
@@ -2451,7 +2451,7 @@ TEST_F(DynamicOpsTest, BitwiseLeftShifts)
         int64_t b = 8;
         int64_t s = 8;
         Tensor self(DT_INT16, {b, s}, "self");
-        Element other(DT_INT16, 1);
+        Element other(DT_INT32, 1);
         Tensor out(DT_INT16, {b, s}, "out");
 
         ProgramData::GetInstance().AppendInputs({
@@ -2484,7 +2484,7 @@ TEST_F(DynamicOpsTest, SBitwiseRightShift)
         config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
         int64_t b = 8;
         int64_t s = 8;
-        Element self(DT_INT16, 4);
+        Element self(DT_INT32, 4);
         Tensor other(DT_INT16, {b, s}, "self");
         Tensor out(DT_INT16, {b, s}, "out");
 
@@ -2518,7 +2518,7 @@ TEST_F(DynamicOpsTest, SBitwiseLeftShift)
         config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
         int64_t b = 8;
         int64_t s = 8;
-        Element self(DT_INT16, 4);
+        Element self(DT_INT32, 4);
         Tensor other(DT_INT16, {b, s}, "self");
         Tensor out(DT_INT16, {b, s}, "out");
 
@@ -3357,19 +3357,19 @@ TEST_F(DynamicOpsTest, RangeFp32AndInt64)
         config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
         int64_t size = 5;
         Tensor outFp32(DT_FP32, {size}, "outFp32");
-        Tensor outInt64(DT_INT32, {size}, "outInt64");
+        Tensor outInt32(DT_INT32, {size}, "outInt32");
         std::vector<float> goldenFp32 = {1.0f, 3.0f, 5.0f, 7.0f, 9.0f};
         std::vector<int32_t> goldenInt64 = {1, 3, 5, 7, 9};
         ProgramData::GetInstance().AppendInputs({});
         ProgramData::GetInstance().AppendOutputs({
             RawTensorData::CreateConstantTensor<float>(outFp32, 0.0f),
-            RawTensorData::CreateConstantTensor<int32_t>(outInt64, 0),
+            RawTensorData::CreateConstantTensor<int32_t>(outInt32, 0),
         });
         ProgramData::GetInstance().AppendGoldens({
             RawTensorData::CreateTensor<float>(outFp32, goldenFp32),
-            RawTensorData::CreateTensor<int32_t>(outInt64, goldenInt64),
+            RawTensorData::CreateTensor<int32_t>(outInt32, goldenInt64),
         });
-        FUNCTION("main", {}, {outFp32, outInt64})
+        FUNCTION("main", {}, {outFp32, outInt32})
         {
             LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
             {
@@ -3378,10 +3378,10 @@ TEST_F(DynamicOpsTest, RangeFp32AndInt64)
                 Element endF(DT_FP32, 10.0f);
                 Element stepF(DT_FP32, 2.0f);
                 outFp32 = Range(startF, endF, stepF);
-                Element startI(DT_INT64, static_cast<int64_t>(1));
-                Element endI(DT_INT64, static_cast<int64_t>(10));
-                Element stepI(DT_INT64, static_cast<int64_t>(2));
-                outInt64 = Range(startI, endI, stepI);
+                Element startI(DT_INT32, static_cast<int64_t>(1));
+                Element endI(DT_INT32, static_cast<int64_t>(10));
+                Element stepI(DT_INT32, static_cast<int64_t>(2));
+                outInt32 = Range(startI, endI, stepI);
             }
         }
     });

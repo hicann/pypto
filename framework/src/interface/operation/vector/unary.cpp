@@ -192,7 +192,9 @@ Tensor Relu(const Tensor& self)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Relu");
 
-    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32, DT_INT32, DT_INT16};
+    static const std::unordered_set<DataType> RELU_A2A3_TYPES = {DT_FP16, DT_BF16, DT_FP32, DT_INT32, DT_INT16};
+    static const std::unordered_set<DataType> RELU_A5_TYPES = {DT_FP16, DT_BF16, DT_FP32, DT_INT32, DT_INT16, DT_INT64};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(RELU_A2A3_TYPES, RELU_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "Relu");
     RETURN_CALL(UnaryOperation<UnaryOpType::RELU>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
 }

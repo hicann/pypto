@@ -541,6 +541,18 @@ T2 GetMapValByName(const std::map<T1, T2>& map_data, const T1& name)
     } else if (dataType == DT_INT64) {
         Element element(dataType, GetValueByName<int64_t>(test_data, name));
         return element;
+    } else if (dataType == DT_UINT8) {
+        Element element(dataType, GetValueByName<uint8_t>(test_data, name));
+        return element;
+    } else if (dataType == DT_UINT16) {
+        Element element(dataType, GetValueByName<uint16_t>(test_data, name));
+        return element;
+    } else if (dataType == DT_UINT32) {
+        Element element(dataType, GetValueByName<uint32_t>(test_data, name));
+        return element;
+    } else if (dataType == DT_UINT64) {
+        Element element(dataType, GetValueByName<uint64_t>(test_data, name));
+        return element;
     } else {
         std::string errorMessage = "Unsupported DataType " + std::string(DataType2String(dataType));
         throw std::invalid_argument(errorMessage.c_str());

@@ -7,3 +7,5 @@ BitwiseLeftShifts_test_4,"[0, 384]",int16,ND,"[-1, 1]","[0, 384]",int16,ND,"[128
 BitwiseLeftShifts_test_5,"[3072, 384]",int16,ND,"[-1, 1]","[3072, 384]",int16,ND,"[128, 128]","[32, 32]",6,int16
 BitwiseLeftShifts_test_6,"[98304, 384]",int16,ND,"[-1, 1]","[98304, 384]",int16,ND,"[6144, 96]","[128, 32]",7,int16
 BitwiseLeftShifts_test_7,"[64, 36864]",int16,ND,"[-1, 1]","[64, 36864]",int16,ND,"[32, 1024]","[32, 128]",7,int16
+BitwiseLeftShifts_int64,"[32, 32]",int64,ND,"[1, 100]","[32, 32]",int64,ND,"[16, 16]","[16, 16]",3,int64
+BitwiseLeftShifts_uint64,"[32, 32]",uint64,ND,"[1, 100]","[32, 32]",uint64,ND,"[16, 16]","[16, 16]",3,uint64

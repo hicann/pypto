@@ -34,8 +34,8 @@ remainder(
 
 | 参数名 | 输入/输出 | 说明                                                                 |
 |--------|-----------|----------------------------------------------------------------------|
-| input  | 输入      | 源操作数。<br>支持的类型为：Tensor、int、float。<br>Tensor支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT32，DT_INT16。<br>不支持空Tensor；Shape仅支持1-4维，支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
-| other  | 输入      | 源操作数。<br>支持的类型为：Tensor、int、float。<br>Tensor支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT32，DT_INT16。<br>不支持空Tensor；Shape仅支持1-4维，支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input  | 输入      | 源操作数。<br>支持的类型为：Tensor、int、float。<br>Tensor支持的数据类型不同型号有所差异，详细请参见[约束说明](#约束说明)。<br>不支持空Tensor；Shape仅支持1-4维，支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
+| other  | 输入      | 源操作数。<br>支持的类型为：Tensor、int、float。<br>Tensor支持的数据类型不同型号有所差异，详细请参见[约束说明](#约束说明)。<br>不支持空Tensor；Shape仅支持1-4维，支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
 | precision_type | 输入      | 精度模式枚举类型，用以控制取余计算的精度模式，具体定义为：[PrecisionType](../datatype/PrecisionType.md)。<br>默认为HIGH_PRECISION（高精度模式）。 |
 
 ## 返回值说明
@@ -44,7 +44,7 @@ remainder(
 
 ## 约束说明
 
-1. 当前不支持混合精度类型输入，即输入都是Tensor时数据类型都相同，输入有一个是标量时，Tensor的数据类型必须是对应的整数类型（DT_INT32或DT_INT16）或浮点数类型（DT_FP32、DT_FP16、DT_BF16）；
+1. 当前不支持混合精度类型输入，即输入都是Tensor时数据类型都相同，输入有一个是标量时，Tensor的数据类型必须是对应的整数类型（DT_INT32、DT_INT16或DT_INT64，其中DT_INT64仅Ascend 950PR/Ascend 950DT支持）或浮点数类型（DT_FP32、DT_FP16、DT_BF16）；
 2. 当input为整型数据类型时，**other不能含0**，整数取余的结果由芯片类型决定，可能为0或-1。
 3. 若输入Tensor的数据类型为DT_INT32，数据范围超过\[-2^24, 2^24\]范围时不保证精度；
 4. precision_type使用说明：
@@ -58,6 +58,16 @@ remainder(
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持，默认使用指令模式 `INTRINSIC`
    <!-- end id6 -->
 5. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+6. Tensor数据类型说明：
+   <!-- npu="950" id7 -->
+   - Ascend 950PR/Ascend 950DT：DT_FP32，DT_FP16，DT_BF16，DT_INT32，DT_INT16，DT_INT64。
+   <!-- end id7 -->
+   <!-- npu="A3" id8 -->
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP32，DT_FP16，DT_BF16，DT_INT32，DT_INT16。
+   <!-- end id8 -->
+   <!-- npu="910b" id9 -->
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_FP32，DT_FP16，DT_BF16，DT_INT32，DT_INT16。
+   <!-- end id9 -->
 
 ## 调用示例
 

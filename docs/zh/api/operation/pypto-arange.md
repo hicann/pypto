@@ -26,13 +26,13 @@ arange(start: Union[int, float] = 0, end: Union[int, float], step: Union[int, fl
 
 | 参数名 | 输入/输出 | 说明                                                                 |
 |--------|-----------|----------------------------------------------------------------------|
-| start  | 输入      | 源操作数。<br>支持的数据类型为：DT_FP16，DT_BF16，DT_INT16，DT_INT32，DT_FP32。<br>默认值为0。 |
-| end    | 输入      | 源操作数。<br>支持的数据类型为：DT_FP16，DT_BF16，DT_INT16，DT_INT32，DT_FP32。<br>该参数不能省略。 |
-| step   | 输入      | 源操作数。<br>支持的数据类型为：DT_FP16，DT_BF16，DT_INT16，DT_INT32，DT_FP32。<br>默认值为1。 |
+| start  | 输入      | 源操作数。<br>支持的数据类型不同型号有所差异，详细请参见[约束说明](#约束说明)。<br>默认值为0。 |
+| end    | 输入      | 源操作数。<br>支持的数据类型不同型号有所差异，详细请参见[约束说明](#约束说明)。<br>该参数不能省略。 |
+| step   | 输入      | 源操作数。<br>支持的数据类型不同型号有所差异，详细请参见[约束说明](#约束说明)。<br>默认值为1。 |
 
 ## 返回值说明
 
-返回一维输出Tensor，若输入值存在float数据类型，则输出Tensor数据类型为DT_FP32，否则为DT_INT32。
+返回一维输出Tensor，若输入值存在float数据类型，则输出Tensor数据类型为DT_FP32；若输入值存在DT_INT64数据类型（或超出int32范围，DT_INT64仅Ascend 950PR/Ascend 950DT支持），则输出Tensor数据类型为DT_INT64；否则为DT_INT32。
 
 ## 约束说明
 
@@ -40,7 +40,18 @@ arange(start: Union[int, float] = 0, end: Union[int, float], step: Union[int, fl
 
 2. \(end-start\)/step需大于0；
 
-3. 如果start，end，step均为int输入，则三者均不能超出int32范围
+3. 如果start，end，step均为int输入且均在int32范围内，则输出数据类型为DT_INT32；若超出int32范围，则输出数据类型为DT_INT64（DT_INT64仅Ascend 950PR/Ascend 950DT支持）
+
+4. Tensor数据类型说明：
+   <!-- npu="950" id4 -->
+   - Ascend 950PR/Ascend 950DT：DT_FP16，DT_BF16，DT_INT16，DT_INT32，DT_INT64，DT_FP32。
+   <!-- end id4 -->
+   <!-- npu="A3" id5 -->
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP16，DT_BF16，DT_INT16，DT_INT32，DT_FP32。
+   <!-- end id5 -->
+   <!-- npu="910b" id6 -->
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_FP16，DT_BF16，DT_INT16，DT_INT32，DT_FP32。
+   <!-- end id6 -->
 
 ## 调用示例
 
