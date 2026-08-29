@@ -878,7 +878,7 @@ uint32_t DeviceWorkspaceAllocator::GlobalReadyQueSlabMemObjSize()
 uint32_t DeviceWorkspaceAllocator::PredCountSlabMemObjSize()
 {
     // predCount
-    return devProg_->stitchFunctionsize * sizeof(int32_t);
+    return devProg_->rootFuncMaxCallOpsize * sizeof(int32_t);
 }
 
 /* 根据当前算子的业务模型分析计算出slab 管理内存页大小, 基于当前可评估的所有内存类型的最大值评估 */

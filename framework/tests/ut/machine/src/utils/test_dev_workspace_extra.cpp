@@ -11,6 +11,7 @@
 
 #define private public
 #include "machine/utils/dynamic/dev_workspace.h"
+#include "machine/utils/dynamic/dev_encode_workspace.h"
 #undef private
 
 using namespace npu::tile_fwk;
@@ -318,6 +319,14 @@ TEST_F(DevWorkspaceTest, CalcStitchSlabMemObjmaxSize_ReturnsValue)
     DeviceWorkspaceAllocator allocator(&prog);
     uint32_t slabCapacity[16] = {0};
     uint32_t size = allocator.CalcStitchSlabMemObjmaxSize(slabCapacity);
+    EXPECT_GT(size, 0u);
+}
+
+TEST_F(DevWorkspaceTest, CalcStitchWorkspace_ReturnsPositiveSize)
+{
+    DevAscendProgram prog{};
+    prog.stitchFunctionsize = 100;
+    uint64_t size = CalcStitchWorkspace(prog);
     EXPECT_GT(size, 0u);
 }
 
