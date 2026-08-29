@@ -130,10 +130,12 @@ void TiledBinaryOperation(Function& function, const TileShape& tileShape, size_t
             op = &function.AddOperation(GetBinaryOpNameCode<T, false, false>(), {inputTile1, inputTile2},
                                         {resultTile, tempTensor});
         } else if (opName == "REM") {
-            auto alignSize = BLOCK_SIZE / BytesOf(result->Datatype());
-            std::vector<int64_t> tmpShape;
-            tmpShape.push_back(2);
-            tmpShape.push_back(AlignUp(resultTileInfo.shape[shapeSize - 1], alignSize));
+            int64_t alignSize = static_cast<int64_t>(BLOCK_SIZE / BytesOf(result->Datatype()));
+            int64_t alignedLast = AlignUp(resultTileInfo.shape[shapeSize - 1], alignSize);
+            int64_t maskBytes = (alignedLast + NUM_VALUE_8 - 1) / NUM_VALUE_8;
+            int64_t maskFloats = AlignUp(maskBytes, BLOCK_SIZE) / static_cast<int64_t>(BytesOf(result->Datatype()));
+            int64_t tmpCols = alignedLast + maskFloats + alignSize;
+            std::vector<int64_t> tmpShape{1, tmpCols};
             auto tmpTensor = std::make_shared<LogicalTensor>(function, result->Datatype(), tmpShape);
             op = &function.AddOperation(GetBinaryOpNameCode<T, false, false>(), {inputTile1, inputTile2},
                                         {resultTile, tmpTensor});
@@ -924,11 +926,14 @@ void TiledRemainderSOperation(Function& function, const TileShape& tileShape, si
         auto inputTile1 = input1.tensor->View(function, input1.tileInfo.shape, input1.tileInfo.offset);
         auto resultTile = result->View(function, resultTileInfo.shape, resultTileInfo.offset);
         int64_t shapeSize = resultTileInfo.shape.size();
-        auto alignSize = BLOCK_SIZE / BytesOf(input1.tensor->Datatype());
-        std::vector<int64_t> tmpShape{2, 1};
-        tmpShape[1] = AlignUp(resultTileInfo.shape[shapeSize - 1], alignSize);
+        int64_t alignSize = static_cast<int64_t>(BLOCK_SIZE / BytesOf(result->Datatype()));
+        int64_t alignedLast = AlignUp(resultTileInfo.shape[shapeSize - 1], alignSize);
+        int64_t maskBytes = (alignedLast + NUM_VALUE_8 - 1) / NUM_VALUE_8;
+        int64_t maskFloats = AlignUp(maskBytes, BLOCK_SIZE) / static_cast<int64_t>(BytesOf(result->Datatype()));
+        int64_t tmpCols = alignedLast + maskFloats + alignSize;
+        std::vector<int64_t> tmpShape{1, tmpCols};
         if (opNameCode == Opcode::OP_REMRS) {
-            tmpShape[0] = shapeSize > 1 ? resultTileInfo.shape[shapeSize - 2] + 3 : 3;
+            tmpShape[0] = shapeSize > 1 ? resultTileInfo.shape[shapeSize - 2] + 1 : 2;
         }
         auto tmpTensor = std::make_shared<LogicalTensor>(function, input1.tensor->Datatype(), tmpShape);
         auto& tmpOp = function.AddOperation(opNameCode, {inputTile1}, {resultTile, tmpTensor});

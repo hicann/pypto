@@ -550,10 +550,10 @@ TILEOP void TRemainderRS(T0 dst, T1 src0, Scalar src1, T2 tmp)
     constexpr auto tmpTileW = TileOp::GetTensorTileShapeDim<T2, 4, 5>();
     using tmp0TileDefine = pto::Tile<pto::TileType::Vec, typename T2::Type, tmpTileH, tmpTileW, pto::BLayout::RowMajor,
                                      -1, -1>;
-    using tmp1TileDefine = pto::Tile<pto::TileType::Vec, typename T2::Type, 2, tmpTileW, pto::BLayout::RowMajor, -1,
+    using tmp1TileDefine = pto::Tile<pto::TileType::Vec, typename T2::Type, 1, tmpTileW, pto::BLayout::RowMajor, -1,
                                      -1>;
     tmp0TileDefine tmp0Tile(shape3, shape4);
-    tmp1TileDefine tmp1Tile(2, shape4);
+    tmp1TileDefine tmp1Tile(1, shape4);
 
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
