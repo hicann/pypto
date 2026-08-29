@@ -46,7 +46,7 @@ void CheckDimensionRange(const std::vector<int64_t>& vec, const std::string& nam
     for (size_t i = 0; i < vec.size(); ++i) {
         CHECK(ExternalError::OUT_OF_RANGE, vec[i] >= minVal && vec[i] <= maxVal)
             << "The value of the " << i << "-th dimension of " << name << " must be in the range [" << minVal << ","
-            << maxVal << "].Current value:" << vec[i] << ".";
+            << maxVal << "]. Current value:" << vec[i] << ".";
     }
 }
 
@@ -108,7 +108,7 @@ void BpCheckOriginShape(const Tensor& gradOutputTensor, const std::vector<int64_
     }
     int64_t cin = weightTensor.GetShape(1); // NCL/NCHW/NCDHW
     CHECK(ExternalError::INVALID_VAL, biasTensor.GetShape(0) == cin)
-        << "Input illegal bias shape:" << biasTensor.GetShape(0) << ", which must equal to Cout:" << cin << ".";
+        << "Input illegal bias shape:" << biasTensor.GetShape(0) << ", which must equal Cout:" << cin << ".";
 }
 
 void BpCheckOutputShape(const Tensor& gradOutputTensor, const std::vector<int64_t>& inputSize,
@@ -172,21 +172,11 @@ void BpCheckAttrShape(const Tensor& gradOutputTensor, const Tensor& weightTensor
         << "Cout (" << coutGradOutput << ") is not divisible by groups (" << groups << ").";
 
     CheckLoad3dShape(weightTensor, attrParam);
-    // todo 反向TransData条件确认
-    // 由于transdata对于output的转换没有实现消除多余pad，所以当前cout只支持coutPerGroup % c0 = 0
-    int64_t c0 = ALIGN_SIZE_32 / BytesOf(weightTensor.GetStorage()->Datatype());
-    int64_t coutPerGroup = coutWeight / groups;
-    CHECK(ExternalError::INVALID_VAL, coutPerGroup % c0 == 0)
-        << "The tiled Cout per group (" << coutPerGroup << ") must be a multiple of " << c0
-        << " (c0 = 32 / sizeof(dtype)). "
-        << "Current tiled Cout(" << coutWeight << ") / groups(" << groups << ") = " << coutPerGroup
-        << " is not divisible by " << c0 << ".";
 }
 
 void BpCheckL0TileTiling(DataType outType, const ConvBpAttrParam& attrParam, const Tensor& weightTensor,
                          const Tensor& gradOutputTensor, const std::vector<int64_t>& inputSize)
 {
-    // todo 反向的TileInfo跟随正向区分L1和L0
     auto& convTile = TileShape::Current().GetConvBpTile();
     int64_t tileML0 = convTile.tileL0Info.tileML0;
     int64_t tileNL0 = convTile.tileL0Info.tileNL0;
@@ -236,7 +226,6 @@ void BpCheckL0TileTiling(DataType outType, const ConvBpAttrParam& attrParam, con
     ASSERT(ConvOperationError::OVER_BUFFER_LIMIT, tileKL0 * tileNL0 * BytesOf(outType) <= l0bSize)
         << "Shape does not satisfy L0B load constraints, tileKL0(" << tileKL0 << ") × " << "tileNL0(" << tileNL0
         << ") × dtypesize ≤ L0B Size(" << l0bSize << ").";
-    // todo fp32?
     ASSERT(ConvOperationError::OVER_BUFFER_LIMIT, tileML0 * tileNL0 * BytesOf(DataType::DT_FP32) <= l0cSize)
         << "Shape does not satisfy L0C load constraints, tileML0(" << tileML0 << ") × " << "tileNL0(" << tileNL0
         << ") × dtypesize ≤ L0C Size(" << l0cSize << ").";
@@ -245,7 +234,6 @@ void BpCheckL0TileTiling(DataType outType, const ConvBpAttrParam& attrParam, con
 void BpCheckTileTiling(DataType outType, const Tensor& gradOutputTensor, const Tensor& weightTensor,
                        const ConvBpAttrParam& attrParam, const std::vector<int64_t>& inputSize)
 {
-    // todo 反向的tileL1/L0Info framework/include/tilefwk/tilefwk_op.h
     auto convTile = TileShape::Current().GetConvBpTile();
     int64_t tileML1 = convTile.tileL1Info.tileML1;
     int64_t tileNL1 = convTile.tileL1Info.tileNL1;
@@ -257,7 +245,7 @@ void BpCheckTileTiling(DataType outType, const Tensor& gradOutputTensor, const T
     CheckAlignment(tileKL1, k0, "tileKL1");
 
     CHECK(ExternalError::INVALID_VAL, (tileML1 < win) || (tileML1 % win == 0))
-        << "tileML1(" << tileML1 << ") should less than win(" << win << ") or be divisible by win";
+        << "tileML1(" << tileML1 << ") should be less than win(" << win << ") or be divisible by win";
 
     BpCheckL0TileTiling(outType, attrParam, weightTensor, gradOutputTensor, inputSize);
 }
@@ -291,6 +279,8 @@ void BpCheckL1SizeTiling(DataType outType, const Tensor& gradOutputTensor, const
 
     uint64_t dilationH = attrParam.dilations[1];
     uint64_t dilationW = attrParam.dilations[2];
+    uint64_t strideH = attrParam.strides[1];
+    uint64_t strideW = attrParam.strides[2];
     uint64_t gradOutputL1Size = 0;
     uint64_t tileML1 = convTile.tileL1Info.tileML1;
     uint64_t hinL1 = 1;
@@ -301,10 +291,12 @@ void BpCheckL1SizeTiling(DataType outType, const Tensor& gradOutputTensor, const
         winL1 = tileML1;
     }
     uint64_t khDilated = (kh - 1) * dilationH + 1;
-    uint64_t houtExpandL1 = std::min(hinL1 + khDilated - 1, hout);
+    uint64_t houtExpandL1 = std::min(hinL1 + khDilated - 1, (hout - 1) * strideH + 1);
     uint64_t kwDilated = (kw - 1) * dilationW + 1;
-    uint64_t woutExpandL1 = std::min(winL1 + kwDilated - 1, wout);
-    gradOutputL1Size = ConvAlignB(houtExpandL1 * woutExpandL1 * tileKL1 * BytesOf(outType), ALIGN_SIZE_32);
+    uint64_t woutExpandL1 = std::min(winL1 + kwDilated - 1, (wout - 1) * strideW + 1);
+
+    uint64_t gradOutputL1KSize = static_cast<uint64_t>(tileKL1) / (kh * kw);
+    gradOutputL1Size = ConvAlignB(houtExpandL1 * woutExpandL1 * gradOutputL1KSize * BytesOf(outType), ALIGN_SIZE_32);
     uint64_t minL1LoadSize = biasL1Size + gradOutputL1Size + weightL1Size;
     ASSERT(ConvOperationError::OVER_BUFFER_LIMIT, minL1LoadSize <= l1Size)
         << "MinL1LoadSize > L1size, current MinL1LoadSize: " << minL1LoadSize << ", L1size: " << l1Size << ".";
@@ -313,7 +305,6 @@ void BpCheckL1SizeTiling(DataType outType, const Tensor& gradOutputTensor, const
 void BpCheckConvOperands(DataType outType, const Tensor& gradOutputTensor, const std::vector<int64_t>& inputSize,
                          const Tensor& weightTensor, const Tensor& biasTensor, ConvBpAttrParam& attrParam)
 {
-    // todo 允许Dtype包含fp32 fp16 bf16
     CHECK(ExternalError::INVALID_TYPE,
           outType == DataType::DT_FP32 || outType == DataType::DT_FP16 || outType == DataType::DT_BF16)
         << "Unsupported output data type. Only DT_FP32, DT_FP16, DT_BF16 are supported.";
@@ -714,8 +705,6 @@ LogicalTensorPtr ConstructGradOutputTile(Function& function, const ConvBpGraphNo
 {
     // L1层级 gradoutput 展开
     if (iterInfo.aL1UpadateFlag) {
-        CONV_LOGW("[Load L1A] kL0Offset=%ld, kL1Offset=%ld, kL1Size=%ld, kPerGroup=%ld", iterInfo.kL0Offset,
-                  iterInfo.kL1Offset, iterInfo.kL1Size, convBpTileInfo.kPerGroup);
         ConstructGradOutputL1Tile(function, tensorGraphNodes, convBpTileInfo, iterInfo, dstAL1TensorPtr,
                                   convBpAttrParam);
     }
@@ -779,8 +768,6 @@ LogicalTensorPtr ConstructWeightTile(Function& function, const ConvBpGraphNodes&
 {
     // L1层级 Weight 展开
     if (iterInfo.bL1UpadateFlag) {
-        CONV_LOGW("[Load L1B] kL0Offset=%ld, kL1Offset=%ld, kL1Size=%ld, kPerGroup=%ld", iterInfo.kL0Offset,
-                  iterInfo.kL1Offset, iterInfo.kL1Size, convTileInfo.kPerGroup);
         ConstructWeightL1Tile(function, tensorGraphNodes, convTileInfo, iterInfo, dstBL1TensorPtr);
     }
     // load2d()
@@ -935,7 +922,6 @@ void IterL0ExpandFunc(Function& function, ConvBpIterInfo& iterInfo, ConvBpTileIn
             std::vector<SymbolicScalar> dstCL0DynValidShape = std::vector<SymbolicScalar>{iterInfo.mL0Size,
                                                                                           iterInfo.nL0Size};
 
-            // todo confirm gradOutputTensor Dtype, Format 和 resTensor 一致？
             tileGraphNodes.resTensorPtr = std::make_shared<LogicalTensor>(
                 function, tensorGraphNodes.gradOutputTensorPtr->Datatype(), dstCL0Shape, dstCL0DynValidShape,
                 tensorGraphNodes.gradOutputTensorPtr->Format(), "cL0Tensor");
@@ -950,9 +936,6 @@ void IterL0ExpandFunc(Function& function, ConvBpIterInfo& iterInfo, ConvBpTileIn
                     iterInfo.kL0Size = std::min(kLimit - iterInfo.kL0Offset, convTileInfo.kL0);
                     iterInfo.isFirstK = iterInfo.kL0Offset == 0 ? true : false;
                     iterInfo.isLastK = iterInfo.kL0Offset + convTileInfo.kL0 >= convTileInfo.kPerGroup ? true : false;
-
-                    CONV_LOGW("kL0Offset=%ld, kL1Offset=%ld, kL1Size=%ld, kPerGroup=%ld", iterInfo.kL0Offset,
-                              iterInfo.kL1Offset, iterInfo.kL1Size, convTileInfo.kPerGroup);
 
                     tileGraphNodes.gradOutputTensorPtr = ConstructGradOutputTile(
                         function, tensorGraphNodes, convTileInfo, iterInfo, gradOutputL1TensorPtr, attrParam);
