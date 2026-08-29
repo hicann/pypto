@@ -94,7 +94,6 @@ public:
         var_counter_.clear();
         all_vars_.clear();
         token_map_.clear();
-        semantic_to_normal_.clear();
         ClearTensorDataDescList();
     }
 
@@ -109,13 +108,9 @@ public:
     std::vector<ir::VarPtr> GetDependToken(Operation& op);
 
     /**
-     * Create a READ/WRITE semantic token and its paired NORMAL token.
-     * The NORMAL token is registered internally and is not returned.
+     * Create a READ/WRITE semantic token used by the tensor graph.
      */
     ir::VarPtr MakeSemanticToken(std::string name, ir::TokenKind kind, ir::Span span);
-
-    /** Look up the NORMAL token paired with a READ/WRITE semantic token. */
-    ir::VarPtr GetNormalToken(const ir::VarPtr& semantic) const;
 
     int AddTensorDataDesc(const std::shared_ptr<Tensor>& assembleTensor)
     {
@@ -141,7 +136,6 @@ private:
     std::map<std::string, int64_t> var_counter_;  // counter for named variable
     std::map<std::string, std::string> all_vars_; // unique var name -> var name
     std::unordered_map<ir::ExprPtr, std::vector<ir::VarPtr>> token_map_;
-    std::unordered_map<ir::VarPtr, ir::VarPtr> semantic_to_normal_;
     std::vector<std::shared_ptr<Tensor>> getTensorDataDescList;
     bool assembleNewLogicalTensor_{false};
 };

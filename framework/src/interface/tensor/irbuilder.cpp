@@ -78,19 +78,7 @@ ir::VarPtr IRContext::MakeSemanticToken(std::string name, ir::TokenKind kind, ir
 {
     FE_ASSERT(FeError::INVALID_VAL, kind == ir::TokenKind::READ || kind == ir::TokenKind::WRITE)
         << "MakeSemanticToken requires READ or WRITE kind";
-    auto semantic = MakeVar(std::move(name), ir::GetTokenType(kind), span);
-    auto normal = MakeVar(semantic->name_ + "_n", ir::GetTokenType(ir::TokenKind::NORMAL), span);
-    semantic_to_normal_.emplace(semantic, normal);
-    return semantic;
-}
-
-ir::VarPtr IRContext::GetNormalToken(const ir::VarPtr& semantic) const
-{
-    if (!semantic) {
-        return nullptr;
-    }
-    auto it = semantic_to_normal_.find(semantic);
-    return it != semantic_to_normal_.end() ? it->second : nullptr;
+    return MakeVar(std::move(name), ir::GetTokenType(kind), span);
 }
 
 Function& DummyFunc()

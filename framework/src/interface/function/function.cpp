@@ -39,8 +39,8 @@
 #include "passes/pass_utils/subgraph_utils.h"
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_utils/graph_utils.h"
-#include "interface/tensor/contract_write_token.h"
 #include "interface/tensor/irbuilder.h"
+#include "passes/tensor_graph_pass/expand_function.h"
 #include "ir/transforms/printer.h"
 using namespace npu::tile_fwk;
 
@@ -1768,62 +1768,213 @@ Operation& Function::AddOperation(const std::string& opName, LogicalTensors iOpe
     return AddOperation(FindOpcode(opName), iOperands, oOperands);
 }
 
+namespace {
+
+LogicalTensorPtr GetSliceParent(const LogicalTensorPtr& tensor)
+{
+    LogicalTensorPtr parent = nullptr;
+    if (tensor == nullptr || !tensor->GetAttr("SLICE_PARENT", parent)) {
+        return nullptr;
+    }
+    return parent;
+}
+
+void ResetSliceView(const LogicalTensorPtr& tensor)
+{
+    int dim = tensor->shape.size();
+    tensor->offset = std::vector<int64_t>(dim, 0);
+    tensor->dynOffset_ = std::vector<SymbolicScalar>(dim, SymbolicScalar(0));
+    tensor->RemoveAttr("SLICE_PARENT");
+    tensor->tensor = std::make_shared<RawTensor>(tensor->tensor->datatype, tensor->shape, tensor->tensor->format,
+                                                 tensor->tensor->symbol);
+}
+
+ir::VarPtr GetPairedNormalToken(const ir::VarPtr& token)
+{
+    if (token == nullptr) {
+        return nullptr;
+    }
+    return ExpandFunction::GetNormalToken(token);
+}
+
+bool SameLogicalTensorPtr(const LogicalTensorPtr& lhs, const LogicalTensorPtr& rhs)
+{
+    if (lhs == nullptr || rhs == nullptr) {
+        return false;
+    }
+    return lhs.get() == rhs.get() || lhs->GetMagic() == rhs->GetMagic();
+}
+
+bool IsCurrentTileOpOperand(const LogicalTensorPtr& tensor, const LogicalTensors& currentOperands)
+{
+    if (tensor == nullptr) {
+        return false;
+    }
+    auto parent = GetSliceParent(tensor);
+    for (const auto& current : currentOperands) {
+        if (SameLogicalTensorPtr(tensor, current) || SameLogicalTensorPtr(parent, current)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool HasCurrentTileOpOperand(const LogicalTensors& tensors, const LogicalTensors& currentOperands)
+{
+    for (const auto& tensor : tensors) {
+        if (IsCurrentTileOpOperand(tensor, currentOperands)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool AttachReadToMatchingInputParents(const LogicalTensors& iOperands, const LogicalTensors& currentInputs,
+                                      const ir::VarPtr& token, const ir::VarPtr& normal,
+                                      std::unordered_map<LogicalTensor*, std::vector<ir::VarPtr>>& target)
+{
+    bool matched = false;
+    for (const auto& iOp : iOperands) {
+        if (!IsCurrentTileOpOperand(iOp, currentInputs)) {
+            continue;
+        }
+        auto parent = GetSliceParent(iOp);
+        if (parent == nullptr || parent->GetReadToken() != token) {
+            continue;
+        }
+        target[iOp.get()].push_back(normal);
+        matched = true;
+    }
+    return matched;
+}
+
+bool AttachToOutputParents(const LogicalTensors& oOperands, const LogicalTensors& currentOutputs,
+                           const ir::VarPtr& normal,
+                           std::unordered_map<LogicalTensor*, std::vector<ir::VarPtr>>& target)
+{
+    bool hasParent = false;
+    for (const auto& oOp : oOperands) {
+        if (!IsCurrentTileOpOperand(oOp, currentOutputs)) {
+            continue;
+        }
+        if (GetSliceParent(oOp) == nullptr) {
+            continue;
+        }
+        target[oOp.get()].push_back(normal);
+        hasParent = true;
+    }
+    return hasParent;
+}
+
+struct ExpandTokenPlan {
+    std::unordered_map<LogicalTensor*, std::vector<ir::VarPtr>> sliceResultTokens;
+    std::unordered_map<LogicalTensor*, std::vector<ir::VarPtr>> contractResultTokens;
+    std::unordered_map<LogicalTensor*, std::vector<ir::VarPtr>> contractInputTokens;
+    std::vector<ir::VarPtr> opResultTokens;
+    std::vector<ir::VarPtr> opInputTokens;
+};
+
+void CollectResultTokens(const Operation& tileOp, const LogicalTensors& iOperands, const LogicalTensors& oOperands,
+                         ExpandTokenPlan& plan)
+{
+    const auto& currentInputs = tileOp.GetIOperands();
+    const auto& currentOutputs = tileOp.GetOOperands();
+    for (const auto& token : tileOp.result_token_) {
+        auto tokenType = token ? std::dynamic_pointer_cast<const ir::TokenType>(token->GetType()) : nullptr;
+        auto normal = GetPairedNormalToken(token);
+        if (tokenType == nullptr || normal == nullptr) {
+            continue;
+        }
+        if (tokenType->kind_ == ir::TokenKind::READ) {
+            if (!AttachReadToMatchingInputParents(iOperands, currentInputs, token, normal, plan.sliceResultTokens) &&
+                HasCurrentTileOpOperand(oOperands, currentOutputs)) {
+                plan.opResultTokens.push_back(normal);
+            }
+        } else if (tokenType->kind_ == ir::TokenKind::WRITE) {
+            if (!AttachToOutputParents(oOperands, currentOutputs, normal, plan.contractResultTokens) &&
+                HasCurrentTileOpOperand(oOperands, currentOutputs)) {
+                plan.opResultTokens.push_back(normal);
+            }
+        }
+    }
+}
+
+void CollectInputTokens(const Operation& tileOp, const LogicalTensors& iOperands, const LogicalTensors& oOperands,
+                        ExpandTokenPlan& plan)
+{
+    const auto& currentInputs = tileOp.GetIOperands();
+    const auto& currentOutputs = tileOp.GetOOperands();
+    for (const auto& token : tileOp.tokens_) {
+        auto normal = GetPairedNormalToken(token);
+        if (normal == nullptr) {
+            continue;
+        }
+        if (!AttachToOutputParents(oOperands, currentOutputs, normal, plan.contractInputTokens) &&
+            HasCurrentTileOpOperand(iOperands, currentInputs)) {
+            plan.opInputTokens.push_back(normal);
+        }
+    }
+}
+
+ExpandTokenPlan CollectExpandTokenPlan(Operation* currentTileOp, const LogicalTensors& iOperands,
+                                       const LogicalTensors& oOperands)
+{
+    ExpandTokenPlan plan;
+    if (currentTileOp == nullptr) {
+        return plan;
+    }
+    CollectResultTokens(*currentTileOp, iOperands, oOperands, plan);
+    CollectInputTokens(*currentTileOp, iOperands, oOperands, plan);
+    return plan;
+}
+
+void AssignMappedTokens(std::vector<ir::VarPtr>& dst,
+                        const std::unordered_map<LogicalTensor*, std::vector<ir::VarPtr>>& src, LogicalTensor* key)
+{
+    auto it = src.find(key);
+    if (it != src.end()) {
+        dst = it->second;
+    }
+}
+
+} // namespace
+
 Operation& Function::AddOperation(const Opcode opCode, LogicalTensors iOperands, const LogicalTensors& oOperands)
 {
-    IRBuilder builder;
+    auto plan = CollectExpandTokenPlan(ExpandFunction::GetCurrentTileOp(), iOperands, oOperands);
     CheckTensorDynamicShape(iOperands, opCode);
-
-    auto ClearOffset = [](LogicalTensorPtr t) {
-        int dim = t->shape.size();
-        t->offset = std::vector<int64_t>(dim, 0);
-        t->dynOffset_ = std::vector<SymbolicScalar>(dim, SymbolicScalar(0));
-    };
 
     const Opcode sliceOpcode = config::GetSliceOpcode();
     const Opcode contractOpcode = config::GetContractOpcode();
-
-    auto cmp = [](ir::VarPtr a, ir::VarPtr b) { return a->name_ < b->name_; };
-    std::set<ir::VarPtr, decltype(cmp)> tokenSets(cmp);
     for (auto& iOp : iOperands) {
-        LogicalTensorPtr parent = nullptr;
-        if (iOp->GetAttr("SLICE_PARENT", parent)) {
-            auto newRaw = std::make_shared<RawTensor>(iOp->tensor->datatype, iOp->shape, iOp->tensor->format,
-                                                      iOp->tensor->symbol);
-            auto& op = AddRawOperation(sliceOpcode, {parent}, {iOp});
-            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(iOp->offset, iOp->dynOffset_, iOp->dynValidShape_));
-            if (auto readToken = parent->GetReadToken()) {
-                if (auto normalToken = IRContext::Get().GetNormalToken(readToken)) {
-                    op.result_token_ = {normalToken};
-                }
-            }
-            ClearOffset(iOp);
-            iOp->RemoveAttr("SLICE_PARENT");
-            iOp->tensor = newRaw;
-            auto tokens = builder.GetDependToken(parent);
-            tokenSets.insert(tokens.begin(), tokens.end());
+        auto parent = GetSliceParent(iOp);
+        if (parent == nullptr) {
+            continue;
         }
+        auto& sliceOp = AddRawOperation(sliceOpcode, {parent}, {iOp});
+        sliceOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(iOp->offset, iOp->dynOffset_, iOp->dynValidShape_));
+        AssignMappedTokens(sliceOp.result_token_, plan.sliceResultTokens, iOp.get());
+        ResetSliceView(iOp);
     }
 
     auto& ret = AddRawOperation(opCode, iOperands, oOperands);
+    if (!plan.opResultTokens.empty()) {
+        ret.result_token_ = std::move(plan.opResultTokens);
+    }
+    if (!plan.opInputTokens.empty()) {
+        ret.tokens_ = std::move(plan.opInputTokens);
+    }
 
-    std::vector<ir::VarPtr> tokenList(tokenSets.begin(), tokenSets.end());
     for (auto& oOp : oOperands) {
-        LogicalTensorPtr parent = nullptr;
-        if (oOp->GetAttr("SLICE_PARENT", parent)) {
-            auto newRaw = std::make_shared<RawTensor>(oOp->tensor->datatype, oOp->shape, oOp->tensor->format,
-                                                      oOp->tensor->symbol);
-            auto& op = AddRawOperation(contractOpcode, {oOp}, {parent});
-            op.SetAssembleOpAttribute(oOp->offset, oOp->dynOffset_);
-            ClearOffset(oOp);
-            oOp->RemoveAttr("SLICE_PARENT");
-            oOp->tensor = newRaw;
-            auto deps = builder.GetDependToken(parent);
-            if (!deps.empty()) {
-                op.result_token_ = {deps[0]};
-            }
-            op.tokens_ = tokenList;
-            ApplyContractWriteNormalTokens(op, oOp);
+        auto parent = GetSliceParent(oOp);
+        if (parent == nullptr) {
+            continue;
         }
+        auto& contractOp = AddRawOperation(contractOpcode, {oOp}, {parent});
+        contractOp.SetAssembleOpAttribute(oOp->offset, oOp->dynOffset_);
+        AssignMappedTokens(contractOp.result_token_, plan.contractResultTokens, oOp.get());
+        AssignMappedTokens(contractOp.tokens_, plan.contractInputTokens, oOp.get());
+        ResetSliceView(oOp);
     }
     return ret;
 }

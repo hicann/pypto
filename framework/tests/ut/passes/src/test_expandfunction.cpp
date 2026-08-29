@@ -16,6 +16,7 @@
 #include <gtest/gtest.h>
 #include <vector>
 #include <string>
+#include "ir/type.h"
 #include "interface/function/function.h"
 #include "interface/operation/attribute.h"
 #include "tilefwk/tilefwk.h"
@@ -130,6 +131,20 @@ int CountSliceOpsOnInputWithShape(Function& function, const LogicalTensorPtr& in
         ++count;
     }
     return count;
+}
+
+bool HasNormalTokenNamed(const std::vector<ir::VarPtr>& tokens, const std::string& namePart)
+{
+    for (const auto& token : tokens) {
+        if (token == nullptr || token->name_.find(namePart) == std::string::npos) {
+            continue;
+        }
+        auto tokenType = std::dynamic_pointer_cast<const ir::TokenType>(token->GetType());
+        if (tokenType != nullptr && tokenType->kind_ == ir::TokenKind::NORMAL) {
+            return true;
+        }
+    }
+    return false;
 }
 
 } // namespace
@@ -1089,6 +1104,127 @@ TEST_F(TestExpandFunctionPass, AssembleDerivesVecTileFromCubeMatmulProducer)
     EXPECT_EQ(CountSliceOpsOnInputWithShape(*func, matmulOut, expectedSliceShape), 2);
     EXPECT_EQ(CountInputSliceOpsWithSecondDimOffset(*func, matmulOut, kCubeN), 1);
     EXPECT_EQ(CountSliceOpsOnInputWithShape(*func, matmulOut, {kCubeM, kCubeM}), 0);
+}
+
+TEST_F(TestExpandFunctionPass, ComputeOpReadGoesToSliceAndWriteGoesToContract)
+{
+    TileShape::Current().SetVecTile(kNumExpSix, kNumExpSix);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "ComputeOpTokenAttach", "ComputeOpTokenAttach",
+                                           nullptr);
+    ASSERT_NE(func, nullptr);
+
+    std::vector<int64_t> shape = {kNumExpSix, kNumExpSix};
+    auto lhs = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto rhs = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto out = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+
+    auto& addOp = PassOperationUtils::AddOperation(*func, Opcode::OP_ADD, {lhs, rhs}, {out});
+    addOp.tileShape_.SetVecTile(kNumExpSix, kNumExpSix);
+
+    auto readSemantic = IRContext::Get().MakeSemanticToken("lhs_r", ir::TokenKind::READ, ir::Span::Unknown());
+    auto writeSemantic = IRContext::Get().MakeSemanticToken("out_w", ir::TokenKind::WRITE, ir::Span::Unknown());
+    auto depSemantic = IRContext::Get().MakeSemanticToken("dep_w", ir::TokenKind::WRITE, ir::Span::Unknown());
+    lhs->SetReadToken(readSemantic);
+    addOp.result_token_ = {readSemantic, writeSemantic};
+    addOp.tokens_ = {depSemantic};
+
+    func->inCasts_.push_back(lhs);
+    func->inCasts_.push_back(rhs);
+    func->outCasts_.push_back(out);
+    func->SetGraphType(GraphType::TENSOR_GRAPH);
+
+    ExpandFunction expandPass;
+    ASSERT_EQ(expandPass.RunOnFunction(*func), SUCCESS);
+
+    bool sliceHasRead = false;
+    bool rhsSliceHasRead = false;
+    bool contractHasWrite = false;
+    bool contractHasDep = false;
+    bool addHasRead = false;
+    for (auto& op : func->Operations(false)) {
+        if (op.GetOpcode() == Opcode::OP_SLICE && !op.GetIOperands().empty() && op.GetIOperands()[0] == lhs) {
+            sliceHasRead = sliceHasRead || HasNormalTokenNamed(op.result_token_, "lhs_r");
+        }
+        if (op.GetOpcode() == Opcode::OP_SLICE && !op.GetIOperands().empty() && op.GetIOperands()[0] == rhs) {
+            rhsSliceHasRead = rhsSliceHasRead || HasNormalTokenNamed(op.result_token_, "lhs_r");
+        }
+        if (op.GetOpcode() == Opcode::OP_CONTRACT && !op.GetOOperands().empty() && op.GetOOperands()[0] == out) {
+            contractHasWrite = contractHasWrite || HasNormalTokenNamed(op.result_token_, "out_w");
+            contractHasDep = contractHasDep || HasNormalTokenNamed(op.tokens_, "dep_w");
+        }
+        if (op.GetOpcode() == Opcode::OP_ADD) {
+            addHasRead = addHasRead || HasNormalTokenNamed(op.result_token_, "lhs_r");
+        }
+    }
+    EXPECT_TRUE(sliceHasRead);
+    EXPECT_FALSE(rhsSliceHasRead);
+    EXPECT_TRUE(contractHasWrite);
+    EXPECT_TRUE(contractHasDep);
+    EXPECT_FALSE(addHasRead);
+}
+
+TEST_F(TestExpandFunctionPass, AssembleWriteGoesToContractAndConsumedOnNextAssemble)
+{
+    TileShape::Current().SetVecTile(kNumExpSix, kNumExpSix);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "AssembleTokenAttach", "AssembleTokenAttach",
+                                           nullptr);
+    ASSERT_NE(func, nullptr);
+
+    std::vector<int64_t> shape = {kNumExpSix, kNumExpSix};
+    auto src1 = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto src2 = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto out = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto assembleAttr1 = CreateAssembleOpAttr();
+    auto assembleAttr2 = CreateAssembleOpAttr();
+
+    auto& firstAssemble = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {src1}, {out});
+    auto& secondAssemble = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {src2}, {out});
+    firstAssemble.SetOpAttribute(assembleAttr1);
+    secondAssemble.SetOpAttribute(assembleAttr2);
+    firstAssemble.tileShape_.SetVecTile(kNumExpSix, kNumExpSix);
+    secondAssemble.tileShape_.SetVecTile(kNumExpSix, kNumExpSix);
+
+    auto readSemantic = IRContext::Get().MakeSemanticToken("src1_r", ir::TokenKind::READ, ir::Span::Unknown());
+    auto firstWrite = IRContext::Get().MakeSemanticToken("out_w1", ir::TokenKind::WRITE, ir::Span::Unknown());
+    auto secondWrite = IRContext::Get().MakeSemanticToken("out_w2", ir::TokenKind::WRITE, ir::Span::Unknown());
+    src1->SetReadToken(readSemantic);
+    firstAssemble.result_token_ = {readSemantic, firstWrite};
+    secondAssemble.result_token_ = {secondWrite};
+    secondAssemble.tokens_ = {firstWrite};
+
+    func->inCasts_.push_back(src1);
+    func->inCasts_.push_back(src2);
+    func->outCasts_.push_back(out);
+    func->SetGraphType(GraphType::TENSOR_GRAPH);
+
+    ExpandFunction expandPass;
+    ASSERT_EQ(expandPass.RunOnFunction(*func), SUCCESS);
+
+    bool src1SliceHasRead = false;
+    int contractWithFirstWrite = 0;
+    int contractWithSecondWrite = 0;
+    int contractConsumingFirstWrite = 0;
+    for (auto& op : func->Operations(false)) {
+        if (op.GetOpcode() == Opcode::OP_SLICE && !op.GetIOperands().empty() && op.GetIOperands()[0] == src1) {
+            src1SliceHasRead = src1SliceHasRead || HasNormalTokenNamed(op.result_token_, "src1_r");
+        }
+        if (op.GetOpcode() != Opcode::OP_CONTRACT) {
+            continue;
+        }
+        if (HasNormalTokenNamed(op.result_token_, "out_w1")) {
+            ++contractWithFirstWrite;
+        }
+        if (HasNormalTokenNamed(op.result_token_, "out_w2")) {
+            ++contractWithSecondWrite;
+        }
+        if (HasNormalTokenNamed(op.tokens_, "out_w1")) {
+            ++contractConsumingFirstWrite;
+        }
+    }
+    EXPECT_TRUE(src1SliceHasRead);
+    EXPECT_EQ(contractWithFirstWrite, 1);
+    EXPECT_EQ(contractWithSecondWrite, 1);
+    EXPECT_EQ(contractConsumingFirstWrite, 1);
 }
 
 } // namespace tile_fwk

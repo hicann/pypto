@@ -16,11 +16,13 @@
 #ifndef PASS_EXPAND_FUNCTION_H_
 #define PASS_EXPAND_FUNCTION_H_
 
+#include <unordered_map>
 #include <unordered_set>
 #include <sstream>
 #include "passes/pass_interface/pass.h"
 #include "interface/operation/opcode.h"
 #include "interface/operation/operation.h"
+#include "ir/expr.h"
 
 namespace npu::tile_fwk {
 class ExpandFunction : public Pass {
@@ -29,6 +31,9 @@ public:
     ~ExpandFunction() override = default;
     Status DefaultEnabledPreCheck(Function& function) override;
     Status PostCheck(Function& function) override;
+
+    static Operation* GetCurrentTileOp() { return currentTileOp_; }
+    static ir::VarPtr GetNormalToken(const ir::VarPtr& semantic);
 
 private:
     Status RunOnFunction(Function& function) override;
@@ -41,6 +46,20 @@ private:
     void ProcessForNotExpandOp(Function& function, Operation& op) const;
     void DoHealthCheckBefore(Function& function, const std::string& folderPath) override;
 
+    struct CurrentTileOpGuard {
+        explicit CurrentTileOpGuard(Operation& op) { currentTileOp_ = &op; }
+        ~CurrentTileOpGuard() { currentTileOp_ = nullptr; }
+        CurrentTileOpGuard(const CurrentTileOpGuard&) = delete;
+        CurrentTileOpGuard& operator=(const CurrentTileOpGuard&) = delete;
+    };
+
+    struct SemanticToNormalGuard {
+        SemanticToNormalGuard() { semanticToNormal_.clear(); }
+        ~SemanticToNormalGuard() { semanticToNormal_.clear(); }
+    };
+
+    static thread_local Operation* currentTileOp_;
+    static thread_local std::unordered_map<ir::VarPtr, ir::VarPtr> semanticToNormal_;
     static const std::unordered_set<Opcode> kNotNeedExpandOps;
 };
 } // namespace npu::tile_fwk

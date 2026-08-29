@@ -36,8 +36,7 @@ void ExpandOperationInto(Function& function, const TileShape& tileShape, Opcode 
                          const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op);
 
 void TiledAssemble(Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand,
-                   const LogicalTensorPtr& result, std::shared_ptr<AssembleOpAttribute> attr,
-                   const Operation& sourceOp);
+                   const LogicalTensorPtr& result, std::shared_ptr<AssembleOpAttribute> attr);
 
 void TiledViewOperation(Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand,
                         const LogicalTensorPtr& result, const Operation& op);

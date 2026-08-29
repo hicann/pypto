@@ -19,6 +19,7 @@
 #include "passes/pass_utils/pass_operation_utils.h"
 #include "interface/tensor/raw_tensor.h"
 #include "interface/tensor/logical_tensor.h"
+#include "interface/tensor/irbuilder.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
@@ -437,6 +438,23 @@ namespace npu::tile_fwk {
 // OP_SLICE / OP_CONTRACT 仅在 ExpandFunction 展开过程中由 AddOperation 插入，本身已是 tile 级语义
 const std::unordered_set<Opcode> ExpandFunction::kNotNeedExpandOps = {Opcode::OP_SLICE, Opcode::OP_CONTRACT,
                                                                       Opcode::OP_NOP, Opcode::OP_ATOMIC_RMW};
+thread_local Operation* ExpandFunction::currentTileOp_ = nullptr;
+thread_local std::unordered_map<ir::VarPtr, ir::VarPtr> ExpandFunction::semanticToNormal_;
+
+ir::VarPtr ExpandFunction::GetNormalToken(const ir::VarPtr& semantic)
+{
+    if (semantic == nullptr) {
+        return nullptr;
+    }
+    auto it = semanticToNormal_.find(semantic);
+    if (it != semanticToNormal_.end()) {
+        return it->second;
+    }
+    auto normal = IRContext::Get().MakeVar(semantic->name_ + "_n", ir::GetTokenType(ir::TokenKind::NORMAL),
+                                           semantic->span_);
+    semanticToNormal_.emplace(semantic, normal);
+    return normal;
+}
 
 Status ExpandFunction::ClearIOOperand(const std::vector<OperationPtr>& tensorOperations) const
 {
@@ -520,8 +538,6 @@ void ExpandFunction::ProcessForNotExpandOp(Function& function, Operation& op) co
     if (op.HasAttribute(OpAttributeKey::rmwMode)) {
         newOp.SetAttribute(OpAttributeKey::rmwMode, op.GetIntAttribute(OpAttributeKey::rmwMode));
     }
-    newOp.result_token_ = op.result_token_;
-    newOp.tokens_ = op.tokens_;
 }
 
 Status ExpandFunction::DefaultEnabledPreCheck(Function& function)
@@ -616,6 +632,7 @@ Status ExpandFunction::Expandfunction(Function& function) const
         return SUCCESS;
     }
     function.expandFunctionAccelerate = true;
+    SemanticToNormalGuard semanticToNormalGuard;
     function.SetGraphType(GraphType::TILE_GRAPH);
 
     std::vector<OperationPtr> tensorOperations;
@@ -706,6 +723,7 @@ Status ExpandFunction::ExpandOperation(Function& function, Operation& op) const
             config::SetPassOption(SG_SET_OOO_SCOPE, std::vector<int64_t>{-1});
         }
     } scopeConfigGuard;
+    CurrentTileOpGuard currentTileOpGuard(op);
     ExpandOperationInto(function, op.GetTileShape(), op.GetOpcode(), op.GetIOperands(), op.GetOOperands(), op);
     return SUCCESS;
 }
