@@ -72,6 +72,7 @@ private:
     std::vector<int> mTensorVisitStamp;
     int mVisitStamp{0};
     std::unordered_set<int> mGlobalOutputSinks; // 出度0子图: 不作为任何 boundary tensor producer, 即最终输出端点
+    std::unordered_set<int> mWarnedInnerTensorMagics; // 已输出过 WARN 的 tensor, 跨 merge loop 迭代去重防打屏
     // cached merged graph (avoid redundant rebuild in CanMergeWithoutCycle)
     std::vector<std::set<int>> mCachedOutGraph;
     std::vector<std::set<int>> mCachedInGraph;
@@ -94,7 +95,8 @@ private:
     bool CheckLatencyConstraint(const std::vector<int>& actualGroup);
     bool CheckMergeBenefitByStructuralPattern(const std::vector<int>& actualGroup);
     bool CheckNoExternalUseOfMergedInnerTensor(const std::vector<int>& actualGroup);
-    bool IsInvalidMergedInnerTensor(int tensorId, const std::unordered_set<int>& mergedRoots);
+    bool IsInvalidMergedInnerTensor(int tensorId, const std::unordered_set<int>& mergedRoots, std::vector<int>& prodIn,
+                                    std::vector<int>& prodOut, std::vector<int>& consIn, std::vector<int>& consOut);
     std::vector<int> GetActualGroup(const std::vector<int>& group);
     void BuildMergedGraph(std::vector<std::set<int>>& outGraph, std::vector<std::set<int>>& inGraph);
     bool HasCycle(const std::vector<std::set<int>>& outGraph, const std::vector<std::set<int>>& inGraph);

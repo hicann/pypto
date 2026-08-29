@@ -469,6 +469,7 @@ static bool ValidateInput(const MergeInput& input)
 void MixGraphMerger::Initialize(const MergeInput& input)
 {
     mInput = input;
+    mWarnedInnerTensorMagics.clear();
     mParent.resize(input.numSubgraph);
     mRank.resize(input.numSubgraph, 0);
     for (int i = 0; i < input.numSubgraph; ++i) {
@@ -671,7 +672,9 @@ bool MixGraphMerger::CheckLatencyConstraint(const std::vector<int>& actualGroup)
     return true;
 }
 
-bool MixGraphMerger::IsInvalidMergedInnerTensor(int tensorId, const std::unordered_set<int>& mergedRoots)
+bool MixGraphMerger::IsInvalidMergedInnerTensor(int tensorId, const std::unordered_set<int>& mergedRoots,
+                                                std::vector<int>& prodIn, std::vector<int>& prodOut,
+                                                std::vector<int>& consIn, std::vector<int>& consOut)
 {
     const auto& tensorInfo = mInput.boundaryTensors[tensorId];
     if (!tensorInfo.isDDR) {
@@ -684,16 +687,20 @@ bool MixGraphMerger::IsInvalidMergedInnerTensor(int tensorId, const std::unorder
         int root = FindParent(subgraphId);
         if (mergedRoots.count(root) > 0) {
             hasProducerInMix = true;
+            prodIn.push_back(subgraphId);
         } else {
             hasExternalEndpoint = true;
+            prodOut.push_back(subgraphId);
         }
     }
     for (int subgraphId : tensorInfo.consumerSubgraphs) {
         int root = FindParent(subgraphId);
         if (mergedRoots.count(root) > 0) {
             hasConsumerInMix = true;
+            consIn.push_back(subgraphId);
         } else {
             hasExternalEndpoint = true;
+            consOut.push_back(subgraphId);
         }
     }
     return hasProducerInMix && hasConsumerInMix && hasExternalEndpoint;
@@ -709,10 +716,24 @@ bool MixGraphMerger::CheckNoExternalUseOfMergedInnerTensor(const std::vector<int
                 continue;
             }
             mTensorVisitStamp[tensorId] = mVisitStamp;
-            if (IsInvalidMergedInnerTensor(tensorId, mergedRoots)) {
-                APASS_LOG_DEBUG_F(Elements::Operation,
-                                  "Merge skipped: tensor %d would become an inner tensor with external usage.",
-                                  mInput.boundaryTensors[tensorId].tensorMagic);
+            std::vector<int> prodIn, prodOut, consIn, consOut;
+            if (IsInvalidMergedInnerTensor(tensorId, mergedRoots, prodIn, prodOut, consIn, consOut)) {
+                const auto& tinfo = mInput.boundaryTensors[tensorId];
+                if (mWarnedInnerTensorMagics.insert(tinfo.tensorMagic).second) {
+                    APASS_LOG_WARN_F(Elements::Operation,
+                                     "Merge group [%s] not merged: tensor %d producer(ingroup[%s] outgroup[%s]) "
+                                     "consumer(ingroup[%s] outgroup[%s]) has both in-group and out-group endpoints. "
+                                     "Likely cause: producer/consumer of the same tensor carry different scope "
+                                     "(CvFuseId).",
+                                     IntVecToStr(actualGroup).c_str(), tinfo.tensorMagic, IntVecToStr(prodIn).c_str(),
+                                     IntVecToStr(prodOut).c_str(), IntVecToStr(consIn).c_str(),
+                                     IntVecToStr(consOut).c_str());
+                } else {
+                    APASS_LOG_DEBUG_F(Elements::Operation,
+                                      "Merge group [%s] not merged: tensor %d blocked by inner-external-use again, "
+                                      "see previous WARN for detail.",
+                                      IntVecToStr(actualGroup).c_str(), tinfo.tensorMagic);
+                }
                 return false;
             }
         }
@@ -986,15 +1007,26 @@ MergeOutput MixGraphMerger::Merge(const MergeInput& input)
                 APASS_LOG_DEBUG_F(Elements::Operation, "Skip merge group %zu: already merged", i);
                 continue;
             }
-            if ((input.isEnforceMergeGroup[i] && CanMergeWithoutCycle(actualGroup)) ||
-                (enableAutoMix && mergeLoopStep != 0 && input.isValidMergeGroup[i] &&
-                 CanMergeWithConstraints(actualGroup))) {
+            if (input.isEnforceMergeGroup[i]) {
+                if (CanMergeWithoutCycle(actualGroup) && CheckNoExternalUseOfMergedInnerTensor(actualGroup)) {
+                    APASS_LOG_DEBUG_F(Elements::Operation, "Merge group %zu succeeded: actualGroup=%s.", i,
+                                      IntVecToStr(actualGroup).c_str());
+                    PerformMerge(actualGroup);
+                    hasUpdated = true;
+                } else {
+                    APASS_LOG_DEBUG_F(Elements::Operation,
+                                      "Merge group %zu [%s] skipped due to constraints, see above for reason.", i,
+                                      IntVecToStr(actualGroup).c_str());
+                }
+            } else if (enableAutoMix && mergeLoopStep != 0 && input.isValidMergeGroup[i] &&
+                       CanMergeWithConstraints(actualGroup)) {
                 APASS_LOG_DEBUG_F(Elements::Operation, "Merge group %zu succeeded: actualGroup=%s.", i,
                                   IntVecToStr(actualGroup).c_str());
                 PerformMerge(actualGroup);
                 hasUpdated = true;
-            } else if (input.isEnforceMergeGroup[i] || mergeLoopStep != 0) {
-                APASS_LOG_DEBUG_F(Elements::Operation, "Merge group %zu skipped due to constraints.", i);
+            } else if (mergeLoopStep != 0) {
+                APASS_LOG_DEBUG_F(Elements::Operation, "Merge group %zu [%s] skipped due to constraints.", i,
+                                  IntVecToStr(actualGroup).c_str());
             }
         }
         if (mergeLoopStep > 0 && !hasUpdated) {

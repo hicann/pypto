@@ -492,6 +492,58 @@ TEST_F(ReduceCopyTest, MixGraphMerger_CacheConsistentWithFullRebuild)
     }
 }
 
+// 强制合并也不能让 DDR tensor 同时具有组内读写和组外端点，否则该 tensor 会在合并后
+// 变成仍被组外子图使用的内部 tensor。组外 producer/consumer 同时覆盖 WARN 诊断的分类路径。
+TEST_F(ReduceCopyTest, MixGraphMerger_EnforcedMergeRejectsExternalDdrTensorUse)
+{
+    std::vector<std::set<int>> outGraph{{1}, {}, {}};
+    MergeInput input = BuildSimpleMergeInput(3, outGraph, {{0, 1}});
+    input.boundaryTensors = {{101, {0, 2}, {0, 2}, true}};
+    input.subgraphToBoundaryTensorIds = {{0}, {}, {0}};
+
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+
+    const int Num3 = 3;
+    EXPECT_EQ(output.numSubgraphUpdated, Num3);
+    EXPECT_NE(output.subgraphIdUpdated[0], output.subgraphIdUpdated[1]);
+    EXPECT_NE(output.subgraphIdUpdated[0], output.subgraphIdUpdated[2]);
+}
+
+// 复刻 issue #3160 原始形态: producer 全部组内, 仅 consumer 部分组外(组内读写 + 组外消费)。
+// 防止误改判定条件(例如要求必须存在组外 producer 才拒绝)后守护失效。
+TEST_F(ReduceCopyTest, MixGraphMerger_EnforcedMergeRejectsExternalConsumerOnly)
+{
+    std::vector<std::set<int>> outGraph{{1}, {}, {}};
+    MergeInput input = BuildSimpleMergeInput(3, outGraph, {{0, 1}});
+    input.boundaryTensors = {{103, {0}, {0, 2}, true}};
+    input.subgraphToBoundaryTensorIds = {{0}, {}, {0}};
+
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+
+    const int Num3 = 3;
+    EXPECT_EQ(output.numSubgraphUpdated, Num3);
+    EXPECT_NE(output.subgraphIdUpdated[0], output.subgraphIdUpdated[1]);
+    EXPECT_NE(output.subgraphIdUpdated[0], output.subgraphIdUpdated[2]);
+}
+
+// 没有组外端点时，强制合并仍应正常完成，防止新增的 external-use 检查误拦截。
+TEST_F(ReduceCopyTest, MixGraphMerger_EnforcedMergeAllowsInternalDdrTensorUse)
+{
+    std::vector<std::set<int>> outGraph{{1}, {}};
+    MergeInput input = BuildSimpleMergeInput(2, outGraph, {{0, 1}});
+    input.boundaryTensors = {{102, {0}, {1}, true}};
+    input.subgraphToBoundaryTensorIds = {{0}, {0}};
+
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+
+    const int Num1 = 1;
+    EXPECT_EQ(output.numSubgraphUpdated, Num1);
+    EXPECT_EQ(output.subgraphIdUpdated[0], output.subgraphIdUpdated[1]);
+}
+
 // 正向: sg0 同时是 T 的 producer(ASSEMBLE) 和 consumer(CAST), sg1 是外部 ASSEMBLE producer.
 // 复刻 gdr_fwd tensor 522 结构: producer 和 consumer 在同一子图, 外部 producer 在另一子图.
 // T(UB) 多 ASSEMBLE producer(全 MOVE_LOCAL) -> WillBeDdrWithoutNewCopyOp 命中 -> isDDR=true ->
