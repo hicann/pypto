@@ -15,7 +15,7 @@
 ## 函数原型
 
 ```python
-triu(self: 'Tensor', diagonal: 'int | SymbolicScalar' = 0) -> Tensor:
+triu(self: 'Tensor', diagonal: 'int | SymbolicScalar' = 0) -> Tensor
 ```
 
 ## 详细说明

@@ -15,7 +15,7 @@
 ## 函数原型
 
 ```python
-tril_(self: 'Tensor', diagonal: 'int | SymbolicScalar' = 0) -> Tensor:
+tril_(self: 'Tensor', diagonal: 'int | SymbolicScalar' = 0) -> Tensor
 ```
 
 ## 详细说明

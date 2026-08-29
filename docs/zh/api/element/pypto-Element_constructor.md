@@ -19,15 +19,15 @@
 ## 函数原型
 
 ```python
-def __init__(self, dtype, value) : ...
+__init__(self, dtype, value)
 ```
 
 ## 参数说明
 
 | 参数名 | 输入/输出 | 说明                  |
 |--------|-----------|-----------------------|
-| dtype  | 输入      | 数据类型，详见<a href="../datatype/DataType.md">DataType</a> |
-| value  | 输入      | 整数或者浮点数        |
+| dtype  | 输入      | 数据类型，详见[DataType](../datatype/DataType.md)。|
+| value  | 输入      | 整数或者浮点数。       |
 
 ## 返回值说明
 

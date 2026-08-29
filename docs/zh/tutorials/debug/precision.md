@@ -12,7 +12,6 @@
 ```mermaid
 flowchart LR
     subgraph Left["整体流程"]
-        direction TB
         L1["1.确认问题合法性"]
         L2["2.基础预检"]
         L3["3.缩小问题规模"]
@@ -21,7 +20,6 @@ flowchart LR
     end
 
     subgraph Right["子流程"]
-        direction TB
         R1["1.确认判定方式合理性（主观）<br>2.确认问题可稳定复现"]
         R2["1.检查硬件：借助asys工具检查硬件问题<br>2.检查软件：版本正确、基础样例正确<br>3.检查用户问题：评审用户代码"]
         R3["1.减少子图数量、大小<br>2.裁剪模型<br>3.二分法移除靠近尾部的计算"]
@@ -55,7 +53,7 @@ flowchart LR
 
 基础预检为指导性说明，指出常见但易被忽视的高概率出错问题。如果用户或调试人员确认相应检查项无误，可以跳过这些步骤。
 
-1. 借助[asys工具](https://hiascend.com/document/redirect/CannCommunityasys)检查硬件问题。
+1. 借助asys工具检查硬件问题，详细请参见《[故障处理](https://gitcode.com/cann/docs/blob/master/docs/zh/troubleshooting/00_troubleshooting.md)》。
     1. 使用硬件自检工具排除硬件安装问题。
     2. 使用硬件压测工具排除硬件故障。
 

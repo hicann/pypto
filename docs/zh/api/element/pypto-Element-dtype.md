@@ -19,7 +19,7 @@
 ## 函数原型
 
 ```python
-def dtype(self) -> pypto.DataType
+dtype(self) -> pypto.DataType
 ```
 
 ## 参数说明

@@ -23,7 +23,7 @@ $$
 ## 函数原型
 
 ```python
-def floor_div(input: Tensor, other: Union[Tensor, int, float]) -> Tensor
+floor_div(input: Tensor, other: Union[Tensor, int, float]) -> Tensor
 ```
 
 ## 参数说明

@@ -9,7 +9,6 @@ PyPTO框架采用分层架构设计，从用户API到底层硬件执行，共分
 ```mermaid
 flowchart LR
     subgraph Left["架构层级"]
-        direction TB
         L1["用户接口层<br>User Interface Layer"]
         L2["计算图编译层<br>Compute Graph Compile Layer"]
         L3["代码生成层<br>Code Generation Layer"]
@@ -17,7 +16,6 @@ flowchart LR
     end
 
     subgraph Right["说明"]
-        direction TB
         R1["Tensor操作、Function、JIT编译"]
         R2["Tensor Graph、Tile Graph、Block Graph、Execute Graph"]
         R3["虚拟指令生成、目标平台代码生成"]

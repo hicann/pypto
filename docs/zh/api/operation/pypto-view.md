@@ -16,16 +16,11 @@
 
 从输入Tensor中取出部分视图，用于后续计算。
 
-## 注意事项
-
-- **需要valid_shape时必须用pypto.view**：当需要指定`valid_shape`（动态有效数据大小）时，不能使用`[]`切片语法，必须使用显式的`pypto.view`接口
-- 输入张量input和输入shape的维度数量需要一致。
-
 ## 函数原型
 
 ```python
 view(input: Tensor, shape: List[int] = None, offsets: List[Union[int, SymbolicScalar]] = None, *, valid_shape: Optional[List[Union[int, SymbolicScalar]]] = None, dtype: DataType = None,
-) -> Tensor:
+) -> Tensor
 ```
 
 ## 参数说明
@@ -41,6 +36,11 @@ view(input: Tensor, shape: List[int] = None, offsets: List[Union[int, SymbolicSc
 ## 返回值说明
 
 返回输出Tensor，Tensor的数据类型和input相同，Shape为参数shape指定大小，若指定了valid\_shape，则真实大小为valid\_shape。若指定dtype，则会将输入按照dtype进行读取。
+
+## 约束说明
+
+- **需要valid_shape时必须用pypto.view**：当需要指定`valid_shape`（动态有效数据大小）时，不能使用`[]`切片语法，必须使用显式的`pypto.view`接口
+- 输入张量input和输入shape的维度数量需要一致。
 
 ## 调用示例
 

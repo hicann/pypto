@@ -53,3 +53,4 @@
     - [PYPTO_PROF_PMU_EVENT_TYPE](./appendix/env_vars/PYPTO_PROF_PMU_EVENT_TYPE.md)
     - [PYPTO_LAUNCH_SCHED_SAME_CLUSTER](./appendix/env_vars/PYPTO_LAUNCH_SCHED_SAME_CLUSTER.md)
     - [PYPTO_DATADUMP_ENABLE](./appendix/env_vars/PYPTO_DATADUMP_ENABLE.md)
+    - [PYPTO_THIRD_PARTY_PATH](./appendix/env_vars/PYPTO_THIRD_PARTY_PATH.md)

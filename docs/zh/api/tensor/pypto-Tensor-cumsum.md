@@ -15,7 +15,7 @@
 ## 函数原型
 
 ```python
-cumsum(input: Tensor, dim: int) -> Tensor:
+cumsum(input: Tensor, dim: int) -> Tensor
 ```
 
 ## 详细说明

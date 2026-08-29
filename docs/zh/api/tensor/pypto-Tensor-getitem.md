@@ -23,7 +23,7 @@ Tensor索引是Tensor的核心操作之一，用于从Tensor中筛选、提取�
 ## 函数原型
 
 ```python
-def __getitem__(self, key, *, valid_shape: Optional[List[Union[int, SymbolicScalar]]] = None)
+__getitem__(self, key, *, valid_shape: Optional[List[Union[int, SymbolicScalar]]] = None)
 ```
 
 ## 参数说明
@@ -182,7 +182,7 @@ def __getitem__(self, key, *, valid_shape: Optional[List[Union[int, SymbolicScal
 ## 函数原型
 
 ```python
-def __setitem__(self, key, value)
+__setitem__(self, key, value)
 ```
 
 ## 参数说明

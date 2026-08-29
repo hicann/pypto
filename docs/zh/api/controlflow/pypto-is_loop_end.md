@@ -19,7 +19,7 @@
 ## 函数原型
 
 ```python
-def is_loop_end(scalar: SymInt) -> SymbolicScalar
+is_loop_end(scalar: SymInt) -> SymbolicScalar
 ```
 
 ## 参数说明

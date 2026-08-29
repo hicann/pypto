@@ -15,7 +15,7 @@
 ## 函数原型
 
 ```python
-cumprod(input: Tensor, dim: int) -> Tensor:
+cumprod(input: Tensor, dim: int) -> Tensor
 ```
 
 ## 详细说明

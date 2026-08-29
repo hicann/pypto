@@ -27,7 +27,7 @@ remainder(
     input: Union[Tensor, int, float],
     other: Union[Tensor, int, float],
     precision_type: PrecisionType = PrecisionType.HIGH_PRECISION
-) -> Tensor:
+) -> Tensor
 ```
 
 ## 参数说明

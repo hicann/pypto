@@ -19,7 +19,7 @@
 ## 函数原型
 
 ```python
-def value(self) -> int | float
+value(self) -> int | float
 ```
 
 ## 参数说明

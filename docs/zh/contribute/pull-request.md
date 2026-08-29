@@ -32,7 +32,7 @@ PR body:
 
 Below is an example of a PR body:
 
-```
+```txt
 feat(interface): Optimize the pypto.cond with concrete value
 
 The origin implementation of pypto.cond generate both if/else branch, even if the condition is always true or false, in this PR, we optimize the implementation to generate only one branch.
