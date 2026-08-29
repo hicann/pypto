@@ -8,7 +8,7 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""构建产物二进制头文件分析."""
+"""Build artifact binary header file analysis."""
 
 import argparse
 from datetime import datetime, timezone
@@ -20,7 +20,7 @@ from typing import Dict, List
 
 class Analysis:
     def __init__(self, args):
-        # 参数预处理
+        # Parameter preprocessing
         self.source: Path = Path(args.source[0])
         self.binary: Path = Path(args.binary[0])
         self.target_file: Path = Path(args.target[0])
@@ -83,7 +83,7 @@ class Analysis:
         return True
 
     def analysis_object(self, o: Path) -> bool:
-        # 获取 .o 对应 .d 文件
+        # Get the .d file corresponding to .o
         if not o.exists():
             logging.error("%s object-file not exist, %s", self.target_name, o)
             return False
@@ -92,13 +92,13 @@ class Analysis:
         if not d.exists():
             logging.error("%s dependence-file not exist, %s", self.target_name, d)
             return False
-        # 解析 .d 获取具体 .h 依赖列表
+        # Parse .d to get specific .h dependency list
         h_lst = []
         with open(d, mode='r', encoding='utf-8', errors="ignore") as fh:
             for _, line in enumerate(fh, 1):
-                # 去除首尾空白字符, 规范化路径
+                # Strip leading/trailing whitespace, normalize path
                 line_str = line.split("\\")[0].replace(":", "").strip()
-                # 存在一行内包含多个路径的情况, 此时路径间以空格分割
+                # A single line may contain multiple paths, separated by spaces
                 line_lst = line_str.split(" ")
                 for cur_line_str in line_lst:
                     cur_line_str = cur_line_str.strip()
@@ -106,9 +106,9 @@ class Analysis:
                     if not cur_path.is_absolute():
                         cur_path = Path(self.target_binary_dir, cur_path).resolve(strict=False)
                     h_lst.append(cur_path)
-        h_lst = h_lst[1:]  # 去除 cpp.o 描述
+        h_lst = h_lst[1:]  # Remove cpp.o description
         h_lst.sort()
-        # 判断 .h 依赖列表内容合法合理性
+        # Validate .h dependency list content
         for h in h_lst:
             legal = self.in_filters(h=h) and not self.in_blacks(h=h)
             if not legal:
@@ -140,16 +140,16 @@ class Analysis:
     def is_sub_path(child: Path, parent: Path) -> bool:
         child = child.absolute()
         parent = parent.absolute()
-        # 比较路径部分
+        # Compare path parts
         parent_parts = parent.parts
         child_parts = child.parts
-        # 子路径需完全包含父路径的前缀
+        # Child path must fully contain parent path prefix
         return parent_parts == child_parts[:len(parent_parts)]
 
     @staticmethod
     def main() -> bool:
-        """主处理流程"""
-        # 参数注册
+        """Main processing flow"""
+        # Register arguments
         parser = argparse.ArgumentParser(description="Header-File Analysis.", epilog="Best Regards!")
         parser.add_argument("-s", "--source", nargs=1, type=Path, required=True, help="Specific source root path.")
         parser.add_argument("-b", "--binary", nargs=1, type=Path, required=True, help="Specific binary root path.")
@@ -175,7 +175,7 @@ class Analysis:
             type=Path,
             help="Specific target include filter(file/dir).",
         )
-        # 流程处理
+        # Process workflow
         ctrl = Analysis(args=parser.parse_args())
         return ctrl.analysis()
 

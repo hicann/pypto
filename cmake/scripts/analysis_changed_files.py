@@ -8,9 +8,10 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""分析修改文件清单.
+"""Analyze changed file list.
 
-分析修改文件清单, 判断当前测试场景是否需要执行及获取用例执行范围.
+Analyze changed file list to determine whether the current test scenario needs to be executed
+and to obtain the case execution scope.
 """
 
 import argparse
@@ -40,10 +41,10 @@ class Module:
         return False
 
     def is_trigger(self, changed: List[Path]) -> Tuple[bool, List[str]]:
-        # 若无 changed, 默认触发所有用例
+        # If no changed files, trigger all cases by default
         if not changed:
             return True, self.cases
-        # 当所有 changed 均命中白名单, 无需触发
+        # If all changed files hit the whitelist, no need to trigger
         for c in changed:
             c_skip = False
             for w in self.write:
@@ -66,7 +67,7 @@ class Analysis:
         self.type: str = str(args.type[0]).lower()
         self.group: List[str] = args.group.split(",") if args.group else []
         self.file: Optional[Path] = Path(args.file[0]).resolve() if args.file and args.file[0] else None
-        # 内部对象转化
+        # Internal object conversion
         self.modules: Dict[str, Module] = self._init_get_models()
         self.changed: List[Path] = self._init_get_changed()
 
@@ -101,18 +102,18 @@ class Analysis:
         )
         parser.add_argument("-d", "--debug", action="store_true", default=False, help="Enable debug mode")
         args = parser.parse_args()
-        # 日志级别注册, 本文件有两种调用场景:
-        # 1) 由 CMake 调用, 此时需保证若正常处理无任何额外输出, 需把日志级别调整为 ERROR;
-        # 2) 调试时由 Python 直调, 此时需输出较多日志, 可将日志级别设置为 DEBUG;
+        # Log level registration, this file has two invocation scenarios:
+        # 1) Called by CMake, in which case normal processing should have no extra output, set log level to ERROR;
+        # 2) Called directly by Python for debugging, in which case more logs are needed, set log level to DEBUG;
         logging.basicConfig(
             format='%(asctime)s - %(filename)s:%(lineno)d - PID[%(process)d] - %(levelname)s: %(message)s',
             level=logging.DEBUG if args.debug else logging.ERROR,
             handlers=[logging.StreamHandler()],
         )
-        # 参数解析
+        # Parse arguments
         ctrl = Analysis(args=args)
         logging.info(ctrl)
-        # 流程处理
+        # Process workflow
         return ctrl.analysis()
 
     def analysis(self) -> str:
@@ -132,15 +133,15 @@ class Analysis:
         with open(file, 'r', encoding='utf-8') as f:
             rule_dict = yaml.safe_load(f)
         rule_dict = rule_dict.get(self.type, {})
-        # 处理 type 下白名单
+        # Process whitelist under type
         type_write_list = self._get_write_list(_desc=rule_dict)
         type_write_list = write_list if write_list else type_write_list
-        # 循环处理 module
+        # Iterate over modules
         for name, desc in rule_dict.items():
-            # 处理 module 下白名单
+            # Process whitelist under module
             write_list = self._get_write_list(_desc=desc)
             write_list.extend(type_write_list)
-            # 获取 module 下用例列表
+            # Get case list under module
             cases_list = desc.get(self._KEY_CASES, [])
             mod = Module(name=name, cases=cases_list, write=write_list)
             modules[name] = mod
@@ -170,7 +171,7 @@ class Analysis:
         for module in self.modules.values():
             match_group = False if self.group else True
             for group in self.group:
-                # 支持 group 名称模糊匹配
+                # Support fuzzy matching for group names
                 if fnmatch.fnmatch(module.name, group):
                     match_group = True
                     break

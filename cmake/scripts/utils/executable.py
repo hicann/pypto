@@ -8,23 +8,24 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""可执行文件执行辅助模块
+"""Executable file execution helper module
 
-本模块提供可执行文件(主要是GTest测试程序)的执行, 测试用例列表获取(按耗时预估刷新顺序)功能,
-主要用于测试框架的用例管理和执行加速.
+This module provides execution of executable files (mainly GTest test programs),
+test case list retrieval (ordered by estimated duration refresh),
+primarily used for test case management and execution acceleration in the test framework.
 
-主要功能:
-- 可执行文件的封装与执行
-- GTest测试用例列表的自动获取
-- 测试用例耗时预估获取与用例列表重排(从可执行文件元数据或JSON缓存)
-- 环境变量配置与管理
-- 执行超时控制
+Main features:
+- Wrapping and execution of executable files
+- Automatic retrieval of GTest test case lists
+- Test case duration estimation retrieval and case list reordering (from executable metadata or JSON cache)
+- Environment variable configuration and management
+- Execution timeout control
 
-主要类:
-- Exec: 可执行文件封装类, 提供完整的执行和管理功能
-- CaseDesc: 测试用例描述, 包含名称和预估耗时
+Main classes:
+- Exec: Executable file wrapper class, providing complete execution and management functionality
+- CaseDesc: Test case description, including name and estimated duration
 
-使用示例:
+Usage example:
     exec_obj = Exec(file=Path("test_executable"), envs={"ENV_VAR": "value"}, timeout=300)
     case_list, case_dict = exec_obj.get_case_name_info(case_duration_json=Path("duration.json"))
     ret, cmd, duration = exec_obj.run(params=["--gtest_filter=TestSuite.TestCase"])
@@ -43,16 +44,16 @@ from typing import Dict, List, Optional, Tuple
 
 
 class Exec:
-    """可执行文件封装类
+    """Executable file wrapper class
 
-    提供可执行文件的执行, 测试用例列表获取等功能.
+    Provides executable file execution, test case list retrieval, and other functionalities.
     """
 
     @dataclasses.dataclass
     class CaseDesc:
-        """测试用例描述
+        """Test case description
 
-        包含用例名称和预估/实际执行耗时
+        Contains case name and estimated/actual execution duration
         """
 
         name: Optional[str] = None
@@ -64,11 +65,12 @@ class Exec:
 
     def __init__(self, file: Path, envs: Optional[Dict[str, str]] = None, timeout: Optional[int] = None):
         """
-        :param file: 可执行文件路径
+        :param file: Path to the executable file
         :type file: Path
-        :param envs: 可执行文件执行时额外指定环境变量
+        :param envs: Additional environment variables to set when executing the executable
         :type envs: Optional[Dict[str, str]]
-        :param timeout: 执行超时时间(秒), 为空时从环境变量 PYPTO_TESTS_CASE_EXECUTE_TIMEOUT 中获取, 未指定时无超时限制
+        :param timeout: Execution timeout in seconds. If empty, reads from environment variable
+            PYPTO_TESTS_CASE_EXECUTE_TIMEOUT; if not specified, no timeout limit
         :type timeout: Optional[int]
         """
         self.file: Path = Path(file).resolve()
@@ -78,15 +80,15 @@ class Exec:
         if env_timeout:
             self.timeout = int(env_timeout)
         if timeout and timeout > 0:
-            self.timeout = timeout  # 参数设置优先级高于环境变量
+            self.timeout = timeout  # Parameter setting takes priority over environment variable
 
     @property
     def brief(self) -> str:
-        """获取可执行过程简要描述
+        """Get a brief description of the execution process
 
-        包含文件名和ASAN/UBSAN状态信息
+        Includes filename and ASAN/UBSAN status information
 
-        :return: 简要描述字符串
+        :return: Brief description string
         """
         asan = "ON" if "ASAN_OPTIONS" in self.envs.keys() else "OFF"
         ubsan = "ON" if "UBSAN_OPTIONS" in self.envs.keys() else "OFF"
@@ -95,18 +97,20 @@ class Exec:
     def get_case_name_info(
         self, case_name_list: Optional[List[str]] = None, duration_json: Optional[Path] = None
     ) -> Tuple[int, List[CaseDesc], Dict[str, CaseDesc]]:
-        """获取测试用例信息并排序
+        """Get test case information and sort
 
-        根据指定的用例列表或可执行文件获取用例列表, 补充耗时预估信息, 并按耗时预估降序排列.
+        Retrieves the case list based on the specified case list or executable file,
+        supplements duration estimation information, and sorts in descending order by estimated duration.
 
-        :param case_name_list: 指定的用例名称列表, 为空或包含"*"时从可执行文件获取全部用例
+        :param case_name_list: Specified list of case names. If empty or contains "*",
+            retrieves all cases from the executable
         :type case_name_list: Optional[List[str]]
-        :param case_duration_json: 用例耗时缓存JSON文件路径, 用于补充预估耗时
+        :param case_duration_json: Path to the case duration cache JSON file, used to supplement estimated duration
         :type case_duration_json: Optional[Path]
-        :return: 排序后的用例描述列表和用例描述字典
+        :return: Sorted list of case descriptions and case description dictionary
         :rtype: Tuple[List[CaseDesc], Dict[str, CaseDesc]]
         """
-        # 确定待执行用例名列表
+        # Determine the list of case names to be executed
         if case_name_list is None or len(case_name_list) == 0 or "*" in case_name_list:
             case_name_list = self._get_case_name_list_origin()
             logging.info("Determine TestCase from file, get %s cases", len(case_name_list))
@@ -114,10 +118,12 @@ class Exec:
             logging.info("Determine TestCase from args, get %s cases", len(case_name_list))
         desc_dict = {name: self.CaseDesc(name=name) for name in case_name_list}
 
-        # 补充刷新预估耗时信息(先由用例内定义耗时, 后根据 json 刷新, 确保其更贴近真实耗时)
+        # Supplement and refresh estimated duration information
+        # (first from duration defined in cases, then refresh from JSON,
+        # to ensure it is closer to actual duration)
         self._mdf_case_desc_dict(case_desc_dict=desc_dict, path=duration_json)
 
-        # 重排用例
+        # Reorder test cases
         desc_list = desc_dict.values()
         desc_list = sorted(
             desc_list, key=lambda x: x.duration if x.duration is not None else float('-inf'), reverse=True
@@ -127,7 +133,7 @@ class Exec:
             if desc.duration:
                 ordered_cnt += 1
             else:
-                break  # 排序后, 有耗时预估的会排在前面
+                break  # After sorting, cases with duration estimates are placed first
         normal_cnt = len(case_name_list) - ordered_cnt
         logging.info("Determine TestCase Order, OrderedCase(%s), NormalCase(%s)", ordered_cnt, normal_cnt)
         return ordered_cnt, desc_list, desc_dict
@@ -139,25 +145,26 @@ class Exec:
         capture_output: bool = True,
         envs: Optional[Dict[str, str]] = None,
     ) -> Tuple[subprocess.CompletedProcess, str, timedelta]:
-        """执行可执行文件
+        """Execute the executable file
 
-        :param params: 额外配置的命令参数
+        :param params: Additional command parameters
         :type params: Optional[List[str]]
-        :param check: 透传至 subprocess.run 的 check 参数
+        :param check: Check parameter passed through to subprocess.run
         :type check: bool
-        :param capture_output: 透传至 subprocess.run 的 capture_output 参数
+        :param capture_output: capture_output parameter passed through to subprocess.run
         :type capture_output: bool
-        :param envs: 运行时额外需配置的环境变量
+        :param envs: Additional environment variables to set at runtime
         :type envs: Optional[Dict[str, str]]
-        :return: 返回值, 执行命令, 执行耗时
+        :return: Return value, executed command, execution duration
         :rtype: Tuple[CompletedProcess, str, timedelta]
         """
         cmd = self._get_run_cmd(params=params)
-        # 环境变量优先级: 函数参数指定 > 类内环境变量(命令行参数指定) > 系统内已有的
+        # Environment variable priority: function parameter specified >
+        # class-level environment variable (command line specified) > existing system variables
         envs = envs if envs is not None else {}
-        act_env = os.environ.copy()  # 系统环境变量
-        act_env.update(self.envs)  # 额外指定环境变量
-        act_env.update(envs)  # 函数调用时指定的环境变量
+        act_env = os.environ.copy()  # System environment variables
+        act_env.update(self.envs)  # Additional specified environment variables
+        act_env.update(envs)  # Environment variables specified at function call time
         cwd = str(self.file.parent)
         ts = datetime.now(tz=timezone.utc)
         ret = subprocess.run(
@@ -173,10 +180,10 @@ class Exec:
         return ret, cmd, datetime.now(tz=timezone.utc) - ts
 
     def _get_run_cmd(self, params: Optional[List[str]] = None) -> str:
-        """构建执行命令字符串
+        """Build the execution command string
 
-        :param params: 命令行参数列表
-        :return: 完整的执行命令字符串
+        :param params: List of command line parameters
+        :return: Complete execution command string
         """
         cmd = f"./{self.file.name}"
         if params:
@@ -185,9 +192,9 @@ class Exec:
 
     def _get_case_name_list_origin(self) -> List[str]:
         """
-        从可执行文件中获取原始测试用例列表:
+        Get the original test case list from the executable:
 
-        :return: 用例名列表
+        :return: List of case names
         :rtype: List[str]
         """
         case_name_list = []
@@ -195,7 +202,7 @@ class Exec:
             ret,
             _,
             _,
-        ) = self.run(params=["--gtest_list_tests"], check=True)  # GoogleTest 原生参数
+        ) = self.run(params=["--gtest_list_tests"], check=True)  # GoogleTest native parameter
         for line in ret.stdout.split('\n'):
             line = line.rstrip()
             if not line or line.startswith('#') or "GoogleTestVerification" in line:
@@ -209,11 +216,11 @@ class Exec:
         return case_name_list
 
     def _get_case_desc_list_origin(self) -> List[CaseDesc]:
-        """从可执行文件中获取包含耗时的测试用例列表
+        """Get the test case list with duration from the executable
 
-        使用自定义参数 --gtest_list_tests_with_meta 获取用例名称及预估耗时
+        Uses custom parameter --gtest_list_tests_with_meta to get case names and estimated durations
 
-        :return: 用例描述列表, 包含用例名和预估耗时
+        :return: List of case descriptions, containing case names and estimated durations
         """
         case_desc_list = []
         (
@@ -228,14 +235,14 @@ class Exec:
         return case_desc_list
 
     def _mdf_case_desc_dict(self, case_desc_dict: Dict[str, CaseDesc], path: Optional[Path] = None):
-        """刷新用例描述字典中的耗时预估
+        """Refresh duration estimates in the case description dictionary
 
-        优先从可执行文件元数据获取, 再从JSON缓存文件刷新
+        Prioritizes retrieval from executable metadata, then refreshes from JSON cache file
 
-        :param case_desc_dict: 用例描述字典, key为用例名, value为CaseDesc对象
-        :param path: 用例耗时缓存JSON文件路径
+        :param case_desc_dict: Case description dictionary, key is case name, value is CaseDesc object
+        :param path: Path to the case duration cache JSON file
         """
-        # 根据用例内定义的耗时预估, 刷新用例耗时预估
+        # Refresh case duration estimates based on durations defined within cases
         update_cnt = 0
         case_desc_list = self._get_case_desc_list_origin()
         for item in case_desc_list:
@@ -246,7 +253,7 @@ class Exec:
             update_cnt += 1
         logging.info("Determine TestCase Order, %s case's estimate update by local define", update_cnt)
 
-        # 根据 json 缓存文件, 刷新用例耗时预估
+        # Refresh case duration estimates based on JSON cache file
         case_duration_dict = {}
         if path is not None and path.exists():
             try:

@@ -8,10 +8,10 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""生成 gcov_config.json 配置文件
+"""Generate gcov_config.json configuration file
 
-由 CMake 在 POST_BUILD 阶段调用, 收集所有 filter 目录并生成 JSON 配置文件.
-生成的配置文件供外部在 Python 用例覆盖率生成时使用.
+Called by CMake in POST_BUILD phase, collects all filter directories and generates JSON configuration file.
+The generated configuration file is used externally during Python case coverage generation.
 """
 
 import argparse
@@ -22,31 +22,32 @@ from typing import List
 
 
 class GenCoverageConfig:
-    """生成 gcov 配置文件的控制器类"""
+    """Controller class for generating gcov configuration file"""
 
     class FilterPathAction(argparse.Action):
-        """自定义 Action: 解析 filter 参数时校验路径并格式化"""
+        """Custom Action: validate and format paths when parsing filter arguments"""
 
         def __call__(self, parser, namespace, values, option_string=None):
-            # 获取当前已收集的列表(初始为 None)
+            # Get the currently collected list (initially None)
             cur_values = getattr(namespace, self.dest, None) or []
-            # 处理分号分隔的多个路径 (VERBATIM 模式下，生成器表达式展开为分号分隔字符串)
+            # Process multiple paths separated by semicolons
+            # (in VERBATIM mode, generator expressions expand to semicolon-separated strings)
             for path_str in values.split(';'):
                 path_str = path_str.strip()
                 if not path_str:
                     continue
                 path = Path(path_str)
                 cur_values.append(str(path))
-            # 更新命名空间的值
+            # Update the namespace value
             setattr(namespace, self.dest, cur_values)
 
     def __init__(self, args):
-        """初始化控制器实例"""
+        """Initialize controller instance"""
         self.binary_dir: Path = Path(args.binary_dir).resolve()
         self.filter_lst: List[str] = args.filter
 
     def __str__(self) -> str:
-        """返回配置信息字符串"""
+        """Return configuration info string"""
         desc = "\nGenCoverageConfig"
         desc += f"\n    BinaryDir    : {self.binary_dir}"
         desc += f"\n    FilterDirs   : {self.filter_lst}"
@@ -55,8 +56,8 @@ class GenCoverageConfig:
 
     @classmethod
     def main(cls):
-        """主入口函数"""
-        # 参数注册
+        """Main entry function"""
+        # Register arguments
         parser = argparse.ArgumentParser(description="Generate Coverage Config")
         parser.add_argument(
             "-d", "--binary_dir", required=True, type=Path, help="CMake binary directory (PTO_FWK_BIN_ROOT)"
@@ -69,21 +70,21 @@ class GenCoverageConfig:
             type=str,
             help="Specify filter file/dir in coverage info.",
         )
-        # 参数处理
+        # Process arguments
         ctrl = cls(args=parser.parse_args())
         logging.info("%s", ctrl)
-        # 流程处理
+        # Process workflow
         ctrl.process()
 
     def process(self):
-        """生成配置文件"""
-        # 构造配置内容
+        """Generate configuration file"""
+        # Build configuration content
         config = {
             'cmake_binary_dir': str(self.binary_dir),
             'filter_dirs': [str(p) for p in self.filter_lst],
         }
 
-        # 写入配置文件 (覆盖式)
+        # Write configuration file (overwrite)
         config_file = self.binary_dir / 'gcov_config.json'
         config_file.parent.mkdir(parents=True, exist_ok=True)
 

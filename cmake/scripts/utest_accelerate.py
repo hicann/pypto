@@ -8,7 +8,7 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""UTest 用例并行执行."""
+"""UTest case parallel execution."""
 
 import argparse
 import logging
@@ -21,9 +21,9 @@ from accelerate.tests_accelerate import TestsAccelerate
 
 
 class UTestAccelerate(TestsAccelerate):
-    """UTest 执行加速
+    """UTest execution acceleration
 
-    通过多进程并行执行, 以提升 UTest 执行效率.
+    Accelerate UTest execution efficiency through multi-process parallel execution.
     """
 
     def __init__(self, args):
@@ -32,14 +32,14 @@ class UTestAccelerate(TestsAccelerate):
 
     @staticmethod
     def main() -> bool:
-        """主处理流程"""
-        # 参数注册
+        """Main processing flow"""
+        # Register arguments
         parser = argparse.ArgumentParser(description="UTest Execute Accelerate", epilog="Best Regards!")
         UTestAccelerate.reg_args(parser=parser)
         parser.add_argument(
             "-j", "--job_num", nargs="?", type=int, default=None, help="Specific parallel accelerate job num."
         )
-        # 流程处理
+        # Process workflow
         args = parser.parse_args()
         ctrl = UTestAccelerate(args=args)
         ctrl.prepare()
@@ -56,7 +56,7 @@ class UTestAccelerate(TestsAccelerate):
                 job_num = int(os.environ.get("PYPTO_TESTS_PARALLEL_NUM", 0))
             else:
                 job_num = int(math.ceil(float(cpu_count()) * 0.8))  # use 0.8 cpu
-        job_num = min(max(int(job_num), 1), cpu_count(), 16, self.case_num)  # 16 表示最大并发度
+        job_num = min(max(int(job_num), 1), cpu_count(), 16, self.case_num)  # 16 represents maximum concurrency
         return job_num
 
     def _prepare_get_params(self) -> List[TestsAccelerate.ExecParam]:

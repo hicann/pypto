@@ -8,7 +8,7 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""Pytest 配置控制"""
+"""Pytest configuration control"""
 
 import os
 from typing import List, Optional
@@ -50,9 +50,9 @@ def _set_process_desc(desc: str):
 
 
 def pytest_addoption(parser: pytest.Parser):
-    """向 pytest 注册自定义参数
+    """Register custom options with pytest
 
-    :param parser: pytest.Parser 类型
+    :param parser: pytest.Parser instance
     """
     parser.addoption("--device", nargs="+", type=int, help="Device ID, default 0")
     parser.addoption("--test_case_info", action="store", default="", help="Test case info.")
@@ -65,11 +65,11 @@ def pytest_addoption(parser: pytest.Parser):
 
 
 def pytest_configure(config):
-    """pytest 启动时在 root scope 上设置 enable_slice=true。
+    """Set enable_slice=true on root scope at pytest startup.
 
-    覆盖 tile_fwk_config.json 的 false 默认值。root scope 不受 config::Reset() / reset_options()
-    影响，所以 UT SetUp 中的 Clear() 不会清除该设置。
-    单个测试用例仍可通过 @pypto.options(pass_options={"enable_slice": False}) 覆盖此设置。
+    Overrides the false default in tile_fwk_config.json. The root scope is not affected by
+    config::Reset() / reset_options(), so Clear() in UT SetUp will not clear this setting.
+    Individual test cases can still override via @pypto.options(pass_options={"enable_slice": False}).
     """
     try:
         import pypto.pypto_impl
@@ -81,7 +81,7 @@ def pytest_configure(config):
 
 def _is_case_match_cards(item, target_cards) -> bool:
     """
-    判断测试用例是否匹配目标卡数
+    Check whether a test case matches the target number of cards
     """
     cards_marker = item.get_closest_marker("world_size")
     if cards_marker is None:
@@ -97,32 +97,32 @@ def _is_case_match_cards(item, target_cards) -> bool:
 
 
 def pytest_configure_node(node):
-    """pytest-xdist 回调函数, 在 pytest 主进程 fork 出 worker 进程之前被调用.
+    """pytest-xdist callback, invoked before the main pytest process forks worker processes.
 
-    :param node: worker 节点
+    :param node: worker node
     """
-    # 获取 DeviceId 列表, 当外部传入 --device 时, 是 STest 场景, 否则是 UTest 场景
+    # Get DeviceId list; when --device is passed externally, it is an STest scenario, otherwise UTest
     device_id_lst: Optional[List[int]] = node.config.getoption("--device")
     cards_per_case: int = node.config.getoption("--cards-per-case", 1)
 
     if device_id_lst:
         if cards_per_case > 1:
-            # 多卡模式
+            # Multi-card mode
             if len(device_id_lst) % cards_per_case != 0:
                 raise ValueError(f"Cannot divide {len(device_id_lst)} devices into groups of {cards_per_case}")
 
-            # 计算worker应该分配的设备组
+            # Calculate the device group to assign to this worker
             num_groups = len(device_id_lst) // cards_per_case
             worker_idx = int(str(node.gateway.id).lstrip("gw"))
 
             if worker_idx >= num_groups:
-                # 没有足够的设备组，这个worker不分配设备
+                # Not enough device groups; do not assign devices to this worker
                 node.gateway.id = "NoDevices"
                 node.gateway.remote_exec('import os; os.environ.pop("TILE_FWK_DEVICE_ID", None)')
                 node.gateway.remote_exec('import os; os.environ.pop("TILE_FWK_DEVICE_ID_LIST", None)')
                 return
 
-            # 分配设备组
+            # Assign device group
             start_idx = worker_idx * cards_per_case
             end_idx = start_idx + cards_per_case
             device_group = device_id_lst[start_idx:end_idx]
@@ -131,14 +131,14 @@ def pytest_configure_node(node):
             node.gateway.id = f"Devices[{device_group_str}]"
             node.gateway.remote_exec(f'import os; os.environ["TILE_FWK_DEVICE_ID_LIST"] = "{device_group_str}"')
         else:
-            # 单卡模式，保持原有逻辑
+            # Single-card mode, keep original logic
             worker_idx = int(str(node.gateway.id).lstrip("gw"))
             if worker_idx >= len(device_id_lst):
                 raise ValueError(f"WorkerIdx[{worker_idx}] out of DeviceIdLst{device_id_lst} range.")
             device_id: int = device_id_lst[worker_idx]
 
-            # 修改 worker 名称, 设置 worker 中的 DeviceId
-            node.gateway.id = f"Device[{device_id}]"  # 体现在回显中
+            # Rename worker and set DeviceId in the worker
+            node.gateway.id = f"Device[{device_id}]"  # Reflected in output
             node.gateway.remote_exec(f'import os; os.environ["TILE_FWK_DEVICE_ID"] = "{device_id}"')
     else:
         node.gateway.remote_exec('import os; os.environ.pop("TILE_FWK_DEVICE_ID", None)')
@@ -146,7 +146,7 @@ def pytest_configure_node(node):
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_runtest_protocol(item, nextitem):
-    # 优先使用设备组列表
+    # Prefer device group list
     device_list_str: Optional[str] = os.environ.get("TILE_FWK_DEVICE_ID_LIST", None)
     if device_list_str is not None:
         device_list = device_list_str.split(",")
@@ -160,13 +160,14 @@ def pytest_runtest_protocol(item, nextitem):
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_call(item):
-    """在 fork 子进程中手动保存 coverage 数据。
+    """Manually save coverage data in forked child processes.
 
-    pytest-forked 的子进程通过 ``os._exit()`` 退出，跳过 coverage 的
-    ``atexit`` 数据写入，导致 ``--forked`` 模式下覆盖率全部丢失。
-    此钩子复用 pytest-cov 已创建的 Coverage 实例 (已配置 source 和
-    data_suffix)，在测试执行后手动 stop + save，数据写入带后缀的
-    文件，最终由 pytest-cov 的 finish() 中的 combine() 自动合并。
+    pytest-forked child processes exit via ``os._exit()``, which skips coverage's
+    ``atexit`` data write, causing all coverage data to be lost in ``--forked`` mode.
+    This hook reuses the Coverage instance already created by pytest-cov (with source
+    and data_suffix configured), manually calling stop + save after test execution.
+    Data is written to suffixed files and automatically merged by pytest-cov's
+    combine() in finish().
     """
     cov_file = os.environ.get("COVERAGE_FILE")
     is_forked = item.config.getoption("forked", default=False)
@@ -193,17 +194,17 @@ def pytest_runtest_call(item):
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_runtest_setup(item):
-    """case 进程启动后被调用"""
-    # 获取当前运行模式下的卡数
+    """Called after the test case process starts"""
+    # Get the number of cards for the current run mode
     device_list_str: Optional[str] = os.environ.get("TILE_FWK_DEVICE_ID_LIST", None)
     if device_list_str is not None:
-        # 多卡
+        # Multi-card
         device_list = device_list_str.split(",")
     else:
-        # 单卡
+        # Single-card
         device_id: Optional[str] = os.environ.get("TILE_FWK_DEVICE_ID", None)
 
-    # 设置进程描述
+    # Set process description
     case_name: str = str(item.name)
     if device_list_str is not None:
         device_list = device_list_str.split(",")
@@ -212,24 +213,27 @@ def pytest_runtest_setup(item):
         device_id: Optional[str] = os.environ.get("TILE_FWK_DEVICE_ID", None)
         if device_id is not None:
             _set_process_desc(f"Case(Device[{device_id}]::{case_name})")
-    return None  # 继续执行默认的测试流程
+    return None  # Continue with the default test flow
 
 
 @pytest.hookimpl(trylast=True)
 def pytest_runtest_teardown(item):
-    """用例执行后清理 C++ Program 单例的全局状态。
+    """Clean up the C++ Program singleton's global state after test case execution.
 
-    PyPTO 的 C++ 侧 ``Program`` 是进程级单例, 用例通过 ``pypto.function()``
-    在其中累积 ``Function`` / ``Operation`` 图节点。``EndFunction`` 仅结束当前
-    函数录制, 不会清理前序用例遗留的全局图对象, 导致同进程内连续执行多个用例时,
-    后续用例在 ``GetGraphInfo`` / ``RemoveCallOpViewAssemble`` 等阶段访问到悬垂的
-    ``shared_ptr<Operation>``, 触发 segfault。
+    PyPTO's C++ side ``Program`` is a process-level singleton. Test cases accumulate
+    ``Function`` / ``Operation`` graph nodes via ``pypto.function()``. ``EndFunction``
+    only ends the current function recording and does not clean up global graph objects
+    left by previous cases, causing subsequent cases in the same process to access
+    dangling ``shared_ptr<Operation>`` during ``GetGraphInfo`` /
+    ``RemoveCallOpViewAssemble`` stages, triggering segfaults.
 
-    ``--forked`` 模式下每个用例运行在独立子进程中, 进程退出自动回收全局状态,
-    因此不会复现。但串行 / xdist worker 内连续执行时, 需要在 teardown 阶段调用
-    ``pypto_impl.Reset()`` (对应 ``Program::Reset()``) 清理全局图对象。
+    In ``--forked`` mode each case runs in an independent child process, and global
+    state is automatically reclaimed on exit, so this issue does not reproduce.
+    However, during serial / xdist worker consecutive execution, ``pypto_impl.Reset()``
+    (corresponding to ``Program::Reset()``) must be called in teardown to clean up
+    global graph objects.
 
-    仅对 UTest (python/tests/ut) 路径生效, 避免影响 STest 的 NPU 设备状态。
+    Only applies to UTest (python/tests/ut) paths to avoid affecting STest NPU device state.
     """
     item_path = str(item.fspath).replace("\\", "/")
     if "/tests/ut/" not in item_path:
@@ -244,19 +248,19 @@ def pytest_runtest_teardown(item):
 
 def _get_test_time_cost(item):
     """
-    获取测试用例的耗时信息
+    Get the estimated duration of a test case
 
     Args:
-        item: pytest 测试项
+        item: pytest test item
 
     Returns:
-        int or None: 耗时秒数, 如果未标记则返回None
+        int or None: duration in seconds, or None if not marked
     """
-    # 检查函数是否有duration_estimate属性
+    # Check if the function has a duration_estimate attribute
     if hasattr(item.function, 'duration_estimate'):
         return item.function.duration_estimate
 
-    # 检查类是否有duration_estimate属性
+    # Check if the class has a duration_estimate attribute
     if hasattr(item, 'cls') and item.cls and hasattr(item.cls, 'duration_estimate'):
         return item.cls.duration_estimate
 
@@ -269,7 +273,7 @@ def _get_test_time_cost(item):
 
 def _get_soc_version():
     """
-    从torch_npu获取soc version
+    Get soc version from torch_npu
     """
     try:
         import torch_npu
@@ -283,19 +287,19 @@ def _get_soc_version():
 
 def _is_case_match_soc(item, target_soc):
     """
-    判断测试用例是否匹配目标soc版本
+    Check whether a test case matches the target soc version
     """
     soc_marker = item.get_closest_marker("soc")
     if soc_marker is None:
         supported_socs = ["910"]
     else:
-        # 解析标记中的支持版本 (兼容单个/多个版本写法)
+        # Parse supported versions from marker (compatible with single/multiple version formats)
         supported_socs = soc_marker.args
         if isinstance(supported_socs[0], str):
             supported_socs = [soc.strip() for soc in supported_socs]
         elif isinstance(supported_socs[0], list):
             supported_socs = [soc.strip() for soc in supported_socs[0]]
-    # 核心匹配逻辑：260的标签为 "950", 其余的标签为 "910"
+    # Core matching logic: soc 260 maps to tag "950", all others map to "910"
     if target_soc == 260:
         target_tag = "950"
     else:
@@ -306,7 +310,7 @@ def _is_case_match_soc(item, target_soc):
 @pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(config, items):
     """
-    在所有conftest.py作用域处理完成后进行全局重排序
+    Perform global reordering after all conftest.py scopes have been processed
     """
     if not items:
         return
@@ -315,7 +319,7 @@ def pytest_collection_modifyitems(config, items):
     has_ut = "ut" in item_path.lower()
 
     def _is_verify_case(item):
-        # Host pass_verify 用例：python/tests/ut/interpreter（原 tests/verify）
+        # Host pass_verify cases: python/tests/ut/interpreter (formerly tests/verify)
         return "ut/interpreter" in str(item.fspath).lower().replace("\\", "/")
 
     if has_ut:
@@ -323,7 +327,7 @@ def pytest_collection_modifyitems(config, items):
     else:
         verify_items = [item for item in items if _is_verify_case(item)]
         other_items = [item for item in items if not _is_verify_case(item)]
-        # ut/interpreter 看护 Host pass_verify / SIM，不依赖 NPU soc 探测
+        # ut/interpreter covers Host pass_verify / SIM, does not depend on NPU soc detection
         if other_items:
             target_soc = _get_soc_version()
             filtered_items = [item for item in other_items if _is_case_match_soc(item, target_soc)]
@@ -331,13 +335,13 @@ def pytest_collection_modifyitems(config, items):
         else:
             filtered_items = verify_items
 
-    # 根据卡数要求过滤用例
+    # Filter cases by card count requirement
     cards_per_case = config.getoption("--cards-per-case", 1)
 
-    # 在收集阶段就过滤掉不匹配的用例
+    # Filter out non-matching cases at collection stage
     card_filtered_items = [item for item in filtered_items if _is_case_match_cards(item, cards_per_case)]
 
-    # 分离有耗时标识和无耗时标识的测试用例
+    # Separate test cases with and without duration markers
     timed_tests = []
     untimed_tests = []
 

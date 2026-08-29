@@ -8,7 +8,7 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""STest 分布式 STest 并性执行."""
+"""STest distributed STest parallel execution."""
 
 import argparse
 import datetime
@@ -21,10 +21,10 @@ from stest_accelerate import STestAccelerate
 
 
 class DistributedSTestAccelerate(STestAccelerate):
-    """分布式STest执行加速
+    """Distributed STest execution acceleration
 
-    支持多卡并行执行 通过设备分组实现分布式测试.
-    继承自STestAccelerate, 使用父类的device_list参数, 按照rank_size进行设备分组.
+    Supports multi-device parallel execution through device grouping for distributed testing.
+    Inherits from STestAccelerate, uses parent's device_list parameter, groups devices by rank_size.
     """
 
     def __init__(self, args: argparse.Namespace):
@@ -35,15 +35,15 @@ class DistributedSTestAccelerate(STestAccelerate):
 
     @staticmethod
     def reg_args(parser: argparse.ArgumentParser) -> None:
-        """注册分布式STest参数
-        先调用父类(STestAccelerate)的参数注册，再添加分布式特有参数
+        """Register distributed STest arguments
+        First call parent (STestAccelerate) argument registration, then add distributed-specific arguments
         """
         STestAccelerate.reg_args(parser)
         parser.add_argument("--rank_size", type=int, required=True, help="Number of devices per test group")
 
     @staticmethod
     def main() -> bool:
-        """分布式主处理流程"""
+        """Distributed main processing flow"""
         parser = argparse.ArgumentParser(
             description="Distributed STest Execute Accelerate",
             epilog="Best Regards!",
@@ -59,9 +59,9 @@ class DistributedSTestAccelerate(STestAccelerate):
 
     @staticmethod
     def set_distributed_device_envs(p: Any) -> Dict[str, str]:
-        """设置分布式设备环境变量
+        """Set distributed device environment variables
 
-        多卡用例通过TILE_FWK_DEVICE_ID_LIST环境变量指定使用的设备组
+        Multi-device cases specify the device group via TILE_FWK_DEVICE_ID_LIST environment variable
         """
         custom_data = p.custom
         device_group = custom_data["device_group"]
@@ -74,11 +74,11 @@ class DistributedSTestAccelerate(STestAccelerate):
 
     @staticmethod
     def _group_devices_by_rank_size(devices: List[int], rank_size: int) -> List[List[int]]:
-        """按照rank_size对设备进行顺序分组
+        """Sequentially group devices by rank_size
 
-        :param devices: 设备列表
-        :param rank_size: 每组设备数量
-        :return: 设备分组列表
+        :param devices: device list
+        :param rank_size: number of devices per group
+        :return: device group list
         """
         if len(devices) < rank_size:
             raise ValueError(f"Available devices ({len(devices)}) are less than required rank_size ({rank_size})")
@@ -111,7 +111,7 @@ class DistributedSTestAccelerate(STestAccelerate):
     def _execute_case(
         self, ctx: STestAccelerate.CaseContext, param: STestAccelerate.ExecParam, case_name: str
     ) -> Tuple[subprocess.CompletedProcess, str, datetime.timedelta]:
-        """多卡模式执行 - 重写父类方法"""
+        """Multi-device mode execution - override parent method"""
         rank_size = param.custom.get("rank_size")
         if rank_size is None:
             raise ValueError("Missing rank_size in custom config, run distribute case failed.")
@@ -123,12 +123,12 @@ class DistributedSTestAccelerate(STestAccelerate):
     def _run_multi_device_case(
         self, ctx: STestAccelerate.CaseContext, device_group: List[int], rank_size: int, case_name: str
     ) -> Tuple[subprocess.CompletedProcess, str, datetime.timedelta]:
-        """执行多卡分布式测试用例
+        """Execute multi-device distributed test case
 
-        :param ctx: Case上下文
-        :param device_group: 设备组列表
-        :param rank_size: 设备组大小
-        :return: 执行结果，命令行，时间
+        :param ctx: Case context
+        :param device_group: device group list
+        :param rank_size: device group size
+        :return: execution result, command line, duration
         """
         env_vars = os.environ.copy()
         env_vars.update(self.exe.envs)

@@ -8,41 +8,42 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""PyPTO 项目 CI 场景构建控制总入口
+"""PyPTO project CI scenario build control entry point
 
-本文件提供 PyPTO 项目 CI 场景的统一构建入口, 支持多种构建模式和配置选项.
+This file provides a unified build entry point for PyPTO project CI scenarios,
+supporting multiple build modes and configuration options.
 
-主要功能:
-    - 支持 whl 包的常规编译和可编辑模式编译
-    - 支持 UTest/STest/Examples 等测试用例的执行
-    - 支持构建超时控制和超时后自动清理子进程
+Main features:
+    - Supports regular and editable mode compilation of whl packages
+    - Supports execution of UTest/STest/Examples and other test cases
+    - Supports build timeout control and automatic subprocess cleanup after timeout
 
-使用方式:
-    通过命令行参数配置构建选项, 执行脚本即可触发构建流程:
+Usage:
+    Configure build options via command-line arguments, then run the script to trigger the build process:
 
-        python build_ci.py [选项]
+        python build_ci.py [options]
 
-    常用选项:
-        -f/--frontend: 指定前端类型 (python3/cpp)
-        -b/--backend: 指定后端类型 (npu/cost_model)
-        -t/--targets: 指定编译目标
-        -j/--job_num: 指定编译并行度
-        --build_type: 指定构建类型 (Debug/Release/MinSizeRel/RelWithDebInfo)
-        -u/--utest: 启用 UTest 测试
-        -s/--stest: 启用 STest 测试
-        -c/--clean: 清理构建目录和安装目录
+    Common options:
+        -f/--frontend: Specify frontend type (python3/cpp)
+        -b/--backend: Specify backend type (npu/cost_model)
+        -t/--targets: Specify build targets
+        -j/--job_num: Specify build parallelism
+        --build_type: Specify build type (Debug/Release/MinSizeRel/RelWithDebInfo)
+        -u/--utest: Enable UTest
+        -s/--stest: Enable STest
+        -c/--clean: Clean build directory and install directory
 
-示例:
-    # 使用默认配置构建
+Examples:
+    # Build with default configuration
     python build_ci.py
 
-    # 指定前端和后端类型构建
+    # Build with specified frontend and backend types
     python build_ci.py -f python3 -b npu
 
-    # 启用测试并指定并行度
+    # Enable tests and specify parallelism
     python build_ci.py -u -s -j 8
 
-    # 清理并重新构建
+    # Clean and rebuild
     python build_ci.py -c --build_type Debug
 """
 
@@ -75,23 +76,25 @@ except ImportError:
 
 
 class CMakeParam(abc.ABC):
-    """CMake 参数抽象基类
+    """CMake parameter abstract base class
 
-    定义所有需要向 CMake 传递 Option 的参数类的通用接口.
-    子类需要实现 reg_args() 方法来注册命令行参数, 实现 get_cfg_cmd() 方法来生成 CMake 配置命令.
+    Defines the common interface for all parameter classes that need to pass Options to CMake.
+    Subclasses must implement reg_args() to register CLI arguments and get_cfg_cmd() to generate
+    CMake configuration commands.
     """
 
     @staticmethod
     def get_system_processor() -> str:
-        """获取系统处理器架构名称
+        """Get the system processor architecture name
 
-        通过 platform.machine() 获取当前系统的处理器架构, 并将常见的别名映射到标准名称.
+        Retrieves the current system processor architecture via platform.machine()
+        and maps common aliases to standard names.
 
-        :return: 标准化的处理器架构名称, 如 x86_64 或 aarch64
+        :return: Standardized processor architecture name, such as x86_64 or aarch64
         :rtype: str
         """
         machine = platform.machine().lower()
-        arch_map = {  # 直接映射常见架构
+        arch_map = {  # Map common architectures directly
             "x86_64": "x86_64",
             "amd64": "x86_64",
             "aarch64": "aarch64",
@@ -102,61 +105,65 @@ class CMakeParam(abc.ABC):
     @staticmethod
     @abc.abstractmethod
     def reg_args(parser, ext: Optional[Any] = None):
-        """注册命令行参数
+        """Register command-line arguments
 
-        向参数解析器注册当前类支持的命令行参数. 子类必须实现此方法以定义各自的参数选项.
+        Registers the command-line arguments supported by the current class to the argument parser.
+        Subclasses must implement this method to define their respective parameter options.
 
-        :param parser: ArgumentParser 参数解析器实例
-        :param ext: 扩展信息, 用于子类特殊实现扩展时使用
+        :param parser: ArgumentParser instance
+        :param ext: Extension information, used for subclass-specific extensions
         :type ext: Optional[Any]
         """
         pass
 
     @classmethod
     def _cfg_require(cls, opt: str, ctr: bool = True, tv: str = "ON", fv: str = "OFF") -> str:
-        """获取 CMake Configure 阶段的必选 Option 配置
+        """Get a required Option configuration for the CMake Configure stage
 
-        根据 ctr 控制变量的值, 返回对应的 CMake Option 配置字符串. 该方法会始终返回一个非空的配置字符串.
+        Returns the corresponding CMake Option configuration string based on the value of the ctr control variable.
+        This method always returns a non-empty configuration string.
 
-        :param opt: CMake Option 名称, 会最终体现到 CMake -D 传入的参数中
+        :param opt: CMake Option name, which will be reflected in the CMake -D parameter
         :type opt: str
-        :param ctr: 控制变量, 标识 CMake Option 布尔值
+        :param ctr: Control variable, indicating the CMake Option boolean value
         :type ctr: bool
-        :param tv: ctr 为 True 时设置的值, 默认为 "ON"
+        :param tv: Value to set when ctr is True, defaults to "ON"
         :type tv: str
-        :param fv: ctr 为 False 时设置的值, 默认为 "OFF"
+        :param fv: Value to set when ctr is False, defaults to "OFF"
         :type fv: str
-        :return: CMake 配置字符串, 格式如 " -DOPT_NAME=VALUE"
+        :return: CMake configuration string, formatted as " -DOPT_NAME=VALUE"
         :rtype: str
         """
         return f" -D{opt}=" + (tv if ctr else fv)
 
     @classmethod
     def _cfg_optional(cls, opt: str, ctr: bool, v: str) -> str:
-        """获取 CMake Configure 阶段的可选 Option 配置
+        """Get an optional Option configuration for the CMake Configure stage
 
-        根据 ctr 控制变量的值, 返回对应的 CMake Option 配置字符串. 当 ctr 为 False 时, 返回空字符串.
+        Returns the corresponding CMake Option configuration string based on the value of the ctr control variable.
+        Returns an empty string when ctr is False.
 
-        :param opt: CMake Option 名称, 会最终体现到 CMake -D 传入的参数中
+        :param opt: CMake Option name, which will be reflected in the CMake -D parameter
         :type opt: str
-        :param ctr: 控制变量, 标识 CMake Option 布尔值
+        :param ctr: Control variable, indicating the CMake Option boolean value
         :type ctr: bool
-        :param v: 控制变量为 True 时设置的值
+        :param v: Value to set when the control variable is True
         :type v: str
-        :return: CMake 配置字符串, 格式如 " -DOPT_NAME=VALUE", ctr 为 False 时返回空字符串
+        :return: CMake configuration string, formatted as " -DOPT_NAME=VALUE", empty string when ctr is False
         :rtype: str
         """
         return (f" -D{opt}=" + v) if ctr else ""
 
     @abc.abstractmethod
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
-        """生成 CMake Configure 命令
+        """Generate CMake Configure command
 
-        根据当前参数配置, 生成对应的 CMake 配置命令字符串. 子类必须实现此方法以定义具体的配置参数.
+        Generates the corresponding CMake configuration command string based on the current parameter configuration.
+        Subclasses must implement this method to define specific configuration parameters.
 
-        :param ext: 扩展信息, 用于子类特殊实现扩展时使用
+        :param ext: Extension information, used for subclass-specific extensions
         :type ext: Optional[Any]
-        :return: CMake 配置参数字符串
+        :return: CMake configuration parameter string
         :rtype: str
         """
         pass
@@ -164,30 +171,32 @@ class CMakeParam(abc.ABC):
 
 @dataclasses.dataclass
 class FeatureParam(CMakeParam):
-    """特性控制相关参数
+    """Feature control related parameters
 
-    管理构建过程中的特性选项, 包括前端类型, 后端类型和 whl 包编译模式.
+    Manages feature options during the build process, including frontend type, backend type,
+    and whl package compilation mode.
     """
 
     whl_name: str = "pypto"
-    frontend_type: Optional[str] = None  # 前端类型, 支持 python3, cpp
-    backend_type: Optional[str] = None  # 后端类型, 支持 npu, cost_model
-    # whl 包 py_abi_tag 数字部分 (如 39/310), 由 --py_abi 显式指定;
+    frontend_type: Optional[str] = None  # Frontend type, supports python3, cpp
+    backend_type: Optional[str] = None  # Backend type, supports npu, cost_model
+    # Numeric part of whl package py_abi_tag (e.g. 39/310), explicitly specified via --py_abi;
     whl_py3_abi: Optional[int] = None
-    whl_plat_name: Optional[str] = None  # python3 whl 包 plat-name
-    whl_isolation: bool = False  # 以 isolation 模式编译 whl 包
-    whl_editable: bool = False  # 以 editable 模式编译 whl 包
+    whl_plat_name: Optional[str] = None  # python3 whl package plat-name
+    whl_isolation: bool = False  # Compile whl package in isolation mode
+    whl_editable: bool = False  # Compile whl package in editable mode
     whl_break_system_packages: bool = False
-    just_build_whl: bool = False  # 只构建 whl 包，不打包进入 run
-    package_type: str = "run"  # 安装包格式: run/rpm/deb/all
+    just_build_whl: bool = False  # Build whl only, without packing into run
+    package_type: str = "run"  # Package type: run/rpm/deb/all
 
     def __init__(self, args):
-        """初始化 FeatureParam 实例
+        """Initialize FeatureParam instance
 
-        从命令行参数中解析前端类型, 后端类型和 whl 包编译模式.
-        如果后端类型为 npu 但未设置 ASCEND_HOME_PATH 环境变量, 则自动回退到 cost_model 后端.
+        Parses frontend type, backend type, and whl package compilation mode from command-line arguments.
+        If the backend type is npu but ASCEND_HOME_PATH environment variable is not set,
+        it automatically falls back to the cost_model backend.
 
-        :param args: 命令行参数解析结果
+        :param args: Parsed command-line arguments
         """
         self.frontend_type = "python3" if args.frontend is None else args.frontend
         self.backend_type = "npu" if args.backend is None else args.backend
@@ -209,9 +218,9 @@ class FeatureParam(CMakeParam):
         self.whl_break_system_packages = args.break_system_packages
 
     def __str__(self) -> str:
-        """返回特性参数的字符串表示
+        """Return string representation of feature parameters
 
-        :return: 格式化的特性参数字符串
+        :return: Formatted feature parameter string
         :rtype: str
         """
         desc = ""
@@ -232,18 +241,19 @@ class FeatureParam(CMakeParam):
 
     @property
     def frontend_type_python3(self) -> bool:
-        """判断前端类型是否为 Python3
+        """Check if the frontend type is Python3
 
-        :return: 如果前端类型为 "python" 或 "python3", 返回 True
+        :return: True if the frontend type is "python" or "python3"
         :rtype: bool
         """
         return self.frontend_type in ["python", "python3"]
 
     @property
     def whl_py3_abi_tag(self) -> Optional[str]:
-        """whl 包 python abi tag 数字部分, 用于 --py-limited-api 参数构造 (如 "39" 对应 cp39).
+        """Numeric part of whl package python abi tag, used for --py-limited-api
+        parameter construction (e.g. "39" maps to cp39).
 
-        优先级: --py_abi 显式指定 , 否则返回 None.
+        Priority: explicitly specified via --py_abi, otherwise returns None.
         """
         if self.whl_py3_abi:
             return str(self.whl_py3_abi)
@@ -251,12 +261,12 @@ class FeatureParam(CMakeParam):
 
     @staticmethod
     def reg_args(parser, ext: Optional[Any] = None):
-        """注册特性相关的命令行参数
+        """Register feature-related command-line arguments
 
-        向参数解析器注册前端类型, 后端类型, whl 编译模式等参数.
+        Registers frontend type, backend type, whl compilation mode, and other arguments to the argument parser.
 
-        :param parser: ArgumentParser 参数解析器实例
-        :param ext: 扩展信息, 未使用
+        :param parser: ArgumentParser instance
+        :param ext: Extension information, unused
         :type ext: Optional[Any]
         """
         parser.add_argument(
@@ -326,13 +336,13 @@ class FeatureParam(CMakeParam):
         )
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
-        """生成 CMake Configure 命令
+        """Generate CMake Configure command
 
-        根据前端类型和后端类型生成对应的 CMake 配置参数.
+        Generates the corresponding CMake configuration parameters based on frontend type and backend type.
 
-        :param ext: 扩展信息, 未使用
+        :param ext: Extension information, unused
         :type ext: Optional[Any]
-        :return: CMake 配置参数字符串
+        :return: CMake configuration parameter string
         :rtype: str
         """
         cmd = ""
@@ -346,32 +356,33 @@ class FeatureParam(CMakeParam):
 
 @dataclasses.dataclass
 class BuildParam(CMakeParam):
-    """构建相关参数
+    """Build related parameters
 
-    管理构建过程的配置选项, 包括 CMake 配置参数和构建执行参数.
+    Manages build process configuration options, including CMake configuration parameters
+    and build execution parameters.
     """
 
     # Configure
     generator: Optional[str] = None  # Generator
-    build_type: Optional[str] = None  # 构建类型
-    asan: bool = False  # 使能 AddressSanitizer
-    ubsan: bool = False  # 使能 UndefinedBehaviorSanitizer
-    gcov: bool = False  # 使能 GNU Coverage
-    gcov_incr: bool = False  # 使能增量覆盖率 GCov 计算 (兼容旧参数 --gcov_increment)
-    cov_incr: bool = False  # 使能增量覆盖率 (C++ gcov 和 Python coverage 均生效)
-    py_cov: bool = False  # 使能 Python 覆盖率 (pytest-cov)
-    clang_install_path: Optional[Path] = None  # Clang 安装位置
-    compile_dependency_check: bool = False  # 使能编译依赖关系检查
+    build_type: Optional[str] = None  # Build type
+    asan: bool = False  # Enable AddressSanitizer
+    ubsan: bool = False  # Enable UndefinedBehaviorSanitizer
+    gcov: bool = False  # Enable GNU Coverage
+    gcov_incr: bool = False  # Enable incremental coverage GCov calculation (compatible with legacy --gcov_increment)
+    cov_incr: bool = False  # Enable incremental coverage (both C++ gcov and Python coverage)
+    py_cov: bool = False  # Enable Python coverage (pytest-cov)
+    clang_install_path: Optional[Path] = None  # Clang installation path
+    compile_dependency_check: bool = False  # Enable compile dependency relation check
     # Build
-    targets: Optional[List[str]] = None  # 编译目标
-    job_num: Optional[int] = None  # 编译阶段使用核数
+    targets: Optional[List[str]] = None  # Build targets
+    job_num: Optional[int] = None  # Number of cores used during build
 
     def __init__(self, args):
-        """初始化 BuildParam 实例
+        """Initialize BuildParam instance
 
-        从命令行参数中解析构建相关的配置选项.
+        Parses build-related configuration options from command-line arguments.
 
-        :param args: 命令行参数解析结果
+        :param args: Parsed command-line arguments
         """
         self.targets = args.targets
         self.job_num = self._get_job_num(job_num=args.job_num, generator=args.generator)
@@ -381,15 +392,15 @@ class BuildParam(CMakeParam):
         self.ubsan = args.ubsan
         self.gcov = args.gcov
         self.gcov_incr = args.gcov_increment
-        self.cov_incr = args.cov_increment or args.gcov_increment  # cov_increment 包含 gcov_increment
+        self.cov_incr = args.cov_increment or args.gcov_increment  # cov_increment includes gcov_increment
         self.py_cov = args.py_cov
         self.clang_install_path = self._get_clang_install_path(opt=args.clang)
         self.compile_dependency_check = args.compile_dependency_check
 
     def __str__(self) -> str:
-        """返回构建参数的字符串表示
+        """Return string representation of build parameters
 
-        :return: 格式化的构建参数字符串
+        :return: Formatted build parameter string
         :rtype: str
         """
         desc = "\nBuild"
@@ -410,12 +421,12 @@ class BuildParam(CMakeParam):
 
     @staticmethod
     def reg_args(parser, ext: Optional[Any] = None):
-        """注册构建相关的命令行参数
+        """Register build-related command-line arguments
 
-        向参数解析器注册构建生成器, 构建类型, Sanitizer 选项等参数.
+        Registers build generator, build type, Sanitizer options, and other arguments to the argument parser.
 
-        :param parser: ArgumentParser 参数解析器实例
-        :param ext: 扩展信息, 未使用
+        :param parser: ArgumentParser instance
+        :param ext: Extension information, unused
         :type ext: Optional[Any]
         """
         # Configure
@@ -486,23 +497,23 @@ class BuildParam(CMakeParam):
 
     @staticmethod
     def _get_clang_install_path(opt: Optional[str]) -> Optional[Path]:
-        """获取 Clang 安装目录
+        """Get Clang installation directory
 
-        根据指定的 clang 参数或自动查找来确定 Clang 安装路径.
+        Determines the Clang installation path based on the specified clang argument or by auto-discovery.
 
-        :param opt: Clang 参数, 可以是 None (自动查找) , 空字符串 (不使用 Clang) 或具体路径
+        :param opt: Clang argument, can be None (auto-discovery), empty string (do not use Clang), or a specific path
         :type opt: Optional[str]
-        :return: Clang 安装目录路径, 如果不使用 Clang 则返回 None
+        :return: Clang installation directory path, returns None if Clang is not used
         :rtype: Optional[Path]
         """
-        if opt is None:  # 指定 clang 参数, 但未指定具体路径, 此时需尝试寻找
+        if opt is None:  # clang argument specified but no specific path given, try to find it
             cmd = "which clang"
             ret = subprocess.run(shlex.split(cmd), capture_output=True, check=True, text=True, encoding='utf-8')
             ret.check_returncode()
             clang_install_path = Path(ret.stdout).resolve()
-        elif opt == "":  # 未指定 clang 参数
+        elif opt == "":  # clang argument not specified
             clang_install_path = None
-        else:  # 指定 clang 参数, 并指定具体路径
+        else:  # clang argument specified with a specific path
             clang_install_path = Path(opt)
         if clang_install_path is not None:
             clang_install_path = Path(clang_install_path).resolve().parent
@@ -512,23 +523,24 @@ class BuildParam(CMakeParam):
 
     @staticmethod
     def _get_job_num(job_num: Optional[int], generator: Optional[str]) -> Optional[int]:
-        """获取构建并行任务数
+        """Get build parallel task count
 
-        委托至 cmake/scripts/_job_num 公共模块, 综合考虑 CPU 核数、可用内存(含 cgroup 上限)
-        及 PYPTO_BUILD_JOB_NUM 环境变量确定并行度. Ninja 生成器时由 Ninja 自身决定.
-        若公共模块不可用, 则回退到仅基于 CPU 核数的旧逻辑.
+        Delegates to the cmake/scripts/_job_num shared module, which considers CPU count,
+        available memory (including cgroup limits), and the PYPTO_BUILD_JOB_NUM environment
+        variable to determine parallelism. For Ninja generator, Ninja decides on its own.
+        Falls back to CPU-only logic if the shared module is unavailable.
 
-        :param job_num: 用户指定的并行任务数
+        :param job_num: User-specified parallel task count
         :type job_num: Optional[int]
-        :param generator: 构建生成器名称
+        :param generator: Build generator name
         :type generator: Optional[str]
-        :return: 最终的并行任务数, None 表示由构建工具自动决定
+        :return: Final parallel task count, None means the build tool decides automatically
         :rtype: Optional[int]
         """
         if get_job_num is not None:
             return get_job_num(job_num=job_num, generator=generator)
         # Fallback: CPU-only calculation (kept for environments where setup.py import fails)
-        def_job_num = min(int(math.ceil(float(multiprocessing.cpu_count()) * 0.9)), 128)  # 128 为缺省最大核数
+        def_job_num = min(int(math.ceil(float(multiprocessing.cpu_count()) * 0.9)), 128)  # 128 is the default max cores
         def_job_num = (
             None
             if generator
@@ -537,32 +549,32 @@ class BuildParam(CMakeParam):
                 "ninja",
             ]
             else def_job_num
-        )  # ninja 自身决定缺省核数
+        )  # ninja determines the default core count itself
         job_num = job_num if job_num and job_num > 0 else def_job_num
         return job_num
 
     @staticmethod
     def _get_generator(generator: Optional[str]) -> Optional[str]:
-        """获取构建生成器名称
+        """Get build generator name
 
-        如果指定了生成器, 则在名称外添加引号以支持带空格的生成器名称.
+        If a generator is specified, wraps the name in quotes to support generator names with spaces.
 
-        :param generator: 构建生成器名称
+        :param generator: Build generator name
         :type generator: Optional[str]
-        :return: 处理后的构建生成器名称
+        :return: Processed build generator name
         :rtype: Optional[str]
         """
         return f"\"{generator}\"" if generator else generator
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
-        """生成 CMake Configure 命令
+        """Generate CMake Configure command
 
-        根据构建配置参数生成对应的 CMake 配置命令字符串.
-        支持构建类型, Sanitizer 选项, 覆盖率统计和 Clang 工具链等配置.
+        Generates the corresponding CMake configuration command string based on build configuration parameters.
+        Supports build type, Sanitizer options, coverage statistics, and Clang toolchain configuration.
 
-        :param ext: 扩展信息, 如果为 True 则不包含构建类型
+        :param ext: Extension information, if True then build type is not included
         :type ext: Optional[Any]
-        :return: CMake 配置参数字符串
+        :return: CMake configuration parameter string
         :rtype: str
         """
         inc_build_type = bool(ext) if ext is not None else True
@@ -573,7 +585,7 @@ class BuildParam(CMakeParam):
         cmd += self._cfg_require(opt="ENABLE_PY_COV", ctr=self.py_cov)
 
         def _check_clang_toolchain(_opt: str, _b: str) -> Tuple[bool, str]:
-            """检查 Clang 工具链是否存在并生成配置命令"""
+            """Check if Clang toolchain exists and generate configuration command"""
             _p = Path(self.clang_install_path, _b)
             if _p.exists():
                 return True, self._cfg_require(opt=_opt, tv=str(_p))
@@ -581,7 +593,7 @@ class BuildParam(CMakeParam):
             return False, ""
 
         def _gen_clang_cmd() -> Tuple[bool, str]:
-            """生成 Clang 相关的 CMake 配置命令"""
+            """Generate Clang-related CMake configuration commands"""
             _bin_opt_lst = [["clang", "CMAKE_C_COMPILER"], ["clang++", "CMAKE_CXX_COMPILER"]]
             _rst = True
             _cmd = ""
@@ -604,15 +616,15 @@ class BuildParam(CMakeParam):
         return cmd
 
     def get_build_cmd_lst(self, cmake: Path, binary_path: Path) -> List[str]:
-        """生成 CMake 构建命令列表
+        """Generate CMake build command list
 
-        根据指定的构建目标生成对应的 CMake 构建命令.
+        Generates the corresponding CMake build commands based on the specified build targets.
 
-        :param cmake: CMake 可执行文件路径
+        :param cmake: CMake executable path
         :type cmake: Path
-        :param binary_path: 二进制构建目录路径
+        :param binary_path: Binary build directory path
         :type binary_path: Path
-        :return: CMake 构建命令列表
+        :return: CMake build command list
         :rtype: List[str]
         """
         cmd_list = []
@@ -630,32 +642,33 @@ class BuildParam(CMakeParam):
 
 @dataclasses.dataclass
 class TestsExecuteParam(CMakeParam):
-    """测试执行相关参数
+    """Test execution related parameters
 
-    管理测试执行的配置选项, 包括自动执行, 并行执行, 超时控制和耗时缓存等.
+    Manages test execution configuration options, including auto-execution, parallel execution,
+    timeout control, and duration caching.
     """
 
-    changed_file: Optional[Path] = None  # 修改文件路径
-    auto_execute: bool = False  # 用例自动执行
-    auto_execute_parallel: bool = False  # 用例并行执行
-    case_execute_timeout: Optional[int] = None  # 用例执行时, 单个用例超时时长
-    case_execute_cpu_rank_size: Optional[int] = None  # 用例并行执行时, CPU 亲和性 Rank Size
-    dump_case_duration_json: Optional[Path] = None  # 用例耗时缓存文件路径
-    dump_case_duration_max_num: Optional[int] = None  # 用例耗时缓存最大数量
-    dump_case_duration_min_secends: Optional[int] = None  # 用例耗时缓存最小秒数
+    changed_file: Optional[Path] = None  # Changed file path
+    auto_execute: bool = False  # Auto-execute test cases
+    auto_execute_parallel: bool = False  # Parallel execution of test cases
+    case_execute_timeout: Optional[int] = None  # Timeout duration per test case
+    case_execute_cpu_rank_size: Optional[int] = None  # CPU affinity Rank Size for parallel test execution
+    dump_case_duration_json: Optional[Path] = None  # Case duration cache file path
+    dump_case_duration_max_num: Optional[int] = None  # Maximum number of cases to cache duration for
+    dump_case_duration_min_secends: Optional[int] = None  # Minimum duration in seconds for caching
 
     def __init__(self, args):
-        """初始化 TestsExecuteParam 实例
+        """Initialize TestsExecuteParam instance
 
-        从命令行参数中解析测试执行相关的配置选项.
+        Parses test execution related configuration options from command-line arguments.
 
-        :param args: 命令行参数解析结果
+        :param args: Parsed command-line arguments
         """
         self.changed_file = None if not args.changed_files else Path(args.changed_files).resolve()
         self.auto_execute = args.disable_auto_execute
         self.auto_execute_parallel = self.auto_execute and self.ci_model
         timeout = args.case_execute_timeout
-        self.case_execute_timeout = timeout if timeout and timeout > 0 else None  # 单个用例执行超时时长
+        self.case_execute_timeout = timeout if timeout and timeout > 0 else None  # Per-case execution timeout
         self.case_execute_cpu_rank_size = args.cpu_rank_size
         duration_json = args.dump_case_duration_json
         self.dump_case_duration_json = Path(duration_json).resolve() if duration_json else None
@@ -663,9 +676,9 @@ class TestsExecuteParam(CMakeParam):
         self.dump_case_duration_min_secends = args.dump_case_duration_min_secends
 
     def __str__(self) -> str:
-        """返回测试执行参数的字符串表示
+        """Return string representation of test execution parameters
 
-        :return: 格式化的测试执行参数字符串
+        :return: Formatted test execution parameter string
         :rtype: str
         """
         desc = "\n    Execute"
@@ -681,21 +694,21 @@ class TestsExecuteParam(CMakeParam):
 
     @property
     def ci_model(self) -> bool:
-        """判断是否为 CI 模式
+        """Check if CI mode is enabled
 
-        :return: 如果指定了修改文件, 则返回 True (表示 CI 模式)
+        :return: True if a changed file is specified (indicating CI mode)
         :rtype: bool
         """
         return True if self.changed_file else False
 
     @staticmethod
     def reg_args(parser, ext: Optional[Any] = None):
-        """注册测试执行相关的命令行参数
+        """Register test execution related command-line arguments
 
-        向参数解析器注册增量测试, 自动执行, 超时控制等参数.
+        Registers incremental testing, auto-execution, timeout control, and other arguments to the argument parser.
 
-        :param parser: ArgumentParser 参数解析器实例
-        :param ext: 扩展信息, 未使用
+        :param parser: ArgumentParser instance
+        :param ext: Extension information, unused
         :type ext: Optional[Any]
         """
         parser.add_argument(
@@ -743,13 +756,13 @@ class TestsExecuteParam(CMakeParam):
         )
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
-        """生成 CMake Configure 命令
+        """Generate CMake Configure command
 
-        根据测试执行配置生成对应的 CMake 配置参数.
+        Generates the corresponding CMake configuration parameters based on test execution configuration.
 
-        :param ext: 扩展信息, 未使用
+        :param ext: Extension information, unused
         :type ext: Optional[Any]
-        :return: CMake 配置参数字符串
+        :return: CMake configuration parameter string
         :rtype: str
         """
         cmd = self._cfg_require(opt="ENABLE_TESTS_EXECUTE", ctr=self.auto_execute)
@@ -761,32 +774,33 @@ class TestsExecuteParam(CMakeParam):
 
 @dataclasses.dataclass
 class TestsGoldenParam(CMakeParam):
-    """Golden 测试相关参数
+    """Golden test related parameters
 
-    管理系统测试 (STest) 的 Golden 标准数据相关配置.
+    Manages system test (STest) Golden standard data related configuration.
     """
 
-    clean: bool = False  # 清理 Golden 标记
-    path: Optional[Path] = None  # 指定 Golden 路径
+    clean: bool = False  # Clean Golden marker
+    path: Optional[Path] = None  # Specify Golden path
 
     def __init__(self, args):
-        """初始化 TestsGoldenParam 实例
+        """Initialize TestsGoldenParam instance
 
-        从命令行参数中解析 Golden 测试相关配置.
+        Parses Golden test related configuration from command-line arguments.
 
-        :param args: 命令行参数解析结果
+        :param args: Parsed command-line arguments
         """
         self.clean = args.golden_clean
         if args.golden_path:
-            # 传参且指定具体路径时, 使用指定路径, 否则具体缺省路径由 CMake 侧决定
+            # When the argument is provided with a specific path, use it;
+            # otherwise the default path is determined by the CMake side
             self.path = Path(args.golden_path).resolve()
 
     @staticmethod
     def reg_args(parser, ext: Optional[Any] = None):
-        """注册 Golden 测试相关的命令行参数
+        """Register Golden test related command-line arguments
 
-        :param parser: ArgumentParser 参数解析器实例
-        :param ext: 扩展信息, 未使用
+        :param parser: ArgumentParser instance
+        :param ext: Extension information, unused
         :type ext: Optional[Any]
         """
         parser.add_argument(
@@ -809,13 +823,13 @@ class TestsGoldenParam(CMakeParam):
         )
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
-        """生成 CMake Configure 命令
+        """Generate CMake Configure command
 
-        根据 Golden 测试配置生成对应的 CMake 配置参数.
+        Generates the corresponding CMake configuration parameters based on Golden test configuration.
 
-        :param ext: 扩展信息, 未使用
+        :param ext: Extension information, unused
         :type ext: Optional[Any]
-        :return: CMake 配置参数字符串
+        :return: CMake configuration parameter string
         :rtype: str
         """
         cmd = self._cfg_require(opt="ENABLE_STEST_GOLDEN_PATH_CLEAN", ctr=self.clean)
@@ -825,9 +839,9 @@ class TestsGoldenParam(CMakeParam):
 
 @dataclasses.dataclass
 class TestsFilterParam(CMakeParam):
-    """测试过滤参数
+    """Test filter parameters
 
-    用于按条件过滤测试用例, 支持多种测试类型和过滤模式.
+    Used to filter test cases by conditions, supporting multiple test types and filter modes.
     """
 
     cmake_option: str = ""
@@ -835,31 +849,32 @@ class TestsFilterParam(CMakeParam):
     filter_str: Optional[str] = None
 
     def __init__(self, argv: Optional[str], opt: str = ""):
-        """初始化 TestsFilterParam 实例
+        """Initialize TestsFilterParam instance
 
-        根据命令行参数值确定过滤选项的启用状态和过滤字符串.
+        Determines the enable status and filter string of the filter option based on command-line argument values.
 
-        :param argv: 命令行参数值, None 表示启用默认过滤, 空字符串表示禁用, 其他值表示指定过滤字符串
+        :param argv: Command-line argument value, None means enable default filter,
+                     empty string means disabled, other values mean specified filter string
         :type argv: Optional[str]
-        :param opt: CMake 选项名称
+        :param opt: CMake option name
         :type opt: str
         """
         self.cmake_option = opt
         if argv is None:
-            self.enable, self.filter_str = True, "ON"  # 指定 对应参数, 但未指定内容
+            self.enable, self.filter_str = True, "ON"  # Argument specified but no content provided
         elif argv == "":
-            self.enable, self.filter_str = False, "OFF"  # 未指定 对应参数
+            self.enable, self.filter_str = False, "OFF"  # Argument not specified
         else:
-            self.enable, self.filter_str = True, argv  # 指定 对应参数 且指定内容
+            self.enable, self.filter_str = True, argv  # Argument specified with content provided
 
     @staticmethod
     def reg_args(parser, ext: Optional[Any] = None):
-        """注册测试过滤相关的命令行参数
+        """Register test filter related command-line arguments
 
-        根据扩展信息生成对应的命令行参数选项.
+        Generates the corresponding command-line argument options based on extension information.
 
-        :param parser: ArgumentParser 参数解析器实例
-        :param ext: 扩展信息, 用于生成参数名称和帮助信息
+        :param parser: ArgumentParser instance
+        :param ext: Extension information, used to generate argument name and help text
         :type ext: Optional[Any]
         """
         mark = str(ext).lower()
@@ -874,13 +889,13 @@ class TestsFilterParam(CMakeParam):
             parser.add_argument(f"--{mark}", nargs="?", type=str, default="", help=help_str)
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
-        """生成 CMake Configure 命令
+        """Generate CMake Configure command
 
-        根据过滤配置生成对应的 CMake 配置参数.
+        Generates the corresponding CMake configuration parameters based on filter configuration.
 
-        :param ext: 扩展信息, 未使用
+        :param ext: Extension information, unused
         :type ext: Optional[Any]
-        :return: CMake 配置参数字符串
+        :return: CMake configuration parameter string
         :rtype: str
         """
         cmd = ""
@@ -889,13 +904,13 @@ class TestsFilterParam(CMakeParam):
         return cmd
 
     def get_filter_str(self, def_filter: str) -> str:
-        """获取测试过滤字符串
+        """Get test filter string
 
-        根据配置和默认过滤条件生成最终的过滤字符串.
+        Generates the final filter string based on configuration and default filter conditions.
 
-        :param def_filter: 默认过滤条件
+        :param def_filter: Default filter condition
         :type def_filter: str
-        :return: 过滤字符串, 如果未启用则返回空字符串
+        :return: Filter string, returns empty string if not enabled
         :rtype: str
         """
         if not self.enable:
@@ -909,9 +924,9 @@ class TestsFilterParam(CMakeParam):
 
 @dataclasses.dataclass
 class STestExecuteParam(CMakeParam):
-    """STest 执行相关参数
+    """STest execution related parameters
 
-    管理系统测试 (STest) 的执行配置, 包括设备 ID, JSON 导出等.
+    Manages system test (STest) execution configuration, including device ID, JSON export, etc.
     """
 
     auto_execute_device_id: str = ""
@@ -920,12 +935,12 @@ class STestExecuteParam(CMakeParam):
     dump_json: bool = False
 
     def __init__(self, args, enable_binary_cache: bool):
-        """初始化 STestExecuteParam 实例
+        """Initialize STestExecuteParam instance
 
-        从命令行参数中解析 STest 执行相关配置.
+        Parses STest execution related configuration from command-line arguments.
 
-        :param args: 命令行参数解析结果
-        :param enable_binary_cache: 是否启用二进制缓存
+        :param args: Parsed command-line arguments
+        :param enable_binary_cache: Whether to enable binary cache
         :type enable_binary_cache: bool
         """
         devs = ["0"]
@@ -938,10 +953,10 @@ class STestExecuteParam(CMakeParam):
 
     @staticmethod
     def reg_args(parser, ext: Optional[Any] = None):
-        """注册 STest 执行相关的命令行参数
+        """Register STest execution related command-line arguments
 
-        :param parser: ArgumentParser 参数解析器实例
-        :param ext: 扩展信息, 未使用
+        :param parser: ArgumentParser instance
+        :param ext: Extension information, unused
         :type ext: Optional[Any]
         """
         parser.add_argument("-d", "--device", nargs="?", type=int, action="append", help="Device ID, default 0.")
@@ -951,13 +966,13 @@ class STestExecuteParam(CMakeParam):
         )
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
-        """生成 CMake Configure 命令
+        """Generate CMake Configure command
 
-        根据 STest 执行配置生成对应的 CMake 配置参数.
+        Generates the corresponding CMake configuration parameters based on STest execution configuration.
 
-        :param ext: 扩展信息, 未使用
+        :param ext: Extension information, unused
         :type ext: Optional[Any]
-        :return: CMake 配置参数字符串
+        :return: CMake configuration parameter string
         :rtype: str
         """
         cmd = self._cfg_require(opt="ENABLE_STEST_EXECUTE_DEVICE_ID", tv=self.auto_execute_device_id)
@@ -968,17 +983,18 @@ class STestExecuteParam(CMakeParam):
 
 
 class TestsParam(CMakeParam):
-    """测试参数总控类
+    """Test parameter aggregator class
 
-    聚合所有测试相关的参数配置, 包括执行参数, Golden 参数, 过滤参数等.
+    Aggregates all test-related parameter configurations, including execution parameters,
+    Golden parameters, filter parameters, etc.
     """
 
     def __init__(self, args):
-        """初始化 TestsParam 实例
+        """Initialize TestsParam instance
 
-        从命令行参数中解析并初始化所有测试相关的参数配置.
+        Parses and initializes all test-related parameter configurations from command-line arguments.
 
-        :param args: 命令行参数解析结果
+        :param args: Parsed command-line arguments
         """
         self.exec: TestsExecuteParam = TestsExecuteParam(args=args)
         self.golden: TestsGoldenParam = TestsGoldenParam(args=args)
@@ -994,9 +1010,9 @@ class TestsParam(CMakeParam):
         self.example: TestsFilterParam = TestsFilterParam(argv=args.example)
 
     def __str__(self) -> str:
-        """返回测试参数的字符串表示
+        """Return string representation of test parameters
 
-        :return: 格式化的测试参数字符串
+        :return: Formatted test parameter string
         :rtype: str
         """
         if not self.enable:
@@ -1037,9 +1053,9 @@ class TestsParam(CMakeParam):
 
     @property
     def enable(self) -> bool:
-        """判断是否启用任意测试
+        """Check if any test is enabled
 
-        :return: 如果启用了任意类型的测试, 返回 True
+        :return: True if any type of test is enabled
         :rtype: bool
         """
         tests_enable = self.utest.enable or self.stest.enable or self.stest_distributed.enable
@@ -1047,12 +1063,12 @@ class TestsParam(CMakeParam):
 
     @staticmethod
     def reg_args(parser, ext: Optional[Any] = None):
-        """注册所有测试相关的命令行参数
+        """Register all test-related command-line arguments
 
-        向参数解析器注册测试执行, Golden 测试, 过滤选项等参数.
+        Registers test execution, Golden test, filter options, and other arguments to the argument parser.
 
-        :param parser: ArgumentParser 参数解析器实例
-        :param ext: 扩展信息 (子命令解析器)
+        :param parser: ArgumentParser instance
+        :param ext: Extension information (subcommand parser)
         :type ext: Optional[Any]
         """
         TestsExecuteParam.reg_args(parser=parser)
@@ -1085,22 +1101,25 @@ class TestsParam(CMakeParam):
 
 
 class BuildCtrl(CMakeParam):
-    """构建过程控制类
+    """Build process control class
 
-    本类包含由命令行指定或解析出的控制标记/参数, 以控制构建过程执行. 是整个构建流程的入口和控制器, 负责协调整个构建过程.
+    This class contains control flags/parameters specified or parsed from the command line
+    to control build process execution. It serves as the entry point and controller for the
+    entire build flow, responsible for coordinating the whole build process.
     """
 
     _PYTHONPATH: str = "PYTHONPATH"
 
     def __init__(self, args):
-        """初始化 BuildCtrl 实例
+        """Initialize BuildCtrl instance
 
-        从命令行参数中解析并初始化所有构建相关的配置.
+        Parses and initializes all build-related configuration from command-line arguments.
 
-        :param args: 命令行参数解析结果
+        :param args: Parsed command-line arguments
         """
-        self.clean: bool = args.clean  # 强制清理 Build-Tree 及 Install-Tree 标记
-        self.origin_timeout: Optional[int] = args.timeout if args.timeout and args.timeout > 0 else None  # 超时时长
+        self.clean: bool = args.clean  # Force clean Build-Tree and Install-Tree marker
+        # Timeout duration
+        self.origin_timeout: Optional[int] = args.timeout if args.timeout and args.timeout > 0 else None
         self.remain_timeout: Optional[int] = self.origin_timeout
         self.src_root: Path = Path(__file__).parent.resolve()
         self.build_dir_file: Path = self.src_root / "build_dir.json"
@@ -1115,12 +1134,12 @@ class BuildCtrl(CMakeParam):
         self.cmake: Optional[Path] = self.which_cmake()
         if not self.cmake:
             raise RuntimeError("Can't find cmake")
-        # 表示 pip 版本是否支持传递 --config-setting 这种 pep 标准参数传递方式
+        # Indicates whether pip version supports passing --config-setting (PEP standard argument passing)
         self.pip_dependence_desc: Dict[str, str] = {"pip": ">=22.1"}
         self.pip_support_config_setting = self.check_pip_dependencies(
             deps=self.pip_dependence_desc, raise_err=False, log_err=False
         )
-        # 用于统一 run 和 whl 的构建时间戳
+        # Used to unify the build timestamp for run and whl
         timestamp = ""
         self.tag_info: str = os.environ.get('tagInfo')
         if self.tag_info:
@@ -1128,16 +1147,17 @@ class BuildCtrl(CMakeParam):
             if len(parts) >= 4:
                 timestamp = '_'.join(parts[-3:-1])
         if not timestamp:
-            # tagInfo 格式须为 prefix_date_time_suffix (至少 4 段), 与 cmake 公共仓中 generate_version_info.py
-            # 和 setup.py 均使用 split('_')[-3:-1] 提取 date_time 保持一致
-            # 若外部给定的环境变量内容不符合预期, 则重新生成.
+            # tagInfo format must be prefix_date_time_suffix (at least 4 segments), consistent with
+            # generate_version_info.py in cmake common repo and setup.py, both using split('_')[-3:-1]
+            # to extract date_time. If the external environment variable content does not match,
+            # regenerate it.
             timestamp = datetime.now(timezone(timedelta(hours=8))).strftime('%Y%m%d_%H%M%S%f')[:-3]
             self.tag_info = f"pypto_{timestamp}_build"
 
     def __str__(self) -> str:
-        """返回构建控制参数的字符串表示
+        """Return string representation of build control parameters
 
-        :return: 格式化的构建控制参数字符串
+        :return: Formatted build control parameter string
         :rtype: str
         """
         py3_ver = sys.version_info
@@ -1165,12 +1185,13 @@ class BuildCtrl(CMakeParam):
 
     @staticmethod
     def which_cmake() -> Optional[Path]:
-        """查找系统级 CMake 可执行文件路径
+        """Find system-level CMake executable path
 
-        实现本函数是为了排除 cmake pip 包的干扰, 否则在 Python 中直接调用 cmake 会调用到 cmake pip 包.
-        通过遍历 PATH 环境变量中的目录, 查找 ELF 格式的 CMake 可执行文件.
+        This function exists to avoid interference from the cmake pip package;
+        otherwise calling cmake directly in Python would invoke the cmake pip package.
+        Searches for ELF-format CMake executables by traversing PATH environment variable directories.
 
-        :return: 系统级 cmake 可执行文件绝对路径, 找不到则返回 None
+        :return: Absolute path to system-level cmake executable, returns None if not found
         :rtype: Optional[Path]
         """
         if _find_system_cmake:
@@ -1200,8 +1221,8 @@ class BuildCtrl(CMakeParam):
 
     @staticmethod
     def _resolve_ascend_cann_package_path() -> str:
-        """解析 ASCEND_CANN_PACKAGE_PATH，优先级与 build.sh 一致：
-        CANN_PATH > ASCEND_HOME_PATH > ASCEND_OPP_PATH > 默认路径
+        """Resolve ASCEND_CANN_PACKAGE_PATH, priority consistent with build.sh:
+        CANN_PATH > ASCEND_HOME_PATH > ASCEND_OPP_PATH > default path
         """
         for env_key in ("CANN_PATH", "ASCEND_HOME_PATH"):
             val = os.environ.get(env_key)
@@ -1243,7 +1264,7 @@ class BuildCtrl(CMakeParam):
         except subprocess.TimeoutExpired as e:
             logging.error("Operation timeout, %s", e)
             raise e
-        # 计算总耗时
+        # Calculate total duration
         duration = int((datetime.now(tz=timezone.utc) - ts).seconds)
         logging.info("Build[CI] Finish, Duration %s secs.", duration)
 
@@ -1265,22 +1286,22 @@ class BuildCtrl(CMakeParam):
 
     @classmethod
     def _main(cls):
-        """主处理流程"""
+        """Main processing flow"""
         parser = argparse.ArgumentParser(description="PyPTO Build Ctrl.", epilog="Best Regards!")
-        sub_parser = parser.add_subparsers()  # 子命令
-        # 参数注册
+        sub_parser = parser.add_subparsers()  # Subcommands
+        # Register arguments
         FeatureParam.reg_args(parser=parser)
         BuildParam.reg_args(parser=parser)
         TestsParam.reg_args(parser=parser, ext=sub_parser)
         BuildCtrl.reg_args(parser=parser)
 
-        # 参数处理
+        # Parse arguments
         args = parser.parse_args()
         ctrl = BuildCtrl(args=args)
-        # 流程处理
+        # Process flow
         if ctrl.verbose:
             logging.getLogger().setLevel(logging.DEBUG)
-        # 区分 python3 前端和 cpp 前端
+        # Distinguish between python3 frontend and cpp frontend
         logging.info("%s", ctrl)
         if ctrl.feature.frontend_type_python3:
             logging.info("Front-end(python3), start process")
@@ -1299,25 +1320,26 @@ class BuildCtrl(CMakeParam):
     def run_build_cmd(
         self, cmd: str, update_env: Optional[Dict[str, str]] = None, check: bool = True, pg_desc: str = "CMake"
     ) -> Tuple[subprocess.CompletedProcess, str]:
-        """执行具体 build 命令行
+        """Execute a specific build command
 
-        因以下原因, 设置本函数, 而非调用原生 subprocess.run
-            1. 支持多 target 构建, 各 target 构建时长共享公共 timeout 配置;
-            2. UTest/STest 并行执行场景下, 执行时进程调用关系为:
-                   build_ci.py(主进程) -> 进程1(CMake) -> 进程2(CMake Generator, make/ninja)
-                   -> 进程3(Python) -> 进程4(exe)
-               此时若 进程1 超时, 需要触发其子/孙进程感知, 进而结束
+        This function is used instead of calling subprocess.run directly for the following reasons:
+            1. Supports multi-target builds, where build duration shares a common timeout configuration;
+            2. In UTest/STest parallel execution scenarios, the process invocation chain is:
+                   build_ci.py(main process) -> process1(CMake) -> process2(CMake Generator, make/ninja)
+                   -> process3(Python) -> process4(exe)
+               If process1 times out, it needs to notify all child/grandchild processes to terminate
 
-        本函数内支持 timeout 重计算, 仅执行成功时会进行重计算
+        This function supports timeout recalculation, which only occurs on successful execution.
 
-        :param cmd: Build 命令行
-        :param update_env: 环境变量(额外更新内容)
-        :param check: 检查返回值
-        :param pg_desc: Process Group Desc, 进程组描述
+        :param cmd: Build command
+        :param update_env: Environment variables (additional updates)
+        :param check: Check return value
+        :param pg_desc: Process Group Description
         """
 
         def _stop_pg(_msg: str, _p: subprocess.Popen):
-            """通过 SIGINT 信号通知所有子/孙进程结束, python 并行脚本内会捕获该信号进行结算处理"""
+            """Notify all child/grandchild processes to terminate via SIGINT signal;
+            the Python parallel script catches this signal for finalization processing"""
             _pgid = os.getpgid(_p.pid)
             logging.info("%s. Send terminate event to %s[%s]", _msg, pg_desc, _pgid)
             os.killpg(_pgid, signal.SIGINT)
@@ -1347,45 +1369,46 @@ class BuildCtrl(CMakeParam):
             ret_code = process.poll()
             if check and ret_code:
                 raise subprocess.CalledProcessError(ret_code, process.args, output=stdout, stderr=stderr)
-        # 超时时长更新
+        # Update remaining timeout
         duration = self._duration(ts=ts)
         return subprocess.CompletedProcess(process.args, ret_code, stdout, stderr), duration
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
-        """生成 CMake Configure 命令
+        """Generate CMake Configure command
 
-        BuildCtrl 类不直接生成 CMake 配置命令, 返回空字符串.
+        BuildCtrl class does not directly generate CMake configuration commands, returns empty string.
 
-        :param ext: 扩展信息, 未使用
+        :param ext: Extension information, unused
         :type ext: Optional[Any]
-        :return: 空字符串
+        :return: Empty string
         :rtype: str
         """
         return ""
 
     def get_cfg_update_env(self) -> Dict[str, str]:
-        """获取 CMake Configure 阶段的环境变量
+        """Get environment variables for CMake Configure stage
 
-        根据配置生成需要传递给 CMake Configure 的环境变量.
+        Generates environment variables to be passed to CMake Configure based on configuration.
 
-        :return: 环境变量字典
+        :return: Environment variable dictionary
         :rtype: Dict[str, str]
         """
         env = {}
         if self.third_party_path:
             env.update({"PYPTO_THIRD_PARTY_PATH": str(self.third_party_path)})
-        # 通过 tag_info 环境变量统一 run 和 whl 内的 build_timestamp
+        # Unify build_timestamp in run and whl via tag_info environment variable
         env.update({"tagInfo": self.tag_info})
-        # 通过 PYPTO_ALLOW_WHL_BUILD 环境变量实现阻止直接 pip install . 覆盖 cann 包内已有 PyPTO
+        # Prevent direct pip install . from overwriting existing PyPTO in cann package
+        # via PYPTO_ALLOW_WHL_BUILD environment variable
         env.update({"PYPTO_ALLOW_WHL_BUILD": "1"})
         return env
 
     def get_cmake_build_update_env(self) -> Dict[str, str]:
-        """获取 CMake Build 阶段的环境变量
+        """Get environment variables for CMake Build stage
 
-        根据配置生成需要传递给 CMake Build 和测试执行的环境变量.
+        Generates environment variables to be passed to CMake Build and test execution based on configuration.
 
-        :return: 环境变量字典
+        :return: Environment variable dictionary
         :rtype: Dict[str, str]
         """
         env = {}
@@ -1417,17 +1440,17 @@ class BuildCtrl(CMakeParam):
     def pip_install(
         self, whl: Path, dest: Optional[Path] = None, opt: str = "", update_env: Optional[Dict[str, str]] = None
     ):
-        """安装指定的 whl 包
+        """Install the specified whl package
 
-        使用 pip 命令安装指定的 whl 包, 支持自定义安装路径和参数.
+        Uses pip command to install the specified whl package, supporting custom installation path and arguments.
 
-        :param whl: whl 包文件路径
+        :param whl: whl package file path
         :type whl: Path
-        :param dest: 安装路径, 未指定时使用默认路径
+        :param dest: Installation path, uses default path when not specified
         :type dest: Optional[Path]
-        :param opt: 额外安装参数
+        :param opt: Additional installation arguments
         :type opt: str
-        :param update_env: 环境变量 (额外更新内容)
+        :param update_env: Environment variables (additional updates)
         :type update_env: Optional[Dict[str, str]]
         """
         edit_str = "-e " if self.feature.whl_editable else ""
@@ -1439,13 +1462,13 @@ class BuildCtrl(CMakeParam):
         logging.info("Install %s%s success, %s", whl, f" to {dest}" if dest else "", duration)
 
     def pip_uninstall(self, name: str, path: Optional[Path] = None):
-        """卸载指定的 whl 包
+        """Uninstall the specified whl package
 
-        根据是否指定安装路径, 选择使用 pip 卸载或直接删除文件.
+        Depending on whether an installation path is specified, either uses pip uninstall or directly deletes files.
 
-        :param name: 包名
+        :param name: Package name
         :type name: str
-        :param path: 指定安装路径, 如果指定则直接删除对应路径下的文件
+        :param path: Specified installation path, if specified then directly deletes files under that path
         :type path: Optional[Path]
         """
         if path:
@@ -1463,9 +1486,9 @@ class BuildCtrl(CMakeParam):
         logging.info("Uninstall %s package%s success", name, f" from {path}" if path else "")
 
     def cmake_clean(self):
-        """清理 CMake 构建中间结果
+        """Clean CMake build intermediate results
 
-        清理内容包括构建树, 安装树全部内容以及 ast 数据缓存. 仅在 clean 标记为 True 时执行.
+        Cleans build tree, install tree contents, and ast data cache. Only executes when clean flag is True.
         """
         if self.clean:
             if self.build_root.exists():
@@ -1485,9 +1508,10 @@ class BuildCtrl(CMakeParam):
                 shutil.rmtree(astdata_folder)
 
     def py_clean(self):
-        """清理 Python 前端构建的中间结果
+        """Clean Python frontend build intermediate results
 
-        清理包括 CMake 构建目录, Python 缓存文件, 输出目录等. 仅在 clean 标记为 True 时执行额外清理.
+        Cleans CMake build directory, Python cache files, output directory, etc.
+        Only performs additional cleaning when clean flag is True.
         """
         self.cmake_clean()
         if not self.clean:
@@ -1499,8 +1523,8 @@ class BuildCtrl(CMakeParam):
             Path(self.src_root, "python/pypto.egg-info"),
             Path(pkg_src, "__pycache__"),
             Path(pkg_src, "op/__pycache__"),
-            Path(pkg_src, "lib"),  # edit 模式
-            self.build_dir_file,  # Python GCov 场景
+            Path(pkg_src, "lib"),  # editable mode
+            self.build_dir_file,  # Python GCov scenario
         ]
         so_glob = pkg_src.glob(pattern="*.so")
         so_path = [Path(p) for p in so_glob]
@@ -1513,7 +1537,7 @@ class BuildCtrl(CMakeParam):
                 shutil.rmtree(cache_dir)
             else:
                 os.remove(cache_dir)
-        # 清理在线编译运行时缓存
+        # Clean online compilation runtime cache
         cache_home = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
         runtime_cache = cache_home / "cann" / "pypto"
         if runtime_cache.exists():
@@ -1521,11 +1545,13 @@ class BuildCtrl(CMakeParam):
             shutil.rmtree(runtime_cache)
 
     def cmake_configure(self):
-        """执行 CMake Configure 阶段流程
+        """Execute CMake Configure stage
 
-        生成 CMake 构建配置, 包括设置生成器, Python 解释器路径, 编译选项等.
+        Generates CMake build configuration, including setting generator, Python interpreter path,
+        compilation options, etc.
         """
-        # 基本配置, 当前 CMake 中有调用 python3 的情况, 传入 python3 解释器, 保证所使用的 python3 版本一致
+        # Basic configuration: CMake internally calls python3, so pass the python3 interpreter
+        # to ensure consistent python3 version usage
         cmd = f"{self.cmake} -S {self.src_root} -B {self.build_root}"
         cmd += f" -G {self.build.generator}" if self.build.generator else ""
         cmd += f" -DPython3_EXECUTABLE={sys.executable}"
@@ -1533,7 +1559,7 @@ class BuildCtrl(CMakeParam):
         cmd += self.feature.get_cfg_cmd()
         cmd += self.build.get_cfg_cmd()
         cmd += self.tests.get_cfg_cmd()
-        # 执行
+        # Execute
         update_env = self.get_cfg_update_env()
         update_env["CCACHE_BASEDIR"] = str(self.src_root)
         logging.info("CMake Configure, Cmd: %s, Timeout: %s", cmd, self.remain_timeout)
@@ -1541,9 +1567,10 @@ class BuildCtrl(CMakeParam):
         logging.info("CMake Configure success, %s", duration)
 
     def cmake_build(self):
-        """执行 CMake Build 阶段流程
+        """Execute CMake Build stage
 
-        根据 BuildParam 配置执行实际的编译过程, 支持多 target 构建.
+        Executes the actual compilation process based on BuildParam configuration,
+        supporting multi-target builds.
         """
         update_env = self.get_cmake_build_update_env()
         update_env["CCACHE_BASEDIR"] = str(self.src_root)
@@ -1560,15 +1587,19 @@ class BuildCtrl(CMakeParam):
             logging.info("CMake Build(%s/%s) success, %s", i, len(cmd_list), duration)
 
     def py_build(self):
-        """whl 包编译处理
+        """whl package compilation
 
-        支持两种编译模式:
-            1. 正式编译: 调用 build 库触发 setuptools(bdist_wheel 命令) 进而触发 CMake 完成编译
-            2. pip 编译: 调用 pip install 命令触发 setuptools(editable_wheel 命令) 进而触发 CMake 完成编译
-               pip 编译有两种模式:
-               - 常规安装: 适用于生产环境或代码稳定后使用, 安装后对源码的修改不会反映到已安装的包中
-               - 可编辑安装: 便于开发调试, 在 site-packages 中创建指向本地的链接,
-                 对 Python 源码的修改会即时生效, 无需重新安装
+        Supports two compilation modes:
+            1. Official build: Calls the build library to trigger setuptools (bdist_wheel command),
+               which in turn triggers CMake to complete compilation
+            2. pip build: Calls pip install command to trigger setuptools (editable_wheel command),
+               which in turn triggers CMake to complete compilation
+               pip build has two modes:
+               - Regular install: Suitable for production or stable code, modifications to source
+                 code after installation are not reflected in the installed package
+               - Editable install: Facilitates development and debugging, creates a link in
+                 site-packages pointing to the local directory, so Python source code changes
+                 take effect immediately without reinstallation
         """
         update_env = self.get_cfg_update_env()
         if self._use_pip_install_mode() or self.feature.whl_editable:
@@ -1582,16 +1613,17 @@ class BuildCtrl(CMakeParam):
                 if self.pip_support_config_setting:
                     opt += f" {cmd_config_setting}" if cmd_config_setting else ""
                 else:
-                    # pip 低版本无 --config-setting 参数, 此时以环境变量方式传入
+                    # Older pip versions lack --config-setting argument, pass via environment variable instead
                     update_env["PYPTO_BUILD_EXT_ARGS"] = env_config_setting
 
-            # 重装 whl 包
+            # Reinstall whl package
             dist = self._get_pip_install_dist()
             self.pip_uninstall(name=self.feature.whl_name, path=dist)
             self.pip_install(whl=self.src_root, dest=dist, opt=opt, update_env=update_env)
         else:
-            # 检查 build 包版本是否符合要求, 之所以将其放在此处检查, 是因为 pyproject.toml 中
-            # build-system.requires 的检查功能就是 build 包实现的, 所以将其写在 pyproject.toml 中并无法提前检查
+            # Check if build package version meets requirements; this check is placed here because
+            # the build-system.requires check in pyproject.toml is implemented by the build package itself,
+            # so writing it in pyproject.toml cannot perform early validation
             self.check_pip_dependencies(deps={"build": ">=1.0.3"}, raise_err=True, log_err=True)
             cmd = f"{sys.executable} -m build --outdir={self.install_root}"
             cmd += " --no-isolation" if not self.feature.whl_isolation else ""
@@ -1601,14 +1633,14 @@ class BuildCtrl(CMakeParam):
             logging.info("Build whl success, %s", duration)
 
     def py_build_run(self):
-        """whl打包入run处理
+        """Pack whl into run package
 
-        流程:
-            1. 查找 py_build() 已产出的 whl 文件
-            2. cmake configure: 在独立 binary 目录 (build_run) 中, 启用 ENABLE_FEATURE_PACKING_WHL_INTO_RUN
-            3. cpack: 生成 .run 自解压安装包
+        Flow:
+            1. Find the whl file already produced by py_build()
+            2. cmake configure: in a separate binary directory (build_run), enable ENABLE_FEATURE_PACKING_WHL_INTO_RUN
+            3. cpack: generate .run self-extracting installer
         """
-        # 条件过滤
+        # Condition filter
         if self.feature.just_build_whl:
             return
         if self._use_pip_install_mode() or self.feature.whl_editable:
@@ -1619,7 +1651,7 @@ class BuildCtrl(CMakeParam):
             raise RuntimeError(
                 f"Can't find {self.feature.whl_name} whl file from {self.install_root}, please run py_build first."
             )
-        # 打包 run
+        # Pack run
         run_build_root = Path(self.build_root, "run")
         run_build_root.mkdir(parents=True, exist_ok=True)
         cmd = f"{self.cmake} -S {self.src_root} -B {run_build_root}"
@@ -1641,26 +1673,26 @@ class BuildCtrl(CMakeParam):
         logging.info("CMake Build(run) package success, %s", duration)
 
     def py_tests(self):
-        """执行 Python 前端测试
+        """Execute Python frontend tests
 
-        包括单元测试 (UTest) , 系统测试 (STest) , 模型测试 (Models) 和示例测试 (Examples) .
-        如果未使用 pip 安装模式, 会先卸载并重新安装 whl 包.
+        Includes unit tests (UTest), system tests (STest), model tests (Models), and example tests (Examples).
+        If pip install mode is not used, the whl package will be uninstalled and reinstalled first.
         """
         tests_enable = self.tests.utest.enable or self.tests.stest.enable
         if not tests_enable and not self.tests.example.enable and not self.tests.models.enable:
             return
         dist = self._get_pip_install_dist()
         if not self._use_pip_install_mode():
-            # 此时需查找重装对应 whl 包
-            self.pip_uninstall(name=self.feature.whl_name, path=dist)  # 卸载 whl 包
-            whl = self._find_match_whl(name=self.feature.whl_name, path=dist)  # 查找 whl 包
+            # Reinstall the corresponding whl package
+            self.pip_uninstall(name=self.feature.whl_name, path=dist)  # Uninstall whl package
+            whl = self._find_match_whl(name=self.feature.whl_name, path=dist)  # Find whl package
             if not whl:
                 raise RuntimeError(f"Can't find {self.feature.whl_name} whl file from {dist}")
-            self.pip_install(whl=whl, dest=dist, opt="--no-compile --no-deps")  # 安装 whl 包
+            self.pip_install(whl=whl, dest=dist, opt="--no-compile --no-deps")  # Install whl package
 
-        # 执行用例, UTest
-        # 在 Python 3.12 中, pytest-xdist 通过 os.fork() 创建子进程时会产生 DeprecationWarning.
-        # 使用 -W ignore::DeprecationWarning 参数来忽略该警告.
+        # Execute test cases, UTest
+        # In Python 3.12, pytest-xdist creates subprocesses via os.fork() which produces DeprecationWarning.
+        # Use -W ignore::DeprecationWarning to suppress this warning.
         if self.build.job_num is not None and self.build.job_num > 0:
             n_workers = str(self.build.job_num)
         else:
@@ -1671,18 +1703,18 @@ class BuildCtrl(CMakeParam):
             ext=f"-n {n_workers} -W ignore::DeprecationWarning",
         )
 
-        # 执行用例, Models/STest, 支持混合执行
+        # Execute test cases, Models/STest, supports mixed execution
         dev_lst = [int(d) for d in self.tests.stest_exec.auto_execute_device_id.split(":")]
         dev_ext = " ".join(f"{d}" for d in dev_lst)
         ext_str = f"-n {len(dev_lst)} --device {dev_ext}"
         self.py_tests_run_pytest(
             dist=dist, params=[(self.tests.models, "models"), (self.tests.stest, "python/tests/st")], ext=ext_str
         )
-        # 执行多卡用例 通过world_size区分
+        # Execute multi-card cases, distinguished by world_size
         for cards_per_case in [4, 16]:
             if cards_per_case <= 1 or cards_per_case > len(dev_lst):
                 continue
-            # 分组策略 一个worker对应一组卡
+            # Grouping strategy: one worker corresponds to one group of cards
             n_workers = len(dev_lst) // cards_per_case
             needed_devices = n_workers * cards_per_case
             used_dev_lst = dev_lst[:needed_devices]
@@ -1696,7 +1728,7 @@ class BuildCtrl(CMakeParam):
                 ext=ext_str,
             )
 
-        # 执行用例, Examples
+        # Execute test cases, Examples
         dev_ext_comma = ",".join(f"{d}" for d in dev_lst)
         self.py_run_examples(
             dist=dist,
@@ -1706,23 +1738,24 @@ class BuildCtrl(CMakeParam):
             n_workers=n_workers,
         )
 
-        # 生成覆盖率报告 (如果启用 gcov 或 py_cov)
+        # Generate coverage report (if gcov or py_cov is enabled)
         if self.build.gcov or self.build.py_cov:
             self._py_generate_coverage()
 
     def py_tests_run_pytest(self, dist: Optional[Path], params: List[Tuple[TestsFilterParam, str]], ext: str = ""):
-        """调用 pytest 执行测试用例
+        """Invoke pytest to execute test cases
 
-        支持多路径下用例混跑, 可以根据配置并行执行.
+        Supports mixed execution of test cases across multiple paths, with configurable parallel execution.
 
-        :param dist: 二进制分发包安装路径
+        :param dist: Binary distribution package installation path
         :type dist: Optional[Path]
-        :param params: 参数列表, 支持多路径下用例混跑, 每个元素为 (TestsFilterParam, 测试路径)
+        :param params: Parameter list, supports mixed execution across multiple paths,
+                       each element is (TestsFilterParam, test path)
         :type params: List[Tuple[TestsFilterParam, str]]
-        :param ext: 扩展命令参数
+        :param ext: Extended command arguments
         :type ext: str
         """
-        # filter 处理
+        # Filter processing
         filter_str = ""
         for cur_tests, cur_filter_str in params:
             cur_filter_str = cur_tests.get_filter_str(def_filter=cur_filter_str)
@@ -1730,7 +1763,7 @@ class BuildCtrl(CMakeParam):
                 filter_str += f" {cur_filter_str}"
         if not filter_str:
             return
-        # 执行 pytest
+        # Execute pytest
         self._py_tests_run_pytest(dist=dist, filter_str=filter_str, ext=ext)
 
     def py_run_examples(
@@ -1741,43 +1774,44 @@ class BuildCtrl(CMakeParam):
         dev_ext_comma: str = "0",
         n_workers: str = "auto",
     ):
-        """运行示例测试用例
+        """Run example test cases
 
-        根据 backend_type 决定执行模式 (NPU 或 SIM) , 支持设备分配和超时控制.
+        Determines execution mode (NPU or SIM) based on backend_type,
+        supporting device allocation and timeout control.
 
-        :param dist: 二进制分发包安装路径
+        :param dist: Binary distribution package installation path
         :type dist: Optional[Path]
-        :param tests: 测试过滤参数
+        :param tests: Test filter parameters
         :type tests: TestsFilterParam
-        :param def_filter: 默认过滤条件
+        :param def_filter: Default filter condition
         :type def_filter: str
-        :param dev_ext_comma: 设备 ID 列表 (逗号分隔)
+        :param dev_ext_comma: Device ID list (comma-separated)
         :type dev_ext_comma: str
-        :param n_workers: 并行工作数
+        :param n_workers: Number of parallel workers
         :type n_workers: str
         """
         if not tests.enable:
             return
         if not self.tests.exec.auto_execute:
             return
-        # filter 处理
+        # Filter processing
         filter_str = tests.get_filter_str(def_filter=def_filter).replace(',', ' ')
 
-        # 根据 backend_type 决定执行模式
+        # Determine execution mode based on backend_type
         update_env = self._get_py_tests_update_env(dist=dist)
-        # 获取 case_timeout 参数
+        # Get case_timeout argument
         case_timeout = self.tests.exec.case_execute_timeout
         timeout_arg = f" --timeout {case_timeout}" if case_timeout and case_timeout > 0 else ""
 
         if self.feature.backend_type == "npu":
-            # NPU 模式
+            # NPU mode
             cmd = f"{sys.executable} examples/validate_examples.py -t {filter_str} -d {dev_ext_comma}{timeout_arg}"
             logging.info("examples --run_mode npu, Cmd: %s", cmd)
             ret, duration = self.run_build_cmd(cmd=cmd, check=True, update_env=update_env)
             ret.check_returncode()
             logging.info("examples --run_mode npu, Cmd: %s, Duration %s sec", cmd, duration)
         else:
-            # SIM 模式
+            # SIM mode
             n_workers_val = int(n_workers) if n_workers != "auto" else 16
             cmd = f"{sys.executable} examples/validate_examples.py -t {filter_str} \
                   --run_mode sim -w {n_workers_val}{timeout_arg} --no-serial-fallback"
@@ -1823,13 +1857,13 @@ class BuildCtrl(CMakeParam):
 
     def _find_match_whl(self, name: str, path: Path) -> Optional[Path]:
         """
-        在指定路径下, 查找对应匹配的 whl 包文件
+        Find the matching whl package file in the specified path
 
-        :param name: 包名
+        :param name: Package name
         :type name: str
-        :param path: 指定路径
+        :param path: Specified path
         :type path: Path
-        :return: 指定路径
+        :return: Matching whl file path, or None if not found
         :rtype: Path | None
         """
         pytag = f"cp{sys.version_info.major}{sys.version_info.minor}"
@@ -1852,16 +1886,16 @@ class BuildCtrl(CMakeParam):
     def _py_tests_run_pytest(self, dist: Optional[Path], filter_str: str, ext: str = ""):
         if not self.tests.exec.auto_execute:
             return
-        # filter 处理
+        # Filter processing
         filter_str = filter_str.replace(',', ' ')
-        # cmd 拼接
+        # Build command
         cmd = f"{sys.executable} -m pytest {filter_str} -v --durations=0 -s --capture=no"
         cmd += f" --rootdir={self.src_root} {ext} --forked"
         if self.check_pip_dependencies(deps={"pytest-xdist": ">=3.8.0"}, raise_err=False, log_err=False):
             cmd += " --no-loadscope-reorder"
-        # cmd 执行
+        # Execute command
         update_env = self._get_py_tests_update_env(dist=dist)
-        # 使能 Python 覆盖率数据收集 (需安装 pytest-cov, 仅由 --py_cov 触发)
+        # Enable Python coverage data collection (requires pytest-cov, triggered only by --py_cov)
         if self.build.py_cov and self.check_pip_dependencies(
             deps={"pytest-cov": ">=4.0.0"}, raise_err=False, log_err=False
         ):
@@ -1911,12 +1945,12 @@ class BuildCtrl(CMakeParam):
         return update_env
 
     def _get_python_utest_params(self) -> List[Tuple[TestsFilterParam, str]]:
-        """根据 --utest_module 参数生成 Python UTest 的 pytest params 列表
+        """Generate Python UTest pytest params list based on --utest_module argument
 
-        将 utest_module 指定的模块名映射为 python/tests/ut 下的子目录路径，
-        每个模块对应一个 params 条目，支持多模块混跑。
+        Maps module names specified by utest_module to subdirectory paths under python/tests/ut,
+        each module corresponds to a params entry, supporting mixed execution of multiple modules.
 
-        :return: pytest params 列表，每个元素为 (TestsFilterParam, 路径)
+        :return: pytest params list, each element is (TestsFilterParam, path)
         :rtype: List[Tuple[TestsFilterParam, str]]
         """
         base = "python/tests/ut"
@@ -1927,7 +1961,7 @@ class BuildCtrl(CMakeParam):
         return [(self.tests.utest, f"{base}/{m}") for m in modules]
 
     def _get_py_cov_data_file(self) -> Optional[Path]:
-        """获取 Python 覆盖率数据文件路径 (与 gen_coverage.py 的 data_dir 一致)"""
+        """Get Python coverage data file path (consistent with gen_coverage.py data_dir)"""
         if not self.build_dir_file.exists():
             return None
         with open(self.build_dir_file, 'r', encoding='utf-8') as f:
@@ -1936,23 +1970,24 @@ class BuildCtrl(CMakeParam):
         return Path(build_dir, ".coverage")
 
     def _py_generate_coverage(self):
-        """生成覆盖率报告
+        """Generate coverage report
 
-        该函数读取 setup.py 生成的 build_dir 标记文件, 调用 gen_coverage.py 生成覆盖率报告.
-        支持 C++ (--gcov) 和 Python (--py_cov) 覆盖率的独立或组合生成.
+        This function reads the build_dir marker file generated by setup.py and calls
+        gen_coverage.py to generate the coverage report.
+        Supports independent or combined generation of C++ (--gcov) and Python (--py_cov) coverage.
 
-        流程:
-            1. 读取 .pypto_build_dir.json -> 获取 CMake 构建目录
-            2. 读取 gcov_config.json -> 获取 C++ filter_dirs (仅 --gcov 时存在)
-            3. 调用 gen_coverage.py -> 生成覆盖率报告
+        Flow:
+            1. Read .pypto_build_dir.json -> get CMake build directory
+            2. Read gcov_config.json -> get C++ filter_dirs (only present with --gcov)
+            3. Call gen_coverage.py -> generate coverage report
 
-        注意:
-            - 需要在 pytest 执行完成后调用 (此时 .gcda / .coverage 文件已生成)
-            - --gcov: 生成 C++ 覆盖率 (需 CMake ENABLE_GCOV=ON 编译插桩)
-            - --py_cov: 生成 Python 覆盖率 (需 pytest-cov, pytest 已通过 --cov 收集数据)
-            - --cov_increment (or --gcov_increment): 增量覆盖率 (C++ 和 Python 均生效)
+        Notes:
+            - Must be called after pytest execution (when .gcda / .coverage files are generated)
+            - --gcov: Generate C++ coverage (requires CMake ENABLE_GCOV=ON compilation instrumentation)
+            - --py_cov: Generate Python coverage (requires pytest-cov, pytest has collected data via --cov)
+            - --cov_increment (or --gcov_increment): Incremental coverage (applies to both C++ and Python)
         """
-        # 1. 读取 build_dir 标记文件
+        # 1. Read build_dir marker file
         if not self.build_dir_file.exists():
             logging.warning("Build dir marker file not found: %s, skip coverage generation", self.build_dir_file)
             return
@@ -1961,7 +1996,7 @@ class BuildCtrl(CMakeParam):
             marker = json.load(f)
         build_dir = Path(marker["cmake_binary_dir"]).resolve()
 
-        # 2. 读取 gcov 配置文件 (仅 C++ 覆盖率需要 filter_dirs, --py_cov 独立使用时可不存在)
+        # 2. Read gcov config file (only C++ coverage needs filter_dirs; may not exist when --py_cov is used alone)
         filter_dirs = []
         config_file = build_dir / "gcov_config.json"
         if config_file.exists():
@@ -1972,17 +2007,17 @@ class BuildCtrl(CMakeParam):
             logging.warning("GCov config file not found: %s, skip coverage generation", config_file)
             return
 
-        # 3. 构造 gen_coverage.py 参数
+        # 3. Build gen_coverage.py arguments
         gen_cov_py = self.src_root / "cmake/scripts/gen_coverage.py"
 
         cmd = f"{sys.executable} {gen_cov_py} -s={self.src_root} -d={build_dir} "
         for filter_dir in filter_dirs:
             cmd += f" -f={filter_dir}"
-        cmd += " -i" if self.build.cov_incr else ""  # 增量覆盖率
-        cmd += " --py_cov" if self.build.py_cov else ""  # Python 覆盖率
-        cmd += " --gcov" if self.build.gcov else ""  # 生成 C++ 覆盖率
+        cmd += " -i" if self.build.cov_incr else ""  # Incremental coverage
+        cmd += " --py_cov" if self.build.py_cov else ""  # Python coverage
+        cmd += " --gcov" if self.build.gcov else ""  # Generate C++ coverage
 
-        # 4. 执行覆盖率生成
+        # 4. Execute coverage generation
         logging.info("Generate coverage, Cmd: %s, Timeout: %s", cmd, self.remain_timeout)
         ret, duration = self.run_build_cmd(cmd=cmd, check=True, pg_desc="gen_coverage")
         ret.check_returncode()
@@ -1995,7 +2030,8 @@ class BuildCtrl(CMakeParam):
         return self.tests.utest.enable or self.tests.stest.enable
 
     def _get_pip_install_dist(self) -> Optional[Path]:
-        # pip install -e 场景需直接安装到 site-packages 默认路径(与指定 --target 参数逻辑冲突), 其他场景安装到自定义目录
+        # pip install -e scenario requires installing to the default site-packages path
+        # (conflicts with --target argument logic); other scenarios install to custom directory
         return None if self._use_pip_install_mode() and self.feature.whl_editable else self.install_root
 
     def _get_setuptools_build_ext_config_setting(self) -> Tuple[str, str]:

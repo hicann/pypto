@@ -1,13 +1,11 @@
-# aicore exception
+# AICore kernel执行异常
 
 ## 问题现象描述
 
-AICore kernel执行期间发生异常（硬件trap、执行超时、core挂死）。
+AICore kernel执行期间发生异常（硬件trap、执行超时、core挂死），报错信息如下：
 
-```bash
-[Error]: aicore exception, device_id: 6, stream_id: 47, task_id: 2, retcode: 507015, kernelName: PyPTO_matmul_add_0_mix_aic
-        Rectify the fault based on the error information in the ascend log.
-PyPTO error: PyPTO Inner Error. Please rectify the fault based on the error information in the ascend log. (function PyPTOExceptionInfoCallBack)
+```text
+ErrCode: F1FFFF! Enum: InternalError::COMMON_INNER_ERROR. aicore exception, device_id: 0, stream_id: 61, task_id: 5929, retcode: 507015, kernelName: PyPTO_fusion_kernel_0_mix_aic
 ```
 
 ## 可能原因
@@ -17,7 +15,7 @@ PyPTO error: PyPTO Inner Error. Please rectify the fault based on the error info
 - Tiling/Shape参数与kernel不匹配。
 - MACHINE调度框架自身问题。
 
-## 处理方式
+## 处理步骤
 
 1. 环境准备。
     - `pypto`和`torch_npu`可正常import（`import pypto; import torch_npu`无报错）。

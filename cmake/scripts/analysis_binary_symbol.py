@@ -8,7 +8,7 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""构建产物二进制符号分析."""
+"""Build artifact binary symbol analysis."""
 
 import argparse
 from datetime import datetime, timezone
@@ -30,7 +30,7 @@ class Analysis:
         self.undefined_symbols_pass: List[str] = []
 
     def __str__(self):
-        # 结果
+        # Result
         str_1 = ""
         if self.print_defined_relations:
             str_1 = "\nDefined:\n\t"
@@ -54,13 +54,13 @@ class Analysis:
 
     def analysis(self) -> bool:
         ts = datetime.now(tz=timezone.utc)
-        # 获取二进制自身未定义原始符号范围
+        # Get undefined original symbol scope of the binary itself
         ori_undefined_symbols_self = self._analysis_ori_undefined_symbols_self()
 
-        # 解析二进制符号
+        # Parse binary symbols
         self._analysis_symbols(ori_undefined_symbols_self=ori_undefined_symbols_self)
 
-        # 结果确定
+        # Determine result
         return self._analysis_result(ts=ts)
 
     def _analysis_ori_undefined_symbols_self(self) -> List[str]:
@@ -84,8 +84,8 @@ class Analysis:
             if line.startswith("\t"):
                 self.defined_relations.append(f"{line.strip()}")
             elif line.startswith("undefined symbol: "):
-                line = line[18:]  # 跳过 'undefined symbol: '
-                ori_symbol = line.split("\t")[0]  # 提取符号
+                line = line[18:]  # Skip 'undefined symbol: '
+                ori_symbol = line.split("\t")[0]  # Extract symbol
                 cmd = f"c++filt {ori_symbol}"
                 ret = subprocess.run(shlex.split(cmd), capture_output=True, check=True, text=True, encoding='utf-8')
                 ret.check_returncode()
@@ -133,8 +133,8 @@ class Analysis:
 
     @staticmethod
     def main():
-        """主处理流程"""
-        # 参数注册
+        """Main processing flow"""
+        # Register arguments
         parser = argparse.ArgumentParser(description="Symbol Analysis.", epilog="Best Regards!")
         parser.add_argument("-f", "--file", nargs=1, type=str, required=True, help="Specific binary file path.")
         parser.add_argument(
@@ -152,7 +152,7 @@ class Analysis:
             default=False,
             help="Ignore undefined symbols passed between binaries.",
         )
-        # 流程处理
+        # Process workflow
         ctrl = Analysis(args=parser.parse_args())
         return ctrl.analysis()
 

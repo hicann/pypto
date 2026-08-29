@@ -8,7 +8,7 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""STest 用例并行执行."""
+"""STest case parallel execution."""
 
 import argparse
 import logging
@@ -21,45 +21,45 @@ from accelerate.tests_accelerate import TestsAccelerate
 
 
 class STestAccelerate(TestsAccelerate):
-    """STest 执行加速
+    """STest execution acceleration
 
-    通过多进程并行执行, 以提升 STest 执行效率.
+    Accelerate STest execution efficiency through multi-process parallel execution.
     """
 
     def __init__(self, args: argparse.Namespace, scene_mark: str = "STest", cntr_name: str = "Device"):
         """
-        :param args: 命令行参数
-        :param scene_mark: 场景标识
-        :param cntr_name: 容器名称
+        :param args: command line arguments
+        :param scene_mark: scene identifier
+        :param cntr_name: container name
         """
-        # 在调用父类初始化之前，从二进制文件获取 meta 信息并重排序用例列表
-        # 二进制文件路径通过 -t/--target 参数传入，存储在 args.target[0] 中
-        # 但需要检查 args.target 是否存在，因为它是 required=True 的参数
+        # Before calling parent init, get meta info from binary file and reorder case list
+        # Binary file path is passed via -t/--target argument, stored in args.target[0]
+        # But need to check if args.target exists since it is a required=True argument
         binary_path = None
         if hasattr(args, 'target') and args.target and len(args.target) > 0:
             binary_path = args.target[0]
         elif hasattr(args, 'exe') and hasattr(args.exe, 'file'):
-            # 如果 args.target 不存在，尝试从其他地方获取
+            # If args.target does not exist, try to get from other sources
             binary_path = args.exe.file
 
         if args.cases and binary_path:
-            # 尝试从二进制文件获取 meta 信息并重排序
+            # Try to get meta info from binary file and reorder
             reordered_cases = self._reorder_cases_with_binary_meta(args.cases, binary_path)
-            # 修改 args.cases，这样父类初始化时会使用重排序后的用例列表
+            # Modify args.cases so parent init uses the reordered case list
             args.cases = reordered_cases
         elif args.cases and not binary_path:
             logging.warning("Binary path not found, skipping meta-based reordering")
 
-        # 调用父类初始化
+        # Call parent init
         super().__init__(args, scene_mark=scene_mark, cntr_name=cntr_name)
 
         self.device_list: List[int] = self._init_get_device_list(args=args)
 
     @staticmethod
     def reg_args(parser: argparse.ArgumentParser) -> None:
-        """注册STest加速器参数
+        """Register STest accelerator arguments
 
-        先调用父类(TestsAccelerate)的参数注册, 再添加STest特有参数
+        First call parent (TestsAccelerate) argument registration, then add STest-specific arguments
         """
         TestsAccelerate.reg_args(parser)
         parser.add_argument(
@@ -74,11 +74,11 @@ class STestAccelerate(TestsAccelerate):
 
     @staticmethod
     def main() -> bool:
-        """主处理流程"""
-        # 参数注册
+        """Main processing flow"""
+        # Register arguments
         parser = argparse.ArgumentParser(description="STest Execute Accelerate", epilog="Best Regards!")
         STestAccelerate.reg_args(parser=parser)
-        # 流程处理
+        # Process workflow
         args = parser.parse_args()
         ctrl = STestAccelerate(args=args)
         ctrl.prepare()
@@ -100,8 +100,8 @@ class STestAccelerate(TestsAccelerate):
     @staticmethod
     def _get_test_costs(binary: str) -> Dict[str, float]:
         """
-        获取所有带耗时信息的测试用例(通过自定义参数--gtest_list_tests_with_meta)
-        返回格式: { "TestCaseName.TestName": cost_seconds, ... }
+        Get all test cases with cost info (via custom argument --gtest_list_tests_with_meta)
+        Return format: { "TestCaseName.TestName": cost_seconds, ... }
         """
         cost_map = {}
         if not binary or not os.path.exists(binary):
@@ -116,7 +116,7 @@ class STestAccelerate(TestsAccelerate):
                 logging.warning("Failed to get test costs from binary %s: %s", binary, result.stderr)
                 return cost_map
 
-            # 仅解析stdout(格式:TestCaseName.TestName|cost_seconds)
+            # Only parse stdout (format: TestCaseName.TestName|cost_seconds)
             pattern = re.compile(r'^([\w.]+)\|(\d+\.?\d*)$', re.MULTILINE)
             matches = pattern.findall(result.stdout)
             for test_name, cost_str in matches:
@@ -131,16 +131,16 @@ class STestAccelerate(TestsAccelerate):
     @staticmethod
     def _reorder_cases_with_binary_meta(cases: List[str], binary: str) -> List[str]:
         """
-        基于 binary meta 耗时对 stest 用例进行重排：
-          - 有耗时信息的用例排前面，按耗时降序
-          - 无耗时信息的用例排后面，保持原有顺序
+        Reorder stest cases based on binary meta cost:
+          - Cases with cost info are placed first, sorted by cost in descending order
+          - Cases without cost info are placed after, keeping original order
         """
         if not cases or not binary:
             return cases
 
         cost_map = STestAccelerate._get_test_costs(binary)
         if not cost_map:
-            # 未获取到耗时信息，保持原序
+            # No cost info obtained, keep original order
             logging.debug("No cost meta found for %s, keep original cases order", binary)
             return cases
 
@@ -152,7 +152,7 @@ class STestAccelerate(TestsAccelerate):
             else:
                 no_cost_cases.append(cs)
 
-        # 有耗时信息的用例按耗时降序重排
+        # Sort cases with cost info by cost in descending order
         cost_cases_sorted = sorted(cost_cases, key=lambda x: cost_map[x], reverse=True)
 
         logging.info(

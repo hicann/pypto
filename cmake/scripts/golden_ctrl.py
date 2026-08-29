@@ -8,10 +8,11 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""STest Golden 生成总入口.
+"""STest Golden generation main entry.
 
-在执行 STest 前需要生成用例所需的 Golden 数据并保存在文件中, 以供用例使用. 设计本入口脚本以统一其处理逻辑.
-本脚本在 CMake 中识别需要执行 STest 时, 由 CMake 调用.
+Before executing STest, Golden data required by cases needs to be generated and saved to files for case usage.
+This entry script is designed to unify the processing logic.
+This script is called by CMake when STest execution is identified.
 """
 
 import argparse
@@ -34,13 +35,13 @@ from utils.table import Table
 
 
 class GoldenCtrl:
-    """STest Golden 生成逻辑控制."""
+    """STest Golden generation logic control."""
 
-    _MAX_JOB_NUM: int = 16  # 16 控制 Golden 产生时多进程最大并行度
+    _MAX_JOB_NUM: int = 16  # 16 controls the maximum multi-process parallelism during Golden generation
 
     def __init__(self, args):
         self.sys_paths: List[Path] = []
-        # 命令行参数处理
+        # Command line argument processing
         self.cases: List[str] = str(args.cases).split(":")
         self.output: Path = Path(args.output).resolve()
         self.impl_dirs: List[Path] = [Path(p).resolve() for p in args.path]
@@ -79,7 +80,7 @@ class GoldenCtrl:
 
     @staticmethod
     def main() -> bool:
-        """主处理流程"""
+        """Main processing flow"""
         parser = argparse.ArgumentParser(description="STest Golden Ctrl", epilog="Best Regards!")
         parser.add_argument(
             "-c",
@@ -104,7 +105,7 @@ class GoldenCtrl:
             "--job_num",
             nargs="?",
             type=int,
-            # Golden 生成不确定是否 CPU Bound, 默认使用 0.8 倍 CPU 数进程
+            # Golden generation may not be CPU bound, default to 0.8x CPU count processes
             default=int(math.ceil(float(multiprocessing.cpu_count()) * 0.8)),
             help="Specific parallel accelerate job num.",
         )
@@ -119,13 +120,13 @@ class GoldenCtrl:
         return ret
 
     def prepare(self) -> bool:
-        """执行 Golden 生成任务前准备"""
+        """Preparation before executing Golden generation tasks"""
         return self.prepare_module()
 
     def prepare_module(self) -> bool:
-        """执行 Golden 生成任务前准备
+        """Preparation before executing Golden generation tasks
 
-        将需 import module 在主进程完成 import, 子进程继承 import 关系
+        Import required modules in the main process, child processes inherit import relationships
         """
         for impl_d in self.impl_dirs:
             if not impl_d.exists():
@@ -146,12 +147,12 @@ class GoldenCtrl:
         return True
 
     def process(self) -> bool:
-        """执行 Golden 生成任务, 生成 Cases 所需 Golden"""
-        # 输出路径处理
+        """Execute Golden generation tasks, generate Golden data required by Cases"""
+        # Output path processing
         if self.clean and self.output.exists():
             shutil.rmtree(self.output)
         self.output.mkdir(parents=True, exist_ok=True)
-        # 任务执行
+        # Task execution
         ts = datetime.now(tz=timezone.utc)
         if self.job_num <= 1:
             ret = self.run_all_task_single_process()
@@ -167,9 +168,9 @@ class GoldenCtrl:
 
     def run_all_task_multi_process(self) -> bool:
         with ProcessPoolExecutor(max_workers=self.job_num) as executor:
-            # 提交多个任务
+            # Submit multiple tasks
             futures = [executor.submit(self.run_task, c, i + 1) for i, c in enumerate(self.cases)]
-            # 按完成顺序获取结果
+            # Get results in completion order
             for future in as_completed(futures):
                 ret = False if not future.result() else True
                 if not ret:
@@ -185,13 +186,13 @@ class GoldenCtrl:
 
     def run_task(self, c: str, idx: int = 0) -> bool:
         ts = datetime.now(tz=timezone.utc)
-        # 获取 Golden 生成函数
+        # Get Golden generation function
         reg_info, case_idx = GoldenRegister.get_golden_func(case_name=c)
         if reg_info is None:
             logging.debug("Generate golden failed Idx[%s/%s] Case(%s) Can't find generator.", idx, len(self.cases), c)
             return True
 
-        # 用例 Golden 路径处理
+        # Case Golden path processing
         case_output, need_gen = self._prepare_output(case=c, reg_info=reg_info)
         if not need_gen:
             logging.info("Generate golden skip Idx[%s/%s] Case(%s).", idx, len(self.cases), c)
@@ -219,7 +220,7 @@ class GoldenCtrl:
 
     def _prepare_output(self, case: str, reg_info: GoldenRegInfo) -> Tuple[Path, bool]:
         case_output = Path(self.output, case.replace("*", ""))
-        # 获取原始控制信息(Version, TimeStamp)
+        # Get original control info (Version, TimeStamp)
         ori_ver = 0
         ori_time = time.time()
         ver_file = Path(case_output, self.json_file_name)
@@ -229,7 +230,7 @@ class GoldenCtrl:
             ori_ver = datas["version"]
             ori_time = datas["timestamp"]
 
-        # 若版本变化, 或已过期, 需要提前删除
+        # If version changed or expired, delete in advance
         now_time = time.time()
         need_del_version = reg_info.version > ori_ver
         need_del_time = False if reg_info.timeout is None else int(now_time - ori_time) > reg_info.timeout
@@ -239,12 +240,12 @@ class GoldenCtrl:
             )
             shutil.rmtree(case_output)
 
-        # 创建 Golden 目录
+        # Create Golden directory
         case_output.mkdir(parents=True, exist_ok=True)
         return case_output, not ver_file.exists()
 
     def _dump_golden_desc(self, case_output: Path, reg_info: GoldenRegInfo):
-        # 刷新控制信息
+        # Refresh control info
         now_time = time.time()
         desc = {"version": reg_info.version, "timestamp": now_time}
         ver_file = Path(case_output, self.json_file_name)

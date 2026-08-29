@@ -8,7 +8,7 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""生成覆盖率"""
+"""Generate coverage"""
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -31,24 +31,25 @@ import yaml
 
 class GenCoverage:
     class FilterPathAction(argparse.Action):
-        """自定义 Action: 解析 filter 参数时校验路径并格式化"""
+        """Custom Action: validate and format paths when parsing filter arguments"""
 
         def __call__(self, parser, namespace, values, option_string=None):
-            # 获取当前已收集的列表(初始为 None)
+            # Get the currently collected list (initially None)
             cur_values = getattr(namespace, self.dest, None) or []
-            # 处理分号分隔的多个路径 (VERBATIM 模式下，生成器表达式展开为分号分隔字符串)
+            # Process multiple paths separated by semicolons
+            # (in VERBATIM mode, generator expressions expand to semicolon-separated strings)
             for path_str in values.split(';'):
                 path_str = path_str.strip()
                 if not path_str:
                     continue
                 path = Path(path_str)
                 cur_values.append(f" {path}/*")
-            # 更新命名空间的值
+            # Update the namespace value
             setattr(namespace, self.dest, cur_values)
 
     @dataclasses.dataclass
     class LCovAblity:
-        """lcov 能力"""
+        """lcov capabilities"""
 
         lcov_version: str = ""
         lcov_supported_exclude: bool = False
@@ -83,16 +84,16 @@ class GenCoverage:
 
         @classmethod
         def parse_version(cls, version: str) -> str:
-            # 提取版本号(兼容 2.3.2, 2.3.2-1, 2.3.2+rc1 等格式)
+            # Extract version number (compatible with formats like 2.3.2, 2.3.2-1, 2.3.2+rc1)
             version = version.strip()
-            # 正则匹配:提取 主版本.次版本.补丁版本(忽略后缀)
+            # Regex match: extract major.minor.patch version (ignoring suffixes)
             version_match = re.search(r'version (\d+\.\d+\.\d+)', version)
             if not version_match:
-                # 兼容只有两位版本号的情况(如 2.3)
+                # Compatible with two-part version numbers (e.g. 2.3)
                 version_match = re.search(r'version (\d+\.\d+)', version)
                 if not version_match:
                     raise RuntimeError(f"Can't get version from {version}")
-                # 补全三位版本号(如 2.3 -> 2.3.0)
+                # Complete to three-part version number (e.g. 2.3 -> 2.3.0)
                 base_version = version_match.group(1)
                 return f"{base_version}.0"
             else:
@@ -107,14 +108,14 @@ class GenCoverage:
 
         @classmethod
         def _check_param_support(cls, exe: str, param: str) -> bool:
-            """检查指定可执行文件是否支持指定参数
+            """Check whether the specified executable supports the specified parameter
 
             Args:
-                exe: 可执行文件名(如 "lcov", "genhtml")
-                param: 要检查的参数(如 "--exclude")
+                exe: executable file name (e.g. "lcov", "genhtml")
+                param: parameter to check (e.g. "--exclude")
 
             Returns:
-                bool: 是否支持该参数
+                bool: whether the parameter is supported
             """
             try:
                 ret = subprocess.run(f"{exe} --help".split(), capture_output=True, check=True, encoding='utf-8')
@@ -125,7 +126,7 @@ class GenCoverage:
                 return False
 
         def init_lcov_version(self):
-            """检查 lcov 环境"""
+            """Check lcov environment"""
             try:
                 ret = subprocess.run('lcov --version'.split(), capture_output=True, check=True, encoding='utf-8')
                 ret.check_returncode()
@@ -147,22 +148,22 @@ class GenCoverage:
         self.result_dir: Path = Path(args.result[0]).resolve() if args.result else Path(self.data_dir, 'cov_result')
         self.job_num: int = self.get_job_num(args=args)
 
-        # C++ 覆盖率开关 (gcov_flag 为 True 时执行 lcov/gcov 全部流程)
+        # C++ coverage switch (when gcov_flag is True, execute the full lcov/gcov workflow)
         self.gcov_flag: bool = args.gcov
 
-        # 全量覆盖率
+        # Full coverage
         self.full_cov_info_file: Path = Path(self.result_dir, 'coverage.info')
         self.full_html_report_path: Path = Path(self.result_dir, "html")
         self.filter_lst: List[str] = args.filter
 
-        # 增量覆盖率
+        # Incremental coverage
         self.incr_flag: bool = self.get_increment_flag(args)
         incr_root = Path(self.result_dir, "increment")
         self.incr_cov_info_file: Path = Path(incr_root, f"{self.full_cov_info_file.name}")
         self.incr_html_report_path: Path = Path(incr_root, self.full_html_report_path.name)
         self.incr_text_report_file: Path = Path(incr_root, "coverage_report.txt")
 
-        # Python 覆盖率
+        # Python coverage
         self.py_cov_flag: bool = args.py_cov
         self.py_cov_data_file: Path = Path(os.environ.get("COVERAGE_FILE", Path(self.data_dir, ".coverage")))
         self.py_cov_info_file: Path = Path(self.result_dir, 'py_coverage.info')
@@ -171,11 +172,11 @@ class GenCoverage:
         self.py_incr_html_report_path: Path = Path(incr_root, "py_html")
         self.py_incr_text_report_file: Path = Path(incr_root, "py_coverage_report.txt")
 
-        # 合法性检查
+        # Validity check
         self.lcov_ability = self.LCovAblity() if self.gcov_flag else None
         self.chk_env()
 
-        # 输出路径准备
+        # Output path preparation
         if self.gcov_flag and not self.data_dir.exists():
             raise ValueError(f"The dir({self.data_dir}) required to find the .da files not exist.")
         self.result_dir.mkdir(parents=True, exist_ok=True)
@@ -189,12 +190,12 @@ class GenCoverage:
             if self.incr_flag:
                 self.py_incr_html_report_path.mkdir(parents=True, exist_ok=True)
 
-        # 增量覆盖率计算相关数据
-        # 变更文件及其行号范围, 格式为 {"file_rel_path": [(start_line, end_line)]}
+        # Incremental coverage calculation related data
+        # Changed files and their line ranges, format: {"file_rel_path": [(start_line, end_line)]}
         self.latest_changes: Dict[str, List[Tuple[int, int]]] = {}
-        # 原始覆盖率数据, 格式为 {"file_abs_path": {"lines": {line_number: hit_count}}}
+        # Original coverage data, format: {"file_abs_path": {"lines": {line_number: hit_count}}}
         self.full_cov_data: Dict[str, Dict[str, Dict[int, int]]] = {}
-        # 增量覆盖率结果
+        # Incremental coverage result
         self.incr_cov_rst: Dict[str, Any] = {}
 
     def __str__(self) -> str:
@@ -230,7 +231,7 @@ class GenCoverage:
 
     @classmethod
     def reg_args(cls, parser):
-        """注册命令行参数"""
+        """Register command line arguments"""
         parser.add_argument(
             "-s", "--source", required=True, nargs=1, type=Path, help="Specify the source base directory."
         )
@@ -278,7 +279,7 @@ class GenCoverage:
 
     @classmethod
     def get_job_num(cls, args):
-        """获取并行任务数"""
+        """Get parallel job number"""
         if args.job_num:
             job_num = args.job_num
         else:
@@ -293,7 +294,7 @@ class GenCoverage:
 
     @classmethod
     def get_increment_flag(cls, args):
-        """获取增量覆盖率标志"""
+        """Get incremental coverage flag"""
         env_val = os.environ.get("PYPTO_BUILD_COV_INCREMENT", "")
         true_list = ["true", "1"]
         if args.increment is not None:
@@ -305,14 +306,14 @@ class GenCoverage:
     def get_file_stats(
         cls, file_cov_info: Dict[str, Dict[int, int]], line_ranges: List[Tuple[int, int]]
     ) -> Dict[str, Any]:
-        """处理单个文件的覆盖率数据
+        """Process coverage data for a single file
 
         Args:
-            file_cov_info: 文件的覆盖率数据, 格式为 {"lines": {line_number: hit_count}}
-            line_ranges: 文件的变更行范围
+            file_cov_info: file coverage data, format: {"lines": {line_number: hit_count}}
+            line_ranges: changed line ranges of the file
 
         Returns:
-            dict: 文件的覆盖率统计, 格式为 {
+            dict: file coverage statistics, format: {
                 "total_lines": int,
                 "covered_lines": int,
                 "coverage_rate": float,
@@ -323,11 +324,11 @@ class GenCoverage:
         def process_line_range(
             start_line: int, end_line: int, lines_coverage: Dict[int, int], file_stats: Dict[str, Any]
         ):
-            """处理单个行范围的覆盖率数据"""
+            """Process coverage data for a single line range"""
             for line_number in range(start_line, end_line + 1):
                 file_stats["total_lines"] += 1
 
-                # 检查行是否被覆盖
+                # Check if the line is covered
                 hit_count = lines_coverage.get(line_number, 0)
                 file_stats["lines"][line_number] = hit_count
 
@@ -344,14 +345,14 @@ class GenCoverage:
 
     @classmethod
     def main(cls):
-        """主函数"""
-        # 参数注册
+        """Main function"""
+        # Register arguments
         parser = argparse.ArgumentParser(description="Generate Coverage", epilog="Best Regards!")
         cls.reg_args(parser=parser)
-        # 参数处理
+        # Process arguments
         ctrl = GenCoverage(args=parser.parse_args())
         logging.info("%s", ctrl)
-        # 流程处理
+        # Process workflow
         ctrl.process()
 
     @classmethod
@@ -392,19 +393,19 @@ class GenCoverage:
             logging.error(f"stderr:\n{ret.stderr}")
 
     def chk_env(self):
-        """检查环境依赖"""
-        # 检查 git 是否安装
+        """Check environment dependencies"""
+        # Check if git is installed
         if self.incr_flag:
             self.chk_env_git()
 
     def chk_env_git(self):
-        """检查 git 环境"""
-        # 检查 git 是否安装
+        """Check git environment"""
+        # Check if git is installed
         try:
             subprocess.run('git --version'.split(), capture_output=True, check=True, encoding='utf-8')
         except FileNotFoundError as e:
             raise FileNotFoundError("git is required for increment coverage, please install.") from e
-        # 检查是否在 git 仓库中
+        # Check if inside a git repository
         try:
             subprocess.run(
                 'git rev-parse --is-inside-work-tree'.split(),
@@ -417,27 +418,28 @@ class GenCoverage:
             raise RuntimeError(f"The source directory {self.src_root} is not a git repository.") from e
 
     def process(self):
-        """生成覆盖率报告
+        """Generate coverage report
 
-        根据 gcov_flag / py_cov_flag / incr_flag 的组合, 选择性执行 C++ (lcov) 和 Python (coverage) 流程:
-            - gcov_flag=True: 执行 C++ 全量覆盖率 (lcov + genhtml)
-            - py_cov_flag=True: 执行 Python 全量覆盖率 (coverage html + report)
-            - incr_flag=True: 执行增量覆盖率 (C++ 和/或 Python)
+        Based on the combination of gcov_flag / py_cov_flag / incr_flag, selectively execute
+        C++ (lcov) and Python (coverage) workflows:
+            - gcov_flag=True: execute C++ full coverage (lcov + genhtml)
+            - py_cov_flag=True: execute Python full coverage (coverage html + report)
+            - incr_flag=True: execute incremental coverage (C++ and/or Python)
         """
-        # 处理 C++ 全量覆盖率
+        # Process C++ full coverage
         if self.gcov_flag:
             self.gen_full_cov_info_file()
             self.gen_cov_html_report(cov_file=self.full_cov_info_file, dest=self.full_html_report_path)
 
-        # 处理 Python 覆盖率 (全量 + 增量)
+        # Process Python coverage (full + incremental)
         if self.py_cov_flag:
             self.gen_py_cov_report()
 
-        # 处理增量覆盖率
+        # Process incremental coverage
         if not self.incr_flag:
             return
 
-        # C++ 增量覆盖率
+        # C++ incremental coverage
         if self.gcov_flag:
             self.gen_full_cov_data()
             self.detect_changes()
@@ -449,16 +451,19 @@ class GenCoverage:
                 self.detect_incr_cov_rst()
                 self.gen_inc_cov_text_report()
 
-        # 压缩结果目录, 仅在增量覆盖率使能时压缩, 避免影响 CI 执行性能
+        # Compress result directory, only when incremental coverage is enabled,
+        # to avoid affecting CI execution performance
         self.compress_result_root()
 
     def _build_lcov_capture_cmd(self, data_dirs, output_file, build_dir=None, parallel=True, job_num=None) -> str:
-        """构建 lcov 采集命令(含过滤与容错选项)
+        """Build lcov capture command (with filtering and error tolerance options)
 
-        :param data_dirs: .gcda 所在目录, 支持单个 Path 或 List[Path]（多目录时 lcov 自动合并同源数据）
-        :param build_dir: 当 .gcda 与 .gcno 在不同目录时, 指定 .gcno 所在的 build 目录
-        :param parallel: 是否使用 --parallel 并行采集
-        :param job_num: 并行任务数, 为 None 时使用 self.job_num
+        :param data_dirs: directories containing .gcda files, supports single Path or List[Path]
+            (lcov automatically merges same-source data for multiple directories)
+        :param build_dir: when .gcda and .gcno are in different directories,
+            specify the build directory containing .gcno
+        :param parallel: whether to use --parallel for parallel capture
+        :param job_num: number of parallel jobs, uses self.job_num when None
         """
         if isinstance(data_dirs, (str, Path)):
             data_dirs = [data_dirs]
@@ -487,11 +492,11 @@ class GenCoverage:
         return cmd
 
     def _get_gcov_prefix_dirs(self) -> List[Path]:
-        """检测 GCOV 并行隔离数据目录
+        """Detect GCOV parallel isolated data directories
 
-        并行执行模式下, utest_accelerate.py 为每个 Cntr 进程设置独立 GCOV_PREFIX,
-        .gcda 文件写入 <data_dir>/gcov_prefix_data/<cntr_id>/ 下.
-        本方法扫描该目录, 返回包含 .gcda 数据的子目录列表.
+        In parallel execution mode, utest_accelerate.py sets independent GCOV_PREFIX for each Cntr process,
+        .gcda files are written under <data_dir>/gcov_prefix_data/<cntr_id>/.
+        This method scans that directory and returns a list of subdirectories containing .gcda data.
         """
         gcov_root = Path(self.data_dir, "gcov_prefix_data")
         if not gcov_root.exists():
@@ -504,7 +509,7 @@ class GenCoverage:
 
     @staticmethod
     def _read_gcov_stamp(path: Path) -> Optional[int]:
-        """读取 .gcda/.gcno 文件头的 stamp 字段(offset 8, 4 bytes)"""
+        """Read the stamp field from .gcda/.gcno file header (offset 8, 4 bytes)"""
         try:
             with open(path, 'rb') as f:
                 f.seek(8)
@@ -516,11 +521,12 @@ class GenCoverage:
         return None
 
     def _clean_mismatched_gcda(self, data_dirs, build_dir) -> int:
-        """清理 stamp mismatch 的 .gcda 文件
+        """Clean up stamp-mismatched .gcda files
 
-        增量编译场景下, 源文件重编译生成新 .gcno(stamp 变化), 但旧 .gcda 仍残留,
-        lcov 2.0 并行模式下 gcov 遇到 stamp mismatch 会触发 die("expected TraceFile") 硬崩溃.
-        采集前删除 stamp 不匹配的 .gcda, 让 lcov 跳过该文件, 避免硬崩溃.
+        In incremental compilation scenarios, source file recompilation generates new .gcno (stamp changes),
+        but old .gcda files remain. In lcov 2.0 parallel mode, gcov encountering stamp mismatch triggers
+        die("expected TraceFile") hard crash. Delete stamp-mismatched .gcda before capture so lcov skips
+        the file, avoiding hard crash.
         """
         build_dir = Path(build_dir)
         if isinstance(data_dirs, (str, Path)):
@@ -540,18 +546,21 @@ class GenCoverage:
                     cleaned += 1
                     logging.warning(
                         "Removed stamp-mismatched gcda (gcda_stamp=%d, gcno_stamp=%d): %s",
-                        gcda_stamp, gcno_stamp, gcda,
+                        gcda_stamp,
+                        gcno_stamp,
+                        gcda,
                     )
         if cleaned:
             logging.info("Cleaned %d stamp-mismatched gcda files", cleaned)
         return cleaned
 
     def _run_lcov_capture_parallel(self, data_dirs, output_file, build_dir=None) -> subprocess.CompletedProcess:
-        """并行采集多个目录的覆盖率数据, 然后合并
+        """Capture coverage data from multiple directories in parallel, then merge
 
-        对每个 data_dir 启动独立的 lcov -c 进程并行采集,
-        各进程产出 partial_N.info, 最后用 lcov -a 合并为最终 .info 文件.
-        相比将所有目录传给单次 lcov 调用(目录间串行扫描), 本方法将目录间扫描并行化.
+        Launch independent lcov -c processes for each data_dir in parallel,
+        each process produces partial_N.info, finally merge into the final .info file using lcov -a.
+        Compared to passing all directories to a single lcov invocation (serial scanning across directories),
+        this method parallelizes the inter-directory scanning.
         """
         num_dirs = len(data_dirs)
         per_invocation_jobs = max(1, self.job_num // num_dirs)
@@ -566,8 +575,11 @@ class GenCoverage:
             def _capture_single(idx: int, data_dir: Path):
                 partial_info = tmp_dir / f"partial_{idx}.info"
                 cmd = self._build_lcov_capture_cmd(
-                    data_dirs=data_dir, output_file=partial_info,
-                    build_dir=build_dir, parallel=True, job_num=per_invocation_jobs,
+                    data_dirs=data_dir,
+                    output_file=partial_info,
+                    build_dir=build_dir,
+                    parallel=True,
+                    job_num=per_invocation_jobs,
                 )
                 ret = subprocess.run(cmd.split(), capture_output=True, check=False, encoding='utf-8')
                 return idx, data_dir, partial_info, ret
@@ -575,10 +587,7 @@ class GenCoverage:
             logging.info("Parallel lcov capture: %d dirs, %d jobs/dir", num_dirs, per_invocation_jobs)
 
             with ThreadPoolExecutor(max_workers=num_dirs) as executor:
-                futures = {
-                    executor.submit(_capture_single, i, d): d
-                    for i, d in enumerate(data_dirs)
-                }
+                futures = {executor.submit(_capture_single, i, d): d for i, d in enumerate(data_dirs)}
                 for future in as_completed(futures):
                     idx, data_dir, partial_info, ret = future.result()
                     if ret.returncode != 0 or not partial_info.exists():
@@ -592,8 +601,9 @@ class GenCoverage:
                 raise RuntimeError(f"All {num_dirs} parallel lcov captures failed")
 
             if failed_count:
-                logging.warning("lcov capture: %d/%d dirs failed, merging remaining %d",
-                                failed_count, num_dirs, len(partial_files))
+                logging.warning(
+                    "lcov capture: %d/%d dirs failed, merging remaining %d", failed_count, num_dirs, len(partial_files)
+                )
 
             add_args = " ".join(f"-a {f}" for f in sorted(partial_files))
             merge_cmd = f"lcov {add_args} -o {output_file}"
@@ -609,22 +619,18 @@ class GenCoverage:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
     def _run_lcov_capture(self, data_dirs, output_file, build_dir=None) -> subprocess.CompletedProcess:
-        """执行 lcov 采集命令
+        """Execute lcov capture command
 
-        采集前清理 stamp mismatch 的 .gcda 文件, 避免 lcov 2.0 并行模式下
-        gcov 失败触发 die("expected TraceFile") 硬崩溃.
+        Clean up stamp-mismatched .gcda files before capture to avoid lcov 2.0 parallel mode
+        gcov failure triggering die("expected TraceFile") hard crash.
         """
         if isinstance(data_dirs, (str, Path)):
             data_dirs = [data_dirs]
-        effective_build_dir = build_dir if build_dir else (
-            data_dirs[0] if isinstance(data_dirs, list) else data_dirs
-        )
+        effective_build_dir = build_dir if build_dir else (data_dirs[0] if isinstance(data_dirs, list) else data_dirs)
         self._clean_mismatched_gcda(data_dirs=data_dirs, build_dir=effective_build_dir)
 
         if len(data_dirs) > 1 and self.lcov_ability and self.lcov_ability.lcov_supported_parallel:
-            return self._run_lcov_capture_parallel(
-                data_dirs=data_dirs, output_file=output_file, build_dir=build_dir
-            )
+            return self._run_lcov_capture_parallel(data_dirs=data_dirs, output_file=output_file, build_dir=build_dir)
 
         cmd = self._build_lcov_capture_cmd(
             data_dirs=data_dirs, output_file=output_file, build_dir=build_dir, parallel=True
@@ -635,12 +641,13 @@ class GenCoverage:
         return ret
 
     def gen_full_cov_info_file(self):
-        """生成过滤后的全量覆盖率文件"""
-        # 检测 GCOV 并行隔离数据目录(并行执行模式下, 各 Cntr 的 .gcda 写入独立目录)
+        """Generate filtered full coverage file"""
+        # Detect GCOV parallel isolated data directories
+        # (in parallel execution mode, each Cntr's .gcda is written to an independent directory)
         gcov_prefix_dirs = self._get_gcov_prefix_dirs()
 
         if gcov_prefix_dirs:
-            # 并行模式: 直接将多个 gcda 目录传给 lcov, 由 lcov 内部合并
+            # Parallel mode: pass multiple gcda directories directly to lcov, let lcov merge internally
             self._run_lcov_capture(
                 data_dirs=gcov_prefix_dirs, output_file=self.full_cov_info_file, build_dir=self.data_dir
             )
@@ -651,10 +658,8 @@ class GenCoverage:
                 len(gcov_prefix_dirs),
             )
         else:
-            # 串行模式: 直接从 build 目录采集
-            self._run_lcov_capture(
-                data_dirs=self.data_dir, output_file=self.full_cov_info_file
-            )
+            # Serial mode: collect directly from the build directory
+            self._run_lcov_capture(data_dirs=self.data_dir, output_file=self.full_cov_info_file)
             logging.info(
                 "Generated%s coverage file %s",
                 "" if self.lcov_ability.lcov_supported_exclude else " origin",
@@ -663,12 +668,12 @@ class GenCoverage:
 
         if self.full_cov_info_file.stat().st_size == 0:
             raise RuntimeError(f"lcov produced empty coverage file: {self.full_cov_info_file}")
-        # 滤掉某些文件/路径的覆盖率信息
+        # Filter out coverage info for certain files/paths
         filtered_file = Path(
             self.full_cov_info_file.parent, f"{self.full_cov_info_file.stem}_filtered{self.full_cov_info_file.suffix}"
         )
         if self.lcov_ability.lcov_supported_exclude:
-            # CI 兼容处理, 当存在 exclude 选项时, 直接复制原始文件
+            # CI compatibility handling: when exclude option exists, directly copy the original file
             shutil.copy(src=self.full_cov_info_file, dst=filtered_file)
         else:
             filter_str = " ".join(self.filter_lst)
@@ -679,13 +684,13 @@ class GenCoverage:
             self.full_cov_info_file = filtered_file
 
     def gen_cov_html_report(self, cov_file: Path, dest: Path, scene: str = "full", hierarchical: bool = True):
-        """生成完整的 html 报告"""
+        """Generate complete HTML report"""
         prefix = f"-p {self.src_root}" if self.src_root else ""
         cmd = f'genhtml {cov_file} {prefix} -o {dest}'
         if self.lcov_ability and self.lcov_ability.genhtml_supported_hierarchical and hierarchical:
             cmd += " --hierarchical"
         if self.lcov_ability and self.lcov_ability.genhtml_supported_parallel:
-            cmd += " --rc check_data_consistency=0"  # 关闭数据一致性校验
+            cmd += " --rc check_data_consistency=0"  # Disable data consistency check
             cmd += f" -j {self.job_num}"
         if self.lcov_ability and self.lcov_ability.genhtml_supported_ignore_mismatch:
             cmd += " --ignore-errors mismatch,mismatch"
@@ -698,7 +703,7 @@ class GenCoverage:
         logging.info("Generated %s coverage html report in %s, cmd: %s", scene, dest, cmd)
 
     def gen_full_cov_data(self):
-        """解析 lcov 覆盖率数据文件, 生成原始覆盖率数据"""
+        """Parse lcov coverage data file, generate original coverage data"""
         self.full_cov_data.clear()
         rel_path_str = None
 
@@ -707,12 +712,12 @@ class GenCoverage:
         for line in lines:
             line = line.strip()
 
-            # 匹配文件路径
+            # Match file path
             if line.startswith('SF:'):
                 rel_path_str = line[3:]
                 self.full_cov_data[rel_path_str] = {"lines": {}}
 
-            # 匹配行覆盖率数据
+            # Match line coverage data
             elif line.startswith('DA:') and rel_path_str:
                 parts = line[3:].split(',')
                 if len(parts) >= 2:
@@ -726,49 +731,49 @@ class GenCoverage:
             logging.error("Failed to parse coverage data from %s", self.full_cov_info_file)
 
     def detect_changes(self):
-        """确定最新一次代码变更情况"""
-        # 获取最新一次代码变更情况
+        """Determine the latest code changes"""
+        # Get the latest code changes
         self.latest_changes = self._detect_changes_from_git_diff()
         if not self.latest_changes:
             logging.error("No code changes detected, skipping increment coverage calculation.")
             return
 
-        # 根据 classify_rule.yaml 过滤变更
+        # Filter changes based on classify_rule.yaml
         self._filter_changes_from_classify_rule()
         if not self.latest_changes:
             logging.info("No changes after filtering by classify_rule.yaml, skipping increment coverage calculation.")
             return
 
-        # 根据规则过滤变更, 如过滤头文件等
+        # Filter changes by rules, e.g. filter header files
         self._filter_changes_by_rules()
         if not self.latest_changes:
             logging.info("No changes after filtering by rules")
             return
 
     def gen_incr_cov_info_file(self):
-        """生成增量覆盖率文件"""
+        """Generate incremental coverage file"""
 
         def write_uncovered_lines(f, line_ranges):
-            """写入未覆盖的行"""
+            """Write uncovered lines"""
             for start_line, end_line in line_ranges:
                 for line_number in range(start_line, end_line + 1):
                     f.write(f'DA:{line_number},0\n')
 
         def write_covered_lines(f, line_ranges, file_coverage):
-            """写入覆盖的行"""
+            """Write covered lines"""
             for start_line, end_line in line_ranges:
                 for line_number in range(start_line, end_line + 1):
                     hit_count = file_coverage["lines"].get(line_number, 0)
                     f.write(f'DA:{line_number},{hit_count}\n')
 
-        # 生成增量 lcov 文件
+        # Generate incremental lcov file
         with open(self.incr_cov_info_file, 'w') as f:
             for rel_path_str, line_ranges in self.latest_changes.items():
                 abs_path_str = str(Path(self.src_root, rel_path_str))
                 f.write(f'SF:{abs_path_str}\n')
 
                 if abs_path_str not in self.full_cov_data:
-                    # 为未在覆盖率数据中的文件写入未覆盖的行
+                    # Write uncovered lines for files not in coverage data
                     write_uncovered_lines(f, line_ranges)
                 else:
                     file_coverage = self.full_cov_data[abs_path_str]
@@ -777,10 +782,10 @@ class GenCoverage:
                 f.write('end_of_record\n')
 
     def detect_incr_cov_rst(self):
-        """计算增量代码覆盖率结果"""
+        """Calculate incremental code coverage result"""
 
         def create_uncovered_stats(line_ranges):
-            """为未在覆盖率数据中的文件创建统计信息"""
+            """Create statistics for files not in coverage data"""
             file_stats = {"total_lines": 0, "covered_lines": 0, "lines": {}}
             for start_line, end_line in line_ranges:
                 for line_number in range(start_line, end_line + 1):
@@ -791,18 +796,18 @@ class GenCoverage:
         cov_rst = {"total_lines": 0, "covered_lines": 0, "coverage_rate": 0.0, "files": {}}
 
         for rel_path_str, line_ranges in self.latest_changes.items():
-            # 检查文件是否在覆盖率数据中
+            # Check if the file is in coverage data
             file_abs_path = Path(self.src_root, rel_path_str)
             file_cov_info = self.full_cov_data.get(str(file_abs_path), None)
 
             if file_cov_info is None:
                 logging.warning("File %s not found in coverage data, considered as uncovered", rel_path_str)
-                # 为未在覆盖率数据中的文件创建统计信息，标记为未覆盖
+                # Create statistics for files not in coverage data, mark as uncovered
                 file_stats = create_uncovered_stats(line_ranges)
             else:
                 file_stats = self.get_file_stats(file_cov_info=file_cov_info, line_ranges=line_ranges)
 
-            # 计算文件的覆盖率
+            # Calculate file coverage rate
             if file_stats["total_lines"] > 0:
                 file_stats["coverage_rate"] = file_stats["covered_lines"] / file_stats["total_lines"] * 100
 
@@ -810,17 +815,17 @@ class GenCoverage:
             cov_rst["total_lines"] += file_stats["total_lines"]
             cov_rst["covered_lines"] += file_stats["covered_lines"]
 
-        # 计算总体覆盖率
+        # Calculate overall coverage rate
         if cov_rst["total_lines"] > 0:
             cov_rst["coverage_rate"] = cov_rst["covered_lines"] / cov_rst["total_lines"] * 100
 
         self.incr_cov_rst = cov_rst
 
     def gen_inc_cov_text_report(self):
-        """生成文本格式的增量覆盖率报告"""
+        """Generate text format incremental coverage report"""
         lines = []
 
-        # 生成总体覆盖率报告
+        # Generate overall coverage report
         lines.append("=" * 80)
         lines.append("Increment Code Coverage Report")
         lines.append("=" * 80)
@@ -840,7 +845,7 @@ class GenCoverage:
         lines.append(f"Covered Lines: {self.incr_cov_rst['covered_lines']}")
         lines.append("=" * 80)
 
-        # 生成文件覆盖率详情
+        # Generate file coverage details
         brief = ""
         if self.incr_cov_rst['files']:
             lines.append("File Coverage Details:")
@@ -860,10 +865,10 @@ class GenCoverage:
         logging.info("\n" + report)
 
     def compress_result_root(self):
-        """压缩结果目录为 zip 格式"""
+        """Compress result directory to zip format"""
 
         def add_files_to_zip(zipf, result_root):
-            """将文件添加到 zip 文件中"""
+            """Add files to zip file"""
             for root, _, files in os.walk(result_root):
                 for file in files:
                     file_path = Path(root, file)
@@ -884,12 +889,12 @@ class GenCoverage:
             raise
 
     def _detect_changes_from_git_diff(self) -> Dict[str, List[Tuple[int, int]]]:
-        """获取最近一次提交的代码变更
+        """Get the latest committed code changes
 
         Returns:
-            dict: 变更文件及其行号范围, 格式为 {"file_rel_path": [(start_line, end_line)]}
+            dict: changed files and their line ranges, format: {"file_rel_path": [(start_line, end_line)]}
         """
-        # 运行 git diff 命令, 获取最近一次提交的变更
+        # Run git diff command to get the latest committed changes
         ret = subprocess.run(
             ['git', 'diff', '--unified=0', 'HEAD~1', 'HEAD'],
             cwd=self.src_root,
@@ -900,8 +905,9 @@ class GenCoverage:
         )
         diff_output = ret.stdout
 
-        file_pattern = re.compile(r'^diff --git a/(.*) b/(.*)$')  # 匹配文件路径的正则表达式
-        hunk_pattern = re.compile(r'^@@ -([0-9]+)(?:,([0-9]+))? \+([0-9]+)(?:,([0-9]+))? @@')  # 匹配行号的正则表达式
+        file_pattern = re.compile(r'^diff --git a/(.*) b/(.*)$')  # Regex to match file paths
+        # Regex to match line numbers
+        hunk_pattern = re.compile(r'^@@ -([0-9]+)(?:,([0-9]+))? \+([0-9]+)(?:,([0-9]+))? @@')
         lines = diff_output.split('\n')
 
         changes: Dict[str, List[Tuple[int, int]]] = {}
@@ -910,13 +916,13 @@ class GenCoverage:
         start_line = None
 
         def finalize_current_range():
-            """完成当前变更范围的处理并添加到变更列表"""
+            """Finalize current change range and add to change list"""
             nonlocal rel_path_str, start_line, current_line
             if rel_path_str and start_line is not None:
                 changes[rel_path_str].append((start_line, current_line - 1))
 
         for line in lines:
-            # 处理文件路径匹配
+            # Handle file path matching
             file_match = file_pattern.match(line)
             if file_match:
                 finalize_current_range()
@@ -926,11 +932,11 @@ class GenCoverage:
                 start_line = None
                 continue
 
-            # 跳过处理如果当前没有文件
+            # Skip processing if no current file
             if rel_path_str not in changes:
                 continue
 
-            # 处理行号范围匹配
+            # Handle line number range matching
             hunk_match = hunk_pattern.match(line)
             if hunk_match:
                 finalize_current_range()
@@ -938,28 +944,28 @@ class GenCoverage:
                 start_line = None
                 continue
 
-            # 处理新增行
+            # Handle added lines
             if line.startswith('+') and not line.startswith('+++'):
                 if start_line is None:
                     start_line = current_line
                 current_line += 1
                 continue
 
-            # 处理未变更行
+            # Handle unchanged lines
             if not line.startswith('-') and not line.startswith('---') and not line.startswith('@@'):
                 finalize_current_range()
                 start_line = None
                 current_line += 1
                 continue
 
-        # 处理最后一个文件的最后一个范围
+        # Handle the last range of the last file
         finalize_current_range()
 
         return changes
 
     def _filter_changes_from_classify_rule(self):
-        """根据 classify_rule.yaml 文件过滤变更"""
-        # 读取 classify_rule.yaml 文件
+        """Filter changes based on classify_rule.yaml file"""
+        # Read classify_rule.yaml file
         classify_rule_path = Path(self.src_root, "classify_rule.yaml")
         if not classify_rule_path.exists():
             logging.warning(f"classify_rule.yaml file not found at {classify_rule_path}, returning original changes")
@@ -968,8 +974,8 @@ class GenCoverage:
         with open(classify_rule_path, 'r', encoding='utf-8') as f:
             classify_rule = yaml.safe_load(f)
 
-        # 提取 release 和 unrelease 路径
-        # 当前是按照模块划分, 需要遍历所有模块
+        # Extract release and unrelease paths
+        # Currently divided by modules, need to iterate over all modules
         release_paths = []
         unrelease_paths = []
         for _, module_cfg in classify_rule.items():
@@ -986,7 +992,7 @@ class GenCoverage:
         filtered_changes = {}
 
         for file_path, line_ranges in self.latest_changes.items():
-            # 检查文件是否在 unrelease 路径中
+            # Check if the file is in unrelease paths
             in_unrelease = False
             for unrelease_path in unrelease_paths:
                 if file_path.startswith(unrelease_path):
@@ -995,7 +1001,7 @@ class GenCoverage:
             if in_unrelease:
                 continue
 
-            # 检查文件是否在 release 路径中
+            # Check if the file is in release paths
             in_release = False
             for release_path in release_paths:
                 if file_path.startswith(release_path):
@@ -1012,27 +1018,31 @@ class GenCoverage:
         self.latest_changes = filtered_changes
 
     def _filter_changes_by_rules(self):
-        """根据规则过滤变更"""
+        """Filter changes by rules"""
         filtered_changes = {}
         for rel_path_str, ori_line_ranges in self.latest_changes.items():
-            # 过滤头文件(与 CI 保持一致, 头文件不参与增量覆盖率计算)
+            # Filter header files (consistent with CI, header files are not included
+            # in incremental coverage calculation)
             if rel_path_str.endswith(('.h', '.hpp', '.hxx')):
                 continue
-            # 根据原始覆盖率数据过滤变更行号, 排除无法覆盖的行(如空行/}/已被编译器优化)
+            # Filter changed line numbers based on original coverage data,
+            # exclude uncoverable lines (e.g. blank lines/}/compiler-optimized)
             line_ranges = self._filter_changes_line_ranges_by_ori_cov_data(rel_path_str, ori_line_ranges)
             if line_ranges:
                 filtered_changes[rel_path_str] = line_ranges
         self.latest_changes = filtered_changes
 
     def _filter_changes_line_ranges_by_ori_cov_data(self, rel_path_str: str, line_ranges: List[Tuple[int, int]]):
-        """根据原始覆盖率数据过滤变更行号"""
-        # 检查对应文件是否存在原始覆盖率数据, 若不存, 说明对应文件在此次变更中属于删除变更, 反馈空列表
+        """Filter changed line numbers based on original coverage data"""
+        # Check if the corresponding file has original coverage data; if not, the file is a
+        # deletion in this change, return empty list
         abs_path_str = str(Path(self.src_root, rel_path_str))
         full_cov_lines_data = self.full_cov_data.get(abs_path_str, {}).get("lines", None)
         if not full_cov_lines_data:
             return []
 
-        # 逐行检查变更行, 若变更行不在覆盖率数据中, 说明其属于无法覆盖的行(如空行/}/已被编译器优化), 跳过
+        # Check changed lines one by one; if a changed line is not in coverage data,
+        # it is uncoverable (e.g. blank line/}/compiler-optimized), skip
         new_lines = []
         for start_line, end_line in line_ranges:
             for line_number in range(start_line, end_line + 1):
@@ -1040,13 +1050,13 @@ class GenCoverage:
                 if hit_count is not None:
                     new_lines.append(line_number)
 
-        # 合并连续的行号范围
+        # Merge consecutive line number ranges
         if not new_lines:
             return []
         return self._merge_line_ranges(lines=new_lines)
 
     def _get_latest_commit_message(self):
-        """获取最新提交的 commit message"""
+        """Get the latest commit message"""
         try:
             ret = subprocess.run(
                 ['git', 'log', '-1', '--pretty=format:%s\n%b'],
@@ -1062,10 +1072,11 @@ class GenCoverage:
             return ""
 
     def gen_py_cov_report(self):
-        """生成 Python 覆盖率报告 (基于 pytest-cov 收集的 .coverage 数据)
+        """Generate Python coverage report (based on .coverage data collected by pytest-cov)
 
-        - 非增量模式: 生成全量 LCOV .info、HTML 报告和文本摘要
-        - 增量模式: 仅生成 .info 文件 (供 CI 解析), 跳过全量 HTML/text, 然后生成增量报告
+        - Non-incremental mode: generate full LCOV .info, HTML report and text summary
+        - Incremental mode: only generate .info file (for CI parsing), skip full HTML/text,
+          then generate incremental report
         """
         self.chk_py_cov_env()
         self.gen_py_cov_info_file()
@@ -1076,7 +1087,7 @@ class GenCoverage:
             self.gen_py_cov_text_report()
 
     def chk_py_cov_env(self):
-        """检查 Python 覆盖率环境依赖"""
+        """Check Python coverage environment dependencies"""
         try:
             subprocess.run('coverage --version'.split(), capture_output=True, check=True, encoding='utf-8')
         except FileNotFoundError as e:
@@ -1090,7 +1101,7 @@ class GenCoverage:
             )
 
     def gen_py_cov_html_report(self):
-        """生成 Python 覆盖率 HTML 报告"""
+        """Generate Python coverage HTML report"""
         cmd = f"coverage html --data-file={self.py_cov_data_file} -d {self.py_cov_html_report_path}"
         ret = subprocess.run(cmd.split(), capture_output=True, check=False, encoding='utf-8')
         self._check_ret(ret=ret, cmd=cmd)
@@ -1098,7 +1109,7 @@ class GenCoverage:
         logging.info("Generated python coverage html report in %s, cmd: %s", self.py_cov_html_report_path, cmd)
 
     def gen_py_cov_info_file(self):
-        """生成 Python 覆盖率 LCOV .info 文件 (coverage lcov)"""
+        """Generate Python coverage LCOV .info file (coverage lcov)"""
         cmd = f"coverage lcov --data-file={self.py_cov_data_file} -o {self.py_cov_info_file}"
         ret = subprocess.run(cmd.split(), capture_output=True, check=False, encoding='utf-8')
         self._check_ret(ret=ret, cmd=cmd)
@@ -1106,7 +1117,7 @@ class GenCoverage:
         logging.info("Generated python coverage info file: %s, cmd: %s", self.py_cov_info_file, cmd)
 
     def gen_py_cov_text_report(self):
-        """生成 Python 覆盖率文本摘要并输出到日志"""
+        """Generate Python coverage text summary and output to log"""
         cmd = f"coverage report --data-file={self.py_cov_data_file}"
         ret = subprocess.run(cmd.split(), capture_output=True, check=False, encoding='utf-8')
         self._check_ret(ret=ret, cmd=cmd)
@@ -1114,12 +1125,12 @@ class GenCoverage:
         logging.info("Python coverage report:\n%s", ret.stdout)
 
     def gen_py_incr_cov_report(self):
-        """生成 Python 增量覆盖率报告
+        """Generate Python incremental coverage report
 
-        流程:
-            1. 从 git diff 获取变更的 .py 文件及行号范围
-            2. 使用 coverage API 计算变更行的覆盖率
-            3. 生成 LCOV .info 文件、文本报告和 HTML 报告
+        Workflow:
+            1. Get changed .py files and line ranges from git diff
+            2. Use coverage API to calculate coverage of changed lines
+            3. Generate LCOV .info file, text report and HTML report
         """
         py_changes = self._detect_py_changes()
         if not py_changes:
@@ -1141,20 +1152,20 @@ class GenCoverage:
         self._gen_py_incr_cov_html_report(incr_rst=incr_rst)
 
     def _detect_py_changes(self) -> Dict[str, List[Tuple[int, int]]]:
-        """获取最近一次提交中 Python 源码文件的变更
+        """Get Python source file changes in the latest commit
 
-        仅保留 python/pypto/ 下的源码, 排除 tests/ 等非源码目录,
-        与 pytest --cov=pypto 的收集范围保持一致.
+        Only keep source code under python/pypto/, exclude non-source directories like tests/,
+        consistent with pytest --cov=pypto collection scope.
         """
         all_changes = self._detect_changes_from_git_diff()
         return {f: r for f, r in all_changes.items() if f.endswith('.py') and f.startswith('python/pypto/')}
 
     def _resolve_cov_file_path(self, abs_path: str, rel_path: str, measured_files: set) -> str:
-        """将源码路径映射到 coverage 数据中存储的实际路径.
+        """Map source code path to the actual path stored in coverage data.
 
-        pytest 运行时 pypto 包安装在 build_out/pypto/ 下, coverage 数据记录的
-        文件路径为 build_out/pypto/xxx.py, 而 git diff 中的路径为 python/pypto/xxx.py.
-        此方法通过文件名后缀匹配, 从 measured_files 中找到对应的 coverage 路径.
+        When pytest runs, the pypto package is installed under build_out/pypto/, and coverage data records
+        file paths as build_out/pypto/xxx.py, while paths in git diff are python/pypto/xxx.py.
+        This method matches by filename suffix to find the corresponding coverage path from measured_files.
         """
         if abs_path in measured_files:
             return abs_path
@@ -1166,17 +1177,18 @@ class GenCoverage:
         return abs_path
 
     def _calc_py_incr_cov(self, cov, py_changes: Dict[str, List[Tuple[int, int]]]) -> Dict[str, Any]:
-        """计算 Python 增量覆盖率
+        """Calculate Python incremental coverage
 
-        仅统计变更行中可执行行的覆盖率, 跳过注释/空行等不可执行行,
-        与 C++ 增量覆盖率的 _filter_changes_line_ranges_by_ori_cov_data 逻辑保持一致.
+        Only count coverage of executable lines among changed lines,
+        skip non-executable lines like comments/blank lines,
+        consistent with C++ incremental coverage _filter_changes_line_ranges_by_ori_cov_data logic.
 
         Args:
-            cov: coverage.Coverage 对象 (已加载数据)
-            py_changes: 变更文件及其行号范围
+            cov: coverage.Coverage object (data already loaded)
+            py_changes: changed files and their line ranges
 
         Returns:
-            dict: 增量覆盖率统计结果, 格式为 {
+            dict: incremental coverage statistics, format: {
                 "total_lines": int,
                 "covered_lines": int,
                 "coverage_rate": float,
@@ -1224,10 +1236,10 @@ class GenCoverage:
         return cov_rst
 
     def _gen_py_incr_cov_info_file(self, incr_rst: Dict[str, Any]):
-        """生成 Python 增量覆盖率 LCOV .info 文件
+        """Generate Python incremental coverage LCOV .info file
 
-        将增量覆盖率结果 (incr_rst) 转写为 LCOV tracefile 格式,
-        与 C++ 的 gen_incr_cov_info_file 产出格式一致, 便于统一工具链处理.
+        Convert incremental coverage result (incr_rst) to LCOV tracefile format,
+        consistent with C++ gen_incr_cov_info_file output format for unified toolchain processing.
         """
         with open(self.py_incr_cov_info_file, 'w') as f:
             for rel_path, file_stats in incr_rst["files"].items():
@@ -1239,7 +1251,7 @@ class GenCoverage:
         logging.info("Generated python increment coverage info file: %s", self.py_incr_cov_info_file)
 
     def _gen_py_incr_cov_text_report(self, incr_rst: Dict[str, Any]):
-        """生成 Python 增量覆盖率文本报告"""
+        """Generate Python incremental coverage text report"""
         lines = []
         lines.append("=" * 80)
         lines.append("Python Increment Code Coverage Report")
@@ -1278,10 +1290,10 @@ class GenCoverage:
         logging.info("\n" + report)
 
     def _gen_py_incr_cov_html_report(self, incr_rst: Dict[str, Any]):
-        """生成 Python 增量覆盖率 HTML 报告
+        """Generate Python incremental coverage HTML report
 
-        与 C++ 增量覆盖率完全一致: 基于仅含变更行的 LCOV .info 文件,
-        通过 genhtml 生成标准 lcov 风格 HTML 报告.
+        Exactly the same as C++ incremental coverage: based on LCOV .info file containing only changed lines,
+        generate standard lcov-style HTML report via genhtml.
         """
         self.gen_cov_html_report(
             cov_file=self.py_incr_cov_info_file, dest=self.py_incr_html_report_path, hierarchical=False

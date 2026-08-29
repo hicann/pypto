@@ -8,28 +8,29 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""辅助表格."""
+"""Helper table."""
 
 import copy
 from typing import Any, List, Optional
 
 
 class Table:
-    """表格处理, 减少对其他外部库依赖"""
+    """Table processing, reducing dependency on other external libraries"""
 
     @staticmethod
     def table(
         datas: List[List[Any]], headers: Optional[List[Any]] = None, col_width_max: int = 128, auto_sort: bool = True
     ) -> str:
-        """获取格式化的表格字符串
+        """Get a formatted table string
 
-        :param datas: 二维表格数据，每个子列表代表一行
-        :param headers: 可选表头列表
-        :param col_width_max: 单列最大列宽
-        :param auto_sort: 自动升序排序
-        :return: 格式化后的网格表格字符串
+        :param datas: Two-dimensional table data, each sublist represents a row
+        :param headers: Optional list of headers
+        :param col_width_max: Maximum column width per column
+        :param auto_sort: Automatically sort in ascending order
+        :return: Formatted grid table string
         """
-        # 归一化为列数相等的表格, 并计算各列所需的最大字符串长度
+        # Normalize to a table with equal number of columns,
+        # and calculate the maximum string length required for each column
         _heads = None if headers is None else copy.deepcopy(headers)
         _datas = copy.deepcopy(datas)
         if _heads is not None:
@@ -47,7 +48,7 @@ class Table:
             if auto_sort:
                 _datas.sort(reverse=False)
 
-        # 构造表头(如果有)
+        # Build header (if present)
         separator = Table._make_separator(widths=col_widths, width_max=col_width_max, div='-')
         lines = []
         if headers is not None:
@@ -57,7 +58,7 @@ class Table:
         else:
             lines.append(separator)
 
-        # 添加数据行
+        # Add data rows
         for row in _datas:
             lines.append(Table._make_details(widths=col_widths, datas=row, width_max=col_width_max, mode="left"))
             lines.append(separator)
@@ -66,13 +67,13 @@ class Table:
 
     @staticmethod
     def _make_separator(widths: List[int], width_max: int = 128, cross: str = '+', div: str = '-') -> str:
-        """构建分隔线
+        """Build a separator line
 
-        :param widths: 各列的列宽
-        :param width_max: 单列最大列宽
-        :param cross: 交叉点字符
-        :param div: division 行中某元素点字符
-        :return 分割线字符串
+        :param widths: Column widths for each column
+        :param width_max: Maximum column width per column
+        :param cross: Character at intersection points
+        :param div: Character for division line elements
+        :return: Separator line string
         """
         line = cross
         for width in widths:
@@ -82,13 +83,13 @@ class Table:
 
     @staticmethod
     def _make_details(widths: List[int], datas: List[Any], width_max: int = 128, mode: str = "center") -> str:
-        """构建数据行详细信息
+        """Build data row details
 
-        :param widths: 各列的列宽
-        :param width_max: 单列最大列宽
-        :param datas: 单行各元素
-        :param mode: 单元素对齐方式
-        :return: 数据行字符串
+        :param widths: Column widths for each column
+        :param width_max: Maximum column width per column
+        :param datas: Elements in a single row
+        :param mode: Alignment mode for elements
+        :return: Data row string
         """
         line = "|"
         mode = mode.lower()

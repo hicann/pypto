@@ -8,7 +8,7 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""Python3环境分析."""
+"""Python3 environment analysis."""
 
 import argparse
 import logging
@@ -45,13 +45,13 @@ class Analysis:
 
     @staticmethod
     def main():
-        """主处理流程"""
-        # 参数注册
+        """Main processing flow"""
+        # Register arguments
         parser = argparse.ArgumentParser(description="Python3-Environ Analysis.", epilog="Best Regards!")
         parser.add_argument(
             "-o", "--output", nargs=1, type=Path, default=None, required=True, help="Specify output file path."
         )
-        # 流程处理
+        # Process workflow
         ctrl = Analysis(args=parser.parse_args())
         ctrl.analysis()
 
@@ -66,7 +66,7 @@ class Analysis:
 
     @staticmethod
     def _get_py_mod_pybind11_dir() -> str:
-        """获取 pybind11_DIR, 以便外层 CMake 处理
+        """Get pybind11_DIR for outer CMake processing
 
         :return: pybind11_DIR
         """

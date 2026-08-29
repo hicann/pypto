@@ -8,7 +8,7 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""STest Golden 处理函数注册管理."""
+"""STest Golden handler function registration management."""
 
 import dataclasses
 import logging
@@ -18,12 +18,12 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 @dataclasses.dataclass
 class GoldenRegInfo:
     func: Optional[Callable]
-    version: int = 0  # Golden 实现版本
-    timeout: Optional[int] = None  # Golden 超时时间
+    version: int = 0  # Golden implementation version
+    timeout: Optional[int] = None  # Golden timeout duration
 
 
 class GoldenRegister:
-    # 全局回调函数注册表
+    # Global callback function registry
     _REG_MAP: Dict[str, GoldenRegInfo] = {}
 
     @classmethod
@@ -31,13 +31,15 @@ class GoldenRegister:
         cls, case_names: Union[str, List[str]], version: int = 0, timeout: Optional[int] = None
     ) -> Callable:
         """
-        注册回调函数, 支持两种函数原型:
+        Register callback function, supports two function prototypes:
             func(case_name: str, output: Path)
             func(case_name: str, output: Path, case_index: int)
 
         :param case_names: CaseName
-        :param version: 实现版本, 由 Golden 脚本控制. 当框架感知 version 大于缓存内的 version, 会触发重新生成 Golden
-        :param timeout: 超时时长(单位秒), 当框架感知 Golden 文件已超过指定时长, 会触发重新生成 Golden
+        :param version: implementation version, controlled by Golden script. When the framework
+            detects a version greater than the cached version, it triggers Golden regeneration
+        :param timeout: timeout duration (in seconds), when the framework detects Golden files
+            have exceeded the specified duration, it triggers Golden regeneration
         """
 
         def decorator(func: Callable) -> Callable:
@@ -55,43 +57,43 @@ class GoldenRegister:
 
     @classmethod
     def get_golden_func(cls, case_name: str) -> Tuple[Optional[GoldenRegInfo], Optional[int]]:
-        """根据名称获取回调函数
+        """Get callback function by name
 
-        支持以下用例名传入
+        Supports the following case name formats:
 
-        1. TEST/TEST_F 场景下:
+        1. TEST/TEST_F scenario:
             TestSuiteName.TestCaseName
-        2. TEST_P 场景下:
+        2. TEST_P scenario:
             TestInstanceName/TestSuiteName.TestCaseName
             TestInstanceName/TestSuiteName.TestCaseName/
             TestInstanceName/TestSuiteName.TestCaseName/*
             TestInstanceName/TestSuiteName.TestCaseName*
-            TestInstanceName/TestSuiteName.TestCaseName/数字标号
+            TestInstanceName/TestSuiteName.TestCaseName/numeric_index
 
-        对应注册用例名支持以下场景
+        Corresponding registered case name supports the following scenarios:
 
-        1. TEST/TEST_F 场景下:
+        1. TEST/TEST_F scenario:
             TestSuiteName.TestCaseName
-        2. TEST_P 场景下:
+        2. TEST_P scenario:
             TestInstanceName/TestSuiteName.TestCaseName
 
         :param case_name: CaseName
         """
-        # 用例名归一化
+        # Normalize case name
         #   TestSuiteName.TestCaseName
         #   TestInstanceName/TestSuiteName.TestCaseName
         #   TestInstanceName/TestSuiteName.TestCaseName/{int}
         cs = case_name.replace("*", "")
         cs = cs[:-1] if cs.endswith("/") else cs
 
-        # 提取用例编号(可选)
+        # Extract case index (optional)
         cs_idx = None
         cs_split = cs.split("/")
         if cs_split[-1].isdigit():
             cs_idx = int(cs_split[-1])
             cs_split = cs_split[:-1]
 
-        # 用例名再归一
+        # Re-normalize case name
         #   TestSuiteName.TestCaseName
         #   TestInstanceName/TestSuiteName.TestCaseName
         cs = "/".join(cs_split)
