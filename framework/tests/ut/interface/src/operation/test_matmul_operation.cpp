@@ -135,9 +135,9 @@ TEST_F(MatmulOperationTest, Test_BatchMatmulMX_Bias_3D)
     Platform::Instance().ReloadMemoryPaths("3510");
     TileShape::Current().SetCubeTile({128, 128}, {128, 128}, {128, 128});
     Tensor matA(DT_FP8E5M2, {2, 128, 256}, "matA");
-    Tensor matB(DT_FP8E5M2, {2, 256, 128}, "matB");
-    Tensor scaleA(DT_FP8E8M0, {128, 4, 2}, "scaleA");
-    Tensor scaleB(DT_FP8E8M0, {4, 128, 2}, "scaleB");
+    Tensor matB(DT_FP8E5M2, {1, 256, 128}, "matB");
+    Tensor scaleA(DT_FP8E8M0, {2, 128, 4, 2}, "scaleA");
+    Tensor scaleB(DT_FP8E8M0, {1, 4, 128, 2}, "scaleB");
     Tensor matBias(DT_BF16, {1, 128}, "biasA");
     Tensor result;
     Matrix::MatmulExtendParam extendParam;
@@ -154,10 +154,10 @@ TEST_F(MatmulOperationTest, Test_BatchMatmulMX_Bias_4D)
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
     Platform::Instance().ReloadMemoryPaths("3510");
     TileShape::Current().SetCubeTile({128, 128}, {128, 128}, {128, 128});
-    Tensor matA(DT_FP8E5M2, {2, 2, 128, 256}, "matA");
-    Tensor matB(DT_FP8E5M2, {2, 2, 256, 128}, "matB");
-    Tensor scaleA(DT_FP8E8M0, {128, 4, 2}, "scaleA");
-    Tensor scaleB(DT_FP8E8M0, {4, 128, 2}, "scaleB");
+    Tensor matA(DT_FP8E5M2, {2, 1, 128, 256}, "matA");
+    Tensor matB(DT_FP8E5M2, {1, 3, 256, 128}, "matB");
+    Tensor scaleA(DT_FP8E8M0, {2, 1, 128, 4, 2}, "scaleA");
+    Tensor scaleB(DT_FP8E8M0, {1, 3, 4, 128, 2}, "scaleB");
     Tensor matBias(DT_BF16, {1, 128}, "biasA");
     Tensor result;
     Matrix::MatmulExtendParam extendParam;

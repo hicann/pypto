@@ -161,15 +161,15 @@ def scaled_mm(
     """
     Performs matrix multiplication with support for transposition, and extended features like bias addition.
 
-    Supports one primary computation modes:
-    1.  Standard matrix multiplication of two matrices.
+    `mat_a` and `mat_b` can be 2-D, 3-D or 4-D. Their batch dimensions support broadcasting.
 
-    `mat_a` and `mat_b` can be 2-D.
-    - If `mat_a` is (n x k) and `mat_b` is (k x m), output is (n x m).
-
-    `scale_a` and `scale_b` can be 3-D.
-    - If `mat_a` is (n x k), `scale_a` is (n x kScale x 2)
-    - If `mat_b` is (k x m), `scale_b` is (kScale x m x 2)
+    `scale_a` and `scale_b` must have one more dimension than the matrix inputs. The batch dimensions of `scale_a`
+    must equal those of `mat_a`, and the batch dimensions of `scale_b` must equal those of `mat_b`. Each matrix and
+    its paired scale use the same batch broadcasting index.
+    - 2-D matrices use 3-D scales: (m, kScale, 2) and (kScale, n, 2).
+    - 3-D matrices use 4-D scales: (batchA, m, kScale, 2) and (batchB, kScale, n, 2).
+    - 4-D matrices use 5-D scales: (batchA0, batchA1, m, kScale, 2) and
+      (batchB0, batchB1, kScale, n, 2).
 
     Parameters
     ----------
@@ -209,8 +209,8 @@ def scaled_mm(
     Raises
     ------
     RuntimeError
-        If mat_a and mat_b dimensions are invalid (!=2-D), or scale_a and scale_b dimensions are invalid (!=3-D),
-        or if matrix dimensions are incompatible.
+        If matrix or scale dimensions are invalid, scale batch dimensions do not equal their paired matrix batch
+        dimensions, or matrix dimensions are incompatible.
 
     Examples
     --------
@@ -228,23 +228,37 @@ def scaled_mm(
     b_scale = pypto.tensor((2, 64, 2), pypto.DT_FP8E8M0, "scale_b")
     bias = pypto.tensor((1, 64), pypto.DT_FP16, "tensor_bias")
     extend_params = {'bias_tensor': bias}
-    pypto.scaled_mm(a, b, pypto.DT_FP16, extend_params=extend_params)
+    pypto.scaled_mm(a, b, pypto.DT_FP16, a_scale, b_scale, extend_params=extend_params)
+
+    # 3-D broadcasting: A and scale_a share batch 1; B and scale_b share batch 4
+    a = pypto.tensor((1, 16, 128), pypto.DT_FP8E4M3, "tensor_a")
+    b = pypto.tensor((4, 128, 64), pypto.DT_FP8E4M3, "tensor_b")
+    a_scale = pypto.tensor((1, 16, 2, 2), pypto.DT_FP8E8M0, "scale_a")
+    b_scale = pypto.tensor((4, 2, 64, 2), pypto.DT_FP8E8M0, "scale_b")
+    pypto.scaled_mm(a, b, pypto.DT_BF16, a_scale, b_scale)
+
+    # 4-D cross broadcasting: each scale follows its paired matrix batch shape
+    a = pypto.tensor((2, 1, 16, 128), pypto.DT_FP8E4M3, "tensor_a")
+    b = pypto.tensor((1, 3, 128, 64), pypto.DT_FP8E4M3, "tensor_b")
+    a_scale = pypto.tensor((2, 1, 16, 2, 2), pypto.DT_FP8E8M0, "scale_a")
+    b_scale = pypto.tensor((1, 3, 2, 64, 2), pypto.DT_FP8E8M0, "scale_b")
+    pypto.scaled_mm(a, b, pypto.DT_BF16, a_scale, b_scale)
 
     # Standard batch matrix multiplication
     a = pypto.tensor((3, 16, 128), pypto.DT_FP8E4M3, "tensor_a")
     b = pypto.tensor((3, 128, 64), pypto.DT_FP8E4M3, "tensor_b")
-    a_scale = pypto.tensor((16, 2, 2), pypto.DT_FP8E8M0, "scale_a")
-    b_scale = pypto.tensor((2, 64, 2), pypto.DT_FP8E8M0, "scale_b")
+    a_scale = pypto.tensor((3, 16, 2, 2), pypto.DT_FP8E8M0, "scale_a")
+    b_scale = pypto.tensor((3, 2, 64, 2), pypto.DT_FP8E8M0, "scale_b")
     pypto.scaled_mm(a, b, pypto.DT_BF16, a_scale, b_scale)
 
     # Standard batch matrix with bias addition
     a = pypto.tensor((3, 16, 128), pypto.DT_FP8E4M3, "tensor_a")
     b = pypto.tensor((3, 128, 64), pypto.DT_FP8E4M3, "tensor_b")
-    a_scale = pypto.tensor((16, 2, 2), pypto.DT_FP8E8M0, "scale_a")
-    b_scale = pypto.tensor((2, 64, 2), pypto.DT_FP8E8M0, "scale_b")
+    a_scale = pypto.tensor((3, 16, 2, 2), pypto.DT_FP8E8M0, "scale_a")
+    b_scale = pypto.tensor((3, 2, 64, 2), pypto.DT_FP8E8M0, "scale_b")
     bias = pypto.tensor((1, 64), pypto.DT_FP16, "tensor_bias")
     extend_params = {'bias_tensor': bias}
-    pypto.scaled_mm(a, b, pypto.DT_FP16, extend_params=extend_params)
+    pypto.scaled_mm(a, b, pypto.DT_FP16, a_scale, b_scale, extend_params=extend_params)
     """
     __validate_inputs(mat_a, mat_b, out_dtype, [a_trans, b_trans, c_matrix_nz, extend_params])
     __validate_scaled_inputs(mat_a, mat_b, scale_a, scale_b, extend_params)
@@ -442,7 +456,6 @@ def __validate_scaled_inputs(input_tensor1, input_tensor2, input_scale1, input_s
     scale_a_dim = input_scale1.Dim()
     scale_b_dim = input_scale2.Dim()
     supported_dims = (2, 3, 4)
-    shape_dim_3 = 3
 
     if (
         input_tensor1.GetDataType() == pypto_impl.DataType.DT_FP4_E1M2
@@ -464,11 +477,13 @@ def __validate_scaled_inputs(input_tensor1, input_tensor2, input_scale1, input_s
                 f"got input_dim: {input_dim}, other_dim: {other_dim}."
             ),
         )
-    if scale_a_dim != scale_b_dim or scale_a_dim != shape_dim_3:
+    expected_scale_dim = input_dim + 1
+    if scale_a_dim != scale_b_dim or scale_a_dim != expected_scale_dim:
         raise PyptoError(
             0xF00003,
             RuntimeError(
-                "Tensor dimension mismatch. Expect scale_a_dim == scale_b_dim and both equal to 3, "
+                "Tensor dimension mismatch. Expect scale_a_dim == scale_b_dim and both equal to input_dim + 1 "
+                f"({expected_scale_dim}), "
                 f"got scale_a_dim: {scale_a_dim}, scale_b_dim: {scale_b_dim}."
             ),
         )
@@ -492,15 +507,37 @@ def __validate_scaled_shape(input_tensor1, input_tensor2, input_scale1, input_sc
     n_dim = (other_valid_shape[-1]) if not b_trans else (other_valid_shape[-2])
     scale1_valid_shape = __get_valid_shape(input_scale1)
     scale2_valid_shape = __get_valid_shape(input_scale2)
+    input_shape = input_tensor1.GetShape()
+    other_shape = input_tensor2.GetShape()
+    scale1_shape = input_scale1.GetShape()
+    scale2_shape = input_scale2.GetShape()
+    batch_dim = input_tensor1.Dim() - 2
+    for batch_idx in range(batch_dim):
+        if scale1_shape[batch_idx] != input_shape[batch_idx]:
+            raise PyptoError(
+                0xF00003,
+                RuntimeError(
+                    f"Scale batch dimension mismatch at axis {batch_idx}. Expected scale_a batch dimension to "
+                    f"equal paired mat_a batch dimension {input_shape[batch_idx]}, got {scale1_shape[batch_idx]}."
+                ),
+            )
+        if scale2_shape[batch_idx] != other_shape[batch_idx]:
+            raise PyptoError(
+                0xF00003,
+                RuntimeError(
+                    f"Scale batch dimension mismatch at axis {batch_idx}. Expected scale_b batch dimension to "
+                    f"equal paired mat_b batch dimension {other_shape[batch_idx]}, got {scale2_shape[batch_idx]}."
+                ),
+            )
     m_scale_dim, k_a_scale0_dim, k_a_scale1_dim = (
-        (scale1_valid_shape[0], scale1_valid_shape[1], scale1_valid_shape[shape_dim_2])
+        (scale1_valid_shape[-3], scale1_valid_shape[-2], scale1_valid_shape[-1])
         if not a_scale_trans
-        else (scale1_valid_shape[1], scale1_valid_shape[0], scale1_valid_shape[shape_dim_2])
+        else (scale1_valid_shape[-2], scale1_valid_shape[-3], scale1_valid_shape[-1])
     )
     k_b_scale0_dim, n_scale_dim, k_b_scale1_dim = (
-        (scale2_valid_shape[0], scale2_valid_shape[1], scale2_valid_shape[shape_dim_2])
+        (scale2_valid_shape[-3], scale2_valid_shape[-2], scale2_valid_shape[-1])
         if not b_scale_trans
-        else (scale2_valid_shape[1], scale2_valid_shape[0], scale2_valid_shape[shape_dim_2])
+        else (scale2_valid_shape[-2], scale2_valid_shape[-3], scale2_valid_shape[-1])
     )
 
     __validate_scale_k0_dimensions(k_a_scale0_dim, k_b_scale0_dim)
@@ -523,13 +560,16 @@ def __validate_scale_k0_dimensions(k_a_scale0_dim, k_b_scale0_dim):
 
 def __validate_scale_k1_dimensions(k_a_scale1_dim, k_b_scale1_dim, shape_dim_2):
     is_value_concrete = k_a_scale1_dim.is_concrete() and k_b_scale1_dim.is_concrete()
-    if is_value_concrete and k_a_scale1_dim != k_b_scale1_dim and k_a_scale1_dim != shape_dim_2:
+    if is_value_concrete and (
+        k_a_scale1_dim != k_b_scale1_dim
+        or k_a_scale1_dim != shape_dim_2
+        or k_b_scale1_dim != shape_dim_2
+    ):
         raise PyptoError(
             0xF00003,
             RuntimeError(
-                "Scale Matrix Kscale1 dimension mismatch. Expect scale_a_shape[2] == scale_b_shape[2] "
-                f"and both equal to 2, got scale_a_shape[2]: {k_a_scale1_dim}, "
-                f"scale_b_shape[2]: {k_b_scale1_dim}."
+                "Scale Matrix Kscale1 dimension mismatch. Expect the last dimensions of scale_a and scale_b "
+                f"to both equal 2, got scale_a: {k_a_scale1_dim}, scale_b: {k_b_scale1_dim}."
             ),
         )
 

@@ -189,14 +189,34 @@ def get_tensor_views_3d(params: TensorViewParams3D):
         b_view = params.b_tensor[batch_b_start:batch_b_end, 0:params.k, params.n_offset:params.n_offset + params.vn]
 
     if params.config.scale_a_trans:
-        scale_a_view = params.scale_a_tensor[0:params.scale_k, params.m_offset:params.m_offset + params.vm, :]
+        scale_a_view = params.scale_a_tensor[
+            batch_a_start:batch_a_end,
+            0:params.scale_k,
+            params.m_offset:params.m_offset + params.vm,
+            :,
+        ]
     else:
-        scale_a_view = params.scale_a_tensor[params.m_offset:params.m_offset + params.vm, 0:params.scale_k, :]
+        scale_a_view = params.scale_a_tensor[
+            batch_a_start:batch_a_end,
+            params.m_offset:params.m_offset + params.vm,
+            0:params.scale_k,
+            :,
+        ]
 
     if params.config.scale_b_trans:
-        scale_b_view = params.scale_b_tensor[params.n_offset:params.n_offset + params.vn, 0:params.scale_k, :]
+        scale_b_view = params.scale_b_tensor[
+            batch_b_start:batch_b_end,
+            params.n_offset:params.n_offset + params.vn,
+            0:params.scale_k,
+            :,
+        ]
     else:
-        scale_b_view = params.scale_b_tensor[0:params.scale_k, params.n_offset:params.n_offset + params.vn, :]
+        scale_b_view = params.scale_b_tensor[
+            batch_b_start:batch_b_end,
+            0:params.scale_k,
+            params.n_offset:params.n_offset + params.vn,
+            :,
+        ]
 
     return a_view, b_view, scale_a_view, scale_b_view
 
@@ -291,7 +311,7 @@ def d3_kernel_common(params: ScaledBmmKernelParams, config):
     tile_b, vm, vn = config.view_shape
     m_loop, n_loop = (output_m + vm - 1) // vm, (output_n + vn - 1) // vn
     batch_loop = (batch + tile_b - 1) // tile_b
-    scale_k = k // K_BLOCK_SIZE_64
+    scale_k = (k + K_BLOCK_SIZE_64 - 1) // K_BLOCK_SIZE_64
 
     pypto.set_vec_tile_shapes(config.m_tile_shape[0], config.n_tile_shape[0])
     pypto.set_matrix_size([output_m, k, output_n])
@@ -433,13 +453,37 @@ def get_4d_tensor_views(params: TensorViewParams4D):
             params.n_offset:params.n_offset + params.vn,
         ]
     if params.config.scale_a_trans:
-        scale_a_view = params.scale_a_tensor[0:params.scale_k, params.m_offset:params.m_offset + params.vm, :]
+        scale_a_view = params.scale_a_tensor[
+            batch_a_outer_start:batch_a_outer_end,
+            batch_a_inner_start:batch_a_inner_end,
+            0:params.scale_k,
+            params.m_offset:params.m_offset + params.vm,
+            :,
+        ]
     else:
-        scale_a_view = params.scale_a_tensor[params.m_offset:params.m_offset + params.vm, 0:params.scale_k, :]
+        scale_a_view = params.scale_a_tensor[
+            batch_a_outer_start:batch_a_outer_end,
+            batch_a_inner_start:batch_a_inner_end,
+            params.m_offset:params.m_offset + params.vm,
+            0:params.scale_k,
+            :,
+        ]
     if params.config.scale_b_trans:
-        scale_b_view = params.scale_b_tensor[params.n_offset:params.n_offset + params.vn, 0:params.scale_k, :]
+        scale_b_view = params.scale_b_tensor[
+            batch_b_outer_start:batch_b_outer_end,
+            batch_b_inner_start:batch_b_inner_end,
+            params.n_offset:params.n_offset + params.vn,
+            0:params.scale_k,
+            :,
+        ]
     else:
-        scale_b_view = params.scale_b_tensor[0:params.scale_k, params.n_offset:params.n_offset + params.vn, :]
+        scale_b_view = params.scale_b_tensor[
+            batch_b_outer_start:batch_b_outer_end,
+            batch_b_inner_start:batch_b_inner_end,
+            0:params.scale_k,
+            params.n_offset:params.n_offset + params.vn,
+            :,
+        ]
     return a_view, b_view, scale_a_view, scale_b_view
 
 
@@ -458,7 +502,7 @@ def d4_kernel_common(params: ScaledBmmKernelParams, config):
     m_loop, n_loop = (output_m + vm - 1) // vm, (output_n + vn - 1) // vn
     batch_outer_loop = (b0 + tile_b0 - 1) // tile_b0
     batch_inner_loop = (b1 + tile_b1 - 1) // tile_b1
-    scale_k = k // K_BLOCK_SIZE_64
+    scale_k = (k + K_BLOCK_SIZE_64 - 1) // K_BLOCK_SIZE_64
 
     pypto.set_vec_tile_shapes(config.m_tile_shape[0], config.n_tile_shape[0])
     pypto.set_matrix_size([output_m, k, output_n])
@@ -496,8 +540,12 @@ def scaled_bmm_kernel_3d_no_bias(
     a_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC]),
     b_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC]),
     out_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC]),
-    scale_a_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], dtype=pypto.DT_FP8E8M0),
-    scale_b_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], dtype=pypto.DT_FP8E8M0),
+    scale_a_tensor: pypto.Tensor(
+        [pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], dtype=pypto.DT_FP8E8M0
+    ),
+    scale_b_tensor: pypto.Tensor(
+        [pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], dtype=pypto.DT_FP8E8M0
+    ),
     scale_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC]),
     config: ScaledBmmConfig,
 ):
@@ -518,8 +566,12 @@ def scaled_bmm_kernel_3d_bias_1n(
     a_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC]),
     b_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC]),
     out_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC]),
-    scale_a_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], dtype=pypto.DT_FP8E8M0),
-    scale_b_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], dtype=pypto.DT_FP8E8M0),
+    scale_a_tensor: pypto.Tensor(
+        [pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], dtype=pypto.DT_FP8E8M0
+    ),
+    scale_b_tensor: pypto.Tensor(
+        [pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], dtype=pypto.DT_FP8E8M0
+    ),
     bias_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC]),
     scale_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC]),
     config: ScaledBmmConfig,
@@ -541,8 +593,12 @@ def scaled_bmm_kernel_3d_bias_b1n(
     a_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC]),
     b_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC]),
     out_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC]),
-    scale_a_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], dtype=pypto.DT_FP8E8M0),
-    scale_b_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], dtype=pypto.DT_FP8E8M0),
+    scale_a_tensor: pypto.Tensor(
+        [pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], dtype=pypto.DT_FP8E8M0
+    ),
+    scale_b_tensor: pypto.Tensor(
+        [pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], dtype=pypto.DT_FP8E8M0
+    ),
     bias_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC]),
     scale_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC]),
     config: ScaledBmmConfig,
@@ -564,8 +620,12 @@ def scaled_bmm_kernel_4d_no_bias(
     a_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC]),
     b_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC]),
     out_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC]),
-    scale_a_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], dtype=pypto.DT_FP8E8M0),
-    scale_b_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], dtype=pypto.DT_FP8E8M0),
+    scale_a_tensor: pypto.Tensor(
+        [pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], dtype=pypto.DT_FP8E8M0
+    ),
+    scale_b_tensor: pypto.Tensor(
+        [pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], dtype=pypto.DT_FP8E8M0
+    ),
     scale_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC]),
     config: ScaledBmmConfig,
 ):
@@ -586,8 +646,12 @@ def scaled_bmm_kernel_4d_bias_1n(
     a_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC]),
     b_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC]),
     out_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC]),
-    scale_a_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], dtype=pypto.DT_FP8E8M0),
-    scale_b_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], dtype=pypto.DT_FP8E8M0),
+    scale_a_tensor: pypto.Tensor(
+        [pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], dtype=pypto.DT_FP8E8M0
+    ),
+    scale_b_tensor: pypto.Tensor(
+        [pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], dtype=pypto.DT_FP8E8M0
+    ),
     bias_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC]),
     scale_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC]),
     config: ScaledBmmConfig,
@@ -606,48 +670,39 @@ def scaled_bmm_kernel_4d_bias_1n(
 
 def _process_scale_tensors(scale_a_cpu, scale_b_cpu, config):
     if len(config.a_shape) == 3:
-        b, m, k, n = config.get_logical_dims_3d()
+        _, m, k, n = config.get_logical_dims_3d()
     else:
-        b0, b1, m, k, n = config.get_logical_dims_4d()
+        _, _, m, k, n = config.get_logical_dims_4d()
 
     scale_k_32 = k // K_BLOCK_SIZE_32
+    scale_a_batch_shape = scale_a_cpu.shape[:-3]
+    scale_b_batch_shape = scale_b_cpu.shape[:-3]
 
     if config.scale_b_trans:
-        scale_b_tmp = scale_b_cpu.view(n, scale_k_32).T
+        scale_b_tmp = scale_b_cpu.reshape(*scale_b_batch_shape, n, scale_k_32).transpose(-2, -1)
     else:
-        scale_b_tmp = torch.transpose(scale_b_cpu, -2, -1).reshape(scale_k_32, n)
+        scale_b_tmp = torch.transpose(scale_b_cpu, -2, -1).reshape(*scale_b_batch_shape, scale_k_32, n)
 
     if config.scale_a_trans:
-        scale_a_tmp = torch.transpose(scale_a_cpu, -2, -1).reshape(scale_k_32, m).T
+        scale_a_tmp = torch.transpose(scale_a_cpu, -2, -1).reshape(
+            *scale_a_batch_shape, scale_k_32, m
+        ).transpose(-2, -1)
     else:
-        scale_a_tmp = scale_a_cpu.view(m, scale_k_32)
+        scale_a_tmp = scale_a_cpu.reshape(*scale_a_batch_shape, m, scale_k_32)
 
-    scale_a_tmp = scale_a_tmp.to(torch.float32).repeat_interleave(32, dim=1)
-    scale_b_tmp = scale_b_tmp.to(torch.float32).repeat_interleave(32, dim=0)
+    scale_a_tmp = scale_a_tmp.to(torch.float32).repeat_interleave(32, dim=-1)
+    scale_b_tmp = scale_b_tmp.to(torch.float32).repeat_interleave(32, dim=-2)
 
     return scale_a_tmp, scale_b_tmp
 
 
 def _compute_golden(params: GoldenComputeParams):
     config = params.config
-    k = config.get_logical_dims_3d()[2] if len(config.a_shape) == 3 else config.get_logical_dims_4d()[3]
-    scale_k_32 = k // K_BLOCK_SIZE_32
     output_m = config.out_shape[-2]
     output_n = config.out_shape[-1]
     padding_m = abs(output_m - params.m)
     padding_n = abs(output_n - params.n)
-    if config.scale_b_trans:
-        scale_b_tmp = params.scale_b_cpu.view(params.n, scale_k_32).T
-    else:
-        scale_b_tmp = torch.transpose(params.scale_b_cpu, -2, -1).reshape(scale_k_32, params.n)
-
-    if config.scale_a_trans:
-        scale_a_tmp = torch.transpose(params.scale_a_cpu, -2, -1).reshape(scale_k_32, params.m).T
-    else:
-        scale_a_tmp = params.scale_a_cpu.view(params.m, scale_k_32)
-
-    scale_a_tmp = scale_a_tmp.to(torch.float32).repeat_interleave(32, dim=1)
-    scale_b_tmp = scale_b_tmp.to(torch.float32).repeat_interleave(32, dim=0)
+    scale_a_tmp, scale_b_tmp = _process_scale_tensors(params.scale_a_cpu, params.scale_b_cpu, config)
 
     mat_a_tmp = (
         params.mat_a_cpu.to(torch.float32).transpose(-2, -1) if config.a_trans else params.mat_a_cpu.to(torch.float32)
@@ -689,9 +744,11 @@ def prepare_inputs(config: ScaledBmmConfig, device_id: int):
         b = max(b0, b1)
 
     output_n = out_shape[-1]
-    scale_k = k // K_BLOCK_SIZE_64
-    scale_a_shape = [scale_k, m, SHAPE_DIM_2] if config.scale_a_trans else [m, scale_k, SHAPE_DIM_2]
-    scale_b_shape = [n, scale_k, SHAPE_DIM_2] if config.scale_b_trans else [scale_k, n, SHAPE_DIM_2]
+    scale_k = (k + K_BLOCK_SIZE_64 - 1) // K_BLOCK_SIZE_64
+    scale_a_tail_shape = [scale_k, m, SHAPE_DIM_2] if config.scale_a_trans else [m, scale_k, SHAPE_DIM_2]
+    scale_b_tail_shape = [n, scale_k, SHAPE_DIM_2] if config.scale_b_trans else [scale_k, n, SHAPE_DIM_2]
+    scale_a_shape = list(config.a_shape[:-2]) + scale_a_tail_shape
+    scale_b_shape = list(config.b_shape[:-2]) + scale_b_tail_shape
 
     torch_in_dtype = ScaledBmmConfig.pto_to_torch(config.in_dtype)
     mat_a_cpu = torch.rand(list(config.a_shape), dtype=torch.float32).uniform_(-3, 3).to(torch_in_dtype)
@@ -863,8 +920,12 @@ def run_scaled_bmm_demo(run_mode):
 
                     a_view = a_tensor[b_offset:b_offset + b_view_size, m_offset:m_offset + vm_view_size, :]
                     b_view = b_tensor[b_offset:b_offset + b_view_size, :, n_offset:n_offset + vn_view_size]
-                    scale_a_view = scale_a_tensor[m_offset:m_offset + vm_view_size, :, :]
-                    scale_b_view = scale_b_tensor[:, n_offset:n_offset + vn_view_size, :]
+                    scale_a_view = scale_a_tensor[
+                        b_offset:b_offset + b_view_size, m_offset:m_offset + vm_view_size, :, :
+                    ]
+                    scale_b_view = scale_b_tensor[
+                        b_offset:b_offset + b_view_size, :, n_offset:n_offset + vn_view_size, :
+                    ]
 
                     out_view = pypto.scaled_mm(
                         a_view,
@@ -888,8 +949,18 @@ def run_scaled_bmm_demo(run_mode):
     device = "npu:0" if run_mode == "npu" else "cpu"
     a = torch.randn([b_size, m_size, k_size], dtype=torch.float32).uniform_(-3, 3).to(torch.float8_e4m3fn).to(device)
     b = torch.randn([b_size, k_size, n_size], dtype=torch.float32).uniform_(-3, 3).to(torch.float8_e4m3fn).to(device)
-    scale_a = torch.randn([m_size, scale_k, 2], dtype=torch.float32).uniform_(0, 1).to(torch.float8_e8m0fnu).to(device)
-    scale_b = torch.randn([scale_k, n_size, 2], dtype=torch.float32).uniform_(0, 1).to(torch.float8_e8m0fnu).to(device)
+    scale_a = (
+        torch.randn([b_size, m_size, scale_k, 2], dtype=torch.float32)
+        .uniform_(0, 1)
+        .to(torch.float8_e8m0fnu)
+        .to(device)
+    )
+    scale_b = (
+        torch.randn([b_size, scale_k, n_size, 2], dtype=torch.float32)
+        .uniform_(0, 1)
+        .to(torch.float8_e8m0fnu)
+        .to(device)
+    )
     out = torch.zeros([b_size, m_size, n_size], dtype=torch.float16).to(device)
     scaled_bmm_demo_kernel(a, b, out, scale_a, scale_b)
 

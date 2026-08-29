@@ -170,8 +170,8 @@ SCALED_BMM_TESTS = [
     {
         "id": "BMM3D_BIAS_1N_UNALIGN",
         "name": "scaled_bmm_3d_bias_1n",
-        "a_shape": [5, 135, 192],
-        "b_shape": [1, 192, 351],
+        "a_shape": [1, 135, 192],
+        "b_shape": [5, 192, 351],
         "out_shape": [5, 135, 351],
         "m_tile_shape": [64, 128],
         "k_tile_shape": [64, 256],
@@ -195,7 +195,7 @@ SCALED_BMM_TESTS = [
     {
         "id": "BMM4D_BIAS_UNALIGN_QUANT_PERCHENNEL",
         "name": "scaled_bmm_4d_bias_quant_perchennel",
-        "a_shape": [2, 3, 383, 320],
+        "a_shape": [2, 1, 383, 320],
         "b_shape": [1, 3, 178, 320],
         "out_shape": [2, 3, 384, 178],
         "m_tile_shape": [128, 256],
