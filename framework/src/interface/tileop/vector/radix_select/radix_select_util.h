@@ -116,7 +116,7 @@ __aicore__ inline constexpr size_t AlignUp(size_t size, size_t align)
     constexpr auto valTileW = TileOp::GetTensorTileShapeDim<VAL, DIM_5TH, MAX_DIMS>(); \
     constexpr auto idxTileW = TileOp::GetTensorTileShapeDim<IDX, DIM_5TH, MAX_DIMS>(); \
     constexpr auto srcMaskShape = AlignUp(srcTileW, 128);                              \
-    constexpr int64_t cmpSize = (srcTileW > 256 ? srcTileW : 256) / 8;                 \
+    constexpr int64_t cmpSize = (srcMaskShape > 256 ? srcMaskShape : 256) / 8;         \
     constexpr auto cmpAlign = AlignUp(cmpSize, 32);                                    \
     constexpr auto kAlign = AlignUp(k, 128);                                           \
     PTO_RS_GET_SHAPE(srcShape, src);                                                   \
@@ -314,10 +314,10 @@ TILEOP void RadixSelectFinalSelect(GT selectGT, EQ selectEQ, SRC srcMask, K kth,
 Memory Usage:
 srcMaskAddr       | srcMaskShape    uint16/uint32 |
 sortTmpAddr       | kAlign          uint16/uint32 |
-number0Addr       | 16              uint16        |
-number1Addr       | 16              uint16        |
-number2Addr       | 16              uint16        |
-number3Addr       | 16              uint16        |
+number0Addr       | 16/8            uint16/uint32 |
+number1Addr       | 16/8            uint16/uint32 |
+number2Addr       | 16/8            uint16/uint32 |
+number3Addr       | 16/8            uint16/uint32 |
 cnt1Addr          | 8               uint32        |
 cnt2Addr          | 8               uint32        |
 cnt3Addr          | 8               uint32        |

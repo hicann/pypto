@@ -263,4 +263,31 @@ TEST_F(TestCodegenDynSort, TestRadixSelectFP32)
 )!!!";
     CheckStringExist(expect, res);
 }
+
+TEST_F(TestCodegenDynSort, TestRadixSelectInt64)
+{
+    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
+    auto npuArch = Platform::Instance().GetSoc().GetNPUArch();
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    std::vector<int64_t> shape = {16, 16};
+    TileShape::Current().SetVecTile({16, 16});
+    Tensor input_a(DataType::DT_INT64, shape, "input");
+    auto output = std::make_tuple(Tensor(DataType::DT_INT64, shape, "value"),
+                                  Tensor(DataType::DT_INT32, shape, "index"));
+    std::string funcName = "RadixSelectInt64";
+    FUNCTION(funcName, {input_a, std::get<0>(output), std::get<1>(output)})
+    {
+        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
+        {
+            (void)i;
+            output = TopK(input_a, 16, -1, true, TopKAlgo::RADIX_SELECT);
+        }
+    }
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
+                                                                HIDDEN_FUNC_SUFFIX);
+    std::string res = GenCodeByFunction(*function);
+    std::string expect = R"(TRadixSelect<16, 1>(ubTensor_2, ubTensor_3, ubTensor_4, ubTensor_0);)";
+    CheckStringExist(expect, res);
+    Platform::Instance().GetSoc().SetNPUArch(npuArch);
+}
 } // namespace npu::tile_fwk

@@ -30,7 +30,7 @@ topk(input: Tensor, k: int, dim: Optional[int] = None, largest: bool = True, alg
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：<br>- MERGE_SORT：DT_FP32。<br>- RADIX_SELECT：DT_BF16，DT_FP16，DT_FP32，DT_INT32，DT_UINT32，DT_INT16，DT_UINT16，DT_INT8，DT_UINT8。<br>不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input   | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：<br>- MERGE_SORT：DT_FP32。<br>- RADIX_SELECT：DT_BF16，DT_FP16，DT_FP32，DT_INT64，DT_UINT64，DT_INT32，DT_UINT32，DT_INT16，DT_UINT16，DT_INT8，DT_UINT8。<br>不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
 | k       | 输入      | 返回元素的数量。<br>k的大小应该满足：1 <= k <= input.shape[dim]。 |
 | dim     | 输入      | 指定排序的维度。<br>目前仅支持按最后一个维度排序，即dim= -1或dim= input.shape.size() - 1。 |
 | largest | 输入      | 如果为True，返回最大元素。如果为False，返回最小元素。 |
@@ -44,7 +44,7 @@ topk(input: Tensor, k: int, dim: Optional[int] = None, largest: bool = True, alg
 
 1. 只支持对尾轴进行topk操作；
 2. 选用MERGE_SORT算法时，TileShape尾轴需要小于22KB\(TileShape\[-1\]\*4 < 22KB\)；
-3. 选用RADIX_SELECT算法时，记TileShape的次尾轴为tileH（若不存在则为1），尾轴为tileW，tileW对齐到128记为tileAlign，则需要临时空间：26\*tileH\*tileAlign，临时空间加上输入输出的tile块不能超过UB大小；
+3. 选用RADIX_SELECT算法时，记TileShape的次尾轴为tileH（若不存在则为1），尾轴为tileW，tileW对齐到128记为tileAlign，则需要临时空间：blockNum\*tileH\*tileAlign（当输入数据类型为UINT64/INT64时blockNum为46，其余情况为26），临时空间加上输入输出的tile块不能超过UB大小；
 4. 选用RADIX_SELECT算法时，尾轴不可切分，TileShape\[-1\]必须大于等于input.shape\[-1\]；
 5. k <= TileShape\[-1\] && k <= input.shape\[-1\]；
 6. RADIX_SELECT算法在不同型号的支持度：

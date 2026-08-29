@@ -20,6 +20,7 @@
 #include "radix_select_b1.h"
 #include "radix_select_b2.h"
 #include "radix_select_b4.h"
+#include "radix_select_b8.h"
 #ifdef PTO_RS_GET_STRIDE
 #undef PTO_RS_GET_STRIDE
 #endif
@@ -51,6 +52,8 @@ TILEOP void RadixSelectCalc(VAL value, IDX index, TMP tmp, SRC src)
         RadixSelectCalcB2<k, isLargest>(value, index, tmp, src);
     } else if constexpr (srcTypeSize == 4) {
         RadixSelectCalcB4<k, isLargest>(value, index, tmp, src);
+    } else if constexpr (srcTypeSize == 8) {
+        RadixSelectCalcB8<k, isLargest>(value, index, tmp, src);
     }
 }
 

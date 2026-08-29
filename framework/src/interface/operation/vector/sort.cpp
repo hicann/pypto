@@ -486,7 +486,11 @@ void TiledTopKRadixSelect(Function& function, const TileShape& tileShape, size_t
         input.tileInfo.shape[cur] = valueResult->shape[cur];
         auto valueTile = valueResult->View(function, input.tileInfo.shape, input.tileInfo.offset);
         auto indexTile = indexResult->View(function, input.tileInfo.shape, input.tileInfo.offset);
-        std::vector<int64_t> tmpShape = {static_cast<int64_t>(AlignUp(lastDim, NUM_VALUE_128) * NUM_VALUE_26)};
+        int64_t blockNum = NUM_VALUE_26;
+        if (BytesOf(input.tensor.GetDataType()) == BytesOf(DT_INT64)) {
+            blockNum = NUM_VALUE_46;
+        }
+        std::vector<int64_t> tmpShape = {static_cast<int64_t>(AlignUp(lastDim, NUM_VALUE_128) * blockNum)};
         if (cur > 0) {
             tmpShape[0] *= input.tileInfo.shape[cur - 1];
         }
@@ -593,8 +597,8 @@ std::tuple<Tensor, Tensor> TopK(const Tensor& self, int k, int axis, bool isLarg
         std::unordered_set<DataType> supportedTypes = {DT_FP32};
         CheckTensorDataType(self.GetStorage(), supportedTypes, "TOPK(Merge Sort)");
     } else if (algo == TopKAlgo::RADIX_SELECT) {
-        std::unordered_set<DataType> supportedTypes = {DT_BF16,   DT_FP16,  DT_FP32,   DT_UINT8, DT_INT8,
-                                                       DT_UINT16, DT_INT16, DT_UINT32, DT_INT32};
+        std::unordered_set<DataType> supportedTypes = {DT_BF16,  DT_FP16,   DT_FP32,  DT_UINT8,  DT_INT8, DT_UINT16,
+                                                       DT_INT16, DT_UINT32, DT_INT32, DT_UINT64, DT_INT64};
         CheckTensorDataType(self.GetStorage(), supportedTypes, "TOPK(Radix Select)");
     }
     CheckTensorDimRange(self.GetStorage(), 1, 4, "TOPK");
