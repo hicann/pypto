@@ -45,7 +45,7 @@ chmod +x *.run
 echo "y" | su - jenkins -c "cd ${WORKSPACE} && bash *.run --full --quiet --install-path=/home/jenkins/Ascend"
 source /home/jenkins/Ascend/cann/bin/setenv.bash
 
-if [[ "${arch}" == "arm64" ]]; then
+if [[ "${arch}" == "x64" ]]; then
     if [[ "${task_name}" == *_ubuntu24 ]]; then
         python3 build_ci.py --clean --timeout=400 --no_isolation --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16 --compile_dependency_check --verbose
     else

@@ -36,7 +36,7 @@ check_ret() {
 
 case "${GE_ST_RT2}" in
     Py3_ninja_simulation)
-        python3 build_ci.py --clean --plat_name=manylinux2014 --timeout=360 --no_isolation --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16 --compile_dependency_check --verbose
+        python3 build_ci.py --clean --plat_name=manylinux2014 --no_isolation --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16 --compile_dependency_check --verbose
         check_ret "PyPTO(Py3-Simulation) build whl failed"
         if [ "${GIT_TARGET_BRANCH}" = "master" ]; then
             bash build_out/cann-pypto_*.run --full -q --pylocal --install-path=./build_out
@@ -54,7 +54,7 @@ case "${GE_ST_RT2}" in
         python3 python/tests/ut/simulator/costmodel_cpu_swimlane.py
         check_ret "PyPTO(Py3-Simulation) build with cann and run with uncann UTest failed"
         rm -rf build_out output
-        python3 build_ci.py --clean --plat_name=manylinux2014 --timeout=300 --no_isolation --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16 --compile_dependency_check --verbose
+        python3 build_ci.py --clean --plat_name=manylinux2014 --no_isolation --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16 --compile_dependency_check --verbose
         if [ "${GIT_TARGET_BRANCH}" = "master" ]; then
             bash build_out/cann-pypto_*.run --full -q --pylocal --install-path=./build_out
             check_ret "PyPTO(Py3-Simulation) install run package failed"
@@ -90,15 +90,15 @@ case "${GE_ST_RT2}" in
         check_ret "Run PyPTO(Cpp-Clang-3x) UTest failed"
         ;;
     make_gnu_1)
-        python3 build_ci.py --clean --frontend=cpp --timeout=420 --build_type=Release --utest --case_execute_timeout=90 --utest_module=machine:simulation:passes --gcov --changed_files=${WORKSPACE}/pr_filelist.txt --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16 --target=tile_fwk_utest
+        python3 build_ci.py --clean --frontend=cpp --build_type=Release --utest --case_execute_timeout=90 --utest_module=machine:simulation:passes --gcov --changed_files=${WORKSPACE}/pr_filelist.txt --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16 --target=tile_fwk_utest
         check_ret "PyPTO(cpp) UTest failed"
         ;;
     make_gnu_2)
-        python3 build_ci.py --clean --frontend=cpp --timeout=420 --build_type=Release --utest --case_execute_timeout=90 --utest_module=interface --gcov --changed_files=${WORKSPACE}/pr_filelist.txt --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16 --target=tile_fwk_utest
+        python3 build_ci.py --clean --frontend=cpp --build_type=Release --utest --case_execute_timeout=90 --utest_module=interface --gcov --changed_files=${WORKSPACE}/pr_filelist.txt --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16 --target=tile_fwk_utest
         check_ret "PyPTO(cpp) UTest failed"
         ;;
     make_gnu_3)
-        python3 build_ci.py --clean --frontend=cpp --timeout=420 --build_type=Release --utest --case_execute_timeout=90 --utest_module=codegen:operator --gcov --changed_files=${WORKSPACE}/pr_filelist.txt --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16 --target=tile_fwk_utest
+        python3 build_ci.py --clean --frontend=cpp --build_type=Release --utest --case_execute_timeout=90 --utest_module=codegen:operator --gcov --changed_files=${WORKSPACE}/pr_filelist.txt --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16 --target=tile_fwk_utest
         check_ret "PyPTO(cpp) UTest failed"
         ;;
     kirinx90)
