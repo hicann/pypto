@@ -1048,9 +1048,9 @@ void ExecuteOpTri(ExecuteOperationContext* ctx)
 
     // dynScalar 可能为 RUNTIME_COA_GET_PARAM(idx)，需经 callop linearArgList 解析
     SymbolicScalar diaSym = ctx->op->GetSymbolicScalarAttribute(OpAttributeKey::dynScalar);
-    std::vector<OpImmediate> diaImmList = {OpImmediate::Specified(diaSym)};
-    int diagonal = static_cast<int>(ctx->opInter->EvaluateOpImmediate(ctx->frame, diaImmList)[0]);
-    std::cout << "diagonal: " << diagonal << std::endl;
+    std::vector<OpImmediate> diagonalImmList = {OpImmediate::Specified(diaSym)};
+    int diagonal = static_cast<int>(ctx->opInter->EvaluateOpImmediate(ctx->frame, diagonalImmList)[0]);
+    INTERPRETER_LOGI("diagonal: %d", diagonal);
     bool isUpper = ctx->op->GetBoolAttribute(OpAttributeKey::isUpper);
     isUpper ? calc::TriU(output, input, diagonal) : calc::TriL(output, input, diagonal);
 }

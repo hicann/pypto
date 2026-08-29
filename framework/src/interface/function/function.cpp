@@ -789,7 +789,7 @@ void RedundantOutCastCheck(std::map<Function*, std::set<size_t>>& removeRecord,
                            std::map<size_t, size_t>& outcasts)
 {
     for (auto calleeFunc : func->GetCalleeFunctionList()) {
-        FE_ASSERT(FeError::INVALID_PTR, calleeFunc != nullptr) << func->GetMagicName() << "has nullptr calleeFunc";
+        FE_ASSERT(FeError::INVALID_PTR, calleeFunc != nullptr) << func->GetMagicName() << " has nullptr calleeFunc";
         std::map<size_t, size_t> outcastIdx2parent; // key: callee outcastIdx, value: caller outcastIdx
         CalleeSlotNoConsumer(*calleeFunc, *func, outcasts, outcastIdx2parent);
         if (!outcastIdx2parent.empty()) {

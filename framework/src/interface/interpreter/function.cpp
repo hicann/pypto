@@ -250,7 +250,7 @@ void FunctionInterpreter::DumpBinary(std::vector<int64_t>& shape, std::vector<in
     } else {
         size_t res = fwrite(data + offset[0] * dtypeSize, dtypeSize, shape[0], fdata);
         if (res != static_cast<size_t>(shape[0])) {
-            INTERPRETER_LOGW("Write size is not equal actual size.");
+            INTERPRETER_LOGW("Write size is not equal to actual size.");
         }
     }
 }

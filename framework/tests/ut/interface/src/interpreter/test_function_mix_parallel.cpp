@@ -16,6 +16,7 @@
 #include <gtest/gtest.h>
 #include <atomic>
 #include <chrono>
+#include <cstdio>
 #include <future>
 
 #include "interface/inner/tilefwk.h"
@@ -353,6 +354,22 @@ TEST_F(FunctionMixParallelTest, GetInplaceIndexIsInplaceAttr)
     EXPECT_EQ(op.GetInplaceIndex(0), -1);
     op.SetAttribute(OP_ATTR_PREFIX + "isInplace", true);
     EXPECT_EQ(op.GetInplaceIndex(0), 0);
+}
+
+// FunctionInterpreter::DumpBinary short-write branch:
+// a read-only FILE* makes fwrite return 0 (not equal to shape[0]),
+// which triggers the "Write size is not equal to actual size" warning.
+TEST_F(FunctionMixParallelTest, DumpBinaryShortWriteTriggersWarning)
+{
+    FunctionInterpreter interp;
+    std::vector<int64_t> shape = {4};
+    std::vector<int64_t> stride = {1};
+    std::vector<int64_t> offset = {0};
+    uint8_t data[4] = {1, 2, 3, 4};
+    FILE* fp = fopen("/dev/null", "r");
+    ASSERT_NE(fp, nullptr);
+    interp.DumpBinary(shape, stride, offset, fp, data, 1);
+    fclose(fp);
 }
 
 } // namespace

@@ -1856,7 +1856,7 @@ void Gather(const TensorData& out, const TensorData& params, const TensorData& i
         axis += paramsRank;
     }
     ASSERT(CalculatorErrorScene::GATHER_AXIS_OUT_OF_RANGE, axis >= 0 && axis < static_cast<int64_t>(paramsRank))
-        << "axis out of range";
+        << "axis " << axis << " out of range [0, " << paramsRank << ")";
     auto idxFlat = tindices.second.to(torch::kLong).reshape({-1});
     auto gathered = tparams.second.index_select(/*dim=*/axis, /*index=*/idxFlat);
     std::vector<int64_t> outSize{};

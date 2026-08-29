@@ -14,6 +14,7 @@
  */
 
 #include "pybind_common.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 #include <utility>
 #include <vector>
@@ -544,7 +545,7 @@ void BindControllerScopeClasses(py::module_& m)
                      try {
                          result[py::str(key)] = AnyToPyObject(val);
                      } catch (const py::type_error& e) {
-                         py::print("Warning: Skipping key '", key, "' -", e.what());
+                         PYPTO_LOGW("Warning: Skipping key '%s' - %s", key.c_str(), e.what());
                      }
                  }
                  return result;

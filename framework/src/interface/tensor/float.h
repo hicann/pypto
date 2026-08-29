@@ -15,6 +15,7 @@
 
 #pragma once
 #include "interface/utils/common.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 #include <stdio.h>
 #include <stdint.h>
@@ -231,9 +232,9 @@ class Float {
 
     static void PrintMetadata()
     {
-        printf("expBit=%d fracBit=%d expZero=%d fp32ExpBit=%d fp32FracBit=%d fp32ExpZero=%d\n", expBit, fracBit,
-               static_cast<uint32_t>(FloatExp::expZero), static_cast<uint32_t>(FloatExp::fp32ExpBit),
-               static_cast<uint32_t>(FloatExp::fp32FracBit), static_cast<uint32_t>(FloatExp::fp32ExpZero));
+        FE_LOGI("expBit=%u fracBit=%u expZero=%u fp32ExpBit=%u fp32FracBit=%u fp32ExpZero=%u", expBit, fracBit,
+                static_cast<uint32_t>(FloatExp::expZero), static_cast<uint32_t>(FloatExp::fp32ExpBit),
+                static_cast<uint32_t>(FloatExp::fp32FracBit), static_cast<uint32_t>(FloatExp::fp32ExpZero));
     }
 
 public:

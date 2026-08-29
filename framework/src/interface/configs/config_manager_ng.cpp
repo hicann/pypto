@@ -596,7 +596,7 @@ bool ConfigManagerNg::IsWithinRange(const std::string& properties, std::any& val
             return impl_->IsWithinRange(properties, AnyCast<int64_t>(value));
         }
     } catch (const std::out_of_range& e) {
-        FE_LOGE(FeError::INVALID_VAL, "key[%s] has been not loaded form tile_fwk_config_schema.json.",
+        FE_LOGE(FeError::INVALID_VAL, "key[%s] has not been loaded from tile_fwk_config_schema.json.",
                 properties.c_str());
         return false;
     }

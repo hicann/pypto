@@ -226,7 +226,7 @@ bool Tensor::IsEmpty() const { return storage_ == nullptr; }
 int32_t Tensor::GetShape(int axis) const
 {
     const size_t dimCount = storage_->shape.size();
-    FE_ASSERT(FeError::INVALID_VAL, dimCount > 0) << "Tensor has no dimensions! disCount: " << dimCount;
+    FE_ASSERT(FeError::INVALID_VAL, dimCount > 0) << "Tensor has no dimensions! dimCount: " << dimCount;
     if (axis < 0) {
         axis += static_cast<int>(dimCount);
     }

@@ -794,9 +794,9 @@ SymbolicScalar UpdateGetTensorDataIOIndex(size_t currOutcastIdx, size_t newOutca
                 std::vector<RawSymbolicScalarPtr> operandList = call->GetExpressionOperandList();
                 auto currIOType = operandList[GET_TENSOR_DATA_OPERAND_INDEX_IOTYPE];
                 auto currIOTypeIndex = operandList[GET_TENSOR_DATA_OPERAND_INDEX_IOTYPE_INDEX];
-                FE_ASSERT(currIOType->IsImmediate()) << "its' kind: " << SymbolicScalarKind2Name(currIOType->kind);
+                FE_ASSERT(currIOType->IsImmediate()) << "its kind: " << SymbolicScalarKind2Name(currIOType->kind);
                 FE_ASSERT(currIOTypeIndex->IsImmediate())
-                    << "its' kind: " << SymbolicScalarKind2Name(currIOTypeIndex->kind);
+                    << "its kind: " << SymbolicScalarKind2Name(currIOTypeIndex->kind);
                 if (currIOType->GetImmediateValue() != GET_TENSOR_DATA_OPERAND_IOTYPE_OUTCAST)
                     continue;
                 size_t outcastIndex = currIOTypeIndex->GetImmediateValue();
@@ -833,9 +833,9 @@ SymbolicScalar GetTensorDataFillIO(const GetTensorDataIODescDict& iodescDict, co
                 std::vector<RawSymbolicScalarPtr> operandList = call->GetExpressionOperandList();
                 auto currIOType = operandList[GET_TENSOR_DATA_OPERAND_INDEX_IOTYPE];
                 auto currIOTypeIndex = operandList[GET_TENSOR_DATA_OPERAND_INDEX_IOTYPE_INDEX];
-                FE_ASSERT(currIOType->IsImmediate()) << "its' kind: " << SymbolicScalarKind2Name(currIOType->kind);
+                FE_ASSERT(currIOType->IsImmediate()) << "its kind: " << SymbolicScalarKind2Name(currIOType->kind);
                 FE_ASSERT(currIOTypeIndex->IsImmediate())
-                    << "its' kind: " << SymbolicScalarKind2Name(currIOTypeIndex->kind);
+                    << "its kind: " << SymbolicScalarKind2Name(currIOTypeIndex->kind);
                 if (currIOType->GetImmediateValue() == ioTypeValue &&
                     currIOTypeIndex->GetImmediateValue() == ioTypeIndexValue) {
                     continue;

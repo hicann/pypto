@@ -417,7 +417,7 @@ Operation* Program::FinishCurrentFunction(const std::shared_ptr<TensorSlotScope>
                             std::to_string(currentFunctionPtr_->GetFuncMagic());
         FE_ASSERT(FeError::NOT_EXIST, funcMagicName == expectedName)
             << "currentFunc magicName: " << funcMagicName << ", rawName: " << currentFunctionPtr_->GetRawName()
-            << "funcMagic: " << currentFunctionPtr_->GetFuncMagic();
+            << ", funcMagic: " << currentFunctionPtr_->GetFuncMagic();
     }
 
     FE_LOGD("func.end.finish: name=%s", funcMagicName.c_str());
