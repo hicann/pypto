@@ -427,6 +427,30 @@ def test_move_to_insert_subblock():
     assert "block.move" not in ir_str
 
 
+def test_move_to_insert_transpose_layout():
+    @pl.jit(auto_mutex=False)
+    def main(
+        output: pl.Tensor[[32, 32], pl.DT_FP32],
+    ):
+        dst_type = pl.TileType(
+            shape=[32, 64], dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Vec, layout=pl.ZN)
+        src_type = pl.TileType(
+            shape=[64, 16], dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Vec, layout=pl.NZ)
+        dst = pl.make_tile(dst_type, addr=0x30200, size=16384)
+        src = pl.make_tile(src_type, addr=0x31200, size=4096)
+        pl.move(dst, src, [0, 0])
+        _test_result = pl.store(output, dst, [0, 0])
+
+    main_program, _ = main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    main = main_program.get_function(main.__name__)
+
+    ir_str = _program_ir(main)
+    assert "block.insert" in ir_str
+    assert "block.move" not in ir_str
+
+
 def test_move_equal_shape_stays_move():
     @pl.jit(auto_mutex=False)
     def main(
