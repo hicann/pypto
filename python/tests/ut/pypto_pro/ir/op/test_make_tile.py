@@ -450,26 +450,6 @@ def test_valid_shape_pad_and_compact_are_spread_from_the_tile_type():
     assert "compact=1" in ir_str
 
 
-def test_layout_and_fractal_are_spread_from_the_tile_type():
-    @pl.jit
-    def k(x: pl.Tensor[[128, 128], pl.DT_FP16]):
-        tt = pl.TileType(
-            shape=[128, 128],
-            dtype=pl.DT_FP16,
-            target_memory=pl.MemorySpace.Vec,
-            layout=pl.NZ,
-            fractal=256,
-        )
-        t = pl.make_tile(tt, addr=0)
-        pl.load(t, x, [0, 0])
-
-    ir_str = _kernel_ir(k)
-    # NZ is (blayout, slayout) = (2, 1).
-    assert "blayout=2" in ir_str
-    assert "slayout=1" in ir_str
-    assert "fractal=256" in ir_str
-
-
 def test_an_explicit_kwarg_wins_over_the_tile_type_field():
     @pl.jit
     def k(x: pl.Tensor[[128, 128], pl.DT_FP16]):

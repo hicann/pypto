@@ -190,6 +190,7 @@ def _ir_load(
         _validate_offset_bounds("load", tensor.type.shape, offsets.elements)
     else:
         _validate_offset_bounds("load", tensor.type.shape, offsets)
+    _check_layout_dtype(op_name, tensor, out, is_transpose=is_transpose)
     return _ir_core.create_op_call(block_ir_op(op_name), [out, tensor, offsets_tuple], kwargs, actual_span)
 
 
@@ -228,6 +229,7 @@ def _ir_load_tile(
     )
     # Validate offset bounds at Python frontend level
     _validate_offset_bounds("load_tile", tensor.type.shape, abs_offsets.elements)
+    _check_layout_dtype("load_tile", tensor, out, is_transpose=is_transpose)
     kwargs: dict[str, Any] = {}
     if is_transpose:
         kwargs["is_transpose"] = is_transpose
@@ -298,14 +300,12 @@ def _ir_store(
 
     if not isinstance(out.type, _ir_core.TensorType):
         raise ValueError(f"{op_name}: dst must be a Tensor, got {type(out.type).__name__}")
-    _validate_dtype(getattr(out.type, "dtype", None), "dst tensor", op_name)
 
     if not isinstance(tile.type, _ir_core.TileType):
         raise ValueError(f"{op_name}: src must be a Tile, got {type(tile.type).__name__}")
     _src_mem = getattr(getattr(tile.type, "memref", None), "memory_space", None)
     if _src_mem is not None and _src_mem not in (_ir_core.MemorySpace.Vec, _ir_core.MemorySpace.Acc):
         raise ValueError(f"{op_name}: src tile must be in Vec (UB) or Acc (L0C) memory, got {_src_mem.name}")
-    _validate_dtype(getattr(tile.type, "dtype", None), "src tile", op_name)
 
     if phase is not None and not isinstance(phase, STPhase):
         raise ValueError(f"{op_name}: invalid phase value {phase!r}, expected STPhase")
@@ -331,13 +331,8 @@ def _ir_store(
     _validate_offset_bounds("store", out.type.shape, offsets_tuple.elements)
 
     pre_quant_scalar, fp_tile = _resolve_scale_param(scale, actual_span)
-
-    _check_scale_dst_supported(
-        getattr(tile.type, "dtype", None),
-        getattr(out.type, "dtype", None),
-        pre_quant_scalar is not None or fp_tile is not None,
-        op_name,
-    )
+    is_quant = pre_quant_scalar is not None or fp_tile is not None
+    _check_layout_dtype(op_name, tile, out, quant=is_quant)
     if fp_tile is not None and relu_pre_mode is not None:
         raise ValueError("scale (per-channel) cannot be used together with relu_pre_mode")
     if fp_tile is not None and phase is not None:
@@ -402,14 +397,12 @@ def _ir_store_tile(
 
     if not isinstance(out.type, _ir_core.TensorType):
         raise ValueError(f"{op_name}: dst must be a Tensor, got {type(out.type).__name__}")
-    _validate_dtype(getattr(out.type, "dtype", None), "dst tensor", op_name)
 
     if not isinstance(tile.type, _ir_core.TileType):
         raise ValueError(f"{op_name}: src must be a Tile, got {type(tile.type).__name__}")
     _src_mem = getattr(getattr(tile.type, "memref", None), "memory_space", None)
     if _src_mem is not None and _src_mem not in (_ir_core.MemorySpace.Vec, _ir_core.MemorySpace.Acc):
         raise ValueError(f"{op_name}: src tile must be in Vec (UB) or Acc (L0C) memory, got {_src_mem.name}")
-    _validate_dtype(getattr(tile.type, "dtype", None), "src tile", op_name)
 
     tensor_ndim = len(out.type.shape)
     tile_shape = list(tile.type.shape)
@@ -438,13 +431,8 @@ def _ir_store_tile(
     _validate_offset_bounds("store_tile", out.type.shape, abs_offsets.elements)
 
     pre_quant_scalar, fp_tile = _resolve_scale_param(scale, actual_span)
-
-    _check_scale_dst_supported(
-        getattr(tile.type, "dtype", None),
-        getattr(out.type, "dtype", None),
-        pre_quant_scalar is not None or fp_tile is not None,
-        op_name,
-    )
+    is_quant = pre_quant_scalar is not None or fp_tile is not None
+    _check_layout_dtype(op_name, tile, out, quant=is_quant)
     if fp_tile is not None and relu_pre_mode is not None:
         raise ValueError("scale (per-channel) cannot be used together with relu_pre_mode")
     if fp_tile is not None and phase is not None:
@@ -857,26 +845,6 @@ _SCALAR_UNSUPPORTED_DTYPES: tuple[DataType, ...] = (
     DataType.HF8,
 )
 
-_SUPPORTED_DTYPES: tuple[DataType, ...] = (
-    DataType.FP8E4M3FN,
-    DataType.FP8E5M2,
-    DataType.FP8E8M0,
-    DataType.FP4E2M1,
-    DataType.FP4E1M2,
-    DataType.HF8,
-    DataType.INT8,
-    DataType.FP16,
-    DataType.BF16,
-    DataType.INT16,
-    DataType.FP32,
-    DataType.INT32,
-    DataType.INT64,
-    DataType.UINT8,
-    DataType.UINT16,
-    DataType.UINT32,
-    DataType.UINT64,
-)
-
 
 def _check_scalar_supported_dtype(op_name: str, container: Expr) -> None:
     dtype = container.type.dtype
@@ -911,11 +879,9 @@ def _validate_load_operands(
     dst_mem = getattr(getattr(out.type, "memref", None), "memory_space", None)
     if dst_mem is not None and dst_mem not in (_ir_core.MemorySpace.Vec, _ir_core.MemorySpace.Mat):
         raise ValueError(f"{op_name}: dst tile must be in Vec (UB) or Mat (L1) memory, got {dst_mem.name}")
-    _validate_dtype(getattr(out.type, "dtype", None), "dst tile", op_name)
 
     if not isinstance(tensor.type, _ir_core.TensorType):
         raise ValueError(f"{op_name}: src must be a Tensor, got {type(tensor.type).__name__}")
-    _validate_dtype(getattr(tensor.type, "dtype", None), "src tensor", op_name)
 
     tensor_ndim = len(tensor.type.shape)
     tile_shape = list(out.type.shape)
@@ -953,11 +919,6 @@ def _build_store_kwargs(
     if phase is not None:
         kwargs["phase"] = phase
     return kwargs
-
-
-def _validate_dtype(dtype: DataType | None, role: str, op_name: str) -> None:
-    if dtype is not None and dtype not in _SUPPORTED_DTYPES:
-        raise ValueError(f"{op_name}: unsupported {role} dtype {dtype}, supported: b8/b16/b32/b64")
 
 
 def _check_dtype(op_name: str, dtype: DataType | None, allowed: tuple[DataType, ...]) -> None:
@@ -1368,7 +1329,9 @@ _REJECTED_LAYOUTS_ON_A5 = (TensorLayout.ZZ, TensorLayout.NN)
 
 def _tile_layout(tile_type: "_IRTileType") -> "TensorLayout | None":
     """Return the TensorLayout of a TileType derived from its hardware_info blayout/slayout."""
-    hw = tile_type.hardware_info
+    hw = getattr(tile_type, "hardware_info", None)
+    if hw is None:
+        return None  # raw C++ TileType without hardware_info — layout unknown, skip check
     return _BS_TO_LAYOUT.get((int(hw.blayout), int(hw.slayout)))
 
 
@@ -1527,6 +1490,269 @@ def _apply_default_layout(tt: "TileType") -> None:
         and tt.fractal is None
     ):
         tt.fractal = 32
+
+
+# ---------------------------------------------------------------------------
+# Layout × dtype 合法组合表（按平台 arch 分；当前仅 a5 配置，后续 a6 等平台按行补充）
+#
+# 每个合法组合是一个六元组 (src_loc, dst_loc, src_layout, dst_layout, src_dtype, dst_dtype)，
+# 均为 pto-isa 实际支持（static_assert 允许范围）且经真实上板实测。
+# 匹配方式：把待校验的操作数解析为同构六元组，六个元素全部相等即命中——
+# 不区分同类型/跨类型/量化子表，也不做 src_dtype == dst_dtype 预判。
+#
+# 表按 op 分组（load / store），每组按 src_loc→dst_loc 与排布分类逐条罗列，
+# 每个分类前有注释说明该排布的 dtype 支持范围。
+#
+# 预留扩展：后续 op（move / insert 等）如需排布×dtype 校验，在此注册对应
+# 组合表，并在其 builder 中调用 _check_layout_dtype(...)。
+# ---------------------------------------------------------------------------
+
+
+def _loc_name(type_: "_IRTileType | _ir_core.TensorType") -> str | None:
+    """Memory-space key of a Tile or Tensor: 'GM' for tensors, MemorySpace name for tiles."""
+    if isinstance(type_, _ir_core.TensorType):
+        return "GM"
+    mem = getattr(getattr(type_, "memref", None), "memory_space", None)  # type: ignore[attr-defined]
+    return mem.name if mem is not None else None
+
+
+def _operand_layout(type_: "_IRTileType | _ir_core.TensorType") -> "TensorLayout | None":
+    """TensorLayout of a Tile (hardware_info) or Tensor (tensor_view)."""
+    if isinstance(type_, _ir_core.TensorType):
+        tv = getattr(type_, "tensor_view", None)
+        return getattr(tv, "layout", None)
+    return _tile_layout(type_)  # type: ignore[arg-type]
+
+
+def _operand_dtype(type_: "_IRTileType | _ir_core.TensorType") -> "DataType | None":
+    return getattr(type_, "dtype", None)
+
+
+# a5 load 合法组合表（load / load_tile 共用）
+_A5_LOAD_COMBOS = (
+    # ══ GM → Vec ══
+    # ND → ND（12 种，无 UINT64）
+    ("GM", "Vec", TensorLayout.ND, TensorLayout.ND, DataType.INT8, DataType.INT8),
+    ("GM", "Vec", TensorLayout.ND, TensorLayout.ND, DataType.UINT8, DataType.UINT8),
+    ("GM", "Vec", TensorLayout.ND, TensorLayout.ND, DataType.FP16, DataType.FP16),
+    ("GM", "Vec", TensorLayout.ND, TensorLayout.ND, DataType.BF16, DataType.BF16),
+    ("GM", "Vec", TensorLayout.ND, TensorLayout.ND, DataType.INT16, DataType.INT16),
+    ("GM", "Vec", TensorLayout.ND, TensorLayout.ND, DataType.FP32, DataType.FP32),
+    ("GM", "Vec", TensorLayout.ND, TensorLayout.ND, DataType.INT32, DataType.INT32),
+    ("GM", "Vec", TensorLayout.ND, TensorLayout.ND, DataType.INT64, DataType.INT64),
+    ("GM", "Vec", TensorLayout.ND, TensorLayout.ND, DataType.FP8E8M0, DataType.FP8E8M0),
+    ("GM", "Vec", TensorLayout.ND, TensorLayout.ND, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
+    ("GM", "Vec", TensorLayout.ND, TensorLayout.ND, DataType.FP8E5M2, DataType.FP8E5M2),
+    ("GM", "Vec", TensorLayout.ND, TensorLayout.ND, DataType.HF8, DataType.HF8),
+    # DN → DN（8 种，无 FP8/HF8/UINT64）
+    ("GM", "Vec", TensorLayout.DN, TensorLayout.DN, DataType.INT8, DataType.INT8),
+    ("GM", "Vec", TensorLayout.DN, TensorLayout.DN, DataType.UINT8, DataType.UINT8),
+    ("GM", "Vec", TensorLayout.DN, TensorLayout.DN, DataType.FP16, DataType.FP16),
+    ("GM", "Vec", TensorLayout.DN, TensorLayout.DN, DataType.BF16, DataType.BF16),
+    ("GM", "Vec", TensorLayout.DN, TensorLayout.DN, DataType.INT16, DataType.INT16),
+    ("GM", "Vec", TensorLayout.DN, TensorLayout.DN, DataType.FP32, DataType.FP32),
+    ("GM", "Vec", TensorLayout.DN, TensorLayout.DN, DataType.INT32, DataType.INT32),
+    ("GM", "Vec", TensorLayout.DN, TensorLayout.DN, DataType.INT64, DataType.INT64),
+    # NZ → NZ（13 种，含 UINT64；NZ2NZ 无 64bit 限制）
+    ("GM", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.INT8, DataType.INT8),
+    ("GM", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.UINT8, DataType.UINT8),
+    ("GM", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP16, DataType.FP16),
+    ("GM", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.BF16, DataType.BF16),
+    ("GM", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.INT16, DataType.INT16),
+    ("GM", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.FP32),
+    ("GM", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.INT32, DataType.INT32),
+    ("GM", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.INT64, DataType.INT64),
+    ("GM", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.UINT64, DataType.UINT64),
+    ("GM", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP8E8M0, DataType.FP8E8M0),
+    ("GM", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
+    ("GM", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP8E5M2, DataType.FP8E5M2),
+    ("GM", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.HF8, DataType.HF8),
+
+    # ══ GM → Mat ══
+    # ND → NZ（7 种，禁 64bit）
+    ("GM", "Mat", TensorLayout.ND, TensorLayout.NZ, DataType.INT8, DataType.INT8),
+    ("GM", "Mat", TensorLayout.ND, TensorLayout.NZ, DataType.UINT8, DataType.UINT8),
+    ("GM", "Mat", TensorLayout.ND, TensorLayout.NZ, DataType.FP16, DataType.FP16),
+    ("GM", "Mat", TensorLayout.ND, TensorLayout.NZ, DataType.BF16, DataType.BF16),
+    ("GM", "Mat", TensorLayout.ND, TensorLayout.NZ, DataType.INT16, DataType.INT16),
+    ("GM", "Mat", TensorLayout.ND, TensorLayout.NZ, DataType.FP32, DataType.FP32),
+    ("GM", "Mat", TensorLayout.ND, TensorLayout.NZ, DataType.INT32, DataType.INT32),
+    # DN → NZ（7 种，禁 64bit）
+    ("GM", "Mat", TensorLayout.DN, TensorLayout.NZ, DataType.INT8, DataType.INT8),
+    ("GM", "Mat", TensorLayout.DN, TensorLayout.NZ, DataType.UINT8, DataType.UINT8),
+    ("GM", "Mat", TensorLayout.DN, TensorLayout.NZ, DataType.FP16, DataType.FP16),
+    ("GM", "Mat", TensorLayout.DN, TensorLayout.NZ, DataType.BF16, DataType.BF16),
+    ("GM", "Mat", TensorLayout.DN, TensorLayout.NZ, DataType.INT16, DataType.INT16),
+    ("GM", "Mat", TensorLayout.DN, TensorLayout.NZ, DataType.FP32, DataType.FP32),
+    ("GM", "Mat", TensorLayout.DN, TensorLayout.NZ, DataType.INT32, DataType.INT32),
+    # ND → ND（仅 INT64 / UINT64）
+    ("GM", "Mat", TensorLayout.ND, TensorLayout.ND, DataType.INT64, DataType.INT64),
+    ("GM", "Mat", TensorLayout.ND, TensorLayout.ND, DataType.UINT64, DataType.UINT64),
+    # DN → ZN（9 种，含 UINT64）
+    ("GM", "Mat", TensorLayout.DN, TensorLayout.ZN, DataType.INT8, DataType.INT8),
+    ("GM", "Mat", TensorLayout.DN, TensorLayout.ZN, DataType.UINT8, DataType.UINT8),
+    ("GM", "Mat", TensorLayout.DN, TensorLayout.ZN, DataType.FP16, DataType.FP16),
+    ("GM", "Mat", TensorLayout.DN, TensorLayout.ZN, DataType.BF16, DataType.BF16),
+    ("GM", "Mat", TensorLayout.DN, TensorLayout.ZN, DataType.INT16, DataType.INT16),
+    ("GM", "Mat", TensorLayout.DN, TensorLayout.ZN, DataType.FP32, DataType.FP32),
+    ("GM", "Mat", TensorLayout.DN, TensorLayout.ZN, DataType.INT32, DataType.INT32),
+    ("GM", "Mat", TensorLayout.DN, TensorLayout.ZN, DataType.INT64, DataType.INT64),
+    ("GM", "Mat", TensorLayout.DN, TensorLayout.ZN, DataType.UINT64, DataType.UINT64),
+    # NZ → NZ（9 种，含 UINT64；Mat 默认 NZ layout 即此组合）
+    ("GM", "Mat", TensorLayout.NZ, TensorLayout.NZ, DataType.INT8, DataType.INT8),
+    ("GM", "Mat", TensorLayout.NZ, TensorLayout.NZ, DataType.UINT8, DataType.UINT8),
+    ("GM", "Mat", TensorLayout.NZ, TensorLayout.NZ, DataType.FP16, DataType.FP16),
+    ("GM", "Mat", TensorLayout.NZ, TensorLayout.NZ, DataType.BF16, DataType.BF16),
+    ("GM", "Mat", TensorLayout.NZ, TensorLayout.NZ, DataType.INT16, DataType.INT16),
+    ("GM", "Mat", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.FP32),
+    ("GM", "Mat", TensorLayout.NZ, TensorLayout.NZ, DataType.INT32, DataType.INT32),
+    ("GM", "Mat", TensorLayout.NZ, TensorLayout.NZ, DataType.INT64, DataType.INT64),
+    ("GM", "Mat", TensorLayout.NZ, TensorLayout.NZ, DataType.UINT64, DataType.UINT64),
+)
+
+# a5 store 合法组合表（store / store_tile 共用，非量化路径）
+_A5_STORE_COMBOS = (
+    # ══ Vec → GM ══
+    # ND → ND（13 种，含 UINT64）
+    ("Vec", "GM", TensorLayout.ND, TensorLayout.ND, DataType.INT8, DataType.INT8),
+    ("Vec", "GM", TensorLayout.ND, TensorLayout.ND, DataType.UINT8, DataType.UINT8),
+    ("Vec", "GM", TensorLayout.ND, TensorLayout.ND, DataType.FP16, DataType.FP16),
+    ("Vec", "GM", TensorLayout.ND, TensorLayout.ND, DataType.BF16, DataType.BF16),
+    ("Vec", "GM", TensorLayout.ND, TensorLayout.ND, DataType.INT16, DataType.INT16),
+    ("Vec", "GM", TensorLayout.ND, TensorLayout.ND, DataType.FP32, DataType.FP32),
+    ("Vec", "GM", TensorLayout.ND, TensorLayout.ND, DataType.INT32, DataType.INT32),
+    ("Vec", "GM", TensorLayout.ND, TensorLayout.ND, DataType.INT64, DataType.INT64),
+    ("Vec", "GM", TensorLayout.ND, TensorLayout.ND, DataType.UINT64, DataType.UINT64),
+    ("Vec", "GM", TensorLayout.ND, TensorLayout.ND, DataType.FP8E8M0, DataType.FP8E8M0),
+    ("Vec", "GM", TensorLayout.ND, TensorLayout.ND, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
+    ("Vec", "GM", TensorLayout.ND, TensorLayout.ND, DataType.FP8E5M2, DataType.FP8E5M2),
+    ("Vec", "GM", TensorLayout.ND, TensorLayout.ND, DataType.HF8, DataType.HF8),
+    # NZ → NZ（13 种，含 UINT64；pto-isa 支持，PyPTO codegen 暂限 Acc 源，后续适配）
+    ("Vec", "GM", TensorLayout.NZ, TensorLayout.NZ, DataType.INT8, DataType.INT8),
+    ("Vec", "GM", TensorLayout.NZ, TensorLayout.NZ, DataType.UINT8, DataType.UINT8),
+    ("Vec", "GM", TensorLayout.NZ, TensorLayout.NZ, DataType.FP16, DataType.FP16),
+    ("Vec", "GM", TensorLayout.NZ, TensorLayout.NZ, DataType.BF16, DataType.BF16),
+    ("Vec", "GM", TensorLayout.NZ, TensorLayout.NZ, DataType.INT16, DataType.INT16),
+    ("Vec", "GM", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.FP32),
+    ("Vec", "GM", TensorLayout.NZ, TensorLayout.NZ, DataType.INT32, DataType.INT32),
+    ("Vec", "GM", TensorLayout.NZ, TensorLayout.NZ, DataType.INT64, DataType.INT64),
+    ("Vec", "GM", TensorLayout.NZ, TensorLayout.NZ, DataType.UINT64, DataType.UINT64),
+    ("Vec", "GM", TensorLayout.NZ, TensorLayout.NZ, DataType.FP8E8M0, DataType.FP8E8M0),
+    ("Vec", "GM", TensorLayout.NZ, TensorLayout.NZ, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
+    ("Vec", "GM", TensorLayout.NZ, TensorLayout.NZ, DataType.FP8E5M2, DataType.FP8E5M2),
+    ("Vec", "GM", TensorLayout.NZ, TensorLayout.NZ, DataType.HF8, DataType.HF8),
+
+    # ══ Acc → GM ══
+    # NZ → ND（2 种，同类型）
+    ("Acc", "GM", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.FP32),
+    ("Acc", "GM", TensorLayout.NZ, TensorLayout.ND, DataType.INT32, DataType.INT32),
+    # NZ → NZ（仅 FP32）
+    ("Acc", "GM", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.FP32),
+    # NZ → ND 跨类型（fixpipe 数值转换，无 scale）
+    ("Acc", "GM", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.FP16),
+    ("Acc", "GM", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.BF16),
+    ("Acc", "GM", TensorLayout.NZ, TensorLayout.ND, DataType.INT32, DataType.FP16),
+    ("Acc", "GM", TensorLayout.NZ, TensorLayout.ND, DataType.INT32, DataType.BF16),
+)
+
+# a5 store 量化合法组合表（store / store_tile 带 scale → store_fp 路径）
+_A5_STORE_QUANT_COMBOS = (
+    # Acc → GM · NZ → ND（fixpipe 量化，7 种）
+    ("Acc", "GM", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.INT8),
+    ("Acc", "GM", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.FP16),
+    ("Acc", "GM", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.HF8),
+    ("Acc", "GM", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.FP8E4M3FN),
+    ("Acc", "GM", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.FP32),
+    ("Acc", "GM", TensorLayout.NZ, TensorLayout.ND, DataType.INT32, DataType.INT8),
+    ("Acc", "GM", TensorLayout.NZ, TensorLayout.ND, DataType.INT32, DataType.FP16),
+)
+
+_LAYOUT_DTYPE_COMBOS = {
+    "load": {"a5": _A5_LOAD_COMBOS},
+    "load_tile": {"a5": _A5_LOAD_COMBOS},
+    "store": {"a5": _A5_STORE_COMBOS, "a5_quant": _A5_STORE_QUANT_COMBOS},
+    "store_tile": {"a5": _A5_STORE_COMBOS, "a5_quant": _A5_STORE_QUANT_COMBOS},
+}
+
+
+def _effective_gm_layout(type_: "_IRTileType | _ir_core.TensorType", is_transpose: bool) -> "TensorLayout":
+    """Effective GM layout for load: NZ declaration wins, else order decides (降序→DN, 否则 ND)."""
+    declared = _operand_layout(type_)
+    if declared == TensorLayout.NZ:
+        return TensorLayout.NZ
+    return TensorLayout.DN if is_transpose else TensorLayout.ND
+
+
+def _frontend_dtype_name(dtype: DataType) -> str:
+    """前端数据类型名（如 ``DT_FP16``），与 ``pl.TileType(dtype=pl.DT_FP16)`` 一致。"""
+    raw = str(dtype)
+    if raw == "bfloat16":
+        return "DT_BF16"
+    return f"DT_{raw.upper()}"
+
+
+def _check_layout_dtype(
+    op: str,
+    src: Expr,
+    dst: Expr,
+    *,
+    is_transpose: bool | None = None,
+    quant: bool = False,
+) -> None:
+    """Validate the layout × dtype combination of a data-movement op.
+
+    把 src/dst 解析为六元组 (src_loc, dst_loc, src_layout, dst_layout, src_dtype, dst_dtype)，
+    直接与合法组合表中的六元组全等比较，命中即合法。
+
+    Args:
+        op: block op name（load / load_tile / store / store_tile）。
+        src: source operand —— tile 或 tensor。
+        dst: destination operand —— tile 或 tensor。
+        is_transpose: load 专用——降序 order 时 GM 有效排布为 DN（仅 load 传入）；
+                      为 None 时 GM 排布取 tensor 声明值（store 场景）。
+        quant: 量化路径时查 `a5_quant` 子表（store 带 scale / store_fp），
+               非量化时查 `a5` 主表；量化组合仅 Acc→GM 有效，不与其他路径混检。
+    """
+    arch = _get_current_arch()
+    combos_by_arch = _LAYOUT_DTYPE_COMBOS.get(op)
+    if combos_by_arch is None:
+        return
+    key = f"{arch}_quant" if quant else arch
+    combos = combos_by_arch.get(key)
+    if combos is None:
+        # 该平台暂未配置支持表（如 a3）——不做硬拦截，后续按平台补表后自动生效。
+        return
+
+    src_loc = _loc_name(src.type)
+    dst_loc = _loc_name(dst.type)
+    src_layout = _operand_layout(src.type)
+    dst_layout = _operand_layout(dst.type)
+    src_dtype = _operand_dtype(src.type)
+    dst_dtype = _operand_dtype(dst.type)
+    if (
+        src_layout is None
+        or dst_layout is None
+        or src_dtype is None
+        or dst_dtype is None
+        or src_loc is None
+        or dst_loc is None
+    ):
+        # 解析不出确定信息（动态/未声明 layout）时不做硬拦截，避免误伤。
+        return
+    if is_transpose is not None and src_loc == "GM":
+        src_layout = _effective_gm_layout(src.type, is_transpose)
+
+    combo = (src_loc, dst_loc, src_layout, dst_layout, src_dtype, dst_dtype)
+    if combo in combos:
+        return
+    kind = "quantized " if quant else ""
+    raise ValueError(
+        f"{op}: unsupported {kind}layout/dtype combination "
+        f"src={src_loc}({src_layout.name},{_frontend_dtype_name(src_dtype)}) "
+        f"-> dst={dst_loc}({dst_layout.name},{_frontend_dtype_name(dst_dtype)}); "
+        f"please check whether the data path supports the current memory space, layout, and dtype."
+    )
+
 
 @dataclass
 class TileType:
