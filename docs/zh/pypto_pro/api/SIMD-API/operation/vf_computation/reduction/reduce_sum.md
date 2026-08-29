@@ -22,7 +22,7 @@ reg_tensor求和归约：将源寄存器`src`中的所有有效元素（`preg`�
 
 ![reduce_sum累加顺序](../../../../figures/reduce_sum_accum_order.jpg)
 
-当源操作数数据类型为DT_FP16时，中间累加过程在DT_FP32精度下进行，最终结果再舍入为DT_FP16，因此精度高于先逐对`vf.add`再手动归约的写法。
+当源操作数数据类型为DT_FP16时，累加过程在DT_FP16精度下进行。当源操作数数据类型为DT_INT16或DT_UINT16时，累加过程在32位精度下进行，最终结果与目的操作数数据类型一致。
 
 ## 函数原型
 
@@ -34,14 +34,36 @@ reduce_sum(src, preg, datablock: bool = False, merge_mode: Optional[MergeMode] =
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src` | 输入 | 源reg_tensor，源操作数`src`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_FP16、DT_FP32。 |
+| `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。 |
 | `preg` | 输入 | [mask_reg](../mask_reg.md)。当所有元素均不参与计算时（mask为空），将目的操作数数据类型的0写入`dst[0]`。 |
-| `datablock` | 输入 | 可选，决定接口工作模式，`True`时按datablock粒度归约（对应`vcgadd`指令），默认`False`。当`datablock=True`时，启用datablock粒度归约，每个datablock独立归约：32位宽（DT_INT32、DT_UINT32、DT_FP32）类型每16个元素为一个datablock，16位宽（DT_INT16、DT_UINT16、DT_FP16）类型每32个元素为一个datablock，各datablock分别求和并将结果写入各自datablock的第一个元素。 |
+| `datablock` | 输入 | 可选，决定接口工作模式，`True`时按datablock粒度归约，默认`False`。当`datablock=True`时，启用datablock粒度归约，每个datablock独立归约：32位宽（DT_INT32、DT_UINT32、DT_FP32）类型每8个元素为一个datablock，16位宽（DT_INT16、DT_UINT16、DT_FP16）类型每16个元素为一个datablock，各datablock分别求和并将结果写入各自datablock的第一个元素。 |
 | `merge_mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
 
 ## 约束说明
 
-- `datablock=True`时，支持的数据类型为：DT_INT16、DT_UINT16、DT_FP16、DT_INT32、DT_UINT32、DT_FP32。
+- 数据类型约束：
+
+  **表1** 非`datablock`模式（`datablock=False`）数据类型支持情况
+
+  | dst（目的操作数类型） | src（源操作数类型） | 累加精度 |
+  |---|---|---|
+  | DT_FP16 | DT_FP16 | DT_FP16 |
+  | DT_INT32 | DT_INT16 | DT_INT32 |
+  | DT_UINT32 | DT_UINT16 | DT_UINT32 |
+  | DT_INT32 | DT_INT32 | DT_INT32 |
+  | DT_UINT32 | DT_UINT32 | DT_UINT32 |
+  | DT_FP32 | DT_FP32 | DT_FP32 |
+
+  **表2** datablock模式（`datablock=True`）数据类型支持情况
+
+  | dst（目的操作数类型） | src（源操作数类型） | datablock大小 |
+  |---|---|---|
+  | DT_FP16 | DT_FP16 | 16个元素 |
+  | DT_INT32 | DT_INT16 | 16个元素 |
+  | DT_UINT32 | DT_UINT16 | 16个元素 |
+  | DT_INT32 | DT_INT32 | 8个元素 |
+  | DT_UINT32 | DT_UINT32 | 8个元素 |
+  | DT_FP32 | DT_FP32 | 8个元素 |
 
 ## 返回值说明
 

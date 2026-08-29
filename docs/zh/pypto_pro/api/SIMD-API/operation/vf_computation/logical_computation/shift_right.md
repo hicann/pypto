@@ -41,8 +41,8 @@ shift_right(src, shift, preg, mode: Optional[MergeMode] = None, dtype: Optional[
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)。源操作数`src`、`shift`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32。 |
-| `shift` | 输入 | 右移位数。标量（整型，所有元素统一移位）或[reg_tensor](../reg_tensor.md)（逐元素移位）。不支持设置为负数，负数行为未定义。<br>- 对于**reg_tensor模式**下逻辑位移（无符号数据类型），如果位移量大于数据类型位宽，则输出为0。<br>- 对于**reg_tensor模式**下算术位移（有符号数据类型），如果src小于0，位移量大于数据类型位宽，则输出-1；如果src大于0，位移量大于数据类型位宽，则输出0。<br>- 两种模式下均不支持设置为负数，负数行为未定义。 |
+| `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)。源操作数`src`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32。 |
+| `shift` | 输入 | 右移位数。标量（整型，所有元素统一移位）或[reg_tensor](../reg_tensor.md)（逐元素移位），支持的数据类型和`src`支持的范围一致。<br>- 对于**reg_tensor模式**下逻辑位移（无符号数据类型），如果位移量大于数据类型位宽，则输出为0。<br>- 对于**reg_tensor模式**下算术位移（有符号数据类型），如果src小于0，位移量大于数据类型位宽，则输出-1；如果src大于0，位移量大于数据类型位宽，则输出0。<br>- 两种模式下均不支持设置为负数，负数行为未定义。 |
 | `preg` | 输入 | [mask_reg](../mask_reg.md)。 |
 | `mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
 

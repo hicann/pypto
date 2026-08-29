@@ -912,12 +912,12 @@ TEST(BackendCCEVFOpsTest, EmitsB64LoadStoreAndNewCastPaths)
         codegen.RegisterRegTensorVar(var->name_);
     }
 
-    // B64 load_align with post_update: __VF_VLDS_B64 POST_UPDATE path
-    ExpectInvoke(codegen, "vf.load_align", {"vector_2xvl_s64", "POST_UPDATE"}, {i64, tile64, Int(2)},
+    // B64 load_align with post_update: b32 vlds simulation (RegTensor<uint32_t>&)
+    ExpectInvoke(codegen, "vf.load_align", {"RegTensor<uint32_t>&", "POST_UPDATE"}, {i64, tile64, Int(2)},
                  {{"post_update", true}});
 
-    // B64 store_align with post_update: __VF_VSTS_B64 POST_UPDATE path
-    ExpectInvoke(codegen, "vf.store_align", {"vector_2xvl_s64", "POST_UPDATE"}, {tile64, i64, mask, Int(2)},
+    // B64 store_align with post_update: b32 vsts simulation (ppack + pintlv_b32 + vsts)
+    ExpectInvoke(codegen, "vf.store_align", {"RegTensor<uint32_t>&", "POST_UPDATE"}, {tile64, i64, mask, Int(2)},
                  {{"post_update", true}});
 
     // INT32→UINT8 (4x int narrowing): vcvt(dst, src, mask, RS, PART_PP, MODE) — 6 args
@@ -1180,6 +1180,49 @@ TEST(BackendCCEVFOpsTest, StoreAlignPostUpdateAccepts4Args)
     ExpectInvoke(codegen, "vf.store_align", {"POST_UPDATE"}, {tile, i64, mask, Int(2)}, {{"post_update", true}});
 }
 
+TEST(BackendCCEVFOpsTest, StoreAlignExplicitNormDistExpandsToWidthQualified)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP32);
+    auto fp32 = MakeVar("fp32", ir::DataType::FP32);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    codegen.RegisterRegTensorVar("fp32");
+    codegen.RegisterMaskRegVar("mask");
+
+    auto emitted = Invoke(codegen, "vf.store_align", {tile, fp32, mask}, {{"dist", EnumValue(ir::StoreDist::NORM)}});
+    ExpectContains(emitted, {"vsts(", "NORM_B32"});
+    EXPECT_EQ(emitted.find("NORM,"), std::string::npos)
+        << "Should expand NORM to NORM_B32, not emit bare NORM: " << emitted;
+}
+
+TEST(BackendCCEVFOpsTest, StoreAlignInt64NormalStoreEmitsB32Simulation)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::INT64);
+    auto i64 = MakeVar("i64", ir::DataType::INT64);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    codegen.RegisterRegTensorVar("i64");
+    codegen.RegisterMaskRegVar("mask");
+
+    auto emitted = Invoke(codegen, "vf.store_align", {tile, i64, mask});
+    ExpectContains(emitted, {"ppack(", "pintlv_b32(", "RegTensor<uint32_t>&", "NORM_B32", "vsts("});
+    EXPECT_EQ(emitted.find("vector_2xvl_s64"), std::string::npos) << "Should not use __VF_VSTS_B64: " << emitted;
+}
+
+TEST(BackendCCEVFOpsTest, StoreAlignInt64PostUpdateEmitsB32Simulation)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::INT64);
+    auto i64 = MakeVar("i64", ir::DataType::INT64);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    codegen.RegisterRegTensorVar("i64");
+    codegen.RegisterMaskRegVar("mask");
+
+    auto emitted = Invoke(codegen, "vf.store_align", {tile, i64, mask, Int(2)}, {{"post_update", true}});
+    ExpectContains(emitted, {"ppack(", "pintlv_b32(", "RegTensor<uint32_t>&", "POST_UPDATE", "vsts("});
+    EXPECT_EQ(emitted.find("vector_2xvl_s64"), std::string::npos) << "Should not use __VF_VSTS_B64: " << emitted;
+}
+
 TEST(BackendCCEVFOpsTest, StoreAlignRejectsTooFewArgs)
 {
     CapturingCCECodegen codegen(ir::SectionKind::Vector);
@@ -1361,6 +1404,111 @@ TEST(BackendCCEVFOpsTest, StoreAlignAddrRegRejectsNonMaskArg2)
 
     // AddrReg path: 4 args with RegTensor (not MaskReg) as args[2] → reject
     EXPECT_ANY_THROW(Invoke(codegen, "vf.store_align", {tile, fp16, fp16b, fp16b}));
+}
+
+// ============================================================================
+// ReduceSum: INT16/UINT16 32-bit accumulator cast, INT64/UINT64 rejection
+// ============================================================================
+
+TEST(BackendCCEVFOpsTest, ReduceSumInt16EmitsInt32AccumulatorCast)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto i16_dst = MakeVar("i16_dst", ir::DataType::INT16);
+    auto i16_src = MakeVar("i16_src", ir::DataType::INT16);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+
+    // INT16 src: vcadd requires 32-bit accumulator, dst cast to RegTensor<int32_t>&
+    ExpectInvoke(codegen, "vf.reduce_sum", {"vcadd(", "RegTensor<int32_t>&"}, {i16_dst, i16_src, mask});
+}
+
+TEST(BackendCCEVFOpsTest, ReduceSumUint16EmitsUint32AccumulatorCast)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto u16_dst = MakeVar("u16_dst", ir::DataType::UINT16);
+    auto u16_src = MakeVar("u16_src", ir::DataType::UINT16);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+
+    // UINT16 src: dst cast to RegTensor<uint32_t>&
+    ExpectInvoke(codegen, "vf.reduce_sum", {"vcadd(", "RegTensor<uint32_t>&"}, {u16_dst, u16_src, mask});
+}
+
+TEST(BackendCCEVFOpsTest, ReduceSumInt32NoCast)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto i32_dst = MakeVar("i32_dst", ir::DataType::INT32);
+    auto i32_src = MakeVar("i32_src", ir::DataType::INT32);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+
+    // INT32 src: same-type, no cast needed
+    auto emitted = Invoke(codegen, "vf.reduce_sum", {i32_dst, i32_src, mask});
+    ExpectContains(emitted, {"vcadd("});
+    EXPECT_EQ(emitted.find("RegTensor<int32_t>&"), std::string::npos) << "INT32 should not need cast: " << emitted;
+}
+
+TEST(BackendCCEVFOpsTest, ReduceSumFp32NoCast)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto fp32_dst = MakeVar("fp32_dst", ir::DataType::FP32);
+    auto fp32_src = MakeVar("fp32_src", ir::DataType::FP32);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+
+    auto emitted = Invoke(codegen, "vf.reduce_sum", {fp32_dst, fp32_src, mask});
+    ExpectContains(emitted, {"vcadd("});
+    EXPECT_EQ(emitted.find("RegTensor<"), std::string::npos) << "FP32 should not need cast: " << emitted;
+}
+
+TEST(BackendCCEVFOpsTest, ReduceSumDatablockInt16NoCast)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto i16_dst = MakeVar("i16_dst", ir::DataType::INT16);
+    auto i16_src = MakeVar("i16_src", ir::DataType::INT16);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+
+    // Datablock mode uses vcgadd which supports INT16 same-type, no cast needed
+    auto emitted = Invoke(codegen, "vf.reduce_sum", {i16_dst, i16_src, mask}, {{"datablock", true}});
+    ExpectContains(emitted, {"vcgadd("});
+    EXPECT_EQ(emitted.find("RegTensor<int32_t>&"), std::string::npos)
+        << "Datablock INT16 should not need cast: " << emitted;
+}
+
+TEST(BackendCCEVFOpsTest, ReduceSumAcceptsInt64)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto i64_dst = MakeVar("i64_dst", ir::DataType::INT64);
+    auto i64_src = MakeVar("i64_src", ir::DataType::INT64);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+
+    ExpectInvoke(codegen, "vf.reduce_sum", {"vcadd("}, {i64_dst, i64_src, mask});
+}
+
+TEST(BackendCCEVFOpsTest, ReduceSumAcceptsUint64)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto u64_dst = MakeVar("u64_dst", ir::DataType::UINT64);
+    auto u64_src = MakeVar("u64_src", ir::DataType::UINT64);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+
+    ExpectInvoke(codegen, "vf.reduce_sum", {"vcadd("}, {u64_dst, u64_src, mask});
+}
+
+TEST(BackendCCEVFOpsTest, ReduceSumRejectsBf16)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto bf16_dst = MakeVar("bf16_dst", ir::DataType::BF16);
+    auto bf16_src = MakeVar("bf16_src", ir::DataType::BF16);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.reduce_sum", {bf16_dst, bf16_src, mask}));
+}
+
+TEST(BackendCCEVFOpsTest, ReduceSumRejectsInt8)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto i8_dst = MakeVar("i8_dst", ir::DataType::INT8);
+    auto i8_src = MakeVar("i8_src", ir::DataType::INT8);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.reduce_sum", {i8_dst, i8_src, mask}));
 }
 
 } // namespace

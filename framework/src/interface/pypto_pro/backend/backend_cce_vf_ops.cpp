@@ -201,31 +201,8 @@ static std::string DtypeToPtrType(DataType dt)
     return dt.ToCTypeString();
 }
 
-// Return the native 64-bit pointer type for B64 vlds/vsts overloads
-// (__VF_VLDS_B64/__VF_VSTS_B64), which expect __ubuf__ int64_t*/uint64_t*.
-static std::string GetB64PtrType(DataType dt)
-{
-    if (dt == DataType::INT64)
-        return "int64_t";
-    if (dt == DataType::UINT64)
-        return "uint64_t";
-    return dt.ToCTypeString();
-}
-
 // Return the (RegTensor<uint8_t>&) cast prefix for types that need B8 reinterpret.
 static std::string GetB8Cast(DataType dt) { return NeedsB8Reinterpret(dt) ? "(RegTensor<uint8_t>&)" : ""; }
-
-// Return the cast prefix for B64 types (INT64/UINT64).
-// B64 vlds/vsts overloads (__VF_VLDS_B64/__VF_VSTS_B64) expect vector_2xvl_s64/u64,
-// but the register is declared as RegTensor<int64_t>/RegTensor<uint64_t>.
-static std::string GetB64Cast(DataType dt)
-{
-    if (dt == DataType::INT64)
-        return "(vector_2xvl_s64&)";
-    if (dt == DataType::UINT64)
-        return "(vector_2xvl_u64&)";
-    return "";
-}
 
 // Resolve an offset argument to a C++ code string.
 // If the argument is a 2-element MakeTuple [row, col], compute the linear
@@ -516,11 +493,11 @@ static std::string EmitVFLoadAlign(const ir::CallPtr& op, codegen::CodegenBase& 
             std::string ptr_type = DtypeToPtrType(dst_dt);
             std::string ub_ptr = GetUBufPtr(codegen, op->args_[1], ptr_type);
             std::string cast = GetB8Cast(dst_dt);
-            // B64 types (INT64/UINT64) use __VF_VLDS_B64 which takes 3 args (no NORM mode)
+            // B64 types (INT64/UINT64): load as b32 (mirrors AscendC DataCopyImpl
+            // b64 RegTraitNumOne: vlds((RegTensor<uint32_t>&)reg, uint32_t* ptr, 0, NORM))
             if (dst_dt.GetBit() == 64) {
-                std::string b64_cast = GetB64Cast(dst_dt);
-                std::string b64_ptr = GetUBufPtr(codegen, op->args_[1], GetB64PtrType(dst_dt));
-                codegen.Emit("vlds(" + b64_cast + dst + ", " + b64_ptr + ", 0);");
+                std::string b32_ptr = GetUBufPtr(codegen, op->args_[1], "uint32_t");
+                codegen.Emit("vlds((RegTensor<uint32_t>&)" + dst + ", " + b32_ptr + ", 0, NORM);");
             } else {
                 codegen.Emit("vlds(" + cast + dst + ", " + ub_ptr + ", 0, NORM);");
             }
@@ -684,20 +661,17 @@ static std::string EmitVFLoadAlign(const ir::CallPtr& op, codegen::CodegenBase& 
         vlds_mode = mode;
     }
     std::string cast = GetB8Cast(dst_dt);
-    // B64 types (INT64/UINT64) use __VF_VLDS_B64 which takes 3 args (no mode)
+    // B64 types (INT64/UINT64): load as b32 (mirrors AscendC DataCopyImpl b64 path)
     if (dst_dt.GetBit() == 64) {
-        std::string b64_cast = GetB64Cast(dst_dt);
-        std::string b64_ptr;
+        std::string b32_ptr;
         if (post_update) {
-            b64_ptr = codegen.GetOrCreateVFTilePtr(op->args_[1], /*is_post_update=*/true);
-        } else {
-            b64_ptr = GetUBufPtr(codegen, op->args_[1], GetB64PtrType(dst_dt));
-        }
-        if (post_update) {
+            b32_ptr = codegen.GetOrCreateVFTilePtr(op->args_[1], /*is_post_update=*/true);
             std::string post_offset = "(" + effective_offset + ") * 2";
-            codegen.Emit("vlds(" + b64_cast + dst + ", " + b64_ptr + ", " + post_offset + ", POST_UPDATE);");
+            codegen.Emit("vlds((RegTensor<uint32_t>&)" + dst + ", (__ubuf__ uint32_t*&)" + b32_ptr + ", " +
+                         post_offset + ", NORM, POST_UPDATE);");
         } else {
-            codegen.Emit("vlds(" + b64_cast + dst + ", " + b64_ptr + ", " + effective_offset + ");");
+            b32_ptr = GetUBufPtr(codegen, op->args_[1], "uint32_t");
+            codegen.Emit("vlds((RegTensor<uint32_t>&)" + dst + ", " + b32_ptr + ", " + effective_offset + ", NORM);");
         }
     } else if (post_update) {
         // B64 register types need stride doubled (postUpdateStride * 2 for 8-byte elements)
@@ -819,7 +793,15 @@ static std::string EmitVFStoreAlign(const ir::CallPtr& op, codegen::CodegenBase&
             dist = "NORM_B32";
     }
     // Auto-expand shorthand dist names to element-width-qualified CCE constants
-    if (dist == "FIRST_ELEMENT" || dist == "FIRST_ELE") {
+    if (dist == "NORM") {
+        DataType sd = GetExprDtype(op->args_[1]);
+        if (IsB8Type(sd))
+            dist = "NORM_B8";
+        else if (IsB16Type(sd))
+            dist = "NORM_B16";
+        else
+            dist = "NORM_B32";
+    } else if (dist == "FIRST_ELEMENT" || dist == "FIRST_ELE") {
         DataType sd = GetExprDtype(op->args_[1]);
         if (IsB8Type(sd))
             dist = "ONEPT_B8";
@@ -964,11 +946,20 @@ static std::string EmitVFStoreAlign(const ir::CallPtr& op, codegen::CodegenBase&
             effective_stride = "(" + stride + ")" + width_op;
         }
         std::string ptr_var = codegen.GetOrCreateVFTilePtr(op->args_[0], /*is_post_update=*/true);
-        // B64 types use __VF_VSTS_B64 which takes 4 args (no dist mode)
+        // B64 types: use b32 vsts with ppack+pintlv_b32 mask splitting (mirrors AscendC
+        // DataCopyImpl post_update b64 path). The b64 register is reinterpreted as
+        // RegTensor<uint32_t>& and stored via b32 vsts with the split mask.
         if (src_dt.GetBit() == 64) {
-            std::string b64_cast = GetB64Cast(src_dt);
-            codegen.Emit("vsts(" + b64_cast + src_reg + ", " + ptr_var + ", " + effective_stride + ", " + mask_reg +
-                         ", POST_UPDATE);");
+            std::string p = src_reg + "_b64pu_";
+            std::string tm = p + "tm_";
+            std::string m0 = p + "m0_";
+            std::string m1 = p + "m1_";
+            codegen.Emit("MaskReg " + tm + ";");
+            codegen.Emit("ppack(" + tm + ", " + mask_reg + ", LOWER);");
+            codegen.Emit("MaskReg " + m0 + ", " + m1 + ";");
+            codegen.Emit("pintlv_b32(" + m0 + ", " + m1 + ", " + tm + ", " + tm + ");");
+            codegen.Emit("vsts((RegTensor<uint32_t>&)" + src_reg + ", (__ubuf__ uint32_t*&)" + ptr_var + ", " +
+                         effective_stride + ", " + dist + ", " + m0 + ", POST_UPDATE);");
         } else {
             codegen.Emit("vsts(" + cast + src_reg + ", " + ptr_var + ", " + effective_stride + ", " + dist + ", " +
                          mask_reg + ", POST_UPDATE);");
@@ -989,12 +980,21 @@ static std::string EmitVFStoreAlign(const ir::CallPtr& op, codegen::CodegenBase&
         if (!width_op.empty()) {
             effective_offset = "(" + offset_str + ")" + width_op;
         }
-        // B64 types (INT64/UINT64) use __VF_VSTS_B64 which takes 4 args (no dist mode)
+        // B64 types (INT64/UINT64): use b32 vsts with ppack+pintlv_b32 mask splitting
+        // (mirrors AscendC DataCopyImpl b64 path). The b64 register is reinterpreted
+        // as RegTensor<uint32_t>& and stored via b32 vsts with the split mask.
         if (src_dt.GetBit() == 64) {
-            std::string b64_cast = GetB64Cast(src_dt);
-            std::string b64_ptr = GetUBufPtr(codegen, op->args_[0], GetB64PtrType(src_dt));
-            codegen.Emit("vsts(" + b64_cast + src_reg + ", " + b64_ptr + ", " + effective_offset + ", " + mask_reg +
-                         ");");
+            std::string p = src_reg + "_b64st_";
+            std::string tm = p + "tm_";
+            std::string m0 = p + "m0_";
+            std::string m1 = p + "m1_";
+            codegen.Emit("MaskReg " + tm + ";");
+            codegen.Emit("ppack(" + tm + ", " + mask_reg + ", LOWER);");
+            codegen.Emit("MaskReg " + m0 + ", " + m1 + ";");
+            codegen.Emit("pintlv_b32(" + m0 + ", " + m1 + ", " + tm + ", " + tm + ");");
+            std::string b32_ptr = GetUBufPtr(codegen, op->args_[0], "uint32_t");
+            codegen.Emit("vsts((RegTensor<uint32_t>&)" + src_reg + ", " + b32_ptr + ", " + effective_offset + ", " +
+                         dist + ", " + m0 + ");");
         } else {
             codegen.Emit("vsts(" + cast + src_reg + ", " + dst_ptr + ", " + effective_offset + ", " + dist + ", " +
                          mask_reg + ");");
@@ -1249,6 +1249,14 @@ static std::string EmitVFReduceImpl(const ir::CallPtr& op, codegen::CodegenBase&
     std::string dst = codegen.GetExprAsCode(op->args_[0]);
     std::string src = codegen.GetExprAsCode(op->args_[1]);
     std::string mask = codegen.GetExprAsCode(op->args_[2]);
+    // vcadd for 16-bit int requires 32-bit accumulator: s16→s32, u16→u32
+    if (!datablock && reduce_mode == "SUM") {
+        if (src_dt == DataType::INT16) {
+            dst = "(RegTensor<int32_t>&)" + dst;
+        } else if (src_dt == DataType::UINT16) {
+            dst = "(RegTensor<uint32_t>&)" + dst;
+        }
+    }
     std::string intrinsic;
     if (reduce_mode == "SUM")
         intrinsic = datablock ? "vcgadd" : "vcadd";
@@ -2109,8 +2117,7 @@ static std::string EmitVFShift(const ir::CallPtr& op, codegen::CodegenBase& code
         CHECK(shift_dt == DataType::INT8 || shift_dt == DataType::INT16 || shift_dt == DataType::INT32 ||
               shift_dt == DataType::INT64)
             << op_name << " (vector) shift register only supports INT8/INT16/INT32/INT64, got " << DTypeStr(shift_dt);
-        codegen.Emit(vector_instruction + "(" + dst + ", " + src + ", *(vector_s32*)&(" + shift + "), " + mask + ", " +
-                     mode + ");");
+        codegen.Emit(vector_instruction + "(" + dst + ", " + src + ", " + shift + ", " + mask + ", " + mode + ");");
     } else {
         codegen.Emit(scalar_instruction + "(" + dst + ", " + src + ", (int16_t)(" + shift + "), " + mask + ", " + mode +
                      ");");
