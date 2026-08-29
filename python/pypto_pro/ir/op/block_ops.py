@@ -73,22 +73,27 @@ class FillPadMode(enum.Enum):
 def _compute_absolute_offsets(
     tile_offsets: _ir_core.MakeTuple,
     tile_shape: list,
-    tile_dims: list[int],
+    tile_dims: list[int] | None,
     span: Span,
+    *,
+    access_size: Any | None = None,
 ) -> _ir_core.MakeTuple:
     """Convert tile-relative offsets to absolute tensor offsets."""
     offsets = []
     for i, tile_offset in enumerate(tile_offsets.elements):
-        if i in tile_dims:
-            tile_idx = tile_dims.index(i)
-            shape = tile_shape[tile_idx]
-            if isinstance(tile_offset, ConstInt) and isinstance(shape, ConstInt):
-                offset = ConstInt(tile_offset.value * shape.value, DataType.INT64, span)
-            else:
-                offset = _ir_core.Mul(tile_offset, shape, DataType.INT64, span)
-            offsets.append(offset)
+        if access_size is not None:
+            shape = access_size
+        elif tile_dims is not None and i in tile_dims:
+            shape = tile_shape[tile_dims.index(i)]
         else:
             offsets.append(tile_offset)
+            continue
+
+        if isinstance(tile_offset, ConstInt) and isinstance(shape, ConstInt):
+            offset = ConstInt(tile_offset.value * shape.value, DataType.INT64, span)
+        else:
+            offset = _ir_core.Mul(tile_offset, shape, DataType.INT64, span)
+        offsets.append(offset)
     return _ir_core.MakeTuple(offsets, span)
 
 
@@ -121,7 +126,7 @@ def _validate_offset_bounds(
 
 def _validate_nz_transfer_axes(
     tensor_type: _ir_core.TensorType,
-    tile_dims: list[int],
+    tile_dims: list[int] | None,
     op_name: str,
 ) -> None:
     """Require a GM NZ transfer's 2D Tile to map to the Tensor's final M/N axes."""
@@ -169,7 +174,9 @@ def _ir_load(
     tile_ndim = len(out.type.shape)
     tile_dims, is_transpose = _resolve_order(order, tensor_ndim, tile_ndim, op_name)
 
-    tensor_ndim, tile_shape, tile_dims = _validate_load_operands(out, tensor, offsets_tuple, tile_dims, op_name)
+    tensor_ndim, tile_shape, tile_dims, _ = _validate_load_operands(
+        out, tensor, offsets_tuple, tile_dims, op_name
+    )
     _validate_nz_transfer_axes(tensor.type, tile_dims, op_name)
 
     kwargs: dict[str, Any] = {}
@@ -177,7 +184,7 @@ def _ir_load(
         kwargs["is_transpose"] = is_transpose
     # Specialized lowerings may use a different fallback, so preserve every
     # explicitly supplied order, including the ordinary last-two-axes order.
-    if order is not None:
+    if order is not None and tile_dims is not None:
         kwargs["tile_dims"] = tile_dims
     if isinstance(offsets, _ir_core.MakeTuple):
         _validate_offset_bounds("load", tensor.type.shape, offsets.elements)
@@ -202,7 +209,7 @@ def _ir_load_tile(
     tile_ndim = len(out.type.shape)
     tile_dims, is_transpose = _resolve_order(order, tensor_ndim, tile_ndim, op_name)
 
-    tensor_ndim, tile_shape, tile_dims = _validate_load_operands(
+    tensor_ndim, tile_shape, tile_dims, access_size = _validate_load_operands(
         out,
         tensor,
         offsets_tuple,
@@ -212,13 +219,19 @@ def _ir_load_tile(
     )
     _validate_nz_transfer_axes(tensor.type, tile_dims, op_name)
 
-    abs_offsets = _compute_absolute_offsets(offsets_tuple, tile_shape, tile_dims, actual_span)
+    abs_offsets = _compute_absolute_offsets(
+        offsets_tuple,
+        tile_shape,
+        tile_dims,
+        actual_span,
+        access_size=access_size,
+    )
     # Validate offset bounds at Python frontend level
     _validate_offset_bounds("load_tile", tensor.type.shape, abs_offsets.elements)
     kwargs: dict[str, Any] = {}
     if is_transpose:
         kwargs["is_transpose"] = is_transpose
-    if order is not None:
+    if order is not None and tile_dims is not None:
         kwargs["tile_dims"] = tile_dims
     return _ir_core.create_op_call(block_ir_op("load"), [out, tensor, abs_offsets], kwargs, actual_span)
 
@@ -301,12 +314,19 @@ def _ir_store(
 
     tensor_ndim = len(out.type.shape)
     tile_shape = list(tile.type.shape)
+    tile_dims, access_size = _validate_tile_dims(order, tensor_ndim, tile_shape, op_name)
     tile_ndim = len(tile_shape)
-    tile_dims = _validate_tile_dims(order, tensor_ndim, tile_ndim, op_name)
     if order is not None and order != sorted(order):
         raise ValueError(f"{op_name}: order must be ascending, got {order}")
     _validate_nz_transfer_axes(out.type, tile_dims, op_name)
-    _validate_offsets(offsets_tuple, tile_dims, tile_shape, out.type.shape, op_name)
+    _validate_offsets(
+        offsets_tuple,
+        tile_dims,
+        tile_shape,
+        out.type.shape,
+        op_name,
+        access_size=access_size,
+    )
 
     _validate_offset_bounds("store", out.type.shape, offsets_tuple.elements)
 
@@ -393,14 +413,28 @@ def _ir_store_tile(
 
     tensor_ndim = len(out.type.shape)
     tile_shape = list(tile.type.shape)
+    tile_dims, access_size = _validate_tile_dims(order, tensor_ndim, tile_shape, op_name)
     tile_ndim = len(tile_shape)
-    tile_dims = _validate_tile_dims(order, tensor_ndim, tile_ndim, op_name)
     if order is not None and order != sorted(order):
         raise ValueError(f"{op_name}: order must be ascending, got {order}")
     _validate_nz_transfer_axes(out.type, tile_dims, op_name)
-    _validate_offsets(offsets_tuple, tile_dims, tile_shape, out.type.shape, op_name, use_tile_absolute=True)
+    _validate_offsets(
+        offsets_tuple,
+        tile_dims,
+        tile_shape,
+        out.type.shape,
+        op_name,
+        use_tile_absolute=True,
+        access_size=access_size,
+    )
 
-    abs_offsets = _compute_absolute_offsets(offsets_tuple, tile_shape, tile_dims, actual_span)
+    abs_offsets = _compute_absolute_offsets(
+        offsets_tuple,
+        tile_shape,
+        tile_dims,
+        actual_span,
+        access_size=access_size,
+    )
     _validate_offset_bounds("store_tile", out.type.shape, abs_offsets.elements)
 
     pre_quant_scalar, fp_tile = _resolve_scale_param(scale, actual_span)
@@ -871,7 +905,7 @@ def _validate_load_operands(
     op_name: str,
     *,
     use_tile_absolute: bool = False,
-) -> tuple[int, list[Any], list[int]]:
+) -> tuple[int, list[Any], list[int] | None, Any | None]:
     if not isinstance(out.type, _ir_core.TileType):
         raise ValueError(f"{op_name}: dst must be a Tile, got {type(out.type).__name__}")
     dst_mem = getattr(getattr(out.type, "memref", None), "memory_space", None)
@@ -885,7 +919,7 @@ def _validate_load_operands(
 
     tensor_ndim = len(tensor.type.shape)
     tile_shape = list(out.type.shape)
-    tile_dims = _validate_tile_dims(tile_dims, tensor_ndim, len(tile_shape), op_name)
+    tile_dims, access_size = _validate_tile_dims(tile_dims, tensor_ndim, tile_shape, op_name)
     _validate_offsets(
         offsets_tuple,
         tile_dims,
@@ -893,14 +927,15 @@ def _validate_load_operands(
         tensor.type.shape,
         op_name,
         use_tile_absolute=use_tile_absolute,
+        access_size=access_size,
     )
-    return tensor_ndim, tile_shape, tile_dims
+    return tensor_ndim, tile_shape, tile_dims, access_size
 
 
 def _build_store_kwargs(
     *,
     relu_pre_mode: ReluPreMode | None,
-    tile_dims: list[int],
+    tile_dims: list[int] | None,
     tensor_ndim: int,
     tile_ndim: int,
     atomic: AtomicType,
@@ -909,9 +944,10 @@ def _build_store_kwargs(
     kwargs: dict[str, Any] = {}
     if relu_pre_mode is not None:
         kwargs["relu_pre_mode"] = relu_pre_mode
-    default_tile_dims = list(range(tensor_ndim - tile_ndim, tensor_ndim))
-    if tile_dims != default_tile_dims:
-        kwargs["tile_dims"] = tile_dims
+    if tile_dims is not None:
+        default_tile_dims = list(range(tensor_ndim - tile_ndim, tensor_ndim))
+        if tile_dims != default_tile_dims:
+            kwargs["tile_dims"] = tile_dims
     if atomic != AtomicType.AtomicNone:
         kwargs["atomic"] = atomic
     if phase is not None:
@@ -1017,12 +1053,32 @@ def _resolve_order(
     return tile_dims, is_transpose
 
 
+def _validate_rank1_tensor_tile_shape(tile_shape: list[Any], op_name: str) -> Any:
+    shape_values = [
+        dim.value if isinstance(dim, ConstInt) else dim if isinstance(dim, int) else None
+        for dim in tile_shape
+    ]
+    if 1 not in shape_values:
+        raise ValueError(
+            f"{op_name}: rank-1 Tensor requires a rank-2 Tile with one dimension equal to 1, "
+            f"got Tile shape {shape_values}"
+        )
+
+    access_size = tile_shape[0] if shape_values[1] == 1 else tile_shape[1]
+    return access_size
+
+
 def _validate_tile_dims(
     tile_dims: list[int] | None,
     tensor_ndim: int,
-    tile_ndim: int,
+    tile_shape: list[Any],
     op_name: str,
-) -> list[int]:
+) -> tuple[list[int] | None, Any | None]:
+    if tensor_ndim == 1:
+        access_size = _validate_rank1_tensor_tile_shape(tile_shape, op_name)
+        return None, access_size
+
+    tile_ndim = len(tile_shape)
     if tile_dims is None:
         tile_dims = list(range(tensor_ndim - tile_ndim, tensor_ndim))
     if len(set(tile_dims)) != len(tile_dims):
@@ -1030,30 +1086,42 @@ def _validate_tile_dims(
     for dim in tile_dims:
         if dim < 0 or dim >= tensor_ndim:
             raise ValueError(f"{op_name}: order axis {dim} is out of range for Tensor rank {tensor_ndim}")
-    return tile_dims
+    return tile_dims, None
 
 
 def _validate_offsets(
     offsets_tuple: _ir_core.MakeTuple,
-    tile_dims: list[int],
+    tile_dims: list[int] | None,
     tile_shape: list[Any],
     tensor_shape: Sequence[Any],
     op_name: str,
     *,
     use_tile_absolute: bool = False,
+    access_size: Any | None = None,
 ) -> None:
+    if len(tensor_shape) != len(offsets_tuple.elements):
+        raise ValueError(
+            f"{op_name}: Tensor rank {len(tensor_shape)} requires exactly {len(tensor_shape)} offsets, "
+            f"got {len(offsets_tuple.elements)}"
+        )
     for i, off in enumerate(offsets_tuple.elements):
         off_val = _try_get_const_offset(off)
         if off_val is not None and off_val < 0:
             raise ValueError(f"{op_name}: offsets[{i}] is {off_val}, negative offset is not allowed")
-        if off_val is not None and i in tile_dims:
-            tile_idx = tile_dims.index(i)
-            t_size = tile_shape[tile_idx]
-            t_dim = tensor_shape[i] if i < len(tensor_shape) else None
-            check_val = off_val * t_size.value if use_tile_absolute else off_val
-            label = f" (absolute offset {check_val})" if use_tile_absolute else ""
-            if isinstance(t_size, ConstInt) and isinstance(t_dim, ConstInt) and check_val >= t_dim.value:
-                raise ValueError(f"{op_name}: offsets[{i}]={off_val}{label} exceeds tensor dim {i} size {t_dim.value}")
+        if off_val is None:
+            continue
+        if access_size is not None:
+            t_size = access_size
+        elif tile_dims is not None and i in tile_dims:
+            t_size = tile_shape[tile_dims.index(i)]
+        else:
+            continue
+
+        t_dim = tensor_shape[i] if i < len(tensor_shape) else None
+        check_val = off_val * t_size.value if use_tile_absolute else off_val
+        label = f" (absolute offset {check_val})" if use_tile_absolute else ""
+        if isinstance(t_size, ConstInt) and isinstance(t_dim, ConstInt) and check_val >= t_dim.value:
+            raise ValueError(f"{op_name}: offsets[{i}]={off_val}{label} exceeds tensor dim {i} size {t_dim.value}")
 
 
 def _ir_getval(container: Expr, offset: int | Expr, *, span: Span | None = None) -> Expr:

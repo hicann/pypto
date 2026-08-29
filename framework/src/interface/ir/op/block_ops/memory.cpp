@@ -65,8 +65,10 @@ TypePtr DeduceBlockCreateTileType([[maybe_unused]] const std::vector<ExprPtr>& a
     CHECK(shape_tuple) << "The operator " << op_name
                        << " requires first argument to be a MakeTuple expression with static shape values, but got "
                        << args[0]->TypeName();
-    CHECK(shape_tuple->elements_.size() == 2) << "TileType only supports rank-2 shape; "
-                                              << "for a tensor with shape [N], use TileType shape [N, 1]";
+    CHECK(shape_tuple->elements_.size() == 2)
+        << "TileType only supports rank-2 shape; "
+        << "for a 1-D tensor with shape [N], use TileType shape [N, 1] or [1, N], "
+        << "and keep the same convention for all tile shapes of that tensor";
 
     // Validate all elements are ConstInt (static compile-time constants)
     std::vector<ExprPtr> tile_shape;
