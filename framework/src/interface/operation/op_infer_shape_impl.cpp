@@ -1188,41 +1188,19 @@ REGISTER_INFER_SHAPE_FUNC(OP_LOAD2D_CONV, Opcode::OP_LOAD2D_CONV, L1ToL0ConvInfe
 REGISTER_INFER_SHAPE_FUNC(OP_LOAD2DDX_CONV, Opcode::OP_LOAD2DDX_CONV, L1ToL0ConvInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_L0C_COPY_OUT_CONV, Opcode::OP_L0C_COPY_OUT_CONV, L0CCopyOutConvInferFunc);
 
-void TransDataDefaultInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
-{
-    outValidShapes.push_back(op->GetOOperands()[0]->GetDynValidShape());
-    std::vector<int64_t> tmpValidShape = op->GetOOperands()[1]->GetShape();
-    outValidShapes.push_back(SymbolicScalar::FromConcrete(tmpValidShape));
-}
-
-void TransDataNC1HWC02NCHWInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
-{
-    std::vector<SymbolicScalar> validShape = op->GetOOperands()[0]->GetDynValidShape();
-    outValidShapes.push_back(validShape);
-    std::vector<int64_t> tmpValidShape = op->GetOOperands()[1]->GetShape();
-    outValidShapes.push_back(SymbolicScalar::FromConcrete(tmpValidShape));
-}
-
 void TransDataInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
     switch (op->GetOpcode()) {
         case Opcode::OP_NCHW2NC1HWC0:
-            TransDataDefaultInferFunc(op, outValidShapes);
-            return;
         case Opcode::OP_NCHW2Fractal_Z:
-            TransDataDefaultInferFunc(op, outValidShapes);
-            return;
         case Opcode::OP_NC1HWC02NCHW:
-            TransDataNC1HWC02NCHWInferFunc(op, outValidShapes);
-            return;
         case Opcode::OP_NCDHW2FRACTAL_Z_3D:
-            TransDataDefaultInferFunc(op, outValidShapes);
-            return;
         case Opcode::OP_NCDHW2NDC1HWC0:
-            TransDataDefaultInferFunc(op, outValidShapes);
-            return;
         case Opcode::OP_NDC1HWC02NCDHW:
-            TransDataDefaultInferFunc(op, outValidShapes);
+        case Opcode::OP_FractalZ2NCHW:
+        case Opcode::OP_FractalZ3D2NCDHW:
+            outValidShapes.push_back(op->GetOOperands()[0]->GetDynValidShape());
+            outValidShapes.push_back(SymbolicScalar::FromConcrete(op->GetOOperands()[1]->GetShape()));
             return;
         default:
             ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "The transDataType is not supported";
@@ -1235,6 +1213,8 @@ REGISTER_INFER_SHAPE_FUNC(OP_NC1HWC02NCHW, Opcode::OP_NC1HWC02NCHW, TransDataInf
 REGISTER_INFER_SHAPE_FUNC(OP_NCDHW2NDC1HWC0, Opcode::OP_NCDHW2NDC1HWC0, TransDataInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_NCDHW2FRACTAL_Z_3D, Opcode::OP_NCDHW2FRACTAL_Z_3D, TransDataInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_NDC1HWC02NCDHW, Opcode::OP_NDC1HWC02NCDHW, TransDataInferFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_FractalZ2NCHW, Opcode::OP_FractalZ2NCHW, TransDataInferFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_FractalZ3D2NCDHW, Opcode::OP_FractalZ3D2NCDHW, TransDataInferFunc);
 
 void CopyInInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {

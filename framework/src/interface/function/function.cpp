@@ -3421,7 +3421,8 @@ void Function::NormalizeCoaForSpecialInfo(std::vector<std::vector<SymbolicScalar
             }
         } else if (op->GetOpcode() == Opcode::OP_NCHW2NC1HWC0 || op->GetOpcode() == Opcode::OP_NCHW2Fractal_Z ||
                    op->GetOpcode() == Opcode::OP_NC1HWC02NCHW || op->GetOpcode() == Opcode::OP_NCDHW2NDC1HWC0 ||
-                   op->GetOpcode() == Opcode::OP_NCDHW2FRACTAL_Z_3D || op->GetOpcode() == Opcode::OP_NDC1HWC02NCDHW) {
+                   op->GetOpcode() == Opcode::OP_NCDHW2FRACTAL_Z_3D || op->GetOpcode() == Opcode::OP_NDC1HWC02NCDHW ||
+                   op->GetOpcode() == Opcode::OP_FractalZ2NCHW || op->GetOpcode() == Opcode::OP_FractalZ3D2NCDHW) {
             if (op->HasAttr(OpAttributeKey::transDataOffset)) {
                 std::vector<SymbolicScalar> offsets;
                 op->GetAttr(OpAttributeKey::transDataOffset, offsets);

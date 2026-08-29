@@ -240,9 +240,9 @@ std::vector<std::reference_wrapper<SymbolicScalar>> DynAttrToStatic::GetOpDynami
     }
 
     const std::set<Opcode> specifiedOps = {
-        Opcode::OP_VEC_DUP,        Opcode::OP_EXPAND,       Opcode::OP_RESHAPE,        Opcode::OP_NCHW2NC1HWC0,
-        Opcode::OP_NCHW2Fractal_Z, Opcode::OP_NC1HWC02NCHW, Opcode::OP_NCDHW2NDC1HWC0, Opcode::OP_NCDHW2FRACTAL_Z_3D,
-        Opcode::OP_NDC1HWC02NCDHW};
+        Opcode::OP_VEC_DUP,        Opcode::OP_EXPAND,        Opcode::OP_RESHAPE,         Opcode::OP_NCHW2NC1HWC0,
+        Opcode::OP_NCHW2Fractal_Z, Opcode::OP_NC1HWC02NCHW,  Opcode::OP_NCDHW2NDC1HWC0,  Opcode::OP_NCDHW2FRACTAL_Z_3D,
+        Opcode::OP_NDC1HWC02NCDHW, Opcode::OP_FractalZ2NCHW, Opcode::OP_FractalZ3D2NCDHW};
     if (specifiedOps.count(opcode)) {
         auto& attrDict = op.GetAllAttr();
         auto it = attrDict.find(OpAttributeKey::dynScalar);

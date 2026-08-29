@@ -548,6 +548,8 @@ public:
                                                             Opcode::OP_NCDHW2NDC1HWC0,
                                                             Opcode::OP_NCDHW2FRACTAL_Z_3D,
                                                             Opcode::OP_NDC1HWC02NCDHW,
+                                                            Opcode::OP_FractalZ2NCHW,
+                                                            Opcode::OP_FractalZ3D2NCDHW,
                                                             Opcode::OP_SHMEM_PUT,
                                                             Opcode::OP_SHMEM_STORE,
                                                             Opcode::OP_SHMEM_SIGNAL,

@@ -85,6 +85,8 @@ CodeGenOpNPU::CodeGenOpNPU(const CodeGenOpNPUCtx& ctx)
           {Opcode::OP_NCDHW2NDC1HWC0, [this]() { return GenTransData(); }},
           {Opcode::OP_NCDHW2FRACTAL_Z_3D, [this]() { return GenTransData(); }},
           {Opcode::OP_NDC1HWC02NCDHW, [this]() { return GenTransData(); }},
+          {Opcode::OP_FractalZ2NCHW, [this]() { return GenTransData(); }},
+          {Opcode::OP_FractalZ3D2NCDHW, [this]() { return GenTransData(); }},
 
           // index outcast
           {Opcode::OP_INDEX_OUTCAST, [this]() { return GenIndexOutCastOp(); }},

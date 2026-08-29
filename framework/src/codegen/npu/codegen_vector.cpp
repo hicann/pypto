@@ -223,7 +223,8 @@ std::string CodeGenOpNPU::GenTransData() const
 
     if (opCode == Opcode::OP_NCHW2NC1HWC0 || opCode == Opcode::OP_NC1HWC02NCHW || opCode == Opcode::OP_NCHW2Fractal_Z ||
         opCode == Opcode::OP_NCDHW2NDC1HWC0 || opCode == Opcode::OP_NCDHW2FRACTAL_Z_3D ||
-        opCode == Opcode::OP_NDC1HWC02NCDHW) {
+        opCode == Opcode::OP_NDC1HWC02NCDHW || opCode == Opcode::OP_FractalZ2NCHW ||
+        opCode == Opcode::OP_FractalZ3D2NCDHW) {
         return PrintTransDataLayoutTmp();
     }
 

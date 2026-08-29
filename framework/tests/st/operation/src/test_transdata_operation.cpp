@@ -67,6 +67,21 @@ static void TransDataOperationExeFunc4Dims(const std::vector<Tensor>& inputs, st
             auto res = TransData(tileTensor0, static_cast<TileOpFormat>(transDataInfo->type_), outputs[0].GetShape(),
                                  SymbolicScalar::FromConcrete(transDataInfo->validShape_), transDataInfo->group_);
             Assemble(res, {0, 0, 0, 0}, outputs[0]);
+        } else if (transDataInfo->type_ == 0) {
+            Tensor tileTensor0 = View(
+                inputs[0],
+                {inputs[0].GetShape()[0], inputs[0].GetShape()[1], inputs[0].GetShape()[2], inputs[0].GetShape()[3]},
+                {SymbolicScalar(inputs[0].GetShape()[0]), SymbolicScalar(inputs[0].GetShape()[1]),
+                 SymbolicScalar(inputs[0].GetShape()[2]), SymbolicScalar(inputs[0].GetShape()[3])},
+                {0, 0, 0, 0});
+            TileShape::Current().SetVecTile(transDataInfo->tileShape_);
+            auto res = TransData(tileTensor0, static_cast<TileOpFormat>(transDataInfo->type_), outputs[0].GetShape(),
+                                 SymbolicScalar::FromConcrete(transDataInfo->validShape_), transDataInfo->group_);
+            if (outputs[0].GetShape().size() == 5) {
+                Assemble(res, {0, 0, 0, 0, 0}, outputs[0]);
+            } else {
+                Assemble(res, {0, 0, 0, 0}, outputs[0]);
+            }
         }
     }
 }
@@ -79,7 +94,7 @@ static void TransDataOperationExeFunc5Dims(const std::vector<Tensor>& inputs, st
     FUNCTION("main", {inputs[0]}, {outputs[0]})
     {
         if (transDataInfo->type_ == 0) {
-            if (inputs[0].GetShape().size() == 5) {
+            if (inputs[0].GetShape().size() == 5 && outputs[0].GetShape().size() == 4) {
                 Tensor tileTensor0 = View(
                     inputs[0],
                     {inputs[0].GetShape()[0], inputs[0].GetShape()[1], inputs[0].GetShape()[2], inputs[0].GetShape()[3],
@@ -171,6 +186,7 @@ INSTANTIATE_TEST_SUITE_P(TestTransData, TransDataOperationTest,
 
 TEST_P(TransDataOperationTest, TestTransData)
 {
+    config::SetPassOption(ENABLE_SLICE, false);
     auto test_data = GetParam().test_data_;
     int type = GetValueByName<int>(test_data, "type");
     int group = GetValueByName<int>(test_data, "group");

@@ -161,4 +161,28 @@ TEST_F(TestCodegenDynTransData, TestTransData0_6)
                       .validShape = {1, 7, 1, 1, 8},
                       .expect = R"!!!(TTransDataNDC1HWC02NCDHW(ubTensor_)!!!"});
 }
+
+TEST_F(TestCodegenDynTransData, TestTransData0_4)
+{
+    RunTransDataTest({.caseName = "TestTransData0_4",
+                      .inputShape = {8, 1, 16, 8},
+                      .vecTile = {8, 1, 16, 8},
+                      .dtype = DT_FP32,
+                      .outputShape = {16, 8, 1, 8},
+                      .tileOpFormat = 0,
+                      .validShape = {16, 8, 1, 8},
+                      .expect = R"!!!(TTransDataFractalZ2NCHW(ubTensor_)!!!"});
+}
+
+TEST_F(TestCodegenDynTransData, TestTransData0_5)
+{
+    RunTransDataTest({.caseName = "TestTransData0_5",
+                      .inputShape = {8, 1, 16, 8},
+                      .vecTile = {8, 1, 16, 8},
+                      .dtype = DT_FP32,
+                      .outputShape = {16, 8, 1, 1, 8},
+                      .tileOpFormat = 0,
+                      .validShape = {16, 8, 1, 1, 8},
+                      .expect = R"!!!(TTransDataFractalZ3D2NCDHW(ubTensor_)!!!"});
+}
 } // namespace npu::tile_fwk

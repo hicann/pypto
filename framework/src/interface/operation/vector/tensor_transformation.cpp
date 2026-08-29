@@ -539,6 +539,10 @@ struct TransDataPara {
     const std::vector<SymbolicScalar> tileParams;
     const int group;
     int groupIdx;
+    int DIdx;
+    int C1Idx;
+    int HIdx;
+    int WIdx;
 };
 
 std::shared_ptr<LogicalTensor> transDataPadNC1HWC0(Function& function, const std::shared_ptr<LogicalTensor>& inputTile,
@@ -1199,10 +1203,6 @@ template <TileOpFormat T>
 void InnerTransData(size_t cur, Function& function, const TileShape& tileShape, const TransDataPara& transDataPara,
                     TransDataTileInfoPara& transDataTileInfoPara)
 {
-    if (T == TileOpFormat::TILEOP_ND) {
-        return InnerTransDataND<T>(cur, function, tileShape, transDataPara, transDataTileInfoPara);
-    }
-
     const LogicalTensorPtr& input = transDataPara.input;
     const LogicalTensorPtr& dstTensor = transDataPara.dstTensor;
     std::vector<SymbolicScalar> tileParams = transDataPara.tileParams;
@@ -1265,16 +1265,264 @@ void InnerTransData(size_t cur, Function& function, const TileShape& tileShape, 
     }
 }
 
+std::shared_ptr<LogicalTensor> GetFzNCHWDstTile(Function& function, const LogicalTensorPtr& dstTensor,
+                                                const std::shared_ptr<LogicalTensor>& inputTile,
+                                                const TransDataTileInfoPara& transDataTileInfoPara,
+                                                const TransDataPara& transDataPara, int64_t C0)
+{
+    auto& inputShape = inputTile->GetShape();
+    int N0 = 16;
+    int DSTN = dstTensor->GetShape()[0];
+    int DSTC = dstTensor->GetShape()[1];
+    int DSTW = dstTensor->GetShape()[3];
+    int DSTPerGroupN = DSTN / transDataPara.group;
+
+    int N1Offset = transDataTileInfoPara.inputTileInfo.offset[1];
+
+    int64_t dstTileN = std::min(inputShape[1] * N0, static_cast<int64_t>(DSTPerGroupN - N1Offset * N0));
+    int64_t dstTileC = C0;
+    int64_t dstTileH = 1;
+    int64_t dstTileW = inputShape[0];
+
+    int totalC1HWOffset = transDataTileInfoPara.inputTileInfo.offset[0]; // 1 * 1 * w
+
+    int suffixOffset = totalC1HWOffset % DSTW;
+    int C1Offset = transDataPara.C1Idx;
+    int dstCOffset = C1Offset * C0;
+    int dstHOffset = transDataPara.HIdx;
+    int dstWOffset = suffixOffset;
+
+    int dstNOffset = transDataPara.groupIdx * DSTPerGroupN + N1Offset * N0;
+
+    if ((dstCOffset + dstTileC) > DSTC) {
+        dstTileC = DSTC - dstCOffset;
+    }
+
+    Shape dstShape = {dstTileN, dstTileC, dstTileH, dstTileW};
+    Offset dstOffset = {dstNOffset, dstCOffset, dstHOffset, dstWOffset};
+
+    return dstTensor->View(function, dstShape, dstOffset);
+}
+
+std::shared_ptr<LogicalTensor> GetFz3DNCDHWDstTile(Function& function, const LogicalTensorPtr& dstTensor,
+                                                   const std::shared_ptr<LogicalTensor>& inputTile,
+                                                   const TransDataTileInfoPara& transDataTileInfoPara,
+                                                   const TransDataPara& transDataPara, int64_t C0)
+{
+    auto& inputShape = inputTile->GetShape();
+    int N0 = 16;
+    int DSTN = dstTensor->GetShape()[0];
+    int DSTC = dstTensor->GetShape()[1];
+    int DSTW = dstTensor->GetShape()[4];
+    int DSTPerGroupN = DSTN / transDataPara.group;
+
+    int N1Offset = transDataTileInfoPara.inputTileInfo.offset[1];
+
+    int64_t dstTileN = std::min(inputShape[1] * N0, static_cast<int64_t>(DSTPerGroupN - N1Offset * N0));
+    int64_t dstTileC = C0;
+    int64_t dstTileD = 1;
+    int64_t dstTileH = 1;
+    int64_t dstTileW = inputShape[0];
+
+    int totalDC1HWOffset = transDataTileInfoPara.inputTileInfo.offset[0];
+
+    int suffixOffset = totalDC1HWOffset % DSTW;
+    int dstDOffset = transDataPara.DIdx;
+    int dstCOffset = transDataPara.C1Idx * C0;
+    int dstHOffset = transDataPara.HIdx;
+    int dstWOffset = suffixOffset;
+    int dstNOffset = transDataPara.groupIdx * DSTPerGroupN + N1Offset * N0;
+
+    if ((dstCOffset + dstTileC) > DSTC) {
+        dstTileC = DSTC - dstCOffset;
+    }
+
+    Shape dstShape = {dstTileN, dstTileC, dstTileD, dstTileH, dstTileW};
+    Offset dstOffset = {dstNOffset, dstCOffset, dstDOffset, dstHOffset, dstWOffset};
+
+    return dstTensor->View(function, dstShape, dstOffset);
+}
+
+void HandleFractalZ2NCHW(Function& function, const LogicalTensorPtr& dstTensor, const LogicalTensorPtr& inputTile,
+                         std::vector<SymbolicScalar>& tileParams, const TransDataTileInfoPara& transDataTileInfoPara,
+                         [[maybe_unused]] int64_t dstW, const TransDataPara& transDataPara)
+{
+    int64_t C0 = BLOCK_SIZE / BytesOf(inputTile->Datatype());
+    int shape2 = 1;
+    std::vector<int64_t> tmpShape = {shape2};
+    auto tmpTile = std::make_shared<LogicalTensor>(function, inputTile->Datatype(), tmpShape);
+    auto dstTensorTile = GetFzNCHWDstTile(function, dstTensor, inputTile, transDataTileInfoPara, transDataPara, C0);
+
+    for (int i = 0; i < SHAPE_DIM4; i++) {
+        tileParams[i] = SymbolicScalar(transDataTileInfoPara.inputTileInfo.offset[i]);
+    }
+    tileParams[4] = transDataPara.groupIdx;
+    tileParams[5] = transDataPara.group;
+
+    auto& op = function.AddOperation(Opcode::OP_FractalZ2NCHW, {inputTile}, {dstTensorTile, tmpTile});
+    op.SetAttribute(OpAttributeKey::transDataOffset, tileParams);
+}
+
+void HandleFractalZ3D2NCDHW(Function& function, const LogicalTensorPtr& dstTensor, const LogicalTensorPtr& inputTile,
+                            std::vector<SymbolicScalar>& tileParams, const TransDataTileInfoPara& transDataTileInfoPara,
+                            [[maybe_unused]] int64_t dstW, const TransDataPara& transDataPara)
+{
+    int64_t C0 = BLOCK_SIZE / BytesOf(inputTile->Datatype());
+    int shape2 = 1;
+    std::vector<int64_t> tmpShape = {shape2};
+    auto tmpTile = std::make_shared<LogicalTensor>(function, inputTile->Datatype(), tmpShape);
+    auto dstTensorTile = GetFz3DNCDHWDstTile(function, dstTensor, inputTile, transDataTileInfoPara, transDataPara, C0);
+
+    for (int i = 0; i < SHAPE_DIM4; i++) {
+        tileParams[i] = SymbolicScalar(transDataTileInfoPara.inputTileInfo.offset[i]);
+    }
+    tileParams[4] = transDataPara.groupIdx;
+    tileParams[5] = transDataPara.group;
+
+    auto& op = function.AddOperation(Opcode::OP_FractalZ3D2NCDHW, {inputTile}, {dstTensorTile, tmpTile});
+    op.SetAttribute(OpAttributeKey::transDataOffset, tileParams);
+}
+
+template <TileOpFormat T>
+void InnerTransDataFz2ND(size_t cur, Function& function, const TileShape& tileShape, const TransDataPara& transDataPara,
+                         TransDataTileInfoPara& transDataTileInfoPara)
+{
+    const LogicalTensorPtr& input = transDataPara.input;
+    const LogicalTensorPtr& dstTensor = transDataPara.dstTensor;
+    std::vector<SymbolicScalar> tileParams = transDataPara.tileParams;
+    int64_t C0 = BLOCK_SIZE / BytesOf(input->Datatype());
+    const int dstC1 = (dstTensor->GetShape()[1] + C0 - 1) / C0;
+    const int dstH = dstTensor->GetShape()[2];
+    const int dstW = dstTensor->GetShape()[3];
+    const int groupIdx = transDataPara.groupIdx;
+    const int C1Idx = transDataPara.C1Idx;
+    const int HIdx = transDataPara.HIdx;
+    auto vecTile = tileShape.GetVecTile();
+    int outputSize = dstTensor->GetShape().size();
+
+    std::unordered_map<int64_t, int64_t> format2DstAxis = {{4, 0}, {5, 0}};
+    int64_t outputAxis = format2DstAxis[outputSize];
+    int64_t tmpOffset = groupIdx * dstC1 * dstH * dstW + C1Idx * dstH * dstW + HIdx * dstW;
+
+    if (cur == input->GetShape().size()) {
+        int64_t offsetSuffix = transDataTileInfoPara.inputTileInfo.offset[0] % dstW;
+        transDataTileInfoPara.inputTileInfo.offset[0] = tmpOffset + offsetSuffix;
+        std::shared_ptr<LogicalTensor> inputTile = input->View(function, transDataTileInfoPara.inputTileInfo.shape,
+                                                               transDataTileInfoPara.inputTileInfo.offset);
+
+        switch (outputSize) {
+            case 4:
+                HandleFractalZ2NCHW(function, dstTensor, inputTile, tileParams, transDataTileInfoPara, dstW,
+                                    transDataPara);
+                return;
+            default:
+                CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "The transDataType is not supported";
+        }
+    }
+
+    int64_t tmpTile = vecTile[cur];
+    int64_t curShapeLen = cur == static_cast<size_t>(outputAxis) ? dstW : input->GetShape()[cur];
+
+    for (int i = 0; i < curShapeLen; i += tmpTile) {
+        transDataTileInfoPara.inputTileInfo.offset[cur] = i;
+        transDataTileInfoPara.inputTileInfo.shape[cur] = std::min(curShapeLen - i, tmpTile);
+        InnerTransDataFz2ND<T>(cur + 1, function, tileShape, transDataPara, transDataTileInfoPara);
+    }
+}
+
+template <TileOpFormat T>
+void InnerTransDataFz3D2ND(size_t cur, Function& function, const TileShape& tileShape,
+                           const TransDataPara& transDataPara, TransDataTileInfoPara& transDataTileInfoPara)
+{
+    const LogicalTensorPtr& input = transDataPara.input;
+    const LogicalTensorPtr& dstTensor = transDataPara.dstTensor;
+    std::vector<SymbolicScalar> tileParams = transDataPara.tileParams;
+    int64_t C0 = BLOCK_SIZE / BytesOf(input->Datatype());
+    const int dstC1 = (dstTensor->GetShape()[1] + C0 - 1) / C0;
+    const int dstD = dstTensor->GetShape()[2];
+    const int dstH = dstTensor->GetShape()[3];
+    const int dstW = dstTensor->GetShape()[4];
+    const int groupIdx = transDataPara.groupIdx;
+    const int DIdx = transDataPara.DIdx;
+    const int C1Idx = transDataPara.C1Idx;
+    const int HIdx = transDataPara.HIdx;
+    auto vecTile = tileShape.GetVecTile();
+
+    int64_t outputAxis = 0;
+    int64_t tmpOffset = groupIdx * dstD * dstC1 * dstH * dstW + DIdx * dstC1 * dstH * dstW + C1Idx * dstH * dstW +
+                        HIdx * dstW;
+
+    if (cur == input->GetShape().size()) {
+        int64_t offsetSuffix = transDataTileInfoPara.inputTileInfo.offset[0] % dstW;
+        transDataTileInfoPara.inputTileInfo.offset[0] = tmpOffset + offsetSuffix;
+        std::shared_ptr<LogicalTensor> inputTile = input->View(function, transDataTileInfoPara.inputTileInfo.shape,
+                                                               transDataTileInfoPara.inputTileInfo.offset);
+        HandleFractalZ3D2NCDHW(function, dstTensor, inputTile, tileParams, transDataTileInfoPara, dstW, transDataPara);
+        return;
+    }
+
+    int64_t tmpTile = vecTile[cur];
+    int64_t curShapeLen = cur == static_cast<size_t>(outputAxis) ? dstW : input->GetShape()[cur];
+
+    for (int i = 0; i < curShapeLen; i += tmpTile) {
+        transDataTileInfoPara.inputTileInfo.offset[cur] = i;
+        transDataTileInfoPara.inputTileInfo.shape[cur] = std::min(curShapeLen - i, tmpTile);
+        InnerTransDataFz3D2ND<T>(cur + 1, function, tileShape, transDataPara, transDataTileInfoPara);
+    }
+}
+
 template <TileOpFormat T>
 void TiledTransData(Function& function, const TileShape& tileShape, TransDataPara& transDataPara)
 {
+    int64_t C0 = BLOCK_SIZE / BytesOf(transDataPara.input->Datatype());
     TransDataTileInfoPara transDataTileInfoPara{
         TileInfo(transDataPara.input->GetShape().size(), transDataPara.input->GetOffset().size()),
         TileInfo(transDataPara.dstTensor->GetShape().size(), transDataPara.dstTensor->GetOffset().size())};
     int group = transDataPara.group;
-    for (int i = 0; i < group; i++) {
-        transDataPara.groupIdx = i;
-        InnerTransData<T>(0, function, tileShape, transDataPara, transDataTileInfoPara);
+    int inputShapeSize = transDataPara.input->GetShape().size();
+    int outputShapeSize = transDataPara.dstTensor->GetShape().size();
+    if (T == TileOpFormat::TILEOP_ND) {
+        if ((inputShapeSize == 5 && outputShapeSize == 4) || (inputShapeSize == 6 && outputShapeSize == 5)) {
+            for (int i = 0; i < group; i++) {
+                transDataPara.groupIdx = i;
+                InnerTransDataND<T>(0, function, tileShape, transDataPara, transDataTileInfoPara);
+            }
+        } else if (inputShapeSize == 4 && outputShapeSize == 5) {
+            int dstC1 = (transDataPara.dstTensor->GetShape()[1] + C0 - 1) / C0;
+            int dstD = transDataPara.dstTensor->GetShape()[2];
+            int dstH = transDataPara.dstTensor->GetShape()[3];
+            for (int i = 0; i < group; i++) {
+                transDataPara.groupIdx = i;
+                for (int j = 0; j < dstD; j++) {
+                    transDataPara.DIdx = j;
+                    for (int k = 0; k < dstC1; k++) {
+                        transDataPara.C1Idx = k;
+                        for (int l = 0; l < dstH; l++) {
+                            transDataPara.HIdx = l;
+                            InnerTransDataFz3D2ND<T>(0, function, tileShape, transDataPara, transDataTileInfoPara);
+                        }
+                    }
+                }
+            }
+        } else {
+            int dstC1 = (transDataPara.dstTensor->GetShape()[1] + C0 - 1) / C0;
+            int dstH = transDataPara.dstTensor->GetShape()[2];
+            for (int i = 0; i < group; i++) {
+                transDataPara.groupIdx = i;
+                for (int j = 0; j < dstC1; j++) {
+                    transDataPara.C1Idx = j;
+                    for (int k = 0; k < dstH; k++) {
+                        transDataPara.HIdx = k;
+                        InnerTransDataFz2ND<T>(0, function, tileShape, transDataPara, transDataTileInfoPara);
+                    }
+                }
+            }
+        }
+    } else {
+        for (int i = 0; i < group; i++) {
+            transDataPara.groupIdx = i;
+            InnerTransData<T>(0, function, tileShape, transDataPara, transDataTileInfoPara);
+        }
     }
 }
 
@@ -1530,9 +1778,6 @@ LogicalTensorPtr TransDataNDC1HWC02NCDHW(Function& function, const LogicalTensor
 LogicalTensorPtr TransDataNC1HWC02NCHW(Function& function, const LogicalTensorPtr& self, const LogicalTensorPtr& output,
                                        int group)
 {
-    if (self->GetShape().size() != 5) {
-        return TransDataNDC1HWC02NCDHW(function, self, output, group);
-    }
     SymbolicScalar dstValidC = output->GetDynValidShape()[1];
     SymbolicScalar inputValidC1 = self->GetDynValidShape()[1];
     int64_t C0 = BLOCK_SIZE / BytesOf(self->Datatype());
@@ -1565,6 +1810,102 @@ LogicalTensorPtr TransDataNC1HWC02NCHW(Function& function, const LogicalTensorPt
     return result;
 }
 
+LogicalTensorPtr TransDataFractalZ2NCHW(Function& function, const LogicalTensorPtr& self,
+                                        const LogicalTensorPtr& output, int group)
+{
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, group > 0) << "The group is not valid !";
+    SymbolicScalar dstValidPerN = output->GetDynValidShape()[0] / group;
+    SymbolicScalar dstValidC = output->GetDynValidShape()[1];
+    int64_t N0 = 16;
+    int64_t C0 = BLOCK_SIZE / BytesOf(self->Datatype());
+    SymbolicScalar padNSize = (dstValidPerN + N0 - 1) / N0 * N0 - dstValidPerN;
+    SymbolicScalar padCSize = (dstValidC + C0 - 1) / C0 * C0 - dstValidC;
+
+    VecTile oriVectile = TileShape::Current().GetVecTile();
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, C0 > 0) << "The C0 is not valid !";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[2] == N0) << "The tileShape n0 should be equal to N0!";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[3] == C0) << "The tileShape c0 should be equal to C0!";
+
+    auto result = std::make_shared<LogicalTensor>(function, self->Datatype(), output->GetShape(),
+                                                  output->dynValidShape_, TileOpFormat::TILEOP_ND);
+
+    auto& op = function.AddOperation(Opcode::OP_FractalZ2NCHW, {self}, {result});
+    std::vector<SymbolicScalar> tileParams = {};
+    // 0-3 input offset;
+    // c1hw n1 n0 c0 idx group padNSize padCSize N C H W
+    for (auto i : self->GetShape()) {
+        (void)i;
+        tileParams.push_back(SymbolicScalar(0));
+    }
+    tileParams.push_back(0);
+    tileParams.push_back(0);
+    tileParams.push_back(padNSize);
+    tileParams.push_back(padCSize);
+    for (auto i : output->GetShape()) {
+        tileParams.push_back(SymbolicScalar(i));
+    }
+    op.SetAttribute(OpAttributeKey::transDataOffset, tileParams);
+    op.SetAttribute(OP_ATTR_PREFIX + "group", group);
+    return result;
+}
+
+LogicalTensorPtr TransDataFractalZ3D2NCDHW(Function& function, const LogicalTensorPtr& self,
+                                           const LogicalTensorPtr& output, int group)
+{
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, group > 0) << "The group is not valid !";
+    SymbolicScalar dstValidPerN = output->GetDynValidShape()[0] / group;
+    SymbolicScalar dstValidC = output->GetDynValidShape()[1];
+    int64_t N0 = 16;
+    int64_t C0 = BLOCK_SIZE / BytesOf(self->Datatype());
+    SymbolicScalar padNSize = (dstValidPerN + N0 - 1) / N0 * N0 - dstValidPerN;
+    SymbolicScalar padCSize = (dstValidC + C0 - 1) / C0 * C0 - dstValidC;
+
+    VecTile oriVectile = TileShape::Current().GetVecTile();
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, C0 > 0) << "The C0 is not valid !";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[2] == N0) << "The tileShape n0 should be equal to N0!";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[3] == C0) << "The tileShape c0 should be equal to C0!";
+
+    auto result = std::make_shared<LogicalTensor>(function, self->Datatype(), output->GetShape(),
+                                                  output->dynValidShape_, TileOpFormat::TILEOP_ND);
+
+    auto& op = function.AddOperation(Opcode::OP_FractalZ3D2NCDHW, {self}, {result});
+    std::vector<SymbolicScalar> tileParams = {};
+    // 0-3 input offset (DC1HW, N1, N0, C0)
+    // 4: groupIdx, 5: group, 6: padNSize, 7: padCSize, 8-12: N C D H W
+    for (auto i : self->GetShape()) {
+        (void)i;
+        tileParams.push_back(SymbolicScalar(0));
+    }
+    tileParams.push_back(0);
+    tileParams.push_back(0);
+    tileParams.push_back(padNSize);
+    tileParams.push_back(padCSize);
+    for (auto i : output->GetShape()) {
+        tileParams.push_back(SymbolicScalar(i));
+    }
+    op.SetAttribute(OpAttributeKey::transDataOffset, tileParams);
+    op.SetAttribute(OP_ATTR_PREFIX + "group", group);
+    return result;
+}
+
+LogicalTensorPtr TransDataReverse(Function& function, const LogicalTensorPtr& self, const LogicalTensorPtr& output,
+                                  int group)
+{
+    int inputShapeSize = self->GetShape().size();
+    int outputShapeSize = output->GetShape().size();
+    if (inputShapeSize == 5 && outputShapeSize == 4) {
+        return TransDataNC1HWC02NCHW(function, self, output, group);
+    } else if (inputShapeSize == 6 && outputShapeSize == 5) {
+        return TransDataNDC1HWC02NCDHW(function, self, output, group);
+    } else if (inputShapeSize == 4 && outputShapeSize == 4) {
+        return TransDataFractalZ2NCHW(function, self, output, group);
+    } else if (inputShapeSize == 4 && outputShapeSize == 5) {
+        return TransDataFractalZ3D2NCDHW(function, self, output, group);
+    } else {
+        return TransDataFractalZ2NCHW(function, self, output, group); // TODO
+    }
+}
+
 LogicalTensorPtr TensorTransData(Function& function, const LogicalTensorPtr& self, const LogicalTensorPtr& output,
                                  TileOpFormat transDataType, int group)
 {
@@ -1578,7 +1919,7 @@ LogicalTensorPtr TensorTransData(Function& function, const LogicalTensorPtr& sel
         case TileOpFormat::TILEOP_FRACTAL_Z_3D:
             return TransDataFRACTAL_Z_3D(function, self, group);
         case TileOpFormat::TILEOP_ND:
-            return TransDataNC1HWC02NCHW(function, self, output, group); // 两种情况，NC1HWC0和NDC1HWC0
+            return TransDataReverse(function, self, output, group); // 反向
         default:
             CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "The transDataType is not supported";
     }
@@ -1621,7 +1962,7 @@ LogicalTensorPtr TransData(Function& function, const LogicalTensorPtr& self, con
             CheckTensorDimRange(self, SHAPE_DIM5, SHAPE_DIM5, "TRANSDATA FRACTAL_Z_3D");
             break;
         case TileOpFormat::TILEOP_ND:
-            CheckTensorDimRange(self, SHAPE_DIM5, SHAPE_DIM6, "TRANSDATA ND");
+            CheckTensorDimRange(self, SHAPE_DIM4, SHAPE_DIM6, "TRANSDATA ND");
             break;
         default:
             CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "The transDataType is not supported";
@@ -1989,7 +2330,7 @@ void TransDataTileFunc(Function& function, const TileShape& tileShape, const std
 {
     std::vector<SymbolicScalar> tileParams = op.GetVectorSymbolicScalarAttribute(OpAttributeKey::transDataOffset);
     int group = op.GetIntAttribute(OP_ATTR_PREFIX + "group");
-    TransDataPara transDataPara = TransDataPara{iOperand[0], oOperand[0], tileParams, group, 0};
+    TransDataPara transDataPara = TransDataPara{iOperand[0], oOperand[0], tileParams, group, 0, 0, 0, 0, 0};
     switch (op.GetOpcode()) {
         case Opcode::OP_NCHW2NC1HWC0:
             TiledTransData<TileOpFormat::TILEOP_NC1HWC0>(function, tileShape, transDataPara);
@@ -2009,6 +2350,12 @@ void TransDataTileFunc(Function& function, const TileShape& tileShape, const std
         case Opcode::OP_NDC1HWC02NCDHW:
             TiledTransData<TileOpFormat::TILEOP_ND>(function, tileShape, transDataPara);
             break;
+        case Opcode::OP_FractalZ2NCHW:
+            TiledTransData<TileOpFormat::TILEOP_ND>(function, tileShape, transDataPara);
+            break;
+        case Opcode::OP_FractalZ3D2NCDHW:
+            TiledTransData<TileOpFormat::TILEOP_ND>(function, tileShape, transDataPara);
+            break;
         default:
             CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "The transDataType is not supported";
     }
@@ -2026,5 +2373,7 @@ REGISTER_OPERATION_TILED_FUNC(OP_NC1HWC02NCHW, Opcode::OP_NC1HWC02NCHW, TransDat
 REGISTER_OPERATION_TILED_FUNC(OP_NCDHW2NDC1HWC0, Opcode::OP_NCDHW2NDC1HWC0, TransDataTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_NCDHW2FRACTAL_Z_3D, Opcode::OP_NCDHW2FRACTAL_Z_3D, TransDataTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_NDC1HWC02NCDHW, Opcode::OP_NDC1HWC02NCDHW, TransDataTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_FractalZ2NCHW, Opcode::OP_FractalZ2NCHW, TransDataTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_FractalZ3D2NCDHW, Opcode::OP_FractalZ3D2NCDHW, TransDataTileFunc);
 
 } // namespace npu::tile_fwk

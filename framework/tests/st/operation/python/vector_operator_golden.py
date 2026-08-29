@@ -1979,7 +1979,7 @@ def gen_transpose_op_golden(case_name: str, output: Path, case_index: int = None
 
             return [res.numpy()]
         elif transdata_type == 0:
-            if len(input_tensor.shape) == 5:
+            if len(input_tensor.shape) == 5 and len(config["output_tensors"][0]["shape"]) == 4:
                 input_n, input_c1, input_h, input_w, c0 = input_tensor.shape
                 total_c = c0 * input_c1
                 output_c = config["output_tensors"][0]["shape"][1]
@@ -2014,6 +2014,75 @@ def gen_transpose_op_golden(case_name: str, output: Path, case_index: int = None
                     )
                     res[:, i * per_output_group_c:(i + 1) * per_output_group_c, :, :, :] = tmp_res[
                         :, :per_output_group_c, :, :, :
+                    ]
+
+                if inputs[0].dtype == bfloat16:
+                    res = res.to(torch.float32).numpy().astype(bfloat16)
+                    return [res]
+
+                return [res.numpy()]
+            elif len(input_tensor.shape) == 4 and len(config["output_tensors"][0]["shape"]) == 4:
+                input_c1hw, input_n1, input_n0, input_c0 = input_tensor.shape
+                c0 = int(32 / get_c_sizeof_type(str(inputs[0].dtype)))
+                n0 = 16
+
+                output_n = config["output_tensors"][0]["shape"][0]
+                output_per_n = output_n // group
+                output_per_n1 = (output_per_n + n0 - 1) // n0
+                output_c = config["output_tensors"][0]["shape"][1]
+                output_c1 = (output_c + c0 - 1) // c0
+                output_h = config["output_tensors"][0]["shape"][2]
+                output_w = config["output_tensors"][0]["shape"][3]
+                res = torch.zeros(output_n, output_c, output_h, output_w)
+
+                output_pad_per_n = output_per_n1 * n0
+                output_pad_per_c = output_c1 * c0
+                intput_per_c1hw = input_c1hw // group
+
+                for i in range(group):
+                    tmp_input_tensor = input_tensor[i * intput_per_c1hw:(i + 1) * intput_per_c1hw, :, :, :]
+                    tmp_res = tmp_input_tensor.reshape(
+                        [output_c1, output_h, output_w, output_per_n1, n0, c0]).permute(
+                            3, 4, 0, 5, 1, 2).reshape(
+                                [output_pad_per_n, output_pad_per_c, output_h, output_w])
+
+                    res[i * output_per_n:(i +1) * output_per_n:, :, :, :] = tmp_res[
+                        0:output_per_n, 0:output_c, :, :
+                    ]
+
+                if inputs[0].dtype == bfloat16:
+                    res = res.to(torch.float32).numpy().astype(bfloat16)
+                    return [res]
+
+                return [res.numpy()]
+            elif len(input_tensor.shape) == 4 and len(config["output_tensors"][0]["shape"]) == 5:
+                input_dc1hw, input_n1, input_n0, input_c0 = input_tensor.shape
+                c0 = int(32 / get_c_sizeof_type(str(inputs[0].dtype)))
+                n0 = 16
+
+                output_n = config["output_tensors"][0]["shape"][0]
+                output_per_n = output_n // group
+                output_per_n1 = (output_per_n + n0 - 1) // n0
+                output_c = config["output_tensors"][0]["shape"][1]
+                output_c1 = (output_c + c0 - 1) // c0
+                output_d = config["output_tensors"][0]["shape"][2]
+                output_h = config["output_tensors"][0]["shape"][3]
+                output_w = config["output_tensors"][0]["shape"][4]
+                res = torch.zeros(output_n, output_c, output_d, output_h, output_w)
+
+                output_pad_per_n = output_per_n1 * n0
+                output_pad_per_c = output_c1 * c0
+                input_per_dc1hw = input_dc1hw // group
+
+                for i in range(group):
+                    tmp_input_tensor = input_tensor[i * input_per_dc1hw:(i + 1) * input_per_dc1hw, :, :, :]
+                    tmp_res = tmp_input_tensor.reshape(
+                        [output_d, output_c1, output_h, output_w, output_per_n1, n0, c0]).permute(
+                            4, 5, 1, 6, 0, 2, 3).reshape(
+                                [output_pad_per_n, output_pad_per_c, output_d, output_h, output_w])
+
+                    res[i * output_per_n:(i + 1) * output_per_n, :, :, :, :] = tmp_res[
+                        0:output_per_n, 0:output_c, :, :, :
                     ]
 
                 if inputs[0].dtype == bfloat16:

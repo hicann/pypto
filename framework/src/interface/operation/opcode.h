@@ -88,6 +88,8 @@ enum class Opcode {
     OP_NCDHW2NDC1HWC0,
     OP_NCDHW2FRACTAL_Z_3D,
     OP_NDC1HWC02NCDHW,
+    OP_FractalZ2NCHW,
+    OP_FractalZ3D2NCDHW,
     OP_ABS,
     OP_PERMUTE,
     OP_PERMUTE_ELEMENT,
@@ -560,9 +562,6 @@ public:
         return opCode == Opcode::OP_COPY_OUT || opCode == Opcode::OP_UB_COPY_OUT || opCode == Opcode::OP_L0C_COPY_OUT ||
                opCode == Opcode::OP_L1_COPY_OUT || opCode == Opcode::OP_TRANSPOSE_MOVEOUT ||
                opCode == Opcode::OP_INDEX_OUTCAST || opCode == Opcode::OP_INDEX_PUT || opCode == Opcode::OP_INDEX_ADD ||
-               opCode == Opcode::OP_NCHW2NC1HWC0 || opCode == Opcode::OP_NCHW2Fractal_Z ||
-               opCode == Opcode::OP_NC1HWC02NCHW || opCode == Opcode::OP_NCDHW2NDC1HWC0 ||
-               opCode == Opcode::OP_NCDHW2FRACTAL_Z_3D || opCode == Opcode::OP_NDC1HWC02NCDHW ||
                opCode == Opcode::OP_SHMEM_PUT || opCode == Opcode::OP_SHMEM_SIGNAL || opCode == Opcode::OP_SHMEM_GET ||
                opCode == Opcode::OP_SHMEM_STORE || opCode == Opcode::OP_RESHAPE_COPY_OUT ||
                opCode == Opcode::OP_L0C_COPY_OUT_CONV || opCode == Opcode::OP_L0C_RESHAPE_COPY_OUT;
@@ -755,6 +754,8 @@ const std::unordered_set<Opcode> SUPPORT_DYNAMIC_UNALIGNED_OPS{Opcode::OP_RANGE,
                                                                Opcode::OP_NCDHW2NDC1HWC0,
                                                                Opcode::OP_NCDHW2FRACTAL_Z_3D,
                                                                Opcode::OP_NDC1HWC02NCDHW,
+                                                               Opcode::OP_FractalZ2NCHW,
+                                                               Opcode::OP_FractalZ3D2NCDHW,
                                                                Opcode::OP_INDEX_OUTCAST,
                                                                Opcode::OP_ADD,
                                                                Opcode::OP_SUB,
@@ -1091,9 +1092,7 @@ inline bool IsCopyOut(const Opcode& op)
     return (op == Opcode::OP_COPY_OUT || op == Opcode::OP_L0C_COPY_OUT || op == Opcode::OP_TRANSPOSE_MOVEOUT ||
             op == Opcode::OP_INDEX_OUTCAST || op == Opcode::OP_INDEX_PUT || op == Opcode::OP_SHMEM_PUT ||
             op == Opcode::OP_SHMEM_SIGNAL || op == Opcode::OP_SHMEM_GET || op == Opcode::OP_SHMEM_SET ||
-            op == Opcode::OP_RESHAPE_COPY_OUT || op == Opcode::OP_SHMEM_STORE || op == Opcode::OP_NCHW2NC1HWC0 ||
-            op == Opcode::OP_NCHW2Fractal_Z || op == Opcode::OP_NC1HWC02NCHW || op == Opcode::OP_NDC1HWC02NCDHW ||
-            op == Opcode::OP_NCDHW2NDC1HWC0 || op == Opcode::OP_NCDHW2FRACTAL_Z_3D || op == Opcode::OP_INDEX_ADD ||
+            op == Opcode::OP_RESHAPE_COPY_OUT || op == Opcode::OP_SHMEM_STORE || op == Opcode::OP_INDEX_ADD ||
             op == Opcode::OP_L0C_COPY_OUT_CONV || op == Opcode::OP_L0C_RESHAPE_COPY_OUT);
 }
 

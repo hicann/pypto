@@ -402,4 +402,120 @@ __aicore__ inline void TTransDataNCDHW2FRACTAL_Z_3D(DST dst, TMP tmpTensor, INPU
 
     pto::TTRANS(ConvDst, convInput, tmpTile);
 }
+
+#define OP_TILE_OP_TRANSDATA_FractalZ2NCHW TTransDataFractalZ2NCHW
+template <typename DST, typename TMP, typename INPUT>
+__aicore__ inline void TTransDataFractalZ2NCHW(DST dst, TMP tmpTensor, INPUT input)
+{
+    constexpr auto inputTypeSize = sizeof(typename INPUT::Type);
+    constexpr auto C0 = 32 / inputTypeSize;
+    constexpr auto N0 = 16;
+    constexpr auto dstTileH = Std::tuple_element<DIM_3RD, typename DST::TileShape>::type::value;
+    constexpr auto dstTileW = Std::tuple_element<DIM_4TH, typename DST::TileShape>::type::value;
+
+    const auto inputLayout = input.GetLayout();
+    auto inputC1HW = inputLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto inputN1 = inputLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto inputN0 = inputLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto inputC0 = inputLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    auto inputStride0 = inputLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>(); // 注意验证
+    auto inputStride1 = inputLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto inputStride2 = inputLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto inputStride3 = inputLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+
+    const auto dstLayout = dst.GetLayout();
+    auto dstStride0 = dstLayout.template GetStrideDim<DIM_1ST>();
+    auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND>();
+    auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD>();
+    auto dstStride3 = dstLayout.template GetStrideDim<DIM_4TH>();
+    auto dstN = dstLayout.template GetShapeDim<DIM_1ST>();
+    auto dstC = dstLayout.template GetShapeDim<DIM_2ND>();
+
+    auto inputAddr = (__ubuf__ typename INPUT::Type*)((uint64_t)(input.GetAddr()));
+    auto dstAddr = (__ubuf__ typename INPUT::Type*)((uint64_t)(dst.GetAddr()));
+
+    if (inputC1HW == 0 || inputN1 == 0 || inputN0 == 0 || inputC0 == 0) {
+        return;
+    }
+
+    for (LoopVar i = 0; i < inputC1HW; i++) {
+        for (LoopVar j = 0; j < inputN1; j++) {
+            for (LoopVar k = 0; k < inputN0; k++) {
+                for (LoopVar m = 0; m < inputC0; m++) {
+                    int inputOffset = i * inputStride1 + j * inputStride2 + k * inputStride3 + m;
+                    int n = j * N0 + k;
+                    int c1 = i / (dstTileH * dstTileW);
+                    int hw = i % (dstTileH * dstTileW);
+                    int c = c1 * C0 + m;
+                    int h = hw / dstTileW;
+                    int w = hw % dstTileW;
+                    if (n < dstN && c < dstC) {
+                        int dstOffset = n * dstStride0 + c * dstStride1 + h * dstStride2 + w * dstStride3;
+                        dstAddr[dstOffset] = inputAddr[inputOffset];
+                    }
+                }
+            }
+        }
+    }
+}
+
+#define OP_TILE_OP_TRANSDATA_FractalZ3D2NCDHW TTransDataFractalZ3D2NCDHW
+template <typename DST, typename TMP, typename INPUT>
+__aicore__ inline void TTransDataFractalZ3D2NCDHW(DST dst, TMP tmpTensor, INPUT input)
+{
+    constexpr auto inputTypeSize = sizeof(typename INPUT::Type);
+    constexpr auto C0 = 32 / inputTypeSize;
+    constexpr auto N0 = 16;
+    constexpr auto dstTileC = Std::tuple_element<DIM_2ND, typename DST::TileShape>::type::value;
+    constexpr auto dstTileD = Std::tuple_element<DIM_3RD, typename DST::TileShape>::type::value;
+    constexpr auto dstTileH = Std::tuple_element<DIM_4TH, typename DST::TileShape>::type::value;
+    constexpr auto dstTileW = Std::tuple_element<DIM_5TH, typename DST::TileShape>::type::value;
+    constexpr auto tileC1 = (dstTileC + C0 - 1) / C0;
+
+    const auto inputLayout = input.GetLayout();
+    auto inputDC1HW = inputLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto inputN1 = inputLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto inputN0 = inputLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto inputC0 = inputLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    auto inputStride1 = inputLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto inputStride2 = inputLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto inputStride3 = inputLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+
+    const auto dstLayout = dst.GetLayout();
+    auto dstStride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto dstStride3 = dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    auto dstN = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto dstC = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+
+    auto inputAddr = (__ubuf__ typename INPUT::Type*)((uint64_t)(input.GetAddr()));
+    auto dstAddr = (__ubuf__ typename INPUT::Type*)((uint64_t)(dst.GetAddr()));
+
+    if (inputDC1HW == 0 || inputN1 == 0 || inputN0 == 0 || inputC0 == 0) {
+        return;
+    }
+
+    for (LoopVar i = 0; i < inputDC1HW; i++) {
+        for (LoopVar j = 0; j < inputN1; j++) {
+            for (LoopVar k = 0; k < inputN0; k++) {
+                for (LoopVar m = 0; m < inputC0; m++) {
+                    int inputOffset = i * inputStride1 + j * inputStride2 + k * inputStride3 + m;
+                    int n = j * N0 + k;
+                    int d = i / (tileC1 * dstTileH * dstTileW);
+                    int rem = i % (tileC1 * dstTileH * dstTileW);
+                    int c1 = rem / (dstTileH * dstTileW);
+                    int hw = rem % (dstTileH * dstTileW);
+                    int c = c1 * C0 + m;
+                    int h = hw / dstTileW;
+                    int w = hw % dstTileW;
+                    if (n < dstN && c < dstC) {
+                        int dstOffset = n * dstStride0 + c * dstStride1 + d * dstStride2 + h * dstStride3 + w;
+                        dstAddr[dstOffset] = inputAddr[inputOffset];
+                    }
+                }
+            }
+        }
+    }
+}
 #endif
