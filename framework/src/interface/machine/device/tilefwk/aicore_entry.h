@@ -346,7 +346,7 @@ INLINE uint32_t WaitWaveSignal(__gm__ KernelArgs* args)
 #include "tilefwk/aicore_entry_devtask.h"
 
 #if IS_AICORE
-#if ENABLE_AICORE_RESOLVE
+#if ENABLE_AICORE_RESOLVE && defined(__DAV_C310__)
 #include "tilefwk/aicore_entry_drco.h"
 #endif
 #endif
@@ -355,7 +355,7 @@ INLINE void KernelEntry(int64_t ffts_addr, int64_t inputs, int64_t outputs, int6
                         int64_t cfgdata)
 {
 #if IS_AICORE
-#if ENABLE_AICORE_RESOLVE
+#if ENABLE_AICORE_RESOLVE && defined(__DAV_C310__)
     KernelEntryDrco(ffts_addr, inputs, outputs, workspace, tilingdata, cfgdata);
     return;
 #endif

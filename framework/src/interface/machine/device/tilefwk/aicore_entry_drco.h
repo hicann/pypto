@@ -16,6 +16,8 @@
 #ifndef AICORE_ENTRY_DRCO_H
 #define AICORE_ENTRY_DRCO_H
 
+#ifdef __DAV_C310__
+
 // device switch head file begin
 namespace npu::tile_fwk {
 
@@ -836,4 +838,5 @@ INLINE void KernelEntryDrco(int64_t ffts_addr, int64_t inputs, int64_t outputs, 
     return;
 }
 
+#endif //__DAV_C310__
 #endif
