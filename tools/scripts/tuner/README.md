@@ -11,7 +11,7 @@ python tools/scripts/tuner/tuner.py --json_path tools/scripts/tuner/config.json
 Example:
 You are writing your own kernel code and want to know which tiles give the best performance
 
-1. Let your code be in the file /path/my_kernel.py
+1. Let your code be in the file /path/to/my/file
 2. In your code find line where you call operation matmul, and line where tiles set
 
 ```
@@ -30,7 +30,7 @@ You are writing your own kernel code and want to know which tiles give the best 
 ```
 files": [
         {
-            "/path/my_kernel.py": [
+            "/path/to/my/file": [
                 {
                     "line": 29, <- line in my_kernel.py with set_cube_tile_shapes
                     "string": "pypto.set_cube_tile_shapes([{mm1[0]}, {mm1[1]}], [{mm1[2]}, {mm1[3]}], [{mm1[4]}, {mm1[5]}])",
@@ -101,7 +101,7 @@ Example of combination_params.json:
 ```
 [
     {
-        "file": "models/glm_v4_5/glm_moe_fusion.py",
+        "file": "/path/to/my/file",
         "lines": {
             "207": "pypto.set_vec_tile_shapes(1, 1, 160)",
             "163": "pypto.set_cube_tile_shapes([1, 1], [512, 1024], [16, 16])"
@@ -143,8 +143,7 @@ For each parameter, a list of values must be made.
 **Parameter names must be unique within the config.json file.** It useful for representation results in results.csv file, these names will be column names
 in table.
 
-*line* - the line number you want to change in the source code file. For example you want to check different tiles on
-test glm_moe_fusion. You need to open `models/glm_v4_5/glm_moe_fusion.py` in your text editor and find line that start with `pypto.set_vec_tile` or `pypto.set_cube_tile`. Line numbers of this string it is what you need.
+*line* - the line number you want to change in the source code file. For example you want to check different tiles on your kernel. You need to open your kernel file in your text editor and find line that start with `pypto.set_vec_tile` or `pypto.set_cube_tile`. Line numbers of this string it is what you need.
 
 *string* - write a format string as well as for the .format() function in the Python language. The values for these format string are parameter names. Using format strings allow to you change different types of parameters.
 
@@ -234,7 +233,7 @@ combination_3|[1,1,256]|[32,32,128,128,256,256]|false|68.8|
 2. Change your config.json as example:
 
 ```
-"/path/my_kernel.py": [
+"/path/to/my/file": [
     {
         "line": 119,
         "string": "\"cube_l1_reuse_setting\" : {{ {l1_reuse_118[0]}: {l1_reuse_118[1]} }}",

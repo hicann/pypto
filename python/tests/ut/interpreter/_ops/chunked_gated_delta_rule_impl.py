@@ -61,10 +61,8 @@ Negative optimization results (tested, no benefit — do NOT retry):
       AICore Util collapses to 5~7% (pipeline completely broken).
    ❌ cube_nbuffer_setting={"DEFAULT":16}: compile failure for L=64 +
       +5~9% slower on completed cases.
-   ❌ cube_l1_reuse_setting={"DEFAULT":2}: compile failure for unaligned +
-      +2~5% slower on completed cases.
-
-Reference: models/qwen3_next/gated_delta_rule_impl.py (production implementation)
+    ❌ cube_l1_reuse_setting={"DEFAULT":2}: compile failure for unaligned +
+       +2~5% slower on completed cases.
 """
 
 import torch

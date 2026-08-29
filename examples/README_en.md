@@ -10,14 +10,12 @@ The sample codes are divided into the following levels:
 - **01_beginner (Beginner)**: Basic operations and core concepts, suitable for developers new to PyPTO.
 - **02_intermediate (Intermediate)**: Neural network components, operator combinations, and Runtime features.
 - **03_advanced (Advanced)**: Complex architectures (such as Attention), advanced patterns, and system-level optimization.
-- **models**: Real-world large language model (LLM) operator implementation samples.
 
 ## Quick Start
 
 1. **First time user?** Start from [Beginner Samples (01_beginner)](01_beginner/README_en.md).
 2. **Building a neural network?** Refer to [Intermediate Samples (02_intermediate)](02_intermediate/README_en.md).
 3. **Exploring advanced patterns?** Refer to [Advanced Samples (03_advanced)](03_advanced/README_en.md).
-4. **LLM operator implementations?** Explore [Model Samples (../models/)](../models).
 
 ### Environment Preparation
 For environment preparation, refer to [Environment Setup](../docs/zh/install/prepare_environment.md) to complete the basic environment setup.
@@ -39,7 +37,6 @@ source /usr/local/Ascend/ascend-toolkit/set_env.sh
 # Set NPU device ID (required when running NPU samples)
 export TILE_FWK_DEVICE_ID=0
 ```
-Additional note: If you need to run models-related samples, run them on a real device.
 
 ## How To Run Samples
 
@@ -78,8 +75,6 @@ python3 examples/01_beginner/basic/basic_ops.py --run_mode sim
 3. **Phase 3: In-Depth Practice**
    - [03_advanced/advanced_nn](03_advanced/advanced_nn/README_en.md)
    - [03_advanced/patterns](03_advanced/patterns/README_en.md)
-   - [../models/deepseek_v32_exp](../models/deepseek_v32_exp/README_en.md)
-   - [../models/glm_v4_5](../models/glm_v4_5/README_en.md)
 
 ---
 

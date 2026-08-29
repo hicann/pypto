@@ -33,13 +33,6 @@ This repository has integrated a code repository agent. Click the [![Zread](http
 
 PyPTO provides a rich set of sample code covering multiple levels from basic operations to complex model implementations. For some best practice samples, refer to the following:
 
-### Large Model Implementation Samples
-
-- [DeepSeekV3.2 SFA](https://gitcode.com/cann/pypto/blob/master/models/deepseek_v32_exp/deepseekv32_sparse_flash_attention_quant.py) - Sparse Flash Attention quantized implementation
-- [DeepSeekV3.2 MLA-PROLOG](https://gitcode.com/cann/pypto/blob/master/models/deepseek_v32_exp/deepseekv32_mla_indexer_prolog_quant.py) - MLA Indexer Prolog quantized implementation
-- [GLM V4.5 Attention](https://gitcode.com/cann/pypto/blob/master/models/glm_v4_5/glm_attention.py) - GLM attention mechanism implementation
-- [GLM V4.5 ExpertsSelector](https://gitcode.com/cann/pypto/blob/master/models/glm_v4_5/glm_select_experts.py) - GLM expert selector implementation
-
 ### Learning Path
 
 In the [examples](https://gitcode.com/cann/pypto/blob/master/examples) directory, the following multi-level samples are available:
@@ -89,8 +82,6 @@ Key directories are as follows:
 │   ├── 01_beginner/            # Beginner samples
 │   ├── 02_intermediate/        # Intermediate samples
 │   └── 03_advanced/            # Advanced samples
-│
-├── models/                     # Model implementation samples
 │
 ├── python/                     # Python source code
 │   ├── pypto/                  # Python package source root

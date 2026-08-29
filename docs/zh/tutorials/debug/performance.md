@@ -207,7 +207,7 @@ msprof --instr-profiling=on [--output=<数据存放路径>] python xxx.py
 
 ## 开箱性能调优
 
-算子初始性能与loop的写法、TileShape的设置最为密切。本章将介绍如何使用相关接口，在算子初始编写过程中直接得到较好的开箱性能。请参考PyPTO仓库的models文件夹内已开发算子的实现，进行新算子的开发。
+算子初始性能与loop的写法、TileShape的设置最为密切。本章将介绍如何使用相关接口，在算子初始编写过程中直接得到较好的开箱性能。
 
 ### 正确选择loop写法
 
@@ -362,7 +362,7 @@ pypto.set_vec_tile_shapes(64, 512)
     )
 ```
 
-以[glm_attention.py](../../../../models/glm_v4_5/glm_attention.py)算子为例，对比下该值的影响：
+以glm_attention.py算子为例，对比下该值的影响：
 
 - 当该值过小（如配置为1）时，每个任务都需要同步，调度开销大，性能差。算子kernel耗时为1230us，端到端耗时（调度耗时+执行耗时）为1590us，对应泳道图如下：
 
@@ -430,7 +430,7 @@ PyPTO框架在深度方向上已经实现了自动合图的功能，在极致性
 
 融合的目标通常来自于Operation间的依赖关系，例如上下游的两个Operation间传输的数据量较大时，应当将其合并以减少搬运耗时；或者多个Operation进行tile切分后变成多个并行的连通分支时，应当将这些Operation进行合并。融合的目标也可以来自于特定类型算子的固有经验，例如IFA算子切batch轴、s2轴和g轴后，V1和V2一般应各作为一个子图任务。
 
-当前主要考虑在连续的Vector计算过程中使用该能力，暂不支持将Matmul Operation与Vector Operation进行合图。使用时需要结合泳道图信息进行分析和调整。具体使用方式可以参考案例：[glm_attention.py](../../../../models/glm_v4_5/glm_attention.py)。
+当前主要考虑在连续的Vector计算过程中使用该能力，暂不支持将Matmul Operation与Vector Operation进行合图。使用时需要结合泳道图信息进行分析和调整。
 
 #### 广度方向合图
 
@@ -464,13 +464,13 @@ CubeNBuffer针对的是不能使能L1Reuse的场景，此类场景较少，主�
 1. Cube子图间没有重复L1搬运。如BatchMatmul的左右矩阵Shape分别为(128,64,64)和(128,64,64)时，pass切出128个左右矩阵Shape分别为(64,64)和(64,64)的同构Cube子图后，它们之间没有重复L1搬运。还有FA算子的MM2，不同S2 block的MM2子图之间没有重复L1搬运。
 2. K轴很长。当没有进行切K时，L1Reuse要求左矩阵的一整行或右矩阵的一整列数据块驻留在L1中。而L1缓存容量有限。因此当K轴较长、且没有切K时，无法使用L1Reuse。
 
-此时可以配置`cube_nbuffer_setting`参数，并结合泳道图实测数据进一步调优。可参考案例[mla_prolog_quant_impl.py](../../../../models/deepseek_v32_exp/mla_prolog_quant_impl.py)
+此时可以配置`cube_nbuffer_setting`参数，并结合泳道图实测数据进一步调优。
 
 **Vector广度方向合图**
 
 Vector运算场景下通过[set_pass_options](../../api/config/pypto-set_pass_options.md)接口的`vec_nbuffer_setting`参数配置广度方向的合图操作。需要注意的是，应先进行前面的优化步骤将上下游子图的切分和合并调到较合适后，再尝试使用vecNBuffer来进行广度合并。当泳道图内有同构子图组具有大量的小子图（耗时在10u以下）时，应该使用该功能进行优化，以减少调度开销和kernel的头开销。
 
-`vec_nbuffer_setting`参数的配置方式与`cube_nbuffer_setting`相似，可参考案例[sparse_flash_attention_quant_impl.py](../../../../models/deepseek_v32_exp/sparse_flash_attention_quant_impl.py)
+`vec_nbuffer_setting`参数的配置方式与`cube_nbuffer_setting`相似。
 
 ### 调度策略调优
 
@@ -506,7 +506,7 @@ def matmul_kernel(a, b, out):
     pypto.assemble(e, [0, 0], out)
 ```
 
-- 增加冗余计算来避免冗余依赖和搬运。这些下面是PyPTO仓库的[glm_moe_fusion.py](../../../../models/glm_v4_5/glm_moe_fusion.py)的示例，通过将e_score_bias_2d复制tile_batch份后进行cast操作，使得每一份的cast都和对应batch的其他操作进行了合图。这避免了e_score_bias_2d的cast操作和每个batch的后续计算产生一对多的子图依赖、增加调度开销，还避免了cast结果的搬运。
+- 增加冗余计算来避免冗余依赖和搬运。例如，通过将e_score_bias_2d复制tile_batch份后进行cast操作，使得每一份的cast都和对应batch的其他操作进行了合图。这避免了e_score_bias_2d的cast操作和每个batch的后续计算产生一对多的子图依赖、增加调度开销，还避免了cast结果的搬运。
 
 ```python
 e_score_bias_2d_tile = pypto.tensor([tile_batch, ne], e_score_bias_2d.dtype, "e_score_bias_2d_tile")

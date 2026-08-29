@@ -33,13 +33,6 @@ PyPTO（发音：pai p-t-o）是一款面向AI加速器的高性能编程框架�
 
 PyPTO提供了丰富的示例代码，涵盖从基础操作到复杂模型实现的多个层级。一些最佳实践样例参考:
 
-### 大模型实现样例
-
-- [DeepSeekV3.2 SFA](https://gitcode.com/cann/pypto/blob/master/models/deepseek_v32_exp/deepseekv32_sparse_flash_attention_quant.py) -稀疏Flash Attention量化实现
-- [DeepSeekV3.2 MLA-PROLOG](https://gitcode.com/cann/pypto/blob/master/models/deepseek_v32_exp/deepseekv32_mla_indexer_prolog_quant.py) -MLA Indexer Prolog量化实现
-- [GLM V4.5 Attention](https://gitcode.com/cann/pypto/blob/master/models/glm_v4_5/glm_attention.py) -GLM注意力机制实现
-- [GLM V4.5 ExpertsSelector](https://gitcode.com/cann/pypto/blob/master/models/glm_v4_5/glm_select_experts.py) -GLM专家选择器实现
-
 ### 学习路径
 
 在 [examples](https://gitcode.com/cann/pypto/blob/master/examples)目录下，我们规划了多个层级的样例:
@@ -88,8 +81,6 @@ PyPTO提供了丰富的示例代码，涵盖从基础操作到复杂模型实现
 │   ├── 01_beginner/            # 初级示例
 │   ├── 02_intermediate/        # 中级示例
 │   └── 03_advanced/            # 高级示例
-│
-├── models/                     # 模型实现示例
 │
 ├── python/                     # Python源码
 │   ├── pypto/                  # Python包源码根目录

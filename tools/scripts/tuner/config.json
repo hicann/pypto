@@ -1,13 +1,13 @@
 {
     "build_folder": "pypto-tune_tool",
-    "test_name": "models/glm_v4_5/glm_moe_fusion.py",
+    "test_name": "/path/to/my/file",
     "results_folder": "measurements",
     "save_best_k": 100,
     "repeats": 1,
 
     "files": [
         {
-            "models/glm_v4_5/glm_moe_fusion.py": [
+            "/path/to/my/file": [
                 {
                     "line": 116,
                     "string": "debug_options={\"runtime_debug_mode\": 1},"
@@ -26,18 +26,6 @@
                     "mm1": [
                         [1, 1, 512, 1024, 16, 16],
                         [32, 32, 128, 128, 256, 256]
-                    ]
-                }
-            ]
-        },
-        {
-            "models/glm_v4_5/glm_attention.py": [
-                {
-                    "line": 355,
-                    "string": "pypto.set_vec_tile_shapes({test[0]}, {test[1]})",
-                    "test": [
-                        [32, 256],
-                        [64, 512]
                     ]
                 }
             ]

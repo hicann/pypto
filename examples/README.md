@@ -10,14 +10,12 @@
 - **01_beginner (初级)**: 基础操作与核心概念，适合刚接触 PyPTO 的开发者。
 - **02_intermediate (中级)**: 神经网络组件、算子组合以及运行时（Runtime）特性。
 - **03_advanced (高级)**: 复杂架构（如 Attention）、高级模式和系统级优化。
-- **models (模型)**: 真实世界的大模型（LLM）算子实现样例。
 
 ## 快速开始
 
 1. **初次使用？** 请从 [初级样例 (01_beginner)](01_beginner/README.md) 开始。
 2. **构建神经网络？** 参考 [中级样例 (02_intermediate)](02_intermediate/README.md)。
 3. **探索高级模式？** 查阅 [高级样例 (03_advanced)](03_advanced/README.md)。
-4. **大模型算子实现？** 探索 [模型样例 (models)](../models)。
 
 ### 环境准备
 请参考[环境准备](../docs/zh/install/prepare_environment.md)，完成基础环境搭建
@@ -39,7 +37,6 @@ source /usr/local/Ascend/ascend-toolkit/set_env.sh
 # 设置 NPU 设备 ID（运行 NPU 样例时必需）
 export TILE_FWK_DEVICE_ID=0
 ```
-补充说明：如需运行models相关样例，请在真实设备运行
 
 ## 如何运行样例
 
@@ -79,8 +76,6 @@ python3 examples/01_beginner/basic/basic_ops.py --run_mode sim
 3. **第三阶段：深度实践**
    - [03_advanced/advanced_nn](03_advanced/advanced_nn/README.md)
    - [03_advanced/patterns](03_advanced/patterns/README.md)
-   - [../models/deepseek_v32_exp](../models/deepseek_v32_exp/README.md)
-   - [../models/glm_v4_5](../models/glm_v4_5/README.md)
 
 ---
 
