@@ -25,7 +25,12 @@ import torch
 
 import pypto
 from pypto import pypto_impl
-from pypto._utils import get_dtensor_type, get_npu_tensor_format, get_torch_npu
+from pypto._utils import (
+    get_dtensor_type,
+    get_npu_tensor_format,
+    get_torch_npu,
+    get_torch_npu_compute_determinism_level,
+)
 from pypto.cost_model import _cost_model_run_once_data_from_host
 from pypto.error import FeError, _catch_and_wrap_error
 from pypto.frontend.parser.diagnostics import Source
@@ -1017,6 +1022,10 @@ class JitCallableWrapper:
             pypto.set_verify_options(**self._verify_options)
         if self._debug_options:
             pypto.set_debug_options(**self._debug_options)
+        # Follow torch_npu deterministic level 0/1/2 (same idea as TorchAir / aclnn).
+        pypto.set_global_config(
+            "compute_determinism_level", get_torch_npu_compute_determinism_level()
+        )
 
     def _run(
         self,

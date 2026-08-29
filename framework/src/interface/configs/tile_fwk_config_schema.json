@@ -1125,6 +1125,15 @@
                             }
                         }
                     }
+                },
+                "compute_determinism_level": {
+                    "type": "integer",
+                    "default": 0,
+                    "enum": [0, 1, 2],
+                    "label": {
+                        "zh": "计算确定性等级，与 torch_npu set_deterministic_level 对齐：0 关闭，1 确定性，2 强一致",
+                        "en": "Compute determinism level synced with torch_npu set_deterministic_level: 0 off, 1 deterministic, 2 strong consistency"
+                    }
                 }
             }
         }

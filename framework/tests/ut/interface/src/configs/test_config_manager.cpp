@@ -278,3 +278,11 @@ TEST_F(TestConfigManager, InvalidValue)
         EXPECT_NE(msg.find("Expected int64"), std::string::npos);
     }
 }
+
+TEST_F(TestConfigManager, ComputeDeterminismLevelGlobalConfig)
+{
+    for (int level : {0, 1, 2}) {
+        ConfigManagerNg::SetGlobalConfig("compute_determinism_level", static_cast<int64_t>(level));
+        EXPECT_EQ(ConfigManagerNg::GetGlobalConfig<int64_t>("compute_determinism_level"), level);
+    }
+}

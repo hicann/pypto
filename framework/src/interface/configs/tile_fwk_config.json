@@ -146,6 +146,7 @@
                     "use_max_freq_label": true
                 }
             }
-        }
+        },
+        "compute_determinism_level": 0
     }
 }

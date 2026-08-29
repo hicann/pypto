@@ -61,6 +61,17 @@ def get_npu_tensor_format(tensor):
     return "ND"
 
 
+def get_torch_npu_compute_determinism_level() -> int:
+    """Return torch_npu deterministic level (0/1/2); 0 when torch_npu is unavailable."""
+    torch_npu = get_torch_npu()
+    if torch_npu is None:
+        return 0
+    level = int(torch_npu.npu._get_deterministic_level())
+    if level < 0 or level > 2:
+        return 0
+    return level
+
+
 def to_sym(value) -> pypto_impl.SymbolicScalar:
     if isinstance(value, int):
         return pypto_impl.SymbolicScalar(value)
