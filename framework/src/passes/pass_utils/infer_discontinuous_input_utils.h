@@ -42,6 +42,7 @@ public:
                                   std::unordered_map<LogicalTensorPtr, std::unordered_set<Operation*>>& insertedNodes);
 
 private:
+    void ConvertViewAssembleToSliceContract(Function& function);
     void Init(Function& function);
     Status InferFromIncast(Function& function, bool checkViewConflict);
     std::vector<std::pair<LogicalTensorPtr, Operation*>> FilterCopyScenes(

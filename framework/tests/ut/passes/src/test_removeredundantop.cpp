@@ -1371,8 +1371,8 @@ TEST_F(TestRemoveRedundantOpPass, DynamicOutcast)
             ++view_num;
         }
     }
-    EXPECT_EQ(assemble_num, kNumOne);
-    EXPECT_EQ(view_num, kNumOne);
+    EXPECT_EQ(assemble_num, kNumZero);
+    EXPECT_EQ(view_num, kNumZero);
 }
 
 /*
@@ -1420,10 +1420,10 @@ TEST_F(TestRemoveRedundantOpPass, TestOutcastToOutcastViewAssembleSkip)
     uint32_t assembleNum = kNumZero;
     uint32_t viewNum = kNumZero;
     for (auto& op : currFunctionPtr->Operations()) {
-        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+        if (op.GetOpcode() == Opcode::OP_SLICE) {
             ++assembleNum;
         }
-        if (op.GetOpcode() == Opcode::OP_VIEW) {
+        if (op.GetOpcode() == Opcode::OP_CONTRACT) {
             ++viewNum;
         }
     }
@@ -2630,8 +2630,8 @@ TEST_F(TestRemoveRedundantOpPass, PerfectMatchWithNonViewProducerShouldNotBypass
     RemoveRedundantOp pass;
     ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
 
-    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumOne);
-    EXPECT_EQ(CountOpcode(function, Opcode::OP_ASSEMBLE), kNumTwo);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumOne);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumOne);
     EXPECT_EQ(CountOpcode(function, Opcode::OP_RESHAPE), kNumTwo);
     EXPECT_EQ(CountOpcode(function, Opcode::OP_EXP), kNumTwo);
     EXPECT_EQ(finalExp.GetIOperands().front(), reshaped);

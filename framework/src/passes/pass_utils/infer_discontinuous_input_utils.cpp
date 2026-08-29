@@ -261,6 +261,12 @@ Status InferDiscontinuousInputUtils::Process(Function& function, bool checkViewC
         APASS_LOG_ERROR_F(Elements::Function, "Insert copy op failed.");
         return FAILED;
     }
+    // Normalize semantic view/assemble cascades before discontinuous-input
+    // analysis.  The rest of this utility already creates physical copy paths
+    // as SLICE/CONTRACT, so keeping pre-existing VIEW/ASSEMBLE pairs here
+    // would make the graph use two different representations of the same
+    // copy-in/copy-out path.
+    ConvertViewAssembleToSliceContract(function);
     if (!newOps_.empty()) {
         if (InferShapeUtils::InferShape(function, newOps_) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Function, "InferShape failed; Please check the InferShape method.");
@@ -271,6 +277,56 @@ Status InferDiscontinuousInputUtils::Process(Function& function, bool checkViewC
     APASS_LOG_INFO_F(Elements::Function, "===> End InferDiscontinuousInput for function [%s].",
                      function.GetRawName().c_str());
     return SUCCESS;
+}
+
+void InferDiscontinuousInputUtils::ConvertViewAssembleToSliceContract(Function& function)
+{
+    if (!config::EnableSlice()) {
+        return;
+    }
+    for (auto& view : function.Operations(false)) {
+        if (view.IsDeleted() || view.GetOpcode() != Opcode::OP_VIEW || view.GetOOperands().size() != 1) {
+            continue;
+        }
+        auto middle = view.GetOOperands().front();
+        if (middle == nullptr) {
+            continue;
+        }
+        auto viewAttr = std::dynamic_pointer_cast<ViewOpAttribute>(view.GetOpAttribute());
+        if (viewAttr == nullptr) {
+            continue;
+        }
+        auto viewInput = view.GetIOperands().empty() ? nullptr : view.GetIOperands().front();
+        for (auto* consumer : middle->GetConsumers()) {
+            if (consumer == nullptr || consumer->IsDeleted() || consumer->GetOpcode() != Opcode::OP_ASSEMBLE ||
+                consumer->GetIOperands().size() != 1 || consumer->GetOOperands().size() != 1 ||
+                consumer->GetIOperands().front() != middle ||
+                std::dynamic_pointer_cast<AssembleOpAttribute>(consumer->GetOpAttribute()) == nullptr) {
+                continue;
+            }
+            auto assembleAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(consumer->GetOpAttribute());
+            auto assembleOutput = consumer->GetOOperands().front();
+            const auto hasMemoryTransform = [](MemoryType from, MemoryType to) {
+                return from != MemoryType::MEM_UNKNOWN && to != MemoryType::MEM_UNKNOWN && from != to;
+            };
+            bool memoryTransform = hasMemoryTransform(assembleAttr->GetFrom(),
+                                                      assembleOutput->GetMemoryTypeOriginal()) ||
+                                   hasMemoryTransform(viewAttr->GetTo(), middle->GetMemoryTypeOriginal());
+            if (viewInput != nullptr) {
+                memoryTransform = memoryTransform || hasMemoryTransform(viewInput->GetMemoryTypeOriginal(),
+                                                                        middle->GetMemoryTypeOriginal());
+            }
+            if (!memoryTransform) {
+                continue;
+            }
+            view.SetOpCode(config::GetSliceOpcode());
+            consumer->SetOpCode(config::GetContractOpcode());
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                              "Normalize view[%d] + assemble[%d] to slice + contract before discontinuous-input "
+                              "inference.",
+                              view.GetOpMagic(), consumer->GetOpMagic());
+        }
+    }
 }
 
 std::vector<std::pair<LogicalTensorPtr, Operation*>> InferDiscontinuousInputUtils::FilterCopyScenes(

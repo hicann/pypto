@@ -37,8 +37,26 @@ public:
     Status ProcessView(Function& function) const;
 
 private:
+    struct ViewReshapeInfo {
+        Shape rawShape;
+        std::vector<SymbolicScalar> dynRawShape;
+        std::vector<SymbolicScalar> dynOffset;
+        std::vector<SymbolicScalar> reshapeDynValidShape;
+        SymbolicScalar validShapeExpr;
+    };
+
     void UpdateReshapeShape(Operation& reshapeOp, LogicalTensorPtr tensorPtr, const Shape& newRawShape,
                             const std::vector<SymbolicScalar>& newDynRawShape) const;
+    bool CalculateViewReshapeInfo(const Operation& reshapeOp, const LogicalTensorPtr& viewInput,
+                                  const ViewOpAttribute& viewAttr, ViewReshapeInfo& info) const;
+    bool CalculateViewReshapeRawShape(const Shape& inputShape, const Shape& outputShape, const Shape& viewRawShape,
+                                      Shape& rawShape, std::vector<size_t>& axisMap) const;
+    bool CalculateViewReshapeDynRawShape(const Shape& inputShape, const Shape& outputShape,
+                                         const std::vector<SymbolicScalar>& viewDynRawShape, const Shape& rawShape,
+                                         const std::vector<size_t>& axisMap,
+                                         std::vector<SymbolicScalar>& dynRawShape) const;
+    void CalculateViewReshapeValidInfo(const LogicalTensorPtr& viewInput, const ViewOpAttribute& viewAttr,
+                                       const LogicalTensorPtr& reshapeOutput, ViewReshapeInfo& info) const;
     Status SplitMultiConsumerReshape(Function& function,
                                      std::vector<std::pair<Operation*, Operation*>>& multiReshapeVector) const;
     Status ProcessReshape(Function& function, Operation*& operation,

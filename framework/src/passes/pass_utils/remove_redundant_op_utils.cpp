@@ -1487,6 +1487,9 @@ Status RemoveRedundantOpUtils::ProcessContractSliceImpl(Function& function, std:
         APASS_LOG_ERROR_F(Elements::Function, "ProcessMultiContractSingleSlice failed.");
         return FAILED;
     }
+    if (operationUpdated) {
+        function.EraseOperations(true, false);
+    }
     if (ProcessSingleContractMultiSlice(function, newOps, operationUpdated) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "ProcessSingleContractMultiSlice failed.");
         return FAILED;

@@ -362,6 +362,51 @@ TEST_F(ReplaceTensorTest, TestBackView)
     EXPECT_EQ(pass.PostCheck(*currFunctionPtr), SUCCESS);
 }
 
+TEST_F(ReplaceTensorTest, TestViewPreservesLargerInputRawShape)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestViewPreservesLargerInputRawShape",
+                                                      "TestViewPreservesLargerInputRawShape", nullptr);
+    ASSERT_NE(currFunctionPtr, nullptr);
+
+    std::vector<int64_t> inputShape = {kNumSix, kNumSixteen};
+    std::vector<int64_t> viewShape = {kNumTwo, kNumSixteen};
+    std::vector<int64_t> offset = {kNumZero, kNumZero};
+    auto source = IRBuilder().CreateTensorVar(DT_FP32, inputShape, CreateTestConstIntVector(inputShape));
+    source->SetMemoryTypeBoth(MEM_UB, true);
+    auto viewInputRaw = std::make_shared<RawTensor>(DT_FP32, inputShape);
+    auto viewOutputRaw = std::make_shared<RawTensor>(DT_FP32, viewShape);
+    auto viewInput = IRBuilder().CreateTensorVar(viewInputRaw, offset, inputShape,
+                                                 CreateTestConstIntVector(inputShape));
+    auto viewOutput = IRBuilder().CreateTensorVar(viewOutputRaw, offset, viewShape,
+                                                  CreateTestConstIntVector(viewShape));
+    viewInput->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    viewOutput->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto copyInOutput = IRBuilder().CreateTensorVar(DT_FP32, viewShape, CreateTestConstIntVector(viewShape));
+    copyInOutput->SetMemoryTypeBoth(MEM_UB, true);
+
+    auto& copyOutOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {source}, {viewInput});
+    auto& viewOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {viewInput}, {viewOutput});
+    auto& copyInOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {viewOutput},
+                                                      {copyInOutput});
+    copyOutOp.UpdateSubgraphID(1);
+    viewOp.UpdateSubgraphID(1);
+    copyInOp.UpdateSubgraphID(2);
+
+    copyOutOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_UB, OpImmediate::Specified(offset),
+                                                               OpImmediate::Specified(inputShape),
+                                                               OpImmediate::Specified(inputShape)));
+    viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
+    copyInOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified(offset), MEM_UB, OpImmediate::Specified(viewShape), OpImmediate::Specified(viewShape)));
+
+    ReplaceTensor pass;
+    ASSERT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    EXPECT_EQ(viewInput->GetRawTensor(), viewInputRaw);
+    EXPECT_EQ(viewOutput->GetRawTensor(), viewInputRaw);
+    EXPECT_EQ(viewOutput->GetRawTensor()->GetRawShape(), inputShape);
+}
+
 TEST_F(ReplaceTensorTest, TestProcessHubAssembleOp_Success)
 {
     auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestProcessHubAssembleOp_Success",

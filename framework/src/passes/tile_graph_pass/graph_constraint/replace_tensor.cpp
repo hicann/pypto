@@ -14,6 +14,9 @@
  */
 
 #include "replace_tensor.h"
+
+#include <algorithm>
+
 #include "interface/tensor/irbuilder.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/pass_operation_utils.h"
@@ -297,9 +300,11 @@ Status ReplaceTensor::FindBaseTensor(Function& function,
     }
     LogicalTensors boundTensors;
     for (auto& curTensor : group) {
-        if (isBoundTensor(curTensor)) {
-            boundTensors.push_back(curTensor);
+        if (!isBoundTensor(curTensor)) {
+            continue;
         }
+        boundTensors.push_back(curTensor);
+        AddViewInputsToBoundTensors(curTensor, boundTensors);
     }
     LogicalTensors baseGroup = boundTensors.empty() ? group : boundTensors;
     baseTensor = baseGroup.front();
@@ -319,6 +324,27 @@ Status ReplaceTensor::FindBaseTensor(Function& function,
         }
     }
     return SUCCESS;
+}
+
+void ReplaceTensor::AddViewInputsToBoundTensors(const LogicalTensorPtr& curTensor, LogicalTensors& boundTensors) const
+{
+    auto consumers = curTensor->GetConsumers();
+    bool hasCopyInConsumer = std::any_of(consumers.begin(), consumers.end(), [](const Operation* consumer) {
+        return consumer != nullptr && IsCopyIn(consumer->GetOpcode());
+    });
+    if (!hasCopyInConsumer) {
+        return;
+    }
+    for (auto* producer : curTensor->GetProducers()) {
+        if (producer == nullptr || producer->GetOpcode() != Opcode::OP_VIEW || producer->GetIOperands().empty()) {
+            continue;
+        }
+        auto viewInput = producer->GetIOperands().front();
+        if (viewInput != nullptr &&
+            std::find(boundTensors.begin(), boundTensors.end(), viewInput) == boundTensors.end()) {
+            boundTensors.push_back(viewInput);
+        }
+    }
 }
 
 Status ReplaceTensor::ForwardView(Operation* op, LogicalTensorPtr& rootTensor, Function& function)

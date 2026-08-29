@@ -1236,6 +1236,33 @@ TEST_F(PreGraphTest, TestRemoveViewSingleReshapeNormalizesCopyInRawShape)
     EXPECT_EQ(G.GetTensor("reshape_output")->tensor->GetRawShape(), (std::vector<int64_t>{-1, 128}));
 }
 
+TEST_F(PreGraphTest, TestRemoveViewSingleReshapeInsertAxisNormalizesCopyIn)
+{
+    ComputationalGraphBuilder G;
+    // The VIEW exposes a [64, 128] slice of a [128, 128] source.  RESHAPE
+    // inserts a singleton axis: [64, 128] -> [1, 64, 128].
+    G.AddTensor(DataType::DT_FP16, {64, 128}, MemoryType::MEM_DEVICE_DDR, "view_input");
+    G.GetTensor("view_input")->tensor->UpdateRawShape({128, 128});
+    G.AddTensor(DataType::DT_FP16, {64, 128}, MemoryType::MEM_DEVICE_DDR, "reshape_input");
+    G.AddTensor(DataType::DT_FP16, {1, 64, 128}, MemoryType::MEM_DEVICE_DDR, "reshape_output");
+    G.AddTensor(DataType::DT_FP16, {1, 64, 128}, MemoryType::MEM_UB, "copy_dst");
+
+    G.AddOp(Opcode::OP_VIEW, {"view_input"}, {"reshape_input"}, "VIEW");
+    G.GetOp("VIEW")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{32, 0}));
+    G.AddOp(Opcode::OP_RESHAPE, {"reshape_input"}, {"reshape_output"}, "RESHAPE");
+    G.AddOp(Opcode::OP_COPY_IN, {"reshape_output"}, {"copy_dst"}, "COPYIN");
+    auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(G.GetOp("COPYIN")->GetOpAttribute());
+
+    RemoveRedundantAssemble pass;
+    EXPECT_EQ(pass.ProcessView(*G.GetFunction()), SUCCESS);
+
+    EXPECT_TRUE(G.GetOp("VIEW")->IsDeleted());
+    EXPECT_EQ(G.GetOp("RESHAPE")->GetIOperands().front(), G.GetTensor("view_input"));
+    EXPECT_EQ(G.GetTensor("reshape_output")->tensor->GetRawShape(), (std::vector<int64_t>{1, 128, 128}));
+    CompareOpImmediateVector(copyAttr->GetFromOffset(), {0, 32, 0});
+    CompareOpImmediateVector(copyAttr->GetRawShape(), {1, 128, 128});
+}
+
 TEST_F(PreGraphTest, TestRemoveRedundantAssemble)
 {
     ComputationalGraphBuilder G;

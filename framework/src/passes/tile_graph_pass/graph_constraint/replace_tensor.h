@@ -138,6 +138,7 @@ private:
     std::unordered_map<LogicalTensorPtr, int> BuildTensorOrderIndexMap(Function& function);
     Status FindBaseTensor(Function& function, const std::unordered_map<LogicalTensorPtr, int>& tensorToOderIndex,
                           LogicalTensors& group, LogicalTensorPtr& baseTensor);
+    void AddViewInputsToBoundTensors(const LogicalTensorPtr& curTensor, LogicalTensors& boundTensors) const;
     Status ProcessHubOp(Function& function);
     void ProcessHubAssembleOp(Function& function, Operation& hubOp, Operation& assembleOp,
                               std::shared_ptr<LogicalTensor> hubInput, std::shared_ptr<LogicalTensor> hubOutput);

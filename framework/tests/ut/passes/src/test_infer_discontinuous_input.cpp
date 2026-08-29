@@ -207,6 +207,30 @@ TEST_F(TestInferDiscontinuousInput, testViewAssembleScenario)
     EXPECT_EQ(inferDiscontinuousInput.PostCheck(*function), SUCCESS);
 }
 
+TEST_F(TestInferDiscontinuousInput, testViewAssembleNormalizeToSliceContract)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP16, {16, 128}, MemoryType::MEM_DEVICE_DDR, "t1");
+    G.AddTensor(DataType::DT_FP16, {16, 128}, MemoryType::MEM_UB, "t2");
+    G.AddTensor(DataType::DT_FP16, {16, 128}, MemoryType::MEM_DEVICE_DDR, "t3");
+    G.AddOp(Opcode::OP_VIEW, {"t1"}, {"t2"}, "view");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"t2"}, {"t3"}, "assemble");
+    auto view = G.GetOp("view");
+    view->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_DEVICE_DDR));
+    auto assemble = G.GetOp("assemble");
+    assemble->SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, std::vector<int64_t>{0, 0}));
+
+    Function* function = G.GetFunction();
+    EXPECT_NE(function, nullptr);
+    config::SetPassOption(ENABLE_SLICE, true);
+
+    InferDiscontinuousInput inferDiscontinuousInput;
+    EXPECT_EQ(inferDiscontinuousInput.Run(*function, "", "", 0), SUCCESS);
+    EXPECT_EQ(inferDiscontinuousInput.PostCheck(*function), SUCCESS);
+    EXPECT_EQ(view->GetOpcode(), Opcode::OP_SLICE);
+    EXPECT_EQ(assemble->GetOpcode(), Opcode::OP_CONTRACT);
+}
+
 TEST_F(TestInferDiscontinuousInput, testCheckTensorAssembleNullAttr)
 {
     ComputationalGraphBuilder G;
@@ -374,10 +398,12 @@ TEST_F(TestInferDiscontinuousInput, testDDRTensorAssignUBNoInsert)
     EXPECT_EQ(inferDiscontinuousInput.Run(*function, "", "", 0), SUCCESS);
     EXPECT_EQ(inferDiscontinuousInput.PostCheck(*function), SUCCESS);
 
-    // Verify no new VIEW or ASSEMBLE ops were inserted (SLICE/CONTRACT may be inserted instead)
+    // Under enable_slice, the DDR VIEW->ASSEMBLE cascades are normalized to SLICE->CONTRACT.
     auto opList = function->Operations().DuplicatedOpList();
     int viewCount = 0;
     int assembleCount = 0;
+    int sliceCount = 0;
+    int contractCount = 0;
     for (auto& op : opList) {
         if (op->GetOpcode() == Opcode::OP_VIEW) {
             viewCount++;
@@ -385,9 +411,17 @@ TEST_F(TestInferDiscontinuousInput, testDDRTensorAssignUBNoInsert)
         if (op->GetOpcode() == Opcode::OP_ASSEMBLE) {
             assembleCount++;
         }
+        if (op->GetOpcode() == Opcode::OP_SLICE) {
+            sliceCount++;
+        }
+        if (op->GetOpcode() == Opcode::OP_CONTRACT) {
+            contractCount++;
+        }
     }
-    EXPECT_EQ(viewCount, 6);
-    EXPECT_EQ(assembleCount, 4);
+    EXPECT_EQ(viewCount, 2);
+    EXPECT_EQ(assembleCount, 0);
+    EXPECT_EQ(sliceCount, 4);
+    EXPECT_EQ(contractCount, 4);
 }
 } // namespace tile_fwk
 } // namespace npu

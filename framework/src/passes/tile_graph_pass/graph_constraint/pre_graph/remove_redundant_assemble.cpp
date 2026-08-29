@@ -467,6 +467,42 @@ bool MatchReshapePattern(const LogicalTensorPtr& reshapeInput, const LogicalTens
     return removeAllOnes(inputShape) == removeAllOnes(outputShape);
 }
 
+// Build the axis mapping for a reshape that only inserts singleton axes.
+// Unlike a regular reshape, a VIEW may expose only a slice of its source
+// tensor, so the source raw shape and the reshape logical shape can have
+// different element counts.  In that case raw-shape calculation must retain
+// the source axes and only insert the new singleton axes.
+bool BuildViewReshapeAxisMap(const Shape& reshapeInputShape, const Shape& reshapeOutputShape,
+                             std::vector<size_t>& axisMap)
+{
+    if (reshapeOutputShape.size() <= reshapeInputShape.size()) {
+        return false;
+    }
+    axisMap.clear();
+    axisMap.resize(reshapeInputShape.size());
+    size_t outputIdx = 0;
+    for (size_t inputIdx = 0; inputIdx < reshapeInputShape.size(); ++inputIdx) {
+        while (outputIdx < reshapeOutputShape.size() && reshapeOutputShape[outputIdx] != reshapeInputShape[inputIdx]) {
+            // Extra axes are allowed only when they are singleton axes.
+            if (reshapeOutputShape[outputIdx] != 1) {
+                return false;
+            }
+            ++outputIdx;
+        }
+        if (outputIdx == reshapeOutputShape.size()) {
+            return false;
+        }
+        axisMap[inputIdx] = outputIdx++;
+    }
+    while (outputIdx < reshapeOutputShape.size()) {
+        if (reshapeOutputShape[outputIdx] != 1) {
+            return false;
+        }
+        ++outputIdx;
+    }
+    return true;
+}
+
 Shape GetStaticShapeForDynAxes(const Shape& rawShape)
 {
     Shape staticShape = rawShape;
@@ -526,6 +562,97 @@ void RemoveRedundantAssemble::UpdateReshapeShape(Operation& reshapeOp, LogicalTe
     tensorPtr->tensor->UpdateDynRawShape(newDynRawShape);
 }
 
+bool RemoveRedundantAssemble::CalculateViewReshapeRawShape(const Shape& inputShape, const Shape& outputShape,
+                                                           const Shape& viewRawShape, Shape& rawShape,
+                                                           std::vector<size_t>& axisMap) const
+{
+    // Direction follows the physical raw rank.  A VIEW can expose a logical
+    // slice with fewer dimensions than its backing raw tensor; using logical
+    // ranks here would incorrectly classify that case as axis insertion.
+    bool isReduce = viewRawShape.size() < outputShape.size();
+    rawShape = outputShape;
+    if (isReduce && viewRawShape.size() == inputShape.size() &&
+        BuildViewReshapeAxisMap(inputShape, outputShape, axisMap)) {
+        rawShape.assign(outputShape.size(), 1);
+        for (size_t i = 0; i < axisMap.size(); ++i) {
+            rawShape[axisMap[i]] = viewRawShape[i];
+        }
+        return true;
+    }
+    return isReduce ? CalculateNewRawShapeReduce(outputShape, viewRawShape, rawShape) :
+                      CalculateNewRawShapeExpand(outputShape, viewRawShape, rawShape);
+}
+
+bool RemoveRedundantAssemble::CalculateViewReshapeDynRawShape(const Shape& inputShape, const Shape& outputShape,
+                                                              const std::vector<SymbolicScalar>& viewDynRawShape,
+                                                              const Shape& rawShape, const std::vector<size_t>& axisMap,
+                                                              std::vector<SymbolicScalar>& dynRawShape) const
+{
+    // Use the source dynamic raw rank, before the remapped output shape is
+    // written into `rawShape`.
+    bool isReduce = viewDynRawShape.size() < outputShape.size();
+    if (isReduce && !axisMap.empty() && (viewDynRawShape.empty() || viewDynRawShape.size() == inputShape.size())) {
+        if (viewDynRawShape.empty()) {
+            dynRawShape = CommonUtils::CreateConstIntVector(rawShape);
+        } else {
+            dynRawShape.assign(outputShape.size(), IRBuilder().CreateConstInt(1));
+            for (size_t i = 0; i < axisMap.size(); ++i) {
+                dynRawShape[axisMap[i]] = viewDynRawShape[i];
+            }
+        }
+        return true;
+    }
+    return isReduce ? CalculateNewDynRawShapeReduce(outputShape, viewDynRawShape, rawShape, dynRawShape) :
+                      CalculateNewDynRawShapeExpand(outputShape, viewDynRawShape, rawShape, dynRawShape);
+}
+
+void RemoveRedundantAssemble::CalculateViewReshapeValidInfo(const LogicalTensorPtr& viewInput,
+                                                            const ViewOpAttribute& viewAttr,
+                                                            const LogicalTensorPtr& reshapeOutput,
+                                                            ViewReshapeInfo& info) const
+{
+    info.reshapeDynValidShape = reshapeOutput->GetDynValidShape();
+    if (info.reshapeDynValidShape.empty()) {
+        info.reshapeDynValidShape = CommonUtils::CreateConstIntVector(reshapeOutput->shape);
+    }
+    auto validShape = viewInput->GetDynValidShape();
+    if (validShape.empty()) {
+        validShape = CommonUtils::CreateConstIntVector(viewInput->shape);
+    }
+    auto offset = viewAttr.GetFromDynOffset();
+    if (offset.empty()) {
+        offset = CommonUtils::CreateConstIntVector(viewAttr.GetFromOffset());
+    }
+    IRBuilder builder;
+    info.validShapeExpr = builder.CreateConstInt(1);
+    if (validShape.size() == 4 && offset.size() == 4) {
+        info.validShapeExpr = (validShape[1] - offset[1]).Max(builder.CreateConstInt(0));
+        info.validShapeExpr = info.validShapeExpr.Min(builder.CreateConstInt(1)).Simplify();
+    }
+    auto physicalShape = viewInput->tensor->GetDynRawShape().empty() ?
+                             CommonUtils::CreateConstIntVector(viewInput->shape) :
+                             viewInput->tensor->GetDynRawShape();
+    GetDynOffsetBeforeDynReshape(offset, physicalShape, info.dynRawShape, info.dynOffset);
+}
+
+bool RemoveRedundantAssemble::CalculateViewReshapeInfo(const Operation& reshapeOp, const LogicalTensorPtr& viewInput,
+                                                       const ViewOpAttribute& viewAttr, ViewReshapeInfo& info) const
+{
+    const auto& inputShape = reshapeOp.GetIOperands().front()->shape;
+    const auto& output = reshapeOp.GetOOperands().front();
+    std::vector<size_t> axisMap;
+    if (!CalculateViewReshapeRawShape(inputShape, output->shape, viewInput->tensor->GetRawShape(), info.rawShape,
+                                      axisMap)) {
+        return false;
+    }
+    if (!CalculateViewReshapeDynRawShape(inputShape, output->shape, viewInput->tensor->GetDynRawShape(), info.rawShape,
+                                         axisMap, info.dynRawShape)) {
+        return false;
+    }
+    CalculateViewReshapeValidInfo(viewInput, viewAttr, output, info);
+    return true;
+}
+
 Status RemoveRedundantAssemble::ProcessView(Function& function) const
 {
     std::vector<std::pair<Operation*, Operation*>> multiReshapeVector;
@@ -580,55 +707,18 @@ Status RemoveRedundantAssemble::RemoveViewSingleReshape(Function& function) cons
             APASS_LOG_INFO_F(Elements::Operation, "Op %d Attribute is nullptr.", producerOp->GetOpMagic());
             continue;
         }
-        auto offset = opAttr->GetFromDynOffset();
-        if (offset.empty()) {
-            offset = CommonUtils::CreateConstIntVector(opAttr->GetFromOffset());
-        }
-        Shape newRawShape = reshapeOp.GetOOperands().front()->shape;
-        std::vector<SymbolicScalar> newDynRawShape;
-        if (!CalculateNewRawShapeExpand(reshapeOp.GetOOperands().front()->shape, viewInput->tensor->GetRawShape(),
-                                        newRawShape))
-            return SUCCESS;
-        if (!CalculateNewDynRawShapeExpand(reshapeOp.GetOOperands().front()->shape, viewInput->tensor->GetDynRawShape(),
-                                           newRawShape, newDynRawShape)) {
+        ViewReshapeInfo reshapeInfo;
+        if (!CalculateViewReshapeInfo(reshapeOp, viewInput, *opAttr, reshapeInfo)) {
             return SUCCESS;
         }
-        auto oriReshapeDynValidShape = reshapeOp.GetOOperands().front()->GetDynValidShape();
-        if (oriReshapeDynValidShape.empty()) {
-            oriReshapeDynValidShape = CommonUtils::CreateConstIntVector(reshapeOp.GetOOperands().front()->shape);
-        }
-        auto viewInputDynValidShape = viewInput->GetDynValidShape();
-        if (viewInputDynValidShape.empty()) {
-            viewInputDynValidShape = CommonUtils::CreateConstIntVector(viewInput->shape);
-        }
-        IRBuilder builder;
-        SymbolicScalar validShapeExpr = builder.CreateConstInt(1);
-        constexpr size_t dim4D = 4;
-        if (viewInputDynValidShape.size() == dim4D && offset.size() == dim4D) {
-            auto zero = builder.CreateConstInt(0);
-            auto one = builder.CreateConstInt(1);
-            validShapeExpr = (viewInputDynValidShape[1] - offset[1]).Max(zero);
-            validShapeExpr = validShapeExpr.Min(one).Simplify();
-        } else if (viewInputDynValidShape.size() == dim4D) {
-            APASS_LOG_ERROR_F(
-                Elements::Tensor,
-                "Cannot update reshape dyn valid shape as viewInputDynValidShape size [%zu] is not equal to offset "
-                "size [%zu].",
-                viewInputDynValidShape.size(), offset.size());
-        }
-        std::vector<SymbolicScalar> newDynOffset;
-        // Offset remapping must follow the physical reshape layout rather than the valid shape.
-        auto dynViewPhysicalShape = viewInput->tensor->GetDynRawShape().empty() ?
-                                        CommonUtils::CreateConstIntVector(viewInput->shape) :
-                                        viewInput->tensor->GetDynRawShape();
-        GetDynOffsetBeforeDynReshape(offset, dynViewPhysicalShape, newDynRawShape, newDynOffset);
+        // Shape and offset details were calculated by the helper above.
         APASS_LOG_DEBUG_F(Elements::Operation, "Process View[%d] Tensor[%d]: newRawshape: %s, newOffset: %s.",
                           producerOp->GetOpMagic(), reshapeOp.GetOOperands().front()->GetMagic(),
-                          IntVecToStr(newRawShape).c_str(), IntVecToStr(newDynOffset).c_str());
-        Shape staticNewRawShape = GetStaticShapeForDynAxes(newRawShape);
-        UpdateCopyInAttrAfterRemoveView(reshapeOp, staticNewRawShape, newDynOffset, oriReshapeDynValidShape,
-                                        validShapeExpr);
-        UpdateReshapeShape(reshapeOp, reshapeOp.GetOOperands().front(), staticNewRawShape, newDynRawShape);
+                          IntVecToStr(reshapeInfo.rawShape).c_str(), IntVecToStr(reshapeInfo.dynOffset).c_str());
+        Shape staticNewRawShape = GetStaticShapeForDynAxes(reshapeInfo.rawShape);
+        UpdateCopyInAttrAfterRemoveView(reshapeOp, staticNewRawShape, reshapeInfo.dynOffset,
+                                        reshapeInfo.reshapeDynValidShape, reshapeInfo.validShapeExpr);
+        UpdateReshapeShape(reshapeOp, reshapeOp.GetOOperands().front(), staticNewRawShape, reshapeInfo.dynRawShape);
         reshapeOp.ReplaceIOperand(0, viewInput);
         producerOp->SetAsDeleted();
     }
