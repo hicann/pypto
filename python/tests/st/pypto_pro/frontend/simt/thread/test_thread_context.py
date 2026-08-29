@@ -62,7 +62,7 @@ def write_thread_context(dst):
         dst[1, tid] = warp
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_thread_context(out: pl.Tensor[[2, THREADS], pl.DT_UINT32]):
     tile_type = pl.TileType(shape=[2, THREADS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
     dst = pl.make_tile(tile_type, addr=0x0000, size=2 * THREADS * 4)

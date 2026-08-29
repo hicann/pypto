@@ -47,7 +47,7 @@ def max_float_dtypes(
     out_fp32[0, tid] = pl.simt.max(lhs_fp32[0, tid], rhs_fp32[0, tid])
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_max_float_dtypes(
     lhs_fp16: pl.Tensor[[1, ELEMENTS], pl.DT_FP16],
     rhs_fp16: pl.Tensor[[1, ELEMENTS], pl.DT_FP16],
@@ -99,7 +99,7 @@ def max_signed_dtypes(
     out_int64[0, tid] = pl.simt.max(lhs_int64[0, tid], rhs_int64[0, tid])
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_max_signed_dtypes(
     lhs_int8: pl.Tensor[[1, ELEMENTS], pl.DT_INT8],
     rhs_int8: pl.Tensor[[1, ELEMENTS], pl.DT_INT8],
@@ -157,7 +157,7 @@ def max_unsigned_dtypes(
     out_uint64[0, tid] = pl.simt.max(lhs_uint64[0, tid], rhs_uint64[0, tid])
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_max_unsigned_dtypes(
     lhs_uint8: pl.Tensor[[1, ELEMENTS], pl.DT_UINT8],
     rhs_uint8: pl.Tensor[[1, ELEMENTS], pl.DT_UINT8],

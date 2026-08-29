@@ -63,7 +63,7 @@ def atomic_add_ub_all_dtypes(
     pl.simt.atomic_add(fp32_tile[0, 0], 1.0)
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_atomic_add_ub_all_dtypes(
     int32_state: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
     uint32_state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],
@@ -143,7 +143,7 @@ def atomic_add_gm_all_dtypes(
     pl.simt.atomic_add(uint64_state[0, 0], 1)
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_atomic_add_gm_all_dtypes(
     int32_state: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
     uint32_state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],
@@ -177,7 +177,7 @@ def atomic_add_return_value_gm(
     old_values[0, 0] = pl.simt.atomic_add(state[0, 0], 5)
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_atomic_add_return_value_gm(
     state: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
     old_values: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
@@ -198,13 +198,13 @@ def atomic_add_histogram_ub(histogram):
     pl.simt.atomic_add(histogram[0, tid % ATOMIC_BUCKETS], 1)
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_atomic_add_histogram_gm(histogram: pl.Tensor[[1, ATOMIC_BUCKETS], pl.DT_INT32]):
     with pl.section_vector():
         pl.simt.launch(atomic_add_histogram_gm, threads=SEMANTIC_THREADS, args=(histogram,))
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_atomic_add_histogram_ub(histogram_tensor: pl.Tensor[[1, ATOMIC_BUCKETS], pl.DT_INT32]):
     tile_type = pl.TileType(shape=[1, ATOMIC_BUCKETS], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
     histogram = pl.make_tile(tile_type, addr=0x0000, size=ATOMIC_BUCKETS * 4)
@@ -223,7 +223,7 @@ def atomic_add_multicore(state: pl.Tensor[[1, 1], pl.DT_INT64]):
     pl.simt.atomic_add(state[0, 0], 1)
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_atomic_add_multicore(state: pl.Tensor[[1, 1], pl.DT_INT64]):
     with pl.section_vector():
         pl.simt.launch(atomic_add_multicore, threads=SEMANTIC_THREADS, args=(state,))

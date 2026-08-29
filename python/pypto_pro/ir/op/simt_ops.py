@@ -48,6 +48,24 @@ def warp_size(span: Span | None = None) -> Call:
     return _ir_core.create_op_call("simt.warp_size", [], {}, actual_span)
 
 
+def syncthreads(span: Span | None = None) -> Call:
+    """Build a block-wide SIMT thread barrier."""
+    actual_span = _get_span_or_capture(span)
+    return _ir_core.create_op_call("simt.syncthreads", [], {}, actual_span)
+
+
+def threadfence_block(span: Span | None = None) -> Call:
+    """Build a block-scoped SIMT memory fence."""
+    actual_span = _get_span_or_capture(span)
+    return _ir_core.create_op_call("simt.threadfence_block", [], {}, actual_span)
+
+
+def threadfence(span: Span | None = None) -> Call:
+    """Build a device-scoped SIMT memory fence."""
+    actual_span = _get_span_or_capture(span)
+    return _ir_core.create_op_call("simt.threadfence", [], {}, actual_span)
+
+
 def cast(
     value: Expr,
     dtype: _ir_core.DataType,
@@ -168,6 +186,26 @@ def isnan(value: Expr, span: Span | None = None) -> Call:
 def isinf(value: Expr, span: Span | None = None) -> Call:
     """Build a floating-point scalar infinity-classification call."""
     return _create_math_call("isinf", value, span=span)
+
+
+def isfinite(value: Expr, span: Span | None = None) -> Call:
+    """Build an FP16 or FP32 scalar finiteness-classification call."""
+    return _create_math_call("isfinite", value, span=span)
+
+
+def popcount(value: Expr, span: Span | None = None) -> Call:
+    """Build an unsigned scalar population count with an INT32 result."""
+    return _create_math_call("popcount", value, span=span)
+
+
+def mul_hi(lhs: Expr, rhs: Expr, span: Span | None = None) -> Call:
+    """Build a same-dtype integer multiply-high call."""
+    return _create_math_call("mul_hi", lhs, rhs, span=span)
+
+
+def fmod(lhs: Expr, rhs: Expr, span: Span | None = None) -> Call:
+    """Build an FP32 remainder call with a quotient truncated toward zero."""
+    return _create_math_call("fmod", lhs, rhs, span=span)
 
 
 def fma(lhs: Expr, rhs: Expr, addend: Expr, span: Span | None = None) -> Call:
@@ -336,6 +374,27 @@ def _parse_warp_size(parser: Any, call: ast.Call) -> Expr:
     _validate_simt_body_op(parser, call, {})
     span = parser.span_tracker.get_span(call)
     return warp_size(span)
+
+
+@op_impl("simt.syncthreads")
+def _parse_syncthreads(parser: Any, call: ast.Call) -> Expr:
+    _validate_simt_body_op(parser, call, {})
+    span = parser.span_tracker.get_span(call)
+    return syncthreads(span)
+
+
+@op_impl("simt.threadfence_block")
+def _parse_threadfence_block(parser: Any, call: ast.Call) -> Expr:
+    _validate_simt_body_op(parser, call, {})
+    span = parser.span_tracker.get_span(call)
+    return threadfence_block(span)
+
+
+@op_impl("simt.threadfence")
+def _parse_threadfence(parser: Any, call: ast.Call) -> Expr:
+    _validate_simt_body_op(parser, call, {})
+    span = parser.span_tracker.get_span(call)
+    return threadfence(span)
 
 
 @op_impl("simt.launch")
@@ -643,6 +702,10 @@ _register_scalar_math_parser("simt.ceil", 1, ceil)
 _register_scalar_math_parser("simt.trunc", 1, trunc)
 _register_scalar_math_parser("simt.isnan", 1, isnan)
 _register_scalar_math_parser("simt.isinf", 1, isinf)
+_register_scalar_math_parser("simt.isfinite", 1, isfinite)
+_register_scalar_math_parser("simt.popcount", 1, popcount)
+_register_scalar_math_parser("simt.mul_hi", 2, mul_hi)
+_register_scalar_math_parser("simt.fmod", 2, fmod)
 _register_scalar_math_parser("simt.fma", 3, fma)
 
 

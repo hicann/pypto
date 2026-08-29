@@ -257,15 +257,22 @@ ir::ProgramPtr MakeSimtScalarOpsProgram()
     auto bf16 = Scalar(ir::DataType::BF16);
     auto fp32 = Scalar(ir::DataType::FP32);
     auto i32 = Scalar(ir::DataType::INT32);
+    auto u32 = Scalar(ir::DataType::UINT32);
     auto i64 = Scalar(ir::DataType::INT64);
+    auto u64 = Scalar(ir::DataType::UINT64);
 
     auto fp16_value = Var("fp16_value", fp16);
     auto bf16_value = Var("bf16_value", bf16);
     auto fp32_value = Var("fp32_value", fp32);
     auto i32_value = Var("i32_value", i32);
+    auto u32_value = Var("u32_value", u32);
     auto i64_value = Var("i64_value", i64);
+    auto u64_value = Var("u64_value", u64);
 
     std::vector<ir::StmtPtr> simt_stmts;
+    for (const auto& op_name : {"simt.syncthreads", "simt.threadfence_block", "simt.threadfence"}) {
+        simt_stmts.push_back(Eval(RegisteredCall(op_name, {})));
+    }
     std::size_t result_index = 0;
     const std::vector<std::string> dtype_specific_unary_ops = {
         "simt.abs",  "simt.sqrt", "simt.rsqrt", "simt.exp",  "simt.exp2",  "simt.log",
@@ -281,6 +288,15 @@ ir::ProgramPtr MakeSimtScalarOpsProgram()
     }
     AppendRegisteredResult(simt_stmts, result_index, "simt.log1p", {fp32_value});
     AppendRegisteredResult(simt_stmts, result_index, "simt.abs", {i64_value});
+    AppendRegisteredResult(simt_stmts, result_index, "simt.isfinite", {fp16_value});
+    AppendRegisteredResult(simt_stmts, result_index, "simt.isfinite", {fp32_value});
+    AppendRegisteredResult(simt_stmts, result_index, "simt.popcount", {u32_value});
+    AppendRegisteredResult(simt_stmts, result_index, "simt.popcount", {u64_value});
+    AppendRegisteredResult(simt_stmts, result_index, "simt.mul_hi", {i32_value, i32_value});
+    AppendRegisteredResult(simt_stmts, result_index, "simt.mul_hi", {u32_value, u32_value});
+    AppendRegisteredResult(simt_stmts, result_index, "simt.mul_hi", {i64_value, i64_value});
+    AppendRegisteredResult(simt_stmts, result_index, "simt.mul_hi", {u64_value, u64_value});
+    AppendRegisteredResult(simt_stmts, result_index, "simt.fmod", {fp32_value, fp32_value});
 
     for (const auto& op_name : {"simt.min", "simt.max"}) {
         AppendRegisteredResult(simt_stmts, result_index, op_name, {fp32_value, fp32_value});
@@ -312,7 +328,8 @@ ir::ProgramPtr MakeSimtScalarOpsProgram()
     append_cast(i64_value, ir::DataType::INT32, ir::RoundMode::CAST_NONE);
     append_cast(fp32_value, ir::DataType::FP32, ir::RoundMode::CAST_NONE);
 
-    std::vector<ir::VarPtr> simt_args = {fp16_value, bf16_value, fp32_value, i32_value, i64_value};
+    std::vector<ir::VarPtr> simt_args = {fp16_value, bf16_value, fp32_value, i32_value,
+                                         u32_value,  i64_value,  u64_value};
     auto simt_function = std::make_shared<const ir::Function>(
         "scalar_ops", simt_args, std::vector<ir::TypePtr>{}, Seq(std::move(simt_stmts)), Sp(),
         ir::FunctionType::SIMT_VF, false, std::vector<std::pair<std::string, std::any>>{{ir::kMaxThreadsAttr, 1}});
@@ -321,12 +338,15 @@ ir::ProgramPtr MakeSimtScalarOpsProgram()
     auto kernel_bf16 = Var("bf16_value", bf16);
     auto kernel_fp32 = Var("fp32_value", fp32);
     auto kernel_i32 = Var("i32_value", i32);
+    auto kernel_u32 = Var("u32_value", u32);
     auto kernel_i64 = Var("i64_value", i64);
-    std::vector<ir::VarPtr> kernel_args = {kernel_fp16, kernel_bf16, kernel_fp32, kernel_i32, kernel_i64};
-    auto launch = RegisteredCall(
-        "simt.launch",
-        {ConstInt(1), ConstInt(1), ConstInt(1), kernel_fp16, kernel_bf16, kernel_fp32, kernel_i32, kernel_i64},
-        Kwargs{{"callee", std::string("scalar_ops")}, {"max_threads", 1}});
+    auto kernel_u64 = Var("u64_value", u64);
+    std::vector<ir::VarPtr> kernel_args = {kernel_fp16, kernel_bf16, kernel_fp32, kernel_i32,
+                                           kernel_u32,  kernel_i64,  kernel_u64};
+    auto launch = RegisteredCall("simt.launch",
+                                 {ConstInt(1), ConstInt(1), ConstInt(1), kernel_fp16, kernel_bf16, kernel_fp32,
+                                  kernel_i32, kernel_u32, kernel_i64, kernel_u64},
+                                 Kwargs{{"callee", std::string("scalar_ops")}, {"max_threads", 1}});
     auto kernel = std::make_shared<const ir::Function>("kernel", kernel_args, std::vector<ir::TypePtr>{}, Eval(launch),
                                                        Sp(), ir::FunctionType::IN_CORE, true);
 
@@ -493,12 +513,15 @@ TEST(CCESimtCodegenTest, DoesNotInterceptOrdinaryKernelCallsWithMatchingCalleeNa
     EXPECT_EQ(CountOccurrences(kernel_function, "(int32_t)(get_subblockid())"), 1u);
 }
 
-TEST(CCESimtCodegenTest, GeneratesRegisteredScalarCastAndMathOperations)
+TEST(CCESimtCodegenTest, GeneratesRegisteredSynchronizationScalarCastAndMathOperations)
 {
     CCECodegen codegen(ir::SectionKind::Vector);
     std::string generated = codegen.GenerateSingle(MakeSimtScalarOpsProgram(), "a5");
 
     const std::vector<std::string> scalar_intrinsics = {
+        "__sync_workitems();",
+        "__threadfence_block();",
+        "__threadfence();",
         "__fabsf(",
         "__sqrtf(",
         "1.0f / __sqrtf(",
@@ -513,6 +536,13 @@ TEST(CCESimtCodegenTest, GeneratesRegisteredScalarCastAndMathOperations)
         "__ceilf(",
         "__isnan(",
         "__isinf(",
+        "__isfinite(",
+        "__popc((unsigned int)(",
+        "__popc((unsigned long long)(",
+        "__mulhi(",
+        "__umulhi(",
+        "__mul64hi(",
+        "__umul64hi(",
         "__fma(",
         "__hmin_nan(",
         "__hmax_nan(",
@@ -525,6 +555,10 @@ TEST(CCESimtCodegenTest, GeneratesRegisteredScalarCastAndMathOperations)
         "__fabsf(__t)",
         "if (__q & 1) { __s = __c; }",
         "if (__q & 1) { __c = -__s; }",
+        "uint32_t __sign = __ux & 0x80000000u;",
+        "if (__ay == 0 || __ax >= 0x7f800000u || __ay > 0x7f800000u)",
+        "while (__ex > __ey)",
+        "reinterpret_cast<float&>(__result);",
     };
     for (const auto& intrinsic : scalar_intrinsics) {
         EXPECT_NE(generated.find(intrinsic), std::string::npos) << intrinsic;
@@ -574,15 +608,19 @@ TEST(CCESimtCodegenTest, GeneratesRegisteredAtomicOperationsForTileAndTensor)
     EXPECT_EQ(CountOccurrences(generated, "atomicMin("), 3u);
 }
 
-TEST(CCESimtCodegenTest, ValidatesRegisteredScalarAndAtomicContracts)
+TEST(CCESimtCodegenTest, ValidatesRegisteredSynchronizationScalarAndAtomicContracts)
 {
     auto fp16 = Scalar(ir::DataType::FP16);
+    auto bf16 = Scalar(ir::DataType::BF16);
     auto fp32 = Scalar(ir::DataType::FP32);
     auto i32 = Scalar(ir::DataType::INT32);
     auto u32 = Scalar(ir::DataType::UINT32);
     auto fp16_value = Var("fp16_value", fp16);
+    auto bf16_value = Var("bf16_value", bf16);
     auto fp32_value = Var("fp32_value", fp32);
     auto i32_value = Var("i32_value", i32);
+    auto u32_value = Var("u32_value", u32);
+    auto u64_value = Var("u64_value", Scalar(ir::DataType::UINT64));
     auto offset = Var("offset", u32);
     auto bool_offset = Var("bool_offset", Scalar(ir::DataType::BOOL));
     auto fp16_tile = Var("fp16_tile", MakeSimtTileType(ir::DataType::FP16));
@@ -596,8 +634,31 @@ TEST(CCESimtCodegenTest, ValidatesRegisteredScalarAndAtomicContracts)
     ASSERT_NE(isnan_type, nullptr);
     EXPECT_EQ(isnan_type->dtype_, ir::DataType::BOOL);
 
+    for (const auto& op_name : {"simt.syncthreads", "simt.threadfence_block", "simt.threadfence"}) {
+        EXPECT_EQ(RegisteredCall(op_name, {})->GetType(), ir::GetNoneType());
+    }
+    auto isfinite_fp16_type = ir::As<ir::ScalarType>(RegisteredCall("simt.isfinite", {fp16_value})->GetType());
+    auto isfinite_fp32_type = ir::As<ir::ScalarType>(RegisteredCall("simt.isfinite", {fp32_value})->GetType());
+    auto popcount_type = ir::As<ir::ScalarType>(RegisteredCall("simt.popcount", {u64_value})->GetType());
+    auto mul_hi_type = ir::As<ir::ScalarType>(RegisteredCall("simt.mul_hi", {u32_value, u32_value})->GetType());
+    auto fmod_type = ir::As<ir::ScalarType>(RegisteredCall("simt.fmod", {fp32_value, fp32_value})->GetType());
+    ASSERT_NE(isfinite_fp16_type, nullptr);
+    ASSERT_NE(isfinite_fp32_type, nullptr);
+    ASSERT_NE(popcount_type, nullptr);
+    ASSERT_NE(mul_hi_type, nullptr);
+    ASSERT_NE(fmod_type, nullptr);
+    EXPECT_EQ(isfinite_fp16_type->dtype_, ir::DataType::BOOL);
+    EXPECT_EQ(isfinite_fp32_type->dtype_, ir::DataType::BOOL);
+    EXPECT_EQ(popcount_type->dtype_, ir::DataType::INT32);
+    EXPECT_EQ(mul_hi_type->dtype_, ir::DataType::UINT32);
+    EXPECT_EQ(fmod_type->dtype_, ir::DataType::FP32);
+
     EXPECT_THROW((void)RegisteredCall("simt.sqrt", {i32_value}), npu::tile_fwk::Error);
     EXPECT_THROW((void)RegisteredCall("simt.min", {fp32_value, i32_value}), npu::tile_fwk::Error);
+    EXPECT_THROW((void)RegisteredCall("simt.isfinite", {bf16_value}), npu::tile_fwk::Error);
+    EXPECT_THROW((void)RegisteredCall("simt.popcount", {i32_value}), npu::tile_fwk::Error);
+    EXPECT_THROW((void)RegisteredCall("simt.mul_hi", {i32_value, u32_value}), npu::tile_fwk::Error);
+    EXPECT_THROW((void)RegisteredCall("simt.fmod", {i32_value, i32_value}), npu::tile_fwk::Error);
     EXPECT_THROW((void)RegisteredCall("simt.atomic_or", {fp32_tile, offset, fp32_value}), npu::tile_fwk::Error);
     EXPECT_THROW((void)RegisteredCall("simt.atomic_inc", {i32_tile, offset, i32_value}), npu::tile_fwk::Error);
     EXPECT_THROW((void)RegisteredCall("simt.atomic_add", {i32_tile, bool_offset, i32_value}), npu::tile_fwk::Error);

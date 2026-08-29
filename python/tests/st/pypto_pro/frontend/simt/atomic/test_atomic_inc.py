@@ -50,7 +50,7 @@ def atomic_inc_ub(uint32_tile):
     pl.simt.atomic_inc(uint32_tile[0, 0], 255)
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_atomic_inc_ub(uint32_state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32]):
     uint32_tile = pl.make_tile(
         pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
@@ -76,7 +76,7 @@ def atomic_inc_gm_all_dtypes(
     pl.simt.atomic_inc(uint64_state[0, 0], 255)
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_atomic_inc_gm_all_dtypes(
     uint32_state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],
     uint64_state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT64],
@@ -93,7 +93,7 @@ def atomic_inc_return_value_gm(
     old_values[0, 0] = pl.simt.atomic_inc(state[0, 0], 5)
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_atomic_inc_return_value_gm(
     state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],
     old_values: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],

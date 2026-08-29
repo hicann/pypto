@@ -35,7 +35,7 @@ def abs_all_dtypes(
     out_int64[0, tid] = pl.simt.abs(src_int64[0, tid])
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_abs_all_dtypes(
     src_fp16: pl.Tensor[[1, ELEMENTS], pl.DT_FP16],
     src_bf16: pl.Tensor[[1, ELEMENTS], pl.DT_BF16],

@@ -64,7 +64,7 @@ def cast_values(
     int64_to_int32[0, tid] = pl.simt.cast(src_int64[0, tid], pl.DT_INT32)
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_cast_values(
     src_fp32: pl.Tensor[[1, ELEMENTS], pl.DT_FP32],
     src_fp16: pl.Tensor[[1, ELEMENTS], pl.DT_FP16],
@@ -134,7 +134,7 @@ def cast_wide_integer_values(
     uint64_to_fp32[0, tid] = pl.simt.cast(src_uint64[0, tid], pl.DT_FP32, mode=pl.RoundMode.CAST_RINT)
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_cast_wide_integer_values(
     src_fp32: pl.Tensor[[1, ELEMENTS], pl.DT_FP32],
     src_int32: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],

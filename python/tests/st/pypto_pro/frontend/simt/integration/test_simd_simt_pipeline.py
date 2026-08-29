@@ -38,7 +38,7 @@ def simt_add_inplace(data, delta: pl.DT_FP32):
     data[0, tid] = data[0, tid] + delta
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simd_simt_pipeline(
     x: pl.Tensor[[1, THREADS], pl.DT_FP32],
     out: pl.Tensor[[1, THREADS], pl.DT_FP32],

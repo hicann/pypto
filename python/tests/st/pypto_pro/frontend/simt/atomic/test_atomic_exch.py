@@ -56,7 +56,7 @@ def atomic_exch_ub_all_dtypes(
     pl.simt.atomic_exch(fp32_tile[0, 0], 7.0)
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_atomic_exch_ub_all_dtypes(
     int32_state: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
     uint32_state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],
@@ -114,7 +114,7 @@ def atomic_exch_gm_all_dtypes(
     pl.simt.atomic_exch(uint64_state[0, 0], 7)
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_atomic_exch_gm_all_dtypes(
     int32_state: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
     uint32_state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],
@@ -144,7 +144,7 @@ def atomic_exch_return_value_gm(
     old_values[0, 0] = pl.simt.atomic_exch(state[0, 0], 7)
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_atomic_exch_return_value_gm(
     state: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
     old_values: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
@@ -162,7 +162,7 @@ def atomic_exch_contention_gm(
     old_values[0, tid] = pl.simt.atomic_exch(state[0, 0], pl.simt.cast(tid, pl.DT_INT32))
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_atomic_exch_contention_gm(
     state: pl.Tensor[[1, 1], pl.DT_INT32],
     old_values: pl.Tensor[[1, 32], pl.DT_INT32],

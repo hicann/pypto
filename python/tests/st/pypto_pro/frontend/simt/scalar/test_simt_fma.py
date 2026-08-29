@@ -42,7 +42,7 @@ def fma_all_dtypes(
     out_fp32[0, tid] = pl.simt.fma(lhs_fp32[0, tid], rhs_fp32[0, tid], addend_fp32[0, tid])
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_fma_all_dtypes(
     lhs_fp16: pl.Tensor[[1, ELEMENTS], pl.DT_FP16],
     rhs_fp16: pl.Tensor[[1, ELEMENTS], pl.DT_FP16],

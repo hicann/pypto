@@ -32,7 +32,7 @@ def sin_all_dtypes(
     out_fp32[0, tid] = pl.simt.sin(src_fp32[0, tid])
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_sin_all_dtypes(
     src_fp16: pl.Tensor[[1, ELEMENTS], pl.DT_FP16],
     src_bf16: pl.Tensor[[1, ELEMENTS], pl.DT_BF16],

@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <initializer_list>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -61,6 +62,14 @@ TypePtr DeduceSimtWarpSizeType(const std::vector<ExprPtr>& args,
     CHECK(args.empty()) << "simt.warp_size does not accept positional arguments";
     CHECK(kwargs.empty()) << "simt.warp_size does not accept keyword arguments";
     return std::make_shared<ScalarType>(DataType(DataType::INT32));
+}
+
+TypePtr DeduceSimtSyncType(const std::string& op_name, const std::vector<ExprPtr>& args,
+                           const std::vector<std::pair<std::string, std::any>>& kwargs)
+{
+    CHECK(args.empty()) << op_name << " does not accept positional arguments";
+    CHECK(kwargs.empty()) << op_name << " does not accept keyword arguments";
+    return GetNoneType();
 }
 
 bool IsSimtCastIntegerDtype(DataType dtype)
@@ -184,9 +193,9 @@ std::string FormatSupportedDtypes(std::initializer_list<DataType> dtypes)
 }
 
 TypePtr DeduceSimtMathType(const std::string& op_name, size_t operand_count,
-                           std::initializer_list<DataType> supported_dtypes, bool returns_bool,
-                           const std::vector<ExprPtr>& args,
-                           const std::vector<std::pair<std::string, std::any>>& kwargs)
+                           std::initializer_list<DataType> supported_dtypes, const std::vector<ExprPtr>& args,
+                           const std::vector<std::pair<std::string, std::any>>& kwargs,
+                           std::optional<DataType> result_dtype = std::nullopt)
 {
     CHECK(args.size() == operand_count) << op_name << " requires exactly " << operand_count << " scalar operand(s)";
     CHECK(kwargs.empty()) << op_name << " does not accept keyword arguments";
@@ -205,7 +214,7 @@ TypePtr DeduceSimtMathType(const std::string& op_name, size_t operand_count,
                                                 << dtype.ToString() << " and " << scalar_type->dtype_.ToString();
         }
     }
-    return std::make_shared<ScalarType>(returns_bool ? DataType::BOOL : dtype);
+    return std::make_shared<ScalarType>(result_dtype.value_or(dtype));
 }
 
 TypePtr DeduceSimtLaunchType(const std::vector<ExprPtr>& args,
@@ -300,6 +309,30 @@ REGISTER_OP("simt.warp_size")
     .no_argument()
     .f_deduce_type(DeduceSimtWarpSizeType);
 
+REGISTER_OP("simt.syncthreads")
+    .set_op_category("SimtOp")
+    .set_description("Synchronize all SIMT threads in the current block")
+    .no_argument()
+    .f_deduce_type([](const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return DeduceSimtSyncType("simt.syncthreads", args, kwargs);
+    });
+
+REGISTER_OP("simt.threadfence_block")
+    .set_op_category("SimtOp")
+    .set_description("Order SIMT memory operations for threads in the current block")
+    .no_argument()
+    .f_deduce_type([](const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return DeduceSimtSyncType("simt.threadfence_block", args, kwargs);
+    });
+
+REGISTER_OP("simt.threadfence")
+    .set_op_category("SimtOp")
+    .set_description("Order SIMT memory operations with device-wide visibility")
+    .no_argument()
+    .f_deduce_type([](const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return DeduceSimtSyncType("simt.threadfence", args, kwargs);
+    });
+
 REGISTER_OP("simt.cast")
     .set_op_category("SimtOp")
     .set_description("Convert one SIMT scalar value to a supported target dtype")
@@ -308,53 +341,83 @@ REGISTER_OP("simt.cast")
     .set_attr<int>("mode")
     .f_deduce_type(DeduceSimtCastType);
 
-#define REGISTER_SIMT_MATH_UNARY_OP(OpName, Description, ReturnsBool, ...)                                      \
+#define REGISTER_SIMT_MATH_UNARY_OP(OpName, Description, ResultDtype, ...)                                      \
     REGISTER_OP("simt." OpName)                                                                                 \
         .set_op_category("SimtOp")                                                                              \
         .set_description(Description)                                                                           \
         .add_argument("value", "Scalar operand")                                                                \
         .f_deduce_type(                                                                                         \
             [](const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs) { \
-                return DeduceSimtMathType("simt." OpName, 1, {__VA_ARGS__}, ReturnsBool, args, kwargs);         \
+                return DeduceSimtMathType("simt." OpName, 1, {__VA_ARGS__}, args, kwargs, ResultDtype);         \
             })
 
-REGISTER_SIMT_MATH_UNARY_OP("abs", "Compute the absolute value of one supported scalar", false, DataType::FP16,
+REGISTER_SIMT_MATH_UNARY_OP("abs", "Compute the absolute value of one supported scalar", std::nullopt, DataType::FP16,
                             DataType::BF16, DataType::FP32, DataType::INT64);
-REGISTER_SIMT_MATH_UNARY_OP("sqrt", "Compute the square root of one floating-point scalar", false, DataType::FP16,
-                            DataType::BF16, DataType::FP32);
-REGISTER_SIMT_MATH_UNARY_OP("rsqrt", "Compute the reciprocal square root of one floating-point scalar", false,
+REGISTER_SIMT_MATH_UNARY_OP("sqrt", "Compute the square root of one floating-point scalar", std::nullopt,
                             DataType::FP16, DataType::BF16, DataType::FP32);
-REGISTER_SIMT_MATH_UNARY_OP("exp", "Compute the natural exponential of one floating-point scalar", false,
+REGISTER_SIMT_MATH_UNARY_OP("rsqrt", "Compute the reciprocal square root of one floating-point scalar", std::nullopt,
                             DataType::FP16, DataType::BF16, DataType::FP32);
-REGISTER_SIMT_MATH_UNARY_OP("exp2", "Compute the base-two exponential of one floating-point scalar", false,
+REGISTER_SIMT_MATH_UNARY_OP("exp", "Compute the natural exponential of one floating-point scalar", std::nullopt,
                             DataType::FP16, DataType::BF16, DataType::FP32);
-REGISTER_SIMT_MATH_UNARY_OP("log", "Compute the natural logarithm of one floating-point scalar", false, DataType::FP16,
-                            DataType::BF16, DataType::FP32);
-REGISTER_SIMT_MATH_UNARY_OP("log2", "Compute the base-two logarithm of one floating-point scalar", false,
+REGISTER_SIMT_MATH_UNARY_OP("exp2", "Compute the base-two exponential of one floating-point scalar", std::nullopt,
                             DataType::FP16, DataType::BF16, DataType::FP32);
-REGISTER_SIMT_MATH_UNARY_OP("log1p", "Compute log(1 + value) for one FP32 scalar", false, DataType::FP32);
-REGISTER_SIMT_MATH_UNARY_OP("sin", "Compute the sine of one floating-point scalar", false, DataType::FP16,
-                            DataType::BF16, DataType::FP32);
-REGISTER_SIMT_MATH_UNARY_OP("cos", "Compute the cosine of one floating-point scalar", false, DataType::FP16,
-                            DataType::BF16, DataType::FP32);
-REGISTER_SIMT_MATH_UNARY_OP("tanh", "Compute the hyperbolic tangent of one floating-point scalar", false,
+REGISTER_SIMT_MATH_UNARY_OP("log", "Compute the natural logarithm of one floating-point scalar", std::nullopt,
                             DataType::FP16, DataType::BF16, DataType::FP32);
-REGISTER_SIMT_MATH_UNARY_OP("rint", "Round one floating-point scalar to the nearest integer value", false,
+REGISTER_SIMT_MATH_UNARY_OP("log2", "Compute the base-two logarithm of one floating-point scalar", std::nullopt,
                             DataType::FP16, DataType::BF16, DataType::FP32);
-REGISTER_SIMT_MATH_UNARY_OP("round", "Round one floating-point scalar halfway away from zero", false, DataType::FP16,
+REGISTER_SIMT_MATH_UNARY_OP("log1p", "Compute log(1 + value) for one FP32 scalar", std::nullopt, DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("sin", "Compute the sine of one floating-point scalar", std::nullopt, DataType::FP16,
                             DataType::BF16, DataType::FP32);
-REGISTER_SIMT_MATH_UNARY_OP("floor", "Round one floating-point scalar downward", false, DataType::FP16, DataType::BF16,
-                            DataType::FP32);
-REGISTER_SIMT_MATH_UNARY_OP("ceil", "Round one floating-point scalar upward", false, DataType::FP16, DataType::BF16,
-                            DataType::FP32);
-REGISTER_SIMT_MATH_UNARY_OP("trunc", "Round one floating-point scalar toward zero", false, DataType::FP16,
+REGISTER_SIMT_MATH_UNARY_OP("cos", "Compute the cosine of one floating-point scalar", std::nullopt, DataType::FP16,
                             DataType::BF16, DataType::FP32);
-REGISTER_SIMT_MATH_UNARY_OP("isnan", "Test whether one floating-point scalar is NaN", true, DataType::FP16,
+REGISTER_SIMT_MATH_UNARY_OP("tanh", "Compute the hyperbolic tangent of one floating-point scalar", std::nullopt,
+                            DataType::FP16, DataType::BF16, DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("rint", "Round one floating-point scalar to the nearest integer value", std::nullopt,
+                            DataType::FP16, DataType::BF16, DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("round", "Round one floating-point scalar halfway away from zero", std::nullopt,
+                            DataType::FP16, DataType::BF16, DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("floor", "Round one floating-point scalar downward", std::nullopt, DataType::FP16,
                             DataType::BF16, DataType::FP32);
-REGISTER_SIMT_MATH_UNARY_OP("isinf", "Test whether one floating-point scalar is infinite", true, DataType::FP16,
+REGISTER_SIMT_MATH_UNARY_OP("ceil", "Round one floating-point scalar upward", std::nullopt, DataType::FP16,
                             DataType::BF16, DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("trunc", "Round one floating-point scalar toward zero", std::nullopt, DataType::FP16,
+                            DataType::BF16, DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("isnan", "Test whether one floating-point scalar is NaN", DataType::BOOL, DataType::FP16,
+                            DataType::BF16, DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("isinf", "Test whether one floating-point scalar is infinite", DataType::BOOL,
+                            DataType::FP16, DataType::BF16, DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("isfinite", "Test whether one FP16 or FP32 scalar is finite", DataType::BOOL,
+                            DataType::FP16, DataType::FP32);
 
 #undef REGISTER_SIMT_MATH_UNARY_OP
+
+REGISTER_OP("simt.popcount")
+    .set_op_category("SimtOp")
+    .set_description("Count set bits in a UINT32 or UINT64 scalar, returning INT32")
+    .add_argument("value", "Unsigned scalar operand")
+    .f_deduce_type([](const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return DeduceSimtMathType("simt.popcount", 1, {DataType::UINT32, DataType::UINT64}, args, kwargs,
+                                  DataType::INT32);
+    });
+
+REGISTER_OP("simt.mul_hi")
+    .set_op_category("SimtOp")
+    .set_description("Compute the high half of the full product of two same-dtype integers")
+    .add_argument("lhs", "Left scalar operand")
+    .add_argument("rhs", "Right scalar operand")
+    .f_deduce_type([](const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return DeduceSimtMathType("simt.mul_hi", 2,
+                                  {DataType::INT32, DataType::UINT32, DataType::INT64, DataType::UINT64}, args, kwargs);
+    });
+
+REGISTER_OP("simt.fmod")
+    .set_op_category("SimtOp")
+    .set_description("Compute an FP32 remainder with a quotient truncated toward zero")
+    .add_argument("lhs", "Dividend")
+    .add_argument("rhs", "Divisor")
+    .f_deduce_type([](const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return DeduceSimtMathType("simt.fmod", 2, {DataType::FP32}, args, kwargs);
+    });
 
 REGISTER_OP("simt.min")
     .set_op_category("SimtOp")
@@ -366,7 +429,7 @@ REGISTER_OP("simt.min")
             "simt.min", 2,
             {DataType::FP16, DataType::BF16, DataType::FP32, DataType::INT8, DataType::INT16, DataType::INT32,
              DataType::INT64, DataType::UINT8, DataType::UINT16, DataType::UINT32, DataType::UINT64},
-            false, args, kwargs);
+            args, kwargs);
     });
 
 REGISTER_OP("simt.max")
@@ -379,7 +442,7 @@ REGISTER_OP("simt.max")
             "simt.max", 2,
             {DataType::FP16, DataType::BF16, DataType::FP32, DataType::INT8, DataType::INT16, DataType::INT32,
              DataType::INT64, DataType::UINT8, DataType::UINT16, DataType::UINT32, DataType::UINT64},
-            false, args, kwargs);
+            args, kwargs);
     });
 
 REGISTER_OP("simt.fma")
@@ -389,7 +452,7 @@ REGISTER_OP("simt.fma")
     .add_argument("rhs", "Right multiplication operand")
     .add_argument("addend", "Scalar addend")
     .f_deduce_type([](const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        return DeduceSimtMathType("simt.fma", 3, {DataType::FP16, DataType::BF16, DataType::FP32}, false, args, kwargs);
+        return DeduceSimtMathType("simt.fma", 3, {DataType::FP16, DataType::BF16, DataType::FP32}, args, kwargs);
     });
 
 REGISTER_OP("simt.atomic_add")

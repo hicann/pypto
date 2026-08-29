@@ -84,6 +84,34 @@ class Simt:
 
     @staticmethod
     @_api_decl
+    def syncthreads() -> None:
+        """Synchronize all threads in the current block.
+
+        The barrier must be reached uniformly by every thread in the block. It
+        cannot be placed inside runtime ``if``, ``for``, or ``while`` control flow.
+        This no-return operation must be used as a standalone statement.
+        """
+
+    @staticmethod
+    @_api_decl
+    def threadfence_block() -> None:
+        """Order this thread's memory operations for threads in the current block.
+
+        This memory fence does not wait for other threads and may be used in
+        runtime control flow. It must be used as a standalone statement.
+        """
+
+    @staticmethod
+    @_api_decl
+    def threadfence() -> None:
+        """Order this thread's memory operations with device-wide visibility.
+
+        This memory fence does not wait for other threads and may be used in
+        runtime control flow. It must be used as a standalone statement.
+        """
+
+    @staticmethod
+    @_api_decl
     def cast(
         value: Scalar,
         dtype: DType,
@@ -195,6 +223,34 @@ class Simt:
     @_api_decl
     def isinf(value: Scalar) -> Scalar:
         """Return a BOOL Scalar indicating whether a floating-point Scalar is infinite."""
+
+    @staticmethod
+    @_api_decl
+    def isfinite(value: Scalar) -> Scalar:
+        """Test whether an FP16 or FP32 Scalar is finite, returning BOOL."""
+
+    @staticmethod
+    @_api_decl
+    def popcount(value: Scalar) -> Scalar:
+        """Count the set bits in a UINT32 or UINT64 Scalar, returning INT32."""
+
+    @staticmethod
+    @_api_decl
+    def mul_hi(lhs: Scalar, rhs: Scalar) -> Scalar:
+        """Return the high half of the full product of two same-dtype integers.
+
+        Supports INT32, UINT32, INT64, and UINT64; the result has the input dtype.
+        """
+
+    @staticmethod
+    @_api_decl
+    def fmod(lhs: Scalar, rhs: Scalar) -> Scalar:
+        """Return the FP32 remainder with a quotient truncated toward zero.
+
+        Both operands must be FP32. The result retains the dividend's sign,
+        including signed zero. A zero divisor, infinite dividend, or NaN operand
+        produces NaN; a finite dividend modulo infinity returns the dividend.
+        """
 
     @staticmethod
     @_api_decl

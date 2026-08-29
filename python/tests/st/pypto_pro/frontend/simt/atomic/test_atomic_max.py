@@ -60,7 +60,7 @@ def atomic_max_ub_all_dtypes(
     pl.simt.atomic_max(fp32_tile[0, 0], 7.0)
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_atomic_max_ub_all_dtypes(
     int32_state: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
     uint32_state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],
@@ -140,7 +140,7 @@ def atomic_max_gm_all_dtypes(
     pl.simt.atomic_max(uint64_state[0, 0], 7)
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_atomic_max_gm_all_dtypes(
     int32_state: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
     uint32_state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],
@@ -174,7 +174,7 @@ def atomic_max_return_value_gm(
     old_values[0, 0] = pl.simt.atomic_max(state[0, 0], 12)
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_atomic_max_return_value_gm(
     state: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
     old_values: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],

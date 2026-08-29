@@ -46,7 +46,7 @@ def gm_add(
         dst[0, tid] = src[0, tid] + delta
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_gm_add(
     x: pl.Tensor[[1, THREADS], pl.DT_FP32],
     out: pl.Tensor[[1, THREADS], pl.DT_FP32],
@@ -74,7 +74,7 @@ def gm_copy_dtypes(
     dst_int64[row, col] = src_int64[row, col]
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_gm_copy_dtypes(
     src_int8: pl.Tensor[[GM_ROWS, GM_COLS], pl.DT_INT8],
     src_fp16: pl.Tensor[[GM_ROWS, GM_COLS], pl.DT_FP16],

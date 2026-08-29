@@ -56,7 +56,7 @@ def atomic_cas_ub_all_dtypes(
     pl.simt.atomic_cas(fp32_tile[0, 0], 0.0, 7.0)
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_atomic_cas_ub_all_dtypes(
     int32_state: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
     uint32_state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],
@@ -114,7 +114,7 @@ def atomic_cas_gm_all_dtypes(
     pl.simt.atomic_cas(uint64_state[0, 0], 0, 7)
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_atomic_cas_gm_all_dtypes(
     int32_state: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
     uint32_state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],
@@ -144,7 +144,7 @@ def atomic_cas_return_value_gm(
     old_values[0, 0] = pl.simt.atomic_cas(state[0, 0], 10, 13)
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_atomic_cas_return_value_gm(
     state: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
     old_values: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
@@ -162,7 +162,7 @@ def atomic_cas_winner_gm(
     old_values[0, tid] = pl.simt.atomic_cas(state[0, 0], 0, 1)
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_atomic_cas_winner_gm(
     state: pl.Tensor[[1, 1], pl.DT_INT32],
     old_values: pl.Tensor[[1, 32], pl.DT_INT32],

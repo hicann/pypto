@@ -8,7 +8,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-"""A5 end-to-end test for launching a SIMT function on multiple AIV cores."""
+"""每个线程写入共享UB，块内同步后读取另一线程写入的数据。"""
 
 import os
 
@@ -18,9 +18,7 @@ import torch
 
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
-GRID_BLOCKS = 4
-THREADS = 64
-TILE_BYTES = THREADS * 4
+THREADS = 128
 
 
 def _require_a5():
@@ -34,35 +32,30 @@ def _require_a5():
 
 
 @pl.simt.function(max_threads=THREADS)
-def write_multicore_result(dst):
+def exchange_after_syncthreads(out: pl.Tensor[[1, THREADS], pl.DT_UINT32], shared):
     tid = pl.simt.linear_thread_idx()
-    core_id = pl.simt.block_idx().x
-    dst[0, tid] = core_id * THREADS + tid
+    shared[0, tid] = tid
+    pl.simt.syncthreads()
+    out[0, tid] = shared[0, THREADS - 1 - tid]
 
 
 @pl.jit()
-def simt_multicore(out: pl.Tensor[[GRID_BLOCKS, THREADS], pl.DT_UINT32]):
-    tile_type = pl.TileType(shape=[1, THREADS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
-    dst = pl.make_tile(tile_type, addr=0x0000, size=TILE_BYTES)
+def simt_syncthreads(out: pl.Tensor[[1, THREADS], pl.DT_UINT32]):
+    shared = pl.make_tile(
+        pl.TileType(shape=[1, THREADS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
+        addr=0,
+        size=THREADS * 4,
+    )
     with pl.section_vector():
-        core_id = pl.get_block_idx()
-        pl.simt.launch(write_multicore_result, threads=THREADS, args=(dst,))
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=0)
-        pl.store(out, dst, [core_id, 0])
+        pl.simt.launch(exchange_after_syncthreads, threads=THREADS, args=(out, shared))
 
 
 @pytest.mark.soc("950")
-def test_multicore():
+def test_syncthreads():
     _require_a5()
-
-    out = torch.empty((GRID_BLOCKS, THREADS), dtype=torch.int32).to(torch.uint32).to(ST_DEVICE)
-    simt_multicore[None, GRID_BLOCKS](out)
+    out = torch.empty((1, THREADS), dtype=torch.uint32, device=ST_DEVICE)
+    simt_syncthreads(out)
     torch.npu.synchronize()
 
-    expected = torch.arange(GRID_BLOCKS * THREADS, dtype=torch.int64).reshape(GRID_BLOCKS, THREADS)
-    torch.testing.assert_close(out.cpu().to(torch.int64), expected, rtol=0, atol=0)
-
-
-if __name__ == "__main__":
-    test_multicore()
+    expected = torch.arange(THREADS - 1, -1, -1, dtype=torch.int64).to(torch.uint32).reshape(1, THREADS)
+    torch.testing.assert_close(out.cpu(), expected, rtol=0, atol=0)

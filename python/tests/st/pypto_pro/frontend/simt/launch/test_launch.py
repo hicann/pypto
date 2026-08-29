@@ -70,7 +70,7 @@ def write_linear_thread_id(out: pl.Tensor[[1, MAX_THREADS], pl.DT_UINT32]):
     out[0, tid] = tid
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_1d_launch(
     x: pl.Tensor[[1, THREADS_1D], pl.DT_FP32],
     out: pl.Tensor[[1, THREADS_1D], pl.DT_FP32],
@@ -88,7 +88,7 @@ def simt_1d_launch(
         pl.store(out, data, [0, 0])
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_2d_launch(
     x: pl.Tensor[[1, THREADS_2D], pl.DT_FP32],
     out: pl.Tensor[[1, THREADS_2D], pl.DT_FP32],
@@ -106,7 +106,7 @@ def simt_2d_launch(
         pl.store(out, data, [0, 0])
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_3d_launch(
     x: pl.Tensor[[1, THREADS_3D], pl.DT_FP32],
     out: pl.Tensor[[1, THREADS_3D], pl.DT_FP32],
@@ -124,13 +124,13 @@ def simt_3d_launch(
         pl.store(out, data, [0, 0])
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_launch_non_warp(out: pl.Tensor[[1, MAX_THREADS], pl.DT_UINT32]):
     with pl.section_vector():
         pl.simt.launch(write_linear_thread_id, threads=NON_WARP_THREADS, args=(out,))
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_launch_non_power_of_two_3d(out: pl.Tensor[[1, MAX_THREADS], pl.DT_UINT32]):
     with pl.section_vector():
         pl.simt.launch(
@@ -140,7 +140,7 @@ def simt_launch_non_power_of_two_3d(out: pl.Tensor[[1, MAX_THREADS], pl.DT_UINT3
         )
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_launch_hardware_limit(out: pl.Tensor[[1, MAX_THREADS], pl.DT_UINT32]):
     with pl.section_vector():
         pl.simt.launch(write_linear_thread_id, threads=MAX_THREADS, args=(out,))

@@ -51,7 +51,7 @@ def ub_tile_add(
         dst[row, col] = src[row, col] + delta
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_ub_tile_access(
     x: pl.Tensor[[VALID_ROWS, VALID_COLS], pl.DT_FP32],
     out: pl.Tensor[[VALID_ROWS, VALID_COLS], pl.DT_FP32],

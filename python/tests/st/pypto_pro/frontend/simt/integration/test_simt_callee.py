@@ -69,7 +69,7 @@ def transform_tile(
     transform_one(dst, src, tid, scale, delta)
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_callee_kernel(
     x: pl.Tensor[[1, THREADS], pl.DT_FP32],
     out: pl.Tensor[[1, THREADS], pl.DT_FP32],

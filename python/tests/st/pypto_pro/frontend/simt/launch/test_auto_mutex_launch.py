@@ -42,7 +42,7 @@ def auto_mutex_add(data, delta: pl.DT_FP32):
     data[0, tid] = data[0, tid] + delta
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_auto_mutex_kernel(
     x: pl.Tensor[[1, THREADS], pl.DT_FP32],
     out: pl.Tensor[[1, THREADS], pl.DT_FP32],

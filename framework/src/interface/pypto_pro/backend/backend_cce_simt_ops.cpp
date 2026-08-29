@@ -84,6 +84,33 @@ std::string MakeSimtWarpSizeCodegenCCE([[maybe_unused]] const ir::CallPtr& op, c
     return "warpSize";
 }
 
+std::string MakeSimtSyncthreadsCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+{
+    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+    CHECK(codegen.IsInSimtContext()) << "simt.syncthreads reached CCE codegen outside a SIMT function";
+    CHECK(op->args_.empty() && op->kwargs_.empty()) << "simt.syncthreads does not accept arguments";
+    codegen.Emit("__sync_workitems();");
+    return "";
+}
+
+std::string MakeSimtThreadfenceBlockCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+{
+    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+    CHECK(codegen.IsInSimtContext()) << "simt.threadfence_block reached CCE codegen outside a SIMT function";
+    CHECK(op->args_.empty() && op->kwargs_.empty()) << "simt.threadfence_block does not accept arguments";
+    codegen.Emit("__threadfence_block();");
+    return "";
+}
+
+std::string MakeSimtThreadfenceCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+{
+    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+    CHECK(codegen.IsInSimtContext()) << "simt.threadfence reached CCE codegen outside a SIMT function";
+    CHECK(op->args_.empty() && op->kwargs_.empty()) << "simt.threadfence does not accept arguments";
+    codegen.Emit("__threadfence();");
+    return "";
+}
+
 const char* GetSimtCastRoundModeCCE(ir::RoundMode mode)
 {
     switch (mode) {
@@ -532,6 +559,97 @@ std::string MakeSimtIsinfCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase&
     return "";
 }
 
+std::string MakeSimtIsfiniteCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+{
+    const auto input = GetSimtUnaryCodegenInput(op, codegen_base);
+    CHECK(input.dtype == ir::DataType::FP16 || input.dtype == ir::DataType::FP32)
+        << "simt.isfinite requires FP16 or FP32";
+    return "__isfinite(" + input.operand + ")";
+}
+
+std::string MakeSimtPopcountCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+{
+    const auto input = GetSimtUnaryCodegenInput(op, codegen_base);
+    if (input.dtype == ir::DataType::UINT32) {
+        return "__popc((unsigned int)(" + input.operand + "))";
+    }
+    CHECK(input.dtype == ir::DataType::UINT64) << "simt.popcount requires UINT32 or UINT64";
+    return "__popc((unsigned long long)(" + input.operand + "))";
+}
+
+std::string MakeSimtMulHiCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+{
+    const auto input = GetSimtUnaryCodegenInput(op, codegen_base);
+    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+    const std::string rhs = codegen.GetExprAsCode(op->args_[1]);
+    const char* intrinsic = nullptr;
+    const char* operand_type = nullptr;
+    if (input.dtype == ir::DataType::INT32) {
+        intrinsic = "__mulhi";
+        operand_type = "int";
+    } else if (input.dtype == ir::DataType::UINT32) {
+        intrinsic = "__umulhi";
+        operand_type = "unsigned int";
+    } else if (input.dtype == ir::DataType::INT64) {
+        intrinsic = "__mul64hi";
+        operand_type = "long long";
+    } else if (input.dtype == ir::DataType::UINT64) {
+        intrinsic = "__umul64hi";
+        operand_type = "unsigned long long";
+    } else {
+        CHECK(false) << "Unsupported simt.mul_hi dtype " << input.dtype.ToString();
+        return "";
+    }
+    return "((" + input.dtype.ToCTypeString() + ")" + intrinsic + "((" + operand_type + ")(" + input.operand + "), (" +
+           operand_type + ")(" + rhs + ")))";
+}
+
+std::string MakeSimtFmodCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+{
+    const auto input = GetSimtUnaryCodegenInput(op, codegen_base);
+    CHECK(input.dtype == ir::DataType::FP32) << "simt.fmod requires FP32";
+    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+    const std::string rhs = codegen.GetExprAsCode(op->args_[1]);
+
+    // Binary long division of normalized significands avoids quotient overflow
+    // and cancellation. Integer shifts also preserve subnormals and signed zero.
+    // Keep the implementation local to the expression, like SIMT sin/cos lowering.
+    std::ostringstream s;
+    s << "({"
+      << "float __x = (" << input.operand << "); float __y = (" << rhs << ");"
+      << "uint32_t __ux = reinterpret_cast<uint32_t&>(__x);"
+      << "uint32_t __uy = reinterpret_cast<uint32_t&>(__y);"
+      << "uint32_t __sign = __ux & 0x80000000u;"
+      << "uint32_t __ax = __ux & 0x7fffffffu, __ay = __uy & 0x7fffffffu;"
+      << "uint32_t __result = __ux;"
+      << "if (__ay == 0 || __ax >= 0x7f800000u || __ay > 0x7f800000u) {"
+      << "__result = 0x7fc00000u;"
+      << "} else if (__ax >= __ay) {"
+      << "int __ex = (int)(__ax >> 23), __ey = (int)(__ay >> 23);"
+      << "uint32_t __mx = __ax & 0x007fffffu, __my = __ay & 0x007fffffu;"
+      << "if (__ex == 0) {"
+      << "__ex = 1; while (__mx < 0x00800000u) { __mx <<= 1; --__ex; }"
+      << "} else { __mx |= 0x00800000u; }"
+      << "if (__ey == 0) {"
+      << "__ey = 1; while (__my < 0x00800000u) { __my <<= 1; --__ey; }"
+      << "} else { __my |= 0x00800000u; }"
+      << "while (__ex > __ey) {"
+      << "if (__mx >= __my) { __mx -= __my; }"
+      << "__mx <<= 1; --__ex;"
+      << "}"
+      << "if (__mx >= __my) { __mx -= __my; }"
+      << "if (__mx == 0) { __result = __sign; } else {"
+      << "while (__mx < 0x00800000u) { __mx <<= 1; --__ex; }"
+      << "if (__ex > 0) { __result = (__mx & 0x007fffffu) | ((uint32_t)__ex << 23); }"
+      << "else { __result = __mx >> (1 - __ex); }"
+      << "__result |= __sign;"
+      << "}"
+      << "}"
+      << "reinterpret_cast<float&>(__result);"
+      << "})";
+    return s.str();
+}
+
 std::string MakeSimtSinCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     const auto input = GetSimtUnaryCodegenInput(op, codegen_base);
@@ -771,6 +889,13 @@ REGISTER_BACKEND_OP(BackendCCE, "simt.linear_thread_idx")
 
 REGISTER_BACKEND_OP(BackendCCE, "simt.warp_size").set_pipe(ir::PipeType::S).f_codegen(MakeSimtWarpSizeCodegenCCE);
 
+REGISTER_BACKEND_OP(BackendCCE, "simt.syncthreads").set_pipe(ir::PipeType::S).f_codegen(MakeSimtSyncthreadsCodegenCCE);
+
+REGISTER_BACKEND_OP(BackendCCE, "simt.threadfence_block")
+    .set_pipe(ir::PipeType::S)
+    .f_codegen(MakeSimtThreadfenceBlockCodegenCCE);
+REGISTER_BACKEND_OP(BackendCCE, "simt.threadfence").set_pipe(ir::PipeType::S).f_codegen(MakeSimtThreadfenceCodegenCCE);
+
 REGISTER_BACKEND_OP(BackendCCE, "simt.cast").set_pipe(ir::PipeType::S).f_codegen(MakeSimtCastCodegenCCE);
 
 REGISTER_BACKEND_OP(BackendCCE, "simt.abs").set_pipe(ir::PipeType::S).f_codegen(MakeSimtAbsCodegenCCE);
@@ -789,6 +914,10 @@ REGISTER_BACKEND_OP(BackendCCE, "simt.ceil").set_pipe(ir::PipeType::S).f_codegen
 REGISTER_BACKEND_OP(BackendCCE, "simt.trunc").set_pipe(ir::PipeType::S).f_codegen(MakeSimtTruncCodegenCCE);
 REGISTER_BACKEND_OP(BackendCCE, "simt.isnan").set_pipe(ir::PipeType::S).f_codegen(MakeSimtIsnanCodegenCCE);
 REGISTER_BACKEND_OP(BackendCCE, "simt.isinf").set_pipe(ir::PipeType::S).f_codegen(MakeSimtIsinfCodegenCCE);
+REGISTER_BACKEND_OP(BackendCCE, "simt.isfinite").set_pipe(ir::PipeType::S).f_codegen(MakeSimtIsfiniteCodegenCCE);
+REGISTER_BACKEND_OP(BackendCCE, "simt.popcount").set_pipe(ir::PipeType::S).f_codegen(MakeSimtPopcountCodegenCCE);
+REGISTER_BACKEND_OP(BackendCCE, "simt.mul_hi").set_pipe(ir::PipeType::S).f_codegen(MakeSimtMulHiCodegenCCE);
+REGISTER_BACKEND_OP(BackendCCE, "simt.fmod").set_pipe(ir::PipeType::S).f_codegen(MakeSimtFmodCodegenCCE);
 REGISTER_BACKEND_OP(BackendCCE, "simt.sin").set_pipe(ir::PipeType::S).f_codegen(MakeSimtSinCodegenCCE);
 REGISTER_BACKEND_OP(BackendCCE, "simt.cos").set_pipe(ir::PipeType::S).f_codegen(MakeSimtCosCodegenCCE);
 REGISTER_BACKEND_OP(BackendCCE, "simt.min").set_pipe(ir::PipeType::S).f_codegen(MakeSimtMinCodegenCCE);

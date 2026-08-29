@@ -44,7 +44,7 @@ def mul_inplace(data, scale: pl.DT_FP32):
     data[0, tid] = data[0, tid] * scale
 
 
-@pl.jit(arch="a5")
+@pl.jit()
 def simt_multiple_functions(
     x: pl.Tensor[[1, THREADS], pl.DT_FP32],
     out: pl.Tensor[[1, THREADS], pl.DT_FP32],
