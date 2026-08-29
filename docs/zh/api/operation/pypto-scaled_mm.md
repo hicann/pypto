@@ -34,8 +34,8 @@ scaled_mm(mat_a, mat_b, out_dtype, scale_a, scale_b, *, a_trans = False, b_trans
 | mat_a             | 输入      | 表示输入左矩阵。不支持输入空Tensor。<br> **数据类型**：详见表3。<br> **矩阵维度**：2维、3维、4维。<br> **Format**：TILEOP_ND，TILEOP_NZ（DT_FP8E5M2输入不支持TILEOP_NZ格式）。<br> **内轴外轴**：当输入矩阵mat_a非转置时，对应数据排布为[M, K]，此时外轴为M，内轴为K；当输入矩阵mat_a转置时，对应数据排布为[K, M]，此时外轴为K，内轴为M。<br> **对齐要求**：当Format为TILEOP_ND（ND格式）时，外轴范围为[1, 2^31 - 1]，内轴范围为[1, 65535]。<br> 当Format为TILEOP_NZ（NZ格式）时，其Shape维度需满足内轴32字节对齐，外轴16元素对齐。<br> 在使用pypto.view接口的场景，应保证传入View的Shape维度也满足内轴32字节对齐，外轴16元素对齐。 |
 | mat_b              | 输入      | 表示输入右矩阵。不支持输入空Tensor。<br> **数据类型**：详见表3。<br> **矩阵维度**：2维、3维、4维。<br> **Format**：TILEOP_ND，TILEOP_NZ（DT_FP8E5M2输入不支持TILEOP_NZ格式）。<br> **内轴外轴**：当输入矩阵mat_b非转置时，对应数据排布为[K, N]，此时外轴为K，内轴为N；当输入矩阵mat_b转置时，对应数据排布为[N, K]，此时外轴为N，内轴为K。<br> **对齐要求**：当Format为TILEOP_ND（ND格式）时，外轴范围为[1, 2^31 - 1]，内轴范围为[1, 65535]。<br> 当Format为TILEOP_NZ（NZ格式）时，其Shape维度需满足内轴32字节对齐，外轴16元素对齐。<br> 在使用pypto.view接口的场景，应保证传入View的Shape维度也满足内轴32字节对齐，外轴16元素对齐。 |
 | out_dtype         | 输出      | 表示输出矩阵数据类型。基础场景输出数据类型支持情况详见表3，量化场景输出数据类型支持情况详见表4。|
-| scale_a              | 输入      | 表示输入左矩阵量化参数。不支持输入空Tensor。<br> **数据类型**：详见表3。<br> **量化参数维度**：3维。<br> **Format**：TILEOP_ND。<br> **量化参数shape**：当输入量化参数非转置时，对应输入shape为[M, CeilAlign(K, 64)/64, 2]；当输入量化参数转置时，对应输入shape为[CeilAlign(K, 64)/64, M, 2]。其中M和K值等于输入矩阵mat_a的M、K维度的形状值。|
-| scale_b              | 输入      | 表示输入右矩阵量化参数。不支持输入空Tensor。<br> **数据类型**：详见表3。<br> **量化参数维度**：3维。<br> **Format**：TILEOP_ND。<br> **量化参数shape**：当输入量化参数非转置时，对应输入shape为[CeilAlign(K, 64)/64, N, 2]；当输入量化参数转置时，对应输入shape为[N, CeilAlign(K, 64)/64, 2]。其中N和K值等于输入矩阵mat_b的N、K维度的形状值。|
+| scale_a              | 输入      | 表示输入左矩阵量化参数。不支持输入空Tensor。<br> **数据类型**：详见表3。<br> **量化参数维度**：比mat_a多1维，mat_a为2/3/4维时，scale_a分别为3/4/5维。<br> **Format**：TILEOP_ND。<br> **量化参数shape**：记Ks=CeilAlign(K, 64)/64。二维场景非转置为[M, Ks, 2]，转置为[Ks, M, 2]；三维、四维场景在上述shape前增加mat_a自身的Batch前缀。scale_a的每个Batch轴必须与mat_a严格相等，并与mat_a使用相同的广播索引。|
+| scale_b              | 输入      | 表示输入右矩阵量化参数。不支持输入空Tensor。<br> **数据类型**：详见表3。<br> **量化参数维度**：比mat_b多1维，mat_b为2/3/4维时，scale_b分别为3/4/5维。<br> **Format**：TILEOP_ND。<br> **量化参数shape**：记Ks=CeilAlign(K, 64)/64。二维场景非转置为[Ks, N, 2]，转置为[N, Ks, 2]；三维、四维场景在上述shape前增加mat_b自身的Batch前缀。scale_b的每个Batch轴必须与mat_b严格相等，并与mat_b使用相同的广播索引。|
 | a_trans           | 输入      | 参数a_trans表示输入左矩阵是否转置，默认为False。 |
 | b_trans           | 输入      | 参数b_trans表示输入右矩阵是否转置，默认为False。 |
 | scale_a_trans     | 输入      | 参数scale_a_trans表示输入左矩阵量化参数是否转置，默认为False。 |
@@ -89,6 +89,20 @@ mat_a = pypto.tensor([64, 128], pypto.DT_FP8E5M2, "mat_a")
 mat_b = pypto.tensor([128, 32], pypto.DT_FP8E5M2, "mat_b")
 scale_a = pypto.tensor([64, 2, 2], pypto.DT_FP8E8M0, "scale_a")
 scale_b = pypto.tensor([2, 32, 2], pypto.DT_FP8E8M0, "scale_b")
+out = pypto.scaled_mm(mat_a, mat_b, pypto.DT_BF16, scale_a, scale_b)
+
+# 3维单侧广播：A/scale_a作为整体沿Batch轴广播
+mat_a = pypto.tensor([1, 128, 256], pypto.DT_FP8E5M2, "mat_a")
+mat_b = pypto.tensor([4, 256, 64], pypto.DT_FP8E5M2, "mat_b")
+scale_a = pypto.tensor([1, 128, 4, 2], pypto.DT_FP8E8M0, "scale_a")
+scale_b = pypto.tensor([4, 4, 64, 2], pypto.DT_FP8E8M0, "scale_b")
+out = pypto.scaled_mm(mat_a, mat_b, pypto.DT_BF16, scale_a, scale_b)
+
+# 4维交叉广播：scale Batch前缀分别与配对矩阵保持一致
+mat_a = pypto.tensor([2, 1, 128, 256], pypto.DT_FP8E5M2, "mat_a")
+mat_b = pypto.tensor([1, 3, 256, 64], pypto.DT_FP8E5M2, "mat_b")
+scale_a = pypto.tensor([2, 1, 128, 4, 2], pypto.DT_FP8E8M0, "scale_a")
+scale_b = pypto.tensor([1, 3, 4, 64, 2], pypto.DT_FP8E8M0, "scale_b")
 out = pypto.scaled_mm(mat_a, mat_b, pypto.DT_BF16, scale_a, scale_b)
 
 # 叠加Bias
