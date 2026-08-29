@@ -33,6 +33,7 @@ from pypto.pypto_impl.ir import DataType
 from pypto_pro.ir._utils import _is_int
 from pypto_pro.ir.op._op_registry import op_impl
 from pypto_pro.ir.op.block_ops import TileType as _TileType
+from pypto_pro.ir.op.block_ops import _ir_reinterpret, _static_shape_ints
 from pypto_pro.ir.op.block_ops import make_tile_expr as _make_tile_expr
 from pypto_pro.ir.op.block_ops import tile_slot_size as _tile_slot_size
 
@@ -240,6 +241,79 @@ class BufferParserMixin:
             [tiles_tuple, *mut_tuples, cursor], ["tiles", *mut_fields, "cursor"], span
         )
         self.tile_group_meta[result] = (depth, mutex_ids, tile_type.target_memory)
+        return result
+
+    def _build_reinterpreted_group(self, group, kwargs: dict, span: ir.Span) -> ir.Expr:
+        """Rebuild a tile_group handle after a reinterpretation.
+
+        Each slot is reinterpreted through the single-tile path (``_ir_reinterpret``):
+        every slot is re-allocated at the ORIGINAL address and size (SameAllocation
+        semantics keep the "same buffer" identity) and runs the same validation as
+        standalone tiles (compile-time shape, element alignment, footprint bound).
+
+        depth and per-tile mutex_ids are inherited verbatim (mutex_id
+        inheritance); the mutex columns and the rotating cursor are reused from
+        the original group handle. The group handle shape mirrors what
+        ``_build_tile_group_ir`` produces (tiles tuple, mutex_id columns,
+        optional cursor), keeping ``next()/current()/previous()`` and
+        ``tile_group_meta`` fully functional.
+        """
+        from pypto_pro.language.parser.diagnostics import ParserTypeError
+
+        meta = self.tile_group_meta.get(group)
+        if meta is None:
+            raise ParserTypeError(
+                "tile group handle has no group metadata; it must come directly from pl.make_tile_group()",
+                span=span,
+                hint="Pass the handle itself rather than a copy stored in a struct or container",
+            )
+        n_slots, per_tile_mutex_ids, _memory = meta
+        tiles = self.lower_attr_access(group, "tiles", span)
+
+        slot0 = ir.GetItemExpr(tiles, ir.ConstInt(0, DataType.INDEX, span), span)
+        t = getattr(slot0, "type", None)
+        memref = getattr(t, "memref", None)
+        try:
+            old_shape = _static_shape_ints(t.shape, "reinterpret: source")
+        except ValueError as exc:
+            raise ParserTypeError(str(exc), span=span) from exc
+
+        # Override args are validated ONCE at the DSL entry (_parse_reinterpret);
+        # the group dispatch never re-validates them. Per-slot validation
+        # (alignment / footprint / compile-time shape) happens inside
+        # _ir_reinterpret for every slot.
+        new_shape = list(kwargs["shape"]) if kwargs.get("shape") is not None else old_shape
+
+        # ① reinterpret every slot through the single-tile path: same address &
+        #    size (fresh MemRef inside _ir_reinterpret) and identical validation.
+        var_name = self.current_target_name
+        tile_vars = []
+        for i in range(n_slots):
+            slot = ir.GetItemExpr(tiles, ir.ConstInt(i, DataType.INDEX, span), span)
+            slot_tile = _ir_reinterpret(slot, shape=new_shape if kwargs.get("shape") is not None else None,
+                                        dtype=kwargs.get("dtype"), layout=kwargs.get("layout"), span=span)
+            tile_vars.append(self.builder.let(f"_tg_{var_name}_tiles_{i}", slot_tile, span=span))
+        tiles_tuple = self.builder.let(f"_tg_{var_name}_tiles", ir.MakeTuple(tile_vars, span), span=span)
+
+        # ② mutex columns: reuse the original group's own column expressions.
+        per_tile = per_tile_mutex_ids or ()
+        n_columns = len(per_tile[0]) if per_tile else 0
+        mut_tuples = []
+        mut_fields = []
+        for column in range(n_columns):
+            suffix = "" if column == 0 else f"_{column}"
+            mut_tuples.append(self.lower_attr_access(group, f"mutex_ids{suffix}", span))
+            mut_fields.append(f"mutex_ids{suffix}")
+
+        # ③ cursor: reused from the original handle so the rotation position
+        #    (the original group keeps its own independent cursor) is preserved.
+        if n_slots == 1:
+            result = self.make_named_tuple([tiles_tuple, *mut_tuples], ["tiles", *mut_fields], span)
+            self.tile_group_meta[result] = (n_slots, per_tile_mutex_ids, memref.memory_space)
+            return result
+        cursor = self.lower_attr_access(group, "cursor", span)
+        result = self.make_named_tuple([tiles_tuple, *mut_tuples, cursor], ["tiles", *mut_fields, "cursor"], span)
+        self.tile_group_meta[result] = (n_slots, per_tile_mutex_ids, memref.memory_space)
         return result
 
     # --- accessors ------------------------------------------------------------

@@ -1818,6 +1818,171 @@ def _parse_make_tile(self, call: ast.Call) -> Expr:
     return make_tile_expr(**kwargs, span=span)
 
 
+# ---------------------------------------------------------------------------
+# reinterpret — Tile/TileGroup metadata reinterpretation (zero data movement)
+# ---------------------------------------------------------------------------
+
+
+def _span_msg(span: "Span | None") -> str:
+    return f" at {span}" if span else ""
+
+
+def _hw_attr(hw, field: str) -> "int | None":
+    """One hardware_info field as an int, or None when unset/negative sentinel."""
+    if hw is None:
+        return None
+    value = getattr(hw, field, None)
+    if value is None:
+        return None
+    value = int(value)
+    return value if value >= 0 else None
+
+
+def _reinterpret_footprint_check(shape: list[int], dtype: DataType, size: int, span: "Span | None") -> None:
+    """The new footprint must not exceed the original buffer span (hard constraint)."""
+    try:
+        footprint = tile_slot_size(shape, dtype)
+    except ValueError:
+        return
+    if footprint > size:
+        raise ValueError(
+            f"reinterpret: new footprint {footprint} bytes exceeds the original buffer size {size} bytes; "
+            f"a reinterpretation may only reuse the buffer at the same size or smaller{_span_msg(span)}"
+        )
+
+
+def _reinterpret_align_check(addr: int, dtype: DataType, span: "Span | None") -> None:
+    """The new element width must divide the base address (element-boundary view)."""
+    elem_bytes = max(1, (int(dtype.get_bit()) + 7) // 8)
+    if addr % elem_bytes != 0:
+        raise ValueError(
+            f"reinterpret: address 0x{addr:X} is not aligned to the new element size {elem_bytes} bytes"
+            f"{_span_msg(span)}"
+        )
+
+
+def _memref_const_addr(memref, span: "Span | None") -> "int | None":
+    """The compile-time address of a tile's MemRef, or None when it is not constant."""
+    addr_expr = getattr(memref, "addr", None)
+    if addr_expr is None:
+        return None
+    value = getattr(addr_expr, "value", None)
+    if not isinstance(value, int):
+        return None
+    return value
+
+
+def _ir_reinterpret(
+    src: Expr,
+    *,
+    shape: "Sequence[int] | None" = None,
+    dtype: "DataType | None" = None,
+    layout: "TensorLayout | None" = None,
+    span: "Span | None" = None,
+) -> Expr:
+    """Build a make_tile call re-declaring the tile's dtype/shape/layout.
+
+    The new tile is re-allocated at the SAME address and size as the source
+    (SameAllocation semantics keep the "same buffer" identity), with valid_shape
+    NOT inherited (dynamic / -1) and fractal/pad/compact inherited verbatim.
+    No MemRef is shared: this path reuses make_tile_expr, so the id counter
+    simply advances and the new MemRef is a fresh object.
+    """
+    actual_span = span or _span()
+    if not isinstance(src.type, _IRTileType):
+        raise TypeError(f"reinterpret: expected a Tile, got {type(src.type).__name__}")
+    t = src.type
+    memref = getattr(t, "memref", None)
+    if memref is None:
+        raise ValueError(
+            f"reinterpret: source tile has no MemRef (bind it with pl.make_tile first){_span_msg(actual_span)}"
+        )
+
+    old_shape = _static_shape_ints(t.shape, "reinterpret: source")
+    hw = getattr(t, "hardware_info", None)
+    old_layout = _tile_layout(t)
+
+    new_shape = list(shape) if shape is not None else old_shape
+    new_dtype = dtype if dtype is not None else t.dtype
+    new_layout = layout if layout is not None else old_layout
+
+    addr = _memref_const_addr(memref, actual_span)
+    if addr is None:
+        raise ValueError(f"reinterpret: source tile address must be a compile-time constant{_span_msg(actual_span)}")
+    _reinterpret_align_check(addr, new_dtype, actual_span)
+    _reinterpret_footprint_check(new_shape, new_dtype, int(memref.size), actual_span)
+
+    # Fresh MemRef at the same address & size (new memref_id); valid_shape
+    # intentionally omitted so the new handle starts dynamic (-1).
+    return make_tile_expr(
+        new_shape,
+        new_dtype,
+        memref.memory_space,
+        addr=addr,
+        size=int(memref.size),
+        valid_shape=None,
+        layout=new_layout,
+        fractal=_hw_attr(hw, "fractal"),
+        pad=_hw_attr(hw, "pad"),
+        compact=_hw_attr(hw, "compact"),
+        span=actual_span,
+    )
+
+
+@op_impl("reinterpret")
+def _parse_reinterpret(self, call: ast.Call) -> Expr:
+    from pypto_pro.language.parser.diagnostics import FinalRejectionError
+
+    span = self.span_tracker.get_span(call)
+    if len(call.args) != 1:
+        raise FinalRejectionError(
+            f"pl.reinterpret() takes exactly 1 positional argument (a Tile or TileGroup), got {len(call.args)}",
+            span=span,
+            hint="Usage: t2 = pl.reinterpret(tile, dtype=..., shape=..., layout=...)",
+        )
+    src = self.parse_expression(call.args[0])
+    kwargs = self.parse_op_kwargs(call)
+
+    if kwargs.get("dtype") is None and kwargs.get("shape") is None and kwargs.get("layout") is None:
+        raise FinalRejectionError(
+            "pl.reinterpret() requires at least one of dtype/shape/layout to override",
+            span=span,
+            hint="e.g. pl.reinterpret(tile, shape=[64, 64], dtype=pl.DT_BF16)",
+        )
+
+    if kwargs.get("dtype") is not None and kwargs.get("shape") is None:
+        raise FinalRejectionError(
+            "pl.reinterpret() 'shape' is required when 'dtype' changes",
+            span=span,
+            hint="state the new element count explicitly: pl.reinterpret(tile, dtype=..., shape=[rows, cols])",
+        )
+
+    new_shape = kwargs.get("shape")
+    if new_shape is not None and not (
+        isinstance(new_shape, (list, tuple)) and len(new_shape) > 0 and all(_is_int(d) for d in new_shape)
+    ):
+        raise FinalRejectionError(
+            "pl.reinterpret() 'shape' must be a non-empty list of compile-time integers",
+            span=span,
+            hint="e.g. shape=[32, 128]; runtime shapes are not supported — use pl.set_validshape() for runtime windows",
+        )
+
+    # All override args are validated once above, before dispatch: neither the
+    # tile branch nor the tile_group branch re-validates them. The "is a Tile"
+    # check lives in _ir_reinterpret, which both branches go through.
+    if self.is_tile_group(src):
+        return self._build_reinterpreted_group(src, kwargs, span)
+
+    new_tile = _ir_reinterpret(src, shape=new_shape, dtype=kwargs.get("dtype"), layout=kwargs.get("layout"), span=span)
+
+    # The reinterpreted tile aliases the same buffer, so it inherits the source's
+    # mutex binding (same propagation pattern as GetItemExpr in _expression_parser).
+    mm = self._tile_mutex_meta.get(src)
+    if mm is not None:
+        self._tile_mutex_meta[new_tile] = mm
+    return new_tile
+
+
 def _resolve_order_kwarg(self, call: ast.Call, kwargs: dict) -> None:
     """Resolve the ``order`` axis list, which selects tensor axes while parsing.
 
@@ -1842,7 +2007,11 @@ def _resolve_order_kwarg(self, call: ast.Call, kwargs: dict) -> None:
 
 
 def _static_shape_ints(shape, what: str) -> list[int]:
-    """Resolve a scale Tile shape to plain ints (hardware deqTensor constraints)."""
+    """Resolve a tile/tensor shape to plain ints (compile-time dims only).
+
+    Shared by scale-tile validation and pl.reinterpret's source-shape reader;
+    raises ValueError when a dimension is not statically known.
+    """
     ints = []
     for dim in shape:
         if isinstance(dim, ConstInt):

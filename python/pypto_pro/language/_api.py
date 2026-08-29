@@ -43,6 +43,8 @@ from pypto.ir import (
 )
 from pypto_pro.ir.op.block_ops import FillPadMode
 
+from . import TensorLayout
+
 # ---------------------------------------------------------------------------
 # User-facing type aliases (NOT IR types)
 # ---------------------------------------------------------------------------
@@ -964,6 +966,39 @@ def set_validshape(tile: "Tile | TileGroup", shape: List[int]) -> None:
     """Set the valid shape of a Tile or tile_group (for partial-tile / tail-block operations).
 
     When a tile_group is passed, valid_shape is set on all tiles in the group.
+    """
+
+@_api_decl
+def reinterpret(tile: "Tile | TileGroup", *, dtype: DType = None, shape: List[int] = None,
+                layout: Optional[TensorLayout] = None) -> "Tile | TileGroup":
+    """Reinterpret a Tile or tile_group's dtype/shape/layout metadata without data movement.
+
+    Returns a new handle over the same on-chip buffer: the new tile is
+    re-allocated at the ORIGINAL address and size (same-buffer semantics hold),
+    with memory space, fractal, pad, compact and mutex mapping inherited; only
+    the given properties are overridden. valid_shape is NOT inherited (the new
+    handle starts with a dynamic valid shape, equivalent to -1; set it with
+    ``pl.set_validshape``). The original handle is unchanged.
+
+    ``reinterpret`` is a compile-time view declaration, not a conversion — no
+    load/move/store/cast instruction is generated. The caller must guarantee
+    that the physical data actually matches the new declaration (e.g. declaring
+    ``layout=pl.ZN`` on data that really is ZN-arranged).
+
+    Constraints:
+        - at least one of ``dtype`` / ``shape`` / ``layout`` must be given
+        - when ``dtype`` changes, ``shape`` must be given as well (the element
+          count is re-stated explicitly)
+        - ``shape`` must be compile-time constants; use ``pl.set_validshape``
+          for runtime windows
+        - the new footprint (shape x dtype bytes) must not exceed the original
+          buffer size, and the base address must be aligned to the new element
+          size (both checked at parse time)
+
+    Example::
+
+        t2 = pl.reinterpret(tile_a, shape=[64, 64], dtype=pl.DT_BF16)  # same buffer as BF16 (dtype change needs shape)
+        g2 = pl.reinterpret(group_a, shape=[128, 32])        # whole group, mutex kept
     """
 
 
