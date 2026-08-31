@@ -86,6 +86,7 @@ struct ViewKey {
 struct TensorDependency {
     std::vector<int> producers;
     int pendingConsumerCount{0};
+    bool hasSelfConsumer{false};
 };
 
 struct SortContext {
@@ -93,14 +94,20 @@ struct SortContext {
     std::unordered_map<const LogicalTensor*, size_t> tensorToDep;
     std::vector<TensorDependency> tensorDeps;
     std::vector<std::vector<size_t>> tensorDepsByConsumer;
+    std::vector<std::vector<int>> tokenProducersByConsumer;
     std::vector<int> outDegree;
 };
 
 class LightweightOperationSorter {
 public:
     LightweightOperationSorter(const Function& function, const std::vector<std::shared_ptr<Operation>>& operations,
-                               const LogicalTensors& inCasts, const LogicalTensors& outCasts)
-        : function_(function), operations_(operations), inCasts_(inCasts), outCasts_(outCasts)
+                               const LogicalTensors& inCasts, const LogicalTensors& outCasts,
+                               bool preserveOriginalOrder)
+        : function_(function),
+          operations_(operations),
+          inCasts_(inCasts),
+          outCasts_(outCasts),
+          preserveOriginalOrder_(preserveOriginalOrder)
     {}
 
     std::vector<std::shared_ptr<Operation>> Sort()
@@ -110,6 +117,7 @@ public:
         // producer-list scans during lightweight sorting.
         BuildOpIndex();
         BuildTensorDeps();
+        BuildTokenDeps();
         BuildOutDegree();
         auto sortedOperations = RunTopologicalSort();
         CheckSortedOperations(sortedOperations);
@@ -158,6 +166,9 @@ private:
         if (dep.producers.empty()) {
             return;
         }
+        if (std::find(dep.producers.begin(), dep.producers.end(), consumerIdx) != dep.producers.end()) {
+            dep.hasSelfConsumer = true;
+        }
         dep.pendingConsumerCount++;
         context_.tensorDepsByConsumer[consumerIdx].emplace_back(depIndex);
     }
@@ -186,14 +197,51 @@ private:
         }
     }
 
+    void BuildTokenDeps()
+    {
+        context_.tokenProducersByConsumer.resize(operations_.size());
+        for (size_t idx = 0; idx < operations_.size(); idx++) {
+            auto& producerIndexes = context_.tokenProducersByConsumer[idx];
+            for (auto* producer : operations_[idx]->ProducerOpsByToken()) {
+                if (producer == operations_[idx].get()) {
+                    continue;
+                }
+                auto producerIter = context_.opToIndex.find(producer);
+                if (producerIter != context_.opToIndex.end()) {
+                    producerIndexes.emplace_back(producerIter->second);
+                }
+            }
+            std::sort(producerIndexes.begin(), producerIndexes.end());
+            producerIndexes.erase(std::unique(producerIndexes.begin(), producerIndexes.end()), producerIndexes.end());
+        }
+    }
+
     void BuildOutDegree()
     {
         context_.outDegree.assign(operations_.size(), 0);
         for (auto& dep : context_.tensorDeps) {
-            if (dep.producers.empty() || dep.pendingConsumerCount == 0) {
+            if (dep.producers.empty() || dep.pendingConsumerCount == 0 || dep.hasSelfConsumer) {
                 continue;
             }
             for (int producerIdx : dep.producers) {
+                context_.outDegree[producerIdx]++;
+            }
+        }
+        for (size_t consumerIdx = 0; consumerIdx < context_.tensorDepsByConsumer.size(); ++consumerIdx) {
+            for (size_t depIndex : context_.tensorDepsByConsumer[consumerIdx]) {
+                const auto& dep = context_.tensorDeps[depIndex];
+                if (!dep.hasSelfConsumer) {
+                    continue;
+                }
+                for (int producerIdx : dep.producers) {
+                    if (producerIdx != static_cast<int>(consumerIdx)) {
+                        context_.outDegree[producerIdx]++;
+                    }
+                }
+            }
+        }
+        for (const auto& producerIndexes : context_.tokenProducersByConsumer) {
+            for (int producerIdx : producerIndexes) {
                 context_.outDegree[producerIdx]++;
             }
         }
@@ -201,26 +249,35 @@ private:
 
     std::vector<std::shared_ptr<Operation>> RunTopologicalSort()
     {
-        // Sort initial ready ops by opmagic to ensure deterministic topological order.
         std::vector<int> readyList;
         for (size_t idx = 0; idx < operations_.size(); idx++) {
             if (context_.outDegree[idx] == 0) {
                 readyList.push_back(static_cast<int>(idx));
             }
         }
-        std::sort(readyList.begin(), readyList.end(),
-                  [this](int a, int b) { return operations_[a]->GetOpMagic() < operations_[b]->GetOpMagic(); });
-        std::queue<int> readyOps;
-        for (int idx : readyList) {
-            readyOps.emplace(idx);
+        if (!preserveOriginalOrder_) {
+            // Sort initial ready ops by opmagic to ensure deterministic topological order.
+            std::sort(readyList.begin(), readyList.end(),
+                      [this](int a, int b) { return operations_[a]->GetOpMagic() < operations_[b]->GetOpMagic(); });
         }
-        auto releasePrevOp = [this, &readyOps](int prevOpIndex) {
+        for (int idx : readyList) {
+            PushReadyOp(idx);
+        }
+        auto releasePrevOp = [this](int prevOpIndex) {
             if (--context_.outDegree[prevOpIndex] == 0) {
-                readyOps.emplace(prevOpIndex);
+                PushReadyOp(prevOpIndex);
             }
         };
-        auto releaseTensorDep = [this, &releasePrevOp](size_t depIndex) {
+        auto releaseTensorDep = [this, &releasePrevOp](size_t depIndex, int consumerIdx) {
             auto& dep = context_.tensorDeps[depIndex];
+            if (dep.hasSelfConsumer) {
+                for (int producerIdx : dep.producers) {
+                    if (producerIdx != consumerIdx) {
+                        releasePrevOp(producerIdx);
+                    }
+                }
+                return;
+            }
             if (--dep.pendingConsumerCount == 0) {
                 for (int producerIdx : dep.producers) {
                     releasePrevOp(producerIdx);
@@ -229,15 +286,43 @@ private:
         };
         std::vector<std::shared_ptr<Operation>> sortedOperations;
         sortedOperations.reserve(operations_.size());
-        while (!readyOps.empty()) {
-            int currIndex = readyOps.front();
-            readyOps.pop();
+        while (HasReadyOp()) {
+            int currIndex = PopReadyOp();
             sortedOperations.emplace_back(operations_[currIndex]);
             for (size_t depIndex : context_.tensorDepsByConsumer[currIndex]) {
-                releaseTensorDep(depIndex);
+                releaseTensorDep(depIndex, currIndex);
+            }
+            for (int producerIdx : context_.tokenProducersByConsumer[currIndex]) {
+                releasePrevOp(producerIdx);
             }
         }
         return sortedOperations;
+    }
+
+    void PushReadyOp(int opIndex)
+    {
+        if (preserveOriginalOrder_) {
+            stableReadyOps_.push(opIndex);
+        } else {
+            readyOps_.push(opIndex);
+        }
+    }
+
+    [[nodiscard]] bool HasReadyOp() const
+    {
+        return preserveOriginalOrder_ ? !stableReadyOps_.empty() : !readyOps_.empty();
+    }
+
+    int PopReadyOp()
+    {
+        if (preserveOriginalOrder_) {
+            int opIndex = stableReadyOps_.top();
+            stableReadyOps_.pop();
+            return opIndex;
+        }
+        int opIndex = readyOps_.front();
+        readyOps_.pop();
+        return opIndex;
     }
 
     void CheckSortedOperations(const std::vector<std::shared_ptr<Operation>>& sortedOperations) const
@@ -255,6 +340,9 @@ private:
     const std::vector<std::shared_ptr<Operation>>& operations_;
     const LogicalTensors& inCasts_;
     const LogicalTensors& outCasts_;
+    bool preserveOriginalOrder_;
+    std::queue<int> readyOps_;
+    std::priority_queue<int> stableReadyOps_;
     SortContext context_;
 };
 
@@ -1316,6 +1404,15 @@ std::vector<std::shared_ptr<Operation>> Function::GetSortedOperations() const
                 addProd(op.get(), outCasts_[index]);
             }
         }
+        for (auto* producer : op->ProducerOpsByToken()) {
+            if (producer == op.get() || producer->BelongTo() != this) {
+                continue;
+            }
+            auto producerIter = opToIndex.find(producer);
+            FE_ASSERT(FeError::NOT_EXIST, producerIter != opToIndex.end())
+                << "Token producer not found in opToIndex: " << producer->Dump();
+            outDegree[producerIter->second]++;
+        }
     }
     for (auto& opGroup : operationGroups_) {
         for (size_t idx = 1; idx < opGroup.size(); idx++) {
@@ -1366,6 +1463,17 @@ std::vector<std::shared_ptr<Operation>> Function::GetSortedOperations() const
                 visit(op.get(), outCasts_[index]);
             }
         }
+        for (auto* producer : op->ProducerOpsByToken()) {
+            if (producer == op.get() || producer->BelongTo() != this) {
+                continue;
+            }
+            auto producerIter = opToIndex.find(producer);
+            FE_ASSERT(FeError::NOT_EXIST, producerIter != opToIndex.end())
+                << "Token producer not found in opToIndex: " << producer->Dump();
+            if (--outDegree[producerIter->second] == 0) {
+                q.emplace(producerIter->second);
+            }
+        }
     }
     for (auto& op : operations_) {
         FE_ASSERT(FeError::OP_DEPENDENCY_CYCLE, outDegree[opToIndex[op.get()]] == 0)
@@ -1378,10 +1486,10 @@ std::vector<std::shared_ptr<Operation>> Function::GetSortedOperations() const
     return sortedOperations;
 }
 
-std::vector<std::shared_ptr<Operation>> Function::GetLightweightSortedOperations() const
+std::vector<std::shared_ptr<Operation>> Function::GetLightweightSortedOperations(bool preserveOriginalOrder) const
 {
     FE_ASSERT(operationGroups_.empty()) << "Lightweight sort does not support operationGroups_.";
-    LightweightOperationSorter sorter(*this, operations_, inCasts_, outCasts_);
+    LightweightOperationSorter sorter(*this, operations_, inCasts_, outCasts_, preserveOriginalOrder);
     return sorter.Sort();
 }
 
@@ -1394,6 +1502,9 @@ void Function::SortOperations(SortOperationsMode mode)
             break;
         case SortOperationsMode::LIGHTWEIGHT:
             sortedOperations = GetLightweightSortedOperations();
+            break;
+        case SortOperationsMode::LIGHTWEIGHT_STABLE:
+            sortedOperations = GetLightweightSortedOperations(true);
             break;
         default:
             FE_ASSERT(FeError::INVALID_VAL, false) << "Invalid sort operations mode.";
@@ -2058,7 +2169,7 @@ void Function::AddOriginOutcast(const std::shared_ptr<LogicalTensor>& tensor)
     originOutCasts_.push_back(tensor);
 }
 
-void Function::SetSameMemId(const LogicalTensorPtr& operand, LogicalTensorPtr& dst)
+void Function::SetSameMemId(const LogicalTensorPtr& operand, const LogicalTensorPtr& dst)
 {
     FE_ASSERT(FeError::INVALID_TYPE, operand->Datatype() == dst->Datatype()) << "Check Dtype failed!";
 

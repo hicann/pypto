@@ -18,6 +18,7 @@ from ..test_common import _ssa_verify, check_snapshot
 _GOLDEN_DIR = Path(__file__).parent
 
 IR = _GOLDEN_DIR / "test_assemble_outcast_versions.pypto"
+LATEST_OUTCAST_IR = _GOLDEN_DIR / "test_assemble_latest_outcast.pypto"
 
 
 def _run_root_builder(func, *args):
@@ -50,3 +51,18 @@ def test_assemble_outcast_versions_share_raw_tensor():
     program = _run_root_builder(foo, a, aux, out)
 
     check_snapshot(program, IR)
+
+
+def test_repeated_assemble_uses_single_latest_outcast():
+    """ComputeOutcast deduplicates versions by RawTensor and keeps the latest one."""
+
+    def foo(src, out):
+        pypto.assemble(src + 1.0, [0, 0], out)
+        pypto.assemble(src + 2.0, [0, 0], out)
+        pypto.assemble(src + 3.0, [0, 0], out)
+
+    src = pypto.Tensor([16, 16], pypto.DT_FP32, name="src")
+    out = pypto.Tensor([16, 16], pypto.DT_FP32, name="out")
+    program = _run_root_builder(foo, src, out)
+
+    check_snapshot(program, LATEST_OUTCAST_IR)

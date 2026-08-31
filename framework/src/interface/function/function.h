@@ -71,6 +71,7 @@ enum class EndFuncReturnParam { INPUT = 0, OUTPUT, ARGS };
 enum class SortOperationsMode {
     GENERAL,
     LIGHTWEIGHT,
+    LIGHTWEIGHT_STABLE,
 };
 
 enum class MixResourceType {
@@ -570,6 +571,7 @@ class Function : public ir::Function {
 public:
     friend class ExpandFunction;
     friend class VFFusionPass;
+    friend class TokenUtils;
 
     std::vector<std::shared_ptr<LogicalTensor>> inCasts_;  // Input tensors
     std::vector<std::shared_ptr<LogicalTensor>> outCasts_; // Output tensors
@@ -644,7 +646,7 @@ public:
                                ir::Span span = ir::Span::Unknown());
 
     std::map<std::shared_ptr<RawTensor>, std::shared_ptr<RawTensor>> outIncastLinkMap; // 记录outcast 共享地址的 incast
-    void SetSameMemId(const LogicalTensorPtr& operand, LogicalTensorPtr& dst);
+    void SetSameMemId(const LogicalTensorPtr& operand, const LogicalTensorPtr& dst);
     void UpdateLinkMap(const std::shared_ptr<LogicalTensor>& oriLogicalTensor,
                        const std::shared_ptr<LogicalTensor>& newLogicalTensor, const bool isOutCast = false);
 
@@ -1036,7 +1038,7 @@ private:
     std::unordered_map<LogicalTensorPtr, bool> outcastNeedAllocMap_;
 
 private:
-    std::vector<std::shared_ptr<Operation>> GetLightweightSortedOperations() const;
+    std::vector<std::shared_ptr<Operation>> GetLightweightSortedOperations(bool preserveOriginalOrder = false) const;
 
     unsigned long ComputeHashOrderless() const;
     void OpValidCheck(Operation& op) const;

@@ -21,6 +21,8 @@
 #include <vector>
 
 #include "interface/tensor/ir.h"
+#include "interface/tensor/ir_tensor_op_rebuild.h"
+#include "interface/tensor/irbuilder.h"
 #include "ir/expr.h"
 #include "ir/kind_traits.h"
 #include "ir/stmt.h"
@@ -104,9 +106,13 @@ void FindLiveRootsRecursiveImpl(const std::vector<StmtPtr>& stmts, const Removab
         if (is_leaf && !is_removable(stmt)) {
             auto all_refs = CollectStmtVarRefs(stmt);
             // Do not keep an unconsumed result token alive just because its TensorOp is non-removable.
-            if (auto tensor_op = std::dynamic_pointer_cast<const TensorOpStmt>(stmt)) {
-                for (const auto& token : tensor_op->result_token_) {
-                    all_refs.erase(token.get());
+            // When the assemble-new-logical-tensor mechanism is active, result tokens are inferred by
+            // InferTokenPass and must survive DCE so that RemoveRedundantTokenPass can analyse them.
+            if (!npu::tile_fwk::IRContext::Get().AssembleNewLogicalTensor()) {
+                if (auto tensor_op = std::dynamic_pointer_cast<const TensorOpStmt>(stmt)) {
+                    for (const auto& token : tensor_op->result_token_) {
+                        all_refs.erase(token.get());
+                    }
                 }
             }
             live.insert(all_refs.begin(), all_refs.end());
@@ -180,7 +186,25 @@ std::vector<StmtPtr> FilterDeadCodeImpl(const std::vector<StmtPtr>& stmts, const
                 if (!any_live)
                     continue;
             }
-            result.push_back(stmt);
+            std::vector<VarPtr> liveTokens;
+            if (npu::tile_fwk::IRContext::Get().AssembleNewLogicalTensor()) {
+                // Preserve all result tokens so RemoveRedundantTokenPass can analyse the full
+                // token dependency graph.  Only tensor results determine statement liveness.
+                liveTokens = tensor_op->result_token_;
+            } else {
+                for (const auto& token : tensor_op->result_token_) {
+                    if (live.count(token.get())) {
+                        liveTokens.push_back(token);
+                    }
+                }
+            }
+            if (liveTokens.size() != tensor_op->result_token_.size()) {
+                result.push_back(npu::tile_fwk::RebuildTensorOpStmt(tensor_op, tensor_op->result_,
+                                                                    std::move(liveTokens), tensor_op->args_,
+                                                                    tensor_op->tokens_, tensor_op->span_));
+            } else {
+                result.push_back(stmt);
+            }
         } else if (auto scalar_op = std::dynamic_pointer_cast<const ScalarOpStmt>(stmt)) {
             if (is_removable(stmt) && !live.count(scalar_op->result_.get()))
                 continue;

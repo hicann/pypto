@@ -371,14 +371,27 @@ void RootFunctionBuilder::ComputeIncast(Function& pathFunc,
 
 void RootFunctionBuilder::ComputeOutcast(Function& pathFunc)
 {
+    LogicalTensors outcasts;
+    std::unordered_map<int, size_t> rawMagicToOutcastIndex;
     for (auto& op : pathFunc.Operations(false)) {
         for (auto& oOperand : op.GetOOperands()) {
             bool neededByConsumer = consumedTensors_.count(oOperand) > 0;
             bool isFuncOutput = paramTensors_.count(oOperand) > 0;
-            if (neededByConsumer || isFuncOutput || oOperand->IsGetTensorDataOutcast()) {
-                pathFunc.AddOriginOutcast(oOperand);
+            if (!neededByConsumer && !isFuncOutput && !oOperand->IsGetTensorDataOutcast()) {
+                continue;
+            }
+
+            int rawMagic = oOperand->GetRawMagic();
+            auto [iter, inserted] = rawMagicToOutcastIndex.emplace(rawMagic, outcasts.size());
+            if (inserted) {
+                outcasts.push_back(oOperand);
+            } else {
+                outcasts[iter->second] = oOperand;
             }
         }
+    }
+    for (const auto& outcast : outcasts) {
+        pathFunc.AddOriginOutcast(outcast);
     }
 }
 

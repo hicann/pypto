@@ -715,6 +715,20 @@ void Operation::LoadExtraInfoFromJson(const Json& opDump)
             SetAIVCore(core);
         }
     }
+    if (opDump.count("otokens") && !opDump["otokens"].empty()) {
+        result_token_.clear();
+        for (const auto& name : opDump["otokens"]) {
+            result_token_.push_back(
+                std::make_shared<ir::Var>(name.get<std::string>(), ir::GetTokenType(), ir::Span::Unknown()));
+        }
+    }
+    if (opDump.count("itokens") && !opDump["itokens"].empty()) {
+        tokens_.clear();
+        for (const auto& name : opDump["itokens"]) {
+            tokens_.push_back(
+                std::make_shared<ir::Var>(name.get<std::string>(), ir::GetTokenType(), ir::Span::Unknown()));
+        }
+    }
 }
 
 std::shared_ptr<Operation> Operation::LoadJson(

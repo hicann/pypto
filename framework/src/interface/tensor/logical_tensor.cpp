@@ -174,11 +174,19 @@ ir::VarPtr LogicalTensor::Clone(bool shareRawTensor) const
 LogicalTensorPtr LogicalTensor::NextVersion(Function& func, std::vector<ir::VarPtr>& tokens) const
 {
     (void)tokens;
-    IRBuilder builder;
-
-    auto zeroOffset = std::vector<int64_t>(shape.size(), 0);
-    auto newTensor = builder.CreateTensorVar(func, tensor, zeroOffset, shape, dynValidShape_);
-
+    auto newTensor = std::make_shared<LogicalTensor>(func, tensor, offset, shape, dynValidShape_);
+    newTensor->oriShape = oriShape;
+    newTensor->dynOffset_ = dynOffset_;
+    newTensor->storageShape = storageShape;
+    newTensor->storage_ = storage_;
+    newTensor->storageOffset_ = storageOffset_;
+    newTensor->memoryrange = memoryrange;
+    newTensor->memoryTypeOriginal_ = memoryTypeOriginal_;
+    newTensor->memoryTypeToBe_ = memoryTypeToBe_;
+    newTensor->readyTime_ = readyTime_;
+    newTensor->remainingTime_ = remainingTime_;
+    newTensor->GetAllAttr() = GetAllAttr();
+    func.GetTensorMap().Insert(newTensor, false);
     return newTensor;
 }
 

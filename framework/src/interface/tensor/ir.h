@@ -13,6 +13,7 @@
 #include <string>
 #include <map>
 #include <unordered_set>
+#include <vector>
 
 #include "ir/scalar_expr.h"
 #include "ir/stmt.h"

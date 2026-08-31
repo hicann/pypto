@@ -81,10 +81,11 @@ struct IrFuncSetup {
         return lt;
     }
 
-    Operation& AddDassemble(const LogicalTensorPtr& src, const LogicalTensorPtr& dst)
+    Operation& AddDassemble(const LogicalTensorPtr& src, const LogicalTensorPtr& dst,
+                            const Offset& offset = Offset{TILE, TILE})
     {
         auto& op = fwkFunc->AddRawOperation(Opcode::OP_ASSEMBLE, {src}, {dst}, Sp());
-        op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(Offset{TILE, TILE}));
+        op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
         op.SetAttribute("dassemble", true);
         stmts.push_back(std::static_pointer_cast<const ir::Stmt>(op.shared_from_this()));
         return op;
@@ -268,6 +269,58 @@ TEST_F(IrFuncBuilderTest, TestConstructAssembleSlotList_DedupSameSlot)
     EXPECT_EQ(slots.size(), 1u) << "Expected 1 slot (deduplicated), got " << slots.size();
 }
 
+TEST_F(IrFuncBuilderTest, TestConstructAssembleSlotList_ContinuationBranchKeepsExistingSlot)
+{
+    IrFuncSetup setup("ContinuationBranchKeepsExistingSlot");
+
+    auto input = setup.MakeParam("input");
+    auto local = setup.MakeLocal("local");
+    setup.AddDassemble(input, local, Offset{0, 0});
+    auto initBody = std::make_shared<ir::SeqStmts>(setup.stmts, Sp());
+    setup.stmts.clear();
+
+    auto updated = setup.builder.CreateTensorVar(*setup.fwkFunc, local->GetRawTensor(), local->GetOffset(),
+                                                 local->GetShape(), local->GetDynValidShape());
+    auto& updateOp = setup.fwkFunc->AddRawOperation(Opcode::OP_ADD, {local, input}, {updated}, Sp());
+    setup.stmts.push_back(std::static_pointer_cast<const ir::Stmt>(updateOp.shared_from_this()));
+    auto localVersion = setup.builder.CreateTensorVar(*setup.fwkFunc, local->GetRawTensor(), local->GetOffset(),
+                                                      local->GetShape(), local->GetDynValidShape());
+    setup.AddDassemble(updated, localVersion, Offset{0, 0});
+    auto continuationBody = std::make_shared<ir::SeqStmts>(setup.stmts, Sp());
+    setup.stmts.clear();
+
+    auto cond = std::make_shared<ir::ConstInt>(1, ir::DataType::INT64, Sp());
+    setup.stmts.push_back(std::make_shared<ir::IfStmt>(cond, initBody, std::optional<ir::SeqStmtsPtr>{continuationBody},
+                                                       std::vector<ir::VarPtr>{}, Sp()));
+
+    auto irFunc = setup.BuildIrFunction("ContinuationBranchKeepsExistingSlot");
+    auto irProg = std::make_shared<ir::Program>(std::vector<ir::FunctionPtr>{irFunc}, "test", Sp());
+
+    auto createRoot = pypto::ir::pass::CreateRootFunctions();
+    (void)createRoot(irProg);
+
+    auto hiddenFuncs = FindHiddenFuncs();
+    ASSERT_EQ(hiddenFuncs.size(), 2u);
+    auto localSlot = Program::GetInstance().GetTensorSlotManager()->GetSlotTensor(local)->Id();
+    for (auto* hiddenFunc : hiddenFuncs) {
+        auto scope = hiddenFunc->Parent().GetSlotScope();
+        ASSERT_NE(scope, nullptr);
+        bool isContinuation = false;
+        for (auto& op : hiddenFunc->Operations(false)) {
+            isContinuation = isContinuation || op.GetOpcode() == Opcode::OP_ADD;
+        }
+        if (isContinuation) {
+            EXPECT_TRUE(std::any_of(scope->ioslot.incastSlot.begin(), scope->ioslot.incastSlot.end(),
+                                    [localSlot](const auto& slots) {
+                                        return std::find(slots.begin(), slots.end(), localSlot) != slots.end();
+                                    }));
+            EXPECT_TRUE(scope->constructAssembleSlotList.empty());
+        } else {
+            EXPECT_EQ(scope->constructAssembleSlotList, std::vector<int>{localSlot});
+        }
+    }
+}
+
 // ============================================================================
 // Mixed: one dassemble to function param (excluded) + one to intermediate (kept)
 //        => constructAssembleSlotList should contain exactly 1 slot
@@ -294,6 +347,32 @@ TEST_F(IrFuncBuilderTest, TestConstructAssembleSlotList_MixedParamAndIntermediat
 
     auto slots = CollectConstructAssembleSlots();
     EXPECT_EQ(slots.size(), 1u) << "Expected 1 slot (aux only, out excluded), got " << slots.size();
+}
+
+TEST_F(IrFuncBuilderTest, TestNonInplaceStorageAliasDoesNotUseParamSlot)
+{
+    IrFuncSetup setup("NonInplaceStorageAlias");
+
+    auto output = setup.MakeParam("output");
+    auto alias = setup.MakeLocal("alias");
+    auto& cast = setup.fwkFunc->AddRawOperation(Opcode::OP_CAST, {output}, {alias}, Sp());
+    setup.fwkFunc->SetSameMemId(output, alias);
+    setup.stmts.push_back(std::static_pointer_cast<const ir::Stmt>(cast.shared_from_this()));
+
+    auto irFunc = setup.BuildIrFunction("NonInplaceStorageAlias");
+    auto irProg = std::make_shared<ir::Program>(std::vector<ir::FunctionPtr>{irFunc}, "test", Sp());
+
+    auto createRoot = pypto::ir::pass::CreateRootFunctions();
+    auto rootProg = createRoot(irProg);
+
+    auto hiddenFuncs = FindHiddenFuncs();
+    ASSERT_EQ(hiddenFuncs.size(), 1u);
+    EXPECT_TRUE(hiddenFuncs[0]->GetOutcast().empty());
+    auto slotManager = Program::GetInstance().GetTensorSlotManager();
+    EXPECT_NE(slotManager->GetSlotTensor(output)->Id(), slotManager->GetSlotTensor(alias)->Id());
+    auto dynFunc = std::static_pointer_cast<const npu::tile_fwk::Function>(
+        rootProg->functions_.at("NonInplaceStorageAlias"));
+    EXPECT_TRUE(dynFunc->GetOriginOutcast().empty());
 }
 
 // ============================================================================

@@ -122,3 +122,30 @@ TEST_F(TestLogicalTensor, UpdateGetTensorDataIOIndexNonImmediateIOTypeIndexThrow
     SymbolicScalar scalar = MakeGetTensorDataCall(true, false);
     EXPECT_THROW(UpdateGetTensorDataIOIndex(0, 1, scalar), std::exception);
 }
+
+TEST_F(TestLogicalTensor, NextVersionPreservesLogicalTensorMetadata)
+{
+    Tensor input(DT_FP32, {16, 16}, "input");
+    auto* function = Program::GetInstance().GetCurrentFunction();
+    ASSERT_NE(function, nullptr);
+
+    auto storage = input.GetStorage(false)->View(*function, {8, 8}, {4, 4});
+    storage->UpdateOffset(TensorOffset({4, 4}, {SymbolicScalar(4), SymbolicScalar(4)}));
+    storage->SetMemoryTypeBoth(MEM_UB, true);
+    storage->SetAttr("version_metadata", true);
+
+    std::vector<ir::VarPtr> tokens;
+    auto next = storage->NextVersion(*function, tokens);
+
+    ASSERT_NE(next, nullptr);
+    EXPECT_NE(next, storage);
+    EXPECT_EQ(next->GetRawTensor(), storage->GetRawTensor());
+    EXPECT_EQ(next->GetOffset(), storage->GetOffset());
+    EXPECT_EQ(next->GetDynOffset(), storage->GetDynOffset());
+    EXPECT_EQ(next->GetShape(), storage->GetShape());
+    EXPECT_EQ(next->GetDynValidShape(), storage->GetDynValidShape());
+    EXPECT_EQ(next->GetMemoryTypeOriginal(), storage->GetMemoryTypeOriginal());
+    EXPECT_EQ(next->GetMemoryTypeToBe(), storage->GetMemoryTypeToBe());
+    EXPECT_TRUE(next->HasAttr("version_metadata"));
+    EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(next->GetMagic()), next);
+}

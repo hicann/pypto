@@ -1565,6 +1565,10 @@ REGISTER_INFER_SHAPE_FUNC(OP_SLICE, Opcode::OP_SLICE, ViewInferFunc);
 
 void AssembleInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
+    if (op == nullptr || op->GetIOperands().empty() || op->GetOOperands().empty()) {
+        VECTOR_LOGW("AssembleInferFunc: op or its operands are invalid, skip infer shape.");
+        return;
+    }
     auto assembleOpAttribute = std::dynamic_pointer_cast<AssembleOpAttribute>(op->GetOpAttribute());
     if (assembleOpAttribute != nullptr) {
         auto fromValidShape = op->GetIOperands()[0]->GetDynValidShape();
@@ -1585,10 +1589,13 @@ void AssembleInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& 
     std::vector<SymbolicScalar> outShape;
     for (size_t i = 0U; i < inputShapes.size(); i++) {
         SymbolicScalar actualDim;
-        if (offset[i] == 0) {
-            actualDim = std::max(outDynShape[i], inputShapes[i]);
+        // offset/outDynShape 维度可能小于 inputShapes（pass 改写后畸形 op），越界时按 0 处理避免崩溃
+        int64_t curOffset = (i < offset.size()) ? offset[i] : 0;
+        SymbolicScalar curOutDim = (i < outDynShape.size()) ? outDynShape[i] : SymbolicScalar(0);
+        if (curOffset == 0) {
+            actualDim = std::max(curOutDim, inputShapes[i]);
         } else {
-            actualDim = std::max(outDynShape[i], (inputShapes[i] + offset[i]) * (inputShapes[i] != 0));
+            actualDim = std::max(curOutDim, (inputShapes[i] + curOffset) * (inputShapes[i] != 0));
         }
         outShape.push_back(actualDim);
     }
