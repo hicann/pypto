@@ -31,6 +31,7 @@
 #include "interface/function/rebuildable_attribute.h"
 #include "interface/program/program.h"
 #include "interface/configs/config_manager.h"
+#include "interface/configs/config_manager_ng.h"
 #include "tilefwk/pypto_fwk_log.h"
 #include "tilefwk/error_code.h"
 
@@ -62,6 +63,11 @@ constexpr int64_t MAX_SHAPE_WARN_THRESHOLE = 512 * 512;
 constexpr int64_t DEFAULT_CACHE_DEVICE_TASK_NUM = 10000;
 constexpr uint32_t FRIENDLY_CACHE_ALIGN_U64_SIZE = 2; // 友好的cache对齐是2个u64
 constexpr int INVALID_WRAPID = -1;
+
+static bool IsComputeDeterminismEnabled()
+{
+    return ConfigManagerNg::GetGlobalConfig<int64_t>("compute_determinism_level") >= 1;
+}
 
 void DevAscendFunction::InitIncastOutcastAttr(uintdevptr_t& initOffset,
                                               const std::vector<std::shared_ptr<LogicalTensor>>& iList,
@@ -1457,8 +1463,14 @@ struct EncodeDevAscendFunctionInfo {
     {
         auto& oOperand = op.GetOOperands()[oOperandIdx];
         auto coaIndex = op.GetOOpAttrOffset(oOperandIdx) + COA_INDEX_DIM_BASE;
-        CellMatchOpType producerOpType = op.GetOOpAttr(oOperandIdx).isAtomic() ? CellMatchOpType::ATOMIC_WRITE :
-                                                                                 CellMatchOpType::NORMAL_WRITE;
+        CellMatchOpType producerOpType = CellMatchOpType::NORMAL_WRITE;
+        if (op.GetOOpAttr(oOperandIdx).isAtomic()) {
+            if (IsComputeDeterminismEnabled()) {
+                o->SetAttr("NORMAL", true);
+            } else {
+                producerOpType = CellMatchOpType::ATOMIC_WRITE;
+            }
+        }
         Opcode opCode = GetOutcastProducerOpcode(op, oOperandIdx);
         std::vector<int64_t> offset = callAttr->GetLinearImmediateArgList(coaIndex, coaIndex + dimSize, true);
         std::vector<int64_t> shape = callAttr->GetLinearImmediateArgList(coaIndex + dimSize, coaIndex + dimSize * 0x2,
@@ -2775,6 +2787,41 @@ static bool HasAtomicWriteInOutcast(DevAscendFunction* devFunc, const DevAscendF
     return false;
 }
 
+static bool OutcastHasAtomicProducer(Function* root, int outcastIndex)
+{
+    if (root == nullptr) {
+        return false;
+    }
+    const auto& outcasts = root->GetOutcast();
+    if (outcastIndex < 0 || static_cast<size_t>(outcastIndex) >= outcasts.size()) {
+        return false;
+    }
+    const auto& outTensor = outcasts[outcastIndex];
+    if (outTensor == nullptr) {
+        return false;
+    }
+    const int rawMagic = outTensor->GetRawMagic();
+    for (auto& op : root->Operations(false)) {
+        if (op.GetOpcode() != Opcode::OP_CALL) {
+            continue;
+        }
+        const auto& oOperands = op.GetOOperands();
+        for (size_t k = 0; k < oOperands.size(); ++k) {
+            const auto& o = oOperands[k];
+            if (o == nullptr) {
+                continue;
+            }
+            if (o.get() != outTensor.get() && o->GetRawMagic() != rawMagic) {
+                continue;
+            }
+            if (op.GetOOpAttr(static_cast<int>(k)).isAtomic()) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 static void FillEmptyPartialUpdateStub(DevAscendProgram* prog, int slotIndex)
 {
     auto& partialUpdate = prog->At(prog->updateList, slotIndex);
@@ -2819,6 +2866,7 @@ static uint8_t CalculateStitchCtrlBitMaskForSlot(
 {
     bool hasNormalAttr = false;
     bool hasAtomicWrite = false;
+    bool hasAtomicProducer = false;
 
     auto outcastIt = slotRootOutcastDict.find(slotIndex);
     if (outcastIt == slotRootOutcastDict.end()) {
@@ -2831,6 +2879,9 @@ static uint8_t CalculateStitchCtrlBitMaskForSlot(
         }
         if (!hasNormalAttr && root->GetOutcast()[outcastIndex]->HasAttr("NORMAL")) {
             hasNormalAttr = true;
+        }
+        if (!hasAtomicProducer && OutcastHasAtomicProducer(root, outcastIndex)) {
+            hasAtomicProducer = true;
         }
         if (!hasAtomicWrite) {
             int funcKey = rootIt->second;
@@ -2854,12 +2905,18 @@ static uint8_t CalculateStitchCtrlBitMaskForSlot(
     const bool gateByRootFuncNum = kernelInputAssembleSlots.count(slotIndex) != 0;
     const bool rootFuncOk = !gateByRootFuncNum || CountSlotRootFuncNum(slotIndex, rootFuncKeyDict, slotRootIncastDict,
                                                                        slotRootOutcastDict) >= 2;
+
+    if (maxReadCount > 0) {
+        stitchCtrlBitMask |= static_cast<StitchCtrlBitMask>(STITCH_CTRL_WAR | STITCH_CTRL_RAW);
+    }
     if (rootFuncOk) {
         if (hasNormalAttr) {
             stitchCtrlBitMask |= STITCH_CTRL_WAW;
         }
-        if (maxReadCount > 0) {
-            stitchCtrlBitMask |= static_cast<StitchCtrlBitMask>(STITCH_CTRL_WAR | STITCH_CTRL_RAW);
+    } else {
+        // Determinism: isAtomic producers are NORMAL_WRITE; serialize them with WAW.
+        if (IsComputeDeterminismEnabled() && hasAtomicProducer) {
+            stitchCtrlBitMask |= STITCH_CTRL_WAW;
         }
     }
     return stitchCtrlBitMask;
