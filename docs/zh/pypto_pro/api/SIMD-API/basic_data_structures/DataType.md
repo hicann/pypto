@@ -14,66 +14,82 @@
 
 ## 功能说明
 
-所有数据类型常量枚举。DataType自身还提供位宽、符号性等特征查询方法。
+数据类型的枚举。
 
-## 取值
+## 原型定义
 
-| 常量 | 位宽 | 有符号 | 浮点 | C类型 | 类别 | 典型用途 |
-|---|---|---|---|---|---|---|
-| `pypto_pro.language.DT_BOOL` | 8 | 否 | 否 | `bool` | 布尔 | 掩码、条件判断 |
-| `pypto_pro.language.DT_INT4` | 4 | 是 | 否 | — | 有符号整型 | 低精度量化 |
-| `pypto_pro.language.DT_INT8` | 8 | 是 | 否 | `int8_t` | 有符号整型 | 量化输出（[-128, 127]） |
-| `pypto_pro.language.DT_INT16` | 16 | 是 | 否 | `int16_t` | 有符号整型 | 索引、中间计算 |
-| `pypto_pro.language.DT_INT32` | 32 | 是 | 否 | `int32_t` | 有符号整型 | 索引、累加器、标量参数 |
-| `pypto_pro.language.DT_INT64` | 64 | 是 | 否 | `int64_t` | 有符号整型 | 大整数、地址计算、坐标/偏移 |
-| `pypto_pro.language.DT_UINT4` | 4 | 否 | 否 | — | 无符号整型 | 低精度量化 |
-| `pypto_pro.language.DT_UINT8` | 8 | 否 | 否 | `uint8_t` | 无符号整型 | 量化输出（[0, 255]）、bit-packed掩码 |
-| `pypto_pro.language.DT_UINT16` | 16 | 否 | 否 | `uint16_t` | 无符号整型 | 索引 |
-| `pypto_pro.language.DT_UINT32` | 32 | 否 | 否 | `uint32_t` | 无符号整型 | 字节偏移（`gatherb`） |
-| `pypto_pro.language.DT_UINT64` | 64 | 否 | 否 | `uint64_t` | 无符号整型 | 大整数、地址计算 |
-| `pypto_pro.language.DT_FP4` | 4 | 否 | 是 | — | IEEE浮点 | 低精度推理 |
-| `pypto_pro.language.DT_FP8E4M3FN` | 8 | 否 | 是 | `float8_e4m3_t` | IEEE浮点 | FP8推理（E4M3格式） |
-| `pypto_pro.language.DT_FP8E5M2` | 8 | 否 | 是 | `float8_e5m2_t` | IEEE浮点 | FP8推理（E5M2格式） |
-| `pypto_pro.language.DT_FP8E8M0` | 8 | 否 | 是 | `float8_e8m0_t` | IEEE浮点 | MXFP8/MXFP4每组32个元素共享的scale |
-| `pypto_pro.language.DT_FP4E2M1` | 4 | 否 | 是 | `float4_e2m1x2_t` | IEEE浮点 | E2M1格式的4位浮点数据，GM中两个元素打包为1字节 |
-| `pypto_pro.language.DT_FP4E1M2` | 4 | 否 | 是 | `float4_e1m2x2_t` | IEEE浮点 | E1M2格式的4位浮点数据，GM中两个元素打包为1字节 |
-| `pypto_pro.language.DT_FP16` | 16 | 否 | 是 | `half` | IEEE浮点 | 矩阵输入、向量计算（最常用） |
-| `pypto_pro.language.DT_FP32` | 32 | 否 | 是 | `float` | IEEE浮点 | 累加器、高精度计算 |
-| `pypto_pro.language.DT_BF16` | 16 | 否 | 是 | `bfloat16_t` | Brain浮点 | 矩阵输入（动态范围优于FP16） |
-| `pypto_pro.language.DT_HF4` | 4 | 否 | 是 | — | 海思浮点 | 低精度推理 |
-| `pypto_pro.language.DT_HF8` | 8 | 否 | 是 | `hifloat8_t` | 海思浮点 | 低精度推理 |
+```python
+DT_FP4 = DataType.FP4               # 4位浮点数，2位指数，1位尾数，两个占用1字节内存
+DT_FP8E4M3FN = DataType.FP8E4M3FN   # 8位浮点数，4位指数，3位尾数，占用1字节内存
+DT_FP8E5M2 = DataType.FP8E5M2       # 8位浮点数，5位指数，2位尾数，占用1字节内存
+DT_FP8E8M0 = DataType.FP8E8M0       # 8位浮点数，8位指数，0位尾数，占用1字节内存
+DT_FP4E2M1 = DataType.FP4E2M1       # 4位浮点数，2位指数，1位尾数，两个占用1字节内存
+DT_FP4E1M2 = DataType.FP4E1M2       # 4位浮点数，1位指数，2位尾数，两个占用1字节内存
+DT_FP16 = DataType.FP16             # 16位半精度浮点数，占用2字节内存
+DT_FP32 = DataType.FP32             # 32位单精度浮点数，占用4字节内存
+DT_BF16 = DataType.BF16             # 16位Brain Float格式，占用2字节内存
+DT_HF4 = DataType.HF4               # 4位HiFloat格式，两个占用1字节内存
+DT_HF8 = DataType.HF8               # 8位HiFloat格式，占用1字节内存
+DT_INT4 = DataType.INT4             # 4位有符号整数，占用1字节内存
+DT_INT8 = DataType.INT8             # 8位有符号整数，占用1字节内存
+DT_INT16 = DataType.INT16           # 16位有符号整数，占用2字节内存
+DT_INT32 = DataType.INT32           # 32位有符号整数，占用4字节内存
+DT_INT64 = DataType.INT64           # 64位有符号整数，占用8字节内存
+DT_UINT4 = DataType.UINT4           # 4位无符号整数，占用1字节内存
+DT_UINT8 = DataType.UINT8           # 8位无符号整数，占用1字节内存
+DT_UINT16 = DataType.UINT16         # 16位无符号整数，占用2字节内存
+DT_UINT32 = DataType.UINT32         # 32位无符号整数，占用4字节内存
+DT_UINT64 = DataType.UINT64         # 64位无符号整数，占用8字节内存
+DT_BOOL = DataType.BOOL             # 布尔类型，占用1字节内存
+```
 
-## 补充说明
+上述DT_XXX常量是Python侧的别名，DataType本身并非Python枚举，而是C++类经绑定后暴露到Python的同名类型。每个DataType.XXX都是该类的一个静态常量实例。
 
-**特征查询方法**：
+```C++
+class DataType {
+public:
+    static const DataType BOOL;      // Boolean (true/false)
+    static const DataType INT4;      // 4-bit signed integer
+    static const DataType INT8;      // 8-bit signed integer
+    static const DataType INT16;     // 16-bit signed integer
+    static const DataType INT32;     // 32-bit signed integer
+    static const DataType INT64;     // 64-bit signed integer
+    static const DataType UINT4;     // 4-bit unsigned integer
+    static const DataType UINT8;     // 8-bit unsigned integer
+    static const DataType UINT16;    // 16-bit unsigned integer
+    static const DataType UINT32;    // 32-bit unsigned integer
+    static const DataType UINT64;    // 64-bit unsigned integer
+    static const DataType FP4;       // 4-bit floating point
+    static const DataType FP8E4M3FN; // 8-bit floating point (IEEE 754 e4m3fn format)
+    static const DataType FP8E5M2;   // 8-bit floating point (IEEE 754 e5m2 format)
+    static const DataType FP8;       // 8-bit floating point (backward compatibility alias)
+    static const DataType FP8E8M0;   // 8-bit floating point (8-bit exponent, 0-bit mantissa)
+    static const DataType FP4E2M1;   // 4-bit floating point (2-bit exponent, 1-bit mantissa)
+    static const DataType FP4E1M2;   // 4-bit floating point (1-bit exponent, 2-bit mantissa)
+    static const DataType FP16;      // 16-bit floating point (IEEE 754 half precision)
+    static const DataType FP32;      // 32-bit floating point (IEEE 754 single precision)
+    static const DataType FP64;      // 64-bit floating point (IEEE 754 double precision)
+    static const DataType BF16;      // 16-bit brain floating point
+    static const DataType HF4;       // 4-bit Hisilicon float
+    static const DataType HF8;       // 8-bit Hisilicon float
+    static const DataType INDEX;     // 32-bit index type
+}
+```
+
+## 约束说明
+
+- 裸整数常量（如42）默认为pypto_pro.language.DT_INT64，裸浮点常量（如3.14）默认为pypto_pro.language.DT_FP32。
+
+- MXFP8的数据元素使用DT_FP8E4M3FN或DT_FP8E5M2，MXFP4的数据元素使用DT_FP4E2M1或DT_FP4E1M2；两者均使用DT_FP8E8M0保存分组缩放因子。详见[matmul_mx](../operation/matrix_computation/matmul_mx.md)和[matmul_mx_acc](../operation/matrix_computation/matmul_mx_acc.md)。
+
+## 常用接口
 
 | 方法 | 说明 |
 |---|---|
-| `dtype.get_bit()` / `dtype.bits()` | 取位宽（如`pypto_pro.language.DT_FP16.get_bit()`返回16） |
-| `dtype.is_float()` | 是否浮点类型 |
-| `dtype.is_int()` | 是否整型（有符号或无符号） |
-| `dtype.is_signed_int()` / `dtype.is_signed()` | 是否有符号整型 |
-| `dtype.is_unsigned_int()` / `dtype.is_unsigned()` | 是否无符号整型 |
-| `dtype.to_string()` / `str(dtype)` | 人类可读名称（如`"fp16"`） |
-| `dtype.to_c_type_string()` | C类型字符串（如`"half"`） |
-
-**默认类型常量**：裸整数常量（如`42`）默认为`pypto_pro.language.DT_INT64`，裸浮点常量（如`3.14`）默认为`pypto_pro.language.DT_FP32`。
-
-**MX浮点类型**：MXFP8的数据元素使用`DT_FP8E4M3FN`或`DT_FP8E5M2`，MXFP4的数据元素可使用`DT_FP4E2M1`或`DT_FP4E1M2`；两者均使用`DT_FP8E8M0`保存分组缩放因子。E8M0编码值`e`对应缩放因子`2^(e-127)`。类型组合和分组规则见[`matmul_mx`](../operation/matrix_computation/matmul_mx.md)和[`matmul_mx_acc`](../operation/matrix_computation/matmul_mx_acc.md)。
-
-## 调用示例
-
-```python
-import pypto_pro.language as pl
-# TileType 中指定数据类型
-tt = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-
-# Tensor 中指定数据类型
-x: pl.Tensor[[64, 128], pl.DT_FP16]
-
-# 特征查询
-assert pl.DT_FP16.get_bit() == 16
-assert pl.DT_FP16.is_float()
-assert pl.DT_INT8.is_signed_int()
-assert pl.DT_UINT8.is_unsigned_int()
-```
+| dtype.get_bit() / dtype.bits() | 取位宽（如pypto_pro.language.DT_FP16.get_bit()返回16） |
+| dtype.is_float() | 是否浮点类型 |
+| dtype.is_int() | 是否整型（有符号或无符号） |
+| dtype.is_signed_int() / dtype.is_signed() | 是否有符号整型 |
+| dtype.is_unsigned_int() / dtype.is_unsigned() | 是否无符号整型 |
+| dtype.to_string() / str(dtype) | 人类可读名称（如"fp16"） |
+| dtype.to_c_type_string() | C类型字符串（如"half"） |

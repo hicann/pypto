@@ -4,11 +4,12 @@
 :maxdepth: 1
 :titlesonly:
 
-CompactMode
+AccToVecMode
 DataType
 MemorySpace
 PipeType
 Ptr
+ReluPreMode
 Scalar
 Tensor
 TensorLayout
