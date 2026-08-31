@@ -506,8 +506,8 @@ public:
     static bool IsDevRunCacheKernelEnable(Function* func);
     static void SetDevRunCacheKernel(Function* func, uint8_t* devProg);
     static CachedOperator* GetDevRunCacheOperator(Function* func);
-    static void SetDevPerfAddr(const bool debugEnable, const bool isCaptureMode,
-                               const ToSubMachineConfig& profLevelConfig);
+    static int SetDevPerfAddr(const bool debugEnable, const bool isCaptureMode,
+                              const ToSubMachineConfig& profLevelConfig);
     static void DumpIOTensorsWithCann(AclRtStream stream, std::vector<DeviceTensorData>& tensors,
                                       const std::string& funcName);
     static int RunPreSync(RtStream scheStream, RtStream ctrlStream, RtStream aicoreStream);

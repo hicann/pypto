@@ -270,15 +270,26 @@ TEST_F(DeviceLauncherNpuTest, RunPreSync_NullStreams)
 TEST_F(DeviceLauncherNpuTest, SetDevPerfAddr_DebugEnable)
 {
     ToSubMachineConfig machinConfig;
+    auto& perf = DevicePerf::GetInstance();
+    uint8_t sharedBuf[1024] = {0};
+    if (perf.args_.sharedBuffer == 0) {
+        perf.args_.sharedBuffer = reinterpret_cast<uint64_t>(sharedBuf);
+    }
     DeviceLauncher::SetDevPerfAddr(true, false, machinConfig);
-    // 不应该崩溃
+    perf.args_.sharedBuffer = 0;
     SUCCEED();
 }
 
 TEST_F(DeviceLauncherNpuTest, SetDevPerfAddr_CaptureMode)
 {
     ToSubMachineConfig machinConfig;
+    auto& perf = DevicePerf::GetInstance();
+    uint8_t sharedBuf[1024] = {0};
+    if (perf.args_.sharedBuffer == 0) {
+        perf.args_.sharedBuffer = reinterpret_cast<uint64_t>(sharedBuf);
+    }
     DeviceLauncher::SetDevPerfAddr(false, true, machinConfig);
+    perf.args_.sharedBuffer = 0;
     SUCCEED();
 }
 

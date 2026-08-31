@@ -185,7 +185,12 @@ TEST_F(TestDeviceRunner, DevicePerf_SetDebugEnable)
 {
     setenv("ENABLE_AICORE_RESOLVE", "true", 1);
     ToSubMachineConfig machinConfig;
+    uint8_t sharedBuf[1024] = {0};
+    DeviceArgs devArgs{};
+    devArgs.sharedBuffer = reinterpret_cast<uint64_t>(sharedBuf);
+    DevicePerf::GetInstance().InitAndStartDumpThread(devArgs);
     DevicePerf::GetInstance().SetDebugEnable(machinConfig);
+    DevicePerf::GetInstance().InitAndStartDumpThread(DeviceArgs{});
     unsetenv("ENABLE_AICORE_RESOLVE");
 }
 

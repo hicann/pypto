@@ -282,7 +282,13 @@ TEST_F(DeviceLauncherHostTest, RunWithProfile_AllModes_ReturnZero)
 TEST_F(DeviceLauncherHostTest, MiscNoOpFunctions_NoCrash)
 {
     ToSubMachineConfig machinConfig;
+    auto& perf = DevicePerf::GetInstance();
+    uint8_t sharedBuf[1024] = {0};
+    if (perf.args_.sharedBuffer == 0) {
+        perf.args_.sharedBuffer = reinterpret_cast<uint64_t>(sharedBuf);
+    }
     DeviceLauncher::SetDevPerfAddr(false, false, machinConfig);
+    perf.args_.sharedBuffer = 0;
     std::vector<DeviceTensorData> tensors;
     DeviceLauncher::DumpIOTensorsWithCann(nullptr, tensors, "test_func");
     DeviceLauncher::CheckAscendDriverVersionOnboard();

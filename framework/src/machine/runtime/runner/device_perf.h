@@ -30,11 +30,11 @@ public:
     bool RunPrepare() const;
     void ResetPerData() const;
     void SyncProfData(bool debugEnable);
-    void SetDebugEnable(const ToSubMachineConfig& profLevelConfig);
+    int SetDebugEnable(const ToSubMachineConfig& profLevelConfig);
 
 private:
     uint32_t GetPerfDataSize() const;
-    void InitPerfData();
+    int32_t InitPerfData();
     void ReleasePerfData();
     void ResetMetrics(const uint32_t coreId);
     void StartMachinePerfTraceDumpThread();

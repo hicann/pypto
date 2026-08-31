@@ -76,7 +76,8 @@ bool DeviceDfx::Init(DeviceArgs& args)
         MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "Fail to copy dfx info from host to device.");
         return false;
     }
-    if (InitAicorePrint(args) != 0) {
+    constexpr bool isOpenAicorePrint = static_cast<bool>(ENABLE_AICORE_PRINT);
+    if (isOpenAicorePrint && InitAicorePrint(args) != 0) {
         MACHINE_LOGW("Failed to init aicore print host manager");
         return false;
     }

@@ -422,18 +422,20 @@ void DeviceLauncher::GetCaptureInfo(AclRtStream aicoreStream, AclMdlRI& rtModel)
 
 bool DeviceLauncher::IsCaptureMode() { return DeviceLauncherContext::Get().IsCaptureMode(); }
 
-void DeviceLauncher::SetDevPerfAddr(const bool debugEnable, const bool isCaptureMode,
-                                    const ToSubMachineConfig& profLevelConfig)
+int DeviceLauncher::SetDevPerfAddr(const bool debugEnable, const bool isCaptureMode,
+                                   const ToSubMachineConfig& profLevelConfig)
 {
+    int ret = 0;
     if (debugEnable || KernelBinary::GetEnableDumpDevPref() || HostProf::GetInstance().GetHostProfType() == 1) {
         if (isCaptureMode) {
             ExchangeCaptureModeRelax();
         }
-        DevicePerf::GetInstance().SetDebugEnable(profLevelConfig);
+        ret = DevicePerf::GetInstance().SetDebugEnable(profLevelConfig);
         if (isCaptureMode) {
             ExchangeCaptureModeGlobal();
         }
     }
+    return ret;
 }
 
 int DeviceLauncher::LaunchSyncTask(AclRtStream aicoreStream, bool isCaptureMode, int launchEarlyMode)
@@ -526,7 +528,8 @@ int DeviceLauncher::LaunchAicoreKernel(AclRtStream aicoreStream, void* kernel, R
     auto startTime = MspfSysCycleTime();
     auto ret = RuntimeKernelLaunchWithHandleV2(kernel, tilingKey, blockDim, &rtArgs, nullptr, aicoreStream, &rtTaskCfg);
     HostProf::GetInstance().ReportHostProfInfo(aicoreStream, startTime, blockDim, MSPF_GE_TASK_TYPE_MIX_AIC, true);
-    if (debugEnable || !IsCaptureMode() || IsPtoDataDumpEnabled()) {
+    constexpr bool isOpenAicorePrint = static_cast<bool>(ENABLE_AICORE_PRINT);
+    if (debugEnable || (!IsCaptureMode() && isOpenAicorePrint) || IsPtoDataDumpEnabled()) {
         int rc = 0;
         auto scheStream = GetStreamContext().GetScheStream();
         rc = DeviceSynchronize(scheStream, aicoreStream);
@@ -585,7 +588,8 @@ int DeviceLauncher::LaunchKernel(AclRtStream aicoreStream, uint8_t* ctrlFlowCach
         MACHINE_ASSERT(ret == RT_SUCCESS) << "launch ring event wait failed: " << ret;
     }
 
-    DeviceLauncher::SetDevPerfAddr(debugEnable, isCaptureMode, kernel->GetMachineConfig());
+    ret = DeviceLauncher::SetDevPerfAddr(debugEnable, isCaptureMode, kernel->GetMachineConfig());
+    MACHINE_ASSERT(ret == 0) << "set dev perf addr failed: " << ret;
     if (!isCaptureMode) {
         args->kArgs.toSubMachineConfig = kernel->GetMachineConfig();
     }
