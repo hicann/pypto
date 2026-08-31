@@ -222,6 +222,7 @@ private:
     Status ProcessL0C2L1LargeToSmall(Function& function);
     bool CheckUBTileShape(const LogicalTensorPtr& output);
     bool CheckConsumerSliceShapeMultiple(const LogicalTensorPtr& output, const LogicalTensorPtr& input);
+    bool AreAllSliceConsumerShapesPreserved(const LogicalTensorPtr& tensor) const;
     Status ProcessL0C2UBSmallToLarge(Function& function);
     Status ProcessL0C2UBLargeToSmall(Function& function);
     Status ProcessUB2UBContractSlice(Function& function);
@@ -230,9 +231,9 @@ private:
     Status ProcessL1DdrL1(Function& function);
     Status ProcessDdrMultiReshape(Function& function);
     bool ShouldSkipUB2L1SmallToLarge(const LogicalTensorPtr& iOperand, const LogicalTensorPtr& oOperand) const;
-    Status TryUpgradeSingleSliceContractPath(Operation& sliceOp, MemoryType sourceType, MemoryType targetType,
-                                             const std::string& reason, bool requireMatrixShape, bool checkUbTileShape,
-                                             bool checkUb2L1Constraints);
+    Status TryUpgradeSliceContractPath(Operation& sliceOp, MemoryType sourceType, MemoryType targetType,
+                                       const std::string& reason, bool requireMatrixShape, bool checkUbTileShape,
+                                       bool checkUb2L1Constraints);
     Status TryUpgradeSingleContractSlicePath(Operation& contractOp, MemoryType sourceType, MemoryType targetType,
                                              const std::string& reason, bool requireMatrixShape, bool checkUbTileShape,
                                              bool checkUb2L1Constraints);
@@ -241,8 +242,8 @@ private:
     bool HasOnlySliceConsumers(const LogicalTensorPtr& tensor) const;
     bool IsSliceOutputTarget(Operation& sliceOp, MemoryType targetType) const;
     Status EnsureSliceOutputTarget(Operation& sliceOp, MemoryType targetType, const std::string& reason);
-    Status ApplySingleSliceContractUpgrade(Operation& sliceOp, MemoryType sourceType, MemoryType targetType,
-                                           const std::string& reason);
+    Status ApplySliceContractUpgrade(Operation& sliceOp, MemoryType sourceType, MemoryType targetType,
+                                     const std::string& reason);
     Status ApplySingleContractSliceUpgrade(Operation& contractOp, MemoryType sourceType, MemoryType targetType,
                                            const std::string& reason);
     bool CanUseL0C2L1UpgradePath(Operation& operation);

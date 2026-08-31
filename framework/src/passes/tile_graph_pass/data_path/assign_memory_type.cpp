@@ -2222,8 +2222,8 @@ Status AssignMemoryType::ProcessL0C2L1SmallToLarge(Function& function)
         if (op.GetOpcode() != Opcode::OP_SLICE) {
             continue;
         }
-        RETURN_IF_NOT_SUCCESS(TryUpgradeSingleSliceContractPath(op, MemoryType::MEM_L0C, MemoryType::MEM_L1,
-                                                                "ProcessL0C2L1SmallToLarge", false, false, false));
+        RETURN_IF_NOT_SUCCESS(TryUpgradeSliceContractPath(op, MemoryType::MEM_L0C, MemoryType::MEM_L1,
+                                                          "ProcessL0C2L1SmallToLarge", false, false, false));
     }
     return SUCCESS;
 }
@@ -2262,7 +2262,13 @@ Status AssignMemoryType::ProcessUB2UBContractSlice(Function& function)
 Status AssignMemoryType::ProcessL0C2L1LargeToSmall(Function& function)
 {
     for (auto& op : function.Operations()) {
-        if (op.GetOpcode() != Opcode::OP_CONTRACT) {
+        if (op.GetOpcode() != Opcode::OP_CONTRACT || op.oOperand.empty() || op.oOperand.front() == nullptr) {
+            continue;
+        }
+        // Large-to-small is a single-contract path. A middle tensor produced by
+        // multiple contracts is the small-to-large (fan-in) pattern instead.
+        auto middle = op.oOperand.front();
+        if (middle->GetProducers().size() != 1 || *middle->GetProducers().begin() != &op) {
             continue;
         }
         RETURN_IF_NOT_SUCCESS(TryUpgradeSingleContractSlicePath(op, MemoryType::MEM_L0C, MemoryType::MEM_L1,
@@ -2294,14 +2300,35 @@ bool AssignMemoryType::CheckConsumerSliceShapeMultiple(const LogicalTensorPtr& o
     return true;
 }
 
+bool AssignMemoryType::AreAllSliceConsumerShapesPreserved(const LogicalTensorPtr& tensor) const
+{
+    if (tensor == nullptr || tensor->GetConsumers().empty()) {
+        return false;
+    }
+    const auto& inputShape = tensor->GetShape();
+    for (auto* consumer : tensor->GetConsumers()) {
+        if (consumer == nullptr || consumer->GetOpcode() != Opcode::OP_SLICE) {
+            return false;
+        }
+        if (consumer->iOperand.empty() || consumer->iOperand.front() != tensor) {
+            return false;
+        }
+        if (consumer->oOperand.empty() || consumer->oOperand.front() == nullptr ||
+            consumer->oOperand.front()->GetShape() != inputShape) {
+            return false;
+        }
+    }
+    return true;
+}
+
 Status AssignMemoryType::ProcessL0C2UBSmallToLarge(Function& function)
 {
     for (auto& op : function.Operations()) {
         if (op.GetOpcode() != Opcode::OP_SLICE) {
             continue;
         }
-        RETURN_IF_NOT_SUCCESS(TryUpgradeSingleSliceContractPath(op, MemoryType::MEM_L0C, MemoryType::MEM_UB,
-                                                                "ProcessL0C2UBSmallToLarge", true, true, false));
+        RETURN_IF_NOT_SUCCESS(TryUpgradeSliceContractPath(op, MemoryType::MEM_L0C, MemoryType::MEM_UB,
+                                                          "ProcessL0C2UBSmallToLarge", true, true, false));
     }
     return SUCCESS;
 }
@@ -2324,8 +2351,8 @@ Status AssignMemoryType::ProcessUB2L1SmallToLarge(Function& function)
         if (op.GetOpcode() != Opcode::OP_SLICE) {
             continue;
         }
-        RETURN_IF_NOT_SUCCESS(TryUpgradeSingleSliceContractPath(op, MemoryType::MEM_UB, MemoryType::MEM_L1,
-                                                                "ProcessUB2L1SmallToLarge", true, false, true));
+        RETURN_IF_NOT_SUCCESS(TryUpgradeSliceContractPath(op, MemoryType::MEM_UB, MemoryType::MEM_L1,
+                                                          "ProcessUB2L1SmallToLarge", true, false, true));
     }
     return SUCCESS;
 }
@@ -2436,8 +2463,8 @@ Status AssignMemoryType::EnsureSliceOutputTarget(Operation& sliceOp, MemoryType 
     return SUCCESS;
 }
 
-Status AssignMemoryType::ApplySingleSliceContractUpgrade(Operation& sliceOp, MemoryType sourceType,
-                                                         MemoryType targetType, const std::string& reason)
+Status AssignMemoryType::ApplySliceContractUpgrade(Operation& sliceOp, MemoryType sourceType, MemoryType targetType,
+                                                   const std::string& reason)
 {
     auto middle = sliceOp.iOperand.front();
     ForceSetOriginal(middle, targetType, reason);
@@ -2511,10 +2538,9 @@ bool AssignMemoryType::CanUseL0C2L1UpgradePath(Operation& operation)
     return inserter.FitL0C2L1(operation);
 }
 
-Status AssignMemoryType::TryUpgradeSingleSliceContractPath(Operation& sliceOp, MemoryType sourceType,
-                                                           MemoryType targetType, const std::string& reason,
-                                                           bool requireMatrixShape, bool checkUbTileShape,
-                                                           bool checkUb2L1Constraints)
+Status AssignMemoryType::TryUpgradeSliceContractPath(Operation& sliceOp, MemoryType sourceType, MemoryType targetType,
+                                                     const std::string& reason, bool requireMatrixShape,
+                                                     bool checkUbTileShape, bool checkUb2L1Constraints)
 {
     constexpr size_t kMatrixShapeDimCount = 2;
     if (sliceOp.GetOpcode() != Opcode::OP_SLICE || sliceOp.iOperand.empty() || sliceOp.oOperand.empty()) {
@@ -2532,7 +2558,8 @@ Status AssignMemoryType::TryUpgradeSingleSliceContractPath(Operation& sliceOp, M
             return SUCCESS;
         }
     }
-    if (sourceType == MemoryType::MEM_L0C && targetType == MemoryType::MEM_L1 && middle->GetConsumers().size() != 1) {
+    if (sourceType == MemoryType::MEM_L0C && targetType == MemoryType::MEM_L1 &&
+        !AreAllSliceConsumerShapesPreserved(middle)) {
         return SUCCESS;
     }
     if (requireMatrixShape &&
@@ -2576,7 +2603,7 @@ Status AssignMemoryType::TryUpgradeSingleSliceContractPath(Operation& sliceOp, M
             return SUCCESS;
         }
     }
-    return ApplySingleSliceContractUpgrade(sliceOp, sourceType, targetType, reason);
+    return ApplySliceContractUpgrade(sliceOp, sourceType, targetType, reason);
 }
 
 Status AssignMemoryType::TryUpgradeSingleContractSlicePath(Operation& contractOp, MemoryType sourceType,
@@ -2632,8 +2659,11 @@ Status AssignMemoryType::TryUpgradeSingleContractSlicePath(Operation& contractOp
             !CanUseL0C2L1UpgradePath(*consumer)) {
             return SUCCESS;
         }
-        if (!IsDimMultiple(input->GetShape(), output->GetShape()) &&
-            !IsDimMultiple(output->GetShape(), input->GetShape())) {
+        bool shapeCompatible = IsDimMultiple(input->GetShape(), output->GetShape());
+        if (sourceType != MemoryType::MEM_L0C || targetType != MemoryType::MEM_L1) {
+            shapeCompatible = shapeCompatible || IsDimMultiple(output->GetShape(), input->GetShape());
+        }
+        if (!shapeCompatible) {
             return SUCCESS;
         }
         if (checkUbTileShape && !CheckUBTileShape(output)) {

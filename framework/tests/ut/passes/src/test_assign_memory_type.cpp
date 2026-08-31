@@ -1175,6 +1175,48 @@ TEST_F(AssignMemoryTypeTest, TestL0C2L1LargeToSmall)
     }
 }
 
+// 负向用例：large-to-small 路径要求 middle 仅由单个 contract 产生。当 middle 由 2 个 contract
+// 产生（fan-in，对应 small-to-large 图模式）时，不再走 L0C→L1 升级，回落 DDR 搬运。
+TEST_F(AssignMemoryTypeTest, TestL0C2L1LargeToSmallMultiContractDdrFallback)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(),
+                                                      "TestL0C2L1LargeToSmallMultiContractDdrFallback",
+                                                      "TestL0C2L1LargeToSmallMultiContractDdrFallback", nullptr);
+    ASSERT_NE(currFunctionPtr, nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("TestL0C2L1LargeToSmallMultiContractDdrFallback", currFunctionPtr);
+
+    std::vector<int64_t> shapeIn = {NUM_32, NUM_32};
+    std::vector<int64_t> shapeMiddle = {NUM_32, NUM_64};
+    auto dynShapeIn = CreateTestConstIntVector(shapeIn);
+    auto dynShapeMiddle = CreateTestConstIntVector(shapeMiddle);
+    auto matmulOut1 = IRBuilder().CreateTensorVar(DT_FP16, shapeIn, dynShapeIn);
+    auto matmulOut2 = IRBuilder().CreateTensorVar(DT_FP16, shapeIn, dynShapeIn);
+    matmulOut1->SetMemoryTypeBoth(MemoryType::MEM_L0C, true);
+    matmulOut2->SetMemoryTypeBoth(MemoryType::MEM_L0C, true);
+    auto middle = IRBuilder().CreateTensorVar(DT_FP16, shapeMiddle, dynShapeMiddle);
+    auto l1Out1 = IRBuilder().CreateTensorVar(DT_FP16, shapeIn, dynShapeIn);
+    auto l1Out2 = IRBuilder().CreateTensorVar(DT_FP16, shapeIn, dynShapeIn);
+
+    // 2 个 contract 共同写入同一 middle（fan-in），middle 仅被 slice 消费
+    auto& contractOp1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_CONTRACT, {matmulOut1}, {middle});
+    contractOp1.SetOpAttribute(
+        std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UNKNOWN, std::vector<int64_t>{0, 0}));
+    auto& contractOp2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_CONTRACT, {matmulOut2}, {middle});
+    contractOp2.SetOpAttribute(
+        std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UNKNOWN, std::vector<int64_t>{0, NUM_32}));
+    auto& sliceOp1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_SLICE, {middle}, {l1Out1});
+    sliceOp1.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_L1));
+    auto& sliceOp2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_SLICE, {middle}, {l1Out2});
+    sliceOp2.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, NUM_32}, MemoryType::MEM_L1));
+
+    AssignMemoryType assignMemoryType;
+    ASSERT_EQ(assignMemoryType.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    EXPECT_EQ(CountMemoryPath(currFunctionPtr.get(), MemoryType::MEM_L0C, MemoryType::MEM_L1), 0);
+    EXPECT_GE(CountMemoryPath(currFunctionPtr.get(), MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR), 1);
+    EXPECT_GE(CountMemoryPath(currFunctionPtr.get(), MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1), 1);
+}
+
 TEST_F(AssignMemoryTypeTest, TestL0C2L1SmallToLarge)
 {
     config::SetHostConfig(KEY_STRATEGY, "AssignMemoryTypeTestStrategy");
@@ -1202,6 +1244,41 @@ TEST_F(AssignMemoryTypeTest, TestL0C2L1SmallToLarge)
 
         originFunction = Program::GetInstance().GetFunctionByRawName(
             "TENSOR_TestL0C2L1SmallToLarge"); // Tensor_{Function名字}
+        ASSERT_NE(originFunction, nullptr) << "当前函数指针为空";
+        EXPECT_EQ(CountL0c2l1Num(originFunction), 4);
+    }
+}
+
+TEST_F(AssignMemoryTypeTest, TestL0C2L1SmallToLargeMultiSecondMatmul)
+{
+    config::SetHostConfig(KEY_STRATEGY, "AssignMemoryTypeTestStrategy");
+    std::vector<int64_t> shapeB1 = {NUM_32, NUM_32};
+    std::vector<int64_t> shapeA1 = {NUM_64, NUM_32};
+    std::vector<int64_t> shapeA2 = {NUM_128, NUM_64};
+    std::vector<int64_t> shapeC2 = {NUM_128, NUM_16};
+    PROGRAM("AssignMemoryTest")
+    {
+        Tensor inputB1(DataType::DT_FP16, shapeB1, "B1");
+        Tensor inputA1(DataType::DT_FP16, shapeA1, "A1");
+        Tensor inputA2(DataType::DT_FP16, shapeA2, "A2");
+        Tensor inputA2I(DataType::DT_FP16, shapeA2, "A2I");
+        Tensor outC2(DataType::DT_FP16, shapeC2, "C2");
+        Tensor outC2I(DataType::DT_FP16, shapeC2, "C2I");
+        SetFullTestStrategy();
+        Function* originFunction = nullptr;
+
+        config::SetBuildStatic(true);
+        FUNCTION("TestL0C2L1SmallToLargeMultiSecondMatmul", {inputA1, inputB1, inputA2, inputA2I, outC2, outC2I})
+        {
+            TileShape::Current().SetCubeTile({NUM_32, NUM_32}, {NUM_16, NUM_16}, {NUM_16, NUM_16});
+            Tensor inputB2 = Matrix::Matmul(outC2.GetDataType(), inputA1, inputB1); // (64 * 32) @ (32 * 32) = (64 * 32)
+            TileShape::Current().SetCubeTile({NUM_128, NUM_128}, {NUM_32, NUM_32}, {NUM_32, NUM_32});
+            outC2 = Matrix::Matmul(outC2.GetDataType(), inputA2, inputB2);   // (128 * 64) @ (64 * 32) = (128 * 32)
+            outC2I = Matrix::Matmul(outC2.GetDataType(), inputA2I, inputB2); // (128 * 64) @ (64 * 32) = (128 * 32)
+        }
+
+        originFunction = Program::GetInstance().GetFunctionByRawName(
+            "TENSOR_TestL0C2L1SmallToLargeMultiSecondMatmul"); // Tensor_{Function名字}
         ASSERT_NE(originFunction, nullptr) << "当前函数指针为空";
         EXPECT_EQ(CountL0c2l1Num(originFunction), 4);
     }
