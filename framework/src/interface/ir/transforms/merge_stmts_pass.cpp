@@ -27,6 +27,7 @@ namespace pypto::ir {
 
 namespace {
 
+using npu::tile_fwk::AsLogicalTensor;
 using npu::tile_fwk::LogicalTensor;
 using npu::tile_fwk::Operation;
 using utils::LookupVarInExpr;
@@ -41,6 +42,39 @@ struct BranchClassification {
     std::vector<SymbolicScalar> thenConds;
     std::vector<SymbolicScalar> elseConds;
 };
+
+bool HasChanged(const ir::ExprPtr& expr, VarExprMap& varMap)
+{
+    auto lt = AsLogicalTensor(expr);
+    if (!lt)
+        return false;
+
+    for (auto& shape : lt->GetDynValidShape()) {
+        if (shape.SubstituteVars(varMap).Raw() != shape.Raw()) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool HasChanged(Operation* op, VarExprMap& varMap)
+{
+    for (auto& var : op->result_) {
+        if (HasChanged(var, varMap)) {
+            return true;
+        }
+    }
+
+    for (auto& attr : op->GetDynamicAttributeList()) {
+        auto& s = attr.get();
+        if (s.SubstituteVars(varMap).Raw() != s.Raw()) {
+            return true;
+        }
+    }
+
+    return false;
+}
 
 StmtPtr SubstituteStmt(StmtPtr stmt, VarExprMap& varMap, std::unordered_set<VarPtr>& clonedVars)
 {
@@ -59,41 +93,23 @@ StmtPtr SubstituteStmt(StmtPtr stmt, VarExprMap& varMap, std::unordered_set<VarP
         return stmt;
     }
 
-    bool changed = false;
-    for (auto& attr : op->GetDynamicAttributeList()) {
-        auto& s = attr.get();
-        if (s.SubstituteVars(varMap).Raw() != s.Raw()) {
-            changed = true;
-            break;
-        }
-    }
-    if (!changed) {
+    if (!HasChanged(op.get(), varMap)) {
         return stmt;
     }
 
-    std::vector<VarPtr> newResults;
-    newResults.reserve(op->result_.size());
+    std::vector<VarPtr> results;
+    results.reserve(op->result_.size());
     for (auto& var : op->result_) {
-        auto lt = std::dynamic_pointer_cast<const LogicalTensor>(var);
-        if (!lt) {
-            newResults.push_back(var);
-            continue;
-        }
-        bool needsClone = false;
-        auto ltMut = std::const_pointer_cast<LogicalTensor>(lt);
-        for (auto& shape : ltMut->GetDynValidShape()) {
-            if (shape.SubstituteVars(varMap).Raw() != shape.Raw()) {
-                needsClone = true;
-                break;
+        if (HasChanged(var, varMap)) {
+            auto lt = var->Clone();
+            for (auto& shape : AsLogicalTensor(lt)->GetDynValidShape()) {
+                shape = shape.SubstituteVars(varMap).Simplify();
             }
-        }
-        if (needsClone) {
-            auto resultClone = lt->Clone();
-            varMap[var] = resultClone;
+            varMap[var] = lt;
             clonedVars.insert(var);
-            newResults.push_back(resultClone);
+            results.push_back(lt);
         } else {
-            newResults.push_back(var);
+            results.push_back(var);
         }
     }
 
@@ -103,7 +119,7 @@ StmtPtr SubstituteStmt(StmtPtr stmt, VarExprMap& varMap, std::unordered_set<VarP
         newArgs.push_back(LookupVarInExpr(arg, varMap));
     }
 
-    auto cloned = npu::tile_fwk::RebuildTensorOpStmt(top, newResults, op->result_token_, newArgs, op->tokens_,
+    auto cloned = npu::tile_fwk::RebuildTensorOpStmt(top, results, op->result_token_, newArgs, op->tokens_,
                                                      Span::Unknown());
     op = std::dynamic_pointer_cast<Operation>(std::const_pointer_cast<Stmt>(cloned));
     for (auto& attr : op->GetDynamicAttributeList()) {

@@ -18,6 +18,8 @@ import pytest
 import torch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+if not hasattr(torch, "npu"):
+    pytest.skip("torch_npu not installed", allow_module_level=True)
 from _ops.bsa import bsa_fwd_impl as _bsa_impl  # noqa: E402
 from _ops.bsa.bsa_common import DEFAULT_CONFIG  # noqa: E402
 from _ops.bsa.bsa_fwd_golden import BSAForwardInputs, bsa_forward_golden  # noqa: E402

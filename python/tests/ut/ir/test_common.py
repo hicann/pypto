@@ -57,6 +57,7 @@ def run_merge_pass(func, *args, create_new_logical_tensor=True):
     b = ir.IRBuilder()
     func = pil.compile(func, *args, create_new_logical_tensor=create_new_logical_tensor)
     prog = b.create_program([func], "main", ir.Span.unknown())
+    logging.info("\ninitial:\n%s" % func)
     dce = ir.Pass.aggressive_dce()
     canonical = ir.Pass.canonicalize()
     merge = ir.Pass.merge_stmts_into_if()
