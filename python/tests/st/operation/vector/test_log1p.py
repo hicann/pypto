@@ -1,58 +1,53 @@
 #!/usr/bin/env python3
 # coding: utf-8
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
-# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-# CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You may not use this file except in compliance with the License.
-# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-# See LICENSE in the root of the software repository for the full text of the License.
-# -----------------------------------------------------------------------------------------------------------
-""" """
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# Licensed under the CANN Open Software License Agreement Version 2.0.
+"""System tests for Log1p migrated from the C++ vector ST."""
 
-import numpy as np
-from st.pypto_test import TestBuilder
+import os
+
+import pytest
 import torch
+from vector_test_utils import assert_outputs, make_inputs, make_outputs
+from vector_testcase.log1p_test_case import LOG1P_TESTS, Log1pConfig
 
 import pypto
 
 
-# pypto op define, need args: params, tensors
-def op_log1p(params, a, b):
-    n, m = a.shape
-    view_shape, tile_shape = params
-    for b_idx in pypto.loop(int(np.ceil(n / view_shape[0])), name="LOOP_LOG1P_L0", idx_name="b_idx"):
-        for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_LOG1P_L1", idx_name="s_idx"):
-            tile_a = pypto.view(
-                a,
-                view_shape,
-                [b_idx * view_shape[0], s_idx * view_shape[1]],
-                valid_shape=[
-                    pypto.min(pypto.symbolic_scalar(n) - b_idx * view_shape[0], pypto.symbolic_scalar(n)),
-                    pypto.min(pypto.symbolic_scalar(m) - b_idx * view_shape[1], pypto.symbolic_scalar(m)),
-                ],
-            )
-            pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
-            tile_a.move(pypto.log1p(tile_a))
-            pypto.assemble(tile_a, [b_idx * view_shape[0], s_idx * view_shape[1]], b)
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def log1p_2d_1input_kernel(input0: pypto.Tensor(), output: pypto.Tensor(), config: Log1pConfig):
+    pypto.set_vec_tile_shapes(*config.tile_shape)
+    for index_0 in pypto.loop(config.loop_ranges[0]):
+        for index_1 in pypto.loop(config.loop_ranges[1]):
+            offsets = [index_0 * config.execution_view_shape[0], index_1 * config.execution_view_shape[1]]
+            input0_offset = [0 if config.input_shapes[0][axis] == 1 else offsets[axis] for axis in range(2)]
+            input0_view = pypto.view(input0, config.input_view_shapes[0], input0_offset)
+            result = pypto.log1p(input0_view)
+            output_offset = [
+                0 if config.output_offset_map[axis] < 0 else offsets[config.output_offset_map[axis]]
+                for axis in range(len(config.execution_view_shape))
+            ]
+            pypto.assemble(result, output_offset, output)
 
 
-def op_log1p_golden(param, a, b):
-    return torch.log1p(a)
+KERNELS = {
+    (2, 1): log1p_2d_1input_kernel,
+}
 
 
-class Log1pTest(TestBuilder):
-    def __init__(self, params: tuple, kernel, kernel_golden, tiling: int):
-        super().__init__(params, kernel, kernel_golden, tiling)
+def run_log1p_test(case: dict):
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    torch.npu.set_device(device_id)
+    config = Log1pConfig.from_test_case(case)
+    inputs_cpu = make_inputs(config)
+    expected = [torch.log1p(inputs_cpu[0])]
+    inputs = [tensor.to(f"npu:{device_id}") for tensor in inputs_cpu]
+    outputs = make_outputs(config, f"npu:{device_id}")
+    KERNELS[(len(config.execution_view_shape), len(inputs))](*inputs, *outputs, config)
+    assert_outputs(outputs, expected)
 
-    def get_input_from_param(self):
-        n, m = self.tiling * 1, self.tiling * 1
-        a_tensor = torch.rand(n, m, dtype=torch.float32) * 100
-        self.setup_inputs(a_tensor)
-        self.set_tol(rtol=3e-3, atol=3e-3)
-        return (a_tensor,)
 
-
-def test():
-    st = Log1pTest(((16, 16), (8, 8)), op_log1p, op_log1p_golden, tiling=32)
-    st()
+@pytest.mark.parametrize("case", LOG1P_TESTS, ids=[case["case_name"] for case in LOG1P_TESTS])
+@pypto.options(pass_options={"enable_slice": True})
+def test_log1p(case: dict):
+    run_log1p_test(case)

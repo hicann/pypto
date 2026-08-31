@@ -1,118 +1,109 @@
 #!/usr/bin/env python3
 # coding: utf-8
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
-# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-# CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You may not use this file except in compliance with the License.
-# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-# See LICENSE in the root of the software repository for the full text of the License.
-# -----------------------------------------------------------------------------------------------------------
-""" """
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# Licensed under the CANN Open Software License Agreement Version 2.0.
+"""System tests for ScatterUpdate migrated from the C++ vector ST."""
 
-import copy
-import math
 import os
 
-import numpy as np
+import pytest
 import torch
+from vector_test_utils import assert_outputs, make_inputs
+from vector_testcase.scatterupdate_onboard_test_case import SCATTERUPDATE_ONBOARD_TESTS, ScatterupdateOnboardConfig
 
 import pypto
 
 
-@pypto.options(pass_options={"enable_slice": True})
-def test_scatterupdate_onboard():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def scatterupdate_onboard_2d_3input_2d_output_kernel(
+    input0: pypto.Tensor([pypto.STATIC, pypto.STATIC]),
+    input1: pypto.Tensor([pypto.STATIC, pypto.STATIC]),
+    input2: pypto.Tensor([pypto.STATIC, pypto.STATIC]),
+    config: ScatterupdateOnboardConfig,
+):
+    pypto.set_vec_tile_shapes(*config.tile_shape)
+    index_rows, index_columns = input1.shape
+    source_view_rows = config.view_shape[0]
+    index_view_rows = source_view_rows // index_columns
+    row_loops = (index_rows + index_view_rows - 1) // index_view_rows
+    for row_index in pypto.loop(row_loops):
+        source_offset = row_index * source_view_rows
+        index_offset = row_index * index_view_rows
+        source_view = input0[source_offset:source_offset + source_view_rows, :]
+        index_view = input1[index_offset:index_offset + index_view_rows, :]
+        input2.move(pypto.scatter_update(input2, -2, index_view, source_view))
+
+
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def scatterupdate_onboard_4d_3input_4d_output_kernel(
+    input0: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC, pypto.STATIC, pypto.STATIC]),
+    input1: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC]),
+    input2: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC]),
+    config: ScatterupdateOnboardConfig,
+):
+    pypto.set_vec_tile_shapes(*config.tile_shape)
+    for index_0 in pypto.loop(config.loop_ranges[0]):
+        for index_1 in pypto.loop(config.loop_ranges[1]):
+            for index_2 in pypto.loop(config.loop_ranges[2]):
+                for index_3 in pypto.loop(config.loop_ranges[3]):
+                    offsets = [
+                        index_0 * config.execution_view_shape[0],
+                        index_1 * config.execution_view_shape[1],
+                        index_2 * config.execution_view_shape[2],
+                        index_3 * config.execution_view_shape[3],
+                    ]
+                    index_view = input1[
+                        offsets[0]:offsets[0] + config.execution_view_shape[0],
+                        offsets[1]:offsets[1] + config.execution_view_shape[1],
+                    ]
+                    source_view = input0[
+                        offsets[0]:offsets[0] + config.execution_view_shape[0],
+                        offsets[1]:offsets[1] + config.execution_view_shape[1],
+                        :,
+                        :,
+                    ]
+                    input2.move(pypto.scatter_update(input2, -2, index_view, source_view))
+
+
+def scatter_update_golden(inputs, config):
+    source, index, destination = inputs
+    result = destination.clone()
+    if source.dim() == 4:
+        block_size = destination.shape[1]
+        for batch in range(index.shape[0]):
+            for sequence in range(index.shape[1]):
+                position = int(index[batch, sequence])
+                result[position // block_size, position % block_size] = source[batch, sequence]
+    else:
+        for batch in range(index.shape[0]):
+            for sequence in range(index.shape[1]):
+                result[int(index[batch, sequence])] = source[batch * index.shape[1] + sequence]
+    return [result]
+
+
+KERNELS = {
+    (2, 3): scatterupdate_onboard_2d_3input_2d_output_kernel,
+    (4, 3): scatterupdate_onboard_4d_3input_4d_output_kernel,
+}
+
+
+def run_scatterupdate_onboard_test(case: dict):
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     torch.npu.set_device(device_id)
-    b = 1
-    s = 1
-    n = 1
-    d = 8
-    block_num = 1
-    block_size = 1
-    src_shape = (b, s, n, d)
-    index_shape = (b, s)
-    dst_shape = (block_num, block_size, n, d)
+    config = ScatterupdateOnboardConfig.from_test_case(case)
+    inputs_cpu = make_inputs(config)
+    index = inputs_cpu[1]
+    index_capacity = inputs_cpu[2].shape[0] * (inputs_cpu[2].shape[1] if inputs_cpu[2].dim() == 4 else 1)
+    inputs_cpu[1] = torch.randperm(index_capacity, dtype=index.dtype)[:index.numel()].reshape(index.shape)
+    expected = scatter_update_golden(inputs_cpu, config)
+    inputs = [tensor.to(f"npu:{device_id}") for tensor in inputs_cpu]
+    KERNELS[(len(config.execution_view_shape), len(inputs))](*inputs, config)
+    assert_outputs([inputs[2]], expected)
 
-    view_shape = (b, s, n, d)
-    tile_shape = (b, s, n, d)
-    pypto.runtime._device_init()
 
-    src_tensor = pypto.tensor(src_shape, pypto.DT_INT32, "PTO_TENSOR_SRC")
-    index_tensor = pypto.tensor(index_shape, pypto.DT_INT32, "PTO_TENSOR_INDEX")
-    update_tensor = pypto.tensor(dst_shape, pypto.DT_INT32, "PTO_TENSOR_DST")
-    dst_tensor = pypto.tensor(dst_shape, pypto.DT_INT32, "PTO_TENSOR_DST")
-
-    b_loop_num = math.ceil(src_shape[0] / view_shape[0])
-    s_loop_num = math.ceil(src_shape[1] / view_shape[1])
-    with pypto.function("MAIN", src_tensor, index_tensor, update_tensor, dst_tensor):
-        for b_idx in pypto.loop(b_loop_num, name="b0", idx_name="bidx"):
-            for s_idx in pypto.loop(s_loop_num, name="s0", idx_name="sidx"):
-                tmp_dst_tensor = pypto.tensor(dst_shape, pypto.DT_INT32, "PTO_TENSOR_TMP")
-                view_tensor_src = pypto.view(
-                    src_tensor,
-                    view_shape,
-                    [b_idx * view_shape[0], s_idx * view_shape[1], 0, 0],
-                    valid_shape=[
-                        pypto.min(
-                            pypto.symbolic_scalar(src_shape[0]) - b_idx * view_shape[0],
-                            pypto.symbolic_scalar(view_shape[0]),
-                        ),
-                        pypto.min(
-                            pypto.symbolic_scalar(src_shape[1]) - s_idx * view_shape[1],
-                            pypto.symbolic_scalar(view_shape[1]),
-                        ),
-                        n,
-                        d,
-                    ],
-                )
-                view_tensor_index = pypto.view(
-                    index_tensor,
-                    [view_shape[0], view_shape[1]],
-                    [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[
-                        pypto.min(
-                            pypto.symbolic_scalar(index_shape[0]) - b_idx * view_shape[0],
-                            pypto.symbolic_scalar(view_shape[0]),
-                        ),
-                        pypto.min(
-                            pypto.symbolic_scalar(index_shape[1]) - s_idx * view_shape[1],
-                            pypto.symbolic_scalar(view_shape[1]),
-                        ),
-                    ],
-                )
-                view_tensor_dst = pypto.view(update_tensor, dst_shape, [0, 0, 0, 0])
-                pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1], tile_shape[2], tile_shape[3])
-                tmp_dst_tensor.move(pypto.scatter_update(view_tensor_dst, -2, view_tensor_index, view_tensor_src))
-                pypto.set_vec_tile_shapes(1, 64, n, d)
-                pypto.assemble(tmp_dst_tensor, [0, 0, 0, 0], dst_tensor)
-
-    assert isinstance(dst_tensor, pypto.tensor)
-
-    input0_tensor = np.random.uniform(2, 3, src_shape).astype(np.int32)
-    input1_tensor = np.random.choice(range(0, dst_shape[0] * dst_shape[1]), index_shape, replace=False).astype(np.int32)
-    input2_tensor = np.random.uniform(1, 2, dst_shape).astype(np.int32)
-    result = copy.copy(input2_tensor)
-    d_data = np.zeros(dst_shape[0] * dst_shape[1] * dst_shape[2] * dst_shape[3]).astype(np.int32)
-
-    a_tensor = torch.from_numpy(input0_tensor)
-    b_tensor = torch.from_numpy(input1_tensor)
-    c_tensor = torch.from_numpy(input2_tensor)
-    d_tensor = torch.from_numpy(d_data)
-
-    pto_a_tensor = pypto.from_torch(a_tensor, "a_tensor")
-    pto_b_tensor = pypto.from_torch(b_tensor, "b_tensor")
-    pto_c_tensor = pypto.from_torch(c_tensor, "c_tensor")
-    pto_d_tensor = pypto.from_torch(d_tensor, "d_tensor")
-
-    pypto.runtime._device_run_once_data_from_host(pto_a_tensor, pto_b_tensor, pto_c_tensor, pto_d_tensor)
-
-    for _b in range(b):
-        for _s in range(s):
-            result[input1_tensor[_b][_s] // block_size][input1_tensor[_b][_s] % block_size][:] = input0_tensor[_b][_s][
-                :
-            ]
-    result_t = torch.from_numpy(result).to(d_tensor.device).to(d_tensor.dtype)
-    result_t = result_t.reshape_as(d_tensor)
-    assert (d_tensor == result_t).all().item()
-    pypto.runtime._device_fini()
+@pytest.mark.parametrize(
+    "case", SCATTERUPDATE_ONBOARD_TESTS, ids=[case["case_name"] for case in SCATTERUPDATE_ONBOARD_TESTS]
+)
+@pypto.options(pass_options={"enable_slice": True})
+def test_migrated_scatterupdate(case: dict):
+    run_scatterupdate_onboard_test(case)

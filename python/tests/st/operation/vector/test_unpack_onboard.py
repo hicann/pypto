@@ -1,64 +1,57 @@
 #!/usr/bin/env python3
 # coding: utf-8
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
-# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-# CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You may not use this file except in compliance with the License.
-# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-# See LICENSE in the root of the software repository for the full text of the License.
-# -----------------------------------------------------------------------------------------------------------
-""" """
+# Licensed under the CANN Open Software License Agreement Version 2.0.
+"""System tests for UnPack migrated from the C++ vector ST."""
 
-import math
 import os
 
+import pytest
 import torch
+from vector_test_utils import assert_outputs, make_inputs, make_outputs
+from vector_testcase.unpack_onboard_test_case import UNPACK_ONBOARD_TESTS, UnpackOnboardConfig
+from vector_testcase.vector_test_case import TORCH_DTYPES
 
 import pypto
 
 
-@pypto.options(pass_options={"enable_slice": True})
-def test_unpack_onboard():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def unpack_onboard_1d_1input_1d_output_kernel(
+    input0: pypto.Tensor(), output0: pypto.Tensor(), config: UnpackOnboardConfig
+):
+    pypto.set_vec_tile_shapes(*config.tile_shape)
+    for index_0 in pypto.loop(config.loop_ranges[0]):
+        offsets = [index_0 * config.execution_view_shape[0]]
+        input0_view = input0[:]
+        result = pypto.unpack(input0_view, config.output_dtype)
+        output_offset = [
+            0 if config.output_offset_map[axis] < 0 else offsets[config.output_offset_map[axis]] for axis in range(1)
+        ]
+        pypto.assemble(result, output_offset, output0)
+
+
+KERNELS = {
+    (1, 1, 1, 1): unpack_onboard_1d_1input_1d_output_kernel,
+}
+
+
+def run_unpack_onboard_test(case: dict):
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     torch.npu.set_device(device_id)
-    dst_dtype = pypto.DT_INT32
-    dst_byte = 4
-    input_shape = (256,)
-    output_shape = (input_shape[0] // dst_byte,)
-    tile_shape = (256,)
-    view_shape = (64,)
-    pypto.runtime._device_init()
+    config = UnpackOnboardConfig.from_test_case(case)
+    inputs_cpu = make_inputs(config)
+    expected = [
+        inputs_cpu[0].flatten().view(TORCH_DTYPES[config.output_tensors[0].dtype]).reshape(config.output_shapes[0])
+    ]
+    inputs = [tensor.to(f"npu:{device_id}") for tensor in inputs_cpu]
+    outputs = make_outputs(config, f"npu:{device_id}")
+    KERNELS[(len(config.execution_view_shape), len(inputs), len(outputs), len(config.output_shapes[0]))](
+        *inputs, *outputs, config
+    )
+    assert_outputs(outputs, expected)
 
-    input1 = pypto.tensor(input_shape, pypto.DT_UINT8, "PTO_TENSOR_input1")
-    output = pypto.tensor(output_shape, dst_dtype, "PTO_TENSOR_output")
 
-    loop_num = math.ceil(input_shape[0] / view_shape[0])
-    with pypto.function("MAIN", input1, output):
-        for idx in pypto.loop(loop_num, name="b0", idx_name="bidx"):
-            view_tensor = pypto.view(
-                input1,
-                view_shape,
-                [idx * view_shape[0]],
-                valid_shape=[
-                    pypto.min(
-                        pypto.symbolic_scalar(input_shape[0]) - idx * view_shape[0],
-                        pypto.symbolic_scalar(view_shape[0]),
-                    ),
-                ],
-            )
-            pypto.set_vec_tile_shapes(tile_shape[0])
-            view_tensor = pypto.unpack(view_tensor, dst_dtype)
-            pypto.assemble(view_tensor, [idx * view_shape[0] // dst_byte], output)
-
-    assert isinstance(output, pypto.tensor)
-
-    a_tensor = torch.randint(0, 256, input_shape, dtype=torch.uint8)
-    b_tensor = torch.zeros(output_shape[0], dtype=torch.int32)
-    pto_a_tensor = pypto.from_torch(a_tensor, "a_tensor")
-    pto_b_tensor = pypto.from_torch(b_tensor, "b_tensor")
-    pypto.runtime._device_run_once_data_from_host(pto_a_tensor, pto_b_tensor)
-
-    golden = a_tensor.view(torch.int32)
-    assert torch.equal(b_tensor, golden)
-    pypto.runtime._device_fini()
+@pytest.mark.parametrize("case", UNPACK_ONBOARD_TESTS, ids=[case["case_name"] for case in UNPACK_ONBOARD_TESTS])
+@pypto.options(pass_options={"enable_slice": True})
+def test_unpack_onboard(case: dict):
+    run_unpack_onboard_test(case)

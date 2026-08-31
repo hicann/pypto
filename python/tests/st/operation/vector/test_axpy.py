@@ -19,6 +19,74 @@ import torch
 
 import pypto
 
+AXPY_CPP_ST_CASES = (
+    # case_index, y_shape, x_shape, dtype(y, x, out), view_shape, tile_shape, alpha
+    (0, (32, 32), (32, 32), (pypto.DT_FP32, pypto.DT_FP32, pypto.DT_FP32), (16, 16), (16, 16), 2.0),
+    (4, (32, 32), (32, 32), (pypto.DT_FP16, pypto.DT_FP16, pypto.DT_FP16), (16, 16), (16, 16), 2.0),
+    (6, (64, 64), (64, 64), (pypto.DT_FP32, pypto.DT_FP16, pypto.DT_FP32), (64, 64), (64, 64), 2.0),
+    (12, (64, 128), (64, 1), (pypto.DT_FP16, pypto.DT_FP16, pypto.DT_FP16), (64, 128), (64, 128), 2.0),
+    (13, (64, 64), (64, 1), (pypto.DT_FP32, pypto.DT_FP16, pypto.DT_FP32), (64, 64), (64, 64), 2.0),
+)
+
+
+@pytest.mark.parametrize(
+    "case_index,y_shape,x_shape,dtypes,view_shape,tile_shape,alpha",
+    AXPY_CPP_ST_CASES,
+    ids=("cpp_case_0", "cpp_case_4", "cpp_case_6", "cpp_case_12", "cpp_case_13"),
+)
+def test_axpy_cpp_st_onboard(case_index, y_shape, x_shape, dtypes, view_shape, tile_shape, alpha):
+    """Python guards for TestAxpy cases 0, 4, 6, 12 and 13."""
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    torch.npu.set_device(device_id)
+    torch_dtypes = {
+        pypto.DT_FP16: torch.float16,
+        pypto.DT_FP32: torch.float32,
+    }
+    y_dtype, x_dtype, output_dtype = dtypes
+    output_shape = y_shape
+    loop_ranges = tuple(math.ceil(dim / view_dim) for dim, view_dim in zip(output_shape, view_shape))
+
+    pypto.runtime._device_init()
+    try:
+        y = pypto.tensor(y_shape, y_dtype, f"AXPY_{case_index}_y")
+        x = pypto.tensor(x_shape, x_dtype, f"AXPY_{case_index}_x")
+        output = pypto.tensor(output_shape, output_dtype, f"AXPY_{case_index}_output")
+
+        with pypto.function(f"AXPY_CPP_ST_{case_index}", y, x, output):
+            for row_index in pypto.loop(loop_ranges[0], name="AXPY_ROW", idx_name="row_index"):
+                for column_index in pypto.loop(loop_ranges[1], name="AXPY_COLUMN", idx_name="column_index"):
+                    row_offset = row_index * view_shape[0]
+                    column_offset = column_index * view_shape[1]
+                    x_column_offset = 0 if x_shape[1] == 1 else column_offset
+                    x_view_width = min(x_shape[1], view_shape[1])
+
+                    y_view = y[
+                        row_offset:row_offset + view_shape[0],
+                        column_offset:column_offset + view_shape[1],
+                    ]
+                    x_view = x[
+                        row_offset:row_offset + view_shape[0],
+                        x_column_offset:x_column_offset + x_view_width,
+                    ]
+                    pypto.set_vec_tile_shapes(*tile_shape)
+                    y_view.axpy_(x_view, alpha)
+                    output[row_offset:, column_offset:] = y_view
+
+        y_data = torch.empty(y_shape, dtype=torch_dtypes[y_dtype]).uniform_(-10, 10)
+        x_data = torch.empty(x_shape, dtype=torch_dtypes[x_dtype]).uniform_(-10, 10)
+        output_data = torch.zeros(output_shape, dtype=torch_dtypes[output_dtype])
+        pypto.runtime._device_run_once_data_from_host(
+            pypto.from_torch(y_data, f"AXPY_{case_index}_y_data"),
+            pypto.from_torch(x_data, f"AXPY_{case_index}_x_data"),
+            pypto.from_torch(output_data, f"AXPY_{case_index}_output_data"),
+        )
+
+        expected = y_data + alpha * x_data
+        tolerance = 3e-3 if output_dtype == pypto.DT_FP32 else 1e-2
+        assert_allclose(output_data, expected, rtol=tolerance, atol=tolerance)
+    finally:
+        pypto.runtime._device_fini()
+
 
 @pytest.mark.skip(reason="冒烟跳过")
 @pypto.options(pass_options={"enable_slice": True})

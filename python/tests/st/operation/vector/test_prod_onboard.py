@@ -1,69 +1,77 @@
 #!/usr/bin/env python3
 # coding: utf-8
-# Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
-# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-# CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You may not use this file except in compliance with the License.
-# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-# See LICENSE in the root of the software repository for the full text of the License.
-# -----------------------------------------------------------------------------------------------------------
-"""
-Test Prod block onboard
-"""
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# Licensed under the CANN Open Software License Agreement Version 2.0.
+"""System tests for Prod migrated from the C++ vector ST."""
 
-import math
 import os
 
-from numpy.testing import assert_allclose
+import pytest
 import torch
+from vector_test_utils import assert_outputs, make_inputs, make_outputs
+from vector_testcase.prod_onboard_test_case import PROD_ONBOARD_TESTS, ProdOnboardConfig
 
 import pypto
 
 
-@pypto.options(pass_options={"enable_slice": True})
-def test_prod_block_onboard():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def prod_onboard_2d_1input_2d_output_kernel(input0: pypto.Tensor(), output0: pypto.Tensor(), config: ProdOnboardConfig):
+    pypto.set_vec_tile_shapes(*config.tile_shape)
+    for index_0 in pypto.loop(config.loop_ranges[0]):
+        for index_1 in pypto.loop(config.loop_ranges[1]):
+            offsets = [index_0 * config.execution_view_shape[0], index_1 * config.execution_view_shape[1]]
+            input0_offset = [0 if config.input_shapes[0][axis] == 1 else offsets[axis] for axis in range(2)]
+            input0_view = pypto.view(input0, config.input_view_shapes[0], input0_offset)
+            result = pypto.prod(input0_view, config.dims[0], config.keep_dim)
+            output_offset = [
+                0 if config.output_offset_map[axis] < 0 else offsets[config.output_offset_map[axis]]
+                for axis in range(2)
+            ]
+            pypto.assemble(result, output_offset, output0)
+
+
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def prod_onboard_3d_1input_2d_output_kernel(input0: pypto.Tensor(), output0: pypto.Tensor(), config: ProdOnboardConfig):
+    pypto.set_vec_tile_shapes(*config.tile_shape)
+    for index_0 in pypto.loop(config.loop_ranges[0]):
+        for index_1 in pypto.loop(config.loop_ranges[1]):
+            for index_2 in pypto.loop(config.loop_ranges[2]):
+                offset_0 = index_0 * config.execution_view_shape[0]
+                offset_1 = index_1 * config.execution_view_shape[1]
+                offset_2 = index_2 * config.execution_view_shape[2]
+                input0_view = input0[
+                    offset_0:offset_0 + config.execution_view_shape[0],
+                    offset_1:offset_1 + config.execution_view_shape[1],
+                    offset_2:offset_2 + config.execution_view_shape[2],
+                ]
+                result = pypto.prod(input0_view, config.dims[0], config.keep_dim)
+                output0[
+                    offset_1:offset_1 + config.execution_view_shape[1],
+                    offset_2:offset_2 + config.execution_view_shape[2],
+                ] = result
+
+
+KERNELS = {
+    (2, 1, 1, 2): prod_onboard_2d_1input_2d_output_kernel,
+    (3, 1, 1, 2): prod_onboard_3d_1input_2d_output_kernel,
+}
+
+
+def run_prod_onboard_test(case: dict):
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     torch.npu.set_device(device_id)
+    config = ProdOnboardConfig.from_test_case(case)
+    inputs_cpu = make_inputs(config)
+    expected = [torch.prod(inputs_cpu[0], dim=config.dims[0], keepdim=config.keep_dim)]
+    inputs = [tensor.to(f"npu:{device_id}") for tensor in inputs_cpu]
+    outputs = make_outputs(config, f"npu:{device_id}")
+    KERNELS[(len(config.execution_view_shape), len(inputs), len(outputs), len(config.output_shapes[0]))](
+        *inputs, *outputs, config
+    )
+    assert_outputs(outputs, expected)
 
-    input_shape = (8, 8)
-    view_shape = (4, 8)
-    tile_shape = (4, 8)
 
-    pypto.runtime._device_init()
-
-    input_tensor = pypto.tensor(input_shape, pypto.DT_FP32, "PTO_TENSOR_SELF")
-    dst_tensor = pypto.tensor((input_shape[0],), pypto.DT_FP32, "PTO_TENSOR_DST")
-
-    b_loop_num = math.ceil(input_shape[0] / view_shape[0])
-
-    with pypto.function("MAIN", input_tensor, dst_tensor):
-        for b_idx in pypto.loop(b_loop_num, name="b0", idx_name="bidx"):
-            # block view
-            view_tensor = pypto.view(
-                input_tensor,
-                view_shape,
-                [b_idx * view_shape[0], 0],
-                valid_shape=[
-                    pypto.min(input_shape[0] - b_idx * view_shape[0], pypto.symbolic_scalar(view_shape[0])),
-                    pypto.symbolic_scalar(view_shape[1]),
-                ],
-            )
-            pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
-
-            block_result = pypto.prod(view_tensor, 1)
-            pypto.assemble(block_result, [b_idx * view_shape[0]], dst_tensor)
-
-    a_tensor = torch.randn(input_shape, dtype=torch.float32)
-    b_tensor = torch.zeros(input_shape[0], dtype=torch.float32)
-
-    pto_a = pypto.from_torch(a_tensor, "a_tensor")
-    pto_b = pypto.from_torch(b_tensor, "b_tensor")
-
-    pypto.runtime._device_run_once_data_from_host(pto_a, pto_b)
-
-    golden = torch.prod(a_tensor, dim=1)
-
-    assert_allclose(b_tensor, golden, rtol=1e-5, atol=1e-6)
-
-    pypto.runtime._device_fini()
+@pytest.mark.parametrize("case", PROD_ONBOARD_TESTS, ids=[case["case_name"] for case in PROD_ONBOARD_TESTS])
+@pypto.options(pass_options={"enable_slice": True})
+def test_prod_onboard(case: dict):
+    run_prod_onboard_test(case)

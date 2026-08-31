@@ -1,59 +1,78 @@
 #!/usr/bin/env python3
 # coding: utf-8
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
-# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-# CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You may not use this file except in compliance with the License.
-# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-# See LICENSE in the root of the software repository for the full text of the License.
-# -----------------------------------------------------------------------------------------------------------
-""" """
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# Licensed under the CANN Open Software License Agreement Version 2.0.
+"""System tests for LReLU migrated from the C++ vector ST."""
 
-import numpy as np
-from st.pypto_test import TestBuilder
+import os
+
+import pytest
 import torch
-import torch.nn.functional as functional
+from vector_test_utils import assert_outputs, make_inputs, make_outputs
+from vector_testcase.lrelu_test_case import LRELU_TESTS, LreluConfig
 
 import pypto
 
 
-# pypto op define, need args: params, tensors
-def op_lrelu(params, a, b):
-    n, m = a.shape
-    view_shape, tile_shape = params
-    for b_idx in pypto.loop(int(np.ceil(n / view_shape[0])), name="LOOP_lrelu_L0", idx_name="b_idx"):
-        for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_lrelu_L1", idx_name="s_idx"):
-            tile_a = pypto.view(
-                a,
-                view_shape,
-                [b_idx * view_shape[0], s_idx * view_shape[1]],
-                valid_shape=[
-                    pypto.min(pypto.symbolic_scalar(n) - b_idx * view_shape[0], pypto.symbolic_scalar(n)),
-                    pypto.min(pypto.symbolic_scalar(m) - s_idx * view_shape[1], pypto.symbolic_scalar(m)),
-                ],
-            )
-            pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
-            tile_a.move(pypto.lrelu(tile_a, 0.01))
-            pypto.assemble(tile_a, [b_idx * view_shape[0], s_idx * view_shape[1]], b)
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def lrelu_2d_1input_kernel(input0: pypto.Tensor(), output: pypto.Tensor(), config: LreluConfig):
+    pypto.set_vec_tile_shapes(*config.tile_shape)
+    for index_0 in pypto.loop(config.loop_ranges[0]):
+        for index_1 in pypto.loop(config.loop_ranges[1]):
+            offsets = [index_0 * config.execution_view_shape[0], index_1 * config.execution_view_shape[1]]
+            input0_offset = [0 if config.input_shapes[0][axis] == 1 else offsets[axis] for axis in range(2)]
+            input0_view = pypto.view(input0, config.input_view_shapes[0], input0_offset)
+            result = pypto.lrelu(input0_view, config.scalar)
+            output_offset = [
+                0 if config.output_offset_map[axis] < 0 else offsets[config.output_offset_map[axis]]
+                for axis in range(len(config.execution_view_shape))
+            ]
+            pypto.assemble(result, output_offset, output)
 
 
-def op_lrelu_golden(param, a, b):
-    return functional.leaky_relu(a, 0.01)
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def lrelu_3d_1input_kernel(input0: pypto.Tensor(), output: pypto.Tensor(), config: LreluConfig):
+    pypto.set_vec_tile_shapes(*config.tile_shape)
+    for index_0 in pypto.loop(config.loop_ranges[0]):
+        for index_1 in pypto.loop(config.loop_ranges[1]):
+            for index_2 in pypto.loop(config.loop_ranges[2]):
+                offsets = [
+                    index_0 * config.execution_view_shape[0],
+                    index_1 * config.execution_view_shape[1],
+                    index_2 * config.execution_view_shape[2],
+                ]
+                input0_offset = [
+                    0 if config.input_shapes[0][axis] == 1 else offsets[axis]
+                    for axis in range(len(config.execution_view_shape))
+                ]
+                input0_view = pypto.view(input0, config.input_view_shapes[0], input0_offset)
+                result = pypto.lrelu(input0_view, config.scalar)
+                output_offset = [
+                    0 if config.output_offset_map[axis] < 0 else offsets[config.output_offset_map[axis]]
+                    for axis in range(len(config.output_shapes[0]))
+                ]
+                pypto.assemble(result, output_offset, output)
 
 
-class LreluTest(TestBuilder):
-    def __init__(self, params: tuple, kernel, kernel_golden, tiling: int):
-        super().__init__(params, kernel, kernel_golden, tiling)
-
-    def get_input_from_param(self):
-        n, m = self.tiling * 1, self.tiling * 1
-        a_tensor = torch.rand(n, m, dtype=torch.float32) * 100
-        self.setup_inputs(a_tensor)
-        self.set_tol(rtol=3e-3, atol=3e-3)
-        return (a_tensor,)
+KERNELS = {
+    (2, 1): lrelu_2d_1input_kernel,
+    (3, 1): lrelu_3d_1input_kernel,
+}
 
 
-def test():
-    st = LreluTest(((16, 16), (8, 8)), op_lrelu, op_lrelu_golden, tiling=32)
-    st()
+def run_lrelu_test(case: dict):
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    torch.npu.set_device(device_id)
+    config = LreluConfig.from_test_case(case)
+    inputs_cpu = make_inputs(config)
+    expected = [torch.nn.functional.leaky_relu(inputs_cpu[0], config.scalar)]
+    inputs = [tensor.to(f"npu:{device_id}") for tensor in inputs_cpu]
+    outputs = make_outputs(config, f"npu:{device_id}")
+    KERNELS[(len(config.execution_view_shape), len(inputs))](*inputs, *outputs, config)
+    assert_outputs(outputs, expected)
+
+
+@pytest.mark.parametrize("case", LRELU_TESTS, ids=[case["case_name"] for case in LRELU_TESTS])
+@pypto.options(pass_options={"enable_slice": True})
+def test_lrelu(case: dict):
+    run_lrelu_test(case)

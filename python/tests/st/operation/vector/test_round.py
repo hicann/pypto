@@ -1,62 +1,62 @@
 #!/usr/bin/env python3
 # coding: utf-8
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
-# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-# CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You may not use this file except in compliance with the License.
-# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-# See LICENSE in the root of the software repository for the full text of the License.
-# -----------------------------------------------------------------------------------------------------------
-""" """
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# Licensed under the CANN Open Software License Agreement Version 2.0.
+"""System tests for Round migrated from the C++ vector ST."""
 
 import os
 
-import numpy as np
-from numpy.testing import assert_allclose
+import pytest
 import torch
+from vector_test_utils import assert_outputs, make_inputs, make_outputs
+from vector_testcase.round_test_case import ROUND_TESTS, RoundConfig
 
 import pypto
 
 
-@pypto.options(pass_options={"enable_slice": True})
-def test_vector_operation_round():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def round_2d_1input_2d_output_kernel(input0: pypto.Tensor(), output0: pypto.Tensor(), config: RoundConfig):
+    pypto.set_vec_tile_shapes(*config.tile_shape)
+    for index_0 in pypto.loop(config.loop_ranges[0]):
+        for index_1 in pypto.loop(config.loop_ranges[1]):
+            offsets = [index_0 * config.execution_view_shape[0], index_1 * config.execution_view_shape[1]]
+            input0_offset = [0 if config.input_shapes[0][axis] == 1 else offsets[axis] for axis in range(2)]
+            input0_view = pypto.view(input0, config.input_view_shapes[0], input0_offset)
+            result = pypto.round(input0_view, config.decimals)
+            output_offset = [
+                0 if config.output_offset_map[axis] < 0 else offsets[config.output_offset_map[axis]]
+                for axis in range(2)
+            ]
+            pypto.assemble(result, output_offset, output0)
+
+
+def round_golden(input_tensor, decimals):
+    if input_tensor.is_floating_point():
+        return torch.round(input_tensor, decimals=decimals)
+    scale = 10 ** (-decimals)
+    return torch.round(input_tensor.to(torch.float64) / scale).mul(scale).to(input_tensor.dtype)
+
+
+KERNELS = {
+    (2, 1, 1, 2): round_2d_1input_2d_output_kernel,
+}
+
+
+def run_round_test(case: dict):
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     torch.npu.set_device(device_id)
-    dtype = pypto.DT_FP32
-    tiling = 32
-    n, m = tiling * 1, tiling * 1
-    shape = (n, m)
-    view_shape = (16, 16)
-    tile_shape = (8, 8)
-    decimals = 2
-    pypto.runtime._device_init()
-    a = pypto.tensor(shape, dtype, "ROUND_TENSOR_a")
-    b = pypto.tensor(shape, dtype, "ROUND_TENSOR_b")
+    config = RoundConfig.from_test_case(case)
+    inputs_cpu = make_inputs(config)
+    expected = [round_golden(inputs_cpu[0], config.decimals)]
+    inputs = [tensor.to(f"npu:{device_id}") for tensor in inputs_cpu]
+    outputs = make_outputs(config, f"npu:{device_id}")
+    KERNELS[(len(config.execution_view_shape), len(inputs), len(outputs), len(config.output_shapes[0]))](
+        *inputs, *outputs, config
+    )
+    assert_outputs(outputs, expected)
 
-    with pypto.function("ROUND", a, b):
-        for b_idx in pypto.loop(int(np.ceil(n / view_shape[0])), name="LOOP_ROUND_L0", idx_name="b_idx"):
-            for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_ROUND_L1", idx_name="s_idx"):
-                tile_a = pypto.view(
-                    a,
-                    view_shape,
-                    [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[
-                        (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                        (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1])),
-                    ],
-                )
-                pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
-                tile_a.move(pypto.round(tile_a, decimals=decimals))
-                pypto.assemble(tile_a, [b_idx * view_shape[0], s_idx * view_shape[1]], b)
 
-    a_tensor = (torch.rand(n, m, dtype=torch.float32) * 100 - 50) * 0.123
-    b_tensor = torch.zeros(n, m, dtype=torch.float32)
-
-    pto_a_tensor = pypto.from_torch(a_tensor, "a_tensor")
-    pto_b_tensor = pypto.from_torch(b_tensor, "b_tensor")
-    pypto.runtime._device_run_once_data_from_host(pto_a_tensor, pto_b_tensor)
-
-    expected = torch.round(a_tensor, decimals=decimals)
-    assert_allclose(b_tensor.flatten(), expected.flatten(), rtol=1e-3, atol=1e-3)
-    pypto.runtime._device_fini()
+@pytest.mark.parametrize("case", ROUND_TESTS, ids=[case["case_name"] for case in ROUND_TESTS])
+@pypto.options(pass_options={"enable_slice": True})
+def test_round(case: dict):
+    run_round_test(case)

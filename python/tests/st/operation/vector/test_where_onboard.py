@@ -1,22 +1,96 @@
 #!/usr/bin/env python3
 # coding: utf-8
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
-# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-# CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You may not use this file except in compliance with the License.
-# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-# See LICENSE in the root of the software repository for the full text of the License.
-# -----------------------------------------------------------------------------------------------------------
-""" """
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# Licensed under the CANN Open Software License Agreement Version 2.0.
+"""System tests for Where migrated from the C++ vector ST."""
 
 import os
 
-import numpy as np
-from numpy.testing import assert_allclose
+import pytest
 import torch
+from vector_test_utils import assert_outputs, make_inputs, make_outputs
+from vector_testcase.where_onboard_test_case import WHERE_ONBOARD_TESTS, WhereOnboardConfig
 
 import pypto
+
+
+def _where_value(tensor, scalar, use_scalar, dtype):
+    if use_scalar:
+        return pypto.Element(dtype, scalar).base()
+    return tensor.base()
+
+
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def where_2d_kernel(
+    condition: pypto.Tensor(), x: pypto.Tensor(), y: pypto.Tensor(), output: pypto.Tensor(), config: WhereOnboardConfig
+):
+    pypto.set_vec_tile_shapes(*config.tile_shape)
+    for row_index in pypto.loop(config.loop_ranges[0]):
+        for column_index in pypto.loop(config.loop_ranges[1]):
+            offsets = [row_index * config.execution_view_shape[0], column_index * config.execution_view_shape[1]]
+            condition_view = pypto.view(condition, config.input_view_shapes[0], offsets)
+            x_view = pypto.view(
+                x,
+                config.input_view_shapes[1],
+                [0 if config.input_shapes[1][axis] == 1 else offsets[axis] for axis in range(2)],
+            )
+            y_view = pypto.view(
+                y,
+                config.input_view_shapes[2],
+                [0 if config.input_shapes[2][axis] == 1 else offsets[axis] for axis in range(2)],
+            )
+            x_value = config.x_scalar if config.flag in (2, 3) else x_view
+            y_value = config.y_scalar if config.flag in (1, 3) else y_view
+            pypto.assemble(pypto.where(condition_view, x_value, y_value), offsets, output)
+
+
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def where_packed_kernel(
+    condition: pypto.Tensor(), x: pypto.Tensor(), y: pypto.Tensor(), output: pypto.Tensor(), config: WhereOnboardConfig
+):
+    pypto.set_vec_tile_shapes(*config.tile_shape)
+    x_base = _where_value(x, config.x_scalar, config.flag in (2, 3), config.output_dtype)
+    y_base = _where_value(y, config.y_scalar, config.flag in (1, 3), config.output_dtype)
+    result = pypto.Tensor.from_base(pypto.pypto_impl.Where(condition.base(), x_base, y_base))
+    output[:] = result
+
+
+def where_golden(inputs, config):
+    condition = inputs[0]
+    if config.condition_is_packed:
+        shifts = torch.arange(8, dtype=torch.uint8)
+        condition = ((condition.unsqueeze(-1) >> shifts) & 1).bool().reshape(config.output_shapes[0])
+    x = config.x_scalar if config.flag in (2, 3) else inputs[1]
+    y = config.y_scalar if config.flag in (1, 3) else inputs[2]
+    return [torch.where(condition.bool(), x, y)]
+
+
+def run_migrated_where_test(case: dict):
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    torch.npu.set_device(device_id)
+    config = WhereOnboardConfig.from_test_case(case)
+    inputs_cpu = make_inputs(config)
+    expected = where_golden(inputs_cpu, config)
+    inputs = [tensor.to(f"npu:{device_id}") for tensor in inputs_cpu]
+    outputs = make_outputs(config, f"npu:{device_id}")
+    kernel = where_packed_kernel if config.condition_is_packed else where_2d_kernel
+    kernel(*inputs, *outputs, config)
+    assert_outputs(outputs, expected)
+
+
+@pytest.mark.parametrize("case", WHERE_ONBOARD_TESTS, ids=[case["case_name"] for case in WHERE_ONBOARD_TESTS])
+@pypto.options(pass_options={"enable_slice": True})
+def test_migrated_where(case: dict):
+    run_migrated_where_test(case)
+
+
+import os  # noqa: E402, F811
+
+import numpy as np  # noqa: E402, F811
+from numpy.testing import assert_allclose  # noqa: E402, F811
+import torch  # noqa: E402, F811
+
+import pypto  # noqa: E402, F811
 
 
 @pypto.options(pass_options={"enable_slice": True})

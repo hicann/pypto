@@ -1,115 +1,79 @@
 #!/usr/bin/env python3
 # coding: utf-8
-# Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
-# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-# CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You may not use this file except in compliance with the License.
-# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-# See LICENSE in the root of the software repository for the full text of the License.
-# -----------------------------------------------------------------------------------------------------------
-import math
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# Licensed under the CANN Open Software License Agreement Version 2.0.
+"""System tests for ArgSort migrated from the C++ vector ST."""
+
 import os
 
-import numpy as np
+import pytest
 import torch
+from vector_test_utils import assert_outputs, make_inputs, make_outputs
+from vector_testcase.argsort_onboard_test_case import ARGSORT_ONBOARD_TESTS, ArgsortOnboardConfig
+from vector_testcase.vector_test_case import TORCH_DTYPES
 
 import pypto
 
 
-@pypto.options(pass_options={"enable_slice": True})
-def test_argsort_onboard():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def argsort_onboard_1d_1input_1d_output_kernel(
+    input0: pypto.Tensor(), output0: pypto.Tensor(), config: ArgsortOnboardConfig
+):
+    pypto.set_vec_tile_shapes(*config.tile_shape)
+    for index_0 in pypto.loop(config.loop_ranges[0]):
+        offsets = [index_0 * config.execution_view_shape[0]]
+        input0_offset = [0 if config.input_shapes[0][axis] == 1 else offsets[axis] for axis in range(1)]
+        input0_view = pypto.view(input0, config.input_view_shapes[0], input0_offset)
+        result = pypto.argsort(input0_view, config.dims[0], config.descending[0])
+        output_offset = [
+            0 if config.output_offset_map[axis] < 0 else offsets[config.output_offset_map[axis]] for axis in range(1)
+        ]
+        pypto.assemble(result, output_offset, output0)
+
+
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def argsort_onboard_2d_1input_2d_output_kernel(
+    input0: pypto.Tensor(), output0: pypto.Tensor(), config: ArgsortOnboardConfig
+):
+    pypto.set_vec_tile_shapes(*config.tile_shape)
+    for index_0 in pypto.loop(config.loop_ranges[0]):
+        for index_1 in pypto.loop(config.loop_ranges[1]):
+            offsets = [index_0 * config.execution_view_shape[0], index_1 * config.execution_view_shape[1]]
+            input0_offset = [0 if config.input_shapes[0][axis] == 1 else offsets[axis] for axis in range(2)]
+            input0_view = pypto.view(input0, config.input_view_shapes[0], input0_offset)
+            result = pypto.argsort(input0_view, config.dims[0], config.descending[0])
+            output_offset = [
+                0 if config.output_offset_map[axis] < 0 else offsets[config.output_offset_map[axis]]
+                for axis in range(2)
+            ]
+            pypto.assemble(result, output_offset, output0)
+
+
+KERNELS = {
+    (1, 1, 1, 1): argsort_onboard_1d_1input_1d_output_kernel,
+    (2, 1, 1, 2): argsort_onboard_2d_1input_2d_output_kernel,
+}
+
+
+def run_argsort_onboard_test(case: dict):
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     torch.npu.set_device(device_id)
-    shape = (12, 128)
-    view_shape = (4, 128)
-    tile_shape = (2, 32)
-    pypto.runtime._device_init()
-
-    input1 = pypto.tensor(shape, pypto.DT_FP32, "PTO_TENSOR_input1")
-    output = pypto.tensor(shape, pypto.DT_INT32, "PTO_TENSOR_output")
-
-    b_loop_num = math.ceil(shape[0] / view_shape[0])
-    s_loop_num = math.ceil(shape[1] / view_shape[1])
-    with pypto.function("MAIN", input1, output):
-        for b_idx in pypto.loop(b_loop_num, name="b0", idx_name="bidx"):
-            for s_idx in pypto.loop(s_loop_num, name="s0", idx_name="sidx"):
-                view_tensor_a = pypto.view(
-                    input1,
-                    view_shape,
-                    [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[
-                        pypto.min(
-                            pypto.symbolic_scalar(shape[0]) - b_idx * view_shape[0],
-                            pypto.symbolic_scalar(view_shape[0]),
-                        ),
-                        pypto.min(
-                            pypto.symbolic_scalar(shape[1]) - s_idx * view_shape[1],
-                            pypto.symbolic_scalar(view_shape[1]),
-                        ),
-                    ],
-                )
-                pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
-                view_tensor_a.move(pypto.argsort(view_tensor_a, 1, True))
-                pypto.assemble(view_tensor_a, [b_idx * view_shape[0], s_idx * view_shape[1]], output)
-    assert isinstance(output, pypto.tensor)
-
-    a_tensor = torch.rand(shape[0], shape[1], dtype=torch.float32) * 1000
-    b_tensor = torch.zeros(shape[0], shape[1], dtype=torch.int32)
-
-    pto_a_tensor = pypto.from_torch(a_tensor, "a_tensor")
-    pto_b_tensor = pypto.from_torch(b_tensor, "b_tensor")
-    pypto.runtime._device_run_once_data_from_host(pto_a_tensor, pto_b_tensor)
-
-    golden = torch.argsort(a_tensor, dim=1, descending=True, stable=True)
-    np.testing.assert_allclose(b_tensor.flatten(), golden.flatten(), rtol=3e-3, atol=3e-3)
-    pypto.runtime._device_fini
+    config = ArgsortOnboardConfig.from_test_case(case)
+    inputs_cpu = make_inputs(config)
+    expected = [
+        torch.argsort(inputs_cpu[0], dim=config.dims[0], descending=config.descending[0]).to(
+            TORCH_DTYPES[config.output_tensors[0].dtype]
+        )
+    ]
+    inputs = [tensor.to(f"npu:{device_id}") for tensor in inputs_cpu]
+    outputs = make_outputs(config, f"npu:{device_id}")
+    KERNELS[(len(config.execution_view_shape), len(inputs), len(outputs), len(config.output_shapes[0]))](
+        *inputs, *outputs, config
+    )
+    assert_outputs(outputs, expected)
 
 
+@pytest.mark.parametrize("case", ARGSORT_ONBOARD_TESTS, ids=[case["case_name"] for case in ARGSORT_ONBOARD_TESTS])
 @pypto.options(pass_options={"enable_slice": True})
-def test_argsort_gm_onboard():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
-    shape = (12, 10000)
-    view_shape = (4, 10000)
-    tile_shape = (2, 1024)
-    pypto.runtime._device_init()
-
-    input1 = pypto.tensor(shape, pypto.DT_FP32, "PTO_TENSOR_input1")
-    output = pypto.tensor(shape, pypto.DT_INT32, "PTO_TENSOR_output")
-
-    b_loop_num = math.ceil(shape[0] / view_shape[0])
-    s_loop_num = math.ceil(shape[1] / view_shape[1])
-    with pypto.function("MAIN", input1, output):
-        for b_idx in pypto.loop(b_loop_num, name="b0", idx_name="bidx"):
-            for s_idx in pypto.loop(s_loop_num, name="s0", idx_name="sidx"):
-                view_tensor_a = pypto.view(
-                    input1,
-                    view_shape,
-                    [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[
-                        pypto.min(
-                            pypto.symbolic_scalar(shape[0]) - b_idx * view_shape[0],
-                            pypto.symbolic_scalar(view_shape[0]),
-                        ),
-                        pypto.min(
-                            pypto.symbolic_scalar(shape[1]) - s_idx * view_shape[1],
-                            pypto.symbolic_scalar(view_shape[1]),
-                        ),
-                    ],
-                )
-                pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
-                view_tensor_a.move(pypto.argsort(view_tensor_a, 1, True))
-                pypto.assemble(view_tensor_a, [b_idx * view_shape[0], s_idx * view_shape[1]], output)
-    assert isinstance(output, pypto.tensor)
-
-    a_tensor = torch.rand(shape[0], shape[1], dtype=torch.float32) * 1000
-    b_tensor = torch.zeros(shape[0], shape[1], dtype=torch.int32)
-
-    pto_a_tensor = pypto.from_torch(a_tensor, "a_tensor")
-    pto_b_tensor = pypto.from_torch(b_tensor, "b_tensor")
-    pypto.runtime._device_run_once_data_from_host(pto_a_tensor, pto_b_tensor)
-
-    golden = torch.argsort(a_tensor, dim=1, descending=True, stable=True)
-    np.testing.assert_allclose(b_tensor.flatten(), golden.flatten(), rtol=3e-3, atol=3e-3)
-    pypto.runtime._device_fini
+def test_argsort_onboard(case: dict):
+    run_argsort_onboard_test(case)

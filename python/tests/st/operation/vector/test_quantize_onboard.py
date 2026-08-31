@@ -1,301 +1,79 @@
 #!/usr/bin/env python3
 # coding: utf-8
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
-# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-# CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You may not use this file except in compliance with the License.
-# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-# See LICENSE in the root of the software repository for the full text of the License.
-# -----------------------------------------------------------------------------------------------------------
-import math
+# Licensed under the CANN Open Software License Agreement Version 2.0.
+"""System tests for Quantize migrated from the C++ vector ST."""
+
 import os
 
-from numpy.testing import assert_allclose
+import pytest
 import torch
+from vector_test_utils import assert_outputs, make_inputs, make_outputs
+from vector_testcase.quantize_onboard_test_case import QUANTIZE_ONBOARD_TESTS, QuantizeOnboardConfig
+from vector_testcase.vector_test_case import TORCH_DTYPES
 
 import pypto
 
-TORCH_TO_PTO_TYPES = {
-    torch.int8: pypto.DT_INT8,
-    torch.int16: pypto.DT_INT16,
-    torch.int32: pypto.DT_INT32,
-    torch.float16: pypto.DT_FP16,
-    torch.float32: pypto.DT_FP32,
-    torch.bfloat16: pypto.DT_BF16,
-    torch.uint8: pypto.DT_UINT8,
+
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def quantize_onboard_2d_2input_2d_output_kernel(
+    input0: pypto.Tensor(), input1: pypto.Tensor(), output0: pypto.Tensor(), config: QuantizeOnboardConfig
+):
+    pypto.set_vec_tile_shapes(*config.tile_shape)
+    for index_0 in pypto.loop(config.loop_ranges[0]):
+        for index_1 in pypto.loop(config.loop_ranges[1]):
+            offsets = [index_0 * config.execution_view_shape[0], index_1 * config.execution_view_shape[1]]
+            input0_view = input0[:]
+            input1_view = input1[:]
+            result = pypto.quantize(input0_view, input1_view, config.output_dtype, config.axis, None)
+            output_offset = [
+                0 if config.output_offset_map[axis] < 0 else offsets[config.output_offset_map[axis]]
+                for axis in range(2)
+            ]
+            pypto.assemble(result, output_offset, output0)
+
+
+def _channel_param(value, source, axis):
+    normalized_axis = axis if axis >= 0 else source.dim() + axis
+    return value.unsqueeze(1) if normalized_axis == 1 else value.unsqueeze(0)
+
+
+def quantize_golden(inputs, config):
+    result = inputs[0] * _channel_param(inputs[1], inputs[0], config.axis)
+    if config.use_zero_points:
+        result += _channel_param(inputs[2], inputs[0], config.axis)
+    outputs_dtype = TORCH_DTYPES[config.output_tensors[0].dtype]
+    limits = torch.iinfo(outputs_dtype)
+    return [torch.round(result).clamp(limits.min, limits.max).to(outputs_dtype)]
+
+
+def dequantize_golden(inputs, config):
+    result = inputs[0].to(torch.float32)
+    if config.use_zero_points:
+        result -= _channel_param(inputs[2], inputs[0], config.axis)
+    return [result * _channel_param(inputs[1], inputs[0], config.axis)]
+
+
+KERNELS = {
+    (2, 2, 1, 2): quantize_onboard_2d_2input_2d_output_kernel,
 }
 
 
-def quantize_golden(input_tensor, scale, axis, output_dtype, zero_points=None):
-    """Golden reference: matches the Ascend TCVT conversion chain."""
-    normalized_axis = axis if axis >= 0 else input_tensor.dim() + axis
-
-    # Broadcast scale
-    if normalized_axis == 1:  # axis=-1 for 2D: per-row scale
-        scale_bc = scale.unsqueeze(1)
-    else:  # axis=-2 for 2D: per-col scale
-        scale_bc = scale.unsqueeze(0)
-
-    scaled = input_tensor * scale_bc
-
-    if zero_points is not None:
-        if normalized_axis == 1:
-            zp_bc = zero_points.unsqueeze(1)
-        else:
-            zp_bc = zero_points.unsqueeze(0)
-        scaled = scaled + zp_bc
-
-    # Round and clamp
-    rounded = torch.round(scaled).to(torch.int32)
-    if output_dtype == torch.int8:
-        return torch.clamp(rounded, -128, 127).to(torch.int8)
-    else:
-        # uint8: S32 -> FP16 -> uint8 path
-        fp16 = rounded.to(torch.float16)
-        return torch.clamp(torch.round(fp16.to(torch.float32)), 0, 255).to(torch.uint8)
-
-
-@pypto.options(pass_options={"enable_slice": True})
-def test_quantize_sym_axis_neg1_onboard():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
+def run_quantize_onboard_test(case: dict):
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     torch.npu.set_device(device_id)
-
-    input_shape = [4, 16]
-    scale_shape = [4]
-    axis = -1
-    view_shape = [4, 16]
-    tile_shape = [4, 16]
-
-    pypto.runtime._device_init()
-
-    input1 = pypto.tensor(input_shape, pypto.DT_FP32, "PTO_TENSOR_input1")
-    scale1 = pypto.tensor(scale_shape, pypto.DT_FP32, "PTO_TENSOR_scale1")
-    output = pypto.tensor(input_shape, pypto.DT_INT8, "PTO_TENSOR_output")
-
-    b_loop_num = math.ceil(input_shape[0] / view_shape[0])
-    s_loop_num = math.ceil(input_shape[1] / view_shape[1])
-
-    output_dtype = pypto.DT_INT8
-
-    with pypto.function("MAIN", input1, scale1, output):
-        for b_idx in pypto.loop(b_loop_num, name="LOOP_B0", idx_name="b_idx"):
-            for s_idx in pypto.loop(s_loop_num, name="LOOP_S0", idx_name="s_idx"):
-                pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
-                offsets = [b_idx * view_shape[0], s_idx * view_shape[1]]
-
-                # View input (2D)
-                view_input = pypto.view(
-                    input1,
-                    view_shape,
-                    offsets,
-                    valid_shape=[
-                        pypto.min(
-                            pypto.symbolic_scalar(input_shape[0]) - b_idx * view_shape[0],
-                            pypto.symbolic_scalar(view_shape[0]),
-                        ),
-                        pypto.min(
-                            pypto.symbolic_scalar(input_shape[1]) - s_idx * view_shape[1],
-                            pypto.symbolic_scalar(view_shape[1]),
-                        ),
-                    ],
-                )
-
-                # View scale (1D) - axis=-1, so scale is per-row, shape=[4], view along axis=0
-                view_scale = pypto.view(
-                    scale1,
-                    [view_shape[0]],
-                    [offsets[0]],
-                    valid_shape=[
-                        pypto.min(
-                            pypto.symbolic_scalar(scale_shape[0]) - offsets[0], pypto.symbolic_scalar(view_shape[0])
-                        ),
-                    ],
-                )
-
-                res = pypto.quantize(view_input, view_scale, output_dtype, axis)
-                pypto.assemble(res, offsets, output)
-
-    input_tensor = torch.rand(input_shape, dtype=torch.float32) * 20 - 10
-    scale_tensor = torch.rand(scale_shape, dtype=torch.float32) * 0.14 + 0.01
-    out_tensor = torch.zeros(input_shape, dtype=torch.int8)
-
-    pto_input1 = pypto.from_torch(input_tensor, "input1")
-    pto_scale1 = pypto.from_torch(scale_tensor, "scale1")
-    pto_output = pypto.from_torch(out_tensor, "output")
-
-    pypto.runtime._device_run_once_data_from_host(pto_input1, pto_scale1, pto_output)
-
-    golden = quantize_golden(input_tensor, scale_tensor, axis, torch.int8)
-    assert_allclose(out_tensor.flatten(), golden.flatten(), rtol=1e-3, atol=1e-3)
-
-    pypto.runtime._device_fini()
+    config = QuantizeOnboardConfig.from_test_case(case)
+    inputs_cpu = make_inputs(config)
+    expected = quantize_golden(inputs_cpu, config)
+    inputs = [tensor.to(f"npu:{device_id}") for tensor in inputs_cpu]
+    outputs = make_outputs(config, f"npu:{device_id}")
+    KERNELS[(len(config.execution_view_shape), len(inputs), len(outputs), len(config.output_shapes[0]))](
+        *inputs, *outputs, config
+    )
+    assert_outputs(outputs, expected)
 
 
+@pytest.mark.parametrize("case", QUANTIZE_ONBOARD_TESTS, ids=[case["case_name"] for case in QUANTIZE_ONBOARD_TESTS])
 @pypto.options(pass_options={"enable_slice": True})
-def test_quantize_sym_axis_neg1_aligned_onboard():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
-
-    input_shape = [32, 64]
-    scale_shape = [32]
-    axis = -1
-    view_shape = [32, 64]
-    tile_shape = [32, 64]
-
-    pypto.runtime._device_init()
-
-    input1 = pypto.tensor(input_shape, pypto.DT_FP32, "PTO_TENSOR_input1")
-    scale1 = pypto.tensor(scale_shape, pypto.DT_FP32, "PTO_TENSOR_scale1")
-    output = pypto.tensor(input_shape, pypto.DT_INT8, "PTO_TENSOR_output")
-
-    b_loop_num = math.ceil(input_shape[0] / view_shape[0])
-    s_loop_num = math.ceil(input_shape[1] / view_shape[1])
-
-    output_dtype = pypto.DT_INT8
-
-    with pypto.function("MAIN", input1, scale1, output):
-        for b_idx in pypto.loop(b_loop_num, name="LOOP_B0", idx_name="b_idx"):
-            for s_idx in pypto.loop(s_loop_num, name="LOOP_S0", idx_name="s_idx"):
-                pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
-                offsets = [b_idx * view_shape[0], s_idx * view_shape[1]]
-
-                # View input (2D)
-                view_input = pypto.view(
-                    input1,
-                    view_shape,
-                    offsets,
-                    valid_shape=[
-                        pypto.min(
-                            pypto.symbolic_scalar(input_shape[0]) - b_idx * view_shape[0],
-                            pypto.symbolic_scalar(view_shape[0]),
-                        ),
-                        pypto.min(
-                            pypto.symbolic_scalar(input_shape[1]) - s_idx * view_shape[1],
-                            pypto.symbolic_scalar(view_shape[1]),
-                        ),
-                    ],
-                )
-
-                # View scale (1D)
-                view_scale = pypto.view(
-                    scale1,
-                    [view_shape[0]],
-                    [offsets[0]],
-                    valid_shape=[
-                        pypto.min(
-                            pypto.symbolic_scalar(scale_shape[0]) - offsets[0], pypto.symbolic_scalar(view_shape[0])
-                        ),
-                    ],
-                )
-
-                res = pypto.quantize(view_input, view_scale, output_dtype, axis)
-                pypto.assemble(res, offsets, output)
-
-    input_tensor = torch.rand(input_shape, dtype=torch.float32) * 20 - 10
-    scale_tensor = torch.rand(scale_shape, dtype=torch.float32)
-    out_tensor = torch.zeros(input_shape, dtype=torch.int8)
-
-    pto_input1 = pypto.from_torch(input_tensor, "input1")
-    pto_scale1 = pypto.from_torch(scale_tensor, "scale1")
-    pto_output = pypto.from_torch(out_tensor, "output")
-
-    pypto.runtime._device_run_once_data_from_host(pto_input1, pto_scale1, pto_output)
-
-    golden = quantize_golden(input_tensor, scale_tensor, axis, torch.int8)
-    assert_allclose(out_tensor.flatten(), golden.flatten(), rtol=1e-3, atol=1e-3)
-
-    pypto.runtime._device_fini()
-
-
-@pypto.options(pass_options={"enable_slice": True})
-def test_quantize_asym_axis_neg1_onboard():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
-
-    input_shape = [4, 16]
-    scale_shape = [4]
-    axis = -1
-    view_shape = [4, 16]
-    tile_shape = [4, 16]
-
-    pypto.runtime._device_init()
-
-    input1 = pypto.tensor(input_shape, pypto.DT_FP32, "PTO_TENSOR_input1")
-    scale1 = pypto.tensor(scale_shape, pypto.DT_FP32, "PTO_TENSOR_scale1")
-    zp1 = pypto.tensor(scale_shape, pypto.DT_FP32, "PTO_TENSOR_zp1")
-    output = pypto.tensor(input_shape, pypto.DT_UINT8, "PTO_TENSOR_output")
-
-    b_loop_num = math.ceil(input_shape[0] / view_shape[0])
-    s_loop_num = math.ceil(input_shape[1] / view_shape[1])
-
-    output_dtype = pypto.DT_UINT8
-
-    with pypto.function("MAIN", input1, scale1, zp1, output):
-        loop_count = 0
-        for b_idx in pypto.loop(b_loop_num, name="LOOP_B0", idx_name="b_idx"):
-            for s_idx in pypto.loop(s_loop_num, name="LOOP_S0", idx_name="s_idx"):
-                loop_count += 1
-                pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
-                offsets = [b_idx * view_shape[0], s_idx * view_shape[1]]
-
-                # View input (2D)
-                view_input = pypto.view(
-                    input1,
-                    view_shape,
-                    offsets,
-                    valid_shape=[
-                        pypto.min(
-                            pypto.symbolic_scalar(input_shape[0]) - b_idx * view_shape[0],
-                            pypto.symbolic_scalar(view_shape[0]),
-                        ),
-                        pypto.min(
-                            pypto.symbolic_scalar(input_shape[1]) - s_idx * view_shape[1],
-                            pypto.symbolic_scalar(view_shape[1]),
-                        ),
-                    ],
-                )
-
-                # View scale (1D)
-                view_scale = pypto.view(
-                    scale1,
-                    [view_shape[0]],
-                    [offsets[0]],
-                    valid_shape=[
-                        pypto.min(
-                            pypto.symbolic_scalar(scale_shape[0]) - offsets[0], pypto.symbolic_scalar(view_shape[0])
-                        ),
-                    ],
-                )
-
-                # View zero_points (1D)
-                view_zp = pypto.view(
-                    zp1,
-                    [view_shape[0]],
-                    [offsets[0]],
-                    valid_shape=[
-                        pypto.min(
-                            pypto.symbolic_scalar(scale_shape[0]) - offsets[0], pypto.symbolic_scalar(view_shape[0])
-                        ),
-                    ],
-                )
-
-                res = pypto.quantize(view_input, view_scale, output_dtype, axis, view_zp)
-                pypto.assemble(res, offsets, output)
-
-    input_tensor = torch.rand(input_shape, dtype=torch.float32) * 20 - 10
-    scale_tensor = torch.rand(scale_shape, dtype=torch.float32) * 0.14 + 0.01
-    zero_points = torch.rand(scale_shape, dtype=torch.float32) * 10
-    out_tensor = torch.zeros(input_shape, dtype=torch.uint8)
-
-    pto_input1 = pypto.from_torch(input_tensor, "input1")
-    pto_scale1 = pypto.from_torch(scale_tensor, "scale1")
-    pto_zp1 = pypto.from_torch(zero_points, "zp1")
-    pto_output = pypto.from_torch(out_tensor, "output")
-
-    pypto.runtime._device_run_once_data_from_host(pto_input1, pto_scale1, pto_zp1, pto_output)
-
-    golden = quantize_golden(input_tensor, scale_tensor, axis, torch.uint8, zero_points)
-    assert_allclose(out_tensor.flatten(), golden.flatten(), rtol=1e-3, atol=1e-3)
-
-    pypto.runtime._device_fini()
+def test_quantize_onboard(case: dict):
+    run_quantize_onboard_test(case)

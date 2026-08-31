@@ -234,10 +234,10 @@ def test_vector_operator_gatherinub():
     with pypto.function("MAIN", src, offsets, pto_page_table, dst):
         for _ in pypto.loop(1, name="b0", idx_name="bidx"):
             pypto.set_vec_tile_shapes(32, 64)
-            dyn_src = pypto.view(src, src_shapes, [0, 0], valid_shape=src_shapes)
-            dyn_offsets = pypto.view(offsets, offsets_shapes, [0, 0], valid_shape=offsets_shapes)
+            dyn_src = src[:, :]
+            dyn_offsets = offsets[:, :]
             tmp = pypto.experimental.gather_in_ub(dyn_src, dyn_offsets, pto_page_table, cfg.block_size, -2)
-            pypto.assemble(tmp, [0, 0], dst)
+            dst[:, :] = tmp
             del dyn_src, dyn_offsets
     result = torch.zeros(dst_shapes, dtype=torch.float16)
     pto_a_tensor = pypto.from_torch(buffer, "buffer")

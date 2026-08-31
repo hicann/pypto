@@ -1,20 +1,83 @@
 #!/usr/bin/env python3
 # coding: utf-8
-# Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
-# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-# CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You may not use this file except in compliance with the License.
-# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-# See LICENSE in the root of the software repository for the full text of the License.
-# -----------------------------------------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# Licensed under the CANN Open Software License Agreement Version 2.0.
+"""System tests for in-place IndexPut migrated from the C++ vector ST."""
+
 import math
 import os
 
-import numpy as np
+import pytest
 import torch
+from vector_test_utils import assert_outputs, make_inputs
+from vector_testcase.indexput_onboard_test_case import INDEXPUT_ONBOARD_TESTS, IndexputOnboardConfig
 
 import pypto
+
+
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def indexput_1index_kernel(
+    target: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC]),
+    values: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC]),
+    index: pypto.Tensor([pypto.DYNAMIC]),
+    config: IndexputOnboardConfig,
+):
+    view_size = config.view_shape[0]
+    pypto.set_vec_tile_shapes(*config.tile_shape)
+    for loop_index in pypto.loop((index.shape[0] + view_size - 1) // view_size):
+        offset = loop_index * view_size
+        pypto.index_put_(
+            target, (index[offset:offset + view_size],), values[offset:offset + view_size], config.accumulate
+        )
+
+
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def indexput_3index_kernel(
+    target: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC]),
+    values: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC]),
+    index0: pypto.Tensor([pypto.DYNAMIC]),
+    index1: pypto.Tensor([pypto.DYNAMIC]),
+    index2: pypto.Tensor([pypto.DYNAMIC]),
+    config: IndexputOnboardConfig,
+):
+    view_size = config.view_shape[0]
+    pypto.set_vec_tile_shapes(*config.tile_shape)
+    for loop_index in pypto.loop((index0.shape[0] + view_size - 1) // view_size):
+        offset = loop_index * view_size
+        indices = (
+            index0[offset:offset + view_size],
+            index1[offset:offset + view_size],
+            index2[offset:offset + view_size],
+        )
+        pypto.index_put_(target, indices, values[offset:offset + view_size], config.accumulate)
+
+
+def run_migrated_indexput_test(case: dict):
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    torch.npu.set_device(device_id)
+    config = IndexputOnboardConfig.from_test_case(case)
+    inputs_cpu = make_inputs(config, unique_indices=True)
+    expected = [
+        inputs_cpu[0].index_put(
+            tuple(index.long() for index in inputs_cpu[2:]), inputs_cpu[1], accumulate=config.accumulate
+        )
+    ]
+    inputs = [tensor.to(f"npu:{device_id}") for tensor in inputs_cpu]
+    kernel = indexput_1index_kernel if len(inputs) == 3 else indexput_3index_kernel
+    kernel(*inputs, config)
+    assert_outputs([inputs[0]], expected)
+
+
+@pytest.mark.parametrize("case", INDEXPUT_ONBOARD_TESTS, ids=[case["case_name"] for case in INDEXPUT_ONBOARD_TESTS])
+@pypto.options(pass_options={"enable_slice": True})
+def test_migrated_indexput(case: dict):
+    run_migrated_indexput_test(case)
+
+
+import numpy as np  # noqa: E402, F811
+import torch  # noqa: E402, F811
+
+import pypto  # noqa: E402, F811
 
 
 class IndexaPutParamInfo:

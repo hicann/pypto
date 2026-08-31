@@ -1,145 +1,78 @@
 #!/usr/bin/env python3
 # coding: utf-8
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
-# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-# CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You may not use this file except in compliance with the License.
-# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-# See LICENSE in the root of the software repository for the full text of the License.
-# -----------------------------------------------------------------------------------------------------------
-""" """
+# Licensed under the CANN Open Software License Agreement Version 2.0.
+"""System tests for Exp2 migrated from the C++ vector ST."""
 
 import os
 
-import numpy as np
-from numpy.testing import assert_allclose
+import pytest
 import torch
+from vector_test_utils import assert_outputs, make_inputs, make_outputs
+from vector_testcase.exp2_test_case import EXP2_TESTS, Exp2Config
 
 import pypto
 
 
-@pypto.options(pass_options={"enable_slice": True})
-def test_vector_operation_exp2():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def exp2_2d_1input_kernel(input0: pypto.Tensor(), output: pypto.Tensor(), config: Exp2Config):
+    pypto.set_vec_tile_shapes(*config.tile_shape)
+    for index_0 in pypto.loop(config.loop_ranges[0]):
+        for index_1 in pypto.loop(config.loop_ranges[1]):
+            offsets = [index_0 * config.execution_view_shape[0], index_1 * config.execution_view_shape[1]]
+            input0_offset = [0 if config.input_shapes[0][axis] == 1 else offsets[axis] for axis in range(2)]
+            input0_view = pypto.view(input0, config.input_view_shapes[0], input0_offset)
+            result = pypto.exp2(input0_view)
+            output_offset = [
+                0 if config.output_offset_map[axis] < 0 else offsets[config.output_offset_map[axis]]
+                for axis in range(len(config.execution_view_shape))
+            ]
+            pypto.assemble(result, output_offset, output)
+
+
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def exp2_3d_1input_kernel(input0: pypto.Tensor(), output: pypto.Tensor(), config: Exp2Config):
+    pypto.set_vec_tile_shapes(*config.tile_shape)
+    for index_0 in pypto.loop(config.loop_ranges[0]):
+        for index_1 in pypto.loop(config.loop_ranges[1]):
+            for index_2 in pypto.loop(config.loop_ranges[2]):
+                offsets = [
+                    index_0 * config.execution_view_shape[0],
+                    index_1 * config.execution_view_shape[1],
+                    index_2 * config.execution_view_shape[2],
+                ]
+                input0_offset = [
+                    0 if config.input_shapes[0][axis] == 1 else offsets[axis]
+                    for axis in range(len(config.execution_view_shape))
+                ]
+                input0_view = pypto.view(input0, config.input_view_shapes[0], input0_offset)
+                result = pypto.exp2(input0_view)
+                output_offset = [
+                    0 if config.output_offset_map[axis] < 0 else offsets[config.output_offset_map[axis]]
+                    for axis in range(len(config.output_shapes[0]))
+                ]
+                pypto.assemble(result, output_offset, output)
+
+
+KERNELS = {
+    (2, 1): exp2_2d_1input_kernel,
+    (3, 1): exp2_3d_1input_kernel,
+}
+
+
+def run_exp2_test(case: dict):
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     torch.npu.set_device(device_id)
-    dtype = pypto.DT_FP32
-    tiling = 32
-    n, m = tiling * 1, tiling * 1
-    shape = (n, m)
-    view_shape = (16, 16)
-    tile_shape = (8, 8)
-    pypto.runtime._device_init()
-    a = pypto.tensor(shape, dtype, "EXP2_TENSOR_a")
-    b = pypto.tensor(shape, dtype, "EXP2_TENSOR_b")
-
-    with pypto.function("EXP2", a, b):
-        for b_idx in pypto.loop(int(np.ceil(n / view_shape[0])), name="LOOP_EXP2_L0", idx_name="b_idx"):
-            for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_EXP2_L1", idx_name="s_idx"):
-                tile_a = pypto.view(
-                    a,
-                    view_shape,
-                    [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[
-                        (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                        (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1])),
-                    ],
-                )
-                pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
-                tile_a.move(pypto.exp2(tile_a))
-                pypto.assemble(tile_a, [b_idx * view_shape[0], s_idx * view_shape[1]], b)
-
-    a_tensor = torch.rand(n, m, dtype=torch.float32) * 4 - 2
-    b_tensor = torch.zeros(n, m, dtype=torch.float32)
-
-    pto_a_tensor = pypto.from_torch(a_tensor, "a_tensor")
-    pto_b_tensor = pypto.from_torch(b_tensor, "b_tensor")
-    pypto.runtime._device_run_once_data_from_host(pto_a_tensor, pto_b_tensor)
-
-    expected = torch.exp2(a_tensor)
-    assert_allclose(b_tensor.flatten(), expected.flatten(), rtol=1e-3, atol=1e-3)
-    pypto.runtime._device_fini()
+    config = Exp2Config.from_test_case(case)
+    inputs_cpu = make_inputs(config)
+    expected = [torch.exp2(inputs_cpu[0])]
+    inputs = [tensor.to(f"npu:{device_id}") for tensor in inputs_cpu]
+    outputs = make_outputs(config, f"npu:{device_id}")
+    KERNELS[(len(config.execution_view_shape), len(inputs))](*inputs, *outputs, config)
+    assert_outputs(outputs, expected)
 
 
+@pytest.mark.parametrize("case", EXP2_TESTS, ids=[case["case_name"] for case in EXP2_TESTS])
 @pypto.options(pass_options={"enable_slice": True})
-def test_vector_operation_exp2_int8():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
-    dtype = pypto.DT_INT8
-    tiling = 32
-    n, m = tiling * 1, tiling * 1
-    shape = (n, m)
-    view_shape = (16, 16)
-    tile_shape = (8, 8)
-    pypto.runtime._device_init()
-    a = pypto.tensor(shape, dtype, "EXP2_INT8_TENSOR_a")
-    b = pypto.tensor(shape, pypto.DT_FP32, "EXP2_INT8_TENSOR_b")
-
-    with pypto.function("EXP2_INT8", a, b):
-        for b_idx in pypto.loop(int(np.ceil(n / view_shape[0])), name="LOOP_EXP2_INT8_L0", idx_name="b_idx"):
-            for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_EXP2_INT8_L1", idx_name="s_idx"):
-                tile_a = pypto.view(
-                    a,
-                    view_shape,
-                    [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[
-                        (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                        (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1])),
-                    ],
-                )
-                pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
-                tile_a.move(pypto.exp2(tile_a))
-                pypto.assemble(tile_a, [b_idx * view_shape[0], s_idx * view_shape[1]], b)
-
-    a_tensor = torch.randint(-5, 6, (n, m), dtype=torch.int8)
-    b_tensor = torch.zeros(n, m, dtype=torch.float32)
-
-    pto_a_tensor = pypto.from_torch(a_tensor, "a_tensor")
-    pto_b_tensor = pypto.from_torch(b_tensor, "b_tensor")
-    pypto.runtime._device_run_once_data_from_host(pto_a_tensor, pto_b_tensor)
-
-    expected = torch.exp2(a_tensor.to(torch.float32))
-    assert_allclose(b_tensor.flatten(), expected.flatten(), rtol=1e-3, atol=1e-3)
-    pypto.runtime._device_fini()
-
-
-@pypto.options(pass_options={"enable_slice": True})
-def test_vector_operation_exp2_uint8():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
-    dtype = pypto.DT_UINT8
-    tiling = 32
-    n, m = tiling * 1, tiling * 1
-    shape = (n, m)
-    view_shape = (16, 16)
-    tile_shape = (8, 8)
-    pypto.runtime._device_init()
-    a = pypto.tensor(shape, dtype, "EXP2_UINT8_TENSOR_a")
-    b = pypto.tensor(shape, pypto.DT_FP32, "EXP2_UINT8_TENSOR_b")
-
-    with pypto.function("EXP2_UINT8", a, b):
-        for b_idx in pypto.loop(int(np.ceil(n / view_shape[0])), name="LOOP_EXP2_UINT8_L0", idx_name="b_idx"):
-            for s_idx in pypto.loop(int(np.ceil(m / view_shape[1])), name="LOOP_EXP2_UINT8_L1", idx_name="s_idx"):
-                tile_a = pypto.view(
-                    a,
-                    view_shape,
-                    [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[
-                        (pypto.symbolic_scalar(n) - b_idx * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0])),
-                        (pypto.symbolic_scalar(m) - s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1])),
-                    ],
-                )
-                pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
-                tile_a.move(pypto.exp2(tile_a))
-                pypto.assemble(tile_a, [b_idx * view_shape[0], s_idx * view_shape[1]], b)
-
-    a_tensor = torch.randint(0, 11, (n, m), dtype=torch.uint8)
-    b_tensor = torch.zeros(n, m, dtype=torch.float32)
-
-    pto_a_tensor = pypto.from_torch(a_tensor, "a_tensor")
-    pto_b_tensor = pypto.from_torch(b_tensor, "b_tensor")
-    pypto.runtime._device_run_once_data_from_host(pto_a_tensor, pto_b_tensor)
-
-    expected = torch.exp2(a_tensor.to(torch.float32))
-    assert_allclose(b_tensor.flatten(), expected.flatten(), rtol=1e-3, atol=1e-3)
-    pypto.runtime._device_fini()
+def test_exp2(case: dict):
+    run_exp2_test(case)

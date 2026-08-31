@@ -1,63 +1,57 @@
 #!/usr/bin/env python3
 # coding: utf-8
-# Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
-# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-# CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You may not use this file except in compliance with the License.
-# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-# See LICENSE in the root of the software repository for the full text of the License.
-# -----------------------------------------------------------------------------------------------------------
-"""
-Test floor_div operation on board
-"""
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# Licensed under the CANN Open Software License Agreement Version 2.0.
+"""System tests for FloorDiv migrated from the C++ vector ST."""
 
 import os
-from typing import List
 
+import pytest
 import torch
-import torch_npu
+from vector_test_utils import assert_outputs, make_inputs, make_outputs
+from vector_testcase.floordiv_test_case import FLOORDIV_TESTS, FloordivConfig
 
 import pypto
-from pypto import SymInt, ceildiv, loop
-from pypto import Tensor as PTensor
-from pypto.frontend import jit
 
 
-@jit()
-def floor_div_2d(
-    x: PTensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_INT32),
-    y: PTensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_INT32),
-    out: PTensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_INT32),
-    view_shape: List[SymInt],
-    tile_shape: List[int],
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def floordiv_2d_2input_kernel(
+    input0: pypto.Tensor(), input1: pypto.Tensor(), output: pypto.Tensor(), config: FloordivConfig
 ):
-    b, s = x.shape
-    pypto.set_vec_tile_shapes(*tile_shape)
-    for i in loop(ceildiv(b, view_shape[0])):
-        for j in loop(ceildiv(s, view_shape[1])):
-            tile_x = pypto.view(x, view_shape, [i * view_shape[0], j * view_shape[1]])
-            tile_y = pypto.view(y, view_shape, [i * view_shape[0], j * view_shape[1]])
-            result = pypto.floor_div(tile_x, tile_y)
-            pypto.assemble(result, [i * view_shape[0], j * view_shape[1]], out)
-            del tile_x, tile_y
+    pypto.set_vec_tile_shapes(*config.tile_shape)
+    for index_0 in pypto.loop(config.loop_ranges[0]):
+        for index_1 in pypto.loop(config.loop_ranges[1]):
+            offsets = [index_0 * config.execution_view_shape[0], index_1 * config.execution_view_shape[1]]
+            input0_offset = [0 if config.input_shapes[0][axis] == 1 else offsets[axis] for axis in range(2)]
+            input0_view = pypto.view(input0, config.input_view_shapes[0], input0_offset)
+            input1_offset = [0 if config.input_shapes[1][axis] == 1 else offsets[axis] for axis in range(2)]
+            input1_view = pypto.view(input1, config.input_view_shapes[1], input1_offset)
+            result = pypto.floor_div(input0_view, input1_view)
+            output_offset = [
+                0 if config.output_offset_map[axis] < 0 else offsets[config.output_offset_map[axis]]
+                for axis in range(len(config.execution_view_shape))
+            ]
+            pypto.assemble(result, output_offset, output)
 
 
-@pypto.options(pass_options={"enable_slice": True})
-def test_floor_div():
-    view_shape = [32, 128]
-    tile_shape = [32, 32]
-    x_pt = torch.randint(0, 100, (32, 128), dtype=torch.int32)
-    y_pt = torch.randint(1, 100, (32, 128), dtype=torch.int32)
+KERNELS = {
+    (2, 2): floordiv_2d_2input_kernel,
+}
 
+
+def run_floordiv_test(case: dict):
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
-    torch_npu.npu.set_device(device_id)
-    out = torch.zeros((32, 128), dtype=torch.int32, device=f"npu:{device_id}")
-    floor_div_2d(x_pt.npu(), y_pt.npu(), out.npu(), view_shape, tile_shape)
-    assert out.shape == (32, 128)
-    golden = torch.floor_divide(x_pt.npu(), y_pt.npu()).to(torch.int32)
-    assert torch.allclose(golden.cpu(), out.cpu())
+    torch.npu.set_device(device_id)
+    config = FloordivConfig.from_test_case(case)
+    inputs_cpu = make_inputs(config)
+    expected = [torch.floor_divide(*inputs_cpu)]
+    inputs = [tensor.to(f"npu:{device_id}") for tensor in inputs_cpu]
+    outputs = make_outputs(config, f"npu:{device_id}")
+    KERNELS[(len(config.execution_view_shape), len(inputs))](*inputs, *outputs, config)
+    assert_outputs(outputs, expected)
 
 
-if __name__ == "__main__":
-    test_floor_div()
+@pytest.mark.parametrize("case", FLOORDIV_TESTS, ids=[case["case_name"] for case in FLOORDIV_TESTS])
+@pypto.options(pass_options={"enable_slice": True})
+def test_floordiv(case: dict):
+    run_floordiv_test(case)

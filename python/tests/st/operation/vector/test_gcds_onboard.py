@@ -1,65 +1,54 @@
 #!/usr/bin/env python3
 # coding: utf-8
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
-# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-# CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You may not use this file except in compliance with the License.
-# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-# See LICENSE in the root of the software repository for the full text of the License.
-# -----------------------------------------------------------------------------------------------------------
-import math
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# Licensed under the CANN Open Software License Agreement Version 2.0.
+"""System tests for Gcds migrated from the C++ vector ST."""
+
 import os
 
-from numpy.testing import assert_allclose
+import pytest
 import torch
+from vector_test_utils import assert_outputs, make_inputs, make_outputs
+from vector_testcase.gcds_onboard_test_case import GCDS_ONBOARD_TESTS, GcdsOnboardConfig
 
 import pypto
 
 
-@pypto.options(pass_options={"enable_slice": True})
-def test_gcd_onboard():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def gcds_onboard_2d_1input_kernel(input0: pypto.Tensor(), output: pypto.Tensor(), config: GcdsOnboardConfig):
+    pypto.set_vec_tile_shapes(*config.tile_shape)
+    for index_0 in pypto.loop(config.loop_ranges[0]):
+        for index_1 in pypto.loop(config.loop_ranges[1]):
+            offsets = [index_0 * config.execution_view_shape[0], index_1 * config.execution_view_shape[1]]
+            input0_offset = [0 if config.input_shapes[0][axis] == 1 else offsets[axis] for axis in range(2)]
+            input0_view = pypto.view(input0, config.input_view_shapes[0], input0_offset)
+            result = pypto.gcd(input0_view, config.scalar)
+            output_offset = [
+                0 if config.output_offset_map[axis] < 0 else offsets[config.output_offset_map[axis]]
+                for axis in range(len(config.execution_view_shape))
+            ]
+            pypto.assemble(result, output_offset, output)
+
+
+KERNELS = {
+    (2, 1): gcds_onboard_2d_1input_kernel,
+}
+
+
+def run_gcds_onboard_test(case: dict):
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     torch.npu.set_device(device_id)
-    shape = (10, 10)
-    view_shape = (10, 8)
-    tile_shape = (10, 8)
-    alpha = 6
-    pypto.runtime._device_init()
-    input1 = pypto.tensor(shape, pypto.DT_INT32, "pypto_TENSOR_input1")
-    output = pypto.tensor(shape, pypto.DT_INT32, "pypto_TENSOR_output")
+    config = GcdsOnboardConfig.from_test_case(case)
+    inputs_cpu = make_inputs(config)
+    scalar = torch.tensor(config.scalar, dtype=inputs_cpu[0].dtype)
+    expected = [torch.gcd(inputs_cpu[0], scalar)]
+    inputs = [tensor.to(f"npu:{device_id}") for tensor in inputs_cpu]
+    outputs = make_outputs(config, f"npu:{device_id}")
+    KERNELS[(len(config.execution_view_shape), len(inputs))](*inputs, *outputs, config)
+    assert_outputs(outputs, expected)
 
-    b_loop_num = math.ceil(shape[0] / view_shape[0])
-    s_loop_num = math.ceil(shape[1] / view_shape[1])
-    with pypto.function("MAIN", input1, output):
-        for b_idx in pypto.loop(b_loop_num, name="b0", idx_name="bidx"):
-            for s_idx in pypto.loop(s_loop_num, name="s0", idx_name="sidx"):
-                view_tensor_a = pypto.view(
-                    input1,
-                    view_shape,
-                    [b_idx * view_shape[0], s_idx * view_shape[1]],
-                    valid_shape=[
-                        pypto.min(
-                            pypto.symbolic_scalar(shape[0]) - b_idx * view_shape[0],
-                            pypto.symbolic_scalar(view_shape[0]),
-                        ),
-                        pypto.min(
-                            pypto.symbolic_scalar(shape[1]) - s_idx * view_shape[1],
-                            pypto.symbolic_scalar(view_shape[1]),
-                        ),
-                    ],
-                )
-                pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
-                view_tensor_a.move(pypto.gcd(view_tensor_a, alpha))
-                pypto.assemble(view_tensor_a, [b_idx * view_shape[0], s_idx * view_shape[1]], output)
-                del view_tensor_a
-    assert isinstance(output, pypto.tensor)
-    a_tensor = torch.randint(low=-10, high=10, size=[shape[0], shape[1]], dtype=torch.int32)
-    out_tensor = torch.zeros(shape[0], shape[1], dtype=torch.int32)
-    pto_a_tensor = pypto.from_torch(a_tensor, "a_tensor")
-    pto_out_tensor = pypto.from_torch(out_tensor, "out_tensor")
 
-    pypto.runtime._device_run_once_data_from_host(pto_a_tensor, pto_out_tensor)
-    golden = torch.gcd(a_tensor, torch.tensor(alpha))
-    assert_allclose(out_tensor.flatten(), golden.flatten(), rtol=0, atol=0)
-    pypto.runtime._device_fini()
+@pytest.mark.parametrize("case", GCDS_ONBOARD_TESTS, ids=[case["case_name"] for case in GCDS_ONBOARD_TESTS])
+@pypto.options(pass_options={"enable_slice": True})
+def test_gcds_onboard(case: dict):
+    run_gcds_onboard_test(case)

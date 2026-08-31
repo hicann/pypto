@@ -1,84 +1,94 @@
 #!/usr/bin/env python3
 # coding: utf-8
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
-# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-# CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You may not use this file except in compliance with the License.
-# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-# See LICENSE in the root of the software repository for the full text of the License.
-# -----------------------------------------------------------------------------------------------------------
-""" """
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# Licensed under the CANN Open Software License Agreement Version 2.0.
+"""System tests for Maximum migrated from the C++ vector ST."""
 
 import os
 
-import numpy as np
+import pytest
 import torch
+from vector_test_utils import assert_outputs, make_inputs, make_outputs
+from vector_testcase.maximum_test_case import MAXIMUM_TESTS, MaximumConfig
 
 import pypto
-from pypto import function, set_vec_tile_shapes, symbolic_scalar, tensor, view
 
 
-@pypto.options(pass_options={"enable_slice": True})
-def test_maximum():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def maximum_3d_1input_kernel(input0: pypto.Tensor(), output: pypto.Tensor(), config: MaximumConfig):
+    pypto.set_vec_tile_shapes(*config.tile_shape)
+    for index_0 in pypto.loop(config.loop_ranges[0]):
+        for index_1 in pypto.loop(config.loop_ranges[1]):
+            for index_2 in pypto.loop(config.loop_ranges[2]):
+                offsets = [
+                    index_0 * config.execution_view_shape[0],
+                    index_1 * config.execution_view_shape[1],
+                    index_2 * config.execution_view_shape[2],
+                ]
+                input0_offset = [0 if config.input_shapes[0][axis] == 1 else offsets[axis] for axis in range(3)]
+                input0_view = pypto.view(input0, config.input_view_shapes[0], input0_offset)
+                result = pypto.maximum(input0_view, config.scalar)
+                output_offset = [
+                    0 if config.output_offset_map[axis] < 0 else offsets[config.output_offset_map[axis]]
+                    for axis in range(len(config.execution_view_shape))
+                ]
+                pypto.assemble(result, output_offset, output)
+
+
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def maximum_4d_2input_kernel(
+    input0: pypto.Tensor(), input1: pypto.Tensor(), output: pypto.Tensor(), config: MaximumConfig
+):
+    pypto.set_vec_tile_shapes(*config.tile_shape)
+    for index_0 in pypto.loop(config.loop_ranges[0]):
+        for index_1 in pypto.loop(config.loop_ranges[1]):
+            for index_2 in pypto.loop(config.loop_ranges[2]):
+                for index_3 in pypto.loop(config.loop_ranges[3]):
+                    offsets = [
+                        index_0 * config.execution_view_shape[0],
+                        index_1 * config.execution_view_shape[1],
+                        index_2 * config.execution_view_shape[2],
+                        index_3 * config.execution_view_shape[3],
+                    ]
+                    input0_offset = [
+                        0 if config.input_shapes[0][axis] == 1 else offsets[axis]
+                        for axis in range(len(config.execution_view_shape))
+                    ]
+                    input0_view = pypto.view(input0, config.input_view_shapes[0], input0_offset)
+                    input1_offset = [0 if config.input_shapes[1][axis] == 1 else offsets[axis] for axis in range(4)]
+                    input1_view = pypto.view(input1, config.input_view_shapes[1], input1_offset)
+                    result = pypto.maximum(input0_view, input1_view)
+                    output_offset = [
+                        0 if config.output_offset_map[axis] < 0 else offsets[config.output_offset_map[axis]]
+                        for axis in range(len(config.execution_view_shape))
+                    ]
+                    pypto.assemble(result, output_offset, output)
+
+
+KERNELS = {
+    (3, 1): maximum_3d_1input_kernel,
+    (4, 2): maximum_4d_2input_kernel,
+}
+
+
+def run_maximum_test(case: dict):
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     torch.npu.set_device(device_id)
-    _scalar_data = 5
-    first_dim, second_dim = 90, 90
-    view_shape, tile_shape = (64, 64), (32, 32)
-    pypto.runtime._device_init()
-    x = tensor((first_dim, second_dim), pypto.DT_INT32, "Operand1")
-    y = tensor((first_dim, second_dim), pypto.DT_INT32, "Operand2")
-    out = tensor((first_dim, second_dim), pypto.DT_INT32, "Operand2")
+    config = MaximumConfig.from_test_case(case)
+    inputs_cpu = make_inputs(config)
+    expected = [
+        torch.maximum(
+            inputs_cpu[0],
+            inputs_cpu[1] if len(inputs_cpu) == 2 else torch.tensor(config.scalar, dtype=inputs_cpu[0].dtype),
+        )
+    ]
+    inputs = [tensor.to(f"npu:{device_id}") for tensor in inputs_cpu]
+    outputs = make_outputs(config, f"npu:{device_id}")
+    KERNELS[(len(config.execution_view_shape), len(inputs))](*inputs, *outputs, config)
+    assert_outputs(outputs, expected)
 
-    first_view_shape, second_view_shape = view_shape
 
-    with function("Maximum", x, y, out):
-        for b_idx in pypto.loop(int(np.ceil(first_dim / view_shape[0])), name="LOOP_ADD_L0", idx_name="b_idx"):
-            for s_idx in pypto.loop(int(np.ceil(second_dim / view_shape[1])), name="LOOP_ADD_L1", idx_name="s_idx"):
-                tile_tensor_0 = view(
-                    x,
-                    view_shape,
-                    [b_idx * first_view_shape, s_idx * second_view_shape],
-                    valid_shape=[
-                        pypto.min(
-                            symbolic_scalar(first_dim) - b_idx * first_view_shape, symbolic_scalar(first_view_shape)
-                        ),
-                        pypto.min(
-                            symbolic_scalar(second_dim) - s_idx * second_view_shape, symbolic_scalar(second_view_shape)
-                        ),
-                    ],
-                )
-                tile_tensor_1 = view(
-                    y,
-                    view_shape,
-                    [b_idx * first_view_shape, s_idx * second_view_shape],
-                    valid_shape=[
-                        pypto.min(
-                            symbolic_scalar(first_dim) - b_idx * first_view_shape, symbolic_scalar(first_view_shape)
-                        ),
-                        pypto.min(
-                            symbolic_scalar(second_dim) - s_idx * second_view_shape, symbolic_scalar(second_view_shape)
-                        ),
-                    ],
-                )
-                set_vec_tile_shapes(*tile_shape)
-                res = tensor()
-                res.move(pypto.maximum(tile_tensor_0, tile_tensor_1))
-                pypto.assemble(
-                    res,
-                    [b_idx * first_view_shape, s_idx * second_view_shape],
-                    out,
-                )
-
-    nx_tensor = torch.randint(-100, 100, [first_dim, second_dim], dtype=torch.int32)
-    ny_tensor = torch.randint(-100, 100, [first_dim, second_dim], dtype=torch.int32)
-    nout_tensor = torch.zeros([first_dim, second_dim], dtype=torch.int32)
-
-    pto_nx_tensor = pypto.from_torch(nx_tensor, "nx_tensor")
-    pto_ny_tensor = pypto.from_torch(ny_tensor, "ny_tensor")
-    pto_nout_tensor = pypto.from_torch(nout_tensor, "nout_tensor")
-    pypto.runtime._device_run_once_data_from_host(pto_nx_tensor, pto_ny_tensor, pto_nout_tensor)
-    golden_data = torch.maximum(nx_tensor, ny_tensor)
-    assert torch.allclose(nout_tensor, golden_data, rtol=1e-9, atol=1e-10)
-    pypto.runtime._device_fini()
+@pytest.mark.parametrize("case", MAXIMUM_TESTS, ids=[case["case_name"] for case in MAXIMUM_TESTS])
+@pypto.options(pass_options={"enable_slice": True})
+def test_maximum(case: dict):
+    run_maximum_test(case)

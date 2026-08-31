@@ -1,21 +1,53 @@
 #!/usr/bin/env python3
 # coding: utf-8
-# Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
-# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-# CANN Open Software License Agreement Version 2.0 (the "License").
-# Please refer to the License for details. You may not use this file except in compliance with the License.
-# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-# See LICENSE in the root of the software repository for the full text of the License.
-# -----------------------------------------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# Licensed under the CANN Open Software License Agreement Version 2.0.
+"""System tests for in-place IndexAdd migrated from the C++ vector ST."""
 
-import math
 import os
-from typing import List
 
+import pytest
 import torch
+from vector_test_utils import assert_outputs, make_inputs
+from vector_testcase.indexadd_onboard_test_case import INDEXADD_ONBOARD_TESTS, IndexaddOnboardConfig
 
 import pypto
+
+
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def indexadd_kernel(
+    target: pypto.Tensor(), source: pypto.Tensor(), index: pypto.Tensor(), config: IndexaddOnboardConfig
+):
+    pypto.set_vec_tile_shapes(*config.tile_shape)
+    pypto.index_add_(target, config.axis, index, source, alpha=config.alpha)
+
+
+def run_migrated_indexadd_test(case: dict):
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    torch.npu.set_device(device_id)
+    config = IndexaddOnboardConfig.from_test_case(case)
+    inputs_cpu = make_inputs(config)
+    expected = [torch.index_add(inputs_cpu[0], config.axis, inputs_cpu[2].long(), inputs_cpu[1], alpha=config.alpha)]
+    target = inputs_cpu[0].to(f"npu:{device_id}")
+    source = inputs_cpu[1].to(f"npu:{device_id}")
+    index = inputs_cpu[2].to(f"npu:{device_id}")
+    indexadd_kernel(target, source, index, config)
+    assert_outputs([target], expected)
+
+
+@pytest.mark.parametrize("case", INDEXADD_ONBOARD_TESTS, ids=[case["case_name"] for case in INDEXADD_ONBOARD_TESTS])
+@pypto.options(pass_options={"enable_slice": True})
+def test_migrated_indexadd(case: dict):
+    run_migrated_indexadd_test(case)
+
+
+import math  # noqa: E402, F811
+import os  # noqa: E402, F811
+from typing import List  # noqa: E402, F811
+
+import torch  # noqa: E402, F811
+
+import pypto  # noqa: E402, F811
 
 TORCH_TO_PTO_TYPES = {
     torch.int8: pypto.DT_INT8,
