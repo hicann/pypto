@@ -37,7 +37,91 @@ constexpr const size_t CMD_SIZE_1K = 1024;
 constexpr const size_t CMD_SIZE_2K = 2048;
 constexpr const char* BISHENG_PROGRAM_CMD = "bisheng";
 constexpr const char* BISHENG_LD_CMD = "ld.lld";
+constexpr const char* RUN_TO_LOG_SCRIPT_NAME = "run_to_log.sh";
+
+static std::string QuoteShellArg(const std::string& arg)
+{
+    std::string escaped = "'";
+    for (char c : arg) {
+        if (c == '\'') {
+            escaped += "'\\''";
+        } else {
+            escaped += c;
+        }
+    }
+    escaped += "'";
+    return escaped;
+}
+
+static std::string GetRunToLogScriptPath()
+{
+    const std::string installed = GetPyptoLibPath() + "/scripts/" + RUN_TO_LOG_SCRIPT_NAME;
+    if (IsPathExist(installed)) {
+        return installed;
+    }
+    // Source-tree fallback for local UT / uninstalled builds.
+    std::string srcDir(__FILE__);
+    const auto pos = srcDir.find_last_of('/');
+    if (pos == std::string::npos) {
+        srcDir = ".";
+    } else {
+        srcDir.resize(pos);
+    }
+    const std::string srcPath = srcDir + "/scripts/" + RUN_TO_LOG_SCRIPT_NAME;
+    return IsPathExist(srcPath) ? srcPath : "";
+}
+
+static void LogBishengCompileFailure(const std::string& logPath)
+{
+    bool readOk = false;
+    const auto logBytes = ReadFile(logPath, &readOk);
+    if (readOk && !logBytes.empty()) {
+        const std::string log(reinterpret_cast<const char*>(logBytes.data()), logBytes.size());
+        MACHINE_LOGE(HostBackEndErr::COMPILE_CCEC_FAILED, "Compile ccec failed.\n%s", log.c_str());
+    } else {
+        MACHINE_LOGE(HostBackEndErr::COMPILE_CCEC_FAILED, "Compile ccec failed.");
+    }
+}
 } // namespace
+
+// Redirect cannot appear in Checkinject()'d system() args; use packaged/source-tree run_to_log.sh.
+int RunBishengQuiet(const std::string& compileCmd, const std::string& workDir)
+{
+    const std::string dirPrefix = (workDir.empty() || workDir.back() == '/') ? workDir : workDir + "/";
+    std::string logTemplate = dirPrefix + "bisheng_log_" + std::to_string(getpid()) + "_XXXXXX";
+    std::vector<char> logBuf(logTemplate.begin(), logTemplate.end());
+    logBuf.push_back('\0');
+    int logFd = mkstemp(logBuf.data());
+    if (logFd < 0) {
+        MACHINE_LOGE(HostBackEndErr::COMPILE_CCEC_FAILED, "Create bisheng log failed.");
+        return -1;
+    }
+    (void)close(logFd);
+    const std::string logPath(logBuf.data());
+
+    const std::string scriptPath = GetRunToLogScriptPath();
+    if (scriptPath.empty()) {
+        (void)unlink(logPath.c_str());
+        MACHINE_LOGE(HostBackEndErr::COMPILE_CCEC_FAILED,
+                     "run_to_log.sh not found under lib/scripts or source-tree compile/scripts.");
+        return -1;
+    }
+
+    const std::string runCmd = "bash " + QuoteShellArg(scriptPath) + " " + QuoteShellArg(logPath) + " " +
+                               QuoteShellArg(compileCmd);
+    int ret = Checkinject(runCmd.c_str(), runCmd.size());
+    if (ret != 0) {
+        (void)unlink(logPath.c_str());
+        MACHINE_LOGE(HostBackEndErr::COMPILE_CCEC_FAILED, "Bisheng compile cmd illegal char.");
+        return ret;
+    }
+    ret = std::system(runCmd.c_str());
+    if (ret != 0) {
+        LogBishengCompileFailure(logPath);
+    }
+    (void)unlink(logPath.c_str());
+    return ret;
+}
 
 static int CompileCoreMachine(const std::string& objFile, bool isCube, uint64_t tilingKey, const std::string& headFile,
                               const std::string& aicoreSrcFile, const std::string& funcRawName)
@@ -95,11 +179,9 @@ static int CompileCoreMachine(const std::string& objFile, bool isCube, uint64_t 
         MACHINE_LOGE(HostBackEndErr::COMPILE_AICORE_FAILED, "Compile aicore cmd illegal char.");
         return ret;
     }
-    ret = std::system(ccecCmd.c_str());
-    if (ret != 0) {
-        MACHINE_LOGE(HostBackEndErr::COMPILE_CCEC_FAILED, "Compile ccec failed.");
-    }
-    return ret;
+    const auto slash = objFile.find_last_of('/');
+    const std::string workDir = (slash == std::string::npos) ? "" : objFile.substr(0, slash + 1);
+    return RunBishengQuiet(std::string(ccecCmd.c_str()), workDir);
 }
 
 std::string GenSubFuncCall(std::map<uint64_t, Function*>& leafDict, CoreType coreType,

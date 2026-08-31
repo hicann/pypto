@@ -172,6 +172,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                 tools/scripts/machine_perf_trace.py
                 tools/scripts/extract_pass_log.py
                 tools/scripts/debug_aicore_error.py
+                framework/src/machine/compile/scripts/run_to_log.sh
             DESTINATION ${PyPTO_WhlName}/lib/scripts
             COMPONENT pypto
     )
