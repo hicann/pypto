@@ -97,7 +97,7 @@ Status ProcessAtomicChecker::CheckMulOpValidity(const Operation& op)
     auto output = op.GetOOperands().front();
     if ((output->GetMemoryTypeOriginal() != MemoryType::MEM_L0C) || (*output->GetConsumers().begin() == nullptr)) {
         APASS_LOG_ERROR_F(Elements::Operation,
-                          "Op[%d] has invalid output tensor[%d]; Please check if the output tensor is vaild.%s",
+                          "Op[%d] has invalid output tensor[%d]; Please check if the output tensor is valid.%s",
                           op.GetOpMagic(), output->magic, GetFormatBacktrace(op).c_str());
         return FAILED;
     }

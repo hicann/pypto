@@ -346,6 +346,38 @@ TEST_F(MergeSrcDstBufferTest, AddDiffMemTypeNotReplaced)
     }
 }
 
+TEST_F(MergeSrcDstBufferTest, AddDiffDataTypeNotReplaced)
+{
+    ComputationalGraphBuilder G;
+    std::vector<std::string> inputTensorNames{"t1", "t2", "t3", "t4"};
+    std::vector<std::string> outputTensorNames{"t5", "t6"};
+    std::vector<Opcode> opCodes{Opcode::OP_COPY_IN, Opcode::OP_COPY_IN, Opcode::OP_MUL, Opcode::OP_COPY_OUT};
+    std::vector<std::vector<std::string>> ioperands{{"t1"}, {"t2"}, {"t3", "t4"}, {"t5"}};
+    std::vector<std::vector<std::string>> ooperands{{"t3"}, {"t4"}, {"t5"}, {"t6"}};
+    std::vector<std::string> opNames{"COPYIN1", "COPYIN2", "MUL", "COPYOUT"};
+
+    // Keep raw data sizes equal while using different element widths so the datatype check is reached.
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP16, {16, 16}, inputTensorNames), true);
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, {8, 16}, outputTensorNames), true);
+    EXPECT_EQ(G.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    EXPECT_EQ(G.SetInCast({"t1", "t2"}), true);
+    EXPECT_EQ(G.SetOutCast({"t6"}), true);
+    Function* function = G.GetFunction();
+    EXPECT_NE(function, nullptr);
+
+    StubInputOutput(function);
+
+    SrcDstBufferMerge mergePass;
+    mergePass.RunOnFunction(*function);
+
+    auto mulOp = G.GetOp("MUL");
+    EXPECT_NE(mulOp, nullptr);
+    auto outputTensor = mulOp->GetOOperands()[0];
+    auto inputTensor = mulOp->GetIOperands()[0];
+    EXPECT_NE(outputTensor->memoryrange.memId, -1);
+    EXPECT_NE(outputTensor->memoryrange.memId, inputTensor->memoryrange.memId);
+}
+
 TEST_F(MergeSrcDstBufferTest, AddDiffShapeNotReplaced)
 {
     ComputationalGraphBuilder G;

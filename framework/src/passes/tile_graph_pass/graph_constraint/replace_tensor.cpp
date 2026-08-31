@@ -219,7 +219,7 @@ Status ReplaceTensor::PreCheck(Function& function)
             continue;
         }
         if (HasSameConsecutive(op)) {
-            APASS_LOG_ERROR_F(Elements::Operation, "%s[%d] has the same Opcode child op; Plese check child ops. %s",
+            APASS_LOG_ERROR_F(Elements::Operation, "%s[%d] has the same Opcode child op; Please check child ops. %s",
                               op.GetOpcodeStr().c_str(), op.GetOpMagic(), GetFormatBacktrace(op).c_str());
             return FAILED;
         }
@@ -229,7 +229,7 @@ Status ReplaceTensor::PreCheck(Function& function)
             APASS_LOG_ERROR_F(
                 Elements::Tensor,
                 "unmatched input output memory type for reshape opmagic: %d, input mem type: %s, output mem type: %s; "
-                "Please check the input ans output.",
+                "Please check the input and output.",
                 op.opmagic, MemoryTypeToString(tensorIn->GetMemoryTypeOriginal()).c_str(),
                 MemoryTypeToString(tensorOut->GetMemoryTypeOriginal()).c_str());
             return FAILED;

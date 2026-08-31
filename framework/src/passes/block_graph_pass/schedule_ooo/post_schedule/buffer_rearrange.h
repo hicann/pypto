@@ -45,7 +45,7 @@ struct RearrangeScheme {
 
     void PrintScheme()
     {
-        APASS_LOG_DEBUG_F(Elements::Tensor, "Memory Rearange Scheme,  Span : [%lu, %lu], Cost : %lu", start, end, cost);
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Memory Rearrange Scheme, Span : [%lu, %lu], Cost : %lu", start, end, cost);
         for (auto memId : memIds) {
             if (moveFrom[memId] != moveTo[memId]) {
                 APASS_LOG_DEBUG_F(Elements::Tensor,

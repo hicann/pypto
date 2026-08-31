@@ -317,7 +317,7 @@ Status NBufferMerge::Init(Function& func)
     if (colorSet.size() != colorMax + 1) {
         APASS_LOG_ERROR_F(
             Elements::Operation,
-            "Colors are not continously numbered from 0, func magic : %d; Please check whether the subgraph IDs are "
+            "Colors are not continuously numbered from 0, func magic : %d; Please check whether the subgraph IDs are "
             "correct.",
             func.GetFuncMagic());
         return FAILED;

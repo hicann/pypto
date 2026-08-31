@@ -215,7 +215,7 @@ Status BufferPool::Allocate(LocalBufferPtr tensor)
             }
         }
     }
-    APASS_LOG_ERROR_F(Elements::Tensor, "Buffer doesnot have enough memory to allocate Tensor[%d].", tensor->id);
+    APASS_LOG_ERROR_F(Elements::Tensor, "Buffer does not have enough memory to allocate Tensor[%d].", tensor->id);
     return FAILED;
 }
 

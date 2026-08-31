@@ -50,7 +50,7 @@ Status InplaceProcess::PreCheck(Function& function)
             continue;
         }
         if (HasSameConsecutive(op)) {
-            APASS_LOG_ERROR_F(Elements::Operation, "%s[%d] has the same Opcode child op; Plese check child ops. %s",
+            APASS_LOG_ERROR_F(Elements::Operation, "%s[%d] has the same Opcode child op; Please check child ops. %s",
                               op.GetOpcodeStr().c_str(), op.GetOpMagic(), GetFormatBacktrace(op).c_str());
             return FAILED;
         }
@@ -60,7 +60,7 @@ Status InplaceProcess::PreCheck(Function& function)
             APASS_LOG_ERROR_F(
                 Elements::Tensor,
                 "unmatched input output memory type for reshape opmagic: %d, input mem type: %s, output mem type: %s; "
-                "Please check the input ans output.",
+                "Please check the input and output.",
                 op.opmagic, MemoryTypeToString(tensorIn->GetMemoryTypeOriginal()).c_str(),
                 MemoryTypeToString(tensorOut->GetMemoryTypeOriginal()).c_str());
             return FAILED;
@@ -604,7 +604,7 @@ static Status ProcessVisitedViewOps(Function& function, const std::unordered_map
             continue; // 仅重构View连接
         auto inplaceIdx = op->GetIntAttribute(OpAttributeKey::inplaceIdx);
         if (inplaceIdx != 0) {
-            APASS_LOG_ERROR_F(Elements::Operation, "Inconsistent inplaceIdx for opsration %d", op->GetOpMagic());
+            APASS_LOG_ERROR_F(Elements::Operation, "Inconsistent inplaceIdx for operation %d", op->GetOpMagic());
             return FAILED;
         }
         auto iOperand = op->GetInputOperand(inplaceIdx);

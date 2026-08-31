@@ -1202,7 +1202,7 @@ Status OoOScheduler::RearrangeBuffer(Operation* allocOp, MemoryType memType)
     for (auto memId : memIds) {
         auto op = spillEngine_.GetSpillOp(memId);
         if (op == nullptr) {
-            APASS_LOG_ERROR_F(Elements::Tensor, "Cannot find spill Tensor[%d] lastest write op.", memId);
+            APASS_LOG_ERROR_F(Elements::Tensor, "Cannot find spill Tensor[%d] latest write op.", memId);
             return FAILED;
         }
         if (op->GetOpcodeStr().find("ALLOC") == std::string::npos) {

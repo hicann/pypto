@@ -1983,7 +1983,7 @@ void AssignMemoryType::ProcessL0C2L1SmallToLarge(Function& function)
             DowngradeConsumerRequirements(oOperand, MemoryType::MEM_L0C);
             APASS_LOG_DEBUG_F(Elements::Tensor,
                               "Set tensor %d original memory type "
-                              "to DDR since not towards L1 or not multipule dimensions.",
+                              "to DDR since not towards L1 or not multiple dimensions.",
                               oOperand->magic);
         }
     }

@@ -656,7 +656,7 @@ Status MixInternalComponentsAnalyzer::CheckL0CCopyUBConsumerAIVCoreConsistency(O
         AIVCore refConsumerAivCore = consumerAivCores.front();
         for (size_t i = 1; i < consumerAivCores.size(); i++) {
             if (consumerAivCores[i] != refConsumerAivCore) {
-                APASS_LOG_ERROR_F(Elements::Operation, "Component %d, L0C_COPY_UB op %d has inconsistent AIVore.",
+                APASS_LOG_ERROR_F(Elements::Operation, "Component %d, L0C_COPY_UB op %d has inconsistent AIVCore.",
                                   componentID, copyOp->GetOpMagic());
                 return FAILED;
             }

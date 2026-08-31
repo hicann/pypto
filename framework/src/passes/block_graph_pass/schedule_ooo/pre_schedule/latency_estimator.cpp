@@ -215,7 +215,7 @@ Status LatencyEstimator::SpillOnBlock()
     state_.localMemoryCurrentSize[spillMemType] += static_cast<long int>(needMemSize);
     if (state_.localMemoryCurrentSize[spillMemType] < 0 ||
         state_.localMemoryCurrentSize[spillMemType] > state_.localMemSize[spillMemType]) {
-        APASS_LOG_ERROR_F(Elements::Operation, "Buffer[%d] is valid. Please check", spillMemType);
+        APASS_LOG_ERROR_F(Elements::Operation, "Buffer[%d] is invalid. Please check", spillMemType);
         return FAILED;
     }
     APASS_LOG_DEBUG_F(Elements::Operation, "SpillOnBlock freeBuffer memType: %d, memId: %d, freeMemSize: %lu.",

@@ -398,7 +398,7 @@ void ReplaceCommonSymbol(Function* leafFunc, std::vector<std::vector<SymbolicSca
         checker.RegisterCall(argList);
     }
     auto allRes1 = checker.GetAllConsistentIndexGroups();
-    APASS_LOG_DEBUG_F(Elements::Operation, "Get all condicate params: %s.", checker.PrintIndexGroups(allRes1).c_str());
+    APASS_LOG_DEBUG_F(Elements::Operation, "Get all candidate params: %s.", checker.PrintIndexGroups(allRes1).c_str());
     std::map<size_t, size_t> index2GroupId;
     std::map<size_t, std::vector<size_t>> groupId2Index;
     for (size_t i = 0; i < allRes1.size(); i++) {

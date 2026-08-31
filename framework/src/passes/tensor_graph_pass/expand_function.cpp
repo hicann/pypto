@@ -637,7 +637,7 @@ Status ExpandFunction::RunOnFunction(Function& function)
         }
     }
     if (!verifyResult) {
-        APASS_LOG_ERROR_F(Elements::Function, "FUnction[%s] ExpandFunction failed: %s", function.GetRawName().c_str(),
+        APASS_LOG_ERROR_F(Elements::Function, "Function[%s] ExpandFunction failed: %s", function.GetRawName().c_str(),
                           oss.str().c_str());
         return FAILED;
     }

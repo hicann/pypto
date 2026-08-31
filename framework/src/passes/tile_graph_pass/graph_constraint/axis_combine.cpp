@@ -172,7 +172,7 @@ Status AxisCombine::Process(Function& function)
     for (auto& op : function.Operations()) {
         if (InsertCondition(op.GetOpcode()) && op.GetIOperands().size() == INPUT_SIZE) {
             if (AlignBroadCastOpInputs(function, op) != SUCCESS) {
-                APASS_LOG_ERROR_F(Elements::Operation, "operation %d's aligned faild. %s", op.GetOpMagic(),
+                APASS_LOG_ERROR_F(Elements::Operation, "operation %d's alignment failed. %s", op.GetOpMagic(),
                                   op.GetOpcodeStr().c_str());
                 return FAILED;
             }

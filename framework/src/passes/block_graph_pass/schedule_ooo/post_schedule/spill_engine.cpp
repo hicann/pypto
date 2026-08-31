@@ -190,7 +190,7 @@ LogicalTensorPtr SpillEngine::CreateParticalTensor(LogicalTensorPtr iOperand, Lo
     particalTensor->memoryrange.memId = oriOperand->memoryrange.memId;
     particalTensor->UpdateDynValidShape(spillTensor->GetDynValidShape());
     particalTensor->offset = toOffset;
-    APASS_LOG_DEBUG_F(Elements::Operation, "Spill: Create partical tensor[%d].", particalTensor->memoryrange.memId);
+    APASS_LOG_DEBUG_F(Elements::Operation, "Spill: Create partial tensor[%d].", particalTensor->memoryrange.memId);
     return particalTensor;
 }
 
@@ -453,7 +453,7 @@ Status SpillEngine::GetPartialWriteReplayAttr(Operation* producerOp, std::vector
         }
         return SUCCESS;
     }
-    APASS_LOG_ERROR_F(Elements::Operation, "Unsupported producer opcode in SpillParticalBuffer.");
+    APASS_LOG_ERROR_F(Elements::Operation, "Unsupported producer opcode in SpillPartialBuffer.");
     return FAILED;
 }
 
@@ -928,7 +928,7 @@ Status SpillEngine::SpillMultiProducerBufferFor3510(int spillMemid, Operation* s
     LogicalTensorPtr gmTensor = CreateGMTensor(spillTensor, actualTriggerTensor, spillMemid);
     LogicalTensorPtr l1Tensor = CreateLocalTensor(spillTensor);
     if (CopyoutParticalBuffer(spillTensor, gmTensor, ctx) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "CopyoutParticalBuffer failed.");
+        APASS_LOG_ERROR_F(Elements::Operation, "CopyoutPartialBuffer failed.");
         return FAILED;
     }
     Operation* allocOp = CreateAllocOp(l1Tensor);

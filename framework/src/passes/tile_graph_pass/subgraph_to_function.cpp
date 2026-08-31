@@ -510,7 +510,7 @@ void SubgraphToFunction::ProcessCopyInOperand(Operation& tileOp, std::vector<int
     std::vector<OpImmediate> opImmList = attr->GetCopyInAttr().first;
     shape = attr->GetSpecifiedShape(kShapePlaceholderForParameterized);
     if (!opImmList.empty() && opImmList[0].IsParameter()) {
-        APASS_LOG_DEBUG_F(Elements::Tensor, "CopyinOperand: First operand is paramter, skip offset processiong.");
+        APASS_LOG_DEBUG_F(Elements::Tensor, "CopyinOperand: First operand is parameter, skip offset processing.");
         return;
     }
     offset.clear();
@@ -530,7 +530,7 @@ void SubgraphToFunction::ProcessCopyOutOperand(Operation& tileOp, std::vector<in
     std::vector<OpImmediate> opImmList = attr->GetCopyOutAttr().second;
     shape = attr->GetSpecifiedShape(kShapePlaceholderForParameterized);
     if (!opImmList.empty() && opImmList[0].IsParameter()) {
-        APASS_LOG_DEBUG_F(Elements::Tensor, "CopyOutOperand: First operand is paramter, skip offset processiong.");
+        APASS_LOG_DEBUG_F(Elements::Tensor, "CopyOutOperand: First operand is parameter, skip offset processing.");
         return;
     }
     offset.clear();
@@ -1037,13 +1037,13 @@ Status SubgraphToFunction::GetTensorDataDependencyClear(Function& function)
             int addrCoaIndex = GetTensorDataGetCoaIndex(&op);
             if (tensorIndex == -1) {
                 APASS_LOG_ERROR_F(Elements::Operation,
-                                  "Atrribute op_emuop_GetTensorData_index is not found for operation[%d]. %s",
+                                  "Attribute op_emuop_GetTensorData_index is not found for operation[%d]. %s",
                                   op.GetOpMagic(), GetFormatBacktrace(copyInOp).c_str());
                 return FAILED;
             }
             if (addrCoaIndex == -1) {
                 APASS_LOG_ERROR_F(Elements::Operation,
-                                  "Atrribute op_emuop_GetTensorData_coaIndex is not found for operation[%d]. %s",
+                                  "Attribute op_emuop_GetTensorData_coaIndex is not found for operation[%d]. %s",
                                   op.GetOpMagic(), GetFormatBacktrace(copyInOp).c_str());
                 return FAILED;
             }

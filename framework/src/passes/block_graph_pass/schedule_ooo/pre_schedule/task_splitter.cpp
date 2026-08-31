@@ -364,13 +364,13 @@ void StrongConnectionComponentFinder::Find(std::vector<std::set<int>>& inGraph, 
     instack_.resize(inGraph.size(), false);
     visited_.clear();
     stack_.clear();
-    APASS_LOG_INFO_F(Elements::Operation, "Start finding strongly connected components using TarJan Algorithm.");
+    APASS_LOG_INFO_F(Elements::Operation, "Start finding strongly connected components using Tarjan Algorithm.");
     for (int i = 0; i < static_cast<int>(inGraph.size()); i++) {
         if (dfn_[i] == 0) {
             TarJanAlg(i, outGraph, sccResult);
         }
     }
-    APASS_LOG_INFO_F(Elements::Operation, "TarJan Algorithm finished.");
+    APASS_LOG_INFO_F(Elements::Operation, "Tarjan Algorithm finished.");
 }
 
 // 递归使用TarJan算法获得强连通分量

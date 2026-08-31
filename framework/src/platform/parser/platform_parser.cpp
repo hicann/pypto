@@ -153,7 +153,7 @@ bool INIParser::ReadINIFile(const std::string& filepath)
 
 bool INIParser::GetStringVal(const std::string& column, const std::string& key, std::string& val) const
 {
-    PLATFORM_LOGD("Try to obtain value from column[%s] and key[%s] throughs ini file.", column.c_str(), key.c_str());
+    PLATFORM_LOGD("Try to obtain value from column[%s] and key[%s] through ini file.", column.c_str(), key.c_str());
     val.clear();
     auto iter = data_.find(column);
     if (iter == data_.end()) {

@@ -27,7 +27,7 @@ Status StaticSubgraphProcessor::BuildGraph(Function& function)
     inGraph.resize(operationViewer.size());
     outGraph.resize(operationViewer.size());
     if (BuildInGraph(function) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Function, "Build failed, Please check above for detailed inforamtion.");
+        APASS_LOG_ERROR_F(Elements::Function, "Build failed, Please check above for detailed information.");
         return FAILED;
     }
     for (size_t i = 0; i < operationViewer.size(); i++) {

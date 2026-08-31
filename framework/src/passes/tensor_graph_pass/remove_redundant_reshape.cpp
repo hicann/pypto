@@ -108,7 +108,7 @@ Status RemoveRedundantReshape::RemoveReshape(Function& function) const
             consumerOp->ReplaceInput(in, out);
         }
         if (allConsumersIsReshape == true && !function.IsFromOutCast(out)) {
-            APASS_LOG_DEBUG_F(Elements::Operation, "All consummers of op [%d] are reshape and the shapes are not -1.",
+            APASS_LOG_DEBUG_F(Elements::Operation, "All consumers of op [%d] are reshape and the shapes are not -1.",
                               op.GetOpMagic());
             redundantResapes.insert(&op);
         }

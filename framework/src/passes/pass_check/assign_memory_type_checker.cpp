@@ -57,7 +57,7 @@ Status AssignMemoryTypeChecker::DoPreCheck(Function& function)
             // 嵌套深度达到3失败
             if (depth > 3) {
                 APASS_LOG_WARN_F(Elements::Operation,
-                                 "Over three view/assemble/reshape operations in sequence, currently reched %d; "
+                                 "Over three view/assemble/reshape operations in sequence, currently reached %d; "
                                  "Potential suboptimal allocation around operation %d.",
                                  depth, currentOp->GetOpMagic());
                 return SUCCESS;

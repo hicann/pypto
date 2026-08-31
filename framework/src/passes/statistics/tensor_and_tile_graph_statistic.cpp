@@ -372,12 +372,12 @@ void FindShapeNotdevisibleOp(Function& function, json& report)
         auto opcfg = OpcodeManager::Inst().GetTileOpCfg(op->GetOpcode());
         if (opcfg.coreType_ == CoreType::AIV) {
             if (CheckTileShapeAIV(op, res) != SUCCESS) {
-                APASS_LOG_WARN_F(Elements::Operation, "FindShapeNotdevisibleOp faild at function CheckTileShapeAIV!");
+                APASS_LOG_WARN_F(Elements::Operation, "FindShapeNotDivisibleOp failed at function CheckTileShapeAIV!");
                 return;
             }
         } else if (opcfg.coreType_ == CoreType::AIC) {
             if (CheckTileShapeAIC(op, res) != SUCCESS) {
-                APASS_LOG_WARN_F(Elements::Operation, "FindShapeNotdevisibleOp faild at function CheckTileShapeAIC!");
+                APASS_LOG_WARN_F(Elements::Operation, "FindShapeNotDivisibleOp failed at function CheckTileShapeAIC!");
                 return;
             }
         }

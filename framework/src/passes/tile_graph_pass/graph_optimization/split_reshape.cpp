@@ -658,10 +658,10 @@ Status SplitReshape::AlignToRaw(const ReshapeTilePara& shapePara, std::vector<in
                 return FAILED;
             }
             if (stride % rawShape[i] != 0) {
-                APASS_LOG_ERROR_F(
-                    Elements::Tensor,
-                    "Incorrect alignment, rawShape[i] %ld should divides %ld stride; Please set the correct alignment.",
-                    static_cast<long>(rawShape[i]), static_cast<long>(stride));
+                APASS_LOG_ERROR_F(Elements::Tensor,
+                                  "Incorrect alignment, rawShape[i] %ld should be divisible by %ld stride; Please set "
+                                  "the correct alignment.",
+                                  static_cast<long>(rawShape[i]), static_cast<long>(stride));
                 return FAILED;
             }
             stride /= rawShape[i];
@@ -930,7 +930,7 @@ Status SplitReshape::CalcTileInfo(const CalcOverlapPara& para, std::vector<int64
         return FAILED;
     }
     if (newShape != output->shape) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "The new input shape of view[%s] does not equal to output[%s].",
+        APASS_LOG_ERROR_F(Elements::Tensor, "The new input shape of view[%s] is not equal to output[%s].",
                           GetStr(newShape).c_str(), GetStr(output->shape).c_str());
         return FAILED;
     }

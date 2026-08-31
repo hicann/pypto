@@ -124,7 +124,7 @@ Status CubeProcess::UpdateCopyAttr(Operation& op) const
     int cIsNz = (nzAttr >> 2) % 2;
     APASS_LOG_DEBUG_F(
         Elements::Operation,
-        "Retrive %s[%d] attr done, aIsNz: %d, bIsNz: %d, cIsNz: %d, mValue: %ld, kValue: %ld, nValue: %ld.",
+        "Retrieve %s[%d] attr done, aIsNz: %d, bIsNz: %d, cIsNz: %d, mValue: %ld, kValue: %ld, nValue: %ld.",
         op.GetOpcodeStr().c_str(), op.GetOpMagic(), aIsNz, bIsNz, cIsNz, static_cast<long>(mValue),
         static_cast<long>(kValue), static_cast<long>(nValue));
     for (auto& input : op.GetIOperands()) {

@@ -259,7 +259,7 @@ bool SrcDstBufferMergeImpl::CanSrcDstReuse(const Operation& ops, std::shared_ptr
     if (oOperand->GetMemoryTypeOriginal() != iOperand->GetMemoryTypeOriginal()) {
         APASS_LOG_DEBUG_F(Elements::Operation, "iOperand memtype %s is not same as oOperand memtype %s",
                           MemoryTypeToString(iOperand->GetMemoryTypeOriginal()).c_str(),
-                          MemoryTypeToString(iOperand->GetMemoryTypeOriginal()).c_str());
+                          MemoryTypeToString(oOperand->GetMemoryTypeOriginal()).c_str());
         return false;
     }
     if (tensorMaxSize_[oOperand->memoryrange.memId] != tensorMaxSize_[iOperand->memoryrange.memId]) {
@@ -270,7 +270,7 @@ bool SrcDstBufferMergeImpl::CanSrcDstReuse(const Operation& ops, std::shared_ptr
         return false;
     }
     if (BytesOf(oOperand->Datatype()) != BytesOf(iOperand->Datatype())) {
-        APASS_LOG_DEBUG_F(Elements::Tensor, "Bytes of output datatype[%zu] != Bytes of output datatype[%zu], op:%s[%d]",
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Bytes of input datatype[%zu] != Bytes of output datatype[%zu], op:%s[%d]",
                           BytesOf(oOperand->Datatype()), BytesOf(iOperand->Datatype()), ops.GetOpcodeStr().c_str(),
                           ops.GetOpMagic());
         return false;
