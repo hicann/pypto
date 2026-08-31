@@ -33,6 +33,13 @@ using namespace pypto;
 
 namespace npu::tile_fwk {
 
+namespace {
+inline LogicalTensorPtr AsLogicalTensor(const ir::ExprPtr& expr)
+{
+    return std::const_pointer_cast<LogicalTensor>(std::dynamic_pointer_cast<const LogicalTensor>(expr));
+}
+} // namespace
+
 class StmtTransformer : public ir::IRMutator {
 public:
     using IRMutator::VisitExpr_;

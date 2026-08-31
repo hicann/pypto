@@ -40,13 +40,11 @@ _patch_methods = [
 
 _orig_assemble = pypto.assemble
 
-
 def _store_wrapper(orig, arg_idx):
     @functools.wraps(orig)
     def wrapper(*args, **kwargs):
         slot_write_inplace(args[arg_idx])
         return orig(*args, **kwargs)
-
     return wrapper
 
 
@@ -177,14 +175,13 @@ def delattr_impl(ctx, obj, attr):
 
 # ---- Tensor construction ----
 
-
 @impl(pypto.Tensor)
 def create_tensor(ctx, *args, **kwargs):
     t = pypto.Tensor(*args, **kwargs)
     lt = t.logical_tensor()
     stmt = ctx.create_tensor_op_stmt(
-        result=[lt], result_token=None, opcode="TENSOR_ALLOC", args=[], tokens=[], attrs={}, span=ctx.span
-    )
+        result=[lt], result_token=None, opcode="TENSOR_ALLOC",
+        args=[], tokens=[], attrs={}, span=ctx.span)
     ctx.emit(stmt)
     return t
 
@@ -448,54 +445,6 @@ def _dyn_for(body: Block, loop: LoopRange, ctx: BuildContext):
         nstart = nstop
 
 
-def _merge_valid_shape(then_val, else_val, ctx):
-    then_shape = then_val.valid_shape
-    else_shape = else_val.valid_shape
-
-    shape = then_shape
-    then_out, else_out, yield_out = [], [], []
-    for d, (a, b) in enumerate(zip(then_shape, else_shape)):
-        if str(a.simplify()) == str(b.simplify()):
-            continue
-        s = ctx.create_scalar_var("sym")
-        then_out.append(a.as_expr())
-        else_out.append(b.as_expr())
-        yield_out.append(s.as_var())
-        shape[d] = s
-    return shape, then_out, else_out, yield_out
-
-
-def _merge_yield_vars(names, then_yield_vars, else_yield_vars, ctx: BuildContext):
-    then_vars: list[ir.Expr] = []
-    else_vars: list[ir.Expr] = []
-    yield_vars = []
-
-    for i, name in enumerate(names):
-        then_val, else_val = then_yield_vars[i], else_yield_vars[i]
-        if ir.type_equal(then_val, else_val):
-            var = ctx.create_var_like(name, then_val)
-            if isinstance(then_val, pypto_impl.LogicalTensor):
-                shape, then_out, else_out, yield_out = _merge_valid_shape(then_val, else_val, ctx)
-                if then_out:
-                    # different valid_shape
-                    var.valid_shape = shape
-                    yield_vars += yield_out
-                    then_vars += then_out
-                    else_vars += else_out
-        elif isinstance(then_val.type, ir.NoneType):
-            var = ctx.create_var_like(name, else_val)
-        elif isinstance(else_val.type, ir.NoneType):
-            var = ctx.create_var_like(name, then_val)
-        else:
-            var = ctx.poison(name, then_val.span)
-        yield_vars.append(var)
-        Scope.store(name, ctx.wrap(var))
-        then_vars.append(then_val)
-        else_vars.append(else_val)
-
-    return then_vars, else_vars, yield_vars
-
-
 @impl("pil.loop")
 def loop_impl(ctx: BuildContext, body: Block, loop):
     if isinstance(loop, LoopRange):
@@ -540,8 +489,7 @@ def _if_else_stmt(cond, then_block: Block, else_block: Block, ctx: BuildContext)
                     discovered.append(name)
                 branch_names = yield_var_names + discovered
                 yield_vars_out.extend(ctx.unwrap(scope.resolve_local(n)) for n in branch_names)
-                if branch.jump != Jump.END_BRANCH:
-                    _add_jump_stmt(ctx, branch.jump, list(yield_vars_out))
+                _add_jump_stmt(ctx, branch.jump, list(yield_vars_out))
             return branch_body
         finally:
             pypto_impl.EndScope()
@@ -561,13 +509,18 @@ def _if_else_stmt(cond, then_block: Block, else_block: Block, ctx: BuildContext)
         missing = discovered[len(yield_vars) - len(yield_var_names):]
         yield_vars.extend(ctx.unwrap(scope.resolve_local(n)) for n in missing)
 
-    then_vars, else_vars, yield_vars = _merge_yield_vars(all_names, then_yield_vars, else_yield_vars, ctx)
-
-    with InsertPoint(then_body):
-        ctx.emit(ctx.create_yield_stmt(list(then_vars), then_block.span))
-
-    with InsertPoint(else_body):
-        ctx.emit(ctx.create_yield_stmt(list(else_vars), else_block.span))
+    yield_vars = []
+    for i, name in enumerate(all_names):
+        if ir.type_equal(then_yield_vars[i], else_yield_vars[i]):
+            var = ctx.create_var_like(name, then_yield_vars[i])
+        elif isinstance(then_yield_vars[i].type, ir.NoneType):
+            var = ctx.create_var_like(name, else_yield_vars[i])
+        elif isinstance(else_yield_vars[i].type, ir.NoneType):
+            var = ctx.create_var_like(name, then_yield_vars[i])
+        else:
+            var = ctx.poison(name, then_block.span)
+        yield_vars.append(var)
+        scope.store(name, ctx.wrap(var))
 
     if_stmt = ctx.create_if_stmt(ctx.unwrap(cond), then_body, else_body, yield_vars, ctx.span)
     ctx.emit(if_stmt)

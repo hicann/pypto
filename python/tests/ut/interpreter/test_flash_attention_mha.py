@@ -19,8 +19,6 @@ import pytest
 import torch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-if not hasattr(torch, "npu"):
-    pytest.skip("torch_npu not installed", allow_module_level=True)
 from _ops.flash_attention_mha_impl import (  # noqa: E402
     FlashAttentionTileShapeConfig,
     flash_attention_varlen_forward_kernel,

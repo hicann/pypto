@@ -228,12 +228,6 @@ enum EmuOpcode : int64_t {
 bool CheckEmuOpcode(const Operation* op, EmuOpcode opcode);
 void SetEmuOpcode(Operation* op, EmuOpcode opcode);
 
-// Cast an expression to a mutable LogicalTensor, or nullptr when it is not one.
-inline LogicalTensorPtr AsLogicalTensor(const ir::ExprPtr& expr)
-{
-    return std::const_pointer_cast<LogicalTensor>(std::dynamic_pointer_cast<const LogicalTensor>(expr));
-}
-
 bool TypeEqual(const LogicalTensorPtr a, const LogicalTensorPtr b);
 
 Tensor TensorExtract(const Tensor& src, const std::vector<SymbolicScalar>& offset);

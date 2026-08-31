@@ -305,8 +305,6 @@ class SymbolicScalar:
 class LogicalTensor(ir.Var):
     """Logical tensor"""
 
-    valid_shape: List[SymbolicScalar]
-
 
 class Tensor:
 

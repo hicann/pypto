@@ -168,10 +168,7 @@ void BindTensor(py::module_& m)
             "Get the logical tensor storage.");
 
     py::class_<LogicalTensor, ir::Var, std::shared_ptr<LogicalTensor>>(m, "LogicalTensor")
-        .def("__str__", [](const LogicalTensor& t) -> std::string { return t.Dump(); })
-        .def_property(
-            "valid_shape", [](const LogicalTensor& t) -> std::vector<SymbolicScalar> { return t.GetDynValidShape(); },
-            &LogicalTensor::UpdateDynValidShape, "Dynamic valid shape dims of this logical tensor.");
+        .def("__str__", [](const LogicalTensor& t) -> std::string { return t.Dump(); });
 
     m.def(
         "GetInputShape",
