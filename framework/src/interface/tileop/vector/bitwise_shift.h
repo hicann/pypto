@@ -15,6 +15,7 @@
 
 #ifndef TILEOP_TILE_OPERATOR_BITWISE_SHIFT__H
 #define TILEOP_TILE_OPERATOR_BITWISE_SHIFT__H
+#include "utils/sync.h"
 #include "pto_tile.h"
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"

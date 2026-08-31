@@ -419,7 +419,7 @@ void DebugJson(const Json& j)
 {
     constexpr int32_t dumpLen = 2;
     std::string s = j.dump(dumpLen);
-    printf("%s\n", s.c_str());
+    PYPTO_LOGD("%s", s.c_str());
 }
 
 void Operation::DumpOperandsJson(Json& opDump, bool dumpTensor) const

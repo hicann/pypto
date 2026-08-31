@@ -237,7 +237,7 @@ Tensor Permute(Function& function, const Tensor& self, std::vector<int> perm)
         CHECK(VectorErrorCode::ERR_PARAM_INVALID, self.Format() != TileOpFormat::TILEOP_NZ)
             << "PERMUTE: INT64/UINT64 do not support NZ format.";
     }
-    CheckTensorDimRange(self.GetStorage(), 1, 5, "PERMUTE");
+    CheckTensorDimRange(self.GetStorage(), 1, NUM_VALUE_5, "PERMUTE");
 
     const int shapeSize = static_cast<int>(self.GetShape().size());
 

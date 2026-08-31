@@ -16,6 +16,7 @@
 #ifndef TILEOP_TILE_OPERATOR_SOFTMAX__H
 #define TILEOP_TILE_OPERATOR_SOFTMAX__H
 
+#include "utils/sync.h"
 #include "pto_tile.h"
 
 #if !defined(__CPU_SIM) && !defined(__COSTMODEL)
@@ -28,13 +29,6 @@
 #define PTO_INTERNAL AICORE PTO_INLINE
 
 #if defined(PTO_NPU_ARCH_A5) || defined(__CPU_SIM)
-TILEOP void TOnlineSoftmaxSyncV()
-{
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
-}
-
 template <typename TileDataOut, typename TileDataIn, typename Scalar>
 __tf__ PTO_INTERNAL void TCOLMAX_HIGH_PERF(TileDataOut& dstTile, TileDataIn& srcTile, Scalar scale)
 {
@@ -109,16 +103,16 @@ TILEOP void TOnlineSoftmax(T0 expScoresBf16, T1 columnMax, T2 columnSum, T3 scor
 
     TCOLMAX_HIGH_PERF(columnMaxData, scoresData, scale);
 
-    TOnlineSoftmaxSyncV();
+    SyncV();
     [[pto::last_use(0, 1)]] pto::TMULS(scaledScoresData, scoresData, scale);
-    TOnlineSoftmaxSyncV();
+    SyncV();
 
     pto::TCOLEXPANDSUB(scaledScoresData, scaledScoresData, columnMaxData);
-    TOnlineSoftmaxSyncV();
+    SyncV();
     pto::TEXP(scaledScoresData, scaledScoresData);
-    TOnlineSoftmaxSyncV();
+    SyncV();
     pto::TCVT<false>(expScoresData, scaledScoresData, pto::RoundMode::CAST_ROUND, pto::SaturationMode::OFF);
-    TOnlineSoftmaxSyncV();
+    SyncV();
     [[pto::last_use(0, 1, 1)]] pto::TCOLSUM(columnSumData, scaledScoresData, reduceWorkspaceData, false);
 }
 
@@ -182,36 +176,36 @@ TILEOP void TOnlineSoftmaxUpdate(T0 updatedMax, T1 updatedSum, T2 updatedOutput,
     pto::TASSIGN(scaledCurrentOutputTile, (uint64_t)(updateWorkspace.GetAddr() + 3U * statisticStrideBytes));
 
     pto::TMAX(updatedMaxData, previousMaxData, currentMaxData);
-    TOnlineSoftmaxSyncV();
+    SyncV();
 
     [[pto::last_use(0, 1, 0)]] pto::TSUB(previousScaleTile, previousMaxData, updatedMaxData);
-    TOnlineSoftmaxSyncV();
+    SyncV();
 
     pto::TEXP(previousScaleTile, previousScaleTile);
-    TOnlineSoftmaxSyncV();
+    SyncV();
 
     [[pto::last_use(0, 1, 0)]] pto::TSUB(currentScaleTile, currentMaxData, updatedMaxData);
-    TOnlineSoftmaxSyncV();
+    SyncV();
 
     pto::TEXP(currentScaleTile, currentScaleTile);
-    TOnlineSoftmaxSyncV();
+    SyncV();
 
     [[pto::last_use(0, 0, 1)]] pto::TMUL(updatedSumData, previousScaleTile, previousSumData);
-    TOnlineSoftmaxSyncV();
+    SyncV();
 
     [[pto::last_use(0, 0, 1)]] pto::TMUL(scaledCurrentSumTile, currentScaleTile, currentSumData);
-    TOnlineSoftmaxSyncV();
+    SyncV();
     [[pto::last_use(0, 0, 1)]] pto::TADD(updatedSumData, updatedSumData, scaledCurrentSumTile);
-    TOnlineSoftmaxSyncV();
+    SyncV();
 
     [[pto::last_use(0, 1, 1)]] pto::TCOLEXPANDMUL(updatedOutputData, previousOutputData, previousScaleTile);
-    TOnlineSoftmaxSyncV();
+    SyncV();
 
     [[pto::last_use(0, 1, 1)]] pto::TCOLEXPANDMUL(scaledCurrentOutputTile, currentOutputData, currentScaleTile);
-    TOnlineSoftmaxSyncV();
+    SyncV();
 
     [[pto::last_use(0, 0, 1)]] pto::TADD(updatedOutputData, updatedOutputData, scaledCurrentOutputTile);
-    TOnlineSoftmaxSyncV();
+    SyncV();
 }
 
 #endif // defined(PTO_NPU_ARCH_A5) || defined(__CPU_SIM)

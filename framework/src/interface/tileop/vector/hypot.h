@@ -15,6 +15,7 @@
 
 #ifndef TILEOP_TILE_OPERATOR_HYPOT__H
 #define TILEOP_TILE_OPERATOR_HYPOT__H
+#include "utils/sync.h"
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 #include <type_traits>
@@ -58,33 +59,32 @@ struct HypotLayoutInfo {
 template <typename T, typename TDst>
 TILEOP HypotLayoutInfo ExtractHypotLayoutInfo(const T& src0, const T& src1, const TDst& dst)
 {
-    constexpr size_t expectSize = 5;
     const auto src0Layout = src0.GetLayout();
     const auto src1Layout = src1.GetLayout();
     const auto dstLayout = dst.GetLayout();
 
     HypotLayoutInfo info;
-    info.shape0 = src0Layout.template GetShapeDim<0, expectSize>();
-    info.shape1 = src0Layout.template GetShapeDim<1, expectSize>();
-    info.shape2 = src0Layout.template GetShapeDim<2, expectSize>();
-    info.shape3 = src0Layout.template GetShapeDim<3, expectSize>();
-    info.shape4 = src0Layout.template GetShapeDim<4, expectSize>();
-    info.dstShape = dstLayout.template GetShapeDim<4, expectSize>();
+    info.shape0 = src0Layout.template GetShapeDim<0, MAX_DIMS>();
+    info.shape1 = src0Layout.template GetShapeDim<1, MAX_DIMS>();
+    info.shape2 = src0Layout.template GetShapeDim<2, MAX_DIMS>();
+    info.shape3 = src0Layout.template GetShapeDim<3, MAX_DIMS>();
+    info.shape4 = src0Layout.template GetShapeDim<4, MAX_DIMS>();
+    info.dstShape = dstLayout.template GetShapeDim<4, MAX_DIMS>();
 
-    info.stride0 = src0Layout.template GetStrideDim<0, expectSize>();
-    info.stride1 = src0Layout.template GetStrideDim<1, expectSize>();
-    info.stride2 = src0Layout.template GetStrideDim<2, expectSize>();
-    info.stride3 = src0Layout.template GetStrideDim<3, expectSize>();
+    info.stride0 = src0Layout.template GetStrideDim<0, MAX_DIMS>();
+    info.stride1 = src0Layout.template GetStrideDim<1, MAX_DIMS>();
+    info.stride2 = src0Layout.template GetStrideDim<2, MAX_DIMS>();
+    info.stride3 = src0Layout.template GetStrideDim<3, MAX_DIMS>();
 
-    info.stride1_0 = src1Layout.template GetStrideDim<0, expectSize>();
-    info.stride1_1 = src1Layout.template GetStrideDim<1, expectSize>();
-    info.stride1_2 = src1Layout.template GetStrideDim<2, expectSize>();
-    info.stride1_3 = src1Layout.template GetStrideDim<3, expectSize>();
+    info.stride1_0 = src1Layout.template GetStrideDim<0, MAX_DIMS>();
+    info.stride1_1 = src1Layout.template GetStrideDim<1, MAX_DIMS>();
+    info.stride1_2 = src1Layout.template GetStrideDim<2, MAX_DIMS>();
+    info.stride1_3 = src1Layout.template GetStrideDim<3, MAX_DIMS>();
 
-    info.dstStride0 = dstLayout.template GetStrideDim<0, expectSize>();
-    info.dstStride1 = dstLayout.template GetStrideDim<1, expectSize>();
-    info.dstStride2 = dstLayout.template GetStrideDim<2, expectSize>();
-    info.dstStride3 = dstLayout.template GetStrideDim<3, expectSize>();
+    info.dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
+    info.dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
+    info.dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
+    info.dstStride3 = dstLayout.template GetStrideDim<3, MAX_DIMS>();
 
     return info;
 }
@@ -97,46 +97,32 @@ TILEOP void ExecuteHypotRobust(TileType& dstTile, TileType& src0Tile, TileType& 
     pto::TABS(src0Tile, src0Tile);
     pto::TABS(src1Tile, src1Tile);
 
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 
     pto::TMAX(maxTile, src0Tile, src1Tile);
     pto::TMIN(minTile, src0Tile, src1Tile);
 
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 
     pto::TADDS(maxTile, maxTile, 1e-9f);
 
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 
     pto::TDIV(minTile, minTile, maxTile);
 
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 
     pto::TMUL(minTile, minTile, minTile);
 
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 
     pto::TADDS(minTile, minTile, 1.0f);
 
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 
     pto::TSQRT(minTile, minTile);
 
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 
     pto::TMUL(dstTile, maxTile, minTile);
 }
@@ -149,28 +135,20 @@ TILEOP void ExecuteHypotFp16(DstTileType& dstTile, SrcTileType& src0Tile, SrcTil
     pto::TCVT(tmp0Fp32, src0Tile, pto::RoundMode::CAST_NONE);
     pto::TCVT(tmp1Fp32, src1Tile, pto::RoundMode::CAST_NONE);
 
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 
     pto::TMUL(tmp0Fp32, tmp0Fp32, tmp0Fp32);
     pto::TMUL(tmp1Fp32, tmp1Fp32, tmp1Fp32);
 
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 
     pto::TADD(tmp0Fp32, tmp0Fp32, tmp1Fp32);
 
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 
     pto::TSQRT(tmp0Fp32, tmp0Fp32);
 
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 
     pto::TCVT(dstTile, tmp0Fp32, pto::RoundMode::CAST_NONE);
 }
@@ -192,7 +170,7 @@ TILEOP void THypot(TDst dst, T src0, T src1, TTmp tmpbuf)
     auto buffers = InitHypotTmpBuffers<T>(tmpbuf, info.shape4);
 
     constexpr auto dataTypeSize = sizeof(typename T::Type);
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T, 4, 5>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T, 4, MAX_DIMS>();
     using DataTile = pto::Tile<pto::TileType::Vec, typename T::Type, 1, srcTileW, pto::BLayout::RowMajor, -1, -1>;
     using Fp32Tile = pto::Tile<pto::TileType::Vec, float, 1, srcTileW, pto::BLayout::RowMajor, -1, -1>;
 
@@ -229,9 +207,7 @@ TILEOP void THypot(TDst dst, T src0, T src1, TTmp tmpbuf)
                         ExecuteHypotFp16(dstTile, src0Tile, src1Tile, tmp0Fp32, tmp1Fp32);
                     }
 
-#ifdef __DAV_V220
-                    pipe_barrier(PIPE_V);
-#endif
+                    SyncV();
                 }
             }
         }

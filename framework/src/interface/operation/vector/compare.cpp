@@ -33,15 +33,15 @@ void TiledCompareOperationImpl(Function& function, const TileShape& tileShape, s
         size_t element_size = BytesOf(input1.tensor.GetDataType());
         CHECK(VectorErrorCode::ERR_RUNTIME_LOGIC, element_size != 0) << "Element size cannot be zero.";
         int64_t elements_per_chunk = COUNT_MODE_SIZE / element_size;
-        int64_t vcmp_bits_size = (elements_per_chunk + 7) / 8;
+        int64_t vcmp_bits_size = (elements_per_chunk + NUM_VALUE_7) / NUM_VALUE_8;
 
-        const size_t ALIGN_SIZE = 32;
+        const size_t ALIGN_SIZE = NUM_VALUE_32;
 
         size_t vcmpBitResult_size = ((vcmp_bits_size + ALIGN_SIZE - 1) / ALIGN_SIZE) * ALIGN_SIZE;
         size_t array_size = elements_per_chunk * element_size;
         size_t aligned_array_size = ((array_size + ALIGN_SIZE - 1) / ALIGN_SIZE) * ALIGN_SIZE;
 
-        size_t total_bytes = vcmpBitResult_size + 3 * aligned_array_size + ALIGN_SIZE * 2;
+        size_t total_bytes = vcmpBitResult_size + NUM_VALUE_3 * aligned_array_size + ALIGN_SIZE * NUM_VALUE_2;
         std::vector<int64_t> tmp_shape({static_cast<int64_t>(total_bytes)});
         auto tmp_tensor = std::make_shared<LogicalTensor>(function, DT_UINT8, tmp_shape);
 
@@ -232,15 +232,15 @@ void TiledCmpsOperationImpl(Function& function, const TileShape& tileShape, size
         size_t element_size = BytesOf(input.tensor.GetDataType());
         CHECK(VectorErrorCode::ERR_RUNTIME_LOGIC, element_size != 0) << "Element size cannot be zero.";
         int64_t elements_per_chunk = COUNT_MODE_SIZE / element_size;
-        int64_t vcmp_bits_size = (elements_per_chunk + 8 - 1) / 8;
+        int64_t vcmp_bits_size = (elements_per_chunk + NUM_VALUE_8 - 1) / NUM_VALUE_8;
 
-        const size_t ALIGN_SIZE = 32;
+        const size_t ALIGN_SIZE = NUM_VALUE_32;
 
         size_t vcmpBitResult_size = ((vcmp_bits_size + ALIGN_SIZE - 1) / ALIGN_SIZE) * ALIGN_SIZE;
         size_t array_size = elements_per_chunk * element_size;
         size_t aligned_array_size = ((array_size + ALIGN_SIZE - 1) / ALIGN_SIZE) * ALIGN_SIZE;
 
-        size_t total_bytes = vcmpBitResult_size + 3 * aligned_array_size + ALIGN_SIZE;
+        size_t total_bytes = vcmpBitResult_size + NUM_VALUE_3 * aligned_array_size + ALIGN_SIZE;
         std::vector<int64_t> tmp_shape({static_cast<int64_t>(total_bytes)});
         auto tmp_tensor = std::make_shared<LogicalTensor>(function, DT_UINT8, tmp_shape);
 
@@ -255,37 +255,15 @@ void TiledCmpsOperationImpl(Function& function, const TileShape& tileShape, size
     }
 
     auto& vecTile = tileShape.GetVecTile();
-    int64_t step = vecTile[cur];
-
-    if (mode == OutType::BIT && cur == result->shape.size() - 1) {
-        step = vecTile[cur] / NUM_VALUE_8;
-        if (step < 1)
-            step = 1;
-
-        int64_t actualInputStep = step * NUM_VALUE_8;
-
-        for (int i = 0; i < result->shape[cur]; i += step) {
-            resultTileInfo.offset[cur] = i;
-            resultTileInfo.shape[cur] = std::min(result->shape[cur] - i, step);
-
-            input.tileInfo.offset[cur] = (i * NUM_VALUE_8) % input.tensor.GetShape()[cur];
-            input.tileInfo.shape[cur] = std::min(input.tensor.GetShape()[cur] - input.tileInfo.offset[cur],
-                                                 actualInputStep);
-
-            TiledCmpsOperationImpl(function, tileShape, cur + 1, input, scalar, result, resultTileInfo, operation,
-                                   mode);
-        }
-    } else {
-        for (int i = 0; i < result->shape[cur]; i += step) {
-            resultTileInfo.offset[cur] = i;
-            resultTileInfo.shape[cur] = std::min(result->shape[cur] - i, step);
-
-            input.tileInfo.offset[cur] = i % input.tensor.GetShape()[cur];
-            input.tileInfo.shape[cur] = std::min(input.tensor.GetShape()[cur] - input.tileInfo.offset[cur], step);
-
-            TiledCmpsOperationImpl(function, tileShape, cur + 1, input, scalar, result, resultTileInfo, operation,
-                                   mode);
-        }
+    int64_t inputScale = mode == OutType::BIT && cur == result->shape.size() - 1 ? NUM_VALUE_8 : 1;
+    int64_t step = inputScale == NUM_VALUE_8 ? std::max<int64_t>(vecTile[cur] / NUM_VALUE_8, 1) : vecTile[cur];
+    int64_t inputStep = step * inputScale;
+    for (int i = 0; i < result->shape[cur]; i += step) {
+        resultTileInfo.offset[cur] = i;
+        resultTileInfo.shape[cur] = std::min(result->shape[cur] - i, step);
+        input.tileInfo.offset[cur] = (i * inputScale) % input.tensor.GetShape()[cur];
+        input.tileInfo.shape[cur] = std::min(input.tensor.GetShape()[cur] - input.tileInfo.offset[cur], inputStep);
+        TiledCmpsOperationImpl(function, tileShape, cur + 1, input, scalar, result, resultTileInfo, operation, mode);
     }
 }
 
@@ -324,7 +302,7 @@ Tensor Compare(const Tensor& self, const Element& other, OpType op, OutType mode
     static const std::unordered_set<DataType> CMP_A5_TYPES = {DT_FP16, DT_FP32, DT_INT16, DT_INT64, DT_UINT64};
     const auto& supportedTypes = GetSupportedDataTypesByArch(CMP_A2A3_TYPES, CMP_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "COMPARE");
-    CheckTensorDimRange(self.GetStorage(), 1, 4, "COMPARE");
+    CheckTensorDimRange(self.GetStorage(), 1, NUM_VALUE_4, "COMPARE");
     CheckTensorShapeSize(self.GetStorage(), "COMPARE");
     CheckTensorNonEmpty(self.GetStorage(), "COMPARE");
     RETURN_CALL(CompareOperationScalar, *Program::GetInstance().GetCurrentFunction(), self, other, op, mode);
@@ -339,7 +317,7 @@ Tensor Compare(const Element& self, const Tensor& other, OpType op, OutType mode
     static const std::unordered_set<DataType> CMP_A5_TYPES = {DT_FP16, DT_FP32, DT_INT16, DT_INT64, DT_UINT64};
     const auto& supportedTypes = GetSupportedDataTypesByArch(CMP_A2A3_TYPES, CMP_A5_TYPES);
     CheckTensorDataType(other.GetStorage(), supportedTypes, "COMPARE");
-    CheckTensorDimRange(other.GetStorage(), 1, 4, "COMPARE");
+    CheckTensorDimRange(other.GetStorage(), 1, NUM_VALUE_4, "COMPARE");
     CheckTensorShapeSize(other.GetStorage(), "COMPARE");
     CheckTensorNonEmpty(other.GetStorage(), "COMPARE");
     RETURN_CALL(CompareOperationScalar, *Program::GetInstance().GetCurrentFunction(), self, other, op, mode);

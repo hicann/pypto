@@ -118,7 +118,7 @@ void TileDeInterleaveOperation(Function& function, const TileShape& tileShape, s
         auto resultTile2 = result2->View(function, resultTileInfo.shape, resultTileInfo.offset);
 
         auto validShape = inputTile->GetDynValidShape();
-        validShape[shapeSize - 1] = validShape[shapeSize - 1] / 2;
+        validShape[shapeSize - 1] = validShape[shapeSize - 1] / NUM_VALUE_2;
         function.AddOperation(Opcode::OP_DEINTERLEAVE_SINGLE, {inputTile}, {resultTile1, resultTile2});
         resultTile1->UpdateDynValidShape(validShape);
         resultTile2->UpdateDynValidShape(validShape);
@@ -130,8 +130,9 @@ void TileDeInterleaveOperation(Function& function, const TileShape& tileShape, s
         input.tileInfo.shape[cur] = std::min(input.tensor->GetShape()[cur] - input.tileInfo.offset[cur], vecTile[cur]);
 
         if (cur == shapeSize - 1) {
-            resultTileInfo.offset[cur] = i / 2;
-            resultTileInfo.shape[cur] = std::min(result1->shape[cur] - resultTileInfo.offset[cur], vecTile[cur] / 2);
+            resultTileInfo.offset[cur] = i / NUM_VALUE_2;
+            resultTileInfo.shape[cur] = std::min(result1->shape[cur] - resultTileInfo.offset[cur],
+                                                 vecTile[cur] / NUM_VALUE_2);
         } else {
             resultTileInfo.offset[cur] = i;
             resultTileInfo.shape[cur] = std::min(result1->shape[cur] - resultTileInfo.offset[cur], vecTile[cur]);
@@ -175,7 +176,7 @@ void TensorDeInterleaveOperation(Function& function, const LogicalTensorPtr& sel
                                  LogicalTensorPtr& dst1)
 {
     auto validShape = self->GetDynValidShape();
-    validShape[validShape.size() - 1] = validShape[validShape.size() - 1] / 2;
+    validShape[validShape.size() - 1] = validShape[validShape.size() - 1] / NUM_VALUE_2;
     dst0->UpdateDynValidShape(validShape);
     dst1->UpdateDynValidShape(validShape);
     GraphUtils::AddDynOperation(function, Opcode::OP_DEINTERLEAVE_SINGLE, {self}, {dst0, dst1},
@@ -188,7 +189,7 @@ static void CheckInterleaveTileShape(const Tensor& self, const char* opName, boo
     auto viewShape = self.GetShape();
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, !viewShape.empty()) << opName << " requires non-empty input shape.";
     auto lastAxis = viewShape.size() - 1;
-    CHECK(VectorErrorCode::ERR_PARAM_INVALID, viewShape[lastAxis] % 2 == 0)
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, viewShape[lastAxis] % NUM_VALUE_2 == 0)
         << opName << " requires input shape last axis to be even, input shape is " << IntVecToStr(viewShape);
 
     const auto& vecTile = TileShape::Current().GetVecTile();
@@ -205,7 +206,7 @@ static void CheckInterleaveTileShape(const Tensor& self, const char* opName, boo
             << viewShape[lastAxis] << ", tile_shape last axis is " << vecTile.tile[lastAxis];
         return;
     }
-    CHECK(VectorErrorCode::ERR_PARAM_INVALID, vecTile.tile[lastAxis] % 2 == 0)
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, vecTile.tile[lastAxis] % NUM_VALUE_2 == 0)
         << opName << " requires tile_shape last axis to be even, tile_shape is " << IntVecToStr(vecTile.tile);
 }
 
@@ -258,11 +259,11 @@ std::tuple<Tensor, Tensor> DeInterleave(const Tensor& self)
     CheckSupportedNPUArch(INTERLEAVE_SUPPORTED_ARCHITECTURES, "DeInterleave");
     CheckInterleaveTileShape(self, "DeInterleave", false);
     auto shape = self.GetShape();
-    shape[shape.size() - 1] = shape[shape.size() - 1] / 2;
+    shape[shape.size() - 1] = shape[shape.size() - 1] / NUM_VALUE_2;
     auto dst0 = Tensor(self.GetDataType(), shape);
     auto dst1 = Tensor(self.GetDataType(), shape);
     auto validShape = self.GetStorage()->GetDynValidShape();
-    validShape[validShape.size() - 1] = validShape[validShape.size() - 1] / 2;
+    validShape[validShape.size() - 1] = validShape[validShape.size() - 1] / NUM_VALUE_2;
     dst0.GetStorage()->UpdateDynValidShape(validShape);
     dst1.GetStorage()->UpdateDynValidShape(validShape);
     CALL(DeInterleaveOperation, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), dst0.GetStorage(),

@@ -11,6 +11,7 @@
 #ifndef TILEOP_TILE_OPERATOR_LOG1P__H
 #define TILEOP_TILE_OPERATOR_LOG1P__H
 
+#include "utils/sync.h"
 #include <type_traits>
 
 #include "pto_tile.h"

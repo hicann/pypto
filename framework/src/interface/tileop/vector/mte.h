@@ -281,22 +281,22 @@ __aicore__ inline void CallTransMove(GM gm, UB ub, C coordinate)
     constexpr auto shapeSize = Std::tuple_size<typename UB::Shape>::value;
     constexpr auto tileW = Std::tuple_element<shapeSize - 1, typename UB::TileShape>::type::value;
     const auto gmLayout = gm.GetLayout();
-    size_t gmShape4 = static_cast<size_t>(gmLayout.template GetShapeDim<4, 5>());
-    size_t gmStride[] = {static_cast<size_t>(gmLayout.template GetStrideDim<0, 5>()),
-                         static_cast<size_t>(gmLayout.template GetStrideDim<1, 5>()),
-                         static_cast<size_t>(gmLayout.template GetStrideDim<2, 5>()),
-                         static_cast<size_t>(gmLayout.template GetStrideDim<3, 5>())};
-    size_t gmOffset = static_cast<size_t>(gmLayout.template GetGmOffset<C, 5>(coordinate));
+    size_t gmShape4 = static_cast<size_t>(gmLayout.template GetShapeDim<4, MAX_DIMS>());
+    size_t gmStride[] = {static_cast<size_t>(gmLayout.template GetStrideDim<0, MAX_DIMS>()),
+                         static_cast<size_t>(gmLayout.template GetStrideDim<1, MAX_DIMS>()),
+                         static_cast<size_t>(gmLayout.template GetStrideDim<2, MAX_DIMS>()),
+                         static_cast<size_t>(gmLayout.template GetStrideDim<3, MAX_DIMS>())};
+    size_t gmOffset = static_cast<size_t>(gmLayout.template GetGmOffset<C, MAX_DIMS>(coordinate));
     const auto ubLayout = ub.GetLayout();
-    size_t srcShape[] = {static_cast<size_t>(ubLayout.template GetShapeDim<0, 5>()),
-                         static_cast<size_t>(ubLayout.template GetShapeDim<1, 5>()),
-                         static_cast<size_t>(ubLayout.template GetShapeDim<2, 5>()),
-                         static_cast<size_t>(ubLayout.template GetShapeDim<3, 5>()),
-                         static_cast<size_t>(ubLayout.template GetShapeDim<4, 5>())};
-    size_t ubStride[] = {static_cast<size_t>(ubLayout.template GetStrideDim<0, 5>()),
-                         static_cast<size_t>(ubLayout.template GetStrideDim<1, 5>()),
-                         static_cast<size_t>(ubLayout.template GetStrideDim<2, 5>()),
-                         static_cast<size_t>(ubLayout.template GetStrideDim<3, 5>())};
+    size_t srcShape[] = {static_cast<size_t>(ubLayout.template GetShapeDim<0, MAX_DIMS>()),
+                         static_cast<size_t>(ubLayout.template GetShapeDim<1, MAX_DIMS>()),
+                         static_cast<size_t>(ubLayout.template GetShapeDim<2, MAX_DIMS>()),
+                         static_cast<size_t>(ubLayout.template GetShapeDim<3, MAX_DIMS>()),
+                         static_cast<size_t>(ubLayout.template GetShapeDim<4, MAX_DIMS>())};
+    size_t ubStride[] = {static_cast<size_t>(ubLayout.template GetStrideDim<0, MAX_DIMS>()),
+                         static_cast<size_t>(ubLayout.template GetStrideDim<1, MAX_DIMS>()),
+                         static_cast<size_t>(ubLayout.template GetStrideDim<2, MAX_DIMS>()),
+                         static_cast<size_t>(ubLayout.template GetStrideDim<3, MAX_DIMS>())};
     auto exchangeAxis = [](size_t* arr) {
         auto tmp = arr[axis0];
         arr[axis0] = arr[axis1];

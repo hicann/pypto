@@ -44,7 +44,7 @@ static void TiledUniformBuildIn(Function& function, const TileShape& tileShape, 
 {
     auto& vecTile = tileShape.GetVecTile();
 
-    const size_t ALIGN_SIZE = 32;
+    const size_t ALIGN_SIZE = NUM_VALUE_32;
     int64_t uint32BufferSize = vecTile[0];
     int64_t uint32BufferBytes = ((uint32BufferSize * BytesOf(DT_UINT32) + ALIGN_SIZE - 1) / ALIGN_SIZE) * ALIGN_SIZE;
     int64_t tempByteSize = uint32BufferBytes;
@@ -64,7 +64,7 @@ static void TiledUniformBuildIn(Function& function, const TileShape& tileShape, 
         std::vector<int64_t> tempShape({static_cast<int64_t>(tempByteSize)});
         auto tempTensor = std::make_shared<LogicalTensor>(function, DT_UINT8, tempShape);
 
-        SymbolicScalar tileCounter0 = counter0 + i / 4;
+        SymbolicScalar tileCounter0 = counter0 + i / NUM_VALUE_4;
         uint64_t tileCounter1 = counter1;
 
         auto& op = function.AddOperation(Opcode::OP_UNIFORM, {}, {resultTile, tempTensor});
@@ -82,15 +82,15 @@ void UniformOperationTileFunc(Function& function, const TileShape& tileShape,
 {
     auto& vecTile = tileShape.GetVecTile();
     for (size_t i = 0; i < vecTile.size(); ++i) {
-        CHECK(VectorErrorCode::ERR_PARAM_INVALID, vecTile[i] % 4 == 0)
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, vecTile[i] % NUM_VALUE_4 == 0)
             << "Uniform: tileShape[" << i << "] must be a multiple of 4, but got " << vecTile[i];
     }
 
     auto scalars = op.GetVectorElementAttribute(OpAttributeKey::vectorScalar);
     uint64_t key = scalars[0].Cast<uint64_t>();
     uint64_t counter1 = scalars[1].Cast<uint64_t>();
-    uint16_t rounds = scalars[2].Cast<uint16_t>();
-    DataType dtype = static_cast<DataType>(scalars[3].Cast<int32_t>());
+    uint16_t rounds = scalars[NUM_VALUE_2].Cast<uint16_t>();
+    DataType dtype = static_cast<DataType>(scalars[NUM_VALUE_3].Cast<int32_t>());
 
     SymbolicScalar counter0 = op.GetSymbolicScalarAttribute(OpAttributeKey::dynScalar);
 
@@ -121,7 +121,8 @@ Tensor Uniform(const Element& key, const SymbolicScalar& counter0, const Element
     CheckSupportedNPUArch(UNIFORM_SUPPORTED_ARCHITECTURES, "Uniform");
     uint16_t roundsVal = rounds.Cast<uint16_t>();
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, shape.size() == 1) << "Uniform: shape must be 1-dimensional";
-    CHECK(VectorErrorCode::ERR_PARAM_INVALID, roundsVal == 7 || roundsVal == 10) << "Uniform: rounds must be 7 or 10";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, roundsVal == NUM_VALUE_7 || roundsVal == NUM_VALUE_10)
+        << "Uniform: rounds must be 7 or 10";
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, dtype == DT_FP32 || dtype == DT_FP16 || dtype == DT_BF16)
         << "Uniform: dtype must be DT_FP32, DT_FP16 or DT_BF16";
     CheckDstShapeSize(shape, "UNIFORM");

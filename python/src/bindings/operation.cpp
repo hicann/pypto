@@ -649,7 +649,6 @@ void BindOperation(py::module_& m)
         [](const Tensor& src, const Tensor& indices, const Tensor& blockTable, int blockSize, int size,
            bool is_b_matrix, bool is_trans) {
             if (!is_b_matrix && !is_trans) {
-                std::cout << " gather in l1 m def" << std::endl;
                 return experimental::GatherInL1<false, false>(src, indices, blockTable, blockSize, size);
             } else if (!is_b_matrix && is_trans) {
                 return experimental::GatherInL1<false, true>(src, indices, blockTable, blockSize, size);

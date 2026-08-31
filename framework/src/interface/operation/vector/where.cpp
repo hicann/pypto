@@ -38,10 +38,10 @@ void TiledWhereOperation(Function& function, const TileShape& tileShape, size_t 
         } else {
             selectDtype = DT_FP16;
         }
-        const size_t ALIGN_SIZE = 32;
+        const size_t ALIGN_SIZE = NUM_VALUE_32;
         int64_t castConditionTensorSize = 1024;
         int64_t compareConditionTensorSize = 1024;
-        int64_t vcmpBitResultTensorSize = 128;
+        int64_t vcmpBitResultTensorSize = NUM_VALUE_128;
         int64_t startAddrUBTensorSize = 1;
         int64_t inputTempTensorSize = 1024;
         int64_t otherTempTensorSize = 1024;
@@ -139,7 +139,7 @@ void ExpandTensorLastDimension(const LogicalTensorPtr& TensorPtr)
 {
     std::vector<int64_t> inputShape(TensorPtr->shape);
     int lastDim = inputShape.back();
-    int bitsNumOfByte = 8;
+    int bitsNumOfByte = NUM_VALUE_8;
     int expandLastDim = lastDim * bitsNumOfByte;
     TensorPtr->shape.back() = expandLastDim;
 }
@@ -148,7 +148,7 @@ void ShrinkTensorLastDimension(const LogicalTensorPtr& TensorPtr)
 {
     std::vector<int64_t> inputShape(TensorPtr->shape);
     int lastDim = inputShape.back();
-    int bitsNumOfByte = 8;
+    int bitsNumOfByte = NUM_VALUE_8;
     int shrinkLastDim = std::max(lastDim / bitsNumOfByte, NUM_VALUE_1);
     TensorPtr->shape.back() = shrinkLastDim;
 }
@@ -170,7 +170,7 @@ void TiledWhereOperation(Function& function, const TileShape& tileShape, const L
     std::vector<SymbolicScalar> conditionValidShape = result->GetDynValidShape();
     std::vector<int64_t> conditionExpandShape(result->shape);
     if (condition->Datatype() == DT_UINT8) {
-        int bitsNumOfByte = 8;
+        int bitsNumOfByte = NUM_VALUE_8;
         CHECK(VectorErrorCode::ERR_CONFIG_ALIGNMENT, tileShape.GetVecTile().tile.back() % bitsNumOfByte == 0)
             << "The tileShape of last axis must be aligned to 8 bytes!";
         conditionValidShape.back() = conditionValidShape.back() / bitsNumOfByte;
@@ -317,7 +317,7 @@ LogicalTensorPtr TensorWhereOperation(Function& function, const Tensor& conditio
         << "The shape size of other and offset must be equal";
 
     if (condition.GetStorage()->Datatype() == DT_UINT8) {
-        int bitsNumOfByte = 8;
+        int bitsNumOfByte = NUM_VALUE_8;
         int broadcastFlag = 1;
         CHECK(VectorErrorCode::ERR_CONFIG_ALIGNMENT, input.GetStorage()->shape.back() % bitsNumOfByte == 0 ||
                                                          input.GetStorage()->shape.back() == broadcastFlag)
@@ -361,7 +361,7 @@ LogicalTensorPtr TensorWhereOperation(Function& function, const Tensor& conditio
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, input.GetShape().size() == input.GetStorage()->offset.size())
         << "The shape size of input and offset must be equal";
     if (condition.GetStorage()->Datatype() == DT_UINT8) {
-        int bitsNumOfByte = 8;
+        int bitsNumOfByte = NUM_VALUE_8;
         int broadcastFlag = 1;
         CHECK(VectorErrorCode::ERR_CONFIG_ALIGNMENT, input.GetStorage()->shape.back() % bitsNumOfByte == 0 ||
                                                          input.GetStorage()->shape.back() == broadcastFlag)
@@ -399,7 +399,7 @@ LogicalTensorPtr TensorWhereOperation(Function& function, const Tensor& conditio
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, other.GetShape().size() == other.GetStorage()->offset.size())
         << "The shape size of other and offset must be equal";
     if (condition.GetStorage()->Datatype() == DT_UINT8) {
-        int bitsNumOfByte = 8;
+        int bitsNumOfByte = NUM_VALUE_8;
         int broadcastFlag = 1;
         CHECK(VectorErrorCode::ERR_CONFIG_ALIGNMENT, other.GetStorage()->shape.back() % bitsNumOfByte == 0 ||
                                                          other.GetStorage()->shape.back() == broadcastFlag)
@@ -476,7 +476,7 @@ Tensor Where(const Tensor& condition, const Tensor& input, const Tensor& other)
                                                               DT_UINT8, DT_INT8, DT_INT64, DT_UINT64};
     const auto& inputTypes = GetSupportedDataTypesByArch(a2a3InputTypes, a5InputTypes);
     CheckTensorDataType(input.GetStorage(), inputTypes, "WHERE");
-    CheckTensorDimRange(condition.GetStorage(), 1, 4, "WHERE");
+    CheckTensorDimRange(condition.GetStorage(), 1, NUM_VALUE_4, "WHERE");
     CheckTensorShapeSize(condition.GetStorage(), "WHERE");
     CheckTensorShapeSize(input.GetStorage(), "WHERE");
     CheckTensorShapeSize(other.GetStorage(), "WHERE");
@@ -500,7 +500,7 @@ Tensor Where(const Tensor& condition, const Tensor& input, const Element& otherV
                                                               DT_UINT8, DT_INT8, DT_INT64, DT_UINT64};
     const auto& inputTypes = GetSupportedDataTypesByArch(a2a3InputTypes, a5InputTypes);
     CheckTensorDataType(input.GetStorage(), inputTypes, "WHERE");
-    CheckTensorDimRange(condition.GetStorage(), 1, 4, "WHERE");
+    CheckTensorDimRange(condition.GetStorage(), 1, NUM_VALUE_4, "WHERE");
     CheckTensorShapeSize(condition.GetStorage(), "WHERE");
     CheckTensorShapeSize(input.GetStorage(), "WHERE");
     CheckTensorsDimConsistency({condition.GetStorage(), input.GetStorage()}, "WHERE");
@@ -521,7 +521,7 @@ Tensor Where(const Tensor& condition, const Element& inputValue, const Tensor& o
                                                               DT_UINT8, DT_INT8, DT_INT64, DT_UINT64};
     const auto& inputTypes = GetSupportedDataTypesByArch(a2a3InputTypes, a5InputTypes);
     CheckTensorDataType(other.GetStorage(), inputTypes, "WHERE");
-    CheckTensorDimRange(condition.GetStorage(), 1, 4, "WHERE");
+    CheckTensorDimRange(condition.GetStorage(), 1, NUM_VALUE_4, "WHERE");
     CheckTensorShapeSize(condition.GetStorage(), "WHERE");
     CheckTensorShapeSize(other.GetStorage(), "WHERE");
     CheckTensorsDimConsistency({condition.GetStorage(), other.GetStorage()}, "WHERE");
@@ -536,7 +536,7 @@ Tensor Where(const Tensor& condition, const Element& inputValue, const Element& 
 
     static const std::unordered_set<DataType> conditionTypes = {DT_BOOL, DT_UINT8};
     CheckTensorDataType(condition.GetStorage(), conditionTypes, "WHERE");
-    CheckTensorDimRange(condition.GetStorage(), 1, 4, "WHERE");
+    CheckTensorDimRange(condition.GetStorage(), 1, NUM_VALUE_4, "WHERE");
     CheckTensorShapeSize(condition.GetStorage(), "WHERE");
     RETURN_CALL(WhereOperation, *Program::GetInstance().GetCurrentFunction(), condition, inputValue, otherValue);
 }
@@ -545,7 +545,7 @@ void WhereOperationTileFuncTT(Function& function, const TileShape& tileShape,
                               const std::vector<LogicalTensorPtr>& iOperand,
                               const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
-    TiledWhereOperation(function, tileShape, iOperand[0], iOperand[1], iOperand[2], oOperand[0]);
+    TiledWhereOperation(function, tileShape, iOperand[0], iOperand[1], iOperand[NUM_VALUE_2], oOperand[0]);
 }
 
 void WhereOperationTileFuncTS(Function& function, const TileShape& tileShape,

@@ -23,7 +23,6 @@ template <int axis, int scatterMode, typename T0, typename T1, typename Scalar>
 TILEOP void TscatterElementS(T0 dst, T1 src1, Scalar src2)
 {
     static_assert(scatterMode < SCATTER_MODE_MAX, "Unsupport scatterMode");
-    constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;
     const auto dstLayout = dst.GetLayout();
     auto n0DstStride = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
     auto n1DstStride = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
@@ -97,32 +96,31 @@ TILEOP void Tscatter(T0 dst, T1 src1, T2 src2, T3 tmp)
 {
     static_assert(scatterMode < SCATTER_MODE_MAX, "Unsupport scatterMode");
     constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;
-    constexpr size_t expectSize = 5;
     const auto dstLayout = dst.GetLayout();
-    auto dstStride0 = dstLayout.template GetStrideDim<0, expectSize>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, expectSize>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, expectSize>();
-    auto dstStride3 = dstLayout.template GetStrideDim<3, expectSize>();
+    auto dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto dstStride3 = dstLayout.template GetStrideDim<3, MAX_DIMS>();
 
     const auto idxLayout = src1.GetLayout();
-    auto idxStride0 = idxLayout.template GetStrideDim<0, expectSize>();
-    auto idxStride1 = idxLayout.template GetStrideDim<1, expectSize>();
-    auto idxStride2 = idxLayout.template GetStrideDim<2, expectSize>();
-    auto idxStride3 = idxLayout.template GetStrideDim<3, expectSize>();
-    auto idxShape0 = idxLayout.template GetShapeDim<0, expectSize>();
-    auto idxShape1 = idxLayout.template GetShapeDim<1, expectSize>();
-    auto idxShape2 = idxLayout.template GetShapeDim<2, expectSize>();
-    auto idxShape3 = idxLayout.template GetShapeDim<3, expectSize>();
-    auto idxShape4 = idxLayout.template GetShapeDim<4, expectSize>();
+    auto idxStride0 = idxLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto idxStride1 = idxLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto idxStride2 = idxLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto idxStride3 = idxLayout.template GetStrideDim<3, MAX_DIMS>();
+    auto idxShape0 = idxLayout.template GetShapeDim<0, MAX_DIMS>();
+    auto idxShape1 = idxLayout.template GetShapeDim<1, MAX_DIMS>();
+    auto idxShape2 = idxLayout.template GetShapeDim<2, MAX_DIMS>();
+    auto idxShape3 = idxLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto idxShape4 = idxLayout.template GetShapeDim<4, MAX_DIMS>();
     const auto srcLayout = src2.GetLayout();
-    auto srcStride0 = srcLayout.template GetStrideDim<0, expectSize>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, expectSize>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, expectSize>();
-    auto srcStride3 = srcLayout.template GetStrideDim<3, expectSize>();
+    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto srcStride3 = srcLayout.template GetStrideDim<3, MAX_DIMS>();
 
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, 5>();
-    constexpr auto idxTileW = TileOp::GetTensorTileShapeDim<T1, 4, 5>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T2, 4, 5>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
+    constexpr auto idxTileW = TileOp::GetTensorTileShapeDim<T1, 4, MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T2, 4, MAX_DIMS>();
 
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
     constexpr auto idxTypeSize = sizeof(typename T1::Type);

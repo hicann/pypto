@@ -228,6 +228,7 @@ int BrcAxisBinaryOp(LogicalTensorPtr operand1, LogicalTensorPtr operand2, int64_
 void CheckBinOpOperandsValid(const LogicalTensorPtr& operand1, const LogicalTensorPtr& operand2);
 void BinaryOperationOperandCheck(const std::vector<LogicalTensorPtr>& iOperand,
                                  const std::vector<LogicalTensorPtr>& oOperand);
+int64_t GetOperationPrecisionType(const Operation& op);
 void BroadcastOperandTensor(LogicalTensorPtr& operand, LogicalTensorPtr& other, LogicalTensorPtr result,
                             Function& function, const TileShape& tileShape, std::vector<int64_t> dstShape = {});
 

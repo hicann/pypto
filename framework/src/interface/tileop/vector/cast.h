@@ -34,32 +34,31 @@ template <typename LastUse = LastUse3Dim<0, 0, 0>, unsigned Mode,
           pto::SaturationMode satmode = pto::SaturationMode::OFF, typename T0, typename T1, typename T2>
 TILEOP void TCast(T0 dst, T1 src, T2 tmp)
 {
-    constexpr size_t expectSize = 5;
     const auto dstLayout = dst.GetLayout();
     const auto srcLayout = src.GetLayout();
-    auto shape0 = dstLayout.template GetShapeDim<0, expectSize>();
-    auto shape1 = dstLayout.template GetShapeDim<1, expectSize>();
-    auto shape2 = dstLayout.template GetShapeDim<2, expectSize>();
-    auto shape3 = dstLayout.template GetShapeDim<3, expectSize>();
-    auto shape4 = dstLayout.template GetShapeDim<4, expectSize>();
-    auto srcExecShape3 = GetElementwiseOperandExecShapeDim<3, expectSize>(dst, src);
-    auto srcExecShape4 = GetElementwiseOperandExecShapeDim<4, expectSize>(dst, src);
+    auto shape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
+    auto shape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
+    auto shape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
+    auto shape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto shape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
+    auto srcExecShape3 = GetElementwiseOperandExecShapeDim<3, MAX_DIMS>(dst, src);
+    auto srcExecShape4 = GetElementwiseOperandExecShapeDim<4, MAX_DIMS>(dst, src);
     if (shape0 == 0 || shape1 == 0 || shape2 == 0 || shape3 == 0 || shape4 == 0) {
         return;
     }
-    auto dstStride0 = dstLayout.template GetStrideDim<0, expectSize>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, expectSize>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, expectSize>();
-    auto srcStride0 = srcLayout.template GetStrideDim<0, expectSize>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, expectSize>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, expectSize>();
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, 5>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, 5>();
+    auto dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
     using SrcExecConfig = ElementwiseOperandExecConfig<T0, T1>;
     constexpr auto srcTileH = SrcExecConfig::tileH;
     constexpr auto srcTileW = SrcExecConfig::tileW;
-    constexpr auto tmpTileH = TileOp::GetTensorTileShapeDim<T2, 3, 5>();
-    constexpr auto tmpTileW = TileOp::GetTensorTileShapeDim<T2, 4, 5>();
+    constexpr auto tmpTileH = TileOp::GetTensorTileShapeDim<T2, 3, MAX_DIMS>();
+    constexpr auto tmpTileW = TileOp::GetTensorTileShapeDim<T2, 4, MAX_DIMS>();
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
     constexpr auto srcTypeSize = sizeof(typename T1::Type);
     constexpr auto n1 = Std::tuple_element<DIM_1ST, LastUse>::type::value;
@@ -104,27 +103,26 @@ template <typename LastUse = LastUse2Dim<0, 0>, unsigned Mode, pto::SaturationMo
           typename T0, typename T1>
 TILEOP void TCast(T0 dst, T1 src)
 {
-    constexpr size_t expectSize = 5;
     const auto dstLayout = dst.GetLayout();
     const auto srcLayout = src.GetLayout();
-    auto shape0 = dstLayout.template GetShapeDim<0, expectSize>();
-    auto shape1 = dstLayout.template GetShapeDim<1, expectSize>();
-    auto shape2 = dstLayout.template GetShapeDim<2, expectSize>();
-    auto shape3 = dstLayout.template GetShapeDim<3, expectSize>();
-    auto shape4 = dstLayout.template GetShapeDim<4, expectSize>();
-    auto srcExecShape3 = GetElementwiseOperandExecShapeDim<3, expectSize>(dst, src);
-    auto srcExecShape4 = GetElementwiseOperandExecShapeDim<4, expectSize>(dst, src);
+    auto shape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
+    auto shape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
+    auto shape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
+    auto shape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto shape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
+    auto srcExecShape3 = GetElementwiseOperandExecShapeDim<3, MAX_DIMS>(dst, src);
+    auto srcExecShape4 = GetElementwiseOperandExecShapeDim<4, MAX_DIMS>(dst, src);
     if (shape0 == 0 || shape1 == 0 || shape2 == 0 || shape3 == 0 || shape4 == 0) {
         return;
     }
-    auto dstStride0 = dstLayout.template GetStrideDim<0, expectSize>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, expectSize>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, expectSize>();
-    auto srcStride0 = srcLayout.template GetStrideDim<0, expectSize>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, expectSize>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, expectSize>();
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, 5>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, 5>();
+    auto dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
     using SrcExecConfig = ElementwiseOperandExecConfig<T0, T1>;
     constexpr auto srcTileH = SrcExecConfig::tileH;
     constexpr auto srcTileW = SrcExecConfig::tileW;

@@ -16,6 +16,7 @@
 #ifndef TILEOP_TILE_OPERATOR_ISNAN__H
 #define TILEOP_TILE_OPERATOR_ISNAN__H
 #include "pto_tile.h"
+#include "utils/sync.h"
 #include "tileop_common.h"
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"

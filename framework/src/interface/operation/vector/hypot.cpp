@@ -35,10 +35,10 @@ void TiledHypotOperationImpl(Function& function, const TileShape& tileShape, siz
         if (!resultTileInfo.shape.empty()) {
             num_elements = resultTileInfo.shape.back();
         }
-        const size_t ALIGN_SIZE = 32;
+        const size_t ALIGN_SIZE = NUM_VALUE_32;
         size_t raw_size_bytes = num_elements * element_size;
         size_t aligned_size_bytes = ((raw_size_bytes + ALIGN_SIZE - 1) / ALIGN_SIZE) * ALIGN_SIZE;
-        size_t total_bytes = 2 * aligned_size_bytes;
+        size_t total_bytes = NUM_VALUE_2 * aligned_size_bytes;
         std::vector<int64_t> tmp_shape = {static_cast<int64_t>(total_bytes)};
         auto tmp_tensor = std::make_shared<LogicalTensor>(function, DT_UINT8, tmp_shape);
         function.AddOperation(Opcode::OP_HYPOT, {inputTile1, inputTile2}, {resultTile, tmp_tensor});

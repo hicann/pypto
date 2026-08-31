@@ -52,7 +52,6 @@ TILEOP void TOneHot(DST dst, SRC src)
     auto srcStride1 = srcLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
     auto srcStride2 = srcLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
     using SrcDtype = typename SRC::Type;
-    using DstDtype = typename DST::Type;
     constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<DST, DIM_5TH, MAX_DIMS>();
     if (dstShape3 == 0 || dstShape4 == 0) {
         return;

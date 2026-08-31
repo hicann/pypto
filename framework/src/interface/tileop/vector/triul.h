@@ -15,6 +15,7 @@
 #ifndef TILEOP_TILE_OPERATOR_TRIUL__H
 #define TILEOP_TILE_OPERATOR_TRIUL__H
 #include "pto_tile.h"
+#include "utils/sync.h"
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
@@ -29,10 +30,10 @@ TILEOP void TTriUL(DstTensor dst, SrcTensor src, int diagonal)
     auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
     auto shape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
     auto shape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<DstTensor, 3, 5>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<DstTensor, 4, 5>();
-    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<SrcTensor, 3, 5>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<SrcTensor, 4, 5>();
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<DstTensor, 3, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<DstTensor, 4, MAX_DIMS>();
+    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<SrcTensor, 3, MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<SrcTensor, 4, MAX_DIMS>();
     auto srcShape3 = srcLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
     auto srcShape4 = srcLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
 
@@ -51,9 +52,7 @@ TILEOP void TTriUL(DstTensor dst, SrcTensor src, int diagonal)
                 pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() +
                                                  GenTileOffset(src, tileOffsets) * sizeof(typename SrcTensor::Type)));
                 pto::TTRI<dstTileDefine, isUpper>(dstTile, diagonal);
-#ifdef __DAV_V220
-                pipe_barrier(PIPE_V);
-#endif
+                SyncV();
                 pto::TMUL(dstTile, dstTile, srcTile);
             }
         }

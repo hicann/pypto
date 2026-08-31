@@ -124,15 +124,15 @@ TILEOP void PermuteDim5(__ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, cons
                         const DstLayoutT& dstLayout, int64_t srcStride0, int64_t srcStride1, int64_t srcStride2,
                         int64_t srcStride3, int64_t srcStride4)
 {
-    auto d0 = dstLayout.template GetShapeDim<0, 5>();
-    auto d1 = dstLayout.template GetShapeDim<1, 5>();
-    auto d2 = dstLayout.template GetShapeDim<2, 5>();
-    auto d3 = dstLayout.template GetShapeDim<3, 5>();
-    auto d4 = dstLayout.template GetShapeDim<4, 5>();
-    auto ds0 = dstLayout.template GetStrideDim<0, 5>();
-    auto ds1 = dstLayout.template GetStrideDim<1, 5>();
-    auto ds2 = dstLayout.template GetStrideDim<2, 5>();
-    auto ds3 = dstLayout.template GetStrideDim<3, 5>();
+    auto d0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
+    auto d1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
+    auto d2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
+    auto d3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto d4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
+    auto ds0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto ds1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto ds2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto ds3 = dstLayout.template GetStrideDim<3, MAX_DIMS>();
     for (LoopVar i0 = 0; i0 < d0; ++i0) {
         __ubuf__ dstType* dst1 = dstAddr + i0 * ds0;
         for (LoopVar i1 = 0; i1 < d1; ++i1) {
@@ -263,15 +263,15 @@ TILEOP void PermuteEleDim5(__ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, c
     auto ss2 = srcLayout.template GetStrideDim<2, 5>();
     auto ss3 = srcLayout.template GetStrideDim<3, 5>();
     auto ss4 = srcLayout.template GetStrideDim<4, 5>();
-    auto d0 = dstLayout.template GetShapeDim<0, 5>();
-    auto d1 = dstLayout.template GetShapeDim<1, 5>();
-    auto d2 = dstLayout.template GetShapeDim<2, 5>();
-    auto d3 = dstLayout.template GetShapeDim<3, 5>();
-    auto d4 = dstLayout.template GetShapeDim<4, 5>();
-    auto ds0 = dstLayout.template GetStrideDim<0, 5>();
-    auto ds1 = dstLayout.template GetStrideDim<1, 5>();
-    auto ds2 = dstLayout.template GetStrideDim<2, 5>();
-    auto ds3 = dstLayout.template GetStrideDim<3, 5>();
+    auto d0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
+    auto d1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
+    auto d2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
+    auto d3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto d4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
+    auto ds0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto ds1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto ds2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto ds3 = dstLayout.template GetStrideDim<3, MAX_DIMS>();
     for (LoopVar i0 = 0; i0 < d0; ++i0) {
         for (LoopVar i1 = 0; i1 < d1; ++i1) {
             for (LoopVar i2 = 0; i2 < d2; ++i2) {
@@ -300,10 +300,9 @@ TILEOP void PermuteEleDim5(__ubuf__ dstType* dstAddr, __gm__ srcType* srcAddr, c
 template <int axis0, int axis1, int axis2, int axis3, int axis4, int dimCount, typename T0, typename T1, typename C0>
 TILEOP void TPermute(T0 dst, T1 src, C0 srcCoordinate)
 {
-    constexpr size_t srcExpectSize = 5;
     const auto dstLayout = dst.GetLayout();
     const auto srcLayout = src.GetLayout();
-    auto srcOffset = srcLayout.template GetGmOffset<C0, srcExpectSize>(srcCoordinate);
+    auto srcOffset = srcLayout.template GetGmOffset<C0, MAX_DIMS>(srcCoordinate);
     using srcType = std::conditional_t<std::is_same_v<typename T1::Type, bool>, uint8_t, typename T1::Type>;
     using dstType = std::conditional_t<std::is_same_v<typename T0::Type, bool>, uint8_t, typename T0::Type>;
     __gm__ srcType* srcAddr = (__gm__ srcType*)((uint64_t)(src.GetAddr()));
@@ -313,14 +312,14 @@ TILEOP void TPermute(T0 dst, T1 src, C0 srcCoordinate)
     constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;
     constexpr auto tileH = Std::tuple_element<shapeSize - 2, typename T0::TileShape>::type::value;
     constexpr auto tileW = Std::tuple_element<shapeSize - 1, typename T0::TileShape>::type::value;
-    auto srcStride0 = srcLayout.template GetStrideDim<0, srcExpectSize>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, srcExpectSize>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, srcExpectSize>();
-    auto srcStride3 = srcLayout.template GetStrideDim<3, srcExpectSize>();
-    auto srcStride4 = srcLayout.template GetStrideDim<4, srcExpectSize>();
+    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto srcStride3 = srcLayout.template GetStrideDim<3, MAX_DIMS>();
+    auto srcStride4 = srcLayout.template GetStrideDim<4, MAX_DIMS>();
     pipe_barrier(PIPE_ALL);
 
-    constexpr int pad = 5 - dimCount;
+    constexpr int pad = MAX_DIMS - dimCount;
     if constexpr (dimCount == 2 && axis0 == 1 && axis1 == 0) {
         permute_detail::PermuteDim2<pad, axis0, axis1, tileH, tileW, dstType, srcType>(
             dstAddr, srcAddr, srcLayout, dstLayout, srcStride0, srcStride1, srcStride4);
@@ -377,11 +376,6 @@ TILEOP void TPermuteElewise(T0 dst, T1 src, C0 srcCoordinate)
         permute_detail::PermuteEleDim4<axis0, axis1, axis2, axis3, dstType, srcType>(dstAddr, srcAddr, srcLayout,
                                                                                      dstLayout);
     } else if constexpr (dimCount == 5) {
-        auto ss0 = srcLayout.template GetStrideDim<0, N>();
-        auto ss1 = srcLayout.template GetStrideDim<1, N>();
-        auto ss2 = srcLayout.template GetStrideDim<2, N>();
-        auto ss3 = srcLayout.template GetStrideDim<3, N>();
-        auto ss4 = srcLayout.template GetStrideDim<4, N>();
         srcAddr += srcLayout.template GetGmOffset<C0, N>(srcCoordinate);
         permute_detail::PermuteEleDim5<axis0, axis1, axis2, axis3, axis4, dstType, srcType>(dstAddr, srcAddr, srcLayout,
                                                                                             dstLayout);

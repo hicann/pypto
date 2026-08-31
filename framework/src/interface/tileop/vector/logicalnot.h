@@ -15,6 +15,7 @@
 
 #ifndef TILEOP_TILE_OPERATOR_LOGICALNOT__H
 #define TILEOP_TILE_OPERATOR_LOGICALNOT__H
+#include "utils/sync.h"
 #include <type_traits>
 
 #include "pto_tile.h"
@@ -48,17 +49,11 @@ TILEOP void LogicalNotImplInt(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile)
     using SSrcTile = pto::Tile<pto::TileType::Vec, SignedT, 1, 2048, pto::BLayout::RowMajor, -1, -1>;
     SSrcTile signedTile(1, dstValid);
     pto::TASSIGN(signedTile, (uint64_t)(unsignedSrcTile.data()));
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TSUBS(signedTile, signedTile, static_cast<SignedT>(1));
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TMULS(signedTile, signedTile, static_cast<SignedT>(-1));
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 
     // Extract low bytes using TGATHER with mask pattern
     if constexpr (sizeof(UnsignedT) == 2) {
@@ -78,8 +73,6 @@ TILEOP void LogicalNotImplInt(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile)
         pto::TASSIGN(gatherDst, (uint64_t)(dstTile.data()));
         pto::TGATHER<U8DstTile, U8ViewTile, pto::MaskPattern::P0001>(gatherDst, srcView);
     } else if constexpr (sizeof(UnsignedT) == 8) {
-        // 8-byte elements: extract the low byte via a two-step gather.
-        // Step 1 (P0001): each 8-byte element -> byte0 and byte4, buffered into the reused tmp area.
         using U8ViewTile = pto::Tile<pto::TileType::Vec, uint8_t, 1, COUNT_MAX_BYTES, pto::BLayout::RowMajor, -1, -1>;
         using U8DstTile = pto::Tile<pto::TileType::Vec, uint8_t, 1, 2048, pto::BLayout::RowMajor, -1, -1>;
         U8ViewTile srcView(1, dstValid * sizeof(UnsignedT));
@@ -87,7 +80,6 @@ TILEOP void LogicalNotImplInt(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile)
         pto::TASSIGN(srcView, (uint64_t)(unsignedSrcTile.data()));
         pto::TASSIGN(step1Dst, (uint64_t)(tmpTile.data()));
         pto::TGATHER<U8DstTile, U8ViewTile, pto::MaskPattern::P0001>(step1Dst, srcView);
-        // Step 2 (P0101): each 2-byte pair -> low byte, written to the dst.
         U8ViewTile step2View(1, dstValid * 2);
         U8DstTile gatherDst(1, dstValid);
         pto::TASSIGN(step2View, (uint64_t)(tmpTile.data()));
@@ -108,9 +100,7 @@ TILEOP void LogicalNotImpl(DstTile dstTile, SrcTile srcTile, CastTile castTile, 
     pto::TEXPANDS(oneTile, 1.0);
     pto::TEXPANDS(zeroTile, 0.0);
 
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 
     if constexpr (std::is_same<T, half>::value || std::is_same<T, float>::value) {
         pto::TCMP(vcmpResTile, srcTile, zeroTile, pto::CmpMode::EQ);
@@ -118,19 +108,13 @@ TILEOP void LogicalNotImpl(DstTile dstTile, SrcTile srcTile, CastTile castTile, 
         pto::TCMP(vcmpResTile, castTile, zeroTile, pto::CmpMode::EQ);
     }
 
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TSEL(oneTile, vcmpResTile, oneTile, zeroTile, startAddrUBTile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 
     if constexpr (std::is_same<T, float>::value) {
         pto::TCVT(castTile, oneTile, pto::RoundMode::CAST_NONE);
-#ifdef __DAV_V220
-        pipe_barrier(PIPE_V);
-#endif
+        SyncV();
         pto::TCVT(dstTile, castTile, pto::RoundMode::CAST_NONE);
     } else {
         pto::TCVT(dstTile, oneTile, pto::RoundMode::CAST_NONE);
@@ -246,19 +230,19 @@ TILEOP void LogicalNotIterateTiles(T0 dst, T1 src, T2 tmp, LayoutD dstLayout, La
 {
     constexpr int64_t COUNT_MAX = 2048;
     constexpr uint32_t ALIGN_SIZE = 32;
-    auto dstShape0 = dstLayout.template GetShapeDim<0, 5>();
-    auto dstShape1 = dstLayout.template GetShapeDim<1, 5>();
-    auto dstShape2 = dstLayout.template GetShapeDim<2, 5>();
-    auto dstShape3 = dstLayout.template GetShapeDim<3, 5>();
-    auto dstShape4 = dstLayout.template GetShapeDim<4, 5>();
-    auto dstStride0 = dstLayout.template GetStrideDim<0, 5>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, 5>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, 5>();
-    auto dstStride3 = dstLayout.template GetStrideDim<3, 5>();
-    auto srcStride0 = srcLayout.template GetStrideDim<0, 5>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, 5>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, 5>();
-    auto srcStride3 = srcLayout.template GetStrideDim<3, 5>();
+    auto dstShape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
+    auto dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto dstStride3 = dstLayout.template GetStrideDim<3, MAX_DIMS>();
+    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto srcStride3 = srcLayout.template GetStrideDim<3, MAX_DIMS>();
     __ubuf__ int8_t* tmpBuffer = nullptr;
     __ubuf__ int8_t* compareCondition = nullptr;
     __ubuf__ int8_t* oneCondition = nullptr;

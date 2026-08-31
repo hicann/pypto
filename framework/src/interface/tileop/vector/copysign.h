@@ -16,6 +16,7 @@
 #ifndef TILEOP_TILE_OPERATOR_COPYSIGN__H
 #define TILEOP_TILE_OPERATOR_COPYSIGN__H
 #include "pto_tile.h"
+#include "utils/sync.h"
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 #include "tileop_common.h"
@@ -124,21 +125,13 @@ TILEOP void TCopysign(T0 dst, T1 src0, T2 src1, T3 tmp)
                 pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + src1Offset * sizeof(typename T2::Type)));
                 AssignElementwiseOperandExecTile(tmpExecTile, tmp, tileOffsets);
                 TMASKS<VALUEMASK16B, VALUEMASK32B>(tmpExecTile);
-#ifdef __DAV_V220
-                pipe_barrier(PIPE_V);
-#endif
+                SyncV();
                 TAND16B<STRIDE>(src0Tile, tmpExecTile);
-#ifdef __DAV_V220
-                pipe_barrier(PIPE_V);
-#endif
+                SyncV();
                 TMASKS<SIGNMASK16B, SIGNMASK32B>(tmpExecTile);
-#ifdef __DAV_V220
-                pipe_barrier(PIPE_V);
-#endif
+                SyncV();
                 TAND16B<STRIDE>(src1Tile, tmpExecTile);
-#ifdef __DAV_V220
-                pipe_barrier(PIPE_V);
-#endif
+                SyncV();
                 TOR16B<STRIDE>(dstTile, src0Tile, src1Tile);
             }
         }

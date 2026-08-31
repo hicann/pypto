@@ -23,43 +23,36 @@
 template <unsigned axis, typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1, typename T2, typename T3>
 TILEOP void TPRelu(T0 dst, T1 src, T2 weight, T3 tmp)
 {
-    constexpr size_t expectSize = 5;
     const auto dstLayout = dst.GetLayout();
     const auto srcLayout = src.GetLayout();
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
     constexpr auto srcTypeSize = sizeof(typename T1::Type);
-    constexpr auto weightTypeSize = sizeof(typename T2::Type);
 
-    auto dstShape0 = dstLayout.template GetShapeDim<0, expectSize>();
-    auto dstShape1 = dstLayout.template GetShapeDim<1, expectSize>();
-    auto dstShape2 = dstLayout.template GetShapeDim<2, expectSize>();
-    auto dstShape3 = dstLayout.template GetShapeDim<3, expectSize>();
-    auto dstShape4 = dstLayout.template GetShapeDim<4, expectSize>();
+    auto dstShape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
     if (dstShape0 == 0 || dstShape1 == 0 || dstShape2 == 0 || dstShape3 == 0 || dstShape4 == 0) {
         return;
     }
 
-    auto srcShape0 = srcLayout.template GetShapeDim<0, expectSize>();
-    auto srcShape1 = srcLayout.template GetShapeDim<1, expectSize>();
-    auto srcShape2 = srcLayout.template GetShapeDim<2, expectSize>();
-    auto srcShape3 = srcLayout.template GetShapeDim<3, expectSize>();
-    auto srcShape4 = srcLayout.template GetShapeDim<4, expectSize>();
+    auto srcShape3 = srcLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto srcShape4 = srcLayout.template GetShapeDim<4, MAX_DIMS>();
 
-    auto dstStride0 = dstLayout.template GetStrideDim<0, expectSize>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, expectSize>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, expectSize>();
-    auto dstStride3 = dstLayout.template GetStrideDim<3, expectSize>();
+    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto dstStride3 = dstLayout.template GetStrideDim<3, MAX_DIMS>();
 
-    auto srcStride0 = srcLayout.template GetStrideDim<0, expectSize>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, expectSize>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, expectSize>();
-    auto srcStride3 = srcLayout.template GetStrideDim<3, expectSize>();
+    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto srcStride3 = srcLayout.template GetStrideDim<3, MAX_DIMS>();
 
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, expectSize>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, expectSize>();
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
 
-    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, expectSize>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, expectSize>();
+    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, MAX_DIMS>();
 
     if constexpr (axis == 5) {
         // For 1D input (N), weight is (1,)

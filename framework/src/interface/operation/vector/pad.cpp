@@ -15,6 +15,7 @@
 
 #include <cmath>
 #include "tensor_transformation.h"
+#include "interface/operation/operation_common.h"
 #include "interface/utils/operator_tracer.h"
 #include "tilefwk/error_code.h"
 #include "passes/pass_utils/graph_utils.h"
@@ -55,21 +56,21 @@ void TiledPadImpl(Function& function, const TileShape& tileShape, size_t cur, In
             auto lastResultShape = result->shape[ndim - 1];
             auto lastShape = input.tileInfo.shape[ndim - 1];
             auto lastOffset = input.tileInfo.offset[ndim - 1];
-            auto preInputShape = input.tensor.GetShape()[ndim - 2];
-            auto preResultShape = result->shape[ndim - 2];
-            auto preShape = input.tileInfo.shape[ndim - 2];
-            auto preOffset = input.tileInfo.offset[ndim - 2];
+            auto preInputShape = input.tensor.GetShape()[ndim - NUM_VALUE_2];
+            auto preResultShape = result->shape[ndim - NUM_VALUE_2];
+            auto preShape = input.tileInfo.shape[ndim - NUM_VALUE_2];
+            auto preOffset = input.tileInfo.offset[ndim - NUM_VALUE_2];
             if (lastShape <= 0 || preShape <= 0) {
                 auto& op = function.AddOperation("TILE_VEC_DUP", {}, {resultTile});
                 op.SetAttribute(OpAttributeKey::scalar, padValue);
                 op.SetAttribute(OP_ATTR_PREFIX + "shape", resultTileInfo.shape);
                 op.SetAttribute(OP_ATTR_PREFIX + "validShape", resultTile->GetDynValidShape());
             } else if (lastOffset + vecTile[ndim - 1] > lastInputShape ||
-                       preOffset + vecTile[ndim - 2] > preInputShape) {
+                       preOffset + vecTile[ndim - NUM_VALUE_2] > preInputShape) {
                 auto inputTile = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset);
                 auto& op = function.AddOperation(Opcode::OP_PAD, {inputTile}, {resultTile});
                 auto last = std::min(lastResultShape, lastOffset + vecTile[ndim - 1]);
-                auto pre = std::min(preResultShape, preOffset + vecTile[ndim - 2]);
+                auto pre = std::min(preResultShape, preOffset + vecTile[ndim - NUM_VALUE_2]);
                 padRight = last > lastInputShape ? last - lastInputShape : 0;
                 padBottom = pre > preInputShape ? pre - preInputShape : 0;
                 op.SetAttribute(OpAttributeKey::scalar, padValue);
@@ -142,20 +143,21 @@ LogicalTensorPtr TensorPadOperation(Function& function, const Tensor& self, cons
     int64_t padBottom = 0;
 
     if (ndim == 1) {
-        CHECK(VectorErrorCode::ERR_PARAM_INVALID, padding.size() == 2)
-            << "Pad: 1D tensor only support 2 padding values.";
-        CHECK(VectorErrorCode::ERR_PARAM_INVALID, padding[0] == 0) << "Pad: 1D tensor only support right pad.";
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, padding.size() == NUM_VALUE_2)
+            << "Pad: 1D tensor only supports 2 padding values.";
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, padding[0] == 0) << "Pad: 1D tensor only supports right pad.";
         padRight = padding[1];
         CHECK(VectorErrorCode::ERR_PARAM_INVALID, padRight >= 0)
             << "Pad: padding values must be non-negative, got pad_right=" << padRight
             << ". Negative padding (for cropping) is not supported.";
         outputShape[0] += padRight;
     } else {
-        CHECK(VectorErrorCode::ERR_PARAM_INVALID, padding.size() == 4) << "Pad: only support last 2 axis pad.";
-        CHECK(VectorErrorCode::ERR_PARAM_INVALID, padding[0] == 0 && padding[2] == 0)
-            << "Pad: only support bottom and right pad.";
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, padding.size() == NUM_VALUE_4)
+            << "Pad: only the last 2 axes support padding.";
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, padding[0] == 0 && padding[NUM_VALUE_2] == 0)
+            << "Pad: only bottom and right padding is supported.";
         padRight = padding[1];
-        padBottom = padding[3];
+        padBottom = padding[NUM_VALUE_3];
         CHECK(VectorErrorCode::ERR_PARAM_INVALID, padRight >= 0)
             << "Pad: padding values must be non-negative, got pad_right=" << padRight
             << ". Negative padding (for cropping) is not supported.";
@@ -163,7 +165,7 @@ LogicalTensorPtr TensorPadOperation(Function& function, const Tensor& self, cons
             << "Pad: padding values must be non-negative, got pad_bottom=" << padBottom
             << ". Negative padding (for cropping) is not supported.";
         outputShape[ndim - 1] += padRight;
-        outputShape[ndim - 2] += padBottom;
+        outputShape[ndim - NUM_VALUE_2] += padBottom;
     }
 
     std::vector<SymbolicScalar> resultValidShape;
@@ -174,7 +176,7 @@ LogicalTensorPtr TensorPadOperation(Function& function, const Tensor& self, cons
             resultValidShape[0] = resultValidShape[0] + padRight;
         } else {
             resultValidShape[ndim - 1] = resultValidShape[ndim - 1] + padRight;
-            resultValidShape[ndim - 2] = resultValidShape[ndim - 2] + padBottom;
+            resultValidShape[ndim - NUM_VALUE_2] = resultValidShape[ndim - NUM_VALUE_2] + padBottom;
         }
     }
     auto result = std::make_shared<LogicalTensor>(function, operand->Datatype(), outputShape, resultValidShape);
@@ -190,7 +192,7 @@ Tensor Pad(const Tensor& self, const std::vector<int64_t>& padding, std::string 
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Pad");
 
-    CheckTensorDimRange(self.GetStorage(), 1, 4, "PAD");
+    CheckTensorDimRange(self.GetStorage(), 1, NUM_VALUE_4, "PAD");
     CheckTensorShapeSize(self.GetStorage(), "PAD");
     std::unordered_set<DataType> supportedTypes = {DT_FP32,  DT_FP16,  DT_BF16,   DT_INT8,  DT_INT16,
                                                    DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32};
@@ -204,8 +206,8 @@ LogicalTensorPtr TensorFillPadOperation(Function& function, const Tensor& self, 
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, mode == "constant") << "FillPad: only 'constant' mode is supported.";
     auto operand = self.GetStorage();
     std::vector<int64_t> outputShape = operand->shape;
-    CHECK(VectorErrorCode::ERR_PARAM_INVALID, outputShape.size() == 1 || outputShape.size() == 2)
-        << "FillPad: only support 1 dim or 2 dim.";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, outputShape.size() == NUM_VALUE_1 || outputShape.size() == NUM_VALUE_2)
+        << "FillPad: only 1D or 2D input is supported.";
     auto result = std::make_shared<LogicalTensor>(function, operand->Datatype(), outputShape,
                                                   SymbolicScalar::FromConcrete(outputShape));
     auto& op = function.AddOperation(Opcode::OP_FILLPAD, {operand}, {result});
@@ -218,7 +220,7 @@ Tensor FillPad(const Tensor& self, std::string mode, const Element& value)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "FillPad");
 
-    CheckTensorDimRange(self.GetStorage(), 1, 2, "FILLPAD");
+    CheckTensorDimRange(self.GetStorage(), 1, NUM_VALUE_2, "FILLPAD");
     CheckTensorShapeSize(self.GetStorage(), "FILLPAD");
     std::unordered_set<DataType> supportedTypes = {DT_FP32,  DT_FP16,  DT_BF16,   DT_INT8,  DT_INT16,
                                                    DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32};

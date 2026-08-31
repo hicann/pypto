@@ -16,6 +16,7 @@
 #ifndef TILEOP_TILE_OPERATOR_CUM_OPERATION__H
 #define TILEOP_TILE_OPERATOR_CUM_OPERATION__H
 #include "utils/layout.h"
+#include "utils/sync.h"
 #include "utils/tile_tensor.h"
 #include <array>
 
@@ -77,19 +78,18 @@ TILEOP void CumOperationScalarTool(__ubuf__ typename T0::Type* dstAddr, __ubuf__
 template <int axis, int is_sum, typename T0, typename T1>
 TILEOP void TCumOperation(T0 dst, T1 src)
 {
-    constexpr size_t expectSize = 5;
     constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
     const auto dstLayout = dst.GetLayout();
-    auto n0DstStride = dstLayout.template GetStrideDim<0, expectSize>();
-    auto n1DstStride = dstLayout.template GetStrideDim<1, expectSize>();
-    auto n2DstStride = dstLayout.template GetStrideDim<2, expectSize>();
-    auto n3DstStride = dstLayout.template GetStrideDim<3, expectSize>();
-    auto n0DstShape = dstLayout.template GetShapeDim<0, expectSize>();
-    auto n1DstShape = dstLayout.template GetShapeDim<1, expectSize>();
-    auto n2DstShape = dstLayout.template GetShapeDim<2, expectSize>();
-    auto n3DstShape = dstLayout.template GetShapeDim<3, expectSize>();
-    auto n4DstShape = dstLayout.template GetShapeDim<4, expectSize>();
+    auto n0DstStride = dstLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto n1DstStride = dstLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto n2DstStride = dstLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto n3DstStride = dstLayout.template GetStrideDim<3, MAX_DIMS>();
+    auto n0DstShape = dstLayout.template GetShapeDim<0, MAX_DIMS>();
+    auto n1DstShape = dstLayout.template GetShapeDim<1, MAX_DIMS>();
+    auto n2DstShape = dstLayout.template GetShapeDim<2, MAX_DIMS>();
+    auto n3DstShape = dstLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto n4DstShape = dstLayout.template GetShapeDim<4, MAX_DIMS>();
     constexpr auto dst1RawShape = Std::tuple_element<shapeSize - 1, typename T0::TileShape>::type::value;
 
     if constexpr (axis == 0) {

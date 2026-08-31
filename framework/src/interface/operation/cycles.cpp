@@ -23,6 +23,7 @@ namespace npu::tile_fwk {
 constexpr const int BYTES_PER_REPEAT = 256;
 constexpr const int DEFAULT_MAX_PARALLELISM = 128;
 constexpr const int DEFAULT_LATENCY = 10;
+constexpr const size_t MIN_GATHER_SHAPE_SIZE = 2;
 
 // get element per cycle
 int GetParallelism(const std::string& op, DataType dtype)
@@ -71,7 +72,7 @@ int64_t GetGatherInUBResultShapeSize(const std::vector<std::vector<int64_t>>& sh
     // param: [token_size, hidden_dim], indices: [1, k], block_table: [1, ...]
     // result: [k, hidden_dim]
     // Use result tile size for sparse gather estimation.
-    if (shape.size() < 2 || shape[0].empty() || shape[1].empty()) {
+    if (shape.size() < MIN_GATHER_SHAPE_SIZE || shape[0].empty() || shape[1].empty()) {
         return GetMaxShapeSize(shape);
     }
 

@@ -15,6 +15,7 @@
 
 #ifndef TILEOP_TILE_OPERATOR_BINARY_BRCINLINE__H
 #define TILEOP_TILE_OPERATOR_BINARY_BRCINLINE__H
+#include "utils/sync.h"
 #include "pto_tile.h"
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
@@ -27,6 +28,8 @@ enum class BrcMode : uint8_t {
     BRC_W0_H1, // [m, 1] [1, n]
     BRC_H0_W1  // [1, n] [m, 1]
 };
+
+enum class BinaryExpandMode : uint8_t { ROW, COL };
 
 // brcOperand per-axis encoding emitted by codegen
 constexpr int BRC_NONE = 0;
@@ -64,66 +67,57 @@ TILEOP constexpr BrcMode GetBrcMode()
     }
 }
 
-#define EXTRACT_LAST_USE_3DIM(LastUse)                                     \
-    constexpr auto n1 = Std::tuple_element<DIM_1ST, LastUse>::type::value; \
-    constexpr auto n2 = Std::tuple_element<DIM_2ND, LastUse>::type::value; \
+template <BinaryExpandMode mode, BinaryOp op, auto PrecisionType = pto::DivAlgorithm::DEFAULT, typename LastUse,
+          typename T0, typename T1, typename T2>
+TILEOP void BinaryExpandDispatch(T0 dst, T1 src0, T2 src1)
+{
+    constexpr auto n1 = Std::tuple_element<DIM_1ST, LastUse>::type::value;
+    constexpr auto n2 = Std::tuple_element<DIM_2ND, LastUse>::type::value;
     constexpr auto n3 = Std::tuple_element<DIM_3RD, LastUse>::type::value;
 
-#define BINARY_EXPAND_DISPATCH(PREFIX, PrecisionType)                                       \
-    if constexpr (op == BinaryOp::ADD) {                                                    \
-        PTO_WITH_LAST_USE(pto::T##PREFIX##ADD(dst, src0, src1), n1, n2, n3);                \
-        return;                                                                             \
-    } else if constexpr (op == BinaryOp::SUB) {                                             \
-        PTO_WITH_LAST_USE(pto::T##PREFIX##SUB(dst, src0, src1), n1, n2, n3);                \
-        return;                                                                             \
-    } else if constexpr (op == BinaryOp::MUL) {                                             \
-        PTO_WITH_LAST_USE(pto::T##PREFIX##MUL(dst, src0, src1), n1, n2, n3);                \
-        return;                                                                             \
-    } else if constexpr (op == BinaryOp::DIV) {                                             \
-        PTO_WITH_LAST_USE(pto::T##PREFIX##DIV<PrecisionType>(dst, src0, src1), n1, n2, n3); \
-        return;                                                                             \
-    } else if constexpr (op == BinaryOp::MAX) {                                             \
-        PTO_WITH_LAST_USE(pto::T##PREFIX##MAX(dst, src0, src1), n1, n2, n3);                \
-        return;                                                                             \
-    } else if constexpr (op == BinaryOp::MIN) {                                             \
-        PTO_WITH_LAST_USE(pto::T##PREFIX##MIN(dst, src0, src1), n1, n2, n3);                \
-        return;                                                                             \
-    } else if constexpr (op == BinaryOp::EXPANDEXPDIF) {                                    \
-        PTO_WITH_LAST_USE(pto::T##PREFIX##EXPDIF(dst, src0, src1), n1, n2, n3);             \
-        return;                                                                             \
-    }
-
-template <BinaryOp op, auto PrecisionType = pto::DivAlgorithm::DEFAULT, typename LastUse, typename T0, typename T1,
-          typename T2>
-TILEOP void BinaryRowExpandComputeImpl(T0 dst, T1 src0, T2 src1)
-{
-    EXTRACT_LAST_USE_3DIM(LastUse)
-    BINARY_EXPAND_DISPATCH(ROWEXPAND, PrecisionType)
-}
-
-template <BinaryOp op, auto PrecisionType = pto::DivAlgorithm::DEFAULT, typename LastUse, typename T0, typename T1,
-          typename T2>
-TILEOP void BinaryColExpandComputeImpl(T0 dst, T1 src0, T2 src1)
-{
-    EXTRACT_LAST_USE_3DIM(LastUse)
-    BINARY_EXPAND_DISPATCH(COLEXPAND, PrecisionType)
-    if constexpr (op == BinaryOp::MOD) {
-        constexpr pto::DivAlgorithm divPrecisionType = (PrecisionType == pto::FmodAlgorithm::HIGH_PRECISION) ?
-                                                           pto::DivAlgorithm::HIGH_PRECISION :
-                                                           pto::DivAlgorithm::DEFAULT;
-        pto::TROWEXPANDDIV<divPrecisionType>(dst, src0, src1);
-#ifdef __DAV_V220
-        pipe_barrier(PIPE_V);
-#endif
-        pto::TCVT(dst, dst, pto::RoundMode::CAST_TRUNC);
-#ifdef __DAV_V220
-        pipe_barrier(PIPE_V);
-#endif
-        pto::TROWEXPANDMUL(dst, dst, src1);
-#ifdef __DAV_V220
-        pipe_barrier(PIPE_V);
-#endif
-        pto::TROWEXPANDSUB(dst, src0, dst);
+    if constexpr (mode == BinaryExpandMode::ROW) {
+        if constexpr (op == BinaryOp::ADD) {
+            PTO_WITH_LAST_USE(pto::TROWEXPANDADD(dst, src0, src1), n1, n2, n3);
+        } else if constexpr (op == BinaryOp::SUB) {
+            PTO_WITH_LAST_USE(pto::TROWEXPANDSUB(dst, src0, src1), n1, n2, n3);
+        } else if constexpr (op == BinaryOp::MUL) {
+            PTO_WITH_LAST_USE(pto::TROWEXPANDMUL(dst, src0, src1), n1, n2, n3);
+        } else if constexpr (op == BinaryOp::DIV) {
+            PTO_WITH_LAST_USE(pto::TROWEXPANDDIV<PrecisionType>(dst, src0, src1), n1, n2, n3);
+        } else if constexpr (op == BinaryOp::MAX) {
+            PTO_WITH_LAST_USE(pto::TROWEXPANDMAX(dst, src0, src1), n1, n2, n3);
+        } else if constexpr (op == BinaryOp::MIN) {
+            PTO_WITH_LAST_USE(pto::TROWEXPANDMIN(dst, src0, src1), n1, n2, n3);
+        } else if constexpr (op == BinaryOp::EXPANDEXPDIF) {
+            PTO_WITH_LAST_USE(pto::TROWEXPANDEXPDIF(dst, src0, src1), n1, n2, n3);
+        }
+    } else if constexpr (mode == BinaryExpandMode::COL) {
+        if constexpr (op == BinaryOp::ADD) {
+            PTO_WITH_LAST_USE(pto::TCOLEXPANDADD(dst, src0, src1), n1, n2, n3);
+        } else if constexpr (op == BinaryOp::SUB) {
+            PTO_WITH_LAST_USE(pto::TCOLEXPANDSUB(dst, src0, src1), n1, n2, n3);
+        } else if constexpr (op == BinaryOp::MUL) {
+            PTO_WITH_LAST_USE(pto::TCOLEXPANDMUL(dst, src0, src1), n1, n2, n3);
+        } else if constexpr (op == BinaryOp::DIV) {
+            PTO_WITH_LAST_USE(pto::TCOLEXPANDDIV<PrecisionType>(dst, src0, src1), n1, n2, n3);
+        } else if constexpr (op == BinaryOp::MAX) {
+            PTO_WITH_LAST_USE(pto::TCOLEXPANDMAX(dst, src0, src1), n1, n2, n3);
+        } else if constexpr (op == BinaryOp::MIN) {
+            PTO_WITH_LAST_USE(pto::TCOLEXPANDMIN(dst, src0, src1), n1, n2, n3);
+        } else if constexpr (op == BinaryOp::EXPANDEXPDIF) {
+            PTO_WITH_LAST_USE(pto::TCOLEXPANDEXPDIF(dst, src0, src1), n1, n2, n3);
+        } else if constexpr (op == BinaryOp::MOD) {
+            constexpr pto::DivAlgorithm divPrecisionType = (PrecisionType == pto::FmodAlgorithm::HIGH_PRECISION) ?
+                                                               pto::DivAlgorithm::HIGH_PRECISION :
+                                                               pto::DivAlgorithm::DEFAULT;
+            pto::TROWEXPANDDIV<divPrecisionType>(dst, src0, src1);
+            SyncV();
+            pto::TCVT(dst, dst, pto::RoundMode::CAST_TRUNC);
+            SyncV();
+            pto::TROWEXPANDMUL(dst, dst, src1);
+            SyncV();
+            pto::TROWEXPANDSUB(dst, src0, dst);
+        }
     }
 }
 
@@ -192,7 +186,8 @@ TILEOP void BinaryMixBrcCompute(T0 dst, T1 src0, T2 src1)
                     pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dsttileOffset * sizeof(typename T0::Type)));
                     pto::TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + src0tileOffset * sizeof(typename T1::Type)));
                     pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + src1tileOffset * sizeof(typename T2::Type)));
-                    BinaryRowExpandComputeImpl<op, PrecisionType, LastUse>(dstTile, src0Tile, src1Tile);
+                    BinaryExpandDispatch<BinaryExpandMode::ROW, op, PrecisionType, LastUse>(dstTile, src0Tile,
+                                                                                            src1Tile);
                 }
             }
         }

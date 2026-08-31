@@ -19,7 +19,9 @@
 
 #include "interface/utils/error.h"
 #include "interface/operation/opcode.h"
+#include "interface/operation/operation_common.h"
 #include "interface/operation/operation_impl.h"
+#include "interface/operation/vector/gather_mask_common.h"
 #include "interface/tensor/logical_tensor.h"
 
 namespace npu::tile_fwk {
@@ -613,11 +615,12 @@ TileShape TileShapeResolver::GetOutputTileShape(const Operation& op, int index) 
             // Last axis tile shrinks by patternMode: /2 for mode 1/2, /4 for mode 3-6, else full min;
             // other axes min(outShape, vecTile). (TiledGatherMaskBuildIn.)
             uint8_t patternMode = static_cast<uint8_t>(op.GetIntAttribute(OP_ATTR_PREFIX + "patternMode"));
-            int64_t divisor = 1;
-            if (patternMode == 1 || patternMode == 2) {
-                divisor = 2;
-            } else if (patternMode >= 3 && patternMode <= 6) {
-                divisor = 4;
+            const auto pattern = static_cast<GatherMaskPattern>(patternMode);
+            int64_t divisor = NUM_VALUE_1;
+            if (IsHalfGatherMaskPattern(pattern)) {
+                divisor = NUM_VALUE_2;
+            } else if (IsQuarterGatherMaskPattern(pattern)) {
+                divisor = NUM_VALUE_4;
             }
             std::vector<int64_t> tile(outShape.size());
             for (size_t a = 0; a < outShape.size(); ++a) {

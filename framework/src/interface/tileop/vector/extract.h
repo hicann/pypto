@@ -15,6 +15,7 @@
 
 #ifndef TILEOP_TILE_OPERATOR_EXTRACT__H
 #define TILEOP_TILE_OPERATOR_EXTRACT__H
+#include "utils/sync.h"
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
@@ -22,27 +23,24 @@
 template <int k, int extractMode, int isLargest, typename T0, typename T1>
 TILEOP void TExtract(T0 dst, T1 src)
 {
-    constexpr size_t expectSize = 5;
     const auto dstLayout = dst.GetLayout();
     const auto srcLayout = src.GetLayout();
-    auto dstShape0 = dstLayout.template GetShapeDim<0, expectSize>();
-    auto dstShape1 = dstLayout.template GetShapeDim<1, expectSize>();
-    auto dstShape2 = dstLayout.template GetShapeDim<2, expectSize>();
-    auto dstShape3 = dstLayout.template GetShapeDim<3, expectSize>();
-    auto dstShape4 = dstLayout.template GetShapeDim<4, expectSize>();
-    auto srcShape3 = srcLayout.template GetShapeDim<3, expectSize>();
-    auto srcShape4 = srcLayout.template GetShapeDim<4, expectSize>();
-    auto dstStride0 = dstLayout.template GetStrideDim<0, expectSize>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, expectSize>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, expectSize>();
-    auto srcStride0 = srcLayout.template GetStrideDim<0, expectSize>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, expectSize>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, expectSize>();
-    constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, 5>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, 5>();
-    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, 5>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, 5>();
+    auto dstShape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
+    auto srcShape3 = srcLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
+    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, MAX_DIMS>();
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
     constexpr auto srcTypeSize = sizeof(typename T1::Type);
     if (dstShape3 == 0 || dstShape4 == 0) {
@@ -63,9 +61,7 @@ TILEOP void TExtract(T0 dst, T1 src)
                 pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
                 constexpr auto pattern = (extractMode == 0) ? pto::MaskPattern::P0101 : pto::MaskPattern::P1010;
                 pto::TGATHER<DstTileDefine, SrcTileDefine, pattern>(dstTile, srcTile);
-#ifdef __DAV_V220
-                pipe_barrier(PIPE_V);
-#endif
+                SyncV();
                 if constexpr (extractMode == 0 && isLargest == 0) {
                     using DstAddTileDefine = pto::Tile<pto::TileType::Vec, int32_t, dstTileH, dstTileW,
                                                        pto::BLayout::RowMajor, -1, -1>;
@@ -73,9 +69,7 @@ TILEOP void TExtract(T0 dst, T1 src)
                     pto::TASSIGN(dstAddTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
                     int32_t scalar = -2147483648;
                     pto::TADDS(dstAddTile, dstAddTile, scalar);
-#ifdef __DAV_V220
-                    pipe_barrier(PIPE_V);
-#endif
+                    SyncV();
                 }
             }
         }
@@ -86,35 +80,34 @@ TILEOP void TExtract(T0 dst, T1 src)
 template <int extractMode, int isLargest, typename T0, typename T1>
 TILEOP void TExtractSingle(T0 dst, T1 src)
 {
-    constexpr size_t expectSize = 5;
     const auto dstLayout = dst.GetLayout();
     const auto srcLayout = src.GetLayout();
-    auto dstShape0 = dstLayout.template GetShapeDim<0, expectSize>();
-    auto dstShape1 = dstLayout.template GetShapeDim<1, expectSize>();
-    auto dstShape2 = dstLayout.template GetShapeDim<2, expectSize>();
-    auto dstShape3 = dstLayout.template GetShapeDim<3, expectSize>();
-    auto dstShape4 = dstLayout.template GetShapeDim<4, expectSize>();
-    auto dstStride0 = dstLayout.template GetStrideDim<0, expectSize>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, expectSize>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, expectSize>();
-    auto dstStride3 = dstLayout.template GetStrideDim<3, expectSize>();
+    auto dstShape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
+    auto dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto dstStride3 = dstLayout.template GetStrideDim<3, MAX_DIMS>();
 
     if (dstShape0 == 0 || dstShape1 == 0 || dstShape2 == 0 || dstShape3 == 0 || dstShape4 == 0) {
         return;
     }
 
-    auto srcShape4 = srcLayout.template GetShapeDim<4, expectSize>();
-    auto srcStride0 = srcLayout.template GetStrideDim<0, expectSize>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, expectSize>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, expectSize>();
-    auto srcStride3 = srcLayout.template GetStrideDim<3, expectSize>();
+    auto srcShape4 = srcLayout.template GetShapeDim<4, MAX_DIMS>();
+    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto srcStride3 = srcLayout.template GetStrideDim<3, MAX_DIMS>();
 
     if (srcShape4 == 0) {
         return;
     }
 
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, 5>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, 5>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, MAX_DIMS>();
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
     constexpr auto srcTypeSize = sizeof(typename T1::Type);
 
@@ -136,9 +129,7 @@ TILEOP void TExtractSingle(T0 dst, T1 src)
                     pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
                     constexpr auto pattern = (extractMode == 0) ? pto::MaskPattern::P0101 : pto::MaskPattern::P1010;
                     pto::TGATHER<DstTileDefine, SrcTileDefine, pattern>(dstTile, srcTile);
-#ifdef __DAV_V220
-                    pipe_barrier(PIPE_V);
-#endif
+                    SyncV();
 
                     if constexpr (extractMode == 0 && isLargest == 0) {
                         int32_t scalar = -2147483648;
@@ -147,10 +138,7 @@ TILEOP void TExtractSingle(T0 dst, T1 src)
                         DstAddTileDefine dstAddTile(1, dstShape4);
                         pto::TASSIGN(dstAddTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
                         pto::TADDS(dstAddTile, dstAddTile, scalar);
-#ifdef __DAV_V220
-                        pipe_barrier(PIPE_V);
-                        ;
-#endif
+                        SyncV();
                     }
                 }
             }

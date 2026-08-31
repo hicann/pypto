@@ -14,6 +14,7 @@
  */
 #ifndef TILEOP_TILE_OPERATOR_INDEXADD_H
 #define TILEOP_TILE_OPERATOR_INDEXADD_H
+#include "utils/sync.h"
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
@@ -33,28 +34,18 @@ TILEOP void IndexAddUBNotLastAxisCompute(dstTileDefine dstTile, tempTileDefine t
         wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
         if (abs(static_cast<float>(alpha) - 1) > TileOp::EPSILON) {
             pto::TMULS(src1Tile, src1Tile, alpha);
-#ifdef __DAV_V220
-            pipe_barrier(PIPE_V);
-#endif
+            SyncV();
             pto::TCVT(tempTile, src1Tile, pto::RoundMode::CAST_RINT); // fp32->bf16
-#ifdef __DAV_V220
-            pipe_barrier(PIPE_V);
-#endif
+            SyncV();
             pto::TCVT(src1Tile, tempTile, pto::RoundMode::CAST_NONE); // bf16->fp32
-#ifdef __DAV_V220
-            pipe_barrier(PIPE_V);
-#endif
+            SyncV();
         }
         pto::TADD(dstTile, dstTile, src1Tile);
         // 当alpha不为1或index为int32类型时，需要在每一步运算后转换为bf16类型
         if (Std::is_same_v<typename T3::Type, int32_t> || abs(static_cast<float>(alpha) - 1) > TileOp::EPSILON) {
-#ifdef __DAV_V220
-            pipe_barrier(PIPE_V);
-#endif
+            SyncV();
             pto::TCVT(tempTile, dstTile, pto::RoundMode::CAST_RINT); // fp32->bf16
-#ifdef __DAV_V220
-            pipe_barrier(PIPE_V);
-#endif
+            SyncV();
             pto::TCVT(dstTile, tempTile, pto::RoundMode::CAST_NONE); // bf16->fp32
         }
     } else {
@@ -62,9 +53,7 @@ TILEOP void IndexAddUBNotLastAxisCompute(dstTileDefine dstTile, tempTileDefine t
         wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
         if (abs(static_cast<float>(alpha) - 1) > TileOp::EPSILON) {
             pto::TMULS(src1Tile, src1Tile, alpha);
-#ifdef __DAV_V220
-            pipe_barrier(PIPE_V);
-#endif
+            SyncV();
         }
         pto::TADD(dstTile, dstTile, src1Tile);
     }

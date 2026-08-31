@@ -15,6 +15,7 @@
 
 #ifndef TILEOP_TILE_OPERATOR_LOGICALAND__H
 #define TILEOP_TILE_OPERATOR_LOGICALAND__H
+#include "utils/sync.h"
 #include <type_traits>
 
 #include "pto_tile.h"
@@ -38,9 +39,7 @@ TILEOP T& StandardizedSrcTile([[maybe_unused]] T& dst, U& src, Cvt& cvt)
             pto::TCVT(dst, src, pto::RoundMode::CAST_NONE);
         } else {
             pto::TCVT(cvt, src, pto::RoundMode::CAST_NONE);
-#ifdef __DAV_V220
-            pipe_barrier(PIPE_V);
-#endif
+            SyncV();
             pto::TCVT(dst, cvt, pto::RoundMode::CAST_NONE);
         }
         return dst;
@@ -51,9 +50,7 @@ template <typename T, typename U, typename R, typename V>
 TILEOP void CalculateLogicalTile(T& dst, U& src, U& zeros, U& ones, R& res, V& startAddrUBTile)
 {
     pto::TCMP(res, src, zeros, pto::CmpMode::EQ);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TSEL(dst, res, zeros, ones, startAddrUBTile);
 }
 
@@ -61,9 +58,7 @@ template <typename T, typename U, typename R, typename Cvt, typename V>
 TILEOP void CalculateSrcLogicalTile(T& dst, U& src, T& zeros, T& ones, R& res, Cvt& cvt, V& startAddrUBTile)
 {
     auto tile = StandardizedSrcTile(dst, src, cvt);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     CalculateLogicalTile(dst, tile, zeros, ones, res, startAddrUBTile);
 }
 
@@ -71,16 +66,12 @@ template <typename T, typename U, typename TMP>
 TILEOP void SelectLogicalResult(T& dst, U& src1, U& src2, TMP& tmp)
 {
     pto::TMIN(src1, src1, src2);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     if constexpr (std::is_same_v<typename TMP::DType, typename U::DType>) {
         pto::TCVT(dst, src1, pto::RoundMode::CAST_NONE);
     } else {
         pto::TCVT(tmp, src1, pto::RoundMode::CAST_NONE);
-#ifdef __DAV_V220
-        pipe_barrier(PIPE_V);
-#endif
+        SyncV();
         pto::TCVT(dst, tmp, pto::RoundMode::CAST_NONE);
     }
 }
@@ -90,13 +81,9 @@ TILEOP void LogicalAndImpl(T& dst, U1& src1, U2& src2, L& tmp1, L& tmp2, L& ones
                            Cvt& cvt, V& startAddrUBTile)
 {
     CalculateSrcLogicalTile(tmp1, src1, zeros, ones, res1, cvt, startAddrUBTile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     CalculateSrcLogicalTile(tmp2, src2, zeros, ones, res2, cvt, startAddrUBTile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     SelectLogicalResult(dst, tmp1, tmp2, cvt);
 }
 

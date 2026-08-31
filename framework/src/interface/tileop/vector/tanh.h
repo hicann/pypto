@@ -16,6 +16,7 @@
 #ifndef TILEOP_TILE_OPERATOR_TANH__H
 #define TILEOP_TILE_OPERATOR_TANH__H
 #include "unary.h"
+#include "utils/sync.h"
 #include <type_traits>
 
 constexpr float TANH_POLY_015 = 0.0157396831f;
@@ -154,31 +155,30 @@ TILEOP void TanhCast(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile1, TmpTile
 template <typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1, typename T3>
 TILEOP void TTanh(T0 dst, T1 src, T3 tmp)
 {
-    constexpr size_t expectSize = 5;
     const auto dstLayout = dst.GetLayout();
     const auto srcLayout = src.GetLayout();
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
     constexpr auto srcTypeSize = sizeof(typename T1::Type);
 
-    auto dstShape0 = dstLayout.template GetShapeDim<0, expectSize>();
-    auto dstShape1 = dstLayout.template GetShapeDim<1, expectSize>();
-    auto dstShape2 = dstLayout.template GetShapeDim<2, expectSize>();
-    auto dstShape3 = dstLayout.template GetShapeDim<3, expectSize>();
-    auto dstShape4 = dstLayout.template GetShapeDim<4, expectSize>();
+    auto dstShape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
 
-    auto srcExecShape3 = GetElementwiseOperandExecShapeDim<3, expectSize>(dst, src);
-    auto srcExecShape4 = GetElementwiseOperandExecShapeDim<4, expectSize>(dst, src);
+    auto srcExecShape3 = GetElementwiseOperandExecShapeDim<3, MAX_DIMS>(dst, src);
+    auto srcExecShape4 = GetElementwiseOperandExecShapeDim<4, MAX_DIMS>(dst, src);
 
-    auto dstStride0 = dstLayout.template GetStrideDim<0, expectSize>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, expectSize>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, expectSize>();
+    auto dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
 
-    auto srcStride0 = srcLayout.template GetStrideDim<0, expectSize>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, expectSize>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, expectSize>();
+    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
 
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, expectSize>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, expectSize>();
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
 
     using SrcExecConfig = ElementwiseOperandExecConfig<T0, T1>;
     constexpr auto srcTileH = SrcExecConfig::tileH;
@@ -197,15 +197,18 @@ TILEOP void TTanh(T0 dst, T1 src, T3 tmp)
     using AddrUBTile = pto::Tile<pto::TileType::Vec, uint8_t, 1, alignUint8, pto::BLayout::RowMajor, -1, -1>;
     AddrUBTile startAddrUBTile(1, addressUsed);
 
-    if constexpr (std::is_same<typename T0::Type, float>::value) {
-        constexpr auto ALIGN32FP32 = 8;
-        constexpr auto tmpTileW = (dstTileW + ALIGN32FP32 - 1) / ALIGN32FP32 * ALIGN32FP32;
-        constexpr auto cmpTileW = (dstTileW / 8 + alignUint8 - 1) / alignUint8 * alignUint8;
-        using TmpTile = pto::Tile<pto::TileType::Vec, float, dstTileH, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
-        using CmpTile = pto::Tile<pto::TileType::Vec, uint8_t, dstTileH, cmpTileW, pto::BLayout::RowMajor, -1, -1>;
+    constexpr bool isFp32 = std::is_same<typename T0::Type, float>::value;
+    constexpr auto computeTileH = isFp32 ? dstTileH : srcTileH;
+    constexpr auto computeTileW = isFp32 ? dstTileW : srcTileW;
+    constexpr auto alignFp32 = 8;
+    constexpr auto tmpTileW = (computeTileW + alignFp32 - 1) / alignFp32 * alignFp32;
+    constexpr auto cmpTileW = (computeTileW / alignFp32 + alignUint8 - 1) / alignUint8 * alignUint8;
+    constexpr auto tmpOffset = computeTileH * tmpTileW;
+    constexpr auto cmpOffset = computeTileH * cmpTileW;
+    using TmpTile = pto::Tile<pto::TileType::Vec, float, computeTileH, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
+    using CmpTile = pto::Tile<pto::TileType::Vec, uint8_t, computeTileH, cmpTileW, pto::BLayout::RowMajor, -1, -1>;
 
-        auto tmpOffset = dstTileH * tmpTileW;
-        auto cmpOffset = dstTileH * cmpTileW;
+    if constexpr (isFp32) {
         TmpTile tmpTile1(dstShape3, dstShape4);
         TmpTile tmpTile2(dstShape3, dstShape4);
         CmpTile cmpTile(dstTileH, dstShape4 / 8);
@@ -229,14 +232,6 @@ TILEOP void TTanh(T0 dst, T1 src, T3 tmp)
         }
     } else if constexpr (std::is_same<typename T0::Type, half>::value ||
                          std::is_same<typename T0::Type, bfloat16_t>::value) {
-        constexpr auto ALIGN32FP32 = 8;
-        constexpr auto tmpTileW = (srcTileW + ALIGN32FP32 - 1) / ALIGN32FP32 * ALIGN32FP32;
-        constexpr auto cmpTileW = (srcTileW / 8 + alignUint8 - 1) / alignUint8 * alignUint8;
-        using TmpTile = pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
-        using CmpTile = pto::Tile<pto::TileType::Vec, uint8_t, srcTileH, cmpTileW, pto::BLayout::RowMajor, -1, -1>;
-
-        auto tmpOffset = srcTileH * tmpTileW;
-        auto cmpOffset = srcTileH * cmpTileW;
         TmpTile tmpTile1(srcExecShape3, srcExecShape4);
         TmpTile tmpTile2(srcExecShape3, srcExecShape4);
         TmpTile tmpTile3(srcExecShape3, srcExecShape4);

@@ -17,6 +17,7 @@
 #ifndef TILEOP_TILE_OPERATOR_COMPARE__H
 #define TILEOP_TILE_OPERATOR_COMPARE__H
 #include "pto_tile.h"
+#include "utils/sync.h"
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
@@ -85,27 +86,26 @@ struct CompareLayoutInfo {
 template <typename T, typename TDst>
 TILEOP CompareLayoutInfo ExtractLayoutInfo(const T& src, const TDst& dst)
 {
-    constexpr size_t expectSize = 5;
     const auto srcLayout = src.GetLayout();
     const auto dstLayout = dst.GetLayout();
 
     CompareLayoutInfo info;
-    info.shape0 = srcLayout.template GetShapeDim<0, expectSize>();
-    info.shape1 = srcLayout.template GetShapeDim<1, expectSize>();
-    info.shape2 = srcLayout.template GetShapeDim<2, expectSize>();
-    info.shape3 = srcLayout.template GetShapeDim<3, expectSize>();
-    info.shape4 = srcLayout.template GetShapeDim<4, expectSize>();
-    info.dstShape = dstLayout.template GetShapeDim<4, expectSize>();
+    info.shape0 = srcLayout.template GetShapeDim<0, MAX_DIMS>();
+    info.shape1 = srcLayout.template GetShapeDim<1, MAX_DIMS>();
+    info.shape2 = srcLayout.template GetShapeDim<2, MAX_DIMS>();
+    info.shape3 = srcLayout.template GetShapeDim<3, MAX_DIMS>();
+    info.shape4 = srcLayout.template GetShapeDim<4, MAX_DIMS>();
+    info.dstShape = dstLayout.template GetShapeDim<4, MAX_DIMS>();
 
-    info.stride0 = srcLayout.template GetStrideDim<0, expectSize>();
-    info.stride1 = srcLayout.template GetStrideDim<1, expectSize>();
-    info.stride2 = srcLayout.template GetStrideDim<2, expectSize>();
-    info.stride3 = srcLayout.template GetStrideDim<3, expectSize>();
+    info.stride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
+    info.stride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
+    info.stride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
+    info.stride3 = srcLayout.template GetStrideDim<3, MAX_DIMS>();
 
-    info.dstStride0 = dstLayout.template GetStrideDim<0, expectSize>();
-    info.dstStride1 = dstLayout.template GetStrideDim<1, expectSize>();
-    info.dstStride2 = dstLayout.template GetStrideDim<2, expectSize>();
-    info.dstStride3 = dstLayout.template GetStrideDim<3, expectSize>();
+    info.dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
+    info.dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
+    info.dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
+    info.dstStride3 = dstLayout.template GetStrideDim<3, MAX_DIMS>();
 
     return info;
 }
@@ -169,21 +169,15 @@ TILEOP void PostProcessMode0(DstTileType& bitResTile, CmpTileType& cmpResTile, S
 {
     pto::TEXPANDS(zeroConditionTile, 0.000000e+00f);
     pto::TEXPANDS(oneConditionTile, 1.000000e+00f);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TSEL(vselResultTile, cmpResTile, oneConditionTile, zeroConditionTile, startAddrUBTile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     if constexpr (sizeof(typename T::Type) == 2) {
         pto::TCVT(bitResTile, vselResultTile, pto::RoundMode::CAST_NONE);
     } else if constexpr (sizeof(typename T::Type) == 4) {
         pto::TASSIGN(tmpTile, reinterpret_cast<uint64_t>(zeroCondition));
         pto::TCVT(tmpTile, vselResultTile, pto::RoundMode::CAST_NONE);
-#ifdef __DAV_V220
-        pipe_barrier(PIPE_V);
-#endif
+        SyncV();
         pto::TCVT(bitResTile, tmpTile, pto::RoundMode::CAST_NONE);
 #ifdef __DAV_V310
     } else if constexpr (sizeof(typename T::Type) == 8) {

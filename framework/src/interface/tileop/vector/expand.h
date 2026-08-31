@@ -15,6 +15,7 @@
 
 #ifndef TILEOP_TILE_OPERATOR_EXPAND__H
 #define TILEOP_TILE_OPERATOR_EXPAND__H
+#include "utils/sync.h"
 #include "pto_tile.h"
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
@@ -59,9 +60,7 @@ TILEOP void ExpandImpl(TileDst& dstTile, TileSrc& srcTile, TileTmp& tmpTile)
         PTO_WITH_LAST_USE(pto::TROWEXPAND(dstTile, srcTile), n1, n2);
     } else if constexpr (expandTile == ExpandTile::HW) {
         pto::TROWEXPAND(tmpTile, srcTile);
-#ifdef __DAV_V220
-        pipe_barrier(PIPE_V);
-#endif
+        SyncV();
         PTO_WITH_LAST_USE(pto::TCOLEXPAND(dstTile, tmpTile), n1, n2);
     } else {
         PTO_WITH_LAST_USE(pto::TMOV(dstTile, srcTile), n1, n2);

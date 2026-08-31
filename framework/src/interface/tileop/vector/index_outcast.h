@@ -60,34 +60,30 @@ TILEOP void TIndexOutcastMode2(T0 dst, T1 src, T2 src1, unsigned b, unsigned s, 
 template <unsigned cacheMode, unsigned blockSize, typename T0, typename T1, typename T2, typename C>
 TILEOP void TIndexOutcast(T0 dst, T1 src, T2 src1, C coordinate)
 {
-    constexpr auto expectSize = 5;
     const auto uLayout = src.GetLayout();
-    auto srcShape1 = uLayout.template GetShapeDim<1, expectSize>();
-    auto srcShape2 = uLayout.template GetShapeDim<2, expectSize>();
-    auto srcShape3 = uLayout.template GetShapeDim<3, expectSize>();
-    auto srcShape4 = uLayout.template GetShapeDim<4, expectSize>();
+    auto srcShape1 = uLayout.template GetShapeDim<1, MAX_DIMS>();
+    auto srcShape2 = uLayout.template GetShapeDim<2, MAX_DIMS>();
+    auto srcShape3 = uLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto srcShape4 = uLayout.template GetShapeDim<4, MAX_DIMS>();
 
     const auto iLayout = src1.GetLayout();
-    auto src1Shape3 = iLayout.template GetShapeDim<3, expectSize>();
-    auto src1Shape4 = iLayout.template GetShapeDim<4, expectSize>();
+    auto src1Shape3 = iLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto src1Shape4 = iLayout.template GetShapeDim<4, MAX_DIMS>();
 
     const auto dLayout = dst.GetLayout();
-    auto dstShape1 = dLayout.template GetShapeDim<1, expectSize>();
-    auto dstShape2 = dLayout.template GetShapeDim<2, expectSize>();
-    auto dstShape3 = dLayout.template GetShapeDim<3, expectSize>();
-    auto dstShape4 = dLayout.template GetShapeDim<4, expectSize>();
+    auto dstShape3 = dLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto dstShape4 = dLayout.template GetShapeDim<4, MAX_DIMS>();
 
-    auto offset = dLayout.template GetGmOffset<C, expectSize>(coordinate);
+    auto offset = dLayout.template GetGmOffset<C, MAX_DIMS>(coordinate);
 
     using DstDtype = typename T0::Type;
     using SrcDtype = typename T1::Type;
     using IdxDtype = typename T2::Type;
 
-    constexpr auto srcrawShape1 = TileOp::GetTensorTileShapeDim<T1, 2, 5>();
-    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, 5>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, 5>();
-    constexpr auto src1SAligned = TileOp::GetTensorTileShapeDim<T2, 4, 5>();
-    constexpr auto srcNdAligned = srcTileW;
+    constexpr auto srcrawShape1 = TileOp::GetTensorTileShapeDim<T1, 2, MAX_DIMS>();
+    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, MAX_DIMS>();
+    constexpr auto src1SAligned = TileOp::GetTensorTileShapeDim<T2, 4, MAX_DIMS>();
 
     if (srcShape1 == 0 || srcShape2 == 0 || srcShape4 == 0 || src1Shape3 == 0 || src1Shape4 == 0) {
         return;

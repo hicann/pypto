@@ -55,59 +55,57 @@ enum class DequantType {
 template <typename T0, typename T1, typename T2, typename T3>
 TILEOP void TDequantInt8(T0 dst, T1 src, T2 scale, T3 offset)
 {
-    constexpr size_t expectSize = 5;
-
     const auto dstLayout = dst.GetLayout();
     const auto srcLayout = src.GetLayout();
     const auto scaleLayout = scale.GetLayout();
     const auto offsetLayout = offset.GetLayout();
 
     // 获取形状
-    auto dstShape0 = dstLayout.template GetShapeDim<0, expectSize>();
-    auto dstShape1 = dstLayout.template GetShapeDim<1, expectSize>();
-    auto dstShape2 = dstLayout.template GetShapeDim<2, expectSize>();
-    auto dstShape3 = dstLayout.template GetShapeDim<3, expectSize>();
-    auto dstShape4 = dstLayout.template GetShapeDim<4, expectSize>();
+    auto dstShape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
 
     if (dstShape3 == 0 || dstShape4 == 0) {
         return;
     }
 
-    auto srcShape3 = srcLayout.template GetShapeDim<3, expectSize>();
-    auto srcShape4 = srcLayout.template GetShapeDim<4, expectSize>();
+    auto srcShape3 = srcLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto srcShape4 = srcLayout.template GetShapeDim<4, MAX_DIMS>();
 
     // 获取步长
-    auto dstStride0 = dstLayout.template GetStrideDim<0, expectSize>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, expectSize>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, expectSize>();
+    auto dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
 
-    auto srcStride0 = srcLayout.template GetStrideDim<0, expectSize>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, expectSize>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, expectSize>();
+    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
 
-    auto scaleStride1 = scaleLayout.template GetStrideDim<1, expectSize>();
-    auto scaleStride2 = scaleLayout.template GetStrideDim<2, expectSize>();
-    auto scaleStride3 = scaleLayout.template GetStrideDim<3, expectSize>();
+    auto scaleStride1 = scaleLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto scaleStride2 = scaleLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto scaleStride3 = scaleLayout.template GetStrideDim<3, MAX_DIMS>();
 
-    auto offsetStride1 = offsetLayout.template GetStrideDim<1, expectSize>();
-    auto offsetStride2 = offsetLayout.template GetStrideDim<2, expectSize>();
-    auto offsetStride3 = offsetLayout.template GetStrideDim<3, expectSize>();
+    auto offsetStride1 = offsetLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto offsetStride2 = offsetLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto offsetStride3 = offsetLayout.template GetStrideDim<3, MAX_DIMS>();
 
     // 获取 Tile 形状
     // dst: FP32, 需要 32 字节对齐
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, expectSize>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, expectSize>();
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
     constexpr int paddedCol_dst = PTO_CEIL(dstTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
 
     // src: INT8, 需要 32 字节对齐
-    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, expectSize>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, expectSize>();
+    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, MAX_DIMS>();
     constexpr int paddedCol_src = PTO_CEIL(srcTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(int8_t)));
 
     // scale/offset: FP32, ColMajor 布局
-    constexpr auto scaleTileW = TileOp::GetTensorTileShapeDim<T2, 4, expectSize>();
+    constexpr auto scaleTileW = TileOp::GetTensorTileShapeDim<T2, 4, MAX_DIMS>();
     constexpr int paddedRow_scale = PTO_CEIL(scaleTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
-    constexpr auto offsetTileW = TileOp::GetTensorTileShapeDim<T3, 4, expectSize>();
+    constexpr auto offsetTileW = TileOp::GetTensorTileShapeDim<T3, 4, MAX_DIMS>();
     constexpr int paddedRow_offset = PTO_CEIL(offsetTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
 
     // 数据类型
@@ -169,59 +167,57 @@ TILEOP void TDequantInt8(T0 dst, T1 src, T2 scale, T3 offset)
 template <typename T0, typename T1, typename T2, typename T3>
 TILEOP void TDequantInt16(T0 dst, T1 src, T2 scale, T3 offset)
 {
-    constexpr size_t expectSize = 5;
-
     const auto dstLayout = dst.GetLayout();
     const auto srcLayout = src.GetLayout();
     const auto scaleLayout = scale.GetLayout();
     const auto offsetLayout = offset.GetLayout();
 
     // 获取形状
-    auto dstShape0 = dstLayout.template GetShapeDim<0, expectSize>();
-    auto dstShape1 = dstLayout.template GetShapeDim<1, expectSize>();
-    auto dstShape2 = dstLayout.template GetShapeDim<2, expectSize>();
-    auto dstShape3 = dstLayout.template GetShapeDim<3, expectSize>();
-    auto dstShape4 = dstLayout.template GetShapeDim<4, expectSize>();
+    auto dstShape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
 
     if (dstShape3 == 0 || dstShape4 == 0) {
         return;
     }
 
-    auto srcShape3 = srcLayout.template GetShapeDim<3, expectSize>();
-    auto srcShape4 = srcLayout.template GetShapeDim<4, expectSize>();
+    auto srcShape3 = srcLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto srcShape4 = srcLayout.template GetShapeDim<4, MAX_DIMS>();
 
     // 获取步长
-    auto dstStride0 = dstLayout.template GetStrideDim<0, expectSize>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, expectSize>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, expectSize>();
+    auto dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
 
-    auto srcStride0 = srcLayout.template GetStrideDim<0, expectSize>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, expectSize>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, expectSize>();
+    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
 
-    auto scaleStride1 = scaleLayout.template GetStrideDim<1, expectSize>();
-    auto scaleStride2 = scaleLayout.template GetStrideDim<2, expectSize>();
-    auto scaleStride3 = scaleLayout.template GetStrideDim<3, expectSize>();
+    auto scaleStride1 = scaleLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto scaleStride2 = scaleLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto scaleStride3 = scaleLayout.template GetStrideDim<3, MAX_DIMS>();
 
-    auto offsetStride1 = offsetLayout.template GetStrideDim<1, expectSize>();
-    auto offsetStride2 = offsetLayout.template GetStrideDim<2, expectSize>();
-    auto offsetStride3 = offsetLayout.template GetStrideDim<3, expectSize>();
+    auto offsetStride1 = offsetLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto offsetStride2 = offsetLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto offsetStride3 = offsetLayout.template GetStrideDim<3, MAX_DIMS>();
 
     // 获取 Tile 形状
     // dst: FP32
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, expectSize>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, expectSize>();
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
     constexpr int paddedCol_dst = PTO_CEIL(dstTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
 
     // src: INT16
-    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, expectSize>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, expectSize>();
+    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, MAX_DIMS>();
     constexpr int paddedCol_src = PTO_CEIL(srcTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(int16_t)));
 
     // scale/offset: FP32, ColMajor
-    constexpr auto scaleTileW = TileOp::GetTensorTileShapeDim<T2, 4, expectSize>();
+    constexpr auto scaleTileW = TileOp::GetTensorTileShapeDim<T2, 4, MAX_DIMS>();
     constexpr int paddedRow_scale = PTO_CEIL(scaleTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
-    constexpr auto offsetTileW = TileOp::GetTensorTileShapeDim<T3, 4, expectSize>();
+    constexpr auto offsetTileW = TileOp::GetTensorTileShapeDim<T3, 4, MAX_DIMS>();
     constexpr int paddedRow_offset = PTO_CEIL(offsetTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
 
     // 数据类型

@@ -16,6 +16,7 @@
 #ifndef TILEOP_TILE_OPERATOR_SIGN__H
 #define TILEOP_TILE_OPERATOR_SIGN__H
 #include "utils/layout.h"
+#include "utils/sync.h"
 #include "utils/tile_tensor.h"
 #include <type_traits>
 
@@ -25,9 +26,7 @@ TILEOP void SignInt(DstTile dstTile, SrcTile srcTile)
     constexpr auto n1 = Std::tuple_element<DIM_1ST, LastUse>::type::value;
     constexpr auto n2 = Std::tuple_element<DIM_2ND, LastUse>::type::value;
     pto::TMINS(dstTile, srcTile, static_cast<T>(1));
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TMAXS(dstTile, dstTile, static_cast<T>(-1));
 }
 
@@ -37,25 +36,15 @@ TILEOP void SignIntCast(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile)
     constexpr auto n1 = Std::tuple_element<DIM_1ST, LastUse>::type::value;
     constexpr auto n2 = Std::tuple_element<DIM_2ND, LastUse>::type::value;
     pto::TCVT(tmpTile, srcTile, pto::RoundMode::CAST_NONE);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TMINS(tmpTile, tmpTile, static_cast<half>(5.960464e-08f));
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TMAXS(tmpTile, tmpTile, static_cast<half>(-5.960464e-08f));
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TMULS(tmpTile, tmpTile, static_cast<half>(4.096000e+03f));
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TMULS(tmpTile, tmpTile, static_cast<half>(4.096000e+03f));
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TCVT(dstTile, tmpTile, pto::RoundMode::CAST_NONE);
 }
 
@@ -68,29 +57,17 @@ TILEOP void SignFloat(DstTile dstTile, SrcTile srcTile, RightTile rightTile, Mas
     constexpr auto n2 = Std::tuple_element<DIM_2ND, LastUse>::type::value;
 
     pto::TCMPS(maskTile, srcTile, static_cast<T>(0.0f), pto::CmpMode::LT);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TEXPANDS(rightTile, static_cast<T>(1.0f));
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TSELS(rightTile, maskTile, rightTile, scalarTmpTile, static_cast<T>(0.0f));
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TCMPS(maskTile, srcTile, static_cast<T>(0.0f), pto::CmpMode::GT);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TEXPANDS(dstTile, static_cast<T>(1.0f));
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TSELS(dstTile, maskTile, dstTile, scalarTmpTile, static_cast<T>(0.0f));
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TSUB(dstTile, dstTile, rightTile);
 }
 
@@ -116,32 +93,31 @@ TILEOP void SignImpl(DstTile dstTile, SrcTile srcTile, WorkTile workTile, MaskTi
 template <typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1, typename T3>
 TILEOP void TSign(T0 dst, T1 src, T3 tmp)
 {
-    constexpr size_t expectSize = 5;
     const auto dstLayout = dst.GetLayout();
     const auto srcLayout = src.GetLayout();
     const auto tmpLayout = tmp.GetLayout();
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
     constexpr auto srcTypeSize = sizeof(typename T1::Type);
 
-    auto dstShape0 = dstLayout.template GetShapeDim<0, expectSize>();
-    auto dstShape1 = dstLayout.template GetShapeDim<1, expectSize>();
-    auto dstShape2 = dstLayout.template GetShapeDim<2, expectSize>();
-    auto dstShape3 = dstLayout.template GetShapeDim<3, expectSize>();
-    auto dstShape4 = dstLayout.template GetShapeDim<4, expectSize>();
+    auto dstShape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
 
-    auto srcExecShape3 = GetElementwiseOperandExecShapeDim<3, expectSize>(dst, src);
-    auto srcExecShape4 = GetElementwiseOperandExecShapeDim<4, expectSize>(dst, src);
+    auto srcExecShape3 = GetElementwiseOperandExecShapeDim<3, MAX_DIMS>(dst, src);
+    auto srcExecShape4 = GetElementwiseOperandExecShapeDim<4, MAX_DIMS>(dst, src);
 
-    auto dstStride0 = dstLayout.template GetStrideDim<0, expectSize>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, expectSize>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, expectSize>();
+    auto dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
 
-    auto srcStride0 = srcLayout.template GetStrideDim<0, expectSize>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, expectSize>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, expectSize>();
+    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
 
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, expectSize>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, expectSize>();
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
 
     using SrcExecConfig = ElementwiseOperandExecConfig<T0, T1>;
     constexpr auto srcTileH = SrcExecConfig::tileH;

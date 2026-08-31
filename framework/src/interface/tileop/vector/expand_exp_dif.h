@@ -15,6 +15,7 @@
 
 #ifndef TILEOP_TILE_OPERATOR_EXPAND_EXP_DIF__H
 #define TILEOP_TILE_OPERATOR_EXPAND_EXP_DIF__H
+#include "utils/sync.h"
 #include "binary.h"
 #include "unary.h"
 
@@ -32,9 +33,7 @@ TILEOP void TExpandExpDif(T0 dst, T1 src0, T2 src1)
         // (m, n) & (m, n) -> (m, n) use SUB + EXP
         if ((src0Shape3 == src1Shape3) && (src0Shape4 == src1Shape4)) {
             BinaryCompute<BinaryOp::SUB, 0, LastUse3Dim<0, 0, 0>, BrcOperands...>(dst, src0, src1);
-#ifdef __DAV_V220
-            pipe_barrier(PIPE_V);
-#endif
+            SyncV();
             UnaryCompute<UnaryOp::EXP, pto::ExpAlgorithm::DEFAULT, LastUse2Dim<0, 0>>(dst, dst);
             return;
         }

@@ -49,57 +49,50 @@ constexpr size_t TILE_ALIGNMENT_BYTES = 32;
 template <typename T0, typename T1, typename T2, typename T3>
 TILEOP void TQuantInt8Sym(T0 dst, T1 src, T2 scale, T3 tmp)
 {
-    constexpr size_t expectSize = 5;
-
     const auto dstLayout = dst.GetLayout();
     const auto srcLayout = src.GetLayout();
     const auto scaleLayout = scale.GetLayout();
 
     // 获取形状
-    auto dstShape0 = dstLayout.template GetShapeDim<0, expectSize>();
-    auto dstShape1 = dstLayout.template GetShapeDim<1, expectSize>();
-    auto dstShape2 = dstLayout.template GetShapeDim<2, expectSize>();
-    auto dstShape3 = dstLayout.template GetShapeDim<3, expectSize>();
-    auto dstShape4 = dstLayout.template GetShapeDim<4, expectSize>();
+    auto dstShape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
 
     if (dstShape3 == 0 || dstShape4 == 0) {
         return;
     }
 
-    auto srcShape3 = srcLayout.template GetShapeDim<3, expectSize>();
-    auto srcShape4 = srcLayout.template GetShapeDim<4, expectSize>();
+    auto srcShape3 = srcLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto srcShape4 = srcLayout.template GetShapeDim<4, MAX_DIMS>();
 
     // 获取步长
-    auto dstStride0 = dstLayout.template GetStrideDim<0, expectSize>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, expectSize>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, expectSize>();
+    auto dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
 
-    auto srcStride0 = srcLayout.template GetStrideDim<0, expectSize>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, expectSize>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, expectSize>();
+    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
 
-    auto scaleStride1 = scaleLayout.template GetStrideDim<1, expectSize>();
-    auto scaleStride2 = scaleLayout.template GetStrideDim<2, expectSize>();
-    auto scaleStride3 = scaleLayout.template GetStrideDim<3, expectSize>();
+    auto scaleStride1 = scaleLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto scaleStride2 = scaleLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto scaleStride3 = scaleLayout.template GetStrideDim<3, MAX_DIMS>();
 
     // 获取 Tile 形状并计算对齐
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, expectSize>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, expectSize>();
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
     constexpr int paddedCol_dst = PTO_CEIL(dstTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(int8_t)));
 
-    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, expectSize>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, expectSize>();
+    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, MAX_DIMS>();
     constexpr int paddedCol_src = PTO_CEIL(srcTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
     constexpr int paddedRow_src = PTO_CEIL(
         srcTileH, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float))); // vbrcb processes in groups of 8 rows
 
-    constexpr auto scaleTileW = TileOp::GetTensorTileShapeDim<T2, 4, expectSize>();
+    constexpr auto scaleTileW = TileOp::GetTensorTileShapeDim<T2, 4, MAX_DIMS>();
     constexpr int paddedRow_scale = PTO_CEIL(scaleTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
-
-    // 计算一个 tile 的大小（元素个数）
-    constexpr auto tileShapeSize = TileOp::GetAnyAxisMergeResult<
-        DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
-
     // 数据类型
     using DstDtype = typename T0::Type;
     using SrcDtype = typename T1::Type;
@@ -159,64 +152,54 @@ TILEOP void TQuantInt8Sym(T0 dst, T1 src, T2 scale, T3 tmp)
 template <typename T0, typename T1, typename T2, typename T3, typename T4>
 TILEOP void TQuantInt8Asym(T0 dst, T1 src, T2 scale, T3 offset, T4 tmp)
 {
-    constexpr size_t expectSize = 5;
-
     const auto dstLayout = dst.GetLayout();
     const auto srcLayout = src.GetLayout();
     const auto scaleLayout = scale.GetLayout();
     const auto offsetLayout = offset.GetLayout();
 
     // 获取形状
-    auto dstShape0 = dstLayout.template GetShapeDim<0, expectSize>();
-    auto dstShape1 = dstLayout.template GetShapeDim<1, expectSize>();
-    auto dstShape2 = dstLayout.template GetShapeDim<2, expectSize>();
-    auto dstShape3 = dstLayout.template GetShapeDim<3, expectSize>();
-    auto dstShape4 = dstLayout.template GetShapeDim<4, expectSize>();
+    auto dstShape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
 
     if (dstShape3 == 0 || dstShape4 == 0) {
         return;
     }
 
-    auto srcShape3 = srcLayout.template GetShapeDim<3, expectSize>();
-    auto srcShape4 = srcLayout.template GetShapeDim<4, expectSize>();
+    auto srcShape3 = srcLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto srcShape4 = srcLayout.template GetShapeDim<4, MAX_DIMS>();
 
     // 获取步长
-    auto dstStride0 = dstLayout.template GetStrideDim<0, expectSize>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, expectSize>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, expectSize>();
+    auto dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
 
-    auto srcStride0 = srcLayout.template GetStrideDim<0, expectSize>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, expectSize>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, expectSize>();
+    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
 
-    auto scaleStride1 = scaleLayout.template GetStrideDim<1, expectSize>();
-    auto scaleStride2 = scaleLayout.template GetStrideDim<2, expectSize>();
-    auto scaleStride3 = scaleLayout.template GetStrideDim<3, expectSize>();
+    auto scaleStride1 = scaleLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto scaleStride2 = scaleLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto scaleStride3 = scaleLayout.template GetStrideDim<3, MAX_DIMS>();
 
-    auto offsetStride1 = offsetLayout.template GetStrideDim<1, expectSize>();
-    auto offsetStride2 = offsetLayout.template GetStrideDim<2, expectSize>();
-    auto offsetStride3 = offsetLayout.template GetStrideDim<3, expectSize>();
+    auto offsetStride1 = offsetLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto offsetStride2 = offsetLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto offsetStride3 = offsetLayout.template GetStrideDim<3, MAX_DIMS>();
 
     // 获取 Tile 形状
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, expectSize>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, expectSize>();
-    constexpr int paddedCol_dst = PTO_CEIL(dstTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(int8_t)));
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
 
-    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, expectSize>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, expectSize>();
+    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, MAX_DIMS>();
     constexpr int paddedCol_src = PTO_CEIL(srcTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
     constexpr int paddedRow_src = PTO_CEIL(
         srcTileH, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float))); // vbrcb processes in groups of 8 rows
 
-    constexpr auto scaleTileW = TileOp::GetTensorTileShapeDim<T2, 4, expectSize>();
+    constexpr auto scaleTileW = TileOp::GetTensorTileShapeDim<T2, 4, MAX_DIMS>();
     constexpr int paddedRow_scale = PTO_CEIL(scaleTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
-    constexpr auto offsetTileW = TileOp::GetTensorTileShapeDim<T3, 4, expectSize>();
-    constexpr int paddedRow_offset = PTO_CEIL(offsetTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
-
-    // 计算一个 tile 的大小（元素个数）
-    constexpr auto tileShapeSize = TileOp::GetAnyAxisMergeResult<
-        DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
-
     // 数据类型
     using DstDtype = typename T0::Type;
     using SrcDtype = typename T1::Type;
@@ -368,7 +351,6 @@ TILEOP void TQuantMXGeneral(T0 dst, T1 exp, T2 maxScratch, T3 scalingScratch, T4
     const auto expLayout = exp.GetLayout();
     const auto maxLayout = maxScratch.GetLayout();
     const auto scalingLayout = scalingScratch.GetLayout();
-    const auto srcLayout = src.GetLayout();
     auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
     auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
     auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
@@ -387,7 +369,6 @@ TILEOP void TQuantMXGeneral(T0 dst, T1 exp, T2 maxScratch, T3 scalingScratch, T4
     ExpByteTile expByteTile(expLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>(),
                             expLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>());
 
-    (void)srcLayout;
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
@@ -425,9 +406,6 @@ TILEOP void TQuantMXDn(T0 dst, T1 exp, T2 maxScratch, T3 scalingScratch, T4 src)
     (void)AXIS;
     const auto dstLayout = dst.GetLayout();
     const auto expLayout = exp.GetLayout();
-    const auto maxLayout = maxScratch.GetLayout();
-    const auto scalingLayout = scalingScratch.GetLayout();
-    const auto srcLayout = src.GetLayout();
     auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
     auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
     auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
@@ -446,9 +424,6 @@ TILEOP void TQuantMXDn(T0 dst, T1 exp, T2 maxScratch, T3 scalingScratch, T4 src)
     ExpByteTile expByteTile(expLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>(),
                             expLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>());
 
-    (void)maxLayout;
-    (void)scalingLayout;
-    (void)srcLayout;
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {

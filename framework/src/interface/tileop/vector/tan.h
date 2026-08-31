@@ -20,6 +20,7 @@
 #ifndef TILEOP_TILE_OPERATOR_TAN__H
 #define TILEOP_TILE_OPERATOR_TAN__H
 #include "utils/layout.h"
+#include "utils/sync.h"
 #include "utils/tile_tensor.h"
 #include <type_traits>
 
@@ -51,160 +52,94 @@ TILEOP void TanImpl(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile, TmpInt32T
 
     // k = round(x / pi)
     pto::TMULS(tmpTile, srcTile, INV_PI);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TCVT(tmpInt32Tile, tmpTile, pto::RoundMode::CAST_RINT);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TCVT(tmpTile, tmpInt32Tile, pto::RoundMode::CAST_RINT);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 
     // KPI_0: input_x = x - k * PI_V2
     pto::TMULS(tmp3Tile, tmpTile, PI_V2);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TSUB(tmp2Tile, srcTile, tmp3Tile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 
     // KPI_1: input_x -= k * KPI_1
     pto::TMULS(tmp3Tile, tmpTile, KPI_1);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TSUB(tmp2Tile, tmp2Tile, tmp3Tile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 
     // res_down1 = input_x + PI_DOWN (first factor: x + pi/2)
     pto::TADDS(tmp4Tile, tmp2Tile, PI_DOWN);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     // res_down2 = input_x + PI_DOWN_NEG (second factor: x - pi/2)
     pto::TADDS(tmp5Tile, tmp2Tile, PI_DOWN_NEG);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 
     // KPI_2: input_x -= k*KPI_2, res_down1 -= k*KPI_2, res_down2 -= k*KPI_2
     pto::TMULS(tmp3Tile, tmpTile, KPI_2);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TSUB(tmp2Tile, tmp2Tile, tmp3Tile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TSUB(tmp4Tile, tmp4Tile, tmp3Tile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TSUB(tmp5Tile, tmp5Tile, tmp3Tile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     // res_down1 += EPS_NEG, res_down2 += EPS
     pto::TADDS(tmp4Tile, tmp4Tile, EPS_NEG);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TADDS(tmp5Tile, tmp5Tile, EPS);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 
     // KPI_3: input_x -= k*KPI_3, res_down1 -= k*KPI_3, res_down2 -= k*KPI_3
     pto::TMULS(tmp3Tile, tmpTile, KPI_3);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TSUB(tmp2Tile, tmp2Tile, tmp3Tile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TSUB(tmp4Tile, tmp4Tile, tmp3Tile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TSUB(tmp5Tile, tmp5Tile, tmp3Tile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 
     // KPI_4: input_x -= k*KPI_4, res_down1 -= k*KPI_4, res_down2 -= k*KPI_4
     pto::TMULS(tmp3Tile, tmpTile, KPI_4);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TSUB(tmp2Tile, tmp2Tile, tmp3Tile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TSUB(tmp4Tile, tmp4Tile, tmp3Tile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TSUB(tmp5Tile, tmp5Tile, tmp3Tile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 
     // Polynomial evaluation
     // x2 = input_x * input_x
     pto::TMUL(tmp6Tile, tmp2Tile, tmp2Tile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 
     // Numerator: res_up = ((x2 * R0 + R1) * x2 + R2) * input_x
     pto::TMULS(tmp7Tile, tmp6Tile, R0);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TADDS(tmp7Tile, tmp7Tile, R1);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TMUL(tmp7Tile, tmp7Tile, tmp6Tile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TADDS(tmp7Tile, tmp7Tile, R2);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TMUL(tmp7Tile, tmp7Tile, tmp2Tile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 
     // Denominator: res_down = (x2 + R3) * res_down1 * res_down2
     pto::TADDS(tmp8Tile, tmp6Tile, R3);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TMUL(tmp8Tile, tmp8Tile, tmp4Tile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TMUL(tmp8Tile, tmp8Tile, tmp5Tile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 
     // Result: tan(x) = numerator / denominator
     pto::TDIV(dstTile, tmp7Tile, tmp8Tile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 }
 
 template <typename LastUse, typename DstTile, typename SrcTile, typename TmpTile, typename TmpFp32Tile,
@@ -218,50 +153,43 @@ TILEOP void TanHalfImpl(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile, TmpFp
     constexpr auto n2 = Std::tuple_element<DIM_2ND, LastUse>::type::value;
 
     pto::TCVT(tmpFp32Tile, srcTile, pto::RoundMode::CAST_NONE);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     TanImpl<LastUse, TmpFp32Tile, TmpFp32Tile, TmpFp32Tile, TmpInt32Tile, Tmp2Tile, Tmp3Tile, Tmp4Tile, Tmp5Tile,
             Tmp6Tile, Tmp7Tile, Tmp8Tile>(tmpFp32Tile, tmpFp32Tile, tmpFp32Tile, tmpInt32Tile, tmp2Tile, tmp3Tile,
                                           tmp4Tile, tmp5Tile, tmp6Tile, tmp7Tile, tmp8Tile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TCVT(dstTile, tmpFp32Tile, pto::RoundMode::CAST_RINT);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
 }
 
 #define OP_TILE_OP_TAN Ttan
 template <typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1, typename T2>
 TILEOP void Ttan(T0 dst, T1 src, T2 tmp)
 {
-    constexpr size_t expectSize = 5;
     const auto dstLayout = dst.GetLayout();
     const auto srcLayout = src.GetLayout();
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
     constexpr auto srcTypeSize = sizeof(typename T1::Type);
 
-    auto dstShape0 = dstLayout.template GetShapeDim<0, expectSize>();
-    auto dstShape1 = dstLayout.template GetShapeDim<1, expectSize>();
-    auto dstShape2 = dstLayout.template GetShapeDim<2, expectSize>();
-    auto dstShape3 = dstLayout.template GetShapeDim<3, expectSize>();
-    auto dstShape4 = dstLayout.template GetShapeDim<4, expectSize>();
+    auto dstShape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
 
-    auto srcExecShape3 = GetElementwiseOperandExecShapeDim<3, expectSize>(dst, src);
-    auto srcExecShape4 = GetElementwiseOperandExecShapeDim<4, expectSize>(dst, src);
+    auto srcExecShape3 = GetElementwiseOperandExecShapeDim<3, MAX_DIMS>(dst, src);
+    auto srcExecShape4 = GetElementwiseOperandExecShapeDim<4, MAX_DIMS>(dst, src);
 
-    auto dstStride0 = dstLayout.template GetStrideDim<0, expectSize>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, expectSize>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, expectSize>();
+    auto dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
 
-    auto srcStride0 = srcLayout.template GetStrideDim<0, expectSize>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, expectSize>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, expectSize>();
+    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
 
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, expectSize>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, expectSize>();
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
 
     using SrcExecConfig = ElementwiseOperandExecConfig<T0, T1>;
     constexpr auto srcTileH = SrcExecConfig::tileH;

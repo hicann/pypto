@@ -25,7 +25,6 @@
 template <typename TDst, typename TTmp>
 TILEOP void TUniform(TDst dst, TTmp tmpbuf, uint64_t key, uint64_t counter0, uint64_t counter1, uint16_t rounds)
 {
-    using ShapeValueType = typename Std::tuple_element<0, typename TDst::Shape>::type;
     constexpr auto shapeSize = Std::tuple_size<typename TDst::Shape>::value;
     constexpr int Size = Std::tuple_element<shapeSize - 1, typename TDst::TileShape>::type::value;
     constexpr int tileW = (Size + 7) / 8 * 8;

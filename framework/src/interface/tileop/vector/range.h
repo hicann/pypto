@@ -15,6 +15,7 @@
 
 #ifndef TILEOP_TILE_OPERATOR_VEC_RANGE__H
 #define TILEOP_TILE_OPERATOR_VEC_RANGE__H
+#include "utils/sync.h"
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
@@ -46,9 +47,7 @@ TILEOP inline void TRangePropagate(__ubuf__ T* base, int32_t loopN, int32_t tail
         pto::TASSIGN(src, reinterpret_cast<uint64_t>(base + loopN * Unit));
         pto::TASSIGN(dst, reinterpret_cast<uint64_t>(base + (loopN + 1) * Unit));
         pto::TADDS(dst, src, offset);
-#ifdef __DAV_V220
-        pipe_barrier(PIPE_V);
-#endif
+        SyncV();
     }
 }
 

@@ -406,7 +406,7 @@ static int NormalizeAndValidateReductionAxis(const Tensor& self, int axis)
 {
     CheckAxisRange(self, axis);
     auto vecTile = TileShape::Current().GetVecTile();
-    CHECK(VectorErrorCode::ERR_CONFIG_TILE, vecTile.valid()) << "TileShape is no set for reduce op";
+    CHECK(VectorErrorCode::ERR_CONFIG_TILE, vecTile.valid()) << "TileShape is not set for reduce op";
     return axis;
 }
 
@@ -438,7 +438,7 @@ Tensor Amax(const Tensor& self, int axis, bool keepDim)
                                                                DT_INT8, DT_UINT8, DT_INT64, DT_UINT64};
     const auto& supportedTypes = GetSupportedDataTypesByArch(AMAX_A2A3_TYPES, AMAX_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "AMAX");
-    CheckTensorDimRange(self.GetStorage(), 1, 4, "AMAX");
+    CheckTensorDimRange(self.GetStorage(), 1, NUM_VALUE_4, "AMAX");
     CheckTensorShapeSize(self.GetStorage(), "AMAX");
     axis = NormalizeAndValidateReductionAxis(self, axis);
 
@@ -458,12 +458,11 @@ Tensor ArgMax(const Tensor& self, int axis, bool keepDim)
 
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "ARGMAX");
-    CheckTensorDimRange(self.GetStorage(), 1, 4, "ARGMAX");
+    CheckTensorDimRange(self.GetStorage(), 1, NUM_VALUE_4, "ARGMAX");
     CheckTensorShapeSize(self.GetStorage(), "ARGMAX");
     axis = NormalizeAndValidateReductionAxis(self, axis);
 
     auto resultShape = self.GetShape();
-    auto vecTile = TileShape::Current().GetVecTile();
     resultShape[axis] = 1;
 
     Tensor result(DataType::DT_INT32, resultShape);
@@ -485,12 +484,11 @@ Tensor ArgMin(const Tensor& self, int axis, bool keepDim)
 
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "ARGMIN");
-    CheckTensorDimRange(self.GetStorage(), 1, 4, "ARGMIN");
+    CheckTensorDimRange(self.GetStorage(), 1, NUM_VALUE_4, "ARGMIN");
     CheckTensorShapeSize(self.GetStorage(), "ARGMIN");
     axis = NormalizeAndValidateReductionAxis(self, axis);
 
     auto resultShape = self.GetShape();
-    auto vecTile = TileShape::Current().GetVecTile();
     resultShape[axis] = 1;
 
     Tensor result(DataType::DT_INT32, resultShape);
@@ -515,7 +513,7 @@ Tensor Amin(const Tensor& self, int axis, bool keepDim)
                                                                DT_INT8, DT_UINT8, DT_INT64, DT_UINT64};
     const auto& supportedTypes = GetSupportedDataTypesByArch(AMIN_A2A3_TYPES, AMIN_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "AMIN");
-    CheckTensorDimRange(self.GetStorage(), 1, 4, "AMIN");
+    CheckTensorDimRange(self.GetStorage(), 1, NUM_VALUE_4, "AMIN");
     CheckTensorShapeSize(self.GetStorage(), "AMIN");
     axis = NormalizeAndValidateReductionAxis(self, axis);
 
@@ -538,7 +536,7 @@ Tensor Sum(const Tensor& self, int axis, bool keepDim)
                                                               DT_INT16, DT_INT64, DT_UINT64};
     const auto& supportedTypes = GetSupportedDataTypesByArch(SUM_A2A3_TYPES, SUM_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "SUM");
-    CheckTensorDimRange(self.GetStorage(), 1, 4, "SUM");
+    CheckTensorDimRange(self.GetStorage(), 1, NUM_VALUE_4, "SUM");
     CheckTensorShapeSize(self.GetStorage(), "SUM");
     axis = NormalizeAndValidateReductionAxis(self, axis);
 
@@ -558,7 +556,7 @@ Tensor Prod(const Tensor& self, int axis, bool keepDim)
 
     std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_INT32, DT_INT16};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "PROD");
-    CheckTensorDimRange(self.GetStorage(), 1, 4, "PROD");
+    CheckTensorDimRange(self.GetStorage(), 1, NUM_VALUE_4, "PROD");
     CheckTensorShapeSize(self.GetStorage(), "PROD");
 
     axis = NormalizeAndValidateReductionAxis(self, axis);
@@ -580,7 +578,7 @@ void TiledReduceExpand(Function& function, const TileShape& tileShape, const std
         << "The shape size of operand and offset should be equal";
 
     // 目前只支持2维操作
-    if (operand->shape.size() != 2) {
+    if (operand->shape.size() != NUM_VALUE_2) {
         CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "unsupported dimension";
     }
 
@@ -622,7 +620,7 @@ void TiledReduceExpandNew(Function& function, const TileShape& tileShape, const 
                           const LogicalTensorPtr& operand, const LogicalTensorPtr& result)
 {
     // 目前只支持2维操作
-    if (operand->shape.size() != 2) {
+    if (operand->shape.size() != NUM_VALUE_2) {
         CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "unsupported dimension";
     }
     auto& vecTile = tileShape.GetVecTile();
