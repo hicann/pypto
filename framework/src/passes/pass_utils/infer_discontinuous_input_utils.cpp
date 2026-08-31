@@ -300,11 +300,13 @@ void InferDiscontinuousInputUtils::ConvertViewAssembleToSliceContract(Function& 
         for (auto* consumer : middle->GetConsumers()) {
             if (consumer == nullptr || consumer->IsDeleted() || consumer->GetOpcode() != Opcode::OP_ASSEMBLE ||
                 consumer->GetIOperands().size() != 1 || consumer->GetOOperands().size() != 1 ||
-                consumer->GetIOperands().front() != middle ||
-                std::dynamic_pointer_cast<AssembleOpAttribute>(consumer->GetOpAttribute()) == nullptr) {
+                consumer->GetIOperands().front() != middle) {
                 continue;
             }
             auto assembleAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(consumer->GetOpAttribute());
+            if (assembleAttr == nullptr) {
+                continue;
+            }
             auto assembleOutput = consumer->GetOOperands().front();
             const auto hasMemoryTransform = [](MemoryType from, MemoryType to) {
                 return from != MemoryType::MEM_UNKNOWN && to != MemoryType::MEM_UNKNOWN && from != to;

@@ -404,6 +404,213 @@ TEST_F(TestExpandFunctionPass, ExpandFunctionUTest3)
 
 /*
 TESTExpandFunctionAssemble
+inCast{64,64}->assemble->midTensor{64,64}->reshape->outCast{16,256}
+assemble 输出仅被一个 reshape 消费且 reshape 输出是 outcast（assemble 无 token）时，
+assemble 不展开，保持视图语义；reshape 正常展开为 TILE_RESHAPE
+*/
+TEST_F(TestExpandFunctionPass, AssembleReshapeToOutcastShouldNotExpand)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestAssembleReshapeOutcast",
+                                                      "TestAssembleReshapeOutcast", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {kNumExpSix, kNumExpSix};
+    std::vector<int64_t> outShape = {kNumExpFour, kNumExpSeven * kNumTwo};
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto midTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outShape, CreateTestConstIntVector(outShape));
+
+    auto& assembleOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {inCast}, {midTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {midTensor}, {outCast});
+    assembleOp.SetOpAttribute(CreateAssembleOpAttr());
+    assembleOp.tileShape_.SetVecTile(shape);
+
+    currFunctionPtr->inCasts_.push_back(inCast);
+    currFunctionPtr->outCasts_.push_back(outCast);
+    currFunctionPtr->SetGraphType(GraphType::TENSOR_GRAPH);
+
+    ExpandFunction expandfunctionpass;
+    auto status = expandfunctionpass.RunOnFunction(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+    EXPECT_EQ(currFunctionPtr->GetGraphType(), GraphType::TILE_GRAPH);
+
+    uint32_t sliceNum = kNumZero;
+    uint32_t contractNum = kNumZero;
+    uint32_t assembleNum = kNumZero;
+    uint32_t reshapeNum = kNumZero;
+    for (auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_SLICE) {
+            ++sliceNum;
+        } else if (op.GetOpcode() == Opcode::OP_CONTRACT) {
+            ++contractNum;
+        } else if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            ++assembleNum;
+        } else if (op.GetOpcode() == Opcode::OP_RESHAPE) {
+            ++reshapeNum;
+        }
+    }
+    EXPECT_EQ(assembleNum, kNumOne);
+    EXPECT_EQ(sliceNum, kNumZero);
+    EXPECT_EQ(contractNum, kNumZero);
+    EXPECT_EQ(reshapeNum, kNumOne);
+}
+
+/*
+TESTExpandFunctionAssemble
+inCast{64,64}->assemble->midTensor{64,64}->reshape->outCast{16,256}
+assemble 携带 token（WAW/WAR）时，即使 assemble+reshape 接 outcast 也必须展开，
+将 semantic token 传播为 contract 上的 NORMAL token
+*/
+TEST_F(TestExpandFunctionPass, AssembleReshapeToOutcastWithTokenShouldExpand)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestAssembleReshapeOutcastToken",
+                                                      "TestAssembleReshapeOutcastToken", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {kNumExpSix, kNumExpSix};
+    std::vector<int64_t> outShape = {kNumExpFour, kNumExpSeven * kNumTwo};
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto midTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outShape, CreateTestConstIntVector(outShape));
+
+    auto& assembleOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {inCast}, {midTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {midTensor}, {outCast});
+    assembleOp.SetOpAttribute(CreateAssembleOpAttr());
+    assembleOp.tileShape_.SetVecTile(shape);
+    auto writeSemantic = IRContext::Get().MakeSemanticToken("mid_w", ir::TokenKind::WRITE, ir::Span::Unknown());
+    assembleOp.result_token_ = {writeSemantic};
+
+    currFunctionPtr->inCasts_.push_back(inCast);
+    currFunctionPtr->outCasts_.push_back(outCast);
+    currFunctionPtr->SetGraphType(GraphType::TENSOR_GRAPH);
+
+    ExpandFunction expandfunctionpass;
+    auto status = expandfunctionpass.RunOnFunction(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+
+    uint32_t sliceNum = kNumZero;
+    uint32_t contractNum = kNumZero;
+    uint32_t assembleNum = kNumZero;
+    bool contractHasWrite = false;
+    for (auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_SLICE) {
+            ++sliceNum;
+        } else if (op.GetOpcode() == Opcode::OP_CONTRACT) {
+            ++contractNum;
+            contractHasWrite = contractHasWrite || HasNormalTokenNamed(op.result_token_, "mid_w");
+        } else if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            ++assembleNum;
+        }
+    }
+    EXPECT_EQ(assembleNum, kNumZero);
+    EXPECT_EQ(sliceNum, kNumOne);
+    EXPECT_EQ(contractNum, kNumOne);
+    EXPECT_TRUE(contractHasWrite);
+}
+
+/*
+TESTExpandFunctionAssemble
+inCast{64,64}->assemble->midTensor{64,64}->reshape->reshapeOut{16,256}->nop->outCast{16,256}
+reshape 输出不是 outcast（后接 nop）时，assemble 正常展开为 slice + contract
+*/
+TEST_F(TestExpandFunctionPass, AssembleReshapeToNonOutcastShouldExpand)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestAssembleReshapeNonOutcast",
+                                                      "TestAssembleReshapeNonOutcast", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {kNumExpSix, kNumExpSix};
+    std::vector<int64_t> outShape = {kNumExpFour, kNumExpSeven * kNumTwo};
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto midTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto reshapeOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outShape, CreateTestConstIntVector(outShape));
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outShape, CreateTestConstIntVector(outShape));
+
+    auto& assembleOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {inCast}, {midTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {midTensor}, {reshapeOut});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_NOP, {reshapeOut}, {outCast});
+    assembleOp.SetOpAttribute(CreateAssembleOpAttr());
+    assembleOp.tileShape_.SetVecTile(shape);
+
+    currFunctionPtr->inCasts_.push_back(inCast);
+    currFunctionPtr->outCasts_.push_back(outCast);
+    currFunctionPtr->SetGraphType(GraphType::TENSOR_GRAPH);
+
+    ExpandFunction expandfunctionpass;
+    auto status = expandfunctionpass.RunOnFunction(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+
+    uint32_t sliceNum = kNumZero;
+    uint32_t contractNum = kNumZero;
+    uint32_t assembleNum = kNumZero;
+    for (auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_SLICE) {
+            ++sliceNum;
+        } else if (op.GetOpcode() == Opcode::OP_CONTRACT) {
+            ++contractNum;
+        } else if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            ++assembleNum;
+        }
+    }
+    EXPECT_EQ(assembleNum, kNumZero);
+    EXPECT_EQ(sliceNum, kNumOne);
+    EXPECT_EQ(contractNum, kNumOne);
+}
+
+/*
+TESTExpandFunctionAssemble
+inCast{64,64}->assemble->midTensor{64,64}->reshape(deleted)->reshapeOut{16,256}
+                      ->reshape(alive)->outCast2{16,256}
+consumers 残留已删除的 RESHAPE 时不应误判为"唯一 RESHAPE 消费者"，
+assemble 正常展开为 slice + contract
+*/
+TEST_F(TestExpandFunctionPass, AssembleReshapeToOutcastWithDeletedReshapeShouldExpand)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestAssembleReshapeDeleted",
+                                                      "TestAssembleReshapeDeleted", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {kNumExpSix, kNumExpSix};
+    std::vector<int64_t> outShape = {kNumExpFour, kNumExpSeven * kNumTwo};
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto midTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto deadOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outShape, CreateTestConstIntVector(outShape));
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outShape, CreateTestConstIntVector(outShape));
+
+    auto& assembleOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {inCast}, {midTensor});
+    auto& deadReshape = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {midTensor}, {deadOut});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {midTensor}, {outCast});
+    assembleOp.SetOpAttribute(CreateAssembleOpAttr());
+    assembleOp.tileShape_.SetVecTile(shape);
+    deadReshape.SetAsDeleted();
+
+    currFunctionPtr->inCasts_.push_back(inCast);
+    currFunctionPtr->outCasts_.push_back(outCast);
+    currFunctionPtr->SetGraphType(GraphType::TENSOR_GRAPH);
+
+    ExpandFunction expandfunctionpass;
+    auto status = expandfunctionpass.RunOnFunction(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+
+    uint32_t sliceNum = kNumZero;
+    uint32_t contractNum = kNumZero;
+    uint32_t assembleNum = kNumZero;
+    for (auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_SLICE) {
+            ++sliceNum;
+        } else if (op.GetOpcode() == Opcode::OP_CONTRACT) {
+            ++contractNum;
+        } else if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            ++assembleNum;
+        }
+    }
+    EXPECT_EQ(assembleNum, kNumZero);
+    EXPECT_EQ(sliceNum, kNumOne);
+    EXPECT_EQ(contractNum, kNumOne);
+}
+
+/*
+TESTExpandFunctionAssemble
 inCast1{64,64}->div->ubTensor{64,64}->assemble->outCast{64,64}
 inCast2{64,64}->
 inCast1{64,64}->view*4->div->ubTensor{64,64}->assemble(*4)->outCast{64,64}

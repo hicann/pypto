@@ -200,6 +200,37 @@ std::unordered_set<Operation*> CollectAssembleSsaDstViewSkipExpandOps(const std:
 // 流程中，当assemble前存在多个不同tile的op汇聚时，会导致assemble的tile无法与前面的展开一一匹配，无法完美处理，导致冗余搬运。
 // 但若assemble携带token依赖（WAW/WAR），仍需展开以将semantic token传播并转换为contract上的NORMAL
 // token，保证下游同步正确。
+// 同理，ASSEMBLE 的输出仅被一个 RESHAPE 消费且该 RESHAPE 的输出是 outcast 时，ASSEMBLE 也不展开：
+// RESHAPE 展开后仅生成 TILE_RESHAPE dummy 标记 op（不搬数据），ASSEMBLE 仍可保持视图语义。
+bool AssembleOutputIsOutcast(const std::vector<std::shared_ptr<LogicalTensor>>& outcasts,
+                             const LogicalTensorPtr& assembleOutput)
+{
+    for (const auto& outcast : outcasts) {
+        if (SameLogicalTensor(outcast, assembleOutput)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool AssembleFeedsOutcastThroughReshape(const std::vector<std::shared_ptr<LogicalTensor>>& outcasts,
+                                        const LogicalTensorPtr& assembleOutput)
+{
+    if (assembleOutput == nullptr) {
+        return false;
+    }
+    const auto& consumers = assembleOutput->GetConsumers();
+    if (consumers.size() != 1) {
+        return false;
+    }
+    auto* reshapeOp = *consumers.begin();
+    if (reshapeOp == nullptr || reshapeOp->IsDeleted() || reshapeOp->GetOpcode() != Opcode::OP_RESHAPE ||
+        reshapeOp->GetOOperands().empty()) {
+        return false;
+    }
+    return AssembleOutputIsOutcast(outcasts, reshapeOp->GetOOperands()[0]);
+}
+
 std::unordered_set<Operation*> CollectAssembleOutcastSkipExpandOps(Function& function,
                                                                    const std::vector<OperationPtr>& tensorOperations)
 {
@@ -213,13 +244,10 @@ std::unordered_set<Operation*> CollectAssembleOutcastSkipExpandOps(Function& fun
         if (oOperands.empty()) {
             continue;
         }
-        for (const auto& outcast : outcasts) {
-            if (SameLogicalTensor(outcast, oOperands[0])) {
-                if (opPtr->result_token_.empty() && opPtr->tokens_.empty()) {
-                    skipExpandOps.insert(opPtr.get());
-                }
-                break;
-            }
+        const bool outputReachesOutcast = AssembleOutputIsOutcast(outcasts, oOperands[0]) ||
+                                          AssembleFeedsOutcastThroughReshape(outcasts, oOperands[0]);
+        if (outputReachesOutcast && opPtr->result_token_.empty() && opPtr->tokens_.empty()) {
+            skipExpandOps.insert(opPtr.get());
         }
     }
     return skipExpandOps;

@@ -1322,7 +1322,7 @@ TEST_F(TestRemoveRedundantOpPass, TestOutcastMutiConsumerCase)
 /*
 TEST DynamicOutcast
 inCast{8,16}->exp->ubTensor1{8,16}->view->ubTensor1{4,16}->assemble->outCast1{-1,16}
-dynamic-axis, cannot delete
+dynamic-axis, cannot delete, trans view/assemble to slice/contract
 */
 TEST_F(TestRemoveRedundantOpPass, DynamicOutcast)
 {
@@ -1361,18 +1361,18 @@ TEST_F(TestRemoveRedundantOpPass, DynamicOutcast)
     EXPECT_EQ(removeredundantpass.RunOnFunction(*currFunctionPtr), SUCCESS);
     EXPECT_EQ(removeredundantpass.PostCheck(*currFunctionPtr), SUCCESS);
 
-    uint32_t assemble_num = kNumZero;
-    uint32_t view_num = kNumZero;
+    uint32_t contract_num = kNumZero;
+    uint32_t slice_num = kNumZero;
     for (auto& op : currFunctionPtr->Operations()) {
-        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
-            ++assemble_num;
+        if (op.GetOpcode() == Opcode::OP_CONTRACT) {
+            ++contract_num;
         }
-        if (op.GetOpcode() == Opcode::OP_VIEW) {
-            ++view_num;
+        if (op.GetOpcode() == Opcode::OP_SLICE) {
+            ++slice_num;
         }
     }
-    EXPECT_EQ(assemble_num, kNumZero);
-    EXPECT_EQ(view_num, kNumZero);
+    EXPECT_EQ(contract_num, kNumOne);
+    EXPECT_EQ(slice_num, kNumOne);
 }
 
 /*
@@ -1814,7 +1814,15 @@ TEST_F(TestRemoveRedundantOpPass, MatmulAccContractMultiSliceShouldNotFold)
     VerifyMatmulContractMultiSliceNotFolded(Opcode::OP_A_MULACC_B);
 }
 
-void VerifyMatmulContractSingleSliceFolded(Opcode matmulOpcode)
+TEST_F(TestRemoveRedundantOpPass, MatmulTransposeContractMultiSliceShouldNotFold)
+{
+    VerifyMatmulContractMultiSliceNotFolded(Opcode::OP_A_MUL_BT);
+    VerifyMatmulContractMultiSliceNotFolded(Opcode::OP_A_MULACC_BT);
+    VerifyMatmulContractMultiSliceNotFolded(Opcode::OP_AT_MUL_B);
+    VerifyMatmulContractMultiSliceNotFolded(Opcode::OP_AT_MUL_BT);
+}
+
+void VerifyMatmulContractSingleSliceNotFolded(Opcode matmulOpcode)
 {
     auto function = std::make_shared<Function>(Program::GetInstance(), "TestMatmulContractSingleSlice",
                                                "TestMatmulContractSingleSlice", nullptr);
@@ -1856,21 +1864,67 @@ void VerifyMatmulContractSingleSliceFolded(Opcode matmulOpcode)
     bool operationUpdated = false;
     ASSERT_EQ(RemoveRedundantOpUtils::ProcessContractSlice(*function, newOps, operationUpdated), SUCCESS);
 
+    EXPECT_FALSE(operationUpdated);
+    EXPECT_TRUE(newOps.empty());
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumOne);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumOne);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumZero);
+}
+
+TEST_F(TestRemoveRedundantOpPass, MatmulContractSingleSliceShouldNotFold)
+{
+    VerifyMatmulContractSingleSliceNotFolded(Opcode::OP_A_MUL_B);
+}
+
+TEST_F(TestRemoveRedundantOpPass, MatmulAccContractSingleSliceShouldNotFold)
+{
+    VerifyMatmulContractSingleSliceNotFolded(Opcode::OP_A_MULACC_B);
+}
+
+TEST_F(TestRemoveRedundantOpPass, MatmulTransposeContractSingleSliceShouldNotFold)
+{
+    VerifyMatmulContractSingleSliceNotFolded(Opcode::OP_A_MUL_BT);
+    VerifyMatmulContractSingleSliceNotFolded(Opcode::OP_A_MULACC_BT);
+    VerifyMatmulContractSingleSliceNotFolded(Opcode::OP_AT_MUL_B);
+    VerifyMatmulContractSingleSliceNotFolded(Opcode::OP_AT_MUL_BT);
+}
+
+TEST_F(TestRemoveRedundantOpPass, NonMatmulContractSingleSliceShouldFold)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "TestNonMatmulContractSingleSlice",
+                                               "TestNonMatmulContractSingleSlice", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> fullShape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> partShape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> zeroOffset = {kNumZero, kNumZero};
+    std::vector<int64_t> partOffset = {kNumFour, kNumZero};
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto sliceOutput = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape),
+                                              TileOpFormat::TILEOP_ND, "out");
+
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_CONTRACT, {input}, {contractOutput},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(zeroOffset)); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_SLICE, {contractOutput}, {sliceOutput},
+        [&partOffset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(partOffset)); });
+    auto& exp = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {sliceOutput}, {output});
+    function->inCasts_ = {input};
+    function->outCasts_ = {output};
+
+    std::vector<Operation*> newOps;
+    bool operationUpdated = false;
+    ASSERT_EQ(RemoveRedundantOpUtils::ProcessContractSlice(*function, newOps, operationUpdated), SUCCESS);
     EXPECT_TRUE(operationUpdated);
-    EXPECT_EQ(newOps.size(), kNumOne);
     EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumZero);
     EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumZero);
     EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumOne);
-}
-
-TEST_F(TestRemoveRedundantOpPass, MatmulContractSingleSliceShouldFold)
-{
-    VerifyMatmulContractSingleSliceFolded(Opcode::OP_A_MUL_B);
-}
-
-TEST_F(TestRemoveRedundantOpPass, MatmulAccContractSingleSliceShouldFold)
-{
-    VerifyMatmulContractSingleSliceFolded(Opcode::OP_A_MULACC_B);
+    auto generatedView = exp.GetInputOperand(kSizeZero)->GetProducers();
+    ASSERT_EQ(generatedView.size(), kNumOne);
+    EXPECT_EQ((*generatedView.begin())->GetOpcode(), Opcode::OP_VIEW);
 }
 
 TEST_F(TestRemoveRedundantOpPass, MultiContractSingleSliceShouldBecomeAssemble)
@@ -1974,13 +2028,13 @@ TEST_F(TestRemoveRedundantOpPass, MultiContractSingleSliceWithMaterializedMatmul
     bool operationUpdated = false;
     ASSERT_EQ(RemoveRedundantOpUtils::ProcessContractSlice(*function, newOps, operationUpdated), SUCCESS);
 
-    EXPECT_TRUE(operationUpdated);
+    EXPECT_FALSE(operationUpdated);
     EXPECT_TRUE(newOps.empty());
     EXPECT_EQ(matmulOuterContract.GetOpcode(), Opcode::OP_CONTRACT);
     EXPECT_EQ(otherOuterContract.GetOpcode(), Opcode::OP_CONTRACT);
     EXPECT_FALSE(finalSlice.IsDeleted());
-    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumTwo);
-    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumOne);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumThree);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumTwo);
     EXPECT_EQ(CountOpcode(function, Opcode::OP_ASSEMBLE), kNumZero);
 }
 

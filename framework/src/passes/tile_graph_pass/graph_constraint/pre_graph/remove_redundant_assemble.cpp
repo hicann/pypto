@@ -625,9 +625,15 @@ void RemoveRedundantAssemble::CalculateViewReshapeValidInfo(const LogicalTensorP
     }
     IRBuilder builder;
     info.validShapeExpr = builder.CreateConstInt(1);
-    if (validShape.size() == 4 && offset.size() == 4) {
+    constexpr size_t dim4D = 4;
+    if (validShape.size() == dim4D && offset.size() == dim4D) {
         info.validShapeExpr = (validShape[1] - offset[1]).Max(builder.CreateConstInt(0));
         info.validShapeExpr = info.validShapeExpr.Min(builder.CreateConstInt(1)).Simplify();
+    } else if (validShape.size() == dim4D) {
+        APASS_LOG_WARN_F(Elements::Tensor,
+                         "Cannot update reshape dyn valid shape as validShape size [%zu] is not equal to offset "
+                         "size [%zu].",
+                         validShape.size(), offset.size());
     }
     auto physicalShape = viewInput->tensor->GetDynRawShape().empty() ?
                              CommonUtils::CreateConstIntVector(viewInput->shape) :

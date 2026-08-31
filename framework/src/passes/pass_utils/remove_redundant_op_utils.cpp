@@ -39,7 +39,13 @@ bool IsViewLikeOpcode(Opcode opcode) { return opcode == Opcode::OP_VIEW || opcod
 
 bool IsAssembleLikeOpcode(Opcode opcode) { return opcode == Opcode::OP_ASSEMBLE || opcode == Opcode::OP_CONTRACT; }
 
-bool IsMatmulOpcode(Opcode opcode) { return opcode == Opcode::OP_A_MUL_B || opcode == Opcode::OP_A_MULACC_B; }
+bool IsMatmulOpcode(Opcode opcode)
+{
+    static const std::unordered_set<Opcode> kMatmulOps = {Opcode::OP_A_MUL_B,  Opcode::OP_A_MULACC_B,
+                                                          Opcode::OP_A_MUL_BT, Opcode::OP_A_MULACC_BT,
+                                                          Opcode::OP_AT_MUL_B, Opcode::OP_AT_MUL_BT};
+    return kMatmulOps.count(opcode) > 0;
+}
 
 Operation* GetSingleProducer(const LogicalTensorPtr& tensor)
 {
@@ -1599,7 +1605,7 @@ Status RemoveRedundantOpUtils::ProcessSingleContractMultiSlice(Function& functio
 {
     auto opList = function.Operations().DuplicatedOpList();
     for (auto& op : opList) {
-        if (op == nullptr || op->GetOpcode() != Opcode::OP_CONTRACT || op->GetIOperands().empty() ||
+        if (op == nullptr || op->IsDeleted() || op->GetOpcode() != Opcode::OP_CONTRACT || op->GetIOperands().empty() ||
             op->GetOOperands().empty() || GetAssembleAttr(*op) == nullptr) {
             continue;
         }
@@ -1610,13 +1616,23 @@ Status RemoveRedundantOpUtils::ProcessSingleContractMultiSlice(Function& functio
             continue;
         }
         // A matmul result uses the L0C layout. Folding its contract-slice chain into views would make later
-        // copy-outs interpret logical slice offsets as linear L0C pointer offsets.
+        // copy-outs interpret logical slice offsets as linear L0C pointer offsets.  Do not require the input tensor
+        // to have exactly one producer here: after fanout splitting/reconnection, the producer set can contain
+        // additional entries while an A_MUL_B result is still one of the producers.
         auto producers = contractInput->GetProducers();
-        if (consumers.size() > 1 && producers.size() == 1 && *producers.begin() != nullptr &&
-            IsMatmulOpcode((*producers.begin())->GetOpcode()) &&
-            std::all_of(consumers.begin(), consumers.end(), [](const Operation* consumer) {
+        const bool hasMatmulProducer = std::any_of(producers.begin(), producers.end(), [](const Operation* producer) {
+            return producer != nullptr && IsMatmulOpcode(producer->GetOpcode());
+        });
+        // Keep a contract-slice chain materialized when the contract consumes an A_MUL_B result.  The
+        // contract may currently have only one slice consumer (for example, after fanout splitting), so
+        // checking consumers.size() > 1 would let that chain through and fold CONTRACT+SLICE into VIEW.
+        if (hasMatmulProducer && std::all_of(consumers.begin(), consumers.end(), [](const Operation* consumer) {
                 return consumer != nullptr && consumer->GetOpcode() == Opcode::OP_SLICE;
             })) {
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                              "Skip CONTRACT[%d] with SLICE consumers because its input has a "
+                              "matmul producer.",
+                              op->GetOpMagic());
             continue;
         }
         struct ConsumerRewriteInfo {
