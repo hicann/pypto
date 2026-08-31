@@ -1155,6 +1155,281 @@ TEST(AicoreManagerTest, CalcAdjAicoreEnd_Dav3510)
     EXPECT_LE(env.mgr->adjAicEnd_, env.mgr->aicEnd_);
 }
 
+TEST(AicoreManagerTest, CalcAdjAicoreEnd_MaxC2GivesOneCorePerDie)
+{
+    MgrTestEnv env;
+    env.mgr->enableEslModel_ = true;
+    env.mgr->archInfo_ = ArchInfo::DAV_3510;
+    env.mgr->aicValidNum_ = 4;
+    env.mgr->aicpuNum_ = 4;
+    env.mgr->schedIdx_ = 0;
+    env.mgr->aicStart_ = 0;
+    env.mgr->aicEnd_ = 2;
+    env.mgr->aivStart_ = 0;
+    env.mgr->aivEnd_ = 4;
+    env.mgr->adjAicEnd_ = 2;
+    env.mgr->adjAivEnd_ = 4;
+
+    auto dynTask = std::make_unique<DynDeviceTaskBase>();
+    dynTask->maxC_ = 2;
+    dynTask->maxV_ = 4;
+    DevAscendFunction devFunc{};
+    DevAscendFunctionDuppedData duppedData{};
+    devFunc.SetMaxCV(2, 4);
+    duppedData.loopDieId_ = 1;
+    dynTask->dynFuncDataCacheList[0].devFunc = &devFunc;
+    dynTask->dynFuncDataCacheList[0].duppedData = &duppedData;
+    dynTask->dynFuncDataCacheListSize = 1;
+
+    DeviceTaskCtrl taskCtrl{};
+    taskCtrl.devTask = &dynTask->devTask;
+    SchDeviceTaskContext devTaskCtx{};
+    devTaskCtx.BindTaskCtrl(&taskCtrl);
+    devTaskCtx.wrapManager.archInfo = ArchInfo::DAV_3510;
+    devTaskCtx.wrapManager.dieId_ = DieId::DIE_0;
+    devTaskCtx.wrapManager.curDie0MaxCpuId_ = 2;
+    devTaskCtx.wrapManager.curDie1StartCpuId_ = 2;
+
+    env.mgr->CalcAdjAicoreEnd(&devTaskCtx, false);
+    EXPECT_EQ(env.mgr->adjAicEnd_, 1);
+
+    env.mgr->schedIdx_ = 2;
+    env.mgr->aicStart_ = 2;
+    env.mgr->aicEnd_ = 4;
+    env.mgr->adjAicEnd_ = 4;
+    devTaskCtx.wrapManager.dieId_ = DieId::DIE_1;
+    env.mgr->CalcAdjAicoreEnd(&devTaskCtx, false);
+    EXPECT_EQ(env.mgr->adjAicEnd_, 3);
+}
+
+TEST(AicoreManagerTest, CalcAdjAicoreEnd_MixedLoopDieIdKeepsGlobalBudget)
+{
+    MgrTestEnv env;
+    env.mgr->enableEslModel_ = true;
+    env.mgr->archInfo_ = ArchInfo::DAV_3510;
+    env.mgr->aicValidNum_ = 4;
+    env.mgr->aicpuNum_ = 4;
+    env.mgr->schedIdx_ = 0;
+    env.mgr->aicStart_ = 0;
+    env.mgr->aicEnd_ = 2;
+    env.mgr->aivStart_ = 0;
+    env.mgr->aivEnd_ = 4;
+    env.mgr->adjAicEnd_ = 2;
+    env.mgr->adjAivEnd_ = 4;
+
+    auto dynTask = std::make_unique<DynDeviceTaskBase>();
+    dynTask->maxC_ = 3;
+    dynTask->maxV_ = 6;
+    DevAscendFunction devFunc0{};
+    DevAscendFunction devFunc1{};
+    DevAscendFunctionDuppedData dupped0{};
+    DevAscendFunctionDuppedData dupped1{};
+    devFunc0.SetMaxCV(3, 6);
+    devFunc1.SetMaxCV(3, 6);
+    dupped0.loopDieId_ = 0;
+    dupped1.loopDieId_ = -1;
+    dynTask->dynFuncDataCacheList[0].devFunc = &devFunc0;
+    dynTask->dynFuncDataCacheList[0].duppedData = &dupped0;
+    dynTask->dynFuncDataCacheList[1].devFunc = &devFunc1;
+    dynTask->dynFuncDataCacheList[1].duppedData = &dupped1;
+    dynTask->dynFuncDataCacheListSize = 2;
+
+    DeviceTaskCtrl taskCtrl{};
+    taskCtrl.devTask = &dynTask->devTask;
+    SchDeviceTaskContext devTaskCtx{};
+    devTaskCtx.BindTaskCtrl(&taskCtrl);
+    devTaskCtx.wrapManager.archInfo = ArchInfo::DAV_3510;
+    devTaskCtx.wrapManager.dieId_ = DieId::DIE_0;
+    devTaskCtx.wrapManager.curDie0MaxCpuId_ = 2;
+    devTaskCtx.wrapManager.curDie1StartCpuId_ = 2;
+
+    env.mgr->CalcAdjAicoreEnd(&devTaskCtx, false);
+    // maxC=3 stays on mainline 4-way: idx=0 → 1 core.
+    EXPECT_EQ(env.mgr->adjAicEnd_, 1);
+}
+
+TEST(AicoreManagerTest, CalcAdjAicoreEnd_GlobalBudgetWhenNoLoopDieId)
+{
+    MgrTestEnv env;
+    env.mgr->enableEslModel_ = true;
+    env.mgr->archInfo_ = ArchInfo::DAV_3510;
+    env.mgr->aicValidNum_ = 4;
+    env.mgr->aicpuNum_ = 4;
+    env.mgr->schedIdx_ = 0;
+    env.mgr->aicStart_ = 0;
+    env.mgr->aicEnd_ = 2;
+
+    auto dynTask = std::make_unique<DynDeviceTaskBase>();
+    dynTask->maxC_ = 2;
+    dynTask->maxV_ = 4;
+    DevAscendFunctionDuppedData duppedData{};
+    duppedData.loopDieId_ = -1;
+    dynTask->dynFuncDataCacheList[0].duppedData = &duppedData;
+    dynTask->dynFuncDataCacheListSize = 1;
+
+    DeviceTaskCtrl taskCtrl{};
+    taskCtrl.devTask = &dynTask->devTask;
+    SchDeviceTaskContext devTaskCtx{};
+    devTaskCtx.BindTaskCtrl(&taskCtrl);
+    devTaskCtx.wrapManager.archInfo = ArchInfo::DAV_3510;
+    devTaskCtx.wrapManager.dieId_ = DieId::DIE_0;
+    devTaskCtx.wrapManager.curDie0MaxCpuId_ = 2;
+    devTaskCtx.wrapManager.curDie1StartCpuId_ = 2;
+
+    env.mgr->CalcAdjAicoreEnd(&devTaskCtx, false);
+    EXPECT_GT(env.mgr->adjAicEnd_, env.mgr->aicStart_);
+}
+
+TEST(AicoreManagerTest, CalcAdjAicoreEnd_MaxC1MovesCoreToDie1WhenBound)
+{
+    MgrTestEnv env;
+    env.mgr->enableEslModel_ = true;
+    env.mgr->archInfo_ = ArchInfo::DAV_3510;
+    env.mgr->aicValidNum_ = 4;
+    env.mgr->aicpuNum_ = 4;
+    env.mgr->schedIdx_ = 0;
+    env.mgr->aicStart_ = 0;
+    env.mgr->aicEnd_ = 2;
+    env.mgr->aivStart_ = 0;
+    env.mgr->aivEnd_ = 4;
+    env.mgr->adjAicEnd_ = 2;
+    env.mgr->adjAivEnd_ = 4;
+
+    auto dynTask = std::make_unique<DynDeviceTaskBase>();
+    dynTask->maxC_ = 1;
+    dynTask->maxV_ = 2;
+    DevAscendFunction devFunc0{};
+    DevAscendFunction devFunc1{};
+    DevAscendFunctionDuppedData dupped0{};
+    DevAscendFunctionDuppedData dupped1{};
+    devFunc0.SetMaxCV(1, 2);
+    devFunc1.SetMaxCV(1, 2);
+    dupped0.loopDieId_ = 1;
+    dupped1.loopDieId_ = -1;
+    dynTask->dynFuncDataCacheList[0].devFunc = &devFunc0;
+    dynTask->dynFuncDataCacheList[0].duppedData = &dupped0;
+    dynTask->dynFuncDataCacheList[1].devFunc = &devFunc1;
+    dynTask->dynFuncDataCacheList[1].duppedData = &dupped1;
+    dynTask->dynFuncDataCacheListSize = 2;
+
+    DeviceTaskCtrl taskCtrl{};
+    taskCtrl.devTask = &dynTask->devTask;
+    SchDeviceTaskContext devTaskCtx{};
+    devTaskCtx.BindTaskCtrl(&taskCtrl);
+    devTaskCtx.wrapManager.archInfo = ArchInfo::DAV_3510;
+    devTaskCtx.wrapManager.dieId_ = DieId::DIE_0;
+    devTaskCtx.wrapManager.curDie0MaxCpuId_ = 2;
+    devTaskCtx.wrapManager.curDie1StartCpuId_ = 2;
+
+    env.mgr->CalcAdjAicoreEnd(&devTaskCtx, false);
+    EXPECT_EQ(env.mgr->adjAicEnd_, env.mgr->aicStart_);
+
+    env.mgr->schedIdx_ = 2;
+    env.mgr->aicStart_ = 2;
+    env.mgr->aicEnd_ = 4;
+    env.mgr->adjAicEnd_ = 4;
+    devTaskCtx.wrapManager.dieId_ = DieId::DIE_1;
+    env.mgr->CalcAdjAicoreEnd(&devTaskCtx, false);
+    EXPECT_EQ(env.mgr->adjAicEnd_, 3);
+}
+
+TEST(AicoreManagerTest, CalcAdjAicoreEnd_MaxC1BothDieQueuesGetOneCoreEach)
+{
+    MgrTestEnv env;
+    env.mgr->enableEslModel_ = true;
+    env.mgr->archInfo_ = ArchInfo::DAV_3510;
+    env.mgr->aicValidNum_ = 4;
+    env.mgr->aicpuNum_ = 4;
+    env.mgr->schedIdx_ = 0;
+    env.mgr->aicStart_ = 0;
+    env.mgr->aicEnd_ = 2;
+    env.mgr->aivStart_ = 0;
+    env.mgr->aivEnd_ = 4;
+    env.mgr->adjAicEnd_ = 2;
+    env.mgr->adjAivEnd_ = 4;
+
+    auto dynTask = std::make_unique<DynDeviceTaskBase>();
+    dynTask->maxC_ = 1;
+    dynTask->maxV_ = 2;
+    DevAscendFunction devFunc0{};
+    DevAscendFunction devFunc1{};
+    DevAscendFunctionDuppedData dupped0{};
+    DevAscendFunctionDuppedData dupped1{};
+    devFunc0.SetMaxCV(1, 2);
+    devFunc1.SetMaxCV(0, 0);
+    dupped0.loopDieId_ = 0;
+    dupped1.loopDieId_ = 1;
+    dynTask->dynFuncDataCacheList[0].devFunc = &devFunc0;
+    dynTask->dynFuncDataCacheList[0].duppedData = &dupped0;
+    dynTask->dynFuncDataCacheList[1].devFunc = &devFunc1;
+    dynTask->dynFuncDataCacheList[1].duppedData = &dupped1;
+    dynTask->dynFuncDataCacheListSize = 2;
+
+    DeviceTaskCtrl taskCtrl{};
+    taskCtrl.devTask = &dynTask->devTask;
+    SchDeviceTaskContext devTaskCtx{};
+    devTaskCtx.BindTaskCtrl(&taskCtrl);
+    devTaskCtx.wrapManager.archInfo = ArchInfo::DAV_3510;
+    devTaskCtx.wrapManager.dieId_ = DieId::DIE_0;
+    devTaskCtx.wrapManager.curDie0MaxCpuId_ = 2;
+    devTaskCtx.wrapManager.curDie1StartCpuId_ = 2;
+
+    env.mgr->CalcAdjAicoreEnd(&devTaskCtx, false);
+    EXPECT_EQ(env.mgr->adjAicEnd_, 1);
+
+    env.mgr->schedIdx_ = 2;
+    env.mgr->aicStart_ = 2;
+    env.mgr->aicEnd_ = 4;
+    env.mgr->adjAicEnd_ = 4;
+    devTaskCtx.wrapManager.dieId_ = DieId::DIE_1;
+    env.mgr->CalcAdjAicoreEnd(&devTaskCtx, false);
+    EXPECT_EQ(env.mgr->adjAicEnd_, 3);
+}
+
+TEST(AicoreManagerTest, CalcAdjAicoreEnd_MaxC1KeepsDie0WhenNoDie1Bound)
+{
+    MgrTestEnv env;
+    env.mgr->enableEslModel_ = true;
+    env.mgr->archInfo_ = ArchInfo::DAV_3510;
+    env.mgr->aicValidNum_ = 4;
+    env.mgr->aicpuNum_ = 4;
+    env.mgr->schedIdx_ = 0;
+    env.mgr->aicStart_ = 0;
+    env.mgr->aicEnd_ = 2;
+    env.mgr->aivStart_ = 0;
+    env.mgr->aivEnd_ = 4;
+    env.mgr->adjAicEnd_ = 2;
+    env.mgr->adjAivEnd_ = 4;
+
+    auto dynTask = std::make_unique<DynDeviceTaskBase>();
+    dynTask->maxC_ = 1;
+    dynTask->maxV_ = 2;
+    DevAscendFunctionDuppedData duppedData{};
+    duppedData.loopDieId_ = -1;
+    dynTask->dynFuncDataCacheList[0].duppedData = &duppedData;
+    dynTask->dynFuncDataCacheListSize = 1;
+
+    DeviceTaskCtrl taskCtrl{};
+    taskCtrl.devTask = &dynTask->devTask;
+    SchDeviceTaskContext devTaskCtx{};
+    devTaskCtx.BindTaskCtrl(&taskCtrl);
+    devTaskCtx.wrapManager.archInfo = ArchInfo::DAV_3510;
+    devTaskCtx.wrapManager.dieId_ = DieId::DIE_0;
+    devTaskCtx.wrapManager.curDie0MaxCpuId_ = 2;
+    devTaskCtx.wrapManager.curDie1StartCpuId_ = 2;
+
+    env.mgr->CalcAdjAicoreEnd(&devTaskCtx, false);
+    EXPECT_EQ(env.mgr->adjAicEnd_, 1);
+
+    env.mgr->schedIdx_ = 2;
+    env.mgr->aicStart_ = 2;
+    env.mgr->aicEnd_ = 4;
+    env.mgr->adjAicEnd_ = 4;
+    devTaskCtx.wrapManager.dieId_ = DieId::DIE_1;
+    env.mgr->CalcAdjAicoreEnd(&devTaskCtx, false);
+    EXPECT_EQ(env.mgr->adjAicEnd_, env.mgr->aicStart_);
+}
+
 TEST(AicoreManagerTest, ReleaseCoreByRegValByAsyncMode_PendingAckWithRunning_Dav3510)
 {
     MgrTestEnv env;

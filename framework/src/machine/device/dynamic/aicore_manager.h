@@ -2378,6 +2378,113 @@ private:
         end = start + perCpu + ((idx < remain) ? count : 0);
     }
 
+    // 4-way remainder fills low schedIdx first. On g20 (aicpuNum=4):
+    // maxC==1 → only tid0; maxC==2 → only tid0/1; die1 gets 0 cores. maxC>=3 is fine.
+    static void ScanBoundLoopDieIds(DynDeviceTask* dynTask, bool& hasDie0, bool& hasDie1)
+    {
+        hasDie0 = false;
+        hasDie1 = false;
+        if (dynTask == nullptr) {
+            return;
+        }
+        const size_t cacheListSize = dynTask->dynFuncDataCacheListSize;
+        const auto* cacheList = dynTask->dynFuncDataCacheList;
+        constexpr int8_t kDie0 = static_cast<int8_t>(DieId::DIE_0);
+        constexpr int8_t kDie1 = static_cast<int8_t>(DieId::DIE_1);
+        for (size_t i = 0; i < cacheListSize; ++i) {
+            const auto* duppedData = cacheList[i].duppedData;
+            if (duppedData == nullptr) {
+                continue;
+            }
+            if (duppedData->loopDieId_ == kDie0) {
+                hasDie0 = true;
+            } else if (duppedData->loopDieId_ == kDie1) {
+                hasDie1 = true;
+            }
+            if (hasDie0 && hasDie1) {
+                return;
+            }
+        }
+    }
+
+    bool PrepareDieLocalSched(SchDeviceTaskContext* devTaskCtx, int& schedPart, int& localSchedIdx)
+    {
+        auto& wrapManager = devTaskCtx->GetWrapManager();
+        if (!wrapManager.IsMixArch()) {
+            return false;
+        }
+        DieId dieId = wrapManager.GetDieId();
+        if (dieId == DieId::DIE_MIX || dieId == DieId::DIE_UNKNOWN) {
+            return false;
+        }
+        int dieSchedStart = 0;
+        int dieSchedEnd = 0;
+        wrapManager.GetDieSchedIdRange(dieSchedStart, dieSchedEnd, aicpuNum_);
+        schedPart = dieSchedEnd - dieSchedStart;
+        localSchedIdx = schedIdx_ - dieSchedStart;
+        return schedPart > 0;
+    }
+
+    // Only for mix-arch DevTask with maxC==1 or 2. Caller falls back to 4-way when this returns false.
+    // Die queues are exclusive: a thread only sees its own die queue plus the global queue.
+    bool TryApplySmallMaxCDieFallback(SchDeviceTaskContext* devTaskCtx, int maxC)
+    {
+        if (maxC <= 0 || maxC > 2) {
+            return false;
+        }
+        int schedPart = 0;
+        int localSchedIdx = 0;
+        if (!PrepareDieLocalSched(devTaskCtx, schedPart, localSchedIdx)) {
+            return false;
+        }
+
+        auto* dynTask = reinterpret_cast<DynDeviceTask*>(devTaskCtx->GetDeviceTask());
+        bool hasDie0 = false;
+        bool hasDie1 = false;
+        ScanBoundLoopDieIds(dynTask, hasDie0, hasDie1);
+        // maxC==2: 4-way puts both cores on die0; 1 per die keeps total=2 and unblocks die1.
+        // maxC==1 with both die queues: one core cannot see both queues; 1+1 uses one extra core.
+        if (maxC == 2 || (hasDie0 && hasDie1)) {
+            ApplyCoreBudgetToAdjRange(1, 1, schedPart, localSchedIdx);
+            return true;
+        }
+        // No die1-queued work: tid0 already covers die0 and the global queue. Keep 4-way.
+        if (!hasDie1) {
+            return false;
+        }
+        // maxC==1 and only die1 has a die queue: move the single core to die1.
+        // Die1 threads take it; die0 threads get adj==start so they do not occupy that core.
+        if (devTaskCtx->GetWrapManager().GetDieId() == DieId::DIE_1) {
+            ApplyCoreBudgetToAdjRange(1, 1, schedPart, localSchedIdx);
+        } else {
+            adjAicEnd_ = aicStart_;
+            adjAivEnd_ = aivStart_;
+        }
+        return true;
+    }
+
+    void ApplyCoreBudgetToAdjRange(int aicBudget, int aivBudget, int schedPart, int localSchedIdx)
+    {
+        UpdateAicoreEnd(aicBudget, localSchedIdx, schedPart, 1, aicStart_, adjAicEnd_);
+        if (archInfo_ == ArchInfo::DAV_3510) {
+            UpdateAicoreEnd(aicBudget, localSchedIdx, schedPart, AIV_NUM_PER_AI_CORE, aivStart_, adjAivEnd_);
+        } else {
+            UpdateAicoreEnd(aivBudget, localSchedIdx, schedPart, 1, aivStart_, adjAivEnd_);
+        }
+        adjAicEnd_ = std::min(adjAicEnd_, aicEnd_);
+        adjAivEnd_ = std::min(adjAivEnd_, aivEnd_);
+    }
+
+    void ApplyGlobalCoreBudgetToAdjRange(int maxC, int maxV)
+    {
+        UpdateAicoreEnd(maxC, schedIdx_, aicpuNum_, 1, aicStart_, adjAicEnd_);
+        if (archInfo_ == ArchInfo::DAV_3510) {
+            UpdateAicoreEnd(maxC, schedIdx_, aicpuNum_, AIV_NUM_PER_AI_CORE, aivStart_, adjAivEnd_);
+        } else {
+            UpdateAicoreEnd(maxV, schedIdx_, aicpuNum_, 1, aivStart_, adjAivEnd_);
+        }
+    }
+
     inline void CalcAdjAicoreEnd(SchDeviceTaskContext* devTaskCtx, bool isNeedUpdateCoreNum = true)
     {
         if constexpr (!IsDeviceMode()) {
@@ -2401,11 +2508,8 @@ private:
             } else {
                 maxC = maxC >= aicValidNum_ ? aicValidNum_ : maxC;
                 maxV = maxV >= maxAivNum ? maxAivNum : maxV;
-                UpdateAicoreEnd(maxC, schedIdx_, aicpuNum_, 1, aicStart_, adjAicEnd_);
-                if (archInfo_ == ArchInfo::DAV_3510) {
-                    UpdateAicoreEnd(maxC, schedIdx_, aicpuNum_, AIV_NUM_PER_AI_CORE, aivStart_, adjAivEnd_);
-                } else {
-                    UpdateAicoreEnd(maxV, schedIdx_, aicpuNum_, 1, aivStart_, adjAivEnd_);
+                if (!TryApplySmallMaxCDieFallback(devTaskCtx, maxC)) {
+                    ApplyGlobalCoreBudgetToAdjRange(maxC, maxV);
                 }
             }
         }
