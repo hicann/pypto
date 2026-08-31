@@ -558,7 +558,7 @@ void ExpandFunction::ProcessForNotExpandOp(Function& function, Operation& op) co
     }
     newOp.SetOpAttribute(op.GetOpAttribute());
     newOp.SetScopeInfo(op.GetScopeInfo());
-    newOp.SetOooScopeId(op.GetOooScopeId());
+    newOp.SetAtomicScopeId(op.GetAtomicScopeId());
     newOp.CopyAttrFrom(op, OP_EMUOP_PREFIX);
     if (op.HasAttribute(OpAttributeKey::inplaceIdx)) {
         newOp.SetAttribute(OpAttributeKey::inplaceIdx, op.GetIntAttribute(OpAttributeKey::inplaceIdx));
@@ -743,12 +743,12 @@ Status ExpandFunction::ExpandOperation(Function& function, Operation& op) const
     std::vector<int64_t> scopeVec = {static_cast<int64_t>(info.scopeId), static_cast<int64_t>(info.allowParallelMerge),
                                      static_cast<int64_t>(info.allowCrossScopeMerge)};
     config::SetPassOption(SG_SET_SCOPE, scopeVec);
-    config::SetPassOption(SG_SET_OOO_SCOPE, std::vector<int64_t>{static_cast<int64_t>(op.GetOooScopeId())});
+    config::SetAtomicScopeId(op.GetAtomicScopeId());
     struct ScopeConfigGuard {
         ~ScopeConfigGuard()
         {
             config::SetPassOption(SG_SET_SCOPE, std::vector<int64_t>{-1, 0, 0});
-            config::SetPassOption(SG_SET_OOO_SCOPE, std::vector<int64_t>{-1});
+            config::SetAtomicScopeId(-1);
         }
     } scopeConfigGuard;
     CurrentTileOpGuard currentTileOpGuard(op);

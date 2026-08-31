@@ -647,7 +647,7 @@ void TaskSplitter::UnionVecClustersByDep(DSUWithOrder& dsu)
     std::map<std::pair<std::set<int>, std::set<int>>, std::vector<int>> vecGroups;
     GroupAIVClustersByDep(clusterIn, clusterOut, tmpCoreTypes, clusterNum, vecGroups);
 
-    // 跳过含 oooScope op 的 cluster，使其既不合别人也不被别人合
+    // 跳过含 atomicScope op 的 cluster，使其既不合别人也不被别人合
     std::unordered_set<int> protectedClusterIds = CollectProtectedClusterIds(opClusterVec);
     for (auto& [key, vecClusters] : vecGroups) {
         (void)key;
@@ -901,7 +901,7 @@ void TaskSplitter::MergeSmallVecClusters(DSUWithOrder& dsu)
     EstimateClusterCycles(opCluster, clusterNum, clusterCycle);
     // 拓扑排序
     std::vector<int> topoOrder = TopoSortClusters(clusterNum, clIn, clOut);
-    // 含 oooScope op 的 cluster 不参与碎子图合并
+    // 含 atomicScope op 的 cluster 不参与碎子图合并
     std::unordered_set<int> protectedClusterIds = CollectProtectedClusterIds(opCluster);
     // 迭代合并
     RunSmallClusterMerge(dsu, topoOrder, tmpCoreTypes, clusterCycle, clIn, clOut, clusterNum, protectedClusterIds);
@@ -929,7 +929,7 @@ void TaskSplitter::UnionCubeClustersByDep(DSUWithOrder& dsu)
     std::map<std::pair<std::set<int>, std::set<int>>, std::vector<int>> cubeGroups;
     GroupAICClustersByDep(clusterIn, clusterOut, tmpCoreTypes, clusterNum, cubeGroups);
 
-    // 含 oooScope op 的 cluster、以及与其有依赖关系的 AIC cluster 都不参与合并
+    // 含 atomicScope op 的 cluster、以及与其有依赖关系的 AIC cluster 都不参与合并
     std::unordered_set<int> protectedClusterIds = CollectProtectedClusterIds(opCluster);
     for (auto& [key, cubeClusters] : cubeGroups) {
         (void)key;
@@ -1164,11 +1164,12 @@ void TaskSplitter::RunSmallClusterMerge(DSUWithOrder& dsu, const std::vector<int
     }
 }
 
-// oooScope 为 -1 的 reshape：如果所有 producer 或所有 consumer 的 oooScopeId 都相同且 > 0，直接继承（忽略UB_ALLOC)
-void TaskSplitter::PropagateOooScopeToReshape()
+// atomicScope 为 -1 的 reshape：如果所有 producer 或所有 consumer 的 atomicScopeId 都相同且 >
+// 0，直接继承（忽略UB_ALLOC)
+void TaskSplitter::PropagateAtomicScopeToReshape()
 {
     for (size_t i = 0; i < opList_.size(); i++) {
-        if (opList_[i]->GetOpcode() != Opcode::OP_RESHAPE || opList_[i]->GetOooScopeId() > 0) {
+        if (opList_[i]->GetOpcode() != Opcode::OP_RESHAPE || opList_[i]->GetAtomicScopeId() > 0) {
             continue;
         }
         std::unordered_set<int> inScope;
@@ -1176,42 +1177,42 @@ void TaskSplitter::PropagateOooScopeToReshape()
         if (!opInGraph_[i].empty()) {
             for (int pred : opInGraph_[i]) {
                 if (opList_[pred]->GetOpcode() != Opcode::OP_UB_ALLOC) {
-                    inScope.insert(opList_[pred]->GetOooScopeId());
+                    inScope.insert(opList_[pred]->GetAtomicScopeId());
                 }
             }
         }
         if (!opOutGraph_[i].empty()) {
             for (int succ : opOutGraph_[i]) {
                 if (opList_[succ]->GetOpcode() != Opcode::OP_UB_ALLOC) {
-                    outScope.insert(opList_[succ]->GetOooScopeId());
+                    outScope.insert(opList_[succ]->GetAtomicScopeId());
                 }
             }
         }
-        // 如果所有 producer 的 oooScopeId 都相同且 > 0，直接继承
+        // 如果所有 producer 的 atomicScopeId 都相同且 > 0，直接继承
         if (inScope.size() == 1 && *inScope.begin() > 0) {
-            opList_[i]->SetOooScopeId(*inScope.begin());
-            APASS_LOG_INFO_F(Elements::Operation, "PropagateOooScopeToReshape(prod): %s[%d] -> oooScope=%d.",
+            opList_[i]->SetAtomicScopeId(*inScope.begin());
+            APASS_LOG_INFO_F(Elements::Operation, "PropagateAtomicScopeToReshape(prod): %s[%d] -> atomicScope=%d.",
                              opList_[i]->GetOpcodeStr().c_str(), opList_[i]->GetOpMagic(), *inScope.begin());
             continue;
         }
 
-        // 如果所有 consumer 的 oooScopeId 都相同且 > 0，直接继承
+        // 如果所有 consumer 的 atomicScopeId 都相同且 > 0，直接继承
         if (outScope.size() == 1 && *outScope.begin() > 0) {
-            opList_[i]->SetOooScopeId(*outScope.begin());
-            APASS_LOG_INFO_F(Elements::Operation, "PropagateOooScopeToReshape(cons): %s[%d] -> oooScope=%d.",
+            opList_[i]->SetAtomicScopeId(*outScope.begin());
+            APASS_LOG_INFO_F(Elements::Operation, "PropagateAtomicScopeToReshape(cons): %s[%d] -> atomicScope=%d.",
                              opList_[i]->GetOpcodeStr().c_str(), opList_[i]->GetOpMagic(), *outScope.begin());
             continue;
         }
     }
 }
 
-// 按 oooScopeId 合并：相同 oooScopeId 且同 coreType 的 op，仅 union 有边相连的
-void TaskSplitter::UnionByOooScope(DSUWithOrder& dsu)
+// 按 atomicScopeId 合并：相同 atomicScopeId 且同 coreType 的 op，仅 union 有边相连的
+void TaskSplitter::UnionByAtomicScope(DSUWithOrder& dsu)
 {
-    // 按 (oooScopeId, coreType) 分组，同组内只 union 有边相连的 op
+    // 按 (atomicScopeId, coreType) 分组，同组内只 union 有边相连的 op
     std::map<std::pair<int, ScheduleCoreType>, std::vector<int>> scopeToOps;
     for (size_t i = 0; i < opList_.size(); i++) {
-        int scopeId = opList_[i]->GetOooScopeId();
+        int scopeId = opList_[i]->GetAtomicScopeId();
         if (scopeId > 0) {
             auto key = std::make_pair(scopeId, opCoreTypes_[i]);
             scopeToOps[key].push_back(static_cast<int>(i));
@@ -1231,31 +1232,32 @@ void TaskSplitter::UnionByOooScope(DSUWithOrder& dsu)
                 }
             }
         }
-        APASS_LOG_INFO_F(Elements::Operation, "UnionByOooScope: oooScopeId=%d coreType=%s, %zu ops, %d edge unions.",
-                         key.first, key.second == ScheduleCoreType::AIC ? "AIC" : "AIV", opIndices.size(), mergeCount);
+        APASS_LOG_INFO_F(Elements::Operation,
+                         "UnionByAtomicScope: atomicScopeId=%d coreType=%s, %zu ops, %d edge unions.", key.first,
+                         key.second == ScheduleCoreType::AIC ? "AIC" : "AIV", opIndices.size(), mergeCount);
     }
 }
 
-// 收集包含 oooScopeId > 0 的 op 的所有 cluster root ID
-std::unordered_set<int> TaskSplitter::CollectOooScopeProtectedClusters(DSUWithOrder& dsu)
+// 收集包含 atomicScopeId > 0 的 op 的所有 cluster root ID
+std::unordered_set<int> TaskSplitter::CollectAtomicScopeProtectedClusters(DSUWithOrder& dsu)
 {
     std::unordered_set<int> protectedRoots;
     for (size_t i = 0; i < opList_.size(); i++) {
-        if (opList_[i]->GetOooScopeId() > 0) {
+        if (opList_[i]->GetAtomicScopeId() > 0) {
             protectedRoots.insert(dsu.Find(static_cast<int>(i)));
         }
     }
-    APASS_LOG_INFO_F(Elements::Operation, "CollectOooScopeProtectedClusters: %zu protected clusters.",
+    APASS_LOG_INFO_F(Elements::Operation, "CollectAtomicScopeProtectedClusters: %zu protected clusters.",
                      protectedRoots.size());
     return protectedRoots;
 }
 
-// 给定 op->cluster 映射，收集包含 oooScope op 的 cluster ID 集合
+// 给定 op->cluster 映射，收集包含 atomicScope op 的 cluster ID 集合
 std::unordered_set<int> TaskSplitter::CollectProtectedClusterIds(const std::vector<int>& opCluster) const
 {
     std::unordered_set<int> protectedClusterIds;
     for (size_t idx = 0; idx < opCluster.size(); idx++) {
-        if (opList_[idx]->GetOooScopeId() > 0) {
+        if (opList_[idx]->GetAtomicScopeId() > 0) {
             protectedClusterIds.insert(opCluster[idx]);
         }
     }
@@ -1272,12 +1274,12 @@ int TaskSplitter::BuildCluster(std::vector<int>& clusterIds, std::vector<Schedul
     UnionSameLayerConnections(dsu);
     // Step 3: Assemble/CopyIn/CopyOut 合并（同核类型）
     UnionCombineOps(dsu);
-    // Step 4.1: 将夹在同 oooScope op 之间的 reshape 继承 oooScope
-    PropagateOooScopeToReshape();
-    // Step 4.2: 按 oooScopeId 合并同组连通 op
-    UnionByOooScope(dsu);
-    // 收集含 oooScope 的 cluster，后续步骤跳过这些 cluster 的合并
-    oooScopeProtectedClusters_ = CollectOooScopeProtectedClusters(dsu);
+    // Step 4.1: 将夹在同 atomicScope op 之间的 reshape 继承 atomicScope
+    PropagateAtomicScopeToReshape();
+    // Step 4.2: 按 atomicScopeId 合并同组连通 op
+    UnionByAtomicScope(dsu);
+    // 收集含 atomicScope 的 cluster，后续步骤跳过这些 cluster 的合并
+    atomicScopeProtectedClusters_ = CollectAtomicScopeProtectedClusters(dsu);
     // Step 5: vec cluster 按依赖的 cube cluster 分组后连通性合并
     UnionVecClustersByDep(dsu);
     // Step 6: L0C->L1 COPY_IN 合并 + 碎子图合并

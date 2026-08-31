@@ -32,7 +32,10 @@ constexpr const char* SG_PARALLEL_NUM = "pg_parallel_lower_bound";
 constexpr const char* SG_PG_LOWER_BOUND = "pg_lower_bound";
 constexpr const char* SG_PARTITION_ALGORITHM = "pg_partition_algorithm";
 constexpr const char* SG_SET_SCOPE = "sg_set_scope";
+// Legacy key kept for config schema declaration only; the Python config layer converts
+// it to sg_set_atomic_scope at set time, so framework code does not consume it.
 constexpr const char* SG_SET_OOO_SCOPE = "sg_set_ooo_scope";
+constexpr const char* SG_SET_ATOMIC_SCOPE = "sg_set_atomic_scope";
 constexpr const char* OOO_SCHED_MODE = "ooo_sched_mode";
 constexpr const char* OOO_SORT_MODE_AIC = "ooo_sort_mode_aic";
 constexpr const char* OOO_SORT_MODE_AIV = "ooo_sort_mode_aiv";
@@ -477,6 +480,37 @@ inline T GetPassOption(const std::string& key)
 }
 
 inline bool EnableSlice() { return GetPassOption<bool>(ENABLE_SLICE); }
+
+/**
+ * @brief Get the atomic scope id from pass config.
+ *
+ * The legacy sg_set_ooo_scope entry is converted to sg_set_atomic_scope by the
+ * Python config layer at set time, so only SG_SET_ATOMIC_SCOPE is read here.
+ * Returns -1 when the atomic scope is disabled.
+ */
+inline int GetAtomicScopeId()
+{
+    // Max encoded user atomic_scope_id: scopeId(1~10000) * 10000 + iter(0~9999),
+    // kept below VF_CLUSTER_ID_START (200000000) to isolate user and VF cluster IDs.
+    constexpr int64_t MAX_USER_ATOMIC_SCOPE_ENCODING = 10000LL * 10000 + 9999;
+    auto atomicScopeConfig = GetPassOption<std::vector<int64_t>>(SG_SET_ATOMIC_SCOPE);
+    int atomicScopeId = -1;
+    if (atomicScopeConfig.size() >= 1 && atomicScopeConfig[0] > 0) {
+        atomicScopeId = static_cast<int>(atomicScopeConfig[0]);
+    }
+    FE_ASSERT(FeError::INVALID_VAL, atomicScopeId <= MAX_USER_ATOMIC_SCOPE_ENCODING)
+        << "Encoded atomic_scope_id " << atomicScopeId << " exceeds max user encoding "
+        << MAX_USER_ATOMIC_SCOPE_ENCODING << ".";
+    return atomicScopeId;
+}
+
+/**
+ * @brief Set the atomic scope id in pass config.
+ */
+inline void SetAtomicScopeId(int atomicScopeId)
+{
+    SetPassOption(SG_SET_ATOMIC_SCOPE, std::vector<int64_t>{static_cast<int64_t>(atomicScopeId)});
+}
 
 inline Opcode GetSliceOpcode() { return EnableSlice() ? Opcode::OP_SLICE : Opcode::OP_VIEW; }
 

@@ -11,6 +11,7 @@
         "enable_slice": false,
         "sg_set_scope": [-1, 0, 0],
         "sg_set_ooo_scope": [-1],
+        "sg_set_atomic_scope": [-1],
         "ooo_sched_mode": "",
         "ooo_sort_mode_aic": "",
         "ooo_sort_mode_aiv": "",

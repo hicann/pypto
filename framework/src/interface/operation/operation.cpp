@@ -1034,7 +1034,7 @@ Operation& Operation::CloneOperation(Function& func, const LogicalTensors& iOper
 {
     Operation& op = func.AddRawOperation(opcode_, iOperandList, oOperandList);
     op.SetScopeInfo(scopeInfo_);
-    op.SetOooScopeId(oooScopeId_);
+    op.SetAtomicScopeId(atomicScopeId_);
     if (opAttribute_) {
         op.opAttribute_ = opAttribute_->Clone();
     }
@@ -1062,7 +1062,7 @@ std::shared_ptr<Operation> Operation::CloneTensorOpStmt(const LogicalTensors& iO
     const_cast<Operation*>(this)->UnlinkFromLogicalTensors();
     auto applyCloneMetadata = [&](Operation& op) {
         op.SetScopeInfo(scopeInfo_);
-        op.SetOooScopeId(oooScopeId_);
+        op.SetAtomicScopeId(atomicScopeId_);
         if (opAttribute_) {
             op.opAttribute_ = opAttribute_->Clone();
         }

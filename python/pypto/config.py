@@ -33,8 +33,43 @@ class CompStage(enum.Enum):
 _FUNC_HASH_ORDER_PATTERN = re.compile(r'^func\d+_\d+$')
 _DEFAULT_KEY = 'DEFAULT'
 
-# Maximum allowed ooo_scope_id
-_OOO_SCOPE_MAX = 100000
+# Maximum allowed scope_id (ooo_scope or atomic_scope). Combined with _ATOMIC_SCOPE_ENCODE_BASE below,
+# max user encoding = 10000 * 10000 + 9999 = 100,009,999. C++ side VF_CLUSTER_ID_START
+# = 200,000,000, ensuring no overlap between user and VF cluster encoding spaces.
+_ATOMIC_SCOPE_MAX = 10000
+
+# Encoding base for packing (scopeId, iter) into a single int stored in atomicScopeId_.
+# C++ side VF_CLUSTER_ID_START = 200,000,000 starts well above max user encoding.
+_ATOMIC_SCOPE_ENCODE_BASE = 10000
+
+
+def _validate_and_encode_scope_id(scope_id: int, param_name: str) -> List[int]:
+    """Validate and encode a scope ID for sg_set_ooo_scope / sg_set_atomic_scope.
+
+    Returns the encoded value list to be stored in pass_options.
+    Shared by top-level set_pass_options for both sg_set_ooo_scope and experimental['sg_set_atomic_scope'].
+    """
+    if scope_id == -1:
+        return [-1]
+    elif 1 <= scope_id <= _ATOMIC_SCOPE_MAX:
+        from pypto._controller import Controller
+
+        encoded = scope_id * _ATOMIC_SCOPE_ENCODE_BASE + Controller.get_atomic_scope_iter()
+        return [encoded]
+    else:
+        raise ValueError(
+            f"Invalid {param_name}: '{scope_id}'. Expected -1 or an integer in [1, {_ATOMIC_SCOPE_MAX}]."
+        )
+
+
+def _decode_scope_id(config_val: Optional[List[int]]) -> int:
+    """Decode an encoded scope ID from config value back to user-facing scope_id."""
+    if config_val and config_val[0] > 0:
+        return config_val[0] // _ATOMIC_SCOPE_ENCODE_BASE
+    elif config_val:
+        return config_val[0]
+    else:
+        return 0
 
 # cube_l1_reuse_setting matrix-side encoding. The (count, side) value is packed into the
 # existing cube_l1_reuse_setting int value as side * _L1_REUSE_SIDE_BASE + count, so no extra
@@ -217,6 +252,7 @@ def set_pass_options(
     cube_nbuffer_setting: Optional[Dict[Union[int, str], int]] = None,
     sg_set_scope: Optional[Union[int, Tuple[int, bool, bool]]] = None,
     sg_set_ooo_scope: Optional[int] = None,
+    experimental: Optional[Dict[str, int]] = None,
     ooo_sched_mode: Optional[str] = None,
     auto_mix_partition: Optional[int] = None,
     sg_set_tunevf_mode: Optional[int] = None,
@@ -277,6 +313,18 @@ def set_pass_options(
     enable_slice : bool
         Whether to enable slice-related processing. Defaults to False.
 
+    sg_set_ooo_scope : int
+        Control OoO scheduling manual task grouping. Connected ops with the
+        same ooo_scope will be merged into one task. Will be deprecated in a
+        future release.
+
+    experimental : Dict[str, int]
+        Experimental pass options. Currently supports 'sg_set_atomic_scope':
+        set indivisible atomic scope for subsequent operations, affecting VF
+        fusion, OoO scheduling, on-chip buffer reuse, sync insertion, mix
+        subgraph split, and loop grouping. This is an experimental feature
+        that may change or be removed in future releases.
+
     Raises
     ------
     ValueError
@@ -302,18 +350,25 @@ def set_pass_options(
         if sg_set_tunevf_mode not in (0, 1, 2):
             raise ValueError(f"Invalid sg_set_tunevf_mode: '{sg_set_tunevf_mode}'. Expected 0, 1 or 2.")
         pass_options['sg_set_tunevf_mode'] = sg_set_tunevf_mode
+    # Legacy sg_set_ooo_scope is converted to the sg_set_atomic_scope config key here,
+    # so the framework only consumes sg_set_atomic_scope.
     if sg_set_ooo_scope is not None:
-        if sg_set_ooo_scope == -1:
-            pass_options['sg_set_ooo_scope'] = [-1]
-        elif 1 <= sg_set_ooo_scope <= _OOO_SCOPE_MAX:
-            from pypto._controller import Controller
-
-            encoded = sg_set_ooo_scope * 10000 + Controller.get_ooo_scope_iter()
-            pass_options['sg_set_ooo_scope'] = [encoded]
-        else:
+        if experimental is not None and 'sg_set_atomic_scope' in experimental:
             raise ValueError(
-                f"Invalid sg_set_ooo_scope: '{sg_set_ooo_scope}'. Expected -1 or an integer in [1, {_OOO_SCOPE_MAX}]."
+                "Cannot specify both 'sg_set_ooo_scope' and experimental['sg_set_atomic_scope']; "
+                "set only one of them."
             )
+        pass_options['sg_set_atomic_scope'] = _validate_and_encode_scope_id(sg_set_ooo_scope, 'sg_set_ooo_scope')
+    if experimental is not None:
+        if not isinstance(experimental, dict):
+            raise ValueError(f"Invalid experimental: '{experimental}'. Expected dict.")
+        for key, val in experimental.items():
+            if key == 'sg_set_atomic_scope':
+                pass_options['sg_set_atomic_scope'] = _validate_and_encode_scope_id(val, 'sg_set_atomic_scope')
+            else:
+                raise ValueError(
+                    f"Invalid experimental key: '{key}'. Supported keys: 'sg_set_atomic_scope'."
+                )
     if ooo_sched_mode is not None:
         if ooo_sched_mode not in ("", "GAPMIN", "HLF"):
             raise ValueError(f"Invalid ooo_sched_mode: '{ooo_sched_mode}'. Expected '', 'GAPMIN' or 'HLF'.")
@@ -363,8 +418,10 @@ def get_pass_options() -> Dict[str, Union[str, int, bool, List[int], Dict[int, i
     val = rst.get("sg_set_scope", (-1, False, False))
     result['sg_set_scope'] = (int(val[0]), bool(val[1]), bool(val[2]))
     result['auto_mix_partition'] = rst.get('auto_mix_partition', 0)
-    ooo_val = rst.get('sg_set_ooo_scope', [0])
-    result['sg_set_ooo_scope'] = ooo_val[0] // 10000 if ooo_val and ooo_val[0] > 0 else (ooo_val[0] if ooo_val else 0)
+    # sg_set_ooo_scope is stored as the sg_set_atomic_scope config key (converted at set time).
+    scope_val = _decode_scope_id(rst.get('sg_set_atomic_scope', [0]))
+    result['sg_set_ooo_scope'] = scope_val
+    result['experimental'] = {'sg_set_atomic_scope': scope_val}
     result['ooo_sched_mode'] = rst.get('ooo_sched_mode', '')
     result['sg_set_tunevf_mode'] = rst.get('sg_set_tunevf_mode', 0)
     result['enable_slice'] = rst.get('enable_slice', False)

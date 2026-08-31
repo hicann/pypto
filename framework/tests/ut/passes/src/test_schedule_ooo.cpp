@@ -1880,8 +1880,9 @@ TEST_F(ScheduleOoOTest, TestCoreAssign)
     EXPECT_EQ(splitter.GetMergedOperations().size(), opList.size());
 }
 
-TEST_F(ScheduleOoOTest, TestOooScopeMerge)
+TEST_F(ScheduleOoOTest, TestAtomicScopeMerge)
 {
+    constexpr int atomicScopeId = 1;
     ComputationalGraphBuilder subGraph;
     std::vector<std::string> tensorNames{"t0", "t1", "t2", "t3", "t4"};
     std::vector<Opcode> opCodes{Opcode::OP_A_MUL_B, Opcode::OP_ADDS, Opcode::OP_ADDS, Opcode::OP_EXP};
@@ -1897,8 +1898,8 @@ TEST_F(ScheduleOoOTest, TestOooScopeMerge)
     ASSERT_NE(op2, nullptr);
     ASSERT_NE(op3, nullptr);
     ASSERT_NE(op4, nullptr);
-    op2->SetOooScopeId(1);
-    op4->SetOooScopeId(1);
+    op2->SetAtomicScopeId(atomicScopeId);
+    op4->SetAtomicScopeId(atomicScopeId);
     int magic2 = op2->GetOpMagic();
     int magic3 = op3->GetOpMagic();
     int magic4 = op4->GetOpMagic();
@@ -1931,8 +1932,8 @@ TEST_F(ScheduleOoOTest, TestOooScopeMerge)
             foundMerged24 = true;
         }
     }
-    EXPECT_TRUE(!foundMerged23) << "op2 and op3 should not be merged into one task by ooo_scope";
-    EXPECT_TRUE(foundMerged24) << "op2 and op4 should be merged into one task by ooo_scope";
+    EXPECT_TRUE(!foundMerged23) << "op2 and op3 should not be merged into one task by atomic_scope";
+    EXPECT_TRUE(foundMerged24) << "op2 and op4 should be merged into one task by atomic_scope";
 }
 
 TEST_F(ScheduleOoOTest, TestBufferPollRearrange)

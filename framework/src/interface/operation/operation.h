@@ -482,8 +482,8 @@ public:
     bool GetAllowCrossScopeMerge() const { return scopeInfo_.allowCrossScopeMerge; };
     int GetCvFuseId() const { return scopeInfo_.cvFuseId; };
 
-    int GetOooScopeId() const { return oooScopeId_; }
-    void SetOooScopeId(int id) { oooScopeId_ = id; }
+    int GetAtomicScopeId() const { return atomicScopeId_; }
+    void SetAtomicScopeId(int id) { atomicScopeId_ = id; }
 
     void AddInCtrlOperation(Operation& operation);
 
@@ -758,7 +758,7 @@ public:
     std::vector<std::string>& GetCommentList() { return commentList_; }
 
 private:
-    int oooScopeId_{-1};
+    int atomicScopeId_{-1};
 
     void InitCoreTypeAndTileShape(Opcode opcode);
     void InitTensorGraphMetadata();

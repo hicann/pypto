@@ -36,12 +36,12 @@ def assert_option_type_error(setter, pattern):
             r"Option 'pass\.sg_set_scope' scope_id 2147483648 is out of range\. Expected -1~2147483647\.",
         ),
         (
-            lambda:pypto.set_pass_options(sg_set_ooo_scope=100001),
-            r"Invalid sg_set_ooo_scope: '100001'\. Expected -1 or an integer in \[1, 100000\].",
+            lambda:pypto.set_pass_options(sg_set_ooo_scope=10001),
+            r"Invalid sg_set_ooo_scope: '10001'\. Expected -1 or an integer in \[1, 10000\].",
         ),
         (
             lambda:pypto.set_pass_options(sg_set_ooo_scope=-2),
-            r"Invalid sg_set_ooo_scope: '-2'\. Expected -1 or an integer in \[1, 100000\].",
+            r"Invalid sg_set_ooo_scope: '-2'\. Expected -1 or an integer in \[1, 10000\].",
         ),
         (
             lambda:pypto.set_pass_options(cube_nbuffer_setting=[1, 2]),

@@ -139,7 +139,7 @@ public:
                                std::set<int>& scheduledTasks, std::function<bool(TargetCoreType)> isAicCore,
                                std::unordered_map<int, TargetCoreType>& vecBranchToCore);
     void HLFSchedule(TaskGraph& taskGraph);
-    static bool HasOooScopeTasks(const TaskGraph& taskGraph);
+    static bool HasAtomicScopeTasks(const TaskGraph& taskGraph);
     void NormalizeSingleAIVBranches(TaskGraph& taskGraph);
 };
 

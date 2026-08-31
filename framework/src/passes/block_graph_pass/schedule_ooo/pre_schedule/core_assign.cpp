@@ -638,11 +638,11 @@ void CoreScheduler::OptimalScheduleWithSearch(TaskGraph& taskGraph, bool enableS
     }
 }
 
-bool CoreScheduler::HasOooScopeTasks(const TaskGraph& taskGraph)
+bool CoreScheduler::HasAtomicScopeTasks(const TaskGraph& taskGraph)
 {
     for (auto& task : taskGraph.tasks) {
         for (auto* op : task.opList_) {
-            if (op->GetOooScopeId() > 0) {
+            if (op->GetAtomicScopeId() > 0) {
                 return true;
             }
         }

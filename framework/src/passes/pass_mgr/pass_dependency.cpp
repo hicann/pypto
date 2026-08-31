@@ -45,6 +45,7 @@ void PassDependency::RegisterPreDependencies()
                                                    PassName::SPLIT_RESHAPE, PassName::PROCESS_ATOMIC});
     registerDependency(PassName::SUBGRAPH_TO_FUNCTION, {PassName::GRAPH_PARTITION, PassName::REPLACE_TENSOR,
                                                         PassName::PRE_GRAPH_PROCESS, PassName::INFER_DYN_SHAPE});
+    registerDependency(PassName::VF_FUSION_CLUSTER_IDENTIFY, {PassName::SUBGRAPH_TO_FUNCTION});
     registerDependency(PassName::INSERT_SYNC, {PassName::OOO_SCHEDULE, PassName::COPY_OUT_RESOLVE});
     registerDependency(PassName::REDUCE_COPY_MERGE, {PassName::GRAPH_PARTITION});
     registerDependency(PassName::N_BUFFER_MERGE, {PassName::GRAPH_PARTITION});

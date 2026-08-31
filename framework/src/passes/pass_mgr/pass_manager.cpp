@@ -57,6 +57,7 @@
 #include "passes/block_graph_pass/loopaxes_proc.h"
 #include "passes/block_graph_pass/tune_tileopseq_for_vf.h"
 #include "passes/block_graph_pass/tune_sync_for_vf.h"
+#include "passes/block_graph_pass/vf_fusion_cluster_identify.h"
 #include "passes/pass_log/pass_log.h"
 
 #undef MODULE_NAME
@@ -181,6 +182,7 @@ void RegPass()
     REG_PASS(LoopaxesProc);
     REG_PASS(TuneTileOpSeqForVF);
     REG_PASS(TuneSyncForVF);
+    REG_PASS(VFFusionClusterIdentify);
 }
 
 void PassManager::RegDefaultStrategy()

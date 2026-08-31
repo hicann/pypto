@@ -212,8 +212,18 @@
                         "type": "integer"
                     },
                     "label": {
-                        "zh": "OoO调度手动控制切图参数。相同ooo_scope的连通op会被合并到同一个task中。",
-                        "en": "OoO schedule manual task grouping. Connected ops with the same ooo_scope will be merged into one task."
+                        "zh": "OoO调度手动控制切图参数。相同ooo_scope的连通op会被合并到同一个task中。该参数计划在后续版本废弃。",
+                        "en": "OoO schedule manual task grouping. Connected ops with the same ooo_scope will be merged into one task. This parameter will be deprecated in a future release."
+                    }
+                },
+                "sg_set_atomic_scope": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    },
+                    "label": {
+                        "zh": "设置不可拆分的原子范围（实验特性）。相同atomic_scope的Operation在编译流程中保持不可拆分，影响VF融合、OoO调度、片上buffer复用、同步指令插入、mix子图拆分与loop循环分组。",
+                        "en": "Set indivisible atomic scope (experimental). Operations with the same atomic_scope remain indivisible during compilation, affecting VF fusion, OoO scheduling, on-chip buffer reuse, sync insertion, mix subgraph split, and loop grouping."
                     }
                 },
                 "ooo_sched_mode": {

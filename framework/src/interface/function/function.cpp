@@ -2136,12 +2136,7 @@ Operation& Function::AddRawOperation(const Opcode opCode, const LogicalTensors& 
         operations_.back()->SetScopeId(-1);
     }
 
-    auto oooScopeConfig = config::GetPassOption<std::vector<int64_t>>(SG_SET_OOO_SCOPE);
-    if (oooScopeConfig.size() >= 1) {
-        operations_.back()->SetOooScopeId(static_cast<int>(oooScopeConfig[0]));
-    } else {
-        operations_.back()->SetOooScopeId(-1);
-    }
+    operations_.back()->SetAtomicScopeId(config::GetAtomicScopeId());
 
     if (!span.IsUnknown()) {
         operations_.back()->SetSpan(span);

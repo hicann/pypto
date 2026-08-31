@@ -52,9 +52,9 @@ public:
     void UnionVecClustersByDep(DSUWithOrder& dsu);
     void MergeSmallVecClusters(DSUWithOrder& dsu);
     void UnionCubeClustersByDep(DSUWithOrder& dsu);
-    void UnionByOooScope(DSUWithOrder& dsu);
-    void PropagateOooScopeToReshape();
-    std::unordered_set<int> CollectOooScopeProtectedClusters(DSUWithOrder& dsu);
+    void UnionByAtomicScope(DSUWithOrder& dsu);
+    void PropagateAtomicScopeToReshape();
+    std::unordered_set<int> CollectAtomicScopeProtectedClusters(DSUWithOrder& dsu);
     std::unordered_set<int> CollectProtectedClusterIds(const std::vector<int>& opCluster) const;
     int BuildCluster(std::vector<int>& clusterIds, std::vector<ScheduleCoreType>& clusterCoreTypes);
     void ReverseDFSFindByOutputMemType(int opIdx, MemoryType targetMemType, std::vector<int>& result,
@@ -125,7 +125,7 @@ public:
     std::vector<std::set<int>> outGraph_;
     std::unordered_map<int, int> opMagicToIdx_;
     TaskGraph taskGraph_;
-    std::unordered_set<int> oooScopeProtectedClusters_;
+    std::unordered_set<int> atomicScopeProtectedClusters_;
     std::vector<std::vector<int>> cycledSCCClusters_;
     std::vector<std::pair<int, int>> cycledTaskNodePairs_;
     void RecordCycledClusters(const std::vector<ScheduleCoreType>& clusterCoreTypes,

@@ -121,6 +121,83 @@ def test_sg_set_scope_new_format():
         assert "Expected bool" in str(e)
 
 
+def test_sg_set_ooo_scope():
+    # -1: reset path
+    pypto.set_pass_options(sg_set_ooo_scope=-1)
+    pass_option = pypto.get_pass_options()
+    assert pass_option["sg_set_ooo_scope"] == -1
+
+    # positive: encode + decode round-trip
+    pypto.reset_options()
+    pypto.set_pass_options(sg_set_ooo_scope=5)
+    pass_option = pypto.get_pass_options()
+    assert pass_option["sg_set_ooo_scope"] == 5
+
+    # upper bound
+    pypto.reset_options()
+    pypto.set_pass_options(sg_set_ooo_scope=10000)
+    pass_option = pypto.get_pass_options()
+    assert pass_option["sg_set_ooo_scope"] == 10000
+
+    # invalid: 0
+    try:
+        pypto.set_pass_options(sg_set_ooo_scope=0)
+        assert False, "Should raise ValueError"
+    except ValueError as e:
+        assert "Invalid sg_set_ooo_scope" in str(e)
+
+    # invalid: exceed max
+    try:
+        pypto.set_pass_options(sg_set_ooo_scope=10001)
+        assert False, "Should raise ValueError"
+    except ValueError as e:
+        assert "Invalid sg_set_ooo_scope" in str(e)
+
+    pypto.reset_options()
+
+
+def test_sg_set_atomic_scope():
+    # -1: reset path
+    pypto.set_pass_options(experimental={"sg_set_atomic_scope": -1})
+    pass_option = pypto.get_pass_options()
+    assert pass_option["experimental"]["sg_set_atomic_scope"] == -1
+
+    # positive: encode + decode round-trip
+    pypto.reset_options()
+    pypto.set_pass_options(experimental={"sg_set_atomic_scope": 5})
+    pass_option = pypto.get_pass_options()
+    assert pass_option["experimental"]["sg_set_atomic_scope"] == 5
+
+    # upper bound
+    pypto.reset_options()
+    pypto.set_pass_options(experimental={"sg_set_atomic_scope": 10000})
+    pass_option = pypto.get_pass_options()
+    assert pass_option["experimental"]["sg_set_atomic_scope"] == 10000
+
+    # invalid: 0
+    try:
+        pypto.set_pass_options(experimental={"sg_set_atomic_scope": 0})
+        assert False, "Should raise ValueError"
+    except ValueError as e:
+        assert "Invalid sg_set_atomic_scope" in str(e)
+
+    # invalid: exceed max
+    try:
+        pypto.set_pass_options(experimental={"sg_set_atomic_scope": 10001})
+        assert False, "Should raise ValueError"
+    except ValueError as e:
+        assert "Invalid sg_set_atomic_scope" in str(e)
+
+    # both entries in one call -> ValueError
+    try:
+        pypto.set_pass_options(sg_set_ooo_scope=1, experimental={"sg_set_atomic_scope": 2})
+        assert False, "Should raise ValueError"
+    except ValueError as e:
+        assert "Cannot specify both" in str(e)
+
+    pypto.reset_options()
+
+
 def test_vf_options():
     a = pypto.tensor([32, 32], pypto.DT_FP32, "a")
     b = pypto.tensor([32, 32], pypto.DT_FP32, "b")
@@ -141,3 +218,5 @@ if __name__ == "__main__":
     test_option_map()
     test_vf_options()
     test_sg_set_scope_new_format()
+    test_sg_set_ooo_scope()
+    test_sg_set_atomic_scope()
