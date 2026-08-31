@@ -908,7 +908,8 @@ void IterL0ExpandFunc(Function& function, ConvBpIterInfo& iterInfo, ConvBpTileIn
             // mL0在HiWi方向上连续，mL1现在不会跨win行，mL0同样限制不跨win行
             if (convTileInfo.mL0 < convTileInfo.orgWin) {
                 int64_t curWinIdx = (iterInfo.mL1Offset + iterInfo.mL0Offset) % convTileInfo.orgWin;
-                iterInfo.mL0Size = std::min(convTileInfo.mL0, convTileInfo.orgWin - curWinIdx);
+                iterInfo.mL0Size = std::min(
+                    {convTileInfo.mL0, convTileInfo.orgWin - curWinIdx, iterInfo.mL1Size - iterInfo.mL0Offset});
             } else {
                 iterInfo.mL0Size = std::min(convTileInfo.mL0, iterInfo.mL1Size - iterInfo.mL0Offset);
             }
