@@ -921,11 +921,11 @@ TILEOP void TCoshCompute(T0 dstTile, T1 srcTile, T2 tmp0Tile, T3 tmp1Tile, T4 tm
     // r += n * (-ln2_hi)
     pto::TMULS(tmp2Tile, tmp0Tile, 0.0f);
     pto::TADDS(tmp2Tile, tmp2Tile, kNegLn2Hi);
-    pto::TMULADDDST(tmp1Tile, tmp0Tile, tmp2Tile);
+    pto::TMULA(tmp1Tile, tmp0Tile, tmp2Tile);
     // r += n * (+ln2_lo)
     pto::TMULS(tmp2Tile, tmp2Tile, 0.0f);
     pto::TADDS(tmp2Tile, tmp2Tile, kLn2Lo);
-    pto::TMULADDDST(tmp1Tile, tmp0Tile, tmp2Tile);
+    pto::TMULA(tmp1Tile, tmp0Tile, tmp2Tile);
     // p2 = 2^(n - 2)
     pto::TADDS(tmp0Tile, tmp0Tile, kExpMagic);
     pto::TSHLS(tmp0IntTile, tmp0IntTile, kFp32MantissaBits);
