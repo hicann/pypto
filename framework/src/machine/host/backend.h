@@ -137,7 +137,11 @@ void ForceLinkLibraryCompiler();
 struct ValDependTensorMeta {
     std::unordered_map<std::string, bool> tensorNameToDependCore;
     std::unordered_map<RawSymbolicScalarPtr, bool> valDependMap;
+    std::unordered_set<std::string> valueDependTensorNames;
+    bool hasValueDepend{false};
     bool disableCtrlFlowCache{false};
+
+    void CheckValueDependCpuTensor();
 };
 
 void InsertWaitCoreStart(SymbolicExpressionTable* exprTable, std::ostringstream& controlFlowOss,

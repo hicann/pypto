@@ -561,7 +561,8 @@ std::string SymbolicExpressionTable::BuildExpressionTempVarInit(int indent)
 
 bool SymbolicExpressionTable::CheckExprDependCore(const RawSymbolicScalarPtr& raw,
                                                   const std::unordered_map<std::string, bool>& tensorNameToDependCore,
-                                                  std::unordered_map<RawSymbolicScalarPtr, bool>& valDependMap)
+                                                  std::unordered_map<RawSymbolicScalarPtr, bool>& valDependMap,
+                                                  std::unordered_set<std::string>& valueDependTensorNames)
 {
     switch (raw->Kind()) {
         case SymbolicScalarKind::T_SCALAR_SYMBOLIC_IMMEDIATE:
@@ -587,6 +588,7 @@ bool SymbolicExpressionTable::CheckExprDependCore(const RawSymbolicScalarPtr& ra
                     auto argExpr = operandList[1];
                     const std::string& argName = std::dynamic_pointer_cast<RawSymbolicSymbol>(argExpr)->Name();
                     FE_LOGI("[RunCmd] Value depend tensor name:%s", argName.c_str());
+                    valueDependTensorNames.insert(argName);
                     auto it = tensorNameToDependCore.find(argName);
                     FE_ASSERT(FeError::NOT_EXIST, it != tensorNameToDependCore.end())
                         << "Tensor " << argName << " not found in tensorNameToDependCore";
@@ -596,7 +598,7 @@ bool SymbolicExpressionTable::CheckExprDependCore(const RawSymbolicScalarPtr& ra
             }
             // Recursively check all operands
             for (const auto& operand : expr->OperandList()) {
-                if (CheckExprDependCore(operand, tensorNameToDependCore, valDependMap)) {
+                if (CheckExprDependCore(operand, tensorNameToDependCore, valDependMap, valueDependTensorNames)) {
                     return true;
                 }
             }

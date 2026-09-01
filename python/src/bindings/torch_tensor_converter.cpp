@@ -168,15 +168,15 @@ TensorDeviceInfo ConvertSingleTensor(const py::object& torchTensor, const py::ob
     return deviceInfo;
 }
 
-int ValidateDeviceAndReturnIndex(const TensorDeviceInfo& deviceInfo)
+int ValidateDeviceAndReturnIndex(const std::optional<TensorDeviceInfo>& deviceInfo)
 {
     if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) == CFG_RUN_MODE_SIM) {
         return 0;
     }
-    if (deviceInfo.type != "npu") {
+    if (!deviceInfo.has_value() || deviceInfo->type != "npu") {
         throw std::runtime_error("Not npu device");
     }
-    return deviceInfo.index;
+    return deviceInfo->index;
 }
 
 } // namespace
@@ -203,14 +203,18 @@ int TorchTensorConverter::Convert(py::sequence& tensors, py::sequence& tensor_de
 
         TensorDeviceInfo tensorDeviceInfo = ConvertSingleTensor(torchTensor, tensorDef, torch_npu, tensors_data.back());
 
+        // Skip device consistency check for cpu tensors (used as host-side data for value-depend).
+        if (tensorDeviceInfo.type == "cpu") {
+            continue;
+        }
+
         if (!commonDeviceInfo.has_value()) {
             commonDeviceInfo.emplace(std::move(tensorDeviceInfo));
         } else if (!IsSameDevice(*commonDeviceInfo, tensorDeviceInfo)) {
             throw std::runtime_error("All input tensors must be on the same device");
         }
     }
-
-    return ValidateDeviceAndReturnIndex(*commonDeviceInfo);
+    return ValidateDeviceAndReturnIndex(commonDeviceInfo);
 }
 
 size_t ValidateInputs(py::sequence& tensors, py::sequence& tensorDefs)

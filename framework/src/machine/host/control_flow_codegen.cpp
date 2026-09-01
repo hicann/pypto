@@ -85,15 +85,20 @@ void InsertWaitCoreStartForLoopBounds(const std::shared_ptr<DynloopFunctionAttri
                                       int indent)
 {
     const SymbolicScalar* loopBounds[] = {&attr->Begin(), &attr->End(), &attr->Step()};
+    bool needWaitAicoreStart = false;
     for (const SymbolicScalar* boundExpr : loopBounds) {
         if (!boundExpr->IsValid() || boundExpr->IsImmediate()) {
             continue;
         }
         if (SymbolicExpressionTable::CheckExprDependCore(boundExpr->Raw(), valDependTensorMeta.tensorNameToDependCore,
-                                                         valDependTensorMeta.valDependMap)) {
-            controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "WaitAicoreStart(startArgs);\n";
-            return;
+                                                         valDependTensorMeta.valDependMap,
+                                                         valDependTensorMeta.valueDependTensorNames)) {
+            needWaitAicoreStart = true;
+            break;
         }
+    }
+    if (needWaitAicoreStart) {
+        controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "WaitAicoreStart(startArgs);\n";
     }
 }
 
@@ -174,7 +179,9 @@ void MarkValueDependDisableCache(ControlFlowEmitCtx& ctx, Function* keyFunc)
     }
     auto valueDependDesc = currDynFuncAttr->valueDependDescDict[keyFunc];
     if (valueDependDesc.getInputDataCount + valueDependDesc.getTensorDataCount != 0) {
-        // Value-depend: disable host ctrl-flow cache only; do not emit CACHESTOP stitch.
+        ctx.valDependTensorMeta.hasValueDepend = true;
+    }
+    if (valueDependDesc.getTensorDataCount != 0) {
         ctx.valDependTensorMeta.disableCtrlFlowCache = true;
     }
 }

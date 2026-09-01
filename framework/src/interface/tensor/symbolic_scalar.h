@@ -1003,7 +1003,8 @@ struct SymbolicExpressionTable {
 
     static bool CheckExprDependCore(const RawSymbolicScalarPtr& ss,
                                     const std::unordered_map<std::string, bool>& tensorNameToDependCore,
-                                    std::unordered_map<RawSymbolicScalarPtr, bool>& valDependMap);
+                                    std::unordered_map<RawSymbolicScalarPtr, bool>& valDependMap,
+                                    std::unordered_set<std::string>& valueDependTensorNames);
 
 private:
     static std::string BuildSymbolName(const std::string& name);

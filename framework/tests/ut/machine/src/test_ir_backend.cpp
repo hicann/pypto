@@ -279,7 +279,8 @@ TEST_F(TestSuite_IrBackend, InsertCacheStopForContrlFlow_AllCases)
 
         ValDependTensorMeta meta;
         InsertCacheStopForContrlFlow(irBackendCtx, AsForStmt(forStmt).get(), fixture.dynFunc.get(), meta);
-        EXPECT_TRUE(meta.disableCtrlFlowCache);
+        EXPECT_TRUE(meta.hasValueDepend);
+        EXPECT_FALSE(meta.disableCtrlFlowCache);
     }
 }
 

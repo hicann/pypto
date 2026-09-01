@@ -370,8 +370,8 @@
                         "type": "string"
                     },
                     "label": {
-                        "zh": "标记在Host端准备好的Tensor名称列表",
-                        "en": "Specify the list of Tensor names that are ready on Host"
+                        "zh": "标记在Host端准备好的Tensor名称列表，支持list[string]或list[tuple[str, str]]",
+                        "en": "Specify Tensor names ready on Host. Supports list[string] or list[tuple[str, str]]"
                     }
                 },
                 "device_sched_parallelism": {

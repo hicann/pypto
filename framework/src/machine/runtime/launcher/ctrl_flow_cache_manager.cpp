@@ -26,6 +26,35 @@
 #include "machine/utils/dynamic/dev_encode_program.h"
 #include "machine/utils/dynamic/dev_encode_program_ctrlflow_cache.h"
 
+namespace {
+
+uint64_t ComputeValueDependHash(const std::vector<npu::tile_fwk::dynamic::DeviceTensorData>& tensors,
+                                const std::vector<size_t>& indices)
+{
+    uint64_t h = 14695981039346656037ull;
+    for (size_t idx : indices) {
+        if (idx >= tensors.size()) {
+            continue;
+        }
+        const auto& shape = tensors[idx].GetShape();
+        for (auto dim : shape) {
+            h ^= static_cast<uint64_t>(dim);
+            h *= 1099511628211ull;
+        }
+        auto addr = reinterpret_cast<const uint8_t*>(tensors[idx].GetAddr());
+        int64_t dataSize = tensors[idx].GetDataSize();
+        if (addr != nullptr && dataSize > 0) {
+            for (int64_t i = 0; i < dataSize; i++) {
+                h ^= addr[i];
+                h *= 1099511628211ull;
+            }
+        }
+    }
+    return h;
+}
+
+} // namespace
+
 namespace npu::tile_fwk::dynamic {
 
 CtrlFlowCacheManager& CtrlFlowCacheManager::Instance()
@@ -43,14 +72,33 @@ uint8_t* CtrlFlowCacheManager::FindOrBuildDevCache(KernelBinary* kernel, std::ve
         kernel->SetCtrlFlowCacheReplay(false);
         return nullptr;
     }
-    auto devCache = kernel->FindCtrlFlowCache(tensors, true);
-    if (devCache == nullptr) {
-        AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
-        devCache = kernel->BuildControlFlowCache(tensors, true);
+    const auto& valueDependIndices = kernel->GetValueDependInputIndices();
+    if (!kernel->HasValueDepend()) {
+        // No value-depend: original shape-based cache reuse logic (unchanged).
+        auto devCache = kernel->FindCtrlFlowCache(tensors, true);
+        if (devCache == nullptr) {
+            AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
+            devCache = kernel->BuildControlFlowCache(tensors, true);
+        }
+        // Host-built cache is already isActivated when copied to device; restore runs on first launch.
+        kernel->SetCtrlFlowCacheReplay(devCache != nullptr);
+        COMPILER_LOGD("find ctrlflow cache: %p", devCache);
+        return devCache;
     }
-    // Host-built cache is already isActivated when copied to device; restore runs on first launch.
+    // Value-depend with cpu tensors: single-slot cache keyed by data+shape hash.
+    uint64_t currentHash = ComputeValueDependHash(tensors, valueDependIndices);
+    uint64_t cachedHash = kernel->GetCachedCtrlFlowHash();
+    if (cachedHash == currentHash && kernel->GetValueDependDevCache() != nullptr) {
+        kernel->SetCtrlFlowCacheReplay(true);
+        return kernel->GetValueDependDevCache();
+    }
+    // Hash mismatch or first build: free old, rebuild, update hash.
+    kernel->FreeAndClearValueDependCache();
+    AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
+    auto devCache = kernel->BuildControlFlowCache(tensors, true, false);
+    kernel->SetValueDependDevCache(devCache);
+    kernel->SetCachedCtrlFlowHash(currentHash);
     kernel->SetCtrlFlowCacheReplay(devCache != nullptr);
-    COMPILER_LOGD("find ctrlflow cache: %p", devCache);
     return devCache;
 }
 

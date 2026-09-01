@@ -14,6 +14,7 @@
  */
 
 #include "machine/runtime/launcher/emulation_launcher.h"
+#include <map>
 #include <thread>
 #include "tilefwk/error_code.h"
 #include "tilefwk/error.h"
@@ -75,6 +76,28 @@ static int EmulationLaunchOnce(DeviceKernelArgs& kArgs)
         }
     }
     return 0;
+}
+
+std::map<size_t, uintptr_t> BuildDevIdxToCpuAddrMap(const std::shared_ptr<DyndevFunctionAttribute>& dynAttr,
+                                                    const std::vector<DeviceTensorData>& inputList)
+{
+    std::map<size_t, uintptr_t> devIdxToCpuAddr;
+    if (dynAttr == nullptr || dynAttr->readyOnHostCpuPairs.empty()) {
+        return devIdxToCpuAddr;
+    }
+    auto inputLogicalSize = dynAttr->startArgsInputLogicalTensorList.size();
+    std::map<std::string, size_t> nameToIdx;
+    for (size_t i = 0; i < inputLogicalSize && i < inputList.size(); i++) {
+        nameToIdx[dynAttr->startArgsInputLogicalTensorList[i]->Symbol()] = i;
+    }
+    for (const auto& [deviceName, cpuName] : dynAttr->readyOnHostCpuPairs) {
+        auto devIt = nameToIdx.find(deviceName);
+        auto cpuIt = nameToIdx.find(cpuName);
+        if (devIt != nameToIdx.end() && cpuIt != nameToIdx.end()) {
+            devIdxToCpuAddr[devIt->second] = reinterpret_cast<uintptr_t>(inputList[cpuIt->second].GetAddr());
+        }
+    }
+    return devIdxToCpuAddr;
 }
 
 int EmulationLauncher::EmulationBuildControlFlowCache(DeviceKernelArgs& kArgs)
@@ -294,11 +317,17 @@ int EmulationLauncher::BuildControlFlowCache(Function* function, EmulationMemory
     } else {
         std::vector<DeviceTensorData> inputDeviceDataList;
         std::vector<DeviceTensorData> outputDeviceDataList;
+
+        auto devIdxToCpuAddr = BuildDevIdxToCpuAddrMap(function->GetDyndevAttribute(), inputList);
+
         uintptr_t index = 0;
-        for (auto& input : inputList) {
-            inputDeviceDataList.emplace_back(input.GetDataType(),
-                                             CONTROL_FLOW_CACHE_BASE_ADDR + index * CONTROL_FLOW_CACHE_TENSOR_SIZE,
-                                             input.GetShape());
+        for (size_t i = 0; i < inputList.size(); i++) {
+            uintptr_t addr = CONTROL_FLOW_CACHE_BASE_ADDR + index * CONTROL_FLOW_CACHE_TENSOR_SIZE;
+            auto it = devIdxToCpuAddr.find(i);
+            if (it != devIdxToCpuAddr.end()) {
+                addr = it->second;
+            }
+            inputDeviceDataList.emplace_back(inputList[i].GetDataType(), addr, inputList[i].GetShape());
             index++;
         }
         for (auto& output : outputList) {

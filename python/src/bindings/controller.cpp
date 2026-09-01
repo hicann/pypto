@@ -225,6 +225,34 @@ void BindControllerUtils(py::module_& m)
     m.def("ClearSpan", &ir::Span::ClearCurrent);
 }
 
+static std::string GetElemTypeName(const py::handle& elem)
+{
+    return py::str(py::type::handle_of(elem).attr("__name__")).cast<std::string>();
+}
+
+static std::any ConvertListList(const std::string& key, const py::list& lst)
+{
+    std::vector<std::pair<std::string, std::string>> pairs;
+    for (size_t i = 0; i < lst.size(); ++i) {
+        if (!py::isinstance<py::list>(lst[i])) {
+            throw py::type_error("Option '" + key + "' has invalid list element type at index " + std::to_string(i) +
+                                 ". Expected list, but got " + GetElemTypeName(lst[i]));
+        }
+        py::list innerList = py::cast<py::list>(lst[i]);
+        if (innerList.size() != 2) {
+            throw py::type_error("Option '" + key + "' has invalid inner list length at index " + std::to_string(i) +
+                                 ". Expected 2 elements [device_name, cpu_name], but got " +
+                                 std::to_string(innerList.size()));
+        }
+        if (!py::isinstance<py::str>(innerList[0]) || !py::isinstance<py::str>(innerList[1])) {
+            throw py::type_error("Option '" + key + "' has invalid inner list element type at index " +
+                                 std::to_string(i) + ". Expected [str, str]");
+        }
+        pairs.push_back({py::cast<std::string>(innerList[0]), py::cast<std::string>(innerList[1])});
+    }
+    return pairs;
+}
+
 std::any ConvertPyList(const std::string& key, const py::list& lst)
 {
     if (lst.size() == 0) {
@@ -270,6 +298,8 @@ std::any ConvertPyList(const std::string& key, const py::list& lst)
             doubleVec.push_back(py::cast<double>(lst[i]));
         }
         return doubleVec;
+    } else if (py::isinstance<py::list>(lst[0])) {
+        return ConvertListList(key, lst);
     }
     throw py::type_error("Unsupported list element type for key: " + key);
 }
@@ -509,6 +539,17 @@ py::object AnyToPyObject(const std::any& val)
         {typeid(std::vector<int64_t>), [](const std::any& a) { return py::cast(AnyCast<std::vector<int64_t>>(a)); }},
         {typeid(std::vector<std::string>),
          [](const std::any& a) { return py::cast(AnyCast<std::vector<std::string>>(a)); }},
+        {typeid(std::vector<std::pair<std::string, std::string>>),
+         [](const std::any& a) {
+             py::list outer;
+             for (const auto& p : AnyCast<std::vector<std::pair<std::string, std::string>>>(a)) {
+                 py::list inner;
+                 inner.append(p.first);
+                 inner.append(p.second);
+                 outer.append(inner);
+             }
+             return outer;
+         }},
         {typeid(std::vector<double>), [](const std::any& a) { return py::cast(AnyCast<std::vector<double>>(a)); }},
         {typeid(std::map<int64_t, int64_t>),
          [](const std::any& a) { return py::cast(AnyCast<std::map<int64_t, int64_t>>(a)); }},

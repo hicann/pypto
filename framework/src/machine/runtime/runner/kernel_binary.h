@@ -48,7 +48,7 @@ public:
 
     uint8_t* FindCtrlFlowCache(std::vector<std::vector<int64_t>>& inputs, bool isOriginShape);
     uint8_t* FindCtrlFlowCache(std::vector<DeviceTensorData>& inputs, bool isOriginShape);
-    uint8_t* BuildControlFlowCache(std::vector<DeviceTensorData>& inputs, bool isOriginShape);
+    uint8_t* BuildControlFlowCache(std::vector<DeviceTensorData>& inputs, bool isOriginShape, bool storeToCache = true);
 
     int64_t GetWorkspaceSize(const std::vector<DeviceTensorData>& tensors);
 
@@ -61,6 +61,13 @@ public:
     Function* GetFunction();
     const std::string& GetKernelname() const;
     bool DisableHostCtrlFlowCacheBuild() const;
+    bool HasValueDepend() const { return devProg != nullptr && devProg->hasValueDepend != 0; }
+    const std::vector<size_t>& GetValueDependInputIndices() const;
+    uint64_t GetCachedCtrlFlowHash() const { return cachedCtrlFlowHash_; }
+    void SetCachedCtrlFlowHash(uint64_t hash) { cachedCtrlFlowHash_ = hash; }
+    uint8_t* GetValueDependDevCache() const { return valueDependDevCache_; }
+    void SetValueDependDevCache(uint8_t* cache) { valueDependDevCache_ = cache; }
+    void FreeAndClearValueDependCache();
     uint64_t GetMaxDynamicAssembleOutcastMem() const;
     uint64_t GetMaxDynamicCellMatchTableMem() const;
     uint64_t GetRuntimeDynamicCellMatchAddr() const;
@@ -132,6 +139,9 @@ private:
     RtTaskCfgInfo rtTaskCfg_;
     std::vector<void*> kernelArgs_;
     AicpuHostInput hostInfo_;
+    uint64_t cachedCtrlFlowHash_{0};
+    uint8_t* valueDependDevCache_{nullptr};
+    static std::vector<size_t> emptyIndices_;
 };
 
 } // namespace npu::tile_fwk::dynamic

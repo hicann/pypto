@@ -116,6 +116,8 @@ struct DevAscendProgram {
     uint32_t stitchMaxFunctionNum{0};
     uint32_t ctrlFlowCacheSize{0};
     uint32_t disableCtrlFlowCache{0};
+    uint8_t hasValueDepend{0};
+    std::vector<size_t> valueDependInputIndices;
     uint32_t rootFuncMaxCallOpsize{0};
     uint32_t cellMatchTagSeq_{0};
     // Seed to UINT32_MAX so the first AdvanceStitchCacheEpoch wraps packed epoch to 0 and memset's virgin cache.

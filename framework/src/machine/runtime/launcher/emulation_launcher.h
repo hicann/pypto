@@ -16,6 +16,7 @@
 #ifndef SRC_MACHINE_EMULATION_LAUNCHER_H
 #define SRC_MACHINE_EMULATION_LAUNCHER_H
 
+#include <map>
 #include <vector>
 
 #include "interface/configs/config_manager.h"
@@ -24,6 +25,10 @@
 #include "machine/runtime/launcher/device_launcher_types.h"
 
 namespace npu::tile_fwk::dynamic {
+
+std::map<size_t, uintptr_t> BuildDevIdxToCpuAddrMap(const std::shared_ptr<DyndevFunctionAttribute>& dynAttr,
+                                                    const std::vector<DeviceTensorData>& inputList);
+
 class EmulationLauncher {
 public:
     static int EmulationLaunchOnceWithHostTensorData(Function* function, const std::vector<DeviceTensorData>& inputList,

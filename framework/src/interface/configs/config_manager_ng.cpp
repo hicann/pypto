@@ -51,6 +51,7 @@ std::string GetReadableTypeName(const std::type_info& type)
         {typeid(std::vector<int64_t>), "list[int64]"},
         {typeid(std::vector<double>), "list[double]"},
         {typeid(std::vector<std::string>), "list[string]"},
+        {typeid(std::vector<std::pair<std::string, std::string>>), "list[list[string]]"},
         {typeid(std::map<int64_t, int64_t>), "dict[int64, int64]"},
         {typeid(CubeTile), "CubeTile"},
         {typeid(ConvTile), "ConvTile"},
@@ -288,6 +289,12 @@ void ValidateConfigValueType(const std::string& key, const std::any& value)
 {
     const auto& expectedType = ConfigManagerNg::GetInstance().Type(key);
     if (expectedType == typeid(void) || value.type() == expectedType) {
+        return;
+    }
+
+    // ready_on_host_tensors accepts both list[string] and list[list[string]] forms.
+    if (key == std::string("runtime.") + READY_ON_HOST_TENSORS &&
+        value.type() == typeid(std::vector<std::pair<std::string, std::string>>)) {
         return;
     }
 
@@ -640,6 +647,8 @@ template void SetOptionsNg<std::map<int, int>>(const std::string& key, const std
 template void SetOptionsNg<std::map<long, long>>(const std::string& key, const std::map<long, long>& value);
 template void SetOptionsNg<std::vector<int>>(const std::string& key, const std::vector<int>& value);
 template void SetOptionsNg<std::vector<std::string>>(const std::string& key, const std::vector<std::string>& value);
+template void SetOptionsNg<std::vector<std::pair<std::string, std::string>>>(
+    const std::string& key, const std::vector<std::pair<std::string, std::string>>& value);
 template void SetOptionsNg<std::vector<double>>(const std::string& key, const std::vector<double>& value);
 template void SetOptionsNg<std::vector<int64_t>>(const std::string& key, const std::vector<int64_t>& value);
 

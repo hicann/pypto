@@ -102,6 +102,7 @@ KernelBinary::~KernelBinary()
         std::free(reinterpret_cast<void*>(runtimeDynamicCellMatchHostAddr_));
     }
     UnregisterKernelBinary(kernelBin);
+    FreeAndClearValueDependCache();
     for (auto& cache : originShapeCaches) {
         DeviceLauncher::FreeControlFlowCache(cache.devCache);
     }
@@ -151,7 +152,8 @@ uint8_t* KernelBinary::FindCtrlFlowCache(std::vector<DeviceTensorData>& inputs, 
     return nullptr;
 }
 
-uint8_t* KernelBinary::BuildControlFlowCache(std::vector<DeviceTensorData>& inputs, bool isOriginShape)
+uint8_t* KernelBinary::BuildControlFlowCache(std::vector<DeviceTensorData>& inputs, bool isOriginShape,
+                                             bool storeToCache)
 {
     DeviceLauncherConfig config;
     DeviceLauncher::DeviceLauncherConfigFillDeviceInfo(config);
@@ -175,10 +177,12 @@ uint8_t* KernelBinary::BuildControlFlowCache(std::vector<DeviceTensorData>& inpu
 
     uint8_t* devCache = DeviceLauncher::CopyControlFlowCache(ctrlCache);
     COMPILER_LOGD("control flow cache: %p", devCache);
-    if (isOriginShape) {
-        originShapeCaches.emplace_back(inputs, devCache);
-    } else {
-        inferShapeCaches.emplace_back(inputs, devCache);
+    if (storeToCache) {
+        if (isOriginShape) {
+            originShapeCaches.emplace_back(inputs, devCache);
+        } else {
+            inferShapeCaches.emplace_back(inputs, devCache);
+        }
     }
     return devCache;
 }
@@ -290,9 +294,27 @@ Function* KernelBinary::GetFunction() { return dynFunc.get(); }
 
 const std::string& KernelBinary::GetKernelname() const { return kernelName_; }
 
+std::vector<size_t> KernelBinary::emptyIndices_;
+
 bool KernelBinary::DisableHostCtrlFlowCacheBuild() const
 {
-    return devProg != nullptr && devProg->disableCtrlFlowCache != 0;
+    if (devProg == nullptr) {
+        return true;
+    }
+    return devProg->disableCtrlFlowCache != 0;
+}
+
+const std::vector<size_t>& KernelBinary::GetValueDependInputIndices() const
+{
+    return devProg != nullptr ? devProg->valueDependInputIndices : emptyIndices_;
+}
+
+void KernelBinary::FreeAndClearValueDependCache()
+{
+    if (valueDependDevCache_ != nullptr) {
+        DeviceLauncher::FreeControlFlowCache(valueDependDevCache_);
+        valueDependDevCache_ = nullptr;
+    }
 }
 
 uint64_t KernelBinary::GetMaxDynamicAssembleOutcastMem() const

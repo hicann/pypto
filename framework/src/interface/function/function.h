@@ -370,6 +370,9 @@ struct DyndevFunctionAttribute {
     };
     std::unordered_map<Function*, ValueDependDesc> valueDependDescDict;
 
+    std::vector<std::pair<std::string, std::string>> readyOnHostCpuPairs;
+    std::vector<size_t> valueDependInputIndices;
+
     struct FunctionGroup {
         /* loop */
         OrderedSet<Function*> loopList;

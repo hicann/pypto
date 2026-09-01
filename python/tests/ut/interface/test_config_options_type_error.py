@@ -128,6 +128,21 @@ def test_wrapper_option_type_mismatch_error(setter, pattern):
             "Option 'runtime.ready_on_host_tensors' has invalid list element type at index 1. "
             "Expected str, but got int",
         ),
+        (
+            {"runtime_options": {"ready_on_host_tensors": [["a", "b", "c"]]}},
+            "Option 'runtime.ready_on_host_tensors' has invalid inner list length at index 0. "
+            "Expected 2 elements \\[device_name, cpu_name\\], but got 3",
+        ),
+        (
+            {"runtime_options": {"ready_on_host_tensors": [["a", 1]]}},
+            "Option 'runtime.ready_on_host_tensors' has invalid inner list element type at index 0. "
+            "Expected \\[str, str\\]",
+        ),
+        (
+            {"runtime_options": {"ready_on_host_tensors": ["a", ["b", "c", "d"]]}},
+            "Option 'runtime.ready_on_host_tensors' has invalid list element type at index 1. "
+            "Expected str, but got list",
+        ),
     ],
 )
 def test_set_options_type_mismatch_error(options_kwargs, pattern):

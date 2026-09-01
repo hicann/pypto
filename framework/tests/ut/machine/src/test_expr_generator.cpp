@@ -120,13 +120,15 @@ TEST_F(TestExprBatchGenerator, CheckExprDependCoreTest)
     RawSymbolicScalarPtr getInputDataExpr = std::make_shared<RawSymbolicExpression>(SymbolicOpcode::T_MOP_CALL,
                                                                                     operands);
     bool dependsCore = SymbolicExpressionTable::CheckExprDependCore(
-        getInputDataExpr, valDependTensorMeta.tensorNameToDependCore, valDependTensorMeta.valDependMap);
+        getInputDataExpr, valDependTensorMeta.tensorNameToDependCore, valDependTensorMeta.valDependMap,
+        valDependTensorMeta.valueDependTensorNames);
     ASSERT_TRUE(dependsCore);
 
     valDependTensorMeta.tensorNameToDependCore[testTensorName] = false;
     valDependTensorMeta.valDependMap.clear();
     dependsCore = SymbolicExpressionTable::CheckExprDependCore(
-        getInputDataExpr, valDependTensorMeta.tensorNameToDependCore, valDependTensorMeta.valDependMap);
+        getInputDataExpr, valDependTensorMeta.tensorNameToDependCore, valDependTensorMeta.valDependMap,
+        valDependTensorMeta.valueDependTensorNames);
     ASSERT_FALSE(dependsCore);
 }
 

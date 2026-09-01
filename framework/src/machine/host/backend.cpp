@@ -393,45 +393,110 @@ static void BuildConstructAssembleNeedAllocRuntimeSlots(FunctionCache& cache, Fu
     }
 }
 
+void ValDependTensorMeta::CheckValueDependCpuTensor()
+{
+    if (valueDependTensorNames.empty()) {
+        return;
+    }
+    auto currDynFunc = Program::GetInstance().GetCurrentDynamicFunction();
+    if (currDynFunc == nullptr) {
+        return;
+    }
+    auto currDynFuncAttr = currDynFunc->GetDyndevAttribute();
+    if (currDynFuncAttr == nullptr) {
+        return;
+    }
+    for (const auto& name : valueDependTensorNames) {
+        std::string rawName = name;
+        if (CheckArgPrefix(rawName)) {
+            rawName = rawName.substr(std::string(SPECIAL_SYMBOL_NAME_ARG_PREFIX).size());
+        }
+        bool hasCpu = false;
+        for (const auto& pair : currDynFuncAttr->readyOnHostCpuPairs) {
+            if (pair.first == rawName) {
+                hasCpu = true;
+                break;
+            }
+        }
+        if (!hasCpu) {
+            disableCtrlFlowCache = true;
+            break;
+        }
+    }
+}
+
 void InsertWaitCoreStart(SymbolicExpressionTable* exprTable, std::ostringstream& controlFlowOss,
                          ValDependTensorMeta& valDependTensorMeta, int indent)
 {
     if (exprTable == nullptr) {
         return;
     }
-    bool needSync = false;
+    bool needWaitAicoreStart = false;
     const auto& primaryExprs = exprTable->GetPrimaryExpressionSet();
     for (const auto& expr : primaryExprs) {
         if (expr == nullptr) {
             continue;
         }
         if (exprTable->CheckExprDependCore(expr, valDependTensorMeta.tensorNameToDependCore,
-                                           valDependTensorMeta.valDependMap)) {
-            needSync = true;
+                                           valDependTensorMeta.valDependMap,
+                                           valDependTensorMeta.valueDependTensorNames)) {
+            needWaitAicoreStart = true;
             break;
         }
     }
-    if (needSync) {
+    if (needWaitAicoreStart) {
         controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "WaitAicoreStart(startArgs);\n";
     }
 }
 
 void GetReadyOnHostTensorsSet(std::unordered_set<int>& readyOnHostTensorsSet)
 {
-    const auto& readyOnHostTensors = config::GetRuntimeOption<std::vector<std::string>>(READY_ON_HOST_TENSORS);
+    const std::any& configAny = ConfigManagerNg::CurrentScope()->GetAnyConfig(std::string("runtime.") +
+                                                                              READY_ON_HOST_TENSORS);
     auto attr = Program::GetInstance().GetCurrentDynamicFunction()->GetDyndevAttribute();
     auto inputSize = attr->startArgsInputLogicalTensorList.size();
-    for (const auto& tensorStr : readyOnHostTensors) {
+
+    auto findTensorIndex = [&](const std::string& tensorStr) -> size_t {
         size_t i = 0;
         for (; i < inputSize; i++) {
             if (tensorStr == attr->startArgsInputLogicalTensorList[i]->Symbol()) {
-                MACHINE_LOGI("Tensor[%zu][%s] is ready on host.", i, tensorStr.c_str());
-                readyOnHostTensorsSet.insert(i);
-                break;
+                return i;
             }
         }
-        ASSERT(DevCommonErr::PARAM_CHECK_FAILED, i < inputSize)
-            << "Tensor " << tensorStr << " not found in input list, please check [ready_on_host_tensors] config.";
+        return inputSize;
+    };
+
+    if (configAny.type() == typeid(std::vector<std::string>)) {
+        const auto& readyOnHostTensors = std::any_cast<const std::vector<std::string>&>(configAny);
+        for (const auto& tensorStr : readyOnHostTensors) {
+            size_t idx = findTensorIndex(tensorStr);
+            ASSERT(DevCommonErr::PARAM_CHECK_FAILED, idx < inputSize)
+                << "Tensor " << tensorStr << " not found in input list, please check [ready_on_host_tensors] config.";
+            MACHINE_LOGI("Tensor[%zu][%s] is ready on host.", idx, tensorStr.c_str());
+            readyOnHostTensorsSet.insert(idx);
+        }
+    } else if (configAny.type() == typeid(std::vector<std::pair<std::string, std::string>>)) {
+        const auto& readyOnHostPairs = std::any_cast<const std::vector<std::pair<std::string, std::string>>&>(
+            configAny);
+        for (const auto& pair : readyOnHostPairs) {
+            const std::string& deviceName = pair.first;
+            const std::string& cpuName = pair.second;
+            size_t idx = findTensorIndex(deviceName);
+            ASSERT(DevCommonErr::PARAM_CHECK_FAILED, idx < inputSize)
+                << "Tensor " << deviceName << " not found in input list, please check [ready_on_host_tensors] config.";
+            readyOnHostTensorsSet.insert(idx);
+            if (cpuName.empty()) {
+                MACHINE_LOGI("Tensor[%zu][%s] is ready on host (no cpu tensor).", idx, deviceName.c_str());
+            } else {
+                size_t cpuIdx = findTensorIndex(cpuName);
+                ASSERT(DevCommonErr::PARAM_CHECK_FAILED, cpuIdx < inputSize)
+                    << "Tensor " << cpuName << " not found in input list, please check [ready_on_host_tensors] config.";
+                MACHINE_LOGI("Tensor[%zu][%s] is ready on host, cpu tensor[%zu][%s].", idx, deviceName.c_str(), cpuIdx,
+                             cpuName.c_str());
+                attr->readyOnHostCpuPairs.push_back({deviceName, cpuName});
+                attr->valueDependInputIndices.push_back(cpuIdx);
+            }
+        }
     }
 }
 static std::string Arm64TargetTool(const std::string& bin)
@@ -496,7 +561,7 @@ static void FillL2PrefetchInfo(std::shared_ptr<DyndevFunctionAttribute> attr)
     }
 }
 
-static void SetDyndevProgBinary(Function* function, bool disableCtrlFlowCache,
+static void SetDyndevProgBinary(Function* function, bool disableCtrlFlowCache, bool hasValueDepend,
                                 const std::unordered_map<int, dynamic::SlotMaskEntry>* stitchUpdateSlotMaskMap)
 {
     if (function == nullptr || function->GetDyndevAttribute() == nullptr) {
@@ -510,6 +575,7 @@ static void SetDyndevProgBinary(Function* function, bool disableCtrlFlowCache,
     dynamic::DevAscendProgram* devProg = reinterpret_cast<dynamic::DevAscendProgram*>(&dynAttrPtr->devProgBinary[0]);
     dynamic::EncodeDevAscendProgram(function, size, devProg, stitchUpdateSlotMaskMap);
     devProg->disableCtrlFlowCache = disableCtrlFlowCache ? 1 : 0;
+    devProg->hasValueDepend = hasValueDepend ? 1 : 0;
 
     if (config::GetPassDefaultConfig(npu::tile_fwk::KEY_PRINT_PROGRAM, false)) {
         devProg->DumpFile(config::LogTopFolder() + "/program.tifwkbintxt");
@@ -819,6 +885,7 @@ static void RunBuildControlFlowStage(IrBackendContext& irBackendCtx, FunctionCac
         EmitControlFlowSources(cache, linker, function, attr, expName, exprSrcFiles, valDependTensorMeta,
                                controlFlowOss, expressionOss, slotIdxMapping);
     }
+    valDependTensorMeta.CheckValueDependCpuTensor();
     expressionOss << "#endif/*TILE_FWK_EXPRESSION_H*/"
                   << "\n";
 
@@ -900,7 +967,8 @@ static bool RunCompileAicoreKernelStage(Function* function, std::map<uint64_t, F
 #endif
 
 static void RunEncodeStage(Function* function, const std::shared_ptr<DyndevFunctionAttribute>& attr, Linker& linker,
-                           EncodeDevAscendFunctionParam& encodeDevAscendFunctionParam, bool disableCtrlFlowCache)
+                           EncodeDevAscendFunctionParam& encodeDevAscendFunctionParam, bool disableCtrlFlowCache,
+                           bool hasValueDepend)
 {
     const int hmStep = MonitorManager::Instance().AllocHostMachineStepIndex();
     MonitorStageScope encodeScope(STAGE_HOST_MACHINE, hmStep, STAGE_DYNDEV_ENCODE,
@@ -951,7 +1019,7 @@ static void RunEncodeStage(Function* function, const std::shared_ptr<DyndevFunct
         DevAscendFunction* funcBin = reinterpret_cast<DevAscendFunction*>(&attr->devEncodeList[devRootKey][0]);
         funcBin->RefilterStitchUpdateSlotLists(stitchUpdateSlotMaskMap);
     }
-    SetDyndevProgBinary(function, disableCtrlFlowCache, &stitchUpdateSlotMaskMap);
+    SetDyndevProgBinary(function, disableCtrlFlowCache, hasValueDepend, &stitchUpdateSlotMaskMap);
 }
 
 static void RunCodeGenStage(const std::shared_ptr<DyndevFunctionAttribute>& attr,
@@ -1063,7 +1131,8 @@ static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[ma
     attr->kernelBinary = ReadFile(kernelPath);
     MACHINE_LOGD("KernelBinary size[%zu] bytes.", attr->kernelBinary.size());
 
-    RunEncodeStage(function, attr, linker, encodeDevAscendFunctionParam, valDependTensorMeta.disableCtrlFlowCache);
+    RunEncodeStage(function, attr, linker, encodeDevAscendFunctionParam, valDependTensorMeta.disableCtrlFlowCache,
+                   valDependTensorMeta.hasValueDepend);
 }
 
 MachineTask* GenCode(MachineTask* task, FunctionCache& cache)

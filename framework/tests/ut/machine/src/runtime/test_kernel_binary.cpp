@@ -65,7 +65,11 @@ TEST(KernelBinaryTest, DefaultStateGetters)
     EXPECT_EQ(helper.kb->GetRuntimeDynamicCellMatchAddr(), 0u);
     EXPECT_EQ(helper.kb->GetRuntimeDynamicCellMatchCapacity(), 0u);
     EXPECT_EQ(helper.kb->GetSyncMode(), 0u);
-    EXPECT_FALSE(helper.kb->DisableHostCtrlFlowCacheBuild());
+    EXPECT_TRUE(helper.kb->DisableHostCtrlFlowCacheBuild());
+    EXPECT_FALSE(helper.kb->HasValueDepend());
+    EXPECT_TRUE(helper.kb->GetValueDependInputIndices().empty());
+    EXPECT_EQ(helper.kb->GetCachedCtrlFlowHash(), 0u);
+    EXPECT_EQ(helper.kb->GetValueDependDevCache(), nullptr);
 }
 
 TEST(KernelBinaryTest, RefReturningGetters)
@@ -101,7 +105,7 @@ TEST(KernelBinaryTest, DisableHostCtrlFlowCacheBuild_WithDevProg)
     helper.kb->devProg = &prog;
     EXPECT_TRUE(helper.kb->DisableHostCtrlFlowCacheBuild());
     helper.kb->devProg = nullptr;
-    EXPECT_FALSE(helper.kb->DisableHostCtrlFlowCacheBuild());
+    EXPECT_TRUE(helper.kb->DisableHostCtrlFlowCacheBuild());
 }
 
 TEST(KernelBinaryTest, ResetRuntimeDynamicCellMatchPool_AllCases)

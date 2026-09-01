@@ -230,7 +230,9 @@ void InsertCacheStopForContrlFlow(IrBackendContext& ctx, const ir::ForStmt* forS
     }
     auto valueDependDesc = currDynFuncAttr->valueDependDescDict[loopFunc];
     if (valueDependDesc.getInputDataCount + valueDependDesc.getTensorDataCount != 0) {
-        // Value-depend: disable host ctrl-flow cache only; do not emit CACHESTOP stitch.
+        valDependTensorMeta.hasValueDepend = true;
+    }
+    if (valueDependDesc.getTensorDataCount != 0) {
         valDependTensorMeta.disableCtrlFlowCache = true;
     }
 }
@@ -242,15 +244,20 @@ void InsertWaitAicoreStartForControlFlow(const ir::ForStmt* forStmt, int indent,
     SymbolicScalar stopScalar = ExprPtrToSymbolicScalar(forStmt->stop_);
     SymbolicScalar stepScalar = ExprPtrToSymbolicScalar(forStmt->step_);
     const SymbolicScalar* loopBounds[] = {&startScalar, &stopScalar, &stepScalar};
+    bool needWaitAicoreStart = false;
     for (const SymbolicScalar* boundExpr : loopBounds) {
         if (!boundExpr->IsValid() || boundExpr->IsImmediate()) {
             continue;
         }
         if (SymbolicExpressionTable::CheckExprDependCore(boundExpr->Raw(), valDependTensorMeta.tensorNameToDependCore,
-                                                         valDependTensorMeta.valDependMap)) {
-            controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "WaitAicoreStart(startArgs);\n";
+                                                         valDependTensorMeta.valDependMap,
+                                                         valDependTensorMeta.valueDependTensorNames)) {
+            needWaitAicoreStart = true;
             break;
         }
+    }
+    if (needWaitAicoreStart) {
+        controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "WaitAicoreStart(startArgs);\n";
     }
 }
 

@@ -3175,6 +3175,7 @@ struct EncodeDevAscendProgramInfo {
                                 fillContent, stitchUpdateSlotMaskMap);
         devProg->InitPrefetchInfoList(initOffset, dyndevAttr->l2InfoList, fillContent);
         devProg->InitDisableL2List(initOffset, dyndevAttr->disableL2List, fillContent);
+        devProg->valueDependInputIndices = dyndevAttr->valueDependInputIndices;
         devProg->dataSize = initOffset - reinterpret_cast<uintdevptr_t>(devProg->data);
     }
 };
