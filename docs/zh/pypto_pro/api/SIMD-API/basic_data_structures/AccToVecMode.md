@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-双目标控制的枚举，是[pypto_pro.language.move](../operation/memory_data_movement/move.md)的重要属性，用于L0C->UB数据搬运场景。
+双目标控制的枚举，是[pypto_pro.language.move](../operation/memory_data_movement/move.md)的重要属性，用于L0C Buffer->UB数据搬运场景。
 
 ## 原型定义
 
@@ -33,8 +33,8 @@ PYPTO_DECLARE_ENUM(AccToVecMode,
 |:-------|:-----|
 | SingleModeVec0 | 单目标模式，将整个矩阵写入Vec0的目标UB。 |
 | SingleModeVec1 | 单目标模式，将整个矩阵写入Vec1的目标UB。 |
-| DualModeSplitM | 双目标模式，按M维度拆分，M/2*N个元素写入每个UB。<br>尾块场景下，框架会**自动**在搬运之前对valid_M（L0C M轴方向的尾块大小）向上对齐到2的倍数获得aligned_M，用户只需要了解UB侧的切分策略：Vec0（sub_id=0）得到前aligned_M / 2行，Vec1（sub_id=1）得到剩余valid_M - aligned_M / 2行。详见[调用示例](#dualmodesplitm模式下的尾块场景)。**注意**：当valid_M为1时，仅切分给Vec0。 |
-| DualModeSplitN | 双目标模式，按N维度拆分，M*N/2个元素写入每个UB。<br>尾块场景下，框架会**自动**在搬运之前对valid_N（L0C N轴方向的尾块大小）向上对齐到32的倍数获得aligned_N，用户只需要了解UB侧的切分策略：Vec0（sub_id=0）得到前aligned_N / 2列，Vec1（sub_id=1）得到剩余valid_N - aligned_N / 2列。详见[调用示例](#dualmodesplitn模式下的尾块场景)。**注意**：当valid_N不超过16时，仅切分给Vec0。 |
+| DualModeSplitM | 双目标模式，按M维度拆分，M/2*N个元素写入每个UB。<br>尾块场景下，框架会**自动**在搬运之前对valid_M（L0C Buffer M轴方向的尾块大小）向上对齐到2的倍数获得aligned_M，用户只需要了解UB侧的切分策略：Vec0（sub_id=0）得到前aligned_M / 2行，Vec1（sub_id=1）得到剩余valid_M - aligned_M / 2行。详见[调用示例](#dualmodesplitm模式下的尾块场景)。**注意**：当valid_M为1时，仅切分给Vec0。 |
+| DualModeSplitN | 双目标模式，按N维度拆分，M*N/2个元素写入每个UB。<br>尾块场景下，框架会**自动**在搬运之前对valid_N（L0C Buffer N轴方向的尾块大小）向上对齐到32的倍数获得aligned_N，用户只需要了解UB侧的切分策略：Vec0（sub_id=0）得到前aligned_N / 2列，Vec1（sub_id=1）得到剩余valid_N - aligned_N / 2列。详见[调用示例](#dualmodesplitn模式下的尾块场景)。**注意**：当valid_N不超过16时，仅切分给Vec0。 |
 
 ## 调用示例
 
