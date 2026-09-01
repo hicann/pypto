@@ -328,6 +328,99 @@ TEST_F(InsertSyncTest, TestFindDep)
     EXPECT_EQ(ps.AdjustOpCfg(opcfg2, *opLogPtr[IS_NUM5]), FAILED);
 }
 
+TEST_F(InsertSyncTest, TestTokenOnlyDependencyGeneratesSync)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "TestTokenOnlyDependencyGeneratesSync",
+                                               "TestTokenOnlyDependencyGeneratesSync", nullptr);
+    std::vector<int64_t> shape = {IS_NUM8, IS_NUM16};
+    auto shapeImmediate = OpImmediate::Specified(shape);
+    IRBuilder builder;
+    auto gmInput = builder.CreateTensorVar(*function, DT_FP32, shape);
+    auto producerOutput = builder.CreateTensorVar(*function, DT_FP32, shape);
+    auto consumerInput = builder.CreateTensorVar(*function, DT_FP32, shape);
+    auto consumerOutput = builder.CreateTensorVar(*function, DT_FP32, shape);
+    gmInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    producerOutput->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    consumerInput->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    consumerOutput->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    gmInput->memoryrange = TileRange(0, IS_NUM100, IS_NUM1);
+    producerOutput->memoryrange = TileRange(0, IS_NUM100, IS_NUM2);
+    consumerInput->memoryrange = TileRange(IS_NUM200, IS_NUM300, IS_NUM3);
+    consumerOutput->memoryrange = TileRange(IS_NUM300, IS_NUM499, IS_NUM4);
+
+    auto& producer = builder.CreateTensorOpStmt(*function, Opcode::OP_COPY_IN, {gmInput}, {producerOutput});
+    producer.SetOpAttribute(std::make_shared<CopyOpAttribute>(OpImmediate::Specified({0, 0}), MemoryType::MEM_UB,
+                                                              shapeImmediate, shapeImmediate));
+    producer.SetAIVCore(AIVCore::AIV0);
+    auto& consumer = builder.CreateTensorOpStmt(*function, Opcode::OP_CAST, {consumerInput}, {consumerOutput});
+    consumer.SetAIVCore(AIVCore::AIV0);
+
+    PipeSync ps;
+    EXPECT_FALSE(ps.HasDataDependency(producer, consumer));
+    auto token = builder.CreateTokenVar(ir::Span::Unknown());
+    producer.result_token_ = {token};
+    consumer.tokens_.push_back(token);
+    auto& dependency = function->GetVarDependency();
+    dependency.AddProducer(token, std::static_pointer_cast<const ir::Stmt>(function->operations_[0]));
+    dependency.AddConsumer(token, std::static_pointer_cast<const ir::Stmt>(function->operations_[IS_NUM1]));
+    EXPECT_TRUE(ps.HasDataDependency(producer, consumer));
+
+    std::vector<Operation*> syncedOps;
+    ASSERT_EQ(ps.InsertSync(*function, syncedOps), SUCCESS);
+    bool hasSyncSrc = false;
+    bool hasSyncDst = false;
+    for (auto* op : syncedOps) {
+        hasSyncSrc = hasSyncSrc || op->GetOpcode() == Opcode::OP_SYNC_SRC;
+        hasSyncDst = hasSyncDst || op->GetOpcode() == Opcode::OP_SYNC_DST;
+    }
+    EXPECT_TRUE(hasSyncSrc);
+    EXPECT_TRUE(hasSyncDst);
+}
+
+TEST_F(InsertSyncTest, TestTokenOnlyCrossCoreDependencyGeneratesCvSync)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(),
+                                               "TestTokenOnlyCrossCoreDependencyGeneratesCvSync",
+                                               "TestTokenOnlyCrossCoreDependencyGeneratesCvSync", nullptr);
+    std::vector<int64_t> shape = {IS_NUM8, IS_NUM16};
+    IRBuilder builder;
+    auto l1Input = builder.CreateTensorVar(*function, DT_FP32, shape);
+    auto l0aOutput = builder.CreateTensorVar(*function, DT_FP32, shape);
+    auto ubInput = builder.CreateTensorVar(*function, DT_FP32, shape);
+    auto ubOutput = builder.CreateTensorVar(*function, DT_FP32, shape);
+    l1Input->SetMemoryTypeBoth(MemoryType::MEM_L1);
+    l0aOutput->SetMemoryTypeBoth(MemoryType::MEM_L0A);
+    ubInput->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    ubOutput->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    l1Input->memoryrange = TileRange(0, IS_NUM100, IS_NUM1);
+    l0aOutput->memoryrange = TileRange(0, IS_NUM100, IS_NUM2);
+    ubInput->memoryrange = TileRange(IS_NUM200, IS_NUM300, IS_NUM3);
+    ubOutput->memoryrange = TileRange(IS_NUM300, IS_NUM499, IS_NUM4);
+
+    auto& producer = builder.CreateTensorOpStmt(*function, Opcode::OP_L1_TO_L0A, {l1Input}, {l0aOutput});
+    auto& consumer = builder.CreateTensorOpStmt(*function, Opcode::OP_CAST, {ubInput}, {ubOutput});
+    consumer.SetAIVCore(AIVCore::AIV0);
+    auto token = builder.CreateTokenVar(ir::Span::Unknown());
+    producer.result_token_ = {token};
+    consumer.tokens_.push_back(token);
+    auto& dependency = function->GetVarDependency();
+    dependency.AddProducer(token, std::static_pointer_cast<const ir::Stmt>(function->operations_[0]));
+    dependency.AddConsumer(token, std::static_pointer_cast<const ir::Stmt>(function->operations_[IS_NUM1]));
+
+    PipeSync ps;
+    EXPECT_TRUE(ps.HasDataDependency(producer, consumer));
+    std::vector<Operation*> syncedOps;
+    ASSERT_EQ(ps.InsertSync(*function, syncedOps), SUCCESS);
+    bool hasCvSyncSrc = false;
+    bool hasCvSyncDst = false;
+    for (auto* op : syncedOps) {
+        hasCvSyncSrc = hasCvSyncSrc || op->GetOpcode() == Opcode::OP_CV_SYNC_SRC;
+        hasCvSyncDst = hasCvSyncDst || op->GetOpcode() == Opcode::OP_CV_SYNC_DST;
+    }
+    EXPECT_TRUE(hasCvSyncSrc);
+    EXPECT_TRUE(hasCvSyncDst);
+}
+
 TEST_F(InsertSyncTest, TestPhaseKernelProcess)
 {
     auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestPhaseKernelProcess",

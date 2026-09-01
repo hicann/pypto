@@ -16,6 +16,7 @@
 #ifndef PASS_SPLIT_RESHAPE_H_
 #define PASS_SPLIT_RESHAPE_H_
 
+#include <unordered_set>
 #include "interface/function/function.h"
 #include "interface/interpreter/function.h"
 #include "interface/tensor/irbuilder.h"
@@ -147,7 +148,7 @@ private:
     Status Init();
     Status CollectCopyOut(Function& function);
     Status CollectReshapeInfo(const Operation& op);
-    Status CollectAssembleInfo(const Operation& op);
+    Status CollectAssembleInfo(const Operation& op, const std::unordered_set<int64_t>& multiLogicalTensorRawMagics);
     void DeduplicateCopySources();
     Status CheckCopyIn(Function& function);
     Status AddOperation(Function& function);

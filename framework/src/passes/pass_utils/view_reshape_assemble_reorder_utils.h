@@ -180,17 +180,17 @@ private:
     void MarkViewReshapeFanoutVisited(Operation& viewOp, Operation& reshapeOp, const ViewReshapeFanoutRecord& record);
     void MarkReshapeAssembleFaninVisited(Operation& reshapeOp, Operation& assembleOp,
                                          const ReshapeAssembleFaninRecord& record);
-    void CreateMetadataReshape(Function& function, const LogicalTensorPtr& input, const LogicalTensorPtr& output,
-                               const std::vector<SymbolicScalar>& dynShape, const ir::Span& span,
-                               const Operation::ScopeInfo& scopeInfo, Operation& srcOp);
+    Operation& CreateMetadataReshape(Function& function, const LogicalTensorPtr& input, const LogicalTensorPtr& output,
+                                     const std::vector<SymbolicScalar>& dynShape, const ir::Span& span,
+                                     const Operation::ScopeInfo& scopeInfo, Operation& srcOp);
     static bool InferInputDynRawShapeFromOutput(const LogicalTensorPtr& input, const LogicalTensorPtr& output,
                                                 std::vector<SymbolicScalar>& inferredInputDynRawShape);
     static bool BuildAxisPlanAllowFirstUnknown(const std::vector<int64_t>& srcShape,
                                                const std::vector<int64_t>& dstShape, std::vector<AxisGroup>& axisPlan);
-    void CreateView(Function& function, const LogicalTensorPtr& input, const LogicalTensorPtr& output,
-                    const std::vector<int64_t>& offset, const std::vector<SymbolicScalar>& dynOffset,
-                    const std::vector<SymbolicScalar>& outputDynShape, MemoryType toType, bool hasCopyInMode,
-                    const std::any& copyInModeValue, const ir::Span& span, const Operation::ScopeInfo& scopeInfo);
+    Operation& CreateView(Function& function, const LogicalTensorPtr& input, const LogicalTensorPtr& output,
+                          const std::vector<int64_t>& offset, const std::vector<SymbolicScalar>& dynOffset,
+                          const std::vector<SymbolicScalar>& outputDynShape, MemoryType toType, bool hasCopyInMode,
+                          const std::any& copyInModeValue, const ir::Span& span, const Operation::ScopeInfo& scopeInfo);
     void CreateAssemble(Function& function, const LogicalTensorPtr& input, const LogicalTensorPtr& output,
                         const std::vector<int64_t>& offset, const std::vector<SymbolicScalar>& dynOffset,
                         const std::vector<SymbolicScalar>& inputDynShape, MemoryType fromType, const ir::Span& span,

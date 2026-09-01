@@ -1847,12 +1847,12 @@ TEST_F(SplitLargeFanoutTensorTest, OneDimShouldSplit)
     ExecutePass(function, false);
 
     // 验证：
-    // 依据UT注释展示，共会出现2个view和2个assemble
+    // Assemble 创建新 LogicalTensor 后，拆分结果保留 2 个分片 Assemble 和 1 个未拆分分支的 Assemble。
     auto countResultAfter = CountViewAssemble(*function);
     const int viewNum = 2;
-    const int assembleNum = 0;
+    const int assembleNum = 3;
     EXPECT_EQ(viewNum, countResultAfter[0]) << countResultAfter[0] << " OP_VIEW after pass, should be 2";
-    EXPECT_EQ(assembleNum, countResultAfter[1]) << countResultAfter[1] << " OP_ASSEMBLE after pass, should be 0";
+    EXPECT_EQ(assembleNum, countResultAfter[1]) << countResultAfter[1] << " OP_ASSEMBLE after pass, should be 3";
 }
 
 // {1} + {16} + {15} --assemble--> {32} --view--> {16} + {16}
@@ -2013,7 +2013,7 @@ TEST_F(SplitLargeFanoutTensorTest, NoSplitLcmLargerThanLargeTensor)
     splitLargeFanoutTensor.PostCheck(*function);
     std::cout << "Run Pass Done." << std::endl;
 
-    // 验证：pass不会切分，所以前后一致, 但由于MergeViewAssemble功能会合并View和Assemble，导致结果不一致
+    // 验证：pass 不会切分，前后操作及数量均不变。
     auto countResultAfter = CountViewAssemble(*function);
     std::vector<int> opMagicAfter;
     for (auto& op : function->Operations()) {
@@ -2021,12 +2021,12 @@ TEST_F(SplitLargeFanoutTensorTest, NoSplitLcmLargerThanLargeTensor)
     }
     EXPECT_EQ(countResultBefore[0], countResultAfter[0]) << countResultBefore[0] << "OP_VIEW before pass; "
                                                          << countResultAfter[0] << " OP_VIEW after pass, should equal.";
-    EXPECT_NE(countResultBefore[1], countResultAfter[1])
+    EXPECT_EQ(countResultBefore[1], countResultAfter[1])
         << countResultBefore[1] << "OP_ASSEMBLE before pass; " << countResultAfter[1]
         << " OP_ASSEMBLE after pass, should equal.";
-    EXPECT_NE(CommonUtils::ContainerToStr(opMagicBefore), CommonUtils::ContainerToStr(opMagicAfter))
+    EXPECT_EQ(CommonUtils::ContainerToStr(opMagicBefore), CommonUtils::ContainerToStr(opMagicAfter))
         << "All op magic before pass: " << CommonUtils::ContainerToStr(opMagicBefore)
-        << "; All op magic after pass: " << CommonUtils::ContainerToStr(opMagicAfter) << "; Op should change.";
+        << "; All op magic after pass: " << CommonUtils::ContainerToStr(opMagicAfter) << "; Op should not change.";
 }
 
 TEST_F(SplitLargeFanoutTensorTest, TestSplitTailTile)
@@ -2666,17 +2666,16 @@ TEST_F(SplitLargeFanoutTensorTest, DynamicDslExpandAndSplitPerfGuard)
         int64_t elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
         EXPECT_EQ(pass.PostCheck(*f), SUCCESS);
 
-        // Verify: addTmp is inlined by MergeViewAssemble, then slice/contract post-processing removes
-        // identity tile-to-tile view-like ops. All assemble-like ops target the large output shape {b,sq,d}.
+        // Versioned writes to addTmp are preserved, while the out update paths are split into region-sized CONTRACTs.
         std::vector<int64_t> largeShape{b, sq, d}, tileShape{1, 1, 8};
         auto c = CountSplitByShape(*f, largeShape, tileShape);
         int pathCnt = sq * b * (d / 8);                         // each {b,1,d} view expands to b*(d/8) tiles
         EXPECT_EQ(c.vCnt, static_cast<size_t>(pathCnt));        // q -> tile view-like ops
-        EXPECT_EQ(c.aCnt, static_cast<size_t>(pathCnt));        // all ASSEMBLEs to out
+        EXPECT_EQ(c.aCnt, static_cast<size_t>(pathCnt + sq));   // split CONTRACTs plus versioned addTmp ASSEMBLEs
         EXPECT_EQ(c.vLargeShape, static_cast<size_t>(pathCnt)); // VIEW from q
         EXPECT_EQ(c.vTileShape, static_cast<size_t>(0));        // identity view-like ops on tiles are merged
-        EXPECT_EQ(c.aLargeShape, static_cast<size_t>(pathCnt)); // ASSEMBLE into out
-        EXPECT_EQ(c.aTileShape, static_cast<size_t>(0));        // addTmp merged, no tile ASSEMBLE
+        EXPECT_EQ(c.aLargeShape, static_cast<size_t>(sq));      // versioned ASSEMBLEs into addTmp
+        EXPECT_EQ(c.aTileShape, static_cast<size_t>(0));        // no assemble-like op writes directly to a tile
         EXPECT_LT(elapsedMs, thresholdMs);
     }
 }

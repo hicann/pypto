@@ -69,11 +69,14 @@ private:
         Operation* op, std::vector<std::pair<Operation*, LogicalTensorPtr>>& toCopyProducerTensor, bool& findCopyOut,
         bool& needToCopy, int& index);
     void FindAllProducerCopyOuts(LogicalTensorPtr tensor, std::vector<Operation*>& copyOutOps);
+    void CollectRawCopyOuts(Function& function, LogicalTensorPtr reshapeInput, std::vector<Operation*>& copyOutOps);
+    void CollectRawCopyInConsumers(Function& function, LogicalTensorPtr reshapeInput,
+                                   std::vector<Operation*>& copyInOps);
+    bool HasMixedRawCopyOutAndAssembleProducers(Function& function, LogicalTensorPtr reshapeInput);
     bool checkNonCopyInConsumerExists(LogicalTensorPtr tensor, std::vector<Operation*>& copyInOps);
     void HandleNoCopyInConsumer(Function& function, Operation& op, LogicalTensorPtr output,
                                 std::vector<Operation*>& copyInOps, bool& checkOverUbSize);
     bool CheckUnaligned(Operation& op);
-    bool CheckAllCopyOutInputsNonUb(const std::vector<Operation*>& copyOutOps);
     void CollectSiblingCopyInConsumersOfDDRReshapeInput(LogicalTensorPtr reshapeInput, Operation& reshapeOp,
                                                         std::vector<Operation*>& copyInOps);
     LogicalTensorPtr InsertIOTensor(Function& function, Operation& op,

@@ -23,6 +23,7 @@
 #include "passes/pass_interface/pass.h"
 #include "interface/operation/opcode.h"
 #include "passes/tile_graph_pass/data_path/convert_op_inserter.h"
+#include "passes/pass_utils/graph_utils.h"
 #include "tilefwk/platform.h"
 #include "tilefwk/data_type.h"
 #include "passes/pass_check/assign_memory_type_checker.h"
@@ -88,7 +89,16 @@ private:
 
     bool HasDifferentConsumerRequirement(const LogicalTensorPtr& tensor, MemoryType targetType) const;
 
-    Status InferAssembleMemoryType(Operation& operation, std::unordered_set<LogicalTensorPtr>& inferredAssembleOutputs);
+    Status InferAssembleMemoryType(Function& function, Operation& operation,
+                                   std::unordered_set<LogicalTensorPtr>& inferredAssembleOutputs);
+
+    // TODO: 后续有公共方法后替换为通过 rawTensor 查找所有 logicalTensor 的公共接口
+    TensorSet GetLogicalTensorsByRawTensor(Function& function, const LogicalTensorPtr& tensor) const;
+
+    void PropagateMemoryTypeToRawTensorSiblings(Function& function, const LogicalTensorPtr& output,
+                                                std::unordered_set<LogicalTensorPtr>& inferredAssembleOutputs);
+
+    Status ResolveInconsistentRawTensorMemoryTypes(Function& function);
 
     Status InferAssembleMemoryType(Operation& operation);
 

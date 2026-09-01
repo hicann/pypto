@@ -16,6 +16,7 @@
 #include "remove_redundant_assemble.h"
 #include "interface/tensor/irbuilder.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/pass_token_utils.h"
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_utils/subgraph_utils.h"
 #include "passes/pass_utils/graph_utils.h"
@@ -67,6 +68,97 @@ std::string OpImmediateVecToStr(const std::vector<OpImmediate>& values)
     ss << "]";
     return ss.str();
 }
+
+namespace {
+ir::StmtPtr ToStmtPtr(Operation& op) { return std::static_pointer_cast<const ir::Stmt>(op.shared_from_this()); }
+
+std::vector<Operation*> GetExternalProducers(Operation& op, const std::unordered_set<Operation*>& deletedOps)
+{
+    std::vector<Operation*> producers;
+    for (auto* producer : op.ProducerOps()) {
+        if (producer == nullptr || deletedOps.count(producer) != 0) {
+            continue;
+        }
+        producers.push_back(producer);
+    }
+    return producers;
+}
+
+std::vector<Operation*> GetExternalConsumers(Operation& op, const std::unordered_set<Operation*>& deletedOps)
+{
+    std::vector<Operation*> consumers;
+    for (auto* consumer : op.ConsumerOps()) {
+        if (consumer == nullptr || deletedOps.count(consumer) != 0) {
+            continue;
+        }
+        consumers.push_back(consumer);
+    }
+    return consumers;
+}
+
+std::unordered_set<ir::StmtPtr> BuildDeletedStmtSet(const std::vector<Operation*>& deletedOps)
+{
+    std::unordered_set<ir::StmtPtr> deletedStmts;
+    for (auto* op : deletedOps) {
+        if (op == nullptr) {
+            continue;
+        }
+        deletedStmts.insert(ToStmtPtr(*op));
+    }
+    return deletedStmts;
+}
+
+std::unordered_set<ir::VarPtr> BuildDeletedResultTokenSet(const std::vector<Operation*>& deletedOps)
+{
+    std::unordered_set<ir::VarPtr> deletedResultTokens;
+    for (auto* op : deletedOps) {
+        if (op == nullptr) {
+            continue;
+        }
+        deletedResultTokens.insert(op->result_token_.begin(), op->result_token_.end());
+    }
+    return deletedResultTokens;
+}
+
+void MoveInputTokensToConsumers(Function& function, const std::vector<Operation*>& deletedOps,
+                                const std::vector<Operation*>& targetConsumers,
+                                const std::unordered_set<ir::VarPtr>& deletedResultTokens)
+{
+    auto& dependency = function.GetVarDependency();
+    for (auto* op : deletedOps) {
+        if (op == nullptr) {
+            continue;
+        }
+        auto inputTokens = op->tokens_;
+        for (const auto& token : inputTokens) {
+            dependency.RemoveConsumer(token, ToStmtPtr(*op));
+            if (deletedResultTokens.count(token) != 0) {
+                continue;
+            }
+            for (auto* consumer : targetConsumers) {
+                if (consumer == nullptr || consumer == op) {
+                    continue;
+                }
+                PassTokenUtils::AddTokenConsumer(function, token, *consumer);
+            }
+        }
+        op->tokens_.clear();
+    }
+}
+
+void MoveReshapeViewTokenBeforeRemove(Function& function, Operation& firstReshape, Operation& viewOp)
+{
+    std::vector<Operation*> deletedOps = {&firstReshape, &viewOp};
+    std::unordered_set<Operation*> deletedOpSet(deletedOps.begin(), deletedOps.end());
+    auto targetProducers = GetExternalProducers(firstReshape, deletedOpSet);
+    auto targetConsumers = GetExternalConsumers(viewOp, deletedOpSet);
+    auto deletedResultTokens = BuildDeletedResultTokenSet(deletedOps);
+    auto deletedStmts = BuildDeletedStmtSet(deletedOps);
+    MoveInputTokensToConsumers(function, deletedOps, targetConsumers, deletedResultTokens);
+    PassTokenUtils::MoveResultTokensToProducers(function, deletedOps, targetProducers, deletedStmts);
+    PassTokenUtils::CleanupDeletedTokenDependency(function, deletedOps);
+}
+} // namespace
 
 std::vector<OpImmediate> SumOffset(const std::vector<OpImmediate> offset1, const std::vector<OpImmediate> offset2)
 {
@@ -725,6 +817,7 @@ Status RemoveRedundantAssemble::RemoveViewSingleReshape(Function& function) cons
         UpdateCopyInAttrAfterRemoveView(reshapeOp, staticNewRawShape, reshapeInfo.dynOffset,
                                         reshapeInfo.reshapeDynValidShape, reshapeInfo.validShapeExpr);
         UpdateReshapeShape(reshapeOp, reshapeOp.GetOOperands().front(), staticNewRawShape, reshapeInfo.dynRawShape);
+        PassTokenUtils::MoveTokenDependencyBeforeRemoveOp(function, *producerOp);
         reshapeOp.ReplaceIOperand(0, viewInput);
         producerOp->SetAsDeleted();
     }
@@ -906,6 +999,7 @@ Status RemoveRedundantAssemble::RemoveViewMultiReshape(
         }
         secondReshape->GetOOperands().front()->GetRawTensor()->UpdateRawShape(newShape);
         secondReshape->GetOOperands().front()->GetRawTensor()->UpdateDynRawShape(newDynShape);
+        MoveReshapeViewTokenBeforeRemove(*secondReshape->BelongTo(), *firstReshape, *viewOp);
         secondReshape->ReplaceIOperand(0, firstReshape->GetIOperands().front());
         firstReshape->SetAsDeleted();
         viewOp->SetAsDeleted();
@@ -1207,6 +1301,7 @@ Status RemoveRedundantAssemble::HanldeForSingleAssemble(Function& function, Logi
     auto& consumers = input->GetConsumers();
     auto cons = *consumers.begin();
     if (consumers.size() == 1 && cons->GetOpcode() == Opcode::OP_ASSEMBLE) {
+        PassTokenUtils::MoveTokenDependencyBeforeRemoveOp(function, *cons);
         cons->SetAsDeleted();
         if (HandleCopyOutToAssemble(*cons, output, producersBackup) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "HandleCopyOutToAssemble for op:[%d] failed. %s", cons->GetOpMagic(),

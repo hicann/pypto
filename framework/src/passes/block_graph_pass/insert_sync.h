@@ -92,6 +92,7 @@ private:
     std::unordered_map<MemoryType, RangeSearchTree> rawSearchTree_;
     std::unordered_map<int, std::set<int>> readDdrMemMap;
     std::unordered_map<int, std::set<int>> writeDdrMemMap;
+    std::unordered_map<const Operation*, int> opIndices_;
 };
 
 using IndexOp = std::pair<uint64_t, std::reference_wrapper<Operation>>;

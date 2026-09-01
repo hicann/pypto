@@ -15,6 +15,7 @@
 
 #include <gtest/gtest.h>
 #include "symbolic_scalar_test_utils.h"
+#include <algorithm>
 #include <memory>
 #include <vector>
 #include <nlohmann/json.hpp>
@@ -28,6 +29,7 @@
 #include "interface/function/function.h"
 #include "interface/operation/operation.h"
 #include "passes/tile_graph_pass/subgraph_to_function.h"
+#include "passes/tile_graph_pass/graph_partition/graph_partition_token_dependency.h"
 #include "passes/tile_graph_pass/static_subgraph_processor.h"
 #include "passes/pass_mgr/pass_manager.h"
 #include "passes/statistics/execute_graph_statistic.h"
@@ -500,6 +502,24 @@ TEST_F(SubgraphToFunctionTest, TestBasicSubgraphConversion)
     EXPECT_EQ(leafFunc->Operations().size(), 4);
 }
 
+TEST_F(SubgraphToFunctionTest, IgnoresRemovedTrailingSubgraph)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> tileShape{16, 16};
+    InitGraphBuilder(G, tileShape);
+
+    Function* function = G.GetFunction();
+    ASSERT_NE(function, nullptr);
+    function->SetTotalSubGraphCount(2);
+
+    SubgraphToFunction pass;
+    ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
+    ASSERT_NE(function->rootFunc_, nullptr);
+    EXPECT_EQ(function->rootFunc_->Operations().size(), 1);
+    ASSERT_EQ(function->rootFunc_->programs_.size(), 1);
+    EXPECT_EQ(function->rootFunc_->programs_.begin()->second->Operations().size(), 4);
+}
+
 static Function* BuildIsomorphicSubgraphsWithDifferentVecHashOrder(ComputationalGraphBuilder& G)
 {
     EXPECT_TRUE(G.AddTensors(DataType::DT_FP32, {16, 16}, {"input", "out0", "out1"}));
@@ -546,6 +566,267 @@ TEST_F(SubgraphToFunctionTest, PreservesHashOrderInfoOnIsomorphicCallOps)
     EXPECT_EQ(firstInfo.second, 4);
     EXPECT_EQ(secondInfo.first, "func9_0");
     EXPECT_EQ(secondInfo.second, 1);
+}
+
+ir::StmtPtr ToSubgraphFunctionStmt(Operation& op)
+{
+    return std::static_pointer_cast<const ir::Stmt>(op.shared_from_this());
+}
+
+bool HasSubgraphFunctionToken(const Operation& op, const ir::VarPtr& token)
+{
+    return std::find(op.tokens_.begin(), op.tokens_.end(), token) != op.tokens_.end();
+}
+
+Operation* FindCallOpBySubgraphId(Function& rootFunc, int subgraphId)
+{
+    for (auto& op : rootFunc.Operations()) {
+        if (op.GetOpcode() == Opcode::OP_CALL && op.GetSubgraphID() == subgraphId) {
+            return &op;
+        }
+    }
+    return nullptr;
+}
+
+Function* BuildSubgraphTokenDependencyGraph(ComputationalGraphBuilder& G)
+{
+    EXPECT_TRUE(G.AddTensors(DataType::DT_FP32, {16, 16}, {"input", "mid", "output"}));
+    EXPECT_TRUE(G.AddOp(Opcode::OP_ABS, {"input"}, {"mid"}, "producer"));
+    EXPECT_TRUE(G.AddOp(Opcode::OP_EXP, {"mid"}, {"output"}, "consumer"));
+    G.GetTensor("input")->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    G.GetTensor("mid")->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    G.GetTensor("output")->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    EXPECT_TRUE(G.SetInCast({"input"}));
+    EXPECT_TRUE(G.SetOutCast({"output"}));
+    G.GetOp("producer")->UpdateSubgraphID(0);
+    G.GetOp("consumer")->UpdateSubgraphID(1);
+    auto token = IRBuilder().CreateTokenVar(ir::Span::Unknown());
+    G.GetFunction()->GetVarDependency().AddProducer(token, ToSubgraphFunctionStmt(*G.GetOp("producer")));
+    G.GetFunction()->GetVarDependency().AddConsumer(token, ToSubgraphFunctionStmt(*G.GetOp("consumer")));
+    G.GetOp("producer")->result_token_ = {token};
+    G.GetOp("consumer")->tokens_.push_back(token);
+    G.GetFunction()->SetTotalSubGraphCount(2);
+    return G.GetFunction();
+}
+
+TEST_F(SubgraphToFunctionTest, BuildsCallOpTokenDependency)
+{
+    ComputationalGraphBuilder G;
+    auto* function = BuildSubgraphTokenDependencyGraph(G);
+    SubgraphToFunction pass;
+    ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
+    auto* rootFunc = function->rootFunc_;
+    ASSERT_NE(rootFunc, nullptr);
+    auto* producerCallOp = FindCallOpBySubgraphId(*rootFunc, 0);
+    auto* consumerCallOp = FindCallOpBySubgraphId(*rootFunc, 1);
+    ASSERT_NE(producerCallOp, nullptr);
+    ASSERT_NE(consumerCallOp, nullptr);
+
+    ASSERT_FALSE(producerCallOp->result_token_.empty());
+    EXPECT_TRUE(rootFunc->GetVarDependency().HasProducer(producerCallOp->result_token_.front(),
+                                                         ToSubgraphFunctionStmt(*producerCallOp)));
+    EXPECT_TRUE(rootFunc->GetVarDependency().HasConsumer(producerCallOp->result_token_.front(),
+                                                         ToSubgraphFunctionStmt(*consumerCallOp)));
+    EXPECT_TRUE(HasSubgraphFunctionToken(*consumerCallOp, producerCallOp->result_token_.front()));
+
+    bool producerSeen = false;
+    for (auto* op : rootFunc->Operations(false).DuplicatedOpList()) {
+        if (op == producerCallOp) {
+            producerSeen = true;
+        }
+        if (op == consumerCallOp) {
+            EXPECT_TRUE(producerSeen);
+            break;
+        }
+    }
+}
+
+TEST_F(SubgraphToFunctionTest, MergesCyclicSubgraphsCreatedAfterPartition)
+{
+    ComputationalGraphBuilder G;
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP32, {16, 16}, {"input", "producer_out", "middle_out", "output"}));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_ABS, {"input"}, {"producer_out"}, "producer"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_EXP, {"producer_out"}, {"middle_out"}, "middle"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_NEG, {"middle_out"}, {"output"}, "consumer"));
+    for (const auto& tensorName : {"input", "producer_out", "middle_out", "output"}) {
+        G.GetTensor(tensorName)->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    }
+    ASSERT_TRUE(G.SetInCast({"input"}));
+    ASSERT_TRUE(G.SetOutCast({"output"}));
+
+    auto* producer = G.GetOp("producer");
+    auto* middle = G.GetOp("middle");
+    auto* consumer = G.GetOp("consumer");
+    producer->UpdateSubgraphID(0);
+    middle->UpdateSubgraphID(1);
+    consumer->UpdateSubgraphID(0);
+    G.GetFunction()->SetTotalSubGraphCount(2);
+    auto token = IRBuilder().CreateTokenVar(ir::Span::Unknown());
+    G.GetFunction()->GetVarDependency().AddProducer(token, ToSubgraphFunctionStmt(*producer));
+    G.GetFunction()->GetVarDependency().AddConsumer(token, ToSubgraphFunctionStmt(*consumer));
+    producer->result_token_ = {token};
+    consumer->tokens_.push_back(token);
+
+    ASSERT_EQ(FinalizePartitionWithTokenDependency(*G.GetFunction()), SUCCESS);
+    SubgraphToFunction pass;
+    ASSERT_EQ(pass.RunOnFunction(*G.GetFunction()), SUCCESS);
+
+    EXPECT_EQ(producer->GetSubgraphID(), middle->GetSubgraphID());
+    EXPECT_EQ(middle->GetSubgraphID(), consumer->GetSubgraphID());
+    EXPECT_EQ(G.GetFunction()->GetTotalSubGraphCount(), 1U);
+    ASSERT_NE(G.GetFunction()->rootFunc_, nullptr);
+    EXPECT_EQ(G.GetFunction()->rootFunc_->Operations().size(), 1U);
+}
+
+TEST_F(SubgraphToFunctionTest, SplitsMixedCoreCycleCreatedAfterPartition)
+{
+    ComputationalGraphBuilder G;
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP32, {16, 16},
+                             {"inputA", "inputB", "inputC", "producer_out", "middle_out", "output"}));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_A_MUL_B, {"inputA", "inputB"}, {"producer_out"}, "producer"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_EXP, {"producer_out"}, {"middle_out"}, "middle"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_A_MUL_B, {"middle_out", "inputC"}, {"output"}, "consumer"));
+    for (const auto& tensorName : {"inputA", "inputB", "inputC", "producer_out", "middle_out", "output"}) {
+        G.GetTensor(tensorName)->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    }
+    ASSERT_TRUE(G.SetInCast({"inputA", "inputB", "inputC"}));
+    ASSERT_TRUE(G.SetOutCast({"output"}));
+
+    auto* producer = G.GetOp("producer");
+    auto* middle = G.GetOp("middle");
+    auto* consumer = G.GetOp("consumer");
+    producer->UpdateSubgraphID(0);
+    middle->UpdateSubgraphID(1);
+    consumer->UpdateSubgraphID(0);
+    G.GetFunction()->SetTotalSubGraphCount(2);
+    auto token = IRBuilder().CreateTokenVar(ir::Span::Unknown());
+    G.GetFunction()->GetVarDependency().AddProducer(token, ToSubgraphFunctionStmt(*producer));
+    G.GetFunction()->GetVarDependency().AddConsumer(token, ToSubgraphFunctionStmt(*consumer));
+    producer->result_token_ = {token};
+    consumer->tokens_.push_back(token);
+
+    ASSERT_EQ(FinalizePartitionWithTokenDependency(*G.GetFunction()), SUCCESS);
+    SubgraphToFunction pass;
+    ASSERT_EQ(pass.RunOnFunction(*G.GetFunction()), SUCCESS);
+
+    EXPECT_NE(producer->GetSubgraphID(), middle->GetSubgraphID());
+    EXPECT_NE(middle->GetSubgraphID(), consumer->GetSubgraphID());
+    EXPECT_NE(producer->GetSubgraphID(), consumer->GetSubgraphID());
+    EXPECT_EQ(G.GetFunction()->GetTotalSubGraphCount(), 3U);
+    ASSERT_NE(G.GetFunction()->rootFunc_, nullptr);
+    EXPECT_EQ(G.GetFunction()->rootFunc_->Operations().size(), 3U);
+}
+
+TEST_F(SubgraphToFunctionTest, KeepsLocalBufferInsideSubgraphWhenSplittingMixedCoreCycle)
+{
+    ComputationalGraphBuilder G;
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP32, {16, 16},
+                             {"inputA", "inputB", "inputC", "local", "cube_out", "vector_out", "output"}));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_A_MUL_B, {"inputA", "inputB"}, {"local"}, "local_producer"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_A_MUL_B, {"local", "inputC"}, {"cube_out"}, "cube_consumer"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_EXP, {"cube_out"}, {"vector_out"}, "vector_middle"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_NEG, {"vector_out"}, {"output"}, "vector_consumer"));
+    for (const auto& tensorName : {"inputA", "inputB", "inputC", "cube_out", "vector_out", "output"}) {
+        G.GetTensor(tensorName)->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    }
+    G.GetTensor("local")->SetMemoryTypeBoth(MemoryType::MEM_L0B);
+    ASSERT_TRUE(G.SetInCast({"inputA", "inputB", "inputC"}));
+    ASSERT_TRUE(G.SetOutCast({"output"}));
+
+    auto* localProducer = G.GetOp("local_producer");
+    auto* cubeConsumer = G.GetOp("cube_consumer");
+    auto* vectorMiddle = G.GetOp("vector_middle");
+    auto* vectorConsumer = G.GetOp("vector_consumer");
+    localProducer->UpdateSubgraphID(0);
+    cubeConsumer->UpdateSubgraphID(1);
+    vectorMiddle->UpdateSubgraphID(1);
+    vectorConsumer->UpdateSubgraphID(0);
+    G.GetFunction()->SetTotalSubGraphCount(2);
+
+    ASSERT_EQ(FinalizePartitionWithTokenDependency(*G.GetFunction()), SUCCESS);
+    SubgraphToFunction pass;
+    ASSERT_EQ(pass.RunOnFunction(*G.GetFunction()), SUCCESS);
+
+    EXPECT_EQ(localProducer->GetSubgraphID(), cubeConsumer->GetSubgraphID());
+    EXPECT_NE(cubeConsumer->GetSubgraphID(), vectorMiddle->GetSubgraphID());
+    EXPECT_EQ(vectorMiddle->GetSubgraphID(), vectorConsumer->GetSubgraphID());
+    EXPECT_EQ(G.GetFunction()->GetTotalSubGraphCount(), 2U);
+}
+
+TEST_F(SubgraphToFunctionTest, CoalescesCompatibleCoreRunsAfterSplittingMixedCoreCycle)
+{
+    ComputationalGraphBuilder G;
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP32, {16, 16},
+                             {"inputA", "inputB", "inputC", "l1", "cube_out", "vector_out", "output"}));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_A_MUL_B, {"inputA", "inputB"}, {"l1"}, "aic_first"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_A_MUL_B, {"l1", "inputC"}, {"cube_out"}, "aic_second"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_EXP, {"cube_out"}, {"vector_out"}, "aiv_first"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_NEG, {"vector_out"}, {"output"}, "aiv_second"));
+    for (const auto& tensorName : {"inputA", "inputB", "inputC", "cube_out", "vector_out", "output"}) {
+        G.GetTensor(tensorName)->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    }
+    G.GetTensor("l1")->SetMemoryTypeBoth(MemoryType::MEM_L1);
+    ASSERT_TRUE(G.SetInCast({"inputA", "inputB", "inputC"}));
+    ASSERT_TRUE(G.SetOutCast({"output"}));
+
+    auto* aicFirst = G.GetOp("aic_first");
+    auto* aicSecond = G.GetOp("aic_second");
+    auto* aivFirst = G.GetOp("aiv_first");
+    auto* aivSecond = G.GetOp("aiv_second");
+    aicFirst->UpdateSubgraphID(0);
+    aicSecond->UpdateSubgraphID(1);
+    aivFirst->UpdateSubgraphID(1);
+    aivSecond->UpdateSubgraphID(0);
+    G.GetFunction()->SetTotalSubGraphCount(2);
+
+    ASSERT_EQ(FinalizePartitionWithTokenDependency(*G.GetFunction()), SUCCESS);
+    SubgraphToFunction pass;
+    ASSERT_EQ(pass.RunOnFunction(*G.GetFunction()), SUCCESS);
+
+    EXPECT_EQ(aicFirst->GetSubgraphID(), aicSecond->GetSubgraphID());
+    EXPECT_NE(aicSecond->GetSubgraphID(), aivFirst->GetSubgraphID());
+    EXPECT_EQ(aivFirst->GetSubgraphID(), aivSecond->GetSubgraphID());
+    EXPECT_EQ(G.GetFunction()->GetTotalSubGraphCount(), 2U);
+}
+
+TEST_F(SubgraphToFunctionTest, BuildsTokenOnlyStaticTopologyDependency)
+{
+    ComputationalGraphBuilder G;
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP32, {16, 16}, {"input", "producer_out", "consumer_out"}));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_ABS, {"input"}, {"producer_out"}, "producer"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_EXP, {"input"}, {"consumer_out"}, "consumer"));
+    for (const auto& tensorName : {"input", "producer_out", "consumer_out"}) {
+        G.GetTensor(tensorName)->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    }
+    ASSERT_TRUE(G.SetInCast({"input"}));
+    ASSERT_TRUE(G.SetOutCast({"producer_out", "consumer_out"}));
+
+    auto* producer = G.GetOp("producer");
+    auto* consumer = G.GetOp("consumer");
+    producer->UpdateSubgraphID(1);
+    consumer->UpdateSubgraphID(0);
+    auto token = IRBuilder().CreateTokenVar(ir::Span::Unknown());
+    producer->result_token_ = {token};
+    consumer->tokens_.push_back(token);
+    G.GetFunction()->SetTotalSubGraphCount(2);
+
+    SubgraphToFunction pass;
+    ASSERT_EQ(pass.RunOnFunction(*G.GetFunction()), SUCCESS);
+    auto* rootFunc = G.GetFunction()->rootFunc_;
+    ASSERT_NE(rootFunc, nullptr);
+    ASSERT_EQ(rootFunc->topoInfo_.topology_.size(), 2);
+    EXPECT_EQ(rootFunc->topoInfo_.topology_[1].readyState, 0);
+    EXPECT_EQ(rootFunc->topoInfo_.topology_[0].readyState, -1);
+    const auto& producerSuccessors = rootFunc->topoInfo_.topology_[1].outGraph;
+    EXPECT_NE(std::find(producerSuccessors.begin(), producerSuccessors.end(), 0), producerSuccessors.end());
+
+    auto* producerCallOp = FindCallOpBySubgraphId(*rootFunc, 1);
+    auto* consumerCallOp = FindCallOpBySubgraphId(*rootFunc, 0);
+    ASSERT_NE(producerCallOp, nullptr);
+    ASSERT_NE(consumerCallOp, nullptr);
+    const auto callOps = rootFunc->Operations(false).DuplicatedOpList();
+    EXPECT_LT(std::find(callOps.begin(), callOps.end(), producerCallOp),
+              std::find(callOps.begin(), callOps.end(), consumerCallOp));
 }
 
 static void BuildMultiSubgraphDependencyGraph(ComputationalGraphBuilder& G)
@@ -763,5 +1044,23 @@ TEST_F(SubgraphToFunctionTest, ReshapeDependencyHandling)
     }
     EXPECT_TRUE(found) << "ABS_SG1 subgraph entry not found in topology";
 }
+
+TEST_F(SubgraphToFunctionTest, LightweightStableSortIgnoresInplaceSelfDependency)
+{
+    Program program;
+    auto function = std::make_unique<Function>(program, "inplace_call_sort", "inplace_call_sort", nullptr);
+    IRBuilder builder;
+    auto inplaceTensor = builder.CreateTensorVar(*function, DataType::DT_FP32, {16, 16});
+    auto output = builder.CreateTensorVar(*function, DataType::DT_FP32, {16, 16});
+
+    auto& inplaceCall = function->AddRawOperation(Opcode::OP_CALL, {inplaceTensor}, {inplaceTensor});
+    auto& consumer = function->AddRawOperation(Opcode::OP_ABS, {inplaceTensor}, {output});
+
+    function->SortOperations(SortOperationsMode::LIGHTWEIGHT_STABLE);
+    ASSERT_EQ(function->Operations(false).size(), 2);
+    EXPECT_EQ(&function->Operations(false)[0], &inplaceCall);
+    EXPECT_EQ(&function->Operations(false)[1], &consumer);
+}
+
 } // namespace tile_fwk
 } // namespace npu

@@ -13,9 +13,10 @@
  * \brief Unit test for ProcessAtomic pass.
  */
 
+#include <algorithm>
 #include <fstream>
-#include <vector>
 #include <string>
+#include <vector>
 #include "gtest/gtest.h"
 #include "tilefwk/tilefwk_op.h"
 #include "interface/function/function.h"
@@ -58,6 +59,7 @@ public:
     {
         Program::GetInstance().Reset();
         config::Reset();
+        config::SetPassOption(ENABLE_SLICE, true);
         config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
         // config::SetHostConfig(KEY_STRATEGY, "SplitKTestStrategy");
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
@@ -175,6 +177,186 @@ TEST_F(ProcessAtomicTest, TestGetL0CCopyOutsInvalidOutputMemory)
     CubeProcess cubeProcess;
     std::vector<Operation*> copyOuts;
     EXPECT_EQ(cubeProcess.GetL0CCopyOuts(*G.GetOp("L0C_Copy_out"), copyOuts), FAILED);
+}
+
+namespace {
+ir::StmtPtr ToStmtPtr(Operation& op) { return std::static_pointer_cast<const ir::Stmt>(op.shared_from_this()); }
+
+std::shared_ptr<LogicalTensor> CreateDdrTensor(Function& function, DataType dtype, const std::vector<int64_t>& shape)
+{
+    auto tensor = IRBuilder().CreateTensorVar(function, dtype, shape);
+    tensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    return tensor;
+}
+
+Operation& AddTestOp(Function& function, Opcode opcode, const std::vector<std::shared_ptr<LogicalTensor>>& inputs,
+                     const std::vector<std::shared_ptr<LogicalTensor>>& outputs)
+{
+    return IRBuilder().CreateTensorOpStmt(function, opcode, inputs, outputs);
+}
+
+ir::VarPtr AddTokenEdge(Function& function, Operation& producer, Operation& consumer)
+{
+    if (producer.result_token_.empty()) {
+        producer.result_token_ = {IRBuilder().CreateTokenVar(producer.GetSpan())};
+    }
+    auto token = producer.result_token_.front();
+    function.GetVarDependency().AddProducer(token, ToStmtPtr(producer));
+    function.GetVarDependency().AddConsumer(token, ToStmtPtr(consumer));
+    if (std::find(consumer.tokens_.begin(), consumer.tokens_.end(), token) == consumer.tokens_.end()) {
+        consumer.tokens_.emplace_back(token);
+    }
+    return token;
+}
+
+bool HasToken(const Operation& op, const ir::VarPtr& token)
+{
+    return std::find(op.tokens_.begin(), op.tokens_.end(), token) != op.tokens_.end();
+}
+} // namespace
+
+TEST_F(ProcessAtomicTest, AtomicRMWTokenDependencyMovesToProducerBoundary)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "AtomicRMWToken", "AtomicRMWToken", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> shape = {64, 128};
+    auto assembleInput = CreateDdrTensor(*function, DataType::DT_FP16, shape);
+    auto atomicInput = CreateDdrTensor(*function, DataType::DT_FP16, shape);
+    auto atomicOutput = CreateDdrTensor(*function, DataType::DT_FP16, shape);
+    auto dataOutput = CreateDdrTensor(*function, DataType::DT_FP16, shape);
+    auto tokenInput = CreateDdrTensor(*function, DataType::DT_FP16, shape);
+    auto tokenOutput = CreateDdrTensor(*function, DataType::DT_FP16, shape);
+    auto tokenSinkOutput = CreateDdrTensor(*function, DataType::DT_FP16, shape);
+
+    auto& assemble = AddTestOp(*function, Opcode::OP_ASSEMBLE, {assembleInput}, {atomicInput});
+    assemble.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto& atomic = AddTestOp(*function, Opcode::OP_ATOMIC_RMW, {atomicInput}, {atomicOutput});
+    atomic.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    atomic.SetAttribute(OpAttributeKey::rmwMode, static_cast<int>(AtomicRMWMode::ADD));
+    auto& dataConsumer = AddTestOp(*function, Opcode::OP_SQRT, {atomicOutput}, {dataOutput});
+    auto& tokenProducer = AddTestOp(*function, Opcode::OP_EXP, {tokenInput}, {tokenOutput});
+    auto& tokenSink = AddTestOp(*function, Opcode::OP_SQRT, {tokenInput}, {tokenSinkOutput});
+    auto incomingToken = AddTokenEdge(*function, tokenProducer, atomic);
+    auto oldResultToken = AddTokenEdge(*function, atomic, tokenSink);
+    auto atomicStmt = ToStmtPtr(atomic);
+
+    function->inCasts_ = {assembleInput, tokenInput};
+    function->outCasts_ = {dataOutput, tokenOutput, tokenSinkOutput};
+
+    ProcessAtomic passLocal;
+    EXPECT_EQ(passLocal.EliminateAtomicRMW(*function), SUCCESS);
+
+    EXPECT_EQ(CountOpsByType(function.get(), Opcode::OP_ATOMIC_RMW), 0);
+    EXPECT_EQ(assemble.GetOOperands().front(), atomicOutput);
+    EXPECT_TRUE(assemble.HasAttr(RMW_MODE_ATTR_ADD));
+    EXPECT_TRUE(HasToken(assemble, incomingToken));
+    EXPECT_FALSE(HasToken(dataConsumer, incomingToken));
+    EXPECT_TRUE(function->GetVarDependency().HasConsumer(incomingToken, ToStmtPtr(assemble)));
+    EXPECT_FALSE(function->GetVarDependency().HasConsumer(incomingToken, atomicStmt));
+    ASSERT_FALSE(assemble.result_token_.empty());
+    EXPECT_NE(assemble.result_token_.front(), oldResultToken);
+    EXPECT_TRUE(function->GetVarDependency().HasConsumer(assemble.result_token_.front(), ToStmtPtr(tokenSink)));
+    EXPECT_TRUE(HasToken(tokenSink, assemble.result_token_.front()));
+    EXPECT_FALSE(function->GetVarDependency().HasDependency(oldResultToken));
+}
+
+TEST_F(ProcessAtomicTest, AtomicRMWWarReadBoundaryClonesRawProducerSet)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "AtomicRMWWarClone", "AtomicRMWWarClone",
+                                               nullptr);
+    ASSERT_NE(function, nullptr);
+
+    IRBuilder builder;
+    std::vector<int64_t> shape = {32, 128};
+    auto sharedRaw = builder.CreateRawTensor(DataType::DT_FP16, Shape{32, 128});
+    auto oldSource = CreateDdrTensor(*function, DataType::DT_FP16, shape);
+    auto newSource = CreateDdrTensor(*function, DataType::DT_FP16, shape);
+    auto oldInput = CreateDdrTensor(*function, DataType::DT_FP16, shape);
+    auto newInput = CreateDdrTensor(*function, DataType::DT_FP16, shape);
+    auto oldVersion = builder.CreateTensorVar(*function, sharedRaw, {0, 0}, shape);
+    auto newVersion = builder.CreateTensorVar(*function, sharedRaw, {0, 0}, shape);
+    auto readOutput = CreateDdrTensor(*function, DataType::DT_FP16, shape);
+    auto normalOutput = CreateDdrTensor(*function, DataType::DT_FP16, shape);
+    auto atomicOutput = CreateDdrTensor(*function, DataType::DT_FP16, shape);
+    auto tokenSinkInput = CreateDdrTensor(*function, DataType::DT_FP16, shape);
+    auto tokenSinkOutput = CreateDdrTensor(*function, DataType::DT_FP16, shape);
+    oldVersion->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    newVersion->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    AddTestOp(*function, Opcode::OP_EXP, {oldSource}, {oldInput});
+    AddTestOp(*function, Opcode::OP_EXP, {newSource}, {newInput});
+    auto& oldWrite = AddTestOp(*function, Opcode::OP_ASSEMBLE, {oldInput}, {oldVersion});
+    oldWrite.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto& read = AddTestOp(*function, Opcode::OP_ABS, {oldVersion}, {readOutput});
+    auto& newWrite = AddTestOp(*function, Opcode::OP_ASSEMBLE, {newInput}, {newVersion});
+    newWrite.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    AddTestOp(*function, Opcode::OP_SQRT, {newVersion}, {normalOutput});
+    auto& atomic = AddTestOp(*function, Opcode::OP_ATOMIC_RMW, {newVersion}, {atomicOutput});
+    atomic.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    atomic.SetAttribute(OpAttributeKey::rmwMode, static_cast<int>(AtomicRMWMode::ADD));
+    auto& tokenSink = AddTestOp(*function, Opcode::OP_EXP, {tokenSinkInput}, {tokenSinkOutput});
+    auto warToken = AddTokenEdge(*function, read, newWrite);
+    auto oldAtomicResultToken = AddTokenEdge(*function, atomic, tokenSink);
+
+    function->inCasts_ = {oldSource, newSource, tokenSinkInput};
+    function->outCasts_ = {readOutput, normalOutput, atomicOutput, tokenSinkOutput};
+
+    ProcessAtomic passLocal;
+    EXPECT_EQ(passLocal.EliminateAtomicRMW(*function), SUCCESS);
+
+    EXPECT_EQ(CountOpsByType(function.get(), Opcode::OP_ATOMIC_RMW), 0);
+    EXPECT_FALSE(oldWrite.HasAttr(RMW_MODE_ATTR_ADD));
+    EXPECT_FALSE(newWrite.HasAttr(RMW_MODE_ATTR_ADD));
+    EXPECT_TRUE(function->GetVarDependency().HasProducer(warToken, ToStmtPtr(read)));
+    EXPECT_TRUE(function->GetVarDependency().HasConsumer(warToken, ToStmtPtr(newWrite)));
+    EXPECT_TRUE(HasToken(newWrite, warToken));
+
+    std::vector<Operation*> atomicAssembles;
+    for (auto& op : function->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE && op.HasAttr(RMW_MODE_ATTR_ADD)) {
+            atomicAssembles.emplace_back(&op);
+        }
+    }
+    ASSERT_EQ(atomicAssembles.size(), 2);
+    Operation* clonedNewWrite = nullptr;
+    bool hasOldVersionClone = false;
+    bool hasNewVersionClone = false;
+    for (auto* op : atomicAssembles) {
+        ASSERT_NE(op, nullptr);
+        ASSERT_FALSE(op->GetOOperands().empty());
+        if (op->GetOOperands().front() == atomicOutput) {
+            hasNewVersionClone = true;
+            clonedNewWrite = op;
+            EXPECT_FALSE(HasToken(*op, warToken));
+            EXPECT_TRUE(function->GetVarDependency().HasConsumer(op->result_token_.front(), ToStmtPtr(tokenSink)));
+        } else {
+            hasOldVersionClone = true;
+            EXPECT_NE(op->GetOOperands().front()->GetRawMagic(), oldVersion->GetRawMagic());
+            EXPECT_TRUE(function->GetVarDependency().HasConsumer(op->result_token_.front(), ToStmtPtr(tokenSink)));
+        }
+    }
+    EXPECT_TRUE(hasOldVersionClone);
+    EXPECT_TRUE(hasNewVersionClone);
+    ASSERT_NE(clonedNewWrite, nullptr);
+
+    std::vector<Operation*> clonedReads;
+    for (auto& op : function->Operations()) {
+        if (op.GetOpcode() != Opcode::OP_ABS || op.GetIOperands().empty()) {
+            continue;
+        }
+        auto input = op.GetInputOperand(0);
+        if (input != nullptr && input->GetRawMagic() != oldVersion->GetRawMagic()) {
+            clonedReads.emplace_back(&op);
+        }
+    }
+    ASSERT_EQ(clonedReads.size(), 1);
+    auto* clonedRead = clonedReads.front();
+    ASSERT_FALSE(clonedRead->result_token_.empty());
+    EXPECT_TRUE(
+        function->GetVarDependency().HasConsumer(clonedRead->result_token_.front(), ToStmtPtr(*clonedNewWrite)));
+    EXPECT_TRUE(HasToken(*clonedNewWrite, clonedRead->result_token_.front()));
+    EXPECT_FALSE(function->GetVarDependency().HasDependency(oldAtomicResultToken));
 }
 
 TEST_F(ProcessAtomicTest, TestReducAccProcessAtomicOn)

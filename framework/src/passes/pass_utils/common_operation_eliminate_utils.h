@@ -22,12 +22,14 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "interface/function/function.h"
 #include "interface/operation/attribute.h"
 #include "interface/operation/opcode.h"
 #include "interface/tensor/logical_tensor.h"
+#include "passes/pass_utils/graph_utils.h"
 
 namespace npu::tile_fwk {
 class CommonOperationEliminateUtils {
@@ -47,7 +49,12 @@ private:
     unsigned long ComputeHash(const std::vector<Operation*>& producers, LogicalTensorPtr curTensor) const;
     std::unordered_map<LogicalTensorPtr, std::vector<Operation*>> GetTensorProducers(
         Function& function, std::vector<LogicalTensorPtr>& sequence);
-    void UpdateConnection(LogicalTensorPtr oldTensor, LogicalTensorPtr newTensor);
+    bool UpdateConnection(Function& function, LogicalTensorPtr oldTensor, LogicalTensorPtr newTensor,
+                          const std::vector<Operation*>& oldProducers, const std::vector<Operation*>& newProducers);
+    bool BuildOutputTensorRedirectPairs(
+        Function& function, const LogicalTensorPtr& oldTensor, const LogicalTensorPtr& newTensor,
+        const std::vector<Operation*>& sortedOldProducers, const std::vector<Operation*>& sortedNewProducers,
+        std::vector<std::pair<LogicalTensorPtr, LogicalTensorPtr>>& tensorRedirectPairs) const;
     uint32_t GetTensorCoreFlag(const LogicalTensorPtr& tensor) const;
     void CollectSubgraphIds(const std::set<Operation*, LogicalTensor::CompareOp>& ops,
                             std::unordered_set<int>& subgraphIds) const;
@@ -62,17 +69,34 @@ private:
                                                 const std::unordered_set<int>& mixSubgraphIds) const;
     std::pair<LogicalTensorPtr, std::vector<Operation*>> TensorHashExist(
         const LogicalTensorPtr orderedTensor, std::unordered_set<Operation*>& cacheProducers,
-        const std::unordered_map<LogicalTensorPtr, std::vector<Operation*>>& tensorProducerMap);
+        const std::unordered_map<LogicalTensorPtr, std::vector<Operation*>>& tensorProducerMap,
+        std::vector<Operation*>& currentBucketProducers);
+    bool ShouldSkipProducers(const std::vector<Operation*>& producers) const;
+    void AugmentProducersWithSiblings(const LogicalTensorPtr& orderedTensor,
+                                      std::vector<Operation*>& augmentedProducers);
     bool TensorProducersMerge(Function& function, const LogicalTensorPtr orderedTensor,
                               std::unordered_set<Operation*>& cacheProducers,
-                              const std::unordered_map<LogicalTensorPtr, std::vector<Operation*>>& tensorProducerMap);
+                              const std::unordered_map<LogicalTensorPtr, std::vector<Operation*>>& tensorProducerMap,
+                              std::vector<Operation*>& oldBucketProducers);
+    const TensorSet& GetSameRawMagicTensors(const LogicalTensorPtr& tensor) const;
+    std::vector<Operation*> CollectConsumersWithSameRawMagic(Function& function, const LogicalTensorPtr& tensor) const;
+    void MarkRedundantProducersDeleted(Function& function, const std::vector<Operation*>& oldBucketProducers,
+                                       std::unordered_set<Operation*>& cacheProducers);
     void UpdateView(ViewOpAttribute* viewOpAttribute, const std::shared_ptr<LogicalTensor> oldTensor,
                     const std::shared_ptr<LogicalTensor> newTensor) const;
     void UpdateCopy(CopyOpAttribute* copyOpAttribute, const std::shared_ptr<LogicalTensor> oldTensor,
                     const std::shared_ptr<LogicalTensor> newTensor) const;
+    bool ProducerPairingValid(LogicalTensorPtr oldTensor, LogicalTensorPtr newTensor,
+                              const std::vector<Operation*>& oldProducers,
+                              const std::vector<Operation*>& newProducers) const;
+    void UpdateTensorConsumers(LogicalTensorPtr oldTensor, LogicalTensorPtr newTensor) const;
 
     std::unordered_map<uint64_t, std::pair<LogicalTensorPtr, std::vector<Operation*>>> hashCache_;
     std::unordered_set<int> mixSubgraphIds_;
+    Function* function_ = nullptr;
+    RawMagicTensorMap tensorsByRawMagic_;
+    // A RawTensor bucket is processed once, including all of its logical tensors.
+    std::unordered_set<int> processedRawMagicTensors_;
 };
 } // namespace npu::tile_fwk
 #endif // PASS_COMMON_OPERATION_ELIMINATE_UTILS_H_

@@ -18,6 +18,7 @@
 #include "interface/function/function.h"
 #include "passes/pass_check/iso_partitioner_checker.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/tile_graph_pass/graph_partition/graph_partition_token_dependency.h"
 
 namespace npu::tile_fwk {
 
@@ -36,6 +37,9 @@ Status RunIsoPartition(Function& function)
         APASS_LOG_ERROR_F(Elements::Function, "GraphPartition failed.");
         return FAILED;
     }
+    if (FinalizePartitionWithTokenDependency(function) != SUCCESS) {
+        return FAILED;
+    }
     APASS_LOG_INFO_F(Elements::Function, "===> End GraphPartition.");
     return SUCCESS;
 }
@@ -52,6 +56,9 @@ Status RunOspPartition(Function& function, const std::string& partitionMode)
     }
     if (partitioner.PartitionGraph(function) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "GraphPartitionOSP failed.");
+        return FAILED;
+    }
+    if (FinalizePartitionWithTokenDependency(function) != SUCCESS) {
         return FAILED;
     }
     APASS_LOG_INFO_F(Elements::Function, "===> End GraphPartitionOSP.");

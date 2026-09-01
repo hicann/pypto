@@ -112,7 +112,7 @@ TEST_F(RemoveRedundantOpTest, TestIntermediateOutcast)
     Function* func = Program::GetInstance().GetFunctionByRawName("TENSOR_RemoveRedundantOpFunction");
     npu::tile_fwk::RemoveRedundantOp removeRedundantOp;
     auto oriOpList = func->Operations(true);
-    EXPECT_EQ(oriOpList.size(), 19) << "Before the Pass, there should be 19 operations";
+    EXPECT_EQ(oriOpList.size(), 17) << "Before the Pass, there should be 17 operations";
     int ori_view_count = 0;
     int ori_assemble_count = 0;
     for (auto& op : oriOpList) {
@@ -122,16 +122,16 @@ TEST_F(RemoveRedundantOpTest, TestIntermediateOutcast)
             ori_assemble_count += 1;
         }
     }
-    EXPECT_EQ(ori_view_count, 4) << "There should be 4 VIEW ops before RemoveRedundantOp";
-    EXPECT_EQ(ori_assemble_count, 1) << "There should be 1 ASSEMBLE op before RemoveRedundantOp";
+    EXPECT_EQ(ori_view_count, 0) << "There should be no VIEW ops before RemoveRedundantOp";
+    EXPECT_EQ(ori_assemble_count, 3) << "There should be 3 ASSEMBLE ops before RemoveRedundantOp";
     EXPECT_EQ(removeRedundantOp.PreCheck(*func), SUCCESS);
     EXPECT_EQ(removeRedundantOp.RunOnFunction(*func), SUCCESS);
     EXPECT_EQ(removeRedundantOp.PostCheck(*func), SUCCESS);
     PrintGraphInfoRemoveRedundantOp(func);
     // ================== Verify the effect of the Pass ==================
     auto updated_operations = func->Operations(true);
-    int opSize = 19;
-    EXPECT_EQ(updated_operations.size(), opSize) << "After the Pass, there should be 19 operations";
+    int opSize = 15;
+    EXPECT_EQ(updated_operations.size(), opSize) << "After the Pass, there should be 15 operations";
     EXPECT_EQ(updated_operations[0].GetOpcode(), Opcode::OP_SLICE) << "The first operation should be SILCE";
     int view_count = 0;
     int assemble_count = 0;
@@ -143,7 +143,7 @@ TEST_F(RemoveRedundantOpTest, TestIntermediateOutcast)
             assemble_count += 1;
         }
     }
-    EXPECT_EQ(view_count, 4) << "There should be 4 VIEW ops after RemoveRedundantOp";
+    EXPECT_EQ(view_count, 0) << "There should be no VIEW ops after RemoveRedundantOp";
     EXPECT_EQ(assemble_count, 1) << "There should be 1 Assemble op after RemoveRedundantOp";
     const auto& outcasts = func->GetOutcast();
     ASSERT_GE(outcasts.size(), 2U);
@@ -275,6 +275,5 @@ TEST_F(RemoveRedundantOpTest, ProcessParallelAssembleWithReshape)
             newAssembleCount++;
         }
     }
-    EXPECT_EQ(newAssembleCount, oriAssembleCount)
-        << "ASSEMBLE ops should NOT be deleted when hasParallelAssemble=true and hasReshapeConsumer=true";
+    EXPECT_EQ(newAssembleCount, 2) << "Only ASSEMBLE ops sharing the same output producer group should be preserved";
 }

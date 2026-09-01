@@ -238,6 +238,32 @@ TEST_F(ScheduleOoOTest, TestDependencies)
     EXPECT_EQ(res, SUCCESS);
 }
 
+TEST_F(ScheduleOoOTest, TestTokenDependency)
+{
+    ComputationalGraphBuilder graph;
+    EXPECT_TRUE(graph.AddTensors(DataType::DT_FP32, {16, 16}, {"in1", "out1", "in2", "out2"}));
+    EXPECT_TRUE(graph.AddOp(Opcode::OP_ADDS, {"in1"}, {"out1"}, "Producer", true));
+    EXPECT_TRUE(graph.AddOp(Opcode::OP_MULS, {"in2"}, {"out2"}, "Consumer", true));
+    auto* function = graph.GetFunction();
+    auto* producer = graph.GetOp("Producer");
+    auto* consumer = graph.GetOp("Consumer");
+    ASSERT_NE(function, nullptr);
+    ASSERT_NE(producer, nullptr);
+    ASSERT_NE(consumer, nullptr);
+
+    producer->result_token_ = {IRBuilder().CreateTokenVar(producer->GetSpan())};
+    consumer->tokens_.push_back(producer->result_token_.front());
+    function->GetVarDependency().AddProducer(producer->result_token_.front(),
+                                             std::static_pointer_cast<const ir::Stmt>(producer->shared_from_this()));
+    function->GetVarDependency().AddConsumer(producer->result_token_.front(),
+                                             std::static_pointer_cast<const ir::Stmt>(consumer->shared_from_this()));
+
+    OoOScheduler scheduler(*function);
+    ASSERT_EQ(scheduler.Init(function->Operations().DuplicatedOpList()), SUCCESS);
+    EXPECT_EQ(scheduler.state_.depManager.GetPredecessors(consumer).count(producer), 1U);
+    EXPECT_EQ(scheduler.state_.depManager.GetSuccessors(producer).count(consumer), 1U);
+}
+
 TEST_F(ScheduleOoOTest, SimtOpUses216KBForUbScheduling)
 {
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);

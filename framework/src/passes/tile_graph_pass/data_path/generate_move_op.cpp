@@ -436,6 +436,18 @@ Status GenerateMoveOp::ProcessConvAssemble(Operation& op, AssembleOpAttribute* a
 bool GenerateMoveOp::TryInsertModeDispatch(Function& function, Operation& op, AssembleOpAttribute* assembleOpAttribute,
                                            MemoryType inputMemtype, MemoryType outputMemtype) const
 {
+    auto ASSEMBLE_in = op.iOperand.front();
+    auto parentOp = *ASSEMBLE_in->GetProducers().begin();
+    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510 && inputMemtype == MemoryType::MEM_L1 &&
+        outputMemtype == MemoryType::MEM_DEVICE_DDR && parentOp->GetOpcode() == Opcode::OP_UB_COPY_L1 &&
+        parentOp->GetIOperands().size() == 1) {
+        auto l1Input = ASSEMBLE_in;
+        ASSEMBLE_in = parentOp->GetIOperands().front();
+        op.ReplaceIOperand(0, ASSEMBLE_in);
+        if (l1Input->GetConsumers().empty()) {
+            parentOp->SetAsDeleted();
+        }
+    }
     if (inputMemtype == MemoryType::MEM_L0C && outputMemtype == MemoryType::MEM_L1) {
         SetOpcodeByMemPath(op, inputMemtype, outputMemtype);
         SetL0C2L1CopyAttr(op, op.GetIOperands()[0]->GetShape(), OpImmediate::Specified(ZERO_OFFSET),
@@ -476,6 +488,7 @@ Status GenerateMoveOp::CreateMoveOpForAssemble(Function& function, Operation& op
     if (TryInsertModeDispatch(function, op, assembleOpAttribute, inputMemtype, outputMemtype)) {
         return SUCCESS;
     }
+    assembleInput = op.iOperand.front();
     // 跳过：DDR 输入 / 非 DDR 输出 / 特殊父 op
     if (inputMemtype == MemoryType::MEM_DEVICE_DDR || outputMemtype != MemoryType::MEM_DEVICE_DDR ||
         (parentOp != nullptr && (parentOp->GetOpcode() == Opcode::OP_TRANSPOSE_MOVEOUT ||

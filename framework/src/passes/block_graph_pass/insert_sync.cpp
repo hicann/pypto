@@ -190,6 +190,12 @@ std::set<int> DataDependencySearcher::Find(Operation* opWait)
     CheckRAWSearchTree(opWait, res);
     // check WAR
     CheckWARSearchTree(opWait, res);
+    for (auto* producer : opWait->ProducerOpsByToken()) {
+        auto iter = opIndices_.find(producer);
+        if (iter != opIndices_.end()) {
+            res.emplace(iter->second);
+        }
+    }
     return res;
 }
 
@@ -254,6 +260,7 @@ void DataDependencySearcher::Insert(const Operation* opSet, int idx)
     InsertWAWSearchTree(opSet, idx);
     InsertRAWSearchTree(opSet, idx);
     InsertWARSearchTree(opSet, idx);
+    opIndices_.emplace(opSet, idx);
 }
 
 void PipeSync::BuildTensorRangeMap(Operation* op)
@@ -1635,6 +1642,12 @@ bool PipeSync::CheckWarDependency(const Operation& opSet, const Operation& opWai
 
 bool PipeSync::HasDataDependency(const Operation& opSet, const Operation& opWait)
 {
+    for (const auto* producer : opWait.ProducerOpsByToken()) {
+        if (producer == &opSet) {
+            return true;
+        }
+    }
+
     std::string opSetStr = opSet.GetOpcodeStr();
     std::string opWaitStr = opWait.GetOpcodeStr();
 

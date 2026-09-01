@@ -69,6 +69,24 @@ Status StaticSubgraphProcessor::BuildInGraph(Function& function)
             }
             inGraph[i].push_back(parentSeqNo);
         }
+
+        for (auto* tokenProducer : operationViewer[i].ProducerOpsByToken()) {
+            if (tokenProducer == nullptr || tokenProducer == &operationViewer[i] ||
+                tokenProducer->BelongTo() != &function) {
+                continue;
+            }
+            auto [parentSeqNo, found] = operationViewer.FindOpPosition(*tokenProducer);
+            if (EdgeIndexCheck(found, parentSeqNo, inGraph.size()) != SUCCESS) {
+                APASS_LOG_ERROR_F(Elements::Operation,
+                                  "Error inserting token producer op magic %d in function %d %s to inGraph. %s",
+                                  tokenProducer->GetOpMagic(), function.GetFuncMagic(), function.GetRawName().c_str(),
+                                  GetFormatBacktrace(tokenProducer).c_str());
+                return FAILED;
+            }
+            if (std::find(inGraph[i].begin(), inGraph[i].end(), parentSeqNo) == inGraph[i].end()) {
+                inGraph[i].push_back(parentSeqNo);
+            }
+        }
     }
     return SUCCESS;
 }

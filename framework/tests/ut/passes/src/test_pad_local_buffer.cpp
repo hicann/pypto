@@ -1346,6 +1346,44 @@ TEST_F(TestPadLocalBuffer, UB2L1_WithAxisCombine)
     EXPECT_EQ(t2->tensor->GetRawShape(), expectShape);
 }
 
+/*
+ * t2 and t4 are outputs of separate ASSEMBLE operations but share one
+ * RawTensor. The t2 path is disabled by a [3,16] -> [3,1] copy-in, so the
+ * shared tensor must take the disabled padding path and become [3,8].
+ */
+TEST_F(TestPadLocalBuffer, AssembleSharedRawMagicDisable)
+{
+    ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {3, 16}, MemoryType::MEM_DEVICE_DDR, "gm1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {3, 1}, MemoryType::MEM_UB, "ci1"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm1"}, {"ci1"}, "copy_in1", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {3, 1}, MemoryType::MEM_DEVICE_DDR, "gm2"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {3, 1}, MemoryType::MEM_UB, "ci2"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm2"}, {"ci2"}, "copy_in2", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {3, 1}, MemoryType::MEM_UB, "t2"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ASSEMBLE, {"ci1"}, {"t2"}, "assemble1", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {3, 1}, MemoryType::MEM_UB, "t4"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ASSEMBLE, {"ci2"}, {"t4"}, "assemble2", true), true);
+
+    auto t2 = graph.GetTensor("t2");
+    auto t4 = graph.GetTensor("t4");
+    t4->tensor = t2->tensor;
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {3, 16}, MemoryType::MEM_UB, "rhs"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {3, 16}, MemoryType::MEM_UB, "out"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ADD, {"t4", "rhs"}, {"out"}, "add", true), true);
+
+    auto* rootFuncPtr = graph.GetFunction();
+    rootFuncPtr->paramConfigs_.combineAxis = true;
+    PadLocalBuffer pass;
+    EXPECT_EQ(pass.RunOnFunction(*rootFuncPtr), SUCCESS);
+
+    EXPECT_EQ(t2->GetRawTensor()->GetRawShape(), (std::vector<int64_t>{3, 8}));
+    EXPECT_EQ(t4->GetRawTensor()->GetRawShape(), (std::vector<int64_t>{3, 8}));
+}
+
 TEST_F(TestPadLocalBuffer, GemvMatmulKAlign)
 {
     ComputationalGraphBuilder graph;
@@ -1372,11 +1410,11 @@ TEST_F(TestPadLocalBuffer, GemvMatmulKAlign)
     PadLocalBuffer padLocalBufferTest;
     padLocalBufferTest.RunOnFunction(*currFunctionPtr);
 
-    // GEMV A 的 M 轴不打 pad（保持 1），L0A K 对齐 512B（fp16 256 元素）
+    // GEMV A 的 M 轴不打 pad（保持 1），L1 与 L0A 的 K 均对齐 512B（fp16 256 元素）
     auto t2a = graph.GetTensor("t2a");
     auto rawShapeL1 = t2a->tensor->GetRawShape();
     EXPECT_EQ(rawShapeL1[0], 1);
-    EXPECT_EQ(rawShapeL1[1], 32);
+    EXPECT_EQ(rawShapeL1[1], 256);
     auto t3a = graph.GetTensor("t3a");
     auto rawShapeL0A = t3a->tensor->GetRawShape();
     EXPECT_EQ(rawShapeL0A[0], 1);

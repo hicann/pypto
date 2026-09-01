@@ -17,6 +17,7 @@
 #define PROCESS_ATOMIC_H
 
 #include <vector>
+#include <unordered_map>
 
 #include "interface/operation/opcode.h"
 #include "tilefwk/data_type.h"
@@ -46,9 +47,11 @@ public:
 private:
     struct ReshapeRemapResult {
         std::vector<Operation*> assembles;
+        std::vector<Operation*> retargetAssembles;
         std::vector<Operation*> reshapeOps;
         std::vector<std::vector<int64_t>> reshapeOutputShapes;
         std::vector<std::vector<SymbolicScalar>> reshapeOutputDynShapes;
+        std::shared_ptr<LogicalTensor> terminalTensor;
         std::vector<int64_t> assembleOutputShape;
         std::vector<SymbolicScalar> assembleOutputDynShape;
         std::vector<int64_t> mappedOffset;
@@ -72,18 +75,26 @@ private:
     Status PrepareAtomicRMWSharedInputs(Function& function, const std::vector<Operation*>& atomicRmwOps) const;
     std::shared_ptr<LogicalTensor> PrepareExclusiveAtomicInput(Function& function, Operation& atomicOp,
                                                                const std::shared_ptr<LogicalTensor>& input) const;
-    Status ProcessSingleAtomicRMW(Operation& op);
+    Status ProcessSingleAtomicRMW(Function& function, Operation& op);
     Status ProcessAtomicInput(Operation& atomicOp, const std::shared_ptr<LogicalTensor>& input,
                               const std::shared_ptr<LogicalTensor>& output, AtomicRMWMode rmwMode,
-                              const std::vector<int64_t>& rmwOffset, const std::vector<SymbolicScalar>& rmwDynOffset);
+                              const std::vector<int64_t>& rmwOffset, const std::vector<SymbolicScalar>& rmwDynOffset,
+                              std::vector<Operation*>& replacementProducers);
     Status ProcessAtomicContractProducer(Operation& atomicOp, Operation& producerOp,
                                          const std::shared_ptr<LogicalTensor>& output, AtomicRMWMode rmwMode,
                                          const std::vector<int64_t>& rmwOffset,
-                                         const std::vector<SymbolicScalar>& rmwDynOffset);
+                                         const std::vector<SymbolicScalar>& rmwDynOffset,
+                                         std::vector<Operation*>& replacementProducers);
+    Status ProcessAtomicAssembleProducer(Operation& atomicOp, Operation& producerOp,
+                                         const std::shared_ptr<LogicalTensor>& output, AtomicRMWMode rmwMode,
+                                         const std::vector<int64_t>& rmwOffset,
+                                         const std::vector<SymbolicScalar>& rmwDynOffset,
+                                         std::vector<Operation*>& replacementProducers);
     Status ProcessAtomicThroughReshape(Operation& atomicOp, const std::shared_ptr<LogicalTensor>& input,
                                        const std::shared_ptr<LogicalTensor>& output, AtomicRMWMode rmwMode,
                                        const std::vector<int64_t>& rmwOffset,
-                                       const std::vector<SymbolicScalar>& rmwDynOffset);
+                                       const std::vector<SymbolicScalar>& rmwDynOffset,
+                                       std::vector<Operation*>& replacementProducers);
     bool HasReshapeProducer(const std::shared_ptr<LogicalTensor>& input) const;
     Status FindUpstreamAssembleAndRemapOffset(const std::shared_ptr<LogicalTensor>& input,
                                               const std::shared_ptr<LogicalTensor>& outputBase,

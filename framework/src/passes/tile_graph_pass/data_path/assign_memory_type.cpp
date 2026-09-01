@@ -28,6 +28,7 @@
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/checker_utils.h"
 #include "passes/pass_utils/pass_utils.h"
+#include "passes/pass_utils/graph_utils.h"
 #include "passes/tile_graph_pass/data_path/memory_path_utils.h"
 #include "tilefwk/tilefwk.h"
 
@@ -53,6 +54,7 @@ Status AssignMemoryType::RunOnFunction(Function& function)
     RETURN_IF_NOT_SUCCESS(AssignConfirmedMemoryTypes(function));
     RETURN_IF_NOT_SUCCESS(InferUncertainMemoryTypes(function));
     RETURN_IF_NOT_SUCCESS(ResolveMemoryUnknowns(function));
+    RETURN_IF_NOT_SUCCESS(ResolveInconsistentRawTensorMemoryTypes(function));
     RETURN_IF_NOT_SUCCESS(SyncViewAssembleMemoryAttrs(function));
     RETURN_IF_NOT_SUCCESS(FixViewAssembleSemanticMismatch(function));
     RETURN_IF_NOT_SUCCESS(InsertConvertOpsAndInferShape(function));
@@ -566,7 +568,7 @@ Status AssignMemoryType::InferUncertainMemoryTypes(Function& function)
                 RETURN_IF_NOT_SUCCESS(InferViewTypeMemoryType(op));
                 break;
             case Opcode::OP_ASSEMBLE:
-                RETURN_IF_NOT_SUCCESS(InferAssembleMemoryType(op, inferredAssembleOutputs));
+                RETURN_IF_NOT_SUCCESS(InferAssembleMemoryType(function, op, inferredAssembleOutputs));
                 break;
             case Opcode::OP_CONTRACT:
                 RETURN_IF_NOT_SUCCESS(InferContractMemoryType(op));
@@ -898,7 +900,7 @@ bool AssignMemoryType::CanUseDirectViewPath(Operation& operation, MemoryType fro
     return isDirectPath;
 }
 
-Status AssignMemoryType::InferAssembleMemoryType(Operation& operation,
+Status AssignMemoryType::InferAssembleMemoryType(Function& function, Operation& operation,
                                                  std::unordered_set<LogicalTensorPtr>& inferredAssembleOutputs)
 {
     if (operation.GetOpcode() != Opcode::OP_ASSEMBLE)
@@ -917,7 +919,9 @@ Status AssignMemoryType::InferAssembleMemoryType(Operation& operation,
     if (!inferredAssembleOutputs.insert(output).second) {
         return SUCCESS;
     }
-    return InferAssembleMemoryType(operation);
+    RETURN_IF_NOT_SUCCESS(InferAssembleMemoryType(operation));
+    PropagateMemoryTypeToRawTensorSiblings(function, operation.oOperand.front(), inferredAssembleOutputs);
+    return SUCCESS;
 }
 
 Status AssignMemoryType::InferAssembleMemoryType(Operation& operation)
@@ -950,6 +954,106 @@ Status AssignMemoryType::InferAssembleMemoryType(Operation& operation)
     }
     RETURN_IF_NOT_SUCCESS(SetOriginalChecked(output, inputRequirement, "InferAssembleInputRequirement"));
     return SetParallelAssembleInputRequirements(output, inputRequirement, "InferAssembleInputRequirement");
+}
+
+TensorSet AssignMemoryType::GetLogicalTensorsByRawTensor(Function& function, const LogicalTensorPtr& tensor) const
+{
+    if (tensor == nullptr || tensor->tensor == nullptr) {
+        return {};
+    }
+    return GraphUtils::GetTensorsByRawMagic(function, tensor->tensor->rawmagic);
+}
+
+void AssignMemoryType::PropagateMemoryTypeToRawTensorSiblings(
+    Function& function, const LogicalTensorPtr& output, std::unordered_set<LogicalTensorPtr>& inferredAssembleOutputs)
+{
+    if (output == nullptr) {
+        return;
+    }
+    auto siblings = GetLogicalTensorsByRawTensor(function, output);
+    if (siblings.size() <= 1) {
+        return;
+    }
+    MemoryType inferredType = output->GetMemoryTypeOriginal();
+    for (const auto& sibling : siblings) {
+        if (sibling == output || sibling == nullptr) {
+            continue;
+        }
+        inferredAssembleOutputs.insert(sibling);
+        if (sibling->GetMemoryTypeOriginal() == MemoryType::MEM_UNKNOWN) {
+            sibling->SetMemoryTypeOriginal(inferredType, false);
+        }
+    }
+}
+
+Status AssignMemoryType::ResolveInconsistentRawTensorMemoryTypes(Function& function)
+{
+    std::unordered_set<int64_t> visitedRawMagic;
+    for (auto& op : function.Operations()) {
+        if (op.GetOpcode() != Opcode::OP_ASSEMBLE) {
+            continue;
+        }
+        if (op.oOperand.empty() || op.oOperand.front() == nullptr) {
+            continue;
+        }
+        auto output = op.oOperand.front();
+        if (output->tensor == nullptr) {
+            continue;
+        }
+        int64_t rawMagic = output->tensor->rawmagic;
+        if (!visitedRawMagic.insert(rawMagic).second) {
+            continue;
+        }
+        auto siblings = GetLogicalTensorsByRawTensor(function, output);
+        if (siblings.size() <= 1) {
+            continue;
+        }
+        MemoryType firstType = MemoryType::MEM_UNKNOWN;
+        bool hasAssembleOutput = false;
+        bool inconsistent = false;
+        for (const auto& sibling : siblings) {
+            bool isAssembleOutput = false;
+            for (auto* producer : sibling->GetProducers()) {
+                if (producer != nullptr && producer->GetOpcode() == Opcode::OP_ASSEMBLE) {
+                    isAssembleOutput = true;
+                    break;
+                }
+            }
+            if (!isAssembleOutput) {
+                continue;
+            }
+            hasAssembleOutput = true;
+            MemoryType siblingType = sibling->GetMemoryTypeOriginal();
+            if (siblingType == MemoryType::MEM_UNKNOWN) {
+                continue;
+            }
+            if (firstType == MemoryType::MEM_UNKNOWN) {
+                firstType = siblingType;
+            } else if (siblingType != firstType) {
+                inconsistent = true;
+                break;
+            }
+        }
+        if (hasAssembleOutput && inconsistent) {
+            APASS_LOG_WARN_F(Elements::Tensor,
+                             "Inconsistent memory types detected on rawMagic %ld across assemble outputs, "
+                             "falling back to DDR.",
+                             static_cast<long>(rawMagic));
+            for (const auto& sibling : siblings) {
+                bool isAssembleOutput = false;
+                for (auto* producer : sibling->GetProducers()) {
+                    if (producer != nullptr && producer->GetOpcode() == Opcode::OP_ASSEMBLE) {
+                        isAssembleOutput = true;
+                        break;
+                    }
+                }
+                if (isAssembleOutput) {
+                    ForceSetOriginal(sibling, MemoryType::MEM_DEVICE_DDR, "ResolveInconsistentRawTensorMemoryTypes");
+                }
+            }
+        }
+    }
+    return SUCCESS;
 }
 
 MemoryType AssignMemoryType::InferParallelAssembleInputRequirement(const LogicalTensorPtr& output) const

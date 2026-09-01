@@ -245,6 +245,42 @@ before:
     copyin
     [8,1]
       |
+    copyout
+    [8,1]
+      |
+    assemble
+    [8,16]
+
+after:
+    Copyout input and intermediate tensor should be marked as DISABLE
+*/
+TEST_F(TestAxisCombineMarker, copyout_tail_preserved_disable_propagation)
+{
+    ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_DEVICE_DDR, "t1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "t2"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_DEVICE_DDR, "t3"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 16}, MemoryType::MEM_DEVICE_DDR, "t4"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"t1"}, {"t2"}, "copy_in", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"t2"}, {"t3"}, "copy_out", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ASSEMBLE, {"t3"}, {"t4"}, "assemble", true), true);
+
+    auto* rootFuncPtr = graph.GetFunction();
+    AxisCombineMarker marker;
+    marker.Run(*rootFuncPtr);
+
+    // Verify the tensor is marked as DISABLE
+    auto t2 = graph.GetTensor("t2");
+    auto t3 = graph.GetTensor("t3");
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(t2), false); // Copyout input should be disabled via backward propagation
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(t3), false); // Assemble input should be disabled
+}
+
+/*
+before:
+    copyin
+    [8,1]
+      |
     expand
     [8,1,1]
       |
@@ -1016,4 +1052,132 @@ TEST_F(TestAxisCombineMarker, multi_output_align_status3)
     EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("adds_idx")), false);
     EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("sub_idx")), false);
     EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("ub_sub2")), false);
+}
+
+/*
+before:
+    copyin DDR[8,1]    copyin DDR[8,1]
+       |                  |
+     ci1[8,1]           ci2[8,1]      (both ENABLE)
+       |                  |
+   assemble1          assemble2
+     t2[8,1]            t4[8,1]        (t4与t2共享同一RawTensor/同一rawMagic)
+
+after:
+    两个assemble输出均ENABLE; 共享rawMagic被union到同一并查集后仍ENABLE。
+    验证: 两Assemble同组, 合轴属性统一为ENABLE。
+*/
+TEST_F(TestAxisCombineMarker, assemble_shared_rawmagic_both_enable)
+{
+    ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_DEVICE_DDR, "gm1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "ci1"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm1"}, {"ci1"}, "copy_in1", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_DEVICE_DDR, "gm2"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "ci2"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm2"}, {"ci2"}, "copy_in2", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "t2"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ASSEMBLE, {"ci1"}, {"t2"}, "assemble1", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "t4"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ASSEMBLE, {"ci2"}, {"t4"}, "assemble2", true), true);
+
+    // t4 与 t2 共享同一 RawTensor(同一地址/rawMagic), 模拟新图表达下多个assemble写同一地址
+    auto t2 = graph.GetTensor("t2");
+    auto t4 = graph.GetTensor("t4");
+    t4->tensor = t2->tensor;
+
+    auto* rootFuncPtr = graph.GetFunction();
+    AxisCombineMarker marker;
+    marker.Run(*rootFuncPtr);
+
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(t2), true);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(t4), true);
+}
+
+/*
+before:
+    copyin DDR[8,16]   copyin DDR[8,1]
+       |                  |
+     ci1[8,1]           ci2[8,1]
+   (DISABLE, 尾轴16->1)  (ENABLE)
+       |                  |
+   assemble1          assemble2
+     t2[8,1]            t4[8,1]        (t4与t2共享同一RawTensor/同一rawMagic)
+
+after:
+    assemble1输入DISABLE => t2 DISABLE;
+    assemble2输入ENABLE => t4 本应ENABLE, 但与t2共享rawMagic被union到同一并查集,
+    组内DISABLE优先 => t4也被传播为DISABLE。
+    验证: 两Assemble同组时, DISABLE经共享rawMagic传播给兄弟Assemble。
+*/
+TEST_F(TestAxisCombineMarker, assemble_shared_rawmagic_disable_propagates)
+{
+    ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 16}, MemoryType::MEM_DEVICE_DDR, "gm1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "ci1"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm1"}, {"ci1"}, "copy_in1", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_DEVICE_DDR, "gm2"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "ci2"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm2"}, {"ci2"}, "copy_in2", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "t2"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ASSEMBLE, {"ci1"}, {"t2"}, "assemble1", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "t4"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ASSEMBLE, {"ci2"}, {"t4"}, "assemble2", true), true);
+
+    auto t2 = graph.GetTensor("t2");
+    auto t4 = graph.GetTensor("t4");
+    t4->tensor = t2->tensor;
+
+    auto* rootFuncPtr = graph.GetFunction();
+    AxisCombineMarker marker;
+    marker.Run(*rootFuncPtr);
+
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(t2), false);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(t4), false);
+}
+
+/*
+before:
+    copyin DDR[8,16]   copyin DDR[8,1]
+       |                  |
+     ci1[8,1]           ci2[8,1]
+   (DISABLE, 尾轴16->1)  (ENABLE)
+       |                  |
+   assemble1          assemble2
+     t2[8,1]            t4[8,1]        (t4与t2不共享同一RawTensor/同一rawMagic)
+
+after:
+    assemble1输入DISABLE => t2 DISABLE;
+    assemble2输入ENABLE => t4 ENABLE, 且不与t2同组, 互不传播。
+    验证: 两Assemble不同组时, 合轴属性各自独立, DISABLE不传播。
+*/
+TEST_F(TestAxisCombineMarker, assemble_independent_rawmagic_no_propagation)
+{
+    ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 16}, MemoryType::MEM_DEVICE_DDR, "gm1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "ci1"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm1"}, {"ci1"}, "copy_in1", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_DEVICE_DDR, "gm2"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "ci2"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm2"}, {"ci2"}, "copy_in2", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "t2"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ASSEMBLE, {"ci1"}, {"t2"}, "assemble1", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "t4"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ASSEMBLE, {"ci2"}, {"t4"}, "assemble2", true), true);
+
+    auto t2 = graph.GetTensor("t2");
+    auto t4 = graph.GetTensor("t4");
+
+    auto* rootFuncPtr = graph.GetFunction();
+    AxisCombineMarker marker;
+    marker.Run(*rootFuncPtr);
+
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(t2), false);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(t4), true);
 }

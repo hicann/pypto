@@ -13,9 +13,11 @@
  * \brief Unit test for ExpandFunction pass.
  */
 
+#include <algorithm>
 #include <gtest/gtest.h>
-#include <vector>
 #include <string>
+#include <unordered_set>
+#include <vector>
 #include "interface/function/function.h"
 #include "interface/operation/attribute.h"
 #include "interface/tensor/irbuilder.h"
@@ -232,4 +234,49 @@ TEST_F(TestExpandFunction, AssembleDerivesVecTileFromCubeMatmulProducer)
     EXPECT_EQ(CountSliceOpsOnInputWithShape(*func, matmulOut, {kCubeM, kCubeM}), 0);
 }
 
+TEST_F(TestExpandFunction, ExpandedOperationsPreserveTokenContract)
+{
+    std::vector<int64_t> shape{64, 64};
+    Tensor input(DT_FP32, shape, "input");
+    Tensor inputB(DT_FP32, shape, "inputB");
+    Tensor output(DT_FP32, shape, "output");
+    TileShape::Current().SetVecTile(32, 32);
+
+    FUNCTION("TokenContract") { output = Div(input, inputB); }
+    auto* function = Program::GetInstance().GetFunctionByRawName("TENSOR_TokenContract");
+    ASSERT_NE(function, nullptr);
+
+    auto operations = function->Operations(false).DuplicatedOpList();
+    auto source = std::find_if(operations.begin(), operations.end(),
+                               [](const auto* op) { return op->GetOpcodeStr().find("DIV") != std::string::npos; });
+    ASSERT_NE(source, operations.end());
+    auto sourceOpcode = (*source)->GetOpcode();
+
+    auto resultToken = IRBuilder().CreateTokenVar(ir::Span::Unknown());
+    auto inputToken = IRBuilder().CreateTokenVar(ir::Span::Unknown());
+    (*source)->result_token_ = {resultToken};
+    (*source)->tokens_.push_back(inputToken);
+
+    ExpandFunction expandFunction;
+    ASSERT_EQ(expandFunction.RunOnFunction(*function), SUCCESS);
+
+    std::unordered_set<ir::VarPtr> expandedResultTokens;
+    size_t expandedCount = 0;
+    for (auto* op : function->Operations(false).DuplicatedOpList()) {
+        if (op->GetOpcode() != sourceOpcode) {
+            continue;
+        }
+        expandedCount++;
+        ASSERT_FALSE(op->result_token_.empty());
+        expandedResultTokens.insert(op->result_token_.front());
+        EXPECT_EQ(std::count(op->tokens_.begin(), op->tokens_.end(), inputToken), 1);
+    }
+
+    EXPECT_EQ(expandedCount, 4);
+    EXPECT_EQ(expandedResultTokens.size(), expandedCount);
+    EXPECT_EQ(function->GetVarDependency().GetConsumers(inputToken).size(), expandedCount);
+    for (const auto& token : expandedResultTokens) {
+        EXPECT_EQ(function->GetVarDependency().GetProducers(token).size(), 1);
+    }
+}
 } // namespace npu::tile_fwk

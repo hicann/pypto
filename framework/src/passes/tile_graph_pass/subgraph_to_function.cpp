@@ -14,6 +14,7 @@
  */
 
 #include "passes/tile_graph_pass/subgraph_to_function.h"
+#include <algorithm>
 #include <fstream>
 #include <unordered_map>
 #include <unordered_set>
@@ -27,9 +28,12 @@
 #include "passes/pass_utils/parallel_tool.h"
 #include "passes/pass_check/subgraph_to_function_checker.h"
 #include "passes/pass_utils/graph_utils.h"
+#include "passes/pass_utils/token_utils.h"
+#include "passes/pass_utils/pass_token_utils.h"
 #include "passes/pass_utils/subgraph_utils.h"
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/tile_graph_pass/graph_partition/graph_partition_token_dependency.h"
 #include "tilefwk/error_code.h"
 
 #undef MODULE_NAME
@@ -45,6 +49,31 @@ const SymbolicScalar& GetParamAddrSymbol()
     }();
     return kGetParamAddr;
 }
+
+ir::StmtPtr AsStmtPtr(Operation& op) { return std::static_pointer_cast<const ir::Stmt>(op.shared_from_this()); }
+
+Operation* ToOperation(const ir::StmtPtr& stmt)
+{
+    if (stmt == nullptr) {
+        return nullptr;
+    }
+    return static_cast<Operation*>(const_cast<ir::Stmt*>(stmt.get()));
+}
+
+void AddCallOpTokenDependency(Function& rootFunction, Operation& producerCallOp, Operation& consumerCallOp)
+{
+    if (&producerCallOp == &consumerCallOp) {
+        return;
+    }
+    if (producerCallOp.result_token_.empty()) {
+        producerCallOp.result_token_.push_back(IRBuilder().CreateTokenVar(producerCallOp.GetSpan()));
+    }
+    const auto& token = producerCallOp.result_token_.front();
+    rootFunction.GetVarDependency().AddProducer(token, AsStmtPtr(producerCallOp));
+    rootFunction.GetVarDependency().AddConsumer(token, AsStmtPtr(consumerCallOp));
+    PassTokenUtils::AddTokenIfAbsent(consumerCallOp, token);
+}
+
 } // namespace
 
 void SubgraphToFunction::Init()
@@ -58,6 +87,11 @@ Status SubgraphToFunction::RunOnFunction(Function& function)
 {
     /* 需要将所有缓存在类成员的信息清零 */
     Init();
+
+    if (FinalizePartitionWithTokenDependency(function) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Function, "Failed to finalize token-aware partitions before subgraph conversion.");
+        return FAILED;
+    }
 
     if (TransViewToCopyInBeforeGenSubgraph(function) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "Failed to transfer view into copy in.");
@@ -383,6 +417,9 @@ void SubgraphToFunction::ConstructnList(Function& function)
         }
         nLIST[list[i].GetSubgraphID()].push_back(list.operations_[i]);
     }
+    while (!nLIST.empty() && nLIST.back().empty()) {
+        nLIST.pop_back();
+    }
 }
 
 void SubgraphToFunction::RecordEsgIncastOutcast(Function& function)
@@ -395,6 +432,79 @@ void SubgraphToFunction::RecordEsgIncastOutcast(Function& function)
             }
             for (size_t k = 0; k < nLIST[i][j]->GetOOperands().size(); k++) {
                 RecordEsgOutcast(function, i, j, k);
+            }
+        }
+    }
+
+    auto scope = function.GetSlotScope();
+    if (scope == nullptr) {
+        return;
+    }
+    for (int outcastIndex : scope->ioslot.partialUpdateOutcastList) {
+        if (outcastIndex < 0 || static_cast<size_t>(outcastIndex) >= function.GetOutcast().size()) {
+            continue;
+        }
+        const auto& outcast = function.GetOutcast()[outcastIndex];
+        auto link = function.outIncastLinkMap.find(outcast->GetRawTensor());
+        if (link == function.outIncastLinkMap.end()) {
+            continue;
+        }
+        auto actualIncast = std::find_if(
+            function.GetIncast().begin(), function.GetIncast().end(),
+            [&link](const auto& incast) { return incast->GetRawTensor() == link->second; });
+        if (actualIncast == function.GetIncast().end()) {
+            continue;
+        }
+        for (size_t i = 0; i < nLIST.size(); i++) {
+            const auto& tensorArgs = subFuncInvokeInfos[i].GetTensorArgs();
+            bool storageAlreadyInput = std::any_of(
+                tensorArgs.begin(), tensorArgs.end(), [&outcast, &actualIncast](const auto& arg) {
+                    return !arg.isOutputToGM &&
+                           (arg.realDDRId == outcast->GetRawMagic() || arg.realDDRId == (*actualIncast)->GetRawMagic());
+                });
+            if (storageAlreadyInput) {
+                continue;
+            }
+            bool storageComesFromOtherSubgraph = false;
+            for (const auto& op : nLIST[i]) {
+                for (const auto& input : op->GetIOperands()) {
+                    if (input->GetRawMagic() != outcast->GetRawMagic()) {
+                        continue;
+                    }
+                    storageComesFromOtherSubgraph = std::any_of(
+                        input->GetProducers().begin(), input->GetProducers().end(),
+                        [i](const auto* producer) { return producer->GetSubgraphID() != static_cast<int>(i); });
+                    if (storageComesFromOtherSubgraph) {
+                        break;
+                    }
+                }
+                if (storageComesFromOtherSubgraph) {
+                    break;
+                }
+            }
+            if (storageComesFromOtherSubgraph) {
+                continue;
+            }
+            bool recorded = false;
+            for (const auto& op : nLIST[i]) {
+                if (!IsCopyIn(op->GetOpcode())) {
+                    continue;
+                }
+                for (size_t k = 0; k < op->GetIOperands().size(); k++) {
+                    if (op->GetIOperands()[k]->GetRawMagic() != outcast->GetRawMagic()) {
+                        continue;
+                    }
+                    const auto& incast = *actualIncast;
+                    outcast->tensor->actualRawmagic = incast->GetRawMagic();
+                    subFuncInvokeInfos[i].RecordTensorArg(k, incast->GetRawMagic(), incast->GetOffset(),
+                                                          incast->GetShape(), incast->tensor->rawshape,
+                                                          incast->Datatype(), false, incast, op->GetOpMagic());
+                    recorded = true;
+                    break;
+                }
+                if (recorded) {
+                    break;
+                }
             }
         }
     }
@@ -605,8 +715,9 @@ void SubgraphToFunction::InsertParameter(size_t i, Function& leafFunc)
 }
 
 Status SubgraphToFunction::ProcessSubgraph(Function& function, size_t i, size_t& programIdx,
-                                           std::vector<Function*>& outputFuncList)
+                                           std::vector<Function*>& outputFuncList, Operation*& callOp)
 {
+    callOp = nullptr;
     auto subgraph = nLIST[i];
     auto leafName = function.GetRawName() + "_leaf" + std::to_string(i);
     APASS_LOG_DEBUG_F(Elements::Graph, "Add leafFunction %s.", leafName.c_str());
@@ -614,12 +725,16 @@ Status SubgraphToFunction::ProcessSubgraph(Function& function, size_t i, size_t&
     Program::GetInstance().BeginFunction(leafName, FunctionType::STATIC, GraphType::BLOCK_GRAPH);
     auto leafFunc = Program::GetInstance().GetCurrentFunction();
     leafFunc->SetProgramOp(subgraph);
+    if (TokenUtils::RebuildTokenDependencies(*leafFunc) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Function, "Failed to rebuild token dependencies for leaf %s.", leafName.c_str());
+        return FAILED;
+    }
     leafFunc->SetLeafFuncAttribute(std::make_shared<LeafFuncAttribute>());
     InsertParameter(i, *leafFunc);
 
     // In EndFunction to calculate cache hash
     auto result = Program::GetInstance().EndFunction(leafName);
-    auto callOp = std::get<1>(result);
+    callOp = std::get<1>(result);
     if (callOp == nullptr) {
         APASS_LOG_ERROR_F(Elements::Graph, "leafname %s, program returned nullptr.", leafName.c_str());
         return FAILED;
@@ -730,6 +845,32 @@ void SubgraphToFunction::SetHashOrderInfoOnCallOp(const std::vector<std::shared_
                               OpAttributeKey::vecMergeSubgraphCount);
 }
 
+Status SubgraphToFunction::BuildRootCallOpTokenDependency(
+    Function& originFunction, Function& rootFunction,
+    const std::unordered_map<const Operation*, Operation*>& originOpToCallOp) const
+{
+    const auto dependencies = originFunction.GetVarDependency().GetAllDependencies();
+    for (const auto& [token, entry] : dependencies) {
+        (void)token;
+        for (const auto& producerStmt : entry.producers) {
+            auto* producerOp = ToOperation(producerStmt);
+            auto producerIt = originOpToCallOp.find(producerOp);
+            if (producerIt == originOpToCallOp.end()) {
+                continue;
+            }
+            for (const auto& consumerStmt : entry.consumers) {
+                auto* consumerOp = ToOperation(consumerStmt);
+                auto consumerIt = originOpToCallOp.find(consumerOp);
+                if (consumerIt == originOpToCallOp.end()) {
+                    continue;
+                }
+                AddCallOpTokenDependency(rootFunction, *producerIt->second, *consumerIt->second);
+            }
+        }
+    }
+    return SUCCESS;
+}
+
 Status SubgraphToFunction::IslandToFunction(Function& function)
 {
     // 1. Create root function
@@ -744,12 +885,23 @@ Status SubgraphToFunction::IslandToFunction(Function& function)
 
     // 2. Call HashInterface to compute hash value to determine isomorphism of each subgraph.
     size_t programIdx = 0;
+    std::unordered_map<const Operation*, Operation*> originOpToCallOp;
     for (size_t i = 0; i < nLIST.size(); i++) {
-        Status status = ProcessSubgraph(function, i, programIdx, mergedFuncList);
+        Operation* callOp = nullptr;
+        Status status = ProcessSubgraph(function, i, programIdx, mergedFuncList, callOp);
         if (status != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Graph, "Failed to process subgraph %zu.", i);
             return status;
         }
+        for (const auto& op : nLIST[i]) {
+            if (op != nullptr) {
+                originOpToCallOp[op.get()] = callOp;
+            }
+        }
+    }
+    if (BuildRootCallOpTokenDependency(function, *rootFunc, originOpToCallOp) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Function, "Failed to build root callop token dependency.");
+        return FAILED;
     }
 
     // 3. Finalize root function
@@ -771,6 +923,10 @@ Status SubgraphToFunction::IslandToFunction(Function& function)
             APASS_LOG_ERROR_F(Elements::Graph, "Failed to handle ready states.");
             return readyStateStatus;
         }
+    }
+    // Root calls are emitted in a valid historical order. Re-sort only when token-only dependencies require it.
+    if (!rootFunc->GetVarDependency().GetAllDependencies().empty()) {
+        rootFunc->SortOperations(SortOperationsMode::LIGHTWEIGHT_STABLE);
     }
     // 5. symbolize esg to program subgraph for both static and dynamic paths
     SymbolizeFunction(*rootFunc, mergedFuncList);

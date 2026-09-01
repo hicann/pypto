@@ -32,6 +32,14 @@ before:
 after:
     add->copyout->reshape->copyin->mul
 */
+static void AddUniqueOperation(std::vector<Operation*>& ops, Operation* op)
+{
+    if (op == nullptr || std::find(ops.begin(), ops.end(), op) != ops.end()) {
+        return;
+    }
+    ops.push_back(op);
+}
+
 static void SetReshapeCopyOutValidShapeAttr(Operation& op)
 {
     if (op.GetOOperands().empty()) {
@@ -410,17 +418,21 @@ void RemoveUnalignedReshape::InsertReshapeCopy(Function& function, Operation& op
     bool needToCopy = false;
     bool checkOverUbSize = false;
     // index表示copyout到reshape之间，有多个消费者的Tensor的第几个消费者是包含需要处理的reshape的
-    FindAllProducerCopyOuts(input, copyOutOps);
-    if (copyOutOps.empty()) {
+    bool hasMixedRawCopyOutAndAssembleProducers = HasMixedRawCopyOutAndAssembleProducers(function, input);
+    if (!hasMixedRawCopyOutAndAssembleProducers) {
+        FindAllProducerCopyOuts(input, copyOutOps);
+        CollectRawCopyOuts(function, input, copyOutOps);
+    }
+    if (copyOutOps.empty() || hasMixedRawCopyOutAndAssembleProducers) {
         auto newReshapeIo = HandleNoCopyOutInProducer(function, op, checkOverUbSize);
         if (!checkOverUbSize && newReshapeIo != nullptr) {
             copyOutOp = *(newReshapeIo->GetProducers().begin());
         }
-    } else if (copyOutOps.size() > 1) {
-        checkOverUbSize = !ProcessMultipleCopyOuts(copyOutOps);
     } else {
         copyOutOp = copyOutOps.front();
-        GetPathBetweenSingleCopyOutAndReshape(&op, toCopyProducerTensor, findCopyOut, needToCopy, index);
+        if (copyOutOps.size() == 1) {
+            GetPathBetweenSingleCopyOutAndReshape(&op, toCopyProducerTensor, findCopyOut, needToCopy, index);
+        }
     }
     std::vector<Operation*> copyInOps;
     if (checkNonCopyInConsumerExists(output, copyInOps)) {
@@ -431,11 +443,14 @@ void RemoveUnalignedReshape::InsertReshapeCopy(Function& function, Operation& op
     if (!checkOverUbSize) {
         if (needToCopy) {
             copyOutOp = CopyBranchBetweenCopyOut2Reshape(function, toCopyProducerTensor, index);
+            copyOutOps.clear();
         }
+        CollectRawCopyInConsumers(function, input, copyInOps);
         CollectSiblingCopyInConsumersOfDDRReshapeInput(input, op, copyInOps);
         if (copyOutOp != nullptr) {
-            ProcessCopyOutOfDDRReshape(copyOutOp);
+            AddUniqueOperation(copyOutOps, copyOutOp);
         }
+        checkOverUbSize = !ProcessMultipleCopyOuts(copyOutOps);
         ProcessCopyInOfDDRReshape(copyInOps);
     } else {
         APASS_LOG_WARN_F(Elements::Tensor,
@@ -527,18 +542,6 @@ void RemoveUnalignedReshape::HandleNoCopyInConsumer(Function& function, Operatio
     copyInOps.push_back(&newCopyInOp);
 }
 
-bool RemoveUnalignedReshape::CheckAllCopyOutInputsNonUb(const std::vector<Operation*>& copyOutOps)
-{
-    for (auto* copyOutOp : copyOutOps) {
-        auto copyOutInput = copyOutOp->GetIOperands().front();
-        auto copyOutInputMemType = copyOutInput->GetMemoryTypeOriginal();
-        if (copyOutInputMemType == MemoryType::MEM_UB) {
-            return false;
-        }
-    }
-    return true;
-}
-
 void RemoveUnalignedReshape::CollectSiblingCopyInConsumersOfDDRReshapeInput(LogicalTensorPtr reshapeInput,
                                                                             Operation& reshapeOp,
                                                                             std::vector<Operation*>& copyInOps)
@@ -564,12 +567,6 @@ void RemoveUnalignedReshape::CollectSiblingCopyInConsumersOfDDRReshapeInput(Logi
 
 bool RemoveUnalignedReshape::ProcessMultipleCopyOuts(std::vector<Operation*>& copyOutOps)
 {
-    bool allCopyOutInputsNonUb = CheckAllCopyOutInputsNonUb(copyOutOps);
-    if (allCopyOutInputsNonUb) {
-        auto* firstCopyOutOp = copyOutOps.front();
-        return ProcessCopyOutOfDDRReshape(firstCopyOutOp);
-    }
-
     for (auto* cOp : copyOutOps) {
         if (!ProcessCopyOutOfDDRReshape(cOp)) {
             return false;
@@ -600,7 +597,13 @@ bool RemoveUnalignedReshape::ProcessCopyOutOfDDRReshape(Operation* copyOutOp)
 
 void RemoveUnalignedReshape::ProcessCopyInOfDDRReshape(std::vector<Operation*>& copyInOps)
 {
+    std::vector<Operation*> processedCopyInOps;
     for (auto* copyInOp : copyInOps) {
+        if (copyInOp == nullptr ||
+            std::find(processedCopyInOps.begin(), processedCopyInOps.end(), copyInOp) != processedCopyInOps.end()) {
+            continue;
+        }
+        processedCopyInOps.push_back(copyInOp);
         auto copyInInput = copyInOp->GetIOperands().front();
         auto copyInOutput = copyInOp->GetOOperands().front();
         auto copyInOutputMemType = copyInOutput->GetMemoryTypeOriginal();
@@ -627,7 +630,7 @@ void RemoveUnalignedReshape::FindAllProducerCopyOuts(LogicalTensorPtr tensor, st
     for (auto producerOp : producers) {
         auto opcode = producerOp->GetOpcode();
         if (opcode == Opcode::OP_COPY_OUT) {
-            copyOutOps.push_back(producerOp);
+            AddUniqueOperation(copyOutOps, producerOp);
             continue;
         }
         if (opcode == Opcode::OP_RESHAPE_COPY_OUT) {
@@ -640,6 +643,67 @@ void RemoveUnalignedReshape::FindAllProducerCopyOuts(LogicalTensorPtr tensor, st
             FindAllProducerCopyOuts(input, copyOutOps);
         }
     }
+}
+
+void RemoveUnalignedReshape::CollectRawCopyOuts(Function& function, LogicalTensorPtr reshapeInput,
+                                                std::vector<Operation*>& copyOutOps)
+{
+    if (reshapeInput == nullptr || reshapeInput->GetRawTensor() == nullptr) {
+        return;
+    }
+    const auto rawMagic = reshapeInput->GetRawMagic();
+    for (auto& op : function.Operations()) {
+        if (op.GetOpcode() != Opcode::OP_COPY_OUT || op.GetOOperands().empty()) {
+            continue;
+        }
+        auto output = op.GetOOperands().front();
+        if (output != nullptr && output->GetRawTensor() != nullptr && output->GetRawMagic() == rawMagic) {
+            AddUniqueOperation(copyOutOps, &op);
+        }
+    }
+}
+
+void RemoveUnalignedReshape::CollectRawCopyInConsumers(Function& function, LogicalTensorPtr reshapeInput,
+                                                       std::vector<Operation*>& copyInOps)
+{
+    if (reshapeInput == nullptr || reshapeInput->GetRawTensor() == nullptr) {
+        return;
+    }
+    const auto rawMagic = reshapeInput->GetRawMagic();
+    for (auto& op : function.Operations()) {
+        if (op.GetOpcode() != Opcode::OP_COPY_IN || op.GetIOperands().empty()) {
+            continue;
+        }
+        auto input = op.GetIOperands().front();
+        if (input != nullptr && input->GetRawTensor() != nullptr && input->GetRawMagic() == rawMagic) {
+            AddUniqueOperation(copyInOps, &op);
+        }
+    }
+}
+
+bool RemoveUnalignedReshape::HasMixedRawCopyOutAndAssembleProducers(Function& function, LogicalTensorPtr reshapeInput)
+{
+    if (reshapeInput == nullptr || reshapeInput->GetRawTensor() == nullptr) {
+        return false;
+    }
+    const auto rawMagic = reshapeInput->GetRawMagic();
+    bool hasCopyOut = false;
+    bool hasAssemble = false;
+    for (auto& op : function.Operations()) {
+        if (op.GetOOperands().empty()) {
+            continue;
+        }
+        auto output = op.GetOOperands().front();
+        if (output == nullptr || output->GetRawTensor() == nullptr || output->GetRawMagic() != rawMagic) {
+            continue;
+        }
+        hasCopyOut = hasCopyOut || op.GetOpcode() == Opcode::OP_COPY_OUT;
+        hasAssemble = hasAssemble || op.GetOpcode() == Opcode::OP_ASSEMBLE;
+        if (hasCopyOut && hasAssemble) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /* 从tensor的消费者列表中查找OP_COPY_IN，如果未找到OP_COPY_IN，

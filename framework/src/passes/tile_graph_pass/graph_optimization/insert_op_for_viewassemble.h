@@ -41,6 +41,8 @@ private:
     Status RunOnFunction(Function& function) override;
     Status JudgedViewAssemble(Function& function);
     Status InsertCopy(Function& function, Operation* viewOp, Operation* assOp);
+    void InsertCopyForSharedInput(Function& function, Operation* assembleOp);
+    void InsertCopiesForSharedAssembleInputs(Function& function);
     bool NeedInsertCopy(LogicalTensorPtr& assembleOut);
     void InsertViewAssemble(Function& function, Operation* viewOp, Operation* assembleOp);
 

@@ -14,6 +14,7 @@
  */
 
 #include "axis_combine_marker.h"
+#include "passes/pass_utils/tensor_utils.h"
 namespace npu {
 namespace tile_fwk {
 const std::unordered_set<Opcode> whiteList{Opcode::OP_RESHAPE, Opcode::OP_VEC_DUP};
@@ -28,7 +29,7 @@ void AxisCombineMarker::Run(Function& function)
 {
     Init(function);
     ForwardVisit();
-    BuildUnionFind();
+    BuildUnionFind(function);
     ResolveGroupStatus();
 }
 
@@ -308,12 +309,14 @@ void AxisCombineMarker::Union(LogicalTensorPtr x, LogicalTensorPtr y)
 bool AxisCombineMarker::IsEligibleUnionOutput(Operation* op, OpCalcType calcType, LogicalTensorPtr outputTensor) const
 {
     bool isPropagationOp = propagationCalcType.find(calcType) != propagationCalcType.end();
-    bool isTailPreserved = (op->GetOpcode() == Opcode::OP_VIEW || op->GetOpcode() == Opcode::OP_ASSEMBLE) &&
+    bool isTailPreserved = (op->GetOpcode() == Opcode::OP_VIEW || op->GetOpcode() == Opcode::OP_ASSEMBLE ||
+                            op->GetOpcode() == Opcode::OP_COPY_OUT) &&
                            outputTensor->GetShape().back() == op->GetIOperands()[0]->GetShape().back();
     return isPropagationOp || isTailPreserved;
 }
 
-void AxisCombineMarker::UnionOutputWithInputs(Operation* op, OpCalcType calcType, LogicalTensorPtr outputTensor)
+void AxisCombineMarker::UnionOutputWithInputs(Function& function, Operation* op, OpCalcType calcType,
+                                              LogicalTensorPtr outputTensor)
 {
     if (!IsEligibleUnionOutput(op, calcType, outputTensor) || outputTensor->GetShape().back() != 1) {
         return;
@@ -323,6 +326,15 @@ void AxisCombineMarker::UnionOutputWithInputs(Operation* op, OpCalcType calcType
             continue;
         }
         Union(inputTensor, outputTensor);
+        // 新图表达下, 多个assemble写入不同logical tensor但共享同一rawMagic(同一地址)。
+        // 需要将同rawMagic的兄弟logical tensor也union到同一组, 保证统一设置合轴属性。
+        if (op->GetOpcode() == Opcode::OP_ASSEMBLE) {
+            for (const auto& sibling : TensorUtils::GetSameRawMagicLogicalTensors(function, outputTensor)) {
+                if (sibling != nullptr && sibling->GetMagic() != outputTensor->GetMagic()) {
+                    Union(outputTensor, sibling);
+                }
+            }
+        }
     }
 }
 
@@ -344,13 +356,13 @@ void AxisCombineMarker::UnionMultiOutputTensors(Operation* op)
     }
 }
 
-void AxisCombineMarker::BuildUnionFind()
+void AxisCombineMarker::BuildUnionFind(Function& function)
 {
     for (size_t opIdx = 0; opIdx < opList_.size(); opIdx++) {
         auto op = opList_[opIdx];
         auto calcType = OpcodeManager::Inst().GetOpCalcType(op->GetOpcode());
         for (auto outputTensor : op->GetOOperands()) {
-            UnionOutputWithInputs(op, calcType, outputTensor);
+            UnionOutputWithInputs(function, op, calcType, outputTensor);
         }
         UnionMultiOutputTensors(op);
     }

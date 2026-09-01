@@ -23,6 +23,7 @@
 #include "interface/configs/config_manager.h"
 #include "ut_json/ut_json_tool.h"
 #include "passes/tile_graph_pass/graph_constraint/replace_tensor.h"
+#include <algorithm>
 #include <fstream>
 #include <vector>
 #include <string>
@@ -40,6 +41,117 @@ static const uint32_t kNumSix = 6u;
 static const uint32_t kNumEight = 8u;
 static const uint32_t kNumTwelve = 12u;
 static const uint32_t kNumSixteen = 16u;
+
+namespace {
+ir::StmtPtr ToStmt(const Operation& op) { return std::static_pointer_cast<const ir::Stmt>(op.shared_from_this()); }
+
+void CheckTokenDependencies(Function& function)
+{
+    const auto& dependency = function.GetVarDependency();
+    for (auto& op : function.Operations(false)) {
+        if (!op.result_token_.empty()) {
+            EXPECT_TRUE(dependency.HasProducer(op.result_token_.front(), ToStmt(op)));
+        }
+        for (const auto& token : op.tokens_) {
+            EXPECT_TRUE(dependency.HasConsumer(token, ToStmt(op)));
+        }
+    }
+    for (const auto& [token, entry] : dependency.GetAllDependencies()) {
+        EXPECT_FALSE(entry.producers.empty());
+        EXPECT_FALSE(entry.consumers.empty());
+        for (const auto& producerStmt : entry.producers) {
+            auto* producer = static_cast<Operation*>(const_cast<ir::Stmt*>(producerStmt.get()));
+            ASSERT_NE(producer, nullptr);
+            EXPECT_EQ(producer->result_token_.front(), token);
+        }
+        for (const auto& consumerStmt : entry.consumers) {
+            auto* consumer = static_cast<Operation*>(const_cast<ir::Stmt*>(consumerStmt.get()));
+            ASSERT_NE(consumer, nullptr);
+            EXPECT_TRUE(std::find(consumer->tokens_.begin(), consumer->tokens_.end(), token) !=
+                        consumer->tokens_.end());
+        }
+    }
+}
+
+struct TokenRawReuseGraph {
+    std::shared_ptr<Function> function;
+    Operation* reshape2{nullptr};
+    Operation* assemble1{nullptr};
+    Operation* assemble2{nullptr};
+    Operation* exp1{nullptr};
+    Operation* exp2{nullptr};
+    Operation* exp3{nullptr};
+    Operation* copyInOp2{nullptr};
+};
+
+TokenRawReuseGraph BuildTokenRawReuseGraph(const std::string& name, bool reshapeBeforeExp1, bool exp2BeforeView)
+{
+    TokenRawReuseGraph graph;
+    graph.function = std::make_shared<Function>(Program::GetInstance(), name, name, nullptr);
+    std::vector<int64_t> shape = {kNumEight, kNumEight};
+    std::vector<int64_t> offset = {kNumZero, kNumZero};
+    auto sharedRaw = std::make_shared<RawTensor>(DT_FP32, shape);
+
+    auto makeTensor = [&](const std::shared_ptr<RawTensor>& raw) {
+        auto tensor = IRBuilder().CreateTensorVar(raw, offset, shape, CreateTestConstIntVector(shape));
+        tensor->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+        return tensor;
+    };
+    auto makeUniqueTensor = [&]() { return makeTensor(std::make_shared<RawTensor>(DT_FP32, shape)); };
+    auto makeIncast = [&]() {
+        auto tensor = makeUniqueTensor();
+        graph.function->inCasts_.push_back(tensor);
+        return tensor;
+    };
+    auto addCopyOut = [&](const LogicalTensorPtr& input) {
+        auto outcast = makeUniqueTensor();
+        PassOperationUtils::AddOperation(*graph.function, Opcode::OP_COPY_OUT, {input}, {outcast});
+        graph.function->outCasts_.push_back(outcast);
+    };
+
+    auto incast1 = makeIncast();
+    auto copyIn1 = makeUniqueTensor();
+    PassOperationUtils::AddOperation(*graph.function, Opcode::OP_COPY_IN, {incast1}, {copyIn1});
+    auto reshape1Out = makeUniqueTensor();
+    PassOperationUtils::AddOperation(*graph.function, Opcode::OP_RESHAPE, {copyIn1}, {reshape1Out});
+    graph.assemble1 = &PassOperationUtils::AddOperation(*graph.function, Opcode::OP_ASSEMBLE, {reshape1Out},
+                                                        {makeTensor(sharedRaw)});
+    graph.assemble1->SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset));
+
+    LogicalTensorPtr branch1Out = graph.assemble1->GetOutputOperand(0);
+    LogicalTensorPtr branch1Final = branch1Out;
+    if (reshapeBeforeExp1) {
+        auto reshape2Out = makeUniqueTensor();
+        graph.reshape2 = &PassOperationUtils::AddOperation(*graph.function, Opcode::OP_RESHAPE, {branch1Out},
+                                                           {reshape2Out});
+        branch1Final = reshape2Out;
+    }
+    graph.exp1 = &PassOperationUtils::AddOperation(*graph.function, Opcode::OP_EXP, {branch1Final},
+                                                   {makeUniqueTensor()});
+    addCopyOut(graph.exp1->GetOutputOperand(0));
+
+    auto incast2 = makeIncast();
+    auto copyIn2 = makeUniqueTensor();
+    graph.copyInOp2 = &PassOperationUtils::AddOperation(*graph.function, Opcode::OP_COPY_IN, {incast2}, {copyIn2});
+    LogicalTensorPtr branch2Input = copyIn2;
+    if (exp2BeforeView) {
+        graph.exp2 = &PassOperationUtils::AddOperation(*graph.function, Opcode::OP_EXP, {copyIn2},
+                                                       {makeUniqueTensor()});
+        branch2Input = graph.exp2->GetOutputOperand(0);
+    }
+    auto viewOut = makeUniqueTensor();
+    auto& view = PassOperationUtils::AddOperation(*graph.function, Opcode::OP_VIEW, {branch2Input}, {viewOut});
+    view.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
+    graph.assemble2 = &PassOperationUtils::AddOperation(*graph.function, Opcode::OP_ASSEMBLE, {viewOut},
+                                                        {makeTensor(sharedRaw)});
+    graph.assemble2->SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset));
+
+    graph.exp3 = &PassOperationUtils::AddOperation(*graph.function, Opcode::OP_EXP,
+                                                   {graph.assemble2->GetOutputOperand(0)}, {makeUniqueTensor()});
+    addCopyOut(graph.exp3->GetOutputOperand(0));
+    return graph;
+}
+} // namespace
 
 class ReplaceTensorTest : public testing::Test {
 public:
@@ -975,5 +1087,758 @@ TEST_F(ReplaceTensorTest, TestA_MULACC_B_5Inputs_A5)
     EXPECT_EQ(pass.PostCheck(*currFunctionPtr), SUCCESS);
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
 }
+
+/*
+ * 新图表达: 两个assemble写入两个不同logical tensor(共享同一rawMagic), 验证pass后
+ * 两个输出及对应输入的rawMagic统一到同一地址。
+ *
+ * 旧图: incast -> view0 -> copy0 -> assemble0 -> outcast (共享)
+ *                       -> view1 -> copy1 -> assemble1 -> outcast (共享)
+ *
+ * 新图: incast -> view0 -> copy0 -> assemble0 -> out0 (rawMagic=R)
+ *                       -> view1 -> copy1 -> assemble1 -> out1 (rawMagic=R)
+ *       out0 和 out1 共享同一 rawMagic, 但为不同 logical tensor
+ */
+TEST_F(ReplaceTensorTest, TestMultiAssembleSameRawMagic)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestMultiAssembleSameRawMagic",
+                                                      "TestMultiAssembleSameRawMagic", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {kNumEight, kNumEight};
+    std::vector<int64_t> offset0 = {kNumZero, kNumZero};
+    std::vector<int64_t> offset1 = {kNumZero, kNumFour};
+    std::shared_ptr<RawTensor> inRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
+    std::shared_ptr<RawTensor> viewRawTensor0 = std::make_shared<RawTensor>(DT_FP32, shape);
+    std::shared_ptr<RawTensor> viewRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape);
+    // 新图表达: out0和out1共享同一rawMagic
+    std::shared_ptr<RawTensor> sharedOutRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
+
+    auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(inRawTensor, offset0, shape,
+                                                             CreateTestConstIntVector(shape));
+    incast->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto viewOut0 = npu::tile_fwk::IRBuilder().CreateTensorVar(viewRawTensor0, offset0, shape,
+                                                               CreateTestConstIntVector(shape));
+    viewOut0->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto viewOut1 = npu::tile_fwk::IRBuilder().CreateTensorVar(viewRawTensor1, offset1, shape,
+                                                               CreateTestConstIntVector(shape));
+    viewOut1->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto out0 = npu::tile_fwk::IRBuilder().CreateTensorVar(sharedOutRawTensor, offset0, shape,
+                                                           CreateTestConstIntVector(shape));
+    out0->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto out1 = npu::tile_fwk::IRBuilder().CreateTensorVar(sharedOutRawTensor, offset1, shape,
+                                                           CreateTestConstIntVector(shape));
+    out1->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+
+    auto& viewOp0 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {incast}, {viewOut0});
+    auto& viewOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {incast}, {viewOut1});
+    auto& assOp0 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {viewOut0}, {out0});
+    auto& assOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {viewOut1}, {out1});
+
+    viewOp0.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset0));
+    viewOp1.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset1));
+    assOp0.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset0));
+    assOp1.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset1));
+
+    currFunctionPtr->inCasts_.push_back(incast);
+    currFunctionPtr->outCasts_.push_back(out0);
+    currFunctionPtr->outCasts_.push_back(out1);
+
+    ReplaceTensor pass;
+    EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    // 两个输出应统一到同一 rawMagic
+    EXPECT_EQ(out0->GetRawMagic(), out1->GetRawMagic());
+    // assemble 输入也应统一到同一 rawMagic
+    EXPECT_EQ(out0->GetRawMagic(), viewOut0->GetRawMagic());
+    EXPECT_EQ(out0->GetRawMagic(), viewOut1->GetRawMagic());
+    EXPECT_EQ(pass.PostCheck(*currFunctionPtr), SUCCESS);
+}
+
+/*
+ * 新图表达: 两个assemble写共享rawMagic的不同logical tensor, 同一输入,
+ * 且两个assemble的offset不同(写同一地址的不同位置)。
+ * 验证 FindNeedToCopyAssemble 用 rawMagic 比较后不会误插入copy
+ * (旧逻辑用 magic 比较会误判输出不同而插入copy)。
+ *
+ * Graph:
+ *                                 /————> Assemble(offset0) -> out0 (rawMagic R, offset0)
+ *   incast -> CopyIn -> copyInOut
+ *                                 \————> Assemble(offset1) -> out1 (rawMagic R, offset1)
+ *   out0 和 out1 共享同一 rawMagic, 但为不同 logical tensor (offset不同)
+ */
+TEST_F(ReplaceTensorTest, TestMultiAssembleSameInputNoExtraCopy)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestMultiAssembleNoCopy",
+                                                      "TestMultiAssembleNoCopy", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {kNumEight, kNumEight};
+    std::vector<int64_t> shape1 = {kNumEight, kNumFour};
+    std::vector<int64_t> offset0 = {kNumZero, kNumZero};
+    std::vector<int64_t> offset1 = {kNumZero, kNumFour};
+    std::shared_ptr<RawTensor> inRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
+    std::shared_ptr<RawTensor> copyInRawTensor = std::make_shared<RawTensor>(DT_FP32, shape1);
+    std::shared_ptr<RawTensor> sharedOutRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
+
+    auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(inRawTensor, offset0, shape,
+                                                             CreateTestConstIntVector(shape));
+    incast->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto copyInOut = npu::tile_fwk::IRBuilder().CreateTensorVar(copyInRawTensor, offset0, shape1,
+                                                                CreateTestConstIntVector(shape1));
+    copyInOut->SetMemoryTypeBoth(MEM_UB, true);
+    auto out0 = npu::tile_fwk::IRBuilder().CreateTensorVar(sharedOutRawTensor, offset0, shape1,
+                                                           CreateTestConstIntVector(shape1));
+    out0->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto out1 = npu::tile_fwk::IRBuilder().CreateTensorVar(sharedOutRawTensor, offset1, shape1,
+                                                           CreateTestConstIntVector(shape1));
+    out1->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+
+    auto& copyInOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copyInOut});
+    auto& assOp0 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {copyInOut}, {out0});
+    auto& assOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {copyInOut}, {out1});
+
+    copyInOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified(offset0), MEM_UB, OpImmediate::Specified(shape), OpImmediate::Specified(shape)));
+    assOp0.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_UB, offset0));
+    assOp1.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_UB, offset1));
+
+    currFunctionPtr->inCasts_.push_back(incast);
+    currFunctionPtr->outCasts_.push_back(out0);
+    currFunctionPtr->outCasts_.push_back(out1);
+
+    int opSumBefore = currFunctionPtr->Operations().size();
+    ReplaceTensor pass;
+    EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
+    // 两个assemble输出共享rawMagic(同一地址), 不应误插入copy
+    EXPECT_EQ(currFunctionPtr->Operations().size(), opSumBefore) << "同rawMagic的assemble输出不应触发额外copy插入";
+    EXPECT_EQ(out0->GetRawMagic(), out1->GetRawMagic());
+    EXPECT_EQ(pass.PostCheck(*currFunctionPtr), SUCCESS);
+}
+
+/*
+ * 新图表达: 两个assemble写入两个不同logical tensor(共享同一rawMagic), assemble输出后接reshape。
+ * 验证backward处理reshape时, SyncSiblingAssembleOutput 能同步兄弟logicaltensor并继续遍历。
+ *
+ * Graph:
+ *   incast -> view0 -> assemble0 -> out0 (rawMagic R) -> reshape -> reshapeOut -> copyOut -> outcast0
+ *         -> view1 -> assemble1 -> out1 (rawMagic R) -> outcast1
+ *   out0 和 out1 共享同一 rawMagic, 但为不同 logical tensor
+ *
+ * 当 backward 从 reshapeOut 处理 reshape 时, out0 被更新, 需同步 out1 (兄弟),
+ * 使 out1 的 producer (assemble1) 也被 backward 处理。
+ */
+TEST_F(ReplaceTensorTest, TestSyncSiblingAssembleOutputReshape)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestSyncSiblingReshape",
+                                                      "TestSyncSiblingReshape", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {kNumEight, kNumEight};
+    std::vector<int64_t> shape1 = {kNumSixteen, kNumFour};
+    std::vector<int64_t> offset0 = {kNumZero, kNumZero};
+    std::vector<int64_t> offset1 = {kNumZero, kNumFour};
+
+    std::shared_ptr<RawTensor> inRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
+    std::shared_ptr<RawTensor> viewRawTensor0 = std::make_shared<RawTensor>(DT_FP32, shape);
+    std::shared_ptr<RawTensor> viewRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape);
+    // 新图表达: out0和out1共享同一rawMagic(同一RawTensor对象)
+    std::shared_ptr<RawTensor> sharedOutRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
+    std::shared_ptr<RawTensor> reshapeRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
+
+    auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(inRawTensor, offset0, shape,
+                                                             CreateTestConstIntVector(shape));
+    incast->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto viewOut0 = npu::tile_fwk::IRBuilder().CreateTensorVar(viewRawTensor0, offset0, shape,
+                                                               CreateTestConstIntVector(shape));
+    viewOut0->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto viewOut1 = npu::tile_fwk::IRBuilder().CreateTensorVar(viewRawTensor1, offset1, shape,
+                                                               CreateTestConstIntVector(shape));
+    viewOut1->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto out0 = npu::tile_fwk::IRBuilder().CreateTensorVar(sharedOutRawTensor, offset0, shape,
+                                                           CreateTestConstIntVector(shape));
+    out0->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto out1 = npu::tile_fwk::IRBuilder().CreateTensorVar(sharedOutRawTensor, offset1, shape,
+                                                           CreateTestConstIntVector(shape));
+    out1->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    // reshape 输入输出共享同一 rawMagic 才会 inplace, reshapeOut 不是 outcast
+    auto reshapeOut = npu::tile_fwk::IRBuilder().CreateTensorVar(reshapeRawTensor, offset0, shape1,
+                                                                 CreateTestConstIntVector(shape1));
+    reshapeOut->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto outcast0 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    outcast0->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+
+    auto& viewOp0 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {incast}, {viewOut0});
+    auto& viewOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {incast}, {viewOut1});
+    auto& assOp0 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {viewOut0}, {out0});
+    auto& assOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {viewOut1}, {out1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {out0}, {reshapeOut});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {reshapeOut}, {outcast0});
+
+    viewOp0.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset0));
+    viewOp1.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset1));
+    assOp0.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset0));
+    assOp1.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset1));
+
+    currFunctionPtr->inCasts_.push_back(incast);
+    currFunctionPtr->outCasts_.push_back(outcast0);
+    currFunctionPtr->outCasts_.push_back(out1);
+
+    // pass 前记录 reshape 输出的 rawMagic, pass 后用于对比验证 reshape 输出成为复用节点
+    int reshapeOutRawMagicBefore = reshapeOut->GetRawMagic();
+    ReplaceTensor pass;
+    EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    // 两个assemble输出应统一到同一 rawMagic
+    EXPECT_EQ(out0->GetRawMagic(), out1->GetRawMagic());
+    // assemble输入也应统一到同一 rawMagic (说明兄弟链路被遍历)
+    EXPECT_EQ(out0->GetRawMagic(), viewOut0->GetRawMagic());
+    EXPECT_EQ(out0->GetRawMagic(), viewOut1->GetRawMagic());
+    // reshape 输出应复用 out0 的 rawMagic, 成为复用节点
+    EXPECT_EQ(reshapeOut->GetRawMagic(), out0->GetRawMagic());
+    EXPECT_NE(reshapeOutRawMagicBefore, reshapeOut->GetRawMagic());
+    EXPECT_EQ(pass.PostCheck(*currFunctionPtr), SUCCESS);
+}
+
+/*
+ * 新图表达: 两个assemble写入两个不同logical tensor(共享同一rawMagic), assemble输出后接index_outcast。
+ * 验证backward处理index_outcast时, SyncSiblingAssembleOutput 能同步兄弟logicaltensor并继续遍历。
+ *
+ * Graph:
+ *   incast -> view0 -> assemble0 -> out0 (rawMagic R) -- (index 2 of index_outcast)
+ *                                                            \
+ *   inIdx0, inIdx1 -----------------------------------------> index_outcast -> idxOut (outcast0)
+ *   incast -> view1 -> assemble1 -> out1 (rawMagic R) -> outcast1
+ *   out0 和 out1 共享同一 rawMagic, 但为不同 logical tensor
+ *
+ * 当 backward 从 idxOut 处理 index_outcast 时, out0 (input idx 2) 被更新,
+ * 需同步 out1 (兄弟), 使 out1 的 producer (assemble1) 也被 backward 处理。
+ */
+TEST_F(ReplaceTensorTest, TestSyncSiblingAssembleOutputIndexOutcast)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestSyncSiblingIdxOutcast",
+                                                      "TestSyncSiblingIdxOutcast", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {kNumEight, kNumEight};
+    std::vector<int64_t> offset0 = {kNumZero, kNumZero};
+    std::vector<int64_t> offset1 = {kNumZero, kNumFour};
+
+    std::shared_ptr<RawTensor> inRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
+    std::shared_ptr<RawTensor> viewRawTensor0 = std::make_shared<RawTensor>(DT_FP32, shape);
+    std::shared_ptr<RawTensor> viewRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape);
+    std::shared_ptr<RawTensor> sharedOutRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
+    std::shared_ptr<RawTensor> idxOutRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
+
+    auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(inRawTensor, offset0, shape,
+                                                             CreateTestConstIntVector(shape));
+    incast->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto viewOut0 = npu::tile_fwk::IRBuilder().CreateTensorVar(viewRawTensor0, offset0, shape,
+                                                               CreateTestConstIntVector(shape));
+    viewOut0->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto viewOut1 = npu::tile_fwk::IRBuilder().CreateTensorVar(viewRawTensor1, offset1, shape,
+                                                               CreateTestConstIntVector(shape));
+    viewOut1->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto out0 = npu::tile_fwk::IRBuilder().CreateTensorVar(sharedOutRawTensor, offset0, shape,
+                                                           CreateTestConstIntVector(shape));
+    out0->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto out1 = npu::tile_fwk::IRBuilder().CreateTensorVar(sharedOutRawTensor, offset1, shape,
+                                                           CreateTestConstIntVector(shape));
+    out1->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    // index_outcast 需要3个输入: index0, index1, data(out0)
+    auto inIdx0 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_INT32, shape, CreateTestConstIntVector(shape));
+    inIdx0->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto inIdx1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_INT32, shape, CreateTestConstIntVector(shape));
+    inIdx1->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto idxOut = npu::tile_fwk::IRBuilder().CreateTensorVar(idxOutRawTensor, offset0, shape,
+                                                             CreateTestConstIntVector(shape));
+    idxOut->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+
+    auto& viewOp0 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {incast}, {viewOut0});
+    auto& viewOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {incast}, {viewOut1});
+    auto& assOp0 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {viewOut0}, {out0});
+    auto& assOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {viewOut1}, {out1});
+    // index_outcast: {inIdx0, inIdx1, out0} -> idxOut, inplace pair = {2, 0}
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_INDEX_OUTCAST, {inIdx0, inIdx1, out0}, {idxOut});
+
+    viewOp0.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset0));
+    viewOp1.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset1));
+    assOp0.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset0));
+    assOp1.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset1));
+
+    currFunctionPtr->inCasts_.push_back(incast);
+    currFunctionPtr->outCasts_.push_back(idxOut);
+    currFunctionPtr->outCasts_.push_back(out1);
+
+    // pass 前记录 idxOut 的 rawMagic, pass 后用于对比验证 idxOut 未成为复用节点 (index_outcast 非inplace)
+    int idxOutRawMagicBefore = idxOut->GetRawMagic();
+    ReplaceTensor pass;
+    EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    // 两个assemble输出应统一到同一 rawMagic
+    EXPECT_EQ(out0->GetRawMagic(), out1->GetRawMagic());
+    // assemble输入也应统一到同一 rawMagic (说明兄弟链路被遍历)
+    EXPECT_EQ(out0->GetRawMagic(), viewOut0->GetRawMagic());
+    EXPECT_EQ(out0->GetRawMagic(), viewOut1->GetRawMagic());
+    // idxOut 不应复用 out0 的 rawMagic (index_outcast 非inplace, 与reshape不同)
+    EXPECT_NE(idxOut->GetRawMagic(), out0->GetRawMagic());
+    EXPECT_EQ(idxOutRawMagicBefore, idxOut->GetRawMagic());
+    EXPECT_EQ(pass.PostCheck(*currFunctionPtr), SUCCESS);
+}
+
+/*
+ * 新图表达: 两个assemble写入两个不同logical tensor(共享同一rawMagic), assemble输出后接view。
+ * 验证backward处理view时, SyncSiblingAssembleOutput 能同步兄弟logicaltensor并继续遍历。
+ *
+ * Graph:
+ *   incast -> view0 -> assemble0 -> out0 (rawMagic R) -> view2 -> viewOut2 (outcast0)
+ *          -> view1 -> assemble1 -> out1 (rawMagic R) -> outcast1
+ *   out0 和 out1 共享同一 rawMagic, 但为不同 logical tensor
+ */
+TEST_F(ReplaceTensorTest, TestSyncSiblingAssembleOutputView)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestSyncSiblingView",
+                                                      "TestSyncSiblingView", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {kNumEight, kNumEight};
+    std::vector<int64_t> offset0 = {kNumZero, kNumZero};
+    std::vector<int64_t> offset1 = {kNumZero, kNumFour};
+
+    std::shared_ptr<RawTensor> inRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
+    std::shared_ptr<RawTensor> viewRawTensor0 = std::make_shared<RawTensor>(DT_FP32, shape);
+    std::shared_ptr<RawTensor> viewRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape);
+    std::shared_ptr<RawTensor> sharedOutRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
+    std::shared_ptr<RawTensor> viewRawTensor2 = std::make_shared<RawTensor>(DT_FP32, shape);
+
+    auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(inRawTensor, offset0, shape,
+                                                             CreateTestConstIntVector(shape));
+    incast->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto viewOut0 = npu::tile_fwk::IRBuilder().CreateTensorVar(viewRawTensor0, offset0, shape,
+                                                               CreateTestConstIntVector(shape));
+    viewOut0->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto viewOut1 = npu::tile_fwk::IRBuilder().CreateTensorVar(viewRawTensor1, offset1, shape,
+                                                               CreateTestConstIntVector(shape));
+    viewOut1->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto out0 = npu::tile_fwk::IRBuilder().CreateTensorVar(sharedOutRawTensor, offset0, shape,
+                                                           CreateTestConstIntVector(shape));
+    out0->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto out1 = npu::tile_fwk::IRBuilder().CreateTensorVar(sharedOutRawTensor, offset1, shape,
+                                                           CreateTestConstIntVector(shape));
+    out1->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto viewOut2 = npu::tile_fwk::IRBuilder().CreateTensorVar(viewRawTensor2, offset0, shape,
+                                                               CreateTestConstIntVector(shape));
+    viewOut2->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+
+    auto& viewOp0 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {incast}, {viewOut0});
+    auto& viewOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {incast}, {viewOut1});
+    auto& assOp0 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {viewOut0}, {out0});
+    auto& assOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {viewOut1}, {out1});
+    auto& viewOp2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {out0}, {viewOut2});
+
+    viewOp0.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset0));
+    viewOp1.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset1));
+    assOp0.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset0));
+    assOp1.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset1));
+    viewOp2.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset0));
+
+    currFunctionPtr->inCasts_.push_back(incast);
+    currFunctionPtr->outCasts_.push_back(viewOut2);
+    currFunctionPtr->outCasts_.push_back(out1);
+
+    ReplaceTensor pass;
+    EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    // 两个assemble输出应统一到同一 rawMagic
+    EXPECT_EQ(out0->GetRawMagic(), out1->GetRawMagic());
+    // assemble输入也应统一到同一 rawMagic
+    EXPECT_EQ(out0->GetRawMagic(), viewOut0->GetRawMagic());
+    EXPECT_EQ(out0->GetRawMagic(), viewOut1->GetRawMagic());
+    // view输出也应与输入统一
+    EXPECT_EQ(out0->GetRawMagic(), viewOut2->GetRawMagic());
+    EXPECT_EQ(pass.PostCheck(*currFunctionPtr), SUCCESS);
+}
+
+/*
+ * 新图表达: 两个assemble写入共享rawMagic的不同logical tensor, base为outcast(out1)而非incast。
+ * 验证base入队后SyncSiblingAssembleOutput同步兄弟(out0), 使out0的consumer(reshape)也被遍历。
+ *
+ * Graph (CopyIn打断inplace链, 使incast不在group中, base为outcast):
+ *   incast -> CopyIn -> copyOut0 -> view0 -> assemble0 -> out0 (rawMagic R) -> reshape -> reshapeOut -> copyOut ->
+ * outcast0
+ *         -> CopyIn -> copyOut1 -> view1 -> assemble1 -> out1 (rawMagic R, outcast1)
+ *   out0 和 out1 共享同一 rawMagic
+ */
+TEST_F(ReplaceTensorTest, TestSyncSiblingBaseIsOutcast)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestSyncSiblingBaseOutcast",
+                                                      "TestSyncSiblingBaseOutcast", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {kNumEight, kNumEight};
+    std::vector<int64_t> shape1 = {kNumSixteen, kNumFour};
+    std::vector<int64_t> offset0 = {kNumZero, kNumZero};
+    std::vector<int64_t> offset1 = {kNumZero, kNumFour};
+
+    std::shared_ptr<RawTensor> inRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
+    std::shared_ptr<RawTensor> copyRawTensor0 = std::make_shared<RawTensor>(DT_FP32, shape);
+    std::shared_ptr<RawTensor> copyRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape);
+    std::shared_ptr<RawTensor> sharedOutRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
+    std::shared_ptr<RawTensor> reshapeRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
+
+    auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(inRawTensor, offset0, shape,
+                                                             CreateTestConstIntVector(shape));
+    incast->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto copyOut0 = npu::tile_fwk::IRBuilder().CreateTensorVar(copyRawTensor0, offset0, shape,
+                                                               CreateTestConstIntVector(shape));
+    copyOut0->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto copyOut1 = npu::tile_fwk::IRBuilder().CreateTensorVar(copyRawTensor1, offset0, shape,
+                                                               CreateTestConstIntVector(shape));
+    copyOut1->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto viewOut0 = npu::tile_fwk::IRBuilder().CreateTensorVar(copyRawTensor0, offset0, shape,
+                                                               CreateTestConstIntVector(shape));
+    viewOut0->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto viewOut1 = npu::tile_fwk::IRBuilder().CreateTensorVar(copyRawTensor1, offset0, shape,
+                                                               CreateTestConstIntVector(shape));
+    viewOut1->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto out0 = npu::tile_fwk::IRBuilder().CreateTensorVar(sharedOutRawTensor, offset0, shape,
+                                                           CreateTestConstIntVector(shape));
+    out0->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto out1 = npu::tile_fwk::IRBuilder().CreateTensorVar(sharedOutRawTensor, offset1, shape,
+                                                           CreateTestConstIntVector(shape));
+    out1->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto reshapeOut = npu::tile_fwk::IRBuilder().CreateTensorVar(reshapeRawTensor, offset0, shape1,
+                                                                 CreateTestConstIntVector(shape1));
+    reshapeOut->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto outcast0 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    outcast0->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+
+    // CopyIn 打断 inplace 链: incast 不在 group 中, base 将是 outcast
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copyOut0});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copyOut1});
+    auto& viewOp0 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {copyOut0}, {viewOut0});
+    auto& viewOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {copyOut1}, {viewOut1});
+    auto& assOp0 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {viewOut0}, {out0});
+    auto& assOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {viewOut1}, {out1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {out0}, {reshapeOut});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {reshapeOut}, {outcast0});
+
+    viewOp0.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset0));
+    viewOp1.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset0));
+    assOp0.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset0));
+    assOp1.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset1));
+
+    currFunctionPtr->inCasts_.push_back(incast);
+    currFunctionPtr->outCasts_.push_back(outcast0);
+    currFunctionPtr->outCasts_.push_back(out1);
+
+    ReplaceTensor pass;
+    EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    // 两个assemble输出应统一到同一 rawMagic (base=out1同步了兄弟out0)
+    EXPECT_EQ(out0->GetRawMagic(), out1->GetRawMagic());
+    // assemble输入也应统一到同一 rawMagic (说明兄弟链路被遍历)
+    EXPECT_EQ(out0->GetRawMagic(), viewOut0->GetRawMagic());
+    EXPECT_EQ(out0->GetRawMagic(), viewOut1->GetRawMagic());
+    EXPECT_EQ(pass.PostCheck(*currFunctionPtr), SUCCESS);
+}
+
+/*
+ * 用例1:
+ *   incast1 -> copyin1 -> reshape1 -> assemble1 -> reshape2 -> exp1 -> copyout1 -> outcast1
+ *   incast2 -> copyin2 -> view -> assemble2 -> exp3 -> copyout2 -> outcast2
+ *
+ * assemble1 和 assemble2 的输出共享同一个 RawTensor。
+ * Before: reshape2 --produce T0--> assemble2
+ * After:  exp1 --produce T1--> assemble2
+ */
+TEST_F(ReplaceTensorTest, TestTokenProducerMove)
+{
+    auto graph = BuildTokenRawReuseGraph("TokenProducerMove", true, false);
+    ASSERT_NE(graph.reshape2, nullptr);
+    ASSERT_NE(graph.exp1, nullptr);
+    ASSERT_NE(graph.assemble1, nullptr);
+    ASSERT_NE(graph.assemble2, nullptr);
+
+    IRBuilder builder;
+    auto originalToken = builder.CreateTokenVar(ir::Span::Unknown());
+    graph.reshape2->result_token_ = {originalToken};
+    graph.assemble2->tokens_.push_back(originalToken);
+    graph.function->GetVarDependency().AddProducer(originalToken, ToStmt(*graph.reshape2));
+    graph.function->GetVarDependency().AddConsumer(originalToken, ToStmt(*graph.assemble2));
+
+    ReplaceTensor pass;
+    pass.RunOnFunction(*graph.function);
+    EXPECT_EQ(graph.assemble1->GetOutputOperand(0)->GetRawTensor(),
+              graph.assemble2->GetOutputOperand(0)->GetRawTensor());
+
+    ASSERT_FALSE(graph.exp1->result_token_.empty());
+    EXPECT_NE(graph.exp1->result_token_.front(), originalToken);
+    EXPECT_EQ(graph.assemble2->tokens_.size(), 0);
+    EXPECT_EQ(graph.copyInOp2->tokens_.size(), 1);
+    EXPECT_EQ(graph.assemble2->tokens_.front(), graph.exp1->result_token_.front());
+    EXPECT_TRUE(graph.reshape2->result_token_.empty());
+    EXPECT_FALSE(graph.function->GetVarDependency().HasDependency(originalToken));
+    CheckTokenDependencies(*graph.function);
+}
+
+/*
+ * 用例2:
+ *   incast1 -> copyin1 -> reshape1 -> assemble1 -> exp1 -> copyout1 -> outcast1
+ *   incast2 -> copyin2 -> exp2 -> view -> assemble2 -> exp3 -> copyout2 -> outcast2
+ *
+ * assemble1 和 assemble2 的输出共享同一个 RawTensor。
+ * Before: exp1 --produce T--> assemble2
+ * After:  exp1 --produce T--> exp2
+ */
+TEST_F(ReplaceTensorTest, TestTokenConsumerMove)
+{
+    auto graph = BuildTokenRawReuseGraph("TokenConsumerMove", false, true);
+    ASSERT_NE(graph.exp1, nullptr);
+    ASSERT_NE(graph.exp2, nullptr);
+    ASSERT_NE(graph.assemble1, nullptr);
+    ASSERT_NE(graph.assemble2, nullptr);
+
+    IRBuilder builder;
+    auto token = builder.CreateTokenVar(ir::Span::Unknown());
+    graph.exp1->result_token_ = {token};
+    graph.assemble2->tokens_.push_back(token);
+    graph.function->GetVarDependency().AddProducer(token, ToStmt(*graph.exp1));
+    graph.function->GetVarDependency().AddConsumer(token, ToStmt(*graph.assemble2));
+
+    EXPECT_EQ(graph.assemble1->GetOutputOperand(0)->GetRawTensor(),
+              graph.assemble2->GetOutputOperand(0)->GetRawTensor());
+
+    ReplaceTensor pass;
+    pass.RunOnFunction(*graph.function);
+    EXPECT_EQ(graph.assemble1->GetOutputOperand(0)->GetRawTensor(),
+              graph.assemble2->GetOutputOperand(0)->GetRawTensor());
+
+    EXPECT_EQ(graph.exp1->result_token_.front(), token);
+    EXPECT_TRUE(graph.assemble2->tokens_.empty());
+    ASSERT_EQ(graph.exp2->tokens_.size(), 1);
+    EXPECT_EQ(graph.exp2->tokens_.front(), token);
+    EXPECT_TRUE(graph.function->GetVarDependency().HasProducer(token, ToStmt(*graph.exp1)));
+    EXPECT_TRUE(graph.function->GetVarDependency().HasConsumer(token, ToStmt(*graph.exp2)));
+    EXPECT_FALSE(graph.function->GetVarDependency().HasConsumer(token, ToStmt(*graph.assemble2)));
+    CheckTokenDependencies(*graph.function);
+}
+
+/*
+ * 用例3:
+ *   incast1 -> copyin1 -> reshape1 -> assemble1 -> reshape2 -> exp1 -> copyout1 -> outcast1
+ *   incast2 -> copyin2 -> exp2 -> view -> assemble2 -> exp3 -> copyout2 -> outcast2
+ *
+ * assemble1 和 assemble2 的输出共享同一个 RawTensor。
+ * Before: reshape2 --produce T0--> assemble2
+ * After:  exp1 --produce T1--> exp2
+ */
+TEST_F(ReplaceTensorTest, TestTokenProducerAndConsumerMove)
+{
+    auto graph = BuildTokenRawReuseGraph("TokenProducerAndConsumerMove", true, true);
+    ASSERT_NE(graph.reshape2, nullptr);
+    ASSERT_NE(graph.exp1, nullptr);
+    ASSERT_NE(graph.exp2, nullptr);
+    ASSERT_NE(graph.assemble1, nullptr);
+    ASSERT_NE(graph.assemble2, nullptr);
+
+    IRBuilder builder;
+    auto originalToken = builder.CreateTokenVar(ir::Span::Unknown());
+    graph.reshape2->result_token_ = {originalToken};
+    graph.assemble2->tokens_.push_back(originalToken);
+    graph.function->GetVarDependency().AddProducer(originalToken, ToStmt(*graph.reshape2));
+    graph.function->GetVarDependency().AddConsumer(originalToken, ToStmt(*graph.assemble2));
+
+    ReplaceTensor pass;
+    pass.RunOnFunction(*graph.function);
+    EXPECT_EQ(graph.assemble1->GetOutputOperand(0)->GetRawTensor(),
+              graph.assemble2->GetOutputOperand(0)->GetRawTensor());
+
+    ASSERT_FALSE(graph.exp1->result_token_.empty());
+    EXPECT_NE(graph.exp1->result_token_.front(), originalToken);
+    EXPECT_EQ(graph.exp2->tokens_.size(), 1);
+    EXPECT_EQ(graph.exp2->tokens_.front(), graph.exp1->result_token_.front());
+    EXPECT_TRUE(graph.reshape2->result_token_.empty());
+    EXPECT_TRUE(graph.assemble2->tokens_.empty());
+    EXPECT_TRUE(graph.function->GetVarDependency().HasProducer(graph.exp1->result_token_.front(), ToStmt(*graph.exp1)));
+    EXPECT_TRUE(graph.function->GetVarDependency().HasConsumer(graph.exp1->result_token_.front(), ToStmt(*graph.exp2)));
+    EXPECT_FALSE(graph.function->GetVarDependency().HasDependency(originalToken));
+    CheckTokenDependencies(*graph.function);
+}
+
+TEST_F(ReplaceTensorTest, DoesNotMoveTokenProducerToItsConsumers)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "TokenConsumerBoundary", "TokenConsumerBoundary",
+                                               nullptr);
+    std::vector<int64_t> shape = {kNumEight, kNumEight};
+    std::vector<int64_t> offset = {kNumZero, kNumZero};
+    auto sharedRaw = std::make_shared<RawTensor>(DT_FP32, shape);
+    auto makeTensor = [&](const std::shared_ptr<RawTensor>& raw) {
+        auto tensor = IRBuilder().CreateTensorVar(raw, offset, shape, CreateTestConstIntVector(shape));
+        tensor->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+        return tensor;
+    };
+
+    auto incast = makeTensor(sharedRaw);
+    function->inCasts_.push_back(incast);
+    auto viewOut1 = makeTensor(sharedRaw);
+    auto viewOut2 = makeTensor(sharedRaw);
+    auto& view1 = PassOperationUtils::AddOperation(*function, Opcode::OP_VIEW, {incast}, {viewOut1});
+    auto& view2 = PassOperationUtils::AddOperation(*function, Opcode::OP_VIEW, {incast}, {viewOut2});
+    auto& consumer1 = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {viewOut1},
+                                                       {makeTensor(std::make_shared<RawTensor>(DT_FP32, shape))});
+    auto& consumer2 = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {viewOut2},
+                                                       {makeTensor(std::make_shared<RawTensor>(DT_FP32, shape))});
+
+    IRBuilder builder;
+    auto token1 = builder.CreateTokenVar(ir::Span::Unknown());
+    auto token2 = builder.CreateTokenVar(ir::Span::Unknown());
+    view1.result_token_ = {token1};
+    view2.result_token_ = {token2};
+    consumer1.tokens_ = {token1, token2};
+    consumer2.tokens_ = {token1, token2};
+    auto& dependency = function->GetVarDependency();
+    dependency.AddProducer(token1, ToStmt(view1));
+    dependency.AddProducer(token2, ToStmt(view2));
+    dependency.AddConsumer(token1, ToStmt(consumer1));
+    dependency.AddConsumer(token1, ToStmt(consumer2));
+    dependency.AddConsumer(token2, ToStmt(consumer1));
+    dependency.AddConsumer(token2, ToStmt(consumer2));
+
+    ReplaceTensor pass;
+    EXPECT_EQ(pass.RunOnFunction(*function), SUCCESS);
+    EXPECT_TRUE(view1.result_token_.empty());
+    EXPECT_TRUE(view2.result_token_.empty());
+    EXPECT_TRUE(consumer1.tokens_.empty());
+    EXPECT_TRUE(consumer2.tokens_.empty());
+    EXPECT_FALSE(dependency.HasDependency(token1));
+    EXPECT_FALSE(dependency.HasDependency(token2));
+    CheckTokenDependencies(*function);
+}
+
+TEST_F(ReplaceTensorTest, DoesNotMoveTokenProducerPastItsConsumer)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "TokenConsumerBeforeBoundary",
+                                               "TokenConsumerBeforeBoundary", nullptr);
+    std::vector<int64_t> shape = {kNumEight, kNumEight};
+    std::vector<int64_t> offset = {kNumZero, kNumZero};
+    auto sharedRaw = std::make_shared<RawTensor>(DT_FP32, shape);
+    auto makeTensor = [&](const std::shared_ptr<RawTensor>& raw) {
+        auto tensor = IRBuilder().CreateTensorVar(raw, offset, shape, CreateTestConstIntVector(shape));
+        tensor->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+        return tensor;
+    };
+
+    auto incast = makeTensor(sharedRaw);
+    function->inCasts_.push_back(incast);
+    auto firstViewOutput = makeTensor(sharedRaw);
+    auto secondViewOutput = makeTensor(sharedRaw);
+    auto boundaryOutput = makeTensor(std::make_shared<RawTensor>(DT_FP32, shape));
+    auto& tokenProducer = PassOperationUtils::AddOperation(*function, Opcode::OP_VIEW, {incast}, {firstViewOutput});
+    auto& tokenConsumer = PassOperationUtils::AddOperation(*function, Opcode::OP_VIEW, {firstViewOutput},
+                                                           {secondViewOutput});
+    auto& boundary = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {secondViewOutput}, {boundaryOutput});
+
+    IRBuilder builder;
+    auto token = builder.CreateTokenVar(ir::Span::Unknown());
+    tokenProducer.result_token_ = {token};
+    tokenConsumer.tokens_ = {token};
+    auto& dependency = function->GetVarDependency();
+    dependency.AddProducer(token, ToStmt(tokenProducer));
+    dependency.AddConsumer(token, ToStmt(tokenConsumer));
+
+    ReplaceTensor pass;
+    EXPECT_EQ(pass.RunOnFunction(*function), SUCCESS);
+
+    EXPECT_TRUE(tokenProducer.result_token_.empty());
+    EXPECT_TRUE(tokenConsumer.tokens_.empty());
+    EXPECT_TRUE(boundary.result_token_.empty());
+    EXPECT_FALSE(dependency.HasDependency(token));
+    EXPECT_NO_THROW(function->GetSortedOperations());
+    CheckTokenDependencies(*function);
+}
+
+TEST_F(ReplaceTensorTest, DoesNotMoveTokenConsumerToProducerAncestor)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "TokenConsumerProducerAncestor",
+                                               "TokenConsumerProducerAncestor", nullptr);
+    std::vector<int64_t> shape = {kNumEight, kNumEight};
+    std::vector<int64_t> offset = {kNumZero, kNumZero};
+    auto sharedRaw = std::make_shared<RawTensor>(DT_FP32, shape);
+    auto makeTensor = [&](const std::shared_ptr<RawTensor>& raw) {
+        auto tensor = IRBuilder().CreateTensorVar(raw, offset, shape, CreateTestConstIntVector(shape));
+        tensor->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+        return tensor;
+    };
+
+    auto incast = makeTensor(std::make_shared<RawTensor>(DT_FP32, shape));
+    function->inCasts_.push_back(incast);
+    auto base = makeTensor(sharedRaw);
+    auto& copyInOp = PassOperationUtils::AddOperation(*function, Opcode::OP_COPY_IN, {incast}, {base});
+
+    auto reshape1Out = makeTensor(sharedRaw);
+    PassOperationUtils::AddOperation(*function, Opcode::OP_RESHAPE, {base}, {reshape1Out});
+    auto viewOut = makeTensor(sharedRaw);
+    auto& view = PassOperationUtils::AddOperation(*function, Opcode::OP_VIEW, {reshape1Out}, {viewOut});
+    view.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
+    auto& exp = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {viewOut},
+                                                 {makeTensor(std::make_shared<RawTensor>(DT_FP32, shape))});
+
+    auto reshape2Out = makeTensor(sharedRaw);
+    auto& tokenConsumer = PassOperationUtils::AddOperation(*function, Opcode::OP_RESHAPE, {base}, {reshape2Out});
+
+    IRBuilder builder;
+    auto token = builder.CreateTokenVar(ir::Span::Unknown());
+    exp.result_token_ = {token};
+    tokenConsumer.tokens_.push_back(token);
+    auto& dependency = function->GetVarDependency();
+    dependency.AddProducer(token, ToStmt(exp));
+    dependency.AddConsumer(token, ToStmt(tokenConsumer));
+
+    ReplaceTensor pass;
+    EXPECT_EQ(pass.RunOnFunction(*function), SUCCESS);
+
+    ASSERT_EQ(tokenConsumer.tokens_.size(), 1);
+    EXPECT_EQ(tokenConsumer.tokens_.front(), token);
+    EXPECT_TRUE(copyInOp.tokens_.empty());
+    EXPECT_TRUE(dependency.HasProducer(token, ToStmt(exp)));
+    EXPECT_TRUE(dependency.HasConsumer(token, ToStmt(tokenConsumer)));
+    EXPECT_FALSE(dependency.HasConsumer(token, ToStmt(copyInOp)));
+    EXPECT_TRUE(function->LoopCheck().empty());
+    CheckTokenDependencies(*function);
+}
+
+TEST_F(ReplaceTensorTest, TestOversizedSharedDdrAssembleInputSkipsCopyInOut)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "OversizedSharedDdrInput",
+                                               "OversizedSharedDdrInput", nullptr);
+    std::vector<int64_t> shape = {128, 2048};
+    std::vector<int64_t> offset = {0, 0};
+    auto makeDdrTensor = [&shape]() {
+        auto tensor = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+        tensor->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+        return tensor;
+    };
+
+    auto input = makeDdrTensor();
+    auto sharedInput = makeDdrTensor();
+    auto assembleOutput = makeDdrTensor();
+    auto otherOutput = makeDdrTensor();
+    PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {input}, {sharedInput});
+    auto& assemble = PassOperationUtils::AddOperation(*function, Opcode::OP_ASSEMBLE, {sharedInput}, {assembleOutput});
+    assemble.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset));
+    PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {sharedInput}, {otherOutput});
+
+    ReplaceTensor pass;
+    EXPECT_EQ(pass.InsertNeedCopy(*function), SUCCESS);
+    auto operations = function->Operations();
+    EXPECT_EQ(operations.size(), 3u);
+    EXPECT_EQ(assemble.GetIOperands().front(), sharedInput);
+    for (const auto& op : operations) {
+        EXPECT_NE(op.GetOpcode(), Opcode::OP_COPY_IN);
+        EXPECT_NE(op.GetOpcode(), Opcode::OP_COPY_OUT);
+    }
+}
+
 } // namespace tile_fwk
 } // namespace npu

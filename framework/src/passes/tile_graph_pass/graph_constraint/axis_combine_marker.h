@@ -49,9 +49,9 @@ private:
     LogicalTensorPtr Find(LogicalTensorPtr x);
     void Union(LogicalTensorPtr x, LogicalTensorPtr y);
     bool IsEligibleUnionOutput(Operation* op, OpCalcType calcType, LogicalTensorPtr outputTensor) const;
-    void UnionOutputWithInputs(Operation* op, OpCalcType calcType, LogicalTensorPtr outputTensor);
+    void UnionOutputWithInputs(Function& function, Operation* op, OpCalcType calcType, LogicalTensorPtr outputTensor);
     void UnionMultiOutputTensors(Operation* op);
-    void BuildUnionFind();
+    void BuildUnionFind(Function& function);
     void ResolveGroupStatus();
     std::unordered_map<LogicalTensorPtr, AxisReorderStatus> tensorStatus_;
     std::unordered_map<LogicalTensorPtr, LogicalTensorPtr> parent_;

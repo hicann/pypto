@@ -17,11 +17,62 @@
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/pass_utils.h"
 #include "tilefwk/error_code.h"
+#include "tilefwk/tilefwk_op.h"
 
 #define MODULE_NAME "RemoveRedundantOp"
 
 namespace npu {
 namespace tile_fwk {
+namespace {
+bool EqualInOutShape(const Operation& op)
+{
+    auto in = op.GetIOperands().front();
+    auto out = op.GetOOperands().front();
+    return in->GetShape() == out->GetShape() && in->GetMemoryTypeOriginal() == out->GetMemoryTypeOriginal();
+}
+
+bool HasOtherAssembleOutputOnSameRaw(Function& function, const Operation& op)
+{
+    if (op.GetOOperands().empty()) {
+        return false;
+    }
+    auto output = op.GetOOperands().front();
+    if (output == nullptr) {
+        return false;
+    }
+    for (auto& currentOp : function.Operations(false)) {
+        if (&currentOp == &op || currentOp.IsDeleted() || currentOp.GetOpcode() != Opcode::OP_ASSEMBLE) {
+            continue;
+        }
+        for (const auto& currentOutput : currentOp.GetOOperands()) {
+            if (currentOutput != nullptr && currentOutput->GetRawMagic() == output->GetRawMagic() &&
+                currentOutput->GetMagic() != output->GetMagic()) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool HasAtomicWriteSemantic(const Operation& op)
+{
+    return op.HasAttr(RMW_MODE_ATTR_ADD) || op.HasAttr(RMW_MODE_ATTR_MIN) || op.HasAttr(RMW_MODE_ATTR_MAX);
+}
+
+bool HasUnmigratableTokenBeforeRemove(Function& function, const Operation& op)
+{
+    if (!op.tokens_.empty() && op.ConsumerOps().empty()) {
+        return true;
+    }
+    for (const auto& token : op.result_token_) {
+        if (!function.GetVarDependency().GetConsumers(token).empty()) {
+            return op.ProducerOps().empty();
+        }
+    }
+    return false;
+}
+} // namespace
+
 Status RemoveRedundantOpChecker::PreCheckAssemble(Function& function, const Operation& op, const LogicalTensorPtr& in)
 {
     uint32_t assembleRemoveNum = 0;
@@ -135,8 +186,7 @@ Status RemoveRedundantOpChecker::PostCheckAssemble(Function& function, const Ope
 {
     auto assembleIn = op.iOperand.front();
     auto assembleOut = op.oOperand.front();
-    auto parentOp = *assembleIn->GetProducers().begin();
-    if (parentOp == nullptr) {
+    if (assembleIn->GetProducers().empty() || *assembleIn->GetProducers().begin() == nullptr) {
         APASS_LOG_ERROR_F(
             Elements::Operation,
             "The input of assemble [%d] has no producer; Please check the input of assemble [%d] to ensure that it has "
@@ -149,21 +199,8 @@ Status RemoveRedundantOpChecker::PostCheckAssemble(Function& function, const Ope
                           assembleOut->GetMagic());
         return SUCCESS;
     }
-    bool hasParallelAssemble = false;
-    for (const auto& consumer : assembleIn->GetConsumers()) {
-        if (consumer->GetOpcode() == Opcode::OP_ASSEMBLE && consumer->GetOpMagic() != op.GetOpMagic()) {
-            hasParallelAssemble = true;
-            break;
-        }
-    }
-    bool hasReshapeConsumer = false;
-    for (const auto& consumer : assembleOut->GetConsumers()) {
-        if (consumer->GetOpcode() == Opcode::OP_RESHAPE) {
-            hasReshapeConsumer = true;
-            break;
-        }
-    }
-    if (hasParallelAssemble && hasReshapeConsumer) {
+    if (HasOtherAssembleOutputOnSameRaw(function, op) || HasAtomicWriteSemantic(op) ||
+        HasUnmigratableTokenBeforeRemove(function, op)) {
         return SUCCESS;
     }
     // 镜像 RemoveRedundantOp 的 outcast 保护：output 为 outcast 且 input 有其他 consumer 的
@@ -173,8 +210,7 @@ Status RemoveRedundantOpChecker::PostCheckAssemble(Function& function, const Ope
                           op.GetOpMagic());
         return SUCCESS;
     }
-    if (assembleIn->shape == assembleOut->shape &&
-        assembleIn->GetMemoryTypeOriginal() == assembleOut->GetMemoryTypeOriginal()) {
+    if (EqualInOutShape(op)) {
         APASS_LOG_ERROR_F(
             Elements::Operation,
             "PostCheck for assemble op[%d] failed: input and output has the same shape and memorytype; Please check "

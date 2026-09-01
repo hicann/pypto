@@ -17,6 +17,7 @@
 #define PASS_MERGE_VIEW_ASSEMBLE_UTILS_H_
 
 #include <unordered_map>
+#include <unordered_set>
 
 #include "interface/function/function.h"
 #include "interface/tensor/logical_tensor.h"
@@ -28,6 +29,13 @@ class MergeViewAssembleUtils {
 public:
     MergeViewAssembleUtils() = default;
     ~MergeViewAssembleUtils() = default;
+
+    struct TokenDependency {
+        std::vector<ir::VarPtr> inputTokens;
+        std::vector<ir::VarPtr> resultTokens;
+        std::vector<ir::StmtPtr> resultTokenConsumers;
+        std::vector<ir::VarPtr> touchedTokens;
+    };
 
     struct ViewOp {
         std::shared_ptr<LogicalTensor> input;
@@ -47,6 +55,7 @@ public:
         ir::Span span;            // 链路最早操作的span
         Operation::ScopeInfo scopeInfo;
         Opcode opcode = Opcode::OP_VIEW;
+        TokenDependency tokenDependency;
     };
     struct AssembleOp {
         std::shared_ptr<LogicalTensor> input;
@@ -57,14 +66,25 @@ public:
         Operation::ScopeInfo scopeInfo;
         std::string rmwModeAttr;
         Opcode opcode = Opcode::OP_ASSEMBLE;
+        TokenDependency tokenDependency;
         bool atomicFromReduceAcc = false;
         bool atomicFromExplicitRmw = false;
+    };
+    struct ProducerGroupFusion {
+        std::shared_ptr<LogicalTensor> middle;
+        Operation* downstream = nullptr;
+        std::vector<Operation*> producers;
+        std::vector<AssembleOp> replacements;
     };
     struct ConsumerCacheEntry {
         std::vector<Operation*> viewConsumers;
         std::vector<Operation*> assembleConsumers;
+        // A dependency-sensitive non-view consumer stops a view chain at this tensor.
+        bool hasViewChainStopper = false;
         // Any non-assemble consumer stops an assemble chain at this tensor.
         bool hasAssembleChainStopper = false;
+        size_t producerCount = 0;
+        bool allProducersAreAssemble = false;
     };
 
     static Status MergeViewAssemble(Function& function);
@@ -127,7 +147,8 @@ public:
                                    const std::vector<int64_t>& newOffset,
                                    const std::vector<SymbolicScalar>& newDynOffset,
                                    const std::vector<SymbolicScalar>& newDynValidShape, const ir::Span& span,
-                                   const Operation::ScopeInfo& scopeInfo, Opcode opcode);
+                                   const Operation::ScopeInfo& scopeInfo, Opcode opcode,
+                                   const TokenDependency& tokenDependency);
 
     // Assemble chain processing methods
     /**
@@ -164,11 +185,19 @@ public:
                                  const std::shared_ptr<LogicalTensor>& output, const std::vector<int64_t>& offset,
                                  const std::vector<SymbolicScalar>& dynOffset, const ir::Span& span,
                                  const Operation::ScopeInfo& scopeInfo, const std::string& rmwModeAttr, Opcode opcode,
-                                 bool atomicFromReduceAcc, bool atomicFromExplicitRmw);
+                                 const TokenDependency& tokenDependency, bool atomicFromReduceAcc,
+                                 bool atomicFromExplicitRmw);
 
     // Common methods
     Status Initialize();
     Status BuildConsumerCache(Function& function);
+    Status DiscoverProducerGroupFusions(Function& function);
+    bool BuildProducerGroupFusion(Function& function, const LogicalTensorPtr& middle,
+                                  const ConsumerCacheEntry& consumers);
+    bool HasSplitVersionContribution(const LogicalTensorPtr& middle,
+                                     const std::vector<Operation*>& currentProducers) const;
+    static bool HasCompleteStaticCoverage(const LogicalTensorPtr& middle, const std::vector<Operation*>& producers);
+    static bool IsFunctionBoundaryTensor(const Function& function, const LogicalTensorPtr& tensor);
     const ConsumerCacheEntry& BuildTensorConsumerCache(Function& function, const LogicalTensorPtr& tensor);
     const ConsumerCacheEntry& GetConsumers(const Operation& operation) const;
     static ir::Span GetFirstSpan(const std::vector<Operation*>& chain);
@@ -180,16 +209,19 @@ public:
     // Operation appending methods
     Status AppendMergedViewOperations(Function& function);
     Status AppendMergedAssembleOperations(Function& function);
+    Status AppendProducerGroupFusions(Function& function);
 
     // Cleanup methods
     Status CleanUp(Function& function);
-    Status EraseRedundantAssemble(Function& function) const;
     std::unordered_set<int> visitedOp_;
     std::unordered_map<int, const ConsumerCacheEntry*> consumerCache_;
     std::unordered_map<int, ConsumerCacheEntry> tensorConsumerCache_;
+    std::unordered_map<int, std::vector<LogicalTensorPtr>> rawTensorVersions_;
+    std::unordered_set<int> processedGroupTensor_;
     std::vector<Operation*> candidateOps_;
     std::vector<ViewOp> viewOpToAppend_;
     std::vector<AssembleOp> assembleOpToAppend_;
+    std::vector<ProducerGroupFusion> producerGroupFusions_;
     IRBuilder irBuilder_;
 };
 } // namespace npu::tile_fwk

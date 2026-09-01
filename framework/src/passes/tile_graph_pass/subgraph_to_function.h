@@ -57,9 +57,13 @@ private:
 
     void DoHealthCheckAfter(Function& function, const std::string& folderPath) override;
 
-    Status ProcessSubgraph(Function& function, size_t i, size_t& programIdx, std::vector<Function*>& outputFuncList);
+    Status ProcessSubgraph(Function& function, size_t i, size_t& programIdx, std::vector<Function*>& outputFuncList,
+                           Operation*& callOp);
     Status ProcessCacheResult(const std::tuple<Function*, Operation*, bool>& result, size_t i, size_t& programIdx,
                               std::vector<Function*>& outputFuncList, Operation& callOp);
+    Status BuildRootCallOpTokenDependency(
+        Function& originFunction, Function& rootFunction,
+        const std::unordered_map<const Operation*, Operation*>& originOpToCallOp) const;
     void SetSemanticLabel(const std::vector<std::shared_ptr<Operation>>& subgraph, Operation& callOp);
     void CopyHashOrderInfoToCallOp(const std::vector<std::shared_ptr<Operation>>& subgraph, Operation& callOp,
                                    const std::string& hashOrderKey, const std::string& countKey) const;

@@ -14,6 +14,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <algorithm>
 #include "symbolic_scalar_test_utils.h"
 #include "interface/function/function.h"
 #include "tilefwk/tilefwk.h"
@@ -305,6 +306,80 @@ TEST_F(L1CopyInReuseTest, TestNormal)
     L1CopyInReuseMerge LCRM;
     EXPECT_EQ(LCRM.RunOnFunction(*function), SUCCESS);
     EXPECT_EQ(function->GetTotalSubGraphCount(), result);
+}
+
+TEST_F(L1CopyInReuseTest, DeletedDuplicateCopyInMigratesTokenDependencies)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> tileShape{16, 16};
+    const int subGraphNum = 3;
+    InitGraphBuilder(G, tileShape, subGraphNum);
+
+    auto view = G.GetOp("view")->shared_from_this();
+    std::vector<std::shared_ptr<Operation>> copyIns{G.GetOp("SLICE_1")->shared_from_this(),
+                                                    G.GetOp("SLICE_2")->shared_from_this()};
+    std::vector<std::shared_ptr<Operation>> consumers{G.GetOp("EXP_1")->shared_from_this(),
+                                                      G.GetOp("EXP_2")->shared_from_this()};
+    auto asStmt = [](const std::shared_ptr<Operation>& op) { return std::static_pointer_cast<const ir::Stmt>(op); };
+
+    Function* function = G.GetFunction();
+    auto& dependency = function->GetVarDependency();
+    std::vector<ir::VarPtr> inputTokens;
+    std::vector<ir::VarPtr> resultTokens;
+    for (size_t i = 0; i < copyIns.size(); ++i) {
+        auto inputToken = IRBuilder().CreateTokenVar(ir::Span::Unknown());
+        view->result_token_.push_back(inputToken);
+        copyIns[i]->tokens_.push_back(inputToken);
+        dependency.AddProducer(inputToken, asStmt(view));
+        dependency.AddConsumer(inputToken, asStmt(copyIns[i]));
+        inputTokens.push_back(inputToken);
+
+        auto resultToken = IRBuilder().CreateTokenVar(ir::Span::Unknown());
+        copyIns[i]->result_token_.push_back(resultToken);
+        consumers[i]->tokens_.push_back(resultToken);
+        dependency.AddProducer(resultToken, asStmt(copyIns[i]));
+        dependency.AddConsumer(resultToken, asStmt(consumers[i]));
+        resultTokens.push_back(resultToken);
+    }
+
+    function->paramConfigs_.cubeNBufferSetting = {{-1, 1}};
+    function->paramConfigs_.cubeL1ReuseSetting = {{-1, 2}};
+    function->SetTotalSubGraphCount(subGraphNum);
+    auto operations = function->Operations(true, SortOperationsMode::LIGHTWEIGHT).DuplicatedOpList();
+    std::vector<std::vector<int>> colorNode(subGraphNum);
+    for (size_t i = 0; i < operations.size(); ++i) {
+        int color = operations[i]->GetSubgraphID();
+        if (color == 2) {
+            color = 1;
+            operations[i]->UpdateSubgraphID(color);
+        }
+        colorNode[color].push_back(static_cast<int>(i));
+    }
+    L1CopyInReuseRunner runner;
+    ASSERT_EQ(runner.Run(*function, subGraphNum, colorNode), SUCCESS);
+
+    ASSERT_NE(copyIns[0]->IsDeleted(), copyIns[1]->IsDeleted());
+    size_t deletedIndex = copyIns[0]->IsDeleted() ? 0 : 1;
+    size_t keptIndex = 1 - deletedIndex;
+    const auto& deletedCopyIn = copyIns[deletedIndex];
+    const auto& keptCopyIn = copyIns[keptIndex];
+    const auto& consumer = consumers[deletedIndex];
+    const auto& inputToken = inputTokens[deletedIndex];
+    const auto& deletedResultToken = resultTokens[deletedIndex];
+    ASSERT_TRUE(deletedCopyIn->IsDeleted());
+    EXPECT_TRUE(deletedCopyIn->tokens_.empty());
+    EXPECT_TRUE(deletedCopyIn->result_token_.empty());
+    EXPECT_FALSE(dependency.HasConsumer(inputToken, asStmt(deletedCopyIn)));
+    EXPECT_TRUE(dependency.HasConsumer(inputToken, asStmt(consumer)));
+    EXPECT_FALSE(dependency.HasDependency(deletedResultToken));
+
+    ASSERT_FALSE(keptCopyIn->result_token_.empty());
+    auto keptResultToken = keptCopyIn->result_token_.front();
+    EXPECT_TRUE(dependency.HasProducer(keptResultToken, asStmt(keptCopyIn)));
+    EXPECT_TRUE(dependency.HasConsumer(keptResultToken, asStmt(consumer)));
+    EXPECT_NE(std::find(consumer->tokens_.begin(), consumer->tokens_.end(), inputToken), consumer->tokens_.end());
+    EXPECT_NE(std::find(consumer->tokens_.begin(), consumer->tokens_.end(), keptResultToken), consumer->tokens_.end());
+    EXPECT_EQ(consumer->GetIOperands()[0], keptCopyIn->GetOOperands()[0]);
 }
 
 /*

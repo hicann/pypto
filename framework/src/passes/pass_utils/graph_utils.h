@@ -16,6 +16,8 @@
 #pragma once
 #ifndef GRAPH_UTILS_H
 #define GRAPH_UTILS_H
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <queue>
 #include "interface/operation/op_infer_shape_impl.h"
@@ -45,6 +47,7 @@ struct CompareTensorByMagic {
 };
 
 using TensorSet = std::set<LogicalTensorPtr, CompareTensorByMagic>;
+using RawMagicTensorMap = std::unordered_map<int64_t, TensorSet>;
 
 class GraphUtils {
 public:
@@ -142,6 +145,21 @@ public:
      * @return a TensorSet containing LogicalTensorPtrs matching the rawMagic.
      */
     static TensorSet GetTensorsByRawMagic(Function& function, int64_t rawMagic);
+    /**
+     * @brief Group all LogicalTensors in a function by rawMagic in one graph traversal.
+     *
+     * @param function the target function to search in.
+     * @return logical tensors grouped by rawMagic.
+     */
+    static RawMagicTensorMap GetTensorsGroupedByRawMagic(Function& function);
+    /**
+     * @brief Get rawMagic IDs that are referenced by more than one LogicalTensor.
+     *        The function graph is traversed once, avoiding repeated full-graph scans per rawMagic.
+     *
+     * @param function the target function to search in.
+     * @return rawMagic IDs whose buckets contain multiple LogicalTensors.
+     */
+    static std::unordered_set<int64_t> GetRawMagicsWithMultipleLogicalTensors(Function& function);
     /**
      * @brief Get the shared RawTensor represented by the given rawMagic bucket.
      *

@@ -14,6 +14,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <vector>
 #include <string>
 #include "interface/function/function.h"
@@ -25,6 +26,7 @@
 #include "ut_json/ut_json_tool.h"
 #include "passes/pass_mgr/pass_manager.h"
 #include "interface/configs/config_manager.h"
+#include "ir/span.h"
 #include "passes/tile_graph_pass/graph_optimization/infer_discontinuous_input.h"
 #include "computational_graph_builder.h"
 
@@ -56,6 +58,30 @@ static const uint16_t kNumExpFive = 32u;
 static const uint16_t kNumExpSix = 64u;
 static const uint16_t kNumExpSeven = 128u;
 static const uint16_t kNumExpEight = 256u;
+
+namespace {
+ir::StmtPtr ToStmtPtr(Operation& op) { return std::static_pointer_cast<const ir::Stmt>(op.shared_from_this()); }
+
+ir::VarPtr AddTokenEdge(Function& function, Operation& producer, Operation& consumer)
+{
+    if (producer.result_token_.empty()) {
+        producer.result_token_ = {IRBuilder().CreateTokenVar(producer.GetSpan())};
+    }
+    auto token = producer.result_token_.front();
+    function.GetVarDependency().AddProducer(token, ToStmtPtr(producer));
+    function.GetVarDependency().AddConsumer(token, ToStmtPtr(consumer));
+    if (std::find(consumer.tokens_.begin(), consumer.tokens_.end(), token) == consumer.tokens_.end()) {
+        consumer.tokens_.emplace_back(token);
+    }
+    return token;
+}
+
+bool HasToken(const Operation& op, const ir::VarPtr& token)
+{
+    return std::find(op.tokens_.begin(), op.tokens_.end(), token) != op.tokens_.end();
+}
+
+} // namespace
 
 class TestRemoveRedundantOpPass : public ::testing::Test {
 public:
@@ -3249,6 +3275,284 @@ TEST_F(TestRemoveRedundantOpPass, ParallelViewAssembleToIntermediateShouldKeepSt
     EXPECT_EQ(consumer.GetIOperands().front(), start);
     EXPECT_EQ(startProducer.GetOOperands().front(), start);
     EXPECT_TRUE(start->HasProducer(&startProducer));
+}
+
+TEST_F(TestRemoveRedundantOpPass, SingleAssembleMovesTokenDependency)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "SingleAssembleMovesTokenDependency",
+                                               "SingleAssembleMovesTokenDependency", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> shape = {kNumEight, kNumExpFour};
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto assembleInput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto assembleOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tokenInput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tokenOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tokenSinkOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    assembleInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    assembleOutput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    assembleInput->UpdateDynValidShape({CreateTestScalarVar("in_valid_0"), CreateTestScalarVar("in_valid_1")});
+    assembleOutput->UpdateDynValidShape({CreateTestScalarVar("out_valid_0"), CreateTestScalarVar("out_valid_1")});
+    assembleOutput->offset = {kNumOne, kNumZero};
+
+    auto& dataProducer = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {input}, {assembleInput});
+    auto& assemble = PassOperationUtils::AddOperation(
+        *function, Opcode::OP_ASSEMBLE, {assembleInput}, {assembleOutput},
+        [](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{1, 0})); });
+    auto& finalConsumer = PassOperationUtils::AddOperation(*function, Opcode::OP_SQRT, {assembleOutput}, {output});
+    auto& tokenProducer = PassOperationUtils::AddOperation(*function, Opcode::OP_ABS, {tokenInput}, {tokenOutput});
+    auto& tokenSink = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {tokenInput}, {tokenSinkOutput});
+    auto inputToken = AddTokenEdge(*function, tokenProducer, assemble);
+    auto oldResultToken = AddTokenEdge(*function, assemble, tokenSink);
+
+    function->inCasts_ = {input, tokenInput};
+    function->outCasts_ = {output, tokenOutput, tokenSinkOutput};
+
+    auto assembleStmt = ToStmtPtr(assemble);
+    RemoveRedundantOp pass;
+    EXPECT_EQ(pass.PreCheck(*function), SUCCESS);
+    EXPECT_EQ(pass.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(pass.PostCheck(*function), SUCCESS);
+
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_ASSEMBLE), kNumZero);
+    EXPECT_EQ(finalConsumer.GetIOperands().front(), assembleInput);
+    EXPECT_TRUE(HasToken(finalConsumer, inputToken));
+    EXPECT_TRUE(function->GetVarDependency().HasConsumer(inputToken, ToStmtPtr(finalConsumer)));
+    EXPECT_FALSE(function->GetVarDependency().HasConsumer(inputToken, assembleStmt));
+    ASSERT_FALSE(dataProducer.result_token_.empty());
+    EXPECT_NE(dataProducer.result_token_.front(), oldResultToken);
+    EXPECT_TRUE(function->GetVarDependency().HasProducer(dataProducer.result_token_.front(), ToStmtPtr(dataProducer)));
+    EXPECT_TRUE(function->GetVarDependency().HasConsumer(dataProducer.result_token_.front(), ToStmtPtr(tokenSink)));
+    EXPECT_TRUE(HasToken(tokenSink, dataProducer.result_token_.front()));
+    EXPECT_FALSE(function->GetVarDependency().HasDependency(oldResultToken));
+}
+
+TEST_F(TestRemoveRedundantOpPass, PerfectViewAssembleMovesTokenDependency)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "PerfectViewAssembleMovesTokenDependency",
+                                               "PerfectViewAssembleMovesTokenDependency", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> shape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> offset = {kNumZero, kNumZero};
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto start = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto viewOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto assembleOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tokenInput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tokenOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tokenSinkOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    start->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    assembleOutput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+
+    auto& dataProducer = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {input}, {start});
+    auto& view = PassOperationUtils::AddOperation(
+        *function, Opcode::OP_VIEW, {start}, {viewOutput},
+        [&offset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset)); });
+    auto& assemble = PassOperationUtils::AddOperation(
+        *function, Opcode::OP_ASSEMBLE, {viewOutput}, {assembleOutput},
+        [&offset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset)); });
+    auto& finalConsumer = PassOperationUtils::AddOperation(*function, Opcode::OP_SQRT, {assembleOutput}, {output});
+    auto& tokenProducer = PassOperationUtils::AddOperation(*function, Opcode::OP_ABS, {tokenInput}, {tokenOutput});
+    auto& tokenSink = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {tokenInput}, {tokenSinkOutput});
+    auto inputToken = AddTokenEdge(*function, tokenProducer, view);
+    AddTokenEdge(*function, tokenProducer, assemble);
+    auto oldResultToken = AddTokenEdge(*function, assemble, tokenSink);
+
+    function->inCasts_ = {input, tokenInput};
+    function->outCasts_ = {output, tokenOutput, tokenSinkOutput};
+
+    auto viewStmt = ToStmtPtr(view);
+    auto assembleStmt = ToStmtPtr(assemble);
+    RemoveRedundantOp pass;
+    EXPECT_EQ(pass.PreCheck(*function), SUCCESS);
+    EXPECT_EQ(pass.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(pass.PostCheck(*function), SUCCESS);
+
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumZero);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_ASSEMBLE), kNumZero);
+    EXPECT_EQ(finalConsumer.GetIOperands().front(), start);
+    EXPECT_TRUE(HasToken(finalConsumer, inputToken));
+    EXPECT_TRUE(function->GetVarDependency().HasConsumer(inputToken, ToStmtPtr(finalConsumer)));
+    EXPECT_FALSE(function->GetVarDependency().HasConsumer(inputToken, viewStmt));
+    EXPECT_FALSE(function->GetVarDependency().HasConsumer(inputToken, assembleStmt));
+    ASSERT_FALSE(dataProducer.result_token_.empty());
+    EXPECT_NE(dataProducer.result_token_.front(), oldResultToken);
+    EXPECT_TRUE(function->GetVarDependency().HasProducer(dataProducer.result_token_.front(), ToStmtPtr(dataProducer)));
+    EXPECT_TRUE(function->GetVarDependency().HasConsumer(dataProducer.result_token_.front(), ToStmtPtr(tokenSink)));
+    EXPECT_TRUE(HasToken(tokenSink, dataProducer.result_token_.front()));
+    EXPECT_FALSE(function->GetVarDependency().HasDependency(oldResultToken));
+}
+
+TEST_F(TestRemoveRedundantOpPass, PartialViewAssembleKeepsTokenOnNewView)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "PartialViewAssembleKeepsTokenOnNewView",
+                                               "PartialViewAssembleKeepsTokenOnNewView", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> fullShape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> partShape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> offset = {kNumZero, kNumZero};
+    std::vector<SymbolicScalar> dynOffset = {kNumZero, kNumZero};
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto start = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto viewOutput = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto assembleOutput = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto tokenInput = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto tokenOutput = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto tokenSinkOutput = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    start->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    assembleOutput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+
+    PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {input}, {start});
+    auto& view = PassOperationUtils::AddOperation(
+        *function, Opcode::OP_VIEW, {start}, {viewOutput}, [&offset, &dynOffset](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset, dynOffset));
+        });
+    auto& assemble = PassOperationUtils::AddOperation(
+        *function, Opcode::OP_ASSEMBLE, {viewOutput}, {assembleOutput},
+        [&offset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset)); });
+    auto& finalConsumer = PassOperationUtils::AddOperation(*function, Opcode::OP_SQRT, {assembleOutput}, {output});
+    auto& tokenProducer = PassOperationUtils::AddOperation(*function, Opcode::OP_ABS, {tokenInput}, {tokenOutput});
+    auto& tokenSink = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {tokenInput}, {tokenSinkOutput});
+    auto inputToken = AddTokenEdge(*function, tokenProducer, view);
+    auto oldResultToken = AddTokenEdge(*function, assemble, tokenSink);
+
+    function->inCasts_ = {input, tokenInput};
+    function->outCasts_ = {output, tokenOutput, tokenSinkOutput};
+
+    auto viewStmt = ToStmtPtr(view);
+    RemoveRedundantOp pass;
+    EXPECT_EQ(pass.PreCheck(*function), SUCCESS);
+    EXPECT_EQ(pass.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(pass.PostCheck(*function), SUCCESS);
+
+    Operation* newView = nullptr;
+    for (auto& op : function->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            newView = &op;
+            break;
+        }
+    }
+    ASSERT_NE(newView, nullptr);
+    EXPECT_FALSE(function->Operations().Contains(view));
+    EXPECT_FALSE(function->Operations().Contains(assemble));
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumOne);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_ASSEMBLE), kNumZero);
+    EXPECT_EQ(newView->GetIOperands().front(), start);
+    EXPECT_EQ(finalConsumer.GetIOperands().front(), newView->GetOOperands().front());
+    EXPECT_TRUE(HasToken(*newView, inputToken));
+    EXPECT_TRUE(function->GetVarDependency().HasConsumer(inputToken, ToStmtPtr(*newView)));
+    EXPECT_FALSE(function->GetVarDependency().HasConsumer(inputToken, viewStmt));
+    ASSERT_FALSE(newView->result_token_.empty());
+    EXPECT_NE(newView->result_token_.front(), oldResultToken);
+    EXPECT_TRUE(function->GetVarDependency().HasProducer(newView->result_token_.front(), ToStmtPtr(*newView)));
+    EXPECT_TRUE(function->GetVarDependency().HasConsumer(newView->result_token_.front(), ToStmtPtr(tokenSink)));
+    EXPECT_TRUE(HasToken(tokenSink, newView->result_token_.front()));
+    EXPECT_FALSE(function->GetVarDependency().HasDependency(oldResultToken));
+}
+
+TEST_F(TestRemoveRedundantOpPass, WarVersionAssembleIsPreserved)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "WarVersionAssembleIsPreserved",
+                                               "WarVersionAssembleIsPreserved", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    IRBuilder builder;
+    std::vector<int64_t> shape = {kNumFour, kNumExpFour};
+    auto sharedRaw = builder.CreateRawTensor(DT_FP32, Shape{kNumFour, kNumExpFour});
+    auto oldSource = builder.CreateTensorVar(*function, DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto newSource = builder.CreateTensorVar(*function, DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto oldInput = builder.CreateTensorVar(*function, DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto newInput = builder.CreateTensorVar(*function, DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto oldVersion = builder.CreateTensorVar(*function, sharedRaw, {0, 0}, shape);
+    auto newVersion = builder.CreateTensorVar(*function, sharedRaw, {0, 0}, shape);
+    auto readOutput = builder.CreateTensorVar(*function, DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto finalOutput = builder.CreateTensorVar(*function, DT_FP32, shape, CreateTestConstIntVector(shape));
+    oldInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    newInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    oldVersion->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    newVersion->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+
+    builder.CreateTensorOpStmt(*function, Opcode::OP_EXP, {oldSource}, {oldInput});
+    builder.CreateTensorOpStmt(*function, Opcode::OP_EXP, {newSource}, {newInput});
+    auto& oldWrite = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {oldInput}, {oldVersion});
+    oldWrite.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto& read = builder.CreateTensorOpStmt(*function, Opcode::OP_ABS, {oldVersion}, {readOutput});
+    auto& newWrite = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {newInput}, {newVersion});
+    newWrite.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    builder.CreateTensorOpStmt(*function, Opcode::OP_EXP, {newVersion}, {finalOutput});
+    auto warToken = AddTokenEdge(*function, read, newWrite);
+    function->inCasts_ = {oldSource, newSource};
+    function->outCasts_ = {readOutput, finalOutput};
+
+    RemoveRedundantOp pass;
+    EXPECT_EQ(pass.PreCheck(*function), SUCCESS);
+    EXPECT_EQ(pass.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(pass.PostCheck(*function), SUCCESS);
+
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_ASSEMBLE), kNumTwo);
+    EXPECT_TRUE(function->Operations().Contains(oldWrite));
+    EXPECT_TRUE(function->Operations().Contains(newWrite));
+    EXPECT_TRUE(function->GetVarDependency().HasProducer(warToken, ToStmtPtr(read)));
+    EXPECT_TRUE(function->GetVarDependency().HasConsumer(warToken, ToStmtPtr(newWrite)));
+    EXPECT_TRUE(HasToken(newWrite, warToken));
+}
+
+TEST_F(TestRemoveRedundantOpPass, ViewAssembleWarVersionBoundaryIsPreserved)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "ViewAssembleWarVersionBoundaryIsPreserved",
+                                               "ViewAssembleWarVersionBoundaryIsPreserved", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    IRBuilder builder;
+    std::vector<int64_t> fullShape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> partShape = {kNumTwo, kNumExpFour};
+    auto sharedRaw = builder.CreateRawTensor(DT_FP32, Shape{kNumFour, kNumExpFour});
+    auto oldStart = builder.CreateTensorVar(*function, DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto newStart = builder.CreateTensorVar(*function, DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto oldPart = builder.CreateTensorVar(*function, DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto newPart = builder.CreateTensorVar(*function, DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto oldVersion = builder.CreateTensorVar(*function, sharedRaw, {0, 0}, fullShape);
+    auto newVersion = builder.CreateTensorVar(*function, sharedRaw, {0, 0}, fullShape);
+    auto readOutput = builder.CreateTensorVar(*function, DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto finalOutput = builder.CreateTensorVar(*function, DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    oldStart->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    newStart->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    oldVersion->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    newVersion->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+
+    auto& oldView = builder.CreateTensorOpStmt(*function, Opcode::OP_VIEW, {oldStart}, {oldPart});
+    oldView.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto& oldWrite = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {oldPart}, {oldVersion});
+    oldWrite.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto& read = builder.CreateTensorOpStmt(*function, Opcode::OP_ABS, {oldVersion}, {readOutput});
+    auto& newView = builder.CreateTensorOpStmt(*function, Opcode::OP_VIEW, {newStart}, {newPart});
+    newView.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto& newWrite = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {newPart}, {newVersion});
+    newWrite.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    builder.CreateTensorOpStmt(*function, Opcode::OP_EXP, {newVersion}, {finalOutput});
+    auto warToken = AddTokenEdge(*function, read, newWrite);
+    function->inCasts_ = {oldStart, newStart};
+    function->outCasts_ = {readOutput, finalOutput};
+
+    RemoveRedundantOp pass;
+    EXPECT_EQ(pass.PreCheck(*function), SUCCESS);
+    EXPECT_EQ(pass.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(pass.PostCheck(*function), SUCCESS);
+
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumTwo);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_ASSEMBLE), kNumTwo);
+    EXPECT_TRUE(function->Operations().Contains(oldView));
+    EXPECT_TRUE(function->Operations().Contains(oldWrite));
+    EXPECT_TRUE(function->Operations().Contains(newView));
+    EXPECT_TRUE(function->Operations().Contains(newWrite));
+    EXPECT_TRUE(function->GetVarDependency().HasProducer(warToken, ToStmtPtr(read)));
+    EXPECT_TRUE(function->GetVarDependency().HasConsumer(warToken, ToStmtPtr(newWrite)));
 }
 } // namespace tile_fwk
 } // namespace npu

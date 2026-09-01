@@ -112,7 +112,34 @@ static void UpdateBrcOperandAfterExpand(Operation& op)
     }
 }
 
-Status AxisCombine::AlignBroadCastOpInputs([[maybe_unused]] Function& function, Operation& op)
+static void MoveResultTokenToInsertedOp(Function& function, const LogicalTensorPtr& srcTensor,
+                                        const LogicalTensorPtr& alignedTensor, Operation& insertedOp)
+{
+    const auto& producers = srcTensor->GetProducers();
+    if (producers.size() != 1 || (*producers.begin())->GetOpcode() != Opcode::OP_ASSEMBLE) {
+        return;
+    }
+
+    const auto& consumers = alignedTensor->GetConsumers();
+    if (consumers.size() != 1) {
+        return;
+    }
+    auto* consumerOp = *consumers.begin();
+    if (consumerOp == nullptr || consumerOp->result_token_.empty() || !insertedOp.result_token_.empty()) {
+        return;
+    }
+
+    auto consumerStmt = std::static_pointer_cast<const ir::Stmt>(consumerOp->shared_from_this());
+    auto insertedStmt = std::static_pointer_cast<const ir::Stmt>(insertedOp.shared_from_this());
+    for (const auto& token : consumerOp->result_token_) {
+        function.GetVarDependency().RemoveProducer(token, consumerStmt);
+        insertedOp.result_token_.push_back(token);
+        function.GetVarDependency().AddProducer(token, insertedStmt);
+    }
+    consumerOp->result_token_.clear();
+}
+
+Status AxisCombine::AlignBroadCastOpInputs(Function& function, Operation& op)
 {
     auto inputTensor = op.GetIOperands();
     auto& inTensor0 = inputTensor[0];
@@ -150,6 +177,7 @@ Status AxisCombine::AlignBroadCastOpInputs([[maybe_unused]] Function& function, 
             expand.UpdateSubgraphID(op.GetSubgraphID());
             UpdateOperand(op, idx, srcTensor, alignedTensor, inputTensor);
             UpdateBrcOperandAfterExpand(op);
+            MoveResultTokenToInsertedOp(function, srcTensor, alignedTensor, expand);
             continue;
         } else if (!isDAV3510 && !IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch())) {
             if (AlignedIfNeed(alignedShape.back(), padValue) != SUCCESS) {
@@ -161,6 +189,7 @@ Status AxisCombine::AlignBroadCastOpInputs([[maybe_unused]] Function& function, 
             alignedTensor->UpdateDynValidShape(validShape);
             brcb.UpdateSubgraphID(op.GetSubgraphID());
             UpdateOperand(op, idx, srcTensor, alignedTensor, inputTensor);
+            MoveResultTokenToInsertedOp(function, srcTensor, alignedTensor, brcb);
         }
         op.SetAttribute(OpAttributeKey::brcbIdx, static_cast<int64_t>(idx + 1));
     }

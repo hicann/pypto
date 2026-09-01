@@ -18,6 +18,7 @@
 
 #include "interface/configs/config_manager_ng.h"
 #include "interface/tensor/irbuilder.h"
+#include "passes/pass_utils/pass_token_utils.h"
 #include "passes/pass_utils/pass_utils.h"
 
 namespace npu::tile_fwk {
@@ -274,6 +275,28 @@ Status L1CopyInReuseRunner::MergeDupL1CopyIn(Function& func, std::vector<std::ve
         for (int i : colorNode[j]) {
             L1CopyInReuseRunner::TackleOp(i, oriList[i], replacedInputs, replacedOutputs);
         }
+        std::vector<Operation*> deletedOps;
+        for (int i : colorNode[j]) {
+            Operation* deletedOp = oriList[i];
+            if (deletedOp == nullptr || !deletedOp->IsDeleted()) {
+                continue;
+            }
+            deletedOps.push_back(deletedOp);
+            for (const auto& token : deletedOp->tokens_) {
+                for (auto* consumer : deletedOp->ConsumerOps()) {
+                    if (consumer != nullptr && !consumer->IsDeleted()) {
+                        PassTokenUtils::AddTokenConsumer(func, token, *consumer);
+                    }
+                }
+            }
+
+            auto keptIt = tensormagic2Op_.find(deletedOp->GetOOperands()[0]->GetRawTensor()->GetRawMagic());
+            Operation* keptOp = keptIt == tensormagic2Op_.end() ? nullptr : oriList[keptIt->second];
+            if (keptOp != nullptr && keptOp != deletedOp && !keptOp->IsDeleted()) {
+                PassTokenUtils::MoveResultTokensToProducers(func, {deletedOp}, {keptOp}, {});
+            }
+        }
+        PassTokenUtils::CleanupDeletedTokenDependency(func, deletedOps);
         // 重新连边
         for (auto& replacedInput : replacedInputs) {
             APASS_LOG_DEBUG_F(Elements::Operation, "Relink op [%d] input [%d] to op [%d] output [%d].",

@@ -22,6 +22,7 @@
 #include "interface/operation/attr_holder.h"
 #include "merge_view_assemble_utils.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/pass_token_utils.h"
 
 #define MODULE_NAME "ViewReshapeAssembleReorderUtils"
 
@@ -253,6 +254,14 @@ void SetMetadataReshapeAttrs(Operation& reshapeOp, const LogicalTensorPtr& outpu
     reshapeOp.SetAttribute(OP_ATTR_PREFIX + "isInplace", true);
     reshapeOp.SetAttribute(OP_ATTR_PREFIX + "validShape", dynShape);
     output->UpdateDynValidShape(dynShape);
+}
+
+void MoveTokenDependencyToReplacement(Function& function, Operation& source, Operation& replacement)
+{
+    for (const auto& token : source.tokens_) {
+        PassTokenUtils::AddTokenConsumer(function, token, replacement);
+    }
+    PassTokenUtils::MoveResultTokensToProducers(function, {&source}, {&replacement}, {});
 }
 } // namespace
 
@@ -847,11 +856,12 @@ bool ViewReshapeAssembleReorderUtils::InferInputDynRawShapeFromOutput(
     return inferredInputDynRawShape.size() == input->GetShape().size();
 }
 
-void ViewReshapeAssembleReorderUtils::CreateMetadataReshape(Function& function, const LogicalTensorPtr& input,
-                                                            const LogicalTensorPtr& output,
-                                                            const std::vector<SymbolicScalar>& dynShape,
-                                                            const ir::Span& span, const Operation::ScopeInfo& scopeInfo,
-                                                            Operation& srcOp)
+Operation& ViewReshapeAssembleReorderUtils::CreateMetadataReshape(Function& function, const LogicalTensorPtr& input,
+                                                                  const LogicalTensorPtr& output,
+                                                                  const std::vector<SymbolicScalar>& dynShape,
+                                                                  const ir::Span& span,
+                                                                  const Operation::ScopeInfo& scopeInfo,
+                                                                  Operation& srcOp)
 {
     if (output != nullptr && output->GetRawTensor() != nullptr &&
         output->GetRawTensor()->GetDynRawShape().size() == dynShape.size() &&
@@ -873,14 +883,14 @@ void ViewReshapeAssembleReorderUtils::CreateMetadataReshape(Function& function, 
     newReshape.SetScopeInfo(scopeInfo);
     newReshape.CopyAttrFrom(srcOp, "");
     SetMetadataReshapeAttrs(newReshape, output, dynShape);
+    return newReshape;
 }
 
-void ViewReshapeAssembleReorderUtils::CreateView(Function& function, const LogicalTensorPtr& input,
-                                                 const LogicalTensorPtr& output, const std::vector<int64_t>& offset,
-                                                 const std::vector<SymbolicScalar>& dynOffset,
-                                                 const std::vector<SymbolicScalar>& outputDynShape, MemoryType toType,
-                                                 bool hasCopyInMode, const std::any& copyInModeValue,
-                                                 const ir::Span& span, const Operation::ScopeInfo& scopeInfo)
+Operation& ViewReshapeAssembleReorderUtils::CreateView(
+    Function& function, const LogicalTensorPtr& input, const LogicalTensorPtr& output,
+    const std::vector<int64_t>& offset, const std::vector<SymbolicScalar>& dynOffset,
+    const std::vector<SymbolicScalar>& outputDynShape, MemoryType toType, bool hasCopyInMode,
+    const std::any& copyInModeValue, const ir::Span& span, const Operation::ScopeInfo& scopeInfo)
 {
     auto viewAttr = std::make_shared<ViewOpAttribute>(offset, toType, dynOffset, outputDynShape);
     auto& newView = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_VIEW, {input}, {output}, span);
@@ -890,6 +900,7 @@ void ViewReshapeAssembleReorderUtils::CreateView(Function& function, const Logic
         newView.SetAttr("op_attr_copy_in_mode", copyInModeValue);
     }
     output->UpdateDynValidShape(outputDynShape);
+    return newView;
 }
 
 void ViewReshapeAssembleReorderUtils::CreateAssemble(Function& function, const LogicalTensorPtr& input,
@@ -909,13 +920,16 @@ void ViewReshapeAssembleReorderUtils::CreateAssemble(Function& function, const L
 void ViewReshapeAssembleReorderUtils::AppendViewReshapeRecords(Function& function)
 {
     for (const auto& record : viewReshapeRecords_) {
-        CreateMetadataReshape(function, record.input, record.reshapeOutput, record.reshapeDynShape, record.span,
-                              record.scopeInfo, *record.reshapeOp);
+        auto& newReshape = CreateMetadataReshape(function, record.input, record.reshapeOutput, record.reshapeDynShape,
+                                                 record.span, record.scopeInfo, *record.reshapeOp);
 
         auto outputDynShape = GetSymbolicShapeOrStatic(record.output);
-        CreateView(function, record.reshapeOutput, record.output, record.viewOffset, record.viewDynOffset,
-                   outputDynShape, record.toType, record.hasCopyInMode, record.copyInModeValue, record.span,
-                   record.scopeInfo);
+        auto& newView = CreateView(function, record.reshapeOutput, record.output, record.viewOffset,
+                                   record.viewDynOffset, outputDynShape, record.toType, record.hasCopyInMode,
+                                   record.copyInModeValue, record.span, record.scopeInfo);
+        MoveTokenDependencyToReplacement(function, *record.viewOp, newReshape);
+        MoveTokenDependencyToReplacement(function, *record.reshapeOp, newView);
+        PassTokenUtils::CleanupDeletedTokenDependency(function, {record.viewOp, record.reshapeOp});
         record.viewOp->SetAsDeleted();
         record.reshapeOp->SetAsDeleted();
     }

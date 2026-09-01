@@ -1019,6 +1019,35 @@ TEST_F(GenerateMoveOpPassTest, CreateMoveOpForAssemble_UB2L1)
     // 验证：Opcode 应变为 OP_UB_COPY_L1
     EXPECT_EQ(assembleOp.GetOpcode(), Opcode::OP_UB_COPY_L1);
 }
+
+TEST_F(GenerateMoveOpPassTest, CreateMoveOpForAssemble_A5BypassRedundantL1)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "A5BypassRedundantL1",
+                                                      "A5BypassRedundantL1", nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("A5BypassRedundantL1", currFunctionPtr);
+
+    std::vector<int64_t> shape{32, 64};
+    auto ubTensor = CreateTestLogicalTensor(MEM_UB, TileOpFormat::TILEOP_ND, shape);
+    auto l1Tensor = CreateTestLogicalTensor(MEM_L1, TileOpFormat::TILEOP_NZ, shape);
+    auto gmTensor = CreateTestLogicalTensor(MEM_DEVICE_DDR, TileOpFormat::TILEOP_ND, shape);
+    auto& ubCopyL1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_UB_COPY_L1, {ubTensor}, {l1Tensor});
+    auto& assembleOp = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_CONTRACT, {l1Tensor}, {gmTensor});
+    assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_L1, std::vector<int64_t>{0, 0}));
+
+    auto oldArch = Platform::Instance().GetSoc().GetNPUArch();
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    GenerateMoveOp().CreateMoveOpForAssemble(*currFunctionPtr, assembleOp);
+    Platform::Instance().GetSoc().SetNPUArch(oldArch);
+
+    EXPECT_EQ(assembleOp.GetOpcode(), Opcode::OP_COPY_OUT);
+    EXPECT_EQ(assembleOp.GetIOperands().front(), ubTensor);
+    auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(assembleOp.GetOpAttribute());
+    EXPECT_NE(copyAttr, nullptr);
+    if (copyAttr != nullptr) {
+        EXPECT_EQ(copyAttr->GetCopyOutAttr().first, MEM_UB);
+    }
+    EXPECT_TRUE(ubCopyL1.IsDeleted());
+}
 // ========== ProcessL1CopyInConv 测试 ==========
 
 TEST_F(GenerateMoveOpPassTest, l1CopyInConvOffsetAccumulation)

@@ -833,8 +833,12 @@ Status AssignMemoryType::AssignAssembleToOutCastRequirement(Operation& operation
                           operation.GetOpMagic());
         return FAILED;
     }
-    MemoryType inputOriginal = input->GetMemoryTypeOriginal();
-    ForceSetRequirement(input, operation, inputOriginal, "AssignAssembleToOutCastRequirement");
+    MemoryType inputRequirement = input->GetMemoryTypeOriginal();
+    // A5 cannot write an L1 assemble result directly to GM. Route only the outcast edge through UB.
+    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510 && inputRequirement == MemoryType::MEM_L1) {
+        inputRequirement = MemoryType::MEM_UB;
+    }
+    ForceSetRequirement(input, operation, inputRequirement, "AssignAssembleToOutCastRequirement");
     ForceSetOriginal(output, MemoryType::MEM_DEVICE_DDR, "AssignAssembleToOutCastRequirement");
     auto assembleOpAttribute = std::dynamic_pointer_cast<AssembleOpAttribute>(operation.GetOpAttribute());
     if (assembleOpAttribute == nullptr) {
@@ -843,8 +847,8 @@ Status AssignMemoryType::AssignAssembleToOutCastRequirement(Operation& operation
                           operation.GetOpMagic());
         return FAILED;
     }
-    if (inputOriginal != MemoryType::MEM_UNKNOWN) {
-        assembleOpAttribute->SetFromType(inputOriginal);
+    if (inputRequirement != MemoryType::MEM_UNKNOWN) {
+        assembleOpAttribute->SetFromType(inputRequirement);
     }
     return SUCCESS;
 }

@@ -255,10 +255,10 @@ bool PadLocalBuffer::IsGemvL0ATensor(const LogicalTensorPtr& in) const
 
 void PadLocalBuffer::PadMatmulGemvKAlign(LogicalTensorPtr& in, size_t highIndex, size_t lowIndex)
 {
-    // GEMV 走 pto-isa TExtractToAVector：L1 源按 32B block 寻址，L0A 目标按 512B fractal block 组织
+    // GEMV 走 pto-isa TExtractToAVector：L1 源和 L0A 目标都按 512B fractal block 组织
     Shape& oriRawshape = GetOriRawshape(in); // 获取已保存的 oriRawshape
     auto bytes = BytesOf(in->Datatype());
-    if (in->GetMemoryTypeOriginal() == MemoryType::MEM_L0A) {
+    if (in->GetMemoryTypeOriginal() == MemoryType::MEM_L1 || in->GetMemoryTypeOriginal() == MemoryType::MEM_L0A) {
         constexpr int64_t kAlignFractalByteSize = 512; // fractal 粒度（CUBE_BLOCK_SIZE）
         int64_t kAlignFractal = (bytes == 0) ? CUBE_PAD_VALUE : kAlignFractalByteSize / bytes;
         in->tensor->rawshape[lowIndex] = AlignmentUtils::Pad(oriRawshape[lowIndex], kAlignFractal);

@@ -51,6 +51,11 @@ std::set<Operation*, LogicalTensor::CompareOp> FindProducers(
         }
         visitedOperands.emplace(input);
     }
+    for (const auto& producer : op.ProducerOpsByToken()) {
+        if (producer->BelongTo() == &function) {
+            producerOps.emplace(producer);
+        }
+    }
     return producerOps;
 }
 

@@ -671,8 +671,55 @@ Status CodegenPreproc::CheckTensorAddrRange(Function& function) const
     return SUCCESS;
 }
 
+void CodegenPreproc::NormalizeDanglingActualRawMagic(Function& function) const
+{
+    const auto& dyndevAttr = function.GetDyndevAttribute();
+    if (dyndevAttr == nullptr) {
+        return;
+    }
+    for (auto* devRoot : dyndevAttr->funcGroup.devRootList) {
+        if (devRoot == nullptr) {
+            continue;
+        }
+        std::unordered_map<int, std::shared_ptr<RawTensor>> rawTensorByMagic;
+        auto recordTensor = [&rawTensorByMagic](const LogicalTensorPtr& tensor) {
+            if (tensor != nullptr && tensor->GetRawTensor() != nullptr) {
+                rawTensorByMagic[tensor->GetRawTensor()->rawmagic] = tensor->GetRawTensor();
+            }
+        };
+        for (const auto& tensor : devRoot->GetIncast()) {
+            recordTensor(tensor);
+        }
+        for (const auto& tensor : devRoot->GetOutcast()) {
+            recordTensor(tensor);
+        }
+        for (auto& op : devRoot->Operations(false)) {
+            if (!op.IsCall()) {
+                continue;
+            }
+            for (const auto& tensor : op.GetIOperands()) {
+                recordTensor(tensor);
+            }
+            for (const auto& tensor : op.GetOOperands()) {
+                recordTensor(tensor);
+            }
+        }
+        for (const auto& [rawMagic, rawTensor] : rawTensorByMagic) {
+            const int actualRawMagic = rawTensor->actualRawmagic;
+            if (actualRawMagic == -1 || actualRawMagic == rawMagic || rawTensorByMagic.count(actualRawMagic) != 0) {
+                continue;
+            }
+            APASS_LOG_WARN_F(Elements::Tensor,
+                             "RawTensor[%d] references missing actual RawTensor[%d] in devRoot %s; clear alias.",
+                             rawMagic, actualRawMagic, devRoot->GetRawName().c_str());
+            rawTensor->actualRawmagic = -1;
+        }
+    }
+}
+
 Status CodegenPreproc::RunOnFunction(Function& function)
 {
+    NormalizeDanglingActualRawMagic(function);
     EstimateCVCores(function);
     combineAxis = function.paramConfigs_.combineAxis;
     APASS_LOG_INFO_F(Elements::Operation,

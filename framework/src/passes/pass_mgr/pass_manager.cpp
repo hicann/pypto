@@ -29,6 +29,7 @@
 #include "pass_dependency.h"
 // tensor graph pass
 #include "passes/tensor_graph_pass/infer_tensor_format.h"
+#include "passes/tensor_graph_pass/merge_dangling_assemble_output.h"
 #include "passes/tensor_graph_pass/remove_redundant_reshape.h"
 #include "passes/tensor_graph_pass/auto_cast.h"
 #include "passes/tensor_graph_pass/infer_memory_conflict.h"
@@ -81,6 +82,7 @@ std::vector<PassEntry> BuildPassEntries(std::initializer_list<PassName> passName
 std::vector<PassEntry> BuildPvc2OooPassEntries()
 {
     return BuildPassEntries({
+        PassName::MERGE_DANGLING_ASSEMBLE_OUTPUT,
         PassName::INFER_TENSOR_FORMAT,
         PassName::REMOVE_REDUNDANT_RESHAPE,
         PassName::AUTO_CAST,
@@ -137,6 +139,7 @@ PassManager& PassManager::Instance()
 
 void RegPass()
 {
+    REG_PASS(MergeDanglingAssembleOutput);
     REG_PASS(InferTensorFormat);
     REG_PASS(GlobalMemoryReuse);
     REG_PASS(SubgraphToFunction);

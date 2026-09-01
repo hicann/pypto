@@ -14,6 +14,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <algorithm>
 #include "interface/function/function.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
@@ -169,6 +170,122 @@ TEST_F(RemoveRedundantReshapeTest, TestReplaceInput)
     ASSERT_NE(add_op, nullptr) << "Add operation should be present";
     ASSERT_NE(view_op, nullptr) << "View operation should be present";
     EXPECT_EQ(add_op->GetIOperands()[0]->shape, shape2) << "The input shape of Add should be the same as shape2";
+}
+
+TEST_F(RemoveRedundantReshapeTest, RemovedReshapeMigratesTokenDependencies)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "RemovedReshapeMigratesTokenDependencies",
+                                               "RemovedReshapeMigratesTokenDependencies", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> shape{32, 32};
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto producerOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto reshapeOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tokenInput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tokenOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+
+    auto& producer = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_EXP, {input}, {producerOutput});
+    auto& reshape = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_RESHAPE, {producerOutput}, {reshapeOutput});
+    auto& consumer = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_SQRT, {reshapeOutput}, {output});
+    auto& tokenProducer = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_ABS, {tokenInput}, {tokenOutput});
+    int reshapeMagic = reshape.GetOpMagic();
+
+    auto inputToken = IRBuilder().CreateTokenVar(ir::Span::Unknown());
+    auto resultToken = IRBuilder().CreateTokenVar(ir::Span::Unknown());
+    auto toStmt = [](Operation& op) { return std::static_pointer_cast<const ir::Stmt>(op.shared_from_this()); };
+    auto& dependency = function->GetVarDependency();
+    tokenProducer.result_token_ = {inputToken};
+    reshape.tokens_ = {inputToken};
+    reshape.result_token_ = {resultToken};
+    consumer.tokens_ = {resultToken};
+    dependency.AddProducer(inputToken, toStmt(tokenProducer));
+    dependency.AddConsumer(inputToken, toStmt(reshape));
+    dependency.AddProducer(resultToken, toStmt(reshape));
+    dependency.AddConsumer(resultToken, toStmt(consumer));
+    function->inCasts_ = {input, tokenInput};
+    function->outCasts_ = {output, tokenOutput};
+
+    RemoveRedundantReshape pass;
+    EXPECT_EQ(pass.RunOnFunction(*function), SUCCESS);
+
+    EXPECT_TRUE(IsOpRemoved(function->Operations(), reshapeMagic));
+    EXPECT_EQ(consumer.GetIOperands().front(), producerOutput);
+    EXPECT_TRUE(dependency.HasConsumer(inputToken, toStmt(consumer)));
+    EXPECT_NE(std::find(consumer.tokens_.begin(), consumer.tokens_.end(), inputToken), consumer.tokens_.end());
+    ASSERT_FALSE(producer.result_token_.empty());
+    auto migratedResultToken = producer.result_token_.front();
+    EXPECT_NE(migratedResultToken, resultToken);
+    EXPECT_TRUE(dependency.HasProducer(migratedResultToken, toStmt(producer)));
+    EXPECT_TRUE(dependency.HasConsumer(migratedResultToken, toStmt(consumer)));
+    EXPECT_NE(std::find(consumer.tokens_.begin(), consumer.tokens_.end(), migratedResultToken), consumer.tokens_.end());
+    EXPECT_FALSE(dependency.HasDependency(resultToken));
+    EXPECT_NO_THROW(function->GetSortedOperations());
+}
+
+TEST_F(RemoveRedundantReshapeTest, ViewReshapeReorderMigratesTokenDependencies)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "ViewReshapeReorderMigratesTokens",
+                                               "ViewReshapeReorderMigratesTokens", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, {8, 16}, CreateTestConstIntVector({8, 16}));
+    auto middle = IRBuilder().CreateTensorVar(DT_FP32, {4, 16}, CreateTestConstIntVector({4, 16}));
+    auto reshapeOutput = IRBuilder().CreateTensorVar(DT_FP32, {64}, CreateTestConstIntVector({64}));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, {64}, CreateTestConstIntVector({64}));
+    auto tokenInput = IRBuilder().CreateTensorVar(DT_FP32, {1}, CreateTestConstIntVector({1}));
+    auto tokenOutput = IRBuilder().CreateTensorVar(DT_FP32, {1}, CreateTestConstIntVector({1}));
+
+    auto& view = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_VIEW, {input}, {middle});
+    view.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto& reshape = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_RESHAPE, {middle}, {reshapeOutput});
+    auto& consumer = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_EXP, {reshapeOutput}, {output});
+    auto& tokenProducer = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_ABS, {tokenInput}, {tokenOutput});
+    int viewMagic = view.GetOpMagic();
+    int reshapeMagic = reshape.GetOpMagic();
+
+    auto inputToken = IRBuilder().CreateTokenVar(ir::Span::Unknown());
+    auto viewResultToken = IRBuilder().CreateTokenVar(ir::Span::Unknown());
+    auto reshapeResultToken = IRBuilder().CreateTokenVar(ir::Span::Unknown());
+    auto toStmt = [](Operation& op) { return std::static_pointer_cast<const ir::Stmt>(op.shared_from_this()); };
+    auto& dependency = function->GetVarDependency();
+    tokenProducer.result_token_ = {inputToken};
+    view.tokens_ = {inputToken};
+    view.result_token_ = {viewResultToken};
+    reshape.tokens_ = {viewResultToken};
+    reshape.result_token_ = {reshapeResultToken};
+    consumer.tokens_ = {reshapeResultToken};
+    dependency.AddProducer(inputToken, toStmt(tokenProducer));
+    dependency.AddConsumer(inputToken, toStmt(view));
+    dependency.AddProducer(viewResultToken, toStmt(view));
+    dependency.AddConsumer(viewResultToken, toStmt(reshape));
+    dependency.AddProducer(reshapeResultToken, toStmt(reshape));
+    dependency.AddConsumer(reshapeResultToken, toStmt(consumer));
+
+    ViewReshapeAssembleReorderUtils utils;
+    EXPECT_EQ(utils.TryRecordViewReshape(*function, view), SUCCESS);
+    ASSERT_EQ(utils.viewReshapeRecords_.size(), 1U);
+    utils.AppendViewReshapeRecords(*function);
+    utils.CleanUp(*function);
+
+    EXPECT_TRUE(IsOpRemoved(function->Operations(), viewMagic));
+    EXPECT_TRUE(IsOpRemoved(function->Operations(), reshapeMagic));
+    Operation* newReshape = FindOpByOpcode(function->Operations(), Opcode::OP_RESHAPE);
+    Operation* newView = FindOpByOpcode(function->Operations(), Opcode::OP_VIEW);
+    ASSERT_NE(newReshape, nullptr);
+    ASSERT_NE(newView, nullptr);
+    EXPECT_NE(std::find(newReshape->tokens_.begin(), newReshape->tokens_.end(), inputToken), newReshape->tokens_.end());
+    ASSERT_FALSE(newReshape->result_token_.empty());
+    EXPECT_NE(std::find(newView->tokens_.begin(), newView->tokens_.end(), newReshape->result_token_.front()),
+              newView->tokens_.end());
+    ASSERT_FALSE(newView->result_token_.empty());
+    EXPECT_TRUE(dependency.HasConsumer(newView->result_token_.front(), toStmt(consumer)));
+    EXPECT_NE(std::find(consumer.tokens_.begin(), consumer.tokens_.end(), newView->result_token_.front()),
+              consumer.tokens_.end());
+    EXPECT_FALSE(dependency.HasDependency(viewResultToken));
+    EXPECT_FALSE(dependency.HasDependency(reshapeResultToken));
+    EXPECT_NO_THROW(function->GetSortedOperations());
 }
 
 /*

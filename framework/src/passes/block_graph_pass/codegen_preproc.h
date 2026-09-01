@@ -55,6 +55,7 @@ private:
     Status CheckSingleTensorAddrRange(const Operation& op, LogicalTensorPtr tensor, size_t tensorIdx,
                                       const std::string& tensorType) const;
     Status CheckTensorAddrRange(Function& function) const;
+    void NormalizeDanglingActualRawMagic(Function& function) const;
     bool combineAxis{false};
 };
 

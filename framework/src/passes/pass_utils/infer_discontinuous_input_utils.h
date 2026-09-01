@@ -55,6 +55,7 @@ private:
 
     std::unordered_map<LogicalTensorPtr, std::vector<std::pair<LogicalTensorPtr, Operation*>>> insertCopys_;
     std::unordered_map<LogicalTensorPtr, size_t> tensorProducers_;
+    std::unordered_set<int64_t> processedRawMagics_;
     std::vector<Operation*> newOps_;
     IRBuilder irBuilder_;
 };

@@ -12,10 +12,14 @@
  * \file insert_op_for_viewassemble.cpp
  * \brief
  */
+#include <algorithm>
+
 #include "insert_op_for_viewassemble.h"
 #include "interface/configs/config_manager_ng.h"
 #include "interface/tensor/irbuilder.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/pass_operation_utils.h"
+#include "tilefwk/platform.h"
 
 #define MODULE_NAME "InsertOpForViewAssemble"
 
@@ -75,18 +79,96 @@ Status InsertOpForViewAssemble::InsertCopy(Function& function, Operation* viewOp
     return SUCCESS;
 }
 
+void InsertOpForViewAssemble::InsertCopyForSharedInput(Function& function, Operation* assembleOp)
+{
+    auto input = assembleOp->GetIOperands()[0];
+    if (input->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR) {
+        return;
+    }
+    auto ubLimit = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB);
+    if (input->GetDataSize() > static_cast<int64_t>(ubLimit)) {
+        APASS_LOG_INFO_F(Elements::Tensor,
+                         "Skip isolating shared assemble input [%d]: tensor size [%ld] exceeds UB size [%lu].",
+                         input->GetMagic(), input->GetDataSize(), ubLimit);
+        return;
+    }
+    auto shape = input->GetShape();
+    Offset zeroOffset(shape.size(), 0);
+    auto rawShape = input->GetRawTensor()->GetDynRawShape();
+    auto dynValidShape = input->GetDynValidShape();
+    LogicalTensorPtr ubTensor = irBuilder_.CreateTensorVar(input->Datatype(), shape, std::vector<SymbolicScalar>{});
+    ubTensor->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    ubTensor->UpdateDynValidShape(dynValidShape);
+    Operation& copyIn = PassOperationUtils::AddOperation(
+        function, Opcode::OP_COPY_IN, {input}, {ubTensor}, [&input, &shape, &rawShape, &dynValidShape](Operation& op) {
+            op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+                OpImmediate::Specified(input->GetOffset()), MemoryType::MEM_UB, OpImmediate::Specified(shape),
+                OpImmediate::Specified(rawShape), OpImmediate::Specified(dynValidShape)));
+        });
+    (void)copyIn;
+
+    LogicalTensorPtr ddrTensor = irBuilder_.CreateTensorVar(input->Datatype(), shape, std::vector<SymbolicScalar>{});
+    ddrTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    ddrTensor->UpdateDynValidShape(dynValidShape);
+    Operation& copyOut = PassOperationUtils::AddOperation(
+        function, Opcode::OP_COPY_OUT, {ubTensor}, {ddrTensor},
+        [&zeroOffset, &shape, &rawShape, &dynValidShape](Operation& op) {
+            op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+                MemoryType::MEM_UB, OpImmediate::Specified(zeroOffset), OpImmediate::Specified(shape),
+                OpImmediate::Specified(rawShape), OpImmediate::Specified(dynValidShape)));
+        });
+    (void)copyOut;
+    assembleOp->ReplaceInput(ddrTensor, input);
+}
+
+void InsertOpForViewAssemble::InsertCopiesForSharedAssembleInputs(Function& function)
+{
+    std::unordered_set<Operation*> copiesNeeded;
+    for (auto& op : function.Operations()) {
+        if (op.GetOpcode() != Opcode::OP_ASSEMBLE || op.GetIOperands().empty()) {
+            continue;
+        }
+        auto input = op.GetIOperands()[0];
+        if (input->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR) {
+            continue;
+        }
+        int outputRawMagic = op.GetOOperands()[0]->GetRawMagic();
+        bool hasDifferentOutput = false;
+        for (auto* consumer : input->GetConsumers()) {
+            if (!consumer->GetOOperands().empty() && consumer->GetOOperands()[0]->GetRawMagic() != outputRawMagic) {
+                hasDifferentOutput = true;
+                break;
+            }
+        }
+        if (!hasDifferentOutput) {
+            continue;
+        }
+        for (auto* consumer : input->GetConsumers()) {
+            if (consumer->GetOpcode() == Opcode::OP_ASSEMBLE) {
+                copiesNeeded.insert(consumer);
+            }
+        }
+    }
+    std::vector<Operation*> sortedOps(copiesNeeded.begin(), copiesNeeded.end());
+    std::sort(sortedOps.begin(), sortedOps.end(),
+              [](const Operation* lhs, const Operation* rhs) { return lhs->GetOpMagic() < rhs->GetOpMagic(); });
+    for (auto* op : sortedOps) {
+        InsertCopyForSharedInput(function, op);
+    }
+}
+
 bool InsertOpForViewAssemble::NeedInsertCopy(LogicalTensorPtr& assembleOut)
 {
     bool isNeedInsert = false;
     for (auto& assOp : assembleOut->GetProducers()) {
         auto& prodOp = *assOp->GetIOperands()[0]->GetProducers().begin();
+        recordOpPair_.push_back(std::make_pair(prodOp, assOp));
         if (!IsViewLike(prodOp->GetOpcode())) {
             isNeedInsert = true;
             APASS_LOG_INFO_F(Elements::Operation, "assOp[%d] producerOp %s[%d] is not viewOp.", assOp->GetOpMagic(),
                              prodOp->GetOpcodeStr().c_str(), prodOp->GetOpMagic());
             continue;
         }
-        recordOpPair_.push_back(std::make_pair(prodOp, assOp));
         if (isNeedInsert)
             continue;
         auto assembleAttr = std::static_pointer_cast<AssembleOpAttribute>(assOp->GetOpAttribute());
@@ -183,6 +265,7 @@ Status InsertOpForViewAssemble::RunOnFunction(Function& function)
         APASS_LOG_ERROR_F(Elements::Function, "JudgedViewAssemble Failed.");
         return FAILED;
     }
+    InsertCopiesForSharedAssembleInputs(function);
     APASS_LOG_INFO_F(Elements::Function, "===> End InsertOpForViewAssemble");
     return SUCCESS;
 }

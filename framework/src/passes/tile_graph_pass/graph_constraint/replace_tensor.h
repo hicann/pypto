@@ -153,9 +153,14 @@ private:
 
     Status ForwardProcess(Function& function);
     Status BackwardProcess(Function& function);
+    // 新图表达下, 当backward/forward处理完一个tensor后, 如果该tensor是assemble输出(有同rawMagic兄弟),
+    // 需要同步更新兄弟的tensor指针并push到对应roots队列, 保证兄弟链路也被遍历。
+    // origRawMagic < 0 时使用 tensor 当前的 rawmagic 查找兄弟;
+    // >= 0 时使用指定值查找, 用于 tensor 指针已被替换但需按原始 rawMagic 定位兄弟的场景。
+    void SyncSiblingAssembleOutput(Function& function, const LogicalTensorPtr& tensor, int origRawMagic = -1);
 
     Status ForwardView(Operation* op, LogicalTensorPtr& rootTensor, Function& function);
-    Status ForwardAssemble(Operation* op, LogicalTensorPtr& rootTensor);
+    Status ForwardAssemble(Operation* op, LogicalTensorPtr& rootTensor, Function& function);
     Status ForwardReshape(Operation* op, LogicalTensorPtr& rootTensor, Function& function);
     Status ForwardInplaceOp(Operation* op, LogicalTensorPtr& rootTensor, Function& function);
     Status ForwardViewType(Operation* op, LogicalTensorPtr& rootTensor);
@@ -163,9 +168,9 @@ private:
     Status ForwardInputIdx(Operation* op, LogicalTensorPtr& rootTensor, Function& function);
 
     Status BackwardAssemble(Operation* op, LogicalTensorPtr& rootTensor);
-    Status BackwardReshape(Operation* op, LogicalTensorPtr& rootTensor);
-    Status BackwardView(Operation* op, LogicalTensorPtr& rootTensor);
-    Status BackwardInplaceOp(Operation* op, LogicalTensorPtr& rootTensor);
+    Status BackwardReshape(Operation* op, LogicalTensorPtr& rootTensor, Function& function);
+    Status BackwardView(Operation* op, LogicalTensorPtr& rootTensor, Function& function);
+    Status BackwardInplaceOp(Operation* op, LogicalTensorPtr& rootTensor, Function& function);
     Status BackwardViewType(Operation* op, LogicalTensorPtr& rootTensor);
     Status BackwardInputIdx(Operation* op, LogicalTensorPtr& rootTensor, Function& function);
 
@@ -179,6 +184,9 @@ private:
     Status UpdateCopyInAttr(Operation* copyInOp);
 
     Status MarkTensorAsPartialMem(Function& function);
+
+    void RebuildTokenProducer(Function& function);
+    void RebuildTokenConsumer(Function& function);
 
     Status InsertCopyUBOp(Function& function, Operation* needInsertCopyAssOp, LogicalTensorPtr& input);
     Status InsertCopyDDROp(Function& function, Operation* needInsertCopyAssOp, LogicalTensorPtr& input);

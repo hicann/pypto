@@ -36,6 +36,7 @@ public:
     Status PostCheck(Function& function) override;
 
 private:
+    Status AdaptBoundaryTensors(Function& function);
     Status CheckColorCount(Function& function, LogicalTensorPtr tensor, size_t commonColorCount);
     Status CheckBoundaryTensor(LogicalTensorPtr tensor);
     Status SplitBoundaryTensor(Function& function, LogicalTensorPtr tensor, int mainSubgraphID,
@@ -51,7 +52,16 @@ private:
     void CollectProducerColors(LogicalTensorPtr tensor, std::set<int>& colors);
     void CollectConsumerColors(LogicalTensorPtr tensor, std::set<int>& colors);
     std::set<int> SetIntersection(std::set<int>& a, std::set<int>& b);
+    bool IsCrossCoreMoveOps(Operation* op);
+
+    // Delay sibling routing until every boundary tensor has completed structural adaptation.
+    void RouteBoundaryTensorToDDR(LogicalTensorPtr tensor);
+    Status RouteVersionGroupsToDDR(Function& function);
+    void InsertDdrToUbViewsForSibling(Function& function, LogicalTensorPtr sibling);
+    void TransferResultToken(Function& function, Operation& from, Operation& to);
+
     std::vector<Operation*> newOps;
+    std::unordered_set<int> ddrRoutedRawMagics_;
     IRBuilder irBuilder_;
 };
 } // namespace npu::tile_fwk

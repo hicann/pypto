@@ -87,6 +87,9 @@ Operation* FindAssembleFamilyConsumer(const LogicalTensorPtr& input)
 
 } // namespace
 
+void InheritTokenFromOldAssemble(Function& function, const Operation& oldAssemble, Operation& newAssemble);
+void RemoveObsoleteTokensAfterSplit(Function& function);
+
 Status SplitLargeFanoutTensor::RunOnFunction(Function& function)
 {
     APASS_LOG_INFO_F(Elements::Function, "===> Start SplitLargeFanoutTensor.");
@@ -108,6 +111,7 @@ Status SplitLargeFanoutTensor::RunOnFunction(Function& function)
         APASS_LOG_ERROR_F(Elements::Function, "Merge assemble and view failed.");
         return status;
     }
+    RemoveObsoleteTokensAfterSplit(function);
     if (!addedOps_.empty()) {
         if (InferShapeUtils::InferShape(function, addedOps_) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Function, "InferShape for added ops failed.");
@@ -322,6 +326,76 @@ void SplitLargeFanoutTensor::CollectCoveredTensors(const Shape& lcmTileShape, co
     }
 }
 
+void InheritTokenFromOldAssemble(Function& function, const Operation& oldAssemble, Operation& newAssemble)
+{
+    if (oldAssemble.result_token_.empty()) {
+        return;
+    }
+    IRBuilder builder;
+    auto newToken = builder.CreateTokenVar(newAssemble.GetSpan());
+    newAssemble.result_token_.push_back(newToken);
+
+    auto& varDependency = function.GetVarDependency();
+    varDependency.AddProducer(newToken, std::static_pointer_cast<const ir::Stmt>(newAssemble.shared_from_this()));
+
+    auto oldConsumers = oldAssemble.ConsumerOpsByToken();
+    for (auto* consumer : oldConsumers) {
+        consumer->tokens_.push_back(newToken);
+        varDependency.AddConsumer(newToken, std::static_pointer_cast<const ir::Stmt>(consumer->shared_from_this()));
+    }
+}
+
+void RemoveObsoleteTokensAfterSplit(Function& function)
+{
+    auto& varDependency = function.GetVarDependency();
+    std::vector<ir::VarPtr> tokensToRemove;
+
+    for (auto& [token, entry] : varDependency.GetAllDependencies()) {
+        bool hasAssembleProducer = false;
+        bool hasAssembleConsumer = false;
+        Operation* producerAssemble = nullptr;
+        Operation* consumerAssemble = nullptr;
+
+        for (auto& stmt : entry.producers) {
+            auto* op = const_cast<Operation*>(static_cast<const Operation*>(stmt.get()));
+            if (op != nullptr && op->GetOpcode() == Opcode::OP_ASSEMBLE) {
+                hasAssembleProducer = true;
+                producerAssemble = op;
+            }
+        }
+        for (auto& stmt : entry.consumers) {
+            auto* op = const_cast<Operation*>(static_cast<const Operation*>(stmt.get()));
+            if (op != nullptr && op->GetOpcode() == Opcode::OP_ASSEMBLE) {
+                hasAssembleConsumer = true;
+                consumerAssemble = op;
+            }
+        }
+
+        if (hasAssembleProducer && hasAssembleConsumer && producerAssemble != nullptr && consumerAssemble != nullptr) {
+            auto producerOutput = producerAssemble->oOperand.empty() ? nullptr : producerAssemble->oOperand.front();
+            auto consumerOutput = consumerAssemble->oOperand.empty() ? nullptr : consumerAssemble->oOperand.front();
+            if (producerOutput != nullptr && consumerOutput != nullptr &&
+                producerOutput->tensor != consumerOutput->tensor) {
+                tokensToRemove.push_back(token);
+            }
+        }
+    }
+
+    for (const auto& token : tokensToRemove) {
+        const auto& entry = varDependency.GetAllDependencies().find(token);
+        if (entry == varDependency.GetAllDependencies().end()) {
+            continue;
+        }
+        for (auto& stmt : entry->second.consumers) {
+            auto* op = const_cast<Operation*>(static_cast<const Operation*>(stmt.get()));
+            if (op != nullptr) {
+                op->tokens_.erase(std::remove(op->tokens_.begin(), op->tokens_.end(), token), op->tokens_.end());
+            }
+        }
+        varDependency.RemoveVar(token);
+    }
+}
+
 // 根据原有assembleOp增加新的assembleOp。寻找原assembleOp时，由于tensor->assemble->largeTensor中assemble可以不唯一并指向其他tensor，
 // 或assemble位置为其他种类op(op_view)。所以需要找到largeTensor的生产者op来确认。
 Operation* AddNewAssembleOp(Function& function, LogicalTensorPtr overlap, LogicalTensorPtr largeTensor,
@@ -385,7 +459,6 @@ void SplitLargeFanoutTensor::CreateOpFor1toM(Function& function, const LogicalTe
                 continue;
             }
             auto assembleOp = *newTensor->GetProducers().begin();
-            addedOps_.push_back(assembleOp);
             APASS_LOG_DEBUG_F(Elements::Operation,
                               "In one-to-multiple situation, create an AssembleOp[%d], input is a "
                               "overlap[%d], output is a newTensor[%d].",
@@ -648,7 +721,6 @@ void SplitLargeFanoutTensor::FindOverlapAndCreateViewOp(Function& function, cons
                     op.SetOpAttribute(
                         std::make_shared<ViewOpAttribute>(newViewOffset, overlap->GetMemoryTypeOriginal()));
                 });
-            addedOps_.push_back(&newViewOp);
             APASS_LOG_INFO_F(Elements::Operation,
                              "For more split situation, create an ViewOp[%d], input is a "
                              "overlapGcdTile[%d], output is a newGcdTensor[%d].",
@@ -671,7 +743,6 @@ void SplitLargeFanoutTensor::CreateOpForMoreSplit(Function& function, const Logi
                 op.SetOpAttribute(
                     std::make_shared<AssembleOpAttribute>(largeTensor->GetMemoryTypeOriginal(), gcdTileOffset));
             });
-        addedOps_.push_back(&newAssembleOp);
         APASS_LOG_INFO_F(Elements::Operation,
                          "For more split situation, create an AssembleOp[%d], input is a newGcdTensor[%d], "
                          "output is a dualOverlap[%d].",
@@ -835,6 +906,7 @@ void SplitLargeFanoutTensor::CollectLargeTensor(Function& function)
 {
     APASS_LOG_INFO_F(Elements::Function, "---> CollectLargeTensor.");
     std::unordered_set<int> visited;
+    const auto multiLogicalTensorRawMagics = GraphUtils::GetRawMagicsWithMultipleLogicalTensors(function);
     auto operations = function.Operations(false);
     visited.reserve(operations.size());
     for (auto& op : operations) {
@@ -862,6 +934,14 @@ void SplitLargeFanoutTensor::CollectLargeTensor(Function& function)
                 }
             }
             if (!allProducersAssemble || !hasAnyViewConsumer) {
+                continue;
+            }
+            if (logicalTensor->GetProducers().size() == 1 &&
+                multiLogicalTensorRawMagics.count(logicalTensor->tensor->rawmagic) > 0) {
+                APASS_LOG_DEBUG_F(Elements::Tensor,
+                                  "Large tensor[%d] rawMagic[%d] has multiple logicalTensors, "
+                                  "skip split for WAW-only token support.",
+                                  logicalTensor->GetMagic(), logicalTensor->tensor->rawmagic);
                 continue;
             }
             if (!RegisterMixedConsumerTensorIfNeeded(logicalTensor, allConsumersView)) {

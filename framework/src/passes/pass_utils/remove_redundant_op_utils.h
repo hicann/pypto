@@ -40,8 +40,8 @@ private:
     Status ProcessMultiContractSingleSlice(Function& function, bool& operationUpdated);
     Status ProcessSingleContractMultiSlice(Function& function, std::vector<Operation*>& newOps, bool& operationUpdated);
 
-    void ProcessPerfectMatch(LogicalTensorPtr& startTensor, LogicalTensorPtr& endTensor, bool endTensorIsOutcast,
-                             bool& operationUpdated);
+    void ProcessPerfectMatch(Function& function, LogicalTensorPtr& startTensor, LogicalTensorPtr& endTensor,
+                             bool endTensorIsOutcast, bool& operationUpdated);
     void RemoveViewAssembleForOutcast(LogicalTensorPtr& startTensor, LogicalTensorPtr& endTensor,
                                       bool& operationUpdated);
     void CalculateViewOffset(Operation& op, LogicalTensorPtr& startTensor, LogicalTensorPtr& endTensor,

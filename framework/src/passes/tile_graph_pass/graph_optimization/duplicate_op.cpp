@@ -18,6 +18,7 @@
 #include "passes/pass_check/duplicate_op_checker.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
 #include "passes/pass_utils/infer_shape_utils.h"
+#include "passes/pass_utils/pass_token_utils.h"
 #include "interface/function/function.h"
 #include "interface/tensor/logical_tensor.h"
 #include "passes/pass_log/pass_log.h"
@@ -108,6 +109,7 @@ Status DuplicateOp::ProcessGatherIn(Function& function, Operation& operation, st
                                                      operation.GetSpan());
             newOp.SetScopeInfo(operation.GetScopeInfo());
             newOp.SetAttribute(OpAttributeKey::startOffset, operation.GetIntAttribute(OpAttributeKey::startOffset));
+            PassTokenUtils::CopyTokenDependency(function, operation, newOp);
             newOps.push_back(&newOp);
         }
     }
@@ -158,6 +160,7 @@ Status DuplicateOp::ProcessViewLike(Function& function, Operation& operation, st
             if (operation.GetOpAttribute() != nullptr) {
                 newOp.SetOpAttribute(operation.GetOpAttribute()->Clone());
             }
+            PassTokenUtils::CopyTokenDependency(function, operation, newOp);
             newOps.push_back(&newOp);
         }
     }

@@ -29,6 +29,7 @@
 #include "passes/pass_utils/dead_operation_eliminate.h"
 #include "passes/pass_utils/pass_operation_utils.h"
 #include "passes/pass_utils/pass_utils.h"
+#include "passes/pass_utils/remove_redundant_op_internal.h"
 
 #define MODULE_NAME "RemoveRedundantOpUtils"
 
@@ -1205,6 +1206,12 @@ Status RemoveRedundantOpUtils::ProcessViewAssembleLikeImpl(Function& function, s
                 startTensor->GetMemoryTypeOriginal() != endTensor->GetMemoryTypeOriginal()) {
                 continue;
             }
+            if (remove_redundant_op_internal::HasOtherAssembleOutputOnSameRaw(function, endTensor)) {
+                APASS_LOG_DEBUG_F(Elements::Tensor,
+                                  "endTensor[%d] has another assemble output on the same raw tensor, skip.",
+                                  endTensor->GetMagic());
+                continue;
+            }
             if (op->GetOpcode() == Opcode::OP_SLICE && consumer->GetOpcode() == Opcode::OP_CONTRACT &&
                 consumer->GetIOperands().size() == 1 &&
                 IsInputProducedBySingleSlice(consumer->GetIOperands().front()) &&
@@ -1223,7 +1230,8 @@ Status RemoveRedundantOpUtils::ProcessViewAssembleLikeImpl(Function& function, s
                     Elements::Operation, "CASE1: Process %s[%d]'s input and %s[%d]'s output perfectMatch.",
                     OpcodeManager::Inst().GetOpcodeStr(op->GetOpcode()).c_str(), op->opmagic,
                     OpcodeManager::Inst().GetOpcodeStr(consumer->GetOpcode()).c_str(), consumer->GetOpMagic());
-                ProcessPerfectMatch(startTensor, endTensor, function.IsFromOutCast(endTensor), operationUpdated);
+                ProcessPerfectMatch(function, startTensor, endTensor, function.IsFromOutCast(endTensor),
+                                    operationUpdated);
             } else {
                 if ((function.IsFromInCast(startTensor) && CommonUtils::ContainsNegativeOne(startTensor->GetShape())) ||
                     (function.IsFromOutCast(endTensor) && CommonUtils::ContainsNegativeOne(endTensor->GetShape()))) {
@@ -1301,13 +1309,24 @@ void RemoveRedundantOpUtils::RemoveViewAssembleForOutcast(LogicalTensorPtr& star
     operationUpdated = true;
 }
 
-void RemoveRedundantOpUtils::ProcessPerfectMatch(LogicalTensorPtr& startTensor, LogicalTensorPtr& endTensor,
-                                                 bool endTensorIsOutcast, bool& operationUpdated)
+void RemoveRedundantOpUtils::ProcessPerfectMatch(Function& function, LogicalTensorPtr& startTensor,
+                                                 LogicalTensorPtr& endTensor, bool endTensorIsOutcast,
+                                                 bool& operationUpdated)
 {
     if (!IsValidViewAssemble(startTensor, endTensor)) {
         APASS_LOG_DEBUG_F(Elements::Tensor, "Not valid view-assemble-like case.");
         return;
     }
+    auto removedOps = remove_redundant_op_internal::CollectViewAssembleCascadeOps(startTensor, endTensor);
+    auto targetConsumers = remove_redundant_op_internal::GetTensorConsumers(endTensor);
+    auto targetProducers = remove_redundant_op_internal::GetTensorProducers(startTensor);
+    if (!remove_redundant_op_internal::CanMigrateRemovedOpsTokenDependency(function, removedOps, targetConsumers,
+                                                                           targetProducers)) {
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Cannot migrate token dependency for view-assemble perfect match.");
+        return;
+    }
+    remove_redundant_op_internal::MigrateRemovedOpsTokenDependency(function, removedOps, targetConsumers,
+                                                                   targetProducers);
     if (endTensor->GetConsumers().size() == 0) {
         if (endTensorIsOutcast) {
             RemoveViewAssembleForOutcast(startTensor, endTensor, operationUpdated);
@@ -1482,6 +1501,8 @@ void RemoveRedundantOpUtils::GenerateNewViewLike(Function& function, Operation& 
     for (auto* consumer : consumers) {
         consumer->ReplaceInput(newViewTensor, endTensor);
     }
+    auto removedOps = remove_redundant_op_internal::CollectViewAssembleCascadeOps(startTensor, endTensor);
+    remove_redundant_op_internal::MigrateRemovedOpsTokenDependency(function, removedOps, {&newViewOp}, {&newViewOp});
     newOps.push_back(&newViewOp);
     operationUpdated = true;
 }

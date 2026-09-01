@@ -24,6 +24,9 @@
 #include "passes/pass_utils/view_reshape_assemble_reorder_utils.h"
 #include "passes/pass_log/pass_log.h"
 #include <algorithm>
+#include <functional>
+#include <unordered_map>
+#include <unordered_set>
 #include <set>
 
 #define MODULE_NAME "ProcessAtomic"
@@ -32,6 +35,51 @@ namespace npu {
 namespace tile_fwk {
 
 namespace {
+ir::StmtPtr ToStmtPtr(Operation& op) { return std::static_pointer_cast<const ir::Stmt>(op.shared_from_this()); }
+
+Operation* ToOperation(const ir::StmtPtr& stmt)
+{
+    if (stmt == nullptr) {
+        return nullptr;
+    }
+    return static_cast<Operation*>(const_cast<ir::Stmt*>(stmt.get()));
+}
+
+template <typename T>
+void AddUnique(std::vector<T>& values, const T& value)
+{
+    if (value == nullptr || std::find(values.begin(), values.end(), value) != values.end()) {
+        return;
+    }
+    values.emplace_back(value);
+}
+
+void RemoveToken(Operation& op, const ir::VarPtr& token)
+{
+    if (token == nullptr) {
+        return;
+    }
+    op.tokens_.erase(std::remove(op.tokens_.begin(), op.tokens_.end(), token), op.tokens_.end());
+}
+
+void AddTokenConsumer(Function& function, const ir::VarPtr& token, Operation& consumer)
+{
+    if (token == nullptr) {
+        return;
+    }
+    function.GetVarDependency().AddConsumer(token, ToStmtPtr(consumer));
+    AddUnique(consumer.tokens_, token);
+}
+
+ir::VarPtr EnsureResultToken(Function& function, Operation& producer)
+{
+    if (producer.result_token_.empty()) {
+        producer.result_token_.push_back(IRBuilder().CreateTokenVar(producer.GetSpan()));
+    }
+    function.GetVarDependency().AddProducer(producer.result_token_.front(), ToStmtPtr(producer));
+    return producer.result_token_.front();
+}
+
 std::vector<SymbolicScalar> GetSymbolicShapeOrStatic(const std::shared_ptr<LogicalTensor>& tensor)
 {
     if (tensor == nullptr) {
@@ -75,6 +123,367 @@ Status CollectReduceAccAssembleProducers(const Operation& op, std::vector<Operat
     }
     return SUCCESS;
 }
+
+bool IsAssembleLike(const Operation* op)
+{
+    return op != nullptr && (op->GetOpcode() == Opcode::OP_ASSEMBLE || op->GetOpcode() == Opcode::OP_ASSEMBLE_SSA ||
+                             op->GetOpcode() == Opcode::OP_CONTRACT);
+}
+
+std::vector<Operation*> CollectRawAssembleProducers(Function& function, const std::shared_ptr<LogicalTensor>& tensor)
+{
+    std::vector<Operation*> producers;
+    if (tensor == nullptr) {
+        return producers;
+    }
+    auto rawMagic = tensor->GetRawMagic();
+    for (auto& op : function.Operations(false)) {
+        if (op.IsDeleted() || !IsAssembleLike(&op) || op.GetOOperands().empty()) {
+            continue;
+        }
+        auto output = op.GetOOperands().front();
+        if (output != nullptr && output->GetRawMagic() == rawMagic) {
+            AddUnique(producers, &op);
+        }
+    }
+    std::sort(producers.begin(), producers.end(),
+              [](const Operation* lhs, const Operation* rhs) { return lhs->GetOpMagic() < rhs->GetOpMagic(); });
+    return producers;
+}
+
+bool IsExactOutputProducer(const Operation& producer, const std::shared_ptr<LogicalTensor>& tensor)
+{
+    return !producer.GetOOperands().empty() && producer.GetOOperands().front() != nullptr && tensor != nullptr &&
+           producer.GetOOperands().front()->GetMagic() == tensor->GetMagic();
+}
+
+bool HasRawExternalConsumer(Function& function, const std::shared_ptr<LogicalTensor>& tensor, const Operation& atomicOp)
+{
+    auto rawProducers = CollectRawAssembleProducers(function, tensor);
+    for (auto* producer : rawProducers) {
+        if (producer == nullptr || producer->GetOOperands().empty()) {
+            continue;
+        }
+        auto output = producer->GetOOperands().front();
+        if (output == nullptr) {
+            continue;
+        }
+        for (auto* consumer : output->GetConsumers()) {
+            if (consumer != nullptr && consumer->GetOpMagic() != atomicOp.GetOpMagic()) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+std::shared_ptr<LogicalTensor> CreateLogicalTensorOnRaw(Function& function, const std::shared_ptr<RawTensor>& rawTensor,
+                                                        const std::shared_ptr<LogicalTensor>& origin)
+{
+    if (rawTensor == nullptr || origin == nullptr) {
+        return nullptr;
+    }
+    auto cloned = IRBuilder().CreateTensorVar(function, rawTensor, origin->GetOffset(), origin->GetShape(),
+                                              origin->GetDynValidShape());
+    cloned->CopyMemoryType(origin);
+    return cloned;
+}
+
+void CopyBasicOpMetadata(const Operation& source, Operation& target)
+{
+    target.UpdateSubgraphID(source.GetSubgraphID());
+    target.SetCoreType(source.GetCoreType());
+    target.SetSpan(source.GetSpan());
+    target.SetScopeInfo(source.GetScopeInfo());
+    if (source.GetOpAttribute() != nullptr) {
+        target.SetOpAttribute(source.GetOpAttribute()->Clone());
+    }
+}
+
+bool IsTensorOnRaw(const std::shared_ptr<LogicalTensor>& tensor, int rawMagic)
+{
+    return tensor != nullptr && tensor->GetRawMagic() == rawMagic;
+}
+
+bool ReadsRawTensor(const Operation& op, int rawMagic)
+{
+    return std::any_of(
+        op.GetIOperands().begin(), op.GetIOperands().end(),
+        [rawMagic](const std::shared_ptr<LogicalTensor>& tensor) { return IsTensorOnRaw(tensor, rawMagic); });
+}
+
+std::shared_ptr<LogicalTensor> CloneAuxiliaryTensor(Function& function, const std::shared_ptr<LogicalTensor>& origin,
+                                                    std::unordered_map<int, std::shared_ptr<LogicalTensor>>& tensorMap)
+{
+    if (origin == nullptr) {
+        return nullptr;
+    }
+    auto iter = tensorMap.find(origin->GetMagic());
+    if (iter != tensorMap.end()) {
+        return iter->second;
+    }
+    auto cloned = origin->Clone(function, true);
+    if (cloned == nullptr) {
+        return nullptr;
+    }
+    tensorMap.emplace(origin->GetMagic(), cloned);
+    return cloned;
+}
+
+Operation* CloneTokenBoundaryProducer(
+    Function& function, Operation& source, int rawMagic,
+    const std::function<std::shared_ptr<LogicalTensor>(const std::shared_ptr<LogicalTensor>&)>& getClonedRawTensor,
+    std::unordered_map<int, std::shared_ptr<LogicalTensor>>& auxTensorMap)
+{
+    if (source.IsDeleted() || source.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
+        return nullptr;
+    }
+
+    LogicalTensors clonedInputs;
+    clonedInputs.reserve(source.GetIOperands().size());
+    for (const auto& input : source.GetIOperands()) {
+        auto mapped = input;
+        if (IsTensorOnRaw(input, rawMagic)) {
+            mapped = getClonedRawTensor(input);
+        } else if (input != nullptr) {
+            auto iter = auxTensorMap.find(input->GetMagic());
+            if (iter != auxTensorMap.end()) {
+                mapped = iter->second;
+            }
+        }
+        if (mapped == nullptr) {
+            return nullptr;
+        }
+        clonedInputs.emplace_back(mapped);
+    }
+
+    LogicalTensors clonedOutputs;
+    clonedOutputs.reserve(source.GetOOperands().size());
+    for (const auto& output : source.GetOOperands()) {
+        auto mapped = IsTensorOnRaw(output, rawMagic) ? getClonedRawTensor(output) :
+                                                        CloneAuxiliaryTensor(function, output, auxTensorMap);
+        if (mapped == nullptr) {
+            return nullptr;
+        }
+        clonedOutputs.emplace_back(mapped);
+    }
+
+    auto& clonedProducer = source.CloneOperation(function, clonedInputs, clonedOutputs);
+    CopyBasicOpMetadata(source, clonedProducer);
+    return &clonedProducer;
+}
+
+Status CloneTokenBoundaryProducers(
+    Function& function, int rawMagic,
+    const std::function<std::shared_ptr<LogicalTensor>(const std::shared_ptr<LogicalTensor>&)>& getClonedRawTensor,
+    std::unordered_map<int, std::shared_ptr<LogicalTensor>>& auxTensorMap,
+    std::unordered_map<Operation*, Operation*>& cloneMap)
+{
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        std::vector<std::pair<ir::VarPtr, VarDependency::Entry>> dependencies;
+        dependencies.reserve(function.GetVarDependency().GetAllDependencies().size());
+        for (const auto& [token, entry] : function.GetVarDependency().GetAllDependencies()) {
+            dependencies.emplace_back(token, entry);
+        }
+
+        for (const auto& dependency : dependencies) {
+            const auto& entry = dependency.second;
+            bool hasClonedConsumer = std::any_of(
+                entry.consumers.begin(), entry.consumers.end(),
+                [&cloneMap](const ir::StmtPtr& consumerStmt) { return cloneMap.count(ToOperation(consumerStmt)) > 0; });
+            if (!hasClonedConsumer) {
+                continue;
+            }
+            for (const auto& producerStmt : entry.producers) {
+                auto* producer = ToOperation(producerStmt);
+                if (producer == nullptr || cloneMap.count(producer) > 0 || !ReadsRawTensor(*producer, rawMagic)) {
+                    continue;
+                }
+                auto* clonedProducer = CloneTokenBoundaryProducer(function, *producer, rawMagic, getClonedRawTensor,
+                                                                  auxTensorMap);
+                if (clonedProducer == nullptr) {
+                    return FAILED;
+                }
+                cloneMap.emplace(producer, clonedProducer);
+                changed = true;
+            }
+        }
+    }
+    return SUCCESS;
+}
+
+void CopyCloneInternalTokenDependency(Function& function, const std::unordered_map<Operation*, Operation*>& cloneMap)
+{
+    auto& dependency = function.GetVarDependency();
+    std::vector<std::pair<ir::VarPtr, VarDependency::Entry>> dependencies;
+    dependencies.reserve(dependency.GetAllDependencies().size());
+    for (const auto& [token, entry] : dependency.GetAllDependencies()) {
+        dependencies.emplace_back(token, entry);
+    }
+
+    for (const auto& [token, entry] : dependencies) {
+        std::vector<Operation*> oldProducers;
+        std::vector<Operation*> oldConsumers;
+        std::unordered_map<Operation*, ir::VarPtr> clonedProducerTokens;
+        for (const auto& producerStmt : entry.producers) {
+            AddUnique(oldProducers, ToOperation(producerStmt));
+        }
+        for (const auto& consumerStmt : entry.consumers) {
+            AddUnique(oldConsumers, ToOperation(consumerStmt));
+        }
+        for (auto* oldConsumer : oldConsumers) {
+            auto consumerIter = cloneMap.find(oldConsumer);
+            if (consumerIter == cloneMap.end()) {
+                continue;
+            }
+            auto* clonedConsumer = consumerIter->second;
+            bool hasClonedProducer = false;
+            for (auto* oldProducer : oldProducers) {
+                auto producerIter = cloneMap.find(oldProducer);
+                if (producerIter == cloneMap.end()) {
+                    continue;
+                }
+                hasClonedProducer = true;
+                auto tokenIter = clonedProducerTokens.find(producerIter->second);
+                if (tokenIter == clonedProducerTokens.end()) {
+                    auto clonedToken = IRBuilder().CreateTokenVar(producerIter->second->GetSpan());
+                    producerIter->second->result_token_.push_back(clonedToken);
+                    dependency.AddProducer(clonedToken, ToStmtPtr(*producerIter->second));
+                    tokenIter = clonedProducerTokens.emplace(producerIter->second, clonedToken).first;
+                }
+                auto clonedToken = tokenIter->second;
+                AddTokenConsumer(function, clonedToken, *clonedConsumer);
+            }
+            if (!hasClonedProducer) {
+                AddTokenConsumer(function, token, *clonedConsumer);
+            }
+        }
+    }
+}
+
+std::shared_ptr<LogicalTensor> CloneRawAssembleSetForAtomic(Function& function, Operation& atomicOp,
+                                                            const std::shared_ptr<LogicalTensor>& input,
+                                                            const std::vector<Operation*>& rawProducers)
+{
+    if (input == nullptr || rawProducers.empty() || input->GetRawTensor() == nullptr) {
+        return nullptr;
+    }
+    auto originRaw = input->GetRawTensor();
+    auto clonedRaw = IRBuilder().CreateRawTensor(originRaw->GetDataType(), originRaw->GetRawShape(), input->Format());
+    clonedRaw->UpdateDynRawShape(originRaw->GetDynRawShape());
+    clonedRaw->memoryId = originRaw->memoryId;
+
+    std::unordered_map<int, std::shared_ptr<LogicalTensor>> rawTensorMap;
+    std::unordered_map<int, std::shared_ptr<LogicalTensor>> auxTensorMap;
+    std::unordered_map<Operation*, Operation*> cloneMap;
+    auto getClonedTensor = [&](const std::shared_ptr<LogicalTensor>& origin) -> std::shared_ptr<LogicalTensor> {
+        if (origin == nullptr) {
+            return nullptr;
+        }
+        auto iter = rawTensorMap.find(origin->GetMagic());
+        if (iter != rawTensorMap.end()) {
+            return iter->second;
+        }
+        auto cloned = CreateLogicalTensorOnRaw(function, clonedRaw, origin);
+        rawTensorMap.emplace(origin->GetMagic(), cloned);
+        return cloned;
+    };
+
+    for (auto* producer : rawProducers) {
+        if (!IsAssembleLike(producer) || producer->GetOOperands().empty()) {
+            return nullptr;
+        }
+        auto clonedOutput = getClonedTensor(producer->GetOOperands().front());
+        if (clonedOutput == nullptr) {
+            return nullptr;
+        }
+        auto& clonedProducer = producer->CloneOperation(function, producer->GetIOperands(), {clonedOutput});
+        CopyBasicOpMetadata(*producer, clonedProducer);
+        cloneMap.emplace(producer, &clonedProducer);
+    }
+
+    if (CloneTokenBoundaryProducers(function, originRaw->rawmagic, getClonedTensor, auxTensorMap, cloneMap) !=
+        SUCCESS) {
+        return nullptr;
+    }
+    CopyCloneInternalTokenDependency(function, cloneMap);
+    auto clonedInput = getClonedTensor(input);
+    if (clonedInput == nullptr) {
+        return nullptr;
+    }
+    atomicOp.ReplaceInput(clonedInput, input);
+    return clonedInput;
+}
+
+Status MigrateFoldedOpTokenDependency(Function& function, Operation& foldedOp,
+                                      const std::vector<Operation*>& replacementProducers)
+{
+    std::vector<Operation*> replacements;
+    for (auto* producer : replacementProducers) {
+        AddUnique(replacements, producer);
+    }
+    auto& dependency = function.GetVarDependency();
+    auto foldedStmt = ToStmtPtr(foldedOp);
+
+    auto inputTokens = foldedOp.tokens_;
+    for (const auto& token : inputTokens) {
+        auto tokenProducers = dependency.GetProducers(token);
+        bool producedByReplacement = std::any_of(
+            tokenProducers.begin(), tokenProducers.end(), [&replacements](const ir::StmtPtr& producerStmt) {
+                auto* producer = ToOperation(producerStmt);
+                return std::find(replacements.begin(), replacements.end(), producer) != replacements.end();
+            });
+        dependency.RemoveConsumer(token, foldedStmt);
+        RemoveToken(foldedOp, token);
+        if (producedByReplacement) {
+            continue;
+        }
+        if (replacements.empty()) {
+            return FAILED;
+        }
+        for (auto* replacement : replacements) {
+            AddTokenConsumer(function, token, *replacement);
+        }
+    }
+    foldedOp.tokens_.clear();
+
+    auto oldResultTokens = foldedOp.result_token_;
+    if (oldResultTokens.empty()) {
+        return SUCCESS;
+    }
+    std::vector<Operation*> externalConsumers;
+    for (const auto& oldResultToken : oldResultTokens) {
+        for (const auto& consumerStmt : dependency.GetConsumers(oldResultToken)) {
+            AddUnique(externalConsumers, ToOperation(consumerStmt));
+        }
+    }
+    if (!externalConsumers.empty() && replacements.empty()) {
+        return FAILED;
+    }
+    for (const auto& oldResultToken : oldResultTokens) {
+        auto oldConsumers = dependency.GetConsumers(oldResultToken);
+        for (auto* replacement : replacements) {
+            auto replacementToken = EnsureResultToken(function, *replacement);
+            for (auto* consumer : externalConsumers) {
+                AddTokenConsumer(function, replacementToken, *consumer);
+            }
+        }
+        for (const auto& consumerStmt : oldConsumers) {
+            auto* consumer = ToOperation(consumerStmt);
+            dependency.RemoveConsumer(oldResultToken, consumerStmt);
+            if (consumer != nullptr) {
+                RemoveToken(*consumer, oldResultToken);
+            }
+        }
+        dependency.RemoveProducer(oldResultToken, foldedStmt);
+        dependency.RemoveVar(oldResultToken);
+    }
+    foldedOp.result_token_.clear();
+    return SUCCESS;
+}
+
 } // namespace
 
 Status ProcessAtomic::PreCheck(Function& function)
@@ -153,12 +562,19 @@ Status ProcessAtomic::EliminateReduceAcc(Function& function)
             }
             auto reduceOut = op.GetOOperands().front();
             reduceOut->GetProducers().clear();
+            std::vector<Operation*> replacementProducers;
             for (auto* producer : assembleProducers) {
                 if (CheckAndSetRmwAttr(*producer, AtomicRMWMode::ADD, RMW_MODE_ATTR_ADD) != SUCCESS) {
                     return FAILED;
                 }
                 producer->SetAttribute(ATOMIC_FROM_REDUCE_ACC_ATTR, true);
                 producer->ReplaceOOperand(0, reduceOut);
+                AddUnique(replacementProducers, producer);
+            }
+            if (MigrateFoldedOpTokenDependency(function, op, replacementProducers) != SUCCESS) {
+                APASS_LOG_ERROR_F(Elements::Operation, "Migrate token dependency for ReduceAcc op[%d] failed.",
+                                  op.GetOpMagic());
+                return FAILED;
             }
             op.SetAsDeleted();
             anyDeleted = true;
@@ -196,7 +612,7 @@ Status ProcessAtomic::EliminateAtomicRMW(Function& function)
         if (op == nullptr || op->IsDeleted()) {
             continue;
         }
-        if (ProcessSingleAtomicRMW(*op) != SUCCESS) {
+        if (ProcessSingleAtomicRMW(function, *op) != SUCCESS) {
             return FAILED;
         }
         anyDeleted = true;
@@ -212,7 +628,7 @@ Status ProcessAtomic::EliminateAtomicRMW(Function& function)
     return SUCCESS;
 }
 
-Status ProcessAtomic::ProcessSingleAtomicRMW(Operation& op)
+Status ProcessAtomic::ProcessSingleAtomicRMW(Function& function, Operation& op)
 {
     APASS_LOG_INFO_F(Elements::Operation, "ATOMIC_RMW, opmagic: %d", op.GetOpMagic());
 
@@ -233,10 +649,16 @@ Status ProcessAtomic::ProcessSingleAtomicRMW(Operation& op)
         APASS_LOG_ERROR_F(Elements::Operation, "Op[%d] has invalid rmwMode value %d.", op.GetOpMagic(), rmwModeValue);
         return FAILED;
     }
+    std::vector<Operation*> replacementProducers;
     for (const auto& input : op.GetIOperands()) {
-        if (ProcessAtomicInput(op, input, rmwOut, rmwMode, rmwOffset, rmwDynOffset) != SUCCESS) {
+        if (ProcessAtomicInput(op, input, rmwOut, rmwMode, rmwOffset, rmwDynOffset, replacementProducers) != SUCCESS) {
             return FAILED;
         }
+    }
+    if (MigrateFoldedOpTokenDependency(function, op, replacementProducers) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "Migrate token dependency for AtomicRMW op[%d] failed.",
+                          op.GetOpMagic());
+        return FAILED;
     }
     op.SetAsDeleted();
     APASS_LOG_DEBUG_F(Elements::Operation, "%s[%d] will be deleted.", op.GetOpcodeStr().c_str(), op.GetOpMagic());
@@ -246,24 +668,55 @@ Status ProcessAtomic::ProcessSingleAtomicRMW(Operation& op)
 Status ProcessAtomic::ProcessAtomicInput(Operation& atomicOp, const std::shared_ptr<LogicalTensor>& input,
                                          const std::shared_ptr<LogicalTensor>& output, AtomicRMWMode rmwMode,
                                          const std::vector<int64_t>& rmwOffset,
-                                         const std::vector<SymbolicScalar>& rmwDynOffset)
+                                         const std::vector<SymbolicScalar>& rmwDynOffset,
+                                         std::vector<Operation*>& replacementProducers)
 {
+    auto* function = atomicOp.BelongTo();
+    if (function == nullptr) {
+        return FAILED;
+    }
     auto producersBackup = input->GetProducers();
+    auto rawProducers = CollectRawAssembleProducers(*function, input);
+    bool hasRawVersionProducer = std::any_of(rawProducers.begin(), rawProducers.end(), [&input](const auto* producer) {
+        return producer != nullptr && !IsExactOutputProducer(*producer, input);
+    });
     bool allContractProducers = !producersBackup.empty() &&
-                                std::all_of(producersBackup.begin(), producersBackup.end(), [](const auto* producer) {
-                                    return producer != nullptr && IsContractOpcode(producer->GetOpcode());
-                                });
+                                std::all_of(producersBackup.begin(), producersBackup.end(),
+                                            [](const auto* producer) {
+                                                return producer != nullptr && IsContractOpcode(producer->GetOpcode());
+                                            }) &&
+                                !hasRawVersionProducer;
     if (allContractProducers) {
         for (auto* producerOp : producersBackup) {
-            if (ProcessAtomicContractProducer(atomicOp, *producerOp, output, rmwMode, rmwOffset, rmwDynOffset) !=
-                SUCCESS) {
+            if (ProcessAtomicContractProducer(atomicOp, *producerOp, output, rmwMode, rmwOffset, rmwDynOffset,
+                                              replacementProducers) != SUCCESS) {
                 return FAILED;
             }
         }
         return SUCCESS;
     }
+    if (!rawProducers.empty()) {
+        for (auto* producerOp : rawProducers) {
+            if (producerOp == nullptr) {
+                return FAILED;
+            }
+            if (IsExactOutputProducer(*producerOp, input)) {
+                if (ProcessAtomicAssembleProducer(atomicOp, *producerOp, output, rmwMode, rmwOffset, rmwDynOffset,
+                                                  replacementProducers) != SUCCESS) {
+                    return FAILED;
+                }
+                continue;
+            }
+            if (MarkContractProducerAtomic(*producerOp, rmwMode, rmwOffset, rmwDynOffset) != SUCCESS) {
+                return FAILED;
+            }
+            AddUnique(replacementProducers, producerOp);
+        }
+        return SUCCESS;
+    }
     if (HasReshapeProducer(input)) {
-        return ProcessAtomicThroughReshape(atomicOp, input, output, rmwMode, rmwOffset, rmwDynOffset);
+        return ProcessAtomicThroughReshape(atomicOp, input, output, rmwMode, rmwOffset, rmwDynOffset,
+                                           replacementProducers);
     }
     APASS_LOG_ERROR_F(Elements::Operation,
                       "AtomicRMW[%d] input producers must be Contract or a supported Reshape chain.%s",
@@ -274,10 +727,15 @@ Status ProcessAtomic::ProcessAtomicInput(Operation& atomicOp, const std::shared_
 Status ProcessAtomic::ProcessAtomicContractProducer(Operation& atomicOp, Operation& producerOp,
                                                     const std::shared_ptr<LogicalTensor>& output, AtomicRMWMode rmwMode,
                                                     const std::vector<int64_t>& rmwOffset,
-                                                    const std::vector<SymbolicScalar>& rmwDynOffset)
+                                                    const std::vector<SymbolicScalar>& rmwDynOffset,
+                                                    std::vector<Operation*>& replacementProducers)
 {
     if (producerOp.GetIOperands().size() != 1 || !HasReshapeProducer(producerOp.GetInputOperand(0))) {
-        return ProcessContractProducer(producerOp, output, rmwMode, rmwOffset, rmwDynOffset);
+        if (ProcessContractProducer(producerOp, output, rmwMode, rmwOffset, rmwDynOffset) != SUCCESS) {
+            return FAILED;
+        }
+        AddUnique(replacementProducers, &producerOp);
+        return SUCCESS;
     }
     std::vector<int64_t> combinedOffset;
     std::vector<SymbolicScalar> combinedDynOffset;
@@ -285,13 +743,36 @@ Status ProcessAtomic::ProcessAtomicContractProducer(Operation& atomicOp, Operati
         return FAILED;
     }
     return ProcessAtomicThroughReshape(atomicOp, producerOp.GetInputOperand(0), output, rmwMode, combinedOffset,
-                                       combinedDynOffset);
+                                       combinedDynOffset, replacementProducers);
+}
+
+Status ProcessAtomic::ProcessAtomicAssembleProducer(Operation& atomicOp, Operation& producerOp,
+                                                    const std::shared_ptr<LogicalTensor>& output, AtomicRMWMode rmwMode,
+                                                    const std::vector<int64_t>& rmwOffset,
+                                                    const std::vector<SymbolicScalar>& rmwDynOffset,
+                                                    std::vector<Operation*>& replacementProducers)
+{
+    if (producerOp.GetIOperands().size() != 1 || !HasReshapeProducer(producerOp.GetInputOperand(0))) {
+        if (ProcessContractProducer(producerOp, output, rmwMode, rmwOffset, rmwDynOffset) != SUCCESS) {
+            return FAILED;
+        }
+        AddUnique(replacementProducers, &producerOp);
+        return SUCCESS;
+    }
+    std::vector<int64_t> combinedOffset;
+    std::vector<SymbolicScalar> combinedDynOffset;
+    if (CombineContractOffset(producerOp, rmwOffset, rmwDynOffset, combinedOffset, combinedDynOffset) != SUCCESS) {
+        return FAILED;
+    }
+    return ProcessAtomicThroughReshape(atomicOp, producerOp.GetInputOperand(0), output, rmwMode, combinedOffset,
+                                       combinedDynOffset, replacementProducers);
 }
 
 Status ProcessAtomic::ProcessAtomicThroughReshape(Operation& atomicOp, const std::shared_ptr<LogicalTensor>& input,
                                                   const std::shared_ptr<LogicalTensor>& output, AtomicRMWMode rmwMode,
                                                   const std::vector<int64_t>& rmwOffset,
-                                                  const std::vector<SymbolicScalar>& rmwDynOffset)
+                                                  const std::vector<SymbolicScalar>& rmwDynOffset,
+                                                  std::vector<Operation*>& replacementProducers)
 {
     ReshapeRemapResult remapResult;
     if (FindUpstreamAssembleAndRemapOffset(input, output, rmwOffset, rmwDynOffset, remapResult) != SUCCESS) {
@@ -305,6 +786,7 @@ Status ProcessAtomic::ProcessAtomicThroughReshape(Operation& atomicOp, const std
             SUCCESS) {
             return FAILED;
         }
+        AddUnique(replacementProducers, contract);
     }
     return RetargetReshapeChain(atomicOp, output, remapResult);
 }
@@ -346,6 +828,7 @@ Status ProcessAtomic::FindUpstreamAssembleAndRemapOffset(const std::shared_ptr<L
         if (found) {
             result.assembleOutputShape = std::move(currentBaseShape);
             result.assembleOutputDynShape = std::move(currentBaseDynShape);
+            result.terminalTensor = current;
             return SUCCESS;
         }
         const auto& producers = current->GetProducers();
@@ -377,11 +860,25 @@ Status ProcessAtomic::CollectTerminalAssembles(const std::shared_ptr<LogicalTens
     if (!allAssemble) {
         return SUCCESS;
     }
-    for (auto* producer : producers) {
+    auto* function = (*producers.begin())->BelongTo();
+    if (function == nullptr) {
+        return FAILED;
+    }
+    auto rawProducers = CollectRawAssembleProducers(*function, current);
+    if (rawProducers.empty()) {
+        return FAILED;
+    }
+    for (auto* producer : rawProducers) {
         if (!visited.insert(producer->GetOpMagic()).second) {
             return FAILED;
         }
         result.assembles.push_back(producer);
+        if (IsExactOutputProducer(*producer, current)) {
+            result.retargetAssembles.push_back(producer);
+        }
+    }
+    if (result.retargetAssembles.empty()) {
+        return FAILED;
     }
     found = true;
     return SUCCESS;
@@ -423,10 +920,10 @@ Status ProcessAtomic::RetargetReshapeChain(Operation& atomicOp, const std::share
                           atomicOp.GetOpMagic());
         return FAILED;
     }
-    if (remapResult.assembles.empty()) {
+    if (remapResult.retargetAssembles.empty()) {
         return FAILED;
     }
-    auto current = remapResult.assembles.front()->GetOutputOperand(0);
+    auto current = remapResult.retargetAssembles.front()->GetOutputOperand(0);
     if (current == nullptr || current->GetShape() != remapResult.assembleOutputShape) {
         auto original = current;
         current = irBuilder_.CreateTensorVar(*function, output->Datatype(), remapResult.assembleOutputShape,
@@ -434,7 +931,7 @@ Status ProcessAtomic::RetargetReshapeChain(Operation& atomicOp, const std::share
         if (original != nullptr) {
             current->CopyMemoryType(original);
         }
-        for (auto* assemble : remapResult.assembles) {
+        for (auto* assemble : remapResult.retargetAssembles) {
             assemble->ReplaceOOperand(0, current);
         }
     }
@@ -535,17 +1032,32 @@ Status ProcessAtomic::PrepareAtomicRMWSharedInputs(Function& function,
 std::shared_ptr<LogicalTensor> ProcessAtomic::PrepareExclusiveAtomicInput(
     Function& function, Operation& atomicOp, const std::shared_ptr<LogicalTensor>& input) const
 {
-    if (input == nullptr || !HasConsumerExcept(input, atomicOp) || !HasContractProducer(input)) {
+    if (input == nullptr) {
         return input;
     }
 
+    auto rawProducers = CollectRawAssembleProducers(function, input);
+    if (!rawProducers.empty() && HasRawExternalConsumer(function, input, atomicOp)) {
+        auto clonedInput = CloneRawAssembleSetForAtomic(function, atomicOp, input, rawProducers);
+        if (clonedInput == nullptr) {
+            APASS_LOG_ERROR_F(Elements::Tensor, "Clone atomic raw producer set for tensor[%d] failed.",
+                              input->GetMagic());
+            return nullptr;
+        }
+        APASS_LOG_INFO_F(Elements::Tensor, "Clone raw producer set for AtomicRMW input tensor[%d].", input->GetMagic());
+        return clonedInput;
+    }
+
+    if (!HasConsumerExcept(input, atomicOp) || !HasContractProducer(input)) {
+        return input;
+    }
     auto producersBackup = input->GetProducers();
-    auto clonedInput = input->Clone(function, true);
-    if (clonedInput == nullptr) {
+    auto contractClonedInput = input->Clone(function, true);
+    if (contractClonedInput == nullptr) {
         APASS_LOG_ERROR_F(Elements::Tensor, "Clone atomic input tensor[%d] failed.", input->GetMagic());
         return nullptr;
     }
-    atomicOp.ReplaceInput(clonedInput, input);
+    atomicOp.ReplaceInput(contractClonedInput, input);
 
     for (auto* producerOp : producersBackup) {
         if (producerOp == nullptr) {
@@ -565,9 +1077,9 @@ std::shared_ptr<LogicalTensor> ProcessAtomic::PrepareExclusiveAtomicInput(
         if (producerOp->GetOpAttribute() != nullptr) {
             clonedProducer.SetOpAttribute(producerOp->GetOpAttribute()->Clone());
         }
-        clonedProducer.ReplaceOutput(clonedInput, input);
+        clonedProducer.ReplaceOutput(contractClonedInput, input);
     }
-    return clonedInput;
+    return contractClonedInput;
 }
 
 std::string ProcessAtomic::GetRmwAttrKey(AtomicRMWMode mode)

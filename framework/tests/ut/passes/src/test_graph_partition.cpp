@@ -26,6 +26,7 @@
 #include "passes/tile_graph_pass/graph_partition/iso_partitioner.h"
 #include "passes/tile_graph_pass/graph_partition/graph_partition.h"
 #undef private
+#include "passes/tile_graph_pass/graph_partition/graph_partition_token_dependency.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "passes/pass_mgr/pass_manager.h"
@@ -133,6 +134,27 @@ TEST_F(GraphPartitionTest, TestBuildOpGraph)
     }
     const int copyInHashNum = 3;
     EXPECT_EQ(copyInHash.size(), copyInHashNum);
+}
+
+TEST_F(GraphPartitionTest, TokenOnlyDependencyDoesNotForceOneSubgraph)
+{
+    ComputationalGraphBuilder graph;
+    GetPairSumGraph(graph);
+    auto* function = graph.GetFunction();
+    ASSERT_NE(function, nullptr);
+
+    auto* producer = graph.GetOp("ADDS0");
+    auto* consumer = graph.GetOp("COPY_IN1");
+    ASSERT_NE(producer, nullptr);
+    ASSERT_NE(consumer, nullptr);
+    producer->result_token_ = {IRBuilder().CreateTokenVar(producer->GetSpan())};
+    consumer->tokens_.push_back(producer->result_token_.front());
+
+    IsoPartitioner partitioner;
+    EXPECT_EQ(partitioner.SetParameter(10, 10, false), SUCCESS);
+    ASSERT_EQ(partitioner.PartitionGraph(*function), SUCCESS);
+
+    EXPECT_NE(producer->GetSubgraphID(), consumer->GetSubgraphID());
 }
 
 void GetReshapeGraph(ComputationalGraphBuilder& G)
@@ -1586,6 +1608,356 @@ TEST_F(GraphPartitionTest, TestUbToUbAssembleWithoutDynOffsetMergeable)
     bool mergeable = partitioner.superNodeInfo_->GetNodeMergeable(partitioner.operationInfo_, nodeIdx);
 
     EXPECT_EQ(mergeable, true);
+}
+
+ir::StmtPtr ToGraphPartitionStmt(Operation& op)
+{
+    return std::static_pointer_cast<const ir::Stmt>(op.shared_from_this());
+}
+
+void AddReverseTokenDependency(Function& function, Operation& producer, Operation& consumer)
+{
+    auto token = IRBuilder().CreateTokenVar(ir::Span::Unknown());
+    function.GetVarDependency().AddProducer(token, ToGraphPartitionStmt(producer));
+    function.GetVarDependency().AddConsumer(token, ToGraphPartitionStmt(consumer));
+    producer.result_token_ = {token};
+    consumer.tokens_.push_back(token);
+}
+
+TEST_F(GraphPartitionTest, PreservesAcyclicTokenConnectedSubgraphs)
+{
+    ComputationalGraphBuilder G;
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP32, {16, 16}, {"input", "mid", "output"}));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_ABS, {"input"}, {"mid"}, "producer"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_EXP, {"mid"}, {"output"}, "consumer"));
+    auto* producer = G.GetOp("producer");
+    auto* consumer = G.GetOp("consumer");
+    ASSERT_NE(producer, nullptr);
+    ASSERT_NE(consumer, nullptr);
+    producer->UpdateSubgraphID(0);
+    consumer->UpdateSubgraphID(1);
+    G.GetFunction()->SetTotalSubGraphCount(2);
+    AddReverseTokenDependency(*G.GetFunction(), *producer, *consumer);
+
+    ASSERT_EQ(FinalizePartitionWithTokenDependency(*G.GetFunction()), SUCCESS);
+
+    EXPECT_NE(producer->GetSubgraphID(), consumer->GetSubgraphID());
+    EXPECT_EQ(G.GetFunction()->GetTotalSubGraphCount(), 2U);
+}
+
+TEST_F(GraphPartitionTest, SplitsLateLoweredAicAndAivOperationsWithinSameSubgraph)
+{
+    ComputationalGraphBuilder G;
+    const Shape shape{16, 16};
+    const std::vector<MemoryType> memoryTypes{MemoryType::MEM_L0A, MemoryType::MEM_L0B, MemoryType::MEM_L0C,
+                                              MemoryType::MEM_UB,  MemoryType::MEM_UB,  MemoryType::MEM_UB,
+                                              MemoryType::MEM_UB};
+    const std::vector<std::string> tensorNames{"a", "b", "l0cInput", "ubMiddle", "output", "otherIn", "otherOut"};
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP32, shape, memoryTypes, tensorNames, 0));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_A_MUL_B, {"a", "b"}, {"l0cInput"}, "cube"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_EXP, {"otherIn"}, {"otherOut"}, "other"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_ASSEMBLE_SSA, {"l0cInput"}, {"ubMiddle"}, "copy"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_EXP, {"ubMiddle"}, {"output"}, "vector"));
+    auto* cube = G.GetOp("cube");
+    auto* other = G.GetOp("other");
+    auto* copy = G.GetOp("copy");
+    auto* vector = G.GetOp("vector");
+    ASSERT_NE(cube, nullptr);
+    ASSERT_NE(other, nullptr);
+    ASSERT_NE(copy, nullptr);
+    ASSERT_NE(vector, nullptr);
+    for (auto* op : {cube, copy, vector}) {
+        op->UpdateSubgraphID(0);
+        op->SetAttribute(OpAttributeKey::isCube, true);
+    }
+    other->UpdateSubgraphID(1);
+    other->SetAttribute(OpAttributeKey::isCube, false);
+    G.GetFunction()->SetTotalSubGraphCount(2);
+
+    ASSERT_EQ(FinalizePartitionWithTokenDependency(*G.GetFunction()), SUCCESS);
+
+    EXPECT_EQ(copy->GetSubgraphID(), vector->GetSubgraphID());
+    EXPECT_EQ(G.GetFunction()->GetTotalSubGraphCount(), 2U);
+
+    ASSERT_EQ(FinalizePartitionWithTokenDependency(*G.GetFunction(), true), SUCCESS);
+
+    EXPECT_EQ(cube->GetSubgraphID(), copy->GetSubgraphID());
+    EXPECT_NE(copy->GetSubgraphID(), vector->GetSubgraphID());
+    EXPECT_EQ(G.GetFunction()->GetTotalSubGraphCount(), 3U);
+    EXPECT_TRUE(copy->GetBoolAttribute(OpAttributeKey::isCube));
+    EXPECT_FALSE(vector->GetBoolAttribute(OpAttributeKey::isCube));
+}
+
+TEST_F(GraphPartitionTest, KeepsProducerSideDdrMoveWithProducerAcrossInterleavedSubgraph)
+{
+    ComputationalGraphBuilder G;
+    const Shape shape{16, 16};
+    const std::vector<MemoryType> memoryTypes{MemoryType::MEM_L0A,        MemoryType::MEM_L0B, MemoryType::MEM_L0C,
+                                              MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB,  MemoryType::MEM_UB,
+                                              MemoryType::MEM_UB};
+    const std::vector<std::string> tensorNames{"a", "b", "l0c", "gm", "otherIn", "otherOut", "vectorOut"};
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP32, shape, memoryTypes, tensorNames, 0));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_A_MUL_B, {"a", "b"}, {"l0c"}, "cube"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_EXP, {"otherIn"}, {"otherOut"}, "other"));
+    ASSERT_TRUE(G.AddOp(config::GetContractOpcode(), {"l0c"}, {"gm"}, "copyOut"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_EXP, {"otherIn"}, {"vectorOut"}, "vector"));
+    auto* cube = G.GetOp("cube");
+    auto* other = G.GetOp("other");
+    auto* copyOut = G.GetOp("copyOut");
+    auto* vector = G.GetOp("vector");
+    ASSERT_NE(cube, nullptr);
+    ASSERT_NE(other, nullptr);
+    ASSERT_NE(copyOut, nullptr);
+    ASSERT_NE(vector, nullptr);
+    for (auto* op : {cube, copyOut, vector}) {
+        op->UpdateSubgraphID(0);
+        op->SetAttribute(OpAttributeKey::isCube, true);
+    }
+    other->UpdateSubgraphID(1);
+    other->SetAttribute(OpAttributeKey::isCube, false);
+    G.GetFunction()->SetTotalSubGraphCount(2);
+
+    ASSERT_EQ(FinalizePartitionWithTokenDependency(*G.GetFunction(), true), SUCCESS);
+
+    EXPECT_EQ(cube->GetSubgraphID(), copyOut->GetSubgraphID());
+    EXPECT_NE(copyOut->GetSubgraphID(), vector->GetSubgraphID());
+    EXPECT_EQ(G.GetFunction()->GetTotalSubGraphCount(), 3U);
+    EXPECT_TRUE(copyOut->GetBoolAttribute(OpAttributeKey::isCube));
+    EXPECT_FALSE(vector->GetBoolAttribute(OpAttributeKey::isCube));
+}
+
+TEST_F(GraphPartitionTest, CoalescesPostLoweringAicSegmentsUsingInferredMoveCore)
+{
+    ComputationalGraphBuilder G;
+    const Shape shape{16, 16};
+    const std::vector<MemoryType> memoryTypes{MemoryType::MEM_L0A, MemoryType::MEM_L0B,        MemoryType::MEM_L0C,
+                                              MemoryType::MEM_UB,  MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1,
+                                              MemoryType::MEM_UB,  MemoryType::MEM_L0A};
+    const std::vector<std::string> tensorNames{"a", "b", "l0c", "ub", "gm", "l1", "vectorOut", "l0a"};
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP32, shape, memoryTypes, tensorNames, 0));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_A_MUL_B, {"a", "b"}, {"l0c"}, "cube"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_ASSEMBLE_SSA, {"l0c"}, {"ub"}, "crossCoreMove"));
+    ASSERT_TRUE(G.AddOp(config::GetSliceOpcode(), {"gm"}, {"l1"}, "copyIn"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_EXP, {"ub"}, {"vectorOut"}, "vector"));
+    ASSERT_TRUE(G.AddOp(config::GetSliceOpcode(), {"l1"}, {"l0a"}, "l1ToL0a"));
+    auto* cube = G.GetOp("cube");
+    auto* crossCoreMove = G.GetOp("crossCoreMove");
+    auto* copyIn = G.GetOp("copyIn");
+    auto* vector = G.GetOp("vector");
+    auto* l1ToL0a = G.GetOp("l1ToL0a");
+    ASSERT_NE(cube, nullptr);
+    ASSERT_NE(crossCoreMove, nullptr);
+    ASSERT_NE(copyIn, nullptr);
+    ASSERT_NE(vector, nullptr);
+    ASSERT_NE(l1ToL0a, nullptr);
+    for (auto* op : {cube, crossCoreMove, copyIn, vector, l1ToL0a}) {
+        op->UpdateSubgraphID(0);
+        op->SetAttribute(OpAttributeKey::isCube, true);
+    }
+    G.GetFunction()->SetTotalSubGraphCount(1);
+
+    ASSERT_EQ(FinalizePartitionWithTokenDependency(*G.GetFunction(), true), SUCCESS);
+
+    EXPECT_EQ(cube->GetSubgraphID(), crossCoreMove->GetSubgraphID());
+    EXPECT_EQ(copyIn->GetSubgraphID(), l1ToL0a->GetSubgraphID());
+    EXPECT_EQ(cube->GetSubgraphID(), l1ToL0a->GetSubgraphID());
+    EXPECT_NE(crossCoreMove->GetSubgraphID(), vector->GetSubgraphID());
+    EXPECT_EQ(G.GetFunction()->GetTotalSubGraphCount(), 2U);
+    EXPECT_TRUE(copyIn->GetBoolAttribute(OpAttributeKey::isCube));
+    EXPECT_TRUE(l1ToL0a->GetBoolAttribute(OpAttributeKey::isCube));
+    EXPECT_FALSE(vector->GetBoolAttribute(OpAttributeKey::isCube));
+}
+
+TEST_F(GraphPartitionTest, KeepsConsumerSideDdrMoveWithConsumerAcrossVectorPath)
+{
+    ComputationalGraphBuilder G;
+    const Shape shape{16, 16};
+    const std::vector<MemoryType> memoryTypes{MemoryType::MEM_L0A, MemoryType::MEM_L0B,        MemoryType::MEM_L0C,
+                                              MemoryType::MEM_UB,  MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1,
+                                              MemoryType::MEM_UB,  MemoryType::MEM_L0A};
+    const std::vector<std::string> tensorNames{"a", "b", "l0c", "ub", "gm", "l1", "vectorOut", "l0a"};
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP32, shape, memoryTypes, tensorNames, 0));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_A_MUL_B, {"a", "b"}, {"l0c"}, "cube"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_ASSEMBLE_SSA, {"l0c"}, {"ub"}, "crossCoreMove"));
+    ASSERT_TRUE(G.AddOp(config::GetSliceOpcode(), {"gm"}, {"l1"}, "copyIn"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_EXP, {"ub"}, {"vectorOut"}, "vector"));
+    ASSERT_TRUE(G.AddOp(config::GetSliceOpcode(), {"l1"}, {"l0a"}, "l1ToL0a"));
+    auto* cube = G.GetOp("cube");
+    auto* crossCoreMove = G.GetOp("crossCoreMove");
+    auto* copyIn = G.GetOp("copyIn");
+    auto* vector = G.GetOp("vector");
+    auto* l1ToL0a = G.GetOp("l1ToL0a");
+    ASSERT_NE(cube, nullptr);
+    ASSERT_NE(crossCoreMove, nullptr);
+    ASSERT_NE(copyIn, nullptr);
+    ASSERT_NE(vector, nullptr);
+    ASSERT_NE(l1ToL0a, nullptr);
+    for (auto* op : {cube, crossCoreMove, copyIn, vector, l1ToL0a}) {
+        op->UpdateSubgraphID(0);
+        op->SetAttribute(OpAttributeKey::isCube, true);
+    }
+    AddReverseTokenDependency(*G.GetFunction(), *vector, *l1ToL0a);
+    G.GetFunction()->SetTotalSubGraphCount(1);
+
+    ASSERT_EQ(FinalizePartitionWithTokenDependency(*G.GetFunction(), true), SUCCESS);
+
+    EXPECT_EQ(cube->GetSubgraphID(), crossCoreMove->GetSubgraphID());
+    EXPECT_NE(cube->GetSubgraphID(), copyIn->GetSubgraphID());
+    EXPECT_EQ(copyIn->GetSubgraphID(), l1ToL0a->GetSubgraphID());
+    EXPECT_NE(crossCoreMove->GetSubgraphID(), vector->GetSubgraphID());
+    EXPECT_NE(vector->GetSubgraphID(), l1ToL0a->GetSubgraphID());
+    EXPECT_EQ(G.GetFunction()->GetTotalSubGraphCount(), 3U);
+    EXPECT_TRUE(copyIn->GetBoolAttribute(OpAttributeKey::isCube));
+    EXPECT_TRUE(l1ToL0a->GetBoolAttribute(OpAttributeKey::isCube));
+    EXPECT_FALSE(vector->GetBoolAttribute(OpAttributeKey::isCube));
+}
+
+TEST_F(GraphPartitionTest, RefreshesAnyOnlySplitSubgraphCoreAttribute)
+{
+    ComputationalGraphBuilder G;
+    const Shape shape{16, 16};
+    const std::vector<MemoryType> memoryTypes{MemoryType::MEM_L0A,        MemoryType::MEM_L0B, MemoryType::MEM_L0C,
+                                              MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB,  MemoryType::MEM_L0A,
+                                              MemoryType::MEM_L0B,        MemoryType::MEM_L0C, MemoryType::MEM_UB};
+    const std::vector<std::string> tensorNames{"a0", "b0", "c0", "gm", "ub", "a1", "b1", "c1", "output"};
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP32, shape, memoryTypes, tensorNames, 0));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_A_MUL_B, {"a0", "b0"}, {"c0"}, "cube0"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_COPY_IN, {"gm"}, {"ub"}, "copy"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_A_MUL_B, {"a1", "b1"}, {"c1"}, "cube1"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_EXP, {"ub"}, {"output"}, "vector"));
+    auto* cube0 = G.GetOp("cube0");
+    auto* copy = G.GetOp("copy");
+    auto* cube1 = G.GetOp("cube1");
+    auto* vector = G.GetOp("vector");
+    ASSERT_NE(cube0, nullptr);
+    ASSERT_NE(copy, nullptr);
+    ASSERT_NE(cube1, nullptr);
+    ASSERT_NE(vector, nullptr);
+    for (auto* op : {cube0, copy, cube1, vector}) {
+        op->UpdateSubgraphID(0);
+        op->SetAttribute(OpAttributeKey::isCube, true);
+    }
+    AddReverseTokenDependency(*G.GetFunction(), *cube0, *copy);
+    AddReverseTokenDependency(*G.GetFunction(), *copy, *cube1);
+    AddReverseTokenDependency(*G.GetFunction(), *cube1, *vector);
+    G.GetFunction()->SetTotalSubGraphCount(1);
+
+    ASSERT_EQ(FinalizePartitionWithTokenDependency(*G.GetFunction(), true), SUCCESS);
+
+    EXPECT_NE(cube0->GetSubgraphID(), copy->GetSubgraphID());
+    EXPECT_NE(copy->GetSubgraphID(), cube1->GetSubgraphID());
+    EXPECT_NE(cube1->GetSubgraphID(), vector->GetSubgraphID());
+    EXPECT_EQ(G.GetFunction()->GetTotalSubGraphCount(), 4U);
+    EXPECT_FALSE(copy->GetBoolAttribute(OpAttributeKey::isCube));
+}
+
+TEST_F(GraphPartitionTest, MergesTokenConnectedAliasedRawTensorSubgraphs)
+{
+    ComputationalGraphBuilder G;
+    const Shape shape{16, 16};
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP32, shape, {"input", "output"}));
+    auto* function = G.GetFunction();
+    ASSERT_NE(function, nullptr);
+
+    auto rawTensor = std::make_shared<RawTensor>(DT_FP32, shape, TileOpFormat::TILEOP_ND, "sharedRaw");
+    IRBuilder builder;
+    auto producerVersion = builder.CreateTensorVar(rawTensor, {0, 0}, shape, {});
+    auto consumerVersion = builder.CreateTensorVar(rawTensor, {0, 0}, shape, {});
+    auto& producer = function->AddOperation(Opcode::OP_ABS, {G.GetTensor("input")}, {producerVersion});
+    auto& consumer = function->AddOperation(Opcode::OP_EXP, {consumerVersion}, {G.GetTensor("output")});
+    producer.UpdateSubgraphID(0);
+    consumer.UpdateSubgraphID(1);
+    function->SetTotalSubGraphCount(2);
+    AddReverseTokenDependency(*function, producer, consumer);
+
+    ASSERT_EQ(FinalizePartitionWithTokenDependency(*function), SUCCESS);
+
+    EXPECT_EQ(producer.GetSubgraphID(), consumer.GetSubgraphID());
+    EXPECT_EQ(function->GetTotalSubGraphCount(), 1U);
+}
+
+TEST_F(GraphPartitionTest, MergesEntireSameCorePathWhenAliasedTokenEndpointsAreContracted)
+{
+    ComputationalGraphBuilder G;
+    const Shape shape{16, 16};
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP32, shape, {"input", "middle", "output"}));
+    auto* function = G.GetFunction();
+    ASSERT_NE(function, nullptr);
+
+    auto rawTensor = std::make_shared<RawTensor>(DT_FP32, shape, TileOpFormat::TILEOP_ND, "sharedRaw");
+    IRBuilder builder;
+    auto producerVersion = builder.CreateTensorVar(rawTensor, {0, 0}, shape, {});
+    auto consumerVersion = builder.CreateTensorVar(rawTensor, {0, 0}, shape, {});
+    auto& producer = function->AddOperation(Opcode::OP_ABS, {G.GetTensor("input")}, {producerVersion});
+    auto& middle = function->AddOperation(Opcode::OP_EXP, {producerVersion}, {G.GetTensor("middle")});
+    auto& consumer = function->AddOperation(Opcode::OP_ADD, {G.GetTensor("middle"), consumerVersion},
+                                            {G.GetTensor("output")});
+    producer.UpdateSubgraphID(0);
+    middle.UpdateSubgraphID(1);
+    consumer.UpdateSubgraphID(2);
+    function->SetTotalSubGraphCount(3);
+    AddReverseTokenDependency(*function, producer, consumer);
+
+    ASSERT_EQ(FinalizePartitionWithTokenDependency(*function), SUCCESS);
+
+    EXPECT_EQ(producer.GetSubgraphID(), middle.GetSubgraphID());
+    EXPECT_EQ(middle.GetSubgraphID(), consumer.GetSubgraphID());
+    EXPECT_EQ(function->GetTotalSubGraphCount(), 1U);
+}
+
+TEST_F(GraphPartitionTest, PreservesAliasedTokenConnectedSubgraphsAcrossAicAndAiv)
+{
+    ComputationalGraphBuilder G;
+    const Shape shape{16, 16};
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP32, shape, {"inputA", "inputB", "output"}));
+    auto* function = G.GetFunction();
+    ASSERT_NE(function, nullptr);
+
+    auto rawTensor = std::make_shared<RawTensor>(DT_FP32, shape, TileOpFormat::TILEOP_ND, "sharedRaw");
+    IRBuilder builder;
+    auto aicVersion = builder.CreateTensorVar(rawTensor, {0, 0}, shape, {});
+    auto aivVersion = builder.CreateTensorVar(rawTensor, {0, 0}, shape, {});
+    auto& aicProducer = function->AddOperation(Opcode::OP_A_MUL_B, {G.GetTensor("inputA"), G.GetTensor("inputB")},
+                                               {aicVersion});
+    auto& aivConsumer = function->AddOperation(Opcode::OP_EXP, {aivVersion}, {G.GetTensor("output")});
+    aicProducer.UpdateSubgraphID(0);
+    aivConsumer.UpdateSubgraphID(1);
+    function->SetTotalSubGraphCount(2);
+    AddReverseTokenDependency(*function, aicProducer, aivConsumer);
+
+    ASSERT_EQ(FinalizePartitionWithTokenDependency(*function), SUCCESS);
+
+    EXPECT_NE(aicProducer.GetSubgraphID(), aivConsumer.GetSubgraphID());
+    EXPECT_EQ(function->GetTotalSubGraphCount(), 2U);
+}
+
+TEST_F(GraphPartitionTest, PreservesAliasedTokenEndpointsWhenPathContainsAicAndAiv)
+{
+    ComputationalGraphBuilder G;
+    const Shape shape{16, 16};
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP32, shape, {"inputA", "inputB", "middle", "output"}));
+    auto* function = G.GetFunction();
+    ASSERT_NE(function, nullptr);
+
+    auto rawTensor = std::make_shared<RawTensor>(DT_FP32, shape, TileOpFormat::TILEOP_ND, "sharedRaw");
+    IRBuilder builder;
+    auto producerVersion = builder.CreateTensorVar(rawTensor, {0, 0}, shape, {});
+    auto consumerVersion = builder.CreateTensorVar(rawTensor, {0, 0}, shape, {});
+    auto& producer = function->AddOperation(Opcode::OP_A_MUL_B, {G.GetTensor("inputA"), G.GetTensor("inputB")},
+                                            {producerVersion});
+    auto& middle = function->AddOperation(Opcode::OP_EXP, {producerVersion}, {G.GetTensor("middle")});
+    auto& consumer = function->AddOperation(Opcode::OP_A_MUL_B, {G.GetTensor("middle"), consumerVersion},
+                                            {G.GetTensor("output")});
+    producer.UpdateSubgraphID(0);
+    middle.UpdateSubgraphID(1);
+    consumer.UpdateSubgraphID(2);
+    function->SetTotalSubGraphCount(3);
+    AddReverseTokenDependency(*function, producer, consumer);
+
+    ASSERT_EQ(FinalizePartitionWithTokenDependency(*function), SUCCESS);
+
+    EXPECT_NE(producer.GetSubgraphID(), consumer.GetSubgraphID());
+    EXPECT_EQ(function->GetTotalSubGraphCount(), 3U);
 }
 
 /**

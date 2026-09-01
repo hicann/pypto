@@ -157,6 +157,44 @@ TensorSet GraphUtils::GetTensorsByRawMagic(Function& function, int64_t rawMagic)
     return result;
 }
 
+RawMagicTensorMap GraphUtils::GetTensorsGroupedByRawMagic(Function& function)
+{
+    RawMagicTensorMap result;
+    auto recordTensor = [&result](const LogicalTensorPtr& tensor) {
+        if (tensor == nullptr || tensor->GetRawTensor() == nullptr) {
+            return;
+        }
+        result[tensor->GetRawMagic()].insert(tensor);
+    };
+
+    for (const auto& tensor : function.GetIncast()) {
+        recordTensor(tensor);
+    }
+    for (const auto& tensor : function.GetOutcast()) {
+        recordTensor(tensor);
+    }
+    for (const auto& op : function.Operations(false)) {
+        for (const auto& tensor : op.GetIOperands()) {
+            recordTensor(tensor);
+        }
+        for (const auto& tensor : op.GetOOperands()) {
+            recordTensor(tensor);
+        }
+    }
+    return result;
+}
+
+std::unordered_set<int64_t> GraphUtils::GetRawMagicsWithMultipleLogicalTensors(Function& function)
+{
+    std::unordered_set<int64_t> multiLogicalTensorRawMagics;
+    for (const auto& [rawMagic, tensors] : GetTensorsGroupedByRawMagic(function)) {
+        if (tensors.size() > 1U) {
+            multiLogicalTensorRawMagics.insert(rawMagic);
+        }
+    }
+    return multiLogicalTensorRawMagics;
+}
+
 std::shared_ptr<RawTensor> GraphUtils::GetRawTensorByRawMagic(Function& function, int64_t rawMagic)
 {
     auto tensors = GetTensorsByRawMagic(function, rawMagic);

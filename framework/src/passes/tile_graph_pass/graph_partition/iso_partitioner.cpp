@@ -22,6 +22,7 @@
 #include "passes/pass_utils/parallel_tool.h"
 #include "passes/pass_check/iso_partitioner_checker.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/token_utils.h"
 
 #define MODULE_NAME "GraphPartition"
 
@@ -89,7 +90,11 @@ Status IsoPartitioner::PartitionGraph(Function& function)
     if (HandleLiteNPU(function)) {
         return SUCCESS;
     }
-    function.SortOperations(SortOperationsMode::LIGHTWEIGHT);
+    if (TokenUtils::RebuildTokenDependencies(function) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Function, "Failed to rebuild token dependencies before graph partition.");
+        return FAILED;
+    }
+    function.SortOperations(SortOperationsMode::LIGHTWEIGHT_STABLE);
     return RunPartitionSteps(function);
 }
 

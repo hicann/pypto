@@ -135,9 +135,9 @@ private:
     std::map<LogicalTensorPtr, std::set<Shape>> toShapes_;
     std::map<LogicalTensorPtr, std::set<Shape>> fromShapes_;
     bool enableMoreSplit_ = false;
-    std::vector<Operation*> addedOps_;
     std::unordered_set<int> mixedConsumerTensors_;
     IRBuilder irBuilder_;
+    std::vector<Operation*> addedOps_;
 
     std::string idx;
 };

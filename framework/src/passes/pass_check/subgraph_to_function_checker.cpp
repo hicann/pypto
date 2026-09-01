@@ -523,6 +523,8 @@ Status SubGraphToFuncChecker::VerifySingleOpTopology(Function& function, size_t 
     }
 
     auto consumers = currentOp->ConsumerOps();
+    auto tokenConsumers = currentOp->ConsumerOpsByToken();
+    consumers.insert(tokenConsumers.begin(), tokenConsumers.end());
     auto producers = currentOp->ProducerOps();
     APASS_LOG_DEBUG_F(Elements::Operation, "=================Call ===============%zu", opIdx);
     for (auto& prod : producers) {

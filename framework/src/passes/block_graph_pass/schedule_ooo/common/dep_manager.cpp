@@ -225,6 +225,12 @@ void DependencyManager::FindDependencies(Operation* op, bool needView)
         HandleScaleOpDependency(op, MemoryType::MEM_L0B);
     }
 
+    for (auto* producer : op->ProducerOpsByToken()) {
+        if (producer != op && producer->BelongTo() == op->BelongTo()) {
+            AddDependency(producer, op);
+        }
+    }
+
     if (needView) {
         for (auto& producer : opProducers[op]) {
             AddDependency(producer, op);

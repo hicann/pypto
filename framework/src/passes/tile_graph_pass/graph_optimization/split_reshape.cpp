@@ -25,6 +25,77 @@
 
 namespace npu::tile_fwk {
 namespace {
+
+void InheritTokenFromOldAssemble(Function& function, const Operation& oldAssemble, Operation& newAssemble)
+{
+    if (oldAssemble.result_token_.empty()) {
+        return;
+    }
+    IRBuilder builder;
+    auto newToken = builder.CreateTokenVar(newAssemble.GetSpan());
+    newAssemble.result_token_.push_back(newToken);
+
+    auto& varDependency = function.GetVarDependency();
+    varDependency.AddProducer(newToken, std::static_pointer_cast<const ir::Stmt>(newAssemble.shared_from_this()));
+
+    auto oldConsumers = oldAssemble.ConsumerOpsByToken();
+    for (auto* consumer : oldConsumers) {
+        consumer->tokens_.push_back(newToken);
+        varDependency.AddConsumer(newToken, std::static_pointer_cast<const ir::Stmt>(consumer->shared_from_this()));
+    }
+}
+
+void RemoveObsoleteTokensAfterSplit(Function& function)
+{
+    auto& varDependency = function.GetVarDependency();
+    std::vector<ir::VarPtr> tokensToRemove;
+
+    for (auto& [token, entry] : varDependency.GetAllDependencies()) {
+        bool hasAssembleProducer = false;
+        bool hasAssembleConsumer = false;
+        Operation* producerAssemble = nullptr;
+        Operation* consumerAssemble = nullptr;
+
+        for (auto& stmt : entry.producers) {
+            auto* op = const_cast<Operation*>(static_cast<const Operation*>(stmt.get()));
+            if (op != nullptr && op->GetOpcode() == Opcode::OP_ASSEMBLE) {
+                hasAssembleProducer = true;
+                producerAssemble = op;
+            }
+        }
+        for (auto& stmt : entry.consumers) {
+            auto* op = const_cast<Operation*>(static_cast<const Operation*>(stmt.get()));
+            if (op != nullptr && op->GetOpcode() == Opcode::OP_ASSEMBLE) {
+                hasAssembleConsumer = true;
+                consumerAssemble = op;
+            }
+        }
+
+        if (hasAssembleProducer && hasAssembleConsumer && producerAssemble != nullptr && consumerAssemble != nullptr) {
+            auto producerOutput = producerAssemble->oOperand.empty() ? nullptr : producerAssemble->oOperand.front();
+            auto consumerOutput = consumerAssemble->oOperand.empty() ? nullptr : consumerAssemble->oOperand.front();
+            if (producerOutput != nullptr && consumerOutput != nullptr &&
+                producerOutput->tensor != consumerOutput->tensor) {
+                tokensToRemove.push_back(token);
+            }
+        }
+    }
+
+    for (const auto& token : tokensToRemove) {
+        const auto& entry = varDependency.GetAllDependencies().find(token);
+        if (entry == varDependency.GetAllDependencies().end()) {
+            continue;
+        }
+        for (auto& stmt : entry->second.consumers) {
+            auto* op = const_cast<Operation*>(static_cast<const Operation*>(stmt.get()));
+            if (op != nullptr) {
+                op->tokens_.erase(std::remove(op->tokens_.begin(), op->tokens_.end(), token), op->tokens_.end());
+            }
+        }
+        varDependency.RemoveVar(token);
+    }
+}
+
 std::string GetStr(const std::vector<int64_t>& vec)
 {
     std::string ret;
@@ -88,6 +159,7 @@ Status SplitReshape::RunOnFunction(Function& function)
         return FAILED;
     }
     EliminateOperation(function, false, false);
+    RemoveObsoleteTokensAfterSplit(function);
     function.SortOperations(SortOperationsMode::LIGHTWEIGHT);
     if (SetMemoryType(function) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "SetMemoryType failed!");
@@ -389,7 +461,8 @@ Status SplitReshape::CollectReshapeInfo(const Operation& op)
     return SUCCESS;
 }
 
-Status SplitReshape::CollectAssembleInfo(const Operation& op)
+Status SplitReshape::CollectAssembleInfo(const Operation& op,
+                                         const std::unordered_set<int64_t>& multiLogicalTensorRawMagics)
 {
     auto input = op.GetIOperands().front();
     auto output = op.GetOOperands().front();
@@ -402,7 +475,15 @@ Status SplitReshape::CollectAssembleInfo(const Operation& op)
             op.opmagic, GetFormatBacktrace(op).c_str());
         return FAILED;
     }
-    assembleOutToInput_[output->GetRawTensor()->GetRawMagic()].emplace_back(input);
+    const int outputRawMagic = output->GetRawTensor()->GetRawMagic();
+    if (multiLogicalTensorRawMagics.count(outputRawMagic) > 0) {
+        APASS_LOG_DEBUG_F(Elements::Tensor,
+                          "Assemble[%d] output rawMagic[%d] has multiple logicalTensors, "
+                          "skip for WAW-only token support.",
+                          op.GetOpMagic(), outputRawMagic);
+        return SUCCESS;
+    }
+    assembleOutToInput_[outputRawMagic].emplace_back(input);
     auto assembleOpAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(op.GetOpAttribute());
     if (assembleOpAttr == nullptr) {
         APASS_LOG_ERROR_F(Elements::Operation, "Invalid assemble op [%d], assemble op attribute is nullptr. %s",
@@ -431,11 +512,12 @@ void SplitReshape::DeduplicateCopySources()
 
 Status SplitReshape::CollectCopyOut(Function& function)
 {
+    const auto multiLogicalTensorRawMagics = GraphUtils::GetRawMagicsWithMultipleLogicalTensors(function);
     for (const auto& op : function.Operations(false)) {
         if (op.GetOpcode() == Opcode::OP_RESHAPE && CollectReshapeInfo(op) != SUCCESS) {
             return FAILED;
         }
-        if (IsAssembleLike(op.GetOpcode()) && CollectAssembleInfo(op) != SUCCESS) {
+        if (IsAssembleLike(op.GetOpcode()) && CollectAssembleInfo(op, multiLogicalTensorRawMagics) != SUCCESS) {
             return FAILED;
         }
     }
@@ -1459,6 +1541,9 @@ Status SplitReshape::AddOperation(Function& function)
             return FAILED;
         }
         auto& newCopyOut = GraphUtils::AddAssembleOperation(function, a, {dynValidShape});
+        if (a.originOp != nullptr && !a.originOp->result_token_.empty()) {
+            InheritTokenFromOldAssemble(function, *a.originOp, newCopyOut);
+        }
         APASS_LOG_INFO_F(Elements::Operation,
                          "ADD %s, magic %d, IOperand tensor magic %d OOperand tensor magic %d, dynValidShape %s.",
                          newCopyOut.GetOpcodeStr().c_str(), newCopyOut.opmagic, a.input->GetMagic(),

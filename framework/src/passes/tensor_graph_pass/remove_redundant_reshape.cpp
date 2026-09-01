@@ -18,6 +18,7 @@
 #include "passes/pass_check/remove_redundant_reshape_checker.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/merge_view_assemble_utils.h"
+#include "passes/pass_utils/pass_token_utils.h"
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_utils/view_reshape_assemble_reorder_utils.h"
 
@@ -103,11 +104,19 @@ Status RemoveRedundantReshape::RemoveReshape(Function& function) const
             }
             if (in->shape != out->shape && consumerOp->GetOpcode() != Opcode::OP_RESHAPE) {
                 allConsumersIsReshape = false;
+            }
+        }
+        bool removeReshape = allConsumersIsReshape && !function.IsFromOutCast(out);
+        if (removeReshape) {
+            PassTokenUtils::MoveTokenDependencyBeforeRemoveOp(function, op);
+        }
+        for (auto& consumerOp : consumers) {
+            if (in->shape != out->shape && consumerOp->GetOpcode() != Opcode::OP_RESHAPE) {
                 continue;
             }
             consumerOp->ReplaceInput(in, out);
         }
-        if (allConsumersIsReshape == true && !function.IsFromOutCast(out)) {
+        if (removeReshape) {
             APASS_LOG_DEBUG_F(Elements::Operation, "All consumers of op [%d] are reshape and the shapes are not -1.",
                               op.GetOpMagic());
             redundantResapes.insert(&op);

@@ -18,10 +18,13 @@
 #include <algorithm>
 #include <sstream>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 
 #include "interface/operation/operation.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
+#include "passes/pass_utils/graph_utils.h"
 #include "passes/pass_utils/pass_utils.h"
 
 #define MODULE_NAME "CommonOperationEliminateUtils"
@@ -30,10 +33,350 @@ namespace npu::tile_fwk {
 const std::unordered_set<Opcode>& CommonOperationEliminateUtils::GetSkipEliminateOpcodes()
 {
     // Opcodes in this set are excluded from common operation elimination on purpose:
-    //   - OP_VIEW: works with GraphPartition processing logic.
-    static const std::unordered_set<Opcode> skipOpcodes = {Opcode::OP_VIEW, Opcode::OP_SLICE};
+    //   - OP_VIEW: works with GraphPartition processing logic;
+    //   - OP_ASSEMBLE_SSA writes an explicit SSA destination and its version/token chain;
+    //   - OP_ATOMIC_RMW writes external state and is not an ordinary common
+    //     subexpression.
+    static const std::unordered_set<Opcode> skipOpcodes = {
+        Opcode::OP_VIEW,
+        Opcode::OP_SLICE,
+        Opcode::OP_ASSEMBLE_SSA,
+        Opcode::OP_ATOMIC_RMW,
+    };
     return skipOpcodes;
 }
+
+namespace {
+using TokenRewritePair = std::pair<pypto::ir::VarPtr, pypto::ir::VarPtr>;
+
+pypto::ir::VarPtr RewriteToken(const pypto::ir::VarPtr& token, const std::vector<TokenRewritePair>& tokenRewritePairs)
+{
+    for (const auto& tokenRewritePair : tokenRewritePairs) {
+        if (token == tokenRewritePair.first) {
+            return tokenRewritePair.second;
+        }
+    }
+    return token;
+}
+
+bool TokenExists(const std::vector<pypto::ir::VarPtr>& tokens, const pypto::ir::VarPtr& targetToken)
+{
+    return std::find(tokens.begin(), tokens.end(), targetToken) != tokens.end();
+}
+
+bool SymbolicScalarsEqual(const std::vector<SymbolicScalar>& lhs, const std::vector<SymbolicScalar>& rhs)
+{
+    if (lhs.size() != rhs.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < lhs.size(); ++i) {
+        if (lhs[i].Dump() != rhs[i].Dump()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool TensorRedirectCompatible(const LogicalTensorPtr& oldTensor, const LogicalTensorPtr& newTensor)
+{
+    return oldTensor != nullptr && newTensor != nullptr && oldTensor->tensor != nullptr &&
+           newTensor->tensor != nullptr && oldTensor->shape == newTensor->shape &&
+           oldTensor->offset == newTensor->offset &&
+           oldTensor->tensor->GetDataType() == newTensor->tensor->GetDataType() &&
+           SymbolicScalarsEqual(oldTensor->GetDynOffset(), newTensor->GetDynOffset()) &&
+           SymbolicScalarsEqual(oldTensor->GetDynValidShape(), newTensor->GetDynValidShape());
+}
+
+bool HasDuplicateProducerKey(const std::vector<std::string>& producerKeys)
+{
+    std::unordered_set<std::string> visitedKeys;
+    for (const auto& producerKey : producerKeys) {
+        if (!visitedKeys.emplace(producerKey).second) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void AddTokenIfAbsent(std::vector<pypto::ir::VarPtr>& tokens, const pypto::ir::VarPtr& token)
+{
+    if (token != nullptr && !TokenExists(tokens, token)) {
+        tokens.emplace_back(token);
+    }
+}
+
+pypto::ir::StmtPtr GetOperationStmtPtr(Operation& operation)
+{
+    return std::static_pointer_cast<const pypto::ir::Stmt>(operation.shared_from_this());
+}
+
+void UpdateOperationTokens(Function& function, Operation& operation, const std::vector<pypto::ir::VarPtr>& newTokens)
+{
+    auto oldTokens = operation.tokens_;
+    if (oldTokens == newTokens) {
+        return;
+    }
+    auto stmt = GetOperationStmtPtr(operation);
+    auto& varDependency = function.GetVarDependency();
+    auto removeIfUnused = [&varDependency](const pypto::ir::VarPtr& token) {
+        if (token != nullptr && varDependency.GetProducers(token).empty() &&
+            varDependency.GetConsumers(token).empty()) {
+            varDependency.RemoveVar(token);
+        }
+    };
+    for (const auto& oldToken : oldTokens) {
+        if (oldToken != nullptr && !TokenExists(newTokens, oldToken)) {
+            varDependency.RemoveConsumer(oldToken, stmt);
+            removeIfUnused(oldToken);
+        }
+    }
+    for (const auto& newToken : newTokens) {
+        if (newToken != nullptr && !TokenExists(oldTokens, newToken)) {
+            varDependency.AddConsumer(newToken, stmt);
+        }
+    }
+    operation.tokens_ = newTokens;
+}
+
+void DetachOperationTokens(Function& function, Operation& operation)
+{
+    auto stmt = GetOperationStmtPtr(operation);
+    auto& varDependency = function.GetVarDependency();
+    auto removeIfUnused = [&varDependency](const pypto::ir::VarPtr& token) {
+        if (token != nullptr && varDependency.GetProducers(token).empty() &&
+            varDependency.GetConsumers(token).empty()) {
+            varDependency.RemoveVar(token);
+        }
+    };
+    for (const auto& token : operation.tokens_) {
+        if (token != nullptr) {
+            varDependency.RemoveConsumer(token, stmt);
+            removeIfUnused(token);
+        }
+    }
+    for (const auto& token : operation.result_token_) {
+        if (token != nullptr) {
+            varDependency.RemoveProducer(token, stmt);
+            removeIfUnused(token);
+        }
+    }
+    operation.tokens_.clear();
+    operation.result_token_.clear();
+}
+
+bool HasControlDependencies(Function& function)
+{
+    for (const auto* operation : function.Operations(false).DuplicatedOpList()) {
+        if (operation != nullptr && (!operation->tokens_.empty() || !operation->result_token_.empty() ||
+                                     !operation->GetDependOperands().empty())) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool BuildResultTokenRewritePairs(const std::vector<Operation*>& oldProducers,
+                                  const std::vector<Operation*>& newProducers,
+                                  std::vector<TokenRewritePair>& tokenRewritePairs)
+{
+    if (oldProducers.size() != newProducers.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < oldProducers.size(); ++i) {
+        Operation* oldProducer = oldProducers[i];
+        Operation* newProducer = newProducers[i];
+        if (oldProducer == nullptr || newProducer == nullptr) {
+            return false;
+        }
+        const auto& oldTokens = oldProducer->result_token_;
+        const auto& newTokens = newProducer->result_token_;
+        if (oldTokens.size() != newTokens.size()) {
+            return false;
+        }
+        for (size_t j = 0; j < oldTokens.size(); ++j) {
+            const auto& oldToken = oldTokens[j];
+            const auto& newToken = newTokens[j];
+            if ((oldToken == nullptr) != (newToken == nullptr)) {
+                return false;
+            }
+            if (oldToken == nullptr) {
+                continue;
+            }
+            if (oldToken != newToken) {
+                for (const auto& existingPair : tokenRewritePairs) {
+                    if ((existingPair.first == oldToken && existingPair.second != newToken) ||
+                        (existingPair.second == newToken && existingPair.first != oldToken)) {
+                        return false;
+                    }
+                }
+                tokenRewritePairs.emplace_back(oldToken, newToken);
+            }
+        }
+    }
+    return true;
+}
+
+bool BuildMergedProducerTokenInputs(const std::vector<Operation*>& oldProducers,
+                                    const std::vector<Operation*>& newProducers,
+                                    const std::vector<TokenRewritePair>& tokenRewritePairs,
+                                    std::vector<std::vector<pypto::ir::VarPtr>>& mergedProducerTokens)
+{
+    if (oldProducers.size() != newProducers.size()) {
+        return false;
+    }
+    mergedProducerTokens.clear();
+    mergedProducerTokens.reserve(newProducers.size());
+    for (size_t i = 0; i < oldProducers.size(); ++i) {
+        Operation* oldProducer = oldProducers[i];
+        Operation* newProducer = newProducers[i];
+        if (oldProducer == nullptr || newProducer == nullptr) {
+            return false;
+        }
+        const auto& newResultTokens = newProducer->result_token_;
+        std::vector<pypto::ir::VarPtr> mergedTokens;
+        for (const auto& token : newProducer->tokens_) {
+            auto rewrittenToken = RewriteToken(token, tokenRewritePairs);
+            if (TokenExists(newResultTokens, rewrittenToken)) {
+                return false;
+            }
+            AddTokenIfAbsent(mergedTokens, rewrittenToken);
+        }
+        for (const auto& token : oldProducer->tokens_) {
+            auto rewrittenToken = RewriteToken(token, tokenRewritePairs);
+            if (TokenExists(newResultTokens, rewrittenToken)) {
+                return false;
+            }
+            AddTokenIfAbsent(mergedTokens, rewrittenToken);
+        }
+        mergedProducerTokens.emplace_back(std::move(mergedTokens));
+    }
+    return true;
+}
+
+bool BuildRewrittenTokenInputs(const Operation& operation, const std::vector<TokenRewritePair>& tokenRewritePairs,
+                               std::vector<pypto::ir::VarPtr>& rewrittenTokens)
+{
+    if (tokenRewritePairs.empty() || operation.tokens_.empty()) {
+        return false;
+    }
+    bool changed = false;
+    rewrittenTokens.clear();
+    for (const auto& token : operation.tokens_) {
+        auto rewrittenToken = RewriteToken(token, tokenRewritePairs);
+        if (rewrittenToken != token) {
+            changed = true;
+        }
+        AddTokenIfAbsent(rewrittenTokens, rewrittenToken);
+    }
+    return changed;
+}
+
+void UpdateMergedProducerTokens(Function& function, const std::vector<Operation*>& producers,
+                                const std::vector<std::vector<pypto::ir::VarPtr>>& mergedProducerTokens)
+{
+    for (size_t i = 0; i < producers.size(); ++i) {
+        UpdateOperationTokens(function, *producers[i], mergedProducerTokens[i]);
+    }
+}
+
+void RewriteFunctionTokenInputs(Function& function, const std::vector<TokenRewritePair>& tokenRewritePairs)
+{
+    for (auto op : function.Operations(true).DuplicatedOpList()) {
+        std::vector<pypto::ir::VarPtr> rewrittenTokens;
+        if (op != nullptr && BuildRewrittenTokenInputs(*op, tokenRewritePairs, rewrittenTokens)) {
+            UpdateOperationTokens(function, *op, rewrittenTokens);
+        }
+    }
+}
+
+bool LogicalTensorExists(const std::vector<LogicalTensorPtr>& tensors, const LogicalTensorPtr& target)
+{
+    return std::find(tensors.begin(), tensors.end(), target) != tensors.end();
+}
+
+LogicalTensorPtr RewriteTensor(const LogicalTensorPtr& tensor,
+                               const std::vector<std::pair<LogicalTensorPtr, LogicalTensorPtr>>& tensorRedirectPairs)
+{
+    for (const auto& [oldTensor, newTensor] : tensorRedirectPairs) {
+        if (tensor == oldTensor) {
+            return newTensor;
+        }
+    }
+    return tensor;
+}
+
+bool BuildMergedProducerDependOperands(
+    const std::vector<Operation*>& oldProducers, const std::vector<Operation*>& newProducers,
+    const std::vector<std::pair<LogicalTensorPtr, LogicalTensorPtr>>& tensorRedirectPairs,
+    std::vector<std::vector<LogicalTensorPtr>>& mergedDependOperands)
+{
+    if (oldProducers.size() != newProducers.size()) {
+        return false;
+    }
+    mergedDependOperands.clear();
+    mergedDependOperands.reserve(newProducers.size());
+    for (size_t i = 0; i < oldProducers.size(); ++i) {
+        if (oldProducers[i] == nullptr || newProducers[i] == nullptr) {
+            return false;
+        }
+        std::vector<LogicalTensorPtr> merged;
+        auto addDependOperand = [&](const LogicalTensorPtr& depend) {
+            if (depend == nullptr) {
+                return false;
+            }
+            auto rewrittenDepend = RewriteTensor(depend, tensorRedirectPairs);
+            if (rewrittenDepend == depend) {
+                for (const auto* producer : oldProducers) {
+                    if (producer == nullptr) {
+                        continue;
+                    }
+                    const auto& outputs = producer->GetOOperands();
+                    if (std::find(outputs.begin(), outputs.end(), depend) != outputs.end()) {
+                        return false;
+                    }
+                }
+            }
+            if (!LogicalTensorExists(merged, rewrittenDepend)) {
+                merged.emplace_back(rewrittenDepend);
+            }
+            return true;
+        };
+        for (const auto& depend : newProducers[i]->GetDependOperands()) {
+            if (!addDependOperand(depend)) {
+                return false;
+            }
+        }
+        for (const auto& depend : oldProducers[i]->GetDependOperands()) {
+            if (!addDependOperand(depend)) {
+                return false;
+            }
+        }
+        mergedDependOperands.emplace_back(std::move(merged));
+    }
+    return true;
+}
+
+void UpdateMergedProducerDependOperands(const std::vector<Operation*>& producers,
+                                        const std::vector<std::vector<LogicalTensorPtr>>& mergedDependOperands)
+{
+    for (size_t i = 0; i < producers.size(); ++i) {
+        auto& operation = *producers[i];
+        const auto oldDependOperands = operation.GetDependOperands();
+        for (const auto& depend : oldDependOperands) {
+            if (!LogicalTensorExists(mergedDependOperands[i], depend)) {
+                depend->RemoveDependOp(operation);
+            }
+        }
+        for (const auto& depend : mergedDependOperands[i]) {
+            if (!LogicalTensorExists(oldDependOperands, depend)) {
+                depend->AddDependOp(operation);
+            }
+        }
+        operation.GetDependOperands() = mergedDependOperands[i];
+    }
+}
+
+} // namespace
 
 void CommonOperationEliminateUtils::SortedProducer(std::vector<Operation*>& sortedProducers) const
 {
@@ -81,6 +424,12 @@ void CommonOperationEliminateUtils::CollectProducerInfo(const std::vector<Operat
             }
             ss << "[i";
             ss << "$" << iOperands->tensor->DumpSSA(false, false);
+            // Logical tensors sharing one raw tensor can represent different
+            // assemble versions. Keep those versions distinct for CSE.
+            const auto rawTensorIt = tensorsByRawMagic_.find(iOperands->GetRawMagic());
+            if (rawTensorIt != tensorsByRawMagic_.end() && rawTensorIt->second.size() > 1U) {
+                ss << " logicalMagic" << iOperands->GetMagic();
+            }
             ss << iOperands->DumpType();
             ss << "(";
             for (size_t i = 0; i < iOperands->offset.size(); ++i) {
@@ -143,28 +492,28 @@ Status CommonOperationEliminateUtils::Process(Function& function)
     std::unordered_map<LogicalTensorPtr, std::vector<Operation*>> tensorProducerMap;
     tensorProducerMap = GetTensorProducers(function, sequence);
     mixSubgraphIds_ = GetMixSubgraphIds(function);
+    function_ = &function;
+    tensorsByRawMagic_ = GraphUtils::GetTensorsGroupedByRawMagic(function);
+    processedRawMagicTensors_.clear();
+    hashCache_.clear();
     std::unordered_set<Operation*> cacheProducers;
     bool anyDeleted = false;
     for (auto& orderedTensor : sequence) {
-        auto& producerGroup = tensorProducerMap[orderedTensor];
-        if (producerGroup.empty() ||
-            !TensorProducersMerge(function, orderedTensor, cacheProducers, tensorProducerMap)) {
+        if (orderedTensor == nullptr || processedRawMagicTensors_.count(orderedTensor->GetRawMagic()) != 0) {
             continue;
         }
-        for (auto op : producerGroup) {
-            if (op == nullptr) {
-                continue;
-            }
-            if (!cacheProducers.count(op)) {
-                APASS_LOG_DEBUG_F(Elements::Operation, "Operation[%d] was set as deleted.", op->GetOpMagic());
-                op->SetAsDeleted();
-                anyDeleted = true;
-            }
+        auto& producerGroup = tensorProducerMap[orderedTensor];
+        std::vector<Operation*> oldBucketProducers;
+        if (producerGroup.empty() ||
+            !TensorProducersMerge(function, orderedTensor, cacheProducers, tensorProducerMap, oldBucketProducers)) {
+            continue;
         }
+        anyDeleted = true;
+        MarkRedundantProducersDeleted(function, oldBucketProducers, cacheProducers);
     }
     if (anyDeleted) {
         function.EraseOperations(true, false);
-        if (DeadOperationEliminator::EliminateDeadOperation(function) != SUCCESS) {
+        if (!HasControlDependencies(function) && DeadOperationEliminator::EliminateDeadOperation(function) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "Eliminate dead operation failed in CommonOperationEliminateUtils.");
             return FAILED;
         }
@@ -204,42 +553,115 @@ std::unordered_map<LogicalTensorPtr, std::vector<Operation*>> CommonOperationEli
     return tensorProducerMap;
 }
 
-std::pair<LogicalTensorPtr, std::vector<Operation*>> CommonOperationEliminateUtils::TensorHashExist(
-    const LogicalTensorPtr orderedTensor, std::unordered_set<Operation*>& cacheProducers,
-    const std::unordered_map<LogicalTensorPtr, std::vector<Operation*>>& tensorProducerMap)
+const TensorSet& CommonOperationEliminateUtils::GetSameRawMagicTensors(const LogicalTensorPtr& tensor) const
 {
-    const std::vector<Operation*>& producers = tensorProducerMap.find(orderedTensor)->second;
-    for (auto operation : producers) {
+    static const TensorSet empty;
+    if (tensor == nullptr || tensor->tensor == nullptr) {
+        return empty;
+    }
+    const auto iter = tensorsByRawMagic_.find(tensor->GetRawMagic());
+    return iter == tensorsByRawMagic_.end() ? empty : iter->second;
+}
+
+void CommonOperationEliminateUtils::MarkRedundantProducersDeleted(Function& function,
+                                                                  const std::vector<Operation*>& oldBucketProducers,
+                                                                  std::unordered_set<Operation*>& cacheProducers)
+{
+    for (auto* op : oldBucketProducers) {
+        if (op == nullptr) {
+            continue;
+        }
+        if (cacheProducers.count(op) == 0) {
+            DetachOperationTokens(function, *op);
+            op->SetAsDeleted();
+        }
+    }
+}
+
+std::vector<Operation*> CommonOperationEliminateUtils::CollectConsumersWithSameRawMagic(
+    Function& function, const LogicalTensorPtr& tensor) const
+{
+    std::vector<Operation*> result;
+    std::unordered_set<Operation*> seen;
+    for (const auto& sameRawTensor : GetSameRawMagicTensors(tensor)) {
+        if (sameRawTensor == nullptr) {
+            continue;
+        }
+        for (auto* consumer : sameRawTensor->GetConsumers()) {
+            if (consumer == nullptr || consumer->IsDeleted() || consumer->BelongTo() != &function) {
+                continue;
+            }
+            if (seen.insert(consumer).second) {
+                result.emplace_back(consumer);
+            }
+        }
+    }
+    return result;
+}
+
+bool CommonOperationEliminateUtils::ShouldSkipProducers(const std::vector<Operation*>& producers) const
+{
+    for (auto* operation : producers) {
         if (operation == nullptr) {
             continue;
         }
-        auto& inputsMemType = OpcodeManager::Inst().GetInputsMemType(operation->GetOpcode());
-        auto& outputsMemType = OpcodeManager::Inst().GetOutputsMemType(operation->GetOpcode());
-        OpCalcType opCalcType = OpcodeManager::Inst().GetOpCalcType(operation->GetOpcode());
-        bool inputCheck = inputsMemType.size() == 1 && inputsMemType[0] == MemoryType::MEM_L1;
-        bool calcTypeCheck = opCalcType == OpCalcType::MOVE_LOCAL || opCalcType == OpCalcType::MOVE_IN;
-        bool outputCheck = outputsMemType.size() == 1 && outputsMemType[0] != MemoryType::MEM_L1;
-        if (inputCheck && calcTypeCheck && outputCheck) { // copy from L1 to L0
-            return {nullptr, {}};
-        }
-        if (GetSkipEliminateOpcodes().count(operation->GetOpcode()) != 0) {
-            return {nullptr, {}};
-        }
-        if (operation->GetBoolAttribute(OpAttributeKey::dontTouch)) {
-            return {nullptr, {}};
+        const auto& inputsMemType = OpcodeManager::Inst().GetInputsMemType(operation->GetOpcode());
+        const auto& outputsMemType = OpcodeManager::Inst().GetOutputsMemType(operation->GetOpcode());
+        const auto opCalcType = OpcodeManager::Inst().GetOpCalcType(operation->GetOpcode());
+        const bool inputCheck = inputsMemType.size() == 1 && inputsMemType[0] == MemoryType::MEM_L1;
+        const bool calcTypeCheck = opCalcType == OpCalcType::MOVE_LOCAL || opCalcType == OpCalcType::MOVE_IN;
+        const bool outputCheck = outputsMemType.size() == 1 && outputsMemType[0] != MemoryType::MEM_L1;
+        if ((inputCheck && calcTypeCheck && outputCheck) ||
+            GetSkipEliminateOpcodes().count(operation->GetOpcode()) != 0 || IsCopyOut(operation->GetOpcode()) ||
+            operation->GetBoolAttribute(OpAttributeKey::dontTouch)) {
+            return true;
         }
     }
-    uint64_t groupHash = ComputeHash(producers, orderedTensor);
+    return false;
+}
+
+void CommonOperationEliminateUtils::AugmentProducersWithSiblings(const LogicalTensorPtr& orderedTensor,
+                                                                 std::vector<Operation*>& augmentedProducers)
+{
+    if (function_ == nullptr || orderedTensor == nullptr) {
+        return;
+    }
+    for (const auto& sameRawTensor : GetSameRawMagicTensors(orderedTensor)) {
+        if (sameRawTensor == nullptr) {
+            continue;
+        }
+        for (auto* producer : sameRawTensor->GetProducers()) {
+            if (producer != nullptr && !producer->IsDeleted() && producer->BelongTo() == function_ &&
+                std::find(augmentedProducers.begin(), augmentedProducers.end(), producer) == augmentedProducers.end()) {
+                augmentedProducers.emplace_back(producer);
+            }
+        }
+    }
+    processedRawMagicTensors_.insert(orderedTensor->GetRawMagic());
+}
+
+std::pair<LogicalTensorPtr, std::vector<Operation*>> CommonOperationEliminateUtils::TensorHashExist(
+    const LogicalTensorPtr orderedTensor, std::unordered_set<Operation*>& cacheProducers,
+    const std::unordered_map<LogicalTensorPtr, std::vector<Operation*>>& tensorProducerMap,
+    std::vector<Operation*>& currentBucketProducers)
+{
+    const auto producerIt = tensorProducerMap.find(orderedTensor);
+    if (producerIt == tensorProducerMap.end()) {
+        return {nullptr, {}};
+    }
+    currentBucketProducers = producerIt->second;
+    AugmentProducersWithSiblings(orderedTensor, currentBucketProducers);
+    if (ShouldSkipProducers(currentBucketProducers)) {
+        return {nullptr, {}};
+    }
+    const uint64_t groupHash = ComputeHash(currentBucketProducers, orderedTensor);
     if (hashCache_.count(groupHash) != 0) {
         APASS_LOG_DEBUG_F(Elements::Operation, "Tensor[%d] are marked as hash already existed tensor.",
                           orderedTensor->GetMagic());
         return hashCache_[groupHash];
     }
-    hashCache_.emplace(groupHash, std::make_pair(orderedTensor, producers));
-    if (orderedTensor == nullptr) {
-        return {nullptr, {}};
-    }
-    for (auto producer : orderedTensor->GetProducers()) {
+    hashCache_.emplace(groupHash, std::make_pair(orderedTensor, currentBucketProducers));
+    for (auto producer : currentBucketProducers) {
         if (producer != nullptr) {
             cacheProducers.insert(producer);
         }
@@ -272,7 +694,21 @@ void CommonOperationEliminateUtils::UpdateCopy(CopyOpAttribute* copyOpAttribute,
     }
 }
 
-void CommonOperationEliminateUtils::UpdateConnection(LogicalTensorPtr oldTensor, LogicalTensorPtr newTensor)
+bool CommonOperationEliminateUtils::ProducerPairingValid(LogicalTensorPtr oldTensor, LogicalTensorPtr newTensor,
+                                                         const std::vector<Operation*>& oldProducers,
+                                                         const std::vector<Operation*>& newProducers) const
+{
+    std::vector<std::string> oldProducerKeys;
+    std::vector<std::string> newProducerKeys;
+    std::stringstream oldProducerStream;
+    std::stringstream newProducerStream;
+    CollectProducerInfo(oldProducers, oldTensor, oldProducerKeys, oldProducerStream);
+    CollectProducerInfo(newProducers, newTensor, newProducerKeys, newProducerStream);
+    return oldProducerKeys == newProducerKeys && !HasDuplicateProducerKey(oldProducerKeys) &&
+           !HasDuplicateProducerKey(newProducerKeys);
+}
+
+void CommonOperationEliminateUtils::UpdateTensorConsumers(LogicalTensorPtr oldTensor, LogicalTensorPtr newTensor) const
 {
     auto consumers = oldTensor->GetConsumers();
     for (auto& cur : consumers) {
@@ -296,6 +732,49 @@ void CommonOperationEliminateUtils::UpdateConnection(LogicalTensorPtr oldTensor,
             }
         }
     }
+}
+
+bool CommonOperationEliminateUtils::UpdateConnection(Function& function, LogicalTensorPtr oldTensor,
+                                                     LogicalTensorPtr newTensor,
+                                                     const std::vector<Operation*>& oldProducers,
+                                                     const std::vector<Operation*>& newProducers)
+{
+    std::vector<Operation*> sortedOldProducers = oldProducers;
+    std::vector<Operation*> sortedNewProducers = newProducers;
+    SortedProducer(sortedOldProducers);
+    SortedProducer(sortedNewProducers);
+    if (!ProducerPairingValid(oldTensor, newTensor, sortedOldProducers, sortedNewProducers)) {
+        return false;
+    }
+
+    std::vector<TokenRewritePair> tokenRewritePairs;
+    if (!BuildResultTokenRewritePairs(sortedOldProducers, sortedNewProducers, tokenRewritePairs)) {
+        return false;
+    }
+    std::vector<std::vector<pypto::ir::VarPtr>> mergedProducerTokens;
+    if (!BuildMergedProducerTokenInputs(sortedOldProducers, sortedNewProducers, tokenRewritePairs,
+                                        mergedProducerTokens)) {
+        return false;
+    }
+
+    std::vector<std::pair<LogicalTensorPtr, LogicalTensorPtr>> tensorRedirectPairs;
+    if (!BuildOutputTensorRedirectPairs(function, oldTensor, newTensor, sortedOldProducers, sortedNewProducers,
+                                        tensorRedirectPairs)) {
+        return false;
+    }
+    std::vector<std::vector<LogicalTensorPtr>> mergedDependOperands;
+    if (!BuildMergedProducerDependOperands(sortedOldProducers, sortedNewProducers, tensorRedirectPairs,
+                                           mergedDependOperands)) {
+        return false;
+    }
+
+    for (const auto& [oldOutput, newOutput] : tensorRedirectPairs) {
+        UpdateTensorConsumers(oldOutput, newOutput);
+    }
+    UpdateMergedProducerDependOperands(sortedNewProducers, mergedDependOperands);
+    UpdateMergedProducerTokens(function, sortedNewProducers, mergedProducerTokens);
+    RewriteFunctionTokenInputs(function, tokenRewritePairs);
+    return true;
 }
 
 uint32_t CommonOperationEliminateUtils::GetTensorCoreFlag(const LogicalTensorPtr& tensor) const
@@ -436,6 +915,15 @@ bool CommonOperationEliminateUtils::HasSameMemoryAssembleUse(const LogicalTensor
 
 bool CommonOperationEliminateUtils::ShouldSkipSameMemoryAssembleMerge(const LogicalTensorPtr& oldTensor) const
 {
+    if (function_ != nullptr && oldTensor != nullptr) {
+        // MR 4503 represents multiple writes to one RawTensor with distinct
+        // LogicalTensors.  Such a bucket must go through the multi-assemble
+        // merge path even when the assemble memory types are equal.
+        const auto& sameRawTensors = GetSameRawMagicTensors(oldTensor);
+        if (sameRawTensors.size() > 1) {
+            return false;
+        }
+    }
     std::unordered_set<int> visitedTensorMagics;
     if (HasSameMemoryAssembleUse(oldTensor, visitedTensorMagics)) {
         APASS_LOG_DEBUG_F(Elements::Operation,
@@ -444,6 +932,70 @@ bool CommonOperationEliminateUtils::ShouldSkipSameMemoryAssembleMerge(const Logi
         return true;
     }
     return false;
+}
+
+bool CommonOperationEliminateUtils::BuildOutputTensorRedirectPairs(
+    Function& function, const LogicalTensorPtr& oldTensor, const LogicalTensorPtr& newTensor,
+    const std::vector<Operation*>& sortedOldProducers, const std::vector<Operation*>& sortedNewProducers,
+    std::vector<std::pair<LogicalTensorPtr, LogicalTensorPtr>>& tensorRedirectPairs) const
+{
+    if (oldTensor == nullptr || newTensor == nullptr || oldTensor->tensor == nullptr || newTensor->tensor == nullptr ||
+        sortedOldProducers.size() != sortedNewProducers.size()) {
+        return false;
+    }
+    tensorRedirectPairs.clear();
+    std::unordered_map<int, LogicalTensorPtr> oldToNew;
+    std::unordered_map<int, LogicalTensorPtr> newToOld;
+    for (size_t i = 0; i < sortedOldProducers.size(); ++i) {
+        const auto* oldProducer = sortedOldProducers[i];
+        const auto* newProducer = sortedNewProducers[i];
+        if (oldProducer == nullptr || newProducer == nullptr ||
+            oldProducer->GetOOperands().size() != newProducer->GetOOperands().size()) {
+            return false;
+        }
+        for (size_t j = 0; j < oldProducer->GetOOperands().size(); ++j) {
+            const auto& oldOutput = oldProducer->GetOOperands()[j];
+            const auto& newOutput = newProducer->GetOOperands()[j];
+            if (oldOutput == nullptr || newOutput == nullptr || oldOutput->tensor == nullptr ||
+                newOutput->tensor == nullptr) {
+                return false;
+            }
+            if (function.IsFromOutCast(oldOutput) || !oldOutput->GetDependOps().empty() ||
+                !TensorRedirectCompatible(oldOutput, newOutput)) {
+                return false;
+            }
+            const auto oldIt = oldToNew.find(oldOutput->GetMagic());
+            if (oldIt != oldToNew.end()) {
+                if (oldIt->second != newOutput) {
+                    return false;
+                }
+                continue;
+            }
+            const auto newIt = newToOld.find(newOutput->GetMagic());
+            if (newIt != newToOld.end() && newIt->second != oldOutput) {
+                return false;
+            }
+            oldToNew.emplace(oldOutput->GetMagic(), newOutput);
+            newToOld.emplace(newOutput->GetMagic(), oldOutput);
+            tensorRedirectPairs.emplace_back(oldOutput, newOutput);
+        }
+    }
+
+    for (const auto& oldSibling : GetSameRawMagicTensors(oldTensor)) {
+        if (oldSibling == nullptr) {
+            continue;
+        }
+        if (!oldSibling->GetDependOps().empty()) {
+            return false;
+        }
+        if (oldSibling->GetConsumers().empty()) {
+            continue;
+        }
+        if (oldToNew.count(oldSibling->GetMagic()) == 0) {
+            return false;
+        }
+    }
+    return !tensorRedirectPairs.empty();
 }
 
 bool CommonOperationEliminateUtils::WouldExposeMixInternalTensorAfterMerge(
@@ -493,13 +1045,15 @@ bool CommonOperationEliminateUtils::WouldExposeMixInternalTensorAfterMerge(
 
 bool CommonOperationEliminateUtils::TensorProducersMerge(
     Function& function, const LogicalTensorPtr orderedTensor, std::unordered_set<Operation*>& cacheProducers,
-    const std::unordered_map<LogicalTensorPtr, std::vector<Operation*>>& tensorProducerMap)
+    const std::unordered_map<LogicalTensorPtr, std::vector<Operation*>>& tensorProducerMap,
+    std::vector<Operation*>& oldBucketProducers)
 {
     auto& producers = tensorProducerMap.at(orderedTensor);
     if (producers.empty()) {
         return false;
     }
-    auto existOp = TensorHashExist(orderedTensor, cacheProducers, tensorProducerMap);
+    oldBucketProducers.clear();
+    auto existOp = TensorHashExist(orderedTensor, cacheProducers, tensorProducerMap, oldBucketProducers);
     if (existOp.first == nullptr || orderedTensor == nullptr || existOp.second.empty()) {
         return false;
     }
@@ -511,19 +1065,27 @@ bool CommonOperationEliminateUtils::TensorProducersMerge(
     }
     LogicalTensorPtr oldTensor = orderedTensor;
     LogicalTensorPtr newTensor = existOp.first;
-    if (FunctionUtils::GetNodeType(*oldTensor, function) == NodeType::OUTCAST) {
-        return false;
+    for (const auto& sameRawTensor : GetSameRawMagicTensors(oldTensor)) {
+        if (sameRawTensor != nullptr && function.IsFromOutCast(sameRawTensor)) {
+            return false;
+        }
     }
-    if (producers.size() == existOp.second.size()) {
+    if (oldBucketProducers.size() == existOp.second.size()) {
         bool allSame = true;
-        for (size_t i = 0; i < existOp.second.size() && allSame; i++) {
-            allSame = (producers[i] == existOp.second[i]);
+        std::vector<Operation*> sortedOldProducers = oldBucketProducers;
+        std::vector<Operation*> sortedNewProducers = existOp.second;
+        SortedProducer(sortedOldProducers);
+        SortedProducer(sortedNewProducers);
+        for (size_t i = 0; i < sortedNewProducers.size() && allSame; i++) {
+            allSame = (sortedOldProducers[i] == sortedNewProducers[i]);
         }
         if (allSame) {
             return false;
         }
     }
-    if (newTensor->GetConsumers().size() == 0 || oldTensor->GetConsumers().size() == 0) {
+    const auto oldConsumers = CollectConsumersWithSameRawMagic(function, oldTensor);
+    const auto newConsumers = CollectConsumersWithSameRawMagic(function, newTensor);
+    if (newConsumers.empty() || oldConsumers.empty()) {
         return false;
     }
     if (ShouldSkipSameMemoryAssembleMerge(oldTensor)) {
@@ -536,8 +1098,9 @@ bool CommonOperationEliminateUtils::TensorProducersMerge(
             oldTensor->GetMagic(), newTensor->GetMagic());
         return false;
     }
-    UpdateConnection(oldTensor, newTensor);
-    oldTensor->GetConsumers().clear();
+    if (!UpdateConnection(function, oldTensor, newTensor, oldBucketProducers, existOp.second)) {
+        return false;
+    }
     APASS_LOG_DEBUG_F(Elements::Operation,
                       "In CommonOperationEliminateUtils, Tensor[%d] and producersgroup are marked as redundant.",
                       oldTensor->GetMagic());

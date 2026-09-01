@@ -15,6 +15,7 @@
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
+#include <algorithm>
 #include <fstream>
 #include <vector>
 #include <string>
@@ -51,6 +52,22 @@ public:
 };
 
 namespace {
+ir::StmtPtr ToStmtPtr(Operation& op) { return std::static_pointer_cast<const ir::Stmt>(op.shared_from_this()); }
+
+ir::VarPtr AddTokenEdge(Function& function, Operation& producer, Operation& consumer)
+{
+    if (producer.result_token_.empty()) {
+        producer.result_token_ = {IRBuilder().CreateTokenVar(producer.GetSpan())};
+    }
+    auto token = producer.result_token_.front();
+    function.GetVarDependency().AddProducer(token, ToStmtPtr(producer));
+    function.GetVarDependency().AddConsumer(token, ToStmtPtr(consumer));
+    if (std::find(consumer.tokens_.begin(), consumer.tokens_.end(), token) == consumer.tokens_.end()) {
+        consumer.tokens_.emplace_back(token);
+    }
+    return token;
+}
+
 struct BranchReshapeTensors {
     std::shared_ptr<LogicalTensor> incast;
     std::shared_ptr<LogicalTensor> copyInTensor1;
@@ -1435,4 +1452,135 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeBeforeMultCopyOutOnUB)
 
     RemoveUnalignedReshape removeUnalignedReshapeOpTest;
     EXPECT_EQ(removeUnalignedReshapeOpTest.RunOnFunction(*currFunctionPtr), SUCCESS);
+}
+
+TEST_F(TestRemoveUnalignedReshapeOp, TestMultiCopyOutProducerPreserveToken)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestMultiCopyOutProducerPreserveToken",
+                                                      "TestMultiCopyOutProducerPreserveToken", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> inShape = {2, 4};
+    std::vector<int64_t> reshapeShape = {4, 2};
+    IRBuilder builder;
+    auto incast = builder.CreateTensorVar(*currFunctionPtr, DT_FP32, inShape, CreateTestConstIntVector(inShape));
+    incast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    auto ubTensor1 = builder.CreateTensorVar(*currFunctionPtr, DT_FP32, inShape, CreateTestConstIntVector(inShape));
+    ubTensor1->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    auto ubTensor2 = builder.CreateTensorVar(*currFunctionPtr, DT_FP32, inShape, CreateTestConstIntVector(inShape));
+    ubTensor2->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    auto reshapeInput = builder.CreateTensorVar(
+        *currFunctionPtr, DT_FP32, inShape,
+        {CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")});
+    reshapeInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    auto reshapeOutput = builder.CreateTensorVar(
+        *currFunctionPtr, DT_FP32, reshapeShape,
+        {CreateTestScalarVar("Input_1_Dim_0"), CreateTestScalarVar("Input_1_Dim_1")});
+    reshapeOutput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    auto ubOutput = builder.CreateTensorVar(*currFunctionPtr, DT_FP32, reshapeShape,
+                                            CreateTestConstIntVector(reshapeShape));
+    ubOutput->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    auto outcast = builder.CreateTensorVar(*currFunctionPtr, DT_FP32, reshapeShape,
+                                           CreateTestConstIntVector(reshapeShape));
+    outcast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {ubTensor1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {ubTensor2});
+    auto& firstCopyOut = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {ubTensor1},
+                                                          {reshapeInput});
+    auto& secondCopyOut = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {ubTensor2},
+                                                           {reshapeInput});
+    auto token = AddTokenEdge(*currFunctionPtr, firstCopyOut, secondCopyOut);
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {reshapeInput}, {reshapeOutput});
+    auto& copyIn = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshapeOutput}, {ubOutput});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {ubOutput}, {outcast});
+
+    currFunctionPtr->inCasts_.push_back(incast);
+    currFunctionPtr->outCasts_.push_back(outcast);
+
+    RemoveUnalignedReshape removeUnalignedReshapeOpTest;
+    int curSize = currFunctionPtr->Operations().size();
+    EXPECT_EQ(removeUnalignedReshapeOpTest.RunOnFunction(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(currFunctionPtr->Operations().size(), curSize);
+    EXPECT_EQ(firstCopyOut.GetOpcode(), Opcode::OP_RESHAPE_COPY_OUT);
+    EXPECT_EQ(secondCopyOut.GetOpcode(), Opcode::OP_RESHAPE_COPY_OUT);
+    EXPECT_EQ(copyIn.GetOpcode(), Opcode::OP_RESHAPE_COPY_IN);
+    EXPECT_EQ(firstCopyOut.result_token_.front(), token);
+    EXPECT_NE(std::find(secondCopyOut.tokens_.begin(), secondCopyOut.tokens_.end(), token),
+              secondCopyOut.tokens_.end());
+    EXPECT_TRUE(currFunctionPtr->GetVarDependency().HasProducer(token, ToStmtPtr(firstCopyOut)));
+    EXPECT_TRUE(currFunctionPtr->GetVarDependency().HasConsumer(token, ToStmtPtr(secondCopyOut)));
+}
+
+TEST_F(TestRemoveUnalignedReshapeOp, TestRawIdClosureAcrossTensorVersionsPreserveToken)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(),
+                                                      "TestRawIdClosureAcrossTensorVersionsPreserveToken",
+                                                      "TestRawIdClosureAcrossTensorVersionsPreserveToken", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> inShape = {8, 8};
+    std::vector<int64_t> reshapeShape = {4, 16};
+    IRBuilder builder;
+    auto incast = builder.CreateTensorVar(*currFunctionPtr, DT_FP32, inShape, CreateTestConstIntVector(inShape));
+    incast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    auto oldUb = builder.CreateTensorVar(*currFunctionPtr, DT_FP32, inShape, CreateTestConstIntVector(inShape));
+    oldUb->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    auto currentUb = builder.CreateTensorVar(*currFunctionPtr, DT_FP32, inShape, CreateTestConstIntVector(inShape));
+    currentUb->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    auto oldVersion = builder.CreateTensorVar(
+        *currFunctionPtr, DT_FP32, inShape,
+        {CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")});
+    oldVersion->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    auto currentVersion = builder.CreateTensorVar(
+        *currFunctionPtr, oldVersion->GetRawTensor(), {0, 0}, inShape,
+        {CreateTestScalarVar("Input_2_Dim_0"), CreateTestScalarVar("Input_2_Dim_1")});
+    currentVersion->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    auto oldCopyInOutput = builder.CreateTensorVar(*currFunctionPtr, DT_FP32, inShape,
+                                                   CreateTestConstIntVector(inShape));
+    oldCopyInOutput->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    auto reshapeOutput = builder.CreateTensorVar(
+        *currFunctionPtr, DT_FP32, reshapeShape,
+        {CreateTestScalarVar("Input_1_Dim_0"), CreateTestScalarVar("Input_1_Dim_1")});
+    reshapeOutput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    auto reshapeCopyInOutput = builder.CreateTensorVar(*currFunctionPtr, DT_FP32, reshapeShape,
+                                                       CreateTestConstIntVector(reshapeShape));
+    reshapeCopyInOutput->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    auto outcast = builder.CreateTensorVar(*currFunctionPtr, DT_FP32, reshapeShape,
+                                           CreateTestConstIntVector(reshapeShape));
+    outcast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    auto oldOutcast = builder.CreateTensorVar(*currFunctionPtr, DT_FP32, inShape, CreateTestConstIntVector(inShape));
+    oldOutcast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {oldUb});
+    auto& oldCopyOut = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {oldUb}, {oldVersion});
+    auto& oldCopyIn = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {oldVersion},
+                                                       {oldCopyInOutput});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {oldCopyInOutput}, {oldOutcast});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {currentUb});
+    auto& currentCopyOut = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {currentUb},
+                                                            {currentVersion});
+    auto token = AddTokenEdge(*currFunctionPtr, oldCopyOut, currentCopyOut);
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {currentVersion}, {reshapeOutput});
+    auto& reshapeCopyIn = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshapeOutput},
+                                                           {reshapeCopyInOutput});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {reshapeCopyInOutput}, {outcast});
+
+    currFunctionPtr->inCasts_.push_back(incast);
+    currFunctionPtr->outCasts_.push_back(outcast);
+    currFunctionPtr->outCasts_.push_back(oldOutcast);
+
+    RemoveUnalignedReshape removeUnalignedReshapeOpTest;
+    int curSize = currFunctionPtr->Operations().size();
+    EXPECT_EQ(removeUnalignedReshapeOpTest.RunOnFunction(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(currFunctionPtr->Operations().size(), curSize);
+    EXPECT_EQ(oldCopyOut.GetOpcode(), Opcode::OP_RESHAPE_COPY_OUT);
+    EXPECT_EQ(currentCopyOut.GetOpcode(), Opcode::OP_RESHAPE_COPY_OUT);
+    EXPECT_EQ(oldCopyIn.GetOpcode(), Opcode::OP_RESHAPE_COPY_IN);
+    EXPECT_EQ(reshapeCopyIn.GetOpcode(), Opcode::OP_RESHAPE_COPY_IN);
+    EXPECT_EQ(oldCopyOut.result_token_.front(), token);
+    EXPECT_NE(std::find(currentCopyOut.tokens_.begin(), currentCopyOut.tokens_.end(), token),
+              currentCopyOut.tokens_.end());
+    EXPECT_TRUE(currFunctionPtr->GetVarDependency().HasProducer(token, ToStmtPtr(oldCopyOut)));
+    EXPECT_TRUE(currFunctionPtr->GetVarDependency().HasConsumer(token, ToStmtPtr(currentCopyOut)));
 }

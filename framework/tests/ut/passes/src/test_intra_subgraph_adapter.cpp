@@ -77,6 +77,145 @@ TEST_F(IntraSubgraphAdapterTest, TestBoundaryConvert)
     EXPECT_NE(copyOpAttr, nullptr);
 }
 
+TEST_F(IntraSubgraphAdapterTest, FinalizesTokenAwarePartitionBeforeMaterializingBoundaries)
+{
+    ComputationalGraphBuilder graph;
+    ASSERT_TRUE(graph.AddTensors(DataType::DT_FP32, {16, 16}, {"input", "producer_out", "middle_out", "output"}));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_ABS, {"input"}, {"producer_out"}, "producer"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_EXP, {"producer_out"}, {"middle_out"}, "middle"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_NEG, {"middle_out"}, {"output"}, "consumer"));
+    for (const auto& tensorName : {"input", "producer_out", "middle_out", "output"}) {
+        graph.GetTensor(tensorName)->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    }
+
+    auto* producer = graph.GetOp("producer");
+    auto* middle = graph.GetOp("middle");
+    auto* consumer = graph.GetOp("consumer");
+    producer->UpdateSubgraphID(0);
+    middle->UpdateSubgraphID(1);
+    consumer->UpdateSubgraphID(0);
+    graph.GetFunction()->SetTotalSubGraphCount(2);
+    auto token = IRBuilder().CreateTokenVar(ir::Span::Unknown());
+    auto producerStmt = std::static_pointer_cast<const ir::Stmt>(producer->shared_from_this());
+    auto consumerStmt = std::static_pointer_cast<const ir::Stmt>(consumer->shared_from_this());
+    producer->result_token_ = {token};
+    consumer->tokens_.push_back(token);
+    graph.GetFunction()->GetVarDependency().AddProducer(token, producerStmt);
+    graph.GetFunction()->GetVarDependency().AddConsumer(token, consumerStmt);
+
+    IntraSubgraphAdapter adapter;
+    ASSERT_EQ(adapter.RunOnFunction(*graph.GetFunction()), SUCCESS);
+
+    EXPECT_EQ(producer->GetSubgraphID(), middle->GetSubgraphID());
+    EXPECT_EQ(middle->GetSubgraphID(), consumer->GetSubgraphID());
+    EXPECT_EQ(graph.GetFunction()->GetTotalSubGraphCount(), 1U);
+}
+
+TEST_F(IntraSubgraphAdapterTest, AdaptsBoundaryCreatedByDynamicPostLoweringSplit)
+{
+    ComputationalGraphBuilder graph;
+    const std::vector<MemoryType> memoryTypes{MemoryType::MEM_L0A, MemoryType::MEM_L0B, MemoryType::MEM_L0C,
+                                              MemoryType::MEM_UB, MemoryType::MEM_UB};
+    const std::vector<std::string> tensorNames{"a", "b", "l0cInput", "ubMiddle", "output"};
+    ASSERT_TRUE(graph.AddTensors(DataType::DT_FP32, {16, 16}, memoryTypes, tensorNames, 0));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_A_MUL_B, {"a", "b"}, {"l0cInput"}, "cube"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_ASSEMBLE_SSA, {"l0cInput"}, {"ubMiddle"}, "copy"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_EXP, {"ubMiddle"}, {"output"}, "vector"));
+
+    auto* cube = graph.GetOp("cube");
+    auto* copy = graph.GetOp("copy");
+    auto* vector = graph.GetOp("vector");
+    ASSERT_NE(cube, nullptr);
+    ASSERT_NE(copy, nullptr);
+    ASSERT_NE(vector, nullptr);
+    for (auto* op : {cube, copy, vector}) {
+        op->UpdateSubgraphID(0);
+        op->SetAttribute(OpAttributeKey::isCube, true);
+    }
+    auto* function = graph.GetFunction();
+    ASSERT_NE(function, nullptr);
+    function->SetTotalSubGraphCount(1);
+    function->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_2201);
+
+    IntraSubgraphAdapter adapter;
+    ASSERT_EQ(adapter.RunOnFunction(*function), SUCCESS);
+
+    EXPECT_EQ(cube->GetSubgraphID(), copy->GetSubgraphID());
+    EXPECT_NE(copy->GetSubgraphID(), vector->GetSubgraphID());
+    EXPECT_EQ(graph.GetTensor("ubMiddle")->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+}
+
+TEST_F(IntraSubgraphAdapterTest, LiteNpuKeepsDynamicMixedCoreSubgraphTogether)
+{
+    ComputationalGraphBuilder graph;
+    const std::vector<MemoryType> memoryTypes{MemoryType::MEM_L0A, MemoryType::MEM_L0B, MemoryType::MEM_L0C,
+                                              MemoryType::MEM_UB, MemoryType::MEM_UB};
+    const std::vector<std::string> tensorNames{"a", "b", "l0cInput", "ubMiddle", "output"};
+    ASSERT_TRUE(graph.AddTensors(DataType::DT_FP32, {16, 16}, memoryTypes, tensorNames, 0));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_A_MUL_B, {"a", "b"}, {"l0cInput"}, "cube"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_ASSEMBLE_SSA, {"l0cInput"}, {"ubMiddle"}, "copy"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_EXP, {"ubMiddle"}, {"output"}, "vector"));
+
+    auto* cube = graph.GetOp("cube");
+    auto* copy = graph.GetOp("copy");
+    auto* vector = graph.GetOp("vector");
+    ASSERT_NE(cube, nullptr);
+    ASSERT_NE(copy, nullptr);
+    ASSERT_NE(vector, nullptr);
+    for (auto* op : {cube, copy, vector}) {
+        op->UpdateSubgraphID(0);
+        op->SetAttribute(OpAttributeKey::isCube, true);
+    }
+    auto* function = graph.GetFunction();
+    ASSERT_NE(function, nullptr);
+    function->SetTotalSubGraphCount(1);
+    function->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3113);
+
+    IntraSubgraphAdapter adapter;
+    ASSERT_EQ(adapter.RunOnFunction(*function), SUCCESS);
+
+    EXPECT_EQ(cube->GetSubgraphID(), copy->GetSubgraphID());
+    EXPECT_EQ(copy->GetSubgraphID(), vector->GetSubgraphID());
+    EXPECT_EQ(graph.GetTensor("ubMiddle")->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+}
+
+TEST_F(IntraSubgraphAdapterTest, A5KeepsDynamicMixedCoreSubgraphTogether)
+{
+    ComputationalGraphBuilder graph;
+    const std::vector<MemoryType> memoryTypes{MemoryType::MEM_L0A, MemoryType::MEM_L0B, MemoryType::MEM_L0C,
+                                              MemoryType::MEM_UB, MemoryType::MEM_UB};
+    const std::vector<std::string> tensorNames{"a", "b", "l0cInput", "ubMiddle", "output"};
+    ASSERT_TRUE(graph.AddTensors(DataType::DT_FP32, {16, 16}, memoryTypes, tensorNames, 0));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_A_MUL_B, {"a", "b"}, {"l0cInput"}, "cube"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_ASSEMBLE_SSA, {"l0cInput"}, {"ubMiddle"}, "copy"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_EXP, {"ubMiddle"}, {"output"}, "vector"));
+
+    auto* cube = graph.GetOp("cube");
+    auto* copy = graph.GetOp("copy");
+    auto* vector = graph.GetOp("vector");
+    ASSERT_NE(cube, nullptr);
+    ASSERT_NE(copy, nullptr);
+    ASSERT_NE(vector, nullptr);
+    for (auto* op : {cube, copy, vector}) {
+        op->UpdateSubgraphID(0);
+        op->SetAttribute(OpAttributeKey::isCube, true);
+    }
+    auto* function = graph.GetFunction();
+    ASSERT_NE(function, nullptr);
+    function->SetTotalSubGraphCount(1);
+    function->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+
+    IntraSubgraphAdapter adapter;
+    ASSERT_EQ(adapter.RunOnFunction(*function), SUCCESS);
+
+    EXPECT_EQ(cube->GetSubgraphID(), copy->GetSubgraphID());
+    EXPECT_EQ(copy->GetSubgraphID(), vector->GetSubgraphID());
+    EXPECT_EQ(graph.GetTensor("ubMiddle")->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+}
+
 TEST_F(IntraSubgraphAdapterTest, TestBoundaryConvertFailed)
 {
     ComputationalGraphBuilder subGraph;
@@ -417,6 +556,71 @@ TEST_F(IntraSubgraphAdapterTest, BoundaryAssembleShouldKeepAssembleWhenDisableSl
     EXPECT_EQ(assembleOp->GetOpcode(), Opcode::OP_ASSEMBLE);
     EXPECT_EQ(assembleOp->GetOOperands().front(), subGraph.GetTensor("t2"));
     EXPECT_EQ(subGraph.GetTensor("t2")->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+}
+
+TEST_F(IntraSubgraphAdapterTest, SiblingDdrRoutingAdaptsProducerAndConsumerWhenEnableSlice)
+{
+    config::SetPassOption(ENABLE_SLICE, true);
+    ComputationalGraphBuilder subGraph;
+    std::vector<std::string> tensorNames{"input_t", "boundary_t", "boundary_out", "sibling_source", "sibling_out"};
+    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB,
+                                           MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB};
+    EXPECT_TRUE(subGraph.AddTensors(DataType::DT_FP32, {32, 32}, tensorMemTypes, tensorNames, 0));
+
+    // Build a sibling LogicalTensor that shares boundary_t's RawTensor but is not itself a boundary.
+    auto boundary = subGraph.GetTensor("boundary_t");
+    ASSERT_NE(boundary, nullptr);
+    auto sibling = IRBuilder().CreateTensorVar(boundary->GetRawTensor(), boundary->GetOffset(), boundary->GetShape(),
+                                               boundary->GetDynValidShape());
+    sibling->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    sibling->memoryrange.memId = sibling->GetMagic();
+    subGraph.GetFunction()->GetTensorMap().Insert(sibling, false);
+    subGraph.tensors_["sibling_t"] = sibling;
+
+    // boundary_t crosses subgraphs (producer in sg0, consumer in sg1) so RunOnFunction routes its
+    // raw-magic version group to DDR. sibling_t shares that raw magic; its producer and consumer
+    // both need adapters to preserve their original local-memory edge semantics.
+    EXPECT_TRUE(subGraph.AddOp(Opcode::OP_ADDS, {"input_t"}, {"boundary_t"}, "producer"));
+    EXPECT_TRUE(subGraph.AddOp(Opcode::OP_EXP, {"boundary_t"}, {"boundary_out"}, "boundary_consumer"));
+    EXPECT_TRUE(subGraph.AddOp(Opcode::OP_SLICE, {"sibling_source"}, {"sibling_t"}, "sibling_producer"));
+    EXPECT_TRUE(subGraph.AddOp(Opcode::OP_NEG, {"sibling_t"}, {"sibling_out"}, "sibling_consumer"));
+    subGraph.GetOp("producer")->UpdateSubgraphID(0);
+    subGraph.GetOp("boundary_consumer")->UpdateSubgraphID(1);
+    auto siblingProducer = subGraph.GetOp("sibling_producer");
+    siblingProducer->UpdateSubgraphID(0);
+    siblingProducer->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_UB));
+    subGraph.GetOp("sibling_consumer")->UpdateSubgraphID(0);
+
+    Function* function = subGraph.GetFunction();
+    ASSERT_NE(function, nullptr);
+    function->SetTotalSubGraphCount(2);
+
+    IntraSubgraphAdapter adapter;
+    EXPECT_EQ(adapter.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(adapter.PostCheck(*function), SUCCESS);
+
+    // The sibling version must be routed to DDR alongside the boundary version.
+    EXPECT_EQ(sibling->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+
+    // The original producer must continue writing a local tensor, followed by the configured
+    // assemble-family adapter that writes the shared RawTensor in DDR.
+    auto producerOutput = siblingProducer->GetOOperands().front();
+    EXPECT_NE(producerOutput, sibling);
+    ASSERT_EQ(sibling->GetProducers().size(), 1U);
+    auto producerAdapter = *sibling->GetProducers().begin();
+    EXPECT_EQ(producerAdapter->GetOpcode(), Opcode::OP_CONTRACT);
+    EXPECT_EQ(producerAdapter->GetIOperands().front(), producerOutput);
+
+    // The inserted DDR-to-local adapter feeding sibling_consumer must use the configured
+    // view-family opcode (OP_SLICE when enable_slice is true), not OP_VIEW.
+    auto siblingConsumer = subGraph.GetOp("sibling_consumer");
+    ASSERT_NE(siblingConsumer, nullptr);
+    auto consumerInput = siblingConsumer->GetIOperands().front();
+    EXPECT_NE(consumerInput, sibling);
+    ASSERT_EQ(consumerInput->GetProducers().size(), 1U);
+    auto adapterOp = *consumerInput->GetProducers().begin();
+    EXPECT_EQ(adapterOp->GetOpcode(), Opcode::OP_SLICE);
+    EXPECT_EQ(adapterOp->GetIOperands().front(), sibling);
 }
 
 TEST_F(IntraSubgraphAdapterTest, TestL1BoundaryNoDirectPathToDDR)

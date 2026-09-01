@@ -206,3 +206,99 @@ TEST_F(TestAxisCombine, TestDD)
 
     auto funcMap = Program::GetInstance().GetFunctionMap();
 }
+
+/*
+ * Graph: gm1[8,16] -> ci1[8,1] -> assemble1 -> t2[8,1]
+ *        gm2[8,1]  -> ci2[8,1] -> assemble2 -> t4[8,1]
+ * t2 and t4 share one RawTensor. The first copy-in disables axis combine,
+ * while the second one enables it. The shared raw magic must propagate the
+ * disable status to t4, so ADD inserts EXPAND instead of BRCB.
+ */
+TEST_F(TestAxisCombine, AssembleSharedRawMagicDisable)
+{
+    ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 16}, MemoryType::MEM_DEVICE_DDR, "gm1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "ci1"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm1"}, {"ci1"}, "copy_in1", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_DEVICE_DDR, "gm2"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "ci2"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm2"}, {"ci2"}, "copy_in2", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "t2"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ASSEMBLE, {"ci1"}, {"t2"}, "assemble1", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "t4"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ASSEMBLE, {"ci2"}, {"t4"}, "assemble2", true), true);
+
+    auto t2 = graph.GetTensor("t2");
+    auto t4 = graph.GetTensor("t4");
+    t4->tensor = t2->tensor;
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 16}, MemoryType::MEM_UB, "rhs"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 16}, MemoryType::MEM_UB, "out"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ADD, {"t4", "rhs"}, {"out"}, "add", true), true);
+
+    auto* rootFuncPtr = graph.GetFunction();
+    rootFuncPtr->paramConfigs_.combineAxis = true;
+    AxisCombine pass;
+    EXPECT_EQ(pass.RunOnFunction(*rootFuncPtr), SUCCESS);
+
+    int expandCount = 0;
+    int brcbCount = 0;
+    for (const auto& op : rootFuncPtr->Operations()) {
+        expandCount += op.GetOpcode() == Opcode::OP_EXPAND;
+        brcbCount += op.GetOpcode() == Opcode::OP_BRCB;
+    }
+    EXPECT_EQ(expandCount, 1);
+    EXPECT_EQ(brcbCount, 0);
+}
+
+TEST_F(TestAxisCombine, MoveAssembleConsumerTokenToInsertedOp)
+{
+    auto runCase = [](bool disableAxisCombine, Opcode expectedOpcode) {
+        Program::GetInstance().Reset();
+        config::Reset();
+        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
+
+        ComputationalGraphBuilder graph;
+        if (disableAxisCombine) {
+            EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 16}, MemoryType::MEM_DEVICE_DDR, "gm"), true);
+            EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "ci"), true);
+            EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm"}, {"ci"}, "copy_in", true), true);
+        } else {
+            EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "assemble_in"), true);
+        }
+        EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "assembled"), true);
+        EXPECT_EQ(graph.AddOp(Opcode::OP_ASSEMBLE, {disableAxisCombine ? "ci" : "assemble_in"}, {"assembled"},
+                              "assemble", true),
+                  true);
+        EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 16}, MemoryType::MEM_UB, "rhs"), true);
+        EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 16}, MemoryType::MEM_UB, "out"), true);
+        EXPECT_EQ(graph.AddOp(Opcode::OP_ADD, {"assembled", "rhs"}, {"out"}, "consumer", true), true);
+
+        IRBuilder builder;
+        auto token = builder.CreateTokenVar(ir::Span::Unknown());
+        auto* consumer = graph.GetOp("consumer");
+        ASSERT_NE(consumer, nullptr);
+        consumer->result_token_ = {token};
+
+        auto* function = graph.GetFunction();
+        function->paramConfigs_.combineAxis = true;
+        AxisCombine pass;
+        EXPECT_EQ(pass.RunOnFunction(*function), SUCCESS);
+
+        Operation* inserted = nullptr;
+        for (auto& operation : function->Operations(false)) {
+            if (operation.GetOpcode() == expectedOpcode) {
+                inserted = &operation;
+                break;
+            }
+        }
+        ASSERT_NE(inserted, nullptr);
+        EXPECT_EQ(inserted->result_token_.front(), token);
+        EXPECT_TRUE(consumer->result_token_.empty());
+    };
+
+    runCase(false, Opcode::OP_BRCB);
+    runCase(true, Opcode::OP_EXPAND);
+}

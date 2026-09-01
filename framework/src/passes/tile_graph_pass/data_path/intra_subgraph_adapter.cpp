@@ -22,6 +22,7 @@
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_check/intra_subgraph_adapter_checker.h"
 #include "passes/pass_utils/infer_shape_utils.h"
+#include "passes/tile_graph_pass/graph_partition/graph_partition_token_dependency.h"
 
 #define MODULE_NAME "IntraSubgraphAdapter"
 
@@ -89,6 +90,32 @@ static void SetConfiguredOpcode(Operation& op, Opcode opcode)
 
 Status IntraSubgraphAdapter::RunOnFunction(Function& function)
 {
+    if (FinalizePartitionWithTokenDependency(function) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Function, "Failed to finalize token-aware partitions before boundary adaptation.");
+        return FAILED;
+    }
+    if (AdaptBoundaryTensors(function) != SUCCESS) {
+        return FAILED;
+    }
+    if (function.GetFunctionType() != FunctionType::DYNAMIC_LOOP_PATH || function.GetTotalSubGraphCount() == 0U ||
+        Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_2201) {
+        return SUCCESS;
+    }
+    bool postLoweringSplitOccurred = false;
+    if (FinalizePartitionWithTokenDependency(function, true, &postLoweringSplitOccurred) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Function, "Failed to split mixed AIC/AIV subgraphs after boundary adaptation.");
+        return FAILED;
+    }
+    if (!postLoweringSplitOccurred) {
+        return SUCCESS;
+    }
+    return AdaptBoundaryTensors(function);
+}
+
+Status IntraSubgraphAdapter::AdaptBoundaryTensors(Function& function)
+{
+    newOps.clear();
+    ddrRoutedRawMagics_.clear();
     LogicalTensors boundaryTensors = CollectBoundaryTensors(function);
 
     for (size_t i = 0; i < boundaryTensors.size(); i++) {
@@ -101,6 +128,7 @@ Status IntraSubgraphAdapter::RunOnFunction(Function& function)
 
         // If the boundary tensor is already in the ddr, then skip processing this tensor
         if (tensor->GetMemoryTypeOriginal() == MEM_DEVICE_DDR) {
+            RouteBoundaryTensorToDDR(tensor);
             continue;
         }
 
@@ -158,6 +186,10 @@ Status IntraSubgraphAdapter::RunOnFunction(Function& function)
                 return FAILED;
             }
         }
+    }
+    if (RouteVersionGroupsToDDR(function) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Function, "Failed to route RawTensor version groups to DDR.");
+        return FAILED;
     }
     if (!newOps.empty()) {
         if (InferShapeUtils::InferShape(function, newOps) != SUCCESS) {
@@ -319,8 +351,8 @@ Status IntraSubgraphAdapter::ProcessBoundaryTensor(Function& function, LogicalTe
             tensor->GetMagic());
         return FAILED;
     }
-    // Set the boundary tensor's mem type to be DDR
-    tensor->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    // Route all LogicalTensor versions sharing this RawTensor to DDR after boundary adaptation.
+    RouteBoundaryTensorToDDR(tensor);
     return SUCCESS;
 }
 
@@ -462,6 +494,8 @@ LogicalTensorPtr IntraSubgraphAdapter::InsertOpBetween(Function& function, Opcod
     newTensor->AddConsumer(newOp);
     tensor->RemoveProducer(op);
     tensor->AddProducer(newOp);
+    // Keep token dependencies on the op that writes the original RawTensor.
+    TransferResultToken(function, op, *newOp);
     return newTensor;
 }
 
@@ -564,6 +598,75 @@ LogicalTensors IntraSubgraphAdapter::CollectBoundaryTensors(Function& function)
         }
     }
     return ret;
+}
+
+void IntraSubgraphAdapter::RouteBoundaryTensorToDDR(LogicalTensorPtr tensor)
+{
+    const int rawMagic = tensor->GetRawMagic();
+    tensor->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    ddrRoutedRawMagics_.insert(rawMagic);
+}
+
+Status IntraSubgraphAdapter::RouteVersionGroupsToDDR(Function& function)
+{
+    for (const auto& sibling : GraphUtils::GetAllTensors(function)) {
+        if (sibling == nullptr || sibling->GetRawTensor() == nullptr) {
+            continue;
+        }
+        const int rawMagic = sibling->GetRawMagic();
+        if (ddrRoutedRawMagics_.find(rawMagic) == ddrRoutedRawMagics_.end() ||
+            sibling->GetMemoryTypeOriginal() == MEM_DEVICE_DDR) {
+            continue;
+        }
+        APASS_LOG_INFO_F(Elements::Tensor, "Route sibling version(magic : %d) of rawMagic %d to DDR for consistency.",
+                         sibling->GetMagic(), rawMagic);
+        // Insert adapters before changing the sibling memory type so the producer output and consumer inputs
+        // retain their original local memory type.
+        if (AdapteTensorProducers(function, sibling) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Tensor, "Failed to adapt producers of sibling tensor magic %d.",
+                              sibling->GetMagic());
+            return FAILED;
+        }
+        InsertDdrToUbViewsForSibling(function, sibling);
+        sibling->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    }
+    return SUCCESS;
+}
+
+void IntraSubgraphAdapter::InsertDdrToUbViewsForSibling(Function& function, LogicalTensorPtr sibling)
+{
+    std::unordered_map<int, std::vector<Operation*>> consumerColor2OpsMap;
+    for (const auto& consumer : sibling->GetConsumers()) {
+        if ((consumer->GetOpcode() != config::GetSliceOpcode() && consumer->GetOpcode() != Opcode::OP_COPY_IN) ||
+            IsIndirectView(consumer)) {
+            consumerColor2OpsMap[consumer->GetSubgraphID()].push_back(consumer);
+        }
+    }
+    for (auto& [color, consumers] : consumerColor2OpsMap) {
+        (void)color;
+        InsertOpBetween(function, config::GetSliceOpcode(), sibling, consumers);
+    }
+}
+
+void IntraSubgraphAdapter::TransferResultToken(Function& function, Operation& from, Operation& to)
+{
+    auto tokens = from.result_token_;
+    if (tokens.empty()) {
+        return;
+    }
+    for (const auto& token : tokens) {
+        ASSERT(std::find(to.result_token_.begin(), to.result_token_.end(), token) == to.result_token_.end())
+            << "[IntraSubgraphAdapter][Operation][ERROR]: token transfer target already owns a result token.";
+    }
+    auto& dep = function.GetVarDependency();
+    auto fromStmt = std::static_pointer_cast<const ir::Stmt>(from.shared_from_this());
+    auto toStmt = std::static_pointer_cast<const ir::Stmt>(to.shared_from_this());
+    for (const auto& token : tokens) {
+        to.result_token_.push_back(token);
+        dep.RemoveProducer(token, fromStmt);
+        dep.AddProducer(token, toStmt);
+    }
+    from.result_token_.clear();
 }
 
 Status IntraSubgraphAdapter::PostCheck(Function& function)

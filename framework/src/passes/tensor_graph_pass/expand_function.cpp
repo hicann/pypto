@@ -30,6 +30,7 @@
 #include "passes/statistics/tensor_and_tile_graph_statistic.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/graph_utils.h"
+#include "passes/pass_utils/token_utils.h"
 #include "tilefwk/error_code.h"
 #include "tilefwk/tile_shape.h"
 #include <algorithm>
@@ -730,10 +731,26 @@ Status ExpandFunction::Expandfunction(Function& function) const
                 newOp.CopyAttrFrom(*op, OP_EMUOP_PREFIX);
             }
         }
+        if (!op->result_token_.empty() || !op->tokens_.empty()) {
+            // VIEW/ASSEMBLE operations inserted by expansion are implementation
+            // details. Only tile operations representing the original operation
+            // inherit its token contract.
+            for (size_t i = opListPreSize; i < opListPost.size(); i++) {
+                auto& newOp = opListPost[i];
+                if (newOp.GetOpcode() == op->GetOpcode()) {
+                    newOp.result_token_ = op->result_token_;
+                    newOp.tokens_ = op->tokens_;
+                }
+            }
+        }
         ir::Span::ClearCurrent();
     }
     function.BuildTensorMap();
     function.expandFunctionAccelerate = false;
+    if (TokenUtils::SplitMultiProducerTokens(function) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "SplitMultiProducerTokens failed.");
+        return FAILED;
+    }
     return SUCCESS;
 }
 

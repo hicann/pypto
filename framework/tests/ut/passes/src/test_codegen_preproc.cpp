@@ -599,5 +599,40 @@ TEST_F(CodegenPreprocTest, TestGenGmOoRCheckInfoNonDdrSkipped)
     EXPECT_EQ(copyinAttr->GetGmOutOfRangeCheck(), nullptr);
 }
 
+TEST_F(CodegenPreprocTest, NormalizeDanglingActualRawMagicBeforeMachineEncode)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "NormalizeActualRaw", "NormalizeActualRaw",
+                                               nullptr);
+    function->rootFunc_ = function.get();
+    function->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
+    function->SetUnderDynamicFunction(true);
+
+    auto devRoot = std::make_shared<Function>(Program::GetInstance(), "NormalizeActualRawDevRoot",
+                                              "NormalizeActualRawDevRoot", function.get());
+    IRBuilder builder;
+    const std::vector<int64_t> shape{CP_NUM16, CP_NUM16};
+    const std::vector<int64_t> offset(shape.size(), 0);
+    const auto validShape = SymbolicScalar::FromConcrete(shape);
+    auto targetRaw = builder.CreateRawTensor(DT_FP32, shape);
+    auto validAliasRaw = builder.CreateRawTensor(DT_FP32, shape);
+    auto danglingAliasRaw = builder.CreateRawTensor(DT_FP32, shape);
+    validAliasRaw->actualRawmagic = targetRaw->GetRawMagic();
+    danglingAliasRaw->actualRawmagic = targetRaw->GetRawMagic() + 100000;
+
+    auto target = builder.CreateTensorVar(*devRoot, targetRaw, offset, shape, validShape);
+    auto validAlias = builder.CreateTensorVar(*devRoot, validAliasRaw, offset, shape, validShape);
+    auto danglingAlias = builder.CreateTensorVar(*devRoot, danglingAliasRaw, offset, shape, validShape);
+    devRoot->AddRawOperation(Opcode::OP_CALL, {validAlias, danglingAlias}, {target});
+
+    auto dyndevAttr = std::make_shared<DyndevFunctionAttribute>();
+    dyndevAttr->funcGroup.devRootList.Insert(devRoot.get());
+    function->SetDyndevAttribute(dyndevAttr);
+
+    CodegenPreproc pass;
+    ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(validAliasRaw->actualRawmagic, targetRaw->GetRawMagic());
+    EXPECT_EQ(danglingAliasRaw->actualRawmagic, -1);
+}
+
 } // namespace tile_fwk
 } // namespace npu

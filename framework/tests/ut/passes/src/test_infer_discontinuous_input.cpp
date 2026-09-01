@@ -36,6 +36,7 @@ public:
     {
         Program::GetInstance().Reset();
         config::Reset();
+        config::SetPassOption(ENABLE_SLICE, true);
         config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
     }
@@ -75,6 +76,54 @@ void Construct(ComputationalGraphBuilder& G)
 
     G.SetInCast({});
     G.SetOutCast({"outputTensor"});
+}
+
+void ConstructRawMagicVersionGroup(ComputationalGraphBuilder& G)
+{
+    G.AddTensor(DataType::DT_FP16, {32, 128}, MemoryType::MEM_DEVICE_DDR, "inputTensor0");
+    G.AddTensor(DataType::DT_FP16, {32, 128}, MemoryType::MEM_DEVICE_DDR, "inputTensor1");
+    G.AddTensor(DataType::DT_FP16, {16, 128}, MemoryType::MEM_DEVICE_DDR, "inputTensor2");
+    G.AddTensor(DataType::DT_FP16, {16, 128}, MemoryType::MEM_DEVICE_DDR, "inputTensor3");
+    G.AddTensor(DataType::DT_FP16, {64, 128}, MemoryType::MEM_DEVICE_DDR, "outputTensor0");
+    G.AddTensor(DataType::DT_FP16, {64, 128}, MemoryType::MEM_DEVICE_DDR, "outputTensor1");
+
+    auto sharedRaw = G.GetTensor("inputTensor0")->tensor;
+    G.GetTensor("inputTensor1")->tensor = sharedRaw;
+    G.GetTensor("inputTensor2")->tensor = sharedRaw;
+    G.GetTensor("inputTensor3")->tensor = sharedRaw;
+    sharedRaw->UpdateRawShape({64, 128});
+
+    G.GetTensor("inputTensor0")->UpdateOffset({0, 0});
+    G.GetTensor("inputTensor1")->UpdateOffset({32, 0});
+    G.GetTensor("inputTensor2")->UpdateOffset({0, 0});
+    G.GetTensor("inputTensor3")->UpdateOffset({32, 0});
+
+    auto sharedOutRaw = G.GetTensor("outputTensor0")->tensor;
+    G.GetTensor("outputTensor1")->tensor = sharedOutRaw;
+    sharedOutRaw->UpdateRawShape({64, 128});
+    G.GetTensor("outputTensor0")->UpdateOffset({0, 0});
+    G.GetTensor("outputTensor1")->UpdateOffset({0, 0});
+
+    G.AddOp(Opcode::OP_ASSEMBLE, {"inputTensor0"}, {"outputTensor0"}, "assemble_0");
+    auto attrAssemble_0 = std::make_shared<AssembleOpAttribute>(MemoryType::MEM_DEVICE_DDR, std::vector<int64_t>{0, 0});
+    G.GetOp("assemble_0")->SetOpAttribute(attrAssemble_0);
+
+    G.AddOp(Opcode::OP_ASSEMBLE, {"inputTensor1"}, {"outputTensor0"}, "assemble_1");
+    auto attrAssemble_1 = std::make_shared<AssembleOpAttribute>(MemoryType::MEM_DEVICE_DDR,
+                                                                std::vector<int64_t>{32, 0});
+    G.GetOp("assemble_1")->SetOpAttribute(attrAssemble_1);
+
+    G.AddOp(Opcode::OP_ASSEMBLE, {"inputTensor2"}, {"outputTensor1"}, "assemble_2");
+    auto attrAssemble_2 = std::make_shared<AssembleOpAttribute>(MemoryType::MEM_DEVICE_DDR, std::vector<int64_t>{0, 0});
+    G.GetOp("assemble_2")->SetOpAttribute(attrAssemble_2);
+
+    G.AddOp(Opcode::OP_ASSEMBLE, {"inputTensor3"}, {"outputTensor1"}, "assemble_3");
+    auto attrAssemble_3 = std::make_shared<AssembleOpAttribute>(MemoryType::MEM_DEVICE_DDR,
+                                                                std::vector<int64_t>{32, 0});
+    G.GetOp("assemble_3")->SetOpAttribute(attrAssemble_3);
+
+    G.SetInCast({"inputTensor0", "inputTensor1", "inputTensor2", "inputTensor3"});
+    G.SetOutCast({"outputTensor0", "outputTensor1"});
 }
 
 TEST_F(TestInferDiscontinuousInput, testScenarioWithoutInsert_1)
@@ -183,6 +232,42 @@ TEST_F(TestInferDiscontinuousInput, testScenarioInsert_2)
     inputTensor3->tensor->UpdateRawShape({32, 128});
     // run pass
     check(function, G);
+}
+
+TEST_F(TestInferDiscontinuousInput, testRawMagicVersionGroupInsertAllInputs)
+{
+    ComputationalGraphBuilder G;
+    Function* function = G.GetFunction();
+    EXPECT_NE(function, nullptr);
+    ConstructRawMagicVersionGroup(G);
+
+    InferDiscontinuousInput inferDiscontinuousInput;
+    EXPECT_EQ(inferDiscontinuousInput.Run(*function, "", "", 0), SUCCESS);
+    EXPECT_EQ(inferDiscontinuousInput.PostCheck(*function), SUCCESS);
+
+    EXPECT_EQ(function->Operations().size(), 12);
+
+    for (const auto& tensorName : {"inputTensor0", "inputTensor1", "inputTensor2", "inputTensor3"}) {
+        auto tensor = G.GetTensor(tensorName);
+        ASSERT_NE(tensor, nullptr);
+        ASSERT_EQ(tensor->GetConsumers().size(), 1U);
+        auto consumer = *tensor->GetConsumers().begin();
+        ASSERT_NE(consumer, nullptr);
+        EXPECT_TRUE(IsViewLike(consumer->GetOpcode()));
+    }
+
+    int viewCount = 0;
+    int assembleCount = 0;
+    for (const auto& op : function->Operations().DuplicatedOpList()) {
+        if (IsViewLike(op->GetOpcode())) {
+            viewCount++;
+        }
+        if (IsAssembleLike(op->GetOpcode())) {
+            assembleCount++;
+        }
+    }
+    EXPECT_EQ(viewCount, 4);
+    EXPECT_EQ(assembleCount, 8);
 }
 
 TEST_F(TestInferDiscontinuousInput, testViewAssembleScenario)

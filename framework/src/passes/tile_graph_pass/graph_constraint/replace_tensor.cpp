@@ -14,12 +14,12 @@
  */
 
 #include "replace_tensor.h"
-
 #include <algorithm>
-
+#include <deque>
 #include "interface/tensor/irbuilder.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/pass_operation_utils.h"
+#include "passes/pass_utils/tensor_utils.h"
 #include "tilefwk/error_code.h"
 #include "passes/pass_utils/alignment_utils.h"
 
@@ -27,6 +27,136 @@
 
 namespace npu {
 namespace tile_fwk {
+namespace {
+using Token = ir::VarPtr;
+
+ir::StmtPtr GetStmt(const Operation& op) { return std::static_pointer_cast<const ir::Stmt>(op.shared_from_this()); }
+
+bool HasSameRawTensorInput(const Operation& lhs, const Operation& rhs)
+{
+    for (const auto& lhsInput : lhs.GetIOperands()) {
+        if (lhsInput == nullptr || lhsInput->GetRawTensor() == nullptr) {
+            continue;
+        }
+        for (const auto& rhsInput : rhs.GetIOperands()) {
+            if (rhsInput != nullptr && lhsInput->tensor->GetRawMagic() == rhsInput->tensor->GetRawMagic()) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool HasInputMatchingOutputRawTensor(const Operation& inputOp, const Operation& outputOp)
+{
+    for (const auto& input : inputOp.GetIOperands()) {
+        if (input == nullptr || input->GetRawTensor() == nullptr) {
+            continue;
+        }
+        for (const auto& output : outputOp.GetOOperands()) {
+            if (output != nullptr && output->GetRawTensor() != nullptr &&
+                input->GetRawTensor()->GetRawMagic() == output->GetRawTensor()->GetRawMagic()) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool IsInplaceOperation(const Operation& op)
+{
+    if (inplaceOpSet.count(op.GetOpcode()) != 0) {
+        return true;
+    }
+    return (op.GetOpcode() == Opcode::OP_COPY_OUT || op.GetOpcode() == Opcode::OP_INDEX_PUT ||
+            op.GetOpcode() == Opcode::OP_INDEX_ADD) &&
+           op.HasAttribute(OpAttributeKey::inplaceIdx);
+}
+
+std::vector<Operation*> FindFirstNonInplaceConsumers(Operation& op)
+{
+    const auto orderedConsumers = op.ConsumerOpsOrdered();
+    std::deque<Operation*> pending(orderedConsumers.begin(), orderedConsumers.end());
+    std::unordered_set<Operation*> visited;
+    std::vector<Operation*> result;
+    while (!pending.empty()) {
+        auto* current = pending.front();
+        pending.pop_front();
+        if (current == nullptr || !visited.insert(current).second) {
+            continue;
+        }
+        if (!IsInplaceOperation(*current)) {
+            result.push_back(current);
+            continue;
+        }
+        for (auto* consumer : current->ConsumerOpsOrdered()) {
+            pending.push_back(consumer);
+        }
+    }
+    return result;
+}
+
+std::vector<Operation*> FindFirstNonInplaceProducers(Operation& op)
+{
+    const auto orderedProducers = op.ProducerOpsOrdered();
+    std::deque<Operation*> pending(orderedProducers.begin(), orderedProducers.end());
+    std::unordered_set<Operation*> visited;
+    std::vector<Operation*> result;
+    while (!pending.empty()) {
+        auto* current = pending.front();
+        pending.pop_front();
+        if (current == nullptr || !visited.insert(current).second) {
+            continue;
+        }
+        if (!IsInplaceOperation(*current)) {
+            result.push_back(current);
+            continue;
+        }
+        for (auto* producer : current->ProducerOpsOrdered()) {
+            pending.push_back(producer);
+        }
+    }
+    return result;
+}
+
+bool HasDependencyPath(Operation& from, Operation& to)
+{
+    std::deque<Operation*> pending{&from};
+    std::unordered_set<Operation*> visited;
+    while (!pending.empty()) {
+        auto* current = pending.front();
+        pending.pop_front();
+        if (current == nullptr || !visited.insert(current).second) {
+            continue;
+        }
+        if (current == &to) {
+            return true;
+        }
+        for (auto* consumer : current->ConsumerOpsOrdered()) {
+            pending.push_back(consumer);
+        }
+        for (auto* consumer : current->ConsumerOpsByToken()) {
+            pending.push_back(consumer);
+        }
+    }
+    return false;
+}
+
+void RemoveTokenConsumer(Operation& op, const Token& token, Function& function)
+{
+    op.tokens_.erase(std::remove(op.tokens_.begin(), op.tokens_.end(), token), op.tokens_.end());
+    function.GetVarDependency().RemoveConsumer(token, GetStmt(op));
+}
+
+void AddTokenConsumer(Operation& op, const Token& token, Function& function)
+{
+    if (std::find(op.tokens_.begin(), op.tokens_.end(), token) == op.tokens_.end()) {
+        op.tokens_.push_back(token);
+    }
+    function.GetVarDependency().AddConsumer(token, GetStmt(op));
+}
+} // namespace
+
 bool ReplaceTensor::CheckAddrConflict(const Operation& op)
 {
     auto tensorIn = op.GetIOperands().front();
@@ -268,6 +398,16 @@ void ReplaceTensor::UniteTensor(Function& function, UnionFind& uf)
                                  op.GetOOperands()[0]->GetMagic());
             }
         }
+        // 新图表达下, 多个assemble写入不同logical tensor但共享同一rawMagic(同一地址)。
+        // 需要将同rawMagic的兄弟logical tensor也union到同一组, 保证FindBaseTensor统一选base。
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            auto assembleOut = op.GetOOperands().front();
+            for (const auto& sibling : TensorUtils::GetSameRawMagicLogicalTensors(function, assembleOut)) {
+                if (sibling != nullptr && sibling->GetMagic() != assembleOut->GetMagic()) {
+                    uf.Unite(assembleOut, sibling);
+                }
+            }
+        }
         if (op.HasAttribute(OpAttributeKey::inplaceIdx)) {
             uf.Unite(op.GetIOperands()[op.GetIntAttribute(OpAttributeKey::inplaceIdx)], op.GetOOperands().front());
         }
@@ -373,6 +513,8 @@ Status ReplaceTensor::ForwardReshape(Operation* op, LogicalTensorPtr& rootTensor
     op->GetOOperands()[0]->tensor->actualRawmagic = rootTensor->GetRawMagic();
     forwardOps.insert(op->GetOpMagic());
     forRoots.push(op->GetOOperands()[0]);
+    // 新图表达下, reshape的输入可能是assemble输出(共享rawMagic), 需同步兄弟并继续遍历
+    SyncSiblingAssembleOutput(function, op->GetIOperands()[0]);
     return SUCCESS;
 }
 
@@ -445,7 +587,7 @@ bool isMultiAssemble(Operation* op)
     return false;
 }
 
-Status ReplaceTensor::ForwardAssemble(Operation* op, LogicalTensorPtr& rootTensor)
+Status ReplaceTensor::ForwardAssemble(Operation* op, LogicalTensorPtr& rootTensor, Function& function)
 {
     auto assembleIn = op->GetIOperands()[0];
     auto assembleOut = op->GetOOperands()[0];
@@ -464,14 +606,12 @@ Status ReplaceTensor::ForwardAssemble(Operation* op, LogicalTensorPtr& rootTenso
                              inOp->GetOpMagic());
             return SUCCESS;
         }
+        // 保存原始 rawMagic, 因为 tensor 指针替换后 rawmagic 会变, 需按原始值查找兄弟
+        int origRawMagic = assembleOut->tensor->rawmagic;
         assembleOut->tensor = assembleIn->tensor;
         forwardOps.insert(op->GetOpMagic());
-        for (auto prodOp : assembleOut->GetProducers()) {
-            if (prodOp->GetOpMagic() != op->GetOpMagic()) {
-                backRoots.push(assembleOut);
-                return SUCCESS;
-            }
-        }
+        // 新图表达下, Assemble的输出是assemble输出(共享rawMagic), 需同步兄弟并继续遍历
+        SyncSiblingAssembleOutput(function, assembleOut, origRawMagic);
         return SUCCESS;
     } else {
         forRoots.push(assembleOut);
@@ -525,16 +665,18 @@ Status ReplaceTensor::ForwardInputIdx(Operation* op, LogicalTensorPtr& rootTenso
     return SUCCESS;
 }
 
-Status ReplaceTensor::BackwardReshape(Operation* op, LogicalTensorPtr& rootTensor)
+Status ReplaceTensor::BackwardReshape(Operation* op, LogicalTensorPtr& rootTensor, Function& function)
 {
     processedOp.insert(op->GetOpMagic());
     op->GetIOperands()[0]->tensor->actualRawmagic = rootTensor->GetRawMagic();
     backwardOps.insert(op->GetOpMagic());
     backRoots.push(op->GetIOperands()[0]);
+    // 新图表达下, reshape的输入可能是assemble输出(共享rawMagic), 需同步兄弟并继续遍历
+    SyncSiblingAssembleOutput(function, op->GetIOperands()[0]);
     return SUCCESS;
 }
 
-Status ReplaceTensor::BackwardInplaceOp(Operation* op, LogicalTensorPtr& rootTensor)
+Status ReplaceTensor::BackwardInplaceOp(Operation* op, LogicalTensorPtr& rootTensor, Function& function)
 {
     auto reusePairs = inplaceOpMap.at(op->GetOpcode());
     for (const auto& reusePair : reusePairs) {
@@ -549,23 +691,31 @@ Status ReplaceTensor::BackwardInplaceOp(Operation* op, LogicalTensorPtr& rootTen
             return SUCCESS;
         }
         processedOp.insert(op->GetOpMagic());
+        // 保存原始 rawMagic, 因为 tensor 指针替换后 rawmagic 会变, 需按原始值查找兄弟
+        int origRawMagic = tensorIn->tensor->rawmagic;
         tensorIn->tensor = tensorOut->tensor;
         backwardOps.insert(op->GetOpMagic());
         backRoots.push(tensorIn);
         tensorOut->UpdateOffset(tensorIn->GetOffset());
+        // 新图表达下, inplace op的输入可能是assemble输出(共享rawMagic), 需同步兄弟并继续遍历
+        SyncSiblingAssembleOutput(function, tensorIn, origRawMagic);
     }
     return SUCCESS;
 }
 
-Status ReplaceTensor::BackwardView(Operation* op, LogicalTensorPtr& rootTensor)
+Status ReplaceTensor::BackwardView(Operation* op, LogicalTensorPtr& rootTensor, Function& function)
 {
     auto viewIn = op->GetIOperands()[0];
     auto viewOut = op->GetOOperands()[0];
     (void)rootTensor;
     processedOp.insert(op->GetOpMagic());
     backRoots.push(viewIn);
+    // 保存原始 rawMagic, 因为 tensor 指针替换后 rawmagic 会变, 需按原始值查找兄弟
+    int origRawMagic = viewIn->tensor->rawmagic;
     viewIn->tensor = viewOut->tensor;
     backwardOps.insert(op->GetOpMagic());
+    // 新图表达下, view的输入可能是assemble输出(共享rawMagic), 需同步兄弟并继续遍历
+    SyncSiblingAssembleOutput(function, viewIn, origRawMagic);
     return SUCCESS;
 }
 
@@ -654,7 +804,7 @@ Status ReplaceTensor::ForwardProcess(Function& function)
                     return FAILED;
                 }
             } else if (consumerOp->GetOpcode() == Opcode::OP_ASSEMBLE) {
-                if (ForwardAssemble(consumerOp, rootTensor) == FAILED) {
+                if (ForwardAssemble(consumerOp, rootTensor, function) == FAILED) {
                     return FAILED;
                 }
             } else if (consumerOp->GetOpcode() == Opcode::OP_RESHAPE) {
@@ -688,6 +838,25 @@ Status ReplaceTensor::ForwardProcess(Function& function)
     return SUCCESS;
 }
 
+void ReplaceTensor::SyncSiblingAssembleOutput(Function& function, const LogicalTensorPtr& tensor, int origRawMagic)
+{
+    if (tensor == nullptr || tensor->tensor == nullptr) {
+        return;
+    }
+    int rawMagic = (origRawMagic >= 0) ? origRawMagic : tensor->tensor->rawmagic;
+    // 只处理 assemble 输出: 检查同 rawMagic 的兄弟 logical tensor
+    for (const auto& sibling : GraphUtils::GetTensorsByRawMagic(function, rawMagic)) {
+        if (sibling == nullptr || sibling->GetMagic() == tensor->GetMagic()) {
+            continue;
+        }
+        // 同步 tensor 指针(与当前 tensor 保持一致)
+        sibling->tensor = tensor->tensor;
+        // push 到 backRoots 和 forRoots, 使兄弟的 producer/consumer 链路继续被遍历
+        backRoots.push(sibling);
+        forRoots.push(sibling);
+    }
+}
+
 Status ReplaceTensor::BackwardProcess(Function& function)
 {
     while (!backRoots.empty()) {
@@ -702,15 +871,15 @@ Status ReplaceTensor::BackwardProcess(Function& function)
                     return FAILED;
                 }
             } else if (producerOp->GetOpcode() == Opcode::OP_VIEW) {
-                if (BackwardView(producerOp, rootTensor) == FAILED) {
+                if (BackwardView(producerOp, rootTensor, function) == FAILED) {
                     return FAILED;
                 }
             } else if (producerOp->GetOpcode() == Opcode::OP_RESHAPE) {
-                if (BackwardReshape(producerOp, rootTensor) == FAILED) {
+                if (BackwardReshape(producerOp, rootTensor, function) == FAILED) {
                     return FAILED;
                 }
             } else if (inplaceOpMap.find(producerOp->GetOpcode()) != inplaceOpMap.end()) {
-                if (BackwardInplaceOp(producerOp, rootTensor) == FAILED) {
+                if (BackwardInplaceOp(producerOp, rootTensor, function) == FAILED) {
                     return FAILED;
                 }
             } else if (producerOp->GetOpcode() == Opcode::OP_VIEW_TYPE) {
@@ -1045,14 +1214,14 @@ Status ReplaceTensor::FindNeedToCopyAssemble(std::unordered_set<Operation*>& nee
     auto consumers = assembleIn->GetConsumers();
     bool sameAssembleOut = true;
     for (const auto& con : consumers) {
-        if (con->GetOOperands()[0]->GetMagic() != op.GetOOperands()[0]->GetMagic()) {
+        if (con->GetOOperands()[0]->GetRawMagic() != op.GetOOperands()[0]->GetRawMagic()) {
             sameAssembleOut = false;
             break;
         }
     }
     if (!sameAssembleOut) {
         for (const auto& con : consumers) {
-            if (con->GetOpcode() == Opcode::OP_ASSEMBLE) {
+            if (con->GetOpcode() == Opcode::OP_ASSEMBLE && con->GetIOperands()[0]->GetDataSize() <= UB_SIZE_THRESHOLD) {
                 visitedAssOps.insert(con->GetOpMagic());
                 needInsertCopyAssOps.insert(con);
             }
@@ -1147,6 +1316,131 @@ Status ReplaceTensor::InsertNeedCopy(Function& function)
     return SUCCESS;
 }
 
+void ReplaceTensor::RebuildTokenProducer(Function& function)
+{
+    std::vector<Operation*> operations = function.Operations(false).DuplicatedOpList();
+    std::vector<std::pair<Operation*, Token>> tokenProducers;
+    // Find all ops that produce tokens
+    for (auto* producer : operations) {
+        if (producer == nullptr) {
+            continue;
+        }
+        for (const auto& token : producer->result_token_) {
+            tokenProducers.emplace_back(producer, token);
+        }
+    }
+
+    for (const auto& [producer, token] : tokenProducers) {
+        // Do not move tokens for non-inplace
+        if (!IsInplaceOperation(*producer)) {
+            continue;
+        }
+        const auto tokenConsumers = producer->ConsumerOpsByToken();
+        std::vector<Operation*> consumers(tokenConsumers.begin(), tokenConsumers.end());
+        // Find all consumers of the token that need to be moved
+        std::vector<Operation*> matchedConsumers;
+        for (auto* consumer : consumers) {
+            // Only tokens where the producer and consumer inputs must have equal actualRawMagic need to be moved
+            if (consumer != nullptr && HasSameRawTensorInput(*producer, *consumer)) {
+                matchedConsumers.push_back(consumer);
+            }
+        }
+        if (matchedConsumers.empty() || matchedConsumers.size() != consumers.size()) {
+            continue;
+        }
+
+        // Clear the token relationship(s)
+        auto& producerTokens = producer->result_token_;
+        producerTokens.erase(std::remove(producerTokens.begin(), producerTokens.end(), token), producerTokens.end());
+        function.GetVarDependency().RemoveProducer(token, GetStmt(*producer));
+        for (auto* consumer : matchedConsumers) {
+            RemoveTokenConsumer(*consumer, token, function);
+        }
+        function.GetVarDependency().RemoveVar(token);
+
+        // Produce new tokens everyone in matchedConsumers.
+        std::unordered_map<Operation*, Token> replacementTokens;
+        for (auto* boundary : FindFirstNonInplaceConsumers(*producer)) {
+            bool createsCycle = false;
+            for (auto* consumer : matchedConsumers) {
+                if (consumer != nullptr && HasDependencyPath(*consumer, *boundary)) {
+                    createsCycle = true;
+                    break;
+                }
+            }
+            if (createsCycle) {
+                continue;
+            }
+            auto tokenIt = replacementTokens.find(boundary);
+            if (tokenIt == replacementTokens.end()) {
+                if (boundary->result_token_.empty()) {
+                    auto newToken = irBuilder_.CreateTokenVar(boundary->GetSpan());
+                    boundary->result_token_.push_back(newToken);
+                    function.GetVarDependency().AddProducer(newToken, GetStmt(*boundary));
+                }
+                tokenIt = replacementTokens.emplace(boundary, boundary->result_token_.front()).first;
+            }
+            for (auto* consumer : matchedConsumers) {
+                AddTokenConsumer(*consumer, tokenIt->second, function);
+            }
+        }
+    }
+}
+
+void ReplaceTensor::RebuildTokenConsumer(Function& function)
+{
+    std::vector<Operation*> operations = function.Operations(false).DuplicatedOpList();
+    std::vector<std::pair<Operation*, std::vector<Token>>> tokenConsumers;
+    // Find all ops that consume tokens
+    for (auto* consumer : operations) {
+        if (consumer != nullptr && !consumer->tokens_.empty()) {
+            tokenConsumers.emplace_back(consumer, consumer->tokens_);
+        }
+    }
+
+    for (const auto& [consumer, tokens] : tokenConsumers) {
+        // Do not move tokens for non-inplace
+        if (!IsInplaceOperation(*consumer)) {
+            continue;
+        }
+        for (const auto& token : tokens) {
+            std::vector<Operation*> matchedProducers;
+            for (const auto& stmt : function.GetVarDependency().GetProducers(token)) {
+                auto* producer = static_cast<Operation*>(const_cast<ir::Stmt*>(stmt.get()));
+                // Only tokens where the producer and consumer inputs must have equal actualRawMagic need to be moved
+                if (producer != nullptr && (HasSameRawTensorInput(*producer, *consumer) ||
+                                            HasInputMatchingOutputRawTensor(*producer, *consumer))) {
+                    matchedProducers.push_back(producer);
+                }
+            }
+            if (matchedProducers.empty()) {
+                continue;
+            }
+
+            auto boundaries = FindFirstNonInplaceProducers(*consumer);
+            bool createsCycle = boundaries.empty();
+            for (auto* boundary : boundaries) {
+                for (auto* producer : matchedProducers) {
+                    if (HasDependencyPath(*boundary, *producer)) {
+                        createsCycle = true;
+                        break;
+                    }
+                }
+                if (createsCycle) {
+                    break;
+                }
+            }
+            if (createsCycle) {
+                continue;
+            }
+            RemoveTokenConsumer(*consumer, token, function);
+            for (auto* boundary : boundaries) {
+                AddTokenConsumer(*boundary, token, function);
+            }
+        }
+    }
+}
+
 Status ReplaceTensor::RunOnFunction(Function& function)
 {
     APASS_LOG_INFO_F(Elements::Operation, "===> Start ReplaceTensor.");
@@ -1167,6 +1461,9 @@ Status ReplaceTensor::RunOnFunction(Function& function)
         }
         backRoots.push(baseTensor);
         forRoots.push(baseTensor);
+        // 新图表达下, base本身可能是assemble输出(有同rawMagic兄弟), 需同步兄弟并push到roots,
+        // 否则兄弟链路可能无法通过producer/consumer关系到达。
+        SyncSiblingAssembleOutput(function, baseTensor);
         while (!forRoots.empty() || !backRoots.empty()) {
             if (BackwardProcess(function) == FAILED || ForwardProcess(function) == FAILED) {
                 return FAILED;
@@ -1190,6 +1487,8 @@ Status ReplaceTensor::RunOnFunction(Function& function)
     if (ProcessHubOp(function) == FAILED) {
         return FAILED;
     }
+    RebuildTokenProducer(function);
+    RebuildTokenConsumer(function);
     if (MarkTensorAsPartialMem(function) == FAILED) {
         return FAILED;
     }

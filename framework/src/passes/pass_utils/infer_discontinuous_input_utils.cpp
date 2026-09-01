@@ -16,12 +16,56 @@
 #include "passes/pass_utils/infer_discontinuous_input_utils.h"
 #include "interface/configs/config_manager_ng.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/graph_utils.h"
 #include "passes/pass_utils/infer_shape_utils.h"
 #include "passes/pass_utils/pass_utils.h"
 
 #define MODULE_NAME "InferDiscontinuousInput"
 
 namespace npu::tile_fwk {
+namespace {
+const TensorSet& GetSameRawMagicLogicalTensors(const RawMagicTensorMap& tensorsByRawMagic,
+                                               const LogicalTensorPtr& tensor)
+{
+    static const TensorSet empty;
+    if (tensor == nullptr || tensor->GetRawTensor() == nullptr) {
+        return empty;
+    }
+    const auto iter = tensorsByRawMagic.find(tensor->GetRawMagic());
+    return iter == tensorsByRawMagic.end() ? empty : iter->second;
+}
+
+std::vector<std::pair<LogicalTensorPtr, Operation*>> GetInplacedTileTensorsOfRawMagicGroup(
+    const RawMagicTensorMap& tensorsByRawMagic, const LogicalTensorPtr& tensor)
+{
+    std::vector<std::pair<LogicalTensorPtr, Operation*>> inplacedTensors;
+    std::set<std::pair<int, int>> seenPairs;
+    for (const auto& sameRawTensor : GetSameRawMagicLogicalTensors(tensorsByRawMagic, tensor)) {
+        for (const auto& pair : InferDiscontinuousInputUtils::GetInplacedTileTensors(sameRawTensor)) {
+            if (pair.first == nullptr || pair.second == nullptr) {
+                continue;
+            }
+            if (seenPairs.emplace(pair.first->GetMagic(), pair.second->GetOpMagic()).second) {
+                inplacedTensors.emplace_back(pair);
+            }
+        }
+    }
+    return inplacedTensors;
+}
+
+bool IsRawMagicGroupReady(const std::unordered_map<LogicalTensorPtr, size_t>& tensorProducers,
+                          const RawMagicTensorMap& tensorsByRawMagic, const LogicalTensorPtr& tensor)
+{
+    for (const auto& sameRawTensor : GetSameRawMagicLogicalTensors(tensorsByRawMagic, tensor)) {
+        const auto iter = tensorProducers.find(sameRawTensor);
+        if (iter != tensorProducers.end() && iter->second != 0U) {
+            return false;
+        }
+    }
+    return true;
+}
+} // namespace
+
 inline bool ShapeToSize(Shape& shapes, int64_t& out)
 {
     auto [result, overflow] = CommonUtils::SafeMultiplyShape(shapes);
@@ -350,6 +394,10 @@ std::vector<std::pair<LogicalTensorPtr, Operation*>> InferDiscontinuousInputUtil
 void InferDiscontinuousInputUtils::Init(Function& function)
 {
     auto opList = function.Operations(true, SortOperationsMode::LIGHTWEIGHT).DuplicatedOpList();
+    insertCopys_.clear();
+    tensorProducers_.clear();
+    processedRawMagics_.clear();
+    newOps_.clear();
     tensorProducers_.reserve(opList.size());
     for (auto currOp : opList) {
         for (auto outTensor : currOp->GetOOperands()) {
@@ -362,17 +410,21 @@ void InferDiscontinuousInputUtils::Init(Function& function)
 Status InferDiscontinuousInputUtils::InferFromIncast(Function& function, bool checkViewConflict)
 {
     auto opList = function.Operations(true, SortOperationsMode::LIGHTWEIGHT).DuplicatedOpList();
+    const auto tensorsByRawMagic = GraphUtils::GetTensorsGroupedByRawMagic(function);
     insertCopys_.reserve(opList.size());
     for (auto currOp : opList) {
         for (auto& outputTensor : currOp->GetOOperands()) {
             auto& producerCnt = tensorProducers_[outputTensor];
             producerCnt--;
-            if (producerCnt != 0) {
+            const int64_t rawMagic = outputTensor->GetRawMagic();
+            if (processedRawMagics_.count(rawMagic) != 0U ||
+                !IsRawMagicGroupReady(tensorProducers_, tensorsByRawMagic, outputTensor)) {
                 continue;
             }
-            auto inplacedTensor = GetInplacedTileTensors(outputTensor);
+            auto inplacedTensor = GetInplacedTileTensorsOfRawMagicGroup(tensorsByRawMagic, outputTensor);
             auto filteredTensor = FilterCopyScenes(function, inplacedTensor, checkViewConflict);
             insertCopys_.emplace(outputTensor, std::move(filteredTensor));
+            processedRawMagics_.insert(rawMagic);
         }
     }
     return SUCCESS;
