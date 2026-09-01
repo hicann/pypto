@@ -1,0 +1,85 @@
+function online_softmax_like_kernel incast(v0_logical_tensor %a@0 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]), v0_logical_tensor %b@1 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16])) outcast() #type(Opaque) #entry(false) {
+    v0_logical_tensor %b_30@1 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = for %loop_idx_11 inrange 0, 10, 1 iter { v0_logical_tensor %b_1@1 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = %b@1; } #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
+        v0_logical_tensor %b_28@1 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = for %loop_idx_17 inrange 0, 10, 1 iter { v0_logical_tensor %b_3@1 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = %b_1@1; } #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
+            v0_logical_tensor %acc_1@2 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = TENSOR_ALLOC() token();
+            v0_logical_tensor %acc_19@13 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]), v0_logical_tensor %b_17@1 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = for %loop_idx_35 inrange 0, v0mul(v0div(v0sub(n, 0), 2), 2), 2 iter { v0_logical_tensor %acc_3@2 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = %acc_1@2; v0_logical_tensor %b_5@1 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = %b_3@1; } #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(2) {
+                v0_logical_tensor %acc_42@16 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]), v0_logical_tensor %b_32@19 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = if v0eq(loop_idx_35, 0) then {
+                    v0_logical_tensor %acc_15@16 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]), v0_logical_tensor %b_13@19 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = if v0le(n, v0add(loop_idx_35, 2)) then {
+                        v0_logical_tensor %$0@3 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10000 MUL(%a@0, %a@0) token();
+                        v0_logical_tensor %acc_4@4 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10001 ADDS(%$0@3) token();
+                        v0_logical_tensor %$18@14 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10031 ADDS(%acc_4@4) token();
+                        v0_logical_tensor %$19@15 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10032 SUBS(%acc_4@4) token();
+                        v0_logical_tensor %acc_12@16 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10013 ADD(%$18@14, %$19@15) token();
+                        v0_logical_tensor %$21@17 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10014 DIV(%acc_12@16, %$19@15) token();
+                        v0_logical_tensor %$22@18 #dtype(bfloat16_t) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10015 CAST(%$21@17) token();
+                        v0_logical_tensor %b_11@19 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10016 CAST(%$22@18) token();
+                        yield %acc_12@16, %b_11@19;
+                    } else {
+                        v0_logical_tensor %$0_1@3 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10039 MUL(%a@0, %a@0) token();
+                        v0_logical_tensor %acc_46@4 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10040 ADDS(%$0_1@3) token();
+                        v0_logical_tensor %$18_1@14 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10041 ADDS(%acc_46@4) token();
+                        v0_logical_tensor %$19_1@15 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10042 SUBS(%acc_46@4) token();
+                        v0_logical_tensor %acc_38@16 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10029 ADD(%$18_1@14, %$19_1@15) token();
+                        v0_logical_tensor %acc_13@20 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10030 ADDS(%acc_38@16) token();
+                        yield %acc_13@20, %b_5@1;
+                    }
+                    yield %acc_15@16, %b_13@19;
+                } else {
+                    v0_logical_tensor %acc_60@16 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]), v0_logical_tensor %b_36@19 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = if v0le(n, v0add(loop_idx_35, 2)) then {
+                        v0_logical_tensor %$2@5 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10002 ADDS(%acc_3@2) token();
+                        v0_logical_tensor %$3@6 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10003 SUBS(%acc_3@2) token();
+                        v0_logical_tensor %acc_5@7 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10004 ADD(%$2@5, %$3@6) token();
+                        v0_logical_tensor %acc_6@11 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10008 ADDS(%acc_5@7) token();
+                        v0_logical_tensor %$18_3@14 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10053 ADDS(%acc_6@11) token();
+                        v0_logical_tensor %$19_3@15 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10054 SUBS(%acc_6@11) token();
+                        v0_logical_tensor %acc_56@16 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10055 ADD(%$18_3@14, %$19_3@15) token();
+                        v0_logical_tensor %$21_0@17 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10056 DIV(%acc_56@16, %$19_3@15) token();
+                        v0_logical_tensor %$22_0@18 #dtype(bfloat16_t) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10057 CAST(%$21_0@17) token();
+                        v0_logical_tensor %b_34@19 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10058 CAST(%$22_0@18) token();
+                        yield %acc_56@16, %b_34@19;
+                    } else {
+                        v0_logical_tensor %$2_1@5 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10047 ADDS(%acc_3@2) token();
+                        v0_logical_tensor %$3_1@6 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10048 SUBS(%acc_3@2) token();
+                        v0_logical_tensor %acc_52@7 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10049 ADD(%$2_1@5, %$3_1@6) token();
+                        v0_logical_tensor %acc_54@11 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10050 ADDS(%acc_52@7) token();
+                        v0_logical_tensor %$18_5@14 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10059 ADDS(%acc_54@11) token();
+                        v0_logical_tensor %$19_5@15 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10060 SUBS(%acc_54@11) token();
+                        v0_logical_tensor %acc_64@16 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10061 ADD(%$18_5@14, %$19_5@15) token();
+                        v0_logical_tensor %acc_58@20 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10062 ADDS(%acc_64@16) token();
+                        yield %acc_58@20, %b_5@1;
+                    }
+                    yield %acc_60@16, %b_36@19;
+                }
+                continue %acc_42@16, %b_32@19;
+            }
+            v0_logical_tensor %acc_30@22 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]), v0_logical_tensor %b_26@1 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = for %loop_idx_35_0 inrange v0mul(v0div(v0sub(n, 0), 2), 2), %n, 1 iter { v0_logical_tensor %acc_21@13 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = %acc_19@13; v0_logical_tensor %b_19@1 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = %b_17@1; } #parallel(false) #submit_before_loop(false) #_loop_conds(Unsupported) #_config_scope(Unsupported) #unroll_times(1) {
+                v0_logical_tensor %acc_28@22 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]), v0_logical_tensor %b_24@1 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = if v0eq(loop_idx_35_0, 0) then {
+                    v0_logical_tensor %$42@21 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10018 MUL(%a@0, %a@0) token();
+                    v0_logical_tensor %acc_22@22 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10019 ADDS(%$42@21) token();
+                    yield %acc_22@22, %b_19@1;
+                } else {
+                    v0_logical_tensor %acc_26@25 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]), v0_logical_tensor %b_22@28 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = if v0le(n, v0add(loop_idx_35_0, 1)) then {
+                        v0_logical_tensor %$44@23 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10020 ADDS(%acc_21@13) token();
+                        v0_logical_tensor %$45@24 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10021 SUBS(%acc_21@13) token();
+                        v0_logical_tensor %acc_23@25 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10022 ADD(%$44@23, %$45@24) token();
+                        v0_logical_tensor %$47@26 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10023 DIV(%acc_23@25, %$45@24) token();
+                        v0_logical_tensor %$48@27 #dtype(bfloat16_t) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10024 CAST(%$47@26) token();
+                        v0_logical_tensor %b_20@28 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10025 CAST(%$48@27) token();
+                        yield %acc_23@25, %b_20@28;
+                    } else {
+                        v0_logical_tensor %$44_1@23 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10063 ADDS(%acc_21@13) token();
+                        v0_logical_tensor %$45_1@24 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10064 SUBS(%acc_21@13) token();
+                        v0_logical_tensor %acc_68@25 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10065 ADD(%$44_1@23, %$45_1@24) token();
+                        v0_logical_tensor %acc_24@29 #dtype(float) #shape([16, 16]) #offset([0, 0]) #dynvalidshape([16, 16]) = !10066 ADDS(%acc_68@25) token();
+                        yield %acc_24@29, %b_19@1;
+                    }
+                    yield %acc_26@25, %b_22@28;
+                }
+                continue %acc_28@22, %b_24@1;
+            }
+            continue %b_26@1;
+        }
+        continue %b_28@1;
+    }
+    return %a@0, %b_30@1;
+}

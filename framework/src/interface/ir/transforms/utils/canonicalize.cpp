@@ -66,6 +66,9 @@ public:
 
     std::vector<DefSite> sites;
     std::vector<const Var*> liveRoots;
+    // Side-effect op results (ASSEMBLE/ASSEMBLE_SSA/ATOMIC_RMW) seen during traversal,
+    // used to detect genuine in-place accumulator carries when visiting a loop body.
+    std::vector<VarPtr> sideEffectResults_;
 
 private:
     std::vector<const std::vector<VarPtr>*> rvStack_;
@@ -114,6 +117,7 @@ private:
             defs.push_back(res.get());
             if (IsSideEffectOp(op->opcode_)) {
                 liveRoots.push_back(res.get());
+                sideEffectResults_.push_back(res);
             }
         }
         for (const auto& token : op->result_token_) {
@@ -141,14 +145,30 @@ private:
     {
         INTERNAL_CHECK(returnVars.size() == iterArgs.size()) << "for stmt must have one return var per iter arg";
         auto n = iterArgs.size();
-        for (size_t k = 0; k < n; ++k) {
-            if (IsSameRawTensor(iterArgs[k]->iterVar_, returnVars[k])) {
-                AddLiveUses(iterArgs[k]->iterVar_);
-            }
-        }
+        size_t sideEffectStart = sideEffectResults_.size();
         rvStack_.push_back(&returnVars);
         VisitStmt(body);
         rvStack_.pop_back();
+        // A carried value whose iterVar/returnVar share one raw tensor is only a genuine
+        // in-place accumulator update when the loop body actually writes that raw tensor
+        // through a side-effect op. Otherwise it is a dead pass-through carry (the phi
+        // merely inherited the iterVar's raw tensor), which must not be kept alive.
+        for (size_t k = 0; k < n; ++k) {
+            const auto& itv = iterArgs[k]->iterVar_;
+            if (!IsSameRawTensor(itv, returnVars[k])) {
+                continue;
+            }
+            bool writtenInPlace = false;
+            for (size_t j = sideEffectStart; j < sideEffectResults_.size(); ++j) {
+                if (IsSameRawTensor(itv, sideEffectResults_[j])) {
+                    writtenInPlace = true;
+                    break;
+                }
+            }
+            if (writtenInPlace) {
+                AddLiveUses(itv);
+            }
+        }
     }
 
     void VisitStmt_(const ForStmtPtr& op) override { VisitStmt_(op->returnVars_, op->iterArgs_, op->body_); }
