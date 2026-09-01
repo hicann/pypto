@@ -156,10 +156,7 @@ TEST_F(TestCodegenDynBinary, TestGatherEle)
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
                                                                 HIDDEN_FUNC_SUFFIX);
 
-    std::string res = GenCodeByFunction(*function);
-    std::string expect =
-        R"!!!(TileOp::DynTgatherElement<float, int32_t, 1, 2, 256, 1, 2, 8, 1, 2, 8, 3>((__ubuf__ float*)UB_S2176_E2240, (__ubuf__ float*)UB_S0_E2048, (__ubuf__ int32_t*)UB_S2048_E2112, 1, 1, sym_59_dim_0, sym_59_dim_1);)!!!";
-    CheckStringExist(expect, res);
+    EXPECT_THROW((void)GenCodeByFunction(*function), Error);
 }
 
 TEST_F(TestCodegenDynBinary, TestGatherEleTileTensor)
@@ -192,7 +189,8 @@ TEST_F(TestCodegenDynBinary, TestGatherEleTileTensor)
                                                                 HIDDEN_FUNC_SUFFIX);
 
     std::string res = GenCodeByFunction(*function);
-    std::string expect = R"!!!(TgatherElement<4>(ubTensor_4, ubTensor_0, ubTensor_2, ubTensor_5);
+    std::string expect =
+        R"!!!(TgatherElement<4>(ubTensor_2, ubTensor_3, gmTensor_4, ubTensor_0, Coord2Dim(GET_PARAM_OFFSET_2(param, 1, 10)));
 )!!!";
     CheckStringExist(expect, res);
 }

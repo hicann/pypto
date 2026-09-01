@@ -105,7 +105,9 @@ void DumpNoSubFuncBundledKernel(const DyndevFunctionAttribute* dynAttr, Function
 
     // 2. 重新编译 __HAS_SUB_FUNC__ 未定义（enableSubFunc=false）的 kernel
     std::string kernelPath;
-    int ret = CompileAICoreKernel(leafDict, param, ccePath, funcHash, funcRawName, kernelPath, false);
+    auto devProg = reinterpret_cast<const DevAscendProgram*>(dynAttr->devProgBinary.data());
+    bool requiresSimt = devProg != nullptr && devProg->requiresSimt;
+    int ret = CompileAICoreKernel(leafDict, param, ccePath, funcHash, funcRawName, kernelPath, requiresSimt, false);
     if (ret != 0 || RealPath(kernelPath).empty()) {
         MACHINE_LOGW("Skip no-subfunc bundled kernel dump: recompile kernel failed for %s.", kernelName);
         return;

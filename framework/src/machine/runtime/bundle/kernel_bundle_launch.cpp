@@ -190,6 +190,8 @@ int LaunchBundleKernelOnce(const std::vector<uint8_t>& devProgBinary, void* binH
     RtTaskCfgInfo rtTaskCfg;
     (void)memset_s(&rtTaskCfg, sizeof(RtTaskCfgInfo), 0, sizeof(RtTaskCfgInfo));
     rtTaskCfg.schemMode = static_cast<uint8_t>(RtSchemModeType::BATCH);
+    rtTaskCfg.localMemorySize = GetAicoreLocalMemorySize(static_cast<NPUArch>(devProg->devArgs.archInfo),
+                                                         devProg->requiresSimt);
 
     // Launch (mirrors KernelModule::Launch), reusing the public DeviceLauncher helpers.
     const bool isCaptureMode = DeviceLauncher::IsCaptureMode();

@@ -32,3 +32,12 @@ TEST(RuntimeUtilsTest, AlignSize_GetProcessId_RegisterKernelBin)
     std::vector<uint8_t> empty;
     EXPECT_ANY_THROW(RegisterKernelBin(empty));
 }
+
+TEST(RuntimeUtilsTest, A5SimtDynamicUbSize)
+{
+    EXPECT_EQ(A5_SIMT_DYNAMIC_UB_SIZE, 216U * 1024U);
+    EXPECT_EQ(GetAicoreLocalMemorySize(NPUArch::DAV_3510, true), A5_SIMT_DYNAMIC_UB_SIZE);
+    EXPECT_EQ(GetAicoreLocalMemorySize(NPUArch::DAV_3510, false), 0U);
+    EXPECT_EQ(GetAicoreLocalMemorySize(NPUArch::DAV_2201, true), 0U);
+    EXPECT_EQ(GetAicoreLocalMemorySize(NPUArch::DAV_UNKNOWN, true), 0U);
+}

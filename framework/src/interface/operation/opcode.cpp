@@ -738,9 +738,10 @@ void OpcodeManager::RegisterVector()
     RegisterInfo(Opcode::OP_GATHER, OpCoreType::ANY, "GATHER", {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR},
                  {MemoryType::MEM_UB}, {"TileOp::Tgather", PIPE_S, PIPE_MTE2, CoreType::AIV}, OpCalcType::OTHER,
                  {OP_ATTR_PREFIX + "axis"}, TileShapeVerifier::Verify);
-    RegisterInfo(Opcode::OP_GATHER_ELEMENT, OpCoreType::AIV, "GATHER_ELEMENT", {MemoryType::MEM_UB, MemoryType::MEM_UB},
-                 {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::TgatherElement", PIPE_V, PIPE_V, CoreType::AIV},
-                 OpCalcType::OTHER, {OP_ATTR_PREFIX + "axis", OpAttributeKey::excludeBufferReuse},
+    RegisterInfo(Opcode::OP_GATHER_ELEMENT, OpCoreType::AIV, "GATHER_ELEMENT",
+                 {MemoryType::MEM_UNKNOWN, MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
+                 {"TileOp::TgatherElement", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
+                 {OP_ATTR_PREFIX + "axis", OpAttributeKey::excludeBufferReuse, OP_ATTR_PREFIX + "requires_simt"},
                  TileShapeVerifier::Verify);
     RegisterInfo(Opcode::OP_GATHER_MASK, OpCoreType::AIV, "GATHER_MASK", {MemoryType::MEM_UB}, {MemoryType::MEM_UB},
                  {"TileOp::TgatherMask", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
@@ -782,8 +783,9 @@ void OpcodeManager::RegisterVector()
     RegisterInfo(Opcode::OP_INDEX_PUT, OpCoreType::ANY, "INDEX_PUT",
                  {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB,
                   MemoryType::MEM_UB, MemoryType::MEM_UB},
-                 {MemoryType::MEM_DEVICE_DDR}, {"TileOp::TIndexPut", PIPE_MTE3, PIPE_MTE3, CoreType::AIV},
-                 OpCalcType::MOVE_OUT, {OpAttributeKey::accumulate, OpAttributeKey::indicesSize});
+                 {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB},
+                 {"TileOp::TIndexPut", PIPE_MTE3, PIPE_MTE3, CoreType::AIV}, OpCalcType::MOVE_OUT,
+                 {OpAttributeKey::accumulate, OpAttributeKey::indicesSize, OP_ATTR_PREFIX + "requires_simt"});
     RegisterInfo(Opcode::OP_SCATTER_UPDATE, OpCoreType::ANY, "SCATTER_UPDATE", {MemoryType::MEM_UB, MemoryType::MEM_UB},
                  {MemoryType::MEM_UB}, {}, OpCalcType::OTHER);
     RegisterInfo(Opcode::OP_SCATTER_SCALAR, OpCoreType::ANY, "SCATTER_SCALAR", {MemoryType::MEM_UB, MemoryType::MEM_UB},

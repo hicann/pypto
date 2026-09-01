@@ -102,6 +102,31 @@ TEST_F(CodegenPreprocTest, TestSaveGmTensorParamIdxToOp)
     }
 }
 
+TEST_F(CodegenPreprocTest, TestSaveGmGatherElementParamIdxToOp)
+{
+    auto rootFunc = std::make_shared<Function>(Program::GetInstance(), "GmGatherRoot", "GmGatherRoot", nullptr);
+    rootFunc->rootFunc_ = rootFunc.get();
+    auto leafFunc = std::make_shared<Function>(Program::GetInstance(), "GmGatherLeaf", "GmGatherLeaf", rootFunc.get());
+    rootFunc->programs_.emplace(leafFunc->GetFuncMagic(), leafFunc.get());
+    rootFunc->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
+    rootFunc->SetUnderDynamicFunction(true);
+
+    const std::vector<int64_t> shape{CP_NUM16, CP_NUM16};
+    auto source = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto indices = IRBuilder().CreateTensorVar(DT_INT32, shape, CreateTestConstIntVector(shape));
+    auto result = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tmp = IRBuilder().CreateTensorVar(DT_INT32, shape, CreateTestConstIntVector(shape));
+    source->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    indices->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    auto& gather = IRBuilder().CreateTensorOpStmt(*leafFunc, Opcode::OP_GATHER_ELEMENT, {source, indices},
+                                                  {result, tmp});
+    gather.SetIOpAtt(0, 3);
+
+    CodegenPreproc codegenPreproc;
+    ASSERT_EQ(codegenPreproc.SaveGmTensorParamIdxToOp(*rootFunc), SUCCESS);
+    EXPECT_TRUE(gather.HasAttr(OpAttributeKey::gmTensorParamIdxInCall));
+}
+
 TEST_F(CodegenPreprocTest, TestCombineAxisRowSumLine)
 {
     ComputationalGraphBuilder graph;

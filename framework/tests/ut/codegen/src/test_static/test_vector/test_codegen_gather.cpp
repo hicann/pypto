@@ -70,13 +70,14 @@ Function& testGatherEle(bool isSupportTileTensor, string funcName)
     codeGen.GenCode(*function);
     return *function;
 }
-TEST_F(TestCodegenGather, TestGatherEle) { testGatherEle(false, "GATHER_ELEMET_T"); }
+TEST_F(TestCodegenGather, TestGatherEle) { EXPECT_THROW((void)testGatherEle(false, "GATHER_ELEMET_T"), Error); }
 
 TEST_F(TestCodegenGather, TestGatherEleTileTensor)
 {
     Function& func = testGatherEle(true, "GATHER_ELEMET_TILETENSOR");
     std::string res = GetResultFromCpp(func);
-    std::string expect = R"!!!(TgatherElement<4>(ubTensor_12, ubTensor_5, ubTensor_10, ubTensor_13);
+    std::string expect =
+        R"!!!(TgatherElement<4>(ubTensor_10, ubTensor_11, gmTensor_12, ubTensor_8, Coord2Dim(GET_PARAM_OFFSET_2(param, 0, 10)));
 )!!!";
     CheckStringExist(expect, res);
 }

@@ -17,6 +17,7 @@
 
 #include "buffer_rearrange.h"
 #include "passes/pass_log/pass_log.h"
+#include "interface/utils/simt_utils.h"
 
 #ifdef MODULE_NAME
 #undef MODULE_NAME
@@ -967,6 +968,16 @@ Status OoOScheduler::Init(const std::vector<Operation*>& opList,
     LOG_SCOPE_BEGIN(tInit, Elements::Function, "Init");
     // 初始化芯片各buffer大小
     state_.localMemSize = CommonUtils::GetLocalMemorySize();
+    const std::string simtAttr = OP_ATTR_PREFIX + "requires_simt";
+    for (auto& op : opList) {
+        bool requiresSimt = op->HasAttribute(simtAttr) && op->GetBoolAttribute(simtAttr);
+        if (requiresSimt) {
+            FE_ASSERT(Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510)
+                << "requires_simt is only supported on DAV_3510";
+            state_.localMemSize[MemoryType::MEM_UB] = A5_SIMT_DYNAMIC_UB_SIZE;
+            break;
+        }
+    }
     if (fixCoreConfig.empty()) {
         InitCoreConfig(opList);
     } else {

@@ -516,17 +516,21 @@ std::string CodeGenOpNPU::PrintIndexPut(const PrintIndexPutParam& param) const
     return PrintIndexPutDynamicUnaligned(param);
 }
 
-std::string CodeGenOpNPU::PrintIndexPutLayout(size_t indicesSize, bool accumulate) const
+std::string CodeGenOpNPU::PrintIndexPutLayout(size_t indicesSize, bool accumulate, bool requiresSimt) const
 {
     std::string dstTensor = QueryTileTensorNameByIdx(ID0);
     std::vector<std::string> gmOffsetExpr = GetGmOffsetForTileTensor(ID0);
     std::string coordCp = WrapParamByParentheses(gmOffsetExpr);
     std::string coord = PrintCoord(rawShape[ID0].size(), coordCp);
-    std::string valuesTensor = QueryTileTensorNameByIdx(ID2);
+    size_t valuesIndex = requiresSimt ? ID3 : ID2;
+    std::string valuesTensor = QueryTileTensorNameByIdx(valuesIndex);
     std::vector<std::string> paramList = {dstTensor, coord, valuesTensor};
+    if (requiresSimt) {
+        paramList.push_back(QueryTileTensorNameByIdx(ID1));
+    }
     for (size_t i = 0; i < SHAPE_DIM4; ++i) {
         if (i < indicesSize) {
-            std::string indices = QueryTileTensorNameByIdx(ID3 + i);
+            std::string indices = QueryTileTensorNameByIdx(valuesIndex + ID1 + i);
             paramList.push_back(indices);
         } else {
             paramList.push_back(paramList.back());
@@ -545,7 +549,9 @@ std::string CodeGenOpNPU::GenIndexPutOp() const
     bool accumulate = AnyCast<bool>(opAttrs.at(OpAttributeKey::accumulate));
     int64_t indicesSize = AnyCast<int64_t>(opAttrs.at(OpAttributeKey::indicesSize));
     if (isSupportTileTensor) {
-        return PrintIndexPutLayout(indicesSize, accumulate);
+        bool requiresSimt = false;
+        GetOpAttr(OP_ATTR_PREFIX + "requires_simt", requiresSimt);
+        return PrintIndexPutLayout(indicesSize, accumulate, requiresSimt);
     }
     // dst:gm, s0/self:gm, s1/values:ub, s2/indices:ub
     std::string dstVar = GenGmParamVar(ID0);

@@ -124,7 +124,7 @@ int RunBishengQuiet(const std::string& compileCmd, const std::string& workDir)
 }
 
 static int CompileCoreMachine(const std::string& objFile, bool isCube, uint64_t tilingKey, const std::string& headFile,
-                              const std::string& aicoreSrcFile, const std::string& funcRawName)
+                              const std::string& aicoreSrcFile, const std::string& funcRawName, bool requiresSimt)
 {
     MACHINE_LOGI("Compile src file is [%s], kernel type[%d].", aicoreSrcFile.c_str(), isCube);
     const std::string cc_opt = isCube ? Platform::Instance().GetSoc().GetCCECVersion("AIC") :
@@ -140,6 +140,8 @@ static int CompileCoreMachine(const std::string& objFile, bool isCube, uint64_t 
                                             "";
     const std::string enableAicoreResolve = IsAicoreResolveEnabled() ? "-DENABLE_AICORE_RESOLVE=1" :
                                                                        "-DENABLE_AICORE_RESOLVE=0";
+    const std::string requiresSimtMacro = requiresSimt ? "-DREQUIRES_SIMT=1" : "-DREQUIRES_SIMT=0";
+    const std::string simtCompileOption = requiresSimt ? "-mllvm -cce-dyn-kernel-stack-size=false" : "";
     std::string ccecCmd;
     ccecCmd.resize(CMD_SIZE_2K);
     std::string includePath = GetPyptoLibPath() + "/../include/tile_fwk";
@@ -149,6 +151,7 @@ static int CompileCoreMachine(const std::string& objFile, bool isCube, uint64_t 
                          "--cce-aicore-arch=%s "
                          "-mllvm -cce-aicore-stack-size=0x8000 "
                          "-mllvm -cce-aicore-function-stack-size=0x8000 "
+                         "%s "
                          "-mllvm -cce-aicore-record-overflow=false "
                          "-mllvm -cce-aicore-addr-transform "
                          "-mllvm -cce-aicore-dcci-insert-for-scalar=false "
@@ -160,16 +163,17 @@ static int CompileCoreMachine(const std::string& objFile, bool isCube, uint64_t 
                          "%s "
                          "%s "
                          "%s "
+                         "%s "
                          "-I%s/tileop/arch32 "
                          "-I%s/ "
                          "-I%s/include/tileop/arch32 "
                          "-I%s/include/ "
                          "-o %s %s %s %s",
-                         BISHENG_PROGRAM_CMD, cc_opt.c_str(), std::to_string(tilingKey).c_str(), opType.c_str(),
-                         funcRawName.c_str(), headFile.c_str(), hasSubFunc.c_str(), coreType.c_str(),
-                         enableAicoreResolve.c_str(), includePath.c_str(), includePath.c_str(),
-                         GetPyptoLibPath().c_str(), GetPyptoLibPath().c_str(), objFile.c_str(), aicoreSrcFile.c_str(),
-                         davArch.c_str(), enableMainBlock.c_str());
+                         BISHENG_PROGRAM_CMD, cc_opt.c_str(), simtCompileOption.c_str(),
+                         std::to_string(tilingKey).c_str(), opType.c_str(), funcRawName.c_str(), headFile.c_str(),
+                         requiresSimtMacro.c_str(), hasSubFunc.c_str(), coreType.c_str(), enableAicoreResolve.c_str(),
+                         includePath.c_str(), includePath.c_str(), GetPyptoLibPath().c_str(), GetPyptoLibPath().c_str(),
+                         objFile.c_str(), aicoreSrcFile.c_str(), davArch.c_str(), enableMainBlock.c_str());
     if (ret < 0) {
         MACHINE_LOGE(HostBackEndErr::COMPILE_AICORE_FAILED, "Compile aicore construct cmd failed.");
         return ret;
@@ -310,9 +314,23 @@ static int LinkObject(const std::string& src_objs, std::string& objPath, const s
     return RunLdViaSecureTempScript(ccePath, key, ccecCmd);
 }
 
+bool DynamicKernelRequiresSimt(const std::map<uint64_t, Function*>& leafDict)
+{
+    const std::string simtAttr = OP_ATTR_PREFIX + "requires_simt";
+    for (const auto& [hash, leaf] : leafDict) {
+        (void)hash;
+        for (Operation& op : leaf->Operations()) {
+            if (op.HasAttribute(simtAttr) && op.GetBoolAttribute(simtAttr)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 int CompileAICoreKernel(std::map<uint64_t, Function*>& leafDict, dynamic::EncodeDevAscendFunctionParam& param,
                         const std::string& ccePath, const std::string& funcHash, const std::string& funcRawName,
-                        std::string& kernelPath, bool enableSubFunc)
+                        std::string& kernelPath, bool requiresSimt, bool enableSubFunc)
 {
     if (ccePath.empty()) {
         MACHINE_LOGE(DevCommonErr::FILE_ERROR, "No cce path.");
@@ -321,19 +339,19 @@ int CompileAICoreKernel(std::map<uint64_t, Function*>& leafDict, dynamic::Encode
     uint64_t tilingKey = OpInfoManager::GetInstance().GetOpTilingKey();
     std::string aic_obj = ccePath + "dy_kernel_" + funcHash + "_aic_" + std::to_string(tilingKey) + ".o";
     std::string aiv_obj = ccePath + "dy_kernel_" + funcHash + "_aiv_" + std::to_string(tilingKey) + ".o";
-    std::string aicoreSrcFile = ccePath + "aicore.cpp";
-    if (!GenAicoreSrcFile(aicoreSrcFile, funcHash)) {
+    std::string aicoreSrcFile = ccePath + "aicore_" + funcHash + ".cpp";
+    if (!GenAicoreSrcFile(aicoreSrcFile)) {
         MACHINE_LOGE(HostBackEndErr::GEN_AICORE_FILE_FAILED, "Fail to generate aicore src file.");
         return -1;
     }
     std::deque<std::function<void(void)>> tasks;
     auto task = [&ccePath, &funcHash, &funcRawName, &leafDict, &param, &aic_obj, &aicoreSrcFile, &tilingKey,
-                 enableSubFunc]() {
+                 enableSubFunc, requiresSimt]() {
         // gen switch case func
         std::stringstream src_aic_obj;
         auto headFile = GenSubFuncCall(leafDict, CoreType::AIC, param, ccePath, tilingKey, src_aic_obj, enableSubFunc);
         std::string mid_aic_obj = ccePath + "mid_kernel_" + funcHash + "_aic_" + std::to_string(tilingKey) + ".o";
-        auto ret = CompileCoreMachine(mid_aic_obj, true, tilingKey, headFile, aicoreSrcFile, funcRawName);
+        auto ret = CompileCoreMachine(mid_aic_obj, true, tilingKey, headFile, aicoreSrcFile, funcRawName, requiresSimt);
         ASSERT(HostBackEndErr::COMPILE_AICORE_FAILED, ret == 0)
             << "CompileCoreMachine failed with return code  " << ret;
         src_aic_obj << mid_aic_obj;
@@ -344,11 +362,12 @@ int CompileAICoreKernel(std::map<uint64_t, Function*>& leafDict, dynamic::Encode
     tasks.push_back(task);
 
     auto task1 = [&ccePath, &funcHash, &funcRawName, &leafDict, &param, &aiv_obj, &aicoreSrcFile, &tilingKey,
-                  enableSubFunc]() {
+                  enableSubFunc, requiresSimt]() {
         std::stringstream src_aiv_obj;
         auto headFile = GenSubFuncCall(leafDict, CoreType::AIV, param, ccePath, tilingKey, src_aiv_obj, enableSubFunc);
         std::string mid_aiv_obj = ccePath + "mid_kernel_" + funcHash + "_aiv_" + std::to_string(tilingKey) + ".o";
-        auto ret = CompileCoreMachine(mid_aiv_obj, false, tilingKey, headFile, aicoreSrcFile, funcRawName);
+        auto ret = CompileCoreMachine(mid_aiv_obj, false, tilingKey, headFile, aicoreSrcFile, funcRawName,
+                                      requiresSimt);
         ASSERT(HostBackEndErr::COMPILE_AICORE_FAILED, ret == 0)
             << "CompileCoreMachine failed with return code  " << ret;
         src_aiv_obj << mid_aiv_obj;

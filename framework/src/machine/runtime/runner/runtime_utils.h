@@ -18,10 +18,12 @@
 #include "tilefwk/pypto_fwk_log.h"
 #include "tilefwk/error.h"
 #include "tilefwk/error_code.h"
+#include "tilefwk/platform.h"
 #include "adapter/api/runtime_api.h"
 #include "adapter/api/runtime_capture_context.h"
 #include "adapter/api/acl_api.h"
 #include "machine/runtime/context/stream_context.h"
+#include "interface/utils/common.h"
 #include "securec.h"
 
 #define MemcpyS(dest, destMax, src, count) \
@@ -33,6 +35,11 @@
                                                __LINE__)
 
 namespace npu::tile_fwk {
+inline uint32_t GetAicoreLocalMemorySize(NPUArch arch, bool requiresSimt)
+{
+    return arch == NPUArch::DAV_3510 && requiresSimt ? A5_SIMT_DYNAMIC_UB_SIZE : 0U;
+}
+
 inline void MemcpySWithCheck(void* dest, size_t destMax, const void* src, size_t count, const char* func,
                              const char* file, int line)
 {

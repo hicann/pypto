@@ -49,3 +49,15 @@ TEST_F(RebuildableAttributeTest, TestAttribute)
     mgr.ResetAttr<RebuildableNumber>(func.get(), &data);
     EXPECT_EQ(20, mgr.GetAttr<RebuildableNumber>(func.get())->number);
 }
+
+TEST_F(RebuildableAttributeTest, RequiresSimtDefaultsToFalseAndCanBeReset)
+{
+    auto func = std::make_unique<Function>(Program::GetInstance(), "rebuildable_simt_attr_ut",
+                                           "rebuildable_simt_attr_ut", nullptr);
+    auto& mgr = RebuildableAttributeManager::GetInstance();
+    EXPECT_FALSE(mgr.GetAttr<RebuildableRequiresSimt>(func.get())->Get());
+
+    bool requiresSimt = true;
+    mgr.ResetAttr<RebuildableRequiresSimt>(func.get(), &requiresSimt);
+    EXPECT_TRUE(mgr.GetAttr<RebuildableRequiresSimt>(func.get())->Get());
+}

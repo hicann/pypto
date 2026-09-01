@@ -23,6 +23,7 @@
 #include "interface/function/function.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/tensor/irbuilder.h"
+#include "interface/utils/simt_utils.h"
 #include "passes/pass_mgr/pass_manager.h"
 #include "symbolic_scalar_test_utils.h"
 #include "tilefwk/platform.h"
@@ -235,6 +236,36 @@ TEST_F(ScheduleOoOTest, TestDependencies)
     EXPECT_EQ(ooOScheduler.state_.depManager.GetSuccessors(op).size(), 2);
     EXPECT_TRUE(ooOScheduler.state_.depManager.GetSuccessors(op).count(subGraph.GetOp("Add1")) > 0);
     EXPECT_EQ(res, SUCCESS);
+}
+
+TEST_F(ScheduleOoOTest, SimtOpUses216KBForUbScheduling)
+{
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    ComputationalGraphBuilder subGraph;
+    std::vector<std::string> tensorNames{"t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8"};
+    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB, MemoryType::MEM_DEVICE_DDR,
+                                           MemoryType::MEM_UB,         MemoryType::MEM_UB, MemoryType::MEM_UB,
+                                           MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB};
+    std::vector<Opcode> opCodes{Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC,
+                                Opcode::OP_UB_ALLOC, Opcode::OP_COPY_IN,  Opcode::OP_COPY_IN,  Opcode::OP_ROWMAX_SINGLE,
+                                Opcode::OP_ADD,      Opcode::OP_COPY_OUT};
+    std::vector<std::vector<std::string>> ioperands{{}, {}, {}, {}, {}, {"t1"}, {"t3"}, {"t2"}, {"t4", "t5"}, {"t5"}};
+    std::vector<std::vector<std::string>> ooperands{{"t2"}, {"t4"}, {"t5"},       {"t6"}, {"t8"},
+                                                    {"t2"}, {"t4"}, {"t5", "t6"}, {"t8"}, {"t7"}};
+    std::vector<std::string> opNames{"Alloc1",  "Alloc2",  "Alloc3",  "Alloc4", "Alloc5",
+                                     "Copyin1", "Copyin2", "RowMax1", "Add1",   "Copyout1"};
+    ASSERT_TRUE(subGraph.AddTensors(DataType::DT_FP32, {16, 16}, tensorMemTypes, tensorNames, 0));
+    ASSERT_TRUE(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true));
+    Function* function = subGraph.GetFunction();
+    ASSERT_NE(function, nullptr);
+    Operation* simtOp = subGraph.GetOp("Add1");
+    ASSERT_NE(simtOp, nullptr);
+    simtOp->SetAttribute(OP_ATTR_PREFIX + "requires_simt", true);
+
+    OoOScheduler scheduler(*function);
+    ASSERT_EQ(scheduler.Init(function->Operations().DuplicatedOpList()), SUCCESS);
+    EXPECT_EQ(scheduler.state_.localMemSize.at(MemoryType::MEM_UB), A5_SIMT_DYNAMIC_UB_SIZE);
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
 }
 
 TEST_F(ScheduleOoOTest, TestDependenciesView)

@@ -245,6 +245,21 @@ std::string CodeGenOpNPU::PrintGatherElementTileTensor(const PrintGatherEleParam
 
 std::string CodeGenOpNPU::GenGatherElementOp() const
 {
+    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportTileTensor)
+        << "GatherElements only supports tile-tensor code generation";
+
+    constexpr size_t paramsIndex = ID2;
+    constexpr size_t indicesIndex = ID3;
+    const bool paramsInGm = operandType[paramsIndex] == BUF_DDR;
+    const bool indicesInUb = operandType[indicesIndex] == BUF_UB;
+    const bool inputsInUb = operandType[paramsIndex] == BUF_UB && operandType[indicesIndex] == BUF_UB;
+    const bool inputsSupported = inputsInUb || (paramsInGm && indicesInUb);
+    ASSERT(OperErr::OPERAND_TYPE_UNSUPPORTED, inputsSupported)
+        << "GatherElements supports UB params with UB indices, or GM params with UB indices";
+    if (paramsInGm) {
+        return PrintGatherElementFromGMLayout();
+    }
+
     std::string s0Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ID2]);
     std::string s1Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ID3]);
     std::string dVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);
@@ -521,4 +536,5 @@ std::string CodeGenOpNPU::GenScatterOp() const
     return PrintScatterOpDynamicUnaligned(
         {axis, scatterMode, dstVar, src1Var, src2Var, dstRawShape, src1RawShape, src2RawShape, dataTypeExpr});
 }
+
 } // namespace npu::tile_fwk

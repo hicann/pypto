@@ -114,4 +114,6 @@ std::string RebuildableWorkspaceDesc::PrettyDumpSize(uint64_t maxDynamicAssemble
 
 RBUILDABLE_ATTRIBUTE_REGISTER(RebuildableWorkspaceDesc);
 
+RBUILDABLE_ATTRIBUTE_REGISTER(RebuildableRequiresSimt);
+
 } // namespace npu::tile_fwk

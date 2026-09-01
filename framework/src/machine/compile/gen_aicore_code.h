@@ -18,5 +18,5 @@
 #include <string>
 
 namespace npu::tile_fwk {
-bool GenAicoreSrcFile(const std::string& codeSrcPath, const std::string& funcHash);
+bool GenAicoreSrcFile(const std::string& codeSrcPath);
 }

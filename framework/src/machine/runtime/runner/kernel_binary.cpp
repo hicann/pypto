@@ -391,6 +391,8 @@ void KernelBinary::InitLaunchArgs()
 
     memset_s(&rtTaskCfg_, sizeof(RtTaskCfgInfo), 0, sizeof(RtTaskCfgInfo));
     rtTaskCfg_.schemMode = static_cast<uint8_t>(RtSchemModeType::BATCH);
+    rtTaskCfg_.localMemorySize = GetAicoreLocalMemorySize(static_cast<NPUArch>(devProg->devArgs.archInfo),
+                                                          devProg->requiresSimt);
 }
 
 void KernelBinary::RefreshRuntimeDynamicCellMatchMeta(uint64_t needBytes)

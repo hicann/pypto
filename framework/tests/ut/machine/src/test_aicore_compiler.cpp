@@ -23,6 +23,8 @@
 #include <unistd.h>
 
 #include "machine/compile/aicore_compiler.h"
+#include "machine/compile/gen_aicore_code.h"
+#include "interface/program/program.h"
 #include "utils/file_utils.h"
 #include "interface/utils/op_info_manager.h"
 #include "tilefwk/pypto_fwk_log.h"
@@ -60,7 +62,8 @@ TEST_F(TestAicoreCompiler, CompileAICoreKernel_EmptyCcePath)
     dynamic::EncodeDevAscendFunctionParam param = {};
     std::string kernelPath;
 
-    EXPECT_THROW(CompileAICoreKernel(leafDict, param, "", "test_hash", "test_func", kernelPath), npu::tile_fwk::Error);
+    EXPECT_THROW(CompileAICoreKernel(leafDict, param, "", "test_hash", "test_func", kernelPath, false),
+                 npu::tile_fwk::Error);
 }
 
 TEST_F(TestAicoreCompiler, CompileAICoreKernel_GenSrcFileFails)
@@ -69,7 +72,7 @@ TEST_F(TestAicoreCompiler, CompileAICoreKernel_GenSrcFileFails)
     dynamic::EncodeDevAscendFunctionParam param = {};
     std::string kernelPath;
     EXPECT_THROW(
-        CompileAICoreKernel(leafDict, param, "/nonexistent_dir/cce_path/", "test_hash", "test_func", kernelPath),
+        CompileAICoreKernel(leafDict, param, "/nonexistent_dir/cce_path/", "test_hash", "test_func", kernelPath, false),
         npu::tile_fwk::Error);
 }
 
@@ -147,9 +150,34 @@ TEST_F(TestAicoreCompiler, CompileAICoreKernel_ReachRunBishengQuiet)
     dynamic::EncodeDevAscendFunctionParam param = {};
     std::string kernelPath;
     try {
-        (void)CompileAICoreKernel(leafDict, param, ccePath, "ut_hash", "ut_func", kernelPath);
+        (void)CompileAICoreKernel(leafDict, param, ccePath, "ut_hash", "ut_func", kernelPath, false);
     } catch (const npu::tile_fwk::Error&) {
         // compile/link failure is acceptable; path through RunBishengQuiet is already exercised
     }
     SUCCEED();
+}
+
+TEST_F(TestAicoreCompiler, DynamicKernelRequiresSimtAggregatesLeafOps)
+{
+    auto leaf = std::make_shared<Function>(Program::GetInstance(), "simt_leaf", "simt_leaf", nullptr);
+    auto& op = leaf->AddOperation(Opcode::OP_CV_SYNC_SRC, {}, {});
+    std::map<uint64_t, Function*> leafDict{{1U, leaf.get()}};
+
+    EXPECT_FALSE(DynamicKernelRequiresSimt(leafDict));
+    op.SetAttribute(OP_ATTR_PREFIX + "requires_simt", true);
+    EXPECT_TRUE(DynamicKernelRequiresSimt(leafDict));
+}
+
+TEST_F(TestAicoreCompiler, GenAicoreSrcFileUsesRequiresSimtMacro)
+{
+    const std::string sourcePath = GetTestTmpDir() + "/a5_simt_meta.cpp";
+    ASSERT_TRUE(GenAicoreSrcFile(sourcePath));
+
+    std::ifstream source(sourcePath);
+    ASSERT_TRUE(source.is_open());
+    const std::string content((std::istreambuf_iterator<char>(source)), std::istreambuf_iterator<char>());
+    EXPECT_NE(content.find("#if REQUIRES_SIMT && defined(__DAV_V310) && defined(__AIV__)"), std::string::npos);
+    EXPECT_NE(content.find("void KERNEL_ENTRY(__OPTYPE__, __OPNAME__, __TILINGKEY__)"), std::string::npos);
+    EXPECT_NE(content.find("{12U, sizeof(uint32_t), 4U}"), std::string::npos);
+    EXPECT_NE(content.find("{7U, sizeof(uint32_t), 8U * 1024U}"), std::string::npos);
 }

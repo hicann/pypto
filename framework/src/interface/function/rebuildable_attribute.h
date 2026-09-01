@@ -117,12 +117,16 @@ struct RebuildableAttrInitContext {
         const std::string name = typeid(TyAttr).name();                      \
         ctx->manager->InitAttr(ctx->func, name, base);                       \
     }                                                                        \
-    static EntryRegistrarNode node(RebuildableAttributeManager::GetRegistrarGroup(), Entry##TyAttr, #TyAttr);
+    static EntryRegistrarNode node##TyAttr(RebuildableAttributeManager::GetRegistrarGroup(), Entry##TyAttr, #TyAttr);
 
 struct RebuildableWorkspaceDesc : RebuildableAttribute<WorkspaceDesc> {
     uint64_t GetSizeForCheckOnly(uint64_t maxDynamicAssembleOutcastMem, uint64_t debugSize) const;
 
     std::string PrettyDumpSize(uint64_t maxDynamicAssembleOutcastMem, uint64_t debugSize) const;
+};
+
+struct RebuildableRequiresSimt : RebuildableAttribute<bool> {
+    RebuildableRequiresSimt() { data = false; }
 };
 
 } // namespace npu::tile_fwk

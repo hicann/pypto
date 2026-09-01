@@ -223,3 +223,28 @@ TEST_F(GetParamIdxTest, TestGmSpillCopyInWithOutNoramlize)
     InferParamIndex getParamIndexTest;
     getParamIndexTest.RunOnFunction(*rootFuncPtr);
 }
+
+TEST_F(GetParamIdxTest, TestGmGatherElementResetsResultDynValidShape)
+{
+    auto rootFunc = std::make_shared<Function>(Program::GetInstance(), "GmGatherRoot", "GmGatherRoot", nullptr);
+    rootFunc->rootFunc_ = rootFunc.get();
+    auto leafFunc = std::make_shared<Function>(Program::GetInstance(), "GmGatherLeaf", "GmGatherLeaf", rootFunc.get());
+    rootFunc->programs_.emplace(leafFunc->GetFuncMagic(), leafFunc.get());
+
+    const std::vector<int64_t> shape{8, 16};
+    auto source = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto indices = IRBuilder().CreateTensorVar(DT_INT32, shape, CreateTestConstIntVector(shape));
+    auto result = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tmp = IRBuilder().CreateTensorVar(DT_INT32, shape, CreateTestConstIntVector(shape));
+    source->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    indices->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    result->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    tmp->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    PassOperationUtils::AddOperation(*leafFunc, Opcode::OP_GATHER_ELEMENT, {source, indices}, {result, tmp});
+
+    InferParamIndex inferParamIndex;
+    ASSERT_EQ(inferParamIndex.RunOnFunction(*rootFunc), SUCCESS);
+    ASSERT_EQ(result->GetDynValidShape().size(), shape.size());
+    EXPECT_EQ(result->GetDynValidShape()[0].Dump(), "sym_" + std::to_string(result->GetMagic()) + "_dim_0");
+    EXPECT_EQ(result->GetDynValidShape()[1].Dump(), "sym_" + std::to_string(result->GetMagic()) + "_dim_1");
+}

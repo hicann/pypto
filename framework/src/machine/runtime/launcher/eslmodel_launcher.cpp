@@ -35,6 +35,8 @@ int EslModelLauncher::EslModelLaunchAicore(AclRtStream aicoreStream, void* kerne
     RtTaskCfgInfo cfg = {};
     cfg.schemMode = static_cast<uint8_t>(RtSchemModeType::BATCH);
     auto* devProg = (dynamic::DevAscendProgram*)(kernelArgs->cfgdata);
+    cfg.localMemorySize = GetAicoreLocalMemorySize(static_cast<NPUArch>(devProg->devArgs.archInfo),
+                                                   devProg->requiresSimt);
     auto blockDim = devProg->devArgs.nrValidAic;
     return RuntimeKernelLaunchWithHandleV2(kernel, tilingKey, blockDim, &rtArgs, nullptr, aicoreStream, &cfg);
 }

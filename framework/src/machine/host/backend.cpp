@@ -19,6 +19,7 @@
 #include "tilefwk/error_code.h"
 #include "tilefwk/comm_group_recorder.h"
 #include "interface/program/program.h"
+#include "interface/function/rebuildable_attribute.h"
 #include "interface/operation/operation.h"
 #include "interface/configs/config_manager.h"
 #include "interface/utils/common.h"
@@ -879,7 +880,7 @@ static void RunCompileControlFlowStage(Function* function, const std::shared_ptr
 #ifdef BUILD_WITH_CANN
 static bool RunCompileAicoreKernelStage(Function* function, std::map<uint64_t, Function*>& leafDict,
                                         EncodeDevAscendFunctionParam& encodeDevAscendFunctionParam,
-                                        const std::string& ccePath, std::string& kernelPath)
+                                        const std::string& ccePath, std::string& kernelPath, bool requiresSimt)
 {
     const int hmStep = MonitorManager::Instance().AllocHostMachineStepIndex();
     MonitorStageScope aicoreKernelCompileScope(STAGE_HOST_MACHINE, hmStep, STAGE_DYNDEV_AICORE_KERNEL_COMPILE,
@@ -889,7 +890,7 @@ static bool RunCompileAicoreKernelStage(Function* function, std::map<uint64_t, F
         return true;
     }
     int ret = CompileAICoreKernel(leafDict, encodeDevAscendFunctionParam, ccePath, function->GetFunctionHash().Data(),
-                                  function->GetOriginalRawName(), kernelPath);
+                                  function->GetOriginalRawName(), kernelPath, requiresSimt);
     if (ret != 0) {
         MACHINE_LOGE(HostBackEndErr::COMPILE_AICORE_FAILED, "Compile dynamic aicore.o failed.");
         return false;
@@ -1042,6 +1043,8 @@ static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[ma
 
     std::map<uint64_t, Function*> leafDict;
     RunCodeGenStage(attr, leafDict);
+    bool requiresSimt = DynamicKernelRequiresSimt(leafDict);
+    RebuildableAttributeManager::GetInstance().ResetAttr<RebuildableRequiresSimt>(function, &requiresSimt);
 
     struct EncodeDevAscendFunctionParam encodeDevAscendFunctionParam = {};
     ConstructCodeInfo(encodeDevAscendFunctionParam, leafDict, attr);
@@ -1050,7 +1053,8 @@ static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[ma
     std::string kernelPath;
 #ifdef BUILD_WITH_CANN
     if (hasAicoreKernelLink) {
-        if (!RunCompileAicoreKernelStage(function, leafDict, encodeDevAscendFunctionParam, ccePath, kernelPath)) {
+        if (!RunCompileAicoreKernelStage(function, leafDict, encodeDevAscendFunctionParam, ccePath, kernelPath,
+                                         requiresSimt)) {
             return;
         }
     }

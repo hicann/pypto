@@ -123,6 +123,172 @@ TILEOP void TgatherElement(T0 dst, T1 src0, T2 src1, T3 tmp)
     }
 }
 
+template <int axis, typename T0, typename T1, typename T2, typename T3, typename C>
+TILEOP void TgatherElement(T0 dst, T1 tmp, T2 src, T3 idx, C srcCoordinate)
+{
+    constexpr size_t expectSize = 5;
+    const auto srcLayout = src.GetLayout();
+    auto n0SrcShape = srcLayout.template GetShapeDim<0, expectSize>();
+    auto n1SrcShape = srcLayout.template GetShapeDim<1, expectSize>();
+    auto n2SrcShape = srcLayout.template GetShapeDim<2, expectSize>();
+    auto n3SrcShape = srcLayout.template GetShapeDim<3, expectSize>();
+    auto n4SrcShape = srcLayout.template GetShapeDim<4, expectSize>();
+    auto n0SrcStride = srcLayout.template GetStrideDim<0, expectSize>();
+    auto n1SrcStride = srcLayout.template GetStrideDim<1, expectSize>();
+    auto n2SrcStride = srcLayout.template GetStrideDim<2, expectSize>();
+    auto n3SrcStride = srcLayout.template GetStrideDim<3, expectSize>();
+    auto n4SrcStride = srcLayout.template GetStrideDim<4, expectSize>();
+
+    const auto idxLayout = idx.GetLayout();
+    auto n0IdxStride = idxLayout.template GetStrideDim<0, expectSize>();
+    auto n1IdxStride = idxLayout.template GetStrideDim<1, expectSize>();
+    auto n2IdxStride = idxLayout.template GetStrideDim<2, expectSize>();
+    auto n3IdxStride = idxLayout.template GetStrideDim<3, expectSize>();
+
+    const auto dstLayout = dst.GetLayout();
+    auto n0DstShape = dstLayout.template GetShapeDim<0, expectSize>();
+    auto n1DstShape = dstLayout.template GetShapeDim<1, expectSize>();
+    auto n2DstShape = dstLayout.template GetShapeDim<2, expectSize>();
+    auto n3DstShape = dstLayout.template GetShapeDim<3, expectSize>();
+    auto n4DstShape = dstLayout.template GetShapeDim<4, expectSize>();
+    auto n0DstStride = dstLayout.template GetStrideDim<0, expectSize>();
+    auto n1DstStride = dstLayout.template GetStrideDim<1, expectSize>();
+    auto n2DstStride = dstLayout.template GetStrideDim<2, expectSize>();
+    auto n3DstStride = dstLayout.template GetStrideDim<3, expectSize>();
+
+    auto srcOffset = srcLayout.template GetGmOffset<C, expectSize>(srcCoordinate);
+    using DstType = typename T0::Type;
+    using SrcType = typename T2::Type;
+    using IdxType = typename T3::Type;
+    __ubuf__ DstType* dstAddr = (__ubuf__ DstType*)((uint64_t)(dst.GetAddr()));
+    __gm__ SrcType* srcAddr = (__gm__ SrcType*)((uint64_t)(src.GetAddr())) + srcOffset;
+    __ubuf__ IdxType* idxAddr = (__ubuf__ IdxType*)((uint64_t)(idx.GetAddr()));
+
+    set_flag(PIPE_V, PIPE_S, EVENT_ID0);
+    wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
+
+#if defined(__DAV_V310)
+    if constexpr (std::is_same_v<IdxType, int32_t> || std::is_same_v<IdxType, uint32_t>) {
+        constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, expectSize>();
+        using DstTile = pto::Tile<pto::TileType::Vec, DstType, 1, tileW, pto::BLayout::RowMajor, -1, -1>;
+        using OffsetTile = pto::Tile<pto::TileType::Vec, IdxType, 1, tileW, pto::BLayout::RowMajor, -1, -1>;
+        using TableShape = pto::Shape<-1, -1, -1, -1, -1>;
+        using TableStride = pto::Stride<-1, -1, -1, -1, -1>;
+        using TableGlobal = pto::GlobalTensor<SrcType, TableShape, TableStride>;
+        TableGlobal tableGM(srcAddr, TableShape(n0SrcShape, n1SrcShape, n2SrcShape, n3SrcShape, n4SrcShape),
+                            TableStride(n0SrcStride, n1SrcStride, n2SrcStride, n3SrcStride, n4SrcStride));
+        const auto tmpHalfSize = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, expectSize>();
+        __ubuf__ IdxType* offsetAddr = (__ubuf__ IdxType*)((uint64_t)(tmp.GetAddr()));
+        __ubuf__ IdxType* laneAddr = offsetAddr + tmpHalfSize;
+        const unsigned validCol = static_cast<unsigned>(n4DstShape);
+        OffsetTile offsetTile(1U, validCol);
+        OffsetTile indicesTile(1U, validCol);
+        OffsetTile laneTile(1U, validCol);
+        pto::TASSIGN(offsetTile, (uint64_t)(offsetAddr));
+        pto::TASSIGN(laneTile, (uint64_t)(laneAddr));
+        if constexpr (axis != 4) {
+            pto::TCI<OffsetTile, IdxType, 0>(laneTile, static_cast<IdxType>(0));
+            set_flag(PIPE_S, PIPE_V, EVENT_ID0);
+            wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
+            if (n4SrcStride != 1) {
+                pto::TMULS(laneTile, laneTile, static_cast<IdxType>(n4SrcStride));
+            }
+        }
+
+        int64_t axisStride = n4SrcStride;
+        if constexpr (axis == 0) {
+            axisStride = n0SrcStride;
+        } else if constexpr (axis == 1) {
+            axisStride = n1SrcStride;
+        } else if constexpr (axis == 2) {
+            axisStride = n2SrcStride;
+        } else if constexpr (axis == 3) {
+            axisStride = n3SrcStride;
+        }
+
+        for (LoopVar i = 0; i < n0DstShape; ++i) {
+            for (LoopVar j = 0; j < n1DstShape; ++j) {
+                for (LoopVar k = 0; k < n2DstShape; ++k) {
+                    for (LoopVar l = 0; l < n3DstShape; ++l) {
+                        auto idxRowOffset = i * n0IdxStride + j * n1IdxStride + k * n2IdxStride + l * n3IdxStride;
+                        int64_t outerBase = 0;
+                        if constexpr (axis != 0) {
+                            outerBase += i * n0SrcStride;
+                        }
+                        if constexpr (axis != 1) {
+                            outerBase += j * n1SrcStride;
+                        }
+                        if constexpr (axis != 2) {
+                            outerBase += k * n2SrcStride;
+                        }
+                        if constexpr (axis != 3) {
+                            outerBase += l * n3SrcStride;
+                        }
+
+                        pto::TASSIGN(indicesTile, (uint64_t)(idxAddr + idxRowOffset));
+                        pto::TMULS(offsetTile, indicesTile, static_cast<IdxType>(axisStride));
+                        if constexpr (axis != 4) {
+                            pto::TADD(offsetTile, offsetTile, laneTile);
+                            if (outerBase != 0) {
+                                pto::TADDS(offsetTile, offsetTile, static_cast<IdxType>(outerBase));
+                            }
+                        } else if (outerBase != 0) {
+                            pto::TADDS(offsetTile, offsetTile, static_cast<IdxType>(outerBase));
+                        }
+
+                        DstTile dstTile(1U, validCol);
+                        auto dstRowOffset = i * n0DstStride + j * n1DstStride + k * n2DstStride + l * n3DstStride;
+                        pto::TASSIGN(dstTile, (uint64_t)(dstAddr + dstRowOffset));
+                        pipe_barrier(PIPE_ALL);
+                        pto::MGATHER<pto::Coalesce::Elem, pto::GatherOOB::Zero>(dstTile, tableGM, offsetTile);
+                        pipe_barrier(PIPE_ALL);
+                    }
+                }
+            }
+        }
+    } else
+#endif
+    {
+        for (LoopVar i = 0; i < n0DstShape; ++i) {
+            for (LoopVar j = 0; j < n1DstShape; ++j) {
+                for (LoopVar k = 0; k < n2DstShape; ++k) {
+                    for (LoopVar l = 0; l < n3DstShape; ++l) {
+                        for (LoopVar m = 0; m < n4DstShape; ++m) {
+                            auto idxElementOffset = i * n0IdxStride + j * n1IdxStride + k * n2IdxStride +
+                                                    l * n3IdxStride + m;
+                            int64_t index = static_cast<int64_t>(idxAddr[idxElementOffset]);
+                            auto srcElementOffset = i * n0SrcStride + j * n1SrcStride + k * n2SrcStride +
+                                                    l * n3SrcStride + m;
+                            if constexpr (axis == 0) {
+                                srcElementOffset = index * n0SrcStride + j * n1SrcStride + k * n2SrcStride +
+                                                   l * n3SrcStride + m;
+                            } else if constexpr (axis == 1) {
+                                srcElementOffset = i * n0SrcStride + index * n1SrcStride + k * n2SrcStride +
+                                                   l * n3SrcStride + m;
+                            } else if constexpr (axis == 2) {
+                                srcElementOffset = i * n0SrcStride + j * n1SrcStride + index * n2SrcStride +
+                                                   l * n3SrcStride + m;
+                            } else if constexpr (axis == 3) {
+                                srcElementOffset = i * n0SrcStride + j * n1SrcStride + k * n2SrcStride +
+                                                   index * n3SrcStride + m;
+                            } else {
+                                srcElementOffset = i * n0SrcStride + j * n1SrcStride + k * n2SrcStride +
+                                                   l * n3SrcStride + index;
+                            }
+                            auto dstElementOffset = i * n0DstStride + j * n1DstStride + k * n2DstStride +
+                                                    l * n3DstStride + m;
+                            dstAddr[dstElementOffset] = srcAddr[srcElementOffset];
+                        }
+                    }
+                }
+            }
+        }
+        dcci(src.GetAddr(), 0);
+    }
+    set_flag(PIPE_S, PIPE_V, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
+}
+
 template <int axis, size_t index0, size_t index1, size_t index2, size_t index3, size_t index4, typename T0, typename T1,
           typename T2, typename C1, typename C2>
 TILEOP void Tgather(T0 dst, T1 src, T2 idx, C1 srcCoordinate, C2 idxCoordinate)

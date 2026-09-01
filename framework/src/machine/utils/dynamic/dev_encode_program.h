@@ -46,6 +46,7 @@ struct DevAscendProgram {
     uint32_t slotSize;
     uint32_t assembleSlotSize;
     uint32_t ctrlBlockDim{0};
+    bool requiresSimt{false};
     struct {
         struct {
             // root func inner tensors

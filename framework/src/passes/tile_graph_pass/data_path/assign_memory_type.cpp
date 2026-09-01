@@ -24,6 +24,7 @@
 #include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
 #include "interface/configs/config_manager.h"
+#include "interface/utils/simt_utils.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/checker_utils.h"
 #include "passes/pass_utils/pass_utils.h"
@@ -45,7 +46,8 @@ Status AssignMemoryType::RunOnFunction(Function& function)
 {
     APASS_LOG_INFO_F(Elements::Function, "===> Start AssignMemoryType.");
     if (!config::EnableSlice()) {
-        return RunOnFunctionLegacy(function);
+        RETURN_IF_NOT_SUCCESS(RunOnFunctionLegacy(function));
+        return MarkA5SimtGatherElement(function);
     }
     function.SortOperations(SortOperationsMode::LIGHTWEIGHT);
     RETURN_IF_NOT_SUCCESS(AssignConfirmedMemoryTypes(function));
@@ -56,6 +58,7 @@ Status AssignMemoryType::RunOnFunction(Function& function)
     RETURN_IF_NOT_SUCCESS(InsertConvertOpsAndInferShape(function));
     RETURN_IF_NOT_SUCCESS(FallbackSameMemoryMoveOps(function));
     RETURN_IF_NOT_SUCCESS(SyncTensorToBe(function));
+    RETURN_IF_NOT_SUCCESS(MarkA5SimtGatherElement(function));
     APASS_LOG_INFO_F(Elements::Function, "===> End AssignMemoryType.");
     return SUCCESS;
 }
@@ -1895,9 +1898,18 @@ Status AssignMemoryType::ProcessL1DdrL1(Function& function)
 Status AssignMemoryType::ResolveMemoryUnknowns(Function& function)
 {
     std::unordered_set<LogicalTensorPtr> visited;
-    auto resolveTensor = [this, &visited](const LogicalTensorPtr& tensor) -> Status {
+    auto resolveTensor = [this, &function, &visited](const LogicalTensorPtr& tensor) -> Status {
         if (tensor != nullptr && !visited.insert(tensor).second) {
             return SUCCESS;
+        }
+        if (ShouldResolveExplicitUnknownRequirementToDdr(function, tensor)) {
+            ForceSetOriginal(tensor, MemoryType::MEM_DEVICE_DDR, "ResolveExplicitUnknownSliceFromInCast");
+            for (auto* consumer : tensor->GetConsumers()) {
+                if (consumer != nullptr) {
+                    ForceSetRequirement(tensor, *consumer, MemoryType::MEM_DEVICE_DDR,
+                                        "ResolveExplicitUnknownSliceFromInCast");
+                }
+            }
         }
         return ResolveTensorMemoryUnknowns(tensor);
     };
@@ -1910,6 +1922,58 @@ Status AssignMemoryType::ResolveMemoryUnknowns(Function& function)
         }
     }
     return SUCCESS;
+}
+
+bool AssignMemoryType::ShouldResolveExplicitUnknownRequirementToDdr(const Function& function,
+                                                                    const LogicalTensorPtr& tensor) const
+{
+    if (tensor == nullptr || tensor->GetConsumers().empty()) {
+        return false;
+    }
+    for (auto* consumer : tensor->GetConsumers()) {
+        if (consumer == nullptr || inserter.GetRequirementOrUnknown(tensor, *consumer) != MemoryType::MEM_UNKNOWN) {
+            return false;
+        }
+    }
+
+    // Only apply this rule to a SLICE fed directly by an inCast.
+    Operation* slice = nullptr;
+    for (auto* producer : tensor->GetProducers()) {
+        if (producer == nullptr || producer->GetOpcode() != Opcode::OP_SLICE || producer->oOperand.empty() ||
+            producer->oOperand.front() != tensor || producer->iOperand.empty() ||
+            producer->iOperand.front() == nullptr) {
+            return false;
+        }
+        if (slice != nullptr) {
+            return false;
+        }
+        slice = producer;
+    }
+    if (slice == nullptr || std::find(function.inCasts_.begin(), function.inCasts_.end(), slice->iOperand.front()) ==
+                                function.inCasts_.end()) {
+        return false;
+    }
+    if (std::dynamic_pointer_cast<ViewOpAttribute>(slice->GetOpAttribute()) == nullptr) {
+        return false;
+    }
+
+    // Distinguish an explicit unknown entry in opcode.cpp from an opcode with no
+    // memory definition at this input position.
+    for (auto* consumer : tensor->GetConsumers()) {
+        if (consumer == nullptr) {
+            return false;
+        }
+        auto it = std::find(consumer->iOperand.begin(), consumer->iOperand.end(), tensor);
+        if (it == consumer->iOperand.end()) {
+            return false;
+        }
+        size_t inputIndex = static_cast<size_t>(std::distance(consumer->iOperand.begin(), it));
+        const auto& definedTypes = OpcodeManager::Inst().GetInputsMemType(consumer->GetOpcode());
+        if (inputIndex >= definedTypes.size() || definedTypes[inputIndex] != MemoryType::MEM_UNKNOWN) {
+            return false;
+        }
+    }
+    return true;
 }
 
 Status AssignMemoryType::ResolveTensorMemoryUnknowns(const LogicalTensorPtr& tensor)
@@ -2072,6 +2136,19 @@ Status AssignMemoryType::SyncTensorToBe(Function& function)
         }
         for (auto& output : op.oOperand) {
             syncTensor(output);
+        }
+    }
+    return SUCCESS;
+}
+
+Status AssignMemoryType::MarkA5SimtGatherElement(Function& function)
+{
+    if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510) {
+        return SUCCESS;
+    }
+    for (auto& op : function.Operations()) {
+        if (IsGmGatherElement(op)) {
+            op.SetAttribute(OP_ATTR_PREFIX + "requires_simt", true);
         }
     }
     return SUCCESS;

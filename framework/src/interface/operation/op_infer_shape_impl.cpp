@@ -522,6 +522,9 @@ REGISTER_INFER_SHAPE_FUNC(OP_VIEW_TYPE, Opcode::OP_VIEW_TYPE, ViewTypeInferFunc)
 void IndexPutInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
     outValidShapes.push_back(op->GetIOperands()[0]->GetDynValidShape());
+    if (op->GetOOperands().size() > 1) {
+        outValidShapes.push_back(op->GetIOperands()[2]->GetDynValidShape());
+    }
 }
 REGISTER_INFER_SHAPE_FUNC(OP_INDEX_PUT, Opcode::OP_INDEX_PUT, IndexPutInferFunc);
 

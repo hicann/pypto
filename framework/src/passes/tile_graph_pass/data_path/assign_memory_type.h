@@ -192,6 +192,8 @@ private:
 
     Status ResolveTensorMemoryUnknowns(const LogicalTensorPtr& tensor);
 
+    bool ShouldResolveExplicitUnknownRequirementToDdr(const Function& function, const LogicalTensorPtr& tensor) const;
+
     Status SyncViewAssembleMemoryAttrs(Function& function);
 
     Status FixViewAssembleSemanticMismatch(Function& function);
@@ -203,6 +205,8 @@ private:
     MemoryType InferOriginalFromRequirements(const LogicalTensorPtr& tensor) const;
 
     Status SyncTensorToBe(Function& function);
+
+    Status MarkA5SimtGatherElement(Function& function);
 
     Status FallbackSameMemoryMoveOps(Function& function);
 

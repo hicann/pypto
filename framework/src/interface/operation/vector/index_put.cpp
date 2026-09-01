@@ -46,10 +46,24 @@ void TiledIndexPut(Function& function, const TileShape& tileShape, Input& inputS
                                                                               inputIndices[j].tileInfo.offset);
             inputsTile.push_back(inputIndicesTile);
         }
-        auto& newOp = function.AddOperation(Opcode::OP_INDEX_PUT, inputsTile, {result});
+        bool useSimt = Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510 && selfDim == indicesCount &&
+                       (inputSelf.tensor.GetDataType() == DT_FP32 || inputSelf.tensor.GetDataType() == DT_FP16 ||
+                        inputSelf.tensor.GetDataType() == DT_BF16) &&
+                       (inputIndices[0].tensor.GetDataType() == DT_INT32 ||
+                        inputIndices[0].tensor.GetDataType() == DT_UINT32);
+        LogicalTensors outputs{result};
+        if (useSimt) {
+            Shape tmpShape({inputValuesTile->GetShape()[0]});
+            outputs.push_back(
+                std::make_shared<LogicalTensor>(function, inputIndices[0].tensor.GetDataType(), tmpShape));
+        }
+        auto& newOp = function.AddOperation(Opcode::OP_INDEX_PUT, inputsTile, outputs);
         newOp.SetAttribute(OpAttributeKey::inplaceIdx, 0);
         newOp.SetAttribute(OpAttributeKey::accumulate, accumulate);
         newOp.SetAttribute(OpAttributeKey::indicesSize, static_cast<int>(indicesCount));
+        if (useSimt) {
+            newOp.SetAttribute(OP_ATTR_PREFIX + "requires_simt", true);
+        }
         return;
     }
     const auto& vecTile = tileShape.GetVecTile();

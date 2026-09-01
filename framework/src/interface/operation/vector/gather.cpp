@@ -217,7 +217,7 @@ void TiledGatherElementOperation(Function& function, const TileShape& tileShape,
                                                                   indicesInput.tileInfo.offset);
         auto resultTile = result->View(function, resultTileInfo.shape, resultTileInfo.offset);
         Shape tmpShape({indicesTile->GetShape()[indicesTile->GetShape().size() - 1]});
-        tmpShape[0] = NUM_VALUE_2 * AlignUp(tmpShape[0], BLOCK_SIZE / BytesOf(indicesTile->Datatype()));
+        tmpShape[0] = NUM_VALUE_2 * AlignUp(tmpShape[0], BLOCK_SIZE / BytesOf(resultTile->Datatype()));
         auto tmpBuffer = std::make_shared<LogicalTensor>(function, indicesTile->Datatype(), tmpShape);
         auto& op = function.AddOperation(Opcode::OP_GATHER_ELEMENT, {paramsTile, indicesTile}, {resultTile, tmpBuffer});
         op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);

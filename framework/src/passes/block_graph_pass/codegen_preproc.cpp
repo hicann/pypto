@@ -22,6 +22,7 @@
 #include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
 #include "interface/utils/common.h"
+#include "interface/utils/simt_utils.h"
 #include "passes/pass_interface/pass.h"
 #include "codegen_preproc.h"
 #include "passes/pass_log/pass_log.h"
@@ -191,6 +192,9 @@ Status CodegenPreproc::SaveGmTensorParamIdxToOp(Function& func) const
             if (op.GetOpcode() == Opcode::OP_GATHER) {
                 gmParamInCallFunc[op.GetIOpAttrOffset(0)].emplace_back(&op);
                 gmParamInCallFunc[op.GetIOpAttrOffset(1)].emplace_back(&op);
+            }
+            if (IsGmGatherElement(op)) {
+                gmParamInCallFunc[op.GetIOpAttrOffset(0)].emplace_back(&op);
             }
             if (op.GetOpcode() == Opcode::OP_PERMUTE || op.GetOpcode() == Opcode::OP_PERMUTE_ELEMENT) {
                 gmParamInCallFunc[op.GetIOpAttrOffset(0)].emplace_back(&op);

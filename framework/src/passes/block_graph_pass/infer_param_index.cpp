@@ -18,6 +18,7 @@
 #include "interface/operation/opcode.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/topo_program.h"
+#include "interface/utils/simt_utils.h"
 
 #define MODULE_NAME "InferParamIndex"
 
@@ -147,7 +148,9 @@ Status InferParamIndex::ResetOutputDynValidShape(Operation& op, Function& functi
     }
     for (auto outOperand : op.GetOOperands()) {
         std::vector<SymbolicScalar> validShape;
-        if (OpcodeManager::Inst().IsCopyInOrOut(op.GetOpcode()) || setSymDimOps.count(op.GetOpcode())) {
+        const bool isGmGatherElementResult = IsGmGatherElement(op) && outOperand == op.GetOOperands().front();
+        if (OpcodeManager::Inst().IsCopyInOrOut(op.GetOpcode()) || setSymDimOps.count(op.GetOpcode()) ||
+            isGmGatherElementResult) {
             for (size_t dimIdx = 0U; dimIdx < outOperand->GetShape().size(); ++dimIdx) {
                 validShape.emplace_back("sym_" + std::to_string(outOperand->GetMagic()) + "_dim_" +
                                         std::to_string(dimIdx));

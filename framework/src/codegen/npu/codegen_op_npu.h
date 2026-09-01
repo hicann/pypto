@@ -87,6 +87,7 @@ public:
     std::string GenGatherInUB() const;
     std::string PrintGatherInUBDynamicUnaligned() const;
     std::string PrintGatherInUBLayout() const;
+    std::string PrintGatherElementFromGMLayout() const;
 
     std::string GenUnaryOp() const;
     std::string GenUnaryOpWithTmpBuff() const;
@@ -499,7 +500,7 @@ protected:
     std::string PrintIndexAddUBTileTensor(const PrintIndexAddParam& param) const;
 
     std::string PrintIndexPut(const PrintIndexPutParam& param) const;
-    std::string PrintIndexPutLayout(size_t indicesSize, bool accumulate) const;
+    std::string PrintIndexPutLayout(size_t indicesSize, bool accumulate, bool requiresSimt) const;
     std::string PrintIndexPutDynamicUnaligned(const PrintIndexPutParam& param) const;
 
     std::string PrintTriULTileTensor(const std::string& diagonal, bool isUpper) const;

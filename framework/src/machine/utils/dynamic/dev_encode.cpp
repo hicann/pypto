@@ -3147,6 +3147,8 @@ struct EncodeDevAscendProgramInfo {
         devProg->devArgs.archInfo = static_cast<ArchInfo>(Platform::Instance().GetSoc().GetNPUArch());
         devProg->devArgs.enableVFFusion = GetEnableVFFusion();
         devProg->devArgs.hasAicpuTask = HasAicpuTask();
+        auto* requiresSimtAttr = RebuildableAttributeManager::GetInstance().GetAttr<RebuildableRequiresSimt>(func);
+        devProg->requiresSimt = requiresSimtAttr->Get();
         devProg->hashKey = func->ComputeHash().GetHash();
         ASSERT(DevCommonErr::PARAM_CHECK_FAILED, devProg->hashKey != 0)
             << "Function hash must be non-zero: AOT code pool uses 0 as empty-entry sentinel";

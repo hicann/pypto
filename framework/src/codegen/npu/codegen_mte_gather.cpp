@@ -291,6 +291,30 @@ std::string CodeGenOpNPU::GenGatherOp() const
     return "";
 }
 
+std::string CodeGenOpNPU::PrintGatherElementFromGMLayout() const
+{
+    constexpr size_t paramIndex = ID2;
+    constexpr size_t indicesIndex = ID3;
+    const size_t paramDim = rawShape[paramIndex].size();
+    int64_t axis = AnyCast<int64_t>(opAttrs.at(OP_ATTR_PREFIX + "axis"));
+    if (axis < 0) {
+        axis += paramDim;
+    }
+
+    auto paramOffsetSymbol = GenGetParamMacroPacked(paramIndex, paramDim, PREFIX_STR_OFFSET);
+    std::string paramCoord = PrintCoord(paramDim, WrapParamByParentheses(paramOffsetSymbol));
+
+    std::vector<std::string> tileOpParams = {QueryTileTensorNameByIdx(ID0), QueryTileTensorNameByIdx(ID1),
+                                             QueryTileTensorNameByIdx(paramIndex),
+                                             QueryTileTensorNameByIdx(indicesIndex), paramCoord};
+    const int64_t normalizedAxis = axis + SHAPE_DIM5 - paramDim;
+
+    std::ostringstream oss;
+    oss << tileOpName << WrapParamByAngleBrackets({std::to_string(normalizedAxis)})
+        << WrapParamByParentheses(tileOpParams) << STMT_END;
+    return oss.str();
+}
+
 std::string CodeGenOpNPU::PrintGatherInUBLayout() const
 {
     constexpr int paramIndex = 1;
