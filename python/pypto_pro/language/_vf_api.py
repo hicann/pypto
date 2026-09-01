@@ -217,35 +217,72 @@ class Vf:
     @_api_decl
     def store_unalign(dst_ptr, src, align_reg, stride=None,
                       post_update: bool = False):
-        """Store unaligned data from a VF register to UB (vstur/vstus instruction).
+        """Store unaligned data from a VF register to UB (vstus/vstu instruction).
+
+        When ``stride`` is an integer scalar, emits ``vstus`` (strided mode).
+        When ``stride`` is an ``AddrReg``, emits ``vstu`` (AddrReg mode) —
+        the AddrReg provides a vector of element offsets for scatter-pattern
+        unaligned stores. ``vstu`` always uses POST_UPDATE.
 
         Args:
             dst_ptr: Destination UB pointer
-            src: Source register
+            src: Source register or mask_reg
             align_reg: Alignment register (from unalign_reg_for_store)
-            stride: Optional stride for strided mode (vstus)
+            stride: Optional stride (int scalar → vstus) or AddrReg (→ vstu).
+                Required for reg_tensor src; not used for mask_reg src.
 
         Kwargs:
             post_update: ``True`` to auto-advance destination address after store
-
-        When called with 4 args, the 4th arg is stride for strided mode (vstus).
         """
 
     @staticmethod
     @_api_decl
     def store_unalign_post(dst_ptr, align_reg, stride=None,
                            post_update: bool = False):
-        """Complete an unaligned store sequence (vstar/vstas instruction).
+        """Complete an unaligned store sequence (vstas/vsta instruction).
+
+        When ``stride`` is an integer scalar, emits ``vstas`` (strided mode).
+        When ``stride`` is an ``AddrReg``, emits ``vsta`` (AddrReg mode) —
+        must be paired with ``vstu`` from ``store_unalign`` with AddrReg.
+        ``vsta`` always uses POST_UPDATE.
 
         Args:
             dst_ptr: Destination UB pointer
             align_reg: Alignment register (from unalign_reg_for_store)
-            stride: Optional stride for strided mode (vstas)
+            stride: Optional stride (int scalar → vstas) or AddrReg (→ vsta).
+                Not used for mask_reg store post-processing.
 
         Kwargs:
             post_update: ``True`` to auto-advance destination address after store
+        """
 
-        When called with 3 args, the 3rd arg is stride for strided mode (vstas).
+    @staticmethod
+    @_api_decl
+    def squeeze_store_unalign(dst_ptr, src, align_reg):
+        """Squeeze-based unaligned store (vstur instruction).
+
+        Reads the valid byte count from the AR register (written by
+        ``vf.squeeze`` with ``gather_mode=STORE_REG``) as the implicit
+        stride. Must be called after ``vf.squeeze(STORE_REG)`` and
+        paired with ``vf.squeeze_store_unalign_post``.
+
+        Args:
+            dst_ptr: Destination UB pointer
+            src: Source register
+            align_reg: Alignment register (from unalign_reg_for_store)
+        """
+
+    @staticmethod
+    @_api_decl
+    def squeeze_store_unalign_post(dst_ptr, align_reg):
+        """Complete a squeeze-based unaligned store sequence (vstar instruction).
+
+        Reads the remaining byte count from the AR register. Must be
+        called after ``vf.squeeze_store_unalign``.
+
+        Args:
+            dst_ptr: Destination UB pointer
+            align_reg: Alignment register (from unalign_reg_for_store)
         """
 
     @staticmethod

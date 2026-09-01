@@ -266,7 +266,7 @@ TEST(BackendCCEVFOpsTest, EmitsDeclarationsMasksBroadcastsAndMoves)
     ExpectInvoke(codegen, "vf.full", {"vdup(fp, 1.000000, mask, MODE_MERGING);"}, {fp, Float(1.0), mask},
                  {{"mode", EnumValue(ir::MergeMode::MERGING)}});
     codegen.RegisterRegTensorVar("s4");
-    ExpectInvoke(codegen, "vf.full", {"POS_HIGHEST", "MODE_ZEROING"}, {fp, s4},
+    ExpectInvoke(codegen, "vf.full", {"POS_HIGHEST", "MODE_ZEROING"}, {s4, s4},
                  {{"pos", EnumValue(ir::DuplicatePos::HIGHEST)}});
 
     ExpectInvoke(codegen, "vf.create_addr_reg", {"AddrReg addr = vag_b32((4) * 2, (8) * 2);"},
@@ -340,7 +340,7 @@ TEST(BackendCCEVFOpsTest, EmitsArithmeticIntrinsics)
                  {{"mode", EnumValue(ir::MergeMode::ZEROING)}, {"dtype", ir::DataType::FP16}});
     auto f8_src = MakeVar("f8_src", ir::DataType::FP8E4M3FN);
     codegen.RegisterRegTensorVar("f8_src");
-    ExpectInvoke(codegen, "vf.full", {"vdup("}, {dst, f8_src, mask},
+    ExpectInvoke(codegen, "vf.full", {"vdup("}, {f8_src, f8_src, mask},
                  {{"mode", EnumValue(ir::MergeMode::MERGING)}, {"pos", EnumValue(ir::DuplicatePos::LOWEST)}});
 }
 
@@ -804,10 +804,10 @@ TEST(BackendCCEVFOpsTest, EmitsGatherAndUnalignedDataMovement)
     ExpectInvoke(codegen, "vf.load_unalign_pre", {"vldas("}, {ureg, tile});
     ExpectInvoke(codegen, "vf.load_unalign", {"vldus("}, {fp16, ureg, tile});
     ExpectInvoke(codegen, "vf.load_unalign", {"vldus(", "(4) * 2", "POST_UPDATE"}, {i64, ureg, tile64, Int(4)});
-    ExpectInvoke(codegen, "vf.store_unalign", {"vstur("}, {tile8, u8, ureg});
+    ExpectInvoke(codegen, "vf.squeeze_store_unalign", {"vstur("}, {tile8, u8, ureg});
     ExpectInvoke(codegen, "vf.store_unalign", {"vstus(", "POST_UPDATE"}, {tile8, u8, ureg, Int(2)},
                  {{"post_update", true}});
-    ExpectInvoke(codegen, "vf.store_unalign_post", {"vstar("}, {tile8, ureg});
+    ExpectInvoke(codegen, "vf.squeeze_store_unalign_post", {"vstar("}, {tile8, ureg});
     ExpectInvoke(codegen, "vf.store_unalign_post", {"vstas(", "POST_UPDATE"}, {tile8, ureg, Int(2)},
                  {{"post_update", true}});
     ExpectInvoke(codegen, "vf.clear_spr", {"sprclr(SPR_AR)"});
@@ -1509,6 +1509,160 @@ TEST(BackendCCEVFOpsTest, ReduceSumRejectsInt8)
     auto mask = MakeVar("mask", ir::DataType::UINT32);
 
     EXPECT_ANY_THROW(Invoke(codegen, "vf.reduce_sum", {i8_dst, i8_src, mask}));
+}
+
+// ============================================================================
+// SqueezeStoreUnAlign / SqueezeStoreUnAlignPost — vstur/vstar squeeze path
+// ============================================================================
+
+TEST(BackendCCEVFOpsTest, SqueezeStoreUnAlignEmitsVstur)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP32);
+    auto fp32 = MakeVar("fp32", ir::DataType::FP32);
+    auto ureg = MakeVar("ureg", ir::DataType::UINT32);
+    codegen.RegisterRegTensorVar("fp32");
+
+    auto emitted = Invoke(codegen, "vf.squeeze_store_unalign", {tile, fp32, ureg});
+    ExpectContains(emitted, {"vstur(", "POST_UPDATE", "RegTensor<int32_t>", "(__ubuf__ int32_t *)"});
+}
+
+TEST(BackendCCEVFOpsTest, SqueezeStoreUnAlignRejectsWrongArgCount)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP32);
+    auto fp32 = MakeVar("fp32", ir::DataType::FP32);
+
+    // 2 args (missing align_reg) → should reject
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.squeeze_store_unalign", {tile, fp32}));
+}
+
+TEST(BackendCCEVFOpsTest, SqueezeStoreUnAlignPostEmitsVstar)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP32);
+    auto ureg = MakeVar("ureg", ir::DataType::UINT32);
+
+    auto emitted = Invoke(codegen, "vf.squeeze_store_unalign_post", {tile, ureg});
+    ExpectContains(emitted, {"vstar(", "(__ubuf__ int32_t *)"});
+}
+
+TEST(BackendCCEVFOpsTest, SqueezeStoreUnAlignPostRejectsWrongArgCount)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP32);
+    auto ureg = MakeVar("ureg", ir::DataType::UINT32);
+    auto extra = MakeVar("extra", ir::DataType::UINT32);
+
+    // 3 args (extra) → should reject
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.squeeze_store_unalign_post", {tile, ureg, extra}));
+}
+
+TEST(BackendCCEVFOpsTest, StoreUnAlignNormEmitsVstusWithLvalueRef)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP32);
+    auto fp32 = MakeVar("fp32", ir::DataType::FP32);
+    auto ureg = MakeVar("ureg", ir::DataType::UINT32);
+    codegen.RegisterRegTensorVar("fp32");
+
+    // post_update=False (NORM): vstus still needs __ubuf__ T*& (lvalue ref)
+    auto emitted = Invoke(codegen, "vf.store_unalign", {tile, fp32, ureg, Int(2)});
+    ExpectContains(emitted, {"vstus(", "NORM", "(__ubuf__ int32_t *&)"});
+}
+
+TEST(BackendCCEVFOpsTest, StoreUnAlignPostNormEmitsVstasThreeArgs)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP32);
+    auto ureg = MakeVar("ureg", ir::DataType::UINT32);
+
+    // post_update=False (NORM): vstas takes 3 args (no POST_UPDATE suffix)
+    auto emitted = Invoke(codegen, "vf.store_unalign_post", {tile, ureg, Int(2)});
+    ExpectContains(emitted, {"vstas(", "(__ubuf__ int32_t *&)"});
+    // NORM mode must NOT emit POST_UPDATE as 4th arg
+    EXPECT_EQ(emitted.find("POST_UPDATE"), std::string::npos);
+}
+
+TEST(BackendCCEVFOpsTest, StoreUnAlignAddrRegEmitsVstu)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP32);
+    auto fp32 = MakeVar("fp32", ir::DataType::FP32);
+    auto ureg = MakeVar("ureg", ir::DataType::UINT32);
+    auto addr = MakeVar("addr", ir::DataType::INT64);
+    codegen.RegisterRegTensorVar("fp32");
+    codegen.RegisterAddrRegVar("addr");
+
+    // AddrReg as 4th arg → vstu(ureg, areg, vreg, dst, POST_UPDATE)
+    auto emitted = Invoke(codegen, "vf.store_unalign", {tile, fp32, ureg, addr}, {{"post_update", true}});
+    ExpectContains(emitted, {"vstu(", "POST_UPDATE", "(__ubuf__ int32_t *&)"});
+}
+
+TEST(BackendCCEVFOpsTest, StoreUnAlignAddrRegNormEmitsVstuWithNorm)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP32);
+    auto fp32 = MakeVar("fp32", ir::DataType::FP32);
+    auto ureg = MakeVar("ureg", ir::DataType::UINT32);
+    auto addr = MakeVar("addr", ir::DataType::INT64);
+    codegen.RegisterRegTensorVar("fp32");
+    codegen.RegisterAddrRegVar("addr");
+
+    // vstu also supports NORM mode (same post mode handling as vstus)
+    auto emitted = Invoke(codegen, "vf.store_unalign", {tile, fp32, ureg, addr}, {{"post_update", false}});
+    ExpectContains(emitted, {"vstu(", "NORM", "(__ubuf__ int32_t *&)"});
+}
+
+TEST(BackendCCEVFOpsTest, StoreUnAlignPostAddrRegEmitsVsta)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP32);
+    auto ureg = MakeVar("ureg", ir::DataType::UINT32);
+    auto addr = MakeVar("addr", ir::DataType::INT64);
+    codegen.RegisterAddrRegVar("addr");
+
+    // AddrReg as 3rd arg → vsta(ureg, dst, areg)
+    auto emitted = Invoke(codegen, "vf.store_unalign_post", {tile, ureg, addr});
+    ExpectContains(emitted, {"vsta(", "(__ubuf__ int32_t *&)"});
+    // vsta has no POST_UPDATE suffix
+    EXPECT_EQ(emitted.find("POST_UPDATE"), std::string::npos);
+}
+
+TEST(BackendCCEVFOpsTest, StoreUnAlignPostAddrRegRejectsPostUpdate)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP32);
+    auto ureg = MakeVar("ureg", ir::DataType::UINT32);
+    auto addr = MakeVar("addr", ir::DataType::INT64);
+    codegen.RegisterAddrRegVar("addr");
+
+    // vsta has no post mode; post_update kwarg should be rejected
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.store_unalign_post", {tile, ureg, addr}, {{"post_update", true}}));
+}
+
+TEST(BackendCCEVFOpsTest, StoreUnAlignB64EmitsVstusWithInt32CastAndDoubledStride)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::INT64);
+    auto i64 = MakeVar("i64", ir::DataType::INT64);
+    auto ureg = MakeVar("ureg", ir::DataType::UINT32);
+    codegen.RegisterRegTensorVar("i64");
+
+    // b64 strided: cast to int32_t, stride doubled (mirrors AscendC b64 vstus path)
+    auto emitted = Invoke(codegen, "vf.store_unalign", {tile, i64, ureg, Int(4)}, {{"post_update", true}});
+    ExpectContains(emitted, {"vstus(", "(4) * 2", "RegTensor<int32_t>", "(__ubuf__ int32_t *&)"});
+}
+
+TEST(BackendCCEVFOpsTest, StoreUnAlignPostB64EmitsVstasWithInt32CastAndDoubledStride)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::INT64);
+    auto ureg = MakeVar("ureg", ir::DataType::UINT32);
+
+    // b64 strided post: cast to int32_t, stride doubled
+    auto emitted = Invoke(codegen, "vf.store_unalign_post", {tile, ureg, Int(4)}, {{"post_update", true}});
+    ExpectContains(emitted, {"vstas(", "(4) * 2", "(__ubuf__ int32_t *&)"});
 }
 
 } // namespace

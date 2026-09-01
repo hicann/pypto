@@ -716,6 +716,21 @@ REGISTER_OP("vf.store_unalign_post")
     .add_argument("align_reg", "Alignment register")
     .f_deduce_type(DeduceVFUnknownType);
 
+REGISTER_OP("vf.squeeze_store_unalign")
+    .set_op_category("VFOp")
+    .set_description("Squeeze-based unaligned store (reads AR register for byte count)")
+    .add_argument("dst_ptr", "Destination UB pointer")
+    .add_argument("src", "Source register")
+    .add_argument("align_reg", "Alignment register")
+    .f_deduce_type(DeduceVFUnknownType);
+
+REGISTER_OP("vf.squeeze_store_unalign_post")
+    .set_op_category("VFOp")
+    .set_description("Complete squeeze-based unaligned store (reads AR register for remaining bytes)")
+    .add_argument("dst_ptr", "Destination UB pointer")
+    .add_argument("align_reg", "Alignment register")
+    .f_deduce_type(DeduceVFUnknownType);
+
 REGISTER_OP("vf.unalign_reg_for_store")
     .set_op_category("VFOp")
     .set_description("Declare unaligned register for store")

@@ -1,4 +1,4 @@
-# vf.store_unalign_post
+# vf.squeeze_store_unalign
 
 ## 产品支持情况
 
@@ -14,28 +14,33 @@
 
 ## 功能说明
 
-非对齐存储后处理，处理非对齐寄存器（UnalignRegForLoad）中剩余的未对齐字节。须在`vf.store_unalign`之后调用。
+非对齐存储，将变长向量数据写入Tile。基本功能和`vf.store_unalign`的reg_tensor模式一致，但是参数和约束有所区别。
+
+- `vf.store_unalign`的reg_tensor模式下需要`stride`和`post_update`两个额外参数配置，而`vf.squeeze_store_unalign`没有这两个参数。
+
+- 约束的区别请参考`vf.store_unalign`和`vf.squeeze_store_unalign`的约束说明章节。
 
 ## 函数原型
 
 ```python
-store_unalign_post(tile, align_reg, stride, post_update: bool = False)
+squeeze_store_unalign(tile, src, align_reg)
 ```
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `tile` | 输出 | 目的操作数，Tile地址。目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
+| `tile` | 输出 | 目的操作数，Tile地址。 |
+| `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)类型。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64。 |
 | `align_reg` | 输入 | alignment tracker寄存器（由`vf.unalign_reg_for_store()`创建）。 |
-| `stride` | 输入 | 存储元素个数或地址寄存器。当为整型标量时，发射`vstas`指令（strided模式），`post_update = True`时同时作为地址更新步长，仅`post_update = True`时有效。当为`AddrReg`（由`vf.create_addr_reg`创建）时，发射`vsta`指令（AddrReg模式），须与`vf.store_unalign`的AddrReg模式（`vstu`）配对使用。 |
-| `post_update` | 输入 | 可选，`True`时tracker自动累进，默认`False`。 |
 
 ## 约束说明
 
-- 必须与`vf.store_unalign`配对使用，在`vf.store_unalign`之后调用。
+- 调用前必须先调用`vf.squeeze`写入AR寄存器。
 
-- 如需基于`vf.squeeze`的有效元素个数进行非对齐存储后处理，请使用`vf.squeeze_store_unalign_post`接口。
+- 必须与`vf.squeeze_store_unalign_post`配对使用，在`vf.squeeze_store_unalign_post`之前调用。
+
+- `vf.squeeze`和`vf.squeeze_store_unalign`必须交替使用，否则可能导致硬件挂死。
 
 ## 返回值说明
 
@@ -49,15 +54,21 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
+
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
-    ureg = vf.load_unalign_init()
-    vf.load_unalign_pre(ureg, src_tile)
-    reg = vf.load_unalign(ureg, src_tile, post_update=True)
+    preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
+    reg_src = vf.load_align(src_tile, 0)
+    # clear AR register before squeeze (required for deterministic ureg state)
+    vf.clear_spr()
+    # squeeze with STORE_REG: compress valid elements, write byte count to AR
+    reg_sq = vf.squeeze(reg_src, preg, gather_mode=pl.SqueezeMode.STORE_REG)
     align_reg = vf.unalign_reg_for_store()
-    vf.store_unalign(dst_tile, reg, align_reg, 64, post_update=True)
-    # 3参数形式：stride=0仅flush剩余字节，不写入新数据，post_update=True完成tracker收尾
-    vf.store_unalign_post(dst_tile, align_reg, 0, post_update=True)
+    # squeeze_store_unalign: read AR for implicit stride
+    vf.squeeze_store_unalign(dst_tile, reg_sq, align_reg)
+    # squeeze_store_unalign_post: flush remaining bytes from AR
+    vf.squeeze_store_unalign_post(dst_tile, align_reg)
+
 
 @pl.jit()
 def example_kernel(
@@ -78,16 +89,19 @@ def example_kernel(
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
+
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32)
-    out = torch.empty([1, 64], device=device, dtype=torch.float32)
+    out = torch.zeros([1, 64], device=device, dtype=torch.float32)
     example_kernel[None, core_nums](a, out)
     torch.npu.synchronize()
+    # squeeze with ALL mask compresses all 64 elements, store writes them to out
     torch.testing.assert_close(out, a, rtol=1e-5, atol=1e-5)
+
 
 if __name__ == "__main__":
     test_example()

@@ -21,5 +21,7 @@ store
 store_align
 store_unalign
 store_unalign_post
+squeeze_store_unalign
+squeeze_store_unalign_post
 unalign_reg_for_store
 ```

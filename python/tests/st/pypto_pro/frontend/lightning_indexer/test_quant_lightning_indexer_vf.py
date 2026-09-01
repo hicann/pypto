@@ -242,8 +242,8 @@ def find_high_bin_and_histograms_low(
         cout = vf.load_align(hist_high_tile, i * 64)
         preg_ge = vf.ge(cout, btm_k, preg_b32)
         sqz_idx_high = vf.squeeze(idx_c, preg_ge, gather_mode=pl.SqueezeMode.STORE_REG, dtype=pl.DT_UINT32)
-        vf.store_unalign(sqz_idx_buf, sqz_idx_high, align_idx_high, post_update=True)
-    vf.store_unalign_post(sqz_idx_buf, align_idx_high)
+        vf.squeeze_store_unalign(sqz_idx_buf, sqz_idx_high, align_idx_high)
+    vf.squeeze_store_unalign_post(sqz_idx_buf, align_idx_high)
     vf.mem_bar()
 
     # BRC_B8 broadcasts byte0 of sqz_idx_buf into every byte position of every lane,
@@ -309,8 +309,8 @@ def find_kth_vf(kth_value_tile, hist_low_tile, idx_high_tile, sqz_idx_buf, nk_va
         cout = vf.load_align(hist_low_tile, i * 64)
         preg_ge = vf.ge(cout, btm_k, preg_b32)
         sqz_idx_low = vf.squeeze(idx_c, preg_ge, gather_mode=pl.SqueezeMode.STORE_REG, dtype=pl.DT_UINT32)
-        vf.store_unalign(sqz_idx_buf, sqz_idx_low, align_idx_low, post_update=True)
-    vf.store_unalign_post(sqz_idx_buf, align_idx_low)
+        vf.squeeze_store_unalign(sqz_idx_buf, sqz_idx_low, align_idx_low)
+    vf.squeeze_store_unalign_post(sqz_idx_buf, align_idx_low)
     vf.mem_bar()
 
     # BRC_B8:  broadcast byte0 of idxHighBuf -> every u8 lane = idx_high byte
@@ -354,7 +354,7 @@ def collect_indices_gt_eq_vf(
         vreg_input = vf.load_align(score_u16_tile, i * 128)
         pout_gt = vf.gt(vreg_input, kth_value, preg_b16)
         sqz_idx_out = vf.squeeze(idx_c, pout_gt, gather_mode=pl.SqueezeMode.STORE_REG, dtype=pl.DT_UINT16)
-        vf.store_unalign(output_idx_tile, sqz_idx_out, align_idx, post_update=True)
+        vf.squeeze_store_unalign(output_idx_tile, sqz_idx_out, align_idx)
 
     # Pass 2: collect EQ indices (appends after GT)
     for i in pl.range(0, vf_loop):
@@ -362,9 +362,9 @@ def collect_indices_gt_eq_vf(
         vreg_input = vf.load_align(score_u16_tile, i * 128)
         pout_eq = vf.eq(vreg_input, kth_value, preg_b16)
         sqz_idx_out = vf.squeeze(idx_c, pout_eq, gather_mode=pl.SqueezeMode.STORE_REG, dtype=pl.DT_UINT16)
-        vf.store_unalign(output_idx_tile, sqz_idx_out, align_idx, post_update=True)
+        vf.squeeze_store_unalign(output_idx_tile, sqz_idx_out, align_idx)
 
-    vf.store_unalign_post(output_idx_tile, align_idx)
+    vf.squeeze_store_unalign_post(output_idx_tile, align_idx)
 
 
 # ================================================================
@@ -503,8 +503,8 @@ def make_quant_lightning_indexer_vf_kernel(
             idx_c = vf.select(neg_one_i32, idx_c, preg_ge)
             # squeeze all 64 elements (truncate INT32→UINT16)
             sqz_out = vf.squeeze(idx_c, preg_b32, gather_mode=pl.SqueezeMode.STORE_REG, dtype=pl.DT_UINT32)
-            vf.store_unalign(output_idx_tile, sqz_out, align_idx, post_update=True)
-        vf.store_unalign_post(output_idx_tile, align_idx)
+            vf.squeeze_store_unalign(output_idx_tile, sqz_out, align_idx)
+        vf.squeeze_store_unalign_post(output_idx_tile, align_idx)
         vf.mem_bar()
 
     @pl.jit(auto_mutex=True)

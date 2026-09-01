@@ -67,12 +67,10 @@ store_unalign(tile, src, align_reg, stride=None, post_update: bool = False)
 | `tile` | 输出 | 目的操作数，Tile地址。 |
 | `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
 | `align_reg` | 输入 | alignment tracker寄存器（由`vf.unalign_reg_for_store()`创建）。 |
-| `stride` | 输入 | 可选，存储元素个数，`post_update = True`时同时作为地址更新步长（整型标量），仅`post_update = True`时有效。 |
+| `stride` | 输入 | 可选，存储元素个数或地址寄存器。<br>- 当为整型标量时，代表地址更新步长，仅`post_update = True`时有效。<br>- 当为`AddrReg`（由`vf.create_addr_reg`创建）时，使用向量偏移地址替代标量stride。`src`为reg_tensor时为必选输入；`src`为mask_reg时不传`stride`。 |
 | `post_update` | 输入 | 可选，`True`时tracker自动累进到下一段，默认`False`。 |
 
 ## 约束说明
-
-- 3参数形式（legacy）在当前硬件上可能导致挂死，推荐使用4参数形式（带`stride`步长）。
 
 - 必须与`vf.store_unalign_post()`配对使用，在`vf.store_unalign_post()`之前调用。
 
@@ -136,6 +134,65 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
+### AddrReg非对齐存储示例
+
+当`stride`参数传入`AddrReg`（由`vf.create_addr_reg`创建）时，`AddrReg`提供一组向量偏移地址，适用于变长步长的非对齐搬出场景。
+
+```python
+import os
+import pypto_pro.language as pl
+import torch
+import torch_npu
+
+@pl.vector_function
+def example_vf(src_tile, dst_tile):
+    ureg = vf.load_unalign_init()
+    vf.load_unalign_pre(ureg, src_tile)
+    src_reg = vf.load_unalign(ureg, src_tile, post_update=True)
+    store_ureg = vf.unalign_reg_for_store()
+    # create_addr_reg必须在pl.range循环内调用，vag指令参数需绑定到循环层
+    for i in pl.range(0, 1, 1):
+        addr_reg = vf.create_addr_reg(i, 64, dtype=pl.DT_FP32)
+        # AddrReg模式下vstu支持post_update参数（与vstus一致）
+        vf.store_unalign(dst_tile, src_reg, store_ureg, addr_reg, post_update=True)
+        # vsta无post_update参数，AddrReg模式直接传入addr_reg即可
+        vf.store_unalign_post(dst_tile, store_ureg, addr_reg)
+
+@pl.jit()
+def example_kernel(
+    a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+):
+    tf = pl.TileType(shape=[1, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+    in_a_grp = pl.make_tile_group(type=tf, addrs=0x0, mutex_ids=[0])
+    in_a = in_a_grp.current()
+    t_out_grp = pl.make_tile_group(type=tf, addrs=0x100, mutex_ids=[1])
+    t_out = t_out_grp.current()
+    with pl.section_vector():
+        pl.load(in_a, a, [0, 0])
+        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
+        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
+        example_vf(in_a, t_out)
+        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
+        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
+        pl.store(out, t_out, [0, 0])
+
+def test_example():
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
+    core_nums = 1
+    torch.npu.set_device(device)
+    a = torch.randn([1, 64], device=device, dtype=torch.float32)
+    out = torch.empty([1, 64], device=device, dtype=torch.float32)
+    example_kernel[None, core_nums](a, out)
+    torch.npu.synchronize()
+    assert out.shape == torch.Size([1, 64])
+
+if __name__ == "__main__":
+    test_example()
+    print("PASSED")
+```
+
 ### mask_reg非对齐存储示例
 
 当`src`为mask_reg时，`vf.store_unalign`自动分派mask_reg非对齐存储路径。[mask_reg](../mask_reg.md) 32字节数据按16位宽（DT_INT16、DT_UINT16、DT_FP16、DT_BF16）打包为16字节或按32位宽（DT_INT32、DT_UINT32、DT_FP32）打包为8字节写入Tile。硬件从每2bit（16位宽）/4bit（32位宽）中提取最低有效位(LSB)。
@@ -155,7 +212,7 @@ def example_vf(src_tile, mask_buf_tile):
     ureg = vf.unalign_reg_for_store()
     vf.store_unalign(mask_buf_tile, cmp_mask, ureg)
     # 必须flush alignment tracker中剩余的未对齐字节，否则数据滞留不到达Tile
-    vf.store_unalign_post(mask_buf_tile, ureg)
+    vf.store_unalign_post(mask_buf_tile, ureg, 0, post_update=True)
 
 @pl.jit()
 def example_kernel(

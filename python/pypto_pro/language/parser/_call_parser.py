@@ -539,6 +539,8 @@ class CallParserMixin:
         "store_align": 0,
         "store_unalign": 0,
         "store_unalign_post": 0,
+        "squeeze_store_unalign": 0,
+        "squeeze_store_unalign_post": 0,
         "scatter": 0,
         "store": 0,
         "mem_bar": 0,
@@ -581,6 +583,7 @@ class CallParserMixin:
             "load_align",
             "store_align",
             "store_unalign",
+            "squeeze_store_unalign",
         }
     )
 

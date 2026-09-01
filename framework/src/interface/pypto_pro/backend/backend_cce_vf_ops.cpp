@@ -304,7 +304,7 @@ static std::string EmitVFCreateMask(const ir::CallPtr& op, codegen::CodegenBase&
     // FP8/FP4 types are b8 storage → pset_b8
     if (IsB8Type(dtype)) {
         codegen.Emit(reg_name + " = pset_b8(" + pat + ");");
-    } else if (dtype.GetBit() == 32) {
+    } else if (dtype.GetBit() == 32 || dtype.GetBit() == 64) {
         codegen.Emit(reg_name + " = pset_b32(" + pat + ");");
     } else {
         // FP16, BF16, UINT16, INT16 etc. (2 bytes)
@@ -344,6 +344,9 @@ static std::string EmitVFDuplicate(const ir::CallPtr& op, codegen::CodegenBase& 
     if (is_vector_src) {
         // Vector-source broadcast (Tensor mode): vdup(dst, src_vec, mask, POS_xxx, MODE)
         // pos kwarg: "LOWEST" -> POS_LOWEST, "HIGHEST" -> POS_HIGHEST
+        DataType dst_dt = GetExprDtype(op->args_[0]);
+        CHECK(dst_dt == src_dt) << "vf.full (vector-source) requires dst and src to have the same type, got dst="
+                                << DTypeStr(dst_dt) << " src=" << DTypeStr(src_dt);
         if (pos.empty() || pos == "LOWEST")
             pos = "POS_LOWEST";
         else if (pos == "HIGHEST")
@@ -1237,6 +1240,9 @@ static std::string EmitVFReduceImpl(const ir::CallPtr& op, codegen::CodegenBase&
         CHECK((src_dt.GetBit() == 16 || src_dt.GetBit() == 32) &&
               (src_dt.IsInt() || src_dt == DataType::FP16 || src_dt == DataType::FP32))
             << op->name_ << " (datablock) src only supports b16/b32 INT/UINT/FP16/FP32, got " << DTypeStr(src_dt);
+        DataType reduce_dst_dt = GetExprDtype(op->args_[0]);
+        CHECK(src_dt == reduce_dst_dt) << op->name_ << " requires src and dst to have the same type, got dst="
+                                       << DTypeStr(reduce_dst_dt) << " src=" << DTypeStr(src_dt);
     } else {
         // Non-datablock reduce supports b16/b32/b64 (no BF16)
         CHECK((src_dt.GetBit() == 16 || src_dt.GetBit() == 32 || src_dt.GetBit() == 64) &&
@@ -1581,7 +1587,7 @@ static std::string EmitVFSqrt(const ir::CallPtr& op, codegen::CodegenBase& codeg
     // The struct is emitted as a static constexpr local so the template
     // can take a pointer to it.
     if (op->HasKwarg("precision") && op->GetKwarg<bool>("precision")) {
-        codegen.Emit("vsqrt<float, true>(" + dst + ", " + src + ", " + mask + ");");
+        codegen.Emit("vsqrt<" + src_dt.ToCTypeString() + ", true>(" + dst + ", " + src + ", " + mask + ");");
     } else {
         codegen.Emit("vsqrt(" + dst + ", " + src + ", " + mask + ", " + mode + ");");
     }
@@ -1823,6 +1829,9 @@ static std::string EmitVFInterleave(const ir::CallPtr& op, codegen::CodegenBase&
     CHECK((src0_dt.GetBit() == src1_dt.GetBit()))
         << "vf.interleave requires src0 and src1 to have the same bit width, got src0=" << DTypeStr(src0_dt)
         << " src1=" << DTypeStr(src1_dt);
+    DataType dst0_dt = GetExprDtype(op->args_[0]);
+    CHECK(src0_dt == dst0_dt) << "vf.interleave requires src and dst to have the same type, got dst="
+                              << DTypeStr(dst0_dt) << " src=" << DTypeStr(src0_dt);
     codegen.Emit("vintlv(" + dst0 + ", " + dst1 + ", " + src0 + ", " + src1 + ");");
     return "";
 }
@@ -2958,9 +2967,8 @@ static std::string EmitVFHistograms(const ir::CallPtr& op, codegen::CodegenBase&
     std::string dst = codegen.GetExprAsCode(op->args_[0]);
     std::string src = codegen.GetExprAsCode(op->args_[1]);
     std::string mask = codegen.GetExprAsCode(op->args_[2]);
-    // vhist: dst must be uint16_t
+    // vhist: src must be uint8_t, dst is derived from src and cast to uint16_t
     DataType src_dt = GetExprDtype(op->args_[1]);
-    // vhist: src must be uint8_t
     CHECK(src_dt == DataType::UINT8) << "vf.histograms source only supports UINT8, got " << DTypeStr(src_dt);
     // Reinterpret src as RegTensor<uint8_t>& if its dtype isn't u8
     std::string bin_type = VFEnumValueName(ir::EnumToString(static_cast<ir::BinType>(op->GetKwarg<int>("bin_type"))));
@@ -2971,10 +2979,11 @@ static std::string EmitVFHistograms(const ir::CallPtr& op, codegen::CodegenBase&
     if (op->HasKwarg("hist_type")) {
         hist_type = VFEnumValueName(ir::EnumToString(static_cast<ir::HistType>(op->GetKwarg<int>("hist_type"))));
     }
+    std::string dst_cast = "(RegTensor<uint16_t> &)";
     if (hist_type == "FREQUENCY") {
-        codegen.Emit("dhistv2(" + dst + ", " + src_expr + ", " + mask + ", " + bin_const + ");");
+        codegen.Emit("dhistv2(" + dst_cast + dst + ", " + src_expr + ", " + mask + ", " + bin_const + ");");
     } else {
-        codegen.Emit("chistv2(" + dst + ", " + src_expr + ", " + mask + ", " + bin_const + ");");
+        codegen.Emit("chistv2(" + dst_cast + dst + ", " + src_expr + ", " + mask + ", " + bin_const + ");");
     }
     return "";
 }
@@ -3090,13 +3099,11 @@ static std::string EmitVFArange(const ir::CallPtr& op, codegen::CodegenBase& cod
     std::string dst = codegen.GetExprAsCode(op->args_[0]);
     std::string start = codegen.GetExprAsCode(op->args_[1]);
     DataType dst_dt = GetExprDtype(op->args_[0]);
-    // vci: supports INT8/UINT8/INT16/UINT16/INT32/UINT32/INT64/UINT64/FP16/FP32
+    // vci: supports INT8/UINT8/INT16/UINT16/INT32/UINT32/INT64/FP16/FP32 (no UINT64)
     CHECK(dst_dt == DataType::INT8 || dst_dt == DataType::UINT8 || dst_dt == DataType::INT16 ||
           dst_dt == DataType::UINT16 || dst_dt == DataType::INT32 || dst_dt == DataType::UINT32 ||
-          dst_dt == DataType::INT64 || dst_dt == DataType::UINT64 || dst_dt == DataType::FP16 ||
-          dst_dt == DataType::FP32)
-        << "vf.arange only supports INT8/UINT8/INT16/UINT16/INT32/UINT32/INT64/UINT64/FP16/FP32, got "
-        << DTypeStr(dst_dt);
+          dst_dt == DataType::INT64 || dst_dt == DataType::FP16 || dst_dt == DataType::FP32)
+        << "vf.arange only supports INT8/UINT8/INT16/UINT16/INT32/UINT32/INT64/FP16/FP32, got " << DTypeStr(dst_dt);
     // vci: scalarValue must be convertible to RegTensor data type
     // is_convertible<U, ActualT>() — start must be convertible to dst type.
     // This allows e.g. int64(index) start with int32 dst (narrowing conversion).
@@ -3315,42 +3322,49 @@ static std::string EmitVFStoreUnAlign(const ir::CallPtr& op, codegen::CodegenBas
         codegen.Emit("pstu(" + ureg + ", " + vreg + ", (__ubuf__ " + ptr_type + " *&)" + tile_ptr + ");");
         return "";
     }
-    // Two calling conventions, distinguished by arg count:
-    //   3 args [dst, src, align_reg]                    -> vstur (strideless, legacy)
-    //   4 args [dst, vreg, ureg, stride] (+post_update) -> vstus (strided)
-    // Store-unalign on A5 (dav_3510) only supports signed types for 4/8-byte data
-    // (see asc-devkit dav_3510/kernel_reg_compute_datacopy_store_impl.h:495-498).
-    // Cast unsigned 32/64-bit src reg + dst ptr to signed int32_t/int64_t.
-    CHECK(op->args_.size() >= 3) << "vf.store_unalign requires >=3 args (dst, vreg, ureg[, stride])";
+    // 4-arg form: vstus(ureg, stride, vreg, dst, POST_UPDATE|NORM) or
+    //              vstu(ureg, areg, vreg, dst, POST_UPDATE) when args[3] is an AddrReg.
+    // Strideless vstur mode is in vf.squeeze_store_unalign.
+    CHECK(op->args_.size() == 4) << "vf.store_unalign requires 4 args (dst, vreg, ureg, stride|areg); "
+                                 << "use vf.squeeze_store_unalign for strideless (vstur) mode";
     DataType src_dt = GetExprDtype(op->args_[1]);
-    // vstur/vstus support b8/b16/b32/b64 element widths
+    // vstus/vstu support b8/b16/b32/b64 element widths
     CHECK(src_dt.GetBit() == 8 || src_dt.GetBit() == 16 || src_dt.GetBit() == 32 || src_dt.GetBit() == 64)
         << "vf.store_unalign source only supports b8/b16/b32/b64 types, got " << DTypeStr(src_dt);
+    // AscendC DataCopyUnAlignImpl cast rules (dav_3510 store_impl.h):
+    //   b8  → uint8_t
+    //   b16 → no cast (native type)
+    //   b32 → int32_t
+    //   b64 → int32_t (RegTraitNumOne: simulated as b32 with stride×2 for vstus;
+    //                  cast to int32_t for vstu — no stride scaling)
+    bool is_b64 = (src_dt.GetBit() == 64);
     DataType cast_dt = src_dt;
-    if (src_dt == DataType::UINT32) {
+    if (IsB8Type(src_dt)) {
+        cast_dt = DataType::UINT8;
+    } else if (src_dt.GetBit() == 32 || is_b64) {
         cast_dt = DataType::INT32;
-    } else if (src_dt == DataType::UINT16) {
-        cast_dt = DataType::INT16;
-    } else if (src_dt == DataType::UINT8) {
-        cast_dt = DataType::INT8;
     }
     std::string base_c_type = cast_dt.ToCTypeString();
-    // Unalign-store cursor: keep separate from a base-pointer load of the same tile.
-    std::string dst_ptr = GetUBufPtr(codegen, op->args_[0], base_c_type, /*is_post_update=*/true);
+    std::string tile_ptr_var = codegen.GetOrCreateVFTilePtr(op->args_[0], /*is_post_update=*/true);
     std::string vreg = codegen.GetExprAsCode(op->args_[1]);
     std::string ureg = codegen.GetExprAsCode(op->args_[2]);
-    // Reinterpret src reg to signed type when needed.
     std::string vreg_expr = (cast_dt == src_dt) ? vreg : ("(RegTensor<" + base_c_type + "> &)" + vreg);
-
-    if (op->args_.size() >= 4) {
-        // Strided form -> vstus(ureg, stride, vreg, dst, POST_UPDATE|NORM)
-        std::string stride = codegen.GetExprAsCode(op->args_[3]);
-        bool post_update = op->HasKwarg("post_update") && op->GetKwarg<bool>("post_update");
-        std::string pu = post_update ? "POST_UPDATE" : "NORM";
-        codegen.Emit("vstus(" + ureg + ", " + stride + ", " + vreg_expr + ", " + dst_ptr + ", " + pu + ");");
+    std::string fourth_arg = codegen.GetExprAsCode(op->args_[3]);
+    bool post_update = op->HasKwarg("post_update") && op->GetKwarg<bool>("post_update");
+    std::string pu = post_update ? "POST_UPDATE" : "NORM";
+    std::string ptr_cast = "(__ubuf__ " + base_c_type + " *&)";
+    if (codegen.IsAddrRegVar(fourth_arg)) {
+        // vstu(ureg, areg, vreg, dst, POST_UPDATE|NORM) — AddrReg-based unaligned store.
+        // vstu accepts the same post mode as vstus (AscendC DataCopyUnAlignImpl
+        // passes postValue to vstu's 5th arg, same as vstus).
+        codegen.Emit("vstu(" + ureg + ", " + fourth_arg + ", " + vreg_expr + ", " + ptr_cast + tile_ptr_var + ", " +
+                     pu + ");");
     } else {
-        // Strideless legacy form -> vstur(align_reg, src, dst, POST_UPDATE)
-        codegen.Emit("vstur(" + ureg + ", " + vreg_expr + ", " + dst_ptr + ", POST_UPDATE);");
+        // vstus(ureg, stride, vreg, dst, POST_UPDATE|NORM)
+        // b64: stride must be doubled to account for b32 simulation of b64 elements.
+        std::string stride = is_b64 ? ("(" + fourth_arg + ") * 2") : fourth_arg;
+        codegen.Emit("vstus(" + ureg + ", " + stride + ", " + vreg_expr + ", " + ptr_cast + tile_ptr_var + ", " + pu +
+                     ");");
     }
     return "";
 }
@@ -3358,38 +3372,124 @@ static std::string EmitVFStoreUnAlign(const ir::CallPtr& op, codegen::CodegenBas
 static std::string EmitVFStoreUnAlignPost(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    // Two calling conventions, distinguished by arg count:
-    //   2 args [dst, align_reg]                  -> vstar (strideless, legacy)
-    //   3 args [dst, ureg, stride] (+post_update) -> vstas (strided)
-    // Match the paired store's pointer type — A5 only supports signed types.
-    CHECK(op->args_.size() >= 2) << "vf.store_unalign_post requires >=2 args (dst, ureg[, stride])";
+    CHECK(op->args_.size() >= 3) << "vf.store_unalign_post requires 3 args (dst, ureg, stride|areg); "
+                                 << "use vf.squeeze_store_unalign_post for strideless (vstar) mode";
     DataType tile_dt = GetExprDtype(op->args_[0]);
-    // DataCopyUnAlignPost: supports b8/b16/b32/b64
-    CHECK(IsB8Type(tile_dt) || tile_dt.GetBit() == 16 || tile_dt.GetBit() == 32 || tile_dt.GetBit() == 64)
-        << "vf.store_unalign_post only supports b8/b16/b32/b64 types, got " << DTypeStr(tile_dt);
+    // AscendC DataCopyUnAlignPostImpl cast rules (dav_3510 store_impl.h):
+    //   b8  → uint8_t
+    //   b16 → no cast (native type)
+    //   b32 → int32_t
+    //   b64 → int32_t (simulated as b32 with stride×2 for vstas; cast to
+    //                  int32_t for vsta — no stride scaling)
+    bool is_b64 = (tile_dt.GetBit() == 64);
     DataType cast_dt = tile_dt;
-    if (tile_dt == DataType::UINT32) {
+    if (IsB8Type(tile_dt)) {
+        cast_dt = DataType::UINT8;
+    } else if (tile_dt.GetBit() == 32 || is_b64) {
         cast_dt = DataType::INT32;
-    } else if (tile_dt == DataType::UINT16) {
-        cast_dt = DataType::INT16;
-    } else if (tile_dt == DataType::UINT8) {
-        cast_dt = DataType::INT8;
     }
     std::string base_c_type = cast_dt.ToCTypeString();
-    // Share the same cursor as the paired store_unalign (is_post_update=true).
-    std::string dst_ptr = GetUBufPtr(codegen, op->args_[0], base_c_type, /*is_post_update=*/true);
+    std::string tile_ptr_var = codegen.GetOrCreateVFTilePtr(op->args_[0], /*is_post_update=*/true);
     std::string ureg = codegen.GetExprAsCode(op->args_[1]);
-
-    if (op->args_.size() >= 3) {
-        // Strided form -> vstas(ureg, dst, stride, POST_UPDATE|NORM)
-        std::string stride = codegen.GetExprAsCode(op->args_[2]);
-        bool post_update = op->HasKwarg("post_update") && op->GetKwarg<bool>("post_update");
-        std::string pu = post_update ? "POST_UPDATE" : "NORM";
-        codegen.Emit("vstas(" + ureg + ", " + dst_ptr + ", " + stride + ", " + pu + ");");
-    } else {
-        // Strideless legacy form -> vstar(align_reg, dst)
-        codegen.Emit("vstar(" + ureg + ", " + dst_ptr + ");");
+    std::string third_arg = codegen.GetExprAsCode(op->args_[2]);
+    bool post_update = op->HasKwarg("post_update") && op->GetKwarg<bool>("post_update");
+    std::string ptr_cast = "(__ubuf__ " + base_c_type + " *&)";
+    if (codegen.IsAddrRegVar(third_arg)) {
+        // vsta(ureg, dst, areg) — AddrReg-based unaligned store post.
+        // vsta has no post mode; post_update kwarg is not applicable in this mode.
+        CHECK(!op->HasKwarg("post_update")) << "vf.store_unalign_post (AddrReg mode) does not support post_update; "
+                                            << "vsta has no post mode parameter";
+        codegen.Emit("vsta(" + ureg + ", " + ptr_cast + tile_ptr_var + ", " + third_arg + ");");
+        return "";
     }
+    // vstas always requires __ubuf__ T*& (lvalue ref).
+    // POST_UPDATE: 4 args (ureg, ptr, stride, POST_UPDATE)
+    // NORM: 3 args (ureg, ptr, stride) — no Post argument
+    // b64: stride must be doubled to account for b32 simulation of b64 elements.
+    std::string stride = is_b64 ? ("(" + third_arg + ") * 2") : third_arg;
+    if (post_update) {
+        codegen.Emit("vstas(" + ureg + ", " + ptr_cast + tile_ptr_var + ", " + stride + ", POST_UPDATE);");
+    } else {
+        codegen.Emit("vstas(" + ureg + ", " + ptr_cast + tile_ptr_var + ", " + stride + ");");
+    }
+    return "";
+}
+
+// ============================================================================
+// SqueezeStoreUnAlign — vstur (strideless unaligned store, reads AR register
+// for byte count). Must be paired with vf.squeeze(STORE_REG) and
+// vf.squeeze_store_unalign_post. The AR register (written by squeeze) provides
+// the valid byte count; vstur uses it as the implicit stride.
+// ============================================================================
+static std::string EmitVFSqueezeStoreUnAlign(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+{
+    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+    CHECK(op->args_.size() == 3) << "vf.squeeze_store_unalign requires 3 args (dst, src, align_reg)";
+    // Squeeze path does not support mask_reg src — use vf.store_unalign (pstu) for mask store.
+    if (auto src_v = ir::As<ir::Var>(op->args_[1])) {
+        CHECK(!codegen.IsMaskRegVar(codegen.GetVarName(src_v)))
+            << "vf.squeeze_store_unalign does not support MaskReg src; use vf.store_unalign instead";
+    }
+    DataType src_dt = GetExprDtype(op->args_[1]);
+    // vstur supports b8/b16/b32/b64 element widths
+    CHECK(src_dt.GetBit() == 8 || src_dt.GetBit() == 16 || src_dt.GetBit() == 32 || src_dt.GetBit() == 64)
+        << "vf.squeeze_store_unalign source only supports b8/b16/b32/b64 types, got " << DTypeStr(src_dt);
+    // AscendC DataCopyUnAlignImpl cast rules (dav_3510 store_impl.h:496-518):
+    //   b8  → uint8_t (line 506)
+    //   b16 → no cast  (line 515, else branch uses original type)
+    //   b32 → int32_t  (line 511)
+    //   b64 → int64_t  (line 513)
+    DataType cast_dt = src_dt;
+    if (src_dt.GetBit() == 32) {
+        cast_dt = DataType::INT32;
+    } else if (src_dt.GetBit() == 64) {
+        cast_dt = DataType::INT64;
+    } else if (IsB8Type(src_dt)) {
+        cast_dt = DataType::UINT8;
+    }
+    std::string base_c_type = cast_dt.ToCTypeString();
+    std::string tile_ptr_var = codegen.GetOrCreateVFTilePtr(op->args_[0], /*is_post_update=*/true);
+    std::string vreg = codegen.GetExprAsCode(op->args_[1]);
+    std::string ureg = codegen.GetExprAsCode(op->args_[2]);
+    std::string vreg_expr = (cast_dt == src_dt) ? vreg : ("(RegTensor<" + base_c_type + "> &)" + vreg);
+    // vstur takes __ubuf__ T* (not *&)
+    std::string ptr_cast = "(__ubuf__ " + base_c_type + " *)";
+    codegen.Emit("vstur(" + ureg + ", " + vreg_expr + ", " + ptr_cast + tile_ptr_var + ", POST_UPDATE);");
+    return "";
+}
+
+// ============================================================================
+// SqueezeStoreUnAlignPost — vstar (strideless unaligned store post, reads AR
+// register for remaining byte count). Must be paired with
+// vf.squeeze_store_unalign.
+// ============================================================================
+static std::string EmitVFSqueezeStoreUnAlignPost(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+{
+    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+    CHECK(op->args_.size() == 2) << "vf.squeeze_store_unalign_post requires 2 args (dst, align_reg)";
+    DataType tile_dt = GetExprDtype(op->args_[0]);
+    // vstar supports b8/b16/b32/b64 element widths
+    CHECK(IsB8Type(tile_dt) || tile_dt.GetBit() == 16 || tile_dt.GetBit() == 32 || tile_dt.GetBit() == 64)
+        << "vf.squeeze_store_unalign_post only supports b8/b16/b32/b64 types, got " << DTypeStr(tile_dt);
+    // AscendC DataCopyUnAlignPostImpl cast rules (dav_3510 store_impl.h:520-537):
+    //   b8  → uint8_t (line 525)
+    //   b16 → no cast  (line 534, else branch uses original type)
+    //   b32 → int32_t  (line 530)
+    //   b64 → int64_t  (line 532)
+    DataType cast_dt = tile_dt;
+    if (tile_dt.GetBit() == 32) {
+        cast_dt = DataType::INT32;
+    } else if (tile_dt.GetBit() == 64) {
+        cast_dt = DataType::INT64;
+    } else if (IsB8Type(tile_dt)) {
+        cast_dt = DataType::UINT8;
+    }
+    std::string base_c_type = cast_dt.ToCTypeString();
+    std::string tile_ptr_var = codegen.GetOrCreateVFTilePtr(op->args_[0], /*is_post_update=*/true);
+    std::string ureg = codegen.GetExprAsCode(op->args_[1]);
+    // vstar takes __ubuf__ T* (not *&)
+    std::string ptr_cast = "(__ubuf__ " + base_c_type + " *)";
+    codegen.Emit("vstar(" + ureg + ", " + ptr_cast + tile_ptr_var + ");");
     return "";
 }
 
@@ -3921,6 +4021,18 @@ REGISTER_BACKEND_OP(BackendCCE, "vf.store_unalign_post")
         return EmitVFStoreUnAlignPost(op, codegen);
     });
 
+REGISTER_BACKEND_OP(BackendCCE, "vf.squeeze_store_unalign")
+    .set_pipe(ir::PipeType::V)
+    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
+        return EmitVFSqueezeStoreUnAlign(op, codegen);
+    });
+
+REGISTER_BACKEND_OP(BackendCCE, "vf.squeeze_store_unalign_post")
+    .set_pipe(ir::PipeType::V)
+    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
+        return EmitVFSqueezeStoreUnAlignPost(op, codegen);
+    });
+
 REGISTER_BACKEND_OP(BackendCCE, "vf.unalign_reg_for_store")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
@@ -3978,6 +4090,9 @@ static std::string EmitVFLog2(const ir::CallPtr& op, codegen::CodegenBase& codeg
     DataType src_dt = GetExprDtype(op->args_[1]);
     CHECK((src_dt == DataType::FP16 || src_dt == DataType::FP32))
         << "vf.log2 src only supports FP16/FP32, got " << DTypeStr(src_dt);
+    DataType vf_log2_dst_dt = GetExprDtype(op->args_[0]);
+    CHECK(src_dt == vf_log2_dst_dt) << "vf.log2 requires src and dst to have the same type, got dst="
+                                    << DTypeStr(vf_log2_dst_dt) << " src=" << DTypeStr(src_dt);
     std::string dst = codegen.GetExprAsCode(op->args_[0]);
     std::string src = codegen.GetExprAsCode(op->args_[1]);
     std::string mask = codegen.GetExprAsCode(op->args_[2]);
@@ -3998,6 +4113,9 @@ static std::string EmitVFLog10(const ir::CallPtr& op, codegen::CodegenBase& code
     DataType src_dt = GetExprDtype(op->args_[1]);
     CHECK((src_dt == DataType::FP16 || src_dt == DataType::FP32))
         << "vf.log10 src only supports FP16/FP32, got " << DTypeStr(src_dt);
+    DataType vf_log10_dst_dt = GetExprDtype(op->args_[0]);
+    CHECK(src_dt == vf_log10_dst_dt) << "vf.log10 requires src and dst to have the same type, got dst="
+                                     << DTypeStr(vf_log10_dst_dt) << " src=" << DTypeStr(src_dt);
     std::string dst = codegen.GetExprAsCode(op->args_[0]);
     std::string src = codegen.GetExprAsCode(op->args_[1]);
     std::string mask = codegen.GetExprAsCode(op->args_[2]);
