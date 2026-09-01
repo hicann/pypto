@@ -357,7 +357,12 @@ Status BufferPool::CompactBufferSlices(std::unordered_map<int, LocalBufferPtr>& 
     for (const auto& it : items) {
         oldOffsets[it.first] = it.second.offset;
     }
-    std::sort(items.begin(), items.end(), [](const auto& a, const auto& b) { return a.second.size > b.second.size; });
+    std::sort(items.begin(), items.end(), [](const auto& a, const auto& b) {
+        if (a.second.size != b.second.size) {
+            return a.second.size > b.second.size;
+        }
+        return a.second.offset < b.second.offset;
+    });
 
     // 紧凑重排
     uint64_t cursor = 0;

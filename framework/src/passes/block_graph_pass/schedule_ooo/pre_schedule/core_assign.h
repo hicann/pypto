@@ -141,6 +141,22 @@ public:
     void HLFSchedule(TaskGraph& taskGraph);
     static bool HasAtomicScopeTasks(const TaskGraph& taskGraph);
     void NormalizeSingleAIVBranches(TaskGraph& taskGraph);
+
+    // 亲和 dualdst：task 划分后、调度前（仅 HLF）计算 per-branch 的候选核提示。
+    // 尽力而为，仅在 EFTWithInsertSchedule 平局时参考，不改变任何原有约束。
+    // order 为 HLFSchedule 的调度顺序，遍历它找 AIC task 使候选归属与调度顺序一致。
+    void AssignDualDstCandidates(TaskGraph& taskGraph, const std::vector<int>& order);
+
+private:
+    // 需求2的种子对判定：同一 L0C 的两个 L0C_COPY_UB 是否几何相邻、后继两 aiv task
+    // 不同且不连通；命中则给对应 branch 写入候选（offset 小→AIV0，大→AIV1）。
+    void TrySeedDualDstPair(Operation* copyA, Operation* copyB, TaskGraph& taskGraph,
+                            const std::unordered_map<Operation*, int>& opToTask);
+    // 由 L0C_COPY_UB 一跳定位其后继 aiv op 所属的 taskId（输出即 UB tensor，consumer 必是 aiv op）。
+    int ResolveAivTask(Operation* copyOp, const std::unordered_map<Operation*, int>& opToTask) const;
+
+    // vecBranchId -> 候选核。key 存在即锁定，不覆盖。每次 Schedule 入口清空。
+    std::unordered_map<int, TargetCoreType> branchCandidate_;
 };
 
 } // namespace npu::tile_fwk

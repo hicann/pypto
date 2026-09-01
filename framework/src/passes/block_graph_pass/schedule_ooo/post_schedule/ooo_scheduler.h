@@ -51,7 +51,6 @@ public:
 
     // DualDst switch is configured by OoOSchedule before Schedule().
     void SetEnableDualDst(bool v) { state_.enableDualDst = v; }
-    void SetEnableDualDstAllocGuard(bool v) { dualDstEngine_.SetEnableDualDstAllocGuard(v); }
     void SetDualDstPairs(std::unordered_map<Operation*, Operation*> pairs) { state_.dualDstPairs = std::move(pairs); }
     void SetDualDstOpPairs(std::unordered_map<Operation*, Operation*> pairs)
     {
@@ -59,6 +58,10 @@ public:
     }
 
 private:
+    struct DualSpillGroup {
+        std::vector<int> aiv0MemIds;
+        std::vector<int> aiv1MemIds;
+    };
     Function& function_;
     SpillEngine spillEngine_;
     DualDstEngine dualDstEngine_;
@@ -70,7 +73,6 @@ private:
 
     IRBuilder irBuilder_;
     std::unordered_map<int, DDRBufferKind> ddrKindMap_;
-    std::vector<Operation*> guardBlockedAllocs_;
     // 输出在 DDR 上的 skip op: 没有消费者的 skipOps 接管它, 由 PlaceDdrSkipOps 定稿时紧跟生产者插入。
     // 按 opList 原序存放, 祖先在前, 链上后继才能看到已落位的前驱。
     std::vector<Operation*> ddrSkipOps_;
@@ -108,6 +110,7 @@ private:
     void UpdateDualDstL0MXRange();
     Status FinalizeScheduleResult(const std::vector<Operation*>& opList);
     Status SeqSchedule();
+    Status ProcessSeqOp(Operation* op, size_t& pcIdx);
     Status ExecuteAllocIssue(Operation* op, size_t& pcIdx);
     Status AllocateAfterSpill(Operation* op, LocalBufferPtr allocBuffer, CoreLocationType coreLocation, bool isDualDst);
     Status RetireIssue(Operation* op);
@@ -120,8 +123,11 @@ private:
     Status RetireOpAndAwakeSucc(Operation* op, uint64_t& commitCnt);
     Status FreeBuffer(Operation* op, std::vector<int>& freedMemIds);
     Status BufferAllocStage(uint64_t& commitCnt);
+    Status ExecuteAivUbAllocRound(uint64_t& commitCnt);
+    Status ExecuteAivRegularAllocStage(uint64_t& commitCnt, OpQueue& queue0, OpQueue& queue1);
+    Status CheckAivUbPoolSlicesEqual();
     Status ExecuteAllocIssue(uint64_t& commitCnt, MemoryType memType, OpQueue& pipe);
-    Status TryDualDstAllocOnce(Operation* op, uint64_t& commitCnt, bool& allocated);
+    Status TryDualDstAllocPair(Operation* aiv0Alloc, Operation* aiv1Alloc, uint64_t& commitCnt, bool& allocated);
     Status TryRegularAllocOnce(Operation* op, MemoryType memType, CoreLocationType coreLocation,
                                const std::vector<int>& reqMemIds, uint64_t& commitCnt, bool& allocated);
     void HandleSkipOp(Operation* op);
@@ -133,26 +139,24 @@ private:
     void PrintOpList(std::vector<Operation*> opList);
     bool HasEnoughBuffer(Operation* allocOp, MemoryType memType);
     Status RearrangeBuffer(Operation* allocOp, MemoryType memType);
-    Status GenBufferSpill(Operation* allocOp, SpillContext& ctx);
-    bool CollectClearableWindowGroup(const std::vector<std::tuple<int, size_t, size_t>>* pools[2], uint64_t winStart,
-                                     uint64_t winEnd, Operation* allocOp, std::unordered_map<int, bool>& spillableCache,
-                                     std::unordered_map<int, long long>& nextUseCache, std::vector<int>& group,
-                                     long long& winScore);
-    std::vector<std::vector<int>> GetCommonOffsetClearGroup(BufferPool& poolA, BufferPool& poolB, size_t sizeNeedSpill,
-                                                            Operation* allocOp);
-    std::vector<int> SelectDualDstSpillBuffers(Operation* allocOp, LocalBufferPtr allocBuffer, bool isDualDst,
-                                               CoreLocationType allocCore);
+    Status GenBufferSpill(Operation* allocOp, SpillContext& ctx, bool isMainLoop);
+    Status SelectDualDstSpillTargets(Operation* allocOp, Operation* peerAlloc, DualSpillGroup& dualGroup);
+    Status ApplyDualSpill(Operation* allocOp, Operation* peerAlloc, const DualSpillGroup& dualGroup, SpillContext& ctx,
+                          SpillContext& peerCtx, MemoryType reqMemType, uint64_t reqSize);
+    Status ApplySingleSpill(Operation* allocOp, const std::vector<int>& spillGroup, SpillContext& ctx,
+                            MemoryType reqMemType, uint64_t reqSize);
+    Status FinalizeSingleSideSpill(Operation* allocOp, MemoryType reqMemType, uint64_t reqSize);
     std::vector<int> SelectSpillBuffers(Operation* allocOp);
     Status ApplySpillContext(SpillContext& ctx, Operation* allocOp);
     Status PrintSpillFailedInfo(Operation* allocOp);
     std::vector<std::vector<int>> GetSpillGroup(BufferPool& pool, size_t sizeNeedSpill);
-    std::vector<std::vector<int>> GetDualSpillGroup(BufferPool& poolA, BufferPool& poolB, size_t sizeNeedSpill);
+    std::vector<DualSpillGroup> GetDualSpillGroup(BufferPool& poolA, BufferPool& poolB, size_t sizeNeedSpill);
     Status GetGroupNextUseTime(std::vector<int> group, Operation* allocOp, std::vector<int>& groupNextUseTime,
                                std::unordered_map<int, size_t>& nextUseTimeCache);
 
     Status SpillOnBlock();
-    Status SpillOnGuardBlock();
-    bool IsOpInQueue(Operation* op, const OpQueue& pipe) const;
+    Status DetectSpillDeadLoop();
+    Status SpillDualDstAivUbBlock();
     Status SpillOnCoreBlock(std::pair<CoreLocationType, MemoryType> coreLocation);
     Status FindFirstOrder(std::pair<CoreLocationType, MemoryType>& orderFirstPair);
     Status FindCoreLocationMemoryType(CoreLocationType coreLocation, MemoryType& spillMemType);

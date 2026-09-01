@@ -153,9 +153,6 @@ private:
     Status GetPartialWriteReplayAttr(Operation* producerOp, std::vector<int64_t>& toOffset,
                                      std::vector<SymbolicScalar>& toDynOffset,
                                      std::vector<SymbolicScalar>& fromDynValidShape) const;
-
-    void UpdateScheduleStatusForDualDst(const std::vector<std::pair<Operation*, std::vector<int>>>& opMemidMap,
-                                        int memId, Operation* spillAllocOp, Operation* spillOp);
 };
 
 } // namespace npu::tile_fwk

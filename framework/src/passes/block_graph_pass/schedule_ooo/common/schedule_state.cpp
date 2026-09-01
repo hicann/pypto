@@ -338,11 +338,6 @@ void ScheduleState::InsertOrdered(Operation* insertOp)
 
 CoreLocationType ScheduleState::ResolveCoreForFree(int memId)
 {
-    auto overrideIt = dualDstMemIdCoreOverride.find(memId);
-    if (overrideIt != dualDstMemIdCoreOverride.end()) {
-        return overrideIt->second;
-    }
-
     auto allocIt = tensorAllocMap.find(memId);
     if (allocIt == tensorAllocMap.end() || allocIt->second == nullptr) {
         APASS_LOG_ERROR_F(Elements::Tensor, "ResolveCoreForFree cannot find alloc op for tensor[%d].", memId);
@@ -359,19 +354,8 @@ CoreLocationType ScheduleState::ResolveCoreForFree(int memId)
 
 bool ScheduleState::IsDualDstAlloc(Operation* allocOp)
 {
-    if (!enableDualDst)
-        return false;
-    if (allocOp == nullptr)
-        return false;
     auto it = schedInfoMap.find(allocOp);
-    if (it == schedInfoMap.end() || !it->second.isAlloc)
-        return false;
-    for (auto* succ : depManager.GetSuccessors(allocOp)) {
-        if (succ != nullptr && succ->GetOpcode() == Opcode::OP_L0C_COPY_UB_DUAL_DST) {
-            return true;
-        }
-    }
-    return false;
+    return enableDualDst && it != schedInfoMap.end() && it->second.isAlloc && it->second.isDualDstAlloc;
 }
 
 } // namespace npu::tile_fwk

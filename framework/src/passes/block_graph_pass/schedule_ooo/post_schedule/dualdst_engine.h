@@ -43,15 +43,10 @@ public:
     Status RunDualDstFuse();
     Status AllocateDualDstAtCurrent(Operation* allocA, bool& allocated);
     Status ResolveDualDstAllocCtx(Operation* allocOp, DualDstAllocCtx& ctx);
-    Status BuildDualDstAllocGuards();
-    bool IsDualDstAllocGuardSatisfied(Operation* allocOp) const;
-    std::vector<Operation*> GetUnretiredGuardAllocs(Operation* allocOp) const;
     Status GetMatchedAivUbAllocOffset(Operation* allocOp, bool& hasMatchedOffset, uint64_t& matchedOffset);
     Status RecordAivUbAlloc(Operation* allocOp);
-    Status CheckAivUbAllocAlignmentAfterDualDst(Operation* dualDstAllocOp);
 
     bool IsDualDstEnabled() const { return state_.enableDualDst; }
-    void SetEnableDualDstAllocGuard(bool enable) { enableDualDstAllocGuard_ = enable; }
     void SetDualDstL0CDirection(const std::unordered_map<LogicalTensorPtr, int64_t>& dir)
     {
         dualDstL0CDirection_ = dir;
@@ -104,20 +99,9 @@ private:
     CoreLocationType ConsumerCore(Operation* copyUbOp);
     Operation* FindAllocPred(Operation* op);
     bool CheckDualDstDtype(LogicalTensorPtr l0cTensor, const std::vector<Operation*>& copyUbs);
-    bool HasOnlySupportedDualDstConsumers(Operation* op) const;
     void BuildAdjacencyCandidates(const std::vector<Operation*>& copyUbs, const std::vector<CopyUbGeometry>& geos,
                                   std::vector<CandidatePair>& candM, std::vector<CandidatePair>& candN);
     void AppendDualDstPairs(const std::vector<CandidatePair>& chosen, std::vector<DualDstPair>& pairs);
-    void PickAllocOrder(Operation* a1, Operation* a2, Operation*& early, Operation*& late);
-
-    Operation* GetDualDstCopyOpFor(Operation* allocOp);
-
-    int GetDualDstPairedMemId(Operation* allocOp);
-    void ClearDualDstAllocGuards();
-    void CollectDualDstGuardedAllocs(Operation* root, std::set<Operation*, Operation::OperationComparator>& allocs);
-    void CollectSoftmaxOrUpdateGuardedAllocs(Operation* root,
-                                             std::set<Operation*, Operation::OperationComparator>& allocs);
-    Status CollectDualDstGuardRoots(Operation* dualOp, std::set<Operation*, Operation::OperationComparator>& roots);
     void EraseFromOrderedOps(Operation* op);
     void IdentifyPairsForOneL0C(LogicalTensorPtr l0cTensor, const std::vector<Operation*>& copyUbs,
                                 std::vector<DualDstPair>& pairs);
@@ -127,20 +111,22 @@ private:
     void SetDualDstCopyAttr(Operation* C, LogicalTensorPtr l0cIn, const DualDstPair& p,
                             std::shared_ptr<CopyOpAttribute> attrE, std::shared_ptr<CopyOpAttribute> attrL);
     void RewireEdgesForFusedOp(Operation* opEarly, Operation* opLate, Operation* A, Operation* B, Operation* C);
-    void DetachOldOpsFromTensors(const DualDstPair& p, LogicalTensorPtr l0cIn, Operation* B);
-    void RegisterFusedOpInMaps(Operation* C, int execOrder);
-    void SyncBufRefCountForFuse(const DualDstPair& p, Operation* B, Operation* C);
+    void DetachOldOpsFromTensors(const DualDstPair& p, LogicalTensorPtr l0cIn);
+    void SyncBufRefCountForFuse(const DualDstPair& p, Operation* C);
     Status FuseOnePair(const DualDstPair& p);
+    void MarkDualDstAllocPair(Operation* A, Operation* B);
+    bool SpliceFusedOpIntoOrderedOps(const DualDstPair& p, Operation* C, size_t& replaceIdx);
     Status ResolveDualDstMemAndBuf(Operation* allocOp, DualDstAllocCtx& ctx);
     Status ResolveDualDstCores(Operation* allocOp, DualDstAllocCtx& ctx);
     void CommitDualDstAlloc(Operation* allocA, const DualDstAllocCtx& ctx, uint64_t off);
+    void LogDualDstAllocMiss(Operation* allocA, BufferPool& poolA, BufferPool& poolB, uint64_t size);
+    Status AllocateBothPoolsAtOffset(const DualDstAllocCtx& ctx, uint64_t off, Operation* allocA);
     std::optional<uint64_t> FindCommonFreeOffset(BufferPool& poolA, BufferPool& poolB, uint64_t size);
     bool IsAivUbAllocAlignmentCheckEnabled() const;
     Status ResolveAivUbAllocRecordInput(Operation* allocOp, bool& shouldCheck, CoreLocationType& coreLocation,
                                         int& memId, LocalBufferPtr& buf);
     Status TryCancelAivUbAllocRecords();
     std::string FormatAivUbAllocRecord(const AivUbAllocRecord& record) const;
-
     // 把 AIV1 侧同构 op 在 orderedOps 中重排为与 AIV0 侧一致，AIV0 侧保持原始顺序。
     // 返回是否真的重排了，跳过不算失败。
     bool ReorderAiv1ToAiv0Order(std::vector<Operation*>& opList,
@@ -152,8 +138,6 @@ private:
 
     ScheduleState& state_;
     Function& function_;
-    bool enableDualDstAllocGuard_{false};
-    std::unordered_map<Operation*, std::vector<Operation*>> guardedAllocToDualDstAllocs_;
     std::unordered_map<LogicalTensorPtr, int64_t> dualDstL0CDirection_;
     std::unordered_map<LogicalTensorPtr, LogicalTensorPtr> l02L0MXMap_;
     std::deque<AivUbAllocRecord> aiv0UbAllocRecords_;

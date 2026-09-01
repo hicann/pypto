@@ -26,6 +26,7 @@
 
 #include "local_search_solver.h"
 #include "passes/pass_log/pass_log.h"
+#include "interface/operation/attribute.h"
 
 #ifndef MODULE_NAME
 #define MODULE_NAME "CoreAssign"
@@ -221,14 +222,27 @@ void CoreScheduler::EFTWithInsertSchedule(TaskGraph& taskGraph, std::vector<int>
                                  currentIntervalAIV0);
                 FindEarliestSlot(availTime[TargetCoreType::AIV1], evalDepTimeStart, task.latency, currentIdxAIV1,
                                  currentIntervalAIV1);
-                if (currentIntervalAIV0.first <= currentIntervalAIV1.first) {
+                if (currentIntervalAIV0.first < currentIntervalAIV1.first) {
                     evalCore = TargetCoreType::AIV0;
                     currentIdx = currentIdxAIV0;
                     currentInterval = currentIntervalAIV0;
-                } else {
+                } else if (currentIntervalAIV1.first < currentIntervalAIV0.first) {
                     evalCore = TargetCoreType::AIV1;
                     currentIdx = currentIdxAIV1;
                     currentInterval = currentIntervalAIV1;
+                } else {
+                    // 真平局：两核最早开始时间严格相等。查 dualdst 亲和候选，
+                    // 命中 AIV1 则倒向 AIV1，否则维持原有"倒向 AIV0"的行为。
+                    auto candIt = branchCandidate_.find(task.vecBranchId);
+                    if (candIt != branchCandidate_.end() && candIt->second == TargetCoreType::AIV1) {
+                        evalCore = TargetCoreType::AIV1;
+                        currentIdx = currentIdxAIV1;
+                        currentInterval = currentIntervalAIV1;
+                    } else {
+                        evalCore = TargetCoreType::AIV0;
+                        currentIdx = currentIdxAIV0;
+                        currentInterval = currentIntervalAIV0;
+                    }
                 }
             }
             if (task.vecBranchId >= 0) {
@@ -650,6 +664,183 @@ bool CoreScheduler::HasAtomicScopeTasks(const TaskGraph& taskGraph)
     return false;
 }
 
+// dualdst 亲和候选的 2 维几何。参考 DualDstEngine::ReadGeometry，但只读判定相邻所需的
+// fromOffset(2维) 与 shape(2维)，不做 ubShape/validShape/dtype 校验（那是融合阶段的事）。
+struct CopyGeo2D {
+    bool ok{false};
+    int64_t fromM{0};
+    int64_t fromN{0};
+    int64_t tileM{0};
+    int64_t tileN{0};
+};
+
+static int64_t SpecifiedInt2D(const OpImmediate& imm)
+{
+    if (!imm.IsSpecified()) {
+        return INT64_MIN;
+    }
+    const auto& s = imm.GetSpecifiedValue();
+    return s.ConcreteValid() ? s.Concrete() : INT64_MIN;
+}
+
+static CopyGeo2D ReadGeo2D(Operation* op)
+{
+    CopyGeo2D g;
+    if (op == nullptr) {
+        return g;
+    }
+    auto attr = std::dynamic_pointer_cast<CopyOpAttribute>(op->GetOpAttribute());
+    if (attr == nullptr) {
+        return g;
+    }
+    const auto& from = attr->GetFromOffset();
+    const auto& shape = attr->GetShape();
+    if (from.size() != 2 || shape.size() != 2) {
+        return g;
+    }
+    g.fromM = SpecifiedInt2D(from[0]);
+    g.fromN = SpecifiedInt2D(from[1]);
+    g.tileM = SpecifiedInt2D(shape[0]);
+    g.tileN = SpecifiedInt2D(shape[1]);
+    if (g.fromM == INT64_MIN || g.fromN == INT64_MIN || g.tileM <= 0 || g.tileN <= 0) {
+        return g;
+    }
+    g.ok = true;
+    return g;
+}
+
+// 这里只做亲和预筛选，不替代 DualDstEngine 中的 shape、validShape、dtype 和 consumer core 等最终校验。
+// 基础二维相邻规则需与 DualDstEngine::BuildAdjacencyCandidates 保持一致。
+static bool Adjacent2D(const CopyGeo2D& a, const CopyGeo2D& b, bool& smallIsA)
+{
+    if (a.tileM != b.tileM || a.tileN != b.tileN) {
+        return false;
+    }
+    if (a.fromN == b.fromN && std::abs(a.fromM - b.fromM) == a.tileM) {
+        smallIsA = a.fromM < b.fromM;
+        return true;
+    }
+    if (a.fromM == b.fromM && std::abs(a.fromN - b.fromN) == a.tileN) {
+        smallIsA = a.fromN < b.fromN;
+        return true;
+    }
+    return false;
+}
+
+int CoreScheduler::ResolveAivTask(Operation* copyOp, const std::unordered_map<Operation*, int>& opToTask) const
+{
+    if (copyOp == nullptr || copyOp->GetOOperands().empty()) {
+        return -1;
+    }
+    auto out = copyOp->GetOutputOperand(0);
+    if (out == nullptr) {
+        return -1;
+    }
+    // L0C_COPY_UB 的输出即 UB tensor，其 consumer 必是 aiv op，一跳即可。
+    const auto& cons = out->GetConsumers();
+    if (cons.empty()) {
+        return -1;
+    }
+    auto it = opToTask.find(*cons.begin());
+    return (it == opToTask.end()) ? -1 : it->second;
+}
+
+void CoreScheduler::TrySeedDualDstPair(Operation* copyA, Operation* copyB, TaskGraph& taskGraph,
+                                       const std::unordered_map<Operation*, int>& opToTask)
+{
+    CopyGeo2D ga = ReadGeo2D(copyA);
+    CopyGeo2D gb = ReadGeo2D(copyB);
+    if (!ga.ok || !gb.ok) {
+        return;
+    }
+    bool smallIsA = false;
+    if (!Adjacent2D(ga, gb, smallIsA)) {
+        return;
+    }
+
+    int tA = ResolveAivTask(copyA, opToTask);
+    int tB = ResolveAivTask(copyB, opToTask);
+    if (tA < 0 || tB < 0 || tA == tB) {
+        return;
+    }
+    const TaskNode& taskA = taskGraph.tasks[tA];
+    const TaskNode& taskB = taskGraph.tasks[tB];
+    if (taskA.coreType != ScheduleCoreType::AIV || taskB.coreType != ScheduleCoreType::AIV) {
+        return;
+    }
+    // 不连通（不同 branch）才是合法种子；连通的两 task 本就同核，无需也不应给相反候选。
+    if (taskA.vecBranchId < 0 || taskB.vecBranchId < 0 || taskA.vecBranchId == taskB.vecBranchId) {
+        return;
+    }
+    // 两个 aiv task 必须等耗时：dualdst 双池是对称分配，latency 不等说明并不对称，
+    // 强行钉核既无亲和意义，也可能破坏对称前提。
+    if (taskA.latency != taskB.latency) {
+        return;
+    }
+
+    int bSmall = smallIsA ? taskA.vecBranchId : taskB.vecBranchId;
+    int bLarge = smallIsA ? taskB.vecBranchId : taskA.vecBranchId;
+    // 整对准入：任一 branch 已被赋值即整对跳过，保证不覆盖、方向成对。
+    if (branchCandidate_.count(bSmall) > 0 || branchCandidate_.count(bLarge) > 0) {
+        return;
+    }
+    branchCandidate_[bSmall] = TargetCoreType::AIV0; // offset 小 → AIV0
+    branchCandidate_[bLarge] = TargetCoreType::AIV1; // offset 大 → AIV1
+    APASS_LOG_INFO_F(Elements::Operation, "DualDst affinity: branch %d -> AIV0, branch %d -> AIV1 (task %d / %d).",
+                     bSmall, bLarge, smallIsA ? tA : tB, smallIsA ? tB : tA);
+}
+
+// 亲和 dualdst：task 划分后、调度前（仅 HLF）为 per-branch 计算候选核提示。
+// order 为 HLFSchedule 构建的调度顺序（反向深度排序），遍历它找 AIC task，
+// 使候选归属与实际调度顺序一致。
+void CoreScheduler::AssignDualDstCandidates(TaskGraph& taskGraph, const std::vector<int>& order)
+{
+    branchCandidate_.clear();
+
+    // op* -> taskId，本地构建，不依赖 TaskSplitter 内部结构。
+    std::unordered_map<Operation*, int> opToTask;
+    for (auto& task : taskGraph.tasks) {
+        for (auto* op : task.opList_) {
+            opToTask[op] = task.idx;
+        }
+    }
+
+    std::unordered_set<int> visitedAic; // 需求3：已遍历的 AIC task 跳过
+    for (int taskId : order) {
+        auto& task = taskGraph.tasks[taskId];
+        if (task.coreType != ScheduleCoreType::AIC || visitedAic.count(taskId) > 0) {
+            continue;
+        }
+        visitedAic.insert(taskId);
+
+        // 按输入 L0C tensor 分组该 task 内的 L0C_COPY_UB。
+        std::unordered_map<LogicalTensor*, std::vector<Operation*>> l0cToCopy;
+        std::vector<LogicalTensor*> l0cOrder;
+        for (auto* op : task.opList_) {
+            if (op->GetOpcode() != Opcode::OP_L0C_COPY_UB || op->GetIOperands().empty()) {
+                continue;
+            }
+            auto l0cIn = op->GetInputOperand(0);
+            if (l0cIn != nullptr) {
+                auto* l0c = l0cIn.get();
+                if (l0cToCopy.emplace(l0c, std::vector<Operation*>{}).second) {
+                    l0cOrder.push_back(l0c);
+                }
+                l0cToCopy[l0c].push_back(op);
+            }
+        }
+        // 每个"恰好 2 个 L0C_COPY_UB"的 L0C 独立判一次。
+        for (auto* l0c : l0cOrder) {
+            auto& copyUbs = l0cToCopy[l0c];
+            if (copyUbs.size() == 2) {
+                TrySeedDualDstPair(copyUbs[0], copyUbs[1], taskGraph, opToTask);
+            }
+        }
+    }
+    APASS_LOG_INFO_F(Elements::Operation, "DualDst affinity: assigned candidates for %zu branches.",
+                     branchCandidate_.size());
+}
+
 void CoreScheduler::HLFSchedule(TaskGraph& taskGraph)
 {
     taskGraph.ClearSchedule();
@@ -710,6 +901,9 @@ void CoreScheduler::HLFSchedule(TaskGraph& taskGraph)
                          revDepth[order[i]],
                          taskGraph.tasks[order[i]].coreType == ScheduleCoreType::AIC ? "AIC" : "AIV");
     }
+
+    // 亲和 dualdst：复用 HLF 的 order（反向深度排序），在调度前给 per-branch 计算候选核提示。
+    AssignDualDstCandidates(taskGraph, order);
 
     EFTWithInsertSchedule(taskGraph, order);
     APASS_LOG_INFO_F(Elements::Operation, "HLF schedule done, makespan=%d.", taskGraph.makespan);

@@ -1429,13 +1429,8 @@ Status SpillEngine::InsertOps(std::vector<std::pair<Operation*, std::vector<int>
 Status SpillEngine::UpdateScheduleStatus(std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap, int memId,
                                          Operation* spillAllocOp, LogicalTensorPtr localTensor, Operation* spillOp)
 {
-    CoreLocationType coreLocation = state_.schedInfoMap[spillAllocOp].coreLocation;
-    if (!state_.enableDualDst || (coreLocation != CoreLocationType::AIV0 && coreLocation != CoreLocationType::AIV1)) {
-        for (auto& [op, memid] : opMemidMap) {
-            UpdateOpScheduleInfo(op, memid, spillAllocOp);
-        }
-    } else {
-        UpdateScheduleStatusForDualDst(opMemidMap, memId, spillAllocOp, spillOp);
+    for (auto& [op, memid] : opMemidMap) {
+        UpdateOpScheduleInfo(op, memid, spillAllocOp);
     }
 
     if (InsertOps(opMemidMap, spillAllocOp, memId) != SUCCESS) {
@@ -1588,43 +1583,6 @@ Status SpillEngine::RemoveSmallShapeSpillResources(int spillMemId, LogicalTensor
                       opsToDelete.size(), tensorsToDelete.size());
 
     return SUCCESS;
-}
-
-// ============================================================================
-// DualDst 跨池 spill 专用，主线 enableDualDst_=false 时不会进入。
-// ============================================================================
-
-// UpdateScheduleStatus 的 dualdst 分支。入口约定 (调用方保证): spillAllocOp 是 dualdst
-// dualdst 保留的 A（跨池场景）。
-//
-// 关键性质: spilled tensor 必然是 UB,
-// 它的消费者必然在 AIV0/AIV1，直接拿消费者的属性即对。通过 GetSpillTensor(spillOp, memId)
-// 反查 spillTensor 拿到消费者列表。
-void SpillEngine::UpdateScheduleStatusForDualDst(const std::vector<std::pair<Operation*, std::vector<int>>>& opMemidMap,
-                                                 int memId, Operation* spillAllocOp, Operation* spillOp)
-{
-    LogicalTensorPtr spillTensor = GetSpillTensor(spillOp, memId);
-    Operation* consumer = nullptr;
-    if (spillTensor != nullptr) {
-        for (auto* cons : spillTensor->GetConsumers()) {
-            if (cons == nullptr || cons->IsDeleted())
-                continue;
-            if (cons->HasAttribute(OpAttributeKey::isCube) && cons->GetBoolAttribute(OpAttributeKey::isCube))
-                continue;
-            consumer = cons;
-            break;
-        }
-    }
-
-    for (auto& [op, memid] : opMemidMap) {
-        UpdateOpScheduleInfo(op, memid, spillAllocOp); // 先走原始继承 (拿到默认值)
-        if (consumer != nullptr) {
-            // 覆写核、subgraph 和 aivCore，全部从消费者继承。
-            state_.schedInfoMap[op].coreLocation = state_.schedInfoMap[consumer].coreLocation;
-            UpdateOpInternalSubgraphID(*op, consumer);
-        }
-        // 没找到消费者就保留 spillAllocOp 继承的默认值（极罕见，dualdst 触发但 UB 无消费方）。
-    }
 }
 
 } // namespace npu::tile_fwk

@@ -40,8 +40,9 @@ struct IsoPair {
 
 struct IsoMatchResult {
     bool rootIsomorphic{false};
-    std::vector<IsoPair> pairs;      // Non-alloc pairs, emitted in BFS order.
-    std::vector<IsoPair> allocPairs; // Alloc pairs collected during BFS.
+    std::vector<IsoPair> pairs; // Non-alloc pairs, emitted in BFS order.
+    // Only OP_UB_ALLOC pairs participate in cross-AIV address alignment; other alloc opcodes are excluded.
+    std::vector<IsoPair> allocPairs;
     int maxMatchedDepth{0};
     std::size_t truncatedCount{0}; // Number of ambiguous nodes that were not expanded further.
 };

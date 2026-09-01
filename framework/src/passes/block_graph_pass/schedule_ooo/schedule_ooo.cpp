@@ -181,10 +181,35 @@ void OoOSchedule::StableUnique(std::vector<Operation*>& newOpList)
     newOpList.resize(write);
 }
 
-Status OoOSchedule::ConcatTaskOpLists(TaskSplitter& splitter, std::vector<Operation*>& newOpList, Function& function)
+Status OoOSchedule::ConcatTaskOpLists(TaskSplitter& splitter, std::vector<Operation*>& newOpList, Function& function,
+                                      bool enableDualDst)
 {
     auto cyclePairs = splitter.GetCycledTaskNodePairs();
     auto scheduleUnits = BuildScheduleUnits(splitter.GetTaskGraph().tasks, cyclePairs);
+    // 当前调度只有 AIC、AIV0、AIV1 三种物理核，同一 startTime 最多包含三个独立 unit；
+    // cycle-merged unit 的核类型为 UNKNOWN，不参与这里的顺序调整。若三个独立 unit 原顺序为
+    // AIV-AIC-AIV，则将 AIC 移到两个同构 AIV unit 之后，避免其 alloc 打断两侧对称分配。
+    if (enableDualDst) {
+        constexpr size_t kMixCoreCount = 3;
+        size_t begin = 0;
+        while (begin < scheduleUnits.size()) {
+            size_t end = begin + 1;
+            while (end < scheduleUnits.size() &&
+                   scheduleUnits[end].earliestStartTime == scheduleUnits[begin].earliestStartTime) {
+                ++end;
+            }
+            if (end - begin == kMixCoreCount) {
+                auto isAiv = [](const ScheduleUnit& unit) {
+                    return unit.targetCoreType == TargetCoreType::AIV0 || unit.targetCoreType == TargetCoreType::AIV1;
+                };
+                if (isAiv(scheduleUnits[begin]) && scheduleUnits[begin + 1].targetCoreType == TargetCoreType::AIC &&
+                    isAiv(scheduleUnits[begin + 2])) {
+                    std::swap(scheduleUnits[begin + 1], scheduleUnits[begin + 2]);
+                }
+            }
+            begin = end;
+        }
+    }
     for (auto& unit : scheduleUnits) {
         if (unit.isMerged) {
             OptimizeSort optimizeSort(unit.mergedOps, function);
@@ -212,7 +237,6 @@ Status OoOSchedule::DoOoOSchedule(std::vector<Operation*>& opList, Function& fun
     if (enableDualDst) {
         oooSchedule.SetDualDstPairs(std::move(dualDstPairs_));
         oooSchedule.SetDualDstOpPairs(std::move(dualDstOpPairs_));
-        oooSchedule.SetEnableDualDstAllocGuard(true);
     }
     OoOScheduleStatistic oooHealthCheck;
     MemoryTracer oooMemoryTrace;
@@ -285,13 +309,14 @@ Status OoOSchedule::Schedule(std::vector<Operation*>& opList, Function& function
             return FAILED;
         }
 
+        enableDualDst = ShouldEnableDualDst(splitter);
+
         // 按 task 顺序拼接 opList
         std::vector<Operation*> newOpList;
-        if (ConcatTaskOpLists(splitter, newOpList, *program.second) != SUCCESS) {
+        if (ConcatTaskOpLists(splitter, newOpList, *program.second, enableDualDst) != SUCCESS) {
             return FAILED;
         }
         opList = newOpList;
-        enableDualDst = ShouldEnableDualDst(splitter);
     }
 
     // 乱序调度
@@ -376,11 +401,20 @@ bool OoOSchedule::ShouldEnableDualDst(TaskSplitter& splitter)
     std::unordered_map<int, std::vector<const TaskNode*>> aiv0ByStart;
     std::unordered_map<int, std::vector<const TaskNode*>> aiv1ByStart;
     CollectAivTasksByStart(tasks, aiv0ByStart, aiv1ByStart);
+    if (aiv0ByStart.size() != aiv1ByStart.size()) {
+        APASS_LOG_INFO_F(Elements::Operation,
+                         "DualDst disabled: AIV0/AIV1 have different numbers of active startTime groups.");
+        return false;
+    }
     bool hasPair = false;
     for (const auto& [start, aiv0Tasks] : aiv0ByStart) {
         auto it = aiv1ByStart.find(start);
-        if (it == aiv1ByStart.end())
-            continue;
+        if (it == aiv1ByStart.end()) {
+            APASS_LOG_INFO_F(Elements::Operation, "DualDst disabled: startTime=%d only has AIV0 tasks.", start);
+            dualDstPairs_.clear();
+            dualDstOpPairs_.clear();
+            return false;
+        }
         hasPair = true;
         for (const TaskNode* ta : aiv0Tasks) {
             for (const TaskNode* tb : it->second) {
@@ -494,6 +528,7 @@ std::vector<ScheduleUnit> OoOSchedule::BuildScheduleUnits(const std::vector<Task
             ScheduleUnit unit;
             unit.mergedOps = taskNode.opList_;
             unit.earliestStartTime = taskNode.startTime;
+            unit.targetCoreType = taskNode.targetCoreType;
             scheduleUnits.push_back(std::move(unit));
         }
     }

@@ -34,6 +34,8 @@ struct ScheduleUnit {
     int earliestStartTime;
     std::vector<Operation*> mergedOps;
     bool isMerged{false};
+    // A cycle-merged unit contains both AIC and AIV tasks and keeps UNKNOWN; a single-task unit uses its task core.
+    TargetCoreType targetCoreType{TargetCoreType::UNKNOWN};
 };
 
 const std::unordered_map<TargetCoreType, CoreLocationType> targetCoreTypeMap{
@@ -61,7 +63,8 @@ private:
     void CollectStatistic(OoOScheduleStatistic& oooHealthCheck, Function& function,
                           std::pair<uint64_t, Function*>& program);
     Status TaskSchedule(std::vector<Operation*>& opList, Function& function, TaskSplitter& splitter);
-    Status ConcatTaskOpLists(TaskSplitter& splitter, std::vector<Operation*>& newOpList, Function& function);
+    Status ConcatTaskOpLists(TaskSplitter& splitter, std::vector<Operation*>& newOpList, Function& function,
+                             bool enableDualDst);
     void StableUnique(std::vector<Operation*>& newOpList);
     Status ModifyTaskOplist(std::vector<Operation*>& taskList, const std::unordered_map<int, Operation*>& allocMap);
     Status DoOoOSchedule(std::vector<Operation*>& opList, Function& function, std::pair<uint64_t, Function*>& program,

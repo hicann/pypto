@@ -108,8 +108,11 @@ Status OoOScheduler::CheckAndUpdateLifecycle()
 
 Status OoOScheduler::SpillOnCoreBlock(std::pair<CoreLocationType, MemoryType> orderFirstPair)
 {
+    APASS_LOG_INFO_F(Elements::Operation, "Start to spillOnBlock at %s",
+                     coreTypeToString(orderFirstPair.first).c_str());
     SpillContext ctx;
-    if (GenBufferSpill(state_.allocIssueQueue[orderFirstPair.first][orderFirstPair.second].Front(), ctx) != SUCCESS) {
+    if (GenBufferSpill(state_.allocIssueQueue[orderFirstPair.first][orderFirstPair.second].Front(), ctx, true) !=
+        SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "SpillOnBlock failed at GenBufferSpill.");
         return FAILED;
     }
@@ -119,61 +122,6 @@ Status OoOScheduler::SpillOnCoreBlock(std::pair<CoreLocationType, MemoryType> or
         return FAILED;
     }
     return SUCCESS;
-}
-
-bool OoOScheduler::IsOpInQueue(Operation* op, const OpQueue& pipe) const
-{
-    return std::find(pipe.queue.begin(), pipe.queue.end(), op) != pipe.queue.end();
-}
-
-Status OoOScheduler::SpillOnGuardBlock()
-{
-    for (auto* guardedAlloc : guardBlockedAllocs_) {
-        auto guardAllocs = dualDstEngine_.GetUnretiredGuardAllocs(guardedAlloc);
-        for (auto* guardAlloc : guardAllocs) {
-            auto infoIt = state_.schedInfoMap.find(guardAlloc);
-            if (infoIt == state_.schedInfoMap.end()) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation,
-                    "DualDst guard state invariant violated: guard alloc %s has no schedule info while guarded alloc "
-                    "%s waits for it.",
-                    state_.GetOpInfo(guardAlloc).c_str(), state_.GetOpInfo(guardedAlloc).c_str());
-                return FAILED;
-            }
-            auto memIds = state_.GetOpMemIds(guardAlloc);
-            if (memIds.empty() || state_.localBufferMap.find(memIds[0]) == state_.localBufferMap.end()) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation,
-                    "DualDst guard state invariant violated: cannot resolve guard alloc buffer for %s while guarded "
-                    "alloc %s waits for it.",
-                    state_.GetOpInfo(guardAlloc).c_str(), state_.GetOpInfo(guardedAlloc).c_str());
-                return FAILED;
-            }
-            auto coreLocation = infoIt->second.coreLocation;
-            auto memType = state_.localBufferMap[memIds[0]]->memType;
-            auto& pipe = state_.allocIssueQueue[coreLocation][memType];
-            if (pipe.Empty() || !IsOpInQueue(guardAlloc, pipe)) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation,
-                    "DualDst guard state invariant violated: unretired guard alloc %s is not in alloc queue "
-                    "(core=%s, memType=%d) while guarded alloc %s waits for it.",
-                    state_.GetOpInfo(guardAlloc).c_str(), coreTypeToString(coreLocation).c_str(), memType,
-                    state_.GetOpInfo(guardedAlloc).c_str());
-                return FAILED;
-            }
-            if (pipe.Front() == guardedAlloc && guardedAlloc != guardAlloc) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation,
-                    "DualDst guard order invariant violated: guarded alloc %s is before guard alloc %s in the same "
-                    "alloc queue.",
-                    state_.GetOpInfo(guardedAlloc).c_str(), state_.GetOpInfo(guardAlloc).c_str());
-                return FAILED;
-            }
-            return SpillOnCoreBlock({coreLocation, memType});
-        }
-    }
-    APASS_LOG_ERROR_F(Elements::Operation, "DualDst guard block found no spillable guard alloc.");
-    return FAILED;
 }
 
 Status OoOScheduler::FindCoreLocationMemoryType(CoreLocationType coreLocation, MemoryType& spillMemType)
@@ -230,23 +178,29 @@ Status OoOScheduler::FindFirstOrder(std::pair<CoreLocationType, MemoryType>& ord
 
 Status OoOScheduler::SpillOnBlock()
 {
-    if (!guardBlockedAllocs_.empty()) {
-        guardBlockedAllocs_.erase(
-            std::remove_if(guardBlockedAllocs_.begin(), guardBlockedAllocs_.end(),
-                           [this](Operation* g) { return dualDstEngine_.GetUnretiredGuardAllocs(g).empty(); }),
-            guardBlockedAllocs_.end());
-        if (!guardBlockedAllocs_.empty()) {
-            return SpillOnGuardBlock();
-        }
-    }
     std::pair<CoreLocationType, MemoryType> orderFirstPair;
     if (FindFirstOrder(orderFirstPair) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "FindFirstOrder failed.");
         return FAILED;
     }
-    APASS_LOG_INFO_F(Elements::Operation, "Start to spillOnBlock at %s",
-                     coreTypeToString(orderFirstPair.first).c_str());
 
+    if (DetectSpillDeadLoop() != SUCCESS)
+        return FAILED;
+
+    bool isAivUb = orderFirstPair.second == MemoryType::MEM_UB &&
+                   (orderFirstPair.first == CoreLocationType::AIV0 || orderFirstPair.first == CoreLocationType::AIV1);
+    if (state_.enableDualDst && isAivUb)
+        return SpillDualDstAivUbBlock();
+
+    if (SpillOnCoreBlock(orderFirstPair) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "SpillOnCoreBlock failed.");
+        return FAILED;
+    }
+    return SUCCESS;
+}
+
+Status OoOScheduler::DetectSpillDeadLoop()
+{
     int curPreSpillTotalQSize = 0;
     for (auto& corePair : state_.allocIssueQueue) {
         for (auto& memPair : corePair.second) {
@@ -268,9 +222,32 @@ Status OoOScheduler::SpillOnBlock()
         }
     }
     state_.lastPreSpillTotalQSize = curPreSpillTotalQSize;
+    return SUCCESS;
+}
 
-    if (SpillOnCoreBlock(orderFirstPair) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "SpillOnCoreBlock failed.");
+Status OoOScheduler::SpillDualDstAivUbBlock()
+{
+    auto& queue0 = state_.allocIssueQueue[CoreLocationType::AIV0][MemoryType::MEM_UB];
+    auto& queue1 = state_.allocIssueQueue[CoreLocationType::AIV1][MemoryType::MEM_UB];
+    if (queue0.Empty() || queue1.Empty()) {
+        APASS_LOG_ERROR_F(Elements::Operation, "AIV UB spill queues are not synchronized.");
+        return FAILED;
+    }
+    Operation* front0 = queue0.Front();
+    Operation* front1 = queue1.Front();
+    bool isDual0 = state_.IsDualDstAlloc(front0);
+    bool isDual1 = state_.IsDualDstAlloc(front1);
+    if (isDual0 != isDual1 || (isDual0 && (state_.schedInfoMap[front0].pairedDualDstAlloc != front1 ||
+                                           state_.schedInfoMap[front1].pairedDualDstAlloc != front0))) {
+        APASS_LOG_ERROR_F(Elements::Operation, "AIV UB spill queue fronts are inconsistent.");
+        return FAILED;
+    }
+    if (SpillOnCoreBlock({CoreLocationType::AIV0, MemoryType::MEM_UB}) != SUCCESS ||
+        SpillOnCoreBlock({CoreLocationType::AIV1, MemoryType::MEM_UB}) != SUCCESS) {
+        return FAILED;
+    }
+    if (CheckAivUbPoolSlicesEqual() != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Tensor, "AIV0/AIV1 UB pool slices diverged after spill.");
         return FAILED;
     }
     return SUCCESS;
@@ -368,23 +345,22 @@ Status OoOScheduler::LaunchIssueStage(int& nextCycle)
     return SUCCESS;
 }
 
-Status OoOScheduler::TryDualDstAllocOnce(Operation* op, uint64_t& commitCnt, bool& allocated)
+Status OoOScheduler::TryDualDstAllocPair(Operation* aiv0Alloc, Operation* aiv1Alloc, uint64_t& commitCnt,
+                                         bool& allocated)
 {
-    if (dualDstEngine_.AllocateDualDstAtCurrent(op, allocated) != SUCCESS)
+    if (dualDstEngine_.AllocateDualDstAtCurrent(aiv0Alloc, allocated) != SUCCESS)
         return FAILED;
     if (!allocated)
         return SUCCESS; // 当前 Full,由调用方 break 触发 SpillOnBlock
-    if (dualDstEngine_.CheckAivUbAllocAlignmentAfterDualDst(op) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "CheckAivUbAllocAlignmentAfterDualDst failed. %s",
-                          GetFormatBacktrace(*op).c_str());
-        return FAILED;
-    }
-    state_.newOperations.push_back(op);
-    APASS_LOG_DEBUG_F(Elements::Operation, "Insert(dualdst): %s.", state_.GetOpInfo(op).c_str());
-    if (RetireOpAndAwakeSucc(op, commitCnt) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "RetireOpAndAwakeSucc failed for dualdst alloc. %s",
-                          GetFormatBacktrace(*op).c_str());
-        return FAILED;
+
+    for (Operation* alloc : {aiv0Alloc, aiv1Alloc}) {
+        state_.newOperations.push_back(alloc);
+        APASS_LOG_DEBUG_F(Elements::Operation, "Insert(dualdst): %s.", state_.GetOpInfo(alloc).c_str());
+        if (RetireOpAndAwakeSucc(alloc, commitCnt) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "RetireOpAndAwakeSucc failed for dualdst alloc. %s",
+                              GetFormatBacktrace(*alloc).c_str());
+            return FAILED;
+        }
     }
     return SUCCESS;
 }
@@ -441,19 +417,12 @@ Status OoOScheduler::ExecuteAllocIssue(uint64_t& commitCnt, MemoryType memType, 
 {
     while (!pipe.Empty()) {
         Operation* op = pipe.Front();
-        if (!dualDstEngine_.IsDualDstAllocGuardSatisfied(op)) {
-            APASS_LOG_DEBUG_F(Elements::Operation, "DualDst alloc guard blocks: %s.", state_.GetOpInfo(op).c_str());
-            if (std::find(guardBlockedAllocs_.begin(), guardBlockedAllocs_.end(), op) == guardBlockedAllocs_.end()) {
-                guardBlockedAllocs_.push_back(op);
-            }
+        if (state_.enableDualDst && memType == MemoryType::MEM_UB && state_.IsDualDstAlloc(op))
             break;
-        }
         auto& coreLocation = state_.schedInfoMap[op].coreLocation;
         auto& reqMemIds = state_.GetOpMemIds(op);
         bool allocated = false;
-        Status st = (memType == MemoryType::MEM_UB && state_.IsDualDstAlloc(op)) ?
-                        TryDualDstAllocOnce(op, commitCnt, allocated) :
-                        TryRegularAllocOnce(op, memType, coreLocation, reqMemIds, commitCnt, allocated);
+        Status st = TryRegularAllocOnce(op, memType, coreLocation, reqMemIds, commitCnt, allocated);
         if (st != SUCCESS)
             return FAILED;
         if (!allocated)
@@ -463,11 +432,108 @@ Status OoOScheduler::ExecuteAllocIssue(uint64_t& commitCnt, MemoryType memType, 
     return SUCCESS;
 }
 
+Status OoOScheduler::CheckAivUbPoolSlicesEqual()
+{
+    auto& pool0 = state_.bufferManagerMap.at(CoreLocationType::AIV0).at(MemoryType::MEM_UB);
+    auto& pool1 = state_.bufferManagerMap.at(CoreLocationType::AIV1).at(MemoryType::MEM_UB);
+    if (pool0.GetMemSize() != pool1.GetMemSize())
+        return FAILED;
+    auto slices0 = pool0.GetSortedAllocatedBufs();
+    auto slices1 = pool1.GetSortedAllocatedBufs();
+    if (slices0.size() != slices1.size())
+        return FAILED;
+    for (size_t i = 0; i < slices0.size(); ++i) {
+        if (std::get<1>(slices0[i]) != std::get<1>(slices1[i]) || std::get<2>(slices0[i]) != std::get<2>(slices1[i])) {
+            return FAILED;
+        }
+    }
+    return SUCCESS;
+}
+
+Status OoOScheduler::ExecuteAivRegularAllocStage(uint64_t& commitCnt, OpQueue& queue0, OpQueue& queue1)
+{
+    APASS_LOG_DEBUG_F(Elements::Operation, "AIV UB regular alloc stage begin: AIV0 queue=%zu, AIV1 queue=%zu.",
+                      queue0.Size(), queue1.Size());
+    if (ExecuteAllocIssue(commitCnt, MemoryType::MEM_UB, queue0) != SUCCESS)
+        return FAILED;
+    if (ExecuteAllocIssue(commitCnt, MemoryType::MEM_UB, queue1) != SUCCESS)
+        return FAILED;
+    bool bothAtDualDst = !queue0.Empty() && !queue1.Empty() && state_.IsDualDstAlloc(queue0.Front()) &&
+                         state_.IsDualDstAlloc(queue1.Front());
+    if (bothAtDualDst) {
+        state_.continueAllocStage = true;
+        APASS_LOG_DEBUG_F(Elements::Operation,
+                          "AIV UB regular alloc stage end at DualDst boundary; defer pair[%d/%d] to next stage.",
+                          queue0.Front()->GetOpMagic(), queue1.Front()->GetOpMagic());
+    }
+    return SUCCESS;
+}
+
+Status OoOScheduler::ExecuteAivUbAllocRound(uint64_t& commitCnt)
+{
+    state_.continueAllocStage = false;
+    auto& queue0 = state_.allocIssueQueue[CoreLocationType::AIV0][MemoryType::MEM_UB];
+    auto& queue1 = state_.allocIssueQueue[CoreLocationType::AIV1][MemoryType::MEM_UB];
+    if (queue0.Empty() && queue1.Empty())
+        return SUCCESS;
+    if (queue0.Empty() != queue1.Empty()) {
+        APASS_LOG_ERROR_F(Elements::Operation, "AIV UB alloc queues are not synchronized.");
+        return FAILED;
+    }
+    Operation* front0 = queue0.Front();
+    Operation* front1 = queue1.Front();
+    bool isDual0 = state_.IsDualDstAlloc(front0);
+    bool isDual1 = state_.IsDualDstAlloc(front1);
+    if (isDual0 != isDual1) {
+        APASS_LOG_ERROR_F(Elements::Operation, "AIV UB alloc queue fronts have different DualDst kinds.");
+        return FAILED;
+    }
+    if (!isDual0)
+        return ExecuteAivRegularAllocStage(commitCnt, queue0, queue1);
+    if (state_.schedInfoMap[front0].pairedDualDstAlloc != front1 ||
+        state_.schedInfoMap[front1].pairedDualDstAlloc != front0) {
+        APASS_LOG_ERROR_F(Elements::Operation, "AIV UB DualDst queue fronts are not paired.");
+        return FAILED;
+    }
+    APASS_LOG_DEBUG_F(Elements::Operation, "AIV UB DualDst alloc stage begin: pair[%d/%d].", front0->GetOpMagic(),
+                      front1->GetOpMagic());
+    if (CheckAivUbPoolSlicesEqual() != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Tensor, "AIV0/AIV1 UB pool slices diverged before DualDst alloc.");
+        return FAILED;
+    }
+    bool allocated = false;
+    if (TryDualDstAllocPair(front0, front1, commitCnt, allocated) != SUCCESS)
+        return FAILED;
+    if (!allocated) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "AIV UB DualDst alloc stage stopped: buffer full for pair[%d/%d].",
+                          front0->GetOpMagic(), front1->GetOpMagic());
+        return SUCCESS;
+    }
+    queue0.PopFront();
+    queue1.PopFront();
+    if (CheckAivUbPoolSlicesEqual() != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Tensor, "AIV0/AIV1 UB pool slices diverged after DualDst alloc.");
+        return FAILED;
+    }
+    APASS_LOG_DEBUG_F(Elements::Operation, "AIV UB DualDst alloc stage end: pair[%d/%d].", front0->GetOpMagic(),
+                      front1->GetOpMagic());
+    if (!queue0.Empty() || !queue1.Empty())
+        state_.continueAllocStage = true;
+    return SUCCESS;
+}
+
 Status OoOScheduler::BufferAllocStage(uint64_t& commitCnt)
 {
-    guardBlockedAllocs_.clear();
+    if (state_.enableDualDst) {
+        if (ExecuteAivUbAllocRound(commitCnt) != SUCCESS)
+            return FAILED;
+    }
     for (auto coreLocation : state_.coreInitConfigs) {
         for (auto& [memType, pipe] : state_.allocIssueQueue[coreLocation]) {
+            if (state_.enableDualDst && memType == MemoryType::MEM_UB &&
+                (coreLocation == CoreLocationType::AIV0 || coreLocation == CoreLocationType::AIV1)) {
+                continue;
+            }
             if (pipe.Empty()) {
                 continue;
             }
@@ -477,6 +543,8 @@ Status OoOScheduler::BufferAllocStage(uint64_t& commitCnt)
                                   coreTypeToString(coreLocation).c_str());
                 return FAILED;
             }
+            if (!pipe.Empty())
+                state_.continueAllocStage = false;
         }
     }
     return SUCCESS;
@@ -507,14 +575,6 @@ Status OoOScheduler::FreeBuffer(Operation* op, std::vector<int>& freedMemIds)
             if (state_.tensorOccupyMap.erase(memId) == 0) {
                 APASS_LOG_ERROR_F(Elements::Tensor, "Erase tensor[%d] failed.", memId);
                 return FAILED;
-            }
-            state_.dualDstMemIdCoreOverride.erase(memId); // free 后清理, 避免后续 spill 重 alloc 复用旧映射
-            // 同步清理 dualDstPairedMemId 的双向映射: 这一侧 free 后, 这对 pair 不再"两侧
-            // 都活", 后续 spill 选 group 时不能再把它当候选了。
-            auto pairIt = state_.dualDstPairedMemId.find(memId);
-            if (pairIt != state_.dualDstPairedMemId.end()) {
-                state_.dualDstPairedMemId.erase(pairIt->second);
-                state_.dualDstPairedMemId.erase(memId);
             }
         }
     }
@@ -688,11 +748,6 @@ Status OoOScheduler::AllocateAfterSpill(Operation* op, LocalBufferPtr allocBuffe
                           GetFormatBacktrace(*op).c_str());
         return FAILED;
     }
-    if (dualDstEngine_.CheckAivUbAllocAlignmentAfterDualDst(op) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "CheckAivUbAllocAlignmentAfterDualDst failed. %s",
-                          GetFormatBacktrace(*op).c_str());
-        return FAILED;
-    }
     return SUCCESS;
 }
 
@@ -712,11 +767,6 @@ Status OoOScheduler::ExecuteAllocIssue(Operation* op, size_t& pcIdx)
         if (dualDstEngine_.AllocateDualDstAtCurrent(op, allocated) != SUCCESS)
             return FAILED;
         if (allocated) {
-            if (dualDstEngine_.CheckAivUbAllocAlignmentAfterDualDst(op) != SUCCESS) {
-                APASS_LOG_ERROR_F(Elements::Operation, "CheckAivUbAllocAlignmentAfterDualDst failed. %s",
-                                  GetFormatBacktrace(*op).c_str());
-                return FAILED;
-            }
             return SUCCESS;
         }
         needSpill = true;
@@ -726,12 +776,19 @@ Status OoOScheduler::ExecuteAllocIssue(Operation* op, size_t& pcIdx)
 
     if (needSpill) {
         SpillContext ctx;
-        if (GenBufferSpill(op, ctx) != SUCCESS) {
+        if (GenBufferSpill(op, ctx, false) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "GenBufferSpill failed at ExecuteAllocIssue. %s",
-                              GetFormatBacktrace(*state_.orderedOps[pcIdx]).c_str());
+                              GetFormatBacktrace(*op).c_str());
             return FAILED;
         }
-        pcIdx += ctx.newCopyoutOps.size() - ctx.deleteRetiredOpSize;
+        if (isDualDst) {
+            auto currentIt = std::find(state_.orderedOps.begin(), state_.orderedOps.end(), op);
+            if (currentIt == state_.orderedOps.end())
+                return FAILED;
+            pcIdx = static_cast<size_t>(currentIt - state_.orderedOps.begin());
+        } else {
+            pcIdx += ctx.newCopyoutOps.size() - ctx.deleteRetiredOpSize;
+        }
     }
 
     return AllocateAfterSpill(op, allocBuffer, coreLocation, isDualDst);
@@ -745,35 +802,20 @@ Status OoOScheduler::SeqSchedule()
     LOG_SCOPE_BEGIN(tGenSpillSchedule, Elements::Function, "SeqSchedule");
     while (pcIdx < state_.orderedOps.size()) {
         auto op = state_.orderedOps[pcIdx];
-        APASS_LOG_DEBUG_F(Elements::Operation, "Launch %s", state_.GetOpInfo(op).c_str());
-        if (state_.schedInfoMap[op].isAlloc) {
-            if (ExecuteAllocIssue(op, pcIdx) != SUCCESS) {
-                APASS_LOG_ERROR_F(Elements::Operation, "ExecuteAllocIssue failed! %s", GetFormatBacktrace(*op).c_str());
-                return FAILED;
-            }
+        if (state_.IsDualDstAlloc(op) && state_.schedInfoMap[op].isRetired) {
+            pcIdx += 1;
+            continue;
         }
-        for (auto& outTensor : op->GetOOperands()) {
-            if (outTensor->GetMemoryTypeOriginal() < MemoryType::MEM_DEVICE_DDR) {
-                state_.tensorOccupyMap[outTensor->memoryrange.memId] = op;
-            }
-        }
-        if (RetireIssue(op) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "RetireIssue failed! %s", GetFormatBacktrace(*op).c_str());
+        if (ProcessSeqOp(op, pcIdx) != SUCCESS)
             return FAILED;
-        }
-        pcIdx += 1;
-        if (state_.orderedOps.size() > state_.originalNumTotalIssues * MAX_NUM_TOTAL_ISSUES_RATIO) {
-            APASS_LOG_ERROR_F(Elements::Operation, "Spill dead-loop.");
-            return FAILED;
-        }
     }
+    LOG_SCOPE_END(tGenSpillSchedule);
     for (auto bufRef : state_.bufRefCount) {
         if (bufRef.second != 0) {
             APASS_LOG_ERROR_F(Elements::Tensor, "Tensor[%d] bufRefCount not equal to 0!", bufRef.first);
             return FAILED;
         }
     }
-    LOG_SCOPE_END(tGenSpillSchedule);
     if (state_.InitBufRefCount(state_.orderedOps) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "InitBufRefCount failed!");
         return FAILED;
@@ -787,6 +829,47 @@ Status OoOScheduler::SeqSchedule()
         return FAILED;
     }
     state_.depManager.PrintDependencies(state_.orderedOps);
+    return SUCCESS;
+}
+
+Status OoOScheduler::ProcessSeqOp(Operation* op, size_t& pcIdx)
+{
+    APASS_LOG_DEBUG_F(Elements::Operation, "Launch %s", state_.GetOpInfo(op).c_str());
+    if (state_.schedInfoMap[op].isAlloc) {
+        if (ExecuteAllocIssue(op, pcIdx) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "ExecuteAllocIssue failed! %s", GetFormatBacktrace(*op).c_str());
+            return FAILED;
+        }
+    }
+    for (auto& outTensor : op->GetOOperands()) {
+        if (outTensor->GetMemoryTypeOriginal() < MemoryType::MEM_DEVICE_DDR) {
+            state_.tensorOccupyMap[outTensor->memoryrange.memId] = op;
+        }
+    }
+    Operation* peer = nullptr;
+    if (state_.IsDualDstAlloc(op)) {
+        peer = state_.schedInfoMap[op].pairedDualDstAlloc;
+        if (peer == nullptr || state_.schedInfoMap.find(peer) == state_.schedInfoMap.end() ||
+            state_.schedInfoMap[peer].isRetired) {
+            APASS_LOG_ERROR_F(Elements::Operation, "Resolve paired DualDst alloc failed for %s.",
+                              GetFormatBacktrace(*op).c_str());
+            return FAILED;
+        }
+    }
+    if (RetireIssue(op) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "RetireIssue failed! %s", GetFormatBacktrace(*op).c_str());
+        return FAILED;
+    }
+    if (peer != nullptr && RetireIssue(peer) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "Retire paired DualDst alloc failed! %s",
+                          GetFormatBacktrace(*peer).c_str());
+        return FAILED;
+    }
+    pcIdx += 1;
+    if (state_.orderedOps.size() > state_.originalNumTotalIssues * MAX_NUM_TOTAL_ISSUES_RATIO) {
+        APASS_LOG_ERROR_F(Elements::Operation, "Spill dead-loop.");
+        return FAILED;
+    }
     return SUCCESS;
 }
 
@@ -1131,10 +1214,6 @@ Status OoOScheduler::Schedule(const std::vector<Operation*>& opList,
         APASS_LOG_ERROR_F(Elements::Operation, "GenSpillSchedule failed!");
         return FAILED;
     }
-    if (dualDstEngine_.BuildDualDstAllocGuards() != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "BuildDualDstAllocGuards failed!");
-        return FAILED;
-    }
     if (ScheduleMainLoop() != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "ScheduleMainLoop failed!");
         return FAILED;
@@ -1234,10 +1313,10 @@ std::vector<std::vector<int>> OoOScheduler::GetSpillGroup(BufferPool& pool, size
     return pool.GetSpillGroup(sizeNeedSpill);
 }
 
-std::vector<std::vector<int>> OoOScheduler::GetDualSpillGroup(BufferPool& poolA, BufferPool& poolB,
-                                                              size_t sizeNeedSpill)
+std::vector<OoOScheduler::DualSpillGroup> OoOScheduler::GetDualSpillGroup(BufferPool& poolA, BufferPool& poolB,
+                                                                          size_t sizeNeedSpill)
 {
-    std::vector<std::vector<int>> result;
+    std::vector<DualSpillGroup> result;
     auto bufsA = poolA.GetSortedAllocatedBufs();
     auto bufsB = poolB.GetSortedAllocatedBufs();
 
@@ -1266,15 +1345,16 @@ std::vector<std::vector<int>> OoOScheduler::GetDualSpillGroup(BufferPool& poolA,
                 iB++;
                 continue;
             }
-            std::vector<int> combined;
-            combined.reserve((jA - iA) + (jB - iB));
+            DualSpillGroup group;
+            group.aiv0MemIds.reserve(jA - iA);
+            group.aiv1MemIds.reserve(jB - iB);
             for (size_t k = iA; k < jA; k++) {
-                combined.push_back(std::get<0>(bufsA[k]));
+                group.aiv0MemIds.push_back(std::get<0>(bufsA[k]));
             }
             for (size_t k = iB; k < jB; k++) {
-                combined.push_back(std::get<0>(bufsB[k]));
+                group.aiv1MemIds.push_back(std::get<0>(bufsB[k]));
             }
-            result.push_back(std::move(combined));
+            result.push_back(std::move(group));
             iB++;
         }
         iA++;
@@ -1312,128 +1392,11 @@ Status OoOScheduler::GetGroupNextUseTime(std::vector<int> group, Operation* allo
     return SUCCESS;
 }
 
-bool OoOScheduler::CollectClearableWindowGroup(const std::vector<std::tuple<int, size_t, size_t>>* pools[2],
-                                               uint64_t winStart, uint64_t winEnd, Operation* allocOp,
-                                               std::unordered_map<int, bool>& spillableCache,
-                                               std::unordered_map<int, long long>& nextUseCache,
-                                               std::vector<int>& group, long long& winScore)
-{
-    for (int poolIdx = 0; poolIdx < 2; ++poolIdx) {
-        const auto* bufs = pools[poolIdx];
-        for (auto& b : *bufs) {
-            size_t s = std::get<1>(b);
-            size_t e = std::get<2>(b);
-            if (e <= winStart || winEnd <= s)
-                continue;
-            int memId = std::get<0>(b);
-            auto spillableIt = spillableCache.find(memId);
-            if (spillableIt == spillableCache.end()) {
-                Operation* op = spillEngine_.GetSpillOp(memId);
-                spillableIt = spillableCache
-                                  .emplace(memId, op != nullptr && !spillEngine_.IsBelongSpillBlackList(op, allocOp))
-                                  .first;
-            }
-            if (!spillableIt->second) {
-                return false;
-            }
-            auto nextUseIt = nextUseCache.find(memId);
-            if (nextUseIt == nextUseCache.end()) {
-                int nextUse = spillEngine_.GetBufNextUseTime(memId);
-                long long effectiveNextUse = (nextUse < 0) ? LLONG_MAX : static_cast<long long>(nextUse);
-                nextUseIt = nextUseCache.emplace(memId, effectiveNextUse).first;
-            }
-            winScore = std::min(winScore, nextUseIt->second);
-            group.push_back(memId);
-        }
-    }
-    return true;
-}
-
-std::vector<std::vector<int>> OoOScheduler::GetCommonOffsetClearGroup(BufferPool& poolA, BufferPool& poolB,
-                                                                      size_t sizeNeedSpill, Operation* allocOp)
-{
-    auto bufsA = poolA.GetSortedAllocatedBufs();
-    auto bufsB = poolB.GetSortedAllocatedBufs();
-    uint64_t memSize = poolA.GetMemSize();
-
-    std::set<uint64_t> candStarts;
-    candStarts.insert(0);
-    for (auto& b : bufsA) {
-        candStarts.insert(std::get<1>(b));
-        candStarts.insert(std::get<2>(b));
-    }
-    for (auto& b : bufsB) {
-        candStarts.insert(std::get<1>(b));
-        candStarts.insert(std::get<2>(b));
-    }
-
-    std::unordered_map<int, bool> spillableCache;
-    std::unordered_map<int, long long> nextUseCache;
-    std::vector<int> bestGroup;
-    long long bestScore = -1;
-    const std::vector<std::tuple<int, size_t, size_t>>* pools[2] = {&bufsA, &bufsB};
-    for (uint64_t winStart : candStarts) {
-        if (winStart + sizeNeedSpill > memSize)
-            continue;
-        uint64_t winEnd = winStart + sizeNeedSpill;
-        std::vector<int> group;
-        long long winScore = LLONG_MAX;
-        if (!CollectClearableWindowGroup(pools, winStart, winEnd, allocOp, spillableCache, nextUseCache, group,
-                                         winScore) ||
-            group.empty())
-            continue;
-        if (winScore > bestScore) {
-            bestScore = winScore;
-            bestGroup = std::move(group);
-        }
-    }
-    if (bestGroup.empty()) {
-        return {};
-    }
-    return {std::move(bestGroup)};
-}
-
-std::vector<int> OoOScheduler::SelectDualDstSpillBuffers(Operation* allocOp, LocalBufferPtr allocBuffer, bool isDualDst,
-                                                         CoreLocationType allocCore)
-{
-    CoreLocationType coreA = allocCore;
-    CoreLocationType coreB = (allocCore == CoreLocationType::AIV0) ? CoreLocationType::AIV1 : CoreLocationType::AIV0;
-    size_t needSize = allocBuffer->size;
-    if (isDualDst) {
-        DualDstAllocCtx ctx;
-        if (dualDstEngine_.ResolveDualDstAllocCtx(allocOp, ctx) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "DualDst spill select: ResolveDualDstAllocCtx failed.");
-            return {};
-        }
-        coreA = ctx.coreA;
-        coreB = ctx.coreB;
-        needSize = ctx.bufA->size;
-    }
-    auto& poolA = state_.bufferManagerMap[coreA][MemoryType::MEM_UB];
-    auto& poolB = state_.bufferManagerMap[coreB][MemoryType::MEM_UB];
-    auto clearGroup = GetCommonOffsetClearGroup(poolA, poolB, needSize, allocOp);
-    if (clearGroup.empty()) {
-        return {};
-    }
-    return clearGroup.front();
-}
-
 std::vector<int> OoOScheduler::SelectSpillBuffers(Operation* allocOp)
 {
     LocalBufferPtr allocBuffer = state_.localBufferMap[state_.opReqMemIdsMap[allocOp][0]];
     std::vector<int> spillGroup;
     std::vector<std::vector<int>> canSpillGroups;
-
-    bool isDualDst = state_.IsDualDstAlloc(allocOp);
-    CoreLocationType allocCore = state_.schedInfoMap[allocOp].coreLocation;
-    // DualDst 开启时，所有 AIV UB alloc（含非 DualDst）统一走跨池 spill 以维持双池地址对称。
-    bool useDualPath = state_.enableDualDst &&
-                       (isDualDst || (allocBuffer->memType == MemoryType::MEM_UB &&
-                                      (allocCore == CoreLocationType::AIV0 || allocCore == CoreLocationType::AIV1)));
-
-    if (useDualPath) {
-        return SelectDualDstSpillBuffers(allocOp, allocBuffer, isDualDst, allocCore);
-    }
 
     auto coreType = state_.schedInfoMap[allocOp].coreLocation;
     auto& pool = state_.bufferManagerMap[coreType][allocBuffer->memType];
@@ -1460,16 +1423,107 @@ std::vector<int> OoOScheduler::SelectSpillBuffers(Operation* allocOp)
     return spillGroup;
 }
 
-Status OoOScheduler::GenBufferSpill(Operation* allocOp, SpillContext& ctx)
+Status OoOScheduler::GenBufferSpill(Operation* allocOp, SpillContext& ctx, bool isMainLoop)
 {
     auto reqMemType = state_.localBufferMap[state_.opReqMemIdsMap[allocOp][0]]->memType;
     auto reqSize = state_.localBufferMap[state_.opReqMemIdsMap[allocOp][0]]->size;
-    std::vector<int> spillGroup = SelectSpillBuffers(allocOp);
-    if (spillGroup.empty()) {
+    std::vector<int> spillGroup;
+    SpillContext peerCtx;
+    Operation* peerAlloc = nullptr;
+    DualSpillGroup dualGroup;
+    bool useDualGroup = !isMainLoop && state_.IsDualDstAlloc(allocOp);
+    if (useDualGroup) {
+        peerAlloc = state_.schedInfoMap[allocOp].pairedDualDstAlloc;
+        if (SelectDualDstSpillTargets(allocOp, peerAlloc, dualGroup) != SUCCESS)
+            return FAILED;
+    } else {
+        spillGroup = SelectSpillBuffers(allocOp);
+    }
+    if ((!useDualGroup && spillGroup.empty()) ||
+        (useDualGroup && dualGroup.aiv0MemIds.empty() && dualGroup.aiv1MemIds.empty())) {
         APASS_LOG_ERROR_F(Elements::Operation, "Select buffer to spill failed.");
         NotifyAllocFail(allocOp, reqMemType, reqSize);
         return FAILED;
     }
+    // DualDst 需要共同 offset，不使用单侧 compact 和容量检查。
+    if (useDualGroup) {
+        if (ApplyDualSpill(allocOp, peerAlloc, dualGroup, ctx, peerCtx, reqMemType, reqSize) != SUCCESS)
+            return FAILED;
+    } else {
+        if (ApplySingleSpill(allocOp, spillGroup, ctx, reqMemType, reqSize) != SUCCESS)
+            return FAILED;
+        if (FinalizeSingleSideSpill(allocOp, reqMemType, reqSize) != SUCCESS)
+            return FAILED;
+    }
+    return SUCCESS;
+}
+
+Status OoOScheduler::SelectDualDstSpillTargets(Operation* allocOp, Operation* peerAlloc, DualSpillGroup& dualGroup)
+{
+    DualDstAllocCtx allocCtx;
+    if (peerAlloc == nullptr || dualDstEngine_.ResolveDualDstAllocCtx(allocOp, allocCtx) != SUCCESS)
+        return FAILED;
+    auto& pool0 = state_.bufferManagerMap[CoreLocationType::AIV0][MemoryType::MEM_UB];
+    auto& pool1 = state_.bufferManagerMap[CoreLocationType::AIV1][MemoryType::MEM_UB];
+    auto candidates = GetDualSpillGroup(pool0, pool1, allocCtx.bufA->size);
+    if (candidates.empty()) {
+        dualGroup.aiv0MemIds = pool0.GetAddrSortedBufs();
+        dualGroup.aiv1MemIds = pool1.GetAddrSortedBufs();
+    } else {
+        long long bestScore = -1;
+        for (auto& candidate : candidates) {
+            std::vector<int> score0;
+            std::vector<int> score1;
+            std::unordered_map<int, size_t> cache0;
+            std::unordered_map<int, size_t> cache1;
+            bool allocOnAiv0 = state_.schedInfoMap[allocOp].coreLocation == CoreLocationType::AIV0;
+            Operation* alloc0 = allocOnAiv0 ? allocOp : peerAlloc;
+            Operation* alloc1 = allocOnAiv0 ? peerAlloc : allocOp;
+            if (GetGroupNextUseTime(candidate.aiv0MemIds, alloc0, score0, cache0) != SUCCESS ||
+                GetGroupNextUseTime(candidate.aiv1MemIds, alloc1, score1, cache1) != SUCCESS || score0.empty() ||
+                score1.empty()) {
+                continue;
+            }
+            long long score = std::min<long long>(score0.back(), score1.back());
+            if (score > bestScore) {
+                bestScore = score;
+                dualGroup = candidate;
+            }
+        }
+        if (bestScore < 0) {
+            dualGroup.aiv0MemIds = pool0.GetAddrSortedBufs();
+            dualGroup.aiv1MemIds = pool1.GetAddrSortedBufs();
+        }
+    }
+    return SUCCESS;
+}
+
+Status OoOScheduler::ApplyDualSpill(Operation* allocOp, Operation* peerAlloc, const DualSpillGroup& dualGroup,
+                                    SpillContext& ctx, SpillContext& peerCtx, MemoryType reqMemType, uint64_t reqSize)
+{
+    auto spillOneSide = [this](const std::vector<int>& memIds, Operation* trigger, SpillContext& spillCtx) {
+        spillCtx.spillMemIds = memIds;
+        for (int memId : memIds) {
+            if (spillEngine_.SpillBuffer(memId, trigger, spillCtx) != SUCCESS)
+                return FAILED;
+        }
+        return SUCCESS;
+    };
+    Operation* alloc0 = state_.schedInfoMap[allocOp].coreLocation == CoreLocationType::AIV0 ? allocOp : peerAlloc;
+    Operation* alloc1 = alloc0 == allocOp ? peerAlloc : allocOp;
+    SpillContext& ctx0 = alloc0 == allocOp ? ctx : peerCtx;
+    SpillContext& ctx1 = alloc1 == allocOp ? ctx : peerCtx;
+    if (spillOneSide(dualGroup.aiv0MemIds, alloc0, ctx0) != SUCCESS ||
+        spillOneSide(dualGroup.aiv1MemIds, alloc1, ctx1) != SUCCESS) {
+        NotifyAllocFail(allocOp, reqMemType, reqSize);
+        return FAILED;
+    }
+    return SUCCESS;
+}
+
+Status OoOScheduler::ApplySingleSpill(Operation* allocOp, const std::vector<int>& spillGroup, SpillContext& ctx,
+                                      MemoryType reqMemType, uint64_t reqSize)
+{
     ctx.spillMemIds = spillGroup;
     for (auto& memId : spillGroup) {
         if (spillEngine_.SpillBuffer(memId, allocOp, ctx) != SUCCESS) {
@@ -1479,7 +1533,11 @@ Status OoOScheduler::GenBufferSpill(Operation* allocOp, SpillContext& ctx)
             return FAILED;
         }
     }
+    return SUCCESS;
+}
 
+Status OoOScheduler::FinalizeSingleSideSpill(Operation* allocOp, MemoryType reqMemType, uint64_t reqSize)
+{
     if (RearrangeBuffer(allocOp, reqMemType) != SUCCESS) {
         APASS_LOG_WARN_F(Elements::Operation, "RearrangeBuffer failed for %s.", GetFormatBacktrace(*allocOp).c_str());
     }
@@ -1492,7 +1550,8 @@ Status OoOScheduler::GenBufferSpill(Operation* allocOp, SpillContext& ctx)
         }
         APASS_LOG_ERROR_F(
             Elements::Operation,
-            "Possible causes: incorrect memory reuse, memory fragmentation, or spill not supported for L0C_COPY_TO_L1."
+            "Possible causes: incorrect memory reuse, memory fragmentation, or spill not supported for "
+            "L0C_COPY_TO_L1."
             "Please check tile shape and OOO spill failed info. Consider avoiding cube-aligned matrix sizes.");
         NotifyAllocFail(allocOp, reqMemType, reqSize);
         return FAILED;

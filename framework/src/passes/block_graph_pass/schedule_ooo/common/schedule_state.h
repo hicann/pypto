@@ -82,6 +82,8 @@ struct OpSchedInfo {
     PipeType pipeType{PipeType::PIPE_FIX};
     bool isAlloc{false};
     bool isRetired{false};
+    bool isDualDstAlloc{false};
+    Operation* pairedDualDstAlloc{nullptr};
     // 生产者在前: 会照这个次序写回调度序列, 反了则消费者排在生产者之前。
     std::vector<Operation*> skipOps;
     CoreLocationType coreLocation{CoreLocationType::UNKNOWN};
@@ -211,13 +213,6 @@ public:
     std::unordered_map<CoreLocationType, std::map<MemoryType, BufferPool>> bufferManagerMap;
     std::vector<Operation*> newOperations;
     std::unordered_set<CoreLocationType> coreInitConfigs;
-    std::unordered_map<int, CoreLocationType> dualDstMemIdCoreOverride;
-    // DualDst 活动 pair 的 memId 互相索引: dualDstPairedMemId[memIdA] = memIdB,
-    // dualDstPairedMemId[memIdB] = memIdA。CommitDualDstAlloc 写入两个方向;
-    // FreeBuffer 任一侧 free 时同时擦掉两个 key。Spill 选 group 时优先用此表挑活动
-    // pair 配对 spill, 两池同 offset 同时释放, 维持池对称, 切断 "spill 加剧错位
-    // -> alloc 失败更多 -> spill 更多" 的正反馈环。
-    std::unordered_map<int, int> dualDstPairedMemId;
     // DualDst 总开关 (OoOScheduler 在 Schedule() 前设置)。各引擎共享。
     bool enableDualDst{false};
     std::unordered_map<Operation*, Operation*> dualDstPairs;   // AIV0 alloc -> AIV1 alloc
@@ -231,6 +226,8 @@ public:
     int clock{0};
     uint64_t numTotalIssues{0};
     std::unordered_map<CoreLocationType, std::map<MemoryType, OpQueue>> allocIssueQueue;
+    // 当前 alloc stage 因 DualDst 分段而主动结束，需要保持 clock 继续下一轮，不触发 spill。
+    bool continueAllocStage{false};
 
     // === Spill dead-loop detection ===
     int spillNoProgressCnt{0};
@@ -267,11 +264,7 @@ public:
     bool IsOpAllocInSchedInfo(Operation* op) const;
     bool IsOpRetired(Operation* op) const;
     void InsertOrdered(Operation* insertOp);
-    // 给定 memId 求它该在哪个核 free: 优先查 dualDstMemIdCoreOverride (dualdst 跨核池),
-    // 未命中则回退到 tensorAllocMap[memId] 的归核 (原行为)。
     CoreLocationType ResolveCoreForFree(int memId);
-    // 判断 allocOp 是否为 DualDst alloc (有 OP_L0C_COPY_UB_DUAL_DST 后继)。enableDualDst
-    // 关闭时直接返回 false。纯 state 查询, 供 DualDstEngine / SpillEngine / OoOScheduler 共用。
     bool IsDualDstAlloc(Operation* allocOp);
 };
 
@@ -296,6 +289,7 @@ Status RunSchedulerMainLoop(Scheduler& self)
             APASS_LOG_ERROR_F(Elements::Operation, "RetireIssueStage failed.");
             return FAILED;
         }
+        self.state_.continueAllocStage = false;
         if (self.BufferAllocStage(commitCnt) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "BufferAllocStage failed.");
             return FAILED;
@@ -307,6 +301,10 @@ Status RunSchedulerMainLoop(Scheduler& self)
         if (self.state_.numTotalIssues == commitCnt && nextCycle == -1) {
             isAllRetired = true;
             break;
+        }
+        if (nextCycle == -1 && self.state_.continueAllocStage) {
+            APASS_LOG_DEBUG_F(Elements::Operation, "AIV UB alloc stage completed; continue at current clock.");
+            continue;
         }
         if (nextCycle == -1) {
             if (self.SpillOnBlock() != SUCCESS) {
