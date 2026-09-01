@@ -109,6 +109,25 @@ TEST(CCECodegenHeaderTest, CoversHeaderOnlyStateAccessors)
     EXPECT_EQ(codegen.GetTileAddress("tile_0"), "0x100");
 }
 
+TEST(CCECodegenHeaderTest, GeneratesStandaloneTilingHeader)
+{
+    auto index_type = std::make_shared<const ir::ScalarType>(ir::DataType::INDEX);
+    auto float_type = std::make_shared<const ir::ScalarType>(ir::DataType::FP32);
+    auto bool_type = std::make_shared<const ir::ScalarType>(ir::DataType::BOOL);
+    auto offsets_type = std::make_shared<const ir::TupleType>(std::vector<ir::TypePtr>(4, index_type));
+
+    auto header = CCECodegen::GenerateTilingHeader("TestTiling", {"rows", "scale", "enabled", "offsets"},
+                                                   {index_type, float_type, bool_type, offsets_type});
+
+    EXPECT_NE(header.find("#pragma once"), std::string::npos);
+    EXPECT_NE(header.find("class TestTiling"), std::string::npos);
+    EXPECT_NE(header.find("int64_t rows;"), std::string::npos);
+    EXPECT_NE(header.find("float scale;"), std::string::npos);
+    EXPECT_NE(header.find("bool enabled;"), std::string::npos);
+    EXPECT_NE(header.find("int64_t offsets[4];"), std::string::npos);
+    EXPECT_THROW((void)CCECodegen::GenerateTilingHeader("BadTiling", {"rows"}, {}), npu::tile_fwk::Error);
+}
+
 TEST(CCECodegenHeaderTest, RejectsNonCubeOrVectorTarget)
 {
     EXPECT_THROW((void)CCECodegen(ir::SectionKind::VF), npu::tile_fwk::Error);

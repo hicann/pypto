@@ -74,7 +74,10 @@ void BindCodegen(py::module_& m)
             "get_tiling_headers", [](const CCECodegen& self) { return self.GetTilingHeaders(); },
             "Tiling struct headers from the last generate_single call, as a dict mapping "
             "header filename (e.g. 'OpTiling_tiling.h') to its content. The kernel.cpp "
-            "includes these by name; write them next to kernel.cpp in the build dir.");
+            "includes these by name; write them next to kernel.cpp in the build dir.")
+        .def_static("generate_tiling_header", &CCECodegen::GenerateTilingHeader, py::arg("type_name"),
+                    py::arg("fields"), py::arg("types"), py::arg("requires_volatile") = false,
+                    "Generate a standalone TilingData header without running full kernel codegen.");
 }
 
 } // namespace ir

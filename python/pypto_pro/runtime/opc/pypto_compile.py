@@ -39,6 +39,7 @@ The json path is recorded via ``op_context.add_build_res("json_file_path", ...)`
 from __future__ import annotations
 
 import copy
+import inspect
 import os
 from pathlib import Path
 import shutil
@@ -119,8 +120,8 @@ _ORIG_DTYPE_TO_PYPTO = {
 _ORIG_DTYPE_MACRO_PREFIX = "-DORIG_DTYPE_"
 
 
-def _load_kernel(op_path: str, main_func: str | None):
-    """Import the PyPTO kernel module and locate the target ``_TileJitKernel``."""
+def _load_kernel(op_path: str):
+    """Import a PyPTO kernel module that defines exactly one ``_TileJitKernel``."""
     import importlib.util
     import sys
 
@@ -133,21 +134,15 @@ def _load_kernel(op_path: str, main_func: str | None):
     sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)
 
-    if main_func:
-        kernel = getattr(mod, main_func, None)
-        if not isinstance(kernel, _TileJitKernel):
-            raise RuntimeError(f"main_func '{main_func}' is not a @pl.jit kernel in {op_path}")
-        return kernel
     kernels = [v for v in vars(mod).values() if isinstance(v, _TileJitKernel)]
     if len(kernels) != 1:
-        raise RuntimeError(f"main_func not given and module has {len(kernels)} jit kernels; specify main_func")
+        raise RuntimeError(f"kernel module '{op_path}' must define exactly one @pl.jit kernel, found {len(kernels)}")
     return kernels[0]
 
 
-def _write_tilingkey_header(schema, cg, output_dir: str) -> None:
+def _write_tilingkey_header(schema, kernel_name: str, output_dir: str) -> None:
     """Generate ``<TilingKey>_tilingkey.h`` for binary delivery."""
     t_start = time.perf_counter()
-    op_name = cg.kernel_name
     fields = schema._fields
     valid_combos = schema.enumerate_valid()
 
@@ -157,7 +152,7 @@ def _write_tilingkey_header(schema, cg, output_dir: str) -> None:
         header += f"#define ASCENDC_TPL_{bw}_BW {bw}\n"
     header += "\n"
 
-    header += f"ASCENDC_TPL_ARGS_DECL({op_name},\n"
+    header += f"ASCENDC_TPL_ARGS_DECL({kernel_name},\n"
     for field in fields:
         values_str = ", ".join(str(v) for v in field.values)
         comment = f"// bit:{field.offset + field.bits - 1}-{field.offset}"
@@ -191,6 +186,37 @@ def _write_tilingkey_header(schema, cg, output_dir: str) -> None:
         total_combos,
         time.perf_counter() - t_start,
     )
+
+
+def _write_tilingdata_header(kernel, output_dir: str) -> None:
+    """Generate the TilingData header without running kernel codegen."""
+    from pypto.pypto_impl.codegen import CCECodegen
+    from pypto_pro.language.typing._tiling import get_tiling_fields, get_tiling_tuple_type, is_tiling_class
+    from pypto_pro.runtime.shape_policy import _get_annotations
+
+    func = kernel._func
+    namespace = dict(getattr(func, "__globals__", {}))
+    namespace.update(kernel._closure_vars or {})
+    try:
+        annotations = _get_annotations(func, namespace)
+    except (NameError, TypeError, ValueError) as exc:
+        raise TypeError(f"Failed to evaluate annotations for kernel '{kernel.__name__}': {exc}") from exc
+    parameter_names = list(inspect.signature(func).parameters)
+    tiling_params = [
+        (name, annotations[name]) for name in parameter_names if is_tiling_class(annotations.get(name))
+    ]
+    if len(tiling_params) != 1:
+        raise RuntimeError(
+            f"kernel '{kernel.__name__}' must have exactly one tiling-class parameter, found {len(tiling_params)}"
+        )
+    tiling_param_name, tiling_cls = tiling_params[0]
+    if not parameter_names or parameter_names[-1] != tiling_param_name:
+        raise RuntimeError(f"tiling parameter '{tiling_param_name}' must be the last kernel parameter")
+
+    fields = get_tiling_fields(tiling_cls)
+    tiling_type = get_tiling_tuple_type(tiling_cls)
+    header = CCECodegen.generate_tiling_header(tiling_cls.__name__, list(fields), list(tiling_type.types))
+    Path(output_dir, f"{tiling_cls.__name__}_tiling.h").write_text(header, encoding="utf-8")
 
 
 def _signature_parts(entry_params):
@@ -288,9 +314,53 @@ def _gen_infer_cpp(cg, tilingkey_header: str, kernel_cpp: str) -> str:
     )
 
 
-def generate_binary_headers(kernel) -> str:
-    """Generate the tiling-data, tilingkey and infer source required by binary delivery."""
-    from pypto_pro.runtime.jit import _codegen, _setup_arch_env, _TileJitKernel
+def _prepare_infer_cpp(
+    kernel,
+    schema,
+    dtype_consts,
+    arch,
+    cce_file: str,
+    kernel_name: str,
+    kernel_meta_dir: str,
+) -> str:
+    """Generate the infer source from one default legal TilingKey and prepare its headers."""
+    from pypto_pro.runtime.jit import _codegen
+
+    valid_combos = schema.enumerate_valid()
+    if not valid_combos:
+        raise RuntimeError(f"tiling_key schema '{schema.cls_name}' has no valid tilingkey combination")
+    concrete_key = dict(zip(schema.field_names(), valid_combos[0]))
+    default_tiling_key = schema.pack(concrete_key)
+    infer_cg = _codegen(
+        kernel.to_kernel_def(concrete_key, dtype_consts),
+        arch,
+        clean_up=False,
+        tilingkey_packed=default_tiling_key,
+        out_dir=os.path.join(kernel_meta_dir, "_cg_infer"),
+    )
+    if infer_cg is None:
+        raise RuntimeError(f"pypto codegen failed for default tilingkey {default_tiling_key}")
+    for header in (name for name in os.listdir(infer_cg.build_dir) if name.endswith(".h")):
+        shutil.copyfile(os.path.join(infer_cg.build_dir, header), os.path.join(kernel_meta_dir, header))
+    tilingkey_header = f"{schema.cls_name}_tilingkey.h"
+    shutil.copyfile(
+        os.path.join(os.path.dirname(cce_file), tilingkey_header),
+        os.path.join(kernel_meta_dir, tilingkey_header),
+    )
+    kernel_cpp = Path(infer_cg.build_dir, "kernel.cpp").read_text(encoding="utf-8")
+    infer_cpp_path = os.path.join(kernel_meta_dir, f"{kernel_name}_pypto_infer.cpp")
+    _write(infer_cpp_path, _gen_infer_cpp(infer_cg, tilingkey_header, kernel_cpp))
+    return infer_cpp_path
+
+
+def generate_binary_headers(kernel, arch="a5") -> str:
+    """Generate the TilingData and TilingKey headers required by binary delivery."""
+    from pypto_pro.runtime.jit import (
+        _artifact_prefix_from_filename,
+        _make_artifact_build_dir,
+        _setup_arch_env,
+        _TileJitKernel,
+    )
 
     if not isinstance(kernel, _TileJitKernel):
         raise TypeError("generate_binary_headers() expects a @pl.jit kernel")
@@ -300,45 +370,28 @@ def generate_binary_headers(kernel) -> str:
             f"'{kernel.__name__}' has none; binary delivery needs a tilingkey header"
         )
 
-    arch = _setup_arch_env(kernel.arch)
+    arch = _setup_arch_env(arch)
     schema = kernel.tilingkey_schema
     valid_combos = schema.enumerate_valid()
     if not valid_combos:
         raise ValueError(f"tiling_key schema '{schema.cls_name}' has no valid tilingkey combination")
-    concrete_key = dict(zip(schema.field_names(), valid_combos[0]))
-    packed = schema.pack(concrete_key)
-    datatype_schema = kernel.datatype_schema
-    datatype_consts = None
-    if datatype_schema is not None:
-        datatype_consts = {var_name: DataType.FP16 for var_name in set(datatype_schema.values())}
 
-    cg = _codegen(
-        kernel.to_kernel_def(concrete_key, datatype_consts),
+    kernel_def = kernel.to_kernel_def()
+    build_dir = _make_artifact_build_dir(
+        kernel_def,
         arch,
-        clean_up=False,
-        tilingkey_packed=packed,
+        test_prefix=_artifact_prefix_from_filename(kernel_def._source_file),
     )
-    if cg is None:
-        raise RuntimeError(f"Failed to generate code for kernel '{kernel.__name__}'")
-
-    binary_dir = os.path.join(os.path.dirname(cg.build_dir), "binary")
+    binary_dir = os.path.join(build_dir, "binary")
     Path(binary_dir).mkdir(parents=True, exist_ok=True)
-
-    tiling_headers = list(Path(cg.build_dir).glob("*_tiling.h"))
-    if not tiling_headers:
-        raise RuntimeError(
-            f"kernel '{kernel.__name__}' produced no tiling struct header; binary delivery "
-            f"requires a tiling-class parameter so a '*_tiling.h' is generated"
-        )
-    for header in tiling_headers:
-        shutil.copy(str(header), os.path.join(binary_dir, header.name))
-
-    _write_tilingkey_header(schema, cg, output_dir=binary_dir)
-    tilingkey_header = f"{schema.cls_name}_tilingkey.h"
-    kernel_cpp = Path(cg.build_dir, "kernel.cpp").read_text(encoding="utf-8")
-    infer_cpp = _gen_infer_cpp(cg, tilingkey_header, kernel_cpp)
-    _write(os.path.join(binary_dir, f"{cg.kernel_name}_pypto_infer.cpp"), infer_cpp)
+    _write_tilingdata_header(kernel, binary_dir)
+    _write_tilingkey_header(schema, kernel.__name__, output_dir=binary_dir)
     return binary_dir
+
+
+def prepare_binary_headers(op_path: str, arch="a5") -> str:
+    """Load the sole ``@pl.jit`` kernel in ``op_path`` and prepare its binary-delivery headers."""
+    return generate_binary_headers(_load_kernel(op_path), arch)
 
 
 def _op_info_get(op_info, name, default=None):
@@ -553,17 +606,6 @@ def _decode_tiling_key(schema, packed: int):
     return concrete
 
 
-def _find_infer_cpp(cce_file: str, origin_func_name: str) -> str:
-    cce_dir = Path(cce_file).resolve().parent
-    direct = cce_dir / f"{origin_func_name}_pypto_infer.cpp"
-    if direct.is_file():
-        return str(direct)
-    matches = sorted(cce_dir.glob("*_pypto_infer.cpp"))
-    if len(matches) == 1:
-        return str(matches[0])
-    raise RuntimeError(f"cannot find PyPTO infer cpp next to {cce_file}: expected {direct}")
-
-
 def _filter_tiling_keys(tiling_key_list, extend_options, ctx, kernel_name):
     if "customized_tiling_key_list" in extend_options:
         context_tiling_key = extend_options.get("customized_tiling_key_list")
@@ -586,6 +628,7 @@ def pypto_compile_op(
     code_channel=-1,
     op_compile_option="{}",
     extend_options=None,
+    arch="a5",
 ):
     """PyPTO leaf replacing ``asc_op_compiler.compile_op``. Signature-compatible; ``cce_file`` is the PyPTO
     DSL ``.py``. Writes the flat ``kernel_meta`` artifacts + ``<kernel>.o``/``.json`` and records the json
@@ -600,12 +643,18 @@ def pypto_compile_op(
 
     extend_options = extend_options or {}
     kernel_name = _op_info_get(op_info, "kernel_name")
-    arch = _pypto_arch()
-    _setup_arch_env(arch)
+    arch = _setup_arch_env(arch)
     opt = _setup_options(op_info, compile_options, op_compile_option, extend_options)
 
-    kernel = _load_kernel(cce_file, origin_func_name)
+    kernel = _load_kernel(cce_file)
+    if origin_func_name != kernel.__name__:
+        raise RuntimeError(
+            f"origin_func_name '{origin_func_name}' does not match the sole @pl.jit kernel "
+            f"'{kernel.__name__}' in {cce_file}"
+        )
     schema = getattr(kernel, "_tilingkey_schema", None)
+    if schema is None:
+        raise RuntimeError(f"binary delivery requires a tiling_key schema on kernel '{kernel.__name__}'")
     datatype_schema = getattr(kernel, "_datatype_schema", None)
     dtype_key = _extract_datatype_key_from_compile_options(compile_options, datatype_schema)
     dtype_consts = _validate_datatype_key(datatype_schema, dtype_key)
@@ -617,12 +666,22 @@ def pypto_compile_op(
     compile_log_path = None
     if global_var_storage.get_variable("ascendc_compile_debug_config"):
         compile_log_path = os.path.join(kernel_meta_dir, kernel_name + distinct_tag + ".log")
-    infer_cpp = _find_infer_cpp(cce_file, origin_func_name)
+
+    infer_cpp_path = _prepare_infer_cpp(
+        kernel,
+        schema,
+        dtype_consts,
+        arch,
+        cce_file,
+        kernel_name,
+        kernel_meta_dir,
+    )
+
     infer_i = os.path.join(kernel_meta_dir, kernel_name + ".i")
-    logger.info("pypto_compile_op: infer cpp=%s -> %s", infer_cpp, infer_i)
+    logger.info("pypto_compile_op: infer cpp=%s -> %s", infer_cpp_path, infer_i)
     infered_info = KernelInfoInfer.get_tiling_key_list_and_simple_infer_code_channel(
         op_info,
-        infer_cpp,
+        infer_cpp_path,
         infer_i,
         opt,
         compile_log_path,
@@ -751,11 +810,6 @@ def pypto_compile_op(
     )
     ctx.add_build_res("json_file_path", os.path.abspath(json_path))
     logger.info("pypto_compile_op done: %s (%d tilingkeys)", json_path, len(tiling_keys))
-
-
-def _pypto_arch() -> str:
-    """SOC -> pypto codegen arch. ops-transformer sets PYPTO_JIT_ARCH at configure time; default a5."""
-    return os.environ.get("PYPTO_JIT_ARCH") or "a5"
 
 
 def _write(path, content):

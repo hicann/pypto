@@ -130,7 +130,9 @@ add_modules_sources_with_soc(
 )
 ```
 
-CMake配置阶段会加载`op_kernel/add_example.py`，生成TilingData头文件、TilingKey头文件和Kernel编译所需的中间文件。后续构建过程会根据TilingKey生成Kernel实例，并将Kernel二进制与Host侧实现、aclnn接口一起打包。
+CMake配置阶段会加载`op_kernel/add_example.py`，只生成Host和Kernel共同依赖的TilingData与TilingKey头文件。
+后续构建过程会针对每组实际输入dtype生成一次infer源码，再根据TilingKey生成Kernel实例，
+并将Kernel二进制与Host侧实现、aclnn接口一起打包。
 
 ## 实现Host侧Tiling
 

@@ -29,3 +29,11 @@ class CCECodegen:
     ) -> str: ...
 
     def get_tiling_headers(self) -> dict[str, str]: ...
+
+    @staticmethod
+    def generate_tiling_header(
+        type_name: str,
+        fields: list[str],
+        types: list[ir.Type],
+        requires_volatile: bool = False,
+    ) -> str: ...

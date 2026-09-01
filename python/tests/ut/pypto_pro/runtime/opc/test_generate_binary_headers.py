@@ -10,25 +10,36 @@
 # -----------------------------------------------------------------------------------------------------------
 """Tests for OPC binary-delivery header generation."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
+import importlib
+import os
 from pathlib import Path
 
 import pypto_pro.language as pl
-from pypto_pro.runtime.opc.pypto_compile import generate_binary_headers
+from pypto_pro.runtime.opc.pypto_compile import (
+    _load_kernel,
+    generate_binary_headers,
+    prepare_binary_headers,
+    pypto_compile_op,
+)
 from pypto_pro.runtime.tilingkey import TilingKeyField
+import pytest
 
 
 @dataclass
 class HeaderTiling:
     rows: int
     columns: int
+    offsets: int[4]
 
 
 class HeaderTilingKey:
     Operation = TilingKeyField(bits=1, values=[0, 1])
 
 
-@pl.jit(auto_mutex=True, tiling_key=HeaderTilingKey)
+@pl.jit(auto_mutex=True, tiling_key=HeaderTilingKey, datatype={"x": "input_dtype"})
 def header_generation_kernel(
     x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
     y: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
@@ -54,8 +65,17 @@ def header_generation_kernel(
                 pl.store(z, tile_z, [row, column])
 
 
-def test_generate_binary_headers_emits_tiling_and_tilingkey_headers():
-    binary_dir = Path(generate_binary_headers(header_generation_kernel))
+def test_generate_binary_headers_emits_only_tiling_headers(monkeypatch, tmp_path):
+    jit_runtime = importlib.import_module("pypto_pro.runtime.jit")
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        jit_runtime,
+        "_codegen",
+        lambda *args, **kwargs: pytest.fail("generate_binary_headers must not run full codegen"),
+    )
+    binary_dir = Path(generate_binary_headers(header_generation_kernel, "a3"))
+    assert os.environ["PYPTOPRO_JIT_ARCH"] == "a3"
     assert binary_dir.is_dir(), f"binary dir not created: {binary_dir}"
 
     tiling_header = binary_dir / "HeaderTiling_tiling.h"
@@ -67,7 +87,57 @@ def test_generate_binary_headers_emits_tiling_and_tilingkey_headers():
     assert "class HeaderTiling" in tiling_text
     assert "int64_t rows;" in tiling_text
     assert "int64_t columns;" in tiling_text
+    assert "int64_t offsets[4];" in tiling_text
 
     tilingkey_text = tilingkey_header.read_text(encoding="utf-8")
     assert "ASCENDC_TPL_ARGS_DECL(header_generation_kernel" in tilingkey_text
     assert "ASCENDC_TPL_SEL(" in tilingkey_text
+    assert not list(binary_dir.glob("*_pypto_infer.cpp"))
+    assert not list(binary_dir.parent.glob("tk_*"))
+
+
+def test_prepare_binary_headers_loads_the_kernel_file(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("PYPTOPRO_JIT_ARCH", "a3")
+
+    binary_dir = Path(prepare_binary_headers(__file__))
+
+    assert os.environ["PYPTOPRO_JIT_ARCH"] == "a5"
+    assert (binary_dir / "HeaderTiling_tiling.h").is_file()
+    assert (binary_dir / "HeaderTilingKey_tilingkey.h").is_file()
+    assert not list(binary_dir.glob("*_pypto_infer.cpp"))
+
+
+def test_pypto_compile_op_sets_up_explicit_arch(monkeypatch):
+    compile_module = importlib.import_module("pypto_pro.runtime.opc.pypto_compile")
+    jit_runtime = importlib.import_module("pypto_pro.runtime.jit")
+    received_arch = []
+
+    def stop_after_arch_setup(*args, **kwargs):
+        raise RuntimeError("stop after arch setup")
+
+    monkeypatch.setenv("PYPTO_JIT_ARCH", "a2")
+    monkeypatch.setattr(jit_runtime, "_setup_arch_env", lambda arch: received_arch.append(arch) or arch)
+    monkeypatch.setattr(compile_module, "_setup_options", stop_after_arch_setup)
+
+    with pytest.raises(RuntimeError, match="stop after arch setup"):
+        pypto_compile_op("unused.py", "kernel", {"kernel_name": "kernel"}, arch="a3")
+
+    assert received_arch == ["a3"]
+
+
+@pytest.mark.parametrize("kernel_count", [0, 2])
+def test_load_kernel_requires_exactly_one_jit_kernel(tmp_path, kernel_count):
+    definitions = "\n".join(
+        (
+            f"@pl.jit\n"
+            f"def kernel_{index}(x: pl.Ptr[pl.DT_FP16]):\n"
+            "    pass\n"
+        )
+        for index in range(kernel_count)
+    )
+    kernel_file = tmp_path / "kernels.py"
+    kernel_file.write_text(f"import pypto_pro.language as pl\n{definitions}", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match=rf"exactly one @pl.jit kernel, found {kernel_count}"):
+        _load_kernel(str(kernel_file))

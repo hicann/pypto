@@ -2820,6 +2820,13 @@ std::string StructFieldTypeSignature(const ir::TypePtr& type)
 
 std::string CCECodegen::GetStructFieldTypeString(const ir::TypePtr& type) const { return CppTypeForField(type); }
 
+std::string CCECodegen::GenerateTilingHeader(const std::string& type_name, const std::vector<std::string>& fields,
+                                             const std::vector<ir::TypePtr>& types, bool requires_volatile)
+{
+    CHECK(fields.size() == types.size()) << "Tiling struct field count mismatch for type '" << type_name << "'";
+    return "#pragma once\n" + BuildStructTypeDef(type_name, fields, types, requires_volatile) + "\n";
+}
+
 void CCECodegen::RegisterStructDefinition(const ir::TupleTypePtr& tuple_type, const std::string& type_name,
                                           const std::vector<std::string>& fields, bool is_tiling)
 {
@@ -2877,13 +2884,12 @@ void CCECodegen::RegisterTilingStructTypes(const ir::FunctionPtr& func)
 void CCECodegen::EmitStructTypes()
 {
     for (const auto& [type_name, info] : struct_definitions_) {
-        std::string def = BuildStructTypeDef(type_name, info.fields, info.types, info.requires_volatile);
         if (!info.is_tiling) {
-            emitter_.EmitLine(def);
+            emitter_.EmitLine(BuildStructTypeDef(type_name, info.fields, info.types, info.requires_volatile));
             continue;
         }
         const std::string header_name = type_name + "_tiling.h";
-        tiling_headers_[header_name] = "#pragma once\n" + def + "\n";
+        tiling_headers_[header_name] = GenerateTilingHeader(type_name, info.fields, info.types, info.requires_volatile);
         emitter_.EmitLine("#include \"" + header_name + "\"");
     }
 }

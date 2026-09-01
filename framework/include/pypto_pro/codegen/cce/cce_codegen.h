@@ -99,6 +99,17 @@ public:
     explicit CCECodegen(ir::SectionKind target);
 
     /**
+     * \brief Generate a standalone TilingData header from an ordered field definition.
+     *
+     * This is the same header format emitted during full kernel codegen, but does not
+     * require a Program or run any IR passes.
+     */
+    [[nodiscard]] static std::string GenerateTilingHeader(const std::string& type_name,
+                                                          const std::vector<std::string>& fields,
+                                                          const std::vector<ir::TypePtr>& types,
+                                                          bool requires_volatile = false);
+
+    /**
      * \brief Generate a single C++ file from a PyPTO IR Program
      *
      * Runs the ConvertToSSA IR pass,

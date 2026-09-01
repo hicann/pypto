@@ -21,7 +21,7 @@ from typing import Any
 from pypto.pypto_impl import ir
 from pypto_pro.ir import IRBuilder
 
-from ..typing._tiling import ArrayFieldInfo, get_tiling_fields, is_tiling_class
+from ..typing._tiling import get_tiling_fields, get_tiling_tuple_type, is_tiling_class
 from ..typing.shape import _ShapePolicy
 from ._assignment_parser import AssignmentParserMixin
 from ._buffer_parser import BufferParserMixin
@@ -566,18 +566,9 @@ class ASTParser(
         tiling_cls = self.resolve_tiling_class(arg.annotation) if arg.annotation else None
         if tiling_cls is not None:
             fields = get_tiling_fields(tiling_cls)
-            elem_types: list[ir.Type] = []
-            for _, field_info in fields.items():
-                if isinstance(field_info, ArrayFieldInfo):
-                    # T[N] -> a nested TupleType of N homogeneous scalars. Its element
-                    # name is NOT registered in IRDebugInfo, so codegen distinguishes array
-                    # subscript (tiling.opkind[4]) from struct member access by the missing entry.
-                    elem_types.append(ir.TupleType([ir.ScalarType(field_info.dtype)] * field_info.size))
-                else:
-                    elem_types.append(ir.ScalarType(field_info.dtype))
             # Single struct parameter: the tiling class is lowered to a named TupleType whose
             # field names live in the IRDebugInfo side table (codegen emits `struct <ClassName>`).
-            tuple_type = ir.TupleType(elem_types)
+            tuple_type = get_tiling_tuple_type(tiling_cls)
             tiling_var = f.param(param_name, tuple_type, param_span)
             # A tiling param is a struct: register its fields and the Python class name, so
             # codegen emits `struct <ClassName>` (matching the host-side struct).

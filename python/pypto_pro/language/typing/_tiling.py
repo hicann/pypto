@@ -16,6 +16,7 @@ from __future__ import annotations
 __all__ = [
     "is_tiling_class",
     "get_tiling_fields",
+    "get_tiling_tuple_type",
     "ScalarFieldInfo",
     "ArrayFieldInfo",
     "FieldInfo",
@@ -31,6 +32,7 @@ import inspect
 import textwrap
 from typing import Union
 
+from pypto.pypto_impl import ir
 from pypto.pypto_impl.ir import DataType
 
 _PYTHON_TYPE_TO_DTYPE: dict[type, DataType] = {
@@ -177,6 +179,18 @@ def get_tiling_fields(cls: type) -> dict[str, FieldInfo]:
         except (TypeError, ValueError) as exc:
             raise ValueError(f"Invalid tiling field {name!r} annotation {annotation!r}: {exc}") from exc
     return result
+
+
+def get_tiling_tuple_type(cls: type) -> ir.TupleType:
+    """Lower the fields of a tiling class to the IR tuple type used by kernel parameters."""
+    elem_types: list[ir.Type] = []
+    for field_info in get_tiling_fields(cls).values():
+        scalar_type = ir.ScalarType(field_info.dtype)
+        if isinstance(field_info, ArrayFieldInfo):
+            elem_types.append(ir.TupleType([scalar_type] * field_info.size))
+        else:
+            elem_types.append(scalar_type)
+    return ir.TupleType(elem_types)
 
 
 def _field_ctype(dtype: DataType) -> type:
