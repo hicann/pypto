@@ -255,6 +255,7 @@ REGISTER_OP("vf.div")
     .add_argument("src1", "Source register 1")
     .add_argument("mask", "Mask register")
     .set_attr<int>("mode")
+    .set_attr<bool>("precision")
     .f_deduce_type(DeduceVFFromDstArg);
 
 REGISTER_OP("vf.muls")
@@ -274,6 +275,7 @@ REGISTER_OP("vf.ln")
     .add_argument("src", "Source register")
     .add_argument("mask", "Mask register")
     .set_attr<int>("mode")
+    .set_attr<bool>("precision")
     .f_deduce_type(DeduceVFFromDstArg);
 
 REGISTER_OP("vf.log")
@@ -283,6 +285,7 @@ REGISTER_OP("vf.log")
     .add_argument("src", "Source register")
     .add_argument("mask", "Mask register")
     .set_attr<int>("mode")
+    .set_attr<bool>("precision")
     .f_deduce_type(DeduceVFFromDstArg);
 
 REGISTER_OP("vf.min")
@@ -302,6 +305,7 @@ REGISTER_OP("vf.exp")
     .add_argument("src", "Source register")
     .add_argument("mask", "Mask register")
     .set_attr<int>("mode")
+    .set_attr<bool>("precision")
     .f_deduce_type(DeduceVFFromDstArg);
 
 REGISTER_OP("vf.abs")
@@ -329,6 +333,7 @@ REGISTER_OP("vf.sqrt")
     .add_argument("src", "Source register")
     .add_argument("mask", "Mask register")
     .set_attr<int>("mode")
+    .set_attr<bool>("precision")
     .f_deduce_type(DeduceVFFromDstArg);
 
 REGISTER_OP("vf.relu")
@@ -811,6 +816,7 @@ REGISTER_OP("vf.log2")
     .add_argument("src", "Source register")
     .add_argument("mask", "Mask register")
     .set_attr<int>("mode")
+    .set_attr<bool>("precision")
     .f_deduce_type(DeduceVFFromDstArg);
 
 REGISTER_OP("vf.log10")
@@ -820,6 +826,7 @@ REGISTER_OP("vf.log10")
     .add_argument("src", "Source register")
     .add_argument("mask", "Mask register")
     .set_attr<int>("mode")
+    .set_attr<bool>("precision")
     .f_deduce_type(DeduceVFFromDstArg);
 
 REGISTER_OP("vf.muls_cast")

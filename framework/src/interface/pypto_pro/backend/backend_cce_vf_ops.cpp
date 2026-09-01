@@ -1374,7 +1374,24 @@ static std::string EmitVFDiv(const ir::CallPtr& op, codegen::CodegenBase& codege
     std::string src1 = codegen.GetExprAsCode(op->args_[2]);
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
     std::string mode = VFZeroingOnly(op, "vf.div");
-    codegen.Emit("vdiv(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ", " + mode + ");");
+    if (op->HasKwarg("precision") && op->GetKwarg<bool>("precision")) {
+        CHECK((s0_dt == DataType::FP16 || s0_dt == DataType::FP32))
+            << "vf.div high-precision mode only supports FP16/FP32, got " << DTypeStr(s0_dt);
+        std::string r = dst + "_r_";
+        std::string neg_b = dst + "_neg_b_";
+        std::string e = dst + "_e_";
+        std::string ctype = s0_dt.ToCTypeString();
+        codegen.Emit("RegTensor<" + ctype + "> " + r + " = (RegTensor<" + ctype + ">&)" + src0 + ";");
+        codegen.Emit("RegTensor<" + ctype + "> " + neg_b + ";");
+        codegen.Emit("RegTensor<" + ctype + "> " + e + ";");
+        codegen.Emit("vdiv(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ", " + mode + ");");
+        codegen.Emit("vmuls(" + neg_b + ", " + src1 + ", -1.0f, " + mask + ", " + mode + ");");
+        codegen.Emit("vmula(" + r + ", " + neg_b + ", " + dst + ", " + mask + ", " + mode + ");");
+        codegen.Emit("vdiv(" + e + ", " + r + ", " + src1 + ", " + mask + ", " + mode + ");");
+        codegen.Emit("vadd(" + dst + ", " + dst + ", " + e + ", " + mask + ", " + mode + ");");
+    } else {
+        codegen.Emit("vdiv(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ", " + mode + ");");
+    }
     return "";
 }
 
@@ -1436,6 +1453,40 @@ static std::string EmitVFLn(const ir::CallPtr& op, codegen::CodegenBase& codegen
     DataType vf_ln_dst_dt = GetExprDtype(op->args_[0]);
     CHECK(src_dt == vf_ln_dst_dt) << "vf.ln requires src and dst to have the same type, got dst="
                                   << DTypeStr(vf_ln_dst_dt) << " src=" << DTypeStr(src_dt);
+    if (op->HasKwarg("precision") && op->GetKwarg<bool>("precision")) {
+        auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+        std::string dst = codegen.GetExprAsCode(op->args_[0]);
+        std::string src = codegen.GetExprAsCode(op->args_[1]);
+        std::string mask = codegen.GetExprAsCode(op->args_[2]);
+        std::string mode = VFZeroingOnly(op, "vf.ln");
+        std::string mc = dst + "_mcmp_";
+        std::string tp = dst + "_tmp_";
+        std::string sc = dst + "_srcc_";
+        std::string dc = dst + "_dstc_";
+        std::string ctype = src_dt.ToCTypeString();
+        codegen.Emit("MaskReg " + mc + ";");
+        codegen.Emit("RegTensor<" + ctype + "> " + tp + ";");
+        codegen.Emit("RegTensor<" + ctype + "> " + sc + " = (RegTensor<" + ctype + ">&)" + src + ";");
+        codegen.Emit("RegTensor<" + ctype + "> " + dc + ";");
+        if (src_dt == DataType::FP16) {
+            codegen.Emit("union { uint16_t i; half f; } " + dst + "_thr_ = {0x03FF};");
+            codegen.Emit("vcmps_lt(" + mc + ", " + sc + ", " + dst + "_thr_.f, " + mask + ");");
+            codegen.Emit("vmuls(" + tp + ", " + sc + ", 1024.0f, " + mask + ", " + mode + ");");
+            codegen.Emit("vsel(" + sc + ", " + tp + ", " + sc + ", " + mc + ");");
+            codegen.Emit("vln(" + dc + ", " + sc + ", " + mask + ", " + mode + ");");
+            codegen.Emit("vadds(" + tp + ", " + dc + ", -6.931471805599453094172f, " + mask + ", " + mode + ");");
+            codegen.Emit("vsel(" + dst + ", " + tp + ", " + dc + ", " + mc + ");");
+        } else {
+            codegen.Emit("union { uint32_t i; float f; } " + dst + "_thr_ = {0x007FFFFF};");
+            codegen.Emit("vcmps_lt(" + mc + ", " + sc + ", " + dst + "_thr_.f, " + mask + ");");
+            codegen.Emit("vmuls(" + tp + ", " + sc + ", 8388608.0f, " + mask + ", " + mode + ");");
+            codegen.Emit("vsel(" + sc + ", " + tp + ", " + sc + ", " + mc + ");");
+            codegen.Emit("vln(" + dc + ", " + sc + ", " + mask + ", " + mode + ");");
+            codegen.Emit("vadds(" + tp + ", " + dc + ", -15.9423851528787421f, " + mask + ", " + mode + ");");
+            codegen.Emit("vsel(" + dst + ", " + tp + ", " + dc + ", " + mc + ");");
+        }
+        return "";
+    }
     return EmitVFUnary(op, codegen_base, "vf.ln", "vln");
 }
 
@@ -1451,6 +1502,40 @@ static std::string EmitVFLog(const ir::CallPtr& op, codegen::CodegenBase& codege
     DataType vf_log_dst_dt = GetExprDtype(op->args_[0]);
     CHECK(src_dt == vf_log_dst_dt) << "vf.log requires src and dst to have the same type, got dst="
                                    << DTypeStr(vf_log_dst_dt) << " src=" << DTypeStr(src_dt);
+    if (op->HasKwarg("precision") && op->GetKwarg<bool>("precision")) {
+        auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+        std::string dst = codegen.GetExprAsCode(op->args_[0]);
+        std::string src = codegen.GetExprAsCode(op->args_[1]);
+        std::string mask = codegen.GetExprAsCode(op->args_[2]);
+        std::string mode = VFZeroingOnly(op, "vf.log");
+        std::string mc = dst + "_mcmp_";
+        std::string tp = dst + "_tmp_";
+        std::string sc = dst + "_srcc_";
+        std::string dc = dst + "_dstc_";
+        std::string ctype = src_dt.ToCTypeString();
+        codegen.Emit("MaskReg " + mc + ";");
+        codegen.Emit("RegTensor<" + ctype + "> " + tp + ";");
+        codegen.Emit("RegTensor<" + ctype + "> " + sc + " = (RegTensor<" + ctype + ">&)" + src + ";");
+        codegen.Emit("RegTensor<" + ctype + "> " + dc + ";");
+        if (src_dt == DataType::FP16) {
+            codegen.Emit("union { uint16_t i; half f; } " + dst + "_thr_ = {0x03FF};");
+            codegen.Emit("vcmps_lt(" + mc + ", " + sc + ", " + dst + "_thr_.f, " + mask + ");");
+            codegen.Emit("vmuls(" + tp + ", " + sc + ", 1024.0f, " + mask + ", " + mode + ");");
+            codegen.Emit("vsel(" + sc + ", " + tp + ", " + sc + ", " + mc + ");");
+            codegen.Emit("vln(" + dc + ", " + sc + ", " + mask + ", " + mode + ");");
+            codegen.Emit("vadds(" + tp + ", " + dc + ", -6.931471805599453094172f, " + mask + ", " + mode + ");");
+            codegen.Emit("vsel(" + dst + ", " + tp + ", " + dc + ", " + mc + ");");
+        } else {
+            codegen.Emit("union { uint32_t i; float f; } " + dst + "_thr_ = {0x007FFFFF};");
+            codegen.Emit("vcmps_lt(" + mc + ", " + sc + ", " + dst + "_thr_.f, " + mask + ");");
+            codegen.Emit("vmuls(" + tp + ", " + sc + ", 8388608.0f, " + mask + ", " + mode + ");");
+            codegen.Emit("vsel(" + sc + ", " + tp + ", " + sc + ", " + mc + ");");
+            codegen.Emit("vln(" + dc + ", " + sc + ", " + mask + ", " + mode + ");");
+            codegen.Emit("vadds(" + tp + ", " + dc + ", -15.9423851528787421f, " + mask + ", " + mode + ");");
+            codegen.Emit("vsel(" + dst + ", " + tp + ", " + dc + ", " + mc + ");");
+        }
+        return "";
+    }
     return EmitVFUnary(op, codegen_base, "vf.log", "vln");
 }
 
@@ -1502,7 +1587,31 @@ static std::string EmitVFExp(const ir::CallPtr& op, codegen::CodegenBase& codege
     std::string src = codegen.GetExprAsCode(op->args_[1]);
     std::string mask = codegen.GetExprAsCode(op->args_[2]);
     std::string mode = VFZeroingOnly(op, "vf.exp");
-    codegen.Emit("vexp(" + dst + ", " + src + ", " + mask + ", " + mode + ");");
+    if (op->HasKwarg("precision") && op->GetKwarg<bool>("precision")) {
+        std::string ms = dst + "_sub_";
+        std::string tw = dst + "_two_";
+        std::string t0 = dst + "_t0_";
+        std::string t1 = dst + "_t1_";
+        std::string ctype = src_dt.ToCTypeString();
+        codegen.Emit("MaskReg " + ms + ";");
+        codegen.Emit("RegTensor<" + ctype + "> " + tw + ";");
+        codegen.Emit("RegTensor<" + ctype + "> " + t0 + ";");
+        codegen.Emit("RegTensor<" + ctype + "> " + t1 + ";");
+        if (src_dt == DataType::FP16) {
+            codegen.Emit("union { uint16_t i; half f; } " + dst + "_thr_ = {0x03FF};");
+        } else {
+            codegen.Emit("union { uint32_t i; float f; } " + dst + "_thr_ = {0x007FFFFF};");
+        }
+        codegen.Emit("vexp(" + dst + ", " + src + ", " + mask + ", " + mode + ");");
+        codegen.Emit("vcmps_le(" + ms + ", " + dst + ", " + dst + "_thr_.f, " + mask + ");");
+        codegen.Emit("vdup(" + tw + ", 2.0f, " + ms + ", " + mode + ");");
+        codegen.Emit("vdiv(" + t0 + ", " + src + ", " + tw + ", " + ms + ", " + mode + ");");
+        codegen.Emit("vexp(" + t0 + ", " + t0 + ", " + ms + ", " + mode + ");");
+        codegen.Emit("vmul(" + t1 + ", " + t0 + ", " + t0 + ", " + ms + ", " + mode + ");");
+        codegen.Emit("vsel(" + dst + ", " + t1 + ", " + dst + ", " + ms + ");");
+    } else {
+        codegen.Emit("vexp(" + dst + ", " + src + ", " + mask + ", " + mode + ");");
+    }
     return "";
 }
 
@@ -1582,12 +1691,33 @@ static std::string EmitVFSqrt(const ir::CallPtr& op, codegen::CodegenBase& codeg
     std::string src = codegen.GetExprAsCode(op->args_[1]);
     std::string mask = codegen.GetExprAsCode(op->args_[2]);
     std::string mode = VFZeroingOnly(op, "vf.sqrt");
-    // High-precision mode: when precision=True, emit vsqrt with the
-    // SqrtSpecificMode struct to enable 0-ulp fast-inverse algorithm.
-    // The struct is emitted as a static constexpr local so the template
-    // can take a pointer to it.
     if (op->HasKwarg("precision") && op->GetKwarg<bool>("precision")) {
-        codegen.Emit("vsqrt<" + src_dt.ToCTypeString() + ", true>(" + dst + ", " + src + ", " + mask + ");");
+        std::string mc = dst + "_mcmp_";
+        std::string tp = dst + "_tmp_";
+        std::string sc = dst + "_srcc_";
+        std::string dc = dst + "_dstc_";
+        std::string ctype = src_dt.ToCTypeString();
+        codegen.Emit("MaskReg " + mc + ";");
+        codegen.Emit("RegTensor<" + ctype + "> " + tp + ";");
+        codegen.Emit("RegTensor<" + ctype + "> " + sc + " = (RegTensor<" + ctype + ">&)" + src + ";");
+        codegen.Emit("RegTensor<" + ctype + "> " + dc + ";");
+        if (src_dt == DataType::FP16) {
+            codegen.Emit("union { uint16_t i; half f; } " + dst + "_thr_ = {0x03FF};");
+            codegen.Emit("vcmps_lt(" + mc + ", " + sc + ", " + dst + "_thr_.f, " + mask + ");");
+            codegen.Emit("vmuls(" + tp + ", " + sc + ", 4096.0f, " + mask + ", " + mode + ");");
+            codegen.Emit("vsel(" + sc + ", " + tp + ", " + sc + ", " + mc + ");");
+            codegen.Emit("vsqrt(" + dc + ", " + sc + ", " + mask + ", " + mode + ");");
+            codegen.Emit("vmuls(" + tp + ", " + dc + ", 0.000244140625f, " + mask + ", " + mode + ");");
+            codegen.Emit("vsel(" + dst + ", " + tp + ", " + dc + ", " + mc + ");");
+        } else {
+            codegen.Emit("union { uint32_t i; float f; } " + dst + "_thr_ = {0x007FFFFF};");
+            codegen.Emit("vcmps_lt(" + mc + ", " + sc + ", " + dst + "_thr_.f, " + mask + ");");
+            codegen.Emit("vmuls(" + tp + ", " + sc + ", 16777216.0f, " + mask + ", " + mode + ");");
+            codegen.Emit("vsel(" + sc + ", " + tp + ", " + sc + ", " + mc + ");");
+            codegen.Emit("vsqrt(" + dc + ", " + sc + ", " + mask + ", " + mode + ");");
+            codegen.Emit("vmuls(" + tp + ", " + dc + ", 0.000244140625f, " + mask + ", " + mode + ");");
+            codegen.Emit("vsel(" + dst + ", " + tp + ", " + dc + ", " + mc + ");");
+        }
     } else {
         codegen.Emit("vsqrt(" + dst + ", " + src + ", " + mask + ", " + mode + ");");
     }
@@ -4097,8 +4227,39 @@ static std::string EmitVFLog2(const ir::CallPtr& op, codegen::CodegenBase& codeg
     std::string src = codegen.GetExprAsCode(op->args_[1]);
     std::string mask = codegen.GetExprAsCode(op->args_[2]);
     std::string mode = VFZeroingOnly(op, "vf.log2");
-    codegen.Emit("vln(" + dst + ", " + src + ", " + mask + ", " + mode + ");");
-    codegen.Emit("vmuls(" + dst + ", " + dst + ", 1.4426950408889634f, " + mask + ", " + mode + ");");
+    if (op->HasKwarg("precision") && op->GetKwarg<bool>("precision")) {
+        std::string mc = dst + "_mcmp_";
+        std::string tp = dst + "_tmp_";
+        std::string sc = dst + "_srcc_";
+        std::string dc = dst + "_dstc_";
+        std::string ctype = src_dt.ToCTypeString();
+        codegen.Emit("MaskReg " + mc + ";");
+        codegen.Emit("RegTensor<" + ctype + "> " + tp + ";");
+        codegen.Emit("RegTensor<" + ctype + "> " + sc + " = (RegTensor<" + ctype + ">&)" + src + ";");
+        codegen.Emit("RegTensor<" + ctype + "> " + dc + ";");
+        if (src_dt == DataType::FP16) {
+            codegen.Emit("union { uint16_t i; half f; } " + dst + "_thr_ = {0x03FF};");
+            codegen.Emit("vcmps_lt(" + mc + ", " + sc + ", " + dst + "_thr_.f, " + mask + ");");
+            codegen.Emit("vmuls(" + tp + ", " + sc + ", 1024.0f, " + mask + ", " + mode + ");");
+            codegen.Emit("vsel(" + sc + ", " + tp + ", " + sc + ", " + mc + ");");
+            codegen.Emit("vln(" + dc + ", " + sc + ", " + mask + ", " + mode + ");");
+            codegen.Emit("vmuls(" + dc + ", " + dc + ", 1.4426950408889634f, " + mask + ", " + mode + ");");
+            codegen.Emit("vadds(" + tp + ", " + dc + ", -10.0f, " + mask + ", " + mode + ");");
+            codegen.Emit("vsel(" + dst + ", " + tp + ", " + dc + ", " + mc + ");");
+        } else {
+            codegen.Emit("union { uint32_t i; float f; } " + dst + "_thr_ = {0x007FFFFF};");
+            codegen.Emit("vcmps_lt(" + mc + ", " + sc + ", " + dst + "_thr_.f, " + mask + ");");
+            codegen.Emit("vmuls(" + tp + ", " + sc + ", 8388608.0f, " + mask + ", " + mode + ");");
+            codegen.Emit("vsel(" + sc + ", " + tp + ", " + sc + ", " + mc + ");");
+            codegen.Emit("vln(" + dc + ", " + sc + ", " + mask + ", " + mode + ");");
+            codegen.Emit("vmuls(" + dc + ", " + dc + ", 1.4426950408889634f, " + mask + ", " + mode + ");");
+            codegen.Emit("vadds(" + tp + ", " + dc + ", -23.0f, " + mask + ", " + mode + ");");
+            codegen.Emit("vsel(" + dst + ", " + tp + ", " + dc + ", " + mc + ");");
+        }
+    } else {
+        codegen.Emit("vln(" + dst + ", " + src + ", " + mask + ", " + mode + ");");
+        codegen.Emit("vmuls(" + dst + ", " + dst + ", 1.4426950408889634f, " + mask + ", " + mode + ");");
+    }
     return "";
 }
 
@@ -4120,8 +4281,39 @@ static std::string EmitVFLog10(const ir::CallPtr& op, codegen::CodegenBase& code
     std::string src = codegen.GetExprAsCode(op->args_[1]);
     std::string mask = codegen.GetExprAsCode(op->args_[2]);
     std::string mode = VFZeroingOnly(op, "vf.log10");
-    codegen.Emit("vln(" + dst + ", " + src + ", " + mask + ", " + mode + ");");
-    codegen.Emit("vmuls(" + dst + ", " + dst + ", 0.4342944819032518f, " + mask + ", " + mode + ");");
+    if (op->HasKwarg("precision") && op->GetKwarg<bool>("precision")) {
+        std::string mc = dst + "_mcmp_";
+        std::string tp = dst + "_tmp_";
+        std::string sc = dst + "_srcc_";
+        std::string dc = dst + "_dstc_";
+        std::string ctype = src_dt.ToCTypeString();
+        codegen.Emit("MaskReg " + mc + ";");
+        codegen.Emit("RegTensor<" + ctype + "> " + tp + ";");
+        codegen.Emit("RegTensor<" + ctype + "> " + sc + " = (RegTensor<" + ctype + ">&)" + src + ";");
+        codegen.Emit("RegTensor<" + ctype + "> " + dc + ";");
+        if (src_dt == DataType::FP16) {
+            codegen.Emit("union { uint16_t i; half f; } " + dst + "_thr_ = {0x03FF};");
+            codegen.Emit("vcmps_lt(" + mc + ", " + sc + ", " + dst + "_thr_.f, " + mask + ");");
+            codegen.Emit("vmuls(" + tp + ", " + sc + ", 1024.0f, " + mask + ", " + mode + ");");
+            codegen.Emit("vsel(" + sc + ", " + tp + ", " + sc + ", " + mc + ");");
+            codegen.Emit("vln(" + dc + ", " + sc + ", " + mask + ", " + mode + ");");
+            codegen.Emit("vmuls(" + dc + ", " + dc + ", 0.43429448190325176f, " + mask + ", " + mode + ");");
+            codegen.Emit("vadds(" + tp + ", " + dc + ", -3.01029995663981f, " + mask + ", " + mode + ");");
+            codegen.Emit("vsel(" + dst + ", " + tp + ", " + dc + ", " + mc + ");");
+        } else {
+            codegen.Emit("union { uint32_t i; float f; } " + dst + "_thr_ = {0x007FFFFF};");
+            codegen.Emit("vcmps_lt(" + mc + ", " + sc + ", " + dst + "_thr_.f, " + mask + ");");
+            codegen.Emit("vmuls(" + tp + ", " + sc + ", 8388608.0f, " + mask + ", " + mode + ");");
+            codegen.Emit("vsel(" + sc + ", " + tp + ", " + sc + ", " + mc + ");");
+            codegen.Emit("vln(" + dc + ", " + sc + ", " + mask + ", " + mode + ");");
+            codegen.Emit("vmuls(" + dc + ", " + dc + ", 0.43429448190325176f, " + mask + ", " + mode + ");");
+            codegen.Emit("vadds(" + tp + ", " + dc + ", -6.923689900271567f, " + mask + ", " + mode + ");");
+            codegen.Emit("vsel(" + dst + ", " + tp + ", " + dc + ", " + mc + ");");
+        }
+    } else {
+        codegen.Emit("vln(" + dst + ", " + src + ", " + mask + ", " + mode + ");");
+        codegen.Emit("vmuls(" + dst + ", " + dst + ", 0.4342944819032518f, " + mask + ", " + mode + ");");
+    }
     return "";
 }
 

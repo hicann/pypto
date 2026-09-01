@@ -421,7 +421,8 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def div(src0, src1, mask, mode: Optional[MergeMode] = None):
+    def div(src0, src1, mask, mode: Optional[MergeMode] = None,
+            precision: Optional[bool] = None):
         r"""Element-wise division of two source registers.
 
         For each lane ``i`` where ``mask[i]`` is active, divides ``src0[i]``
@@ -436,6 +437,10 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            precision: When ``True``, enables high-precision mode using the
+                error-compensation algorithm (0-ulp precision error). Only
+                effective for ``DT_FP32`` source type. Default ``False``
+                (standard mode).
 
         Returns:
             Destination register (``RegTensor``) holding the element-wise
@@ -643,7 +648,7 @@ class Vf:
     @staticmethod
     @_api_decl
     def ln(src, mask, mode: Optional[MergeMode] = None,
-           precision: Optional[str] = None):
+           precision: Optional[bool] = None):
         r"""Natural logarithm of each element.
 
         For each lane ``i`` where ``mask[i]`` is active, computes the natural
@@ -659,6 +664,10 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            precision: When ``True``, enables high-precision mode that
+                preserves subnormal output results (1-ulp precision error).
+                Only effective for ``DT_FP32`` source type. Default ``False``
+                (standard mode, subnormal outputs are flush-to-zero).
 
         Returns:
             Destination register (``RegTensor``) holding the natural
@@ -1089,7 +1098,7 @@ class Vf:
     @staticmethod
     @_api_decl
     def log(src, mask, mode: Optional[MergeMode] = None,
-            precision: Optional[str] = None):
+            precision: Optional[bool] = None):
         r"""Natural logarithm (alias for :func:`vf.ln`).
 
         Convenience wrapper that maps to the same ``vln`` hardware instruction
@@ -1104,6 +1113,10 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            precision: When ``True``, enables high-precision mode that
+                preserves subnormal output results (1-ulp precision error).
+                Only effective for ``DT_FP32`` source type. Default ``False``
+                (standard mode, subnormal outputs are flush-to-zero).
 
         Returns:
             Destination register (``RegTensor``) with ``ln(src)`` per lane.
@@ -1136,7 +1149,7 @@ class Vf:
     @staticmethod
     @_api_decl
     def exp(src, mask, mode: Optional[MergeMode] = None,
-            precision: Optional[str] = None):
+            precision: Optional[bool] = None):
         r"""Exponential function of each element.
 
         For each lane ``i`` where ``mask[i]`` is active, computes ``e``
@@ -1151,6 +1164,10 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            precision: When ``True``, enables high-precision mode that
+                preserves subnormal output results (1-ulp precision error).
+                Only effective for ``DT_FP32`` source type. Default ``False``
+                (standard mode, subnormal outputs are flush-to-zero).
 
         Returns:
             Destination register (``RegTensor``) holding ``e^src``
@@ -1221,12 +1238,10 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
-            precision: When ``True``, enables high-precision mode using the
-                fast-inverse algorithm. The maximum precision error is 0 ulp
-                for input values in [0, 85070596800837026223494223584045301760].
-                Input values exceeding this range output 0. Only effective for
-                ``DT_FP32`` source type. Default ``False`` (standard mode,
-                1 ulp precision error).
+            precision: When ``True``, enables high-precision mode that
+                preserves subnormal output results (1-ulp precision error).
+                Only effective for ``DT_FP32`` source type. Default ``False``
+                (standard mode, subnormal outputs are flush-to-zero).
 
         Returns:
             Destination register (``RegTensor``) holding the square
@@ -1772,7 +1787,8 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def log2(src, mask, mode: Optional[MergeMode] = None):
+    def log2(src, mask, mode: Optional[MergeMode] = None,
+             precision: Optional[bool] = None):
         r"""Base-2 logarithm of each element.
 
         For each lane ``i`` where ``mask[i]`` is active, computes the base-2
@@ -1787,6 +1803,10 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            precision: When ``True``, enables high-precision mode that
+                preserves subnormal output results (1-ulp precision error).
+                Only effective for ``DT_FP32`` source type. Default ``False``
+                (standard mode, subnormal outputs are flush-to-zero).
 
         Returns:
             Destination register (``RegTensor``) holding ``log2(src)``
@@ -1795,7 +1815,8 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def log10(src, mask, mode: Optional[MergeMode] = None):
+    def log10(src, mask, mode: Optional[MergeMode] = None,
+              precision: Optional[bool] = None):
         r"""Base-10 logarithm of each element.
 
         For each lane ``i`` where ``mask[i]`` is active, computes the base-10
@@ -1810,6 +1831,10 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            precision: When ``True``, enables high-precision mode that
+                preserves subnormal output results (1-ulp precision error).
+                Only effective for ``DT_FP32`` source type. Default ``False``
+                (standard mode, subnormal outputs are flush-to-zero).
 
         Returns:
             Destination register (``RegTensor``) holding ``log10(src)``

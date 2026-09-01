@@ -317,7 +317,21 @@ TEST(BackendCCEVFOpsTest, EmitsArithmeticIntrinsics)
     expect_unary("vf.abs", {"vabs("});
     expect_unary("vf.not_", {"vnot("});
     expect_unary("vf.sqrt", {"vsqrt("});
-    ExpectInvoke(codegen, "vf.sqrt", {"vsqrt<float, true>("}, {dst, src0, mask}, {{"precision", true}});
+    ExpectInvoke(codegen, "vf.sqrt", {"vcmps_lt(", "16777216.0f", "0.000244140625f", "vsel("}, {dst, src0, mask},
+                 {{"precision", true}});
+    ExpectInvoke(codegen, "vf.exp", {"vexp(", "vcmps_le(", "vdup(", "vdiv(", "vmul(", "vsel("}, {dst, src0, mask},
+                 {{"precision", true}});
+    ExpectInvoke(codegen, "vf.ln", {"vcmps_lt(", "8388608.0f", "-15.9423851528787421f", "vsel("}, {dst, src0, mask},
+                 {{"precision", true}});
+    ExpectInvoke(codegen, "vf.log", {"vcmps_lt(", "8388608.0f", "-15.9423851528787421f", "vsel("}, {dst, src0, mask},
+                 {{"precision", true}});
+    ExpectInvoke(codegen, "vf.log2", {"vcmps_lt(", "8388608.0f", "1.4426950408889634f", "-23.0f", "vsel("},
+                 {dst, src0, mask}, {{"precision", true}});
+    ExpectInvoke(codegen, "vf.log10",
+                 {"vcmps_lt(", "8388608.0f", "0.43429448190325176f", "-6.923689900271567f", "vsel("}, {dst, src0, mask},
+                 {{"precision", true}});
+    ExpectInvoke(codegen, "vf.div", {"vdiv(", "vmuls(", "vmula(", "vadd("}, {dst, src0, src1, mask},
+                 {{"precision", true}});
     expect_unary("vf.relu", {"vrelu("});
     expect_unary("vf.neg", {"vneg("});
     expect_unary("vf.log2", {"vln(", "1.4426950408889634f"});
@@ -1663,6 +1677,171 @@ TEST(BackendCCEVFOpsTest, StoreUnAlignPostB64EmitsVstasWithInt32CastAndDoubledSt
     // b64 strided post: cast to int32_t, stride doubled
     auto emitted = Invoke(codegen, "vf.store_unalign_post", {tile, ureg, Int(4)}, {{"post_update", true}});
     ExpectContains(emitted, {"vstas(", "(4) * 2", "(__ubuf__ int32_t *&)"});
+}
+
+// ============================================================================
+// High-precision mode: subnormal threshold, union declaration, temp regs
+// ============================================================================
+
+TEST(BackendCCEVFOpsTest, HighPrecisionEmitsSubnormalThreshold)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto dst = MakeVar("dst");
+    auto src = MakeVar("src");
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+
+    // All unary high-precision ops must emit the subnormal threshold 0x007FFFFF
+    ExpectInvoke(codegen, "vf.exp", {"0x007FFFFF"}, {dst, src, mask}, {{"precision", true}});
+    ExpectInvoke(codegen, "vf.ln", {"0x007FFFFF"}, {dst, src, mask}, {{"precision", true}});
+    ExpectInvoke(codegen, "vf.log", {"0x007FFFFF"}, {dst, src, mask}, {{"precision", true}});
+    ExpectInvoke(codegen, "vf.sqrt", {"0x007FFFFF"}, {dst, src, mask}, {{"precision", true}});
+    ExpectInvoke(codegen, "vf.log2", {"0x007FFFFF"}, {dst, src, mask}, {{"precision", true}});
+    ExpectInvoke(codegen, "vf.log10", {"0x007FFFFF"}, {dst, src, mask}, {{"precision", true}});
+}
+
+TEST(BackendCCEVFOpsTest, HighPrecisionEmitsUnionAndTempRegs)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto dst = MakeVar("dst");
+    auto src = MakeVar("src");
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+
+    // exp: union + MaskReg + RegTensor<float> temps
+    ExpectInvoke(codegen, "vf.exp", {"union { uint32_t i; float f; }", "MaskReg ", "RegTensor<float> "},
+                 {dst, src, mask}, {{"precision", true}});
+    // sqrt: same pattern
+    ExpectInvoke(codegen, "vf.sqrt", {"union { uint32_t i; float f; }", "RegTensor<float> "}, {dst, src, mask},
+                 {{"precision", true}});
+    // ln: same pattern
+    ExpectInvoke(codegen, "vf.ln", {"union { uint32_t i; float f; }", "MaskReg ", "RegTensor<float> "},
+                 {dst, src, mask}, {{"precision", true}});
+}
+
+TEST(BackendCCEVFOpsTest, HighPrecisionDivEmitsTempRegsAndInstructions)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto dst = MakeVar("dst");
+    auto src0 = MakeVar("src0");
+    auto src1 = MakeVar("src1");
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+
+    // div high-precision: emits RegTensor<float> temps + FMA sequence
+    auto emitted = Invoke(codegen, "vf.div", {dst, src0, src1, mask}, {{"precision", true}});
+    ExpectContains(emitted, {"RegTensor<float>", "vmuls(", "vmula(", "vdiv(", "vadd("});
+    // Should NOT emit subnormal threshold (div uses FMA, not subnormal scaling)
+    EXPECT_EQ(emitted.find("0x007FFFFF"), std::string::npos) << emitted;
+}
+
+TEST(BackendCCEVFOpsTest, HighPrecisionDivFp16EmitsHalfTypeRegs)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto dst = MakeVar("dst", ir::DataType::FP16);
+    auto src0 = MakeVar("src0", ir::DataType::FP16);
+    auto src1 = MakeVar("src1", ir::DataType::FP16);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+
+    auto emitted = Invoke(codegen, "vf.div", {dst, src0, src1, mask}, {{"precision", true}});
+    ExpectContains(emitted, {"RegTensor<half>", "vmuls(", "vmula(", "vdiv(", "vadd("});
+    EXPECT_EQ(emitted.find("RegTensor<float>"), std::string::npos)
+        << "FP16 div should not use RegTensor<float>: " << emitted;
+}
+
+TEST(BackendCCEVFOpsTest, HighPrecisionDivRejectsNonFloat)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto i32_dst = MakeVar("i32_dst", ir::DataType::INT32);
+    auto i32_src0 = MakeVar("i32_src0", ir::DataType::INT32);
+    auto i32_src1 = MakeVar("i32_src1", ir::DataType::INT32);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    codegen.RegisterRegTensorVar("i32_dst");
+    codegen.RegisterRegTensorVar("i32_src0");
+    codegen.RegisterRegTensorVar("i32_src1");
+
+    // INT32 src + precision=True → should reject (only FP16/FP32 supported)
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.div", {i32_dst, i32_src0, i32_src1, mask}, {{"precision", true}}));
+}
+
+TEST(BackendCCEVFOpsTest, PrecisionFalseBehavesAsDefault)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto dst = MakeVar("dst");
+    auto src = MakeVar("src");
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    const Kwargs zeroing = {{"mode", EnumValue(ir::MergeMode::ZEROING)}, {"precision", false}};
+
+    // precision=False should emit standard single-instruction, not multi-instruction
+    ExpectInvoke(codegen, "vf.exp", {"vexp("}, {dst, src, mask}, zeroing);
+    ExpectInvoke(codegen, "vf.ln", {"vln("}, {dst, src, mask}, zeroing);
+    ExpectInvoke(codegen, "vf.sqrt", {"vsqrt("}, {dst, src, mask}, zeroing);
+    auto emitted = Invoke(codegen, "vf.sqrt", {dst, src, mask}, zeroing);
+    EXPECT_EQ(emitted.find("vcmps_lt("), std::string::npos) << "precision=False should not emit high-precision";
+}
+
+TEST(BackendCCEVFOpsTest, HighPrecisionLog2EmitsCorrectCompensation)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto dst = MakeVar("dst");
+    auto src = MakeVar("src");
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+
+    // log2 high-precision: compensation is -23 (integer), scale factor 1/ln2
+    auto emitted = Invoke(codegen, "vf.log2", {dst, src, mask}, {{"precision", true}});
+    ExpectContains(emitted, {"vcmps_lt(", "8388608.0f", "1.4426950408889634f", "-23.0f", "vsel("});
+    // Should NOT have the default-mode 0.434294 constant (that's log10)
+    EXPECT_EQ(emitted.find("0.434294"), std::string::npos) << emitted;
+}
+
+TEST(BackendCCEVFOpsTest, HighPrecisionLog10EmitsCorrectCompensation)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto dst = MakeVar("dst");
+    auto src = MakeVar("src");
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+
+    // log10 high-precision: compensation is -6.923689900271567f, scale 1/ln10
+    auto emitted = Invoke(codegen, "vf.log10", {dst, src, mask}, {{"precision", true}});
+    ExpectContains(emitted, {"vcmps_lt(", "8388608.0f", "0.43429448190325176f", "-6.923689900271567f", "vsel("});
+    // Should NOT have the log2 constant 1/ln2
+    EXPECT_EQ(emitted.find("1.442695"), std::string::npos) << emitted;
+}
+
+TEST(BackendCCEVFOpsTest, HighPrecisionHalfEmitsHalfSubnormalThreshold)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto dst = MakeVar("dst", ir::DataType::FP16);
+    auto src = MakeVar("src", ir::DataType::FP16);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+
+    ExpectInvoke(codegen, "vf.exp", {"0x03FF"}, {dst, src, mask}, {{"precision", true}});
+    ExpectInvoke(codegen, "vf.ln", {"0x03FF"}, {dst, src, mask}, {{"precision", true}});
+    ExpectInvoke(codegen, "vf.log", {"0x03FF"}, {dst, src, mask}, {{"precision", true}});
+    ExpectInvoke(codegen, "vf.sqrt", {"0x03FF"}, {dst, src, mask}, {{"precision", true}});
+    ExpectInvoke(codegen, "vf.log2", {"0x03FF"}, {dst, src, mask}, {{"precision", true}});
+    ExpectInvoke(codegen, "vf.log10", {"0x03FF"}, {dst, src, mask}, {{"precision", true}});
+}
+
+TEST(BackendCCEVFOpsTest, HighPrecisionHalfEmitsHalfTypeRegsAndConstants)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto dst = MakeVar("dst", ir::DataType::FP16);
+    auto src = MakeVar("src", ir::DataType::FP16);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+
+    auto emitted = Invoke(codegen, "vf.ln", {dst, src, mask}, {{"precision", true}});
+    ExpectContains(emitted, {"RegTensor<half>", "1024.0f", "-6.931471805599453094172f"});
+
+    emitted = Invoke(codegen, "vf.log2", {dst, src, mask}, {{"precision", true}});
+    ExpectContains(emitted, {"RegTensor<half>", "1024.0f", "-10.0f", "1.4426950408889634f"});
+
+    emitted = Invoke(codegen, "vf.log10", {dst, src, mask}, {{"precision", true}});
+    ExpectContains(emitted, {"RegTensor<half>", "1024.0f", "-3.01029995663981f", "0.43429448190325176f"});
+
+    emitted = Invoke(codegen, "vf.sqrt", {dst, src, mask}, {{"precision", true}});
+    ExpectContains(emitted, {"RegTensor<half>", "4096.0f", "0.000244140625f"});
+
+    emitted = Invoke(codegen, "vf.exp", {dst, src, mask}, {{"precision", true}});
+    ExpectContains(emitted, {"RegTensor<half>"});
+    EXPECT_EQ(emitted.find("0x007FFFFF"), std::string::npos) << "FP16 should use 0x03FF, not 0x007FFFFF: " << emitted;
 }
 
 } // namespace
