@@ -19,7 +19,6 @@
 #include "irbuilder.h"
 #include "symbolic_scalar.h"
 #include "logical_tensor.h"
-#include "token_pass.h"
 #include "ir_func_builder.h"
 #include "ir_finalize.h"
 
@@ -150,16 +149,6 @@ Pass pass::AggressiveDCE()
                                                   func->funcType_, func->entry_, func->attrs_);
         },
         "AggressiveDCE");
-}
-
-Pass pass::TokenPass()
-{
-    return pass::CreateFunctionPass(
-        [](const FunctionPtr& func) -> FunctionPtr {
-            npu::tile_fwk::TokenPass transform;
-            return transform(func);
-        },
-        "TokenPass");
 }
 
 Pass pass::CreateRootFunctions()

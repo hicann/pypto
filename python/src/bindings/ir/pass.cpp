@@ -92,7 +92,6 @@ void BindPasses(py::module_& m)
                     "Create a verifier pass with configurable rules")
         .def_static("aggressive_dce", &pass::AggressiveDCE, "Eliminate dead code")
         .def_static("canonicalize", &pass::Canonicalize, "Canonicalize IR")
-        .def_static("token_pass", &pass::TokenPass, "Add WAR/WAW token dependencies")
         .def_static("infer_token_pass", &pass::InferTokenPass, "Infer token dependencies")
         .def_static("remove_redundant_token_pass", &pass::RemoveRedundantTokenPass,
                     "Remove redundant token dependencies")

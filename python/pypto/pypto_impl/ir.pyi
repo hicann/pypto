@@ -2415,10 +2415,6 @@ class Pass:
         """Canonicalize the IR."""
 
     @staticmethod
-    def token_pass() -> Pass:
-        """Add WAR/WAW token dependencies."""
-
-    @staticmethod
     def infer_token_pass() -> Pass:
         """Infer token dependencies."""
 
