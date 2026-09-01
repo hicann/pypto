@@ -20,6 +20,7 @@
 #include "tilefwk/tilefwk_op.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
 #include "passes/pass_utils/merge_view_assemble_utils.h"
+#include "passes/pass_utils/pass_attr_defs.h"
 #include "passes/pass_utils/view_reshape_assemble_reorder_utils.h"
 #include "passes/pass_log/pass_log.h"
 #include <algorithm>
@@ -42,20 +43,52 @@ std::vector<SymbolicScalar> GetSymbolicShapeOrStatic(const std::shared_ptr<Logic
 
 bool IsContractOpcode(Opcode opcode)
 {
-    return opcode == config::GetContractOpcode() || (!config::EnableSlice() && opcode == Opcode::OP_ASSEMBLE_SSA);
+    // ProcessAtomic may run on graphs that contain a mixture of legacy
+    // Assemble nodes and slice-mode Contract nodes.  This is expected for
+    // example when an AtomicRMW consumes a tensor assembled before the
+    // slice/contract lowering pass.  Do not gate the check on the current
+    // ENABLE_SLICE setting: both opcodes have the same assemble-like
+    // producer semantics here.  ASSEMBLE_SSA is kept for the non-slice SSA
+    // form as well.
+    return IsAssembleLike(opcode) || opcode == Opcode::OP_ASSEMBLE_SSA;
+}
+
+Status CollectReduceAccAssembleProducers(const Operation& op, std::vector<Operation*>& assembleProducers)
+{
+    for (const auto& input : op.GetIOperands()) {
+        if (input == nullptr || input->GetProducers().empty()) {
+            APASS_LOG_ERROR_F(Elements::Operation,
+                              "ReduceAcc[%d] input has no producer; expected Assemble before ProcessAtomic.%s",
+                              op.GetOpMagic(), GetFormatBacktrace(op).c_str());
+            return FAILED;
+        }
+        for (auto* producer : input->GetProducers()) {
+            if (producer == nullptr || !IsContractOpcode(producer->GetOpcode())) {
+                APASS_LOG_ERROR_F(Elements::Operation,
+                                  "ReduceAcc[%d] input producer must be Contract/Assemble, but got %s.%s",
+                                  op.GetOpMagic(), producer == nullptr ? "nullptr" : producer->GetOpcodeStr().c_str(),
+                                  GetFormatBacktrace(op).c_str());
+                return FAILED;
+            }
+            assembleProducers.push_back(producer);
+        }
+    }
+    return SUCCESS;
 }
 } // namespace
 
 Status ProcessAtomic::PreCheck(Function& function)
 {
     ProcessAtomicChecker checker;
-    return checker.DoPreCheck(function);
+    const auto status = checker.DoPreCheck(function);
+    return status;
 }
 
 Status ProcessAtomic::PostCheck(Function& function)
 {
     ProcessAtomicChecker checker;
-    return checker.DoPostCheck(function);
+    const auto status = checker.DoPostCheck(function);
+    return status;
 }
 
 Status ProcessAtomic::RunOnFunction(Function& function)
@@ -114,15 +147,18 @@ Status ProcessAtomic::EliminateReduceAcc(Function& function)
     for (auto& op : function.Operations(true, SortOperationsMode::LIGHTWEIGHT)) {
         if (op.GetOpcode() == Opcode::OP_REDUCE_ACC) {
             APASS_LOG_INFO_F(Elements::Operation, "ATOMIC_ADD, opmagic: %d", op.GetOpMagic());
+            std::vector<Operation*> assembleProducers;
+            if (CollectReduceAccAssembleProducers(op, assembleProducers) != SUCCESS) {
+                return FAILED;
+            }
             auto reduceOut = op.GetOOperands().front();
             reduceOut->GetProducers().clear();
-
-            for (const auto& input : op.GetIOperands()) {
-                auto producersBackup = input->GetProducers();
-                for (auto& produceCopyOutOp : producersBackup) {
-                    produceCopyOutOp->ReplaceOOperand(0, reduceOut);
-                    produceCopyOutOp->SetAttribute(RMW_MODE_ATTR_ADD, 1);
+            for (auto* producer : assembleProducers) {
+                if (CheckAndSetRmwAttr(*producer, AtomicRMWMode::ADD, RMW_MODE_ATTR_ADD) != SUCCESS) {
+                    return FAILED;
                 }
+                producer->SetAttribute(ATOMIC_FROM_REDUCE_ACC_ATTR, true);
+                producer->ReplaceOOperand(0, reduceOut);
             }
             op.SetAsDeleted();
             anyDeleted = true;
@@ -212,21 +248,27 @@ Status ProcessAtomic::ProcessAtomicInput(Operation& atomicOp, const std::shared_
                                          const std::vector<int64_t>& rmwOffset,
                                          const std::vector<SymbolicScalar>& rmwDynOffset)
 {
-    bool hasContractProducer = false;
     auto producersBackup = input->GetProducers();
-    for (auto* producerOp : producersBackup) {
-        if (!IsContractOpcode(producerOp->GetOpcode())) {
-            continue;
+    bool allContractProducers = !producersBackup.empty() &&
+                                std::all_of(producersBackup.begin(), producersBackup.end(), [](const auto* producer) {
+                                    return producer != nullptr && IsContractOpcode(producer->GetOpcode());
+                                });
+    if (allContractProducers) {
+        for (auto* producerOp : producersBackup) {
+            if (ProcessAtomicContractProducer(atomicOp, *producerOp, output, rmwMode, rmwOffset, rmwDynOffset) !=
+                SUCCESS) {
+                return FAILED;
+            }
         }
-        if (ProcessAtomicContractProducer(atomicOp, *producerOp, output, rmwMode, rmwOffset, rmwDynOffset) != SUCCESS) {
-            return FAILED;
-        }
-        hasContractProducer = true;
-    }
-    if (hasContractProducer || !HasReshapeProducer(input)) {
         return SUCCESS;
     }
-    return ProcessAtomicThroughReshape(atomicOp, input, output, rmwMode, rmwOffset, rmwDynOffset);
+    if (HasReshapeProducer(input)) {
+        return ProcessAtomicThroughReshape(atomicOp, input, output, rmwMode, rmwOffset, rmwDynOffset);
+    }
+    APASS_LOG_ERROR_F(Elements::Operation,
+                      "AtomicRMW[%d] input producers must be Contract or a supported Reshape chain.%s",
+                      atomicOp.GetOpMagic(), GetFormatBacktrace(atomicOp).c_str());
+    return FAILED;
 }
 
 Status ProcessAtomic::ProcessAtomicContractProducer(Operation& atomicOp, Operation& producerOp,
@@ -550,6 +592,7 @@ Status ProcessAtomic::ProcessContractProducer(Operation& producerOp, std::shared
     if (CheckAndSetRmwAttr(producerOp, rmwMode, rmwAttrKey) != SUCCESS) {
         return FAILED;
     }
+    producerOp.SetAttribute(ATOMIC_FROM_EXPLICIT_RMW_ATTR, true);
 
     producerOp.ReplaceOOperand(0, rmwOut);
 
@@ -569,6 +612,7 @@ Status ProcessAtomic::MarkContractProducerAtomic(Operation& producerOp, AtomicRM
     if (CheckAndSetRmwAttr(producerOp, rmwMode, rmwAttrKey) != SUCCESS) {
         return FAILED;
     }
+    producerOp.SetAttribute(ATOMIC_FROM_EXPLICIT_RMW_ATTR, true);
     auto producerAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(producerOp.GetOpAttribute());
     if (producerAttr != nullptr && AccumulateContractOffset(producerAttr, rmwOffset, rmwDynOffset) != SUCCESS) {
         return FAILED;

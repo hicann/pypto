@@ -28,6 +28,7 @@
 #include "passes/pass_mgr/pass_manager.h"
 #include "interface/configs/config_manager.h"
 #include "computational_graph_builder.h"
+#include "passes/pass_utils/pass_attr_defs.h"
 #include "ut_json/ut_json_tool.h"
 #include "passes/tile_graph_pass/graph_optimization/merge_view_assemble.h"
 #include "passes/pass_utils/graph_utils.h"
@@ -1302,6 +1303,62 @@ TEST_F(MergeViewAssembleTest, MergeAssembleChainShouldInheritAtomicAddAttr)
     ASSERT_EQ(assembleCount, 1);
     ASSERT_NE(mergedAssemble, nullptr);
     EXPECT_TRUE(mergedAssemble->HasAttr(RMW_MODE_ATTR_ADD));
+}
+
+TEST_F(MergeViewAssembleTest, MergeAssembleChainShouldInheritAtomicSemanticAttrs)
+{
+    ComputationalGraphBuilder G;
+
+    std::vector<std::string> tensorNames = {"input", "view_out", "assemble1_out", "assemble2_out", "final_out"};
+    EXPECT_TRUE(G.AddTensors(DataType::DT_FP32, {10, 10}, tensorNames));
+
+    std::vector<Opcode> opCodes = {Opcode::OP_VIEW, Opcode::OP_ASSEMBLE, Opcode::OP_ASSEMBLE, Opcode::OP_ABS};
+    std::vector<std::vector<std::string>> ioperands = {{"input"}, {"view_out"}, {"assemble1_out"}, {"assemble2_out"}};
+    std::vector<std::vector<std::string>> ooperands = {
+        {"view_out"}, {"assemble1_out"}, {"assemble2_out"}, {"final_out"}};
+    std::vector<std::string> opNames = {"view1", "assemble1", "assemble2", "abs"};
+
+    EXPECT_TRUE(G.AddOps(opCodes, ioperands, ooperands, opNames, true));
+    EXPECT_TRUE(G.SetInCast({"input"}));
+    EXPECT_TRUE(G.SetOutCast({"final_out"}));
+
+    Function* function = G.GetFunction();
+    ASSERT_NE(function, nullptr);
+
+    auto* view1 = G.GetOp("view1");
+    ASSERT_NE(view1, nullptr);
+    view1->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, std::vector<SymbolicScalar>{},
+                                                            std::vector<SymbolicScalar>{}));
+
+    auto* assemble1 = G.GetOp("assemble1");
+    ASSERT_NE(assemble1, nullptr);
+    assemble1->SetOpAttribute(
+        std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{1, 0}, std::vector<SymbolicScalar>{}));
+    assemble1->SetAttribute(RMW_MODE_ATTR_ADD, 1L);
+    assemble1->SetAttribute(ATOMIC_FROM_REDUCE_ACC_ATTR, true);
+
+    auto* assemble2 = G.GetOp("assemble2");
+    ASSERT_NE(assemble2, nullptr);
+    assemble2->SetOpAttribute(
+        std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 2}, std::vector<SymbolicScalar>{}));
+    assemble2->SetAttribute(ATOMIC_FROM_EXPLICIT_RMW_ATTR, true);
+
+    MergeViewAssemble mergePass;
+    ASSERT_EQ(mergePass.RunOnFunction(*function), SUCCESS);
+
+    int assembleCount = 0;
+    Operation* mergedAssemble = nullptr;
+    for (auto& op : function->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE && !op.IsDeleted()) {
+            assembleCount++;
+            mergedAssemble = &op;
+        }
+    }
+    ASSERT_EQ(assembleCount, 1);
+    ASSERT_NE(mergedAssemble, nullptr);
+    EXPECT_TRUE(mergedAssemble->HasAttr(RMW_MODE_ATTR_ADD));
+    EXPECT_TRUE(mergedAssemble->HasAttr(ATOMIC_FROM_REDUCE_ACC_ATTR));
+    EXPECT_TRUE(mergedAssemble->HasAttr(ATOMIC_FROM_EXPLICIT_RMW_ATTR));
 }
 
 TEST_F(MergeViewAssembleTest, AssembleChainWithDifferentRmwModeAttrsShouldNotMerge)

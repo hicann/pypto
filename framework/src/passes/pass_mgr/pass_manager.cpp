@@ -97,6 +97,7 @@ std::vector<PassEntry> BuildPvc2OooPassEntries()
         PassName::REMOVE_REDUNDANT_OP,
         PassName::INSERT_OP_FOR_VIEWASSEMBLE,
         PassName::PROCESS_ATOMIC,
+        PassName::BUILD_TREE_FROM_REDUCE,
         PassName::GRAPH_PARTITION,
         PassName::N_BUFFER_MERGE,
         PassName::L1_COPY_IN_REUSE_MERGE,
@@ -165,6 +166,7 @@ void RegPass()
     REG_PASS(CodegenPreproc);
     REG_PASS(SplitLargeFanoutTensor);
     REG_PASS(ProcessAtomic);
+    REG_PASS(BuildTreeFromReduce);
     REG_PASS(InferDynShape);
     REG_PASS(InferParamIndex);
     REG_PASS(AddAlloc);

@@ -57,6 +57,8 @@ public:
         Operation::ScopeInfo scopeInfo;
         std::string rmwModeAttr;
         Opcode opcode = Opcode::OP_ASSEMBLE;
+        bool atomicFromReduceAcc = false;
+        bool atomicFromExplicitRmw = false;
     };
     struct ConsumerCacheEntry {
         std::vector<Operation*> viewConsumers;
@@ -161,7 +163,8 @@ public:
     void RecordAssembleOperation(const std::shared_ptr<LogicalTensor>& input,
                                  const std::shared_ptr<LogicalTensor>& output, const std::vector<int64_t>& offset,
                                  const std::vector<SymbolicScalar>& dynOffset, const ir::Span& span,
-                                 const Operation::ScopeInfo& scopeInfo, const std::string& rmwModeAttr, Opcode opcode);
+                                 const Operation::ScopeInfo& scopeInfo, const std::string& rmwModeAttr, Opcode opcode,
+                                 bool atomicFromReduceAcc, bool atomicFromExplicitRmw);
 
     // Common methods
     Status Initialize();

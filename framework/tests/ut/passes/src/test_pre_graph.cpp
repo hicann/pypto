@@ -99,6 +99,7 @@ void SetUpPassStrategy()
                                      {"InferDiscontinuousInput", PassName::INFER_DISCONTINUOUS_INPUT},
                                      {"RemoveRedundantOp", PassName::REMOVE_REDUNDANT_OP},
                                      {"ProcessAtomic", PassName::PROCESS_ATOMIC},
+                                     {"BuildTreeFromReduce", PassName::BUILD_TREE_FROM_REDUCE},
                                      {"GraphPartition", PassName::GRAPH_PARTITION},
                                      {"NBufferMerge", PassName::N_BUFFER_MERGE},
                                      {"IntraSubgraphAdapter", PassName::INTRA_SUBGRAPH_ADAPTER},

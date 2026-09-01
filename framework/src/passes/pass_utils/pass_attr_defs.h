@@ -17,4 +17,6 @@
 
 namespace npu::tile_fwk {
 inline constexpr const char* OP_ATTR_VALID_SHAPE = "op_attr_validShape";
+inline constexpr const char* ATOMIC_FROM_REDUCE_ACC_ATTR = "op_attr_atomic_from_reduce_acc";
+inline constexpr const char* ATOMIC_FROM_EXPLICIT_RMW_ATTR = "op_attr_atomic_from_explicit_rmw";
 } // namespace npu::tile_fwk

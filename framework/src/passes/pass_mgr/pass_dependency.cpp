@@ -41,8 +41,10 @@ void PassDependency::RegisterPreDependencies()
     };
 
     registerDependency(PassName::EXPAND_FUNCTION, {PassName::AUTO_CAST, PassName::INFER_MEMORY_CONFLICT});
-    registerDependency(PassName::GRAPH_PARTITION, {PassName::DUPLICATE_OP, PassName::SPLIT_LARGE_FANOUT_TENSOR,
-                                                   PassName::SPLIT_RESHAPE, PassName::PROCESS_ATOMIC});
+    registerDependency(PassName::BUILD_TREE_FROM_REDUCE, {PassName::PROCESS_ATOMIC});
+    registerDependency(PassName::GRAPH_PARTITION,
+                       {PassName::DUPLICATE_OP, PassName::SPLIT_LARGE_FANOUT_TENSOR, PassName::SPLIT_RESHAPE,
+                        PassName::PROCESS_ATOMIC, PassName::BUILD_TREE_FROM_REDUCE});
     registerDependency(PassName::SUBGRAPH_TO_FUNCTION, {PassName::GRAPH_PARTITION, PassName::REPLACE_TENSOR,
                                                         PassName::PRE_GRAPH_PROCESS, PassName::INFER_DYN_SHAPE});
     registerDependency(PassName::VF_FUSION_CLUSTER_IDENTIFY, {PassName::SUBGRAPH_TO_FUNCTION});

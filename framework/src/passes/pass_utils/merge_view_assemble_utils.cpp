@@ -19,6 +19,7 @@
 #include "interface/operation/attribute.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
 #include "passes/pass_utils/infer_shape_utils.h"
+#include "passes/pass_utils/pass_attr_defs.h"
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_log/pass_log.h"
 #include "tilefwk/tilefwk_op.h"
@@ -30,6 +31,11 @@ namespace {
 struct RmwModeAttrState {
     bool conflict = false;
     std::optional<AtomicRMWMode> mode;
+};
+
+struct AtomicSemanticAttrState {
+    bool fromReduceAcc = false;
+    bool fromExplicitRmw = false;
 };
 
 RmwModeAttrState MergeRmwModeAttr(const RmwModeAttrState& current, const RmwModeAttrState& next)
@@ -132,6 +138,19 @@ Opcode GetMergedViewOpcode(const std::vector<Operation*>& chain)
 Opcode GetMergedAssembleOpcode(const std::vector<Operation*>& chain)
 {
     return ChainHasOpcode(chain, Opcode::OP_CONTRACT) ? Opcode::OP_CONTRACT : Opcode::OP_ASSEMBLE;
+}
+
+AtomicSemanticAttrState GetChainAtomicSemanticAttr(const std::vector<Operation*>& chain)
+{
+    AtomicSemanticAttrState attr;
+    for (const auto* op : chain) {
+        if (op == nullptr) {
+            continue;
+        }
+        attr.fromReduceAcc = attr.fromReduceAcc || op->HasAttr(ATOMIC_FROM_REDUCE_ACC_ATTR);
+        attr.fromExplicitRmw = attr.fromExplicitRmw || op->HasAttr(ATOMIC_FROM_EXPLICIT_RMW_ATTR);
+    }
+    return attr;
 }
 } // namespace
 
@@ -321,6 +340,12 @@ Status MergeViewAssembleUtils::AppendMergedAssembleOperations(Function& function
         mergedAssembleOp.SetOpAttribute(attr);
         if (!assembleOp.rmwModeAttr.empty()) {
             mergedAssembleOp.SetAttribute(assembleOp.rmwModeAttr, 1L);
+        }
+        if (assembleOp.atomicFromReduceAcc) {
+            mergedAssembleOp.SetAttribute(ATOMIC_FROM_REDUCE_ACC_ATTR, true);
+        }
+        if (assembleOp.atomicFromExplicitRmw) {
+            mergedAssembleOp.SetAttribute(ATOMIC_FROM_EXPLICIT_RMW_ATTR, true);
         }
     }
     return SUCCESS;
@@ -662,9 +687,11 @@ Status MergeViewAssembleUtils::ProcessAssembleChainEnd(Function& function, std::
         APASS_LOG_ERROR_F(Elements::Function, "Assemble chain has conflicting rmw mode attributes.");
         return FAILED;
     }
+    AtomicSemanticAttrState atomicSemanticAttr = GetChainAtomicSemanticAttr(chain);
     // 4. 记录并清理
     RecordAssembleOperation(startTensor, endTensor, newOffset, newDynOffset, firstSpan, chainScopeInfo,
-                            GetRmwModeAttrKey(rmwModeAttr), GetMergedAssembleOpcode(chain));
+                            GetRmwModeAttrKey(rmwModeAttr), GetMergedAssembleOpcode(chain),
+                            atomicSemanticAttr.fromReduceAcc, atomicSemanticAttr.fromExplicitRmw);
     function.GetTensorMap().Erase(endTensor);
     operation.SetAsDeleted();
 
@@ -705,10 +732,11 @@ void MergeViewAssembleUtils::RecordAssembleOperation(const std::shared_ptr<Logic
                                                      const std::vector<int64_t>& offset,
                                                      const std::vector<SymbolicScalar>& dynOffset, const ir::Span& span,
                                                      const Operation::ScopeInfo& scopeInfo,
-                                                     const std::string& rmwModeAttr, Opcode opcode)
+                                                     const std::string& rmwModeAttr, Opcode opcode,
+                                                     bool atomicFromReduceAcc, bool atomicFromExplicitRmw)
 {
-    assembleOpToAppend_.emplace_back(
-        AssembleOp{input, output, offset, dynOffset, span, scopeInfo, rmwModeAttr, opcode});
+    assembleOpToAppend_.emplace_back(AssembleOp{input, output, offset, dynOffset, span, scopeInfo, rmwModeAttr, opcode,
+                                                atomicFromReduceAcc, atomicFromExplicitRmw});
 }
 
 Status MergeViewAssembleUtils::EraseRedundantAssemble(Function& function) const

@@ -270,10 +270,14 @@ TEST_F(ProcessAtomicTest, TestReducAccProcessAtomicOn)
     G.AddOp(Opcode::OP_A_MUL_B, {"l0_a_1", "l0_b_1"}, {"l0_c_1"}, "A_MUL_B_1");
     G.AddOp(Opcode::OP_A_MUL_B, {"l0_a_2", "l0_b_2"}, {"l0_c_2"}, "A_MUL_B_2");
     G.AddOp(Opcode::OP_A_MUL_B, {"l0_a_3", "l0_b_3"}, {"l0_c_3"}, "A_MUL_B_3");
-    G.AddOp(Opcode::OP_COPY_OUT, {"l0_c_0"}, {"mat_c_before_reduce_acc_0"}, "L0C_Copy_out_0");
-    G.AddOp(Opcode::OP_COPY_OUT, {"l0_c_1"}, {"mat_c_before_reduce_acc_1"}, "L0C_Copy_out_1");
-    G.AddOp(Opcode::OP_COPY_OUT, {"l0_c_2"}, {"mat_c_before_reduce_acc_2"}, "L0C_Copy_out_2");
-    G.AddOp(Opcode::OP_COPY_OUT, {"l0_c_3"}, {"mat_c_before_reduce_acc_3"}, "L0C_Copy_out_3");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"l0_c_0"}, {"mat_c_before_reduce_acc_0"}, "L0C_Copy_out_0");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"l0_c_1"}, {"mat_c_before_reduce_acc_1"}, "L0C_Copy_out_1");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"l0_c_2"}, {"mat_c_before_reduce_acc_2"}, "L0C_Copy_out_2");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"l0_c_3"}, {"mat_c_before_reduce_acc_3"}, "L0C_Copy_out_3");
+    for (size_t i = 0; i < 4; ++i) {
+        G.GetOp("L0C_Copy_out_" + std::to_string(i))
+            ->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    }
     G.AddOp(Opcode::OP_REDUCE_ACC,
             {"mat_c_before_reduce_acc_0", "mat_c_before_reduce_acc_1", "mat_c_before_reduce_acc_2",
              "mat_c_before_reduce_acc_3"},
@@ -477,7 +481,8 @@ TEST_F(ProcessAtomicTest, TestReducAccInputLess)
     G.AddOp(Opcode::OP_L1_TO_L0A, {"l1_a"}, {"l0_a"}, "L1_To_L0A");
     G.AddOp(Opcode::OP_L1_TO_L0B, {"l1_b"}, {"l0_b"}, "L1_To_L0B");
     G.AddOp(Opcode::OP_A_MUL_B, {"l0_a", "l0_b"}, {"l0_c"}, "A_MUL_B");
-    G.AddOp(Opcode::OP_COPY_OUT, {"l0_c"}, {"mat_c_before_reduce_acc"}, "L0C_Copy_out");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"l0_c"}, {"mat_c_before_reduce_acc"}, "L0C_Copy_out");
+    G.GetOp("L0C_Copy_out")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
     G.AddOp(Opcode::OP_REDUCE_ACC, {"mat_c_before_reduce_acc"}, {"mat_c_after_reduce_acc"}, "Reduce_Acc");
     SetMatMulAttr(G, "A_MUL_B", false, 0);
     // set incast and outcast
@@ -1093,6 +1098,63 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWBasic)
     EXPECT_EQ(updatedContractOp->HasAttr(RMW_MODE_ATTR_ADD), true);
 }
 
+TEST_F(ProcessAtomicTest, TestPostCheckFailsWhenReduceAccRemains)
+{
+    ComputationalGraphBuilder G;
+    DataType dtype = DataType::DT_FP16;
+
+    AddDdrTensor(G, dtype, {64, 128}, "input0");
+    AddDdrTensor(G, dtype, {64, 128}, "input1");
+    AddDdrTensor(G, dtype, {64, 128}, "reduceInput0");
+    AddDdrTensor(G, dtype, {64, 128}, "reduceInput1");
+    AddDdrTensor(G, dtype, {64, 128}, "reduceOutput");
+
+    G.AddOp(Opcode::OP_ASSEMBLE, {"input0"}, {"reduceInput0"}, "assembleOp0");
+    G.GetOp("assembleOp0")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_ASSEMBLE, {"input1"}, {"reduceInput1"}, "assembleOp1");
+    G.GetOp("assembleOp1")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_REDUCE_ACC, {"reduceInput0", "reduceInput1"}, {"reduceOutput"}, "reduceAccOp");
+    G.SetInCast({"input0", "input1"});
+    G.SetOutCast({"reduceOutput"});
+
+    auto* function = G.GetFunction();
+    ASSERT_NE(function, nullptr);
+    ProcessAtomic passLocal;
+
+    EXPECT_EQ(passLocal.PostCheck(*function), FAILED);
+    EXPECT_EQ(passLocal.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(passLocal.PostCheck(*function), SUCCESS);
+    EXPECT_EQ(CountOpsByType(function, Opcode::OP_REDUCE_ACC), 0);
+}
+
+TEST_F(ProcessAtomicTest, TestPostCheckFailsWhenAtomicRMWRemains)
+{
+    ComputationalGraphBuilder G;
+    DataType dtype = DataType::DT_FP16;
+
+    AddDdrTensor(G, dtype, {64, 128}, "assembleInput");
+    AddDdrTensor(G, dtype, {64, 128}, "atomicInput");
+    AddDdrTensor(G, dtype, {128, 128}, "atomicOutput");
+
+    G.AddOp(Opcode::OP_ASSEMBLE, {"assembleInput"}, {"atomicInput"}, "assembleOp");
+    G.GetOp("assembleOp")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_ATOMIC_RMW, {"atomicInput"}, {"atomicOutput"}, "atomicRmwOp");
+    auto* atomicRmwOp = G.GetOp("atomicRmwOp");
+    atomicRmwOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{64, 0}));
+    atomicRmwOp->SetAttribute(OpAttributeKey::rmwMode, static_cast<int>(AtomicRMWMode::ADD));
+    G.SetInCast({"assembleInput"});
+    G.SetOutCast({"atomicOutput"});
+
+    auto* function = G.GetFunction();
+    ASSERT_NE(function, nullptr);
+    ProcessAtomic passLocal;
+
+    EXPECT_EQ(passLocal.PostCheck(*function), FAILED);
+    EXPECT_EQ(passLocal.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(passLocal.PostCheck(*function), SUCCESS);
+    EXPECT_EQ(CountOpsByType(function, Opcode::OP_ATOMIC_RMW), 0);
+}
+
 TEST_F(ProcessAtomicTest, TestAtomicRMWMaxModeUnsupported)
 {
     ComputationalGraphBuilder G;
@@ -1244,9 +1306,15 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWWithReduceAcc)
     auto matCBeforeReduce0 = G.GetTensor("matCBeforeReduce0");
     matCBeforeReduce0->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
+    G.AddTensor(dtype, {64, 128}, "reduceInput0");
+    G.GetTensor("reduceInput0")->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
     G.AddTensor(dtype, {64, 128}, "matCBeforeReduce1");
     auto matCBeforeReduce1 = G.GetTensor("matCBeforeReduce1");
     matCBeforeReduce1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddTensor(dtype, {64, 128}, "reduceInput1");
+    G.GetTensor("reduceInput1")->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
     G.AddTensor(dtype, {64, 128}, "matCAfterReduce");
     auto matCAfterReduce = G.GetTensor("matCAfterReduce");
@@ -1260,6 +1328,10 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWWithReduceAcc)
     auto atomicOutput = G.GetTensor("atomicOutput");
     atomicOutput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
+    G.AddOp(Opcode::OP_ASSEMBLE, {"reduceInput0"}, {"matCBeforeReduce0"}, "reduceAssemble0");
+    G.GetOp("reduceAssemble0")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_ASSEMBLE, {"reduceInput1"}, {"matCBeforeReduce1"}, "reduceAssemble1");
+    G.GetOp("reduceAssemble1")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
     G.AddOp(Opcode::OP_REDUCE_ACC, {"matCBeforeReduce0", "matCBeforeReduce1"}, {"matCAfterReduce"}, "ReduceAcc");
 
     G.AddOp(Opcode::OP_CONTRACT, {"contractInput"}, {"matCAfterReduce"}, "contractOp");
@@ -1273,7 +1345,7 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWWithReduceAcc)
     atomicRmwOp->SetOpAttribute(atomicRmwAttr);
     atomicRmwOp->SetAttribute(OpAttributeKey::rmwMode, (int)AtomicRMWMode::ADD);
 
-    G.SetInCast({"matCBeforeReduce0", "matCBeforeReduce1", "contractInput"});
+    G.SetInCast({"reduceInput0", "reduceInput1", "contractInput"});
     G.SetOutCast({"atomicOutput"});
 
     Function* function = G.GetFunction();

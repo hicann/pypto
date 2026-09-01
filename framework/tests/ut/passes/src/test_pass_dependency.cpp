@@ -36,32 +36,38 @@ TEST_F(TestPassDependency, TestCheckStrategyDependency)
 {
     PassDependency& passDependency = PassDependency::Instance();
 
-    std::vector<PassName> normalPasses = {
-        PassName::DUPLICATE_OP,     PassName::SPLIT_LARGE_FANOUT_TENSOR, PassName::SPLIT_RESHAPE,
-        PassName::PROCESS_ATOMIC,   PassName::GRAPH_PARTITION,           PassName::REDUCE_COPY_MERGE,
-        PassName::N_BUFFER_MERGE,   PassName::L1_COPY_IN_REUSE_MERGE,    PassName::INTRA_SUBGRAPH_ADAPTER,
-        PassName::GENERATE_MOVE_OP, PassName::PRE_GRAPH_PROCESS,         PassName::REPLACE_TENSOR,
-        PassName::INFER_DYN_SHAPE,  PassName::SUBGRAPH_TO_FUNCTION};
+    std::vector<PassName> normalPasses = {PassName::DUPLICATE_OP,           PassName::SPLIT_LARGE_FANOUT_TENSOR,
+                                          PassName::SPLIT_RESHAPE,          PassName::PROCESS_ATOMIC,
+                                          PassName::BUILD_TREE_FROM_REDUCE, PassName::GRAPH_PARTITION,
+                                          PassName::REDUCE_COPY_MERGE,      PassName::N_BUFFER_MERGE,
+                                          PassName::L1_COPY_IN_REUSE_MERGE, PassName::INTRA_SUBGRAPH_ADAPTER,
+                                          PassName::GENERATE_MOVE_OP,       PassName::PRE_GRAPH_PROCESS,
+                                          PassName::REPLACE_TENSOR,         PassName::INFER_DYN_SHAPE,
+                                          PassName::SUBGRAPH_TO_FUNCTION};
     // GraphPartition缺少前置DuplicateOp
-    std::vector<PassName> passesLessPreDependency = {
-        PassName::SPLIT_LARGE_FANOUT_TENSOR, PassName::SPLIT_RESHAPE,          PassName::PROCESS_ATOMIC,
-        PassName::GRAPH_PARTITION,           PassName::REDUCE_COPY_MERGE,      PassName::N_BUFFER_MERGE,
-        PassName::L1_COPY_IN_REUSE_MERGE,    PassName::INTRA_SUBGRAPH_ADAPTER, PassName::GENERATE_MOVE_OP};
+    std::vector<PassName> passesLessPreDependency = {PassName::SPLIT_LARGE_FANOUT_TENSOR,
+                                                     PassName::SPLIT_RESHAPE,
+                                                     PassName::PROCESS_ATOMIC,
+                                                     PassName::BUILD_TREE_FROM_REDUCE,
+                                                     PassName::GRAPH_PARTITION,
+                                                     PassName::REDUCE_COPY_MERGE,
+                                                     PassName::N_BUFFER_MERGE,
+                                                     PassName::L1_COPY_IN_REUSE_MERGE,
+                                                     PassName::INTRA_SUBGRAPH_ADAPTER,
+                                                     PassName::GENERATE_MOVE_OP};
     // ProcessAtomic重复
     std::vector<PassName> passesConsecutiveDup = {PassName::DUPLICATE_OP,           PassName::SPLIT_LARGE_FANOUT_TENSOR,
                                                   PassName::SPLIT_RESHAPE,          PassName::PROCESS_ATOMIC,
-                                                  PassName::PROCESS_ATOMIC,         PassName::GRAPH_PARTITION,
-                                                  PassName::REDUCE_COPY_MERGE,      PassName::N_BUFFER_MERGE,
-                                                  PassName::L1_COPY_IN_REUSE_MERGE, PassName::INTRA_SUBGRAPH_ADAPTER,
-                                                  PassName::GENERATE_MOVE_OP};
+                                                  PassName::PROCESS_ATOMIC,         PassName::BUILD_TREE_FROM_REDUCE,
+                                                  PassName::GRAPH_PARTITION,        PassName::REDUCE_COPY_MERGE,
+                                                  PassName::N_BUFFER_MERGE,         PassName::L1_COPY_IN_REUSE_MERGE,
+                                                  PassName::INTRA_SUBGRAPH_ADAPTER, PassName::GENERATE_MOVE_OP};
     // GraphPartition前调用L1CopyInReuseMerge
     std::vector<PassName> passesL1CopyBeforeGraphPartition = {
-        PassName::DUPLICATE_OP,           PassName::SPLIT_LARGE_FANOUT_TENSOR,
-        PassName::SPLIT_RESHAPE,          PassName::PROCESS_ATOMIC,
-        PassName::L1_COPY_IN_REUSE_MERGE, PassName::GRAPH_PARTITION,
-        PassName::REDUCE_COPY_MERGE,      PassName::N_BUFFER_MERGE,
-        PassName::L1_COPY_IN_REUSE_MERGE, PassName::INTRA_SUBGRAPH_ADAPTER,
-        PassName::GENERATE_MOVE_OP};
+        PassName::DUPLICATE_OP,           PassName::SPLIT_LARGE_FANOUT_TENSOR, PassName::SPLIT_RESHAPE,
+        PassName::PROCESS_ATOMIC,         PassName::BUILD_TREE_FROM_REDUCE,    PassName::L1_COPY_IN_REUSE_MERGE,
+        PassName::GRAPH_PARTITION,        PassName::REDUCE_COPY_MERGE,         PassName::N_BUFFER_MERGE,
+        PassName::L1_COPY_IN_REUSE_MERGE, PassName::INTRA_SUBGRAPH_ADAPTER,    PassName::GENERATE_MOVE_OP};
 
     EXPECT_EQ(passDependency.CheckStrategyDependency("normalPasses", normalPasses), SUCCESS);
     EXPECT_EQ(passDependency.CheckStrategyDependency("passesLessPreDependency", passesLessPreDependency), WARNING);
@@ -75,17 +81,11 @@ TEST_F(TestPassDependency, TestStrategySequenceDependency)
 {
     PassDependency& passDependency = PassDependency::Instance();
     // GraphPartition后缺少ReduceConpyMerge
-    std::vector<PassName> lessSequenceDependency = {PassName::DUPLICATE_OP,
-                                                    PassName::SPLIT_LARGE_FANOUT_TENSOR,
-                                                    PassName::SPLIT_RESHAPE,
-                                                    PassName::PROCESS_ATOMIC,
-                                                    PassName::GRAPH_PARTITION,
-                                                    PassName::N_BUFFER_MERGE,
-                                                    PassName::L1_COPY_IN_REUSE_MERGE,
-                                                    PassName::INTRA_SUBGRAPH_ADAPTER,
-                                                    PassName::GENERATE_MOVE_OP,
-                                                    PassName::COMMON_OPERATION_ELIMINATE,
-                                                    PassName::AXIS_COMBINE};
+    std::vector<PassName> lessSequenceDependency = {
+        PassName::DUPLICATE_OP,     PassName::SPLIT_LARGE_FANOUT_TENSOR,  PassName::SPLIT_RESHAPE,
+        PassName::PROCESS_ATOMIC,   PassName::BUILD_TREE_FROM_REDUCE,     PassName::GRAPH_PARTITION,
+        PassName::N_BUFFER_MERGE,   PassName::L1_COPY_IN_REUSE_MERGE,     PassName::INTRA_SUBGRAPH_ADAPTER,
+        PassName::GENERATE_MOVE_OP, PassName::COMMON_OPERATION_ELIMINATE, PassName::AXIS_COMBINE};
 
     EXPECT_EQ(passDependency.CheckStrategyDependency("lessSequenceDependency", lessSequenceDependency), WARNING);
 }
