@@ -20,6 +20,7 @@
 #include "codegen_op_litenpu.h"
 #include "codegen/utils/codegen_utils.h"
 #include "codegen/utils/parallel_execute.h"
+#include "interface/function/function.h"
 
 namespace npu::tile_fwk {
 
@@ -135,7 +136,7 @@ void CodeGenLiteNPU::GenCode(Function& topFunc)
                 int blockDim = 1; // NEXTNEXT: currently only support one block dim
                 int jsonWorkspaceSize = subFunc->GetStackWorkespaceSize();
                 GenConfigJson(compileInfo.GetJsonAbsPath(), compileInfo.GetCCEAbsPath(), compileInfo.GetBinAbsPath(),
-                              topFunc.GetMagicName(), jsonWorkspaceSize, inOutParams, blockDim);
+                              topFunc.GetMagicNameWithHash(), jsonWorkspaceSize, inOutParams, blockDim);
             }
 #endif
             UpdateSubFunc(subFuncPair, compileInfo);
@@ -329,7 +330,7 @@ extern "C" __global__ [aicore] void ${FunctionName}$_main(${GlobalParams}$) {
     }
 
     SubstMap substMap = {
-        {"FunctionName", func.GetMagicName()},
+        {"FunctionName", func.GetMagicNameWithHash()},
         {"ProgramId", std::to_string(subFuncPair.first)},
         {"SubProgCode", subProgramCode},
         {"GlobalParams", globalParams.substr(0, globalParams.length() - 2)},

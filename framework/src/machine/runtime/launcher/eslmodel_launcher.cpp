@@ -13,6 +13,7 @@
 #include "tilefwk/pypto_fwk_log.h"
 #include "adapter/api/acl_api.h"
 #include "adapter/api/runtime_api.h"
+#include "interface/function/function.h"
 #include "interface/utils/op_info_manager.h"
 #include "interface/program/program.h"
 #include "machine/runtime/launcher/device_launcher.h"
@@ -216,7 +217,7 @@ void EslModelLauncher::LiteRegisterKernel(Function* function, void*& hdl, int& s
     stubFunc = 1;
     std::string kernelName = "";
     for (auto& devRoot : dynAttr->funcGroup.devRootList) {
-        kernelName = dynAttr->rootTileDict[devRoot]->GetMagicName() + "_main";
+        kernelName = dynAttr->rootTileDict[devRoot]->GetMagicNameWithHash() + "_main";
     }
     RuntimeFunctionRegister(hdl, &stubFunc, kernelName.c_str(), kernelName.c_str(), 0);
 }

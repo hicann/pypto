@@ -707,6 +707,7 @@ public:
     bool IsExplicit() const { return explicitArgSlots_.empty(); }
     size_t GetOperationSize() const { return operations_.size(); }
     const std::string& GetMagicName() const { return funcMagicName_; }
+    std::string GetMagicNameWithHash() const { return GetMagicName() + "_" + GetFunctionHash(); }
     const std::string& GetRawName() const { return funcRawName_; }
     std::string GetOriginalRawName() const;
     void AppendCalleeMagicName(const std::string& name) { calleeMagicNameList_.push_back(name); }
