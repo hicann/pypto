@@ -137,15 +137,14 @@ using DrcoLocalReadyQueue = npu::tile_fwk::DrcoLocalReadyQueue;
 INLINE __gm__ DrcoDeviceTask* GetCurrentDeviceTask(__gm__ DrcoDeviceTaskReadyQueue* queue)
 {
     uint32_t head = DrcoGmLoad(&queue->head);
-    uint32_t size = DrcoGmLoad(&queue->size);
-    if (head >= size) {
-        return nullptr;
+    uint32_t tail = DrcoGmLoad(&queue->tail);
+    if (head < tail) {
+        __gm__ DrcoDeviceTask* elem = &queue->dynFuncDataListList[head % npu::tile_fwk::DEVICE_TASK_QUEUE_SIZE];
+        if (DrcoGmLoad(&elem->dynFuncDataList) != nullptr) {
+            return elem;
+        }
     }
-    __gm__ DrcoDeviceTask* elem = &queue->dynFuncDataListList[head];
-    if (DrcoGmLoad(&elem->dynFuncDataList) == nullptr) {
-        return nullptr;
-    }
-    return elem;
+    return nullptr;
 }
 
 INLINE uint32_t DrcoAtomicLoad(__gm__ uint32_t* ptr) { return static_cast<uint32_t>(atomicAdd(ptr, 0)); }
@@ -663,9 +662,11 @@ INLINE __gm__ DrcoDeviceTask* GetDrcoDeviceTask(DrcoEntryState& entry, bool& isF
             deviceTask = GetCurrentDeviceTask(entry.deviceTaskReadyQueue);
             if (deviceTask == nullptr) {
                 uint32_t qHead = DrcoAtomicLoad(&entry.deviceTaskReadyQueue->head);
-                uint32_t qSize = DrcoGmLoad(&entry.deviceTaskReadyQueue->size);
-                if (qHead < qSize) {
-                    __gm__ DrcoDeviceTask* elem = &entry.deviceTaskReadyQueue->dynFuncDataListList[qHead];
+                uint32_t qTail = DrcoGmLoad(&entry.deviceTaskReadyQueue->tail);
+                if (qHead < qTail) {
+                    __gm__ DrcoDeviceTask*
+                        elem = &entry.deviceTaskReadyQueue
+                                    ->dynFuncDataListList[qHead % npu::tile_fwk::DEVICE_TASK_QUEUE_SIZE];
                     if (DrcoGmLoad(&elem->dynFuncDataList) == nullptr) {
                         break;
                     }
@@ -788,8 +789,8 @@ INLINE void KernelEntryDrco(int64_t ffts_addr, int64_t inputs, int64_t outputs, 
             break;
         }
 
-        __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList = deviceTask->drcoRootFuncList;
         UpdateCacheDevTask(&entry.ctx, entry.ctx.curLeafTaskParallelIdx, (int64_t)deviceTask->dynFuncDataList);
+        __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList = deviceTask->drcoRootFuncList;
         entry.ctx.lastTaskFinishCycle = 0;
 
         __gm__ npu::tile_fwk::PerCorePendingQueue* myPerCoreQueue = DrcoGmLoad(
@@ -828,7 +829,7 @@ INLINE void KernelEntryDrco(int64_t ffts_addr, int64_t inputs, int64_t outputs, 
     }
     if (entry.blockIdx == 0) {
         entry.deviceTaskReadyQueue->head = 0;
-        entry.deviceTaskReadyQueue->size = 0;
+        entry.deviceTaskReadyQueue->tail = 0;
         uint64_t finished = DrcoGmLoad(&entry.runtimeDataRingBufferHeadData->indexFinished.value) + 1;
         DrcoGmStore(&entry.runtimeDataRingBufferHeadData->indexFinished.value, finished);
     }

@@ -125,9 +125,9 @@ public:
 
         if (!appendLastTaskCtrl && !ctx->devProg->ctrlFlowCacheAnchor->IsRecording()) {
             if (AicoreResolveEnabled()) {
-                GetDeviceTaskReadyQueue().Append(dynTask->dynFuncDataList, dynTask->drcoRootFuncList);
-                DEV_DEBUG("DRCO append task=%p root=%p qsize=%u", dynTask->dynFuncDataList, dynTask->drcoRootFuncList,
-                          GetDeviceTaskReadyQueue().size);
+                DrcoDeviceTaskReadyQueueAppend(dynTask->dynFuncDataList, dynTask->drcoRootFuncList);
+                DEV_DEBUG("DRCO append task=%p root=%p qtail=%u", dynTask->dynFuncDataList, dynTask->drcoRootFuncList,
+                          GetDeviceTaskReadyQueue().tail);
             } else {
                 for (uint32_t i = 0; i < GetScheAicpuNum(); ++i) {
                     GetTaskQueue(i).Enqueue(newTaskCtrl);
@@ -141,7 +141,7 @@ public:
     void StopAicoreManager()
     {
         if (AicoreResolveEnabled()) {
-            GetDeviceTaskReadyQueue().Append(nullptr, nullptr);
+            DrcoDeviceTaskReadyQueueAppend(nullptr, nullptr);
         } else {
             for (uint32_t i = 0; i < GetScheAicpuNum(); ++i) {
                 GetTaskQueue(i).Enqueue(nullptr);
@@ -473,6 +473,18 @@ private:
     npu::tile_fwk::DrcoDeviceTaskReadyQueue& GetDeviceTaskReadyQueue()
     {
         return *devStartArgs_->drcoDeviceTaskReadyQueue;
+    }
+    int32_t DrcoDeviceTaskReadyQueueAppend(npu::tile_fwk::DynFuncHeader* dynFuncDataList,
+                                           npu::tile_fwk::DrcoRootFuncList* rootFuncList)
+    {
+        TIMEOUT_CHECK_INIT(devStartArgs_->devProg->devArgs.archInfo, TIMEOUT_1MIN);
+        while (!GetDeviceTaskReadyQueue().TryAppend(dynFuncDataList, rootFuncList)) {
+            __PYPTO_TIMEOUT_CHECK_EXIT_ONLY(CtrlErr::CTRL_ALLOC_TIMEOUT, return DEVICE_MACHINE_ERROR,
+                                            "#drco.queue.full: DrcoDeviceTaskReadyQueue full, tail=%u head=%u.",
+                                            GetDeviceTaskReadyQueue().tail,
+                                            __atomic_load_n(&GetDeviceTaskReadyQueue().head, __ATOMIC_ACQUIRE));
+        }
+        return DEVICE_MACHINE_OK;
     }
     bool AicoreResolveEnabled() const
     {

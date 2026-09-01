@@ -91,26 +91,32 @@ struct DrcoRootFuncList {
     alignas(64) uint8_t pad[64];
 };
 
-constexpr int32_t DEVICE_TASK_QUEUE_SIZE = 100;
+constexpr int32_t DEVICE_TASK_QUEUE_SIZE = 4;
 struct DrcoDeviceTask {
     __gm__ DynFuncHeader* dynFuncDataList;
     __gm__ DrcoRootFuncList* drcoRootFuncList;
 };
 struct DrcoDeviceTaskReadyQueue {
     uint32_t head;
-    uint32_t size;
+    uint32_t tail;
     DrcoDeviceTask dynFuncDataListList[DEVICE_TASK_QUEUE_SIZE];
 #ifdef __TILE_FWK_HOST__
     void Reset()
     {
         head = 0;
-        size = 0;
+        tail = 0;
     }
-    void Append(DynFuncHeader* dynFuncDataList, DrcoRootFuncList* rootFuncList)
+    bool TryAppend(DynFuncHeader* dynFuncDataList, DrcoRootFuncList* rootFuncList)
     {
-        dynFuncDataListList[size].dynFuncDataList = dynFuncDataList;
-        dynFuncDataListList[size].drcoRootFuncList = rootFuncList;
-        size++;
+        if (tail - __atomic_load_n(&head, __ATOMIC_ACQUIRE) == DEVICE_TASK_QUEUE_SIZE) {
+            return false;
+        }
+        uint32_t idx = tail % DEVICE_TASK_QUEUE_SIZE;
+        dynFuncDataListList[idx].dynFuncDataList = dynFuncDataList;
+        dynFuncDataListList[idx].drcoRootFuncList = rootFuncList;
+        __sync_synchronize();
+        __atomic_store_n(&tail, tail + 1, __ATOMIC_RELEASE);
+        return true;
     }
 #endif
 };
