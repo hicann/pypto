@@ -12,11 +12,11 @@
 
 from contextlib import contextmanager
 import inspect
-import itertools
 import sys
 from typing import Iterator, List, Optional, Tuple, Union, overload
 
 from . import pypto_impl
+from ._compile_state import CompileState
 from ._utils import clear_source_location, set_source_location, to_sym
 from .config import ConvBpTile, ConvTile, CubeTile, get_current_scope
 from .enum import *  # noqa: F403
@@ -41,39 +41,6 @@ __all__ = [
     "is_loop_end",
     "cond",
 ]
-
-
-class Controller:
-    _loop_idx_generator = itertools.count(0)
-    in_function = False
-    _atomic_scope_iter_id = 0
-
-    @classmethod
-    def init_atomic_scope_iter(cls):
-        cls._atomic_scope_iter_id = 0
-
-    @classmethod
-    def next_loop_idx(cls) -> int:
-        return next(cls._loop_idx_generator)
-
-    @classmethod
-    def bump_atomic_scope_iter(cls):
-        cls._atomic_scope_iter_id += 1
-
-    @classmethod
-    def get_atomic_scope_iter(cls) -> int:
-        return cls._atomic_scope_iter_id
-
-    @classmethod
-    def begin_function(cls):
-        if cls.in_function:
-            raise FeError(RuntimeError("function nested is not allowed"))
-        cls.in_function = True
-
-    @classmethod
-    def end_function(cls):
-        cls.in_function = False
-        cls._loop_idx_generator = itertools.count(0)
 
 
 def set_vec_tile_shapes(*shapes: int):
@@ -349,16 +316,6 @@ def set_build_static(static: bool):
     pypto_impl.SetBuildStatic(static)
 
 
-def begin_function(name: str, graph_type: pypto_impl.GraphType, func_type: pypto_impl.FunctionType, *args):
-    args = [arg.base() for arg in args]
-    Controller.reset()
-    return pypto_impl.BeginFunction(name, graph_type, func_type, *args)
-
-
-def end_function(name: str, generate_call: bool = True):
-    pypto_impl.EndFunction(name, generate_call)
-
-
 class LoopRange:
     def __init__(self, start, stop=None, step: Union[int, SymbolicScalar] = 1):
         if stop is None:
@@ -493,7 +450,7 @@ def function(name: str, *args) -> Iterator:
     in_out_tensors = [item for item in args if isinstance(item, Tensor)]
     func = None
     first_exc = None
-    Controller.begin_function()
+    CompileState.begin_function()
     try:
         set_source_location(level=2)
         func = pypto_impl.RecordFunc(name, [t.base() for t in in_out_tensors])
@@ -503,7 +460,7 @@ def function(name: str, *args) -> Iterator:
         first_exc = e
     finally:
         first_exc = _finalize_function_recording(func, first_exc)
-        Controller.end_function()
+        CompileState.end_function()
         _raise_if_exception(first_exc)
 
 
@@ -554,13 +511,13 @@ class _LoopFunction:
             self._iter = iter
             self._begin = begin
             self._end = end
-            Controller.init_atomic_scope_iter()
+            CompileState.init_atomic_scope_iter()
 
         def __next__(self):
             scalar = self._iter.__next__()
             setattr(scalar, "_loop_begin", self._begin)
             setattr(scalar, "_loop_end", self._end)
-            Controller.bump_atomic_scope_iter()
+            CompileState.bump_atomic_scope_iter()
             return scalar
 
     def __init__(self, name, loop_name, loop_range, unroll_list, submit_before_loop, parallel):
@@ -698,7 +655,7 @@ def loop(
     """
     start, stop, step = _get_loop_range(*args)
     # implementation
-    loop_idx = Controller.next_loop_idx()
+    loop_idx = CompileState.next_loop_idx()
     name = kwargs.get("name", f"loop_{loop_idx}")
     idx_name = f"loop_idx_{kwargs.get('idx_name', loop_idx)}"
     unroll_list = kwargs.get("unroll_list", None)

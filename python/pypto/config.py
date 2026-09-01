@@ -52,9 +52,9 @@ def _validate_and_encode_scope_id(scope_id: int, param_name: str) -> List[int]:
     if scope_id == -1:
         return [-1]
     elif 1 <= scope_id <= _ATOMIC_SCOPE_MAX:
-        from pypto._controller import Controller
+        from pypto._compile_state import CompileState
 
-        encoded = scope_id * _ATOMIC_SCOPE_ENCODE_BASE + Controller.get_atomic_scope_iter()
+        encoded = scope_id * _ATOMIC_SCOPE_ENCODE_BASE + CompileState.get_atomic_scope_iter()
         return [encoded]
     else:
         raise ValueError(

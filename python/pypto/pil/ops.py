@@ -12,6 +12,7 @@ from typing import Optional, Sequence
 
 import pypto
 from pypto import SatStatus, SymbolicScalar, ir, pypto_impl
+from pypto._compile_state import CompileState
 
 from .dispatcher import dispatch_block
 from .op_registry import impl
@@ -388,10 +389,12 @@ def _loop_unroll(body: Block, loop: LoopRange, factor, nstart, nstop, ctx: Build
 
         if loop.batch:
             scope.varmap[loop_val.id] = (loop_var, loop.step * factor)
+            CompileState.bump_atomic_scope_iter()
             dispatch_block(body, False)
         else:
             for i in range(factor):
                 scope.varmap[loop_val.id] = loop_var + i * loop.step
+                CompileState.bump_atomic_scope_iter()
                 dispatch_block(body, False)
         if is_positive:
             loop_conds.append(loop_var + (factor - 1) * loop.step < loop.stop)
@@ -430,6 +433,10 @@ def _loop_unroll(body: Block, loop: LoopRange, factor, nstart, nstop, ctx: Build
 def _dyn_for(body: Block, loop: LoopRange, ctx: BuildContext):
     nstart = loop.start
     nstop = loop.stop
+
+    # Mirror legacy frontend (_LoopFunction.Iterator): reset atomic scope iter on loop entry,
+    # bump per iteration in _loop_unroll, so sg_set_atomic_scope encodes unique ids per iteration.
+    CompileState.init_atomic_scope_iter()
 
     for factor in loop.unroll_list:
         if factor == 1:

@@ -15,8 +15,9 @@ from unittest import mock
 import pytest
 
 import pypto
+from pypto._compile_state import CompileState
 import pypto._controller as controller
-from pypto._controller import Controller, _finalize_function_recording, function
+from pypto._controller import _finalize_function_recording, function
 from pypto.error import FeError
 
 
@@ -58,7 +59,7 @@ def test_finalize_end_function_failure_returns_end_error():
 
 def test_function_record_func_construct_failure_resets_in_function():
     controller.reset()
-    Controller.in_function = False
+    CompileState.in_function = False
     with mock.patch(
         "pypto._controller.pypto_impl.RecordFunc",
         side_effect=RuntimeError("construct fail"),
@@ -66,7 +67,7 @@ def test_function_record_func_construct_failure_resets_in_function():
         with pytest.raises(FeError, match="construct fail"):
             with function("main"):
                 pass
-    assert Controller.in_function is False
+    assert CompileState.in_function is False
 
 
 def test_function_user_error_resets_in_function():
@@ -77,12 +78,12 @@ def test_function_user_error_resets_in_function():
     with pytest.raises(FeError, match="boom"):
         with pypto.function("MAIN", a, b):
             raise ValueError("boom")
-    assert Controller.in_function is False
+    assert CompileState.in_function is False
 
     with pypto.function("MAIN2", a, b):
         pypto.set_vec_tile_shapes(8, 8)
         b.move(pypto.add(a, b))
-    assert Controller.in_function is False
+    assert CompileState.in_function is False
 
 
 def test_function_abort_recording_failure_still_resets_in_function():
@@ -97,4 +98,4 @@ def test_function_abort_recording_failure_still_resets_in_function():
         with pytest.raises(FeError, match="user"):
             with pypto.function("MAIN", a, b):
                 raise ValueError("user")
-    assert Controller.in_function is False
+    assert CompileState.in_function is False
