@@ -1528,6 +1528,10 @@ def _apply_default_layout(tt: "TileType") -> None:
     ):
         tt.fractal = 32
 
+# CompactMode enum (pto/type.hpp): Null=0, Normal=1, RowPlusOne=2,
+# RowAlignedPadding=3. Any other integer is not a valid compact mode.
+_COMPACT_VALUES = frozenset({0, 1, 2, 3})
+
 @dataclass
 class TileType:
     """Tile type descriptor containing shape, dtype, and TileView parameters."""
@@ -1542,6 +1546,7 @@ class TileType:
     compact: Optional[int] = None
 
     def __post_init__(self):
+        _validate_tile_type_params(self)
         self.pad = _normalize_tile_pad(self.pad)
         _validate_subbyte_tile_shape(self)
         _apply_default_layout(self)
@@ -1632,6 +1637,99 @@ def tile_slot_size(shape: "Sequence[int] | _ir_core.MakeTuple", dtype: DataType)
     for dim in static_dims:
         elems *= dim
     return elems * max(1, (int(dtype.get_bit()) + 7) // 8)
+
+
+def _const_shape_ints(shape) -> "list[int] | None":
+    """Extract compile-time ints from a tile shape (list/tuple or MakeTuple of ConstInt).
+
+    Returns None when any element is not a compile-time integer constant.
+    """
+    if isinstance(shape, _ir_core.MakeTuple):
+        ints = []
+        for elt in shape.elements:
+            if isinstance(elt, _ir_core.ConstInt):
+                ints.append(elt.value)
+            else:
+                return None
+        return ints
+    if isinstance(shape, (list, tuple)) and all(
+        isinstance(s, int) and not isinstance(s, bool) for s in shape
+    ):
+        return list(shape)
+    return None
+
+
+def _validate_tile_type_params(tt: "TileType") -> None:
+    """Reject invalid TileType parameter values early with actionable errors.
+
+    Runs in ``TileType.__post_init__`` so both the AST-parsed path
+    (``pl.TileType(...)`` inside a kernel) and direct Python construction are
+    covered. Invalid values otherwise surface as opaque device/runtime errors
+    (e.g. zero/negative tile sizes, misaligned derived addresses).
+    """
+    if not isinstance(tt.dtype, DataType):
+        raise TypeError(
+            f"TileType dtype must be a pl.DT_* / DataType value, got {tt.dtype!r} "
+            f"({type(tt.dtype).__name__})."
+        )
+    if not isinstance(tt.target_memory, MemorySpace):
+        raise TypeError(
+            f"TileType target_memory must be a pl.MemorySpace value, got {tt.target_memory!r} "
+            f"({type(tt.target_memory).__name__})."
+        )
+
+    shape = _const_shape_ints(tt.shape)
+    if shape is None:
+        # Symbolic/dynamic dimensions (e.g. a runtime tensor dim) are allowed to
+        # survive into the TileType; consuming code (make_tile/make_tile_group)
+        # reports them when a compile-time size is actually required.
+        pass
+    else:
+        if not shape:
+            raise ValueError(f"TileType shape must not be empty, got {tt.shape!r}.")
+        if any(s <= 0 for s in shape):
+            raise ValueError(
+                f"TileType shape dimensions must be positive, got {tt.shape!r}. "
+                f"Zero or negative tile dimensions produce invalid tile allocations."
+            )
+
+        if tt.target_memory == MemorySpace.Bias and shape[0] != 1:
+            raise ValueError(
+                f"TileType Bias tiles must have exactly 1 row (hardware Rows==1 constraint, "
+                f"see TMatmul.hpp/TMov.hpp), got shape {tt.shape!r} with {shape[0]} rows. "
+                f"Use shape=[1, N] for the Bias (L0B) tile."
+            )
+
+    valid_shape = _const_shape_ints(tt.valid_shape)
+    if valid_shape is not None and shape is not None:
+        if len(valid_shape) != len(shape):
+            raise ValueError(
+                f"TileType valid_shape {tt.valid_shape!r} has rank {len(valid_shape)}, "
+                f"which must match shape rank {len(shape)}."
+            )
+        for vs, s in zip(valid_shape, shape):
+            if vs == -1:
+                continue  # -1: dynamic valid dimension, set at runtime
+            if vs <= 0:
+                raise ValueError(
+                    f"TileType valid_shape dimensions must be positive or -1 (dynamic), "
+                    f"got {tt.valid_shape!r}."
+                )
+            if vs > s:
+                raise ValueError(
+                    f"TileType valid_shape dimension {vs} exceeds tile shape dimension {s}."
+                )
+
+    if tt.fractal is not None and not _is_int(tt.fractal):
+        raise ValueError(f"TileType fractal must be an integer, got {tt.fractal!r}.")
+
+    if tt.compact is not None:
+        if isinstance(tt.compact, bool) or not isinstance(tt.compact, int) or tt.compact not in _COMPACT_VALUES:
+            raise ValueError(
+                f"TileType compact must be one of {sorted(_COMPACT_VALUES)} "
+                f"(CompactMode: null=0/normal=1/row_plus_one=2/row_aligned_padding=3), "
+                f"got {tt.compact!r}."
+            )
 
 
 def make_tile_expr(

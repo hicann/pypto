@@ -119,6 +119,14 @@ class BufferParserMixin:
                 span=span,
             )
         kw = {k.arg: k for k in call.keywords if k.arg is not None}
+        # bwd_ids/fwd_ids are accepted for backward compatibility with existing
+        # operator repositories and ignored, as in the legacy parser behavior.
+        unknown = sorted(set(kw) - {"type", "addrs", "mutex_ids", "depth", "bwd_ids", "fwd_ids"})
+        if unknown:
+            raise ParserTypeError(
+                f"pl.make_tile_group() got unexpected keyword argument(s) {unknown}; "
+                f"supported keywords are type, addrs, mutex_ids, depth, bwd_ids, fwd_ids", span=span
+            )
         for required in ("type", "addrs"):
             if required not in kw:
                 raise ParserTypeError(f"pl.make_tile_group() missing required keyword '{required}'", span=span)
@@ -166,6 +174,11 @@ class BufferParserMixin:
             hint="addrs is fixed while parsing; pass a literal, or a variable bound to "
             "literals/constants — not a runtime value such as a tensor shape or loop index",
         )
+        for addr in (list(addrs) if isinstance(addrs, (list, tuple)) else [addrs]):
+            if addr < 0:
+                raise ParserTypeError(
+                    f"make_tile_group() addrs must be non-negative integers, got {addr!r}", span=span
+                )
         if isinstance(addrs, (list, tuple)):
             tile_addrs = list(addrs)
             if len(tile_addrs) != depth:

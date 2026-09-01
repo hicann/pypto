@@ -412,7 +412,7 @@ def test_err_per_channel_0d_tile():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserSyntaxError, match="TileType only supports rank-2 shape"):
+    with pytest.raises(ParserSyntaxError, match="shape must not be empty"):
         kernel(q, k, out)
 
 
