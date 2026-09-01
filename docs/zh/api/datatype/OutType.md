@@ -21,5 +21,5 @@ OutType定义了输出数据的类型，用于指定某些操作（如比较操�
 ```python
 class OutType(enum.Enum):
      BOOL = ...  # 布尔输出类型，输出True或False
-     BIT = ...   # 位输出类型，输出或1的位值
+     BIT = ...   # 位输出类型，输出0或1的位值
 ```

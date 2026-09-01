@@ -20,7 +20,7 @@ ScatterMode定义了scatter函数reduce模式
 
 ```python
 class ScatterMode(enum.Enum):
-     None = ...     # 仅做数据搬运
+     NONE = ...     # 仅做数据搬运
      ADD = ...      # 加法模式
      MULTIPLY = ... # 乘法模式
 ```

@@ -27,7 +27,7 @@ loop_unroll(start: SymInt = 0, stop: SymInt, step: SymInt = 1, *, name: str = No
 | 参数名            | 输入/输出 | 说明                                                                 |
 |-------------------|-----------|----------------------------------------------------------------------|
 | *args             | 输入      | 三个可选参数，分别为循环起始值（start），循环结束值（stop），循环步长（step），有以下三种写法：<br> - 单参数形式：stop(SymInt)，起始值默认为0，步长默认为1。等价于：loop_unroll(0, stop, 1)<br> - 双参数形式：start(SymInt)，stop(SymInt)，等价于loop_unroll(start, stop, 1)<br> - 三参数形式：start (SymInt)，stop(SymInt)，step(SymInt)，等价于loop_unroll(start, stop, step) |
-| **kwargs          | 输入      | - name(str)：循环标识名称，默认生成f"loop_{loop_idx}"。<br> - idx_name(str):  循环索引变量的名称，默认生成f"loop_idx_{loop_idx}"。<br> - unroll_list(List[int]):  需要展开unroll的循环层数集合，默认为空集合。loop会提供unroll_list中定义的几种展开方式，展开次数为n时，循环步长会变成step*n，每次迭代会执行n次循环体。每种展开次数会生成不同的代码路径。<br> - submit_before_loop(bool):  是否在循环开始前提交计算，默认为False。开启后会在循环开启前强制提交当前累积的计算任务到AICore执行。 |
+| **kwargs          | 输入      | - name(str)：循环标识名称，默认生成f"loop_{loop_idx}"。<br> - idx_name(str):  循环索引变量的名称，默认生成f"loop_idx_{loop_idx}"。<br> - unroll_list(List[int]):  需要展开的循环因子集合，默认为空集合。loop会提供unroll_list中定义的几种展开方式，展开次数为n时，循环步长会变成step*n，每次迭代会执行n次循环体。每种展开次数会生成不同的代码路径。<br> - submit_before_loop(bool):  是否在循环开始前提交计算，默认为False。开启后会在循环开启前强制提交当前累积的计算任务到AICore执行。 |
 
 ## 返回值说明
 

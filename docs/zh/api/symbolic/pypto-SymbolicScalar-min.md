@@ -65,7 +65,7 @@ s1 = pypto.SymbolicScalar(10)
 s2 = pypto.SymbolicScalar(5)
 out1 = s1.min(s2)
 out2 = s1.min(3)
-s3 = pypto.SymbolicScalar(x)
+s3 = pypto.SymbolicScalar("x")
 out3 = s3.min(2)
 ```
 

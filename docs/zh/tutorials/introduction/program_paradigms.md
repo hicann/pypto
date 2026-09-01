@@ -117,7 +117,7 @@ Tensor层次编程是PyPTO当前主要支持的编程方式，开发者直接使
     tensor = pypto.tensor([-1, 32], pypto.DT_FP16, "dynamic")
 
     # 获取动态维度的符号化标量，在运行时获取具体数值
-    b = pypto.symbolic_scalar(tensor_shape[0])
+    b = pypto.symbolic_scalar(tensor.shape[0])
     ```
 
 ## 计算图
@@ -133,7 +133,7 @@ Tensor层次编程是PyPTO当前主要支持的编程方式，开发者直接使
 
 - 计算图的转换流程
 
-    将用户定义的计算图计算图最终转换成可执行代码：
+    将用户定义的计算图最终转换成可执行代码：
 
     ```mermaid
     graph LR
@@ -200,7 +200,7 @@ graph LR
 
     @pypto.frontend.jit
     def matmul(a:  pypto.Tensor(shape_a, dtype), b:  pypto.Tensor(shape_b, dtype), output:  pypto.Tensor(shape_c, dtype)):
-        outputs[:] = pypto.matmul(a, b)  # 矩阵乘法
+        output[:] = pypto.matmul(a, b)  # 矩阵乘法
 
     # 执行
     matmul(matrix_a, matrix_b, output_matrix)
@@ -250,16 +250,17 @@ graph LR
     import torch
 
     @pypto.frontend.jit
-    def my_operator(x: pypto.Tensor(in_shape, dtype), output: pypto.Tensor(out_shape, dtype)):
+    def my_operator(x: pypto.Tensor(in_shape, dtype), weight: pypto.Tensor(weight_shape, dtype), output: pypto.Tensor(out_shape, dtype)):
         result = pypto.matmul(x, weight)
         output[:] = result
 
     # 使用PyTorch Tensor
     input_torch = torch.randn(32, 128, device='npu')
+    weight_torch = torch.randn(128, 64, device='npu')
     output_torch = torch.zeros(32, 64, device='npu')
 
     # 执行
-    my_operator(input_torch, output_torch)
+    my_operator(input_torch, weight_torch, output_torch)
     ```
 
 ## 总结

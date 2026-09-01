@@ -82,7 +82,7 @@ PyPTO为张量计算提供了一套全面的操作，旨在为用户提供高效
 
     # Softmax
     result = pypto.softmax(x, dim=-1)  # 沿着dim维度做Softmax
-    result = x.softmax(x, dim=-1)
+    result = x.softmax(dim=-1)
     ```
 
 - 比较操作
@@ -183,9 +183,9 @@ def softmax_core(x: pypto.Tensor) -> pypto.Tensor:
 
 def softmax_kernel(x: pypto.Tensor, y: pypto.Tensor) -> None:
     ...
-    for idx in pypto.loop(b_loop):
+    for idx in pypto.loop(x.shape[0]):
         ...
-        softmax_out = softmax_core(x_view)
+        softmax_out = softmax_core(x)
         ...
 ```
 
@@ -232,7 +232,7 @@ def softmax_kernel(x: pypto.Tensor, y: pypto.Tensor) -> None:
     # 切片（创建视图）
     slice_tensor = tensor[0:5, 10:20]
 
-    # 椭圆
+    # 省略号
     ellipsis_slice = tensor[..., 0:10]
     ```
 
@@ -242,7 +242,7 @@ def softmax_kernel(x: pypto.Tensor, y: pypto.Tensor) -> None:
     # 将一个小的张量组装成一个大的张量
     pypto.assemble(
         small_tensor,      # 源张量
-        offsets=[10, 20],  # 目标位置
+        [10, 20],          # 目标位置
         large_tensor       # 目标张量
     )
     ```
@@ -270,7 +270,7 @@ reshaped = pypto.reshape(tensor, [new_shape])
 transposed = pypto.transpose(tensor, dim0=0, dim1=1)
 ```
 
-重塑不会改变数据，只会改变尺寸的视图。
+重塑不会改变数据，只会改变张量的视图。
 
 ### 类型转换
 

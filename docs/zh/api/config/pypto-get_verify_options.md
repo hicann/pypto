@@ -28,7 +28,7 @@ get_verify_options() -> Dict[str, Union[str, int, List[int], Dict[int, int]]]
 
 ## 返回值说明
 
-获取精度调试Verify特性的当前设定值。
+返回一个字典，包含精度调试Verify特性的当前设定值。
 
 ## 约束说明
 

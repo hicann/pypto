@@ -37,7 +37,7 @@ void：Set方法无返回值。设置操作成功即生效。
 
 ## 约束说明
 
-support\_dynamic\_aligned选项效果后续会通过Pass推导机制进行优化，无需用户手工设置并日落，建议用户谨慎使用。
+support\_dynamic\_aligned选项效果后续会通过Pass推导机制进行优化，无需用户手工设置，建议用户谨慎使用。
 
 enable\_pmu\_trace使用说明：
 <!-- npu="950" id4 -->

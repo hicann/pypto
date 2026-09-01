@@ -6,7 +6,7 @@
 
 ### 图编译流程
 
-下图展示了完整的计算图编译过程，Tensor Graph、Tile Graph、Block Graph阶段会经历多个Pass的优化，最终通过Execute Graph阶段整合图信息，编程生成最终的硬件执行图。
+下图展示了完整的计算图编译过程，Tensor Graph、Tile Graph、Block Graph阶段会经历多个Pass的优化，最终通过Execute Graph阶段整合图信息，编译生成最终的硬件执行图。
 
 具体Pass列表请参见：framework/src/passes/pass\_mgr/pass\_manager.cpp文件。
 

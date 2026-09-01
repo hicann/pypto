@@ -19,7 +19,7 @@ Tensor是PyPTO中的基本数据结构，用于表示将在计算图中使用并
     - dtype：表示Tensor中存储的数据类型，支持DataType类型，例如，DT\_FP16表示16位半精度浮点数。
     - name：名称，支持字符串类型，可选。但建议为Tensor提供有意义的名称，以便于调试和理解计算图结构。
     - format：数据排布格式，支持TileOpFormat类型，可选，默认为：TILEOP\_ND。
-                format显式标记时,性能更优,要求传入的torch tensor与pypto.Tensor声明的format一致;
+                format显式标记时，性能更优，要求传入的数据排布与pypto.Tensor声明的format一致；
 
 - 创建带格式的Tensor
 
@@ -83,7 +83,7 @@ tensor.name = "new_name"  #可以更改
 
 ## 动态维度Tensor的处理
 
-在实际应用场景，Tensor通常是个可变长的数据。可通过以下方法定义动态Shape的Tensor，并通过-1标记动态维度：
+在实际应用场景中，Tensor通常是个可变长的数据。可通过以下方法定义动态Shape的Tensor，并通过-1标记动态维度：
 
 ```python
 tensor = pypto.tensor([-1, 32], pypto.DT_FP16, "dynamic")
@@ -96,7 +96,7 @@ print(tensor.shape)
 通过如下方法可以获取动态维度的符号化标量，在运行时获取具体数值：
 
 ```python
-b = pypto.symbolic_scalar(tensor_shape[0])
+b = pypto.symbolic_scalar(tensor.shape[0])
 ```
 
 如果Tensor继承自PyTorch Tensor，可以通过pypto.from\_torch接口的参数dynamic\_axis = \[int\]来定义动态维度的Tensor。

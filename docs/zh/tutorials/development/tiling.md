@@ -117,7 +117,7 @@ set\_cube\_tile\_shapes用于设置矩阵计算中各矩阵在m、k、n维度上
 # 设置Cube计算的TileShape
 pypto.set_cube_tile_shapes([16, 16], [256, 512], [128, 128], enable_split_k=False)
 # 获取并打印设置的TileShape
-print(pypto.get_cube_tile_shapes())  # 输出: [[16, 16], [256, 512, 512], [128, 128], False]
+print(pypto.get_cube_tile_shapes())  # 输出: [[16, 16], [256, 512], [128, 128], False]
 ```
 
 pypto.set\_cube\_tile\_shapes\(\[16, 16\], \[256, 512\], \[128, 128\], enable\_split\_k=False\)：将矩阵相乘形状变化记为\(m, k\) x \(k, n\) = \(m, n\)，这里三个列表分别设置的是矩阵m、k、n维度的切分大小，每个列表的两个元素，第一个元素是设置L0的切分大小，第二个元素设置的是L1的切分大小。其中enable\_split\_k参数为是否开启多核切K功能，默认为False。对于M、N较小而K轴较大的场景，仅在M、N轴做分核可能无法用满核导致整体性能较差，此时可以设置`enable_split_k`为True以使能K轴分核。
@@ -205,7 +205,7 @@ def test_set_cube_different_tile_shapes_runtime():
     print(f"runtime_2(pypto.set_cube_tile_shapes([64, 64], [128, 128], [128, 128])): {runtime_2}")
 ```
 
-在该示例中，对于两个shape分别为\(4, 64, 512\)和的\(4, 512, 128\)的矩阵相乘，set\_cube\_tile\_shapes\(\[32, 32\], \[32, 32\], \[32, 32\]\)的运行时间明显比set\_cube\_tile\_shapes\(\[64, 64\], \[128, 128\], \[128, 128\]\)要长。
+在该示例中，对于两个shape分别为\(4, 64, 512\)和\(4, 512, 128\)的矩阵相乘，set\_cube\_tile\_shapes\(\[32, 32\], \[32, 32\], \[32, 32\]\)的运行时间明显比set\_cube\_tile\_shapes\(\[64, 64\], \[128, 128\], \[128, 128\]\)要长。
 
 完整样例请参考：[tiling_config.py](../../../../examples/01_beginner/tiling/tiling_config.py)。
 
