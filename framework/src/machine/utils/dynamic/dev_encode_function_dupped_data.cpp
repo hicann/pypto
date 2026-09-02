@@ -160,8 +160,8 @@ void DevAscendFunctionDupped::DumpRawShape(const DevAscendRawTensor* rawTensor, 
 void DevAscendFunctionDupped::DumpOperandShape(uint32_t dimSize, size_t opIdx, size_t operandIdx, bool isIn,
                                                std::vector<std::string>& lines, std::stringstream& oss) const
 {
-    uint64_t offset[DEV_SHAPE_DIM_MAX];
-    uint64_t shape[DEV_SHAPE_DIM_MAX];
+    uint64_t offset[DEV_SHAPE_DIM_MAX] = {0};
+    uint64_t shape[DEV_SHAPE_DIM_MAX] = {0};
     GetFuncTensorOffsetAndShape(offset, shape, dimSize, opIdx, operandIdx, isIn);
 
     oss << "          offset=[";
