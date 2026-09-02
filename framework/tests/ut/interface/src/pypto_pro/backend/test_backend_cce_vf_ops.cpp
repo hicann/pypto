@@ -807,11 +807,10 @@ TEST(BackendCCEVFOpsTest, EmitsGatherAndUnalignedDataMovement)
     ExpectInvoke(codegen, "vf.gather", {"vselr("}, {fp16, fp16, index_u16});
     ExpectInvoke(codegen, "vf.scatter", {"vscatter("}, {tile, fp16, index_u16, mask});
     ExpectInvoke(codegen, "vf.load", {"UnalignReg __ureg_ld_", "vldas(", "vldus("}, {fp16, tile});
-    ExpectInvoke(codegen, "vf.load", {"UnalignReg __ureg_ld_", "vldas(", "vldus(", "(4) * 2", "NORM"},
-                 {i64, tile64, Int(4)}, {{"post_mode", std::string("NORM")}});
+    ExpectInvoke(codegen, "vf.load", {"UnalignReg __ureg_ld_", "vldas(", "vldus(", "POST_UPDATE"},
+                 {i64, tile64, Int(4)});
     ExpectInvoke(codegen, "vf.store", {"UnalignReg __ureg_st_", "vstus(", "vstas("}, {tile, fp16});
-    ExpectInvoke(codegen, "vf.store", {"UnalignReg __ureg_st_", "vstus(", "vstas(", "(7) * 2", "NORM"},
-                 {tile64, i64, Int(7)}, {{"post_mode", std::string("NORM")}});
+    ExpectInvoke(codegen, "vf.store", {"UnalignReg __ureg_st_", "vstus(", "vstas("}, {tile64, i64, Int(7)});
 
     ExpectInvoke(codegen, "vf.unalign_reg_for_store", {"UnalignReg store_ureg;"}, {}, {}, "store_ureg");
     ExpectInvoke(codegen, "vf.load_unalign_init", {"UnalignReg load_ureg;"}, {}, {}, "load_ureg");
@@ -825,6 +824,146 @@ TEST(BackendCCEVFOpsTest, EmitsGatherAndUnalignedDataMovement)
     ExpectInvoke(codegen, "vf.store_unalign_post", {"vstas(", "POST_UPDATE"}, {tile8, ureg, Int(2)},
                  {{"post_update", true}});
     ExpectInvoke(codegen, "vf.clear_spr", {"sprclr(SPR_AR)"});
+}
+
+TEST(BackendCCEVFOpsTest, EmitsScatterWithVariousDtypes)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    auto fp16_reg = MakeVar("fp16_reg", ir::DataType::FP16);
+    auto int8_reg = MakeVar("int8_reg", ir::DataType::INT8);
+    auto uint8_reg = MakeVar("uint8_reg", ir::DataType::UINT8);
+    auto int16_reg = MakeVar("int16_reg", ir::DataType::INT16);
+    auto int32_reg = MakeVar("int32_reg", ir::DataType::INT32);
+    auto uint32_reg = MakeVar("uint32_reg", ir::DataType::UINT32);
+    auto fp32_reg = MakeVar("fp32_reg", ir::DataType::FP32);
+    auto int64_reg = MakeVar("int64_reg", ir::DataType::INT64);
+    auto uint64_reg = MakeVar("uint64_reg", ir::DataType::UINT64);
+    auto idx_u16 = MakeVar("idx_u16", ir::DataType::UINT16);
+    auto idx_u32 = MakeVar("idx_u32", ir::DataType::UINT32);
+    auto idx_u64 = MakeVar("idx_u64", ir::DataType::UINT64);
+
+    // b8 src + u16 index → vscatter with uint16_t index cast
+    ExpectInvoke(codegen, "vf.scatter", {"vscatter(", "RegTensor<uint16_t>"},
+                 {MakeTile("t8"), int8_reg, idx_u16, mask});
+    ExpectInvoke(codegen, "vf.scatter", {"vscatter(", "RegTensor<uint16_t>"},
+                 {MakeTile("tu8"), uint8_reg, idx_u16, mask});
+    // b16 src + u16 index → vscatter with uint16_t index cast
+    ExpectInvoke(codegen, "vf.scatter", {"vscatter(", "RegTensor<uint16_t>"},
+                 {MakeTile("t16"), int16_reg, idx_u16, mask});
+    ExpectInvoke(codegen, "vf.scatter", {"vscatter(", "RegTensor<uint16_t>"},
+                 {MakeTile("th16"), fp16_reg, idx_u16, mask});
+    // b32 src + u32 index → vscatter with uint32_t index cast
+    ExpectInvoke(codegen, "vf.scatter", {"vscatter(", "RegTensor<uint32_t>"},
+                 {MakeTile("ti32"), int32_reg, idx_u32, mask});
+    ExpectInvoke(codegen, "vf.scatter", {"vscatter(", "RegTensor<uint32_t>"},
+                 {MakeTile("tu32"), uint32_reg, idx_u32, mask});
+    ExpectInvoke(codegen, "vf.scatter", {"vscatter(", "RegTensor<uint32_t>"},
+                 {MakeTile("tf32"), fp32_reg, idx_u32, mask});
+    // b64 src + u32 index → vscatter with uint32_t index cast
+    ExpectInvoke(codegen, "vf.scatter", {"vscatter(", "RegTensor<uint32_t>"},
+                 {MakeTile("ti64"), int64_reg, idx_u32, mask});
+    ExpectInvoke(codegen, "vf.scatter", {"vscatter(", "RegTensor<uint32_t>"},
+                 {MakeTile("tu64"), uint64_reg, idx_u32, mask});
+    // b64 src + u64 index → vscatter with uint32_t index cast
+    ExpectInvoke(codegen, "vf.scatter", {"vscatter(", "RegTensor<uint32_t>"},
+                 {MakeTile("ti64b"), int64_reg, idx_u64, mask});
+    ExpectInvoke(codegen, "vf.scatter", {"vscatter(", "RegTensor<uint32_t>"},
+                 {MakeTile("tu64b"), uint64_reg, idx_u64, mask});
+}
+
+TEST(BackendCCEVFOpsTest, EmitsStoreWithUint64Reinterpret)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto u64_tile = MakeTile("tile_u64", ir::DataType::UINT64);
+    auto u64_reg = MakeVar("reg_u64", ir::DataType::UINT64);
+    auto i64_tile = MakeTile("tile_i64", ir::DataType::INT64);
+    auto i64_reg = MakeVar("reg_i64", ir::DataType::INT64);
+
+    // UINT64: vstus/vstas must reinterpret src as uint32_t pairs and double count
+    ExpectInvoke(
+        codegen, "vf.store",
+        {"UnalignReg __ureg_st_", "vstus(", "vstas(", "POST_UPDATE", "(RegTensor<uint32_t>&)", "uint32_t", "* 2"},
+        {u64_tile, u64_reg, Int(7)});
+    // INT64: no reinterpret needed, count used as-is
+    ExpectInvoke(codegen, "vf.store", {"UnalignReg __ureg_st_", "vstus(", "vstas(", "POST_UPDATE", ", 7,"},
+                 {i64_tile, i64_reg, Int(7)});
+    // Verify UINT64 uses uint32_t ptr cast (tile is uint64_t, cast to uint32_t)
+    auto u64_out = Invoke(codegen, "vf.store", {u64_tile, u64_reg, Int(7)});
+    EXPECT_NE(u64_out.find("__ubuf__ uint32_t"), std::string::npos);
+}
+
+TEST(BackendCCEVFOpsTest, EmitsStoreWithB8NativeType)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile_u8 = MakeTile("tile_u8", ir::DataType::UINT8);
+    auto reg_u8 = MakeVar("reg_u8", ir::DataType::UINT8);
+    auto tile_i8 = MakeTile("tile_i8", ir::DataType::INT8);
+    auto reg_i8 = MakeVar("reg_i8", ir::DataType::INT8);
+
+    // INT8/UINT8 have direct vstus/vstas overloads, no reinterpret needed.
+    // Pointer type matches the tile's native C type (int8_t / uint8_t).
+    auto u8_out = Invoke(codegen, "vf.store", {tile_u8, reg_u8, Int(64)});
+    ExpectContains(u8_out, {"UnalignReg __ureg_st_", "vstus(", "vstas(", "POST_UPDATE", "reg_u8"});
+    auto i8_out = Invoke(codegen, "vf.store", {tile_i8, reg_i8, Int(64)});
+    ExpectContains(i8_out, {"UnalignReg __ureg_st_", "vstus(", "vstas(", "POST_UPDATE", "reg_i8"});
+}
+
+TEST(BackendCCEVFOpsTest, EmitsStoreWithDefaultCount)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP32);
+    auto reg = MakeVar("reg", ir::DataType::FP32);
+
+    // Default count = 256/4 = 64 for FP32
+    ExpectInvoke(codegen, "vf.store", {"UnalignReg __ureg_st_", "vstus(", "vstas(", "POST_UPDATE", "64"}, {tile, reg});
+}
+
+TEST(BackendCCEVFOpsTest, EmitsStoreRejectsRepeatStride)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP32);
+    auto reg = MakeVar("reg", ir::DataType::FP32);
+
+    EXPECT_THROW(Invoke(codegen, "vf.store", {tile, reg}, {{{"repeat_stride", 16}}}), std::exception);
+}
+
+TEST(BackendCCEVFOpsTest, EmitsStoreRejectsExceedCount)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP32);
+    auto reg = MakeVar("reg", ir::DataType::FP32);
+
+    // FP32 max count = 256/4 = 64; 1000 exceeds the limit
+    EXPECT_THROW(Invoke(codegen, "vf.store", {tile, reg, Int(1000)}), std::exception);
+    // FP32 max count = 64; 65 just exceeds
+    EXPECT_THROW(Invoke(codegen, "vf.store", {tile, reg, Int(65)}), std::exception);
+    // FP32 max count = 64; 64 is valid
+    ExpectInvoke(codegen, "vf.store", {"vstus(", "64"}, {tile, reg, Int(64)});
+}
+
+TEST(BackendCCEVFOpsTest, EmitsLoadWithUnifiedPointerType)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile_fp16 = MakeTile("tile_fp16", ir::DataType::FP16);
+    auto fp16_reg = MakeVar("fp16_reg", ir::DataType::FP16);
+    auto tile_i64 = MakeTile("tile_i64", ir::DataType::INT64);
+    auto i64_reg = MakeVar("i64_reg", ir::DataType::INT64);
+    auto tile_u8 = MakeTile("tile_u8", ir::DataType::UINT8);
+    auto u8_reg = MakeVar("u8_reg", ir::DataType::UINT8);
+
+    // FP16: vldas and vldus both use the same pointer (native half, no separate int ptr)
+    auto fp16_out = Invoke(codegen, "vf.load", {fp16_reg, tile_fp16});
+    ExpectContains(fp16_out, {"UnalignReg __ureg_ld_", "vldas(", "vldus(", "fp16_reg"});
+
+    // INT64: vldas and vldus both use native int64_t pointer, no "* 2" multiplier
+    ExpectInvoke(codegen, "vf.load", {"UnalignReg __ureg_ld_", "vldas(", "vldus("}, {i64_reg, tile_i64});
+    auto i64_out = Invoke(codegen, "vf.load", {i64_reg, tile_i64, Int(4)});
+    EXPECT_EQ(i64_out.find("* 2"), std::string::npos);
+
+    // UINT8: b8 uses uint8_t pointer (tile is UINT8, matches natively)
+    auto u8_out = Invoke(codegen, "vf.load", {u8_reg, tile_u8});
+    ExpectContains(u8_out, {"UnalignReg __ureg_ld_", "vldas(", "vldus(", "u8_reg"});
 }
 
 TEST(BackendCCEVFOpsTest, EmitsMaskLogicOperations)

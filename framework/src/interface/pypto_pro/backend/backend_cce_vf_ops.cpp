@@ -3748,10 +3748,7 @@ static std::string EmitVFScatter(const ir::CallPtr& op, codegen::CodegenBase& co
     }
     std::string base_c_type = src_dt.ToCTypeString();
     std::string base_ptr = GetUBufPtr(codegen, op->args_[0], base_c_type);
-    std::string idx_c_type = (src_dt == DataType::UINT32) ? "uint32_t" :
-                             (src_dt == DataType::INT32)  ? "int32_t" :
-                             (src_dt == DataType::FP32)   ? "uint32_t" :
-                                                            "uint16_t";
+    std::string idx_c_type = (src_dt.GetBit() >= 32) ? "uint32_t" : "uint16_t";
     codegen.Emit("vscatter(" + src + ", " + base_ptr + ", (RegTensor<" + idx_c_type + "> &)" + index + ", " + mask +
                  ");");
     return "";
@@ -4377,43 +4374,21 @@ static std::string EmitVFLoad(const ir::CallPtr& op, codegen::CodegenBase& codeg
     int elem_bytes = static_cast<int>(dst_dt.GetBit() / 8);
     if (elem_bytes <= 0)
         elem_bytes = 4;
-    // vldas requires integer pointer types; vldus requires dst reg type == ptr type.
-    // Strategy: use int-type ptr for vldas, native-type ptr for vldus, cast dst for vldus if needed.
-    std::string vldas_ptr_type;
-    if (elem_bytes == 1) {
-        vldas_ptr_type = "uint8_t";
-    } else if (elem_bytes == 8) {
-        vldas_ptr_type = "uint32_t";
-    } else if (elem_bytes == 4) {
-        vldas_ptr_type = "int32_t";
-    } else {
-        if (dst_dt == DataType::FP16 || dst_dt == DataType::BF16)
-            vldas_ptr_type = "half";
-        else
-            vldas_ptr_type = "uint16_t";
-    }
-    // vldus needs matching dst/ptr types; for float data use float ptr directly.
-    std::string vldus_ptr_type = dst_dt.ToCTypeString();
+    // vldas and vldus both use the native dtype pointer (matches asc_load C-API).
+    // For b8 types that lack a direct vldas/vldus overload, reinterpret as uint8_t.
+    std::string ptr_type = NeedsB8Reinterpret(dst_dt) ? "uint8_t" : dst_dt.ToCTypeString();
     static int load_counter = 0;
     std::string ureg_name = "__ureg_ld_" + std::to_string(load_counter++);
     codegen.Emit("UnalignReg " + ureg_name + ";");
     if (op->args_.size() == 3) {
-        std::string vldas_ptr = GetUBufPtr(codegen, op->args_[1], vldas_ptr_type, /*is_post_update=*/true);
-        std::string vldus_ptr = GetUBufPtr(codegen, op->args_[1], vldus_ptr_type, /*is_post_update=*/true);
+        std::string src_ptr = GetUBufPtr(codegen, op->args_[1], ptr_type, /*is_post_update=*/true);
         std::string stride = codegen.GetExprAsCode(op->args_[2]);
-        std::string effective_stride = (elem_bytes == 8) ? ("(" + stride + ") * 2") : stride;
-        std::string post_mode = "POST_UPDATE";
-        if (op->HasKwarg("post_mode")) {
-            post_mode = op->GetKwarg<std::string>("post_mode");
-        }
-        codegen.Emit("vldas(" + ureg_name + ", " + vldas_ptr + ");");
-        codegen.Emit("vldus(" + dst + ", " + ureg_name + ", " + vldus_ptr + ", " + effective_stride + ", " + post_mode +
-                     ");");
+        codegen.Emit("vldas(" + ureg_name + ", " + src_ptr + ");");
+        codegen.Emit("vldus(" + dst + ", " + ureg_name + ", " + src_ptr + ", " + stride + ", POST_UPDATE);");
     } else {
-        std::string vldas_ptr = GetUBufPtr(codegen, op->args_[1], vldas_ptr_type);
-        std::string vldus_ptr = GetUBufPtr(codegen, op->args_[1], vldus_ptr_type);
-        codegen.Emit("vldas(" + ureg_name + ", " + vldas_ptr + ");");
-        codegen.Emit("vldus(" + dst + ", " + ureg_name + ", " + vldus_ptr + ");");
+        std::string src_ptr = GetUBufPtr(codegen, op->args_[1], ptr_type);
+        codegen.Emit("vldas(" + ureg_name + ", " + src_ptr + ");");
+        codegen.Emit("vldus(" + dst + ", " + ureg_name + ", " + src_ptr + ");");
     }
     return "";
 }
@@ -4430,32 +4405,47 @@ static std::string EmitVFStore(const ir::CallPtr& op, codegen::CodegenBase& code
     // vstus/vstas support b8/b16/b32/b64 element widths
     CHECK(IsB8Type(src_dt) || src_dt.GetBit() == 16 || src_dt.GetBit() == 32 || src_dt.GetBit() == 64)
         << "vf.store only supports b8/b16/b32/b64 types, got " << DTypeStr(src_dt);
+    // Check src/dst dtype consistency (doc: src and dst must have the same dtype)
+    DataType tile_dt = GetExprDtype(op->args_[0], src_dt);
+    CHECK(tile_dt == src_dt) << "vf.store requires src and dst to have the same dtype, got src=" << DTypeStr(src_dt)
+                             << " dst=" << DTypeStr(tile_dt);
     int elem_bytes = static_cast<int>(src_dt.GetBit() / 8);
     if (elem_bytes <= 0)
         elem_bytes = 4;
-    // vstus requires matching src reg type and dst pointer type (same as vldus).
-    // Use native type for the pointer; no cast on the src register.
-    std::string ptr_type = src_dt.ToCTypeString();
-    std::string dst_ptr = GetUBufPtr(codegen, op->args_[0], ptr_type, /*is_post_update=*/true);
-    std::string src = codegen.GetExprAsCode(op->args_[1]);
+    // Determine count (positional arg, default 256B/elem_bytes)
     std::string count;
     if (op->args_.size() == 3) {
         count = codegen.GetExprAsCode(op->args_[2]);
-    } else if (op->HasKwarg("count")) {
-        count = std::to_string(op->GetKwarg<int>("count"));
     } else {
         count = std::to_string(256 / elem_bytes);
     }
-    std::string effective_count = (elem_bytes == 8) ? ("(" + count + ") * 2") : count;
-    std::string post_mode = "POST_UPDATE";
-    if (op->HasKwarg("post_mode")) {
-        post_mode = op->GetKwarg<std::string>("post_mode");
+    // Validate constant count does not exceed max (256B/sizeof(dtype))
+    int max_count = 256 / elem_bytes;
+    if (op->args_.size() == 3) {
+        auto const_int = std::dynamic_pointer_cast<const ir::ConstInt>(op->args_[2]);
+        if (const_int != nullptr) {
+            CHECK(const_int->value_ <= max_count)
+                << "vf.store count must not exceed 256B/sizeof(dtype) = " << max_count << ", got " << const_int->value_;
+        }
     }
+    // repeat_stride is not supported by vstus/vstas intrinsics
+    CHECK(!op->HasKwarg("repeat_stride")) << "vf.store does not support repeat_stride";
+    // UINT64: vstus/vstas have no uint64_t overload, must reinterpret as uint32_t pairs.
+    // INT64 has a direct overload (asc_storeunalign_impl has int64_t but not uint64_t).
+    bool is_u64 = (src_dt == DataType::UINT64);
+    std::string ptr_type = is_u64 ? "uint32_t" : (NeedsB8Reinterpret(src_dt) ? "uint8_t" : src_dt.ToCTypeString());
+    std::string src_expr = is_u64 ? ("(RegTensor<uint32_t>&)" + codegen.GetExprAsCode(op->args_[1])) :
+                                    codegen.GetExprAsCode(op->args_[1]);
+    std::string effective_count = is_u64 ? ("(" + count + ") * 2") : count;
+    // vstus/vstas use POST_UPDATE so the pointer is advanced internally by vstus
+    // and vstas flushes the tail at the advanced position. This matches AscendC
+    // StoreImpl which always uses POST_MODE_UPDATE via DataCopyUnAlignImpl.
+    std::string dst_ptr = GetUBufPtr(codegen, op->args_[0], ptr_type, /*is_post_update=*/true);
     static int store_counter = 0;
     std::string ureg_name = "__ureg_st_" + std::to_string(store_counter++);
     codegen.Emit("UnalignReg " + ureg_name + ";");
-    codegen.Emit("vstus(" + ureg_name + ", " + effective_count + ", " + src + ", " + dst_ptr + ", " + post_mode + ");");
-    codegen.Emit("vstas(" + ureg_name + ", " + dst_ptr + ", 0, " + post_mode + ");");
+    codegen.Emit("vstus(" + ureg_name + ", " + effective_count + ", " + src_expr + ", " + dst_ptr + ", POST_UPDATE);");
+    codegen.Emit("vstas(" + ureg_name + ", " + dst_ptr + ", 0, POST_UPDATE);");
     return "";
 }
 

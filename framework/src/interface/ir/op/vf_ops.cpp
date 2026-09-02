@@ -865,8 +865,6 @@ REGISTER_OP("vf.store")
     .add_argument("dst_ptr", "Destination UB pointer")
     .add_argument("src", "Source register")
     .add_argument("count", "Element count (optional, defaults to 256/elem_bytes)")
-    .set_attr<bool>("post_update")
-    .set_attr<int>("repeat_stride")
     .f_deduce_type(DeduceVFUnknownType);
 
 REGISTER_OP("vf.create_addr_reg")

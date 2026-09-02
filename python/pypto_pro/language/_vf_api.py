@@ -1887,20 +1887,15 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def store(dst_ptr, src, count=None, post_update: bool = False,
-              repeat_stride=None):
+    def store(dst_ptr, src, count=None):
         """Unified store (vstus+vstas, matches AscendC Store interface).
 
-        Simple store from register to UB. Supports optional post-update.
+        Simple store from register to UB.
 
         Args:
             dst_ptr: Destination UB pointer
             src: Source register
             count: Element count (optional, defaults to 256/elem_bytes)
-
-        Kwargs:
-            post_update: Enable post-update addressing
-            repeat_stride: Stride for repeated stores
         """
 
     @staticmethod

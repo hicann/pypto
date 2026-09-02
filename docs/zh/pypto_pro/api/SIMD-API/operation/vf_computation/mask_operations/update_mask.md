@@ -14,9 +14,7 @@
 
 ## 功能说明
 
-从标量值更新mask_reg。标量值的比特位定义新的掩码模式。
-
-update_mask根据当前scalarValue的值生成对应长度的有效位掩码，并自动将scalarValue减去当前向量长度以更新剩余待处理元素数量：`scalarValue = (scalarValue < VL_T) ? 0 : (scalarValue - VL_T)`。以16位宽数据类型为例，掩码生成过程如下图所示：
+从标量值更新mask_reg。`vf.update_mask`根据当前scalarValue的值生成对应长度的有效位掩码。以16位宽数据类型为例，掩码生成过程如下图所示：
 
 **图1**update_mask 16位宽数据类型下基于scalarValue的掩码生成
 
@@ -33,7 +31,7 @@ update_mask(scalar, dtype: Optional[DType] = None) -> preg
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `scalar` | 输入 | 标量值，其比特位定义新的掩码模式。 |
-| `dtype` | 输入 | 掩码对应的数据类型，决定掩码宽度（默认`pl.DT_FP32`）。 - 本接口操作数为寄存器，不涉及地址对齐。<br>- 本接口不修改全局寄存器的值。 |
+| `dtype` | 输入 | 掩码对应的数据类型，决定掩码宽度（默认`pl.DT_FP32`）。<br>- 本接口操作数为寄存器，不涉及地址对齐。<br>- 本接口不修改全局寄存器的值。 |
 
 ## 约束说明
 
