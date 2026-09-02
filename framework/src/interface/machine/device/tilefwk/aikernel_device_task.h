@@ -91,7 +91,7 @@ struct DrcoRootFuncList {
     alignas(64) uint8_t pad[64];
 };
 
-constexpr int32_t DEVICE_TASK_QUEUE_SIZE = 4;
+constexpr int32_t DEVICE_TASK_QUEUE_SIZE = 64;
 struct DrcoDeviceTask {
     __gm__ DynFuncHeader* dynFuncDataList;
     __gm__ DrcoRootFuncList* drcoRootFuncList;
