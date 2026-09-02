@@ -378,6 +378,28 @@ void UpdateMergedProducerDependOperands(const std::vector<Operation*>& producers
 
 } // namespace
 
+std::string CommonOperationEliminateUtils::DumpAttr(const Operation& op)
+{
+    // Excluded attribute keys: graph-merge attributes are annotated by merge passes (L1CopyInReuse /
+    // CubeNBuffer / VecNBuffer) with merge-group identifiers (e.g. "func<magic>_<order>") that differ
+    // across equivalent producer groups, so they must not participate in the common-operation hash.
+    static const std::unordered_set<std::string> excludedAttrKeys = {
+        OpAttributeKey::l1ReuseHashOrder,   OpAttributeKey::l1ReuseSubgraphCount,
+        OpAttributeKey::cubeMergeHashOrder, OpAttributeKey::cubeMergeSubgraphCount,
+        OpAttributeKey::vecMergeHashOrder,  OpAttributeKey::vecMergeSubgraphCount,
+    };
+    std::ostringstream oss;
+    size_t index = 0;
+    for (const auto& attr : op.GetAllAttr()) {
+        if (excludedAttrKeys.count(attr.first) != 0) {
+            continue;
+        }
+        oss << ((index++ == 0) ? "" : " ");
+        oss << "#" << attr.first << "{" << op.DumpAttr(attr.first) << "}";
+    }
+    return oss.str();
+}
+
 void CommonOperationEliminateUtils::SortedProducer(std::vector<Operation*>& sortedProducers) const
 {
     // Keep the original producer order for ties so hash generation stays deterministic.
@@ -451,8 +473,9 @@ void CommonOperationEliminateUtils::CollectProducerInfo(const std::vector<Operat
         if (op->GetOpAttribute() != nullptr) {
             ss << " " << op->GetOpAttribute()->Dump();
         }
-        if (!op->DumpAttr().empty()) {
-            ss << " " << op->DumpAttr();
+        std::string opAttrStr = DumpAttr(*op);
+        if (!opAttrStr.empty()) {
+            ss << " " << opAttrStr;
         }
         for (const auto& attr : OpcodeManager::Inst().GetAttrs(op->GetOpcode())) {
             ss << " attr: [" << attr << " : " << op->DumpAttr(attr) << "]";

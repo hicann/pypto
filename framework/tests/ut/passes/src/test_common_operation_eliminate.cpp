@@ -400,6 +400,38 @@ TEST_F(CommonOperationEliminateTest, RespectReduceCopyPreSubgraphId)
     EXPECT_EQ(function->Operations().size(), 3);
 }
 
+TEST_F(CommonOperationEliminateTest, EliminateDupOpsWithDifferentGraphMergeHashOrder)
+{
+    ComputationalGraphBuilder G;
+    std::vector<std::string> tensorNames{"t1", "t2", "t3", "t4"};
+    std::vector<Opcode> opCodes{Opcode::OP_ABS, Opcode::OP_ABS, Opcode::OP_MUL};
+    std::vector<std::vector<std::string>> ioperands{{"t1"}, {"t1"}, {"t2", "t3"}};
+    std::vector<std::vector<std::string>> ooperands{{"t2"}, {"t3"}, {"t4"}};
+    std::vector<std::string> opNames{"ABS1", "ABS2", "MUL"};
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, {16, 16}, tensorNames), true);
+    EXPECT_EQ(G.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    EXPECT_EQ(G.SetInCast({"t1"}), true);
+    EXPECT_EQ(G.SetOutCast({"t4"}), true);
+    auto* abs1 = G.GetOp("ABS1");
+    auto* abs2 = G.GetOp("ABS2");
+    auto* mul = G.GetOp("MUL");
+    ASSERT_NE(abs1, nullptr);
+    ASSERT_NE(abs2, nullptr);
+    ASSERT_NE(mul, nullptr);
+    // Merge passes annotate equivalent producers of one merged subgraph with different
+    // merge-group ids ("func<magic>_<order>"); these must not block common-op elimination.
+    abs1->UpdateSubgraphID(0);
+    abs2->UpdateSubgraphID(0);
+    mul->UpdateSubgraphID(0);
+    abs1->SetHashOrderInfo(OpAttributeKey::l1ReuseHashOrder, OpAttributeKey::l1ReuseSubgraphCount, "func0_0", 2);
+    abs2->SetHashOrderInfo(OpAttributeKey::l1ReuseHashOrder, OpAttributeKey::l1ReuseSubgraphCount, "func0_1", 4);
+    abs1->SetHashOrderInfo(OpAttributeKey::cubeMergeHashOrder, OpAttributeKey::cubeMergeSubgraphCount, "func0_0", 2);
+    abs2->SetHashOrderInfo(OpAttributeKey::cubeMergeHashOrder, OpAttributeKey::cubeMergeSubgraphCount, "func0_1", 4);
+    abs1->SetHashOrderInfo(OpAttributeKey::vecMergeHashOrder, OpAttributeKey::vecMergeSubgraphCount, "func0_0", 2);
+    abs2->SetHashOrderInfo(OpAttributeKey::vecMergeHashOrder, OpAttributeKey::vecMergeSubgraphCount, "func0_1", 4);
+    ExpectCommonOperationEliminateOpCount(G, 2);
+}
+
 TEST_F(CommonOperationEliminateTest, IgnoreSpecialOp)
 {
     ComputationalGraphBuilder G;

@@ -43,6 +43,7 @@ public:
 
 private:
     static const std::unordered_set<Opcode>& GetSkipEliminateOpcodes();
+    static std::string DumpAttr(const Operation& op);
     void SortedProducer(std::vector<Operation*>& sortedProducers) const;
     void CollectProducerInfo(const std::vector<Operation*>& sortedProducers, const LogicalTensorPtr& curTensor,
                              std::vector<std::string>& opStrList, std::stringstream& ss) const;
