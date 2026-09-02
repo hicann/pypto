@@ -10,7 +10,6 @@
 # -----------------------------------------------------------------------------------------------------------
 
 import math
-import pkgutil
 
 import numpy as np
 import torch
@@ -65,23 +64,10 @@ def str_to_bool(input_str: str):
 
 
 def get_dtype_by_name(name: str, is_torch: bool = False, check: bool = True):
-    if pkgutil.find_loader("ml_dtypes"):
-        from ml_dtypes import bfloat16, float8_e4m3fn, float8_e5m2
-
-        fp8_e4m3_np = float8_e4m3fn
-        fp8_e5m2_np = float8_e5m2
-    else:
-        bfloat16 = None
-        fp8_e4m3_np = None
-        fp8_e5m2_np = None
-
     # torch FP8 dtype
     fp8_e4m3_torch = torch.float8_e4m3fn if hasattr(torch, 'float8_e4m3fn') else None
     fp8_e5m2_torch = torch.float8_e5m2 if hasattr(torch, 'float8_e5m2') else None
     fp8_e8m0_torch = torch.float8_e8m0fnu if hasattr(torch, 'float8_e8m0fnu') else None
-
-    if check and name == "bf16" and bfloat16 is None:
-        raise TypeError("No module named 'ml_dtypes'.")
 
     str_to_dtype = {
         "int8": [np.int8, torch.int8],
@@ -99,15 +85,15 @@ def get_dtype_by_name(name: str, is_torch: bool = False, check: bool = True):
         "double": [np.float64, torch.double],
         "complex64": [np.complex64, torch.complex64],
         "complex128": [np.complex128, torch.complex64],
-        "bf16": [bfloat16, torch.bfloat16],
+        "bf16": [None, torch.bfloat16],
         "fp4_e2m1x2": [np.uint8, torch.uint8],
         "fp4_e1m2x2": [np.uint8, torch.uint8],
         "fp8e4m3": [
-            fp8_e4m3_np if fp8_e4m3_np is not None else np.uint8,
+            np.uint8,
             fp8_e4m3_torch if fp8_e4m3_torch is not None else np.uint8,
         ],
         "fp8e5m2": [
-            fp8_e5m2_np if fp8_e5m2_np is not None else np.uint8,
+            np.uint8,
             fp8_e5m2_torch if fp8_e5m2_torch is not None else np.uint8,
         ],
         "fp8e8m0": [np.uint8, fp8_e8m0_torch if fp8_e8m0_torch is not None else np.uint8],

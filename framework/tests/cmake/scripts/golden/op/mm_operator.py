@@ -20,7 +20,6 @@ from pathlib import Path
 import sys
 from typing import List
 
-from ml_dtypes import bfloat16
 import numpy as np
 
 if __name__ == "__main__":
@@ -41,7 +40,6 @@ else:
 
 dtype_f32 = np.float32
 dtype_f16 = np.float16
-dtype_bf16 = bfloat16
 dtype_s8 = np.int8
 dtype_s32 = np.int32
 
@@ -136,8 +134,6 @@ def gen_mm_data_trans(mm_size, dtype, out_dtype, output_dir: Path):
         "MatmulOnBoardTest.test_mm_float16_4_7168_1536",
         "MatmulOnBoardTest.test_mm_float16_4_1536_6144",
         "MatmulOnBoardTest.test_mm_float16_16_7168_2048",
-        "MatmulOnBoardTest.test_mm_bfloat16_64_128_128",
-        "MatmulOnBoardTest.test_mm_bfloat16_f32_64_128_128",
         "MatmulOnBoardTest.test_mm_unalign_float32_2_128_128",
         "MatmulOnBoardTest.test_mm_unalign_float32_16_35_32",
         "MatmulOnBoardTest.test_mm_unalign_float32_16_32_35",
@@ -251,12 +247,6 @@ def gen_mm_op_data(case_name: str, output: Path) -> bool:
         elif case_name == "MatmulOnBoardTest.test_mm_float16_16_7168_1024":
             m, k, n = 16, 7168, 1024
             gen_mm_data(m, k, n, dtype_f16, dtype_f16, output)
-        elif case_name == "MatmulOnBoardTest.test_mm_bfloat16_64_128_128":
-            m, k, n = 64, 128, 128
-            gen_mm_data(m, k, n, dtype_bf16, dtype_bf16, output)
-        elif case_name == "MatmulOnBoardTest.test_mm_bfloat16_f32_64_128_128":
-            m, k, n = 64, 128, 128
-            gen_mm_data(m, k, n, dtype_bf16, dtype_f32, output)
         elif case_name == "MatmulOnBoardTest.test_mm_unalign_float32_2_128_128":
             m, k, n = 2, 128, 128
             gen_mm_data(m, k, n, dtype_f16, dtype_f32, output)
