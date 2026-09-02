@@ -9,7 +9,7 @@ rm -rf /home/jenkins/opensource/json
 
 python3 -m pip install build
 python3 -m pip install --upgrade packaging==24.2
-python3 -m pip install --upgrade pytest-xdist pytest-forked
+python3 -m pip install --upgrade pytest-xdist pytest-forked==1.6.0
 sudo apt install -y ninja-build
 apt install -y libclang-rt-15-dev
 

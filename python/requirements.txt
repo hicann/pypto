@@ -9,7 +9,7 @@ packaging
 
 # UTest/STest 依赖 pytest 相关包
 pytest
-pytest-forked
+pytest-forked==1.6.0
 pytest-xdist
 pytest-cov
 setproctitle
