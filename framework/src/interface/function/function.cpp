@@ -2350,6 +2350,10 @@ void Function::CreateFromIncast(const std::shared_ptr<LogicalTensor>& symbol,
     newIncast->UpdateDynValidShape(validShape);
     newIncast->GetRawTensor()->UpdateDynRawShape(symbol->GetDynValidShape());
     newIncast->CopyMemoryType(origin);
+    auto readToken = origin->GetReadToken();
+    auto writeToken = origin->GetWriteToken();
+    newIncast->SetReadToken(readToken);
+    newIncast->SetWriteToken(writeToken);
 }
 
 void Function::MoveNewlyInsertedOpsToFront(size_t operationCountBefore)

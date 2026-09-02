@@ -338,16 +338,18 @@ private:
         for (const auto& arg : op->args_) {
             auto tensor = AsLogicalTensor(arg);
             auto* raw = storage_.Find(tensor->GetRawTensor().get());
+            // An inplace operand aliases an output, so the op's write token covers both its internal read and write.
+            // Do not assign a new read token here; preserve the earlier reader's token used for the WAR dependency.
+            if (writtenRaws.count(raw)) {
+                continue;
+            }
             auto it = opReadTokens.find(raw);
             if (it != opReadTokens.end()) {
                 tensor->SetReadToken(it->second);
                 continue;
             }
 
-            VarPtr token;
-            if (!writtenRaws.count(raw)) {
-                token = rawTokenStates_[raw].latestRead;
-            }
+            VarPtr token = rawTokenStates_[raw].latestRead;
             if (!token) {
                 token = CreateTokenVar(tensor, op->span_, TokenKind::READ);
             }
@@ -359,9 +361,7 @@ private:
         std::vector<VarPtr> tokens = op->tokens_;
         std::unordered_set<VarPtr> seenTokens(tokens.begin(), tokens.end());
         for (const auto& read : reads) {
-            if (!writtenRaws.count(read.raw)) {
-                AppendToken(rawTokenStates_[read.raw].latestWrite, tokens, seenTokens);
-            }
+            AppendToken(rawTokenStates_[read.raw].latestWrite, tokens, seenTokens);
         }
         for (const auto& write : writes) {
             const auto& state = rawTokenStates_[write.raw];
@@ -384,11 +384,9 @@ private:
             rawTokenStates_[write.raw] = RawTokenState{write.token, nullptr, 0};
         }
         for (const auto& read : reads) {
-            if (!writtenRaws.count(read.raw)) {
-                auto& state = rawTokenStates_[read.raw];
-                state.latestRead = read.token;
-                state.readRevision = ++readRevision_;
-            }
+            auto& state = rawTokenStates_[read.raw];
+            state.latestRead = read.token;
+            state.readRevision = ++readRevision_;
         }
         return op;
     }
