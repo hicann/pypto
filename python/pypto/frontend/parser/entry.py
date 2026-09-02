@@ -590,8 +590,8 @@ class JitCallableWrapper:
             if isinstance(val, torch.Tensor):
                 raise FeError(
                     RuntimeError(
-                        f"Non-tensor parameter '{param_name}' must not be a torch.Tensor. "
-                        "Use positional arguments for tensors."
+                        f"JIT function parameter '{param_name}' received a torch.Tensor but is not annotated as "
+                        "pypto.Tensor(shape, dtype). Add the pypto.Tensor annotation to the function signature."
                     )
                 )
             result[param_name] = val

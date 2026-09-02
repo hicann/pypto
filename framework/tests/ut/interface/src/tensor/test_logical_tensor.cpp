@@ -147,5 +147,4 @@ TEST_F(TestLogicalTensor, NextVersionPreservesLogicalTensorMetadata)
     EXPECT_EQ(next->GetMemoryTypeOriginal(), storage->GetMemoryTypeOriginal());
     EXPECT_EQ(next->GetMemoryTypeToBe(), storage->GetMemoryTypeToBe());
     EXPECT_TRUE(next->HasAttr("version_metadata"));
-    EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(next->GetMagic()), next);
 }
