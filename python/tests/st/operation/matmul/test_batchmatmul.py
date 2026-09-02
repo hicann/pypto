@@ -18,7 +18,7 @@ import os
 from typing import Tuple
 
 import pytest
-from testcase.batchmatmul_test_case import BASIC_3D_TESTS, BASIC_4D_TESTS, BatchMatmulConfig
+from testcase.batchmatmul_test_case import BASIC_3D_TESTS, BASIC_4D_TESTS, DYNAMIC_3D_TESTS, BatchMatmulConfig
 import torch
 import torch.nn.functional as functional
 import torch_npu
@@ -247,6 +247,50 @@ def batch_matmul_kernel_4d(
             process_mn_loops_4d(ctx)
 
 
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def batch_matmul_kernel_3d_all_dynamic(
+    a_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC, pypto.DYNAMIC]),
+    b_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC, pypto.DYNAMIC]),
+    out_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC, pypto.DYNAMIC]),
+    config: BatchMatmulConfig,
+):
+    # 全Dynamic kernel：a/b/out 三个输入输出张量所有维度均为 DYNAMIC，
+    # batch/m/n 循环边界在运行时由张量实际 shape 推导（符号量），
+    # k 由 config 提供（view shape 需编译期常量，与 scaled_mm 全Dynamic kernel 约定一致）。
+    # 约束：a/b 的 batch 维需一致（不支持 batch 广播）。
+    batch = out_tensor.shape[0]
+    output_m = out_tensor.shape[1]
+    output_n = out_tensor.shape[2]
+    _, m, k, n = config.get_logical_dims_3d()
+    pypto.set_cube_tile_shapes(*config.tile_shape, config.is_acc)
+    pypto.set_vec_tile_shapes(128, 128)
+    tile_b = config.view_shape[0]
+    tile_m = config.view_shape[1]
+    tile_n = config.view_shape[2]
+
+    m_loop = (output_m + tile_m - 1) // tile_m
+    n_loop = (output_n + tile_n - 1) // tile_n
+    b_loop = (batch + tile_b - 1) // tile_b
+    pypto.set_matrix_size([m, k, n])
+
+    for b_idx in pypto.loop(0, b_loop, 1, name="LOOP_L0_bIdx", idx_name="b_idx"):
+        for m_idx in pypto.loop(0, m_loop, 1, name="LOOP_L0_mIdx", idx_name="m_idx"):
+            for n_idx in pypto.loop(0, n_loop, 1, name="LOOP_L1_nIdx", idx_name="n_idx"):
+                m_offset = m_idx * tile_m
+                n_offset = n_idx * tile_n
+                b_offset = b_idx * tile_b
+
+                a_view = a_tensor[b_offset:b_offset + tile_b, m_offset:m_offset + tile_m, 0:k]
+                b_view = b_tensor[b_offset:b_offset + tile_b, 0:k, n_offset:n_offset + tile_n]
+
+                out_view = pypto.matmul(
+                    a_view, b_view, out_dtype=config.out_dtype, a_trans=config.a_trans, b_trans=config.b_trans
+                )
+                out_tensor[b_offset:b_offset + tile_b, m_offset:m_offset + tile_m, n_offset:n_offset + tile_n] = (
+                    out_view
+                )
+
+
 def prepare_tensors_3d(config, a_dtype, b_dtype, c_dtype, device_id):
     b, m, k, n = config.get_logical_dims_3d()
     output_shape = config.out_shape
@@ -347,6 +391,32 @@ def test_batch_matmul_3d_nd(case: dict):
 @pypto.options(pass_options={"enable_slice": False})
 def test_batch_matmul_4d_nd(case: dict):
     run_batch_matmul_test(case)
+
+
+def run_batch_matmul_dynamic_test(case: dict):
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    torch.npu.set_device(device_id)
+
+    config = BatchMatmulConfig.from_test_case(case)
+    a_dtype = BatchMatmulConfig.get_torch_dtype(case["a_dtype"])
+    b_dtype = BatchMatmulConfig.get_torch_dtype(case["b_dtype"])
+    c_dtype = BatchMatmulConfig.get_torch_dtype(case["c_dtype"])
+
+    a_tensor, b_tensor, c_tensor, golden = prepare_tensors_3d(config, a_dtype, b_dtype, c_dtype, device_id)
+    batch_matmul_kernel_3d_all_dynamic(a_tensor, b_tensor, c_tensor, config)
+
+    atol, rtol = BatchMatmulConfig.get_tolerance(case["c_dtype"])
+    assert torch.allclose(c_tensor.cpu(), golden.cpu(), atol=atol, rtol=rtol), (
+        f"Test case {case['id']} ({case['name']}) failed"
+    )
+
+
+@pytest.mark.parametrize(
+    "case", [pytest.param(case, marks=pytest.mark.soc(*case["products"])) for case in DYNAMIC_3D_TESTS]
+)
+@pypto.options(pass_options={"enable_slice": False})
+def test_batch_matmul_3d_all_dynamic_nd(case: dict):
+    run_batch_matmul_dynamic_test(case)
 
 
 def run_batch_matmul_demo():

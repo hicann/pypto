@@ -3356,6 +3356,24 @@ static bool IsInplaceIncast(Operation* op, std::vector<Operation*>& copyInList)
     return true;
 }
 
+// 出口侧链式检测：outcast 登记在 RESHAPE/view-like 上，其输入 tensor 的全部 producer 都是 COPY_OUT。
+// 与入口侧 IsInplaceIncast 对称，用于把 COPY_OUT→RESHAPE 出口链上的折叠 offset 纳入 COA 参数化。
+static bool IsOutcastCopyOutChain(Operation* op, std::vector<Operation*>& copyOutList)
+{
+    if (!IsViewLike(op->GetOpcode()) && op->GetOpcode() != Opcode::OP_RESHAPE) {
+        return false;
+    }
+    LogicalTensorPtr data = op->GetIOperands().front();
+    copyOutList.clear();
+    for (auto prod : data->GetProducers()) {
+        if (!IsCopyOut(prod->GetOpcode())) {
+            return false;
+        }
+        copyOutList.push_back(prod);
+    }
+    return !copyOutList.empty();
+}
+
 void Function::NormalizeCoaForInCasts(std::vector<OperandAttribute>& iOpAttr,
                                       std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
                                       std::unordered_map<LogicalTensorPtr, int>& processedOperands,
@@ -3429,8 +3447,35 @@ void Function::NormalizeCoaForOutCasts(std::vector<OperandAttribute>& oOpAttr,
         }
         bool isAtomic = op->GetOOperands()[0]->HasAttr(OpAttributeKey::writeConflict);
         std::vector<SymbolicScalar> operandCoaList;
+        std::vector<Operation*> copyOutList;
         if (IsCopyOut(op->GetOpcode()) && k == 0) {
             operandCoaList = NormalizeCopyOut(op, coaIndex, valueToIndex);
+        } else if (op->GetIOperands().size() > 0 && !this->IsFromInCast(op->GetIOperands().front()) &&
+                   IsOutcastCopyOutChain(op, copyOutList)) {
+            // 出口链 COPY_OUT→RESHAPE：参数化链首 COPY_OUT 的 attr（镜像入口侧 COPY_IN→RESHAPE
+            // 的处理），RESHAPE 出口 tensor 只记录值不回写。折叠在 COPY_OUT attr 里的字面量由此
+            // 进入参数表而非 hash。
+            bool isReshape = op->GetOpcode() == Opcode::OP_RESHAPE;
+            for (auto copyOut : copyOutList) {
+                if (copyOut->GetOOpAttrOffset(0) != -1) {
+                    continue;
+                }
+                operandCoaList = NormalizeCopyOut(copyOut, coaIndex, valueToIndex);
+                copyOut->SetOOpAtt(isReshape ? 0 : k, coaIndex, false);
+                if (!isReshape) {
+                    oOpAttr.emplace_back(coaIndex, isAtomic);
+                }
+                coaIndex += operandCoaList.size();
+                coaLists.emplace_back(std::move(operandCoaList));
+            }
+            if (isReshape) {
+                operandCoaList = NormalizeTensor(op->GetOutputOperand(k), coaIndex, false);
+                op->SetOOpAtt(k, coaIndex, isAtomic);
+                oOpAttr.emplace_back(coaIndex, isAtomic);
+                coaIndex += operandCoaList.size();
+                coaLists.emplace_back(std::move(operandCoaList));
+            }
+            continue;
         } else {
             auto oOperand = op->GetOutputOperand(k);
             auto it = processedOperands.find(oOperand);

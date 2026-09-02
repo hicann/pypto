@@ -175,3 +175,27 @@ BASIC_4D_TESTS = [
         "products": ["950", "910"],
     },
 ]
+
+
+DYNAMIC_3D_TESTS = [
+    {
+        "id": "3DDYNTEST1",
+        "name": "fp16_3d_all_dynamic_out_fp32",
+        "desc": "FP16 3D 全Dynamic输入FP32输出（batch/m/n运行时推导，需a/b batch一致）",
+        "a_shape": [4, 215, 251],
+        "b_shape": [4, 251, 451],
+        "out_shape": [4, 215, 451],
+        "dim": 3,
+        "a_dtype": "DT_FP16",
+        "b_dtype": "DT_FP16",
+        "c_dtype": "DT_FP32",
+        "a_format": "ND",
+        "b_format": "ND",
+        "a_trans": False,
+        "b_trans": False,
+        "is_acc": False,
+        "viewshape": [3, 106, 374],
+        "tileshape": [[32, 288], [64, 128], [96, 192]],
+        "products": ["950", "910"],
+    },
+]
