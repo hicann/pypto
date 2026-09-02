@@ -148,7 +148,7 @@ AI Core内部存在多条异步并行流水，当一条流水生产的数据被�
 - `sync_src(set_pipe, wait_pipe, event_id)` —— 生产方SET flag
 - `sync_dst(set_pipe, wait_pipe, event_id)` —— 消费方WAIT flag
 
-需要显式控制缓冲区互斥时可使用[`mutex_lock`/`mutex_unlock`](../../../api/SIMD-API/operation/synchronization/mutex_lock_mutex_unlock.md)；需要等待指定pipe或本AI Core全部pipe上的前序操作完成时可使用[`bar_*`](../../../api/SIMD-API/operation/synchronization/barrier.md)。
+需要显式控制缓冲区互斥时可使用[mutex_lock](../../../api/SIMD-API/operation/synchronization/mutex_lock.md)和[mutex_unlock](../../../api/SIMD-API/operation/synchronization/mutex_unlock.md)；需要等待指定pipe或本AI Core全部pipe上的前序操作完成时可使用[`bar_*`](../../../api/SIMD-API/operation/synchronization/barrier.md)。
 
 PyPTO Pro的流水类型（`pl.PipeType`）与硬件指令流水对应关系：
 

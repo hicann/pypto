@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-硬件执行单元（流水）的类型枚举，标记某个操作运行在哪条流水上。是同步控制（[`sync_src`/`sync_dst`](../operation/synchronization/sync_src_sync_dst.md)、[`mutex_lock`](../operation/synchronization/mutex_lock_mutex_unlock.md)等）里`set_pipe`/`wait_pipe`/`pipe`参数的取值来源。
+硬件执行单元（流水）的类型枚举，标记某个操作运行在哪条流水上。是同步控制（[`sync_src`/`sync_dst`](../operation/synchronization/sync_src_sync_dst.md)、[mutex_lock](../operation/synchronization/mutex_lock.md)等）里`set_pipe`/`wait_pipe`/`pipe`参数的取值来源。
 
 昇腾芯片内部有多条并行流水，各自负责不同阶段的数据搬运和计算。正确理解每条流水的职责是写好同步控制的基础。
 

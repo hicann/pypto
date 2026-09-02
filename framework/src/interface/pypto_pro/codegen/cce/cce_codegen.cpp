@@ -2699,14 +2699,10 @@ public:
         if (!is_mutex) {
             return;
         }
-        ir::PipeType pipe = ir::PipeType::S;
-        for (const auto& [key, value] : op->kwargs_) {
-            if (key == "pipe")
-                pipe = static_cast<ir::PipeType>(std::any_cast<int>(value));
-        }
-        auto record = [&](int bid) { mutex_pipes[bid].insert(pipe); };
-        for (int bid : backend::mutex_id::GetMutexIds(op))
-            record(bid);
+        auto pipe = static_cast<ir::PipeType>(op->GetKwarg<int>("pipe"));
+        const auto mutex_ids = op->GetKwarg<std::vector<int>>("mutex_ids");
+        for (int bid : mutex_ids)
+            mutex_pipes[bid].insert(pipe);
     }
 };
 

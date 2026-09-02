@@ -20,6 +20,8 @@ consumed by auto_mutex, so the frontend never handles mutex ids or manual lock/u
 """
 
 
+import re
+
 import pypto_pro.language as pl
 from pypto_pro.language.parser.diagnostics import ParserTypeError, UnsupportedFeatureError
 import pytest
@@ -202,6 +204,8 @@ def test_auto_mutex_single_tile():
     ir_str = _ir_to_str(_parse_kernel(k))
     assert ir_str.count("mutex_lock") >= 2, ir_str
     assert ir_str.count("mutex_unlock") >= 2, ir_str
+    assert re.search(r'mutex_ids(?:="mutex_ids":|=)\s*\[3\]', ir_str), ir_str
+    assert re.search(r'mutex_id_owner_indices(?:="mutex_id_owner_indices":|=)\s*\[0\]', ir_str), ir_str
 
 
 def test_auto_mutex_group_loop():
@@ -217,6 +221,8 @@ def test_auto_mutex_group_loop():
     assert "mutex_lock" in ir_str, ir_str
     assert "mutex_unlock" in ir_str, ir_str
     assert ir_str.count("block.make_tile") == 2, ir_str
+    assert re.search(r'mutex_ids(?:="mutex_ids":|=)\s*\[0, 1\]', ir_str), ir_str
+    assert re.search(r'mutex_id_owner_indices(?:="mutex_id_owner_indices":|=)\s*\[0\]', ir_str), ir_str
 
 
 def test_next_advances():
@@ -666,6 +672,7 @@ def test_dynamic_multi_mutex_ids_use_one_dedup_op():
     assert ir_str.count("system.mutex_unlock_dyn") == 1, ir_str
     assert "_tg_g_mutex_ids" in ir_str, ir_str
     assert "_tg_g_mutex_ids_1" in ir_str, ir_str
+    assert "mutex_ids=[0, 1, 2, 3, 4, 5]" in ir_str, ir_str
 
 
 def test_single_and_multi_id_groups_can_share_one_op():
@@ -772,6 +779,21 @@ def test_make_tile_group_rejects_duplicate_id_for_one_tile():
 
 @pytest.mark.parametrize("mutex_ids", [[True], [[0, False]]])
 def test_make_tile_group_rejects_bool_mutex_id(mutex_ids):
+    @pl.jit(auto_mutex=True)
+    def k(gm_q: pl.Tensor[[32], pl.DT_FP16]):
+        tt = pl.TileType(shape=[32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+        pl.make_tile_group(type=tt, addrs=0, mutex_ids=mutex_ids)
+
+    with pytest.raises(ParserTypeError, match=r"mutex_ids must be ints in \[0,31\]"):
+        _parse_kernel(k)
+
+
+@pytest.mark.parametrize(
+    "mutex_ids",
+    [[-1], [32], [[0, -1]], [[0, 32]]],
+    ids=["single-negative", "single-too-large", "multi-negative", "multi-too-large"],
+)
+def test_make_tile_group_rejects_out_of_range_mutex_id(mutex_ids):
     @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[32], pl.DT_FP16]):
         tt = pl.TileType(shape=[32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)

@@ -242,51 +242,12 @@ def test_mutex_rejects_all_pipe_in_frontend(builder):
 
 
 @pytest.mark.parametrize("builder", [pl.system.mutex_lock, pl.system.mutex_unlock])
-@pytest.mark.parametrize("max_mutex_id", [0, 33])
-@pytest.mark.parametrize("dynamic_id", [False, True], ids=["static-id", "dynamic-id"])
-def test_mutex_max_id_range_is_validated_by_frontend(builder, max_mutex_id, dynamic_id):
-    span = pypto_pro.ir.Span.unknown()
-    mutex_id = (
-        pypto_pro.ir.Var("mutex_id", pypto_pro.ir.ScalarType(pypto_pro.ir.DataType.INT64), span)
-        if dynamic_id
-        else _const_int(0)
-    )
+def test_manual_mutex_has_no_auto_candidate_metadata(builder):
+    call = builder(pipe=pl.PipeType.MTE2, mutex_id=_const_int(8))
 
-    with pytest.raises(ValueError, match=r"max_mutex_id must be in \[1, 32\]"):
-        builder(pipe=pl.PipeType.MTE2, mutex_id=mutex_id, max_mutex_id=max_mutex_id)
-
-
-@pytest.mark.parametrize("builder", [pl.system.mutex_lock, pl.system.mutex_unlock])
-@pytest.mark.parametrize("mutex_ids", [[], (), [-1], [32]])
-@pytest.mark.parametrize("dynamic_id", [False, True], ids=["static-id", "dynamic-id"])
-def test_mutex_candidate_ids_are_validated_by_frontend(builder, mutex_ids, dynamic_id):
-    span = pypto_pro.ir.Span.unknown()
-    mutex_id = (
-        pypto_pro.ir.Var("mutex_id", pypto_pro.ir.ScalarType(pypto_pro.ir.DataType.INT64), span)
-        if dynamic_id
-        else _const_int(0)
-    )
-
-    with pytest.raises(ValueError, match="mutex_ids"):
-        builder(pipe=pl.PipeType.MTE2, mutex_id=mutex_id, mutex_ids=mutex_ids)
-
-
-def test_empty_mutex_ids_rejected_after_kwarg_resolution():
-    with pytest.raises(ParserSyntaxError, match="mutex_ids must not be empty"):
-
-        @pl.jit(auto_mutex=False)
-        def func(_jit_entry: pl.DT_INT64):
-            pl.system.mutex_lock(pipe=pl.PipeType.MTE2, mutex_id=0, mutex_ids=[])
-
-
-        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
-
-
-@pytest.mark.parametrize("builder", [pl.system.mutex_lock, pl.system.mutex_unlock])
-def test_static_mutex_preserves_max_mutex_id_attribute(builder):
-    call = builder(pipe=pl.PipeType.MTE2, mutex_id=_const_int(0), max_mutex_id=4)
-
-    assert call.kwargs["max_mutex_id"] == 4
+    assert "auto_mutex" not in call.kwargs
+    assert "max_mutex_id" not in str(call)
+    assert "mutex_ids" not in str(call)
 
 
 def test_sync_all_hard_mode_rejects_workspaces_in_frontend():
@@ -349,12 +310,10 @@ def test_constant_integer_mutex_id_expression_is_folded_to_operand():
         pl.system.mutex_lock(
             pipe=pl.PipeType.MTE2,
             mutex_id=(5 * 2 + 1) % 32,
-            max_mutex_id=12,
         )
         pl.system.mutex_unlock(
             pipe=pl.PipeType.MTE2,
             mutex_id=(5 * 2 + 1) % 32,
-            max_mutex_id=12,
         )
 
 
@@ -423,7 +382,6 @@ def test_complex_float_mutex_id_expression_is_rejected_by_parser():
             pl.system.mutex_lock(
                 pipe=pl.PipeType.MTE2,
                 mutex_id=mutex_id,
-                max_mutex_id=8,
             )
 
 
@@ -473,32 +431,13 @@ def test_control_flow_float_event_id_expression_is_rejected_by_parser():
 
 
 @pytest.mark.parametrize("builder", [pl.system.mutex_lock, pl.system.mutex_unlock])
-def test_mutex_rejects_removed_mode_kwarg(builder):
-    with pytest.raises(TypeError, match="unexpected keyword argument 'mode'"):
-        builder(pipe=pl.PipeType.MTE2, mutex_id=_const_int(0), mode=0)
-
-
-@pytest.mark.parametrize("builder", [pl.system.mutex_lock, pl.system.mutex_unlock])
-@pytest.mark.parametrize("mutex_ids", [[True], [0, False], (True, 1)])
-def test_mutex_candidate_ids_reject_bool(builder, mutex_ids):
-    span = pypto_pro.ir.Span.unknown()
-    dynamic_id = pypto_pro.ir.Var(
-        "mutex_id", pypto_pro.ir.ScalarType(pypto_pro.ir.DataType.INT64), span
-    )
-
-    with pytest.raises(TypeError, match=r"mutex_ids\[\d+\] must be a Python int"):
-        builder(pipe=pl.PipeType.MTE2, mutex_id=dynamic_id, mutex_ids=mutex_ids)
-
-
-@pytest.mark.parametrize("builder", [pl.system.mutex_lock, pl.system.mutex_unlock])
 @pytest.mark.parametrize(
-    "mutex_ids",
-    [1, {0, 1}, (mutex_id for mutex_id in (0, 1))],
-    ids=["integer", "set", "generator"],
+    ("kwarg", "value"),
+    [("mode", 0), ("max_mutex_id", 2), ("mutex_ids", [0, 1])],
 )
-def test_mutex_candidate_ids_reject_wrong_container_type(builder, mutex_ids):
-    with pytest.raises(TypeError, match="mutex_ids must be a list, tuple, or None"):
-        builder(pipe=pl.PipeType.MTE2, mutex_id=_const_int(0), mutex_ids=mutex_ids)
+def test_mutex_rejects_non_public_kwargs(builder, kwarg, value):
+    with pytest.raises(TypeError, match=rf"unexpected keyword argument '{kwarg}'"):
+        builder(pipe=pl.PipeType.MTE2, mutex_id=_const_int(0), **{kwarg: value})
 
 
 def test_dcci_gm_tensor_with_offset_print_style():

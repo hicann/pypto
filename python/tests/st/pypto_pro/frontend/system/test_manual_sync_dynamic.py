@@ -161,14 +161,12 @@ def t01_vector_event_mutex_reuse(
                 pl.system.mutex_lock(
                     pipe=pl.PipeType.MTE2,
                     mutex_id=MUTEX_INPUT[slot],
-                    mutex_ids=MUTEX_INPUT,
                 )
                 pl.load(tile_x, x, [row, col])
                 pl.load(tile_y, y, [row, col])
                 pl.system.mutex_unlock(
                     pipe=pl.PipeType.MTE2,
                     mutex_id=MUTEX_INPUT[slot],
-                    mutex_ids=MUTEX_INPUT,
                 )
 
                 pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=load_event)
@@ -180,13 +178,11 @@ def t01_vector_event_mutex_reuse(
                 pl.system.mutex_lock(
                     pipe=pl.PipeType.MTE3,
                     mutex_id=MUTEX_OUTPUT[slot],
-                    mutex_ids=MUTEX_OUTPUT,
                 )
                 pl.store(out, tile_out, [row, col])
                 pl.system.mutex_unlock(
                     pipe=pl.PipeType.MTE3,
                     mutex_id=MUTEX_OUTPUT[slot],
-                    mutex_ids=MUTEX_OUTPUT,
                 )
                 # Reverse release chain: store completion releases V first,
                 # then V releases MTE2 before the same physical UB addresses
@@ -895,12 +891,8 @@ def t10_mutex_id_forms(
                 pl.system.mutex_unlock(pipe=pl.PipeType.MTE2, mutex_id=31)
                 pl.system.mutex_lock(pipe=pl.PipeType.MTE2, mutex_id=local_mutex)
                 pl.system.mutex_unlock(pipe=pl.PipeType.MTE2, mutex_id=local_mutex)
-                pl.system.mutex_lock(
-                    pipe=pl.PipeType.MTE2, mutex_id=selected_mutex, mutex_ids=CONTROL_MUTEX_IDS
-                )
-                pl.system.mutex_unlock(
-                    pipe=pl.PipeType.MTE2, mutex_id=selected_mutex, mutex_ids=CONTROL_MUTEX_IDS
-                )
+                pl.system.mutex_lock(pipe=pl.PipeType.MTE2, mutex_id=selected_mutex)
+                pl.system.mutex_unlock(pipe=pl.PipeType.MTE2, mutex_id=selected_mutex)
                 pl.system.mutex_lock(pipe=pl.PipeType.MTE2, mutex_id=10)
                 pl.system.mutex_unlock(pipe=pl.PipeType.MTE2, mutex_id=10)
                 pl.system.mutex_lock(pipe=pl.PipeType.MTE2, mutex_id=10)

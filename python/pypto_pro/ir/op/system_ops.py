@@ -72,13 +72,6 @@ def _normalize_mutex_ids(mutex_ids: tuple | list | None) -> list[int] | None:
     return normalized_mutex_ids
 
 
-def _validate_max_mutex_id(max_mutex_id: int) -> None:
-    if not _is_int(max_mutex_id):
-        raise TypeError("max_mutex_id must be a Python int")
-    if not 1 <= max_mutex_id <= _MAX_MUTEX_ID:
-        raise ValueError(f"max_mutex_id must be in [1, {_MAX_MUTEX_ID}], got {max_mutex_id}")
-
-
 def _validate_concrete_pipe(pipe: PipeType, name: str) -> None:
     if not isinstance(pipe, PipeType):
         raise TypeError(f"{name} must be a PipeType, got {type(pipe).__name__}")
@@ -367,21 +360,15 @@ def _create_mutex_op(
     mutex_id: int | Expr,
     *,
     pipe: PipeType,
-    max_mutex_id: int,
-    mutex_ids: tuple | list | None,
     actual_span: Span,
 ) -> Call:
-    """Create a mutex lock/unlock operation with the ID represented as an IR expression."""
+    """Create one user-requested manual mutex operation."""
     _validate_concrete_pipe(pipe, "pipe")
-    _validate_max_mutex_id(max_mutex_id)
-    normalized_mutex_ids = _normalize_mutex_ids(mutex_ids)
     mutex_id_expr = _normalize_integer_id_expr(
         mutex_id, actual_span, name="mutex_id", upper_bound=_MAX_MUTEX_ID
     )
 
-    kwargs: dict = {"pipe": pipe, "max_mutex_id": max_mutex_id}
-    if normalized_mutex_ids is not None:
-        kwargs["mutex_ids"] = normalized_mutex_ids
+    kwargs: dict = {"pipe": pipe}
     return _ir_core.create_op_call(f"{op_name}_dyn", [mutex_id_expr], kwargs, actual_span)
 
 
@@ -408,7 +395,7 @@ def _create_mutex_dedup_op(
         mutex_id_exprs: List of N mutex_id IR expressions (already normalized to Expr).
         mutex_id_owner_indices: Owner index for every expression. Expressions with
             the same index come from one Tile and are guaranteed distinct.
-        mutex_ids_union: Union of all candidate mutex_id values (for ShouldSkipVPipeMutex).
+        mutex_ids_union: Union of all TileGroup candidate mutex_id values.
         span: Source span.
     """
     actual_span = span if span is not None else _get_span_or_capture(span, frame_offset=3)
@@ -419,8 +406,7 @@ def _create_mutex_dedup_op(
         _normalize_integer_id_expr(mutex_id, actual_span, name="mutex_id", upper_bound=_MAX_MUTEX_ID)
         for mutex_id in mutex_id_exprs
     ]
-    _validate_max_mutex_id(len(mutex_id_exprs))
-    kwargs: dict = {"pipe": pipe, "max_mutex_id": len(mutex_id_exprs)}
+    kwargs: dict = {"pipe": pipe}
     if mutex_id_owner_indices is not None:
         if len(mutex_id_owner_indices) != len(mutex_id_exprs):
             raise ValueError("mutex_id_owner_indices length must match mutex_id_exprs length")
@@ -436,8 +422,6 @@ def _mutex_op(
     *,
     pipe: PipeType,
     mutex_id: int | Expr,
-    max_mutex_id: int = 2,
-    mutex_ids: tuple | list | None = None,
     span: Span | None = None,
 ) -> Call:
     """Shared wrapper for mutex_lock / mutex_unlock (handles span capture)."""
@@ -446,8 +430,6 @@ def _mutex_op(
         op_name,
         mutex_id,
         pipe=pipe,
-        max_mutex_id=max_mutex_id,
-        mutex_ids=mutex_ids,
         actual_span=actual_span,
     )
 
@@ -456,8 +438,6 @@ def mutex_lock(
     *,
     pipe: PipeType,
     mutex_id: int | Expr,
-    max_mutex_id: int = 2,
-    mutex_ids: tuple | list | None = None,
     span: Span | None = None,
 ) -> Call:
     """Acquire a Mutex buffer-id token on ``pipe`` (A5).
@@ -468,10 +448,6 @@ def mutex_lock(
     Args:
         pipe: PipeType for which to acquire the lock (e.g. PipeType.MTE2).
         mutex_id: MutexID 0-31 as a Python int or integer scalar IR expression.
-        max_mutex_id: Candidate-count metadata used by compile-time mutex
-            analysis. Defaults to 2.
-        mutex_ids: Optional list or tuple of candidate MutexID values used by
-            compile-time mutex analysis.
         span: Optional source span (auto-captured when omitted).
 
     Returns:
@@ -481,8 +457,6 @@ def mutex_lock(
         "system.mutex_lock",
         pipe=pipe,
         mutex_id=mutex_id,
-        max_mutex_id=max_mutex_id,
-        mutex_ids=mutex_ids,
         span=span,
     )
 
@@ -491,8 +465,6 @@ def mutex_unlock(
     *,
     pipe: PipeType,
     mutex_id: int | Expr,
-    max_mutex_id: int = 2,
-    mutex_ids: tuple | list | None = None,
     span: Span | None = None,
 ) -> Call:
     """Release a previously acquired Mutex buffer-id token on ``pipe`` (A5).
@@ -503,10 +475,6 @@ def mutex_unlock(
     Args:
         pipe: PipeType for which to release the lock.
         mutex_id: MutexID passed to the paired :func:`mutex_lock`.
-        max_mutex_id: Candidate-count metadata used by compile-time mutex
-            analysis. Defaults to 2.
-        mutex_ids: Optional list or tuple of candidate MutexID values used by
-            compile-time mutex analysis.
         span: Optional source span (auto-captured when omitted).
 
     Returns:
@@ -516,8 +484,6 @@ def mutex_unlock(
         "system.mutex_unlock",
         pipe=pipe,
         mutex_id=mutex_id,
-        max_mutex_id=max_mutex_id,
-        mutex_ids=mutex_ids,
         span=span,
     )
 

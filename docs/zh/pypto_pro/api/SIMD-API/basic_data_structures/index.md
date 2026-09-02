@@ -11,6 +11,8 @@ PipeType
 Ptr
 ReluPreMode
 Scalar
+SyncAllMode
+SyncCoreType
 Tensor
 TensorLayout
 TilePad

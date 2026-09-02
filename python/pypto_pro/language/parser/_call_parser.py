@@ -1619,34 +1619,28 @@ class CallParserMixin:
         return True
 
     def _emit_mutex_op(
-        self, buf_ids, mutex_ids, mutex_id_owner_indices, pipe, span: ir.Span, *, is_lock: bool
+        self,
+        buf_ids,
+        mutex_ids,
+        mutex_id_owner_indices,
+        pipe,
+        span: ir.Span,
+        *,
+        is_lock: bool,
     ) -> None:
-        """Emit static IDs directly or a per-tile-aware dynamic dedup operation."""
-        from pypto_pro.ir._utils import _normalize_expr
-        from pypto_pro.ir.op.system_ops import _create_mutex_dedup_op, mutex_lock, mutex_unlock
+        """Emit a per-tile-aware mutex dedup operation."""
+        from pypto_pro.ir.op.system_ops import _create_mutex_dedup_op
 
-        emit_plain = mutex_lock if is_lock else mutex_unlock
         op_name = "system.mutex_lock" if is_lock else "system.mutex_unlock"
         id_exprs = list(buf_ids)
-
-        if all(isinstance(buf_id, ir.ConstInt) for buf_id in id_exprs):
-            unique_ids = list(dict.fromkeys(int(buf_id.value) for buf_id in id_exprs))
-            for mutex_id in unique_ids:
-                expr = emit_plain(pipe=pipe, mutex_id=mutex_id, mutex_ids=mutex_ids, span=span)
-                self.builder.emit(ir.EvalStmt(expr, span))
-            return
-
-        if len(id_exprs) == 1:
-            expr = emit_plain(pipe=pipe, mutex_id=id_exprs[0], mutex_ids=mutex_ids, span=span)
-        else:
-            expr = _create_mutex_dedup_op(
-                op_name,
-                pipe=pipe,
-                mutex_id_exprs=[_normalize_expr(buf_id, span) for buf_id in id_exprs],
-                mutex_id_owner_indices=mutex_id_owner_indices,
-                mutex_ids_union=list(mutex_ids or ()),
-                span=span,
-            )
+        expr = _create_mutex_dedup_op(
+            op_name,
+            pipe=pipe,
+            mutex_id_exprs=id_exprs,
+            mutex_id_owner_indices=mutex_id_owner_indices,
+            mutex_ids_union=list(mutex_ids or ()),
+            span=span,
+        )
         self.builder.emit(ir.EvalStmt(expr, span))
 
     def _emit_mutex_for_groups(self, groups: list, pipe, span: ir.Span, *, is_lock: bool):
@@ -1654,10 +1648,10 @@ class CallParserMixin:
 
         ``groups`` is the output of _group_refs_by_mutex_overlap (computed once at
         lock time and reused at unlock time). Shared by lock (is_lock=True) and unlock
-        (is_lock=False). Static IDs are stable-deduplicated and emitted individually;
-        dynamic IDs share one mutex_(un)lock_dyn whose CCE codegen guards aliases
-        across Tiles while trusting the frontend's per-tile uniqueness validation.
-        Lock and unlock visit independent groups and IDs in the same order.
+        (is_lock=False). Each group uses one mutex_(un)lock_dyn whose CCE codegen
+        guards possible aliases across Tiles while trusting the frontend's per-tile
+        uniqueness validation. Lock and unlock visit independent groups and IDs in
+        the same order.
         """
         for group in groups:
             id_exprs = [

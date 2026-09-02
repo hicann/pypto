@@ -30,12 +30,6 @@ int FindIndex(const std::string& mode, const std::string& op_name);
 
 } // namespace round_mode
 
-namespace mutex_id {
-
-std::vector<int> GetMutexIds(const ir::CallPtr& op);
-
-} // namespace mutex_id
-
 namespace gather {
 
 struct CompareAttrs {

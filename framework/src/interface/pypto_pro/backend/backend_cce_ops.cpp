@@ -1883,8 +1883,10 @@ static std::string MakeMutexBufCodegenCCE(const ir::CallPtr& op, codegen::Codege
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     auto pipe = static_cast<ir::PipeType>(op->GetKwarg<int>("pipe"));
 
-    std::vector<int> mutex_ids = mutex_id::GetMutexIds(op);
-    if (codegen.ShouldSkipVPipeMutex(pipe, mutex_ids))
+    std::vector<int> mutex_ids = op->GetKwarg<std::vector<int>>("mutex_ids");
+    // Candidate IDs are attached only by the auto-mutex path. A manual mutex op
+    // has no candidate set and must always be emitted, including on PIPE_V.
+    if (!mutex_ids.empty() && codegen.ShouldSkipVPipeMutex(pipe, mutex_ids))
         return "";
 
     std::string pipe_str = PipeTypeToCCEString(pipe);

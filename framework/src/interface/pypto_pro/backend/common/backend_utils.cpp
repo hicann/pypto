@@ -41,44 +41,6 @@ int FindIndex(const std::string& mode, const std::string& op_name)
 
 } // namespace round_mode
 
-namespace mutex_id {
-
-std::vector<int> GetMutexIds(const ir::CallPtr& op)
-{
-    std::vector<int> values;
-    for (const auto& [key, value] : op->kwargs_) {
-        if (key == "mutex_ids") {
-            values = std::any_cast<std::vector<int>>(value);
-            return values;
-        }
-    }
-    bool all_ids_are_constant = !op->args_.empty();
-    for (const auto& arg : op->args_) {
-        if (auto id = ir::As<ir::ConstInt>(arg)) {
-            values.push_back(static_cast<int>(id->value_));
-        } else {
-            all_ids_are_constant = false;
-            break;
-        }
-    }
-    if (all_ids_are_constant) {
-        return values;
-    }
-    values.clear();
-    int max_id = 2;
-    for (const auto& [key, value] : op->kwargs_) {
-        if (key == "max_mutex_id") {
-            max_id = std::any_cast<int>(value);
-        }
-    }
-    for (int i = 0; i < max_id; ++i) {
-        values.push_back(i);
-    }
-    return values;
-}
-
-} // namespace mutex_id
-
 namespace gather {
 
 CompareAttrs GetCompareAttrs(const ir::CallPtr& op)

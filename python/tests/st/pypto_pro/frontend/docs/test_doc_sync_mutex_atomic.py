@@ -9,7 +9,7 @@
 
 """sync_all, mutex_lock/mutex_unlock, and store(atomic="add").
 
-Doc: docs/zh/pypto_pro/api/SIMD-API/计算API/{同步控制/sync_all, 同步控制/mutex_lock_mutex_unlock, 原子操作/store_atomic}
+Docs: sync_all.md, mutex_lock.md, mutex_unlock.md, and store_atomic.md.
 
 Pure vector mode. Verifies full-pipeline sync, manual mutex for load/store,
 and atomic add write-back to GM.

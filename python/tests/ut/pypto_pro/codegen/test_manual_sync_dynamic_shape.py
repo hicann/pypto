@@ -293,17 +293,15 @@ def _mutex_kernel(
         pl.system.mutex_lock(
             pipe=pl.PipeType.MTE3,
             mutex_id=PING_PONG_MUTEXES[slot % 2],
-            mutex_ids=PING_PONG_MUTEXES,
         )
         pl.store(out, tile, [0, 0])
         pl.system.mutex_unlock(
             pipe=pl.PipeType.MTE3,
             mutex_id=PING_PONG_MUTEXES[slot % 2],
-            mutex_ids=PING_PONG_MUTEXES,
         )
 
-        pl.system.mutex_lock(pipe=pl.PipeType.MTE2, mutex_id=selected_mutex, mutex_ids=(8, 9))
-        pl.system.mutex_unlock(pipe=pl.PipeType.MTE2, mutex_id=selected_mutex, mutex_ids=(8, 9))
+        pl.system.mutex_lock(pipe=pl.PipeType.MTE2, mutex_id=selected_mutex)
+        pl.system.mutex_unlock(pipe=pl.PipeType.MTE2, mutex_id=selected_mutex)
         pl.system.mutex_lock(pipe=pl.PipeType.MTE2, mutex_id=10)
         pl.system.mutex_unlock(pipe=pl.PipeType.MTE2, mutex_id=10)
         pl.system.mutex_lock(pipe=pl.PipeType.MTE2, mutex_id=10)

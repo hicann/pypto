@@ -12,7 +12,8 @@
 
 The kernels in this file intentionally match the examples in:
 
-* mutex_lock_mutex_unlock.md
+* mutex_lock.md
+* mutex_unlock.md
 * sync_all.md
 
 They cover ordinary operator flows rather than boundary IDs, dynamic-ID forms,
@@ -42,7 +43,7 @@ def _require_a5() -> None:
         pytest.skip(f"Current device is {device_name}, not A5 (Ascend950). Skip.")
 
 
-# mutex_lock_mutex_unlock.md: one input UB crosses MTE2 -> V and one output
+# mutex_lock.md and mutex_unlock.md: one input UB crosses MTE2 -> V and one output
 # UB crosses V -> MTE3. No flag synchronization or auto_mutex is present, so
 # the result exercises the manually inserted mutex operations directly.
 @pl.jit(auto_mutex=False)
