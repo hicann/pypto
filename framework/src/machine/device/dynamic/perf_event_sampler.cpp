@@ -258,7 +258,7 @@ void AicpuPerfEventSampler::TryAddCacheEvent(uint64_t cacheId, uint64_t opId, ui
 
 void AicpuPerfEventSampler::DumpSummary(const char* title)
 {
-    DEV_ERROR(MachineError::UNKNOWN, "[AICPU_PMU] %s", title);
+    DEV_INFO("[AICPU_PMU] %s", title);
     DumpElapsedCycles();
 }
 

@@ -73,7 +73,7 @@ uint32_t HostProf::profType_ = 0;
 int32_t HostProf::HostProfInit(uint32_t type, void* data, uint32_t len)
 {
     if (data == nullptr || len == 0) {
-        MACHINE_LOGW("Para is invalid");
+        MACHINE_LOGW("HostProfInit para invalid: data=%p, len=%u", data, len);
         return -1;
     }
     if (type != static_cast<uint32_t>(RtProfCtrlType::SWITCH)) {
@@ -104,7 +104,7 @@ bool HostProf::HostProfReportApi(const uint64_t& startTime, const uint64_t& endT
     apiInfo.threadId = syscall(SYS_gettid);
     auto ret = MspfReportApi(true, &apiInfo);
     if (ret != 0) {
-        MACHINE_LOGW("Report Api not success");
+        MACHINE_LOGW("Report Api failed");
         return false;
     }
     return true;
@@ -149,7 +149,7 @@ void HostProf::HostProfReportContextInfo(const uint64_t& endTime) const
     MemcpyS(contextInfo.data, MSPF_ADDTIONAL_INFO_DATA_LENGTH, &ctxId, sizeof(MspfContextIdInfo));
     auto ret = MspfReportAdditionalInfo(false, reinterpret_cast<void*>(&contextInfo), sizeof(MspfAdditionalInfo));
     if (ret != 0) {
-        MACHINE_LOGW("Op[%s] Msprof report context info not success", opName_.c_str());
+        MACHINE_LOGW("Op[%s] Msprof report context info failed", opName_.c_str());
     }
 }
 
@@ -187,7 +187,7 @@ void HostProf::ReportTensoInfo(const uint32_t& groupId, const uint32_t mods, con
     }
     auto ret = MspfReportAdditionalInfo(false, reinterpret_cast<void*>(&tensorInfo), sizeof(MspfAdditionalInfo));
     if (ret != 0) {
-        MACHINE_LOGW("Op[%s] Msprof report tensor info not success", opName_.c_str());
+        MACHINE_LOGW("Op[%s] Msprof report tensor info failed", opName_.c_str());
     }
 }
 
@@ -361,7 +361,8 @@ void HostProf::GetIOTensor(const std::vector<npu::tile_fwk::dynamic::DeviceTenso
     iDeviceTensorData_.clear();
     oDeviceTensorData_.clear();
     if (tensors.size() != directions.size()) {
-        MACHINE_LOGW("Direction size != tensorData size not support to msprof");
+        MACHINE_LOGW("Direction size [%zu] != tensorData size [%zu], not support to msprof", directions.size(),
+                     tensors.size());
         return;
     }
     for (size_t idx = 0; idx < directions.size(); idx++) {

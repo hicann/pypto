@@ -149,7 +149,7 @@ void DumpAicoreTaskExectInfo(const DeviceArgs& args, const std::vector<void*>& p
         MACHINE_LOGW("Construct custom op json failed");
         return;
     }
-    MACHINE_LOGD("tilefwk_L1_prof_data have saved in: %s", jsonFilePath.c_str());
+    MACHINE_LOGD("tilefwk_L1_prof_data has been saved in: %s", jsonFilePath.c_str());
     std::string topo_txt_path = npu::tile_fwk::config::LogTopFolder() + "/dyn_topo.txt";
     std::string program_json_path = npu::tile_fwk::config::LogTopFolder() + "/program.json";
     std::string mix_event_path = npu::tile_fwk::config::GetAbsoluteTopFolder() + "/mix_event_info.json";
@@ -278,7 +278,7 @@ inline std::unique_ptr<MetricPerf> GetAicpuPrefAddr(const DeviceArgs& args, cons
     auto aicpuMetric = std::make_unique<MetricPerf>();
     auto aicpuPer = (ValueToPtr(args.aicpuPerfAddr + turnIdx * sizeof(MetricPerf)));
     if (aicpuPer == nullptr) {
-        MACHINE_LOGW("Aicpu per ptr is null");
+        MACHINE_LOGW("Aicpu perf ptr is null");
         return aicpuMetric;
     }
 

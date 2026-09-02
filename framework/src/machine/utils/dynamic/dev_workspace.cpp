@@ -895,7 +895,7 @@ uint32_t DeviceWorkspaceAllocator::CalcAicpuMetaSlabAlloctorSlabMemObjmaxSize()
     }
     slabMemObjmaxSize = SlabWsAllocator::CalcSlotStride(slabMemObjmaxSize);
     devProg_->memBudget.metadata.generalSlabSize = slabMemObjmaxSize;
-    DEV_INFO("General slab size=%u", slabMemObjmaxSize);
+    DEV_INFO("General slab size=%u bytes", slabMemObjmaxSize);
     return slabMemObjmaxSize;
 }
 

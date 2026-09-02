@@ -34,7 +34,7 @@ void DeviceDfx::InitAicpuPerfAddr(DeviceArgs& args)
     if (GetEnvVar("DUMP_DEVICE_PERF") == "true") {
         auto aicpuDevPtr = DevMallocWithAlignSize(MAX_ROUND_NUM * sizeof(MetricPerf), TWO_MB_HUGE_PAGE_FLAGS);
         if (aicpuDevPtr == nullptr) {
-            MACHINE_LOGW("Aicpu per addr malloc failed");
+            MACHINE_LOGW("Aicpu perf addr malloc failed");
         } else {
             args.aicpuPerfAddr = npu::tile_fwk::dynamic::PtrToValue(aicpuDevPtr);
         }
@@ -61,7 +61,7 @@ void DeviceDfx::InitDevDfxArgs(const bool isPerfTrace, DevDfxArgs& devDfxArg)
     if (isPerfTrace) {
         devDfxArg.isOpenPerfTrace = 1;
     }
-    MACHINE_LOGI("Dfx info: log level is: %d, openPerTrace: %d, deviceId: %u", logLevel, devDfxArg.isOpenPerfTrace,
+    MACHINE_LOGI("Dfx info: log level is: %d, openPerfTrace: %d, deviceId: %u", logLevel, devDfxArg.isOpenPerfTrace,
                  devDfxArg.deviceId);
 }
 

@@ -46,7 +46,7 @@ void CheckDimensionRange(const std::vector<int64_t>& vec, const std::string& nam
     for (size_t i = 0; i < vec.size(); ++i) {
         CHECK(ExternalError::OUT_OF_RANGE, vec[i] >= minVal && vec[i] <= maxVal)
             << "The value of the " << i << "-th dimension of " << name << " must be in the range [" << minVal << ","
-            << maxVal << "]. Current value:" << vec[i] << ".";
+            << maxVal << "]. Current value: " << vec[i] << ".";
     }
 }
 
@@ -88,12 +88,12 @@ void CheckLoad3dShape(const Tensor& weightTensor, const ConvBpAttrParam& attrPar
     CHECK(ExternalError::OUT_OF_RANGE, kh <= MAX_PAD_KERNEL && kw <= MAX_PAD_KERNEL)
         << "Weight shapes do not satisfy Load3D's" << (attrParam.isConv1D ? " limit: kw=" : " limits: kh=")
         << (attrParam.isConv1D ? kw : kh) << (attrParam.isConv1D ? "" : ", kw=" + std::to_string(kw))
-        << ", which must <= " << MAX_PAD_KERNEL << ".";
+        << ", which must be <= " << MAX_PAD_KERNEL << ".";
 
     int64_t k0 = Conv::MKN_N_VALUE; // 反向K轴=cout*kh*kw，K0(cout0)=16
     CHECK(ExternalError::OUT_OF_RANGE, kh * kw * k0 <= SHAPE_INNER_AXIS_MAX_SIZE)
         << "Weight shapes do not satisfy Load3D's limits: kh*kw*k0=" << kh * kw * k0
-        << "(k0 = 16, mmad K block size), which must <=" << SHAPE_INNER_AXIS_MAX_SIZE << ".";
+        << "(k0 = 16, mmad K block size), which must be <=" << SHAPE_INNER_AXIS_MAX_SIZE << ".";
 }
 
 void BpCheckOriginShape(const Tensor& gradOutputTensor, const std::vector<int64_t>& inputSize,
@@ -108,7 +108,7 @@ void BpCheckOriginShape(const Tensor& gradOutputTensor, const std::vector<int64_
     }
     int64_t cin = weightTensor.GetShape(1); // NCL/NCHW/NCDHW
     CHECK(ExternalError::INVALID_VAL, biasTensor.GetShape(0) == cin)
-        << "Input illegal bias shape:" << biasTensor.GetShape(0) << ", which must equal Cout:" << cin << ".";
+        << "Input illegal bias shape:" << biasTensor.GetShape(0) << ", which must equal Cin:" << cin << ".";
 }
 
 void BpCheckOutputShape(const Tensor& gradOutputTensor, const std::vector<int64_t>& inputSize,
@@ -161,8 +161,8 @@ void BpCheckAttrShape(const Tensor& gradOutputTensor, const Tensor& weightTensor
         int64_t dilatedWeightVal = (weightVal - 1) * dilationVal + 1;
         CHECK(ExternalError::INVALID_VAL, paddingLeft < dilatedWeightVal && paddingRight < dilatedWeightVal)
             << "The value of the " << dimNames[dimNames.size() - i - 1]
-            << " dimension of weight must be > padding.Current weight value after dilation :" << dilatedWeightVal
-            << ",padding value:" << paddingLeft << " and " << paddingRight << ".";
+            << " dimension of weight must be > padding. Current weight value after dilation: " << dilatedWeightVal
+            << ", padding value: " << paddingLeft << " and " << paddingRight << ".";
     }
     // weight [cout, cin/groups, Dk, Hk, Wk]
     CheckValueRange(groups, "groups", NUM1, SHAPE_INNER_AXIS_MAX_SIZE);

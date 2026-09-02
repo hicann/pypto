@@ -183,7 +183,7 @@ struct ParallelSchDeviceTaskContext {
             DEV_ERROR(SchedErr::SCH_DEVTASK_CTX_FULL, "Parallel sch device task ctx is full.");
             return false;
         }
-        DEV_INFO("Parallel ctx enque device task %lu, forid=%u, iterid=%u, wsid=%u.", taskCtrl->taskId,
+        DEV_INFO("Parallel ctx enqueue device task %lu, forid=%u, iterid=%u, wsid=%u.", taskCtrl->taskId,
                  taskCtrl->ParallelForId(), taskCtrl->ParallelIterId(), taskCtrl->ParallelWsId());
         auto& ctx = elements[(rear++) % npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM];
         ctx.BindTaskCtrl(taskCtrl);

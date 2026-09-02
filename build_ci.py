@@ -1457,7 +1457,7 @@ class BuildCtrl(CMakeParam):
         cmd = f"{sys.executable} -m pip install {edit_str}" + f"{whl} {opt}" + (" -vvv " if self.verbose else "")
         cmd += f" --target={dest}" if dest else ""
         cmd += " --break-system-packages" if self.feature.whl_break_system_packages else ""
-        logging.info("Install %s, Cmd: %s, Timeout: %s", whl, cmd, self.remain_timeout)
+        logging.info("Install %s, Cmd: %s, Timeout: %s secs", whl, cmd, self.remain_timeout)
         _, duration = self.run_build_cmd(cmd=cmd, update_env=update_env, pg_desc="pip")
         logging.info("Install %s%s success, %s", whl, f" to {dest}" if dest else "", duration)
 
@@ -1481,7 +1481,7 @@ class BuildCtrl(CMakeParam):
         else:
             cmd = f"{sys.executable} -m pip uninstall -v -y {name}"
             cmd += " --break-system-packages" if self.feature.whl_break_system_packages else ""
-            logging.info("Uninstall %s package, Cmd: %s, Timeout: %s", name, cmd, self.remain_timeout)
+            logging.info("Uninstall %s package, Cmd: %s, Timeout: %s secs", name, cmd, self.remain_timeout)
             _, _ = self.run_build_cmd(cmd=cmd, pg_desc="pip")
         logging.info("Uninstall %s package%s success", name, f" from {path}" if path else "")
 
@@ -1562,7 +1562,7 @@ class BuildCtrl(CMakeParam):
         # Execute
         update_env = self.get_cfg_update_env()
         update_env["CCACHE_BASEDIR"] = str(self.src_root)
-        logging.info("CMake Configure, Cmd: %s, Timeout: %s", cmd, self.remain_timeout)
+        logging.info("CMake Configure, Cmd: %s, Timeout: %s secs", cmd, self.remain_timeout)
         _, duration = self.run_build_cmd(cmd=cmd, update_env=update_env)
         logging.info("CMake Configure success, %s", duration)
 
@@ -1578,7 +1578,7 @@ class BuildCtrl(CMakeParam):
         cmd_list = self.build.get_build_cmd_lst(cmake=self.cmake, binary_path=self.build_root)
         for i, c in enumerate(cmd_list, start=1):
             c += " --verbose" if self.verbose else ""
-            logging.info("CMake Build(%s/%s), Cmd: %s, Timeout: %s", i, len(cmd_list), c, self.remain_timeout)
+            logging.info("CMake Build(%s/%s), Cmd: %s, Timeout: %s secs", i, len(cmd_list), c, self.remain_timeout)
             try:
                 _, duration = self.run_build_cmd(cmd=c, update_env=update_env)
             except subprocess.CalledProcessError as e:
@@ -1628,7 +1628,7 @@ class BuildCtrl(CMakeParam):
             cmd = f"{sys.executable} -m build --outdir={self.install_root}"
             cmd += " --no-isolation" if not self.feature.whl_isolation else ""
             cmd += f" {self._get_setuptools_bdist_wheel_config_setting()}"
-            logging.info("Build whl, Cmd: %s, Timeout: %s", cmd, self.remain_timeout)
+            logging.info("Build whl, Cmd: %s, Timeout: %s secs", cmd, self.remain_timeout)
             _, duration = self.run_build_cmd(cmd=cmd, update_env=update_env, pg_desc="build")
             logging.info("Build whl success, %s", duration)
 
@@ -1662,13 +1662,13 @@ class BuildCtrl(CMakeParam):
         cmd += f" -DASCEND_CANN_PACKAGE_PATH={self._resolve_ascend_cann_package_path()}"
         cmd += f" -DPYPTO_THIRD_PARTY_PATH={self.third_party_path}" if self.third_party_path else ""
         update_env = self.get_cfg_update_env()
-        logging.info("CMake Configure(run), Cmd: %s, Timeout: %s", cmd, self.remain_timeout)
+        logging.info("CMake Configure(run), Cmd: %s, Timeout: %s secs", cmd, self.remain_timeout)
         _, duration = self.run_build_cmd(cmd=cmd, update_env=update_env, pg_desc="cmake-configure-run")
         logging.info("CMake Configure(run) success, %s", duration)
 
         cmd = f"{self.cmake} --build {run_build_root} --target package"
         cmd += " --verbose" if self.verbose else ""
-        logging.info("CMake Build(run) package, Cmd: %s, Timeout: %s", cmd, self.remain_timeout)
+        logging.info("CMake Build(run) package, Cmd: %s, Timeout: %s secs", cmd, self.remain_timeout)
         _, duration = self.run_build_cmd(cmd=cmd, update_env=update_env, pg_desc="cmake-build-package")
         logging.info("CMake Build(run) package success, %s", duration)
 
@@ -1842,7 +1842,7 @@ class BuildCtrl(CMakeParam):
         cmd = f"{self.cmake} --build {self.build_root} --target cann_device"
         cmd += f" -j {self.build.job_num}" if self.build.job_num else ""
         cmd += " --verbose" if self.verbose else ""
-        logging.info("CMake Device Build, Cmd: %s, Timeout: %s", cmd, self.remain_timeout)
+        logging.info("CMake Device Build, Cmd: %s, Timeout: %s secs", cmd, self.remain_timeout)
         _, duration = self.run_build_cmd(cmd=cmd, update_env=update_env, pg_desc="cmake-build-device")
         logging.info("CMake Device Build success, %s", duration)
 
@@ -1903,7 +1903,7 @@ class BuildCtrl(CMakeParam):
             if cov_data_file is not None:
                 cmd += " --cov=pypto"
                 update_env["COVERAGE_FILE"] = str(cov_data_file)
-        logging.info("pytest run, Cmd: %s, Timeout: %s", cmd, self.remain_timeout)
+        logging.info("pytest run, Cmd: %s, Timeout: %s secs", cmd, self.remain_timeout)
         _, duration = self.run_build_cmd(cmd=cmd, update_env=update_env, pg_desc="pytest")
         logging.info("pytest run success, %s", duration)
 
@@ -2018,7 +2018,7 @@ class BuildCtrl(CMakeParam):
         cmd += " --gcov" if self.build.gcov else ""  # Generate C++ coverage
 
         # 4. Execute coverage generation
-        logging.info("Generate coverage, Cmd: %s, Timeout: %s", cmd, self.remain_timeout)
+        logging.info("Generate coverage, Cmd: %s, Timeout: %s secs", cmd, self.remain_timeout)
         ret, duration = self.run_build_cmd(cmd=cmd, check=True, pg_desc="gen_coverage")
         ret.check_returncode()
         logging.info("Generate coverage success, %s", duration)

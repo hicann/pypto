@@ -44,7 +44,7 @@ TypePtr DeduceSimtContextComponentType(const std::vector<ExprPtr>& args,
 {
     CHECK(args.empty()) << "SIMT context operations do not accept positional arguments";
     int axis = GetOpKwarg<int>(kwargs, "axis", 0);
-    CHECK(axis >= 0 && axis <= 2) << "SIMT context axis must be in [0, 2]";
+    CHECK(axis >= 0 && axis <= 2) << "SIMT context axis must be in [0, 2], got axis=" << axis;
     return std::make_shared<ScalarType>(DataType(DataType::UINT32));
 }
 
@@ -228,10 +228,12 @@ TypePtr DeduceSimtLaunchType(const std::vector<ExprPtr>& args,
             << "simt.launch dimensions must be non-bool integer scalars";
         auto dim = As<ConstInt>(args[i]);
         CHECK(dim && dim->value_ > 0 && dim->value_ <= 2048)
-            << "simt.launch dimensions must be compile-time integers in [1, 2048]";
+            << "simt.launch dimensions must be compile-time integers in [1, 2048], got dim[" << i
+            << "]=" << (dim ? dim->value_ : -1);
         total_threads *= dim->value_;
     }
-    CHECK(total_threads <= 2048) << "simt.launch total thread count must not exceed 2048";
+    CHECK(total_threads <= 2048) << "simt.launch total thread count must not exceed 2048, got total_threads="
+                                 << total_threads;
     int max_threads = GetOpKwarg<int>(kwargs, "max_threads");
     CHECK(max_threads >= 1 && max_threads <= 2048) << "simt.launch max_threads must be in [1, 2048]";
     CHECK(total_threads <= max_threads) << "simt.launch threads " << total_threads << " exceed callee max_threads "

@@ -219,7 +219,7 @@ void DevicePerf::MachinePerfTraceDumpThread()
     MACHINE_LOGD("Dump thread start to machine perf trace data");
     int32_t deviceId = static_cast<int32_t>(args_.deviceId);
     if (RuntimeSetDevice(deviceId) != 0) {
-        MACHINE_LOGW("Dump perf thread set Device[%d] not success", deviceId);
+        MACHINE_LOGW("Dump perf thread failed to set Device[%d]", deviceId);
     }
     while (!dumpThreadStopFlag_.load()) {
         usleep(10000);

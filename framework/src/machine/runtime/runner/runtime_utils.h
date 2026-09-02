@@ -107,7 +107,7 @@ inline void CheckDeviceId()
     int32_t devId = 0;
     int32_t getDeviceResult = RuntimeGetDevice(&devId);
     if (getDeviceResult != RT_SUCCESS) {
-        MACHINE_LOGE(RtErr::RT_DEVICE_FAILED, "fail get device id, check if set device id");
+        MACHINE_LOGE(RtErr::RT_DEVICE_FAILED, "Failed to get device id, please check if device id is set");
         return;
     }
     MACHINE_LOGI("Current device is %d.", devId);
@@ -135,7 +135,7 @@ inline uint64_t GetRuntimeL2Offset()
     uint64_t offset = 0;
     int32_t userDeviceId = GetUserDeviceId();
     RuntimeGetL2CacheOffset(userDeviceId, &offset);
-    MACHINE_LOGD("L2 cache offset of device[%d] is %lu", userDeviceId, offset);
+    MACHINE_LOGD("L2 cache offset of device[%d] is %lu bytes", userDeviceId, offset);
     return offset;
 }
 
@@ -200,7 +200,7 @@ inline void* RegisterKernelBin(const std::vector<uint8_t>& kernelBinary)
     if (RuntimeRegisterAllKernel(&binary, &hdl) != RT_SUCCESS) {
         MACHINE_LOGE(HostLauncherErr::REGISTER_KERNEL_FAILED, "Failed to register kernel bin");
     }
-    MACHINE_LOGD("Kernel binary has been registered successfully, size is [%zu].", kernelBinary.size());
+    MACHINE_LOGD("Kernel binary has been registered successfully, size is [%zu] bytes.", kernelBinary.size());
     return hdl;
 }
 
@@ -209,7 +209,7 @@ inline bool GetStreamCaptureInfo(RtStream aicoreStream, AclMdlRI& rtModel, bool&
     AclMdlRICaptureStatus captureStatus = AclMdlRICaptureStatus::NONE;
     AclError ret = AclMdlRICaptureGetInfo(aicoreStream, &captureStatus, &rtModel);
     if (ret == ACL_ERROR_RT_FEATURE_NOT_SUPPORT) {
-        MACHINE_LOGW("Stream capture not support");
+        MACHINE_LOGW("Stream capture is not supported");
         return true;
     }
     if (ret != ACLRT_SUCCESS) {

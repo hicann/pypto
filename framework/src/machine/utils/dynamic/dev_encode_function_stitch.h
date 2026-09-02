@@ -221,7 +221,8 @@ static uint32_t CellMatchProcessByDim(int dims, const DevCellMatchTableDesc& cel
         } break;
         default:
             DEV_ERROR(ProgEncodeErr::CELL_MATCH_PARAM_INVALID,
-                      "#ctrl.encode.stitch.dim: [Stitch] Too many dimensions: dimSize=%d\n", dims);
+                      "#ctrl.encode.stitch.dim: [Stitch] Too many dimensions: dimSize=%d, max=%d\n", dims,
+                      DEV_SHAPE_DIM_NUM_5);
             break;
     }
     return errCode;

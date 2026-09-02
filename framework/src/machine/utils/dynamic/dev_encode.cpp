@@ -106,14 +106,14 @@ static void FillDuppedDataFields(DevAscendFunctionDuppedData* dupData, uint64_t 
     dupData->operationList_.stitchCount = stitchCount;
     offset += stitchDataSize;
     ASSERT(DevCommonErr::PARAM_CHECK_FAILED, offset == totalDataSize)
-        << "Offset mismatch:offset " << offset << " != totalDataSize " << totalDataSize;
+        << "Offset mismatch: offset " << offset << " != totalDataSize " << totalDataSize;
 
     memset_s(dupData->data_, totalDataSize, 0, totalDataSize);
 
     uint8_t* dataEnd = &dupData->data_[totalDataSize];
     uint8_t* dataEndAlloc = &dupData->data_[duppedDataAllocSize - sizeof(DevAscendFunctionDuppedData)];
     ASSERT(DevCommonErr::PARAM_CHECK_FAILED, dataEnd == dataEndAlloc)
-        << "Pointer mismatch:dataEnd " << dataEnd << " != dataEndAlloc " << dataEndAlloc;
+        << "Pointer mismatch: dataEnd " << dataEnd << " != dataEndAlloc " << dataEndAlloc;
 }
 
 static void VerifyDuppedDataRanges(DevAscendFunctionDuppedData* dupData, uint64_t operationSize, uint64_t incastSize,
@@ -307,7 +307,7 @@ static void EncodeRawShape(const SymbolicExpressionTable* expressionTable, DevAs
     encoded->maxStaticMemReq = AlignUp(DataSizeOf(nelm, rawTensor->GetDataType()), TENSOR_ADDR_ALIGNMENT);
     if (nelm > MAX_SHAPE_WARN_THRESHOLE) {
         MACHINE_LOGW(
-            "[workspaceSize] Root=[%s], symbol=[%s],rawmagic=[%d]: staticMemReq=[%lu] is too large, which might "
+            "[workspaceSize] Root=[%s], symbol=[%s],rawmagic=[%d]: staticMemReq=[%lu] bytes is too large, which might "
             "indicate an error",
             rootName.c_str(), rawTensor->symbol.c_str(), rawTensor->GetRawMagic(), encoded->maxStaticMemReq);
     }
@@ -468,15 +468,15 @@ void DevAscendFunction::InitRawTensorAndMemoryRequirement(
                 ASSERT(DevCommonErr::PARAM_CHECK_FAILED, rawTensor->GetRawShapeSize() == actualRaw->GetRawShapeSize())
                     << "Shape size mismatch:" << rawTensor->GetRawShapeSize() << "!=" << actualRaw->GetRawShapeSize()
                     << ", rootMagic=" << param.devRoot->GetMagicName()
-                    << ", rootHash=" << param.devRoot->GetFunctionHash().GetHash() << " ,rawShape=" << rawShape
-                    << ",actualrawShape=" << actualrawShape << ", rawTensor->rawMagic=" << rawTensor->GetRawMagic()
+                    << ", rootHash=" << param.devRoot->GetFunctionHash().GetHash() << ", rawShape=" << rawShape
+                    << ", actualrawShape=" << actualrawShape << ", rawTensor->rawMagic=" << rawTensor->GetRawMagic()
                     << ", rawTensor->actualRawmagic=" << rawTensor->actualRawmagic
                     << ", actualRaw->rawMagic=" << actualRaw->rawmagic;
                 ASSERT(DevCommonErr::PARAM_CHECK_FAILED, rawTensor->GetRawDataSize() == actualRaw->GetRawDataSize())
                     << "Data size mismatch:" << rawTensor->GetRawDataSize() << "!=" << actualRaw->GetRawDataSize()
                     << ", rootMagic=" << param.devRoot->GetMagicName()
-                    << ", rootHash=" << param.devRoot->GetFunctionHash().GetHash() << " ,rawShape=" << rawShape
-                    << ",actualrawShape=" << actualrawShape << ", rawTensor->rawMagic=" << rawTensor->GetRawMagic()
+                    << ", rootHash=" << param.devRoot->GetFunctionHash().GetHash() << ", rawShape=" << rawShape
+                    << ", actualrawShape=" << actualrawShape << ", rawTensor->rawMagic=" << rawTensor->GetRawMagic()
                     << ", rawTensor->actualRawmagic=" << rawTensor->actualRawmagic
                     << ", actualRaw->rawMagic=" << actualRaw->rawmagic;
             }
@@ -1334,13 +1334,15 @@ struct EncodeDevAscendFunctionInfo {
                 ProgEncodeErr::ASSEMBLE_STITCH_MEMORY_EXCESS,
                 "Assemble out-cast %d raw %d stitch results in excessive memory consumption "
                 "Please appropriately configure the view shape and tile shape, and ensure aligned with the input "
-                "shape ",
-                tensor->magic, tensor->GetRawMagic());
+                "shape, cellMatchStride[0]=%lu, MAX_CELLMATCHSSTRIDE=%lu",
+                tensor->magic, tensor->GetRawMagic(), static_cast<unsigned long>(cellMatchStride[0]),
+                static_cast<unsigned long>(MAX_CELLMATCHSSTRIDE));
         }
         ASSERT(DevCommonErr::PARAM_CHECK_FAILED, cellMatchStride[0] < MAX_CELLMATCHSSTRIDE)
             << " Assemble outcast " << tensor->magic << " raw " << tensor->GetRawMagic()
-            << "stitch results in excessive memory consumption,"
-            << "Please appropriately configure the view shape and tile shape, and ensure aligned with the input shape.";
+            << " stitch results in excessive memory consumption,"
+            << " Please appropriately configure the view shape and tile shape, and ensure aligned with the input "
+               "shape.";
     }
 
     void RecordRawTensor(const std::shared_ptr<LogicalTensor>& tensor)
@@ -1441,7 +1443,7 @@ struct EncodeDevAscendFunctionInfo {
                     }
                     useList.emplace_back(succOpIdx, coaIndex, CellMatchOpType::READ);
                     lastReadPos[succOpIdx] = useList.size() - 1;
-                    MACHINE_LOGD("MATCH! consumerList.emplace_back succOpIdx=%d coaIndex=%d dim=%d iOprandIdx=%zu.",
+                    MACHINE_LOGD("MATCH! consumerList.emplace_back succOpIdx=%d coaIndex=%d dim=%d iOperandIdx=%zu.",
                                  succOpIdx, coaIndex, outcastOpAttr.dim, k);
 
                     auto shape = callAttrSucc->GetLinearImmediateArgList(coaIndex + outcastOpAttr.dim,

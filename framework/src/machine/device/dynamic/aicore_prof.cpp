@@ -75,7 +75,7 @@ void AiCoreProf::RegDevProf()
     }
     int ret = MsprofRegisterCallback(AICPU, DevProfInit);
     if (ret != 0) {
-        DEV_WARN("Pypto Msprof reg not success");
+        DEV_WARN("Pypto Msprof register failed");
     }
 }
 
@@ -207,7 +207,7 @@ inline void AiCoreProf::ProfStopLog()
     hostAicoreMng_.ForEachManageAicore([&](int coreIdx) {
         if (logHead_[coreIdx]->cnt != 0) {
             int32_t ret = profReportAdditionalInfoFunc_(1, &logMsg_[coreIdx], sizeof(PyPtoMsprofAdditionalInfo));
-            DEV_DEBUG("aicore profiling send log mesg, core id: %d, task num: %d, ret: %d.", coreIdx,
+            DEV_DEBUG("aicore profiling send log message, core id: %d, task num: %d, ret: %d.", coreIdx,
                       logHead_[coreIdx]->cnt, ret);
             (void)(ret);
             memset_s(&logMsg_[coreIdx], logMsgSize_, 0, logMsgSize_);

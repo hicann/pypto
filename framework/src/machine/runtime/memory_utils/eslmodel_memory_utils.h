@@ -163,8 +163,8 @@ struct EslModelMemoryUtils {
         void* hostAddr = mmap((void*)AlignAddress(eslAddr, pageSize, false), alignSize, PROT_READ | PROT_WRITE,
                               MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
         if (hostAddr == MAP_FAILED) {
-            MACHINE_LOGE(DevCommonErr::SYSTEM_CALL_FAILED, "mmap failed: Failed to map ESL address 0x%lx, size: %zu",
-                         eslAddr, size);
+            MACHINE_LOGE(DevCommonErr::SYSTEM_CALL_FAILED,
+                         "mmap failed: Failed to map ESL address 0x%lx, size: %zu bytes", eslAddr, size);
             return MAP_FAILED;
         }
         MmapGlobalManager::AddRecord(hostAddr, alignSize);

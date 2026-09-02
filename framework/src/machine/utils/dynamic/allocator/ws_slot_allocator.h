@@ -117,7 +117,9 @@ public:
     {
         DEV_ASSERT_MSG(WsErr::WS_TENSOR_ADDRESS_OUT_OF_RANGE,
                        workspaceAddr_ <= ptr && ptr < workspaceAddr_ + slotNum_ * slotStandardMemReq_,
-                       "Pointer to deallocate is out of range");
+                       "Pointer to deallocate is out of range: ptr=%p, valid range=[%p, %p)",
+                       reinterpret_cast<void*>(ptr), reinterpret_cast<void*>(workspaceAddr_),
+                       reinterpret_cast<void*>(workspaceAddr_ + slotNum_ * slotStandardMemReq_));
         DEV_ASSERT_MSG(WsErr::WORKSPACE_INIT_RESOURCE_ERROR, notInUseHeaders_ != nullptr,
                        "Blocks are all free, there shouldn't be any deallocation request.");
 

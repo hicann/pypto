@@ -747,7 +747,7 @@ static void CompileControlFlow(const std::string& aicpuDirPath, const std::strin
     MACHINE_LOGD("Dump path is %s, functionName %s, path is %s", aicpuDirPath.c_str(), funcName.c_str(),
                  controlFlowCompilepath.c_str());
     if (!CreateDir(controlFlowCompilepath, true)) {
-        MACHINE_LOGE(DevCommonErr::FILE_ERROR, "Creat AicpuCompile dir not success\n");
+        MACHINE_LOGE(DevCommonErr::FILE_ERROR, "Failed to create AicpuCompile directory\n");
         return;
     }
     std::string controlFlowFileName = controlFlowCompilepath + "/controlFlow_dev" + funcName + ".h";

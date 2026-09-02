@@ -648,7 +648,7 @@ class TestsAccelerate(ABC):
         while True:
             if not ctx.move():
                 break
-        logging.info("%s Exist, Move %s elements.", TestsAccelerate._get_process_desc(), ctx.ele_count)
+        logging.info("%s Exit, Move %s elements.", TestsAccelerate._get_process_desc(), ctx.ele_count)
 
     @staticmethod
     def _get_process_desc() -> str:
@@ -959,7 +959,7 @@ class TestsAccelerate(ABC):
         if not ctx.exit_code:
             logging.info("%s Send terminate event upload.", self._get_process_desc())
         logging.info(
-            "%s Exist[%s] %s %s",
+            "%s Exit[%s] %s %s",
             self._get_process_desc(),
             ctx.exit_code,
             self._cntr_progress(update=True),

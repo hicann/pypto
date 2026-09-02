@@ -75,7 +75,7 @@ public:
         }
 
         if (static_cast<uint32_t>(schedIdx) >= args->scheCpuNum) {
-            DEV_INFO("thread start ignore ");
+            DEV_INFO("Thread start ignored");
             return DEVICE_MACHINE_OK;
         }
         aicoreManager_[schedIdx]->SetSchedSyncMode(devScheSyncMode_);
@@ -93,7 +93,7 @@ public:
         }
         sleep(1);
         aicoreManager_[0]->CheckAndResetReg();
-        DEV_INFO("Exception reset reg finish.");
+        DEV_INFO("Exception register reset completed.");
     }
 
 private:
@@ -157,7 +157,7 @@ struct DynMachineManager {
 
     void SignalReg(const sig_act_f sigAct)
     {
-        DEV_INFO("Exception SignalReg.");
+        DEV_INFO("Signal register completed.");
         struct sigaction myAct;
         (void)memset_s(&myAct, sizeof(myAct), 0, sizeof(myAct));
         sigemptyset(&myAct.sa_mask);
@@ -196,7 +196,7 @@ struct DynMachineManager {
         DEV_INFO("TaskType=%d, threadIdx=%d, aicNum=%u, aivNum=%u, aicpuNum=%u, validAicNum=%u.",
                  static_cast<int>(devArgs->taskType), threadIdx, devArgs->nrAic, devArgs->nrAiv, devArgs->nrAicpu,
                  devArgs->nrValidAic);
-        DEV_INFO("devQueueAddr=%#lx, sharedBuffer=%#lx, coreRegAddr=%#lx, corePmuAdr=%#lx.", devArgs->devQueueAddr,
+        DEV_INFO("devQueueAddr=%#lx, sharedBuffer=%#lx, coreRegAddr=%#lx, corePmuAddr=%#lx.", devArgs->devQueueAddr,
                  devArgs->sharedBuffer, devArgs->coreRegAddr, devArgs->corePmuAddr);
         DEV_TRACE_DEBUG(schema::ScheEvent(threadIdx, schema::ThreadStart()));
 

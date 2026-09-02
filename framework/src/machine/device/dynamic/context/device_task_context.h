@@ -85,8 +85,7 @@ private:
             return;
 
         if (IsHubType(coreType)) {
-            DEV_VERBOSE_DEBUG("doResolve hub func %d succindex %d", static_cast<int>(funcIdx),
-                              static_cast<int>(succIdx));
+            DEV_VERBOSE_DEBUG("doResolve hub func %d succIdx %d", static_cast<int>(funcIdx), static_cast<int>(succIdx));
             ResolveEarlyDepends(dyntask, funcIdx, succIdx, hasWrap, isMultiDie);
             return;
         }

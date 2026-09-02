@@ -210,7 +210,7 @@ Pass RunVerifier(const std::vector<std::string>& disabled_rules)
             // Log diagnostics
             if (!diagnostics.empty()) {
                 std::string report = IRVerifier::GenerateReport(diagnostics);
-                IR_LOGI() << "IR Verification Report:\n" << report;
+                IR_LOGW() << "IR Verification Report:\n" << report;
             }
 
             // Return the same program (verification doesn't modify IR)

@@ -189,7 +189,7 @@ public:
     uint64_t CostModelGetTask(int coreIdx)
     {
         auto currentTime = GetCycles();
-        DEV_DEBUG("CostModel AICore polling: aicoreIdx=%d, time=%lu.", coreIdx, currentTime);
+        DEV_DEBUG("CostModel AICore polling: aicoreIdx=%d, time(cycles)=%lu.", coreIdx, currentTime);
         if (taskIds[coreIdx].empty())
             return AICORE_FUNC_STOP | AICORE_FIN_MASK;
         uint64_t taskId = 0;
@@ -199,12 +199,13 @@ public:
             taskIds[coreIdx].pop_front();
         }
         if (taskIds[coreIdx].empty()) {
-            DEV_DEBUG("CostModel AICore finish task: aicoreIdx=%d, taskId=%#lx, currentTime=%lu.", coreIdx, taskId,
-                      currentTime);
+            DEV_DEBUG("CostModel AICore finish task: aicoreIdx=%d, taskId=%#lx, currentTime(cycles)=%lu.", coreIdx,
+                      taskId, currentTime);
             return taskId | AICORE_FIN_MASK;
         }
-        DEV_DEBUG("CostModel AICore running task: aicoreIdx=%d, taskId=%#lx, currentTime=%lu, finishTime=%lu.", coreIdx,
-                  taskIds[coreIdx].front(), currentTime, taskTimes[coreIdx].front());
+        DEV_DEBUG("CostModel AICore running task: aicoreIdx=%d, taskId=%#lx, currentTime(cycles)=%lu, "
+                  "finishTime(cycles)=%lu.",
+                  coreIdx, taskIds[coreIdx].front(), currentTime, taskTimes[coreIdx].front());
         return taskIds[coreIdx].front();
     }
 
@@ -345,7 +346,7 @@ public:
             // make sure reset wave goodbye flag after hand shake ,orelse impact last aicore exit through wavegoodbye
             // flag
             args_[coreIdx]->waveBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_GOODBYE_INDEX] = 0;
-            DEV_VERBOSE_DEBUG("hand shake success coreidex:%d", coreIdx);
+            DEV_VERBOSE_DEBUG("hand shake success coreIdx=%d", coreIdx);
             return true;
         } else {
             int32_t phyId = -1;

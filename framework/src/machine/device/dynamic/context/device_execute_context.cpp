@@ -598,7 +598,7 @@ void* DeviceExecuteContext::CallRootFunctionStitch(uint64_t rootKey)
 
     uint32_t updateErrCode = slotContext.UpdateSlots(currDevRootDup, taskId, devNextIdx, cellMatchTagSeq);
     if (updateErrCode == static_cast<uint32_t>(CtrlErr::CELL_MATCH_FILL_OP_NOT_ENOUGH)) {
-        DEV_INFO("UpdateSlots stitch cell failed with error code %u, force submit devtask", updateErrCode);
+        DEV_WARN("UpdateSlots stitch cell failed with error code %u, force submit devtask", updateErrCode);
         ret = SubmitToAicoreAndRecycleMemory(false);
         if (unlikely(ret != DEVICE_MACHINE_OK)) {
             return RUNTIME_FUNCKEY_ERROR;
@@ -611,9 +611,9 @@ void* DeviceExecuteContext::CallRootFunctionStitch(uint64_t rootKey)
 
 void DeviceExecuteContext::MarkSlotNeedAlloc(int slotIndex)
 {
-    DEV_ASSERT_MSG(DevCommonErr::PARAM_INVALID,
-                   slotIndex >= 0 && slotIndex < static_cast<int>(slotContext.GetSlotSize()),
-                   "MarkSlotNeedAlloc: Invalid slot index %d.", slotIndex);
+    DEV_ASSERT_MSG(
+        DevCommonErr::PARAM_INVALID, slotIndex >= 0 && slotIndex < static_cast<int>(slotContext.GetSlotSize()),
+        "MarkSlotNeedAlloc: Invalid slot index %d, valid range [0, %zu).", slotIndex, slotContext.GetSlotSize());
     slotContext.GetSlotList()[slotIndex].isAssembleSlotNeedAlloc = true;
     return;
 }

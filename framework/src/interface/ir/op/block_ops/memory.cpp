@@ -166,7 +166,7 @@ TypePtr DeduceTileValidShapeType(const std::vector<ExprPtr>& args,
 {
     CHECK(args.size() == 1 && As<TileType>(args[0]->GetType())) << "block.tile_valid_shape requires one Tile argument";
     int axis = GetOpKwarg<int>(kwargs, "axis", 0);
-    CHECK(axis >= 0 && axis <= 1) << "block.tile_valid_shape axis must be in [0, 1]";
+    CHECK(axis >= 0 && axis <= 1) << "block.tile_valid_shape axis must be in [0, 1], got axis=" << axis;
     return std::make_shared<ScalarType>(DataType(DataType::UINT32));
 }
 

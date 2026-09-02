@@ -138,8 +138,8 @@ void GetTensorInfo(uint32_t inputSize, DevTensorData* tensorData, AdxExceptionDu
     auto& disableL2List = dynAttr->disableL2List;
     auto l2Offset = GetRuntimeL2Offset();
     if (inputSize > MAX_TENSOR_NUM) {
+        MACHINE_LOGW("Current function input size [%u] is larger than max [%d], truncated", inputSize, MAX_TENSOR_NUM);
         inputSize = MAX_TENSOR_NUM;
-        MACHINE_LOGW("Current function input is larger than %d", MAX_TENSOR_NUM);
     }
     for (uint32_t i = 0; i < inputSize; i++) {
         if (tensorData[i].address == 0) {
@@ -319,7 +319,7 @@ int32_t ExceptionDumpCallBack(AclRtExceptionInfo* exceptionInfo, AdxExceptionDum
     MACHINE_LOGI("ExceptionDumpCallBack enter: exceptionInfo");
     if (exceptionInfo == nullptr || exceptionDumpInfo == nullptr || exceptionDumpRealSize == nullptr ||
         mode == nullptr) {
-        MACHINE_LOGW("DeviceExceptionDumpCallBack failed: the input params is invalid [%p, %p, %p, %p]",
+        MACHINE_LOGW("DeviceExceptionDumpCallBack failed: the input params are invalid [%p, %p, %p, %p]",
                      (void*)exceptionInfo, (void*)exceptionDumpInfo, (void*)exceptionDumpRealSize, (void*)(mode));
         return static_cast<int32_t>(npu::tile_fwk::MachineError::DUMP_DFX);
     }

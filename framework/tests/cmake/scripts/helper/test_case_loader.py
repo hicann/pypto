@@ -181,7 +181,7 @@ class FileReader:
 
     def run(self) -> list:
         if not os.path.exists(self._file_name):
-            logging.error(f"Process File {self._file_name} failed, file not exist.")
+            logging.error(f"Process File {self._file_name} failed, file does not exist.")
             return None
 
         data_frames = (

@@ -25,7 +25,7 @@ RtError StubMalloc(void** devPtr, uint64_t size, RtMemType type, const uint16_t 
     (void)type;
     (void)moduleId;
     if (devPtr == nullptr || size == 0 || size > MAX_MALLOC_SIZE) {
-        ADAPTER_LOGW("devPtr is null or size cannot be supported");
+        ADAPTER_LOGW("devPtr is null or size %lu exceeds max %lu", size, MAX_MALLOC_SIZE);
         return RT_SUCCESS;
     }
     *devPtr = malloc(size);

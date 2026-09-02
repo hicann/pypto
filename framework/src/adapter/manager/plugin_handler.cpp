@@ -44,7 +44,7 @@ void* PluginHandler::GetFunction(const std::string& funcName) const
 {
     void* func = dlsym(handler_, funcName.c_str());
     if (func == nullptr) {
-        ADAPTER_LOGI("Failed to load symbol[%s] from library, error: %s", funcName.c_str(), dlerror());
+        ADAPTER_LOGI("Symbol[%s] not found in library, error: %s", funcName.c_str(), dlerror());
     }
     return func;
 }

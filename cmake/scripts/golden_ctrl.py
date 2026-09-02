@@ -208,7 +208,8 @@ class GoldenCtrl:
             self._dump_golden_desc(case_output=case_output, reg_info=reg_info)
 
         msg = "success" if ret else "failed"
-        logging.info(
+        log_fn = logging.info if ret else logging.error
+        log_fn(
             "Generate golden %s Idx[%s/%s] Case(%s) Duration %s secs.",
             msg,
             idx,

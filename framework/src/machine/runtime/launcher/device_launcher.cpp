@@ -327,7 +327,7 @@ void DeviceLauncher::DataDumpUnInit()
         MACHINE_LOGD("DataDumpServerUnInit is called \n");
         int sf = AdxDumpDataDumpServerUnInit();
         if (sf != 0) {
-            MACHINE_LOGW("AdxDataDumpServerUnInit is failed %d \n", sf);
+            MACHINE_LOGW("AdxDataDumpServerUnInit failed, ret=%d \n", sf);
         }
     }
 }

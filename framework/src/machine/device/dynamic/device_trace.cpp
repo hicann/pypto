@@ -232,13 +232,13 @@ int32_t DeviceTrace::Initialize(void* targ)
 
     DEV_INFO("Initializing device trace...");
     if (AtraceInitialize() == 0) {
-        DEV_INFO("Current using so is libascend_trace.so");
+        DEV_INFO("Currently using so: libascend_trace.so");
         return ConnectTraceD2H(targ);
     }
 
     DEV_WARN("Failed to load libascend_trace.so, trying libutrace.so as fallback");
     if (UtraceInitialize() == 0) {
-        DEV_INFO("Current using so is libutrace.so");
+        DEV_INFO("Currently using so: libutrace.so");
         return ConnectTraceD2H(targ);
     }
     DEV_TRACE_LOG_ERROR(DevCommonErr::LOAD_LIBRARY_FAILED,
@@ -312,7 +312,7 @@ TraHandle DeviceTrace::CreateTraceHandle()
         pyptoHandleArray_[threadIdx] = pyptoHandle;
     } else {
         pyptoHandle = -1;
-        DEV_WARN("Create pypto trace failed because aicpu more than %d", MAX_AICPU_NUM);
+        DEV_WARN("Create pypto trace failed because aicpu count exceeds %d", MAX_AICPU_NUM);
         return pyptoHandle;
     }
     DEV_INFO("Create pypto trace Handle successful");

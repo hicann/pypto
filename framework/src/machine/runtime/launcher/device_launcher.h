@@ -129,8 +129,8 @@ public:
 
         uint64_t generalSize = devProg->memBudget.metadata.general;
         uint64_t stitchPoolSize = devProg->memBudget.metadata.stitchPool;
-        MACHINE_LOGD("generalSize=%lu, stitchPoolSize=%lu, generalOffset=%#lx, stitchPoolOffset=%#lx.", generalSize,
-                     stitchPoolSize, devProg->deviceRuntimeOffset.generalOffset,
+        MACHINE_LOGD("generalSize=%lu bytes, stitchPoolSize=%lu bytes, generalOffset=%#lx, stitchPoolOffset=%#lx.",
+                     generalSize, stitchPoolSize, devProg->deviceRuntimeOffset.generalOffset,
                      devProg->deviceRuntimeOffset.stitchPoolOffset);
         return;
     }
@@ -239,8 +239,8 @@ public:
 
         devProg->workspaceSize = devProg->memBudget.Total();
         MACHINE_LOGI(
-            "[workspaceSize] Metadata=%lu, workspaceSize=%lu, tensor=%lu, aicoreSpillen=%lu, debug.DumpTensor=%lu, "
-            "leafDumpWorkspace=%lu.",
+            "[workspaceSize] Metadata=%lu bytes, workspaceSize=%lu bytes, tensor=%lu bytes, aicoreSpilled=%lu bytes, "
+            "debug.DumpTensor=%lu bytes, leafDumpWorkspace=%lu bytes.",
             devProg->memBudget.metadata.Total(), devProg->workspaceSize, devProg->memBudget.tensor.Total(),
             devProg->memBudget.aicoreSpilled.Total(), devProg->memBudget.debug.dumpTensor,
             devProg->memBudget.debug.leafDump);

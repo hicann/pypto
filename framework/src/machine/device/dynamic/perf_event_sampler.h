@@ -141,11 +141,11 @@ private:
     auto& sampler_name = ::npu::tile_fwk::GetAicpuPerfEventSampler(); \
     (sampler_name).Begin()
 
-#define AICPU_PMU_END(sampler_name, section_name_literal)                         \
-    do {                                                                          \
-        (sampler_name).End();                                                     \
-        DEV_ERROR(MachineError::UNKNOWN, "[AICPU_PMU] %s", section_name_literal); \
-        (sampler_name).Dump();                                                    \
+#define AICPU_PMU_END(sampler_name, section_name_literal) \
+    do {                                                  \
+        (sampler_name).End();                             \
+        DEV_INFO("[AICPU_PMU] %s", section_name_literal); \
+        (sampler_name).Dump();                            \
     } while (0)
 
 // 外部对象式采样（跨函数场景）
@@ -154,11 +154,11 @@ private:
         (sampler_ptr)->Begin();               \
     } while (0)
 
-#define AICPU_PMU_END_EXTERNAL(sampler_ptr, section_name_literal)                 \
-    do {                                                                          \
-        (sampler_ptr)->End();                                                     \
-        DEV_ERROR(MachineError::UNKNOWN, "[AICPU_PMU] %s", section_name_literal); \
-        (sampler_ptr)->Dump();                                                    \
+#define AICPU_PMU_END_EXTERNAL(sampler_ptr, section_name_literal) \
+    do {                                                          \
+        (sampler_ptr)->End();                                     \
+        DEV_INFO("[AICPU_PMU] %s", section_name_literal);         \
+        (sampler_ptr)->Dump();                                    \
     } while (0)
 #else
 class AicpuPerfEventSampler {

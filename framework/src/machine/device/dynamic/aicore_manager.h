@@ -622,7 +622,7 @@ private:
                 for (size_t i = 0; i < sendTask_[coreIdx].size(); i++) {
                     DEV_ERROR(
                         SchedErr::ABNOMAL_LAST_WORD,
-                        "send task: seqno %d, taskId %lx, refreshDevTask %x prallelModifyflag:%x, deviceTaskId %u",
+                        "send task: seqno %d, taskId %lu, refreshDevTask %x parallelModifyFlag:%x, deviceTaskId %u",
                         (int)i, sendTask_[coreIdx][i].taskId & 0xFFFFFFFF,
                         DevTaskId(sendTask_[coreIdx][i].taskId >> REG_HIGH_DTASKID_SHIFT),
                         ParallelDevTaskModifyFlag(sendTask_[coreIdx][i].taskId >> REG_HIGH_DTASKID_SHIFT),
@@ -633,7 +633,7 @@ private:
                           "recv finish task info ~~~~~~~~~~~~~~~~~~~~~~~~count:%lu~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~.",
                           recvFinTask_[coreIdx].size());
                 for (size_t i = 0; i < recvFinTask_[coreIdx].size(); i++) {
-                    DEV_ERROR(SchedErr::ABNOMAL_LAST_WORD, "recv task: seqno %d, taskId %lx, deviceTaskId %u", (int)i,
+                    DEV_ERROR(SchedErr::ABNOMAL_LAST_WORD, "recv task: seqno %d, taskId %lu, deviceTaskId %u", (int)i,
                               recvFinTask_[coreIdx][i].taskId, recvFinTask_[coreIdx][i].dtaskId);
                 }
 
@@ -641,7 +641,7 @@ private:
                           "recv ack task info ~~~~~~~~~~~~~~~~~~~~~~~~~~~count:%lu~~~~~~~~~~~~~~~~~~~~~~~~~~~.",
                           recvAckTask_[coreIdx].size());
                 for (size_t i = 0; i < recvAckTask_[coreIdx].size(); i++) {
-                    DEV_ERROR(SchedErr::ABNOMAL_LAST_WORD, "recv ack task: seqno %d, taskId %lx", static_cast<int>(i),
+                    DEV_ERROR(SchedErr::ABNOMAL_LAST_WORD, "recv ack task: seqno %d, taskId %lu", static_cast<int>(i),
                               recvAckTask_[coreIdx][i].taskId);
                 }
             });
@@ -1068,7 +1068,7 @@ private:
 
         // devicetask context not compatible， need notify aicore dcci
         if (devTaskCtx->bindParallelCtxVersion > coreParallelVersion) {
-            DEV_INFO("Notify aicore(%d) refresh prallel devtask, devtaskVer:%u > coreVer:%u, newestVer: %u.", coreIdx,
+            DEV_INFO("Notify aicore(%d) refresh parallel devtask, devtaskVer:%u > coreVer:%u, newestVer: %u.", coreIdx,
                      devTaskCtx->bindParallelCtxVersion, aicoreHal_.ParallelDevTaskCtxVersion(coreIdx),
                      context_->PrallelVersion());
 
@@ -2239,14 +2239,14 @@ private:
     {
         ResetRegAll();
         CheckAndResetReg();
-        DEV_INFO("aicore manager[%d] abnormal stopped.", aicpuIdx_);
+        DEV_INFO("aicore manager[%d] abnormally stopped.", aicpuIdx_);
     }
 
     inline void NormalStop()
     {
         DEV_INFO("aicore manager[%d] try normal stop.", aicpuIdx_);
         BatchStopAllManagedCores();
-        DEV_INFO("aicore manager[%d] normal stopped.", aicpuIdx_);
+        DEV_INFO("aicore manager[%d] normally stopped.", aicpuIdx_);
     }
 
     inline int GetAllAiCoreNum() { return aicNum_ + aivNum_; }
@@ -2315,17 +2315,17 @@ private:
             }
 
             if (!context_->CurSupportParallel()) {
-                DEV_DEBUG("Cur ctx cannot support prallel, fill stop.");
+                DEV_DEBUG("Cur ctx cannot support parallel, fill stop.");
                 break; // non-parallel context just support one devtask schedule
             }
 
             if (!taskCtrl->SupportParallel()) {
-                DEV_DEBUG("Device task(%lu) cannot support prallel, fill stop.", taskCtrl->taskId);
+                DEV_DEBUG("Device task(%lu) cannot support parallel, fill stop.", taskCtrl->taskId);
                 break; // non-parallel devtask cannot scheduled with prallel dev task
             }
 
             if (!context_->CanParallelWith(taskCtrl)) {
-                DEV_DEBUG("Cur ctx cannot prallel with device task, %lu, forid=%u", taskCtrl->taskId,
+                DEV_DEBUG("Cur ctx cannot parallel with device task, %lu, forid=%u", taskCtrl->taskId,
                           taskCtrl->ParallelForId());
                 break; // different parallel-forid devtask cannot scheduled together
             }

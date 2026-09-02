@@ -48,7 +48,7 @@ static inline bool WaitCtrlRoundReady(ArchInfo archInfo, std::atomic<uint64_t>& 
     uint64_t waitTimeout = CalcWaitTimeout(isOnlyOneSche, false);
     TIMEOUT_CHECK_INIT(archInfo, waitTimeout);
     while (ctrlRound.load(std::memory_order_acquire) <= scheRound.load(std::memory_order_acquire)) {
-        __PYPTO_TIMEOUT_CHECK_WARN_EXIT(return false, "#ctrl.wait: ctrl thread not start.");
+        __PYPTO_TIMEOUT_CHECK_WARN_EXIT(return false, "#ctrl.wait: ctrl thread not started.");
     }
     return true;
 }
@@ -100,7 +100,7 @@ static inline int WaitForCtrlDecision(ArchInfo archInfo, int& curThreadIdx, int&
     // 决策后统一分发
     if (level == CTRL_WAIT_FAILED) {
         DEV_ERROR(SchedErr::WAIT_CTRL_TIMEOUT,
-                  "Wait for ctrl thread timeout,"
+                  "Wait for ctrl thread timeout, "
                   "only one sched thread exists, id is %d.",
                   curThreadIdx);
         return DEVICE_MACHINE_ERROR;

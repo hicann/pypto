@@ -259,7 +259,7 @@ static void MarkPartialUpdateSlots(DeviceExecuteSlot* slotList, size_t slotSize,
             continue;
         }
         DEV_ASSERT_MSG(ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE, slotIndex < static_cast<int>(slotSize),
-                       "Invalid slot index %d", slotIndex);
+                       "Invalid slot index %d, slot size %zu", slotIndex, slotSize);
         slotList[slotIndex].stitchCtrlBitMask = update.stitchCtrlBitMask;
         if (update.isPartial) {
             slotList[slotIndex].isPartialUpdateStitch = true;
@@ -277,7 +277,8 @@ static void FillExternalTensorSlot(DeviceExecuteSlot* slotList, size_t slotSize,
                                    int slotIndex, uint64_t tensorAddr, int tensorIndex, bool isInput)
 {
     DEV_ASSERT_MSG(ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE,
-                   slotIndex >= 0 && slotIndex < static_cast<int>(slotSize), "Invalid slot index %d", slotIndex);
+                   slotIndex >= 0 && slotIndex < static_cast<int>(slotSize),
+                   "Invalid slot index %d, valid range [0, %zu)", slotIndex, slotSize);
     slotList[slotIndex].rtOutcastIter = workspace->MakeRuntimeOutcastTensorBump(WsAllocation(tensorAddr, 0),
                                                                                 RuntimeTensorMemProperty::EXTERNAL);
     slotList[slotIndex].isOutputSlot = true;
@@ -310,9 +311,11 @@ void DeviceSlotContext::FillInputOutputSlot(DeviceExecuteSlot* slotList, [[maybe
         int inSlot = static_cast<int>(inplaceSlots[index]);
         if (inSlot != -1) {
             DEV_ASSERT_MSG(ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE,
-                           outSlot >= 0 && outSlot < static_cast<int>(slotSize), "Invalid slot index %d", outSlot);
+                           outSlot >= 0 && outSlot < static_cast<int>(slotSize),
+                           "Invalid slot index %d, valid range [0, %zu)", outSlot, slotSize);
             DEV_ASSERT_MSG(ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE,
-                           inSlot >= 0 && inSlot < static_cast<int>(slotSize), "Invalid slot index %d", inSlot);
+                           inSlot >= 0 && inSlot < static_cast<int>(slotSize),
+                           "Invalid slot index %d, valid range [0, %zu)", inSlot, slotSize);
             workspace_->RuntimeOutcastTensorAssign(slotList[outSlot].rtOutcastIter, slotList[inSlot].rtOutcastIter);
             slotList[outSlot].isOutputSlot = true;
             DEV_VERBOSE_DEBUG("Param %zu Output Slot %d = inSlot %d.", index, outSlot, inSlot);

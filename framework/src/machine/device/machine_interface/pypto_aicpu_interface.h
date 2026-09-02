@@ -33,7 +33,7 @@ public:
     {
         std::lock_guard<std::mutex> lock(funcLock_);
         if (len < minSoLen || firstCreatSo_) {
-            DEV_WARN("Aicpu so len less than 1, no need to copy");
+            DEV_WARN("so len %lu less than minSoLen %lu or first create, no need to copy", len, minSoLen);
             return true;
         }
         if (pyptoServerSoName_.empty()) {
