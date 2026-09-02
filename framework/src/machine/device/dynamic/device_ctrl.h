@@ -98,6 +98,16 @@ public:
     int PushTask(DynDeviceTask* dynTask, DeviceExecuteContext* ctx)
     {
         DEV_VERBOSE_DEBUG("#trace.dtask.built: dtaskId %lu", dynTask->GetIndex());
+
+        if (AicoreResolveEnabled()) {
+            if (!ctx->devProg->ctrlFlowCacheAnchor->IsRecording()) {
+                DrcoDeviceTaskReadyQueueAppend(dynTask->dynFuncDataList, dynTask->drcoRootFuncList);
+                DEV_DEBUG("DRCO append task=%p root=%p qtail=%u", dynTask->dynFuncDataList, dynTask->drcoRootFuncList,
+                          GetDeviceTaskReadyQueue().tail);
+            }
+            return 0;
+        }
+
         auto idx = AllocNewTaskCtrl();
         if (idx < 0) {
             DEV_ERROR(CtrlErr::CTRL_ALLOC_TIMEOUT, "#ctrl.push.alloc: AllocNewTaskCtrl failed, idx=%d.", idx);
@@ -105,9 +115,6 @@ public:
         }
         bool appendLastTaskCtrl = false;
         DeviceTaskCtrl* newTaskCtrl = InitTaskCtrl(idx, &dynTask->devTask, ctx);
-        if (AicoreResolveEnabled()) {
-            dynTask->taskStageAllocMem.ctrlNotFreeFlag = &newTaskCtrl->notFree;
-        }
         if (lastTaskCtrl_ && lastTaskCtrl_->SupportParallel()) {
             if (SameParallelIterTaskCtrl(lastTaskCtrl_, newTaskCtrl)) {
                 lastTaskCtrl_->existNextSameIterTask = true;
@@ -124,14 +131,8 @@ public:
         }
 
         if (!appendLastTaskCtrl && !ctx->devProg->ctrlFlowCacheAnchor->IsRecording()) {
-            if (AicoreResolveEnabled()) {
-                DrcoDeviceTaskReadyQueueAppend(dynTask->dynFuncDataList, dynTask->drcoRootFuncList);
-                DEV_DEBUG("DRCO append task=%p root=%p qtail=%u", dynTask->dynFuncDataList, dynTask->drcoRootFuncList,
-                          GetDeviceTaskReadyQueue().tail);
-            } else {
-                for (uint32_t i = 0; i < GetScheAicpuNum(); ++i) {
-                    GetTaskQueue(i).Enqueue(newTaskCtrl);
-                }
+            for (uint32_t i = 0; i < GetScheAicpuNum(); ++i) {
+                GetTaskQueue(i).Enqueue(newTaskCtrl);
             }
         }
 
