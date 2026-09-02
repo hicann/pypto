@@ -2407,8 +2407,14 @@ def _check_tile_memory_space(
         raise ValueError(f"{op_name}: {operand_name} must be in {expected_desc}, got {mem.name}")
 
 
+def _validate_acc_phase(op_name: str, phase: AccPhase | None) -> None:
+    if phase is not None and not isinstance(phase, AccPhase):
+        raise ValueError(f"{op_name}: invalid phase value {phase!r}, expected AccPhase")
+
+
 def _ir_matmul(dst: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, phase: AccPhase | None = None) -> Expr:
     actual_span = span or _span()
+    _validate_acc_phase("matmul", phase)
     _check_tile_memory_space("matmul", "dst_tile", dst, MemorySpace.Acc, "L0C (Acc)")
     _check_tile_memory_space("matmul", "lhs_tile", lhs, MemorySpace.Left, "L0A (Left)")
     _check_tile_memory_space("matmul", "rhs_tile", rhs, MemorySpace.Right, "L0B (Right)")
@@ -2422,6 +2428,7 @@ def _ir_matmul_acc(
     dst: Expr, acc: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, phase: AccPhase | None = None
 ) -> Expr:
     actual_span = span or _span()
+    _validate_acc_phase("matmul_acc", phase)
     _check_tile_memory_space("matmul_acc", "dst_tile", dst, MemorySpace.Acc, "L0C (Acc)")
     _check_tile_memory_space("matmul_acc", "acc_tile", acc, MemorySpace.Acc, "L0C (Acc)")
     _check_tile_memory_space("matmul_acc", "lhs_tile", lhs, MemorySpace.Left, "L0A (Left)")
@@ -2436,6 +2443,7 @@ def _ir_matmul_bias(
     dst: Expr, lhs: Expr, rhs: Expr, bias: Expr, *, span: Span | None = None, phase: AccPhase | None = None
 ) -> Expr:
     actual_span = span or _span()
+    _validate_acc_phase("matmul_bias", phase)
     _check_tile_memory_space("matmul_bias", "dst_tile", dst, MemorySpace.Acc, "L0C (Acc)")
     _check_tile_memory_space("matmul_bias", "lhs_tile", lhs, MemorySpace.Left, "L0A (Left)")
     _check_tile_memory_space("matmul_bias", "rhs_tile", rhs, MemorySpace.Right, "L0B (Right)")
@@ -2466,6 +2474,8 @@ def _parse_matmul_acc(self, call: ast.Call) -> Expr:
 
 _MX_FP8_DTYPES = (DataType.FP8E4M3FN, DataType.FP8E5M2)
 _MX_FP4_DTYPES = (DataType.FP4E2M1, DataType.FP4E1M2)
+_MX_GROUP_SIZE = 32
+_MX_SCALE_ADDR_SHIFT = 4
 
 
 def _check_mx_scale_tile(
@@ -2491,13 +2501,18 @@ def _check_mx_scale_tile(
     if scale_type.dtype != DataType.FP8E8M0:
         raise ValueError(f"{op_name}: {scale_name} must use FP8E8M0 dtype, got {scale_type.dtype}")
     _check_tile_memory_space(op_name, scale_name, scale, expected_space, expected_desc)
+    scale_fractal = scale_type.hardware_info.fractal
+    if scale_fractal != _MX_GROUP_SIZE:
+        raise ValueError(
+            f"{op_name}: {scale_name} must use fractal={_MX_GROUP_SIZE}, got {scale_fractal}"
+        )
 
     data_type = data.type
     data_shape = _tile_shape_ints(data_type)
     scale_shape = _tile_shape_ints(scale_type)
     if data_shape is not None and scale_shape is not None:
         expected_shape = data_shape.copy()
-        expected_shape[group_axis] //= 32
+        expected_shape[group_axis] //= _MX_GROUP_SIZE
         if scale_shape != expected_shape:
             raise ValueError(
                 f"{op_name}: {scale_name} shape must match {data_name} MX groups, "
@@ -2517,10 +2532,10 @@ def _check_mx_scale_tile(
     if not isinstance(data_addr, ConstInt) or not isinstance(scale_addr, ConstInt):
         return
 
-    expected_scale_addr = data_addr.value >> 4
+    expected_scale_addr = data_addr.value >> _MX_SCALE_ADDR_SHIFT
     if scale_addr.value != expected_scale_addr:
         raise ValueError(
-            f"{op_name}: {scale_name} address must equal {data_name} address >> 4, "
+            f"{op_name}: {scale_name} address must equal {data_name} address >> {_MX_SCALE_ADDR_SHIFT}, "
             f"got {data_name}=0x{data_addr.value:X}, expected {scale_name}=0x{expected_scale_addr:X}, "
             f"actual {scale_name}=0x{scale_addr.value:X}."
         )
@@ -2541,6 +2556,16 @@ def _check_mx_operands(
     _check_tile_memory_space(op_name, "rhs_tile", rhs, MemorySpace.Right, "L0B (Right)")
     if acc is not None:
         _check_tile_memory_space(op_name, "acc_tile", acc, MemorySpace.Acc, "L0C (Acc)")
+
+    a_dtype, b_dtype, dst_dtype = lhs.type.dtype, rhs.type.dtype, dst.type.dtype
+    valid_input_dtypes = (a_dtype in _MX_FP8_DTYPES and b_dtype in _MX_FP8_DTYPES) or (
+        a_dtype in _MX_FP4_DTYPES and b_dtype in _MX_FP4_DTYPES
+    )
+    if not valid_input_dtypes or dst_dtype != DataType.FP32:
+        raise ValueError(
+            f"{op_name}: (lhs,rhs) must be FP8/FP4 combo and dst FP32, "
+            f"got ({a_dtype},{b_dtype},{dst_dtype})."
+        )
 
     dst_shape = _tile_shape_ints(dst.type)
     lhs_shape = _tile_shape_ints(lhs.type)
@@ -2576,22 +2601,13 @@ def _check_mx_operands(
     _check_mx_scale_tile(op_name, scale_a, lhs, is_left=True)
     _check_mx_scale_tile(op_name, scale_b, rhs, is_left=False)
 
-    a_dtype, b_dtype, dst_dtype = lhs.type.dtype, rhs.type.dtype, dst.type.dtype
-    valid_input_dtypes = (a_dtype in _MX_FP8_DTYPES and b_dtype in _MX_FP8_DTYPES) or (
-        a_dtype in _MX_FP4_DTYPES and b_dtype in _MX_FP4_DTYPES
-    )
-    if not valid_input_dtypes or dst_dtype != DataType.FP32:
-        raise ValueError(
-            f"{op_name}: (lhs,rhs) must be FP8/FP4 combo and dst FP32, "
-            f"got ({a_dtype},{b_dtype},{dst_dtype})."
-        )
-
 
 def _ir_matmul_mx(
     dst: Expr, lhs: Expr, rhs: Expr, scale_a: Expr, scale_b: Expr,
     *, span: Span | None = None, phase: AccPhase | None = None
 ) -> Expr:
     actual_span = span or _span()
+    _validate_acc_phase("matmul_mx", phase)
     _check_mx_operands("matmul_mx", dst, lhs, rhs, scale_a, scale_b)
     kwargs: dict[str, Any] = {}
     if phase is not None:
@@ -2606,6 +2622,7 @@ def _ir_matmul_mx_acc(
     *, span: Span | None = None, phase: AccPhase | None = None
 ) -> Expr:
     actual_span = span or _span()
+    _validate_acc_phase("matmul_mx_acc", phase)
     _check_mx_operands("matmul_mx_acc", dst, lhs, rhs, scale_a, scale_b, acc)
     kwargs: dict[str, Any] = {}
     if phase is not None:

@@ -671,21 +671,15 @@ _VEC_DTYPE_KERNELS = {
     )
     for label, pl_dtype, _, c0 in _VEC_DTYPE_CASES
 }
-_VEC_DTYPE_PARAMS = [
-    pytest.param(
-        *case,
-        id=case[0],
-        marks=pytest.mark.skip(reason="Requires the PTO-ISA FP4 NZ C0 fix"),
-    )
-    if case[0] == "fp4_e2m1"
-    else pytest.param(*case, id=case[0])
-    for case in _VEC_DTYPE_CASES
-]
 
 
 @pytest.mark.soc("950")
 @pypto.options(pass_options={"enable_slice": False})
-@pytest.mark.parametrize("label,pl_dtype,torch_dtype,c0", _VEC_DTYPE_PARAMS)
+@pytest.mark.parametrize(
+    "label,pl_dtype,torch_dtype,c0",
+    _VEC_DTYPE_CASES,
+    ids=[case[0] for case in _VEC_DTYPE_CASES],
+)
 def test_t02_vec_nz_dtype_c0(
     device: str,
     label: str,

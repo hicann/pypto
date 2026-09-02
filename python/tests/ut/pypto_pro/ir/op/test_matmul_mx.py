@@ -25,7 +25,15 @@ import pytest
 _MEMREF_IDS = count()
 
 
-def _tile(name, shape, dtype, memory_space, addr=0):
+_LAYOUT_HARDWARE = {
+    ir.TensorLayout.NZ: (ir.TileLayout.col_major, ir.TileLayout.row_major),
+    ir.TensorLayout.ZN: (ir.TileLayout.row_major, ir.TileLayout.col_major),
+    ir.TensorLayout.NN: (ir.TileLayout.col_major, ir.TileLayout.col_major),
+    ir.TensorLayout.ZZ: (ir.TileLayout.row_major, ir.TileLayout.row_major),
+}
+
+
+def _tile(name, shape, dtype, memory_space, addr=0, *, layout=None, fractal=None):
     span = ir.Span.unknown()
     dims = [ir.ConstInt(dim, DataType.INDEX, span) for dim in shape]
     memref = ir.MemRef(
@@ -34,7 +42,15 @@ def _tile(name, shape, dtype, memory_space, addr=0):
         65536,
         next(_MEMREF_IDS),
     )
-    return ir.Var(name, ir.TileType(dims, dtype, memref), span)
+    if layout is None and memory_space == ir.MemorySpace.ScaleLeft:
+        layout, fractal = ir.TensorLayout.ZZ, 32
+    elif layout is None and memory_space == ir.MemorySpace.ScaleRight:
+        layout, fractal = ir.TensorLayout.NN, 32
+    hardware_info = None
+    if layout is not None:
+        blayout, slayout = _LAYOUT_HARDWARE[layout]
+        hardware_info = ir.HardwareInfo(blayout, slayout, 512 if fractal is None else fractal)
+    return ir.Var(name, ir.TileType(dims, dtype, memref, hardware_info=hardware_info), span)
 
 
 def _tensor(name, shape, dtype):
@@ -92,6 +108,12 @@ def test_matmul_mx_rejects_unaligned_k():
         _ir_matmul_mx(t["dst"], t["lhs"], t["rhs"], t["scale_a"], t["scale_b"])
 
 
+def test_matmul_mx_checks_dtype_before_shape():
+    t = _mx_tiles(k=32, lhs_dtype=DataType.FP16)
+    with pytest.raises(ValueError, match="must be FP8/FP4 combo and dst FP32"):
+        _ir_matmul_mx(t["dst"], t["lhs"], t["rhs"], t["scale_a"], t["scale_b"])
+
+
 def test_matmul_mx_rejects_mismatched_k():
     t = _mx_tiles(k=64)
     t["rhs"] = _tile("rhs", [128, 64], DataType.FP8E5M2, ir.MemorySpace.Right)
@@ -145,6 +167,19 @@ def test_matmul_mx_rejects_scale_in_wrong_memory_space():
 def test_matmul_mx_rejects_scale_with_wrong_dtype():
     t = _mx_tiles(scale_a_dtype=DataType.FP16)
     with pytest.raises(ValueError, match="scale_a must use FP8E8M0 dtype"):
+        _ir_matmul_mx(t["dst"], t["lhs"], t["rhs"], t["scale_a"], t["scale_b"])
+
+
+@pytest.mark.parametrize("scale_key", ["scale_a", "scale_b"])
+def test_matmul_mx_rejects_scale_with_wrong_fractal(scale_key):
+    t = _mx_tiles()
+    is_left = scale_key == "scale_a"
+    space = ir.MemorySpace.ScaleLeft if is_left else ir.MemorySpace.ScaleRight
+    layout = ir.TensorLayout.ZZ if is_left else ir.TensorLayout.NN
+    shape = [64, 2] if is_left else [2, 64]
+    t[scale_key] = _tile(scale_key, shape, DataType.FP8E8M0, space, layout=layout, fractal=512)
+
+    with pytest.raises(ValueError, match=rf"{scale_key} must use fractal=32"):
         _ir_matmul_mx(t["dst"], t["lhs"], t["rhs"], t["scale_a"], t["scale_b"])
 
 
@@ -214,9 +249,35 @@ def test_matmul_mx_skips_address_check_without_explicit_memref():
     shape = [ir.ConstInt(dim, DataType.INDEX, span) for dim in [64, 64]]
     scale_shape = [ir.ConstInt(dim, DataType.INDEX, span) for dim in [64, 2]]
     t["lhs"] = ir.Var("lhs", ir.TileType(shape, DataType.FP8E4M3FN), span)
-    t["scale_a"] = ir.Var("scale_a", ir.TileType(scale_shape, DataType.FP8E8M0), span)
+    scale_hw = ir.HardwareInfo(ir.TileLayout.row_major, ir.TileLayout.row_major, 32)
+    t["scale_a"] = ir.Var(
+        "scale_a", ir.TileType(scale_shape, DataType.FP8E8M0, hardware_info=scale_hw), span
+    )
 
     _ir_matmul_mx(t["dst"], t["lhs"], t["rhs"], t["scale_a"], t["scale_b"])
+
+
+@pytest.mark.parametrize("phase", [ir.STPhase.Final, 7])
+def test_matmul_mx_rejects_invalid_phase(phase):
+    t = _mx_tiles()
+    with pytest.raises(ValueError, match="invalid phase value.*expected AccPhase"):
+        _ir_matmul_mx(
+            t["dst"], t["lhs"], t["rhs"], t["scale_a"], t["scale_b"], phase=phase
+        )
+
+
+def test_matmul_mx_acc_rejects_invalid_phase():
+    t = _mx_tiles()
+    with pytest.raises(ValueError, match="invalid phase value.*expected AccPhase"):
+        _ir_matmul_mx_acc(
+            t["dst"],
+            t["acc"],
+            t["lhs"],
+            t["rhs"],
+            t["scale_a"],
+            t["scale_b"],
+            phase=ir.STPhase.Partial,
+        )
 
 
 @pytest.mark.parametrize(
