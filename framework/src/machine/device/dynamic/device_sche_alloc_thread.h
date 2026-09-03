@@ -27,9 +27,6 @@ constexpr int CPU_ID_HIGH_BOUND_DIE1 = 15;
 constexpr int DAV2201_DUAL_SCHE_NUM = 2;
 constexpr int DAV2201_SINGLE_SCHE_NUM = 1;
 
-// WaitForArbitrationLevel 等待仲裁线程发布结果，需大于最大仲裁轮数×单轮仲裁等待时间
-constexpr uint32_t ARBIT_LEVEL_WAIT_MULT = 5;
-
 constexpr uint64_t CPU_MASK_DIE0 = ((1ULL << (CPU_ID_HIGH_BOUND_DIE0 - CPU_ID_LOW_BOUND_DIE0 + 1)) - 1)
                                    << CPU_ID_LOW_BOUND_DIE0;
 constexpr uint64_t CPU_MASK_DIE1 = ((1ULL << (CPU_ID_HIGH_BOUND_DIE1 - CPU_ID_LOW_BOUND_DIE1 + 1)) - 1)
@@ -92,9 +89,9 @@ inline uint64_t GetArbitTimeOutVal(ArchInfo archInfo)
 }
 
 inline int WaitForCpuMaskReadyForArbitration(ArchInfo archInfo, int targetVal, std::atomic<uint64_t>& mask,
-                                             std::atomic<uint64_t>* snapshot = nullptr)
+                                             std::atomic<uint64_t>* snapshot = nullptr, bool osThrottleFallback = false)
 {
-    uint64_t arbitTimeout = GetArbitTimeOutVal(archInfo);
+    uint64_t arbitTimeout = osThrottleFallback ? GetOsThrottleSafeWaitTimeout(archInfo) : GetArbitTimeOutVal(archInfo);
     TIMEOUT_CHECK_INIT(archInfo, arbitTimeout);
 
     uint32_t cpumask = static_cast<uint32_t>(mask.load(std::memory_order_acquire));
@@ -128,8 +125,8 @@ inline int ComputeArbitrationLevel(DeviceArgs* devArgs, std::atomic<uint64_t>& c
         return ARBIT_A5_SAME_DIE;
     }
 
-    // 只要满足最小调度需求即可，不考虑拓扑优化
-    ret = WaitForCpuMaskReadyForArbitration(devArgs->archInfo, devArgs->scheCpuNum, cpumask, &arbitrationCpumask);
+    // 只要满足最小调度需求即可，不考虑拓扑优化（兜底等待需覆盖 OS 节流）
+    ret = WaitForCpuMaskReadyForArbitration(devArgs->archInfo, devArgs->scheCpuNum, cpumask, &arbitrationCpumask, true);
     if (ret == DEVICE_MACHINE_OK) {
         return ARBIT_A5_CROSS_DIE;
     }
@@ -142,7 +139,7 @@ inline int ComputeArbitrationLevel(DeviceArgs* devArgs, std::atomic<uint64_t>& c
 
 inline int WaitForArbitrationLevel(ArchInfo archInfo, std::atomic<int>& globalArbitrationLevel)
 {
-    uint64_t arbitTimeout = GetArbitTimeOutVal(archInfo) * ARBIT_LEVEL_WAIT_MULT;
+    uint64_t arbitTimeout = GetOsThrottleSafeWaitTimeout(archInfo);
     TIMEOUT_CHECK_INIT(archInfo, arbitTimeout);
 
     int level = globalArbitrationLevel.load(std::memory_order_acquire);
@@ -427,7 +424,7 @@ static inline int ComputeArbitrationLevelDav2201(const DeviceArgs* devArgs, std:
             return ARBIT_A2A3_SAME_CLUSTER;
         }
     }
-    // 从 devArgs->scheCpuNum 到 1 sche 依次降级
+    // 从 devArgs->scheCpuNum 到 1 sche 依次降级；当前线程已登记 cpumask，降至 1 时必成功，无需 55ms
     for (int arbitScheNum = devArgs->scheCpuNum; arbitScheNum >= 1; arbitScheNum--) {
         int ret = WaitForCpuMaskReadyForArbitration(devArgs->archInfo, arbitScheNum, cpumask);
         if (ret == DEVICE_MACHINE_OK) {

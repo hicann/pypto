@@ -340,12 +340,12 @@ TEST_F(ArbitrationTest, WaitCtrlDecision_ReturnsTerminalLevel_Dropped)
 
 TEST_F(ArbitrationTest, CalcWaitTimeout_NonDevice_AllBranches)
 {
-    // isWaitCtrlRoundTime=false：提前 return，不走 DEV_IF / isOnlyOneSche
-    EXPECT_EQ(CalcWaitTimeout(false, false), TIMEOUT_A2A3_1SEC);
-    EXPECT_EQ(CalcWaitTimeout(true, false), TIMEOUT_A2A3_1SEC);
-    // isWaitCtrlRoundTime=true：提前 return 10SEC
-    EXPECT_EQ(CalcWaitTimeout(false, true), TIMEOUT_A2A3_10SEC);
-    EXPECT_EQ(CalcWaitTimeout(true, true), TIMEOUT_A2A3_10SEC);
+    // 非 device：isWaitCtrlLevel=false 提前 return 1SEC，不走 DEV_IF / isOnlyOneSche
+    EXPECT_EQ(CalcWaitTimeout(ArchInfo::DAV_2201, false, false), TIMEOUT_A2A3_1SEC);
+    EXPECT_EQ(CalcWaitTimeout(ArchInfo::DAV_2201, true, false), TIMEOUT_A2A3_1SEC);
+    // 非 device：isWaitCtrlLevel=true 提前 return 10SEC
+    EXPECT_EQ(CalcWaitTimeout(ArchInfo::DAV_2201, false, true), TIMEOUT_A2A3_10SEC);
+    EXPECT_EQ(CalcWaitTimeout(ArchInfo::DAV_2201, true, true), TIMEOUT_A2A3_10SEC);
 }
 
 // ---------------------------------------------------------------------------
