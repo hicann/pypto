@@ -218,7 +218,7 @@ public:
         if (IsPtoDataDumpEnabled()) { // dump tensor
             devProg->devArgs.hostPid = GetProcessId();
         }
-        devProg->devArgs.enableAicoreResolve = IsAicoreResolveEnabled();
+        devProg->devArgs.enableAicoreResolve = IsAicoreResolveEnabled() && IsDeviceMode();
         if (isDevice) {
             devProg->devArgs.validGetPgMask = RuntimeAgent::GetAgent().GetValidGetPgMask();
         }
