@@ -19,12 +19,13 @@
  */
 
 #include "spill_engine.h"
+#include <algorithm>
 #include "tilefwk/symbolic_scalar.h"
 #include "passes/pass_utils/reschedule_utils.h"
+#include "passes/pass_utils/mem_path_utils.h"
 
 namespace npu::tile_fwk {
 
-constexpr int32_t TWO_ISSUE = 2;
 constexpr int32_t DEFAULT_LATENCY = 511;
 
 void SpillEngine::EmitInitDDRBuffer(const LogicalTensorPtr& t, DDRBufferKind kind)
@@ -58,31 +59,26 @@ void SpillEngine::EmitInitDDRBuffer(const LogicalTensorPtr& t, DDRBufferKind kin
     }
 }
 
-int64_t SpillEngine::CalcWorkspaceOffset(std::vector<int64_t> shape, std::vector<int64_t> offset, DataType dataType)
+// 筛候选用的过滤条件, 判据就是 PlanSpill 排不排得出计划, 内外支持范围自动对齐。
+bool SpillEngine::IsBelongSpillBlackList(int memId, Operation* allocOp)
 {
-    if (shape.size() != offset.size()) {
-        return -1;
+    Operation* spillOp = GetSpillOp(memId);
+    if (spillOp == nullptr) {
+        return true;
     }
-    if (shape.size() == 0) {
-        return 0;
-    }
-
-    int64_t linearOffset = 0;
-    int64_t stride = 1;
-    for (size_t i = shape.size(); i > 0; --i) {
-        linearOffset += offset[i - 1] * stride;
-        if (i > 0) {
-            stride *= shape[i - 1];
-        }
-    }
-    return linearOffset * BytesOf(dataType);
-}
-
-bool SpillEngine::IsBelongSpillBlackList(Operation* spillOp, Operation* op)
-{
     std::set<Operation*> filterLtags;
-    FindFilterLtags(op, filterLtags);
-    if (state_.schedInfoMap[spillOp].isAlloc || filterLtags.count(spillOp) != 0 || !CheckMachineAndL1(spillOp, op)) {
+    FindFilterLtags(allocOp, filterLtags);
+    if (state_.IsOpAllocInSchedInfo(spillOp) || filterLtags.count(spillOp) != 0) {
+        return true;
+    }
+    // 拿不到张量是账对不上, 那是 bug 不是规避, 留给 SpillBuffer 报错。
+    LogicalTensorPtr spillTensor = GetSpillTensor(spillOp, memId);
+    if (spillTensor == nullptr) {
+        return false;
+    }
+    SpillPlan plan;
+    if (PlanSpill(memId, spillTensor, plan) != SUCCESS) {
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Spill: skip tensor[%d], cannot plan a spill for it.", memId);
         return true;
     }
     return false;
@@ -107,24 +103,6 @@ void SpillEngine::FindFilterLtags(Operation* allocOp, std::set<Operation*>& filt
     }
 }
 
-bool SpillEngine::CheckMachineAndL1(Operation* spillOp, Operation* allocOp)
-{
-    if (!spillOp->GetInputOperand(0) && allocOp->GetOutputOperand(0)->GetMemoryTypeOriginal() == MemoryType::MEM_L1) {
-        APASS_LOG_WARN_F(Elements::Tensor, "CheckMachineAndL1: spillOp %s has no inputOperand.",
-                         state_.GetOpInfo(spillOp).c_str());
-        return false;
-    }
-    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510 &&
-        allocOp->GetOpcodeStr().find("L1_ALLOC") != std::string::npos &&
-        spillOp->GetOpcodeStr().find("COPY_IN") == std::string::npos &&
-        spillOp->GetOpcodeStr().find("RESHAPE") == std::string::npos &&
-        spillOp->GetInputOperand(0)->GetMemoryTypeOriginal() != MemoryType::MEM_UB &&
-        spillOp->GetInputOperand(0)->GetMemoryTypeOriginal() != MemoryType::MEM_L0C) {
-        return false;
-    }
-    return true;
-}
-
 LogicalTensorPtr SpillEngine::CreateLocalTensor(LogicalTensorPtr spillTensor)
 {
     LogicalTensorPtr localTensor = irBuilder_.CreateTensorVar(spillTensor->Datatype(), spillTensor->GetShape(),
@@ -133,13 +111,17 @@ LogicalTensorPtr SpillEngine::CreateLocalTensor(LogicalTensorPtr spillTensor)
     localTensor->SetMemoryTypeOriginal(spillTensor->GetMemoryTypeOriginal());
     localTensor->UpdateDynValidShape(spillTensor->GetDynValidShape());
     localTensor->tensor->rawshape = spillTensor->tensor->rawshape;
-    int rawMagic = localTensor->GetRawTensor()->GetRawMagic();
-    localTensor->memoryrange.memId = rawMagic;
-    state_.localBufferMap[rawMagic] = std::make_shared<LocalBuffer>(rawMagic, localTensor->tensor->GetRawDataSize(),
-                                                                    localTensor->GetMemoryTypeOriginal());
+    localTensor->memoryrange.memId = localTensor->GetRawTensor()->GetRawMagic();
     localTensor->offset = std::vector<int64_t>(localTensor->GetShape().size(), 0);
     APASS_LOG_DEBUG_F(Elements::Operation, "Create local tensor[%d].", localTensor->memoryrange.memId);
     return localTensor;
+}
+
+void SpillEngine::RegisterLocalBuffer(const LogicalTensorPtr& localTensor)
+{
+    int memId = localTensor->memoryrange.memId;
+    state_.localBufferMap[memId] = std::make_shared<LocalBuffer>(memId, localTensor->tensor->GetRawDataSize(),
+                                                                 localTensor->GetMemoryTypeOriginal());
 }
 
 const std::vector<int64_t>& SpillEngine::GetLargerShape(const std::vector<int64_t>& shape1,
@@ -162,36 +144,32 @@ LogicalTensorPtr SpillEngine::CreateGMTensor(LogicalTensorPtr spillTensor, Logic
         TileOpFormat::TILEOP_ND, "WorkspaceGm");
     LogicalTensorPtr gmTensor = irBuilder_.CreateTensorVar(
         gmRawTensor, spillTensor->GetOffset(), actualSpillTensor->GetShape(), std::vector<SymbolicScalar>{});
-    gmTensor->SetAttr(OpAttributeKey::workspaceBaseOffset, state_.workspaceOffset);
     gmTensor->SetMemoryTypeToBe(MemoryType::MEM_DEVICE_DDR);
     gmTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR);
     gmTensor->UpdateDynValidShape(spillTensor->GetDynValidShape());
     gmTensor->tensor->rawshape = GetLargerShape(spillTensor->tensor->rawshape, actualSpillTensor->tensor->rawshape);
-    if (state_.localBufferMap.find(spillMemId) == state_.localBufferMap.end()) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "Cannot find Tensor[%d] in localBufferMap.", spillMemId);
+    int64_t baseOffset = 0;
+    TileRange range;
+    if (ReserveWorkspaceRange(spillMemId, gmTensor->tensor->GetRawDataSize(), baseOffset, range) != SUCCESS) {
         return nullptr;
     }
-    gmTensor->memoryrange = TileRange(state_.workspaceOffset, state_.workspaceOffset + gmRawTensor->GetRawDataSize(),
-                                      state_.workspaceMemId++);
-    state_.workspaceOffset += gmRawTensor->GetRawDataSize();
+    gmTensor->SetAttr(OpAttributeKey::workspaceBaseOffset, baseOffset);
+    gmTensor->memoryrange = range;
     EmitInitDDRBuffer(gmTensor, DDRBufferKind::SPILL_TEMP);
     APASS_LOG_DEBUG_F(Elements::Operation, "Spill: Create gm tensor[%d].", gmTensor->memoryrange.memId);
     return gmTensor;
 }
 
-LogicalTensorPtr SpillEngine::CreateParticalTensor(LogicalTensorPtr iOperand, LogicalTensorPtr oriOperand,
-                                                   LogicalTensorPtr spillTensor, std::vector<int64_t> toOffset)
+Status SpillEngine::ReserveWorkspaceRange(int spillMemId, int64_t size, int64_t& baseOffset, TileRange& range)
 {
-    LogicalTensorPtr particalTensor = irBuilder_.CreateTensorVar(iOperand->Datatype(), iOperand->GetShape(),
-                                                                 std::vector<SymbolicScalar>{}, iOperand->Format());
-    particalTensor->SetMemoryTypeToBe(oriOperand->GetMemoryTypeToBe());
-    particalTensor->SetMemoryTypeOriginal(oriOperand->GetMemoryTypeOriginal());
-    particalTensor->tensor = oriOperand->tensor;
-    particalTensor->memoryrange.memId = oriOperand->memoryrange.memId;
-    particalTensor->UpdateDynValidShape(spillTensor->GetDynValidShape());
-    particalTensor->offset = toOffset;
-    APASS_LOG_DEBUG_F(Elements::Operation, "Spill: Create partial tensor[%d].", particalTensor->memoryrange.memId);
-    return particalTensor;
+    if (state_.localBufferMap.find(spillMemId) == state_.localBufferMap.end()) {
+        APASS_LOG_ERROR_F(Elements::Tensor, "Cannot find Tensor[%d] in localBufferMap.", spillMemId);
+        return FAILED;
+    }
+    baseOffset = state_.workspaceOffset;
+    range = TileRange(state_.workspaceOffset, state_.workspaceOffset + size, state_.workspaceMemId++);
+    state_.workspaceOffset += size;
+    return SUCCESS;
 }
 
 Operation* SpillEngine::CreateAllocOp(LogicalTensorPtr oOperand)
@@ -199,9 +177,13 @@ Operation* SpillEngine::CreateAllocOp(LogicalTensorPtr oOperand)
     Opcode opcode = oOperand->GetMemoryTypeOriginal() == MemoryType::MEM_UB ? Opcode::OP_UB_ALLOC : Opcode::OP_L1_ALLOC;
     Operation& allocOp = irBuilder_.CreateTensorOpStmt(function_, opcode, {}, {oOperand});
     allocOp.UpdateLatency(1);
-    state_.tensorAllocMap[oOperand->memoryrange.memId] = &allocOp;
     APASS_LOG_DEBUG_F(Elements::Operation, "Spill: Create %s", state_.GetOpInfo(&allocOp).c_str());
     return &allocOp;
+}
+
+void SpillEngine::RegisterTensorAllocOp(Operation* allocOp)
+{
+    state_.tensorAllocMap[allocOp->GetOutputOperand(0)->memoryrange.memId] = allocOp;
 }
 
 Operation* SpillEngine::CloneCopyinOp(Operation* spillOp, LogicalTensorPtr iOperand, LogicalTensorPtr oOperand)
@@ -230,11 +212,10 @@ Operation* SpillEngine::CreateCopyinOp(LogicalTensorPtr iOperand, LogicalTensorP
     }
     copyinOp.SetAttribute(OpAttributeKey::isCube, isCube);
     if (oOperand->GetMemoryTypeOriginal() == MemoryType::MEM_L1) {
-        if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510 || isND2NZ) {
-            copyinOp.SetAttribute(OpAttributeKey::copyInMode, static_cast<int64_t>(Matrix::CopyInMode::ND2NZ));
-        } else {
-            copyinOp.SetAttribute(OpAttributeKey::copyInMode, static_cast<int64_t>(Matrix::CopyInMode::ND2ND));
-        }
+        // 镜像里存的是 ND 才分形: 上溯走过了 ND2NZ, 或 DAV_3510 上 L1 一律按 NZ 存。
+        bool needND2NZ = Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510 || isND2NZ;
+        auto mode = needND2NZ ? Matrix::CopyInMode::ND2NZ : Matrix::CopyInMode::ND2ND;
+        copyinOp.SetAttribute(OpAttributeKey::copyInMode, static_cast<int64_t>(mode));
     }
     APASS_LOG_DEBUG_F(Elements::Operation, "Spill: Create %s", state_.GetOpInfo(&copyinOp).c_str());
     return &copyinOp;
@@ -260,8 +241,8 @@ Operation* SpillEngine::CreateCopyoutOp(Operation* spillOp, LogicalTensorPtr iOp
     copyoutOp.SetAttribute(OpAttributeKey::isCube, isCube);
     if (iOperand->GetMemoryTypeOriginal() == MemoryType::MEM_L0C) {
         copyoutOp.SetAttribute(OpAttributeKey::copyIsNZ, 0);
-    } else if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510 &&
-               iOperand->GetMemoryTypeOriginal() == MemoryType::MEM_L1) {
+    } else if (iOperand->GetMemoryTypeOriginal() == MemoryType::MEM_L1) {
+        // L1 的数据本就是 ND 排布, 落盘不做变换。
         copyoutOp.SetAttribute(OpAttributeKey::copyOutMode, static_cast<int64_t>(Matrix::CopyOutMode::ND2ND));
     }
     copyoutOp.UpdateLatency(DEFAULT_LATENCY);
@@ -269,32 +250,30 @@ Operation* SpillEngine::CreateCopyoutOp(Operation* spillOp, LogicalTensorPtr iOp
     return &copyoutOp;
 }
 
-Operation* SpillEngine::CreateReshapeOp(LogicalTensorPtr iOperand, LogicalTensorPtr oOperand)
+// 整块里的一片视图: 落盘时描述"整块里已产出的那一片", 回载时描述"整块里要装回的那一片"。
+LogicalTensorPtr SpillEngine::CreatePartialTensor(LogicalTensorPtr shapeFrom, LogicalTensorPtr wholeTensor,
+                                                  const std::vector<int64_t>& toOffset)
 {
-    Operation& reshapeOp = irBuilder_.CreateTensorOpStmt(function_, Opcode::OP_RESHAPE, {iOperand}, {oOperand});
-    bool isCube = true;
-    if (iOperand->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
-        isCube = false;
-    }
-    reshapeOp.SetAttribute(OpAttributeKey::isCube, isCube);
-    reshapeOp.UpdateLatency(0);
-    APASS_LOG_DEBUG_F(Elements::Operation, "Spill: Create %s", state_.GetOpInfo(&reshapeOp).c_str());
-    return &reshapeOp;
+    LogicalTensorPtr partialTensor = irBuilder_.CreateTensorVar(wholeTensor->Datatype(), shapeFrom->GetShape(),
+                                                                std::vector<SymbolicScalar>{}, wholeTensor->Format());
+    partialTensor->SetMemoryTypeToBe(wholeTensor->GetMemoryTypeToBe());
+    partialTensor->SetMemoryTypeOriginal(wholeTensor->GetMemoryTypeOriginal());
+    partialTensor->tensor = wholeTensor->tensor;
+    partialTensor->memoryrange.memId = wholeTensor->memoryrange.memId;
+    partialTensor->UpdateDynValidShape(shapeFrom->GetDynValidShape());
+    partialTensor->offset = toOffset;
+    APASS_LOG_DEBUG_F(Elements::Operation, "Spill: Create partial tensor[%d].", partialTensor->memoryrange.memId);
+    return partialTensor;
 }
 
 Operation* SpillEngine::CreateAssembleOp(LogicalTensorPtr iOperand, LogicalTensorPtr oOperand,
-                                         std::vector<int64_t> toOffset, std::vector<SymbolicScalar> toDynOffset,
-                                         std::vector<SymbolicScalar> fromDynValidShape)
+                                         const SpillPartialWrite& partial)
 {
     Operation& assembleOp = irBuilder_.CreateTensorOpStmt(function_, Opcode::OP_ASSEMBLE, {iOperand}, {oOperand});
     assembleOp.UpdateLatency(1);
-    assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(iOperand->GetMemoryTypeOriginal(), toOffset,
-                                                                    toDynOffset, fromDynValidShape));
-    bool isCube = true;
-    if (iOperand->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
-        isCube = false;
-    }
-    assembleOp.SetAttribute(OpAttributeKey::isCube, isCube);
+    assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(iOperand->GetMemoryTypeOriginal(), partial.toOffset,
+                                                                    partial.toDynOffset, partial.fromDynValidShape));
+    assembleOp.SetAttribute(OpAttributeKey::isCube, iOperand->GetMemoryTypeOriginal() != MemoryType::MEM_UB);
     APASS_LOG_DEBUG_F(Elements::Operation, "Spill: Create %s", state_.GetOpInfo(&assembleOp).c_str());
     return &assembleOp;
 }
@@ -317,73 +296,263 @@ LogicalTensorPtr SpillEngine::GetSpillTensor(Operation* spillOp, int spillMemId)
     return nullptr;
 }
 
-Status SpillEngine::GetActualSpillForNd2nz(Operation*& spillOp, LogicalTensorPtr& spillTensor)
+// 没设过与全零都归一成空 —— 都是"这一跳不带偏移"。运行期值原样留着, 由 IsStaticOffset 挡下来。
+static std::vector<OpImmediate> NormalizeOffset(const std::vector<OpImmediate>& offset)
 {
-    if (spillOp->GetOpcode() == Opcode::OP_UB_COPY_ND2NZ) {
-        for (auto producer : spillOp->ProducerOps()) {
-            if (state_.schedInfoMap[producer].isAlloc)
-                continue;
-            spillTensor = spillOp->GetInputOperand(0);
-            spillOp = producer;
-            if (spillTensor == nullptr) {
-                APASS_LOG_ERROR_F(Elements::Operation, "Get %s spill tensor failed.",
-                                  state_.GetOpInfo(spillOp).c_str());
-                return FAILED;
-            }
+    for (const auto& imm : offset) {
+        if (imm.IsParameter()) {
+            return offset;
         }
-        if (spillOp->GetOpcode() == Opcode::OP_UB_COPY_ND2NZ) {
-            APASS_LOG_ERROR_F(Elements::Operation, "Cannot spill %s.", state_.GetOpInfo(spillOp).c_str());
+        if (imm.IsSpecified() &&
+            (!imm.GetSpecifiedValue().ConcreteValid() || imm.GetSpecifiedValue().Concrete() != 0)) {
+            return offset;
+        }
+    }
+    return {};
+}
+
+// 归一后的空只能用于判断, 造 op 得写具体值: GM 越界检查要求偏移维数和 rawShape 对齐。
+static std::vector<OpImmediate> MirrorOffset(const std::vector<OpImmediate>& offset, LogicalTensorPtr gmTensor)
+{
+    return offset.empty() ? OpImmediate::Specified(gmTensor->GetOffset()) : offset;
+}
+
+// 这个写往它的输出的哪个位置写 (INSERT): 非空说明只填了一片, 落盘要落到镜像的同一位置。
+std::vector<OpImmediate> SpillEngine::GetSaveOffset(Operation* writeOp)
+{
+    if (writeOp->GetOpcode() == Opcode::OP_ASSEMBLE) {
+        auto attr = std::dynamic_pointer_cast<AssembleOpAttribute>(writeOp->GetOpAttribute());
+        if (attr != nullptr) {
+            return NormalizeOffset(OpImmediate::Specified(attr->GetToTensorOffset()));
+        }
+    }
+    auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(writeOp->GetOpAttribute());
+    return copyAttr != nullptr ? NormalizeOffset(copyAttr->GetToOffset()) : std::vector<OpImmediate>{};
+}
+
+// 这个搬运从它的输入的哪个位置读: 源比落盘目标大时非空 (抠子块), 回载 copyin 要重放同一个偏移。
+std::vector<OpImmediate> SpillEngine::GetReloadOffset(Operation* moveOp)
+{
+    auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(moveOp->GetOpAttribute());
+    return copyAttr != nullptr ? NormalizeOffset(copyAttr->GetFromOffset()) : std::vector<OpImmediate>{};
+}
+
+// 偏移要原样搬进新建的 copy 属性, 符号值搬过去不保证仍指向同一处, 宁可放弃这次 spill。
+bool SpillEngine::IsStaticOffset(const std::vector<OpImmediate>& offset)
+{
+    for (const auto& imm : offset) {
+        if (!imm.IsSpecified() || !imm.GetSpecifiedValue().ConcreteValid()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// 唯一允许穿过的排布变换, 回载 copyin 会重做这一步分形。
+// 认 opcode 不认 format: format 默认就是 ND, 按它判会放行 NZ->NZ, 二次分形静默错值。
+bool SpillEngine::IsLayoutMove(Operation* op) { return op != nullptr && op->GetOpcode() == Opcode::OP_UB_COPY_ND2NZ; }
+
+// 只搬不算的写才能穿过去上溯: 算子的输出是算出来的, 它的输入里没有这份数据。
+// 白名单而非反查通路表 —— 放行一条得先确认这一跳 shape 语义一致、偏移读得出来。
+// OP_ASSEMBLE 不收: 同级的不进调度, 穿过它可能溯回同一块 buffer, 等于没换级。
+bool SpillEngine::IsPureMove(Operation* op)
+{
+    static const std::set<Opcode> PURE_MOVE_OPS = {Opcode::OP_UB_COPY_L1, Opcode::OP_L0C_TO_L1, Opcode::OP_L0C_COPY_UB,
+                                                   Opcode::OP_COPY_IN};
+    if (op->GetInputOperand(0) == nullptr || op->GetOutputOperand(0) == nullptr || op->GetIOperands().size() != 1 ||
+        op->GetOOperands().size() != 1) {
+        return false;
+    }
+    return IsLayoutMove(op) || PURE_MOVE_OPS.count(op->GetOpcode()) != 0;
+}
+
+// 逐写问: 多写张量没有唯一生产者, 只问唯一生产者会把 NZ 数据漏判成可落盘。
+bool SpillEngine::HasLayoutWrite(LogicalTensorPtr tensor)
+{
+    for (auto* producer : tensor->GetProducers()) {
+        if (IsLayoutMove(producer)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// 能不能就地落盘: 已经在 DDR, 或有 DDR 通路且排布在回载侧复现得出来。
+bool SpillEngine::CanSaveTensorToDDR(LogicalTensorPtr tensor)
+{
+    if (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
+        return true;
+    }
+    return MemPathUtils::CanSaveToDDR(tensor->GetMemoryTypeOriginal()) && !HasLayoutWrite(tensor);
+}
+
+bool SpillEngine::IsDataComplete(LogicalTensorPtr tensor)
+{
+    for (auto* writeOp : CollectDataWrites(tensor)) {
+        if (!state_.IsOpRetired(writeOp)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// 这个写读的就是 DDR, 那份数据不必重新落盘。只认单输入: 克隆时只接一个 iOperand。
+bool SpillEngine::IsReadFromDDR(Operation* op)
+{
+    if (op == nullptr || !OpcodeManager::Inst().IsCopyIn(op->GetOpcode()) || op->GetIOperands().size() != 1 ||
+        op->GetOOperands().size() != 1) {
+        return false;
+    }
+    LogicalTensorPtr input = op->GetInputOperand(0);
+    return input != nullptr && input->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR;
+}
+
+// 一次判完形态, 后三个阶段照它走。通路优先: 落得了盘就在这一级落, 数据齐不齐只影响怎么回载。
+SpillKind SpillEngine::DispatchSpill(LogicalTensorPtr spillTensor)
+{
+    std::vector<Operation*> writes = CollectDataWrites(spillTensor);
+    // 认输入在不在 DDR 而不只认 opcode 是 copyin: L1_TO_BT 这类读的是 L1,
+    // 那块地随时会被腾走, 克隆它等于把镜像建在活不到回载的 buffer 上。
+    if (writes.size() == 1 && IsReadFromDDR(writes[0])) {
+        return SpillKind::ReuseDDR;
+    }
+    if (!CanSaveTensorToDDR(spillTensor)) {
+        return SpillKind::WalkUp;
+    }
+    return IsDataComplete(spillTensor) ? SpillKind::InPlaceWhole : SpillKind::InPlacePartial;
+}
+
+Status SpillEngine::CollectSpillSources(LogicalTensorPtr spillTensor, SpillPlan& plan)
+{
+    if (plan.kind == SpillKind::ReuseDDR) {
+        plan.cloneCopyinFrom = CollectDataWrites(spillTensor).front();
+        return SUCCESS;
+    }
+    if (plan.kind == SpillKind::WalkUp) {
+        return CollectWalkUpSources(spillTensor, plan);
+    }
+    return CollectInPlaceSource(spillTensor, plan);
+}
+
+// 就地落盘: 镜像与这块 buffer 同排布, 整块搬出整块搬回, 所以只有一份源、不带偏移。
+// 只取已执行的写当锚: 未执行的写会改指新 buffer 或随失去读者被删, 与这条 copyout 无关。
+Status SpillEngine::CollectInPlaceSource(LogicalTensorPtr spillTensor, SpillPlan& plan)
+{
+    std::vector<Operation*> retiredWrites;
+    for (auto* writeOp : CollectDataWrites(spillTensor)) {
+        if (state_.IsOpRetired(writeOp)) {
+            retiredWrites.push_back(writeOp);
+        }
+    }
+    if (retiredWrites.empty()) {
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Spill: tensor[%d] holds nothing produced yet.",
+                          spillTensor->memoryrange.memId);
+        return FAILED;
+    }
+    plan.sources.push_back({spillTensor, retiredWrites, {}, true});
+    return SUCCESS;
+}
+
+// 上溯: 每个写各走自己那一跳, 改从它的输入落盘, 各源带各自的 saveOffset 落进镜像的对应片。
+// 上一级的全部写都是锚, 一个都不能漏 —— 漏掉未执行的那个, copyout 会排在它前面搬走缺片的镜像。
+Status SpillEngine::CollectWalkUpSources(LogicalTensorPtr spillTensor, SpillPlan& plan)
+{
+    std::vector<Operation*> writes = CollectDataWrites(spillTensor);
+    if (writes.empty()) {
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Spill: tensor[%d] cannot reach DDR and has no write to walk up.",
+                          spillTensor->memoryrange.memId);
+        return FAILED;
+    }
+    // 回载是一条整块 copyin, 带不了逐源各一份偏移, 所以大搬小的偏移整次 spill 只有一个。
+    if (writes.size() == 1) {
+        plan.reloadOffset = GetReloadOffset(writes[0]);
+        if (!IsStaticOffset(plan.reloadOffset)) {
+            APASS_LOG_DEBUG_F(Elements::Operation, "Spill: %s reloads at a symbolic offset.",
+                              state_.GetOpInfo(writes[0]).c_str());
             return FAILED;
         }
-        APASS_LOG_DEBUG_F(Elements::Operation, "Spill UB_COPY_ND2NZ producer %s", state_.GetOpInfo(spillOp).c_str());
+    }
+    for (auto* writeOp : writes) {
+        LogicalTensorPtr source = WalkUpOneHop(writeOp, plan);
+        if (source == nullptr) {
+            return FAILED;
+        }
+        std::vector<Operation*> anchors = CollectDataWrites(source);
+        if (anchors.empty()) {
+            APASS_LOG_DEBUG_F(Elements::Tensor, "Spill: tensor[%d] has no data producer.", source->memoryrange.memId);
+            return FAILED;
+        }
+        bool allRetired = std::all_of(anchors.begin(), anchors.end(),
+                                      [this](Operation* anchor) { return state_.IsOpRetired(anchor); });
+        plan.sources.push_back({source, anchors, GetSaveOffset(writeOp), allRetired});
     }
     return SUCCESS;
 }
 
-Status SpillEngine::GetActualSpill(Operation* op, Operation*& actualOp, LogicalTensorPtr& actualTensor)
+// 往上走一跳: 输出是搬来的, 同一份数据在输入里还有一份, 改从输入落盘。
+// 一跳后必是 UB 或 L0C, 两者都有 DDR 通路, 所以"没通路"这个原因一步消耗完;
+// 剩下唯一落不了盘的是已分形, 那个 op 就是 ND2NZ, 再多走一步取它变换前的 ND。
+LogicalTensorPtr SpillEngine::WalkUpOneHop(Operation* writeOp, SpillPlan& plan)
 {
-    auto iOperand = op->GetInputOperand(0);
-    if (iOperand == nullptr) {
-        APASS_LOG_ERROR_F(Elements::Operation, "SmallShape spill: producer %s has null input.",
-                          state_.GetOpInfo(op).c_str());
-        return FAILED;
+    if (!IsPureMove(writeOp)) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "Spill: %s computes into a level with no DDR path.",
+                          state_.GetOpInfo(writeOp).c_str());
+        return nullptr;
     }
-    auto iOperandMemType = iOperand->GetMemoryTypeOriginal();
-    if (iOperandMemType != MemoryType::MEM_UB && iOperandMemType != MemoryType::MEM_L0C) {
-        APASS_LOG_ERROR_F(Elements::Operation, "SmallShape spill: producer %s input memType is %s, expect UB/L0C.",
-                          state_.GetOpInfo(op).c_str(), MemoryTypeToString(iOperandMemType).c_str());
-        return FAILED;
+    if (!IsStaticOffset(GetSaveOffset(writeOp))) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "Spill: %s saves at a symbolic offset.",
+                          state_.GetOpInfo(writeOp).c_str());
+        return nullptr;
     }
-    actualOp = op;
-    actualTensor = iOperand;
-    if (iOperandMemType == MemoryType::MEM_UB) {
-        Operation* prevOp = nullptr;
-        for (auto& preOp : state_.depManager.GetPredecessors(op)) {
-            if (!state_.schedInfoMap[preOp].isAlloc) {
-                prevOp = preOp;
-            }
-        }
-        if (prevOp == nullptr || prevOp->GetOpcode() != Opcode::OP_UB_COPY_ND2NZ) {
-            APASS_LOG_ERROR_F(Elements::Operation,
-                              "SmallShape spill: UB-producer %s does not have UB_COPY_ND2NZ predecessor.",
-                              state_.GetOpInfo(op).c_str());
-            return FAILED;
-        }
-        actualOp = prevOp;
-        actualTensor = prevOp->GetInputOperand(0);
+    LogicalTensorPtr source = writeOp->GetInputOperand(0);
+    std::vector<Operation*> writes = CollectDataWrites(source);
+    if (writes.size() == 1 && IsLayoutMove(writes[0])) {
+        plan.crossedNd2nz = true;
+        source = writes[0]->GetInputOperand(0);
     }
-    if (actualTensor == nullptr) {
-        APASS_LOG_ERROR_F(Elements::Operation, "SmallShape spill: actualTensor is null for producer %s.",
-                          state_.GetOpInfo(op).c_str());
-        return FAILED;
+    // 溯到 DDR 就放弃: 复用它得让镜像认别人的地, 落位和生命期都不再由这次 spill 说了算。
+    if (source->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Spill: tensor[%d] walks up onto DDR, not reused.",
+                          source->memoryrange.memId);
+        return nullptr;
     }
-    return SUCCESS;
+    if (!CanSaveTensorToDDR(source)) {
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Spill: tensor[%d] still cannot reach DDR after one hop.",
+                          source->memoryrange.memId);
+        return nullptr;
+    }
+    return source;
 }
 
-void SpillEngine::CollectL0CConsumers(LogicalTensorPtr spillTensor, std::vector<Operation*>& consumers)
+std::vector<Operation*> SpillEngine::CollectDataWrites(LogicalTensorPtr tensor)
 {
+    std::vector<Operation*> writes;
+    for (auto* producer : tensor->GetProducers()) {
+        if (producer != nullptr && !state_.IsOpAllocInSchedInfo(producer)) {
+            writes.push_back(producer);
+        }
+    }
+    return writes;
+}
+
+// 量化 scale 长在算出这块数据的那个写上 (matmul), 搬运 op 从来不带, 所以供体取生产者。
+Operation* SpillEngine::GetScaleDonor(const SpillSource& source)
+{
+    return source.producerOps.empty() ? nullptr : source.producerOps.front();
+}
+
+// 换输入路恒一份镜像; 顶替消费者路 (L0C) 按消费者输出 dtype 分组, 每组一份 ——
+// 随路转换只能落在 copyout 上, 不同 dtype 不能共用一份镜像。
+Status SpillEngine::CollectMirrorGroups(LogicalTensorPtr spillTensor, bool replaceInput,
+                                        std::vector<SpillMirror>& mirrors)
+{
+    if (replaceInput) {
+        mirrors.push_back({spillTensor->Datatype(), {}, nullptr});
+        return SUCCESS;
+    }
+    std::vector<Operation*> consumers;
     for (auto* consumer : spillTensor->GetConsumers()) {
-        if (consumer == nullptr || state_.schedInfoMap[consumer].isRetired) {
+        if (consumer == nullptr || state_.IsOpRetired(consumer)) {
             continue;
         }
         auto output = consumer->GetOutputOperand(0);
@@ -403,71 +572,21 @@ void SpillEngine::CollectL0CConsumers(LogicalTensorPtr spillTensor, std::vector<
         }
         consumers.push_back(consumer);
     }
-    std::sort(consumers.begin(), consumers.end(), [this](Operation* a, Operation* b) {
-        return state_.schedInfoMap[a].execOrder < state_.schedInfoMap[b].execOrder;
-    });
-}
-
-bool SpillEngine::IsMultiProducerTensor(LogicalTensorPtr tensor)
-{
-    int producerCount = 0;
-    for (auto& producer : tensor->GetProducers()) {
-        if (producer->GetOpcodeStr().find("ALLOC") == std::string::npos) {
-            producerCount++;
-        }
+    if (consumers.empty()) {
+        APASS_LOG_ERROR_F(Elements::Tensor, "Spill: tensor[%d] has no pure-move consumer to replace.",
+                          spillTensor->memoryrange.memId);
+        return FAILED;
     }
-    return producerCount > 1 ? true : false;
-}
-
-Status SpillEngine::GetPartialWriteReplayAttr(Operation* producerOp, std::vector<int64_t>& toOffset,
-                                              std::vector<SymbolicScalar>& toDynOffset,
-                                              std::vector<SymbolicScalar>& fromDynValidShape) const
-{
-    if (producerOp->GetOpcode() == Opcode::OP_ASSEMBLE) {
-        auto attr = std::static_pointer_cast<AssembleOpAttribute>(producerOp->GetOpAttribute());
-        if (attr == nullptr) {
-            APASS_LOG_ERROR_F(Elements::Operation, "Invalid AssembleOpAttribute.");
-            return FAILED;
-        }
-        toOffset = attr->GetToOffset();
-        toDynOffset = attr->GetToDynOffset();
-        fromDynValidShape = attr->GetFromDynValidShape();
-        return SUCCESS;
-    } else if (producerOp->GetOpcode() == Opcode::OP_L0C_TO_L1 || producerOp->GetOpcode() == Opcode::OP_L0C_COPY_UB) {
-        auto attr = std::static_pointer_cast<CopyOpAttribute>(producerOp->GetOpAttribute());
-        if (attr == nullptr) {
-            APASS_LOG_ERROR_F(Elements::Operation, "Invalid CopyOpAttribute.");
-            return FAILED;
-        }
-        auto iOperand = producerOp->GetInputOperand(0);
-        for (const auto& offsetImm : attr->GetToOffset()) {
-            if (!offsetImm.IsSpecified() || !offsetImm.GetSpecifiedValue().ConcreteValid()) {
-                APASS_LOG_ERROR_F(Elements::Operation, "L0C_TO_L1 replay only supports static concrete toOffset.");
-                return FAILED;
-            }
-            toOffset.push_back(static_cast<int64_t>(offsetImm.GetSpecifiedValue()));
-        }
-        fromDynValidShape = iOperand->GetDynValidShape();
-        if (fromDynValidShape.empty() && !attr->GetToDynValidShape().empty()) {
-            fromDynValidShape = OpImmediate::ToSpecified(attr->GetToDynValidShape());
-        }
-        return SUCCESS;
+    std::sort(consumers.begin(), consumers.end(),
+              [this](Operation* a, Operation* b) { return state_.GetExecOrder(a) < state_.GetExecOrder(b); });
+    std::map<DataType, std::vector<Operation*>> groups;
+    for (auto* consumer : consumers) {
+        groups[consumer->GetOutputOperand(0)->Datatype()].push_back(consumer);
     }
-    APASS_LOG_ERROR_F(Elements::Operation, "Unsupported producer opcode in SpillPartialBuffer.");
-    return FAILED;
-}
-
-bool SpillEngine::IsUnusedTensor(Operation* spillOp)
-{
-    if (spillOp == nullptr) {
-        return false;
+    for (auto& [dtype, group] : groups) {
+        mirrors.push_back({dtype, group, nullptr});
     }
-    for (auto& succOp : state_.depManager.GetSuccessors(spillOp)) {
-        if (state_.schedInfoMap[succOp].isRetired) {
-            return false;
-        }
-    }
-    return true;
+    return SUCCESS;
 }
 
 Status SpillEngine::UpdateOperationInput(Operation* targetOp, Operation* spillOp, LogicalTensorPtr reloadTensor,
@@ -490,12 +609,12 @@ Status SpillEngine::UpdateOperationInput(Operation* targetOp, Operation* spillOp
     return SUCCESS;
 }
 
-// 一律给 targetOp 重建一条链, 不判是否被共享: 原链原封不动留给别的读者 (含已发射的), 语义上永远安全。
-// 代价只是多几个 skip op —— 它们零 codegen、不申请内存、不进流水线, 判"能不能省下这份克隆"反而更贵更险。
+// 一律重建一条链, 不判是否被共享: 原链留给别的读者 (含已发射的) 永远安全,
+// 代价只是多几个 skip op —— 它们零 codegen、不申请内存、不进流水线。
 Status SpillEngine::UpdateSkipOpInput(Operation* chainTail, Operation* spillOp, Operation* targetOp,
                                       LogicalTensorPtr reloadTensor, size_t index)
 {
-    // 从链尾往上取祖先路径: 链中间的张量允许有旁支消费者, 沿 consumers 走会在分叉处停下, 到不了链尾。
+    // 从链尾往上取: 链中间允许有旁支消费者, 沿 consumers 走会在分叉处停下。
     std::vector<Operation*> chain = SkipChainPath(chainTail);
     if (chain.empty()) {
         return SUCCESS;
@@ -516,16 +635,21 @@ Status SpillEngine::UpdateSkipOpInput(Operation* chainTail, Operation* spillOp, 
     return SUCCESS;
 }
 
+void SpillEngine::UnregisterSkipOp(Operation* targetOp, Operation* skipOp)
+{
+    auto& skipOps = state_.schedInfoMap[targetOp].skipOps;
+    auto pos = std::find(skipOps.begin(), skipOps.end(), skipOp);
+    if (pos != skipOps.end()) {
+        skipOps.erase(pos);
+    }
+}
+
 // 从链尾往链首扫: 摘掉尾巴才会让它的上游变成无读者, 一趟连锁清干净。
 void SpillEngine::DetachOrphanedSkipChain(const std::vector<Operation*>& chain, Operation* targetOp)
 {
-    auto& skipOps = state_.schedInfoMap[targetOp].skipOps;
     for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
         Operation* oldOp = *it;
-        auto pos = std::find(skipOps.begin(), skipOps.end(), oldOp);
-        if (pos != skipOps.end()) {
-            skipOps.erase(pos);
-        }
+        UnregisterSkipOp(targetOp, oldOp);
         const auto& consumers = oldOp->GetOutputOperand(0)->GetConsumers();
         if (std::any_of(consumers.begin(), consumers.end(), [](Operation* c) { return !c->IsDeleted(); })) {
             continue;
@@ -536,9 +660,7 @@ void SpillEngine::DetachOrphanedSkipChain(const std::vector<Operation*>& chain, 
     }
 }
 
-// 逐个克隆 chain 上的 skip op, 把上一个克隆的输出接给下一个的输入, 链首的输入直接用 reload copyin 的产物。
-// 返回克隆链尾的输出张量, 供 targetOp 改指。
-// Clone(function_, true) 新建 RawTensor 并深拷 shape/rawshape/offset/dtype/format/dynValidShape, 这里只覆写 memId。
+// Clone(function_, true) 已深拷 shape/offset/dtype/format 等, 这里只覆写 memId。
 LogicalTensorPtr SpillEngine::CloneSkipChain(Operation* targetOp, const std::vector<Operation*>& chain,
                                              LogicalTensorPtr reloadTensor)
 {
@@ -588,7 +710,7 @@ void SpillEngine::ReplaceSkipOpChainMemId(LogicalTensorPtr startTensor, int oldM
     }
 }
 
-void SpillEngine::ReplaceTensorMemId(Operation* op, int oldMemId, int newMemId)
+void SpillEngine::RemapOpReqMemId(Operation* op, int oldMemId, int newMemId)
 {
     auto& reqMemIds = state_.opReqMemIdsMap[op];
     for (auto memId : reqMemIds) {
@@ -599,6 +721,10 @@ void SpillEngine::ReplaceTensorMemId(Operation* op, int oldMemId, int newMemId)
             std::replace(reqMemIds.begin(), reqMemIds.end(), oldMemId, newMemId);
         }
     }
+}
+
+void SpillEngine::ReplaceTensorMemId(Operation* op, int oldMemId, int newMemId)
+{
     for (auto& outTensor : op->GetOOperands()) {
         if (outTensor->memoryrange.memId == oldMemId) {
             outTensor->memoryrange.memId = newMemId;
@@ -630,129 +756,458 @@ Status SpillEngine::UpdateSpillOpDepend(Operation* spillOp, LogicalTensorPtr new
     return SUCCESS;
 }
 
-Status SpillEngine::UpdateSuccessorDependencies(Operation* succOp, Operation* spillOp, Operation* reloadCopyin,
-                                                int spillMemId, int reloadMemId)
+Status SpillEngine::SpillBuffer(int memId, Operation* spillAllocOp, SpillContext& ctx)
 {
-    auto& reqMemIds = state_.GetOpMemIds(succOp);
-    if (std::count(reqMemIds.begin(), reqMemIds.end(), spillMemId) > 0) {
-        state_.depManager.InsertSuccessor(reloadCopyin, succOp);
-        std::replace(reqMemIds.begin(), reqMemIds.end(), spillMemId, reloadMemId);
-        for (auto& outTensor : succOp->GetOOperands()) {
-            if (outTensor->memoryrange.memId == spillMemId) {
-                outTensor->memoryrange.memId = reloadMemId;
-                ReplaceSkipOpChainMemId(outTensor, spillMemId, reloadMemId);
-            }
-        }
-        state_.depManager.RemovePredecessor(succOp, spillOp);
-        state_.depManager.InsertPredecessor(succOp, reloadCopyin);
-        return UpdateOperationInput(succOp, spillOp, reloadCopyin->GetOutputOperand(0), spillMemId);
+    Operation* spillOp = GetSpillOp(memId);
+    if (spillOp == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Tensor, "Cannot find spill Tensor[%d] occupy op.", memId);
+        return FAILED;
+    }
+    if (state_.IsOpAllocInSchedInfo(spillOp)) {
+        return SUCCESS;
+    }
+    LogicalTensorPtr spillTensor = GetSpillTensor(spillOp, memId);
+    if (spillTensor == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Tensor, "Find %s spill tensor[%d] failed.", state_.GetOpInfo(spillOp).c_str(),
+                          memId);
+        return FAILED;
+    }
+
+    SpillPlan plan;
+    // 兜底 spill-all 走的是全池, 不过候选筛选, 所以这里会收到排不出计划的 buffer。
+    // 腾不动就跳过这块、换下一块, 不挂整个调度。
+    if (PlanSpill(memId, spillTensor, plan) != SUCCESS) {
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Spill: skip tensor[%d], cannot plan a spill for it.", memId);
+        return SUCCESS;
+    }
+    if (SaveToDDR(memId, spillTensor, plan, ctx) != SUCCESS ||
+        ReloadFromDDR(memId, spillTensor, spillOp, spillAllocOp, plan, ctx) != SUCCESS) {
+        return FAILED;
+    }
+    return FinalizeSpill(memId, spillTensor, spillAllocOp, plan, ctx);
+}
+
+// 阶段①: 解析源、定镜像分组、必要时定逐片回载的计划, 纯读。
+// 回载侧按通路图分派: 能从 DDR 直搬回这一级就换输入, 否则顶替消费者。
+// 排不出计划就是"这块存不下去", 只记 DEBUG, 报不报错由调用侧定。
+Status SpillEngine::PlanSpill(int memId, LogicalTensorPtr spillTensor, SpillPlan& plan)
+{
+    auto bufIt = state_.localBufferMap.find(memId);
+    if (bufIt == state_.localBufferMap.end() || bufIt->second == nullptr) {
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Spill: tensor[%d] has no local buffer record.", memId);
+        return FAILED;
+    }
+    plan.replaceInput = MemPathUtils::CanReloadFromDDR(bufIt->second->memType);
+    plan.kind = DispatchSpill(spillTensor);
+    // 顶替消费者 (L0C) 时新数据直接写进消费者的输出, 没有整块可拼, 分不了片。
+    if (plan.kind == SpillKind::InPlacePartial && !plan.replaceInput) {
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Spill: tensor[%d] cannot reload partially while replacing consumers.",
+                          memId);
+        return FAILED;
+    }
+    if (plan.kind == SpillKind::ReuseDDR && !plan.replaceInput) {
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Spill: tensor[%d] cannot reuse DDR while replacing consumers.", memId);
+        return FAILED;
+    }
+    if (CollectSpillSources(spillTensor, plan) != SUCCESS) {
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Spill: plan sources of tensor[%d] failed.", memId);
+        return FAILED;
+    }
+    if (plan.kind != SpillKind::ReuseDDR &&
+        CollectMirrorGroups(spillTensor, plan.replaceInput, plan.mirrors) != SUCCESS) {
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Spill: plan mirrors of tensor[%d] failed.", memId);
+        return FAILED;
+    }
+    if (plan.kind == SpillKind::InPlacePartial && CollectPartialWrites(spillTensor, plan.partialWrites) != SUCCESS) {
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Spill: tensor[%d] cannot replay its partial writes.", memId);
+        return FAILED;
+    }
+    APASS_LOG_DEBUG_F(Elements::Tensor, "Spill plan: tensor[%d] kind %d, %zu sources, crossedNd2nz %d.", memId,
+                      static_cast<int>(plan.kind), plan.sources.size(), static_cast<int>(plan.crossedNd2nz));
+    for (const auto& source : plan.sources) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "Spill source: tensor[%d] from %s, saveOffset %zu, producedInPast %d.",
+                          source.tensor->memoryrange.memId, state_.GetOpInfo(GetScaleDonor(source)).c_str(),
+                          source.saveOffset.size(), static_cast<int>(source.producedInPast));
     }
     return SUCCESS;
 }
 
-void SpillEngine::UpdatePredecessorAllocDependencies(Operation* succOp, Operation* reloadAlloc, int spillMemId)
+// 取这个写在整块里的落点, 只有两种表达: assemble 的记在 AssembleOpAttribute, 搬运的记在 toOffset。
+Status SpillEngine::GetPartialWriteReplayAttr(Operation* writeOp, SpillPartialWrite& partial)
 {
-    auto predecessors = state_.depManager.GetPredecessors(succOp);
-    for (auto predOp : predecessors) {
-        if (state_.schedInfoMap[predOp].isAlloc) {
-            auto& predReqMemIds = state_.GetOpMemIds(predOp);
-            if (std::find(predReqMemIds.begin(), predReqMemIds.end(), spillMemId) != predReqMemIds.end()) {
-                state_.depManager.RemovePredecessor(succOp, predOp);
-                state_.depManager.InsertPredecessor(succOp, reloadAlloc);
-            }
-        }
-    }
-}
-
-Status SpillEngine::UpdateSmallShapeDependAndBuf(std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap,
-                                                 int spillMemId, Operation* spillOp)
-{
-    if (opMemidMap.size() != TWO_ISSUE) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "The number of elements in opMemidMap is invalid: %zu.", opMemidMap.size());
-        return FAILED;
-    }
-    Operation* reloadAlloc = opMemidMap[0].first;
-    Operation* reloadCopyin = opMemidMap[1].first;
-    if (state_.bufRefCount.find(spillMemId) == state_.bufRefCount.end()) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "bufRefCount cannot find Tensor[%d]. ", spillMemId);
-        return FAILED;
-    }
-    int reloadMemId = state_.GetOpMemIds(reloadAlloc)[0];
-    state_.bufRefCount[reloadMemId] = TWO_ISSUE;
-
-    auto& successors = state_.depManager.GetSuccessors(spillOp);
-    for (auto succOp : successors) {
-        if (state_.schedInfoMap[succOp].isRetired) {
-            continue;
-        }
-        state_.bufRefCount[reloadMemId]++;
-        if (UpdateSuccessorDependencies(succOp, spillOp, reloadCopyin, spillMemId, reloadMemId) != SUCCESS) {
+    if (writeOp->GetOpcode() == Opcode::OP_ASSEMBLE) {
+        auto attr = std::dynamic_pointer_cast<AssembleOpAttribute>(writeOp->GetOpAttribute());
+        if (attr == nullptr) {
             return FAILED;
         }
-        UpdatePredecessorAllocDependencies(succOp, reloadAlloc, spillMemId);
+        partial.toOffset = attr->GetToOffset();
+        partial.toDynOffset = attr->GetToDynOffset();
+        partial.fromDynValidShape = attr->GetFromDynValidShape();
+        return SUCCESS;
+    }
+    auto attr = std::dynamic_pointer_cast<CopyOpAttribute>(writeOp->GetOpAttribute());
+    if (attr == nullptr) {
+        return FAILED;
+    }
+    // 符号值搬进新建的 assemble 属性后不保证仍指向同一处。
+    for (const auto& imm : attr->GetToOffset()) {
+        if (!imm.IsSpecified() || !imm.GetSpecifiedValue().ConcreteValid()) {
+            return FAILED;
+        }
+        partial.toOffset.push_back(imm.GetSpecifiedValue().Concrete());
+    }
+    partial.fromDynValidShape = writeOp->GetInputOperand(0)->GetDynValidShape();
+    if (partial.fromDynValidShape.empty()) {
+        partial.fromDynValidShape = OpImmediate::ToSpecified(attr->GetToDynValidShape());
     }
     return SUCCESS;
 }
 
-void SpillEngine::CollectUBSceneOpsAndTensors(Operation* producerOp, std::vector<Operation*>& opsToDelete,
-                                              std::vector<LogicalTensorPtr>& tensorsToDelete)
+// 数据没齐时逐片回载的计划: 一个写一片。已执行的从镜像读回, 未执行的改指向新 buffer。
+Status SpillEngine::CollectPartialWrites(LogicalTensorPtr spillTensor, std::vector<SpillPartialWrite>& partialWrites)
 {
-    opsToDelete.push_back(producerOp);
-    auto ubTensor2 = producerOp->GetInputOperand(0);
-    if (ubTensor2 == nullptr)
-        return;
-    for (auto* op : ubTensor2->GetProducers()) {
-        if (op != nullptr && op->GetOpcodeStr().find("UB_COPY_ND2NZ") != std::string::npos) {
-            if (state_.depManager.GetSuccessors(op).size() > 1) {
-                return;
+    for (auto* writeOp : CollectDataWrites(spillTensor)) {
+        SpillPartialWrite partial;
+        partial.writeOp = writeOp;
+        partial.producedInPast = state_.IsOpRetired(writeOp);
+        if (GetPartialWriteReplayAttr(writeOp, partial) != SUCCESS) {
+            APASS_LOG_DEBUG_F(Elements::Operation, "Spill: %s cannot be replayed as a partial write.",
+                              state_.GetOpInfo(writeOp).c_str());
+            return FAILED;
+        }
+        partialWrites.push_back(std::move(partial));
+    }
+    return SUCCESS;
+}
+
+// 阶段②: 每份镜像一块 workspace, 各源的 copyout 往各自区间写。ReuseDDR 不落盘。
+Status SpillEngine::SaveToDDR(int memId, LogicalTensorPtr spillTensor, SpillPlan& plan, SpillContext& ctx)
+{
+    if (plan.kind == SpillKind::ReuseDDR) {
+        return SUCCESS;
+    }
+    for (auto& mirror : plan.mirrors) {
+        if (PrepareSpillMirror(memId, plan, spillTensor, mirror) != SUCCESS ||
+            SaveSourcesToDDR(plan.sources, mirror.gmTensor, ctx, plan.created) != SUCCESS) {
+            return FAILED;
+        }
+    }
+    return SUCCESS;
+}
+
+// 阶段③: 能从 DDR 搬回这一级就换输入 (镜像恒只有一份), 搬不回去就按 dtype 逐份顶替消费者。
+Status SpillEngine::ReloadFromDDR(int memId, LogicalTensorPtr spillTensor, Operation* spillOp, Operation* spillAllocOp,
+                                  SpillPlan& plan, SpillContext& ctx)
+{
+    if (plan.replaceInput) {
+        return ReloadIntoNewBuffer(memId, spillTensor, spillOp, spillAllocOp, plan, ctx);
+    }
+    for (const auto& mirror : plan.mirrors) {
+        if (ReplaceConsumersWithCopyin(mirror, spillAllocOp, plan.created) != SUCCESS) {
+            return FAILED;
+        }
+    }
+    // 顶替掉的消费者已标删, 依赖按新图重建, 老 buffer 的引用随之归零。
+    state_.depManager.InitDependencies(state_.orderedOps, false);
+    state_.bufRefCount[memId] = 0;
+    return SUCCESS;
+}
+
+// 阶段④: 删掉没有活读者的写, 通知观察者, 释放这块 buffer。
+Status SpillEngine::FinalizeSpill(int memId, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillPlan& plan,
+                                  SpillContext& ctx)
+{
+    // 释放的是被腾空那块地所在的核, 这个事实在收割之前就已确定; 收割会抹掉 tensorAllocMap
+    // 的条目, 之后再解析就查不到 alloc 了。
+    CoreLocationType freeCore = state_.enableDualDst ? state_.ResolveCoreForFree(memId) :
+                                                       state_.GetCoreLocation(spillAllocOp);
+    if (DropWritesWithoutReaders(spillTensor, plan, ctx) != SUCCESS) {
+        return FAILED;
+    }
+    NotifySpill(state_, spillTensor, memId, spillAllocOp, plan.created);
+    return FreeSpilledBuffer(memId, freeCore);
+}
+
+// ③ 的顶替消费者版: 消费者本是纯搬运, 由 copyin 从 DDR 直写它的输出即等价, 整个换掉。
+Status SpillEngine::ReplaceConsumersWithCopyin(const SpillMirror& mirror, Operation* spillAllocOp,
+                                               SingleSpillCreatedOps& created)
+{
+    for (auto* consumer : mirror.consumers) {
+        auto oOperand = consumer->GetOutputOperand(0);
+        Operation* copyinOp = CreateCopyinOp(mirror.gmTensor, oOperand,
+                                             OpImmediate::Specified(mirror.gmTensor->GetOffset()), true);
+        UpdateOpScheduleInfo(copyinOp, {oOperand->memoryrange.memId}, spillAllocOp);
+        TakeOverScheduleSlot(consumer, copyinOp);
+        consumer->SetAsDeleted();
+    }
+    created.Record(nullptr, nullptr, nullptr, mirror.gmTensor);
+    return SUCCESS;
+}
+
+// 尺寸由 GetLargerShape 在源与 spill buffer 之间挑: 只有大搬小那一种源比整块大,
+// 多源时每片都比整块小、挑中的恒是 spill buffer, 所以取哪个源当参照都一样。
+Status SpillEngine::PrepareSpillMirror(int spillMemId, const SpillPlan& plan, LogicalTensorPtr spillTensor,
+                                       SpillMirror& mirror)
+{
+    mirror.gmTensor = CreateGMTensor(spillTensor, plan.sources.front().tensor, spillMemId, mirror.dtype);
+    if (mirror.gmTensor == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Tensor, "Spill: create mirror for tensor[%d] failed.", spillMemId);
+        return FAILED;
+    }
+    return SUCCESS;
+}
+
+// 一个源一条 copyout, 与回载 copyin 的先后由 InitDependencies 从生产/消费关系自己推出, 不用手工排。
+Status SpillEngine::SaveSourcesToDDR(const std::vector<SpillSource>& sources, LogicalTensorPtr gmTensor,
+                                     SpillContext& ctx, SingleSpillCreatedOps& created)
+{
+    for (const auto& source : sources) {
+        int sourceMemId = source.tensor->memoryrange.memId;
+        Operation* copyoutOp = CreateCopyoutOp(GetScaleDonor(source), source.tensor, gmTensor,
+                                               MirrorOffset(source.saveOffset, gmTensor));
+        if (UpdateCopyoutScheduleInfo(copyoutOp, source, sourceMemId) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "Spill: update copyout schedule info failed.");
+            return FAILED;
+        }
+        created.Record(copyoutOp);
+        if (source.producedInPast) {
+            ctx.newCopyoutOps.push_back(copyoutOp);
+        } else {
+            // 源还没产出: 先给源 buffer 加引用, 保它活到 copyout 执行。
+            state_.bufRefCount[sourceMemId]++;
+            ctx.newNotRetiredCopyOutSize++;
+        }
+    }
+    return SUCCESS;
+}
+
+// 新 buffer 与 spillTensor 同 memType、同 rawshape, 消费者原本那套 offset/shape 因此继续有效。
+Status SpillEngine::ReloadIntoNewBuffer(int spillMemId, LogicalTensorPtr spillTensor, Operation* spillOp,
+                                        Operation* spillAllocOp, SpillPlan& plan, SpillContext& ctx)
+{
+    // ReuseDDR 没建镜像, 数据源就是原来那条 copyin 读的那块 DDR。
+    LogicalTensorPtr gmTensor = plan.kind == SpillKind::ReuseDDR ? plan.cloneCopyinFrom->GetInputOperand(0) :
+                                                                   plan.mirrors.front().gmTensor;
+    LogicalTensorPtr localTensor = CreateLocalTensor(spillTensor);
+    RegisterLocalBuffer(localTensor);
+    Operation* allocOp = CreateAllocOp(localTensor);
+    RegisterTensorAllocOp(allocOp);
+    OpMemIdMap opMemIdMap = {{allocOp, {localTensor->memoryrange.memId}}};
+    Operation* wholeCopyin = nullptr;
+    if (plan.kind == SpillKind::InPlacePartial) {
+        CreatePartialReloads(spillTensor, localTensor, gmTensor, plan.partialWrites, opMemIdMap);
+    } else {
+        wholeCopyin = CreateWholeReload(gmTensor, localTensor, plan);
+        opMemIdMap.push_back({wholeCopyin, {localTensor->memoryrange.memId}});
+    }
+    if (UpdateScheduleStatus(opMemIdMap, spillMemId, spillAllocOp, localTensor, spillOp) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "Spill: update schedule status failed.");
+        return FAILED;
+    }
+    ctx.newAllocOps.push_back(allocOp);
+    plan.created.Record(nullptr, allocOp, wholeCopyin, gmTensor);
+    return SUCCESS;
+}
+
+// 上溯单写时镜像存的是那一跳的输入 (更大), reloadOffset 重放它抠子块的偏移; 其余读镜像原点。
+// crossedNd2nz 时镜像里是变换前的 ND, 回载要重做分形, 否则消费者按 NZ 读到排布不对的数据。
+Operation* SpillEngine::CreateWholeReload(LogicalTensorPtr gmTensor, LogicalTensorPtr localTensor,
+                                          const SpillPlan& plan)
+{
+    if (plan.kind == SpillKind::ReuseDDR) {
+        return CloneCopyinOp(plan.cloneCopyinFrom, gmTensor, localTensor);
+    }
+    std::vector<OpImmediate> fromOffset = MirrorOffset(plan.reloadOffset, gmTensor);
+    return CreateCopyinOp(gmTensor, localTensor, fromOffset, plan.crossedNd2nz);
+}
+
+// assemble 上挂着的 alloc 认的是分片视图, 而未执行的写马上按整块改指向, alloc 得跟着认整块。
+void SpillEngine::NormalizeAssembleAllocOutput(LogicalTensorPtr spillTensor)
+{
+    for (auto* producer : spillTensor->GetProducers()) {
+        if (producer == nullptr || producer->GetOpcode() != Opcode::OP_ASSEMBLE) {
+            continue;
+        }
+        for (auto* pre : producer->ProducerOps()) {
+            if (state_.IsOpAllocInSchedInfo(pre)) {
+                pre->UpdateOutputOperand(0, spillTensor);
             }
         }
     }
-    tensorsToDelete.push_back(ubTensor2);
-    for (auto* op : ubTensor2->GetProducers()) {
-        if (op != nullptr &&
-            (state_.schedInfoMap[op].isAlloc || op->GetOpcodeStr().find("UB_COPY_ND2NZ") != std::string::npos)) {
-            opsToDelete.push_back(op);
-            APASS_LOG_DEBUG_F(Elements::Operation, "UB scene: collect %s[%d]", op->GetOpcodeStr().c_str(),
-                              op->GetOpMagic());
+}
+
+// 改指放在最后: 分片都靠老 spillTensor 的生产者关系定位, 改早了就找不着了。
+void SpillEngine::CreatePartialReloads(LogicalTensorPtr spillTensor, LogicalTensorPtr localTensor,
+                                       LogicalTensorPtr gmTensor, const std::vector<SpillPartialWrite>& partialWrites,
+                                       OpMemIdMap& opMemIdMap)
+{
+    NormalizeAssembleAllocOutput(spillTensor);
+    std::vector<Operation*> writesToRedirect;
+    for (const auto& partial : partialWrites) {
+        if (partial.producedInPast) {
+            CreateOnePartialReload(localTensor, gmTensor, partial, opMemIdMap);
+        } else {
+            writesToRedirect.push_back(partial.writeOp);
         }
+    }
+    for (auto* writeOp : writesToRedirect) {
+        writeOp->ReplaceOutput(localTensor, spillTensor);
+        APASS_LOG_DEBUG_F(Elements::Operation, "Spill: redirect %s to the reloaded buffer.",
+                          state_.GetOpInfo(writeOp).c_str());
     }
 }
 
-void SpillEngine::CollectProducerChainForDeletion(LogicalTensorPtr spillTensor, std::vector<Operation*>& opsToDelete,
-                                                  std::vector<LogicalTensorPtr>& tensorsToDelete)
+// assemble 读写同一块 buffer, 所以它的 memId 要报两次。
+void SpillEngine::CreateOnePartialReload(LogicalTensorPtr localTensor, LogicalTensorPtr gmTensor,
+                                         const SpillPartialWrite& partial, OpMemIdMap& opMemIdMap)
 {
-    tensorsToDelete.push_back(spillTensor);
+    int memId = localTensor->memoryrange.memId;
+    LogicalTensorPtr writeInput = partial.writeOp->GetInputOperand(0);
+    LogicalTensorPtr partialTensor = CreatePartialTensor(writeInput, localTensor, partial.toOffset);
+    Operation* copyinOp = CreateCopyinOp(gmTensor, partialTensor, OpImmediate::Specified(partial.toOffset));
+    Operation* assembleOp = CreateAssembleOp(partialTensor, localTensor, partial);
+    // 这一片在镜像里是 NZ 还是 ND, 由写它的那个 op 决定, 读回来的两条都得照着认。
+    int64_t isNZ = 0;
+    partial.writeOp->GetAttr(OpAttributeKey::copyIsNZ, isNZ);
+    copyinOp->SetAttr(OpAttributeKey::copyIsNZ, isNZ);
+    assembleOp->SetAttr(OpAttributeKey::copyIsNZ, isNZ);
+    opMemIdMap.push_back({copyinOp, {memId}});
+    opMemIdMap.push_back({assembleOp, {memId, memId}});
+}
 
-    for (auto* producerOp : spillTensor->GetProducers()) {
-        if (producerOp == nullptr) {
+bool SpillEngine::HasLiveConsumer(const LogicalTensorPtr& tensor)
+{
+    if (tensor == nullptr) {
+        return false;
+    }
+    const auto& consumers = tensor->GetConsumers();
+    return std::any_of(consumers.begin(), consumers.end(),
+                       [](Operation* consumer) { return consumer != nullptr && !consumer->IsDeleted(); });
+}
+
+bool SpillEngine::HasLiveReader(Operation* op)
+{
+    for (const auto& outTensor : op->GetOOperands()) {
+        if (HasLiveConsumer(outTensor)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// 消费者全改指到新 buffer 后, 原来往这块地写的搬运就白干了, 连同它们腾空的 buffer 一起收走。
+// 就地落盘那两种形态的 copyout 读的就是这块地, 恒有活读者, 进不来。
+// 改指向已经把这些写的输出 memId 换成了新 buffer 的, 所以擦引用记录时要把新 buffer 摘出去:
+// 它刚建好、还没退休, 记录一抹回载的 alloc 退休时就找不到自己的引用。
+Status SpillEngine::DropWritesWithoutReaders(LogicalTensorPtr spillTensor, SpillPlan& plan, SpillContext& ctx)
+{
+    if (HasLiveConsumer(spillTensor)) {
+        return SUCCESS;
+    }
+    OrphanedOps orphaned = CollectOrphanedChain(spillTensor);
+    if (orphaned.ops.empty()) {
+        return SUCCESS;
+    }
+    if (plan.created.allocOp != nullptr && plan.created.allocOp->GetOutputOperand(0) != nullptr) {
+        orphaned.memIds.erase(plan.created.allocOp->GetOutputOperand(0)->memoryrange.memId);
+    }
+    size_t retiredNum = 0;
+    for (auto* op : orphaned.ops) {
+        if (state_.IsOpAllocInSchedInfo(op)) {
+            ctx.deleteAllocOps.push_back(
+                {op, op->GetOutputOperand(0)->GetMemoryTypeOriginal(), state_.schedInfoMap[op].coreLocation});
+        }
+        if (DeleteOneOp(op, orphaned.memIds)) {
+            retiredNum++;
+        }
+    }
+    ctx.deleteRetiredOpSize += static_cast<int>(retiredNum);
+    ctx.deleteNotRetiredOpSize += static_cast<int>(orphaned.ops.size() - retiredNum);
+    for (int memId : orphaned.memIds) {
+        state_.tensorAllocMap.erase(memId);
+        state_.bufRefCount.erase(memId);
+    }
+    DetachOrphanedProducers(orphaned);
+    function_.EraseOperations(false, false);
+    APASS_LOG_DEBUG_F(Elements::Operation, "Spill: dropped %zu writes without readers.", orphaned.ops.size());
+    return SUCCESS;
+}
+
+// 逐级上溯: 删掉一层搬运, 它的输入那一级也可能失去唯一读者, 不继续删就漏一块回不来的 buffer。
+// 天然停在数据源上 —— 源上挂着这次 spill 新插的 copyout, 永远有活读者。
+// 还有别的活消费者的那一级整个留下: 它仍在服役, 抹掉 memId 会让别人退休时找不到引用记录。
+OrphanedOps SpillEngine::CollectOrphanedChain(LogicalTensorPtr spillTensor)
+{
+    OrphanedOps orphaned;
+    std::vector<LogicalTensorPtr> pending = {spillTensor};
+    std::set<LogicalTensor*> visited;
+    while (!pending.empty()) {
+        LogicalTensorPtr tensor = pending.back();
+        pending.pop_back();
+        if (tensor == nullptr || !visited.insert(tensor.get()).second || HasLiveConsumer(tensor)) {
             continue;
         }
-        bool isUBCopyL1 = producerOp->GetOpcode() == Opcode::OP_UB_COPY_L1;
-        if (isUBCopyL1) {
-            CollectUBSceneOpsAndTensors(producerOp, opsToDelete, tensorsToDelete);
-            APASS_LOG_DEBUG_F(Elements::Operation, "UB scene: collect UB tensor and op");
-        } else {
-            opsToDelete.push_back(producerOp);
-            APASS_LOG_DEBUG_F(Elements::Operation, "collect L0C_COPY_L1/L1_ALLOC only");
+        orphaned.tensors.push_back(tensor);
+        orphaned.memIds.insert(tensor->memoryrange.memId);
+        for (auto* writeOp : tensor->GetProducers()) {
+            if (writeOp == nullptr || HasLiveReader(writeOp)) {
+                continue;
+            }
+            orphaned.ops.push_back(writeOp);
+            // 先标删: 它不再算活读者, 上一级下一轮才判得出自己也没读者了。
+            writeOp->SetAsDeleted();
+            if (!state_.IsOpAllocInSchedInfo(writeOp)) {
+                pending.push_back(writeOp->GetInputOperand(0));
+            }
         }
     }
+    return orphaned;
 }
 
-void SpillEngine::ReleaseDeletedOpBufRefs(Operation* op, const std::vector<LogicalTensorPtr>& tensorsToDelete)
+// op 的存在分布在五处: 执行序、buffer 引用、调度侧各表、依赖边、新增 op 台账, 一处不摘就留下野记录。
+// 返回它是否已执行过, 供调用侧区分两类计数。
+bool SpillEngine::DeleteOneOp(Operation* op, const std::set<int>& orphanedMemIds)
+{
+    bool wasRetired = EraseFromExecOrder(op);
+    ReleaseOpBufRefs(op, orphanedMemIds);
+    EraseSchedulerSideMaps(op);
+    UnregisterOpDependencies(op);
+
+    auto newOpsIt = std::find(state_.newOperations.begin(), state_.newOperations.end(), op);
+    if (newOpsIt != state_.newOperations.end()) {
+        state_.newOperations.erase(newOpsIt);
+    }
+    APASS_LOG_DEBUG_F(Elements::Operation, "Spill: deleted op %s.", state_.GetOpInfo(op).c_str());
+    return wasRetired;
+}
+
+// 执行序是连号的, 抽掉一个后面每个都要挪一位。
+bool SpillEngine::EraseFromExecOrder(Operation* op)
+{
+    auto it = std::find(state_.orderedOps.begin(), state_.orderedOps.end(), op);
+    if (it == state_.orderedOps.end()) {
+        return false;
+    }
+    bool wasRetired = state_.schedInfoMap[op].isRetired;
+    int deletedOrder = state_.schedInfoMap[op].execOrder;
+    auto nextIt = state_.orderedOps.erase(it);
+    for (auto adjustIt = nextIt; adjustIt != state_.orderedOps.end(); adjustIt++) {
+        if (state_.schedInfoMap.count(*adjustIt) > 0 && state_.schedInfoMap[*adjustIt].execOrder > deletedOrder) {
+            state_.schedInfoMap[*adjustIt].execOrder--;
+        }
+    }
+    return wasRetired;
+}
+
+// 未执行的写被删 -> 它占的引用不会再由退休来释放, 就地还掉。
+// 整块腾空的那些跳过: 引用记录随后整条抹除, 逐个减到 0 反而会让别处误判已释放。
+void SpillEngine::ReleaseOpBufRefs(Operation* op, const std::set<int>& orphanedMemIds)
 {
     if (state_.schedInfoMap[op].isRetired) {
         return;
     }
     for (int memId : state_.GetOpMemIds(op)) {
-        bool willErase = false;
-        for (const auto& tensor : tensorsToDelete) {
-            if (tensor->memoryrange.memId == memId) {
-                willErase = true;
-                break;
-            }
-        }
-        if (willErase) {
+        if (orphanedMemIds.count(memId) > 0) {
             continue;
         }
         auto refIt = state_.bufRefCount.find(memId);
@@ -762,58 +1217,32 @@ void SpillEngine::ReleaseDeletedOpBufRefs(Operation* op, const std::vector<Logic
     }
 }
 
-void SpillEngine::CleanupCollectedTensors(const std::vector<LogicalTensorPtr>& tensorsToDelete)
+void SpillEngine::UnregisterOpDependencies(Operation* op)
 {
-    for (size_t i = 0; i < tensorsToDelete.size(); i++) {
-        auto& tensor = tensorsToDelete[i];
-        int memId = tensor->memoryrange.memId;
-
-        state_.tensorAllocMap.erase(memId);
-        state_.bufRefCount.erase(memId);
-
-        APASS_LOG_DEBUG_F(Elements::Tensor, "Cleaned tensor[%d] scheduler.", memId);
+    // 必须拷贝: RemoveSuccessor/RemovePredecessor 会改动正在遍历的那两个 set。
+    auto predecessors = state_.depManager.GetPredecessors(op);
+    auto successors = state_.depManager.GetSuccessors(op);
+    for (auto* pred : predecessors) {
+        state_.depManager.RemoveSuccessor(pred, op);
+    }
+    for (auto* succ : successors) {
+        state_.depManager.RemovePredecessor(succ, op);
     }
 }
 
-void SpillEngine::EraseOrphanedTensors(const std::vector<LogicalTensorPtr>& tensorsToDelete,
-                                       const std::vector<Operation*>& opsToDelete)
+// 已删的写还挂在各级 tensor 的生产/消费表里, 不摘掉重建依赖时会走到已删对象。
+void SpillEngine::DetachOrphanedProducers(const OrphanedOps& orphaned)
 {
-    for (auto& tensor : tensorsToDelete) {
-        for (auto* op : opsToDelete) {
+    for (const auto& tensor : orphaned.tensors) {
+        for (auto* op : orphaned.ops) {
             tensor->RemoveProducer(op);
-        }
-        for (auto* op : opsToDelete) {
             tensor->RemoveConsumer(op);
         }
     }
 }
 
-Status SpillEngine::SpillBuffer(int memId, Operation* spillAllocOp, SpillContext& ctx)
+Status SpillEngine::FreeSpilledBuffer(int memId, CoreLocationType freeCore)
 {
-    Operation* spillOp = GetSpillOp(memId);
-    if (spillOp == nullptr) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "Cannot find spill Tensor[%d] occupy op.", memId);
-        return FAILED;
-    }
-    if (state_.schedInfoMap[spillOp].isAlloc || !CheckMachineAndL1(spillOp, spillAllocOp)) {
-        return SUCCESS;
-    }
-    LogicalTensorPtr spillTensor = GetSpillTensor(spillOp, memId);
-    if (spillTensor == nullptr) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "Find %s spill tensor[%d] failed.", state_.GetOpInfo(spillOp).c_str(),
-                          memId);
-        return FAILED;
-    }
-    SingleSpillCreatedOps created;
-    if (HandleSpillMode(memId, spillOp, spillTensor, spillAllocOp, ctx, created) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "Spill %s tensor[%d] failed.", state_.GetOpInfo(spillOp).c_str(), memId);
-        return FAILED;
-    }
-    NotifySpill(state_, spillTensor, memId, spillAllocOp, created);
-    CoreLocationType freeCore = state_.schedInfoMap[spillAllocOp].coreLocation;
-    if (state_.enableDualDst) {
-        freeCore = state_.ResolveCoreForFree(memId);
-    }
     if (state_.bufferManagerMap[freeCore][state_.localBufferMap[memId]->memType].Free(memId) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "Free spill tensor[%d] failed!", memId);
         return FAILED;
@@ -822,504 +1251,12 @@ Status SpillEngine::SpillBuffer(int memId, Operation* spillAllocOp, SpillContext
     return SUCCESS;
 }
 
-Status SpillEngine::HandleSpillMode(int memId, Operation* spillOp, LogicalTensorPtr spillTensor,
-                                    Operation* spillAllocOp, SpillContext& ctx, SingleSpillCreatedOps& created)
+void SpillEngine::TakeOverScheduleSlot(Operation* oldOp, Operation* newOp)
 {
-    APASS_LOG_DEBUG_F(Elements::Operation, "Begin spill %s, Tensor[%d]", state_.GetOpInfo(spillOp).c_str(), memId);
-    if (spillOp->GetOpcodeStr().find("COPY_IN") != std::string::npos) {
-        if (SpillBufferFromDDR(memId, spillOp, spillTensor, spillAllocOp, ctx, created) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "SpillBufferFromDDR failed!");
-            return FAILED;
-        }
-    } else if (state_.localBufferMap[memId]->memType == MemoryType::MEM_L1 &&
-               Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) {
-        if (SpillL1BufferFor3510(memId, spillOp, spillTensor, spillAllocOp, ctx, created) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "SpillL1BufferFor3510 failed!");
-            return FAILED;
-        }
-    } else if (IsMultiProducerTensor(spillTensor)) {
-        if (SpillMultiProducerBuffer(memId, spillOp, spillTensor, spillAllocOp, ctx, created) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "SpillMultiProducerBuffer failed!");
-            return FAILED;
-        }
-    } else if (state_.localBufferMap[memId]->memType == MemoryType::MEM_L0C) {
-        if (SpillL0CBuffer(memId, spillOp, spillTensor, spillAllocOp, ctx, created) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "SpillL0CBuffer failed!");
-            return FAILED;
-        }
-    } else {
-        if (SpillGeneralBuffer(memId, spillOp, spillTensor, spillAllocOp, ctx, created) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "SpillGeneralBuffer failed!");
-            return FAILED;
-        }
-    }
-    return SUCCESS;
-}
-
-Status SpillEngine::SpillBufferFromDDR(int memId, Operation* spillOp, LogicalTensorPtr spillTensor,
-                                       Operation* spillAllocOp, SpillContext& ctx, SingleSpillCreatedOps& created)
-{
-    APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillBufferFromDDR begin.");
-    LogicalTensorPtr gmTensor = spillOp->GetInputOperand(0);
-    LogicalTensorPtr localTensor = CreateLocalTensor(spillTensor);
-    Operation* allocOp = CreateAllocOp(localTensor);
-    Operation* copyinOp = CloneCopyinOp(spillOp, gmTensor, localTensor);
-
-    std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap = {{allocOp, {localTensor->memoryrange.memId}},
-                                                                       {copyinOp, {localTensor->memoryrange.memId}}};
-
-    if (UpdateScheduleStatus(opMemidMap, memId, spillAllocOp, localTensor, spillOp) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "UpdateScheduleStatus failed.");
-        return FAILED;
-    }
-    ctx.newAllocOps.push_back(allocOp);
-    created.Record(nullptr, allocOp, copyinOp, nullptr);
-    APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillBufferFromDDR end.");
-    return SUCCESS;
-}
-
-Status SpillEngine::SpillGeneralBuffer(int spillMemId, Operation* spillOp, LogicalTensorPtr spillTensor,
-                                       Operation* spillAllocOp, SpillContext& ctx, SingleSpillCreatedOps& created)
-{
-    APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillGeneralBuffer begin.");
-    if (GetActualSpillForNd2nz(spillOp, spillTensor) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "GetActualSpillForNd2nz failed.");
-        return FAILED;
-    }
-
-    LogicalTensorPtr gmTensor = CreateGMTensor(spillTensor, spillTensor, spillMemId);
-    LogicalTensorPtr localTensor = CreateLocalTensor(spillTensor);
-
-    Operation* copyoutOp = CreateCopyoutOp(spillOp, spillTensor, gmTensor,
-                                           OpImmediate::Specified(gmTensor->GetOffset()));
-    Operation* allocOp = CreateAllocOp(localTensor);
-    Operation* copyinOp = CreateCopyinOp(gmTensor, localTensor, OpImmediate::Specified(gmTensor->GetOffset()));
-
-    if (UpdateCopyoutScheduleInfo(copyoutOp, spillTensor, spillMemId, spillOp) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "UpdateCopyoutScheduleInfo failed.");
-        return FAILED;
-    }
-
-    std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap = {{allocOp, {localTensor->memoryrange.memId}},
-                                                                       {copyinOp, {localTensor->memoryrange.memId}}};
-
-    if (UpdateScheduleStatus(opMemidMap, spillMemId, spillAllocOp, localTensor, spillOp) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "UpdateScheduleStatus failed.");
-        return FAILED;
-    }
-    ctx.newCopyoutOps.push_back(copyoutOp);
-    ctx.newAllocOps.push_back(allocOp);
-    created.Record(copyoutOp, allocOp, copyinOp, gmTensor);
-    APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillGeneralBuffer end.");
-    return SUCCESS;
-}
-
-Status SpillEngine::SpillMultiProducerBufferFor3510(int spillMemid, Operation* spillOp, LogicalTensorPtr spillTensor,
-                                                    Operation* spillAllocOp, SpillContext& ctx,
-                                                    SingleSpillCreatedOps& created)
-{
-    APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillMultiProducerBufferFor3510 begin.");
-    Operation* actualTriggerOp = nullptr;
-    LogicalTensorPtr actualTriggerTensor = nullptr;
-    if (GetActualSpill(spillOp, actualTriggerOp, actualTriggerTensor) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "GetActualSpill failed.");
-        return FAILED;
-    }
-    LogicalTensorPtr gmTensor = CreateGMTensor(spillTensor, actualTriggerTensor, spillMemid);
-    LogicalTensorPtr l1Tensor = CreateLocalTensor(spillTensor);
-    if (CopyoutParticalBuffer(spillTensor, gmTensor, ctx) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "CopyoutPartialBuffer failed.");
-        return FAILED;
-    }
-    Operation* allocOp = CreateAllocOp(l1Tensor);
-    Operation* copyinOp = CreateCopyinOp(gmTensor, l1Tensor, OpImmediate::Specified(gmTensor->GetOffset()));
-
-    std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap = {{allocOp, {l1Tensor->memoryrange.memId}},
-                                                                       {copyinOp, {l1Tensor->memoryrange.memId}}};
-
-    if (!IsUnusedTensor(spillOp)) {
-        if (UpdateScheduleStatus(opMemidMap, spillMemid, spillAllocOp, l1Tensor, spillOp) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "UpdateScheduleStatus failed.");
-            return FAILED;
-        }
-    } else {
-        if (UpdateNeedDeleteScheduleStatus(opMemidMap, spillMemid, spillAllocOp, spillTensor, spillOp, ctx) !=
-            SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "UpdateNeedDeleteScheduleStatus failed.");
-            return FAILED;
-        }
-    }
-    ctx.newAllocOps.push_back(allocOp);
-    created.Record(nullptr, allocOp, copyinOp, gmTensor);
-    APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillMultiProducerBufferFor3510 end.");
-    return SUCCESS;
-}
-
-Status SpillEngine::SpillL1BufferFor3510(int memId, Operation* spillOp, LogicalTensorPtr spillTensor,
-                                         Operation* spillAllocOp, SpillContext& ctx, SingleSpillCreatedOps& created)
-{
-    if (IsMultiProducerTensor(spillTensor)) {
-        if (SpillMultiProducerBufferFor3510(memId, spillOp, spillTensor, spillAllocOp, ctx, created) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "SpillMultiProducerBufferFor3510 failed.");
-            return FAILED;
-        }
-    } else if (spillOp->GetOpcode() != Opcode::OP_RESHAPE) {
-        if (spillOp->GetIOperands().size() == 1) {
-            SpillGeneralL1BufferFor3510(memId, spillOp, spillTensor, spillAllocOp, ctx, created);
-        } else {
-            return FAILED;
-        }
-    } else {
-        Operation* actualSpillOp = nullptr;
-        for (auto& preOp : state_.depManager.GetPredecessors(spillOp)) {
-            if (!state_.schedInfoMap[preOp].isAlloc) {
-                actualSpillOp = preOp;
-            }
-        }
-        if (actualSpillOp == nullptr || actualSpillOp->GetIOperands().size() != 1) {
-            return FAILED;
-        }
-        if (actualSpillOp->GetOpcode() == Opcode::OP_COPY_IN) {
-            SpillReshapeFromDDRFor3510(memId, actualSpillOp, spillOp, spillTensor, spillAllocOp, ctx, created);
-        } else {
-            SpillReshapeL1BufferFor3510(memId, actualSpillOp, spillOp, spillTensor, spillAllocOp, ctx, created);
-        }
-    }
-    return SUCCESS;
-}
-
-Status SpillEngine::SpillGeneralL1BufferFor3510(int memId, Operation* spillOp, LogicalTensorPtr spillTensor,
-                                                Operation* spillAllocOp, SpillContext& ctx,
-                                                SingleSpillCreatedOps& created)
-{
-    APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillGeneralL1BufferFor3510 begin.");
-    Operation* actualOp = nullptr;
-    LogicalTensorPtr actualSpillTensor = nullptr;
-    if (GetActualSpill(spillOp, actualOp, actualSpillTensor) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "GetActualSpill failed.");
-        return FAILED;
-    }
-    LogicalTensorPtr gmTensor = CreateGMTensor(actualSpillTensor, actualSpillTensor, memId, spillTensor->Datatype());
-    LogicalTensorPtr localTensor = CreateLocalTensor(spillTensor);
-
-    Operation* copyoutOp = CreateCopyoutOp(spillOp, actualSpillTensor, gmTensor,
-                                           OpImmediate::Specified(gmTensor->GetOffset()));
-    Operation* allocOp = CreateAllocOp(localTensor);
-    auto attr = std::dynamic_pointer_cast<CopyOpAttribute>(spillOp->GetOpAttribute());
-    if (attr == nullptr) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "Op %s attribute is nullptr", state_.GetOpInfo(spillOp).c_str());
-        return FAILED;
-    }
-    Operation* copyinOp = CreateCopyinOp(gmTensor, localTensor, attr->GetFromOffset());
-
-    if (UpdateCopyoutScheduleInfo(copyoutOp, actualSpillTensor, actualSpillTensor->memoryrange.memId, actualOp) !=
-        SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "UpdateCopyoutScheduleInfo failed.");
-        return FAILED;
-    }
-
-    std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap = {{allocOp, {localTensor->memoryrange.memId}},
-                                                                       {copyinOp, {localTensor->memoryrange.memId}}};
-
-    if (UpdateScheduleStatus(opMemidMap, memId, spillAllocOp, localTensor, spillOp) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "UpdateScheduleStatus failed.");
-        return FAILED;
-    }
-    ctx.newCopyoutOps.push_back(copyoutOp);
-    ctx.newAllocOps.push_back(allocOp);
-    created.Record(copyoutOp, allocOp, copyinOp, gmTensor);
-    APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillGeneralL1BufferFor3510 end.");
-    return SUCCESS;
-}
-
-Status SpillEngine::SpillReshapeFromDDRFor3510(int memId, Operation* actualSpillOp, Operation* spillOp,
-                                               LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext& ctx,
-                                               SingleSpillCreatedOps& created)
-{
-    APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillReshapeFromDDRFor3510 begin.");
-    LogicalTensorPtr preSpillTensor = spillOp->GetInputOperand(0);
-    LogicalTensorPtr ddrTensor = actualSpillOp->GetInputOperand(0);
-    LogicalTensorPtr reshapeTensor = CreateLocalTensor(spillTensor);
-    LogicalTensorPtr copyinTensor = CreateParticalTensor(preSpillTensor, reshapeTensor, preSpillTensor,
-                                                         preSpillTensor->GetOffset());
-
-    Operation* allocOp = CreateAllocOp(copyinTensor);
-    Operation* copyinOp = CloneCopyinOp(actualSpillOp, ddrTensor, copyinTensor);
-    Operation* reshapeOp = CreateReshapeOp(copyinTensor, reshapeTensor);
-
-    std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap = {
-        {allocOp, {reshapeTensor->memoryrange.memId}},
-        {copyinOp, {reshapeTensor->memoryrange.memId}},
-        {reshapeOp, {reshapeTensor->memoryrange.memId, reshapeTensor->memoryrange.memId}}};
-
-    if (UpdateScheduleStatus(opMemidMap, memId, spillAllocOp, reshapeTensor, spillOp) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "UpdateScheduleStatus failed.");
-        return FAILED;
-    }
-    ctx.newAllocOps.push_back(allocOp);
-    created.Record(nullptr, allocOp, copyinOp, nullptr);
-    APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillReshapeFromDDRFor3510 end.");
-    return SUCCESS;
-}
-
-Status SpillEngine::SpillReshapeL1BufferFor3510(int spillMemId, Operation* actualSpillOp, Operation* spillOp,
-                                                LogicalTensorPtr spillTensor, Operation* spillAllocOp,
-                                                SpillContext& ctx, SingleSpillCreatedOps& created)
-{
-    APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillReshapeL1BufferFor3510 begin.");
-    LogicalTensorPtr preSpillTensor = spillOp->GetInputOperand(0);
-    Operation* actualOp = nullptr;
-    LogicalTensorPtr actualSpillTensor = nullptr;
-    if (GetActualSpill(actualSpillOp, actualOp, actualSpillTensor) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "GetActualSpill failed.");
-        return FAILED;
-    }
-    LogicalTensorPtr gmTensor = CreateGMTensor(actualSpillTensor, actualSpillTensor, spillMemId,
-                                               preSpillTensor->Datatype());
-    LogicalTensorPtr reshapeTensor = CreateLocalTensor(spillTensor);
-    LogicalTensorPtr l1Tensor = CreateParticalTensor(preSpillTensor, reshapeTensor, preSpillTensor,
-                                                     preSpillTensor->GetOffset());
-
-    Operation* copyoutOp = CreateCopyoutOp(actualSpillOp, actualOp->GetInputOperand(0), gmTensor,
-                                           OpImmediate::Specified(gmTensor->GetOffset()));
-
-    Operation* allocOp = CreateAllocOp(l1Tensor);
-    auto attr = std::dynamic_pointer_cast<CopyOpAttribute>(actualSpillOp->GetOpAttribute());
-    if (attr == nullptr) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "Op %s attribute is nullptr", state_.GetOpInfo(actualSpillOp).c_str());
-        return FAILED;
-    }
-    Operation* copyinOp = CreateCopyinOp(gmTensor, l1Tensor, attr->GetFromOffset());
-    Operation* reshapeOp = CreateReshapeOp(l1Tensor, reshapeTensor);
-
-    if (UpdateCopyoutScheduleInfo(copyoutOp, actualSpillTensor, actualSpillTensor->memoryrange.memId, actualSpillOp) !=
-        SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "UpdateCopyoutScheduleInfo failed.");
-        return FAILED;
-    }
-
-    std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap = {
-        {allocOp, {l1Tensor->memoryrange.memId}},
-        {copyinOp, {l1Tensor->memoryrange.memId}},
-        {reshapeOp, {l1Tensor->memoryrange.memId, l1Tensor->memoryrange.memId}}};
-
-    if (UpdateScheduleStatus(opMemidMap, spillMemId, spillAllocOp, reshapeTensor, spillOp) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "UpdateScheduleStatus failed.");
-        return FAILED;
-    }
-    ctx.newCopyoutOps.push_back(copyoutOp);
-    ctx.newAllocOps.push_back(allocOp);
-    created.Record(copyoutOp, allocOp, copyinOp, gmTensor);
-    APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillReshapeL1BufferFor3510 end.");
-    return SUCCESS;
-}
-
-Status SpillEngine::SpillL0CBuffer(int spillMemId, Operation* spillOp, LogicalTensorPtr spillTensor,
-                                   Operation* spillAllocOp, SpillContext& ctx, SingleSpillCreatedOps& created)
-{
-    APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillL0CBuffer begin.");
-    std::vector<Operation*> consumers;
-    CollectL0CConsumers(spillTensor, consumers);
-
-    std::map<DataType, std::vector<Operation*>> dtypeGroups;
-    for (auto* consumer : consumers) {
-        auto oOperand = consumer->GetOutputOperand(0);
-        if (oOperand == nullptr) {
-            APASS_LOG_ERROR_F(Elements::Operation, "L0C spill: consumer %s has no output operand.",
-                              state_.GetOpInfo(consumer).c_str());
-            return FAILED;
-        }
-        dtypeGroups[oOperand->Datatype()].push_back(consumer);
-    }
-
-    auto emitGroup = [&](DataType dtype, const std::vector<Operation*>& groupConsumers) -> Status {
-        LogicalTensorPtr gmTensor = CreateGMTensor(spillTensor, spillTensor, spillMemId, dtype);
-        Operation* copyoutOp = CreateCopyoutOp(spillOp, spillTensor, gmTensor,
-                                               OpImmediate::Specified(gmTensor->GetOffset()));
-        if (UpdateCopyoutScheduleInfo(copyoutOp, spillTensor, spillMemId, spillOp) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "UpdateCopyoutScheduleInfo failed for dtype group.");
-            return FAILED;
-        }
-        for (auto* consumer : groupConsumers) {
-            auto oOperand = consumer->GetOutputOperand(0);
-            Operation* copyinOp = CreateCopyinOp(gmTensor, oOperand, OpImmediate::Specified(gmTensor->GetOffset()),
-                                                 true);
-            UpdateOpScheduleInfo(copyinOp, {oOperand->memoryrange.memId}, spillAllocOp);
-            std::replace(state_.orderedOps.begin(), state_.orderedOps.end(), consumer, copyinOp);
-            APASS_LOG_DEBUG_F(Elements::Operation, "L0C spill: replace %s with %s.", state_.GetOpInfo(consumer).c_str(),
-                              state_.GetOpInfo(copyinOp).c_str());
-            consumer->SetAsDeleted();
-            EraseSchedulerSideMaps(consumer);
-        }
-        ctx.newCopyoutOps.push_back(copyoutOp);
-        created.Record(copyoutOp, nullptr, nullptr, gmTensor);
-        return SUCCESS;
-    };
-
-    for (auto& [dtype, groupConsumers] : dtypeGroups) {
-        if (emitGroup(dtype, groupConsumers) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "SpillL0CBuffer: emit dtype group failed.");
-            return FAILED;
-        }
-    }
-    state_.depManager.InitDependencies(state_.orderedOps, false);
-    state_.bufRefCount[spillMemId] = 0;
-    function_.EraseOperations(false, false);
-    APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillL0CBuffer end.");
-    return SUCCESS;
-}
-
-Status SpillEngine::SpillMultiProducerBuffer(int spillMemid, Operation* spillOp, LogicalTensorPtr spillTensor,
-                                             Operation* spillAllocOp, SpillContext& ctx, SingleSpillCreatedOps& created)
-{
-    APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillMultiProducerBuffer begin.");
-    LogicalTensorPtr gmTensor = CreateGMTensor(spillTensor, spillTensor, spillMemid);
-    LogicalTensorPtr assembleTensor = CreateLocalTensor(spillTensor);
-
-    Operation* copyoutOp = CreateCopyoutOp(spillOp, spillTensor, gmTensor,
-                                           OpImmediate::Specified(gmTensor->GetOffset()));
-
-    if (UpdateCopyoutScheduleInfo(copyoutOp, spillTensor, spillMemid, spillOp) != SUCCESS) {
-        return FAILED;
-    }
-    if (UpdateSpillOpDepend(spillOp, assembleTensor, spillMemid) != SUCCESS) {
-        return FAILED;
-    }
-
-    for (auto& op : spillTensor->GetProducers()) {
-        if (op->GetOpcode() != Opcode::OP_ASSEMBLE)
-            continue;
-        for (auto& producer : op->ProducerOps()) {
-            if (state_.schedInfoMap[producer].isAlloc)
-                producer->UpdateOutputOperand(0, spillTensor);
-        }
-    }
-    Operation* allocOp = CreateAllocOp(assembleTensor);
-    UpdateOpScheduleInfo(allocOp, {assembleTensor->memoryrange.memId}, spillAllocOp);
-    if (InsertOps({{allocOp, {assembleTensor->memoryrange.memId}}}, spillAllocOp, spillMemid) != SUCCESS) {
-        return FAILED;
-    }
-    Operation* wholeCopyinOp = nullptr;
-    if (FillSpillAssembleBuffer(spillMemid, spillTensor, assembleTensor, copyoutOp, gmTensor, spillAllocOp,
-                                wholeCopyinOp) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "FillSpillAssembleBuffer failed.");
-        return FAILED;
-    }
-
-    if (UpdateRemainMemid(spillMemid, assembleTensor->memoryrange.memId) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "UpdateRemainMemid failed.");
-        return FAILED;
-    }
-    state_.depManager.InitDependencies(state_.orderedOps, false);
-    ctx.newCopyoutOps.push_back(copyoutOp);
-    ctx.newAllocOps.push_back(allocOp);
-    created.Record(copyoutOp, allocOp, wholeCopyinOp, gmTensor);
-    return SUCCESS;
-}
-
-Status SpillEngine::FillSpillAssembleBuffer(int spillMemid, LogicalTensorPtr spillTensor,
-                                            LogicalTensorPtr assembleTensor, Operation* copyoutOp,
-                                            LogicalTensorPtr gmTensor, Operation* spillAllocOp,
-                                            Operation*& wholeCopyinOut)
-{
-    wholeCopyinOut = nullptr;
-    bool allRetired = true;
-    for (auto& op : spillTensor->GetProducers()) {
-        if (state_.schedInfoMap[op].isAlloc) {
-            continue;
-        }
-        if (!state_.schedInfoMap[op].isRetired) {
-            allRetired = false;
-            break;
-        }
-    }
-    if (allRetired) {
-        wholeCopyinOut = CreateCopyinOp(gmTensor, assembleTensor, OpImmediate::Specified(gmTensor->GetOffset()));
-        UpdateOpScheduleInfo(wholeCopyinOut, {assembleTensor->memoryrange.memId}, spillAllocOp);
-        return InsertOps({{wholeCopyinOut, {assembleTensor->memoryrange.memId}}}, spillAllocOp, spillMemid);
-    }
-    std::vector<Operation*> replaceOps;
-    for (auto& op : spillTensor->GetProducers()) {
-        if (state_.schedInfoMap[op].isAlloc) {
-            continue;
-        }
-        if (state_.schedInfoMap[op].isRetired) {
-            CreateParticalBuffer(spillMemid, op, assembleTensor, copyoutOp, spillAllocOp);
-        } else {
-            replaceOps.push_back(op);
-        }
-    }
-    for (auto& op : replaceOps) {
-        op->ReplaceOutput(assembleTensor, spillTensor);
-    }
-    return SUCCESS;
-}
-
-Status SpillEngine::CopyoutParticalBuffer(LogicalTensorPtr spillTensor, LogicalTensorPtr gmTensor, SpillContext& ctx)
-{
-    for (auto& op : spillTensor->GetProducers()) {
-        if (state_.schedInfoMap[op].isAlloc) {
-            continue;
-        }
-        Operation* actualOp = nullptr;
-        LogicalTensorPtr actualTensor = nullptr;
-        if (GetActualSpill(op, actualOp, actualTensor) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "GetActualSpill failed.");
-            return FAILED;
-        }
-        auto attr = std::dynamic_pointer_cast<CopyOpAttribute>(op->GetOpAttribute());
-        if (attr == nullptr) {
-            APASS_LOG_ERROR_F(Elements::Tensor, "Op %s attribute is nullptr", state_.GetOpInfo(op).c_str());
-            return FAILED;
-        }
-        Operation* copyoutOp = CreateCopyoutOp(op, actualTensor, gmTensor, attr->GetToOffset());
-        if (UpdateCopyoutScheduleInfo(copyoutOp, actualTensor, actualTensor->memoryrange.memId, actualOp,
-                                      state_.schedInfoMap[op].isRetired) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "UpdateCopyoutScheduleInfo failed.");
-            return FAILED;
-        }
-        if (!state_.schedInfoMap[op].isRetired) {
-            state_.bufRefCount[actualTensor->memoryrange.memId]++;
-            ctx.newNotRetiredCopyOutSize++;
-        } else {
-            ctx.newCopyoutOps.push_back(copyoutOp);
-        }
-    }
-    return SUCCESS;
-}
-
-Status SpillEngine::CreateParticalBuffer(int spillMemid, Operation* producerOp, LogicalTensorPtr assembleTensor,
-                                         Operation* copyoutOp, Operation* spillAllocOp)
-{
-    LogicalTensorPtr gmTensor = copyoutOp->GetOutputOperand(0);
-    LogicalTensorPtr spillTensor = copyoutOp->GetInputOperand(0);
-
-    std::vector<int64_t> toOffset;
-    std::vector<SymbolicScalar> toDynOffset;
-    std::vector<SymbolicScalar> fromDynValidShape;
-    if (GetPartialWriteReplayAttr(producerOp, toOffset, toDynOffset, fromDynValidShape) != SUCCESS) {
-        return FAILED;
-    }
-
-    LogicalTensorPtr copyinTensor = CreateParticalTensor(producerOp->GetInputOperand(0), assembleTensor,
-                                                         producerOp->GetInputOperand(0), toOffset);
-    Operation* copyinOp = CreateCopyinOp(gmTensor, copyinTensor, OpImmediate::Specified(toOffset));
-    Operation* assembleOp = CreateAssembleOp(copyinTensor, assembleTensor, toOffset, toDynOffset, fromDynValidShape);
-
-    int64_t isNZ = 0;
-    producerOp->GetAttr(OpAttributeKey::copyIsNZ, isNZ);
-    copyinOp->SetAttr(OpAttributeKey::copyIsNZ, isNZ);
-    assembleOp->SetAttr(OpAttributeKey::copyIsNZ, isNZ);
-    UpdateOpScheduleInfo(copyinOp, {assembleTensor->memoryrange.memId}, spillAllocOp);
-    UpdateOpScheduleInfo(assembleOp, {assembleTensor->memoryrange.memId, assembleTensor->memoryrange.memId},
-                         spillAllocOp);
-    if (InsertOps({{copyinOp, {assembleTensor->memoryrange.memId}},
-                   {assembleOp, {assembleTensor->memoryrange.memId, assembleTensor->memoryrange.memId}}},
-                  spillAllocOp, spillMemid) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "InsertOps failed.");
-        return FAILED;
-    }
-    return SUCCESS;
+    std::replace(state_.orderedOps.begin(), state_.orderedOps.end(), oldOp, newOp);
+    APASS_LOG_DEBUG_F(Elements::Operation, "Replace %s with %s in exec order.", state_.GetOpInfo(oldOp).c_str(),
+                      state_.GetOpInfo(newOp).c_str());
+    EraseSchedulerSideMaps(oldOp);
 }
 
 void SpillEngine::EraseSchedulerSideMaps(Operation* op)
@@ -1366,30 +1303,47 @@ int SpillEngine::GetBufNextUseTime(int curMemId)
     return -1;
 }
 
-Status SpillEngine::UpdateCopyoutScheduleInfo(Operation* op, LogicalTensorPtr spillTensor, int spillMemId,
-                                              Operation* spillOp, bool isRetired)
+Status SpillEngine::UpdateCopyoutScheduleInfo(Operation* op, const SpillSource& source, int sourceMemId)
 {
-    state_.opReqMemIdsMap[op] = {spillMemId};
-    state_.schedInfoMap[op].isRetired = isRetired;
+    LogicalTensorPtr spillTensor = source.tensor;
+    state_.opReqMemIdsMap[op] = {sourceMemId};
+    state_.schedInfoMap[op].isRetired = source.producedInPast;
     state_.schedInfoMap[op].isAlloc = false;
     state_.schedInfoMap[op].pipeType = RescheduleUtils::GetOpPipeType(op);
     state_.depManager.RegisterOp(op);
-    Operation* allocOp = state_.tensorAllocMap[spillTensor->memoryrange.memId];
-    state_.schedInfoMap[op].coreLocation = state_.schedInfoMap[allocOp].coreLocation;
-    UpdateOpInternalSubgraphID(*op, allocOp);
-    int bufNextUseTime = state_.schedInfoMap[spillOp].execOrder;
-    for (auto succOp : state_.depManager.GetSuccessors(spillOp)) {
-        if (!state_.schedInfoMap[succOp].isRetired)
-            continue;
-        if (succOp == op)
-            continue;
-        if (succOp->GetOpcodeStr().find("COPY_OUT") != std::string::npos) {
-            bufNextUseTime = std::max(bufNextUseTime, state_.schedInfoMap[succOp].execOrder);
-        }
+    // 落位跟 buffer 的归属者 (alloc) 而非生产者: 跨核写同一块 buffer 是允许的, 拿生产者会把核定错。
+    auto allocIt = state_.tensorAllocMap.find(spillTensor->memoryrange.memId);
+    if (allocIt == state_.tensorAllocMap.end() || allocIt->second == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Tensor, "Spill: tensor[%d] has no alloc op to locate its copyout.",
+                          spillTensor->memoryrange.memId);
+        return FAILED;
     }
-    state_.schedInfoMap[op].execOrder = bufNextUseTime + 1;
+    Operation* refOp = allocIt->second;
+    state_.schedInfoMap[op].coreLocation = state_.schedInfoMap[refOp].coreLocation;
+    UpdateOpInternalSubgraphID(*op, refOp);
+    state_.schedInfoMap[op].execOrder = ComputeCopyoutExecOrder(source, op) + 1;
     state_.InsertOrdered(op);
     return SUCCESS;
+}
+
+// copyout 排在数据齐之后: 取各生产者里最晚的那个。
+// 同一块 buffer 上已有的 retired copyout 也要让开, 否则两个 copyout 抢同一格。
+int SpillEngine::ComputeCopyoutExecOrder(const SpillSource& source, Operation* copyoutOp)
+{
+    const std::vector<Operation*>& anchors = source.producerOps;
+    int execOrder = state_.schedInfoMap[anchors.front()].execOrder;
+    for (auto* anchor : anchors) {
+        execOrder = std::max(execOrder, state_.schedInfoMap[anchor].execOrder);
+        for (auto* succOp : state_.depManager.GetSuccessors(anchor)) {
+            if (!state_.schedInfoMap[succOp].isRetired || succOp == copyoutOp) {
+                continue;
+            }
+            if (OpcodeManager::Inst().IsCopyOut(succOp->GetOpcode())) {
+                execOrder = std::max(execOrder, state_.schedInfoMap[succOp].execOrder);
+            }
+        }
+    }
+    return execOrder;
 }
 
 void SpillEngine::UpdateOpScheduleInfo(Operation* op, std::vector<int> memIds, Operation* AllocOp)
@@ -1404,8 +1358,7 @@ void SpillEngine::UpdateOpScheduleInfo(Operation* op, std::vector<int> memIds, O
     state_.numTotalIssues++;
 }
 
-Status SpillEngine::InsertOps(std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap, Operation* spillAllocOp,
-                              int memId)
+Status SpillEngine::InsertOps(OpMemIdMap opMemidMap, Operation* spillAllocOp, int memId)
 {
     if (memId == -1) {
         APASS_LOG_ERROR_F(Elements::Tensor, "MemId: %d illegal.", memId);
@@ -1426,8 +1379,8 @@ Status SpillEngine::InsertOps(std::vector<std::pair<Operation*, std::vector<int>
     return SUCCESS;
 }
 
-Status SpillEngine::UpdateScheduleStatus(std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap, int memId,
-                                         Operation* spillAllocOp, LogicalTensorPtr localTensor, Operation* spillOp)
+Status SpillEngine::UpdateScheduleStatus(OpMemIdMap opMemidMap, int memId, Operation* spillAllocOp,
+                                         LogicalTensorPtr localTensor, Operation* spillOp)
 {
     for (auto& [op, memid] : opMemidMap) {
         UpdateOpScheduleInfo(op, memid, spillAllocOp);
@@ -1449,37 +1402,6 @@ Status SpillEngine::UpdateScheduleStatus(std::vector<std::pair<Operation*, std::
     return SUCCESS;
 }
 
-Status SpillEngine::UpdateNeedDeleteScheduleStatus(std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap,
-                                                   int memId, Operation* spillAllocOp, LogicalTensorPtr spillTensor,
-                                                   Operation* spillOp, SpillContext& ctx)
-{
-    for (auto& [op, memid] : opMemidMap) {
-        UpdateOpScheduleInfo(op, memid, spillAllocOp);
-    }
-
-    if (UpdateSmallShapeDependAndBuf(opMemidMap, memId, spillOp) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "UpdateSmallShapeDependAndBuf failed");
-        return FAILED;
-    }
-    if (RemoveSmallShapeSpillResources(memId, spillTensor, ctx) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "RemoveSmallShapeSpillResources failed");
-        return FAILED;
-    }
-
-    int newMemid = -1;
-    for (auto& op : opMemidMap) {
-        if (state_.schedInfoMap[op.first].isAlloc) {
-            newMemid = op.first->GetOutputOperand(0)->memoryrange.memId;
-        }
-    }
-    if (InsertOps(opMemidMap, spillAllocOp, newMemid) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "InsertOps failed.");
-        return FAILED;
-    }
-    state_.depManager.InitDependencies(state_.orderedOps, false);
-    return SUCCESS;
-}
-
 Status SpillEngine::UpdateRemainMemid(int oldMemId, int newMemId)
 {
     if (state_.bufRefCount.find(oldMemId) == state_.bufRefCount.end()) {
@@ -1492,96 +1414,9 @@ Status SpillEngine::UpdateRemainMemid(int oldMemId, int newMemId)
         if (state_.schedInfoMap[op].isRetired) {
             continue;
         }
+        RemapOpReqMemId(op, oldMemId, newMemId);
         ReplaceTensorMemId(op, oldMemId, newMemId);
     }
-    return SUCCESS;
-}
-
-size_t SpillEngine::CleanupCollectedOperations(const std::vector<Operation*>& opsToDelete,
-                                               const std::vector<LogicalTensorPtr>& tensorsToDelete)
-{
-    size_t deleteNum = 0;
-    for (auto* op : opsToDelete) {
-        if (op == nullptr) {
-            continue;
-        }
-        auto it = std::find(state_.orderedOps.begin(), state_.orderedOps.end(), op);
-        if (it != state_.orderedOps.end()) {
-            size_t opIndex = std::distance(state_.orderedOps.begin(), it);
-            if (state_.schedInfoMap[op].isRetired) {
-                deleteNum++;
-            }
-            int deletedOrder = state_.schedInfoMap[op].execOrder;
-
-            auto nextIt = state_.orderedOps.erase(it);
-
-            for (auto adjustIt = nextIt; adjustIt != state_.orderedOps.end(); adjustIt++) {
-                if (state_.schedInfoMap.count(*adjustIt) > 0 &&
-                    state_.schedInfoMap[*adjustIt].execOrder > deletedOrder) {
-                    state_.schedInfoMap[*adjustIt].execOrder--;
-                }
-            }
-
-            APASS_LOG_DEBUG_F(Elements::Operation, "Deleted op %s at index %zu (order %d).",
-                              state_.GetOpInfo(op).c_str(), opIndex, deletedOrder);
-        }
-        ReleaseDeletedOpBufRefs(op, tensorsToDelete);
-        EraseSchedulerSideMaps(op);
-
-        auto predecessors = state_.depManager.GetPredecessors(op);
-        auto successors = state_.depManager.GetSuccessors(op);
-        for (auto* pred : predecessors) {
-            state_.depManager.RemoveSuccessor(pred, op);
-        }
-        for (auto* succ : successors) {
-            state_.depManager.RemovePredecessor(succ, op);
-        }
-        auto newOpsIt = std::find(state_.newOperations.begin(), state_.newOperations.end(), op);
-        if (newOpsIt != state_.newOperations.end()) {
-            state_.newOperations.erase(newOpsIt);
-            APASS_LOG_DEBUG_F(Elements::Operation, "Removed op %s from newOperations.", state_.GetOpInfo(op).c_str());
-        }
-        op->SetAsDeleted();
-        APASS_LOG_DEBUG_F(Elements::Operation, "Marked op %s as deleted.", state_.GetOpInfo(op).c_str());
-    }
-    APASS_LOG_DEBUG_F(Elements::Operation, "Delete pcidx num: %zu", deleteNum);
-    return deleteNum;
-}
-
-Status SpillEngine::RemoveSmallShapeSpillResources(int spillMemId, LogicalTensorPtr spillTensor, SpillContext& ctx)
-{
-    if (spillTensor == nullptr) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "spillTensor is null.");
-        return FAILED;
-    }
-
-    std::vector<Operation*> opsToDelete;
-    std::vector<LogicalTensorPtr> tensorsToDelete;
-    CollectProducerChainForDeletion(spillTensor, opsToDelete, tensorsToDelete);
-    APASS_LOG_DEBUG_F(Elements::Operation, "Collected %zu ops and %zu tensors.", opsToDelete.size(),
-                      tensorsToDelete.size());
-    for (auto deleteOp : opsToDelete) {
-        if (state_.schedInfoMap[deleteOp].isAlloc) {
-            ctx.deleteAllocOps.push_back({deleteOp, deleteOp->GetOutputOperand(0)->GetMemoryTypeOriginal(),
-                                          state_.schedInfoMap[deleteOp].coreLocation});
-        }
-    }
-    auto deleteNum = CleanupCollectedOperations(opsToDelete, tensorsToDelete);
-    if (deleteNum > opsToDelete.size()) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "Delete number greater than totalDeleteNumber");
-        return FAILED;
-    }
-    CleanupCollectedTensors(tensorsToDelete);
-
-    function_.EraseOperations(false, true);
-
-    EraseOrphanedTensors(tensorsToDelete, opsToDelete);
-
-    ctx.deleteRetiredOpSize += deleteNum;
-    ctx.deleteNotRetiredOpSize = static_cast<int>(opsToDelete.size() - deleteNum);
-    APASS_LOG_DEBUG_F(Elements::Operation, "Deleted spill tensor[%d] and %zu ops (%zu tensors).", spillMemId,
-                      opsToDelete.size(), tensorsToDelete.size());
-
     return SUCCESS;
 }
 

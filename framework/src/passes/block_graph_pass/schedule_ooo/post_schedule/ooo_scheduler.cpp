@@ -1372,7 +1372,7 @@ Status OoOScheduler::GetGroupNextUseTime(std::vector<int> group, Operation* allo
             APASS_LOG_ERROR_F(Elements::Tensor, "Cannot find spill Tensor[%d] occupy op.", memId);
             return FAILED;
         }
-        if (spillEngine_.IsBelongSpillBlackList(spillOp, allocOp)) {
+        if (spillEngine_.IsBelongSpillBlackList(memId, allocOp)) {
             groupNextUseTime.push_back(-1);
             return SUCCESS;
         }

@@ -694,7 +694,21 @@ TEST_F(ScheduleOoOTest, TestSpillMultiTensor)
     EXPECT_EQ(res, SUCCESS);
     res = ooOScheduler.SeqSchedule();
     EXPECT_EQ(res, SUCCESS);
-    EXPECT_EQ(ooOScheduler.state_.orderedOps.size(), 23);
+    EXPECT_EQ(ooOScheduler.state_.orderedOps.size(), 21);
+    for (auto* op : ooOScheduler.state_.orderedOps) {
+        if (op->GetOpcode() != Opcode::OP_COPY_IN) {
+            continue;
+        }
+        auto output = op->GetOutputOperand(0);
+        ASSERT_NE(output, nullptr);
+        size_t liveConsumers = 0;
+        for (auto* consumer : output->GetConsumers()) {
+            if (consumer != nullptr && !consumer->IsDeleted()) {
+                liveConsumers++;
+            }
+        }
+        EXPECT_GT(liveConsumers, 0u) << "copyin without live consumer: " << op->Dump();
+    }
 }
 
 TEST_F(ScheduleOoOTest, TestSpillView)
@@ -1268,7 +1282,12 @@ TEST_F(ScheduleOoOTest, TestSpillMultiProducerBuffer)
     rotate(sort.operations.begin() + 12, sort.operations.begin() + 15, sort.operations.begin() + 18);
     EXPECT_EQ(ooOScheduler.Init(sort.operations), SUCCESS);
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Platform::Instance().ReloadMemoryPaths("3510");
+    EXPECT_FALSE(Platform::Instance().GetDie().HasDirectPath(MemoryType::MEM_L1, MemoryType::MEM_DEVICE_DDR));
     EXPECT_EQ(ooOScheduler.SeqSchedule(), SUCCESS);
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+    Platform::Instance().ReloadMemoryPaths("2201");
+    EXPECT_TRUE(Platform::Instance().GetDie().HasDirectPath(MemoryType::MEM_L1, MemoryType::MEM_DEVICE_DDR));
 }
 
 TEST_F(ScheduleOoOTest, TestSpillMultiProducerBufferNotReady)
@@ -1319,7 +1338,12 @@ TEST_F(ScheduleOoOTest, TestSpillMultiProducerBufferNotReady)
     rotate(sort.operations.begin() + 4, sort.operations.begin() + 12, sort.operations.begin() + 13);
     EXPECT_EQ(ooOScheduler.Init(sort.operations), SUCCESS);
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Platform::Instance().ReloadMemoryPaths("3510");
+    EXPECT_FALSE(Platform::Instance().GetDie().HasDirectPath(MemoryType::MEM_L1, MemoryType::MEM_DEVICE_DDR));
     EXPECT_EQ(ooOScheduler.SeqSchedule(), SUCCESS);
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+    Platform::Instance().ReloadMemoryPaths("2201");
+    EXPECT_TRUE(Platform::Instance().GetDie().HasDirectPath(MemoryType::MEM_L1, MemoryType::MEM_DEVICE_DDR));
 }
 
 TEST_F(ScheduleOoOTest, TestSpillL0CMultiConsumer)
@@ -2164,6 +2188,7 @@ TEST_F(ScheduleOoOTest, TestOoO1C2V)
     EXPECT_EQ(op2->GetInternalSubgraphID(), 2);
     EXPECT_EQ(op3->GetInternalSubgraphID(), 1);
     EXPECT_EQ(op4->GetInternalSubgraphID(), 0);
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
 }
 
 void SetInternalSubgraphIDAndAIVCore(Operation* op, int id)
