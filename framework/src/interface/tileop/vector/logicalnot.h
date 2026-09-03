@@ -33,8 +33,9 @@ template <typename T, typename DstTile, typename SrcTile, typename TmpTile>
 TILEOP void LogicalNotImplInt(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile)
 {
     using UnsignedT = std::make_unsigned_t<T>;
-    constexpr int64_t COUNT_MAX_BYTES = 2048 * sizeof(UnsignedT);
-    using USrcTile = pto::Tile<pto::TileType::Vec, UnsignedT, 1, 2048, pto::BLayout::RowMajor, -1, -1>;
+    constexpr int64_t COUNT_MAX = 2048;
+    constexpr int64_t COUNT_MAX_BYTES = COUNT_MAX * sizeof(UnsignedT);
+    using USrcTile = pto::Tile<pto::TileType::Vec, UnsignedT, 1, COUNT_MAX, pto::BLayout::RowMajor, -1, -1>;
 
     unsigned dstValid = dstTile.GetValidCol();
 
@@ -46,7 +47,7 @@ TILEOP void LogicalNotImplInt(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile)
 
     pto::TMINS(unsignedSrcTile, unsignedSrcView, static_cast<UnsignedT>(1));
     using SignedT = std::make_signed_t<UnsignedT>;
-    using SSrcTile = pto::Tile<pto::TileType::Vec, SignedT, 1, 2048, pto::BLayout::RowMajor, -1, -1>;
+    using SSrcTile = pto::Tile<pto::TileType::Vec, SignedT, 1, COUNT_MAX, pto::BLayout::RowMajor, -1, -1>;
     SSrcTile signedTile(1, dstValid);
     pto::TASSIGN(signedTile, (uint64_t)(unsignedSrcTile.data()));
     SyncV();
@@ -58,7 +59,7 @@ TILEOP void LogicalNotImplInt(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile)
     // Extract low bytes using TGATHER with mask pattern
     if constexpr (sizeof(UnsignedT) == 2) {
         using U8ViewTile = pto::Tile<pto::TileType::Vec, uint8_t, 1, COUNT_MAX_BYTES, pto::BLayout::RowMajor, -1, -1>;
-        using U8DstTile = pto::Tile<pto::TileType::Vec, uint8_t, 1, 2048, pto::BLayout::RowMajor, -1, -1>;
+        using U8DstTile = pto::Tile<pto::TileType::Vec, uint8_t, 1, COUNT_MAX, pto::BLayout::RowMajor, -1, -1>;
         U8ViewTile srcView(1, dstValid * sizeof(UnsignedT));
         U8DstTile gatherDst(1, dstValid);
         pto::TASSIGN(srcView, (uint64_t)(unsignedSrcTile.data()));
@@ -66,21 +67,22 @@ TILEOP void LogicalNotImplInt(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile)
         pto::TGATHER<U8DstTile, U8ViewTile, pto::MaskPattern::P0101>(gatherDst, srcView);
     } else if constexpr (sizeof(UnsignedT) == 4) {
         using U8ViewTile = pto::Tile<pto::TileType::Vec, uint8_t, 1, COUNT_MAX_BYTES, pto::BLayout::RowMajor, -1, -1>;
-        using U8DstTile = pto::Tile<pto::TileType::Vec, uint8_t, 1, 2048, pto::BLayout::RowMajor, -1, -1>;
+        using U8DstTile = pto::Tile<pto::TileType::Vec, uint8_t, 1, COUNT_MAX, pto::BLayout::RowMajor, -1, -1>;
         U8ViewTile srcView(1, dstValid * sizeof(UnsignedT));
         U8DstTile gatherDst(1, dstValid);
         pto::TASSIGN(srcView, (uint64_t)(unsignedSrcTile.data()));
         pto::TASSIGN(gatherDst, (uint64_t)(dstTile.data()));
         pto::TGATHER<U8DstTile, U8ViewTile, pto::MaskPattern::P0001>(gatherDst, srcView);
     } else if constexpr (sizeof(UnsignedT) == 8) {
+        constexpr size_t UINT64_GATHER_RATIO = sizeof(uint64_t) / sizeof(uint32_t);
         using U8ViewTile = pto::Tile<pto::TileType::Vec, uint8_t, 1, COUNT_MAX_BYTES, pto::BLayout::RowMajor, -1, -1>;
-        using U8DstTile = pto::Tile<pto::TileType::Vec, uint8_t, 1, 2048, pto::BLayout::RowMajor, -1, -1>;
+        using U8DstTile = pto::Tile<pto::TileType::Vec, uint8_t, 1, COUNT_MAX, pto::BLayout::RowMajor, -1, -1>;
         U8ViewTile srcView(1, dstValid * sizeof(UnsignedT));
-        U8DstTile step1Dst(1, dstValid * 2);
+        U8DstTile step1Dst(1, dstValid * UINT64_GATHER_RATIO);
         pto::TASSIGN(srcView, (uint64_t)(unsignedSrcTile.data()));
         pto::TASSIGN(step1Dst, (uint64_t)(tmpTile.data()));
         pto::TGATHER<U8DstTile, U8ViewTile, pto::MaskPattern::P0001>(step1Dst, srcView);
-        U8ViewTile step2View(1, dstValid * 2);
+        U8ViewTile step2View(1, dstValid * UINT64_GATHER_RATIO);
         U8DstTile gatherDst(1, dstValid);
         pto::TASSIGN(step2View, (uint64_t)(tmpTile.data()));
         pto::TASSIGN(gatherDst, (uint64_t)(dstTile.data()));
@@ -176,21 +178,20 @@ TILEOP void LogicalNotGenericSetup(T2 tmp, __ubuf__ int8_t*& compareCondition, _
                                    TileStartAddrUBT& startAddrUBTile)
 {
     constexpr int64_t COUNT_MAX = 2048;
-    constexpr uint32_t ALIGN_SIZE = 32;
-    constexpr int64_t TYPE_SIZE = std::is_same_v<typename T1::Type, float> ? 4 : 2;
-    uint32_t vcmpBitSize = (COUNT_MAX + 7) / 8;
+    constexpr int64_t TYPE_SIZE = std::is_same_v<typename T1::Type, float> ? sizeof(float) : sizeof(half);
+    uint32_t vcmpBitSize = (COUNT_MAX + TileOp::BITS_PER_BYTE - 1) / TileOp::BITS_PER_BYTE;
     __ubuf__ int8_t* vcmpBitResult = reinterpret_cast<__ubuf__ int8_t*>(tmp.GetAddr());
     uintptr_t zeroCondAddr = reinterpret_cast<uintptr_t>(vcmpBitResult + vcmpBitSize);
-    zeroCondAddr = (zeroCondAddr + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1);
+    zeroCondAddr = (zeroCondAddr + TileOp::BLOCK_SIZE - 1) & ~(TileOp::BLOCK_SIZE - 1);
     compareCondition = reinterpret_cast<__ubuf__ int8_t*>(zeroCondAddr);
     uintptr_t oneCondAddr = reinterpret_cast<uintptr_t>(compareCondition + COUNT_MAX * TYPE_SIZE);
-    oneCondAddr = (oneCondAddr + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1);
+    oneCondAddr = (oneCondAddr + TileOp::BLOCK_SIZE - 1) & ~(TileOp::BLOCK_SIZE - 1);
     oneCondition = reinterpret_cast<__ubuf__ int8_t*>(oneCondAddr);
     uintptr_t castAddr = reinterpret_cast<uintptr_t>(oneCondition + COUNT_MAX * TYPE_SIZE);
-    castAddr = (castAddr + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1);
+    castAddr = (castAddr + TileOp::BLOCK_SIZE - 1) & ~(TileOp::BLOCK_SIZE - 1);
     castCondition = reinterpret_cast<__ubuf__ half*>(castAddr);
     uintptr_t startAddrAddr = reinterpret_cast<uintptr_t>(castCondition + COUNT_MAX);
-    startAddrAddr = (startAddrAddr + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1);
+    startAddrAddr = (startAddrAddr + TileOp::BLOCK_SIZE - 1) & ~(TileOp::BLOCK_SIZE - 1);
     __ubuf__ uint8_t* startAddrUB = reinterpret_cast<__ubuf__ uint8_t*>(startAddrAddr);
     pto::TASSIGN(vcmpResTile, (uint64_t)(vcmpBitResult));
     pto::TASSIGN(startAddrUBTile, (uint64_t)(startAddrUB));
@@ -229,29 +230,29 @@ template <typename T0, typename T1, typename T2, typename LayoutD, typename Layo
 TILEOP void LogicalNotIterateTiles(T0 dst, T1 src, T2 tmp, LayoutD dstLayout, LayoutS srcLayout)
 {
     constexpr int64_t COUNT_MAX = 2048;
-    constexpr uint32_t ALIGN_SIZE = 32;
-    auto dstShape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
-    auto dstShape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
-    auto dstShape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
-    auto dstShape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
-    auto dstShape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
-    auto dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto dstStride3 = dstLayout.template GetStrideDim<3, MAX_DIMS>();
-    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto srcStride3 = srcLayout.template GetStrideDim<3, MAX_DIMS>();
+    auto dstShape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    auto dstStride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto dstStride3 = dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    auto srcStride0 = srcLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto srcStride3 = srcLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
     __ubuf__ int8_t* tmpBuffer = nullptr;
     __ubuf__ int8_t* compareCondition = nullptr;
     __ubuf__ int8_t* oneCondition = nullptr;
     __ubuf__ half* castCondition = nullptr;
-    using VcmpResTile = pto::Tile<pto::TileType::Vec, uint8_t, 1, COUNT_MAX / 8, pto::BLayout::RowMajor, 1,
-                                  COUNT_MAX / 8>;
-    using TileStartAddrUB = pto::Tile<pto::TileType::Vec, uint8_t, 1, ALIGN_SIZE, pto::BLayout::RowMajor, -1, -1>;
+    using VcmpResTile = pto::Tile<pto::TileType::Vec, uint8_t, 1, COUNT_MAX / TileOp::BITS_PER_BYTE,
+                                  pto::BLayout::RowMajor, 1, COUNT_MAX / TileOp::BITS_PER_BYTE>;
+    using TileStartAddrUB = pto::Tile<pto::TileType::Vec, uint8_t, 1, TileOp::BLOCK_SIZE, pto::BLayout::RowMajor, -1,
+                                      -1>;
     VcmpResTile vcmpResTile;
-    TileStartAddrUB startAddrUBTile(1, ALIGN_SIZE / 8);
+    TileStartAddrUB startAddrUBTile(1, TileOp::BLOCK_SIZE / TileOp::BITS_PER_BYTE);
     LogicalNotPrepareState<T1>(tmp, tmpBuffer, compareCondition, oneCondition, castCondition, vcmpResTile,
                                startAddrUBTile);
     unsigned numLoop = dstShape4 / COUNT_MAX;

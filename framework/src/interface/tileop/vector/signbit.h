@@ -30,34 +30,34 @@ TILEOP void TSignbit(T0 dst, T1 src, T2 tmp)
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
     constexpr auto srcTypeSize = sizeof(typename T1::Type);
 
-    auto dstShape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
-    auto dstShape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
-    auto dstShape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
-    auto dstShape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
-    auto dstShape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
+    auto dstShape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
 
-    auto srcExecShape3 = GetElementwiseOperandExecShapeDim<3, MAX_DIMS>(dst, src);
-    auto srcExecShape4 = GetElementwiseOperandExecShapeDim<4, MAX_DIMS>(dst, src);
+    auto srcExecShape3 = GetElementwiseOperandExecShapeDim<DIM_4TH, MAX_DIMS>(dst, src);
+    auto srcExecShape4 = GetElementwiseOperandExecShapeDim<DIM_5TH, MAX_DIMS>(dst, src);
 
-    auto dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto dstStride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
 
-    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto srcStride0 = srcLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
 
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, MAX_DIMS>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
 
     using SrcExecConfig = ElementwiseOperandExecConfig<T0, T1>;
     constexpr auto srcTileH = SrcExecConfig::tileH;
     constexpr auto srcTileW = SrcExecConfig::tileW;
 
-    constexpr auto ALIGN32HALF = 16;
-    constexpr auto tmpTileW = (srcTileW + ALIGN32HALF - 1) / ALIGN32HALF * ALIGN32HALF;
-    constexpr auto ALIGN32FLOAT = 8;
-    constexpr auto tmpTileW32Bit = (srcTileW + ALIGN32FLOAT - 1) / ALIGN32FLOAT * ALIGN32FLOAT;
+    constexpr auto tmpTileW = (srcTileW + TileOp::BLOCK_NELEM_B16 - 1) / TileOp::BLOCK_NELEM_B16 *
+                              TileOp::BLOCK_NELEM_B16;
+    constexpr auto tmpTileW32Bit = (srcTileW + TileOp::BLOCK_NELEM_B32 - 1) / TileOp::BLOCK_NELEM_B32 *
+                                   TileOp::BLOCK_NELEM_B32;
 
     using DstTile = pto::Tile<pto::TileType::Vec, uint8_t, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
     using SrcTile = pto::Tile<pto::TileType::Vec, typename T1::Type, srcTileH, srcTileW, pto::BLayout::RowMajor, -1,
@@ -101,8 +101,9 @@ TILEOP void TSignbit(T0 dst, T1 src, T2 tmp)
                 pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
 
                 if constexpr (std::is_same<typename T1::Type, uint8_t>::value) {
-                    using DstUint16Tile = pto::Tile<pto::TileType::Vec, uint16_t, srcTileH, srcTileW / 2,
-                                                    pto::BLayout::RowMajor, -1, -1>;
+                    constexpr auto UINT8_TO_UINT16_RATIO = sizeof(uint16_t) / sizeof(uint8_t);
+                    using DstUint16Tile = pto::Tile<pto::TileType::Vec, uint16_t, srcTileH,
+                                                    srcTileW / UINT8_TO_UINT16_RATIO, pto::BLayout::RowMajor, -1, -1>;
                     DstUint16Tile dstUint16Tile(dstShape3, dstShape4);
                     pto::TASSIGN(dstUint16Tile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
                     pto::TEXPANDS(dstUint16Tile, static_cast<uint16_t>(zero));

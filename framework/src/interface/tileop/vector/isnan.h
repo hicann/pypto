@@ -87,8 +87,10 @@ TILEOP void TIsNan(T0 dst, T1 src, T2 tmp)
     constexpr size_t blockBytes = srcTileH * tmpTileW * sizeof(float);
     constexpr size_t castOffset = 0;
     constexpr size_t maskOffset = blockBytes;
-    constexpr size_t resultOffset = 2 * blockBytes;
-    constexpr size_t scalarTmpOffset = 3 * blockBytes;
+    constexpr size_t RESULT_SLOT = 2;
+    constexpr size_t SCALAR_TMP_SLOT = 3;
+    constexpr size_t resultOffset = RESULT_SLOT * blockBytes;
+    constexpr size_t scalarTmpOffset = SCALAR_TMP_SLOT * blockBytes;
 
     using DstTile = pto::Tile<pto::TileType::Vec, uint8_t, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
     using SrcTile = pto::Tile<pto::TileType::Vec, typename T1::Type, srcTileH, srcTileW, pto::BLayout::RowMajor, -1,

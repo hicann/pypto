@@ -14,7 +14,6 @@
  */
 
 #include "unary.h"
-#include <sstream>
 #include <string>
 #include "tensor_transformation.h"
 #include "interface/utils/operator_tracer.h"

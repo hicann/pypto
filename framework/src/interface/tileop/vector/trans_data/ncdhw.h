@@ -24,7 +24,7 @@ template <typename DST, typename TMP, typename INPUT>
 __aicore__ inline void TTransDataNCDHW2NDC1HWC0(DST dst, TMP tmpTensor, INPUT input)
 {
     constexpr auto inputTypeSize = sizeof(typename INPUT::Type);
-    constexpr auto C0 = 32 / inputTypeSize;
+    constexpr auto C0 = TileOp::BLOCK_SIZE / inputTypeSize;
     constexpr auto tileN = Std::tuple_element<DIM_1ST, typename INPUT::TileShape>::type::value;
     constexpr auto tileD = Std::tuple_element<DIM_2ND, typename INPUT::TileShape>::type::value;
     constexpr auto tileC = Std::tuple_element<DIM_3RD, typename INPUT::TileShape>::type::value;
@@ -69,7 +69,7 @@ __aicore__ inline void TTransDataNCDHW2NDC1HWC0(DST dst, TMP tmpTensor, INPUT in
     using tmpDstTileData = pto::ConvTile<pto::TileType::Vec, typename INPUT::Type, bufferSize, pto::Layout::GNC1HWC0,
                                          pto::ConvTileShape<tileN, tileD, tileC1, tileH, tileW, C0>>;
     using tmpTileData = pto::Tile<pto::TileType::Vec, typename INPUT::Type, tileH * tileW, C0, pto::BLayout::RowMajor,
-                                  tileH * tileW, C0>; // TODO
+                                  tileH * tileW, C0>;
     inputTileData convInput;
     tmpDstTileData convTmpDst;
     tmpTileData tmpAreaTile;
@@ -127,7 +127,7 @@ template <typename DST, typename TMP, typename INPUT>
 __aicore__ inline void TTransDataNCDHW2FRACTAL_Z_3D(DST dst, TMP tmpTensor, INPUT input)
 {
     constexpr auto inputTypeSize = sizeof(typename INPUT::Type);
-    constexpr auto C0 = 32 / inputTypeSize;
+    constexpr auto C0 = TileOp::BLOCK_SIZE / inputTypeSize;
     constexpr auto N0 = 16;
     constexpr auto tileN = Std::tuple_element<DIM_1ST, typename INPUT::TileShape>::type::value;
     constexpr auto tileC = Std::tuple_element<DIM_2ND, typename INPUT::TileShape>::type::value;
@@ -199,7 +199,7 @@ template <typename DST, typename TMP, typename INPUT>
 __aicore__ inline void TTransDataFractalZ3D2NCDHW(DST dst, TMP tmpTensor, INPUT input)
 {
     constexpr auto inputTypeSize = sizeof(typename INPUT::Type);
-    constexpr auto C0 = 32 / inputTypeSize;
+    constexpr auto C0 = TileOp::BLOCK_SIZE / inputTypeSize;
     constexpr auto N0 = 16;
     constexpr auto dstTileC = Std::tuple_element<DIM_2ND, typename DST::TileShape>::type::value;
     constexpr auto dstTileD = Std::tuple_element<DIM_3RD, typename DST::TileShape>::type::value;

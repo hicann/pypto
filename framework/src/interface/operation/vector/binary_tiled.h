@@ -72,11 +72,10 @@ void AddTiledBinaryOperation(Function& function, const TileShape& tileShape, Log
     } else if (opName == "FLOORDIV") {
         auto tmpShape = resultTileInfo.shape;
         auto alignSize = BLOCK_SIZE / BytesOf(result->Datatype());
-        tmpShape[resultTileInfo.shape.size() - 1] = AlignUp(tmpShape.back(), alignSize) * NUM_VALUE_6;
-        auto tmpElemBytes = result->Datatype() == DT_INT64 ? BytesOf(DT_INT64) : BytesOf(DT_FP32);
-        int64_t intermediateBytes = std::accumulate(tmpShape.begin(), tmpShape.end(), 1LL, std::multiplies<int64_t>()) *
-                                    tmpElemBytes;
-        auto tempTensor = std::make_shared<LogicalTensor>(function, DT_UINT8, std::vector<int64_t>{intermediateBytes});
+        tmpShape.back() = AlignUp(tmpShape.back(), alignSize);
+        tmpShape.front() *= NUM_VALUE_6;
+        auto tmpType = result->Datatype() == DT_INT64 ? DT_INT64 : DT_FP32;
+        auto tempTensor = std::make_shared<LogicalTensor>(function, tmpType, tmpShape);
         op = &function.AddOperation(GetBinaryOpNameCode<T, false, false>(), {inputTile1, inputTile2},
                                     {resultTile, tempTensor});
     } else if (opName == "GCD") {
@@ -87,7 +86,7 @@ void AddTiledBinaryOperation(Function& function, const TileShape& tileShape, Log
         int64_t maskCols = ((tileW + NUM_VALUE_7) / NUM_VALUE_8 + NUM_VALUE_31) / BLOCK_SIZE * BLOCK_SIZE;
         int64_t intermediateBytes = (NUM_VALUE_6 * tileFootprint * BytesOf(DT_INT32)) +
                                     (NUM_VALUE_2 * tileFootprint * BytesOf(DT_FP32)) + NUM_VALUE_4 * tileH * maskCols +
-                                    320;
+                                    GCD_TSEL_TMP_BYTES;
         auto tempTensor = std::make_shared<LogicalTensor>(function, DT_UINT8, std::vector<int64_t>{intermediateBytes});
         op = &function.AddOperation(GetBinaryOpNameCode<T, false, false>(), {inputTile1, inputTile2},
                                     {resultTile, tempTensor});

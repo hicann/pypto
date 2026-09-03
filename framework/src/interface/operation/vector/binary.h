@@ -24,6 +24,8 @@
 
 namespace npu::tile_fwk {
 
+constexpr int64_t GCD_TSEL_TMP_BYTES = NUM_VALUE_8 * BLOCK_SIZE + NUM_VALUE_64;
+
 enum class BinaryOpType {
     ADD,
     SUB,

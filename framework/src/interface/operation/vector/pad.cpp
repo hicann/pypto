@@ -13,7 +13,6 @@
  * \brief
  */
 
-#include <cmath>
 #include "tensor_transformation.h"
 #include "interface/operation/operation_common.h"
 #include "interface/utils/operator_tracer.h"

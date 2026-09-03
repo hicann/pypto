@@ -91,7 +91,7 @@ TILEOP void TCopysign(T0 dst, T1 src0, T2 src1, T3 tmp)
     constexpr uint32_t SIGNMASK32B = 0x80000000;
     constexpr uint16_t SIGNMASK16B = 0x8000;
     using T = select_bit<T0>;
-    constexpr auto STRIDE = sizeof(typename T0::Type) / 2;
+    constexpr auto STRIDE = sizeof(typename T0::Type) / sizeof(uint16_t);
     constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
     constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
     using Src0ExecConfig = ElementwiseOperandExecConfig<T0, T1>;

@@ -216,10 +216,14 @@ TILEOP void TPow(T0 dst, T1 src0, T2 src1, T3 tmp)
         constexpr auto tileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
         constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
         constexpr auto dataTypeSize = sizeof(typename T0::Type);
-        constexpr auto floatSlot = tileH * tileW * dataTypeSize;    // bytes, 32B-aligned
-        constexpr auto maskCols = ((tileW + 7) / 8 + 31) / 32 * 32; // bit-packed mask bytes/row, 32B-aligned
-        constexpr auto maskSlot = tileH * maskCols;                 // bytes
-        constexpr auto maskBase = 2 * floatSlot;                    // masks laid out after 2 float tiles
+        constexpr auto floatSlot = tileH * tileW * dataTypeSize; // bytes, 32B-aligned
+        constexpr auto BITS_PER_BYTE = TileOp::BITS_PER_BYTE;
+        constexpr auto MASK_ALIGNMENT = TileOp::BLOCK_SIZE;
+        constexpr auto MASK_COUNT = 2;
+        constexpr auto maskCols = ((tileW + BITS_PER_BYTE - 1) / BITS_PER_BYTE + MASK_ALIGNMENT - 1) / MASK_ALIGNMENT *
+                                  MASK_ALIGNMENT;
+        constexpr auto maskSlot = tileH * maskCols; // bytes
+        constexpr auto maskBase = MASK_COUNT * floatSlot;
         using DataTile = pto::Tile<pto::TileType::Vec, float, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
         using MaskTile = pto::Tile<pto::TileType::Vec, uint8_t, tileH, maskCols, pto::BLayout::RowMajor, -1, -1>;
         DataTile dstTile(dstShape3, dstShape4);
@@ -227,9 +231,10 @@ TILEOP void TPow(T0 dst, T1 src0, T2 src1, T3 tmp)
         DataTile src1Tile(dstShape3, dstShape4);
         DataTile tmp0Tile(dstShape3, dstShape4);
         DataTile tmp1Tile(dstShape3, dstShape4);
-        MaskTile mask0Tile(dstShape3, (dstShape4 + 7) / 8);
-        MaskTile mask1Tile(dstShape3, (dstShape4 + 7) / 8);
-        MaskTile selTmpTile(dstShape3, (dstShape4 + 7) / 8);
+        const auto validMaskCols = (dstShape4 + BITS_PER_BYTE - 1) / BITS_PER_BYTE;
+        MaskTile mask0Tile(dstShape3, validMaskCols);
+        MaskTile mask1Tile(dstShape3, validMaskCols);
+        MaskTile selTmpTile(dstShape3, validMaskCols);
         for (LoopVar n0Index = 0; n0Index < dstShape0; n0Index++) {
             for (LoopVar n1Index = 0; n1Index < dstShape1; n1Index++) {
                 for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index++) {
@@ -244,7 +249,7 @@ TILEOP void TPow(T0 dst, T1 src0, T2 src1, T3 tmp)
                     pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + 1 * floatSlot));
                     pto::TASSIGN(mask0Tile, (uint64_t)(tmp.GetAddr() + maskBase + 0 * maskSlot));
                     pto::TASSIGN(mask1Tile, (uint64_t)(tmp.GetAddr() + maskBase + 1 * maskSlot));
-                    pto::TASSIGN(selTmpTile, (uint64_t)(tmp.GetAddr() + maskBase + 2 * maskSlot));
+                    pto::TASSIGN(selTmpTile, (uint64_t)(tmp.GetAddr() + maskBase + MASK_COUNT * maskSlot));
                     TPowFloatTile(dstTile, src0Tile, src1Tile, tmp0Tile, tmp1Tile, mask0Tile, mask1Tile, selTmpTile);
                 }
             }

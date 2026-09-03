@@ -30,6 +30,7 @@ TILEOP void TLog(T0 dst, T1 src)
 template <typename T0, typename T1, typename T2, typename T3>
 TILEOP void TExp2(T0 dst, T1 tmp, T2 tmp2, T3 src)
 {
+    constexpr float EXP2_BASE = 2.0f;
     const auto dstLayout = dst.GetLayout();
     auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
     auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
@@ -49,7 +50,7 @@ TILEOP void TExp2(T0 dst, T1 tmp, T2 tmp2, T3 src)
                 AssignElementwiseOperandExecTile(srcExecTile, src, tileOffsets);
 
                 if constexpr (std::is_same_v<typename T3::Type, float>) {
-                    pto::TEXPANDS(tmpTile2.Data(), 2.0f);
+                    pto::TEXPANDS(tmpTile2.Data(), EXP2_BASE);
                     SyncV();
                     pto::TLOG(tmpTile2.Data(), tmpTile2.Data());
                     SyncV();
@@ -60,7 +61,7 @@ TILEOP void TExp2(T0 dst, T1 tmp, T2 tmp2, T3 src)
                 } else {
                     pto::TCVT(tmpTile.Data(), srcExecTile, pto::RoundMode::CAST_NONE);
                     SyncV();
-                    pto::TEXPANDS(tmpTile2.Data(), 2.0f);
+                    pto::TEXPANDS(tmpTile2.Data(), EXP2_BASE);
                     SyncV();
                     pto::TLOG(tmpTile2.Data(), tmpTile2.Data());
                     SyncV();
@@ -161,6 +162,8 @@ TILEOP void TSinh(T0 dst, T1 src, T2 tmp)
     DstTileDefine tmp2Tile(dstShape3, dstShape4);
     DstTileDefine tmp3Tile(dstShape3, dstShape4);
     MaskTileDefine tmp1MaskTile(dstShape3, dstShape4);
+    constexpr size_t TMP2_SLOT = 2;
+    constexpr size_t TMP3_SLOT = 3;
 
     for (LoopVar n0Index = 0; n0Index < dstShape0; n0Index++) {
         for (LoopVar n1Index = 0; n1Index < dstShape1; n1Index++) {
@@ -173,8 +176,10 @@ TILEOP void TSinh(T0 dst, T1 src, T2 tmp)
 
                 pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr() + tmpByteOffset));
                 pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + tmpByteOffset + tileShapeSize * dstTypeSize));
-                pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + tmpByteOffset + 2 * tileShapeSize * dstTypeSize));
-                pto::TASSIGN(tmp3Tile, (uint64_t)(tmp.GetAddr() + tmpByteOffset + 3 * tileShapeSize * dstTypeSize));
+                pto::TASSIGN(tmp2Tile,
+                             (uint64_t)(tmp.GetAddr() + tmpByteOffset + TMP2_SLOT * tileShapeSize * dstTypeSize));
+                pto::TASSIGN(tmp3Tile,
+                             (uint64_t)(tmp.GetAddr() + tmpByteOffset + TMP3_SLOT * tileShapeSize * dstTypeSize));
                 pto::TASSIGN(tmp1MaskTile, (uint64_t)(tmp.GetAddr() + tmpByteOffset + tileShapeSize * dstTypeSize));
 
                 // sinh(x) = x + x^3 / 3! + x^5 / 5! + x^7 / 7! for small x
@@ -343,6 +348,7 @@ TILEOP void TCosh(T0 dst, T1 src, T2 tmp)
     DataTileDefine tmp2Tile(dstShape3, dstShape4);
     IntTileDefine tmp0IntTile(dstShape3, dstShape4);
     MaskTileDefine tmp2MaskTile(dstShape3, dstShape4);
+    constexpr size_t TMP2_SLOT = 2;
 #endif
 
     for (LoopVar n0Index = 0; n0Index < dstShape0; n0Index++) {
@@ -360,7 +366,8 @@ TILEOP void TCosh(T0 dst, T1 src, T2 tmp)
 #else
                 auto tmp0Addr = static_cast<uint64_t>(tmp.GetAddr() + tmpByteOffset);
                 auto tmp1Addr = static_cast<uint64_t>(tmp.GetAddr() + tmpByteOffset + tileShapeSize * dstTypeSize);
-                auto tmp2Addr = static_cast<uint64_t>(tmp.GetAddr() + tmpByteOffset + 2 * tileShapeSize * dstTypeSize);
+                auto tmp2Addr = static_cast<uint64_t>(tmp.GetAddr() + tmpByteOffset +
+                                                      TMP2_SLOT * tileShapeSize * dstTypeSize);
 
                 pto::TASSIGN(tmp0Tile, tmp0Addr);
                 pto::TASSIGN(tmp1Tile, tmp1Addr);
@@ -539,6 +546,7 @@ TILEOP void TrigCompute(T0 dst, T1 tmp, T2 src)
     TmpINT32Tile tmp1Tile(shape3, shape4);
     TmpFP32Tile tmp2Tile(shape3, shape4);
     TmpFP32Tile tmp3Tile(shape3, shape4);
+    constexpr size_t TMP2_SLOT = 2;
     auto srcExecTile = MakeElementwiseOperandExecTile(dst, src);
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
@@ -548,7 +556,7 @@ TILEOP void TrigCompute(T0 dst, T1 tmp, T2 src)
                 AssignElementwiseOperandExecTile(srcExecTile, src, tileOffsets);
                 pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr()));
                 pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + tileW * tileH * dstTypeSize));
-                pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + 2 * tileW * tileH * dstTypeSize));
+                pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + TMP2_SLOT * tileW * tileH * dstTypeSize));
                 pto::TASSIGN(tmp3Tile, (uint64_t)(tmp.GetAddr() + tileW * tileH * dstTypeSize));
 
                 reduceKCompute<op>(dstTile, tmp0Tile, tmp1Tile, tmp2Tile, srcExecTile);

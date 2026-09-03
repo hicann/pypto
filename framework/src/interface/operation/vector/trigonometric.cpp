@@ -14,8 +14,8 @@
  */
 
 #include "unary_tiled.h"
-#include "unary_utils.h"
 #include "binary.h"
+#include "binary_tiled.h"
 #include "tensor_transformation.h"
 #include "interface/utils/operator_tracer.h"
 #include "passes/pass_utils/graph_utils.h"
@@ -39,6 +39,32 @@ Tensor Atan(const Tensor& self)
     if (self.GetDataType() != DataType::DT_FP32) {
         RETURN_CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), res,
                     self.GetDataType(), CastMode::CAST_NONE);
+    }
+    return res;
+}
+
+Tensor Atan2(const Tensor& y, const Tensor& x)
+{
+    DECLARE_TRACER();
+    CheckTensorFormat(y.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Atan2");
+    CheckTensorFormat(x.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Atan2");
+
+    CheckTensorsDataTypeConsistency(y.GetStorage(), x.GetStorage(), "ATAN2");
+    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16};
+    CheckTensorDataType(y.GetStorage(), supportedTypes, "ATAN2");
+    auto castY = y.GetStorage();
+    auto castX = x.GetStorage();
+    DataType dataType = y.GetDataType();
+    if (dataType != DataType::DT_FP32) {
+        castY = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), y.GetStorage(),
+                     DataType::DT_FP32, CastMode::CAST_NONE);
+        castX = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), x.GetStorage(),
+                     DataType::DT_FP32, CastMode::CAST_NONE);
+    }
+    auto res = CALL(BinaryOperation<BinaryOpType::ATAN2>, *Program::GetInstance().GetCurrentFunction(), castY, castX);
+    if (dataType != DataType::DT_FP32) {
+        RETURN_CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), res, dataType,
+                    CastMode::CAST_NONE);
     }
     return res;
 }
@@ -241,6 +267,7 @@ void TanOperationTileFunc(Function& function, const TileShape& tileShape, const 
 }
 
 REGISTER_OPERATION_TILED_FUNC(OP_ATAN, Opcode::OP_ATAN, AtanOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_ATAN2, Opcode::OP_ATAN2, BinaryOperationTileFunc<BinaryOpType::ATAN2>);
 REGISTER_OPERATION_TILED_FUNC(OP_SIN, Opcode::OP_SIN, SinOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_COS, Opcode::OP_COS, CosOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_ASIN, Opcode::OP_ASIN, AsinAcosOperationTileFunc<UnaryOpType::ASIN>);

@@ -273,6 +273,70 @@ Tensor Minimum(const Tensor& operand1, const Tensor& operand2)
                 operand2);
 }
 
+Tensor Clip(const Tensor& self, const Element& min, const Element& max)
+{
+    DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Clip");
+
+    static const std::unordered_set<DataType> CLIP_A2A3_TYPES = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16};
+    static const std::unordered_set<DataType> CLIP_A5_TYPES = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16, DT_INT64};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(CLIP_A2A3_TYPES, CLIP_A5_TYPES);
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "CLIP");
+    CheckTensorShapeSize(self.GetStorage(), "CLIP");
+
+    Element min_ = min, max_ = max;
+
+    Tensor result = self;
+    if (min_.GetDataType() != DT_BOTTOM) {
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, min_.GetDataType() == self.GetDataType())
+            << "The datatype of inputs should be same";
+        result = Maximum(result, min_);
+    }
+    if (max_.GetDataType() != DT_BOTTOM) {
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, max_.GetDataType() == self.GetDataType())
+            << "The datatype of inputs should be same";
+        result = Minimum(result, max_);
+    }
+    result.GetStorage()->UpdateDynValidShape(self.GetStorage()->GetDynValidShape());
+    return result;
+}
+
+Tensor Clip(const Tensor& self, const Tensor& min, const Tensor& max)
+{
+    DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Clip");
+
+    static const std::unordered_set<DataType> CLIP_A2A3_TYPES = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16};
+    static const std::unordered_set<DataType> CLIP_A5_TYPES = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16, DT_INT64};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(CLIP_A2A3_TYPES, CLIP_A5_TYPES);
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "CLIP");
+    CheckTensorShapeSize(self.GetStorage(), "CLIP");
+
+    Tensor result = self;
+    if (min.GetStorage() != nullptr) {
+        CheckTensorFormat(min.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Clip");
+        CheckTensorShapeSize(min.GetStorage(), "CLIP");
+        CheckTensorsFormatConsistency(self.GetStorage(), min.GetStorage(), "CLIP");
+        std::vector minBroadcastAxes = GetBroadcastAxes(min.GetShape(), self.GetShape());
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, minBroadcastAxes.size() <= 1)
+            << "minBroadcastAxes size should be <= 1";
+        CheckInt64Broadcast(self.GetStorage(), min.GetStorage(), "CLIP");
+        result = Maximum(result, min);
+    }
+    if (max.GetStorage() != nullptr) {
+        CheckTensorFormat(max.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Clip");
+        CheckTensorShapeSize(max.GetStorage(), "CLIP");
+        CheckTensorsFormatConsistency(self.GetStorage(), max.GetStorage(), "CLIP");
+        std::vector maxBroadcastAxes = GetBroadcastAxes(max.GetShape(), self.GetShape());
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, maxBroadcastAxes.size() <= 1)
+            << "maxBroadcastAxes size should be <= 1";
+        CheckInt64Broadcast(self.GetStorage(), max.GetStorage(), "CLIP");
+        result = Minimum(result, max);
+    }
+    result.GetStorage()->UpdateDynValidShape(self.GetStorage()->GetDynValidShape());
+    return result;
+}
+
 Tensor Gcd(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();

@@ -13,6 +13,8 @@
  * \brief
  */
 
+#include <algorithm>
+#include <set>
 #include "unary.h"
 #include "interface/configs/config_manager.h"
 #include "interface/utils/operator_tracer.h"
@@ -568,6 +570,113 @@ Tensor Prod(const Tensor& self, int axis, bool keepDim)
     CALL(ReduceSingle, *Program::GetInstance().GetCurrentFunction(), "PROD", self, result, axis);
 
     return ProcessResultShape(result, self, axis, keepDim);
+}
+
+static void VarParamVaildCheck(const Tensor& input, std::vector<int>& dim)
+{
+    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16};
+    CheckTensorDataType(input.GetStorage(), supportedTypes, "VAR");
+    CheckTensorDimRange(input.GetStorage(), 1, NUM_VALUE_4, "VAR");
+    CheckTensorShapeSize(input.GetStorage(), "VAR");
+
+    Shape shape = input.GetShape();
+    uint64_t shapeSize = shape.size();
+
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, dim.size() <= shapeSize) << "The dim.size() should <= input.size()";
+    for (uint64_t i = 0; i < shapeSize; i++) {
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, shape[i] > 0) << "The input shape should > 0";
+    }
+
+    if (dim.empty()) {
+        for (uint64_t i = 0; i < shapeSize; i++) {
+            dim.push_back(static_cast<int>(i));
+        }
+    }
+    std::set<int> dupDimSet(dim.begin(), dim.end());
+
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, dupDimSet.size() == dim.size()) << "There are duplicate elements in dim";
+    for (size_t i = 0; i < dim.size(); i++) {
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID,
+              dim[i] < static_cast<int>(shapeSize) && dim[i] >= -(static_cast<int>(shapeSize)))
+            << "The value in dim is out of range";
+        if (dim[i] < 0) {
+            dim[i] = dim[i] + static_cast<int>(shapeSize);
+        }
+    }
+    std::sort(dim.begin(), dim.end());
+}
+
+static Tensor VarResSqueeze(const Tensor& res, const std::vector<int>& dim, const std::vector<int64_t>& oriVecTile,
+                            DataType dtype)
+{
+    std::vector<int64_t> vecTile(oriVecTile.begin(), oriVecTile.end());
+    for (auto it = dim.rbegin(); it != dim.rend(); ++it) {
+        vecTile.erase(vecTile.begin() + *it);
+    }
+    int64_t algnedSize = BLOCK_SIZE / BytesOf(dtype);
+    if (vecTile.empty()) {
+        vecTile.push_back(algnedSize);
+    }
+    int64_t lastDimSize = vecTile.back();
+    if (lastDimSize % algnedSize != 0) {
+        vecTile.back() = CeilDiv(lastDimSize, algnedSize) * algnedSize;
+    }
+    TileShape::Current().SetVecTile(vecTile);
+    return Squeeze(res, dim);
+}
+
+Tensor Var(const Tensor& input, const std::vector<int>& dim, float correction, bool keepDim)
+{
+    CheckTensorFormat(input.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Var");
+
+    std::vector<int> innerDim(dim.begin(), dim.end());
+    VarParamVaildCheck(input, innerDim);
+
+    DataType dtype = input.GetDataType();
+    Shape shape = input.GetShape();
+    auto castInput = Tensor(DT_FP32, shape);
+    if (dtype == DT_FP16 || dtype == DT_BF16) {
+        castInput = Cast(input, DT_FP32, CAST_NONE);
+    } else {
+        castInput = input;
+    }
+
+    int calcN = 1;
+    auto res = castInput;
+    for (size_t i = 0; i < innerDim.size(); i++) {
+        calcN *= static_cast<int>(shape[innerDim[i]]);
+    }
+    res = Div(res, Element(DT_FP32, static_cast<float>(calcN)));
+    for (size_t i = 0; i < innerDim.size(); i++) {
+        res = Sum(res, innerDim[i], true);
+    }
+
+    Shape dstShape = res.GetShape();
+    for (size_t i = 0; i < innerDim.size(); i++) {
+        dstShape[innerDim[i]] = shape[innerDim[i]];
+        res = Expand(res, dstShape);
+    }
+
+    res = Sub(castInput, res);
+    res = Mul(res, res);
+    float count = std::max(0.0f, static_cast<float>(calcN) - correction);
+    res = Div(res, Element(DT_FP32, count));
+    for (size_t i = 0; i < innerDim.size(); i++) {
+        res = Sum(res, innerDim[i], true);
+    }
+    auto oriVecTile = TileShape::Current().GetVecTile();
+    if (!keepDim) {
+        res = VarResSqueeze(res, innerDim, oriVecTile.tile, dtype);
+    }
+
+    if (dtype == DT_FP16 || dtype == DT_BF16) {
+        res = Cast(res, dtype, CAST_NONE);
+    }
+    if (!keepDim) {
+        TileShape::Current().SetVecTile(oriVecTile.tile);
+    }
+
+    return res;
 }
 
 void TiledReduceExpand(Function& function, const TileShape& tileShape, const std::string& op,

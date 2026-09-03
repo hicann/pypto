@@ -177,8 +177,22 @@ Opcode GetUnaryOpNameCode()
 #undef CASE
 }
 
-void UnaryOperationOperandCheck(const std::vector<LogicalTensorPtr>& iOperand,
-                                const std::vector<LogicalTensorPtr>& oOperand);
+inline void UnaryOperationOperandCheck(const std::vector<LogicalTensorPtr>& iOperand,
+                                       const std::vector<LogicalTensorPtr>& oOperand)
+{
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, iOperand.size() == 1) << "The input operand size should be 1";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oOperand.size() == 1) << "The output operand size should be 1";
+}
+
+template <typename T>
+int64_t MultiplyLastTwoDims(const std::vector<int64_t>& vec)
+{
+    constexpr size_t ALIGN_SIZE = NUM_VALUE_32;
+    constexpr size_t ELEMENT_SIZE = sizeof(T);
+    constexpr size_t ALIGN_ELEMENTS = ALIGN_SIZE / ELEMENT_SIZE;
+    int64_t axis2 = (vec[vec.size() - 1] + ALIGN_ELEMENTS - 1) / ALIGN_ELEMENTS * ALIGN_ELEMENTS;
+    return axis2 * vec[vec.size() - NUM_VALUE_2];
+}
 
 template <UnaryOpType T>
 std::pair<LogicalTensorPtr, Operation*> TensorUnaryOperationWithOp(Function& function, LogicalTensorPtr operand,

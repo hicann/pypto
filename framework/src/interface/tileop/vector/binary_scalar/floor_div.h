@@ -227,12 +227,10 @@ TILEOP void FloorDivSLegacyIntegerCompute(DstTile& dstTile, SrcTile& src0Tile, S
         pto::TASSIGN(tmp3MaskTile, FloorDivTmpAddr(tmp, dstOffset, tileShapeSize, 1, sizeof(float)));
 
         if (src1 == 0) {
-            constexpr int32_t pos = 0x7FFF7F7F;
-            constexpr int32_t neg = 0x80008080;
             pto::TCMPS(tmp2MaskTile, src0Tile, 0, pto::CmpMode::LT);
-            pto::TSELS(dstTile, tmp2MaskTile, dstTile, tmp0DataTile, pos);
+            pto::TSELS(dstTile, tmp2MaskTile, dstTile, tmp0DataTile, INT32_NEGATIVE_DIVIDEND_ZERO_DIVISOR_RESULT);
             pto::TCMPS(tmp2MaskTile, src0Tile, 0, pto::CmpMode::GE);
-            pto::TSELS(dstTile, tmp2MaskTile, dstTile, tmp0DataTile, neg);
+            pto::TSELS(dstTile, tmp2MaskTile, dstTile, tmp0DataTile, INT32_NONNEGATIVE_DIVIDEND_ZERO_DIVISOR_RESULT);
         } else {
             if (src1 < 0) {
                 pto::TCMPS(tmp2MaskTile, src0Tile, 0, pto::CmpMode::GE);
@@ -260,12 +258,10 @@ TILEOP void FloorDivSLegacyIntegerCompute(DstTile& dstTile, SrcTile& src0Tile, S
         pto::TASSIGN(tmp3MaskTile, FloorDivTmpAddr(tmp, dstOffset, tileShapeSize, 3, sizeof(int64_t)));
 
         if (src1 == 0) {
-            constexpr int64_t pos = 0x7FFFFFFFFFFFFFFF;
-            constexpr int64_t neg = 0x8000000000000000;
             pto::TCMPS(tmp2MaskTile, src0Tile, 0, pto::CmpMode::LT);
-            pto::TSELS(dstTile, tmp2MaskTile, dstTile, tmp0DataTile, pos);
+            pto::TSELS(dstTile, tmp2MaskTile, dstTile, tmp0DataTile, INT64_NEGATIVE_DIVIDEND_ZERO_DIVISOR_RESULT);
             pto::TCMPS(tmp2MaskTile, src0Tile, 0, pto::CmpMode::GE);
-            pto::TSELS(dstTile, tmp2MaskTile, dstTile, tmp0DataTile, neg);
+            pto::TSELS(dstTile, tmp2MaskTile, dstTile, tmp0DataTile, INT64_NONNEGATIVE_DIVIDEND_ZERO_DIVISOR_RESULT);
         } else {
             if (src1 < 0) {
                 pto::TCMPS(tmp2MaskTile, src0Tile, 0, pto::CmpMode::GE);
@@ -301,8 +297,10 @@ TILEOP void TFloorDivS(T0 dst, T1 src0, Scalar src1, T2 tmp)
     constexpr auto tileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
     constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
-    constexpr auto tileShapeSize = TileOp::GetAnyAxisMergeResult<
-        DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
+    constexpr size_t FLOOR_DIV_TMP_PLANE_COUNT = 6;
+    constexpr auto tmpPlaneSize = TileOp::GetAnyAxisMergeResult<DIM_1ST, Std::tuple_size<typename T2::TileShape>::value,
+                                                                typename T2::TileShape>() /
+                                  FLOOR_DIV_TMP_PLANE_COUNT;
     using DataTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1,
                                      -1>;
     DataTileDefine src0Tile(dstShape3, dstShape4);
@@ -314,17 +312,18 @@ TILEOP void TFloorDivS(T0 dst, T1 src0, Scalar src1, T2 tmp)
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 auto srcOffset = GenTileOffset(src0, tileOffsets);
                 auto dstOffset = GenTileOffset(dst, tileOffsets);
+                auto tmpByteOffset = TileOp::GetPackedByteOffset<typename T2::Type>(GenTileOffset(tmp, tileOffsets));
                 pto::TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + srcOffset * dstTypeSize));
                 pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
-                FloorDivSFloatingCompute<T0>(dstTile, src0Tile, src1, tmp, dstOffset, tileShapeSize, dstShape3,
+                FloorDivSFloatingCompute<T0>(dstTile, src0Tile, src1, tmp, tmpByteOffset, tmpPlaneSize, dstShape3,
                                              dstShape4);
 #ifdef __DAV_V220
-                FloorDivSV220Int32Compute<T0>(dstTile, src0Tile, src1, tmp, dstOffset, tileShapeSize, dstShape3,
+                FloorDivSV220Int32Compute<T0>(dstTile, src0Tile, src1, tmp, tmpByteOffset, tmpPlaneSize, dstShape3,
                                               dstShape4);
-                FloorDivSV220Int8Compute<T0>(dstTile, src0Tile, src1, tmp, dstOffset, tileShapeSize, dstShape3,
+                FloorDivSV220Int8Compute<T0>(dstTile, src0Tile, src1, tmp, tmpByteOffset, tmpPlaneSize, dstShape3,
                                              dstShape4);
 #else
-                FloorDivSLegacyIntegerCompute<T0>(dstTile, src0Tile, src1, tmp, dstOffset, tileShapeSize, dstShape3,
+                FloorDivSLegacyIntegerCompute<T0>(dstTile, src0Tile, src1, tmp, tmpByteOffset, tmpPlaneSize, dstShape3,
                                                   dstShape4);
 #endif
             }

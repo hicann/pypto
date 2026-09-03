@@ -19,10 +19,6 @@
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
-const int32_t DEFAULT_REPEAT_STRIDE = 8;
-const int32_t NUM_EIGHT = 8;
-const int32_t ONE_BLK_SIZE = 32;
-
 template <typename T, int Unit>
 TILEOP inline void TRangePropagate(__ubuf__ T* base, int32_t loopN, int32_t tailSize, T offset)
 {
@@ -57,8 +53,8 @@ TILEOP void TRange(TileType dst, unsigned size, typename TileType::Type start, t
 {
     using T = typename TileType::Type;
     const T baseStart = start + step * static_cast<T>(tileIdx);
-    constexpr int32_t kBlkElems = ONE_BLK_SIZE / sizeof(T);
-    constexpr int32_t kRepElems = (ONE_BLK_SIZE * DEFAULT_REPEAT_STRIDE) / sizeof(T);
+    constexpr int32_t kBlkElems = TileOp::BLOCK_SIZE / sizeof(T);
+    constexpr int32_t kRepElems = (TileOp::BLOCK_SIZE * TileOp::BLOCK_NUM_ONE_REPEAT) / sizeof(T);
 
     __ubuf__ T* dst_ptr = reinterpret_cast<__ubuf__ T*>(dst.GetAddr());
     unsigned N = size;
@@ -80,14 +76,14 @@ TILEOP void TRange(TileType dst, unsigned size, typename TileType::Type start, t
     // blocks 2~8
     int32_t loopN = 0, tailSize = 0;
     if (N >= static_cast<unsigned>(kRepElems)) {
-        loopN = DEFAULT_REPEAT_STRIDE - 1;
+        loopN = TileOp::BLOCK_NUM_ONE_REPEAT - 1;
     } else {
         loopN = static_cast<int32_t>(N) / kBlkElems - 1;
         tailSize = static_cast<int32_t>(N) % kBlkElems;
     }
     set_flag(PIPE_S, PIPE_V, EVENT_ID0);
     wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
-    TRangePropagate<T, ONE_BLK_SIZE / sizeof(T)>(dst_ptr, loopN, tailSize, step * static_cast<T>(kBlkElems));
+    TRangePropagate<T, TileOp::BLOCK_SIZE / sizeof(T)>(dst_ptr, loopN, tailSize, step * static_cast<T>(kBlkElems));
 
     if (N <= static_cast<unsigned>(kRepElems)) {
         return;
@@ -96,7 +92,7 @@ TILEOP void TRange(TileType dst, unsigned size, typename TileType::Type start, t
     // repeat
     loopN = static_cast<int32_t>(N) / kRepElems - 1;
     tailSize = static_cast<int32_t>(N) % kRepElems;
-    TRangePropagate<T, (ONE_BLK_SIZE * DEFAULT_REPEAT_STRIDE) / sizeof(T)>(dst_ptr, loopN, tailSize,
-                                                                           step * static_cast<T>(kRepElems));
+    TRangePropagate<T, (TileOp::BLOCK_SIZE * TileOp::BLOCK_NUM_ONE_REPEAT) / sizeof(T)>(
+        dst_ptr, loopN, tailSize, step * static_cast<T>(kRepElems));
 }
 #endif

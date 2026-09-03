@@ -14,8 +14,6 @@
  */
 
 #include "unary.h"
-#include <sstream>
-#include <string>
 #include "tensor_transformation.h"
 #include "interface/utils/operator_tracer.h"
 #include "tilefwk/error_code.h"
@@ -570,7 +568,7 @@ void InnerTransDataND(size_t cur, Function& function, const TileShape& tileShape
     auto vecTile = tileShape.GetVecTile();
     int inputSize = input->GetShape().size();
 
-    std::unordered_map<int64_t, int64_t> format2InputAxis = {{5, 1}, {6, 2}};
+    std::unordered_map<int64_t, int64_t> format2InputAxis = {{SHAPE_DIM5, 1}, {SHAPE_DIM6, 2}};
     int64_t inputGroupAxis = format2InputAxis[inputSize];
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, group > 0) << "The group is not valid !";
     int64_t inputPerGroup = input->GetShape()[inputGroupAxis] / group;
@@ -582,11 +580,11 @@ void InnerTransDataND(size_t cur, Function& function, const TileShape& tileShape
                                                                transDataTileInfoPara.inputTileInfo.offset);
 
         switch (inputSize) {
-            case 5:
+            case SHAPE_DIM5:
                 HandleNCHW5DimFormat(function, dstTensor, inputTile, tileParams, transDataTileInfoPara, inputPerGroup,
                                      transDataPara);
                 return;
-            case 6:
+            case SHAPE_DIM6:
                 HandleNCDHW6DimFormat(function, dstTensor, inputTile, tileParams, transDataTileInfoPara, inputPerGroup,
                                       transDataPara);
                 return;
@@ -895,7 +893,7 @@ void InnerTransDataFz2ND(size_t cur, Function& function, const TileShape& tileSh
     auto vecTile = tileShape.GetVecTile();
     int outputSize = dstTensor->GetShape().size();
 
-    std::unordered_map<int64_t, int64_t> format2DstAxis = {{4, 0}, {5, 0}};
+    std::unordered_map<int64_t, int64_t> format2DstAxis = {{SHAPE_DIM4, 0}, {SHAPE_DIM5, 0}};
     int64_t outputAxis = format2DstAxis[outputSize];
     int64_t tmpOffset = groupIdx * dstC1 * dstH * dstW + C1Idx * dstH * dstW + HIdx * dstW;
 
@@ -906,7 +904,7 @@ void InnerTransDataFz2ND(size_t cur, Function& function, const TileShape& tileSh
                                                                transDataTileInfoPara.inputTileInfo.offset);
 
         switch (outputSize) {
-            case 4:
+            case SHAPE_DIM4:
                 HandleFractalZ2NCHW(function, dstTensor, inputTile, tileParams, transDataTileInfoPara, dstW,
                                     transDataPara);
                 return;
@@ -977,12 +975,13 @@ void TiledTransData(Function& function, const TileShape& tileShape, TransDataPar
     int inputShapeSize = transDataPara.input->GetShape().size();
     int outputShapeSize = transDataPara.dstTensor->GetShape().size();
     if (T == TileOpFormat::TILEOP_ND) {
-        if ((inputShapeSize == 5 && outputShapeSize == 4) || (inputShapeSize == 6 && outputShapeSize == 5)) {
+        if ((inputShapeSize == SHAPE_DIM5 && outputShapeSize == SHAPE_DIM4) ||
+            (inputShapeSize == SHAPE_DIM6 && outputShapeSize == SHAPE_DIM5)) {
             for (int i = 0; i < group; i++) {
                 transDataPara.groupIdx = i;
                 InnerTransDataND<T>(0, function, tileShape, transDataPara, transDataTileInfoPara);
             }
-        } else if (inputShapeSize == 4 && outputShapeSize == 5) {
+        } else if (inputShapeSize == SHAPE_DIM4 && outputShapeSize == SHAPE_DIM5) {
             int dstC1 = (transDataPara.dstTensor->GetShape()[1] + C0 - 1) / C0;
             int dstD = transDataPara.dstTensor->GetShape()[2];
             int dstH = transDataPara.dstTensor->GetShape()[3];
@@ -1394,16 +1393,16 @@ LogicalTensorPtr TransDataReverse(Function& function, const LogicalTensorPtr& se
 {
     int inputShapeSize = self->GetShape().size();
     int outputShapeSize = output->GetShape().size();
-    if (inputShapeSize == 5 && outputShapeSize == 4) {
+    if (inputShapeSize == SHAPE_DIM5 && outputShapeSize == SHAPE_DIM4) {
         return TransDataNC1HWC02NCHW(function, self, output, group);
-    } else if (inputShapeSize == 6 && outputShapeSize == 5) {
+    } else if (inputShapeSize == SHAPE_DIM6 && outputShapeSize == SHAPE_DIM5) {
         return TransDataNDC1HWC02NCDHW(function, self, output, group);
-    } else if (inputShapeSize == 4 && outputShapeSize == 4) {
+    } else if (inputShapeSize == SHAPE_DIM4 && outputShapeSize == SHAPE_DIM4) {
         return TransDataFractalZ2NCHW(function, self, output, group);
-    } else if (inputShapeSize == 4 && outputShapeSize == 5) {
+    } else if (inputShapeSize == SHAPE_DIM4 && outputShapeSize == SHAPE_DIM5) {
         return TransDataFractalZ3D2NCDHW(function, self, output, group);
     } else {
-        return TransDataFractalZ2NCHW(function, self, output, group); // TODO
+        return TransDataFractalZ2NCHW(function, self, output, group);
     }
 }
 

@@ -20,9 +20,6 @@
 
 namespace npu::tile_fwk {
 
-/**
- * @brief Hypot
- */
 void TiledHypotOperationImpl(Function& function, const TileShape& tileShape, size_t cur, Input& input1, Input& input2,
                              const LogicalTensorPtr& result, TileInfo& resultTileInfo)
 {

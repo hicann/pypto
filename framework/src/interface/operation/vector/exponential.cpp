@@ -15,6 +15,7 @@
 
 #include "unary_tiled.h"
 #include "binary.h"
+#include "binary_tiled.h"
 #include "tensor_transformation.h"
 #include "interface/utils/operator_tracer.h"
 #include "passes/pass_utils/graph_utils.h"
@@ -210,6 +211,155 @@ void Expm1OperationTileFunc(Function& function, const TileShape& tileShape,
     TiledExpm1(function, tileShape, iOperand[0], oOperand[0]);
 }
 
+void TiledExpandExpDifOperation(Function& function, const TileShape& tileShape, size_t cur, LogicalInput& input1,
+                                LogicalInput& input2, const LogicalTensorPtr& result, TileInfo& resultTileInfo)
+{
+    if (cur == input1.tensor->GetShape().size()) {
+        auto inputTile1 = input1.tensor->View(function, input1.tileInfo.shape, input1.tileInfo.offset);
+        auto inputTile2 = input2.tensor->View(function, input2.tileInfo.shape, input2.tileInfo.offset);
+        auto resultTile = result->View(function, resultTileInfo.shape, resultTileInfo.offset);
+        auto opName = GetBinaryOpNameCode<BinaryOpType::EXPANDEXPDIF>();
+        auto& op = function.AddOperation(opName, {inputTile1, inputTile2}, {resultTile});
+        size_t shapeSize = input1.tensor->GetShape().size();
+        std::vector<int64_t> brcOperand(shapeSize, 0);
+        size_t brcAxesCount = 0;
+        for (size_t i = 0; i < shapeSize; i++) {
+            brcOperand[i] = BrcAxisBinaryOp(input1.tensor, input2.tensor, i);
+            if (brcOperand[i] != 0) {
+                brcAxesCount++;
+            }
+        }
+        if (brcAxesCount > 0) {
+            op.SetAttribute(OpAttributeKey::brcOperand, brcOperand);
+        }
+    } else {
+        auto& vecTile = tileShape.GetVecTile();
+        for (int i = 0; i < result->shape[cur]; i += vecTile[cur]) {
+            resultTileInfo.offset[cur] = i;
+            resultTileInfo.shape[cur] = std::min(result->shape[cur] - resultTileInfo.offset[cur], vecTile[cur]);
+            input1.tileInfo.offset[cur] = i % input1.tensor->GetShape()[cur];
+            input1.tileInfo.shape[cur] = std::min(input1.tensor->GetShape()[cur] - input1.tileInfo.offset[cur],
+                                                  vecTile[cur]);
+            input2.tileInfo.offset[cur] = i % input2.tensor->GetShape()[cur];
+            input2.tileInfo.shape[cur] = std::min(input2.tensor->GetShape()[cur] - input2.tileInfo.offset[cur],
+                                                  vecTile[cur]);
+            TiledExpandExpDifOperation(function, tileShape, cur + 1, input1, input2, result, resultTileInfo);
+        }
+    }
+}
+
+void TiledExpandExpDifOperation(Function& function, const TileShape& tileShape, LogicalTensorPtr operand1,
+                                LogicalTensorPtr operand2, const LogicalTensorPtr& result)
+{
+    CheckBinOpOperandsValid(operand1, operand2);
+
+    TileInfo tileInfo1(result->shape.size(), result->offset.size());
+    TileInfo tileInfo2(result->shape.size(), result->offset.size());
+    TileInfo resultTileInfo(result->shape.size(), result->offset.size());
+    auto input1 = LogicalInput{operand1, tileInfo1};
+    auto input2 = LogicalInput{operand2, tileInfo2};
+    TiledExpandExpDifOperation(function, tileShape, 0, input1, input2, result, resultTileInfo);
+}
+
+Tensor ExpandExpDif(const Tensor& input, const Tensor& other)
+{
+    DECLARE_TRACER();
+    CheckTensorFormat(input.GetStorage(), {TileOpFormat::TILEOP_NZ}, "ExpandExpDif");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "ExpandExpDif");
+
+    CheckTensorsDataTypeConsistency(input.GetStorage(), other.GetStorage(), "EXPANDEXPDIF");
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
+    CheckTensorDataType(input.GetStorage(), supportedTypes, "EXPANDEXPDIF");
+    CheckBinaryInputTensors(input.GetStorage(), other.GetStorage(), "EXPANDEXPDIF");
+    config::SetOperationOption(KEY_COMBINE_AXIS, true);
+    RETURN_CALL(BinaryOperation<BinaryOpType::EXPANDEXPDIF>, *Program::GetInstance().GetCurrentFunction(), input,
+                other);
+}
+
+void ExpandExpDifOperationTileFunc(Function& function, const TileShape& tileShape,
+                                   const std::vector<LogicalTensorPtr>& iOperand,
+                                   const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+{
+    BinaryOperationOperandCheck(iOperand, oOperand);
+    TiledExpandExpDifOperation(function, tileShape, iOperand[0], iOperand[1], oOperand[0]);
+}
+
+DataType GetPowRealResultDataType(DataType selfType, DataType otherType)
+{
+    if (selfType == DT_INT32) {
+        return otherType;
+    }
+    if (otherType == DT_INT32) {
+        return selfType;
+    }
+    if (selfType == DT_BF16) {
+        return otherType == DT_FP16 ? DT_FP32 : otherType;
+    }
+    if (otherType == DT_BF16) {
+        return selfType == DT_FP16 ? DT_FP32 : selfType;
+    }
+    return selfType == DT_FP16 && otherType == DT_FP16 ? DT_FP16 : DT_FP32;
+}
+
+DataType GetPowCalcResultDataType(DataType selfType, DataType otherType)
+{
+    if (selfType == DT_INT32 && otherType == DT_INT32) {
+        return DT_INT32;
+    }
+    return DT_FP32;
+}
+
+LogicalTensorPtr CastToResultType(const LogicalTensorPtr& tensor, DataType originType, DataType resultType)
+{
+    if (originType == resultType) {
+        return tensor;
+    }
+    RETURN_CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), tensor, resultType,
+                CastMode::CAST_NONE);
+}
+
+void PowCheck(const Tensor& self, const Tensor& other)
+{
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT32, DT_FP32, DT_INT8, DT_UINT8, DT_INT16};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "POW");
+    CheckTensorDimRange(self.GetStorage(), 1, NUM_VALUE_4, "POW");
+    CheckTensorShapeSize(self.GetStorage(), "POW");
+    CheckTensorShapeSize(other.GetStorage(), "POW");
+    CheckTensorsDimConsistency({self.GetStorage(), other.GetStorage()}, "POW");
+    CheckTensorsShapeConsistencyOrBroadcast({self.GetStorage(), other.GetStorage()}, "POW");
+    CheckTensorsFormatConsistency(self.GetStorage(), other.GetStorage(), "POW");
+}
+
+Tensor Pow(const Tensor& self, const Tensor& other, PrecisionType precisionType)
+{
+    DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Pow");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Pow");
+
+    PowCheck(self, other);
+    DataType selfType = self.GetDataType();
+    DataType otherType = other.GetDataType();
+    if (IsInteger(selfType) && IsInteger(otherType)) {
+        CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "Pow");
+        auto [result, op] = TensorBinaryOperationWithOp<BinaryOpType::POW>(*Program::GetInstance().GetCurrentFunction(),
+                                                                           self.GetStorage(), other.GetStorage());
+        op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(PrecisionType::INTRINSIC));
+        return result;
+    }
+    DataType realResultType = GetPowRealResultDataType(selfType, otherType);
+    DataType calcResultType = GetPowCalcResultDataType(selfType, otherType);
+    auto selfSt = CastToResultType(self.GetStorage(), selfType, calcResultType);
+    auto otherSt = CastToResultType(other.GetStorage(), otherType, calcResultType);
+    auto [result, op] = TensorBinaryOperationWithOp<BinaryOpType::POW>(*Program::GetInstance().GetCurrentFunction(),
+                                                                       selfSt, otherSt);
+    op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
+    if (realResultType != calcResultType) {
+        RETURN_CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), result,
+                    realResultType, CastMode::CAST_NONE);
+    }
+    return result;
+}
+
 LogicalTensorPtr IntegerPow(const Tensor& self, int32_t intExponent)
 {
     // 快速幂
@@ -301,5 +451,7 @@ Tensor Pow(const Tensor& self, const Element& other)
 REGISTER_OPERATION_TILED_FUNC(OP_EXP, Opcode::OP_EXP, ExpOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_EXP2, Opcode::OP_EXP2, Exp2OperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_EXPM1, Opcode::OP_EXPM1, Expm1OperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_EXPANDEXPDIF, Opcode::OP_EXPANDEXPDIF, ExpandExpDifOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_POW, Opcode::OP_POW, BinaryOperationTileFunc<BinaryOpType::POW>);
 
 } // namespace npu::tile_fwk

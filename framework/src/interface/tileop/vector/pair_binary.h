@@ -60,9 +60,9 @@ TILEOP constexpr int GetOneDimensionTileSize()
         }
     } else {
         if constexpr (isHeight) {
-            return TileOp::GetTensorTileShapeDim<T0, 3, MAX_DIMS>();
+            return TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
         } else {
-            return TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
+            return TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
         }
     }
 }
@@ -135,26 +135,26 @@ TILEOP void InnerPairBinaryCompute(T0 dst, T1 src0, T2 src1)
         size_t src1Stride1 = 0;
         size_t src1Stride2 = 0;
 
-        if constexpr ((reduceAxisIndex == shapeSize - 1 && reduceAxisIndex >= 2) ||
+        if constexpr ((reduceAxisIndex == shapeSize - 1 && reduceAxisIndex >= DIM_3RD) ||
                       (reduceAxisIndex < shapeSize - 1 && reduceAxisIndex >= 1)) {
-            dstShape0 = dstLayout.template GetShapeDim<0, shapeSize>();
-            dstStride0 = dstLayout.template GetStrideDim<0, shapeSize>();
-            src0Stride0 = src0Layout.template GetStrideDim<0, shapeSize>();
-            src1Stride0 = src1Layout.template GetStrideDim<0, shapeSize>();
+            dstShape0 = dstLayout.template GetShapeDim<DIM_1ST, shapeSize>();
+            dstStride0 = dstLayout.template GetStrideDim<DIM_1ST, shapeSize>();
+            src0Stride0 = src0Layout.template GetStrideDim<DIM_1ST, shapeSize>();
+            src1Stride0 = src1Layout.template GetStrideDim<DIM_1ST, shapeSize>();
         }
-        if constexpr ((reduceAxisIndex == shapeSize - 1 && reduceAxisIndex >= 3) ||
-                      (reduceAxisIndex < shapeSize - 1 && reduceAxisIndex >= 2)) {
-            dstShape1 = dstLayout.template GetShapeDim<1, shapeSize>();
-            dstStride1 = dstLayout.template GetStrideDim<1, shapeSize>();
-            src0Stride1 = src0Layout.template GetStrideDim<1, shapeSize>();
-            src1Stride1 = src1Layout.template GetStrideDim<1, shapeSize>();
+        if constexpr ((reduceAxisIndex == shapeSize - 1 && reduceAxisIndex >= DIM_4TH) ||
+                      (reduceAxisIndex < shapeSize - 1 && reduceAxisIndex >= DIM_3RD)) {
+            dstShape1 = dstLayout.template GetShapeDim<DIM_2ND, shapeSize>();
+            dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, shapeSize>();
+            src0Stride1 = src0Layout.template GetStrideDim<DIM_2ND, shapeSize>();
+            src1Stride1 = src1Layout.template GetStrideDim<DIM_2ND, shapeSize>();
         }
-        if constexpr ((reduceAxisIndex == shapeSize - 1 && reduceAxisIndex >= 4) ||
-                      (reduceAxisIndex < shapeSize - 1 && reduceAxisIndex >= 3)) {
-            dstShape2 = dstLayout.template GetShapeDim<2, shapeSize>();
-            dstStride2 = dstLayout.template GetStrideDim<2, shapeSize>();
-            src0Stride2 = src0Layout.template GetStrideDim<2, shapeSize>();
-            src1Stride2 = src1Layout.template GetStrideDim<2, shapeSize>();
+        if constexpr ((reduceAxisIndex == shapeSize - 1 && reduceAxisIndex >= DIM_5TH) ||
+                      (reduceAxisIndex < shapeSize - 1 && reduceAxisIndex >= DIM_4TH)) {
+            dstShape2 = dstLayout.template GetShapeDim<DIM_3RD, shapeSize>();
+            dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, shapeSize>();
+            src0Stride2 = src0Layout.template GetStrideDim<DIM_3RD, shapeSize>();
+            src1Stride2 = src1Layout.template GetStrideDim<DIM_3RD, shapeSize>();
         }
 
         constexpr auto dstTileH = GetOneDimensionTileSize<reduceAxisIndex, shapeSize, true, T0>();
@@ -232,26 +232,26 @@ TILEOP void InnerPairArgBinaryCompute(T0 dstValue, T1 dstIndex, T2 src0Value, T3
         size_t src1Stride1 = 0;
         size_t src1Stride2 = 0;
 
-        if constexpr ((reduceAxisIndex == shapeSize - 1 && reduceAxisIndex >= 2) ||
+        if constexpr ((reduceAxisIndex == shapeSize - 1 && reduceAxisIndex >= DIM_3RD) ||
                       (reduceAxisIndex < shapeSize - 1 && reduceAxisIndex >= 1)) {
-            dstShape0 = dstLayout.template GetShapeDim<0, shapeSize>();
-            dstStride0 = dstLayout.template GetStrideDim<0, shapeSize>();
-            src0Stride0 = src0Layout.template GetStrideDim<0, shapeSize>();
-            src1Stride0 = src1Layout.template GetStrideDim<0, shapeSize>();
+            dstShape0 = dstLayout.template GetShapeDim<DIM_1ST, shapeSize>();
+            dstStride0 = dstLayout.template GetStrideDim<DIM_1ST, shapeSize>();
+            src0Stride0 = src0Layout.template GetStrideDim<DIM_1ST, shapeSize>();
+            src1Stride0 = src1Layout.template GetStrideDim<DIM_1ST, shapeSize>();
         }
-        if constexpr ((reduceAxisIndex == shapeSize - 1 && reduceAxisIndex >= 3) ||
-                      (reduceAxisIndex < shapeSize - 1 && reduceAxisIndex >= 2)) {
-            dstShape1 = dstLayout.template GetShapeDim<1, shapeSize>();
-            dstStride1 = dstLayout.template GetStrideDim<1, shapeSize>();
-            src0Stride1 = src0Layout.template GetStrideDim<1, shapeSize>();
-            src1Stride1 = src1Layout.template GetStrideDim<1, shapeSize>();
+        if constexpr ((reduceAxisIndex == shapeSize - 1 && reduceAxisIndex >= DIM_4TH) ||
+                      (reduceAxisIndex < shapeSize - 1 && reduceAxisIndex >= DIM_3RD)) {
+            dstShape1 = dstLayout.template GetShapeDim<DIM_2ND, shapeSize>();
+            dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, shapeSize>();
+            src0Stride1 = src0Layout.template GetStrideDim<DIM_2ND, shapeSize>();
+            src1Stride1 = src1Layout.template GetStrideDim<DIM_2ND, shapeSize>();
         }
-        if constexpr ((reduceAxisIndex == shapeSize - 1 && reduceAxisIndex >= 4) ||
-                      (reduceAxisIndex < shapeSize - 1 && reduceAxisIndex >= 3)) {
-            dstShape2 = dstLayout.template GetShapeDim<2, shapeSize>();
-            dstStride2 = dstLayout.template GetStrideDim<2, shapeSize>();
-            src0Stride2 = src0Layout.template GetStrideDim<2, shapeSize>();
-            src1Stride2 = src1Layout.template GetStrideDim<2, shapeSize>();
+        if constexpr ((reduceAxisIndex == shapeSize - 1 && reduceAxisIndex >= DIM_5TH) ||
+                      (reduceAxisIndex < shapeSize - 1 && reduceAxisIndex >= DIM_4TH)) {
+            dstShape2 = dstLayout.template GetShapeDim<DIM_3RD, shapeSize>();
+            dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, shapeSize>();
+            src0Stride2 = src0Layout.template GetStrideDim<DIM_3RD, shapeSize>();
+            src1Stride2 = src1Layout.template GetStrideDim<DIM_3RD, shapeSize>();
         }
 
         constexpr auto dstTileH = GetOneDimensionTileSize<reduceAxisIndex, shapeSize, true, T0>();
@@ -331,12 +331,12 @@ TILEOP void PairBinaryCompute(T0 dst, T1 src0, T2 src1)
         InnerPairBinaryCompute<op, 0>(dst, src0, src1);
     } else if (reduceAxisIndex == 1) {
         InnerPairBinaryCompute<op, 1>(dst, src0, src1);
-    } else if (reduceAxisIndex == 2) {
-        InnerPairBinaryCompute<op, 2>(dst, src0, src1);
-    } else if (reduceAxisIndex == 3) {
-        InnerPairBinaryCompute<op, 3>(dst, src0, src1);
-    } else if (reduceAxisIndex == 4) {
-        InnerPairBinaryCompute<op, 4>(dst, src0, src1);
+    } else if (reduceAxisIndex == DIM_3RD) {
+        InnerPairBinaryCompute<op, DIM_3RD>(dst, src0, src1);
+    } else if (reduceAxisIndex == DIM_4TH) {
+        InnerPairBinaryCompute<op, DIM_4TH>(dst, src0, src1);
+    } else if (reduceAxisIndex == DIM_5TH) {
+        InnerPairBinaryCompute<op, DIM_5TH>(dst, src0, src1);
     }
 }
 
@@ -349,12 +349,12 @@ TILEOP void PairArgBinaryCompute(T0 dstValue, T1 dstIndex, T2 src0Value, T3 src0
         InnerPairArgBinaryCompute<op, 0>(dstValue, dstIndex, src0Value, src0Index, src1Value, src1Index);
     } else if (reduceAxisIndex == 1) {
         InnerPairArgBinaryCompute<op, 1>(dstValue, dstIndex, src0Value, src0Index, src1Value, src1Index);
-    } else if (reduceAxisIndex == 2) {
-        InnerPairArgBinaryCompute<op, 2>(dstValue, dstIndex, src0Value, src0Index, src1Value, src1Index);
-    } else if (reduceAxisIndex == 3) {
-        InnerPairArgBinaryCompute<op, 3>(dstValue, dstIndex, src0Value, src0Index, src1Value, src1Index);
-    } else if (reduceAxisIndex == 4) {
-        InnerPairArgBinaryCompute<op, 4>(dstValue, dstIndex, src0Value, src0Index, src1Value, src1Index);
+    } else if (reduceAxisIndex == DIM_3RD) {
+        InnerPairArgBinaryCompute<op, DIM_3RD>(dstValue, dstIndex, src0Value, src0Index, src1Value, src1Index);
+    } else if (reduceAxisIndex == DIM_4TH) {
+        InnerPairArgBinaryCompute<op, DIM_4TH>(dstValue, dstIndex, src0Value, src0Index, src1Value, src1Index);
+    } else if (reduceAxisIndex == DIM_5TH) {
+        InnerPairArgBinaryCompute<op, DIM_5TH>(dstValue, dstIndex, src0Value, src0Index, src1Value, src1Index);
     }
 }
 

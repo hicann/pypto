@@ -51,14 +51,13 @@ TILEOP void ProcessWhere(uint64_t dst, uint64_t vcmpBitResult, uint64_t src0, ui
                          const unsigned curCount)
 {
     constexpr unsigned bitsOfByte = 8;
-    constexpr unsigned addressUsed = 4;
-    constexpr unsigned alignUint8 = 32;
     using TileVCmpBitResult = pto::Tile<pto::TileType::Vec, uint8_t, 1, elementsCount / bitsOfByte,
                                         pto::BLayout::RowMajor, -1, -1>;
     TileVCmpBitResult vcmpBitResultTile(1, curCount / bitsOfByte);
     pto::TASSIGN(vcmpBitResultTile, (uint64_t)(vcmpBitResult));
-    using TileStartAddrUB = pto::Tile<pto::TileType::Vec, uint8_t, 1, alignUint8, pto::BLayout::RowMajor, -1, -1>;
-    TileStartAddrUB startAddrUBTile(1, addressUsed);
+    using TileStartAddrUB = pto::Tile<pto::TileType::Vec, uint8_t, 1, TileOp::BLOCK_SIZE, pto::BLayout::RowMajor, -1,
+                                      -1>;
+    TileStartAddrUB startAddrUBTile(1, TileOp::BLOCK_SIZE / bitsOfByte);
     pto::TASSIGN(startAddrUBTile, (uint64_t)(startAddrUB));
 
     using TileDst = pto::Tile<pto::TileType::Vec, T, 1, elementsCount, pto::BLayout::RowMajor, -1, -1>;
@@ -90,21 +89,21 @@ TILEOP void TWhereTT(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
 
     const auto dstLayout = dst.GetLayout();
     const auto conditionLayout = condition.GetLayout();
-    auto shape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
-    auto shape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
-    auto shape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
-    auto shape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
-    auto shape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
-    auto conditionShape = condition.GetLayout().template GetShapeDim<4, MAX_DIMS>();
+    auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto shape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto shape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    auto conditionShape = condition.GetLayout().template GetShapeDim<DIM_5TH, MAX_DIMS>();
 
-    auto stride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto stride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto stride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto stride3 = dstLayout.template GetStrideDim<3, MAX_DIMS>();
-    auto conditionStride0 = conditionLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto conditionStride1 = conditionLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto conditionStride2 = conditionLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto conditionStride3 = conditionLayout.template GetStrideDim<3, MAX_DIMS>();
+    auto stride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto stride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto stride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto stride3 = dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    auto conditionStride0 = conditionLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto conditionStride1 = conditionLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto conditionStride2 = conditionLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto conditionStride3 = conditionLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
 
     constexpr auto tileW = Std::tuple_element<shapeSize - 1, typename TDst::TileShape>::type::value;
     constexpr auto conditionTileW = Std::tuple_element<shapeSize - 1, typename TCond::TileShape>::type::value;
@@ -162,11 +161,9 @@ TILEOP void TWhereTT(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
                                 elementsRemainPerLine);
                         }
                     } else {
-                        constexpr unsigned addressUsed = 4;
-                        constexpr unsigned alignUint8 = 32;
-                        using TileStartAddrUB = pto::Tile<pto::TileType::Vec, uint8_t, 1, alignUint8,
+                        using TileStartAddrUB = pto::Tile<pto::TileType::Vec, uint8_t, 1, TileOp::BLOCK_SIZE,
                                                           pto::BLayout::RowMajor, -1, -1>;
-                        TileStartAddrUB startAddrUBTile(1, addressUsed);
+                        TileStartAddrUB startAddrUBTile(1, TileOp::BLOCK_SIZE / bitsOfByte);
                         pto::TASSIGN(startAddrUBTile, (uint64_t)(startAddrUB));
 
                         using TileDst = pto::Tile<pto::TileType::Vec, typename TDst::Type, 1, tileW,
@@ -218,21 +215,21 @@ TILEOP void TWhereTS(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
 
     const auto dstLayout = dst.GetLayout();
     const auto conditionLayout = condition.GetLayout();
-    auto shape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
-    auto shape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
-    auto shape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
-    auto shape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
-    auto shape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
-    auto conditionShape = condition.GetLayout().template GetShapeDim<4, MAX_DIMS>();
+    auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto shape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto shape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    auto conditionShape = condition.GetLayout().template GetShapeDim<DIM_5TH, MAX_DIMS>();
 
-    auto stride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto stride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto stride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto stride3 = dstLayout.template GetStrideDim<3, MAX_DIMS>();
-    auto conditionStride0 = conditionLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto conditionStride1 = conditionLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto conditionStride2 = conditionLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto conditionStride3 = conditionLayout.template GetStrideDim<3, MAX_DIMS>();
+    auto stride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto stride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto stride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto stride3 = dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    auto conditionStride0 = conditionLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto conditionStride1 = conditionLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto conditionStride2 = conditionLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto conditionStride3 = conditionLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
 
     constexpr auto dstTypeSize = sizeof(typename TDst::Type);
     constexpr auto conditionTypeSize = sizeof(typename TCond::Type);
@@ -338,21 +335,21 @@ TILEOP void TWhereST(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
 
     const auto dstLayout = dst.GetLayout();
     const auto conditionLayout = condition.GetLayout();
-    auto shape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
-    auto shape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
-    auto shape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
-    auto shape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
-    auto shape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
-    auto conditionShape = condition.GetLayout().template GetShapeDim<4, MAX_DIMS>();
+    auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto shape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto shape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    auto conditionShape = condition.GetLayout().template GetShapeDim<DIM_5TH, MAX_DIMS>();
 
-    auto stride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto stride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto stride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto stride3 = dstLayout.template GetStrideDim<3, MAX_DIMS>();
-    auto conditionStride0 = conditionLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto conditionStride1 = conditionLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto conditionStride2 = conditionLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto conditionStride3 = conditionLayout.template GetStrideDim<3, MAX_DIMS>();
+    auto stride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto stride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto stride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto stride3 = dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    auto conditionStride0 = conditionLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto conditionStride1 = conditionLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto conditionStride2 = conditionLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto conditionStride3 = conditionLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
 
     constexpr auto dstTypeSize = sizeof(typename TDst::Type);
     constexpr auto conditionTypeSize = sizeof(typename TCond::Type);
@@ -462,21 +459,21 @@ TILEOP void TWhereSS(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
 
     const auto dstLayout = dst.GetLayout();
     const auto conditionLayout = condition.GetLayout();
-    auto shape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
-    auto shape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
-    auto shape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
-    auto shape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
-    auto shape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
-    auto conditionShape = condition.GetLayout().template GetShapeDim<4, MAX_DIMS>();
+    auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto shape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto shape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    auto conditionShape = condition.GetLayout().template GetShapeDim<DIM_5TH, MAX_DIMS>();
 
-    auto stride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto stride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto stride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto stride3 = dstLayout.template GetStrideDim<3, MAX_DIMS>();
-    auto conditionStride0 = conditionLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto conditionStride1 = conditionLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto conditionStride2 = conditionLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto conditionStride3 = conditionLayout.template GetStrideDim<3, MAX_DIMS>();
+    auto stride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto stride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto stride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto stride3 = dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    auto conditionStride0 = conditionLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto conditionStride1 = conditionLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto conditionStride2 = conditionLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto conditionStride3 = conditionLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
 
     constexpr auto dstTypeSize = sizeof(typename TDst::Type);
     constexpr auto conditionTypeSize = sizeof(typename TCond::Type);

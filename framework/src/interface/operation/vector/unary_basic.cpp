@@ -13,6 +13,7 @@
  * \brief
  */
 
+#include <cmath>
 #include "unary_tiled.h"
 #include "binary.h"
 #include "tensor_transformation.h"
@@ -76,24 +77,6 @@ Tensor Relu(const Tensor& self)
     RETURN_CALL(UnaryOperation<UnaryOpType::RELU>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
 }
 
-Tensor BitwiseNot(const Tensor& self)
-{
-    DECLARE_TRACER();
-    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseNot");
-
-    if (self.GetDataType() == DT_BOOL) {
-        return LogicalNot(self);
-    }
-    static const std::unordered_set<DataType> BITWISE_A2A3_TYPES = {DT_INT16, DT_UINT16, DT_INT8,
-                                                                    DT_UINT8, DT_INT32,  DT_UINT32};
-    static const std::unordered_set<DataType> BITWISE_A5_TYPES = {DT_INT16, DT_UINT16, DT_INT8,  DT_UINT8,
-                                                                  DT_INT32, DT_UINT32, DT_INT64, DT_UINT64};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISE_A2A3_TYPES, BITWISE_A5_TYPES);
-    CheckTensorDataType(self.GetStorage(), supportedTypes, "BitwiseNot");
-    RETURN_CALL(UnaryOperation<UnaryOpType::BITWISENOT>, *Program::GetInstance().GetCurrentFunction(),
-                self.GetStorage());
-}
-
 Tensor Reciprocal(const Tensor& operand, PrecisionType precisionType)
 {
     DECLARE_TRACER();
@@ -150,6 +133,197 @@ Tensor Neg(const Tensor& self)
     }
 }
 
+Tensor Duplicate(const Tensor& operand)
+{
+    DECLARE_TRACER();
+    CheckTensorFormat(operand.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Duplicate");
+
+    RETURN_CALL(UnaryOperation<UnaryOpType::DUPLICATE>, *Program::GetInstance().GetCurrentFunction(),
+                operand.GetStorage());
+}
+
+Tensor IsFinite(const Tensor& self)
+{
+    DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "IsFinite");
+
+    std::unordered_set<DataType> supportedTypes = {DT_FP16,  DT_FP32,   DT_BF16,   DT_INT16, DT_INT4,   DT_INT8,
+                                                   DT_INT32, DT_UINT16, DT_UINT32, DT_UINT8, DT_UINT64, DT_INT64};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "IsFinite");
+    RETURN_CALL(UnaryOperation<UnaryOpType::ISFINITE>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(),
+                DT_BOOL);
+}
+
+Tensor IsNan(const Tensor& self)
+{
+    DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "IsNan");
+
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_FP32, DT_BF16};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "ISNAN");
+
+    RETURN_CALL(UnaryOperation<UnaryOpType::ISNAN>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(),
+                DT_BOOL);
+}
+
+Tensor Ceil(const Tensor& self)
+{
+    DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Ceil");
+
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "Ceil");
+
+    if (self.GetDataType() == DataType::DT_INT16 || self.GetDataType() == DataType::DT_INT32) {
+        RETURN_CALL(UnaryOperation<UnaryOpType::CEIL>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
+    }
+
+    auto castSelf = self.GetStorage();
+    if (self.GetDataType() != DataType::DT_FP32) {
+        castSelf = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
+                        self.GetStorage(), DataType::DT_FP32, CastMode::CAST_NONE);
+    }
+
+    auto ceilResult = CALL(UnaryOperation<UnaryOpType::CEIL>, *Program::GetInstance().GetCurrentFunction(), castSelf);
+    if (self.GetDataType() != DataType::DT_FP32) {
+        RETURN_CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), ceilResult,
+                    self.GetDataType(), CastMode::CAST_NONE);
+    }
+    return ceilResult;
+}
+
+Tensor Floor(const Tensor& self)
+{
+    DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Floor");
+
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "Floor");
+
+    if (self.GetDataType() == DataType::DT_INT16 || self.GetDataType() == DataType::DT_INT32) {
+        RETURN_CALL(UnaryOperation<UnaryOpType::FLOOR>, *Program::GetInstance().GetCurrentFunction(),
+                    self.GetStorage());
+    }
+
+    auto castSelf = self.GetStorage();
+    if (self.GetDataType() != DataType::DT_FP32) {
+        castSelf = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
+                        self.GetStorage(), DataType::DT_FP32, CastMode::CAST_NONE);
+    }
+
+    auto floorResult = CALL(UnaryOperation<UnaryOpType::FLOOR>, *Program::GetInstance().GetCurrentFunction(), castSelf);
+    if (self.GetDataType() != DataType::DT_FP32) {
+        RETURN_CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), floorResult,
+                    self.GetDataType(), CastMode::CAST_NONE);
+    }
+    return floorResult;
+}
+
+Tensor Trunc(const Tensor& self)
+{
+    DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Trunc");
+
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "Trunc");
+
+    if (self.GetDataType() == DataType::DT_INT16 || self.GetDataType() == DataType::DT_INT32) {
+        RETURN_CALL(UnaryOperation<UnaryOpType::TRUNC>, *Program::GetInstance().GetCurrentFunction(),
+                    self.GetStorage());
+    }
+
+    auto castSelf = self.GetStorage();
+    if (self.GetDataType() != DataType::DT_FP32) {
+        castSelf = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
+                        self.GetStorage(), DataType::DT_FP32, CastMode::CAST_NONE);
+    }
+
+    auto truncResult = CALL(UnaryOperation<UnaryOpType::TRUNC>, *Program::GetInstance().GetCurrentFunction(), castSelf);
+    if (self.GetDataType() != DataType::DT_FP32) {
+        RETURN_CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), truncResult,
+                    self.GetDataType(), CastMode::CAST_NONE);
+    }
+    return truncResult;
+}
+
+Tensor TensorRound(Function& function, const LogicalTensorPtr& self, const int& decimals = 0)
+{
+    auto result = std::make_shared<LogicalTensor>(function, self->Datatype(), self->GetShape(),
+                                                  self->GetDynValidShape());
+    auto& op = function.AddOperation(Opcode::OP_ROUND, {self}, {result});
+    op.SetAttribute(OP_ATTR_PREFIX + "decimals", decimals);
+    return result;
+}
+
+Tensor Round(const Tensor& self, const int& decimals)
+{
+    DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Round");
+
+    static const std::unordered_set<DataType> ROUND_A2A3_TYPES = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16};
+    static const std::unordered_set<DataType> ROUND_A5_TYPES = {DT_FP32,  DT_FP16,  DT_BF16,
+                                                                DT_INT32, DT_INT16, DT_INT64};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(ROUND_A2A3_TYPES, ROUND_A5_TYPES);
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "ROUND");
+    CheckTensorDimRange(self.GetStorage(), 1, NUM_VALUE_4, "ROUND");
+    CheckTensorShapeSize(self.GetStorage(), "ROUND");
+
+    RETURN_CALL(Round, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), decimals);
+}
+
+void TiledRound(Function& function, const TileShape& tileShape, size_t cur, Input& input,
+                const LogicalTensorPtr& result, const int& decimals = 0)
+{
+    if (cur == input.tensor.GetShape().size()) {
+        auto tile = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset);
+        auto resultTile = result->View(function, input.tileInfo.shape, input.tileInfo.offset);
+        std::vector<int64_t> srcTileShape(input.tileInfo.shape);
+        auto tileShapeLen = srcTileShape.size();
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM1 <= tileShapeLen && tileShapeLen <= SHAPE_DIM4)
+            << "Length of tile shape only supports 1~4";
+        std::vector<int64_t> tmpShape;
+        if (result->Datatype() == DT_FP32) {
+            tmpShape = {BLOCK_SIZE / sizeof(float)};
+        } else {
+            if (srcTileShape.size() == 1) {
+                tmpShape.assign(srcTileShape.end() - SHAPE_DIM1, srcTileShape.end());
+            } else {
+                tmpShape.assign(srcTileShape.end() - SHAPE_DIM2, srcTileShape.end());
+            }
+            auto alignSize = BLOCK_SIZE / BytesOf(DT_FP32);
+            tmpShape[tmpShape.size() - 1] = (tmpShape[tmpShape.size() - 1] + alignSize - 1) / alignSize * alignSize;
+        }
+        auto tmpTensor = std::make_shared<LogicalTensor>(function, DT_FP32, tmpShape);
+        auto& newOp = function.AddOperation(Opcode::OP_ROUND, {tile}, {resultTile, tmpTensor});
+        float powDecimals = std::pow(static_cast<float>(NUM_VALUE_10), static_cast<float>(decimals));
+        const int32_t maxFp32Len = 38;
+        if (decimals > maxFp32Len) {
+            powDecimals = INFINITY;
+        }
+        newOp.SetAttribute(OP_ATTR_PREFIX + "decimals", decimals);
+        newOp.SetAttribute(OpAttributeKey::scalar, Element(DataType::DT_FP32, powDecimals));
+        return;
+    }
+    auto& vecTile = tileShape.GetVecTile();
+    for (int i = 0; i < input.tensor.GetShape()[cur]; i += vecTile[cur]) {
+        input.tileInfo.shape[cur] = std::min(input.tensor.GetShape()[cur] - i, vecTile[cur]);
+        input.tileInfo.offset[cur] = i;
+        TiledRound(function, tileShape, cur + 1, input, result, decimals);
+    }
+}
+
+void TiledRound(Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand,
+                const LogicalTensorPtr& result, const int& decimals = 0)
+{
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
+        << "The shape size of operand and offset must be equal";
+
+    TileInfo tileInfo(result->shape.size(), result->offset.size());
+    auto input = Input{operand, tileInfo};
+
+    TiledRound(function, tileShape, 0, input, result, decimals);
+}
+
 void RsqrtOperationTileFunc(Function& function, const TileShape& tileShape,
                             const std::vector<LogicalTensorPtr>& iOperand,
                             const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
@@ -176,14 +350,6 @@ void SqrtOperationTileFunc(Function& function, const TileShape& tileShape,
         precisionType = op.GetIntAttribute(OpAttributeKey::precisionType);
     }
     return TiledUnaryOperation<UnaryOpType::SQRT>(function, tileShape, iOperand[0], oOperand[0], 0, precisionType);
-}
-
-void BitwiseNotOperationTileFunc(Function& function, const TileShape& tileShape,
-                                 const std::vector<LogicalTensorPtr>& iOperand,
-                                 const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
-{
-    UnaryOperationOperandCheck(iOperand, oOperand);
-    return TiledUnaryOperation<UnaryOpType::BITWISENOT>(function, tileShape, iOperand[0], oOperand[0]);
 }
 
 void ReciprocalOperationTileFunc(Function& function, const TileShape& tileShape,
@@ -213,12 +379,79 @@ void HubOperationTileFunc(Function& function, const TileShape& tileShape, const 
     return TiledUnaryOperation<UnaryOpType::HUB>(function, tileShape, iOperand[0], oOperand[0]);
 }
 
+void IsFiniteOperationTileFunc(Function& function, const TileShape& tileShape,
+                               const std::vector<LogicalTensorPtr>& iOperand,
+                               const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+{
+    UnaryOperationOperandCheck(iOperand, oOperand);
+    auto shape = tileShape.GetVecTile().tile;
+    // tileShape 对应的中间变量结果，类型为 FP16
+    uint32_t intermediateBytes = static_cast<int64_t>(BytesOf(DT_FP16)) *
+                                 std::accumulate(shape.begin(), shape.end(), 1LL, std::multiplies<int64_t>());
+    uint32_t workspaceSize = intermediateBytes;
+    return TiledUnaryOperation<UnaryOpType::ISFINITE>(function, tileShape, iOperand[0], oOperand[0], workspaceSize);
+}
+
+void IsNanOperationTileFunc(Function& function, const TileShape& tileShape,
+                            const std::vector<LogicalTensorPtr>& iOperand,
+                            const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+{
+    UnaryOperationOperandCheck(iOperand, oOperand);
+    auto tmpShape = tileShape.GetVecTile().tile;
+    int dim = static_cast<int>(tmpShape.size());
+    auto alignSize = BLOCK_SIZE / BytesOf(DT_FP16);
+    int64_t tmpW = AlignUp(tmpShape[dim - 1], alignSize);
+    int64_t tmpH = (dim >= NUM_VALUE_2) ? tmpShape[dim - NUM_VALUE_2] : 1;
+
+    constexpr int64_t kNumBlocks = NUM_VALUE_3;
+    int64_t blockBytes = tmpH * tmpW * BytesOf(DT_FP32);
+    uint32_t workspaceSize = kNumBlocks * blockBytes + BLOCK_SIZE;
+    return TiledUnaryOperation<UnaryOpType::ISNAN>(function, tileShape, iOperand[0], oOperand[0], workspaceSize);
+}
+
+void CeilOperationTileFunc(Function& function, const TileShape& tileShape,
+                           const std::vector<LogicalTensorPtr>& iOperand, const std::vector<LogicalTensorPtr>& oOperand,
+                           [[maybe_unused]] const Operation& op)
+{
+    UnaryOperationOperandCheck(iOperand, oOperand);
+    return TiledUnaryOperation<UnaryOpType::CEIL>(function, tileShape, iOperand[0], oOperand[0]);
+}
+
+void FloorOperationTileFunc(Function& function, const TileShape& tileShape,
+                            const std::vector<LogicalTensorPtr>& iOperand,
+                            const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+{
+    UnaryOperationOperandCheck(iOperand, oOperand);
+    return TiledUnaryOperation<UnaryOpType::FLOOR>(function, tileShape, iOperand[0], oOperand[0]);
+}
+
+void TruncOperationTileFunc(Function& function, const TileShape& tileShape,
+                            const std::vector<LogicalTensorPtr>& iOperand,
+                            const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+{
+    UnaryOperationOperandCheck(iOperand, oOperand);
+    return TiledUnaryOperation<UnaryOpType::TRUNC>(function, tileShape, iOperand[0], oOperand[0]);
+}
+
+void RoundOperationTileFunc(Function& function, const TileShape& tileShape,
+                            const std::vector<LogicalTensorPtr>& iOperand,
+                            const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+{
+    int decimals = op.GetIntAttribute(OP_ATTR_PREFIX + "decimals");
+    TiledRound(function, tileShape, iOperand[0], oOperand[0], decimals);
+}
+
 REGISTER_OPERATION_TILED_FUNC(OP_RSQRT, Opcode::OP_RSQRT, RsqrtOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_RELU, Opcode::OP_RELU, ReluOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_SQRT, Opcode::OP_SQRT, SqrtOperationTileFunc);
-REGISTER_OPERATION_TILED_FUNC(OP_BITWISENOT, Opcode::OP_BITWISENOT, BitwiseNotOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_RECIPROCAL, Opcode::OP_RECIPROCAL, ReciprocalOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_ABS, Opcode::OP_ABS, AbsOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_HUB, Opcode::OP_HUB, HubOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_ISFINITE, Opcode::OP_ISFINITE, IsFiniteOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_ISNAN, Opcode::OP_ISNAN, IsNanOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_CEIL, Opcode::OP_CEIL, CeilOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_FLOOR, Opcode::OP_FLOOR, FloorOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_TRUNC, Opcode::OP_TRUNC, TruncOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_ROUND, Opcode::OP_ROUND, RoundOperationTileFunc);
 
 } // namespace npu::tile_fwk

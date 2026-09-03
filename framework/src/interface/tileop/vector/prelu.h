@@ -28,33 +28,33 @@ TILEOP void TPRelu(T0 dst, T1 src, T2 weight, T3 tmp)
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
     constexpr auto srcTypeSize = sizeof(typename T1::Type);
 
-    auto dstShape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
-    auto dstShape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
-    auto dstShape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
-    auto dstShape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
-    auto dstShape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
+    auto dstShape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
     if (dstShape0 == 0 || dstShape1 == 0 || dstShape2 == 0 || dstShape3 == 0 || dstShape4 == 0) {
         return;
     }
 
-    auto srcShape3 = srcLayout.template GetShapeDim<3, MAX_DIMS>();
-    auto srcShape4 = srcLayout.template GetShapeDim<4, MAX_DIMS>();
+    auto srcShape3 = srcLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto srcShape4 = srcLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
 
-    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto dstStride3 = dstLayout.template GetStrideDim<3, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto dstStride3 = dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
 
-    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto srcStride3 = srcLayout.template GetStrideDim<3, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto srcStride3 = srcLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
 
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, MAX_DIMS>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
 
-    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, MAX_DIMS>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, MAX_DIMS>();
+    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, DIM_4TH, MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, DIM_5TH, MAX_DIMS>();
 
-    if constexpr (axis == 5) {
+    if constexpr (axis == DIM_6TH) {
         // For 1D input (N), weight is (1,)
         using DstTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, 1, dstTileW, pto::BLayout::RowMajor, -1,
                                         -1>;
@@ -72,13 +72,11 @@ TILEOP void TPRelu(T0 dst, T1 src, T2 weight, T3 tmp)
         pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr()));
 
         pto::TLRELU(dstTile, srcTile, negative_slope);
-    } else if constexpr (axis == 4) {
+    } else if constexpr (axis == DIM_5TH) {
         // For 2D input (N, C), weight is (C,)
-        constexpr size_t ALIGN_SIZE = 32;
-        constexpr size_t SIZEOFBYTE = 8;
-        constexpr int64_t tmpSize = (srcTileW + SIZEOFBYTE - 1) / SIZEOFBYTE;
-        constexpr auto tmpTileW = (tmpSize + ALIGN_SIZE - 1) / ALIGN_SIZE * ALIGN_SIZE;
-        auto tmpShape = (srcShape4 + SIZEOFBYTE - 1) / SIZEOFBYTE;
+        constexpr int64_t tmpSize = (srcTileW + TileOp::BITS_PER_BYTE - 1) / TileOp::BITS_PER_BYTE;
+        constexpr auto tmpTileW = (tmpSize + TileOp::BLOCK_SIZE - 1) / TileOp::BLOCK_SIZE * TileOp::BLOCK_SIZE;
+        auto tmpShape = (srcShape4 + TileOp::BITS_PER_BYTE - 1) / TileOp::BITS_PER_BYTE;
 
         using DstTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, 1, dstTileW, pto::BLayout::RowMajor, -1,
                                         -1>;
@@ -101,7 +99,7 @@ TILEOP void TPRelu(T0 dst, T1 src, T2 weight, T3 tmp)
 
             pto::TPRELU(dstTile, srcTile, weightTile, tmpTile);
         }
-    } else if constexpr (axis == 3) {
+    } else if constexpr (axis == DIM_4TH) {
         // For 3D input (N, C, L), weight is (C,)
         using DstTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, 1, dstTileW, pto::BLayout::RowMajor, -1,
                                         -1>;
@@ -125,7 +123,7 @@ TILEOP void TPRelu(T0 dst, T1 src, T2 weight, T3 tmp)
                 pto::TLRELU(dstTile, srcTile, negative_slope);
             }
         }
-    } else if constexpr (axis == 2) {
+    } else if constexpr (axis == DIM_3RD) {
         // For 4D input (N, C, H, W), weight is (C,)
         using DstTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, dstTileH, dstTileW,
                                         pto::BLayout::RowMajor, -1, -1>;

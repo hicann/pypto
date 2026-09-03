@@ -24,6 +24,10 @@
 #include <cmath>
 #include <limits>
 
+constexpr int16_t BF16_EXPONENT_MASK = 0x7F80;
+constexpr int16_t FP16_EXPONENT_MASK = 0x7C00;
+constexpr int16_t PACKED_BOOL_TRUE = 0x0101;
+
 template <typename DType>
 TILEOP constexpr bool IsIntegralType()
 {
@@ -72,9 +76,9 @@ TILEOP void IsFiniteCalcImpl(TileDefineDst dst, B16TileDefineSrc src, B16TileDef
 {
     int16_t mask = 0;
     if constexpr (std::is_same_v<T, bfloat16_t>) {
-        mask = 0x7F80;
+        mask = BF16_EXPONENT_MASK;
     } else if constexpr (std::is_same_v<T, half> || std::is_same_v<T, float>) {
-        mask = 0x7C00;
+        mask = FP16_EXPONENT_MASK;
     }
     pto::TANDS(bufferB16, src, mask);
     SyncV();
@@ -225,11 +229,13 @@ TILEOP void TIsFiniteCombineAxis(DstTileTensor dst, SrcTileTensor src, BufferTil
     constexpr int validW = GetValidWidth<SrcTileTensor>();
 
     if constexpr (IsIntegralType<SrcType>()) {
-        using TileDefineDst = pto::Tile<pto::TileType::Vec, int16_t, tileDstH, (tileDstW + 1) / 2,
-                                        pto::BLayout::RowMajor, validH, (validW + 1) / 2>;
+        constexpr auto INT16_PACK_RATIO = sizeof(int16_t) / sizeof(uint8_t);
+        using TileDefineDst = pto::Tile<pto::TileType::Vec, int16_t, tileDstH,
+                                        (tileDstW + INT16_PACK_RATIO - 1) / INT16_PACK_RATIO, pto::BLayout::RowMajor,
+                                        validH, (validW + INT16_PACK_RATIO - 1) / INT16_PACK_RATIO>;
         TileDefineDst dstTile;
         pto::TASSIGN(dstTile, dst.GetAddr());
-        int16_t mask = 0x0101;
+        int16_t mask = PACKED_BOOL_TRUE;
         TANDS(dstTile, dstTile, 0);
         SyncV();
         TORS(dstTile, dstTile, mask);
@@ -282,15 +288,16 @@ TILEOP void TIsFinite4Integral(DstTileTensor dst, SrcTileTensor src)
     int validH = dst.GetLayout().template GetShapeDim<DIM_4TH, MAX_DIMS>();
     int validW = dst.GetLayout().template GetShapeDim<DIM_5TH, MAX_DIMS>();
 
-    using TileDefineDst = pto::Tile<pto::TileType::Vec, int16_t, tileDstH, tileDstW / 2, pto::BLayout::RowMajor, -1,
-                                    -1>;
-    TileDefineDst dstTile(validH, (validW + 1) / 2);
+    constexpr auto INT16_PACK_RATIO = sizeof(int16_t) / sizeof(uint8_t);
+    using TileDefineDst = pto::Tile<pto::TileType::Vec, int16_t, tileDstH, tileDstW / INT16_PACK_RATIO,
+                                    pto::BLayout::RowMajor, -1, -1>;
+    TileDefineDst dstTile(validH, (validW + INT16_PACK_RATIO - 1) / INT16_PACK_RATIO);
     pto::TASSIGN(dstTile, dst.GetAddr());
     const auto dstLayout = dst.GetLayout();
     auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
     auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
     auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
-    int16_t mask = 0x0101;
+    int16_t mask = PACKED_BOOL_TRUE;
 
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
@@ -625,9 +632,11 @@ TILEOP void PackCompute(T0 dst, T1 src)
     auto shape = dst.GetLayout().template GetShapeDim<DIM_5TH, MAX_DIMS>();
     constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
     if constexpr (std::is_same_v<typename T0::Type, int64_t> || std::is_same_v<typename T0::Type, uint64_t>) {
-        using TileDef = pto::Tile<pto::TileType::Vec, int32_t, 1, tileW * 2, pto::BLayout::RowMajor, -1, -1>;
-        TileDef dstTile(1, shape * 2);
-        TileDef srcTile(1, shape * 2);
+        constexpr auto INT64_TO_INT32_RATIO = sizeof(int64_t) / sizeof(int32_t);
+        using TileDef = pto::Tile<pto::TileType::Vec, int32_t, 1, tileW * INT64_TO_INT32_RATIO, pto::BLayout::RowMajor,
+                                  -1, -1>;
+        TileDef dstTile(1, shape * INT64_TO_INT32_RATIO);
+        TileDef srcTile(1, shape * INT64_TO_INT32_RATIO);
         pto::TASSIGN(dstTile, dst.GetAddr());
         pto::TASSIGN(srcTile, src.GetAddr());
         pto::TMOV(dstTile, srcTile);

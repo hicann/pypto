@@ -25,12 +25,24 @@
 template <typename TDst, typename TTmp>
 TILEOP void TUniform(TDst dst, TTmp tmpbuf, uint64_t key, uint64_t counter0, uint64_t counter1, uint16_t rounds)
 {
+    constexpr uint16_t REDUCED_ROUNDS = 7;
+    constexpr uint16_t DEFAULT_ROUNDS = 10;
+    constexpr size_t COUNTER_WORDS = 2;
+    constexpr uint64_t UINT32_LOW_MASK = 0xFFFFFFFFULL;
+    constexpr uint32_t UINT32_BIT_WIDTH = sizeof(uint32_t) * TileOp::BITS_PER_BYTE;
+    constexpr uint32_t FP32_MANTISSA_MASK = 0x7FFFFF;
+    constexpr uint32_t FP32_ONE_BITS = 0x3F800000;
+    constexpr uint32_t UINT16_LOW_MASK = 0xFFFF;
+    constexpr uint16_t FP16_MANTISSA_MASK = 0x03FF;
+    constexpr uint16_t FP16_ONE_BITS = 0x3C00;
+    constexpr uint16_t BF16_MANTISSA_MASK = 0x007F;
+    constexpr uint16_t BF16_ONE_BITS = 0x3F80;
     constexpr auto shapeSize = Std::tuple_size<typename TDst::Shape>::value;
     constexpr int Size = Std::tuple_element<shapeSize - 1, typename TDst::TileShape>::type::value;
-    constexpr int tileW = (Size + 7) / 8 * 8;
-    constexpr size_t ALIGN_SIZE = 32;
+    constexpr int alignElems = static_cast<int>(TileOp::BLOCK_SIZE / sizeof(uint32_t));
+    constexpr int tileW = (Size + alignElems - 1) / alignElems * alignElems;
 
-    uint64_t tileCounter[2] = {counter0, counter1};
+    uint64_t tileCounter[COUNTER_WORDS] = {counter0, counter1};
 
     uint64_t tmpbufAddr = tmpbuf.GetAddr();
     __ubuf__ uint32_t* uint32Buffer = reinterpret_cast<__ubuf__ uint32_t*>(tmpbufAddr);
@@ -40,15 +52,17 @@ TILEOP void TUniform(TDst dst, TTmp tmpbuf, uint64_t key, uint64_t counter0, uin
     TileUint32 dstUint32Tile(1, Size);
     pto::TASSIGN(uint32Tile, (uint64_t)uint32Buffer);
 
-    pto::TRandomKey uniformKey = {static_cast<uint32_t>(key & 0xFFFFFFFF), static_cast<uint32_t>(key >> 32)};
-    pto::TRandomCounter uniformCounter = {
-        static_cast<uint32_t>(tileCounter[0] & 0xFFFFFFFF), static_cast<uint32_t>(tileCounter[0] >> 32),
-        static_cast<uint32_t>(tileCounter[1] & 0xFFFFFFFF), static_cast<uint32_t>(tileCounter[1] >> 32)};
+    pto::TRandomKey uniformKey = {static_cast<uint32_t>(key & UINT32_LOW_MASK),
+                                  static_cast<uint32_t>(key >> UINT32_BIT_WIDTH)};
+    pto::TRandomCounter uniformCounter = {static_cast<uint32_t>(tileCounter[0] & UINT32_LOW_MASK),
+                                          static_cast<uint32_t>(tileCounter[0] >> UINT32_BIT_WIDTH),
+                                          static_cast<uint32_t>(tileCounter[1] & UINT32_LOW_MASK),
+                                          static_cast<uint32_t>(tileCounter[1] >> UINT32_BIT_WIDTH)};
 
-    if (rounds == 7) {
-        pto::TRANDOM<7>(uint32Tile, uniformKey, uniformCounter);
+    if (rounds == REDUCED_ROUNDS) {
+        pto::TRANDOM<REDUCED_ROUNDS>(uint32Tile, uniformKey, uniformCounter);
     } else {
-        pto::TRANDOM<10>(uint32Tile, uniformKey, uniformCounter);
+        pto::TRANDOM<DEFAULT_ROUNDS>(uint32Tile, uniformKey, uniformCounter);
     }
 
     using DstType = typename TDst::Type;
@@ -59,8 +73,8 @@ TILEOP void TUniform(TDst dst, TTmp tmpbuf, uint64_t key, uint64_t counter0, uin
     if constexpr (isFloat) {
         pto::TASSIGN(dstUint32Tile, (uint64_t)dst.GetAddr());
 
-        pto::TANDS(dstUint32Tile, uint32Tile, 0x7fffff);
-        pto::TORS(uint32Tile, dstUint32Tile, 0x3f800000);
+        pto::TANDS(dstUint32Tile, uint32Tile, FP32_MANTISSA_MASK);
+        pto::TORS(uint32Tile, dstUint32Tile, FP32_ONE_BITS);
 
         using TileFloat = pto::Tile<pto::TileType::Vec, float, 1, tileW, pto::BLayout::RowMajor, -1, -1>;
         TileFloat floatTile(1, Size);
@@ -71,13 +85,15 @@ TILEOP void TUniform(TDst dst, TTmp tmpbuf, uint64_t key, uint64_t counter0, uin
         pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr()));
         pto::TSUBS(dstTile, floatTile, 1.0f);
     } else if constexpr (isHalf || isBfloat16) {
-        constexpr int64_t uint32BufferBytes = ((Size * sizeof(uint32_t) + ALIGN_SIZE - 1) / ALIGN_SIZE) * ALIGN_SIZE;
+        constexpr int64_t uint32BufferBytes = ((Size * sizeof(uint32_t) + TileOp::BLOCK_SIZE - 1) /
+                                               TileOp::BLOCK_SIZE) *
+                                              TileOp::BLOCK_SIZE;
         __ubuf__ uint32_t* uint32BufferLow = reinterpret_cast<__ubuf__ uint32_t*>(tmpbufAddr + uint32BufferBytes);
 
         TileUint32 uint32TileLow(1, Size);
         pto::TASSIGN(uint32TileLow, (uint64_t)uint32BufferLow);
 
-        pto::TANDS(uint32TileLow, uint32Tile, 0xFFFF);
+        pto::TANDS(uint32TileLow, uint32Tile, UINT16_LOW_MASK);
 
         __ubuf__ uint16_t* uint16Buffer = reinterpret_cast<__ubuf__ uint16_t*>(tmpbufAddr);
 
@@ -90,11 +106,11 @@ TILEOP void TUniform(TDst dst, TTmp tmpbuf, uint64_t key, uint64_t counter0, uin
         pto::TCVT(uint16Tile, uint32TileLow, pto::RoundMode::CAST_NONE);
 
         if constexpr (isHalf) {
-            pto::TANDS(dstUint16Tile, uint16Tile, 0x3ff);
-            pto::TORS(uint16Tile, dstUint16Tile, 0x3c00);
+            pto::TANDS(dstUint16Tile, uint16Tile, FP16_MANTISSA_MASK);
+            pto::TORS(uint16Tile, dstUint16Tile, FP16_ONE_BITS);
         } else {
-            pto::TANDS(dstUint16Tile, uint16Tile, 0x7f);
-            pto::TORS(uint16Tile, dstUint16Tile, 0x3f80);
+            pto::TANDS(dstUint16Tile, uint16Tile, BF16_MANTISSA_MASK);
+            pto::TORS(uint16Tile, dstUint16Tile, BF16_ONE_BITS);
         }
 
         __ubuf__ DstType* resultBuffer = reinterpret_cast<__ubuf__ DstType*>(uint16Buffer);

@@ -80,6 +80,8 @@ TILEOP void TLog1p(T0 dst, T1 src, T2 tmp)
     DataTileDefine tmp1Tile(shape3, shape4);
     DataTileDefine tmp2Tile(shape3, shape4);
     MaskTileDefine maskTile(shape3, shape4);
+    constexpr size_t TMP2_SLOT = 2;
+    constexpr size_t MASK_SLOT = 3;
 
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
@@ -91,8 +93,8 @@ TILEOP void TLog1p(T0 dst, T1 src, T2 tmp)
                 pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * dataTypeSize));
                 pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr() + 0 * tileH * tileW * dataTypeSize));
                 pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + 1 * tileH * tileW * dataTypeSize));
-                pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + 2 * tileH * tileW * dataTypeSize));
-                pto::TASSIGN(maskTile, (uint64_t)(tmp.GetAddr() + 3 * tileH * tileW * dataTypeSize));
+                pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + TMP2_SLOT * tileH * tileW * dataTypeSize));
+                pto::TASSIGN(maskTile, (uint64_t)(tmp.GetAddr() + MASK_SLOT * tileH * tileW * dataTypeSize));
                 TLog1pTileImpl(dstTile, srcTile, tmp0Tile, tmp1Tile, tmp2Tile, maskTile);
             }
         }

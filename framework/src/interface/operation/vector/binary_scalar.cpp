@@ -189,13 +189,10 @@ void TiledBinaryOperationScalar(Function& function, const TileShape& tileShape, 
         } else if (opNameCode == Opcode::OP_FLOORDIVS) {
             auto alignSize = BLOCK_SIZE / BytesOf(input1.tensor->Datatype());
             auto tmpShape = resultTileInfo.shape;
-            tmpShape[resultTileInfo.shape.size() - 1] = AlignUp(tmpShape.back(), alignSize) * NUM_VALUE_6;
-            auto tmpElemBytes = input1.tensor->Datatype() == DT_INT64 ? BytesOf(DT_INT64) : BytesOf(DT_FP32);
-            int64_t intermediateBytes = std::accumulate(tmpShape.begin(), tmpShape.end(), 1LL,
-                                                        std::multiplies<int64_t>()) *
-                                        tmpElemBytes;
-            auto tempTensor = std::make_shared<LogicalTensor>(function, DT_UINT8,
-                                                              std::vector<int64_t>{intermediateBytes});
+            tmpShape.back() = AlignUp(tmpShape.back(), alignSize);
+            tmpShape.front() *= NUM_VALUE_6;
+            auto tmpType = input1.tensor->Datatype() == DT_INT64 ? DT_INT64 : DT_FP32;
+            auto tempTensor = std::make_shared<LogicalTensor>(function, tmpType, tmpShape);
             auto& tmpOp = function.AddOperation(opNameCode, {inputTile1}, {resultTile, tempTensor});
             tmpOp.SetAttribute(OpAttributeKey::scalar, value);
             tmpOp.SetAttribute(OP_ATTR_PREFIX + "reverseOperand", reverseOperand);
@@ -208,7 +205,7 @@ void TiledBinaryOperationScalar(Function& function, const TileShape& tileShape, 
             int64_t maskCols = ((tileW + NUM_VALUE_7) / NUM_VALUE_8 + NUM_VALUE_31) / BLOCK_SIZE * BLOCK_SIZE;
             int64_t intermediateBytes = (NUM_VALUE_6 * tileFootprint * BytesOf(DT_INT32)) +
                                         (NUM_VALUE_2 * tileFootprint * BytesOf(DT_FP32)) +
-                                        NUM_VALUE_4 * tileH * maskCols + 320;
+                                        NUM_VALUE_4 * tileH * maskCols + GCD_TSEL_TMP_BYTES;
             auto tempTensor = std::make_shared<LogicalTensor>(function, DT_UINT8,
                                                               std::vector<int64_t>{intermediateBytes});
             auto& tmpOp = function.AddOperation(opNameCode, {inputTile1}, {resultTile, tempTensor});

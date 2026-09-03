@@ -14,8 +14,8 @@
  */
 
 #include "unary.h"
-#include "unary_utils.h"
 #include "binary.h"
+#include "binary_tiled.h"
 #include "tensor_transformation.h"
 #include "interface/utils/operator_tracer.h"
 #include "passes/pass_utils/graph_utils.h"
@@ -146,13 +146,30 @@ Tensor Signbit(const Tensor& self)
     RETURN_CALL(SignbitOperation, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
 }
 
-int64_t CmpResAlign(const std::vector<int64_t>& vec)
+Tensor CopySign(const Tensor& self, const Tensor& other)
 {
-    constexpr size_t ALIGN_SIZE = NUM_VALUE_32;
-    constexpr size_t ALIGN_BIT = NUM_VALUE_8;
-    int64_t axis2 = (vec[vec.size() - 1] + ALIGN_BIT - 1) / ALIGN_BIT * ALIGN_BIT;
-    axis2 = (axis2 + ALIGN_SIZE - 1) / ALIGN_SIZE * ALIGN_SIZE;
-    return axis2 * vec[vec.size() - NUM_VALUE_2];
+    DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "CopySign");
+    CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "CopySign");
+
+    CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "COPYSIGN");
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "COPYSIGN");
+
+    DataType selfDType = self.GetDataType();
+    DataType otherDType = other.GetDataType();
+    Tensor castSelf = self;
+    Tensor castOther = other;
+    if (selfDType == DT_INT16 || selfDType == DT_INT32) {
+        castSelf = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
+                        self.GetStorage(), DataType::DT_FP32, CastMode::CAST_NONE);
+    }
+    if (otherDType == DT_INT16 || otherDType == DT_INT32) {
+        castOther = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
+                         other.GetStorage(), DataType::DT_FP32, CastMode::CAST_NONE);
+    }
+    RETURN_CALL(BinaryOperation<BinaryOpType::COPYSIGN>, *Program::GetInstance().GetCurrentFunction(), castSelf,
+                castOther);
 }
 
 void SignOperationTileFunc(Function& function, const TileShape& tileShape,
@@ -171,5 +188,6 @@ void SignbitOperationTileFunc(Function& function, const TileShape& tileShape,
 
 REGISTER_OPERATION_TILED_FUNC(OP_SIGN, Opcode::OP_SIGN, SignOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_SIGNBIT, Opcode::OP_SIGNBIT, SignbitOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_COPYSIGN, Opcode::OP_COPYSIGN, BinaryOperationTileFunc<BinaryOpType::COPYSIGN>);
 
 } // namespace npu::tile_fwk

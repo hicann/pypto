@@ -45,38 +45,44 @@ TILEOP void RadixSelectCalcB1(VAL value, IDX index, TMP tmp, SRC src)
     size_t srcTwiddleInAddr = DefineWorkSpace<SrcDType, srcTileH * srcTileW>(point);
     size_t cmpAddr = DefineWorkSpace<uint8_t, srcTileH * cmpAlign>(point);
     size_t srcTmpAddr = cmpAddr;
-    size_t highAddr = DefineWorkSpace<uint8_t, srcTileH * 32>(point);
-    size_t selectCountGTAddr = DefineWorkSpace<uint32_t, srcTileH * 8>(point);
+    size_t highAddr = DefineWorkSpace<uint8_t, srcTileH * UB_BLOCK_BYTES>(point);
+    size_t selectCountGTAddr = DefineWorkSpace<uint32_t, srcTileH * UINT32_ELEMENTS_PER_BLOCK>(point);
     size_t rowMinAddr = selectCountGTAddr;
-    size_t selectCountEQAddr = DefineWorkSpace<uint32_t, srcTileH * 8>(point);
+    size_t selectCountEQAddr = DefineWorkSpace<uint32_t, srcTileH * UINT32_ELEMENTS_PER_BLOCK>(point);
     size_t gatherAddr = selectCountEQAddr;
-    size_t uselessAddr = DefineWorkSpace<uint32_t, srcTileH * 8>(point);
-    size_t histogramAddr = DefineWorkSpace<uint32_t, srcTileH * 256>(point);
-    size_t histogramTmpAddr = DefineWorkSpace<uint32_t, srcTileH * 256>(point);
+    size_t uselessAddr = DefineWorkSpace<uint32_t, srcTileH * UINT32_ELEMENTS_PER_BLOCK>(point);
+    size_t histogramAddr = DefineWorkSpace<uint32_t, srcTileH * HISTOGRAM_BUCKETS>(point);
+    size_t histogramTmpAddr = DefineWorkSpace<uint32_t, srcTileH * HISTOGRAM_BUCKETS>(point);
     point = histogramAddr;
     size_t selectGTAddr = DefineWorkSpace<uint32_t, srcTileH * kAlign>(point);
     size_t selectEQAddr = DefineWorkSpace<uint32_t, srcTileH * kAlign>(point);
     PTO_RS_SORT_ADDR_DEFINE(16);
     // Define tile
     PTO_RS_COMMON_TILE_DEFINE;
-    auto srcMaskUInt8KTile = DefineTile<uint8_t, srcTileH, srcMaskShape>(srcShape[3], k, srcMaskAddr);
-    auto srcMaskInt8KTile = DefineTile<int8_t, srcTileH, srcMaskShape>(srcShape[3], k, srcMaskAddr);
-    auto srcMaskUInt16Tile = DefineTile<uint16_t, srcTileH, srcMaskShape>(srcShape[3], srcShape[4], srcMaskAddr);
-    auto srcMaskInt16Tile = DefineTile<int16_t, srcTileH, srcMaskShape>(srcShape[3], srcShape[4], srcMaskAddr);
-    auto srcMaskInt16KTile = DefineTile<int16_t, srcTileH, srcMaskShape>(srcShape[3], k, srcMaskAddr);
-    auto srcMaskInt16MaxTile = DefineTile<int16_t, srcTileH, srcMaskShape>(srcShape[3], srcMaskShape, srcMaskAddr);
-    auto srcTmpInt16KTile = DefineTile<int16_t, srcTileH, srcMaskShape>(srcShape[3], k, srcTmpAddr);
-    auto highTile = DefineTile<uint8_t, srcTileH, 32, true>(1, srcShape[3], highAddr);
-    auto highIntTile = DefineTile<int32_t, srcTileH>(srcShape[3], 8, highAddr);
-    auto highUInt16Tile = DefineTile<uint16_t, srcTileH>(srcShape[3], 16, highAddr);
-    auto histogramUInt32Tile = DefineTile<uint32_t, srcTileH, 256>(srcShape[3], 256, histogramAddr);
-    auto histogramTmpUInt32Tile = DefineTile<uint32_t, srcTileH, 256>(srcShape[3], 256, histogramTmpAddr);
-    auto histogramTmpInt32Tile = DefineTile<int32_t, srcTileH, 256>(srcShape[3], 256, histogramTmpAddr);
+    auto srcMaskUInt8KTile = DefineTile<uint8_t, srcTileH, srcMaskShape>(srcShape[DIM_4TH], k, srcMaskAddr);
+    auto srcMaskInt8KTile = DefineTile<int8_t, srcTileH, srcMaskShape>(srcShape[DIM_4TH], k, srcMaskAddr);
+    auto srcMaskUInt16Tile = DefineTile<uint16_t, srcTileH, srcMaskShape>(srcShape[DIM_4TH], srcShape[DIM_5TH],
+                                                                          srcMaskAddr);
+    auto srcMaskInt16Tile = DefineTile<int16_t, srcTileH, srcMaskShape>(srcShape[DIM_4TH], srcShape[DIM_5TH],
+                                                                        srcMaskAddr);
+    auto srcMaskInt16KTile = DefineTile<int16_t, srcTileH, srcMaskShape>(srcShape[DIM_4TH], k, srcMaskAddr);
+    auto srcMaskInt16MaxTile = DefineTile<int16_t, srcTileH, srcMaskShape>(srcShape[DIM_4TH], srcMaskShape,
+                                                                           srcMaskAddr);
+    auto srcTmpInt16KTile = DefineTile<int16_t, srcTileH, srcMaskShape>(srcShape[DIM_4TH], k, srcTmpAddr);
+    auto highTile = DefineTile<uint8_t, srcTileH, UB_BLOCK_BYTES, true>(1, srcShape[DIM_4TH], highAddr);
+    auto highIntTile = DefineTile<int32_t, srcTileH>(srcShape[DIM_4TH], UINT32_ELEMENTS_PER_BLOCK, highAddr);
+    auto highUInt16Tile = DefineTile<uint16_t, srcTileH>(srcShape[DIM_4TH], UINT16_ELEMENTS_PER_BLOCK, highAddr);
+    auto histogramUInt32Tile = DefineTile<uint32_t, srcTileH, HISTOGRAM_BUCKETS>(srcShape[DIM_4TH], HISTOGRAM_BUCKETS,
+                                                                                 histogramAddr);
+    auto histogramTmpUInt32Tile = DefineTile<uint32_t, srcTileH, HISTOGRAM_BUCKETS>(
+        srcShape[DIM_4TH], HISTOGRAM_BUCKETS, histogramTmpAddr);
+    auto histogramTmpInt32Tile = DefineTile<int32_t, srcTileH, HISTOGRAM_BUCKETS>(srcShape[DIM_4TH], HISTOGRAM_BUCKETS,
+                                                                                  histogramTmpAddr);
     PTO_RS_SORT_TILE_DEFINE(16);
 
     for (LoopVar n0Index = 0; n0Index < srcShape[0]; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < srcShape[1]; ++n1Index) {
-            for (LoopVar n2Index = 0; n2Index < srcShape[2]; ++n2Index) {
+            for (LoopVar n2Index = 0; n2Index < srcShape[DIM_3RD]; ++n2Index) {
                 RadixSelectBatchAssign(src, value, index, n0Index, n1Index, n2Index, srcStride, valStride, idxStride,
                                        srcTypeSize, idxTypeSize, srcIntTile, valIntTile, idxTile);
                 RadixSelectTwiddle<isLargest, true, isUInt, isFloat, SrcDType>(twiddleIntTile, srcIntTile, uselessTile,
@@ -85,21 +91,22 @@ TILEOP void RadixSelectCalcB1(VAL value, IDX index, TMP tmp, SRC src)
                 pto::TEXPANDS(highUInt16Tile, 0);
                 pto::TCVT(srcMaskUInt16Tile, twiddleUIntTile, pto::RoundMode::CAST_TRUNC);
                 RadixSelectHistogram<pto::HistByte::BYTE_0>(histogramUInt32Tile, srcMaskUInt16Tile, highTile);
-                pto::TCMPS(cmpTile, histogramUInt32Tile, static_cast<uint32_t>(srcShape[4] - k), pto::CmpMode::GT);
+                pto::TCMPS(cmpTile, histogramUInt32Tile, static_cast<uint32_t>(srcShape[DIM_5TH] - k),
+                           pto::CmpMode::GT);
                 RadixSelectTCI(histogramTmpUInt32Tile);
-                pto::TSELS(histogramTmpUInt32Tile, cmpTile, histogramTmpUInt32Tile, uselessTile, 0x7fffffffu);
+                pto::TSELS(histogramTmpUInt32Tile, cmpTile, histogramTmpUInt32Tile, uselessTile, HISTOGRAM_SENTINEL);
                 pto::TROWMIN(highIntTile, histogramTmpInt32Tile, uselessTile);
                 RadixSelectFinalSelect(selectInt32GTTile, selectInt32EQTile, srcMaskInt16Tile, highUInt16Tile,
                                        selectCountUInt32GTTile, selectCountUInt32EQTile, idxTile, uselessTile);
                 RadixSelectGather(srcTmpInt16KTile, srcMaskInt16Tile, idxTile, uselessTile);
-                pto::TEXPANDS(srcMaskInt16MaxTile, 0x7fff);
+                pto::TEXPANDS(srcMaskInt16MaxTile, INT16_MAX_VALUE);
                 pto::TMOV(srcMaskInt16KTile, srcTmpInt16KTile);
                 RadixSelectSortPrepare(sortTempInt16MaxTile, number0UInt16Tile, number1UInt16Tile, number2UInt16Tile,
                                        number3UInt16Tile);
-                RadixSelectSortTwoBit<0, 8>(srcMaskInt16KTile, srcMaskInt16KTile, indexInt32Tile, sortTempInt16KTile,
-                                            sortTempInt16KTile, uselessTile, select1Int32Tile, select2Int32Tile,
-                                            select3Int32Tile, cnt1UInt32Tile, cnt2UInt32Tile, cnt3UInt32Tile,
-                                            number0UInt16Tile, number1UInt16Tile, number2UInt16Tile, number3UInt16Tile);
+                RadixSelectSortTwoBit<0, BITS_PER_BYTE>(
+                    srcMaskInt16KTile, srcMaskInt16KTile, indexInt32Tile, sortTempInt16KTile, sortTempInt16KTile,
+                    uselessTile, select1Int32Tile, select2Int32Tile, select3Int32Tile, cnt1UInt32Tile, cnt2UInt32Tile,
+                    cnt3UInt32Tile, number0UInt16Tile, number1UInt16Tile, number2UInt16Tile, number3UInt16Tile);
                 RadixSelectGather(select1Int32Tile, idxTile, indexInt32Tile, uselessTile);
                 pto::TMOV(idxTile, select1Int32Tile);
                 pto::TCVT(srcMaskUInt8KTile, srcMaskInt16KTile, pto::RoundMode::CAST_TRUNC);

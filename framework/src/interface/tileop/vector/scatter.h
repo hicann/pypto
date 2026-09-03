@@ -56,9 +56,9 @@ TILEOP void TscatterElementS(T0 dst, T1 src1, Scalar src2)
                             dstOffset = index * n0DstStride + j * n1DstStride + k * n2DstStride + l * n3DstStride + m;
                         } else if constexpr (axis == 1) {
                             dstOffset = i * n0DstStride + index * n1DstStride + k * n2DstStride + l * n3DstStride + m;
-                        } else if constexpr (axis == 2) {
+                        } else if constexpr (axis == DIM_3RD) {
                             dstOffset = i * n0DstStride + j * n1DstStride + index * n2DstStride + l * n3DstStride + m;
-                        } else if constexpr (axis == 3) {
+                        } else if constexpr (axis == DIM_4TH) {
                             dstOffset = i * n0DstStride + j * n1DstStride + k * n2DstStride + index * n3DstStride + m;
                         } else {
                             dstOffset = i * n0DstStride + j * n1DstStride + k * n2DstStride + l * n3DstStride + index;
@@ -97,30 +97,30 @@ TILEOP void Tscatter(T0 dst, T1 src1, T2 src2, T3 tmp)
     static_assert(scatterMode < SCATTER_MODE_MAX, "Unsupport scatterMode");
     constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;
     const auto dstLayout = dst.GetLayout();
-    auto dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto dstStride3 = dstLayout.template GetStrideDim<3, MAX_DIMS>();
+    auto dstStride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto dstStride3 = dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
 
     const auto idxLayout = src1.GetLayout();
-    auto idxStride0 = idxLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto idxStride1 = idxLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto idxStride2 = idxLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto idxStride3 = idxLayout.template GetStrideDim<3, MAX_DIMS>();
-    auto idxShape0 = idxLayout.template GetShapeDim<0, MAX_DIMS>();
-    auto idxShape1 = idxLayout.template GetShapeDim<1, MAX_DIMS>();
-    auto idxShape2 = idxLayout.template GetShapeDim<2, MAX_DIMS>();
-    auto idxShape3 = idxLayout.template GetShapeDim<3, MAX_DIMS>();
-    auto idxShape4 = idxLayout.template GetShapeDim<4, MAX_DIMS>();
+    auto idxStride0 = idxLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto idxStride1 = idxLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto idxStride2 = idxLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto idxStride3 = idxLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    auto idxShape0 = idxLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto idxShape1 = idxLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto idxShape2 = idxLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto idxShape3 = idxLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto idxShape4 = idxLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
     const auto srcLayout = src2.GetLayout();
-    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto srcStride3 = srcLayout.template GetStrideDim<3, MAX_DIMS>();
+    auto srcStride0 = srcLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto srcStride3 = srcLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
 
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
-    constexpr auto idxTileW = TileOp::GetTensorTileShapeDim<T1, 4, MAX_DIMS>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T2, 4, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
+    constexpr auto idxTileW = TileOp::GetTensorTileShapeDim<T1, DIM_5TH, MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T2, DIM_5TH, MAX_DIMS>();
 
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
     constexpr auto idxTypeSize = sizeof(typename T1::Type);
@@ -129,9 +129,10 @@ TILEOP void Tscatter(T0 dst, T1 src1, T2 src2, T3 tmp)
     /* A2 A3不支持vscatter指令，调用pto封装接口会导致性能劣化，因此pypto自行用scalar计算实现，A5正常调用pto接口 */
     constexpr bool scalarFlag = true;
 #else
-    constexpr bool scalarFlag = ((sizeof(typename T1::Type) == 8) || (scatterMode > 0) ||
-                                 (dstTypeSize == 2 && idxTypeSize == 4) || (dstTypeSize == 1 && idxTypeSize == 4) ||
-                                 (dstTypeSize == 4 && idxTypeSize == 4)) ?
+    constexpr bool scalarFlag = ((sizeof(typename T1::Type) == sizeof(int64_t)) || (scatterMode > 0) ||
+                                 (dstTypeSize == sizeof(int16_t) && idxTypeSize == sizeof(int32_t)) ||
+                                 (dstTypeSize == sizeof(int8_t) && idxTypeSize == sizeof(int32_t)) ||
+                                 (dstTypeSize == sizeof(int32_t) && idxTypeSize == sizeof(int32_t))) ?
                                     true :
                                     false;
 #endif
@@ -170,9 +171,9 @@ TILEOP void Tscatter(T0 dst, T1 src1, T2 src2, T3 tmp)
                             dstOffset = index * dstStride0 + j * dstStride1 + k * dstStride2 + l * dstStride3 + m;
                         } else if constexpr (axis == 1) {
                             dstOffset = i * dstStride0 + index * dstStride1 + k * dstStride2 + l * dstStride3 + m;
-                        } else if constexpr (axis == 2) {
+                        } else if constexpr (axis == DIM_3RD) {
                             dstOffset = i * dstStride0 + j * dstStride1 + index * dstStride2 + l * dstStride3 + m;
-                        } else if constexpr (axis == 3) {
+                        } else if constexpr (axis == DIM_4TH) {
                             dstOffset = i * dstStride0 + j * dstStride1 + k * dstStride2 + index * dstStride3 + m;
                         } else {
                             dstOffset = i * dstStride0 + j * dstStride1 + k * dstStride2 + l * dstStride3 + index;

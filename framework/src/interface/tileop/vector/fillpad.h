@@ -27,32 +27,33 @@ TILEOP void TFillPad(DstTensor dst, SrcTensor src)
     static_assert(srcShapeSize == dstShapeSize, "FillPad: Src and Dst rank mismatch");
 
     const auto dstLayout = dst.GetLayout();
-    auto dstShape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
-    auto dstShape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
-    auto dstShape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
-    auto dstShape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
-    auto dstShape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
-    auto dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto dstStride3 = dstLayout.template GetStrideDim<3, MAX_DIMS>();
+    auto dstShape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    auto dstStride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto dstStride3 = dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
 
     const auto srcLayout = src.GetLayout();
-    auto srcShape3 = srcLayout.template GetShapeDim<3, MAX_DIMS>();
-    auto srcShape4 = srcLayout.template GetShapeDim<4, MAX_DIMS>();
-    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto srcStride3 = srcLayout.template GetStrideDim<3, MAX_DIMS>();
+    auto srcShape3 = srcLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto srcShape4 = srcLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    auto srcStride0 = srcLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto srcStride3 = srcLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
 
     using SrcDtype = typename SrcTensor::Type;
     using DstDtype = typename DstTensor::Type;
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<DstTensor, 3, MAX_DIMS>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<DstTensor, 4, MAX_DIMS>();
-    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<SrcTensor, 3, MAX_DIMS>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<SrcTensor, 4, MAX_DIMS>();
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<DstTensor, DIM_4TH, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<DstTensor, DIM_5TH, MAX_DIMS>();
+    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<SrcTensor, DIM_4TH, MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<SrcTensor, DIM_5TH, MAX_DIMS>();
+    constexpr size_t PAD_TILE_INNER_SIZE = 512;
     using DstTileType = pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1,
-                                  pto::SLayout::NoneBox, 512, padValue>;
+                                  pto::SLayout::NoneBox, PAD_TILE_INNER_SIZE, padValue>;
     using SrcTileType = pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, srcTileW, pto::BLayout::RowMajor, -1, -1>;
 
     for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
@@ -70,7 +71,7 @@ TILEOP void TFillPad(DstTensor dst, SrcTensor src)
                     pto::TFILLPAD_EXPAND(dstTile, srcTile);
                 } else {
                     using DstRowTileType = pto::Tile<pto::TileType::Vec, DstDtype, 1, dstTileW, pto::BLayout::RowMajor,
-                                                     -1, -1, pto::SLayout::NoneBox, 512, padValue>;
+                                                     -1, -1, pto::SLayout::NoneBox, PAD_TILE_INNER_SIZE, padValue>;
                     using SrcRowTileType = pto::Tile<pto::TileType::Vec, SrcDtype, 1, dstTileW, pto::BLayout::RowMajor,
                                                      -1, -1>;
                     for (LoopVar row = 0; row < dstShape3; ++row) {

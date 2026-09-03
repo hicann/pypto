@@ -13,7 +13,6 @@
  * \\brief
  */
 
-#include <climits>
 #include <limits>
 #include <cmath>
 #include "interface/utils/operator_tracer.h"

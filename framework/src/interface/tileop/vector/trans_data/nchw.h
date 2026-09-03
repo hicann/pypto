@@ -24,7 +24,7 @@ template <typename DST, typename TMP, typename INPUT>
 __aicore__ inline void TTransDataNCHW2NC1HWC0(DST dst, TMP tmpTensor, INPUT input)
 {
     constexpr auto inputTypeSize = sizeof(typename INPUT::Type);
-    constexpr auto C0 = 32 / inputTypeSize;
+    constexpr auto C0 = TileOp::BLOCK_SIZE / inputTypeSize;
     constexpr auto tileN = Std::tuple_element<DIM_1ST, typename INPUT::TileShape>::type::value;
     constexpr auto tileC = Std::tuple_element<DIM_2ND, typename INPUT::TileShape>::type::value;
     constexpr auto tileH = Std::tuple_element<DIM_3RD, typename INPUT::TileShape>::type::value;
@@ -82,7 +82,7 @@ template <typename DST, typename TMP, typename INPUT>
 __aicore__ inline void TTransDataNCHW2Fractal_Z(DST dst, TMP tmpTensor, INPUT input)
 {
     constexpr auto inputTypeSize = sizeof(typename INPUT::Type);
-    constexpr auto C0 = 32 / inputTypeSize;
+    constexpr auto C0 = TileOp::BLOCK_SIZE / inputTypeSize;
     constexpr auto N0 = 16;
     constexpr auto tileN = Std::tuple_element<DIM_1ST, typename INPUT::TileShape>::type::value;
     constexpr auto tileC = Std::tuple_element<DIM_2ND, typename INPUT::TileShape>::type::value;
@@ -199,7 +199,7 @@ template <typename DST, typename TMP, typename INPUT>
 __aicore__ inline void TTransDataFractalZ2NCHW(DST dst, TMP tmpTensor, INPUT input)
 {
     constexpr auto inputTypeSize = sizeof(typename INPUT::Type);
-    constexpr auto C0 = 32 / inputTypeSize;
+    constexpr auto C0 = TileOp::BLOCK_SIZE / inputTypeSize;
     constexpr auto N0 = 16;
     constexpr auto dstTileH = Std::tuple_element<DIM_3RD, typename DST::TileShape>::type::value;
     constexpr auto dstTileW = Std::tuple_element<DIM_4TH, typename DST::TileShape>::type::value;

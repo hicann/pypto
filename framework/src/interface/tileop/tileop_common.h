@@ -95,6 +95,7 @@ enum class BroadcastOperand : int64_t {
 };
 
 constexpr uint64_t MASK_LEN = 64;
+constexpr uint64_t BITS_PER_BYTE = 8;
 constexpr uint64_t BLOCK_NELEM_B16 = 16;
 constexpr uint64_t BLOCK_NELEM_B32 = 8;
 constexpr uint64_t NBLOCK_PER_MASK_B16 = 4;

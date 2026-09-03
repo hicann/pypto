@@ -257,15 +257,15 @@ __aicore__ inline void DoTransMove(size_t* srcShape, size_t gmShape4, size_t* gm
     using GlobalData = pto::GlobalTensor<GMType, pto::Shape<-1, -1, -1, -1, -1>, pto::Stride<-1, -1, -1, -1, -1>>;
     for (LoopVar index0 = 0; index0 < srcShape[0]; ++index0) {
         for (LoopVar index1 = 0; index1 < srcShape[1]; ++index1) {
-            for (LoopVar index2 = 0; index2 < srcShape[2]; ++index2) {
-                for (LoopVar index3 = 0; index3 < srcShape[3]; ++index3) {
+            for (LoopVar index2 = 0; index2 < srcShape[DIM_3RD]; ++index2) {
+                for (LoopVar index3 = 0; index3 < srcShape[DIM_4TH]; ++index3) {
                     GlobalData globalData(gmAddr + gmOffset + index0 * gmStride[0] + index1 * gmStride[1] +
-                                              index2 * gmStride[2] + index3 * gmStride[3],
+                                              index2 * gmStride[DIM_3RD] + index3 * gmStride[DIM_4TH],
                                           pto::Shape(1, 1, 1, 1, gmShape4), pto::Stride(0, 0, 0, 0, 0));
                     using TileDefine = pto::Tile<pto::TileType::Vec, UBType, 1, tileW, pto::BLayout::RowMajor, -1, -1>;
-                    TileDefine ubData(1, srcShape[4]);
-                    auto ubOffset = index0 * ubStride[0] + index1 * ubStride[1] + index2 * ubStride[2] +
-                                    index3 * ubStride[3];
+                    TileDefine ubData(1, srcShape[DIM_5TH]);
+                    auto ubOffset = index0 * ubStride[DIM_1ST] + index1 * ubStride[DIM_2ND] +
+                                    index2 * ubStride[DIM_3RD] + index3 * ubStride[DIM_4TH];
                     pto::TASSIGN(ubData, ubAddr + ubOffset * sizeof(UBType));
                     ProcessTransMove<copyIn>(globalData, ubData);
                 }
@@ -277,26 +277,26 @@ __aicore__ inline void DoTransMove(size_t* srcShape, size_t gmShape4, size_t* gm
 template <unsigned axis0, unsigned axis1, bool copyIn, typename GM, typename UB, typename C>
 __aicore__ inline void CallTransMove(GM gm, UB ub, C coordinate)
 {
-    static_assert(axis0 != 4 && axis1 != 4);
+    static_assert(axis0 != DIM_5TH && axis1 != DIM_5TH);
     constexpr auto shapeSize = Std::tuple_size<typename UB::Shape>::value;
     constexpr auto tileW = Std::tuple_element<shapeSize - 1, typename UB::TileShape>::type::value;
     const auto gmLayout = gm.GetLayout();
-    size_t gmShape4 = static_cast<size_t>(gmLayout.template GetShapeDim<4, MAX_DIMS>());
-    size_t gmStride[] = {static_cast<size_t>(gmLayout.template GetStrideDim<0, MAX_DIMS>()),
-                         static_cast<size_t>(gmLayout.template GetStrideDim<1, MAX_DIMS>()),
-                         static_cast<size_t>(gmLayout.template GetStrideDim<2, MAX_DIMS>()),
-                         static_cast<size_t>(gmLayout.template GetStrideDim<3, MAX_DIMS>())};
+    size_t gmShape4 = static_cast<size_t>(gmLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>());
+    size_t gmStride[] = {static_cast<size_t>(gmLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>()),
+                         static_cast<size_t>(gmLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>()),
+                         static_cast<size_t>(gmLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>()),
+                         static_cast<size_t>(gmLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>())};
     size_t gmOffset = static_cast<size_t>(gmLayout.template GetGmOffset<C, MAX_DIMS>(coordinate));
     const auto ubLayout = ub.GetLayout();
-    size_t srcShape[] = {static_cast<size_t>(ubLayout.template GetShapeDim<0, MAX_DIMS>()),
-                         static_cast<size_t>(ubLayout.template GetShapeDim<1, MAX_DIMS>()),
-                         static_cast<size_t>(ubLayout.template GetShapeDim<2, MAX_DIMS>()),
-                         static_cast<size_t>(ubLayout.template GetShapeDim<3, MAX_DIMS>()),
-                         static_cast<size_t>(ubLayout.template GetShapeDim<4, MAX_DIMS>())};
-    size_t ubStride[] = {static_cast<size_t>(ubLayout.template GetStrideDim<0, MAX_DIMS>()),
-                         static_cast<size_t>(ubLayout.template GetStrideDim<1, MAX_DIMS>()),
-                         static_cast<size_t>(ubLayout.template GetStrideDim<2, MAX_DIMS>()),
-                         static_cast<size_t>(ubLayout.template GetStrideDim<3, MAX_DIMS>())};
+    size_t srcShape[] = {static_cast<size_t>(ubLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>()),
+                         static_cast<size_t>(ubLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>()),
+                         static_cast<size_t>(ubLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>()),
+                         static_cast<size_t>(ubLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>()),
+                         static_cast<size_t>(ubLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>())};
+    size_t ubStride[] = {static_cast<size_t>(ubLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>()),
+                         static_cast<size_t>(ubLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>()),
+                         static_cast<size_t>(ubLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>()),
+                         static_cast<size_t>(ubLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>())};
     auto exchangeAxis = [](size_t* arr) {
         auto tmp = arr[axis0];
         arr[axis0] = arr[axis1];
@@ -330,7 +330,7 @@ __aicore__ inline void TTransMoveOut(DST dst, SRC src, C coordinate)
     CallTransMove<axis0, axis1, false>(dst, src, coordinate);
 }
 
-template <size_t current, size_t target = 3>
+template <size_t current, size_t target = DIM_4TH>
 __aicore__ inline size_t IndexPutGetStride(size_t arr[])
 {
     size_t result = 1;
@@ -343,18 +343,21 @@ __aicore__ inline size_t IndexPutGetStride(size_t arr[])
 template <size_t dstShapeSize, size_t indicesSize, typename IndicesPtr>
 __aicore__ inline uint64_t GetIndexPutDstOffset(size_t dstShapes[], IndicesPtr indicesPtrs[], size_t i)
 {
+    constexpr size_t FIRST_INDEX_STRIDE_BASE = MAX_DIMS - 1;
     uint64_t dstOffset = 0;
     if constexpr (indicesSize >= 1) {
-        dstOffset += indicesPtrs[0][i] * IndexPutGetStride<4 - dstShapeSize>(dstShapes);
+        dstOffset += indicesPtrs[0][i] * IndexPutGetStride<FIRST_INDEX_STRIDE_BASE - dstShapeSize>(dstShapes);
     }
     if constexpr (indicesSize >= 2) {
-        dstOffset += indicesPtrs[1][i] * IndexPutGetStride<5 - dstShapeSize>(dstShapes);
+        dstOffset += indicesPtrs[1][i] * IndexPutGetStride<FIRST_INDEX_STRIDE_BASE + 1 - dstShapeSize>(dstShapes);
     }
     if constexpr (indicesSize >= 3) {
-        dstOffset += indicesPtrs[2][i] * IndexPutGetStride<6 - dstShapeSize>(dstShapes);
+        dstOffset += indicesPtrs[DIM_3RD][i] *
+                     IndexPutGetStride<FIRST_INDEX_STRIDE_BASE + DIM_3RD - dstShapeSize>(dstShapes);
     }
     if constexpr (indicesSize >= 4) {
-        dstOffset += indicesPtrs[3][i] * IndexPutGetStride<7 - dstShapeSize>(dstShapes);
+        dstOffset += indicesPtrs[DIM_4TH][i] *
+                     IndexPutGetStride<FIRST_INDEX_STRIDE_BASE + DIM_4TH - dstShapeSize>(dstShapes);
     }
     return dstOffset;
 }
@@ -368,18 +371,18 @@ __aicore__ inline void DoIndexPut(size_t indicesLength, size_t dstShapes[], size
     constexpr auto tileW = Std::tuple_element<valuesSize - 1, typename VAL::TileShape>::type::value;
     using ValuesTileDefine = pto::Tile<pto::TileType::Vec, ValuesDtype, 1, tileW, pto::BLayout::RowMajor, -1, -1>;
     using DstData = pto::GlobalTensor<DstType, pto::Shape<-1, -1, -1, -1, -1>, pto::Stride<-1, -1, -1, -1, -1>>;
-    size_t copyShapes[] = {1, 1, valuesShapes[2]};
-    size_t copyStrides[] = {0, dstShapes[2]};
+    size_t copyShapes[] = {1, 1, valuesShapes[DIM_3RD]};
+    size_t copyStrides[] = {0, dstShapes[DIM_3RD]};
     if constexpr (valuesSize == 1) {
-        copyShapes[2] = 1;
+        copyShapes[DIM_3RD] = 1;
     } else if constexpr (valuesSize == 3) {
         copyShapes[1] = valuesShapes[1];
     } else if constexpr (valuesSize == 4) {
         copyShapes[0] = valuesShapes[0];
         copyShapes[1] = valuesShapes[1];
-        copyStrides[0] = dstShapes[1] * dstShapes[2];
+        copyStrides[DIM_1ST] = dstShapes[DIM_2ND] * dstShapes[DIM_3RD];
     }
-    auto dstDataShape = pto::Shape(1, 1, copyShapes[0], copyShapes[1], copyShapes[2]);
+    auto dstDataShape = pto::Shape(1, 1, copyShapes[DIM_1ST], copyShapes[DIM_2ND], copyShapes[DIM_3RD]);
     auto dstDataStride = pto::Stride(0, 0, copyStrides[0], copyStrides[1], 0);
     auto valuesPtr = (__ubuf__ ValuesDtype*)valuesAddr;
     ValuesDtype valuesOrigin;
@@ -392,7 +395,7 @@ __aicore__ inline void DoIndexPut(size_t indicesLength, size_t dstShapes[], size
         if constexpr (valuesSize == 1) {
             valuesPtr[0] = valuesPtr[i];
         }
-        ValuesTileDefine valuesData(copyShapes[1], copyShapes[2]);
+        ValuesTileDefine valuesData(copyShapes[DIM_2ND], copyShapes[DIM_3RD]);
         DstData dstData(dstAddr + dstOffset, dstDataShape, dstDataStride);
         set_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
         wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
@@ -415,7 +418,9 @@ __aicore__ inline void TIndexPut(DST dst, C coordinate, VAL values, TMP tmp, IDX
     constexpr auto atomicType = accumulate ? pto::AtomicType::AtomicAdd : pto::AtomicType::AtomicNone;
     constexpr auto dstShapeSize = Std::tuple_size<typename DST::Shape>::value;
     constexpr auto valuesSize = Std::tuple_size<typename VAL::Shape>::value;
-    static_assert(dstShapeSize >= indicesSize && dstShapeSize <= 4 && dstShapeSize == valuesSize + indicesSize - 1);
+    constexpr size_t maxIndicesSize = 4;
+    static_assert(dstShapeSize >= indicesSize && dstShapeSize <= maxIndicesSize &&
+                  dstShapeSize == valuesSize + indicesSize - 1);
     using IndicesDtype = typename IDX::Type;
     using IndicesPtr = __ubuf__ IndicesDtype*;
     IndicesPtr indicesPtrs[] = {(IndicesPtr)indices0.GetAddr(), (IndicesPtr)indices1.GetAddr(),
@@ -472,19 +477,23 @@ __aicore__ inline void TIndexPut(DST dst, C coordinate, VAL values, TMP tmp, IDX
         pto::TASSIGN(offsetTile, static_cast<uint64_t>(tmp.GetAddr()));
         pto::TASSIGN(indicesTile0, (uint64_t)(indicesPtrs[0]));
         pto::TASSIGN(indicesTile1, (uint64_t)(indicesPtrs[1]));
-        pto::TASSIGN(indicesTile2, (uint64_t)(indicesPtrs[2]));
-        pto::TASSIGN(indicesTile3, (uint64_t)(indicesPtrs[3]));
+        pto::TASSIGN(indicesTile2, (uint64_t)(indicesPtrs[DIM_3RD]));
+        pto::TASSIGN(indicesTile3, (uint64_t)(indicesPtrs[DIM_4TH]));
         pto::TMULS(offsetTile, indicesTile0, static_cast<IndicesDtype>(1));
+        constexpr size_t FIRST_INDEX_SHAPE_BASE = MAX_DIMS - 1;
         if constexpr (indicesSize >= 2) {
-            pto::TMULS(offsetTile, offsetTile, static_cast<IndicesDtype>(dstShapes[4 - dstShapeSize]));
+            pto::TMULS(offsetTile, offsetTile,
+                       static_cast<IndicesDtype>(dstShapes[FIRST_INDEX_SHAPE_BASE - dstShapeSize]));
             pto::TADD(offsetTile, offsetTile, indicesTile1);
         }
         if constexpr (indicesSize >= 3) {
-            pto::TMULS(offsetTile, offsetTile, static_cast<IndicesDtype>(dstShapes[5 - dstShapeSize]));
+            pto::TMULS(offsetTile, offsetTile,
+                       static_cast<IndicesDtype>(dstShapes[FIRST_INDEX_SHAPE_BASE + 1 - dstShapeSize]));
             pto::TADD(offsetTile, offsetTile, indicesTile2);
         }
         if constexpr (indicesSize >= 4) {
-            pto::TMULS(offsetTile, offsetTile, static_cast<IndicesDtype>(dstShapes[6 - dstShapeSize]));
+            pto::TMULS(offsetTile, offsetTile,
+                       static_cast<IndicesDtype>(dstShapes[FIRST_INDEX_SHAPE_BASE + DIM_3RD - dstShapeSize]));
             pto::TADD(offsetTile, offsetTile, indicesTile3);
         }
         pto::MSCATTER<pto::Coalesce::Elem, atomicOp, pto::ScatterOOB::Skip, conflictOp>(tableGM, valuesTile,
@@ -512,7 +521,9 @@ __aicore__ inline void TIndexPut(DST dst, C coordinate, VAL values, IDX indices0
     constexpr auto atomicType = accumulate ? pto::AtomicType::AtomicAdd : pto::AtomicType::AtomicNone;
     constexpr auto dstShapeSize = Std::tuple_size<typename DST::Shape>::value;
     constexpr auto valuesSize = Std::tuple_size<typename VAL::Shape>::value;
-    static_assert(dstShapeSize >= indicesSize && dstShapeSize <= 4 && dstShapeSize == valuesSize + indicesSize - 1);
+    constexpr size_t maxIndicesSize = 4;
+    static_assert(dstShapeSize >= indicesSize && dstShapeSize <= maxIndicesSize &&
+                  dstShapeSize == valuesSize + indicesSize - 1);
     using IndicesDtype = typename IDX::Type;
     using IndicesPtr = __ubuf__ IndicesDtype*;
     IndicesPtr indicesPtrs[] = {(IndicesPtr)indices0.GetAddr(), (IndicesPtr)indices1.GetAddr(),

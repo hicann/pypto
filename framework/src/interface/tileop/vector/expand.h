@@ -116,14 +116,15 @@ TILEOP void TExpand(T0 dst, T1 src)
                                     ((Axes == DIM_3RD) || ...) ? 0 : n2Index));
                 if constexpr (expandTile == ExpandTile::NONE &&
                               (std::is_same_v<DstDtype, int64_t> || std::is_same_v<DstDtype, uint64_t>)) {
-                    constexpr auto dstTileW32 = dstTileW * 2;
-                    constexpr auto srcTileW32 = srcTileW * 2;
+                    constexpr auto INT64_TO_INT32_RATIO = sizeof(int64_t) / sizeof(int32_t);
+                    constexpr auto dstTileW32 = dstTileW * INT64_TO_INT32_RATIO;
+                    constexpr auto srcTileW32 = srcTileW * INT64_TO_INT32_RATIO;
                     using dstTileDefine32 = pto::Tile<pto::TileType::Vec, int32_t, dstTileH, dstTileW32,
                                                       pto::BLayout::RowMajor, -1, -1>;
                     using srcTileDefine32 = pto::Tile<pto::TileType::Vec, int32_t, srcTileH, srcTileW32,
                                                       pto::BLayout::RowMajor, -1, -1>;
-                    dstTileDefine32 dstTile32(dstShape3, dstShape4 * 2);
-                    srcTileDefine32 srcTile32(srcShape3, srcShape4 * 2);
+                    dstTileDefine32 dstTile32(dstShape3, dstShape4 * INT64_TO_INT32_RATIO);
+                    srcTileDefine32 srcTile32(srcShape3, srcShape4 * INT64_TO_INT32_RATIO);
                     pto::TASSIGN(dstTile32, (uint64_t)(dst.GetAddr() + dstOffset * typeSize));
                     pto::TASSIGN(srcTile32, (uint64_t)(src.GetAddr() + srcOffset * typeSize));
                     pto::TMOV(dstTile32, srcTile32);

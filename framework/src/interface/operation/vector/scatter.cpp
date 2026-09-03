@@ -13,9 +13,6 @@
  * \\brief
  */
 
-#include <climits>
-#include <limits>
-#include <cmath>
 #include "interface/utils/operator_tracer.h"
 #include "passes/pass_utils/graph_utils.h"
 #include "interface/function/function.h"

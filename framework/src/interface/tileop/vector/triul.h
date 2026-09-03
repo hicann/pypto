@@ -30,10 +30,10 @@ TILEOP void TTriUL(DstTensor dst, SrcTensor src, int diagonal)
     auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
     auto shape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
     auto shape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<DstTensor, 3, MAX_DIMS>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<DstTensor, 4, MAX_DIMS>();
-    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<SrcTensor, 3, MAX_DIMS>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<SrcTensor, 4, MAX_DIMS>();
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<DstTensor, DIM_4TH, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<DstTensor, DIM_5TH, MAX_DIMS>();
+    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<SrcTensor, DIM_4TH, MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<SrcTensor, DIM_5TH, MAX_DIMS>();
     auto srcShape3 = srcLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
     auto srcShape4 = srcLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
 

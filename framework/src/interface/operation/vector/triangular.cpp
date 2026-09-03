@@ -141,8 +141,6 @@ void TriULOperationTileFunc(Function& function, const TileShape& tileShape,
     TiledTriUL(function, tileShape, {iOperand[0], oOperand[0], diagonal, isUpper});
 }
 
-// beginregin: Clip
-
 REGISTER_OPERATION_TILED_FUNC(OP_TRIUL, Opcode::OP_TRIUL, TriULOperationTileFunc);
 
 } // namespace npu::tile_fwk

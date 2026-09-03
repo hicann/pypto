@@ -19,9 +19,9 @@
 #include "interface/program/program.h"
 #include "interface/configs/config_manager.h"
 #include "tensor_transformation.h"
-#include "permute.h"
 #include <algorithm>
-#include <sstream>
+#include <unordered_set>
+#include <vector>
 
 namespace npu::tile_fwk {
 

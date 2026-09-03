@@ -23,31 +23,31 @@ TILEOP void TgatherElement(T0 dst, T1 src0, T2 src1, T3 tmp)
 {
     constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;
     const auto srcLayout = src0.GetLayout();
-    auto n0SrcStride = srcLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto n1SrcStride = srcLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto n2SrcStride = srcLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto n3SrcStride = srcLayout.template GetStrideDim<3, MAX_DIMS>();
+    auto n0SrcStride = srcLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto n1SrcStride = srcLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto n2SrcStride = srcLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto n3SrcStride = srcLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
 
     const auto idxLayout = src1.GetLayout();
-    auto n0IdxShape = idxLayout.template GetShapeDim<0, MAX_DIMS>();
-    auto n1IdxShape = idxLayout.template GetShapeDim<1, MAX_DIMS>();
-    auto n2IdxShape = idxLayout.template GetShapeDim<2, MAX_DIMS>();
-    auto n3IdxShape = idxLayout.template GetShapeDim<3, MAX_DIMS>();
-    auto n4IdxShape = idxLayout.template GetShapeDim<4, MAX_DIMS>();
-    auto n0IdxStride = idxLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto n1IdxStride = idxLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto n2IdxStride = idxLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto n3IdxStride = idxLayout.template GetStrideDim<3, MAX_DIMS>();
+    auto n0IdxShape = idxLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto n1IdxShape = idxLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto n2IdxShape = idxLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto n3IdxShape = idxLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto n4IdxShape = idxLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    auto n0IdxStride = idxLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto n1IdxStride = idxLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto n2IdxStride = idxLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto n3IdxStride = idxLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
 
     const auto dstLayout = dst.GetLayout();
-    auto n0DstStride = dstLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto n1DstStride = dstLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto n2DstStride = dstLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto n3DstStride = dstLayout.template GetStrideDim<3, MAX_DIMS>();
+    auto n0DstStride = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto n1DstStride = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto n2DstStride = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto n3DstStride = dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
 
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, MAX_DIMS>();
-    constexpr auto idxTileW = TileOp::GetTensorTileShapeDim<T2, 4, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, DIM_5TH, MAX_DIMS>();
+    constexpr auto idxTileW = TileOp::GetTensorTileShapeDim<T2, DIM_5TH, MAX_DIMS>();
 
     constexpr bool scalarFlag = (sizeof(typename T2::Type) == 8) ? true : false;
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
@@ -87,10 +87,10 @@ TILEOP void TgatherElement(T0 dst, T1 src0, T2 src1, T3 tmp)
                         } else if constexpr (axis == 1) {
                             newIdxValue = i * n0SrcStride + orgIdxValue * n1SrcStride + k * n2SrcStride +
                                           l * n3SrcStride + m;
-                        } else if constexpr (axis == 2) {
+                        } else if constexpr (axis == DIM_3RD) {
                             newIdxValue = i * n0SrcStride + j * n1SrcStride + orgIdxValue * n2SrcStride +
                                           l * n3SrcStride + m;
-                        } else if constexpr (axis == 3) {
+                        } else if constexpr (axis == DIM_4TH) {
                             newIdxValue = i * n0SrcStride + j * n1SrcStride + k * n2SrcStride +
                                           orgIdxValue * n3SrcStride + m;
                         } else {
@@ -128,33 +128,33 @@ TILEOP void TgatherElement(T0 dst, T1 tmp, T2 src, T3 idx, C srcCoordinate)
 {
     constexpr size_t expectSize = 5;
     const auto srcLayout = src.GetLayout();
-    auto n0SrcShape = srcLayout.template GetShapeDim<0, expectSize>();
-    auto n1SrcShape = srcLayout.template GetShapeDim<1, expectSize>();
-    auto n2SrcShape = srcLayout.template GetShapeDim<2, expectSize>();
-    auto n3SrcShape = srcLayout.template GetShapeDim<3, expectSize>();
-    auto n4SrcShape = srcLayout.template GetShapeDim<4, expectSize>();
-    auto n0SrcStride = srcLayout.template GetStrideDim<0, expectSize>();
-    auto n1SrcStride = srcLayout.template GetStrideDim<1, expectSize>();
-    auto n2SrcStride = srcLayout.template GetStrideDim<2, expectSize>();
-    auto n3SrcStride = srcLayout.template GetStrideDim<3, expectSize>();
-    auto n4SrcStride = srcLayout.template GetStrideDim<4, expectSize>();
+    auto n0SrcShape = srcLayout.template GetShapeDim<DIM_1ST, expectSize>();
+    auto n1SrcShape = srcLayout.template GetShapeDim<DIM_2ND, expectSize>();
+    auto n2SrcShape = srcLayout.template GetShapeDim<DIM_3RD, expectSize>();
+    auto n3SrcShape = srcLayout.template GetShapeDim<DIM_4TH, expectSize>();
+    auto n4SrcShape = srcLayout.template GetShapeDim<DIM_5TH, expectSize>();
+    auto n0SrcStride = srcLayout.template GetStrideDim<DIM_1ST, expectSize>();
+    auto n1SrcStride = srcLayout.template GetStrideDim<DIM_2ND, expectSize>();
+    auto n2SrcStride = srcLayout.template GetStrideDim<DIM_3RD, expectSize>();
+    auto n3SrcStride = srcLayout.template GetStrideDim<DIM_4TH, expectSize>();
+    auto n4SrcStride = srcLayout.template GetStrideDim<DIM_5TH, expectSize>();
 
     const auto idxLayout = idx.GetLayout();
-    auto n0IdxStride = idxLayout.template GetStrideDim<0, expectSize>();
-    auto n1IdxStride = idxLayout.template GetStrideDim<1, expectSize>();
-    auto n2IdxStride = idxLayout.template GetStrideDim<2, expectSize>();
-    auto n3IdxStride = idxLayout.template GetStrideDim<3, expectSize>();
+    auto n0IdxStride = idxLayout.template GetStrideDim<DIM_1ST, expectSize>();
+    auto n1IdxStride = idxLayout.template GetStrideDim<DIM_2ND, expectSize>();
+    auto n2IdxStride = idxLayout.template GetStrideDim<DIM_3RD, expectSize>();
+    auto n3IdxStride = idxLayout.template GetStrideDim<DIM_4TH, expectSize>();
 
     const auto dstLayout = dst.GetLayout();
-    auto n0DstShape = dstLayout.template GetShapeDim<0, expectSize>();
-    auto n1DstShape = dstLayout.template GetShapeDim<1, expectSize>();
-    auto n2DstShape = dstLayout.template GetShapeDim<2, expectSize>();
-    auto n3DstShape = dstLayout.template GetShapeDim<3, expectSize>();
-    auto n4DstShape = dstLayout.template GetShapeDim<4, expectSize>();
-    auto n0DstStride = dstLayout.template GetStrideDim<0, expectSize>();
-    auto n1DstStride = dstLayout.template GetStrideDim<1, expectSize>();
-    auto n2DstStride = dstLayout.template GetStrideDim<2, expectSize>();
-    auto n3DstStride = dstLayout.template GetStrideDim<3, expectSize>();
+    auto n0DstShape = dstLayout.template GetShapeDim<DIM_1ST, expectSize>();
+    auto n1DstShape = dstLayout.template GetShapeDim<DIM_2ND, expectSize>();
+    auto n2DstShape = dstLayout.template GetShapeDim<DIM_3RD, expectSize>();
+    auto n3DstShape = dstLayout.template GetShapeDim<DIM_4TH, expectSize>();
+    auto n4DstShape = dstLayout.template GetShapeDim<DIM_5TH, expectSize>();
+    auto n0DstStride = dstLayout.template GetStrideDim<DIM_1ST, expectSize>();
+    auto n1DstStride = dstLayout.template GetStrideDim<DIM_2ND, expectSize>();
+    auto n2DstStride = dstLayout.template GetStrideDim<DIM_3RD, expectSize>();
+    auto n3DstStride = dstLayout.template GetStrideDim<DIM_4TH, expectSize>();
 
     auto srcOffset = srcLayout.template GetGmOffset<C, expectSize>(srcCoordinate);
     using DstType = typename T0::Type;
@@ -186,7 +186,7 @@ TILEOP void TgatherElement(T0 dst, T1 tmp, T2 src, T3 idx, C srcCoordinate)
         OffsetTile laneTile(1U, validCol);
         pto::TASSIGN(offsetTile, (uint64_t)(offsetAddr));
         pto::TASSIGN(laneTile, (uint64_t)(laneAddr));
-        if constexpr (axis != 4) {
+        if constexpr (axis != DIM_5TH) {
             pto::TCI<OffsetTile, IdxType, 0>(laneTile, static_cast<IdxType>(0));
             set_flag(PIPE_S, PIPE_V, EVENT_ID0);
             wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
@@ -200,9 +200,9 @@ TILEOP void TgatherElement(T0 dst, T1 tmp, T2 src, T3 idx, C srcCoordinate)
             axisStride = n0SrcStride;
         } else if constexpr (axis == 1) {
             axisStride = n1SrcStride;
-        } else if constexpr (axis == 2) {
+        } else if constexpr (axis == DIM_3RD) {
             axisStride = n2SrcStride;
-        } else if constexpr (axis == 3) {
+        } else if constexpr (axis == DIM_4TH) {
             axisStride = n3SrcStride;
         }
 
@@ -218,16 +218,16 @@ TILEOP void TgatherElement(T0 dst, T1 tmp, T2 src, T3 idx, C srcCoordinate)
                         if constexpr (axis != 1) {
                             outerBase += j * n1SrcStride;
                         }
-                        if constexpr (axis != 2) {
+                        if constexpr (axis != DIM_3RD) {
                             outerBase += k * n2SrcStride;
                         }
-                        if constexpr (axis != 3) {
+                        if constexpr (axis != DIM_4TH) {
                             outerBase += l * n3SrcStride;
                         }
 
                         pto::TASSIGN(indicesTile, (uint64_t)(idxAddr + idxRowOffset));
                         pto::TMULS(offsetTile, indicesTile, static_cast<IdxType>(axisStride));
-                        if constexpr (axis != 4) {
+                        if constexpr (axis != DIM_5TH) {
                             pto::TADD(offsetTile, offsetTile, laneTile);
                             if (outerBase != 0) {
                                 pto::TADDS(offsetTile, offsetTile, static_cast<IdxType>(outerBase));
@@ -265,10 +265,10 @@ TILEOP void TgatherElement(T0 dst, T1 tmp, T2 src, T3 idx, C srcCoordinate)
                             } else if constexpr (axis == 1) {
                                 srcElementOffset = i * n0SrcStride + index * n1SrcStride + k * n2SrcStride +
                                                    l * n3SrcStride + m;
-                            } else if constexpr (axis == 2) {
+                            } else if constexpr (axis == DIM_3RD) {
                                 srcElementOffset = i * n0SrcStride + j * n1SrcStride + index * n2SrcStride +
                                                    l * n3SrcStride + m;
-                            } else if constexpr (axis == 3) {
+                            } else if constexpr (axis == DIM_4TH) {
                                 srcElementOffset = i * n0SrcStride + j * n1SrcStride + k * n2SrcStride +
                                                    index * n3SrcStride + m;
                             } else {
@@ -296,13 +296,13 @@ TILEOP void Tgather(T0 dst, T1 src, T2 idx, C1 srcCoordinate, C2 idxCoordinate)
     constexpr size_t srcExpectSize = 4;
     constexpr size_t idxExpectSize = 2;
     const auto srcLayout = src.GetLayout();
-    auto n0SrcStride = srcLayout.template GetStrideDim<0, srcExpectSize>();
-    auto n1SrcStride = srcLayout.template GetStrideDim<1, srcExpectSize>();
-    auto n2SrcStride = srcLayout.template GetStrideDim<2, srcExpectSize>();
-    auto n3SrcStride = srcLayout.template GetStrideDim<3, srcExpectSize>();
+    auto n0SrcStride = srcLayout.template GetStrideDim<DIM_1ST, srcExpectSize>();
+    auto n1SrcStride = srcLayout.template GetStrideDim<DIM_2ND, srcExpectSize>();
+    auto n2SrcStride = srcLayout.template GetStrideDim<DIM_3RD, srcExpectSize>();
+    auto n3SrcStride = srcLayout.template GetStrideDim<DIM_4TH, srcExpectSize>();
 
     const auto idxLayout = idx.GetLayout();
-    auto n0IdxStride = idxLayout.template GetStrideDim<0, idxExpectSize>();
+    auto n0IdxStride = idxLayout.template GetStrideDim<DIM_1ST, idxExpectSize>();
 
     const auto dstLayout = dst.GetLayout();
     auto n0DstStride = dstLayout.template GetStrideDim<index0, MAX_DIMS>();
@@ -378,7 +378,7 @@ TILEOP void Tgather(T0 dst, T1 src, T2 idx, C1 srcCoordinate, C2 idxCoordinate)
             dstAddr += n0DstStride;
             srcAddr += n0SrcStride;
         }
-    } else if constexpr (axis == 2) {
+    } else if constexpr (axis == DIM_3RD) {
         for (LoopVar i = 0; i < n0DstShape; i++) {
             __gm__ dstType* src0 = srcAddr;
             __ubuf__ dstType* dst0 = dstAddr;
@@ -407,7 +407,7 @@ TILEOP void Tgather(T0 dst, T1 src, T2 idx, C1 srcCoordinate, C2 idxCoordinate)
             srcAddr += n0SrcStride;
             dstAddr += n0DstStride;
         }
-    } else if constexpr (axis == 3) {
+    } else if constexpr (axis == DIM_4TH) {
         for (LoopVar i = 0; i < n0DstShape; i++) {
             __gm__ dstType* src0 = srcAddr;
             __ubuf__ dstType* dst0 = dstAddr;
@@ -489,17 +489,17 @@ TILEOP void TgatherInUB(T0 dst, T1 param, T2 indices, T3 blockTable, C1 paramCoo
     constexpr size_t paramExpectSize = 2;
     constexpr size_t dstExpectSize = 2;
     const auto paramLayout = param.GetLayout();
-    auto n0ParamLayoutStride = paramLayout.template GetStrideDim<0, paramExpectSize>();
-    auto n1ParamLayoutStride = paramLayout.template GetStrideDim<1, paramExpectSize>();
+    auto n0ParamLayoutStride = paramLayout.template GetStrideDim<DIM_1ST, paramExpectSize>();
+    auto n1ParamLayoutStride = paramLayout.template GetStrideDim<DIM_2ND, paramExpectSize>();
 
     const auto indicesLayout = indices.GetLayout();
 
     const auto blockTableLayout = blockTable.GetLayout();
 
     const auto dstLayout = dst.GetLayout();
-    auto n0DstLayoutStride = dstLayout.template GetStrideDim<0, dstExpectSize>();
-    auto n0DstShape = dstLayout.template GetShapeDim<0, dstExpectSize>();
-    auto n1DstShape = dstLayout.template GetShapeDim<1, dstExpectSize>();
+    auto n0DstLayoutStride = dstLayout.template GetStrideDim<DIM_1ST, dstExpectSize>();
+    auto n0DstShape = dstLayout.template GetShapeDim<DIM_1ST, dstExpectSize>();
+    auto n1DstShape = dstLayout.template GetShapeDim<DIM_2ND, dstExpectSize>();
 
     auto paramOffset = paramLayout.template GetGmOffset<C1, MAX_DIMS>(paramCoordinate);
     auto indicesOffset = indicesLayout.template GetGmOffset<C2, MAX_DIMS>(indicesCoordinate);
@@ -525,7 +525,8 @@ TILEOP void TgatherInUB(T0 dst, T1 param, T2 indices, T3 blockTable, C1 paramCoo
     // auto n0ParamStride = paramLayout.template GetStrideDim<index0, paramExpectSize>();
 
     constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;
-    constexpr auto tileH = Std::tuple_element<shapeSize - 2, typename T0::TileShape>::type::value;
+    constexpr size_t TILE_HEIGHT_OFFSET = 2;
+    constexpr auto tileH = Std::tuple_element<shapeSize - TILE_HEIGHT_OFFSET, typename T0::TileShape>::type::value;
     constexpr auto tileW = Std::tuple_element<shapeSize - 1, typename T0::TileShape>::type::value;
     using ShapeDim5 = pto::Shape<-1, -1, -1, -1, -1>;
     using StrideDim5 = pto::Stride<-1, -1, -1, -1, -1>;
@@ -558,21 +559,21 @@ TILEOP void TGatherMask(T0 dst, T1 src)
     constexpr auto pattern = static_cast<pto::MaskPattern>(patternMode);
     const auto dstLayout = dst.GetLayout();
     const auto srcLayout = src.GetLayout();
-    auto dstShape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
-    auto dstShape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
-    auto dstShape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
-    auto dstShape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
-    auto dstShape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
-    auto dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto dstStride3 = dstLayout.template GetStrideDim<3, MAX_DIMS>();
-    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto srcStride3 = srcLayout.template GetStrideDim<3, MAX_DIMS>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, MAX_DIMS>();
+    auto dstShape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    auto dstStride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto dstStride3 = dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    auto srcStride0 = srcLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto srcStride3 = srcLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, DIM_5TH, MAX_DIMS>();
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
     constexpr auto srcTypeSize = sizeof(typename T1::Type);
     if (dstShape3 == 0 || dstShape4 == 0) {

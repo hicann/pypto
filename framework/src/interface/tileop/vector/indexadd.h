@@ -18,6 +18,10 @@
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
+namespace indexadd_detail {
+constexpr size_t MERGED_TILE_AXIS_OFFSET = 3;
+} // namespace indexadd_detail
+
 template <typename T0, typename T2, typename T3, typename dstTileDefine, typename tempTileDefine,
           typename src1TileDefine, typename Scalar>
 TILEOP void IndexAddUBNotLastAxisCompute(dstTileDefine dstTile, tempTileDefine tempTile, src1TileDefine src1Tile,
@@ -178,17 +182,17 @@ TILEOP void TIndexAddUB(T0 dst, T1 src0, T2 src1, T3 src2, T4 tempTensor, Scalar
     if (!dstShape0 || !dstShape1 || !dstShape2 || !dstShape3 || !dstShape4) {
         return;
     }
-    if constexpr (axis == 4) { // 尾轴
+    if constexpr (axis == DIM_5TH) { // 尾轴
         IndexAddUBLastAxisCompute(dst, src1, src2, alpha, src1Shape0, src1Shape1, src1Shape2, src1Shape3, src1Shape4,
                                   dstStride0, dstStride1, dstStride2, dstStride3, src1Stride0, src1Stride1, src1Stride2,
                                   src1Stride3);
     } else {
-        constexpr auto
-            dstTileW = TileOp::GetAnyAxisMergeResult<axis + shapeSize - 3, shapeSize, typename T0::TileShape>();
-        constexpr auto
-            tempTileW = TileOp::GetAnyAxisMergeResult<axis + shapeSize - 3, shapeSize, typename T4::TileShape>();
-        constexpr auto
-            src1TileW = TileOp::GetAnyAxisMergeResult<axis + shapeSize - 3, shapeSize, typename T2::TileShape>();
+        constexpr auto dstTileW = TileOp::GetAnyAxisMergeResult<
+            axis + shapeSize - indexadd_detail::MERGED_TILE_AXIS_OFFSET, shapeSize, typename T0::TileShape>();
+        constexpr auto tempTileW = TileOp::GetAnyAxisMergeResult<
+            axis + shapeSize - indexadd_detail::MERGED_TILE_AXIS_OFFSET, shapeSize, typename T4::TileShape>();
+        constexpr auto src1TileW = TileOp::GetAnyAxisMergeResult<
+            axis + shapeSize - indexadd_detail::MERGED_TILE_AXIS_OFFSET, shapeSize, typename T2::TileShape>();
         using dstTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, 1, dstTileW, pto::BLayout::RowMajor>;
         using tempTileDefine = pto::Tile<pto::TileType::Vec, bfloat16_t, 1, tempTileW, pto::BLayout::RowMajor>;
         using src1TileDefine = pto::Tile<pto::TileType::Vec, typename T2::Type, 1, src1TileW, pto::BLayout::RowMajor>;
@@ -217,7 +221,7 @@ TILEOP void TIndexAddUB(T0 dst, T1 src0, T2 src1, T3 src2, T4 tempTensor, Scalar
                                                              src1Addr, dstOffset, src1Offset);
                 }
             }
-        } else if constexpr (axis == 2) { // 从第4轴开始合轴
+        } else if constexpr (axis == DIM_3RD) { // 从第4轴开始合轴
             for (LoopVar i = 0; i < src1Shape0; ++i) {
                 for (LoopVar j = 0; j < src1Shape1; ++j) {
                     for (LoopVar k = 0; k < src1Shape2; ++k) {
@@ -320,19 +324,20 @@ TILEOP size_t GetTileOffset(size_t dstStrides[], size_t idx[], __ubuf__ typename
 {
     size_t dstOffset = 0;
     if constexpr (axis == 0) {
-        dstOffset = *(idxAddr + idx[0]) * dstStrides[0] + idx[1] * dstStrides[1] + idx[2] * dstStrides[2] +
-                    idx[3] * dstStrides[3];
+        dstOffset = *(idxAddr + idx[DIM_1ST]) * dstStrides[DIM_1ST] + idx[DIM_2ND] * dstStrides[DIM_2ND] +
+                    idx[DIM_3RD] * dstStrides[DIM_3RD] + idx[DIM_4TH] * dstStrides[DIM_4TH];
     } else if constexpr (axis == 1) {
-        dstOffset = idx[0] * dstStrides[0] + *(idxAddr + idx[1]) * dstStrides[1] + idx[2] * dstStrides[2] +
-                    idx[3] * dstStrides[3];
-    } else if constexpr (axis == 2) {
-        dstOffset = idx[0] * dstStrides[0] + idx[1] * dstStrides[1] + *(idxAddr + idx[2]) * dstStrides[2] +
-                    idx[3] * dstStrides[3];
-    } else if constexpr (axis == 3) {
-        dstOffset = idx[0] * dstStrides[0] + idx[1] * dstStrides[1] + idx[2] * dstStrides[2] +
-                    *(idxAddr + idx[3]) * dstStrides[3];
+        dstOffset = idx[DIM_1ST] * dstStrides[DIM_1ST] + *(idxAddr + idx[DIM_2ND]) * dstStrides[DIM_2ND] +
+                    idx[DIM_3RD] * dstStrides[DIM_3RD] + idx[DIM_4TH] * dstStrides[DIM_4TH];
+    } else if constexpr (axis == DIM_3RD) {
+        dstOffset = idx[DIM_1ST] * dstStrides[DIM_1ST] + idx[DIM_2ND] * dstStrides[DIM_2ND] +
+                    *(idxAddr + idx[DIM_3RD]) * dstStrides[DIM_3RD] + idx[DIM_4TH] * dstStrides[DIM_4TH];
+    } else if constexpr (axis == DIM_4TH) {
+        dstOffset = idx[DIM_1ST] * dstStrides[DIM_1ST] + idx[DIM_2ND] * dstStrides[DIM_2ND] +
+                    idx[DIM_3RD] * dstStrides[DIM_3RD] + *(idxAddr + idx[DIM_4TH]) * dstStrides[DIM_4TH];
     } else {
-        dstOffset = idx[0] * dstStrides[0] + idx[1] * dstStrides[1] + idx[2] * dstStrides[2] + idx[3] * dstStrides[3];
+        dstOffset = idx[DIM_1ST] * dstStrides[DIM_1ST] + idx[DIM_2ND] * dstStrides[DIM_2ND] +
+                    idx[DIM_3RD] * dstStrides[DIM_3RD] + idx[DIM_4TH] * dstStrides[DIM_4TH];
     }
     return dstOffset;
 }
@@ -353,7 +358,8 @@ TILEOP void TIndexAdd(T0 dst, T1 src0, T2 src1, T3 src2, T4 tmpTensor, C coord, 
         dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>(), dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>(),
         dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>(), dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>(),
         dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>()}; // validShape
-    if (!dstShapes[0] || !dstShapes[1] || !dstShapes[2] || !dstShapes[3] || !dstShapes[4]) {
+    if (!dstShapes[DIM_1ST] || !dstShapes[DIM_2ND] || !dstShapes[DIM_3RD] || !dstShapes[DIM_4TH] ||
+        !dstShapes[DIM_5TH]) {
         return;
     }
     size_t dstStrides[] = {
@@ -383,14 +389,14 @@ TILEOP void TIndexAdd(T0 dst, T1 src0, T2 src1, T3 src2, T4 tmpTensor, C coord, 
     using dstGlobalData = pto::GlobalTensor<dstType, pto::Shape<-1, -1, -1, -1, -1>, pto::Stride<-1, -1, -1, -1, -1>>;
     using tmpTileDefine = pto::Tile<pto::TileType::Vec, tmpType, 1, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
     using src1TileDefine = pto::Tile<pto::TileType::Vec, src1Type, 1, src1TileW, pto::BLayout::RowMajor, -1, -1>;
-    if constexpr (axis == 4) { // 尾轴
+    if constexpr (axis == DIM_5TH) { // 尾轴
         dstGlobalData dstGlobal(dstAddr, pto::Shape(1, 1, 1, 1, 1), pto::Stride(0, 0, 0, 0, 0));
         tmpTileDefine tmpTile(1, 1);
         for (LoopVar i = 0; i < src1Shapes[0]; ++i) {
             for (LoopVar j = 0; j < src1Shapes[1]; ++j) {
-                for (LoopVar k = 0; k < src1Shapes[2]; ++k) {
-                    for (LoopVar l = 0; l < src1Shapes[3]; ++l) {
-                        for (LoopVar m = 0; m < src1Shapes[4]; ++m) {
+                for (LoopVar k = 0; k < src1Shapes[DIM_3RD]; ++k) {
+                    for (LoopVar l = 0; l < src1Shapes[DIM_4TH]; ++l) {
+                        for (LoopVar m = 0; m < src1Shapes[DIM_5TH]; ++m) {
                             set_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
                             wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
                             size_t idx[] = {i, j, k, l};
@@ -404,18 +410,18 @@ TILEOP void TIndexAdd(T0 dst, T1 src0, T2 src1, T3 src2, T4 tmpTensor, C coord, 
             }
         }
     } else {
-        dstGlobalData dstGlobal(dstAddr, pto::Shape(1, 1, 1, 1, dstShapes[4]), pto::Stride(0, 0, 0, 0, 0));
-        tmpTileDefine tmpTile(1, src1Shapes[4]);
-        src1TileDefine src1Tile(1, src1Shapes[4]);
+        dstGlobalData dstGlobal(dstAddr, pto::Shape(1, 1, 1, 1, dstShapes[DIM_5TH]), pto::Stride(0, 0, 0, 0, 0));
+        tmpTileDefine tmpTile(1, src1Shapes[DIM_5TH]);
+        src1TileDefine src1Tile(1, src1Shapes[DIM_5TH]);
         for (LoopVar i = 0; i < src1Shapes[0]; ++i) {
             for (LoopVar j = 0; j < src1Shapes[1]; ++j) {
-                for (LoopVar k = 0; k < src1Shapes[2]; ++k) {
-                    for (LoopVar l = 0; l < src1Shapes[3]; ++l) {
+                for (LoopVar k = 0; k < src1Shapes[DIM_3RD]; ++k) {
+                    for (LoopVar l = 0; l < src1Shapes[DIM_4TH]; ++l) {
                         set_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
                         wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
                         size_t idx[] = {i, j, k, l};
                         auto dstOffset = GetTileOffset<axis, T3>(dstStrides, idx, idxAddr);
-                        auto src1Offset = GetTileOffset<4, T3>(src1Strides, idx, idxAddr);
+                        auto src1Offset = GetTileOffset<DIM_5TH, T3>(src1Strides, idx, idxAddr);
                         IndexAddNotLastAxisCompute<T0, T2>(dstGlobal, tmpTile, src1Tile, alpha, dstAddr, tmpAddr,
                                                            src1Addr, dstOffset, src1Offset);
                     }

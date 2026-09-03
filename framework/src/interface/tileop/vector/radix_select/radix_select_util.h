@@ -20,6 +20,24 @@
 #include "utils/tile_tensor.h"
 
 namespace RadixSelectUtil {
+constexpr size_t BITS_PER_BYTE = TileOp::BITS_PER_BYTE;
+constexpr size_t UB_BLOCK_BYTES = TileOp::BLOCK_SIZE;
+constexpr size_t UINT32_ELEMENTS_PER_BLOCK = UB_BLOCK_BYTES / sizeof(uint32_t);
+constexpr size_t UINT16_ELEMENTS_PER_BLOCK = UB_BLOCK_BYTES / sizeof(uint16_t);
+constexpr size_t HISTOGRAM_BUCKETS = 256;
+constexpr size_t BYTE_LOW_BIT_MASK = BITS_PER_BYTE - 1;
+constexpr size_t B16_SORT_BITS = sizeof(uint16_t) * BITS_PER_BYTE;
+constexpr size_t B32_SORT_BITS = sizeof(uint32_t) * BITS_PER_BYTE;
+constexpr size_t B64_SORT_BITS = sizeof(uint64_t) * BITS_PER_BYTE;
+constexpr size_t RADIX_BITS_PER_PASS = 2;
+constexpr uint16_t RADIX_PASS_MASK = 0x3;
+constexpr uint16_t UINT8_VALUE_MASK = 0xFF;
+constexpr int16_t INT16_MAX_VALUE = 0x7FFF;
+constexpr int32_t PACKED_INT16_MAX = 0x7FFF7FFF;
+constexpr uint32_t HISTOGRAM_SENTINEL = 0x7FFFFFFF;
+constexpr size_t RADIX_BUCKET_2 = 2;
+constexpr size_t RADIX_BUCKET_3 = 3;
+constexpr size_t RADIX_BATCH_DIMS = 4;
 template <size_t size = sizeof(uint8_t)>
 struct IntBySize {
     using T = int8_t;
@@ -55,26 +73,26 @@ struct UIntBySize<sizeof(uint64_t)> {
 template <typename T>
 struct SignByType {
     using U = typename IntBySize<sizeof(T)>::T;
-    static constexpr U value = U(1) << (sizeof(U) * 8 - 1);
+    static constexpr U value = U(1) << (sizeof(U) * BITS_PER_BYTE - 1);
 };
 template <typename T>
 struct RSExchangeTile {
     using U = typename pto::Tile<T::Loc, typename T::DType, T::ColStride, T::RowStride, T::BFractal, -1, -1>;
 };
-template <typename T, size_t other = 1, size_t tile = 32ULL / sizeof(T), bool isCol = false>
+template <typename T, size_t other = 1, size_t tile = UB_BLOCK_BYTES / sizeof(T), bool isCol = false>
 struct RSTile {
     using U = typename std::conditional_t<
         isCol, typename pto::Tile<pto::TileType::Vec, T, tile, other, pto::BLayout::ColMajor, -1, -1>,
         typename pto::Tile<pto::TileType::Vec, T, other, tile, pto::BLayout::RowMajor, -1, -1> >;
 };
-template <typename T, size_t other = 1, size_t tile = 32ULL / sizeof(T), bool isCol = false>
+template <typename T, size_t other = 1, size_t tile = UB_BLOCK_BYTES / sizeof(T), bool isCol = false>
 __aicore__ inline auto DefineTile(size_t row, size_t col, size_t addr)
 {
     typename RSTile<T, other, tile, isCol>::U t(row, col);
     pto::TASSIGN(t, addr);
     return t;
 }
-template <typename T, size_t other = 1, size_t tile = 32ULL / sizeof(T), bool isCol = false>
+template <typename T, size_t other = 1, size_t tile = UB_BLOCK_BYTES / sizeof(T), bool isCol = false>
 __aicore__ inline auto DefineTile(size_t row, size_t col)
 {
     return typename RSTile<T, other, tile, isCol>::U(row, col);
@@ -104,67 +122,74 @@ __aicore__ inline constexpr size_t AlignUp(size_t size, size_t align)
                         static_cast<size_t>(layout.GetLayout().template GetShapeDim<DIM_3RD, MAX_DIMS>()), \
                         static_cast<size_t>(layout.GetLayout().template GetShapeDim<DIM_4TH, MAX_DIMS>()), \
                         static_cast<size_t>(layout.GetLayout().template GetShapeDim<DIM_5TH, MAX_DIMS>())}
-#define PTO_RS_PREPARE                                                                 \
-    using SrcDType = typename SRC::Type;                                               \
-    using IdxDType = typename IDX::Type;                                               \
-    constexpr auto srcTypeSize = sizeof(SrcDType);                                     \
-    constexpr auto idxTypeSize = sizeof(IdxDType);                                     \
-    using ConvUIntType = typename UIntBySize<srcTypeSize>::T;                          \
-    using ConvIntType = typename IntBySize<srcTypeSize>::T;                            \
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<SRC, DIM_5TH, MAX_DIMS>(); \
-    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<SRC, DIM_4TH, MAX_DIMS>(); \
-    constexpr auto valTileW = TileOp::GetTensorTileShapeDim<VAL, DIM_5TH, MAX_DIMS>(); \
-    constexpr auto idxTileW = TileOp::GetTensorTileShapeDim<IDX, DIM_5TH, MAX_DIMS>(); \
-    constexpr auto srcMaskShape = AlignUp(srcTileW, 128);                              \
-    constexpr int64_t cmpSize = (srcMaskShape > 256 ? srcMaskShape : 256) / 8;         \
-    constexpr auto cmpAlign = AlignUp(cmpSize, 32);                                    \
-    constexpr auto kAlign = AlignUp(k, 128);                                           \
-    PTO_RS_GET_SHAPE(srcShape, src);                                                   \
-    PTO_RS_GET_STRIDE(srcStride, src);                                                 \
-    PTO_RS_GET_STRIDE(valStride, value);                                               \
+#define PTO_RS_PREPARE                                                                                                 \
+    using SrcDType = typename SRC::Type;                                                                               \
+    using IdxDType = typename IDX::Type;                                                                               \
+    constexpr auto srcTypeSize = sizeof(SrcDType);                                                                     \
+    constexpr auto idxTypeSize = sizeof(IdxDType);                                                                     \
+    using ConvUIntType = typename UIntBySize<srcTypeSize>::T;                                                          \
+    using ConvIntType = typename IntBySize<srcTypeSize>::T;                                                            \
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<SRC, DIM_5TH, MAX_DIMS>();                                 \
+    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<SRC, DIM_4TH, MAX_DIMS>();                                 \
+    constexpr auto valTileW = TileOp::GetTensorTileShapeDim<VAL, DIM_5TH, MAX_DIMS>();                                 \
+    constexpr auto idxTileW = TileOp::GetTensorTileShapeDim<IDX, DIM_5TH, MAX_DIMS>();                                 \
+    constexpr auto srcMaskShape = AlignUp(srcTileW, 128);                                                              \
+    constexpr int64_t cmpSize = (srcMaskShape > HISTOGRAM_BUCKETS ? srcMaskShape : HISTOGRAM_BUCKETS) / BITS_PER_BYTE; \
+    constexpr auto cmpAlign = AlignUp(cmpSize, UB_BLOCK_BYTES);                                                        \
+    constexpr auto kAlign = AlignUp(k, 128);                                                                           \
+    PTO_RS_GET_SHAPE(srcShape, src);                                                                                   \
+    PTO_RS_GET_STRIDE(srcStride, src);                                                                                 \
+    PTO_RS_GET_STRIDE(valStride, value);                                                                               \
     PTO_RS_GET_STRIDE(idxStride, index)
-#define PTO_RS_SORT_ADDR_DEFINE(type)                                               \
-    point = sortTmpAddr_;                                                           \
-    size_t sortTmpAddr = DefineWorkSpace<uint##type##_t, srcTileH * kAlign>(point); \
-    size_t number0Addr = DefineWorkSpace<uint16_t, srcTileH * 16>(point);           \
-    size_t number1Addr = DefineWorkSpace<uint16_t, srcTileH * 16>(point);           \
-    size_t number2Addr = DefineWorkSpace<uint16_t, srcTileH * 16>(point);           \
-    size_t number3Addr = DefineWorkSpace<uint16_t, srcTileH * 16>(point);           \
-    size_t cnt1Addr = DefineWorkSpace<uint32_t, srcTileH * 8>(point);               \
-    size_t cnt2Addr = DefineWorkSpace<uint32_t, srcTileH * 8>(point);               \
-    size_t cnt3Addr = DefineWorkSpace<uint32_t, srcTileH * 8>(point);               \
-    size_t select1Addr = DefineWorkSpace<uint32_t, srcTileH * kAlign>(point);       \
-    size_t select2Addr = DefineWorkSpace<uint32_t, srcTileH * kAlign>(point);       \
-    size_t select3Addr = DefineWorkSpace<uint32_t, srcTileH * kAlign>(point);       \
+#define PTO_RS_SORT_ADDR_DEFINE(type)                                                            \
+    point = sortTmpAddr_;                                                                        \
+    size_t sortTmpAddr = DefineWorkSpace<uint##type##_t, srcTileH * kAlign>(point);              \
+    size_t number0Addr = DefineWorkSpace<uint16_t, srcTileH * UINT16_ELEMENTS_PER_BLOCK>(point); \
+    size_t number1Addr = DefineWorkSpace<uint16_t, srcTileH * UINT16_ELEMENTS_PER_BLOCK>(point); \
+    size_t number2Addr = DefineWorkSpace<uint16_t, srcTileH * UINT16_ELEMENTS_PER_BLOCK>(point); \
+    size_t number3Addr = DefineWorkSpace<uint16_t, srcTileH * UINT16_ELEMENTS_PER_BLOCK>(point); \
+    size_t cnt1Addr = DefineWorkSpace<uint32_t, srcTileH * UINT32_ELEMENTS_PER_BLOCK>(point);    \
+    size_t cnt2Addr = DefineWorkSpace<uint32_t, srcTileH * UINT32_ELEMENTS_PER_BLOCK>(point);    \
+    size_t cnt3Addr = DefineWorkSpace<uint32_t, srcTileH * UINT32_ELEMENTS_PER_BLOCK>(point);    \
+    size_t select1Addr = DefineWorkSpace<uint32_t, srcTileH * kAlign>(point);                    \
+    size_t select2Addr = DefineWorkSpace<uint32_t, srcTileH * kAlign>(point);                    \
+    size_t select3Addr = DefineWorkSpace<uint32_t, srcTileH * kAlign>(point);                    \
     size_t indexAddr = DefineWorkSpace<uint32_t, srcTileH * kAlign>(point)
-#define PTO_RS_SORT_TILE_DEFINE(type)                                                                                \
-    auto sortTempInt##type##KTile = DefineTile<int##type##_t, srcTileH, kAlign>(srcShape[3], k, sortTmpAddr);        \
-    auto sortTempInt##type##MaxTile = DefineTile<int##type##_t, srcTileH, kAlign>(srcShape[3], kAlign, sortTmpAddr); \
-    auto number0UInt##type##Tile = DefineTile<uint##type##_t>(srcShape[3], 256 / type, number0Addr);                 \
-    auto number1UInt##type##Tile = DefineTile<uint##type##_t>(srcShape[3], 256 / type, number1Addr);                 \
-    auto number2UInt##type##Tile = DefineTile<uint##type##_t>(srcShape[3], 256 / type, number2Addr);                 \
-    auto number3UInt##type##Tile = DefineTile<uint##type##_t>(srcShape[3], 256 / type, number3Addr);                 \
-    auto cnt1UInt32Tile = DefineTile<uint32_t, srcTileH>(srcShape[3], 8, cnt1Addr);                                  \
-    auto cnt2UInt32Tile = DefineTile<uint32_t, srcTileH>(srcShape[3], 8, cnt2Addr);                                  \
-    auto cnt3UInt32Tile = DefineTile<uint32_t, srcTileH>(srcShape[3], 8, cnt3Addr);                                  \
-    auto select1Int32Tile = DefineTile<int32_t, srcTileH, kAlign>(srcShape[3], k, select1Addr);                      \
-    auto select2Int32Tile = DefineTile<int32_t, srcTileH, kAlign>(srcShape[3], k, select2Addr);                      \
-    auto select3Int32Tile = DefineTile<int32_t, srcTileH, kAlign>(srcShape[3], k, select3Addr);                      \
-    auto indexInt32Tile = DefineTile<int32_t, srcTileH, kAlign>(srcShape[3], k, indexAddr)
-#define PTO_RS_COMMON_TILE_DEFINE                                                                                  \
-    auto srcIntTile = DefineTile<ConvIntType, srcTileH, srcTileW>(srcShape[3], srcShape[4]);                       \
-    auto valIntTile = DefineTile<ConvIntType, srcTileH, valTileW>(srcShape[3], k);                                 \
-    auto idxTile = DefineTile<IdxDType, srcTileH, idxTileW>(srcShape[3], k);                                       \
-    auto cmpTile = DefineTile<uint8_t, srcTileH, cmpAlign>(srcShape[3], cmpSize, cmpAddr);                         \
-    auto selectInt32GTTile = DefineTile<int32_t, srcTileH, kAlign>(srcShape[3], k, selectGTAddr);                  \
-    auto selectInt32EQTile = DefineTile<int32_t, srcTileH, kAlign>(srcShape[3], k, selectEQAddr);                  \
-    auto selectCountUInt32GTTile = DefineTile<uint32_t, srcTileH>(srcShape[3], 1, selectCountGTAddr);              \
-    auto selectCountUInt32EQTile = DefineTile<uint32_t, srcTileH>(srcShape[3], 1, selectCountEQAddr);              \
-    auto rowMinTile = DefineTile<int32_t, srcTileH>(srcShape[3], 8, rowMinAddr);                                   \
-    auto gatherIntTile = DefineTile<int32_t, srcTileH>(srcShape[3], 8, gatherAddr);                                \
-    auto uselessTile = DefineTile<uint32_t>(1, 1, uselessAddr);                                                    \
-    auto twiddleIntTile = DefineTile<ConvIntType, srcTileH, srcTileW>(srcShape[3], srcShape[4], srcTwiddleInAddr); \
-    auto twiddleUIntTile = DefineTile<ConvUIntType, srcTileH, srcTileW>(srcShape[3], srcShape[4], srcTwiddleInAddr)
+#define PTO_RS_SORT_TILE_DEFINE(type)                                                                               \
+    auto sortTempInt##type##KTile = DefineTile<int##type##_t, srcTileH, kAlign>(srcShape[DIM_4TH], k, sortTmpAddr); \
+    auto sortTempInt##type##MaxTile = DefineTile<int##type##_t, srcTileH, kAlign>(srcShape[DIM_4TH], kAlign,        \
+                                                                                  sortTmpAddr);                     \
+    auto number0UInt##type##Tile = DefineTile<uint##type##_t>(srcShape[DIM_4TH], HISTOGRAM_BUCKETS / type,          \
+                                                              number0Addr);                                         \
+    auto number1UInt##type##Tile = DefineTile<uint##type##_t>(srcShape[DIM_4TH], HISTOGRAM_BUCKETS / type,          \
+                                                              number1Addr);                                         \
+    auto number2UInt##type##Tile = DefineTile<uint##type##_t>(srcShape[DIM_4TH], HISTOGRAM_BUCKETS / type,          \
+                                                              number2Addr);                                         \
+    auto number3UInt##type##Tile = DefineTile<uint##type##_t>(srcShape[DIM_4TH], HISTOGRAM_BUCKETS / type,          \
+                                                              number3Addr);                                         \
+    auto cnt1UInt32Tile = DefineTile<uint32_t, srcTileH>(srcShape[DIM_4TH], UINT32_ELEMENTS_PER_BLOCK, cnt1Addr);   \
+    auto cnt2UInt32Tile = DefineTile<uint32_t, srcTileH>(srcShape[DIM_4TH], UINT32_ELEMENTS_PER_BLOCK, cnt2Addr);   \
+    auto cnt3UInt32Tile = DefineTile<uint32_t, srcTileH>(srcShape[DIM_4TH], UINT32_ELEMENTS_PER_BLOCK, cnt3Addr);   \
+    auto select1Int32Tile = DefineTile<int32_t, srcTileH, kAlign>(srcShape[DIM_4TH], k, select1Addr);               \
+    auto select2Int32Tile = DefineTile<int32_t, srcTileH, kAlign>(srcShape[DIM_4TH], k, select2Addr);               \
+    auto select3Int32Tile = DefineTile<int32_t, srcTileH, kAlign>(srcShape[DIM_4TH], k, select3Addr);               \
+    auto indexInt32Tile = DefineTile<int32_t, srcTileH, kAlign>(srcShape[DIM_4TH], k, indexAddr)
+#define PTO_RS_COMMON_TILE_DEFINE                                                                                 \
+    auto srcIntTile = DefineTile<ConvIntType, srcTileH, srcTileW>(srcShape[DIM_4TH], srcShape[DIM_5TH]);          \
+    auto valIntTile = DefineTile<ConvIntType, srcTileH, valTileW>(srcShape[DIM_4TH], k);                          \
+    auto idxTile = DefineTile<IdxDType, srcTileH, idxTileW>(srcShape[DIM_4TH], k);                                \
+    auto cmpTile = DefineTile<uint8_t, srcTileH, cmpAlign>(srcShape[DIM_4TH], cmpSize, cmpAddr);                  \
+    auto selectInt32GTTile = DefineTile<int32_t, srcTileH, kAlign>(srcShape[DIM_4TH], k, selectGTAddr);           \
+    auto selectInt32EQTile = DefineTile<int32_t, srcTileH, kAlign>(srcShape[DIM_4TH], k, selectEQAddr);           \
+    auto selectCountUInt32GTTile = DefineTile<uint32_t, srcTileH>(srcShape[DIM_4TH], 1, selectCountGTAddr);       \
+    auto selectCountUInt32EQTile = DefineTile<uint32_t, srcTileH>(srcShape[DIM_4TH], 1, selectCountEQAddr);       \
+    auto rowMinTile = DefineTile<int32_t, srcTileH>(srcShape[DIM_4TH], UINT32_ELEMENTS_PER_BLOCK, rowMinAddr);    \
+    auto gatherIntTile = DefineTile<int32_t, srcTileH>(srcShape[DIM_4TH], UINT32_ELEMENTS_PER_BLOCK, gatherAddr); \
+    auto uselessTile = DefineTile<uint32_t>(1, 1, uselessAddr);                                                   \
+    auto twiddleIntTile = DefineTile<ConvIntType, srcTileH, srcTileW>(srcShape[DIM_4TH], srcShape[DIM_5TH],       \
+                                                                      srcTwiddleInAddr);                          \
+    auto twiddleUIntTile = DefineTile<ConvUIntType, srcTileH, srcTileW>(srcShape[DIM_4TH], srcShape[DIM_5TH],     \
+                                                                        srcTwiddleInAddr)
 
 template <pto::CmpMode cmpMode, typename SELECT, typename SRC, typename K, typename COUNT, typename USELESS>
 TILEOP void RadixSelectGather(SELECT select, SRC src, K k, COUNT count, USELESS useless)
@@ -237,9 +262,11 @@ TILEOP void RadixSelectHistogramB4(DST dst, SRC src, IDX idx)
 {
     auto validRow = dst.GetValidRow();
     typename RSExchangeTile<DST>::U dstOneRow(1, dst.GetValidCol());
-    using SrcTile = typename pto::Tile<SRC::Loc, typename SRC::DType, SRC::Rows, SRC::Rows * 32, SRC::BFractal, -1, -1>;
+    using SrcTile = typename pto::Tile<SRC::Loc, typename SRC::DType, SRC::Rows, SRC::Rows * UB_BLOCK_BYTES,
+                                       SRC::BFractal, -1, -1>;
     SrcTile srcOneRow(1, src.GetValidCol());
-    using IdxTile = typename pto::Tile<IDX::Loc, typename IDX::DType, IDX::Rows, SRC::Rows * 32, IDX::BFractal, -1, -1>;
+    using IdxTile = typename pto::Tile<IDX::Loc, typename IDX::DType, IDX::Rows, SRC::Rows * UB_BLOCK_BYTES,
+                                       IDX::BFractal, -1, -1>;
     IdxTile idxOneRow(idx.GetValidRow(), 1);
     for (LoopVar n3Index = 0; n3Index < validRow; ++n3Index) {
         pto::TASSIGN(dstOneRow, (int64_t)(dst.data() + n3Index * DST::RowStride));
@@ -285,8 +312,9 @@ TILEOP void RadixSelectSel(DST dst, CMP cmp, SRC src, IDX idx, USELESS useless)
 
 template <typename SRC, typename VAL, typename IDX, typename SRCTILE, typename VALTILE, typename IDXTILE>
 TILEOP void RadixSelectBatchAssign(SRC src, VAL value, IDX index, LoopVar n0Index, LoopVar n1Index, LoopVar n2Index,
-                                   const size_t (&srcStride)[4], const size_t (&valStride)[4],
-                                   const size_t (&idxStride)[4], size_t srcTypeSize, size_t idxTypeSize,
+                                   const size_t (&srcStride)[RADIX_BATCH_DIMS],
+                                   const size_t (&valStride)[RADIX_BATCH_DIMS],
+                                   const size_t (&idxStride)[RADIX_BATCH_DIMS], size_t srcTypeSize, size_t idxTypeSize,
                                    SRCTILE& srcIntTile, VALTILE& valIntTile, IDXTILE& idxTile)
 {
     uint64_t srcAddr = src.GetAddr() +
@@ -333,7 +361,7 @@ TILEOP void RadixSelectSortTwoBitCalc(SRC src, SRC2 src2, IDX index, TMP tmp, TM
                                       COUNT count3, NUM num0, NUM num1, NUM num2, NUM num3)
 {
     pto::TSHRS(tmp, src, bit);
-    pto::TANDS(tmp, tmp, 0x3);
+    pto::TANDS(tmp, tmp, RADIX_PASS_MASK);
     RadixSelectGather<pto::CmpMode::EQ>(select2, tmp2, num3, count2, useless);
     RadixSelectGather<pto::CmpMode::EQ>(select1, tmp2, num2, count1, useless);
     pto::TADD(count3, count1, count2);
@@ -360,26 +388,27 @@ TILEOP void RadixSelectSortTwoBit(SRC src, SRC2 src2, IDX index, TMP tmp, TMP2 t
                                   NUM num1, NUM num2, NUM num3)
 {
     if constexpr (bit < lastBit) {
-        if constexpr (bit % 4 == 0) {
+        if constexpr (bit % (RADIX_BITS_PER_PASS * 2) == 0) {
             RadixSelectSortTwoBitCalc<bit>(src, src2, index, tmp, tmp2, useless, select1, select2, select3, count1,
                                            count2, count3, num0, num1, num2, num3);
         } else {
             RadixSelectSortTwoBitCalc<bit>(tmp, tmp2, select1, src, src2, useless, index, select2, select3, count1,
                                            count2, count3, num0, num1, num2, num3);
         }
-        RadixSelectSortTwoBit<bit + 2, lastBit>(src, src2, index, tmp, tmp2, useless, select1, select2, select3, count1,
-                                                count2, count3, num0, num1, num2, num3);
+        RadixSelectSortTwoBit<bit + RADIX_BITS_PER_PASS, lastBit>(src, src2, index, tmp, tmp2, useless, select1,
+                                                                  select2, select3, count1, count2, count3, num0, num1,
+                                                                  num2, num3);
     }
 }
 
 template <typename TMP, typename NUM>
 TILEOP void RadixSelectSortPrepare(TMP tmp, NUM num0, NUM num1, NUM num2, NUM num3)
 {
-    pto::TEXPANDS(tmp, 0x7fff);
+    pto::TEXPANDS(tmp, INT16_MAX_VALUE);
     pto::TEXPANDS(num0, 0);
     pto::TEXPANDS(num1, 1);
-    pto::TEXPANDS(num2, 2);
-    pto::TEXPANDS(num3, 3);
+    pto::TEXPANDS(num2, RADIX_BUCKET_2);
+    pto::TEXPANDS(num3, RADIX_BUCKET_3);
 }
 
 template <bool isLargest, bool in, bool isUInt, bool isFloat, typename SrcDType, typename TWI, typename SRC,

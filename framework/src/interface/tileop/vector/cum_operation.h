@@ -81,16 +81,19 @@ TILEOP void TCumOperation(T0 dst, T1 src)
     constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
     const auto dstLayout = dst.GetLayout();
-    auto n0DstStride = dstLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto n1DstStride = dstLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto n2DstStride = dstLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto n3DstStride = dstLayout.template GetStrideDim<3, MAX_DIMS>();
-    auto n0DstShape = dstLayout.template GetShapeDim<0, MAX_DIMS>();
-    auto n1DstShape = dstLayout.template GetShapeDim<1, MAX_DIMS>();
-    auto n2DstShape = dstLayout.template GetShapeDim<2, MAX_DIMS>();
-    auto n3DstShape = dstLayout.template GetShapeDim<3, MAX_DIMS>();
-    auto n4DstShape = dstLayout.template GetShapeDim<4, MAX_DIMS>();
+    auto n0DstStride = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto n1DstStride = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto n2DstStride = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto n3DstStride = dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    auto n0DstShape = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto n1DstShape = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto n2DstShape = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto n3DstShape = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto n4DstShape = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
     constexpr auto dst1RawShape = Std::tuple_element<shapeSize - 1, typename T0::TileShape>::type::value;
+    constexpr size_t SECOND_LAST_DIM_OFFSET = 2;
+    constexpr size_t THIRD_LAST_DIM_OFFSET = 3;
+    constexpr size_t FOURTH_LAST_DIM_OFFSET = 4;
 
     if constexpr (axis == 0) {
         constexpr auto tileH = Std::tuple_element<DIM_1ST, typename T0::TileShape>::type::value;
@@ -100,9 +103,12 @@ TILEOP void TCumOperation(T0 dst, T1 src)
         return;
     } else if constexpr (axis == 1) {
         int loops = n0DstShape;
-        constexpr auto tileH = Std::tuple_element<shapeSize - 4, typename T0::TileShape>::type::value;
-        constexpr auto dst2RawShape = Std::tuple_element<shapeSize - 2, typename T0::TileShape>::type::value;
-        constexpr auto dst3RawShape = Std::tuple_element<shapeSize - 3, typename T0::TileShape>::type::value;
+        constexpr auto
+            tileH = Std::tuple_element<shapeSize - FOURTH_LAST_DIM_OFFSET, typename T0::TileShape>::type::value;
+        constexpr auto
+            dst2RawShape = Std::tuple_element<shapeSize - SECOND_LAST_DIM_OFFSET, typename T0::TileShape>::type::value;
+        constexpr auto
+            dst3RawShape = Std::tuple_element<shapeSize - THIRD_LAST_DIM_OFFSET, typename T0::TileShape>::type::value;
         constexpr int tileW = dst3RawShape * dst2RawShape * dst1RawShape;
 
         for (LoopVar loop = 0; loop < loops; loop++) {
@@ -110,9 +116,11 @@ TILEOP void TCumOperation(T0 dst, T1 src)
             CumOperationTool<T0, T1, tileH, tileW, dstTypeSize, is_sum>(dst, src, tmpStride);
         }
         return;
-    } else if constexpr (axis == 2) {
-        constexpr auto dst2RawShape = Std::tuple_element<shapeSize - 2, typename T0::TileShape>::type::value;
-        constexpr auto dst3RawShape = Std::tuple_element<shapeSize - 3, typename T0::TileShape>::type::value;
+    } else if constexpr (axis == DIM_3RD) {
+        constexpr auto
+            dst2RawShape = Std::tuple_element<shapeSize - SECOND_LAST_DIM_OFFSET, typename T0::TileShape>::type::value;
+        constexpr auto
+            dst3RawShape = Std::tuple_element<shapeSize - THIRD_LAST_DIM_OFFSET, typename T0::TileShape>::type::value;
         constexpr int tileH = dst3RawShape;
         constexpr int tileW = dst2RawShape * dst1RawShape;
 
@@ -123,8 +131,9 @@ TILEOP void TCumOperation(T0 dst, T1 src)
             }
         }
         return;
-    } else if constexpr (axis == 3) {
-        constexpr auto dst2RawShape = Std::tuple_element<shapeSize - 2, typename T0::TileShape>::type::value;
+    } else if constexpr (axis == DIM_4TH) {
+        constexpr auto
+            dst2RawShape = Std::tuple_element<shapeSize - SECOND_LAST_DIM_OFFSET, typename T0::TileShape>::type::value;
         constexpr int tileH = dst2RawShape;
         constexpr int tileW = dst1RawShape;
 

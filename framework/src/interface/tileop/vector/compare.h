@@ -33,6 +33,8 @@ struct CompareTmpBuffers {
 template <typename T0, typename T1 = T0>
 struct CompareTileTypes {
     static constexpr int64_t COUNT_MAX = 1024;
+    static constexpr uint64_t BUFFER_BYTES = 4096;
+    static constexpr uint32_t BITS_PER_BYTE = TileOp::BITS_PER_BYTE;
     using SrcTile0 = pto::Tile<pto::TileType::Vec, typename T0::Type, 1, COUNT_MAX, pto::BLayout::RowMajor, -1, -1>;
     using SrcTile1 = pto::Tile<pto::TileType::Vec, typename T1::Type, 1, COUNT_MAX, pto::BLayout::RowMajor, -1, -1>;
     using SrcTile = SrcTile0;
@@ -44,9 +46,9 @@ struct CompareTileTypes {
 template <typename T, typename TTmp>
 TILEOP CompareTmpBuffers<T> InitCompareTmpBuffers(TTmp tmpbuf)
 {
-    constexpr uint64_t countNum = 4096 / sizeof(typename T::Type);
-    const uint32_t ALIGNMENT = 32;
-    const uint32_t vcmpBitsSize = (countNum + 7) / 8;
+    constexpr uint64_t countNum = CompareTileTypes<T>::BUFFER_BYTES / sizeof(typename T::Type);
+    const uint32_t vcmpBitsSize = (countNum + CompareTileTypes<T>::BITS_PER_BYTE - 1) /
+                                  CompareTileTypes<T>::BITS_PER_BYTE;
 
     uint64_t tmpbufAddr = tmpbuf.GetAddr();
     __ubuf__ uint8_t* currentPtr = reinterpret_cast<__ubuf__ uint8_t*>(tmpbufAddr);
@@ -55,23 +57,23 @@ TILEOP CompareTmpBuffers<T> InitCompareTmpBuffers(TTmp tmpbuf)
     buffers.vcmpBitResult = currentPtr;
     currentPtr += vcmpBitsSize;
 
-    currentPtr = reinterpret_cast<__ubuf__ uint8_t*>((reinterpret_cast<uintptr_t>(currentPtr) + ALIGNMENT - 1) &
-                                                     ~(ALIGNMENT - 1));
+    currentPtr = reinterpret_cast<__ubuf__ uint8_t*>(
+        (reinterpret_cast<uintptr_t>(currentPtr) + TileOp::BLOCK_SIZE - 1) & ~(TileOp::BLOCK_SIZE - 1));
     buffers.startAddrUB = reinterpret_cast<__ubuf__ uint8_t*>(currentPtr);
-    currentPtr += ALIGNMENT;
+    currentPtr += TileOp::BLOCK_SIZE;
 
-    currentPtr = reinterpret_cast<__ubuf__ uint8_t*>((reinterpret_cast<uintptr_t>(currentPtr) + ALIGNMENT - 1) &
-                                                     ~(ALIGNMENT - 1));
+    currentPtr = reinterpret_cast<__ubuf__ uint8_t*>(
+        (reinterpret_cast<uintptr_t>(currentPtr) + TileOp::BLOCK_SIZE - 1) & ~(TileOp::BLOCK_SIZE - 1));
     buffers.zeroCondition = reinterpret_cast<__ubuf__ T*>(currentPtr);
     currentPtr += countNum * sizeof(typename T::Type);
 
-    currentPtr = reinterpret_cast<__ubuf__ uint8_t*>((reinterpret_cast<uintptr_t>(currentPtr) + ALIGNMENT - 1) &
-                                                     ~(ALIGNMENT - 1));
+    currentPtr = reinterpret_cast<__ubuf__ uint8_t*>(
+        (reinterpret_cast<uintptr_t>(currentPtr) + TileOp::BLOCK_SIZE - 1) & ~(TileOp::BLOCK_SIZE - 1));
     buffers.oneCondition = reinterpret_cast<__ubuf__ T*>(currentPtr);
     currentPtr += countNum * sizeof(typename T::Type);
 
-    currentPtr = reinterpret_cast<__ubuf__ uint8_t*>((reinterpret_cast<uintptr_t>(currentPtr) + ALIGNMENT - 1) &
-                                                     ~(ALIGNMENT - 1));
+    currentPtr = reinterpret_cast<__ubuf__ uint8_t*>(
+        (reinterpret_cast<uintptr_t>(currentPtr) + TileOp::BLOCK_SIZE - 1) & ~(TileOp::BLOCK_SIZE - 1));
     buffers.vselResult = reinterpret_cast<__ubuf__ T*>(currentPtr);
 
     return buffers;
@@ -90,22 +92,22 @@ TILEOP CompareLayoutInfo ExtractLayoutInfo(const T& src, const TDst& dst)
     const auto dstLayout = dst.GetLayout();
 
     CompareLayoutInfo info;
-    info.shape0 = srcLayout.template GetShapeDim<0, MAX_DIMS>();
-    info.shape1 = srcLayout.template GetShapeDim<1, MAX_DIMS>();
-    info.shape2 = srcLayout.template GetShapeDim<2, MAX_DIMS>();
-    info.shape3 = srcLayout.template GetShapeDim<3, MAX_DIMS>();
-    info.shape4 = srcLayout.template GetShapeDim<4, MAX_DIMS>();
-    info.dstShape = dstLayout.template GetShapeDim<4, MAX_DIMS>();
+    info.shape0 = srcLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    info.shape1 = srcLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    info.shape2 = srcLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    info.shape3 = srcLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    info.shape4 = srcLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    info.dstShape = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
 
-    info.stride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
-    info.stride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
-    info.stride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
-    info.stride3 = srcLayout.template GetStrideDim<3, MAX_DIMS>();
+    info.stride0 = srcLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    info.stride1 = srcLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    info.stride2 = srcLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    info.stride3 = srcLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
 
-    info.dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
-    info.dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
-    info.dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
-    info.dstStride3 = dstLayout.template GetStrideDim<3, MAX_DIMS>();
+    info.dstStride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    info.dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    info.dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    info.dstStride3 = dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
 
     return info;
 }
@@ -233,8 +235,6 @@ TILEOP void TCompare(TDst dst, T0 src0, T1 src1, TTmp tmpbuf)
     constexpr auto dstTypeSize = sizeof(typename TDst::Type);
     constexpr auto src0TypeSize = sizeof(typename T0::Type);
     constexpr auto src1TypeSize = sizeof(typename T1::Type);
-    constexpr unsigned alignUint8 = 32;
-    constexpr unsigned addressUsed = 4;
     using Types = CompareTileTypes<T0, T1>;
     using SrcTile0 = typename Types::SrcTile0;
     using SrcTile1 = typename Types::SrcTile1;
@@ -242,13 +242,16 @@ TILEOP void TCompare(TDst dst, T0 src0, T1 src1, TTmp tmpbuf)
     using DstTile = typename Types::DstTile;
     using CmpTile = typename Types::CmpTile;
     using TmpTile = typename Types::TmpTile;
-    using TileStartAddrUB = pto::Tile<pto::TileType::Vec, uint8_t, 1, alignUint8, pto::BLayout::RowMajor, -1, -1>;
+    using TileStartAddrUB = pto::Tile<pto::TileType::Vec, uint8_t, 1, TileOp::BLOCK_SIZE, pto::BLayout::RowMajor, -1,
+                                      -1>;
 
-    constexpr uint64_t countBy4096 = 4096 / sizeof(typename T0::Type);
-    constexpr uint64_t elementsPerCount = (countBy4096 < static_cast<uint64_t>(Types::COUNT_MAX)) ?
-                                              countBy4096 :
+    constexpr uint64_t bufferElementCount = Types::BUFFER_BYTES / sizeof(typename T0::Type);
+    constexpr uint64_t elementsPerCount = (bufferElementCount < static_cast<uint64_t>(Types::COUNT_MAX)) ?
+                                              bufferElementCount :
                                               static_cast<uint64_t>(Types::COUNT_MAX);
-    constexpr uint64_t dstElementsPerCount = (mode == 0) ? elementsPerCount : ((elementsPerCount + 7) / 8);
+    constexpr uint64_t dstElementsPerCount = (mode == 0) ?
+                                                 elementsPerCount :
+                                                 ((elementsPerCount + Types::BITS_PER_BYTE - 1) / Types::BITS_PER_BYTE);
 
     uint64_t numCountPerLine = info.shape4 / elementsPerCount;
     uint64_t elementsRemainPerLine = info.shape4 % elementsPerCount;
@@ -263,7 +266,9 @@ TILEOP void TCompare(TDst dst, T0 src0, T1 src1, TTmp tmpbuf)
 
                     for (LoopVar j = 0; j < numCountPerLine; ++j) {
                         size_t curShape4 = elementsPerCount;
-                        size_t curDstShape = (mode == 0) ? curShape4 : ((curShape4 + 7) / 8);
+                        size_t curDstShape = (mode == 0) ?
+                                                 curShape4 :
+                                                 ((curShape4 + Types::BITS_PER_BYTE - 1) / Types::BITS_PER_BYTE);
 
                         size_t curSrcOffset = srcOffset + j * elementsPerCount;
                         size_t curSrc1Offset = src1Offset + j * elementsPerCount;
@@ -276,7 +281,7 @@ TILEOP void TCompare(TDst dst, T0 src0, T1 src1, TTmp tmpbuf)
                         SrcTile vselResultTile, oneConditionTile, zeroConditionTile;
                         DstTile bitResTile;
                         CmpTile cmpResTile;
-                        TileStartAddrUB startAddrUBTile(1, addressUsed);
+                        TileStartAddrUB startAddrUBTile(1, TileOp::BLOCK_SIZE / Types::BITS_PER_BYTE);
                         TmpTile tmpTile(1, curShape4);
 
                         InitCommonTiles<T0, Types>(vselResultTile, startAddrUBTile, oneConditionTile, zeroConditionTile,
@@ -297,7 +302,9 @@ TILEOP void TCompare(TDst dst, T0 src0, T1 src1, TTmp tmpbuf)
 
                     if (elementsRemainPerLine) {
                         size_t curShape4 = elementsRemainPerLine;
-                        size_t curDstShape = (mode == 0) ? curShape4 : ((curShape4 + 7) / 8);
+                        size_t curDstShape = (mode == 0) ?
+                                                 curShape4 :
+                                                 ((curShape4 + Types::BITS_PER_BYTE - 1) / Types::BITS_PER_BYTE);
 
                         size_t curSrcOffset = srcOffset + numCountPerLine * elementsPerCount;
                         size_t curSrc1Offset = src1Offset + numCountPerLine * elementsPerCount;
@@ -310,7 +317,7 @@ TILEOP void TCompare(TDst dst, T0 src0, T1 src1, TTmp tmpbuf)
                         SrcTile vselResultTile, oneConditionTile, zeroConditionTile;
                         DstTile bitResTile;
                         CmpTile cmpResTile;
-                        TileStartAddrUB startAddrUBTile(1, addressUsed);
+                        TileStartAddrUB startAddrUBTile(1, TileOp::BLOCK_SIZE / Types::BITS_PER_BYTE);
                         TmpTile tmpTile(1, curShape4);
 
                         InitCommonTiles<T0, Types>(vselResultTile, startAddrUBTile, oneConditionTile, zeroConditionTile,
@@ -341,20 +348,21 @@ TILEOP void TCompareScalar(TDst dst, T src, TTmp tmpbuf, TVal scalarVal)
     auto info = ExtractLayoutInfo(src, dst);
     constexpr auto dstTypeSize = sizeof(typename TDst::Type);
     constexpr auto srcTypeSize = sizeof(typename T::Type);
-    constexpr unsigned alignUint8 = 32;
-    constexpr unsigned addressUsed = 4;
     using Types = CompareTileTypes<T>;
     using DstTile = typename Types::DstTile;
     using CmpTile = typename Types::CmpTile;
     using SrcTile = typename Types::SrcTile;
     using TmpTile = typename Types::TmpTile;
-    using TileStartAddrUB = pto::Tile<pto::TileType::Vec, uint8_t, 1, alignUint8, pto::BLayout::RowMajor, -1, -1>;
+    using TileStartAddrUB = pto::Tile<pto::TileType::Vec, uint8_t, 1, TileOp::BLOCK_SIZE, pto::BLayout::RowMajor, -1,
+                                      -1>;
 
-    constexpr uint64_t countBy4096 = 4096 / sizeof(typename T::Type);
-    constexpr uint64_t elementsPerCount = (countBy4096 < static_cast<uint64_t>(Types::COUNT_MAX)) ?
-                                              countBy4096 :
+    constexpr uint64_t bufferElementCount = Types::BUFFER_BYTES / sizeof(typename T::Type);
+    constexpr uint64_t elementsPerCount = (bufferElementCount < static_cast<uint64_t>(Types::COUNT_MAX)) ?
+                                              bufferElementCount :
                                               static_cast<uint64_t>(Types::COUNT_MAX);
-    constexpr uint64_t dstElementsPerCount = (mode == 0) ? elementsPerCount : ((elementsPerCount + 7) / 8);
+    constexpr uint64_t dstElementsPerCount = (mode == 0) ?
+                                                 elementsPerCount :
+                                                 ((elementsPerCount + Types::BITS_PER_BYTE - 1) / Types::BITS_PER_BYTE);
 
     uint64_t numCountPerLine = info.shape4 / elementsPerCount;
     uint64_t elementsRemainPerLine = info.shape4 % elementsPerCount;
@@ -368,7 +376,9 @@ TILEOP void TCompareScalar(TDst dst, T src, TTmp tmpbuf, TVal scalarVal)
 
                     for (LoopVar j = 0; j < numCountPerLine; ++j) {
                         size_t curShape4 = elementsPerCount;
-                        size_t curDstShape = (mode == 0) ? curShape4 : ((curShape4 + 7) / 8);
+                        size_t curDstShape = (mode == 0) ?
+                                                 curShape4 :
+                                                 ((curShape4 + Types::BITS_PER_BYTE - 1) / Types::BITS_PER_BYTE);
 
                         size_t curSrcOffset = srcOffset + j * elementsPerCount;
                         size_t curDstOffset = dstOffset + j * dstElementsPerCount;
@@ -379,7 +389,7 @@ TILEOP void TCompareScalar(TDst dst, T src, TTmp tmpbuf, TVal scalarVal)
                         SrcTile vselResultTile, oneConditionTile, zeroConditionTile;
                         DstTile bitResTile;
                         CmpTile cmpResTile;
-                        TileStartAddrUB startAddrUBTile(1, addressUsed);
+                        TileStartAddrUB startAddrUBTile(1, TileOp::BLOCK_SIZE / Types::BITS_PER_BYTE);
                         TmpTile tmpTile(1, curShape4);
 
                         InitCommonTiles<T, Types>(vselResultTile, startAddrUBTile, oneConditionTile, zeroConditionTile,
@@ -399,7 +409,9 @@ TILEOP void TCompareScalar(TDst dst, T src, TTmp tmpbuf, TVal scalarVal)
 
                     if (elementsRemainPerLine) {
                         size_t curShape4 = elementsRemainPerLine;
-                        size_t curDstShape = (mode == 0) ? curShape4 : ((curShape4 + 7) / 8);
+                        size_t curDstShape = (mode == 0) ?
+                                                 curShape4 :
+                                                 ((curShape4 + Types::BITS_PER_BYTE - 1) / Types::BITS_PER_BYTE);
 
                         size_t curSrcOffset = srcOffset + numCountPerLine * elementsPerCount;
                         size_t curDstOffset = dstOffset + numCountPerLine * dstElementsPerCount;
@@ -410,7 +422,7 @@ TILEOP void TCompareScalar(TDst dst, T src, TTmp tmpbuf, TVal scalarVal)
                         SrcTile vselResultTile, oneConditionTile, zeroConditionTile;
                         DstTile bitResTile;
                         CmpTile cmpResTile;
-                        TileStartAddrUB startAddrUBTile(1, addressUsed);
+                        TileStartAddrUB startAddrUBTile(1, TileOp::BLOCK_SIZE / Types::BITS_PER_BYTE);
                         TmpTile tmpTile(1, curShape4);
 
                         InitCommonTiles<T, Types>(vselResultTile, startAddrUBTile, oneConditionTile, zeroConditionTile,

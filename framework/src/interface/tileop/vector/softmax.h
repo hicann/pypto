@@ -32,14 +32,17 @@
 template <typename TileDataOut, typename TileDataIn, typename Scalar>
 __tf__ PTO_INTERNAL void TCOLMAX_HIGH_PERF(TileDataOut& dstTile, TileDataIn& srcTile, Scalar scale)
 {
+    constexpr uint16_t ROWS_PER_ITER = 4;
+    constexpr uint16_t F32_ELEMENTS_PER_VECTOR = TileOp::MASK_LEN;
+    constexpr uint16_t ITER_STRIDE = ROWS_PER_ITER * F32_ELEMENTS_PER_VECTOR;
     __ubuf__ typename TileDataIn::DType* dst = (__ubuf__ typename TileDataIn::DType*)__cce_get_tile_ptr(dstTile.data());
     __ubuf__ typename TileDataIn::DType* src = (__ubuf__ typename TileDataIn::DType*)__cce_get_tile_ptr(srcTile.data());
 
     __ubuf__ float* src0_ub = (__ubuf__ float*)src;
-    __ubuf__ float* p0 = src0_ub + 4 * 64;
-    __ubuf__ float* p1 = src0_ub + 5 * 64;
-    __ubuf__ float* p2 = src0_ub + 6 * 64;
-    __ubuf__ float* p3 = src0_ub + 7 * 64;
+    __ubuf__ float* p0 = src0_ub + ITER_STRIDE;
+    __ubuf__ float* p1 = p0 + F32_ELEMENTS_PER_VECTOR;
+    __ubuf__ float* p2 = p1 + F32_ELEMENTS_PER_VECTOR;
+    __ubuf__ float* p3 = p2 + F32_ELEMENTS_PER_VECTOR;
     __VEC_SCOPE__
     {
         vector_f32 max_0a, max_1a, max_2a, max_3a;
@@ -51,20 +54,20 @@ __tf__ PTO_INTERNAL void TCOLMAX_HIGH_PERF(TileDataOut& dstTile, TileDataIn& src
 
         vector_bool preg_108 = pset_b16(PAT_ALL);
 
-        vlds(max_0a, src0_ub, 0 * 64, NORM);
-        vlds(max_1a, src0_ub, 1 * 64, NORM);
-        vlds(max_2a, src0_ub, 2 * 64, NORM);
-        vlds(max_3a, src0_ub, 3 * 64, NORM);
+        vlds(max_0a, src0_ub, DIM_1ST * F32_ELEMENTS_PER_VECTOR, NORM);
+        vlds(max_1a, src0_ub, DIM_2ND * F32_ELEMENTS_PER_VECTOR, NORM);
+        vlds(max_2a, src0_ub, DIM_3RD * F32_ELEMENTS_PER_VECTOR, NORM);
+        vlds(max_3a, src0_ub, DIM_4TH * F32_ELEMENTS_PER_VECTOR, NORM);
 
         pto::RegTensor<float> v_row;
-        for (uint16_t row = 4; row < uint16_t(TileDataIn::Rows); row += 4) {
-            vlds(v_row, p0, 4 * 64, NORM, POST_UPDATE);
+        for (uint16_t row = ROWS_PER_ITER; row < uint16_t(TileDataIn::Rows); row += ROWS_PER_ITER) {
+            vlds(v_row, p0, ITER_STRIDE, NORM, POST_UPDATE);
             vmax(max_0a, max_0a, v_row, preg_108, MODE_ZEROING);
-            vlds(v_row, p1, 4 * 64, NORM, POST_UPDATE);
+            vlds(v_row, p1, ITER_STRIDE, NORM, POST_UPDATE);
             vmax(max_1a, max_1a, v_row, preg_108, MODE_ZEROING);
-            vlds(v_row, p2, 4 * 64, NORM, POST_UPDATE);
+            vlds(v_row, p2, ITER_STRIDE, NORM, POST_UPDATE);
             vmax(max_2a, max_2a, v_row, preg_108, MODE_ZEROING);
-            vlds(v_row, p3, 4 * 64, NORM, POST_UPDATE);
+            vlds(v_row, p3, ITER_STRIDE, NORM, POST_UPDATE);
             vmax(max_3a, max_3a, v_row, preg_108, MODE_ZEROING);
         }
 

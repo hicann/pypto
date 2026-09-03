@@ -89,9 +89,8 @@ TILEOP void LogicalAndImpl(T& dst, U1& src1, U2& src2, L& tmp1, L& tmp2, L& ones
 
 TILEOP uint64_t GenTmpTileAddr(uint64_t addr, uint64_t offset)
 {
-    constexpr uint32_t ALIGN_SIZE = 32;
     uintptr_t start = reinterpret_cast<uintptr_t>(addr + offset);
-    return (start + ALIGN_SIZE - 1) & ~(ALIGN_SIZE - 1);
+    return (start + TileOp::BLOCK_SIZE - 1) & ~(TileOp::BLOCK_SIZE - 1);
 }
 
 template <typename T0, typename T1, typename T2, typename T3>
@@ -106,9 +105,7 @@ TILEOP void TLogicalAnd(T0 dst, T1 src1, T2 src2, T3 tmp)
 
     using DType = FINAL_TYPE<typename T1::Type, typename T2::Type>;
     constexpr auto COUNT_MAX = 64;
-    constexpr auto ALIGN_SIZE = 32;
-    constexpr auto BITS_PER_BYTE = 8;
-    constexpr auto CMP_BYTE_SIZE = (COUNT_MAX + BITS_PER_BYTE - 1) / BITS_PER_BYTE;
+    constexpr auto CMP_BYTE_SIZE = (COUNT_MAX + TileOp::BITS_PER_BYTE - 1) / TileOp::BITS_PER_BYTE;
     constexpr auto TMP_OFFSET = sizeof(DType) * COUNT_MAX;
 
     using DstTileTensor = TileTensor<typename T0::Type, LocalLayout2Dim<1, COUNT_MAX>, Hardware::UB>;
@@ -116,9 +113,9 @@ TILEOP void TLogicalAnd(T0 dst, T1 src1, T2 src2, T3 tmp)
     using Src2TileTensor = TileTensor<typename T2::Type, LocalLayout2Dim<1, COUNT_MAX>, Hardware::UB>;
     using TmpTileTensor = TileTensor<DType, LocalLayout2Dim<1, COUNT_MAX>, Hardware::UB>;
     using CvtTileTensor = TileTensor<half, LocalLayout2Dim<1, COUNT_MAX>, Hardware::UB>;
-    using StartAddrUBTile = TileTensor<uint8_t, LocalLayout2Dim<1, ALIGN_SIZE>, Hardware::UB>;
+    using StartAddrUBTile = TileTensor<uint8_t, LocalLayout2Dim<1, TileOp::BLOCK_SIZE>, Hardware::UB>;
     // Tile shape of pto tile must 32 byte align
-    constexpr auto CMP_TILE = ((CMP_BYTE_SIZE + ALIGN_SIZE - 1) / ALIGN_SIZE) * ALIGN_SIZE;
+    constexpr auto CMP_TILE = ((CMP_BYTE_SIZE + TileOp::BLOCK_SIZE - 1) / TileOp::BLOCK_SIZE) * TileOp::BLOCK_SIZE;
     using CmpBitsTileTensor = TileTensor<uint8_t, StaticLayout2Dim<1, CMP_BYTE_SIZE, 1, CMP_TILE>, Hardware::UB>;
 
     using DstTile = PtoTile<DstTileTensor>;
@@ -135,7 +132,7 @@ TILEOP void TLogicalAnd(T0 dst, T1 src1, T2 src2, T3 tmp)
     auto tmp1Addr = GenTmpTileAddr(oneAddr, TMP_OFFSET);
     auto tmp2Addr = GenTmpTileAddr(tmp1Addr, TMP_OFFSET);
     auto sauAddr = GenTmpTileAddr(tmp2Addr, TMP_OFFSET);
-    auto cvtAddr = GenTmpTileAddr(sauAddr, ALIGN_SIZE);
+    auto cvtAddr = GenTmpTileAddr(sauAddr, TileOp::BLOCK_SIZE);
 
     auto cmp1Tile = PtoTile<CmpBitsTileTensor>(cmp1Addr);
     auto cmp2Tile = PtoTile<CmpBitsTileTensor>(cmp2Addr);
@@ -152,7 +149,7 @@ TILEOP void TLogicalAnd(T0 dst, T1 src1, T2 src2, T3 tmp)
     auto loopOneTile = TmpTile(1, validCols, oneAddr);
     auto loopZeroTile = TmpTile(1, validCols, zeroAddr);
     auto loopCvtTile = CvtTile(1, validCols, cvtAddr);
-    auto startAddrUBTile = SauTile(1, ALIGN_SIZE, sauAddr);
+    auto startAddrUBTile = SauTile(1, TileOp::BLOCK_SIZE, sauAddr);
 
     auto remainDstTile = loopDstTile;
     auto remainSrc1Tile = loopSrc1Tile;

@@ -763,7 +763,8 @@ void BindOperation(py::module_& m)
         "OnlineSoftmax",
         [](const Tensor& scores, float scale) {
             auto result = npu::tile_fwk::OnlineSoftmax(scores, scale);
-            return py::make_tuple(std::get<0>(result), std::get<1>(result), std::get<2>(result));
+            const auto& [expScores, columnMax, columnSum] = result;
+            return py::make_tuple(expScores, columnMax, columnSum);
         },
         py::arg("scores"), py::arg("scale"),
         "OnlineSoftmax(scores, scale) -> (exp_scores_bf16, column_max, column_sum).");
@@ -773,7 +774,8 @@ void BindOperation(py::module_& m)
            const Tensor& currentSum, const Tensor& currentOutput) {
             auto result = npu::tile_fwk::OnlineSoftmaxUpdate(previousMax, previousSum, previousOutput, currentMax,
                                                              currentSum, currentOutput);
-            return py::make_tuple(std::get<0>(result), std::get<1>(result), std::get<2>(result));
+            const auto& [updatedMax, updatedSum, updatedOutput] = result;
+            return py::make_tuple(updatedMax, updatedSum, updatedOutput);
         },
         py::arg("previous_max"), py::arg("previous_sum"), py::arg("previous_output"), py::arg("current_max"),
         py::arg("current_sum"), py::arg("current_output"),

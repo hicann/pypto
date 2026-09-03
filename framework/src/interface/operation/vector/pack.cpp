@@ -19,15 +19,6 @@
 
 namespace npu::tile_fwk {
 
-Tensor Duplicate(const Tensor& operand)
-{
-    DECLARE_TRACER();
-    CheckTensorFormat(operand.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Duplicate");
-
-    RETURN_CALL(UnaryOperation<UnaryOpType::DUPLICATE>, *Program::GetInstance().GetCurrentFunction(),
-                operand.GetStorage());
-}
-
 Tensor Pack(const Tensor& self)
 {
     DECLARE_TRACER();

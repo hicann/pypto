@@ -171,34 +171,34 @@ TILEOP void Ttan(T0 dst, T1 src, T2 tmp)
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
     constexpr auto srcTypeSize = sizeof(typename T1::Type);
 
-    auto dstShape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
-    auto dstShape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
-    auto dstShape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
-    auto dstShape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
-    auto dstShape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
+    auto dstShape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
 
-    auto srcExecShape3 = GetElementwiseOperandExecShapeDim<3, MAX_DIMS>(dst, src);
-    auto srcExecShape4 = GetElementwiseOperandExecShapeDim<4, MAX_DIMS>(dst, src);
+    auto srcExecShape3 = GetElementwiseOperandExecShapeDim<DIM_4TH, MAX_DIMS>(dst, src);
+    auto srcExecShape4 = GetElementwiseOperandExecShapeDim<DIM_5TH, MAX_DIMS>(dst, src);
 
-    auto dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto dstStride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
 
-    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto srcStride0 = srcLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
 
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, MAX_DIMS>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
 
     using SrcExecConfig = ElementwiseOperandExecConfig<T0, T1>;
     constexpr auto srcTileH = SrcExecConfig::tileH;
     constexpr auto srcTileW = SrcExecConfig::tileW;
 
-    constexpr auto ALIGN32HALF = 16;
-    constexpr auto ALIGN32FLOAT = 8;
-    constexpr auto tmpTileW = (srcTileW + ALIGN32HALF - 1) / ALIGN32HALF * ALIGN32HALF;
-    constexpr auto tmpTileW32Bit = (srcTileW + ALIGN32FLOAT - 1) / ALIGN32FLOAT * ALIGN32FLOAT;
+    constexpr auto tmpTileW = (srcTileW + TileOp::BLOCK_NELEM_B16 - 1) / TileOp::BLOCK_NELEM_B16 *
+                              TileOp::BLOCK_NELEM_B16;
+    constexpr auto tmpTileW32Bit = (srcTileW + TileOp::BLOCK_NELEM_B32 - 1) / TileOp::BLOCK_NELEM_B32 *
+                                   TileOp::BLOCK_NELEM_B32;
 
     using DstTile = pto::Tile<pto::TileType::Vec, typename T0::Type, dstTileH, dstTileW, pto::BLayout::RowMajor, -1,
                               -1>;
@@ -228,15 +228,22 @@ TILEOP void Ttan(T0 dst, T1 src, T2 tmp)
     Tmp8Tile tmp8Tile(srcExecShape3, srcExecShape4);
 
     constexpr auto tmpFp32TileSize = srcTileH * tmpTileW32Bit * sizeof(float);
+    constexpr size_t TMP2_SLOT = 2;
+    constexpr size_t TMP3_SLOT = 3;
+    constexpr size_t TMP4_SLOT = 4;
+    constexpr size_t TMP5_SLOT = 5;
+    constexpr size_t TMP6_SLOT = 6;
+    constexpr size_t TMP7_SLOT = 7;
+    constexpr size_t TMP8_SLOT = 8;
     pto::TASSIGN(tmpFp32Tile, (uint64_t)(tmp.GetAddr()));
     pto::TASSIGN(tmpInt32Tile, (uint64_t)(tmp.GetAddr() + tmpFp32TileSize));
-    pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + 2 * tmpFp32TileSize));
-    pto::TASSIGN(tmp3Tile, (uint64_t)(tmp.GetAddr() + 3 * tmpFp32TileSize));
-    pto::TASSIGN(tmp4Tile, (uint64_t)(tmp.GetAddr() + 4 * tmpFp32TileSize));
-    pto::TASSIGN(tmp5Tile, (uint64_t)(tmp.GetAddr() + 5 * tmpFp32TileSize));
-    pto::TASSIGN(tmp6Tile, (uint64_t)(tmp.GetAddr() + 6 * tmpFp32TileSize));
-    pto::TASSIGN(tmp7Tile, (uint64_t)(tmp.GetAddr() + 7 * tmpFp32TileSize));
-    pto::TASSIGN(tmp8Tile, (uint64_t)(tmp.GetAddr() + 8 * tmpFp32TileSize));
+    pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + TMP2_SLOT * tmpFp32TileSize));
+    pto::TASSIGN(tmp3Tile, (uint64_t)(tmp.GetAddr() + TMP3_SLOT * tmpFp32TileSize));
+    pto::TASSIGN(tmp4Tile, (uint64_t)(tmp.GetAddr() + TMP4_SLOT * tmpFp32TileSize));
+    pto::TASSIGN(tmp5Tile, (uint64_t)(tmp.GetAddr() + TMP5_SLOT * tmpFp32TileSize));
+    pto::TASSIGN(tmp6Tile, (uint64_t)(tmp.GetAddr() + TMP6_SLOT * tmpFp32TileSize));
+    pto::TASSIGN(tmp7Tile, (uint64_t)(tmp.GetAddr() + TMP7_SLOT * tmpFp32TileSize));
+    pto::TASSIGN(tmp8Tile, (uint64_t)(tmp.GetAddr() + TMP8_SLOT * tmpFp32TileSize));
 
     for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < dstShape1; ++n1Index) {

@@ -19,6 +19,11 @@
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
+namespace reduce_detail {
+constexpr size_t MERGED_TILE_AXIS_OFFSET = 3;
+constexpr size_t TILE_HEIGHT_OFFSET = 2;
+} // namespace reduce_detail
+
 template <ReduceOp op, typename LastUse, typename T0, typename T1, typename T2>
 TILEOP void ReduceComputeImpl(T0 dst, T1 src, T2 tmp)
 {
@@ -43,38 +48,38 @@ TILEOP void ReduceComputeImpl(T0 dst, T1 src, T2 tmp)
 template <ReduceOp op, typename LastUse, typename T0, typename T1, typename T2>
 TILEOP void ReduceLastAxisCompute(T0 dst, T1 src, T2 tmp)
 {
-    constexpr auto tmpTileH = TileOp::GetTensorTileShapeDim<T2, 3, MAX_DIMS>();
-    constexpr auto tmpTileW = TileOp::GetTensorTileShapeDim<T2, 4, MAX_DIMS>();
+    constexpr auto tmpTileH = TileOp::GetTensorTileShapeDim<T2, DIM_4TH, MAX_DIMS>();
+    constexpr auto tmpTileW = TileOp::GetTensorTileShapeDim<T2, DIM_5TH, MAX_DIMS>();
     using TmpTileDefine = pto::Tile<pto::TileType::Vec, typename T2::Type, tmpTileH, tmpTileW, pto::BLayout::RowMajor,
                                     tmpTileH, tmpTileW>;
     TmpTileDefine tmpTile;
 
     const auto dstLayout = dst.GetLayout();
-    auto dstShape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
-    auto dstShape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
-    auto dstShape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
-    auto dstShape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
-    auto dstShape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
-    auto dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, MAX_DIMS>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
+    auto dstShape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    auto dstStride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
 
     const auto srcLayout = src.GetLayout();
-    auto srcShape0 = srcLayout.template GetShapeDim<0, MAX_DIMS>();
-    auto srcShape1 = srcLayout.template GetShapeDim<1, MAX_DIMS>();
-    auto srcShape2 = srcLayout.template GetShapeDim<2, MAX_DIMS>();
-    auto srcShape3 = srcLayout.template GetShapeDim<3, MAX_DIMS>();
-    auto srcShape4 = srcLayout.template GetShapeDim<4, MAX_DIMS>();
+    auto srcShape0 = srcLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto srcShape1 = srcLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto srcShape2 = srcLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto srcShape3 = srcLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto srcShape4 = srcLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
     if (srcShape0 == 0 || srcShape1 == 0 || srcShape2 == 0 || srcShape3 == 0 || srcShape4 == 0) {
         return;
     }
-    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
-    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, MAX_DIMS>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, MAX_DIMS>();
+    auto srcStride0 = srcLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, DIM_4TH, MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, DIM_5TH, MAX_DIMS>();
     constexpr auto srcTypeSize = sizeof(typename T1::Type);
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
     for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
@@ -111,38 +116,38 @@ TILEOP void TRowSumSingle(T0 dst, T1 src, T2 tmp)
 template <ReduceOp op, typename T0, typename T1, typename T2, typename T3>
 TILEOP void ArgReduceLastAxisCompute(T0 dstValue, T1 dstIndex, T2 src, T3 tmp)
 {
-    constexpr auto tmpTileH = TileOp::GetTensorTileShapeDim<T3, 3, MAX_DIMS>();
-    constexpr auto tmpTileW = TileOp::GetTensorTileShapeDim<T3, 4, MAX_DIMS>();
+    constexpr auto tmpTileH = TileOp::GetTensorTileShapeDim<T3, DIM_4TH, MAX_DIMS>();
+    constexpr auto tmpTileW = TileOp::GetTensorTileShapeDim<T3, DIM_5TH, MAX_DIMS>();
     using TmpTileDefine = pto::Tile<pto::TileType::Vec, typename T2::Type, tmpTileH, tmpTileW, pto::BLayout::RowMajor,
                                     tmpTileH, tmpTileW>;
     TmpTileDefine tmpTile;
 
     const auto dstLayout = dstValue.GetLayout();
-    auto dstShape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
-    auto dstShape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
-    auto dstShape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
-    auto dstShape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
-    auto dstShape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
-    auto dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, MAX_DIMS>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
+    auto dstShape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    auto dstStride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
 
     const auto srcLayout = src.GetLayout();
-    auto srcShape0 = srcLayout.template GetShapeDim<0, MAX_DIMS>();
-    auto srcShape1 = srcLayout.template GetShapeDim<1, MAX_DIMS>();
-    auto srcShape2 = srcLayout.template GetShapeDim<2, MAX_DIMS>();
-    auto srcShape3 = srcLayout.template GetShapeDim<3, MAX_DIMS>();
-    auto srcShape4 = srcLayout.template GetShapeDim<4, MAX_DIMS>();
+    auto srcShape0 = srcLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto srcShape1 = srcLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto srcShape2 = srcLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto srcShape3 = srcLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto srcShape4 = srcLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
     if (srcShape0 == 0 || srcShape1 == 0 || srcShape2 == 0 || srcShape3 == 0 || srcShape4 == 0) {
         return;
     }
-    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
-    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T2, 3, MAX_DIMS>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T2, 4, MAX_DIMS>();
+    auto srcStride0 = srcLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T2, DIM_4TH, MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T2, DIM_5TH, MAX_DIMS>();
     constexpr auto srcTypeSize = sizeof(typename T2::Type);
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
     for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
@@ -221,12 +226,12 @@ TILEOP void TRowMaxMinProdLineDynamic(T0 dst, T1 src)
 {
     constexpr auto srcShapeSize = Std::tuple_size<typename T1::Shape>::value;
     constexpr auto dstShapeSize = Std::tuple_size<typename T0::Shape>::value;
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, axis + dstShapeSize - 5>();
-    constexpr auto
-        dstTileW = TileOp::GetAnyAxisMergeResult<axis + dstShapeSize - 3, dstShapeSize, typename T0::TileShape>();
-    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, axis + srcShapeSize - 5>();
-    constexpr auto
-        srcTileW = TileOp::GetAnyAxisMergeResult<axis + srcShapeSize - 3, srcShapeSize, typename T1::TileShape>();
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, axis + dstShapeSize - MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetAnyAxisMergeResult<
+        axis + dstShapeSize - reduce_detail::MERGED_TILE_AXIS_OFFSET, dstShapeSize, typename T0::TileShape>();
+    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, axis + srcShapeSize - MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetAnyAxisMergeResult<
+        axis + srcShapeSize - reduce_detail::MERGED_TILE_AXIS_OFFSET, srcShapeSize, typename T1::TileShape>();
     using DstTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, dstTileH, dstTileW, pto::BLayout::RowMajor,
                                     -1, -1>;
     using SrcTileDefine = pto::Tile<pto::TileType::Vec, typename T1::Type, srcTileH, srcTileW, pto::BLayout::RowMajor,
@@ -234,34 +239,36 @@ TILEOP void TRowMaxMinProdLineDynamic(T0 dst, T1 src)
     constexpr auto typeSize = sizeof(typename T1::Type);
     const auto dstLayout = dst.GetLayout();
     const auto srcLayout = src.GetLayout();
-    size_t dstShape[] = {static_cast<size_t>(dstLayout.template GetShapeDim<0, MAX_DIMS>()),
-                         static_cast<size_t>(dstLayout.template GetShapeDim<1, MAX_DIMS>()),
-                         static_cast<size_t>(dstLayout.template GetShapeDim<2, MAX_DIMS>()),
-                         static_cast<size_t>(dstLayout.template GetShapeDim<3, MAX_DIMS>()),
-                         static_cast<size_t>(dstLayout.template GetShapeDim<4, MAX_DIMS>())};
-    size_t dstStride[] = {static_cast<size_t>(dstLayout.template GetStrideDim<0, MAX_DIMS>()),
-                          static_cast<size_t>(dstLayout.template GetStrideDim<1, MAX_DIMS>()),
-                          static_cast<size_t>(dstLayout.template GetStrideDim<2, MAX_DIMS>()),
-                          static_cast<size_t>(dstLayout.template GetStrideDim<3, MAX_DIMS>())};
-    size_t srcShape[] = {static_cast<size_t>(srcLayout.template GetShapeDim<0, MAX_DIMS>()),
-                         static_cast<size_t>(srcLayout.template GetShapeDim<1, MAX_DIMS>()),
-                         static_cast<size_t>(srcLayout.template GetShapeDim<2, MAX_DIMS>()),
-                         static_cast<size_t>(srcLayout.template GetShapeDim<3, MAX_DIMS>()),
-                         static_cast<size_t>(srcLayout.template GetShapeDim<4, MAX_DIMS>())};
-    size_t srcStride[] = {static_cast<size_t>(srcLayout.template GetStrideDim<0, MAX_DIMS>()),
-                          static_cast<size_t>(srcLayout.template GetStrideDim<1, MAX_DIMS>()),
-                          static_cast<size_t>(srcLayout.template GetStrideDim<2, MAX_DIMS>()),
-                          static_cast<size_t>(srcLayout.template GetStrideDim<3, MAX_DIMS>())};
+    size_t dstShape[] = {static_cast<size_t>(dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>()),
+                         static_cast<size_t>(dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>()),
+                         static_cast<size_t>(dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>()),
+                         static_cast<size_t>(dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>()),
+                         static_cast<size_t>(dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>())};
+    size_t dstStride[] = {static_cast<size_t>(dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>()),
+                          static_cast<size_t>(dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>()),
+                          static_cast<size_t>(dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>()),
+                          static_cast<size_t>(dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>())};
+    size_t srcShape[] = {static_cast<size_t>(srcLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>()),
+                         static_cast<size_t>(srcLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>()),
+                         static_cast<size_t>(srcLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>()),
+                         static_cast<size_t>(srcLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>()),
+                         static_cast<size_t>(srcLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>())};
+    size_t srcStride[] = {static_cast<size_t>(srcLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>()),
+                          static_cast<size_t>(srcLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>()),
+                          static_cast<size_t>(srcLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>()),
+                          static_cast<size_t>(srcLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>())};
     for (LoopVar n0Index = 0, n0Size = (axis == 0 ? (size_t)1 : dstShape[0]); n0Index < n0Size; ++n0Index) {
         for (LoopVar n1Index = 0, n1Size = (axis == 1 ? (size_t)1 : dstShape[1]); n1Index < n1Size; ++n1Index) {
-            for (LoopVar n2Index = 0, n2Size = (axis == 2 ? (size_t)1 : dstShape[2]); n2Index < n2Size; ++n2Index) {
-                for (LoopVar n3Index = 0, n3Size = (axis == 3 ? (size_t)1 : dstShape[3]); n3Index < n3Size; ++n3Index) {
-                    DstTileDefine dstTile(dstShape[axis], dstShape[4]);
-                    SrcTileDefine srcTile(srcShape[axis], srcShape[4]);
-                    auto dstOffset = n0Index * dstStride[0] + n1Index * dstStride[1] + n2Index * dstStride[2] +
-                                     n3Index * dstStride[3];
-                    auto srcOffset = n0Index * srcStride[0] + n1Index * srcStride[1] + n2Index * srcStride[2] +
-                                     n3Index * srcStride[3];
+            for (LoopVar n2Index = 0, n2Size = (axis == DIM_3RD ? (size_t)1 : dstShape[DIM_3RD]); n2Index < n2Size;
+                 ++n2Index) {
+                for (LoopVar n3Index = 0, n3Size = (axis == DIM_4TH ? (size_t)1 : dstShape[DIM_4TH]); n3Index < n3Size;
+                     ++n3Index) {
+                    DstTileDefine dstTile(dstShape[axis], dstShape[DIM_5TH]);
+                    SrcTileDefine srcTile(srcShape[axis], srcShape[DIM_5TH]);
+                    auto dstOffset = n0Index * dstStride[DIM_1ST] + n1Index * dstStride[DIM_2ND] +
+                                     n2Index * dstStride[DIM_3RD] + n3Index * dstStride[DIM_4TH];
+                    auto srcOffset = n0Index * srcStride[DIM_1ST] + n1Index * srcStride[DIM_2ND] +
+                                     n2Index * srcStride[DIM_3RD] + n3Index * srcStride[DIM_4TH];
                     pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * typeSize));
                     pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * typeSize));
                     if constexpr (op == ReduceOp::MAX) {
@@ -306,35 +313,37 @@ TILEOP void ColReduceWithTmpImp(T0 dst, T1 src, T2 tmp)
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
     const auto dstLayout = dst.GetLayout();
     const auto srcLayout = src.GetLayout();
-    size_t dstShape[] = {static_cast<size_t>(dstLayout.template GetShapeDim<0, MAX_DIMS>()),
-                         static_cast<size_t>(dstLayout.template GetShapeDim<1, MAX_DIMS>()),
-                         static_cast<size_t>(dstLayout.template GetShapeDim<2, MAX_DIMS>()),
-                         static_cast<size_t>(dstLayout.template GetShapeDim<3, MAX_DIMS>()),
-                         static_cast<size_t>(dstLayout.template GetShapeDim<4, MAX_DIMS>())};
-    size_t dstStride[] = {static_cast<size_t>(dstLayout.template GetStrideDim<0, MAX_DIMS>()),
-                          static_cast<size_t>(dstLayout.template GetStrideDim<1, MAX_DIMS>()),
-                          static_cast<size_t>(dstLayout.template GetStrideDim<2, MAX_DIMS>()),
-                          static_cast<size_t>(dstLayout.template GetStrideDim<3, MAX_DIMS>())};
-    size_t srcShape[] = {static_cast<size_t>(srcLayout.template GetShapeDim<0, MAX_DIMS>()),
-                         static_cast<size_t>(srcLayout.template GetShapeDim<1, MAX_DIMS>()),
-                         static_cast<size_t>(srcLayout.template GetShapeDim<2, MAX_DIMS>()),
-                         static_cast<size_t>(srcLayout.template GetShapeDim<3, MAX_DIMS>()),
-                         static_cast<size_t>(srcLayout.template GetShapeDim<4, MAX_DIMS>())};
-    size_t srcStride[] = {static_cast<size_t>(srcLayout.template GetStrideDim<0, MAX_DIMS>()),
-                          static_cast<size_t>(srcLayout.template GetStrideDim<1, MAX_DIMS>()),
-                          static_cast<size_t>(srcLayout.template GetStrideDim<2, MAX_DIMS>()),
-                          static_cast<size_t>(srcLayout.template GetStrideDim<3, MAX_DIMS>())};
+    size_t dstShape[] = {static_cast<size_t>(dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>()),
+                         static_cast<size_t>(dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>()),
+                         static_cast<size_t>(dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>()),
+                         static_cast<size_t>(dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>()),
+                         static_cast<size_t>(dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>())};
+    size_t dstStride[] = {static_cast<size_t>(dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>()),
+                          static_cast<size_t>(dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>()),
+                          static_cast<size_t>(dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>()),
+                          static_cast<size_t>(dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>())};
+    size_t srcShape[] = {static_cast<size_t>(srcLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>()),
+                         static_cast<size_t>(srcLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>()),
+                         static_cast<size_t>(srcLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>()),
+                         static_cast<size_t>(srcLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>()),
+                         static_cast<size_t>(srcLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>())};
+    size_t srcStride[] = {static_cast<size_t>(srcLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>()),
+                          static_cast<size_t>(srcLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>()),
+                          static_cast<size_t>(srcLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>()),
+                          static_cast<size_t>(srcLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>())};
     for (LoopVar n0Index = 0, n0Size = (axis == 0 ? (size_t)1 : dstShape[0]); n0Index < n0Size; ++n0Index) {
         for (LoopVar n1Index = 0, n1Size = (axis == 1 ? (size_t)1 : dstShape[1]); n1Index < n1Size; ++n1Index) {
-            for (LoopVar n2Index = 0, n2Size = (axis == 2 ? (size_t)1 : dstShape[2]); n2Index < n2Size; ++n2Index) {
-                for (LoopVar n3Index = 0, n3Size = (axis == 3 ? (size_t)1 : dstShape[3]); n3Index < n3Size; ++n3Index) {
-                    DstTileDefine dstTile(dstShape[axis], dstShape[4]);
-                    SrcTileDefine srcTile(srcShape[axis], srcShape[4]);
+            for (LoopVar n2Index = 0, n2Size = (axis == DIM_3RD ? (size_t)1 : dstShape[DIM_3RD]); n2Index < n2Size;
+                 ++n2Index) {
+                for (LoopVar n3Index = 0, n3Size = (axis == DIM_4TH ? (size_t)1 : dstShape[DIM_4TH]); n3Index < n3Size;
+                     ++n3Index) {
+                    DstTileDefine dstTile(dstShape[axis], dstShape[DIM_5TH]);
+                    SrcTileDefine srcTile(srcShape[axis], srcShape[DIM_5TH]);
                     TmpTileDefine tmpTile;
-                    auto dstOffset = n0Index * dstStride[0] + n1Index * dstStride[1] + n2Index * dstStride[2] +
-                                     n3Index * dstStride[3];
-                    auto srcOffset = n0Index * srcStride[0] + n1Index * srcStride[1] + n2Index * srcStride[2] +
-                                     n3Index * srcStride[3];
+                    auto dstOffset = n0Index * dstStride[DIM_1ST] + n1Index * dstStride[DIM_2ND] +
+                                     n2Index * dstStride[DIM_3RD] + n3Index * dstStride[DIM_4TH];
+                    auto srcOffset = n0Index * srcStride[DIM_1ST] + n1Index * srcStride[DIM_2ND] +
+                                     n2Index * srcStride[DIM_3RD] + n3Index * srcStride[DIM_4TH];
                     pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
                     pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
                     pto::TASSIGN(tmpTile, (uint64_t)(tmp.GetAddr()));
@@ -357,17 +366,17 @@ TILEOP void ColReduceWithTmp(T0 dst, T1 src, T2 tmp)
     constexpr auto srcShapeSize = Std::tuple_size<typename T1::Shape>::value;
     constexpr auto dstShapeSize = Std::tuple_size<typename T0::Shape>::value;
     constexpr auto tmpShapeSize = Std::tuple_size<typename T2::Shape>::value;
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, axis + dstShapeSize - 5>();
-    constexpr auto
-        dstTileW = TileOp::GetAnyAxisMergeResult<axis + dstShapeSize - 3, dstShapeSize, typename T0::TileShape>();
-    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, axis + srcShapeSize - 5>();
-    constexpr auto
-        srcTileW = TileOp::GetAnyAxisMergeResult<axis + srcShapeSize - 3, srcShapeSize, typename T1::TileShape>();
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, axis + dstShapeSize - MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetAnyAxisMergeResult<
+        axis + dstShapeSize - reduce_detail::MERGED_TILE_AXIS_OFFSET, dstShapeSize, typename T0::TileShape>();
+    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, axis + srcShapeSize - MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetAnyAxisMergeResult<
+        axis + srcShapeSize - reduce_detail::MERGED_TILE_AXIS_OFFSET, srcShapeSize, typename T1::TileShape>();
     using DstTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, dstTileH, dstTileW, pto::BLayout::RowMajor,
                                     -1, -1>;
     using SrcTileDefine = pto::Tile<pto::TileType::Vec, typename T1::Type, srcTileH, srcTileW, pto::BLayout::RowMajor,
                                     -1, -1>;
-    constexpr auto tmpTileH = TileOp::GetTensorTileShapeDim<T2, tmpShapeSize - 2>();
+    constexpr auto tmpTileH = TileOp::GetTensorTileShapeDim<T2, tmpShapeSize - reduce_detail::TILE_HEIGHT_OFFSET>();
     constexpr auto tmpTileW = TileOp::GetTensorTileShapeDim<T2, tmpShapeSize - 1>();
     using TmpTileDefine = pto::Tile<pto::TileType::Vec, typename T2::Type, tmpTileH, tmpTileW, pto::BLayout::RowMajor,
                                     tmpTileH, tmpTileW>;
@@ -396,36 +405,38 @@ TILEOP void ColArgReduceImp(T0 dstValue, T1 dstIndex, T2 src, T3 tmp)
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
     const auto dstLayout = dstValue.GetLayout();
     const auto srcLayout = src.GetLayout();
-    size_t dstShape[] = {static_cast<size_t>(dstLayout.template GetShapeDim<0, MAX_DIMS>()),
-                         static_cast<size_t>(dstLayout.template GetShapeDim<1, MAX_DIMS>()),
-                         static_cast<size_t>(dstLayout.template GetShapeDim<2, MAX_DIMS>()),
-                         static_cast<size_t>(dstLayout.template GetShapeDim<3, MAX_DIMS>()),
-                         static_cast<size_t>(dstLayout.template GetShapeDim<4, MAX_DIMS>())};
-    size_t dstStride[] = {static_cast<size_t>(dstLayout.template GetStrideDim<0, MAX_DIMS>()),
-                          static_cast<size_t>(dstLayout.template GetStrideDim<1, MAX_DIMS>()),
-                          static_cast<size_t>(dstLayout.template GetStrideDim<2, MAX_DIMS>()),
-                          static_cast<size_t>(dstLayout.template GetStrideDim<3, MAX_DIMS>())};
-    size_t srcShape[] = {static_cast<size_t>(srcLayout.template GetShapeDim<0, MAX_DIMS>()),
-                         static_cast<size_t>(srcLayout.template GetShapeDim<1, MAX_DIMS>()),
-                         static_cast<size_t>(srcLayout.template GetShapeDim<2, MAX_DIMS>()),
-                         static_cast<size_t>(srcLayout.template GetShapeDim<3, MAX_DIMS>()),
-                         static_cast<size_t>(srcLayout.template GetShapeDim<4, MAX_DIMS>())};
-    size_t srcStride[] = {static_cast<size_t>(srcLayout.template GetStrideDim<0, MAX_DIMS>()),
-                          static_cast<size_t>(srcLayout.template GetStrideDim<1, MAX_DIMS>()),
-                          static_cast<size_t>(srcLayout.template GetStrideDim<2, MAX_DIMS>()),
-                          static_cast<size_t>(srcLayout.template GetStrideDim<3, MAX_DIMS>())};
+    size_t dstShape[] = {static_cast<size_t>(dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>()),
+                         static_cast<size_t>(dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>()),
+                         static_cast<size_t>(dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>()),
+                         static_cast<size_t>(dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>()),
+                         static_cast<size_t>(dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>())};
+    size_t dstStride[] = {static_cast<size_t>(dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>()),
+                          static_cast<size_t>(dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>()),
+                          static_cast<size_t>(dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>()),
+                          static_cast<size_t>(dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>())};
+    size_t srcShape[] = {static_cast<size_t>(srcLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>()),
+                         static_cast<size_t>(srcLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>()),
+                         static_cast<size_t>(srcLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>()),
+                         static_cast<size_t>(srcLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>()),
+                         static_cast<size_t>(srcLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>())};
+    size_t srcStride[] = {static_cast<size_t>(srcLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>()),
+                          static_cast<size_t>(srcLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>()),
+                          static_cast<size_t>(srcLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>()),
+                          static_cast<size_t>(srcLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>())};
     for (LoopVar n0Index = 0, n0Size = (axis == 0 ? (size_t)1 : dstShape[0]); n0Index < n0Size; ++n0Index) {
         for (LoopVar n1Index = 0, n1Size = (axis == 1 ? (size_t)1 : dstShape[1]); n1Index < n1Size; ++n1Index) {
-            for (LoopVar n2Index = 0, n2Size = (axis == 2 ? (size_t)1 : dstShape[2]); n2Index < n2Size; ++n2Index) {
-                for (LoopVar n3Index = 0, n3Size = (axis == 3 ? (size_t)1 : dstShape[3]); n3Index < n3Size; ++n3Index) {
-                    DstValueTileDefine dstValueTile(dstShape[axis], dstShape[4]);
-                    DstIndexTileDefine dstIndexTile(dstShape[axis], dstShape[4]);
-                    SrcTileDefine srcTile(srcShape[axis], srcShape[4]);
+            for (LoopVar n2Index = 0, n2Size = (axis == DIM_3RD ? (size_t)1 : dstShape[DIM_3RD]); n2Index < n2Size;
+                 ++n2Index) {
+                for (LoopVar n3Index = 0, n3Size = (axis == DIM_4TH ? (size_t)1 : dstShape[DIM_4TH]); n3Index < n3Size;
+                     ++n3Index) {
+                    DstValueTileDefine dstValueTile(dstShape[axis], dstShape[DIM_5TH]);
+                    DstIndexTileDefine dstIndexTile(dstShape[axis], dstShape[DIM_5TH]);
+                    SrcTileDefine srcTile(srcShape[axis], srcShape[DIM_5TH]);
                     TmpTileDefine tmpTile;
-                    auto dstOffset = n0Index * dstStride[0] + n1Index * dstStride[1] + n2Index * dstStride[2] +
-                                     n3Index * dstStride[3];
-                    auto srcOffset = n0Index * srcStride[0] + n1Index * srcStride[1] + n2Index * srcStride[2] +
-                                     n3Index * srcStride[3];
+                    auto dstOffset = n0Index * dstStride[DIM_1ST] + n1Index * dstStride[DIM_2ND] +
+                                     n2Index * dstStride[DIM_3RD] + n3Index * dstStride[DIM_4TH];
+                    auto srcOffset = n0Index * srcStride[DIM_1ST] + n1Index * srcStride[DIM_2ND] +
+                                     n2Index * srcStride[DIM_3RD] + n3Index * srcStride[DIM_4TH];
                     pto::TASSIGN(dstValueTile, (uint64_t)(dstValue.GetAddr() + dstOffset * dstTypeSize));
                     pto::TASSIGN(dstIndexTile, (uint64_t)(dstIndex.GetAddr() + dstOffset * dstTypeSize));
                     pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
@@ -447,19 +458,19 @@ TILEOP void ColArgReduce(T0 dstValue, T1 dstIndex, T2 src, T3 tmp)
     constexpr auto srcShapeSize = Std::tuple_size<typename T2::Shape>::value;
     constexpr auto dstShapeSize = Std::tuple_size<typename T0::Shape>::value;
     constexpr auto tmpShapeSize = Std::tuple_size<typename T3::Shape>::value;
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, axis + dstShapeSize - 5>();
-    constexpr auto
-        dstTileW = TileOp::GetAnyAxisMergeResult<axis + dstShapeSize - 3, dstShapeSize, typename T0::TileShape>();
-    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T2, axis + srcShapeSize - 5>();
-    constexpr auto
-        srcTileW = TileOp::GetAnyAxisMergeResult<axis + srcShapeSize - 3, srcShapeSize, typename T2::TileShape>();
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, axis + dstShapeSize - MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetAnyAxisMergeResult<
+        axis + dstShapeSize - reduce_detail::MERGED_TILE_AXIS_OFFSET, dstShapeSize, typename T0::TileShape>();
+    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T2, axis + srcShapeSize - MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetAnyAxisMergeResult<
+        axis + srcShapeSize - reduce_detail::MERGED_TILE_AXIS_OFFSET, srcShapeSize, typename T2::TileShape>();
     using DstValueTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, dstTileH, dstTileW,
                                          pto::BLayout::RowMajor, -1, -1>;
     using DstIndexTileDefine = pto::Tile<pto::TileType::Vec, typename T1::Type, dstTileH, dstTileW,
                                          pto::BLayout::RowMajor, -1, -1>;
     using SrcTileDefine = pto::Tile<pto::TileType::Vec, typename T2::Type, srcTileH, srcTileW, pto::BLayout::RowMajor,
                                     -1, -1>;
-    constexpr auto tmpTileH = TileOp::GetTensorTileShapeDim<T3, tmpShapeSize - 2>();
+    constexpr auto tmpTileH = TileOp::GetTensorTileShapeDim<T3, tmpShapeSize - reduce_detail::TILE_HEIGHT_OFFSET>();
     constexpr auto tmpTileW = TileOp::GetTensorTileShapeDim<T3, tmpShapeSize - 1>();
     using TmpTileDefine = pto::Tile<pto::TileType::Vec, typename T3::Type, tmpTileH, tmpTileW, pto::BLayout::RowMajor,
                                     tmpTileH, tmpTileW>;

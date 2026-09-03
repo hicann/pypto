@@ -33,8 +33,7 @@ template <typename T, typename TTmp>
 TILEOP HypotTmpBuffers<T> InitHypotTmpBuffers(TTmp tmpbuf, size_t elementCount)
 {
     uint64_t dataSizeBytes = elementCount * sizeof(float);
-    const uint32_t ALIGNMENT = 32;
-    uint64_t alignedSizeBytes = (dataSizeBytes + ALIGNMENT - 1) & ~(ALIGNMENT - 1);
+    uint64_t alignedSizeBytes = (dataSizeBytes + TileOp::BLOCK_SIZE - 1) & ~(TileOp::BLOCK_SIZE - 1);
     uint64_t tmpbufAddr = tmpbuf.GetAddr();
     __ubuf__ uint8_t* basePtr = reinterpret_cast<__ubuf__ uint8_t*>(tmpbufAddr);
 
@@ -64,27 +63,27 @@ TILEOP HypotLayoutInfo ExtractHypotLayoutInfo(const T& src0, const T& src1, cons
     const auto dstLayout = dst.GetLayout();
 
     HypotLayoutInfo info;
-    info.shape0 = src0Layout.template GetShapeDim<0, MAX_DIMS>();
-    info.shape1 = src0Layout.template GetShapeDim<1, MAX_DIMS>();
-    info.shape2 = src0Layout.template GetShapeDim<2, MAX_DIMS>();
-    info.shape3 = src0Layout.template GetShapeDim<3, MAX_DIMS>();
-    info.shape4 = src0Layout.template GetShapeDim<4, MAX_DIMS>();
-    info.dstShape = dstLayout.template GetShapeDim<4, MAX_DIMS>();
+    info.shape0 = src0Layout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    info.shape1 = src0Layout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    info.shape2 = src0Layout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    info.shape3 = src0Layout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    info.shape4 = src0Layout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    info.dstShape = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
 
-    info.stride0 = src0Layout.template GetStrideDim<0, MAX_DIMS>();
-    info.stride1 = src0Layout.template GetStrideDim<1, MAX_DIMS>();
-    info.stride2 = src0Layout.template GetStrideDim<2, MAX_DIMS>();
-    info.stride3 = src0Layout.template GetStrideDim<3, MAX_DIMS>();
+    info.stride0 = src0Layout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    info.stride1 = src0Layout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    info.stride2 = src0Layout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    info.stride3 = src0Layout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
 
-    info.stride1_0 = src1Layout.template GetStrideDim<0, MAX_DIMS>();
-    info.stride1_1 = src1Layout.template GetStrideDim<1, MAX_DIMS>();
-    info.stride1_2 = src1Layout.template GetStrideDim<2, MAX_DIMS>();
-    info.stride1_3 = src1Layout.template GetStrideDim<3, MAX_DIMS>();
+    info.stride1_0 = src1Layout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    info.stride1_1 = src1Layout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    info.stride1_2 = src1Layout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    info.stride1_3 = src1Layout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
 
-    info.dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
-    info.dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
-    info.dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
-    info.dstStride3 = dstLayout.template GetStrideDim<3, MAX_DIMS>();
+    info.dstStride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    info.dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    info.dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    info.dstStride3 = dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
 
     return info;
 }
@@ -170,7 +169,7 @@ TILEOP void THypot(TDst dst, T src0, T src1, TTmp tmpbuf)
     auto buffers = InitHypotTmpBuffers<T>(tmpbuf, info.shape4);
 
     constexpr auto dataTypeSize = sizeof(typename T::Type);
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T, 4, MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T, DIM_5TH, MAX_DIMS>();
     using DataTile = pto::Tile<pto::TileType::Vec, typename T::Type, 1, srcTileW, pto::BLayout::RowMajor, -1, -1>;
     using Fp32Tile = pto::Tile<pto::TileType::Vec, float, 1, srcTileW, pto::BLayout::RowMajor, -1, -1>;
 

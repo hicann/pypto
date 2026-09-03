@@ -13,7 +13,6 @@
  * \brief Scalar operation implementations.
  */
 
-#include <limits>
 #include "tilefwk/data_type.h"
 #include "unary.h"
 #include "binary.h"

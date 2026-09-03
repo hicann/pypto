@@ -35,15 +35,17 @@ TILEOP void SignIntCast(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile)
 {
     constexpr auto n1 = Std::tuple_element<DIM_1ST, LastUse>::type::value;
     constexpr auto n2 = Std::tuple_element<DIM_2ND, LastUse>::type::value;
+    constexpr float FP16_MIN_SUBNORMAL = 5.960464e-08f;
+    constexpr float SCALE_FACTOR = 4.096000e+03f;
     pto::TCVT(tmpTile, srcTile, pto::RoundMode::CAST_NONE);
     SyncV();
-    pto::TMINS(tmpTile, tmpTile, static_cast<half>(5.960464e-08f));
+    pto::TMINS(tmpTile, tmpTile, static_cast<half>(FP16_MIN_SUBNORMAL));
     SyncV();
-    pto::TMAXS(tmpTile, tmpTile, static_cast<half>(-5.960464e-08f));
+    pto::TMAXS(tmpTile, tmpTile, static_cast<half>(-FP16_MIN_SUBNORMAL));
     SyncV();
-    pto::TMULS(tmpTile, tmpTile, static_cast<half>(4.096000e+03f));
+    pto::TMULS(tmpTile, tmpTile, static_cast<half>(SCALE_FACTOR));
     SyncV();
-    pto::TMULS(tmpTile, tmpTile, static_cast<half>(4.096000e+03f));
+    pto::TMULS(tmpTile, tmpTile, static_cast<half>(SCALE_FACTOR));
     SyncV();
     pto::TCVT(dstTile, tmpTile, pto::RoundMode::CAST_NONE);
 }
@@ -99,25 +101,25 @@ TILEOP void TSign(T0 dst, T1 src, T3 tmp)
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
     constexpr auto srcTypeSize = sizeof(typename T1::Type);
 
-    auto dstShape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
-    auto dstShape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
-    auto dstShape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
-    auto dstShape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
-    auto dstShape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
+    auto dstShape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
 
-    auto srcExecShape3 = GetElementwiseOperandExecShapeDim<3, MAX_DIMS>(dst, src);
-    auto srcExecShape4 = GetElementwiseOperandExecShapeDim<4, MAX_DIMS>(dst, src);
+    auto srcExecShape3 = GetElementwiseOperandExecShapeDim<DIM_4TH, MAX_DIMS>(dst, src);
+    auto srcExecShape4 = GetElementwiseOperandExecShapeDim<DIM_5TH, MAX_DIMS>(dst, src);
 
-    auto dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto dstStride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
 
-    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
+    auto srcStride0 = srcLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
 
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, MAX_DIMS>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
 
     using SrcExecConfig = ElementwiseOperandExecConfig<T0, T1>;
     constexpr auto srcTileH = SrcExecConfig::tileH;
@@ -142,10 +144,11 @@ TILEOP void TSign(T0 dst, T1 src, T3 tmp)
     WorkTile workTile(srcExecShape3, srcExecShape4);
     MaskTile maskTile(srcExecShape3, srcExecShape4);
     ScalarTmpTile scalarTmpTile(1, TileOp::BLOCK_SIZE);
+    constexpr size_t SCALAR_TMP_SLOT = 2;
 
     pto::TASSIGN(workTile, (uint64_t)(tmp.GetAddr()));
     pto::TASSIGN(maskTile, (uint64_t)(tmp.GetAddr() + workBlockBytes));
-    pto::TASSIGN(scalarTmpTile, (uint64_t)(tmp.GetAddr() + 2 * workBlockBytes));
+    pto::TASSIGN(scalarTmpTile, (uint64_t)(tmp.GetAddr() + SCALAR_TMP_SLOT * workBlockBytes));
 
     for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < dstShape1; ++n1Index) {

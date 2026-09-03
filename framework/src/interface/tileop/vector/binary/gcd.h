@@ -7,25 +7,30 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
+
 /*!
- * \file extended.h
- * \brief Extended binary-scalar tile operation implementations.
+ * \file gcd.h
+ * \brief Greatest common divisor tile operation implementation.
  */
 
-#ifndef TILEOP_TILE_OPERATOR_VEC_BINARY_SCALAR_EXTENDED_H
-#define TILEOP_TILE_OPERATOR_VEC_BINARY_SCALAR_EXTENDED_H
+#ifndef TILEOP_TILE_OPERATOR_VEC_BINARY_GCD_H
+#define TILEOP_TILE_OPERATOR_VEC_BINARY_GCD_H
 
 #include "utils/sync.h"
 #include "../pto_tile.h"
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
+#include "../binary_brcinline.h"
 
-#define OP_TILE_OP_GCDS TGcdS
-template <typename Scalar, typename T0, typename T1, typename T2>
-TILEOP void TGcdS(T0 dst, T1 src0, Scalar src1, T2 temp)
+#define OP_TILE_OP_GCD TGcd
+template <int... BrcOperands, typename T0, typename T1, typename T2, typename T3>
+TILEOP void TGcd(T0 dst, T1 src0, T2 src1, T3 temp)
 {
-    // 统一 int32 计算：q*b 可达 a+b（int16 输入时 65534 超 int16），且仿真器上 int16 指令不可靠
-    using CalcType = int32_t;
+    // 计算位宽按输入类型选择：int8/uint8 输入时中间值 <= 510（q*b <= a+b），int16 槽不溢出；
+    // int16/int32 输入时 q*b 可达 a+b <= 65534/2e8，需 int32 槽。
+    using CalcType = typename std::conditional<Std::is_same_v<typename T0::Type, int8_t> ||
+                                                   Std::is_same_v<typename T0::Type, uint8_t>,
+                                               int16_t, int32_t>::type;
     constexpr auto tileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
     constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
     using CalcTile = pto::Tile<pto::TileType::Vec, CalcType, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
@@ -40,7 +45,8 @@ TILEOP void TGcdS(T0 dst, T1 src0, Scalar src1, T2 temp)
     using MaskTile = pto::Tile<pto::TileType::Vec, uint8_t, tileH, maskCols, pto::BLayout::RowMajor, -1, -1>;
 
     const auto dstLayout = dst.GetLayout();
-    const auto srcLayout = src0.GetLayout();
+    const auto src0Layout = src0.GetLayout();
+    const auto src1Layout = src1.GetLayout();
     auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
     auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
     auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
@@ -49,8 +55,11 @@ TILEOP void TGcdS(T0 dst, T1 src0, Scalar src1, T2 temp)
     if (shape0 == 0 || shape1 == 0 || shape2 == 0) {
         return;
     }
+    using Src0TileInfo = TensorTileInfo<T1>;
+    using Src1TileInfo = TensorTileInfo<T2>;
+    constexpr BrcMode brcmode = GetBrcMode<BrcOperands...>();
 
-    // temp 布局（与 BinaryOperationScalarTileFunc 中 GCDS 的临时空间分配保持一致）：
+    // temp 布局（与 BinaryOperationTileFunc 中 GCD 的临时空间分配保持一致）：
     //   slot0: a = |src0|  slot1: b = |src1|  slot2: r = a % b  slot3: q
     //   slot4: 暂存，顺序复用为 q*b / q修正 / r修正（生命周期互不重叠）
     //   f/fb: 两个 f32 槽（近似商与 refine 除法）
@@ -86,6 +95,7 @@ TILEOP void TGcdS(T0 dst, T1 src0, Scalar src1, T2 temp)
     MaskTile fixMaskTile(shape3, shape4);
     CalcTile selTmpTile(shape3, shape4);
     TTile src0Tile(shape3, shape4);
+    TTile src1Tile(shape3, shape4);
     TTile dstTile(shape3, shape4);
 
     pto::TASSIGN(aTile, temp.GetAddr());
@@ -107,20 +117,32 @@ TILEOP void TGcdS(T0 dst, T1 src0, Scalar src1, T2 temp)
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 auto dstOffset = GenTileOffset(dst, tileOffsets);
-                auto src0Offset = GenTileOffset(src0, tileOffsets);
+                auto src0tileOffsets = TileOffset(
+                    (Src0TileInfo::tile0 == 1 || GetBrcOperandAt<DIM_1ST, BrcOperands...>() == BRC_LEFT) ? 0 : n0Index,
+                    (Src0TileInfo::tile1 == 1 || GetBrcOperandAt<DIM_2ND, BrcOperands...>() == BRC_LEFT) ? 0 : n1Index,
+                    (Src0TileInfo::tile2 == 1 || GetBrcOperandAt<DIM_3RD, BrcOperands...>() == BRC_LEFT) ? 0 : n2Index);
+                auto src1tileOffsets = TileOffset(
+                    (Src1TileInfo::tile0 == 1 || GetBrcOperandAt<DIM_1ST, BrcOperands...>() == BRC_RIGHT) ? 0 : n0Index,
+                    (Src1TileInfo::tile1 == 1 || GetBrcOperandAt<DIM_2ND, BrcOperands...>() == BRC_RIGHT) ? 0 : n1Index,
+                    (Src1TileInfo::tile2 == 1 || GetBrcOperandAt<DIM_3RD, BrcOperands...>() == BRC_RIGHT) ? 0 :
+                                                                                                            n2Index);
+                auto src0Offset = GenTileOffset(src0, src0tileOffsets);
+                auto src1Offset = GenTileOffset(src1, src1tileOffsets);
                 pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * sizeof(typename T0::Type)));
                 pto::TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + src0Offset * sizeof(typename T1::Type)));
+                pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + src1Offset * sizeof(typename T2::Type)));
 
                 // 统一转换到计算位宽。a2/a3 的 TCVT 没有 int8/uint8/int16 到 int32 的
                 // 直接转换，int16 经 f32、int8/uint8 经 f16 中转（小整数转换无精度损失）
-                // b = |scalar| 广播到整 tile；a 按输入类型转换到计算位宽
-                pto::TEXPANDS(bTile, static_cast<CalcType>(src1));
                 if constexpr (Std::is_same_v<typename T0::Type, int32_t>) {
                     pto::TMOV(aTile, src0Tile);
+                    pto::TMOV(bTile, src1Tile);
                 } else if constexpr (Std::is_same_v<typename T0::Type, int16_t>) {
                     pto::TCVT(fTile, src0Tile, pto::RoundMode::CAST_NONE);
+                    pto::TCVT(fbTile, src1Tile, pto::RoundMode::CAST_NONE);
                     SyncV();
                     pto::TCVT(aTile, fTile, pto::RoundMode::CAST_RINT);
+                    pto::TCVT(bTile, fbTile, pto::RoundMode::CAST_RINT);
                 } else {
                     // int8/uint8: s8/u8 -> f16 -> s16（f16 中转视图复用 fbTile 的地址）
                     F16Tile f16Tile(shape3, shape4);
@@ -128,6 +150,10 @@ TILEOP void TGcdS(T0 dst, T1 src0, Scalar src1, T2 temp)
                     pto::TCVT(f16Tile, src0Tile, pto::RoundMode::CAST_NONE);
                     SyncV();
                     pto::TCVT(aTile, f16Tile, pto::RoundMode::CAST_RINT);
+                    SyncV();
+                    pto::TCVT(f16Tile, src1Tile, pto::RoundMode::CAST_NONE);
+                    SyncV();
+                    pto::TCVT(bTile, f16Tile, pto::RoundMode::CAST_RINT);
                 }
                 SyncV();
 
@@ -145,11 +171,11 @@ TILEOP void TGcdS(T0 dst, T1 src0, Scalar src1, T2 temp)
                 pto::TMUL(bTile, bTile, rTile);
                 SyncV();
                 if constexpr (Std::is_same_v<typename T0::Type, int16_t>) {
-                    constexpr float INT16_ABS_LIMIT = 32768.0f;
-                    constexpr int32_t UINT16_RANGE = 65536;
                     // int16 回绕: -32768 的绝对值 32768 回绕为 -32768（与 torch.gcd 一致）
                     pto::TCVT(fTile, aTile, pto::RoundMode::CAST_NONE);
                     SyncV();
+                    constexpr float INT16_ABS_LIMIT = 32768.0f;
+                    constexpr int32_t UINT16_RANGE = 65536;
                     pto::TCMPS(maskTile, fTile, INT16_ABS_LIMIT, pto::CmpMode::GE);
                     SyncV();
                     pto::TADDS(scratchTile, aTile, -UINT16_RANGE);
@@ -165,11 +191,11 @@ TILEOP void TGcdS(T0 dst, T1 src0, Scalar src1, T2 temp)
                     pto::TSEL(bTile, maskTile, scratchTile, bTile, selTmpTile);
                     SyncV();
                 } else if constexpr (Std::is_same_v<typename T0::Type, int8_t>) {
-                    constexpr float INT8_ABS_LIMIT = 128.0f;
-                    constexpr int16_t UINT8_RANGE = 256;
                     // int8 回绕: -128 的绝对值 128 回绕为 -128（与 torch.gcd 一致）
                     pto::TCVT(fTile, aTile, pto::RoundMode::CAST_NONE);
                     SyncV();
+                    constexpr float INT8_ABS_LIMIT = 128.0f;
+                    constexpr int16_t UINT8_RANGE = 256;
                     pto::TCMPS(maskTile, fTile, INT8_ABS_LIMIT, pto::CmpMode::GE);
                     SyncV();
                     pto::TADDS(scratchTile, aTile, -UINT8_RANGE);
@@ -318,115 +344,4 @@ TILEOP void TGcdS(T0 dst, T1 src0, Scalar src1, T2 temp)
     }
 }
 
-template <BinaryScalarOp op, auto PrecisionType = 0, typename T0, typename T1, typename Scalar, typename T2>
-TILEOP void BinaryScalarTmpComputeImpl(T0 dst, T1 src0, Scalar src1, T2 tmp)
-{
-    if constexpr (op == BinaryScalarOp::BITWISEXOR) {
-        pto::TXORS(dst, src0, src1, tmp);
-    }
-    if constexpr (op == BinaryScalarOp::REM) {
-        pto::TREMS<PrecisionType>(dst, src0, src1, tmp);
-    }
-    if constexpr (op == BinaryScalarOp::POW) {
-        pto::TPOWS<PrecisionType>(dst, src0, src1, tmp);
-    }
-}
-
-template <BinaryScalarOp op, auto PrecisionType = 0, typename T0, typename T1, typename Scalar, typename T2>
-TILEOP void BinaryScalarTmpCompute(T0 dst, T1 src0, Scalar src1, T2 tmp)
-{
-    const auto dstLayout = dst.GetLayout();
-    auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
-    auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
-    auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
-
-    auto dstTile = PtoTile<T0>(dst);
-    auto src0ExecTile = MakeElementwiseOperandExecTile(dst, src0);
-    if constexpr (op == BinaryScalarOp::REM) {
-        auto tmpTile = PtoTile<T2>(tmp);
-        for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
-            for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
-                for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
-                    auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
-                    dstTile.Assign(dst, tileOffsets);
-                    AssignElementwiseOperandExecTile(src0ExecTile, src0, tileOffsets);
-                    tmpTile.Assign(tmp, tileOffsets);
-                    BinaryScalarTmpComputeImpl<op, PrecisionType>(dstTile.Data(), src0ExecTile, src1, tmpTile.Data());
-                }
-            }
-        }
-    } else {
-        auto tmpExecTile = MakeElementwiseOperandExecTile(dst, tmp);
-        for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
-            for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
-                for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
-                    auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
-                    dstTile.Assign(dst, tileOffsets);
-                    AssignElementwiseOperandExecTile(src0ExecTile, src0, tileOffsets);
-                    AssignElementwiseOperandExecTile(tmpExecTile, tmp, tileOffsets);
-                    BinaryScalarTmpComputeImpl<op, PrecisionType>(dstTile.Data(), src0ExecTile, src1, tmpExecTile);
-                }
-            }
-        }
-    }
-}
-
-#define OP_TILE_OP_BITWISEXORS TBitwiseXorS
-template <typename Scalar, typename T0, typename T1, typename T2>
-TILEOP void TBitwiseXorS(T0 dst, T1 src0, Scalar src1, T2 tmp)
-{
-    BinaryScalarTmpCompute<BinaryScalarOp::BITWISEXOR, 0>(dst, src0, src1, tmp);
-}
-
-#define OP_TILE_OP_REMS TRemainderS
-template <typename Scalar, auto PrecisionType = pto::RemSAlgorithm::DEFAULT, typename T0, typename T1, typename T2>
-TILEOP void TRemainderS(T0 dst, T1 src0, Scalar src1, T2 tmp)
-{
-    BinaryScalarTmpCompute<BinaryScalarOp::REM, PrecisionType>(dst, src0, src1, tmp);
-}
-
-#define OP_TILE_OP_POWS TPowS
-template <auto PrecisionType = pto::PowAlgorithm::DEFAULT, typename Scalar, typename T0, typename T1, typename T2>
-TILEOP void TPowS(T0 dst, T1 src0, Scalar src1, T2 tmp)
-{
-    BinaryScalarTmpCompute<BinaryScalarOp::POW, PrecisionType>(dst, src0, src1, tmp);
-}
-
-#define OP_TILE_OP_REMRS TRemainderRS
-template <typename Scalar, auto PrecisionType = pto::RemAlgorithm::DEFAULT, typename T0, typename T1, typename T2>
-TILEOP void TRemainderRS(T0 dst, T1 src0, Scalar src1, T2 tmp)
-{
-    const auto dstLayout = dst.GetLayout();
-    auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
-    auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
-    auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
-    auto shape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
-    auto shape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
-    auto dstTile = PtoTile<T0>(dst);
-    auto src0ExecTile = MakeElementwiseOperandExecTile(dst, src0);
-    constexpr auto tmpTileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
-    constexpr auto tmpTileW = TileOp::GetTensorTileShapeDim<T2, DIM_5TH, MAX_DIMS>();
-    using tmp0TileDefine = pto::Tile<pto::TileType::Vec, typename T2::Type, tmpTileH, tmpTileW, pto::BLayout::RowMajor,
-                                     -1, -1>;
-    using tmp1TileDefine = pto::Tile<pto::TileType::Vec, typename T2::Type, 1, tmpTileW, pto::BLayout::RowMajor, -1,
-                                     -1>;
-    tmp0TileDefine tmp0Tile(shape3, shape4);
-    tmp1TileDefine tmp1Tile(1, shape4);
-
-    for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
-        for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
-            for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
-                auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
-                dstTile.Assign(dst, tileOffsets);
-                AssignElementwiseOperandExecTile(src0ExecTile, src0, tileOffsets);
-                pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr()));
-                pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + shape3 * tmpTileW * sizeof(typename T2::Type)));
-                pto::TEXPANDS(tmp0Tile, src1);
-                SyncV();
-                pto::TREM<PrecisionType>(dstTile.Data(), tmp0Tile, src0ExecTile, tmp1Tile);
-            }
-        }
-    }
-}
-
-#endif // TILEOP_TILE_OPERATOR_VEC_BINARY_SCALAR_EXTENDED_H
+#endif // TILEOP_TILE_OPERATOR_VEC_BINARY_GCD_H

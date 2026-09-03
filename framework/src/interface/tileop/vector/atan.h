@@ -35,6 +35,9 @@ TILEOP void AtanCalc(DST dst, SRC src, TMP1 tmp1, TMP2 tmp2, CMP cmp)
 {
     constexpr float a[] = {-0.333329409,  0.199887753,  -0.141718030,  0.105184801,
                            -0.0725297481, 0.0398497507, -0.0143969795, 0.00245002890};
+    constexpr int POLY_LAST_INDEX = 7;
+    constexpr int POLY_SECOND_LAST_INDEX = POLY_LAST_INDEX - 1;
+    constexpr int HORNER_START_INDEX = POLY_SECOND_LAST_INDEX - 1;
     constexpr float pi2 = 1.570796326794896619;
     pto::TABS(tmp1, src);
     pto::TEXPANDS(dst, 1.0);
@@ -46,11 +49,11 @@ TILEOP void AtanCalc(DST dst, SRC src, TMP1 tmp1, TMP2 tmp2, CMP cmp)
     SyncV();
     pto::TMUL(tmp1, tmp2, tmp2);
     SyncV();
-    pto::TMULS(dst, tmp1, a[7]);
+    pto::TMULS(dst, tmp1, a[POLY_LAST_INDEX]);
     SyncV();
-    pto::TADDS(dst, dst, a[6]);
+    pto::TADDS(dst, dst, a[POLY_SECOND_LAST_INDEX]);
     SyncV();
-    for (int i = 5; i >= 0; --i) {
+    for (int i = HORNER_START_INDEX; i >= 0; --i) {
         pto::TMUL(dst, dst, tmp1);
         SyncV();
         pto::TADDS(dst, dst, a[i]);

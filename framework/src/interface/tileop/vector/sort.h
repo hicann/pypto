@@ -23,29 +23,29 @@
 template <int axis, int offset, int isLargest, typename T0, typename T1, typename T2>
 TILEOP void TBitSort(T0 dst, T1 src, T2 tmp)
 {
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
     constexpr auto tmpTileW = dstTileW / 2;
     const auto dstLayout = dst.GetLayout();
-    auto dstShape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
-    auto dstShape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
-    auto dstShape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
-    auto dstShape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
-    auto dstShape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
+    auto dstShape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
     if (dstShape0 == 0 || dstShape1 == 0 || dstShape2 == 0 || dstShape3 == 0 || dstShape4 == 0) {
         return;
     }
-    auto dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto dstStride3 = dstLayout.template GetStrideDim<3, MAX_DIMS>();
+    auto dstStride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto dstStride3 = dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
 
     const auto srcLayout = src.GetLayout();
-    auto srcShape4 = srcLayout.template GetShapeDim<4, MAX_DIMS>();
-    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto srcStride3 = srcLayout.template GetStrideDim<3, MAX_DIMS>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, MAX_DIMS>();
+    auto srcShape4 = srcLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    auto srcStride0 = srcLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto srcStride3 = srcLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, DIM_5TH, MAX_DIMS>();
     constexpr auto srcTypeSize = sizeof(typename T1::Type);
     for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < dstShape1; ++n1Index) {
@@ -81,8 +81,8 @@ TILEOP void TBitSort(T0 dst, T1 src, T2 tmp)
                                                            pto::BLayout::RowMajor, -1, -1>;
                         SrcAddTileDefine srcAddTile(1, srcShape4);
                         pto::TASSIGN(srcAddTile, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
-                        int32_t scalar = -2147483648;
-                        pto::TADDS(srcAddTile, srcAddTile, scalar);
+                        constexpr int32_t INT32_MIN_VALUE = static_cast<int32_t>(0x80000000U);
+                        pto::TADDS(srcAddTile, srcAddTile, INT32_MIN_VALUE);
                         SyncV();
                     }
                     pto::TSORT32(dstTile, srcTile, idxTile, tmpTile);
@@ -97,33 +97,37 @@ TILEOP void TBitSort(T0 dst, T1 src, T2 tmp)
 template <int axis, int k, int mergeSize, typename T0, typename T1, typename T2>
 TILEOP void TMrgSort(T0 dst, T1 src, T2 tmp)
 {
+    constexpr int SORT_ITEM_WIDTH = 2;
+    constexpr int MERGE_WAY = 4;
+    constexpr int MOVE_ELEMENTS_PER_GROUP = 8;
+    constexpr int MAX_MERGE_ARRAYS = 15;
     const auto dstLayout = dst.GetLayout();
-    auto dstShape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
-    auto dstShape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
-    auto dstShape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
-    auto dstShape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
-    auto dstShape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
+    auto dstShape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
     if (dstShape0 == 0 || dstShape1 == 0 || dstShape2 == 0 || dstShape3 == 0 || dstShape4 == 0) {
         return;
     }
-    auto dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto dstStride3 = dstLayout.template GetStrideDim<3, MAX_DIMS>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
+    auto dstStride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto dstStride3 = dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
 
     const auto srcLayout = src.GetLayout();
-    auto srcShape4 = srcLayout.template GetShapeDim<4, MAX_DIMS>();
-    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto srcStride3 = srcLayout.template GetStrideDim<3, MAX_DIMS>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, MAX_DIMS>();
+    auto srcShape4 = srcLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    auto srcStride0 = srcLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto srcStride3 = srcLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, DIM_5TH, MAX_DIMS>();
     constexpr auto srcTypeSize = sizeof(typename T1::Type);
     if (srcShape4 == 0) {
         return;
     }
-    srcShape4 = srcShape4 / 2;
+    srcShape4 = srcShape4 / SORT_ITEM_WIDTH;
     for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < dstShape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < dstShape2; ++n2Index) {
@@ -135,7 +139,7 @@ TILEOP void TMrgSort(T0 dst, T1 src, T2 tmp)
                     using TmpTileDefine = pto::Tile<pto::TileType::Vec, typename T1::Type, 1, srcTileW,
                                                     pto::BLayout::RowMajor, -1, -1>;
                     DstTileDefine dstTile(1, dstShape4);
-                    SrcTileDefine srcTile(1, srcShape4 * 2);
+                    SrcTileDefine srcTile(1, srcShape4 * SORT_ITEM_WIDTH);
                     TmpTileDefine tmpTile(1, srcTileW);
                     auto dstOffset = n0Index * dstStride0 + n1Index * dstStride1 + n2Index * dstStride2 +
                                      n3Index * dstStride3;
@@ -145,16 +149,16 @@ TILEOP void TMrgSort(T0 dst, T1 src, T2 tmp)
                     pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
                     pto::TASSIGN(tmpTile, (uint64_t)(tmp.GetAddr()));
                     LoopVar z = mergeSize;
-                    for (; z * 4 <= srcShape4; z *= 4) {
-                        uint32_t repeat_mrg = srcShape4 / (z * 4);
-                        pto::TMRGSORT(tmpTile, srcTile, z * 2);
+                    for (; z * MERGE_WAY <= srcShape4; z *= MERGE_WAY) {
+                        uint32_t repeat_mrg = srcShape4 / (z * MERGE_WAY);
+                        pto::TMRGSORT(tmpTile, srcTile, z * SORT_ITEM_WIDTH);
                         SyncV();
                         using SrcMovTileDefine = pto::Tile<pto::TileType::Vec, typename T1::Type, 1, srcTileW,
                                                            pto::BLayout::RowMajor, -1, -1>;
                         using TmpMovTileDefine = pto::Tile<pto::TileType::Vec, typename T1::Type, 1, srcTileW,
                                                            pto::BLayout::RowMajor, -1, -1>;
-                        SrcMovTileDefine srcMovTile(1, z * repeat_mrg * 8);
-                        TmpMovTileDefine tmpMovTile(1, z * repeat_mrg * 8);
+                        SrcMovTileDefine srcMovTile(1, z * repeat_mrg * MOVE_ELEMENTS_PER_GROUP);
+                        TmpMovTileDefine tmpMovTile(1, z * repeat_mrg * MOVE_ELEMENTS_PER_GROUP);
                         pto::TASSIGN(srcMovTile, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
                         pto::TASSIGN(tmpMovTile, (uint64_t)(tmp.GetAddr()));
                         pto::TMOV(srcMovTile, tmpMovTile);
@@ -162,9 +166,9 @@ TILEOP void TMrgSort(T0 dst, T1 src, T2 tmp)
                     }
                     if (z < srcShape4) {
                         int32_t arrayCount = 0;
-                        int32_t mrgArray[15] = {0};
+                        int32_t mrgArray[MAX_MERGE_ARRAYS] = {0};
                         int32_t tmpInner = srcShape4;
-                        for (LoopVar i = z; i >= mergeSize; i /= 4) {
+                        for (LoopVar i = z; i >= mergeSize; i /= MERGE_WAY) {
                             int32_t count;
                             for (count = 0; count < tmpInner / i; count++) {
                                 mrgArray[arrayCount++] = i;
@@ -185,12 +189,14 @@ TILEOP void TMrgSort(T0 dst, T1 src, T2 tmp)
                             if (mrgArray[i + 1] > k) {
                                 tmpMrgArray = k;
                             }
-                            SrcTileDefine src1Tile(1, tmpMrgSortedLen * 2), src2Tile(1, tmpMrgArray * 2);
-                            TmpTileDefine tmp1Tile(1, (tmpMrgSortedLen + tmpMrgArray) * 2);
-                            DstTileDefine dst1Tile(1, (tmpMrgSortedLen + tmpMrgArray) * 2);
+                            SrcTileDefine src1Tile(1, tmpMrgSortedLen * SORT_ITEM_WIDTH),
+                                src2Tile(1, tmpMrgArray * SORT_ITEM_WIDTH);
+                            TmpTileDefine tmp1Tile(1, (tmpMrgSortedLen + tmpMrgArray) * SORT_ITEM_WIDTH);
+                            DstTileDefine dst1Tile(1, (tmpMrgSortedLen + tmpMrgArray) * SORT_ITEM_WIDTH);
                             pto::TASSIGN(src1Tile, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
-                            pto::TASSIGN(src2Tile,
-                                         (uint64_t)(src.GetAddr() + (srcOffset + mrgSortedLen * 2) * srcTypeSize));
+                            pto::TASSIGN(
+                                src2Tile,
+                                (uint64_t)(src.GetAddr() + (srcOffset + mrgSortedLen * SORT_ITEM_WIDTH) * srcTypeSize));
                             pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr()));
                             pto::TASSIGN(dst1Tile, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
                             pto::MrgSortExecutedNumList executedNumList;
@@ -199,13 +205,15 @@ TILEOP void TMrgSort(T0 dst, T1 src, T2 tmp)
                             SyncV();
                         }
                     }
-                    constexpr int64_t TileW = ((k + 7) / 8) * 16;
+                    constexpr int64_t SORT_GROUP_SIZE = 8;
+                    constexpr int64_t SORT_RESULT_ELEMENTS = 16;
+                    constexpr int64_t TileW = ((k + SORT_GROUP_SIZE - 1) / SORT_GROUP_SIZE) * SORT_RESULT_ELEMENTS;
                     using DstTileMovDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, 1, TileW,
                                                        pto::BLayout::RowMajor, -1, -1>;
                     using SrcTileMovDefine = pto::Tile<pto::TileType::Vec, typename T1::Type, 1, TileW,
                                                        pto::BLayout::RowMajor, -1, -1>;
-                    DstTileMovDefine dstTileMov(1, ((k + 7) / 8) * 16);
-                    SrcTileMovDefine srcTileMov(1, ((k + 7) / 8) * 16);
+                    DstTileMovDefine dstTileMov(1, TileW);
+                    SrcTileMovDefine srcTileMov(1, TileW);
                     pto::TASSIGN(dstTileMov, (uint64_t)(dst.GetAddr() + dstOffset * srcTypeSize));
                     pto::TASSIGN(srcTileMov, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
                     pto::TMOV(dstTileMov, srcTileMov);
@@ -220,53 +228,57 @@ TILEOP void TMrgSort(T0 dst, T1 src, T2 tmp)
 template <int k, int validBit, typename T0, typename T1, typename T2, typename T3, typename T4, typename T5>
 TILEOP void TTiledMrgSort(T0 dst, T1 src1, T2 src2, T3 src3, T4 src4, T5 tmp)
 {
-    constexpr auto tmpTileW = TileOp::GetTensorTileShapeDim<T5, 4, MAX_DIMS>();
+    constexpr int SORT_ITEM_WIDTH = 2;
+    constexpr int TWO_VALID_INPUTS = 2;
+    constexpr int THREE_VALID_INPUTS = 3;
+    constexpr int FOUR_VALID_INPUTS = 4;
+    constexpr auto tmpTileW = TileOp::GetTensorTileShapeDim<T5, DIM_5TH, MAX_DIMS>();
     const auto dstTiledSortLayout = dst.GetLayout();
-    auto dstShape0 = dstTiledSortLayout.template GetShapeDim<0, MAX_DIMS>();
-    auto dstShape1 = dstTiledSortLayout.template GetShapeDim<1, MAX_DIMS>();
-    auto dstShape2 = dstTiledSortLayout.template GetShapeDim<2, MAX_DIMS>();
-    auto dstShape3 = dstTiledSortLayout.template GetShapeDim<3, MAX_DIMS>();
-    auto dstShape4 = dstTiledSortLayout.template GetShapeDim<4, MAX_DIMS>();
-    auto dstStride0 = dstTiledSortLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto dstStride1 = dstTiledSortLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto dstStride2 = dstTiledSortLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto dstStride3 = dstTiledSortLayout.template GetStrideDim<3, MAX_DIMS>();
+    auto dstShape0 = dstTiledSortLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto dstShape1 = dstTiledSortLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto dstShape2 = dstTiledSortLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto dstShape3 = dstTiledSortLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto dstShape4 = dstTiledSortLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    auto dstStride0 = dstTiledSortLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto dstStride1 = dstTiledSortLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto dstStride2 = dstTiledSortLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto dstStride3 = dstTiledSortLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
 
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
 
     const auto src1Layout = src1.GetLayout();
 
-    auto src1Shape4 = src1Layout.template GetShapeDim<4, MAX_DIMS>();
-    auto src1Stride0 = src1Layout.template GetStrideDim<0, MAX_DIMS>();
-    auto src1Stride1 = src1Layout.template GetStrideDim<1, MAX_DIMS>();
-    auto src1Stride2 = src1Layout.template GetStrideDim<2, MAX_DIMS>();
-    auto src1Stride3 = src1Layout.template GetStrideDim<3, MAX_DIMS>();
-    constexpr auto src1TileW = TileOp::GetTensorTileShapeDim<T1, 4, MAX_DIMS>();
+    auto src1Shape4 = src1Layout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    auto src1Stride0 = src1Layout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto src1Stride1 = src1Layout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto src1Stride2 = src1Layout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto src1Stride3 = src1Layout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    constexpr auto src1TileW = TileOp::GetTensorTileShapeDim<T1, DIM_5TH, MAX_DIMS>();
 
     const auto src2Layout = src2.GetLayout();
-    auto src2Shape4 = src2Layout.template GetShapeDim<4, MAX_DIMS>();
-    auto src2Stride0 = src2Layout.template GetStrideDim<0, MAX_DIMS>();
-    auto src2Stride1 = src2Layout.template GetStrideDim<1, MAX_DIMS>();
-    auto src2Stride2 = src2Layout.template GetStrideDim<2, MAX_DIMS>();
-    auto src2Stride3 = src2Layout.template GetStrideDim<3, MAX_DIMS>();
-    constexpr auto src2TileW = TileOp::GetTensorTileShapeDim<T2, 4, MAX_DIMS>();
+    auto src2Shape4 = src2Layout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    auto src2Stride0 = src2Layout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto src2Stride1 = src2Layout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto src2Stride2 = src2Layout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto src2Stride3 = src2Layout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    constexpr auto src2TileW = TileOp::GetTensorTileShapeDim<T2, DIM_5TH, MAX_DIMS>();
 
     const auto src3Layout = src3.GetLayout();
-    auto src3Shape4 = src3Layout.template GetShapeDim<4, MAX_DIMS>();
-    auto src3Stride0 = src3Layout.template GetStrideDim<0, MAX_DIMS>();
-    auto src3Stride1 = src3Layout.template GetStrideDim<1, MAX_DIMS>();
-    auto src3Stride2 = src3Layout.template GetStrideDim<2, MAX_DIMS>();
-    auto src3Stride3 = src3Layout.template GetStrideDim<3, MAX_DIMS>();
-    constexpr auto src3TileW = TileOp::GetTensorTileShapeDim<T3, 4, MAX_DIMS>();
+    auto src3Shape4 = src3Layout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    auto src3Stride0 = src3Layout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto src3Stride1 = src3Layout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto src3Stride2 = src3Layout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto src3Stride3 = src3Layout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    constexpr auto src3TileW = TileOp::GetTensorTileShapeDim<T3, DIM_5TH, MAX_DIMS>();
 
     const auto src4Layout = src4.GetLayout();
 
-    auto src4Shape4 = src4Layout.template GetShapeDim<4, MAX_DIMS>();
-    auto src4Stride0 = src4Layout.template GetStrideDim<0, MAX_DIMS>();
-    auto src4Stride1 = src4Layout.template GetStrideDim<1, MAX_DIMS>();
-    auto src4Stride2 = src4Layout.template GetStrideDim<2, MAX_DIMS>();
-    auto src4Stride3 = src4Layout.template GetStrideDim<3, MAX_DIMS>();
-    constexpr auto src4TileW = TileOp::GetTensorTileShapeDim<T4, 4, MAX_DIMS>();
+    auto src4Shape4 = src4Layout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    auto src4Stride0 = src4Layout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto src4Stride1 = src4Layout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto src4Stride2 = src4Layout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto src4Stride3 = src4Layout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    constexpr auto src4TileW = TileOp::GetTensorTileShapeDim<T4, DIM_5TH, MAX_DIMS>();
 
     constexpr auto srcTypeSize = sizeof(typename T1::Type);
 
@@ -274,14 +286,14 @@ TILEOP void TTiledMrgSort(T0 dst, T1 src1, T2 src2, T3 src3, T4 src4, T5 tmp)
     if (src1Shape4 == 0 || src2Shape4 == 0) {
         return;
     } else if (src3Shape4 == 0) {
-        validBitNew = 2;
+        validBitNew = TWO_VALID_INPUTS;
         src4Shape4 = src2Shape4;
     } else if (src4Shape4 == 0) {
-        validBitNew = 3;
+        validBitNew = THREE_VALID_INPUTS;
         src4Shape4 = src3Shape4;
     }
-    int32_t kLast = k * 2;
-    if (k * 2 > src4Shape4) {
+    int32_t kLast = k * SORT_ITEM_WIDTH;
+    if (k * SORT_ITEM_WIDTH > src4Shape4) {
         kLast = src4Shape4;
     }
     for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
@@ -315,26 +327,26 @@ TILEOP void TTiledMrgSort(T0 dst, T1 src1, T2 src2, T3 src3, T4 src4, T5 tmp)
                     pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * srcTypeSize));
                     pto::TASSIGN(tmpTile, (uint64_t)(tmp.GetAddr()));
                     pto::MrgSortExecutedNumList executedNumList;
-                    if (validBitNew == 2) {
-                        Src1TileDefine src1Tile(1, k * 2);
+                    if (validBitNew == TWO_VALID_INPUTS) {
+                        Src1TileDefine src1Tile(1, k * SORT_ITEM_WIDTH);
                         Src2TileDefine src2Tile(1, kLast);
                         pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + src1Offset * srcTypeSize));
                         pto::TASSIGN(src2Tile, (uint64_t)(src2.GetAddr() + src2Offset * srcTypeSize));
                         pto::TMRGSORT<DstTileDefine, TmpTileDefine, Src1TileDefine, Src2TileDefine, false>(
                             dstTile, executedNumList, tmpTile, src1Tile, src2Tile);
-                    } else if (validBitNew == 3) {
-                        Src1TileDefine src1Tile(1, k * 2);
-                        Src2TileDefine src2Tile(1, k * 2);
+                    } else if (validBitNew == THREE_VALID_INPUTS) {
+                        Src1TileDefine src1Tile(1, k * SORT_ITEM_WIDTH);
+                        Src2TileDefine src2Tile(1, k * SORT_ITEM_WIDTH);
                         Src3TileDefine src3Tile(1, kLast);
                         pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + src1Offset * srcTypeSize));
                         pto::TASSIGN(src2Tile, (uint64_t)(src2.GetAddr() + src2Offset * srcTypeSize));
                         pto::TASSIGN(src3Tile, (uint64_t)(src3.GetAddr() + src3Offset * srcTypeSize));
                         pto::TMRGSORT<DstTileDefine, TmpTileDefine, Src1TileDefine, Src2TileDefine, Src3TileDefine,
                                       false>(dstTile, executedNumList, tmpTile, src1Tile, src2Tile, src3Tile);
-                    } else if (validBitNew == 4) {
-                        Src1TileDefine src1Tile(1, k * 2);
-                        Src2TileDefine src2Tile(1, k * 2);
-                        Src3TileDefine src3Tile(1, k * 2);
+                    } else if (validBitNew == FOUR_VALID_INPUTS) {
+                        Src1TileDefine src1Tile(1, k * SORT_ITEM_WIDTH);
+                        Src2TileDefine src2Tile(1, k * SORT_ITEM_WIDTH);
+                        Src3TileDefine src3Tile(1, k * SORT_ITEM_WIDTH);
                         Src4TileDefine src4Tile(1, kLast);
                         pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + src1Offset * srcTypeSize));
                         pto::TASSIGN(src2Tile, (uint64_t)(src2.GetAddr() + src2Offset * srcTypeSize));
@@ -356,33 +368,33 @@ template <unsigned firstShape, typename T0, typename T1>
 TILEOP void TTwoTileMrgSort(T0 dst, T1 src)
 {
     const auto dstLayout = dst.GetLayout();
-    auto dstStride0 = dstLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto dstStride3 = dstLayout.template GetStrideDim<3, MAX_DIMS>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, MAX_DIMS>();
+    auto dstStride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto dstStride3 = dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
 
-    auto dstShape0 = dstLayout.template GetShapeDim<0, MAX_DIMS>();
-    auto dstShape1 = dstLayout.template GetShapeDim<1, MAX_DIMS>();
-    auto dstShape2 = dstLayout.template GetShapeDim<2, MAX_DIMS>();
-    auto dstShape3 = dstLayout.template GetShapeDim<3, MAX_DIMS>();
-    auto dstShape4 = dstLayout.template GetShapeDim<4, MAX_DIMS>();
+    auto dstShape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
 
     if (dstShape0 == 0 || dstShape1 == 0 || dstShape2 == 0 || dstShape3 == 0 || dstShape4 == 0) {
         return;
     }
 
     const auto srcLayout = src.GetLayout();
-    auto srcShape4 = srcLayout.template GetShapeDim<4, MAX_DIMS>();
+    auto srcShape4 = srcLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
     if (srcShape4 == 0) {
         return;
     }
 
-    auto srcStride0 = srcLayout.template GetStrideDim<0, MAX_DIMS>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, MAX_DIMS>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, MAX_DIMS>();
-    auto srcStride3 = srcLayout.template GetStrideDim<3, MAX_DIMS>();
-    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, MAX_DIMS>();
+    auto srcStride0 = srcLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto srcStride3 = srcLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, DIM_5TH, MAX_DIMS>();
 
     constexpr auto tileW = srcTileW;
 

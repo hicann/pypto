@@ -245,6 +245,19 @@ void UnPackInferShapeFunc(Operation* op, std::vector<std::vector<SymbolicScalar>
 }
 REGISTER_INFER_SHAPE_FUNC(OP_UNPACK, Opcode::OP_UNPACK, UnPackInferShapeFunc);
 
+void FloorDivInferShapeFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
+{
+    auto inputValidShape = op->GetIOperands()[0]->GetDynValidShape();
+    if (inputValidShape.empty()) {
+        return;
+    }
+    outValidShapes.emplace_back(inputValidShape);
+    inputValidShape.front() = inputValidShape.front() * NUM_VALUE_6;
+    outValidShapes.emplace_back(inputValidShape);
+}
+REGISTER_INFER_SHAPE_FUNC(OP_FLOORDIV, Opcode::OP_FLOORDIV, FloorDivInferShapeFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_FLOORDIVS, Opcode::OP_FLOORDIVS, FloorDivInferShapeFunc);
+
 template <int64_t TailScale>
 void InferShapeWithTailScaleFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
@@ -256,8 +269,6 @@ void InferShapeWithTailScaleFunc(Operation* op, std::vector<std::vector<Symbolic
     outValidShapes.emplace_back(inputValidShape);
     outValidShapes.emplace_back(std::vector<SymbolicScalar>{inputValidShape[ndim - 1] * TailScale});
 }
-REGISTER_INFER_SHAPE_FUNC(OP_FLOORDIV, Opcode::OP_FLOORDIV, InferShapeWithTailScaleFunc<NUM_VALUE_4>);
-REGISTER_INFER_SHAPE_FUNC(OP_FLOORDIVS, Opcode::OP_FLOORDIVS, InferShapeWithTailScaleFunc<NUM_VALUE_3>);
 REGISTER_INFER_SHAPE_FUNC(OP_SINH, Opcode::OP_SINH, InferShapeWithTailScaleFunc<NUM_VALUE_4>);
 REGISTER_INFER_SHAPE_FUNC(OP_COSH, Opcode::OP_COSH, InferShapeWithTailScaleFunc<1>);
 REGISTER_INFER_SHAPE_FUNC(OP_TAN, Opcode::OP_TAN, InferShapeWithTailScaleFunc<NUM_VALUE_7>);

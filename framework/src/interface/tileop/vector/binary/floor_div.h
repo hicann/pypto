@@ -19,6 +19,11 @@
 #include "utils/sync.h"
 #include "basic.h"
 
+constexpr int32_t INT32_NEGATIVE_DIVIDEND_ZERO_DIVISOR_RESULT = 0x7FFF7F7F;
+constexpr int32_t INT32_NONNEGATIVE_DIVIDEND_ZERO_DIVISOR_RESULT = static_cast<int32_t>(0x80008080U);
+constexpr int64_t INT64_NEGATIVE_DIVIDEND_ZERO_DIVISOR_RESULT = 0x7FFFFFFFFFFFFFFF;
+constexpr int64_t INT64_NONNEGATIVE_DIVIDEND_ZERO_DIVISOR_RESULT = static_cast<int64_t>(0x8000000000000000ULL);
+
 template <auto pos, auto neg, typename T0, typename T1, typename T2, typename T3, typename T4, typename T5, typename T6,
           typename T7>
 TILEOP void IntFloorDiv(T0 dst, T1 src0, T2 src1, T3 tmp0, T4 tmp1, T5 tmp2, T6 tmp3, T7 tmp4)
@@ -63,7 +68,7 @@ template <typename TmpTensor>
 TILEOP uint64_t FloorDivTmpAddr(TmpTensor tmp, size_t byteOffset, size_t tileShapeSize, size_t tileIndex,
                                 size_t elementSize)
 {
-    return (uint64_t)(tmp.GetAddr() + byteOffset + tileIndex * tileShapeSize * elementSize);
+    return (uint64_t)((__ubuf__ uint8_t*)tmp.GetAddr() + byteOffset + tileIndex * tileShapeSize * elementSize);
 }
 
 template <typename T0, typename T3, auto tileH, auto tileW, typename Src0Tile, typename Src1Tile, typename DstTile>
@@ -308,8 +313,8 @@ TILEOP void FloorDivNonV220Int32Compute(DstTile dstTile, Src0Tile src0Tile, Src1
     pto::TASSIGN(tmp3MaskTile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 2, sizeof(int32_t)));
     pto::TASSIGN(tmp4MaskTile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 3, sizeof(int32_t)));
 
-    IntFloorDiv<(int32_t)0x7FFF7F7F, (int32_t)0x80008080>(dstTile, src0Tile, src1Tile, tmp0DataTile, tmp1DataTile,
-                                                          tmp2DataTile, tmp3MaskTile, tmp4MaskTile);
+    IntFloorDiv<INT32_NEGATIVE_DIVIDEND_ZERO_DIVISOR_RESULT, INT32_NONNEGATIVE_DIVIDEND_ZERO_DIVISOR_RESULT>(
+        dstTile, src0Tile, src1Tile, tmp0DataTile, tmp1DataTile, tmp2DataTile, tmp3MaskTile, tmp4MaskTile);
 }
 
 template <typename T0, typename T3, auto tileH, auto tileW, typename SrcTile, typename DstTile>
@@ -329,7 +334,7 @@ TILEOP void FloorDivNonV220Int64Compute(DstTile dstTile, SrcTile src0Tile, SrcTi
     pto::TASSIGN(tmp3MaskTile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 2, sizeof(int64_t)));
     pto::TASSIGN(tmp4MaskTile, FloorDivTmpAddr(tmp, offset, tileShapeSize, 3, sizeof(int64_t)));
 
-    IntFloorDiv<(int64_t)0x7FFFFFFFFFFFFFFF, (int64_t)0x8000000000000000>(
+    IntFloorDiv<INT64_NEGATIVE_DIVIDEND_ZERO_DIVISOR_RESULT, INT64_NONNEGATIVE_DIVIDEND_ZERO_DIVISOR_RESULT>(
         dstTile, src0Tile, src1Tile, tmp0DataTile, tmp1DataTile, tmp2DataTile, tmp3MaskTile, tmp4MaskTile);
 }
 #endif
@@ -348,9 +353,11 @@ TILEOP void TFloorDiv(T0 dst, T1 src0, T2 src1, T3 tmp)
     constexpr auto tileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
     constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
+    constexpr size_t FLOOR_DIV_TMP_PLANE_COUNT = 6;
 
-    constexpr auto tileShapeSize = TileOp::GetAnyAxisMergeResult<
-        DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
+    constexpr auto tmpPlaneSize = TileOp::GetAnyAxisMergeResult<DIM_1ST, Std::tuple_size<typename T3::TileShape>::value,
+                                                                typename T3::TileShape>() /
+                                  FLOOR_DIV_TMP_PLANE_COUNT;
 
     using DataTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1,
                                      -1>;
@@ -371,7 +378,7 @@ TILEOP void TFloorDiv(T0 dst, T1 src0, T2 src1, T3 tmp)
                 if constexpr (std::is_same_v<typename T0::Type, half> ||
                               std::is_same_v<typename T0::Type, bfloat16_t>) {
                     FloorDivFp32TmpCompute<T0, T3, tileH, tileW>(dstTile, src0ExecTile, src1ExecTile, tmp,
-                                                                 tmpByteOffset, dstShape3, dstShape4, tileShapeSize);
+                                                                 tmpByteOffset, dstShape3, dstShape4, tmpPlaneSize);
                 } else if constexpr (std::is_same_v<typename T0::Type, float>) {
                     FloorDivFloatCompute(dstTile, src0ExecTile, src1ExecTile);
                 }
@@ -379,25 +386,25 @@ TILEOP void TFloorDiv(T0 dst, T1 src0, T2 src1, T3 tmp)
 #ifdef __DAV_V220
                 if constexpr (std::is_same_v<typename T0::Type, int32_t>) {
                     FloorDivV220Int32Compute<T0, T3, tileH, tileW>(dstTile, src0ExecTile, src1ExecTile, tmp,
-                                                                   tmpByteOffset, dstShape3, dstShape4, tileShapeSize);
+                                                                   tmpByteOffset, dstShape3, dstShape4, tmpPlaneSize);
                 } else if constexpr (std::is_same_v<typename T0::Type, int8_t> ||
                                      std::is_same_v<typename T0::Type, uint8_t>) {
                     FloorDivV220Int8Compute<T0, T3, tileH, tileW>(dstTile, src0ExecTile, src1ExecTile, tmp,
-                                                                  tmpByteOffset, dstShape3, dstShape4, tileShapeSize);
+                                                                  tmpByteOffset, dstShape3, dstShape4, tmpPlaneSize);
                 }
 #else
                 if constexpr (std::is_same_v<typename T0::Type, uint8_t>) {
                     FloorDivNonV220Uint8Compute<T0, T3, tileH, tileW>(
-                        dstTile, src0ExecTile, src1ExecTile, tmp, tmpByteOffset, dstShape3, dstShape4, tileShapeSize);
+                        dstTile, src0ExecTile, src1ExecTile, tmp, tmpByteOffset, dstShape3, dstShape4, tmpPlaneSize);
                 } else if constexpr (std::is_same_v<typename T0::Type, int8_t>) {
-                    FloorDivNonV220Int8Compute<T0, T3, tileH, tileW>(
-                        dstTile, src0ExecTile, src1ExecTile, tmp, tmpByteOffset, dstShape3, dstShape4, tileShapeSize);
+                    FloorDivNonV220Int8Compute<T0, T3, tileH, tileW>(dstTile, src0ExecTile, src1ExecTile, tmp,
+                                                                     tmpByteOffset, dstShape3, dstShape4, tmpPlaneSize);
                 } else if constexpr (std::is_same_v<typename T0::Type, int32_t>) {
                     FloorDivNonV220Int32Compute<T0, T3, tileH, tileW>(
-                        dstTile, src0ExecTile, src1ExecTile, tmp, tmpByteOffset, dstShape3, dstShape4, tileShapeSize);
+                        dstTile, src0ExecTile, src1ExecTile, tmp, tmpByteOffset, dstShape3, dstShape4, tmpPlaneSize);
                 } else if constexpr (std::is_same_v<typename T0::Type, int64_t>) {
                     FloorDivNonV220Int64Compute<T0, T3, tileH, tileW>(
-                        dstTile, src0ExecTile, src1ExecTile, tmp, tmpByteOffset, dstShape3, dstShape4, tileShapeSize);
+                        dstTile, src0ExecTile, src1ExecTile, tmp, tmpByteOffset, dstShape3, dstShape4, tmpPlaneSize);
                 }
 #endif
             }

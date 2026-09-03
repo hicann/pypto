@@ -95,7 +95,6 @@ LogicalTensorPtr TensorAxpyOperation(Function& function, const Tensor& self, con
 {
     auto selfTensor = self.GetStorage();
     auto otherTensor = other.GetStorage();
-
     if (selfTensor->shape.size() != otherTensor->shape.size()) {
         std::vector<int> broadCastShape = GetBroadCastShape(selfTensor, otherTensor);
         selfTensor = BinaryOperationBroadCast(selfTensor, broadCastShape);
