@@ -195,6 +195,15 @@ def pytest_runtest_call(item):
 @pytest.hookimpl(tryfirst=True)
 def pytest_runtest_setup(item):
     """Called after the test case process starts"""
+    item_path = str(item.fspath).replace("\\", "/")
+    if "/tests/ut/" in item_path:
+        try:
+            import pypto
+
+            pypto.pypto_impl.Reset()
+        except Exception:
+            pass
+
     # Get the number of cards for the current run mode
     device_list_str: Optional[str] = os.environ.get("TILE_FWK_DEVICE_ID_LIST", None)
     if device_list_str is not None:
@@ -227,11 +236,10 @@ def pytest_runtest_teardown(item):
     dangling ``shared_ptr<Operation>`` during ``GetGraphInfo`` /
     ``RemoveCallOpViewAssemble`` stages, triggering segfaults.
 
-    In ``--forked`` mode each case runs in an independent child process, and global
-    state is automatically reclaimed on exit, so this issue does not reproduce.
-    However, during serial / xdist worker consecutive execution, ``pypto_impl.Reset()``
-    (corresponding to ``Program::Reset()``) must be called in teardown to clean up
-    global graph objects.
+    In ``--forked`` mode each case runs in an independent child process. However the
+    parent (xdist worker) process accumulates state across forks, so ``Reset()`` is
+    called in both setup (pre-fork, cleans parent) and teardown (post-test, cleans
+    forked child before exit).
 
     Only applies to UTest (python/tests/ut) paths to avoid affecting STest NPU device state.
     """

@@ -864,18 +864,29 @@ public:
 
     void RemoveOutcast(int idx)
     {
-        outcastPosition.erase(outcastPosition.begin() + idx);
-        outCasts_.erase(outCasts_.begin() + idx);
-        auto& outcastSlot = slotScope_->ioslot.outcastSlot;
-        outcastSlot.erase(outcastSlot.begin() + idx);
+        if (idx < 0) {
+            return;
+        }
+        if (idx < static_cast<int>(outcastPosition.size())) {
+            outcastPosition.erase(outcastPosition.begin() + idx);
+        }
+        if (idx < static_cast<int>(outCasts_.size())) {
+            outCasts_.erase(outCasts_.begin() + idx);
+        }
+        if (slotScope_ != nullptr) {
+            auto& outcastSlot = slotScope_->ioslot.outcastSlot;
+            if (idx < static_cast<int>(outcastSlot.size())) {
+                outcastSlot.erase(outcastSlot.begin() + idx);
+            }
 
-        // rebuild partial outcast list
-        auto& partialList = slotScope_->ioslot.partialUpdateOutcastList;
-        auto& partialDict = slotScope_->partialUpdateOutcastDict;
-        partialList.clear();
-        for (size_t i = 0; i < outCasts_.size(); i++) {
-            if (partialDict.find(outCasts_[i]) != partialDict.end()) {
-                partialList.push_back(i);
+            // rebuild partial outcast list
+            auto& partialList = slotScope_->ioslot.partialUpdateOutcastList;
+            auto& partialDict = slotScope_->partialUpdateOutcastDict;
+            partialList.clear();
+            for (size_t i = 0; i < outCasts_.size(); i++) {
+                if (partialDict.find(outCasts_[i]) != partialDict.end()) {
+                    partialList.push_back(i);
+                }
             }
         }
     }
