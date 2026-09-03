@@ -234,7 +234,7 @@ private:
     void FillUnknownRequirementsWith(const LogicalTensorPtr& tensor, MemoryType memoryType, const char* reason);
     Status ProcessL0C2L1SmallToLarge(Function& function);
     Status ProcessL0C2L1LargeToSmall(Function& function);
-    bool CheckUBTileShape(const LogicalTensorPtr& output);
+    bool CheckL0C2UBInnerAxisAligned(const LogicalTensorPtr& copyShapeTensor, const LogicalTensorPtr& ubOutputTensor);
     bool CheckConsumerSliceShapeMultiple(const LogicalTensorPtr& output, const LogicalTensorPtr& input);
     bool AreAllSliceConsumerShapesPreserved(const LogicalTensorPtr& tensor) const;
     Status ProcessL0C2UBSmallToLarge(Function& function);
@@ -246,11 +246,11 @@ private:
     Status ProcessDdrMultiReshape(Function& function);
     bool ShouldSkipUB2L1SmallToLarge(const LogicalTensorPtr& iOperand, const LogicalTensorPtr& oOperand) const;
     Status TryUpgradeSliceContractPath(Operation& sliceOp, MemoryType sourceType, MemoryType targetType,
-                                       const std::string& reason, bool requireMatrixShape, bool checkUbTileShape,
+                                       const std::string& reason, bool requireMatrixShape, bool checkL0C2UBConstraints,
                                        bool checkUb2L1Constraints);
     Status TryUpgradeSingleContractSlicePath(Operation& contractOp, MemoryType sourceType, MemoryType targetType,
-                                             const std::string& reason, bool requireMatrixShape, bool checkUbTileShape,
-                                             bool checkUb2L1Constraints);
+                                             const std::string& reason, bool requireMatrixShape,
+                                             bool checkL0C2UBConstraints, bool checkUb2L1Constraints);
     bool CanUseMiddleTensorForUpgrade(const LogicalTensorPtr& middle, MemoryType targetType) const;
     bool HasOnlyContractProducers(const LogicalTensorPtr& tensor) const;
     bool HasOnlySliceConsumers(const LogicalTensorPtr& tensor) const;
@@ -272,7 +272,6 @@ private:
 static constexpr double UB_THRESHOLD_ASSEMBLE = 0.35;
 static constexpr double UB_THRESHOLD_NORMAL = 1.0;
 static constexpr double L1_THRESHOLD = 0.5;
-static constexpr uint16_t L0C_TILE_SIZE = 16;
 } // namespace npu::tile_fwk
 
 #endif // TILE_FWK_ASSIGN_MEMORY_TYPE_H

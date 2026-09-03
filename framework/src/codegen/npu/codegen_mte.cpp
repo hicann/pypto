@@ -176,7 +176,8 @@ std::string CodeGenOpNPU::GenL0CToUBTileTensor() const
         std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
         std::string src1Tensor = src0Tensor;
         auto [coordDst, coordSrc] = PrintDstSrcCoordFromAttr();
-        if ((!scaleValue.GetUnsignedData()) && ((operandDtype[ID1] == DT_INT32) && (operandDtype[ID0] == DT_FP16))) {
+        if ((!scaleValue.GetUnsignedData()) &&
+            (((operandDtype[ID1] == DT_INT32) && (operandDtype[ID0] == DT_FP16)) || (operandDtype[ID0] == DT_INT8))) {
             src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
         }
         tileOpParamList = {dstTensor,

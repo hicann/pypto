@@ -28,12 +28,16 @@ TILEOP void TExtractL0CToUB(ubTileData& ubTile, l0cTileData& l0cTile, FbTileTens
         if (scaleValue != 0) {
             constexpr pto::ReluPreMode relu_mode = (config::kReluMode == 0) ? pto::ReluPreMode::NoRelu :
                                                                               pto::ReluPreMode::NormalRelu;
+            constexpr bool isUBDtypeInt8 = std::is_same<typename ubTileData::DType, int8_t>::value;
+            uint64_t preQuantScalar = (scaleValue & ~(static_cast<uint64_t>(1) << DEQ_SCALAR_INT8OUT_SIGN_BIT)) |
+                                      (static_cast<uint64_t>(isUBDtypeInt8)
+                                       << DEQ_SCALAR_INT8OUT_SIGN_BIT); // 量化场景int8输出标志位设置
             if (subblockId == 0) {
                 pto::TEXTRACT<ubTileData, l0cTileData, pto::AccToVecMode::SingleModeVec0, relu_mode>(
-                    ubTile, l0cTile, scaleValue, l0cOffset0, l0cOffset1);
+                    ubTile, l0cTile, preQuantScalar, l0cOffset0, l0cOffset1);
             } else {
                 pto::TEXTRACT<ubTileData, l0cTileData, pto::AccToVecMode::SingleModeVec1, relu_mode>(
-                    ubTile, l0cTile, scaleValue, l0cOffset0, l0cOffset1);
+                    ubTile, l0cTile, preQuantScalar, l0cOffset0, l0cOffset1);
             }
         } else {
             auto scaleData = CreateScaleTileData(fixbuf);
@@ -71,12 +75,15 @@ TILEOP void TInsertL0CToUB(ubTileData& ubTile, l0cTileData& l0cTile, FbTileTenso
         if (scaleValue != 0) {
             constexpr pto::ReluPreMode relu_mode = (config::kReluMode == 0) ? pto::ReluPreMode::NoRelu :
                                                                               pto::ReluPreMode::NormalRelu;
+            constexpr bool sign = std::is_same<typename ubTileData::DType, int8_t>::value;
+            uint64_t preQuantScalar = (scaleValue & ~(static_cast<uint64_t>(1) << DEQ_SCALAR_INT8OUT_SIGN_BIT)) |
+                                      (static_cast<uint64_t>(sign) << DEQ_SCALAR_INT8OUT_SIGN_BIT);
             if (subblockId == 0) {
                 pto::TINSERT<ubTileData, l0cTileData, pto::AccToVecMode::SingleModeVec0, relu_mode>(
-                    ubTile, l0cTile, scaleValue, ubOffset0, ubOffset1);
+                    ubTile, l0cTile, preQuantScalar, ubOffset0, ubOffset1);
             } else {
                 pto::TINSERT<ubTileData, l0cTileData, pto::AccToVecMode::SingleModeVec1, relu_mode>(
-                    ubTile, l0cTile, scaleValue, ubOffset0, ubOffset1);
+                    ubTile, l0cTile, preQuantScalar, ubOffset0, ubOffset1);
             }
         } else {
             auto scaleData = CreateScaleTileData(fixbuf);

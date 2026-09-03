@@ -26,6 +26,7 @@
 #include "interface/program/program.h"
 #include "interface/configs/config_manager.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/alignment_utils.h"
 #include "passes/pass_utils/checker_utils.h"
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/tile_graph_pass/data_path/memory_path_utils.h"
@@ -2024,15 +2025,19 @@ void AssignMemoryType::ProcessL0C2L1LargeToSmall(Function& function)
     }
 }
 
-bool AssignMemoryType::CheckUBTileShape(const LogicalTensorPtr& output)
+bool AssignMemoryType::CheckL0C2UBInnerAxisAligned(const LogicalTensorPtr& copyShapeTensor,
+                                                   const LogicalTensorPtr& ubOutputTensor)
 {
-    if (output->GetShape()[0] % L0C_TILE_SIZE == 0 && output->GetShape()[1] % L0C_TILE_SIZE == 0) {
+    if (copyShapeTensor == nullptr || copyShapeTensor->GetShape().empty()) {
+        return false;
+    }
+    const int64_t alignBase = AlignmentUtils::GetLastDimAlignBase(ubOutputTensor);
+    if (alignBase > 0 && copyShapeTensor->GetShape().back() % alignBase == 0) {
         return true;
     }
     APASS_LOG_DEBUG_F(Elements::Tensor,
-                      "Set tensor %d original memory type to DDR since vector tile shape "
-                      "is not 16-element aligned.",
-                      output->magic);
+                      "Set tensor %d original memory type to DDR since inner N axis is not 32-byte aligned.",
+                      copyShapeTensor->magic);
     return false;
 }
 
@@ -2105,7 +2110,7 @@ void AssignMemoryType::ProcessL0C2UBSmallToLarge(Function& function)
             continue;
         }
         bool isConsumerOutputMultiple = CheckConsumerViewShapeMultiple(oOperand, iOperand);
-        bool isVecTileShapeValid = CheckUBTileShape(oOperand);
+        bool isVecTileShapeValid = CheckL0C2UBInnerAxisAligned(iOperand, oOperand);
         bool canUseUb = !HasParallelDifferentConsumerRequirement(iOperand, MemoryType::MEM_UB) &&
                         AreAllConsumerRequirementsTowardsUb(inserter, oOperand) &&
                         IsDimMultiple(oOperand->GetShape(), iOperand->GetShape()) && isConsumerOutputMultiple &&
@@ -2141,7 +2146,7 @@ void AssignMemoryType::ProcessL0C2UBLargeToSmall(Function& function)
         }
         auto iOperand = op.GetIOperands().front();
         auto oOperand = op.GetOOperands().front();
-        bool isVecTileShapeValid = CheckUBTileShape(oOperand);
+        bool isVecTileShapeValid = CheckL0C2UBInnerAxisAligned(oOperand, oOperand);
         if (iOperand->GetMemoryTypeOriginal() == MEM_L0C &&
             HasParallelDifferentConsumerRequirement(iOperand, MemoryType::MEM_UB)) {
             inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);

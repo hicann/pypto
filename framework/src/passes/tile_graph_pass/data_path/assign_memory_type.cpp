@@ -26,6 +26,7 @@
 #include "interface/configs/config_manager.h"
 #include "interface/utils/simt_utils.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/alignment_utils.h"
 #include "passes/pass_utils/checker_utils.h"
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_utils/graph_utils.h"
@@ -2458,15 +2459,19 @@ Status AssignMemoryType::ProcessL0C2L1LargeToSmall(Function& function)
     return SUCCESS;
 }
 
-bool AssignMemoryType::CheckUBTileShape(const LogicalTensorPtr& output)
+bool AssignMemoryType::CheckL0C2UBInnerAxisAligned(const LogicalTensorPtr& copyShapeTensor,
+                                                   const LogicalTensorPtr& ubOutputTensor)
 {
-    if (output->GetShape()[0] % L0C_TILE_SIZE == 0 && output->GetShape()[1] % L0C_TILE_SIZE == 0) {
+    if (copyShapeTensor == nullptr || copyShapeTensor->GetShape().empty()) {
+        return false;
+    }
+    const int64_t alignBase = AlignmentUtils::GetLastDimAlignBase(ubOutputTensor);
+    if (alignBase > 0 && copyShapeTensor->GetShape().back() % alignBase == 0) {
         return true;
     }
     APASS_LOG_DEBUG_F(Elements::Tensor,
-                      "Set tensor %d original memory type to DDR since vector tile shape "
-                      "is not 16-element aligned.",
-                      output->magic);
+                      "Set tensor %d original memory type to DDR since inner N axis is not 32-byte aligned.",
+                      copyShapeTensor->magic);
     return false;
 }
 
@@ -2721,7 +2726,7 @@ bool AssignMemoryType::CanUseL0C2L1UpgradePath(Operation& operation)
 
 Status AssignMemoryType::TryUpgradeSliceContractPath(Operation& sliceOp, MemoryType sourceType, MemoryType targetType,
                                                      const std::string& reason, bool requireMatrixShape,
-                                                     bool checkUbTileShape, bool checkUb2L1Constraints)
+                                                     bool checkL0C2UBConstraints, bool checkUb2L1Constraints)
 {
     constexpr size_t kMatrixShapeDimCount = 2;
     if (sliceOp.GetOpcode() != Opcode::OP_SLICE || sliceOp.iOperand.empty() || sliceOp.oOperand.empty()) {
@@ -2747,7 +2752,7 @@ Status AssignMemoryType::TryUpgradeSliceContractPath(Operation& sliceOp, MemoryT
         (middle->GetShape().size() != kMatrixShapeDimCount || target->GetShape().size() != kMatrixShapeDimCount)) {
         return SUCCESS;
     }
-    if (checkUbTileShape && (!CheckUBTileShape(middle) || !FitsAssembleOutputMemoryLimit(middle, targetType))) {
+    if (checkL0C2UBConstraints && !FitsAssembleOutputMemoryLimit(middle, targetType)) {
         return SUCCESS;
     }
     for (auto* producer : middle->GetProducers()) {
@@ -2756,6 +2761,9 @@ Status AssignMemoryType::TryUpgradeSliceContractPath(Operation& sliceOp, MemoryT
             return SUCCESS;
         }
         if (requireMatrixShape && input->GetShape().size() != kMatrixShapeDimCount) {
+            return SUCCESS;
+        }
+        if (checkL0C2UBConstraints && !CheckL0C2UBInnerAxisAligned(input, middle)) {
             return SUCCESS;
         }
         if (sourceType == MemoryType::MEM_L0C && targetType == MemoryType::MEM_L1 &&
@@ -2789,7 +2797,7 @@ Status AssignMemoryType::TryUpgradeSliceContractPath(Operation& sliceOp, MemoryT
 
 Status AssignMemoryType::TryUpgradeSingleContractSlicePath(Operation& contractOp, MemoryType sourceType,
                                                            MemoryType targetType, const std::string& reason,
-                                                           bool requireMatrixShape, bool checkUbTileShape,
+                                                           bool requireMatrixShape, bool checkL0C2UBConstraints,
                                                            bool checkUb2L1Constraints)
 {
     constexpr size_t kMatrixShapeDimCount = 2;
@@ -2847,7 +2855,7 @@ Status AssignMemoryType::TryUpgradeSingleContractSlicePath(Operation& contractOp
         if (!shapeCompatible) {
             return SUCCESS;
         }
-        if (checkUbTileShape && !CheckUBTileShape(output)) {
+        if (checkL0C2UBConstraints && !CheckL0C2UBInnerAxisAligned(output, output)) {
             return SUCCESS;
         }
         if (checkUb2L1Constraints) {

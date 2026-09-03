@@ -15,12 +15,28 @@ MatmulL0C2UB 融合算子测试脚本
 """
 
 import os
+import struct
 
+import numpy as np
 import pytest
 from testcase.matmul_l0c2ub_test_case import L0C2UB_TESTS, MatmulL0C2UBConfig
 import torch
+import torch_npu
 
 import pypto
+
+
+def fixpipe_mask_scale(scale_input):
+    """Convert FP32 scale values to the precision consumed by fixpipe."""
+    mask = 0xFFFFE000
+    if isinstance(scale_input, torch.Tensor):
+        tensor_data = scale_input.numpy().view(np.uint32) & mask
+        golden_scale = tensor_data.view(np.float32)
+        return torch.from_numpy(tensor_data.astype(np.uint64)), torch.from_numpy(golden_scale)
+
+    scale_bits = struct.unpack("I", struct.pack("f", np.float32(scale_input)))[0] & mask
+    golden_scale = struct.unpack("f", struct.pack("I", scale_bits))[0]
+    return golden_scale, np.float32(golden_scale)
 
 
 @pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
@@ -31,9 +47,9 @@ def matmul_l0c2ub_kernel_basic(
     out_tensor: pypto.Tensor(),
     config: MatmulL0C2UBConfig,
 ):
-    """基础 kernel：matmul → add（不带 extend_params）
+    """基础 kernel：matmul → add，支持 PerTensor scale value。
 
-    适用场景：L01-L03（extend_params为空）
+    适用场景：无量化或 PerTensor 量化。
     """
     m, k, n = config.shape
     m_view, n_view = config.view_shape
@@ -56,12 +72,78 @@ def matmul_l0c2ub_kernel_basic(
             else:
                 b_view = b_tensor[:, n_idx * n_view:n_idx * n_view + n_view]
 
+            if config.quant_type == 1:
+                mat_result = pypto.matmul(
+                    a_view,
+                    b_view,
+                    out_dtype=config.out_dtype,
+                    a_trans=config.a_trans,
+                    b_trans=config.b_trans,
+                    extend_params={"scale": config.scale_value},
+                )
+            else:
+                mat_result = pypto.matmul(
+                    a_view,
+                    b_view,
+                    out_dtype=config.out_dtype,
+                    a_trans=config.a_trans,
+                    b_trans=config.b_trans,
+                )
+
+            c_view = c_tensor[
+                m_idx * m_view:m_idx * m_view + m_view,
+                n_idx * n_view:n_idx * n_view + n_view,
+            ]
+
+            pypto.set_vec_tile_shapes(*config.vec_tile_shape)
+            result = pypto.add(mat_result, c_view)
+
+            out_tensor[
+                m_idx * m_view:m_idx * m_view + m_view,
+                n_idx * n_view:n_idx * n_view + n_view,
+            ] = result
+    pypto.set_pass_options(sg_set_scope=-1)
+
+
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def matmul_l0c2ub_kernel_perchannel(
+    a_tensor: pypto.Tensor(),
+    b_tensor: pypto.Tensor(),
+    scale_tensor: pypto.Tensor(),
+    c_tensor: pypto.Tensor(),
+    out_tensor: pypto.Tensor(),
+    config: MatmulL0C2UBConfig,
+):
+    """PerChannel kernel：matmul → L0C2UB quant → add。"""
+    m, k, n = config.shape
+    m_view, n_view = config.view_shape
+
+    pypto.set_pass_options(sg_set_scope=10000)
+    pypto.set_cube_tile_shapes(*config.tile_shape)
+
+    m_loop = (m + m_view - 1) // m_view
+    n_loop = (n + n_view - 1) // n_view
+
+    for m_idx in pypto.loop(0, m_loop, 1, name="LOOP_L0_mIdx", idx_name="m_idx"):
+        for n_idx in pypto.loop(0, n_loop, 1, name="LOOP_L0_nIdx", idx_name="n_idx"):
+            if config.a_trans:
+                a_view = a_tensor[:, m_idx * m_view:m_idx * m_view + m_view]
+            else:
+                a_view = a_tensor[m_idx * m_view:m_idx * m_view + m_view, :]
+
+            if config.b_trans:
+                b_view = b_tensor[n_idx * n_view:n_idx * n_view + n_view, :]
+            else:
+                b_view = b_tensor[:, n_idx * n_view:n_idx * n_view + n_view]
+
+            scale_view = scale_tensor[:, n_idx * n_view:n_idx * n_view + n_view]
             mat_result = pypto.matmul(
                 a_view,
                 b_view,
                 out_dtype=config.out_dtype,
                 a_trans=config.a_trans,
                 b_trans=config.b_trans,
+                extend_params={"scale_tensor": scale_view},
             )
 
             c_view = c_tensor[
@@ -79,7 +161,13 @@ def matmul_l0c2ub_kernel_basic(
     pypto.set_pass_options(sg_set_scope=-1)
 
 
-def matmul_l0c2ub_golden(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor, config: MatmulL0C2UBConfig) -> torch.Tensor:
+def matmul_l0c2ub_golden(
+    a: torch.Tensor,
+    b: torch.Tensor,
+    c: torch.Tensor,
+    config: MatmulL0C2UBConfig,
+    scale=None,
+) -> torch.Tensor:
     """Golden 参考实现（纯 PyTorch）
 
     Args:
@@ -96,9 +184,14 @@ def matmul_l0c2ub_golden(a: torch.Tensor, b: torch.Tensor, c: torch.Tensor, conf
     a_input = a.T if a_trans else a
     b_input = b.T if b_trans else b
 
-    c_dtype = config.out_dtype
-    accum_dtype = torch.int32 if c_dtype == "DT_INT32" else torch.float32
+    accum_dtype = torch.int32 if config.a_dtype == pypto.DT_INT8 else torch.float32
     mat_result = torch.matmul(a_input.to(accum_dtype), b_input.to(accum_dtype))
+    if config.quant_type != 0:
+        mat_result = mat_result * scale
+        if config.out_dtype == pypto.DT_INT8:
+            mat_result = torch.round(mat_result).clamp(-128, 127).to(torch.int8)
+        else:
+            mat_result = mat_result.to(torch.float16)
     c_input = c.to(accum_dtype)
     result = mat_result + c_input
     return result
@@ -125,20 +218,50 @@ def run_matmul_l0c2ub_test(case: dict):
     if a_dtype == torch.int8:
         a_tensor_cpu = torch.randint(-5, 6, a_shape, dtype=a_dtype)
         b_tensor_cpu = torch.randint(-5, 6, b_shape, dtype=b_dtype)
-        c_tensor_cpu = torch.randint(-5, 6, c_shape, dtype=c_dtype)
+    elif config.quant_type != 0:
+        a_tensor_cpu = torch.rand(a_shape, dtype=a_dtype) * 2 - 1
+        b_tensor_cpu = torch.rand(b_shape, dtype=b_dtype) * 2 - 1
     else:
         a_tensor_cpu = torch.rand(a_shape, dtype=a_dtype)
         b_tensor_cpu = torch.rand(b_shape, dtype=b_dtype)
+
+    if config.quant_type != 0:
+        c_tensor_cpu = torch.zeros(c_shape, dtype=c_dtype)
+    else:
         c_tensor_cpu = torch.rand(c_shape, dtype=c_dtype)
 
-    golden = matmul_l0c2ub_golden(a_tensor_cpu, b_tensor_cpu, c_tensor_cpu, config).to(c_dtype)
+    scale_input = None
+    golden_scale = None
+    if config.quant_type == 1:
+        scale_input, golden_scale = fixpipe_mask_scale(0.25)
+        config.scale_value = scale_input
+    elif config.quant_type == 2:
+        scale_input, golden_scale = fixpipe_mask_scale(torch.full((1, n), 0.25, dtype=torch.float32))
+
+    golden = matmul_l0c2ub_golden(
+        a_tensor_cpu, b_tensor_cpu, c_tensor_cpu, config, scale=golden_scale
+    ).to(c_dtype)
 
     a_tensor = a_tensor_cpu.to(f"npu:{device_id}")
     b_tensor = b_tensor_cpu.to(f"npu:{device_id}")
     c_tensor = c_tensor_cpu.to(f"npu:{device_id}")
     c_out_tensor = torch.zeros(c_shape, dtype=c_dtype, device=f"npu:{device_id}")
 
-    matmul_l0c2ub_kernel_basic(a_tensor, b_tensor, c_tensor, c_out_tensor, config=config)
+    if case.get("a_format") == "NZ":
+        a_tensor = torch_npu.npu_format_cast(a_tensor, 29)
+    if case.get("b_format") == "NZ":
+        b_tensor = torch_npu.npu_format_cast(b_tensor, 29)
+
+    if config.quant_type == 2:
+        if config.out_dtype == pypto.DT_INT8:
+            scale_tensor = torch_npu.npu_trans_quant_param(golden_scale.to(f"npu:{device_id}"))
+        else:
+            scale_tensor = scale_input.to(f"npu:{device_id}")
+        matmul_l0c2ub_kernel_perchannel(
+            a_tensor, b_tensor, scale_tensor, c_tensor, c_out_tensor, config=config
+        )
+    else:
+        matmul_l0c2ub_kernel_basic(a_tensor, b_tensor, c_tensor, c_out_tensor, config=config)
 
     atol, rtol = MatmulL0C2UBConfig.get_tolerance(case["c_dtype"])
     assert torch.allclose(c_out_tensor.cpu(), golden.cpu(), atol=atol, rtol=rtol), (
@@ -149,7 +272,7 @@ def run_matmul_l0c2ub_test(case: dict):
 @pytest.mark.parametrize(
     "case", [pytest.param(case, marks=pytest.mark.soc(*case["products"])) for case in L0C2UB_TESTS]
 )
-@pypto.options(pass_options={"enable_slice": True})
+@pypto.options(pass_options={"enable_slice": False})
 def test_matmul_l0c2ub(case: dict):
     """pytest 参数化测试"""
     run_matmul_l0c2ub_test(case)

@@ -31,6 +31,8 @@ constexpr uint16_t BLOCK_CUBE_M_N = 16;
 constexpr uint16_t BLOCK_ALIGN_BYTE = 32;
 constexpr int64_t FP4_BLOCK_ALIGN_BYTE = 64;
 constexpr int64_t MX_BLOCK_ALIGN_BYTE = 64;
+// Bit 46 of the fixpipe deqScalar register selects signed (vs unsigned) int8 requantization.
+constexpr uint64_t DEQ_SCALAR_INT8OUT_SIGN_BIT = 46;
 
 template <CopyOutMode mode, bool isAcc, uint8_t reluMode>
 struct TStoreConfig {
@@ -120,7 +122,8 @@ INLINE auto CreateScaleTileData(FpTileData& fixbuf)
 template <typename l0cDType, typename ubDType>
 constexpr INLINE bool IsSupportedQuantMode()
 {
-    return std::is_same<l0cDType, int32_t>::value && std::is_same<ubDType, half>::value;
+    return (std::is_same<l0cDType, int32_t>::value && std::is_same<ubDType, half>::value) ||
+           std::is_same<ubDType, int8_t>::value;
 }
 
 // Type compatibility check for basic mode

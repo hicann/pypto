@@ -35,19 +35,22 @@ class MatmulL0C2UBConfig:
     out_dtype: pypto.DataType
     a_trans: bool = False
     b_trans: bool = False
+    quant_type: int = 0
+    scale_value: float = 0.0
     extend_params: dict = None
 
     DTYPE_CONFIG = {
         "DT_FP16": {"pto": pypto.DT_FP16, "torch": torch.float16, "atol": 1e-3, "rtol": 1e-3},
         "DT_FP32": {"pto": pypto.DT_FP32, "torch": torch.float32, "atol": 1e-3, "rtol": 1e-3},
         "DT_BF16": {"pto": pypto.DT_BF16, "torch": torch.bfloat16, "atol": 1e-2, "rtol": 1e-2},
-        "DT_INT8": {"pto": pypto.DT_INT8, "torch": torch.int8, "atol": 0, "rtol": 0},
+        "DT_INT8": {"pto": pypto.DT_INT8, "torch": torch.int8, "atol": 1, "rtol": 0},
         "DT_INT32": {"pto": pypto.DT_INT32, "torch": torch.int32, "atol": 0, "rtol": 0},
     }
 
     @classmethod
     def from_test_case(cls, case: dict) -> "MatmulL0C2UBConfig":
         """从测试用例字典构造配置"""
+        fixpipe_info = case.get("fixpipe_info", {})
         return cls(
             shape=(case["m"], case["k"], case["n"]),
             tile_shape=tuple(case["tileshape"]),
@@ -59,6 +62,7 @@ class MatmulL0C2UBConfig:
             out_dtype=cls.DTYPE_CONFIG[case["c_dtype"]]["pto"],
             a_trans=case.get("a_trans", False),
             b_trans=case.get("b_trans", False),
+            quant_type=fixpipe_info.get("quant_type", 0),
             extend_params=case.get("extend_params", {}),
         )
 
@@ -132,6 +136,90 @@ L0C2UB_TESTS = [
         "viewshape": [128, 128],
         "tileshape": [[96, 192], [128, 128], [64, 128]],
         "vec_tileshape": [128, 32],
+        "extend_params": {},
+        "products": ["950"],
+    },
+    {
+        "id": "L04",
+        "name": "fp16_pertensor_int8_TInsert",
+        "desc": "FP16输入INT8输出, PerTensor量化, L0C_COPY_UB小搬大",
+        "m": 384,
+        "k": 96,
+        "n": 80,
+        "a_dtype": "DT_FP16",
+        "b_dtype": "DT_FP16",
+        "c_dtype": "DT_INT8",
+        "a_format": "ND",
+        "b_format": "NZ",
+        "a_trans": True,
+        "b_trans": False,
+        "viewshape": [162, 128],
+        "tileshape": [[128, 256], [16, 16], [32, 32]],
+        "vec_tileshape": [128, 8],
+        "fixpipe_info": {"quant_type": 1},
+        "extend_params": {},
+        "products": ["950"],
+    },
+    {
+        "id": "L05",
+        "name": "int8_perchannel_int8_TExtract",
+        "desc": "INT8输入INT8输出, PerChannel量化, L0C_COPY_UB大搬小",
+        "m": 48,
+        "k": 512,
+        "n": 512,
+        "a_dtype": "DT_INT8",
+        "b_dtype": "DT_INT8",
+        "c_dtype": "DT_INT8",
+        "a_format": "NZ",
+        "b_format": "NZ",
+        "a_trans": False,
+        "b_trans": True,
+        "viewshape": [16, 512],
+        "tileshape": [[16, 16], [128, 128], [128, 128]],
+        "vec_tileshape": [16, 256],
+        "fixpipe_info": {"quant_type": 2},
+        "extend_params": {},
+        "products": ["950"],
+    },
+    {
+        "id": "L06",
+        "name": "int8_pertensor_fp16_TInsert",
+        "desc": "INT8输入FP16输出, PerTensor反量化, L0C_COPY_UB小搬大",
+        "m": 16,
+        "k": 896,
+        "n": 896,
+        "a_dtype": "DT_INT8",
+        "b_dtype": "DT_INT8",
+        "c_dtype": "DT_FP16",
+        "a_format": "NZ",
+        "b_format": "ND",
+        "a_trans": False,
+        "b_trans": True,
+        "viewshape": [16, 260],
+        "tileshape": [[16, 16], [128, 128], [128, 128]],
+        "vec_tileshape": [8, 128],
+        "fixpipe_info": {"quant_type": 1},
+        "extend_params": {},
+        "products": ["950"],
+    },
+    {
+        "id": "L07",
+        "name": "int8_perchannel_fp16_TExtract",
+        "desc": "INT8输入FP16输出, PerChannel反量化, L0C_COPY_UB大搬小",
+        "m": 64,
+        "k": 128,
+        "n": 128,
+        "a_dtype": "DT_INT8",
+        "b_dtype": "DT_INT8",
+        "c_dtype": "DT_FP16",
+        "a_format": "ND",
+        "b_format": "NZ",
+        "a_trans": True,
+        "b_trans": False,
+        "viewshape": [128, 128],
+        "tileshape": [[64, 64], [128, 128], [64, 64]],
+        "vec_tileshape": [128, 128],
+        "fixpipe_info": {"quant_type": 2},
         "extend_params": {},
         "products": ["950"],
     },

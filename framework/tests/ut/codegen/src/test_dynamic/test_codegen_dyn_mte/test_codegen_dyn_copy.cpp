@@ -252,7 +252,7 @@ TEST_F(TestCodegenDynCopy, L1ToBt)
 }
 
 std::string TestMatmulMteBody(const std::string& funcName, Opcode opcode, MemoryType inType, MemoryType outType,
-                              bool isSupportTileTensor = true)
+                              bool isSupportTileTensor = true, DataType outDtype = DataType::DT_FP16)
 {
     config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, isSupportTileTensor);
     config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
@@ -263,7 +263,7 @@ std::string TestMatmulMteBody(const std::string& funcName, Opcode opcode, Memory
     auto function = GenMockFuncDyn(funcName);
     const std::vector<SymbolicScalar> dynValidShape = {64, 64};
     auto localTensor = CreateLogicalTensor({*function, DataType::DT_INT32, inType, shape, dynValidShape});
-    auto localOutTensor = CreateLogicalTensor({*function, DataType::DT_FP16, outType, shape, dynValidShape});
+    auto localOutTensor = CreateLogicalTensor({*function, outDtype, outType, shape, dynValidShape});
     std::vector<int64_t> offset = {0, 0};
     std::vector<SymbolicScalar> dynoffset = {0, 0};
     localTensor->UpdateOffset(TensorOffset(offset, dynoffset));
@@ -272,7 +272,12 @@ std::string TestMatmulMteBody(const std::string& funcName, Opcode opcode, Memory
     LogicalTensors outputs = {localOutTensor};
     if (opcode == Opcode::OP_COPY_OUT || opcode == Opcode::OP_L0C_COPY_UB ||
         opcode == Opcode::OP_L0C_RESHAPE_COPY_OUT) {
-        inputs.emplace_back(localTensor);
+        if (opcode == Opcode::OP_L0C_COPY_UB && outDtype == DataType::DT_INT8) {
+            inputs.emplace_back(
+                CreateLogicalTensor({*function, DataType::DT_UINT64, MemoryType::MEM_FIX, shape, dynValidShape}));
+        } else {
+            inputs.emplace_back(localTensor);
+        }
     }
     if (opcode == Opcode::OP_L0C_COPY_UB_DUAL_DST) {
         outputs.emplace_back(localOutTensor);
@@ -393,6 +398,16 @@ TEST_F(TestCodegenDynCopy, L0CCopyUBTensor)
                                         MemoryType::MEM_UB);
     std::string expect =
         R"!!!(TCopyL0C2UB<TStoreConfig<CopyOutMode::NZ2ND, 0, 0>, CopyMode::UNKNOWN, DualDstMode::DUAL_DST_DISABLE>(ubTensor_0, l0cTensor_1, l0cTensor_1, Coord2Dim(0, 0), Coord2Dim(0, 0), 0, 0);
+)!!!";
+    EXPECT_EQ(res, expect);
+}
+
+TEST_F(TestCodegenDynCopy, L0CCopyUBTensorInt8)
+{
+    std::string res = TestMatmulMteBody("L0CCopyUBTensorInt8", Opcode::OP_L0C_COPY_UB, MemoryType::MEM_L0C,
+                                        MemoryType::MEM_UB, true, DataType::DT_INT8);
+    std::string expect =
+        R"!!!(TCopyL0C2UB<TStoreConfig<CopyOutMode::NZ2ND, 0, 0>, CopyMode::UNKNOWN, DualDstMode::DUAL_DST_DISABLE>(ubTensor_0, l0cTensor_1, fbufTensor_2, Coord2Dim(0, 0), Coord2Dim(0, 0), 0, 0);
 )!!!";
     EXPECT_EQ(res, expect);
 }

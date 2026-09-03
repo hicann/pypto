@@ -42,9 +42,10 @@ INLINE void TStoreExecute(globalData dstGlobal, tileData srcL0C, FpTileData& fix
     if constexpr (supportedQuantMode) {
         // L0C->GM反量化场景
         if (scaleValue != 0) {
-            constexpr bool sign = (std::is_same<typename globalData::DType, __gm__ int8_t>::value) ? true : false;
-            uint64_t preQuantScalar = (scaleValue & ~(static_cast<uint64_t>(1) << 46)) |
-                                      (static_cast<uint64_t>(sign) << 46);
+            constexpr bool isUBDtypeInt8 = (std::is_same<typename globalData::DType, __gm__ int8_t>::value) ? true :
+                                                                                                              false;
+            uint64_t preQuantScalar = (scaleValue & ~(static_cast<uint64_t>(1) << DEQ_SCALAR_INT8OUT_SIGN_BIT)) |
+                                      (static_cast<uint64_t>(isUBDtypeInt8) << DEQ_SCALAR_INT8OUT_SIGN_BIT);
             pto::TSTORE<tileData, globalData, config::kIsAcc ? pto::AtomicType::AtomicAdd : pto::AtomicType::AtomicNone,
                         config::kReluMode == 0 ? pto::ReluPreMode::NoRelu : pto::ReluPreMode::NormalRelu>(
                 dstGlobal, srcL0C, preQuantScalar);
