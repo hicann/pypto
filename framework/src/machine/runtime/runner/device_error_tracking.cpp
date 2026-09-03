@@ -15,6 +15,7 @@
 
 #include "machine/runtime/runner/device_error_tracking.h"
 #include <cstdint>
+#include <cstring>
 #include <iostream>
 #include "adapter/api/acl_api.h"
 #include "tilefwk/device_error_code.h"
@@ -173,13 +174,24 @@ const char* GetRetcodeMessage(int32_t retcode)
     return "unknown error";
 }
 
+bool IsPyPTOAicoreException(const AclRtExceptionInfo* exceptionInfo)
+{
+    if (exceptionInfo == nullptr || exceptionInfo->expandInfo.type != RtExceptionExpandType::AICORE) {
+        return false;
+    }
+
+    const char* kernelName = exceptionInfo->expandInfo.u.aicoreInfo.exceptionArgs.exceptionKernelInfo.kernelName;
+    return kernelName != nullptr && std::strncmp(kernelName, "PyPTO", 5) == 0;
+}
+
 void PyPTOExceptionInfoCallBack(AclRtExceptionInfo* exceptionInfo)
 {
-    const char* errMsg = GetRetcodeMessage(static_cast<int32_t>(exceptionInfo->retcode));
-    const char* kernelName = "(Null)";
-    if (exceptionInfo->expandInfo.type == RtExceptionExpandType::AICORE) {
-        kernelName = exceptionInfo->expandInfo.u.aicoreInfo.exceptionArgs.exceptionKernelInfo.kernelName;
+    if (!IsPyPTOAicoreException(exceptionInfo)) {
+        return;
     }
+
+    const char* errMsg = GetRetcodeMessage(static_cast<int32_t>(exceptionInfo->retcode));
+    const char* kernelName = exceptionInfo->expandInfo.u.aicoreInfo.exceptionArgs.exceptionKernelInfo.kernelName;
 
     PYPTO_HOST_LOGE_WITH_ERRCODE(AICORE, InternalError::COMMON_INNER_ERROR,
                                  "%s, device_id: %u, stream_id: %u, task_id: %u, retcode: %u, kernelName: %s", errMsg,
