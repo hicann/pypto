@@ -14,43 +14,52 @@
 
 ## 功能说明
 
-编译期结构体，将多个标量值组合为一个具名字段的结构体变量。
-
-PyPTO Kernel最终编译为NPU上的C++ 代码，`pl.struct`在编译期生成对应的C++ struct定义和实例。典型用途是通过[`ssbuf_store`](../memory_data_movement/ssbuf_store.md)/[`ssbuf_load`](../memory_data_movement/ssbuf_load.md)在SSBUF（共享标量缓冲区）中传递少量元数据（如批次号、块号、地址偏移），实现不同流水线（pipe）或不同核之间的标量通信。
-
-> **关于pipe**：NPU内部有多条并行流水线（MTE1/MTE2/MTE3/M/V/S/FIX），各自负责不同阶段的数据搬运和计算。详见[`PipeType`](../../basic_data_structures/PipeType.md)。
+创建字段布局在编译期确定的具名结构体变量。字段声明顺序与关键字参数顺序一致。典型用途是通过[ssbuf_store](../memory_data_movement/ssbuf_store.md)/[ssbuf_load](../memory_data_movement/ssbuf_load.md)传递批次号、块号、地址偏移等少量元数据。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.struct("TypeName", field1=default1, field2=default2, ...)
+pypto_pro.language.struct(
+    type_name: str,
+    **fields,
+) -> Struct
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `"TypeName"` | 输入 | 结构体类型名（字符串常量） |
-| `field=value` | 输入 | 字段名和初始值（关键字参数） |
+| type_name | 输入 | 结构体类型名，必须是字符串常量，不能是变量。名称只能包含字母、数字和下划线，且不能以数字开头。 |
+| **fields | 输入 | 字段名和初始值（关键字参数），至少包含一个字段，字段名不可重复。标量字段初始值支持整数、浮点数、布尔值或Scalar表达式；列表用于创建定长数组字段，例如offsets=[0, 0, 0, 0]。数组长度和元素类型必须在编译期确定，元素应为同一数据类型。不支持**kwargs展开，也不支持将Tensor、Tile、Ptr或嵌套struct作为字段。字段值可通过message.field = value修改，数组字段可通过message.field[index]读写。可在for循环内创建struct；if/else分支内只能修改已存在字段，不能只在某个分支创建新struct。 |
 
-## 参数范围
+## 返回值说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `"TypeName"` | 输入 | 必须是字符串常量，不能是变量<br>须为合法的C标识符（字母/数字/下划线，不以数字开头）<br>编译后生成的C++ struct以此命名 |
-| `field=value` | 输入 | 至少一个关键字参数<br>字段名须为合法的C标识符，不可重复<br>初始值可为整型、浮点型、标量表达式或列表（数组字段，如`arr=[0, 0, 0, 0]`）<br>不支持`**kwargs`展开<br>字段值可多次修改（通过`message.field = new_value`赋值）<br>数组字段元素可通过`s.arr_field[idx] = val`赋值，通过`s.arr_field[idx]`读取<br>可在`for`循环内创建struct；`if/else`分支内只能修改字段，不能创建新struct（须在分支外创建）<br>字段数量已验证8个，SSBUF容量有限（通常256字节），传递的struct不宜过大 |
+返回一个具名struct变量，字段可通过点号访问。若只需要编译期聚合，请使用[pypto_pro.language.make_tuple](make_tuple.md)。
+
+## 约束说明
+
+### 类型名和字段布局
+
+1. 同一个Kernel中，同一type_name只能对应一种字段定义。重复使用相同类型名时，字段名、顺序、标量类型和数组长度必须完全一致。
+2. 字段类型由创建时的初始表达式确定，后续赋值必须与该字段类型兼容，且不会改变字段布局。
+3. 数组长度必须为正的编译期常量。运行时只能修改数组元素，不能改变数组长度。
+
+### 与SSBUF配合使用
+
+1. 发送端和接收端必须使用完全相同的type_name和字段定义。
+2. 用于SSBUF传输时，结构体占用空间必须为4字节的整数倍，并确保offset与结构体占用空间之和不超过可用SSBUF范围。
+3. pl.struct本身不提供跨流水或跨核同步；发布和接收顺序参见ssbuf_store/ssbuf_load文档。
 
 ## 调用示例
-### 示例一
 
-下面是一个完整Kernel：Vector侧把struct（含标量和数组字段）写入SSBUF并发送跨核事件，Cube侧等待后读取，再写回输出Tensor。
+### 跨核传递struct
 
 ```python
 import pypto_pro.language as pl
 
 
 @pl.jit()
-def struct_kernel(out: pl.Tensor[[6], pl.DT_INT32]):
+def struct_kernel(x: pl.Tensor[[1], pl.DT_INT32]):
     # 创建结构体：标量字段 + 数组字段
     message = pl.struct("Message", batch=0, block=0, offsets=[0, 0, 0, 0])
 
@@ -66,34 +75,27 @@ def struct_kernel(out: pl.Tensor[[6], pl.DT_INT32]):
     with pl.section_vector():
         if pl.get_subblock_idx() == 0:
             pl.ssbuf_store(message, 0)
-            pl.system.set_cross_core(pipe=pl.PipeType.S, event_id=15)
+            pl.system.set_cross_core(
+                pipe=pl.PipeType.S,
+                event_id=15,
+                sync_mode=pl.CrossCoreSyncMode.UNICAST_BLOCK,
+            )
 
     with pl.section_cube():
         pl.system.wait_cross_core(pipe=pl.PipeType.S, event_id=15, sync_mode=pl.CrossCoreSyncMode.UNICAST_BLOCK)
         pl.ssbuf_load(message, 0)
         pl.printf("batch=%d, block=%d, offset0=%d",
                   message.batch, message.block, message.offsets[0])
-
-    # 读回数组字段元素并输出
-    with pl.section_vector():
-        pl.setval(out, 0, message.batch)
-        pl.setval(out, 1, message.block)
-        pl.setval(out, 2, message.offsets[0])
-        pl.setval(out, 3, message.offsets[2])
-        pl.setval(out, 4, message.offsets[1])
-        pl.setval(out, 5, message.offsets[3])
 ```
 
-### 示例二
-
-下面是一个完整Kernel：for循环中按索引读写数组字段元素，并做累加。
+### 循环读写数组字段
 
 ```python
 import pypto_pro.language as pl
 
 
 @pl.jit()
-def struct_array_field_kernel(out: pl.Tensor[[5], pl.DT_INT32]):
+def struct_field_kernel(out: pl.Tensor[[5], pl.DT_INT32]):
     # 创建带数组字段的结构体
     s = pl.struct("RunInfo", batch_id=0, offsets=[0, 0, 0, 0])
 

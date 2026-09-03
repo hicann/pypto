@@ -55,7 +55,7 @@ PyPTO Pro使用[`TileType.target_memory`](../../api/SIMD-API/basic_data_structur
 | `Left` | L0A Buffer | `matmul`左操作数 |
 | `Right` | L0B Buffer | `matmul`右操作数 |
 | `Acc` | L0C Buffer | `matmul`累加结果（通常为FP32/INT32） |
-| `Scaling` | Scaling/FBuffer | 量化、反量化参数 |
+| `Scaling` | Fixpipe Buffer | 量化、反量化参数 |
 | `ScaleLeft` | L0A Buffer（scale专用地址域） | A矩阵的E8M0 scale（分组缩放因子） |
 | `ScaleRight` | L0B Buffer（scale专用地址域） | B矩阵的E8M0 scale（分组缩放因子） |
 

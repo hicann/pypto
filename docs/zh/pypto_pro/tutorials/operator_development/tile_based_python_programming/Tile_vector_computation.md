@@ -116,6 +116,29 @@ pl.store(z, tile_c, [i, j])
 
 `load_tile`/`store_tile`会自动把每个Tile坐标乘以Tile的shape，因此按“Tile”来索引，无需手动计算字节/元素偏移。
 
+### Tile切片
+
+在`pl.section_vector()`中，可以使用二维切片语法从UB Tile中选取一个矩形区域：
+
+```python
+with pl.section_vector():
+    tile = tile_group.next()
+    pl.load(tile, src, [0, 0])
+
+    # 选取第2～5行、第16～49列，对应shape为[4, 34]
+    sub_tile = tile[2:6, 16:50]
+    pl.store(dst, sub_tile, [0, 0])
+```
+
+切片结果仍是Tile，与原Tile共享UB缓冲区，不会分配或复制数据；修改切片区域也会修改原Tile的对应区域。切片采用Python风格的半开区间，支持整型常量或运行时整型Scalar作为起止位置，也可以省略结束位置以选取到对应维度末尾。
+
+使用Tile切片时应注意以下限制：
+
+- 源对象必须是位于UB的二维Tile，layout为ND或DN；Tensor不能使用该切片语法，访问Tensor时仍需通过`pl.load`或`pl.store`的offset参数定位。
+- 结束位置超过Tile物理shape时会截断到该维度末尾。每一维截断后必须满足`0 <= start < stop`，不支持生成空切片。
+- 如果原Tile设置了`valid_shape`，切片的有效区域还会受到原有效区域限制。例如原Tile的`valid_shape`为`[6, 40]`时，`tile[2:6, 16:50]`得到的有效shape为`[4, 24]`。切片起点不能超过原Tile对应维度的有效范围。
+- 不支持步长切片和负数索引，例如`tile[::2, :]`或`tile[-1:, :]`均不属于支持的用法。
+
 ## 完整示例 —— 逐元素加法（双缓冲）
 
 ```python

@@ -14,47 +14,64 @@
 
 ## 功能说明
 
-描述一块Tile的“规格”——形状、数据类型、所在内存空间、排布方式等，配合[`pypto_pro.language.make_tile`](../operation/resource_management/make_tile.md)或[`pypto_pro.language.make_tile_group`](../operation/resource_management/make_tile_group.md)分配实际缓冲区。
+描述一块Tile的规格，包括形状、数据类型、所在内存空间和排布方式等，配合[pypto_pro.language.make_tile](../operation/resource_management/make_tile.md)或[pypto_pro.language.make_tile_group](../operation/resource_management/make_tile_group.md)分配实际缓冲区。
 
-TileType本身不分配内存，只是一个规格描述符。实际缓冲区通过`make_tile`（单块）或`make_tile_group`（多块轮转）创建。
+TileType本身不分配内存，只是一个规格描述符。实际缓冲区通过make_tile（单块）或make_tile_group（多块轮转）创建。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.TileType(shape, dtype, target_memory=pypto_pro.language.MemorySpace.Vec, valid_shape=None,
-             layout=None, fractal=None, pad=None, compact=None)
+pypto_pro.language.TileType(
+    shape: Sequence[int],
+    dtype: DataType,
+    target_memory: MemorySpace = pypto_pro.language.MemorySpace.Vec,
+    valid_shape: Optional[Sequence[int]] = None,
+    layout: Optional[TensorLayout] = None,
+    fractal: Optional[int] = None,
+    pad: Optional[Union[TilePad, int]] = None,
+    compact: Optional[int] = None,
+) -> TileType
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `shape` | 输入 | tile各维大小，如`[64, 128]` |
-| `dtype` | 输入 | 元素数据类型，如`pypto_pro.language.DT_FP16` |
-| `target_memory` | 输入 | 目标内存空间，默认`pypto_pro.language.MemorySpace.Vec` |
-| `valid_shape` | 输入 | 可选，有效形状（处理尾块/非满块场景） |
-| `layout` | 输入 | 可选，排布方式（`pl.NZ`/`pl.ZN`/`pl.ND`/`pl.DN`/`pl.ZZ`/`pl.NN`） |
-| `fractal` | 输入 | 可选，分形大小 |
-| `pad` | 输入 | 可选，填充模式 |
-| `compact` | 输入 | 可选，紧凑模式 |
+| shape | 输入 | tile各维大小，如[64, 128]。长度为2的编译期常量整数列表，各维大小须为正整数；仅支持二维Tile。对齐及分形布局约束由使用该TileType的具体API检查。 |
+| dtype | 输入 | 元素的数据类型，[pypto_pro.language.DataType](DataType.md)类型。 |
+| target_memory | 输入 | 目标内存空间，[pypto_pro.language.MemorySpace](MemorySpace.md)枚举值，默认为UB。 |
+| valid_shape | 输入 | 可选，有效形状（处理尾块/非满块场景）。编译期常量整数列表或None（默认）。<br>- 具体整数（如[32, 64]）：编译期确定有效形状。<br>- None（默认）：后端缺省行为等同于[-1, -1]（动态模式）。<br>- [-1, -1]：运行时动态设置有效形状，配合[pypto_pro.language.set_validshape](../operation/memory_vector_computation/transpose_and_element_access/set_validshape.md)使用。 |
+| layout | 输入 | 可选，排布方式，[pypto_pro.language.TensorLayout](TensorLayout.md)枚举值或None（默认）。不指定时按内存空间取默认值（详见[约束说明](#约束说明)）。L1 Buffer、L0A Buffer、L0B Buffer、L0C Buffer、Scaling、ScaleLeft、ScaleRight的非法组合在构造时即报ValueError；UB的可用布局由具体Tile API约束。 |
+| fractal | 输入 | 可选，分形大小，整数或None（默认）。L0C Buffer中的FP32/INT32 Tile在未指定时自动设为1024；显式值会写入Tile硬件信息，取值要求和适用场景由具体Tile API决定。 |
+| pad | 输入 | 可选，填充模式，支持[pypto_pro.language.TilePad](TilePad.md)类型或int类型。当为int类型时取值范围为[0, 3]：<br>- 0：不填充。<br>- 1：补零。<br>- 2：补最大值。<br>- 3：补最小值。<br>非法值报ValueError，非法类型报TypeError。 |
+| compact | 输入 | 可选，Tile缓冲区的紧凑布局模式，描述Tile在搬运、重排和矩阵计算路径中的布局解释方式，不改变数据类型，也不代替valid_shape对实际有效区域的描述。取值如下：<br>- **0或None**：不启用紧凑模式。此时L1 Buffer→L0A Buffer/L0B Buffer的[move](../operation/memory_data_movement/move.md)完全按物理shape搬运，[set_validshape](../operation/memory_vector_computation/transpose_and_element_access/set_validshape.md)在该搬运路径上不生效。<br>- **1**：使用普通紧凑模式。数据在valid_shape向上对齐到分形粒度的有效空间内连续排布，Tile声明的其余空间空闲在尾部，详见[普通紧凑模式的数据排布](#普通紧凑模式的数据排布)。通常用于尾块场景，与set_validshape搭配使用。在L1 Buffer上配置与否对结果无影响。与phase搭配使用时，如果存在尾块，L0C Buffer必须配置compact=1，否则可能会卡死。compact不会填充无效区域，需要填充时通过pad参数或[fillpad](../operation/memory_vector_computation/fillpad.md)补齐。compact不改变缓冲区的分配大小，只改变数据在缓冲区内的排布，因此把多个Tile拼成一个更宽的操作数时需特别注意地址偏移，详见[多Tile拼接的尾块处理](#多Tile拼接的尾块处理)。<br>- **2**：使用RowPlusOne紧凑模式。仅在UB Tile中配置，用于避免以该Tile为源作搬运时的bank冲突，详见[RowPlusOne紧凑模式的数据排布](#rowplusone紧凑模式的数据排布)。NZ格式下每个分形列多预留一行物理空间，仅作占位不参与计算，因此申请Tile的物理shape时须包含多出来的这一行，数据使用时通过set_validshape配置实际的有效行数；ZN格式同理，多预留的是一列。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `shape` | 输入 | 长度为2的编译期常量整数列表，各维大小须为正整数；仅支持二维Tile<br>对齐及分形布局约束由使用该TileType的具体API检查 |
-| `dtype` | 输入 | [`pypto_pro.language.DataType`](DataType.md)枚举值<br>常用：`pypto_pro.language.DT_FP16`、`pypto_pro.language.DT_FP32`、`pypto_pro.language.DT_BF16`、`pypto_pro.language.DT_INT8`、`pypto_pro.language.DT_INT32` |
-| `target_memory` | 输入 | [`pypto_pro.language.MemorySpace`](MemorySpace.md)枚举值<br>默认`pypto_pro.language.MemorySpace.Vec`（UB）<br>可选：`Vec`(UB)、`Mat`(L1)、`Left`(L0A)、`Right`(L0B)、`Acc`(L0C)、`Scaling`、`ScaleLeft`、`ScaleRight` |
-| `valid_shape` | 输入 | 编译期常量整数列表或`None`（默认）<br>具体整数（如`[32, 64]`）：编译期确定有效形状<br>`None`：后端缺省行为等同于`[-1, -1]`（动态模式）<br>`[-1, -1]`：运行时动态设置有效形状，配合[`pypto_pro.language.set_validshape`](../operation/memory_vector_computation/transpose_and_element_access/set_validshape.md)使用 |
-| `layout` | 输入 | [`pypto_pro.language.TensorLayout`](TensorLayout.md)枚举值或`None`（默认）<br>不指定时按“内存空间 + 架构”自动取默认值（见下表）<br>`Mat`、`Left`、`Right`、`Acc`、`Scaling`、`ScaleLeft`、`ScaleRight`的非法组合在构造时即报`ValueError`；`Vec`的可用布局由具体Tile API约束 |
-| `fractal` | 输入 | 整数或`None`（默认）<br>`Acc`的FP32/INT32在未指定时自动设为1024<br>显式值会写入Tile硬件信息，取值要求和适用场景由具体Tile API决定 |
-| `pad` | 输入 | [`pypto_pro.language.TilePad`](TilePad.md)枚举值或整数0-3<br>`null`(0)不填充 / `zero`(1)补零 / `max`(2)补最大值 / `min`(3)补最小值<br>非法值报`ValueError`，非法类型报`TypeError` |
-| compact | 输入 | 可选，Tile缓冲区的紧凑布局模式，描述Tile在搬运、重排和矩阵计算路径中的布局解释方式。取值如下：<br>- **0或None**：不启用紧凑模式。<br>&nbsp;&nbsp;- 此时L1→L0A/L0B的pypto_pro.language.move完全按物理shape搬运，pypto_pro.language.set_validshape在该搬运路径上不生效。<br>- **1**：使用普通紧凑模式。<br>&nbsp;&nbsp;- 数据在valid_shape向上对齐到分形粒度的有效空间内连续排布，Tile声明的其余空间空闲在尾部，详见[普通紧凑模式的数据排布](#普通紧凑模式的数据排布)。<br>&nbsp;&nbsp;- 通常用于尾块场景，与pypto_pro.language.set_validshape搭配使用。<br>&nbsp;&nbsp;- 在L1上配置与否对结果无影响。<br>&nbsp;&nbsp;- 与phase搭配使用时，如果存在尾块，L0C必须配置compact=1，否则可能会卡死。<br>&nbsp;&nbsp;- compact不会填充无效区域。需要填充时，通过pad参数或pypto_pro.language.fillpad补齐。<br>&nbsp;&nbsp;- compact不改变缓冲区的分配大小，只改变数据在缓冲区内的排布，因此把多个Tile拼成一个更宽的操作数的写法，需要特别注意地址的使用与偏移。多Tile之间距按物理shape计算地址偏移，紧凑模式下存储尾块数据的有效分形间距按实际shape计算地址偏移，这种场景下只能使用非紧凑搬运的方式，详见[多Tile拼接的尾块处理](#多Tile拼接的尾块处理)。<br>- **2**：使用RowPlusOne紧凑模式。<br>&nbsp;&nbsp;- 仅在UB Tile中配置，用于避免以该Tile为源作搬运时的bank冲突，详见[RowPlusOne紧凑模式的数据排布](#rowplusone紧凑模式的数据排布)。<br>&nbsp;&nbsp;- NZ格式下，每个分形列会多预留一行物理空间，仅作占位，不参与计算。因此要求在申请Tile的物理shape时包含多出来的这一行，数据使用时通过pypto_pro.language.set_validshape配置实际的有效行数。ZN格式同理，多预留的是一列。 |
+### layout默认值说明
+
+layout不指定时，按内存空间自动取默认值：
+
+| 内存空间 | 默认layout |
+|---|---|
+| UB | 无约束 |
+| L1 Buffer | NZ |
+| L0A Buffer | NZ |
+| L0B Buffer | ZN |
+| L0C Buffer | NZ |
+| Scaling | ND |
+| ScaleLeft | ZZ |
+| ScaleRight | NN |
+
+- L1 Buffer未指定layout时使用NZ，也可以显式指定ZN。数据类型为DT_UINT64或DT_INT64时，还可以显式指定ND。
+- L0A Buffer未指定layout时使用NZ，也可以显式指定ZZ。
+- L1 Buffer中的DT_FP8E8M0 scale可以显式指定ZZ或NN，未指定fractal时自动取32。
+- ScaleLeft和ScaleRight分别用于A矩阵和B矩阵的E8M0 scale；未指定fractal时自动取32，Tile地址须按32字节对齐。
 
 ### 普通紧凑模式的数据排布
 
 ```python
-  举例：L0A Tile的物理shape=[64, 64]，数据类型为FP16，valid_shape=[8, 24]，NZ格式，由此可知：
+  举例：L0A Buffer中Tile的物理shape=[64, 64]，数据类型为FP16，valid_shape=[8, 24]，NZ格式，由此可知：
         1、分形粒度D=16行×16列，共512字节（0x200）；
         2、实际搬运数据的有效空间为[ceil16(8), ceil16(24)] = [16, 32]，共2个分形；
 
@@ -106,84 +123,71 @@ pypto_pro.language.TileType(shape, dtype, target_memory=pypto_pro.language.Memor
      首地址间距 = 65 行，各列起始依次错开一行，落到不同 bank 上
 ```
 
-## 默认布局表
+## 返回值说明
 
-`layout`不指定时，按内存空间和架构自动取默认值：
-
-| 内存空间 | A3默认`layout` | A5默认`layout` |
-|---|---|---|
-| `Vec` | 无约束 | 无约束 |
-| `Mat` | `pl.NZ` | `pl.NZ` |
-| `Left` | `pl.ZZ` | `pl.NZ` |
-| `Right` | `pl.ZN` | `pl.ZN` |
-| `Acc` | `pl.NZ` | `pl.NZ` |
-| `Scaling` | `pl.ND` | `pl.ND` |
-| `ScaleLeft` | — | `pl.ZZ` |
-| `ScaleRight` | — | `pl.NN` |
-
-补充规则：
-
-- `Mat`除默认`pl.NZ`外，还允许`pl.ZN`；当`dtype`为`UINT64`或`INT64`时，额外允许`pl.ND`
-- `Left`跨架构兼容，同时允许`pl.ZZ`（A3默认）和`pl.NZ`（A5默认）
-- `Mat`中的E8M0 scale允许`pl.ZZ`和`pl.NN`，未指定`fractal`时自动取32
-- `ScaleLeft`和`ScaleRight`仅A5支持，分别用于A矩阵和B矩阵的E8M0 scale；未指定`fractal`时自动取32，Tile地址须按32字节对齐
+返回一个Tile类型描述对象。该对象仅保存Tile的shape、dtype、内存空间和布局等属性，不分配片上内存；需传给make_tile或make_tile_group创建实际Tile。
 
 ## 调用示例
 
-以下示例展示不同内存空间和使用场景下的`TileType`定义。`TileType`仅描述Tile规格，实际缓冲区由`make_tile`或`make_tile_group`创建。
+TileType仅描述Tile规格，实际缓冲区由make_tile或make_tile_group创建。
+
+### 默认UB Tile
 
 ```python
 import pypto_pro.language as pl
 
-TILE_M = 64
-TILE_K = 128
-TILE_N = 128
+# target_memory 默认取 MemorySpace.Vec
+vec_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16)
+```
 
-# UB Tile：target_memory 默认取 MemorySpace.Vec
-vec_type = pl.TileType(
-    shape=[TILE_M, TILE_N],
-    dtype=pl.DT_FP16,
-)
+### Cube各内存空间的Tile
 
-# A5 L0A Tile：Left 的默认布局为 NZ，也可以显式指定
+```python
+import pypto_pro.language as pl
+
+# L0A Buffer中的Tile：Left的默认布局为NZ，也可以显式指定
 left_type = pl.TileType(
-    shape=[TILE_M, TILE_K],
-    dtype=pl.DT_FP16,
-    target_memory=pl.MemorySpace.Left,
-    layout=pl.NZ,
+    shape=[64, 128], dtype=pl.DT_FP16,
+    target_memory=pl.MemorySpace.Left, layout=pl.NZ,
 )
 
-# A5 L1 转置分形 Tile：Mat 支持显式指定 ZN
+# L1 Buffer中的转置分形Tile：Mat支持显式指定ZN
 mat_zn_type = pl.TileType(
-    shape=[TILE_K, TILE_N],
-    dtype=pl.DT_FP16,
-    target_memory=pl.MemorySpace.Mat,
-    layout=pl.ZN,
+    shape=[128, 128], dtype=pl.DT_FP16,
+    target_memory=pl.MemorySpace.Mat, layout=pl.ZN,
 )
 
-# L0C Tile：FP32 Acc 未指定 fractal 时自动取 1024
+# L0C Buffer中的Tile：FP32 Acc未指定fractal时自动取1024
 acc_type = pl.TileType(
-    shape=[TILE_M, TILE_N],
-    dtype=pl.DT_FP32,
+    shape=[64, 128], dtype=pl.DT_FP32,
     target_memory=pl.MemorySpace.Acc,
 )
+```
 
-# 动态尾块 Tile：运行时使用 set_validshape 设置实际有效形状
+### 动态尾块Tile
+
+```python
+import pypto_pro.language as pl
+
+# valid_shape=[-1, -1]：运行时通过 set_validshape 设置实际有效形状
+# compact=1：使动态尾块在 load、move 和 matmul 路径中按有效窗口紧凑解释
 tail_type = pl.TileType(
-    shape=[TILE_M, TILE_N],
-    dtype=pl.DT_FP16,
+    shape=[64, 128], dtype=pl.DT_FP16,
     target_memory=pl.MemorySpace.Vec,
-    valid_shape=[-1, -1],
-    compact=1,
+    valid_shape=[-1, -1], compact=1,
 )
+```
 
-# 带填充模式的 Tile：供 fillpad 等读取 pad 属性的操作使用
+### 带填充模式的Tile
+
+```python
+import pypto_pro.language as pl
+
+# pad=pl.TilePad.min：flash attention 掩码场景，无效行补 FP32 最小值
 mask_type = pl.TileType(
-    shape=[TILE_M, TILE_N],
-    dtype=pl.DT_FP32,
+    shape=[64, 128], dtype=pl.DT_FP32,
     target_memory=pl.MemorySpace.Vec,
-    valid_shape=[-1, -1],
-    compact=1,
+    valid_shape=[-1, -1], compact=1,
     pad=pl.TilePad.min,
 )
 ```
@@ -220,7 +224,7 @@ def matmul_m_tail(
         addrs=0x10000,
         mutex_ids=[1],
     )
-    # L0A：matmul恒按紧凑布局取数，compact=1使move按同样的跨度写入
+    # L0A Buffer：matmul恒按紧凑布局取数，compact=1使move按同样的跨度写入
     a_l0a = pl.make_tile_group(
         type=pl.TileType(
             shape=[TILE, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left,
@@ -236,7 +240,7 @@ def matmul_m_tail(
         addrs=0x0,
         mutex_ids=[3],
     )
-    # L0C：matmul恒按紧凑布局写数，compact=1使store按同样的跨度读出
+    # L0C Buffer：matmul恒按紧凑布局写数，compact=1使store按同样的跨度读出
     c_l0c = pl.make_tile_group(
         type=pl.TileType(
             shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
@@ -344,7 +348,7 @@ def matmul_wide_alias(
         pl.load(cur_y, y, [0, 0])
         pl.move(br, cur_y)
 
-        # 两块L0A Tile不设置compact=1和set_validshape，数据全量搬运，确保拼接后的整块L0A Tile中数据排布连续
+        # 两块L0A Buffer中的Tile不设置compact=1和set_validshape，数据全量搬运，确保拼接后的整块L0A Buffer中数据排布连续
         al_1 = x_l0a.next()
         pl.move(al_1, cur_x, [0, 0])
         al_2 = x_l0a.next()
@@ -353,7 +357,7 @@ def matmul_wide_alias(
         al = x_wide.next()
         pl.matmul(ac, al, br)
 
-        # L0C不设置compact=1，store按matmul的写入格式搬运；set_validshape控制搬运的数据量；
+        # L0C Buffer不设置compact=1，store按matmul的写入格式搬运；set_validshape控制搬运的数据量；
         pl.set_validshape(ac, [40, 128])
         pl.store(out, ac, [0, 0])
 

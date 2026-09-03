@@ -14,7 +14,6 @@ resource_management/index
 synchronization/index
 cache_control/index
 system_variables/index
-atomic_operations/index
 transpose_and_element_access/index
 utilities/index
 ```

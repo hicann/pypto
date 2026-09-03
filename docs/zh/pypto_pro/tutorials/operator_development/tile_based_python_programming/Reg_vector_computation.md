@@ -104,6 +104,32 @@ def add_kernel(
 
 完整可运行示例和寄存器生命周期说明参见[`vf.reg_tensor`](../../../api/SIMD-API/operation/vf_computation/reg_tensor.md)。
 
+### VF函数中的Tile指针偏移
+
+VF函数接收的Tile参数可以使用`tile + offset`进行线性元素偏移，偏移后的表达式可传给`vf.load_align`、`vf.store_align`等访存接口。例如，下面的VF函数按行读取源Tile，并将结果连续写入目标Tile：
+
+```python
+@pl.vector_function
+def copy_rows(dst_tile, src_tile, row_count, col_count, src_stride):
+    preg = vf.update_mask(col_count, dtype=pl.DT_FP16)
+    for row in pl.range(row_count):
+        vreg = vf.load_align(src_tile, row * src_stride)
+        vf.store_align(dst_tile + row * col_count, vreg, preg)
+```
+
+`offset`的单位是元素，可以是整型常量或运行时整型Scalar。`tile + offset`只形成偏移后的指针表达式，不会创建新的Tile，也不携带shape或`valid_shape`信息。
+
+VF函数内不支持`tile[row_start:row_stop, col_start:col_stop]`切片。如果需要先选取二维区域，应在`pl.section_vector()`中创建子Tile，再将其传给VF函数：
+
+```python
+with pl.section_vector():
+    src_tile = src_group.next()
+    dst_tile = dst_group.next()
+    pl.load(src_tile, src, [0, 0])
+    copy_rows(dst_tile, src_tile[1:4, 16:48], 3, 32, 64)
+    pl.store(dst, dst_tile, [0, 0])
+```
+
 ## 同步与依赖
 
 - GM↔UB搬运与Vector/VF计算之间的跨Pipe依赖，由TileGroup + `auto_mutex=True`自动管理，或使用`pl.system.sync_src` / `pl.system.sync_dst`手动管理。

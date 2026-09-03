@@ -14,39 +14,46 @@
 
 ## 功能说明
 
-把低精度整型tile反量化回高精度浮点。计算公式：`out = (src - offset) * scale`。
+把INT8或INT16源Tile反量化为FP32。scale[i,0]和offset[i,0]按行广播：
+
+$$
+out_{i,j}=\left(\operatorname{FP32}(src_{i,j})-offset_{i,0}\right)\times scale_{i,0}
+$$
+
+计算顺序为：整数源数据扩展并转换为FP32、减去offset、乘以scale。若与[quant](quant.md)配套使用，量化阶段传入的乘子通常为本接口scale的倒数。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.dequant(out, src, scale, offset)
+pypto_pro.language.dequant(
+    out: Tile,
+    src: Tile,
+    scale: Tile,
+    offset: Tile,
+) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 反量化结果tile（高精度浮点） |
-| `src` | 输入 | 源tile（低精度整型） |
-| `scale` | 输入 | 缩放系数tile |
-| `offset` | 输入 | 零点偏移tile |
+| out | 输出 | UB、RowMajor、DT_FP32 Tile；逻辑shape和valid_shape须与src一致。 |
+| src | 输入 | UB、RowMajor Tile，dtype为DT_INT8或DT_INT16；逻辑shape和valid_shape须与out一致。 |
+| scale | 输入 | UB、RowMajor、DT_FP32 Tile。若out.valid_shape=[M,N]，则scale.valid_shape须为[M,1]，物理shape的行数不得小于M且列数必须为1；第i行的scale[i,0]广播到输出第i行全部有效列。 |
+| offset | 输入 | UB、RowMajor、DT_FP32 Tile，物理shape和valid_shape均须与scale一致；第i行的offset[i,0]广播到对应数据行。对称量化数据须传入全零Tile，本参数不能省略。 |
 
-## 参数范围
+## 返回值说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `out` | 输出 | 数据类型：`pypto_pro.language.DT_FP32`<br>shape须与`src`一致 |
-| `src` | 输入 | 数据类型：`pypto_pro.language.DT_INT8`或`pypto_pro.language.DT_INT16`<br>shape和valid shape须与`out`一致，且采用行主序布局 |
-| `scale` | 输入 | 数据类型：`pypto_pro.language.DT_FP32`<br>按行提供参数，有效行数须等于`out`的有效行数；典型shape为`[行数, 1]` |
-| `offset` | 输入 | 数据类型：`pypto_pro.language.DT_FP32`<br>shape：与`scale`一致，有效行数须等于`out`的有效行数<br>对称量化场景可传全零tile |
+无返回值。反量化结果写入out。
 
-## 流水类型
+## 约束说明
 
-V（向量计算流水）。
+1. out、src、scale和offset应使用互不重叠的UB区域；本接口不保证地址重叠时的结果。
+2. scale和offset必须覆盖src的每个有效行，不能依赖参数Tile最后一行或最后一列隐式扩展。
+3. 计算使用FP32。scale或offset中的NaN、Inf按照FP32运算传播；超出FP32范围的结果按目标硬件浮点规则处理。
+4. 接口只定义src.valid_shape有效区域内的输出；有效区域外的内容未定义。
 
 ## 调用示例
-
-下面是一个完整kernel：从GM载入INT8源tile、per-row scale和offset，用`pypto_pro.language.dequant`反量化为FP32再写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl

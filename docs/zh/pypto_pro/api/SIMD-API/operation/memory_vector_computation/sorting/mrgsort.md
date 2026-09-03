@@ -14,39 +14,45 @@
 
 ## 功能说明
 
-归并排序：对src tile中的元素按块进行归并排序，结果写入dst tile。输入数据为val-idx对格式（每个元素包含值和索引），排序后保持索引与值的对应关系。
+四路块归并：将src中的每组4个连续、等长且已按值降序排列的块归并为一个降序块，并写入dst。本接口操作固定8字节的value-index记录，不是对任意未排序数据执行完整排序。
 
-典型场景：TopK排序的预处理步骤，先对每个块内部排序，再用[`pypto_pro.language.mrgsort2`](mrgsort2.md)多路归并。
+记录布局与[sort32](sort32.md)输出一致：FP32记录为[value_f32(4B), index_u32(4B)]，FP16记录为[value_f16(2B), padding(2B, 0), index_u32(4B)]。
+
+典型场景：TopK排序的预处理步骤，先对每个块内部排序，再用[pypto_pro.language.mrgsort2](mrgsort2.md)多路归并。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.mrgsort(dst, src, *, block_len)
+pypto_pro.language.mrgsort(
+    dst: Tile,
+    src: Tile,
+    *,
+    block_len: int,
+) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst` | 输出 | 目标tile，存放排序结果 |
-| `src` | 输入 | 源tile，val-idx对格式 |
-| `block_len` | 输入 | 归并块长度 |
+| dst | 输出 | UB、RowMajor、单行Tile；dtype、物理shape和valid_shape须与src一致。 |
+| src | 输入 | UB、RowMajor、单行Tile，dtype为DT_FP16或DT_FP32；内容须为8字节value-index记录，每个待归并块内部已按value降序排列。 |
+| block_len | 输入 | 编译期正整数，单位为Tile存储元素而不是value-index记录数。每条value-index记录固定占8字节，因此block_len * sizeof(dtype)必须是8的倍数：FP32场景block_len须为2的倍数，FP16场景须为4的倍数。每块记录数block_len * sizeof(dtype) / 8须位于[1, 4095]。例如block_len=64分别表示每块32条FP32记录或16条FP16记录。 |
 
-## 参数范围
+## 返回值说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `dst` | 输出 | 数据类型：与`src`一致<br>shape：与`src`一致 |
-| `src` | 输入 | 数据类型：b16、b32<br>shape：行数为1<br>数据格式：val-idx对（每个元素含值和原始索引） |
-| `block_len` | 输入 | 编译期正整数，单位为Tile存储元素，并同时包含value和index。例如32个FP32 value-index记录对应64个FP32存储元素 |
+无返回值。归并结果写入dst。
 
-## 流水类型
+## 约束说明
 
-V（向量计算流水）。
+1. src.valid_shape[1]必须是4 * block_len的整数倍。每连续4个块构成一组四路归并，多个组彼此独立。
+2. repeatTimes = src.valid_shape[1] / (4 * block_len)必须位于[1,255]。
+3. src中每个输入块必须预先按value降序排列。通常先用[sort32](sort32.md)生成有序记录，再逐级增大block_len调用mrgsort。
+4. src和dst须使用互不重叠且按32字节对齐的UB区域；本接口不保证原地归并结果。
+5. 结果按value降序排列；value相同时，index较小的记录排在前面。NaN的相对顺序由底层浮点比较行为决定。
+6. block_len及相关shape约束按Tile存储元素计算，不得误用value-index记录数；换算后的每块value-index记录数不得超过4095。
 
 ## 调用示例
-
-下面是一个完整kernel：用`pypto_pro.language.mrgsort`对UB上的val-idx对数据做归并排序。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl

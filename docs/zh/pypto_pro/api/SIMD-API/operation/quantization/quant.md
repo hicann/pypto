@@ -14,41 +14,54 @@
 
 ## 功能说明
 
-把高精度tile量化为低精度整型（支持对称/非对称）。对称模式：`out = clamp(round(src * scale), -128, 127)`；非对称模式：`out = clamp(round(src * scale) + offset, 0, 255)`。
+把FP32源Tile量化为INT8或UINT8。scale是量化乘子（常见量化定义中真实scale的倒数），scale[i, 0]和offset[i, 0]按行广播：
+
+$$
+out_{i,j}=\begin{cases}
+\operatorname{clamp}_{[-128,127]}\left(\operatorname{roundToEven}\left(src_{i,j}\times scale_{i,0}\right)\right), & mode=\mathrm{SYM} \\
+\operatorname{clamp}_{[0,255]}\left(\operatorname{roundToEven}\left(src_{i,j}\times scale_{i,0}+offset_{i,0}\right)\right), & mode=\mathrm{ASYM}
+\end{cases}
+$$
+
+非对称模式先在FP32中完成乘法和加法，再对合并后的结果执行一次舍入；不是先舍入乘积再添加offset。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.quant(out, src, scale, *, mode=pl.QuantMode.SYM, offset=None)
+pypto_pro.language.quant(
+    out: Tile,
+    src: Tile,
+    scale: Tile,
+    *,
+    mode: QuantMode = pypto_pro.language.QuantMode.SYM,
+    offset: Optional[Tile] = None,
+) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 量化结果tile（低精度整型） |
-| `src` | 输入 | 源tile（高精度浮点） |
-| `scale` | 输入 | 量化缩放系数tile |
-| `mode` | 输入 | 量化模式，默认`pl.QuantMode.SYM` |
-| `offset` | 输入 | 非对称模式下的零点偏移tile |
+| out | 输出 | UB、RowMajor Tile。mode=SYM时必须为DT_INT8；mode=ASYM时必须为DT_UINT8。逻辑shape和valid_shape须与src一致。 |
+| src | 输入 | UB、RowMajor、DT_FP32 Tile。逻辑shape和valid_shape须与out一致。 |
+| scale | 输入 | UB、RowMajor、DT_FP32 Tile。若src.valid_shape=[M,N]，则scale.valid_shape须为[M,1]，物理shape的行数不得小于M且列数必须为1；第i行的scale[i,0]广播到src第i行全部有效列。该值直接与src相乘，因此若使用常见公式$q=round(x/s)$，此处应传入$1/s$。 |
+| mode | 输入 | 可选，编译期[pypto_pro.language.QuantMode](../../basic_data_structures/QuantMode.md)枚举值，可取SYM（默认）或ASYM。模式同时决定输出dtype和是否需要offset。 |
+| offset | 输入 | 可选，mode=ASYM时必填，须为UB、RowMajor、DT_FP32 Tile，物理shape和valid_shape均须与scale一致；第i行的offset[i,0]广播到对应数据行。mode=SYM时不参与后端调用，建议省略而不是传入无效占位Tile。 |
 
-## 参数范围
+## 返回值说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `out` | 输出 | 数据类型：`pypto_pro.language.DT_INT8`（对称模式，范围[-128, 127]）或`pypto_pro.language.DT_UINT8`（非对称模式，范围[0, 255]）<br>shape须与`src`一致 |
-| `src` | 输入 | 数据类型：`pypto_pro.language.DT_FP32`<br>shape：与`out`一致 |
-| `scale` | 输入 | 数据类型：`pypto_pro.language.DT_FP32`<br>按行提供量化系数，典型shape为`[src行数, 1]` |
-| `mode` | 输入 | `pl.QuantMode.SYM`（对称，默认）或`pl.QuantMode.ASYM`（非对称）<br>非对称模式时`offset`必填 |
-| `offset` | 输入 | 数据类型：`pypto_pro.language.DT_FP32`<br>shape：与`scale`一致<br>仅`pl.QuantMode.ASYM`模式需要，`pl.QuantMode.SYM`模式忽略 |
+无返回值。量化结果写入out。
 
-## 流水类型
+## 约束说明
 
-V（向量计算流水）。
+1. mode必须在编译期确定，不能使用运行时Scalar或Tensor动态选择。
+2. 舍入规则固定为舍入到最近值，中间值取偶数，接口不提供RoundMode参数。有限输入超出目标整数范围时分别饱和到[-128,127]或[0,255]。
+3. scale通常应为有限正数；接口不检查其数值范围。scale=0、负数、NaN或Inf会按底层浮点和类型转换规则执行，不应作为可移植量化用法。
+4. ASYM模式的offset在FP32域中参与舍入，因此允许FP32存储，但规范用法应传入可表示零点的有限数值。
+5. out、src、scale和offset应使用互不重叠的UB区域。由于源、目的位宽不同，本接口不保证地址重叠时的结果。
+6. 接口只定义src.valid_shape有效区域内的输出；有效区域外的内容未定义。
 
 ## 调用示例
-
-下面是一个完整kernel：从GM载入FP32源tile和per-row scale，用`pypto_pro.language.quant`对称量化为INT8再写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl

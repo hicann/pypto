@@ -14,70 +14,37 @@
 
 ## 功能说明
 
-内存空间枚举，用于标记Tile所在的物理存储位置，是[`pypto_pro.language.TileType`](TileType.md)的关键属性。
+内存空间枚举，用于描述PyPTO数据对象对应的硬件存储区域。创建片上Tile时，该枚举作为[pypto_pro.language.TileType](TileType.md)的target_memory属性，用于指定Tile的目标内存空间。
 
-不同内存空间对应昇腾芯片上不同的物理存储区域，决定了Tile能参与哪些计算、需要哪条流水搬运。
+不同的枚举值对应AI处理器的全局存储或AI Core内的片上存储区域。对于片上Tile，内存空间决定其可参与的计算类型和支持的数据搬运路径。
 
-## 取值
-
-| 取值 | 物理位置 | 说明 | 典型用途 |
-|---|---|---|---|
-| `pypto_pro.language.MemorySpace.DDR` | 片外DDR | 全局内存，Tensor所在 | GM张量存储 |
-| `pypto_pro.language.MemorySpace.Vec` | 片上UB | 向量/统一缓冲区 | 向量计算（element-wise、reduce等）的输入输出 |
-| `pypto_pro.language.MemorySpace.Mat` | 片上L1 | 矩阵缓冲区 | matmul的L1暂存（GM→L1→L0A/L0B两跳的中间站） |
-| `pypto_pro.language.MemorySpace.Left` | 片上L0A | 左操作数缓冲区 | matmul左矩阵输入 |
-| `pypto_pro.language.MemorySpace.Right` | 片上L0B | 右操作数缓冲区 | matmul右矩阵输入 |
-| `pypto_pro.language.MemorySpace.Acc` | 片上L0C | 累加器缓冲区 | matmul累加器输出 |
-| `pypto_pro.language.MemorySpace.Scaling` | 片上 | 缩放/量化参数缓冲区 | quantization/反量化参数 |
-| `pypto_pro.language.MemorySpace.ScaleLeft` | 片上L0A（scale专用地址域） | A矩阵的E8M0 scale（分组缩放因子）缓冲区 | `matmul_mx`的`scale_a` |
-| `pypto_pro.language.MemorySpace.ScaleRight` | 片上L0B（scale专用地址域） | B矩阵的E8M0 scale（分组缩放因子）缓冲区 | `matmul_mx`的`scale_b` |
-| `pypto_pro.language.MemorySpace.Bias` | Bias Buffer | 底层偏置缓冲区标识 | 当前CCE Tile codegen未实现该内存空间映射，不能用于`make_tile`或`make_tile_group`创建Tile |
-
-## 补充说明
-
-不同内存空间的tile在构造[`pypto_pro.language.TileType`](TileType.md)时有不同的默认`layout`：
-
-| 内存空间 | A3默认`layout` | A5默认`layout` | 额外允许 |
-|---|---|---|---|
-| `Vec` | 无约束 | 无约束 | — |
-| `Mat` | `pl.NZ` | `pl.NZ` | `pl.ZN`转置分形布局；UINT64/INT64还允许`pl.ND` |
-| `Left` | `pl.ZZ` | `pl.NZ` | 同时允许`pl.ZZ`和`pl.NZ` |
-| `Right` | `pl.ZN` | `pl.ZN` | — |
-| `Acc` | `pl.NZ` | `pl.NZ` | FP32/INT32自动`fractal=1024` |
-| `Scaling` | `pl.ND` | `pl.ND` | — |
-| `ScaleLeft` | — | `pl.ZZ` | 仅用于A矩阵的`DT_FP8E8M0`分组缩放因子，32字节地址对齐 |
-| `ScaleRight` | — | `pl.NN` | 仅用于B矩阵的`DT_FP8E8M0`分组缩放因子，32字节地址对齐 |
-
-### MX scale（MX矩阵计算的E8M0分组缩放因子）配套缓冲区
-
-`ScaleLeft`和`ScaleRight`分别是与L0A和L0B配套的MX scale缓冲区，在PTO-ISA中分别使用`__ca__`和`__cb__`地址空间。它们具有独立于Left/Right数据地址域的4KB逻辑容量，并非从普通L0A/L0B的64KB数据空间中划出；scale Tile的起始地址由配对数据Tile的起始地址推导：
-
-```text
-ScaleLeftAddr  = LeftAddr  >> 4
-ScaleRightAddr = RightAddr >> 4
-```
-
-因此，64KB的L0A/L0B数据地址范围对应4KB的ScaleLeft/ScaleRight地址范围。例如，Left起始地址为`0x8000`时，配对的ScaleLeft起始地址为`0x0800`。该映射是MX矩阵指令的强制寻址约束。对于显式指定且编译期可知的Tile地址，框架会校验ScaleLeft/ScaleRight与Left/Right的地址映射；自动分配或动态地址无法在该阶段校验。映射不一致时，指令会从由Left/Right地址推导的位置读取scale，而不是从错误配置的scale Tile地址读取，导致计算结果错误。
-
-> [!NOTE]说明
-> 4KB的ScaleLeft/ScaleRight不是从64KB的L0A/L0B数据容量中划出的预留空间。使用ScaleLeft/ScaleRight时，Left/Right的数据地址域仍可使用完整64KB，不需要缩减为60KB。
-
-这里的`/16`来自硬件地址右移4位，与“一个E8M0 scale对应K方向连续32个尾数元素”的数据分组规则不是同一概念。MX矩阵乘法的完整参数约束见[`matmul_mx`](../operation/matrix_computation/matmul_mx.md)。
-
-## 调用示例
+## 原型定义
 
 ```python
-import pypto_pro.language as pl
-# UB tile（向量计算）
-tt = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-
-# L1 tile（matmul 中间暂存）
-tt_l1 = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
-
-# L0A tile（matmul 左矩阵）
-tt_left = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left,
-                       layout=pl.NZ)
-
-# Acc tile（matmul 累加器）
-tt_acc = pl.TileType(shape=[128, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc)
+class MemorySpace(enum.IntEnum):
+    DDR = ...
+    Vec = ...
+    Mat = ...
+    Left = ...
+    Right = ...
+    Scaling = ...
+    Acc = ...
+    Bias = ...
+    ScaleLeft = ...
+    ScaleRight = ...
 ```
+
+## 参数说明
+
+| 参数值 | 存储单元 | 用法与约束 |
+|---|---|---|
+| pypto_pro.language.MemorySpace.DDR | GM | 表示Kernel输入、输出Tensor所在的存储区域。该枚举值用于表示Tensor存储位置，不用作make_tile/make_tile_group的片上Tile分配目标。 |
+| pypto_pro.language.MemorySpace.Vec | UB | Vector Core的工作缓冲区，用于逐元素、归约、排序、纯Vector量化/反量化等SIMD计算。Tile起始地址须按32字节对齐。 |
+| pypto_pro.language.MemorySpace.Mat | L1 Buffer | 用于存放Cube计算的中间数据。数据从GM加载后可搬入L0A Buffer、L0B Buffer、BiasTable Buffer、Scaling、ScaleLeft或ScaleRight空间。Tile起始地址须按32字节对齐。 |
+| pypto_pro.language.MemorySpace.Left | L0A Buffer | 用于存放矩阵乘的左操作数，与L0B Buffer中的右操作数共同参与Cube计算。Tile起始地址须按512字节对齐。 |
+| pypto_pro.language.MemorySpace.Right | L0B Buffer | 用于存放矩阵乘的右操作数，与L0A Buffer中的左操作数共同参与Cube计算。Tile起始地址须按512字节对齐。 |
+| pypto_pro.language.MemorySpace.Scaling | Fixpipe Buffer | 仅用于FIX数据通路的per-channel随路量化/反量化参数。该空间不是quant/dequant接口的scale存储区。数据需经L1 Buffer搬入：源Tile须为1行，目的Tile数据类型须为DT_INT64或DT_UINT64，目的地址和数据量均须按128字节对齐，单次搬运数据量不得超过4096字节。 |
+| pypto_pro.language.MemorySpace.Acc | L0C Buffer | 用于存放matmul、matmul_acc、matmul_mx等Cube计算的结果或中间累加值。Tile起始地址须按64字节对齐。 |
+| pypto_pro.language.MemorySpace.Bias | BiasTable Buffer | 用于存放矩阵计算的偏置数据。偏置数据不能从GM直接加载，需经L1 Buffer中转。经L1 Buffer搬入时，源Tile须为1行，目的地址和数据量均须按64字节对齐，单次搬运数据量不得超过4096字节。 |
+| pypto_pro.language.MemorySpace.ScaleLeft | L0A Buffer | 仅用于存放MX矩阵乘左操作数的DT_FP8E8M0分组缩放因子。Tile起始地址须按32字节对齐，ScaleLeft地址必须等于L0A Buffer地址右移4位。 |
+| pypto_pro.language.MemorySpace.ScaleRight | L0B Buffer | 仅用于存放MX矩阵乘右操作数的DT_FP8E8M0分组缩放因子。Tile起始地址须按32字节对齐，ScaleRight地址必须等于L0B Buffer地址右移4位。 |
