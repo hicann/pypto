@@ -32,7 +32,7 @@ move(src, preg, mode: Optional[MergeMode] = None) -> dst
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，源操作数`src`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32。 |
-| `preg` | 输入 | 可选，[mask_reg](../mask_reg.md)。控制哪些元素/bit参与操作：<br>- **reg_tensor模式**：`preg`为元素操作的有效指示。`preg`选中的位置，将`src`中对应元素复制写入`dst`；`preg`未选中的位置，`dst`保留原值。<br>- **mask_reg模式**：`preg`控制哪些bit有效。`preg`选中的bit，将`src`中对应bit复制到`dst`；`preg`未选中的bit，`dst`对应位置填0。 |
+| `preg` | 输入 | [mask_reg](../mask_reg.md)。控制哪些元素/bit参与操作：<br>- **reg_tensor模式**：`preg`为元素操作的有效指示。`preg`选中的位置，将`src`中对应元素复制写入`dst`；`preg`未选中的位置，`dst`保留原值。<br>- **mask_reg模式**：`preg`控制哪些bit有效。`preg`选中的bit，将`src`中对应bit复制到`dst`；`preg`未选中的bit，`dst`对应位置填0。 |
 | `mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.MERGING`（默认），`preg`未选中的元素在`dst`中保留原值。<br>- `pl.MergeMode.ZEROING`，当前**不支持**。 |
 
 ## 约束说明

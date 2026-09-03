@@ -3457,6 +3457,11 @@ static std::string EmitVFStoreUnAlign(const ir::CallPtr& op, codegen::CodegenBas
     // vstus/vstu support b8/b16/b32/b64 element widths
     CHECK(src_dt.GetBit() == 8 || src_dt.GetBit() == 16 || src_dt.GetBit() == 32 || src_dt.GetBit() == 64)
         << "vf.store_unalign source only supports b8/b16/b32/b64 types, got " << DTypeStr(src_dt);
+    auto ureg_var = ir::As<ir::Var>(op->args_[2]);
+    if (ureg_var) {
+        CHECK(codegen.IsUnalignRegVar(codegen.GetVarName(ureg_var)))
+            << "vf.store_unalign requires the ureg argument to be an UnalignReg (from vf.unalign_reg_for_store)";
+    }
     // AscendC DataCopyUnAlignImpl cast rules (dav_3510 store_impl.h):
     //   b8  → uint8_t
     //   b16 → no cast (native type)
@@ -3501,6 +3506,11 @@ static std::string EmitVFStoreUnAlignPost(const ir::CallPtr& op, codegen::Codege
     CHECK(op->args_.size() >= 3) << "vf.store_unalign_post requires 3 args (dst, ureg, stride|areg); "
                                  << "use vf.squeeze_store_unalign_post for strideless (vstar) mode";
     DataType tile_dt = GetExprDtype(op->args_[0]);
+    auto ureg_var = ir::As<ir::Var>(op->args_[1]);
+    if (ureg_var) {
+        CHECK(codegen.IsUnalignRegVar(codegen.GetVarName(ureg_var)))
+            << "vf.store_unalign_post requires the ureg argument to be an UnalignReg (from vf.unalign_reg_for_store)";
+    }
     // AscendC DataCopyUnAlignPostImpl cast rules (dav_3510 store_impl.h):
     //   b8  → uint8_t
     //   b16 → no cast (native type)
@@ -3556,6 +3566,12 @@ static std::string EmitVFSqueezeStoreUnAlign(const ir::CallPtr& op, codegen::Cod
         CHECK(!codegen.IsMaskRegVar(codegen.GetVarName(src_v)))
             << "vf.squeeze_store_unalign does not support MaskReg src; use vf.store_unalign instead";
     }
+    auto ureg_var = ir::As<ir::Var>(op->args_[2]);
+    if (ureg_var) {
+        CHECK(codegen.IsUnalignRegVar(codegen.GetVarName(ureg_var)))
+            << "vf.squeeze_store_unalign requires the align_reg argument to be an UnalignReg"
+            << " (from vf.unalign_reg_for_store)";
+    }
     DataType src_dt = GetExprDtype(op->args_[1]);
     // vstur supports b8/b16/b32/b64 element widths
     CHECK(src_dt.GetBit() == 8 || src_dt.GetBit() == 16 || src_dt.GetBit() == 32 || src_dt.GetBit() == 64)
@@ -3597,6 +3613,12 @@ static std::string EmitVFSqueezeStoreUnAlignPost(const ir::CallPtr& op, codegen:
     // vstar supports b8/b16/b32/b64 element widths
     CHECK(IsB8Type(tile_dt) || tile_dt.GetBit() == 16 || tile_dt.GetBit() == 32 || tile_dt.GetBit() == 64)
         << "vf.squeeze_store_unalign_post only supports b8/b16/b32/b64 types, got " << DTypeStr(tile_dt);
+    auto ureg_var = ir::As<ir::Var>(op->args_[1]);
+    if (ureg_var) {
+        CHECK(codegen.IsUnalignRegVar(codegen.GetVarName(ureg_var)))
+            << "vf.squeeze_store_unalign_post requires the align_reg argument to be an UnalignReg"
+            << " (from vf.unalign_reg_for_store)";
+    }
     // AscendC DataCopyUnAlignPostImpl cast rules (dav_3510 store_impl.h:520-537):
     //   b8  → uint8_t (line 525)
     //   b16 → no cast  (line 534, else branch uses original type)
@@ -3624,6 +3646,7 @@ static std::string EmitVFUnalignRegForStore(const ir::CallPtr& /*op*/, codegen::
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     std::string reg_name = codegen.GetCurrentResultTarget();
     codegen.Emit("UnalignReg " + reg_name + ";");
+    codegen.RegisterUnalignRegVar(reg_name);
     return "";
 }
 
@@ -3643,6 +3666,7 @@ static std::string EmitVFUnalignRegForLoad(const ir::CallPtr& /*op*/, codegen::C
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     std::string reg_name = codegen.GetCurrentResultTarget();
     codegen.Emit("UnalignReg " + reg_name + ";");
+    codegen.RegisterUnalignRegVar(reg_name);
     return "";
 }
 
@@ -3655,6 +3679,12 @@ static std::string EmitVFLoadUnalignPre(const ir::CallPtr& op, codegen::CodegenB
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     CHECK(op->args_.size() == 2) << "vf.load_unalign_pre requires 2 args (ureg, src_ptr)";
     std::string ureg = codegen.GetExprAsCode(op->args_[0]);
+    auto ureg_var = ir::As<ir::Var>(op->args_[0]);
+    if (ureg_var) {
+        CHECK(codegen.IsUnalignRegVar(codegen.GetVarName(ureg_var)))
+            << "vf.load_unalign_pre requires the first argument to be an UnalignReg (from vf.load_unalign_init), got "
+            << ureg;
+    }
     DataType dt = GetExprDtype(op->args_[1], DataType::FP32);
     // vldas supports b8/b16/b32/b64 element widths
     CHECK(IsB8Type(dt) || dt.GetBit() == 16 || dt.GetBit() == 32 || dt.GetBit() == 64)
@@ -3690,6 +3720,12 @@ static std::string EmitVFLoadUnalign(const ir::CallPtr& op, codegen::CodegenBase
     CHECK(op->args_.size() >= 3) << "vf.load_unalign requires 3-4 args (dst, ureg, src_ptr [, stride])";
     std::string dst = codegen.GetExprAsCode(op->args_[0]);
     std::string ureg = codegen.GetExprAsCode(op->args_[1]);
+    auto ureg_var = ir::As<ir::Var>(op->args_[1]);
+    if (ureg_var) {
+        CHECK(codegen.IsUnalignRegVar(codegen.GetVarName(ureg_var)))
+            << "vf.load_unalign requires the ureg argument to be an UnalignReg (from vf.load_unalign_init), got "
+            << ureg;
+    }
     DataType dst_dt = GetExprDtype(op->args_[0]);
     CHECK((IsB8Type(dst_dt) || dst_dt.GetBit() == 16 || dst_dt.GetBit() == 32 || dst_dt.GetBit() == 64))
         << "vf.load_unalign only supports b8/b16/b32/b64 types, got " << DTypeStr(dst_dt);
@@ -4410,22 +4446,17 @@ static std::string EmitVFStore(const ir::CallPtr& op, codegen::CodegenBase& code
         elem_bytes = 4;
     // Determine count (positional arg, default 256B/elem_bytes)
     std::string count;
-    if (op->args_.size() == 3) {
-        count = codegen.GetExprAsCode(op->args_[2]);
-    } else {
-        count = std::to_string(256 / elem_bytes);
-    }
-    // Validate constant count does not exceed max (256B/sizeof(dtype))
     int max_count = 256 / elem_bytes;
     if (op->args_.size() == 3) {
+        count = codegen.GetExprAsCode(op->args_[2]);
         auto const_int = std::dynamic_pointer_cast<const ir::ConstInt>(op->args_[2]);
         if (const_int != nullptr) {
             CHECK(const_int->value_ <= max_count)
                 << "vf.store count must not exceed 256B/sizeof(dtype) = " << max_count << ", got " << const_int->value_;
         }
+    } else {
+        count = std::to_string(max_count);
     }
-    // repeat_stride is not supported by vstus/vstas intrinsics
-    CHECK(!op->HasKwarg("repeat_stride")) << "vf.store does not support repeat_stride";
     // UINT64: vstus/vstas have no uint64_t overload, must reinterpret as uint32_t pairs.
     // INT64 has a direct overload (asc_storeunalign_impl has int64_t but not uint64_t).
     bool is_u64 = (src_dt == DataType::UINT64);

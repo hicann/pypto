@@ -201,6 +201,12 @@ public:
     /** \brief Check if a C++ variable name was declared as a VF AddrReg. */
     bool IsAddrRegVar(const std::string& cpp_name) const { return addr_reg_vars_.count(cpp_name) > 0; }
 
+    /** \brief Register a VF UnalignReg variable (called from EmitVFUnalignRegForStore/Load). */
+    void RegisterUnalignRegVar(const std::string& cpp_name) { unalign_reg_vars_.insert(cpp_name); }
+
+    /** \brief Check if a C++ variable name was declared as a VF UnalignReg. */
+    bool IsUnalignRegVar(const std::string& cpp_name) const { return unalign_reg_vars_.count(cpp_name) > 0; }
+
     /** \brief Map logical tensor coordinates to a layout-aware physical element offset. */
     std::string ComputeTensorOffset(const ir::TensorTypePtr& tensor_type, const ir::MakeTuplePtr& offsets);
 
@@ -651,6 +657,9 @@ private:
 
     /// Track VF AddrReg variable names (C++ names set by EmitVFCreateAddrReg)
     std::set<std::string> addr_reg_vars_;
+
+    /// Track VF UnalignReg variable names (C++ names set by EmitVFUnalignRegForStore/Load)
+    std::set<std::string> unalign_reg_vars_;
 
     // Tuple Var C++ name -> the MakeTuple that was assigned to it.
     // Populated during body codegen by VisitStmt_(AssignStmtPtr) on tuple-typed lhs:

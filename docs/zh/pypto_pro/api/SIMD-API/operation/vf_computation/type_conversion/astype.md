@@ -48,7 +48,7 @@
 ## 函数原型
 
 ```python
-astype(src, preg, dtype: Optional[DType] = None, layout: Optional[CastLayout] = None, round_mode: Optional[VFRoundMode] = None, saturate: Optional[SaturateMode] = None)
+astype(src, preg, dtype: DType, layout: Optional[CastLayout] = None, round_mode: Optional[VFRoundMode] = None, saturate: Optional[SaturateMode] = None)
 ```
 
 ## 参数说明

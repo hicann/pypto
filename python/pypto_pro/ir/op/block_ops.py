@@ -742,8 +742,15 @@ def _ir_relu(out: Expr, src: Expr, *, span: Span | None = None) -> Expr:
 
 def _ir_axpy(out: Expr, src: Expr, scalar: Expr, *, span: Span | None = None) -> Expr:
     dt = getattr(out.type, "dtype", None)
+    src_dt = getattr(src.type, "dtype", None)
     _check_dtype("axpy", dt, _AXPY_DTYPES)
-    _check_dtype_match("axpy", dt, getattr(src.type, "dtype", None))
+    _check_dtype("axpy", src_dt, _AXPY_DTYPES)
+    if dt != src_dt:
+        if not (dt == DataType.FP32 and src_dt == DataType.FP16):
+            raise ValueError(
+                f"axpy: dtype mismatch between out ({dt}) and src ({src_dt}). "
+                f"Supported: same type, or src=FP16 + out=FP32."
+            )
     return _ir_core.create_op_call(block_ir_op("axpy"), [out, src, scalar], {}, span or _span())
 
 

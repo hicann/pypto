@@ -595,6 +595,7 @@ REGISTER_OP("vf.mem_bar")
     .set_op_category("VFOp")
     .set_description("Memory barrier")
     .no_argument()
+    .set_attr<int>("mode")
     .f_deduce_type(DeduceVFUnknownType);
 
 // TopK VF ops
@@ -719,6 +720,7 @@ REGISTER_OP("vf.store_unalign_post")
     .set_description("Complete unaligned store")
     .add_argument("dst_ptr", "Destination UB pointer")
     .add_argument("align_reg", "Alignment register")
+    .set_attr<bool>("post_update")
     .f_deduce_type(DeduceVFUnknownType);
 
 REGISTER_OP("vf.squeeze_store_unalign")
@@ -854,9 +856,6 @@ REGISTER_OP("vf.load")
     .add_argument("dst", "Destination register")
     .add_argument("src_ptr", "Source UB pointer")
     .add_argument("stride", "Post-update stride (optional, triggers POST_UPDATE mode)")
-    .set_attr<bool>("post_update")
-    .set_attr<int>("repeat_stride")
-    .set_attr<int>("count")
     .f_deduce_type(DeduceVFFromDstArg);
 
 REGISTER_OP("vf.store")

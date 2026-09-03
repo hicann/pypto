@@ -22,7 +22,7 @@
 ## 函数原型
 
 ```python
-arange(start, index_order: Optional[IndexOrder] = None, dtype: Optional[DType] = None) -> dst
+arange(start, dtype: DType, index_order: Optional[IndexOrder] = None) -> dst
 ```
 
 ## 参数说明
@@ -31,7 +31,7 @@ arange(start, index_order: Optional[IndexOrder] = None, dtype: Optional[DType] =
 |---|---|---|
 | `start` | 输入 | 序列起始值（整型标量或表达式）。 |
 | `index_order` | 输入 | 可选关键字参数，生成方向。`pl.IndexOrder.INCREASE_ORDER`（默认，递增）或`pl.IndexOrder.DECREASE_ORDER`（递减）。每一步的步长固定为 ±1，这是硬件特性。如需非1步长（如`start + i*step`），可在`vf.arange`之后追加一条`vf.muls`对结果整体缩放。 |
-| `dtype` | 输入 | 必选，指定目标[reg_tensor](../reg_tensor.md)的数据类型（如`pl.DT_UINT32`、`pl.DT_INT32`等）。由于标量源无法推断寄存器数据类型，必须显式指定。 |
+| `dtype` | 输入 | 指定目标[reg_tensor](../reg_tensor.md)的数据类型（如`pl.DT_UINT32`、`pl.DT_INT32`等）。由于标量源无法推断寄存器数据类型，必须显式指定。 |
 
 ## 约束说明
 

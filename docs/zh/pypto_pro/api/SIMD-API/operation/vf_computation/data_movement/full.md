@@ -22,7 +22,7 @@
 ## 函数原型
 
 ```python
-full(src, preg=None, dtype: Optional[DType] = None, mode: Optional[MergeMode] = None, pos: Optional[DuplicatePos] = None) -> dst
+full(src, preg, dtype: Optional[DType] = None, mode: Optional[MergeMode] = None, pos: Optional[DuplicatePos] = None) -> dst
 ```
 
 ## 参数说明
@@ -31,7 +31,7 @@ full(src, preg=None, dtype: Optional[DType] = None, mode: Optional[MergeMode] = 
 |---|---|---|
 | `src` | 输入 | 源操作数，为标量值或者[reg_tensor](../reg_tensor.md)。源操作数`src`与目的操作数`dst`的数据类型保持一致。<br>- **Scalar模式**：标量值，广播到寄存器各元素。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32。<br>- **Tensor模式**：[reg_tensor](../reg_tensor.md)，广播其最低位或最高位元素。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
 | `preg` | 输入 | [mask_reg](../mask_reg.md)。Tensor模式必选；Scalar模式可选。 |
-| `dtype` | 输入 | 数据类型。<br>- Scalar模式必选，指定目标reg_tensor的数据类型。<br>- Tensor模式由源reg_tensor自动推断，无需指定。 |
+| `dtype` | 输入 | 可选，指定数据类型。Scalar模式必须输入，Tensor模式可从源寄存器自动推断。 |
 | `pos` | 输入 | 可选，Tensor模式下选择广播源reg_tensor的哪个元素，对应[DuplicatePos](../types/DuplicatePos.md)类型：<br>- `pl.DuplicatePos.LOWEST`：默认，广播最低位的元素。<br>- `pl.DuplicatePos.HIGHEST`：指定广播最高位的元素。 |
 | `mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`，`preg`未筛选的元素在`dst`中保留原值。 |
 

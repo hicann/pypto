@@ -29,7 +29,7 @@
 ## 函数原型
 
 ```python
-bit_cast(src, dtype=pl.DT_FP32) -> dst
+bit_cast(src, dtype: DType) -> dst
 ```
 
 ## 参数说明
@@ -37,7 +37,7 @@ bit_cast(src, dtype=pl.DT_FP32) -> dst
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)。 |
-| `dtype` | 输入 | 必选，目标数据类型。指定`src`被重解释为的数据类型。 |
+| `dtype` | 输入 | 目标数据类型。指定`src`被重解释为的数据类型。 |
 
 ## 返回值说明
 

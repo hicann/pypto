@@ -22,7 +22,7 @@ it.  Outside a kernel, calling a declaration raises ``RuntimeError``.
 
 from __future__ import annotations
 
-from typing import Optional, overload
+from typing import Optional
 
 from pypto.ir import (
     BinType,
@@ -101,7 +101,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def full(scalar_or_src, mask=None, dtype: Optional[DType] = None,
+    def full(src, preg, dtype: Optional[DType] = None,
              mode: Optional[MergeMode] = None,
              pos: Optional[DuplicatePos] = None):
         """Broadcast a scalar or vector-source element into all lanes of a VF register.
@@ -116,7 +116,7 @@ class Vf:
 
         Args:
             scalar_or_src: Scalar value (Scalar mode) or source register (Tensor mode)
-            mask: Predicate mask register. Required for Tensor mode; optional for Scalar mode
+            preg: Predicate mask register. Required for Tensor mode; optional for Scalar mode
 
         Kwargs:
             dtype: Required for Scalar mode (cannot infer from scalar). Auto-inferred
@@ -132,7 +132,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def load_align(src, offset=None, dtype: Optional[DType] = None,
+    def load_align(tile, offset=None, dtype: Optional[DType] = None,
                    dist: Optional[LoadDist] = None,
                    data_copy_mode: Optional[DataCopyMode] = None,
                    block_stride=None, post_update: bool = False):
@@ -176,7 +176,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def store_align(dst, src, *args, dist: Optional[StoreDist] = None,
+    def store_align(tile, src, *args, dist: Optional[StoreDist] = None,
                     data_copy_mode: Optional[DataCopyMode] = None,
                     block_stride=None, repeat_stride=None,
                     post_update: bool = False):
@@ -184,20 +184,20 @@ class Vf:
 
         Statement form only (no assignment form --- dst is a UB tile, not a register):
 
-            vf.store_align(dst_tile, src, mask)
+            vf.store_align(dst_tile, src, preg)
 
         An optional offset may be appended as the last positional argument.
         It may be an integer, an AddrReg, or a 2-element list ``[row, col]``
         where ``row`` is the row offset (unit = number of columns, i.e.
         ``shape[1]``) and ``col`` is the element offset within the row::
 
-            vf.store_align(dst_tile, src, mask, [i, j])   # list offset
-            vf.store_align(dst_tile, src, mask, addr_reg)  # AddrReg offset
+            vf.store_align(dst_tile, src, preg, [i, j])   # list offset
+            vf.store_align(dst_tile, src, preg, addr_reg)  # AddrReg offset
 
         Args:
             dst: Destination UB Tile pointer
             src: Source register
-            mask: Predicate mask register (omitted when src is a MaskReg)
+            preg: Predicate mask register (omitted when src is a MaskReg)
             offset: Optional trailing positional arg — integer, AddrReg, or
                 ``[row, col]`` list/tuple (linear offset = ``row * shape[1] + col``)
 
@@ -215,7 +215,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def store_unalign(dst_ptr, src, align_reg, stride=None,
+    def store_unalign(tile, src, align_reg, stride=None,
                       post_update: bool = False):
         """Store unaligned data from a VF register to UB (vstus/vstu instruction).
 
@@ -237,7 +237,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def store_unalign_post(dst_ptr, align_reg, stride=None,
+    def store_unalign_post(tile, align_reg, stride,
                            post_update: bool = False):
         """Complete an unaligned store sequence (vstas/vsta instruction).
 
@@ -258,7 +258,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def squeeze_store_unalign(dst_ptr, src, align_reg):
+    def squeeze_store_unalign(tile, src, align_reg):
         """Squeeze-based unaligned store (vstur instruction).
 
         Reads the valid byte count from the AR register (written by
@@ -274,7 +274,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def squeeze_store_unalign_post(dst_ptr, align_reg):
+    def squeeze_store_unalign_post(tile, align_reg):
         """Complete a squeeze-based unaligned store sequence (vstar instruction).
 
         Reads the remaining byte count from the AR register. Must be
@@ -322,7 +322,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def max(src0, src1, mask, mode: Optional[MergeMode] = None):
+    def max(src0, src1, preg, mode: Optional[MergeMode] = None):
         r"""Element-wise maximum of two source registers.
 
         For each lane ``i`` where ``mask[i]`` is active, compares the
@@ -334,7 +334,7 @@ class Vf:
         Args:
             src0: First source register
             src1: Second source register
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -346,7 +346,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def add(src0, src1, mask, mode: Optional[MergeMode] = None):
+    def add(src0, src1, preg, mode: Optional[MergeMode] = None):
         r"""Element-wise addition of two source registers.
 
         For each lane ``i`` where ``mask[i]`` is active, computes the sum of
@@ -362,7 +362,7 @@ class Vf:
         Args:
             src0: First source register
             src1: Second source register
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -374,7 +374,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def sub(src0, src1, mask, mode: Optional[MergeMode] = None):
+    def sub(src0, src1, preg, mode: Optional[MergeMode] = None):
         r"""Element-wise subtraction of two source registers.
 
         For each lane ``i`` where ``mask[i]`` is active, subtracts ``src1[i]``
@@ -385,7 +385,7 @@ class Vf:
         Args:
             src0: First source register (minuend)
             src1: Second source register (subtrahend)
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -397,7 +397,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def mul(src0, src1, mask, mode: Optional[MergeMode] = None):
+    def mul(src0, src1, preg, mode: Optional[MergeMode] = None):
         r"""Element-wise multiplication of two source registers.
 
         For each lane ``i`` where ``mask[i]`` is active, computes the product
@@ -409,7 +409,7 @@ class Vf:
         Args:
             src0: First source register
             src1: Second source register
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -421,7 +421,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def div(src0, src1, mask, mode: Optional[MergeMode] = None,
+    def div(src0, src1, preg, mode: Optional[MergeMode] = None,
             precision: Optional[bool] = None):
         r"""Element-wise division of two source registers.
 
@@ -433,7 +433,7 @@ class Vf:
         Args:
             src0: Numerator register
             src1: Denominator register
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -449,7 +449,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def muls(src, scalar, mask, mode: Optional[MergeMode] = None):
+    def muls(src, scaler, preg, mode: Optional[MergeMode] = None):
         r"""Multiply all elements by a scalar.
 
         For each lane ``i`` where ``mask[i]`` is active, multiplies ``src[i]``
@@ -460,7 +460,7 @@ class Vf:
         Args:
             src: Source register
             scalar: Scalar multiplier value
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -476,7 +476,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def mul_add_dst(src0, src1, mask, mode: Optional[MergeMode] = None):
+    def mul_add_dst(src0, src1, preg, mode: Optional[MergeMode] = None):
         r"""Fused multiply-add into destination.
 
         For each lane ``i`` where ``mask[i]`` is active, multiplies ``src0[i]``
@@ -490,7 +490,7 @@ class Vf:
         Args:
             src0: First multiplicand register
             src1: Second multiplicand register
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -501,7 +501,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def and_(src0, src1, mask, mode: Optional[MergeMode] = None):
+    def and_(src0, src1, preg, mode: Optional[MergeMode] = None):
         r"""Element-wise bitwise AND of two source registers.
 
         For each lane ``i`` where ``mask[i]`` is active, computes the bitwise
@@ -513,7 +513,7 @@ class Vf:
         Args:
             src0: First source register
             src1: Second source register
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -525,7 +525,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def or_(src0, src1, mask, mode: Optional[MergeMode] = None):
+    def or_(src0, src1, preg, mode: Optional[MergeMode] = None):
         r"""Element-wise bitwise OR of two source registers.
 
         For each lane ``i`` where ``mask[i]`` is active, computes the bitwise
@@ -537,7 +537,7 @@ class Vf:
         Args:
             src0: First source register
             src1: Second source register
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -549,7 +549,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def xor(src0, src1, mask, mode: Optional[MergeMode] = None,
+    def xor(src0, src1, preg, mode: Optional[MergeMode] = None,
             dtype: Optional[DType] = None):
         r"""Element-wise bitwise XOR of two source registers.
 
@@ -562,7 +562,7 @@ class Vf:
         Args:
             src0: First source register
             src1: Second source register
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -575,7 +575,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def reduce_sum(src, mask, datablock: bool = False,
+    def reduce_sum(src, preg, datablock: bool = False,
                    merge_mode: Optional[MergeMode] = None):
         r"""In-register sum reduction across all lanes (vcadd / vcgadd).
 
@@ -586,7 +586,7 @@ class Vf:
 
         Args:
             src: Source register
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             datablock: ``True`` to use datablock-granularity reduction (vcgadd)
@@ -599,7 +599,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def reduce_max(src, mask, datablock: bool = False,
+    def reduce_max(src, preg, datablock: bool = False,
                    merge_mode: Optional[MergeMode] = None):
         r"""In-register max reduction across all lanes (vcmax / vcgmax).
 
@@ -610,7 +610,7 @@ class Vf:
 
         Args:
             src: Source register
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             datablock: ``True`` to use datablock-granularity reduction (vcgmax)
@@ -623,7 +623,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def reduce_min(src, mask, datablock: bool = False,
+    def reduce_min(src, preg, datablock: bool = False,
                    merge_mode: Optional[MergeMode] = None):
         r"""In-register min reduction across all lanes (vcmin / vcgmin).
 
@@ -634,7 +634,7 @@ class Vf:
 
         Args:
             src: Source register
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             datablock: ``True`` to use datablock-granularity reduction (vcgmin)
@@ -647,7 +647,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def ln(src, mask, mode: Optional[MergeMode] = None,
+    def ln(src, preg, mode: Optional[MergeMode] = None,
            precision: Optional[bool] = None):
         r"""Natural logarithm of each element.
 
@@ -660,7 +660,7 @@ class Vf:
 
         Args:
             src: Source register (must be positive)
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -676,7 +676,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def exp_sub(src, max_val, mask, layout: Optional[CastLayout] = None):
+    def exp_sub(src0, src1, preg, layout: Optional[CastLayout] = None):
         r"""Fused exp-subtract for numerical stability.
 
         For each lane ``i`` where ``mask[i]`` is active, subtracts ``max_val[i]``
@@ -689,7 +689,7 @@ class Vf:
         Args:
             src: Source register
             max_val: Max register (subtracted before exp)
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             layout: ``pl.CastLayout.ZERO`` (even half, default) or
@@ -702,7 +702,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def astype(src, mask, dtype: Optional[DType] = None,
+    def astype(src, preg, dtype: DType,
                layout: Optional[CastLayout] = None,
                round_mode: Optional[VFRoundMode] = None,
                saturate: Optional[SaturateMode] = None,
@@ -732,7 +732,7 @@ class Vf:
 
         Args:
             src: Source register (source type)
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             layout: ``pl.CastLayout.ZERO`` (default) / ``ONE`` / ``TWO`` / ``THREE``
@@ -779,7 +779,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def select(src_true, src_false, mask, mode: Optional[MergeMode] = None):
+    def select(src0, src1, preg, mode: Optional[MergeMode] = None):
         r"""Conditional select between two source registers.
 
         For each lane ``i``, selects ``src_true[i]`` when ``mask[i]`` is active
@@ -793,7 +793,7 @@ class Vf:
         Args:
             src_true: Register selected when mask bit is 1
             src_false: Register selected when mask bit is 0
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -805,15 +805,15 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def shift_left(src, shift, mask, mode: Optional[MergeMode] = None):
+    def shift_left(src, shift, preg, mode: Optional[MergeMode] = None):
         """Left shift: ``dst[i] = src[i] << shift``
 
         The shift amount may be a scalar (all lanes shifted by the same amount,
         emits ``vshls``) or a vector register (per-lane shift amount, emits
         ``vshl``). The form is selected automatically from the argument type::
 
-            dst = vf.shift_left(src, 2, mask)          # scalar: uniform shift
-            dst = vf.shift_left(src, shift_reg, mask)   # register: per-lane shift
+            dst = vf.shift_left(src, 2, preg)          # scalar: uniform shift
+            dst = vf.shift_left(src, shift_reg, preg)   # register: per-lane shift
 
         This unified op replaces the former separate ``vf.shift_lefts`` (scalar)
         and ``vf.shift_left`` (vector) entry points.
@@ -822,7 +822,7 @@ class Vf:
             src: Source register
             shift: Shift amount --- scalar integer (uniform) or a vector register
                 (per-lane). Negative values are undefined.
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -830,7 +830,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def shift_right(src, shift, mask, mode: Optional[MergeMode] = None,
+    def shift_right(src, shift, preg, mode: Optional[MergeMode] = None,
                     dtype: Optional[DType] = None):
         """Right shift: ``dst[i] = src[i] >> shift``
 
@@ -838,8 +838,8 @@ class Vf:
         emits ``vshrs``) or a vector register (per-lane shift amount, emits
         ``vshr``). The form is selected automatically from the argument type::
 
-            dst = vf.shift_right(src, 24, mask)         # scalar: uniform shift
-            dst = vf.shift_right(src, shift_reg, mask)   # register: per-lane shift
+            dst = vf.shift_right(src, 24, preg)         # scalar: uniform shift
+            dst = vf.shift_right(src, shift_reg, preg)   # register: per-lane shift
 
         This unified op replaces the former separate ``vf.shift_rights`` (scalar)
         and ``vf.shift_right`` (vector) entry points. Unsigned src does a logical
@@ -849,7 +849,7 @@ class Vf:
             src: Source register
             shift: Shift amount --- scalar integer (uniform) or a vector register
                 (per-lane). Negative values are undefined.
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -858,7 +858,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def histograms(src, mask, bin_type: Optional[BinType] = None,
+    def histograms(src, preg, bin_type: Optional[BinType] = None,
                    hist_type: Optional[HistType] = None):
         """Histogram accumulation (chistv2/dhistv2 instruction).
 
@@ -871,7 +871,7 @@ class Vf:
 
         Args:
             src: Source register (data to bin)
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             bin_type: ``pl.BinType.BIN0`` (default) or ``pl.BinType.BIN1`` --- selects bin mapping
@@ -885,7 +885,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def eq(a, b, mask, cmp_dtype: Optional[DType] = None):
+    def eq(src0, src1, preg, cmp_dtype: Optional[DType] = None):
         """Element-wise equality comparison.
 
         Compares two source elements and writes the result to the
@@ -894,87 +894,87 @@ class Vf:
         vector-vector compare path is used.
 
         Args:
-            a: First source register
-            b: Second source register or scalar value
-            mask: Source predicate mask
+            src0: First source register
+            src1: Second source register or scalar value
+            preg: Source predicate mask
 
         Returns:
-            MaskReg with comparison result (True where a_i == b_i)
+            MaskReg with comparison result (True where src0_i == src1_i)
         """
 
     @staticmethod
     @_api_decl
-    def ne(a, b, mask, cmp_dtype: Optional[DType] = None):
+    def ne(src0, src1, preg, cmp_dtype: Optional[DType] = None):
         """Element-wise not-equal comparison.
 
         Args:
-            a: First source register
-            b: Second source register or scalar value
-            mask: Source predicate mask
+            src0: First source register
+            src1: Second source register or scalar value
+            preg: Source predicate mask
 
         Returns:
-            MaskReg with comparison result (True where a_i != b_i)
+            MaskReg with comparison result (True where src0_i != src1_i)
         """
 
     @staticmethod
     @_api_decl
-    def lt(a, b, mask, cmp_dtype: Optional[DType] = None):
+    def lt(src0, src1, preg, cmp_dtype: Optional[DType] = None):
         """Element-wise less-than comparison.
 
         Args:
-            a: First source register
-            b: Second source register or scalar value
-            mask: Source predicate mask
+            src0: First source register
+            src1: Second source register or scalar value
+            preg: Source predicate mask
 
         Returns:
-            MaskReg with comparison result (True where a_i < b_i)
+            MaskReg with comparison result (True where src0_i < src1_i)
         """
 
     @staticmethod
     @_api_decl
-    def gt(a, b, mask, cmp_dtype: Optional[DType] = None):
+    def gt(src0, src1, preg, cmp_dtype: Optional[DType] = None):
         """Element-wise greater-than comparison.
 
         Args:
-            a: First source register
-            b: Second source register or scalar value
-            mask: Source predicate mask
+            src0: First source register
+            src1: Second source register or scalar value
+            preg: Source predicate mask
 
         Returns:
-            MaskReg with comparison result (True where a_i > b_i)
+            MaskReg with comparison result (True where src0_i > src1_i)
         """
 
     @staticmethod
     @_api_decl
-    def le(a, b, mask, cmp_dtype: Optional[DType] = None):
+    def le(src0, src1, preg, cmp_dtype: Optional[DType] = None):
         """Element-wise less-or-equal comparison.
 
         Args:
-            a: First source register
-            b: Second source register or scalar value
-            mask: Source predicate mask
+            src0: First source register
+            src1: Second source register or scalar value
+            preg: Source predicate mask
 
         Returns:
-            MaskReg with comparison result (True where a_i <= b_i)
+            MaskReg with comparison result (True where src0_i <= src1_i)
         """
 
     @staticmethod
     @_api_decl
-    def ge(a, b, mask, cmp_dtype: Optional[DType] = None):
+    def ge(src0, src1, preg, cmp_dtype: Optional[DType] = None):
         """Element-wise greater-or-equal comparison.
 
         Args:
-            a: First source register
-            b: Second source register or scalar value
-            mask: Source predicate mask
+            src0: First source register
+            src1: Second source register or scalar value
+            preg: Source predicate mask
 
         Returns:
-            MaskReg with comparison result (True where a_i >= b_i)
+            MaskReg with comparison result (True where src0_i >= src1_i)
         """
 
     @staticmethod
     @_api_decl
-    def squeeze(src, mask, gather_mode: Optional[SqueezeMode] = None,
+    def squeeze(src, preg, gather_mode: Optional[SqueezeMode] = None,
                 dtype: Optional[DType] = None):
         """Squeeze mask to index register (vsqz instruction).
 
@@ -985,7 +985,7 @@ class Vf:
 
         Args:
             src: Source register
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             gather_mode: ``pl.SqueezeMode.STORE_REG`` or ``pl.SqueezeMode.NO_STORE_REG``
@@ -997,7 +997,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def arange(start, dtype: Optional[DType] = None,
+    def arange(start, dtype: DType,
                index_order: Optional[IndexOrder] = None):
         r"""Generate an index sequence starting from ``start`` (vci instruction).
 
@@ -1025,25 +1025,26 @@ class Vf:
         """
 
     @staticmethod
-    @overload
-    def gather(src, indices, mask, *, data_copy_mode: Optional[DataCopyMode] = None):
-        r"""Gather elements by index — Tile→Reg form.
+    @_api_decl
+    def gather(src, index, preg,
+               data_copy_mode: Optional[DataCopyMode] = None):
+        r"""Gather elements by index.
 
-        ``src`` is a UB tile. For each active lane ``i``, loads the element at
-        ``src[indices[i]]`` into ``dst[i]``.
+        Two forms, dispatched by src argument type:
 
-        - **NORM mode** (default): per-element gather. ``indices`` unit is
-          element. b8 sources are zero-extended to b16 (INT8→INT16).
-        - **DATA_BLOCK_LOAD mode**: per-32B-DataBlock gather. ``indices`` unit
-          is byte offset, must be 32-byte aligned. Source and destination
-          types must be identical.
+        - **Tile→Reg**: ``src`` is a UB tile, ``preg`` required.
+          For each active lane ``i``, loads ``src[index[i]]`` into ``dst[i]``.
+          NORM mode: per-element gather. DATA_BLOCK_LOAD mode: per-32B-DataBlock gather.
+        - **Reg→Reg**: ``src`` is a register, ``preg`` omitted.
+          For each lane ``i``, copies ``src[index[i]]`` into ``dst[i]``.
+          Source and destination must have the same data type.
+
+        .. math:: dstReg_i = src[\text{index}_i]
 
         Args:
-            src: Source UB tile, base address must be 32-byte aligned
-            indices: Index register. NORM mode: element offsets;
-                DATA_BLOCK_LOAD mode: byte offsets, must be 32-byte aligned
-                (one index per datablock)
-            mask: Predicate mask register
+            src: Source UB tile or register
+            index: Index register
+            preg: Predicate mask register (required for Tile→Reg, omitted for Reg→Reg)
 
         Kwargs:
             data_copy_mode: ``pl.DataCopyMode.NORM`` (default, per-element)
@@ -1051,39 +1052,6 @@ class Vf:
 
         Returns:
             Destination register (``RegTensor``) with gathered elements.
-        """
-
-    @staticmethod
-    @overload
-    def gather(src, indices, mask=None, *, data_copy_mode: Optional[DataCopyMode] = None):
-        r"""Gather elements by index — Reg→Reg form.
-
-        ``src`` is a register. For each lane ``i``, copies ``src[indices[i]]``
-        into ``dst[i]``. Source and destination must have the **same data
-        type**, including INT8→INT8. No mask is needed. Index and dst data
-        type bit-width must match (b8→``uint8_t``, b16→``uint16_t``,
-        b32→``uint32_t``).
-
-        .. math:: dstReg_i = src[\text{indices}_i]
-
-        Args:
-            src: Source register
-            indices: Index register, element offsets within ``src``.
-                Data type bit-width must match ``src``
-
-        Returns:
-            Destination register (``RegTensor``) with gathered elements.
-        """
-
-    @staticmethod
-    @_api_decl
-    def gather(src, indices, mask=None,
-               data_copy_mode: Optional[DataCopyMode] = None):
-        r"""Gather elements by index.
-
-        See the overload signatures above for the two supported forms:
-        **Tile→Reg** (``src`` is a UB tile, ``mask`` required) and
-        **Reg→Reg** (``src`` is a register, ``mask`` omitted).
         """
 
     @staticmethod
@@ -1097,7 +1065,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def log(src, mask, mode: Optional[MergeMode] = None,
+    def log(src, preg, mode: Optional[MergeMode] = None,
             precision: Optional[bool] = None):
         r"""Natural logarithm (alias for :func:`vf.ln`).
 
@@ -1109,7 +1077,7 @@ class Vf:
 
         Args:
             src: Source register (must be positive)
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -1124,7 +1092,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def min(src0, src1, mask, mode: Optional[MergeMode] = None):
+    def min(src0, src1, preg, mode: Optional[MergeMode] = None):
         r"""Element-wise minimum of two source registers.
 
         For each lane ``i`` where ``mask[i]`` is active, compares the
@@ -1136,7 +1104,7 @@ class Vf:
         Args:
             src0: First source register
             src1: Second source register
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -1148,7 +1116,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def exp(src, mask, mode: Optional[MergeMode] = None,
+    def exp(src, preg, mode: Optional[MergeMode] = None,
             precision: Optional[bool] = None):
         r"""Exponential function of each element.
 
@@ -1160,7 +1128,7 @@ class Vf:
 
         Args:
             src: Source register
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -1176,7 +1144,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def abs(src, mask, mode: Optional[MergeMode] = None):
+    def abs(src, preg, mode: Optional[MergeMode] = None):
         r"""Element-wise absolute value.
 
         For each lane ``i`` where ``mask[i]`` is active, computes the absolute
@@ -1186,7 +1154,7 @@ class Vf:
 
         Args:
             src: Source register
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -1198,7 +1166,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def not_(src, mask, mode: Optional[MergeMode] = None):
+    def not_(src, preg, mode: Optional[MergeMode] = None):
         r"""Element-wise bitwise NOT.
 
         For each lane ``i`` where ``mask[i]`` is active, computes the bitwise
@@ -1209,7 +1177,7 @@ class Vf:
 
         Args:
             src: Source register
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -1221,7 +1189,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def sqrt(src, mask, mode: Optional[MergeMode] = None,
+    def sqrt(src, preg, mode: Optional[MergeMode] = None,
              precision: Optional[bool] = None):
         r"""Square root of each element.
 
@@ -1234,7 +1202,7 @@ class Vf:
 
         Args:
             src: Source register (must be non-negative)
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -1250,7 +1218,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def relu(src, mask, mode: Optional[MergeMode] = None):
+    def relu(src, preg, mode: Optional[MergeMode] = None):
         r"""ReLU activation.
 
         For each lane ``i`` where ``mask[i]`` is active, writes ``src[i]`` to
@@ -1260,7 +1228,7 @@ class Vf:
 
         Args:
             src: Source register
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -1272,7 +1240,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def neg(src, mask, mode: Optional[MergeMode] = None):
+    def neg(src, preg, mode: Optional[MergeMode] = None):
         r"""Element-wise negation.
 
         For each lane ``i`` where ``mask[i]`` is active, computes the
@@ -1282,7 +1250,7 @@ class Vf:
 
         Args:
             src: Source register
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -1294,7 +1262,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def adds(src, scalar, mask, mode: Optional[MergeMode] = None):
+    def adds(src, scalar, preg, mode: Optional[MergeMode] = None):
         r"""Add scalar to each element.
 
         For each lane ``i`` where ``mask[i]`` is active, adds the scalar value
@@ -1305,7 +1273,7 @@ class Vf:
         Args:
             src: Source register
             scalar: Scalar addend value
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -1317,7 +1285,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def subs(src, scalar, mask, mode: Optional[MergeMode] = None):
+    def subs(src, scalar, preg, mode: Optional[MergeMode] = None):
         r"""Subtract scalar from each element.
 
         For each lane ``i`` where ``mask[i]`` is active, subtracts the scalar
@@ -1329,7 +1297,7 @@ class Vf:
         Args:
             src: Source register
             scalar: Scalar subtrahend value
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -1341,7 +1309,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def mins(src, scalar, mask, mode: Optional[MergeMode] = None):
+    def mins(src, scalar, preg, mode: Optional[MergeMode] = None):
         r"""Element-wise minimum with scalar.
 
         For each lane ``i`` where ``mask[i]`` is active, compares ``src[i]``
@@ -1352,7 +1320,7 @@ class Vf:
         Args:
             src: Source register
             scalar: Scalar value to compare against
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -1364,7 +1332,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def maxs(src, scalar, mask, mode: Optional[MergeMode] = None):
+    def maxs(src, scalar, preg, mode: Optional[MergeMode] = None):
         r"""Element-wise maximum with scalar.
 
         For each lane ``i`` where ``mask[i]`` is active, compares ``src[i]``
@@ -1375,7 +1343,7 @@ class Vf:
         Args:
             src: Source register
             scalar: Scalar value to compare against
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -1387,7 +1355,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def leaky_relu(src, alpha, mask, mode: Optional[MergeMode] = None):
+    def leaky_relu(src, scalar, preg, mode: Optional[MergeMode] = None):
         r"""Leaky ReLU activation.
 
         For each lane ``i`` where ``mask[i]`` is active, writes ``src[i]`` to
@@ -1400,7 +1368,7 @@ class Vf:
         Args:
             src: Source register
             alpha: Negative slope scalar (e.g. 0.1)
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -1443,7 +1411,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def pair_reduce_sum(src, mask, mode: Optional[MergeMode] = None):
+    def pair_reduce_sum(src, preg, mode: Optional[MergeMode] = None):
         r"""Pairwise reduction sum.
 
         For each pair of adjacent elements, adds them together and writes the
@@ -1453,7 +1421,7 @@ class Vf:
 
         Args:
             src: Source register
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -1464,7 +1432,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def abs_sub(src0, src1, mask, mode: Optional[MergeMode] = None):
+    def abs_sub(src0, src1, preg, mode: Optional[MergeMode] = None):
         r"""Absolute difference of two source registers.
 
         For each lane ``i`` where ``mask[i]`` is active, computes the absolute
@@ -1476,7 +1444,7 @@ class Vf:
         Args:
             src0: First source register
             src1: Second source register
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -1488,7 +1456,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def axpy(src, scalar, mask, mode: Optional[MergeMode] = None):
+    def axpy(src, scalar, preg, mode: Optional[MergeMode] = None):
         r"""Fused AXPY: multiply src by scalar and add to dst.
 
         For each lane ``i`` where ``mask[i]`` is active, multiplies ``src[i]``
@@ -1502,7 +1470,7 @@ class Vf:
         Args:
             src: Source register
             scalar: Scalar multiplier
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -1550,7 +1518,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def mul_dst_add(src0, src1, mask, mode: Optional[MergeMode] = None):
+    def mul_dst_add(src0, src1, preg, mode: Optional[MergeMode] = None):
         r"""Multiply-dst-add: multiply dst by src0, then add src1.
 
         For each lane ``i`` where ``mask[i]`` is active, multiplies ``dst[i]``
@@ -1564,7 +1532,7 @@ class Vf:
         Args:
             src0: First multiplicand register
             src1: Addend register
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -1613,7 +1581,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def prelu(src, slope, mask, mode: Optional[MergeMode] = None):
+    def prelu(src, slope, preg, mode: Optional[MergeMode] = None):
         """Parametric ReLU with per-element slope register.
 
         ``dst[i] = src[i] if src[i] >= 0 else src[i] * slope[i]``
@@ -1624,7 +1592,7 @@ class Vf:
         Args:
             src: Source register
             slope: Slope register (per-element negative slope values)
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -1632,7 +1600,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def mull(src0, src1, mask, mode: Optional[MergeMode] = None):
+    def mull(src0, src1, preg, mode: Optional[MergeMode] = None):
         """Long multiply: 32x32->64, output split into lo/hi register pair.
 
         Multiplies two 32-bit registers and produces 64-bit result split
@@ -1645,7 +1613,7 @@ class Vf:
         Args:
             src0: First source register (32-bit)
             src1: Second source register (32-bit)
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -1653,20 +1621,20 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def addc(src0, src1, carry_in, mask, mode: Optional[MergeMode] = None):
+    def addc(src0, src1, carry_src, preg, mode: Optional[MergeMode] = None):
         """Add with carry (vaddcs): ``carry_out, dst = src0 + src1 + carry_in``
 
         Used for multi-word (e.g. 64-bit) arithmetic on 32-bit registers.
         Produces two outputs via tuple unpacking --- the carry-out flag register
         (declared as a MaskReg) and the sum register (RegTensor)::
 
-            carry_out, dst = vf.addc(src0, src1, carry_in, mask)
+            carry_out, dst = vf.addc(src0, src1, carry_src, preg)
 
         Args:
             src0: First source register
             src1: Second source register
             carry_in: Input carry flag register (MaskReg)
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Returns:
             (carry_out, dst): carry-out flag register and the sum register
@@ -1677,20 +1645,20 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def subc(src0, src1, borrow_in, mask, mode: Optional[MergeMode] = None):
+    def subc(src0, src1, borrow_src, preg, mode: Optional[MergeMode] = None):
         """Subtract with borrow (vsubcs): ``borrow_out, dst = src0 - src1 - borrow_in``
 
         Used for multi-word (e.g. 64-bit) arithmetic on 32-bit registers.
         Produces two outputs via tuple unpacking --- the borrow-out flag register
         (declared as a MaskReg) and the difference register (RegTensor)::
 
-            borrow_out, dst = vf.subc(src0, src1, borrow_in, mask)
+            borrow_out, dst = vf.subc(src0, src1, borrow_src, preg)
 
         Args:
             src0: First source register
             src1: Second source register
             borrow_in: Input borrow flag register (MaskReg)
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Returns:
             (borrow_out, dst): borrow-out flag register and the difference register
@@ -1713,7 +1681,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def load_unalign_pre(ureg, src_ptr):
+    def load_unalign_pre(align_reg, tile):
         """Setup unaligned load (vldas instruction).
 
         Initializes the alignment state for subsequent unaligned loads.
@@ -1725,7 +1693,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def load_unalign(ureg, src_ptr, stride=None):
+    def load_unalign(tile, align_reg, stride=None, post_update: bool = False):
         """Unaligned load from UB to register (vldus instruction).
 
         Loads data from an unaligned UB address. Supports optional stride
@@ -1739,7 +1707,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def scatter(base_ptr, src, index, mask):
+    def scatter(tile, src, index, preg):
         """Scatter store by index (vscatter instruction).
 
         Writes register elements to non-contiguous UB locations specified
@@ -1749,19 +1717,19 @@ class Vf:
             base_ptr: Base UB pointer
             src: Source register (data to scatter)
             index: Index register (destination offsets)
-            mask: Predicate mask register
+            preg: Predicate mask register
         """
 
     @staticmethod
     @_api_decl
-    def unsqueeze(mask, dtype: Optional[DType] = None):
+    def unsqueeze(preg, dtype: Optional[DType] = None):
         """Unsqueeze mask bits into a register (vusqz instruction).
 
         Expands each mask bit into the corresponding register lane
         (1 for active, 0 for inactive).
 
         Args:
-            mask: Mask register to unsqueeze
+            preg: Mask register to unsqueeze
 
         Kwargs:
             dtype: Data type for the destination register (e.g. ``pl.DT_UINT32``)
@@ -1787,7 +1755,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def log2(src, mask, mode: Optional[MergeMode] = None,
+    def log2(src, preg, mode: Optional[MergeMode] = None,
              precision: Optional[bool] = None):
         r"""Base-2 logarithm of each element.
 
@@ -1799,7 +1767,7 @@ class Vf:
 
         Args:
             src: Source register (must be positive)
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -1815,7 +1783,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def log10(src, mask, mode: Optional[MergeMode] = None,
+    def log10(src, preg, mode: Optional[MergeMode] = None,
               precision: Optional[bool] = None):
         r"""Base-10 logarithm of each element.
 
@@ -1827,7 +1795,7 @@ class Vf:
 
         Args:
             src: Source register (must be positive)
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -1843,7 +1811,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def muls_cast(src, scalar, mask, dtype: Optional[DType] = None,
+    def muls_cast(src, scalar, preg, dtype: DType,
                   layout: Optional[CastLayout] = None):
         r"""Multiply by scalar then cast.
 
@@ -1856,7 +1824,7 @@ class Vf:
         Args:
             src: Source register (fp32)
             scalar: Scalar multiplier
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             dtype: Destination data type (e.g. ``pl.DT_FP16``)
@@ -1869,7 +1837,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def load(src_ptr, stride=None, post_update: bool = False,
+    def load(tile, stride=None, post_update: bool = False,
              repeat_stride=None, count=None):
         """Unified load (vldas+vldus, matches AscendC Load interface).
 
@@ -1887,7 +1855,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def store(dst_ptr, src, count=None):
+    def store(tile, src, count):
         """Unified store (vstus+vstas, matches AscendC Store interface).
 
         Simple store from register to UB.
@@ -1900,14 +1868,14 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def truncate(src, mask, mode: Optional[MergeMode] = None):
+    def truncate(src, preg, mode: Optional[MergeMode] = None):
         """Truncate to integer (round toward zero): ``dst[i] = trunc(src[i])``
 
         Maps to hardware ``vtrc`` with ROUND_Z mode.
 
         Args:
             src: Source register
-            mask: Predicate mask register
+            preg: Predicate mask register
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
@@ -1968,7 +1936,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def move(src, mask=None, mode: Optional[MergeMode] = None):
+    def move(src, preg, mode: Optional[MergeMode] = None):
         r"""Move/copy register elements (vmov for RegTensor, pmov for MaskReg).
 
         For RegTensor: copies valid elements from src to dst; masked-out
@@ -1982,17 +1950,17 @@ class Vf:
         Usage::
 
             # RegTensor with mask
-            dst = vf.move(src_reg, mask)
+            dst = vf.move(src_reg, preg)
             # RegTensor without mask
             dst = vf.move(src_reg)
             # MaskReg with mask
-            dst = vf.move(src_mask, mask)
+            dst = vf.move(src_mask, preg)
             # MaskReg without mask
             dst = vf.move(src_mask)
 
         Args:
             src: Source register (RegTensor or MaskReg)
-            mask: Optional mask register
+            preg: Optional mask register
 
         Kwargs:
             mode: ``pl.MergeMode.MERGING`` (default, only supported mode)

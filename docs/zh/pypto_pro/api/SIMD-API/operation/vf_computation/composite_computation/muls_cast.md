@@ -23,7 +23,7 @@ $$
 ## 函数原型
 
 ```python
-muls_cast(src, scalar, preg, dtype: Optional[DType] = None, layout: Optional[CastLayout] = None) -> dst
+muls_cast(src, scalar, preg, dtype: DType, layout: Optional[CastLayout] = None) -> dst
 ```
 
 ## 参数说明
@@ -33,7 +33,7 @@ muls_cast(src, scalar, preg, dtype: Optional[DType] = None, layout: Optional[Cas
 | `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。 |
 | `scalar` | 输入 | 标量源操作数。 |
 | `preg` | 输入 | [mask_reg](../mask_reg.md)。 |
-| `dtype` | 输入 | 必选，指定目标reg_tensor的数据类型，支持的数据类型请参见[约束说明](#约束说明)。由于乘法后进行类型转换（DT_FP32→DT_FP16），目标类型与源类型不同，必须显式指定，通常为`pl.DT_FP16`。 |
+| `dtype` | 输入 | 指定目标reg_tensor的数据类型，支持的数据类型请参见[约束说明](#约束说明)。由于乘法后进行类型转换（DT_FP32→DT_FP16），目标类型与源类型不同，必须显式指定，通常为`pl.DT_FP16`。 |
 | `layout` | 输入 | 可选，结果放置半区：`pl.CastLayout.ZERO`（偶数半区，默认，PART_EVEN）或`pl.CastLayout.ONE`（奇数半区，PART_ODD），对应[CastLayout](../types/CastLayout.md)类型。计算按照`CAST_ROUND`模式舍入。 |
 
 ## 约束说明

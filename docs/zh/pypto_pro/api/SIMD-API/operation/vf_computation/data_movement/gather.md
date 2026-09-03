@@ -37,7 +37,7 @@
 ## 函数原型
 
 ```python
-gather(src, index, preg=None, data_copy_mode: Optional[DataCopyMode] = None) -> dst
+gather(src, index, preg, data_copy_mode: Optional[DataCopyMode] = None) -> dst
 ```
 
 ## 参数说明
@@ -46,7 +46,7 @@ gather(src, index, preg=None, data_copy_mode: Optional[DataCopyMode] = None) -> 
 |---|---|---|
 | `src` | 输入 | 源操作数，可为Tile（Tile→reg形式，基地址需32字节对齐）或[reg_tensor](../reg_tensor.md)（reg→reg形式），支持的数据类型请参见[约束说明](#约束说明)。<br>- NORM模式下，当`src`为16位宽数据类型且`index`为DT_UINT32时，每个gather到的16位元素占32位空间（低16位为数据，高16位补零），寄存器中有效元素数量为索引数量（VL/4），而非`index`为DT_UINT16索引场景的VL/2。存储时需使用`pl.StoreDist.NORM_B16`按16位粒度写入，输出中偶数位置为有效数据，奇数位置为零。此功能适用于索引数据天然为32位宽的场景。<br>- DATA_BLOCK_LOAD模式和reg→reg形式下，源操作数和目的操作数数据类型必须相同。 |
 | `index` | 输入 | 索引值，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。<br>- Tile→reg NORM模式下为`dst`中每个元素相对于`src`的位置，单位：元素。8位宽的数据类型（DT_INT8、DT_UINT8）源数据会被零扩展到16位宽。16位宽源数据类型（DT_INT16、DT_UINT16、DT_FP16、DT_BF16）的索引支持DT_UINT16和DT_UINT32。<br>- Tile→reg DATA_BLOCK_LOAD模式下为每个DataBlock相对于`src`的位置，单位：字节，且必须32B对齐，即一个索引值对应1个DataBlock。<br>- reg→reg形式下为`src`中每个元素的位置，单位：元素，数据类型位宽需与`src`保持一致。<br>`index`索引值对应的数据必须在Tile有效地址范围内（Tile→reg形式）。如果索引值超出当前reg_tensor中能存储的最大数据元素个数，索引值更新为`i % (VL / sizeof(T))`，其中VL为256字节（reg→reg形式）。`index`中的值可以重复。 |
-| `preg` | 输入 | [mask_reg](../mask_reg.md)。mask功能**仅Tile→reg形式支持**，reg→reg形式不支持此参数。 |
+| `preg` | 输入 | 可选，[mask_reg](../mask_reg.md)。mask功能**仅Tile→reg形式支持**，reg→reg形式不支持此参数。 |
 | `data_copy_mode` | 输入 | 可选关键字参数，收集粒度。`pl.DataCopyMode.NORM`（默认，按元素）或`pl.DataCopyMode.DATA_BLOCK_LOAD`（按32B DataBlock）。**仅Tile→reg形式支持**，reg→reg形式不支持此参数。 |
 
 ## 约束说明

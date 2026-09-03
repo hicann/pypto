@@ -72,8 +72,8 @@ create_mask(pattern: Optional[MaskPattern] = None, dtype: Optional[DType] = None
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `pattern` | 输入 | 掩码模式，`pattern`参数决定mask_reg中哪些元素被设置为有效（1），哪些被设置为无效（0），对应[MaskPattern](../types/MaskPattern.md)类型。支持的模式见[约束说明](#约束说明)，默认`pl.MaskPattern.ALL`。 |
-| `dtype` | 输入 | 掩码对应的数据类型，决定掩码粒度（即每多少bit对应一个数据元素）。如`pl.DT_FP32`对应32位宽粒度（64元素 × 4 bit），全部对应关系请见[约束说明](#约束说明)。掩码寄存器总位宽固定为256 bit，默认`pl.DT_FP32`。 |
+| `pattern` | 输入 | 可选，掩码模式，`pattern`参数决定mask_reg中哪些元素被设置为有效（1），哪些被设置为无效（0），对应[MaskPattern](../types/MaskPattern.md)类型。支持的模式见[约束说明](#约束说明)，默认`pl.MaskPattern.ALL`。 |
+| `dtype` | 输入 | 可选，掩码对应的数据类型，决定掩码粒度（即每多少bit对应一个数据元素）。如`pl.DT_FP32`对应32位宽粒度（64元素 × 4 bit），全部对应关系请见[约束说明](#约束说明)。掩码寄存器总位宽固定为256 bit，默认`pl.DT_FP32`。 |
 
 ## 约束说明
 

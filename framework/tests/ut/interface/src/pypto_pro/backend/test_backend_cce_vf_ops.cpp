@@ -797,6 +797,7 @@ TEST(BackendCCEVFOpsTest, EmitsGatherAndUnalignedDataMovement)
     auto index_u16 = MakeVar("index_u16", ir::DataType::UINT16);
     auto mask = MakeVar("mask", ir::DataType::UINT32);
     auto ureg = MakeVar("ureg", ir::DataType::INT64);
+    codegen.RegisterUnalignRegVar("ureg");
 
     // b16 src + uint16 index -> vgather2
     ExpectInvoke(codegen, "vf.gather", {"vgather2("}, {fp16, tile, index_u16, mask});
@@ -919,15 +920,6 @@ TEST(BackendCCEVFOpsTest, EmitsStoreWithDefaultCount)
     ExpectInvoke(codegen, "vf.store", {"UnalignReg __ureg_st_", "vstus(", "vstas(", "POST_UPDATE", "64"}, {tile, reg});
 }
 
-TEST(BackendCCEVFOpsTest, EmitsStoreRejectsRepeatStride)
-{
-    CapturingCCECodegen codegen(ir::SectionKind::Vector);
-    auto tile = MakeTile("tile", ir::DataType::FP32);
-    auto reg = MakeVar("reg", ir::DataType::FP32);
-
-    EXPECT_THROW(Invoke(codegen, "vf.store", {tile, reg}, {{{"repeat_stride", 16}}}), std::exception);
-}
-
 TEST(BackendCCEVFOpsTest, EmitsStoreRejectsExceedCount)
 {
     CapturingCCECodegen codegen(ir::SectionKind::Vector);
@@ -1003,6 +995,7 @@ TEST(BackendCCEVFOpsTest, EmitsMaskMemoryAndSpecialRegisterOperations)
     codegen.RegisterMaskRegVar("mask0");
     codegen.RegisterMaskRegVar("mask1");
     codegen.RegisterAddrRegVar("addr");
+    codegen.RegisterUnalignRegVar("ureg");
 
     ExpectInvoke(codegen, "vf.load_align", {"plds(mask0"}, {mask0, tile, Int(0)},
                  {{"dist", EnumValue(ir::LoadDist::DS)}});
@@ -1675,6 +1668,7 @@ TEST(BackendCCEVFOpsTest, SqueezeStoreUnAlignEmitsVstur)
     auto fp32 = MakeVar("fp32", ir::DataType::FP32);
     auto ureg = MakeVar("ureg", ir::DataType::UINT32);
     codegen.RegisterRegTensorVar("fp32");
+    codegen.RegisterUnalignRegVar("ureg");
 
     auto emitted = Invoke(codegen, "vf.squeeze_store_unalign", {tile, fp32, ureg});
     ExpectContains(emitted, {"vstur(", "POST_UPDATE", "RegTensor<int32_t>", "(__ubuf__ int32_t *)"});
@@ -1695,6 +1689,7 @@ TEST(BackendCCEVFOpsTest, SqueezeStoreUnAlignPostEmitsVstar)
     CapturingCCECodegen codegen(ir::SectionKind::Vector);
     auto tile = MakeTile("tile", ir::DataType::FP32);
     auto ureg = MakeVar("ureg", ir::DataType::UINT32);
+    codegen.RegisterUnalignRegVar("ureg");
 
     auto emitted = Invoke(codegen, "vf.squeeze_store_unalign_post", {tile, ureg});
     ExpectContains(emitted, {"vstar(", "(__ubuf__ int32_t *)"});
@@ -1718,6 +1713,7 @@ TEST(BackendCCEVFOpsTest, StoreUnAlignNormEmitsVstusWithLvalueRef)
     auto fp32 = MakeVar("fp32", ir::DataType::FP32);
     auto ureg = MakeVar("ureg", ir::DataType::UINT32);
     codegen.RegisterRegTensorVar("fp32");
+    codegen.RegisterUnalignRegVar("ureg");
 
     // post_update=False (NORM): vstus still needs __ubuf__ T*& (lvalue ref)
     auto emitted = Invoke(codegen, "vf.store_unalign", {tile, fp32, ureg, Int(2)});
@@ -1729,6 +1725,7 @@ TEST(BackendCCEVFOpsTest, StoreUnAlignPostNormEmitsVstasThreeArgs)
     CapturingCCECodegen codegen(ir::SectionKind::Vector);
     auto tile = MakeTile("tile", ir::DataType::FP32);
     auto ureg = MakeVar("ureg", ir::DataType::UINT32);
+    codegen.RegisterUnalignRegVar("ureg");
 
     // post_update=False (NORM): vstas takes 3 args (no POST_UPDATE suffix)
     auto emitted = Invoke(codegen, "vf.store_unalign_post", {tile, ureg, Int(2)});
@@ -1746,6 +1743,7 @@ TEST(BackendCCEVFOpsTest, StoreUnAlignAddrRegEmitsVstu)
     auto addr = MakeVar("addr", ir::DataType::INT64);
     codegen.RegisterRegTensorVar("fp32");
     codegen.RegisterAddrRegVar("addr");
+    codegen.RegisterUnalignRegVar("ureg");
 
     // AddrReg as 4th arg → vstu(ureg, areg, vreg, dst, POST_UPDATE)
     auto emitted = Invoke(codegen, "vf.store_unalign", {tile, fp32, ureg, addr}, {{"post_update", true}});
@@ -1761,6 +1759,7 @@ TEST(BackendCCEVFOpsTest, StoreUnAlignAddrRegNormEmitsVstuWithNorm)
     auto addr = MakeVar("addr", ir::DataType::INT64);
     codegen.RegisterRegTensorVar("fp32");
     codegen.RegisterAddrRegVar("addr");
+    codegen.RegisterUnalignRegVar("ureg");
 
     // vstu also supports NORM mode (same post mode handling as vstus)
     auto emitted = Invoke(codegen, "vf.store_unalign", {tile, fp32, ureg, addr}, {{"post_update", false}});
@@ -1774,6 +1773,7 @@ TEST(BackendCCEVFOpsTest, StoreUnAlignPostAddrRegEmitsVsta)
     auto ureg = MakeVar("ureg", ir::DataType::UINT32);
     auto addr = MakeVar("addr", ir::DataType::INT64);
     codegen.RegisterAddrRegVar("addr");
+    codegen.RegisterUnalignRegVar("ureg");
 
     // AddrReg as 3rd arg → vsta(ureg, dst, areg)
     auto emitted = Invoke(codegen, "vf.store_unalign_post", {tile, ureg, addr});
@@ -1789,6 +1789,7 @@ TEST(BackendCCEVFOpsTest, StoreUnAlignPostAddrRegRejectsPostUpdate)
     auto ureg = MakeVar("ureg", ir::DataType::UINT32);
     auto addr = MakeVar("addr", ir::DataType::INT64);
     codegen.RegisterAddrRegVar("addr");
+    codegen.RegisterUnalignRegVar("ureg");
 
     // vsta has no post mode; post_update kwarg should be rejected
     EXPECT_ANY_THROW(Invoke(codegen, "vf.store_unalign_post", {tile, ureg, addr}, {{"post_update", true}}));
@@ -1801,6 +1802,7 @@ TEST(BackendCCEVFOpsTest, StoreUnAlignB64EmitsVstusWithInt32CastAndDoubledStride
     auto i64 = MakeVar("i64", ir::DataType::INT64);
     auto ureg = MakeVar("ureg", ir::DataType::UINT32);
     codegen.RegisterRegTensorVar("i64");
+    codegen.RegisterUnalignRegVar("ureg");
 
     // b64 strided: cast to int32_t, stride doubled (mirrors AscendC b64 vstus path)
     auto emitted = Invoke(codegen, "vf.store_unalign", {tile, i64, ureg, Int(4)}, {{"post_update", true}});
@@ -1812,6 +1814,7 @@ TEST(BackendCCEVFOpsTest, StoreUnAlignPostB64EmitsVstasWithInt32CastAndDoubledSt
     CapturingCCECodegen codegen(ir::SectionKind::Vector);
     auto tile = MakeTile("tile", ir::DataType::INT64);
     auto ureg = MakeVar("ureg", ir::DataType::UINT32);
+    codegen.RegisterUnalignRegVar("ureg");
 
     // b64 strided post: cast to int32_t, stride doubled
     auto emitted = Invoke(codegen, "vf.store_unalign_post", {tile, ureg, Int(4)}, {{"post_update", true}});

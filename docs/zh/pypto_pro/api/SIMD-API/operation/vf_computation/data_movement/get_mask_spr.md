@@ -31,7 +31,7 @@ get_mask_spr(width: MaskWidth = MaskWidth.B32) -> mask_reg
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `width` | 输入 | 掩码宽度，决定读取的SPR位宽及扩展方式，对应[MaskWidth](../types/MaskWidth.md)类型。<br>- `pl.MaskWidth.B32`（默认）：读取64bit MASK0，每bit扩展为4bit，对应`movp_b32()`指令。<br>- `pl.MaskWidth.B16`：读取128bit {MASK1, MASK0}，每bit扩展为2bit，对应`movp_b16()`指令。 |
+| `width` | 输入 | 可选，掩码宽度，决定读取的SPR位宽及扩展方式，对应[MaskWidth](../types/MaskWidth.md)类型。<br>- `pl.MaskWidth.B32`（默认）：读取64bit MASK0，每bit扩展为4bit，对应`movp_b32()`指令。<br>- `pl.MaskWidth.B16`：读取128bit {MASK1, MASK0}，每bit扩展为2bit，对应`movp_b16()`指令。 |
 
 ## 约束说明
 
