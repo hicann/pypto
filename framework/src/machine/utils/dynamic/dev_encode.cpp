@@ -3192,7 +3192,7 @@ void EncodeDevAscendProgramSizeOnly(uint64_t& offset, EncodeDevAscendProgramInfo
                                     const std::unordered_map<int, SlotMaskEntry>* stitchUpdateSlotMaskMap)
 {
     DevAscendProgram devfunc;
-    devfunc.SetParallelism(config::GetRuntimeOption<uint32_t>(DEVICE_SCHED_PARALLELISM));
+    devfunc.SetParallelism(config::GetDeviceSchedParallelism());
     encodeInfo.Init(&devfunc, false, stitchUpdateSlotMaskMap);
 
     WorkspaceDesc wsDesc = CollectWorkspaceDescForSizeOnlyEncode(encodeInfo.func, encodeInfo);
@@ -3280,7 +3280,7 @@ void EncodeDevAscendProgramFull(Function* func, DevAscendProgram* base, uint64_t
                                 EncodeDevAscendProgramInfo& encodeInfo,
                                 const std::unordered_map<int, SlotMaskEntry>* stitchUpdateSlotMaskMap)
 {
-    base->SetParallelism(config::GetRuntimeOption<uint32_t>(DEVICE_SCHED_PARALLELISM));
+    base->SetParallelism(config::GetDeviceSchedParallelism());
     MACHINE_LOGD("device sched parallelism is %u.", base->GetParallelism());
     encodeInfo.Init(base, true, stitchUpdateSlotMaskMap);
 

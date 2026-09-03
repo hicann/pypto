@@ -286,7 +286,7 @@ void BuildControlFlowDynamic(ControlFlowEmitCtx& ctx, Function* func, int indent
     generator.HeaderFileEnd(ctx.exprHeaderOss);
 }
 
-bool SupportParallelLoop() { return config::GetRuntimeOption<uint16_t>(DEVICE_SCHED_PARALLELISM) > 1; }
+bool SupportParallelLoop() { return config::GetDeviceSchedParallelism() > 1; }
 
 const std::unordered_map<std::string, std::string>* GetInputCseMap(const ControlFlowEmitCtx& ctx)
 {

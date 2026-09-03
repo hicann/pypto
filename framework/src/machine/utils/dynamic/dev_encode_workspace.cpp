@@ -99,10 +99,7 @@ uint32_t EffectiveStitchNumMax(uint32_t maxUnrollTimes)
     return std::max(ConfiguredStitchFunctionMaxNum(), maxUnrollTimes);
 }
 
-void CalcWorkspaceConfig(WorkspaceDesc& wsDesc)
-{
-    wsDesc.config.parallelism = config::GetRuntimeOption<uint32_t>(DEVICE_SCHED_PARALLELISM);
-}
+void CalcWorkspaceConfig(WorkspaceDesc& wsDesc) { wsDesc.config.parallelism = config::GetDeviceSchedParallelism(); }
 
 void CalcWorkspacePlatform(WorkspaceDesc& wsDesc)
 {
@@ -112,7 +109,7 @@ void CalcWorkspacePlatform(WorkspaceDesc& wsDesc)
 RuntimeWorkspaceConfig LoadRuntimeWorkspaceConfig(uint32_t maxUnrollTimes)
 {
     RuntimeWorkspaceConfig cfg;
-    cfg.parallelism = config::GetRuntimeOption<uint32_t>(DEVICE_SCHED_PARALLELISM);
+    cfg.parallelism = config::GetDeviceSchedParallelism();
     cfg.maxWorkspaceBytes = GetMaxWorkspaceBytes();
     cfg.stitchNumMax = (cfg.maxWorkspaceBytes == 0) ? ConfiguredStitchFunctionMaxNum() :
                                                       EffectiveStitchNumMax(maxUnrollTimes);

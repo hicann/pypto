@@ -344,7 +344,7 @@ void VisitForStmtForControlFlow(IrBackendContext& ctx, FunctionCache& cache, Lin
     Function* loopFunc = IrBuildVirtualLoopFunc(ctx, forStmt.get(), dynFunc);
     bool submitBeforeLoop = forStmt->GetAttr<bool>("submit_before_loop", false);
     bool parallel = forStmt->GetAttr<bool>("parallel", false);
-    bool supportParallelLoop = (config::GetRuntimeOption<uint16_t>(DEVICE_SCHED_PARALLELISM) > 1);
+    bool supportParallelLoop = (config::GetDeviceSchedParallelism() > 1);
     bool isDav3510 = Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510;
     bool needCrossDie = isDav3510 && parallel;
 
