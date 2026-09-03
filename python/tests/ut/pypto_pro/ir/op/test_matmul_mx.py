@@ -170,19 +170,6 @@ def test_matmul_mx_rejects_scale_with_wrong_dtype():
         _ir_matmul_mx(t["dst"], t["lhs"], t["rhs"], t["scale_a"], t["scale_b"])
 
 
-@pytest.mark.parametrize("scale_key", ["scale_a", "scale_b"])
-def test_matmul_mx_rejects_scale_with_wrong_fractal(scale_key):
-    t = _mx_tiles()
-    is_left = scale_key == "scale_a"
-    space = ir.MemorySpace.ScaleLeft if is_left else ir.MemorySpace.ScaleRight
-    layout = ir.TensorLayout.ZZ if is_left else ir.TensorLayout.NN
-    shape = [64, 2] if is_left else [2, 64]
-    t[scale_key] = _tile(scale_key, shape, DataType.FP8E8M0, space, layout=layout, fractal=512)
-
-    with pytest.raises(ValueError, match=rf"{scale_key} must use fractal=32"):
-        _ir_matmul_mx(t["dst"], t["lhs"], t["rhs"], t["scale_a"], t["scale_b"])
-
-
 @pytest.mark.parametrize(
     "scale_key,shape,error_pattern",
     [
@@ -296,6 +283,27 @@ def test_mx_scale_tile_defaults_to_fractal_32(target_memory, layout, monkeypatch
         shape=[64, 2], dtype=DataType.FP8E8M0, target_memory=target_memory, layout=layout
     )
     assert tile_type.fractal == 32
+
+
+@pytest.mark.parametrize(
+    "target_memory,layout",
+    [
+        (ir.MemorySpace.Mat, ir.TensorLayout.ZZ),
+        (ir.MemorySpace.Mat, ir.TensorLayout.NN),
+        (ir.MemorySpace.ScaleLeft, ir.TensorLayout.ZZ),
+        (ir.MemorySpace.ScaleRight, ir.TensorLayout.NN),
+    ],
+)
+def test_mx_scale_tile_rejects_non_32_fractal(target_memory, layout, monkeypatch):
+    monkeypatch.setenv("PYPTOPRO_JIT_ARCH", "a5")
+    with pytest.raises(ValueError, match="require fractal=32"):
+        TileType(
+            shape=[64, 2],
+            dtype=DataType.FP8E8M0,
+            target_memory=target_memory,
+            layout=layout,
+            fractal=512,
+        )
 
 
 @pytest.mark.parametrize("memory_space", [ir.MemorySpace.ScaleLeft, ir.MemorySpace.ScaleRight])

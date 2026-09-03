@@ -1381,7 +1381,9 @@ _REJECTED_LAYOUTS_ON_A5 = (TensorLayout.ZZ, TensorLayout.NN)
 
 def _tile_layout(tile_type: "_IRTileType") -> "TensorLayout | None":
     """Return the TensorLayout of a TileType derived from its hardware_info blayout/slayout."""
-    hw = tile_type.hardware_info
+    hw = getattr(tile_type, "hardware_info", None)
+    if hw is None:
+        return None
     return _BS_TO_LAYOUT.get((int(hw.blayout), int(hw.slayout)))
 
 
@@ -1402,6 +1404,8 @@ _DEFAULT_LAYOUTS_A5: dict[MemorySpace, TensorLayout] = {
     MemorySpace.ScaleLeft: TensorLayout.ZZ,
     MemorySpace.ScaleRight: TensorLayout.NN,
 }
+
+_MX_SCALE_FRACTAL = 32
 
 mem_id: int = 0
 
@@ -1474,8 +1478,6 @@ def _apply_default_layout(tt: "TileType") -> None:
     if tt.target_memory in (MemorySpace.ScaleLeft, MemorySpace.ScaleRight):
         if default_layout is None:
             raise ValueError(f"{tt.target_memory.name} is only supported on A5, got architecture '{arch}'")
-        if tt.fractal is None:
-            tt.fractal = 32
 
     # A tile whose last axis is 1 has only its rows left to align, so the ISA accepts it in one
     # encoding only: BLayout::RowMajor needs Cols * sizeof(dtype) % 32 == 0, which a 1-wide tile
@@ -1499,6 +1501,17 @@ def _apply_default_layout(tt: "TileType") -> None:
 
     if tt.layout is None:
         tt.layout = default_layout
+
+    # L1 ZZ/NN scale views and the dedicated scale buffers use the PTO MX fractal size.
+    is_mx_scale_tile = tt.target_memory in (MemorySpace.ScaleLeft, MemorySpace.ScaleRight) or (
+        tt.target_memory == MemorySpace.Mat and tt.layout in (TensorLayout.ZZ, TensorLayout.NN)
+    )
+    if is_mx_scale_tile:
+        if tt.fractal not in (None, _MX_SCALE_FRACTAL):
+            raise ValueError(
+                f"{tt.target_memory.name} MX scale tiles require fractal={_MX_SCALE_FRACTAL}, got {tt.fractal}"
+            )
+        tt.fractal = _MX_SCALE_FRACTAL
 
     allowed_layouts = {default_layout}
     if tt.target_memory == MemorySpace.Left:
@@ -1533,13 +1546,6 @@ def _apply_default_layout(tt: "TileType") -> None:
         if tt.dtype in (DataType.FP32, DataType.INT32):
             tt.fractal = 1024
 
-    if (
-        tt.target_memory == MemorySpace.Mat
-        and tt.dtype == DataType.FP8E8M0
-        and tt.layout in (TensorLayout.ZZ, TensorLayout.NN)
-        and tt.fractal is None
-    ):
-        tt.fractal = 32
 
 # CompactMode enum (pto/type.hpp): Null=0, Normal=1, RowPlusOne=2,
 # RowAlignedPadding=3. Any other integer is not a valid compact mode.
@@ -2518,11 +2524,6 @@ def _check_mx_scale_tile(
     if scale_type.dtype != DataType.FP8E8M0:
         raise ValueError(f"{op_name}: {scale_name} must use FP8E8M0 dtype, got {scale_type.dtype}")
     _check_tile_memory_space(op_name, scale_name, scale, expected_space, expected_desc)
-    scale_fractal = scale_type.hardware_info.fractal
-    if scale_fractal != _MX_GROUP_SIZE:
-        raise ValueError(
-            f"{op_name}: {scale_name} must use fractal={_MX_GROUP_SIZE}, got {scale_fractal}"
-        )
 
     data_type = data.type
     data_shape = _tile_shape_ints(data_type)
