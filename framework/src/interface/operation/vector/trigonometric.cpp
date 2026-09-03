@@ -190,6 +190,7 @@ Tensor Tan(const Tensor& operand)
 {
     DECLARE_TRACER();
     CheckTensorFormat(operand.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Tan");
+    CheckTensorDimRange(operand.GetStorage(), 1, NUM_VALUE_4, "Tan");
 
     auto dType = operand.GetStorage()->Datatype();
     CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
