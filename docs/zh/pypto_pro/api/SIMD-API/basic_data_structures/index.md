@@ -10,6 +10,7 @@ MemorySpace
 PipeType
 Ptr
 ReluPreMode
+RoundMode
 Scalar
 SyncAllMode
 SyncCoreType

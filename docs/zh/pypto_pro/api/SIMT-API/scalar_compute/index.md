@@ -5,6 +5,7 @@
 :titlesonly:
 
 cast
+bitcast
 abs
 min
 max

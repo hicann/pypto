@@ -121,7 +121,19 @@ class Simt:
         """Convert one scalar expression to ``dtype`` inside a SIMT function.
 
         ``mode`` controls rounding when the target dtype cannot represent ``value``
-        exactly. ``CAST_ODD`` is supported only for FP32-to-FP16 conversion.
+        exactly. Low-precision floating-point conversions added beyond the default
+        paths require an explicit supported mode. ``CAST_ODD`` is supported only
+        for FP32-to-FP16 conversion. Saturation mode selection is not yet exposed.
+        """
+
+    @staticmethod
+    @_api_decl
+    def bitcast(value: Scalar, dtype: DType) -> Scalar:
+        """Reinterpret one scalar bit pattern as a supported equal-width dtype.
+
+        Unlike :meth:`cast`, this operation performs no numerical conversion,
+        rounding, or saturation. Only the explicitly supported FP16/BF16 and
+        FP32 integer bit-reinterpretation pairs are accepted.
         """
 
     @staticmethod

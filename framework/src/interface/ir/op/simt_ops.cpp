@@ -79,16 +79,12 @@ bool IsSimtCastIntegerDtype(DataType dtype)
            dtype == DataType::UINT32 || dtype == DataType::UINT64;
 }
 
-bool IsSimtCastWideIntegerDtype(DataType dtype)
-{
-    return dtype == DataType::INT32 || dtype == DataType::INT64 || dtype == DataType::UINT32 ||
-           dtype == DataType::UINT64;
-}
-
 bool IsSimtCastSupportedDtype(DataType dtype)
 {
-    return IsSimtCastIntegerDtype(dtype) || dtype == DataType::FP16 || dtype == DataType::BF16 ||
-           dtype == DataType::FP32;
+    return dtype == DataType::INT8 || dtype == DataType::INT16 || dtype == DataType::INT32 ||
+           dtype == DataType::INT64 || dtype == DataType::UINT8 || dtype == DataType::UINT16 ||
+           dtype == DataType::UINT32 || dtype == DataType::UINT64 || dtype == DataType::FP16 ||
+           dtype == DataType::BF16 || dtype == DataType::FP32;
 }
 
 bool IsSimtCastStandardRoundMode(RoundMode mode)
@@ -97,26 +93,96 @@ bool IsSimtCastStandardRoundMode(RoundMode mode)
            mode == RoundMode::CAST_FLOOR || mode == RoundMode::CAST_CEIL || mode == RoundMode::CAST_TRUNC;
 }
 
+bool IsSimtCastFromInt8OrUint8Supported(DataType target_dtype, RoundMode mode)
+{
+    if (IsSimtCastIntegerDtype(target_dtype)) {
+        return mode == RoundMode::CAST_NONE;
+    }
+    return false;
+}
+
+bool IsSimtCastFromInt16OrUint16Supported(DataType target_dtype, RoundMode mode)
+{
+    if (IsSimtCastIntegerDtype(target_dtype)) {
+        return mode == RoundMode::CAST_NONE;
+    }
+    if (target_dtype == DataType::FP16 || target_dtype == DataType::BF16) {
+        return mode == RoundMode::CAST_RINT || mode == RoundMode::CAST_FLOOR || mode == RoundMode::CAST_CEIL ||
+               mode == RoundMode::CAST_TRUNC;
+    }
+    return false;
+}
+
+bool IsSimtCastFromWideIntegerSupported(DataType target_dtype, RoundMode mode)
+{
+    if (IsSimtCastIntegerDtype(target_dtype)) {
+        return mode == RoundMode::CAST_NONE;
+    }
+    if (target_dtype == DataType::FP16 || target_dtype == DataType::BF16) {
+        return mode == RoundMode::CAST_RINT || mode == RoundMode::CAST_ROUND || mode == RoundMode::CAST_FLOOR ||
+               mode == RoundMode::CAST_CEIL || mode == RoundMode::CAST_TRUNC;
+    }
+    if (target_dtype == DataType::FP32) {
+        return IsSimtCastStandardRoundMode(mode);
+    }
+    return false;
+}
+
+bool IsSimtCastFromFp16OrBf16Supported(DataType target_dtype, RoundMode mode)
+{
+    if (target_dtype == DataType::FP32) {
+        return mode == RoundMode::CAST_NONE;
+    }
+    if (target_dtype == DataType::FP16 || target_dtype == DataType::BF16 || target_dtype == DataType::INT32 ||
+        target_dtype == DataType::INT64 || target_dtype == DataType::UINT32 || target_dtype == DataType::UINT64) {
+        return mode == RoundMode::CAST_RINT || mode == RoundMode::CAST_ROUND || mode == RoundMode::CAST_FLOOR ||
+               mode == RoundMode::CAST_CEIL || mode == RoundMode::CAST_TRUNC;
+    }
+    if (target_dtype == DataType::INT8 || target_dtype == DataType::UINT8) {
+        return mode == RoundMode::CAST_TRUNC;
+    }
+    if (target_dtype == DataType::INT16 || target_dtype == DataType::UINT16) {
+        return mode == RoundMode::CAST_RINT || mode == RoundMode::CAST_FLOOR || mode == RoundMode::CAST_CEIL ||
+               mode == RoundMode::CAST_TRUNC;
+    }
+    return false;
+}
+
+bool IsSimtCastFromFp32Supported(DataType target_dtype, RoundMode mode)
+{
+    if (target_dtype == DataType::FP16) {
+        return mode == RoundMode::CAST_ODD || IsSimtCastStandardRoundMode(mode);
+    }
+    if (target_dtype == DataType::BF16 || target_dtype == DataType::INT32 || target_dtype == DataType::INT64 ||
+        target_dtype == DataType::UINT32 || target_dtype == DataType::UINT64) {
+        return IsSimtCastStandardRoundMode(mode);
+    }
+    return false;
+}
+
 bool IsSimtCastSupported(DataType source_dtype, DataType target_dtype, RoundMode mode)
 {
     if (source_dtype == target_dtype) {
-        return IsSimtCastSupportedDtype(source_dtype) && mode == RoundMode::CAST_NONE;
+        if (mode != RoundMode::CAST_NONE) {
+            return false;
+        }
+        return IsSimtCastSupportedDtype(source_dtype);
     }
-    if (IsSimtCastIntegerDtype(source_dtype) && IsSimtCastIntegerDtype(target_dtype)) {
-        return mode == RoundMode::CAST_NONE;
+    if (source_dtype == DataType::INT8 || source_dtype == DataType::UINT8) {
+        return IsSimtCastFromInt8OrUint8Supported(target_dtype, mode);
     }
-    if ((source_dtype == DataType::FP16 || source_dtype == DataType::BF16) && target_dtype == DataType::FP32) {
-        return mode == RoundMode::CAST_NONE;
+    if (source_dtype == DataType::INT16 || source_dtype == DataType::UINT16) {
+        return IsSimtCastFromInt16OrUint16Supported(target_dtype, mode);
     }
-    if (source_dtype == DataType::FP32 && target_dtype == DataType::FP16) {
-        return IsSimtCastStandardRoundMode(mode) || mode == RoundMode::CAST_ODD;
+    if (source_dtype == DataType::INT32 || source_dtype == DataType::UINT32 || source_dtype == DataType::INT64 ||
+        source_dtype == DataType::UINT64) {
+        return IsSimtCastFromWideIntegerSupported(target_dtype, mode);
     }
-    if (source_dtype == DataType::FP32 && target_dtype == DataType::BF16) {
-        return IsSimtCastStandardRoundMode(mode);
+    if (source_dtype == DataType::FP16 || source_dtype == DataType::BF16) {
+        return IsSimtCastFromFp16OrBf16Supported(target_dtype, mode);
     }
-    if ((source_dtype == DataType::FP32 && IsSimtCastWideIntegerDtype(target_dtype)) ||
-        (IsSimtCastWideIntegerDtype(source_dtype) && target_dtype == DataType::FP32)) {
-        return IsSimtCastStandardRoundMode(mode);
+    if (source_dtype == DataType::FP32) {
+        return IsSimtCastFromFp32Supported(target_dtype, mode);
     }
     return false;
 }
@@ -133,6 +199,40 @@ TypePtr DeduceSimtCastType(const std::vector<ExprPtr>& args,
     CHECK(IsSimtCastSupported(source_type->dtype_, target_dtype, mode))
         << "simt.cast does not support " << source_type->dtype_.ToString() << " -> " << target_dtype.ToString()
         << " with mode " << EnumToString(mode);
+    return std::make_shared<ScalarType>(target_dtype);
+}
+
+bool IsSimtBitcastSupported(DataType source_dtype, DataType target_dtype)
+{
+    if (source_dtype == DataType::FP16 || source_dtype == DataType::BF16) {
+        return target_dtype == DataType::INT16 || target_dtype == DataType::UINT16;
+    }
+    if (source_dtype == DataType::INT16 || source_dtype == DataType::UINT16) {
+        return target_dtype == DataType::FP16 || target_dtype == DataType::BF16;
+    }
+    if (source_dtype == DataType::FP32) {
+        return target_dtype == DataType::INT32 || target_dtype == DataType::UINT32;
+    }
+    if (source_dtype == DataType::INT32 || source_dtype == DataType::UINT32) {
+        return target_dtype == DataType::FP32;
+    }
+    return false;
+}
+
+TypePtr DeduceSimtBitcastType(const std::vector<ExprPtr>& args,
+                              const std::vector<std::pair<std::string, std::any>>& kwargs)
+{
+    CHECK(args.size() == 1) << "simt.bitcast requires one scalar argument";
+    auto source_type = As<ScalarType>(args[0]->GetType());
+    CHECK(source_type) << "simt.bitcast value must be a scalar";
+
+    DataType target_dtype = GetOpKwarg<DataType>(kwargs, "target_type");
+    CHECK(source_type->dtype_.GetBit() == target_dtype.GetBit())
+        << "simt.bitcast requires source and target dtypes to have the same bit width, got "
+        << source_type->dtype_.ToString() << " (" << source_type->dtype_.GetBit() << " bits) -> "
+        << target_dtype.ToString() << " (" << target_dtype.GetBit() << " bits)";
+    CHECK(IsSimtBitcastSupported(source_type->dtype_, target_dtype))
+        << "simt.bitcast does not support " << source_type->dtype_.ToString() << " -> " << target_dtype.ToString();
     return std::make_shared<ScalarType>(target_dtype);
 }
 
@@ -342,6 +442,13 @@ REGISTER_OP("simt.cast")
     .set_attr<DataType>("target_type")
     .set_attr<int>("mode")
     .f_deduce_type(DeduceSimtCastType);
+
+REGISTER_OP("simt.bitcast")
+    .set_op_category("SimtOp")
+    .set_description("Reinterpret one SIMT scalar bit pattern as a supported equal-width dtype")
+    .add_argument("value", "Source scalar value")
+    .set_attr<DataType>("target_type")
+    .f_deduce_type(DeduceSimtBitcastType);
 
 #define REGISTER_SIMT_MATH_UNARY_OP(OpName, Description, ResultDtype, ...)                                      \
     REGISTER_OP("simt." OpName)                                                                                 \

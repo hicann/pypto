@@ -159,10 +159,136 @@ const char* GetSimtCastIntrinsicCCE(ir::DataType dtype)
     return nullptr;
 }
 
-bool IsSimtCastWideIntegerDtype(ir::DataType dtype)
+std::string MakeSimtCastIntrinsicCallCCE(ir::DataType target_dtype, ir::RoundMode mode, const char* saturation,
+                                         const std::string& operand)
 {
-    return dtype == ir::DataType::INT32 || dtype == ir::DataType::UINT32 || dtype == ir::DataType::INT64 ||
-           dtype == ir::DataType::UINT64;
+    const char* intrinsic = GetSimtCastIntrinsicCCE(target_dtype);
+    CHECK(intrinsic != nullptr) << "No A5 scalar conversion intrinsic for " << target_dtype.ToString();
+    return std::string(intrinsic) + "<" + GetSimtCastRoundModeCCE(mode) + ", " + saturation + ">(" + operand + ")";
+}
+
+std::string MakeSimtCastNarrowIntegerCCE(ir::DataType target_dtype, ir::RoundMode mode, const std::string& operand)
+{
+    // A5 has no direct low-float-to-8/16-bit scalar conversion. Match the reference semantics by converting to
+    // a 32-bit carrier first, then clamp before narrowing. This is fixed per-conversion behavior, not public SatMode.
+    const bool is_signed = target_dtype == ir::DataType::INT8 || target_dtype == ir::DataType::INT16;
+    const ir::DataType carrier_dtype = is_signed ? ir::DataType::INT32 : ir::DataType::UINT32;
+    const std::string converted = MakeSimtCastIntrinsicCallCCE(carrier_dtype, mode,
+                                                               "RoundingSaturation::RS_ENABLE_VALUE", operand);
+
+    const char* upper_bound = nullptr;
+    const char* lower_bound = nullptr;
+    if (target_dtype == ir::DataType::INT8) {
+        upper_bound = "127";
+        lower_bound = "-128";
+    } else if (target_dtype == ir::DataType::UINT8) {
+        upper_bound = "255U";
+    } else if (target_dtype == ir::DataType::INT16) {
+        upper_bound = "32767";
+        lower_bound = "-32768";
+    } else if (target_dtype == ir::DataType::UINT16) {
+        upper_bound = "65535U";
+    } else {
+        CHECK(false) << "Unsupported narrow simt.cast target " << target_dtype.ToString();
+    }
+
+    const std::string target_type = target_dtype.ToCTypeString();
+    const std::string carrier_type = carrier_dtype.ToCTypeString();
+    std::ostringstream s;
+    s << "({" << carrier_type << " __simt_cast_value = " << converted << ";"
+      << "__simt_cast_value > " << upper_bound << " ? (" << target_type << ")" << upper_bound << " : ";
+    if (is_signed) {
+        s << "(__simt_cast_value < " << lower_bound << " ? (" << target_type << ")" << lower_bound << " : ("
+          << target_type << ")__simt_cast_value);";
+    } else {
+        s << "(" << target_type << ")__simt_cast_value;";
+    }
+    s << "})";
+    return s.str();
+}
+
+std::string MakeSimtCastPlainCCE(ir::DataType target_dtype, ir::RoundMode mode, const std::string& operand)
+{
+    CHECK(mode == ir::RoundMode::CAST_NONE) << "Explicit simt.cast rounding requires an A5 scalar conversion intrinsic";
+    return "((" + target_dtype.ToCTypeString() + ")" + operand + ")";
+}
+
+std::string MakeSimtCastFromFp16OrBf16CCE(ir::DataType target_dtype, ir::RoundMode mode, const std::string& operand)
+{
+    if (target_dtype == ir::DataType::FP16 || target_dtype == ir::DataType::BF16 ||
+        target_dtype == ir::DataType::FP32) {
+        return MakeSimtCastIntrinsicCallCCE(target_dtype, mode, "RoundingSaturation::RS_DISABLE_VALUE", operand);
+    }
+    if (mode != ir::RoundMode::CAST_NONE &&
+        (target_dtype == ir::DataType::INT32 || target_dtype == ir::DataType::UINT32)) {
+        return MakeSimtCastIntrinsicCallCCE(target_dtype, mode, "RoundingSaturation::RS_ENABLE_VALUE", operand);
+    }
+    if (mode != ir::RoundMode::CAST_NONE &&
+        (target_dtype == ir::DataType::INT64 || target_dtype == ir::DataType::UINT64)) {
+        const std::string fp32 = MakeSimtCastIntrinsicCallCCE(ir::DataType::FP32, mode,
+                                                              "RoundingSaturation::RS_ENABLE_VALUE", operand);
+        return MakeSimtCastIntrinsicCallCCE(target_dtype, mode, "RoundingSaturation::RS_ENABLE_VALUE", fp32);
+    }
+    if (mode != ir::RoundMode::CAST_NONE &&
+        (target_dtype == ir::DataType::INT8 || target_dtype == ir::DataType::UINT8 ||
+         target_dtype == ir::DataType::INT16 || target_dtype == ir::DataType::UINT16)) {
+        return MakeSimtCastNarrowIntegerCCE(target_dtype, mode, operand);
+    }
+    return MakeSimtCastPlainCCE(target_dtype, mode, operand);
+}
+
+std::string MakeSimtCastFromFp32CCE(ir::DataType target_dtype, ir::RoundMode mode, const std::string& operand)
+{
+    if (target_dtype == ir::DataType::FP16 || target_dtype == ir::DataType::BF16) {
+        return MakeSimtCastIntrinsicCallCCE(target_dtype, mode, "RoundingSaturation::RS_DISABLE_VALUE", operand);
+    }
+    if (mode != ir::RoundMode::CAST_NONE &&
+        (target_dtype == ir::DataType::INT32 || target_dtype == ir::DataType::UINT32 ||
+         target_dtype == ir::DataType::INT64 || target_dtype == ir::DataType::UINT64)) {
+        return MakeSimtCastIntrinsicCallCCE(target_dtype, mode, "RoundingSaturation::RS_ENABLE_VALUE", operand);
+    }
+    return MakeSimtCastPlainCCE(target_dtype, mode, operand);
+}
+
+std::string MakeSimtCastFromInt16OrUint16CCE(ir::DataType source_dtype, ir::DataType target_dtype, ir::RoundMode mode,
+                                             const std::string& operand)
+{
+    if (mode != ir::RoundMode::CAST_NONE &&
+        (target_dtype == ir::DataType::FP16 || target_dtype == ir::DataType::BF16)) {
+        const ir::DataType carrier_dtype = source_dtype == ir::DataType::INT16 ? ir::DataType::INT32 :
+                                                                                 ir::DataType::UINT32;
+        const std::string widened = "((" + carrier_dtype.ToCTypeString() + ")" + operand + ")";
+        return MakeSimtCastIntrinsicCallCCE(target_dtype, mode, "RoundingSaturation::RS_DISABLE_VALUE", widened);
+    }
+    return MakeSimtCastPlainCCE(target_dtype, mode, operand);
+}
+
+std::string MakeSimtCastFromInt32OrUint32CCE(ir::DataType target_dtype, ir::RoundMode mode, const std::string& operand)
+{
+    if (mode != ir::RoundMode::CAST_NONE && (target_dtype == ir::DataType::FP16 || target_dtype == ir::DataType::BF16 ||
+                                             target_dtype == ir::DataType::FP32)) {
+        return MakeSimtCastIntrinsicCallCCE(target_dtype, mode, "RoundingSaturation::RS_DISABLE_VALUE", operand);
+    }
+    return MakeSimtCastPlainCCE(target_dtype, mode, operand);
+}
+
+std::string MakeSimtCastFromInt64OrUint64CCE(ir::DataType source_dtype, ir::DataType target_dtype, ir::RoundMode mode,
+                                             const std::string& operand)
+{
+    if (mode != ir::RoundMode::CAST_NONE &&
+        (target_dtype == ir::DataType::FP16 || target_dtype == ir::DataType::BF16)) {
+        // The A5 uint64-to-BF16 reference path always uses nearest-even for the uint64-to-FP32 carrier conversion.
+        const auto fp32_mode = source_dtype == ir::DataType::UINT64 && target_dtype == ir::DataType::BF16 ?
+                                   ir::RoundMode::CAST_RINT :
+                                   mode;
+        const std::string fp32 = MakeSimtCastIntrinsicCallCCE(ir::DataType::FP32, fp32_mode,
+                                                              "RoundingSaturation::RS_DISABLE_VALUE", operand);
+        return MakeSimtCastIntrinsicCallCCE(target_dtype, mode, "RoundingSaturation::RS_DISABLE_VALUE", fp32);
+    }
+    if (mode != ir::RoundMode::CAST_NONE && target_dtype == ir::DataType::FP32) {
+        return MakeSimtCastIntrinsicCallCCE(target_dtype, mode, "RoundingSaturation::RS_DISABLE_VALUE", operand);
+    }
+    return MakeSimtCastPlainCCE(target_dtype, mode, operand);
 }
 
 std::string MakeSimtCastCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
@@ -185,32 +311,43 @@ std::string MakeSimtCastCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& 
         return operand;
     }
 
-    const char* intrinsic = nullptr;
-    const char* saturation = nullptr;
-    if ((source_dtype == ir::DataType::FP16 || source_dtype == ir::DataType::BF16) &&
-        target_dtype == ir::DataType::FP32) {
-        intrinsic = GetSimtCastIntrinsicCCE(target_dtype);
-        saturation = "RoundingSaturation::RS_DISABLE_VALUE";
-    } else if (source_dtype == ir::DataType::FP32 &&
-               (target_dtype == ir::DataType::FP16 || target_dtype == ir::DataType::BF16)) {
-        intrinsic = GetSimtCastIntrinsicCCE(target_dtype);
-        saturation = "RoundingSaturation::RS_DISABLE_VALUE";
-    } else if (mode != ir::RoundMode::CAST_NONE) {
-        if (source_dtype == ir::DataType::FP32 && IsSimtCastWideIntegerDtype(target_dtype)) {
-            intrinsic = GetSimtCastIntrinsicCCE(target_dtype);
-            saturation = "RoundingSaturation::RS_ENABLE_VALUE";
-        } else if (IsSimtCastWideIntegerDtype(source_dtype) && target_dtype == ir::DataType::FP32) {
-            intrinsic = GetSimtCastIntrinsicCCE(target_dtype);
-            saturation = "RoundingSaturation::RS_DISABLE_VALUE";
-        }
+    if (source_dtype == ir::DataType::INT16 || source_dtype == ir::DataType::UINT16) {
+        return MakeSimtCastFromInt16OrUint16CCE(source_dtype, target_dtype, mode, operand);
     }
-
-    if (intrinsic != nullptr) {
-        return std::string(intrinsic) + "<" + GetSimtCastRoundModeCCE(mode) + ", " + saturation + ">(" + operand + ")";
+    if (source_dtype == ir::DataType::INT32 || source_dtype == ir::DataType::UINT32) {
+        return MakeSimtCastFromInt32OrUint32CCE(target_dtype, mode, operand);
     }
+    if (source_dtype == ir::DataType::INT64 || source_dtype == ir::DataType::UINT64) {
+        return MakeSimtCastFromInt64OrUint64CCE(source_dtype, target_dtype, mode, operand);
+    }
+    if (source_dtype == ir::DataType::FP16 || source_dtype == ir::DataType::BF16) {
+        return MakeSimtCastFromFp16OrBf16CCE(target_dtype, mode, operand);
+    }
+    if (source_dtype == ir::DataType::FP32) {
+        return MakeSimtCastFromFp32CCE(target_dtype, mode, operand);
+    }
+    return MakeSimtCastPlainCCE(target_dtype, mode, operand);
+}
 
-    CHECK(mode == ir::RoundMode::CAST_NONE) << "Explicit simt.cast rounding requires an A5 scalar conversion intrinsic";
-    return "((" + target_dtype.ToCTypeString() + ")" + operand + ")";
+std::string MakeSimtBitcastCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+{
+    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+    CHECK(codegen.IsInSimtContext()) << "simt.bitcast reached CCE codegen outside a SIMT function";
+    CHECK(codegen.GetArch() == "a5") << "simt.bitcast currently requires arch='a5'";
+    CHECK(op->args_.size() == 1) << "simt.bitcast requires one scalar argument";
+
+    auto source_type = ir::As<ir::ScalarType>(op->args_[0]->GetType());
+    auto target_type = ir::As<ir::ScalarType>(op->GetType());
+    CHECK(source_type) << "simt.bitcast source must be ScalarType";
+    CHECK(target_type) << "simt.bitcast target must be ScalarType";
+
+    const std::string operand = codegen.GetExprAsCode(op->args_[0]);
+    std::ostringstream s;
+    s << "({union {" << source_type->dtype_.ToCTypeString() << " source;" << target_type->dtype_.ToCTypeString()
+      << " target;} __simt_bitcast_data;"
+      << "__simt_bitcast_data.source = (" << operand << ");"
+      << "__simt_bitcast_data.target;})";
+    return s.str();
 }
 
 std::string MakeSimtTrigFP32Codegen(const std::string& operand, bool is_sin)
@@ -897,6 +1034,7 @@ REGISTER_BACKEND_OP(BackendCCE, "simt.threadfence_block")
 REGISTER_BACKEND_OP(BackendCCE, "simt.threadfence").set_pipe(ir::PipeType::S).f_codegen(MakeSimtThreadfenceCodegenCCE);
 
 REGISTER_BACKEND_OP(BackendCCE, "simt.cast").set_pipe(ir::PipeType::S).f_codegen(MakeSimtCastCodegenCCE);
+REGISTER_BACKEND_OP(BackendCCE, "simt.bitcast").set_pipe(ir::PipeType::S).f_codegen(MakeSimtBitcastCodegenCCE);
 
 REGISTER_BACKEND_OP(BackendCCE, "simt.abs").set_pipe(ir::PipeType::S).f_codegen(MakeSimtAbsCodegenCCE);
 REGISTER_BACKEND_OP(BackendCCE, "simt.sqrt").set_pipe(ir::PipeType::S).f_codegen(MakeSimtSqrtCodegenCCE);

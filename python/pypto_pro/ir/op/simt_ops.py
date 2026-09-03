@@ -82,6 +82,17 @@ def cast(
     )
 
 
+def bitcast(value: Expr, dtype: _ir_core.DataType, span: Span | None = None) -> Call:
+    """Build a registered SIMT scalar bit-reinterpretation operation."""
+    actual_span = _get_span_or_capture(span)
+    return _ir_core.create_op_call(
+        "simt.bitcast",
+        [value],
+        {"target_type": dtype},
+        actual_span,
+    )
+
+
 def _create_math_call(op_name: str, *operands: Expr, span: Span | None) -> Call:
     """Create an IR call for one explicit SIMT scalar math operation."""
     actual_span = _get_span_or_capture(span)
@@ -634,6 +645,52 @@ def _parse_simt_cast(parser: Any, call: ast.Call) -> Expr:
         return cast(value, dtype, mode, span)
     except (ValueError, RuntimeError) as err:
         message = str(err).replace("simt.cast", "pl.simt.cast()")
+        raise ParserTypeError(message, span=span) from err
+
+
+@op_impl("simt.bitcast")
+def _parse_simt_bitcast(parser: Any, call: ast.Call) -> Expr:
+    """Parse ``pl.simt.bitcast`` with scalar and dtype validation."""
+    from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError
+
+    span = parser.span_tracker.get_span(call)
+    if parser._current_func_type not in (
+        _ir_core.FunctionType.SimtVF,
+        _ir_core.FunctionType.SimtCallee,
+    ):
+        raise ParserSyntaxError(
+            "pl.simt.bitcast() can only be used inside a SIMT function",
+            span=span,
+            hint="Move SIMT-context-dependent logic into @pl.simt.function.",
+        )
+
+    if call.keywords:
+        raise ParserSyntaxError("pl.simt.bitcast() does not accept keyword arguments", span=span)
+    if len(call.args) != 2:
+        raise ParserSyntaxError(
+            f"pl.simt.bitcast() requires exactly 2 positional arguments, got {len(call.args)}",
+            span=span,
+            hint="Use pl.simt.bitcast(value, pl.DT_UINT32).",
+        )
+
+    value = parser.parse_expression(call.args[0])
+    if not isinstance(value, Expr) or not isinstance(value.type, _ir_core.ScalarType):
+        raise ParserTypeError(
+            "pl.simt.bitcast() value must be a scalar expression",
+            span=parser.span_tracker.get_span(call.args[0]),
+        )
+
+    dtype = parser.parse_expression(call.args[1])
+    if not isinstance(dtype, _ir_core.DataType):
+        raise ParserTypeError(
+            "pl.simt.bitcast() dtype must be a pl.DT_* value",
+            span=parser.span_tracker.get_span(call.args[1]),
+        )
+
+    try:
+        return bitcast(value, dtype, span)
+    except (ValueError, RuntimeError) as err:
+        message = str(err).replace("simt.bitcast", "pl.simt.bitcast()")
         raise ParserTypeError(message, span=span) from err
 
 

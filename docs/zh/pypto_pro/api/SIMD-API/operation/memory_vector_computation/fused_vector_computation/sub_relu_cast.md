@@ -30,7 +30,7 @@ pypto_pro.language.sub_relu_cast(out, lhs, rhs, *, target_type, mode=pl.RoundMod
 | `lhs` | 输入 | 左操作数tile（被减数） |
 | `rhs` | 输入 | 右操作数tile（减数） |
 | `target_type` | 输入 | 输出数据类型，如`pypto_pro.language.DT_FP32`、`pypto_pro.language.DT_FP16` |
-| `mode` | 输入 | 舍入模式，默认`pl.RoundMode.CAST_ROUND` |
+| `mode` | 输入 | 舍入模式，[`RoundMode`](../../../basic_data_structures/RoundMode.md)类型，默认`pl.RoundMode.CAST_ROUND` |
 
 ## 参数范围
 
@@ -40,7 +40,7 @@ pypto_pro.language.sub_relu_cast(out, lhs, rhs, *, target_type, mode=pl.RoundMod
 | `lhs` | 输入 | 中间减法/ReLU类型须为FP16或FP32；实现会用`lhs`保存中间结果，因此调用后其内容被覆盖<br>shape：与`out`一致 |
 | `rhs` | 输入 | 数据类型：与`lhs`一致<br>shape：与`out`一致 |
 | `target_type` | 输入 | 支持`pypto_pro.language.DT_FP16`、`pypto_pro.language.DT_BF16`、`pypto_pro.language.DT_FP32`等<br>可与输入类型相同（仅做ReLU）或不同（融合类型转换） |
-| `mode` | 输入 | 舍入模式：`pl.RoundMode.CAST_NONE` / `pl.RoundMode.CAST_RINT` / `pl.RoundMode.CAST_ROUND` / `pl.RoundMode.CAST_FLOOR` / `pl.RoundMode.CAST_CEIL` / `pl.RoundMode.CAST_TRUNC` / `pl.RoundMode.CAST_ODD`<br>缩窄转换（如FP32→FP16）时生效，扩展转换时忽略 |
+| `mode` | 输入 | 舍入模式，可选值参见[`RoundMode`](../../../basic_data_structures/RoundMode.md)<br>缩窄转换（如DT_FP32→DT_FP16）时生效，扩展转换时忽略 |
 
 ## 流水类型
 

@@ -28,7 +28,7 @@ pypto_pro.language.cast(out, src, *, mode=pl.RoundMode.CAST_ROUND)
 |---|---|---|
 | `out` | 输出 | 目标tile，存放类型转换后的结果 |
 | `src` | 输入 | 源tile |
-| `mode` | 输入 | 舍入模式，默认`pl.RoundMode.CAST_ROUND` |
+| `mode` | 输入 | 舍入模式，[`RoundMode`](../../../basic_data_structures/RoundMode.md)类型，默认`pl.RoundMode.CAST_ROUND` |
 
 ## 参数范围
 
@@ -36,7 +36,7 @@ pypto_pro.language.cast(out, src, *, mode=pl.RoundMode.CAST_ROUND)
 |---|---|---|
 | `out` | 输出 | Vec（UB）Tile，目标数据类型由`out.dtype`决定；物理shape和`valid_shape`须与`src`一致 |
 | `src` | 输入 | Vec（UB）Tile；物理shape和`valid_shape`须与`out`一致。支持的源/目标dtype组合由`TCVT`实现决定，包括常用8/16/32/64位整数、FP16、BF16、FP32及部分FP4/FP8/HF8转换；并非任意同位宽或跨位宽组合都合法 |
-| `mode` | 输入 | 舍入模式：`pl.RoundMode.CAST_NONE` / `pl.RoundMode.CAST_RINT` / `pl.RoundMode.CAST_ROUND` / `pl.RoundMode.CAST_FLOOR` / `pl.RoundMode.CAST_CEIL` / `pl.RoundMode.CAST_TRUNC` / `pl.RoundMode.CAST_ODD`。具体转换必须支持所选模式；`CAST_ODD`当前仅对FP32→FP16实现奇数舍入，其他组合不应使用该模式 |
+| `mode` | 输入 | 舍入模式，可选值参见[`RoundMode`](../../../basic_data_structures/RoundMode.md)。具体转换必须支持所选模式；`CAST_ODD`当前仅对DT_FP32→DT_FP16实现奇数舍入，其他组合不应使用该模式 |
 
 ## 流水类型
 

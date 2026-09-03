@@ -134,6 +134,117 @@ TEST(SimtOpsTest, CastRejectsUnsupportedDtypeAndModeCombinations)
     expect_rejected(DataType::INT32, DataType::INT64, RoundMode::CAST_RINT);
 }
 
+TEST(SimtOpsTest, CastSupportsExtendedLowPrecisionConversionMatrix)
+{
+    auto& registry = OpRegistry::GetInstance();
+    auto expect_supported = [&registry](DataType source_dtype, DataType target_dtype, RoundMode mode) {
+        auto source = MakeScalarVar("value", source_dtype);
+        auto result = registry.Create("simt.cast", {source},
+                                      Kwargs{{"target_type", target_dtype}, {"mode", static_cast<int>(mode)}}, Sp());
+        auto result_type = As<ScalarType>(result->GetType());
+        ASSERT_NE(result_type, nullptr);
+        EXPECT_EQ(result_type->dtype_, target_dtype);
+    };
+
+    const std::vector<DataType> low_float_dtypes = {DataType::FP16, DataType::BF16};
+    const std::vector<DataType> wide_integer_dtypes = {DataType::INT32, DataType::UINT32, DataType::INT64,
+                                                       DataType::UINT64};
+    const std::vector<DataType> int16_dtypes = {DataType::INT16, DataType::UINT16};
+    const std::vector<DataType> int8_dtypes = {DataType::INT8, DataType::UINT8};
+    const std::vector<RoundMode> standard_modes = {RoundMode::CAST_RINT, RoundMode::CAST_ROUND, RoundMode::CAST_FLOOR,
+                                                   RoundMode::CAST_CEIL, RoundMode::CAST_TRUNC};
+    const std::vector<RoundMode> int16_modes = {RoundMode::CAST_RINT, RoundMode::CAST_FLOOR, RoundMode::CAST_CEIL,
+                                                RoundMode::CAST_TRUNC};
+
+    for (auto mode : standard_modes) {
+        expect_supported(DataType::FP16, DataType::BF16, mode);
+        expect_supported(DataType::BF16, DataType::FP16, mode);
+        for (auto low_float_dtype : low_float_dtypes) {
+            for (auto wide_integer_dtype : wide_integer_dtypes) {
+                expect_supported(low_float_dtype, wide_integer_dtype, mode);
+                expect_supported(wide_integer_dtype, low_float_dtype, mode);
+            }
+        }
+    }
+    for (auto mode : int16_modes) {
+        for (auto low_float_dtype : low_float_dtypes) {
+            for (auto int16_dtype : int16_dtypes) {
+                expect_supported(low_float_dtype, int16_dtype, mode);
+                expect_supported(int16_dtype, low_float_dtype, mode);
+            }
+        }
+    }
+    for (auto low_float_dtype : low_float_dtypes) {
+        for (auto int8_dtype : int8_dtypes) {
+            expect_supported(low_float_dtype, int8_dtype, RoundMode::CAST_TRUNC);
+        }
+    }
+}
+
+TEST(SimtOpsTest, CastRejectsUnsupportedExtendedConversionModes)
+{
+    auto& registry = OpRegistry::GetInstance();
+    auto expect_rejected = [&registry](DataType source_dtype, DataType target_dtype, RoundMode mode) {
+        auto source = MakeScalarVar("value", source_dtype);
+        EXPECT_THROW(
+            (void)registry.Create("simt.cast", {source},
+                                  Kwargs{{"target_type", target_dtype}, {"mode", static_cast<int>(mode)}}, Sp()),
+            npu::tile_fwk::Error);
+    };
+
+    expect_rejected(DataType::FP16, DataType::BF16, RoundMode::CAST_NONE);
+    expect_rejected(DataType::FP16, DataType::INT64, RoundMode::CAST_ODD);
+    expect_rejected(DataType::INT16, DataType::BF16, RoundMode::CAST_ROUND);
+    expect_rejected(DataType::BF16, DataType::INT8, RoundMode::CAST_RINT);
+    expect_rejected(DataType::INT8, DataType::FP16, RoundMode::CAST_TRUNC);
+}
+
+TEST(SimtOpsTest, BitcastSupportsOnlyAscScalarPairs)
+{
+    auto& registry = OpRegistry::GetInstance();
+    const std::vector<std::pair<DataType, DataType>> supported_pairs = {
+        {DataType::INT16, DataType::FP16},  {DataType::UINT16, DataType::FP16}, {DataType::FP16, DataType::INT16},
+        {DataType::FP16, DataType::UINT16}, {DataType::INT16, DataType::BF16},  {DataType::UINT16, DataType::BF16},
+        {DataType::BF16, DataType::INT16},  {DataType::BF16, DataType::UINT16}, {DataType::INT32, DataType::FP32},
+        {DataType::UINT32, DataType::FP32}, {DataType::FP32, DataType::INT32},  {DataType::FP32, DataType::UINT32},
+    };
+
+    for (const auto& [source_dtype, target_dtype] : supported_pairs) {
+        auto source = MakeScalarVar("value", source_dtype);
+        auto result = registry.Create("simt.bitcast", {source}, Kwargs{{"target_type", target_dtype}}, Sp());
+        EXPECT_EQ(result->name_, "simt.bitcast");
+        EXPECT_EQ(result->GetKwarg<DataType>("target_type"), target_dtype);
+        auto result_type = As<ScalarType>(result->GetType());
+        ASSERT_NE(result_type, nullptr);
+        EXPECT_EQ(result_type->dtype_, target_dtype);
+    }
+
+    const std::vector<std::pair<DataType, DataType>> unsupported_pairs = {
+        {DataType::FP16, DataType::BF16},
+        {DataType::INT16, DataType::UINT16},
+        {DataType::INT32, DataType::UINT32},
+        {DataType::INT64, DataType::UINT64},
+    };
+    for (const auto& [source_dtype, target_dtype] : unsupported_pairs) {
+        auto source = MakeScalarVar("value", source_dtype);
+        EXPECT_THROW((void)registry.Create("simt.bitcast", {source}, Kwargs{{"target_type", target_dtype}}, Sp()),
+                     npu::tile_fwk::Error);
+    }
+}
+
+TEST(SimtOpsTest, BitcastRejectsMismatchedBitWidths)
+{
+    auto& registry = OpRegistry::GetInstance();
+    auto source = MakeScalarVar("value", DataType::FP16);
+
+    try {
+        (void)registry.Create("simt.bitcast", {source}, Kwargs{{"target_type", DataType::UINT32}}, Sp());
+        FAIL() << "Expected simt.bitcast to reject mismatched bit widths";
+    } catch (const npu::tile_fwk::Error& error) {
+        EXPECT_NE(std::string(error.what()).find("same bit width"), std::string::npos);
+    }
+}
+
 TEST(SimtOpsTest, RejectsInvalidContextAxisAndLaunchBounds)
 {
     auto& registry = OpRegistry::GetInstance();
