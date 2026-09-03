@@ -1854,6 +1854,30 @@ TEST_F(PreGraphTest, TestAmulbInputDT_FP16)
     EXPECT_EQ(l0c->tensor->GetDataType() == outDtype, true);
 }
 
+TEST_F(PreGraphTest, CopyOpAttributeShapeRankMismatchIsRejected)
+{
+    ComputationalGraphBuilder graph;
+    ASSERT_TRUE(graph.AddTensor(DataType::DT_FP32, {4, 4}, MemoryType::MEM_DEVICE_DDR, "input"));
+    ASSERT_TRUE(graph.AddTensor(DataType::DT_FP32, {4, 4}, MemoryType::MEM_UB, "output"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_COPY_IN, {"input"}, {"output"}, "copy_in"));
+
+    auto copyIn = graph.GetOp("copy_in");
+    ASSERT_NE(copyIn, nullptr);
+    copyIn->SetOpAttribute(std::make_shared<CopyOpAttribute>(OpImmediate::Specified({0, 0}), MemoryType::MEM_UB,
+                                                             OpImmediate::Specified({4, 4}),
+                                                             OpImmediate::Specified({1, 4, 4})));
+    copyIn->UpdateSubgraphID(0);
+    ASSERT_TRUE(graph.SetInCast({"input"}));
+    ASSERT_TRUE(graph.SetOutCast({"output"}));
+
+    auto* function = graph.GetFunction();
+    ASSERT_NE(function, nullptr);
+    function->SetTotalSubGraphCount(1);
+
+    PreGraphProcess pass;
+    EXPECT_EQ(pass.RunOnFunction(*function), FAILED);
+}
+
 // vec_in - CopyIn - copy_in - TransposeMoveout - vec_out
 TEST_F(PreGraphTest, TestTransposeMoveout)
 {

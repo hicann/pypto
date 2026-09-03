@@ -225,6 +225,10 @@ Status PreGraphProcess::RunOnFunction(Function& function)
         APASS_LOG_ERROR_F(Elements::Function, "Merge assemble and view failed.");
         return status;
     }
+    if (Checker::CheckShapeForCopyOp(function) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Function, "CheckShapeForCopyOp failed.");
+        return FAILED;
+    }
     APASS_LOG_INFO_F(Elements::Operation, "===> End PreGraph.");
     return SUCCESS;
 }

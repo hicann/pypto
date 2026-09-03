@@ -58,6 +58,13 @@ public:
      */
     virtual Status DoDefaultEnabledPostCheck(Function& function);
 
+    /**
+     * \brief Check whether the shape and the rawShape of copy ops have the same dimension.
+     * \param function : This parameter indicates the function to be checked.
+     * \return Status, indicating whether the shape dimension of CopyOpAttribute matches the rawShape.
+     */
+    static Status CheckShapeForCopyOp(Function& function);
+
 protected:
     /**
      * \brief Check whether consumers and producers of the tensor are valid (not null).

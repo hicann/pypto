@@ -245,6 +245,26 @@ Status Checker::CheckToDynOffsetForAssemble(Function& function)
     return SUCCESS;
 }
 
+Status Checker::CheckShapeForCopyOp(Function& function)
+{
+    for (auto& op : function.Operations()) {
+        if (!IsCopyIn(op.GetOpcode()) && !IsCopyOut(op.GetOpcode())) {
+            continue;
+        }
+        auto copyOpAttr = std::dynamic_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
+        if (copyOpAttr == nullptr || copyOpAttr->GetShape().size() == copyOpAttr->GetRawShape().size()) {
+            continue;
+        }
+        APASS_LOG_ERROR_C(TensorErr::TENSOR_SHAPE_MISMATCH, Elements::Operation,
+                          "CheckShapeForCopyOp failed, shape dimension: %zu and rawShape dimension: %zu of op[%d] in "
+                          "function[%d] are mismatched.",
+                          copyOpAttr->GetShape().size(), copyOpAttr->GetRawShape().size(), op.GetOpMagic(),
+                          function.GetFuncMagic());
+        return FAILED;
+    }
+    return SUCCESS;
+}
+
 Status Checker::CheckLocalTensor(Function& function)
 {
     auto opList = function.Operations().DuplicatedOpList();
