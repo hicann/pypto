@@ -826,3 +826,38 @@ TEST_F(RemoveRedundantReshapeTest, TestCreateMetadataReshapeSkipsWhenNoNegativeD
     EXPECT_EQ(afterDynRawShape[0].Concrete(), 8);
     EXPECT_EQ(afterDynRawShape[1].Concrete(), 64);
 }
+
+TEST_F(RemoveRedundantReshapeTest, TestDirectReshapeAssemblePreservesOutcastAlias)
+{
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestOutcastAlias", "TestOutcastAlias", nullptr);
+    ASSERT_NE(func, nullptr);
+
+    const std::vector<int64_t> inputShape{4, 4};
+    const std::vector<int64_t> middleShape{16};
+    const std::vector<int64_t> outputShape{16};
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, inputShape, CreateTestConstIntVector(inputShape));
+    auto middle = IRBuilder().CreateTensorVar(DT_FP32, middleShape, CreateTestConstIntVector(middleShape));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, outputShape, CreateTestConstIntVector(outputShape));
+    output->tensor->actualRawmagic = 4242;
+    output->tensor->SetSymbol("outcast_alias");
+
+    auto& reshapeOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_RESHAPE, {input}, {middle});
+    auto& assembleOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_ASSEMBLE, {middle}, {output});
+    auto assembleAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0});
+    assembleOp.SetOpAttribute(assembleAttr);
+    func->outCasts_.push_back(output);
+
+    ViewReshapeAssembleReorderUtils utils;
+    ViewReshapeAssembleReorderUtils::ChainMatch match{input, middle, &assembleOp, output};
+    EXPECT_EQ(utils.TryRecordDirectReshapeAssemble(*func, reshapeOp, assembleOp, match, *assembleAttr, outputShape,
+                                                   CreateTestConstIntVector(outputShape),
+                                                   CreateTestConstIntVector(middleShape),
+                                                   CreateTestConstIntVector(outputShape)),
+              SUCCESS);
+
+    ASSERT_EQ(utils.reshapeAssembleRecords_.size(), 1U);
+    const auto& generated = utils.reshapeAssembleRecords_.front().assembleOutput;
+    ASSERT_NE(generated, nullptr);
+    EXPECT_EQ(generated->GetRawMagic(), output->GetRawMagic());
+    EXPECT_EQ(generated->Symbol(), output->Symbol());
+}

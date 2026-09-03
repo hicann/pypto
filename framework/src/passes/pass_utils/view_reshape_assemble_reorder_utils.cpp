@@ -657,12 +657,17 @@ Status ViewReshapeAssembleReorderUtils::TryRecordDirectReshapeAssemble(
                                   match.output->GetShape().size(), finalOutputDynShape)) {
         return SUCCESS;
     }
-    reshapeAssembleRecords_.emplace_back(ReshapeAssembleRecord{
-        &reshapeOp, &assembleOp, match.input, match.output,
-        irBuilder_.CreateTensorVar(function, match.output->Datatype(), assembleOutputShape, assembleDynShape,
-                                   match.output->Format()),
-        remap.staticOffset, remap.dynOffset, assembleDynShape, finalOutputDynShape, assembleAttr.GetFrom(),
-        GetFirstSpan(reshapeOp, assembleOp), GetChainScopeInfo(reshapeOp, assembleOp)});
+    LogicalTensorPtr assembleOutput = irBuilder_.CreateTensorVar(
+        function, match.output->Datatype(), assembleOutputShape, assembleDynShape, match.output->Format());
+    const auto& outcasts = function.GetOutcast();
+    if (std::find(outcasts.begin(), outcasts.end(), match.output) != outcasts.end()) {
+        assembleOutput->tensor->actualRawmagic = match.output->GetRawMagic();
+        assembleOutput->tensor->SetSymbol(match.output->Symbol());
+    }
+    reshapeAssembleRecords_.emplace_back(
+        ReshapeAssembleRecord{&reshapeOp, &assembleOp, match.input, match.output, assembleOutput, remap.staticOffset,
+                              remap.dynOffset, assembleDynShape, finalOutputDynShape, assembleAttr.GetFrom(),
+                              GetFirstSpan(reshapeOp, assembleOp), GetChainScopeInfo(reshapeOp, assembleOp)});
     visitedOp_.insert(reshapeOp.GetOpMagic());
     visitedOp_.insert(assembleOp.GetOpMagic());
     return SUCCESS;
