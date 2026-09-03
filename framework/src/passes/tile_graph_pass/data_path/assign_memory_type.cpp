@@ -2447,12 +2447,7 @@ Status AssignMemoryType::ProcessL0C2L1LargeToSmall(Function& function)
         if (op.GetOpcode() != Opcode::OP_CONTRACT || op.oOperand.empty() || op.oOperand.front() == nullptr) {
             continue;
         }
-        // Large-to-small is a single-contract path. A middle tensor produced by
-        // multiple contracts is the small-to-large (fan-in) pattern instead.
-        auto middle = op.oOperand.front();
-        if (middle->GetProducers().size() != 1 || *middle->GetProducers().begin() != &op) {
-            continue;
-        }
+        // Single-contract restriction is enforced inside TryUpgradeSingleContractSlicePath.
         RETURN_IF_NOT_SUCCESS(TryUpgradeSingleContractSlicePath(op, MemoryType::MEM_L0C, MemoryType::MEM_L1,
                                                                 "ProcessL0C2L1LargeToSmall", false, false, false));
     }
@@ -2811,6 +2806,34 @@ Status AssignMemoryType::TryUpgradeSingleContractSlicePath(Operation& contractOp
         !HasOnlySliceConsumers(middle)) {
         return SUCCESS;
     }
+    // Large-to-small must be a single-contract path: the slice/view side already reads with a
+    // from-offset, and multiple contracts would write the middle with their own to-offsets.
+    // Offsets on both sides cannot be handled by the underlying direct path and break accuracy.
+    // The same-memory path (sourceType == targetType, e.g. UB2UB) is exempt: multiple contracts
+    // fan-in is its designed pattern (CanKeepContractProducersInUb checks producers one by one).
+    if (sourceType != targetType &&
+        (middle->GetProducers().size() != 1 || *middle->GetProducers().begin() != &contractOp)) {
+        return SUCCESS;
+    }
+    // For large-to-small the middle stays in sourceType after the upgrade; reject when it cannot
+    // fit. UB residency holds both the ND original and the NZ copy, L0C residency holds NZ only.
+    // The same-memory path is exempt: its caller already checks the middle against the
+    // assemble-output UB limit and the middle carries no NZ copy there.
+    if (sourceType != targetType && middle->GetShape().size() == kMatrixShapeDimCount) {
+        if (sourceType == MemoryType::MEM_UB) {
+            const size_t ubLimit = static_cast<size_t>(
+                Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * UB_THRESHOLD_NORMAL);
+            if (CalcNZTensorSize(middle) > ubLimit) {
+                return SUCCESS;
+            }
+        } else if (sourceType == MemoryType::MEM_L0C) {
+            const size_t l0cLimit = static_cast<size_t>(
+                Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L0C) * L0C_THRESHOLD);
+            if (CalcNzStorageSize(middle) > l0cLimit) {
+                return SUCCESS;
+            }
+        }
+    }
     if (requireMatrixShape && input->GetShape().size() != kMatrixShapeDimCount) {
         return SUCCESS;
     }
@@ -2921,9 +2944,8 @@ bool AssignMemoryType::IsDimMultiple(const Shape& shape1, const Shape& shape2)
     return true;
 }
 
-size_t AssignMemoryType::CalcNZTensorSize(const LogicalTensorPtr& tensor) const
+size_t AssignMemoryType::CalcNzAlignedSize(const LogicalTensorPtr& tensor) const
 {
-    constexpr int64_t kAlignBytes = 4;
     constexpr int64_t kC0AlignBytes = 32;
     DataType dtype = tensor->Datatype();
     int64_t bytes = BytesOf(dtype);
@@ -2936,19 +2958,39 @@ size_t AssignMemoryType::CalcNZTensorSize(const LogicalTensorPtr& tensor) const
     if (bytes > 0) {
         c0 = static_cast<size_t>(kC0AlignBytes / bytes);
     }
-    if (c0 <= 0) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "CalcNZTensorSize: invalid C0 size, c0=%zu", c0);
-        // 返回原始 ND 格式大小作为 fallback
-        return outer * inner * static_cast<size_t>(bytes > 0 ? bytes : kAlignBytes);
+    if (c0 == 0) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "CalcNzAlignedSize: invalid C0 size, c0=%zu", c0);
+        return 0;
     }
     size_t alignedOuter = (outer + outerAlign - 1) / outerAlign * outerAlign + 1;
     size_t alignedInner = (inner + c0 - 1) / c0 * c0;
-    // NZ 格式大小
-    size_t nzSize = alignedOuter * alignedInner * static_cast<size_t>(bytes);
-    // ND 格式原始大小
-    size_t ndSize = outer * inner * static_cast<size_t>(bytes);
-    // ND + NZ 同时存在，需要两者之和
+    return alignedOuter * alignedInner * static_cast<size_t>(bytes);
+}
+
+size_t AssignMemoryType::CalcNZTensorSize(const LogicalTensorPtr& tensor) const
+{
+    constexpr int64_t kAlignBytes = 4;
+    int64_t bytes = BytesOf(tensor->Datatype());
+    size_t ndSize = tensor->GetShape()[0] * tensor->GetShape()[1] * static_cast<size_t>(bytes);
+    size_t nzSize = CalcNzAlignedSize(tensor);
+    // ND + NZ 同时存在，需要两者之和；C0 无法推导时退化为仅 ND 大小
+    if (nzSize == 0) {
+        return tensor->GetShape()[0] * tensor->GetShape()[1] * static_cast<size_t>(bytes > 0 ? bytes : kAlignBytes);
+    }
     return ndSize + nzSize;
+}
+
+size_t AssignMemoryType::CalcNzStorageSize(const LogicalTensorPtr& tensor) const
+{
+    constexpr int64_t kAlignBytes = 4;
+    int64_t bytes = BytesOf(tensor->Datatype());
+    size_t nzSize = CalcNzAlignedSize(tensor);
+    // C0 无法推导时退化为原始 ND 格式大小作为 fallback
+    if (nzSize == 0) {
+        return tensor->GetShape()[0] * tensor->GetShape()[1] * static_cast<size_t>(bytes > 0 ? bytes : kAlignBytes);
+    }
+    // 仅 NZ 布局大小
+    return nzSize;
 }
 
 Status AssignMemoryType::RunOnFunctionLegacy(Function& function)

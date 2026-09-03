@@ -1217,6 +1217,156 @@ TEST_F(AssignMemoryTypeTest, TestL0C2L1LargeToSmallMultiContractDdrFallback)
     EXPECT_GE(CountMemoryPath(currFunctionPtr.get(), MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1), 1);
 }
 
+// 负向用例（A5 + slice 新路径）：L0C2UB large-to-small 单 contract，但 middle（升级后驻留 L0C）
+// 的 NZ 布局大小超出 L0C（ND+NZ 亦超出 UB）时，不再走 L0C→UB 直通升级，middle 回落 DDR。
+// input [128,256] fp16 的 NZ 大小可被 L0C 容纳，保证用例仅由 middle 超限拦截。
+TEST_F(AssignMemoryTypeTest, TestL0C2UBLargeToSmallOversizedMiddleDdrFallback)
+{
+    config::SetPassOption(ENABLE_SLICE, true);
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Platform::Instance().ReloadMemoryPaths("3510");
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(),
+                                                      "TestL0C2UBLargeToSmallOversizedMiddleDdrFallback",
+                                                      "TestL0C2UBLargeToSmallOversizedMiddleDdrFallback", nullptr);
+    ASSERT_NE(currFunctionPtr, nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("TestL0C2UBLargeToSmallOversizedMiddleDdrFallback", currFunctionPtr);
+
+    std::vector<int64_t> shapeIn = {NUM_128, NUM_256};
+    std::vector<int64_t> shapeMiddle = {NUM_1024, NUM_256};
+    auto dynShapeIn = CreateTestConstIntVector(shapeIn);
+    auto dynShapeMiddle = CreateTestConstIntVector(shapeMiddle);
+    auto matmulOut = IRBuilder().CreateTensorVar(DT_FP16, shapeIn, dynShapeIn);
+    matmulOut->SetMemoryTypeBoth(MemoryType::MEM_L0C, true);
+    auto middle = IRBuilder().CreateTensorVar(DT_FP16, shapeMiddle, dynShapeMiddle);
+    constexpr int64_t sliceNum = NUM_1024 / NUM_128;
+    std::vector<std::shared_ptr<LogicalTensor>> ubOuts;
+    for (int64_t i = 0; i < sliceNum; i++) {
+        ubOuts.push_back(IRBuilder().CreateTensorVar(DT_FP16, shapeIn, dynShapeIn));
+    }
+
+    // 单 contract 将 [128,256] 的 L0C 输入写入超大 middle [1024,256]（NZ 超出 L0C），middle 仅被 slice 消费
+    auto& contractOp = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_CONTRACT, {matmulOut}, {middle});
+    contractOp.SetOpAttribute(
+        std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UNKNOWN, std::vector<int64_t>{0, 0}));
+    for (int64_t i = 0; i < sliceNum; i++) {
+        auto& sliceOp = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_SLICE, {middle}, {ubOuts[i]});
+        sliceOp.SetOpAttribute(
+            std::make_shared<ViewOpAttribute>(std::vector<int64_t>{i * NUM_128, 0}, MemoryType::MEM_UB));
+    }
+
+    AssignMemoryType assignMemoryType;
+    ASSERT_EQ(assignMemoryType.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    EXPECT_EQ(middle->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(CountMemoryPath(currFunctionPtr.get(), MemoryType::MEM_L0C, MemoryType::MEM_UB), 0);
+    EXPECT_GE(CountMemoryPath(currFunctionPtr.get(), MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR), 1);
+    EXPECT_GE(CountMemoryPath(currFunctionPtr.get(), MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB), 1);
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+    Platform::Instance().ReloadMemoryPaths("2201");
+}
+
+// 负向用例（A5 + slice 新路径）：UB2L1 large-to-small 的 middle 由 2 个 contract 产生（fan-in）时，
+// 不再走 UB→L1 直通升级，middle 回落 DDR。大搬小只能单 contract：多 contract 时 middle 侧带各
+// 自 to-offset、slice 侧带 from-offset，双侧 offset 底层直通路径无法处理。middle 大小可被 UB
+// 容纳（128 % 48 != 0 同时阻断 small-to-large 误升级），保证用例仅由多 contract 拦截。
+TEST_F(AssignMemoryTypeTest, TestUB2L1LargeToSmallMultiContractDdrFallback)
+{
+    config::SetPassOption(ENABLE_SLICE, true);
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Platform::Instance().ReloadMemoryPaths("3510");
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(),
+                                                      "TestUB2L1LargeToSmallMultiContractDdrFallback",
+                                                      "TestUB2L1LargeToSmallMultiContractDdrFallback", nullptr);
+    ASSERT_NE(currFunctionPtr, nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("TestUB2L1LargeToSmallMultiContractDdrFallback", currFunctionPtr);
+
+    std::vector<int64_t> shapeIn = {48, NUM_128};
+    std::vector<int64_t> shapeMiddle = {NUM_128, NUM_128};
+    auto dynShapeIn = CreateTestConstIntVector(shapeIn);
+    auto dynShapeMiddle = CreateTestConstIntVector(shapeMiddle);
+    auto ubTile1 = IRBuilder().CreateTensorVar(DT_FP32, shapeIn, dynShapeIn);
+    auto ubTile2 = IRBuilder().CreateTensorVar(DT_FP32, shapeIn, dynShapeIn);
+    ubTile1->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    ubTile2->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    auto middle = IRBuilder().CreateTensorVar(DT_FP32, shapeMiddle, dynShapeMiddle);
+    auto l1Out1 = IRBuilder().CreateTensorVar(DT_FP32, shapeIn, dynShapeIn);
+    auto l1Out2 = IRBuilder().CreateTensorVar(DT_FP32, shapeIn, dynShapeIn);
+
+    // 2 个 contract 共同写入同一 middle（fan-in），middle 仅被 slice 消费
+    auto& contractOp1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_CONTRACT, {ubTile1}, {middle});
+    contractOp1.SetOpAttribute(
+        std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UNKNOWN, std::vector<int64_t>{0, 0}));
+    auto& contractOp2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_CONTRACT, {ubTile2}, {middle});
+    contractOp2.SetOpAttribute(
+        std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UNKNOWN, std::vector<int64_t>{48, 0}));
+    auto& sliceOp1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_SLICE, {middle}, {l1Out1});
+    sliceOp1.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_L1));
+    auto& sliceOp2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_SLICE, {middle}, {l1Out2});
+    sliceOp2.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{48, 0}, MemoryType::MEM_L1));
+
+    AssignMemoryType assignMemoryType;
+    ASSERT_EQ(assignMemoryType.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    EXPECT_EQ(middle->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(CountMemoryPath(currFunctionPtr.get(), MemoryType::MEM_UB, MemoryType::MEM_L1), 0);
+    EXPECT_GE(CountMemoryPath(currFunctionPtr.get(), MemoryType::MEM_UB, MemoryType::MEM_DEVICE_DDR), 1);
+    EXPECT_GE(CountMemoryPath(currFunctionPtr.get(), MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1), 1);
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+    Platform::Instance().ReloadMemoryPaths("2201");
+}
+
+// 正向守护用例：UB2UB（同内存通路）的多 contract fan-in 是合法模式，不受大搬小的单 contract
+// 限制。ProcessUB2UBContractSlice 的前置检查（CanKeepContractProducersInUb 等）按多 producer
+// 语义编写，2 个 contract 拼入同一 middle、slice 全零行偏移读出时，middle 仍应驻留 UB。
+// 守护大搬小限制按 sourceType != targetType 收窄、不误伤 UB2UB 的修复。
+TEST_F(AssignMemoryTypeTest, TestUB2UBContractSliceMultiContractKeepsUb)
+{
+    config::SetPassOption(ENABLE_SLICE, true);
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Platform::Instance().ReloadMemoryPaths("3510");
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(),
+                                                      "TestUB2UBContractSliceMultiContractKeepsUb",
+                                                      "TestUB2UBContractSliceMultiContractKeepsUb", nullptr);
+    ASSERT_NE(currFunctionPtr, nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("TestUB2UBContractSliceMultiContractKeepsUb", currFunctionPtr);
+
+    std::vector<int64_t> shapeIn = {NUM_64, NUM_128};
+    std::vector<int64_t> shapeMiddle = {NUM_128, NUM_128};
+    auto dynShapeIn = CreateTestConstIntVector(shapeIn);
+    auto dynShapeMiddle = CreateTestConstIntVector(shapeMiddle);
+    auto ubTile1 = IRBuilder().CreateTensorVar(DT_FP32, shapeIn, dynShapeIn);
+    auto ubTile2 = IRBuilder().CreateTensorVar(DT_FP32, shapeIn, dynShapeIn);
+    ubTile1->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    ubTile2->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    auto middle = IRBuilder().CreateTensorVar(DT_FP32, shapeMiddle, dynShapeMiddle);
+    auto ubOut1 = IRBuilder().CreateTensorVar(DT_FP32, shapeIn, dynShapeIn);
+    auto ubOut2 = IRBuilder().CreateTensorVar(DT_FP32, shapeIn, dynShapeIn);
+
+    // 2 个 contract 以 32B 对齐的 to-offset 拼入同一 middle（fan-in），middle 仅被 slice 消费，
+    // slice 的 from-offset 行偏移全 0，满足 ProcessUB2UBContractSlice 全部前置检查
+    auto& contractOp1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_CONTRACT, {ubTile1}, {middle});
+    contractOp1.SetOpAttribute(
+        std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UNKNOWN, std::vector<int64_t>{0, 0}));
+    auto& contractOp2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_CONTRACT, {ubTile2}, {middle});
+    contractOp2.SetOpAttribute(
+        std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UNKNOWN, std::vector<int64_t>{NUM_64, 0}));
+    auto& sliceOp1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_SLICE, {middle}, {ubOut1});
+    sliceOp1.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_UB));
+    auto& sliceOp2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_SLICE, {middle}, {ubOut2});
+    sliceOp2.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_UB));
+
+    AssignMemoryType assignMemoryType;
+    ASSERT_EQ(assignMemoryType.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    // 多 contract 的 UB2UB middle 仍驻留 UB（存在 UB→UB 通路），不回落 DDR
+    EXPECT_EQ(middle->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+    EXPECT_GE(CountMemoryPath(currFunctionPtr.get(), MemoryType::MEM_UB, MemoryType::MEM_UB), 1);
+    EXPECT_EQ(CountMemoryPath(currFunctionPtr.get(), MemoryType::MEM_UB, MemoryType::MEM_DEVICE_DDR), 0);
+    EXPECT_EQ(CountMemoryPath(currFunctionPtr.get(), MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB), 0);
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+    Platform::Instance().ReloadMemoryPaths("2201");
+}
+
 TEST_F(AssignMemoryTypeTest, TestL0C2L1SmallToLarge)
 {
     config::SetHostConfig(KEY_STRATEGY, "AssignMemoryTypeTestStrategy");

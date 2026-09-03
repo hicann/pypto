@@ -264,6 +264,8 @@ private:
     bool IsDimMultiple(const Shape& shape1, const Shape& shape2);
     bool CheckInnerAxisC0Size(const LogicalTensorPtr& input, const LogicalTensorPtr& output) const;
     size_t CalcNZTensorSize(const LogicalTensorPtr& tensor) const;
+    size_t CalcNzStorageSize(const LogicalTensorPtr& tensor) const;
+    size_t CalcNzAlignedSize(const LogicalTensorPtr& tensor) const;
     Status CalcLineOffset(const Shape& shape, const Offset& offset, int64_t& lineOffset) const;
     Status RunOnFunctionLegacy(Function& function);
     ConvertInserter inserter;
@@ -271,6 +273,7 @@ private:
 };
 static constexpr double UB_THRESHOLD_ASSEMBLE = 0.35;
 static constexpr double UB_THRESHOLD_NORMAL = 1.0;
+static constexpr double L0C_THRESHOLD = 1.0;
 static constexpr double L1_THRESHOLD = 0.5;
 } // namespace npu::tile_fwk
 
