@@ -218,7 +218,8 @@ public:
         if (IsPtoDataDumpEnabled()) { // dump tensor
             devProg->devArgs.hostPid = GetProcessId();
         }
-        devProg->devArgs.enableAicoreResolve = IsAicoreResolveEnabled() && IsDeviceMode();
+        devProg->devArgs.enableAicoreResolve = IsAicoreResolveEnabled() &&
+                                               config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) != CFG_RUN_MODE_SIM;
         if (isDevice) {
             devProg->devArgs.validGetPgMask = RuntimeAgent::GetAgent().GetValidGetPgMask();
         }
