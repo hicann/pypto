@@ -31,6 +31,7 @@ enum class AclFunc {
     RtStreamWaitEvent,
     RtGetStreamResLimit,
     RtGetStreamAttribute,
+    RtSetStreamAttribute,
     RtCacheLastTaskOpInfo,
     RtSetExceptionInfoCallback,
     MdlRICaptureGetInfo,
@@ -59,6 +60,7 @@ const std::map<AclFunc, std::string> kAclFuncStrMap{
     {AclFunc::RtStreamWaitEvent, "aclrtStreamWaitEvent"},
     {AclFunc::RtGetStreamResLimit, "aclrtGetStreamResLimit"},
     {AclFunc::RtGetStreamAttribute, "aclrtGetStreamAttribute"},
+    {AclFunc::RtSetStreamAttribute, "aclrtSetStreamAttribute"},
     {AclFunc::RtCacheLastTaskOpInfo, "aclrtCacheLastTaskOpInfo"},
     {AclFunc::RtSetExceptionInfoCallback, "aclrtSetExceptionInfoCallback"},
     {AclFunc::MdlRICaptureGetInfo, "aclmdlRICaptureGetInfo"},
@@ -71,4 +73,12 @@ const std::map<AclFunc, std::string> kAclFuncStrMap{
     {AclFunc::BinaryLoadFromFile, "aclrtBinaryLoadFromFile"},
     {AclFunc::BinaryGetFunction, "aclrtBinaryGetFunction"},
     {AclFunc::SysGetVersionStr, "aclsysGetVersionStr"}};
+
+enum class AclNewFunc { NoBlockingLaunchBegin, NoBlockingLaunchEnd, Bottom };
+
+const std::string newAclLibName = "libacl_rt.so";
+const std::map<AclNewFunc, std::string> aclNewFuncStrMap{
+    {AclNewFunc::NoBlockingLaunchBegin, "aclrtNoBlockingLaunchBegin"},
+    {AclNewFunc::NoBlockingLaunchEnd, "aclrtNoBlockingLaunchEnd"},
+};
 } // namespace npu::tile_fwk

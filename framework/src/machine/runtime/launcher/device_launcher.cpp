@@ -553,6 +553,33 @@ int DeviceLauncher::LaunchAicoreKernel(AclRtStream aicoreStream, void* kernel, R
     return ret;
 }
 
+// 在这个范围之类的流不受ASCENT_RT_LAUNCH_BLOCKING的影响, 依旧是异步
+int32_t DeviceLauncher::SetLaunchNoBlocking(const AclRtStream& aicoreStream)
+{
+    auto schedStream = GetStreamContext().GetScheStream();
+    auto ctrlStream = GetStreamContext().GetCtrlStream();
+    int32_t ret = 0;
+    AclRtStreamAttrValue attrValue;
+    attrValue.launchBlockingMode = 1;
+    ret = AclRtSetStreamAttribute(schedStream, npu::tile_fwk::AclRtStreamAttr::STREAM_ATTR_LAUNCH_BLOCKING, &attrValue);
+    if (ret != 0) {
+        MACHINE_LOGW("ScheStream Launch set no blocking failed, ret: %d", ret);
+        return static_cast<int32_t>(MachineError::HOST_LAUNCHER);
+    }
+    ret = AclRtSetStreamAttribute(ctrlStream, npu::tile_fwk::AclRtStreamAttr::STREAM_ATTR_LAUNCH_BLOCKING, &attrValue);
+    if (ret != 0) {
+        MACHINE_LOGW("CtrlStream Launch set no blocking failed, ret: %d", ret);
+        return static_cast<int32_t>(MachineError::HOST_LAUNCHER);
+    }
+    ret = AclRtSetStreamAttribute(aicoreStream, npu::tile_fwk::AclRtStreamAttr::STREAM_ATTR_LAUNCH_BLOCKING,
+                                  &attrValue);
+    if (ret != 0) {
+        MACHINE_LOGW("AicoreStream Launch set no blocking failed, ret: %d", ret);
+        return static_cast<int32_t>(MachineError::HOST_LAUNCHER);
+    }
+    return ret;
+}
+
 int DeviceLauncher::LaunchKernel(AclRtStream aicoreStream, uint8_t* ctrlFlowCache, KernelBinary* kernel,
                                  int64_t* workspace, const std::vector<DeviceTensorData>& tensors, bool isDebugMode,
                                  int launchEarlyMode)
@@ -592,6 +619,13 @@ int DeviceLauncher::LaunchKernel(AclRtStream aicoreStream, uint8_t* ctrlFlowCach
     MACHINE_ASSERT(ret == 0) << "set dev perf addr failed: " << ret;
     if (!isCaptureMode) {
         args->kArgs.toSubMachineConfig = kernel->GetMachineConfig();
+    }
+    bool isEnableBlocking = IsLaunchBlockingEnabled();
+    if (!isCaptureMode && isEnableBlocking) {
+        // 更新runtime 包场景这里失败需要中断，当前考虑CI和本地无runtime 包更新场景暂时warn 提示下
+        if (SetLaunchNoBlocking(aicoreStream) != 0) {
+            MACHINE_LOGW("May exect failed, please update CANN Package");
+        }
     }
     ret = LaunchAicpuKernel(aicpuLaunchDesc, debugEnable, kernel->GetFunction(), tensors);
     MACHINE_ASSERT(ret == RT_SUCCESS) << "launch aicpu failed: " << ret;

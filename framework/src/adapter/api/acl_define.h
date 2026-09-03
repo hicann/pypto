@@ -85,6 +85,8 @@ enum class AclRtStreamAttr {
     FLOAT_OVERFLOW_CHECK = 2,
     USER_CUSTOM_TAG = 3,
     CACHE_OP_INFO = 4,
+    STREAM_ATTR_PRIORITY = 5,
+    STREAM_ATTR_LAUNCH_BLOCKING = 6,
 };
 
 typedef union {
@@ -92,7 +94,9 @@ typedef union {
     uint32_t overflowSwitch;
     uint32_t userCustomTag;
     uint32_t cacheOpInfoSwitch;
-    uint32_t reserve[4];
+    uint32_t streamPriority;
+    uint8_t launchBlockingMode;
+    uint32_t rsv[4];
 } AclRtStreamAttrValue;
 
 enum class AclRtDevResLimitType {

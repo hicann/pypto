@@ -30,6 +30,12 @@ AdapterManager::AdapterManager()
         ADAPTER_LOGI("Acl adapter has been initialized from library[%s] successfully.", kAclLibName.c_str());
     }
 
+    if (!aclNewAdapter_.Initialize(newAclLibName, aclNewFuncStrMap)) {
+        ADAPTER_LOGI("New Acl adapter has not been initialized from library[%s].", newAclLibName.c_str());
+    } else {
+        ADAPTER_LOGI("New Acl adapter has been initialized from library[%s] successfully.", newAclLibName.c_str());
+    }
+
     if (!adumpAdapter_.Initialize(kAdumpLibName, kAdumpFuncStrMap)) {
         ADAPTER_LOGI("Adump adapter has not been initialized from library[%s].", kAdumpLibName.c_str());
     } else {

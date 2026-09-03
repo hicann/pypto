@@ -33,11 +33,13 @@ public:
     const CannAdapter<HcclFunc>& GetHcclAdapter() const { return hcclAdapter_; }
     const CannAdapter<MsprofFunc>& GetMsprofAdapter() const { return msprofAdapter_; }
     const CannAdapter<RuntimeFunc>& GetRuntimeAdapter() const { return runtimeAdapter_; }
+    const CannAdapter<AclNewFunc>& GetAclNewAdapter() const { return aclNewAdapter_; }
 
 private:
     AdapterManager();
     ~AdapterManager();
     CannAdapter<AclFunc> aclAdapter_;
+    CannAdapter<AclNewFunc> aclNewAdapter_;
     CannAdapter<AdumpFunc> adumpAdapter_;
     CannAdapter<HalFunc> halAdapter_;
     CannAdapter<HcclFunc> hcclAdapter_;

@@ -124,6 +124,15 @@ AclError StubRtGetStreamAttribute(AclRtStream stream, AclRtStreamAttr stmAttrTyp
     return ACLRT_SUCCESS;
 }
 
+AclError StubRtSetStreamAttribute(AclRtStream stream, AclRtStreamAttr stmAttrType, AclRtStreamAttrValue* value)
+{
+    ADAPTER_LOGD("Enter stub function of AclRtSetStreamAttribute.");
+    (void)stream;
+    (void)stmAttrType;
+    (void)value;
+    return ACLRT_SUCCESS;
+}
+
 AclError StubRtCacheLastTaskOpInfo(const void* const infoPtr, size_t infoSize)
 {
     ADAPTER_LOGD("Enter stub function of AclRtCacheLastTaskOpInfo.");

@@ -31,6 +31,7 @@ AclError StubRtCreateEventExWithFlag(AclRtEvent* event, uint32_t flag);
 AclError StubRtStreamWaitEvent(AclRtStream stream, AclRtEvent event);
 AclError StubRtGetStreamResLimit(AclRtStream stream, AclRtDevResLimitType type, uint32_t* value);
 AclError StubRtGetStreamAttribute(AclRtStream stream, AclRtStreamAttr stmAttrType, AclRtStreamAttrValue* value);
+AclError StubRtSetStreamAttribute(AclRtStream stream, AclRtStreamAttr stmAttrType, AclRtStreamAttrValue* value);
 AclError StubRtCacheLastTaskOpInfo(const void* const infoPtr, size_t infoSize);
 AclError StubRtSetExceptionInfoCallback(AclRtExceptionInfoCallback callback);
 AclError StubRtCreateStream(AclRtStream* stream);

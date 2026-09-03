@@ -29,6 +29,7 @@ AclError AclRtCreateEventExWithFlag(AclRtEvent* event, uint32_t flag);
 AclError AclRtStreamWaitEvent(AclRtStream stream, AclRtEvent event);
 AclError AclRtGetStreamResLimit(AclRtStream stream, AclRtDevResLimitType type, uint32_t* value);
 AclError AclRtGetStreamAttribute(AclRtStream stream, AclRtStreamAttr stmAttrType, AclRtStreamAttrValue* value);
+AclError AclRtSetStreamAttribute(AclRtStream stream, AclRtStreamAttr stmAttrType, AclRtStreamAttrValue* value);
 AclError AclRtCacheLastTaskOpInfo(const void* const infoPtr, size_t infoSize);
 AclError AclRtSetExceptionInfoCallback(AclRtExceptionInfoCallback callback);
 AclError AclMdlRICaptureGetInfo(AclRtStream stream, AclMdlRICaptureStatus* status, AclMdlRI* modelRI);
@@ -41,4 +42,6 @@ AclError AclRtDestroyStream(AclRtStream stream);
 AclError AclRtBinaryLoadFromFile(const char* binPath, AclRtBinaryLoadOptions* options, AclRtBinHandle* binHandle);
 AclError AclRtBinaryGetFunction(AclRtBinHandle binHandle, const char* kernelName, AclRtFuncHandle* funcHandle);
 AclError AclSysGetVersionStr(const char* pkgName, char* versionStr);
+AclError AclRtNoBlockingLaunchBegin(AclRtStream stream, uint64_t flag);
+AclError AclRtNoBlockingLaunchEnd(AclRtStream stream, uint64_t flag);
 } // namespace npu::tile_fwk

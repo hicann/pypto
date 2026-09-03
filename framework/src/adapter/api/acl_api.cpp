@@ -188,6 +188,20 @@ AclError AclRtGetStreamAttribute(AclRtStream stream, AclRtStreamAttr stmAttrType
     return StubRtGetStreamAttribute(stream, stmAttrType, value);
 }
 
+AclError AclRtSetStreamAttribute(AclRtStream stream, AclRtStreamAttr stmAttrType, AclRtStreamAttrValue* value)
+{
+#ifdef BUILD_WITH_CANN
+    void* func = AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::RtSetStreamAttribute);
+    if (func != nullptr) {
+        aclError (*aclFunc)(aclrtStream, aclrtStreamAttr, aclrtStreamAttrValue*) = reinterpret_cast<aclError (*)(
+            aclrtStream, aclrtStreamAttr, aclrtStreamAttrValue*)>(func);
+        return aclFunc(stream, static_cast<aclrtStreamAttr>(stmAttrType),
+                       reinterpret_cast<aclrtStreamAttrValue*>(value));
+    }
+#endif
+    return StubRtSetStreamAttribute(stream, stmAttrType, value);
+}
+
 AclError AclRtCacheLastTaskOpInfo(const void* const infoPtr, size_t infoSize)
 {
 #ifdef BUILD_WITH_CANN
@@ -317,6 +331,35 @@ AclError AclSysGetVersionStr(const char* pkgName, char* versionStr)
 #endif
     return StubSysGetVersionStr(pkgName, versionStr);
 }
+
+AclError AclRtNoBlockingLaunchBegin(AclRtStream stream, uint64_t flag)
+{
+#ifdef BUILD_WITH_CANN
+    void* func = AdapterManager::Instance().GetAclNewAdapter().GetFunction(AclNewFunc::NoBlockingLaunchBegin);
+    if (func != nullptr) {
+        aclError (*aclFunc)(AclRtStream, uint64_t) = reinterpret_cast<aclError (*)(AclRtStream, uint64_t)>(func);
+        return aclFunc(stream, flag);
+    }
+#endif
+    (void)stream;
+    (void)flag;
+    return 0;
+}
+
+AclError AclRtNoBlockingLaunchEnd(AclRtStream stream, uint64_t flag)
+{
+#ifdef BUILD_WITH_CANN
+    void* func = AdapterManager::Instance().GetAclNewAdapter().GetFunction(AclNewFunc::NoBlockingLaunchEnd);
+    if (func != nullptr) {
+        aclError (*aclFunc)(AclRtStream, uint64_t) = reinterpret_cast<aclError (*)(AclRtStream, uint64_t)>(func);
+        return aclFunc(stream, flag);
+    }
+#endif
+    (void)stream;
+    (void)flag;
+    return 0;
+}
+
 #ifdef BUILD_WITH_CANN
 static_assert(std::is_same<AclError, aclError>::value);
 static_assert(std::is_same<AclRtStream, aclrtStream>::value);

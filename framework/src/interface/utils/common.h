@@ -485,6 +485,17 @@ inline bool IsAicoreResolveEnabled()
     return result;
 }
 
+// 判断环境变量 export ASCEND_RT_LAUNCH_BLOCKING是否为1
+inline bool IsLaunchBlockingEnabled()
+{
+    static const bool result = []() {
+        std::string value = GetEnvVar("ASCEND_RT_LAUNCH_BLOCKING", true, true);
+        return (value == "1");
+    }();
+
+    return result;
+}
+
 // 向上取整除法
 inline int CeilDiv(int a, int b)
 {

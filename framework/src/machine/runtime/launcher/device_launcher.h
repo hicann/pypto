@@ -495,6 +495,7 @@ public:
                                   bool debugEnable, [[maybe_unused]] Function* function);
     static int LaunchKernel(AclRtStream aicoreStream, uint8_t* ctrlFlowCache, KernelBinary* kernel, int64_t* workspace,
                             const std::vector<DeviceTensorData>& tensors, bool isDebugMode, int launchEarlyMode);
+    static int32_t SetLaunchNoBlocking(const AclRtStream& aicoreStream);
     static int DeviceRunOnce(Function* function, DevControlFlowCache* hostCtrlCache = nullptr,
                              const DeviceLauncherConfig& config = DeviceLauncherConfig());
     static void EmulationLaunch(Function* function, const std::vector<DeviceTensorData>& tensors,
