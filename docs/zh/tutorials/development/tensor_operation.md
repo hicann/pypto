@@ -74,11 +74,9 @@ PyPTO为张量计算提供了一套全面的操作，旨在为用户提供高效
     result = pypto.sigmoid(x)  # 1 / (1 + exp(-x))
     result = x.sigmoid()
 
-    # ReLU变体
+    # ReLU
     result = pypto.relu(x)     # 最大值(0, x)
-    result = pypto.gelu(x)     # GELU激活
     result = x.relu()
-    result = x.gelu()
 
     # Softmax
     result = pypto.softmax(x, dim=-1)  # 沿着dim维度做Softmax
