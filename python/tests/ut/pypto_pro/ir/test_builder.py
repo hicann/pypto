@@ -346,7 +346,6 @@ def test_iter_arg_with_inferred_type():
 
             assert sum_iter.name == "sum"
             assert isinstance(sum_iter.iterVar.type, ir.ScalarType)
-            # Integer literal 0 defaults to DEFAULT_CONST_INT = INDEX
             assert sum_iter.iterVar.type.dtype == DataType.INDEX
 
     func = f.get_result()

@@ -200,7 +200,7 @@ def test_mutex_ir_builder_normalizes_python_int_id(builder):
 @pytest.mark.parametrize("builder", [pl.system.sync_src, pl.system.sync_dst])
 @pytest.mark.parametrize("event_id", [-1, 8])
 def test_sync_static_event_id_range_is_validated_by_frontend(builder, event_id):
-    with pytest.raises(ValueError, match=r"event_id must be in \[0, 8\)"):
+    with pytest.raises(ValueError, match=r"event_id must be in \[0, 7\]"):
         builder(
             set_pipe=pl.PipeType.MTE2,
             wait_pipe=pl.PipeType.V,
@@ -231,7 +231,7 @@ def test_sync_rejects_all_pipe_in_frontend(builder, set_pipe, wait_pipe):
 @pytest.mark.parametrize("builder", [pl.system.mutex_lock, pl.system.mutex_unlock])
 @pytest.mark.parametrize("mutex_id", [-1, 32])
 def test_mutex_static_id_range_is_validated_by_frontend(builder, mutex_id):
-    with pytest.raises(ValueError, match=r"mutex_id must be in \[0, 32\)"):
+    with pytest.raises(ValueError, match=r"mutex_id must be in \[0, 31\]"):
         builder(pipe=pl.PipeType.MTE2, mutex_id=_const_int(mutex_id))
 
 

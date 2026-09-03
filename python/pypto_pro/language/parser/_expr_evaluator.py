@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from pypto.pypto_impl import ir
 from pypto.pypto_impl.ir import DataType
 
-from .diagnostics import ParserTypeError
+from .diagnostics import ParserTypeError, make_const_int
 
 if TYPE_CHECKING:
     from ._span_tracker import SpanTracker
@@ -246,7 +246,7 @@ class ExprEvaluator:
         if isinstance(value, bool):
             return ir.ConstBool(value, span)
         if isinstance(value, int):
-            return ir.ConstInt(value, DataType.INDEX, span)
+            return make_const_int(value, DataType.INDEX, span=span)
         if isinstance(value, float):
             return ir.ConstFloat(value, DataType.DEFAULT_CONST_FLOAT, span)
         if isinstance(value, ir.Expr):

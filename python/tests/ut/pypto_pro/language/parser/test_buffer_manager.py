@@ -784,7 +784,7 @@ def test_make_tile_group_rejects_bool_mutex_id(mutex_ids):
         tt = pl.TileType(shape=[32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         pl.make_tile_group(type=tt, addrs=0, mutex_ids=mutex_ids)
 
-    with pytest.raises(ParserTypeError, match=r"mutex_ids must be ints in \[0,31\]"):
+    with pytest.raises(ParserTypeError, match=r"mutex_ids must be ints, got"):
         _parse_kernel(k)
 
 
@@ -799,7 +799,7 @@ def test_make_tile_group_rejects_out_of_range_mutex_id(mutex_ids):
         tt = pl.TileType(shape=[32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         pl.make_tile_group(type=tt, addrs=0, mutex_ids=mutex_ids)
 
-    with pytest.raises(ParserTypeError, match=r"mutex_ids must be ints in \[0,31\]"):
+    with pytest.raises(ParserTypeError, match=r"ErrCode: F00001, mutex_ids element must be in \[0, 31\]"):
         _parse_kernel(k)
 
 

@@ -87,6 +87,7 @@ def test_cce_sels_emits_tsels():
     # TSELS(dst, mask, src, tmp, scalar) — pto-isa form.
     assert "TSELS(out_0, mask_0, src_0, tmp_0, " in cpp, "Expected TSELS(dst, mask, src, tmp, scalar)"
     # The scalar operand (0.0) is the last argument. CCE codegen emits float
-    # literals with the C++ "f" suffix (e.g. 0.000000f) for correct float type.
+    # literals with the C++ "f" suffix for correct float type, and keeps the ".0"
+    # so an integral value still reads as a float rather than an int.
     tsels_line = next(line for line in cpp.splitlines() if "TSELS(" in line)
-    assert tsels_line.rstrip().endswith("0.000000f);"), f"scalar should be last arg: {tsels_line}"
+    assert tsels_line.rstrip().endswith("0.0f);"), f"scalar should be last arg: {tsels_line}"

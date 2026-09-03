@@ -110,6 +110,15 @@ class AssignmentParserMixin:
     # Ops where dst type differs from src type — dtype kwarg is mandatory.
     _TYPE_CHANGING_OPS = frozenset({"astype", "muls_cast", "pack", "unpack", "bit_cast"})
 
+    @staticmethod
+    def _infer_src_dtype(parsed_src_args: list) -> DataType | None:
+        """The dtype of the first source that carries one, or None if no source does."""
+        for src_expr in parsed_src_args:
+            dtype = getattr(getattr(src_expr, 'type', None), 'dtype', None)
+            if dtype is not None:
+                return dtype
+        return None
+
     def _parse_vf_assignment(
         self,
         target: ast.expr,
@@ -203,17 +212,10 @@ class AssignmentParserMixin:
         # Also use this pass to infer dtype if not already determined.
         parsed_src_args = [self.parse_expression(src_arg) for src_arg in call.args]
 
+        src_dtype = self._infer_src_dtype(parsed_src_args)
+
         if dtype_val is None:
-            for src_expr in parsed_src_args:
-                src_type = getattr(src_expr, 'type', None)
-                if src_type is None:
-                    continue
-                if hasattr(src_type, 'dtype'):
-                    dtype_val = src_type.dtype
-                    break
-                if hasattr(src_type, 'element_dtype'):
-                    dtype_val = src_type.element_dtype
-                    break
+            dtype_val = src_dtype
 
         if dtype_val is None:
             raise ParserTypeError(
@@ -221,6 +223,12 @@ class AssignmentParserMixin:
                 f"Pass dtype=pl.DT_FP32 (or appropriate type) as a kwarg.",
                 span=span,
             )
+
+        # A scalar operand is checked against the dtype it is actually encoded in. That is dtype_val
+        # -- the dst dtype -- except for a type-changing op, where dtype_val names the dst and the
+        # operand still lives in the source domain (vf.muls_cast scales an fp32 src, then casts).
+        operand_dtype = src_dtype if vf_op_name in self._TYPE_CHANGING_OPS else dtype_val
+        self._check_vf_scalar_operands(vf_op_name, parsed_src_args, operand_dtype, span)
 
         # Re-inject dtype into kwargs iff the backend op carries it as an IR
         # attribute; otherwise it has already been stripped above.

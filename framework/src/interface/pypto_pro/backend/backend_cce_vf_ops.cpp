@@ -108,36 +108,32 @@ static DataType GetExprDtype(const ir::ExprPtr& expr, DataType fallback = DataTy
 // Coerce a float-constant scalar to an integer literal matching the src type,
 // so that the emitted intrinsic (vmuls/vadds/vmins/vmaxs/vcmps_*/vaxpy)
 // receives a correctly-typed integer literal instead of a float literal
-// that would trigger -Wliteral-conversion. Matches AscendC's implicit
-// float→int truncation behavior (silent, mod 2^N wrap).
+// that would trigger -Wliteral-conversion. The value is truncated to the width
+// of src_dt, matching AscendC's implicit float→int conversion. The front end now
+// rejects a scalar the src type cannot represent, so what reaches here is only
+// the fractional part being dropped — not a value silently wrapping.
 static std::string CoerceScalarToInt(const ir::ExprPtr& scalar_expr, const DataType& src_dt,
                                      const std::string& original_str)
 {
     if (!src_dt.IsInt()) {
         return original_str;
     }
-    if (auto cf = ir::As<ir::ConstFloat>(scalar_expr)) {
-        int64_t v = static_cast<int64_t>(cf->value_);
-        if (src_dt == DataType::INT16) {
-            return std::to_string(static_cast<int64_t>(static_cast<int16_t>(v)));
-        }
-        if (src_dt == DataType::UINT16) {
-            return std::to_string(static_cast<uint64_t>(static_cast<uint16_t>(v))) + "u";
-        }
-        if (src_dt == DataType::INT32) {
-            return std::to_string(static_cast<int64_t>(static_cast<int32_t>(v)));
-        }
-        if (src_dt == DataType::UINT32) {
-            return std::to_string(static_cast<uint64_t>(static_cast<uint32_t>(v))) + "u";
-        }
-        if (src_dt == DataType::INT64) {
-            return std::to_string(v);
-        }
-        if (src_dt == DataType::UINT64) {
-            return std::to_string(static_cast<uint64_t>(v)) + "u";
-        }
+    auto cf = ir::As<ir::ConstFloat>(scalar_expr);
+    if (cf == nullptr) {
+        return original_str;
     }
-    return original_str;
+    const size_t bits = src_dt.GetBit();
+    if (bits == 0 || bits > 64) {
+        return original_str;
+    }
+    const auto raw = static_cast<uint64_t>(static_cast<int64_t>(cf->value_));
+    const uint64_t truncated = (bits == 64) ? raw : (raw & ((static_cast<uint64_t>(1) << bits) - 1));
+    if (src_dt.IsUnsignedInt()) {
+        return std::to_string(truncated) + "u";
+    }
+    // Sign-extend back out of the truncated width.
+    const uint64_t sign_bit = static_cast<uint64_t>(1) << (bits - 1);
+    return std::to_string(static_cast<int64_t>((truncated ^ sign_bit) - sign_bit));
 }
 
 // For ops that only support ZEROING: return "MODE_ZEROING", reject MERGING.

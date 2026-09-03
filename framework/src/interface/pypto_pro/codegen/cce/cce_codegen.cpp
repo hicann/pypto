@@ -1790,7 +1790,7 @@ void CCECodegen::VisitExpr_(const ir::MakeTuplePtr& op)
 void CCECodegen::VisitExpr_(const ir::ConstIntPtr& op)
 {
     INTERNAL_CHECK(op != nullptr) << "Internal error: null ConstInt";
-    current_expr_value_ = std::to_string(op->value_);
+    current_expr_value_ = FormatIntCLiteral(op->value_, op->dtype());
 }
 
 void CCECodegen::VisitExpr_(const ir::ConstFloatPtr& op)
@@ -1802,9 +1802,7 @@ void CCECodegen::VisitExpr_(const ir::ConstFloatPtr& op)
     } else if (std::isinf(val)) {
         current_expr_value_ = val > 0 ? "__builtin_huge_valf()" : "(-__builtin_huge_valf())";
     } else {
-        std::string literal = std::to_string(val);
-        literal += "f";
-        current_expr_value_ = literal;
+        current_expr_value_ = FormatFloatCLiteral(val) + "f";
     }
 }
 

@@ -13,9 +13,9 @@
   1. 覆盖 with_params control_flow 场景的前端语法、编译入口与运行验证。
   2. 覆盖 dtype 泛化：DT_INT32; Tensor 维度/shape 泛化：无。
   3. 覆盖控制流组合：for 循环、while 循环、if/elif/else 分支、with section 上下文、break 跳转、
-     无值 return 提前退出、constexpr 编译期条件。
+     无值 return 提前退出。
   4. 覆盖接口组合：基础算术运算、Tensor 与 Tile 数据搬运、section_vector/section_cube 上下文。
-  5. 覆盖边界场景：scalar 参数驱动 range stop/step、if flag、while condition、constexpr 和函数边界。
+  5. 覆盖边界场景：scalar 参数驱动 range stop/step、if flag、while condition 和函数边界。
 """
 
 import logging
@@ -276,42 +276,9 @@ def make_for_if_break_scalar_kernel(dtype, name_suffix=""):
 
 
 # ===================================================================
-# constexpr_scalar: constexpr branch with scalar
 # ===================================================================
 
 
-def make_constexpr_scalar_kernel(dtype, name_suffix=""):
-    # =============================================================================
-    # Test 6: 标量参数 + constexpr
-    #         scalar parameter + constexpr
-    # =============================================================================
-    @pl.jit(auto_mutex=True, name=name_suffix or None)
-    def kernel(
-        x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], dtype],
-        y: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], dtype],
-        z: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], dtype],
-    ):
-        m = x.shape[0]
-        n = x.shape[1]
-        tile_type = pl.TileType(shape=[TILE_M, TILE_N], dtype=dtype, target_memory=pl.MemorySpace.Vec)
-        a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
-        b_db = pl.make_tile_group(type=tile_type, addrs=_addr_b(dtype), mutex_ids=[2, 3])
-        c_db = pl.make_tile_group(type=tile_type, addrs=_addr_c(dtype), mutex_ids=[30, 31])
-        with pl.section_vector():
-            for i in pl.range(0, m // TILE_M, 1):
-                for j in pl.range(0, n // TILE_N, 1):
-                    tile_a = a_db.next()
-                    tile_b = b_db.next()
-                    tile_c = c_db.next()
-                    pl.load_tile(tile_a, x, [i, j])
-                    pl.load_tile(tile_b, y, [i, j])
-                    if pl.constexpr(True):
-                        pl.add(tile_c, tile_a, tile_b)
-                    else:
-                        pl.sub(tile_c, tile_a, tile_b)
-                    pl.store_tile(z, tile_c, [i, j])
-
-    return kernel
 
 
 # ===================================================================
@@ -354,7 +321,7 @@ def make_func_range_bound_kernel(dtype, name_suffix=""):
                     tile_c = c_db.next()
                     pl.load_tile(tile_a, x, [i, j])
                     pl.load_tile(tile_b, y, [i, j])
-                    if pl.constexpr(True):
+                    if True:
                         pl.add(tile_c, tile_a, tile_b)
                     else:
                         pl.sub(tile_c, tile_a, tile_b)
@@ -501,21 +468,6 @@ def test_for_if_break_scalar():
         logging.info("test_for_if_break_scalar [%s] passed! shape=%s", label, shape)
 
 
-@pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
-def test_constexpr_scalar():
-    device = ST_DEVICE
-    torch.npu.set_device(device)
-    torch.manual_seed(0)
-    shape = [128, 64]
-    for pl_dt, tdt, label, atol, rtol in DTYPES_FP16:
-        kernel = make_constexpr_scalar_kernel(pl_dt, f"constexpr_scalar_{label}")
-        x, y, z = _gen(shape, tdt, device)
-        kernel(x, y, z)
-        torch.npu.synchronize()
-        z_ref = _ref(tdt, lambda a, b: a + b, x, y)
-        torch.testing.assert_close(z, z_ref, atol=atol, rtol=rtol)
-        logging.info("test_constexpr_scalar [%s] passed! shape=%s", label, shape)
 
 
 @pytest.mark.soc("950")
@@ -575,7 +527,6 @@ if __name__ == "__main__":
     test_if_scalar_flag()
     test_while_scalar_cond()
     test_for_if_break_scalar()
-    test_constexpr_scalar()
     test_func_range_bound()
     test_if_func_bool_expr()
     logging.info("\nAll tests passed!")

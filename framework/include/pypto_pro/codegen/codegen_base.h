@@ -93,69 +93,6 @@ public:
      */
     virtual std::string GetVarName(const ir::VarPtr& var) = 0;
 
-    /**
-     * \brief Get the data pointer expression for a tensor variable
-     *
-     * Returns the C++ expression to access a tensor's raw data pointer.
-     * For external tensors returns "arg_<name>_ptr" or "<name>.data" for local tensors.
-     *
-     * \param tensor_name Tensor variable name
-     * \return C++ expression for the data pointer (e.g., "arg_x_ptr", "x.data")
-     */
-    [[nodiscard]] virtual std::string GetTensorDataPtr(const std::string& tensor_name) const
-    {
-        (void)tensor_name;
-        throw ir::ValueError("GetTensorDataPtr not implemented for this codegen");
-    }
-
-    /**
-     * \brief Get the external tensor name for a variable
-     *
-     * Returns the name used to reference a tensor in generated code.
-     * For external tensors (params/returns), returns "ext_<name>".
-     * For local tensors, returns the name as-is.
-     *
-     * \param name Tensor variable name
-     * \return External tensor name (e.g., "ext_x" or "x")
-     */
-    [[nodiscard]] virtual std::string GetExternalTensorName(const std::string& name) const { return name; }
-
-    /**
-     * \brief Get the runtime DataType enum string for generated code
-     *
-     * Returns the fully qualified DataType enum name as used by the runtime
-     * (e.g., "DataType::FLOAT32", "DataType::INT64"). Subclasses can override
-     * to match their target runtime's DataType enum naming.
-     *
-     * \param dtype The data type to convert
-     * \return Runtime DataType string (e.g., "DataType::FLOAT32")
-     */
-    [[nodiscard]] virtual std::string GetRuntimeDataTypeString(const ir::DataType& dtype) const;
-
-    /**
-     * \brief Try to extract variable name from expression
-     *
-     * Supports Var and IterArg expressions. Returns empty string if not a variable.
-     * Subclasses can override to transform variable names (e.g., strip SSA suffixes).
-     *
-     * \param expr Expression to extract name from
-     * \return Variable name or empty string
-     */
-    [[nodiscard]] virtual std::string TryGetVarName(const ir::ExprPtr& expr) const;
-
-    /**
-     * \brief Generate C++ code string for an IR expression
-     *
-     * Converts IR expressions to C++ code strings for inline operations.
-     * Supports variables, constants, binary operations, and tuple access.
-     * Calls TryGetVarName() for variable name extraction, enabling subclass
-     * name resolution via virtual dispatch.
-     *
-     * \param expr Expression to convert
-     * \return C++ code string
-     */
-    [[nodiscard]] std::string GenerateExprString(const ir::ExprPtr& expr) const;
-
 protected:
     /**
      * \brief Throw when no codegen is registered for a Call
@@ -177,6 +114,31 @@ protected:
      */
     void VisitExpr_(const ir::CallPtr& op) override { ThrowNoCodegenForCall(op->name_); }
 };
+
+/**
+ * \brief Render a ConstInt payload as a C literal, honouring the dtype's signedness
+ *
+ * ConstInt stores an int64_t that doubles as the bit image of a uint64_t. Only a value above INT64_MAX
+ * is stored folded, and only that one has to be spelled unsigned to stay in range; every other value
+ * keeps the plain signed spelling so the surrounding integer promotions do not change.
+ *
+ * \param value Stored value
+ * \param dtype Data type the value belongs to
+ * \return C literal text
+ */
+std::string FormatIntCLiteral(int64_t value, const ir::DataType& dtype);
+
+/**
+ * \brief Render a double as a C literal that round-trips
+ *
+ * std::to_string is "%f": exactly six decimal places, so a small constant such as 1e-30 becomes
+ * 0.000000 and compiles to the wrong value. This keeps a trailing ".0" on an integral value and
+ * otherwise emits the shortest form that parses back to the same double.
+ *
+ * \param value Value to render
+ * \return C literal text, without a type suffix
+ */
+std::string FormatFloatCLiteral(double value);
 
 } // namespace codegen
 } // namespace pypto

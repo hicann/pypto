@@ -762,7 +762,13 @@ def _ir_xor(out: Expr, lhs: Expr, rhs: Expr, tmp: Expr, *, span: Span | None = N
 
 
 def _ir_expands(out: Expr, scalar: Expr, *, span: Span | None = None) -> Expr:
-    _check_dtype("expands", getattr(out.type, "dtype", None), _EXPANDS_DTYPES)
+    from pypto_pro.language.parser.diagnostics import check_const_expr_fits_dtype
+
+    out_dtype = getattr(out.type, "dtype", None)
+    _check_dtype("expands", out_dtype, _EXPANDS_DTYPES)
+    # The splat value lands in the out tile, so it has to be representable there. Without this the
+    # scalar was only bounded by the IR storage band, which is far wider than a narrow tile dtype.
+    check_const_expr_fits_dtype(scalar, out_dtype, span=span, api="pl.expands")
     return _ir_core.create_op_call(block_ir_op("expands"), [out, scalar], {}, span or _span())
 
 
@@ -2227,7 +2233,11 @@ def _create_tile_scalar_op(
     if isinstance(getattr(rhs, "type", None), _ir_core.TileType):
         target_op = block_ir_op(tile_op)
     else:
+        from pypto_pro.language.parser.diagnostics import check_const_expr_fits_dtype
+
         target_op = block_ir_op(scalar_op)
+        out_dtype = getattr(getattr(out, "type", None), "dtype", None)
+        check_const_expr_fits_dtype(rhs, out_dtype, span=span, api=f"pl.{tile_op}")
     return _ir_core.create_op_call(target_op, [out, lhs, rhs], kwargs, span)
 
 

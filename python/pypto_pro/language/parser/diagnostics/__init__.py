@@ -25,6 +25,13 @@ __all__ = [
     # Error codes
     "ErrorCode",
     "get_error_code",
+    # Range checks
+    "check_const_expr_fits_dtype",
+    "check_fits_dtype",
+    "check_in_range",
+    "check_ir_int",
+    "make_const_int",
+    "range_message",
 ]
 
 
@@ -39,4 +46,12 @@ from ._exceptions import (
     SSAViolationError,
     UndefinedVariableError,
     UnsupportedFeatureError,
+)
+from ._range import (
+    check_const_expr_fits_dtype,
+    check_fits_dtype,
+    check_in_range,
+    check_ir_int,
+    make_const_int,
+    range_message,
 )

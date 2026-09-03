@@ -36,8 +36,9 @@ from pypto_pro.ir.op.block_ops import TileType as _TileType
 from pypto_pro.ir.op.block_ops import _ir_reinterpret, _static_shape_ints
 from pypto_pro.ir.op.block_ops import make_tile_expr as _make_tile_expr
 from pypto_pro.ir.op.block_ops import tile_slot_size as _tile_slot_size
+from pypto_pro.ir.op.system_ops import MAX_MUTEX_ID
 
-from .diagnostics import ParserSyntaxError, ParserTypeError
+from .diagnostics import ParserSyntaxError, ParserTypeError, check_in_range
 
 
 def _is_int_sequence(value) -> bool:
@@ -65,8 +66,9 @@ class BufferParserMixin:
                 tile_mutex_ids = (mutex_id,)
 
             for value in tile_mutex_ids:
-                if not _is_int(value) or value < 0 or value > 31:
-                    raise ParserTypeError(f"mutex_ids must be ints in [0,31], got {value!r}", span=span)
+                if not _is_int(value):
+                    raise ParserTypeError(f"mutex_ids must be ints, got {value!r}", span=span)
+                check_in_range(value, 0, MAX_MUTEX_ID, subject="mutex_ids element", span=span)
             if len(set(tile_mutex_ids)) != len(tile_mutex_ids):
                 raise ParserTypeError(
                     f"make_tile_group() mutex IDs for one tile must not contain duplicates: {tile_mutex_ids}",

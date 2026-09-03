@@ -34,6 +34,10 @@ from typing import Union
 
 from pypto.pypto_impl import ir
 from pypto.pypto_impl.ir import DataType
+from pypto_pro.language.parser.diagnostics import check_in_range
+
+# Largest fixed-size array a tiling class field may declare.
+_MAX_ARRAY_SIZE = 2048
 
 _PYTHON_TYPE_TO_DTYPE: dict[type, DataType] = {
     int: DataType.INDEX,
@@ -91,8 +95,7 @@ def _parse_field_annotation(annotation: object) -> FieldInfo:
     if not isinstance(size_node.value, int) or isinstance(size_node.value, bool) or size_node.value <= 0:
         raise ValueError("array size must be a positive integer literal")
     size = size_node.value
-    if size > 2048:
-        raise ValueError(f"Array size must not exceed 2048, got {size}")
+    check_in_range(size, 1, _MAX_ARRAY_SIZE, subject="array size", error=ValueError)
     return ArrayFieldInfo(dtype=_PYTHON_TYPE_TO_DTYPE[dtype], size=size)
 
 

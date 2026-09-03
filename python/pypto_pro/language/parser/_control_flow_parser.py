@@ -230,11 +230,8 @@ class ControlFlowParserMixin:
         Args:
             stmt: If AST node
         """
-        test_node, is_constexpr = self._unwrap_constexpr(stmt.test)
-        condition = self.parse_expression(test_node)
+        condition = self.parse_expression(stmt.test)
         span = self.span_tracker.get_span(stmt)
-
-        condition = self._resolve_constexpr_condition(test_node, condition, is_constexpr, span)
 
         if isinstance(condition, (ir.ConstBool, ir.ConstInt)):
             is_true = condition.value if isinstance(condition, ir.ConstBool) else condition.value != 0

@@ -34,7 +34,12 @@ from .diagnostics import (
     ParserSyntaxError,
     ParserTypeError,
     UnsupportedFeatureError,
+    check_const_expr_fits_dtype,
+    check_in_range,
 )
+
+# Largest thread count a SIMT function may declare.
+_MAX_SIMT_THREADS = 2048
 
 logger = logging.getLogger(__name__)
 
@@ -908,6 +913,47 @@ class CallParserMixin:
         """Return True if the VF op's dst(s) are MaskReg (not RegTensor)."""
         return op_name in cls._VF_MASK_DST_OPS
 
+    # VF ops that take a literal scalar as a *value* operand, and are therefore
+    # range-checked against the operand dtype. Everywhere else a numeric literal is
+    # an offset, a repeat count or a bit pattern, none of which live in that dtype.
+    # shift_left / shift_right are deliberately absent: their docs define a shift
+    # wider than the type as yielding 0, so an "out of range" shift is legal. So is
+    # bit_cast, whose operand is a bit pattern rather than a value.
+    _VF_SCALAR_OPERAND_OPS = frozenset({
+        "adds",
+        "subs",
+        "muls",
+        "mins",
+        "maxs",
+        "axpy",
+        "leaky_relu",
+        "muls_cast",
+        "full",
+        "eq",
+        "ne",
+        "lt",
+        "gt",
+        "le",
+        "ge",
+        "arange",
+    })
+
+    def _check_vf_scalar_operands(
+        self,
+        op_name: str,
+        args: list,
+        dtype: ir.DataType | None,
+        span: ir.Span,
+    ) -> None:
+        """Reject a literal scalar operand of ``vf.<op_name>`` that ``dtype`` cannot represent.
+
+        Non-constant operands carry no value to check and are skipped.
+        """
+        if dtype is None or op_name not in self._VF_SCALAR_OPERAND_OPS:
+            return
+        for arg in args:
+            check_const_expr_fits_dtype(arg, dtype, span=span, api=f"vf.{op_name}")
+
     def parse_call(self, call: ast.Call) -> Any:
         """Parse function call.
 
@@ -963,15 +1009,6 @@ class CallParserMixin:
                 f"Unsupported operation call: {ast.unparse(call)}",
                 span=span,
                 hint="Use pl.*, pl.tensor.*, or pl.system.* operations",
-            )
-
-        if op_name == "constexpr":
-            raise ParserSyntaxError(
-                "pl.constexpr() can only be used as an 'if' condition or in a ternary expression, "
-                "e.g. 'if pl.constexpr(cond):' or 'x = a if pl.constexpr(cond) else b'",
-                span=span,
-                hint="Use 'pl.constexpr(condition):' in an if statement or ternary expression — "
-                "constexpr is not allowed in for/while/with/break/continue/return or as a standalone statement",
             )
 
         if self._current_func_type in (ir.FunctionType.SimtVF, ir.FunctionType.SimtCallee) and not op_name.startswith(
@@ -1109,8 +1146,7 @@ class CallParserMixin:
         if launchable:
             if not _is_int(max_threads):
                 raise TypeError("max_threads must be an integer")
-            if not 1 <= max_threads <= 2048:
-                raise ValueError("max_threads must be in the range [1, 2048]")
+            check_in_range(max_threads, 1, _MAX_SIMT_THREADS, subject="max_threads", error=ValueError)
 
         cached = self.simt_func_cache.get(id(fn))
         if cached is not None:
@@ -1481,6 +1517,9 @@ class CallParserMixin:
         args = [self.parse_expression(arg) for arg in call.args]
         kwargs = self.parse_op_kwargs(call)
 
+        # No scalar-range check here: every op that takes a scalar value operand produces a result,
+        # so the guard above has already rejected its statement form. The assignment form is checked
+        # in _parse_vf_assignment, which is the only path those ops can reach.
         return ir.create_op_call(f"vf.{op_name}", args, kwargs, span)
 
     # --- auto_mutex helpers ---------------------------------------------------

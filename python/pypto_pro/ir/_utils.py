@@ -76,6 +76,7 @@ def _normalize_expr(
 
     Raises:
         TypeError: If value is not int, float, or ir.Expr
+        FinalRejectionError: If an integer is outside the range the IR can carry
     """
     if isinstance(value, _ir.Expr):
         return value
@@ -83,7 +84,9 @@ def _normalize_expr(
     actual_span = span if span is not None else _ir.Span.unknown()
 
     if isinstance(value, int):
-        return _ir.ConstInt(value, int_dtype, actual_span)
+        from pypto_pro.language.parser.diagnostics import make_const_int
+
+        return make_const_int(value, int_dtype, span=actual_span)
     elif isinstance(value, float):
         return _ir.ConstFloat(value, float_dtype, actual_span)
     else:

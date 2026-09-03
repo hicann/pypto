@@ -12,9 +12,9 @@
 测试覆盖场景:
   1. 覆盖 if control_flow 场景的前端语法、编译入口与运行验证。
   2. 覆盖 dtype 泛化：DT_FP16/DT_BF16/DT_FP32/DT_INT32; Tensor 维度/shape 泛化：2D。
-  3. 覆盖控制流组合：for 循环、if/elif/else 分支、with section 上下文、无值 return 提前退出、constexpr 编译期条件。
+  3. 覆盖控制流组合：for 循环、if/elif/else 分支、with section 上下文、无值 return 提前退出。
   4. 覆盖接口组合：基础算术运算、激活/比较类运算、Tensor 与 Tile 数据搬运、section_vector/section_cube 上下文。
-  5. 覆盖边界场景：constexpr、常量比较、truthiness、三元表达式和深层嵌套分支。
+  5. 覆盖边界场景：常量比较、truthiness、三元表达式和深层嵌套分支。
 """
 
 import logging
@@ -202,45 +202,8 @@ IF_ELSE_KERNELS = {
 }
 
 
-# ===================================================================
-# if_constexpr: constexpr(True) if/else with add/sub  (FP16)
-# ===================================================================
 
 
-# =============================================================================
-# Test 5: if + constexpr 编译期条件 - FP16
-#         if with constexpr compile-time condition - FP16
-# =============================================================================
-@pl.jit(auto_mutex=True)
-def if_constexpr_fp16_kernel(
-    x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
-    y: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
-    z: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
-):
-    m = x.shape[0]
-    n = x.shape[1]
-    tile_type = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
-    b_db = pl.make_tile_group(type=tile_type, addrs=0x4000, mutex_ids=[2, 3])
-    c_db = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[30, 31])
-    with pl.section_vector():
-        for i in pl.range(0, m // TILE_M, 1):
-            for j in pl.range(0, n // TILE_N, 1):
-                tile_a = a_db.next()
-                tile_b = b_db.next()
-                tile_c = c_db.next()
-                pl.load_tile(tile_a, x, [i, j])
-                pl.load_tile(tile_b, y, [i, j])
-                if pl.constexpr(True):
-                    pl.add(tile_c, tile_a, tile_b)
-                else:
-                    pl.sub(tile_c, tile_a, tile_b)
-                pl.store_tile(z, tile_c, [i, j])
-
-
-IF_CONSTEXPR_KERNELS = {
-    "fp16": if_constexpr_fp16_kernel,
-}
 
 
 # ===================================================================
@@ -371,45 +334,8 @@ IF_RELU_KERNELS = {
 }
 
 
-# ===================================================================
-# constexpr: constexpr(True) if/else with add/sub  (FP16)
-# ===================================================================
 
 
-# =============================================================================
-# Test 9: constexpr 分支 - FP16
-#         constexpr branch - FP16
-# =============================================================================
-@pl.jit(auto_mutex=True)
-def constexpr_fp16_kernel(
-    x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
-    y: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
-    z: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
-):
-    m = x.shape[0]
-    n = x.shape[1]
-    tile_type = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
-    b_db = pl.make_tile_group(type=tile_type, addrs=0x4000, mutex_ids=[2, 3])
-    c_db = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[30, 31])
-    with pl.section_vector():
-        for i in pl.range(0, m // TILE_M, 1):
-            for j in pl.range(0, n // TILE_N, 1):
-                tile_a = a_db.next()
-                tile_b = b_db.next()
-                tile_c = c_db.next()
-                pl.load_tile(tile_a, x, [i, j])
-                pl.load_tile(tile_b, y, [i, j])
-                if pl.constexpr(True):
-                    pl.add(tile_c, tile_a, tile_b)
-                else:
-                    pl.sub(tile_c, tile_a, tile_b)
-                pl.store_tile(z, tile_c, [i, j])
-
-
-CONSTEXPR_KERNELS = {
-    "fp16": constexpr_fp16_kernel,
-}
 
 
 # ===================================================================
@@ -525,21 +451,6 @@ def test_if_else():
         logging.info("test_if_else [%s] passed! shape=%s", label, shape)
 
 
-@pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
-def test_if_constexpr():
-    device = ST_DEVICE
-    torch.npu.set_device(device)
-    torch.manual_seed(0)
-    shape = [128, 64]
-    for _pl_dt, tdt, label, atol, rtol in DTYPES_FP16:
-        kernel = IF_CONSTEXPR_KERNELS[label]
-        x, y, z = _gen(shape, tdt, device)
-        kernel(x, y, z)
-        torch.npu.synchronize()
-        z_ref = _ref(tdt, lambda a, b: a + b, x, y)
-        torch.testing.assert_close(z, z_ref, atol=atol, rtol=rtol)
-        logging.info("test_if_constexpr [%s] passed! shape=%s", label, shape)
 
 
 @pytest.mark.soc("950")
@@ -601,21 +512,6 @@ def test_if_relu():
         logging.info("test_if_relu [%s] passed! shape=%s", label, shape)
 
 
-@pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
-def test_constexpr():
-    device = ST_DEVICE
-    torch.npu.set_device(device)
-    torch.manual_seed(0)
-    shape = [128, 64]
-    for _pl_dt, tdt, label, atol, rtol in DTYPES_FP16:
-        kernel = CONSTEXPR_KERNELS[label]
-        x, y, z = _gen(shape, tdt, device)
-        kernel(x, y, z)
-        torch.npu.synchronize()
-        z_ref = _ref(tdt, lambda a, b: a + b, x, y)
-        torch.testing.assert_close(z, z_ref, atol=atol, rtol=rtol)
-        logging.info("test_constexpr [%s] passed! shape=%s", label, shape)
 
 
 # ===================================================================
@@ -1537,11 +1433,9 @@ def test_if_not_in_operator():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     test_if_else()
-    test_if_constexpr()
     test_if_elif_else()
     test_nested_if()
     test_if_relu()
-    test_constexpr()
     test_if_always_false()
     test_deeply_nested_if()
     test_if_lt_const()

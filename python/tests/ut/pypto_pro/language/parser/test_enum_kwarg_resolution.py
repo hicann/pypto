@@ -605,26 +605,6 @@ def test_dtype_kwarg_enum_ternary_inline():
     assert isinstance(func, ir.Function)
 
 
-@pytest.mark.soc("950")
-def test_enum_ternary_constexpr_condition():
-    """pl.constexpr() around the condition also reaches the folded path.
-
-    Worth its own case: constexpr governs how the condition is proven constant, while the
-    enum pass-through happens after the branch is chosen -- so wrapping the condition is
-    neither required for the fold nor an obstacle to it.
-    """
-    data_type = 0
-
-    @pl.jit(auto_mutex=False)
-    def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
-        target = pl.DT_FP32 if pl.constexpr(data_type == 0) else pl.DT_INT32
-        result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=target)
-        _test_result = result
-
-    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
-    func = func_program.get_function(func.__name__)
-
-    assert isinstance(func, ir.Function)
 
 
 @pytest.mark.soc("950")
@@ -897,7 +877,6 @@ if __name__ == "__main__":
         test_enum_compare_closure_vars,
         test_dtype_kwarg_enum_ternary_const_condition,
         test_dtype_kwarg_enum_ternary_inline,
-        test_enum_ternary_constexpr_condition,
         test_enum_ternary_condition_is_an_enum_comparison,
         test_non_dtype_enum_ternary,
         test_enum_ternary_unselected_branch_not_parsed,

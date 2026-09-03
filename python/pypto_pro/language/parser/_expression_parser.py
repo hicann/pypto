@@ -27,6 +27,8 @@ from .diagnostics import (
     ParserTypeError,
     UndefinedVariableError,
     UnsupportedFeatureError,
+    check_fits_dtype,
+    make_const_int,
 )
 
 
@@ -101,8 +103,11 @@ class ExpressionParserMixin:
         if dtype == DataType.BOOL:
             return ir.ConstBool(bool(value), span)
         if dtype.is_float():
+            # Folding must not change a program's meaning: a result the dtype cannot represent would
+            # otherwise become inf (or a wrapped integer, on the branch below) with no diagnostic.
+            check_fits_dtype(float(value), dtype, subject="float constant", span=span)
             return ir.ConstFloat(float(value), dtype, span)
-        return ir.ConstInt(int(value), dtype, span)
+        return make_const_int(int(value), dtype, span=span)
 
     @staticmethod
     def _check_uniform_tuple_types(value_type: ir.TupleType, span: ir.Span) -> None:
@@ -119,34 +124,6 @@ class ExpressionParserMixin:
                     span=span,
                     hint="Use a constant index to access elements of different types",
                 )
-
-    @staticmethod
-    def _resolve_constexpr_condition(
-        test_node: ast.expr,
-        condition: ir.Expr,
-        is_constexpr: bool,
-        span: ir.Span,
-    ) -> ir.Expr:
-        """Validate and normalize a constexpr condition.
-
-        Raises ``ParserSyntaxError`` if ``is_constexpr`` is True but
-        ``condition`` is not a compile-time constant.  Converts
-        ``ir.ConstBool`` to ``ir.ConstInt`` (value 0/1) so downstream
-        consumers only need to handle ``ConstInt``.
-        """
-        if is_constexpr and not isinstance(condition, (ir.ConstBool, ir.ConstInt)):
-            raise ParserSyntaxError(
-                "pl.constexpr() can only accept compile-time constants, "
-                f"but got a runtime expression: {ast.unparse(test_node)}",
-                span=span,
-                hint="pl.constexpr() only accepts compile-time constants, "
-                "e.g. 'pl.constexpr(True)' or 'pl.constexpr(False)'",
-            )
-
-        if is_constexpr and isinstance(condition, ir.ConstBool):
-            condition = ir.ConstInt(1 if condition.value else 0, DataType.BOOL, span)
-
-        return condition
 
     @staticmethod
     def _is_pl_range_call(call: ast.Call) -> bool:
@@ -353,7 +330,7 @@ class ExpressionParserMixin:
         if isinstance(value, bool):
             return ir.ConstBool(value, span)
         elif isinstance(value, int):
-            return ir.ConstInt(value, DataType.INDEX, span)
+            return make_const_int(value, DataType.INDEX, span=span)
         elif isinstance(value, float):
             return ir.ConstFloat(value, DataType.DEFAULT_CONST_FLOAT, span)
         elif isinstance(value, str):
@@ -656,10 +633,7 @@ class ExpressionParserMixin:
 
     def parse_ifexp(self, expr: ast.IfExp) -> ir.Expr:
         span = self.span_tracker.get_span(expr)
-        test_node, is_constexpr = self._unwrap_constexpr(expr.test)
-        condition = self.parse_expression(test_node)
-
-        condition = self._resolve_constexpr_condition(test_node, condition, is_constexpr, span)
+        condition = self.parse_expression(expr.test)
 
         if isinstance(condition, (ir.ConstBool, ir.ConstInt)):
             is_true = condition.value if isinstance(condition, ir.ConstBool) else condition.value != 0
@@ -677,7 +651,7 @@ class ExpressionParserMixin:
         with self.builder.if_stmt(condition, span) as if_builder:
             then_value = self.parse_expression(expr.body, nested=False)
             if not isinstance(then_value, ir.Expr):
-                self._reject_ternary_branch(then_value, expr.body, "then", test_node)
+                self._reject_ternary_branch(then_value, expr.body, "then", expr.test)
             # auto_mutex: for a tile ternary, yield the chosen tile's mutex id alongside the
             # tile so ConvertToSSA phi-merges the id in lockstep with the pointer (arbitrary
             # nesting). Probe each branch's id expr; both must be tiles-with-meta to add it.
@@ -696,7 +670,7 @@ class ExpressionParserMixin:
             if_builder.else_(span)
             else_value = self.parse_expression(expr.orelse, nested=False)
             if not isinstance(else_value, ir.Expr):
-                self._reject_ternary_branch(else_value, expr.orelse, "else", test_node)
+                self._reject_ternary_branch(else_value, expr.orelse, "else", expr.test)
             if not ir.structural_equal(
                 then_value.type, else_value.type, enable_auto_mapping=False
             ) and not _scalar_branches_reconcilable(then_value.type, else_value.type):
@@ -1151,34 +1125,6 @@ class ExpressionParserMixin:
             if isinstance(scoped_value, ir.Expr) and isinstance(scoped_value.type, ir.TupleType):
                 return scoped_value
         return value_expr
-
-    def _unwrap_constexpr(self, expr: ast.expr) -> tuple[ast.expr, bool]:
-        """Detect pl.constexpr(...) or bare constexpr(...) wrapper.
-
-        Returns (inner_expression, is_constexpr). If *expr* is a call to
-        ``pl.constexpr(x)`` or ``constexpr(x)``, returns ``(x, True)``;
-        otherwise returns ``(expr, False)``.
-        """
-        if not isinstance(expr, ast.Call):
-            return expr, False
-        func = expr.func
-        if isinstance(func, ast.Attribute) and func.attr == "constexpr":
-            if len(expr.args) != 1:
-                raise ParserSyntaxError(
-                    "pl.constexpr() expects exactly one argument",
-                    span=self.span_tracker.get_span(expr),
-                    hint="Use 'pl.constexpr(condition)' with a single compile-time constant.",
-                )
-            return expr.args[0], True
-        if isinstance(func, ast.Name) and func.id == "constexpr":
-            if len(expr.args) != 1:
-                raise ParserSyntaxError(
-                    "constexpr() expects exactly one argument",
-                    span=self.span_tracker.get_span(expr),
-                    hint="Use 'constexpr(condition)' with a single compile-time constant.",
-                )
-            return expr.args[0], True
-        return expr, False
 
     def _parse_tensor_shape_subscript(
         self,

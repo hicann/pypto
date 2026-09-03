@@ -159,7 +159,7 @@ register_table(
 
 @op_impl("const")
 def _parse_typed_constant(self, call: ast.Call):
-    from pypto_pro.language.parser.diagnostics import ParserSyntaxError
+    from pypto_pro.language.parser.diagnostics import ParserSyntaxError, check_fits_dtype, make_const_int
 
     span = self.span_tracker.get_span(call)
 
@@ -197,7 +197,9 @@ def _parse_typed_constant(self, call: ast.Call):
         )
 
     if dtype == _ir_core.DataType.BOOL:
+        check_fits_dtype(value, dtype, subject="value", span=span, api="pl.const")
         return _ir_core.ConstBool(bool(value), span)
     if dtype.is_float():
+        check_fits_dtype(float(value), dtype, subject="value", span=span, api="pl.const")
         return _ir_core.ConstFloat(float(value), dtype, span)
-    return _ir_core.ConstInt(int(value), dtype, span)
+    return make_const_int(int(value), dtype, span=span, subject="value", api="pl.const")

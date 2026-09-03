@@ -306,7 +306,7 @@ def test_make_tile_group_bool_mutex_id_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[True])
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(ParserError, match="mutex_ids must be ints in \\[0,31\\]"):
+    with pytest.raises(ParserError, match="mutex_ids must be ints, got True"):
         _parse(k)
 
 

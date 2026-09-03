@@ -34,9 +34,11 @@ from pypto.pypto_impl.ir import (
 from .._utils import _get_span_or_capture, _is_int, _normalize_expr, _to_make_tuple
 from ._op_registry import OpSpec, op_impl, register_table
 
-_MAX_EVENT_ID = 16
-_MAX_FLAG_EVENT_ID = 8
-_MAX_MUTEX_ID = 32
+# Hardware resource ranges, inclusive on both ends. These are the single definition of each limit;
+# the pipeline scanner and the make_tile_group parser import them rather than restating them.
+MAX_EVENT_ID = 15  # cross-core event ids
+MAX_FLAG_EVENT_ID = 7  # set_flag / wait_flag event ids
+MAX_MUTEX_ID = 31  # tile mutex ids
 
 
 def _is_integer_scalar_expr(value: Expr) -> bool:
@@ -44,14 +46,15 @@ def _is_integer_scalar_expr(value: Expr) -> bool:
     return isinstance(value_type, _ir_core.ScalarType) and value_type.dtype.is_int()
 
 
-def _normalize_integer_id_expr(value: int | Expr, span: Span, *, name: str, upper_bound: int) -> Expr:
+def _normalize_integer_id_expr(value: int | Expr, span: Span, *, name: str, max_id: int) -> Expr:
     """Normalize an integer ID to an IR operand and validate statically known values."""
     if not isinstance(value, Expr) and not _is_int(value):
         raise TypeError(f"{name} must be a Python int or an integer scalar expression")
     expr = _normalize_expr(value, span)
     if not _is_integer_scalar_expr(expr):
         raise TypeError(f"{name} must be an integer scalar expression")
-    _validate_const_id(expr, upper_bound, name)
+    if isinstance(expr, _ir_core.ConstInt):
+        _check_id_range(expr.value, max_id, name)
     return expr
 
 
@@ -67,8 +70,7 @@ def _normalize_mutex_ids(mutex_ids: tuple | list | None) -> list[int] | None:
     for index, mutex_id in enumerate(normalized_mutex_ids):
         if not _is_int(mutex_id):
             raise TypeError(f"mutex_ids[{index}] must be a Python int")
-        if not 0 <= mutex_id < _MAX_MUTEX_ID:
-            raise ValueError(f"mutex_ids element must be in [0, {_MAX_MUTEX_ID}), got {mutex_id}")
+        _check_id_range(mutex_id, MAX_MUTEX_ID, "mutex_ids element")
     return normalized_mutex_ids
 
 
@@ -79,9 +81,11 @@ def _validate_concrete_pipe(pipe: PipeType, name: str) -> None:
         raise ValueError(f"{name} must identify one concrete pipe, got PipeType.ALL")
 
 
-def _validate_const_id(expr: Expr, upper_bound: int, name: str) -> None:
-    if isinstance(expr, _ir_core.ConstInt) and not 0 <= expr.value < upper_bound:
-        raise ValueError(f"{name} must be in [0, {upper_bound}), got {expr.value}")
+def _check_id_range(value: int, max_id: int, name: str, *, min_id: int = 0) -> None:
+    """Reject a hardware resource id outside its inclusive range."""
+    from pypto_pro.language.parser.diagnostics import check_in_range
+
+    check_in_range(value, min_id, max_id, subject=name, error=ValueError)
 
 
 def _create_sync_op(
@@ -108,7 +112,7 @@ def _create_sync_op(
         raise ValueError(f"set_pipe and wait_pipe must differ, got {set_pipe}")
     kwargs = {"set_pipe": set_pipe, "wait_pipe": wait_pipe}
     event_id_expr = _normalize_integer_id_expr(
-        event_id, actual_span, name="event_id", upper_bound=_MAX_FLAG_EVENT_ID
+        event_id, actual_span, name="event_id", max_id=MAX_FLAG_EVENT_ID
     )
     return _ir_core.create_op_call(op_name + "_dyn", [event_id_expr], kwargs, actual_span)
 
@@ -221,8 +225,7 @@ def set_cross_core(
         return _ir_core.create_op_call(
             "system.set_cross_core_dyn", [event_id], {"pipe": pipe, "sync_mode": sync_mode}, actual_span
         )
-    if not 0 <= event_id < _MAX_EVENT_ID:
-        raise ValueError(f"event_id must be in [0, {_MAX_EVENT_ID}), got {event_id}")
+    _check_id_range(event_id, MAX_EVENT_ID, "event_id")
     kwargs = {"pipe": pipe, "event_id": event_id, "sync_mode": sync_mode}
     return _ir_core.create_op_call("system.set_cross_core", [], kwargs, actual_span)
 
@@ -257,8 +260,7 @@ def wait_cross_core(
             {"pipe": pipe, "sync_mode": sync_mode},
             actual_span,
         )
-    if not 0 <= event_id < _MAX_EVENT_ID:
-        raise ValueError(f"event_id must be in [0, {_MAX_EVENT_ID}), got {event_id}")
+    _check_id_range(event_id, MAX_EVENT_ID, "event_id")
     kwargs = {"pipe": pipe, "event_id": event_id, "sync_mode": sync_mode}
     return _ir_core.create_op_call("system.wait_cross_core", [], kwargs, actual_span)
 
@@ -365,7 +367,7 @@ def _create_mutex_op(
     """Create one user-requested manual mutex operation."""
     _validate_concrete_pipe(pipe, "pipe")
     mutex_id_expr = _normalize_integer_id_expr(
-        mutex_id, actual_span, name="mutex_id", upper_bound=_MAX_MUTEX_ID
+        mutex_id, actual_span, name="mutex_id", max_id=MAX_MUTEX_ID
     )
 
     kwargs: dict = {"pipe": pipe}
@@ -403,7 +405,7 @@ def _create_mutex_dedup_op(
     if not mutex_id_exprs:
         raise ValueError("mutex_id requires at least one expression")
     normalized_mutex_id_exprs = [
-        _normalize_integer_id_expr(mutex_id, actual_span, name="mutex_id", upper_bound=_MAX_MUTEX_ID)
+        _normalize_integer_id_expr(mutex_id, actual_span, name="mutex_id", max_id=MAX_MUTEX_ID)
         for mutex_id in mutex_id_exprs
     ]
     kwargs: dict = {"pipe": pipe}
