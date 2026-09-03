@@ -5,7 +5,6 @@
 :titlesonly:
 
 getval
-set_stride
 set_validshape
 setval
 transpose
