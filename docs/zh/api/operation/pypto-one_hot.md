@@ -31,7 +31,7 @@ one_hot(input: Tensor, num_classes: int) -> Tensor
 
 ## 返回值说明
 
-返回一个Shape为\(input, num\_classes\)、数据类型为DT\_INT64的Tensor。
+返回一个Shape为(input, num\_classes)、数据类型为DT\_INT64的Tensor。
 
 ## 约束说明
 

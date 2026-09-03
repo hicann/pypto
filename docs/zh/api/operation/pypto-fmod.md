@@ -41,7 +41,7 @@ fmod(input: Tensor, other: Union[Tensor, float], precision_type: PrecisionType =
 ## 约束说明
 
 1. input和other数据类型应相同。
-2. other为数字的时候，不支持隐式转化。
+2. other为数字的时候，不支持隐式转换。
 3. other不支持nan、inf等特殊值。
 4. precision_type使用说明：
    <!-- npu="950" id4 -->

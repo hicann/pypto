@@ -35,7 +35,7 @@ unpack(self: Tensor, dstDataType: DataType) -> Tensor
 
 ## 约束说明
 
-1. InputShape、ValidShape、TileShape必须能被`dstDataType`的字节数整除。
+1. InputShape、ValidShape、TileShape的大小必须能被`dstDataType`的字节数整除。
 2. Shape Size不大于2147483647（即INT32_MAX）。
 3. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 

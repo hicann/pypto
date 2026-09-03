@@ -29,10 +29,10 @@ normal(shape: List[int], key: List[int], counter: List[int], alg: List[int], dty
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|--------------------------------------------------------------------|
-| shape   | 输入      | 输出Tensor的形状。<br>长度支持1-4维。                                        |
-| key     | 输入      | 随机数生成器的seed。<br>长度仅支持为1。                                         |
-| counter | 输入      | 随机数生成器的计数器。<br>长度仅支持为2。                                          |
-| alg     | 输入      | 随机数生成算法，当前仅支持值1（Philox算法），3（auto_select，选择Philox算法）。<br>长度仅支持为1。 |
+| shape   | 输入      | 输出Tensor的形状。<br>数组长度支持1-4。                                        |
+| key     | 输入      | 随机数生成器的seed。<br>数组长度仅支持1。                                         |
+| counter | 输入      | 随机数生成器的计数器。<br>数组长度仅支持2。                                          |
+| alg     | 输入      | 随机数生成算法，当前仅支持值1（Philox算法），3（auto_select，选择Philox算法）。<br>数组长度仅支持1。 |
 | dtype   | 输入      | 输出Tensor的数据类型。<br>支持的数据类型为：DT_FP32，DT_FP16，DT_BF16。            |
 
 ## 约束说明

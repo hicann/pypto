@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-对两个输入的Tensor行逐元素逻辑与（AND）运算。运算规则：
+对两个输入的Tensor进行逐元素逻辑与（AND）运算。运算规则：
 
 - 如果输入的Tensor为bool则True and True -\> True，其余情况皆为False。
 - 如果输入的Tensor数值，会自动转换成True/False，0为False，非0为True。

@@ -35,13 +35,13 @@ ceil_div(self: Tensor, other: Union[Tensor, int]) -> Tensor
 
 ## 返回值说明
 
-返回输出Tensor，Tensor的数据类型和input、other相同，Shape为input和other广播后大小。
+返回输出Tensor，Tensor的数据类型和self、other相同，Shape为self和other广播后大小。
 
 ## 约束说明
 
-1. input和other类型应该相同。
+1. self和other类型应该相同。
 2. 支持多维度广播。
-3. input和other中的值域范围需要在\[-2^24, 2^24\]范围内，以确保在计算过程中能精确转换为float32，**other不能为0**，整数除法为0时结果由芯片决定，可能为INT32_MAX或INT32_MIN。
+3. self和other中的值域范围需要在\[-2^24, 2^24\]范围内，以确保在计算过程中能精确转换为float32，**other不能为0**，整数除法为0时结果由芯片决定，可能为INT32_MAX或INT32_MIN。
 4. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
 ## 调用示例
@@ -52,9 +52,9 @@ ceil_div(self: Tensor, other: Union[Tensor, int]) -> Tensor
 
 TileShape维度应和输出一致。
 
-如非广播场景，输入input shape为[m, n]，other为[m, n]，输出为[m, n]，TileShape设置为[m1, n1]，则m1，n1分别用于切分m，n轴。
+如非广播场景，输入self shape为[m, n]，other为[m, n]，输出为[m, n]，TileShape设置为[m1, n1]，则m1，n1分别用于切分m，n轴。
 
-广播场景，输入input shape为[m, n]，other为[m, 1]，输出为[m, n]，TileShape设置为[m1, n1]，则m1，n1分别用于切分m，n轴。
+广播场景，输入self shape为[m, n]，other为[m, 1]，输出为[m, n]，TileShape设置为[m1, n1]，则m1，n1分别用于切分m，n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)

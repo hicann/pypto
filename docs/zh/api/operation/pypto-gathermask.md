@@ -35,7 +35,7 @@ gathermask(self: Tensor, pattern_mode: int) -> Tensor
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
 | self   | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_INT16，DT_UINT16，DT_INT32，DT_UINT32，DT_FP16，DT_BF16，DT_FP32。<br>不支持空Tensor，Shape支持1-4维，且shape size不大于2147483647（即INT32_MAX）。 |
-| pattern_mode | 输入      | 源操作数。<br>int类型，取值范围为：1~7。 |
+| pattern_mode | 输入      | 控制参数。<br>int类型，取值范围为：1~7。 |
 
 ## 返回值说明
 
