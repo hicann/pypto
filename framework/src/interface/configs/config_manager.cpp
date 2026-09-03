@@ -155,7 +155,11 @@ static std::string CreateLogTopFolder()
     bool ret = CreateDir(folderPath);
     CHECK(FeError::BAD_FD, ret) << "Failed to create dir: " << folderPath << ", ensure its parent dir exists.";
 
-    folderPath = folderPath + "/output_" + timestamp.str() + "_" + std::to_string(getpid()) + "_" + GetHostName();
+    constexpr int PID_WIDTH = 10;
+    std::stringstream folderPathStream;
+    folderPathStream << folderPath << "/" << PREFIX_OUTPUT << "_" << timestamp.str() << "_" << GetHostName() << "_"
+                     << std::setw(PID_WIDTH) << std::setfill('0') << getpid();
+    folderPath = folderPathStream.str();
     ret = CreateDir(folderPath);
     FE_ASSERT(FeError::BAD_FD, ret) << "Failed to create dir: " << folderPath << ", ensure its parent dir exists.";
 
