@@ -30,6 +30,30 @@ namespace npu::tile_fwk::dynamic {
 inline constexpr int64_t TENSOR_ADDR_ALIGNMENT = 512;
 inline constexpr uint32_t SUBMMIT_TASK_QUE_SIZE = 512;
 constexpr int32_t ALLOC_NUM_ONE_SLAB = 4;
+
+enum class FunctionMemoryAllocFailure : uint8_t {
+    OK = 0,
+    EXCLUSIVE_OUTCAST,
+    INNER_TEMPORAL_OUTCAST,
+    RUNTIME_OUTCAST_METADATA,
+};
+
+inline constexpr const char* FunctionMemoryAllocFailureName(FunctionMemoryAllocFailure failure)
+{
+    switch (failure) {
+        case FunctionMemoryAllocFailure::OK:
+            return "ok";
+        case FunctionMemoryAllocFailure::EXCLUSIVE_OUTCAST:
+            return "exclusive-outcast";
+        case FunctionMemoryAllocFailure::INNER_TEMPORAL_OUTCAST:
+            return "inner-temporal-outcast";
+        case FunctionMemoryAllocFailure::RUNTIME_OUTCAST_METADATA:
+            return "runtime-outcast-metadata";
+        default:
+            return "unknown";
+    }
+}
+
 class DeviceWorkspaceAllocator {
 public:
     DeviceWorkspaceAllocator() = default;
@@ -136,33 +160,8 @@ private:
 
     void AssignOutcastAddresses(DevAscendFunctionDupped devRootDup, DeviceExecuteSlot* slotList);
 
-    bool CanAllocateFunctionMemory(DevAscendFunctionDupped devRootDup)
-    {
-        DevAscendFunction* devRootSrc = devRootDup.GetSource();
-
-        // check allocation of outcast workspace
-        size_t outcastMemReq = devRootSrc->exclusiveOutcastWsMemoryRequirement;
-        if (!tensorAllocators_[curParallelWsId].devTaskInnerExclusiveOutcasts.CanAllocate(outcastMemReq)) {
-            return false;
-        }
-
-        // allocation of inner workspace will never fail
-
-        // check if reallocated-assemble-slots and the stitch-ending slotMem (secondary allocation) can be allocated
-        auto& boundaryPool = tensorAllocators_[curParallelWsId].devTaskBoundaryOutcasts;
-        auto& innerTemporalPool = tensorAllocators_[curParallelWsId].devTaskInnerTemporalOutcasts;
-        if (devProg_->memBudget.tensor.slottableOutcastSlotSize >
-            boundaryPool.AvailableSlots() + innerTemporalPool.AvailableSlots()) {
-            return false;
-        }
-
-        // check if runtimeOutcastTensorPool_ has enough items left, estimatedly
-        if (devRootSrc->GetOutcastSize() > runtimeOutcastTensorPool_.FreeItemNum()) {
-            return false;
-        }
-
-        return true;
-    }
+    FunctionMemoryAllocFailure CanAllocateFunctionMemory(DevAscendFunctionDupped devRootDup,
+                                                         DeviceExecuteSlot* slotList);
 
     void TryAllocateDynamicCellMatchForAssembleSlot(DeviceExecuteSlot& slot);
 
@@ -178,14 +177,17 @@ public:
     }
 #endif
 
-    bool TryAllocateFunctionMemory(DevAscendFunctionDupped devRootDup, DeviceExecuteSlot* slotList)
+    FunctionMemoryAllocFailure TryAllocateFunctionMemory(DevAscendFunctionDupped devRootDup,
+                                                         DeviceExecuteSlot* slotList)
     {
         AutoScopedPerf asp(PERF_EVT_ALLOCATE_WORKSPACE);
 
         devRootDup.DupDataForDynFuncData()->InitDuppedRuntimeTail();
 
-        if (!CanAllocateFunctionMemory(devRootDup)) {
-            return false;
+        const FunctionMemoryAllocFailure status = CanAllocateFunctionMemory(devRootDup, slotList);
+        if (status != FunctionMemoryAllocFailure::OK) {
+            DEV_INFO("[Workspace Runtime Alloc Failure] reason=%s", FunctionMemoryAllocFailureName(status));
+            return status;
         }
 
         WsAllocatorCounter* pDfxCounter = nullptr;
@@ -200,11 +202,12 @@ public:
 
         AssignIncastAddresses(devRootDup, slotList);
         AssignOutcastAddresses(devRootDup, slotList);
+        DEV_IF_INFO { ObserveTensorPoolUsage(curParallelWsId); }
 
 #if DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_FULL
         funcAllocDfx.DelayedDumpAsRootFuncAndReset(wsMemDelayedDumper_, devRootDup.GetSource()->GetRawName());
 #endif // DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_FULL
-        return true;
+        return FunctionMemoryAllocFailure::OK;
     }
 
     bool IsValidSlotMemRequirement(uint64_t memReq) const;
@@ -346,6 +349,12 @@ public:
 
     void DumpMemoryUsage(const char* hint) const;
 
+    void LogTuningUsage(uint64_t taskId, size_t stitchCount) const;
+
+    void LogTuningSummary() const;
+
+    void ResetTuningDeviceTaskPeaks();
+
     void InitMetadataSlabAllocator();
 
     static uint64_t CalcMetadataItemPoolMemSize(const DevAscendProgram* devProg);
@@ -447,6 +456,8 @@ public:
 private:
     bool DeviceTaskMemTryRecycle();
 
+    void ObserveTensorPoolUsage(uint32_t parallelId);
+
 private:
     WsAllocation AllocateFromOutcastSlotPool(WsSlotAllocator& pool, [[maybe_unused]] const char* rootFuncName = nullptr)
     {
@@ -494,6 +505,19 @@ private:
     SPSCQueue<DynDeviceTask*, SUBMMIT_TASK_QUE_SIZE> submmitTaskQueue_;
 
     ItemPool<RuntimeOutcastTensor> runtimeOutcastTensorPool_;
+
+    struct TensorPoolUsagePeak {
+        uint64_t rootInnerBytes;
+        uint64_t exclusiveOutcastBytes;
+        uint64_t innerTemporalOutcastSlots;
+    };
+
+    struct WorkspaceTuningState {
+        TensorPoolUsagePeak deviceTaskUsagePeak[SCH_DEVTASK_MAX_PARALLELISM];
+        TensorPoolUsagePeak launchUsagePeak[SCH_DEVTASK_MAX_PARALLELISM];
+    };
+
+    WorkspaceTuningState tuningState_{};
 
     uint64_t stitchCacheAddr_{0};
     uint32_t rootFuncMaxCallOpsize_{0};

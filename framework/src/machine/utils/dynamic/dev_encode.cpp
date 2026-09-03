@@ -28,7 +28,7 @@
 #include "interface/tensor/raw_tensor.h"
 #include "interface/operation/operation.h"
 #include "interface/function/function.h"
-#include "interface/function/rebuildable_attribute.h"
+#include "machine/utils/dynamic/rebuildable_workspace_desc.h"
 #include "interface/program/program.h"
 #include "interface/configs/config_manager.h"
 #include "interface/configs/config_manager_ng.h"
@@ -3267,8 +3267,7 @@ static void FinalizeEncodedDevAscendProgram(Function* func, DevAscendProgram* ba
 {
     base->workspaceSize = base->memBudget.Total();
     offset = base->GetSize();
-    LogWorkspaceEncodeSummary(1, runtimeCfg.stitchNumMax, *base, depthConfig, runtimeCfg.maxWorkspaceBytes,
-                              runtimeCfg.workspaceStitchMin);
+    LogWorkspaceEncodeSummary(1, *base, depthConfig, runtimeCfg, wsDesc);
     MACHINE_LOGD("StitchPool:%lu bytes, aicoreSpilled:%lu bytes.", base->memBudget.metadata.stitchPool,
                  base->memBudget.aicoreSpilled.Total());
     func->GetDyndevAttribute()->maxDynamicAssembleOutcastMem = wsDesc.maxDynamicAssembleOutcastMem;
@@ -3289,7 +3288,14 @@ void EncodeDevAscendProgramFull(Function* func, DevAscendProgram* base, uint64_t
 
     WorkspaceDesc wsDesc = CollectWorkspaceDescForEncode(func, base);
     RuntimeWorkspaceConfig runtimeCfg = BuildFullEncodeRuntimeWorkspaceConfig(base, wsDesc);
-    ValidateMaxWorkspaceOrThrow(runtimeCfg.maxWorkspaceBytes, runtimeCfg.workspaceStitchMin);
+    if (HasPreciseStitchFunctionNumPerPool(runtimeCfg.stitchFunctionNumPerPool)) {
+        MACHINE_LOGW("[workspaceSize] Precise workspace mode is enabled via stitch_function_num_per_pool; "
+                     "stitch_function_max_num is forced to %u, and stitch_function_max_num / max_workspace_kb "
+                     "are ignored.",
+                     static_cast<uint32_t>(MAX_STITCH_FUNC_NUM));
+    } else {
+        ValidateMaxWorkspaceOrThrow(runtimeCfg.maxWorkspaceBytes, runtimeCfg.workspaceStitchMin);
+    }
 
     StitchDepthConfig depthConfig = ResolveStitchDepthConfig(wsDesc, runtimeCfg);
     ApplyStitchDepthConfig(base, wsDesc, depthConfig, encodeInfo.dyndevAttr->inoutLink.totalSlot);

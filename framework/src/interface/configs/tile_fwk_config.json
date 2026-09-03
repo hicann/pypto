@@ -30,6 +30,7 @@
         "run_mode": 0,
         "stitch_function_max_num": 128,
         "max_workspace_kb": 0,
+        "stitch_function_num_per_pool": [0, 0, 0],
         "valid_shape_optimize": 0,
         "ready_on_host_tensors": [],
         "device_sched_parallelism": 1,

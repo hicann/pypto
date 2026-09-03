@@ -127,7 +127,7 @@ struct DeviceExecuteContext {
 
     int PrepareShmemWaitUntilTasks(DynDeviceTask* dynTask);
 
-    int SubmitToAicoreAndRecycleMemory(bool withoutTail, bool isLastTask = false, bool isParallelIterLast = false);
+    int SubmitToAicoreAndRecycleMemory(bool withoutTail, bool isLastTask = false, bool isParallelIterLastTask = false);
 
     void ProcessControlFlowCacheRecord(DynDeviceTask* dynTask);
 

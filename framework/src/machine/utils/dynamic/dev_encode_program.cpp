@@ -128,6 +128,12 @@ void DevAscendProgram::DumpBasicInfo(const int indent, std::ostringstream& oss) 
     oss << INDENTINNER << "#stitchMaxFunctionNum:" << stitchMaxFunctionNum << "\n";
     oss << INDENTINNER << "#runtimeOutcastPoolSize:" << memBudget.tensor.runtimeOutcastPoolSize << "\n";
     oss << INDENTINNER << "#memoryDrivenWorkspace:" << memBudget.tensor.memoryDrivenWorkspace << "\n";
+    oss << INDENTINNER << "#preciseWorkspaceEnabled:" << memBudget.tensor.workspacePool.preciseWorkspaceEnabled << "\n";
+    oss << INDENTINNER << "#rootInnerDepth:" << memBudget.tensor.workspacePool.stitchFunctionNumPerPool[0] << "\n";
+    oss << INDENTINNER << "#innerTemporalOutcastDepth:" << memBudget.tensor.workspacePool.stitchFunctionNumPerPool[1]
+        << "\n";
+    oss << INDENTINNER << "#exclusiveOutcastDepth:" << memBudget.tensor.workspacePool.stitchFunctionNumPerPool[2]
+        << "\n";
     oss << INDENTINNER << "#stitchFunctionsize:" << stitchFunctionsize << "\n";
     oss << INDENTINNER << "#slot{" << slotSize << "}\n";
     oss << INDENTINNER << "#assembleSlot{" << assembleSlotSize << "}\n";

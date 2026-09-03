@@ -17,6 +17,7 @@
 
 #include "dev_encode_program_ctrlflow_cache.h"
 #include "interface/tensor/symbol_handler.h"
+#include "tilefwk/workspace_desc.h"
 
 namespace npu::tile_fwk {
 class DyndevFunctionAttribute;
@@ -66,6 +67,15 @@ struct DevAscendProgram {
             uint32_t runtimeOutcastPoolSize{0};
             uint32_t slottableOutcastSlotSize{0};
             uint32_t memoryDrivenWorkspace{0};
+
+            struct WorkspacePoolConfig {
+                uint64_t rootInnerUnitBytes{0};
+                uint64_t exclusiveOutcastUnitBytes{0};
+                uint64_t assembleSlotsPerDepth{0};
+                uint32_t stitchFunctionNumPerPool[STITCH_FUNCTION_NUM_PER_POOL_SIZE]{0, 0, 0};
+                uint32_t preciseWorkspaceEnabled{0};
+            };
+            WorkspacePoolConfig workspacePool;
 
             uint64_t MaxOutcastMem() const { return std::max(maxStaticOutcastMem, maxDynamicAssembleOutcastMem); }
 

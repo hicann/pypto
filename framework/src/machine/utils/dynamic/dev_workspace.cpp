@@ -19,12 +19,38 @@
 #include <string>
 
 namespace npu::tile_fwk::dynamic {
+namespace {
+uint64_t CeilDiv(uint64_t value, uint64_t divisor)
+{
+    return divisor == 0 ? 0 : value / divisor + static_cast<uint64_t>(value % divisor != 0);
+}
+
+uint64_t AtLeastRequiredDepth(uint64_t value, uint64_t unitRequirement)
+{
+    return value == 0 && unitRequirement != 0 ? 1 : value;
+}
+
+// Conservative Assemble preflight submits when remaining slots < one depth. Recommend one extra
+// depth so filling stitch_function_num_per_pool from this value does not immediately re-trigger submit.
+uint64_t RecommendAssembleOutcastDepth(uint64_t observedDepth, uint64_t assembleSlotsPerDepth)
+{
+    uint64_t recommended = AtLeastRequiredDepth(observedDepth, assembleSlotsPerDepth);
+    if (observedDepth != 0) {
+        recommended += 1;
+    }
+    if (recommended > MAX_STITCH_FUNC_NUM) {
+        recommended = MAX_STITCH_FUNC_NUM;
+    }
+    return recommended;
+}
+} // namespace
 
 void DeviceWorkspaceAllocator::Init(DevStartArgs* devStartArgs)
 {
     uintdevptr_t baseAddr = devStartArgs->contextWorkspaceAddr;
     DevAscendProgram* devProg = devStartArgs->devProg;
     devProg_ = devProg;
+    DEV_IF_INFO { tuningState_ = {}; }
     // Host coherent allocators MUST be initialized EARLIEST since some other allocators might depend on them
     InitMetadataAllocators(devProg, devStartArgs);
 
@@ -50,6 +76,86 @@ void DeviceWorkspaceAllocator::Init(DevStartArgs* devStartArgs)
 
     SetupItemPool(runtimeOutcastTensorPool_, devProg->memBudget.tensor.runtimeOutcastPoolSize,
                   WsMemCategory::ITEMPOOL_RUNTIME_OUTCAST);
+    DEV_IF_INFO { ResetTuningDeviceTaskPeaks(); }
+}
+
+void DeviceWorkspaceAllocator::ObserveTensorPoolUsage(uint32_t parallelId)
+{
+    auto& allocators = tensorAllocators_[parallelId];
+    auto& deviceTaskPeak = tuningState_.deviceTaskUsagePeak[parallelId];
+    auto& launchPeak = tuningState_.launchUsagePeak[parallelId];
+    const uint64_t rootInnerBytes = allocators.rootInner.AllocatedSize();
+    const uint64_t exclusiveBytes = allocators.devTaskInnerExclusiveOutcasts.AllocatedSize();
+    const uint64_t innerTemporalSlots = devProg_->memBudget.tensor.devTaskInnerTemporalOutcastNum -
+                                        allocators.devTaskInnerTemporalOutcasts.AvailableSlots();
+    deviceTaskPeak.rootInnerBytes = rootInnerBytes > deviceTaskPeak.rootInnerBytes ? rootInnerBytes :
+                                                                                     deviceTaskPeak.rootInnerBytes;
+    deviceTaskPeak.exclusiveOutcastBytes = exclusiveBytes > deviceTaskPeak.exclusiveOutcastBytes ?
+                                               exclusiveBytes :
+                                               deviceTaskPeak.exclusiveOutcastBytes;
+    deviceTaskPeak.innerTemporalOutcastSlots = innerTemporalSlots > deviceTaskPeak.innerTemporalOutcastSlots ?
+                                                   innerTemporalSlots :
+                                                   deviceTaskPeak.innerTemporalOutcastSlots;
+    launchPeak.rootInnerBytes = rootInnerBytes > launchPeak.rootInnerBytes ? rootInnerBytes : launchPeak.rootInnerBytes;
+    launchPeak.exclusiveOutcastBytes = exclusiveBytes > launchPeak.exclusiveOutcastBytes ?
+                                           exclusiveBytes :
+                                           launchPeak.exclusiveOutcastBytes;
+    launchPeak.innerTemporalOutcastSlots = innerTemporalSlots > launchPeak.innerTemporalOutcastSlots ?
+                                               innerTemporalSlots :
+                                               launchPeak.innerTemporalOutcastSlots;
+}
+
+void DeviceWorkspaceAllocator::ResetTuningDeviceTaskPeaks()
+{
+    for (uint32_t i = 0; i < devProg_->GetParallelism(); ++i) {
+        auto& allocators = tensorAllocators_[i];
+        auto& peak = tuningState_.deviceTaskUsagePeak[i];
+        peak.rootInnerBytes = allocators.rootInner.AllocatedSize();
+        peak.exclusiveOutcastBytes = allocators.devTaskInnerExclusiveOutcasts.AllocatedSize();
+        peak.innerTemporalOutcastSlots = devProg_->memBudget.tensor.devTaskInnerTemporalOutcastNum -
+                                         allocators.devTaskInnerTemporalOutcasts.AvailableSlots();
+    }
+}
+
+void DeviceWorkspaceAllocator::LogTuningUsage(uint64_t taskId, size_t stitchCount) const
+{
+    const auto& tensorBudget = devProg_->memBudget.tensor;
+    uint64_t maxRootInnerDepth = 0;
+    uint64_t maxExclusiveDepth = 0;
+    uint64_t maxInnerTemporalDepth = 0;
+    for (uint32_t i = 0; i < devProg_->GetParallelism(); ++i) {
+        const auto& allocators = tensorAllocators_[i];
+        const auto& peak = tuningState_.deviceTaskUsagePeak[i];
+        const uint64_t rootCurrent = allocators.rootInner.AllocatedSize();
+        const uint64_t rootCapacity = allocators.rootInner.Capacity();
+        const uint64_t exclusiveCurrent = allocators.devTaskInnerExclusiveOutcasts.AllocatedSize();
+        const uint64_t exclusiveCapacity = allocators.devTaskInnerExclusiveOutcasts.Capacity();
+        const uint64_t innerCapacity = tensorBudget.devTaskInnerTemporalOutcastNum;
+        const uint64_t innerCurrent = innerCapacity - allocators.devTaskInnerTemporalOutcasts.AvailableSlots();
+        DEV_INFO("[Workspace Runtime Pool] parallelId=%u, "
+                 "rootInner={current=%" PRIu64 ",peak=%" PRIu64 ",capacity=%" PRIu64 "}, "
+                 "exclusiveOutcast={current=%" PRIu64 ",peak=%" PRIu64 ",capacity=%" PRIu64 "}, "
+                 "innerTemporalOutcast={currentSlots=%" PRIu64 ",peakSlots=%" PRIu64 ",capacitySlots=%" PRIu64 "}.",
+                 i, rootCurrent, peak.rootInnerBytes, rootCapacity, exclusiveCurrent, peak.exclusiveOutcastBytes,
+                 exclusiveCapacity, innerCurrent, peak.innerTemporalOutcastSlots, innerCapacity);
+        const uint64_t rootInnerDepth = CeilDiv(peak.rootInnerBytes, tensorBudget.workspacePool.rootInnerUnitBytes);
+        const uint64_t exclusiveDepth = CeilDiv(peak.exclusiveOutcastBytes,
+                                                tensorBudget.workspacePool.exclusiveOutcastUnitBytes);
+        const uint64_t innerTemporalDepth = CeilDiv(peak.innerTemporalOutcastSlots,
+                                                    tensorBudget.workspacePool.assembleSlotsPerDepth);
+        maxExclusiveDepth = exclusiveDepth > maxExclusiveDepth ? exclusiveDepth : maxExclusiveDepth;
+        maxRootInnerDepth = rootInnerDepth > maxRootInnerDepth ? rootInnerDepth : maxRootInnerDepth;
+        maxInnerTemporalDepth = innerTemporalDepth > maxInnerTemporalDepth ? innerTemporalDepth : maxInnerTemporalDepth;
+    }
+    DEV_INFO("[Workspace Runtime Tuning] taskId=%" PRIu64 ", stitchCount=%zu, "
+             "configuredDepths={rootInner=%u,innerTemporal=%u,exclusive=%u}, "
+             "recommendedDepths={rootInner=%" PRIu64 ",innerTemporal=%" PRIu64 ",exclusive=%" PRIu64 "}.",
+             taskId, stitchCount, tensorBudget.workspacePool.stitchFunctionNumPerPool[0],
+             tensorBudget.workspacePool.stitchFunctionNumPerPool[1],
+             tensorBudget.workspacePool.stitchFunctionNumPerPool[2],
+             AtLeastRequiredDepth(maxRootInnerDepth, tensorBudget.workspacePool.rootInnerUnitBytes),
+             RecommendAssembleOutcastDepth(maxInnerTemporalDepth, tensorBudget.workspacePool.assembleSlotsPerDepth),
+             AtLeastRequiredDepth(maxExclusiveDepth, tensorBudget.workspacePool.exclusiveOutcastUnitBytes));
 }
 
 void DeviceWorkspaceAllocator::MemoryInfo::DumpError() const
@@ -125,6 +231,7 @@ void DeviceWorkspaceAllocator::AllocateFunctionInnerWorkspace(DevAscendFunctionD
                                                               [[maybe_unused]] WsAllocatorCounter* dfxCounter)
 {
     if (!tensorAllocators_[curParallelWsId].rootInner.CanAllocate(rootInnerMemReq)) {
+        DEV_IF_INFO { ObserveTensorPoolUsage(curParallelWsId); }
         tensorAllocators_[curParallelWsId].rootInner.ResetPool();
         DEV_ASSERT_MSG(WsErr::WORKSPACE_INIT_RESOURCE_ERROR,
                        tensorAllocators_[curParallelWsId].rootInner.CanAllocate(rootInnerMemReq),
@@ -293,6 +400,34 @@ void DeviceWorkspaceAllocator::AssignOutcastAddresses(DevAscendFunctionDupped de
     }
 }
 
+FunctionMemoryAllocFailure DeviceWorkspaceAllocator::CanAllocateFunctionMemory(DevAscendFunctionDupped devRootDup,
+                                                                               DeviceExecuteSlot* slotList)
+{
+    (void)slotList;
+    DevAscendFunction* devRootSrc = devRootDup.GetSource();
+    const size_t outcastSize = devRootSrc->GetOutcastSize();
+
+    const size_t outcastMemReq = devRootSrc->exclusiveOutcastWsMemoryRequirement;
+    if (!tensorAllocators_[curParallelWsId].devTaskInnerExclusiveOutcasts.CanAllocate(outcastMemReq)) {
+        return FunctionMemoryAllocFailure::EXCLUSIVE_OUTCAST;
+    }
+
+    auto& innerTemporalPool = tensorAllocators_[curParallelWsId].devTaskInnerTemporalOutcasts;
+    const size_t availableInnerTemporalSlots = innerTemporalPool.AvailableSlots();
+    const uint64_t assembleSlotsPerDepth = devProg_->memBudget.tensor.workspacePool.assembleSlotsPerDepth;
+    // Conservative: treat one assemble depth as the next-root requirement. Exact per-root assemble
+    // slot counting belongs on Host; the extra recommended assemble depth covers this over-estimate.
+    if (outcastSize != 0 && availableInnerTemporalSlots < assembleSlotsPerDepth) {
+        return FunctionMemoryAllocFailure::INNER_TEMPORAL_OUTCAST;
+    }
+
+    if (outcastSize > runtimeOutcastTensorPool_.FreeItemNum()) {
+        return FunctionMemoryAllocFailure::RUNTIME_OUTCAST_METADATA;
+    }
+
+    return FunctionMemoryAllocFailure::OK;
+}
+
 void DeviceWorkspaceAllocator::TryAllocateDynamicCellMatchForAssembleSlot(DeviceExecuteSlot& slot)
 {
     // Caller: isPartialUpdateStitch (⇒ partialUpdate set) && mask != NONE.
@@ -438,6 +573,61 @@ void DeviceWorkspaceAllocator::MarkAsNewStitchWindow()
     aicpuStitchAllocator_.DelayedDumpAndResetCounter(wsMemDelayedDumper_);
     wsMemDelayedDumper_.MarkAsNewStitchWindow();
 #endif // DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_FULL
+}
+
+void DeviceWorkspaceAllocator::LogTuningSummary() const
+{
+    const auto& tensorBudget = devProg_->memBudget.tensor;
+    uint64_t maxRootInnerDepth = 0;
+    uint64_t maxExclusiveDepth = 0;
+    uint64_t maxInnerTemporalDepth = 0;
+    for (uint32_t i = 0; i < devProg_->GetParallelism(); ++i) {
+        const auto& peak = tuningState_.launchUsagePeak[i];
+        const auto& allocators = tensorAllocators_[i];
+        const uint64_t rootCapacity = allocators.rootInner.Capacity();
+        const uint64_t exclusiveCapacity = allocators.devTaskInnerExclusiveOutcasts.Capacity();
+        DEV_INFO("[Workspace Runtime Summary] parallelId=%u, "
+                 "rootInner={peak=%" PRIu64 ",capacity=%" PRIu64 "}, "
+                 "exclusiveOutcast={peak=%" PRIu64 ",capacity=%" PRIu64 "}, "
+                 "innerTemporalOutcast={peakSlots=%" PRIu64 ",capacitySlots=%" PRIu64 "}.",
+                 i, peak.rootInnerBytes, rootCapacity, peak.exclusiveOutcastBytes, exclusiveCapacity,
+                 peak.innerTemporalOutcastSlots, tensorBudget.devTaskInnerTemporalOutcastNum);
+        const uint64_t rootInnerDepth = CeilDiv(peak.rootInnerBytes, tensorBudget.workspacePool.rootInnerUnitBytes);
+        const uint64_t exclusiveDepth = CeilDiv(peak.exclusiveOutcastBytes,
+                                                tensorBudget.workspacePool.exclusiveOutcastUnitBytes);
+        const uint64_t innerTemporalDepth = CeilDiv(peak.innerTemporalOutcastSlots,
+                                                    tensorBudget.workspacePool.assembleSlotsPerDepth);
+        maxExclusiveDepth = exclusiveDepth > maxExclusiveDepth ? exclusiveDepth : maxExclusiveDepth;
+        maxRootInnerDepth = rootInnerDepth > maxRootInnerDepth ? rootInnerDepth : maxRootInnerDepth;
+        maxInnerTemporalDepth = innerTemporalDepth > maxInnerTemporalDepth ? innerTemporalDepth : maxInnerTemporalDepth;
+    }
+    const uint64_t slotBytes = tensorBudget.MaxOutcastMem();
+    const uint64_t rootInnerDepthBytes = tensorBudget.workspacePool.rootInnerUnitBytes;
+    const uint64_t innerTemporalDepthBytes = tensorBudget.workspacePool.assembleSlotsPerDepth * slotBytes;
+    const uint64_t exclusiveDepthBytes = tensorBudget.workspacePool.exclusiveOutcastUnitBytes;
+    const uint64_t tensorRawPerParallel = tensorBudget.rootInnerSpilledMem +
+                                          tensorBudget.devTaskInnerExclusiveOutcasts +
+                                          tensorBudget.BoundaryAndInnerTemporalOutcastSlotNum() * slotBytes;
+    const uint64_t tensorAlignedPerParallel = AlignUp(tensorRawPerParallel, ALIGNMENT_32K);
+    const auto nextDepthTotalBytes = [&](uint64_t depthBytes) {
+        return (AlignUp(tensorRawPerParallel + depthBytes, ALIGNMENT_32K) - tensorAlignedPerParallel) *
+               tensorBudget.parallelism;
+    };
+    DEV_INFO("[Workspace Runtime Recommendation] "
+             "actualDepths={rootInner=%u,innerTemporal=%u,exclusive=%u}, "
+             "recommendedDepths={rootInner=%" PRIu64 ",innerTemporal=%" PRIu64 ",exclusive=%" PRIu64 "}, "
+             "depthMemory={rawPerParallelBytes={rootInner=%" PRIu64 ",innerTemporal=%" PRIu64 ",exclusive=%" PRIu64
+             "}, nextDepthTotalBytes={rootInner=%" PRIu64 ",innerTemporal=%" PRIu64 ",exclusive=%" PRIu64
+             "}, parallelism=%u}.",
+             tensorBudget.workspacePool.stitchFunctionNumPerPool[0],
+             tensorBudget.workspacePool.stitchFunctionNumPerPool[1],
+             tensorBudget.workspacePool.stitchFunctionNumPerPool[2],
+             AtLeastRequiredDepth(maxRootInnerDepth, tensorBudget.workspacePool.rootInnerUnitBytes),
+             RecommendAssembleOutcastDepth(maxInnerTemporalDepth, tensorBudget.workspacePool.assembleSlotsPerDepth),
+             AtLeastRequiredDepth(maxExclusiveDepth, tensorBudget.workspacePool.exclusiveOutcastUnitBytes),
+             rootInnerDepthBytes, innerTemporalDepthBytes, exclusiveDepthBytes,
+             nextDepthTotalBytes(rootInnerDepthBytes), nextDepthTotalBytes(innerTemporalDepthBytes),
+             nextDepthTotalBytes(exclusiveDepthBytes), tensorBudget.parallelism);
 }
 
 void DeviceWorkspaceAllocator::DumpMemoryUsage(const char* hint) const

@@ -15,6 +15,7 @@
 
 #include "machine/device/dynamic/context/device_execute_context.h"
 #include "machine/device/distributed/shmem_wait_until.h"
+#include "tilefwk/aicpu_runtime.h"
 #include "tileop/distributed/comm_context.h"
 
 #include <cinttypes>
@@ -414,6 +415,7 @@ int DeviceExecuteContext::SubmitToAicoreAndRecycleMemory(bool withoutTail, bool 
 #endif // DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_FULL
 
     CalcControlMaxAicore();
+    DEV_IF_INFO { workspace.LogTuningUsage(taskId, stitchContext.Size()); }
     PROF_STAGE_BEGIN(PERF_EVT_STAGE_BUILD_TASK, "BuildDeviceTaskData.before\n");
     DynDeviceTask* dynTask = taskContext.BuildDeviceTaskData(stitchContext, taskId, devProg, withoutTail);
     if (dynTask == nullptr) {
@@ -444,6 +446,7 @@ int DeviceExecuteContext::SubmitToAicoreAndRecycleMemory(bool withoutTail, bool 
     // Reset stitch context
     stitchContext.Reset();
     slotContext.ClearDirty();
+    DEV_IF_INFO { workspace.ResetTuningDeviceTaskPeaks(); }
     PROF_STAGE_END(PERF_EVT_DEALLOCATE_WORKSPACE, "RecycleTensorWorkspace.after\n");
 
     ProcessControlFlowCacheRecord(dynTask);
@@ -542,8 +545,8 @@ void* DeviceExecuteContext::CallRootFunctionStitch(uint64_t rootKey)
     }
 
     if (NeedSubmmitDevTask(rootKey)) {
-        ret = SubmitToAicoreAndRecycleMemory(false, rootKey == RUNTIME_FUNCKEY_FINISH ? true : false,
-                                             (rootKey == RUNTIME_FUNCKEY_PARALLEL_FOR_END) ? true : false);
+        ret = SubmitToAicoreAndRecycleMemory(false, rootKey == RUNTIME_FUNCKEY_FINISH,
+                                             rootKey == RUNTIME_FUNCKEY_PARALLEL_FOR_END);
         if (unlikely(ret != DEVICE_MACHINE_OK)) {
             return RUNTIME_FUNCKEY_ERROR;
         }
@@ -572,14 +575,22 @@ void* DeviceExecuteContext::CallRootFunctionStitch(uint64_t rootKey)
 
     DEV_TRACE_DEBUG(REvent(GetRuid(rootKey), currDevRootDup.SchemaGetExpressionTable()));
     // dyn rawshape size depend expresstable calculated
-    while (!workspace.TryAllocateFunctionMemory(currDevRootDup, slotContext.GetSlotList())) {
-        // Failed to allocate, failed to stitch, submit existing stitched window to aicore and recycle memory
-        // If nothing stitched, wait for aicore to finish tasks and release enough memory
+    FunctionMemoryAllocFailure allocStatus = workspace.TryAllocateFunctionMemory(currDevRootDup,
+                                                                                 slotContext.GetSlotList());
+    while (allocStatus != FunctionMemoryAllocFailure::OK) {
+        const char* failureName = FunctionMemoryAllocFailureName(allocStatus);
+        if (stitchContext.Empty()) {
+            DEV_ERROR(CtrlErr::CTRL_FLOW_EXEC_FAILED,
+                      "#ctrl.workspace.preflight: Root cannot fit in an empty DeviceTask, rootKey=%" PRIu64
+                      ", func=%s, reason=%s.",
+                      rootKey, currDevRootDup.GetSource()->GetRawName(), failureName);
+            return RUNTIME_FUNCKEY_ERROR;
+        }
         ret = SubmitToAicoreAndRecycleMemory(true);
         if (unlikely(ret != DEVICE_MACHINE_OK)) {
             return RUNTIME_FUNCKEY_ERROR;
         }
-        DEV_INFO("[Stitch Finish] Memory Limit Exceeded.");
+        allocStatus = workspace.TryAllocateFunctionMemory(currDevRootDup, slotContext.GetSlotList());
     }
 
     if (AiCoreFree()) {

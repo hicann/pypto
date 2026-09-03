@@ -24,6 +24,7 @@ struct RuntimeWorkspaceConfig {
     uint64_t debugTotal{0};
     uint64_t maxWorkspaceBytes{0};
     uint64_t workspaceStitchMin{0};
+    uint32_t stitchFunctionNumPerPool[STITCH_FUNCTION_NUM_PER_POOL_SIZE]{0, 0, 0};
 };
 
 struct StitchDepthConfig {
@@ -33,6 +34,7 @@ struct StitchDepthConfig {
     uint32_t stitchMaxFunctionNum{0};
     uint64_t encodedWorkspaceSize{0};
     uint32_t memoryDrivenWorkspace{0};
+    uint32_t preciseWorkspaceEnabled{0};
 };
 
 uint64_t EstimateCtrlFlowCacheSlottedBlockCount(uint64_t totalSlot, uint32_t outcastCacheDepth);
@@ -40,6 +42,7 @@ uint64_t EstimateCtrlFlowCacheSlottedBlockCount(uint64_t totalSlot, uint32_t out
 uint64_t TensorWorkspaceBytesAtMinimumStitchDepth(const WorkspaceDesc& desc, uint32_t parallelism,
                                                   uint64_t aicoreSpilled, uint64_t debugTotal);
 
+void ValidateWorkspaceControlOrThrow(const WorkspaceDesc& desc, const RuntimeWorkspaceConfig& runtimeCfg);
 StitchDepthConfig ResolveStitchDepthConfig(WorkspaceDesc& desc, const RuntimeWorkspaceConfig& runtimeCfg);
 
 uint64_t WorkspaceBytesToKbCeil(uint64_t bytes);

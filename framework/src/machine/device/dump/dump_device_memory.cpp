@@ -22,7 +22,7 @@
 #include <string>
 #include <utility>
 #include "interface/configs/config_manager.h"
-#include "interface/function/rebuildable_attribute.h"
+#include "machine/utils/dynamic/rebuildable_workspace_desc.h"
 #include "machine/utils/dep_verify_dump_path.h"
 #include "machine/utils/dynamic/dev_callop_attribute.h"
 #include "machine/utils/dynamic/dev_encode_program.h"

@@ -362,6 +362,7 @@ public:
             DeviceTrace::GetInstance().ReportTraceMsg();
             return ret;
         }
+        DEV_IF_INFO { ctx.workspace.LogTuningSummary(); }
         DEV_INFO("end control flow.");
         PerfBegin(PERF_EVT_STAGE_STOP_AICORE);
         if (!devProg->ctrlFlowCacheAnchor->IsRecording()) {

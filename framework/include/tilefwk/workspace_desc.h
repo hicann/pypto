@@ -25,10 +25,18 @@ namespace npu::tile_fwk {
 
 class Function;
 
+inline constexpr uint32_t STITCH_FUNCTION_NUM_PER_POOL_SIZE = 3;
+
 struct WorkspaceDesc {
     struct WorkspaceConfig {
         uint64_t parallelism{0};
+        uint64_t rootInnerUnitBytes{0};
+        uint64_t exclusiveOutcastUnitBytes{0};
+        uint64_t assembleSlotsPerDepth{0};
+        uint32_t preciseWorkspaceEnabled{0};
     } config;
+
+    uint32_t stitchFunctionNumPerPool[STITCH_FUNCTION_NUM_PER_POOL_SIZE]{0, 0, 0};
 
     struct WorkspacePlatform {
         uint64_t aicoreCount{0};

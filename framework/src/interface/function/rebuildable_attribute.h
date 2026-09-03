@@ -26,7 +26,6 @@
 
 #include "tilefwk/symbolic_scalar.h"
 #include "interface/utils/entry_registrar.h"
-#include "tilefwk/workspace_desc.h"
 
 namespace npu::tile_fwk {
 namespace dynamic {
@@ -118,12 +117,6 @@ struct RebuildableAttrInitContext {
         ctx->manager->InitAttr(ctx->func, name, base);                       \
     }                                                                        \
     static EntryRegistrarNode node##TyAttr(RebuildableAttributeManager::GetRegistrarGroup(), Entry##TyAttr, #TyAttr);
-
-struct RebuildableWorkspaceDesc : RebuildableAttribute<WorkspaceDesc> {
-    uint64_t GetSizeForCheckOnly(uint64_t maxDynamicAssembleOutcastMem, uint64_t debugSize) const;
-
-    std::string PrettyDumpSize(uint64_t maxDynamicAssembleOutcastMem, uint64_t debugSize) const;
-};
 
 struct RebuildableRequiresSimt : RebuildableAttribute<bool> {
     RebuildableRequiresSimt() { data = false; }

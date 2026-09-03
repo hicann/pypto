@@ -313,6 +313,20 @@
                     "minimum": 0,
                     "maximum": 2147483647
                 },
+                "stitch_function_num_per_pool": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1024
+                    },
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "label": {
+                        "zh": "精细Workspace模式下三个内存池支持的stitch function深度，顺序为[rootInner, Assemble outcast, exclusive outcast]；[0,0,0]表示不启用精细模式，其他值表示启用；无实际需求的内存池可配置为0，有实际需求的内存池至少配置为1",
+                        "en": "Stitch function depths for the three pools in precise Workspace mode, ordered as [rootInner, inner-temporal outcast, exclusive outcast]. [0,0,0] disables precise mode; any other value enables it. A pool with no actual requirement may use 0, while a required pool must use at least 1."
+                    }
+                },
 
                 "run_mode": {
                     "type": "integer",

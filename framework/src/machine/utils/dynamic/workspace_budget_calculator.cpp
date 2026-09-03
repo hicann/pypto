@@ -12,7 +12,10 @@
 #include "interface/utils/common.h"
 #include "machine/utils/dynamic/dev_encode_program_ctrlflow_cache.h"
 #include "machine/utils/dynamic/dev_workspace.h"
+#include "machine/utils/dynamic/rebuildable_workspace_desc.h"
 #include "tilefwk/error_code.h"
+
+#include <stdexcept>
 
 namespace {
 constexpr uint64_t kAlignment32K = 32 * 1024;
@@ -20,6 +23,7 @@ constexpr uint64_t kAlignment32K = 32 * 1024;
 static uint64_t MinU64(uint64_t lhs, uint64_t rhs) { return lhs < rhs ? lhs : rhs; }
 
 static uint64_t MaxU64(uint64_t lhs, uint64_t rhs) { return lhs > rhs ? lhs : rhs; }
+
 } // namespace
 
 namespace npu::tile_fwk {
@@ -297,10 +301,136 @@ static uint32_t DeriveEffectiveStitchNum(uint64_t cap, const WorkspaceDesc& desc
 }
 } // namespace
 
+namespace {
+bool PreciseWorkspaceEnabled(const RuntimeWorkspaceConfig& runtimeCfg)
+{
+    return HasPreciseStitchFunctionNumPerPool(runtimeCfg.stitchFunctionNumPerPool);
+}
+
+uint64_t MaxRootInnerUnitBytes(const WorkspaceDesc& desc)
+{
+    uint64_t maxRootInner = 0;
+    for (const auto& root : desc.rootFuncDescList) {
+        const uint64_t alignedRootInner = ::npu::tile_fwk::AlignUp<uint64_t>(root.rootInnerSpilledRawMem,
+                                                                             TENSOR_ADDR_ALIGNMENT);
+        maxRootInner = std::max(maxRootInner, alignedRootInner);
+    }
+    return maxRootInner;
+}
+
+uint64_t MaxExclusiveOutcastUnitBytes(const WorkspaceDesc& desc)
+{
+    uint64_t maxExclusive = 0;
+    for (const auto& root : desc.rootFuncDescList) {
+        const uint64_t alignedExclusive = ::npu::tile_fwk::AlignUp<uint64_t>(root.rootTotalExclusiveOutcastRawMem,
+                                                                             TENSOR_ADDR_ALIGNMENT);
+        maxExclusive = std::max(maxExclusive, alignedExclusive);
+    }
+    return maxExclusive;
+}
+
+struct PreciseWorkspaceLayout {
+    uint64_t rootInnerUnitBytes{0};
+    uint64_t exclusiveUnitBytes{0};
+    uint64_t assembleSlotsPerDepth{0};
+    uint64_t fixedBoundarySlots{0};
+    uint64_t encodedWorkspaceSize{0};
+    uint32_t rootInnerDepth{1};
+    uint32_t innerTemporalOutcastDepth{1};
+    uint32_t exclusiveOutcastDepth{1};
+};
+
+void PopulateFixedOutcastLayout(const WorkspaceDesc& desc, PreciseWorkspaceLayout& layout)
+{
+    layout.rootInnerUnitBytes = MaxRootInnerUnitBytes(desc);
+    layout.exclusiveUnitBytes = MaxExclusiveOutcastUnitBytes(desc);
+    layout.assembleSlotsPerDepth = desc.totalAssembleOutcastSlot;
+    layout.fixedBoundarySlots = desc.totalExclusiveOutcastSlot * SLOTS_NEED_ALLOC_SIZE +
+                                desc.totalAssembleOutcastSlot * SLOTS_NEED_ALLOC_SIZE;
+}
+
+PreciseWorkspaceLayout CalculatePreciseWorkspaceLayout(const WorkspaceDesc& desc,
+                                                       const RuntimeWorkspaceConfig& runtimeCfg)
+{
+    PreciseWorkspaceLayout layout;
+    layout.rootInnerDepth = runtimeCfg.stitchFunctionNumPerPool[STITCH_POOL_ROOT_INNER];
+    layout.innerTemporalOutcastDepth = runtimeCfg.stitchFunctionNumPerPool[STITCH_POOL_ASSEMBLE_OUTCAST];
+    layout.exclusiveOutcastDepth = runtimeCfg.stitchFunctionNumPerPool[STITCH_POOL_EXCLUSIVE_OUTCAST];
+    PopulateFixedOutcastLayout(desc, layout);
+
+    const uint64_t rootInnerBytes = layout.rootInnerUnitBytes * layout.rootInnerDepth;
+    const uint64_t exclusiveBytes = layout.exclusiveUnitBytes * layout.exclusiveOutcastDepth;
+    const uint64_t innerTemporalSlots = layout.assembleSlotsPerDepth * layout.innerTemporalOutcastDepth;
+    const uint64_t slottedBytes = (layout.fixedBoundarySlots + innerTemporalSlots) * desc.maxStaticOutcastMem;
+    const uint64_t tensorRawPerParallel = rootInnerBytes + exclusiveBytes + slottedBytes;
+    const uint64_t tensorTotal = AlignUp(tensorRawPerParallel, kAlignment32K) * runtimeCfg.parallelism;
+    layout.encodedWorkspaceSize = tensorTotal + runtimeCfg.aicoreSpilled + runtimeCfg.debugTotal;
+    return layout;
+}
+
+void ValidateDepth(const char* name, uint32_t depth, uint64_t singleRootRequirement)
+{
+    if (depth > static_cast<uint32_t>(MAX_STITCH_FUNC_NUM)) {
+        throw std::runtime_error(std::string(name) + " must be in range [0, 1024]");
+    }
+    if (singleRootRequirement != 0 && depth == 0) {
+        throw std::runtime_error(std::string(name) +
+                                 " cannot be 0 because the current program requires this workspace pool "
+                                 "to construct one root function");
+    }
+}
+} // namespace
+
+void ValidateWorkspaceControlOrThrow(const WorkspaceDesc& desc, const RuntimeWorkspaceConfig& runtimeCfg)
+{
+    if (!PreciseWorkspaceEnabled(runtimeCfg)) {
+        return;
+    }
+    ValidateDepth("stitch_function_num_per_pool[0]", runtimeCfg.stitchFunctionNumPerPool[STITCH_POOL_ROOT_INNER],
+                  MaxRootInnerUnitBytes(desc));
+    ValidateDepth("stitch_function_num_per_pool[1]", runtimeCfg.stitchFunctionNumPerPool[STITCH_POOL_ASSEMBLE_OUTCAST],
+                  desc.totalAssembleOutcastSlot);
+    ValidateDepth("stitch_function_num_per_pool[2]", runtimeCfg.stitchFunctionNumPerPool[STITCH_POOL_EXCLUSIVE_OUTCAST],
+                  MaxExclusiveOutcastUnitBytes(desc));
+}
+
+namespace {
+void WriteWorkspaceUnitConfig(WorkspaceDesc& desc, uint64_t rootInnerUnitBytes, uint64_t exclusiveUnitBytes,
+                              uint64_t assembleSlotsPerDepth, uint32_t preciseWorkspaceEnabled)
+{
+    desc.config.rootInnerUnitBytes = rootInnerUnitBytes;
+    desc.config.exclusiveOutcastUnitBytes = exclusiveUnitBytes;
+    desc.config.assembleSlotsPerDepth = assembleSlotsPerDepth;
+    desc.config.preciseWorkspaceEnabled = preciseWorkspaceEnabled;
+}
+} // namespace
+
 StitchDepthConfig ResolveStitchDepthConfig(WorkspaceDesc& desc, const RuntimeWorkspaceConfig& runtimeCfg)
 {
+    ValidateWorkspaceControlOrThrow(desc, runtimeCfg);
     StitchDepthConfig config;
     config.kEff = runtimeCfg.stitchNumMax;
+    if (PreciseWorkspaceEnabled(runtimeCfg)) {
+        const PreciseWorkspaceLayout layout = CalculatePreciseWorkspaceLayout(desc, runtimeCfg);
+        CopyStitchFunctionNumPerPool(desc.stitchFunctionNumPerPool, runtimeCfg.stitchFunctionNumPerPool);
+        // Cache / RuntimeOutcast metadata must cover any pool that can accumulate Roots in one DeviceTask.
+        config.kEff = MaxOfStitchFunctionNumPerPool(desc.stitchFunctionNumPerPool);
+        config.encodedWorkspaceSize = layout.encodedWorkspaceSize;
+        config.memoryDrivenWorkspace = 1;
+        config.stitchMaxFunctionNum = static_cast<uint32_t>(MAX_STITCH_FUNC_NUM);
+        config.outcastCacheDepth = DeriveOutcastCacheDepth(config.kEff);
+        config.runtimeOutcastPoolDepth = DeriveRuntimeOutcastPoolDepth(config.kEff);
+        config.preciseWorkspaceEnabled = 1;
+        WriteWorkspaceUnitConfig(desc, layout.rootInnerUnitBytes, layout.exclusiveUnitBytes,
+                                 layout.assembleSlotsPerDepth, 1);
+
+        desc.maxRootInnerSpilledMem = layout.rootInnerUnitBytes * layout.rootInnerDepth;
+        desc.maxRootTotalExclusiveOutcastMem = layout.exclusiveUnitBytes * layout.exclusiveOutcastDepth;
+        desc.devTaskBoundaryOutcastNum = layout.fixedBoundarySlots;
+        desc.devTaskInnerTemporalOutcastNum = layout.assembleSlotsPerDepth * layout.innerTemporalOutcastDepth;
+        return config;
+    }
+
     const bool memoryDriven = runtimeCfg.maxWorkspaceBytes > 0 &&
                               runtimeCfg.maxWorkspaceBytes > runtimeCfg.workspaceStitchMin;
     if (memoryDriven) {
@@ -321,6 +451,10 @@ StitchDepthConfig ResolveStitchDepthConfig(WorkspaceDesc& desc, const RuntimeWor
 
     config.outcastCacheDepth = DeriveOutcastCacheDepth(config.kEff);
     config.runtimeOutcastPoolDepth = DeriveRuntimeOutcastPoolDepth(config.kEff);
+    config.preciseWorkspaceEnabled = 0;
+    FillStitchFunctionNumPerPool(desc.stitchFunctionNumPerPool, config.kEff);
+    WriteWorkspaceUnitConfig(desc, MaxRootInnerUnitBytes(desc), MaxExclusiveOutcastUnitBytes(desc),
+                             desc.totalAssembleOutcastSlot, 0);
     BuildTensorWorkspaceFromDescriptor(desc, config.kEff);
     return config;
 }

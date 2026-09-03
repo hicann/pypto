@@ -8,6 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 #include "machine/utils/dynamic/dev_encode_workspace.h"
+#include "machine/utils/dynamic/rebuildable_workspace_desc.h"
 
 #include "machine/utils/dynamic/dev_encode_program_ctrlflow_cache.h"
 #include "machine/utils/dynamic/dev_encode_function.h"
@@ -18,6 +19,7 @@
 #include "interface/program/program.h"
 #include "interface/configs/config_manager.h"
 #include "interface/configs/config_manager_ng.h"
+#include "interface/utils/common.h"
 #include "tilefwk/platform.h"
 #include "tilefwk/pypto_fwk_log.h"
 #include "tilefwk/error_code.h"
@@ -25,10 +27,12 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <iomanip>
 #include <numeric>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace npu::tile_fwk {
 namespace dynamic {
@@ -113,6 +117,20 @@ RuntimeWorkspaceConfig LoadRuntimeWorkspaceConfig(uint32_t maxUnrollTimes)
     cfg.maxWorkspaceBytes = GetMaxWorkspaceBytes();
     cfg.stitchNumMax = (cfg.maxWorkspaceBytes == 0) ? ConfiguredStitchFunctionMaxNum() :
                                                       EffectiveStitchNumMax(maxUnrollTimes);
+    const auto stitchFunctionNumPerPool = config::GetRuntimeOption<std::vector<int64_t>>(STITCH_FUNCTION_NUM_PER_POOL);
+    if (stitchFunctionNumPerPool.size() != STITCH_FUNCTION_NUM_PER_POOL_SIZE) {
+        throw std::runtime_error("stitch_function_num_per_pool must contain exactly 3 elements");
+    }
+    for (size_t i = 0; i < STITCH_FUNCTION_NUM_PER_POOL_SIZE; ++i) {
+        const int64_t depth = stitchFunctionNumPerPool[i];
+        if (depth < 0 || depth > static_cast<int64_t>(MAX_STITCH_FUNC_NUM)) {
+            throw std::runtime_error("stitch_function_num_per_pool elements must be in range [0, 1024]");
+        }
+        cfg.stitchFunctionNumPerPool[i] = static_cast<uint32_t>(depth);
+    }
+    if (HasPreciseStitchFunctionNumPerPool(cfg.stitchFunctionNumPerPool)) {
+        cfg.stitchNumMax = static_cast<uint32_t>(MAX_STITCH_FUNC_NUM);
+    }
     return cfg;
 }
 
@@ -124,6 +142,7 @@ uint64_t GetMaxWorkspaceBytes()
 
 static void EmitWorkspaceUserMessage(const std::string& msg)
 {
+    MACHINE_LOGI("%s", msg.c_str());
     (void)fprintf(stdout, "%s\n", msg.c_str());
     (void)fflush(stdout);
 }
@@ -275,28 +294,38 @@ void ApplyStitchDepthConfig(DevAscendProgram* devProg, WorkspaceDesc& wsDesc, co
     ApplyTensorWorkspaceResult(devProg, wsDesc);
     devProg->memBudget.aicoreSpilled.aicoreCount = wsDesc.platform.aicoreCount;
     devProg->memBudget.tensor.memoryDrivenWorkspace = config.memoryDrivenWorkspace;
+    auto& workspacePool = devProg->memBudget.tensor.workspacePool;
+    workspacePool.rootInnerUnitBytes = wsDesc.config.rootInnerUnitBytes;
+    workspacePool.exclusiveOutcastUnitBytes = wsDesc.config.exclusiveOutcastUnitBytes;
+    workspacePool.assembleSlotsPerDepth = wsDesc.config.assembleSlotsPerDepth;
+    CopyStitchFunctionNumPerPool(workspacePool.stitchFunctionNumPerPool, wsDesc.stitchFunctionNumPerPool);
+    workspacePool.preciseWorkspaceEnabled = wsDesc.config.preciseWorkspaceEnabled;
     devProg->stitchMaxFunctionNum = config.stitchMaxFunctionNum;
     devProg->memBudget.tensor.runtimeOutcastPoolSize = totalSlot * (config.runtimeOutcastPoolDepth + 1) *
                                                        devProg->GetParallelism();
 }
 
-void LogWorkspaceEncodeSummary(int kMin, uint32_t stitchNumMax, const DevAscendProgram& devProg,
-                               const StitchDepthConfig& depthConfig, uint64_t maxWorkspaceBytes,
-                               uint64_t workspaceStitchMin)
+void LogWorkspaceEncodeSummary(int kMin, const DevAscendProgram& devProg, const StitchDepthConfig& depthConfig,
+                               const RuntimeWorkspaceConfig& runtimeCfg, const WorkspaceDesc& wsDesc)
 {
-    MACHINE_LOGI("[workspaceSize] stitch depth: k_min=%d, stitchNumMax=%u, k_eff=%u, "
-                 "outcastCacheDepth=%u, "
-                 "runtimeOutcastPoolDepth=%u, devTaskBoundaryOutcastNum=%lu, "
-                 "devTaskInnerTemporalOutcastNum=%lu, "
-                 "stitchMax=%u, stitch_1=%lu bytes, encoded_tensor_budget=%lu bytes, context_workspace=%lu bytes, "
-                 "metadata=%lu bytes, "
-                 "max_workspace_kb=%lu KB, memory_driven=%d, runtimeOutcastPoolSize=%u bytes.",
-                 kMin, stitchNumMax, depthConfig.kEff, depthConfig.outcastCacheDepth,
-                 depthConfig.runtimeOutcastPoolDepth, devProg.memBudget.tensor.devTaskBoundaryOutcastNum,
-                 devProg.memBudget.tensor.devTaskInnerTemporalOutcastNum, devProg.stitchMaxFunctionNum,
-                 workspaceStitchMin, depthConfig.encodedWorkspaceSize, devProg.workspaceSize,
-                 devProg.memBudget.metadata.Total(), WorkspaceBytesToKbCeil(maxWorkspaceBytes),
-                 static_cast<int>(depthConfig.memoryDrivenWorkspace), devProg.memBudget.tensor.runtimeOutcastPoolSize);
+    MACHINE_LOGI(
+        "[workspaceSize] stitch depth: k_min=%d, stitchNumMax=%u, k_eff=%u, outcastCacheDepth=%u, "
+        "runtimeOutcastPoolDepth=%u, devTaskBoundaryOutcastNum=%lu, devTaskInnerTemporalOutcastNum=%lu, "
+        "stitchMax=%u, stitch_1=%lu bytes, encoded_tensor_budget=%lu bytes, context_workspace=%lu bytes, metadata=%lu "
+        "bytes, "
+        "max_workspace_kb=%lu KB, memory_driven=%d, precise_workspace=%u, "
+        "rootInnerDepth=%u, innerTemporalDepth=%u, exclusiveDepth=%u, "
+        "rootInnerUnitBytes=%lu, runtimeOutcastPoolSize=%u bytes.",
+        kMin, runtimeCfg.stitchNumMax, depthConfig.kEff, depthConfig.outcastCacheDepth,
+        depthConfig.runtimeOutcastPoolDepth, devProg.memBudget.tensor.devTaskBoundaryOutcastNum,
+        devProg.memBudget.tensor.devTaskInnerTemporalOutcastNum, devProg.stitchMaxFunctionNum,
+        runtimeCfg.workspaceStitchMin, depthConfig.encodedWorkspaceSize, devProg.workspaceSize,
+        devProg.memBudget.metadata.Total(), WorkspaceBytesToKbCeil(runtimeCfg.maxWorkspaceBytes),
+        static_cast<int>(depthConfig.memoryDrivenWorkspace), depthConfig.preciseWorkspaceEnabled,
+        wsDesc.stitchFunctionNumPerPool[STITCH_POOL_ROOT_INNER],
+        wsDesc.stitchFunctionNumPerPool[STITCH_POOL_ASSEMBLE_OUTCAST],
+        wsDesc.stitchFunctionNumPerPool[STITCH_POOL_EXCLUSIVE_OUTCAST],
+        devProg.memBudget.tensor.workspacePool.rootInnerUnitBytes, devProg.memBudget.tensor.runtimeOutcastPoolSize);
 }
 
 struct FlexSlotInfo {
@@ -732,4 +761,76 @@ uint64_t DevAscendProgram::GetCtrlFlowCacheSlottedOutcastBlockCount(uint64_t tot
 }
 
 } // namespace dynamic
+
+#define ComputeSize(name)                                                                                \
+    constexpr uint64_t ALIGNMENT_32K = 32 * 1024;                                                        \
+    uint64_t tensorRootInnerSpill = data.maxRootInnerSpilledMem;                                         \
+    uint64_t tensorDevTaskInnerExclusiveOutcast = data.maxRootTotalExclusiveOutcastMem;                  \
+    uint64_t tensorMaxOutcast = std::max(data.maxStaticOutcastMem, maxDynamicAssembleOutcastMem);        \
+    uint64_t tensorInnerTemporalOutcastNum = data.devTaskInnerTemporalOutcastNum;                        \
+    uint64_t tensorBoundaryAndInnerTemporalOutcastNum = data.devTaskBoundaryOutcastNum +                 \
+                                                        tensorInnerTemporalOutcastNum;                   \
+    uint64_t tensorPerOutcast = tensorMaxOutcast * tensorBoundaryAndInnerTemporalOutcastNum;             \
+    uint64_t tensorTotal = tensorRootInnerSpill + tensorDevTaskInnerExclusiveOutcast + tensorPerOutcast; \
+    uint64_t tensorTotalAlloc = AlignUp(tensorTotal, ALIGNMENT_32K) * data.config.parallelism;           \
+    uint64_t leafSpill = data.platform.aicoreCount * data.maxLeafPerCoreSpilledMem;                      \
+    uint64_t name = tensorTotalAlloc + leafSpill + debugSize
+
+uint64_t RebuildableWorkspaceDesc::GetSizeForCheckOnly(uint64_t maxDynamicAssembleOutcastMem, uint64_t debugSize) const
+{
+    ComputeSize(workspaceSize);
+    return workspaceSize;
+}
+
+std::string RebuildableWorkspaceDesc::PrettyDumpSize(uint64_t maxDynamicAssembleOutcastMem, uint64_t debugSize) const
+{
+    std::ostringstream oss;
+    oss << "Config:\n"
+        << "  " << std::setw(30) << std::left << "parallelism:" << std::setw(10) << std::right
+        << data.config.parallelism << "\n";
+    oss << "Root:\n";
+    for (auto& rootFuncDesc : data.rootFuncDescList) {
+        oss << "  " << "name: " << rootFuncDesc.devFuncName << "\n";
+        oss << "    " << "unroll:" << std::setw(3) << rootFuncDesc.unroll << " innerSpilledRaw:" << std::setw(10)
+            << rootFuncDesc.rootInnerSpilledRawMem << " leafSpilled:" << std::setw(7)
+            << rootFuncDesc.leafPerCoreSpilledMem << " totalOutcastRaw:" << std::setw(10)
+            << rootFuncDesc.rootTotalExclusiveOutcastRawMem << " staticOutcast:" << std::setw(10)
+            << rootFuncDesc.rootMaxExclusiveOutcastMem << "\n";
+    }
+
+    ComputeSize(workspaceSize);
+
+    auto print = [&](int indent, const std::string& name, uint64_t value) {
+        oss << std::setw(indent * 2) << " " << std::setw(50 - indent * 2) << std::left << name << std::setw(10)
+            << std::right << value << "\n";
+    };
+    print(1, "workspace:", workspaceSize);
+    print(2, "tensorAlloc:", tensorTotalAlloc);
+    print(3, "tensor:", tensorTotal);
+    print(4, "rootInnerSpilled:", tensorRootInnerSpill);
+    print(4, "devTaskInnerOutcast:", tensorDevTaskInnerExclusiveOutcast);
+    print(4, "devTaskBoundaryAndInnerOutcast:", tensorPerOutcast);
+    print(5, "maxOutcast:", tensorMaxOutcast);
+    print(6, "staticOutcast:", data.maxStaticOutcastMem);
+    print(6, "dynamicOutcast:", maxDynamicAssembleOutcastMem);
+    print(5, "devTaskBoundaryAndInnerOutcastCount:", tensorBoundaryAndInnerTemporalOutcastNum);
+    print(6, "devTaskBoundaryOutcastCount:", data.devTaskBoundaryOutcastNum);
+    print(6, "devTaskInnerOutcastCount:", tensorInnerTemporalOutcastNum);
+    print(4, "preciseWorkspaceEnabled:", data.config.preciseWorkspaceEnabled);
+    print(4, "stitchFunctionNumPerPool[0]:", data.stitchFunctionNumPerPool[STITCH_POOL_ROOT_INNER]);
+    print(4, "stitchFunctionNumPerPool[1]:", data.stitchFunctionNumPerPool[STITCH_POOL_ASSEMBLE_OUTCAST]);
+    print(4, "stitchFunctionNumPerPool[2]:", data.stitchFunctionNumPerPool[STITCH_POOL_EXCLUSIVE_OUTCAST]);
+    print(4, "rootInnerUnitBytes:", data.config.rootInnerUnitBytes);
+    print(4, "exclusiveOutcastUnitBytes:", data.config.exclusiveOutcastUnitBytes);
+    print(4, "assembleSlotsPerDepth:", data.config.assembleSlotsPerDepth);
+    print(3, "parallel:", data.config.parallelism);
+    print(2, "leafSpill:", leafSpill);
+    print(3, "aicoreCount:", data.platform.aicoreCount);
+    print(3, "maxLeafPerCoreSpilled:", data.maxLeafPerCoreSpilledMem);
+    print(2, "debug:", debugSize);
+    return oss.str();
+}
+
+RBUILDABLE_ATTRIBUTE_REGISTER(RebuildableWorkspaceDesc);
+
 } // namespace npu::tile_fwk

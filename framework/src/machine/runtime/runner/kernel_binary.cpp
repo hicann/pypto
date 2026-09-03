@@ -25,7 +25,7 @@
 #include "adapter/api/msprof_api.h"
 #include "adapter/api/acl_api.h"
 #include "adapter/api/runtime_api.h"
-#include "interface/function/rebuildable_attribute.h"
+#include "machine/utils/dynamic/rebuildable_workspace_desc.h"
 #include "interface/utils/common.h"
 #include "interface/configs/config_manager.h"
 #include "interface/machine/host/perf_analysis.h"
