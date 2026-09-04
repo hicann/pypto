@@ -99,7 +99,7 @@ python3 .agents/skills/.../get_memory_check_paths.py /path/to/wk /path/to/output
 使用脚本输出的命令执行检测：
 
 ```bash
-python3 tools/schema/schema_memory_check.py -d <device_log_dir> -t <dyn_topo_file>
+python3 tools/runtime_verifier/schema_memory_check.py -d <device_log_dir> -t <dyn_topo_file>
 ```
 
 ### 3.3 恢复测试用例文件

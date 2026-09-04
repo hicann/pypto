@@ -60,7 +60,7 @@ def main():
     logger.info("")
     logger.info("=" * 60)
     logger.info("内存重叠检测命令:")
-    logger.info("python3 tools/schema/schema_memory_check.py -d %s -t %s", trace_log_dir, dyn_topo_path)
+    logger.info("python3 tools/runtime_verifier/schema_memory_check.py -d %s -t %s", trace_log_dir, dyn_topo_path)
     logger.info("=" * 60)
 
     sys.exit(0)
