@@ -75,7 +75,7 @@ PyPTO提供了丰富的示例代码，涵盖从基础操作到复杂模型实现
 │   └── zh/
 │      ├── api/                 # PyPTO API参考
 │      ├── contribute/          # 贡献指南文档
-│      └── tutorials/           # PyPTO算子开发
+│      └── guide/               # PyPTO算子开发
 │
 ├── examples/                   # 示例代码
 │   ├── 01_beginner/            # 初级示例

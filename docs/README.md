@@ -17,7 +17,7 @@ docs/
 ├── zh/                         # 中文文档
 │   ├── install                 # 环境部署
 │   ├── invocation              # 样例运行
-│   ├── tutorials               # PyPTO算子开发
+│   ├── guide                   # PyPTO算子开发
 │   └── api                     # PyPTO API
 ├── CONTRIBUTION_DOC.md         # 文档贡献指南
 └── README.md                   # 本文件

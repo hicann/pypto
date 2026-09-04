@@ -51,7 +51,7 @@
 
 ## 阶段 4a：API 文档更新
 
-- [ ] 定位文档文件: `docs/zh/api/operation/pypto-{op}.md`
+- [ ] 定位文档文件: `docs/zh/api/tensor_api/operation/pypto-{op}.md`
 - [ ] 找到「约束说明」章节中的 dtype 列表
 - [ ] 更新 dtype 列表（架构区分型或统一型）
 - [ ] 确认 `<!-- npu -->` 标签格式正确
@@ -104,7 +104,7 @@ C++ ST 测试: PASS / FAIL ({passed}/{total} 用例通过)
 | # | 文件 | 变更类型 | 说明 |
 |---|------|---------|------|
 | 1 | framework/src/interface/operation/vector/{file}.cpp | 修改 | {description} |
-| 2 | docs/zh/api/operation/pypto-{op}.md | 修改 | {description} |
+| 2 | docs/zh/api/tensor_api/operation/pypto-{op}.md | 修改 | {description} |
 | 3 | framework/tests/st/operation/test_case/{Op}_st_test_cases.csv | 修改 | 新增 N 条测试用例 |
 
 > 注意：`{Op}_st_test_cases.json` 不在变更清单中——它由测试脚本从 CSV 自动生成。

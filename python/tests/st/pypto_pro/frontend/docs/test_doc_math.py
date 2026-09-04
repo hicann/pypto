@@ -9,7 +9,7 @@
 
 """Math functions: row/col reduce, argmax/argmin, expand variants.
 
-Doc: docs/zh/pypto_pro/api/SIMD-API/计算API/数学函数
+Doc: docs/zh/api/pro_api/SIMD-API/计算API/数学函数
 
 Vector mode with make_tile_group + auto_mutex (single buffer). Verifies reduction ops
 (col_*/row_*) with tile_tmp and expand ops (max/min/add/sub/mul/div).

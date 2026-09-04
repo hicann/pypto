@@ -9,7 +9,7 @@
 
 """Memory data movement APIs (load/store/load_tile/store_tile/move/insert/ssbuf).
 
-Doc: docs/zh/pypto_pro/api/SIMD-API/计算API/Memory数据搬运/
+Doc: docs/zh/api/pro_api/SIMD-API/计算API/Memory数据搬运/
 
 Verifies GM-UB data transfer: pure vector load/store, cube-path move
 (GM->L1->L0->matmul->GM), insert with cross-core sync, and ssbuf copy.

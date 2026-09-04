@@ -143,7 +143,7 @@ description: 为现有 PyPTO operation 新增 dtype 支持。自动完成 pto-is
 #### 4a. 更新 API 文档
 
 1. 读取 [templates/doc-dtype-table-template.md](templates/doc-dtype-table-template.md) 以了解文档格式。
-2. 定位文档文件：`docs/zh/api/operation/pypto-{op}.md`。
+2. 定位文档文件：`docs/zh/api/tensor_api/operation/pypto-{op}.md`。
 3. 找到「约束说明」章节中的 Tensor 数据类型说明部分。
 4. 根据架构区分情况更新 dtype 列表：
 
@@ -249,7 +249,7 @@ description: 为现有 PyPTO operation 新增 dtype 支持。自动完成 pto-is
 | 文件 | 变更类型 | 说明 |
 |------|---------|------|
 | framework/src/interface/operation/vector/{file}.cpp | 修改 | 在 {OP}_A2A3_TYPES / {OP}_A5_TYPES 中新增 dtype |
-| docs/zh/api/operation/pypto-{op}.md | 修改 | 更新约束说明中的 dtype 表格 |
+| docs/zh/api/tensor_api/operation/pypto-{op}.md | 修改 | 更新约束说明中的 dtype 表格 |
 | framework/tests/st/operation/test_case/{Op}_st_test_cases.csv | 修改 | 新增 N 条测试用例 |
 
 > 注意：`{Op}_st_test_cases.json` 不在变更清单中——它由测试脚本从 CSV 自动生成，不要手动编辑。

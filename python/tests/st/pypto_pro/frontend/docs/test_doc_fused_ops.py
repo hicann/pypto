@@ -12,9 +12,9 @@
 make_tile_group + auto_mutex style.
 
 Verifies kernel examples from:
-  docs/zh/pypto_pro/api/SIMD-API/operation/memory_vector_computation/fused_vector_computation/mul_add_dst.md
-  docs/zh/pypto_pro/api/SIMD-API/operation/memory_vector_computation/fused_vector_computation/fused_mul_add_relu.md
-  docs/zh/pypto_pro/api/SIMD-API/operation/memory_vector_computation/fused_vector_computation/partadd.md
+  docs/zh/api/pro_api/SIMD-API/operation/memory_vector_computation/fused_vector_computation/mul_add_dst.md
+  docs/zh/api/pro_api/SIMD-API/operation/memory_vector_computation/fused_vector_computation/fused_mul_add_relu.md
+  docs/zh/api/pro_api/SIMD-API/operation/memory_vector_computation/fused_vector_computation/partadd.md
 """
 
 import logging

@@ -10,8 +10,8 @@
 """UT for doc examples — shl / shr element-wise shift ops.
 
 Verifies kernel examples from:
-  docs/zh/pypto_pro/api/SIMD-API/operation/memory_vector_computation/elementwise/shl.md
-  docs/zh/pypto_pro/api/SIMD-API/operation/memory_vector_computation/elementwise/shr.md
+  docs/zh/api/pro_api/SIMD-API/operation/memory_vector_computation/elementwise/shl.md
+  docs/zh/api/pro_api/SIMD-API/operation/memory_vector_computation/elementwise/shr.md
 """
 
 import logging

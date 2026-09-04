@@ -76,7 +76,7 @@ Key directories are as follows:
 │   └── zh/
 │      ├── api/                 # PyPTO APIs
 │      ├── contribute/          # Contribution guide documentation
-│      └── tutorials/           # PyPTO Operator Development
+│      └── guide/               # PyPTO Operator Development
 │
 ├── examples/                   # Sample code
 │   ├── 01_beginner/            # Beginner samples

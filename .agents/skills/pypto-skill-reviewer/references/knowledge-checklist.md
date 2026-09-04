@@ -15,7 +15,7 @@
 | R49 | S1 | skill 中的知识内容（references/ 和 SKILL.md）应与 docs/zh/ 保持一致性，不得存在 P0 级别问题 |
 | R50 | S2 | skill 中的路径应在正确的执行上下文中可访问 |
 | R51 | S2 | skill 中引用的 API 应存在于 docs/zh/ 或官方示例中 |
-| R52 | S2 | skill 中的术语应与 docs/zh/tutorials/appendix/glossary.md 保持一致 |
+| R52 | S2 | skill 中的术语应与 docs/zh/guide/appendix/glossary.md 保持一致 |
 
 ## 输出格式
 
@@ -240,7 +240,7 @@ EXPECT_EQ(pass.PostCheck(function), SUCCESS);
 
 ```bash
 # 检查术语表
-grep -i "<term>" docs/zh/tutorials/appendix/glossary.md
+grep -i "<term>" docs/zh/guide/appendix/glossary.md
 
 # 检查组件名称
 grep -r "Tile Graph\|Tensor Graph" docs/zh/
@@ -286,7 +286,7 @@ grep -i "version\|cann\|pytorch" docs/zh/installation/
 
 # 更清晰（或指向 docs）
 - dtype: INT8/UINT8/INT16/UINT16/INT32/UINT32/INT64/UINT64
-- dtype: 详见 docs/zh/api/others/pypto-from_torch.md
+- dtype: 详见 docs/zh/api/tensor_api/others/pypto-from_torch.md
 ```
 
 ---
@@ -335,7 +335,7 @@ grep -i "version\|cann\|pytorch" docs/zh/installation/
 | 类型 | 定义 | 识别方法 |
 |------|------|----------|
 | 概念歧义 | 术语使用可能造成误解 | 示例使用真实 API 但声称不存在 |
-| 术语不一致 | 与 docs 术语表不一致 | `grep -i "<term>" docs/zh/tutorials/appendix/glossary.md` |
+| 术语不一致 | 与 docs 术语表不一致 | `grep -i "<term>" docs/zh/guide/appendix/glossary.md` |
 | 正则/格式错误 | 正则表达式、格式规范有语法问题 | 正则测试、格式验证 |
 
 ### P2 可选修复

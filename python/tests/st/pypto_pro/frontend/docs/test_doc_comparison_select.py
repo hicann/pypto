@@ -9,7 +9,7 @@
 
 """Scalar comparison and element-wise selection.
 
-Doc: docs/zh/pypto_pro/api/SIMD-API/计算API/Memory矢量计算/{比较, 选择}
+Doc: docs/zh/api/pro_api/SIMD-API/计算API/Memory矢量计算/{比较, 选择}
 
 Pure vector mode with make_tile_group and auto_mutex. Verifies gt producing
 a bit-packed UINT8 predicate and select choosing lhs/rhs per element.

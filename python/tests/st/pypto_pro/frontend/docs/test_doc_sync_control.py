@@ -9,7 +9,7 @@
 
 """Sync control APIs: sync_src/dst, barriers, sync_all, mutex, cross-core, layout transform.
 
-Doc: docs/zh/pypto_pro/api/SIMD-API/计算API/同步控制/
+Doc: docs/zh/api/pro_api/SIMD-API/计算API/同步控制/
 
 Verifies pipeline sync, barriers (bar_all/bar_m), global sync,
 manual mutex, cross-core communication, and matmul layout transform.

@@ -461,7 +461,7 @@ if (0) {
 
 | 文件 | 说明 |
 |------|------|
-| `docs/zh/tutorials/appendix/trouble_shooting/machine.md` | MACHINE 组件错误码与排查建议（含 Workspace 内存异常偏大章节） |
+| `docs/zh/guide/appendix/trouble_shooting/machine.md` | MACHINE 组件错误码与排查建议（含 Workspace 内存异常偏大章节） |
 | `framework/src/machine/utils/dynamic/dev_encode_program.h` | memBudget 结构体定义 |
 | `framework/src/machine/utils/dynamic/dev_encode.cpp` | Workspace 预算计算核心逻辑（CalcTensorWorkspace、EncodeRawShape 等） |
 | `framework/src/machine/runtime/launcher/device_launcher.h` | Workspace 分配与总量日志打印 |

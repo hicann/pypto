@@ -9,7 +9,7 @@
 
 """Quantization, type cast, and scatter ops.
 
-Doc: docs/zh/pypto_pro/api/SIMD-API/计算API/{量化, Memory矢量计算/类型转换, Memory矢量计算/离散与聚合}
+Doc: docs/zh/api/pro_api/SIMD-API/计算API/{量化, Memory矢量计算/类型转换, Memory矢量计算/离散与聚合}
 
 make_tile_group + auto_mutex style. Verifies quant/dequant,
 pl.cast type conversion, and scatter correctness.

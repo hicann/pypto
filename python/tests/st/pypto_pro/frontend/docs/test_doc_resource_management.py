@@ -9,7 +9,7 @@
 
 """Resource management APIs (make_tile / addptr / make_tensor / make_tile_group).
 
-Doc: docs/zh/pypto_pro/api/SIMD-API/计算API/资源管理/
+Doc: docs/zh/api/pro_api/SIMD-API/计算API/资源管理/
 
 Verifies tile/tensor creation and pointer arithmetic. make_tile_group tested
 within a minimal matmul context (requires auto_mutex).

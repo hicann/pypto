@@ -9,7 +9,7 @@
 
 """Elementwise, composite, and fused vector ops.
 
-Doc: docs/zh/pypto_pro/api/SIMD-API/计算API/Memory矢量计算/{逐元素, 复合计算, 融合算子, 类型转换}
+Doc: docs/zh/api/pro_api/SIMD-API/计算API/Memory矢量计算/{逐元素, 复合计算, 融合算子, 类型转换}
 
 Pure vector mode with make_tile_group + auto_mutex style (single-buffer, no manual sync).
 Verifies add/sub/mul/div/xor, maximum/minimum, neg/relu, and fused ops (axpy/mul_add/etc).

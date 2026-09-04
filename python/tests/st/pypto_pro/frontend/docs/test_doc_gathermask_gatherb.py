@@ -9,7 +9,7 @@
 
 """Gather variants: gathermask (pattern_mode) and gatherb (byte-offset block gather).
 
-Doc: docs/zh/pypto_pro/api/SIMD-API/计算API/Memory矢量计算/离散与聚合
+Doc: docs/zh/api/pro_api/SIMD-API/计算API/Memory矢量计算/离散与聚合
 
 Pure vector mode with make_tile_group and auto_mutex. Verifies masked column
 selection and byte-offset block gather with identity offsets.

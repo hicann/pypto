@@ -11,7 +11,7 @@
 
 Uses make_tile_group + auto_mutex style.
 
-Doc: docs/zh/pypto_pro/api/SIMD-API/计算API/{Memory矢量计算/离散与聚合, 系统访问变量}
+Doc: docs/zh/api/pro_api/SIMD-API/计算API/{Memory矢量计算/离散与聚合, 系统访问变量}
 
 Pure vector mode. Verifies indexed gather and multi-core block variable
 access for row offset computation.

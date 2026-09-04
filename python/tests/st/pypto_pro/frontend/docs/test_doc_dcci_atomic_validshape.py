@@ -9,7 +9,7 @@
 
 """Cache control (dcci) and tail-block shape (set_validshape).
 
-Doc: docs/zh/pypto_pro/api/SIMD-API/计算API/{缓存控制/dcci, Memory矢量计算/转置与元素读写/set_validshape}
+Doc: docs/zh/api/pro_api/SIMD-API/计算API/{缓存控制/dcci, Memory矢量计算/转置与元素读写/set_validshape}
 
 Verifies GM cache invalidation for host-device visibility and valid shape
 setting for tail-block processing.

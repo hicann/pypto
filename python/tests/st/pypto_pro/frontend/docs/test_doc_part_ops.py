@@ -10,9 +10,9 @@
 """UT for doc examples — partmax / partmin / partmul fused ops.
 
 Verifies kernel examples from:
-  docs/zh/pypto_pro/api/SIMD-API/operation/memory_vector_computation/fused_vector_computation/partmax.md
-  docs/zh/pypto_pro/api/SIMD-API/operation/memory_vector_computation/fused_vector_computation/partmin.md
-  docs/zh/pypto_pro/api/SIMD-API/operation/memory_vector_computation/fused_vector_computation/partmul.md
+  docs/zh/api/pro_api/SIMD-API/operation/memory_vector_computation/fused_vector_computation/partmax.md
+  docs/zh/api/pro_api/SIMD-API/operation/memory_vector_computation/fused_vector_computation/partmin.md
+  docs/zh/api/pro_api/SIMD-API/operation/memory_vector_computation/fused_vector_computation/partmul.md
 """
 
 import logging

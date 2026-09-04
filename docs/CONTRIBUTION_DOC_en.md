@@ -12,7 +12,7 @@ Strictly follow the [Documentation Writing Requirements](https://gitcode.com/can
 
 ### Terminology Standard Expression Specifications
 
-All domain-specific terms must strictly follow the standard expressions in the [Glossary](./zh/tutorials/appendix/glossary.md). If a term is not covered by the glossary, you can submit a PR to extend the glossary.
+All domain-specific terms must strictly follow the standard expressions in the [Glossary](./zh/guide/appendix/glossary.md). If a term is not covered by the glossary, you can submit a PR to extend the glossary.
 
 ### Product Model Standard Expression
 
@@ -24,7 +24,7 @@ To maintain consistent product model expressions in the documentation system, us
 
 ### Product Difference Description Specification
 
-For functional differences between product models, it is recommended to consolidate them into the **Constraint Description** of the corresponding `.md` file (for example, [pypto.bitwise_and](./zh/api/operation/pypto-bitwise_and.md)). This helps users quickly locate difference information and facilitates subsequent documentation customization, extension, and version iteration maintenance.
+For functional differences between product models, it is recommended to consolidate them into the **Constraint Description** of the corresponding `.md` file (for example, [pypto.bitwise_and](./zh/api/tensor_api/operation/pypto-bitwise_and.md)). This helps users quickly locate difference information and facilitates subsequent documentation customization, extension, and version iteration maintenance.
 
 ## Update or Add Documentation
 

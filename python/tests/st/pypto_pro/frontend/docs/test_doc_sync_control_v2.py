@@ -9,7 +9,7 @@
 
 """Sync control APIs (batch 2): bar_m, set_mm_layout_transform, cross-core sync.
 
-Doc: docs/zh/pypto_pro/api/SIMD-API/计算API/同步控制/
+Doc: docs/zh/api/pro_api/SIMD-API/计算API/同步控制/
 
 Verifies cube-pipeline barrier between matmuls, layout transform for K
 accumulation, and vector-cube cross-core communication.

@@ -12,7 +12,7 @@
 """pl.max NPU 泛化测试 — 标量级取大语法糖，覆盖多种数据类型与控制流。
 
 参考文献:
-  docs/zh/pypto_pro/api/Utils-API/python_syntax_sugar/max.md
+  docs/zh/api/pro_api/Utils-API/python_syntax_sugar/max.md
 
 被测 API:
   pl.max(lhs, rhs)  — 取两个标量中的较大值，恰好 2 个参数，不接受关键字参数；

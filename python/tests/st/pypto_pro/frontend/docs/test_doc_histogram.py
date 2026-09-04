@@ -9,7 +9,7 @@
 
 """Histogram op for radix sort preprocessing.
 
-Doc: docs/zh/pypto_pro/api/SIMD-API/operation/memory_vector_computation/scatter_gather/histogram.md
+Doc: docs/zh/api/pro_api/SIMD-API/operation/memory_vector_computation/scatter_gather/histogram.md
 
 make_tile_group + auto_mutex style. Verifies UINT16 MSB histogram
 (bits 15-8) with ND/DN layout constraints.

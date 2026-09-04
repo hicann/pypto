@@ -22,7 +22,7 @@ import sys
 import torch
 
 # PyPTO 数据类型映射
-# 参考：docs/zh/api/datatype/DataType.md
+# 参考：docs/zh/api/tensor_api/datatype/DataType.md
 DTYPE_MAP = {
     1: ('int8', torch.int8, 1),            # DT_INT8: 8位有符号整数
     2: ('int16', torch.int16, 2),          # DT_INT16: 16位有符号整数

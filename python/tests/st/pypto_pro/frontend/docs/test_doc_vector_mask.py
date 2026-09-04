@@ -11,7 +11,7 @@
 
 Uses make_tile_group + auto_mutex style.
 
-Doc: docs/zh/pypto_pro/api/SIMD-API/计算API/Memory矢量计算/向量掩码/
+Doc: docs/zh/api/pro_api/SIMD-API/计算API/Memory矢量计算/向量掩码/
 
 Verifies all mask APIs compile and run without error, and that block-level
 ops remain correct after mask manipulation (mask state not corrupted).

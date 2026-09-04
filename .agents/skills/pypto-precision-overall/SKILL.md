@@ -234,4 +234,4 @@ export TILE_FWK_DEVICE_ID=0
 ## 参考资料
 
 - [PyPTO API 文档](../../../docs/zh/api/)
-- [pass_verify_save API](../../../docs/zh/api/others/pypto-pass_verify_save.md)
+- [pass_verify_save API](../../../docs/zh/api/tensor_api/others/pypto-pass_verify_save.md)

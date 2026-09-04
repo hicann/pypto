@@ -10,7 +10,7 @@
 |---------|---------|------|
 | C++ 源码 | `framework/src/interface/operation/vector/{file}.cpp` | `vector/binary.cpp` |
 | C++ 头文件 | `framework/src/interface/operation/vector/{file}.h` | `vector/binary.h` |
-| API 文档 | `docs/zh/api/operation/pypto-{op}.md` | `pypto-add.md` |
+| API 文档 | `docs/zh/api/tensor_api/operation/pypto-{op}.md` | `pypto-add.md` |
 | C++ ST 测试 | `framework/tests/st/operation/src/test_{op}_operation.cpp` | `test_add_operation.cpp` |
 | CSV 测试用例 | `framework/tests/st/operation/test_case/{Op}_st_test_cases.csv` | `Add_st_test_cases.csv` |
 | JSON 测试用例 | `framework/tests/st/operation/test_case/{Op}_st_test_cases.json` | `Add_st_test_cases.json` |
@@ -129,7 +129,7 @@ API 文档文件名格式：`pypto-{op}.md`，其中 `{op}` 为 operation 的小
 | transpose | `pypto-transpose.md` |
 | relu | `pypto-relu.md` |
 
-> 注意：部分 operation 的文档文件名可能有后缀（如 `scatter_` 带下划线）。如果直接找不到，在 `docs/zh/api/operation/` 目录下搜索。
+> 注意：部分 operation 的文档文件名可能有后缀（如 `scatter_` 带下划线）。如果直接找不到，在 `docs/zh/api/tensor_api/operation/` 目录下搜索。
 
 ## 多重载场景
 

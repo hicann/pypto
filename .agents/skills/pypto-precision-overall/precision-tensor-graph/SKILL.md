@@ -20,7 +20,7 @@ description: PyPTO 算子精度校验与对比技能。包含 tensor_graph 校�
 
 ### 规则 1：kernel 输出必须通过切片写回，禁止直接赋值
 
-> 参考：[kernel-output-not-written-back.md](../../../../docs/zh/tutorials/appendix/faq/kernel-output-not-written-back.md)
+> 参考：[kernel-output-not-written-back.md](../../../../docs/zh/guide/appendix/faq/kernel-output-not-written-back.md)
 
 `@pypto.frontend.jit` 装饰的 kernel 函数**不支持返回值**，输出必须通过参数传入并用 `[:]` 写回。直接赋值 `=` 会创建新的局部变量，不会修改外部 Tensor。
 
@@ -28,7 +28,7 @@ description: PyPTO 算子精度校验与对比技能。包含 tensor_graph 校�
 
 ### 规则 2：view 的 validShape 依赖其他 Tensor 时必须显式传入 valid_shape
 
-> 参考：[view-valid-shape-precision.md](../../../../docs/zh/tutorials/appendix/faq/view-valid-shape-precision.md)
+> 参考：[view-valid-shape-precision.md](../../../../docs/zh/guide/appendix/faq/view-valid-shape-precision.md)
 
 当 `view` 的输入 Tensor 的 validShape 来自另一个 Tensor（无法通过推导得到）时，必须显式传入 `valid_shape` 参数，否则框架无法正确推导输出的 validShape，导致精度问题。
 

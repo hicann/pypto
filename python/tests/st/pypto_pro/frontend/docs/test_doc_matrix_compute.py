@@ -9,7 +9,7 @@
 
 """Matrix compute APIs (matmul / matmul_acc).
 
-Doc: docs/zh/pypto_pro/api/SIMD-API/计算API/矩阵计算/
+Doc: docs/zh/api/pro_api/SIMD-API/计算API/矩阵计算/
 
 Verifies single matmul (auto_mutex + make_tile_group) and K-dimension
 accumulated matmul_acc (phase partial/final + layout transform).

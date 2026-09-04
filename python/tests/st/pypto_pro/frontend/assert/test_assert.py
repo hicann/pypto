@@ -12,7 +12,7 @@
 """pl.pto_assert 调测接口泛化测试 — 覆盖多种断言形式和场景。
 
 参考文献:
-  docs/zh/pypto_pro/api/Utils-API/debugging/pto_assert.md
+  docs/zh/api/pro_api/Utils-API/debugging/pto_assert.md
 
 控制流覆盖: for / if-else / while / 条件+消息组合
 """

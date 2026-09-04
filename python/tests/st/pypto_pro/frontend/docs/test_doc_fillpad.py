@@ -9,7 +9,7 @@
 
 """Fillpad-family ops: fillpad, fillpad_expand, fillpad_inplace.
 
-Doc: docs/zh/pypto_pro/api/SIMD-API/计算API/Memory矢量计算/{fillpad, fillpad_expand, fillpad_inplace}
+Doc: docs/zh/api/pro_api/SIMD-API/计算API/Memory矢量计算/{fillpad, fillpad_expand, fillpad_inplace}
 
 make_tile_group + auto_mutex style. Verifies padding region fill
 after set_validshape, including expand and inplace variants.

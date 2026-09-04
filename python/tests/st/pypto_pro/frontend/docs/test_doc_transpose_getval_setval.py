@@ -9,7 +9,7 @@
 
 """Transpose and element read/write (subscript getval / setval / transpose).
 
-Doc: docs/zh/pypto_pro/api/SIMD-API/计算API/Memory矢量计算/转置与元素读写
+Doc: docs/zh/api/pro_api/SIMD-API/计算API/Memory矢量计算/转置与元素读写
 
 make_tile_group + auto_mutex style. Verifies scalar read/write
 via S pipeline and transpose(dst, src) correctness.

@@ -278,7 +278,7 @@ pypto.set_pass_options(auto_mix_partition=0)
 
 用于：打印上板tensor数据、验证动态shape/offset值、定位AICORE执行异常。
 
-详细排查方法请参考：**[machine.md](../../../../docs/zh/tutorials/appendix/trouble_shooting/machine.md)**
+详细排查方法请参考：**[machine.md](../../../../docs/zh/guide/appendix/trouble_shooting/machine.md)**
 
 ### 打印环境配置
 
@@ -321,7 +321,7 @@ pypto.set_pass_options(auto_mix_partition=0)
 
 1. **Pass 精度判断**：只看 CodegenPreproc。前置 Pass 报错不影响算子精度结论，但需记录为框架问题。
 2. **框架误报上报**：CodegenPreproc PASS + 前置 Pass 报错 → 归类为"精度工具框架问题"，记录报错 Pass 名称和错误码，上报。
-3. 动态shape验证/AICORE异常排查：参考 [machine.md](../../../../docs/zh/tutorials/appendix/trouble_shooting/machine.md)
+3. 动态shape验证/AICORE异常排查：参考 [machine.md](../../../../docs/zh/guide/appendix/trouble_shooting/machine.md)
 4. 打印配置：`fixed_output_path=true`, `force_overwrite=false`
 5. 打印限制：元素数量 ≤ 80
 6. 配置备份：修改配置前建议备份原文件
@@ -333,4 +333,4 @@ pypto.set_pass_options(auto_mix_partition=0)
 
 | 文档                                                                            | 内容                        |
 | ------------------------------------------------------------------------------- | --------------------------- |
-| [machine.md](../../../../docs/zh/tutorials/appendix/trouble_shooting/machine.md) | MACHINE组件错误码与排查指南 |
+| [machine.md](../../../../docs/zh/guide/appendix/trouble_shooting/machine.md) | MACHINE组件错误码与排查指南 |

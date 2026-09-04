@@ -212,7 +212,7 @@ Compare_test_21,"[32, 32], [32, 32]","int16, int16","ND, ND","[-100, 100], [-100
 | # | 文件 | 变更类型 | 说明 |
 |---|------|---------|------|
 | 1 | `framework/src/interface/operation/vector/tensor_transformation.cpp` | 修改 | 直接在 `supportedTypes` 局部变量中追加 dtype |
-| 2 | `docs/zh/api/operation/pypto-concat.md` | 修改 | 在 dtype 列表中追加新类型 |
+| 2 | `docs/zh/api/tensor_api/operation/pypto-concat.md` | 修改 | 在 dtype 列表中追加新类型 |
 
 ### 核心变更模式（模式 C）
 

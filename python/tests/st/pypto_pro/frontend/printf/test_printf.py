@@ -12,7 +12,7 @@
 """pl.printf 调测接口泛化测试 — 覆盖多种格式串、控制流和场景用法。
 
 参考文献:
-  docs/zh/pypto_pro/api/Utils-API/debugging/printf.md
+  docs/zh/api/pro_api/Utils-API/debugging/printf.md
 
 控制流覆盖: for / if-else / while / 多格式说明符组合
 """

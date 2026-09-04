@@ -9,7 +9,7 @@
 
 """Tile-tile comparison and fused scalar multiply-add (axpy).
 
-Doc: docs/zh/pypto_pro/api/SIMD-API/计算API/Memory矢量计算/{比较/comparison, 复合计算/axpy}
+Doc: docs/zh/api/pro_api/SIMD-API/计算API/Memory矢量计算/{比较/comparison, 复合计算/axpy}
 
 Pure vector mode. Verifies gt producing a bit-packed mask for select, and
 in-place axpy (out = scalar * src + out).
