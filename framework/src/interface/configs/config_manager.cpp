@@ -157,7 +157,7 @@ static std::string CreateLogTopFolder()
 
     constexpr int PID_WIDTH = 10;
     std::stringstream folderPathStream;
-    folderPathStream << folderPath << "/" << PREFIX_OUTPUT << "_" << timestamp.str() << "_" << GetHostName() << "_"
+    folderPathStream << folderPath << "/" << PREFIX_OUTPUT << timestamp.str() << "_" << GetHostName() << "_"
                      << std::setw(PID_WIDTH) << std::setfill('0') << getpid();
     folderPath = folderPathStream.str();
     ret = CreateDir(folderPath);
