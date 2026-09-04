@@ -34,10 +34,11 @@ using namespace npu::tile_fwk::dynamic;
 // ----------------- 配置结构体（含类型） -----------------
 // IndexT  : topk_indices / page_table 的整数类型
 // DataT   : buffer / golden_result 的数据类型
-template <typename IndexT, typename DataT>
+template <typename IndexT, typename DataT, npu::tile_fwk::DataType TensorDataT = DT_FP16>
 struct PageAttentionTestConfig {
     using IndexType = IndexT;
     using DataType = DataT;
+    static constexpr npu::tile_fwk::DataType tensorDataType = TensorDataT;
 
     int topk_count;         // topk 的 k 值：选出的 token 个数
     int num_logical_blocks; // 逻辑块个数（page_table 长度）
@@ -124,8 +125,12 @@ std::vector<typename Config::DataType> make_buffer(const Config& cfg)
 
     for (int token_index = 0; token_index < cfg.num_buffer_tokens; ++token_index) {
         for (int h = 0; h < cfg.hidden_dim; ++h) {
-            // 简单可区分的 pattern：1000 * token_index + hidden_idx
-            buffer[token_index * cfg.hidden_dim + h] = static_cast<DataType>(10.0f * token_index + h);
+            // 保持在 int8_t 可表示范围内，并让相邻 token / hidden 位置易于区分。
+            if constexpr (Config::tensorDataType == DT_BOOL) {
+                buffer[token_index * cfg.hidden_dim + h] = static_cast<DataType>((token_index + h) % 2);
+            } else {
+                buffer[token_index * cfg.hidden_dim + h] = static_cast<DataType>((token_index * 13 + h * 3) % 101);
+            }
         }
     }
     return buffer;
@@ -254,10 +259,10 @@ void BasicGatherTest(Config& cfg)
     Shape pageTableShapes{1, cfg.num_logical_blocks};       // page attention 对应的页表
     Shape dstShapes{cfg.topk_count, cfg.hidden_dim};        // 结果，将topk个数据拿出来
 
-    Tensor src(DT_FP16, srcShapes, "src");
+    Tensor src(Config::tensorDataType, srcShapes, "src");
     Tensor offsets(DT_INT32, offsetsShapes, "offsets");
     Tensor pageTable(DT_INT32, pageTableShapes, "pageTable");
-    Tensor dst(DT_FP16, dstShapes, "dst");
+    Tensor dst(Config::tensorDataType, dstShapes, "dst");
 
     std::string err;
     if (!validate_config<Config>(cfg, err)) {
@@ -290,11 +295,12 @@ void BasicGatherTest(Config& cfg)
     }
     std::cout << "compile finished" << std::endl;
 
-    ProgramData::GetInstance().AppendInputs({RawTensorData::CreateTensor<float16>(src, srcData),
+    using DataType = typename Config::DataType;
+    ProgramData::GetInstance().AppendInputs({RawTensorData::CreateTensor<DataType>(src, srcData),
                                              RawTensorData::CreateTensor<int32_t>(offsets, offsetsData),
                                              RawTensorData::CreateTensor<int32_t>(pageTable, pageTableData)});
     ProgramData::GetInstance().AppendOutputs({
-        RawTensorData::CreateConstantTensor<float16>(dst, 0),
+        RawTensorData::CreateConstantTensor<DataType>(dst, static_cast<DataType>(0)),
     });
 
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
@@ -302,15 +308,18 @@ void BasicGatherTest(Config& cfg)
     int maxErrorPrintNum = 50;
     int curErrorPrintNum = 0;
     float eps = 1e-6f;
+    auto actualData = reinterpret_cast<DataType*>(out->data());
     for (size_t i = 0; i < golden.size(); i++) {
-        auto actual = ((float16*)out->data())[i];
+        auto actual = actualData[i];
         auto expect = golden[i];
-        if (fabs(actual - expect) > eps && curErrorPrintNum < maxErrorPrintNum) {
-            std::cout << i << ": output: " << actual << "; expect: " << expect << std::endl;
+        if (fabs(static_cast<float>(actual) - static_cast<float>(expect)) > eps &&
+            curErrorPrintNum < maxErrorPrintNum) {
+            std::cout << i << ": output: " << static_cast<float>(actual) << "; expect: " << static_cast<float>(expect)
+                      << std::endl;
             curErrorPrintNum++;
         }
     }
-    EXPECT_TRUE(resultCmp(golden, (float16*)out->data(), eps));
+    EXPECT_TRUE(resultCmp(golden, actualData, eps));
 }
 
 TEST_F(GatherInUBTest, gather_in_a_)
@@ -324,14 +333,57 @@ TEST_F(GatherInUBTest, gather_in_a_)
     cfg.block_size = 4;         // 每个块的 token 数
     BasicGatherTest(cfg);
 }
+
 TEST_F(GatherInUBTest, gather_in_a)
 {
     using Config = PageAttentionTestConfig<int32_t, float16>;
     Config cfg;
     cfg.topk_count = 512;         // topk 结果
-    cfg.num_logical_blocks = 8;   // 逻辑块个数，
+    cfg.num_logical_blocks = 8;   // 逻辑块个数
     cfg.num_buffer_tokens = 2048; // buffer token 维度（物理 token 容量）
     cfg.hidden_dim = 256;         // 隐藏维度大小
     cfg.block_size = 128;         // 每个块的 token 数
     BasicGatherTest(cfg);
 }
+
+#define GATHER_IN_UB_TYPED_CASES(PREFIX, DATA_TYPE, TENSOR_TYPE, ALIGNED_HIDDEN, LARGE_HIDDEN) \
+    TEST_F(GatherInUBTest, PREFIX##_small_unaligned)                                           \
+    {                                                                                          \
+        using Config = PageAttentionTestConfig<int32_t, DATA_TYPE, TENSOR_TYPE>;               \
+        Config cfg{3, 3, 12, 7, 4};                                                            \
+        BasicGatherTest(cfg);                                                                  \
+    }                                                                                          \
+    TEST_F(GatherInUBTest, PREFIX##_tile_boundary_unaligned)                                   \
+    {                                                                                          \
+        using Config = PageAttentionTestConfig<int32_t, DATA_TYPE, TENSOR_TYPE>;               \
+        Config cfg{37, 5, 40, 15, 8};                                                          \
+        BasicGatherTest(cfg);                                                                  \
+    }                                                                                          \
+    TEST_F(GatherInUBTest, PREFIX##_aligned)                                                   \
+    {                                                                                          \
+        using Config = PageAttentionTestConfig<int32_t, DATA_TYPE, TENSOR_TYPE>;               \
+        Config cfg{32, 4, 32, ALIGNED_HIDDEN, 8};                                              \
+        BasicGatherTest(cfg);                                                                  \
+    }                                                                                          \
+    TEST_F(GatherInUBTest, PREFIX##_large_aligned)                                             \
+    {                                                                                          \
+        using Config = PageAttentionTestConfig<int32_t, DATA_TYPE, TENSOR_TYPE>;               \
+        Config cfg{129, 9, 144, LARGE_HIDDEN, 16};                                             \
+        BasicGatherTest(cfg);                                                                  \
+    }
+
+GATHER_IN_UB_TYPED_CASES(gather_int8, int8_t, DT_INT8, 32, 96)
+GATHER_IN_UB_TYPED_CASES(gather_int16, int16_t, DT_INT16, 16, 80)
+GATHER_IN_UB_TYPED_CASES(gather_int32, int32_t, DT_INT32, 8, 72)
+GATHER_IN_UB_TYPED_CASES(gather_uint8, uint8_t, DT_UINT8, 32, 96)
+GATHER_IN_UB_TYPED_CASES(gather_uint16, uint16_t, DT_UINT16, 16, 80)
+GATHER_IN_UB_TYPED_CASES(gather_uint32, uint32_t, DT_UINT32, 8, 72)
+GATHER_IN_UB_TYPED_CASES(gather_fp16, float16, DT_FP16, 16, 80)
+GATHER_IN_UB_TYPED_CASES(gather_fp32, float, DT_FP32, 8, 72)
+GATHER_IN_UB_TYPED_CASES(gather_bf16, bfloat16, DT_BF16, 16, 80)
+GATHER_IN_UB_TYPED_CASES(gather_bool, uint8_t, DT_BOOL, 32, 96)
+GATHER_IN_UB_TYPED_CASES(gather_fp8e4m3, uint8_t, DT_FP8E4M3, 32, 96)
+GATHER_IN_UB_TYPED_CASES(gather_fp8e5m2, uint8_t, DT_FP8E5M2, 32, 96)
+GATHER_IN_UB_TYPED_CASES(gather_fp8e8m0, uint8_t, DT_FP8E8M0, 32, 96)
+
+#undef GATHER_IN_UB_TYPED_CASES

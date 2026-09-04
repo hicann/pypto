@@ -29,7 +29,7 @@ gather_in_ub(param: Tensor, indices: Tensor, block_table: Tensor,
 
 | 参数名       | 输入/输出 | 说明                                                                 |
 |--------------|-----------|----------------------------------------------------------------------|
-| param        | 输入      | 源操作数。<br>支持的数据类型为：DT_FP32，DT_FP16。<br>不支持空Tensor，支持两维。<br>在实际使用中表示kv cache，形状为[token_size,hidden_dim]。 |
+| param        | 输入      | 源操作数。<br>不同型号支持的数据类型有所差异，详细请参见[约束说明](#约束说明)。<br>不支持空Tensor，支持两维。<br>在实际使用中表示kv cache，形状为[token_size,hidden_dim]。 |
 | indices      | 输入      | 源操作数。<br>支持的数据类型为DT_INT32。<br>不支持空Tensor，支持两维。<br>在实际使用中表示为topk输出结果，形状为[1,k]。 |
 | block_table  | 输入      | 源操作数。<br>支持的数据类型为DT_INT32。<br>不支持空Tensor，支持两维。<br>在实际使用中表示为Page Attention中的页表，形状为[1,block_table_size]，其中block_table_size表示页表的长度。 |
 | block_size   | 输入      | 源操作数。<br>int类型。<br>表示Page Attention中一个块可以放多少个token。 |
@@ -45,6 +45,16 @@ gather_in_ub(param: Tensor, indices: Tensor, block_table: Tensor,
 2. param、indices、block_table 均不支持空Tensor，仅支持两维。
 3. indices Shape 必须为 [1, k]。
 4. axis 参数仅支持 -2。
+5. Tensor数据类型说明：
+   <!-- npu="950" id4 -->
+   - Ascend 950PR/Ascend 950DT：DT_INT8，DT_INT16，DT_INT32，DT_UINT8，DT_UINT16，DT_UINT32，DT_FP16，DT_FP32，DT_BF16，DT_BOOL，DT_FP8E4M3，DT_FP8E5M2，DT_FP8E8M0
+   <!-- end id4 -->
+   <!-- npu="A3" id5 -->
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT8，DT_INT16，DT_INT32，DT_UINT8，DT_UINT16，DT_UINT32，DT_FP16，DT_FP32，DT_BF16
+   <!-- end id5 -->
+   <!-- npu="910b" id6 -->
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT8，DT_INT16，DT_INT32，DT_UINT8，DT_UINT16，DT_UINT32，DT_FP16，DT_FP32，DT_BF16
+   <!-- end id6 -->
 
 ## 调用示例
 
