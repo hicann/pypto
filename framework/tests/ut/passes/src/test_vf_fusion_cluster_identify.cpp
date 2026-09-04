@@ -36,6 +36,16 @@ class VFFusionClusterIdentifyTestAccessor {
 public:
     static void MarkVfFusionCluster(VFFusionClusterIdentify& pass, Operation& op) { pass.SetVfFusionCluster(op, true); }
 
+    static bool IsPrefixSetCompatible(VFFusionClusterIdentify& pass,
+                                      const std::vector<std::vector<uint64_t>>& taskPrefix,
+                                      const std::vector<uint64_t>& prefixA, const std::vector<uint64_t>& prefixB)
+    {
+        VFFusionClusterIdentify::PrefixContext prefixCtx;
+        prefixCtx.taskMembers.resize(taskPrefix.size());
+        prefixCtx.taskPrefix = taskPrefix;
+        return pass.IsPrefixSetCompatible(prefixCtx, prefixA, prefixB);
+    }
+
     static bool VerifyScheduleTopology(VFFusionClusterIdentify& pass, Function& function,
                                        const std::vector<Operation*>& schedule)
     {
@@ -59,6 +69,38 @@ public:
             result.emplace_back(graph.ops[opIndex]);
         }
         return result;
+    }
+
+    // Member count of every cube task built for the function's graph, in task-id order. Ops in
+    // singleton groups (or non-cube ops) map to -1 and never appear in any task.
+    static std::vector<size_t> BuildCubeTaskMemberCounts(VFFusionClusterIdentify& pass, Function& function)
+    {
+        auto graph = pass.BuildGraph(function);
+        std::vector<int> cubeTaskOfOp;
+        std::vector<std::vector<size_t>> taskMembers;
+        std::vector<std::vector<std::string>> taskMatMulOps;
+        pass.BuildCubeTasks(graph, cubeTaskOfOp, taskMembers, taskMatMulOps);
+        std::vector<size_t> memberCounts;
+        memberCounts.reserve(taskMembers.size());
+        for (const auto& members : taskMembers) {
+            memberCounts.emplace_back(members.size());
+        }
+        return memberCounts;
+    }
+
+    // Cube task id of an op (-1 when the op is not part of any cube task).
+    static int CubeTaskOf(VFFusionClusterIdentify& pass, Function& function, Operation* op)
+    {
+        auto graph = pass.BuildGraph(function);
+        auto iter = graph.opToIndex.find(op);
+        if (iter == graph.opToIndex.end()) {
+            return -1;
+        }
+        std::vector<int> cubeTaskOfOp;
+        std::vector<std::vector<size_t>> taskMembers;
+        std::vector<std::vector<std::string>> taskMatMulOps;
+        pass.BuildCubeTasks(graph, cubeTaskOfOp, taskMembers, taskMatMulOps);
+        return iter->second < cubeTaskOfOp.size() ? cubeTaskOfOp[iter->second] : -1;
     }
 };
 
@@ -101,6 +143,19 @@ std::vector<int> GetOpMagics(const std::vector<Operation*>& ops)
         result.emplace_back(op->GetOpMagic());
     }
     return result;
+}
+
+// UT builds the block graph directly, so no tile-graph pass has stamped the isCube attribute
+// yet; VFFusionClusterIdentify (like TaskSplitter) classifies ops solely by that attribute.
+// Stamp it here for every statically AIC-registered op, mirroring what the tile-graph
+// graph-partition passes do in a real compile.
+void MarkCubeOps(ComputationalGraphBuilder& graph)
+{
+    for (auto& item : graph.operations_) {
+        if (OpcodeManager::Inst().GetCoreType(item.second->GetOpcode()) == OpCoreType::AIC) {
+            item.second->SetAttribute(OpAttributeKey::isCube, true);
+        }
+    }
 }
 
 } // namespace
@@ -421,6 +476,42 @@ TEST_F(VFFusionClusterIdentifyTest, MergesConsumerWithMultipleInputClusters)
     EXPECT_EQ(joinAdd->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST);
 }
 
+TEST_F(VFFusionClusterIdentifyTest, RejectsMergeWhenExternalMemoryExceedsUbThreshold)
+{
+    auto rootFunc = CreateRootFunction("TestVFFusionExternalMemoryRoot");
+    auto leafFunc = CreateLeafFunction(*rootFunc, "TestVFFusionExternalMemoryLeaf");
+    ComputationalGraphBuilder graph(leafFunc.get());
+    const size_t ubSize = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB);
+    ASSERT_GT(ubSize, 0UL);
+    const size_t elementsPerTensor = (ubSize * 35 / 100) / sizeof(float) + 1;
+    const std::vector<int64_t> shape = {static_cast<int64_t>(elementsPerTensor), 1};
+    ASSERT_TRUE(graph.AddTensors(DataType::DT_FP32, shape, {"a0", "a1", "a2", "b0", "b1", "b2", "out"}));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_EXP, {"a0"}, {"a1"}, "AExp"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_SQRT, {"a1"}, {"a2"}, "ASqrt"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_EXP, {"b0"}, {"b1"}, "BExp"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_SQRT, {"b1"}, {"b2"}, "BSqrt"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_ADD, {"a2", "b2"}, {"out"}, "JoinAdd"));
+    auto* aExp = graph.GetOp("AExp");
+    auto* aSqrt = graph.GetOp("ASqrt");
+    auto* bExp = graph.GetOp("BExp");
+    auto* bSqrt = graph.GetOp("BSqrt");
+    auto* joinAdd = graph.GetOp("JoinAdd");
+    ASSERT_NE(aExp, nullptr);
+    ASSERT_NE(aSqrt, nullptr);
+    ASSERT_NE(bExp, nullptr);
+    ASSERT_NE(bSqrt, nullptr);
+    ASSERT_NE(joinAdd, nullptr);
+
+    VFFusionClusterIdentify pass;
+    EXPECT_EQ(pass.RunOnFunction(*rootFunc), SUCCESS);
+
+    EXPECT_EQ(aExp->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST);
+    EXPECT_EQ(aSqrt->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST);
+    EXPECT_EQ(bExp->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST + 1);
+    EXPECT_EQ(bSqrt->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST + 1);
+    EXPECT_EQ(joinAdd->GetAtomicScopeId(), -1);
+}
+
 TEST_F(VFFusionClusterIdentifyTest, MergesConsumerOnlyWithLeafClusterThroughNonVfSideBranch)
 {
     auto rootFunc = CreateRootFunction("TestVFFusionNonVfSideBranchRoot");
@@ -497,6 +588,8 @@ TEST_F(VFFusionClusterIdentifyTest, RejectsMergeWhenNonVfBarrierWouldSplitCluste
 
 TEST_F(VFFusionClusterIdentifyTest, MergesOnlyInputClustersThatFitSizeLimit)
 {
+    // The join consumer's A-side input cluster is already at VF_CLUSTER_SIZE_LIMIT, so only the
+    // B-side cluster may take it in; the size-limit gate must keep the full A cluster separate.
     auto rootFunc = CreateRootFunction("TestVFFusionPartialSizeRoot");
     auto leafFunc = CreateLeafFunction(*rootFunc, "TestVFFusionPartialSizeLeaf");
     ComputationalGraphBuilder graph(leafFunc.get());
@@ -841,6 +934,447 @@ TEST_F(VFFusionClusterIdentifyTest, RejectsMergeWhenReduceFollowedByElementwise)
     // singleton cluster that gets dissolved by DissolveSingletonClusters.
     EXPECT_EQ(reduce->GetAtomicScopeId(), -1);
     EXPECT_EQ(exp->GetAtomicScopeId(), -1);
+}
+
+TEST_F(VFFusionClusterIdentifyTest, MergesForkBranchesSharingSingleCubeTaskPrefix)
+{
+    // Rule A: two vector branches fed by the SAME cube task share an equal prefix and fully fuse.
+    // mm1 -> AExp -> ASqrt -->
+    //                            > JoinAdd
+    // mm1 -> BExp -> BSqrt -->
+    auto rootFunc = CreateRootFunction("TestVFRuleAForkRoot");
+    auto leafFunc = CreateLeafFunction(*rootFunc, "TestVFRuleAForkLeaf");
+    ComputationalGraphBuilder graph(leafFunc.get());
+    ASSERT_TRUE(graph.AddTensors(DataType::DT_FP32, {16, 16}, {"a", "b", "m1", "e1", "e2", "s1", "s2", "out"}));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_A_MUL_B, {"a", "b"}, {"m1"}, "Mm1"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_EXP, {"m1"}, {"e1"}, "AExp"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_SQRT, {"e1"}, {"e2"}, "ASqrt"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_EXP, {"m1"}, {"s1"}, "BExp"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_SQRT, {"s1"}, {"s2"}, "BSqrt"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_ADD, {"e2", "s2"}, {"out"}, "JoinAdd"));
+    auto* mm1 = graph.GetOp("Mm1");
+    auto* aExp = graph.GetOp("AExp");
+    auto* aSqrt = graph.GetOp("ASqrt");
+    auto* bExp = graph.GetOp("BExp");
+    auto* bSqrt = graph.GetOp("BSqrt");
+    auto* joinAdd = graph.GetOp("JoinAdd");
+    ASSERT_NE(mm1, nullptr);
+    ASSERT_NE(aExp, nullptr);
+    ASSERT_NE(aSqrt, nullptr);
+    ASSERT_NE(bExp, nullptr);
+    ASSERT_NE(bSqrt, nullptr);
+    ASSERT_NE(joinAdd, nullptr);
+
+    MarkCubeOps(graph);
+    VFFusionClusterIdentify pass;
+    EXPECT_EQ(pass.RunOnFunction(*rootFunc), SUCCESS);
+
+    EXPECT_EQ(aExp->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST);
+    EXPECT_EQ(aSqrt->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST);
+    EXPECT_EQ(bExp->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST);
+    EXPECT_EQ(bSqrt->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST);
+    EXPECT_EQ(joinAdd->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST);
+    EXPECT_EQ(mm1->GetAtomicScopeId(), -1);
+}
+
+TEST_F(VFFusionClusterIdentifyTest, KeepsBranchesUnderDifferentCubeTasksSeparate)
+{
+    // FA fork pattern: branches under DIFFERENT cube tasks must not fuse through the join consumer.
+    // mm1 -> AExp -> ASqrt -->
+    //                            > JoinAdd   Both branches stay separate so each can overlap with
+    // mm2 -> BExp -> BSqrt -->   its matmul on another core. JoinAdd cannot follow branch A via
+    // Rule B either: its extra task T2={mm2} has an empty own prefix (independent parallel root
+    // fed from GM), so it is not a serial extension of branch A's common prefix -- the
+    // serial-extension check rejects the merge and the singleton JoinAdd cluster dissolves.
+    auto rootFunc = CreateRootFunction("TestVFDifferentPrefixForkRoot");
+    auto leafFunc = CreateLeafFunction(*rootFunc, "TestVFDifferentPrefixForkLeaf");
+    ComputationalGraphBuilder graph(leafFunc.get());
+    ASSERT_TRUE(
+        graph.AddTensors(DataType::DT_FP32, {16, 16}, {"a", "b", "c", "d", "m1", "m2", "e1", "e2", "s1", "s2", "out"}));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_A_MUL_B, {"a", "b"}, {"m1"}, "Mm1"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_A_MUL_B, {"c", "d"}, {"m2"}, "Mm2"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_EXP, {"m1"}, {"e1"}, "AExp"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_SQRT, {"e1"}, {"e2"}, "ASqrt"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_EXP, {"m2"}, {"s1"}, "BExp"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_SQRT, {"s1"}, {"s2"}, "BSqrt"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_ADD, {"e2", "s2"}, {"out"}, "JoinAdd"));
+    auto* mm1 = graph.GetOp("Mm1");
+    auto* mm2 = graph.GetOp("Mm2");
+    auto* aExp = graph.GetOp("AExp");
+    auto* aSqrt = graph.GetOp("ASqrt");
+    auto* bExp = graph.GetOp("BExp");
+    auto* bSqrt = graph.GetOp("BSqrt");
+    auto* joinAdd = graph.GetOp("JoinAdd");
+    ASSERT_NE(mm1, nullptr);
+    ASSERT_NE(mm2, nullptr);
+    ASSERT_NE(aExp, nullptr);
+    ASSERT_NE(aSqrt, nullptr);
+    ASSERT_NE(bExp, nullptr);
+    ASSERT_NE(bSqrt, nullptr);
+    ASSERT_NE(joinAdd, nullptr);
+
+    MarkCubeOps(graph);
+    VFFusionClusterIdentify pass;
+    EXPECT_EQ(pass.RunOnFunction(*rootFunc), SUCCESS);
+
+    EXPECT_EQ(aExp->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST);
+    EXPECT_EQ(aSqrt->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST);
+    EXPECT_EQ(bExp->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST + 1);
+    EXPECT_EQ(bSqrt->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST + 1);
+    // JoinAdd's difference task T2={mm2} is an independent root (empty task prefix), so Rule B
+    // rejects the merge into branch A; the singleton cluster dissolves to -1.
+    EXPECT_EQ(joinAdd->GetAtomicScopeId(), -1);
+    EXPECT_EQ(mm1->GetAtomicScopeId(), -1);
+    EXPECT_EQ(mm2->GetAtomicScopeId(), -1);
+}
+
+TEST_F(VFFusionClusterIdentifyTest, MergesSubsetPrefixBranchThroughSerialExtension)
+{
+    // Rule B accept: the extra cube task of branch B serially extends the common prefix and does
+    // not depend on the fused ops, so both branches may fuse.
+    // mm1 -> Neg0 -> mm2 -> BSqrt -->
+    //                                    > JoinAdd
+    // mm1 -> AExp ---------------------->
+    // P(AExp) = {T1}, P(BSqrt) = {T1, T2}, taskPrefix(T2) = {T1} <= common prefix {T1}.
+    auto rootFunc = CreateRootFunction("TestVFRuleBSerialRoot");
+    auto leafFunc = CreateLeafFunction(*rootFunc, "TestVFRuleBSerialLeaf");
+    ComputationalGraphBuilder graph(leafFunc.get());
+    ASSERT_TRUE(graph.AddTensors(DataType::DT_FP32, {16, 16}, {"a", "b", "m1", "n", "m2", "e", "s", "out"}));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_A_MUL_B, {"a", "b"}, {"m1"}, "Mm1"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_NEG, {"m1"}, {"n"}, "Neg0"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_A_MUL_B, {"n", "b"}, {"m2"}, "Mm2"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_EXP, {"m1"}, {"e"}, "AExp"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_SQRT, {"m2"}, {"s"}, "BSqrt"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_ADD, {"e", "s"}, {"out"}, "JoinAdd"));
+    auto* neg0 = graph.GetOp("Neg0");
+    auto* aExp = graph.GetOp("AExp");
+    auto* bSqrt = graph.GetOp("BSqrt");
+    auto* joinAdd = graph.GetOp("JoinAdd");
+    ASSERT_NE(neg0, nullptr);
+    ASSERT_NE(aExp, nullptr);
+    ASSERT_NE(bSqrt, nullptr);
+    ASSERT_NE(joinAdd, nullptr);
+
+    MarkCubeOps(graph);
+    VFFusionClusterIdentify pass;
+    EXPECT_EQ(pass.RunOnFunction(*rootFunc), SUCCESS);
+
+    EXPECT_EQ(aExp->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST);
+    EXPECT_EQ(bSqrt->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST);
+    EXPECT_EQ(joinAdd->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST);
+    EXPECT_EQ(neg0->GetAtomicScopeId(), -1);
+}
+
+TEST_F(VFFusionClusterIdentifyTest, RejectsSubsetPrefixWhenExtensionTaskHasExternalCubeDep)
+{
+    // Rule B reject (serial-extension check): JoinAdd's prefix is a strict SUPERSET of the
+    // {AExp, ASqrt} cluster prefix {T1}, and the difference task mm2 depends on the SIDE cube
+    // task mm3 which is outside the common prefix, so mm2 forks away instead of serially
+    // extending the common prefix. The mm3->Neg->mm2 chain does NOT depend on the cluster, so
+    // schedule compaction alone would allow the merge: only the prefix gate rejects it.
+    // mm1 -> AExp -> ASqrt ------------> JoinAdd
+    // mm3 -> Neg -> mm2 ---------------/
+    // T1={mm1}, T2={mm2}, T3={mm3}
+    // P(ASqrt)={T1}, P(JoinAdd)={T1,T2,T3}, TP(T2)={T3} not subset of common prefix {T1}
+    // -> serial-extension check rejects the fusion.
+    auto rootFunc = CreateRootFunction("TestVFRuleBForkExtRoot");
+    auto leafFunc = CreateLeafFunction(*rootFunc, "TestVFRuleBForkExtLeaf");
+    ComputationalGraphBuilder graph(leafFunc.get());
+    ASSERT_TRUE(
+        graph.AddTensors(DataType::DT_FP32, {16, 16}, {"a", "b", "c", "d", "m1", "m3", "n", "e1", "e2", "m2", "out"}));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_A_MUL_B, {"a", "b"}, {"m1"}, "Mm1"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_EXP, {"m1"}, {"e1"}, "AExp"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_SQRT, {"e1"}, {"e2"}, "ASqrt"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_A_MUL_B, {"c", "d"}, {"m3"}, "Mm3"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_NEG, {"m3"}, {"n"}, "Neg"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_A_MUL_B, {"n", "d"}, {"m2"}, "Mm2"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_ADD, {"e2", "m2"}, {"out"}, "JoinAdd"));
+    auto* aExp = graph.GetOp("AExp");
+    auto* aSqrt = graph.GetOp("ASqrt");
+    auto* joinAdd = graph.GetOp("JoinAdd");
+    ASSERT_NE(aExp, nullptr);
+    ASSERT_NE(aSqrt, nullptr);
+    ASSERT_NE(joinAdd, nullptr);
+
+    MarkCubeOps(graph);
+    VFFusionClusterIdentify pass;
+    EXPECT_EQ(pass.RunOnFunction(*rootFunc), SUCCESS);
+
+    EXPECT_EQ(aExp->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST);
+    EXPECT_EQ(aSqrt->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST);
+    // JoinAdd is a strict superset-prefix consumer whose difference task mm2 depends on the
+    // external task mm3: not a serial extension of the common prefix -> merge rejected.
+    EXPECT_EQ(joinAdd->GetAtomicScopeId(), -1);
+}
+
+TEST_F(VFFusionClusterIdentifyTest, MergesBranchesFedByChainedCubeTask)
+{
+    // Cube task clustering: directly connected cube ops form ONE cube task, so branches after a
+    // mm1 -> mm2 chain share a single-element prefix and fully fuse (Rule A).
+    auto rootFunc = CreateRootFunction("TestVFCubeChainRoot");
+    auto leafFunc = CreateLeafFunction(*rootFunc, "TestVFCubeChainLeaf");
+    ComputationalGraphBuilder graph(leafFunc.get());
+    ASSERT_TRUE(graph.AddTensors(DataType::DT_FP32, {16, 16}, {"a", "b", "m1", "m2", "e1", "e2", "s1", "s2", "out"}));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_A_MUL_B, {"a", "b"}, {"m1"}, "Mm1"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_A_MUL_B, {"m1", "b"}, {"m2"}, "Mm2"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_EXP, {"m2"}, {"e1"}, "AExp"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_SQRT, {"e1"}, {"e2"}, "ASqrt"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_EXP, {"m2"}, {"s1"}, "BExp"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_SQRT, {"s1"}, {"s2"}, "BSqrt"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_ADD, {"e2", "s2"}, {"out"}, "JoinAdd"));
+    auto* mm1 = graph.GetOp("Mm1");
+    auto* mm2 = graph.GetOp("Mm2");
+    auto* aExp = graph.GetOp("AExp");
+    auto* aSqrt = graph.GetOp("ASqrt");
+    auto* bExp = graph.GetOp("BExp");
+    auto* bSqrt = graph.GetOp("BSqrt");
+    auto* joinAdd = graph.GetOp("JoinAdd");
+    ASSERT_NE(mm1, nullptr);
+    ASSERT_NE(mm2, nullptr);
+    ASSERT_NE(aExp, nullptr);
+    ASSERT_NE(aSqrt, nullptr);
+    ASSERT_NE(bExp, nullptr);
+    ASSERT_NE(bSqrt, nullptr);
+    ASSERT_NE(joinAdd, nullptr);
+
+    MarkCubeOps(graph);
+    VFFusionClusterIdentify pass;
+    EXPECT_EQ(pass.RunOnFunction(*rootFunc), SUCCESS);
+
+    EXPECT_EQ(aExp->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST);
+    EXPECT_EQ(aSqrt->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST);
+    EXPECT_EQ(bExp->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST);
+    EXPECT_EQ(bSqrt->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST);
+    EXPECT_EQ(joinAdd->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST);
+    EXPECT_EQ(mm1->GetAtomicScopeId(), -1);
+    EXPECT_EQ(mm2->GetAtomicScopeId(), -1);
+}
+
+TEST_F(VFFusionClusterIdentifyTest, RejectsAccumulatorChainAcrossIndependentCubeTasks)
+{
+    // FA unrolled-loop pattern: per-iteration matmuls T_j are INDEPENDENT parallel roots (all fed
+    // straight from GM, empty task prefixes), while the accumulator chains the iterations
+    // serially. The update block of iteration j+1 has a strictly larger prefix
+    // ({T1..Tj+1} vs {T1..Tj}) because it consumes the previous accumulator, but the difference
+    // task T_{j+1} has an EMPTY own prefix -- it is an independent root, not a serial extension
+    // of the common prefix. Rule B must reject the merge so each iteration keeps its own cluster.
+    // mm1 -> m1 -------------------> Max1 -> Exp1 -->
+    // mm2 -> m2, Exp1 --------------> Max2 -> Exp2 -->   (accumulator passed across iterations)
+    // mm3 -> m3, Exp2 --------------> Max3 -> Exp3 -->
+    // T1={mm1}, T2={mm2}, T3={mm3}, TP(Tk) = {} for all k (independent roots).
+    // P(Max1)={T1}, P(Max2)={T1,T2}, P(Max3)={T1,T2,T3}.
+    auto rootFunc = CreateRootFunction("TestVFAccumulatorChainRoot");
+    auto leafFunc = CreateLeafFunction(*rootFunc, "TestVFAccumulatorChainLeaf");
+    ComputationalGraphBuilder graph(leafFunc.get());
+    ASSERT_TRUE(graph.AddTensors(DataType::DT_FP32, {16, 16},
+                                 {"i1", "i2", "i3", "b", "m1", "m2", "m3", "x1", "x2", "x3", "y1", "y2", "y3"}));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_A_MUL_B, {"i1", "b"}, {"m1"}, "Mm1"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_A_MUL_B, {"i2", "b"}, {"m2"}, "Mm2"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_A_MUL_B, {"i3", "b"}, {"m3"}, "Mm3"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_MAXIMUM, {"m1"}, {"x1"}, "Max1"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_EXP, {"x1"}, {"y1"}, "Exp1"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_MAXIMUM, {"m2", "y1"}, {"x2"}, "Max2"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_EXP, {"x2"}, {"y2"}, "Exp2"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_MAXIMUM, {"m3", "y2"}, {"x3"}, "Max3"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_EXP, {"x3"}, {"y3"}, "Exp3"));
+    auto* mm1 = graph.GetOp("Mm1");
+    auto* mm2 = graph.GetOp("Mm2");
+    auto* mm3 = graph.GetOp("Mm3");
+    auto* max1 = graph.GetOp("Max1");
+    auto* max2 = graph.GetOp("Max2");
+    auto* max3 = graph.GetOp("Max3");
+    auto* exp1 = graph.GetOp("Exp1");
+    auto* exp2 = graph.GetOp("Exp2");
+    auto* exp3 = graph.GetOp("Exp3");
+    ASSERT_NE(mm1, nullptr);
+    ASSERT_NE(mm2, nullptr);
+    ASSERT_NE(mm3, nullptr);
+    ASSERT_NE(max1, nullptr);
+    ASSERT_NE(max2, nullptr);
+    ASSERT_NE(max3, nullptr);
+    ASSERT_NE(exp1, nullptr);
+    ASSERT_NE(exp2, nullptr);
+    ASSERT_NE(exp3, nullptr);
+
+    MarkCubeOps(graph);
+    VFFusionClusterIdentify pass;
+    EXPECT_EQ(pass.RunOnFunction(*rootFunc), SUCCESS);
+
+    // Each iteration fuses only its own MAX+EXP pair (equal prefixes within the iteration).
+    EXPECT_EQ(max1->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST);
+    EXPECT_EQ(exp1->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST);
+    // Iteration 2 must NOT merge into iteration 1: difference task T2 has an empty own prefix.
+    EXPECT_NE(max2->GetAtomicScopeId(), max1->GetAtomicScopeId());
+    EXPECT_EQ(max2->GetAtomicScopeId(), exp2->GetAtomicScopeId());
+    // Iteration 3 must NOT merge into the previous iterations either.
+    EXPECT_NE(max3->GetAtomicScopeId(), max1->GetAtomicScopeId());
+    EXPECT_NE(max3->GetAtomicScopeId(), max2->GetAtomicScopeId());
+    EXPECT_EQ(max3->GetAtomicScopeId(), exp3->GetAtomicScopeId());
+    EXPECT_EQ(mm1->GetAtomicScopeId(), -1);
+    EXPECT_EQ(mm2->GetAtomicScopeId(), -1);
+    EXPECT_EQ(mm3->GetAtomicScopeId(), -1);
+}
+
+TEST_F(VFFusionClusterIdentifyTest, MergesComplementaryPrefixMembersThroughClusterUnion)
+{
+    // Cluster-level union comparison: two branch heads whose prefixes fork pairwise
+    // ({T1,T2} vs {T1,T3}) must still fuse through the join consumer. The consumer joins one
+    // branch first (Rule B: difference task anchored to the common prefix), then the other
+    // branch's cluster merges in: comparing the SIDES AS UNIONS gives {T1,T2,T3} vs {T1,T3},
+    // whose difference task T2 has TP(T2)={T1} inside the common prefix -> Rule B accepts.
+    // The old pairwise check rejected this merge because BSqrt vs CSqrt fork in isolation.
+    // mm1 -> Neg0 -> mm2 -> BSqrt -->
+    //                             > JoinAdd
+    // mm1 -> Neg1 -> mm3 -> CSqrt ->
+    // T1={mm1}, T2={mm2}, T3={mm3}, TP(T2)={T1}, TP(T3)={T1}.
+    // P(BSqrt)={T1,T2}, P(CSqrt)={T1,T3}, P(JoinAdd)={T1,T2,T3}.
+    auto rootFunc = CreateRootFunction("TestVFUnionPrefixRoot");
+    auto leafFunc = CreateLeafFunction(*rootFunc, "TestVFUnionPrefixLeaf");
+    ComputationalGraphBuilder graph(leafFunc.get());
+    ASSERT_TRUE(
+        graph.AddTensors(DataType::DT_FP32, {16, 16}, {"a", "b", "m1", "n0", "m2", "s2", "n1", "m3", "s3", "out"}));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_A_MUL_B, {"a", "b"}, {"m1"}, "Mm1"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_NEG, {"m1"}, {"n0"}, "Neg0"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_A_MUL_B, {"n0", "b"}, {"m2"}, "Mm2"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_SQRT, {"m2"}, {"s2"}, "BSqrt"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_NEG, {"m1"}, {"n1"}, "Neg1"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_A_MUL_B, {"n1", "b"}, {"m3"}, "Mm3"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_SQRT, {"m3"}, {"s3"}, "CSqrt"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_ADD, {"s2", "s3"}, {"out"}, "JoinAdd"));
+    auto* mm1 = graph.GetOp("Mm1");
+    auto* neg0 = graph.GetOp("Neg0");
+    auto* neg1 = graph.GetOp("Neg1");
+    auto* bSqrt = graph.GetOp("BSqrt");
+    auto* cSqrt = graph.GetOp("CSqrt");
+    auto* joinAdd = graph.GetOp("JoinAdd");
+    ASSERT_NE(mm1, nullptr);
+    ASSERT_NE(neg0, nullptr);
+    ASSERT_NE(neg1, nullptr);
+    ASSERT_NE(bSqrt, nullptr);
+    ASSERT_NE(cSqrt, nullptr);
+    ASSERT_NE(joinAdd, nullptr);
+
+    MarkCubeOps(graph);
+    VFFusionClusterIdentify pass;
+    EXPECT_EQ(pass.RunOnFunction(*rootFunc), SUCCESS);
+
+    // All three vector ops fuse into one cluster via the union-prefix cluster merge.
+    EXPECT_EQ(bSqrt->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST);
+    EXPECT_EQ(cSqrt->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST);
+    EXPECT_EQ(joinAdd->GetAtomicScopeId(), VF_CLUSTER_ID_START_FOR_TEST);
+    EXPECT_EQ(mm1->GetAtomicScopeId(), -1);
+    EXPECT_EQ(neg0->GetAtomicScopeId(), -1);
+    EXPECT_EQ(neg1->GetAtomicScopeId(), -1);
+}
+
+TEST_F(VFFusionClusterIdentifyTest, MergesForkedPrefixesWhenDifferenceTasksAreAnchoredAcrossSides)
+{
+    // Prefixes are not subsets, but each difference task is serially anchored by the other side:
+    // P(A)={T0,T1,T6}, P(B)={T0,T1,T8}; TP(T6)={T0,T1}, TP(T8)={T0,T1}.
+    const std::vector<std::vector<uint64_t>> taskPrefix = {
+        {}, {}, {}, {}, {}, {}, {0b11}, {}, {0b11},
+    };
+    const std::vector<uint64_t> prefixA = {0b01000011};
+    const std::vector<uint64_t> prefixB = {0b100000011};
+
+    VFFusionClusterIdentify pass;
+    EXPECT_TRUE(VFFusionClusterIdentifyTestAccessor::IsPrefixSetCompatible(pass, taskPrefix, prefixA, prefixB));
+}
+
+TEST_F(VFFusionClusterIdentifyTest, MergesForkedPrefixesWhenDifferenceTaskHasAnyAncestorOnOppositeSide)
+{
+    // A difference task is allowed when at least one of its ancestors belongs to the opposite
+    // prefix, even if another ancestor is outside that prefix. This is weaker than a full subset
+    // relation and matches the cross-side anchoring rule.
+    // P(A)={T0,T1,T6}, P(B)={T0,T1,T8}; TP(T6)={T0,T2}, TP(T8)={T1,T3}.
+    const std::vector<std::vector<uint64_t>> taskPrefix = {
+        {}, {}, {}, {}, {}, {}, {0b101}, {}, {0b1010},
+    };
+    const std::vector<uint64_t> prefixA = {0b01000011};
+    const std::vector<uint64_t> prefixB = {0b100000011};
+
+    VFFusionClusterIdentify pass;
+    EXPECT_TRUE(VFFusionClusterIdentifyTestAccessor::IsPrefixSetCompatible(pass, taskPrefix, prefixA, prefixB));
+}
+
+TEST_F(VFFusionClusterIdentifyTest, MergesForkedPrefixesWhenDifferenceTasksShareACubePrefix)
+{
+    // Neither difference task is fully anchored by the opposite set, but their own cube-task
+    // prefixes overlap at T0: P(A)={T0,T1,T2,T6}, P(B)={T0,T1,T3,T8},
+    // TP(T6)={T0,T2}, TP(T8)={T0,T3}.
+    const std::vector<std::vector<uint64_t>> taskPrefix = {
+        {}, {}, {0b1}, {0b1}, {}, {}, {0b101}, {}, {0b1001},
+    };
+    const std::vector<uint64_t> prefixA = {0b01000111};
+    const std::vector<uint64_t> prefixB = {0b100001011};
+
+    VFFusionClusterIdentify pass;
+    EXPECT_TRUE(VFFusionClusterIdentifyTestAccessor::IsPrefixSetCompatible(pass, taskPrefix, prefixA, prefixB));
+}
+
+TEST_F(VFFusionClusterIdentifyTest, FormsFourCubeTasksWhenBranchesShareOneL1CopyIn)
+{
+    // 4-way parallel matmul branches whose L0A path is fed through ONE shared L1 copy
+    // (DDR -> L1, multi-consumer):
+    //              ┌─ L1_TO_L0A_0 ─ A_MUL_B_0 ─┐
+    //   DDR ─ COPY ─┼─ L1_TO_L0A_1 ─ A_MUL_B_1 ─┼─ ...
+    //              ├─ L1_TO_L0A_2 ─ A_MUL_B_2 ─┤
+    //              └─ L1_TO_L0A_3 ─ A_MUL_B_3 ─┘
+    // Expected cube-task partition: exactly FOUR tasks, one {L1_TO_L0A_i, A_MUL_B_i} chain per
+    // branch. The shared copy op forms no task at all: the L1 multi-consumer special-case keeps
+    // it out of every union (without it all 9 cube ops would chain into ONE task), and the
+    // singleton rule then drops its leftover one-op group (keeping it would give FIVE tasks).
+    auto rootFunc = CreateRootFunction("TestVFSharedL1CopyInRoot");
+    auto leafFunc = CreateLeafFunction(*rootFunc, "TestVFSharedL1CopyInLeaf");
+    ComputationalGraphBuilder graph(leafFunc.get());
+    const std::vector<std::string> tensorNames = {"a0", "l1", "la0", "la1", "la2", "la3", "b0",
+                                                  "b1", "b2", "b3",  "m0",  "m1",  "m2",  "m3"};
+    const std::vector<MemoryType> memTypes = {
+        MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1,                              // a0 -> l1
+        MemoryType::MEM_L0A,        MemoryType::MEM_L0A,        MemoryType::MEM_L0A, // la0..la2
+        MemoryType::MEM_L0A,                                                         // la3
+        MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR,                      // b0, b1
+        MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR,                      // b2, b3
+        MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR,                      // m0, m1
+        MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR,                      // m2, m3
+    };
+    ASSERT_EQ(tensorNames.size(), memTypes.size());
+    ASSERT_TRUE(graph.AddTensors(DataType::DT_FP32, {16, 16}, memTypes, tensorNames));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_L1_COPY_IN, {"a0"}, {"l1"}, "SharedCopyIn"));
+    for (int i = 0; i < 4; i++) {
+        ASSERT_TRUE(
+            graph.AddOp(Opcode::OP_L1_TO_L0A, {"l1"}, {"la" + std::to_string(i)}, "L1ToL0A" + std::to_string(i)));
+        ASSERT_TRUE(graph.AddOp(Opcode::OP_A_MUL_B, {"la" + std::to_string(i), "b" + std::to_string(i)},
+                                {"m" + std::to_string(i)}, "Mm" + std::to_string(i)));
+    }
+    auto* sharedCopyIn = graph.GetOp("SharedCopyIn");
+    std::vector<Operation*> matmuls;
+    for (int i = 0; i < 4; i++) {
+        auto* mm = graph.GetOp("Mm" + std::to_string(i));
+        ASSERT_NE(mm, nullptr);
+        matmuls.emplace_back(mm);
+    }
+    ASSERT_NE(sharedCopyIn, nullptr);
+
+    MarkCubeOps(graph);
+    VFFusionClusterIdentify pass;
+    EXPECT_EQ(pass.RunOnFunction(*rootFunc), SUCCESS);
+
+    const auto memberCounts = VFFusionClusterIdentifyTestAccessor::BuildCubeTaskMemberCounts(pass, *leafFunc);
+    ASSERT_EQ(memberCounts.size(), 4UL);
+    for (size_t taskIndex = 0; taskIndex < memberCounts.size(); taskIndex++) {
+        EXPECT_EQ(memberCounts[taskIndex], 2UL); // {L1_TO_L0A_i, A_MUL_B_i} per task.
+    }
+    EXPECT_EQ(VFFusionClusterIdentifyTestAccessor::CubeTaskOf(pass, *leafFunc, sharedCopyIn), -1);
+    std::vector<int> matmulTaskIds;
+    for (auto* mm : matmuls) {
+        matmulTaskIds.emplace_back(VFFusionClusterIdentifyTestAccessor::CubeTaskOf(pass, *leafFunc, mm));
+    }
+    for (int taskId : matmulTaskIds) {
+        EXPECT_GE(taskId, 0); // Every matmul belongs to a real cube task.
+    }
+    std::sort(matmulTaskIds.begin(), matmulTaskIds.end());
+    EXPECT_EQ(std::unique(matmulTaskIds.begin(), matmulTaskIds.end()) - matmulTaskIds.begin(), 4);
 }
 
 } // namespace npu::tile_fwk

@@ -16,7 +16,9 @@
 #include "passes/block_graph_pass/vf_fusion_cluster_identify.h"
 
 #include <algorithm>
+#include <limits>
 #include <queue>
+#include <string>
 #include <unordered_set>
 #include <utility>
 
@@ -24,11 +26,65 @@
 #include "interface/operation/opcode.h"
 #include "interface/operation/operation.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/pass_utils.h"
 
 #undef MODULE_NAME
 #define MODULE_NAME "VFFusionClusterIdentify"
 
 namespace npu::tile_fwk {
+
+namespace {
+// Cube-task prefix bitset helpers. Cube tasks are indexed in [0, cubeTaskNum).
+constexpr size_t PREFIX_WORD_BITS = 64;
+
+size_t PrefixWordNum(size_t taskNum) { return (taskNum + PREFIX_WORD_BITS - 1) / PREFIX_WORD_BITS; }
+
+void SetPrefixBit(std::vector<uint64_t>& bits, size_t taskIndex)
+{
+    bits[taskIndex / PREFIX_WORD_BITS] |= (uint64_t{1} << (taskIndex % PREFIX_WORD_BITS));
+}
+
+bool IsPrefixBitSet(const std::vector<uint64_t>& bits, size_t taskIndex)
+{
+    return (bits[taskIndex / PREFIX_WORD_BITS] & (uint64_t{1} << (taskIndex % PREFIX_WORD_BITS))) != 0;
+}
+
+bool IsPrefixSubsetOf(const std::vector<uint64_t>& sub, const std::vector<uint64_t>& super)
+{
+    for (size_t w = 0; w < sub.size(); w++) {
+        if ((sub[w] & ~super[w]) != 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Renders a cube-task prefix bitset as the set of task indices, e.g. "{0,2}".
+std::string PrefixToString(const std::vector<uint64_t>& bits)
+{
+    std::string text = "{";
+    bool first = true;
+    for (size_t w = 0; w < bits.size(); w++) {
+        for (size_t b = 0; b < PREFIX_WORD_BITS; b++) {
+            if ((bits[w] & (uint64_t{1} << b)) != 0) {
+                if (!first) {
+                    text += ",";
+                }
+                text += std::to_string(w * PREFIX_WORD_BITS + b);
+                first = false;
+            }
+        }
+    }
+    text += "}";
+    return text;
+}
+
+bool IsPassDebugEnabled()
+{
+    const auto& logFunc = LogFuncInfo::Instance();
+    return logFunc.checkLevel != nullptr && logFunc.checkLevel(PYPTO, DLOG_DEBUG, LogModule::PASS);
+}
+} // namespace
 
 void AncestorBits::SetBit(std::vector<uint64_t>& bits, size_t bitIndex)
 {
@@ -347,6 +403,66 @@ std::vector<size_t> VFFusionClusterIdentify::GetClusterOpIndices(const GraphCont
     return opIndices;
 }
 
+size_t VFFusionClusterIdentify::CalculateClusterExternalMemory(const GraphContext& graph,
+                                                               const std::unordered_set<size_t>& clusterOpIndices) const
+{
+    std::unordered_set<const LogicalTensor*> externalTensors;
+    for (size_t opIndex : clusterOpIndices) {
+        if (opIndex >= graph.ops.size()) {
+            continue;
+        }
+        for (const auto& input : graph.ops[opIndex]->GetIOperands()) {
+            if (input == nullptr) {
+                continue;
+            }
+            bool hasExternalProducer = input->GetProducers().empty();
+            for (auto* producer : input->GetProducers()) {
+                auto producerIter = graph.opToIndex.find(producer);
+                if (producerIter == graph.opToIndex.end() || clusterOpIndices.count(producerIter->second) == 0) {
+                    hasExternalProducer = true;
+                    break;
+                }
+            }
+            if (hasExternalProducer) {
+                externalTensors.insert(input.get());
+            }
+        }
+    }
+
+    size_t externalMemory = 0;
+    for (const auto* tensor : externalTensors) {
+        const size_t tensorSize = tensor->MemorySize();
+        if (externalMemory > std::numeric_limits<size_t>::max() - tensorSize) {
+            return std::numeric_limits<size_t>::max();
+        }
+        externalMemory += tensorSize;
+    }
+    return externalMemory;
+}
+
+bool VFFusionClusterIdentify::IsFusionResourceWithinLimits(const GraphContext& graph,
+                                                           const std::vector<size_t>& existingOpIndices,
+                                                           const std::vector<size_t>& addedOpIndices) const
+{
+    std::unordered_set<size_t> mergedOpIndices;
+    mergedOpIndices.reserve(existingOpIndices.size() + addedOpIndices.size());
+    mergedOpIndices.insert(existingOpIndices.begin(), existingOpIndices.end());
+    mergedOpIndices.insert(addedOpIndices.begin(), addedOpIndices.end());
+
+    const size_t externalMemory = CalculateClusterExternalMemory(graph, mergedOpIndices);
+    const size_t ubSize = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB);
+    const size_t externalMemoryLimit = ubSize * VF_CLUSTER_EXTERNAL_UB_MEMORY_RATIO_NUMERATOR /
+                                       VF_CLUSTER_EXTERNAL_UB_MEMORY_RATIO_DENOMINATOR;
+    if (externalMemory > externalMemoryLimit) {
+        APASS_LOG_DEBUG_F(
+            Elements::Operation, "Cannot fuse VF ops: external memory %zu exceeds %zu%% of UB (%zu).", externalMemory,
+            VF_CLUSTER_EXTERNAL_UB_MEMORY_RATIO_NUMERATOR * 100 / VF_CLUSTER_EXTERNAL_UB_MEMORY_RATIO_DENOMINATOR,
+            externalMemoryLimit);
+        return false;
+    }
+    return true;
+}
+
 bool VFFusionClusterIdentify::HasDirectDependencyFromCluster(const GraphContext& graph, size_t consumerIndex,
                                                              const std::vector<Operation*>& clusterOps) const
 {
@@ -633,9 +749,331 @@ void VFFusionClusterIdentify::AssembleScheduleWindow(const std::vector<ScheduleB
     }
 }
 
+bool VFFusionClusterIdentify::IsCubeOp(const Operation& op) const
+{
+    return op.HasAttribute(OpAttributeKey::isCube) && op.GetBoolAttribute(OpAttributeKey::isCube);
+}
+
+// Chain-merge directly connected cube ops into one cube task, mirroring the cube side of
+// TaskSplitter::UnionSameCoreOps (including its L1 special-case: a cube producer whose first
+// output tensor lives in L1 with multiple consumers is not unioned with an L1_TO_L0 consumer).
+// Cube ops separated by vector ops stay in different tasks. A one-op group forms no cube task
+// only when the op is a pure DDR->L1 move (all inputs on DDR, all outputs on L1): such an
+// isolated L1 copy (e.g. one shared L1_COPY_IN feeding several branches) carries no
+// compute-chain semantics and would only fake a shared prefix for all downstream branches.
+// Other singletons (e.g. a lone MATMUL) still form their own task.
+void VFFusionClusterIdentify::BuildCubeTasks(const GraphContext& graph, std::vector<int>& cubeTaskOfOp,
+                                             std::vector<std::vector<size_t>>& taskMembers,
+                                             std::vector<std::vector<std::string>>& taskMatMulOps) const
+{
+    const size_t opNum = graph.ops.size();
+    cubeTaskOfOp.assign(opNum, -1);
+    taskMembers.clear();
+    taskMatMulOps.clear();
+    std::vector<size_t> parent(opNum, 0);
+    for (size_t i = 0; i < opNum; i++) {
+        parent[i] = i;
+    }
+    auto findRoot = [&parent](size_t idx) {
+        while (parent[idx] != idx) {
+            parent[idx] = parent[parent[idx]];
+            idx = parent[idx];
+        }
+        return idx;
+    };
+    // Same premise as TaskSplitter::UnionSameCoreOps: L1_TO_L0 ops are cube ops generated by
+    // the tile-graph move-op pass, so an L1 multi-consumer cube producer can meet them here.
+    auto isL1MultiConsumerProducer = [&graph](size_t producerIndex) {
+        const auto output = graph.ops[producerIndex]->GetOutputOperand(0);
+        return output != nullptr && output->GetMemoryTypeOriginal() == MemoryType::MEM_L1 &&
+               graph.consumers[producerIndex].size() > 1;
+    };
+    auto isL1ToL0Op = [&graph](size_t opIndex) {
+        return graph.ops[opIndex]->GetOpcodeStr().find("L1_TO_L0") != std::string::npos;
+    };
+    auto isDdrToL1Op = [&graph](size_t opIndex) {
+        const auto& inputs = graph.ops[opIndex]->GetIOperands();
+        const auto& outputs = graph.ops[opIndex]->GetOOperands();
+        if (inputs.empty() || outputs.empty()) {
+            return false;
+        }
+        for (const auto& input : inputs) {
+            if (input == nullptr || input->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR) {
+                return false;
+            }
+        }
+        for (const auto& output : outputs) {
+            if (output == nullptr || output->GetMemoryTypeOriginal() != MemoryType::MEM_L1) {
+                return false;
+            }
+        }
+        return true;
+    };
+    std::unordered_map<size_t, size_t> rootMemberCount;
+    for (size_t producerIndex = 0; producerIndex < opNum; producerIndex++) {
+        if (!IsCubeOp(*graph.ops[producerIndex])) {
+            continue;
+        }
+        rootMemberCount[findRoot(producerIndex)]++;
+        const bool l1MultiConsumerSkip = isL1MultiConsumerProducer(producerIndex);
+        for (size_t consumerIndex : graph.consumers[producerIndex]) {
+            if (!IsCubeOp(*graph.ops[consumerIndex])) {
+                continue;
+            }
+            if (l1MultiConsumerSkip && isL1ToL0Op(consumerIndex)) {
+                continue;
+            }
+            const size_t producerRoot = findRoot(producerIndex);
+            const size_t consumerRoot = findRoot(consumerIndex);
+            if (producerRoot == consumerRoot) {
+                continue;
+            }
+            auto consumerCountIter = rootMemberCount.find(consumerRoot);
+            if (consumerCountIter != rootMemberCount.end()) {
+                rootMemberCount[producerRoot] += consumerCountIter->second;
+                rootMemberCount.erase(consumerCountIter);
+            }
+            parent[consumerRoot] = producerRoot;
+        }
+    }
+    std::unordered_map<size_t, int> rootToTask;
+    size_t cubeOpNum = 0;
+    size_t skippedSingletonNum = 0;
+    const bool debugEnabled = IsPassDebugEnabled();
+    for (size_t i = 0; i < opNum; i++) {
+        if (!IsCubeOp(*graph.ops[i])) {
+            continue;
+        }
+        cubeOpNum++;
+        size_t root = findRoot(i);
+        // Singleton rule, see function comment: skip only one-op groups that are pure DDR->L1
+        // moves; they stay out of the prefix context (cubeTaskOfOp == -1).
+        if (rootMemberCount[root] == 1 && isDdrToL1Op(i)) {
+            skippedSingletonNum++;
+            continue;
+        }
+        auto iter = rootToTask.find(root);
+        if (iter == rootToTask.end()) {
+            iter = rootToTask.emplace(root, static_cast<int>(taskMembers.size())).first;
+            taskMembers.emplace_back();
+            taskMatMulOps.emplace_back();
+        }
+        const size_t taskIndex = static_cast<size_t>(iter->second);
+        cubeTaskOfOp[i] = iter->second;
+        taskMembers[taskIndex].emplace_back(i);
+        if (debugEnabled && OpcodeManager::Inst().GetOpCalcType(graph.ops[i]->GetOpcode()) == OpCalcType::MATMUL) {
+            taskMatMulOps[taskIndex].emplace_back(graph.ops[i]->GetOpcodeStr() + "[" +
+                                                  std::to_string(graph.ops[i]->GetOpMagic()) + "]");
+        }
+    }
+    APASS_LOG_DEBUG_F(Elements::Graph, "Built cube tasks: cubeOps=%zu, cubeTasks=%zu, skippedSingletons=%zu.",
+                      cubeOpNum, taskMembers.size(), skippedSingletonNum);
+    if (debugEnabled) {
+        for (size_t taskIndex = 0; taskIndex < taskMembers.size(); taskIndex++) {
+            std::string matMulOps = "[";
+            for (size_t i = 0; i < taskMatMulOps[taskIndex].size(); i++) {
+                if (i != 0) {
+                    matMulOps += ",";
+                }
+                matMulOps += taskMatMulOps[taskIndex][i];
+            }
+            matMulOps += "]";
+            APASS_LOG_DEBUG_F(Elements::Graph, "Cube task[%zu]: members=%zu, matmulOps=%s.", taskIndex,
+                              taskMembers[taskIndex].size(), matMulOps.c_str());
+        }
+    }
+}
+
+void VFFusionClusterIdentify::ComputeOpPrefixBits(const GraphContext& graph, const std::vector<size_t>& topoOrder,
+                                                  const std::vector<int>& cubeTaskOfOp, size_t cubeTaskNum,
+                                                  std::vector<std::vector<uint64_t>>& opPrefix) const
+{
+    const size_t wordNum = PrefixWordNum(cubeTaskNum);
+    opPrefix.assign(graph.ops.size(), std::vector<uint64_t>(wordNum, 0));
+    for (size_t opIndex : topoOrder) {
+        if (opIndex >= graph.ops.size()) {
+            continue;
+        }
+        auto& bits = opPrefix[opIndex];
+        for (size_t producerIndex : graph.producers[opIndex]) {
+            if (producerIndex >= graph.ops.size()) {
+                continue;
+            }
+            const auto& producerBits = opPrefix[producerIndex];
+            for (size_t w = 0; w < wordNum; w++) {
+                bits[w] |= producerBits[w];
+            }
+            int task = cubeTaskOfOp[producerIndex];
+            if (task >= 0) {
+                SetPrefixBit(bits, static_cast<size_t>(task));
+            }
+        }
+    }
+}
+
+void VFFusionClusterIdentify::ComputeTaskPrefixBits(const std::vector<std::vector<size_t>>& taskMembers,
+                                                    const std::vector<std::vector<uint64_t>>& opPrefix,
+                                                    size_t cubeTaskNum,
+                                                    std::vector<std::vector<uint64_t>>& taskPrefix) const
+{
+    taskPrefix.assign(taskMembers.size(), std::vector<uint64_t>(PrefixWordNum(cubeTaskNum), 0));
+    for (size_t taskIndex = 0; taskIndex < taskMembers.size(); taskIndex++) {
+        auto& bits = taskPrefix[taskIndex];
+        for (size_t memberIndex : taskMembers[taskIndex]) {
+            if (memberIndex >= opPrefix.size()) {
+                continue;
+            }
+            for (size_t w = 0; w < bits.size(); w++) {
+                bits[w] |= opPrefix[memberIndex][w];
+            }
+        }
+        // A task never counts itself as its own prefix member.
+        bits[taskIndex / PREFIX_WORD_BITS] &= ~(uint64_t{1} << (taskIndex % PREFIX_WORD_BITS));
+    }
+}
+
+void VFFusionClusterIdentify::BuildPrefixContext(const GraphContext& graph, const std::vector<size_t>& topoOrder,
+                                                 PrefixContext& prefixCtx) const
+{
+    BuildCubeTasks(graph, prefixCtx.cubeTaskOfOp, prefixCtx.taskMembers, prefixCtx.taskMatMulOps);
+    const size_t cubeTaskNum = prefixCtx.taskMembers.size();
+    ComputeOpPrefixBits(graph, topoOrder, prefixCtx.cubeTaskOfOp, cubeTaskNum, prefixCtx.opPrefix);
+    ComputeTaskPrefixBits(prefixCtx.taskMembers, prefixCtx.opPrefix, cubeTaskNum, prefixCtx.taskPrefix);
+    APASS_LOG_DEBUG_F(Elements::Graph, "Built prefix context: ops=%zu, cubeTasks=%zu.", graph.ops.size(), cubeTaskNum);
+}
+
+// Union of the cube-task prefixes of a set of ops: the side's collective prefix. All side ops are
+// vector ops (cluster members and mergeable consumers are gated by IsFusableOp), so the union of
+// their ancestor bitsets is exactly the set of cube tasks the side depends on.
+std::vector<uint64_t> VFFusionClusterIdentify::UnionOpPrefixes(const PrefixContext& prefixCtx,
+                                                               const std::vector<size_t>& opIndices) const
+{
+    const size_t wordNum = PrefixWordNum(prefixCtx.taskMembers.size());
+    std::vector<uint64_t> unionBits(wordNum, 0);
+    for (size_t opIndex : opIndices) {
+        const auto& prefix = prefixCtx.opPrefix[opIndex];
+        for (size_t w = 0; w < wordNum; w++) {
+            unionBits[w] |= prefix[w];
+        }
+    }
+    return unionBits;
+}
+
+// Rule A: prefixes are equal (both mutual subsets). For different prefixes, every task in either
+// difference set must still be connected to the opposite side: one of its ancestor tasks must be
+// contained in the opposite prefix, or it shares a cube-task prefix with one of the opposite
+// side's tasks. A difference task with an empty own prefix is an independent parallel root and
+// never provides a safe fusion anchor.
+bool VFFusionClusterIdentify::IsPrefixSetCompatible(const PrefixContext& prefixCtx,
+                                                    const std::vector<uint64_t>& prefixA,
+                                                    const std::vector<uint64_t>& prefixB) const
+{
+    const bool aSubB = IsPrefixSubsetOf(prefixA, prefixB);
+    const bool bSubA = IsPrefixSubsetOf(prefixB, prefixA);
+    if (aSubB && bSubA) {
+        return true; // Rule A: equal prefixes.
+    }
+    auto hasAnyBit = [](const std::vector<uint64_t>& bits) {
+        return std::any_of(bits.begin(), bits.end(), [](uint64_t word) { return word != 0; });
+    };
+    auto hasCommonBit = [](const std::vector<uint64_t>& lhs, const std::vector<uint64_t>& rhs) {
+        const size_t wordNum = std::min(lhs.size(), rhs.size());
+        for (size_t wordIndex = 0; wordIndex < wordNum; wordIndex++) {
+            if ((lhs[wordIndex] & rhs[wordIndex]) != 0) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    const size_t taskNum = prefixCtx.taskMembers.size();
+    // Precomputed once per side: the union of the own prefixes of all cube tasks on that side.
+    // Intersecting a difference task's own prefix with this closure is semantically identical to
+    // intersecting it with every opposite task's own prefix one by one, and keeps the difference
+    // loop O(T * wordNum) instead of O(T^2 * wordNum).
+    auto buildSideAncestorClosure = [&](const std::vector<uint64_t>& prefix) {
+        std::vector<uint64_t> closure(prefix.size(), 0);
+        for (size_t taskIndex = 0; taskIndex < taskNum; taskIndex++) {
+            if (!IsPrefixBitSet(prefix, taskIndex)) {
+                continue;
+            }
+            const auto& taskOwnPrefix = prefixCtx.taskPrefix[taskIndex];
+            const size_t wordNum = std::min(closure.size(), taskOwnPrefix.size());
+            for (size_t wordIndex = 0; wordIndex < wordNum; wordIndex++) {
+                closure[wordIndex] |= taskOwnPrefix[wordIndex];
+            }
+        }
+        return closure;
+    };
+    const auto closureA = buildSideAncestorClosure(prefixA);
+    const auto closureB = buildSideAncestorClosure(prefixB);
+    auto isDifferenceTaskAnchored = [&](size_t taskIndex, const std::vector<uint64_t>& oppositePrefix,
+                                        const std::vector<uint64_t>& oppositeClosure) {
+        const auto& taskOwnPrefix = prefixCtx.taskPrefix[taskIndex];
+        if (!hasAnyBit(taskOwnPrefix)) {
+            return false;
+        }
+        // The difference task is anchored when at least one of its ancestor tasks is already
+        // present on the opposite side. The remaining ancestors may belong to another branch;
+        // requiring the complete own prefix to be a subset is unnecessarily strict for a fork
+        // that still has a cross-side dependency.
+        if (hasCommonBit(taskOwnPrefix, oppositePrefix)) {
+            return true;
+        }
+        // It may also be a sibling extension: even when its complete ancestor set is not present
+        // on the opposite side, sharing an ancestor prefix with one of the opposite cube tasks
+        // means the two sides are rooted in the same dependency chain.
+        return hasCommonBit(taskOwnPrefix, oppositeClosure);
+    };
+
+    for (size_t taskIndex = 0; taskIndex < taskNum; taskIndex++) {
+        const bool inA = IsPrefixBitSet(prefixA, taskIndex);
+        const bool inB = IsPrefixBitSet(prefixB, taskIndex);
+        if (inA == inB) {
+            continue;
+        }
+        if (!isDifferenceTaskAnchored(taskIndex, inA ? prefixB : prefixA, inA ? closureB : closureA)) {
+            const auto& taskOwnPrefix = prefixCtx.taskPrefix[taskIndex];
+            if (!hasAnyBit(taskOwnPrefix)) {
+                APASS_LOG_DEBUG_F(Elements::Operation,
+                                  "Cannot fuse prefix sets: difference task %zu has an empty own prefix "
+                                  "(independent parallel root).",
+                                  taskIndex);
+            } else {
+                APASS_LOG_DEBUG_F(Elements::Operation,
+                                  "Cannot fuse prefix sets: difference task %zu prefix %s has no "
+                                  "ancestor or shared prefix on the opposite side.",
+                                  taskIndex, PrefixToString(taskOwnPrefix).c_str());
+            }
+            return false;
+        }
+    }
+    return true;
+}
+
+// Compare the two sides as wholes: collect each side's union of cube-task prefixes, then apply
+// the prefix compatibility rules once on the unions. Bail out immediately on the first unsatisfied condition.
+bool VFFusionClusterIdentify::PrefixCompatibleForMerge(const PrefixContext& prefixCtx, const std::vector<size_t>& sideA,
+                                                       const std::vector<size_t>& sideB) const
+{
+    for (size_t opIndex : sideA) {
+        if (opIndex >= prefixCtx.opPrefix.size()) {
+            return false;
+        }
+    }
+    for (size_t opIndex : sideB) {
+        if (opIndex >= prefixCtx.opPrefix.size()) {
+            return false;
+        }
+    }
+    const auto prefixA = UnionOpPrefixes(prefixCtx, sideA);
+    const auto prefixB = UnionOpPrefixes(prefixCtx, sideB);
+    return IsPrefixSetCompatible(prefixCtx, prefixA, prefixB);
+}
+
 bool VFFusionClusterIdentify::CanMergeToCluster(const GraphContext& graph, size_t consumerIndex, int clusterId,
                                                 const std::unordered_map<int, std::vector<Operation*>>& clusters,
-                                                const AncestorBits& ancestorBits) const
+                                                const AncestorBits& ancestorBits, const PrefixContext& prefixCtx) const
 {
     auto clusterIter = clusters.find(clusterId);
     auto* consumer = graph.ops[consumerIndex];
@@ -656,13 +1094,21 @@ bool VFFusionClusterIdentify::CanMergeToCluster(const GraphContext& graph, size_
                           clusterIter->second.size() + 1, VF_CLUSTER_SIZE_LIMIT);
         return false;
     }
+    auto clusterOpIndices = GetClusterOpIndices(graph, clusterIter->second);
+    if (!PrefixCompatibleForMerge(prefixCtx, {consumerIndex}, clusterOpIndices)) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "Cannot merge %s[%d] into VF cluster %d: cube-task prefix misaligned.",
+                          consumer->GetOpcodeStr().c_str(), consumer->GetOpMagic(), clusterId);
+        return false;
+    }
+    if (!IsFusionResourceWithinLimits(graph, clusterOpIndices, {consumerIndex})) {
+        return false;
+    }
     if (!HasDirectDependencyFromCluster(graph, consumerIndex, clusterIter->second)) {
         APASS_LOG_DEBUG_F(Elements::Operation,
                           "Cannot merge %s[%d] into VF cluster %d: no direct dependency from cluster.",
                           consumer->GetOpcodeStr().c_str(), consumer->GetOpMagic(), clusterId);
         return false;
     }
-    auto clusterOpIndices = GetClusterOpIndices(graph, clusterIter->second);
     for (size_t producerIndex : graph.producers[consumerIndex]) {
         if (std::find(clusterOpIndices.begin(), clusterOpIndices.end(), producerIndex) != clusterOpIndices.end() &&
             OpcodeManager::Inst().GetOpCalcType(graph.ops[producerIndex]->GetOpcode()) == OpCalcType::REDUCE) {
@@ -684,7 +1130,8 @@ bool VFFusionClusterIdentify::CanMergeToCluster(const GraphContext& graph, size_
 
 bool VFFusionClusterIdentify::CanMergeClusterIntoTarget(
     const GraphContext& graph, size_t consumerIndex, int targetClusterId, int inputClusterId,
-    const std::unordered_map<int, std::vector<Operation*>>& clusters, const AncestorBits& ancestorBits) const
+    const std::unordered_map<int, std::vector<Operation*>>& clusters, const AncestorBits& ancestorBits,
+    const PrefixContext& prefixCtx) const
 {
     if (targetClusterId == inputClusterId) {
         return true;
@@ -713,6 +1160,17 @@ bool VFFusionClusterIdentify::CanMergeClusterIntoTarget(
 
     auto targetOpIndices = GetClusterOpIndices(graph, targetIter->second);
     auto inputOpIndices = GetClusterOpIndices(graph, inputIter->second);
+    if (!PrefixCompatibleForMerge(prefixCtx, targetOpIndices, inputOpIndices)) {
+        APASS_LOG_DEBUG_F(Elements::Operation,
+                          "Cannot merge input VF cluster %d into target %d for consumer %s[%d]: cube-task prefix "
+                          "misaligned.",
+                          inputClusterId, targetClusterId, graph.ops[consumerIndex]->GetOpcodeStr().c_str(),
+                          graph.ops[consumerIndex]->GetOpMagic());
+        return false;
+    }
+    if (!IsFusionResourceWithinLimits(graph, targetOpIndices, inputOpIndices)) {
+        return false;
+    }
     for (size_t producerIndex : graph.producers[consumerIndex]) {
         if (std::find(targetOpIndices.begin(), targetOpIndices.end(), producerIndex) != targetOpIndices.end() &&
             OpcodeManager::Inst().GetOpCalcType(graph.ops[producerIndex]->GetOpcode()) == OpCalcType::REDUCE) {
@@ -802,11 +1260,11 @@ bool VFFusionClusterIdentify::CompactScheduleForCluster(const GraphContext& grap
 bool VFFusionClusterIdentify::CanMergeMultiInputClusters(
     const GraphContext& graph, size_t consumerIndex, const std::vector<int>& inputClusterIds,
     const std::unordered_map<int, std::vector<Operation*>>& clusters, const AncestorBits& ancestorBits,
-    std::vector<int>& mergeableClusterIds) const
+    const PrefixContext& prefixCtx, std::vector<int>& mergeableClusterIds) const
 {
     mergeableClusterIds.clear();
     for (int clusterId : inputClusterIds) {
-        if (CanMergeToCluster(graph, consumerIndex, clusterId, clusters, ancestorBits)) {
+        if (CanMergeToCluster(graph, consumerIndex, clusterId, clusters, ancestorBits, prefixCtx)) {
             mergeableClusterIds.emplace_back(clusterId);
         }
     }
@@ -821,17 +1279,17 @@ bool VFFusionClusterIdentify::CanMergeMultiInputClusters(
 bool VFFusionClusterIdentify::CanMergeConsumerWithInputClusters(
     const GraphContext& graph, size_t consumerIndex, const std::vector<int>& inputClusterIds,
     const std::unordered_map<int, std::vector<Operation*>>& clusters, const AncestorBits& ancestorBits,
-    std::vector<int>& mergeableClusterIds) const
+    const PrefixContext& prefixCtx, std::vector<int>& mergeableClusterIds) const
 {
     mergeableClusterIds.clear();
     if (inputClusterIds.size() == 1) {
-        if (!CanMergeToCluster(graph, consumerIndex, inputClusterIds.front(), clusters, ancestorBits)) {
+        if (!CanMergeToCluster(graph, consumerIndex, inputClusterIds.front(), clusters, ancestorBits, prefixCtx)) {
             return false;
         }
         mergeableClusterIds.emplace_back(inputClusterIds.front());
         return true;
     }
-    return CanMergeMultiInputClusters(graph, consumerIndex, inputClusterIds, clusters, ancestorBits,
+    return CanMergeMultiInputClusters(graph, consumerIndex, inputClusterIds, clusters, ancestorBits, prefixCtx,
                                       mergeableClusterIds);
 }
 
@@ -874,8 +1332,8 @@ VFFusionClusterIdentify::GraphContext VFFusionClusterIdentify::BuildGraph(Functi
         SortOpIndicesByMagic(graph, graph.producers[i]);
         SortOpIndicesByMagic(graph, graph.consumers[i]);
     }
-    APASS_LOG_DEBUG_F(Elements::Graph, "Built VF graph for function[%s,%d]: ops=%zu.", function.GetRawName().c_str(),
-                      function.GetFuncMagic(), graph.ops.size());
+    APASS_LOG_DEBUG_F(Elements::Graph, "Built VF graph for function[%s]: ops=%zu.", function.GetMagicName().c_str(),
+                      graph.ops.size());
     return graph;
 }
 
@@ -1027,17 +1485,29 @@ Status VFFusionClusterIdentify::ProcessFusableOps(const GraphContext& graph, con
                                                   std::unordered_map<int, std::vector<Operation*>>& clusters,
                                                   int& nextClusterId)
 {
+    PrefixContext prefixCtx;
+    BuildPrefixContext(graph, topoOrder, prefixCtx);
     for (size_t opIndex : topoOrder) {
         auto* op = graph.ops[opIndex];
-        if (!IsFusableOp(*op) || IsUserScopedOp(*op)) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "Begin process op:%s[%d].", op->GetOpcodeStr().c_str(),
+                          op->GetOpMagic());
+        if (!IsFusableOp(*op)) {
+            APASS_LOG_DEBUG_F(Elements::Operation, "Skip op:%s[%d], reason=not_fusable.", op->GetOpcodeStr().c_str(),
+                              op->GetOpMagic());
             continue;
         }
-
+        if (IsUserScopedOp(*op)) {
+            APASS_LOG_DEBUG_F(Elements::Operation, "Skip op:%s[%d], reason=user_scoped, atomicScopeId=%d.",
+                              op->GetOpcodeStr().c_str(), op->GetOpMagic(), op->GetAtomicScopeId());
+            continue;
+        }
         std::vector<int> inputClusterIds = GetInputClusterIds(graph, opIndex);
         std::vector<int> mergeableClusterIds;
-        if (!inputClusterIds.empty() && CanMergeConsumerWithInputClusters(graph, opIndex, inputClusterIds, clusters,
-                                                                          ancestorBits, mergeableClusterIds)) {
-            if (MergeConsumerIntoClusters(graph, opIndex, mergeableClusterIds, ancestorBits, clusters) != SUCCESS) {
+        if (!inputClusterIds.empty() &&
+            CanMergeConsumerWithInputClusters(graph, opIndex, inputClusterIds, clusters, ancestorBits, prefixCtx,
+                                              mergeableClusterIds)) {
+            if (MergeConsumerIntoClusters(graph, opIndex, mergeableClusterIds, ancestorBits, prefixCtx, clusters) !=
+                SUCCESS) {
                 return FAILED;
             }
             continue;
@@ -1054,6 +1524,7 @@ Status VFFusionClusterIdentify::ProcessFusableOps(const GraphContext& graph, con
 Status VFFusionClusterIdentify::MergeConsumerIntoClusters(const GraphContext& graph, size_t opIndex,
                                                           const std::vector<int>& mergeableClusterIds,
                                                           const AncestorBits& ancestorBits,
+                                                          const PrefixContext& prefixCtx,
                                                           std::unordered_map<int, std::vector<Operation*>>& clusters)
 {
     auto* op = graph.ops[opIndex];
@@ -1071,7 +1542,8 @@ Status VFFusionClusterIdentify::MergeConsumerIntoClusters(const GraphContext& gr
                       op->GetOpcodeStr().c_str(), op->GetOpMagic(), targetClusterId, clusters[targetClusterId].size());
     for (size_t i = 1; i < mergeableClusterIds.size(); i++) {
         int inputClusterId = mergeableClusterIds[i];
-        if (!CanMergeClusterIntoTarget(graph, opIndex, targetClusterId, inputClusterId, clusters, ancestorBits)) {
+        if (!CanMergeClusterIntoTarget(graph, opIndex, targetClusterId, inputClusterId, clusters, ancestorBits,
+                                       prefixCtx)) {
             continue;
         }
         if (!MergeClusters(targetClusterId, inputClusterId, clusters)) {
@@ -1094,12 +1566,12 @@ Status VFFusionClusterIdentify::ProcessLeafFunction(Function& function, int& nex
 {
     scheduleOrder_.clear();
     schedulePosition_.clear();
-    APASS_LOG_DEBUG_F(Elements::Function, "Start VFFusionClusterIdentify for leaf function[%s,%d].",
-                      function.GetRawName().c_str(), function.GetFuncMagic());
+    APASS_LOG_DEBUG_F(Elements::Function, "Start VFFusionClusterIdentify for leaf function[%s].",
+                      function.GetMagicName().c_str());
     GraphContext graph = BuildGraph(function);
     if (graph.ops.empty()) {
-        APASS_LOG_DEBUG_F(Elements::Function, "Skip VFFusionClusterIdentify for empty leaf function[%s,%d].",
-                          function.GetRawName().c_str(), function.GetFuncMagic());
+        APASS_LOG_DEBUG_F(Elements::Function, "Skip VFFusionClusterIdentify for empty leaf function[%s].",
+                          function.GetMagicName().c_str());
         return SUCCESS;
     }
     ResetGeneratedClusterIds(graph);
@@ -1123,16 +1595,63 @@ Status VFFusionClusterIdentify::ProcessLeafFunction(Function& function, int& nex
     }
 
     function.ScheduleBy(scheduledOps, true);
+    DumpVfClusters(clusters, scheduledOps, function);
+    return SUCCESS;
+}
+
+void VFFusionClusterIdentify::DumpVfClusters(const std::unordered_map<int, std::vector<Operation*>>& clusters,
+                                             const std::vector<Operation*>& scheduledOps,
+                                             const Function& function) const
+{
     size_t clusterOpNum = 0;
     for (const auto& cluster : clusters) {
         clusterOpNum += cluster.second.size();
     }
+    if (IsPassDebugEnabled()) {
+        int lastClusterId = -1;
+        for (auto* op : scheduledOps) {
+            if (!IsVfFusionCluster(*op)) {
+                continue;
+            }
+            int clusterId = op->GetAtomicScopeId();
+            if (clusterId != lastClusterId) {
+                lastClusterId = clusterId;
+                auto clusterIter = clusters.find(clusterId);
+                size_t opNum = clusterIter != clusters.end() ? clusterIter->second.size() : 0;
+                APASS_LOG_DEBUG_F(Elements::Function, "VF cluster (id=%d) in leaf function[%s]: opNum=%zu.", clusterId,
+                                  function.GetMagicName().c_str(), opNum);
+            }
+            std::string operands = "inputs[";
+            for (const auto& input : op->GetIOperands()) {
+                if (input == nullptr) {
+                    continue;
+                }
+                if (operands.back() != '[') {
+                    operands += ", ";
+                }
+                operands += "magic=" + std::to_string(input->GetMagic()) +
+                            ", shape=" + CommonUtils::ContainerToStr(input->GetShape());
+            }
+            operands += "], outputs[";
+            for (const auto& output : op->GetOOperands()) {
+                if (output == nullptr) {
+                    continue;
+                }
+                if (operands.back() != '[') {
+                    operands += ", ";
+                }
+                operands += "magic=" + std::to_string(output->GetMagic()) +
+                            ", shape=" + CommonUtils::ContainerToStr(output->GetShape());
+            }
+            operands += "]";
+            APASS_LOG_DEBUG_F(Elements::Operation, "op %s[%d]: %s", op->GetOpcodeStr().c_str(), op->GetOpMagic(),
+                              operands.c_str());
+        }
+    }
     APASS_LOG_INFO_F(Elements::Function,
-                     "Finish VFFusionClusterIdentify for leaf function[%s,%d]: clusters=%zu, clusteredOps=%zu, "
+                     "Finish VFFusionClusterIdentify for leaf function[%s]: clusters=%zu, clusteredOps=%zu, "
                      "scheduledOps=%zu.",
-                     function.GetRawName().c_str(), function.GetFuncMagic(), clusters.size(), clusterOpNum,
-                     scheduledOps.size());
-    return SUCCESS;
+                     function.GetMagicName().c_str(), clusters.size(), clusterOpNum, scheduledOps.size());
 }
 
 Status VFFusionClusterIdentify::RunOnFunction(Function& function)
@@ -1149,19 +1668,18 @@ Status VFFusionClusterIdentify::RunOnFunction(Function& function)
         APASS_LOG_ERROR_F(Elements::Function, "VFFusionClusterIdentify failed for root function is null.");
         return FAILED;
     }
-    APASS_LOG_INFO_F(Elements::Function, "Start VFFusionClusterIdentify for root function[%s,%d]: leafFunctions=%zu.",
-                     function.rootFunc_->GetRawName().c_str(), function.rootFunc_->GetFuncMagic(),
-                     function.rootFunc_->programs_.size());
+    APASS_LOG_INFO_F(Elements::Function, "Start VFFusionClusterIdentify for root function[%s]: leafFunctions=%zu.",
+                     function.rootFunc_->GetMagicName().c_str(), function.rootFunc_->programs_.size());
     int nextClusterId = VF_CLUSTER_ID_START;
     for (auto& program : function.rootFunc_->programs_) {
         if (ProcessLeafFunction(*program.second, nextClusterId) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Function, "VFFusionClusterIdentify failed for leaf function[%s,%d].",
-                              program.second->GetRawName().c_str(), program.second->GetFuncMagic());
+            APASS_LOG_ERROR_F(Elements::Function, "VFFusionClusterIdentify failed for leaf function[%s].",
+                              program.second->GetMagicName().c_str());
             return FAILED;
         }
     }
-    APASS_LOG_INFO_F(Elements::Function, "Finish VFFusionClusterIdentify for root function[%s,%d].",
-                     function.rootFunc_->GetRawName().c_str(), function.rootFunc_->GetFuncMagic());
+    APASS_LOG_INFO_F(Elements::Function, "Finish VFFusionClusterIdentify for root function[%s].",
+                     function.rootFunc_->GetMagicName().c_str());
     return SUCCESS;
 }
 
