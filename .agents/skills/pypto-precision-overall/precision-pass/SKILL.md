@@ -1,5 +1,5 @@
 ---
-name: pypto-pass-precision
+name: precision-pass
 description: Pass精度校验技能。开启PreCheck/PostCheck进行全链路Pass校验，通过pass校验定位报错Pass，使用pass_compare逐Op对比定位具体问题Op，支持动态shape上板数据打印验证。触发词：pass精度、pass校验、pass_verify、pass_compare、精度校验。
 ---
 # Pass 精度校验
