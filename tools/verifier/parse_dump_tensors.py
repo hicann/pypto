@@ -21,7 +21,7 @@ import struct
 import time
 from typing import Dict
 
-import ml_dtypes
+from dtype_decode import decode_tensor_data
 import numpy as np
 import pandas as pd
 from tensor_diff import IsCloseConfig, compare_tensors_result_dict
@@ -31,6 +31,8 @@ import torch
 DEV_SHAPE_DIM_MAX = 6  # 替换为实际值
 BYTE_ORDER = "<"  # 小端：< ；大端：> ；本机字节序：=
 RESULT_FILE = ""
+ATOL_OVERRIDE = None
+RTOL_OVERRIDE = None
 
 # 单个字段的字节数定义（无对齐，纯原始字节）
 FIELD_SIZES = {"uint8_t": 1, "uint16_t": 2, "uint32_t": 4, "int32_t": 4, "int64_t": 8, "uint64_t": 8}
@@ -47,24 +49,26 @@ logging.basicConfig(
 
 
 _data_type_full_mapping = {
-    0: ("INT4", ml_dtypes.int4),
+    0: ("INT4", np.uint8),
     1: ("INT8", np.int8),
     2: ("INT16", np.int16),
     3: ("INT32", np.int32),
     4: ("INT64", np.int64),
-    5: ("FP8", ml_dtypes.float8_e4m3fn),
+    5: ("FP8", np.uint8),
     6: ("FP16", np.float16),
     7: ("FP32", np.float32),
-    8: ("BF16", ml_dtypes.bfloat16),
+    8: ("BF16", np.uint16),
     9: ("HF4", None),  # 暂不支持解析
-    10: ("HF8", None),  # 暂不支持解析
+    10: ("HF8", np.uint8),
     11: ("UINT8", np.uint8),
     12: ("UINT16", np.uint16),
     13: ("UINT32", np.uint32),
     14: ("UINT64", np.uint64),
     15: ("BOOL", np.bool_),
     16: ("DOUBLE", np.float64),
-    17: ("BOTTOM", None),
+    17: ("FP8E4M3", np.uint8),
+    18: ("FP8E5M2", np.uint8),
+    24: ("BOTTOM", None),
 }
 
 
@@ -79,29 +83,38 @@ def _get_dtype_from_str(dtype_str: str):
     return str_to_dtype.get(dtype_str, None)
 
 
-def _get_compare_config(dtype):
+def _get_compare_config(dtype_name):
     """
     根据数据类型返回合适的对比配置
 
     Args:
-        dtype: numpy dtype 对象，可能为 None
+        dtype_name: 数据类型名称字符串，可能为 None
 
     Returns:
         IsCloseConfig: 对比配置对象，或 None（表示不支持的类型）
     """
-    if dtype is None:
+    if dtype_name is None:
         return None
 
     # 整型数据：精确匹配
-    if np.issubdtype(dtype, np.integer):
-        return IsCloseConfig(rtol=0, atol=0, calc_dtype=torch.float64, is_detail=True)
+    if dtype_name in ("INT4", "INT8", "INT16", "INT32", "INT64", "UINT8", "UINT16", "UINT32", "UINT64"):
+        config = IsCloseConfig(rtol=0, atol=0, calc_dtype=torch.float64, is_detail=True)
 
     # FP32/FP64：标准容差
-    if dtype in [np.float32, np.float64]:
-        return IsCloseConfig(rtol=1e-3, atol=1e-3, calc_dtype=torch.float64, is_detail=True)
+    elif dtype_name in ("FP32", "DOUBLE"):
+        config = IsCloseConfig(rtol=1e-3, atol=1e-3, calc_dtype=torch.float64, is_detail=True)
 
     # FP16/BF16/FP8 等低精度浮点：放宽容差
-    return IsCloseConfig(rtol=1e-2, atol=1e-2, calc_dtype=torch.float64, is_detail=True)
+    else:
+        config = IsCloseConfig(rtol=1e-2, atol=1e-2, calc_dtype=torch.float64, is_detail=True)
+
+    # 命令行传入的 atol/rtol 优先，覆盖按 dtype 推导的默认值
+    if ATOL_OVERRIDE is not None or RTOL_OVERRIDE is not None:
+        config = config._replace(
+            rtol=config.rtol if RTOL_OVERRIDE is None else RTOL_OVERRIDE,
+            atol=config.atol if ATOL_OVERRIDE is None else ATOL_OVERRIDE,
+        )
+    return config
 
 
 class VerifyRes:
@@ -208,7 +221,8 @@ class VerifyRes:
             if os.path.exists(verify_tensor_info) and len(verify_tshape) == len(dump_tshape):
                 dtype_result = _get_data_type(tensor_info["datatype"])
                 dtype = dtype_result[1]
-                verify_data_type = _get_dtype_from_str(tensor_info["A>:datatype"])
+                verify_dtype_name = str(tensor_info["A>:datatype"]).strip().upper()
+                verify_data_type = _get_dtype_from_str(verify_dtype_name)
 
                 # 不支持的类型，跳过对比
                 if dtype is None:
@@ -217,9 +231,11 @@ class VerifyRes:
                     continue
 
                 verify_tensor_data = np.fromfile(verify_tensor_info, verify_data_type)
+                verify_tensor_data = decode_tensor_data(verify_tensor_data, verify_dtype_name)
                 verify_tensor_data = verify_tensor_data.reshape(verify_tshape)
 
                 data = np.fromfile(tensor_info["B>FILENAME"], dtype)
+                data = decode_tensor_data(data, dtype_result[0])
                 data = data.reshape(dump_tshape)
 
                 slices = []
@@ -230,7 +246,7 @@ class VerifyRes:
                 sliced_data = data[tuple(slices)]
                 sliced_verify = verify_tensor_data[tuple(slices)]
 
-                config = _get_compare_config(dtype)
+                config = _get_compare_config(dtype_result[0])
                 tensor_a = torch.from_numpy(sliced_data.astype(np.float64)).to(torch.float64)
                 tensor_b = torch.from_numpy(sliced_verify.astype(np.float64)).to(torch.float64)
                 file_name = tensor_info["B>FILENAME"].split('/')[-1]
@@ -588,10 +604,13 @@ class CompactDumpTensorInfoParser:
                 return merge_tensor_info
 
             verify_tensor_data = np.fromfile(verify_tensor_info, dtype)
+            verify_tensor_data = decode_tensor_data(verify_tensor_data, dtype_result[0])
             verify_tensor_data = verify_tensor_data.reshape(verify_tshape)
 
-            config = _get_compare_config(dtype)
-            tensor_a = torch.from_numpy(raw_data.astype(np.float64)).to(torch.float64)
+            config = _get_compare_config(dtype_result[0])
+            tensor_a = torch.from_numpy(decode_tensor_data(raw_data, dtype_result[0]).astype(np.float64)).to(
+                torch.float64
+            )
             tensor_b = torch.from_numpy(verify_tensor_data.astype(np.float64)).to(torch.float64)
             file_name = merge_tensor_info["B>FILENAME"].split('/')[-1]
             csv_path = os.path.join(RESULT_FILE[:-4] + ".DETAIL", file_name[:-5] + ".csv")
@@ -649,7 +668,7 @@ class CompactDumpTensorInfoParser:
             result["B>:rawshape"] = result["B>:rawshape"][:dims]
 
         # 衍生字段（可选）
-        result["B>:datatype"] = _get_data_type(result.get("datatype", 17))[0]
+        result["B>:datatype"] = _get_data_type(result.get("datatype", 24))[0]
 
         return result
 
@@ -903,6 +922,12 @@ def parse_arguments():
         help="directory like output/output_2026xxxxx/dump_tensor_device_x",
     )
     parser.add_argument("--verify_path", type=str, default="", help="Path to verify_result.csv")
+    parser.add_argument(
+        "--atol", type=float, default=None, help="Absolute tolerance override; if not set, use dtype-based default"
+    )
+    parser.add_argument(
+        "--rtol", type=float, default=None, help="Relative tolerance override; if not set, use dtype-based default"
+    )
     return parser.parse_args()
 
 
@@ -911,8 +936,12 @@ def main():
     timestamp = int(time.time() * 1_000_000)
     pass_full_name = get_pass_full_name(args.verify_path, "CodegenPreproc")
     csv_path = os.path.join(args.verify_path, f"verify_task_result_cmp~{pass_full_name}~{timestamp}.csv")
-    global RESULT_FILE
+    global RESULT_FILE, ATOL_OVERRIDE, RTOL_OVERRIDE
     RESULT_FILE = csv_path
+    ATOL_OVERRIDE = args.atol
+    RTOL_OVERRIDE = args.rtol
+    if ATOL_OVERRIDE is not None or RTOL_OVERRIDE is not None:
+        logging.info(f"Compare tolerance override: rtol={RTOL_OVERRIDE}, atol={ATOL_OVERRIDE}")
     if not os.path.exists(args.dump_tensor_path):
         logging.error(f"Directory does not exist: {args.dump_tensor_path}")
         return

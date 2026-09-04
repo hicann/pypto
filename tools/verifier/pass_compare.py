@@ -21,12 +21,34 @@ import time
 import traceback
 from typing import Any, Dict, List, Optional, Tuple
 
-import ml_dtypes
+from dtype_decode import decode_tensor_data
 import numpy as np
 import pandas as pd
 from parse_dump_tensors import scan_pass_info_from_path
 from tensor_diff import IsCloseConfig, compare_tensors_result_dict
 import torch
+
+# 数据类型 -> 文件原始字节存储 dtype；INT4/FP8/FP8E4M3/FP8E5M2/HF8/BF16 为打包类型，读入后需经 decode_tensor_data 解码
+_dtype_dict = {
+    "INT4": np.uint8,
+    "INT8": np.int8,
+    "INT16": np.int16,
+    "INT32": np.int32,
+    "INT64": np.int64,
+    "FP8": np.uint8,
+    "FP8E4M3": np.uint8,
+    "FP8E5M2": np.uint8,
+    "HF8": np.uint8,
+    "FP16": np.float16,
+    "FP32": np.float32,
+    "BF16": np.uint16,
+    "UINT8": np.uint8,
+    "UINT16": np.uint16,
+    "UINT32": np.uint32,
+    "UINT64": np.uint64,
+    "BOOL": np.bool_,
+    "DOUBLE": np.float64,
+}
 
 
 @dataclass
@@ -79,15 +101,7 @@ class PassComparator:
         self.result_file = ""
         self.row_num = 1
         self.comparison_records: List[Dict[str, Any]] = []
-        self.dtype_dict = {
-            "BF16": ml_dtypes.bfloat16,
-            "FP32": np.float32,
-            "FP16": np.float16,
-            "INT32": np.int32,
-            "INT8": np.int8,
-            "INT64": np.int64,
-            "INT16": np.int16,
-        }
+        self.dtype_dict = _dtype_dict
 
         self.pass_dict = {
             "tensor_graph": 0,
@@ -292,15 +306,7 @@ class PassComparator:
             csv_data_dict = args.csv_data_dict
             result_file = args.result_file
 
-            dtype_dict = {
-                "BF16": ml_dtypes.bfloat16,
-                "FP32": np.float32,
-                "FP16": np.float16,
-                "INT32": np.int32,
-                "INT8": np.int8,
-                "INT64": np.int64,
-                "INT16": np.int16,
-            }
+            dtype_dict = _dtype_dict
 
             opcode_dict = {
                 "VIEW": ["L1_TO_L0A", "L1_TO_L0B"],
@@ -479,6 +485,8 @@ class PassComparator:
         np_dtype = dtype_dict.get(a[":datatype"])
         data_a = np.fromfile(f_a, np_dtype)
         data_b = np.fromfile(f_b, np_dtype)
+        data_a = decode_tensor_data(data_a, a[":datatype"])
+        data_b = decode_tensor_data(data_b, a[":datatype"])
 
         data_a = data_a.reshape(a_shape)
         data_b = data_b.reshape(b_shape)
@@ -519,6 +527,8 @@ class PassComparator:
         np_dtype = dtype_dict.get(a[":datatype"])
         data_a = np.fromfile(f_a, np_dtype)
         data_b = np.fromfile(f_b, np_dtype)
+        data_a = decode_tensor_data(data_a, a[":datatype"])
+        data_b = decode_tensor_data(data_b, a[":datatype"])
 
         data_a = data_a.reshape(shape)
         data_b = data_b.reshape(shape)
