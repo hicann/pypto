@@ -33,7 +33,9 @@ struct BoundaryTensorInfo {
     int tensorMagic;
     std::vector<int> producerSubgraphs;
     std::vector<int> consumerSubgraphs;
-    bool isDDR{false}; // 目的: 仅 DDR tensor 参与 inner-external-use 检查
+    bool isDDR{false};                  // 目的: 仅 DDR tensor 参与 inner-external-use 检查
+    std::vector<int> producerCvFuseIds; // 与 producerSubgraphs 逐项平行, 端点级 CvFuseId, 未分配为 -1
+    std::vector<int> consumerCvFuseIds; // 与 consumerSubgraphs 逐项平行
 };
 
 struct MergeInput {
@@ -94,9 +96,12 @@ private:
     void UpdateOutput();
     bool CheckLatencyConstraint(const std::vector<int>& actualGroup);
     bool CheckMergeBenefitByStructuralPattern(const std::vector<int>& actualGroup);
-    bool CheckNoExternalUseOfMergedInnerTensor(const std::vector<int>& actualGroup);
+    bool CheckNoExternalUseOfMergedInnerTensor(const std::vector<int>& actualGroup, bool checkByCvFuseId = false);
     bool IsInvalidMergedInnerTensor(int tensorId, const std::unordered_set<int>& mergedRoots, std::vector<int>& prodIn,
                                     std::vector<int>& prodOut, std::vector<int>& consIn, std::vector<int>& consOut);
+    bool IsInvalidMergedInnerTensorByCvFuseId(int tensorId, const std::unordered_set<int>& mergedRoots,
+                                              std::vector<int>& prodIn, std::vector<int>& prodOut,
+                                              std::vector<int>& consIn, std::vector<int>& consOut);
     std::vector<int> GetActualGroup(const std::vector<int>& group);
     void BuildMergedGraph(std::vector<std::set<int>>& outGraph, std::vector<std::set<int>>& inGraph);
     bool HasCycle(const std::vector<std::set<int>>& outGraph, const std::vector<std::set<int>>& inGraph);

@@ -318,16 +318,22 @@ void ReduceCopyMerge::RecordBoundaryTensorInfo(LogicalTensorPtr& tensor, MergeIn
     // boundary tensor 也须参与 inner-external-use 检查(其后必落地 DDR, 且无新 op 隔离)
     tensorInfo.isDDR = tensor->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR ||
                        tensor->GetMemoryTypeToBe() == MemoryType::MEM_DEVICE_DDR || WillBeDdrWithoutNewCopyOp(tensor);
-    std::set<int> producerSubgraphs;
-    std::set<int> consumerSubgraphs;
+    std::set<std::pair<int, int>> producerEndpoints;
+    std::set<std::pair<int, int>> consumerEndpoints;
     for (auto& op : tensor->GetProducers()) {
-        producerSubgraphs.insert(op->GetSubgraphID());
+        producerEndpoints.insert({op->GetSubgraphID(), op->GetCvFuseId()});
     }
     for (auto& op : tensor->GetConsumers()) {
-        consumerSubgraphs.insert(op->GetSubgraphID());
+        consumerEndpoints.insert({op->GetSubgraphID(), op->GetCvFuseId()});
     }
-    tensorInfo.producerSubgraphs.assign(producerSubgraphs.begin(), producerSubgraphs.end());
-    tensorInfo.consumerSubgraphs.assign(consumerSubgraphs.begin(), consumerSubgraphs.end());
+    for (const auto& endpoint : producerEndpoints) {
+        tensorInfo.producerSubgraphs.push_back(endpoint.first);
+        tensorInfo.producerCvFuseIds.push_back(endpoint.second);
+    }
+    for (const auto& endpoint : consumerEndpoints) {
+        tensorInfo.consumerSubgraphs.push_back(endpoint.first);
+        tensorInfo.consumerCvFuseIds.push_back(endpoint.second);
+    }
     int tensorId = static_cast<int>(mergeInput.boundaryTensors.size());
     mergeInput.boundaryTensors.push_back(tensorInfo);
     for (int subgraphId : connectGraphs) {
@@ -706,7 +712,45 @@ bool MixGraphMerger::IsInvalidMergedInnerTensor(int tensorId, const std::unorder
     return hasProducerInMix && hasConsumerInMix && hasExternalEndpoint;
 }
 
-bool MixGraphMerger::CheckNoExternalUseOfMergedInnerTensor(const std::vector<int>& actualGroup)
+// Enforce merge 只对全端点属于同一个有效 scope 的 tensor 进行豁免；其它情况沿用原子图端点检查。
+// 该前提与 IsEnforceMergeBoundary 的单一 CvFuseId 判定一致；无法获得完整 scope 的端点不会进入豁免。
+static bool HasSingleValidCvFuseId(const BoundaryTensorInfo& tensorInfo)
+{
+    if (tensorInfo.producerSubgraphs.size() != tensorInfo.producerCvFuseIds.size() ||
+        tensorInfo.consumerSubgraphs.size() != tensorInfo.consumerCvFuseIds.size()) {
+        return false;
+    }
+    int cvFuseId = -1;
+    bool hasEndpoint = false;
+    auto collect = [&](const std::vector<int>& ids) {
+        for (int id : ids) {
+            if (id < 0) {
+                return false;
+            }
+            if (!hasEndpoint) {
+                cvFuseId = id;
+                hasEndpoint = true;
+            } else if (cvFuseId != id) {
+                return false;
+            }
+        }
+        return true;
+    };
+    return collect(tensorInfo.producerCvFuseIds) && collect(tensorInfo.consumerCvFuseIds) && hasEndpoint;
+}
+
+bool MixGraphMerger::IsInvalidMergedInnerTensorByCvFuseId(int tensorId, const std::unordered_set<int>& mergedRoots,
+                                                          std::vector<int>& prodIn, std::vector<int>& prodOut,
+                                                          std::vector<int>& consIn, std::vector<int>& consOut)
+{
+    const auto& tensorInfo = mInput.boundaryTensors[tensorId];
+    if (!tensorInfo.isDDR || HasSingleValidCvFuseId(tensorInfo)) {
+        return false;
+    }
+    return IsInvalidMergedInnerTensor(tensorId, mergedRoots, prodIn, prodOut, consIn, consOut);
+}
+
+bool MixGraphMerger::CheckNoExternalUseOfMergedInnerTensor(const std::vector<int>& actualGroup, bool checkByCvFuseId)
 {
     std::unordered_set<int> mergedRoots(actualGroup.begin(), actualGroup.end());
     ++mVisitStamp;
@@ -717,17 +761,35 @@ bool MixGraphMerger::CheckNoExternalUseOfMergedInnerTensor(const std::vector<int
             }
             mTensorVisitStamp[tensorId] = mVisitStamp;
             std::vector<int> prodIn, prodOut, consIn, consOut;
-            if (IsInvalidMergedInnerTensor(tensorId, mergedRoots, prodIn, prodOut, consIn, consOut)) {
+            bool isInvalid = false;
+            if (checkByCvFuseId) {
+                isInvalid = IsInvalidMergedInnerTensorByCvFuseId(tensorId, mergedRoots, prodIn, prodOut, consIn,
+                                                                 consOut);
+            } else {
+                isInvalid = IsInvalidMergedInnerTensor(tensorId, mergedRoots, prodIn, prodOut, consIn, consOut);
+            }
+            if (isInvalid) {
                 const auto& tinfo = mInput.boundaryTensors[tensorId];
                 if (mWarnedInnerTensorMagics.insert(tinfo.tensorMagic).second) {
+                    bool hasScopelessEndpoint = tinfo.producerSubgraphs.size() != tinfo.producerCvFuseIds.size() ||
+                                                tinfo.consumerSubgraphs.size() != tinfo.consumerCvFuseIds.size();
+                    for (int cvFuseId : tinfo.producerCvFuseIds) {
+                        hasScopelessEndpoint = hasScopelessEndpoint || cvFuseId < 0;
+                    }
+                    for (int cvFuseId : tinfo.consumerCvFuseIds) {
+                        hasScopelessEndpoint = hasScopelessEndpoint || cvFuseId < 0;
+                    }
+                    const char* cause = checkByCvFuseId ? (hasScopelessEndpoint ?
+                                                               "scope information is missing (CvFuseId=-1)" :
+                                                               "producer/consumer carry different scopes (CvFuseId)") :
+                                                          "producer/consumer carry different scopes (CvFuseId)";
                     APASS_LOG_WARN_F(Elements::Operation,
                                      "Merge group [%s] not merged: tensor %d producer(ingroup[%s] outgroup[%s]) "
                                      "consumer(ingroup[%s] outgroup[%s]) has both in-group and out-group endpoints. "
-                                     "Likely cause: producer/consumer of the same tensor carry different scope "
-                                     "(CvFuseId).",
+                                     "Likely cause: %s.",
                                      IntVecToStr(actualGroup).c_str(), tinfo.tensorMagic, IntVecToStr(prodIn).c_str(),
                                      IntVecToStr(prodOut).c_str(), IntVecToStr(consIn).c_str(),
-                                     IntVecToStr(consOut).c_str());
+                                     IntVecToStr(consOut).c_str(), cause);
                 } else {
                     APASS_LOG_DEBUG_F(Elements::Operation,
                                       "Merge group [%s] not merged: tensor %d blocked by inner-external-use again, "
@@ -1008,7 +1070,9 @@ MergeOutput MixGraphMerger::Merge(const MergeInput& input)
                 continue;
             }
             if (input.isEnforceMergeGroup[i]) {
-                if (CanMergeWithoutCycle(actualGroup) && CheckNoExternalUseOfMergedInnerTensor(actualGroup)) {
+                // true: enforce 组改走 CvFuseId 判定, 同 scope 的组外端点豁免(终将并入同一混合子图),
+                // 防止 enforce 组互相等待无法合并; auto-mix 路径保持默认 subgraphId 判定不变
+                if (CanMergeWithoutCycle(actualGroup) && CheckNoExternalUseOfMergedInnerTensor(actualGroup, true)) {
                     APASS_LOG_DEBUG_F(Elements::Operation, "Merge group %zu succeeded: actualGroup=%s.", i,
                                       IntVecToStr(actualGroup).c_str());
                     PerformMerge(actualGroup);

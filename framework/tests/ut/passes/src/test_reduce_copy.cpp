@@ -498,7 +498,7 @@ TEST_F(ReduceCopyTest, MixGraphMerger_EnforcedMergeRejectsExternalDdrTensorUse)
 {
     std::vector<std::set<int>> outGraph{{1}, {}, {}};
     MergeInput input = BuildSimpleMergeInput(3, outGraph, {{0, 1}});
-    input.boundaryTensors = {{101, {0, 2}, {0, 2}, true}};
+    input.boundaryTensors = {{101, {0, 2}, {0, 2}, true, {}, {}}};
     input.subgraphToBoundaryTensorIds = {{0}, {}, {0}};
 
     MixGraphMerger merger;
@@ -516,7 +516,7 @@ TEST_F(ReduceCopyTest, MixGraphMerger_EnforcedMergeRejectsExternalConsumerOnly)
 {
     std::vector<std::set<int>> outGraph{{1}, {}, {}};
     MergeInput input = BuildSimpleMergeInput(3, outGraph, {{0, 1}});
-    input.boundaryTensors = {{103, {0}, {0, 2}, true}};
+    input.boundaryTensors = {{103, {0}, {0, 2}, true, {}, {}}};
     input.subgraphToBoundaryTensorIds = {{0}, {}, {0}};
 
     MixGraphMerger merger;
@@ -533,7 +533,7 @@ TEST_F(ReduceCopyTest, MixGraphMerger_EnforcedMergeAllowsInternalDdrTensorUse)
 {
     std::vector<std::set<int>> outGraph{{1}, {}};
     MergeInput input = BuildSimpleMergeInput(2, outGraph, {{0, 1}});
-    input.boundaryTensors = {{102, {0}, {1}, true}};
+    input.boundaryTensors = {{102, {0}, {1}, true, {}, {}}};
     input.subgraphToBoundaryTensorIds = {{0}, {0}};
 
     MixGraphMerger merger;
@@ -542,6 +542,113 @@ TEST_F(ReduceCopyTest, MixGraphMerger_EnforcedMergeAllowsInternalDdrTensorUse)
     const int Num1 = 1;
     EXPECT_EQ(output.numSubgraphUpdated, Num1);
     EXPECT_EQ(output.subgraphIdUpdated[0], output.subgraphIdUpdated[1]);
+}
+
+// 同 scope 的组外端点豁免: tensor 202 的组外 producer 2 与组内端点(producer 0/consumer 1)携带相同
+// CvFuseId(5), scope 融合机制保证其终将同组 -> 不计为组外 -> 不构成拒绝 -> 合并放行。
+// 复刻 scope 互锁场景: [48,49,52,53] 与 [49,50,52,53] 各被对方 tensor 卡住, 豁免后可先后合并。
+TEST_F(ReduceCopyTest, MixGraphMerger_EnforcedMergeAllowsSameScopeExternalProducer)
+{
+    std::vector<std::set<int>> outGraph{{1}, {}, {}};
+    MergeInput input = BuildSimpleMergeInput(3, outGraph, {{0, 1}});
+    input.boundaryTensors = {{202, {0, 2}, {1}, true, {5, 5}, {5}}};
+    input.subgraphToBoundaryTensorIds = {{0}, {0}, {0}};
+
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+
+    const int Num2 = 2;
+    EXPECT_EQ(output.numSubgraphUpdated, Num2);
+    EXPECT_EQ(output.subgraphIdUpdated[0], output.subgraphIdUpdated[1]);
+    EXPECT_NE(output.subgraphIdUpdated[0], output.subgraphIdUpdated[2]);
+}
+
+// 组外 consumer 与组内端点属于同一 scope 时应豁免，覆盖 consumer 侧的同 scope 路径。
+TEST_F(ReduceCopyTest, MixGraphMerger_EnforcedMergeAllowsSameScopeExternalConsumer)
+{
+    std::vector<std::set<int>> outGraph{{1}, {}, {}};
+    MergeInput input = BuildSimpleMergeInput(3, outGraph, {{0, 1}});
+    input.boundaryTensors = {{205, {0}, {1, 2}, true, {5}, {5, 5}}};
+    input.subgraphToBoundaryTensorIds = {{0}, {0}, {0}};
+
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+
+    const int Num2 = 2;
+    EXPECT_EQ(output.numSubgraphUpdated, Num2);
+    EXPECT_EQ(output.subgraphIdUpdated[0], output.subgraphIdUpdated[1]);
+    EXPECT_NE(output.subgraphIdUpdated[0], output.subgraphIdUpdated[2]);
+}
+
+// 组外 producer 虽与组内 scope 相同，但同时存在异 scope 的组外 consumer 时不得豁免，
+// 防止豁免路径吞掉 foreign endpoint 的拒绝条件。
+TEST_F(ReduceCopyTest, MixGraphMerger_EnforcedMergeRejectsMixedScopeExternalEndpoints)
+{
+    std::vector<std::set<int>> outGraph{{1}, {}, {}};
+    MergeInput input = BuildSimpleMergeInput(3, outGraph, {{0, 1}});
+    input.boundaryTensors = {{206, {0, 2}, {1, 2}, true, {5, 5}, {5, 7}}};
+    input.subgraphToBoundaryTensorIds = {{0}, {0}, {0}};
+
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+
+    const int Num3 = 3;
+    EXPECT_EQ(output.numSubgraphUpdated, Num3);
+    EXPECT_NE(output.subgraphIdUpdated[0], output.subgraphIdUpdated[1]);
+    EXPECT_NE(output.subgraphIdUpdated[0], output.subgraphIdUpdated[2]);
+}
+
+// 异 scope 的组外端点不豁免: 组内端点(producer 0/consumer 1)为 scope 5, 组外 producer 2 为 scope 7,
+// 无融合保证 -> 仍计为组外 -> 组内读写 + 异 scope 组外端点 -> 拒绝。
+TEST_F(ReduceCopyTest, MixGraphMerger_EnforcedMergeRejectsForeignScopeExternalProducer)
+{
+    std::vector<std::set<int>> outGraph{{1}, {}, {}};
+    MergeInput input = BuildSimpleMergeInput(3, outGraph, {{0, 1}});
+    input.boundaryTensors = {{201, {0, 2}, {1}, true, {5, 7}, {5}}};
+    input.subgraphToBoundaryTensorIds = {{0}, {0}, {0}};
+
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+
+    const int Num3 = 3;
+    EXPECT_EQ(output.numSubgraphUpdated, Num3);
+    EXPECT_NE(output.subgraphIdUpdated[0], output.subgraphIdUpdated[1]);
+    EXPECT_NE(output.subgraphIdUpdated[0], output.subgraphIdUpdated[2]);
+}
+
+// 无 scope(-1)的组外端点不豁免: 组内端点为 scope 5, 组外 producer 2 为 -1, 无融合保证 -> 拒绝。
+TEST_F(ReduceCopyTest, MixGraphMerger_EnforcedMergeRejectsScopelessExternalProducer)
+{
+    std::vector<std::set<int>> outGraph{{1}, {}, {}};
+    MergeInput input = BuildSimpleMergeInput(3, outGraph, {{0, 1}});
+    input.boundaryTensors = {{203, {0, 2}, {1}, true, {5, -1}, {5}}};
+    input.subgraphToBoundaryTensorIds = {{0}, {0}, {0}};
+
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+
+    const int Num3 = 3;
+    EXPECT_EQ(output.numSubgraphUpdated, Num3);
+    EXPECT_NE(output.subgraphIdUpdated[0], output.subgraphIdUpdated[1]);
+    EXPECT_NE(output.subgraphIdUpdated[0], output.subgraphIdUpdated[2]);
+}
+
+// 组内端点含 -1(无 scope)同样不豁免: 组内 producer 0 为 scope 5、组内 consumer 1 为 -1, 组外 producer 2
+// 为 scope 5。任一端点为 -1 即 scope 信息不完整 -> 豁免整体失效 -> 组外 producer 2 按 foreign 处理 -> 拒绝。
+TEST_F(ReduceCopyTest, MixGraphMerger_EnforcedMergeRejectsScopelessInnerEndpoint)
+{
+    std::vector<std::set<int>> outGraph{{1}, {}, {}};
+    MergeInput input = BuildSimpleMergeInput(3, outGraph, {{0, 1}});
+    input.boundaryTensors = {{204, {0, 2}, {1}, true, {5, 5}, {-1}}};
+    input.subgraphToBoundaryTensorIds = {{0}, {0}, {0}};
+
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+
+    const int Num3 = 3;
+    EXPECT_EQ(output.numSubgraphUpdated, Num3);
+    EXPECT_NE(output.subgraphIdUpdated[0], output.subgraphIdUpdated[1]);
+    EXPECT_NE(output.subgraphIdUpdated[0], output.subgraphIdUpdated[2]);
 }
 
 // 正向: sg0 同时是 T 的 producer(ASSEMBLE) 和 consumer(CAST), sg1 是外部 ASSEMBLE producer.
