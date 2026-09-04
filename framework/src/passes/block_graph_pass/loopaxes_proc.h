@@ -35,20 +35,24 @@ private:
     bool SameDynLoopAxes(const std::vector<SymbolicScalar>& curLoopAxes, const Function& subFunc);
     bool SameLoopAxes(const std::vector<int64_t>& curLoopAxes);
     void ClearStatus();
-    void ProcessDynLoopGroup(Operation& op, const std::vector<SymbolicScalar>& dynloopAxes, const Function& subFunc);
-    void ProcessStaticLoopGroup(Operation& op, const std::vector<int64_t>& loopAxes);
+    Status ProcessDynLoopGroup(Operation& op, const std::vector<SymbolicScalar>& dynloopAxes, const Function& subFunc);
+    Status ProcessStaticLoopGroup(Operation& op, const std::vector<int64_t>& loopAxes);
     void ResetGroupState();
-    void FinalizeLoopGroups();
+    Status FinalizeLoopGroups();
     void RecordAddrOverLap(Operation* op, int& idx, std::set<std::pair<int, int>>& addrConflictIdx,
                            std::map<int, std::vector<std::vector<size_t>>>& addrRecordMap);
     void IsOverLap(std::vector<size_t>& addrRange, bool& isAdd, int& conflictIdx,
                    std::map<int, std::vector<std::vector<size_t>>>& addrRecordMap,
                    std::set<std::pair<int, int>>& addrConflictIdx, int& idx);
-    void CheckAddrOverLap(bool isStaticLoop, std::vector<Operation*>& sameLoopOpGroup,
-                          std::set<std::pair<int, int>>& addrConflictIdx,
-                          std::map<int, std::vector<std::vector<size_t>>>& addrRecordMap);
+    Status CheckAddrOverLap(bool isStaticLoop, std::vector<Operation*>& sameLoopOpGroup,
+                            std::set<std::pair<int, int>>& addrConflictIdx,
+                            std::map<int, std::vector<std::vector<size_t>>>& addrRecordMap);
     void ProcessCutStaticGroup(std::vector<int>& cutResult, std::vector<Operation*>& sameLoopOpGroup);
     void ProcessCutDynGroup(std::vector<int>& cutResult, std::vector<Operation*>& sameLoopOpGroup);
+    std::vector<int> FindCuts(const std::set<std::pair<int, int>>& conflicts, int groupSize,
+                              const std::set<int>& forbiddenCuts);
+    Status ValidateAtomicScopeGrouping(Function& subFunc) const;
+    std::set<int> GetForbiddenCutPositions(const std::vector<Operation*>& opGroup) const;
 
     int64_t groupIdx{INVALID_LOOP_GROUPID};
     int64_t lastGroupIdx{INVALID_LOOP_GROUPID};
@@ -70,6 +74,9 @@ private:
     std::map<int, std::vector<std::vector<size_t>>> addrDynRecordMap;
     std::vector<Operation*> sameDynLoopOpGroup;
     std::set<std::pair<int, int>> addrDynConflictIdx;
+
+    // debug 开关：atomicScope 分组校验与禁切保护，默认关闭，置 true 启用
+    bool enableAtomicScope_{false};
 };
 
 } // namespace tile_fwk

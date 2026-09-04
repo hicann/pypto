@@ -15,6 +15,7 @@
 #include <gtest/gtest.h>
 #include "symbolic_scalar_test_utils.h"
 #include "tilefwk/platform.h"
+#include "interface/operation/attribute.h"
 #include "interface/tensor/irbuilder.h"
 #define private public
 #include "passes/block_graph_pass/insert_sync.h"
@@ -984,6 +985,38 @@ static void VerifyBarAll(const std::vector<Operation*>& ops, size_t idx)
     VerifySyncOp(ops[idx], Opcode::OP_BAR_ALL, AIVCore::UNSPECIFIED);
 }
 
+class ScopedNPUArchForInsertSyncTest {
+public:
+    explicit ScopedNPUArchForInsertSyncTest(NPUArch arch) : oldArch_(Platform::Instance().GetSoc().GetNPUArch())
+    {
+        Platform::Instance().GetSoc().SetNPUArch(arch);
+    }
+
+    ~ScopedNPUArchForInsertSyncTest() { Platform::Instance().GetSoc().SetNPUArch(oldArch_); }
+
+private:
+    NPUArch oldArch_;
+};
+
+static Operation& CreateAtomicScopeSyncOp(Function& func, Opcode opcode)
+{
+    std::vector<std::shared_ptr<LogicalTensor>> input;
+    std::vector<std::shared_ptr<LogicalTensor>> output;
+    Operation& syncOp = IRBuilder().CreateTensorOpStmt(func, opcode, input, output);
+    syncOp.syncQueue_ = {PipeType::PIPE_V, PipeType::PIPE_V, CoreType::AIV, CoreType::AIV,
+                         IS_NUM1,          AIVCore::AIV0,    AIVCore::AIV0};
+    syncOp.SetAIVCore(AIVCore::AIV0);
+    return syncOp;
+}
+
+static void ExpectOpListEq(const std::vector<Operation*>& actual, const std::vector<Operation*>& expected)
+{
+    ASSERT_EQ(actual.size(), expected.size());
+    for (size_t i = 0; i < expected.size(); ++i) {
+        EXPECT_EQ(actual[i], expected[i]) << "Mismatch at index " << i;
+    }
+}
+
 // Helper: verify full InsertCvSyncOps 12-op sequence, return next index
 static size_t VerifyCvSyncOps(const std::vector<Operation*>& ops, size_t i)
 {
@@ -1094,6 +1127,601 @@ TEST_F(InsertSyncTest, TestEnableDebugAllAic)
     EXPECT_EQ(ops[IS_NUM2]->GetOpcode(), Opcode::OP_A_MULACC_B);
     VerifyBarAll(ops, IS_NUM3);
     EXPECT_EQ(ops[IS_NUM4]->GetOpcode(), Opcode::OP_A_MUL_BT);
+}
+
+// =========================================================================
+// AdjustSyncByAtomicScope 测试用例
+// 后处理逻辑：A5 平台上，cluster 内的 wait-like sync 移到 cluster 前，
+// set-like sync 移到 cluster 后。非 A5 平台不做处理。
+// =========================================================================
+
+// 单条 wait-like 同步（OP_SYNC_DST）被移动到 cluster 前
+TEST_F(InsertSyncTest, AdjustSyncByAtomicScopeMovesSingleWaitBeforeCluster)
+{
+    ScopedNPUArchForInsertSyncTest scopedArch(NPUArch::DAV_3510);
+    auto [root, leaf] = SetupDebugFunc("TestMoveWaitBeforeCluster");
+    (void)root;
+    auto ts = MakeTensors(IS_NUM4, {IS_NUM8, IS_NUM16});
+    auto& add = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_ADD, {ts[0], ts[1]}, {ts[2]});
+    auto& cast = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_CAST, {ts[2]}, {ts[3]});
+    auto& wait = CreateAtomicScopeSyncOp(*leaf, Opcode::OP_SYNC_DST);
+    add.SetAtomicScopeId(IS_NUM7);
+    cast.SetAtomicScopeId(IS_NUM7);
+    std::vector<Operation*> opList = {&add, &wait, &cast};
+
+    InsertSync syncPass;
+    EXPECT_EQ(syncPass.AdjustSyncByAtomicScope(opList), SUCCESS);
+
+    ExpectOpListEq(opList, {&wait, &add, &cast});
+}
+
+// 单条 set-like 同步（OP_SYNC_SRC）被移动到 cluster 后
+TEST_F(InsertSyncTest, AdjustSyncByAtomicScopeMovesSingleSetAfterCluster)
+{
+    ScopedNPUArchForInsertSyncTest scopedArch(NPUArch::DAV_3510);
+    auto [root, leaf] = SetupDebugFunc("TestMoveSetAfterCluster");
+    (void)root;
+    auto ts = MakeTensors(IS_NUM4, {IS_NUM8, IS_NUM16});
+    auto& add = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_ADD, {ts[0], ts[1]}, {ts[2]});
+    auto& cast = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_CAST, {ts[2]}, {ts[3]});
+    auto& set = CreateAtomicScopeSyncOp(*leaf, Opcode::OP_SYNC_SRC);
+    add.SetAtomicScopeId(IS_NUM7);
+    cast.SetAtomicScopeId(IS_NUM7);
+    std::vector<Operation*> opList = {&add, &set, &cast};
+
+    InsertSync syncPass;
+    EXPECT_EQ(syncPass.AdjustSyncByAtomicScope(opList), SUCCESS);
+
+    ExpectOpListEq(opList, {&add, &cast, &set});
+}
+
+// OP_BAR_V 不可移动，出现在 cluster 内时失败
+TEST_F(InsertSyncTest, AdjustSyncByAtomicScopeRejectsBarVInCluster)
+{
+    ScopedNPUArchForInsertSyncTest scopedArch(NPUArch::DAV_3510);
+    auto [root, leaf] = SetupDebugFunc("TestRejectBarV");
+    (void)root;
+    auto ts = MakeTensors(IS_NUM4, {IS_NUM8, IS_NUM16});
+    auto& add = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_ADD, {ts[0], ts[1]}, {ts[2]});
+    auto& cast = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_CAST, {ts[2]}, {ts[3]});
+    auto& barV = CreateAtomicScopeSyncOp(*leaf, Opcode::OP_BAR_V);
+    add.SetAtomicScopeId(IS_NUM7);
+    cast.SetAtomicScopeId(IS_NUM7);
+    std::vector<Operation*> opList = {&add, &barV, &cast};
+
+    InsertSync syncPass;
+    EXPECT_EQ(syncPass.AdjustSyncByAtomicScope(opList), FAILED);
+}
+
+// cluster 内连续 sync op（不配对）允许移动，各自移到对应边界
+TEST_F(InsertSyncTest, AdjustSyncByAtomicScopeMovesConsecutiveUnpairedSyncOps)
+{
+    ScopedNPUArchForInsertSyncTest scopedArch(NPUArch::DAV_3510);
+    auto [root, leaf] = SetupDebugFunc("TestConsecutiveSync");
+    (void)root;
+    auto ts = MakeTensors(IS_NUM5, {IS_NUM8, IS_NUM16});
+    auto& add = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_ADD, {ts[0], ts[1]}, {ts[2]});
+    auto& midExp = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_EXP, {ts[2]}, {ts[3]});
+    auto& cast = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_CAST, {ts[3]}, {ts[4]});
+    // wait 和 set 连续出现（中间无 cluster op 隔开），但 eventId 不同，不配对
+    std::vector<std::shared_ptr<LogicalTensor>> emptyInput;
+    std::vector<std::shared_ptr<LogicalTensor>> emptyOutput;
+    Operation& wait = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_SYNC_DST, emptyInput, emptyOutput);
+    wait.syncQueue_ = {PipeType::PIPE_MTE2, PipeType::PIPE_V, CoreType::AIV, CoreType::AIV, IS_NUM1,
+                       AIVCore::AIV0,       AIVCore::AIV0};
+    wait.SetAIVCore(AIVCore::AIV0);
+    Operation& set = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_SYNC_SRC, emptyInput, emptyOutput);
+    set.syncQueue_ = {PipeType::PIPE_V, PipeType::PIPE_MTE3, CoreType::AIV, CoreType::AIV,
+                      IS_NUM2,          AIVCore::AIV0,       AIVCore::AIV0};
+    set.SetAIVCore(AIVCore::AIV0);
+    add.SetAtomicScopeId(IS_NUM7);
+    midExp.SetAtomicScopeId(IS_NUM7);
+    cast.SetAtomicScopeId(IS_NUM7);
+    // wait 和 set 连续，但 eventId 不同（1 vs 2），pipe 也不配对
+    std::vector<Operation*> opList = {&add, &wait, &set, &midExp, &cast};
+
+    InsertSync syncPass;
+    EXPECT_EQ(syncPass.AdjustSyncByAtomicScope(opList), SUCCESS);
+
+    // wait 移到 cluster 前，set 移到 cluster 后
+    ExpectOpListEq(opList, {&wait, &add, &midExp, &cast, &set});
+}
+
+// cluster 忽略同步后仍非连续时失败
+TEST_F(InsertSyncTest, AdjustSyncByAtomicScopeRejectsNonContinuousCluster)
+{
+    ScopedNPUArchForInsertSyncTest scopedArch(NPUArch::DAV_3510);
+    auto [root, leaf] = SetupDebugFunc("TestRejectNonContinuous");
+    (void)root;
+    auto ts = MakeTensors(IS_NUM5, {IS_NUM8, IS_NUM16});
+    auto& add = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_ADD, {ts[0], ts[1]}, {ts[2]});
+    auto& exp = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_EXP, {ts[2]}, {ts[3]});
+    auto& cast = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_CAST, {ts[3]}, {ts[4]});
+    add.SetAtomicScopeId(IS_NUM7);
+    exp.SetAtomicScopeId(IS_NUM8);
+    cast.SetAtomicScopeId(IS_NUM7);
+    std::vector<Operation*> opList = {&add, &exp, &cast};
+
+    InsertSync syncPass;
+    EXPECT_EQ(syncPass.AdjustSyncByAtomicScope(opList), FAILED);
+}
+
+// cluster 内出现核间同步（OP_CV_SYNC_SRC）时失败
+TEST_F(InsertSyncTest, AdjustSyncByAtomicScopeRejectsCrossCoreSyncInCluster)
+{
+    ScopedNPUArchForInsertSyncTest scopedArch(NPUArch::DAV_3510);
+    auto [root, leaf] = SetupDebugFunc("TestRejectCrossCore");
+    (void)root;
+    auto ts = MakeTensors(IS_NUM4, {IS_NUM8, IS_NUM16});
+    auto& add = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_ADD, {ts[0], ts[1]}, {ts[2]});
+    auto& cast = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_CAST, {ts[2]}, {ts[3]});
+    auto& cvSync = CreateAtomicScopeSyncOp(*leaf, Opcode::OP_CV_SYNC_SRC);
+    add.SetAtomicScopeId(IS_NUM7);
+    cast.SetAtomicScopeId(IS_NUM7);
+    std::vector<Operation*> opList = {&add, &cvSync, &cast};
+
+    InsertSync syncPass;
+    EXPECT_EQ(syncPass.AdjustSyncByAtomicScope(opList), FAILED);
+}
+
+// 非 A5 平台不做后处理
+TEST_F(InsertSyncTest, AdjustSyncByAtomicScopeNoopsOnNonA5)
+{
+    ScopedNPUArchForInsertSyncTest scopedArch(NPUArch::DAV_2201);
+    auto [root, leaf] = SetupDebugFunc("TestNoopNonA5");
+    (void)root;
+    auto ts = MakeTensors(IS_NUM4, {IS_NUM8, IS_NUM16});
+    auto& add = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_ADD, {ts[0], ts[1]}, {ts[2]});
+    auto& cast = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_CAST, {ts[2]}, {ts[3]});
+    auto& wait = CreateAtomicScopeSyncOp(*leaf, Opcode::OP_SYNC_DST);
+    add.SetAtomicScopeId(IS_NUM7);
+    cast.SetAtomicScopeId(IS_NUM7);
+    std::vector<Operation*> opList = {&add, &wait, &cast};
+
+    InsertSync syncPass;
+    EXPECT_EQ(syncPass.AdjustSyncByAtomicScope(opList), SUCCESS);
+
+    ExpectOpListEq(opList, {&add, &wait, &cast});
+}
+
+// 同一 cluster 内出现配对的 set/wait（相同 eventId + pipe 互换匹配）时失败
+TEST_F(InsertSyncTest, AdjustSyncByAtomicScopeRejectsPairedSetWaitInSameCluster)
+{
+    ScopedNPUArchForInsertSyncTest scopedArch(NPUArch::DAV_3510);
+    auto [root, leaf] = SetupDebugFunc("TestRejectPairedSetWait");
+    (void)root;
+    auto ts = MakeTensors(IS_NUM5, {IS_NUM8, IS_NUM16});
+    auto& add = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_ADD, {ts[0], ts[1]}, {ts[2]});
+    auto& midExp = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_EXP, {ts[2]}, {ts[3]});
+    auto& cast = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_CAST, {ts[3]}, {ts[4]});
+    // set: pipeId_=PIPE_V, trigPipeId_=PIPE_MTE2, eventId_=3
+    // wait: pipeId_=PIPE_MTE2, trigPipeId_=PIPE_V, eventId_=3
+    // 配对条件：set.pipeId_ == wait.trigPipeId_ (PIPE_V == PIPE_V)
+    //           set.trigPipeId_ == wait.pipeId_ (PIPE_MTE2 == PIPE_MTE2)
+    //           eventId 相同 (3 == 3)
+    std::vector<std::shared_ptr<LogicalTensor>> emptyInput;
+    std::vector<std::shared_ptr<LogicalTensor>> emptyOutput;
+    Operation& setOp = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_SYNC_SRC, emptyInput, emptyOutput);
+    setOp.syncQueue_ = {PipeType::PIPE_V, PipeType::PIPE_MTE2, CoreType::AIV, CoreType::AIV,
+                        IS_NUM3,          AIVCore::AIV0,       AIVCore::AIV0};
+    setOp.SetAIVCore(AIVCore::AIV0);
+    Operation& waitOp = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_SYNC_DST, emptyInput, emptyOutput);
+    waitOp.syncQueue_ = {PipeType::PIPE_MTE2, PipeType::PIPE_V, CoreType::AIV, CoreType::AIV, IS_NUM3,
+                         AIVCore::AIV0,       AIVCore::AIV0};
+    waitOp.SetAIVCore(AIVCore::AIV0);
+    add.SetAtomicScopeId(IS_NUM7);
+    midExp.SetAtomicScopeId(IS_NUM7);
+    cast.SetAtomicScopeId(IS_NUM7);
+    // set 和 wait 都在 cluster 内部，中间有 midExp 隔开，各自 run length = 1
+    std::vector<Operation*> opList = {&add, &setOp, &midExp, &waitOp, &cast};
+
+    InsertSync syncPass;
+    EXPECT_EQ(syncPass.AdjustSyncByAtomicScope(opList), FAILED);
+}
+
+// cluster 内同时出现不配对的 set 和 wait（不同 eventId），各自移动到两侧，不报错
+TEST_F(InsertSyncTest, AdjustSyncByAtomicScopeMovesUnpairedSetAndWaitIndependently)
+{
+    ScopedNPUArchForInsertSyncTest scopedArch(NPUArch::DAV_3510);
+    auto [root, leaf] = SetupDebugFunc("TestMoveUnpairedSetWait");
+    (void)root;
+    auto ts = MakeTensors(IS_NUM5, {IS_NUM8, IS_NUM16});
+    auto& add = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_ADD, {ts[0], ts[1]}, {ts[2]});
+    auto& midExp = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_EXP, {ts[2]}, {ts[3]});
+    auto& cast = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_CAST, {ts[3]}, {ts[4]});
+    // set: eventId=3, pipeId_=PIPE_V, trigPipeId_=PIPE_MTE2
+    // wait: eventId=5, pipeId_=PIPE_MTE3, trigPipeId_=PIPE_V
+    // eventId 不同 → 不配对 → 各自移动
+    std::vector<std::shared_ptr<LogicalTensor>> emptyInput;
+    std::vector<std::shared_ptr<LogicalTensor>> emptyOutput;
+    Operation& setOp = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_SYNC_SRC, emptyInput, emptyOutput);
+    setOp.syncQueue_ = {PipeType::PIPE_V, PipeType::PIPE_MTE2, CoreType::AIV, CoreType::AIV,
+                        IS_NUM3,          AIVCore::AIV0,       AIVCore::AIV0};
+    setOp.SetAIVCore(AIVCore::AIV0);
+    Operation& waitOp = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_SYNC_DST, emptyInput, emptyOutput);
+    waitOp.syncQueue_ = {PipeType::PIPE_MTE3, PipeType::PIPE_V, CoreType::AIV, CoreType::AIV, IS_NUM5,
+                         AIVCore::AIV0,       AIVCore::AIV0};
+    waitOp.SetAIVCore(AIVCore::AIV0);
+    add.SetAtomicScopeId(IS_NUM7);
+    midExp.SetAtomicScopeId(IS_NUM7);
+    cast.SetAtomicScopeId(IS_NUM7);
+    // set 和 wait 都在 cluster 内部，中间有 midExp 隔开
+    std::vector<Operation*> opList = {&add, &setOp, &midExp, &waitOp, &cast};
+
+    InsertSync syncPass;
+    EXPECT_EQ(syncPass.AdjustSyncByAtomicScope(opList), SUCCESS);
+
+    // wait 移到 cluster 前，set 移到 cluster 后
+    ExpectOpListEq(opList, {&waitOp, &add, &midExp, &cast, &setOp});
+}
+
+// 多个 cluster 各自独立处理，互不干扰
+TEST_F(InsertSyncTest, AdjustSyncByAtomicScopeHandlesMultipleClustersIndependently)
+{
+    ScopedNPUArchForInsertSyncTest scopedArch(NPUArch::DAV_3510);
+    auto [root, leaf] = SetupDebugFunc("TestMultiCluster");
+    (void)root;
+    auto ts = MakeTensors(IS_NUM8, {IS_NUM8, IS_NUM16});
+    // cluster A: add, cast (atomicScopeId=7)
+    // cluster B: exp, sqrt (atomicScopeId=8)
+    // 中间有一个非 cluster op: neg
+    auto& add = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_ADD, {ts[0], ts[1]}, {ts[2]});
+    auto& waitA = CreateAtomicScopeSyncOp(*leaf, Opcode::OP_SYNC_DST);
+    auto& cast = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_CAST, {ts[2]}, {ts[3]});
+    auto& neg = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_NEG, {ts[3]}, {ts[4]});
+    auto& setB = CreateAtomicScopeSyncOp(*leaf, Opcode::OP_SYNC_SRC);
+    auto& exp = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_EXP, {ts[4]}, {ts[5]});
+    auto& sqrt = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_SQRT, {ts[5]}, {ts[6]});
+    add.SetAtomicScopeId(IS_NUM7);
+    cast.SetAtomicScopeId(IS_NUM7);
+    exp.SetAtomicScopeId(IS_NUM8);
+    sqrt.SetAtomicScopeId(IS_NUM8);
+    std::vector<Operation*> opList = {&add, &waitA, &cast, &neg, &exp, &setB, &sqrt};
+
+    InsertSync syncPass;
+    EXPECT_EQ(syncPass.AdjustSyncByAtomicScope(opList), SUCCESS);
+
+    // cluster A: waitA 移到 add 前
+    // cluster B: setB 移到 sqrt 后
+    ExpectOpListEq(opList, {&waitA, &add, &cast, &neg, &exp, &sqrt, &setB});
+}
+
+// 无 atomic scope op 时不做任何处理
+TEST_F(InsertSyncTest, AdjustSyncByAtomicScopeNoopsWithoutAtomicScope)
+{
+    ScopedNPUArchForInsertSyncTest scopedArch(NPUArch::DAV_3510);
+    auto [root, leaf] = SetupDebugFunc("TestNoopNoScope");
+    (void)root;
+    auto ts = MakeTensors(IS_NUM4, {IS_NUM8, IS_NUM16});
+    auto& add = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_ADD, {ts[0], ts[1]}, {ts[2]});
+    auto& cast = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_CAST, {ts[2]}, {ts[3]});
+    auto& wait = CreateAtomicScopeSyncOp(*leaf, Opcode::OP_SYNC_DST);
+    // 不设置 atomicScopeId，默认 -1
+    std::vector<Operation*> opList = {&add, &wait, &cast};
+
+    InsertSync syncPass;
+    EXPECT_EQ(syncPass.AdjustSyncByAtomicScope(opList), SUCCESS);
+
+    ExpectOpListEq(opList, {&add, &wait, &cast});
+}
+
+// 两个相邻 cluster（中间无非 cluster op），各自 set/wait sync 移到各自 cluster 边界
+TEST_F(InsertSyncTest, AdjustSyncByAtomicScopeHandlesAdjacentClusters)
+{
+    ScopedNPUArchForInsertSyncTest scopedArch(NPUArch::DAV_3510);
+    auto [root, leaf] = SetupDebugFunc("TestAdjacentClusters");
+    (void)root;
+    auto ts = MakeTensors(IS_NUM8, {IS_NUM8, IS_NUM16});
+    // cluster A: add, cast (atomicScopeId=7)，内部有 waitA 和 setA
+    // cluster B: exp, sqrt (atomicScopeId=8)，内部有 waitB 和 setB
+    // 两个 cluster 直接相邻，中间无非 cluster op
+    // 使用不同 eventId 避免跨 cluster 配对检查误触发
+    std::vector<std::shared_ptr<LogicalTensor>> emptyInput;
+    std::vector<std::shared_ptr<LogicalTensor>> emptyOutput;
+    auto& add = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_ADD, {ts[0], ts[1]}, {ts[2]});
+    Operation& waitA = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_SYNC_DST, emptyInput, emptyOutput);
+    waitA.syncQueue_ = {PipeType::PIPE_MTE2, PipeType::PIPE_V, CoreType::AIV, CoreType::AIV, IS_NUM1,
+                        AIVCore::AIV0,       AIVCore::AIV0};
+    waitA.SetAIVCore(AIVCore::AIV0);
+    auto& cast = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_CAST, {ts[2]}, {ts[3]});
+    Operation& setA = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_SYNC_SRC, emptyInput, emptyOutput);
+    setA.syncQueue_ = {PipeType::PIPE_V, PipeType::PIPE_MTE2, CoreType::AIV, CoreType::AIV,
+                       IS_NUM2,          AIVCore::AIV0,       AIVCore::AIV0};
+    setA.SetAIVCore(AIVCore::AIV0);
+    auto& exp = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_EXP, {ts[3]}, {ts[4]});
+    Operation& waitB = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_SYNC_DST, emptyInput, emptyOutput);
+    waitB.syncQueue_ = {PipeType::PIPE_MTE3, PipeType::PIPE_V, CoreType::AIV, CoreType::AIV, IS_NUM3,
+                        AIVCore::AIV0,       AIVCore::AIV0};
+    waitB.SetAIVCore(AIVCore::AIV0);
+    auto& sqrt = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_SQRT, {ts[4]}, {ts[5]});
+    Operation& setB = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_SYNC_SRC, emptyInput, emptyOutput);
+    setB.syncQueue_ = {PipeType::PIPE_V, PipeType::PIPE_MTE3, CoreType::AIV, CoreType::AIV,
+                       IS_NUM4,          AIVCore::AIV0,       AIVCore::AIV0};
+    setB.SetAIVCore(AIVCore::AIV0);
+    add.SetAtomicScopeId(IS_NUM7);
+    cast.SetAtomicScopeId(IS_NUM7);
+    exp.SetAtomicScopeId(IS_NUM8);
+    sqrt.SetAtomicScopeId(IS_NUM8);
+    // 原始顺序: add, waitA, cast, setA, exp, waitB, sqrt, setB
+    std::vector<Operation*> opList = {&add, &waitA, &cast, &setA, &exp, &waitB, &sqrt, &setB};
+
+    InsertSync syncPass;
+    EXPECT_EQ(syncPass.AdjustSyncByAtomicScope(opList), SUCCESS);
+
+    // cluster A: waitA 移到 add 前，setA 移到 cast 后
+    // cluster B: waitB 移到 exp 前，setB 移到 sqrt 后
+    // 两个 cluster 相邻，但各自的 sync 仍然移到各自边界
+    ExpectOpListEq(opList, {&waitA, &add, &cast, &setA, &waitB, &exp, &sqrt, &setB});
+}
+
+// 同一 cluster 内多条 sync 指令，移动后保持原始相对顺序
+TEST_F(InsertSyncTest, AdjustSyncByAtomicScopePreservesSyncOrderWithinCluster)
+{
+    ScopedNPUArchForInsertSyncTest scopedArch(NPUArch::DAV_3510);
+    auto [root, leaf] = SetupDebugFunc("TestPreserveSyncOrder");
+    (void)root;
+    auto ts = MakeTensors(IS_NUM6, {IS_NUM8, IS_NUM16});
+    // cluster: add, exp, cast, neg, sqrt (atomicScopeId=7)
+    // 内部有 2 条 wait-like 和 2 条 set-like，每条都被 cluster op 隔开（run length = 1）
+    // 使用不同 eventId 避免配对检查失败
+    auto& add = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_ADD, {ts[0], ts[1]}, {ts[2]});
+    auto& wait1 = CreateAtomicScopeSyncOp(*leaf, Opcode::OP_SYNC_DST);
+    auto& exp = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_EXP, {ts[2]}, {ts[3]});
+    std::vector<std::shared_ptr<LogicalTensor>> emptyInput;
+    std::vector<std::shared_ptr<LogicalTensor>> emptyOutput;
+    Operation& set1 = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_SYNC_SRC, emptyInput, emptyOutput);
+    set1.syncQueue_ = {PipeType::PIPE_V, PipeType::PIPE_MTE2, CoreType::AIV, CoreType::AIV,
+                       IS_NUM2,          AIVCore::AIV0,       AIVCore::AIV0};
+    set1.SetAIVCore(AIVCore::AIV0);
+    auto& cast = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_CAST, {ts[3]}, {ts[4]});
+    Operation& wait2 = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_SYNC_DST, emptyInput, emptyOutput);
+    wait2.syncQueue_ = {PipeType::PIPE_MTE3, PipeType::PIPE_V, CoreType::AIV, CoreType::AIV, IS_NUM4,
+                        AIVCore::AIV0,       AIVCore::AIV0};
+    wait2.SetAIVCore(AIVCore::AIV0);
+    auto& neg = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_NEG, {ts[4]}, {ts[5]});
+    Operation& set2 = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_SYNC_SRC, emptyInput, emptyOutput);
+    set2.syncQueue_ = {PipeType::PIPE_V, PipeType::PIPE_MTE2, CoreType::AIV, CoreType::AIV,
+                       IS_NUM5,          AIVCore::AIV0,       AIVCore::AIV0};
+    set2.SetAIVCore(AIVCore::AIV0);
+    auto& sqrt = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_SQRT, {ts[5]}, {ts[0]});
+    add.SetAtomicScopeId(IS_NUM7);
+    exp.SetAtomicScopeId(IS_NUM7);
+    cast.SetAtomicScopeId(IS_NUM7);
+    neg.SetAtomicScopeId(IS_NUM7);
+    sqrt.SetAtomicScopeId(IS_NUM7);
+    // 原始顺序: add, wait1, exp, set1, cast, wait2, neg, set2, sqrt
+    // 每条 sync 都被 cluster op 隔开，run length = 1
+    // eventId 各不相同，不会触发配对检查
+    std::vector<Operation*> opList = {&add, &wait1, &exp, &set1, &cast, &wait2, &neg, &set2, &sqrt};
+
+    InsertSync syncPass;
+    EXPECT_EQ(syncPass.AdjustSyncByAtomicScope(opList), SUCCESS);
+
+    // wait1, wait2 移到 cluster 前（保持原始出现顺序: wait1 在 wait2 前）
+    // set1, set2 移到 cluster 后（保持原始出现顺序: set1 在 set2 前）
+    ExpectOpListEq(opList, {&wait1, &wait2, &add, &exp, &cast, &neg, &sqrt, &set1, &set2});
+}
+
+// =========================================================================
+// 端到端测试：通过 RunOnFunction 走完整 normal 路径
+// PipeSync::InsertSync → PhaseKernelProcess → AdjustSyncByAtomicScope
+// =========================================================================
+
+// Helper: 创建带 UB memory range 的 tensor
+static std::shared_ptr<LogicalTensor> MakeUbTensor(int start, int end)
+{
+    std::vector<int64_t> shape = {IS_NUM8, IS_NUM16};
+    auto t = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    t->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    t->memoryrange.start = start;
+    t->memoryrange.end = end;
+    return t;
+}
+
+// Helper: 创建 GM tensor
+static std::shared_ptr<LogicalTensor> MakeGmTensor()
+{
+    std::vector<int64_t> shape = {IS_NUM8, IS_NUM16};
+    return npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+}
+
+// Helper: 创建 copy_in op (GM → UB)，带 CopyOpAttribute
+static Operation& MakeCopyInOp(Function& func, std::shared_ptr<LogicalTensor> gm, std::shared_ptr<LogicalTensor> ub)
+{
+    std::vector<int64_t> shape = {IS_NUM8, IS_NUM16};
+    auto& op = IRBuilder().CreateTensorOpStmt(func, Opcode::OP_COPY_IN, {gm}, {ub});
+    op.SetOpAttribute(std::make_shared<CopyOpAttribute>(std::vector<OpImmediate>{}, MemoryType::MEM_UB,
+                                                        std::vector<OpImmediate>{OpImmediate::Specified(shape)},
+                                                        std::vector<OpImmediate>{OpImmediate::Specified(shape)}));
+    op.SetAIVCore(AIVCore::AIV0);
+    return op;
+}
+
+// Helper: 创建 copy_out op (UB → GM)，带 CopyOpAttribute
+static Operation& MakeCopyOutOp(Function& func, std::shared_ptr<LogicalTensor> ub, std::shared_ptr<LogicalTensor> gm)
+{
+    std::vector<int64_t> shape = {IS_NUM8, IS_NUM16};
+    auto& op = IRBuilder().CreateTensorOpStmt(func, Opcode::OP_COPY_OUT, {ub}, {gm});
+    op.SetOpAttribute(std::make_shared<CopyOpAttribute>(MemoryType::MEM_UB, std::vector<OpImmediate>{},
+                                                        std::vector<OpImmediate>{OpImmediate::Specified(shape)},
+                                                        std::vector<OpImmediate>{OpImmediate::Specified(shape)}));
+    op.SetAIVCore(AIVCore::AIV0);
+    return op;
+}
+
+// Helper: 创建 root + leaf function pair
+static std::pair<std::shared_ptr<Function>, std::shared_ptr<Function>> CreateRootAndLeaf(const std::string& name)
+{
+    auto root = std::make_shared<Function>(Program::GetInstance(), name, name, nullptr);
+    root->rootFunc_ = root.get();
+    auto leaf = std::make_shared<Function>(Program::GetInstance(), name + "Leaf", name + "Leaf", root.get());
+    root->rootFunc_->programs_.emplace(leaf->GetFuncMagic(), leaf.get());
+    return {root, leaf};
+}
+
+// Helper: 验证 firstOp 和 lastOp 之间没有 sync op
+static void VerifyNoSyncBetween(const std::vector<Operation*>& ops, Operation* firstOp, Operation* lastOp)
+{
+    bool foundFirst = false;
+    bool foundLast = false;
+    bool hasSync = false;
+    for (auto* op : ops) {
+        if (op == firstOp) {
+            foundFirst = true;
+            continue;
+        }
+        if (op == lastOp) {
+            foundLast = true;
+            continue;
+        }
+        if (foundFirst && !foundLast &&
+            (op->GetOpcode() == Opcode::OP_SYNC_SRC || op->GetOpcode() == Opcode::OP_SYNC_DST)) {
+            hasSync = true;
+        }
+    }
+    EXPECT_TRUE(foundFirst);
+    EXPECT_TRUE(foundLast);
+    EXPECT_FALSE(hasSync) << "sync op found inside cluster";
+}
+
+// Helper: 验证 targetOp 之前有指定 sync opcode
+static void VerifyHasSyncBefore(const std::vector<Operation*>& ops, Operation* targetOp, Opcode syncOpcode)
+{
+    bool found = false;
+    for (auto* op : ops) {
+        if (op == targetOp) {
+            break;
+        }
+        if (op->GetOpcode() == syncOpcode) {
+            found = true;
+        }
+    }
+    EXPECT_TRUE(found) << "no sync before target op";
+}
+
+// Helper: 验证 targetOp 之后有指定 sync opcode
+static void VerifyHasSyncAfter(const std::vector<Operation*>& ops, Operation* targetOp, Opcode syncOpcode)
+{
+    bool afterTarget = false;
+    bool found = false;
+    for (auto* op : ops) {
+        if (op == targetOp) {
+            afterTarget = true;
+            continue;
+        }
+        if (afterTarget && op->GetOpcode() == syncOpcode) {
+            found = true;
+        }
+    }
+    EXPECT_TRUE(found) << "no sync after target op";
+}
+
+// Helper: 验证两个 op 之间有指定 sync opcode
+static void VerifyHasSyncBetween(const std::vector<Operation*>& ops, Operation* firstOp, Operation* lastOp,
+                                 Opcode syncOpcode)
+{
+    bool afterFirst = false;
+    bool found = false;
+    for (auto* op : ops) {
+        if (op == firstOp) {
+            afterFirst = true;
+            continue;
+        }
+        if (op == lastOp) {
+            break;
+        }
+        if (afterFirst && op->GetOpcode() == syncOpcode) {
+            found = true;
+        }
+    }
+    EXPECT_TRUE(found) << "no sync between ops";
+}
+
+// 端到端：cluster 内部有跨 pipe 依赖产生的 sync，验证 sync 被移到 cluster 边界
+// 构图: copy_in(a) copy_in(b) → exp(a→c) add(c,b→d) sub(d→e) → copy_out(d) copy_out(e)
+// exp/add/sub 设为同一 cluster，copy_in(b)→add 的 sync 会落在 cluster 内部
+TEST_F(InsertSyncTest, EndToEndSyncMovedToClusterBoundary)
+{
+    ScopedNPUArchForInsertSyncTest scopedArch(NPUArch::DAV_3510);
+    auto [rootFuncPtr, leafFuncPtr] = CreateRootAndLeaf("E2EBoundary");
+
+    auto ubA = MakeUbTensor(0, IS_NUM99);
+    auto ubB = MakeUbTensor(IS_NUM100, IS_NUM199);
+    auto ubC = MakeUbTensor(IS_NUM200, IS_NUM299);
+    auto ubD = MakeUbTensor(IS_NUM300, IS_NUM300 + IS_NUM99);
+    auto ubE = MakeUbTensor(IS_NUM500, IS_NUM500 + IS_NUM99);
+    MakeCopyInOp(*leafFuncPtr, MakeGmTensor(), ubA);
+    MakeCopyInOp(*leafFuncPtr, MakeGmTensor(), ubB);
+    auto& exp = IRBuilder().CreateTensorOpStmt(*leafFuncPtr, Opcode::OP_EXP, {ubA}, {ubC});
+    exp.SetAIVCore(AIVCore::AIV0);
+    auto& add = IRBuilder().CreateTensorOpStmt(*leafFuncPtr, Opcode::OP_ADD, {ubC, ubB}, {ubD});
+    add.SetAIVCore(AIVCore::AIV0);
+    auto& sub = IRBuilder().CreateTensorOpStmt(*leafFuncPtr, Opcode::OP_SUB, {ubD}, {ubE});
+    sub.SetAIVCore(AIVCore::AIV0);
+    MakeCopyOutOp(*leafFuncPtr, ubD, MakeGmTensor());
+    MakeCopyOutOp(*leafFuncPtr, ubE, MakeGmTensor());
+
+    constexpr int clusterId = 200000000;
+    exp.SetAtomicScopeId(clusterId);
+    add.SetAtomicScopeId(clusterId);
+    sub.SetAtomicScopeId(clusterId);
+
+    InsertSync syncPass;
+    syncPass.enableAtomicScope_ = true;
+    ASSERT_EQ(syncPass.RunOnFunction(*rootFuncPtr), SUCCESS);
+    auto ops = leafFuncPtr->Operations(false).DuplicatedOpList();
+
+    VerifyNoSyncBetween(ops, &exp, &sub);
+    VerifyHasSyncBefore(ops, &exp, Opcode::OP_SYNC_DST);
+    VerifyHasSyncAfter(ops, &sub, Opcode::OP_SYNC_SRC);
+}
+
+// 端到端：两个相邻 cluster，各自内部有跨 pipe sync，验证互不干扰
+// 构图: copy_in(a) copy_in(b) copy_in(c2) → exp add | sqrt cast → copy_out(d) copy_out(f)
+// cluster A: exp,add  cluster B: sqrt,cast  相邻
+TEST_F(InsertSyncTest, EndToEndAdjacentClustersSyncMovedIndependently)
+{
+    ScopedNPUArchForInsertSyncTest scopedArch(NPUArch::DAV_3510);
+    auto [rootFuncPtr, leafFuncPtr] = CreateRootAndLeaf("E2EAdj");
+
+    auto ubA = MakeUbTensor(0, IS_NUM99);
+    auto ubB = MakeUbTensor(IS_NUM100, IS_NUM199);
+    auto ubC = MakeUbTensor(IS_NUM200, IS_NUM299);
+    auto ubD = MakeUbTensor(IS_NUM300, IS_NUM300 + IS_NUM99);
+    auto ubE = MakeUbTensor(IS_NUM500, IS_NUM500 + IS_NUM99);
+    auto ubF = MakeUbTensor(IS_NUM600, IS_NUM699);
+    auto ubC2 = MakeUbTensor(IS_NUM700, IS_NUM800);
+    MakeCopyInOp(*leafFuncPtr, MakeGmTensor(), ubA);
+    MakeCopyInOp(*leafFuncPtr, MakeGmTensor(), ubB);
+    MakeCopyInOp(*leafFuncPtr, MakeGmTensor(), ubC2);
+    auto& exp = IRBuilder().CreateTensorOpStmt(*leafFuncPtr, Opcode::OP_EXP, {ubA}, {ubC});
+    exp.SetAIVCore(AIVCore::AIV0);
+    auto& add = IRBuilder().CreateTensorOpStmt(*leafFuncPtr, Opcode::OP_ADD, {ubC, ubB}, {ubD});
+    add.SetAIVCore(AIVCore::AIV0);
+    auto& sqrt = IRBuilder().CreateTensorOpStmt(*leafFuncPtr, Opcode::OP_SQRT, {ubD}, {ubE});
+    sqrt.SetAIVCore(AIVCore::AIV0);
+    auto& cast = IRBuilder().CreateTensorOpStmt(*leafFuncPtr, Opcode::OP_CAST, {ubE, ubC2}, {ubF});
+    cast.SetAIVCore(AIVCore::AIV0);
+    MakeCopyOutOp(*leafFuncPtr, ubD, MakeGmTensor());
+    MakeCopyOutOp(*leafFuncPtr, ubF, MakeGmTensor());
+
+    constexpr int clusterA = 200000000;
+    constexpr int clusterB = 200000001;
+    exp.SetAtomicScopeId(clusterA);
+    add.SetAtomicScopeId(clusterA);
+    sqrt.SetAtomicScopeId(clusterB);
+    cast.SetAtomicScopeId(clusterB);
+
+    InsertSync syncPass;
+    syncPass.enableAtomicScope_ = true;
+    ASSERT_EQ(syncPass.RunOnFunction(*rootFuncPtr), SUCCESS);
+    auto ops = leafFuncPtr->Operations(false).DuplicatedOpList();
+
+    VerifyNoSyncBetween(ops, &exp, &add);
+    VerifyNoSyncBetween(ops, &sqrt, &cast);
+    VerifyHasSyncBefore(ops, &exp, Opcode::OP_SYNC_DST);
+    VerifyHasSyncBetween(ops, &add, &sqrt, Opcode::OP_SYNC_DST);
+    VerifyHasSyncAfter(ops, &cast, Opcode::OP_SYNC_SRC);
 }
 
 } // namespace tile_fwk

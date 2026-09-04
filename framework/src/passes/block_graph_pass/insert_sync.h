@@ -479,7 +479,31 @@ private:
     Status GenNewOpList(Function* subGraphFunc, std::vector<Operation*>& opListNew);
     Status CheckNewOpListSeq(const std::vector<Operation*>& oriOpList, const std::vector<Operation*>& opListNew);
     Status InsertSyncMainLoop(Function* subGraphFunc);
+    Status AdjustSyncByAtomicScope(std::vector<Operation*>& opList);
+
+    // --- atomic scope 后处理辅助方法 ---
+    static bool IsSyncOpcode(Opcode opcode);
+    static bool IsImmovableSync(Opcode opcode, const OpSyncQueue& sq);
+    // 配对签名：(eventId, setPipe, waitPipe) 编码为 uint64
+    using SyncSignature = uint64_t;
+    static SyncSignature MakeSyncSignature(int eventId, PipeType setPipe, PipeType waitPipe);
+    // isSet=true 返回 set 签名，isSet=false 返回 wait 的反签名（用于配对查找）
+    static SyncSignature GetSyncSignature(const OpSyncQueue& sq, bool isSet);
+    // cluster 信息
+    struct ClusterInfo {
+        size_t firstIdx{SIZE_MAX};
+        size_t lastIdx{0};
+        std::vector<Operation*> waitSyncs;
+        std::vector<Operation*> setSyncs;
+        std::unordered_set<SyncSignature> setSignatures;
+    };
+    Status BuildClusterRanges(const std::vector<Operation*>& opList, std::map<int, ClusterInfo>& clusters);
+    Status ValidateAndCollectClusterSyncOps(const std::vector<Operation*>& opList, int scopeId, ClusterInfo& ci);
+    void ReorderOpListForClusters(std::vector<Operation*>& opList, const std::map<int, ClusterInfo>& clusters);
+
     bool enableDebug_{false};
+    // debug 开关：atomic scope 后处理，默认关闭，置 true 启用
+    bool enableAtomicScope_{false};
     IRBuilder irBuilder_;
 };
 } // namespace tile_fwk

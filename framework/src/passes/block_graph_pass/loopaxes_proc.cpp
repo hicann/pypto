@@ -98,10 +98,10 @@ Status LoopaxesProc::RunOnFunction(Function& function)
 
     APASS_LOG_INFO_F(Elements::Operation,
                      "===============================================================> Start LoopaxesProc.");
-    UpdateFuncLoopAxes(function);
+    Status status = UpdateFuncLoopAxes(function);
     APASS_LOG_INFO_F(Elements::Operation,
                      "===============================================================> Finish LoopaxesProc.");
-    return SUCCESS;
+    return status;
 }
 
 void LoopaxesProc::ClearStatus()
@@ -155,8 +155,12 @@ Status LoopaxesProc::UpdateOpLoopAxes(Operation& op, Function& subFunc)
     std::vector<SymbolicScalar> dynloopAxes;
     GetOpLoopAxes(op, loopAxes, dynloopAxes);
 
-    ProcessDynLoopGroup(op, dynloopAxes, subFunc);
-    ProcessStaticLoopGroup(op, loopAxes);
+    if (ProcessDynLoopGroup(op, dynloopAxes, subFunc) != SUCCESS) {
+        return FAILED;
+    }
+    if (ProcessStaticLoopGroup(op, loopAxes) != SUCCESS) {
+        return FAILED;
+    }
 
     APASS_LOG_INFO_F(Elements::Operation,
                      "Op Code %s, Op[%d] groupIdx=%ld, loopAxes=%s, dynGroupIdx=%ld, dynLoopAxes=%s",
@@ -166,11 +170,14 @@ Status LoopaxesProc::UpdateOpLoopAxes(Operation& op, Function& subFunc)
     return SUCCESS;
 }
 
-void LoopaxesProc::ProcessDynLoopGroup(Operation& op, const std::vector<SymbolicScalar>& dynloopAxes,
-                                       const Function& subFunc)
+Status LoopaxesProc::ProcessDynLoopGroup(Operation& op, const std::vector<SymbolicScalar>& dynloopAxes,
+                                         const Function& subFunc)
 {
     if (!SameDynLoopAxes(dynloopAxes, subFunc)) {
-        CheckAddrOverLap(false, sameDynLoopOpGroup, addrDynConflictIdx, addrDynRecordMap);
+        if (CheckAddrOverLap(false, sameDynLoopOpGroup, addrDynConflictIdx, addrDynRecordMap) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "Unresolvable address conflict in dyn loop group");
+            return FAILED;
+        }
         dynLastGroupIdx = dynGroupIdx++;
         dynPreviousLoopAxes = dynloopAxes;
         op.SetAttribute(OpAttributeKey::dynloopGroupStart, true);
@@ -188,6 +195,7 @@ void LoopaxesProc::ProcessDynLoopGroup(Operation& op, const std::vector<Symbolic
     op.SetAttribute(OpAttributeKey::dynloopAxes, dynloopAxes);
     dynLastOpInLoop = &op;
     dynPreviousOutputMagic = op.GetOOperands().front()->GetMagic();
+    return SUCCESS;
 }
 
 namespace {
@@ -245,7 +253,8 @@ void UpdateBestSolution(const std::vector<int>& cuts, int groupSize, std::vector
 }
 } // namespace
 
-std::vector<int> FindCuts(const std::set<std::pair<int, int>>& conflicts, int& groupSize)
+std::vector<int> LoopaxesProc::FindCuts(const std::set<std::pair<int, int>>& conflicts, int groupSize,
+                                        const std::set<int>& forbiddenCuts)
 {
     if (groupSize <= 1)
         return {};
@@ -259,10 +268,18 @@ std::vector<int> FindCuts(const std::set<std::pair<int, int>>& conflicts, int& g
 
     for (int mask = 0; mask < (1 << totalPos); ++mask) {
         std::vector<int> cuts;
+        bool hasForbidden = false;
         for (int i = 0; i < totalPos; ++i) {
-            if (mask & (1 << i))
+            if (mask & (1 << i)) {
+                if (forbiddenCuts.count(i) > 0) {
+                    hasForbidden = true;
+                    break;
+                }
                 cuts.push_back(i);
+            }
         }
+        if (hasForbidden)
+            continue;
         bool allCovered = true;
         for (const auto& inv : intervals) {
             if (!IsIntervalCovered(inv, cuts)) {
@@ -281,6 +298,9 @@ void LoopaxesProc::IsOverLap(std::vector<size_t>& addrRange, bool& isAdd, int& c
                              std::set<std::pair<int, int>>& addrConflictIdx, int& idx)
 {
     for (auto& entry : addrRecordMap) {
+        if (entry.first == idx) {
+            continue;
+        }
         bool noOverlapWithInput = addrRange[0] >= entry.second[0][1] || addrRange[1] <= entry.second[0][0];
         bool noOverlapWithOutput = addrRange[0] >= entry.second[1][1] || addrRange[1] <= entry.second[1][0];
         if (noOverlapWithInput && noOverlapWithOutput) {
@@ -318,9 +338,9 @@ void LoopaxesProc::RecordAddrOverLap(Operation* op, int& idx, std::set<std::pair
     return;
 }
 
-void LoopaxesProc::CheckAddrOverLap(bool isStaticLoop, std::vector<Operation*>& sameLoopOpGroup,
-                                    std::set<std::pair<int, int>>& addrConflictIdx,
-                                    std::map<int, std::vector<std::vector<size_t>>>& addrRecordMap)
+Status LoopaxesProc::CheckAddrOverLap(bool isStaticLoop, std::vector<Operation*>& sameLoopOpGroup,
+                                      std::set<std::pair<int, int>>& addrConflictIdx,
+                                      std::map<int, std::vector<std::vector<size_t>>>& addrRecordMap)
 {
     if (sameLoopOpGroup.size() != 1) {
         for (int idx = 0; idx < static_cast<int>(sameLoopOpGroup.size()); idx++) {
@@ -330,19 +350,21 @@ void LoopaxesProc::CheckAddrOverLap(bool isStaticLoop, std::vector<Operation*>& 
         }
     }
     if (addrConflictIdx.empty()) {
-        return;
+        return SUCCESS;
     }
-    std::vector<int> cutResult;
     int groupSize = static_cast<int>(sameLoopOpGroup.size());
-    cutResult = FindCuts(addrConflictIdx, groupSize);
+    std::set<int> forbiddenCuts = enableAtomicScope_ ? GetForbiddenCutPositions(sameLoopOpGroup) : std::set<int>{};
+    std::vector<int> cutResult = FindCuts(addrConflictIdx, groupSize, forbiddenCuts);
     if (cutResult.empty()) {
-        return;
+        APASS_LOG_ERROR_F(Elements::Operation, "No legal cut position found for address conflict.");
+        return FAILED;
     }
     if (isStaticLoop) {
         ProcessCutStaticGroup(cutResult, sameLoopOpGroup);
     } else {
         ProcessCutDynGroup(cutResult, sameLoopOpGroup);
     }
+    return SUCCESS;
 }
 
 void LoopaxesProc::ProcessCutStaticGroup(std::vector<int>& cutResult, std::vector<Operation*>& sameLoopOpGroup)
@@ -393,10 +415,13 @@ void LoopaxesProc::ProcessCutDynGroup(std::vector<int>& cutResult, std::vector<O
     }
 }
 
-void LoopaxesProc::ProcessStaticLoopGroup(Operation& op, const std::vector<int64_t>& loopAxes)
+Status LoopaxesProc::ProcessStaticLoopGroup(Operation& op, const std::vector<int64_t>& loopAxes)
 {
     if (!SameLoopAxes(loopAxes)) {
-        CheckAddrOverLap(true, sameStaticLoopOpGroup, addrStaticConflictIdx, addrStaticRecordMap);
+        if (CheckAddrOverLap(true, sameStaticLoopOpGroup, addrStaticConflictIdx, addrStaticRecordMap) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "Unresolvable address conflict in static loop group");
+            return FAILED;
+        }
         lastGroupIdx = groupIdx++;
         previousLoopAxes = loopAxes;
         op.SetAttribute(OpAttributeKey::loopGroupStart, true);
@@ -414,6 +439,7 @@ void LoopaxesProc::ProcessStaticLoopGroup(Operation& op, const std::vector<int64
     op.SetAttribute(OpAttributeKey::loopAxes, loopAxes);
     lastOpInLoop = &op;
     previousOutputMagic = op.GetOOperands().front()->GetMagic();
+    return SUCCESS;
 }
 
 Status LoopaxesProc::UpdateFuncLoopAxes(Function& function)
@@ -433,10 +459,17 @@ Status LoopaxesProc::UpdateFuncLoopAxes(Function& function)
         ResetGroupState();
 
         for (auto& op : pair.first->Operations(false)) {
-            UpdateOpLoopAxes(op, *pair.first);
+            if (UpdateOpLoopAxes(op, *pair.first) != SUCCESS) {
+                return FAILED;
+            }
         }
 
-        FinalizeLoopGroups();
+        if (FinalizeLoopGroups() != SUCCESS) {
+            return FAILED;
+        }
+        if (enableAtomicScope_ && ValidateAtomicScopeGrouping(*pair.first) != SUCCESS) {
+            return FAILED;
+        }
     }
     return SUCCESS;
 }
@@ -450,19 +483,33 @@ void LoopaxesProc::ResetGroupState()
     dynGroupIdx = INVALID_LOOP_GROUPID;
     dynLastGroupIdx = dynGroupIdx;
     dynLastOpInLoop = nullptr;
+
+    previousLoopAxes.clear();
+    dynPreviousLoopAxes.clear();
+    sameStaticLoopOpGroup.clear();
+    addrStaticConflictIdx.clear();
+    addrStaticRecordMap.clear();
+    sameDynLoopOpGroup.clear();
+    addrDynConflictIdx.clear();
+    addrDynRecordMap.clear();
 }
 
-void LoopaxesProc::FinalizeLoopGroups()
+Status LoopaxesProc::FinalizeLoopGroups()
 {
-    CheckAddrOverLap(false, sameDynLoopOpGroup, addrDynConflictIdx, addrDynRecordMap);
-    CheckAddrOverLap(true, sameStaticLoopOpGroup, addrStaticConflictIdx, addrStaticRecordMap);
+    if (CheckAddrOverLap(false, sameDynLoopOpGroup, addrDynConflictIdx, addrDynRecordMap) != SUCCESS) {
+        return FAILED;
+    }
+    if (CheckAddrOverLap(true, sameStaticLoopOpGroup, addrStaticConflictIdx, addrStaticRecordMap) != SUCCESS) {
+        return FAILED;
+    }
 
-    if (lastGroupIdx != INVALID_LOOP_GROUPID && lastOpInLoop != nullptr) {
+    if (groupIdx != INVALID_LOOP_GROUPID && lastOpInLoop != nullptr) {
         SetOpLoopEnd(lastOpInLoop);
     }
-    if (dynLastGroupIdx != INVALID_LOOP_GROUPID && dynLastOpInLoop != nullptr) {
+    if (dynGroupIdx != INVALID_LOOP_GROUPID && dynLastOpInLoop != nullptr) {
         SetOpDynLoopEnd(dynLastOpInLoop);
     }
+    return SUCCESS;
 }
 
 bool LoopaxesProc::SameLoopAxes(const std::vector<int64_t>& curLoopAxes)
@@ -508,6 +555,56 @@ bool LoopaxesProc::SameDynLoopAxes(const std::vector<SymbolicScalar>& curLoopAxe
     }
 
     return allReplacedSymbolsMatch || allExprsMatch;
+}
+
+Status LoopaxesProc::ValidateAtomicScopeGrouping(Function& subFunc) const
+{
+    // dynloopGroup 与 loopGroup 是两个独立编号空间（各自独立递增），聚合 key 使用 (isDyn, group)
+    // 二元组区分，避免跨空间同号（如 dyn 组 1 与 static 组 1）被折叠为同组而漏检
+    std::map<int, std::set<std::pair<bool, int64_t>>> scopeToGroups;
+    for (auto& op : subFunc.Operations(false)) {
+        if (op.IsNOP()) {
+            continue;
+        }
+        int scopeId = op.GetAtomicScopeId();
+        if (scopeId <= 0) {
+            continue;
+        }
+        if (SUPPORT_VF_FUSE_OPS.find(op.GetOpcode()) == SUPPORT_VF_FUSE_OPS.end()) {
+            continue;
+        }
+        int64_t group = INVALID_LOOP_GROUPID;
+        bool isDynGroup = op.HasAttr(OpAttributeKey::dynloopGroup);
+        if (isDynGroup) {
+            group = op.GetIntAttribute(OpAttributeKey::dynloopGroup);
+        } else if (op.HasAttr(OpAttributeKey::loopGroup)) {
+            group = op.GetIntAttribute(OpAttributeKey::loopGroup);
+        }
+        if (group != INVALID_LOOP_GROUPID) {
+            scopeToGroups[scopeId].insert({isDynGroup, group});
+        }
+    }
+    for (auto& entry : scopeToGroups) {
+        if (entry.second.size() > 1) {
+            APASS_LOG_ERROR_F(Elements::Operation, "AtomicScope %d ops span %zu loop groups, expected 1", entry.first,
+                              entry.second.size());
+            return FAILED;
+        }
+    }
+    return SUCCESS;
+}
+
+std::set<int> LoopaxesProc::GetForbiddenCutPositions(const std::vector<Operation*>& opGroup) const
+{
+    std::set<int> forbidden;
+    for (size_t i = 0; i + 1 < opGroup.size(); i++) {
+        int scope1 = opGroup[i]->GetAtomicScopeId();
+        int scope2 = opGroup[i + 1]->GetAtomicScopeId();
+        if (scope1 > 0 && scope1 == scope2) {
+            forbidden.insert(static_cast<int>(i));
+        }
+    }
+    return forbidden;
 }
 
 } // namespace tile_fwk

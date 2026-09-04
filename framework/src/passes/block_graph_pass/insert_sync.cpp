@@ -14,7 +14,9 @@
  */
 
 #include "passes/block_graph_pass/insert_sync.h"
+#include <algorithm>
 #include <thread>
+#include <unordered_set>
 #include "interface/tensor/irbuilder.h"
 #include "passes/pass_log/pass_log.h"
 
@@ -1999,6 +2001,158 @@ Status InsertSync::CheckNewOpListSeq(const std::vector<Operation*>& oriOpList, c
     return SUCCESS;
 }
 
+// --- atomic scope 后处理：静态辅助方法 ---
+
+bool InsertSync::IsSyncOpcode(Opcode opcode)
+{
+    return opcode == Opcode::OP_SYNC_SRC || opcode == Opcode::OP_SYNC_DST || opcode == Opcode::OP_CV_SYNC_SRC ||
+           opcode == Opcode::OP_CV_SYNC_DST || opcode == Opcode::OP_FFTS_CROSS_CORE_SYNC ||
+           opcode == Opcode::OP_WAIT_FLAG_DEV || opcode == Opcode::OP_BAR_V || opcode == Opcode::OP_BAR_M ||
+           opcode == Opcode::OP_BAR_ALL;
+}
+
+bool InsertSync::IsImmovableSync(Opcode opcode, const OpSyncQueue& sq)
+{
+    return opcode == Opcode::OP_CV_SYNC_SRC || opcode == Opcode::OP_CV_SYNC_DST ||
+           opcode == Opcode::OP_FFTS_CROSS_CORE_SYNC || opcode == Opcode::OP_WAIT_FLAG_DEV ||
+           opcode == Opcode::OP_BAR_ALL || opcode == Opcode::OP_BAR_V || opcode == Opcode::OP_BAR_M ||
+           sq.coreType_ != sq.trigCoreType_;
+}
+
+InsertSync::SyncSignature InsertSync::MakeSyncSignature(int eventId, PipeType setPipe, PipeType waitPipe)
+{
+    return (static_cast<uint64_t>(eventId) << 16) | (static_cast<uint64_t>(setPipe) << 8) |
+           static_cast<uint64_t>(waitPipe);
+}
+
+InsertSync::SyncSignature InsertSync::GetSyncSignature(const OpSyncQueue& sq, bool isSet)
+{
+    // set 签名: (eventId, pipeId_, trigPipeId_) = (eventId, setPipe, waitPipe)
+    // wait 反签名: (eventId, trigPipeId_, pipeId_) = (eventId, setPipe, waitPipe)（互换 pipe）
+    if (isSet) {
+        return MakeSyncSignature(sq.eventId_, sq.pipeId_, sq.trigPipeId_);
+    }
+    return MakeSyncSignature(sq.eventId_, sq.trigPipeId_, sq.pipeId_);
+}
+
+// Pass 1: 确定 cluster 范围（只看非 sync op 的 scopeId），O(N)
+Status InsertSync::BuildClusterRanges(const std::vector<Operation*>& opList, std::map<int, ClusterInfo>& clusters)
+{
+    for (size_t i = 0; i < opList.size(); ++i) {
+        if (IsSyncOpcode(opList[i]->GetOpcode())) {
+            continue;
+        }
+        int scopeId = opList[i]->GetAtomicScopeId();
+        if (scopeId <= 0) {
+            continue;
+        }
+        auto& ci = clusters[scopeId];
+        ci.firstIdx = std::min(ci.firstIdx, i);
+        ci.lastIdx = std::max(ci.lastIdx, i);
+    }
+    return SUCCESS;
+}
+
+// Pass 2: 扫描单个 cluster 范围 — 连续性 + 指令类型 + 收集 sync op + 配对检查
+Status InsertSync::ValidateAndCollectClusterSyncOps(const std::vector<Operation*>& opList, int scopeId, ClusterInfo& ci)
+{
+    for (size_t i = ci.firstIdx + 1; i < ci.lastIdx; ++i) {
+        Operation* op = opList[i];
+        if (!IsSyncOpcode(op->GetOpcode())) {
+            if (op->GetAtomicScopeId() != scopeId) {
+                APASS_LOG_ERROR_F(Elements::Operation,
+                                  "AdjustSyncByAtomicScope failed: cluster %d not continuous at index %zu.", scopeId,
+                                  i);
+                return FAILED;
+            }
+            continue;
+        }
+        if (IsImmovableSync(op->GetOpcode(), op->syncQueue_)) {
+            APASS_LOG_ERROR_F(Elements::Operation,
+                              "AdjustSyncByAtomicScope failed: immovable sync %s inside cluster %d.",
+                              op->GetOpcodeStr().c_str(), scopeId);
+            return FAILED;
+        }
+        if (op->GetOpcode() == Opcode::OP_SYNC_DST) {
+            if (ci.setSignatures.count(GetSyncSignature(op->syncQueue_, false)) > 0) {
+                APASS_LOG_ERROR_F(Elements::Operation,
+                                  "AdjustSyncByAtomicScope failed: paired set/wait (eventId=%d) in cluster %d.",
+                                  op->syncQueue_.eventId_, scopeId);
+                return FAILED;
+            }
+            ci.waitSyncs.push_back(op);
+        } else if (op->GetOpcode() == Opcode::OP_SYNC_SRC) {
+            ci.setSyncs.push_back(op);
+            ci.setSignatures.insert(GetSyncSignature(op->syncQueue_, true));
+        }
+    }
+    return SUCCESS;
+}
+
+// Pass 3: 重排 — wait-like 移到 cluster 前，set-like 移到 cluster 后
+void InsertSync::ReorderOpListForClusters(std::vector<Operation*>& opList, const std::map<int, ClusterInfo>& clusters)
+{
+    std::vector<int> posToCluster(opList.size(), -1);
+    for (const auto& [scopeId, ci] : clusters) {
+        std::fill(posToCluster.begin() + static_cast<ptrdiff_t>(ci.firstIdx),
+                  posToCluster.begin() + static_cast<ptrdiff_t>(ci.lastIdx) + 1, scopeId);
+    }
+
+    std::vector<Operation*> newOpList;
+    newOpList.reserve(opList.size());
+    std::unordered_map<int, bool> waitEmitted, setEmitted;
+
+    for (size_t i = 0; i < opList.size(); ++i) {
+        int cid = posToCluster[i];
+        if (cid < 0) {
+            newOpList.push_back(opList[i]);
+            continue;
+        }
+        const auto& ci = clusters.at(cid);
+        if (IsSyncOpcode(opList[i]->GetOpcode())) {
+            continue;
+        }
+        if (i == ci.firstIdx && !waitEmitted[cid]) {
+            for (auto* w : ci.waitSyncs) {
+                newOpList.push_back(w);
+            }
+            waitEmitted[cid] = true;
+        }
+        newOpList.push_back(opList[i]);
+        if (i == ci.lastIdx && !setEmitted[cid]) {
+            for (auto* s : ci.setSyncs) {
+                newOpList.push_back(s);
+            }
+            setEmitted[cid] = true;
+        }
+    }
+    opList = std::move(newOpList);
+}
+
+Status InsertSync::AdjustSyncByAtomicScope(std::vector<Operation*>& opList)
+{
+    if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510) {
+        return SUCCESS;
+    }
+
+    std::map<int, ClusterInfo> clusters;
+    if (BuildClusterRanges(opList, clusters) != SUCCESS) {
+        return FAILED;
+    }
+    if (clusters.empty()) {
+        return SUCCESS;
+    }
+
+    for (auto& [scopeId, ci] : clusters) {
+        if (ValidateAndCollectClusterSyncOps(opList, scopeId, ci) != SUCCESS) {
+            return FAILED;
+        }
+    }
+
+    ReorderOpListForClusters(opList, clusters);
+    return SUCCESS;
+}
+
 Status InsertSync::GenNewOpList(Function* subGraphFunc, std::vector<Operation*>& opListNew)
 {
     PipeSync ps;
@@ -2010,6 +2164,10 @@ Status InsertSync::GenNewOpList(Function* subGraphFunc, std::vector<Operation*>&
     }
     ps.PhaseKernelProcess(*subGraphFunc, syncedOpLogPtr, opListNew);
     subGraphFunc->EraseOperations(true, false);
+    if (enableAtomicScope_ && AdjustSyncByAtomicScope(opListNew) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "GenNewOpList failed at function AdjustSyncByAtomicScope.");
+        return FAILED;
+    }
     if (CheckNewOpListSeq(oriOpList, opListNew) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "GenNewOpList failed at function CheckNewOpListSeq.");
         return FAILED;
