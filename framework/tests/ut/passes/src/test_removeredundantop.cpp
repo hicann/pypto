@@ -3554,5 +3554,377 @@ TEST_F(TestRemoveRedundantOpPass, ViewAssembleWarVersionBoundaryIsPreserved)
     EXPECT_TRUE(function->GetVarDependency().HasProducer(warToken, ToStmtPtr(read)));
     EXPECT_TRUE(function->GetVarDependency().HasConsumer(warToken, ToStmtPtr(newWrite)));
 }
+
+/*
+SliceContractSliceSingleFullSlice
+input{8,16}->slice(preceding)->contractInput{8,16}->contract->contractOutput{8,16}
+                                                      ->slice(full)->sliceOutput{8,16}->exp->out
+input{8,16}->slice(preceding)->contractInput{8,16}->exp->out
+The view/assemble cascade leaves the strict slice-contract-slice chain to the dedicated pass, which
+removes the contract and the trailing full slice while keeping the preceding materialization slice.
+*/
+TEST_F(TestRemoveRedundantOpPass, SliceContractSliceSingleFullSliceShouldKeepPrecedingSlice)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "SliceContractSliceSingleFull",
+                                               "SliceContractSliceSingleFull", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> shape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> zeroOffset = {kNumZero, kNumZero};
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto contractInput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto sliceOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND,
+                                              "out");
+
+    auto& precedingSlice = PassOperationUtils::AddOperation(
+        *function, Opcode::OP_SLICE, {input}, {contractInput},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(zeroOffset)); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_CONTRACT, {contractInput}, {contractOutput},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(zeroOffset)); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_SLICE, {contractOutput}, {sliceOutput},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(zeroOffset)); });
+    auto& exp = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {sliceOutput}, {output});
+
+    function->inCasts_ = {input};
+    function->outCasts_ = {output};
+
+    std::vector<Operation*> newOps;
+    bool operationUpdated = false;
+    ASSERT_EQ(RemoveRedundantOpUtils::ProcessContractSlice(*function, newOps, operationUpdated), SUCCESS);
+
+    EXPECT_TRUE(operationUpdated);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumZero);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumOne);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumZero);
+    EXPECT_EQ(exp.GetInputOperand(kSizeZero), contractInput);
+    EXPECT_FALSE(precedingSlice.IsDeleted());
+    EXPECT_EQ(precedingSlice.GetOOperands().front(), contractInput);
+}
+
+/*
+SliceContractSliceSinglePartialSlice
+input{8,16}->slice(preceding)->contractInput{8,16}->contract->contractOutput{8,16}
+                                                      ->slice(partial{4,0})->sliceOutput{4,16}->exp
+input{8,16}->slice(preceding)->contractInput{8,16}->view(offset{4,0})->sliceOutput{4,16}->exp
+*/
+TEST_F(TestRemoveRedundantOpPass, SliceContractSliceSinglePartialSliceShouldGenerateView)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "SliceContractSliceSinglePartial",
+                                               "SliceContractSliceSinglePartial", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> fullShape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> partShape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> zeroOffset = {kNumZero, kNumZero};
+    std::vector<int64_t> partOffset = {kNumFour, kNumZero};
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto contractInput = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto sliceOutput = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape),
+                                              TileOpFormat::TILEOP_ND, "out");
+
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_SLICE, {input}, {contractInput},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(zeroOffset)); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_CONTRACT, {contractInput}, {contractOutput},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(zeroOffset)); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_SLICE, {contractOutput}, {sliceOutput},
+        [&partOffset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(partOffset)); });
+    auto& exp = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {sliceOutput}, {output});
+
+    std::vector<Operation*> newOps;
+    bool operationUpdated = false;
+    ASSERT_EQ(RemoveRedundantOpUtils::ProcessContractSlice(*function, newOps, operationUpdated), SUCCESS);
+
+    EXPECT_TRUE(operationUpdated);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumZero);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumOne);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumOne);
+    auto* generatedView = FindSingleOp(function, Opcode::OP_VIEW);
+    ASSERT_NE(generatedView, nullptr);
+    EXPECT_EQ(generatedView->GetIOperands().front(), contractInput);
+    EXPECT_EQ(exp.GetIOperands().front(), generatedView->GetOOperands().front());
+    auto viewAttr = std::dynamic_pointer_cast<ViewOpAttribute>(generatedView->GetOpAttribute());
+    ASSERT_NE(viewAttr, nullptr);
+    EXPECT_EQ(viewAttr->GetFromOffset(), partOffset);
+}
+
+/*
+SliceContractSliceMixedFanout
+input{8,16}->slice(preceding)->contractInput{8,16}->contract->contractOutput{8,16}
+                                                       ->slice0{0,0}->sliceOut0{4,16}->exp0
+                                                       ->slice1{4,0}(L1)->sliceOut1{4,16}->exp1
+input{8,16}->slice0{0,0}->sliceOut0{4,16}->exp0
+           ->slice1{4,0}(L1)->sliceOut1{4,16}->exp1
+Mixed L1/UNKNOWN fan-out composes the preceding slice and contract offsets into the surviving slices
+so every consumer reads directly from the original source tensor.
+*/
+TEST_F(TestRemoveRedundantOpPass, SliceContractSliceMixedFanoutShouldComposeOffsets)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "SliceContractSliceMixedFanout",
+                                               "SliceContractSliceMixedFanout", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> fullShape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> partShape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> zeroOffset = {kNumZero, kNumZero};
+    std::vector<int64_t> partOffset = {kNumFour, kNumZero};
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto contractInput = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto sliceOut0 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto sliceOut1 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto out0 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape),
+                                            TileOpFormat::TILEOP_ND, "out0");
+    auto out1 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape),
+                                            TileOpFormat::TILEOP_ND, "out1");
+    sliceOut1->SetMemoryTypeBoth(MemoryType::MEM_L1);
+
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_SLICE, {input}, {contractInput},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(zeroOffset)); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_CONTRACT, {contractInput}, {contractOutput},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(zeroOffset)); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_SLICE, {contractOutput}, {sliceOut0},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(zeroOffset)); });
+    auto l1Attr = std::make_shared<ViewOpAttribute>(partOffset);
+    l1Attr->SetToType(MemoryType::MEM_L1);
+    PassOperationUtils::AddOperation(*function, Opcode::OP_SLICE, {contractOutput}, {sliceOut1},
+                                     [&l1Attr](Operation& op) { op.SetOpAttribute(l1Attr); });
+    auto& exp0 = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {sliceOut0}, {out0});
+    auto& exp1 = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {sliceOut1}, {out1});
+
+    std::vector<Operation*> newOps;
+    bool operationUpdated = false;
+    ASSERT_EQ(RemoveRedundantOpUtils::ProcessContractSlice(*function, newOps, operationUpdated), SUCCESS);
+
+    // EraseOperations inside the pass destroys deleted ops (precedingSlice/contract), so their
+    // references from AddOperation are dangling.  Verify everything through surviving objects only.
+    EXPECT_TRUE(operationUpdated);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumZero);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumTwo);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumZero);
+    const Operation* l1Slice = nullptr;
+    uint32_t sliceInputCount = kNumZero;
+    for (const auto& op : function->Operations()) {
+        if (op.GetOpcode() != Opcode::OP_SLICE) {
+            continue;
+        }
+        EXPECT_EQ(op.GetIOperands().front(), input);
+        ++sliceInputCount;
+        if (op.GetOOperands().front() == sliceOut1) {
+            l1Slice = &op;
+        }
+    }
+    EXPECT_EQ(sliceInputCount, kNumTwo);
+    ASSERT_NE(l1Slice, nullptr);
+    auto composedAttr = std::dynamic_pointer_cast<ViewOpAttribute>(l1Slice->GetOpAttribute());
+    ASSERT_NE(composedAttr, nullptr);
+    EXPECT_EQ(composedAttr->GetFromOffset(), partOffset);
+    EXPECT_EQ(composedAttr->GetTo(), MemoryType::MEM_L1);
+    EXPECT_EQ(sliceOut1->GetMemoryTypeOriginal(), MemoryType::MEM_L1);
+    EXPECT_EQ(exp0.GetIOperands().front(), sliceOut0);
+    EXPECT_EQ(exp1.GetIOperands().front(), sliceOut1);
+}
+
+/*
+SliceContractSliceL1FanoutFoldPrecedingSlice
+input{12,16}(UB)->slice(preceding{4,0},To=UB)->contractInput{8,16}(UB)->contract->contractOutput{8,16}
+                                                                            ->slice0{0,0}(L1)->sliceOut0{4,16}->exp0
+                                                                            ->slice1{4,0}(L1)->sliceOut1{4,16}->exp1
+input{12,16}->slice0{4,0}(L1)->sliceOut0{4,16}->exp0
+             ->slice1{8,0}(L1)->sliceOut1{4,16}->exp1
+All-L1 fan-out with a plain same-memory preceding slice folds the preceding offset into every
+consumer, so both the slice and the contract disappear.
+*/
+TEST_F(TestRemoveRedundantOpPass, SliceContractSliceL1FanoutShouldFoldPrecedingSlice)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "SliceContractSliceL1FanoutFold",
+                                               "SliceContractSliceL1FanoutFold", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> srcShape = {kNumEight + kNumFour, kNumExpFour};
+    std::vector<int64_t> midShape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> partShape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> precedingOffset = {kNumFour, kNumZero};
+    std::vector<int64_t> zeroOffset = {kNumZero, kNumZero};
+    std::vector<int64_t> partOffset = {kNumFour, kNumZero};
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, srcShape, CreateTestConstIntVector(srcShape));
+    auto contractInput = IRBuilder().CreateTensorVar(DT_FP32, midShape, CreateTestConstIntVector(midShape));
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP32, midShape, CreateTestConstIntVector(midShape));
+    auto sliceOut0 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto sliceOut1 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto out0 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape),
+                                            TileOpFormat::TILEOP_ND, "out0");
+    auto out1 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape),
+                                            TileOpFormat::TILEOP_ND, "out1");
+    input->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    contractInput->SetMemoryTypeBoth(MemoryType::MEM_UB);
+    sliceOut0->SetMemoryTypeBoth(MemoryType::MEM_L1);
+    sliceOut1->SetMemoryTypeBoth(MemoryType::MEM_L1);
+
+    auto precedingAttr = std::make_shared<ViewOpAttribute>(precedingOffset);
+    precedingAttr->SetToType(MemoryType::MEM_UB);
+    PassOperationUtils::AddOperation(*function, Opcode::OP_SLICE, {input}, {contractInput},
+                                     [&precedingAttr](Operation& op) { op.SetOpAttribute(precedingAttr); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_CONTRACT, {contractInput}, {contractOutput},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(zeroOffset)); });
+    auto l1Attr0 = std::make_shared<ViewOpAttribute>(zeroOffset);
+    l1Attr0->SetToType(MemoryType::MEM_L1);
+    PassOperationUtils::AddOperation(*function, Opcode::OP_SLICE, {contractOutput}, {sliceOut0},
+                                     [&l1Attr0](Operation& op) { op.SetOpAttribute(l1Attr0); });
+    auto l1Attr1 = std::make_shared<ViewOpAttribute>(partOffset);
+    l1Attr1->SetToType(MemoryType::MEM_L1);
+    PassOperationUtils::AddOperation(*function, Opcode::OP_SLICE, {contractOutput}, {sliceOut1},
+                                     [&l1Attr1](Operation& op) { op.SetOpAttribute(l1Attr1); });
+    auto& exp0 = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {sliceOut0}, {out0});
+    auto& exp1 = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {sliceOut1}, {out1});
+
+    std::vector<Operation*> newOps;
+    bool operationUpdated = false;
+    ASSERT_EQ(RemoveRedundantOpUtils::ProcessContractSlice(*function, newOps, operationUpdated), SUCCESS);
+
+    // EraseOperations inside the pass destroys deleted ops (precedingSlice/contract), so their
+    // references from AddOperation are dangling.  Verify everything through surviving objects only.
+    EXPECT_TRUE(operationUpdated);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumZero);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumTwo);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumZero);
+    std::vector<const Operation*> survivingSlices;
+    for (const auto& op : function->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_SLICE) {
+            survivingSlices.push_back(&op);
+        }
+    }
+    ASSERT_EQ(survivingSlices.size(), 2UL);
+    for (const auto* survivingSlice : survivingSlices) {
+        EXPECT_EQ(survivingSlice->GetIOperands().front(), input);
+        auto attr = std::dynamic_pointer_cast<ViewOpAttribute>(survivingSlice->GetOpAttribute());
+        ASSERT_NE(attr, nullptr);
+        EXPECT_EQ(attr->GetTo(), MemoryType::MEM_L1);
+        const auto& offset = attr->GetFromOffset();
+        const bool isFoldedOffset = offset == precedingOffset || offset == (std::vector<int64_t>{kNumEight, kNumZero});
+        EXPECT_TRUE(isFoldedOffset);
+        EXPECT_EQ(survivingSlice->GetOOperands().front()->GetMemoryTypeOriginal(), MemoryType::MEM_L1);
+    }
+    EXPECT_EQ(exp0.GetIOperands().front(), sliceOut0);
+    EXPECT_EQ(exp1.GetIOperands().front(), sliceOut1);
+}
+
+/*
+SliceContractSliceWithMaterializedMatmulInput
+inputA/inputB->A_MUL_B->mmOut{8,16}->contract(materialize)->matOut{8,16}->slice(preceding)
+    ->contractInput{8,16}->contract->contractOutput{8,16}->slice{4,0}->sliceOut{4,16}->exp
+A contract fed by a materialized matmul result must stay materialized, so the whole chain is kept.
+*/
+TEST_F(TestRemoveRedundantOpPass, SliceContractSliceWithMaterializedMatmulInputShouldNotFold)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "SliceContractSliceMatmulInput",
+                                               "SliceContractSliceMatmulInput", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> fullShape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> partShape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> zeroOffset = {kNumZero, kNumZero};
+    std::vector<int64_t> partOffset = {kNumFour, kNumZero};
+    auto inputA = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto inputB = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto matmulOutput = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto matOut = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto contractInput = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto sliceOutput = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape),
+                                              TileOpFormat::TILEOP_ND, "out");
+
+    PassOperationUtils::AddOperation(*function, Opcode::OP_A_MUL_B, {inputA, inputB}, {matmulOutput});
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_CONTRACT, {matmulOutput}, {matOut},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(zeroOffset)); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_SLICE, {matOut}, {contractInput},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(zeroOffset)); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_CONTRACT, {contractInput}, {contractOutput},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(zeroOffset)); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_SLICE, {contractOutput}, {sliceOutput},
+        [&partOffset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(partOffset)); });
+    auto& exp = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {sliceOutput}, {output});
+
+    function->inCasts_ = {inputA, inputB};
+    function->outCasts_ = {output};
+
+    std::vector<Operation*> newOps;
+    bool operationUpdated = false;
+    ASSERT_EQ(RemoveRedundantOpUtils::ProcessContractSlice(*function, newOps, operationUpdated), SUCCESS);
+
+    EXPECT_FALSE(operationUpdated);
+    EXPECT_TRUE(newOps.empty());
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumTwo);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumTwo);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumZero);
+    EXPECT_EQ(exp.GetInputOperand(kSizeZero), sliceOutput);
+}
+
+/*
+MultipleContractsSameOutput
+input0{4,16}->contract{0,0}->sharedOut{8,16}->slice{0,0}->sliceOut{4,16}->exp
+input1{4,16}->contract{4,0}->
+A contract output assembled from several contract chains has no unique layout owner, so the chains
+stay materialized and the generic contract-slice rewrite must not fold them.
+*/
+TEST_F(TestRemoveRedundantOpPass, MultipleContractsSameOutputShouldNotFold)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "MultiContractSameOutput",
+                                               "MultiContractSameOutput", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> partShape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> fullShape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> zeroOffset = {kNumZero, kNumZero};
+    std::vector<int64_t> offset1 = {kNumFour, kNumZero};
+    auto input0 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto input1 = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto sharedOut = IRBuilder().CreateTensorVar(DT_FP32, fullShape, CreateTestConstIntVector(fullShape));
+    auto sliceOutput = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape),
+                                              TileOpFormat::TILEOP_ND, "out");
+
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_CONTRACT, {input0}, {sharedOut},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(zeroOffset)); });
+    PassOperationUtils::AddOperation(*function, Opcode::OP_CONTRACT, {input1}, {sharedOut}, [&offset1](Operation& op) {
+        op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset1));
+    });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_SLICE, {sharedOut}, {sliceOutput},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(zeroOffset)); });
+    auto& exp = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {sliceOutput}, {output});
+
+    function->inCasts_ = {input0, input1};
+    function->outCasts_ = {output};
+
+    std::vector<Operation*> newOps;
+    bool operationUpdated = false;
+    ASSERT_EQ(RemoveRedundantOpUtils::ProcessContractSlice(*function, newOps, operationUpdated), SUCCESS);
+
+    EXPECT_FALSE(operationUpdated);
+    EXPECT_TRUE(newOps.empty());
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumTwo);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumOne);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumZero);
+    EXPECT_EQ(exp.GetInputOperand(kSizeZero), sliceOutput);
+}
 } // namespace tile_fwk
 } // namespace npu

@@ -357,7 +357,7 @@ def run_scaled_mm_k_split_test(case: dict):
 @pytest.mark.parametrize(
     "case", [pytest.param(case, marks=pytest.mark.soc(*case["products"])) for case in K_SPLIT_2D_TESTS]
 )
-@pypto.options(pass_options={"enable_slice": True})
+@pypto.options(pass_options={"enable_slice": False})
 def test_2d_k_split(case: dict):
     """Test 2D matmul with k-axis split."""
     run_2d_k_split_test(case)

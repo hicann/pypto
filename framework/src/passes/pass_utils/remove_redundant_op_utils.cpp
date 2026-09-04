@@ -1028,7 +1028,90 @@ void ReplaceConsumers(const LogicalTensorPtr& oldTensor, const LogicalTensorPtr&
         consumer->ReplaceInput(newTensor, oldTensor);
     }
 }
+
 } // namespace
+
+bool RemoveRedundantOpUtils::CollectSliceContractSliceChain(const Operation& contractOp, SliceContractSliceChain& chain)
+{
+    if (contractOp.IsDeleted() || contractOp.GetOpcode() != Opcode::OP_CONTRACT ||
+        contractOp.GetIOperands().size() != 1 || contractOp.GetOOperands().size() != 1 ||
+        GetAssembleAttr(contractOp) == nullptr) {
+        return false;
+    }
+
+    chain.contract = const_cast<Operation*>(&contractOp);
+    chain.contractInput = contractOp.GetIOperands().front();
+    chain.contractOutput = contractOp.GetOOperands().front();
+    if (chain.contractInput == nullptr || chain.contractOutput == nullptr ||
+        chain.contractInput->GetProducers().size() != 1 || chain.contractOutput->GetProducers().size() != 1 ||
+        *chain.contractOutput->GetProducers().begin() != &contractOp) {
+        return false;
+    }
+
+    chain.precedingSlice = *chain.contractInput->GetProducers().begin();
+    if (chain.precedingSlice == nullptr || chain.precedingSlice->IsDeleted() ||
+        chain.precedingSlice->GetOpcode() != Opcode::OP_SLICE || chain.precedingSlice->GetIOperands().size() != 1 ||
+        chain.precedingSlice->GetOOperands().size() != 1 ||
+        chain.precedingSlice->GetOOperands().front() != chain.contractInput ||
+        GetViewAttr(*chain.precedingSlice) == nullptr || chain.contractInput->GetConsumers().size() != 1 ||
+        *chain.contractInput->GetConsumers().begin() != &contractOp) {
+        return false;
+    }
+    chain.sourceTensor = chain.precedingSlice->GetIOperands().front();
+    if (chain.sourceTensor == nullptr || chain.contractOutput->GetConsumers().empty()) {
+        return false;
+    }
+
+    for (auto* consumer : chain.contractOutput->GetConsumers()) {
+        if (consumer == nullptr || consumer->IsDeleted() || consumer->GetOpcode() != Opcode::OP_SLICE ||
+            consumer->GetIOperands().size() != 1 || consumer->GetOOperands().size() != 1 ||
+            consumer->GetIOperands().front() != chain.contractOutput || GetViewAttr(*consumer) == nullptr) {
+            return false;
+        }
+        chain.consumers.push_back(consumer);
+    }
+    // Keep this matcher deliberately strict: a contract output may only be consumed by slices.  In
+    // particular, if several contract operations produce the same tensor, the producer-count check
+    // above rejects the graph because there is no single slice-contract chain whose offsets can be
+    // composed safely.
+    return !chain.consumers.empty();
+}
+
+bool RemoveRedundantOpUtils::ComposeSliceContractOffset(const SliceContractSliceChain& chain, const Operation& consumer,
+                                                        std::vector<int64_t>& composedOffset)
+{
+    auto precedingAttr = GetViewAttr(*chain.precedingSlice);
+    auto contractAttr = GetAssembleAttr(*chain.contract);
+    auto consumerAttr = GetViewAttr(consumer);
+    if (precedingAttr == nullptr || contractAttr == nullptr || consumerAttr == nullptr ||
+        !precedingAttr->GetFromDynOffset().empty() || !contractAttr->GetToDynOffset().empty() ||
+        !consumerAttr->GetFromDynOffset().empty()) {
+        return false;
+    }
+
+    std::vector<int64_t> localOffset;
+    std::vector<SymbolicScalar> localDynOffset;
+    auto consumerOutput = consumer.GetOOperands().front();
+    if (!CalculateContractLocalSliceOffset(chain.contractInput, consumerOutput, *consumerAttr, *contractAttr,
+                                           localOffset, localDynOffset) ||
+        !localDynOffset.empty()) {
+        return false;
+    }
+
+    const auto& sourceOffset = precedingAttr->GetFromOffset();
+    if (sourceOffset.size() != localOffset.size() || sourceOffset.size() != chain.sourceTensor->GetShape().size()) {
+        return false;
+    }
+    composedOffset.resize(sourceOffset.size());
+    for (size_t idx = 0; idx < sourceOffset.size(); ++idx) {
+        if ((localOffset[idx] > 0 && sourceOffset[idx] > std::numeric_limits<int64_t>::max() - localOffset[idx]) ||
+            (localOffset[idx] < 0 && sourceOffset[idx] < std::numeric_limits<int64_t>::min() - localOffset[idx])) {
+            return false;
+        }
+        composedOffset[idx] = sourceOffset[idx] + localOffset[idx];
+    }
+    return IsRegionWithinShape(composedOffset, consumerOutput->GetShape(), chain.sourceTensor->GetShape());
+}
 
 Status RemoveRedundantOpUtils::Process(Function& function, std::vector<Operation*>& newOps, bool& operationUpdated)
 {
@@ -1214,9 +1297,26 @@ Status RemoveRedundantOpUtils::ProcessViewAssembleLikeImpl(Function& function, s
             }
             if (op->GetOpcode() == Opcode::OP_SLICE && consumer->GetOpcode() == Opcode::OP_CONTRACT &&
                 consumer->GetIOperands().size() == 1 &&
-                IsInputProducedBySingleSlice(consumer->GetIOperands().front()) &&
-                IsSingleContractWithMultipleL1SliceConsumers(*consumer)) {
-                continue;
+                IsInputProducedBySingleSlice(consumer->GetIOperands().front())) {
+                // Leave a strict slice-contract-slice chain to ProcessSliceContractSlice.  The
+                // dedicated pass must see all L1/UNKNOWN fan-out variants before this generic
+                // view/assemble cascade pass can rewrite the prefix.
+                SliceContractSliceChain chain;
+                const auto& contractOutput = consumer->GetOOperands().front();
+                const bool hasOnlySliceConsumers = contractOutput != nullptr &&
+                                                   !contractOutput->GetConsumers().empty() &&
+                                                   std::all_of(contractOutput->GetConsumers().begin(),
+                                                               contractOutput->GetConsumers().end(),
+                                                               [](const Operation* outputConsumer) {
+                                                                   return outputConsumer != nullptr &&
+                                                                          !outputConsumer->IsDeleted() &&
+                                                                          outputConsumer->GetOpcode() ==
+                                                                              Opcode::OP_SLICE;
+                                                               });
+                if (CollectSliceContractSliceChain(*consumer, chain) ||
+                    IsSingleContractWithMultipleL1SliceConsumers(*consumer) || hasOnlySliceConsumers) {
+                    continue;
+                }
             }
             if (startTensor->shape == endTensor->shape && startTensor->offset == endTensor->offset) {
                 if (!CanBypassPerfectMatch(startTensor, endTensor)) {
@@ -1510,6 +1610,15 @@ void RemoveRedundantOpUtils::GenerateNewViewLike(Function& function, Operation& 
 Status RemoveRedundantOpUtils::ProcessContractSliceImpl(Function& function, std::vector<Operation*>& newOps,
                                                         bool& operationUpdated)
 {
+    bool sliceContractSliceUpdated = false;
+    if (ProcessSliceContractSlice(function, newOps, sliceContractSliceUpdated) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Function, "ProcessSliceContractSlice failed.");
+        return FAILED;
+    }
+    if (sliceContractSliceUpdated) {
+        function.EraseOperations(true, false);
+        operationUpdated = true;
+    }
     if (ProcessMultiContractSingleSlice(function, operationUpdated) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "ProcessMultiContractSingleSlice failed.");
         return FAILED;
@@ -1522,6 +1631,276 @@ Status RemoveRedundantOpUtils::ProcessContractSliceImpl(Function& function, std:
         return FAILED;
     }
     function.EraseOperations(true, false);
+    return SUCCESS;
+}
+
+bool RemoveRedundantOpUtils::CollectSliceContractSliceRewrites(const SliceContractSliceChain& chain, bool isFanout,
+                                                               bool keepL1Fanout,
+                                                               std::vector<SliceContractSliceRewrite>& rewrites,
+                                                               bool& canComposeOffsets)
+{
+    rewrites.reserve(chain.consumers.size());
+    for (auto* consumer : chain.consumers) {
+        auto consumerAttr = GetViewAttr(*consumer);
+        auto contractAttr = GetAssembleAttr(*chain.contract);
+        std::vector<int64_t> localOffset;
+        std::vector<SymbolicScalar> localDynOffset;
+        if (consumerAttr == nullptr || contractAttr == nullptr ||
+            !CalculateContractLocalSliceOffset(chain.contractInput, consumer->GetOOperands().front(), *consumerAttr,
+                                               *contractAttr, localOffset, localDynOffset)) {
+            return false;
+        }
+
+        SliceContractSliceRewrite rewrite;
+        rewrite.consumer = consumer;
+        rewrite.localOffset = std::move(localOffset);
+        rewrite.localDynOffset = std::move(localDynOffset);
+        rewrite.isFullSlice = IsFullSliceOfContractInput(chain.contractInput, consumer->GetOOperands().front(),
+                                                         rewrite.localOffset, rewrite.localDynOffset);
+        if (isFanout && !keepL1Fanout) {
+            if (rewrite.isFullSlice && !IsContractInputEqualSliceOutput(*chain.contract, *consumer)) {
+                // Mirror the single-consumer rejection: bypassing a full slice whose dynamic valid shape
+                // differs from the contract input would drop that shape from the surviving graph.
+                return false;
+            }
+            if (!ComposeSliceContractOffset(chain, *consumer, rewrite.composedOffset)) {
+                // The direct source rewrite requires concrete offsets.  Keep the legacy surviving-input
+                // path available for dynamic/otherwise non-composable chains.
+                canComposeOffsets = false;
+            }
+        }
+        rewrites.push_back(std::move(rewrite));
+    }
+    return true;
+}
+
+void RemoveRedundantOpUtils::FoldL1FanoutChain(const SliceContractSliceChain& chain,
+                                               const std::vector<SliceContractSliceRewrite>& rewrites)
+{
+    // Multiple L1 consumers share the preceding L1/UB materialization.  Fold the preceding slice into
+    // every consumer when it is a plain same-memory view, so the slice and the contract both disappear;
+    // otherwise keep the slice and remove only the redundant contract.
+    auto precedingAttr = GetViewAttr(*chain.precedingSlice);
+    bool canFoldPrecedingSlice = precedingAttr->GetFromOffset().size() == chain.sourceTensor->GetShape().size() &&
+                                 chain.sourceTensor->GetShape().size() == chain.contractInput->GetShape().size() &&
+                                 chain.sourceTensor->GetMemoryTypeOriginal() ==
+                                     chain.contractInput->GetMemoryTypeOriginal() &&
+                                 (precedingAttr->GetTo() == MemoryType::MEM_UNKNOWN ||
+                                  precedingAttr->GetTo() == chain.sourceTensor->GetMemoryTypeOriginal()) &&
+                                 !HasMemoryTypeTransform(chain.sourceTensor, chain.contractInput) &&
+                                 IsConcreteDynOffsetConsistent(precedingAttr->GetFromOffset(),
+                                                               precedingAttr->GetFromDynOffset());
+    std::vector<std::pair<std::vector<int64_t>, std::vector<SymbolicScalar>>> mergedOffsets;
+    if (canFoldPrecedingSlice) {
+        for (const auto& rewrite : rewrites) {
+            auto mergedOffset = TensorOffset::Add(precedingAttr->GetFromOffset(), precedingAttr->GetFromDynOffset(),
+                                                  rewrite.localOffset, rewrite.localDynOffset);
+            if (!IsRegionWithinShape(mergedOffset.first, rewrite.consumer->GetOOperands().front()->GetShape(),
+                                     chain.sourceTensor->GetShape())) {
+                canFoldPrecedingSlice = false;
+                break;
+            }
+            mergedOffsets.push_back(std::move(mergedOffset));
+        }
+    }
+    for (size_t idx = 0; idx < rewrites.size(); ++idx) {
+        const auto& rewrite = rewrites[idx];
+        auto* consumer = rewrite.consumer;
+        auto consumerAttr = GetViewAttr(*consumer);
+        auto newAttr = std::dynamic_pointer_cast<ViewOpAttribute>(consumerAttr->Clone());
+        if (canFoldPrecedingSlice) {
+            newAttr->SetFromOffset(mergedOffsets[idx].first, mergedOffsets[idx].second);
+        } else {
+            newAttr->SetFromOffset(rewrite.localOffset, rewrite.localDynOffset);
+        }
+        newAttr->SetToType(MemoryType::MEM_L1);
+        consumer->SetOpAttribute(newAttr);
+        consumer->GetOOperands().front()->SetMemoryTypeBoth(MemoryType::MEM_L1, true);
+        consumer->ReplaceInput(canFoldPrecedingSlice ? chain.sourceTensor : chain.contractInput, chain.contractOutput);
+    }
+    if (canFoldPrecedingSlice) {
+        chain.precedingSlice->SetAsDeleted();
+    }
+    chain.contract->SetAsDeleted();
+}
+
+void RemoveRedundantOpUtils::RewriteComposableFanoutChain(const SliceContractSliceChain& chain,
+                                                          const std::vector<SliceContractSliceRewrite>& rewrites)
+{
+    // For UNKNOWN consumers and mixed L1/UNKNOWN fan-out, compose the preceding slice and contract
+    // offsets into each remaining slice.  This is the only safe way to eliminate the common
+    // slice1-contract1 prefix: every consumer then reads directly from the one original source tensor.
+    for (const auto& rewrite : rewrites) {
+        auto* consumer = rewrite.consumer;
+        auto consumerAttr = GetViewAttr(*consumer);
+        auto newAttr = std::dynamic_pointer_cast<ViewOpAttribute>(consumerAttr->Clone());
+        newAttr->SetFromOffset(rewrite.composedOffset);
+        consumer->SetOpAttribute(newAttr);
+        consumer->ReplaceInput(chain.sourceTensor, chain.contractOutput);
+    }
+    chain.precedingSlice->SetAsDeleted();
+    chain.contract->SetAsDeleted();
+}
+
+bool RemoveRedundantOpUtils::RewriteDynamicFanoutFallback(Function& function, const SliceContractSliceChain& chain,
+                                                          std::vector<SliceContractSliceRewrite>& rewrites,
+                                                          bool hasL1Consumer, std::vector<Operation*>& newOps,
+                                                          bool& operationUpdated)
+{
+    // Dynamic offsets cannot be composed into a static source slice.  Keep the original surviving-input
+    // rewrite for this unsupported direct-composition case.
+    std::stable_sort(rewrites.begin(), rewrites.end(),
+                     [](const SliceContractSliceRewrite& lhs, const SliceContractSliceRewrite& rhs) {
+                         return SliceRequiresL1(*lhs.consumer) && !SliceRequiresL1(*rhs.consumer);
+                     });
+    std::set<Operation*> precedingSlices;
+    for (const auto& rewrite : rewrites) {
+        if (!CollectPrecedingSlicesForL1Transfer(*rewrite.consumer, std::vector<Operation*>{chain.contract},
+                                                 precedingSlices)) {
+            return false;
+        }
+    }
+    TransferL1Requirement(precedingSlices);
+    LogicalTensorPtr survivingInput = chain.contractInput;
+    for (const auto& rewrite : rewrites) {
+        RewriteSliceContractSliceConsumer(function, *chain.contract, *rewrite.consumer, rewrite.isFullSlice,
+                                          rewrite.localOffset, rewrite.localDynOffset, chain.contractInput,
+                                          survivingInput, hasL1Consumer, chain.sourceTensor, newOps, operationUpdated);
+    }
+    chain.contract->SetAsDeleted();
+    return true;
+}
+
+void RemoveRedundantOpUtils::RewriteSliceContractSliceConsumer(
+    Function& function, Operation& contract, Operation& consumer, bool isFullSlice,
+    const std::vector<int64_t>& localOffset, const std::vector<SymbolicScalar>& localDynOffset,
+    const LogicalTensorPtr& contractInput, LogicalTensorPtr& survivingInput, bool redirectEnabled,
+    const LogicalTensorPtr& redirectTarget, std::vector<Operation*>& newOps, bool& operationUpdated)
+{
+    auto sliceOutput = consumer.GetOOperands().front();
+    if (SliceRequiresL1(consumer) && contractInput->GetProducers().size() == 1) {
+        TransferL1CopyAttrs(consumer, **contractInput->GetProducers().begin());
+    }
+    if (isFullSlice) {
+        auto* precedingSlice = GetReplaceablePrecedingSlice(contract, consumer, survivingInput, sliceOutput);
+        if (precedingSlice != nullptr) {
+            sliceOutput->SetMemoryTypeBoth(MemoryType::MEM_L1, true);
+            // ReplaceOOperand detaches the old output from its producer.  Migrate all users first so
+            // later operations do not retain a dangling tensor reference.
+            ReplaceConsumers(precedingSlice->GetOOperands().front(), sliceOutput);
+            precedingSlice->ReplaceOOperand(0, sliceOutput);
+            survivingInput = sliceOutput;
+        } else if (redirectEnabled && !SliceRequiresL1(consumer) && redirectTarget != nullptr) {
+            // A non-L1 consumer cannot consume the L1 materialization directly in a mixed fan-out.
+            // Redirect its full-slice users to the original source instead.
+            ReplaceConsumers(sliceOutput, redirectTarget);
+        } else {
+            ReplaceConsumers(sliceOutput, survivingInput);
+        }
+    } else {
+        GenerateContractSliceView(function, consumer, survivingInput, localOffset, localDynOffset, newOps,
+                                  operationUpdated);
+    }
+    consumer.SetAsDeleted();
+}
+
+bool RemoveRedundantOpUtils::ProcessSliceContractSliceFanout(Function& function, const SliceContractSliceChain& chain,
+                                                             std::vector<SliceContractSliceRewrite>& rewrites,
+                                                             bool keepL1Fanout, bool canComposeOffsets,
+                                                             std::vector<Operation*>& newOps, bool& operationUpdated)
+{
+    const bool hasL1Consumer = std::any_of(rewrites.begin(), rewrites.end(), [](const SliceContractSliceRewrite& r) {
+        return SliceRequiresL1(*r.consumer);
+    });
+    const bool hasNonL1Consumer = std::any_of(rewrites.begin(), rewrites.end(), [](const SliceContractSliceRewrite& r) {
+        return !SliceRequiresL1(*r.consumer);
+    });
+    // A dynamic mixed-memory fan-out cannot share a surviving input safely: transferring the L1
+    // requirement to the common preceding slice would also make partial vector views read from L1.
+    // Keep the materialization boundary until all offsets can be composed back to the source tensor.
+    if (!keepL1Fanout && !canComposeOffsets && hasL1Consumer && hasNonL1Consumer) {
+        return false;
+    }
+    if (keepL1Fanout) {
+        FoldL1FanoutChain(chain, rewrites);
+    } else if (canComposeOffsets) {
+        RewriteComposableFanoutChain(chain, rewrites);
+    } else if (!RewriteDynamicFanoutFallback(function, chain, rewrites, hasL1Consumer, newOps, operationUpdated)) {
+        return false;
+    }
+    return true;
+}
+
+void RemoveRedundantOpUtils::ProcessSliceContractSliceSingle(Function& function, const SliceContractSliceChain& chain,
+                                                             const SliceContractSliceRewrite& rewrite,
+                                                             std::vector<Operation*>& newOps, bool& operationUpdated)
+{
+    // There is one consumer.  Preserve the established single-consumer behavior (including L1
+    // requirement transfer and the partial-slice VIEW fallback), but keep it in this dedicated
+    // slice-contract-slice pass so ProcessSingleContractMultiSlice never handles this pattern.
+    auto* consumer = rewrite.consumer;
+    if (rewrite.isFullSlice && !IsContractInputEqualSliceOutput(*chain.contract, *consumer)) {
+        return;
+    }
+
+    std::set<Operation*> precedingSlices;
+    if (!CollectPrecedingSlicesForL1Transfer(*consumer, std::vector<Operation*>{chain.contract}, precedingSlices)) {
+        return;
+    }
+    TransferL1Requirement(precedingSlices);
+
+    // Keep the replacement tensor explicit.  Replacing a full L1 slice may detach the original contract
+    // input from its preceding slice; any later rewrite must consume the tensor that actually survived.
+    LogicalTensorPtr survivingInput = chain.contractInput;
+    RewriteSliceContractSliceConsumer(function, *chain.contract, *consumer, rewrite.isFullSlice, rewrite.localOffset,
+                                      rewrite.localDynOffset, chain.contractInput, survivingInput, false, nullptr,
+                                      newOps, operationUpdated);
+    chain.contract->SetAsDeleted();
+    operationUpdated = true;
+}
+
+Status RemoveRedundantOpUtils::ProcessSliceContractSlice(Function& function, std::vector<Operation*>& newOps,
+                                                         bool& operationUpdated)
+{
+    auto opList = function.Operations().DuplicatedOpList();
+    for (auto* op : opList) {
+        if (op == nullptr || op->GetOpcode() != Opcode::OP_CONTRACT) {
+            continue;
+        }
+
+        SliceContractSliceChain chain;
+        if (!CollectSliceContractSliceChain(*op, chain)) {
+            continue;
+        }
+
+        const bool isFanout = chain.consumers.size() > 1;
+        const bool keepL1Fanout = isFanout && std::all_of(chain.consumers.begin(), chain.consumers.end(),
+                                                          [](const Operation* consumer) {
+                                                              return consumer != nullptr && SliceRequiresL1(*consumer);
+                                                          });
+        // A contract fed by a materialized matmul result normally must remain materialized because the
+        // L0C layout is not a linear tensor view.  Multiple L1 slices are the exception: the preceding
+        // slice already represents the materialized copy-out, and folding it into the surviving L1
+        // slices preserves that boundary.
+        if (IsMatmulBackedContractInput(chain.contractInput) && !keepL1Fanout) {
+            continue;
+        }
+
+        std::vector<SliceContractSliceRewrite> rewrites;
+        bool canComposeOffsets = true;
+        if (!CollectSliceContractSliceRewrites(chain, isFanout, keepL1Fanout, rewrites, canComposeOffsets)) {
+            continue;
+        }
+
+        if (isFanout) {
+            if (ProcessSliceContractSliceFanout(function, chain, rewrites, keepL1Fanout, canComposeOffsets, newOps,
+                                                operationUpdated)) {
+                operationUpdated = true;
+            }
+            continue;
+        }
+        ProcessSliceContractSliceSingle(function, chain, rewrites.front(), newOps, operationUpdated);
+    }
     return SUCCESS;
 }
 
@@ -1621,6 +2000,128 @@ void RemoveRedundantOpUtils::GenerateContractSliceView(Function& function, Opera
     operationUpdated = true;
 }
 
+bool RemoveRedundantOpUtils::ShouldSkipContractMultiSlice(
+    const Operation& op, const LogicalTensorPtr& contractInput, const LogicalTensorPtr& contractOutput,
+    const std::set<Operation*, LogicalTensor::CompareOp>& consumers)
+{
+    // A contract fed by a single slice belongs to the dedicated slice-contract-slice pass.  Do not let
+    // the generic contract-multi-slice rewrite fold that three-op chain a second time.
+    if (IsInputProducedBySingleSlice(contractInput) && contractOutput != nullptr) {
+        const bool hasOnlySliceConsumers = !consumers.empty() &&
+                                           std::all_of(consumers.begin(), consumers.end(),
+                                                       [](const Operation* consumer) {
+                                                           return consumer != nullptr && !consumer->IsDeleted() &&
+                                                                  consumer->GetOpcode() == Opcode::OP_SLICE;
+                                                       });
+        if (hasOnlySliceConsumers) {
+            return true;
+        }
+    }
+    // A matmul result uses the L0C layout. Folding its contract-slice chain into views would make later
+    // copy-outs interpret logical slice offsets as linear L0C pointer offsets.  Do not require the input
+    // tensor to have exactly one producer here: after fanout splitting/reconnection, the producer set can
+    // contain additional entries while an A_MUL_B result is still one of the producers.
+    const auto& producers = contractInput->GetProducers();
+    const bool hasMatmulProducer = std::any_of(producers.begin(), producers.end(), [](const Operation* producer) {
+        return producer != nullptr && IsMatmulOpcode(producer->GetOpcode());
+    });
+    // Keep a contract-slice chain materialized when the contract consumes an A_MUL_B result.  The
+    // contract may currently have only one slice consumer (for example, after fanout splitting), so
+    // checking consumers.size() > 1 would let that chain through and fold CONTRACT+SLICE into VIEW.
+    if (hasMatmulProducer && std::all_of(consumers.begin(), consumers.end(), [](const Operation* consumer) {
+            return consumer != nullptr && consumer->GetOpcode() == Opcode::OP_SLICE;
+        })) {
+        APASS_LOG_DEBUG_F(Elements::Operation,
+                          "Skip CONTRACT[%d] with SLICE consumers because its input has a matmul producer.",
+                          op.GetOpMagic());
+        return true;
+    }
+    return false;
+}
+
+bool RemoveRedundantOpUtils::CollectContractSliceRewriteInfos(
+    Operation& op, const LogicalTensorPtr& contractInput,
+    const std::set<Operation*, LogicalTensor::CompareOp>& consumers,
+    std::vector<ContractSliceRewriteInfo>& rewriteInfos, std::set<Operation*>& precedingSlices)
+{
+    if (std::any_of(consumers.begin(), consumers.end(),
+                    [](const Operation* consumer) {
+                        return consumer != nullptr && consumer->GetOpcode() == Opcode::OP_SLICE &&
+                               SliceRequiresL1(*consumer);
+                    }) &&
+        contractInput->GetProducers().size() != 1) {
+        return false;
+    }
+    for (auto* consumer : consumers) {
+        if (consumer == nullptr || consumer->GetOpcode() != Opcode::OP_SLICE || consumer->GetOOperands().empty()) {
+            return false;
+        }
+        auto sliceAttr = GetViewAttr(*consumer);
+        auto contractAttr = GetAssembleAttr(op);
+        std::vector<int64_t> localOffset;
+        std::vector<SymbolicScalar> localDynOffset;
+        if (sliceAttr == nullptr || contractAttr == nullptr ||
+            !CalculateContractLocalSliceOffset(contractInput, consumer->GetOOperands().front(), *sliceAttr,
+                                               *contractAttr, localOffset, localDynOffset)) {
+            return false;
+        }
+        bool isFullSlice = IsFullSliceOfContractInput(contractInput, consumer->GetOOperands().front(), localOffset,
+                                                      localDynOffset);
+        if (isFullSlice && !IsContractInputEqualSliceOutput(op, *consumer)) {
+            return false;
+        }
+        if (!CollectPrecedingSlicesForL1Transfer(*consumer, std::vector<Operation*>{&op}, precedingSlices)) {
+            return false;
+        }
+        rewriteInfos.push_back({consumer, std::move(localOffset), std::move(localDynOffset), isFullSlice});
+    }
+    return true;
+}
+
+LogicalTensorPtr RemoveRedundantOpUtils::GetMixedConsumerRedirectTarget(const LogicalTensorPtr& contractInput)
+{
+    if (contractInput == nullptr || contractInput->GetProducers().size() != 1) {
+        return nullptr;
+    }
+    auto* producer = *contractInput->GetProducers().begin();
+    if (producer == nullptr || producer->GetOpcode() != Opcode::OP_SLICE || producer->GetIOperands().size() != 1) {
+        return nullptr;
+    }
+    return producer->GetIOperands().front();
+}
+
+void RemoveRedundantOpUtils::RewriteContractMultiSliceConsumers(Function& function, Operation& op,
+                                                                const LogicalTensorPtr& contractInput,
+                                                                std::vector<ContractSliceRewriteInfo>& rewriteInfos,
+                                                                std::set<Operation*>& precedingSlices,
+                                                                std::vector<Operation*>& newOps, bool& operationUpdated)
+{
+    // Process L1 consumers first.  Their requirement transfer can change the materialization tensor
+    // used by the remaining contract-slice consumers.
+    std::stable_sort(rewriteInfos.begin(), rewriteInfos.end(),
+                     [](const ContractSliceRewriteInfo& lhs, const ContractSliceRewriteInfo& rhs) {
+                         return SliceRequiresL1(*lhs.consumer) && !SliceRequiresL1(*rhs.consumer);
+                     });
+    TransferL1Requirement(precedingSlices);
+
+    // A full-slice consumer may replace the output of the preceding materialization slice.  Keep the
+    // tensor that remains connected to the graph so subsequent consumers and generated views are never
+    // redirected through a detached contract input.
+    const bool hasL1Consumer = std::any_of(
+        rewriteInfos.begin(), rewriteInfos.end(),
+        [](const ContractSliceRewriteInfo& rewriteInfo) { return SliceRequiresL1(*rewriteInfo.consumer); });
+    LogicalTensorPtr redirectTarget = GetMixedConsumerRedirectTarget(contractInput);
+    LogicalTensorPtr survivingInput = contractInput;
+    for (auto& rewriteInfo : rewriteInfos) {
+        RewriteSliceContractSliceConsumer(function, op, *rewriteInfo.consumer, rewriteInfo.isFullSlice,
+                                          rewriteInfo.localOffset, rewriteInfo.localDynOffset, contractInput,
+                                          survivingInput, hasL1Consumer, redirectTarget, newOps, operationUpdated);
+        operationUpdated = true;
+    }
+    op.SetAsDeleted();
+    operationUpdated = true;
+}
+
 Status RemoveRedundantOpUtils::ProcessSingleContractMultiSlice(Function& function, std::vector<Operation*>& newOps,
                                                                bool& operationUpdated)
 {
@@ -1632,119 +2133,26 @@ Status RemoveRedundantOpUtils::ProcessSingleContractMultiSlice(Function& functio
         }
         auto contractInput = op->GetIOperands().front();
         auto contractOutput = op->GetOOperands().front();
+        if (contractInput == nullptr || contractOutput == nullptr || contractOutput->GetProducers().size() != 1 ||
+            *contractOutput->GetProducers().begin() != op) {
+            // A contract output assembled from several slice-contract chains has no unique layout owner.
+            // Keeping the chains materialized is required because their offsets cannot be composed independently.
+            continue;
+        }
         auto consumers = contractOutput->GetConsumers();
         if (consumers.empty()) {
             continue;
         }
-        // A matmul result uses the L0C layout. Folding its contract-slice chain into views would make later
-        // copy-outs interpret logical slice offsets as linear L0C pointer offsets.  Do not require the input tensor
-        // to have exactly one producer here: after fanout splitting/reconnection, the producer set can contain
-        // additional entries while an A_MUL_B result is still one of the producers.
-        auto producers = contractInput->GetProducers();
-        const bool hasMatmulProducer = std::any_of(producers.begin(), producers.end(), [](const Operation* producer) {
-            return producer != nullptr && IsMatmulOpcode(producer->GetOpcode());
-        });
-        // Keep a contract-slice chain materialized when the contract consumes an A_MUL_B result.  The
-        // contract may currently have only one slice consumer (for example, after fanout splitting), so
-        // checking consumers.size() > 1 would let that chain through and fold CONTRACT+SLICE into VIEW.
-        if (hasMatmulProducer && std::all_of(consumers.begin(), consumers.end(), [](const Operation* consumer) {
-                return consumer != nullptr && consumer->GetOpcode() == Opcode::OP_SLICE;
-            })) {
-            APASS_LOG_DEBUG_F(Elements::Operation,
-                              "Skip CONTRACT[%d] with SLICE consumers because its input has a "
-                              "matmul producer.",
-                              op->GetOpMagic());
+        if (ShouldSkipContractMultiSlice(*op, contractInput, contractOutput, consumers)) {
             continue;
         }
-        struct ConsumerRewriteInfo {
-            Operation* consumer = nullptr;
-            std::vector<int64_t> localOffset;
-            std::vector<SymbolicScalar> localDynOffset;
-            bool isFullSlice = false;
-        };
-        std::vector<ConsumerRewriteInfo> rewriteInfos;
-        bool canProcess = true;
-        bool keepMultiL1Slices = IsSingleContractWithMultipleL1SliceConsumers(*op) &&
-                                 IsInputProducedBySingleSlice(contractInput);
-        if (std::any_of(consumers.begin(), consumers.end(),
-                        [](const Operation* consumer) {
-                            return consumer != nullptr && consumer->GetOpcode() == Opcode::OP_SLICE &&
-                                   SliceRequiresL1(*consumer);
-                        }) &&
-            contractInput->GetProducers().size() != 1) {
-            continue;
-        }
+        std::vector<ContractSliceRewriteInfo> rewriteInfos;
         std::set<Operation*> precedingSlices;
-        for (auto* consumer : consumers) {
-            if (consumer == nullptr || consumer->GetOpcode() != Opcode::OP_SLICE || consumer->GetOOperands().empty()) {
-                canProcess = false;
-                break;
-            }
-            auto sliceAttr = GetViewAttr(*consumer);
-            auto contractAttr = GetAssembleAttr(*op);
-            std::vector<int64_t> localOffset;
-            std::vector<SymbolicScalar> localDynOffset;
-            if (sliceAttr == nullptr || contractAttr == nullptr ||
-                !CalculateContractLocalSliceOffset(contractInput, consumer->GetOOperands().front(), *sliceAttr,
-                                                   *contractAttr, localOffset, localDynOffset)) {
-                canProcess = false;
-                break;
-            }
-            bool isFullSlice = IsFullSliceOfContractInput(contractInput, consumer->GetOOperands().front(), localOffset,
-                                                          localDynOffset);
-            if (isFullSlice && !IsContractInputEqualSliceOutput(*op, *consumer)) {
-                canProcess = false;
-                break;
-            }
-            if (!keepMultiL1Slices &&
-                !CollectPrecedingSlicesForL1Transfer(*consumer, std::vector<Operation*>{op}, precedingSlices)) {
-                canProcess = false;
-                break;
-            }
-            rewriteInfos.push_back({consumer, localOffset, localDynOffset, isFullSlice});
-        }
-        if (!canProcess) {
+        if (!CollectContractSliceRewriteInfos(*op, contractInput, consumers, rewriteInfos, precedingSlices)) {
             continue;
         }
-        if (keepMultiL1Slices) {
-            for (auto& rewriteInfo : rewriteInfos) {
-                auto* consumer = rewriteInfo.consumer;
-                auto sliceAttr = GetViewAttr(*consumer);
-                auto newAttr = std::dynamic_pointer_cast<ViewOpAttribute>(sliceAttr->Clone());
-                newAttr->SetFromOffset(rewriteInfo.localOffset, rewriteInfo.localDynOffset);
-                newAttr->SetToType(MemoryType::MEM_L1);
-                consumer->SetOpAttribute(newAttr);
-                consumer->GetOOperands().front()->SetMemoryTypeBoth(MemoryType::MEM_L1, true);
-                consumer->ReplaceInput(contractInput, contractOutput);
-            }
-            op->SetAsDeleted();
-            operationUpdated = true;
-            continue;
-        }
-        TransferL1Requirement(precedingSlices);
-        for (auto& rewriteInfo : rewriteInfos) {
-            auto* consumer = rewriteInfo.consumer;
-            auto sliceOutput = consumer->GetOOperands().front();
-            if (SliceRequiresL1(*consumer) && contractInput->GetProducers().size() == 1) {
-                TransferL1CopyAttrs(*consumer, **contractInput->GetProducers().begin());
-            }
-            if (rewriteInfo.isFullSlice) {
-                auto* precedingSlice = GetReplaceablePrecedingSlice(*op, *consumer, contractInput, sliceOutput);
-                if (precedingSlice != nullptr) {
-                    sliceOutput->SetMemoryTypeBoth(MemoryType::MEM_L1, true);
-                    precedingSlice->ReplaceOOperand(0, sliceOutput);
-                } else {
-                    ReplaceConsumers(sliceOutput, contractInput);
-                }
-            } else {
-                GenerateContractSliceView(function, *consumer, contractInput, rewriteInfo.localOffset,
-                                          rewriteInfo.localDynOffset, newOps, operationUpdated);
-            }
-            consumer->SetAsDeleted();
-            operationUpdated = true;
-        }
-        op->SetAsDeleted();
-        operationUpdated = true;
+        RewriteContractMultiSliceConsumers(function, *op, contractInput, rewriteInfos, precedingSlices, newOps,
+                                           operationUpdated);
     }
     return SUCCESS;
 }

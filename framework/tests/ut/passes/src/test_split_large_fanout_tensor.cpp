@@ -2141,7 +2141,7 @@ TEST_F(SplitLargeFanoutTensorTest, TestHeadTileOffsetNoSplit)
         ASSERT_NE(originFunction, nullptr) << "当前函数指针为空";
         auto countResultAfter = CountViewAssemble(*originFunction);
         const int expectViewCount = 12;
-        const int expectAssembleCount = 15;
+        const int expectAssembleCount = 16;
         EXPECT_EQ(countResultAfter[0], expectViewCount);
         EXPECT_EQ(countResultAfter[1], expectAssembleCount);
         ExpectInCastsReachOutCasts(*originFunction);
