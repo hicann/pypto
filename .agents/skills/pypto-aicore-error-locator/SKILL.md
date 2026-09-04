@@ -164,7 +164,7 @@ python3 .agents/skills/pypto-aicore-error-locator/scripts/locate_source_line.py 
 **参数说明**:
 - `<cce_file>`: 步骤 3 脚本输出的 `CCE_FILE` 值
 - `<program_json_path>`: 步骤 3 脚本输出的 `PROGRAM_JSON` 值
-- `<problem_line>`: 步骤 4.3 输出的问题代码行号
+- `<problem_line>`: 步骤 4.2 输出的问题代码行号
 
 **输出说明**:
 - 若匹配成功，将输出前端源代码文件路径和行号
