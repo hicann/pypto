@@ -14,35 +14,35 @@
 
 ## 功能说明
 
-将Tile填充为一个标量值（标量填充 / splat）。常用于初始化负无穷Tile（因果掩码）或零Tile。
+将Tile填充为指定标量值。常用于初始化负无穷Tile或零Tile。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.expands(out, scalar)
+pypto_pro.language.expands(
+    out: Tile,
+    scalar: Scalar,
+) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标Tile，全部元素被填充为`scalar` |
-| `scalar` | 输入 | 填充值 |
+| out | 输入 | 目的操作数，Tile类型，全部元素被填充为scalar值。<br>数据类型支持：DT_UINT8、DT_INT8、DT_UINT16、DT_INT16、DT_UINT32、DT_INT32、DT_INT64、DT_UINT64、DT_FP16、DT_BF16、DT_FP32。<br>位于UB或L1 Buffer。 |
+| scalar | 输入 | 填充值。为整型或浮点型常量，或运行时整型或浮点型标量表达式，类型须与out元素类型兼容。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `out` | 输出 | 支持8/16/32/64位整型、FP16、BF16和FP32；位于Vec或Mat空间，Vec Tile使用行主序布局<br>shape：二维Tile |
-| `scalar` | 输入 | 整型或浮点型常量，或运行时整型或浮点型标量表达式<br>类型须与`out`元素类型兼容 |
+无。
 
-## 流水类型
+## 返回值说明
 
-V（向量计算流水）。
+无。
 
 ## 调用示例
 
-下面是一个完整Kernel：用`pypto_pro.language.expands`把FP32 Tile填充为标量`2.0`后写回GM。Vector Kernel开启`auto_mutex`，同步由`make_tile_group`自动管理。
+### 基本用法
 
 ```python
 import pypto_pro.language as pl
@@ -61,21 +61,23 @@ def expands_kernel(dummy: pl.Tensor[[64, 64], pl.DT_FP32],
         pl.store(out, cur_out, [0, 0])
 ```
 
-实测结果示例如下：
-
 <!-- pypto-doc-output:expands:start -->
 ```bash
-输入数据value：2
+输入数据K_VALUE：2
 输出数据out：[[2 2 2 2 2 2 2 2 ...], [2 2 2 2 2 2 2 2 ...], [2 2 2 2 2 2 2 2 ...], [2 2 2 2 2 2 2 2 ...], ...]
 ```
 <!-- pypto-doc-output:expands:end -->
 
-其他典型用法（节选）：
+### 初始化负无穷Tile
 
 ```python
 # 初始化负无穷 Tile（因果掩码）
 pl.expands(neg_inf_vec, NEG_INF)
+```
 
+### 初始化零Tile
+
+```python
 # 初始化零 Tile
 pl.expands(score_u16_row, 0)
 ```

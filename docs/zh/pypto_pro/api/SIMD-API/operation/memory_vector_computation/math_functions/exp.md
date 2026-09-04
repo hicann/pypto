@@ -14,35 +14,35 @@
 
 ## 功能说明
 
-逐元素计算自然指数e^x。支持in-place写法。
+逐元素计算自然指数e^x。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.exp(out, src)
+pypto_pro.language.exp(
+    out: Tile,
+    src: Tile,
+) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标tile，存放逐元素自然指数结果 |
-| `src` | 输入 | 源tile |
+| out | 输入 | 目的操作数，Tile类型，存放逐元素自然指数结果。<br>数据类型支持DT_FP16、DT_FP32，与src保持一致。shape与src保持一致，src设置valid_shape时，out同步设置valid_shape且与src保持一致。<br>支持与src为同一Tile，实现in-place计算。 |
+| src | 输入 | 源操作数，Tile类型，数据类型支持DT_FP16、DT_FP32。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `out` | 输出 | 数据类型：FP16、FP32<br>shape须与`src`一致<br>支持与`src`为同一tile，实现in-place exp |
-| `src` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
+无。
 
-## 流水类型
+## 返回值说明
 
-V（向量计算流水）。
+无。
 
 ## 调用示例
 
-下面是一个完整kernel：把FP32源tile逐元素计算自然指数后写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
+### 基本用法
 
 ```python
 import pypto_pro.language as pl
@@ -62,8 +62,6 @@ def exp_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
         pl.store(out, cur_out, [0, 0])
 ```
 
-实测结果示例如下：
-
 <!-- pypto-doc-output:exp:start -->
 ```bash
 输入数据a：[[-4 -3.875 -3.75 -3.625 -3.5 -3.375 -3.25 -3.125 ...], [4 4.125 4.25 4.375 4.5 4.625 4.75 4.875 ...], [12 12.125 12.25 12.375 12.5 12.625 12.75 12.875 ...], [20 20.125 20.25 20.375 20.5 20.625 20.75 20.875 ...], ...]
@@ -71,7 +69,7 @@ def exp_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
 ```
 <!-- pypto-doc-output:exp:end -->
 
-其他典型用法（节选）：
+### in-place用法
 
 ```python
 # in-place exp

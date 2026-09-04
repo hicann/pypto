@@ -14,35 +14,35 @@
 
 ## 功能说明
 
-逐元素计算倒数平方根：`out = 1 / sqrt(src)`。支持in-place写法。
+逐元素计算倒数平方根。支持in-place写法。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.rsqrt(out, src)
+pypto_pro.language.rsqrt(
+    out: Tile,
+    src: Tile,
+) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标tile，存放逐元素倒数平方根结果 |
-| `src` | 输入 | 源tile |
+| out | 输入 | 目的操作数，Tile类型，存放逐元素倒数平方根结果。<br>数据类型支持：DT_FP16、DT_FP32。<br>shape与src保持一致，如果src设置valid_shape，out必须同步设置valid_shape且与src保持一致。<br>支持与src为同一Tile，实现in-place计算。 |
+| src | 输入 | 源操作数，Tile类型。<br>数据类型支持：DT_FP16、DT_FP32，与out保持一致。<br>元素值应大于0，若为0或负数，硬件结果未定义。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `out` | 输出 | 数据类型：`DT_FP16`、`DT_FP32`，须与`src`一致<br>内存空间：`MemorySpace.Vec`（UB）<br>layout：RowMajor（`pl.ND`）<br>shape和`valid_shape`须与`src`一致<br>支持与`src`为同一tile，实现in-place rsqrt |
-| `src` | 输入 | 数据类型、内存空间、layout、shape和`valid_shape`：与`out`一致<br>元素值应大于0；若为0或负数，硬件结果未定义 |
+无。
 
-## 流水类型
+## 返回值说明
 
-V（向量计算流水）。
+无。
 
 ## 调用示例
 
-下面是一个完整kernel：把FP32源tile逐元素计算倒数平方根后写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
+### 基本用法
 
 ```python
 import pypto_pro.language as pl
@@ -61,8 +61,6 @@ def rsqrt_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
         pl.rsqrt(cur_out, cur_a)
         pl.store(out, cur_out, [0, 0])
 ```
-
-实测结果示例如下：
 
 <!-- pypto-doc-output:rsqrt:start -->
 ```bash

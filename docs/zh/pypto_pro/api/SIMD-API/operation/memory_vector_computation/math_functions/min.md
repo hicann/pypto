@@ -14,36 +14,36 @@
 
 ## 功能说明
 
-取两个标量中的较小值。Python内置的`min()`在前端解析时会被自动转换为`pypto_pro.language.min`，两者等价。
-
-> [!CAUTION]注意
-> Tile逐元素取最小值使用[`pypto_pro.language.minimum`](../elementwise/minimum.md)。
+取两个标量中的较小值。
 
 ## 函数原型
 
 ```python
-result = pypto_pro.language.min(lhs, rhs)
+pypto_pro.language.min(
+    lhs: Scalar,
+    rhs: Scalar,
+) -> Scalar
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `lhs` | 输入 | 左操作数（标量或数值常量） |
-| `rhs` | 输入 | 右操作数（标量或数值常量） |
+| lhs | 输入 | 左操作数，为整型或浮点型常量，或运行时整型或浮点型标量表达式。 |
+| rhs | 输入 | 右操作数，为整型或浮点型常量，或运行时整型或浮点型标量表达式。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `lhs` | 输入 | Python `int`、Python `float`或Kernel内整型或浮点型标量表达式 |
-| `rhs` | 输入 | Python `int`、Python `float`或Kernel内整型或浮点型标量表达式<br>两个操作数须属于同一数值类别（同为整型或同为浮点型），同类别内自动提升宽度（如INT32 + INT64 → INT64） |
+- 数据类型：lhs和rhs须属于同一数值类别（同为整型或同为浮点型），同类别内自动提升宽度（如INT32与INT64运算时提升为INT64）。
+- 适用范围：本接口仅用于标量取较小值。Tile逐元素取最小值请使用[pypto_pro.language.minimum](../elementwise/minimum.md)。
 
-## 流水类型
+## 返回值说明
 
-S（标量流水）
+返回两个标量中的较小值，Scalar类型。
 
 ## 调用示例
+
+### 基本用法
 
 ```python
 import pypto_pro.language as pl
