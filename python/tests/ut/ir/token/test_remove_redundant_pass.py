@@ -391,3 +391,29 @@ def test_remove_disjoint_dependency_inside_loop_first_stage():
     )
     check_snapshot(before_remove, BEFORE_IR_15)
     check_snapshot(after_remove, IR_15)
+
+
+BEFORE_IR_16 = _GOLDEN_DIR / "BEFORE_IR_16.pypto"
+
+
+IR_16 = _GOLDEN_DIR / "IR_16.pypto"
+
+
+def test_remove_disjoint_write_dependency_for_input_tensor():
+    def foo(src, kj_assemble, result):
+        block_size = 128
+        valid_rows = src.shape[0].min(block_size)
+        for i in range(4):
+            block = pypto.view(src, [block_size, 128], [i * block_size, 0],
+                               valid_shape=[valid_rows, 128])
+            pypto.assemble(block, [i * block_size, 0], kj_assemble)
+        result = kj_assemble + 1.0  # noqa: F841
+
+    before_remove, after_remove = _run_passes(
+        foo,
+        _tensor((-1, 128), "src"),
+        _tensor((512, 128), "kj_assemble"),
+        _tensor((512, 128), "result"),
+    )
+    check_snapshot(before_remove, BEFORE_IR_16)
+    check_snapshot(after_remove, IR_16)

@@ -86,12 +86,17 @@ private:
         return SymbolicScalar::FromConcrete(tensor->GetOffset());
     }
 
-    static std::vector<SymbolicScalar> GetShape(const LogicalTensorPtr& tensor)
+    static std::vector<SymbolicScalar> GetShapeForOverlap(const LogicalTensorPtr& tensor)
     {
-        if (!tensor->GetDynValidShape().empty()) {
-            return tensor->GetDynValidShape();
+        const auto& shape = tensor->GetShape();
+        auto shapeForOverlap = SymbolicScalar::FromConcrete(shape);
+        const auto& dynValidShape = tensor->GetDynValidShape();
+        for (size_t i = 0; i < shape.size(); ++i) {
+            if (shape[i] == -1) {
+                shapeForOverlap[i] = dynValidShape[i];
+            }
         }
-        return SymbolicScalar::FromConcrete(tensor->GetShape());
+        return shapeForOverlap;
     }
 
     static std::optional<AccessRegion> GetTensorRegion(const LogicalTensorPtr& tensor)
@@ -100,7 +105,7 @@ private:
             return std::nullopt;
         }
         auto offset = GetOffset(tensor);
-        auto shape = GetShape(tensor);
+        auto shape = GetShapeForOverlap(tensor);
         if (offset.size() != shape.size()) {
             return std::nullopt;
         }
@@ -128,7 +133,7 @@ private:
                 region->offset = viewAttr->GetFromDynOffset().empty() ?
                                      SymbolicScalar::FromConcrete(viewAttr->GetFromOffset()) :
                                      viewAttr->GetFromDynOffset();
-                region->shape = GetShape(viewResult);
+                region->shape = GetShapeForOverlap(viewResult);
             }
             if (region->offset.size() == region->shape.size()) {
                 regions.push_back(std::move(*region));
@@ -155,7 +160,7 @@ private:
                 region->offset = assembleAttr->GetToDynOffset().empty() ?
                                      SymbolicScalar::FromConcrete(assembleAttr->GetToOffset()) :
                                      assembleAttr->GetToDynOffset();
-                region->shape = GetShape(source);
+                region->shape = GetShapeForOverlap(source);
             }
             if (region->offset.size() == region->shape.size()) {
                 regions.push_back(std::move(*region));
