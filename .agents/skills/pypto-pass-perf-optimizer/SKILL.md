@@ -865,7 +865,7 @@ python3 "$PASS_PERF_SCRIPTS_DIR/parse_pass_perf.py" -l $latest_log
 # 查看同一次执行产生的所有拆分日志文件
 # 方法 1：手动提取 pid 查找
 log_file="pypto-log-1051473-20260312202107387.log"
-pid=$(echo $log_file | sed 's/pypto-log-\([0-9]*\)-.*/\1/')
+pid=$(echo "$log_file" | sed 's/pypto-log-\([0-9]*\)-.*/\1/')
 ls -lh pypto-log-${pid}-*.log
 
 # 方法 2：自动分析（推荐）
