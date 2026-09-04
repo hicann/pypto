@@ -679,7 +679,6 @@ def detect_npu() -> NPUDetectionResult:
 def main() -> int:
     parser = argparse.ArgumentParser(description='Ascend NPU hardware detection')
     parser.add_argument('--json', action='store_true', help='JSON output')
-    parser.add_argument('--summary', action='store_true', help='Human-readable summary')
     args = parser.parse_args()
     result = detect_npu()
     if args.json:
