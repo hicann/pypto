@@ -501,7 +501,7 @@
       "severity": "S2",
       "type": "knowledge",
       "dimension": "D10",
-      "rule": "skill 中的术语应与 docs/tutorials/appendix/glossary.md 保持一致",
+      "rule": "skill 中的术语应与 docs/zh/tutorials/appendix/glossary.md 保持一致",
       "source": ["A3"],
       "check_strategy": "Compare terminology in references/ and SKILL.md with docs glossary"
     }
