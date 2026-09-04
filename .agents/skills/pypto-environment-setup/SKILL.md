@@ -104,7 +104,7 @@ lspci | grep -i "acc" | grep -oE "d80[236]"
 
 **CANN 安装检查脚本**：
 ```bash
-cd ${PYPTO_REPO:-$PWD}
+cd "${PYPTO_REPO:-$PWD}"
 # 检查 CANN 安装日志，未完成则安装
 if ! grep -q "Successfully installed CANN packages." prepare_env.cann.install.log 2>/dev/null; then
     echo "CANN 未安装完成，正在安装..."
@@ -223,7 +223,7 @@ source env_setup.sh
 
 # 如果有 pypto 先删除本地 pypto
 pip uninstall pypto -y
-cd ${PYPTO_REPO:-$PWD}
+cd "${PYPTO_REPO:-$PWD}"
 rm -rf build_out
 # 编译产出 whl
 python3 build_ci.py --clean --no_isolation
@@ -264,7 +264,7 @@ python3 examples/02_intermediate/operators/softmax/softmax.py --run_mode npu
 
 **运行诊断**：
 ```bash
-cd ${PYPTO_REPO:-$PWD}
+cd "${PYPTO_REPO:-$PWD}"
 python3 scripts/diagnose_env.py --checklist
 ```
 
