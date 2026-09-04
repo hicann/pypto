@@ -40,6 +40,36 @@ MAX_EVENT_ID = 15  # cross-core event ids
 MAX_FLAG_EVENT_ID = 7  # set_flag / wait_flag event ids
 MAX_MUTEX_ID = 31  # tile mutex ids
 
+# A5 intra-core flag paths are execution-side specific. The maps are
+# directional: each key is set_pipe and its value contains valid wait_pipe values.
+_A5_AIC_SYNC_WAIT_PIPES = {
+    PipeType.MTE1: (PipeType.MTE2, PipeType.M, PipeType.MTE3, PipeType.FIX),
+    PipeType.MTE2: (
+        PipeType.MTE1,
+        PipeType.M,
+        PipeType.MTE3,
+        PipeType.S,
+        PipeType.FIX,
+    ),
+    PipeType.MTE3: (PipeType.MTE1, PipeType.MTE2, PipeType.S),
+    PipeType.M: (PipeType.MTE1, PipeType.MTE2, PipeType.FIX, PipeType.S),
+    PipeType.S: (PipeType.MTE2, PipeType.MTE3),
+    PipeType.FIX: (
+        PipeType.M,
+        PipeType.MTE2,
+        PipeType.S,
+        PipeType.MTE3,
+        PipeType.MTE1,
+    ),
+}
+
+_A5_AIV_SYNC_WAIT_PIPES = {
+    PipeType.MTE2: (PipeType.V, PipeType.MTE3, PipeType.S),
+    PipeType.MTE3: (PipeType.V, PipeType.MTE2, PipeType.S),
+    PipeType.V: (PipeType.MTE2, PipeType.MTE3, PipeType.S),
+    PipeType.S: (PipeType.V, PipeType.MTE2, PipeType.MTE3),
+}
+
 
 def _is_integer_scalar_expr(value: Expr) -> bool:
     value_type = getattr(value, "type", None)
@@ -88,6 +118,29 @@ def _check_id_range(value: int, max_id: int, name: str, *, min_id: int = 0) -> N
     check_in_range(value, min_id, max_id, subject=name, error=ValueError)
 
 
+def _validate_sync_pipes(
+    set_pipe: PipeType,
+    wait_pipe: PipeType,
+    target: _ir_core.SectionKind,
+) -> None:
+    _validate_concrete_pipe(set_pipe, "set_pipe")
+    _validate_concrete_pipe(wait_pipe, "wait_pipe")
+    if set_pipe == wait_pipe:
+        raise ValueError(f"set_pipe and wait_pipe must differ, got {set_pipe}")
+
+    is_cube = target == _ir_core.SectionKind.Cube
+    sync_wait_pipes = _A5_AIC_SYNC_WAIT_PIPES if is_cube else _A5_AIV_SYNC_WAIT_PIPES
+    supported_wait_pipes = sync_wait_pipes.get(set_pipe, ())
+    side = " on AIC" if is_cube else " on AIV"
+
+    if wait_pipe not in supported_wait_pipes:
+        supported = ", ".join(str(pipe) for pipe in supported_wait_pipes)
+        raise ValueError(
+            f"unsupported A5 synchronization path{side}: {set_pipe} -> {wait_pipe}; "
+            f"supported wait_pipe values for {set_pipe}: {supported}"
+        )
+
+
 def _create_sync_op(
     op_name: str,
     *,
@@ -106,10 +159,6 @@ def _create_sync_op(
         span: Optional source span for debugging
     """
     actual_span = _get_span_or_capture(span, frame_offset=2)
-    _validate_concrete_pipe(set_pipe, "set_pipe")
-    _validate_concrete_pipe(wait_pipe, "wait_pipe")
-    if set_pipe == wait_pipe:
-        raise ValueError(f"set_pipe and wait_pipe must differ, got {set_pipe}")
     kwargs = {"set_pipe": set_pipe, "wait_pipe": wait_pipe}
     event_id_expr = _normalize_integer_id_expr(
         event_id, actual_span, name="event_id", max_id=MAX_FLAG_EVENT_ID
@@ -517,8 +566,6 @@ def set_mm_layout_transform(*, enabled: bool, span: Span | None = None) -> Call:
 register_table(
     {
         # kwargs only
-        "system.sync_src": OpSpec(builder=sync_src, parse_args=False),
-        "system.sync_dst": OpSpec(builder=sync_dst, parse_args=False),
         "system.set_cross_core": OpSpec(builder=set_cross_core, parse_args=False),
         "system.wait_cross_core": OpSpec(builder=wait_cross_core, parse_args=False),
         "system.mutex_lock": OpSpec(builder=mutex_lock, parse_args=False),
@@ -539,6 +586,23 @@ register_table(
         "system.dcci": OpSpec(builder=dcci),
     }
 )
+
+
+def _parse_system_sync(self, call: ast.Call, op_name: str):
+    span = self.span_tracker.get_span(call)
+    kwargs = self.parse_op_kwargs(call)
+    _validate_sync_pipes(kwargs["set_pipe"], kwargs["wait_pipe"], self.target)
+    return _create_sync_op(op_name, **kwargs, span=span)
+
+
+@op_impl("system.sync_src")
+def _parse_system_sync_src(self, call: ast.Call):
+    return _parse_system_sync(self, call, "system.sync_src")
+
+
+@op_impl("system.sync_dst")
+def _parse_system_sync_dst(self, call: ast.Call):
+    return _parse_system_sync(self, call, "system.sync_dst")
 
 
 @op_impl("system.sync_all")

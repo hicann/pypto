@@ -84,7 +84,7 @@ def test_sync_with_different_pipe_types():
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE3, wait_pipe=pl.PipeType.S, event_id=2)
         _test_result = x
 
-    main_program, _ = main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    main_program, _ = main.to_kernel_def().parse_target_program(ir.SectionKind.Cube)
     main = main_program.get_function(main.__name__)
 
     printed = pypto_pro.ir.python_print(main)
@@ -116,6 +116,20 @@ def test_sync_dst_pipe_kwarg_rejects_plain_integer():
         func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
+def test_sync_pipe_kwarg_rejects_other_enum_type():
+    with pytest.raises(ParserSyntaxError, match="set_pipe must be a PipeType"):
+
+        @pl.jit(auto_mutex=False)
+        def func(_jit_entry: pl.DT_INT64):
+            pl.system.sync_src(
+                set_pipe=pl.SyncCoreType.AIV_ONLY,
+                wait_pipe=pl.PipeType.V,
+                event_id=0,
+            )
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
 def test_mutex_lock_pipe_kwarg_rejects_plain_integer():
     with pytest.raises(ParserTypeError, match="'pipe' expects an enum value"):
 
@@ -125,13 +139,6 @@ def test_mutex_lock_pipe_kwarg_rejects_plain_integer():
 
 
         func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
-
-
-@pytest.mark.parametrize("builder", [pl.system.sync_src, pl.system.sync_dst])
-@pytest.mark.parametrize("set_pipe", [1, pl.SyncCoreType.AIV_ONLY])
-def test_sync_ir_builder_requires_pipe_type(builder, set_pipe):
-    with pytest.raises(TypeError, match="set_pipe must be a PipeType"):
-        builder(set_pipe=set_pipe, wait_pipe=pl.PipeType.V, event_id=0)
 
 
 @pytest.mark.parametrize("builder", [pl.system.mutex_lock, pl.system.mutex_unlock])
@@ -163,23 +170,42 @@ def test_sync_all_mode_rejects_plain_integer():
         func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
-@pytest.mark.parametrize("builder", [pl.system.sync_src, pl.system.sync_dst])
 @pytest.mark.parametrize("event_id", [True, False])
-def test_sync_event_id_rejects_bool(builder, event_id):
-    with pytest.raises(TypeError, match="event_id must be a Python int or an integer scalar expression"):
-        builder(
+def test_sync_event_id_rejects_bool(event_id):
+    @pl.jit(auto_mutex=False)
+    def func(_jit_entry: pl.DT_INT64):
+        pl.system.sync_src(
             set_pipe=pl.PipeType.MTE2,
             wait_pipe=pl.PipeType.V,
             event_id=event_id,
         )
 
+    with pytest.raises(ParserSyntaxError, match="event_id must be .*integer scalar expression"):
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
-@pytest.mark.parametrize("builder", [pl.system.sync_src, pl.system.sync_dst])
-def test_sync_ir_builder_normalizes_python_int_id(builder):
-    call = builder(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=3)
 
-    assert isinstance(call.args[0], pypto_pro.ir.ConstInt)
-    assert call.args[0].value == 3
+def test_sync_parser_normalizes_python_int_id():
+    @pl.jit(auto_mutex=False)
+    def func(_jit_entry: pl.DT_INT64):
+        pl.system.sync_src(
+            set_pipe=pl.PipeType.MTE2,
+            wait_pipe=pl.PipeType.V,
+            event_id=3,
+        )
+        pl.system.sync_dst(
+            set_pipe=pl.PipeType.MTE2,
+            wait_pipe=pl.PipeType.V,
+            event_id=3,
+        )
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
+    calls = [stmt.expr for stmt in func.body.stmts if isinstance(stmt, pypto_pro.ir.EvalStmt)]
+
+    assert [call.name for call in calls] == ["system.sync_src_dyn", "system.sync_dst_dyn"]
+    for sync_call in calls:
+        assert isinstance(sync_call.args[0], pypto_pro.ir.ConstInt)
+        assert sync_call.args[0].value == 3
 
 
 @pytest.mark.parametrize("builder", [pl.system.mutex_lock, pl.system.mutex_unlock])
@@ -197,35 +223,99 @@ def test_mutex_ir_builder_normalizes_python_int_id(builder):
     assert call.args[0].value == 0
 
 
-@pytest.mark.parametrize("builder", [pl.system.sync_src, pl.system.sync_dst])
 @pytest.mark.parametrize("event_id", [-1, 8])
-def test_sync_static_event_id_range_is_validated_by_frontend(builder, event_id):
-    with pytest.raises(ValueError, match=r"event_id must be in \[0, 7\]"):
-        builder(
+def test_sync_static_event_id_range_is_validated_by_parser(event_id):
+    @pl.jit(auto_mutex=False)
+    def func(_jit_entry: pl.DT_INT64):
+        pl.system.sync_src(
             set_pipe=pl.PipeType.MTE2,
             wait_pipe=pl.PipeType.V,
             event_id=event_id,
         )
 
+    with pytest.raises(ParserSyntaxError, match=r"event_id must be in \[0, 7\]"):
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
-@pytest.mark.parametrize("builder", [pl.system.sync_src, pl.system.sync_dst])
-def test_sync_rejects_equal_pipes_in_frontend(builder):
-    with pytest.raises(ValueError, match="set_pipe and wait_pipe must differ"):
-        builder(
+
+def test_sync_rejects_equal_pipes_in_parser():
+    @pl.jit(auto_mutex=False)
+    def func(_jit_entry: pl.DT_INT64):
+        pl.system.sync_src(
             set_pipe=pl.PipeType.MTE2,
             wait_pipe=pl.PipeType.MTE2,
             event_id=0,
         )
 
+    with pytest.raises(ParserSyntaxError, match="set_pipe and wait_pipe must differ"):
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
-@pytest.mark.parametrize("builder", [pl.system.sync_src, pl.system.sync_dst])
-@pytest.mark.parametrize(
-    ("set_pipe", "wait_pipe"),
-    [(pl.PipeType.ALL, pl.PipeType.V), (pl.PipeType.MTE2, pl.PipeType.ALL)],
-)
-def test_sync_rejects_all_pipe_in_frontend(builder, set_pipe, wait_pipe):
-    with pytest.raises(ValueError, match="must identify one concrete pipe"):
-        builder(set_pipe=set_pipe, wait_pipe=wait_pipe, event_id=0)
+
+def test_sync_rejects_all_set_pipe_in_parser():
+    @pl.jit(auto_mutex=False)
+    def func(_jit_entry: pl.DT_INT64):
+        pl.system.sync_src(
+            set_pipe=pl.PipeType.ALL,
+            wait_pipe=pl.PipeType.V,
+            event_id=0,
+        )
+
+    with pytest.raises(ParserSyntaxError, match="set_pipe must identify one concrete pipe"):
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
+def test_sync_rejects_all_wait_pipe_in_parser():
+    @pl.jit(auto_mutex=False)
+    def func(_jit_entry: pl.DT_INT64):
+        pl.system.sync_dst(
+            set_pipe=pl.PipeType.MTE2,
+            wait_pipe=pl.PipeType.ALL,
+            event_id=0,
+        )
+
+    with pytest.raises(ParserSyntaxError, match="wait_pipe must identify one concrete pipe"):
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
+def test_sync_rejects_aic_only_path_in_vector_section():
+    @pl.jit(auto_mutex=False)
+    def func(_jit_entry: pl.DT_INT64):
+        with pl.section_vector():
+            pl.system.sync_src(
+                set_pipe=pl.PipeType.MTE1,
+                wait_pipe=pl.PipeType.M,
+                event_id=0,
+            )
+
+    with pytest.raises(ParserSyntaxError, match="unsupported A5 synchronization path on AIV"):
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
+def test_sync_rejects_aiv_only_path_in_cube_section():
+    @pl.jit(auto_mutex=False)
+    def func(_jit_entry: pl.DT_INT64):
+        with pl.section_cube():
+            pl.system.sync_dst(
+                set_pipe=pl.PipeType.MTE2,
+                wait_pipe=pl.PipeType.V,
+                event_id=0,
+            )
+
+    with pytest.raises(ParserSyntaxError, match="unsupported A5 synchronization path on AIC"):
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Cube)
+
+
+def test_sync_rejects_unsupported_aic_pipe_path():
+    @pl.jit(auto_mutex=False)
+    def func(_jit_entry: pl.DT_INT64):
+        with pl.section_cube():
+            pl.system.sync_src(
+                set_pipe=pl.PipeType.MTE1,
+                wait_pipe=pl.PipeType.S,
+                event_id=0,
+            )
+
+    with pytest.raises(ParserSyntaxError, match="unsupported A5 synchronization path on AIC"):
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Cube)
 
 
 @pytest.mark.parametrize("builder", [pl.system.mutex_lock, pl.system.mutex_unlock])
