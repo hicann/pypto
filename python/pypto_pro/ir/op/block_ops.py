@@ -20,7 +20,6 @@ import ast
 from collections.abc import Sequence
 from dataclasses import dataclass, fields
 import enum
-import os
 import struct
 from typing import Any, Optional
 
@@ -1336,18 +1335,6 @@ def _ir_ssbuf_load(*args: Expr, span: Span | None = None) -> Expr:
 # ---------------------------------------------------------------------------
 
 
-def _get_current_arch() -> str:
-    arch = os.environ.get("PYPTOPRO_JIT_ARCH") or os.environ.get("PYPTOPRO_NPU_ARCH") or "a3"
-    arch = arch.strip().lower()
-    if arch.startswith("dav-c220") or arch.startswith("dav-2201"):
-        return "a3"
-    if arch.startswith("dav-c310") or arch.startswith("dav-3510"):
-        return "a5"
-    if arch in ("a2", "a3", "a5"):
-        return arch
-    return "a3"
-
-
 _LAYOUT_TO_BS: dict[TensorLayout, tuple[int, int]] = {
     TensorLayout.ND: (1, 0),
     TensorLayout.DN: (2, 0),
@@ -1471,7 +1458,9 @@ def _has_unit_last_axis(shape: "Sequence[int] | _ir_core.MakeTuple") -> bool:
 
 
 def _apply_default_layout(tt: "TileType") -> None:
-    arch = _get_current_arch()
+    from pypto_pro.runtime.jit import get_current_arch
+
+    arch = get_current_arch()
     layout_dict = _DEFAULT_LAYOUTS_A5 if arch == "a5" else _DEFAULT_LAYOUTS_A3
     default_layout = layout_dict.get(tt.target_memory)
 

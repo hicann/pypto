@@ -74,8 +74,8 @@ def test_generate_binary_headers_emits_only_tiling_headers(monkeypatch, tmp_path
         "_codegen",
         lambda *args, **kwargs: pytest.fail("generate_binary_headers must not run full codegen"),
     )
-    binary_dir = Path(generate_binary_headers(header_generation_kernel, "a3"))
-    assert os.environ["PYPTOPRO_JIT_ARCH"] == "a3"
+    binary_dir = Path(generate_binary_headers(header_generation_kernel, "a5"))
+    assert os.environ["PYPTOPRO_JIT_ARCH"] == "a5"
     assert binary_dir.is_dir(), f"binary dir not created: {binary_dir}"
 
     tiling_header = binary_dir / "HeaderTiling_tiling.h"
@@ -121,9 +121,9 @@ def test_pypto_compile_op_sets_up_explicit_arch(monkeypatch):
     monkeypatch.setattr(compile_module, "_setup_options", stop_after_arch_setup)
 
     with pytest.raises(RuntimeError, match="stop after arch setup"):
-        pypto_compile_op("unused.py", "kernel", {"kernel_name": "kernel"}, arch="a3")
+        pypto_compile_op("unused.py", "kernel", {"kernel_name": "kernel"}, arch="a5")
 
-    assert received_arch == ["a3"]
+    assert received_arch == ["a5"]
 
 
 @pytest.mark.parametrize("kernel_count", [0, 2])

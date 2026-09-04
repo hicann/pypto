@@ -164,9 +164,10 @@ def _build_debug_compile_cmd(build_dir: str, kernel_name: str,
         return ""
 
     from pypto_pro.runtime.compile_config import get_jit_compile_config
-    from pypto_pro.runtime.jit import _build_llvm_args, _normalize_arch
+    from pypto_pro.runtime.jit import _build_llvm_args, get_current_arch
 
-    arch = _normalize_arch(os.environ.get("PYPTOPRO_JIT_ARCH", "a5"))
+    arch = get_current_arch()
+
     cfg = get_jit_compile_config()
 
     npu_arch = cfg._resolve_npu_arch(arch, has_cube=has_cube, has_vec=has_vector)

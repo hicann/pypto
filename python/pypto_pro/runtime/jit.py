@@ -812,29 +812,6 @@ def _generate_caller_cpp(
     )
 
 
-def _normalize_arch(arch: str | None) -> str:
-    """Normalize and validate arch names to 'a2', 'a3', or 'a5'.
-
-    Resolution order:
-        1. Explicit arch parameter (if provided and not "auto")
-        2. PYPTOPRO_JIT_ARCH environment variable
-        3. Auto-detect from platform SOC version via RTS
-        4. Default to "a3"
-    """
-    if arch and arch.strip().lower() != "auto":
-        value = arch.strip().lower()
-    else:
-        value = os.environ.get("PYPTOPRO_JIT_ARCH", "").strip().lower()
-        if not value:
-            from pypto_pro.runtime.platform import get_platform_info
-
-            info = get_platform_info()
-            value = info.arch if info.arch else "a3"
-    if value not in {"a2", "a3", "a5"}:
-        raise ValueError(f"Unsupported arch: {arch!r}, expected one of 'a2', 'a3', 'a5'")
-    return value
-
-
 def _detect_print_debug_from_cpp(content: str) -> bool:
     """Best-effort detection for device-side debug print usage in generated C++."""
     scrubbed = CPP_LITERAL_PATTERN.sub(" ", content)
@@ -853,8 +830,6 @@ def _build_bisheng_flags(
 
     Determines the npu_arch from the explicit Parser target availability.
     """
-    arch = _normalize_arch(arch)
-
     if has_cross_sync and not (has_cube and has_vector):
         if has_cube:
             raise ValueError("Contains ffts cross sync but vector code is missing.")
@@ -871,7 +846,7 @@ def _build_bisheng_flags(
 
 def _build_llvm_args(arch: str) -> list[str]:
     """Build architecture-specific LLVM/CCE arguments for C++ compilation."""
-    return get_jit_compile_config().build_llvm_args(_normalize_arch(arch))
+    return get_jit_compile_config().build_llvm_args(arch)
 
 
 def _static_signature_suffix(static_signature: tuple[tuple[int, int, int], ...]) -> str:
@@ -1352,11 +1327,19 @@ def _build_jit_so(
     return _compile_shared_library(paths, arch, generated, clean_up, compile_timeout)
 
 
-def _setup_arch_env(arch: str | None) -> str:
-    """Normalize *arch* and export the env vars codegen/compile read. Returns the arch."""
-    arch = _normalize_arch(arch)
+def get_current_arch() -> str:
+    """Return the arch configured in the current process environment."""
+    return os.environ.get("PYPTOPRO_JIT_ARCH", "a5")
+
+
+def _setup_arch_env(arch: str) -> str:
+    """Validate *arch* and export the env vars used by compilation."""
+    if not arch:
+        raise ValueError("arch must not be empty")
+    arch = arch.strip().lower()
+    if arch != "a5":
+        raise ValueError(f"PyPTO Pro only supports arch 'a5', got {arch!r}")
     os.environ["PYPTOPRO_JIT_ARCH"] = arch
-    os.environ["PYPTOPRO_NPU_ARCH"] = "dav-c220" if arch in ("a2", "a3") else "dav-c310"
     return arch
 
 
@@ -1427,7 +1410,7 @@ def jit(
     performs lazy compilation on first call and supports bracket-launch syntax.
 
     Args:
-        arch: Target architecture ("a2", "a3", "a5", or None for auto-detect).
+        arch: Target architecture ("a5", or None for auto-detect).
         auto_mutex: If True, enable automatic mutex lock/unlock insertion.
         name: Custom kernel name for build artifact path isolation.
         pipeline: PipelineConfig for automatic preload pipeline transformation.
@@ -1654,6 +1637,7 @@ class _TileJitKernel:
         arity = self._positional_arity
 
         def launcher(*args, **kwargs):
+            self._validate_launch_arch()
             # A complete positional call is already normalized; skip the bind entirely.
             if kwargs or len(args) != arity:
                 args = self._normalize_launch_args(args, kwargs)
@@ -1671,10 +1655,22 @@ class _TileJitKernel:
                 f"Kernel '{self.__name__}' has compile-time specialization and cannot be called directly; "
                 "use bracket-launch syntax"
             )
+        self._validate_launch_arch()
         if kwargs_ or len(args) != self._positional_arity:
             args = self._normalize_launch_args(args, kwargs_)
         compiled = self._ensure_compiled(args, spec=_NO_SPEC)
         _launch(compiled, args, 1, None)
+
+    def _validate_launch_arch(self) -> None:
+        from pypto_pro.runtime.platform import get_platform_info
+
+        platform_arch = get_platform_info().arch
+        if self._arch is None:
+            self._arch = platform_arch
+        elif self._arch.strip().lower() != platform_arch:
+            raise ValueError(
+                f"JIT arch {self._arch!r} does not match current platform arch {platform_arch!r}"
+            )
 
     @property
     def arch(self):
@@ -1837,7 +1833,8 @@ class _TileJitKernel:
         ``<build_dir>/tk_<packed>``. Codegen and compile are both per-key (the constants differ).
         """
         tilingkey_packed, dtype_consts, dtype_metadata, dtype_hash = spec
-        arch = _setup_arch_env(self._arch)
+        self._arch = _setup_arch_env(self._arch)
+        arch = self._arch
         logging.info(
             "Generating kernel '%s' for static shape signature %s",
             self.__name__,
