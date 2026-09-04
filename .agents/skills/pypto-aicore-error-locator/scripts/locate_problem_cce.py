@@ -473,7 +473,12 @@ def find_cce_file(kernel_aicore_dir, leaf_index):
 
 
 def find_all_cce_files(kernel_aicore_dir, missing_leaf_indices):
-    return [f for idx in missing_leaf_indices if (f := find_cce_file(kernel_aicore_dir, idx))]
+    files = []
+    for idx in missing_leaf_indices:
+        cce_file = find_cce_file(kernel_aicore_dir, idx)
+        if cce_file:
+            files.append(cce_file)
+    return files
 
 
 def test_single_cce(cce_file, test_cmd, run_dir):
