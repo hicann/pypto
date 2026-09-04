@@ -127,7 +127,7 @@ fi
 
 #### 步骤 4.1：加载 CANN 环境
 ```bash
-source ${ASCEND_INSTALL_PATH:-/usr/local/Ascend}/ascend-toolkit/set_env.sh
+source "${ASCEND_INSTALL_PATH:-/usr/local/Ascend}/ascend-toolkit/set_env.sh"
 ```
 
 #### 步骤 4.2：检查可用的 NPU 卡 (务必在加载 CANN 环境后检查)
@@ -195,7 +195,7 @@ cat > env_setup.sh << "EOF"
 #!/bin/bash
 # 自动生成的环境配置文件
 # 加载 Ascend 基础环境（根据实际安装路径调整）
-source ${ASCEND_INSTALL_PATH:-/usr/local/Ascend}/ascend-toolkit/set_env.sh
+source "${ASCEND_INSTALL_PATH:-/usr/local/Ascend}/ascend-toolkit/set_env.sh"
 
 # 动态获取当前架构（确保生成的脚本在不同机器上仍正确）
 arch=$(uname -m)
