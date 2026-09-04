@@ -100,7 +100,7 @@ description: PyPTO machine 侧（framework/src/machine）代码检视与行级 r
    ```bash
    curl -s -H "PRIVATE-TOKEN: ${TOKEN}" -H "Content-Type: application/json" \
      -X POST "https://gitcode.com/api/v5/repos/cann/pypto/pulls/<PR>/comments" \
-     -d "$(jq -n --arg b "$BODY" --arg p "$PATH" --argjson pos $LINE \
+     -d "$(jq -n --arg b "$BODY" --arg p "$PATH" --argjson pos "$LINE" \
        '{body:$b, path:$p, position:$pos, need_to_resolve:true}')"
    ```
 
