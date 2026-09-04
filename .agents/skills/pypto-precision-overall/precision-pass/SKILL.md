@@ -16,7 +16,7 @@ description: Pass精度校验技能。开启PreCheck/PostCheck进行全链路Pas
        ▼
   最后一个 Pass CodegenPreproc和前置 Pass 是否通过？
        │
-       ├── FAIL ──→ pass_compare 结果存在 Fail Op ──→ 定位到问题 Op，针对该 Op 检查实现 （CodegenPreproc 通过，前置 Pass 报错记录为精度工具框架问题，上报））
+       ├── FAIL ──→ pass_compare 结果存在 Fail Op ──→ 定位到问题 Op，针对该 Op 检查实现 （CodegenPreproc 通过，前置 Pass 报错记录为精度工具框架问题，上报）
        │
        │ PASS
        │
