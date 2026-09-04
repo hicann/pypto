@@ -8,7 +8,7 @@
 
 ## Kernel函数实现
 
-通过`@pl.jit()`装饰器定义Kernel函数，使用[`pl.printf`](../../../api/Utils-API/debugging/printf.md)在Device端打印字符串。[`pl.section_vector()`](../../../api/SIMD-API/operation/controlflow/section_vector_section_cube.md)用于声明该段代码在Vector核上执行，其中`pl.printf`由Scalar流水执行。
+通过`@pypto_pro.language.jit()`装饰器定义Kernel函数，使用[`pypto_pro.language.printf`](../../../api/Utils-API/debugging/printf.md)在Device端打印字符串。[`pypto_pro.language.section_vector()`](../../../api/SIMD-API/operation/controlflow/section_vector.md)用于声明该段代码在Vector核上执行，其中`pypto_pro.language.printf`由Scalar流水执行。
 
 ```python
 import pypto_pro.language as pl
@@ -22,8 +22,8 @@ def hello_world_kernel(out: pl.Tensor[[1], pl.DT_INT32]):
 
 > [!NOTE]说明
 >
-> - PyPTO Pro的Kernel函数通过`@pl.jit()`装饰器标记为JIT编译目标。首次调用时触发编译，后续调用直接执行缓存的二进制文件，无需重复编译。
-> - `pl.printf`通过设备侧打印机制输出，具体查看位置由运行环境的CANN日志配置决定。`printf`仅用于调试，生产环境应移除。
+> - PyPTO Pro的Kernel函数通过`@pypto_pro.language.jit()`装饰器标记为JIT编译目标。首次调用时触发编译；在同一Python进程中，同一Kernel对象以相同编译签名再次调用时复用编译结果。
+> - `pypto_pro.language.printf`通过设备侧打印机制输出，具体查看位置由运行环境的CANN日志配置决定。`printf`仅用于调试，生产环境应移除。
 
 ## Host端调用
 

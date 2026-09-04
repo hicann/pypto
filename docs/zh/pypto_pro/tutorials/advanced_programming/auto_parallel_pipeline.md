@@ -68,9 +68,9 @@ for ki in pl.range(0, N_ITER):
 | 参数 | 含义 |
 |---|---|
 | preload | 上游核提前迭代计算的次数。数值越大，越能把数据搬运、计算的延迟掩盖掉，性能通常更好，但会导致头尾开销增大，可根据实际情况调整 |
-| sync_only | True时只插核间同步，不做流水改写，用于验证串行版本精度。
+| sync_only | True时只插核间同步，不做流水改写，用于验证串行版本精度。 |
 
-**建议流程**：先配置**sync_only=True**执行，确认串行流水版本精度正确，再开启perload参数。
+**建议流程**：先配置**sync_only=True**执行，确认串行流水版本精度正确，再开启preload参数。
 
 ```python
 import pypto_pro.language as pl
@@ -101,7 +101,7 @@ def pipeline_demo_kernel(...):
 - 允许跨核Buffer之间、跨核Buffer与核内Buffer之间进行地址复用，但最多允许两块Buffer复用，且复用双方的Tile数需要一致。
 - 一个跨核Buffer（通过fwd_ids/bwd_ids标记）需要恰好被两个stage使用，且这两个stage分别在cube和vector上，构成一对一的生产者/消费者关系。
 - 跨核Buffer的Tiles必须随迭代顺序轮转。
-- stage函数如果有结构体参数，请使用pl.struct()声明，不支持pl.struct_array()。
+- stage函数如果有结构体参数，请使用pypto_pro.language.struct()声明，不支持pypto_pro.language.struct_array()。
 - 跨核Buffer仅支持UB/L1。
 
 ## 调用示例
@@ -111,6 +111,7 @@ import os
 import pypto_pro.language as pl
 import pytest
 import torch
+import torch_npu
 
 import pypto
 
@@ -267,9 +268,13 @@ def test_pipeline_demo_kernel():
     d = torch.randn(TILE, TILE, device=device, dtype=torch.float32)
     out = torch.zeros(N_ITER * TILE, TILE, device=device, dtype=torch.float32)
 
-    pipeline_demo_kernel(a, b, d, out)
+    pipeline_demo_kernel[None, 1](a, b, d, out)
     torch.npu.synchronize()
 
     ref = torch.relu(a @ b) @ d
     torch.testing.assert_close(out, ref, rtol=1e-2, atol=1e-2)
 ```
+
+> [!NOTE]说明
+>
+> - 本示例按单个1:2 CV执行组设计，因此`block_dim`设置为1。扩展为多个执行组时，需要通过`pypto_pro.language.get_block_idx()`划分各执行组处理的GM数据和输出范围。`block_dim`的完整说明参见[Kernel函数](../operator_development/kernel_function.md#blockdim的含义与设置)。

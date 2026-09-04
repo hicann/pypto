@@ -21,14 +21,14 @@ import pypto_pro.language as pl
 
 ## 逻辑Block与执行域
 
-`block_dim`是启动时配置的逻辑Block数，[`pl.get_block_num()`](../../../api/SIMD-API/operation/system_variables/get_block_num.md)返回本次启动传入的该值。仅启动Cube或仅启动Vector时，执行域中的逻辑核数与`block_dim`一致；同时启动AIC与AIV时，各执行域的逻辑核数由`block_dim`和AIC:AIV比例共同决定。
+`block_dim`是启动时配置的逻辑Block数，[`pypto_pro.language.get_block_num()`](../../../api/SIMD-API/operation/system_variables/get_block_num.md)返回本次启动传入的该值。仅启动Cube或仅启动Vector时，执行域中的逻辑核数与`block_dim`一致；同时启动AIC与AIV时，各执行域的逻辑核数由`block_dim`和AIC:AIV比例共同决定。
 
 四个索引接口的语义如下：
 
-- `pl.get_block_num()`：启动时配置的逻辑Block数；
-- [`pl.get_block_idx()`](../../../api/SIMD-API/operation/system_variables/get_block_idx.md)：当前执行域的全局逻辑核索引；在Vector段中已按subblock展平；
-- [`pl.get_subblock_idx()`](../../../api/SIMD-API/operation/system_variables/get_subblock_idx.md)：当前逻辑Block内的subblock索引，仅在需要区分同一Block内的AIV时使用；
-- `pl.get_subblock_num()`：当前执行域每个逻辑Block对应的subblock数量。
+- `pypto_pro.language.get_block_num()`：启动时配置的逻辑Block数；
+- [`pypto_pro.language.get_block_idx()`](../../../api/SIMD-API/operation/system_variables/get_block_idx.md)：当前执行域的全局逻辑核索引；在Vector段中已按subblock展平；
+- [`pypto_pro.language.get_subblock_idx()`](../../../api/SIMD-API/operation/system_variables/get_subblock_idx.md)：当前逻辑Block内的subblock索引，仅在需要区分同一Block内的AIV时使用；
+- `pypto_pro.language.get_subblock_num()`：当前执行域每个逻辑Block对应的subblock数量。
 
 仅包含一个执行域的Kernel可直接写成：
 
@@ -42,19 +42,18 @@ core_id = pl.get_block_idx()       # 0..31
 | Kernel执行模式 | 执行域 | `get_block_idx()`范围 | 该域工作单元总数 |
 |---|---|---|---|
 | 仅Cube或仅Vector | 当前执行域 | `[0, block_num)` | `block_num` |
-| AIC:AIV为1:1的混合Kernel | Cube或Vector | `[0, block_num)` | `block_num` |
 | AIC:AIV为1:2的混合Kernel | Cube | `[0, block_num)` | `block_num` |
 | AIC:AIV为1:2的混合Kernel | Vector | `[0, 2 * block_num)` | `block_num * get_subblock_num()` |
 
-其中`block_num = pl.get_block_num()`。在1:2混合Kernel的Vector段中，`pl.get_subblock_num()`返回2。
+其中`block_num = pypto_pro.language.get_block_num()`。在1:2混合Kernel的Vector段中，`pypto_pro.language.get_subblock_num()`返回2。
 
 ![1:2混合Kernel中逻辑Block与Cube、Vector执行域的索引映射](../../figures/pro_multicore_spmd_mapping.png)
 
-上图以`block_dim=8`为例：Cube执行域包含8个AIC工作单元，Vector执行域包含16个AIV工作单元；Vector侧的`pl.get_block_idx()`是展平后的全局AIV逻辑索引。
+上图以`block_dim=8`为例：Cube执行域包含8个AIC工作单元，Vector执行域包含16个AIV工作单元；Vector侧的`pypto_pro.language.get_block_idx()`是展平后的全局AIV逻辑索引。
 
 ### `get_subblock_idx`：逻辑Block内的subblock索引
 
-在1:2混合Kernel中，`pl.get_subblock_idx()`可区分同一逻辑Block对应的两个AIV，返回`0`或`1`。例如让两个AIV分别处理Tile的前半行和后半行：
+在1:2混合Kernel中，`pypto_pro.language.get_subblock_idx()`可区分同一逻辑Block对应的两个AIV，返回`0`或`1`。例如让两个AIV分别处理Tile的前半行和后半行：
 
 ```python
 with pl.section_vector():
@@ -62,7 +61,7 @@ with pl.section_vector():
     row_off = sub_id * TS_HALF           # 两个子核各处理 [0:TS_HALF] 和 [TS_HALF:TS]
 ```
 
-Vector段的`pl.get_block_idx()`是包含subblock信息的全局AIV逻辑索引。混合Kernel的Vector段按全部AIV做跨步切分时，使用：
+Vector段的`pypto_pro.language.get_block_idx()`是包含subblock信息的全局AIV逻辑索引。混合Kernel的Vector段按全部AIV做跨步切分时，使用：
 
 ```python
 with pl.section_vector():
@@ -76,7 +75,7 @@ with pl.section_vector():
 
 将总任务切分为`total_tiles`个Tile后，可以采用跨步（strided）方式分配任务：
 第`core_id`个逻辑核处理编号为`core_id, core_id+num_cores, core_id+2*num_cores, ...`
-的Tile。该方式可通过`pl.range(start, stop, step)`实现，其参数语义与Python `range`一致：
+的Tile。该方式可通过`pypto_pro.language.range(start, stop, step)`实现，其参数语义与Python `range`一致：
 
 ```python
 with pl.section_vector():
@@ -97,13 +96,13 @@ with pl.section_vector():
 
 - **负载均衡**：若`total_tiles`不能被`num_cores`整除，前
   `total_tiles % num_cores`个逻辑核各多处理1个Tile，各核任务量最多相差1。
-- **循环边界统一**：所有核共用同一个`pl.range(core_id, total_tiles, num_cores)`，代码
+- **循环边界统一**：所有核共用同一个`pypto_pro.language.range(core_id, total_tiles, num_cores)`，代码
   无需为首核或尾核单独设置分支。
 
 也可以采用二维切分：外层使用`range(core_id, m_tiles, num_cores)`切分行，内层使用
 `range(0, n_tiles, 1)`遍历列。应根据数据连续性和负载均衡需求选择切分方式。
 
-![PyPTO Pro使用pl.range进行跨步多核切分](../../figures/pro_multicore_strided_partition.png)
+![PyPTO Pro使用pypto_pro.language.range进行跨步多核切分](../../figures/pro_multicore_strided_partition.png)
 
 上图用18个Tile和4个逻辑核展示跨步分配。每个核从自己的`core_id`开始，以
 `num_cores`为步长继续认领Tile，因此各核工作量最多相差1。
@@ -122,7 +121,7 @@ with pl.section_vector():
 
 | 方式        | 循环写法                                                   | 适用                         |
 |-------------|------------------------------------------------------------|------------------------------|
-| **扁平切** | `for idx in pl.range(core_id, m_tiles*n_tiles, num_cores)` | Tile总数多、想要最细粒度均衡 |
+| **扁平切** | `for idx in pypto_pro.language.range(core_id, m_tiles*n_tiles, num_cores)` | Tile总数多、想要最细粒度均衡 |
 | **二维切** | 外`range(core_id, m_tiles, num_cores)` + 内`range(0, n_tiles, 1)` | 每核处理整行、数据更连续 |
 
 扁平切把`idx`还原成`(i, j)`：`i = idx // n_tiles`、`j = idx % n_tiles`。二维切让同一
@@ -166,8 +165,9 @@ from pypto_pro.runtime.platform import get_platform_info
 
 info = get_platform_info()
 print(info.soc_version)   # 例如 "DAV_3510"
-print(info.core_num)         # Cube或混合Kernel的上限
-print(info.vector_core_num)  # 仅Vector Kernel的上限
+print(info.core_num)         # 混合Kernel的执行组数上限
+print(info.cube_core_num)    # 仅Cube Kernel的AIC逻辑核数上限
+print(info.vector_core_num)  # 仅Vector Kernel的AIV逻辑核数上限
 
 max_blocks = info.vector_core_num  # 本例假设Kernel仅包含Vector段
 kernel[None, max_blocks](q, k, v, o)
@@ -181,9 +181,9 @@ block_dim = min(max_blocks, total_tiles)
 kernel[None, block_dim](x, y, z)
 ```
 
-JIT启动不会自动截断超过平台上限的`block_dim`。仅Vector Kernel使用
-`vector_core_num`作为上限，Cube或混合Kernel使用`core_num`。Host侧必须根据Kernel类型
-和任务Tile数计算合法的`block_dim`后再启动。
+JIT启动不会自动截断超过平台上限的`block_dim`。仅Cube Kernel使用`cube_core_num`作为
+上限，仅Vector Kernel使用`vector_core_num`作为上限，混合Kernel使用`core_num`作为配对
+执行组数上限。Host侧必须根据Kernel类型和任务Tile数计算合法的`block_dim`后再启动。
 
 ---
 
@@ -191,9 +191,9 @@ JIT启动不会自动截断超过平台上限的`block_dim`。仅Vector Kernel�
 
 Kernel可以通过以下三种方式获取shape、Tile数量、循环次数和算子类型等运行时信息：
 
-### 动态shape（`pl.DYNAMIC`）—— 从Tensor获取
+### 动态shape（`pypto_pro.language.DYNAMIC`）—— 从Tensor获取
 
-在签名中使用`pl.DYNAMIC`声明动态维度，Kernel中通过`tensor.shape[i]`读取运行时值。
+在签名中使用`pypto_pro.language.DYNAMIC`声明动态维度，Kernel中通过`tensor.shape[i]`读取运行时值。
 
 ```python
 @pl.jit(auto_mutex=True)
@@ -217,7 +217,7 @@ add_kernel[None, num_cores](x, y, z)
 
 ### 标量参数 —— 传一两个运行时值
 
-需要传单个运行时标量（缩放系数、循环边界、flag）时，直接在签名里加一个`pl.DT_*`参数，
+需要传单个运行时标量（缩放系数、循环边界、flag）时，直接在签名里加一个`pypto_pro.language.DT_*`参数，
 在启动时直接传入标量值：
 
 ```python
@@ -269,7 +269,7 @@ add_dynrank_kernel[None, num_cores](x, y, z, tiling)
 ```
 
 TilingData的字段类型、数组和布局规则参见[TilingData](TilingData.md)。三种运行时参数
-传递方式可以组合使用，例如使用`pl.Ptr`作为输入，并通过TilingData传递shape、循环边界
+传递方式可以组合使用，例如使用`pypto_pro.language.Ptr`作为输入，并通过TilingData传递shape、循环边界
 和算子选择器。
 
 <a id="tiling-key--编译期特化而非运行时传值"></a>
@@ -340,7 +340,7 @@ num_cores = min(core_by_load, info.core_num)
 跨步循环可使各核处理的Tile数量最多相差1。实现步骤如下：
 
 1. Host侧计算总Tile数`total_tiles`和使用的逻辑核数`num_cores`；
-2. Kernel中使用`for idx in pl.range(core_id, total_tiles, num_cores)`分配任务。
+2. Kernel中使用`for idx in pypto_pro.language.range(core_id, total_tiles, num_cores)`分配任务。
 
 跨步分配使各核处理的Tile数量最多相差1，从而实现负载均衡。
 
@@ -383,7 +383,7 @@ Ascend 950PR/Ascend 950DT的UB容量为248KB，因此192KB满足容量限制。�
 
 应统一规划输入、输出和中间缓冲区，并使用双缓冲使数据搬运与计算重叠。
 
-在PyPTO Pro里用`pl.make_tile_group` + `auto_mutex=True`实现双 / N缓冲，框架自动插入
+在PyPTO Pro里用`pypto_pro.language.make_tile_group` + `auto_mutex=True`实现双 / N缓冲，框架自动插入
 同步（细节见[Tensor、Tile与TileGroup](Python_programming_overview.md)）：
 
 ```python
@@ -410,8 +410,11 @@ c_db = pl.make_tile_group(type=tile_type, addrs=0x20000, mutex_ids=[30, 31])
 
 ```python
 import os
-import torch
+
 import pypto_pro.language as pl
+import torch
+import torch_npu
+from pypto_pro.runtime.platform import get_platform_info
 
 TILE_M = 128
 TILE_N = 128
@@ -452,7 +455,9 @@ def test_add():
     device = f"npu:{device_id}"
     torch.npu.set_device(device)
     M_SIZE, N_SIZE = 8192, 4096
-    num_cores = M_SIZE // TILE_M           # 每个核一行 Tile；此处能整除
+    m_tile_num = M_SIZE // TILE_M
+    # block_dim取平台可用AIV数量和M方向Tile数量中的较小值。
+    num_cores = min(get_platform_info().vector_core_num, m_tile_num)
     torch.manual_seed(0)
     x = torch.rand([M_SIZE, N_SIZE], device=device, dtype=torch.float16)
     y = torch.rand([M_SIZE, N_SIZE], device=device, dtype=torch.float16)
@@ -470,8 +475,8 @@ if __name__ == "__main__":
 示例说明：
 
 - `add_kernel[None, num_cores](...)`：`None`表示默认Stream，`num_cores`表示逻辑Block数。
-- 对这个仅包含Vector段的Kernel，`pl.get_block_num()` / `pl.get_block_idx()`给出工作单元总数 / 当前工作单元索引。
-- `for i in pl.range(core_id, m_tile_num, num_cores)` —— 标准跨步多核切分。
+- 对这个仅包含Vector段的Kernel，`pypto_pro.language.get_block_num()` / `pypto_pro.language.get_block_idx()`给出工作单元总数 / 当前工作单元索引。
+- `for i in pypto_pro.language.range(core_id, m_tile_num, num_cores)` —— 标准跨步多核切分。
 - 这里`M_SIZE`恰好被`TILE_M`整除；不整除时把`num_cores`改成
   `min(info.vector_core_num, ceildiv(M, TILE_M) * ceildiv(N, TILE_N))`并按[尾块文档](tail_block_handling.md)
   处理边界。
@@ -501,15 +506,15 @@ with pl.section_cube():
 
 ## 使用限制与建议
 
-- **`block_dim`超过对应执行域上限。** Host侧根据Kernel类型选择`vector_core_num`或`core_num`，再与任务Tile数取最小值。
+- **`block_dim`超过对应执行域上限。** Host侧根据Kernel类型选择`cube_core_num`、`vector_core_num`或`core_num`，再与可独立执行的任务数取最小值；完整规则参见[Kernel函数](../kernel_function.md#blockdim的含义与设置)。
 - **混合Kernel的Vector段工作单元数。** 1:2模式下使用`get_block_num() * get_subblock_num()`；`get_block_idx()`直接返回全局AIV逻辑索引。
 - **逻辑核数多于Tile数。** 多出的逻辑核不会进入
-  `pl.range(core_id, total_tiles, num_cores)`循环，造成资源空转。可使用
-  `num_cores = min(core_num, total_tiles)`限制逻辑核数。
+  `pypto_pro.language.range(core_id, total_tiles, num_cores)`循环，造成资源空转。可使用
+  `num_cores = min(platform_limit, total_tiles)`限制逻辑核数，其中`platform_limit`按Kernel模式选择。
 - **连续分段导致不均衡。** 手写`[k*chunk:(k+1)*chunk]`且不处理余数时，最后一个核可能显
-  著多做或少做。优先用跨步`pl.range(core_id, total, num_cores)`。
+  著多做或少做。优先用跨步`pypto_pro.language.range(core_id, total, num_cores)`。
 - **把TilingData字段当编译期常量用。** TilingData字段是运行时值，不能用在需要编译期
-  `int`的地方（例如`TileType`的静态`shape`）；用在`pl.range`、`make_tensor`的
+  `int`的地方（例如`TileType`的静态`shape`）；用在`pypto_pro.language.range`、`make_tensor`的
   shape/stride、算术、`if`条件里。
 - **TilingData必须是最后一个参数。** TilingData实例必须位于Kernel形参和启动实参的末尾。
 

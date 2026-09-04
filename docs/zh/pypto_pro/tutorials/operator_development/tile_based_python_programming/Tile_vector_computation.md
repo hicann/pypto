@@ -6,7 +6,7 @@
 
 ### make_tile —— 分配单个Tile
 
-[`pl.make_tile`](../../../api/SIMD-API/operation/resource_management/make_tile.md)分配一块固定的片上缓冲区。指定`addr`时**必须**同时指定`size`（缓冲区的字节大小）：
+[`pypto_pro.language.make_tile`](../../../api/SIMD-API/operation/resource_management/make_tile.md)分配一块固定的片上缓冲区。指定`addr`时**必须**同时指定`size`（缓冲区的字节大小）：
 
 ```python
 tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
@@ -19,7 +19,7 @@ tile_out = pl.make_tile(tt, addr=0x4000, size=8192)
 
 ### make_tile的手动同步
 
-由`make_tile`创建的Tile只是一块裸缓冲区，框架**不会**为它插入任何跨pipe的同步。当一个Tile在某条硬件pipe上被生产（例如MTE2加载），又在另一条pipe上被消费（例如V计算）时，**必须自己**用[`pl.system.sync_src`/`pl.system.sync_dst`](../../../api/SIMD-API/operation/synchronization/sync_src_sync_dst.md)插入同步：
+由`make_tile`创建的Tile只是一块裸缓冲区，框架**不会**为它插入任何跨pipe的同步。当一个Tile在某条硬件pipe上被生产（例如MTE2加载），又在另一条pipe上被消费（例如V计算）时，**必须自己**用[`pypto_pro.language.system.sync_src`/`pypto_pro.language.system.sync_dst`](../../../api/SIMD-API/operation/synchronization/sync_src_sync_dst.md)插入同步：
 
 ```python
 with pl.section_vector():
@@ -39,11 +39,11 @@ with pl.section_vector():
 
 `sync_src`/`sync_dst`的pipe组合和ID必须完全一致。前端只校验单次调用的参数，不会跨分支或循环证明两个接口已正确成对。
 
-Pipe类型（`pl.PipeType`）：`MTE2`（GM→L1/UB加载）、`MTE1`（L1→L0搬运）、`M`（矩阵计算）、`FIX`（L0C结果搬运）、`V`（向量计算）、`MTE3`（UB→GM存储）等。
+Pipe类型（`pypto_pro.language.PipeType`）：`MTE2`（GM→L1/UB加载）、`MTE1`（L1→L0搬运）、`M`（矩阵计算）、`FIX`（L0C结果搬运）、`V`（向量计算）、`MTE3`（UB→GM存储）等。
 
 ## TileGroup —— 自动同步的双缓冲/N缓冲
 
-[`pl.make_tile_group`](../../../api/SIMD-API/operation/resource_management/make_tile_group.md)声明一组轮转的Tile，用于实现双缓冲及N缓冲。配置非空`mutex_ids`并配合`auto_mutex=True`时，框架在每次使用轮转Tile的前后自动插入`mutex_lock`/`mutex_unlock`；`mutex_ids`为`None`或空列表时，必须通过`depth`指定Tile数量，跨Pipe同步由用户自行保证。
+[`pypto_pro.language.make_tile_group`](../../../api/SIMD-API/operation/resource_management/make_tile_group.md)声明一组轮转的Tile，用于实现双缓冲及N缓冲。配置非空`mutex_ids`并配合`auto_mutex=True`时，框架在每次使用轮转Tile的前后自动插入`mutex_lock`/`mutex_unlock`；`mutex_ids`为`None`或空列表时，必须通过`depth`指定Tile数量，跨Pipe同步由用户自行保证。
 
 ![PyPTO Pro TileGroup双缓冲的理想化流水时序](../../figures/pro_tile_vector_double_buffer.png)
 
@@ -94,15 +94,15 @@ GM Tensor与片上Tile之间的数据搬运通过以下接口完成：
 
 | 算子 | 方向 | 偏移语义 |
 |:---|:---|:---|
-| `pl.load` | GM → Tile | 绝对元素偏移 |
-| `pl.load_tile` | GM → Tile | 按Tile索引：offset = `index * tile_shape` |
-| `pl.store` | Tile → GM | 绝对元素偏移 |
-| `pl.store_tile` | Tile → GM | 按Tile索引 |
+| `pypto_pro.language.load` | GM → Tile | 绝对元素偏移 |
+| `pypto_pro.language.load_tile` | GM → Tile | 按Tile索引：offset = `index * tile_shape` |
+| `pypto_pro.language.store` | Tile → GM | 绝对元素偏移 |
+| `pypto_pro.language.store_tile` | Tile → GM | 按Tile索引 |
 
 ![PyPTO Pro Tile矢量计算的数据通路与搬运接口](../../figures/pro_tile_vector_dataflow.png)
 
-图中的MTE2和MTE3分别对应搬入、搬出流水；`pl.load_tile`/`pl.store_tile`与
-`pl.load`/`pl.store`走相同的数据通路，区别在于坐标采用Tile索引还是绝对元素偏移。
+图中的MTE2和MTE3分别对应搬入、搬出流水；`pypto_pro.language.load_tile`/`pypto_pro.language.store_tile`与
+`pypto_pro.language.load`/`pypto_pro.language.store`走相同的数据通路，区别在于坐标采用Tile索引还是绝对元素偏移。
 
 ```python
 # 按Tile索引：[i, j]选取第(i,j)个TILE_M x TILE_N块
@@ -143,8 +143,11 @@ with pl.section_vector():
 
 ```python
 import os
-import torch
+
 import pypto_pro.language as pl
+import torch
+import torch_npu
+from pypto_pro.runtime.platform import get_platform_info
 
 TILE_M = 128
 TILE_N = 128
@@ -184,7 +187,9 @@ def test_add():
     device = f"npu:{device_id}"
     torch.npu.set_device(device)
     M_SIZE, N_SIZE = 8192, 4096
-    num_cores = M_SIZE // TILE_M
+    total_tiles = M_SIZE // TILE_M
+    # block_dim取平台可用AIV数量和任务Tile数量中的较小值。
+    num_cores = min(get_platform_info().vector_core_num, total_tiles)
     torch.manual_seed(0)
     x = torch.rand([M_SIZE, N_SIZE], device=device, dtype=torch.float16)
     y = torch.rand([M_SIZE, N_SIZE], device=device, dtype=torch.float16)
@@ -197,7 +202,7 @@ def test_add():
 
 要点：
 
-- `@pl.jit(auto_mutex=True)` —— 对带mutex元数据的TileGroup访问自动插入mutex同步；其他数据依赖仍需显式处理
+- `@pypto_pro.language.jit(auto_mutex=True)` —— 对带mutex元数据的TileGroup访问自动插入mutex同步；其他数据依赖仍需显式处理
 - `kernel[None, num_cores](...)`：方括号启动参数为`[stream, block_dim]`；`None`表示默认Stream
 
 ## 多核切分与Tiling
@@ -206,7 +211,7 @@ def test_add():
 
 ## 尾块处理
 
-当GM上的`pl.Tensor`的shape不能被Tile shape整除时，边界上会出现比Tile小的“不完整块”。尾块处理涉及`valid_shape`、`set_validshape`、`pad`、`fillpad`和`compact`等参数的协同，详细说明请参考[尾块处理](tail_block_handling.md)。
+当GM上的`pypto_pro.language.Tensor`的shape不能被Tile shape整除时，边界上会出现比Tile小的“不完整块”。尾块处理涉及`valid_shape`、`set_validshape`、`pad`、`fillpad`和`compact`等参数的协同，详细说明请参考[尾块处理](tail_block_handling.md)。
 
 ## N缓冲（循环）用法
 

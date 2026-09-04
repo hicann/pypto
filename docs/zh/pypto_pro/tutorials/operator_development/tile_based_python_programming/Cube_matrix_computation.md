@@ -2,16 +2,16 @@
 
 本文介绍如何在PyPTO Pro中使用Tile API编写基于L1 Buffer、L0A Buffer、L0B Buffer、L0C Buffer等片上存储的**矩阵计算代码**。
 
-Cube计算单元专用于执行矩阵乘加运算，直接访问的专用缓存如下：L0A Buffer存储左矩阵，L0B Buffer存储右矩阵，L0C Buffer存储累加值及矩阵计算结果。PyPTO Pro通过`pl.section_cube()`标记Cube执行域，在域内完成数据搬运与矩阵计算。
+Cube计算单元专用于执行矩阵乘加运算，直接访问的专用缓存如下：L0A Buffer存储左矩阵，L0B Buffer存储右矩阵，L0C Buffer存储累加值及矩阵计算结果。PyPTO Pro通过`pypto_pro.language.section_cube()`标记Cube执行域，在域内完成数据搬运与矩阵计算。
 
 ## 矩阵编程的基本步骤
 
 Cube矩阵计算的基本步骤为：数据搬入 → 数据加载 → 计算 → 数据搬出。当描述一个常见的Cube矩阵计算时，需要执行以下四个步骤：
 
-1. 通过`pl.load`将数据从GM搬入L1 Buffer（Mat）
-2. 通过`pl.move`将L1 Buffer数据搬入L0A Buffer（Left）和L0B Buffer（Right）
-3. 通过`pl.matmul`执行矩阵乘法，结果存储在L0C Buffer（Acc）中
-4. 通过`pl.store`将L0C Buffer中的结果搬出到GM
+1. 通过`pypto_pro.language.load`将数据从GM搬入L1 Buffer（Mat）
+2. 通过`pypto_pro.language.move`将L1 Buffer数据搬入L0A Buffer（Left）和L0B Buffer（Right）
+3. 通过`pypto_pro.language.matmul`执行矩阵乘法，结果存储在L0C Buffer（Acc）中
+4. 通过`pypto_pro.language.store`将L0C Buffer中的结果搬出到GM
 
 对应的数据流和硬件流水如下：
 
@@ -23,15 +23,15 @@ Cube矩阵计算的基本步骤为：数据搬入 → 数据加载 → 计算 �
 
 ### Cube侧Tile分配
 
-Cube矩阵计算使用L0A/L0B/L0C Buffer，并经L1 Buffer中转。输入数据从GM搬入L1 Buffer（`pl.MemorySpace.Mat`），再从L1 Buffer搬入L0A（`pl.MemorySpace.Left`）/L0B（`pl.MemorySpace.Right`）；`pl.matmul`执行矩阵计算，并将结果写入L0C（`pl.MemorySpace.Acc`）。
+Cube矩阵计算使用L0A/L0B/L0C Buffer，并经L1 Buffer中转。输入数据从GM搬入L1 Buffer（`pypto_pro.language.MemorySpace.Mat`），再从L1 Buffer搬入L0A（`pypto_pro.language.MemorySpace.Left`）/L0B（`pypto_pro.language.MemorySpace.Right`）；`pypto_pro.language.matmul`执行矩阵计算，并将结果写入L0C（`pypto_pro.language.MemorySpace.Acc`）。
 
-PyPTO Pro通过`TileType`描述Tile的shape、dtype和target_memory。`TileType`本身不分配片上缓冲区，需要将其传给`pl.make_tile`或`pl.make_tile_group`。
+PyPTO Pro通过`TileType`描述Tile的shape、dtype和target_memory。`TileType`本身不分配片上缓冲区，需要将其传给`pypto_pro.language.make_tile`或`pypto_pro.language.make_tile_group`。
 
 本节代码仅展示Tile分配和同步方式，省略了完整Kernel的计算、调用及结果验证代码；整体代码结构及调用方式请参考本文末尾的[完整示例](#完整示例)。
 
 各内存空间的典型角色如下：
 
-| `pl.MemorySpace` | 物理缓冲区 | 典型角色 |
+| `pypto_pro.language.MemorySpace` | 物理缓冲区 | 典型角色 |
 |:---|:---|:---|
 | `Mat` | L1 Buffer | GM与L0A/L0B之间的矩阵暂存 |
 | `Left` | L0A Buffer | `matmul`左操作数 |
@@ -40,7 +40,7 @@ PyPTO Pro通过`TileType`描述Tile的shape、dtype和target_memory。`TileType`
 
 #### 使用make_tile分配单个Tile
 
-`pl.make_tile`分配一块固定的片上缓冲区。指定`addr`时需要同时指定`size`，其中`size`为缓冲区的字节数。使用`make_tile`时，跨Pipe依赖通过显式的`sync_src`/`sync_dst`对进行同步。
+`pypto_pro.language.make_tile`分配一块固定的片上缓冲区。指定`addr`时需要同时指定`size`，其中`size`为缓冲区的字节数。使用`make_tile`时，跨Pipe依赖通过显式的`sync_src`/`sync_dst`对进行同步。
 
 ```python
 TILE_M = 128
@@ -67,7 +67,7 @@ acc = pl.make_tile(acc_type, addr=0x0000, size=65536)
 
 #### 使用make_tile_group分配轮转Tile
 
-`pl.make_tile_group`分配一组轮转的Tile。`mutex_ids`的长度就是组内Tile数量，可通过`next()`、`current()`和`previous()`选择Tile。配合`@pl.jit(auto_mutex=True)`时，框架根据每个Tile的`mutex_id`自动插入跨Pipe同步。单缓冲也可以使用长度为1的`mutex_ids`，从而复用自动同步机制。
+`pypto_pro.language.make_tile_group`分配一组轮转的Tile。`mutex_ids`的长度就是组内Tile数量，可通过`next()`、`current()`和`previous()`选择Tile。配合`@pypto_pro.language.jit(auto_mutex=True)`时，框架根据每个Tile的`mutex_id`自动插入跨Pipe同步。单缓冲也可以使用长度为1的`mutex_ids`，从而复用自动同步机制。
 
 ```python
 @pl.jit(auto_mutex=True)
@@ -131,11 +131,11 @@ def matmul_kernel(a: pl.Tensor[[pl.DYNAMIC, TILE_K], pl.DT_FP16],
 
 L0C中的结果分形固定为16×16。以FP32/INT32累加结果为例，一个结果分形占用`16 × 16 × 4B = 1024B`，因此需要显式描述硬件分形大小的累加场景使用`fractal=1024`。
 
-下图以FP16类型的40×56矩阵为例，展示`compact=0`时的标准分形布局：GM中的`pl.ND` Tensor通过`pl.load`搬入L1 Buffer的`Mat` Tile，并转换为`pl.NZ`布局。有效区为40×56，按16×16分形对齐后的寻址边界为48×64；分形之间按列优先排列，分形内部按行优先排列。图中白色区域为有效数据，灰色区域为无效区域，其值未必为0。`valid_shape`描述有效区域，`pad`/`pl.fillpad`决定是否以及如何填充无效区域；`compact=1`会按`valid_shape`紧凑解释片上布局，不使用图2所示的完整标准分形边界。
+下图以FP16类型的40×56矩阵为例，展示`compact=0`时的标准分形布局：GM中的`pypto_pro.language.ND` Tensor通过`pypto_pro.language.load`搬入L1 Buffer的`Mat` Tile，并转换为`pypto_pro.language.NZ`布局。有效区为40×56，按16×16分形对齐后的寻址边界为48×64；分形之间按列优先排列，分形内部按行优先排列。图中白色区域为有效数据，灰色区域为无效区域，其值未必为0。`valid_shape`描述有效区域，`pad`/`pypto_pro.language.fillpad`决定是否以及如何填充无效区域；`compact=1`会按`valid_shape`紧凑解释片上布局，不使用图2所示的完整标准分形边界。
 
-**图2** PyPTO Pro中`pl.load`完成ND（GM）到Nz（L1 Mat）的分形转换
+**图2** PyPTO Pro中`pypto_pro.language.load`完成ND（GM）到Nz（L1 Mat）的分形转换
 
-![PyPTO Pro中pl.load完成ND（GM）到Nz（L1 Mat）的分形转换](../../figures/cube_matrix_nd_to_nz.png)
+![PyPTO Pro中pypto_pro.language.load完成ND（GM）到Nz（L1 Mat）的分形转换](../../figures/cube_matrix_nd_to_nz.png)
 
 #### 分形格式的命名
 
@@ -144,7 +144,7 @@ L0C中的结果分形固定为16×16。以FP32/INT32累加结果为例，一个�
 - 大Y（Z/N）表示多个分形之间的排列顺序：Z为row major（行主序），N为column major（列主序）。
 - 小x（z/n）表示一个分形内部的元素排列顺序：z为row major（行主序），n为column major（列主序）。
 
-PyPTO Pro使用大写的`pl.NZ`、`pl.ZN`等枚举表示文档中的Nz、Zn格式。以二维矩阵为例，几种常用格式的含义如下：
+PyPTO Pro使用大写的`pypto_pro.language.NZ`、`pypto_pro.language.ZN`等枚举表示文档中的Nz、Zn格式。以二维矩阵为例，几种常用格式的含义如下：
 
 - **ND**：通用线性布局，通常用于GM中的输入和输出Tensor。
 - **Nz**：分形之间按列主序排列，分形内部按行主序排列。对shape为`[M, N]`的矩阵，补齐并拆分为`[M1, M0, N1, N0]`后，物理排列顺序为`[N1, M1, M0, N0]`。
@@ -154,12 +154,12 @@ PyPTO Pro使用大写的`pl.NZ`、`pl.ZN`等枚举表示文档中的Nz、Zn格�
 
 Ascend 950PR/Ascend 950DT的默认数据路径如下：
 
-- GM中的ND数据搬入`Mat`（L1）时转换为`pl.NZ`。
-- A矩阵从`Mat`搬入`Left`（L0A）后保持`pl.NZ`。
-- B矩阵从`Mat`搬入`Right`（L0B）时转换为`pl.ZN`。
-- `matmul`的结果在`Acc`（L0C）中按`pl.NZ`存放。
+- GM中的ND数据搬入`Mat`（L1）时转换为`pypto_pro.language.NZ`。
+- A矩阵从`Mat`搬入`Left`（L0A）后保持`pypto_pro.language.NZ`。
+- B矩阵从`Mat`搬入`Right`（L0B）时转换为`pypto_pro.language.ZN`。
+- `matmul`的结果在`Acc`（L0C）中按`pypto_pro.language.NZ`存放。
 
-当`target_memory`确定后，`layout`和`fractal`通常随之确定，上述默认路径可省略这两个参数。转置搬入等特殊场景需要显式指定`layout`。`layout`描述Tile的物理排布，`TileType.shape`保持逻辑轴语义；例如B矩阵在L0B中仍使用`[K, N]`描述shape，物理布局为`pl.ZN`。
+当`target_memory`确定后，`layout`和`fractal`通常随之确定，上述默认路径可省略这两个参数。转置搬入等特殊场景需要显式指定`layout`。`layout`描述Tile的物理排布，`TileType.shape`保持逻辑轴语义；例如B矩阵在L0B中仍使用`[K, N]`描述shape，物理布局为`pypto_pro.language.ZN`。
 
 下图以FP16输入、FP32累加为例，展示`Left`、`Right`、`Acc` Tile与PyPTO Pro接口的对应关系。
 
@@ -173,14 +173,14 @@ Cube矩阵计算的四个步骤分别对应MTE2、MTE1、M、FIX四条流水线�
 
 | 流水线 | 含义 | 典型操作 |
 |:---|:---|:---|
-| MTE2 | GM→L1搬运 | `pl.load`/`pl.load_tile` |
-| MTE1 | L1→L0A/L0B搬运 | `pl.move` |
-| M | 矩阵计算 | `pl.matmul`/`pl.matmul_acc` |
-| FIX | L0C→GM搬运 | `pl.store`/`pl.store_tile` |
+| MTE2 | GM→L1搬运 | `pypto_pro.language.load`/`pypto_pro.language.load_tile` |
+| MTE1 | L1→L0A/L0B搬运 | `pypto_pro.language.move` |
+| M | 矩阵计算 | `pypto_pro.language.matmul`/`pypto_pro.language.matmul_acc` |
+| FIX | L0C→GM搬运 | `pypto_pro.language.store`/`pypto_pro.language.store_tile` |
 
-使用`make_tile_group`并通过`@pl.jit(auto_mutex=True)`启用自动同步时，框架根据Tile的使用关系和`mutex_id`插入`mutex_lock`/`mutex_unlock`。
+使用`make_tile_group`并通过`@pypto_pro.language.jit(auto_mutex=True)`启用自动同步时，框架根据Tile的使用关系和`mutex_id`插入`mutex_lock`/`mutex_unlock`。
 
-使用`make_tile`时，框架不会自动插入跨Pipe同步，需要在生产操作之后、消费操作之前插入配对的`pl.system.sync_src`和`pl.system.sync_dst`。下面展示一次完整矩阵计算中的前向数据依赖：
+使用`make_tile`时，框架不会自动插入跨Pipe同步，需要在生产操作之后、消费操作之前插入配对的`pypto_pro.language.system.sync_src`和`pypto_pro.language.system.sync_dst`。下面展示一次完整矩阵计算中的前向数据依赖：
 
 ```python
 with pl.section_cube():
@@ -213,7 +213,7 @@ with pl.section_cube():
 
 ## 矩阵数据搬入
 
-矩阵搬入分为两跳：GM → L1（`pl.load`）和L1 → L0A/L0B（`pl.move`）。
+矩阵搬入分为两跳：GM → L1（`pypto_pro.language.load`）和L1 → L0A/L0B（`pypto_pro.language.move`）。
 
 ### Ascend 950PR/Ascend 950DT的L1 Buffer内存结构
 
@@ -239,13 +239,13 @@ L1_ADDR[18:0] = {BANK[18], BANK_DEPTH[17:8], BG[7:5], BANK_WIDTH[4:0]}
 
 在PyPTO Pro中，`make_tile_group`的`addrs`决定L1 Tile的起始地址。规划A、B矩阵以及双缓冲地址时，除了避免地址范围重叠，还应尽量避免并行访问落入存在冲突的Bank或Bank Group。
 
-**图4** Ascend 950 L1 Buffer（`pl.MemorySpace.Mat`）内存结构
+**图4** Ascend 950 L1 Buffer（`pypto_pro.language.MemorySpace.Mat`）内存结构
 
-![Ascend 950 L1 Buffer（pl.MemorySpace.Mat）内存结构](../../figures/cube_matrix_l1_buffer_bank.png)
+![Ascend 950 L1 Buffer（pypto_pro.language.MemorySpace.Mat）内存结构](../../figures/cube_matrix_l1_buffer_bank.png)
 
 ### GM → L1搬运
 
-通过`pl.load`将矩阵从GM搬入L1 Buffer。`load`在搬运过程中自动完成ND到NZ的格式转换，无需手动配置分形参数。
+通过`pypto_pro.language.load`将矩阵从GM搬入L1 Buffer。`load`在搬运过程中自动完成ND到NZ的格式转换，无需手动配置分形参数。
 
 ```python
 with pl.section_cube():
@@ -259,7 +259,7 @@ with pl.section_cube():
 
 ### L1 → L0A/L0B搬运
 
-通过`pl.move`将L1 Buffer中的数据搬入L0A/L0B Buffer，搬运过程中自动完成Nz到Zn（L0B）的格式转换。
+通过`pypto_pro.language.move`将L1 Buffer中的数据搬入L0A/L0B Buffer，搬运过程中自动完成Nz到Zn（L0B）的格式转换。
 
 ```python
     cur_a_left = a_left.current()
@@ -270,16 +270,16 @@ with pl.section_cube():
 
 ### 转置搬入
 
-当输入矩阵的轴序与L1 Tile的轴序相反时（如Tensor为`[K, M]`而Tile为`[M, K]`），需要在搬入时进行转置。通过`load`的`order`参数控制：`order=[1, 0]`表示转置搬入，此时L1 Tile的`layout`需设为`pl.ZN`。
+当输入矩阵的轴序与L1 Tile的轴序相反时（如Tensor为`[K, M]`而Tile为`[M, K]`），需要在搬入时进行转置。通过`load`的`order`参数控制：`order=[1, 0]`表示转置搬入，此时L1 Tile的`layout`需设为`pypto_pro.language.ZN`。
 
 以`C[M, N] = A[M, K] @ B[K, N]`为例：
 
 | 操作数 | Tensor shape | 是否转置 | `load`的`order` | L1 Mat Tile layout |
 |:---|:---|:---|:---|:---|
-| 左矩阵A | `[M, K]` | 否 | `[0, 1]`（默认） | `pl.NZ`（默认） |
-| 左矩阵A | `[K, M]` | 是 | `[1, 0]` | `pl.ZN` |
-| 右矩阵B | `[K, N]` | 否 | `[0, 1]`（默认） | `pl.NZ`（默认） |
-| 右矩阵B | `[N, K]` | 是 | `[1, 0]` | `pl.ZN` |
+| 左矩阵A | `[M, K]` | 否 | `[0, 1]`（默认） | `pypto_pro.language.NZ`（默认） |
+| 左矩阵A | `[K, M]` | 是 | `[1, 0]` | `pypto_pro.language.ZN` |
+| 右矩阵B | `[K, N]` | 否 | `[0, 1]`（默认） | `pypto_pro.language.NZ`（默认） |
+| 右矩阵B | `[N, K]` | 是 | `[1, 0]` | `pypto_pro.language.ZN` |
 
 左矩阵转置搬入示例：
 
@@ -308,7 +308,7 @@ def kernel_left_transpose(
 
 ## 矩阵数据搬出
 
-通过`pl.store`将L0C Buffer中的计算结果搬出到GM。L0C→GM的搬运走FIX流水线，支持在搬运过程中进行格式转换（NZ→ND）。
+通过`pypto_pro.language.store`将L0C Buffer中的计算结果搬出到GM。L0C→GM的搬运走FIX流水线，支持在搬运过程中进行格式转换（NZ→ND）。
 
 ```python
     pl.store(out, acc, [i, j])    # L0C → GM，自动NZ→ND
@@ -327,7 +327,7 @@ def kernel(...,
 
 ## 矩阵计算
 
-`pl.matmul`是PyPTO Pro封装NPU硬件计算能力的矩阵乘法核心接口，实现`dst_tile = lhs_tile × rhs_tile`，数据通路为L0A(Left) × L0B(Right) → L0C(Acc)。
+`pypto_pro.language.matmul`是PyPTO Pro封装NPU硬件计算能力的矩阵乘法核心接口，实现`dst_tile = lhs_tile × rhs_tile`，数据通路为L0A(Left) × L0B(Right) → L0C(Acc)。
 
 **表：矩阵乘计算A、B、C矩阵说明**
 
@@ -343,17 +343,17 @@ def kernel(...,
 
 ### MXFP8/MXFP4矩阵乘
 
-MX矩阵乘使用`pl.matmul_mx`/`pl.matmul_mx_acc`，除Left/Right尾数Tile外，还需要分别位于L0A配套ScaleLeft缓冲区和L0B配套ScaleRight缓冲区的E8M0 scale Tile。每个scale对应K方向连续32个尾数元素，K必须为64的倍数。MXFP8支持E4M3/E5M2，MXFP4支持E2M1/E1M2；完整参数约束、scale Tensor布局和调用示例参见[`matmul_mx`](../../../api/SIMD-API/operation/matrix_computation/matmul_mx.md)和[`matmul_mx_acc`](../../../api/SIMD-API/operation/matrix_computation/matmul_mx_acc.md)。
+MX矩阵乘使用`pypto_pro.language.matmul_mx`/`pypto_pro.language.matmul_mx_acc`，除Left/Right尾数Tile外，还需要分别位于L0A配套ScaleLeft缓冲区和L0B配套ScaleRight缓冲区的E8M0 scale Tile。每个scale对应K方向连续32个尾数元素，K必须为64的倍数。MXFP8支持E4M3/E5M2，MXFP4支持E2M1/E1M2；完整参数约束、scale Tensor布局和调用示例参见[`matmul_mx`](../../../api/SIMD-API/operation/matrix_computation/matmul_mx.md)和[`matmul_mx_acc`](../../../api/SIMD-API/operation/matrix_computation/matmul_mx_acc.md)。
 
 ### K维分块累加
 
-当K维度较大，无法一次装入L1/L0时，需要将K轴切分为多个分块，逐块累加。首块用`pl.matmul`写入累加器，其余块用[`pl.matmul_acc`](../../../api/SIMD-API/operation/matrix_computation/matmul_acc.md)累加到同一个L0C。
+当K维度较大，无法一次装入L1/L0时，需要将K轴切分为多个分块，逐块累加。首块用`pypto_pro.language.matmul`写入累加器，其余块用[`pypto_pro.language.matmul_acc`](../../../api/SIMD-API/operation/matrix_computation/matmul_acc.md)累加到同一个L0C。
 
 K维分块累加对正确性有三个硬性要求：
 
-1. **每步matmul / matmul_acc都要传`phase`**：首块和中间块用`phase=pl.AccPhase.Partial`，末块用`phase=pl.AccPhase.Final`；写回GM的`store`也传`phase=pl.STPhase.Final`。
+1. **每步matmul / matmul_acc都要传`phase`**：首块和中间块用`phase=pypto_pro.language.AccPhase.Partial`，末块用`phase=pypto_pro.language.AccPhase.Final`；写回GM的`store`也传`phase=pypto_pro.language.STPhase.Final`。
 2. **L0C累加器设`fractal=1024`**（FP32）。
-3. **Cube段用`pl.system.set_mm_layout_transform(enabled=True)`开启**，段末`enabled=False`关闭。
+3. **Cube段用`pypto_pro.language.system.set_mm_layout_transform(enabled=True)`开启**，段末`enabled=False`关闭。
 
 ```python
 @pl.jit(auto_mutex=True)
@@ -406,7 +406,7 @@ def matmul_acc_kernel(
 
 ## 尾块处理
 
-当GM Tensor的shape不能被Tile shape整除时，边界上会出现比Tile小的尾块。Cube场景的尾块处理通过`valid_shape=[-1, -1]`配合`pl.set_validshape`和`compact=1`完成：
+当GM Tensor的shape不能被Tile shape整除时，边界上会出现比Tile小的尾块。Cube场景的尾块处理通过`valid_shape=[-1, -1]`配合`pypto_pro.language.set_validshape`和`compact=1`完成：
 
 - `valid_shape=[-1, -1]`：声明有效区域为运行时动态，后续通过`set_validshape`设置。
 - `compact=1`：让硬件按有效行紧凑摆放，减少L1/L0占用。
@@ -442,6 +442,7 @@ import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
+from pypto_pro.runtime.platform import get_platform_info
 
 TILE_M = 128
 TILE_K = 128
@@ -505,7 +506,9 @@ a = torch.randn(M_SIZE, K_SIZE, device=device, dtype=torch.float16)
 b = torch.randn(K_SIZE, N_SIZE, device=device, dtype=torch.float16)
 out = torch.zeros(M_SIZE, N_SIZE, device=device, dtype=torch.float32)
 
-matmul_kernel[None, 32](a, b, out)
+# block_dim取平台可用AIC数量和M方向Tile数量中的较小值。
+block_dim = min(get_platform_info().cube_core_num, M_SIZE // TILE_M)
+matmul_kernel[None, block_dim](a, b, out)
 torch.npu.synchronize()
 
 golden = torch.matmul(a.float(), b.float())
@@ -518,5 +521,5 @@ print("Matmul kernel passed!")
 > - `make_tile_group`在`section_cube`外部声明，与Add等Vector示例风格一致。
 > - L1使用双缓冲（`mutex_ids`长度为2），L0A/L0B/L0C使用单缓冲（`mutex_ids`长度为1）。
 > - `auto_mutex=True`由框架自动管理各Tile的mutex锁。
-> - 多核切分通过`pl.range(core_id, M // TILE_M, num_cores)`实现跨步分配，详见[多核切分与Tiling](multi_core_partitioning_and_Tiling.md)。
+> - 多核切分通过`pypto_pro.language.range(core_id, M // TILE_M, num_cores)`实现跨步分配，详见[多核切分与Tiling](multi_core_partitioning_and_Tiling.md)。
 > - 上例K恰好为一个Tile，无需K维分块累加。K需要分块时请参考上文[K维分块累加](#k维分块累加)。

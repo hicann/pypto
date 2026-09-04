@@ -5,5 +5,6 @@
 :titlesonly:
 
 range
-section_vector_section_cube
+section_cube
+section_vector
 ```

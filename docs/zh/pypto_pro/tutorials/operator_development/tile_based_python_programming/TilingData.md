@@ -60,7 +60,7 @@ class OpTiling:
 ## 在Kernel签名中声明TilingData
 
 在Kernel函数形参末尾声明TilingData类型参数。该参数按运行时结构体传递，可与裸指针
-输入（[`pl.Ptr[dtype]`](../../../api/SIMD-API/basic_data_structures/Ptr.md)）配合，使用TilingData中的shape重建固定rank的Tensor视图：
+输入（[`pypto_pro.language.Ptr[dtype]`](../../../api/SIMD-API/basic_data_structures/Ptr.md)）配合，使用TilingData中的shape重建固定rank的Tensor视图：
 
 ```python
 @dataclass
@@ -90,7 +90,7 @@ def fa_kernel(
     # Kernel中将tiling字段作为普通运行时标量使用
 ```
 
-上述示例使用[`pl.make_tensor`](../../../api/SIMD-API/operation/resource_management/make_tensor.md)从裸指针构造固定rank的Tensor视图。也可以保留带类型的[`pl.Tensor`](../../../api/SIMD-API/basic_data_structures/Tensor.md)输入，并仅使用TilingData传递循环边界、标志和缩放系数。
+上述示例使用[`pypto_pro.language.make_tensor`](../../../api/SIMD-API/operation/resource_management/make_tensor.md)从裸指针构造固定rank的Tensor视图。也可以保留带类型的[`pypto_pro.language.Tensor`](../../../api/SIMD-API/basic_data_structures/Tensor.md)输入，并仅使用TilingData传递循环边界、标志和缩放系数。
 两种用法相互独立。
 
 > [!NOTE]说明
@@ -110,8 +110,8 @@ def fa_kernel(
 
 它们可用于：
 
-- `pl.make_tensor`的shape和stride实参，
-- `pl.range(...)`的循环边界，
+- `pypto_pro.language.make_tensor`的shape和stride实参，
+- `pypto_pro.language.range(...)`的循环边界，
 - 算术运算（`(tiling.sq + TS - 1) // TS`），
 - 运行时条件分支（`if tiling.opkind[4] == 0:`）。
 
@@ -213,6 +213,7 @@ import logging
 import torch
 import torch_npu
 import pypto_pro.language as pl
+from pypto_pro.runtime.platform import get_platform_info
 
 MAX_RANK = 4
 TILE_M = 128
@@ -336,7 +337,8 @@ def _run_case(shape, opkind, ref_fn, op_name):
     n = shape[-1]
     m = numel // n
     total_tiles = ceildiv(m, TILE_M) * ceildiv(n, TILE_N)
-    num_cores = min(32, total_tiles)
+    # block_dim取平台可用AIV数量和任务Tile数量中的较小值。
+    num_cores = min(get_platform_info().vector_core_num, total_tiles)
 
     add_dynrank_kernel[None, num_cores](x, y, z, tiling)
     torch.npu.synchronize()
@@ -371,7 +373,7 @@ if __name__ == "__main__":
 - 使用多个`int[N]`数组字段的TilingData类；
 - Kernel中的**数组元素访问**（`tiling.opkind[4]`）驱动不同的计算分支；
 - `tiling.shape[0..3]`（`int[4]`数组）保存Host输入的运行时shape；Kernel构造的`[M, N]` Tensor视图的rank固定为2；
-- `valid_shape`和`pl.set_validshape`用于安全处理任意二维尾块；
+- `valid_shape`和`pypto_pro.language.set_validshape`用于安全处理任意二维尾块；
 - 同一个已编译Kernel可根据启动时传入的TilingData值运行三种不同算子，无需重新编译。
 
 ---
@@ -434,8 +436,8 @@ TilingData字段标注与IR dtype、C struct成员的对应关系如下：
 - **参数位置错误。** TilingData必须位于Kernel形参和启动实参的末尾。
 - **字段顺序与布局不匹配。** dataclass的字段顺序决定struct布局，应与设备侧预期的
   字段顺序和填充方式保持一致。
-- **运行时数据与编译期常量混用。** TilingData字段是运行时值，可用于`pl.range`、
-  `pl.make_tensor`、算术和`if`条件，但不能用于需要编译期Python `int`的参数，
+- **运行时数据与编译期常量混用。** TilingData字段是运行时值，可用于`pypto_pro.language.range`、
+  `pypto_pro.language.make_tensor`、算术和`if`条件，但不能用于需要编译期Python `int`的参数，
   例如`TileType`的静态`shape`。
 
 ---

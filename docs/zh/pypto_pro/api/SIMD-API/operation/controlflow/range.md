@@ -14,36 +14,49 @@
 
 ## 功能说明
 
-在kernel中定义`for`循环范围，参数形式与Python `range`一致。`pl.range`是kernel内`for`循环唯一的合法迭代器，循环变量作为运行时标量参与索引和运算。
+生成Kernel中for循环的迭代区间。迭代区间由起始值、终止值和步长确定，不包含终止值。循环变量为运行时整数标量，可用于Tile索引、数据偏移计算和标量运算。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.range(stop)
-pypto_pro.language.range(start, stop, step=1)
+pypto_pro.language.range(
+    stop: Union[int, Scalar],
+) -> RangeIterator
+
+pypto_pro.language.range(
+    start: Union[int, Scalar],
+    stop: Union[int, Scalar],
+    step: Union[int, Scalar] = 1,
+) -> RangeIterator
 ```
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `start` | 输入 | 起始值（单参数形式下省略，默认`0`） |
-| `stop` | 输入 | 终止值（不包含） |
-| `step` | 输入 | 步长，默认`1` |
+| start | 输入 | 起始值，支持整型常量、运行时整型标量或整型标量表达式。单参数形式下省略并取0。 |
+| stop | 输入 | 终止值（不包含），支持整型常量、运行时整型标量或整型标量表达式。 |
+| step | 输入 | 步长，支持整型常量、运行时整型标量或整型标量表达式，不能为0。正步长在迭代值达到或超过stop时结束，负步长在迭代值达到或小于stop时结束。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `start` / `stop` / `step` | 输入 | 整型常量、运行时整型标量或整型标量表达式（如`M // TILE_M`）<br>只支持1～3个位置参数，不支持关键字传参；`step`不能为0。正步长在迭代值达到或超过`stop`时结束，负步长在迭代值达到或小于`stop`时结束 |
+- 只支持1～3个位置参数，不支持关键字传参。
+- 支持嵌套循环，也支持在for循环中使用break和continue。break只退出其所在的最内层循环，continue跳过当前迭代。
+- pypto_pro.language.range只能在pypto_pro.language.section_vector或pypto_pro.language.section_cube内部使用。
+
+## 返回值说明
+
+返回一个用于for循环的迭代器。
 
 ## 调用示例
 
-下面是一个完整kernel：用双层`pl.range`循环遍历`[M, N]`的GM Tensor，按`[TILE_M, TILE_N]`分块load两个输入，逐元素相加后store回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
+### 双层循环分块
 
 ```python
 import pypto_pro.language as pl
 
+# 本示例要求M和N分别是TILE_M和TILE_N的整数倍。
+# Vector Kernel开启auto_mutex，同步由make_tile_group自动管理。
 TILE_M = 64
 TILE_N = 64
 
@@ -72,9 +85,10 @@ def for_add_fp16_kernel(
                 pl.store_tile(z, tile_c, [i, j])
 ```
 
-单参数形式等价于`range(0, stop, 1)`：
+### 单参数形式
 
 ```python
+# 等价于range(0, 10, 1)。
 for i in pl.range(10):
     ...
 ```

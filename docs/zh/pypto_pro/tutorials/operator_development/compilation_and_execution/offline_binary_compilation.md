@@ -47,13 +47,13 @@ Kernel文件放置在`op_kernel/${op_file}.py`。`${op_file}`不包含`.py`后�
 
 参与离线二进制编译的Kernel需要满足以下要求：
 
-- 使用`@pl.jit`定义Kernel。
-- 定义TilingKey，并通过`@pl.jit(tiling_key=...)`绑定到Kernel。
+- 使用`@pypto_pro.language.jit`定义Kernel。
+- 定义TilingKey，并通过`@pypto_pro.language.jit(tiling_key=...)`绑定到Kernel。
 - 使用Python `@dataclass`定义TilingData，并将其作为Kernel参数。
 - Kernel函数名与算子Kernel入口名称保持一致。
 - Kernel业务输入输出参数名称与算子原型一致，形参排列顺序与Host侧Kernel参数下发顺序一致，因为离线交付按位置绑定Host侧下发参数与Device侧Kernel形参。参数可使用[`Tensor`](../../../api/SIMD-API/basic_data_structures/Tensor.md)或[`Ptr`](../../../api/SIMD-API/basic_data_structures/Ptr.md)声明。
 - 在所有业务输入输出参数之后声明`workspace`，并将TilingData作为最后一个参数，即参数结尾固定为`workspace, tiling`。
-- Kernel需要获取哪些输入或输出参数的数据类型，就在`@pl.jit(datatype=...)`字典中声明哪些参数。字典的key必须与算子原型中的参数名称一致，value必须是合法的Python标识符，且不能与Kernel参数名或TilingKey字段名冲突；声明后的变量可在Kernel中直接使用。
+- Kernel需要获取哪些输入或输出参数的数据类型，就在`@pypto_pro.language.jit(datatype=...)`字典中声明哪些参数。字典的key必须与算子原型中的参数名称一致，value必须是合法的Python标识符，且不能与Kernel参数名或TilingKey字段名冲突；声明后的变量可在Kernel中直接使用。
 
 下面以`add_example`为例展示代码结构，省略具体计算逻辑：
 
@@ -101,7 +101,7 @@ TilingData字段支持`int`、`float`、`bool`及对应的定长数组类型。�
 
 TilingKey用于描述需要生成独立Kernel实例的编译期配置。每个字段通过`TilingKeyField`声明位宽和候选值，构建系统会为合法的TilingKey组合生成对应的算子二进制。
 
-`datatype`是一个描述Kernel所需参数数据类型的字典。key对应算子原型中的输入或输出参数名称，value是用户自定义的dtype变量名。只需添加Kernel计算过程中需要获取数据类型的参数；不依赖某个参数的数据类型时，无需将其加入字典。多个参数的数据类型相同时，可以像示例中的`x`、`y`和`z`一样映射到同一个变量，此时这些参数在编译时传入的实际数据类型必须一致；需要分别使用各参数的数据类型时，则映射到不同的变量。声明后的变量可直接用于`pl.make_tensor`、`pl.TileType`以及其他需要指定`dtype`的位置。
+`datatype`是一个描述Kernel所需参数数据类型的字典。key对应算子原型中的输入或输出参数名称，value是用户自定义的dtype变量名。只需添加Kernel计算过程中需要获取数据类型的参数；不依赖某个参数的数据类型时，无需将其加入字典。多个参数的数据类型相同时，可以像示例中的`x`、`y`和`z`一样映射到同一个变量，此时这些参数在编译时传入的实际数据类型必须一致；需要分别使用各参数的数据类型时，则映射到不同的变量。声明后的变量可直接用于`pypto_pro.language.make_tensor`、`pypto_pro.language.TileType`以及其他需要指定`dtype`的位置。
 
 ## 配置CMakeLists.txt
 
@@ -172,7 +172,7 @@ Host侧Tiling实现需要保证：
 
 - 填充的字段与Kernel侧TilingData定义一致。
 - 传给`GET_TPL_TILING_KEY(...)`的字段值和顺序与Kernel侧TilingKey定义一致，并且属于合法组合。
-- BlockDim与Kernel的多核切分方式一致。
+- BlockDim与Kernel的多核切分方式一致，并按纯Cube、纯Vector或混合Kernel选择对应的平台上限；不同模式下的含义参见[Kernel函数](../kernel_function.md#blockdim的含义与设置)。
 - Kernel签名中的`workspace`参数位于TilingData之前。
 - Workspace大小满足Kernel实际使用的用户Workspace，以及所调用接口要求的系统Workspace。示例未使用需要系统Workspace的接口，因此设置为`0`；需要系统Workspace时，应通过平台接口查询所需大小后与用户Workspace相加，不能写死固定值。
 

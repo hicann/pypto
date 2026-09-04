@@ -1,6 +1,6 @@
 # Reg矢量计算编程
 
-Reg矢量计算直接使用SIMD Register File保存向量数据和中间结果。PyPTO Pro通过`@pl.vector_function`定义VF函数，并在函数内使用[`vf.*` API](../../../api/SIMD-API/operation/vf_computation/index.md)表达寄存器加载、计算和存储。
+Reg矢量计算直接使用SIMD Register File保存向量数据和中间结果。PyPTO Pro通过`@pypto_pro.language.vector_function`定义VF函数，并在函数内使用[`vf.*` API](../../../api/SIMD-API/operation/vf_computation/index.md)表达寄存器加载、计算和存储。
 
 > [!NOTE]说明
 > Reg矢量计算依赖VF Register File，使用前请确认对应VF API的支持范围。
@@ -15,7 +15,7 @@ Reg矢量计算将一段连续计算保留在寄存器中，仅在计算链入�
 |:---|:---|:---|
 | 数据载体 | UB中的`Tile` | Register File中的`RegTensor` / `MaskReg` |
 | 中间结果 | 通常写回UB | 可由后续`vf.*`操作直接消费 |
-| PyPTO Pro接口 | `pl.add`、`pl.sub`、`pl.reduce_*`等 | `vf.add`、`vf.sub`、`vf.reduce_*`等 |
+| PyPTO Pro接口 | `pypto_pro.language.add`、`pypto_pro.language.sub`、`pypto_pro.language.sum`等 | `vf.add`、`vf.sub`、`vf.reduce_*`等 |
 | 适用场景 | 通用向量计算、快速实现 | 连续计算链、需要降低UB往返开销的高性能场景 |
 
 ## 硬件组成
@@ -46,11 +46,11 @@ PyPTO Pro中各阶段的接口对应关系如下：
 
 | 数据路径 | PyPTO Pro表达 |
 |:---|:---|
-| GM → UB | `pl.load` / `pl.load_tile` |
+| GM → UB | `pypto_pro.language.load` / `pypto_pro.language.load_tile` |
 | UB → Register File | `vf.load` / `vf.load_align` / `vf.load_unalign`等 |
 | Register File内计算 | `vf.add`、`vf.mul`、`vf.reduce_sum`等 |
 | Register File → UB | `vf.store` / `vf.store_align` / `vf.store_unalign`等 |
-| UB → GM | `pl.store` / `pl.store_tile` |
+| UB → GM | `pypto_pro.language.store` / `pypto_pro.language.store_tile` |
 
 ## 编程模型
 
@@ -62,10 +62,11 @@ Regbase在Tile/Membase的“数据搬入 → 计算 → 数据搬出”基础上
 
 ### VF函数与执行域
 
-使用`@pl.vector_function`声明VF函数。函数体隐式处于VF执行域，只能调用`vf.*`操作；Tile参数的类型由调用点推导。VF函数通常从UB Tile加载寄存器，完成一段连续计算，再把结果存回UB Tile。
+使用`@pypto_pro.language.vector_function`声明VF函数。函数体隐式处于VF执行域，只能调用`vf.*`操作；Tile参数的类型由调用点推导。VF函数通常从UB Tile加载寄存器，完成一段连续计算，再把结果存回UB Tile。
 
 ```python
 import pypto_pro.language as pl
+from pypto_pro.language import Vf as vf
 
 
 @pl.vector_function
@@ -77,7 +78,7 @@ def add_vf(src_a, src_b, dst):
     vf.store_align(dst, reg_out, preg)
 ```
 
-外层`@pl.jit` Kernel负责GM与UB之间的搬运以及跨Pipe同步，并在`pl.section_vector()`中调用VF函数：
+外层`@pypto_pro.language.jit` Kernel负责GM与UB之间的搬运以及跨Pipe同步，并在`pypto_pro.language.section_vector()`中调用VF函数：
 
 ```python
 @pl.jit(auto_mutex=True)
@@ -132,7 +133,7 @@ with pl.section_vector():
 
 ## 同步与依赖
 
-- GM↔UB搬运与Vector/VF计算之间的跨Pipe依赖，由TileGroup + `auto_mutex=True`自动管理，或使用`pl.system.sync_src` / `pl.system.sync_dst`手动管理。
+- GM↔UB搬运与Vector/VF计算之间的跨Pipe依赖，由TileGroup + `auto_mutex=True`自动管理，或使用`pypto_pro.language.system.sync_src` / `pypto_pro.language.system.sync_dst`手动管理。
 - VF函数内存在UB写后读、写后写等局部依赖时，按接口要求使用`vf.mem_bar`指定对应模式。
 - Register File中存在直接数据依赖的`vf.*`表达式应保持清晰的数据流关系，避免在未初始化寄存器上执行计算。
 

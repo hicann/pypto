@@ -7,7 +7,9 @@
 barrier
 mutex_lock
 mutex_unlock
-set_cross_core_wait_cross_core
+CrossCoreSyncMode
+set_cross_core
 sync_all
 sync_src_sync_dst
+wait_cross_core
 ```

@@ -14,37 +14,37 @@
 
 ## 功能说明
 
-从共享标量缓冲区（SSBUF）按字节地址偏移读取数据，填入一个具名struct，用于在不同pipe / 不同核之间接收少量元数据（如批次号、块号、地址偏移等）。
-
-SSBUF是核内的共享标量缓冲区，按字节寻址，不是Tile内存、不经硬件数据搬运通路，而是由标量（S）流水逐字拷贝。常用于跨核通信：一个核用[`pypto_pro.language.ssbuf_store`](ssbuf_store.md)写入，另一些核在[`wait_cross_core`](../synchronization/set_cross_core_wait_cross_core.md)之后读取。
+按字节地址偏移从SSBuffer读取数据并填入具名struct，用于在不同硬件流水或不同计算核之间接收少量元数据，例如批次号、块号、地址偏移等。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.ssbuf_load(struct_var, offset)
+pypto_pro.language.ssbuf_load(
+    struct_var: Struct,
+    offset: Union[int, Scalar],
+) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `struct_var` | 输出 | 接收数据的具名struct（由`pypto_pro.language.struct`创建） |
-| `offset` | 输入 | SSBUF字节地址偏移 |
+| struct_var | 输出 | 接收读取结果的具名struct，须由[pypto_pro.language.struct](../utilities/struct.md)创建。sizeof(struct_var)必须是4的倍数。接口每次读取4字节，共读取sizeof(struct_var) / 4次，不读取末尾不足4字节的数据。发送端和接收端必须使用字段顺序、字段类型、数组长度及C++对齐方式完全一致的struct定义。 |
+| offset | 输入 | SSBuffer中的起始字节地址偏移，读取区间为[offset, offset + sizeof(struct_var))。支持非负的整型常量或运行时整型标量表达式，必须按4字节对齐。读取区间必须位于目标平台的有效SSBuffer地址范围内；PyPTO不对offset执行越界检查，开发者需要根据目标平台和Kernel通信方案规划地址。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `struct_var` | 输出 | 须为布局确定的POD具名struct，且与写入时的struct布局一致；按`sizeof(struct)`逐u32字拷贝 |
-| `offset` | 输入 | 单位为字节（整型常量或运行时整型标量表达式），须与写入时使用的偏移一致，并落在本核SSBUF分区内 |
+1. SSBuffer按字节寻址，不是Tile内存，也不经过MTE数据搬运通路。接口由S流水执行。
+2. pypto_pro.language.ssbuf_load本身不等待发送端完成写入。跨硬件流水或跨计算核通信时，接收端必须先调用与发送端匹配的[pypto_pro.language.system.wait_cross_core](../synchronization/wait_cross_core.md)，再调用pypto_pro.language.ssbuf_load读取数据。
+3. 读取期间不得有其他执行单元改写同一区间，否则读取结果无法保证一致。
 
-## 流水类型
+## 返回值说明
 
-S（标量/系统流水）。
+无返回值。读取的数据写入struct_var。
 
 ## 调用示例
 
-下面是一个完整Kernel：Vector侧把元数据写入SSBUF并发送跨核事件，Cube侧等待后用`pypto_pro.language.ssbuf_load`读取。
+### 跨核传递元数据
 
 ```python
 import pypto_pro.language as pl
@@ -60,7 +60,11 @@ def ssbuf_copy_kernel(x: pl.Tensor[[1], pl.DT_INT32]):
         message.offset = 32768
         if pl.get_subblock_idx() == 0:
             pl.ssbuf_store(message, 0)
-            pl.system.set_cross_core(pipe=pl.PipeType.S, event_id=15)
+            pl.system.set_cross_core(
+                pipe=pl.PipeType.S,
+                event_id=15,
+                sync_mode=pl.CrossCoreSyncMode.UNICAST_BLOCK,
+            )
 
     with pl.section_cube():
         pl.system.wait_cross_core(pipe=pl.PipeType.S, event_id=15, sync_mode=pl.CrossCoreSyncMode.UNICAST_BLOCK)

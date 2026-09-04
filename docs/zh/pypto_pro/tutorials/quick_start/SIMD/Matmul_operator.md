@@ -42,10 +42,11 @@
 ```python
 import os
 
-import pypto_pro.language as pl
 import pytest
+import pypto_pro.language as pl
 import torch
 import torch_npu
+from pypto_pro.runtime.platform import get_platform_info
 
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
@@ -147,7 +148,9 @@ def test_matmul_kernel():
     b = torch.randn(k, n, device=device, dtype=torch.float16)
     out = torch.zeros(m, n, device=device, dtype=torch.float32)
 
-    matmul_example[None, 32](a, b, out)
+    # block_dim取平台可用AIC数量和M方向Tile数量中的较小值。
+    block_dim = min(get_platform_info().cube_core_num, m // 128)
+    matmul_example[None, block_dim](a, b, out)
     torch.npu.synchronize()
 
     golden = torch.matmul(a.float(), b.float())
