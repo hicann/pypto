@@ -1837,20 +1837,15 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def load(tile, stride=None, post_update: bool = False,
-             repeat_stride=None, count=None):
+    def load(tile, stride=None):
         """Unified load (vldas+vldus, matches AscendC Load interface).
 
-        Simple aligned load from UB to register. Supports optional post-update.
+        Simple load from UB to register. Passing stride as 3rd positional
+        arg enables post-update mode.
 
         Args:
-            src_ptr: Source UB pointer
-            stride: Post-update stride (optional, triggers POST_UPDATE mode)
-
-        Kwargs:
-            post_update: Enable post-update addressing
-            repeat_stride: Stride for repeated loads
-            count: Element count
+            tile: Source UB tile
+            stride: Post-update stride (optional positional arg)
         """
 
     @staticmethod

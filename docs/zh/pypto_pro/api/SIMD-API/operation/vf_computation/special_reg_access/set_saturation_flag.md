@@ -14,12 +14,12 @@
 
 ## 功能说明
 
-设置CTRL特殊寄存器中的饱和模式标志位。饱和模式控制`vf.astype`等类型转换指令在数据超出目标类型范围时的行为：
+设置CTRL特殊寄存器中的饱和模式标志位。饱和模式控制vf.astype等类型转换指令在数据超出目标类型范围时的行为：
 
 - **饱和模式（enable=True）**：超出目标类型范围的数据被钳位到目标类型的最大值或最小值。
 - **不饱和模式（enable=False）**：超出目标类型范围的数据被截断为目标数据宽度的低位有效位。
 
-模式配置与`vf.astype`的`SaturateMode`参数配合使用，具体生效规则请参考[Cast饱和模式配置表](../type_conversion/astype.md#约束说明)。
+模式配置与vf.astype的SaturateMode参数配合使用，具体生效规则请参考[Cast饱和模式配置表](../type_conversion/astype.md#约束说明)。
 
 ## 函数原型
 
@@ -31,14 +31,14 @@ set_saturation_flag(mode: SaturationFlagMode, enable: bool) -> None
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `mode` | 输入 | 饱和模式类别，对应[SaturationFlagMode](../types/SaturationFlagMode.md)枚举。<br>- `pl.SaturationFlagMode.FLOAT`：浮点数计算和浮点数精度转换（CTRL bit 48）<br>- `pl.SaturationFlagMode.FLOAT8`：浮点8计算（CTRL bit 50）<br>- `pl.SaturationFlagMode.INT`：整数计算（CTRL bit 53）<br>- `pl.SaturationFlagMode.CAST`：浮点转整数或整数转整数的精度转换（CTRL bit 59）<br> 设置后对后续所有VF计算指令生效，直到再次调用本接口修改。|
-| `enable` | 输入 | 饱和模式使能位。`True`启用饱和模式，`False`禁用（不饱和模式）。 |
+| mode | 输入 | 饱和模式类别，对应[SaturationFlagMode](../types/SaturationFlagMode.md)枚举。<br>- pl.SaturationFlagMode.FLOAT：浮点数计算和浮点数精度转换（CTRL bit 48）<br>- pl.SaturationFlagMode.FLOAT8：浮点8计算（CTRL bit 50）<br>- pl.SaturationFlagMode.INT：整数计算（CTRL bit 53）<br>- pl.SaturationFlagMode.CAST：浮点转整数或整数转整数的精度转换（CTRL bit 59）<br> 设置后对后续所有VF计算指令生效，直到再次调用本接口修改。|
+| enable | 输入 | 饱和模式使能位。True启用饱和模式，False禁用（不饱和模式）。 |
 
 ## 约束说明
 
-- `FLOAT`/`FLOAT8`/`CAST`模式的极性为反转极性：bit=0表示饱和开启，bit=1表示饱和关闭。`INT`模式为正常极性：bit=1表示饱和开启，bit=0表示饱和关闭。
+- FLOAT/FLOAT8/CAST模式的极性为反转极性：bit=0表示饱和开启，bit=1表示饱和关闭。INT模式为正常极性：bit=1表示饱和开启，bit=0表示饱和关闭。
 
-- 当`vf.astype`的`saturate`参数设置为`pl.SaturateMode.ON`或`pl.SaturateMode.OFF`时，为单指令模式（CTRL[60]=0），本接口设置的全局标志不生效。当需要全局饱和模式生效时，需确保CTRL[60]=1。
+- 当vf.astype的saturate参数设置为pl.SaturateMode.ON或pl.SaturateMode.OFF时，为单指令模式（CTRL[60]=0），本接口设置的全局标志不生效。当需要全局饱和模式生效时，需确保CTRL[60]=1。
 
 ## 返回值说明
 

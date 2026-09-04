@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-MemBarMode定义了[`vf.mem_bar`](../data_movement/mem_bar.md)内存屏障的源->目标排序约束，用于确保指定的前序访存操作在后序访存操作开始之前完成。
+MemBarMode定义了[vf.mem_bar](../data_movement/mem_bar.md)内存屏障的源->目标排序约束，用于确保指定的前序访存操作在后序访存操作开始之前完成。
 
 ## 原型定义
 

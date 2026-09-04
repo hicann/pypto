@@ -14,16 +14,16 @@
 
 ## 功能说明
 
-`vf.astype`用于数据类型精度转换，将源操作数数据类型转换成目的操作数数据类型，能够实现浮点转整数、浮点转浮点、整数转浮点、整数转整数的数据类型转换。
+vf.astype用于数据类型精度转换，将源操作数数据类型转换成目的操作数数据类型，能够实现浮点转整数、浮点转浮点、整数转浮点、整数转整数的数据类型转换。
 
 转换过程中，由于位宽变化、精度变化，支持配置如下参数进行功能实现：
 
-- **layout**（`pl.CastLayout`）：源操作数和目的操作数位宽不同时，单条指令计算量以位宽更大的数据类型为准，`layout`用于控制位宽小的元素在寄存器中的排布方式。`pl.CastLayout.ZERO`放置在偶数索引位置，`pl.CastLayout.ONE`放置在奇数索引位置。FP4类型还支持`pl.CastLayout.TWO`/`pl.CastLayout.THREE`模式（4x扩展/缩窄时使用）。
-- **saturate**（`pl.SaturateMode`）：用于设置饱和与不饱和模式。饱和模式下，超出目标类型表示范围的值会被截断为目标类型的最大/最小值；非饱和模式下，超出范围的值行为因转换场景而异（详见[约束说明](#约束说明)）。
-- **mode**（`pl.MergeMode`）：用于指定写入寄存器数据模式，`preg`未选择的元素在dst中置零（`pl.MergeMode.ZEROING`）或保留dst原值（`pl.MergeMode.MERGING`）。当前设备仅支持`pl.MergeMode.ZEROING`模式。
-- **round_mode**（`pl.VFRoundMode`）：用于设置舍入模式。仅在可能导致精度损失且支持该舍入模式的转换中生效。
+- **layout**（pl.CastLayout）：源操作数和目的操作数位宽不同时，单条指令计算量以位宽更大的数据类型为准，layout用于控制位宽小的元素在寄存器中的排布方式。pl.CastLayout.ZERO放置在偶数索引位置，pl.CastLayout.ONE放置在奇数索引位置。FP4类型还支持pl.CastLayout.TWO/pl.CastLayout.THREE模式（4x扩展/缩窄时使用）。
+- **saturate**（pl.SaturateMode）：用于设置饱和与不饱和模式。饱和模式下，超出目标类型表示范围的值会被截断为目标类型的最大/最小值；非饱和模式下，超出范围的值行为因转换场景而异（详见[约束说明](#约束说明)）。
+- **mode**（pl.MergeMode）：用于指定写入寄存器数据模式，preg未选择的元素在dst中置零（pl.MergeMode.ZEROING）或保留dst原值（pl.MergeMode.MERGING）。当前设备仅支持pl.MergeMode.ZEROING模式。
+- **round_mode**（pl.VFRoundMode）：用于设置舍入模式。仅在可能导致精度损失且支持该舍入模式的转换中生效。
 
-不同数据类型下元素对应的`preg`位宽不一致，在类型转换时，mask_reg根据输入的源操作数进行有效元素筛选。当源操作数和目的操作数位宽不同时，单条指令计算量以位宽更大的数据类型为准，layout用于控制位宽小的元素在寄存器中的排布方式。
+不同数据类型下元素对应的preg位宽不一致，在类型转换时，mask_reg根据输入的源操作数进行有效元素筛选。当源操作数和目的操作数位宽不同时，单条指令计算量以位宽更大的数据类型为准，layout用于控制位宽小的元素在寄存器中的排布方式。
 
 下图展示了mask_reg和layout同时作用时16位宽和32位宽进行类型转换的过程：
 
@@ -35,7 +35,7 @@
 
 ![](../../../../figures/astype_b32_to_b16_conversion.jpg)
 
-特别地，DT_FP4E2M1、DT_FP4E1M2与DT_BF16之间的转换，指令会以每2个元素为一对进行读写，大转小时`preg`有效位以偶数位为准。下图展示了mask_reg和layout同时作用时DT_FP4E2M1和DT_BF16之间的转换过程：
+特别地，DT_FP4E2M1、DT_FP4E1M2与DT_BF16之间的转换，指令会以每2个元素为一对进行读写，大转小时preg有效位以偶数位为准。下图展示了mask_reg和layout同时作用时DT_FP4E2M1和DT_BF16之间的转换过程：
 
 **图3** DT_FP4E2M1到DT_BF16类型转换过程
 
@@ -55,13 +55,13 @@ astype(src, preg, dtype: DType, layout: Optional[CastLayout] = None, round_mode:
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。 |
-| `preg` | 输入 | [mask_reg](../mask_reg.md)。`preg`会按照输入的源操作数来筛选有效元素。 |
-| `dtype` | 输入 | 必选，指定目标寄存器的数据类型（如`pl.DT_FP16`、`pl.DT_INT32`等）。由于类型转换后目标类型与源类型不同，必须显式指定。 |
-| `layout` | 输入 | 可选，[CastLayout](../types/CastLayout.md)枚举类型。`pl.CastLayout.ZERO`（偶数半区，默认）或`pl.CastLayout.ONE`（奇数半区）。当源操作数和目的操作数位宽不同时，控制位宽小的元素在寄存器中的排布方式。FP4类型还支持`pl.CastLayout.TWO`/`pl.CastLayout.THREE`模式。具体支持的值因转换路径而异，详见[约束说明](#约束说明)各表。 |
-| `round_mode` | 输入 | 可选，[VFRoundMode](../types/VFRoundMode.md)枚举类型，浮点舍入模式。默认`pl.VFRoundMode.CAST_RINT`。不同转换路径支持的舍入模式不同，详见[约束说明](#约束说明)各表。不涉及精度损失的转换路径round_mode标记为`UNKNOWN`（可省略）。 |
-| `saturate` | 输入 | 可选，[SaturateMode](../types/SaturateMode.md)枚举类型。`pl.SaturateMode.OFF`（默认，非饱和）或`pl.SaturateMode.ON`（饱和）。具体支持的值因转换路径而异，详见[约束说明](#约束说明)各表。标记为`UNKNOWN`的路径表示不涉及饱和/非饱和选择。 |
-| `mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
+| src | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。 |
+| preg | 输入 | [mask_reg](../mask_reg.md)。preg会按照输入的源操作数来筛选有效元素。 |
+| dtype | 输入 | 必选，指定目标寄存器的数据类型（如pl.DT_FP16、pl.DT_INT32等）。由于类型转换后目标类型与源类型不同，必须显式指定。 |
+| layout | 输入 | 可选，[CastLayout](../types/CastLayout.md)枚举类型。pl.CastLayout.ZERO（偶数半区，默认）或pl.CastLayout.ONE（奇数半区）。当源操作数和目的操作数位宽不同时，控制位宽小的元素在寄存器中的排布方式。FP4类型还支持pl.CastLayout.TWO/pl.CastLayout.THREE模式。具体支持的值因转换路径而异，详见[约束说明](#约束说明)各表。 |
+| round_mode | 输入 | 可选，[VFRoundMode](../types/VFRoundMode.md)枚举类型，浮点舍入模式。默认pl.VFRoundMode.CAST_RINT。不同转换路径支持的舍入模式不同，详见[约束说明](#约束说明)各表。不涉及精度损失的转换路径round_mode标记为UNKNOWN（可省略）。 |
+| saturate | 输入 | 可选，[SaturateMode](../types/SaturateMode.md)枚举类型。pl.SaturateMode.OFF（默认，非饱和）或pl.SaturateMode.ON（饱和）。具体支持的值因转换路径而异，详见[约束说明](#约束说明)各表。标记为UNKNOWN的路径表示不涉及饱和/非饱和选择。 |
+| mode | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- pl.MergeMode.ZEROING（默认），preg未筛选的元素在dst中置0。<br>- pl.MergeMode.MERGING当前不支持。 |
 
 ## 约束说明
 
@@ -166,7 +166,7 @@ astype(src, preg, dtype: DType, layout: Optional[CastLayout] = None, round_mode:
   | DT_UINT32 | DT_UINT16 | pl.CastLayout.ZERO/pl.CastLayout.ONE | pl.SaturateMode.OFF/pl.SaturateMode.ON | pl.MergeMode.ZEROING | UNKNOWN |
   | DT_INT64 | DT_INT32 | pl.CastLayout.ZERO/pl.CastLayout.ONE | pl.SaturateMode.OFF/pl.SaturateMode.ON | pl.MergeMode.ZEROING | UNKNOWN |
 
-  > **表中`UNKNOWN`的含义**：`layout`为`UNKNOWN`表示该转换路径源和目的位宽相同，无需指定layout（可省略）。`saturate`为`UNKNOWN`表示该转换路径不涉及饱和/非饱和选择（可省略）。`round_mode`为`UNKNOWN`表示该转换路径不涉及精度损失（可省略）。
+  > **表中UNKNOWN的含义**：layout为UNKNOWN表示该转换路径源和目的位宽相同，无需指定layout（可省略）。saturate为UNKNOWN表示该转换路径不涉及饱和/非饱和选择（可省略）。round_mode为UNKNOWN表示该转换路径不涉及精度损失（可省略）。
 
 - 饱和和不饱和模式说明：
 
@@ -193,7 +193,7 @@ astype(src, preg, dtype: DType, layout: Optional[CastLayout] = None, round_mode:
 
 ## 返回值说明
 
-返回`dst`目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。当目的操作数位宽比源操作数小时，在`preg`和`layout`作用下，目的操作数中的无效元素均为0
+返回dst目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。当目的操作数位宽比源操作数小时，在preg和layout作用下，目的操作数中的无效元素均为0
 
 ## 调用示例
 

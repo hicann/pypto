@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-按掩码在两个输入间逐元素选择。掩码为真处取`src0`，为假处取`src1`。
+按掩码在两个输入间逐元素选择。掩码为真处取src0，为假处取src1。
 
 $$dstReg_i = \begin{cases} srcTrueReg_i & \text{if } mask_i = 1 \\ srcFalseReg_i & \text{if } mask_i = 0 \end{cases}$$
 
@@ -28,9 +28,9 @@ select(src0, src1, preg, mode: Optional[MergeMode] = None) -> dst
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src0` | 输入 | 掩码为真时，取值的源操作数，为[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，源操作数`src0`、`src1`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_BOOL、DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32。 |
-| `src1` | 输入 | 掩码为假时，取值的源操作数，为[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，支持的数据类型与`src0`一致。 |
-| `preg` | 输入 | [mask_reg](../mask_reg.md)。 |
+| src0 | 输入 | 掩码为真时，取值的源操作数，为[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，源操作数src0、src1与目的操作数dst的数据类型保持一致。支持的数据类型为：DT_BOOL、DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32。 |
+| src1 | 输入 | 掩码为假时，取值的源操作数，为[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，支持的数据类型与src0一致。 |
+| preg | 输入 | [mask_reg](../mask_reg.md)。 |
 
 ## 约束说明
 
@@ -38,7 +38,7 @@ select(src0, src1, preg, mode: Optional[MergeMode] = None) -> dst
 
 ## 返回值说明
 
-返回`dst`目的操作数，为[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，支持的数据类型与`src0`一致。
+返回dst目的操作数，为[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，支持的数据类型与src0一致。
 
 ## 调用示例
 
@@ -101,7 +101,7 @@ if __name__ == "__main__":
 
 ### mask_reg调用示例
 
-当源操作数为mask_reg时，`vf.select`根据preg的比特位在两个mask_reg间选取。
+当源操作数为mask_reg时，vf.select根据preg的比特位在两个mask_reg间选取。
 
 ```python
 import os

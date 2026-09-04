@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-非对齐存储，将变长向量数据或mask_reg数据写入Tile。配合`vf.unalign_reg_for_store()`和`vf.store_unalign_post()`使用。当`src`为mask_reg时，后端自动分派mask_reg非对齐存储路径。
+非对齐存储，将变长向量数据或mask_reg数据写入Tile。配合vf.unalign_reg_for_store()和vf.store_unalign_post()使用。当src为mask_reg时，后端自动分派mask_reg非对齐存储路径。
 
 ### 非对齐搬出原理
 
@@ -50,9 +50,9 @@
 
 ![](../../../../figures/contiguous_unaligned_load_store_unalign.jpg)
 
-连续非对齐搬入时，`vf.load_unalign`会将后续未对齐的数据缓存至ureg，所以下一次搬入不需要再次调用`vf.load_unalign_pre`，只需在迭代开始前调用一次`vf.load_unalign_pre`，从而实现非对齐搬入的性能优化。
+连续非对齐搬入时，vf.load_unalign会将后续未对齐的数据缓存至ureg，所以下一次搬入不需要再次调用vf.load_unalign_pre，只需在迭代开始前调用一次vf.load_unalign_pre，从而实现非对齐搬入的性能优化。
 
-连续非对齐搬出时，下次迭代的`vf.store_unalign`会将本次迭代`vf.store_unalign`缓存至ureg中的数据写入Tile，所以本次迭代不需要调用`vf.store_unalign_post`将ureg数据写入Tile，只需在迭代结束后调用一次`vf.store_unalign_post`，从而实现非对齐搬出的性能优化。
+连续非对齐搬出时，下次迭代的vf.store_unalign会将本次迭代vf.store_unalign缓存至ureg中的数据写入Tile，所以本次迭代不需要调用vf.store_unalign_post将ureg数据写入Tile，只需在迭代结束后调用一次vf.store_unalign_post，从而实现非对齐搬出的性能优化。
 
 ## 函数原型
 
@@ -64,15 +64,15 @@ store_unalign(tile, src, align_reg, stride=None, post_update: bool = False)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `tile` | 输出 | 目的操作数，Tile地址。 |
-| `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
-| `align_reg` | 输入 | alignment tracker寄存器（由`vf.unalign_reg_for_store()`创建）。 |
-| `stride` | 输入 | 可选，存储元素个数或地址寄存器。<br>- 当为整型标量时，代表地址更新步长，仅`post_update = True`时有效。<br>- 当为`AddrReg`（由`vf.create_addr_reg`创建）时，使用向量偏移地址替代标量stride。`src`为reg_tensor时为必选输入；`src`为mask_reg时不传`stride`。 |
-| `post_update` | 输入 | 可选，`True`时tracker自动累进到下一段，默认`False`。 |
+| tile | 输出 | 目的操作数，Tile地址。 |
+| src | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
+| align_reg | 输入 | alignment tracker寄存器（由vf.unalign_reg_for_store()创建）。 |
+| stride | 输入 | 可选，存储元素个数或地址寄存器。<br>- 当为整型标量时，代表地址更新步长，仅post_update = True时有效。<br>- 当为AddrReg（由vf.create_addr_reg创建）时，使用向量偏移地址替代标量stride。src为reg_tensor时为必选输入；src为mask_reg时不传stride。 |
+| post_update | 输入 | 可选，True时tracker自动累进到下一段，默认False。 |
 
 ## 约束说明
 
-- 必须与`vf.store_unalign_post()`配对使用，在`vf.store_unalign_post()`之前调用。
+- 必须与vf.store_unalign_post()配对使用，在vf.store_unalign_post()之前调用。
 
 ## 返回值说明
 
@@ -82,7 +82,7 @@ store_unalign(tile, src, align_reg, stride=None, post_update: bool = False)
 
 ### 基本非对齐存储
 
-非对齐搬出与非对齐搬入配套使用，形成完整的非对齐数据搬运流程。`vf.load_unalign_init`分配非对齐搬入寄存器，`vf.load_unalign_pre`初始化缓存，`vf.load_unalign`执行搬入，`vf.unalign_reg_for_store`分配搬出对齐寄存器，`vf.store_unalign`执行搬出，`vf.store_unalign_post`刷出剩余数据。
+非对齐搬出与非对齐搬入配套使用，形成完整的非对齐数据搬运流程。vf.load_unalign_init分配非对齐搬入寄存器，vf.load_unalign_pre初始化缓存，vf.load_unalign执行搬入，vf.unalign_reg_for_store分配搬出对齐寄存器，vf.store_unalign执行搬出，vf.store_unalign_post刷出剩余数据。
 
 ```python
 import os
@@ -136,7 +136,7 @@ if __name__ == "__main__":
 
 ### AddrReg非对齐存储示例
 
-当`stride`参数传入`AddrReg`（由`vf.create_addr_reg`创建）时，`AddrReg`提供一组向量偏移地址，适用于变长步长的非对齐搬出场景。
+当stride参数传入AddrReg（由vf.create_addr_reg创建）时，AddrReg提供一组向量偏移地址，适用于变长步长的非对齐搬出场景。
 
 ```python
 import os
@@ -195,7 +195,7 @@ if __name__ == "__main__":
 
 ### mask_reg非对齐存储示例
 
-当`src`为mask_reg时，`vf.store_unalign`自动分派mask_reg非对齐存储路径。[mask_reg](../mask_reg.md) 32字节数据按16位宽（DT_INT16、DT_UINT16、DT_FP16、DT_BF16）打包为16字节或按32位宽（DT_INT32、DT_UINT32、DT_FP32）打包为8字节写入Tile。硬件从每2bit（16位宽）/4bit（32位宽）中提取最低有效位(LSB)。
+当src为mask_reg时，vf.store_unalign自动分派mask_reg非对齐存储路径。[mask_reg](../mask_reg.md) 32字节数据按16位宽（DT_INT16、DT_UINT16、DT_FP16、DT_BF16）打包为16字节或按32位宽（DT_INT32、DT_UINT32、DT_FP32）打包为8字节写入Tile。硬件从每2bit（16位宽）/4bit（32位宽）中提取最低有效位(LSB)。
 
 ```python
 import os

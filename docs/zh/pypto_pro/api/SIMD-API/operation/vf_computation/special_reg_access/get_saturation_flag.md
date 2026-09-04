@@ -26,7 +26,7 @@ get_saturation_flag(mode: SaturationFlagMode) -> bool
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `mode` | 输入 | 饱和模式类别，对应[SaturationFlagMode](../types/SaturationFlagMode.md)枚举。取值与`pl.set_saturation_flag`的`mode`参数一致。 |
+| mode | 输入 | 饱和模式类别，对应[SaturationFlagMode](../types/SaturationFlagMode.md)枚举。取值与pl.set_saturation_flag的mode参数一致。 |
 
 ## 约束说明
 
@@ -34,7 +34,7 @@ get_saturation_flag(mode: SaturationFlagMode) -> bool
 
 ## 返回值说明
 
-返回`bool`类型。`True`表示指定类别的饱和模式当前处于开启状态，`False`表示关闭状态。
+返回bool类型。True表示指定类别的饱和模式当前处于开启状态，False表示关闭状态。
 
 ## 调用示例
 

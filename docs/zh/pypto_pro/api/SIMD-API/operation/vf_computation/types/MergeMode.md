@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-MergeMode定义了VF计算指令中mask未选中元素（非活跃元素）在目标寄存器中的处理方式。适用于[`vf.add`](../basic_arithmetic/add.md)、[`vf.sub`](../basic_arithmetic/sub.md)、[`vf.mul`](../basic_arithmetic/mul.md)、[`vf.div`](../basic_arithmetic/div.md)等VF计算接口。
+MergeMode定义了VF计算指令中mask未选中元素（非活跃元素）在目标寄存器中的处理方式。适用于[vf.add](../basic_arithmetic/add.md)、[vf.sub](../basic_arithmetic/sub.md)、[vf.mul](../basic_arithmetic/mul.md)、[vf.div](../basic_arithmetic/div.md)等VF计算接口。
 
 ## 原型定义
 

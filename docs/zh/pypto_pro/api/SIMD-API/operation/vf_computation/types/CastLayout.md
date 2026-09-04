@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-CastLayout定义了[`vf.astype`](../type_conversion/astype.md)、[`vf.exp_sub`](../composite_computation/exp_sub.md)和[`vf.muls_cast`](../composite_computation/muls_cast.md)中源操作数和目的操作数位宽不同时，位宽小的元素在寄存器中的排布方式。
+CastLayout定义了[vf.astype](../type_conversion/astype.md)、[vf.exp_sub](../composite_computation/exp_sub.md)和[vf.muls_cast](../composite_computation/muls_cast.md)中源操作数和目的操作数位宽不同时，位宽小的元素在寄存器中的排布方式。
 
 单条指令计算量以位宽更大的数据类型为准，layout用于控制位宽小的元素在寄存器中的排布位置。
 

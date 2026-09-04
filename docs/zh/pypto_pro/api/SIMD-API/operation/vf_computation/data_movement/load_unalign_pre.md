@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-非对齐搬入初始化接口。在读非对齐地址前，应该先通过`vf.load_unalign_pre`进行初始化，保存非32字节对齐的数据，然后再调用`vf.load_unalign`进行数据搬入。
+非对齐搬入初始化接口。在读非对齐地址前，应该先通过vf.load_unalign_pre进行初始化，保存非32字节对齐的数据，然后再调用vf.load_unalign进行数据搬入。
 
 ## 函数原型
 
@@ -26,12 +26,12 @@ load_unalign_pre(align_reg, tile)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `align_reg` | 输入/输出 | 源操作数，非对齐寄存器，UnalignRegForLoad类型，用于缓存非32字节对齐的数据（由`vf.load_unalign_init()`创建）。 |
-| `tile` | 输入 | 源操作数，Tile地址，起始地址需要32字节对齐。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
+| align_reg | 输入/输出 | 源操作数，非对齐寄存器，UnalignRegForLoad类型，用于缓存非32字节对齐的数据（由vf.load_unalign_init()创建）。 |
+| tile | 输入 | 源操作数，Tile地址，起始地址需要32字节对齐。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
 
 ## 约束说明
 
-- `vf.load_unalign_pre`与`vf.load_unalign`接口需要组合使用。
+- vf.load_unalign_pre与vf.load_unalign接口需要组合使用。
 
 ## 返回值说明
 

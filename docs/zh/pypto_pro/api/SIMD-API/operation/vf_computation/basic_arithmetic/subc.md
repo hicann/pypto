@@ -14,11 +14,11 @@
 
 ## 功能说明
 
-该接口根据mask，对源操作数`src0`、`src1`及输入借位`borrow_src`进行按元素求差操作，将结果写入目的操作数`dst`，同时将每个元素的借位结果写入`borrow`。计算公式如下：
+该接口根据mask，对源操作数src0、src1及输入借位borrow_src进行按元素求差操作，将结果写入目的操作数dst，同时将每个元素的借位结果写入borrow。计算公式如下：
 
 $$\{borrow_i, dst_i\} = src0_i - src1_i - borrow\_src_i$$
 
-Borrow flag（借位标志）用于表示减法借位，减法运算在硬件底层通过补码加法实现。若`src0`、`src1`的按位取反结果与`borrow_src`输入按位相加后最高位无进位（即不够减），则在`borrow`（存放借位的mask_reg）中对应位置每4bit设置1，否则写0。
+Borrow flag（借位标志）用于表示减法借位，减法运算在硬件底层通过补码加法实现。若src0、src1的按位取反结果与borrow_src输入按位相加后最高位无进位（即不够减），则在borrow（存放借位的mask_reg）中对应位置每4bit设置1，否则写0。
 
 ## 函数原型
 
@@ -30,10 +30,10 @@ subc(src0, src1, borrow_src, preg, mode: Optional[MergeMode] = None) -> (borrow,
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src0` | 输入 | 源操作数0，[reg_tensor](../reg_tensor.md)，源操作数`src0`、`src1`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT32、DT_UINT32。 |
-| `src1` | 输入 | 源操作数1，[reg_tensor](../reg_tensor.md)，支持的数据类型和`src0`中的说明一致。 |
-| `borrow_src` | 输入 | 输入借位值，[mask_reg](../mask_reg.md)。 |
-| `preg` | 输入 | [mask_reg](../mask_reg.md)。 |
+| src0 | 输入 | 源操作数0，[reg_tensor](../reg_tensor.md)，源操作数src0、src1与目的操作数dst的数据类型保持一致。支持的数据类型为：DT_INT32、DT_UINT32。 |
+| src1 | 输入 | 源操作数1，[reg_tensor](../reg_tensor.md)，支持的数据类型和src0中的说明一致。 |
+| borrow_src | 输入 | 输入借位值，[mask_reg](../mask_reg.md)。 |
+| preg | 输入 | [mask_reg](../mask_reg.md)。 |
 
 ## 约束说明
 
@@ -41,10 +41,10 @@ subc(src0, src1, borrow_src, preg, mode: Optional[MergeMode] = None) -> (borrow,
 
 ## 返回值说明
 
-返回一个二元组 `(borrow, dst)`。
+返回一个二元组 (borrow, dst)。
 
-- `borrow` 输出借位值，[mask_reg](../mask_reg.md)。
-- `dst` 目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型和`src0`中的说明一致。
+- borrow输出借位值，[mask_reg](../mask_reg.md)。
+- dst目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型和src0中的说明一致。
 
 ## 调用示例
 
@@ -102,8 +102,5 @@ def test_example():
 
 if __name__ == "__main__":
     test_example()
-    print("PASSED")
-```
-   test_example()
     print("PASSED")
 ```

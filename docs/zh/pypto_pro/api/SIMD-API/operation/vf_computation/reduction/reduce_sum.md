@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-reg_tensor求和归约：将源寄存器`src`中的所有有效元素（`preg`选中的元素）求和，结果写入目标寄存器的第一个元素`dst[0]`，其余元素置零。
+reg_tensor求和归约：将源寄存器src中的所有有效元素（preg选中的元素）求和，结果写入目标寄存器的第一个元素dst[0]，其余元素置零。
 
-以二叉树累加的方式计算源操作数`src`内有效元素的数据总和。以DT_FP16类型的数据求和为例，在`src`内有128个数，通过二叉树的方式，两两相加，最终得到目的操作数为1个DT_FP16类型的数据sum，计算过程如下图所示：
+以二叉树累加的方式计算源操作数src内有效元素的数据总和。以DT_FP16类型的数据求和为例，在src内有128个数，通过二叉树的方式，两两相加，最终得到目的操作数为1个DT_FP16类型的数据sum，计算过程如下图所示：
 
 **图1** reduce_sum累加顺序
 
@@ -34,16 +34,16 @@ reduce_sum(src, preg, datablock: bool = False, merge_mode: Optional[MergeMode] =
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。 |
-| `preg` | 输入 | [mask_reg](../mask_reg.md)。当所有元素均不参与计算时（mask为空），将目的操作数数据类型的0写入`dst[0]`。 |
-| `datablock` | 输入 | 可选，决定接口工作模式，`True`时按datablock粒度归约，默认`False`。当`datablock=True`时，启用datablock粒度归约，每个datablock独立归约：32位宽（DT_INT32、DT_UINT32、DT_FP32）类型每8个元素为一个datablock，16位宽（DT_INT16、DT_UINT16、DT_FP16）类型每16个元素为一个datablock，各datablock分别求和并将结果写入各自datablock的第一个元素。 |
-| `merge_mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
+| src | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。 |
+| preg | 输入 | [mask_reg](../mask_reg.md)。当所有元素均不参与计算时（mask为空），将目的操作数数据类型的0写入dst[0]。 |
+| datablock | 输入 | 可选，决定接口工作模式，True时按datablock粒度归约，默认False。当datablock=True时，启用datablock粒度归约，每个datablock独立归约：32位宽（DT_INT32、DT_UINT32、DT_FP32）类型每8个元素为一个datablock，16位宽（DT_INT16、DT_UINT16、DT_FP16）类型每16个元素为一个datablock，各datablock分别求和并将结果写入各自datablock的第一个元素。 |
+| merge_mode | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- pl.MergeMode.ZEROING（默认），preg未筛选的元素在dst中置0。<br>- pl.MergeMode.MERGING当前不支持。 |
 
 ## 约束说明
 
 - 数据类型约束：
 
-  **表1** 非`datablock`模式（`datablock=False`）数据类型支持情况
+  **表1** 非datablock模式（datablock=False）数据类型支持情况
 
   | dst（目的操作数类型） | src（源操作数类型） | 累加精度 |
   |---|---|---|
@@ -54,7 +54,7 @@ reduce_sum(src, preg, datablock: bool = False, merge_mode: Optional[MergeMode] =
   | DT_UINT32 | DT_UINT32 | DT_UINT32 |
   | DT_FP32 | DT_FP32 | DT_FP32 |
 
-  **表2** datablock模式（`datablock=True`）数据类型支持情况
+  **表2** datablock模式（datablock=True）数据类型支持情况
 
   | dst（目的操作数类型） | src（源操作数类型） | datablock大小 |
   |---|---|---|
@@ -67,7 +67,7 @@ reduce_sum(src, preg, datablock: bool = False, merge_mode: Optional[MergeMode] =
 
 ## 返回值说明
 
-返回`dst`目标[reg_tensor](../reg_tensor.md)，支持的数据类型和`src`中的说明一致，归约结果写入第一个元素`dst[0]`，其余元素置零。指令内累加顺序采用二叉树累加方式，结果具有确定性。
+返回dst目标[reg_tensor](../reg_tensor.md)，支持的数据类型和src中的说明一致，归约结果写入第一个元素dst[0]，其余元素置零。指令内累加顺序采用二叉树累加方式，结果具有确定性。
 
 ## 调用示例
 

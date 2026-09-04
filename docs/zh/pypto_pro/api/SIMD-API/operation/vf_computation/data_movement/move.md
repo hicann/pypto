@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-将源操作数`src`中的元素复制到目标操作数`dst`的对应位置。支持reg_tensor和mask_reg两种寄存器类型：
+将源操作数src中的元素复制到目标操作数dst的对应位置。支持reg_tensor和mask_reg两种寄存器类型：
 
 - **reg_tensor模式**：对src中的有效元素逐个复制写入dst中对应位置，无效位置保留dst原值。
 - **mask_reg模式**：将src中的bit复制到dst中对应位置。如果有输入mask，则仅复制被mask选定的有效bit，无效位置填0。机制如下图所示：16位宽（DT_INT16、DT_UINT16、DT_FP16、DT_BF16）类型读取完整128bit的 {MASK1, MASK0}，将每个bit复制为2bit；32位宽（DT_INT32、DT_UINT32、DT_FP32）类型读取64bit的MASK0，并将每个bit复制为4bit。
@@ -31,9 +31,9 @@ move(src, preg, mode: Optional[MergeMode] = None) -> dst
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，源操作数`src`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32。 |
-| `preg` | 输入 | [mask_reg](../mask_reg.md)。控制哪些元素/bit参与操作：<br>- **reg_tensor模式**：`preg`为元素操作的有效指示。`preg`选中的位置，将`src`中对应元素复制写入`dst`；`preg`未选中的位置，`dst`保留原值。<br>- **mask_reg模式**：`preg`控制哪些bit有效。`preg`选中的bit，将`src`中对应bit复制到`dst`；`preg`未选中的bit，`dst`对应位置填0。 |
-| `mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.MERGING`（默认），`preg`未选中的元素在`dst`中保留原值。<br>- `pl.MergeMode.ZEROING`，当前**不支持**。 |
+| src | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，源操作数src与目的操作数dst的数据类型保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32。 |
+| preg | 输入 | [mask_reg](../mask_reg.md)。控制哪些元素/bit参与操作：<br>- **reg_tensor模式**：preg为元素操作的有效指示。preg选中的位置，将src中对应元素复制写入dst；preg未选中的位置，dst保留原值。<br>- **mask_reg模式**：preg控制哪些bit有效。preg选中的bit，将src中对应bit复制到dst；preg未选中的bit，dst对应位置填0。 |
+| mode | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- pl.MergeMode.MERGING（默认），preg未选中的元素在dst中保留原值。<br>- pl.MergeMode.ZEROING，当前**不支持**。 |
 
 ## 约束说明
 
@@ -41,7 +41,7 @@ move(src, preg, mode: Optional[MergeMode] = None) -> dst
 
 ## 返回值说明
 
-返回`dst`目的操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，支持的数据类型与`src`中的说明一致。
+返回dst目的操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，支持的数据类型与src中的说明一致。
 
 ## 调用示例
 

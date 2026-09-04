@@ -14,17 +14,17 @@
 
 ## 功能说明
 
-为提升对不规则内存地址的处理能力，reg_tensor支持在数据搬运过程中对非32字节对齐的地址进行访问，降低非对齐访问带来的性能开销。`vf.load_unalign`能够实现数据从非对齐的地址连续搬运至reg_tensor，利用非对齐寄存器UnalignRegForLoad作为临时缓存区，暂存跨对齐边界的数据，从而实现高效的连续非对齐数据传输。
+为提升对不规则内存地址的处理能力，reg_tensor支持在数据搬运过程中对非32字节对齐的地址进行访问，降低非对齐访问带来的性能开销。vf.load_unalign能够实现数据从非对齐的地址连续搬运至reg_tensor，利用非对齐寄存器UnalignRegForLoad作为临时缓存区，暂存跨对齐边界的数据，从而实现高效的连续非对齐数据传输。
 
 非对齐搬入有三类接口：普通搬运接口、PostUpdate扩展搬运接口、使用AddrReg寄存器存储偏移量接口。
 
 | 接口类型 | 触发条件 | 说明 |
 |---|---|---|
-| 普通搬运接口 | 不传`stride`，`post_update=False`（默认） | 完成一次搬运后，Tile地址不会自动更新，每次迭代需要手动更新地址。 |
-| PostUpdate扩展搬运接口 | `post_update=True`或传入`stride` | 完成一次搬运后，Tile地址会自动更新，每次迭代不需要手动更新地址。 |
-| AddrReg存储偏移量接口 | offset为`vf.create_addr_reg`创建的AddrReg | 在每次迭代中，需要先调用`vf.create_addr_reg`手动设定地址偏移量，再调用搬运指令。 |
+| 普通搬运接口 | 不传stride，post_update=False（默认） | 完成一次搬运后，Tile地址不会自动更新，每次迭代需要手动更新地址。 |
+| PostUpdate扩展搬运接口 | post_update=True或传入stride | 完成一次搬运后，Tile地址会自动更新，每次迭代不需要手动更新地址。 |
+| AddrReg存储偏移量接口 | offset为vf.create_addr_reg创建的AddrReg | 在每次迭代中，需要先调用vf.create_addr_reg手动设定地址偏移量，再调用搬运指令。 |
 
-在读非对齐地址前，应该先通过`vf.load_unalign_pre`进行初始化，保存非32字节对齐的数据，然后再调用`vf.load_unalign`进行数据搬入。
+在读非对齐地址前，应该先通过vf.load_unalign_pre进行初始化，保存非32字节对齐的数据，然后再调用vf.load_unalign进行数据搬入。
 
 ### 非对齐搬入原理
 
@@ -44,9 +44,9 @@
 
 ![](../../../../figures/contiguous_unaligned_load_store.jpg)
 
-连续非对齐搬入时，`vf.load_unalign`会将后续未对齐的数据缓存至`vf.load_unalign_init`创建的ureg，所以下一次搬入不需要再次调用`vf.load_unalign_pre`，只需在迭代开始前调用一次`vf.load_unalign_pre`，从而实现非对齐搬入的性能优化。
+连续非对齐搬入时，vf.load_unalign会将后续未对齐的数据缓存至vf.load_unalign_init创建的ureg，所以下一次搬入不需要再次调用vf.load_unalign_pre，只需在迭代开始前调用一次vf.load_unalign_pre，从而实现非对齐搬入的性能优化。
 
-连续非对齐搬出时，下次迭代的`vf.store_unalign`会将本次迭代`vf.store_unalign`缓存至ureg中的数据写入Tile，所以本次迭代不需要调用`vf.store_unalign_post`将ureg数据写入Tile，只需在迭代结束后调用一次`vf.store_unalign_post`，从而实现非对齐搬出的性能优化。
+连续非对齐搬出时，下次迭代的vf.store_unalign会将本次迭代vf.store_unalign缓存至ureg中的数据写入Tile，所以本次迭代不需要调用vf.store_unalign_post将ureg数据写入Tile，只需在迭代结束后调用一次vf.store_unalign_post，从而实现非对齐搬出的性能优化。
 
 如上图所示，将Tile地址48 ~ 560的DT_UINT32数据[1, 2, 3, ..., 128]搬入至dstReg，再搬回Tile，需要两次搬入搬出操作，即for循环执行两次，初始化和后处理移至for循环外。stride = 256B / sizeof(T)（即每次地址偏移256B），repeatTimes = dataSize / 256B（即迭代次数=总数据量/VL）。
 
@@ -62,25 +62,25 @@
 ## 函数原型
 
 ```python
-load_unalign(tile, align_reg, stride=None, post_update: bool = False) -> dst
+load_unalign(align_reg, tile, stride=None, post_update: bool = False) -> dst
 ```
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `tile` | 输入 | 源操作数，Tile地址，起始地址不需要32字节对齐。目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
-| `align_reg` | 输入/输出 | 非对齐寄存器，UnalignRegForLoad类型，用于存储非32字节的数据，寄存器大小为32字节（由`vf.load_unalign_init()`创建）。 |
-| `stride` | 输入 | 可选，地址更新步长，单位：字节。仅在`post_update=True`时有效。 |
-| `post_update` | 输入 | 可选，`True`时搬运后地址自动累进，默认`False`。 |
+| tile | 输入 | 源操作数，Tile地址，起始地址需要32字节对齐。目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
+| align_reg | 输入/输出 | 非对齐寄存器，UnalignRegForLoad类型，用于存储非32字节的数据，寄存器大小为32字节（由vf.load_unalign_init()创建）。 |
+| stride | 输入 | 可选，地址更新步长，单位：元素个数。仅在post_update=True时有效。 |
+| post_update | 输入 | 可选，True时搬运后地址自动累进，默认False。 |
 
 ## 约束说明
 
-- `vf.load_unalign_pre`与`vf.load_unalign`接口需要组合使用。
+- vf.load_unalign_pre与vf.load_unalign接口需要组合使用。
 
 ## 返回值说明
 
-返回`dst`目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。
+返回dst目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。
 
 ## 调用示例
 

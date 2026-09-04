@@ -14,13 +14,13 @@
 
 ## 功能说明
 
-该接口根据mask对`src0`、`src1`和`dst`逐元素执行乘加融合运算（FMA），将src0与src1相乘的积加上`dst`的当前值，结果写回`dst`。计算公式如下：
+该接口根据mask对src0、src1和dst逐元素执行乘加融合运算（FMA），将src0与src1相乘的积加上dst的当前值，结果写回dst。计算公式如下：
 
 $$
 dst_i = src0_i \times src1_i + dst_i
 $$
 
-由于乘法和加法在单条指令内完成，中间乘积不会因寄存器宽度限制而被截断或舍入，因此精度高于先调用`vf.mul`再调用`vf.add`的分步写法。该指令对应硬件`vmula`指令（AscendC MulAddDst）。
+由于乘法和加法在单条指令内完成，中间乘积不会因寄存器宽度限制而被截断或舍入，因此精度高于先调用vf.mul再调用vf.add的分步写法。
 
 dst寄存器既被读取（作为加数）又被写入（存储结果），调用前必须预初始化为加数值。
 
@@ -34,10 +34,10 @@ mul_add_dst(src0, src1, preg, mode: Optional[MergeMode] = None) -> dst
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src0` | 输入 | 源操作数0，[reg_tensor](../reg_tensor.md)，源操作数`src0`、`src1`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_FP16、DT_BF16、DT_FP32。 |
-| `src1` | 输入 | 源操作数1，[reg_tensor](../reg_tensor.md)，数据类型与`src0`一致。 |
-| `preg` | 输入 | [mask_reg](../mask_reg.md)。 |
-| `mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
+| src0 | 输入 | 源操作数0，[reg_tensor](../reg_tensor.md)，源操作数src0、src1与目的操作数dst的数据类型保持一致。支持的数据类型为：DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_FP16、DT_BF16、DT_FP32。 |
+| src1 | 输入 | 源操作数1，[reg_tensor](../reg_tensor.md)，数据类型与src0一致。 |
+| preg | 输入 | [mask_reg](../mask_reg.md)。 |
+| mode | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- pl.MergeMode.ZEROING（默认），preg未筛选的元素在dst中置0。<br>- pl.MergeMode.MERGING当前不支持。 |
 
 ## 约束说明
 
@@ -45,7 +45,7 @@ mul_add_dst(src0, src1, preg, mode: Optional[MergeMode] = None) -> dst
 
 ## 返回值说明
 
-返回`dst`目标/累加操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型和`src0`中的说明一致。调用前需预初始化为加数值。
+返回dst目标/累加操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型和src0中的说明一致。调用前需预初始化为加数值。
 
 ## 调用示例
 

@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-MaskPattern定义了[`vf.create_mask`](../mask_operations/create_mask.md)和[`vf.mask_gen_with_reg_tensor`](../mask_operations/mask_gen_with_reg_tensor.md)的掩码生成模式，用于控制寄存器中哪些元素被标记为有效。
+MaskPattern定义了[vf.create_mask](../mask_operations/create_mask.md)和[vf.mask_gen_with_reg_tensor](../mask_operations/mask_gen_with_reg_tensor.md)的掩码生成模式，用于控制寄存器中哪些元素被标记为有效。
 
 ## 原型定义
 

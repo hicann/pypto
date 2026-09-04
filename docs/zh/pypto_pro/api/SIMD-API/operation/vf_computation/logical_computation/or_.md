@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-根据`preg`对输入数据`src0`、`src1`按位求或操作，将结果写入`dst`。
+根据preg对输入数据src0、src1按位求或操作，将结果写入dst。
 
 $$dstReg_i = srcReg0_i \;|\; srcReg1_i$$
 
@@ -28,10 +28,10 @@ or_(src0, src1, preg, mode: Optional[MergeMode] = None) -> dst
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src0` | 输入 | 源操作数0，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)，支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0。 |
-| `src1` | 输入 | 源操作数1，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)，数据类型与`src0`一致。 |
-| `preg` | 输入 | [mask_reg](../mask_reg.md)。 |
-| `mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
+| src0 | 输入 | 源操作数0，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)，支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0。 |
+| src1 | 输入 | 源操作数1，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)，数据类型与src0一致。 |
+| preg | 输入 | [mask_reg](../mask_reg.md)。 |
+| mode | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- pl.MergeMode.ZEROING（默认），preg未筛选的元素在dst中置0。<br>- pl.MergeMode.MERGING当前不支持。 |
 
 ## 约束说明
 
@@ -39,7 +39,7 @@ or_(src0, src1, preg, mode: Optional[MergeMode] = None) -> dst
 
 ## 返回值说明
 
-返回`dst`目的操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，支持的数据类型和`src0`中的说明一致。
+返回dst目的操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，支持的数据类型和src0中的说明一致。
 
 ## 调用示例
 
@@ -101,7 +101,7 @@ if __name__ == "__main__":
 
 ### mask_reg调用示例
 
-当源操作数为mask_reg时，`vf.or_`对两个掩码按位或。
+当源操作数为mask_reg时，vf.or_对两个掩码按位或。
 
 ```python
 import os

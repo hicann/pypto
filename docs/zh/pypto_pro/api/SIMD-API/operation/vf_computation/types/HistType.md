@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-HistType定义了[`vf.histograms`](../sorting_and_indexing/histograms.md)直方图的统计模式，用于指定是累加统计还是频次统计。
+HistType定义了[vf.histograms](../sorting_and_indexing/histograms.md)直方图的统计模式，用于指定是累加统计还是频次统计。
 
 ## 原型定义
 

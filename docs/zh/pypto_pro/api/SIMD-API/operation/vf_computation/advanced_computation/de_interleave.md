@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-给定源操作数`src0`和`src1`，将`src0`和`src1`中的元素解交织存入结果操作数`dst0`和`dst1`中。解交织排列方式如下图所示，其中每个方格代表一个元素：
+给定源操作数src0和src1，将src0和src1中的元素解交织存入结果操作数dst0和dst1中。解交织排列方式如下图所示，其中每个方格代表一个元素：
 
 $$dstReg0_i = srcReg_{2i}, \quad dstReg1_i = srcReg_{2i+1}$$
 
@@ -32,8 +32,8 @@ de_interleave(src0, src1, dtype: Optional[DType] = None) -> (dst0, dst1)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src0` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型。<br>- **reg_tensor输入**：源操作数`src0`、`src1`和目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32。<br>- **mask_reg输入**：支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32。 |
-| `src1` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，支持的数据类型和`src0`一致。 |
+| src0 | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型。<br>- **reg_tensor输入**：源操作数src0、src1和目的操作数dst的数据类型保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32。<br>- **mask_reg输入**：支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32。 |
+| src1 | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，支持的数据类型和src0一致。 |
 
 ## 约束说明
 
@@ -43,10 +43,10 @@ de_interleave(src0, src1, dtype: Optional[DType] = None) -> (dst0, dst1)
 
 ## 返回值说明
 
-返回一个二元组 `(dst0, dst1)`。
+返回一个二元组 (dst0, dst1)。
 
-- `dst0` 目的操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，支持的数据类型和`src0`中的说明一致。
-- `dst1` 目的操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，支持的数据类型和`src0`中的说明一致。
+- dst0目的操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，支持的数据类型和src0中的说明一致。
+- dst1目的操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，支持的数据类型和src0中的说明一致。
 
 ## 调用示例
 
@@ -108,7 +108,7 @@ if __name__ == "__main__":
 
 ### mask_reg调用示例
 
-当源操作数为mask_reg时，`vf.de_interleave`按位解交织两个mask_reg。解交织位宽由mask_reg的数据类型决定。
+当源操作数为mask_reg时，vf.de_interleave按位解交织两个mask_reg。解交织位宽由mask_reg的数据类型决定。
 
 ```python
 import os

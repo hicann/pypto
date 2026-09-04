@@ -14,17 +14,17 @@
 
 ## 功能说明
 
-对向量寄存器进行按位类型强转，不进行任何数值转换。生成的C++代码为引用强转赋值语句：`dst = (RegTensor<T>&)src;`。
+对向量寄存器进行按位类型强转，不进行任何数值转换。
 
 该接口支持两种使用方式：
 
-- **赋值形式**：`dst = vf.bit_cast(src, dtype=xxx)` — 将`src`按位重解释为`dtype`类型，赋值给新声明的`dst`寄存器。
-- **嵌套参数形式**：`vf.xor(vf.bit_cast(reg_a, dtype=pl.DT_UINT32), vf.bit_cast(reg_b, dtype=pl.DT_UINT32), preg)` — 作为其他`vf.xxx`调用的参数，满足指令对操作数类型的要求。
+- **赋值形式**：dst = vf.bit_cast(src, dtype=xxx) — 将src按位重解释为dtype类型，赋值给新声明的dst寄存器。
+- **嵌套参数形式**：vf.xor(vf.bit_cast(reg_a, dtype=pl.DT_UINT32), vf.bit_cast(reg_b, dtype=pl.DT_UINT32), preg) — 作为其他vf.xxx调用的参数，满足指令对操作数类型的要求。
 
-与`vf.astype`的区别：
+与vf.astype的区别：
 
-- `vf.astype`执行真正的数值类型转换（如DT_FP32→DT_FP16），元素的值会发生变化。
-- `vf.bit_cast`仅改变类型标签，比特模式不变。
+- vf.astype执行真正的数值类型转换（如DT_FP32→DT_FP16），元素的值会发生变化。
+- vf.bit_cast仅改变类型标签，比特模式不变。
 
 ## 函数原型
 
@@ -36,16 +36,16 @@ bit_cast(src, dtype: DType) -> dst
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)。 |
-| `dtype` | 输入 | 目标数据类型。指定`src`被重解释为的数据类型。 |
+| src | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)。 |
+| dtype | 输入 | 目标数据类型。指定src被重解释为的数据类型。 |
 
 ## 返回值说明
 
-返回`dst`目标操作数，[reg_tensor](../reg_tensor.md)。数据类型由`dtype`参数决定。
+返回dst目标操作数，[reg_tensor](../reg_tensor.md)。数据类型由dtype参数决定。
 
 ## 约束说明
 
-- 源操作数和目标操作数的位宽必须相同（即`src`和`dtype`的`GetBit()`返回值一致），否则行为未定义。
+- 源操作数和目标操作数的位宽必须相同（即src和dtype的GetBit()返回值一致），否则行为未定义。
 
 ## 调用示例
 
@@ -121,7 +121,7 @@ if __name__ == "__main__":
 
 ### 嵌套参数形式：HF8转为UINT8进行按位运算
 
-将 `DT_HF8` 寄存器按位重解释为 `DT_UINT8`，然后执行 `vf.or_` 按位或运算。HF8 为8位存储类型，加载后RegTensor包含256个元素；`vf.bit_cast` 将其按位重解释为 `DT_UINT8`（同样256个元素），`vf.or_` 对UINT8寄存器执行按位或。
+将DT_HF8寄存器按位重解释为DT_UINT8，然后执行vf.or_按位或运算。HF8为8位存储类型，加载后RegTensor包含256个元素；vf.bit_cast将其按位重解释为DT_UINT8（同样256个元素），vf.or_对UINT8寄存器执行按位或。
 
 ```python
 import os

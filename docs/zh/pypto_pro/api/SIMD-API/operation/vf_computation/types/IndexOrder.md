@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-IndexOrder定义了[`vf.arange`](../sorting_and_indexing/arange.md)生成的索引序列方向，用于控制序列是递增还是递减。
+IndexOrder定义了[vf.arange](../sorting_and_indexing/arange.md)生成的索引序列方向，用于控制序列是递增还是递减。
 
 ## 原型定义
 

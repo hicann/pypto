@@ -26,13 +26,13 @@ reg_tensor(dtype: DType) -> reg_tensor
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dtype` | 输入 | 寄存器存储的数据类型，决定寄存器覆盖的元素个数。 <br>- `vf.reg_tensor`不能直接调用，由编译器在赋值形式中自动声明。<br>- 寄存器在`@pl.vector_function`函数内创建和使用，函数结束后自动释放。<br>- 创建寄存器后必须通过`vf.load_align`或`vf.full`初始化数据，否则内容未定义。<br>- RegTensor寄存器数量上限为32。超出限制上限的寄存器数据会写入预留的8K UB内存中，可能会引起性能劣化。编译器会自动复用生命周期结束的寄存器和预留内存，若寄存器与预留内存均存在可用空间，将优先复用寄存器。 |
+| dtype | 输入 | 寄存器存储的数据类型，决定寄存器覆盖的元素个数。 <br>- vf.reg_tensor不能直接调用，由编译器在赋值形式中自动声明。<br>- 寄存器在@pl.vector_function函数内创建和使用，函数结束后自动释放。<br>- 创建寄存器后必须通过vf.load_align或vf.full初始化数据，否则内容未定义。<br>- RegTensor寄存器数量上限为32。超出限制上限的寄存器数据会写入预留的8K UB内存中，可能会引起性能劣化。编译器会自动复用生命周期结束的寄存器和预留内存，若寄存器与预留内存均存在可用空间，将优先复用寄存器。 |
 
 ## 约束说明
 
 - 数据类型约束：
 
-  RegTensor支持的数据类型由`dtype`参数决定，不同dtype对应不同的元素个数（寄存器总大小固定为256字节）：
+  RegTensor支持的数据类型由dtype参数决定，不同dtype对应不同的元素个数（寄存器总大小固定为256字节）：
 
   | dtype | 元素宽度 | 元素个数 |
   |---|---|---|
@@ -42,9 +42,9 @@ reg_tensor(dtype: DType) -> reg_tensor
   | DT_INT32 / DT_UINT32 / DT_FP32 | 32 bit | 64 |
   | DT_INT64 / DT_UINT64 | 64 bit | 32 |
 
-  > **FP8/FP4 说明**：FP8 类型（`DT_FP8E4M3FN`、`DT_FP8E5M2`、`DT_FP8E8M0`、`DT_HF8`）为 8 位浮点存储类型，仅支持数据搬运（`load_align`/`store_align`）、数据填充（`full`）和类型转换（`astype`），不支持直接参与算术运算。FP4 类型（`DT_FP4E2M1`、`DT_FP4E1M2`、`DT_FP4`）为 4 位浮点存储类型，两个元素打包在一个字节中（b8 存储），同样仅支持搬运、填充和类型转换。使用时需通过`vf.astype`转换为 FP32/BF16/FP16 进行计算。
+  > **FP8/FP4 说明**：FP8 类型（DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8）为 8 位浮点存储类型，仅支持数据搬运（load_align/store_align）、数据填充（full）和类型转换（astype），不支持直接参与算术运算。FP4 类型（DT_FP4E2M1、DT_FP4E1M2、DT_FP4）为 4 位浮点存储类型，两个元素打包在一个字节中（b8 存储），同样仅支持搬运、填充和类型转换。使用时需通过vf.astype转换为 FP32/BF16/FP16 进行计算。
 
-- `vf.reg_tensor`为类型声明，不产生返回值。寄存器由赋值形式自动声明（如`reg = vf.load_align(...)`或`reg = vf.add(...)`）。
+- vf.reg_tensor为类型声明，不产生返回值。寄存器由赋值形式自动声明（如reg = vf.load_align(...)或reg = vf.add(...)）。
 
 ## 返回值说明
 

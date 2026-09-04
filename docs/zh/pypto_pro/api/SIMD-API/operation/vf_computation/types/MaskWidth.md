@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-MaskWidth定义了[`vf.get_mask_spr`](../data_movement/get_mask_spr.md)读取SPR掩码时的位宽展开模式，用于控制从MASK寄存器读取掩码数据时的位扩展粒度。
+MaskWidth定义了[vf.get_mask_spr](../data_movement/get_mask_spr.md)读取SPR掩码时的位宽展开模式，用于控制从MASK寄存器读取掩码数据时的位扩展粒度。
 
 ## 原型定义
 

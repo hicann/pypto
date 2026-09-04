@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-该接口用于实现PReLU（Parametric ReLU）激活函数：当源操作数`src`中对应元素大于等于0时，直接将该元素写入目的操作数`dst`；否则将`src`与`slope`对应元素相乘的结果写入`dst`，计算公式如下：
+该接口用于实现PReLU（Parametric ReLU）激活函数：当源操作数src中对应元素大于等于0时，直接将该元素写入目的操作数dst；否则将src与slope对应元素相乘的结果写入dst，计算公式如下：
 
 $$dst_i = \begin{cases} src_i & src_i \geq 0 \\ src_i \times slope_i & src_i < 0 \end{cases}$$
 
@@ -28,10 +28,10 @@ prelu(src, slope, preg, mode: Optional[MergeMode] = None) -> dst
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)，源操作数`src`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_FP16、DT_FP32。 |
-| `slope` | 输入 | 斜率源操作数，[reg_tensor](../reg_tensor.md)，数据类型与`src`一致。 |
-| `preg` | 输入 | [mask_reg](../mask_reg.md)。 |
-| `mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
+| src | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)，源操作数src与目的操作数dst的数据类型保持一致。支持的数据类型为：DT_FP16、DT_FP32。 |
+| slope | 输入 | 斜率源操作数，[reg_tensor](../reg_tensor.md)，数据类型与src一致。 |
+| preg | 输入 | [mask_reg](../mask_reg.md)。 |
+| mode | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- pl.MergeMode.ZEROING（默认），preg未筛选的元素在dst中置0。<br>- pl.MergeMode.MERGING当前不支持。 |
 
 ## 约束说明
 
@@ -39,7 +39,7 @@ prelu(src, slope, preg, mode: Optional[MergeMode] = None) -> dst
 
 ## 返回值说明
 
-返回`dst`目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型和`src`中的说明一致。
+返回dst目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型和src中的说明一致。
 
 ## 调用示例
 

@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-从标量值更新mask_reg。`vf.update_mask`根据当前scalarValue的值生成对应长度的有效位掩码。以16位宽数据类型为例，掩码生成过程如下图所示：
+从标量值更新mask_reg。vf.update_mask根据当前scalarValue的值生成对应长度的有效位掩码。以16位宽数据类型为例，掩码生成过程如下图所示：
 
 **图1**update_mask 16位宽数据类型下基于scalarValue的掩码生成
 
@@ -30,27 +30,27 @@ update_mask(scalar, dtype: Optional[DType] = None) -> preg
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `scalar` | 输入 | 标量值，其比特位定义新的掩码模式。 |
-| `dtype` | 输入 | 可选，掩码对应的数据类型，决定掩码宽度（默认`pl.DT_FP32`）。<br>- 本接口操作数为寄存器，不涉及地址对齐。<br>- 本接口不修改全局寄存器的值。 |
+| scalar | 输入 | 标量值，其比特位定义新的掩码模式。 |
+| dtype | 输入 | 可选，掩码对应的数据类型，决定掩码宽度（默认pl.DT_FP32）。<br>- 本接口操作数为寄存器，不涉及地址对齐。<br>- 本接口不修改全局寄存器的值。 |
 
 ## 约束说明
 
 - 数据类型约束：
 
-  `dtype`参数决定掩码粒度（即每多少 bit 对应一个数据元素），掩码寄存器总位宽固定为 256 bit：
+  dtype参数决定掩码粒度（即每多少 bit 对应一个数据元素），掩码寄存器总位宽固定为 256 bit：
 
   | dtype | 元素位宽 | 元素个数 | 每元素掩码位数 | 总掩码位数 |
   |---|---|---|---|---|
-  | `DT_INT8` / `DT_UINT8` / `DT_FP8E4M3FN` / `DT_FP8E5M2` / `DT_FP8E8M0` / `DT_HF8` / `DT_FP4E2M1` / `DT_FP4E1M2` | 8 bit | 256 | 1 bit（b8 粒度） | 256 bit |
-  | `DT_FP16` / `DT_UINT16` / `DT_BF16` | 16 bit | 128 | 2 bit（b16 粒度） | 256 bit |
-  | `DT_FP32` / `DT_INT32` / `DT_UINT32` | 32 bit | 64 | 4 bit（b32 粒度） | 256 bit |
-  | `DT_INT64` / `DT_UINT64` | 64 bit | 32 | 8 bit（b64 粒度） | 256 bit |
+  | DT_INT8 / DT_UINT8 / DT_FP8E4M3FN / DT_FP8E5M2 / DT_FP8E8M0 / DT_HF8 / DT_FP4E2M1 / DT_FP4E1M2 | 8 bit | 256 | 1 bit（b8 粒度） | 256 bit |
+  | DT_FP16 / DT_UINT16 / DT_BF16 | 16 bit | 128 | 2 bit（b16 粒度） | 256 bit |
+  | DT_FP32 / DT_INT32 / DT_UINT32 | 32 bit | 64 | 4 bit（b32 粒度） | 256 bit |
+  | DT_INT64 / DT_UINT64 | 64 bit | 32 | 8 bit（b64 粒度） | 256 bit |
 
-  > **注意**：FP8 类型（FP8E4M3FN/FP8E5M2/FP8E8M0/HF8）和 FP4 类型（FP4E2M1/FP4E1M2）均为 b8 存储，按 b8 粒度处理。掩码寄存器始终为`[mask_reg](../mask_reg.md)`类型。
+  > **注意**：FP8 类型（FP8E4M3FN/FP8E5M2/FP8E8M0/HF8）和 FP4 类型（FP4E2M1/FP4E1M2）均为 b8 存储，按 b8 粒度处理。掩码寄存器始终为[mask_reg](../mask_reg.md)类型。
 
 ## 返回值说明
 
-返回`preg`目标[mask_reg](../mask_reg.md)。
+返回preg目标[mask_reg](../mask_reg.md)。
 
 ## 调用示例
 

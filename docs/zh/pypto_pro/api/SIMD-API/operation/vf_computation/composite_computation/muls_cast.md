@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-该接口用于将源操作数`src`与标量`scalar`相乘，再按照`layout`将结果转换为DT_FP16类型，根据`preg`将计算结果写入目的操作数`dst`。计算公式如下：
+该接口用于将源操作数src与标量scalar相乘，再按照layout将结果转换为DT_FP16类型，根据preg将计算结果写入目的操作数dst。计算公式如下：
 
 $$
 dst_i = cast\_round\_to\_f16(src_i \times scalar)
@@ -30,11 +30,11 @@ muls_cast(src, scalar, preg, dtype: DType, layout: Optional[CastLayout] = None) 
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。 |
-| `scalar` | 输入 | 标量源操作数。 |
-| `preg` | 输入 | [mask_reg](../mask_reg.md)。 |
-| `dtype` | 输入 | 指定目标reg_tensor的数据类型，支持的数据类型请参见[约束说明](#约束说明)。由于乘法后进行类型转换（DT_FP32→DT_FP16），目标类型与源类型不同，必须显式指定，通常为`pl.DT_FP16`。 |
-| `layout` | 输入 | 可选，结果放置半区：`pl.CastLayout.ZERO`（偶数半区，默认，PART_EVEN）或`pl.CastLayout.ONE`（奇数半区，PART_ODD），对应[CastLayout](../types/CastLayout.md)类型。计算按照`CAST_ROUND`模式舍入。 |
+| src | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。 |
+| scalar | 输入 | 标量源操作数。 |
+| preg | 输入 | [mask_reg](../mask_reg.md)。 |
+| dtype | 输入 | 指定目标reg_tensor的数据类型，支持的数据类型请参见[约束说明](#约束说明)。由于乘法后进行类型转换（DT_FP32→DT_FP16），目标类型与源类型不同，必须显式指定，通常为pl.DT_FP16。 |
+| layout | 输入 | 可选，结果放置半区：pl.CastLayout.ZERO（偶数半区，默认，PART_EVEN）或pl.CastLayout.ONE（奇数半区，PART_ODD），对应[CastLayout](../types/CastLayout.md)类型。计算按照CAST_ROUND模式舍入。 |
 
 ## 约束说明
 
@@ -48,7 +48,7 @@ muls_cast(src, scalar, preg, dtype: DType, layout: Optional[CastLayout] = None) 
 
 ## 返回值说明
 
-返回`dst`目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。
+返回dst目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。
 
 ## 调用示例
 

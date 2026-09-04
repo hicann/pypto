@@ -26,8 +26,8 @@ get_ctrl_spr(start_bit: int, end_bit: int) -> int
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `start_bit` | 输入 | 读取的特殊寄存器起始比特位（0-63），编译期常量。 |
-| `end_bit` | 输入 | 读取的特殊寄存器结束比特位（0-63），编译期常量。 |
+| start_bit | 输入 | 读取的特殊寄存器起始比特位（0-63），编译期常量。 |
+| end_bit | 输入 | 读取的特殊寄存器结束比特位（0-63），编译期常量。 |
 
 ## 约束说明
 
@@ -35,7 +35,7 @@ get_ctrl_spr(start_bit: int, end_bit: int) -> int
 
 ## 返回值说明
 
-返回`int`类型，为CTRL寄存器中`[start_bit, end_bit]`比特区间的值。
+返回int类型，为CTRL寄存器中[start_bit, end_bit]比特区间的值。
 
 ## 调用示例
 

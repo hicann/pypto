@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-该接口根据`preg`将`src0`与`src1`逐元素相减再求绝对值，计算结果写入`dst`。
+该接口根据preg将src0与src1逐元素相减再求绝对值，计算结果写入dst。
 
 计算公式如下：
 
@@ -32,10 +32,10 @@ abs_sub(src0, src1, preg, mode: Optional[MergeMode] = None) -> dst
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src0` | 输入 | 源操作数0，[reg_tensor](../reg_tensor.md)，支持的数据类型为：DT_FP16、DT_FP32。 |
-| `src1` | 输入 | 源操作数1，[reg_tensor](../reg_tensor.md)，支持的数据类型和`src0`中的说明一致。 |
-| `preg` | 输入 | [mask_reg](../mask_reg.md)。 |
-| `mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
+| src0 | 输入 | 源操作数0，[reg_tensor](../reg_tensor.md)，支持的数据类型为：DT_FP16、DT_FP32。 |
+| src1 | 输入 | 源操作数1，[reg_tensor](../reg_tensor.md)，支持的数据类型和src0中的说明一致。 |
+| preg | 输入 | [mask_reg](../mask_reg.md)。 |
+| mode | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- pl.MergeMode.ZEROING（默认），preg未筛选的元素在dst中置0。<br>- pl.MergeMode.MERGING当前不支持。 |
 
 ## 约束说明
 
@@ -43,7 +43,7 @@ abs_sub(src0, src1, preg, mode: Optional[MergeMode] = None) -> dst
 
 ## 返回值说明
 
-返回`dst`目标[reg_tensor](../reg_tensor.md)，支持的数据类型和`src0`中的说明一致。
+返回dst目标[reg_tensor](../reg_tensor.md)，支持的数据类型和src0中的说明一致。
 
 ## 调用示例
 

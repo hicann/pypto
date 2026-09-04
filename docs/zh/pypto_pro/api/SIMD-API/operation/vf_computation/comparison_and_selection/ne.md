@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-逐元素比较两个操作数`src0`、`src1`是否不相等，将比较结果写入目的操作数`dst_mask`中对应比特位，如果比较后的结果为真，则输出结果的对应比特位为1，否则为0。
+逐元素比较两个操作数src0、src1是否不相等，将比较结果写入目的操作数dst_mask中对应比特位，如果比较后的结果为真，则输出结果的对应比特位为1，否则为0。
 
 第二个参数可以是标量或reg_tensor，接口自动识别并分发到对应的硬件指令。
 
@@ -30,10 +30,10 @@ ne(src0, src1, preg, cmp_dtype: Optional[DType] = None) -> dst_mask
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src0` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32。`src0`和`src1`可以是同一个reg_tensor。 |
-| `src1` | 输入 | 比较操作数，可以是标量或[reg_tensor](../reg_tensor.md)，数据类型与`src0`一致。 |
-| `preg` | 输入 | [mask_reg](../mask_reg.md)，指定参与比较的元素范围。通过`preg`参数控制的未选中元素在目的操作数中被置零。 |
-| `cmp_dtype` | 输入 | 可选，向量比较时指定比较位宽的数据类型。若未传入，则根据`src0`的dtype自动推断；若传入，则按指定数据类型宽度进行比较。例如将DT_UINT16寄存器按DT_UINT8宽度比较时，传入`cmp_dtype=pl.DT_UINT8`。 |
+| src0 | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32。src0和src1可以是同一个reg_tensor。 |
+| src1 | 输入 | 比较操作数，可以是标量或[reg_tensor](../reg_tensor.md)，数据类型与src0一致。 |
+| preg | 输入 | [mask_reg](../mask_reg.md)，指定参与比较的元素范围。通过preg参数控制的未选中元素在目的操作数中被置零。 |
+| cmp_dtype | 输入 | 可选，向量比较时指定比较位宽的数据类型。若未传入，则根据src0的dtype自动推断；若传入，则按指定数据类型宽度进行比较。例如将DT_UINT16寄存器按DT_UINT8宽度比较时，传入cmp_dtype=pl.DT_UINT8。 |
 
 ## 约束说明
 
@@ -41,7 +41,7 @@ ne(src0, src1, preg, cmp_dtype: Optional[DType] = None) -> dst_mask
 
 ## 返回值说明
 
-返回`dst_mask`目标[mask_reg](../mask_reg.md)，存放比较结果。
+返回dst_mask目标[mask_reg](../mask_reg.md)，存放比较结果。
 
 ## 调用示例
 

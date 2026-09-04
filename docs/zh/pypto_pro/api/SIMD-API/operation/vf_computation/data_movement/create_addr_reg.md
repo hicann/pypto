@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-`vf.create_addr_reg`用于创建地址偏移量寄存器（AddrReg），在多维循环中逐层累加地址偏移。AddrReg可作为`vf.load_align`和`vf.store_align`的地址偏移参数，替代直接传入整数偏移量。
+vf.create_addr_reg用于创建地址偏移量寄存器（AddrReg），在多维循环中逐层累加地址偏移。AddrReg可作为vf.load_align和vf.store_align的地址偏移参数，替代直接传入整数偏移量。
 
-偏移量计算公式为`offset = index0 * stride0 + index1 * stride1 + ...`，支持1-4层循环轴。在循环中，index每次递增1，AddrReg的偏移量自动增加对应的stride。
+偏移量计算公式为offset = index0 * stride0 + index1 * stride1 + ...，支持1-4层循环轴。在循环中，index每次递增1，AddrReg的偏移量自动增加对应的stride。
 
 ## 函数原型
 
@@ -28,15 +28,15 @@ create_addr_reg(index0, stride0, index1=None, stride1=None, index2=None, stride2
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `index0` | 输入 | 最外层循环轴索引（循环变量）。 |
-| `stride0` | 输入 | 最外层循环轴对应的地址偏移量，单位为元素个数。 |
-| `index1` | 输入 | 可选，第二层循环轴索引。 |
-| `stride1` | 输入 | 可选，第二层循环轴对应的地址偏移量，单位为元素个数。 |
-| `index2` | 输入 | 可选，第三层循环轴索引。 |
-| `stride2` | 输入 | 可选，第三层循环轴对应的地址偏移量，单位为元素个数。 |
-| `index3` | 输入 | 可选，第四层循环轴索引。 |
-| `stride3` | 输入 | 可选，第四层循环轴对应的地址偏移量，单位为元素个数。 |
-| `dtype` | 输入 | 可选，模板参数对应的数据类型（默认`pl.DT_FP32`）。决定元素宽度：8位宽（DT_INT8、DT_UINT8）/16位宽（DT_INT16、DT_UINT16、DT_FP16、DT_BF16）/32位宽（DT_INT32、DT_UINT32、DT_FP32）/64位宽（DT_INT64、DT_UINT64）。 |
+| index0 | 输入 | 最外层循环轴索引（循环变量）。 |
+| stride0 | 输入 | 最外层循环轴对应的地址偏移量，单位为元素个数。 |
+| index1 | 输入 | 可选，第二层循环轴索引。 |
+| stride1 | 输入 | 可选，第二层循环轴对应的地址偏移量，单位为元素个数。 |
+| index2 | 输入 | 可选，第三层循环轴索引。 |
+| stride2 | 输入 | 可选，第三层循环轴对应的地址偏移量，单位为元素个数。 |
+| index3 | 输入 | 可选，第四层循环轴索引。 |
+| stride3 | 输入 | 可选，第四层循环轴对应的地址偏移量，单位为元素个数。 |
+| dtype | 输入 | 可选，模板参数对应的数据类型（默认pl.DT_FP32）。决定元素宽度：8位宽（DT_INT8、DT_UINT8）/16位宽（DT_INT16、DT_UINT16、DT_FP16、DT_BF16）/32位宽（DT_INT32、DT_UINT32、DT_FP32）/64位宽（DT_INT64、DT_UINT64）。 |
 
 ## 约束说明
 
@@ -46,7 +46,7 @@ create_addr_reg(index0, stride0, index1=None, stride1=None, index2=None, stride2
 
 ## 返回值说明
 
-返回`a_reg`目的操作数，AddrReg地址偏移量寄存器。<br>- AddrReg数量上限为8。<br>- 由于硬件循环限制，AddrReg最多支持4层循环轴。<br>-AddrReg仅支持`vf.load_align`和`vf.store_align`搬运指令使用。<br>- 通过AddrReg设置地址偏移进行搬运时，需要满足对应搬运指令的地址对齐约束。
+返回a_reg目的操作数，AddrReg地址偏移量寄存器。<br>- AddrReg数量上限为8。<br>- 由于硬件循环限制，AddrReg最多支持4层循环轴。<br>-AddrReg仅支持vf.load_align和vf.store_align搬运指令使用。<br>- 通过AddrReg设置地址偏移进行搬运时，需要满足对应搬运指令的地址对齐约束。
 
 ## 调用示例
 

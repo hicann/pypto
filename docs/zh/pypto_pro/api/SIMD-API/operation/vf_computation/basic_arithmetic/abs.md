@@ -16,15 +16,15 @@
 
 - 对实数类型（DT_INT8、DT_INT16、DT_INT32、DT_FP16、DT_FP32）
 
-    对`src`中的有效元素逐个取绝对值，并将结果写入`dst`对应位置，计算公式如下：
+    对src中的有效元素逐个取绝对值，并将结果写入dst对应位置，计算公式如下：
 
     $$dst_i = |src_i|$$
 
 - 对复数类型（DT_FP16双寄存器模式、DT_FP32双寄存器模式）
 
-    复数类型通过双寄存器模式实现：DT_FP16双寄存器模式对应由两个DT_FP16组成的复数（实部和虚部各16位，共32位），DT_FP32双寄存器模式对应由两个DT_FP32组成的复数（实部和虚部各32位，共64位）。`reg[0]`存储实部，`reg[1]`存储虚部。
+    复数类型通过双寄存器模式实现：DT_FP16双寄存器模式对应由两个DT_FP16组成的复数（实部和虚部各16位，共32位），DT_FP32双寄存器模式对应由两个DT_FP32组成的复数（实部和虚部各32位，共64位）。reg[0]存储实部，reg[1]存储虚部。
 
-    对`src`中有效元素逐个取模，并将结果写入`dst`对应位置，计算公式如下：
+    对src中有效元素逐个取模，并将结果写入dst对应位置，计算公式如下：
 
     $$dst_i = |src_i| = (\alpha^2 + \beta^2)^{1/2}$$
 
@@ -40,9 +40,9 @@ abs(src, preg, mode: Optional[MergeMode] = None) -> dst
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)。源操作数`src`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT8、DT_INT16、DT_INT32、DT_FP16、DT_FP32。其中DT_FP16和DT_FP32支持双寄存器模式，用于复数取模运算。 |
-| `preg` | 输入 | [mask_reg](../mask_reg.md)。 |
-| `mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
+| src | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)。源操作数src与目的操作数dst的数据类型保持一致。支持的数据类型为：DT_INT8、DT_INT16、DT_INT32、DT_FP16、DT_FP32。其中DT_FP16和DT_FP32支持双寄存器模式，用于复数取模运算。 |
+| preg | 输入 | [mask_reg](../mask_reg.md)。 |
+| mode | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- pl.MergeMode.ZEROING（默认），preg未筛选的元素在dst中置0。<br>- pl.MergeMode.MERGING当前不支持。 |
 
 ## 约束说明
 
@@ -50,7 +50,7 @@ abs(src, preg, mode: Optional[MergeMode] = None) -> dst
 
 ## 返回值说明
 
-返回`dst`目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型和`src`中的说明一致。整型数据的计算结果如果超出数据类型的表示范围会采取非饱和截断，比如DT_INT8类型，src为-128，其绝对值128会被截断成-128。
+返回dst目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型和src中的说明一致。整型数据的计算结果如果超出数据类型的表示范围会采取非饱和截断，比如DT_INT8类型，src为-128，其绝对值128会被截断成-128。
 
 ## 调用示例
 

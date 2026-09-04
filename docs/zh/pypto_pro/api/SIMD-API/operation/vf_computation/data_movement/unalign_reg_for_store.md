@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-为非对齐存储分配alignment tracker寄存器。该寄存器贯穿后续的`vf.store_unalign` / `vf.store_unalign_post`调用链，用于追踪未对齐字节的累积状态。
+为非对齐存储分配alignment tracker寄存器。该寄存器贯穿后续的vf.store_unalign / vf.store_unalign_post调用链，用于追踪未对齐字节的累积状态。
 
 ## 函数原型
 
@@ -32,7 +32,7 @@ unalign_reg_for_store() -> align_reg
 
 ## 返回值说明
 
-返回`align_reg`目标reg_tensor。
+返回align_reg目标reg_tensor。
 
 ## 调用示例
 

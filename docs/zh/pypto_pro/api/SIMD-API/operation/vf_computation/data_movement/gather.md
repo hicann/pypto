@@ -14,23 +14,23 @@
 
 ## 功能说明
 
-该指令会根据索引值index将源操作数收集到目的操作数dst中。后端根据`src`参数类型自动分发为两种形式：
+该指令会根据索引值index将源操作数收集到目的操作数dst中。后端根据src参数类型自动分发为两种形式：
 
-**Tile→reg形式**（`src`为Tile）：从Tile中按索引收集数据到reg_tensor。通过`data_copy_mode`选择收集粒度：
+**Tile→reg形式**（src为Tile）：从Tile中按索引收集数据到reg_tensor。通过data_copy_mode选择收集粒度：
 
-- `pl.DataCopyMode.NORM`（默认）：NORM模式，按元素收集，index单位为元素。收集过程如下图所示：
+- pl.DataCopyMode.NORM（默认）：NORM模式，按元素收集，index单位为元素。收集过程如下图所示：
 
   **图1** gather NORM模式功能说明
 
   ![](../../../../figures/gather_function.jpg)
 
-- `pl.DataCopyMode.DATA_BLOCK_LOAD`：DATA_BLOCK_LOAD模式，按DataBlock（32B）收集，index单位为字节且需32B对齐。收集过程如下图所示：
+- pl.DataCopyMode.DATA_BLOCK_LOAD：DATA_BLOCK_LOAD模式，按DataBlock（32B）收集，index单位为字节且需32B对齐。收集过程如下图所示：
 
   **图2** gather DATA_BLOCK_LOAD模式功能说明
 
   ![](../../../../figures/block_mode_gather.jpg)
 
-**reg→reg形式**（`src`为reg_tensor）：reg_tensor到reg_tensor按元素收集，无需mask。
+**reg→reg形式**（src为reg_tensor）：reg_tensor到reg_tensor按元素收集，无需mask。
 
 > **两种形式的区别**：Tile→reg形式从Tile中读取数据，8位宽的数据类型（DT_INT8、DT_UINT8）源数据会被零扩展到16位宽；reg→reg形式从reg_tensor读取数据，保持源数据类型不变。
 
@@ -44,10 +44,10 @@ gather(src, index, preg, data_copy_mode: Optional[DataCopyMode] = None) -> dst
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src` | 输入 | 源操作数，可为Tile（Tile→reg形式，基地址需32字节对齐）或[reg_tensor](../reg_tensor.md)（reg→reg形式），支持的数据类型请参见[约束说明](#约束说明)。<br>- NORM模式下，当`src`为16位宽数据类型且`index`为DT_UINT32时，每个gather到的16位元素占32位空间（低16位为数据，高16位补零），寄存器中有效元素数量为索引数量（VL/4），而非`index`为DT_UINT16索引场景的VL/2。存储时需使用`pl.StoreDist.NORM_B16`按16位粒度写入，输出中偶数位置为有效数据，奇数位置为零。此功能适用于索引数据天然为32位宽的场景。<br>- DATA_BLOCK_LOAD模式和reg→reg形式下，源操作数和目的操作数数据类型必须相同。 |
-| `index` | 输入 | 索引值，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。<br>- Tile→reg NORM模式下为`dst`中每个元素相对于`src`的位置，单位：元素。8位宽的数据类型（DT_INT8、DT_UINT8）源数据会被零扩展到16位宽。16位宽源数据类型（DT_INT16、DT_UINT16、DT_FP16、DT_BF16）的索引支持DT_UINT16和DT_UINT32。<br>- Tile→reg DATA_BLOCK_LOAD模式下为每个DataBlock相对于`src`的位置，单位：字节，且必须32B对齐，即一个索引值对应1个DataBlock。<br>- reg→reg形式下为`src`中每个元素的位置，单位：元素，数据类型位宽需与`src`保持一致。<br>`index`索引值对应的数据必须在Tile有效地址范围内（Tile→reg形式）。如果索引值超出当前reg_tensor中能存储的最大数据元素个数，索引值更新为`i % (VL / sizeof(T))`，其中VL为256字节（reg→reg形式）。`index`中的值可以重复。 |
-| `preg` | 输入 | 可选，[mask_reg](../mask_reg.md)。mask功能**仅Tile→reg形式支持**，reg→reg形式不支持此参数。 |
-| `data_copy_mode` | 输入 | 可选关键字参数，收集粒度。`pl.DataCopyMode.NORM`（默认，按元素）或`pl.DataCopyMode.DATA_BLOCK_LOAD`（按32B DataBlock）。**仅Tile→reg形式支持**，reg→reg形式不支持此参数。 |
+| src | 输入 | 源操作数，可为Tile（Tile→reg形式，基地址需32字节对齐）或[reg_tensor](../reg_tensor.md)（reg→reg形式），支持的数据类型请参见[约束说明](#约束说明)。<br>- NORM模式下，当src为16位宽数据类型且index为DT_UINT32时，每个gather到的16位元素占32位空间（低16位为数据，高16位补零），寄存器中有效元素数量为索引数量（VL/4），而非index为DT_UINT16索引场景的VL/2。存储时需使用pl.StoreDist.NORM_B16按16位粒度写入，输出中偶数位置为有效数据，奇数位置为零。此功能适用于索引数据天然为32位宽的场景。<br>- DATA_BLOCK_LOAD模式和reg→reg形式下，源操作数和目的操作数数据类型必须相同。 |
+| index | 输入 | 索引值，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。<br>- Tile→reg NORM模式下为dst中每个元素相对于src的位置，单位：元素。8位宽的数据类型（DT_INT8、DT_UINT8）源数据会被零扩展到16位宽。16位宽源数据类型（DT_INT16、DT_UINT16、DT_FP16、DT_BF16）的索引支持DT_UINT16和DT_UINT32。<br>- Tile→reg DATA_BLOCK_LOAD模式下为每个DataBlock相对于src的位置，且必须32B对齐，即一个索引值对应1个DataBlock。<br>- reg→reg形式下为src中每个元素的位置，单位：元素，数据类型位宽需与src保持一致。<br>index索引值对应的数据必须在Tile有效地址范围内（Tile→reg形式）。如果索引值超出当前reg_tensor中能存储的最大数据元素个数，索引值更新为i % (VL / sizeof(T))，其中VL为256字节（reg→reg形式）。index中的值可以重复。 |
+| preg | 输入 | 可选，[mask_reg](../mask_reg.md)。mask功能**仅Tile→reg形式支持**，reg→reg形式不支持此参数。 |
+| data_copy_mode | 输入 | 可选关键字参数，收集粒度。pl.DataCopyMode.NORM（默认，按元素）或pl.DataCopyMode.DATA_BLOCK_LOAD（按32B DataBlock）。**仅Tile→reg形式支持**，reg→reg形式不支持此参数。 |
 
 ## 约束说明
 
@@ -87,7 +87,7 @@ gather(src, index, preg, data_copy_mode: Optional[DataCopyMode] = None) -> dst
 
 ## 返回值说明
 
-返回`dst`目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。NORM模式下，当`dst`为16位宽数据类型（DT_INT16、DT_UINT16、DT_FP16、DT_BF16），`src`为8位宽数据类型（DT_INT8、DT_UINT8）时，目的操作数的低8位与源操作数相同，高8位自动补0。
+返回dst目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。NORM模式下，当dst为16位宽数据类型（DT_INT16、DT_UINT16、DT_FP16、DT_BF16），src为8位宽数据类型（DT_INT8、DT_UINT8）时，目的操作数的低8位与源操作数相同，高8位自动补0。
 
 ## 调用示例
 

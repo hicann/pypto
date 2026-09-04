@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-非对齐存储后处理，处理非对齐寄存器（UnalignRegForLoad）中剩余的未对齐字节。须在`vf.store_unalign`之后调用。
+非对齐存储后处理，处理非对齐寄存器（UnalignRegForLoad）中剩余的未对齐字节。须在vf.store_unalign之后调用。
 
 ## 函数原型
 
@@ -26,16 +26,16 @@ store_unalign_post(tile, align_reg, stride, post_update: bool = False)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `tile` | 输出 | 目的操作数，Tile地址。目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
-| `align_reg` | 输入 | alignment tracker寄存器（由`vf.unalign_reg_for_store()`创建）。 |
-| `stride` | 输入 | 存储元素个数或地址寄存器。当为整型标量时，发射`vstas`指令（strided模式），`post_update = True`时同时作为地址更新步长，仅`post_update = True`时有效。当为`AddrReg`（由`vf.create_addr_reg`创建）时，发射`vsta`指令（AddrReg模式），须与`vf.store_unalign`的AddrReg模式（`vstu`）配对使用。 |
-| `post_update` | 输入 | 可选，`True`时tracker自动累进，默认`False`。 |
+| tile | 输出 | 目的操作数，Tile地址。目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
+| align_reg | 输入 | alignment tracker寄存器（由vf.unalign_reg_for_store()创建）。 |
+| stride | 输入 | 存储元素个数或地址寄存器。当为整型标量时，发射vstas指令（strided模式），post_update = True时同时作为地址更新步长，仅post_update = True时有效。当为AddrReg（由vf.create_addr_reg创建）时，发射vsta指令（AddrReg模式），须与vf.store_unalign的AddrReg模式（vstu）配对使用。 |
+| post_update | 输入 | 可选，True时tracker自动累进，默认False。 |
 
 ## 约束说明
 
-- 必须与`vf.store_unalign`配对使用，在`vf.store_unalign`之后调用。
+- 必须与vf.store_unalign配对使用，在vf.store_unalign之后调用。
 
-- 如需基于`vf.squeeze`的有效元素个数进行非对齐存储后处理，请使用`vf.squeeze_store_unalign_post`接口。
+- 如需基于vf.squeeze的有效元素个数进行非对齐存储后处理，请使用vf.squeeze_store_unalign_post接口。
 
 ## 返回值说明
 

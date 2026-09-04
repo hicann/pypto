@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-内存屏障，对`src`类内存操作与其后的`dst`类内存操作施加顺序保证，确保屏障前的操作对屏障后的操作可见。
+内存屏障，对src类内存操作与其后的dst类内存操作施加顺序保证，确保屏障前的操作对屏障后的操作可见。
 
 如下图所示，目的流水线将等待源流水线上所有指令完成才进行执行。读写场景下，当读指令使用的寄存器和写指令使用的寄存器相同时，可以触发寄存器保序，指令将会按照代码顺序执行，不需要插入同步指令；而当使用的寄存器不同时，如果要确保读写指令顺序执行，则需要插入同步指令，写写场景同理。
 
@@ -22,22 +22,22 @@
 
 ![流水线等待示意图](../../../../figures/pipeline_wait.jpg)
 
-通过`mode`选择src→dst的类型组合，共支持12种合法组合（`V*`表示矢量，`*_LD`、`*_ST`、`ST_*`、`LD_*`表示标量，`*_ALL`表示该单元全量屏障）：
+通过mode选择src→dst的类型组合，共支持12种合法组合（V*表示矢量，*_LD、*_ST、ST_*、LD_*表示标量，*_ALL表示该单元全量屏障）：
 
 | mode | src → dst含义 |
 |---|---|
-| `VST_VLD` | 矢量store → 矢量load（默认，RAW） |
-| `VLD_VST` | 矢量load → 矢量store（WAR） |
-| `VST_VST` | 矢量store → 矢量store（WAW） |
-| `VST_LD` | 矢量store → 标量load |
-| `VST_ST` | 矢量store → 标量store |
-| `VLD_ST` | 矢量load → 标量store |
-| `ST_VLD` | 标量store → 矢量load |
-| `ST_VST` | 标量store → 矢量store |
-| `LD_VST` | 标量load → 矢量store |
-| `VV_ALL` | 全部矢量 ↔ 全部矢量 |
-| `VS_ALL` | 全部矢量 ↔ 全部标量 |
-| `SV_ALL` | 全部标量 ↔ 全部矢量 |
+| VST_VLD | 矢量store → 矢量load（默认，RAW） |
+| VLD_VST | 矢量load → 矢量store（WAR） |
+| VST_VST | 矢量store → 矢量store（WAW） |
+| VST_LD | 矢量store → 标量load |
+| VST_ST | 矢量store → 标量store |
+| VLD_ST | 矢量load → 标量store |
+| ST_VLD | 标量store → 矢量load |
+| ST_VST | 标量store → 矢量store |
+| LD_VST | 标量load → 矢量store |
+| VV_ALL | 全部矢量 ↔ 全部矢量 |
+| VS_ALL | 全部矢量 ↔ 全部标量 |
+| SV_ALL | 全部标量 ↔ 全部矢量 |
 
 ## 函数原型
 
@@ -49,7 +49,7 @@ mem_bar(mode: Optional[MemBarMode] = None)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `mode` | 输入 | 可选，屏障模式，对应[MemBarMode](../types/MemBarMode.md)类型，`pl.MemBarMode`枚举（见上表12种组合）。默认`pl.MemBarMode.VST_VLD`。`mode`只能取上表12种合法组合之一。 |
+| mode | 输入 | 可选，屏障模式，对应[MemBarMode](../types/MemBarMode.md)类型，pl.MemBarMode枚举（见上表12种组合）。默认pl.MemBarMode.VST_VLD。mode只能取上表12种合法组合之一。 |
 
 ## 约束说明
 

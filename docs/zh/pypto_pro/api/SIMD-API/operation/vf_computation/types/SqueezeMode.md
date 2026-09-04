@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-SqueezeMode定义了[`vf.squeeze`](../comparison_and_selection/squeeze.md)的数据收集模式，用于控制是否将有效元素的字节计数存储到AR SPR（Special Purpose Register）中。
+SqueezeMode定义了[vf.squeeze](../comparison_and_selection/squeeze.md)的数据收集模式，用于控制是否将有效元素的字节计数存储到AR SPR（Special Purpose Register）中。
 
 ## 原型定义
 

@@ -16,10 +16,10 @@
 
 从reg_tensor的指定数据块（DataBlock）的bit位生成mask_reg。
 
-[reg_tensor](../reg_tensor.md)（256B）被划分为若干个DataBlock，`offset`参数指定从哪个DataBlock生成mask_reg。每个DataBlock中的每个bit会被broadcast到mask_reg中对应的多个bit位，broadcast倍数由数据类型位宽决定：
+[reg_tensor](../reg_tensor.md)（256B）被划分为若干个DataBlock，offset参数指定从哪个DataBlock生成mask_reg。每个DataBlock中的每个bit会被broadcast到mask_reg中对应的多个bit位，broadcast倍数由数据类型位宽决定：
 
-- **b16数据类型**（DT_FP16、DT_BF16、DT_INT16、DT_UINT16）：RegTensor划分为16个DataBlock（每个16B），每个bit broadcast到2bit，生成32B的mask_reg。`offset`取值范围为[0, 15]。
-- **b32数据类型**（DT_FP32、DT_INT32、DT_UINT32）：RegTensor划分为32个DataBlock（每个8B），每个bit broadcast到4bit，生成32B的mask_reg。`offset`取值范围为[0, 31]。
+- **b16数据类型**（DT_FP16、DT_BF16、DT_INT16、DT_UINT16）：RegTensor划分为16个DataBlock（每个16B），每个bit broadcast到2bit，生成32B的mask_reg。offset取值范围为[0, 15]。
+- **b32数据类型**（DT_FP32、DT_INT32、DT_UINT32）：RegTensor划分为32个DataBlock（每个8B），每个bit broadcast到4bit，生成32B的mask_reg。offset取值范围为[0, 31]。
 
 ### b16数据类型搬运原理
 
@@ -47,8 +47,8 @@ mask_gen_with_reg_tensor(src, offset: Optional[int] = None) -> dst
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src` | 输入 | 源操作数，reg_tensor。支持的数据类型请参见[约束说明](#约束说明)。 |
-| `offset` | 输入 | 可选，指定从`src`的哪个DataBlock生成mask_reg，默认0。<br>- 16位宽数据类型时取值范围为[0, 15]（reg_tensor 256B划分为16个16B DataBlock）。<br>- 32位宽数据类型时取值范围为[0, 31]（reg_tensor 256B划分为32个8B DataBlock）。 |
+| src | 输入 | 源操作数，reg_tensor。支持的数据类型请参见[约束说明](#约束说明)。 |
+| offset | 输入 | 可选，指定从src的哪个DataBlock生成mask_reg，默认0。<br>- 16位宽数据类型时取值范围为[0, 15]（reg_tensor 256B划分为16个16B DataBlock）。<br>- 32位宽数据类型时取值范围为[0, 31]（reg_tensor 256B划分为32个8B DataBlock）。 |
 
 ## 约束说明
 
@@ -58,7 +58,7 @@ mask_gen_with_reg_tensor(src, offset: Optional[int] = None) -> dst
 
 ## 返回值说明
 
-返回`dst`目的操作数，[mask_reg](../mask_reg.md)。生成的mask_reg仅最低位有效：16位宽数据类型时每2bit中仅最低位有效，32位宽数据类型时每4bit中仅最低位有效。具体原理请参见[mask_reg工作原理](./create_mask.md#mask_reg工作原理)。
+返回dst目的操作数，[mask_reg](../mask_reg.md)。生成的mask_reg仅最低位有效：16位宽数据类型时每2bit中仅最低位有效，32位宽数据类型时每4bit中仅最低位有效。具体原理请参见[mask_reg工作原理](./create_mask.md#mask_reg工作原理)。
 
 ## 调用示例
 

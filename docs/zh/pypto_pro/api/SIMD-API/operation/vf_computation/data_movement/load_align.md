@@ -23,38 +23,38 @@ reg_tensor模式支持**连续搬运模式**和**非连续搬运模式**。**连
 - **reg_tensor单搬入模式**：从Tile读取VL（寄存器长度）数据量，搬入到一个reg_tensor中。
 - **reg_tensor双搬入模式**（de-interleave）：从Tile读取2*VL数据量，交错搬运，将偶数索引和奇数索引的元素分别搬入两个reg_tensor（2*VL）中。
 
-连续数据搬入时，可以通过`dist`关键字参数配置搬运的数据分布模式，能够实现broadcast、上采样、下采样、解压缩等功能。下图展示了连续搬入模式。完整的`dist`取值及对齐约束请参见[约束说明](#约束说明)。
+连续数据搬入时，可以通过dist关键字参数配置搬运的数据分布模式，能够实现broadcast、上采样、下采样、解压缩等功能。下图展示了连续搬入模式。完整的dist取值及对齐约束请参见[约束说明](#约束说明)。
 
 **图1** vf.load_align连续对齐搬入分布模式图示
 
 ![](../../../../figures/contiguous_aligned_load.jpg)
 
-**非连续搬运模式**下，通过`data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY`启用DataBlock搬运模式，实现数据从Tile非连续搬运至reg_tensor。单条指令一次搬运8个DataBlock，`block_stride`参数表示相邻DataBlock间的间隔。该模式下`offset`参数改为传入控制有效元素的mask_reg，控制规则如下：
+**非连续搬运模式**下，通过data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY启用DataBlock搬运模式，实现数据从Tile非连续搬运至reg_tensor。单条指令一次搬运8个DataBlock，block_stride参数表示相邻DataBlock间的间隔。该模式下offset参数改为传入控制有效元素的mask_reg，控制规则如下：
 
 - 某个DataBlock在mask中对应的32bit有任意一位为1时，该DataBlock对应的数据会被搬入dst。
 - 某个DataBlock在mask中对应的32bit全为0时，该DataBlock对应的数据不会被读取，dst对应位置置0，即使Tile越界也不会报错。
 
 ### mask_reg模式
 
-当目标变量已通过`vf.create_mask`预声明为mask_reg时，后端自动分派mask_reg加载路径，实现数据从Tile搬运至mask_reg。
+当目标变量已通过vf.create_mask预声明为mask_reg时，后端自动分派mask_reg加载路径，实现数据从Tile搬运至mask_reg。
 
-mask_reg目标支持三种分布模式，通过`dist`关键字参数配置，能够实现上采样、下采样等功能：
+mask_reg目标支持三种分布模式，通过dist关键字参数配置，能够实现上采样、下采样等功能：
 
-- `pl.LoadDist.NORM`（正常模式，搬运数据量为VL/8）
-- `pl.LoadDist.US`（上采样模式，每bit数据重复搬运两次，将VL/16数据扩充为VL/8搬入）
-- `pl.LoadDist.DS`（下采样模式，每间隔1bit舍弃数据，将VL/4数据压缩为VL/8搬入）
+- pl.LoadDist.NORM（正常模式，搬运数据量为VL/8）
+- pl.LoadDist.US（上采样模式，每bit数据重复搬运两次，将VL/16数据扩充为VL/8搬入）
+- pl.LoadDist.DS（下采样模式，每间隔1bit舍弃数据，将VL/4数据压缩为VL/8搬入）
 
 各模式示意如下：
 
-**图2** `pl.LoadDist.NORM`模式
+**图2** pl.LoadDist.NORM模式
 
 ![LoadDist-NORM模式](../../../../figures/load_dist_norm_mode.jpg)
 
-**图3** `pl.LoadDist.US`模式
+**图3** pl.LoadDist.US模式
 
 ![LoadDist-US模式](../../../../figures/load_dist_us_mode.jpg)
 
-**图4** `pl.LoadDist.DS`模式
+**图4** pl.LoadDist.DS模式
 
 ![LoadDist-DS模式](../../../../figures/load_dist_ds_mode.jpg)
 
@@ -68,71 +68,71 @@ load_align(tile, offset=None, dist: Optional[LoadDist] = None, dtype: Optional[D
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `tile` | 输入 | 源操作数，Tile地址。地址需要32字节对齐。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
-| `offset` | 输入 | 可选，地址偏移参数，根据传入类型自动分派搬运接口。在**连续搬运模式**和**mask_reg模式**下单位为元素个数，在**非连续搬运模式**时为mask。<br>- **连续搬运模式**：<br>&nbsp;&nbsp;- **整数或`[row, col]`列表**：整数偏移在代码生成时转换为指针算术`tile + offset`。<br>&nbsp;&nbsp;&nbsp;&nbsp;`[row, col]`列表的线性偏移为`row * shape[1] + col`，`row`单位为Tile的列数（即`set_validshape[m, n]`的`n`），`col`单位为元素个数，两者均支持表达式。<br>&nbsp;&nbsp;- **AddrReg**（由`vf.create_addr_reg`创建）：实际搬运Tile地址为`tile + AddrReg中存储的偏移量`。<br>&nbsp;&nbsp;&nbsp;&nbsp;每次迭代需先调用`vf.create_addr_reg`设定偏移量再调用搬运指令。<br>- **非连续搬运模式**（DataBlock加载模式，`data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY`时）：该模式下offset位置改为传入控制有效元素的mask_reg，<br>&nbsp;&nbsp;某个DataBlock在mask中对应的32bit有任意一位为1时搬入，全为0时不读取且dst对应位置置0。<br>&nbsp;&nbsp;- 当`post_update=True`时，搬运后源地址自动累进`repeat_stride`步长，每次迭代无需手动更新地址。<br>&nbsp;&nbsp;- 当`post_update=False`时，搬运后地址不更新。<br>- **mask_reg模式**（需先用`vf.create_mask`预声明）：<br>&nbsp;&nbsp;- **整数**：仅在`post_update=True`时生效；`post_update=False`时不支持整数offset。<br>&nbsp;&nbsp;- **AddrReg**（由`vf.create_addr_reg`创建）：实际搬运Tile地址为`srcAddr + AddrReg中存储的偏移量`。 |
-| `dist` | 输入 | 可选，数据分布模式，对应[LoadDist](../types/LoadDist.md)类型，具体模式根据是**reg_tensor单搬入模式**、**reg_tensor双搬入模式**还是**mask_reg模式**请分别参见[约束说明](#约束说明)中各表。 |
-| `dtype` | 输入 | 可选，指定目标[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)的数据类型。当源tile的数据类型与期望的寄存器数据类型不一致时需要指定（例如源tile为DT_FP32但需要按DT_UINT32位重解释加载到寄存器）。默认从源tile的数据类型推断。 |
-| `post_update` | 输入 | 可选，`True`时搬运后源地址自动累进，默认`False`。适用于循环内连续加载，避免手动更新offset。 |
-| `block_stride` | 输入 | 可选，仅在`data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY`模式下有效，其他模式下传入会被忽略。表示相邻DataBlock间的间隔，单位：DataBlock（32字节）。当`block_stride=0`时，表示重复搬入第一个DataBlock。 |
-| `repeat_stride` | 输入 | 可选，仅在`data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY`模式且`post_update=True`时有效。表示重复搬运时的地址更新步长，单位：DataBlock（32字节），需要32字节对齐。`post_update=True`时，搬运后源地址自动更新为`srcAddr += repeat_stride * 32B`。 |
-| `data_copy_mode` | 输入 | 可选，数据拷贝模式，对应[DataCopyMode](../types/DataCopyMode.md)类型。仅在**reg_tensor模式**下有效，mask_reg目标不支持此参数。取值：`pl.DataCopyMode.NORM`（默认，普通连续搬运）或`pl.DataCopyMode.DATA_BLOCK_COPY`（非连续以DataBlock（32B）为单位进行搬运）。 |
+| tile | 输入 | 源操作数，Tile地址。地址需要32字节对齐。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
+| offset | 输入 | 可选，地址偏移参数，根据传入类型自动分派搬运接口。在**连续搬运模式**和**mask_reg模式**下单位为元素个数，在**非连续搬运模式**时为mask。<br>- **连续搬运模式**：<br>&nbsp;&nbsp;- **整数或[row, col]列表**：整数偏移在代码生成时转换为指针算术tile + offset。<br>&nbsp;&nbsp;&nbsp;&nbsp;[row, col]列表的线性偏移为row * shape[1] + col，row单位为Tile的列数（即set_validshape[m, n]的n），col单位为元素个数，两者均支持表达式。<br>&nbsp;&nbsp;- **AddrReg**（由vf.create_addr_reg创建）：实际搬运Tile地址为tile + AddrReg中存储的偏移量。<br>&nbsp;&nbsp;&nbsp;&nbsp;每次迭代需先调用vf.create_addr_reg设定偏移量再调用搬运指令。<br>- **非连续搬运模式**（DataBlock加载模式，data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY时）：该模式下offset位置改为传入控制有效元素的mask_reg，<br>&nbsp;&nbsp;某个DataBlock在mask中对应的32bit有任意一位为1时搬入，全为0时不读取且dst对应位置置0。<br>&nbsp;&nbsp;- 当post_update=True时，搬运后源地址自动累进repeat_stride步长，每次迭代无需手动更新地址。<br>&nbsp;&nbsp;- 当post_update=False时，搬运后地址不更新。<br>- **mask_reg模式**（需先用vf.create_mask预声明）：<br>&nbsp;&nbsp;- **整数**：仅在post_update=True时生效；post_update=False时不支持整数offset。<br>&nbsp;&nbsp;- **AddrReg**（由vf.create_addr_reg创建）：实际搬运Tile地址为srcAddr + AddrReg中存储的偏移量。 |
+| dist | 输入 | 可选，数据分布模式，对应[LoadDist](../types/LoadDist.md)类型，具体模式根据是**reg_tensor单搬入模式**、**reg_tensor双搬入模式**还是**mask_reg模式**请分别参见[约束说明](#约束说明)中各表。 |
+| dtype | 输入 | 可选，指定目标[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)的数据类型。当源tile的数据类型与期望的寄存器数据类型不一致时需要指定（例如源tile为DT_FP32但需要按DT_UINT32位重解释加载到寄存器）。默认从源tile的数据类型推断。 |
+| post_update | 输入 | 可选，True时搬运后源地址自动累进，默认False。适用于循环内连续加载，避免手动更新offset。 |
+| block_stride | 输入 | 可选，仅在data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY模式下有效，其他模式下传入会被忽略。表示相邻DataBlock间的间隔，单位：DataBlock（32字节）。当block_stride=0时，表示重复搬入第一个DataBlock。 |
+| repeat_stride | 输入 | 可选，仅在data_copy_mode=pl.DataCopyMode.DATA_BLOCK_COPY模式且post_update=True时有效。表示重复搬运时的地址更新步长，单位：DataBlock（32字节），需要32字节对齐。post_update=True时，搬运后源地址自动更新为srcAddr += repeat_stride * 32B。 |
+| data_copy_mode | 输入 | 可选，数据拷贝模式，对应[DataCopyMode](../types/DataCopyMode.md)类型。仅在**reg_tensor模式**下有效，mask_reg目标不支持此参数。取值：pl.DataCopyMode.NORM（默认，普通连续搬运）或pl.DataCopyMode.DATA_BLOCK_COPY（非连续以DataBlock（32B）为单位进行搬运）。 |
 
 ## 约束说明
 
 - 各模式下dist参数说明：
 
-  部分模式提供通用形式和显式粒度形式。通用形式（如`BRC`、`US`）不带粒度后缀，后端会根据目标寄存器的数据类型自动选择对应的B8/B16/B32变体；显式粒度形式（如`BRC_B8`、`US_B16`）直接指定粒度。两种形式均可使用。完整的取值说明请参见[LoadDist枚举类型](../types/LoadDist.md)。
+  部分模式提供通用形式和显式粒度形式。通用形式（如BRC、US）不带粒度后缀，后端会根据目标寄存器的数据类型自动选择对应的B8/B16/B32变体；显式粒度形式（如BRC_B8、US_B16）直接指定粒度。两种形式均可使用。完整的取值说明请参见[LoadDist枚举类型](../types/LoadDist.md)。
 
   **表1** reg_tensor单搬入模式dist参数说明
 
   | dist取值 | 含义 | 搬运对齐约束（Byte） |
   |---|---|---|
-  | `pl.LoadDist.NORM` | 正常模式，搬运VL数据量。 | 32 |
-  | `pl.LoadDist.BRC` | 广播模式（通用），根据数据类型自动选择B8/B16/B32粒度。 | 1/2/4 |
-  | `pl.LoadDist.BRC_B8` | 搬运一个8位宽类型的数据，并Broadcast到所有元素位置。 | 1 |
-  | `pl.LoadDist.BRC_B16` | 搬运一个16位宽类型的数据，并Broadcast到所有元素位置。 | 2 |
-  | `pl.LoadDist.BRC_B32` | 搬运一个32位宽类型的数据，并Broadcast到所有元素位置。 | 4 |
-  | `pl.LoadDist.US` | 上采样模式（通用），根据数据类型自动选择B8/B16粒度。 | min(32, VL/2) |
-  | `pl.LoadDist.US_B8` | 数据2倍上采样，加载数据量为VL/2，每个输入元素重复两次，数据类型为8位宽类型。 | min(32, VL/2) |
-  | `pl.LoadDist.US_B16` | 数据2倍上采样，加载数据量为VL/2，每个输入元素重复两次，数据类型为16位宽类型。 | min(32, VL/2) |
-  | `pl.LoadDist.DS` | 下采样模式（通用），根据数据类型自动选择B8/B16粒度。 | 32 |
-  | `pl.LoadDist.DS_B8` | 数据2倍下采样，加载数据量为2*VL，数据每隔一个保留，数据类型为8位宽类型。 | 32 |
-  | `pl.LoadDist.DS_B16` | 数据2倍下采样，加载数据量为2*VL，数据每隔一个保留，数据类型为16位宽类型。 | 32 |
-  | `pl.LoadDist.UNPK` | 解压缩模式（通用），根据数据类型自动选择B8/B16/B32粒度。 | min(32, VL/2) |
-  | `pl.LoadDist.UNPK_B8` | 解压缩模式，按无符号整型u8加载VL/2数据量，每个元素后会补1个值为0元素，即unpack到VL。 | min(32, VL/2) |
-  | `pl.LoadDist.UNPK_B16` | 解压缩模式，按无符号整型u16加载VL/2数据量，每个元素后会补1个值为0元素，即unpack到VL。 | min(32, VL/2) |
-  | `pl.LoadDist.UNPK_B32` | 解压缩模式，按无符号整型u32加载VL/2数据量，每个元素后会补1个值为0元素，即unpack到VL。 | min(32, VL/2) |
-  | `pl.LoadDist.UNPK4` | 4元素解压缩模式，固定按u8加载VL/4数据量，unpack到VL，每个元素后会补3个值为0的元素。 | min(32, VL/4) |
-  | `pl.LoadDist.BLK` | 读取一个DataBlock（32B），并广播到VL。 | 32 |
-  | `pl.LoadDist.E2B` | 元素扩展到DataBlock模式（通用），根据数据类型自动选择B16/B32粒度。 | VL/16或VL/8 |
-  | `pl.LoadDist.E2B_B16` | 加载(VL/DataBlock)个B16的数据，并将每个元素（16bit）广播到一个DataBlock（32B）中。 | VL/16 |
-  | `pl.LoadDist.E2B_B32` | 加载(VL/DataBlock)个B32的数据，并将每个元素（32bit）广播到一个DataBlock（32B）中。 | VL/8 |
+  | pl.LoadDist.NORM | 正常模式，搬运VL数据量。 | 32 |
+  | pl.LoadDist.BRC | 广播模式（通用），根据数据类型自动选择B8/B16/B32粒度。 | 1/2/4 |
+  | pl.LoadDist.BRC_B8 | 搬运一个8位宽类型的数据，并Broadcast到所有元素位置。 | 1 |
+  | pl.LoadDist.BRC_B16 | 搬运一个16位宽类型的数据，并Broadcast到所有元素位置。 | 2 |
+  | pl.LoadDist.BRC_B32 | 搬运一个32位宽类型的数据，并Broadcast到所有元素位置。 | 4 |
+  | pl.LoadDist.US | 上采样模式（通用），根据数据类型自动选择B8/B16粒度。 | min(32, VL/2) |
+  | pl.LoadDist.US_B8 | 数据2倍上采样，加载数据量为VL/2，每个输入元素重复两次，数据类型为8位宽类型。 | min(32, VL/2) |
+  | pl.LoadDist.US_B16 | 数据2倍上采样，加载数据量为VL/2，每个输入元素重复两次，数据类型为16位宽类型。 | min(32, VL/2) |
+  | pl.LoadDist.DS | 下采样模式（通用），根据数据类型自动选择B8/B16粒度。 | 32 |
+  | pl.LoadDist.DS_B8 | 数据2倍下采样，加载数据量为2*VL，数据每隔一个保留，数据类型为8位宽类型。 | 32 |
+  | pl.LoadDist.DS_B16 | 数据2倍下采样，加载数据量为2*VL，数据每隔一个保留，数据类型为16位宽类型。 | 32 |
+  | pl.LoadDist.UNPK | 解压缩模式（通用），根据数据类型自动选择B8/B16/B32粒度。 | min(32, VL/2) |
+  | pl.LoadDist.UNPK_B8 | 解压缩模式，按无符号整型u8加载VL/2数据量，每个元素后会补1个值为0元素，即unpack到VL。 | min(32, VL/2) |
+  | pl.LoadDist.UNPK_B16 | 解压缩模式，按无符号整型u16加载VL/2数据量，每个元素后会补1个值为0元素，即unpack到VL。 | min(32, VL/2) |
+  | pl.LoadDist.UNPK_B32 | 解压缩模式，按无符号整型u32加载VL/2数据量，每个元素后会补1个值为0元素，即unpack到VL。 | min(32, VL/2) |
+  | pl.LoadDist.UNPK4 | 4元素解压缩模式，固定按u8加载VL/4数据量，unpack到VL，每个元素后会补3个值为0的元素。 | min(32, VL/4) |
+  | pl.LoadDist.BLK | 读取一个DataBlock（32B），并广播到VL。 | 32 |
+  | pl.LoadDist.E2B | 元素扩展到DataBlock模式（通用），根据数据类型自动选择B16/B32粒度。 | VL/16或VL/8 |
+  | pl.LoadDist.E2B_B16 | 加载(VL/DataBlock)个B16的数据，并将每个元素（16bit）广播到一个DataBlock（32B）中。 | VL/16 |
+  | pl.LoadDist.E2B_B32 | 加载(VL/DataBlock)个B32的数据，并将每个元素（32bit）广播到一个DataBlock（32B）中。 | VL/8 |
 
   **表2** reg_tensor双搬入模式dist参数说明
 
   | dist取值 | 含义 | 搬运对齐约束（Byte） |
   |---|---|---|
-  | `pl.LoadDist.DINTLV_B8` | 双搬入模式，基于元素的交错搬运，将偶数索引的元素存入dst0，奇数索引的元素存入dst1，数据类型为8位宽类型。 | 32 |
-  | `pl.LoadDist.DINTLV_B16` | 双搬入模式，基于元素的交错搬运，将偶数索引的元素存入dst0，奇数索引的元素存入dst1，数据类型为16位宽类型。 | 32 |
-  | `pl.LoadDist.DINTLV_B32` | 双搬入模式，基于元素的交错搬运，将偶数索引的元素存入dst0，奇数索引的元素存入dst1，数据类型为32位宽类型。 | 32 |
+  | pl.LoadDist.DINTLV_B8 | 双搬入模式，基于元素的交错搬运，将偶数索引的元素存入dst0，奇数索引的元素存入dst1，数据类型为8位宽类型。 | 32 |
+  | pl.LoadDist.DINTLV_B16 | 双搬入模式，基于元素的交错搬运，将偶数索引的元素存入dst0，奇数索引的元素存入dst1，数据类型为16位宽类型。 | 32 |
+  | pl.LoadDist.DINTLV_B32 | 双搬入模式，基于元素的交错搬运，将偶数索引的元素存入dst0，奇数索引的元素存入dst1，数据类型为32位宽类型。 | 32 |
 
   **表3** mask_reg模式dist参数说明
 
   | dist取值 | 含义 | 搬运对齐约束（Byte） |
   |---|---|---|
-  | `pl.LoadDist.NORM` | 正常模式，搬运数据量为VL/8。 | VL/8 |
-  | `pl.LoadDist.US` | 上采样模式，每bit数据重复搬运两次，将VL/16数据扩充为VL/8搬入。 | VL/16 |
-  | `pl.LoadDist.DS` | 下采样模式，每间隔1bit舍弃数据，将VL/4数据压缩为VL/8搬入。 | min(32, VL/4) |
+  | pl.LoadDist.NORM | 正常模式，搬运数据量为VL/8。 | VL/8 |
+  | pl.LoadDist.US | 上采样模式，每bit数据重复搬运两次，将VL/16数据扩充为VL/8搬入。 | VL/16 |
+  | pl.LoadDist.DS | 下采样模式，每间隔1bit舍弃数据，将VL/4数据压缩为VL/8搬入。 | min(32, VL/4) |
 
 ## 返回值说明
 
-返回`dst`目的操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型。
+返回dst目的操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型。
 
-- 当目标为reg_tensor时，为**reg_tensor单搬入模式**，支持的数据类型和`tile`中的说明一致。
+- 当目标为reg_tensor时，为**reg_tensor单搬入模式**，支持的数据类型和tile中的说明一致。
 
-- `dst_even` / `dst_odd` **reg_tensor双搬入模式**的偶数/奇数目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型和`tile`中的说明一致。
+- dst_even/dst_odd**reg_tensor双搬入模式**的偶数/奇数目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型和tile中的说明一致。
 
-- 当目标已通过`vf.create_mask`预声明为mask_reg时，自动分派mask_reg加载路径，将Tile中的数据搬入mask_reg。
+- 当目标已通过vf.create_mask预声明为mask_reg时，自动分派mask_reg加载路径，将Tile中的数据搬入mask_reg。
 
 ## 调用示例
 
@@ -575,9 +575,9 @@ if __name__ == "__main__":
 
 ### HF8转FP32（layout=TWO/THREE）
 
-HF8为8位类型，FP32为32位类型，二者位宽比为1:4。FP32→HF8为4x缩窄转换，`layout`参数控制转换结果放在HF8寄存器的哪个子区（`CastLayout.ZERO`/`ONE`/`TWO`/`THREE`分别对应第0/1/2/3个byte位置）。HF8→FP32为4x扩展转换，`layout`参数控制从HF8寄存器的哪个子区读取数据扩展为FP32。
+HF8为8位类型，FP32为32位类型，二者位宽比为1:4。FP32→HF8为4x缩窄转换，layout参数控制转换结果放在HF8寄存器的哪个子区（CastLayout.ZERO/ONE/TWO/THREE分别对应第0/1/2/3个byte位置）。HF8→FP32为4x扩展转换，layout参数控制从HF8寄存器的哪个子区读取数据扩展为FP32。
 
-以下示例先通过FP32→HF8转换（`layout=ZERO`）生成HF8数据，再分别使用`layout=ZERO`/`ONE`/`TWO`/`THREE`将HF8数据转换回FP32并存储，展示四种`CastLayout`的使用方式。其中`layout=ZERO`读取有效数据，其余layout读取未写入的子区，结果为0。
+以下示例先通过FP32→HF8转换（layout=ZERO）生成HF8数据，再分别使用layout=ZERO/ONE/TWO/THREE将HF8数据转换回FP32并存储，展示四种CastLayout的使用方式。其中layout=ZERO读取有效数据，其余layout读取未写入的子区，结果为0。
 
 ```python
 import os

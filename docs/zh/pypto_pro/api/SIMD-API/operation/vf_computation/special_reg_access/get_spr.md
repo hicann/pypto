@@ -16,7 +16,7 @@
 
 读取指定特殊寄存器的值，返回标量值。当前仅支持AddrReg寄存器。
 
-AddrReg寄存器是一个特殊的地址寄存器，通常配合`vf.squeeze`使用——`vf.squeeze`会将有效元素的总字节数存储到AddrReg寄存器中，随后可通过`pl.get_spr`读取该值。
+AddrReg寄存器是一个特殊的地址寄存器，通常配合vf.squeeze使用——vf.squeeze会将有效元素的总字节数存储到AddrReg寄存器中，随后可通过pl.get_spr读取该值。
 
 ## 函数原型
 
@@ -34,7 +34,7 @@ get_spr() -> ar_value
 
 ## 返回值说明
 
-返回`ar_value`目标reg_tensor。
+返回ar_value目标reg_tensor。
 
 ## 调用示例
 

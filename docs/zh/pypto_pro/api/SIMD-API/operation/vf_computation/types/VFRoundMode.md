@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-VFRoundMode定义了[`vf.astype`](../type_conversion/astype.md)类型转换时的浮点舍入模式。仅在可能导致精度损失且支持该舍入模式的转换中生效，不涉及精度损失的转换路径标记为`UNKNOWN`（可省略）。
+VFRoundMode定义了[vf.astype](../type_conversion/astype.md)类型转换时的浮点舍入模式。仅在可能导致精度损失且支持该舍入模式的转换中生效，不涉及精度损失的转换路径标记为UNKNOWN（可省略）。
 
-不同转换路径支持的舍入模式不同，详见[`vf.astype`约束说明](../type_conversion/astype.md#约束说明)各表。
+不同转换路径支持的舍入模式不同，详见[vf.astype约束说明](../type_conversion/astype.md#约束说明)各表。
 
 ## 原型定义
 

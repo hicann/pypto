@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-为非对齐搬入分配非对齐寄存器（UnalignRegForLoad）。该寄存器作为临时缓存区，用于暂存跨对齐边界的数据，贯穿后续的`vf.load_unalign_pre` / `vf.load_unalign`调用链。
+为非对齐搬入分配非对齐寄存器（UnalignRegForLoad）。该寄存器作为临时缓存区，用于暂存跨对齐边界的数据，贯穿后续的vf.load_unalign_pre / vf.load_unalign调用链。
 
-非对齐搬入的完整流程为：先调用`vf.load_unalign_init`分配寄存器，再调用`vf.load_unalign_pre`进行初始化，最后调用`vf.load_unalign`进行数据搬入。
+非对齐搬入的完整流程为：先调用vf.load_unalign_init分配寄存器，再调用vf.load_unalign_pre进行初始化，最后调用vf.load_unalign进行数据搬入。
 
 ## 函数原型
 
@@ -34,7 +34,7 @@ load_unalign_init() -> ureg
 
 ## 返回值说明
 
-返回`ureg`目标reg_tensor。
+返回ureg目标reg_tensor。
 
 ## 调用示例
 

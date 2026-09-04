@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-将源操作数`src`中的浮点数元素截断为整数值（保留原数据类型），并存入目的操作数`dst`。
+将源操作数src中的浮点数元素截断为整数值（保留原数据类型），并存入目的操作数dst。
 
 如下图所示，浮点数3.7和-2.3经截断后分别变为3.0和-2.0，即丢弃小数部分仅保留整数部分，数据类型保持不变：
 
@@ -32,9 +32,9 @@ truncate(src, preg, mode: Optional[MergeMode] = None) -> dst
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)，源操作数`src`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_FP16、DT_BF16、DT_FP32。 |
-| `preg` | 输入 | [mask_reg](../mask_reg.md)，mask未筛选的元素在dst中置零。 - DT_FP32类型只支持不饱和模式。 |
-| `mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
+| src | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)，源操作数src与目的操作数dst的数据类型保持一致。支持的数据类型为：DT_FP16、DT_BF16、DT_FP32。 |
+| preg | 输入 | [mask_reg](../mask_reg.md)，mask未筛选的元素在dst中置零。 - DT_FP32类型只支持不饱和模式。 |
+| mode | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- pl.MergeMode.ZEROING（默认），preg未筛选的元素在dst中置0。<br>- pl.MergeMode.MERGING当前不支持。 |
 
 ## 约束说明
 
@@ -42,7 +42,7 @@ truncate(src, preg, mode: Optional[MergeMode] = None) -> dst
 
 ## 返回值说明
 
-返回`dst`目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型和`src`中的说明一致。
+返回dst目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型和src中的说明一致。
 
 ## 调用示例
 

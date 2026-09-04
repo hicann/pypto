@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-StoreDist定义了[`vf.store_align`](../data_movement/store_align.md)的数据存储分布模式，用于控制从寄存器到UB的数据搬运方式。
+StoreDist定义了[vf.store_align](../data_movement/store_align.md)的数据存储分布模式，用于控制从寄存器到UB的数据搬运方式。
 
 ## 原型定义
 
@@ -38,9 +38,9 @@ class StoreDist(enum.Enum):
 
 StoreDist的取值根据目标模式不同，支持的模式有所区别：
 
-- **reg_tensor单搬出模式**：支持 `NORM`、`NORM_B16`、`FIRST_ELEMENT`、`PACK`、`PACK4`
-- **reg_tensor双搬出模式**：支持 `INTLV`、`INTLV_B32`（需要两个源寄存器）
-- **mask_reg模式**：支持 `NORM`、`PACK`
+- **reg_tensor单搬出模式**：支持 NORM、NORM_B16、FIRST_ELEMENT、PACK、PACK4
+- **reg_tensor双搬出模式**：支持 INTLV、INTLV_B32（需要两个源寄存器）
+- **mask_reg模式**：支持 NORM、PACK
 
 ## 调用示例
 

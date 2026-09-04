@@ -14,11 +14,11 @@
 
 ## 功能说明
 
-该接口根据mask，对源操作数`src0`、`src1`及输入进位`carry_src`进行按元素求和操作，将结果写入目的操作数`dst`，同时将每个元素的进位结果写入`carry`。计算公式如下：
+该接口根据mask，对源操作数src0、src1及输入进位carry_src进行按元素求和操作，将结果写入目的操作数dst，同时将每个元素的进位结果写入carry。计算公式如下：
 
 $$\{carry_i, dst_i\} = src0_i + src1_i + carry\_src_i$$
 
-Carry flag（进位标志）用于表示加法进位，若`src0`、`src1`、`carry_src`输入按位相加后最高位有进位，在`carry`（存放进位的mask_reg）中对应位置每4bit设置1，否则写0。
+Carry flag（进位标志）用于表示加法进位，若src0、src1、carry_src输入按位相加后最高位有进位，在carry（存放进位的mask_reg）中对应位置每4bit设置1，否则写0。
 
 以int64_t类型数据计算 -1 + 8 = 7为例，vf.addc接口的适用场景如下图所示：
 
@@ -36,10 +36,10 @@ addc(src0, src1, carry_src, preg, mode: Optional[MergeMode] = None) -> (carry, d
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src0` | 输入 | 源操作数0，[reg_tensor](../reg_tensor.md)，源操作数`src0`、`src1`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT32、DT_UINT32。 |
-| `src1` | 输入 | 源操作数1，[reg_tensor](../reg_tensor.md)，支持的数据类型和`src0`中的说明一致。 |
-| `carry_src` | 输入 | 输入进位值，[mask_reg](../mask_reg.md)。 |
-| `preg` | 输入 | [mask_reg](../mask_reg.md)。 |
+| src0 | 输入 | 源操作数0，[reg_tensor](../reg_tensor.md)，源操作数src0、src1与目的操作数dst的数据类型保持一致。支持的数据类型为：DT_INT32、DT_UINT32。 |
+| src1 | 输入 | 源操作数1，[reg_tensor](../reg_tensor.md)，支持的数据类型和src0中的说明一致。 |
+| carry_src | 输入 | 输入进位值，[mask_reg](../mask_reg.md)。 |
+| preg | 输入 | [mask_reg](../mask_reg.md)。 |
 
 ## 约束说明
 
@@ -47,10 +47,10 @@ addc(src0, src1, carry_src, preg, mode: Optional[MergeMode] = None) -> (carry, d
 
 ## 返回值说明
 
-返回一个二元组 `(carry, dst)`。
+返回一个二元组 (carry, dst)。
 
-- `carry` 输出进位值，[mask_reg](../mask_reg.md)。
-- `dst` 目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型和`src0`中的说明一致。
+- carry输出进位值，[mask_reg](../mask_reg.md)。
+- dst目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型和src0中的说明一致。
 
 ## 调用示例
 

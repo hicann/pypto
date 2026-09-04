@@ -19,18 +19,15 @@
 ## 函数原型
 
 ```python
-load(tile, stride=None, post_update: bool = False, repeat_stride=None, count=None) -> dst
+load(tile, stride) -> dst
 ```
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `tile` | 输入 | 源操作数，Tile，起始地址不需要32字节对齐。目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64。 |
-| `stride` | 输入 | 可选，`post_update`步长，配置`post_update=True`后有效。 |
-| `post_update` | 输入 | 可选，`post_update=True`时，源地址会在每次搬运后自动累进`stride`指定的步长，无需用户手动更新offset。默认`post_update=False`。 |
-| `repeat_stride` | 输入 | 可选，重复加载时的步长，默认`0`。 |
-| `count` | 输入 | 可选，搬运数据量，单位为元素个数。 |
+| tile | 输入 | 源操作数，Tile，起始地址需要32字节对齐。目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64。 |
+| stride | 输入 | 可选，传入时自动启用post-update模式，搬运后源地址自动累进stride指定的步长。不传时为普通加载模式。 |
 
 ## 约束说明
 
@@ -38,7 +35,7 @@ load(tile, stride=None, post_update: bool = False, repeat_stride=None, count=Non
 
 ## 返回值说明
 
-返回`dst`目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。不支持双寄存器模式。
+返回dst目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。不支持双寄存器模式。
 
 ## 调用示例
 
@@ -103,8 +100,8 @@ import torch_npu
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
-    # post_update模式：搬运后地址自动累进stride，适合循环内连续加载
-    src_reg = vf.load(src_tile, 64, post_update=True)
+    # post_update模式：传入stride自动启用，搬运后地址自动累进，适合循环内连续加载
+    src_reg = vf.load(src_tile, 64)
     vf.store_align(dst_tile, src_reg, preg)
 
 @pl.jit()

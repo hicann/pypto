@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-非对齐存储`vf.squeeze_store_unalign`的后处理，处理非对齐寄存器中剩余的未对齐字节。
+非对齐存储vf.squeeze_store_unalign的后处理，处理非对齐寄存器中剩余的未对齐字节。
 
 ## 函数原型
 
@@ -26,12 +26,12 @@ squeeze_store_unalign_post(tile, align_reg)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `tile` | 输出 | 目的操作数，Tile地址。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64。 |
-| `align_reg` | 输入 | alignment tracker寄存器（由`vf.unalign_reg_for_store()`创建）。 |
+| tile | 输出 | 目的操作数，Tile地址。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64。 |
+| align_reg | 输入 | alignment tracker寄存器（由vf.unalign_reg_for_store()创建）。 |
 
 ## 约束说明
 
-- 必须与`vf.squeeze_store_unalign`配对使用，在`vf.squeeze_store_unalign`之后调用。
+- 必须与vf.squeeze_store_unalign配对使用，在vf.squeeze_store_unalign之后调用。
 
 ## 返回值说明
 

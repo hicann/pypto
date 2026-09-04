@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-reg_tensor最大值归约：将源寄存器`src`中的所有有效元素（`preg`选中的元素）求最大值，结果写入目标寄存器的第一个元素`dst[0]`，第一个最大值所在索引写入`dst[1]`，其余元素置零。
+reg_tensor最大值归约：将源寄存器src中的所有有效元素（preg选中的元素）求最大值，结果写入目标寄存器的第一个元素dst[0]，第一个最大值所在索引写入dst[1]，其余元素置零。
 
 归约求最大值的计算过程及索引保存方式如下图所示：
 
@@ -32,24 +32,24 @@ reduce_max(src, preg, datablock: bool = False, merge_mode: Optional[MergeMode] =
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)，源操作数`src`与目的操作数`dst`的数据类型保持一致。支持的数据类型为：DT_INT16、DT_UINT16、DT_FP16、DT_INT32、DT_UINT32、DT_FP32。 |
-| `preg` | 输入 | [mask_reg](../mask_reg.md)。当所有元素均不参与计算时（mask为空），将该数据类型的最小值写入`dst[0]`。 |
-| `datablock` | 输入 | 可选，决定接口工作模式，`True`时按datablock粒度归约（对应`vcgmax`指令），默认`False`。当`datablock=True`时，启用datablock粒度归约，每个datablock独立归约：32位宽（DT_INT32、DT_UINT32、DT_FP32）类型每16个元素为一个datablock，16位宽（DT_INT16、DT_UINT16、DT_FP16）类型每32个元素为一个datablock，各datablock分别求最大值并将结果写入各自datablock的第一个元素。 |
-| `merge_mode` | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- `pl.MergeMode.ZEROING`（默认），`preg`未筛选的元素在`dst`中置0。<br>- `pl.MergeMode.MERGING`当前不支持。 |
+| src | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)，源操作数src与目的操作数dst的数据类型保持一致。支持的数据类型为：DT_INT16、DT_UINT16、DT_FP16、DT_INT32、DT_UINT32、DT_FP32。 |
+| preg | 输入 | [mask_reg](../mask_reg.md)。当所有元素均不参与计算时（mask为空），将该数据类型的最小值写入dst[0]。 |
+| datablock | 输入 | 可选，决定接口工作模式，True时按datablock粒度归约（对应vcgmax指令），默认False。当datablock=True时，启用datablock粒度归约，每个datablock独立归约：32位宽（DT_INT32、DT_UINT32、DT_FP32）类型每16个元素为一个datablock，16位宽（DT_INT16、DT_UINT16、DT_FP16）类型每32个元素为一个datablock，各datablock分别求最大值并将结果写入各自datablock的第一个元素。 |
+| merge_mode | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- pl.MergeMode.ZEROING（默认），preg未筛选的元素在dst中置0。<br>- pl.MergeMode.MERGING当前不支持。 |
 
 ## 约束说明
 
-- `datablock=True`时，支持的数据类型为：DT_INT16、DT_UINT16、DT_FP16、DT_INT32、DT_UINT32、DT_FP32。
+- datablock=True时，支持的数据类型为：DT_INT16、DT_UINT16、DT_FP16、DT_INT32、DT_UINT32、DT_FP32。
 
 ## 返回值说明
 
-返回`dst`目标[reg_tensor](../reg_tensor.md)，支持的数据类型和`src`中的说明一致，归约结果写入第一个元素`dst[0]`，索引写入`dst[1]`。
+返回dst目标[reg_tensor](../reg_tensor.md)，支持的数据类型和src中的说明一致，归约结果写入第一个元素dst[0]，索引写入dst[1]。
 
-- 当存在多个最大值时，将第一个最大值的索引保存在`dst[1]`中。
+- 当存在多个最大值时，将第一个最大值的索引保存在dst[1]中。
 
-- 如果输入数据存在nan，将该数据类型的nan写入`dst[0]`，并将第一个nan的索引保存在`dst[1]`中。
+- 如果输入数据存在nan，将该数据类型的nan写入dst[0]，并将第一个nan的索引保存在dst[1]中。
 
-- `max(-0, +0) = +0`。
+- max(-0, +0) = +0。
 
 ## 调用示例
 

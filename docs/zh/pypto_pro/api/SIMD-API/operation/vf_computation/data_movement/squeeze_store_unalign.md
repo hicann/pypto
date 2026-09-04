@@ -14,11 +14,11 @@
 
 ## 功能说明
 
-非对齐存储，将变长向量数据写入Tile。基本功能和`vf.store_unalign`的reg_tensor模式一致，但是参数和约束有所区别。
+非对齐存储，将变长向量数据写入Tile。基本功能和vf.store_unalign的reg_tensor模式一致，但是参数和约束有所区别。
 
-- `vf.store_unalign`的reg_tensor模式下需要`stride`和`post_update`两个额外参数配置，而`vf.squeeze_store_unalign`没有这两个参数。
+- vf.store_unalign的reg_tensor模式下需要stride和post_update两个额外参数配置，而vf.squeeze_store_unalign没有这两个参数。
 
-- 约束的区别请参考`vf.store_unalign`和`vf.squeeze_store_unalign`的约束说明章节。
+- 约束的区别请参考vf.store_unalign和vf.squeeze_store_unalign的约束说明章节。
 
 ## 函数原型
 
@@ -30,17 +30,17 @@ squeeze_store_unalign(tile, src, align_reg)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `tile` | 输出 | 目的操作数，Tile地址。 |
-| `src` | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)类型。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64。 |
-| `align_reg` | 输入 | alignment tracker寄存器（由`vf.unalign_reg_for_store()`创建）。 |
+| tile | 输出 | 目的操作数，Tile地址。 |
+| src | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)类型。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64。 |
+| align_reg | 输入 | alignment tracker寄存器（由vf.unalign_reg_for_store()创建）。 |
 
 ## 约束说明
 
-- 调用前必须先调用`vf.squeeze`写入AR寄存器。
+- 调用前必须先调用vf.squeeze写入AR寄存器。
 
-- 必须与`vf.squeeze_store_unalign_post`配对使用，在`vf.squeeze_store_unalign_post`之前调用。
+- 必须与vf.squeeze_store_unalign_post配对使用，在vf.squeeze_store_unalign_post之前调用。
 
-- `vf.squeeze`和`vf.squeeze_store_unalign`必须交替使用，否则可能导致硬件挂死。
+- vf.squeeze和vf.squeeze_store_unalign必须交替使用，否则可能导致硬件挂死。
 
 ## 返回值说明
 

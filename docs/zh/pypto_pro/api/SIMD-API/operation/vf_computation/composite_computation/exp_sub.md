@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-`src0`与`src1`相减，差值作为e的指数计算，根据`preg`将计算结果写入dst。公式如下：
+src0与src1相减，差值作为e的指数计算，根据preg将计算结果写入dst。公式如下：
 
 src数据类型为DT_FP32时：
 
@@ -38,11 +38,11 @@ exp_sub(src0, src1, preg, layout: Optional[CastLayout] = None, dtype: Optional[D
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `src0` | 输入 | 源操作数0，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。 |
-| `src1` | 输入 | 源操作数1，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。 |
-| `preg` | 输入 | [mask_reg](../mask_reg.md)。 |
-| `layout` | 输入 | 可选，决定结果放置半区。`pl.CastLayout.ZERO`（偶数半区，默认）或`pl.CastLayout.ONE`（奇数半区）。<br>- src类型为DT_FP16类型时，支持`pl.CastLayout.ZERO`和`pl.CastLayout.ONE`。<br>- src类型为DT_FP32类型时，配置不生效。|
-| `dtype` | 输入 | 可选，目标reg_tensor数据类型。当src为DT_FP16时，指定`dtype=pl.DT_FP32`可将源操作数提升精度到DT_FP32再进行计算，产生DT_FP32结果。 |
+| src0 | 输入 | 源操作数0，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。 |
+| src1 | 输入 | 源操作数1，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。 |
+| preg | 输入 | [mask_reg](../mask_reg.md)。 |
+| layout | 输入 | 可选，决定结果放置半区。pl.CastLayout.ZERO（偶数半区，默认）或pl.CastLayout.ONE（奇数半区）。<br>- src类型为DT_FP16类型时，支持pl.CastLayout.ZERO和pl.CastLayout.ONE。<br>- src类型为DT_FP32类型时，配置不生效。|
+| dtype | 输入 | 可选，目标reg_tensor数据类型。当src为DT_FP16时，指定dtype=pl.DT_FP32可将源操作数提升精度到DT_FP32再进行计算，产生DT_FP32结果。 |
 
 ## 约束说明
 
@@ -63,7 +63,7 @@ exp_sub(src0, src1, preg, layout: Optional[CastLayout] = None, dtype: Optional[D
 
 ## 返回值说明
 
-返回`dst`目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。
+返回dst目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。
 
 ## 调用示例
 
@@ -125,7 +125,7 @@ if __name__ == "__main__":
 
 ### DT_FP16源 → DT_FP32结果
 
-当源操作数为DT_FP16、目的操作数为DT_FP32时，寄存器中128个DT_FP16元素按相邻两两分组，`layout`决定每组中参与计算的元素位置：`pl.CastLayout.ZERO`（默认）取偶数位（第0个），`pl.CastLayout.ONE`取奇数位（第1个）。最终输出64个DT_FP32元素。以下示例使用默认的`layout=ZERO`，即取每组偶数位元素参与计算。
+当源操作数为DT_FP16、目的操作数为DT_FP32时，寄存器中128个DT_FP16元素按相邻两两分组，layout决定每组中参与计算的元素位置：pl.CastLayout.ZERO（默认）取偶数位（第0个），pl.CastLayout.ONE取奇数位（第1个）。最终输出64个DT_FP32元素。以下示例使用默认的layout=ZERO，即取每组偶数位元素参与计算。
 
 ```python
 import os

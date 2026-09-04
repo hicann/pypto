@@ -14,24 +14,24 @@
 
 ## 功能说明
 
-从`pl.set_vec_mask`设置的掩码寄存器 {MASK1, MASK0} 中读取mask值，并按数据类型对应的格式转换后写入返回值`[mask_reg](../mask_reg.md)`。
+从pl.set_vec_mask设置的掩码寄存器 {MASK1, MASK0} 中读取mask值，并按数据类型对应的格式转换后写入返回值[mask_reg](../mask_reg.md)。
 
-本接口对应AscendC `MoveMask<T>`接口。具体转换方式：
+具体转换方式：
 
-- **32位宽（DT_INT32、DT_UINT32、DT_FP32）**：读取64bit的MASK0数据，将每个bit复制为4bit，写入`mask_reg`。
-- **16位宽（DT_INT16、DT_UINT16、DT_FP16、DT_BF16）**：读取完整128bit的 {MASK1, MASK0} 数据，将每个bit复制为2bit，写入`mask_reg`。
+- **32位宽（DT_INT32、DT_UINT32、DT_FP32）**：读取64bit的MASK0数据，将每个bit复制为4bit，写入mask_reg。
+- **16位宽（DT_INT16、DT_UINT16、DT_FP16、DT_BF16）**：读取完整128bit的 {MASK1, MASK0} 数据，将每个bit复制为2bit，写入mask_reg。
 
 ## 函数原型
 
 ```python
-get_mask_spr(width: MaskWidth = MaskWidth.B32) -> mask_reg
+get_mask_spr(width: MaskWidth = MaskWidth.B32) -> preg
 ```
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `width` | 输入 | 可选，掩码宽度，决定读取的SPR位宽及扩展方式，对应[MaskWidth](../types/MaskWidth.md)类型。<br>- `pl.MaskWidth.B32`（默认）：读取64bit MASK0，每bit扩展为4bit，对应`movp_b32()`指令。<br>- `pl.MaskWidth.B16`：读取128bit {MASK1, MASK0}，每bit扩展为2bit，对应`movp_b16()`指令。 |
+| width | 输入 | 可选，掩码宽度，决定读取的SPR位宽及扩展方式，对应[MaskWidth](../types/MaskWidth.md)类型。<br>- pl.MaskWidth.B32（默认）：读取64bit MASK0，每bit扩展为4bit。<br>- pl.MaskWidth.B16：读取128bit {MASK1, MASK0}，每bit扩展为2bit。 |
 
 ## 约束说明
 
@@ -42,17 +42,17 @@ get_mask_spr(width: MaskWidth = MaskWidth.B32) -> mask_reg
   | pl.MaskWidth.B32 | mask_reg（对应32位宽：DT_INT32、DT_UINT32、DT_FP32） |
   | pl.MaskWidth.B16 | mask_reg（对应16位宽：DT_INT16、DT_UINT16、DT_FP16、DT_BF16） |
 
-- 本接口为兼容性接口，建议优先采用`vf.create_mask`和`vf.update_mask`进行mask_reg计算。
+- 本接口为兼容性接口，建议优先采用vf.create_mask和vf.update_mask进行mask_reg计算。
 
-- 本接口使用前需选择与掩码含义一致的模式，并通过`pl.set_vec_mask`或产生掩码的VF指令设置SPR {MASK1, MASK0}。按位掩码使用norm模式；元素计数使用count模式。
+- 本接口使用前需选择与掩码含义一致的模式，并通过pl.set_vec_mask或产生掩码的VF指令设置SPR {MASK1, MASK0}。按位掩码使用norm模式；元素计数使用count模式。
 
 ## 返回值说明
 
-返回`mask_reg`返回的mask_reg，从SPR {MASK1, MASK0} 读取并转换。
+返回mask_reg，从SPR {MASK1, MASK0} 读取并转换。
 
 ## 调用示例
 
-先用`pl.set_vec_mask`设置SPR {MASK1, MASK0}，再用`vf.get_mask_spr`读取到mask_reg，最后用该mask_reg控制计算：
+先用pl.set_vec_mask设置SPR {MASK1, MASK0}，再用vf.get_mask_spr读取到mask_reg，最后用该mask_reg控制计算：
 
 ```python
 import os

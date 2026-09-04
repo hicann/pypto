@@ -14,10 +14,10 @@
 
 ## 功能说明
 
-从起始值`start`生成索引序列，用于构造索引向量。通过`index_order`选择生成方向：
+从起始值start生成索引序列，用于构造索引向量。通过index_order选择生成方向：
 
-- `pl.IndexOrder.INCREASE_ORDER`（默认）：递增，`dst[i] = start + i`。
-- `pl.IndexOrder.DECREASE_ORDER`：递减，`dst[i] = start - i`。
+- pl.IndexOrder.INCREASE_ORDER（默认）：递增，dst[i] = start + i。
+- pl.IndexOrder.DECREASE_ORDER：递减，dst[i] = start - i。
 
 ## 函数原型
 
@@ -29,9 +29,9 @@ arange(start, dtype: DType, index_order: Optional[IndexOrder] = None) -> dst
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `start` | 输入 | 序列起始值（整型标量或表达式）。 |
-| `index_order` | 输入 | 可选关键字参数，生成方向。`pl.IndexOrder.INCREASE_ORDER`（默认，递增）或`pl.IndexOrder.DECREASE_ORDER`（递减）。每一步的步长固定为 ±1，这是硬件特性。如需非1步长（如`start + i*step`），可在`vf.arange`之后追加一条`vf.muls`对结果整体缩放。 |
-| `dtype` | 输入 | 指定目标[reg_tensor](../reg_tensor.md)的数据类型（如`pl.DT_UINT32`、`pl.DT_INT32`等）。由于标量源无法推断寄存器数据类型，必须显式指定。 |
+| start | 输入 | 序列起始值（整型标量或表达式）。 |
+| index_order | 输入 | 可选关键字参数，生成方向。pl.IndexOrder.INCREASE_ORDER（默认，递增）或pl.IndexOrder.DECREASE_ORDER（递减）。每一步的步长固定为 ±1，这是硬件特性。如需非1步长（如start + i*step），可在vf.arange之后追加一条vf.muls对结果整体缩放。 |
+| dtype | 输入 | 指定目标[reg_tensor](../reg_tensor.md)的数据类型（如pl.DT_UINT32、pl.DT_INT32等）。由于标量源无法推断寄存器数据类型，必须显式指定。 |
 
 ## 约束说明
 
@@ -41,7 +41,7 @@ arange(start, dtype: DType, index_order: Optional[IndexOrder] = None) -> dst
 
 ## 返回值说明
 
-返回`dst`目标[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)，存放生成的序列。
+返回dst目标[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)，存放生成的序列。
 
 ## 调用示例
 

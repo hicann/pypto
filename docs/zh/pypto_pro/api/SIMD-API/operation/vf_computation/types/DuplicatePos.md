@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-DuplicatePos定义了[`vf.full`](../data_movement/full.md)广播模式下元素的复制位置选择，用于指定将哪个索引位置的元素广播到整个寄存器。
+DuplicatePos定义了[vf.full](../data_movement/full.md)广播模式下元素的复制位置选择，用于指定将哪个索引位置的元素广播到整个寄存器。
 
 ## 原型定义
 

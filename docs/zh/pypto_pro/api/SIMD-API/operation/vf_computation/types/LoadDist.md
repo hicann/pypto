@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-LoadDist定义了[`vf.load_align`](../data_movement/load_align.md)的数据加载分布模式，用于控制从UB到寄存器的数据搬运方式。不同模式对应不同的硬件指令，影响数据在寄存器中的排布和广播/采样行为。
+LoadDist定义了[vf.load_align](../data_movement/load_align.md)的数据加载分布模式，用于控制从UB到寄存器的数据搬运方式。不同模式对应不同的硬件指令，影响数据在寄存器中的排布和广播/采样行为。
 
 ## 原型定义
 

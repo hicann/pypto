@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-DataCopyMode定义了[`vf.load_align`](../data_movement/load_align.md)、[`vf.store_align`](../data_movement/store_align.md)和[`vf.gather`](../data_movement/gather.md)的数据拷贝粒度模式，用于控制是逐元素拷贝还是按DataBlock块拷贝。
+DataCopyMode定义了[vf.load_align](../data_movement/load_align.md)、[vf.store_align](../data_movement/store_align.md)和[vf.gather](../data_movement/gather.md)的数据拷贝粒度模式，用于控制是逐元素拷贝还是按DataBlock块拷贝。
 
 ## 原型定义
 
