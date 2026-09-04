@@ -69,33 +69,14 @@ ROUND_TESTS = [
                 'name': 'input0',
                 'shape': (128, 128),
                 'dtype': 'int32',
-                'data_range': {'min': 0, 'max': 1},
+                'data_range': {'min': -2147483648, 'max': 2147483647},
                 'format': 'ND',
             }
         ],
         'output_tensors': [{'name': 'output0', 'shape': (128, 128), 'dtype': 'int32', 'format': 'ND'}],
         'view_shape': (40, 40),
         'tile_shape': (32, 32),
-        'params': {'decimals': -1},
+        'params': {'decimals': 0},
         'source_case_index': 13,
-    },
-    {
-        'case_index': 14,
-        'case_name': 'Round_test_14',
-        'operation': 'Round',
-        'input_tensors': [
-            {
-                'name': 'input0',
-                'shape': (120, 120),
-                'dtype': 'int16',
-                'data_range': {'min': 0, 'max': 1},
-                'format': 'ND',
-            }
-        ],
-        'output_tensors': [{'name': 'output0', 'shape': (120, 120), 'dtype': 'int16', 'format': 'ND'}],
-        'view_shape': (32, 32),
-        'tile_shape': (32, 32),
-        'params': {'decimals': -2},
-        'source_case_index': 14,
     },
 ]

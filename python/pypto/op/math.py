@@ -1535,6 +1535,13 @@ def round(input: Tensor, decimals: int = 0) -> Tensor:
     Input x: [[1.21, 2.35], [3.65, 4.76]]
     Output y: [[1.2, 2.4], [3.6, 4.8]]
     """
+    if input.dtype in (DataType.DT_INT32, DataType.DT_INT64):
+        if decimals != 0:
+            raise PyptoError(
+                0xF00002,
+                ValueError(f"round(): decimals must be 0 for integer tensor dtype {input.dtype.name}."),
+            )
+        return add(input, 0)
     return pypto_impl.Round(input, decimals)
 
 

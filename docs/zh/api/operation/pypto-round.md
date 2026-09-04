@@ -19,7 +19,7 @@
 ## 函数原型
 
 ```python
-round(input: Tensor, decimals: int) -> Tensor
+round(input: Tensor, decimals: int = 0) -> Tensor
 ```
 
 ## 参数说明
@@ -37,15 +37,16 @@ round(input: Tensor, decimals: int) -> Tensor
 
 1. Tensor数据类型说明：
    <!-- npu="950" id4 -->
-   - Ascend 950PR/Ascend 950DT：DT_FP32，DT_FP16，DT_BF16，DT_INT32，DT_INT16，DT_INT64。
+   - Ascend 950PR/Ascend 950DT：DT_FP32，DT_FP16，DT_BF16，DT_INT32，DT_INT64。
    <!-- end id4 -->
    <!-- npu="A3" id5 -->
-   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP32，DT_FP16，DT_BF16，DT_INT32，DT_INT16。
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP32，DT_FP16，DT_BF16，DT_INT32。
    <!-- end id5 -->
    <!-- npu="910b" id6 -->
-   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_FP32，DT_FP16，DT_BF16，DT_INT32，DT_INT16。
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_FP32，DT_FP16，DT_BF16，DT_INT32。
    <!-- end id6 -->
 2. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
+3. 当输入Tensor的数据类型为DT_INT32或DT_INT64时，decimals必须为0，此时返回结果与输入Tensor一致。
 
 ## 调用示例
 

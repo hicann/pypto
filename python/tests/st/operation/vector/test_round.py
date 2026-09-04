@@ -33,8 +33,7 @@ def round_2d_1input_2d_output_kernel(input0: pypto.Tensor(), output0: pypto.Tens
 def round_golden(input_tensor, decimals):
     if input_tensor.is_floating_point():
         return torch.round(input_tensor, decimals=decimals)
-    scale = 10 ** (-decimals)
-    return torch.round(input_tensor.to(torch.float64) / scale).mul(scale).to(input_tensor.dtype)
+    return torch.round(input_tensor)
 
 
 KERNELS = {

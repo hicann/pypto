@@ -260,9 +260,8 @@ Tensor Round(const Tensor& self, const int& decimals)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Round");
 
-    static const std::unordered_set<DataType> ROUND_A2A3_TYPES = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16};
-    static const std::unordered_set<DataType> ROUND_A5_TYPES = {DT_FP32,  DT_FP16,  DT_BF16,
-                                                                DT_INT32, DT_INT16, DT_INT64};
+    static const std::unordered_set<DataType> ROUND_A2A3_TYPES = {DT_FP32, DT_FP16, DT_BF16, DT_INT32};
+    static const std::unordered_set<DataType> ROUND_A5_TYPES = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT64};
     const auto& supportedTypes = GetSupportedDataTypesByArch(ROUND_A2A3_TYPES, ROUND_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "ROUND");
     CheckTensorDimRange(self.GetStorage(), 1, NUM_VALUE_4, "ROUND");
