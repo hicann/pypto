@@ -159,7 +159,7 @@ export TILE_FWK_DEVICE_ID=<空闲 chip id>
 ```bash
 # 1. 先使用 CANN 内置路径（默认）
 arch=$(uname -m)   # 常见值：x86_64 或 aarch64
-export PTO_TILE_LIB_CODE_PATH=${ASCEND_HOME_PATH:-/usr/local/Ascend/cann}/${arch}-linux
+export PTO_TILE_LIB_CODE_PATH="${ASCEND_HOME_PATH:-/usr/local/Ascend/cann}/${arch}-linux"
 
 # 2. 验证兼容性：检查关键枚举是否存在，任一缺失即需切换到源码方式
 check_items=("FmodSAlgorithm" "RemSAlgorithm" "DivAlgorithm" "ExpAlgorithm" "SqrtAlgorithm")
@@ -200,7 +200,7 @@ source ${ASCEND_INSTALL_PATH:-/usr/local/Ascend}/ascend-toolkit/set_env.sh
 # 动态获取当前架构（确保生成的脚本在不同机器上仍正确）
 arch=$(uname -m)
 export TILE_FWK_DEVICE_ID=0
-export PTO_TILE_LIB_CODE_PATH=${ASCEND_HOME_PATH:-/usr/local/Ascend/cann}/${arch}-linux
+export PTO_TILE_LIB_CODE_PATH="${ASCEND_HOME_PATH:-/usr/local/Ascend/cann}/${arch}-linux"
 
 echo "env_setup.sh 加载完成：TILE_FWK_DEVICE_ID=${TILE_FWK_DEVICE_ID}, PTO_TILE_LIB_CODE_PATH=${PTO_TILE_LIB_CODE_PATH}"
 EOF
