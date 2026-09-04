@@ -436,7 +436,7 @@ workspace_tensor = torch.empty(workspace_size * 10, dtype=torch.uint8, device=de
 
 ### 补充手段 D：workspace 改为内部自管理
 
-在 `framework/src/machine/runtime/device_launcher.h` 中，将 `config.workspaceAddr` 的条件分支屏蔽：
+在 `framework/src/machine/runtime/launcher/device_launcher.h` 中，将 `config.workspaceAddr` 的条件分支屏蔽：
 
 ```cpp
 // 原始
@@ -464,6 +464,6 @@ if (0) {
 | `docs/zh/tutorials/appendix/trouble_shooting/machine.md` | MACHINE 组件错误码与排查建议（含 Workspace 内存异常偏大章节） |
 | `framework/src/machine/utils/dynamic/dev_encode_program.h` | memBudget 结构体定义 |
 | `framework/src/machine/utils/dynamic/dev_encode.cpp` | Workspace 预算计算核心逻辑（CalcTensorWorkspace、EncodeRawShape 等） |
-| `framework/src/machine/runtime/device_launcher.h` | Workspace 分配与总量日志打印 |
+| `framework/src/machine/runtime/launcher/device_launcher.h` | Workspace 分配与总量日志打印 |
 | `framework/src/machine/utils/dynamic/dev_workspace.h` | 运行时 workspace 分配器（InitTensorAllocators 等） |
 | `framework/src/machine/utils/dynamic/allocator/seq_ws_allocator.h` | 顺序分配器与 "Memory not enough" 断言 |
