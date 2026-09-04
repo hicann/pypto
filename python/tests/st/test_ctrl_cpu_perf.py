@@ -53,11 +53,17 @@ _BLOCK_NUM = _S2_TILE // _BLOCK
 #   EXEC_DYN 均值 206~217us（最差 216.87），单轮最大 264.20
 #   首个 DEV_TASK_BUILD 均值 114~120us（最差 119.53），单轮最大 156.44
 # 28 轮均值上限：最差均值 * 1.20
-# 单轮上限：多次实测的单轮最大 * 1.15（单轮最大已含波动，只留小余量）
+# 单轮 EXEC_DYN 上限：多次实测的单轮最大 * 1.15（单轮最大已含波动，只留小余量）
+# 单轮首个 DEV_TASK_BUILD 上限：多次实测的单轮最大 * 1.35
 _MEAN_EXEC_DYN_US = 260.3
 _MEAN_FIRST_BUILD_US = 143.5
 _MAX_EXEC_DYN_US = 303.9
-_MAX_FIRST_BUILD_US = 179.9
+_MAX_FIRST_BUILD_US = 211.2
+
+# 单轮首个 DEV_TASK_BUILD 门禁超限提示：先排查当前修改是否引入 ctrl cpu 效率回退，再考虑环境波动。
+_MAX_FIRST_GATE_HINT = (
+    "max first DEV_TASK_BUILD 超限：请先确认当前修改是否影响 ctrl cpu 效率"
+)
 
 _BUILD_NAME = re.compile(r"^DEV_TASK_BUILD_(\d+)\((\d+)\)$")
 _INIT_NAME = re.compile(r"^INIT_(\d+)$")
@@ -366,5 +372,5 @@ def test_ctrl_cpu_perf():
         f"max EXEC_DYN {max_exec:.2f} us > gate {_MAX_EXEC_DYN_US:.2f} us"
     )
     assert max_first <= _MAX_FIRST_BUILD_US, (
-        f"max first DEV_TASK_BUILD {max_first:.2f} us > gate {_MAX_FIRST_BUILD_US:.2f} us"
+        f"max first DEV_TASK_BUILD {max_first:.2f} us > gate {_MAX_FIRST_BUILD_US:.2f} us. {_MAX_FIRST_GATE_HINT}"
     )

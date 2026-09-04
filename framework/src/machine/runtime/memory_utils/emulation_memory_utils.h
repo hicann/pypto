@@ -37,6 +37,7 @@ struct EmulationMemoryUtils {
         }
         uint8_t* rawPtr = (uint8_t*)malloc(size);
         if (rawPtr == nullptr) {
+            MACHINE_LOGE(DevCommonErr::MALLOC_FAILED, "AllocDev failed: malloc %zu bytes", size);
             return nullptr;
         }
         std::shared_ptr<uint8_t> ptr(rawPtr, free);
