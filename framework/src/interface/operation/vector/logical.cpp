@@ -102,10 +102,10 @@ Tensor LogicalNot(const Tensor& self)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "LogicalNot");
 
-    static const std::unordered_set<DataType> LOGICALNOT_A2A3_TYPES = {
-        DT_FP32, DT_FP16, DT_UINT8, DT_INT8, DT_BOOL, DT_BF16, DT_INT16, DT_INT32, DT_UINT16, DT_UINT32};
+    static const std::unordered_set<DataType> LOGICALNOT_A2A3_TYPES = {DT_FP32, DT_FP16, DT_UINT8,
+                                                                       DT_INT8, DT_BOOL, DT_BF16};
     static const std::unordered_set<DataType> LOGICALNOT_A5_TYPES = {
-        DT_FP32, DT_FP16, DT_UINT8, DT_INT8, DT_BOOL, DT_BF16, DT_INT16, DT_INT32, DT_UINT16, DT_UINT32, DT_INT64};
+        DT_FP32, DT_FP16, DT_UINT8, DT_INT8, DT_BOOL, DT_BF16, DT_INT16, DT_UINT16, DT_INT32, DT_UINT32, DT_INT64};
     const auto& supportedTypes = GetSupportedDataTypesByArch(LOGICALNOT_A2A3_TYPES, LOGICALNOT_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "LOGICALNOT");
     CheckTensorDimRange(self.GetStorage(), 1, NUM_VALUE_4, "LOGICALNOT");

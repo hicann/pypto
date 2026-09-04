@@ -86,10 +86,22 @@ TEST_F(OperationOpsTest, Range_UnsupportedOutputDataType)
 
 TEST_F(OperationOpsTest, LogicalNot_UnsupportedDataType)
 {
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_2201);
     std::vector<int64_t> shape = {10, 10};
     Tensor input(DT_INT32, shape);
 
     EXPECT_THROW(LogicalNot(input), std::exception);
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+}
+
+TEST_F(OperationOpsTest, LogicalNot_A5SupportedDataType)
+{
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    TileShape::Current().SetVecTile(10, 10);
+    Tensor input(DT_UINT32, {10, 10});
+
+    FUNCTION("LogicalNotA5SupportedDataType", {input}) { EXPECT_NO_THROW((void)LogicalNot(input)); }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
 }
 
 TEST_F(OperationOpsTest, QuantMX_DefaultRoundDownFp8Output)

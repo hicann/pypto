@@ -60,7 +60,7 @@ __tf__ PTO_INTERNAL void TCOLMAX_HIGH_PERF(TileDataOut& dstTile, TileDataIn& src
         vlds(max_3a, src0_ub, DIM_4TH * F32_ELEMENTS_PER_VECTOR, NORM);
 
         pto::RegTensor<float> v_row;
-        for (uint16_t row = ROWS_PER_ITER; row < uint16_t(TileDataIn::Rows); row += ROWS_PER_ITER) {
+        for (uint16_t row = 4; row < uint16_t(TileDataIn::Rows); row += 4) {
             vlds(v_row, p0, ITER_STRIDE, NORM, POST_UPDATE);
             vmax(max_0a, max_0a, v_row, preg_108, MODE_ZEROING);
             vlds(v_row, p1, ITER_STRIDE, NORM, POST_UPDATE);
