@@ -6,7 +6,6 @@
 
 add_relu
 add_relu_cast
-addc
 fused_mul_add_relu
 mul_add_dst
 mul_cast

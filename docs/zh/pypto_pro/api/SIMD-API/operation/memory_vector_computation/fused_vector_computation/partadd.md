@@ -14,39 +14,38 @@
 
 ## 功能说明
 
-部分加法：在两路输入的有效区域内逐元素相加，结果写入`out`。两路输入中至少一路的有效shape必须与`out`一致；另一条输入可具有较小的有效shape，其有效区域之外不参与运算，`out`对应位置保持完整输入的值。
-
-典型场景：尾块处理——当src1的行数或列数小于dst时，只对重叠区域做加法，其余区域直接复制src0。
+对两个源 Tile 的有效区域执行逐元素加法。某一位置在两个源 Tile 中均有效时，输出两者之和；仅在一个源 Tile 中有效时，复制该源 Tile 对应位置的数据。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.partadd(out, src0, src1)
+pypto_pro.language.partadd(
+  out: Tile,
+  src0: Tile,
+  src1: Tile
+) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标tile |
-| `src0` | 输入 | 源Tile 0 |
-| `src1` | 输入 | 源Tile 1 |
+| out | 输出 | 目标二维 UB Tile，用于保存计算结果。支持的数据类型为 DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP16、DT_BF16 和 DT_FP32。 |
+| src0 | 输入 | 第一个源二维 UB Tile。支持的数据类型与 out 相同。 |
+| src1 | 输入 | 第二个源二维 UB Tile。支持的数据类型与 out 相同。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `out` | 输出 | Vec二维Tile，dtype与`src0`、`src1`一致；物理shape与两路输入一致 |
-| `src0` | 输入 | 支持8/16/32/64位整数、FP16、BF16、FP32；dtype与`out`一致 |
-| `src1` | 输入 | dtype与`out`一致；两路输入中至多一路通过较小的`valid_shape`指定部分区域，另一条输入的有效shape须与`out`一致。`out`的有效区域为零时操作直接返回 |
+- out、src0 和 src1 的物理 Shape 和数据类型须一致。
+- 两个源 Tile 中至少一个的有效 Shape 须与 out 的有效 Shape 一致，另一个源 Tile 的有效行数和有效列数均不得超过 out。
+- 通过较小的有效 Shape 指定部分计算区域，不支持使用较小的物理 Shape 指定部分计算区域。
+- out 的有效区域为空时，接口直接返回。
 
-## 流水类型
+## 返回值说明
 
-V（向量计算流水）。
+无。
 
 ## 调用示例
-
-下面是一个完整kernel：src1（`cur_b`）仅前32行有效，用`partadd`把它加到src0（`cur_a`）上，后32行保持src0不变。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl
@@ -89,4 +88,4 @@ def partadd_kernel(
 ```
 <!-- pypto-doc-output:partadd:end -->
 
-第0、1、30、31行位于`src1`的有效区域，输出为`x+y`；第32、33行位于有效区域之外，输出保持为`x`。
+第0、1、30、31行位于src1的有效区域，输出为x+y；第32、33行位于有效区域之外，输出保持为x。

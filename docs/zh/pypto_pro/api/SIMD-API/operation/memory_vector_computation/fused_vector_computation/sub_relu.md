@@ -14,37 +14,37 @@
 
 ## 功能说明
 
-先对两个tile做逐元素减法，再对结果施加ReLU激活（负值置零）。与`pypto_pro.language.sub_relu_cast`的区别是不做类型转换。
+对两个源 Tile 执行逐元素减法，再对结果执行 ReLU 激活，将小于 0 的元素置为 0。计算公式为 out = max(lhs - rhs, 0)。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.sub_relu(out, lhs, rhs)
+pypto_pro.language.sub_relu(
+  out: Tile,
+  lhs: Tile,
+  rhs: Tile
+) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标tile，存放先减后ReLU的结果 |
-| `lhs` | 输入 | 左操作数tile（被减数） |
-| `rhs` | 输入 | 右操作数tile（减数） |
+| out | 输出 | 目标 UB Tile，用于保存减法和 ReLU 激活的结果。支持的数据类型为 DT_FP16 和 DT_FP32。 |
+| lhs | 输入 | 第一个源 UB Tile，作为被减数。支持的数据类型为 DT_FP16 和 DT_FP32。 |
+| rhs | 输入 | 第二个源 UB Tile，作为减数。支持的数据类型为 DT_FP16 和 DT_FP32。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `out` | 输出 | 数据类型：FP16或FP32；该接口依次发射`TSUB`与`TRELU`，类型必须同时满足两者约束<br>shape须与`lhs`、`rhs`一致；支持与`lhs`或`rhs`为同一tile，实现in-place减法+ReLU；实现会将`lhs`用作中间结果，因此`lhs`会被覆盖 |
-| `lhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
-| `rhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
+- out、lhs 和 rhs 的 Shape 和数据类型须一致。
+- out 可以与 lhs 或 rhs 指向同一个 Tile，以实现原地计算。
+- 该接口依次执行减法和 ReLU 激活，并将 lhs 用作中间结果，因此 lhs 中的原始数据会被覆盖。
 
-## 流水类型
+## 返回值说明
 
-V（向量计算流水）。
+无。
 
 ## 调用示例
-
-下面是一个完整kernel：从GM载入两个FP32输入，用`pypto_pro.language.sub_relu`先减后ReLU再写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl

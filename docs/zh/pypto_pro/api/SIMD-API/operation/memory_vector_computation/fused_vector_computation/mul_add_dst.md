@@ -14,37 +14,38 @@
 
 ## 功能说明
 
-融合乘加到目标：`out = lhs * rhs + out`。先计算lhs和rhs的逐元素乘积，再累加到out的现有值上。
+对 lhs 和 rhs 执行逐元素乘法，再将乘法结果与 out 中的原始数据执行逐元素加法，并将最终结果写入 out。计算公式为 out = lhs * rhs + out。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.mul_add_dst(out, lhs, rhs)
+pypto_pro.language.mul_add_dst(
+    out: Tile,
+    lhs: Tile,
+    rhs: Tile
+) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输入/输出 | 目标tile，既提供累加初值也存放结果 |
-| `lhs` | 输入 | 左操作数tile |
-| `rhs` | 输入 | 右操作数tile |
+| out | 输入/输出 | 目标 UB Tile。输入时提供参与逐元素加法的数据，输出时保存最终计算结果。支持的数据类型为 DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP16、DT_BF16 和 DT_FP32。 |
+| lhs | 输入/输出 | 左操作数 UB Tile，在计算过程中用于保存乘法的中间结果。支持的数据类型为 DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP16、DT_BF16 和 DT_FP32。 |
+| rhs | 输入 | 右操作数 UB Tile。支持的数据类型为 DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP16、DT_BF16 和 DT_FP32。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `out` | 输入/输出 | 数据类型：INT16、UINT16、INT32、UINT32、INT64、UINT64、FP16、BF16或FP32；该接口依次发射`TMUL`与`TADD`，类型必须同时满足两者约束<br>shape：与`lhs`、`rhs`一致 |
-| `lhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
-| `rhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
+- out、lhs 和 rhs 的数据类型和有效 Shape 须一致。
+- out、lhs 和 rhs 支持 ND、ZN 和 ZZ 布局。
+- out 中的原始数据参与计算，调用后会被最终结果覆盖。
+- lhs 在计算过程中会被修改，调用后其中的原始数据不再保留。
 
-## 流水类型
+## 返回值说明
 
-V（向量计算流水）。
+无。
 
 ## 调用示例
-
-下面是一个完整kernel：从GM载入三个FP16输入，用`pypto_pro.language.mul_add_dst`完成`out = lhs * rhs + out`的就地融合乘加再写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl

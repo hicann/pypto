@@ -14,39 +14,38 @@
 
 ## 功能说明
 
-融合乘加ReLU（就地）：`out = relu(out * a + b)`。先将out与a逐元素相乘，再加上b，最后对结果施加ReLU激活（负值置零）。
-
-注意：out同时作为乘数和累加目标，运算后out的原始值被覆盖。
+先将 out 中的原始数据与 a 逐元素相乘，再将乘法结果与 b 逐元素相加，最后执行 ReLU 激活，将小于 0 的元素置为 0。计算结果写回 out，并覆盖 out 中的原始数据。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.fused_mul_add_relu(out, a, b)
+pypto_pro.language.fused_mul_add_relu(
+  out: Tile,
+  a: Tile,
+  b: Tile
+) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输入/输出 | 目标tile，既作为乘数也存放结果 |
-| `a` | 输入 | 乘数tile |
-| `b` | 输入 | 加数tile |
+| out | 输入/输出 | UB Tile。输入时提供参与逐元素乘法的数据，输出时保存最终计算结果。支持的数据类型为 DT_FP16、DT_FP32 和 DT_INT32。 |
+| a | 输入/输出 | 参与逐元素乘法的 UB Tile，在计算过程中用于保存中间结果。支持的数据类型为 DT_FP16、DT_FP32 和 DT_INT32。 |
+| b | 输入 | 参与逐元素加法的 UB Tile。支持的数据类型为 DT_FP16、DT_FP32 和 DT_INT32。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `out` | 输入/输出 | 数据类型：b16、b32<br>shape：与`a`、`b`一致 |
-| `a` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
-| `b` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
+- out、a 和 b 的数据类型和有效 Shape 须一致。
+- out、a 和 b 支持 ND、ZN 和 ZZ 布局。
+- out 中的原始数据参与计算，调用后会被最终结果覆盖。
+- a 在计算过程中会被修改，调用后其中的原始数据不再保留。
 
-## 流水类型
+## 返回值说明
 
-V（向量计算流水）。
+无。
 
 ## 调用示例
-
-下面是一个完整kernel：从GM载入三个FP16输入，用`pypto_pro.language.fused_mul_add_relu`完成`out = relu(out * a + b)`的就地融合乘加ReLU再写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl

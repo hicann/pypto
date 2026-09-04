@@ -14,37 +14,37 @@
 
 ## 功能说明
 
-先对两个tile做逐元素加法，再对结果施加ReLU激活（负值置零）。与`pypto_pro.language.add_relu_cast`的区别是不做类型转换。
+对两个Tile执行逐元素加法，再对结果执行ReLU激活，将小于0的元素置为0。与add_relu_cast相比，本接口不进行数据类型转换。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.add_relu(out, lhs, rhs)
+pypto_pro.language.add_relu(
+  out: Tile,
+  lhs: Tile,
+  rhs: Tile
+) -> None:
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标tile，存放先加后ReLU的结果 |
-| `lhs` | 输入 | 左操作数tile |
-| `rhs` | 输入 | 右操作数tile |
+| out | 输出 | 目标 UB Tile，用于保存逐元素加法和 ReLU 激活的结果。支持的数据类型为 DT_FP16、DT_FP32 和 DT_INT32。 |
+| lhs | 输入/输出 | 左操作数 UB Tile，在计算过程中用于保存加法的中间结果。支持的数据类型为 DT_FP16、DT_FP32 和 DT_INT32。 |
+| rhs | 输入 | 右操作数 UB Tile。支持的数据类型为 DT_FP16、DT_FP32 和 DT_INT32。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `out` | 输出 | 数据类型：FP16、FP32或INT32；该接口依次发射`TADD`与`TRELU`，类型必须同时满足两者约束<br>shape须与`lhs`、`rhs`一致；支持与`lhs`或`rhs`为同一tile，实现in-place加法+ReLU；实现会将`lhs`用作中间结果，因此`lhs`会被覆盖 |
-| `lhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
-| `rhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
+- out、lhs 和 rhs 的数据类型和有效 Shape 须一致。
+- out、lhs 和 rhs 支持 ND、ZN 和 ZZ 布局。
+- lhs 在计算过程中会被修改，调用后其中的原始数据不再保留。
 
-## 流水类型
+## 返回值说明
 
-V（向量计算流水）。
+无。
 
 ## 调用示例
-
-下面是一个完整kernel：从GM载入两个FP32输入，用`pypto_pro.language.add_relu`先加后ReLU再写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
 
 ```python
 import pypto_pro.language as pl
@@ -53,7 +53,12 @@ import pypto_pro.language as pl
 @pl.jit(auto_mutex=True)
 def add_relu_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl.DT_FP32],
                     out: pl.Tensor[[64, 64], pl.DT_FP32]):
-    tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+    tt = pl.TileType(
+      shape=[64, 64],
+      dtype=pl.DT_FP32,
+      target_memory=pl.MemorySpace.Vec,
+      layout=pl.TensorLayout.ND,
+	  )
     tile_a = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
     tile_b = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[1])
     tile_out = pl.make_tile_group(type=tt, addrs=0x8000, mutex_ids=[2])

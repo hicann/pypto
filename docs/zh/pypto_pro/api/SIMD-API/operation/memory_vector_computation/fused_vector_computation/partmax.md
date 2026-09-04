@@ -14,29 +14,36 @@
 
 ## 功能说明
 
-对两路输入的有效区域执行部分逐元素最大值。两个输入在同一位置均有效时写入二者最大值；只有一路有效时复制该路输入。
+对两个源 Tile 的有效区域执行逐元素最大值计算。某一位置在两个源 Tile 中均有效时，输出两者的最大值；仅在一个源 Tile 中有效时，复制该源 Tile 对应位置的数据。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.partmax(out, src0, src1)
+pypto_pro.language.partmax(
+  out: Tile,
+  src0: Tile,
+  src1: Tile
+) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标Tile |
-| `src0` | 输入 | 第一条源Tile |
-| `src1` | 输入 | 第二条源Tile |
+| out | 输出 | 目标二维 UB Tile，用于保存计算结果。支持的数据类型为 DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP16、DT_BF16 和 DT_FP32。 |
+| src0 | 输入 | 第一个源二维 UB Tile。支持的数据类型与 out 相同。 |
+| src1 | 输入 | 第二个源二维 UB Tile。支持的数据类型与 out 相同。 |
 
-## 参数范围
+## 约束说明
 
-三个参数均须为Vec Tile，dtype相同，支持INT8、UINT8、INT16、UINT16、INT32、UINT32、INT64、UINT64、FP16、BF16和FP32。两路输入中至少一路的有效shape须与`out`一致；另一条输入的有效行数和列数不得超过`out`。`out`的有效区域为零时操作直接返回。
+- out、src0 和 src1 的物理 Shape 和数据类型须一致。
+- 两个源 Tile 中至少一个的有效 Shape 须与 out 的有效 Shape 一致，另一个源 Tile 的有效行数和有效列数均不得超过 out。
+- 通过较小的有效 Shape 指定部分计算区域，不支持使用较小的物理 Shape 指定部分计算区域。
+- out 的有效区域为空时，接口直接返回。
 
-## 流水类型
+## 返回值说明
 
-V（向量计算流水）。
+无。
 
 ## 调用示例
 
@@ -64,4 +71,4 @@ def partmax_kernel(x: pl.Tensor[[64, 128], pl.DT_FP16],
         pl.store(out, tout, [0, 0])
 ```
 
-前32行取`maximum(x, y)`，后32行只有`x`有效，因此复制`x`。
+前32行取maximum(x, y)，后32行只有x有效，因此复制x。
