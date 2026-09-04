@@ -157,13 +157,6 @@ chmod_start() {
 
 # 功能: 安装后精细化锁定权限
 chmod_end() {
-    chmod_recur "${PKG_SHARE_INFO_INSTALL_PATH}/script" 550 dir 2> /dev/null
-    chmod_recur "${PKG_SHARE_INFO_INSTALL_PATH}/script" 550 file 2> /dev/null
-    chmod_single_dir "${PKG_SHARE_INFO_INSTALL_PATH}/script/install.sh" 500 file 2> /dev/null
-    chmod_single_dir "${PKG_SHARE_INFO_INSTALL_PATH}/ascend_install.info" 640 file 2> /dev/null
-    chmod_single_dir "${PKG_SHARE_INFO_INSTALL_PATH}/version.info" 440 file 2> /dev/null
-    chmod_single_dir "${PKG_SHARE_INFO_INSTALL_PATH}/scene.info" 640 file 2> /dev/null
-    chmod_single_dir "${PKG_SHARE_INFO_INSTALL_PATH}" 550 dir 2> /dev/null
     if [ "$(id -u)" = "0" ]; then
         chown "root:root" "${PKG_SHARE_INFO_INSTALL_PATH}" 2> /dev/null
         chmod 755 "${PKG_SHARE_INFO_INSTALL_PATH}" 2> /dev/null
@@ -230,7 +223,6 @@ _update_version_info() {
         cp -f "${TMP_PKG_VERSION_FILE}" "${PKG_SHARE_INFO_INSTALL_PATH}"
         comm_log "INFO" "Base version set successfully!"
     fi
-    chmod_single_dir "${PKG_SHARE_INFO_INSTALL_PATH}/version.info" 440 file 2> /dev/null
 }
 
 ########################################################################################################################
