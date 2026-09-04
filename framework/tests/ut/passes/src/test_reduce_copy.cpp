@@ -440,11 +440,58 @@ static MergeInput BuildSimpleMergeInput(int numSubgraph, const std::vector<std::
     input.aivRatio = {1e-6, 1e6};
     input.subgraphAICLatency.assign(numSubgraph, 50);
     input.subgraphAIVLatency.assign(numSubgraph, 50);
+    input.subgraphAICOpNum.assign(numSubgraph, 1);
+    input.subgraphAIVOpNum.assign(numSubgraph, 1);
+    input.maxSubgraphAICOpNum = 2000;
+    input.maxSubgraphAIVOpNum = 2240;
     input.subGraphOutGraph = outGraph;
     input.mergeGroup = groups;
     input.isEnforceMergeGroup.assign(groups.size(), true);
     input.isValidMergeGroup.assign(groups.size(), true);
     return input;
+}
+
+// 收紧 AIC op 数阈值为 50: {0,1} AIC 总 60 超限拒绝, {2,3} AIC 总 10 限内通过
+TEST_F(ReduceCopyTest, MixGraphMerger_AICOpNumLimitRejectsMerge)
+{
+    MergeInput input = BuildSimpleMergeInput(4, {{1}, {}, {3}, {}}, {{0, 1}, {2, 3}});
+    input.subgraphAICOpNum = {30, 30, 5, 5};
+    input.subgraphAIVOpNum = {30, 30, 5, 5};
+    input.maxSubgraphAICOpNum = 50;
+    MixGraphMerger merger;
+    merger.mInput = input;
+    merger.mParent = {0, 1, 2, 3};
+    EXPECT_FALSE(merger.CheckLatencyConstraint({0, 1}));
+    EXPECT_TRUE(merger.CheckLatencyConstraint({2, 3}));
+}
+
+// 收紧 AIV op 数阈值为 50: {0,1} AIV 总 60 超限拒绝, {2,3} AIV 总 10 限内通过
+TEST_F(ReduceCopyTest, MixGraphMerger_AIVOpNumLimitRejectsMerge)
+{
+    MergeInput input = BuildSimpleMergeInput(4, {{1}, {}, {3}, {}}, {{0, 1}, {2, 3}});
+    input.subgraphAICOpNum = {30, 30, 5, 5};
+    input.subgraphAIVOpNum = {30, 30, 5, 5};
+    input.maxSubgraphAIVOpNum = 50;
+    MixGraphMerger merger;
+    merger.mInput = input;
+    merger.mParent = {0, 1, 2, 3};
+    EXPECT_FALSE(merger.CheckLatencyConstraint({0, 1}));
+    EXPECT_TRUE(merger.CheckLatencyConstraint({2, 3}));
+}
+
+// 上限边界: aicOps/aivOps 恰等于阈值时放行(仅超过才拒绝)
+TEST_F(ReduceCopyTest, MixGraphMerger_OpNumLimitBoundaryEqualPasses)
+{
+    MergeInput input = BuildSimpleMergeInput(4, {{1}, {}, {3}, {}}, {{0, 1}, {2, 3}});
+    input.subgraphAICOpNum = {30, 30, 5, 5};
+    input.subgraphAIVOpNum = {30, 30, 5, 5};
+    input.maxSubgraphAICOpNum = 60;
+    input.maxSubgraphAIVOpNum = 60;
+    MixGraphMerger merger;
+    merger.mInput = input;
+    merger.mParent = {0, 1, 2, 3};
+    EXPECT_TRUE(merger.CheckLatencyConstraint({0, 1}));
+    EXPECT_TRUE(merger.CheckLatencyConstraint({2, 3}));
 }
 
 // 两对独立子图 0->1, 2->3, 强制合并 {0,1} 和 {2,3}
@@ -474,6 +521,20 @@ TEST_F(ReduceCopyTest, MixGraphMerger_CacheRestoreAfterRejection)
     EXPECT_EQ(output.subgraphIdUpdated[0], output.subgraphIdUpdated[1]);
     EXPECT_EQ(output.subgraphIdUpdated[1], output.subgraphIdUpdated[2]);
     EXPECT_NE(output.subgraphIdUpdated[0], output.subgraphIdUpdated[3]);
+}
+
+// RunOnFunction 端到端注入收紧上限: BuildMatmulAddsGraph 每个合并组 {cube,vec,vec} 的 AIC op=6
+// AIC 上限收紧为 5 -> 走 automix valid 路径被拒, 子图数保持 6
+TEST_F(ReduceCopyTest, RunOnFunction_InjectedAICOpNumLimitBlocksMerge)
+{
+    ComputationalGraphBuilder G;
+    BuildMatmulAddsGraph(G);
+    Function* function = G.GetFunction();
+    function->paramConfigs_.autoMixPartition = 1;
+    ReduceCopyMerge merger;
+    merger.maxSubgraphAICOpNum = 5;
+    EXPECT_EQ(merger.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(function->GetTotalSubGraphCount(), 6);
 }
 
 // 经历多轮「合并-拒绝-合并」后, 直接对比缓存图与 BuildMergedGraph 全量重建结果
@@ -845,6 +906,27 @@ TEST_F(ReduceCopyTest, DdrPredictRejectsSingleAssembleProducerOnUbTensor)
     // T(UB) 单 ASSEMBLE producer -> WillBeDdr 命中 -> isDDR=true -> 拒绝 sg0+sg2 合并 -> 子图数 == 3.
     const int Num3 = 3;
     EXPECT_EQ(function->GetTotalSubGraphCount(), Num3);
+}
+
+// enforce 合并超 op 数上限时不拦截, 只打 WARN; 子图照常合并为 1
+TEST_F(ReduceCopyTest, MixGraphMerger_EnforceOpNumExceedsWarnsButMerges)
+{
+    std::vector<std::set<int>> outGraph{{1}, {}};
+    MergeInput input = BuildSimpleMergeInput(2, outGraph, {{0, 1}});
+    input.subgraphAICOpNum = {1500, 600};
+    input.subgraphAIVOpNum = {800, 500};
+    input.maxSubgraphAICOpNum = 2000;
+    input.maxSubgraphAIVOpNum = 1000;
+
+    MixGraphMerger merger;
+    merger.mInput = input;
+    merger.mParent = {0, 1};
+    merger.WarnIfEnforceOpNumExceeds({0, 1});
+
+    MergeOutput output = merger.Merge(input);
+    const int Num1 = 1;
+    EXPECT_EQ(output.numSubgraphUpdated, Num1);
+    EXPECT_EQ(output.subgraphIdUpdated[0], output.subgraphIdUpdated[1]);
 }
 
 } // namespace tile_fwk

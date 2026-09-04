@@ -39,11 +39,15 @@ struct BoundaryTensorInfo {
 };
 
 struct MergeInput {
-    int numSubgraph;
-    int maxLatency;
+    int numSubgraph{0};
+    int maxLatency{0};
+    int maxSubgraphAICOpNum{0};
+    int maxSubgraphAIVOpNum{0};
     std::pair<double, double> aivRatio;
     std::vector<int> subgraphAICLatency;
     std::vector<int> subgraphAIVLatency;
+    std::vector<int> subgraphAICOpNum;
+    std::vector<int> subgraphAIVOpNum;
     std::vector<std::set<int>> subGraphInGraph;
     std::vector<std::set<int>> subGraphOutGraph;
     std::vector<std::vector<int>> mergeGroup;
@@ -88,6 +92,7 @@ private:
     int FindParent(int x);
     void UnionSets(int x, int y);
     bool CanMergeWithoutCycle(const std::vector<int>& actualGroup);
+    void WarnIfEnforceOpNumExceeds(const std::vector<int>& actualGroup);
     bool CanMergeWithConstraints(const std::vector<int>& actualGroup);
     void PerformMerge(const std::vector<int>& actualGroup);
     void UpdateBoundaryTensorIndex(const std::vector<int>& actualGroup);
@@ -113,6 +118,8 @@ public:
     ~ReduceCopyMerge() override = default;
 
 private:
+    int maxSubgraphAICOpNum{2000};
+    int maxSubgraphAIVOpNum{2240};
     Status BuildGraph(Function& function, MergeInput& mergeInput);
     Status BuildMergeGroup(Function& function, MergeInput& mergeInput);
     void CombineForkSubgraph(Function& function, MergeInput& mergeInput);

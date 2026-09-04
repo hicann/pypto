@@ -55,7 +55,11 @@ Status ReduceCopyMerge::RunOnFunction(Function& function)
     size_t subgraphNumBefore = function.GetTotalSubGraphCount();
     MergeInput mergeInput;
     mergeInput.maxLatency = 1e7;
+    mergeInput.maxSubgraphAICOpNum = maxSubgraphAICOpNum;
+    mergeInput.maxSubgraphAIVOpNum = maxSubgraphAIVOpNum;
     mergeInput.aivRatio = {1e-6, 1e6};
+    APASS_LOG_DEBUG_F(Elements::Operation, "Merge limits: graph=%s maxSubgraphAICOpNum=%d maxSubgraphAIVOpNum=%d.",
+                      function.GetMagicName().c_str(), mergeInput.maxSubgraphAICOpNum, mergeInput.maxSubgraphAIVOpNum);
     APASS_LOG_INFO_F(Elements::Operation, "Subgraph Info before ReduceCopy Pass:");
     BuildGraph(function, mergeInput);
     MarkNoMergeSubgraph(function);
@@ -222,16 +226,23 @@ Status ReduceCopyMerge::BuildGraph(Function& function, MergeInput& mergeInput)
     mergeInput.subgraphAICLatency.resize(subgraphNum, 0);
     mergeInput.subgraphAIVLatency.clear();
     mergeInput.subgraphAIVLatency.resize(subgraphNum, 0);
+    mergeInput.subgraphAICOpNum.clear();
+    mergeInput.subgraphAICOpNum.resize(subgraphNum, 0);
+    mergeInput.subgraphAIVOpNum.clear();
+    mergeInput.subgraphAIVOpNum.resize(subgraphNum, 0);
     mergeInput.subGraphOutGraph.clear();
     mergeInput.subGraphOutGraph.resize(subgraphNum);
     mergeInput.subGraphInGraph.clear();
     mergeInput.subGraphInGraph.resize(subgraphNum);
     for (auto& op : function.Operations()) {
         int src = op.GetSubgraphID();
+        bool isCube = op.HasAttr(OpAttributeKey::isCube) && op.GetBoolAttribute(OpAttributeKey::isCube);
         int opLatency = op.GetLatency();
-        if (op.HasAttr(OpAttributeKey::isCube) && op.GetBoolAttribute(OpAttributeKey::isCube)) {
+        if (isCube) {
+            mergeInput.subgraphAICOpNum[src] += 1;
             mergeInput.subgraphAICLatency[src] += opLatency;
         } else {
+            mergeInput.subgraphAIVOpNum[src] += 1;
             mergeInput.subgraphAIVLatency[src] += opLatency;
         }
         for (auto& consumer : op.ConsumerOps()) {
@@ -455,6 +466,7 @@ static bool ValidateInput(const MergeInput& input)
     }
     int n = input.numSubgraph;
     if ((int)input.subgraphAICLatency.size() != n || (int)input.subgraphAIVLatency.size() != n ||
+        (int)input.subgraphAICOpNum.size() != n || (int)input.subgraphAIVOpNum.size() != n ||
         (int)input.subGraphOutGraph.size() != n) {
         return false;
     }
@@ -608,6 +620,29 @@ bool MixGraphMerger::HasCycle(const std::vector<std::set<int>>& outGraph, const 
     return count != rootCount;
 }
 
+// 目的: enforce 合并不受 op 数上限拦截, 超限时仅打 WARN 用于观测编译时间风险, 不改变合并行为
+void MixGraphMerger::WarnIfEnforceOpNumExceeds(const std::vector<int>& actualGroup)
+{
+    int totalAICOpNum = 0;
+    int totalAIVOpNum = 0;
+    for (int root : actualGroup) {
+        for (int i = 0; i < mInput.numSubgraph; ++i) {
+            if (FindParent(i) == root) {
+                totalAICOpNum += mInput.subgraphAICOpNum[i];
+                totalAIVOpNum += mInput.subgraphAIVOpNum[i];
+            }
+        }
+    }
+    if (totalAICOpNum > mInput.maxSubgraphAICOpNum) {
+        APASS_LOG_WARN_F(Elements::Operation, "Enforce merged group=%s aicOps=%d exceeds maxSubgraphAICOpNum=%d.",
+                         IntVecToStr(actualGroup).c_str(), totalAICOpNum, mInput.maxSubgraphAICOpNum);
+    }
+    if (totalAIVOpNum > mInput.maxSubgraphAIVOpNum) {
+        APASS_LOG_WARN_F(Elements::Operation, "Enforce merged group=%s aivOps=%d exceeds maxSubgraphAIVOpNum=%d.",
+                         IntVecToStr(actualGroup).c_str(), totalAIVOpNum, mInput.maxSubgraphAIVOpNum);
+    }
+}
+
 bool MixGraphMerger::CanMergeWithoutCycle(const std::vector<int>& actualGroup)
 {
     if (actualGroup.size() <= 1) {
@@ -650,17 +685,31 @@ bool MixGraphMerger::CheckLatencyConstraint(const std::vector<int>& actualGroup)
 {
     int totalAIC = 0;
     int totalAIV = 0;
+    int totalAICOpNum = 0;
+    int totalAIVOpNum = 0;
     for (int root : actualGroup) {
         for (int i = 0; i < mInput.numSubgraph; ++i) {
             if (FindParent(i) == root) {
                 totalAIC += mInput.subgraphAICLatency[i];
                 totalAIV += mInput.subgraphAIVLatency[i];
+                totalAICOpNum += mInput.subgraphAICOpNum[i];
+                totalAIVOpNum += mInput.subgraphAIVOpNum[i];
             }
         }
     }
     if (totalAIC == 0 || totalAIV == 0) {
         APASS_LOG_DEBUG_F(Elements::Operation,
                           "Merge skipped: merged subgraph must be mixed (both AIC and AIV non-zero).");
+        return false;
+    }
+    if (totalAICOpNum > mInput.maxSubgraphAICOpNum) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "Merge skipped: group=%s aicOps=%d exceeds maxSubgraphAICOpNum=%d.",
+                          IntVecToStr(actualGroup).c_str(), totalAICOpNum, mInput.maxSubgraphAICOpNum);
+        return false;
+    }
+    if (totalAIVOpNum > mInput.maxSubgraphAIVOpNum) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "Merge skipped: group=%s aivOps=%d exceeds maxSubgraphAIVOpNum=%d.",
+                          IntVecToStr(actualGroup).c_str(), totalAIVOpNum, mInput.maxSubgraphAIVOpNum);
         return false;
     }
     int totalLatency = totalAIC + totalAIV;
@@ -1073,6 +1122,8 @@ MergeOutput MixGraphMerger::Merge(const MergeInput& input)
                 // true: enforce 组改走 CvFuseId 判定, 同 scope 的组外端点豁免(终将并入同一混合子图),
                 // 防止 enforce 组互相等待无法合并; auto-mix 路径保持默认 subgraphId 判定不变
                 if (CanMergeWithoutCycle(actualGroup) && CheckNoExternalUseOfMergedInnerTensor(actualGroup, true)) {
+                    // enforce 路径不受 op 数上限拦截, 但超限时打 WARN 提示编译时间风险(观测用, 不改变合并行为)
+                    WarnIfEnforceOpNumExceeds(actualGroup);
                     APASS_LOG_DEBUG_F(Elements::Operation, "Merge group %zu succeeded: actualGroup=%s.", i,
                                       IntVecToStr(actualGroup).c_str());
                     PerformMerge(actualGroup);
