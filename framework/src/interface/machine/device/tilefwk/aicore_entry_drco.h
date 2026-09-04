@@ -151,29 +151,25 @@ INLINE uint32_t DrcoAtomicLoad(__gm__ uint32_t* ptr) { return static_cast<uint32
 
 INLINE uint32_t DrcoAtomicAddToSigned(__gm__ int32_t* ptr, int32_t value)
 {
-    uint32_t result;
-    while (true) {
-        uint32_t ptrValue = static_cast<uint32_t>(atomicAdd(ptr, 0));
-        result = static_cast<uint32_t>(
-            atomicCAS(reinterpret_cast<__gm__ uint32_t*>(ptr), ptrValue, static_cast<uint32_t>(ptrValue + value)));
-        if (ptrValue == result) {
-            break;
+    return static_cast<uint32_t>(atomicAdd(ptr, value));
+}
+
+INLINE uint32_t DrcoAtomicAddToSignedClaim(__gm__ int32_t* ptr, int32_t value)
+{
+    uint32_t ptrValue = static_cast<uint32_t>(atomicAdd(ptr, value));
+    if (ptrValue == 1 || atomicAdd(ptr, 0) == 0) {
+        uint32_t result = static_cast<uint32_t>(atomicCAS(reinterpret_cast<__gm__ uint32_t*>(ptr), 0, 0xffff));
+        if (result == 0) {
+            return 1;
         }
+        return 0;
     }
-    return result;
+    return ptrValue;
 }
 
 INLINE uint32_t DrcoAtomicAddTo(__gm__ uint32_t* ptr, uint32_t value)
 {
-    uint32_t result;
-    while (true) {
-        uint32_t ptrValue = static_cast<uint32_t>(atomicAdd(ptr, 0));
-        result = static_cast<uint32_t>(atomicCAS(ptr, ptrValue, ptrValue + value));
-        if (ptrValue == result) {
-            break;
-        }
-    }
-    return result;
+    return static_cast<uint32_t>(atomicAdd(ptr, value));
 }
 
 INLINE uint32_t DrcoAtomicCasTo(__gm__ uint32_t* ptr, uint32_t compare, uint32_t value)
@@ -357,7 +353,7 @@ INLINE void ExecDrcoResolve(ExecuteContext* ctx, __gm__ npu::tile_fwk::DrcoRootF
 
         for (uint16_t i = staticIndex; i < staticIndex + staticSize; i++) {
             uint32_t succOpIdx = succStaticList[i];
-            int32_t old = DrcoAtomicAddToSigned(&predCount[succOpIdx], -1);
+            int32_t old = DrcoAtomicAddToSignedClaim(&predCount[succOpIdx], -1);
             if (old == 1) {
                 uint32_t succTaskId = npu::tile_fwk::MakeTaskID(funcIdx, succOpIdx);
                 DRCO_LOGD(ctx, "resolve static cur=%u succ=%u", curTaskId, succTaskId);
@@ -391,7 +387,7 @@ INLINE void ExecDrcoResolve(ExecuteContext* ctx, __gm__ npu::tile_fwk::DrcoRootF
                     DRCO_DCCI_SINGLE_CACHE_LINE((__gm__ uint8_t*)succFuncData + 64);
                     DRCO_DCCI_SINGLE_CACHE_LINE((__gm__ uint8_t*)succFuncData + 128);
                     __gm__ npu::tile_fwk::DrcoRootFuncData* succRootFuncData = &succFuncData->drcoRootFuncData;
-                    int32_t old = DrcoAtomicAddToSigned(&succRootFuncData->predCount[succOpIdx], -1);
+                    int32_t old = DrcoAtomicAddToSignedClaim(&succRootFuncData->predCount[succOpIdx], -1);
                     if (old == 1) {
                         DRCO_LOGD(ctx, "resolve stitch cur=%u succ=%u", curTaskId, succTaskId);
                         int cceBinaryIndex = ctx->cachedDevTasks[ctx->curLeafTaskParallelIdx]
