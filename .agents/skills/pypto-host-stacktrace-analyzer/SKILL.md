@@ -34,7 +34,7 @@ description: 分析 host 侧捕获异常后的堆栈信息，通过地址到源�
 编译Debug版本：
 
 ```bash
-python3 .agents/skills/pypto-stack-trace-analyzer/scripts/build_debug_pypto.py
+python3 .agents/skills/pypto-host-stacktrace-analyzer/scripts/build_debug_pypto.py
 ```
 
 **编译完成后自动安装**：
@@ -77,7 +77,7 @@ grep -A 100 "Run pass failed" /tmp/new_stack_trace.log > /tmp/new_stack_trace.tx
 运行综合分析脚本，自动完成所有分析步骤：
 
 ```bash
-python3 .agents/skills/pypto-stack-trace-analyzer/scripts/comprehensive_analyzer.py <stack_file> -f
+python3 .agents/skills/pypto-host-stacktrace-analyzer/scripts/comprehensive_analyzer.py <stack_file> -f
 ```
 其中stack_file为步骤3中提取并保存的堆栈信息文件
 ---
