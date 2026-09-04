@@ -14,42 +14,42 @@
 
 ## 功能说明
 
-两个操作数对应位置逐元素做乘法。支持tile-tile和tile-scalar（scalar指标量）两种模式，支持in-place写法（`out`与`lhs`/`rhs`为同一tile）。
+两个操作数对应位置逐元素做乘法。支持Tile-Tile和Tile-Scalar两种模式，其中Scalar为标量；同时支持原地计算。
 
-- **tile-tile模式**：`mul(out, lhs, rhs)` -> `out[i] = lhs[i] * rhs[i]`
-- **tile-scalar模式**：`mul(out, lhs, scalar)` -> `out[i] = lhs[i] * scalar`
+- **Tile-Tile模式**：将lhs和rhs对应位置的元素相乘，将结果写入out。
+- **Tile-Scalar模式**：将lhs中的每个元素与rhs标量相乘，将结果写入out。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.mul(out, lhs, rhs)
+pypto_pro.language.mul(
+    out: Tile,
+    lhs: Tile,
+    rhs: Union[Tile, Scalar],
+) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标tile，存放逐元素乘法结果 |
-| `lhs` | 输入 | 左操作数tile |
-| `rhs` | 输入 | 右操作数（tile或scalar） |
+| out | 输出 | 目的操作数，Tile类型，存放逐元素乘法的结果。数据类型与lhs一致，支持DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP16、DT_BF16和DT_FP32。可与lhs或Tile类型的rhs为同一Tile，实现原地计算。 |
+| lhs | 输入 | 左操作数，Tile类型。数据类型与out一致。 |
+| rhs | 输入 | 右操作数，Tile或Scalar类型。传入Tile时执行Tile-Tile计算，数据类型与out一致，且shape与out、lhs一致；传入Scalar时执行Tile-Scalar计算。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `out` | 输出 | 支持16/32/64位整型、FP16、BF16和FP32<br>shape须与`lhs`一致；支持与`lhs`或`rhs`为同一tile，实现in-place乘法 |
-| `lhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
-| `rhs` | 输入 | tile-tile模式：数据类型与`out`一致，shape与`out`一致<br>tile-scalar模式：scalar值（int/float/Scalar） |
+无。
 
-## 流水类型
+## 返回值说明
 
-V（向量计算流水）。
+无。
 
 ## 调用示例
 
-### tile-tile模式
+### Tile-Tile模式
 
-下面是一个完整kernel：从GM载入两个FP32输入到UB，用`pypto_pro.language.mul`逐元素相乘后写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
+下面是一个完整Kernel：从GM载入两个DT_FP32输入到UB，使用pypto_pro.language.mul逐元素相乘后写回GM。Vector Kernel开启auto_mutex，同步由make_tile_group自动管理。
 
 ```python
 import pypto_pro.language as pl
@@ -72,7 +72,7 @@ def mul_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl.DT_
         pl.store(out, cur_out, [0, 0])
 ```
 
-实测结果示例如下：
+实测结果示例如下。
 
 <!-- pypto-doc-output:mul:start -->
 ```bash
@@ -82,9 +82,9 @@ def mul_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl.DT_
 ```
 <!-- pypto-doc-output:mul:end -->
 
-### tile-scalar模式
+### Tile-Scalar模式
 
 ```python
-# tile 每个元素乘以 scalar 值
+# Tile每个元素乘以Scalar值。
 pl.mul(out, lhs, 2.0)
 ```

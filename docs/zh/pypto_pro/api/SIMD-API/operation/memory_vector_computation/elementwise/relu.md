@@ -14,35 +14,35 @@
 
 ## 功能说明
 
-逐元素ReLU激活：`out = max(src, 0)`。将源tile中的负值置零，正值保持不变。
+对源操作数src逐元素执行ReLU激活，将负值置零并保持正值不变，将结果写入目的操作数out。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.relu(out, src)
+pypto_pro.language.relu(
+    out: Tile,
+    src: Tile,
+) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标tile，存放逐元素ReLU结果（负值置零） |
-| `src` | 输入 | 源tile |
+| out | 输出 | 目的操作数，Tile类型，存放逐元素ReLU激活的结果。数据类型与src一致，支持DT_FP16、DT_FP32或DT_INT32。shape和valid_shape与src一致。可与src为同一Tile，实现原地计算。 |
+| src | 输入 | 源操作数，Tile类型。数据类型与out一致。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `out` | 输出 | 数据类型：FP16、FP32或INT32<br>shape和valid_shape须与`src`一致；支持与`src`为同一tile，实现in-place ReLU |
-| `src` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
+无。
 
-## 流水类型
+## 返回值说明
 
-V（向量计算流水）。
+无。
 
 ## 调用示例
 
-下面是一个完整kernel：把FP32源tile逐元素ReLU后写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
+下面是一个完整Kernel：把DT_FP32源Tile逐元素执行ReLU激活后写回GM。Vector Kernel开启auto_mutex，同步由make_tile_group自动管理。
 
 ```python
 import pypto_pro.language as pl
@@ -62,7 +62,7 @@ def relu_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
         pl.store(out, cur_out, [0, 0])
 ```
 
-实测结果示例如下：
+实测结果示例如下。
 
 <!-- pypto-doc-output:relu:start -->
 ```bash

@@ -14,42 +14,42 @@
 
 ## 功能说明
 
-两个操作数对应位置逐元素按位与。支持tile-tile和tile-scalar（scalar指标量）两种模式，支持in-place写法（`out`与`lhs`为同一tile）。
+两个操作数对应位置逐元素按位与。支持Tile-Tile和Tile-Scalar两种模式，其中Scalar为标量；同时支持原地计算。
 
-- **tile-tile模式**：`and_(out, lhs, rhs)` -> `out[i] = lhs[i] & rhs[i]`
-- **tile-scalar模式**：`and_(out, lhs, scalar)` -> `out[i] = lhs[i] & scalar`
+- **Tile-Tile模式**：对lhs和rhs对应位置的元素执行按位与，将结果写入out。
+- **Tile-Scalar模式**：对lhs中的每个元素和rhs标量执行按位与，将结果写入out。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.and_(out, lhs, rhs)
+pypto_pro.language.and_(
+    out: Tile,
+    lhs: Tile,
+    rhs: Union[Tile, Scalar],
+) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标tile，存放逐元素按位与结果 |
-| `lhs` | 输入 | 左操作数tile |
-| `rhs` | 输入 | 右操作数（tile或scalar） |
+| out | 输出 | 目的操作数，Tile类型，存放逐元素按位与的结果。数据类型与lhs一致，支持DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32或DT_UINT32。可与lhs为同一Tile，实现原地计算。 |
+| lhs | 输入 | 左操作数，Tile类型。数据类型与out一致。 |
+| rhs | 输入 | 右操作数，Tile或Scalar类型。传入Tile时执行Tile-Tile计算，数据类型与out一致，且shape与out、lhs一致；传入Scalar时执行Tile-Scalar计算，支持int或Scalar类型。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `out` | 输出 | 数据类型：8/16/32位整型<br>shape须与`lhs`一致；支持与`lhs`为同一tile，实现in-place按位与 |
-| `lhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
-| `rhs` | 输入 | tile-tile模式：数据类型与`out`一致，shape与`out`一致<br>tile-scalar模式：scalar值（int/Scalar） |
+无。
 
-## 流水类型
+## 返回值说明
 
-V（向量计算流水）。
+无。
 
 ## 调用示例
 
-### tile-scalar模式
+### Tile-Scalar模式
 
-下面是一个完整kernel：从GM载入INT32输入到UB，用`pypto_pro.language.and_`与标量`7`逐元素按位与后写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
+下面是一个完整Kernel：从GM载入DT_INT32输入到UB，使用pypto_pro.language.and_与标量7逐元素按位与后写回GM。Vector Kernel开启auto_mutex，同步由make_tile_group自动管理。
 
 ```python
 import pypto_pro.language as pl
@@ -69,9 +69,9 @@ def and_scalar_kernel(a: pl.Tensor[[64, 64], pl.DT_INT32],
         pl.store(out, cur_out, [0, 0])
 ```
 
-### tile-tile模式
+### Tile-Tile模式
 
 ```python
-# 两个 tile 对应位置按位与
+# 两个Tile对应位置按位与。
 pl.and_(tile_out, tile_a, tile_b)
 ```

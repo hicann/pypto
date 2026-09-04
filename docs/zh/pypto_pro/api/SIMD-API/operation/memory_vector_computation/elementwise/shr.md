@@ -14,33 +14,37 @@
 
 ## 功能说明
 
-逐元素右移：`out = lhs >> rhs`。`rhs`为逐元素移位量Tile；有符号类型执行算术右移，无符号类型执行逻辑右移。
+将源操作数lhs中的每个元素按照rhs对应位置的移位量向右移位，将结果写入目的操作数out。有符号类型执行算术右移，无符号类型执行逻辑右移。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.shr(out, lhs, rhs)
+pypto_pro.language.shr(
+    out: Tile,
+    lhs: Tile,
+    rhs: Tile,
+) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 右移结果Tile |
-| `lhs` | 输入 | 被移位Tile |
-| `rhs` | 输入 | 移位量Tile |
+| out | 输出 | 目的操作数，Tile类型，存放逐元素右移的结果。必须位于UB，采用row-major布局。数据类型与lhs、rhs一致，支持DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_INT64或DT_UINT64。valid_shape与lhs、rhs一致。 |
+| lhs | 输入 | 被移位操作数，Tile类型。必须位于UB，采用row-major布局。数据类型与out一致。 |
+| rhs | 输入 | 移位量，Tile类型。必须位于UB，采用row-major布局。数据类型与out一致。移位量必须为非负数，且小于元素位宽。 |
 
-## 参数范围
+## 约束说明
 
-`out`、`lhs`和`rhs`须为Vec、row-major Tile，数据类型均为INT8、UINT8、INT16、UINT16、INT32、UINT32、INT64或UINT64，且类型和有效shape一致。`rhs`中的移位量应非负并小于元素位宽。
+无。
 
-## 流水类型
+## 返回值说明
 
-V（向量计算流水）。
+无。
 
 ## 调用示例
 
-下面是一个完整kernel：从GM载入两个INT32输入到UB，用`pypto_pro.language.shr`逐元素右移后写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
+下面是一个完整Kernel：从GM载入两个DT_INT32输入到UB，使用pypto_pro.language.shr逐元素右移后写回GM。Vector Kernel开启auto_mutex，同步由make_tile_group自动管理。
 
 ```python
 import pypto_pro.language as pl

@@ -14,39 +14,39 @@
 
 ## 功能说明
 
-逐元素按位异或：`out = lhs ^ rhs`。`rhs`须为与`lhs`同类型的Tile，计算需要临时Tile。
+对源操作数lhs和rhs对应位置的元素执行按位异或，将结果写入目的操作数out。计算时需要临时操作数tmp。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.xor(out, lhs, rhs, tmp)
+pypto_pro.language.xor(
+    out: Tile,
+    lhs: Tile,
+    rhs: Tile,
+    tmp: Tile,
+) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标tile，存放按位异或结果 |
-| `lhs` | 输入 | 左操作数tile |
-| `rhs` | 输入 | 右操作数Tile |
-| `tmp` | 输入 | 临时tile（中间计算用） |
+| out | 输出 | 目的操作数，Tile类型，存放逐元素按位异或的结果。数据类型与lhs、rhs、tmp一致，支持DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32或DT_UINT32。shape与lhs、rhs一致。 |
+| lhs | 输入 | 左操作数，Tile类型。数据类型与out一致。 |
+| rhs | 输入 | 右操作数，Tile类型。采用row-major布局，valid_shape与out一致，shape与out、lhs一致。数据类型与out一致。 |
+| tmp | 输入 | 临时操作数，Tile类型，用于存放中间计算结果。数据类型与out一致。shape与out一致，且内存区域不能与out、lhs或rhs重叠。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `out` | 输出 | 数据类型：8/16/32位整型<br>shape须与`lhs`、`rhs`一致 |
-| `lhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
-| `rhs` | 输入 | 数据类型、row-major布局和有效shape与`out`一致 |
-| `tmp` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致<br>硬件中间计算用，不可与`out`/`lhs`/`rhs`重叠 |
+无。
 
-## 流水类型
+## 返回值说明
 
-V（向量计算流水）。
+无。
 
 ## 调用示例
 
-下面是一个完整kernel：从GM载入两个INT32输入到UB，逐元素按位异或后写回GM。`tmp`为异或计算所需的临时tile。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
+下面是一个完整Kernel：从GM载入两个DT_INT32输入到UB，逐元素按位异或后写回GM。tmp为异或计算所需的临时Tile。Vector Kernel开启auto_mutex，同步由make_tile_group自动管理。
 
 ```python
 import pypto_pro.language as pl
@@ -74,7 +74,7 @@ def xor_kernel(
         pl.store(out, cur_out, [0, 0])
 ```
 
-实测结果示例如下：
+实测结果示例如下。
 
 <!-- pypto-doc-output:xor:start -->
 ```bash

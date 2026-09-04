@@ -14,35 +14,35 @@
 
 ## 功能说明
 
-逐元素开平方：`out = sqrt(src)`。对源tile中每个元素求平方根，要求输入为非负值。
+计算源操作数src中每个元素的平方根，将结果写入目的操作数out。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.sqrt(out, src)
+pypto_pro.language.sqrt(
+    out: Tile,
+    src: Tile,
+) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标tile，存放逐元素开平方结果 |
-| `src` | 输入 | 源tile |
+| out | 输出 | 目的操作数，Tile类型，存放逐元素开平方的结果。数据类型与src一致，支持DT_FP16或DT_FP32。shape与src一致。可与src为同一Tile，实现原地计算。 |
+| src | 输入 | 源操作数，Tile类型。数据类型与out一致。元素值必须为非负数。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `out` | 输出 | 数据类型：FP16、FP32<br>shape须与`src`一致<br>支持与`src`为同一tile，实现in-place开平方 |
-| `src` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致<br>元素值须非负 |
+无。
 
-## 流水类型
+## 返回值说明
 
-V（向量计算流水）。
+无。
 
 ## 调用示例
 
-下面是一个完整kernel：把FP32源tile逐元素开平方后写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
+下面是一个完整Kernel：把DT_FP32源Tile逐元素开平方后写回GM。Vector Kernel开启auto_mutex，同步由make_tile_group自动管理。
 
 ```python
 import pypto_pro.language as pl

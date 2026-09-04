@@ -14,35 +14,35 @@
 
 ## 功能说明
 
-逐元素取负：`out = -src`。
+计算源操作数src中每个元素的相反数，将结果写入目的操作数out。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.neg(out, src)
+pypto_pro.language.neg(
+    out: Tile,
+    src: Tile,
+) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标tile，存放逐元素取负结果 |
-| `src` | 输入 | 源tile |
+| out | 输出 | 目的操作数，Tile类型，存放逐元素取负的结果。数据类型与src一致，支持DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP16、DT_BF16或DT_FP32。shape与src一致。可与src为同一Tile，实现原地计算。 |
+| src | 输入 | 源操作数，Tile类型。数据类型与out一致。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `out` | 输出 | 数据类型：16/32/64位整型、FP16、BF16或FP32<br>shape须与`src`一致；支持与`src`为同一tile，实现in-place取负 |
-| `src` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
+无。
 
-## 流水类型
+## 返回值说明
 
-V（向量计算流水）。
+无。
 
 ## 调用示例
 
-下面是一个完整kernel：把FP32源tile逐元素取负后写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
+下面是一个完整Kernel：把DT_FP32源Tile逐元素取负后写回GM。Vector Kernel开启auto_mutex，同步由make_tile_group自动管理。
 
 ```python
 import pypto_pro.language as pl
@@ -62,7 +62,7 @@ def neg_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32],
         pl.store(out, cur_out, [0, 0])
 ```
 
-实测结果示例如下：
+实测结果示例如下。
 
 <!-- pypto-doc-output:neg:start -->
 ```bash

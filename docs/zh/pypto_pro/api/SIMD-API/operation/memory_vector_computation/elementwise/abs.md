@@ -14,35 +14,35 @@
 
 ## 功能说明
 
-逐元素取绝对值：`out = |src|`。将源tile中每个元素替换为其绝对值，负值取相反数，正值和零保持不变。
+计算源操作数src中每个元素的绝对值，将结果写入目的操作数out。负值取相反数，正值和零保持不变。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.abs(out, src)
+pypto_pro.language.abs(
+    out: Tile,
+    src: Tile,
+) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标tile，存放逐元素取绝对值结果 |
-| `src` | 输入 | 源tile |
+| out | 输出 | 目的操作数，Tile类型，存放逐元素取绝对值的结果。数据类型与src一致，支持DT_FP16、DT_FP32、DT_INT8、DT_INT16或DT_INT32。shape和valid_shape与src一致。可与src为同一Tile，实现原地计算。 |
+| src | 输入 | 源操作数，Tile类型。数据类型与out一致。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `out` | 输出 | 数据类型：FP16、FP32或8/16/32位有符号整型<br>shape和valid_shape须与`src`一致；支持与`src`为同一tile，实现in-place取绝对值 |
-| `src` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
+无。
 
-## 流水类型
+## 返回值说明
 
-V（向量计算流水）。
+无。
 
 ## 调用示例
 
-下面是一个完整kernel：把FP32源tile逐元素取绝对值后写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
+下面是一个完整Kernel：把DT_FP32源Tile逐元素取绝对值后写回GM。Vector Kernel开启auto_mutex，同步由make_tile_group自动管理。
 
 ```python
 import pypto_pro.language as pl

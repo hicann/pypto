@@ -14,45 +14,46 @@
 
 ## 功能说明
 
-`minimum`同时支持逐元素取较小值和按维度取最小值归约。是否传入`dim`决定调用模式。
+minimum同时支持逐元素取较小值和按维度取最小值归约。是否传入dim决定调用模式。
 
-- **tile-tile模式**：`minimum(out, lhs, rhs)` -> `out[i] = min(lhs[i], rhs[i])`
-- **tile-scalar模式**：`minimum(out, lhs, scalar)` -> `out[i] = min(lhs[i], scalar)`
-- **归约模式**：`minimum(out, src, tmp, dim=0/1)`，`dim=0`沿最后一维归约，`dim=1`沿第一维归约
+- **Tile-Tile模式**：比较lhs和rhs对应位置的元素，将较小值写入out。
+- **Tile-Scalar模式**：比较lhs中的每个元素与rhs标量，将较小值写入out。
+- **归约模式**：对lhs沿dim指定的维度取最小值，将结果写入out。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.minimum(out, lhs, rhs, *, dim=None)
+pypto_pro.language.minimum(
+    out: Tile,
+    lhs: Tile,
+    rhs: Union[Tile, Scalar],
+    *,
+    dim: Optional[int] = None,
+) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标tile，存放逐元素结果或归约结果 |
-| `lhs` | 输入 | 逐元素模式下为左操作数tile；归约模式下为源tile |
-| `rhs` | 输入 | 逐元素模式下为右操作数（tile或scalar）；归约模式下为临时tile |
-| `dim` | 输入 | `None`表示逐元素模式；`0`或`1`表示归约模式 |
+| out | 输出 | 目的操作数，Tile类型，存放逐元素计算结果或归约结果。逐元素模式下数据类型与lhs一致，支持DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP16、DT_BF16和DT_FP32；归约模式下数据类型与lhs一致，dim=0时shape为[行数, 1]，dim=1时shape为[1, 列数]。 |
+| lhs | 输入 | Tile类型。逐元素模式下为左操作数；归约模式下为源操作数，必须为二维Tile，dim=0时支持DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_FP16和DT_FP32，dim=1时还支持DT_INT64、DT_UINT64和DT_BF16。 |
+| rhs | 输入 | Tile或Scalar类型。逐元素模式下为右操作数，Tile-Tile时数据类型与out一致且shape与out、lhs一致；归约模式下为临时Tile，数据类型和shape与lhs一致。 |
+| dim | 输入 | 可选，归约维度。未传入时执行逐元素计算；传入0时沿最后一维归约；传入1时沿第一维归约。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `out` | 输出 | 逐元素模式支持8/16/32/64位整型、FP16、BF16和FP32，shape与`lhs`一致<br>归约模式：数据类型与`lhs`一致；`dim=0`时shape为`[行数, 1]`，`dim=1`时shape为`[1, 列数]` |
-| `lhs` | 输入 | 逐元素模式：数据类型和shape均与`out`一致<br>归约模式：`dim=0`支持8/16/32位整型、FP16和FP32；`dim=1`还支持64位整型和BF16，shape为二维Tile |
-| `rhs` | 输入 | tile-tile模式：数据类型与`out`一致，shape与`out`一致<br>tile-scalar模式：scalar值（int/float/Scalar）<br>归约模式：数据类型和shape均与`lhs`一致的临时tile |
-| `dim` | 输入 | `None`：逐元素取较小值；`0`：沿最后一维取每行最小值；`1`：沿第一维取每列最小值。默认值为`None` |
+无。
 
-## 流水类型
+## 返回值说明
 
-V（向量计算流水）。
+无。
 
 ## 调用示例
 
-### tile-tile模式
+### Tile-Tile模式
 
-下面是一个完整kernel：从GM载入两个FP32输入到UB，用`pypto_pro.language.minimum`逐元素取较小值后写回GM。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
+下面是一个完整Kernel：从GM载入两个DT_FP32输入到UB，使用pypto_pro.language.minimum逐元素取较小值后写回GM。Vector Kernel开启auto_mutex，同步由make_tile_group自动管理。
 
 ```python
 import pypto_pro.language as pl
@@ -75,7 +76,7 @@ def minimum_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl
         pl.store(out, cur_out, [0, 0])
 ```
 
-实测结果示例如下：
+实测结果示例如下。
 
 <!-- pypto-doc-output:minimum:start -->
 ```bash
@@ -85,10 +86,10 @@ def minimum_kernel(a: pl.Tensor[[64, 64], pl.DT_FP32], b: pl.Tensor[[64, 64], pl
 ```
 <!-- pypto-doc-output:minimum:end -->
 
-### tile-scalar模式
+### Tile-Scalar模式
 
 ```python
-# tile 每个元素与 scalar 值取较小值
+# Tile每个元素与Scalar值取较小值。
 pl.minimum(out, lhs, 100.0)
 ```
 
