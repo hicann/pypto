@@ -114,7 +114,7 @@ private:
 private:
     std::atomic<bool> initialized_;
     HostMachineMode mode_;
-    MachineTask* curTask;
+    MachineTask* curTask{nullptr};
 
     std::atomic<uint64_t> curTaskId_{0};
     std::atomic<bool> stopFlag_{false};
