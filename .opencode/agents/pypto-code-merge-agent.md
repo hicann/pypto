@@ -144,7 +144,7 @@ curl -s "https://api.gitcode.com/api/v5/user?access_token=$TOKEN_VALUE"
 
 取返回的 `login` 字段作为 `current_user`。
 
-**检测已有 PR**：调用 `gitcode_list_pull_requests(owner="cann", repo="pypto")`，筛选 `state == "open"` 且 `head.ref` 匹配当前分支且 `head.user.login` 匹配 `current_user` → 得到 `existing_pr`（可能为空）。
+**检测已有 PR**：调用 `gitcode_list_pull_requests(owner="cann", repo="pypto")`，筛选 `state == "opened"` 且 `head.ref` 匹配当前分支且 `head.user.login` 匹配 `current_user` → 得到 `existing_pr`（可能为空）。
 
 **检测已有 Issue**（两个来源，合并判断）：
 - 用户消息中包含 Issue 编号（`#123`、`issue 123`、`https://gitcode.com/cann/pypto/issues/123`）
