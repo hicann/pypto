@@ -20,6 +20,7 @@
 #include "ir/transforms/base/visitor.h"
 
 #include "interface/tensor/ir.h"
+#include "interface/tensor/logical_tensor.h"
 
 namespace pypto {
 namespace ir {
@@ -53,18 +54,21 @@ private:
     {
         if (!skip_iter_updates_) {
             IRVisitor::VisitStmt_(op);
+            CollectValueTypeRefs(op->value_);
         }
     }
     void VisitStmt_(const BreakStmtPtr& op) override
     {
         if (!skip_iter_updates_) {
             IRVisitor::VisitStmt_(op);
+            CollectValueTypeRefs(op->value_);
         }
     }
     void VisitStmt_(const ContinueStmtPtr& op) override
     {
         if (!skip_iter_updates_) {
             IRVisitor::VisitStmt_(op);
+            CollectValueTypeRefs(op->value_);
         }
     }
 
@@ -72,6 +76,20 @@ private:
     {
         IRVisitor::VisitStmt_(op);
         CollectScalarVarRefs(op, var_uses);
+    }
+
+    // A terminator forwards carried values, and a carried tensor's dynvalidshape may reference
+    // scalars (symbolic merge dims) whose defining if lives earlier in the body: those refs are
+    // uses too, or the scalar's carry gets pruned while the exported tensor type still names it.
+    void CollectValueTypeRefs(const std::vector<ExprPtr>& values)
+    {
+        for (const auto& v : values) {
+            if (auto lt = npu::tile_fwk::AsLogicalTensor(v)) {
+                for (auto& shape : lt->GetDynValidShape()) {
+                    shape.GetVarRefs(var_uses);
+                }
+            }
+        }
     }
 
     bool skip_iter_updates_;

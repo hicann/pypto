@@ -245,6 +245,11 @@ Pass FlattenSingleStmt();
 
 Pass MergeStmtsIntoIf();
 
+/**
+ * \brief Simplify symbolic scalars under their enclosing branch condition
+ */
+Pass SimplifySymbolicScalar();
+
 Pass CreateRootFunctions();
 
 /**

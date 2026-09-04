@@ -51,8 +51,8 @@ def ssa_verify(func, desc: str = ""):
 
 
 def run_merge_pass(func, *args, create_new_logical_tensor=True):
-    """Compile a kernel and run canonicalize + dce + merge_stmts_into_if, stopping before lowering
-    so the resulting if-tree (func.body) is inspectable. Mirrors compile_new_ir's first half.
+    """Compile a kernel and run canonicalize + dce + merge_stmts_into_if + symbolic_scalar_simplify_pass, stopping
+    before lowering so the resulting if-tree (func.body) is inspectable. Mirrors compile_new_ir's first half.
     """
     b = ir.IRBuilder()
     func = pil.compile(func, *args, create_new_logical_tensor=create_new_logical_tensor)
@@ -60,6 +60,7 @@ def run_merge_pass(func, *args, create_new_logical_tensor=True):
     dce = ir.Pass.aggressive_dce()
     canonical = ir.Pass.canonicalize()
     merge = ir.Pass.merge_stmts_into_if()
+    simplify_symbolic_scalar = ir.Pass.simplify_symbolic_scalar()
     verifier = ir.IRVerifier.create_default()
     _ssa_verify(verifier, prog, "original")
     prog = canonical(prog)
@@ -68,6 +69,8 @@ def run_merge_pass(func, *args, create_new_logical_tensor=True):
     _ssa_verify(verifier, prog, "dce")
     prog = canonical(merge(prog))
     _ssa_verify(verifier, prog, "merged")
+    # only symbolic scalar are simplified, skip ssa_verify
+    prog = simplify_symbolic_scalar(prog)
     func = prog.functions[func.name]
     logging.info("\nmerged:\n%s" % func.body)
     return func

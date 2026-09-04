@@ -69,6 +69,7 @@ public:
     pypto::ir::ExprPtr AsExpr() const;
     void GetVarRefs(std::unordered_set<const pypto::ir::Var*>& out) const;
     SymbolicScalar SubstituteVars(const std::unordered_map<pypto::ir::VarPtr, pypto::ir::ExprPtr>& vars);
+    SymbolicScalar Substitute(const std::vector<std::pair<RawSymbolicScalarPtr, RawSymbolicScalarPtr>>& vals);
 
     operator int() const
     {

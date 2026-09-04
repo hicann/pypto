@@ -973,6 +973,39 @@ SymbolicScalar SymbolicScalar::SubstituteVars(const std::unordered_map<ir::VarPt
     return SymbolicScalar(substitute(raw_));
 }
 
+SymbolicScalar SymbolicScalar::Substitute(
+    const std::vector<std::pair<RawSymbolicScalarPtr, RawSymbolicScalarPtr>>& vals)
+{
+    std::function<RawSymbolicScalarPtr(const RawSymbolicScalarPtr&)> substitute;
+    substitute = [&](const RawSymbolicScalarPtr& raw) -> RawSymbolicScalarPtr {
+        if (!raw) {
+            return raw;
+        }
+        for (auto& [key, val] : vals) {
+            if (key == raw) {
+                return val;
+            }
+        }
+        if (!raw->IsExpression()) {
+            return raw;
+        }
+        auto expr = std::static_pointer_cast<RawSymbolicExpression>(raw);
+        std::vector<RawSymbolicScalarPtr> operands;
+        operands.reserve(expr->OperandList().size());
+        bool changed = false;
+        for (auto& operand : expr->OperandList()) {
+            auto substituted = substitute(operand);
+            operands.push_back(substituted);
+            changed = changed || substituted != operand;
+        }
+        if (!changed) {
+            return raw;
+        }
+        return std::make_shared<RawSymbolicExpression>(expr->Opcode(), operands);
+    };
+    return SymbolicScalar(substitute(raw_));
+}
+
 SymbolicScalar SymbolicScalar::Min(const SymbolicScalar& sval) const
 {
     if (ConcreteValid() && sval.ConcreteValid()) {

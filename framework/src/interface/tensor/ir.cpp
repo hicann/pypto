@@ -81,6 +81,13 @@ void CollectScalarVarRefs(const TensorOpStmtPtr& op, std::unordered_set<const Va
             attr.get().GetVarRefs(var_uses);
         }
     }
+    for (auto& var : op->result_) {
+        if (auto lt = std::dynamic_pointer_cast<const LogicalTensor>(var)) {
+            for (auto& shape : lt->GetDynValidShape()) {
+                shape.GetVarRefs(var_uses);
+            }
+        }
+    }
 }
 
 bool IsSameRawTensor(const VarPtr& v0, const VarPtr& v1)

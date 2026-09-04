@@ -392,10 +392,12 @@ def _loop_unroll(body: Block, loop: LoopRange, factor, nstart, nstop, ctx: Build
             CompileState.bump_atomic_scope_iter()
             dispatch_block(body, False)
         else:
+            ctx.in_loop_unroll = factor != 1
             for i in range(factor):
                 scope.varmap[loop_val.id] = loop_var + i * loop.step
                 CompileState.bump_atomic_scope_iter()
                 dispatch_block(body, False)
+            ctx.in_loop_unroll = False
         if is_positive:
             loop_conds.append(loop_var + (factor - 1) * loop.step < loop.stop)
         if is_negative:
@@ -450,6 +452,16 @@ def _dyn_for(body: Block, loop: LoopRange, ctx: BuildContext):
         finally:
             pypto_impl.EndScope()
         nstart = nstop
+
+
+def _merge_valid_shape(var, cond, shape1, shape2):
+    shape = []
+    for a, b in zip(shape1, shape2):
+        if str(a.simplify()) == str(b.simplify()):
+            shape.append(a)
+        else:
+            shape.append(SymbolicScalar.tenary(cond, a, b))
+    var.valid_shape = shape
 
 
 @impl("pil.loop")
@@ -520,6 +532,8 @@ def _if_else_stmt(cond, then_block: Block, else_block: Block, ctx: BuildContext)
     for i, name in enumerate(all_names):
         if ir.type_equal(then_yield_vars[i], else_yield_vars[i]):
             var = ctx.create_var_like(name, then_yield_vars[i])
+            if isinstance(then_yield_vars[i], ir.LogicalTensor) and not ctx.in_loop_unroll:
+                _merge_valid_shape(var, cond, then_yield_vars[i].valid_shape, else_yield_vars[i].valid_shape)
         elif isinstance(then_yield_vars[i].type, ir.NoneType):
             var = ctx.create_var_like(name, else_yield_vars[i])
         elif isinstance(else_yield_vars[i].type, ir.NoneType):

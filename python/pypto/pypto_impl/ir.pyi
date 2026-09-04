@@ -2427,6 +2427,10 @@ class Pass:
         """Merge statements into if statements."""
 
     @staticmethod
+    def simplify_symbolic_scalar() -> Pass:
+        """Simplify symbolic scalars under their enclosing branch condition."""
+
+    @staticmethod
     def create_root_functions() -> Pass:
         """Create root functions."""
 

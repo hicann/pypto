@@ -53,7 +53,7 @@ def get_dtensor_type():
     return _dtensor_type
 
 
-def get_npu_tensor_format(tensor):
+def get_tensor_format(tensor):
     """Return 'NZ' if tensor is in NPU NZ format (format code 29), else 'ND'."""
     torch_npu = get_torch_npu()
     if torch_npu is not None and torch_npu.get_npu_format(tensor) == 29:
@@ -61,7 +61,7 @@ def get_npu_tensor_format(tensor):
     return "ND"
 
 
-def get_torch_npu_compute_determinism_level() -> int:
+def get_compute_determinism_level() -> int:
     """Return torch_npu deterministic level (0/1/2); 0 when torch_npu is unavailable."""
     torch_npu = get_torch_npu()
     if torch_npu is None:

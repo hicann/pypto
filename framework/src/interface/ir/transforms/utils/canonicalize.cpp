@@ -22,6 +22,7 @@
 #include "stmt_utils.h"
 
 #include "interface/tensor/ir.h"
+#include "interface/tensor/logical_tensor.h"
 
 namespace pypto {
 namespace ir {
@@ -93,7 +94,15 @@ private:
     {
         const auto& returnVars = *rvStack_.back();
         for (size_t k = 0; k < values.size(); ++k) {
-            AddSite({returnVars[k].get()}, CollectVarUses(values[k]));
+            auto uses = CollectVarUses(values[k]);
+            // A carried tensor's dynvalidshape may reference scalars defined earlier in the
+            // body (symbolic merge dims); those refs keep the scalar's carry alive.
+            if (auto lt = npu::tile_fwk::AsLogicalTensor(values[k])) {
+                for (auto& shape : lt->GetDynValidShape()) {
+                    shape.GetVarRefs(uses);
+                }
+            }
+            AddSite({returnVars[k].get()}, std::move(uses));
         }
     }
 

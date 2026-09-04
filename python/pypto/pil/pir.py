@@ -239,6 +239,7 @@ class BuildContext(ir.IRBuilder):
         self.return_var_names = []
         self.loop_stack = []  # used by legacy is_loop_begin() and is_loop_end()
         self.call_stack = []
+        self.in_loop_unroll = False
 
     def __enter__(self):
         self.parent = _current.build_context

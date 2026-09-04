@@ -43,6 +43,13 @@ static inline std::optional<ScalarImmediateType> GetConstVal(const RawPtr& n)
     return std::nullopt;
 }
 
+// Fully-qualified runtime call name of the ternary op, matching SymbolicScalar::Ternary.
+inline const std::string& TernaryOpCallName()
+{
+    static const std::string name = AddRuntimePrefix(SymbolHandler::GetNameByHandlerId(SymbolHandlerId::TernaryOP));
+    return name;
+}
+
 // ============================================================================
 // CRTP Pattern base
 // ============================================================================
@@ -446,6 +453,13 @@ private:
         if (Expr::AllImmediate(newOps)) {
             auto immList = Expr::ToImmediateList(newOps);
             return MakeConst(Expr::FoldAllImmediate(e->Opcode(), immList));
+        }
+
+        // RUNTIME_TernaryOP(c, lhs, rhs) with a decided condition folds to the selected operand
+        if (newOps.size() == 4 && e->IsExpressionCall(TernaryOpCallName())) {
+            if (auto condVal = GetConstVal(newOps[1])) {
+                return condVal.value() != 0 ? newOps[2] : newOps[3];
+            }
         }
 
         SymbolicOpcode opcode = e->Opcode();
