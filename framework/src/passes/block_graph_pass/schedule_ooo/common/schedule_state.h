@@ -36,6 +36,7 @@
 #include "passes/block_graph_pass/schedule_ooo/common/dep_manager.h"
 #include "passes/pass_interface/pass.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/pass_common_defs.h"
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_utils/reschedule_utils.h"
 #include "passes/statistics/schedule_observer.h"
@@ -228,6 +229,11 @@ public:
     std::unordered_map<CoreLocationType, std::map<MemoryType, OpQueue>> allocIssueQueue;
     // 当前 alloc stage 因 DualDst 分段而主动结束，需要保持 clock 继续下一轮，不触发 spill。
     bool continueAllocStage{false};
+
+    // === VF scope tensor memId blacklist for spill ===
+    std::unordered_map<int, std::unordered_set<int>> vfScopeTensorMemIds;
+    // scopeId -> 按原 op 顺序排列的 vf op 列表(首 op 在前)。spill 锚定 copyin 用。
+    std::unordered_map<int, std::vector<Operation*>> vfScopeOpsByScope;
 
     // === Spill dead-loop detection ===
     int spillNoProgressCnt{0};

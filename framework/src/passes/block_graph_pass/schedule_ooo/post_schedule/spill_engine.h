@@ -96,9 +96,10 @@ public:
 
     Operation* GetSpillOp(int memId);
     int GetBufNextUseTime(int curMemId);
-    bool IsBelongSpillBlackList(int memId, Operation* allocOp);
+    bool IsBelongSpillBlackList(int memId, Operation* op);
 
 private:
+    bool IsVfTensorSpillBlocked(int memId, int triggerScopeId) const;
     ScheduleState& state_;
     Function& function_;
     IRBuilder irBuilder_;

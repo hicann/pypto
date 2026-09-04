@@ -14,6 +14,7 @@
  */
 
 #include "add_alloc.h"
+#include "passes/pass_utils/pass_common_defs.h"
 #include "passes/pass_utils/pass_operation_utils.h"
 #include "passes/pass_log/pass_log.h"
 
@@ -129,12 +130,16 @@ Status AddAlloc::FindTensorAllocMsg(Operation& op, std::unordered_map<int, Tenso
 
 Status AddAlloc::GenAllocOpcode(const Opcode& allocOpcode, const TensorAllocMsg& tensorAllocMsg, Function& function)
 {
+    int atomicScopeId = tensorAllocMsg.producer[0].get().GetAtomicScopeId();
     for (auto& oOperand : tensorAllocMsg.producer[0].get().GetOOperands()) {
         if (oOperand->memoryrange.memId != tensorAllocMsg.memId) {
             continue;
         }
-        PassOperationUtils::AddOperation(function, allocOpcode, {},
-                                         std::vector<std::shared_ptr<LogicalTensor>>({oOperand}));
+        auto& allocOp = PassOperationUtils::AddOperation(function, allocOpcode, {},
+                                                         std::vector<std::shared_ptr<LogicalTensor>>({oOperand}));
+        if (atomicScopeId >= VF_CLUSTER_ID_START) {
+            allocOp.SetAtomicScopeId(atomicScopeId);
+        }
     }
     return SUCCESS;
 }

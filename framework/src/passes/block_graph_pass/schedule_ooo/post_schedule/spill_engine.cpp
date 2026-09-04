@@ -59,15 +59,14 @@ void SpillEngine::EmitInitDDRBuffer(const LogicalTensorPtr& t, DDRBufferKind kin
     }
 }
 
-// 筛候选用的过滤条件, 判据就是 PlanSpill 排不排得出计划, 内外支持范围自动对齐。
-bool SpillEngine::IsBelongSpillBlackList(int memId, Operation* allocOp)
+bool SpillEngine::IsBelongSpillBlackList(int memId, Operation* op)
 {
     Operation* spillOp = GetSpillOp(memId);
     if (spillOp == nullptr) {
         return true;
     }
     std::set<Operation*> filterLtags;
-    FindFilterLtags(allocOp, filterLtags);
+    FindFilterLtags(op, filterLtags);
     if (state_.IsOpAllocInSchedInfo(spillOp) || filterLtags.count(spillOp) != 0) {
         return true;
     }
@@ -81,7 +80,21 @@ bool SpillEngine::IsBelongSpillBlackList(int memId, Operation* allocOp)
         APASS_LOG_DEBUG_F(Elements::Tensor, "Spill: skip tensor[%d], cannot plan a spill for it.", memId);
         return true;
     }
+    if (op->GetAtomicScopeId() >= VF_CLUSTER_ID_START && IsVfTensorSpillBlocked(memId, op->GetAtomicScopeId())) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "VF spill blacklist: block memId=%d (scope=%d) triggered by alloc %s.",
+                          memId, op->GetAtomicScopeId(), state_.GetOpInfo(op).c_str());
+        return true;
+    }
     return false;
+}
+
+bool SpillEngine::IsVfTensorSpillBlocked(int memId, int triggerScopeId) const
+{
+    auto scopeIt = state_.vfScopeTensorMemIds.find(triggerScopeId);
+    if (scopeIt == state_.vfScopeTensorMemIds.end()) {
+        return false;
+    }
+    return scopeIt->second.count(memId) > 0;
 }
 
 void SpillEngine::FindFilterLtags(Operation* allocOp, std::set<Operation*>& filterLtags)
@@ -1281,6 +1294,13 @@ int SpillEngine::GetBufNextUseTime(int curMemId)
         auto& reqMemids = state_.GetOpMemIds(op);
         if (std::find(reqMemids.begin(), reqMemids.end(), curMemId) == reqMemids.end())
             continue;
+
+        if (op->GetAtomicScopeId() >= VF_CLUSTER_ID_START) {
+            auto scopeIt = state_.vfScopeOpsByScope.find(op->GetAtomicScopeId());
+            if (scopeIt != state_.vfScopeOpsByScope.end() && !scopeIt->second.empty()) {
+                return state_.schedInfoMap[scopeIt->second.front()].execOrder;
+            }
+        }
 
         int opExecOrder = state_.schedInfoMap[op].execOrder;
         int minAlloc = INT_MAX;

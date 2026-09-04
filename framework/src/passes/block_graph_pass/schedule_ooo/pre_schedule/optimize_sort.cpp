@@ -19,6 +19,7 @@
 
 #include "prior_dfs_sort.h"
 #include "cluster_list_sort.h"
+#include "vf_affinity_sort.h"
 #include "passes/pass_log/pass_log.h"
 
 namespace npu::tile_fwk {
@@ -549,19 +550,30 @@ void OptimizeSort::AllocAhead()
 const std::unordered_map<std::string, OptimizeSort::Factory> OptimizeSort::SORT_ALGOS = {
     {"PriorDFS", [](std::vector<Operation*> ops, Function& f) { return std::make_unique<PriorDFSSort>(ops, f); }},
     {"ClusterList", [](std::vector<Operation*> ops, Function& f) { return std::make_unique<ClusterListSort>(ops, f); }},
+    {"VfAffinity", [](std::vector<Operation*> ops, Function& f) { return std::make_unique<VfAffinitySort>(ops, f); }},
 };
 
 std::string OptimizeSort::ResolveOooSortMode(const std::vector<Operation*>& ops, const ParamConfigs& pc)
 {
     bool hasAic = false;
     bool hasAiv = false;
+    bool hasVfOp = false;
     for (auto* op : ops) {
+        if (IsAllocOpCode(op->GetOpcode())) {
+            continue;
+        }
+        if (op->GetAtomicScopeId() >= VF_CLUSTER_ID_START) {
+            hasVfOp = true;
+        }
         auto coreType = OpcodeManager::Inst().GetCoreType(op->GetOpcode());
         if (coreType == OpCoreType::AIC) {
             hasAic = true;
         } else if (coreType == OpCoreType::AIV) {
             hasAiv = true;
         }
+    }
+    if (hasAiv && !hasAic && hasVfOp) {
+        return "VfAffinity";
     }
     if (hasAic && !hasAiv) {
         return pc.oooSortModeAic.empty() ? "PriorDFS" : pc.oooSortModeAic;

@@ -23,17 +23,11 @@
 
 #include "interface/function/function.h"
 #include "passes/pass_interface/pass.h"
+#include "passes/pass_utils/pass_common_defs.h"
 
 namespace npu::tile_fwk {
 
-// VF cluster IDs start at 200000000, isolated from user atomic_scope encoding space.
-// User encoding: scopeId * _ATOMIC_SCOPE_ENCODE_BASE + iter, scopeId ∈ [1, 10000],
-// max user encoding = 10000 * 10000 + 9999 = 100,009,999. Gap of ~100M ensures no overlap.
-constexpr int VF_CLUSTER_ID_START = 200000000;
 constexpr size_t VF_CLUSTER_SIZE_LIMIT = 32;
-// Ensure VF cluster ID space never overlaps with user atomic_scope encoding.
-static_assert(VF_CLUSTER_ID_START > 10000 * 10000 + 9999,
-              "VF_CLUSTER_ID_START must exceed max user atomic_scope encoding");
 
 class AncestorBits {
 public:

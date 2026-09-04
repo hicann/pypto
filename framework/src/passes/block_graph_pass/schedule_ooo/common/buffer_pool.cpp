@@ -174,11 +174,72 @@ void BufferPool::SelectHeadAndTail(LocalBufferPtr tensor, bool& head, bool& tail
     }
 }
 
-Status BufferPool::Allocate(LocalBufferPtr tensor)
+std::map<uint64_t, std::map<uint64_t, uint64_t>> BufferPool::SubtractAvoidRanges(
+    const std::map<uint64_t, std::map<uint64_t, uint64_t>>& freeIntervals,
+    const std::vector<std::pair<uint64_t, uint64_t>>& avoidRanges)
 {
-    std::map<uint64_t, std::map<uint64_t, uint64_t>> freeIntervals = FindFreeIntervals();
-    // size, {begin, end}
-    // 创建新的bufferSlice
+    if (avoidRanges.empty()) {
+        return freeIntervals;
+    }
+    // cursor 单调扣减要求输入按 start 有序且无重叠。但调用方(scopeTensorRanges_)按 alloc 发生序
+    // push_back, 地址不保证单调(exact-reuse 会命中任意地址的区间); 且 scope 外部输入两两之间
+    // 不受机制5约束, 可能部分重叠。这里先局部拷贝、排序并合并为不相交并集, 保证扣减正确。
+    std::vector<std::pair<uint64_t, uint64_t>> mergedRanges;
+    {
+        std::vector<std::pair<uint64_t, uint64_t>> sortedRanges = avoidRanges;
+        std::sort(sortedRanges.begin(), sortedRanges.end());
+        for (auto& [as, ae] : sortedRanges) {
+            if (!mergedRanges.empty() && as <= mergedRanges.back().second) {
+                mergedRanges.back().second = std::max(mergedRanges.back().second, ae);
+            } else {
+                mergedRanges.push_back({as, ae});
+            }
+        }
+    }
+    std::map<uint64_t, std::map<uint64_t, uint64_t>> filtered;
+    for (auto& intervalEntry : freeIntervals) {
+        for (auto& [fs, fe] : intervalEntry.second) {
+            uint64_t cursor = fs;
+            for (auto& [as, ae] : mergedRanges) {
+                if (ae <= cursor || as >= fe) {
+                    continue;
+                }
+                if (as > cursor) {
+                    filtered[as - cursor].insert({cursor, as});
+                }
+                cursor = std::max(cursor, ae);
+            }
+            if (cursor < fe) {
+                filtered[fe - cursor].insert({cursor, fe});
+            }
+        }
+    }
+    return filtered;
+}
+
+bool BufferPool::IsRangeFree(uint64_t start, uint64_t end)
+{
+    for (auto& [memId, slice] : bufferSlices) {
+        (void)memId;
+        if (slice.offset < end && start < slice.offset + slice.size) {
+            return false;
+        }
+    }
+    return true;
+}
+
+Status BufferPool::Allocate(LocalBufferPtr tensor, const std::vector<std::pair<uint64_t, uint64_t>>& avoidRanges)
+{
+    // 1. 优先在 avoidRanges 中找 exact-reuse 落点（地址完全匹配某 avoid 区间，且该区间当前空闲）
+    for (auto& [as, ae] : avoidRanges) {
+        if (tensor->size == ae - as && IsRangeFree(as, ae)) {
+            BufferSlice newSlice(as, tensor->size);
+            return MakeBufferSlice(tensor, newSlice);
+        }
+    }
+    // 2. 获取 freeIntervals，从中减去 avoidRanges 重叠部分
+    auto freeIntervals = SubtractAvoidRanges(FindFreeIntervals(), avoidRanges);
+    // 3. 在剩余 freeIntervals 中分配
     if (tensor->memType == MemoryType::MEM_L0A || tensor->memType == MemoryType::MEM_L0B ||
         tensor->memType == MemoryType::MEM_L0C) {
         bool headFree = false;
@@ -253,14 +314,21 @@ Status BufferPool::Free(const int tensorId)
     return SUCCESS;
 }
 
-bool BufferPool::IsFull(const LocalBufferPtr tensor, bool isMainLoop)
+bool BufferPool::IsFull(const LocalBufferPtr tensor, bool isMainLoop,
+                        const std::vector<std::pair<uint64_t, uint64_t>>& avoidRanges)
 {
+    // avoidRanges 非空时先查 exact-reuse（该区间必须当前空闲）
+    for (auto& [as, ae] : avoidRanges) {
+        if (tensor->size == ae - as && IsRangeFree(as, ae)) {
+            return false;
+        }
+    }
     if (tensor->memType == MemoryType::MEM_BT) {
         if (bufferSlices.size() >= 1) {
             return true;
         }
     }
-    auto freeSpace = FindFreeIntervals();
+    auto freeSpace = SubtractAvoidRanges(FindFreeIntervals(), avoidRanges);
     if (tensor->memType == MemoryType::MEM_L0C && tensor->size >= ONE_THIRD * memSize_ && isMainLoop) {
         bool headFree = false;
         bool tailFree = false;

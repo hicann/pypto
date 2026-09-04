@@ -17,6 +17,7 @@
 #define PASS_SCHEDULER_H
 
 #include <climits>
+#include <unordered_set>
 
 #include "interface/tensor/irbuilder.h"
 #include "passes/block_graph_pass/schedule_ooo/common/buffer_pool.h"
@@ -77,6 +78,16 @@ private:
     // 按 opList 原序存放, 祖先在前, 链上后继才能看到已落位的前驱。
     std::vector<Operation*> ddrSkipOps_;
 
+    // 每 core 闸门持有的活动 vf scope id（-1 表示闸门打开）
+    std::unordered_map<CoreLocationType, int> gateActiveScope_;
+    // scopeId -> 已发射（launch）的 scope op 计数，闸门关闭期间随同 scope op 发射递增
+    std::unordered_map<int, int> scopeLaunchedCnt_;
+    // scopeId -> launch 计数集合大小：scope 内走 PIPE_V 发射路径的非 skip/ALLOC op 数
+    std::unordered_map<int, int> scopeLaunchTotal_;
+    std::unordered_map<int, std::vector<std::pair<uint64_t, uint64_t>>> scopeTensorRanges_;
+    // 本次 alloc 下发后是否激活了后继 op（就绪进 launch 队列），用于 vf alloc 的"激活即停"节流
+    bool allocActivatedOp_{false};
+
     void NotifyOpLaunch(Operation* op, int cycleEnd);
     void NotifyOpRetire(Operation* op, const std::vector<int>& freedMemIds);
     void NotifyAllocExec(Operation* op, int memId);
@@ -105,6 +116,15 @@ private:
     void InitCoreConfig(const std::vector<Operation*>& opList);
     void InitTensorCoreMap();
     void InitIssueQueuesAndBufferManager();
+    void InitVfScopeGate();
+    bool IsScopeInputsReady(int scopeId);
+    bool GateAllowsIssue(CoreLocationType coreLocation, PipeType pipeType, Operation* op);
+    void UpdateVfScopeGate(CoreLocationType coreLocation, PipeType pipeType, Operation* op);
+    void RecordScopeTensorRange(int scopeId, int memId);
+    void ClearScopeTensorRanges(int scopeId);
+    Status InsertSpillCopyoutOp(Operation* copyoutOp);
+    Status QueryAllocPlacement(Operation* op, bool& hasMatchedOffset, uint64_t& matchedOffset,
+                               std::vector<std::pair<uint64_t, uint64_t>>& avoidRanges);
 
     void AllocWorkspaceGM(const std::vector<Operation*>& opList);
     void UpdateDualDstL0MXRange();

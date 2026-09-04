@@ -77,10 +77,11 @@ public:
     ~BufferPool() = default;
     // 返回tensorid 到 bufferblock的映射关系，value是bufferblock的index不是bufferblock的magic
     // 在已有的block中分配tensor空间
-    Status Allocate(LocalBufferPtr tensor);
+    Status Allocate(LocalBufferPtr tensor, const std::vector<std::pair<uint64_t, uint64_t>>& avoidRanges = {});
     std::map<uint64_t, uint64_t> GenFreeIntervals(const std::map<uint64_t, uint64_t>& occupiedSpace);
     std::map<uint64_t, std::map<uint64_t, uint64_t>> FindFreeIntervals();
-    bool IsFull(const LocalBufferPtr tensor, bool isMainLoop);
+    bool IsFull(const LocalBufferPtr tensor, bool isMainLoop,
+                const std::vector<std::pair<uint64_t, uint64_t>>& avoidRanges = {});
     bool IsFullWithoutRearrange(const size_t size);
     Status Free(const int tensorId);
     uint64_t GetMemSize();
@@ -126,6 +127,11 @@ private:
     uint64_t memSize_{0};
     std::map<int, BufferSlice> bufferSlices;
     std::unordered_map<int, int> tensorIdToBuffer_;
+
+    std::map<uint64_t, std::map<uint64_t, uint64_t>> SubtractAvoidRanges(
+        const std::map<uint64_t, std::map<uint64_t, uint64_t>>& freeIntervals,
+        const std::vector<std::pair<uint64_t, uint64_t>>& avoidRanges);
+    bool IsRangeFree(uint64_t start, uint64_t end);
 };
 } // namespace npu::tile_fwk
 

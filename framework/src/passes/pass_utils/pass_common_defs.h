@@ -21,6 +21,15 @@
 namespace npu {
 namespace tile_fwk {
 enum class Opcode;
+
+// VF cluster IDs start at 200000000, isolated from user atomic_scope encoding space.
+// User encoding: scopeId * _ATOMIC_SCOPE_ENCODE_BASE + iter, scopeId ∈ [1, 10000],
+// max user encoding = 10000 * 10000 + 9999 = 100,009,999. Gap of ~100M ensures no overlap.
+constexpr int VF_CLUSTER_ID_START = 200000000;
+// Ensure VF cluster ID space never overlaps with user atomic_scope encoding.
+static_assert(VF_CLUSTER_ID_START > 10000 * 10000 + 9999,
+              "VF_CLUSTER_ID_START must exceed max user atomic_scope encoding");
+
 struct AssembleOp {
     MemoryType from;
     std::vector<int64_t> toOffset;

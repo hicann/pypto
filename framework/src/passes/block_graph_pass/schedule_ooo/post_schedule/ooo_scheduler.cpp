@@ -313,6 +313,37 @@ void OoOScheduler::HandleSkipOp(Operation* op)
     }
 }
 
+// 闸门判定：关闭时仅放行活动 scope 自身的 op（scope op 天然只在 PIPE_V 上，其余 op 留在队首
+// 等待；其 execOrder 均在活动 scope 窗口外，后到就绪的 scope op 会插到它们前面，不会饿死）。
+// 未关时队首 vf op 即本 scope 首 op，须等 scope 全部外部输入 tensor 就绪，否则首 op issue 立即
+// 关闸，尚未执行的输入 copyin 被闸门饿死 → 调度死锁。
+bool OoOScheduler::GateAllowsIssue(CoreLocationType coreLocation, PipeType pipeType, Operation* op)
+{
+    int activeScope = gateActiveScope_[coreLocation];
+    if (activeScope >= VF_CLUSTER_ID_START) {
+        return op->GetAtomicScopeId() == activeScope;
+    }
+    if (pipeType == PipeType::PIPE_V && op->GetAtomicScopeId() >= VF_CLUSTER_ID_START) {
+        return IsScopeInputsReady(op->GetAtomicScopeId());
+    }
+    return true;
+}
+
+// 发射后维护闸门状态：发射 scope op 即占闸并计数，全部 scope op 已发射（发射位序已固化）则开闸。
+void OoOScheduler::UpdateVfScopeGate(CoreLocationType coreLocation, PipeType pipeType, Operation* op)
+{
+    if (op->GetAtomicScopeId() < VF_CLUSTER_ID_START || pipeType != PipeType::PIPE_V) {
+        return;
+    }
+    int scopeId = op->GetAtomicScopeId();
+    gateActiveScope_[coreLocation] = scopeId;
+    scopeLaunchedCnt_[scopeId]++;
+    if (scopeLaunchedCnt_[scopeId] >= scopeLaunchTotal_[scopeId]) {
+        gateActiveScope_[coreLocation] = -1;
+        ClearScopeTensorRanges(scopeId);
+    }
+}
+
 Status OoOScheduler::LaunchIssueStage(int& nextCycle)
 {
     for (auto coreLocation : state_.coreInitConfigs) {
@@ -321,7 +352,11 @@ Status OoOScheduler::LaunchIssueStage(int& nextCycle)
             if (pipe.Empty() || pipe.busy) {
                 continue;
             }
-            Operation* op = pipe.PopFront();
+            Operation* op = pipe.Front();
+            if (!GateAllowsIssue(coreLocation, pipeEntry.first, op)) {
+                continue;
+            }
+            pipe.PopFront();
             // 标注op的生命周期
             op->cycleStart = state_.clock;
             op->cycleEnd = state_.clock + op->GetLatency();
@@ -331,6 +366,7 @@ Status OoOScheduler::LaunchIssueStage(int& nextCycle)
             NotifyOpLaunch(op, op->cycleEnd);
             HandleSkipOp(op);
             state_.newOperations.emplace_back(op);
+            UpdateVfScopeGate(coreLocation, pipeEntry.first, op);
             if (nextCycle == -1 || nextCycle > pipe.curOpRetireCycle) {
                 nextCycle = pipe.curOpRetireCycle;
             }
@@ -365,6 +401,25 @@ Status OoOScheduler::TryDualDstAllocPair(Operation* aiv0Alloc, Operation* aiv1Al
     return SUCCESS;
 }
 
+// 查询 alloc 的落点约束: dualdst 指定 offset + vf scope 的 avoidRanges。
+Status OoOScheduler::QueryAllocPlacement(Operation* op, bool& hasMatchedOffset, uint64_t& matchedOffset,
+                                         std::vector<std::pair<uint64_t, uint64_t>>& avoidRanges)
+{
+    if (dualDstEngine_.GetMatchedAivUbAllocOffset(op, hasMatchedOffset, matchedOffset) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "GetMatchedAivUbAllocOffset failed. %s",
+                          GetFormatBacktrace(*op).c_str());
+        return FAILED;
+    }
+    int vfScopeId = op->GetAtomicScopeId();
+    if (vfScopeId >= VF_CLUSTER_ID_START) {
+        auto it = scopeTensorRanges_.find(vfScopeId);
+        if (it != scopeTensorRanges_.end()) {
+            avoidRanges = it->second;
+        }
+    }
+    return SUCCESS;
+}
+
 Status OoOScheduler::TryRegularAllocOnce(Operation* op, MemoryType memType, CoreLocationType coreLocation,
                                          const std::vector<int>& reqMemIds, uint64_t& commitCnt, bool& allocated)
 {
@@ -372,20 +427,23 @@ Status OoOScheduler::TryRegularAllocOnce(Operation* op, MemoryType memType, Core
     auto buf = state_.localBufferMap[reqMemIds[0]];
     bool hasMatchedOffset = false;
     uint64_t matchedOffset = 0;
-    if (dualDstEngine_.GetMatchedAivUbAllocOffset(op, hasMatchedOffset, matchedOffset) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "GetMatchedAivUbAllocOffset failed. %s",
-                          GetFormatBacktrace(*op).c_str());
+    std::vector<std::pair<uint64_t, uint64_t>> avoidRanges;
+    if (QueryAllocPlacement(op, hasMatchedOffset, matchedOffset, avoidRanges) != SUCCESS) {
         return FAILED;
     }
-    if (!hasMatchedOffset && pool.IsFull(buf, true)) {
+    int vfScopeId = op->GetAtomicScopeId();
+    if (!hasMatchedOffset && pool.IsFull(buf, true, avoidRanges)) {
         allocated = false;
         return SUCCESS;
     }
     APASS_LOG_DEBUG_F(Elements::Operation, "ALLOCATE: %s.", state_.GetOpInfo(op).c_str());
-    Status allocStatus = hasMatchedOffset ? pool.AllocateAtOffset(buf, matchedOffset) : pool.Allocate(buf);
+    Status allocStatus = hasMatchedOffset ? pool.AllocateAtOffset(buf, matchedOffset) : pool.Allocate(buf, avoidRanges);
     if (allocStatus != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Tensor, "Allocate Tensor[%d] failed.", reqMemIds[0]);
         return FAILED;
+    }
+    if (vfScopeId >= VF_CLUSTER_ID_START) {
+        RecordScopeTensorRange(vfScopeId, reqMemIds[0]);
     }
     // pool-evt 记录单池 alloc 成功时的 clock、memId 和 size，用于重建池占用曲线。
     APASS_LOG_DEBUG_F(Elements::Operation, "[pool-evt] alloc clock=%llu cycles core=%d mt=%d memId=%d size=%llu bytes",
@@ -422,12 +480,17 @@ Status OoOScheduler::ExecuteAllocIssue(uint64_t& commitCnt, MemoryType memType, 
         auto& coreLocation = state_.schedInfoMap[op].coreLocation;
         auto& reqMemIds = state_.GetOpMemIds(op);
         bool allocated = false;
+        allocActivatedOp_ = false;
         Status st = TryRegularAllocOnce(op, memType, coreLocation, reqMemIds, commitCnt, allocated);
         if (st != SUCCESS)
             return FAILED;
         if (!allocated)
             break; // Full;退出循环交给 SpillOnBlock
         pipe.PopFront();
+        // vf alloc 激活了后继 op：停发，剩余 alloc 留给下一轮（激活即停，避免提前占位破坏 exact-reuse）
+        if (op->GetAtomicScopeId() >= VF_CLUSTER_ID_START && allocActivatedOp_) {
+            break;
+        }
     }
     return SUCCESS;
 }
@@ -629,6 +692,7 @@ Status OoOScheduler::RetireOpAndAwakeSucc(Operation* op, uint64_t& commitCnt)
         }
         if (ready) {
             issueQueues[state_.schedInfoMap[succOp].coreLocation][state_.schedInfoMap[succOp].pipeType].Insert(succOp);
+            allocActivatedOp_ = true;
             APASS_LOG_DEBUG_F(Elements::Operation, "    Wakeup: %s, execOrder: %d", state_.GetOpInfo(succOp).c_str(),
                               state_.schedInfoMap[succOp].execOrder);
         }
@@ -912,6 +976,95 @@ void OoOScheduler::InitIssueQueuesAndBufferManager()
     }
 }
 
+void OoOScheduler::InitVfScopeGate()
+{
+    gateActiveScope_.clear();
+    scopeLaunchedCnt_.clear();
+    scopeLaunchTotal_.clear();
+    scopeTensorRanges_.clear();
+    state_.vfScopeTensorMemIds.clear();
+    state_.vfScopeOpsByScope.clear();
+    for (auto* op : state_.orderedOps) {
+        int scopeId = op->GetAtomicScopeId();
+        if (scopeId >= VF_CLUSTER_ID_START) {
+            state_.vfScopeOpsByScope[scopeId].push_back(op);
+            if (!state_.schedInfoMap[op].isAlloc) {
+                scopeLaunchTotal_[scopeId]++;
+            }
+            for (auto& iOperand : op->GetIOperands()) {
+                if (iOperand->GetMemoryTypeOriginal() < MemoryType::MEM_DEVICE_DDR) {
+                    state_.vfScopeTensorMemIds[scopeId].insert(iOperand->memoryrange.memId);
+                }
+            }
+            for (auto& oOperand : op->GetOOperands()) {
+                if (oOperand->GetMemoryTypeOriginal() < MemoryType::MEM_DEVICE_DDR) {
+                    state_.vfScopeTensorMemIds[scopeId].insert(oOperand->memoryrange.memId);
+                }
+            }
+        }
+    }
+    for (auto& scope : scopeLaunchTotal_) {
+        scopeLaunchedCnt_[scope.first] = 0;
+    }
+    APASS_LOG_INFO_F(Elements::Operation, "InitVfScopeGate: %zu vf scopes with launch counting.",
+                     scopeLaunchTotal_.size());
+}
+
+// scope 全部外部输入 tensor（producer 不在本 scope、且非 ALLOC）的 producer 已 retire
+bool OoOScheduler::IsScopeInputsReady(int scopeId)
+{
+    auto it = state_.vfScopeOpsByScope.find(scopeId);
+    if (it == state_.vfScopeOpsByScope.end()) {
+        return true;
+    }
+    for (auto* op : it->second) {
+        for (auto& iop : op->GetIOperands()) {
+            if (iop->GetMemoryTypeOriginal() >= MemoryType::MEM_DEVICE_DDR) {
+                continue;
+            }
+            for (auto* producer : iop->GetProducers()) {
+                if (producer == nullptr || IsAllocOpCode(producer->GetOpcode())) {
+                    continue;
+                }
+                if (producer->GetAtomicScopeId() == scopeId) {
+                    continue;
+                }
+                auto schedIt = state_.schedInfoMap.find(producer);
+                if (schedIt == state_.schedInfoMap.end()) {
+                    continue;
+                }
+                if (!schedIt->second.isRetired) {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
+void OoOScheduler::RecordScopeTensorRange(int scopeId, int memId)
+{
+    auto bufIt = state_.localBufferMap.find(memId);
+    if (bufIt == state_.localBufferMap.end() || bufIt->second == nullptr) {
+        return;
+    }
+    auto& buf = bufIt->second;
+    scopeTensorRanges_[scopeId].push_back({buf->start, buf->end});
+    APASS_LOG_DEBUG_F(Elements::Operation, "RecordScopeTensorRange: scope=%d memId=%d range=[%lu, %lu].", scopeId,
+                      memId, buf->start, buf->end);
+}
+
+void OoOScheduler::ClearScopeTensorRanges(int scopeId)
+{
+    auto it = scopeTensorRanges_.find(scopeId);
+    if (it == scopeTensorRanges_.end()) {
+        return;
+    }
+    APASS_LOG_DEBUG_F(Elements::Operation, "ClearScopeTensorRanges: scope=%d, %zu ranges cleared.", scopeId,
+                      it->second.size());
+    scopeTensorRanges_.erase(it);
+}
+
 void OoOScheduler::InitTensorCoreMap()
 {
     // 不存在 no producer情况
@@ -1089,6 +1242,7 @@ Status OoOScheduler::Init(const std::vector<Operation*>& opList,
     InitTensorCoreMap();
     // 初始化内存管理器
     InitIssueQueuesAndBufferManager();
+    InitVfScopeGate();
     LOG_SCOPE_END(tInit);
     return SUCCESS;
 }
@@ -1559,25 +1713,60 @@ Status OoOScheduler::FinalizeSingleSideSpill(Operation* allocOp, MemoryType reqM
     return SUCCESS;
 }
 
+Status OoOScheduler::InsertSpillCopyoutOp(Operation* copyoutOp)
+{
+    int spillMemid = copyoutOp->GetInputOperand(0)->memoryrange.memId;
+    Operation* insertOp = nullptr;
+    for (auto op : state_.newOperations) {
+        auto& reqMemids = state_.GetOpMemIds(op);
+        if (std::find(reqMemids.begin(), reqMemids.end(), spillMemid) != reqMemids.end()) {
+            insertOp = op;
+        }
+    }
+    if (insertOp == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Operation, "Insert spillout %s failed.", state_.GetOpInfo(copyoutOp).c_str());
+        return FAILED;
+    }
+    if (insertOp->GetAtomicScopeId() >= VF_CLUSTER_ID_START) {
+        int scopeId = insertOp->GetAtomicScopeId();
+        auto opsIt = state_.vfScopeOpsByScope.find(scopeId);
+        if (opsIt == state_.vfScopeOpsByScope.end() || opsIt->second.empty()) {
+            APASS_LOG_ERROR_F(Elements::Operation, "Insert spillout %s failed: unknown vf scope %d.",
+                              state_.GetOpInfo(copyoutOp).c_str(), scopeId);
+            return FAILED;
+        }
+        std::unordered_set<Operation*> scopeOpSet(opsIt->second.begin(), opsIt->second.end());
+        Operation* scopeLastOp = nullptr;
+        size_t foundCnt = 0;
+        for (auto op : state_.newOperations) {
+            if (scopeOpSet.count(op) > 0) {
+                foundCnt++;
+                scopeLastOp = op;
+            }
+        }
+        if (foundCnt != scopeOpSet.size()) {
+            APASS_LOG_ERROR_F(Elements::Operation, "Insert spillout %s failed: vf scope %d not fully launch(%zu/%zu).",
+                              state_.GetOpInfo(copyoutOp).c_str(), scopeId, foundCnt, scopeOpSet.size());
+            return FAILED;
+        }
+        auto lastIt = find(state_.newOperations.begin(), state_.newOperations.end(), scopeLastOp);
+        state_.newOperations.insert(lastIt + 1, copyoutOp);
+        return SUCCESS;
+    }
+    auto it = find(state_.newOperations.begin(), state_.newOperations.end(), insertOp);
+    if (it != state_.newOperations.end()) {
+        state_.newOperations.insert(it + 1, copyoutOp);
+    }
+    return SUCCESS;
+}
+
 Status OoOScheduler::ApplySpillContext(SpillContext& ctx, Operation* allocOp)
 {
     for (auto* copyoutOp : ctx.newCopyoutOps) {
-        int spillMemid = copyoutOp->GetInputOperand(0)->memoryrange.memId;
-        Operation* insertOp = nullptr;
-        for (auto op : state_.newOperations) {
-            auto& reqMemids = state_.GetOpMemIds(op);
-            if (std::find(reqMemids.begin(), reqMemids.end(), spillMemid) != reqMemids.end()) {
-                insertOp = op;
-            }
-        }
-        if (insertOp == nullptr) {
-            APASS_LOG_ERROR_F(Elements::Operation, "Insert %s in newOperations failed.",
+        if (InsertSpillCopyoutOp(copyoutOp) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "ApplySpillContext: insert copyout %s failed.",
                               state_.GetOpInfo(copyoutOp).c_str());
             return FAILED;
-        }
-        auto it = find(state_.newOperations.begin(), state_.newOperations.end(), insertOp);
-        if (it != state_.newOperations.end()) {
-            state_.newOperations.insert(it + 1, copyoutOp);
         }
     }
     state_.numTotalIssues += ctx.newNotRetiredCopyOutSize - ctx.deleteNotRetiredOpSize;
