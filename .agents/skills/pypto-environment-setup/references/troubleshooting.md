@@ -3,7 +3,7 @@
 ## 通用排查步骤
 
 1. 运行诊断：`python3 scripts/diagnose_env.py --pretty`
-2. 确认 Python：`which python3`
+2. 确认 Python：`command -v python3`
 3. 确认 CANN：`echo $ASCEND_HOME_PATH`（为空则需加载，见 [prepare_environment.md](prepare_environment.md) § "CANN 环境加载"）
 4. conda 用户确认已激活正确环境
 ---
@@ -61,7 +61,7 @@ pip install build_out/pypto-*.whl --force-reinstall -q
 python3 -c "from pypto.pypto_impl import DataType; print('DT_FP8E8M0=', DataType.DT_FP8E8M0)"
 ```
 
-仍失败：排查是否混用多个 pypto 路径/解释器 — `which python3` + `python3 -c "import pypto; print(pypto.__file__)"`.
+仍失败：排查是否混用多个 pypto 路径/解释器 — `command -v python3` + `python3 -c "import pypto; print(pypto.__file__)"`.
 
 
 ### ModuleNotFoundError: No module named 'pypto'
@@ -193,7 +193,7 @@ python3 softmax.py --run_mode npu
 
 ```bash
 pip show torch | grep Location
-which python3
+command -v python3
 ```
 
 修复：激活正确的 conda 环境。
