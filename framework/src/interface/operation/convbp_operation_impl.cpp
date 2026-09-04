@@ -192,7 +192,7 @@ void BpCheckL0TileTiling(DataType outType, const ConvBpAttrParam& attrParam, con
     int64_t kw = weightTensor.GetShape()[indexW];
     int64_t cout = gradOutputTensor.GetShape(1);
     int64_t cinPerGroup = weightTensor.GetShape(1);
-    int64_t kAlignL1 = ConvAlignB(tileKL1, k0) * kh * kw;
+    int64_t kAlignL1 = ConvAlignB(tileKL1, k0);
     int64_t oriK = ConvAlignB(cout, k0) * kh * kw;
     int64_t batch = gradOutputTensor.GetShape(0);
     int64_t groups = attrParam.groups;
@@ -238,14 +238,19 @@ void BpCheckTileTiling(DataType outType, const Tensor& gradOutputTensor, const T
     int64_t tileML1 = convTile.tileL1Info.tileML1;
     int64_t tileNL1 = convTile.tileL1Info.tileNL1;
     int64_t tileKL1 = convTile.tileL1Info.tileKL1;
-    uint32_t indexW = attrParam.isConv3D ? NCDHW_W_IDX : (attrParam.isConv1D ? NCL_L_IDX : NCHW_W_IDX);
-    int64_t win = inputSize[indexW];
     CheckAlignment(tileNL1, Conv::MKN_N_VALUE, "tileNL1");
     int64_t k0 = Conv::MKN_N_VALUE; // 反向K轴=cout*kh*kw，K0=16
     CheckAlignment(tileKL1, k0, "tileKL1");
+    uint32_t indexW = attrParam.isConv3D ? NCDHW_W_IDX : (attrParam.isConv1D ? NCL_L_IDX : NCHW_W_IDX);
+    uint32_t indexH = attrParam.isConv3D ? NCDHW_H_IDX : NCHW_H_IDX;
+    int64_t win = inputSize[indexW];
+    int64_t kh = attrParam.isConv1D ? 1 : weightTensor.GetShape()[indexH];
+    int64_t kw = weightTensor.GetShape()[indexW];
 
     CHECK(ExternalError::INVALID_VAL, (tileML1 < win) || (tileML1 % win == 0))
         << "tileML1(" << tileML1 << ") should be less than win(" << win << ") or be divisible by win";
+    CHECK(ExternalError::INVALID_VAL, tileKL1 % (k0 * kh * kw) == 0)
+        << "tileKL1(" << tileKL1 << ") should be divisible by Cout0 * Hk * Wk";
 
     BpCheckL0TileTiling(outType, attrParam, weightTensor, gradOutputTensor, inputSize);
 }
