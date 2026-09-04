@@ -124,7 +124,7 @@ def get_pr_diff_via_api(owner: str, repo: str, pr_number: int) -> Optional[str]:
             logger.info("⚠️ API 返回的 diff 内容为空")
             return None
 
-        logger.info("API 成功获取 diff，大小: {len(diff_content)} 字节")
+        logger.info(f"API 成功获取 diff，大小: {len(diff_content)} 字节")
         return diff_content
 
     except urllib.error.HTTPError as e:
@@ -164,7 +164,7 @@ def get_pr_diff_via_git_fetch(
             )
 
             if result.returncode == 0:
-                logger.info("成功从 {remote_name} 获取 PR 分支")
+                logger.info(f"成功从 {remote_name} 获取 PR 分支")
 
                 result = subprocess.run(
                     ['git', 'log', '-1', '--format=%H', local_branch], capture_output=True, text=True, cwd=work_dir
@@ -181,7 +181,7 @@ def get_pr_diff_via_git_fetch(
                     if result.returncode == 0:
                         diff_content = result.stdout
                         if diff_content.strip():
-                            logger.info("git fetch 成功获取 diff，大小: {len(diff_content)} 字节")
+                            logger.info(f"git fetch 成功获取 diff，大小: {len(diff_content)} 字节")
                             return diff_content, local_branch
                 break
             else:
