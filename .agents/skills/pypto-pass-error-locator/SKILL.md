@@ -97,7 +97,7 @@ license: 完整条款见 LICENSE.txt
    - `catch (const std::exception& e)`，打印 `e.what()`
    - `catch (...)`，打印 unknown exception
    - 如有必要，可在 pass 内关键步骤前后增加临时日志，缩小中断位置
-3. 加入临时代码后，重新编译并安装 pypto 包：`python3 build_ci.py --clean --no_isolation && bash build_out/cann-pypto_*.run --full -q --pylocal
+3. 加入临时代码后，重新编译并安装 pypto 包：`python3 build_ci.py --clean --no_isolation && bash build_out/cann-pypto_*.run --full -q --pylocal`
 4. 在同样的日志环境变量配置下重新执行用户复现脚本。
 5. 上述异常捕获和临时日志仅用于定位；定位完成后，将临时诊断代码回退。
 
