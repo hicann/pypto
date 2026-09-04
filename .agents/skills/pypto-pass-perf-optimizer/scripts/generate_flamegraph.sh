@@ -35,10 +35,10 @@ NC='\033[0m' # No Color
 # 参数解析
 TIMEOUT=${1:-300}
 OUTPUT_DIR=${2:-"./flamegraphs"}
-SCRIPT_CMD="${@:3}"
+SCRIPT_CMD=("${@:3}")
 
 # 检查命令参数
-if [ -z "$SCRIPT_CMD" ]; then
+if [ ${#SCRIPT_CMD[@]} -eq 0 ]; then
     echo -e "${RED}错误：未指定要执行的命令${NC}"
     echo ""
     echo "用法: $0 <超时时间(秒)> <输出目录> <命令...>"
@@ -77,7 +77,7 @@ echo -e "${BLUE}火焰图生成配置${NC}"
 echo -e "${BLUE}=========================================${NC}"
 echo -e "  超时时间: ${GREEN}${TIMEOUT}s${NC}"
 echo -e "  输出目录: ${GREEN}${OUTPUT_DIR}${NC}"
-echo -e "  执行命令: ${GREEN}${SCRIPT_CMD}${NC}"
+echo -e "  执行命令: ${GREEN}${SCRIPT_CMD[*]}${NC}"
 echo -e "${BLUE}=========================================${NC}"
 echo ""
 
@@ -85,8 +85,8 @@ echo ""
 echo -e "${YELLOW}[1/3] 开始 perf 采样...${NC}"
 echo ""
 
-bash "$SCRIPT_DIR/run_with_timeout.sh" $TIMEOUT \
-    perf record -F 99 -g -e cycles -o "$PERF_DATA" -- $SCRIPT_CMD
+bash "$SCRIPT_DIR/run_with_timeout.sh" "$TIMEOUT" \
+    perf record -F 99 -g -e cycles -o "$PERF_DATA" -- "${SCRIPT_CMD[@]}"
 
 # 检查 perf 数据是否生成
 if [ ! -f "$PERF_DATA" ]; then
