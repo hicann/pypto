@@ -223,6 +223,7 @@ class BufferParserMixin:
                 valid_shape=tile_type.valid_shape,
                 addr=addr,
                 size=slot_size,
+                span=span,
             )
             tile_vars.append(self.builder.let(f"_tg_{var_name}_tiles_{i}", t, span=span))
         tiles_tuple = self.builder.let(f"_tg_{var_name}_tiles", ir.MakeTuple(tile_vars, span), span=span)

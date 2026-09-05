@@ -128,6 +128,30 @@ def _get_aiv_core_num() -> int:
         return 0
 
 
+def get_memory_limit(arch: str, memory_space: int) -> int:
+    """Query on-chip buffer capacity (bytes) for the target arch via pypto_impl.
+
+    The arch -> platform ini selection and the memory-space mapping live in the
+    C++ binding (GetMemoryLimitForArch), so this side only forwards the
+    pypto_pro-native values.
+
+    Args:
+        arch: Compilation arch ("a5", from PYPTOPRO_JIT_ARCH).
+        memory_space: pypto_pro MemorySpace enum value (e.g. Vec/Mat/Left/
+              Right/Acc) of the buffer to query.
+
+    Returns:
+        Buffer capacity in bytes, or 0 if unavailable.
+    """
+    try:
+        from pypto import pypto_impl
+
+        return pypto_impl.GetMemoryLimitForArch(arch, int(memory_space))
+    except (ImportError, AttributeError, RuntimeError) as e:
+        logger.debug("pypto_impl memory-limit query not available: %s", e)
+        return 0
+
+
 def get_platform_info(force_refresh: bool = False) -> PlatformInfo:
     """Get NPU platform information.
 

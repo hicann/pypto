@@ -1339,11 +1339,6 @@ def _ir_ssbuf_load(*args: Expr, span: Span | None = None) -> Expr:
     return _ir_core.create_op_call(block_ir_op("ssbuf_load"), list(args), {}, span or _span())
 
 
-# ---------------------------------------------------------------------------
-# TileType descriptor and make_tile_expr
-# ---------------------------------------------------------------------------
-
-
 _LAYOUT_TO_BS: dict[TensorLayout, tuple[int, int]] = {
     TensorLayout.ND: (1, 0),
     TensorLayout.DN: (2, 0),
@@ -1610,6 +1605,78 @@ def _validate_tile_addr_alignment(
         )
 
 
+def _get_memory_capacity(target_memory: MemorySpace) -> int:
+    """On-chip buffer capacity (bytes) for ``target_memory``.
+
+    The target platform comes from the pypto_pro compile flow: ``pl.jit``
+    resolves arch (explicit argument, PYPTOPRO_JIT_ARCH, or hardware probe)
+    and exports it via PYPTOPRO_JIT_ARCH before kernel parsing, so reading it
+    here is reliable. The capacity is queried per-target via
+    ``pypto_impl.GetMemoryLimitForArch`` (state-free, no platform-switch
+    staleness), which also owns the memory-space mapping and the arch ->
+    platform ini selection. Returns 0 (caller warns and skips validation)
+    when the capacity cannot be determined, instead of failing the build.
+    """
+    from pypto_pro.runtime.jit import get_current_arch
+    from pypto_pro.runtime.platform import get_memory_limit
+
+    arch = get_current_arch()
+    cap = get_memory_limit(arch, target_memory.value)
+    if cap <= 0:
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "Cannot determine %s capacity for arch %r; skipping tile capacity validation. "
+            "Check that pypto_impl is loaded and the arch maps to an installed platform ini.",
+            target_memory,
+            arch,
+        )
+    # The platform ini reports the software-usable UB size, which may be smaller
+    # than the physical buffer (e.g., ub_size=253952 = 256K - 8K reserved). Tile
+    # address capacity must be checked against the physical buffer size.
+    if target_memory == MemorySpace.Vec and cap == 256 * 1024 - 8 * 1024:
+        cap = 256 * 1024
+    return cap
+
+
+def _validate_tile_addr_capacity(
+    addr: int,
+    size: int,
+    target_memory: MemorySpace,
+    span: "Span | None" = None,
+) -> None:
+    """Validate that addr + size does not exceed the buffer capacity.
+
+    Mirrors SA-0353 in ``tassign_check.hpp`` (``end_addr <= capacity``).
+    Also rejects negative addresses and non-positive sizes, which are
+    nonsensical for on-chip buffer allocation and would silently bypass
+    the capacity check (negative addr wraps to a large uint at runtime).
+    Without this check, an out-of-bounds tile address silently passes
+    compilation and triggers an AICore hardware trap (error 507015) at runtime.
+    """
+    mem_name = str(target_memory).replace("MemorySpace.", "")
+    span_info = f" at {span}" if span else ""
+    if addr < 0:
+        raise ValueError(
+            f"Tile addr {addr} is negative for memory space {mem_name}{span_info}. "
+            f"Address must be a non-negative integer."
+        )
+    if size <= 0:
+        raise ValueError(
+            f"Tile size {size} must be positive for memory space {mem_name}{span_info}."
+        )
+    capacity = _get_memory_capacity(target_memory)
+    if capacity <= 0:
+        return
+    end_addr = addr + size
+    if end_addr > capacity:
+        raise ValueError(
+            f"Tile addr 0x{addr:X} + size {size} (0x{end_addr:X}) exceeds "
+            f"{mem_name} capacity 0x{capacity:X} ({capacity} bytes){span_info}. "
+            f"Use a smaller address so that addr + tile_size <= {capacity}."
+        )
+
+
 _MAKE_TILE_HINT = (
     "A tile occupies a fixed range of its memory space, so it needs an address, "
     "e.g. pl.make_tile(tile_type, addr=0x0); use pl.make_tile_group(type=..., "
@@ -1807,6 +1874,8 @@ def make_tile_expr(
             ) from exc
     if isinstance(addr, int):
         _validate_tile_addr_alignment(addr, target_memory, actual_span)
+        if isinstance(size, int):
+            _validate_tile_addr_capacity(addr, size, target_memory, actual_span)
     global mem_id
     mem_id += 1
     kwargs["memref_addr"] = addr

@@ -355,4 +355,37 @@ void Platform::ReloadMemoryPaths(const std::string& archType)
         PLATFORM_LOGW("Failed to reload memory paths for arch: %s.", archType.c_str());
     }
 }
+
+size_t GetMemoryLimitForArch(const std::string& arch, pypto::ir::MemorySpace space)
+{
+    // Arch -> platform ini. PyPTO Pro only supports A5.
+    static const std::unordered_map<std::string, std::string> archToIni = {
+        {"a5", "950PR_957x"},
+    };
+    const auto iniIt = archToIni.find(arch);
+    if (iniIt == archToIni.end()) {
+        return 0;
+    }
+    // MemorySpace -> MemoryType + ini key, next to the C++ enum it mirrors.
+    static const std::unordered_map<pypto::ir::MemorySpace, std::string> spaceKeys = {
+        {pypto::ir::MemorySpace::Vec, ubSize},   {pypto::ir::MemorySpace::Mat, l1Size},
+        {pypto::ir::MemorySpace::Left, l0aSize}, {pypto::ir::MemorySpace::Right, l0bSize},
+        {pypto::ir::MemorySpace::Acc, l0cSize},
+    };
+    const auto keyIt = spaceKeys.find(space);
+    if (keyIt == spaceKeys.end()) {
+        return 0;
+    }
+    size_t memoryLimit = 0;
+    try {
+        INIParser parser(iniIt->second);
+        if (!parser.GetSizeVal(aiCoreSpec, keyIt->second, memoryLimit)) {
+            return 0;
+        }
+    } catch (const std::exception& e) {
+        PLATFORM_LOGW("GetMemoryLimitForArch(%s) failed: %s.", arch.c_str(), e.what());
+        return 0;
+    }
+    return memoryLimit;
+}
 } // namespace npu::tile_fwk

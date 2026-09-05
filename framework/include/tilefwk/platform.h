@@ -24,6 +24,7 @@
 #include <set>
 #include <memory>
 #include <unordered_map>
+#include "ir/memory_space.h"
 #include "data_type.h"
 #include "pypto_fwk_log.h"
 #include "cann_host_runtime.h"
@@ -591,4 +592,14 @@ public:
         return ss.str();
     }
 };
+
+// State-free per-arch buffer capacity query (bytes). Reads the platform ini
+// shipped with the package for ``arch`` ("a5"), bypassing the
+// process-wide Platform singleton, so the value always matches the requested
+// target. The MemorySpace -> MemoryType mapping and the arch -> platform ini
+// selection live here (next to the C++ MemoryType enum they mirror), so
+// Python callers pass their own native enum value without duplicating it.
+// Returns 0 when the arch or memory space is not recognized / the ini cannot
+// be found or parsed.
+size_t GetMemoryLimitForArch(const std::string& arch, pypto::ir::MemorySpace space);
 } // namespace npu::tile_fwk
