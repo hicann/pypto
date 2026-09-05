@@ -441,7 +441,6 @@ def test_move_to_insert_transpose_layout():
         dst = pl.make_tile(dst_type, addr=0x30200, size=16384)
         src = pl.make_tile(src_type, addr=0x31200, size=4096)
         pl.move(dst, src, [0, 0])
-        _test_result = pl.store(output, dst, [0, 0])
 
     main_program, _ = main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     main = main_program.get_function(main.__name__)

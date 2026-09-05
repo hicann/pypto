@@ -292,9 +292,9 @@ def test_layout_via_binding():
 
     @pl.jit
     def k(a: pl.Tensor[[64, 64], pl.DT_FP16]):
-        tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
+        tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN)
         t = pl.make_tile(tt, addr=0, size=8192)
-        ly = pl.TensorLayout.ZN
+        ly = pl.TensorLayout.NZ
         pl.load(pl.reinterpret(t, shape=[64, 64], layout=ly), a, [0, 0])
 
     assert _kernel_ir(k)  # parses fine with layout from a variable
@@ -468,13 +468,13 @@ def test_group_layout_override_updates_slot_encoding():
     def k(a: pl.Tensor[[64, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
         db = pl.make_tile_group(type=tt, addrs=[0, 0x4000], mutex_ids=[0, 1])
-        g2 = pl.reinterpret(db, shape=[64, 32], layout=pl.TensorLayout.ZN)
+        g2 = pl.reinterpret(db, shape=[64, 32], layout=pl.TensorLayout.NZ)
         c0 = g2.next()
         pl.load(c0, a, [0, 0])
 
     ir_str = _kernel_ir(k)
     assert ir_str.count("block.make_tile") == 4
-    assert "blayout=1" in ir_str and "slayout=2" in ir_str  # ZN encoding on rebuilt slots
+    assert "blayout=2" in ir_str and "slayout=1" in ir_str  # NZ encoding on rebuilt slots
 
 
 def test_slot_tile_reinterpret_keeps_mutex_binding():

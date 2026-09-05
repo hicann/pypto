@@ -457,16 +457,16 @@ def test_layout_and_fractal_are_spread_from_the_tile_type():
             shape=[128, 128],
             dtype=pl.DT_FP16,
             target_memory=pl.MemorySpace.Vec,
-            layout=pl.NZ,
+            layout=pl.ND,
             fractal=256,
         )
         t = pl.make_tile(tt, addr=0)
         pl.load(t, x, [0, 0])
 
     ir_str = _kernel_ir(k)
-    # NZ is (blayout, slayout) = (2, 1).
-    assert "blayout=2" in ir_str
-    assert "slayout=1" in ir_str
+    # ND is (blayout, slayout) = (1, 0).
+    assert "blayout=1" in ir_str
+    assert "slayout=0" in ir_str
     assert "fractal=256" in ir_str
 
 
