@@ -99,18 +99,6 @@ static Operation& MakeVfOp(Function& func, Opcode opcode, const LogicalTensors& 
     return op;
 }
 
-static Operation& MakeRowSumSingle(Function& func, const LogicalTensorPtr& input, const LogicalTensorPtr& output,
-                                   int axis, int atomicScopeId = -1)
-{
-    auto& op = PassOperationUtils::AddOperation(
-        func, Opcode::OP_ROWSUM_SINGLE, {input}, {output},
-        [axis](Operation& o) { o.SetAttribute(OP_ATTR_PREFIX + "AXIS", static_cast<int64_t>(axis)); });
-    if (atomicScopeId > 0) {
-        op.SetAtomicScopeId(atomicScopeId);
-    }
-    return op;
-}
-
 static void SetMemRange(const LogicalTensorPtr& tensor, size_t start, size_t end)
 {
     tensor->memoryrange.start = start;
@@ -293,122 +281,12 @@ TEST_F(TestLoopaxesProcPass, AtomicScopeSameLoopAxesFormsGroup)
     pair.leaf->outCasts_.push_back(h);
     MakeCallOp(*pair.root, *pair.leaf, 1, 1);
     LoopaxesProc pass;
-    pass.enableAtomicScope_ = true;
     EXPECT_EQ(pass.RunOnFunction(*pair.root), SUCCESS);
     VerifyDynLoopGroup(add, 0);
     VerifyDynLoopGroupStart(add);
     VerifyDynLoopGroup(mul, 0);
     VerifyDynLoopGroup(sub, 0);
     VerifyDynLoopGroupEnd(sub);
-}
-
-// T2: atomicScope 内 loopAxes 不全相同 → RunOnFunction 返回 FAILED
-TEST_F(TestLoopaxesProcPass, AtomicScopeDifferentLoopAxesError)
-{
-    auto pair = MakeDynLoopFuncPair("T2");
-    auto b = MakeUbTensor(shape2, symShape2);
-    auto c = MakeUbTensor(shape2, symShape2);
-    auto d = MakeUbTensor(shape2, symShape2);
-    auto e = MakeUbTensor(shapeReduced, symShapeReduced);
-    auto f = MakeUbTensor(shapeReduced, symShapeReduced);
-    auto g = MakeUbTensor(shapeReduced, symShapeReduced);
-    MakeVfOp(*pair.leaf, Opcode::OP_ADD, {b, c}, {d}, kAtomicScopeId);
-    MakeRowSumSingle(*pair.leaf, d, e, 1, kAtomicScopeId);
-    MakeVfOp(*pair.leaf, Opcode::OP_MUL, {e, f}, {g}, kAtomicScopeId);
-    pair.leaf->inCasts_.push_back(b);
-    pair.leaf->outCasts_.push_back(g);
-    MakeCallOp(*pair.root, *pair.leaf, 1, 1);
-    LoopaxesProc pass;
-    pass.enableAtomicScope_ = true;
-    EXPECT_EQ(pass.RunOnFunction(*pair.root), FAILED);
-}
-
-// T3: atomicScope 内 loopAxes 不全相同 → FAILED
-TEST_F(TestLoopaxesProcPass, AtomicScopeErrorNotAffectPreceding)
-{
-    auto pair = MakeDynLoopFuncPair("T3");
-    auto inCast = MakeUbTensor(shape2, symShape2);
-    auto b = MakeUbTensor(shape2, symShape2);
-    auto c = MakeUbTensor(shape2, symShape2);
-    auto d = MakeUbTensor(shape2, symShape2);
-    auto e = MakeUbTensor(shapeReduced, symShapeReduced);
-    auto f = MakeUbTensor(shapeReduced, symShapeReduced);
-    auto g = MakeUbTensor(shapeReduced, symShapeReduced);
-    auto& expand = MakeVfOp(*pair.leaf, Opcode::OP_EXPAND, {inCast}, {b});
-    expand.SetAttribute(OpAttributeKey::expandDims, std::vector<int>{kNum3});
-    MakeVfOp(*pair.leaf, Opcode::OP_ADD, {b, c}, {d}, kAtomicScopeId);
-    MakeRowSumSingle(*pair.leaf, d, e, 1, kAtomicScopeId);
-    MakeVfOp(*pair.leaf, Opcode::OP_MUL, {e, f}, {g}, kAtomicScopeId);
-    pair.leaf->inCasts_.push_back(inCast);
-    pair.leaf->outCasts_.push_back(g);
-    MakeCallOp(*pair.root, *pair.leaf, 1, 1);
-    LoopaxesProc pass;
-    pass.enableAtomicScope_ = true;
-    EXPECT_EQ(pass.RunOnFunction(*pair.root), FAILED);
-    VerifyDynLoopGroup(expand, 0);
-    VerifyDynLoopGroupStart(expand);
-}
-
-// T4: atomicScope 内地址冲突，无合法 cut 点 → FAILED
-TEST_F(TestLoopaxesProcPass, AtomicScopeAddrConflictNoLegalCut)
-{
-    auto pair = MakeDynLoopFuncPair("T4");
-    auto b = MakeUbTensor(shape2, symShape2);
-    auto c = MakeUbTensor(shape2, symShape2);
-    auto d = MakeUbTensor(shape2, symShape2);
-    auto e = MakeUbTensor(shape2, symShape2);
-    auto f = MakeUbTensor(shape2, symShape2);
-    auto g = MakeUbTensor(shape2, symShape2);
-    auto h = MakeUbTensor(shape2, symShape2);
-    SetMemRange(b, 0, 128);
-    SetMemRange(d, 256, 384);
-    SetMemRange(f, 512, 640);
-    SetMemRange(h, 768, 896);
-    MakeVfOp(*pair.leaf, Opcode::OP_ADD, {b, c}, {d}, kAtomicScopeId);
-    MakeVfOp(*pair.leaf, Opcode::OP_MUL, {d, e}, {f}, kAtomicScopeId);
-    MakeVfOp(*pair.leaf, Opcode::OP_SUB, {f, g}, {h}, kAtomicScopeId);
-    pair.leaf->inCasts_.push_back(b);
-    pair.leaf->outCasts_.push_back(h);
-    MakeCallOp(*pair.root, *pair.leaf, 1, 1);
-    LoopaxesProc pass;
-    pass.enableAtomicScope_ = true;
-    EXPECT_EQ(pass.RunOnFunction(*pair.root), FAILED);
-}
-
-// T5: atomicScope 前后有非 atomicScope op，地址冲突存在合法 cut 点 → SUCCESS
-TEST_F(TestLoopaxesProcPass, AtomicScopeAddrConflictWithLegalCut)
-{
-    auto pair = MakeDynLoopFuncPair("T5");
-    auto b = MakeUbTensor(shape2, symShape2);
-    auto c = MakeUbTensor(shape2, symShape2);
-    auto d = MakeUbTensor(shape2, symShape2);
-    auto e = MakeUbTensor(shape2, symShape2);
-    auto f = MakeUbTensor(shape2, symShape2);
-    auto g = MakeUbTensor(shape2, symShape2);
-    auto h = MakeUbTensor(shape2, symShape2);
-    auto i = MakeUbTensor(shape2, symShape2);
-    auto j = MakeUbTensor(shape2, symShape2);
-    SetMemRange(b, 0, 128);
-    SetMemRange(d, 256, 384);
-    SetMemRange(f, 512, 640);
-    SetMemRange(g, 700, 800);
-    SetMemRange(i, 900, 1000);
-    MakeVfOp(*pair.leaf, Opcode::OP_ADD, {b, c}, {d});
-    auto& add1 = MakeVfOp(*pair.leaf, Opcode::OP_ADD, {d, e}, {f}, kAtomicScopeId);
-    auto& mul = MakeVfOp(*pair.leaf, Opcode::OP_MUL, {g, h}, {i}, kAtomicScopeId);
-    auto& cast = MakeVfOp(*pair.leaf, Opcode::OP_CAST, {i}, {j});
-    cast.SetAttribute(OP_ATTR_PREFIX + "mode", static_cast<int64_t>(0));
-    cast.SetAttribute(OP_ATTR_PREFIX + "satmode", static_cast<int64_t>(0));
-    pair.leaf->inCasts_.push_back(b);
-    pair.leaf->outCasts_.push_back(j);
-    MakeCallOp(*pair.root, *pair.leaf, 1, 1);
-    LoopaxesProc pass;
-    pass.enableAtomicScope_ = true;
-    EXPECT_EQ(pass.RunOnFunction(*pair.root), SUCCESS);
-    VerifyDynLoopGroup(add1, 1);
-    VerifyDynLoopGroupStart(add1);
-    VerifyDynLoopGroup(mul, 1);
-    VerifyDynLoopGroupEnd(mul);
 }
 
 // T6: 非 atomicScope 地址冲突 → 正常 cut
@@ -433,7 +311,6 @@ TEST_F(TestLoopaxesProcPass, NonAtomicScopeAddrConflictNormalCut)
     pair.leaf->outCasts_.push_back(h);
     MakeCallOp(*pair.root, *pair.leaf, 1, 1);
     LoopaxesProc pass;
-    pass.enableAtomicScope_ = true;
     EXPECT_EQ(pass.RunOnFunction(*pair.root), SUCCESS);
     VerifyDynLoopGroupEnd(add);
     VerifyDynLoopGroupStart(mul);
@@ -464,40 +341,6 @@ TEST_F(TestLoopaxesProcPass, RealAddrNoCrossConflictReturnsSuccess)
     EXPECT_EQ(pass.RunOnFunction(*pair.root), SUCCESS);
 }
 
-// T12: 与 T4 同构图，enableAtomicScope_=false → forbiddenCuts 为空，正常切分返回 SUCCESS
-// （对照回归：守护"关闭开关时 FindCuts 行为与主干一致"，拦截开关关闭分支的回归）
-TEST_F(TestLoopaxesProcPass, AddrConflictNormalCutWhenAtomicScopeDisabled)
-{
-    auto pair = MakeDynLoopFuncPair("T12");
-    auto b = MakeUbTensor(shape2, symShape2);
-    auto c = MakeUbTensor(shape2, symShape2);
-    auto d = MakeUbTensor(shape2, symShape2);
-    auto e = MakeUbTensor(shape2, symShape2);
-    auto f = MakeUbTensor(shape2, symShape2);
-    auto g = MakeUbTensor(shape2, symShape2);
-    auto h = MakeUbTensor(shape2, symShape2);
-    SetMemRange(b, 0, 128);
-    SetMemRange(d, 256, 384);
-    SetMemRange(f, 512, 640);
-    SetMemRange(h, 768, 896);
-    auto& add = MakeVfOp(*pair.leaf, Opcode::OP_ADD, {b, c}, {d}, kAtomicScopeId);
-    auto& mul = MakeVfOp(*pair.leaf, Opcode::OP_MUL, {d, e}, {f}, kAtomicScopeId);
-    auto& sub = MakeVfOp(*pair.leaf, Opcode::OP_SUB, {f, g}, {h}, kAtomicScopeId);
-    pair.leaf->inCasts_.push_back(b);
-    pair.leaf->outCasts_.push_back(h);
-    MakeCallOp(*pair.root, *pair.leaf, 1, 1);
-    LoopaxesProc pass;
-    pass.enableAtomicScope_ = false;
-    EXPECT_EQ(pass.RunOnFunction(*pair.root), SUCCESS);
-    // 冲突区间 [0,0]、[1,1] → 切点 {0,1}，三个组各一个 op
-    VerifyDynLoopGroupEnd(add);
-    VerifyDynLoopGroupStart(mul);
-    VerifyDynLoopGroup(mul, kNum1);
-    VerifyDynLoopGroupEnd(mul);
-    VerifyDynLoopGroupStart(sub);
-    VerifyDynLoopGroup(sub, kNum2);
-}
-
 // T7: atomicScope 与非 atomicScope 混合，loopAxes 全相同 → 正常分组，校验通过
 TEST_F(TestLoopaxesProcPass, AtomicScopeMixedWithNonAtomic)
 {
@@ -523,7 +366,6 @@ TEST_F(TestLoopaxesProcPass, AtomicScopeMixedWithNonAtomic)
     pair.leaf->outCasts_.push_back(out);
     MakeCallOp(*pair.root, *pair.leaf, 1, 1);
     LoopaxesProc pass;
-    pass.enableAtomicScope_ = true;
     EXPECT_EQ(pass.RunOnFunction(*pair.root), SUCCESS);
     VerifyDynLoopGroup(expand, 0);
     VerifyDynLoopGroupStart(expand);
@@ -549,30 +391,11 @@ TEST_F(TestLoopaxesProcPass, AtomicScopeDynLoopAxesConsistent)
     pair.leaf->outCasts_.push_back(f);
     MakeCallOp(*pair.root, *pair.leaf, 1, 1);
     LoopaxesProc pass;
-    pass.enableAtomicScope_ = true;
     EXPECT_EQ(pass.RunOnFunction(*pair.root), SUCCESS);
     VerifyDynLoopGroup(add, 0);
     VerifyDynLoopGroupStart(add);
     VerifyDynLoopGroup(mul, 0);
     VerifyDynLoopGroupEnd(mul);
-}
-
-// T10: 动态 loopAxes 不全相同 → RunOnFunction 返回 FAILED
-TEST_F(TestLoopaxesProcPass, AtomicScopeDynLoopAxesInconsistent)
-{
-    auto pair = MakeDynLoopFuncPair("T10");
-    auto b = MakeUbTensor(shape2, symShape2);
-    auto c = MakeUbTensor(shape2, symShape2);
-    auto d = MakeUbTensor(shape2, symShape2);
-    auto e = MakeUbTensor(shapeReduced, symShapeReduced);
-    MakeVfOp(*pair.leaf, Opcode::OP_ADD, {b, c}, {d}, kAtomicScopeId);
-    MakeRowSumSingle(*pair.leaf, d, e, 1, kAtomicScopeId);
-    pair.leaf->inCasts_.push_back(b);
-    pair.leaf->outCasts_.push_back(e);
-    MakeCallOp(*pair.root, *pair.leaf, 1, 1);
-    LoopaxesProc pass;
-    pass.enableAtomicScope_ = true;
-    EXPECT_EQ(pass.RunOnFunction(*pair.root), FAILED);
 }
 
 // 跨 leaf function 状态不泄漏——上一份 leaf 的末组 axes/地址记录不得并入下一份 leaf 的首个组

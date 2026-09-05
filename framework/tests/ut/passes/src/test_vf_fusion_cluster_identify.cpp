@@ -114,6 +114,7 @@ std::shared_ptr<Function> CreateRootFunction(const std::string& name)
     auto rootFunc = std::make_shared<Function>(Program::GetInstance(), name, name, nullptr);
     rootFunc->rootFunc_ = rootFunc.get();
     rootFunc->SetGraphType(GraphType::BLOCK_GRAPH);
+    rootFunc->paramConfigs_.oooSchedMode = "HLF";
     return rootFunc;
 }
 
@@ -783,6 +784,27 @@ TEST_F(VFFusionClusterIdentifyTest, DoesNothingWhenVfDisabled)
     config::SetPassGlobalConfig(KEY_ENABLE_VF, false);
     auto rootFunc = CreateRootFunction("TestVFFusionDisabledRoot");
     auto leafFunc = CreateLeafFunction(*rootFunc, "TestVFFusionDisabledLeaf");
+    ComputationalGraphBuilder graph(leafFunc.get());
+    ASSERT_TRUE(graph.AddTensors(DataType::DT_FP32, {16, 16}, {"t0", "t1", "t2"}));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_EXP, {"t0"}, {"t1"}, "Exp"));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_SQRT, {"t1"}, {"t2"}, "Sqrt"));
+    auto* exp = graph.GetOp("Exp");
+    auto* sqrt = graph.GetOp("Sqrt");
+    ASSERT_NE(exp, nullptr);
+    ASSERT_NE(sqrt, nullptr);
+
+    VFFusionClusterIdentify pass;
+    EXPECT_EQ(pass.RunOnFunction(*rootFunc), SUCCESS);
+
+    EXPECT_EQ(exp->GetAtomicScopeId(), -1);
+    EXPECT_EQ(sqrt->GetAtomicScopeId(), -1);
+}
+
+TEST_F(VFFusionClusterIdentifyTest, DoesNothingWhenSchedModeNotHlf)
+{
+    auto rootFunc = CreateRootFunction("TestVFFusionNotHlfRoot");
+    rootFunc->paramConfigs_.oooSchedMode = "";
+    auto leafFunc = CreateLeafFunction(*rootFunc, "TestVFFusionNotHlfLeaf");
     ComputationalGraphBuilder graph(leafFunc.get());
     ASSERT_TRUE(graph.AddTensors(DataType::DT_FP32, {16, 16}, {"t0", "t1", "t2"}));
     ASSERT_TRUE(graph.AddOp(Opcode::OP_EXP, {"t0"}, {"t1"}, "Exp"));

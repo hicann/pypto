@@ -114,6 +114,7 @@ std::vector<PassEntry> BuildPvc2OooPassEntries()
         PassName::PRE_GRAPH_PROCESS,
         PassName::INFER_DYN_SHAPE,
         PassName::SUBGRAPH_TO_FUNCTION,
+        PassName::VF_FUSION_CLUSTER_IDENTIFY,
         PassName::INFER_PARAM_INDEX,
         PassName::SRC_DST_BUFFER_MERGE,
         PassName::ADD_ALLOC,

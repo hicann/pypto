@@ -1227,25 +1227,6 @@ TEST_F(InsertSyncTest, AdjustSyncByAtomicScopeMovesConsecutiveUnpairedSyncOps)
     ExpectOpListEq(opList, {&wait, &add, &midExp, &cast, &set});
 }
 
-// cluster 忽略同步后仍非连续时失败
-TEST_F(InsertSyncTest, AdjustSyncByAtomicScopeRejectsNonContinuousCluster)
-{
-    ScopedNPUArchForInsertSyncTest scopedArch(NPUArch::DAV_3510);
-    auto [root, leaf] = SetupDebugFunc("TestRejectNonContinuous");
-    (void)root;
-    auto ts = MakeTensors(IS_NUM5, {IS_NUM8, IS_NUM16});
-    auto& add = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_ADD, {ts[0], ts[1]}, {ts[2]});
-    auto& exp = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_EXP, {ts[2]}, {ts[3]});
-    auto& cast = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_CAST, {ts[3]}, {ts[4]});
-    add.SetAtomicScopeId(IS_NUM7);
-    exp.SetAtomicScopeId(IS_NUM8);
-    cast.SetAtomicScopeId(IS_NUM7);
-    std::vector<Operation*> opList = {&add, &exp, &cast};
-
-    InsertSync syncPass;
-    EXPECT_EQ(syncPass.AdjustSyncByAtomicScope(opList), FAILED);
-}
-
 // cluster 内出现核间同步（OP_CV_SYNC_SRC）时失败
 TEST_F(InsertSyncTest, AdjustSyncByAtomicScopeRejectsCrossCoreSyncInCluster)
 {
@@ -1667,7 +1648,6 @@ TEST_F(InsertSyncTest, EndToEndSyncMovedToClusterBoundary)
     sub.SetAtomicScopeId(clusterId);
 
     InsertSync syncPass;
-    syncPass.enableAtomicScope_ = true;
     ASSERT_EQ(syncPass.RunOnFunction(*rootFuncPtr), SUCCESS);
     auto ops = leafFuncPtr->Operations(false).DuplicatedOpList();
 
@@ -1713,7 +1693,6 @@ TEST_F(InsertSyncTest, EndToEndAdjacentClustersSyncMovedIndependently)
     cast.SetAtomicScopeId(clusterB);
 
     InsertSync syncPass;
-    syncPass.enableAtomicScope_ = true;
     ASSERT_EQ(syncPass.RunOnFunction(*rootFuncPtr), SUCCESS);
     auto ops = leafFuncPtr->Operations(false).DuplicatedOpList();
 

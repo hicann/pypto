@@ -1660,6 +1660,11 @@ Status VFFusionClusterIdentify::RunOnFunction(Function& function)
         APASS_LOG_DEBUG_F(Elements::Function, "VFFusionClusterIdentify is skipped for ENABLE_VF is false.");
         return SUCCESS;
     }
+    if (function.paramConfigs_.oooSchedMode != "HLF") {
+        APASS_LOG_DEBUG_F(Elements::Function, "VFFusionClusterIdentify is skipped for ooo_sched_mode[%s] is not HLF.",
+                          function.paramConfigs_.oooSchedMode.c_str());
+        return SUCCESS;
+    }
     if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510) {
         APASS_LOG_DEBUG_F(Elements::Function, "VFFusionClusterIdentify is skipped for unsupported architecture.");
         return SUCCESS;

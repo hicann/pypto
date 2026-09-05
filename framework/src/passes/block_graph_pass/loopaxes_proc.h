@@ -74,9 +74,6 @@ private:
     std::map<int, std::vector<std::vector<size_t>>> addrDynRecordMap;
     std::vector<Operation*> sameDynLoopOpGroup;
     std::set<std::pair<int, int>> addrDynConflictIdx;
-
-    // debug 开关：atomicScope 分组校验与禁切保护，默认关闭，置 true 启用
-    bool enableAtomicScope_{false};
 };
 
 } // namespace tile_fwk

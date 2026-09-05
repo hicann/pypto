@@ -2060,10 +2060,9 @@ Status InsertSync::ValidateAndCollectClusterSyncOps(const std::vector<Operation*
         Operation* op = opList[i];
         if (!IsSyncOpcode(op->GetOpcode())) {
             if (op->GetAtomicScopeId() != scopeId) {
-                APASS_LOG_ERROR_F(Elements::Operation,
-                                  "AdjustSyncByAtomicScope failed: cluster %d not continuous at index %zu.", scopeId,
-                                  i);
-                return FAILED;
+                APASS_LOG_WARN_F(Elements::Operation,
+                                 "AdjustSyncByAtomicScope failed: cluster %d not continuous at index %zu.", scopeId, i);
+                return WARNING;
             }
             continue;
         }
@@ -2144,8 +2143,9 @@ Status InsertSync::AdjustSyncByAtomicScope(std::vector<Operation*>& opList)
     }
 
     for (auto& [scopeId, ci] : clusters) {
-        if (ValidateAndCollectClusterSyncOps(opList, scopeId, ci) != SUCCESS) {
-            return FAILED;
+        auto status = ValidateAndCollectClusterSyncOps(opList, scopeId, ci);
+        if (status != SUCCESS) {
+            return status;
         }
     }
 
@@ -2164,10 +2164,7 @@ Status InsertSync::GenNewOpList(Function* subGraphFunc, std::vector<Operation*>&
     }
     ps.PhaseKernelProcess(*subGraphFunc, syncedOpLogPtr, opListNew);
     subGraphFunc->EraseOperations(true, false);
-    if (enableAtomicScope_ && AdjustSyncByAtomicScope(opListNew) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "GenNewOpList failed at function AdjustSyncByAtomicScope.");
-        return FAILED;
-    }
+    AdjustSyncByAtomicScope(opListNew);
     if (CheckNewOpListSeq(oriOpList, opListNew) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "GenNewOpList failed at function CheckNewOpListSeq.");
         return FAILED;

@@ -502,8 +502,6 @@ private:
     void ReorderOpListForClusters(std::vector<Operation*>& opList, const std::map<int, ClusterInfo>& clusters);
 
     bool enableDebug_{false};
-    // debug 开关：atomic scope 后处理，默认关闭，置 true 启用
-    bool enableAtomicScope_{false};
     IRBuilder irBuilder_;
 };
 } // namespace tile_fwk

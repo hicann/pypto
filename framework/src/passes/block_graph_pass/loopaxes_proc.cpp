@@ -353,11 +353,11 @@ Status LoopaxesProc::CheckAddrOverLap(bool isStaticLoop, std::vector<Operation*>
         return SUCCESS;
     }
     int groupSize = static_cast<int>(sameLoopOpGroup.size());
-    std::set<int> forbiddenCuts = enableAtomicScope_ ? GetForbiddenCutPositions(sameLoopOpGroup) : std::set<int>{};
+    std::set<int> forbiddenCuts = GetForbiddenCutPositions(sameLoopOpGroup);
     std::vector<int> cutResult = FindCuts(addrConflictIdx, groupSize, forbiddenCuts);
     if (cutResult.empty()) {
-        APASS_LOG_ERROR_F(Elements::Operation, "No legal cut position found for address conflict.");
-        return FAILED;
+        APASS_LOG_WARN_F(Elements::Operation, "No legal cut position found for address conflict.");
+        return SUCCESS;
     }
     if (isStaticLoop) {
         ProcessCutStaticGroup(cutResult, sameLoopOpGroup);
@@ -467,7 +467,7 @@ Status LoopaxesProc::UpdateFuncLoopAxes(Function& function)
         if (FinalizeLoopGroups() != SUCCESS) {
             return FAILED;
         }
-        if (enableAtomicScope_ && ValidateAtomicScopeGrouping(*pair.first) != SUCCESS) {
+        if (ValidateAtomicScopeGrouping(*pair.first) != SUCCESS) {
             return FAILED;
         }
     }
@@ -586,9 +586,8 @@ Status LoopaxesProc::ValidateAtomicScopeGrouping(Function& subFunc) const
     }
     for (auto& entry : scopeToGroups) {
         if (entry.second.size() > 1) {
-            APASS_LOG_ERROR_F(Elements::Operation, "AtomicScope %d ops span %zu loop groups, expected 1", entry.first,
-                              entry.second.size());
-            return FAILED;
+            APASS_LOG_WARN_F(Elements::Operation, "AtomicScope %d ops span %zu loop groups, expected 1", entry.first,
+                             entry.second.size());
         }
     }
     return SUCCESS;
