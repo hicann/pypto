@@ -46,6 +46,7 @@ struct ExecuteContext {
     uint32_t curLeafTaskParallelIdx{0};
     uint32_t seqNo{0};
     uint32_t profLevel{0};
+    uint32_t aicCoreNum{0};
     struct CachedDevTask {
         uint32_t seqNo{0};
         __gm__ DynFuncHeader* header{nullptr};
