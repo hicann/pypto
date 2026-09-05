@@ -95,7 +95,7 @@ static void BuildTensorWorkspaceFromDescriptor(WorkspaceDesc& desc, uint32_t sti
     desc.maxRootTotalExclusiveOutcastMem = maxExclusive;
     desc.devTaskBoundaryOutcastNum = desc.totalExclusiveOutcastSlot * SLOTS_NEED_ALLOC_SIZE +
                                      desc.totalAssembleOutcastSlot * SLOTS_NEED_ALLOC_SIZE;
-    desc.devTaskInnerTemporalOutcastNum = desc.totalAssembleOutcastSlot * stitchDepthK;
+    desc.devTaskInnerTemporalOutcastNum = desc.totalAssembleOutcastSlot * stitchDepthK * SLOTS_NEED_ALLOC_SIZE;
 }
 
 static uint64_t WorkspaceTotalFromDesc(const WorkspaceDesc& desc, uint32_t parallelism, uint64_t aicoreSpilled,
@@ -178,7 +178,8 @@ static void ComputeTensorBudgetLinearCoeffs(const WorkspaceDesc& desc, uint64_t&
     const uint64_t boundaryFixed = desc.totalExclusiveOutcastSlot * SLOTS_NEED_ALLOC_SIZE +
                                    desc.totalAssembleOutcastSlot * SLOTS_NEED_ALLOC_SIZE;
     c0 = desc.maxStaticOutcastMem * boundaryFixed;
-    c1 = maxAlignedInner + maxAlignedExclusive + desc.maxStaticOutcastMem * desc.totalAssembleOutcastSlot;
+    c1 = maxAlignedInner + maxAlignedExclusive +
+         desc.maxStaticOutcastMem * desc.totalAssembleOutcastSlot * SLOTS_NEED_ALLOC_SIZE;
 }
 
 // Loose upper bound for binary-search range only (not the final k_eff).
@@ -360,7 +361,8 @@ PreciseWorkspaceLayout CalculatePreciseWorkspaceLayout(const WorkspaceDesc& desc
 
     const uint64_t rootInnerBytes = layout.rootInnerUnitBytes * layout.rootInnerDepth;
     const uint64_t exclusiveBytes = layout.exclusiveUnitBytes * layout.exclusiveOutcastDepth;
-    const uint64_t innerTemporalSlots = layout.assembleSlotsPerDepth * layout.innerTemporalOutcastDepth;
+    const uint64_t innerTemporalSlots = layout.assembleSlotsPerDepth * layout.innerTemporalOutcastDepth *
+                                        SLOTS_NEED_ALLOC_SIZE;
     const uint64_t slottedBytes = (layout.fixedBoundarySlots + innerTemporalSlots) * desc.maxStaticOutcastMem;
     const uint64_t tensorRawPerParallel = rootInnerBytes + exclusiveBytes + slottedBytes;
     const uint64_t tensorTotal = AlignUp(tensorRawPerParallel, kAlignment32K) * runtimeCfg.parallelism;
@@ -427,7 +429,8 @@ StitchDepthConfig ResolveStitchDepthConfig(WorkspaceDesc& desc, const RuntimeWor
         desc.maxRootInnerSpilledMem = layout.rootInnerUnitBytes * layout.rootInnerDepth;
         desc.maxRootTotalExclusiveOutcastMem = layout.exclusiveUnitBytes * layout.exclusiveOutcastDepth;
         desc.devTaskBoundaryOutcastNum = layout.fixedBoundarySlots;
-        desc.devTaskInnerTemporalOutcastNum = layout.assembleSlotsPerDepth * layout.innerTemporalOutcastDepth;
+        desc.devTaskInnerTemporalOutcastNum = layout.assembleSlotsPerDepth * layout.innerTemporalOutcastDepth *
+                                              SLOTS_NEED_ALLOC_SIZE;
         return config;
     }
 

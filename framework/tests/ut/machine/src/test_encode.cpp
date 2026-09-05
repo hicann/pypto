@@ -457,7 +457,7 @@ TEST_F(TestDevEncode, test_memory_driven_runtime_outcast_cache_depth)
     EXPECT_GE(totalOutcastSlots, static_cast<uint64_t>(std::max(outcastDepth, 2u)));
     EXPECT_GT(devProg->memBudget.tensor.devTaskBoundaryOutcastNum, 0u);
     EXPECT_LE(devProg->memBudget.tensor.devTaskInnerTemporalOutcastNum,
-              devProg->memBudget.tensor.slottableOutcastSlotSize * kEff);
+              devProg->memBudget.tensor.slottableOutcastSlotSize * kEff * SLOTS_NEED_ALLOC_SIZE);
     EXPECT_EQ(devProg->controlFlowCache.runtimeBackup.workspace.tensorAllocators[0].slottedOutcastsBlockList.size(),
               devProg->GetCtrlFlowCacheSlottedOutcastBlockCount(devProg->slotSize));
 }
@@ -713,7 +713,8 @@ TEST_F(TestDevEncode, test_memory_driven_ctrlflow_backup_decoupled_from_stitch_n
 
     const uint64_t alignedBackupCount = requiredSlotBlocks;
     EXPECT_GE(alignedBackupCount, requiredSlotBlocks);
-    EXPECT_EQ(alignedBackupCount, desc.totalAssembleOutcastSlot * depth.kEff + desc.devTaskBoundaryOutcastNum);
+    EXPECT_EQ(alignedBackupCount,
+              desc.totalAssembleOutcastSlot * depth.kEff * SLOTS_NEED_ALLOC_SIZE + desc.devTaskBoundaryOutcastNum);
 }
 
 TEST_F(TestDevEncode, test_derive_k_eff_matches_brute_force)
