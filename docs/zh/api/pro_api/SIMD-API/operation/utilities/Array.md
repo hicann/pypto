@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-在TilingData类中声明定长同构数组字段。元素类型限定为`int`、`float`或`bool`，分别映射为IR类型`INDEX`、`FP32`、`BOOL`。
+在TilingData类中声明定长同构数组字段。元素类型限定为int、float或bool，分别映射为IR类型INDEX、DT_FP32、BOOL。
 
-数组字段在IR中表示为包含N个标量元素的嵌套Tuple。例如`offsets: int[4]`对应一个包含4个`INDEX`元素的Tuple字段。
+数组字段在IR中表示为包含N个标量元素的嵌套Tuple。例如offsets: int[4]对应一个包含4个INDEX元素的Tuple字段。
 
 ## 函数原型
 
@@ -26,25 +26,18 @@ float[N]   # N 个 FP32 元素
 bool[N]    # N 个 BOOL 元素
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| 元素类型 | 输入 | 仅限`int`、`float`、`bool` |
-| `N` | 输入 | 数组长度，正整数 |
+| 元素类型 | 输入 | 支持int、float和bool，分别映射为INDEX、DT_FP32和BOOL，不支持其他元素类型。 |
+| N | 输入 | 数组长度，取值范围为[1, 2048]，必须直接写为整数常量。布尔值或变量不属于合法配置。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| 元素类型 | 输入 | `int` → `DataType.INDEX`<br>`float` → `DataType.FP32`<br>`bool` → `DataType.BOOL`<br>不支持其他元素类型 |
-| `N` | 输入 | 取值范围为1～2048，必须直接写出整数值<br>`N <= 0`、`N > 2048`、布尔值或变量均为非法配置 |
+使用int[N]、float[N]或bool[N]标注时，文件开头须包含from __future__ import annotations，使字段标注以字符串形式保留并由PyPTO解析。
 
-## 补充说明
-
-使用`int[N]`、`float[N]`或`bool[N]`标注时，文件开头须包含`from __future__ import annotations`，使字段标注以字符串形式保留并由PyPTO解析。
-
-运行时使用普通Python序列为数组字段赋值，序列长度必须与声明的`N`一致：
+运行时使用普通Python序列为数组字段赋值，序列长度必须与声明的N一致：
 
 ```python
 tiling = MyTiling(m=64, n=128, offsets=[0, 64, 128, 192])
@@ -58,9 +51,13 @@ offsets = tiling.offsets
 current_offset = offsets[index]
 ```
 
+## 返回值说明
+
+返回指定元素类型和长度的定长数组。
+
 ## 调用示例
 
-以下代码展示TilingData类声明和Kernel内字段访问片段：
+### 在TilingData中声明并访问定长数组
 
 ```python
 from __future__ import annotations
@@ -89,7 +86,7 @@ def kernel(
     ...
 ```
 
-运行时传入tiling实例：
+### 传入TilingData实例
 
 ```python
 tiling = MyTiling(m=64, n=128, offsets=[0, 64, 128, 192])

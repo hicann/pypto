@@ -14,39 +14,44 @@
 
 ## 功能说明
 
-按[`TileType`](../../basic_data_structures/TileType.md)在指定内存空间的精确地址创建一个Tile，是kernel中创建Tile的核心接口。Tile的形状、数据类型、内存空间、排布等“规格”都由`TileType`描述，`make_tile`负责把它落到具体地址。
+按[TileType](../../basic_data_structures/TileType.md)在指定Buffer的地址上创建一个Tile，是Kernel中创建Tile的核心接口。Tile的形状、数据类型、Buffer和排布由TileType描述，make_tile将其绑定到具体地址。
 
-如果需要多块同规格tile做ping-pong双缓冲，并自动管理互斥，使用[`pypto_pro.language.make_tile_group`](make_tile_group.md)。
+如果需要多块同规格Tile构成ping-pong双缓冲并自动管理互斥，使用[pypto_pro.language.make_tile_group](make_tile_group.md)。
 
-下图展示了`TileType`、`addr`和`size`如何共同确定Tile绑定的片上地址范围。
+下图展示了TileType、addr和size如何共同确定Tile绑定的片上地址范围。
 
 ![make_tile创建Tile并绑定片上地址](../../../figures/make_tile_allocation.jpg "make_tile创建Tile并绑定片上地址")
 
 ## 函数原型
 
 ```python
-pypto_pro.language.make_tile(tile_type, *, addr, size=None) -> tile
+pypto_pro.language.make_tile(
+    tile_type: TileType,
+    *,
+    addr: int,
+    size: Optional[int] = None,
+) -> Tile
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `tile_type` | 输入 | `TileType`描述符，定义shape/dtype/内存空间/排布等；唯一的位置参数 |
-| `addr` | 输入 | 必选关键字参数，Tile在该内存空间内绑定的起始地址（字节） |
-| `size` | 输入 | 可选关键字参数，Tile绑定的地址范围大小（字节）；缺省时由`TileType`推导 |
+| tile_type | 输入 | Tile类型描述，[TileType](../../basic_data_structures/TileType.md)类型，是唯一允许的位置参数。其shape、dtype、target_memory和layout共同决定Tile的存储大小和可用接口。 |
+| addr | 输入 | Tile地址，int类型，表示Tile在tile_type所指定Buffer内的字节偏移，必须以关键字形式传入并在编译期确定。UB和L1 Buffer要求32字节对齐，L0A和L0B Buffer要求512字节对齐，L0C Buffer要求64字节对齐。 |
+| size | 输入 | 地址范围大小，int类型，可选，单位为字节。必须为编译期正整数并能覆盖Tile实际占用的存储范围；省略时根据TileType的shape和dtype推导，NZ或ZN排布向上对齐后实际占用更大时，应显式指定足够的空间。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `tile_type` | 输入 | 须为[`pypto_pro.language.TileType`](../../basic_data_structures/TileType.md)，其内存空间决定该tile能用于哪些接口（如Left/Right用于matmul输入，Acc用于matmul输出） |
-| `addr` | 输入 | 内存空间内的字节偏移，必选，且须为编译期常量<br>须以关键字传入（`addr=`）：与`size`同为两个裸整数时顺序无法自证，写反会把Tile放到错误地址<br>对齐要求：`Vec`（UB）和`Mat`（L1）为32字节，`Left`（L0A）和`Right`（L0B）为512字节，`Acc`（L0C）为64字节，`ScaleLeft`/`ScaleRight`为32字节<br>创建MX scale Tile时不能独立规划地址：`ScaleLeft` Tile地址必须等于配对`Left` Tile地址右移4位，`ScaleRight`与`Right`同理 |
-| `size` | 输入 | 与`addr`对应的地址范围大小，单位为字节，须为编译期正整数<br>缺省时按“元素数 × dtype字节数”从`TileType`的shape和dtype推导，例如`[64, 128]`的FP16 Tile为16384字节，与[`make_tile_group`](make_tile_group.md)的每槽大小一致<br>仅当实际占用大于该值时才需显式指定，例如NZ/ZN排布按分形向上对齐后需要预留更多空间 |
+多个Tile的地址范围不得发生非预期重叠；需要有意复用同一块Buffer时，调用方必须自行保证访存时序正确。
+
+## 返回值说明
+
+返回绑定到指定片上地址的Tile。
 
 ## 调用示例
 
-下面是一个完整kernel：用`pypto_pro.language.make_tile`将输入/输出Tile分别绑定到UB的三个地址区间，完成一次element-wise加法。纯vector kernel，同步用`sync_src`/`sync_dst`手写。
+### 在UB中创建Tile并完成逐元素加法
 
 ```python
 import pypto_pro.language as pl
@@ -75,4 +80,4 @@ def make_tile_add_kernel(
         pl.store(out, tile_out, [0, 0])
 ```
 
-> tile规格（shape/dtype/内存空间/排布/尾块）的完整说明见[`pypto_pro.language.TileType`](../../basic_data_structures/TileType.md)。
+Tile的形状、数据类型、Buffer、排布和尾块配置见[pypto_pro.language.TileType](../../basic_data_structures/TileType.md)。

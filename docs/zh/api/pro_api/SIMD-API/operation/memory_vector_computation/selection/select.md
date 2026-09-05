@@ -14,43 +14,42 @@
 
 ## 功能说明
 
-按掩码在两个tile中逐元素选择，掩码为真取lhs，为假取rhs。常与`pypto_pro.language.eq/ne/lt/le/gt/ge`配合使用。
+按掩码逐元素选择数据，掩码为真时取lhs，为假时取rhs。rhs可以是Tile或Scalar。该接口通常与pypto_pro.language.eq、ne、lt、le、gt、ge配合使用。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.select(out, mask, lhs, rhs, tmp)
+pypto_pro.language.select(
+    out: Tile,
+    mask: Tile,
+    lhs: Tile,
+    rhs: Union[Tile, Scalar],
+    tmp: Tile,
+) -> None
 ```
 
-> 5个参数均按函数原型中的顺序以位置参数传入。
-
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 选择结果tile |
-| `mask` | 输入 | 掩码tile（由`eq`/`ne`/`lt`/`le`/`gt`/`ge`产生的bit-packed UINT8） |
-| `lhs` | 输入 | mask为真时取的源tile |
-| `rhs` | 输入 | mask为假时取的源tile或标量 |
-| `tmp` | 输入 | 兼容性临时tile |
+| out | 输出 | 目的操作数，Tile类型，存储空间为UB，形状必须与输入数据Tile一致。Tile-Tile和Tile-Scalar模式均支持8、16、32、64位整型、DT_FP16、DT_BF16和DT_FP32。 |
+| mask | 输入 | 源操作数（掩码），Tile类型，存储空间为UB，数据类型为DT_UINT8，采用按位压缩格式，形状与lhs一致，须由比较接口生成。 |
+| lhs | 输入 | 源操作数（掩码为真时选取的数据），Tile类型，存储空间为UB，数据类型和形状必须与out一致。 |
+| rhs | 输入 | 源操作数（掩码为假时选取的数据），Tile或Scalar类型，也支持可转换为Scalar的Python int或float常量。传入Tile时，存储空间为UB，数据类型和形状必须与out一致；传入Scalar或Python常量时，数据类型必须与out的元素类型兼容。 |
+| tmp | 输入 | 兼容性参数，Tile类型，存储空间为UB。该参数为接口必传参数，当前实现不读取或写入，不要求其数据类型和形状与out一致。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `out` | 输出 | tile-tile模式支持8/16/32/64位整型、FP16、BF16和FP32；tile-scalar模式支持8/16/32/64位整型、FP16和FP32<br>shape须与输入数据Tile一致 |
-| `mask` | 输入 | 数据类型：UINT8（bit-packed掩码）<br>shape：与`lhs`一致<br>须由`pypto_pro.language.eq/ne/lt/le/gt/ge`产生，不能手动构造 |
-| `lhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
-| `rhs` | 输入 | Tile：数据类型和shape与`out`一致；标量：须与`out`元素类型兼容 |
-| `tmp` | 输入 | API必传的Vec Tile兼容性参数；当前实现不读写该参数，不要求与`out`同类型或同shape |
+- out、mask、lhs、tmp以及Tile类型的rhs必须位于UB。out、lhs以及Tile类型的rhs必须采用行主序排布。
+- out、lhs以及Tile类型的rhs必须具有相同的形状、有效形状和数据类型。
 
-## 流水类型
+## 返回值说明
 
-V（向量计算流水）。
+无。
 
 ## 调用示例
 
-下面是一个完整kernel：用`pypto_pro.language.gt`生成bit-packed谓词后，`pypto_pro.language.select`按谓词选择两个FP32 tile中的一个写回GM。掩码为真取`lhs`，为假取`rhs`。纯vector kernel使用`make_tile_group`管理Tile资源，并通过`auto_mutex`完成Tile访问间的同步。
+### 根据比较结果在两个Tile间选择
 
 ```python
 import pypto_pro.language as pl
@@ -84,14 +83,14 @@ def scalar_gt_select_kernel(
         pl.load(tile_a, a, [0, 0])
         pl.load(tile_b, b, [0, 0])
         pl.load(mask_fp16, mask_in, [0, 0])
-        # mask_fp16 > 0 -> bit-packed 谓词 mask_vec（cmp_mode=4 为 gt）
+        # mask_fp16 > 0，生成按位压缩的掩码mask_vec
         pl.gt(mask_vec, mask_fp16, 0.0)
         # 谓词为真取 lhs(=a)，否则取 rhs(=b)
         pl.select(tile_out, mask_vec, tile_a, tile_b, tmp_vec)
         pl.store(out, tile_out, [0, 0])
 ```
 
-实测结果示例如下：
+### 运行结果
 
 <!-- pypto-doc-output:select:start -->
 ```bash

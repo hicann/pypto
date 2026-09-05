@@ -14,37 +14,33 @@
 
 ## 功能说明
 
-融合乘加：`out = lhs * out + rhs`。将`lhs`与`out`逐元素相乘，再加上`rhs`，结果写回`out`。`out`同时作为乘数输入和累加输出。
+融合乘加：out = lhs * out + rhs。将lhs与out逐元素相乘，再加上rhs，结果写回out。out同时作为乘数输入和累加输出。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.fused_mul_add(out, lhs, rhs)
+pypto_pro.language.fused_mul_add(out: Tile, lhs: Tile, rhs: Tile) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输入/输出 | 目标tile，同时作为乘数输入和累加输出 |
-| `lhs` | 输入 | 左操作数tile，与`out`逐元素相乘 |
-| `rhs` | 输入 | 右操作数tile，乘积再加上`rhs`写回`out` |
+| out | 输入/输出 | 目的操作数，Tile类型，存储空间为UB，支持DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP16、DT_BF16和DT_FP32，形状和有效形状必须与lhs、rhs一致。运算前作为乘数输入，运算后保存计算结果。 |
+| lhs | 输入 | 源操作数（左操作数），Tile类型，存储空间为UB，数据类型、形状和有效形状必须与out一致。 |
+| rhs | 输入 | 源操作数（右操作数），Tile类型，存储空间为UB，数据类型、形状和有效形状必须与out一致。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `out` | 输入/输出 | 数据类型：b16、b32<br>shape须与`lhs`、`rhs`一致<br>该tile在运算前须已载入有效数据（作为乘数），运算后被覆盖为结果 |
-| `lhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
-| `rhs` | 输入 | 数据类型：与`out`一致<br>shape：与`out`一致 |
+- out、lhs和rhs必须采用行主序排布。
 
-## 流水类型
+## 返回值说明
 
-V（向量计算流水）。
+无。
 
 ## 调用示例
 
-下面是一个完整kernel：载入三个tile，用`pypto_pro.language.fused_mul_add`做`c = a * c + b`融合乘加。vector kernel开`auto_mutex`，同步由`make_tile_group`自动管理。
+### 计算c = a × c + b
 
 ```python
 import pypto_pro.language as pl
@@ -71,7 +67,7 @@ def fused_mul_add_kernel(
         pl.store(c, cur_c, [0, 0])
 ```
 
-实测结果示例如下：
+### 运行结果
 
 <!-- pypto-doc-output:fused_mul_add:start -->
 ```bash

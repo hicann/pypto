@@ -1,4 +1,4 @@
-# phase使用约束（AccPhase / STPhase）
+# AccPhase与STPhase配合使用说明
 
 ## 产品支持情况
 
@@ -14,7 +14,9 @@
 
 ## 功能说明
 
-`matmul` / `matmul_acc` / `matmul_mx` / `matmul_mx_acc`的`phase`参数（`pl.AccPhase`）与`store` / `store_tile` / `move`的`phase`参数（`pl.STPhase`）共同控制Cube（矩阵乘）与（L0C→GM/L0C→UB搬运）之间的**unit_flag硬件握手**。正确使用phase可以省去软件同步、提升流水并行度；使用不当则会导致精度问题或设备卡死。
+`matmul` / `matmul_acc` / `matmul_mx` / `matmul_mx_acc`的`phase`参数（`pl.AccPhase`）与`store` / `store_tile` / `move`的`phase`参数（`pl.STPhase`）共同控制Cube（矩阵乘）与Fixpipe（L0C→GM或L0C→UB搬运）之间的**unit_flag硬件握手**。正确使用phase可以省去软件同步、提升流水并行度；使用不当则会导致精度问题或设备卡死。
+
+本文是AccPhase与[STPhase](../../basic_data_structures/STPhase.md)的配合使用说明，不是独立接口文档。STPhase.md说明枚举本身及各枚举值的语义；本文重点说明两个枚举之间的配对关系、硬件握手机制和典型使用方式。
 
 ## 硬件unit_flag机制
 
@@ -50,8 +52,8 @@
 
 | 配置 | 自动同步 | 同步机制 |
 |---|---|---|
-| 配置了phase |**不自动插入同步** | 靠硬件unit_flag实现Matmul（M流水）与FixPipe之间的同步 |
-| 未配置phase |**自动插入同步** | 框架自动插入M流水与FixPipe流水的软件同步 |
+| 配置了phase |**不自动插入同步** | 靠硬件unit_flag实现Matmul（M流水）与Fixpipe之间的同步 |
+| 未配置phase |**自动插入同步** | 框架自动插入M流水与Fixpipe之间的软件同步 |
 
 ## 使用约束
 
@@ -71,7 +73,7 @@ pl.store(out, ac, [0, 0], phase=pl.STPhase.Final)
 
 **现象**：卡死。
 
-**原因**：`matmul`使用`Partial`只检查unit_flag不会设置unit_flag，unit_flag始终为0。`store`使用`Final`等待unit_flag被设置成1才能读取，但unit_flag永远不会被置1，FixPipe一直等待 → 卡死。
+**原因**：`matmul`使用`Partial`只检查unit_flag不会设置unit_flag，unit_flag始终为0。`store`使用`Final`等待unit_flag被设置成1才能读取，但unit_flag永远不会被置1，Fixpipe一直等待 → 卡死。
 
 ### 错误案例二：store未配置phase导致精度问题
 
@@ -89,10 +91,10 @@ pl.store(out, ac, [0, 0])
 
 **原因**：
 
-- **软件同步角度**：`store`未配置phase，框架会自动插入FixPipe流水同步；但`matmul`配置了phase，不会自动插入M流水同步。两种同步机制不匹配。
-- **硬件unit_flag角度**：`store`未配置phase，不受硬件unit_flag值影响，FixPipe不会等待unit_flag。
+- **软件同步角度**：`store`未配置phase，框架会自动插入Fixpipe同步；但`matmul`配置了phase，不会自动插入M流水同步。两种同步机制不匹配。
+- **硬件unit_flag角度**：`store`未配置phase，不受硬件unit_flag值影响，Fixpipe不会等待unit_flag。
 
-上述两种情况，FixPipe搬运L0C数据都不会严格等待Matmul计算完成，导致读到未完成的数据。
+上述两种情况，Fixpipe搬运L0C数据都不会严格等待Matmul计算完成，导致读到未完成的数据。
 
 ### 错误案例三：循环内store(Final)后matmul卡死
 

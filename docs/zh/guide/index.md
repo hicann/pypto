@@ -5,5 +5,6 @@
 
 introduction
 quick_start/index
-tutorials/tensor/index
+programming_guide/index
 appendix/index
+```

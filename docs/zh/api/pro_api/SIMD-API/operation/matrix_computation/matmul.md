@@ -14,47 +14,48 @@
 
 ## 功能说明
 
-完成一次矩阵乘法`dst_tile = lhs_tile × rhs_tile`，数据通路为L0A(Left) × L0B(Right) → L0C(Acc)。输入矩阵需先搬运到L0A/L0B内存空间（一般经GM → L1 → L0A/L0B两跳），结果写入L0C累加器。
+对lhs_tile和rhs_tile执行矩阵乘法，并将结果写入dst_tile：
 
-当传入可选参数`bias_tile`时，在矩阵乘法后自动融合bias加法：`dst_tile = lhs_tile × rhs_tile + bias_tile`，bias沿M维行广播（shape `[1, N]`广播到`[M, N]`），在fixpipe阶段完成加法。无需额外调用`pl.add`，减少UB往返。
-
-如果要在已有累加结果上继续累加（K维分块的非首块），使用 [`pypto_pro.language.matmul_acc`](matmul_acc.md)。
+```text
+dst_tile = lhs_tile × rhs_tile
+```
 
 ## 函数原型
 
 ```python
-pypto_pro.language.matmul(dst_tile, lhs_tile, rhs_tile, bias_tile=None, *, phase=None)
+pypto_pro.language.matmul(
+    dst_tile: Tile,
+    lhs_tile: Tile,
+    rhs_tile: Tile,
+    bias_tile: Optional[Tile] = None,
+    *,
+    phase: Optional[AccPhase] = None,
+) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst_tile` | 输出 | 只能是Acc/L0C Tile，存放矩阵乘法结果 |
-| `lhs_tile` | 输入 | 只能是L0A/Left Tile，左矩阵 |
-| `rhs_tile` | 输入 | 只能是L0B/Right Tile，右矩阵 |
-| `bias_tile` | 输入 | 可选，Bias Tile，shape为`[1, N]`，沿M维行广播。<br>仅支持作为第4个位置参数传入，不支持`bias_tile=`关键字传参 |
-| `phase` | 输入 | 可选，用于K维分块累加场景 |
+| dst_tile | 输出 | 目的操作数，Tile类型，存储空间为L0C Buffer，形状为[M, N]。数据类型为DT_FP32或DT_INT32，由lhs_tile和rhs_tile的数据类型组合决定。支持通过valid_shape或pypto_pro.language.set_validshape设置尾块的有效形状，有效M、N必须与实际矩阵乘结果范围一致。 |
+| lhs_tile | 输入 | 源操作数（左矩阵），Tile类型，存储空间为L0A Buffer，形状为[M, K]，K必须与rhs_tile的K维一致。支持DT_INT8 × DT_INT8 → DT_INT32；DT_FP16 × DT_FP16、DT_BF16 × DT_BF16、DT_FP32 × DT_FP32、DT_HF8 × DT_HF8 → DT_FP32；DT_FP8E4M3FN和DT_FP8E5M2可任意两两组合，输出为DT_FP32。 |
+| rhs_tile | 输入 | 源操作数（右矩阵），Tile类型，存储空间为L0B Buffer，形状为[K, N]，K必须与lhs_tile的K维一致。数据类型必须与lhs_tile组成上述支持的组合。 |
+| bias_tile | 输入 | 源操作数（可选偏置），Tile类型，存储空间为BiasTable Buffer，形状为[1, N]。偏置沿M维广播，数据类型必须与dst_tile一致。传入本参数时，在Fixpipe阶段融合偏置加法，无需额外调用pypto_pro.language.add。只能作为第四个位置参数传入。 |
+| phase | 输入 | K维分块累加阶段，pypto_pro.language.AccPhase类型，可选。与[pypto_pro.language.STPhase](../../basic_data_structures/STPhase.md)的配合方式见[AccPhase与STPhase配合使用说明](phase.md)。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `dst_tile` | 输出 | 数据类型：FP16、BF16、FP32、INT32（累加器精度通常高于输入，如FP16输入对应FP32累加）<br>shape：`[M, N]`<br>地址配置：<br>• 只能是Acc/L0C内存空间，其他空间报错<br>• `layout=pl.NZ`；FP32/INT32累加器需设`fractal`（FP32默认1024）<br>• 支持通过`valid_shape=[-1, -1]` + `set_validshape`设置尾块有效大小 |
-| `lhs_tile` | 输入 | 数据类型：FP16、BF16、FP32、INT8、HF8<br>shape：`[M, K]`<br>地址配置：<br>• 只能是L0A/Left内存空间，其他空间报错<br>• A3默认`layout=pl.ZZ`；A5默认`layout=pl.NZ` |
-| `rhs_tile` | 输入 | 数据类型：与`lhs_tile`一致<br>shape：`[K, N]`，K维需与`lhs_tile`的K一致<br>地址配置：<br>• 只能是L0B/Right内存空间，其他空间报错<br>• `layout=pl.ZN` |
-| `bias_tile` | 输入 | 可选，传入时执行`dst = lhs @ rhs + bias`，仅支持作为第4个位置参数传入（`matmul(dst, lhs, rhs, bias)`），不支持`bias_tile=`关键字传参<br>数据类型：FP32（必须与累加器dtype一致，硬件要求`TileRes::DType == TileBias::DType`）<br>shape：`[1, N]`，N维需与`rhs_tile`的N一致，沿M维行广播到`[M, N]`<br>地址配置：<br>• 只能是Bias内存空间（`pl.MemorySpace.Bias`），其他空间报错<br>• bias tile无法直接从GM加载，需先load到L1(Mat) 再`move`到Bias，`move`时自动完成dtype转换（如FP16→FP32、BF16→FP32） |
-| `phase` | 输入 | 可选，K维分块累加时控制fixpipe写回GM的unit_flag：<br>• 不传（默认）：单次乘法，无分块累加<br>• `pl.AccPhase.Partial`：中间累加步，表示后续还有K块<br>• `pl.AccPhase.Final`：最终步，表示K累加结束、可写回GM<br>详见 [`matmul_acc`](matmul_acc.md) 的分块累加用法 |
+- 使用bias_tile的matmul会初始化L0C Buffer，只能用于K维分块的首块；后续分块必须使用matmul_acc累加。
+- K维分块时，首块使用matmul初始化L0C Buffer，后续块使用matmul_acc累加。启用phase后，非末块使用pypto_pro.language.AccPhase.Partial，末块使用pypto_pro.language.AccPhase.Final，并与store或store_tile的[pypto_pro.language.STPhase](../../basic_data_structures/STPhase.md)配合使用。
+- DT_FP32或DT_INT32结果进行K维分块累加时，L0C Buffer Tile的fractal应设置为1024，并在计算前后通过pypto_pro.language.system.set_mm_layout_transform开启和关闭L0C Buffer读出方向转换。
+
+## 返回值说明
+
+无。
 
 ## 调用示例
 
 ### 单次matmul（无bias、无K维分块）
-
-完整kernel计算`C[M,N] = A[M,K] @ B[K,N]`，用`make_tile_group` + `auto_mutex`管理L1/L0A/L0B/L0C缓冲。L1暂存用`next()`轮转开ping-pong双缓冲，L0A/L0B/L0C用单mutex_id的group配`current()`。开启`auto_mutex=True`后，相邻搬运与计算间的同步由框架按tile的mutex自动插入，无需手写`sync_src`/`sync_dst`。
-
-下面是K恰好为一个tile（128）的单次matmul：每个`[i, j]`块一次`matmul`直接写回GM，不涉及K维累加，因此不需要`phase` / `fractal`。
-
-> K维分块累加（`phase` + `fractal` + `set_mm_layout_transform`）见 [`pypto_pro.language.matmul_acc`](matmul_acc.md) 的调用示例。
 
 ```python
 import pypto_pro.language as pl
@@ -78,7 +79,7 @@ def matmul_kernel(
     b_l1_db = pl.make_tile_group(
         type=pl.TileType(shape=[K_SIZE_MM, TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
         addrs=0x10000, mutex_ids=[2, 3])
-    # L0A / L0B / Acc 单 tile group（current()）
+    # L0A Buffer、L0B Buffer和L0C Buffer均使用单Tile组（current()）
     a_left = pl.make_tile_group(
         type=pl.TileType(shape=[TILE, K_SIZE_MM], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
         addrs=0x0000, mutex_ids=[4])
@@ -105,9 +106,7 @@ def matmul_kernel(
                 pl.store(c, ac, [i, j])
 ```
 
-### 带bias的matmul（无K维分块）
-
-传入第4个位置参数（`pl.matmul(ac, al, br, bl)`）即可融合bias加法。bias从GM加载到L1(Mat, FP16)，再`move`到L0B(Bias, FP32)，`move`时自动完成FP16→FP32类型转换。
+### 带偏置的matmul（无K维分块）
 
 ```python
 import pypto_pro.language as pl
@@ -162,25 +161,12 @@ def matmul_bias_kernel(
                 pl.load(cur_bias_l1, bias, [0, j])
                 pl.move(al, cur_a)
                 pl.move(br, cur_b)
-                pl.move(bl, cur_bias_l1)             # L1(FP16) → L0B Bias(FP32)，自动类型转换
+                pl.move(bl, cur_bias_l1)             # L1 Buffer的FP16数据搬入BiasTable Buffer并转换为FP32
                 pl.matmul(ac, al, br, bl)             # out = A @ B + bias
                 pl.store(c, ac, [i, j])
 ```
 
-### K维分块累加 + bias（首块matmul(bias) + 后续matmul_acc）
-
-计算`D[M,N] = A[M,K] @ B[K,N] + bias[1,N]`，K=384分为3个tile。首块用带bias的`matmul`覆盖写入`A0@B0+bias`，后续块用 [`matmul_acc`](matmul_acc.md) 累加。
-
-带bias的`matmul`底层硬件将累加器初始化为0后写入结果（`cmatrixInitVal=true`，覆盖而非累加），因此 **只能用于首块**，不能用于中间块或末块。
-
-K分块累加链对正确性的硬性要求：
-
-1. **首块`matmul(bias, phase=Partial)`**：覆盖写入`acc = A0@B0 + bias`，不设unit_flag。
-2. **中间块`matmul_acc(phase=Partial)`**：累加`acc += Ai@Bi`，不设unit_flag。
-3. **末块`matmul_acc(phase=Final)`**：累加`acc += An@Bn`，设unit_flag=1。
-4. **store传`phase=pl.STPhase.Final`**：读unit_flag=1后写回GM。
-5. **L0C累加器设`fractal=1024`**（FP32）。
-6. **cube段用`set_mm_layout_transform(enabled=True)`开启**，段末`enabled=False`关闭。
+### 带偏置的K维分块累加
 
 ```python
 import pypto_pro.language as pl
@@ -246,13 +232,3 @@ def matmul_k_split_bias_kernel(
         pl.store(c, ac, [0, 0], phase=pl.STPhase.Final)
         pl.system.set_mm_layout_transform(enabled=False)
 ```
-
-> **bias tile约束**：
-> - dtype必须为 **FP32**（与累加器一致），否则编译报`No supported bias data type`。
-> - 内存空间必须为`pl.MemorySpace.Bias`，否则codegen报`Invalid MemorySpace value`。
-> - 加载路径为GM → L1(Mat, FP16/BF16) → L0B(Bias, FP32)，`move`时自动完成类型转换。不支持直接从GM load到Bias空间（`load`仅支持Vec/Mat目标）。
-
-> **K维分块约束**：
-> - 带bias的`matmul`底层`cmatrixInitVal=true`（覆盖acc），**只能用于首块**，不能用于中间块或末块。
-> - 首块`matmul(bias, phase=Partial)`后，后续块必须用 [`matmul_acc`](matmul_acc.md) 累加。
-> - `phase`配对规则与不带bias的`matmul` / `matmul_acc`一致，详见 [`phase`](phase.md)。

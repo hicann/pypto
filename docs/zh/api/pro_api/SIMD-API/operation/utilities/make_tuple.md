@@ -14,44 +14,44 @@
 
 ## 功能说明
 
-编译期元组，纯IR不生成C++代码。将多个IR变量按字段名打包，字段访问被常量折叠回原值，零运行时开销。
+创建编译期命名元组，将多个IR变量按字段名聚合。字段访问在编译期解析为对应的原始值，不生成C++结构体，也不产生运行时开销。
 
-与`pypto_pro.language.struct`的区别：`pypto_pro.language.struct`生成真实C++ struct（用于跨pipe传递），`pypto_pro.language.make_tuple`不生成C++ 代码（仅用于IR层面聚合变量）。
+pypto_pro.language.struct会生成C++结构体，可用于跨Pipeline传递数据；pypto_pro.language.make_tuple仅在IR中聚合变量，不生成C++结构体。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.make_tuple(field1=val1, field2=val2, ...)
+pypto_pro.language.make_tuple(**kwargs: Any) -> Any
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `field=value` | 输入 | 字段名和对应的IR表达式（关键字参数） |
+| field=value | 输入 | 命名元组字段，以关键字参数形式传入，至少指定一个字段。字段名必须为合法标识符。字段值支持Kernel内可解析的值表达式，包括Python标量值、Kernel标量表达式、Tensor、Tile、Ptr以及由这些值组成的Python元组，例如(tile0, tile1)。不支持位置参数或通过kwargs展开参数。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `field=value` | 输入 | 至少一个关键字参数<br>字段名须为合法标识符<br>字段值支持Kernel内可解析的值表达式，包括Python标量值、Kernel标量表达式、Tensor、Tile、Ptr以及由这些值组成的Python元组（如`(tile0, tile1)`）<br>不支持位置参数<br>不支持`**kwargs`展开 |
+返回的命名元组对象支持通过字段名访问打包的变量。字段访问在编译期被常量折叠回原值，不产生运行时开销。
 
-## 补充说明
+### 使用场景
 
-返回一个命名元组对象，支持通过字段名访问打包的变量。字段访问在编译期被常量折叠回原值，不产生运行时开销。
+- 函数返回多个值时，可以将多个Tile或变量聚合后返回。
+- 可以将逻辑相关的变量聚合，并通过字段名访问。
+- 可以聚合ping-pong缓冲中的多个Tile，并通过字段名访问。
 
-典型使用场景：
+### 与pypto_pro.language.struct的区别
 
-1. **函数返回多个值**：将多个Tile或变量打包返回，避免使用全局变量
-2. **组织相关变量**：将逻辑上相关的变量分组，提高代码可读性
-3. **双缓冲管理**：将ping/pong缓冲区的多个Tile打包，通过字段名访问
+- 需要跨Pipeline传递数据，例如通过SSBUF通信时，使用pypto_pro.language.struct。
+- 仅需在同一Pipeline内聚合变量时，使用pypto_pro.language.make_tuple。
 
-与`struct`的选择：
+## 返回值说明
 
-- 需要跨pipe传递（如SSBUF通信）→ 使用`struct`
-- 仅在同一pipe内组织变量 → 使用`make_tuple`
+返回包含所有命名字段的命名元组对象。
 
 ## 调用示例
+
+### 创建命名元组并访问字段
 
 ```python
 import pypto_pro.language as pl

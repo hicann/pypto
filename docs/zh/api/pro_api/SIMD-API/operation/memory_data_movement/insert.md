@@ -14,41 +14,33 @@
 
 ## 功能说明
 
-把一块较小的源Tile，按`offset=[row, col]`指定的行列位置，嵌入到一块较大的目标Tile中。对应pto-isa的TINSERT指令，用于**UB→L1**的搬运，典型场景是把UB上的向量计算结果按NZ格式拼入L1缓冲区，供后续Cube计算使用。
-
-源Tile的左上角对齐到目标Tile的`offset`位置。`offset[0]`为目标Tile的行偏移`row`，`offset[1]`为列偏移`col`。
+把一块较小的源Tile，按offset=[row, col]指定的行列位置嵌入到一块较大的目标Tile中。建议使用[pypto_pro.language.move](move.md)接口代替insert接口。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.insert(dst_tile, src_tile, offset)
+pypto_pro.language.insert(dst_tile: Tile, src_tile: Tile, offset: List[int]) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst_tile` | 输出 | 目标Tile，`target_memory`为`pl.MemorySpace.Mat`（L1），通常采用NZ格式 |
-| `src_tile` | 输入 | 源Tile，`target_memory`为`pl.MemorySpace.Vec`（UB） |
-| `offset` | 输入 | 长度为2的序列，元素为整型常量或运行时整型标量表达式 |
+| dst_tile | 输出 | 目的操作数，Tile类型，支持DT_FP4E2M1、DT_FP4E1M2、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_INT8、DT_INT32、DT_FP16、DT_BF16和DT_FP32。 |
+| src_tile | 输入 | 源操作数，Tile类型，支持的数据类型与dst_tile一致。 |
+| offset | 输入 | 位置偏移，List[int]类型，长度必须为2，格式为[row, col]。源Tile的左上角对齐到目标Tile的offset位置；offset[0]为目标Tile的行偏移row，offset[1]为列偏移col。row和col必须是非负整数或运行时整数表达式，且源Tile的有效区域必须完整落入目标Tile。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `dst_tile` | 输出 | 数据类型：b8、b16、b32、b64<br>`target_memory`须为`pl.MemorySpace.Mat`（L1）；首地址必须32字节对齐 |
-| `src_tile` | 输入 | 数据类型：b8、b16、b32、b64<br>`target_memory`须为`pl.MemorySpace.Vec`（UB） |
-| `offset` | 输入 | 格式为`[row, col]`；须满足`row + src行数 ≤ dst行数`，`col + src列数 ≤ dst列数`，否则越界 |
+无。
 
-## 流水类型
+## 返回值说明
 
-MTE3（UB → L1的搬运流水）。
+无。
 
 ## 调用示例
 
-下面是一个完整Kernel：Vector侧每个subcore处理32行，算出`x+y`后用`pypto_pro.language.move`做ND→NZ转换，再用`pypto_pro.language.insert`按二维offset拼入一块64×64的L1 NZ缓冲`v1_mat`；Cube侧把`v1_mat`当左矩阵和`rhs`做matmul。`insert`在此承担UB→L1的NZ拼接。
-
-注意：`insert`的源Tile必须是NZ格式（`layout=pl.NZ`），需先经`pypto_pro.language.move`把ND结果转成NZ。示例使用`make_tile_group`管理Tile资源，并通过`auto_mutex`完成组内流水同步；Vector与Cube之间仍显式使用`set_cross_core`/`wait_cross_core`，以`INTRA_BLOCK`模式完成AIV→AIC的段间同步。
+### 将UB中的计算结果拼接到L1 Buffer
 
 ```python
 import pypto_pro.language as pl
@@ -132,7 +124,7 @@ def insert_matmul_kernel(
         pl.store(out, c_l0c, [0, 0])
 ```
 
-其他典型用法（节选）：
+### 其他二维偏移场景
 
 ```python
 # 两个维度均有偏移

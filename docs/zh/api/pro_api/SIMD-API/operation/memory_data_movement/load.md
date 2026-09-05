@@ -14,55 +14,52 @@
 
 ## 功能说明
 
-把GM中一块数据按**绝对元素坐标**搬入L1/UB Tile，是Kernel获取输入数据并参与计算的基础接口。GM数据支持在行（Row）、列（Col）维度上偏移任意元素个数，支持连续搬运和高维切分搬运两种模式。
+把GM中的数据按绝对元素坐标搬入L1 Buffer或UB中的Tile，是Kernel获取输入数据的基础接口。支持在行、列维度上按任意元素数偏移，也支持从高维Tensor中选择指定维度搬运。
 
-如果希望按“第几块Tile”来定位（自动乘以Tile形状），需要使用[`pypto_pro.language.load_tile`](load_tile.md)。
+如果希望按“第几块Tile”来定位（自动乘以Tile形状），需要使用[pypto_pro.language.load_tile](load_tile.md)。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.load(dst_tile, src_tensor, offsets, *, order=None)
+pypto_pro.language.load(
+    dst_tile: Tile,
+    src_tensor: Tensor,
+    offsets: Offset,
+    *,
+    order: Optional[List[int]] = None,
+) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `dst_tile` | 输出 | 只能是L1、UB Tile，搬入目的地 |
-| `src_tensor` | 输入 | Tensor类型，来自GM的源数据 |
-| `offsets` | 输入 | GM地址偏移，标记在每根轴上的初始偏移，单位元素个数 |
-| `order` | 输入 | 可选，Tile维度在GlobalTensor维度中对应哪几根轴；元素为Tensor绝对轴索引，升序表示不转置，反序表示转置；省略时默认`[ndim-2, ndim-1]`（不转置） |
-
-## 参数范围
-
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `dst_tile` | 输出 | 数据类型：b4、b8、b16、b32、b64<br>尾块处理：<br>• 可通过set_validshape设置尾块大小，Tile shape需要32字节对齐，不对齐报错<br>• valid_shape可以不对齐<br>• Vec ND尾块不需要配置compact；涉及紧凑排列、分形转换或Cube计算时，按对应数据路径配置compact = 1，详见[尾块处理](../../../../../guide/programming_guide/pro/development/tile_based_python_programming/tail_block_handling.md)<br>• 支持设定padding值<br>地址配置：<br>• 作为`load`目的Tile时，只支持`Mat`（L1）和`Vec`（UB）；`Left`（L0A）、`Right`（L0B）、`Acc`（L0C）、`Scaling`、`ScaleLeft`、`ScaleRight`等其他Tile内存空间由`move`、`matmul`或`store`等对应接口使用<br>• Cube侧目的Tile必须为`Mat`（L1），Vector侧目的Tile必须为`Vec`（UB）；MX scale的E8M0 Tile先load到`Mat`（L1）的ZZ/NN layout Tile，再通过`move`搬入`ScaleLeft`/`ScaleRight`<br>• L1、UB缓冲区首地址必须32字节对齐，不对齐编译报错 |
-| `src_tensor` | 输入 | 数据类型：b4、b8、b16、b32、b64<br>layout：支持`ND`、`DN`、`NZ` |
-| `offsets` | 输入 | 单位元素个数，大小不超过对应维度的shape，不支持负数索引 |
-| `order` | 输入 | 只支持配置Tensor维度范围内的dim，只支持二维数组配置，其余配置报错<br>用于高维Tensor中指定Tile对应哪几个维度；order中轴索引的顺序决定是否转置：升序不转置（ND行主序），反序转置（DN列主序），需要配合Tensor的layout以及Tile的shape和stride填写<br>E8M0搬入fractal-32 ZZ/NN Tile时分别选择A/B scale layout，框架不从shape判断group/phase轴；最后一轴固定作为物理phase轴，不能在`order`中选择<br>省略时，普通Tensor默认取最后两维`[ndim-2, ndim-1]`；带物理尾轴的MX scale默认取尾轴前两维`[ndim-3, ndim-2]`，其他多维结构应显式指定两个矩阵轴 |
-
-## 流水类型
-
-MTE2（GM → L1/UB的搬入流水）。
+| dst_tile | 输出 | 目的操作数，Tile类型，存储空间为L1 Buffer或UB，首地址必须按32字节对齐。支持DT_FP4E2M1、DT_FP4E1M2、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP16、DT_BF16和DT_FP32。可通过set_validshape设置尾块有效形状；涉及紧凑排列、分形转换或Cube计算时，须按数据路径设置compact。 |
+| src_tensor | 输入 | 源操作数，Tensor类型，存储空间为GM，支持的数据类型与dst_tile一致，排布支持ND、DN和NZ。 |
+| offsets | 输入 | 源Tensor的元素偏移，List[int或Scalar]类型，长度须与Tensor维数相同。各项为非负整数或运行时整数表达式，访问范围不得越过Tensor边界。 |
+| order | 输入 | 维度映射，List[int]类型，可选。表示Tile两个维度分别对应源Tensor的哪两个维度；两个轴索引必须互不重复且位于Tensor维度范围内，升序表示不转置，降序表示转置。 |
 
 ## 约束说明
 
-当`src_tensor`声明为`pypto_pro.language.NZ`时，其物理排布、分形轴和完整Tensor shape约束见[`TensorLayout`](../../basic_data_structures/TensorLayout.md#tensor布局)。`load`还需满足以下NZ搬运约束：
+当src_tensor声明为pypto_pro.language.NZ时，其物理排布、分形轴和完整Tensor shape约束见[TensorLayout](../../basic_data_structures/TensorLayout.md#tensor布局)。load还需满足以下NZ搬运约束：
 
-- 仅支持GM NZ到NZ Tile的同布局搬运，目标Tile位于`Mat`（L1）或`Vec`（UB）；`order`省略或指定Tensor最后两轴的正序。
-- Tile shape和valid M/N须满足M按16、N按Tensor dtype对应的`C0`对齐，N方向offset也须按`C0`对齐。
+- 仅支持GM NZ到NZ Tile的同布局搬运，目标Tile位于L1 Buffer或UB；order省略或指定Tensor最后两轴的正序。
+- Tile形状和有效M、N须满足M按16、N按Tensor数据类型对应的C0对齐，N方向偏移也须按C0对齐。
 - 高维offset的前导项选择batch，最后两项为M、N方向的逻辑元素坐标。
 
-当前`DT_FP8E8M0` Tensor搬入`fractal=32`的`ZZ`/`NN` Mat（L1）Tile，仅支持作为`matmul_mx`/`matmul_mx_acc`的scale搬运。普通E8M0数据不支持使用该目标组合；满足该组合的`load`会按MX scale解释，并要求源Tensor的最后一轴是长度为2的物理phase轴。
+当前DT_FP8E8M0 Tensor搬入fractal=32的ZZ或NN排布L1 Buffer Tile，仅支持作为matmul_mx或matmul_mx_acc的缩放因子搬运。普通E8M0数据不支持使用该目标组合；满足该组合的load会按MX缩放因子解释，并要求源Tensor的最后一轴是长度为2的物理phase轴。
 
-开启`auto_mutex`时，若连续两次`pl.load`向同一个UB（或L1）Tile地址搬运数据，并且前一次搬入的数据没有被读取，则必须在两次`load`之间调用`pl.system.bar_mte2()`，再复用该地址。
+开启auto_mutex时，若连续两次pypto_pro.language.load向同一个UB或L1 Buffer Tile地址搬运数据，并且前一次搬入的数据没有被读取，则必须在两次load之间调用pypto_pro.language.system.bar_mte2()，再复用该地址。
 
 关于复用Tile地址的完整同步规则，请参考下文“Tile地址复用与流水同步”。
 
+## 返回值说明
+
+无。
+
 ## 调用示例
 
-下面是一个完整Kernel：从GM载入两个64×64的输入到UB，相加后写回GM。`pypto_pro.language.load`负责把GM数据搬入UB Tile。Vector Kernel开启`auto_mutex`，同步由`make_tile_group`自动管理。
+### 从GM搬入UB并完成逐元素加法
 
 ```python
 import pypto_pro.language as pl
@@ -88,7 +85,7 @@ def add_kernel(
         pl.store(out, cur_out, [0, 0])
 ```
 
-其他典型用法（节选）：
+### 高维Tensor与转置搬运
 
 ```python
 # 循环按行块载入（matmul 取左矩阵）
@@ -102,31 +99,25 @@ pl.load(k_mat, k, [skv_off, 0], order=[1, 0])
 pl.load(q_buf, q, [b_idx, 0, n_idx, 0], order=[1, 3])
 ```
 
-## 高级用法
-
-以下介绍`pypto_pro.language.load`在流水同步、复杂数据布局和边界处理场景中的用法。
-
 ### Tile地址复用与流水同步
 
-一次`pl.load`会通过MTE2向目标Tile写入数据。开启`auto_mutex`并复用同一个UB（或L1）Tile地址时，可按以下步骤判断是否需要手动同步。
+一次pypto_pro.language.load会通过MTE2向目标Tile写入数据。开启auto_mutex并复用同一个UB或L1 Buffer Tile地址时，可按以下步骤判断是否需要手动同步。
 
 #### 判断步骤
 
-1. 先确认相邻两次`load`的目标是否为**同一个Tile（同一个物理地址）**。若目标地址不同，例如双缓冲或多缓冲轮转到不同Tile，则不适用本节规则。
-2. 若目标地址相同，检查第二次`load`前是否已有操作读取前一次搬入的Tile：
-   - **已读取**：例如UB上由Vector（V）流水执行的计算（`pl.add`、`pl.mul`），或L1→L0的MTE1 `move`。数据依赖会建立MTE2→V或MTE2→MTE1同步，**无需额外调用`pl.system.bar_mte2()`**。
-   - **未读取**：在两次`load`之间调用`pl.system.bar_mte2()`，使前一次MTE2搬运完成后再复用该地址，避免两次写入同一地址的次序或覆盖风险（WAW，Write-After-Write）。与该Tile无关的计算或搬运不属于“读取”。
+1. 先确认相邻两次load的目标是否为**同一个Tile（同一个物理地址）**。若目标地址不同，例如双缓冲或多缓冲轮转到不同Tile，则不适用本节规则。
+2. 若目标地址相同，检查第二次load前是否已有操作读取前一次搬入的Tile：
+   - **已读取**：例如UB上由Vector流水执行的计算，或通过MTE1将数据从L1 Buffer搬入L0A Buffer或L0B Buffer。数据依赖会建立MTE2到Vector或MTE2到MTE1的同步，无需额外调用pypto_pro.language.system.bar_mte2()。
+   - **未读取**：在两次load之间调用pypto_pro.language.system.bar_mte2()，使前一次MTE2搬运完成后再复用该地址，避免两次写入同一地址的次序或覆盖风险（WAW，Write-After-Write）。与该Tile无关的计算或搬运不属于“读取”。
 
-#### `auto_mutex`与`bar_mte2`的边界
+#### auto_mutex与bar_mte2的边界
 
-- `auto_mutex`只能处理具有相同mutex ID的Tile在不同Pipeline之间的同步。同一个Tile被反复写入属于同一条Pipeline，框架不会自动补充同步，需要用户按上述步骤处理。
-- `pl.system.bar_mte2()`只约束MTE2流水，不会保留随后被覆盖的旧数据。若后续仍需要前一次搬入的数据，必须在复用该地址前先读取或复制该数据。
+- auto_mutex只能处理具有相同mutex ID的Tile在不同Pipeline之间的同步。同一个Tile被反复写入属于同一条Pipeline，框架不会自动补充同步，需要用户按上述步骤处理。
+- pypto_pro.language.system.bar_mte2()只约束MTE2流水，不会保留随后被覆盖的旧数据。若后续仍需要前一次搬入的数据，必须在复用该地址前先读取或复制该数据。
 
-#### 代码示例
+#### 复用地址前未读取前一次结果
 
-**场景一：复用同一地址前未读取前一次结果——需要`bar_mte2`**
-
-未同步示例（两次MTE2写入同一地址之间没有同步）：
+##### 未同步的错误写法
 
 ```python
 # 同一Tile被连续写入，中间没有读取操作或bar_mte2
@@ -141,7 +132,7 @@ for x in pl.range(0, m_dim, 64):
     # 奇数轮没有读取in_tile，也没有bar_mte2
 ```
 
-同步示例（在未读取结果的分支中插入`bar_mte2`）：
+##### 使用bar_mte2同步地址复用
 
 ```python
 # 复用同一Tile前先完成前一次MTE2搬运
@@ -158,11 +149,11 @@ for x in pl.range(0, m_dim, 64):
         pl.system.bar_mte2()                  # 下一轮复用in_tile前完成MTE2
 ```
 
-> 循环写成`load → Vector计算（读取该Tile）→ store`时，每一轮都会在下一次`load`前读取该Tile，因此不需要`bar_mte2`。只有某个分支跳过了这次读取、而后续仍要复用同一Tile时，才需要在该分支中补充`bar_mte2`。
+循环按照load、Vector计算、store的顺序执行时，每一轮都会在下一次load前读取该Tile，因此不需要调用bar_mte2。仅当某个分支跳过本轮读取且后续仍要复用同一Tile时，才需要在该分支中调用bar_mte2。
 
-**场景二：复用同一地址前已读取前一次结果——无需`bar_mte2`**
+#### 复用地址前已读取前一次结果
 
-冗余同步示例（重复同步会降低流水并行度）：
+##### 包含冗余同步的写法
 
 ```python
 # 后续Vector计算读取in_tile，无需额外调用bar_mte2
@@ -172,7 +163,7 @@ pl.add(out_tile, in_tile, in_tile)
 pl.load(in_tile, src_b, [64, 0])
 ```
 
-数据依赖同步示例（无需额外调用`bar_mte2`）：
+##### 通过数据依赖建立同步
 
 ```python
 # Vector计算读取in_tile，因此可在下一次搬运时复用该地址
@@ -189,19 +180,17 @@ for x in pl.range(0, m_dim, 64):
 
 ### GM Tensor多维场景
 
-Tensor的维度可能有多维，而Tile只有两维，那么Tensor和Tile之间的拷贝需要指定Tile的两维是Tensor中的哪两维。
+当Tensor多于二维时，需要通过order参数指定Tile的两个维度分别对应Tensor的哪两个维度。
 
-这由`pl.load` / `pl.load_tile`的`order`参数（以及`store` / `store_tile`的`order`参数）控制：
+pypto_pro.language.load和pypto_pro.language.load_tile的order参数，以及pypto_pro.language.store和pypto_pro.language.store_tile的order参数，采用相同的维度映射规则：
 
-- **`offsets`的长度 == Tensor的维数**：每个Tensor轴给一个偏移。
-- **`order`**：一个长度为2的列表，元素为Tensor绝对轴索引，指出Tile的两维分别落在Tensor的哪两个轴上。order中轴索引的顺序决定是否转置：升序不转置，反序转置。
-  未被`order`选中的轴，用`offsets`里对应的值**定死为一个下标**（相当于在那一维上
-  切一刀）。
-- **默认值**：不填`order`时，取Tensor的**最后两维**，即
-  `order = [ndim-2, ndim-1]`（不转置）。
+- offsets的长度必须与Tensor的维数相同，每个元素表示对应维度的偏移。
+- order是一个长度为2的列表，列表元素为Tensor的绝对维度索引，依次指定Tile的两个维度对应的Tensor维度。order中的维度索引升序排列时不转置，反序排列时执行转置。未被order选中的维度由offsets中的对应值固定为一个下标。
+- 不设置order时，Tile对应Tensor的最后两个维度，即order = [ndim - 2, ndim - 1]，不执行转置。
 
-例：一个4维Tensor `q: [B, N, Sq, D]`，Tile是`[TS, TD]`，想让Tile覆盖
-`(Sq, D)`这两维、并在`b`、`n`上各定死一个下标：
+例如，对于形状为[B, N, Sq, D]的四维Tensor q和形状为[TS, TD]的Tile，可以使Tile覆盖Sq、D两个维度，并在B、N维分别固定一个下标。
+
+#### 选择末尾相邻维度
 
 ```python
 q: pl.Tensor[[B, N, Sq, D], pl.DT_FP16]
@@ -211,27 +200,25 @@ q_tile = pl.make_tile(pl.TileType(shape=[TS, TD], dtype=pl.DT_FP16,
 pl.load(q_tile, q, [b, n, sq_off, 0])
 ```
 
-若想让Tile覆盖**非相邻**或**非末尾**的两维（例如`(N, D)`，即轴1和轴3），显式给
-`order`。例如，对于Tensor `[B, S, N, D]`：
+若要使Tile覆盖非相邻或非末尾的两个维度，例如形状为[B, S, N, D]的Tensor中的S、D维，需要显式设置order=[1, 3]。
+
+#### 选择非相邻维度
 
 ```python
 # Tile 的两维 = Tensor 的轴 1 与轴 3；轴 0(b_idx)、轴 2(n_idx) 被定死
 pl.load_tile(k_mat_buf[buf_idx], k, [b_idx, ki, n_idx, 0], order=[1, 3])
 ```
 
-> `order`是**编译期常量列表**（它决定代码生成时Tensor视图的stride），不能是运行时
-> 变量。
+order必须是编译期常量列表，不能使用运行时变量。
 
 ### 尾块需要padding场景
 
-当GM Tensor的shape不能被Tile整除时，边界上会出现比Tile小的**尾块**。Tile的
-物理大小固定，但每个尾块的**有效区域**不同。处理方式：
+当GM Tensor的形状不能被Tile整除时，边界上会出现有效区域小于Tile物理形状的尾块。处理方式如下：
 
-1. Tile的`valid_shape`声明成动态（`[-1, -1]`），load前用`pl.set_validshape`写入这一
-   块真实的有效行/列 —— load会**只搬有效区**，不会越界读GM，也不会把padding写回。
-2. 若后续算子会读到有效区**之外**（归约 / matmul会整块读入），再配合`pad` +
-   `pl.fillpad`把无效区填成安全值（求和填`zero`、`row_max`/softmax填`min`、`row_min`
-   填`max`）。
+1. 将Tile的valid_shape声明为动态值[-1, -1]，并在load前调用pypto_pro.language.set_validshape设置当前尾块的有效行数和列数。load仅搬运有效区域，不会越界读取GM。
+2. 若后续算子会读取有效区域之外的数据，例如归约或矩阵乘操作会读取整个Tile，则需要设置pad属性并调用pypto_pro.language.fillpad，将无效区域填充为对应计算的安全值。求和操作填充zero，row_max或softmax操作填充min，row_min操作填充max。
+
+#### 为尾块填充安全值
 
 ```python
 # Tile 物理 64x128，有效行/列运行时决定
@@ -246,36 +233,35 @@ with pl.section_vector():
     pl.store(out, tile, [row_off, col_off])   # 只写回有效区
 ```
 
-尾块的`valid_shape` / `set_validshape` / `pad` / `fillpad` / `compact`如何协同，详见
-[尾块处理](../../../../../guide/programming_guide/pro/development/tile_based_python_programming/tail_block_handling.md)。
+valid_shape、pypto_pro.language.set_validshape、pad、pypto_pro.language.fillpad和pypto_pro.language.compact的配合方式，详见[尾块处理](../../../../../guide/programming_guide/pro/development/tile_based_python_programming/tail_block_handling.md)。
 
 ### Cube侧转置场景
 
-matmul的左/右矩阵在从L1（`Mat`）搬到L0（`Left`/`Right`）时可能需要转置。下面先说明硬件约束，再给出前端的写法。
+matmul的左矩阵或右矩阵从L1 Buffer搬入L0A Buffer或L0B Buffer时，可能需要执行转置。相关硬件约束和接口写法如下。
 
 #### 背景：硬件约束
 
-- 左矩阵进入L0A（`Left`），物理形态固定为`shape=[M, K]`、`layout=pl.NZ`；右矩阵进入L0B（`Right`），固定为`shape=[K, N]`、`layout=pl.ZN`。
-- `Mat`搬到L0（`pl.move`，底层是CANN的TMOV）**要求源和目的的物理`[Rows, Cols]`完全一致**；转置只能借助`NZ`/`ZN`的fractal差异实现，不能改变维度本身。
-- 物理上`Mat [N, K] NZ`与`Mat [K, N] ZN`是**同一份数据（同一段bytes）**，只是标注方式不同。
+- 左矩阵进入L0A Buffer，物理形态固定为shape=[M, K]、layout=pypto_pro.language.NZ；右矩阵进入L0B Buffer，固定为shape=[K, N]、layout=pypto_pro.language.ZN。
+- 从L1 Buffer搬入L0A Buffer或L0B Buffer时，源Tile和目标Tile的物理[Rows, Cols]必须一致。转置通过NZ和ZN的分形差异实现，不能改变物理维度。
+- 物理上，[N, K] NZ排布的L1 Buffer Tile与[K, N] ZN排布的L1 Buffer Tile表示同一段数据，只是排布标注不同。
 
-因此“逻辑转置”本质上要求`Mat`声明成与`Left`/`Right`一致的物理形态，并通过`layout`与`order`表达转置。
+因此，逻辑转置要求L1 Buffer Tile声明为与L0A Buffer或L0B Buffer一致的物理形态，并通过layout与order表达转置。
 
-#### 写法：显式`order`
+#### 写法：显式order
 
-`Mat`的`shape`与对应的`Left`/`Right`**保持一致**，靠`layout`与`order`表达转置。
+L1 Buffer Tile的shape与对应的L0A Buffer或L0B Buffer Tile保持一致，通过layout与order表达转置。
 
-- **不转置**：左矩阵`Mat`的`layout`与`Left`相同（`pl.NZ`）；右矩阵`Mat`的`layout`与`Right`相反（`pl.NZ`）；`pl.load`正常调用。
-- **转置**：左矩阵`Mat`的`layout`与`Left`相反（`pl.ZN`）；右矩阵`Mat`的`layout`与`Right`相同（`pl.ZN`）；`pl.load`增加`order=[1, 0]`（反序转置），框架会把对应的`GlobalTensor`标成`DN`并对调stride。
+- **不转置**：左矩阵L1 Buffer Tile的layout与L0A Buffer Tile相同，使用pypto_pro.language.NZ；右矩阵L1 Buffer Tile使用pypto_pro.language.NZ。
+- **转置**：左矩阵或右矩阵的L1 Buffer Tile使用pypto_pro.language.ZN，pypto_pro.language.load传入order=[1, 0]，框架会按DN排布搬运并交换stride。
 
-| 矩阵 | 是否转置 | GM Tensor shape | Mat声明 | load |
+| 矩阵 | 是否转置 | GM Tensor shape | L1 Buffer Tile声明 | load |
 | --- | --- | --- | --- | --- |
-| 左A[M,K] | 否 | `[M, K]` | `shape=[M, K], layout=pl.NZ` | 正常 |
-| 左A[M,K] | 是 | `[K, M]` | `shape=[M, K], layout=pl.ZN` | `order=[1, 0]` |
-| 右B[K,N] | 否 | `[K, N]` | `shape=[K, N], layout=pl.NZ` | 正常 |
-| 右B[K,N] | 是 | `[N, K]` | `shape=[K, N], layout=pl.ZN` | `order=[1, 0]` |
+| 左A[M,K] | 否 | [M, K] | shape=[M, K], layout=pypto_pro.language.NZ | 正常 |
+| 左A[M,K] | 是 | [K, M] | shape=[M, K], layout=pypto_pro.language.ZN | order=[1, 0] |
+| 右B[K,N] | 否 | [K, N] | shape=[K, N], layout=pypto_pro.language.NZ | 正常 |
+| 右B[K,N] | 是 | [N, K] | shape=[K, N], layout=pypto_pro.language.ZN | order=[1, 0] |
 
-- **左矩阵不转置，从GM拷贝到L1**
+#### 左矩阵不转置，从GM搬入L1 Buffer
 
 ```python
 gm = pl.make_tensor(ptr, [M, K])
@@ -285,10 +271,10 @@ mat_0 = pl.make_tile(mat_type, addr=0x0, size=32768)
 pl.load(mat_0, gm)                          # 正常 load
 left = pl.make_tile(pl.TileType(shape=[M, K], dtype=pl.DT_FP16,
                                 target_memory=pl.MemorySpace.Left), addr=0x0, size=32768)
-pl.move(left, mat_0)                        # Mat[M,K] -> Left[M,K]，同形，不转置
+pl.move(left, mat_0)                        # L1 Buffer到L0A Buffer，同形，不转置
 ```
 
-- **左矩阵转置，从GM拷贝到L1**
+#### 左矩阵转置，从GM搬入L1 Buffer
 
 ```python
 gm = pl.make_tensor(ptr, [K, M])            # 数据是 A^T=[K, M]
@@ -298,10 +284,10 @@ mat_0 = pl.make_tile(mat_type, addr=0x0, size=32768)
 pl.load(mat_0, gm, order=[1, 0])       # 转置 load（order 反序）；框架标 DN 并对调 stride
 left = pl.make_tile(pl.TileType(shape=[M, K], dtype=pl.DT_FP16,
                                 target_memory=pl.MemorySpace.Left), addr=0x0, size=32768)
-pl.move(left, mat_0)                        # Mat[M,K] -> Left[M,K]，同形，move 时 fractal 翻转实现转置
+pl.move(left, mat_0)                        # L1 Buffer到L0A Buffer，同形，通过分形转换实现转置
 ```
 
-- **右矩阵不转置，从GM拷贝到L1**
+#### 右矩阵不转置，从GM搬入L1 Buffer
 
 ```python
 gm = pl.make_tensor(ptr, [K, N])
@@ -311,10 +297,10 @@ mat_0 = pl.make_tile(mat_type, addr=0x0, size=32768)
 pl.load(mat_0, gm)                          # 正常 load
 right = pl.make_tile(pl.TileType(shape=[K, N], dtype=pl.DT_FP16,
                                  target_memory=pl.MemorySpace.Right), addr=0x0, size=32768)
-pl.move(right, mat_0)                        # Mat[K,N] -> Right[K,N]，同形，不转置
+pl.move(right, mat_0)                        # L1 Buffer到L0B Buffer，同形，不转置
 ```
 
-- **右矩阵转置，从GM拷贝到L1**
+#### 右矩阵转置，从GM搬入L1 Buffer
 
 ```python
 gm = pl.make_tensor(ptr, [N, K])            # 数据是 B^T=[N, K]
@@ -324,33 +310,34 @@ mat_0 = pl.make_tile(mat_type, addr=0x0, size=32768)
 pl.load(mat_0, gm, order=[1, 0])       # 转置 load（order 反序）；框架标 DN 并对调 stride
 right = pl.make_tile(pl.TileType(shape=[K, N], dtype=pl.DT_FP16,
                                  target_memory=pl.MemorySpace.Right), addr=0x0, size=32768)
-pl.move(right, mat_0)                        # Mat[K,N] -> Right[K,N]，同形，move 时 fractal 翻转实现转置
+pl.move(right, mat_0)                        # L1 Buffer到L0B Buffer，同形，通过分形转换实现转置
 ```
 
 #### 数据来自UB（片上产生）时的转置
 
-当左/右矩阵不是从GM直接load，而是由Vector侧产生、经`pl.move`(ND→NZ) + `pl.insert`写入L1时，`Mat`的`layout`与`shape`同样需要与`Left`/`Right`保持一致：
+当左矩阵或右矩阵不是从GM直接load，而是由Vector侧产生、经pypto_pro.language.move完成ND到NZ转换后再由pypto_pro.language.insert写入L1 Buffer时，L1 Buffer Tile的layout与shape同样需要与L0A Buffer或L0B Buffer Tile保持一致。
 
-- **不转置**：`Mat`的`layout=pl.NZ`，`shape`与`Left`/`Right`一致；`insert`后`move`同形不转置。
-- **转置**：`Mat`的`layout=pl.ZN`，`shape`与`Left`/`Right`一致；`insert`写入ZN物理布局（与源NZ Tile物理等价），`move`时SFractal不匹配触发硬件转置。
+- **不转置**：L1 Buffer Tile使用pypto_pro.language.NZ，shape与L0A Buffer或L0B Buffer Tile一致。
+- **转置**：L1 Buffer Tile使用pypto_pro.language.ZN，shape与L0A Buffer或L0B Buffer Tile一致；insert写入ZN物理排布，move时由分形差异完成转置。
 
-> 注意：`pl.insert`写入`ZN` Mat时，源Tile的NZ `[R, C]`物理布局等价于`ZN [C, R]`，因此源Tile shape与Mat shape互为转置时物理数据恰好匹配。需确保`insert`的逻辑边界检查通过（`indexCol + validCol ≤ Mat.Cols`）。
+源Tile的NZ [R, C]物理排布等价于ZN [C, R]。使用pypto_pro.language.insert写入ZN排布的L1 Buffer Tile时，须确保源Tile和目标Tile的物理形状匹配，并满足insert的边界约束。
 
-| 矩阵 | 是否转置 | Vector产出数据 | Mat声明 |
+| 矩阵 | 是否转置 | Vector产出数据 | L1 Buffer Tile声明 |
 | --- | --- | --- | --- |
-| 左A[M,K] | 否 | `[M, K]` | `shape=[M, K], layout=pl.NZ` |
-| 左A[M,K] | 是 | `[K, M]` (Aᵀ) | `shape=[M, K], layout=pl.ZN` |
-| 右B[K,N] | 否 | `[K, N]` | `shape=[K, N], layout=pl.NZ` |
-| 右B[K,N] | 是 | `[N, K]` (Bᵀ) | `shape=[K, N], layout=pl.ZN` |
+| 左A[M,K] | 否 | [M, K] | shape=[M, K], layout=pypto_pro.language.NZ |
+| 左A[M,K] | 是 | [K, M] (Aᵀ) | shape=[M, K], layout=pypto_pro.language.ZN |
+| 右B[K,N] | 否 | [K, N] | shape=[K, N], layout=pypto_pro.language.NZ |
+| 右B[K,N] | 是 | [N, K] (Bᵀ) | shape=[K, N], layout=pypto_pro.language.ZN |
 
-> 约束：`pl.insert`要求`tile.dim0 == mat.dim0`（物理行匹配）；分subcore带列偏移插入时，被转置的矩阵通常需为方阵。
+使用pypto_pro.language.insert时，源Tile和目标Tile的物理行数必须匹配；按列偏移分块插入时，还须保证每个分块不越过目标Tile边界。
 
-### Tensor视图重建与合轴
+### 重建Tensor视图并合并连续维度
 
-`pl.make_tensor`在不搬运数据的情况下，通过shape和stride重建GM Tensor视图，可用于调整rank、shape或stride以及合并连续维度。新Tensor视图复用底层存储，`stride`必须与实际内存排布一致。
+pypto_pro.language.make_tensor可以在不搬运数据的情况下，通过shape和stride重建GM Tensor视图，用于调整维数、形状或步长，以及合并连续维度。新Tensor视图复用底层存储，其stride必须与实际内存排布一致。
 
-- **通过`pl.Ptr`重新生成**：Kernel参数声明成裸指针`pl.Ptr[dtype]`，在函数体里用
-  `pl.make_tensor(ptr, shape, stride)`按需要的shape和stride构造视图。shape各维的长度可来自运行时TilingData；视图的rank由`shape`列表长度决定，是编译期固定的。
+通过pypto_pro.language.Ptr重建视图时，将Kernel参数声明为pypto_pro.language.Ptr[dtype]，并在函数体内调用pypto_pro.language.make_tensor(ptr, shape, stride)。shape中的各维长度可以来自运行时TilingData，但shape列表的长度必须在编译期确定。
+
+#### 通过Ptr创建Tensor视图
 
 ```python
 @pl.jit()
@@ -361,33 +348,23 @@ def k(q: pl.Ptr[pl.DT_FP16], tiling: OpTiling):
     # 之后 tensor_q 的用法与 pl.Tensor 参数完全相同
 ```
 
-- **从已有`pl.Tensor`重建**：`pl.make_tensor`的第一个参数可以是已有的`pl.Tensor`，
-  新视图复用其底层指针，并设置新的shape、stride及可选的dtype。
+pypto_pro.language.make_tensor的第一个参数也可以是已有的pypto_pro.language.Tensor。新视图复用其底层指针，并使用新指定的shape、stride和可选dtype。
 
-**“合轴”指把GM Tensor的两个维度当成一维来处理**。
+合轴是将GM Tensor中相邻且连续的两个维度合并为一个维度。与通过order从多维Tensor中选择两个维度不同，合轴会降低Tensor视图的维数，使其与二维Tile对应。典型用途如下：
 
-与前面“多维场景”用`order`在多维里挑两维不同，合轴是把**相邻的两维合并**，让
-Tensor的有效维数降下来，从而更自然地对上二维Tile。典型用途：
+- 对于FlashAttention的TND或BSND排布，将批次维B和序列维S合并为总token维B × S，即TND中的T维，使一次load可以跨批次连续读取多行。
+- 对于维数不同的Host输入，将前若干连续维度合并，在Kernel内构造固定的二维[M, N]视图。
 
-- FA 的**TND / BSND**布局：把 batch 轴`B`和序列轴`S`合成一个“总 token”轴`B * S`
-  （即TND里的`T`），一次load就能跨batch连续取若干行。
-- 不同维数的Host输入：把前若干维乘到一起，折叠成Kernel内固定的二维`[M, N]` 视图。
+#### 合并连续维度
 
-#### 合轴的前提：两维在内存里必须连续
+仅当待合并的维度在内存中连续且不存在间隔时，才能合轴。对于行优先ND排布的[d0, d1, d2]，其stride为[d1 × d2, d2, 1]：
 
-只有当被合并的两维在内存中**首尾相接、没有间隔**时才能合轴。对行优先（ND）的
-`[d0, d1, d2]`，其stride是`[d1 * d2, d2, 1]`：
+- 合并d0与d1后，新维度大小为d0 × d1，stride取内层维度d1的stride。合并条件为stride(d0) = d1 × stride(d1)。
+- 如果d0与d1之间存在Padding，即stride(d0) > d1 × stride(d1)，则不能合并，否则Padding区域会被当作有效数据读取。
 
-- 合并`d0`与`d1` → 新轴大小`d0 * d1`，stride取里层的`d2`。成立条件：
-  `stride(d0) == d1 * stride(d1)`，即`d1 * d2 == d1 * d2`，满足连续性条件。
-- 如果`d0`与`d1`之间有padding（`stride(d0) > d1 * stride(d1)`），**不能**合轴 ——
-  合并后会把那段padding也当成数据读进来。
+#### 将[B, S, D]合并为[B × S, D]
 
-#### 使用 `pl.make_tensor` 构造降维视图
-
-合轴通过`pl.make_tensor`合并连续维度并构造低一维视图，再由`load`搬入Tile。
-
-**例1：把`[B, S, D]`合成`[B * S, D]`（静态shape）**
+通过pypto_pro.language.make_tensor合并连续维度并构造低一维的Tensor视图，再调用load搬入Tile。
 
 ```python
 # 原始 GM：q 是 [B, S, D]，行优先连续，stride = [S*D, D, 1]
@@ -402,13 +379,11 @@ tile = pl.make_tile(pl.TileType(shape=[TS, D], dtype=pl.DT_FP16,
 pl.load_tile(tile, q_merged, [t, 0])   # 第 t 块 = 合并轴上的第 [t*TS : (t+1)*TS] 行
 ```
 
-合并轴上的偏移换算：要读原始的第`b`个batch、第`s`行，合并后的行号是
-`b * S + s`（行优先的自然展开）。
+若要读取原始Tensor中第b个批次的第s行，合并后的行号为b × S + s。
 
-**例 2：运行时shape —— 把Host输入的前若干维折叠成 `[M, N]`**
+#### 使用运行时形状合并为[M, N]
 
-Kernel可接收裸指针和TilingData，将Host侧2～4维输入的shape折叠成固定的二维Tensor视图再处理。
-`N`是最内维，`M`是其余维的乘积（合轴）：
+Kernel可以接收指针和TilingData，将Host侧2～4维输入的形状合并为固定的二维Tensor视图。N为最内层维度，M为其余维度的乘积。
 
 ```python
 @pl.jit(auto_mutex=True)
@@ -423,13 +398,11 @@ def add_dynrank_kernel(x: pl.Ptr[pl.DT_FP16], y: pl.Ptr[pl.DT_FP16],
     pl.load_tile(tile_a, tensor_x, [i, j])                    # 之后就是普通二维 load
 ```
 
-因为逐元素算子只关心"扁平的元素顺序"，把 `[2, 4, 256, 256]`、`[8, 256, 256]`、
-`[512, 512]`都可合轴成`[M, N]`，因此同一份Kernel可处理这些不同的Host输入shape。Kernel内由`make_tensor`构造的视图的rank始终固定为2。
+逐元素算子只依赖连续的元素顺序，因此可以将[2, 4, 256, 256]、[8, 256, 256]和[512, 512]等不同形状合并为[M, N]，由同一个Kernel处理。Kernel内通过pypto_pro.language.make_tensor构造的视图始终为二维。
 
-**例3：TND / BSND布局的合轴**
+#### 将BSND排布转换为TND视图
 
-FlashAttention的TND布局本身就是把batch与序列合成一个“总token”轴`T = ΣS_i`。若拿到
-的是BSND（`[B, S, N, D]`）且各batch的`S`相同、内存连续，可临时合轴成TND视角：
+FlashAttention的TND排布将批次与序列合并为总token维T = ΣS_i。对于形状为[B, S, N, D]的BSND Tensor，如果各批次的S相同且数据在内存中连续，可以合并B、S维，构造TND视图。
 
 ```python
 # BSND -> 把 B、S 合成 T = B*S（N、D 保留），stride 取里层
@@ -443,8 +416,8 @@ pl.load_tile(q_tile, q_tnd, [t_off, n_idx, 0], order=[0, 2])
 | 步骤 | 做法 |
 |------|------|
 | 1. 确认可合轴 | 被合并的两维在内存里连续（无padding）。 |
-| 2. 重建视图   | `pl.make_tensor(src, 合并后的shape, 合并后的stride)`，stride取里层维的stride。 |
+| 2. 重建视图   | pypto_pro.language.make_tensor(src, 合并后的shape, 合并后的stride)，stride取里层维的stride。 |
 | 3. 正常load  | 合并后的Tensor维数更低，按普通二维 / 多维场景load即可。 |
-| 4. 偏移换算   | 合并轴的行号 = `外层下标 * 里层大小 + 里层下标`。 |
+| 4. 偏移换算   | 合并轴的行号 = 外层下标 * 里层大小 + 里层下标。 |
 
 > **合轴约束**：被合并的维度必须连续，stride必须与实际内存排布一致。违反上述约束会读取错误位置或Padding区域的数据。排查精度问题时，可改用未合轴的逐维Tensor视图进行对比验证。

@@ -4,5 +4,10 @@
 :maxdepth: 1
 :titlesonly:
 
-comparison
+eq
+ne
+lt
+le
+gt
+ge
 ```

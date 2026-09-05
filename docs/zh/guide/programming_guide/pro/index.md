@@ -6,5 +6,6 @@
 
 programming_paradigm/index
 development/index
+advanced_programming/index
 debug/index
 ```

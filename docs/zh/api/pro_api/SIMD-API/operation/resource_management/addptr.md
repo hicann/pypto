@@ -14,33 +14,34 @@
 
 ## 功能说明
 
-对一个裸指针（`pypto_pro.language.Ptr[dtype]`）做偏移运算，得到指向同一片GM、起点平移后的新指针。偏移以**元素**为单位（不是字节），元素大小由指针的dtype决定。
+对一个裸指针（pypto_pro.language.Ptr[dtype]）做偏移运算，得到指向同一片GM、起点平移后的新指针。偏移以**元素**为单位（不是字节），元素大小由指针的dtype决定。
 
-常用于把一块workspace（GM暂存区）按需切成多段，配合[`pypto_pro.language.make_tensor`](make_tensor.md)把每段包装成可load/store的Tensor视图。
+常用于把一块workspace（GM暂存区）按需切成多段，配合[pypto_pro.language.make_tensor](make_tensor.md)把每段包装成可load/store的Tensor视图。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.addptr(ptr, offset) -> Ptr
+pypto_pro.language.addptr(ptr: Ptr, offset: Union[int, Scalar]) -> Ptr
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `ptr` | 输入 | 裸指针，类型为`pypto_pro.language.Ptr[dtype]`（PtrType） |
-| `offset` | 输入 | 元素偏移量 |
+| ptr | 输入 | 输入指针，Ptr类型。返回的新指针与ptr的数据类型相同。元素位宽必须不少于8 bit；亚字节数据类型不支持指针算术，可先通过make_ptr重解释为DT_UINT8等字节可寻址类型。 |
+| offset | 输入 | 指针偏移量，int或Scalar类型，单位为元素。编译器根据指针的数据类型换算实际字节偏移，偏移后的地址必须仍位于原workspace范围内。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `ptr` | 输入 | 须为`pypto_pro.language.Ptr[dtype]`标注的裸指针；返回的新指针与入参dtype相同。元素位宽必须不少于8 bit；`DT_INT4`、`DT_UINT4`、`DT_FP4`、`DT_HF4`等亚字节类型不支持指针算术，可先通过`make_ptr`重解释为`DT_UINT8`等字节可寻址类型。 |
-| `offset` | 输入 | 整型常量或运行时整型标量表达式，单位为**元素**（实际字节偏移 = `offset × dtype字节数`，由编译器换算）；偏移后须仍落在原workspace范围内 |
+无。
+
+## 返回值说明
+
+返回与ptr数据类型相同、地址偏移后的Ptr。
 
 ## 调用示例
 
-下面是一个完整Kernel：用`pypto_pro.language.addptr`将workspace裸指针偏移到后半段，配合`make_tensor`包装成Tensor视图作为暂存区，完成`a*2`写回`out`。Vector Kernel开启`auto_mutex`，同步由`make_tile_group`自动管理。
+### 偏移workspace指针并创建Tensor视图
 
 ```python
 import pypto_pro.language as pl

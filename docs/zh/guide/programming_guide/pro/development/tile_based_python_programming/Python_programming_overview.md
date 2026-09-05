@@ -152,7 +152,7 @@ AI Core内部存在多条异步并行流水，当一条流水生产的数据被�
 - `sync_src(set_pipe, wait_pipe, event_id)` —— 生产方SET flag
 - `sync_dst(set_pipe, wait_pipe, event_id)` —— 消费方WAIT flag
 
-需要显式控制缓冲区互斥时可使用[mutex_lock](../../../../../api/pro_api/SIMD-API/operation/synchronization/mutex_lock.md)和[mutex_unlock](../../../../../api/pro_api/SIMD-API/operation/synchronization/mutex_unlock.md)；需要等待指定pipe或本AI Core全部pipe上的前序操作完成时可使用[`bar_*`](../../../../../api/pro_api/SIMD-API/operation/synchronization/barrier.md)。
+需要显式控制缓冲区互斥时可使用[mutex_lock](../../../../../api/pro_api/SIMD-API/operation/synchronization/mutex_lock.md)和[mutex_unlock](../../../../../api/pro_api/SIMD-API/operation/synchronization/mutex_unlock.md)。需要等待指定流水中此前下发的操作完成时，可根据流水分别使用[bar_m](../../../../../api/pro_api/SIMD-API/operation/synchronization/bar_m.md)、[bar_mte1](../../../../../api/pro_api/SIMD-API/operation/synchronization/bar_mte1.md)、[bar_mte2](../../../../../api/pro_api/SIMD-API/operation/synchronization/bar_mte2.md)、[bar_mte3](../../../../../api/pro_api/SIMD-API/operation/synchronization/bar_mte3.md)或[bar_fix](../../../../../api/pro_api/SIMD-API/operation/synchronization/bar_fix.md)；需要等待本AI Core内全部流水中此前下发的操作完成时，使用[bar_all](../../../../../api/pro_api/SIMD-API/operation/synchronization/bar_all.md)。
 
 PyPTO Pro的流水类型（`pypto_pro.language.PipeType`）与硬件指令流水对应关系：
 

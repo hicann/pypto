@@ -14,67 +14,58 @@
 
 ## 功能说明
 
-填充Tile的padding区域。当Tile设置的`valid_shape`（有效形状）小于`shape`（物理形状）时，有效区域之外的部分为padding区域。`fillpad`根据Tile创建时指定的`pad`值（如`pypto_pro.language.TilePad.zero`）填充该区域。
+填充Tile的padding区域。当Tile设置的valid_shape（有效形状）小于shape（物理形状）时，有效区域之外的部分为padding区域。fillpad根据Tile创建时指定的pad值（如pypto_pro.language.TilePad.zero）填充该区域。
 
-`mode`用于选择填充模式：
+mode用于选择填充模式：
 
-- `NORMAL`：`out`和`src`的shape相同、地址不同。
-- `EXPAND`：允许`out`的shape大于`src`的shape，将源Tile的有效数据复制到目标Tile，并填充扩展区域。
-- `INPLACE`：`out`和`src`的shape相同、地址相同，直接在原地址上填充。
+- pypto_pro.language.FillPadMode.NORMAL：out和src的形状相同、地址不同。
+- pypto_pro.language.FillPadMode.EXPAND：允许out的形状大于src的形状，将源Tile的有效数据复制到目标Tile，并填充扩展区域。
+- pypto_pro.language.FillPadMode.INPLACE：out和src的形状相同、地址相同，直接在原地址上填充。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.fillpad(out, src, *, mode=pypto_pro.language.FillPadMode.NORMAL)
+pypto_pro.language.fillpad(
+    out: Tile,
+    src: Tile,
+    *,
+    mode: FillPadMode = FillPadMode.NORMAL,
+) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输出 | 目标Tile，padding区域将被填充 |
-| `src` | 输入 | 源Tile，提供有效数据和有效形状信息 |
-| `mode` | 输入 | 填充模式，默认`pypto_pro.language.FillPadMode.NORMAL` |
+| out | 输出 | 目的操作数，Tile类型，存储空间为UB或L1 Buffer，支持8、16和32 bit数据类型。必须设置有效的pad属性，例如pypto_pro.language.TilePad.zero。 |
+| src | 输入 | 源操作数，Tile类型，存储空间为UB或L1 Buffer，且必须与out位于相同Buffer。数据位宽必须与out相同。填充范围由src的有效形状确定，有效形状可在TileType中指定或通过set_validshape设置。 |
+| mode | 输入 | 填充模式，[FillPadMode](../../basic_data_structures/FillPadMode.md)类型。 |
 
-## 参数范围
+## 约束说明
 
-### NORMAL模式
+fillpad支持UB和L1 Buffer中的Tile，源Tile和目标Tile必须位于相同Buffer。
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `out` | 输出 | 数据类型：b8、b16、b32<br>shape须与`src`一致<br>必须设置非`null`的`pad`属性（如`pypto_pro.language.TilePad.zero`）<br>地址须与`src`不同 |
-| `src` | 输入 | 数据类型：b8、b16、b32，数据位宽须与`out`一致<br>shape须与`out`一致<br>padding范围由`src`的有效形状确定；可在TileType中指定，或通过`set_validshape`设置 |
-| `mode` | 输入 | `pypto_pro.language.FillPadMode.NORMAL`，可省略 |
+### pypto_pro.language.FillPadMode.NORMAL模式
 
-### EXPAND模式
+- out和src的形状必须相同，地址必须不同。
+- out和src位于L1 Buffer时，Tile类型必须完全相同，包括形状、有效形状和pad属性。
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `out` | 输出 | 数据类型：b8、b16、b32<br>shape各维度须大于等于`src`<br>必须设置非`null`的`pad`属性（如`pypto_pro.language.TilePad.zero`）<br>地址须与`src`不同 |
-| `src` | 输入 | 数据类型：b8、b16、b32，数据位宽须与`out`一致<br>shape各维度须小于等于`out`<br>padding范围由`src`的有效形状确定；可在TileType中指定，或通过`set_validshape`设置 |
-| `mode` | 输入 | `pypto_pro.language.FillPadMode.EXPAND` |
+### pypto_pro.language.FillPadMode.EXPAND模式
 
-### INPLACE模式
+- out和src的地址必须不同，out各维形状不得小于src对应维度。
+- 不支持在L1 Buffer中对不同形状的源Tile和目标Tile使用EXPAND模式。
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `out` | 输出 | 数据类型：b8、b16、b32<br>shape须与`src`一致<br>必须设置非`null`的`pad`属性（如`pypto_pro.language.TilePad.zero`）<br>地址须与`src`相同 |
-| `src` | 输入 | 数据类型：b8、b16、b32，数据位宽须与`out`一致<br>shape须与`out`一致<br>padding范围由`src`的有效形状确定；可在TileType中指定，或通过`set_validshape`设置 |
-| `mode` | 输入 | `pypto_pro.language.FillPadMode.INPLACE` |
+### pypto_pro.language.FillPadMode.INPLACE模式
 
-## 补充说明
+- out和src的形状必须相同，并共享同一地址。
 
-`fillpad`支持Vec和Mat Tile，源、目标必须位于相同内存空间。Mat上的`NORMAL`模式要求源、目标具有完全相同的Tile类型（包括shape、valid_shape和pad）；Mat上的异构`EXPAND`跨层接口尚未定型，不应使用。`INPLACE`还要求源、目标共享同一内存地址。
+## 返回值说明
 
-## 流水类型
-
-V（向量计算流水）。
+无。
 
 ## 调用示例
 
-### NORMAL模式
-
-本例中，源Tile和目标Tile的物理shape均为`[8, 8]`，但使用不同地址。源Tile的有效shape设置为`[5, 7]`后，目标Tile的`[0:5, 0:7]`区域保留源数据，其余区域补零。
+### NORMAL模式示例
 
 ```python
 import pypto_pro.language as pl
@@ -100,9 +91,7 @@ def fillpad_kernel(
         pl.store(z, cur_dst, [0, 0])
 ```
 
-### EXPAND模式
-
-本例中，源Tile的物理shape为`[8, 8]`、有效shape为`[5, 7]`，目标Tile的物理shape扩展为`[8, 16]`，并使用不同地址。执行后，目标Tile的`[0:5, 0:7]`区域保留源数据，其余区域补零。
+### EXPAND模式示例
 
 ```python
 import pypto_pro.language as pl
@@ -128,9 +117,7 @@ def fillpad_expand_kernel(
         pl.store(z, cur_dst, [0, 0])
 ```
 
-### INPLACE模式
-
-本例中，源Tile和目标Tile的物理shape均为`[8, 8]`，并使用同一地址`0x0000`。源Tile的有效shape设置为`[5, 7]`后，`INPLACE`直接在原地址上将其余区域补零，不占用额外地址空间。
+### INPLACE模式示例
 
 ```python
 import pypto_pro.language as pl

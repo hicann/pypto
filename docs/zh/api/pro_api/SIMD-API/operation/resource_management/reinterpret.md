@@ -40,14 +40,14 @@ pypto_pro.language.reinterpret(
 
 | 参数   | 输入/输出 | 说明                                                                                                                                                    |
 | ------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| tile   | 输入      | 源操作数，Tile或TileGroup类型。                                                                                                                         |
-| dtype  | 输入      | 可选，新的数据类型，[pypto_pro.language.DataType](../../basic_data_structures/DataType.md)枚举值，缺省继承原dtype。                                      |
-| shape  | 输入      | 可选，新Tile的各维大小，缺省继承原shape。<br />- dtype变化时必须同时提供shape，新声明的Tile占用的字节数（元素数×dtype字节数）不得超过原Tile的字节数。 |
-| layout | 输入      | 可选，新的分形，[pypto_pro.language.TensorLayout](../../basic_data_structures/TensorLayout.md)枚举值，缺省继承原layout。        |
+| tile   | 输入      | 待重声明的对象，Tile或TileGroup类型。源Tile必须已绑定编译期可确定的Buffer地址；新别名与源对象复用同一地址和大小，不执行数据搬运或类型转换。 |
+| dtype  | 输入      | 目标数据类型，[pypto_pro.language.DataType](../../basic_data_structures/DataType.md)类型，可选，省略时继承原dtype。指定dtype时必须同时指定shape，且Tile基地址必须按新dtype的元素字节数对齐。 |
+| shape  | 输入      | 目标形状，List[int]类型，可选，必须是非空的编译期整数列表，省略时继承原shape。新shape与dtype决定的存储占用不得超过原Tile的Buffer大小；运行时有效形状应使用pypto_pro.language.set_validshape设置。 |
+| layout | 输入      | 目标数据排布，[pypto_pro.language.TensorLayout](../../basic_data_structures/TensorLayout.md)类型，可选，省略时继承原layout。调用方必须确保Buffer中的物理数据确实符合新layout。 |
 
 ## 约束说明
 
-- Tile基地址必须能被新Tile数据类型位宽整除。
+- dtype、shape和layout三个可选参数中至少必须指定一项。
 - 原始Tile的pypto_pro.language.set_validshape不继承。
 - TileGroup重声明后，与原TileGroup使用同一buffer管理，任意一方的next()行为都会影响buffer的轮转。需要独立轮转buffer时建议使用group[i] [pypto_pro.language.make_tile_group](make_tile_group.md)。
 

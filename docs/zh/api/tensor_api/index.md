@@ -1,4 +1,4 @@
-# API参考
+# PyPTO Tensor API参考
 
 ```{toctree}
 :maxdepth: 2

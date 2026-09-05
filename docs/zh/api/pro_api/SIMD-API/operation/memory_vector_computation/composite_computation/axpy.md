@@ -14,37 +14,33 @@
 
 ## 功能说明
 
-向量标量乘加：`out[i] = alpha * src[i] + out[i]`。将源Tile每个元素乘以标量alpha后累加到目标Tile。
+向量标量乘加：out[i] = alpha * src[i] + out[i]。将源Tile每个元素乘以标量alpha后累加到目标Tile。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.axpy(out, src, alpha)
+pypto_pro.language.axpy(out: Tile, src: Tile, alpha: Scalar) -> None
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `out` | 输入/输出 | 目标Tile，同时作为累加器输入和输出 |
-| `src` | 输入 | 源Tile，乘以`alpha`后累加到`out` |
-| `alpha` | 输入 | 标量乘数 |
+| out | 输入/输出 | 目的操作数，Tile类型，存储空间为UB，数据类型为DT_FP16或DT_FP32，数据类型、形状和有效形状须与src一致。运算前保存累加初值，运算后保存计算结果。 |
+| src | 输入 | 源操作数，Tile类型，存储空间为UB，数据类型为DT_FP16或DT_FP32，形状和有效形状须与out一致。 |
+| alpha | 输入 | 缩放系数，float或Scalar类型，可为编译期常量或运行时浮点Scalar，数据类型必须与src的数据类型一致。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `out` | 输入/输出 | Vec Tile，dtype支持FP16或FP32；shape和`valid_shape`须与`src`一致。通常dtype与`src`相同；另支持`src`为FP16、`out`为FP32的拓宽计算。运算前须已载入累加器初值，运算后被结果覆盖 |
-| `src` | 输入 | Vec Tile，dtype支持FP16或FP32；shape和`valid_shape`须与`out`一致 |
-| `alpha` | 输入 | 编译期常量或运行时浮点标量表达式；标量dtype必须与`src`元素dtype完全一致 |
+- out和src必须采用行主序排布。
 
-## 流水类型
+## 返回值说明
 
-V（向量计算流水）。
+无。
 
 ## 调用示例
 
-下面是一个完整Kernel：载入两个FP32 Tile，用`pypto_pro.language.axpy`做`y = 2.0 * x + y`融合标量乘加。纯Vector Kernel使用`make_tile_group`管理Tile资源，并通过`auto_mutex`完成流水同步。
+### 计算y = 2.0 × x + y
 
 ```python
 import pypto_pro.language as pl
@@ -69,7 +65,7 @@ def axpy_kernel(
         pl.store(y, tile_y, [0, 0])
 ```
 
-实测结果示例如下：
+### 运行结果
 
 <!-- pypto-doc-output:axpy:start -->
 ```bash

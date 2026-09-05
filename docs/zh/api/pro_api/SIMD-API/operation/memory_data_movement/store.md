@@ -40,14 +40,14 @@ pypto_pro.language.store(
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| dst_tensor | 输出 | 目标GM Tensor。源Tile位于UB时支持ND、DN和NZ布局；源Tile位于L0C Buffer时支持ND和NZ布局。写入起始位置和有效写入区域不能超过各维shape。 |
-| src_tile | 输入 | 待写回GM的源Tile，须位于UB或L0C Buffer。UB Tile的首地址须按32字节对齐，L0C Buffer Tile的首地址须按64字节对齐。不支持从L1 Buffer直接写回GM。 |
-| offsets | 输入 | 目标Tensor各维度的绝对元素偏移，长度与dst_tensor的维数相同，不支持负数。 |
-| relu_pre_mode | 输入 | 可选，仅用于L0C Buffer写回GM时在写回前执行ReLU。支持pypto_pro.language.ReluPreMode.NormalRelu。不能与Tile类型的scale同时使用。 |
-| scale | 输入 | 可选，仅用于L0C Buffer写回GM时设置量化比例。支持float、Scalar或Tile类型。Scalar支持DT_FP32、DT_INT32和DT_INT64。Tile用于按列分别设置比例，须位于MemorySpace.Scaling对应的Fixpipe Buffer，数据类型为DT_INT64，shape为[1, N]，其中N是16的倍数且不大于512。不支持Tensor类型和[N, 1]形式。 |
-| order | 输入 | 可选，指定源Tile各维度对应的目标Tensor维度。各维度编号必须在目标Tensor的维度范围内、不能重复并按升序排列；省略时对应目标Tensor的最后两个维度。 |
-| atomic | 输入 | 可选，原子写模式，[pypto_pro.language.AtomicType](../../basic_data_structures/AtomicType.md)类型。支持AtomicNone和AtomicAdd。 |
-| phase | 输入 | 可选，L0C Buffer中多步矩阵计算结果写回GM时所处的阶段，[pypto_pro.language.STPhase](../../basic_data_structures/STPhase.md)类型。不能与Tile类型的scale同时使用。 |
+| dst_tensor | 输出 | 目的操作数，Tensor类型，存储空间为GM。源Tile位于UB时支持ND、DN和NZ布局；源Tile位于L0C Buffer时支持ND和NZ布局。写入起始位置和有效写入区域不能超过各维shape。 |
+| src_tile | 输入 | 源操作数，Tile类型，存储空间为UB或L0C Buffer。UB Tile的首地址须按32字节对齐，L0C Buffer Tile的首地址须按64字节对齐；不支持从L1 Buffer直接写回GM。 |
+| offsets | 输入 | 目标Tensor的元素偏移，List[int或Scalar]类型，长度与dst_tensor的维数相同，不支持负数。 |
+| relu_pre_mode | 输入 | 预处理模式，pypto_pro.language.ReluPreMode类型，可选，仅用于L0C Buffer写回GM时在写回前执行ReLU。支持ReluPreMode.NormalRelu，不能与Tile类型的scale同时使用。 |
+| scale | 输入 | 量化比例，float、Scalar或Tile类型，可选，仅用于L0C Buffer写回GM。Scalar支持DT_FP32、DT_INT32和DT_INT64。Tile用于按列分别设置比例，须位于MemorySpace.Scaling对应的Fixpipe Buffer，数据类型为DT_INT64，shape为[1, N]，其中N是16的倍数且不大于512。不支持Tensor类型和[N, 1]形式。 |
+| order | 输入 | 维度映射，List[int]类型，可选。指定源Tile各维度对应的目标Tensor维度；各维度编号必须在目标Tensor的维度范围内、不能重复并按升序排列，省略时对应目标Tensor的最后两个维度。 |
+| atomic | 输入 | 原子写模式，[pypto_pro.language.AtomicType](../../basic_data_structures/AtomicType.md)类型，可选。支持AtomicNone和AtomicAdd。 |
+| phase | 输入 | 分块写回阶段，[pypto_pro.language.STPhase](../../basic_data_structures/STPhase.md)类型，可选，用于L0C Buffer中多步矩阵计算结果写回GM。不能与Tile类型的scale同时使用。 |
 
 ## 约束说明
 

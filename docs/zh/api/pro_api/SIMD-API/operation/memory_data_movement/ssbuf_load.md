@@ -29,18 +29,17 @@ pypto_pro.language.ssbuf_load(
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| struct_var | 输出 | 接收读取结果的具名struct，须由[pypto_pro.language.struct](../utilities/struct.md)创建。sizeof(struct_var)必须是4的倍数。接口每次读取4字节，共读取sizeof(struct_var) / 4次，不读取末尾不足4字节的数据。发送端和接收端必须使用字段顺序、字段类型、数组长度及C++对齐方式完全一致的struct定义。 |
-| offset | 输入 | SSBuffer中的起始字节地址偏移，读取区间为[offset, offset + sizeof(struct_var))。支持非负的整型常量或运行时整型标量表达式，必须按4字节对齐。读取区间必须位于目标平台的有效SSBuffer地址范围内；PyPTO不对offset执行越界检查，开发者需要根据目标平台和Kernel通信方案规划地址。 |
+| struct_var | 输出 | 接收读取结果的参数，Struct类型，须由[pypto_pro.language.struct](../utilities/struct.md)创建。sizeof(struct_var)必须是4的倍数。接口每次读取4字节，共读取sizeof(struct_var) / 4次，不读取末尾不足4字节的数据。发送端和接收端必须使用字段顺序、字段类型、数组长度及C++对齐方式完全一致的struct定义。 |
+| offset | 输入 | 起始字节地址偏移，int或Scalar类型，读取区间为[offset, offset + sizeof(struct_var))。取值必须非负并按4字节对齐。读取区间必须位于目标平台的有效SSBuffer地址范围内；PyPTO不对offset执行越界检查，开发者需要根据目标平台和Kernel通信方案规划地址。 |
 
 ## 约束说明
 
-1. SSBuffer按字节寻址，不是Tile内存，也不经过MTE数据搬运通路。接口由S流水执行。
-2. pypto_pro.language.ssbuf_load本身不等待发送端完成写入。跨硬件流水或跨计算核通信时，接收端必须先调用与发送端匹配的[pypto_pro.language.system.wait_cross_core](../synchronization/wait_cross_core.md)，再调用pypto_pro.language.ssbuf_load读取数据。
-3. 读取期间不得有其他执行单元改写同一区间，否则读取结果无法保证一致。
+- pypto_pro.language.ssbuf_load本身不等待发送端完成写入。跨硬件流水或跨计算核通信时，接收端必须先调用与发送端匹配的[pypto_pro.language.system.wait_cross_core](../synchronization/wait_cross_core.md)，再调用pypto_pro.language.ssbuf_load读取数据。
+- 读取期间不得有其他执行单元改写同一区间，否则读取结果无法保证一致。
 
 ## 返回值说明
 
-无返回值。读取的数据写入struct_var。
+无。
 
 ## 调用示例
 

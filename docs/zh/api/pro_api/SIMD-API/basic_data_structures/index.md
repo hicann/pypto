@@ -9,6 +9,7 @@ AtomicType
 CacheLine
 DataType
 DcciDst
+FillPadMode
 MemorySpace
 PipeType
 Ptr
