@@ -512,22 +512,11 @@ public:
         }
     }
 
-    void UpdateLaunchEarlyMode(KernelBinary* kernel)
-    {
-        if (launchEarlyMode_ < 0) {
-            if (!kernel->HasValueDepend() || isReadyOnHostTensorsSet_) {
-                launchEarlyMode_ = 0;
-            } else {
-                launchEarlyMode_ = 2;
-            }
-        }
-    }
-
     void Launch(KernelBinary* kernel, AclRtStream aicoreStream, std::vector<DeviceTensorData>& tensors,
                 uint8_t* ctrlFlowCache, int64_t* workspace)
     {
         SetTensorData(tensors);
-        UpdateLaunchEarlyMode(kernel);
+
         COMPILER_LOGD("Workspace %p cfgcache %p", workspace, ctrlFlowCache);
         DeviceLauncher::LaunchKernel(aicoreStream, ctrlFlowCache, kernel, workspace, tensors, isDebugMode_,
                                      launchEarlyMode_);
@@ -578,7 +567,6 @@ private:
                     launchEarlyMode_ = runtimeOptions["launch_early_mode"].cast<int>();
                 }
             }
-            isReadyOnHostTensorsSet_ = runtimeOptions.contains("ready_on_host_tensors");
         }
 
         if (!module.attr("_debug_options").is_none()) {
@@ -613,6 +601,10 @@ private:
                 totalTimeoutSec = host_options["compile_timeout"].cast<int>();
             }
         }
+
+        if (launchEarlyMode_ < 0) {
+            launchEarlyMode_ = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) ? 2 : 0;
+        }
     }
 
 private:
@@ -625,7 +617,6 @@ private:
     double timeoutSec{static_cast<double>(config::GetHostOption<int>(TIMEOUT_SEC))};
     int totalTimeoutSec{600};
     int launchEarlyMode_{-1};
-    bool isReadyOnHostTensorsSet_{false};
 
     std::vector<KernelBinary*> kernels;
 };
