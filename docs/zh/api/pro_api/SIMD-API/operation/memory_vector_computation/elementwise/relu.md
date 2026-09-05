@@ -42,8 +42,6 @@ pypto_pro.language.relu(
 
 ## 调用示例
 
-下面是一个完整Kernel：把DT_FP32源Tile逐元素执行ReLU激活后写回GM。Vector Kernel开启auto_mutex，同步由make_tile_group自动管理。
-
 ```python
 import pypto_pro.language as pl
 

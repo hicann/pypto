@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-对源操作数lhs和rhs对应位置的元素执行按位异或，将结果写入目的操作数out。计算时需要临时操作数tmp。
+对源操作数lhs和rhs对应位置的元素执行按位异或，将结果写入目的操作数out。
 
 ## 函数原型
 
@@ -31,10 +31,10 @@ pypto_pro.language.xor(
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| out | 输出 | 目的操作数，Tile类型，存放逐元素按位异或的结果。数据类型与lhs、rhs、tmp一致，支持DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32或DT_UINT32。shape与lhs、rhs一致。 |
+| out | 输出 | 目的操作数，Tile类型，存放逐元素按位异或的结果。数据类型与lhs、rhs一致，支持DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32或DT_UINT32。shape与lhs、rhs一致。 |
 | lhs | 输入 | 左操作数，Tile类型。数据类型与out一致。 |
 | rhs | 输入 | 右操作数，Tile类型。采用row-major布局，valid_shape与out一致，shape与out、lhs一致。数据类型与out一致。 |
-| tmp | 输入 | 临时操作数，Tile类型，用于存放中间计算结果。数据类型与out一致。shape与out一致，且内存区域不能与out、lhs或rhs重叠。 |
+| tmp | 输入 | 兼容性参数，Tile类型。 |
 
 ## 约束说明
 
@@ -45,8 +45,6 @@ pypto_pro.language.xor(
 无。
 
 ## 调用示例
-
-下面是一个完整Kernel：从GM载入两个DT_INT32输入到UB，逐元素按位异或后写回GM。tmp为异或计算所需的临时Tile。Vector Kernel开启auto_mutex，同步由make_tile_group自动管理。
 
 ```python
 import pypto_pro.language as pl

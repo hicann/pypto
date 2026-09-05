@@ -38,7 +38,7 @@ pypto_pro.language.maximum(
 |---|---|---|
 | out | 输出 | 目的操作数，Tile类型，存放逐元素计算结果或归约结果。逐元素模式下数据类型与lhs一致，支持DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP16、DT_BF16和DT_FP32；归约模式下数据类型与lhs一致，dim=0时shape为[行数, 1]，dim=1时shape为[1, 列数]。 |
 | lhs | 输入 | Tile类型。逐元素模式下为左操作数；归约模式下为源操作数，必须为二维Tile，dim=0时支持DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_FP16和DT_FP32，dim=1时还支持DT_INT64、DT_UINT64和DT_BF16。 |
-| rhs | 输入 | Tile或Scalar类型。逐元素模式下为右操作数，Tile-Tile时数据类型与out一致且shape与out、lhs一致；归约模式下为临时Tile，数据类型和shape与lhs一致。 |
+| rhs | 输入 | Tile或Scalar类型。逐元素模式下为右操作数，Tile-Tile时数据类型与out一致且shape与out、lhs一致；归约模式下为临时Tile。 |
 | dim | 输入 | 可选，归约维度。未传入时执行逐元素计算；传入0时沿最后一维归约；传入1时沿第一维归约。 |
 
 ## 约束说明
@@ -52,8 +52,6 @@ pypto_pro.language.maximum(
 ## 调用示例
 
 ### Tile-Tile模式
-
-下面是一个完整Kernel：从GM载入两个DT_FP32输入到UB，使用pypto_pro.language.maximum逐元素取较大值后写回GM。Vector Kernel开启auto_mutex，同步由make_tile_group自动管理。
 
 ```python
 import pypto_pro.language as pl

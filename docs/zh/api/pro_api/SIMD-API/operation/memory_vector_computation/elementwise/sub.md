@@ -49,8 +49,6 @@ pypto_pro.language.sub(
 
 ### Tile-Tile模式
 
-下面是一个完整Kernel：从GM载入两个DT_FP32输入到UB，使用pypto_pro.language.sub逐元素相减后写回GM。Vector Kernel开启auto_mutex，同步由make_tile_group自动管理。
-
 ```python
 import pypto_pro.language as pl
 

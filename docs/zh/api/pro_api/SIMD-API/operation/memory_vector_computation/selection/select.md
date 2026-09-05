@@ -36,11 +36,11 @@ pypto_pro.language.select(
 | mask | 输入 | 源操作数（掩码），Tile类型，存储空间为UB，数据类型为DT_UINT8，采用按位压缩格式，形状与lhs一致，须由比较接口生成。 |
 | lhs | 输入 | 源操作数（掩码为真时选取的数据），Tile类型，存储空间为UB，数据类型和形状必须与out一致。 |
 | rhs | 输入 | 源操作数（掩码为假时选取的数据），Tile或Scalar类型，也支持可转换为Scalar的Python int或float常量。传入Tile时，存储空间为UB，数据类型和形状必须与out一致；传入Scalar或Python常量时，数据类型必须与out的元素类型兼容。 |
-| tmp | 输入 | 兼容性参数，Tile类型，存储空间为UB。该参数为接口必传参数，当前实现不读取或写入，不要求其数据类型和形状与out一致。 |
+| tmp | 输入 | 兼容性参数，Tile类型。 |
 
 ## 约束说明
 
-- out、mask、lhs、tmp以及Tile类型的rhs必须位于UB。out、lhs以及Tile类型的rhs必须采用行主序排布。
+- out、mask、lhs以及Tile类型的rhs必须位于UB。out、lhs以及Tile类型的rhs必须采用行主序排布。
 - out、lhs以及Tile类型的rhs必须具有相同的形状、有效形状和数据类型。
 
 ## 返回值说明
