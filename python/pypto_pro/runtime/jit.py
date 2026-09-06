@@ -226,6 +226,43 @@ def _infer_test_artifact_prefix() -> str | None:
     return None
 
 
+def _current_device_id() -> str | None:
+    """The NPU device id this process is bound to, or None if the NPU is not initialized."""
+    try:
+        if not torch.npu.is_initialized():
+            return None
+        return str(torch.npu.current_device())
+    except Exception:
+        return None
+
+
+def _current_rank() -> str | None:
+    """This process's rank in its process group, or None outside a distributed job."""
+    try:
+        dist = torch.distributed
+        if dist.is_available() and dist.is_initialized():
+            return str(dist.get_rank())
+    except Exception:
+        return None
+    return None
+
+
+def _process_identity_tag() -> str:
+    """The build dir name segment identifying this process: ``__d<device>_r<rank>``.
+
+    Either component is omitted when unavailable (``__d0`` outside a distributed job); with
+    both unavailable the tag is empty.
+    """
+    parts = []
+    device = _current_device_id()
+    if device:
+        parts.append(f"d{device}")
+    rank = _current_rank()
+    if rank:
+        parts.append(f"r{rank}")
+    return f"__{'_'.join(parts)}" if parts else ""
+
+
 def _make_artifact_build_dir(prog, arch: str, test_prefix: str | None = None, tilingkey_suffix: str = "") -> str:
     """The per-kernel build dir. All tilingkeys of one kernel share this dir; each concrete
     key gets a ``tk_<packed>`` subdir under it (see :func:`_make_tilingkey_dir`)."""
@@ -234,7 +271,12 @@ def _make_artifact_build_dir(prog, arch: str, test_prefix: str | None = None, ti
     safe_name = _sanitize_artifact_component(str(prog_name))
     test_prefix = test_prefix if test_prefix is not None else _infer_test_artifact_prefix()
     readable_prefix = f"{test_prefix}__{safe_name}" if test_prefix and test_prefix != safe_name else safe_name
-    return os.path.join(".", "build", f"{readable_prefix}__{arch}{tilingkey_suffix}")
+    work_path = os.environ.get("ASCEND_WORK_PATH", "").strip()
+    root = os.path.join(os.path.expanduser(work_path), "PYPTO_PRO") if work_path else "."
+    return os.path.join(
+        root,
+        "build",
+        f"{readable_prefix}__{arch}{tilingkey_suffix}{_process_identity_tag()}")
 
 
 def _make_tilingkey_dir(build_dir: str, tilingkey_packed: int | None) -> str:
@@ -338,14 +380,35 @@ def _datatype_hash(metadata: dict | None) -> str | None:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
+def _atomic_write_text(path: Path, content: str) -> None:
+    """Write ``content`` to ``path`` so concurrent readers never see a partial file.
+
+    Unlike ``Path.write_text``, which truncates the target to zero bytes before writing, this
+    writes a sibling temp file and renames it over the target: a reader gets either the complete
+    old content or the complete new content. Readers holding an open descriptor keep reading the
+    old content until they close it.
+
+    The temp file is a sibling because rename is only atomic within one filesystem, is named
+    with pid and a uuid so two writers never share it, and carries a leading dot to stay out of
+    the ``*.h`` directory scans in pypto_compile.
+    """
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp")
+    try:
+        tmp.write_text(content, encoding="utf-8")
+        os.replace(tmp, path)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+
+
 def write_datatype_metadata(output_dir: str, metadata: dict | None) -> None:
     """Write datatype.json into an artifact directory when dtype specialization is active."""
     if metadata is None:
         return
     Path(output_dir).mkdir(parents=True, exist_ok=True)
-    Path(output_dir, "datatype.json").write_text(
+    _atomic_write_text(
+        Path(output_dir, "datatype.json"),
         json.dumps(metadata, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
     )
 
 
@@ -1121,9 +1184,9 @@ def _parse_and_codegen_targets(
 def _write_codegen_artifacts(result: CodegenResult) -> None:
     """Write the final assembled source and shared tiling headers once."""
     Path(result.build_dir).mkdir(parents=True, exist_ok=True)
-    Path(result.build_dir, "kernel.cpp").write_text(result.content, encoding="utf-8")
+    _atomic_write_text(Path(result.build_dir, "kernel.cpp"), result.content)
     for header_name, header_content in result.tiling_headers.items():
-        Path(result.build_dir, header_name).write_text(header_content, encoding="utf-8")
+        _atomic_write_text(Path(result.build_dir, header_name), header_content)
 
 
 def _add_kernel_header(result: CodegenResult) -> CodegenResult:
@@ -1147,7 +1210,7 @@ def _dump_pipeline_generated_source(
     """
     if not source:
         return
-    Path(out_dir, "pipeline_generated.py").write_text(source, encoding="utf-8")
+    _atomic_write_text(Path(out_dir, "pipeline_generated.py"), source)
 
 
 def _runtime_include_flags(ascend_home_path: str) -> list[str]:
@@ -1315,7 +1378,7 @@ def _build_jit_so(
         enable_print_debug=resolved_print_debug,
         global_entry=global_entry,
     )
-    Path(paths.final_kernel).write_text(caller_content, encoding="utf-8")
+    _atomic_write_text(Path(paths.final_kernel), caller_content)
 
     generated = GeneratedKernel(
         content=cg.content,
