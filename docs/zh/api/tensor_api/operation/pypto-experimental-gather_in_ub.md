@@ -74,25 +74,25 @@ TileShape的维度设置须与输出张量保持一致，用于控制输出Tile�
 
 考虑以上场景，indices为topk结果，block\_table为Page Attention的页表，param为kv cache，block\_size为2。最终的结果是将token的kv cache收集起来。
 
-以token id 4为例（在图中标红），根据blockSize计算出实际偏移：
+以token id 4为例（在图中标红），根据block_size计算出实际偏移：
 
 blockIdx = 4 / 2; //计算对应的逻辑块，第2个逻辑块
 
 tail = 4 % 2;        //计算块内偏移，偏移为0
 
-slcBlockIdx = blockTable\[0, blockIdxInBatch\];  //查表，得到该块实际偏移，对应第1个物理块
+slcBlockIdx = block_table\[0, blockIdxInBatch\];  //查表，得到该块实际偏移，对应第1个物理块
 
-offsets = slcBlockIdx \* blockSize + tail;//计算出实际的偏移，为2
+offsets = slcBlockIdx \* block_size + tail;//计算出实际的偏移，为2
 
 对数据进行搬运
 
 ```python
 param = pypto.tensor([6, 4], pypto.DT_FP32)
 indices = pypto.tensor([1, 3], pypto.DT_INT32)
-blockTable = pypto.tensor([1, 3], pypto.DT_INT32)
-blockSize = 2
+block_table = pypto.tensor([1, 3], pypto.DT_INT32)
+block_size = 2
 axis = -2
-result = pypto.experimental.gather_in_ub(param , indices , blockTable, blockSize , axis)
+result = pypto.experimental.gather_in_ub(param , indices , block_table, block_size , axis)
 ```
 
 结果示例如下：
@@ -114,7 +114,7 @@ result = pypto.experimental.gather_in_ub(param , indices , blockTable, blockSize
   [ 50, 51, 52, 53],
 ]
 输入数据indices : [0, 4, 3]
-输入数据blockTable : [0, 2, 1]
+输入数据block_table : [0, 2, 1]
 输出数据out:
 [
    [  0,  1,  2,  3],

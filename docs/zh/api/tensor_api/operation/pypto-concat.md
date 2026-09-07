@@ -64,8 +64,8 @@ pypto.set_vec_tile_shapes(4, 16, 32)
 ### 接口调用示例
 
 ```python
-a = pypto.tensor([2, 2], pypto.DT_FP32)  # 2x2 tensor with all 1s
-b = pypto.tensor([2, 2], pypto.DT_FP32)  # 2x2 tensor with all 0s
+a = pypto.ones([2, 2], pypto.DT_FP32)  # 2x2 tensor with all 1s
+b = pypto.zeros([2, 2], pypto.DT_FP32)  # 2x2 tensor with all 0s
 out = pypto.concat([a, b], dim = 0)
 ```
 

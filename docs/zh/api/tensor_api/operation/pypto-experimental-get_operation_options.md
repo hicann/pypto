@@ -38,5 +38,5 @@ get_operation_options() -> Dict[str, Union[str, int, List[int], Dict[int, int]]]
 ## 调用示例
 
 ```python
-pypto.get_operation_options()
+pypto.experimental.get_operation_options()
 ```

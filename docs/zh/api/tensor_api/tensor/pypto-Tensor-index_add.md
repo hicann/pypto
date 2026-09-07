@@ -15,7 +15,7 @@
 ## 函数原型
 
 ```python
-index_add(self, dim: int, index: 'Tensor', source: 'Tensor', *, alpha: Optional[List[Union[int, float]]] = 1) -> 'Tensor'
+index_add(self, dim: int, index: 'Tensor', source: 'Tensor', *, alpha: Union[int, float] = 1) -> 'Tensor'
 ```
 
 ## 详细说明

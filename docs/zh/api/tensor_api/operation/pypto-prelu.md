@@ -62,7 +62,7 @@ TileShape维度应和输出一致。
 
 示例1（1D输入）：输入input与weight，shape分别为[n] [1]。输出为[n]，TileShape设置为[n1]，则n1用于切分n轴。
 
-示例2（2D输入）：输入input与weight，shape分别为[m, n] [n\]。输出为[m, n]，TileShape设置为[m1, n1]，则m1，n1分别用于切分m，n轴。
+示例2（2D输入）：输入input与weight，shape分别为[m, n] [n]。输出为[m, n]，TileShape设置为[m1, n1]，则m1，n1分别用于切分m，n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)

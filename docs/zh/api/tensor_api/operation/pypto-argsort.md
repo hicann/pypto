@@ -27,7 +27,7 @@ argsort(input: Tensor, dim: Optional[int]=None, descending: bool=True) -> Tensor
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
 | input   | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_FP32，DT_FP16。<br>不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
-| dim     | 输入      | 指定排序的维度。<br>支持1-4轴。|
+| dim     | 输入      | 指定排序的维度。<br>支持负索引,取值范围为[-input.dim, input.dim - 1]; 默认值为None,表示最后一个轴。四维输入不支持第0轴(即dim=0或者dim=-4)。|
 | descending | 输入      | 如果为True，按降序返回索引。如果为False，按升序返回索引。 |
 
 ## 返回值说明

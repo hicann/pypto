@@ -15,7 +15,7 @@
 ## 函数原型
 
 ```python
-scatter_(self, dim: int, index: 'Tensor', src: float, *, reduce: str = None) -> 'Tensor'
+scatter_(self, dim: int, index: 'Tensor', src: Union[float, Element, Tensor], *, reduce: str = None) -> 'Tensor'
 ```
 
 ## 详细说明
