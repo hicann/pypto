@@ -2224,13 +2224,18 @@ private:
     {
         aicoreHal_.SetReadyQueue(aicStart_, aicEnd_, AICORE_TASK_STOP + 1);
         aicoreHal_.SetReadyQueue(aivStart_, aivEnd_, AICORE_TASK_STOP + 1);
-        /* write to MAINBASE reg must be done before close 0x18 */
+        /* write to MAINBASE reg must be done before close 0x18;
+         * also make STOP visible before clearing parallelDevTask. */
         __sync_synchronize();
         if (aicoreHal_.NeedsFastPathRegClose()) {
             aicoreHal_.CloseFastPathReg(aicStart_, aicEnd_);
             aicoreHal_.CloseFastPathReg(aivStart_, aivEnd_);
-            __sync_synchronize();
         }
+        // Clear shared parallelDevTask after STOP is visible, fence once, then
+        // GOODBYE. Clearing too early races with aicores still reading ptrElements.
+        aicoreHal_.ResetParallelDevTask(aicStart_, aicEnd_);
+        aicoreHal_.ResetParallelDevTask(aivStart_, aivEnd_);
+        __sync_synchronize();
         aicoreHal_.ResetShakeBuf(aicStart_, aicEnd_);
         aicoreHal_.ResetShakeBuf(aivStart_, aivEnd_);
     }

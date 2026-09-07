@@ -369,12 +369,15 @@ public:
         if constexpr (IsDeviceMode()) {
             ResetShakeBufDeviceOne(coreIdx);
         } else {
-            GetActiveModel()->ResetShakeBuf(args_[coreIdx]);
+            // Clear parallelDevTask before GOODBYE (set inside model ResetShakeBuf).
             ResetParallelDevTask(coreIdx);
+            GetActiveModel()->ResetShakeBuf(args_[coreIdx]);
         }
     }
 
     void ResetShakeBuf(int coreStart, int coreEnd);
+
+    void ResetParallelDevTask(int coreStart, int coreEnd);
 
     inline void InitKernelArgs(int coreIdx, int64_t buffer)
     {
@@ -442,16 +445,7 @@ public:
 
     void ResetParallelDevTask(int coreIdx)
     {
-        DEV_IF_DEVICE
-        {
-            args_[coreIdx]->parallelDevTask.version = 0;
-            args_[coreIdx]->parallelDevTask.front = 0;
-            args_[coreIdx]->parallelDevTask.rear = 0;
-            for (uint32_t i = 0; i < npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM; i++) {
-                args_[coreIdx]->parallelDevTask.ptrElements[i] = 0;
-                args_[coreIdx]->parallelDevTask.idElements[i] = 0;
-            }
-        }
+        DEV_IF_DEVICE { ResetParallelDevTaskDeviceOne(coreIdx); }
         else
         {
             GetActiveModel()->ResetParallelDevTask(args_[coreIdx]);
@@ -470,9 +464,12 @@ private:
     {
         args_[coreIdx]->shakeBuffer[0] = 0;
         args_[coreIdx]->shakeBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_COREFUNC_DATA_INDEX] = 0;
+        // parallelDevTask is cleared in BatchStopAllManagedCores before the barrier
+        // that precedes ResetShakeBuf / GOODBYE.
         args_[coreIdx]->waveBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_GOODBYE_INDEX] = AICORE_SAY_GOODBYE;
-        ResetParallelDevTask(coreIdx);
     }
+
+    void ResetParallelDevTaskDeviceOne(int coreIdx);
 
     inline ModelBase* GetActiveModel()
     {

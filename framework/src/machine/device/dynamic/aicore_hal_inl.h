@@ -203,4 +203,64 @@ inline void AicoreHAL::ResetShakeBuf(int coreStart, int coreEnd)
     }
 }
 
+inline void AicoreHAL::ResetParallelDevTaskDeviceOne(int coreIdx)
+{
+    volatile ParallelDevTask* task = &args_[coreIdx]->parallelDevTask;
+    task->version = 0;
+    task->front = 0;
+    task->rear = 0;
+    task->reserver = 0;
+    for (uint32_t i = 0; i < npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM; i++) {
+        task->ptrElements[i] = 0;
+        task->idElements[i] = 0;
+    }
+}
+
+inline void AicoreHAL::ResetParallelDevTask(int coreStart, int coreEnd)
+{
+    if constexpr (IsDeviceMode()) {
+        int i, idx = coreStart;
+        int n = coreEnd - coreStart;
+        for (i = 0; i < (n & (~CORE_QUEUE_MODE_NUM_7)); i += CORE_QUEUE_MODE_NUM_8) {
+            ResetParallelDevTaskDeviceOne(idx++);
+            ResetParallelDevTaskDeviceOne(idx++);
+            ResetParallelDevTaskDeviceOne(idx++);
+            ResetParallelDevTaskDeviceOne(idx++);
+            ResetParallelDevTaskDeviceOne(idx++);
+            ResetParallelDevTaskDeviceOne(idx++);
+            ResetParallelDevTaskDeviceOne(idx++);
+            ResetParallelDevTaskDeviceOne(idx++);
+        }
+        switch (n & CORE_QUEUE_MODE_NUM_7) {
+            case CORE_QUEUE_MODE_NUM_7:
+                ResetParallelDevTaskDeviceOne(idx++);
+                [[fallthrough]];
+            case CORE_QUEUE_MODE_NUM_6:
+                ResetParallelDevTaskDeviceOne(idx++);
+                [[fallthrough]];
+            case CORE_QUEUE_MODE_NUM_5:
+                ResetParallelDevTaskDeviceOne(idx++);
+                [[fallthrough]];
+            case CORE_QUEUE_MODE_NUM_4:
+                ResetParallelDevTaskDeviceOne(idx++);
+                [[fallthrough]];
+            case CORE_QUEUE_MODE_NUM_3:
+                ResetParallelDevTaskDeviceOne(idx++);
+                [[fallthrough]];
+            case CORE_QUEUE_MODE_NUM_2:
+                ResetParallelDevTaskDeviceOne(idx++);
+                [[fallthrough]];
+            case CORE_QUEUE_MODE_NUM_1:
+                ResetParallelDevTaskDeviceOne(idx++);
+                [[fallthrough]];
+            default:
+                break;
+        }
+    } else {
+        for (int i = coreStart; i < coreEnd; ++i) {
+            ResetParallelDevTask(i);
+        }
+    }
+}
+
 } // namespace npu::tile_fwk::dynamic
