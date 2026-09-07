@@ -13,6 +13,7 @@
 import argparse
 from collections import defaultdict
 from datetime import datetime, timezone
+import gc
 import json
 import os
 import sys
@@ -296,7 +297,22 @@ def parse_arguments():
     return parser.parse_args()
 
 
+try:
+    import orjson as _fast_json
+except ImportError:
+    _fast_json = None
+
+
 def load_json(file_path):
+    if _fast_json is not None:
+        gc_enabled = gc.isenabled()
+        gc.disable()
+        try:
+            with open(file_path, "rb") as file:
+                return _fast_json.loads(file.read())
+        finally:
+            if gc_enabled:
+                gc.enable()
     with open(file_path, "r") as file:
         return json.load(file)
 
@@ -749,7 +765,7 @@ def convert_to_chrome_trace_json(out_path, is_dyn):
     # 构建chrome trace json 文件
     # 写入到JSON文件
     with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(res, f, ensure_ascii=False, indent=4)
+        f.write(json.dumps(res, ensure_ascii=False, separators=(",", ":")))
     print("Convert To perfetto trace End")
 
 
@@ -767,17 +783,14 @@ def generate_execute_json(path):
     print("Generate Executable Json:", path)
 
 
-def get_func_index(func_hash, func_data):
-    i = 0
-    while i < len(func_data):
-        if str(func_hash) == func_data[i].get("hash", "0"):
-            return i
-        i += 1
-    return i
-
-
 def load_dyn_topo(file_path, func_data):
     # 输入文件由Tensor_Main_2.json改为program.json，处理json数据接入
+    hash_order_info_cache = {}
+    func_index_by_hash = {}
+    tensors_cache = {}
+    rawtensors_cache = {}
+    for i, func in enumerate(func_data):
+        func_index_by_hash.setdefault(str(func.get("hash", "0")), i)
     func_hash_data = {}
     for _, func in enumerate(func_data):
         func_hash_data[func['hash']] = func
@@ -829,10 +842,19 @@ def load_dyn_topo(file_path, func_data):
                 wrap_id,
                 static_succ_count,
             ) = fields[:11]
-            root_index = get_func_index(root_hash, func_data)
-            leaf_index = get_func_index(func_hash, func_data)
+            root_index = func_index_by_hash.get(str(root_hash), len(func_data))
+            leaf_index = func_index_by_hash.get(str(func_hash), len(func_data))
             succs = fields[11:]
-            l1_info, cube_info, vec_info = fcvt.get_hash_order_info_for_task(root_index, opmagic, leaf_index, func_data)
+            cache_key = (root_index, opmagic, leaf_index)
+            if cache_key not in hash_order_info_cache:
+                hash_order_info_cache[cache_key] = fcvt.get_hash_order_info_for_task(
+                    root_index, opmagic, leaf_index, func_data
+                )
+            l1_info, cube_info, vec_info = hash_order_info_cache[cache_key]
+            str_func_hash = str(func_hash)
+            if str_func_hash not in tensors_cache:
+                tensors_cache[str_func_hash] = fcvt.get_tensors(str_func_hash, func_hash_data)
+                rawtensors_cache[str_func_hash] = fcvt.get_rawtensors(str_func_hash, func_hash_data)
             topo.append(
                 {
                     "taskId": seq_no << 32 | task_id,
@@ -855,8 +877,8 @@ def load_dyn_topo(file_path, func_data):
                     "outoperands": fcvt.get_in_out_operand_str(False, root_index, opmagic, func_data),
                     "in_operands": fcvt.get_in_out_operands_data(True, root_index, opmagic, func_data),
                     "out_operands": fcvt.get_in_out_operands_data(False, root_index, opmagic, func_data),
-                    "tensors": fcvt.get_tensors(str(func_hash), func_hash_data),
-                    "rawtensors": fcvt.get_rawtensors(str(func_hash), func_hash_data),
+                    "tensors": tensors_cache[str_func_hash],
+                    "rawtensors": rawtensors_cache[str_func_hash],
                 }
             )
     return topo
@@ -1080,6 +1102,7 @@ def calculate_pipe_usage(path):
 if __name__ == "__main__":
     start_time = time_module.time()
     start_str = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+    print("========== Swimlane diagram generation start ==========")
     print(f"Start time: {start_str}")
 
     args = parse_arguments()
@@ -1091,6 +1114,7 @@ if __name__ == "__main__":
         if not os.path.exists(args.func_table_file):
             sys.exit(0)
         program_data = load_json(args.func_table_file)
+        gc.freeze()
         func_data = program_data["functions"]
         input_topo_data = load_dyn_topo(args.topo_json_file, func_data)
     else:
@@ -1117,6 +1141,7 @@ if __name__ == "__main__":
     end_time = time_module.time()
     end_str = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
     print(f"End time: {end_str}")
+    print("========== Swimlane diagram generation end ==========")
 
     duration = int(end_time - start_time)
     print(f"Time taken: {duration} secs")
