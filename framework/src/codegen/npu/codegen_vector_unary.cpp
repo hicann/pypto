@@ -96,7 +96,8 @@ std::string CodeGenOpNPU::PrintRowMaxlineStatic(const PrintUnaryParam& param) co
         reduceAxis = AnyCast<int64_t>(axis);
     }
     bool isValidAxis = ((reduceAxis >= 0) && (reduceAxis < (int(rawShape[1].size()) - 1)));
-    ASSERT(OperErr::ATTRIBUTE_INVALID, isValidAxis) << "unsupported reduce axis: " << reduceAxis;
+    ASSERT(OperErr::ATTRIBUTE_INVALID, isValidAxis)
+        << "unsupported reduce axis: " << reduceAxis << ", expected [0, " << (rawShape[1].size() - 1) << ")";
 
     reduceAxis += SHAPE_DIM4 - rawShape[0].size();
     std::vector<int64_t> srcShape = NormalizeShape(rawShape[1], SHAPE_DIM4);
@@ -131,7 +132,8 @@ std::string CodeGenOpNPU::PrintRowMaxlineDynamicUnaligned(const PrintUnaryParam&
         reduceAxis = AnyCast<int64_t>(axis);
     }
     bool isValidAxis = ((reduceAxis >= 0) && (reduceAxis < (int(rawShape[1].size()) - 1)));
-    ASSERT(OperErr::ATTRIBUTE_INVALID, isValidAxis) << "unsupported reduce axis: " << reduceAxis;
+    ASSERT(OperErr::ATTRIBUTE_INVALID, isValidAxis)
+        << "unsupported reduce axis: " << reduceAxis << ", expected [0, " << (rawShape[1].size() - 1) << ")";
     const std::string& dstDtypeStr = param.dstDtypeStr;
     const std::string& srcDtypeStr = param.srcDtypeStr;
     const std::string& dVar = param.dVar;
@@ -180,7 +182,8 @@ std::string CodeGenOpNPU::PrintRowMaxlineTileTensor() const
     }
 
     bool isValidAxis = ((reduceAxis >= 0) && (reduceAxis < (int(rawShape[1].size()) - 1)));
-    ASSERT(OperErr::ATTRIBUTE_INVALID, isValidAxis) << "unsupported reduce axis: " << reduceAxis;
+    ASSERT(OperErr::ATTRIBUTE_INVALID, isValidAxis)
+        << "unsupported reduce axis: " << reduceAxis << ", expected [0, " << (rawShape[1].size() - 1) << ")";
     reduceAxis += SHAPE_DIM5 - rawShape[0].size();
     std::ostringstream oss;
     oss << tileOpName;

@@ -143,7 +143,8 @@ std::string CodeGenOpNPU::GenGatherFromUBOp() const
     const int64_t axis = AnyCast<int64_t>(opAttrs.at("op_attr_axis"));
     // shape: dst, src0, src1
     int dim = rawShape[ID1].size();
-    ASSERT(GenCodeErr::TENSOR_SHAPE_INVALID, dim <= SHAPE_DIM4) << "GenGatherOp: dim is not supported: " << dim;
+    ASSERT(GenCodeErr::TENSOR_SHAPE_INVALID, dim <= SHAPE_DIM4)
+        << "GenGatherOp: dim " << dim << " is not supported, expected dim <= " << SHAPE_DIM4;
 
     std::vector dstShape = rawShape[ID0];
     std::vector src0Shape = rawShape[ID1];

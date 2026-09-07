@@ -1152,7 +1152,7 @@ std::string CodeGenOpNPU::GenMemL1ToFB() const
     std::vector<std::string> paramList;
     paramList.emplace_back(srcDtypeStr);
     // only need the valid offset of tail axis
-    ASSERT(GenCodeErr::TENSOR_OFFSET_INVALID, dynoffset[ID1].IsValid()) << "GenMemL1TFB offset is invalid";
+    ASSERT(GenCodeErr::TENSOR_OFFSET_INVALID, dynoffset[ID1].IsValid()) << "GenMemL1ToFB offset is invalid";
     paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dynoffset[ID1]));
     std::string templateParam = JoinString(paramList, CONN_COMMA);
     paramList.clear();

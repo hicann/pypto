@@ -73,9 +73,48 @@
 
 ### 采集结果文件说明和参数含义解释
 
-关于采集结果文件的详细说明和IDE参数含义解释，请参阅Machine的Troubleshooting（故障诊断）手册：
+#### output目录产物说明
 
-- [output目录产物说明及IDE参数含义解释](../../../appendix/faq/swimlane-issue.md#output目录产物说明)
+`output/output_时间戳`目录下泳道图相关文件：
+
+| 文件 | 用途 |
+|---|---|
+| `machine_trace_perf_data*.json` | Machine组件原始Profiling数据 |
+| `tilefwk_L1_prof_data_*.json` | Machine组件L1层级Profiling数据 |
+| `merged_swimlane.json` | IDE可视化综合泳道图 |
+| `machine_runtime_operator_trace*.json` | AI CPU / AI Core泳道图（联合时序） |
+
+> `machine_trace_perf_data*.json`与`tilefwk_L1_prof_data_*.json`可判断底层采集是否成功；`merged_swimlane.json`与`machine_runtime_operator_trace*.json`用于PyPTO Toolkit展示。
+
+#### 参数含义解释
+
+##### CTRL AICPU
+
+| 阶段 | 含义 |
+|---|---|
+| **DEV_TASK_BUILD** | 将计算图编译结果组装为设备可执行DevTask的耗时（stitch阶段） |
+| **Post-process** | 所有DevTask构建完成后的收尾耗时，直至Control AICPU退出 |
+| **Total run time** | Control AICPU从启动到退出的完整运行时间 |
+
+##### SCHED AICPU
+
+| 阶段 | 含义 |
+|---|---|
+| **ALLOC_THREAD_ID** | Schedule AICPU线程分配耗时 |
+| **INIT** | Schedule AICPU初始化耗时 |
+| **CORE_HAND_SHAKE** | Schedule AICPU与AI Core建立通信握手的耗时 |
+| **DEV_TASK_RCV** | 从Control AICPU接收DevTask的耗时 |
+| **Post-process** | 所有DevTask下发执行完成后的收尾耗时（含同步停止、等待AI Core退出等），直至Schedule AICPU退出 |
+| **Total run time** | Schedule AICPU从启动到退出的完整运行时间 |
+
+##### AICORE
+
+| 阶段 | 含义 |
+|---|---|
+| **INIT** | AI Core启动后的头段开销，包括初始化、与Schedule AICPU握手，以及等待接收首个计算任务 |
+| **End-to-End time** | 所有AI Core上实际执行计算任务的时间窗口，从最早开始执行到最晚执行完成 |
+| **Post-process** | 最后一个计算任务执行完成后的尾段开销，直至所有AI Core退出 |
+| **Total run time** | 所有AI Core从启动到退出的完整运行时间 |
 
 ### 查看泳道图数据
 
