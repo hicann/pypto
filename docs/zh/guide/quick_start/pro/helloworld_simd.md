@@ -1,6 +1,6 @@
-# HelloWorld
+# HelloWorld（SIMD）
 
-本入门示例基于PyPTO Pro SIMD实现Hello World算子，带你快速上手实践，涵盖Kernel函数定义、JIT编译以及运行的完整流程，帮助开发者建立整体认知。开始前请参考[环境准备](../../../../install/prepare_environment.md)完成基础环境搭建。
+本入门示例基于PyPTO Pro SIMD实现Hello World算子，带你快速上手实践，涵盖Kernel函数定义、JIT编译以及运行的完整流程，帮助开发者建立整体认知。开始前请参考[环境准备](../../../install/prepare_environment.md)完成基础环境搭建。
 
 ## Hello World
 
@@ -8,7 +8,7 @@
 
 ## Kernel函数实现
 
-通过`@pypto_pro.language.jit()`装饰器定义Kernel函数，使用[`pypto_pro.language.printf`](../../../../api/pro_api/Utils-API/debugging/printf.md)在Device端打印字符串。[`pypto_pro.language.section_vector()`](../../../../api/pro_api/SIMD-API/operation/controlflow/section_vector.md)用于声明该段代码在Vector核上执行，其中`pypto_pro.language.printf`由Scalar流水执行。
+通过`@pypto_pro.language.jit()`装饰器定义Kernel函数，使用[`pypto_pro.language.printf`](../../../api/pro_api/Utils-API/debugging/printf.md)在Device端打印字符串。[`pypto_pro.language.section_vector()`](../../../api/pro_api/SIMD-API/operation/controlflow/section_vector.md)用于声明该段代码在Vector核上执行，其中`pypto_pro.language.printf`由Scalar流水执行。
 
 ```python
 import pypto_pro.language as pl
@@ -58,4 +58,4 @@ python3 hello_world.py
 
 > [!NOTE]说明
 >
-> 如需进一步了解PyPTO Pro的SIMD编程模型，请参阅[编程范式概述](../../../programming_guide/pro/programming_paradigm/programming_paradigm_overview.md)。
+> 如需进一步了解PyPTO Pro的SIMD编程模型，请参阅[编程范式概述](../../programming_guide/pro/programming_paradigm/programming_paradigm_overview.md)。

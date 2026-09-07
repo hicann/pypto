@@ -181,7 +181,7 @@ Host端使用transform_kernel\[None, 4\](...)启动该Kernel时，当前Vector�
 
 ## 相关文档
 
-- [Add算子（SIMT）快速入门](../../../quick_start/pro/SIMT/Add_operator.md)
+- [Add算子（SIMT）快速入门](../../../quick_start/pro/add_simt.md)
 - [SIMT API](../../../../api/index.md)
 - [simt.launch](../../../../api/pro_api/SIMT-API/execution/launch.md)
 - [SIMT执行](../../../../api/index.md)

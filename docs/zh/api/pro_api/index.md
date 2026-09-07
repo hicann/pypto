@@ -1,4 +1,4 @@
-# PyPTO Pro API参考
+# PyPTO Pro API
 
 ```{toctree}
 :maxdepth: 1

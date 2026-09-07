@@ -82,7 +82,7 @@ PyPTO Pro当前支持以下产品型号：
 建议按照以下路径学习PyPTO Pro：
 
 1. **环境准备**：参考[环境准备](../install/prepare_environment.md)完成基础环境搭建。
-2. **快速入门**：从[HelloWorld](quick_start/pro/SIMD/HelloWorld.md)开始，了解Kernel函数定义、JIT编译和运行的基本流程；再通过[Add算子（SIMD）快速入门](quick_start/pro/SIMD/Add_operator.md)学习主要的Tile配置、数据搬运和向量计算方式。需要逐线程编程时，可进一步参考[Add算子（SIMT）快速入门](quick_start/pro/SIMT/Add_operator.md)。
+2. **快速入门**：从[HelloWorld](quick_start/pro/helloworld_simd.md)开始，了解Kernel函数定义、JIT编译和运行的基本流程；再通过[Add算子（SIMD）快速入门](quick_start/pro/add_simd.md)学习主要的Tile配置、数据搬运和向量计算方式。需要逐线程编程时，可进一步参考[Add算子（SIMT）快速入门](quick_start/pro/add_simt.md)。
 3. **编程范式**：阅读[编程范式概述](programming_guide/pro/programming_paradigm/programming_paradigm_overview.md)，理解SPMD编程、Tile抽象和流水机制。
 4. **算子开发**：深入学习[基于Tile的Python编程](programming_guide/pro/development/tile_based_python_programming/Python_programming_overview.md)，掌握Tensor、Tile、TileGroup等核心数据结构的使用。
 5. **API参考**：查阅[SIMD API](../api/pro_api/SIMD-API/index.md)、[SIMT API](../api/pro_api/SIMT-API/index.md)和[Utils API](../api/pro_api/Utils-API/index.md)，了解各接口的详细用法。
