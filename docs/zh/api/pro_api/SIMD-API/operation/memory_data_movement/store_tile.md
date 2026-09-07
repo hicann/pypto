@@ -59,7 +59,7 @@ pypto_pro.language.store_tile(
 |---|---|---|
 | UB → GM | 源与目的分形必须相同，支持ND、DN、NZ。 | 源与目的数据类型位宽必须相同，支持DT_INT8、DT_UINT8、DT_FP16、DT_BF16、DT_INT16、DT_UINT16、DT_FP32、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP8E8M0、DT_FP8E4M3FN、DT_FP8E5M2、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
 | L0C Buffer → GM（不配置scale） | NZ → ND，NZ → NZ。 | 支持DT_FP32 → DT_FP32/DT_FP16/DT_BF16，以及DT_INT32 → DT_INT32/DT_FP16/DT_BF16。 |
-| L0C Buffer → GM（配置scale） | NZ → ND，NZ → NZ。 | 支持DT_FP32 → DT_INT8/DT_HF8/DT_FP8E4M3FN/DT_FP16/DT_BF16/DT_FP32，以及DT_INT32 → DT_INT8/DT_FP16/DT_BF16。 |
+| L0C Buffer → GM（配置scale） | NZ → ND，NZ → NZ。 | 支持DT_FP32 → DT_INT8/DT_UINT8/DT_HF8/DT_FP8E4M3FN/DT_FP16/DT_BF16/DT_FP32，以及DT_INT32 → DT_INT8/DT_UINT8/DT_FP16/DT_BF16。 |
 
 当dst_tensor声明为pypto_pro.language.NZ时，其物理排布和完整Tensor shape约束见[TensorLayout](../../basic_data_structures/TensorLayout.md#tensor布局)，同布局搬运、源Tile、order和L0C Buffer直接写回约束与[store](store.md#约束说明)一致。store_tile还需满足以下NZ搬运约束：
 
