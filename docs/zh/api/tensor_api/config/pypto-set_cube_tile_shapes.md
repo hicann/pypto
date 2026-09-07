@@ -106,7 +106,8 @@ void
 
 - 多核切K约束
 
-    - 仅支持2维/3维/4维矩阵多核切K。
+    - `pypto.matmul`支持2维/3维/4维矩阵多核切K。
+    - `pypto.scaled_mm`仅支持2维矩阵多核切K，3维/4维矩阵不支持。
     - 多核切K场景只支持out\_dtype数据类型为DT\_FP32或DT\_INT32。
     - Bias/FixPipe(包含ReLU)场景不支持叠加多核切K功能。
 

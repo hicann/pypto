@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # coding: utf-8
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
+# Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -101,26 +101,26 @@ def matmul(input, mat2, out_dtype, *, a_trans=False, b_trans=False, c_matrix_nz=
     b = pypto.tensor((32, 64), pypto.DT_FP16, "tensor_b")
     bias = pypto.tensor((1, 64), pypto.DT_FP16, "tensor_bias")
     extend_params = {'bias_tensor': bias}
-    pypto.matmul(a, b, pypto.DT_BF16, extend_params=extend_params)
+    pypto.matmul(a, b, pypto.DT_FP16, extend_params=extend_params)
 
     # With dequantization (scale)
     a = pypto.tensor((16, 32), pypto.DT_INT8, "tensor_a")
     b = pypto.tensor((32, 64), pypto.DT_INT8, "tensor_b")
     extend_params = {'scale': 0.2}
-    pypto.matmul(a, b, pypto.DT_BF16, extend_params=extend_params)
+    pypto.matmul(a, b, pypto.DT_FP16, extend_params=extend_params)
 
     # With dequantization (scale & ReLU)
     a = pypto.tensor((16, 32), pypto.DT_INT8, "tensor_a")
     b = pypto.tensor((32, 64), pypto.DT_INT8, "tensor_b")
     extend_params = {'scale': 0.2, 'relu_type': pypto.ReLuType.RELU}
-    pypto.matmul(a, b, pypto.DT_BF16, extend_params=extend_params)
+    pypto.matmul(a, b, pypto.DT_FP16, extend_params=extend_params)
 
     # With dequantization (scale_tensor & ReLU)
     a = pypto.tensor((16, 32), pypto.DT_INT8, "tensor_a")
     b = pypto.tensor((32, 64), pypto.DT_INT8, "tensor_b")
     scale_tensor = pypto.tensor((1, 64), pypto.DT_UINT64, "tensor_scale")
     extend_params = {'scale_tensor': scale_tensor, 'relu_type': pypto.ReLuType.RELU}
-    pypto.matmul(a, b, pypto.DT_BF16, extend_params=extend_params)
+    pypto.matmul(a, b, pypto.DT_FP16, extend_params=extend_params)
 
     # TF32 matrix multiplication
     a = pypto.tensor((16, 32), pypto.DT_FP32, "tensor_a")
@@ -128,7 +128,7 @@ def matmul(input, mat2, out_dtype, *, a_trans=False, b_trans=False, c_matrix_nz=
     extend_params = {'trans_mode': pypto.TransMode.CAST_ROUND}
     pypto.matmul(a, b, pypto.DT_FP32, extend_params=extend_params)
     """
-    __validate_inputs(input, mat2, out_dtype, [a_trans, b_trans, c_matrix_nz, extend_params])
+    __validate_inputs(input, mat2, out_dtype, [a_trans, b_trans, c_matrix_nz, extend_params], INPUT_COMBOS)
     if input.Dim() == 2:
         if extend_params is not None:
             extend_params = pypto_impl.MatmulExtendParam(**__convert_matmul_extend_params(extend_params))
@@ -260,9 +260,10 @@ def scaled_mm(
     extend_params = {'bias_tensor': bias}
     pypto.scaled_mm(a, b, pypto.DT_FP16, a_scale, b_scale, extend_params=extend_params)
     """
-    __validate_inputs(mat_a, mat_b, out_dtype, [a_trans, b_trans, c_matrix_nz, extend_params])
+    __validate_inputs(mat_a, mat_b, out_dtype, [a_trans, b_trans, c_matrix_nz, extend_params], MX_INPUT_COMBOS)
     __validate_scaled_inputs(mat_a, mat_b, scale_a, scale_b, extend_params)
     __validate_scaled_shape(mat_a, mat_b, scale_a, scale_b, [a_trans, b_trans, scale_a_trans, scale_b_trans])
+    __validate_out_dtype(mat_a.GetDataType(), out_dtype, extend_params, MX_BASIC_OUT_DTYPES)
 
     if mat_a.Dim() == 2:
         if extend_params is not None:
@@ -304,6 +305,73 @@ def scaled_mm(
             return pypto_impl.BatchMatmulMX(
                 out_dtype, mat_a, scale_a, mat_b, scale_b, a_trans, scale_a_trans, b_trans, scale_b_trans, c_matrix_nz
             )
+
+
+A2A3_ARCHS = ("DAV_1001", "DAV_2201")
+
+# 封闭白名单：输入组合不在表内一律拒绝（来源：接口文档表3输入列）
+INPUT_COMBOS = {
+    (pypto_impl.DataType.DT_FP16, pypto_impl.DataType.DT_FP16),
+    (pypto_impl.DataType.DT_BF16, pypto_impl.DataType.DT_BF16),
+    (pypto_impl.DataType.DT_FP32, pypto_impl.DataType.DT_FP32),
+    (pypto_impl.DataType.DT_INT8, pypto_impl.DataType.DT_INT8),
+    (pypto_impl.DataType.DT_FP8E5M2, pypto_impl.DataType.DT_FP8E5M2),
+    (pypto_impl.DataType.DT_FP8E5M2, pypto_impl.DataType.DT_FP8E4M3),
+    (pypto_impl.DataType.DT_FP8E4M3, pypto_impl.DataType.DT_FP8E5M2),
+    (pypto_impl.DataType.DT_FP8E4M3, pypto_impl.DataType.DT_FP8E4M3),
+    (pypto_impl.DataType.DT_HF8, pypto_impl.DataType.DT_HF8),
+}
+
+# 封闭白名单：输入组合不在表内一律拒绝（来源：scaled_mm文档表3输入列）
+MX_INPUT_COMBOS = {
+    (pypto_impl.DataType.DT_FP8E5M2, pypto_impl.DataType.DT_FP8E5M2),
+    (pypto_impl.DataType.DT_FP8E5M2, pypto_impl.DataType.DT_FP8E4M3),
+    (pypto_impl.DataType.DT_FP8E4M3, pypto_impl.DataType.DT_FP8E5M2),
+    (pypto_impl.DataType.DT_FP8E4M3, pypto_impl.DataType.DT_FP8E4M3),
+    (pypto_impl.DataType.DT_FP4_E2M1, pypto_impl.DataType.DT_FP4_E2M1),
+}
+
+_FLOAT_OUT_DTYPES = (
+    pypto_impl.DataType.DT_FP16,
+    pypto_impl.DataType.DT_BF16,
+    pypto_impl.DataType.DT_FP32,
+)
+
+BASIC_OUT_DTYPES = {
+    pypto_impl.DataType.DT_FP16: (pypto_impl.DataType.DT_FP16, pypto_impl.DataType.DT_FP32),
+    pypto_impl.DataType.DT_BF16: (pypto_impl.DataType.DT_BF16, pypto_impl.DataType.DT_FP32),
+    pypto_impl.DataType.DT_INT8: (pypto_impl.DataType.DT_INT32,),
+    pypto_impl.DataType.DT_FP8E5M2: _FLOAT_OUT_DTYPES,
+    pypto_impl.DataType.DT_FP8E4M3: _FLOAT_OUT_DTYPES,
+    pypto_impl.DataType.DT_HF8: _FLOAT_OUT_DTYPES,
+}
+
+MX_BASIC_OUT_DTYPES = {
+    pypto_impl.DataType.DT_FP8E5M2: _FLOAT_OUT_DTYPES,
+    pypto_impl.DataType.DT_FP8E4M3: _FLOAT_OUT_DTYPES,
+    pypto_impl.DataType.DT_FP4_E2M1: _FLOAT_OUT_DTYPES,
+}
+
+NZ_UNSUPPORTED_INPUT_DTYPES = {
+    pypto_impl.DataType.DT_FP32,
+    pypto_impl.DataType.DT_FP8E5M2,
+    pypto_impl.DataType.DT_HF8,
+}
+
+QUANT_OUT_DTYPES = {
+    pypto_impl.DataType.DT_INT8: (pypto_impl.DataType.DT_FP16, pypto_impl.DataType.DT_INT8),
+    pypto_impl.DataType.DT_BF16: (pypto_impl.DataType.DT_INT8,),
+    pypto_impl.DataType.DT_FP16: (pypto_impl.DataType.DT_INT8,),
+    pypto_impl.DataType.DT_FP32: (pypto_impl.DataType.DT_INT8,),
+    pypto_impl.DataType.DT_FP8E5M2: (pypto_impl.DataType.DT_INT8,),
+    pypto_impl.DataType.DT_FP8E4M3: (pypto_impl.DataType.DT_INT8,),
+    pypto_impl.DataType.DT_HF8: (pypto_impl.DataType.DT_INT8,),
+    pypto_impl.DataType.DT_FP4_E2M1: (pypto_impl.DataType.DT_INT8,),
+}
+
+
+def __is_a2a3_arch() -> bool:
+    return pypto_impl.GetNPUArch() in A2A3_ARCHS
 
 
 def __validate_type(value: Any, expect_type: Type, arg_name: str = "input") -> None:
@@ -379,7 +447,20 @@ def __validate_bias(input_tensor, extend_params) -> None:
             )
 
 
-def __validate_inputs(input_tensor1, input_tensor2, out_dtype, optional_param) -> None:
+def __validate_nz_input(input_tensor1, input_tensor2) -> None:
+    for tensor in (input_tensor1, input_tensor2):
+        unsupported_dtype = tensor.GetDataType() in NZ_UNSUPPORTED_INPUT_DTYPES
+        if unsupported_dtype and tensor.Format() == pypto_impl.TileOpFormat.TILEOP_NZ:
+            raise PyptoError(
+                0xF00002,
+                ValueError(
+                    f"Input tensor with {tensor.GetDataType().name} must use ND format, "
+                    "NZ format is not supported currently."
+                ),
+            )
+
+
+def __validate_inputs(input_tensor1, input_tensor2, out_dtype, optional_param, input_combos) -> None:
     a_trans, b_trans, is_out_nz, extend_params = optional_param
     __validate_type(out_dtype, DataType, "out_dtype")
     __validate_type(a_trans, bool, "a_trans")
@@ -392,33 +473,43 @@ def __validate_inputs(input_tensor1, input_tensor2, out_dtype, optional_param) -
 
     input1_dtype = input_tensor1.GetDataType()
     input2_dtype = input_tensor2.GetDataType()
-    input1_format = input_tensor1.Format()
-    input2_format = input_tensor2.Format()
-    fp8_dtype = (pypto_impl.DataType.DT_FP8E5M2, pypto_impl.DataType.DT_FP8E4M3)
     if is_out_nz:
         raise PyptoError(0xF00002, ValueError("Output tensor do not support NZ currently."))
-    input1_fp32_valid = (
-        input1_dtype == pypto_impl.DataType.DT_FP32 and input1_format == pypto_impl.TileOpFormat.TILEOP_NZ
-    )
-    input2_fp32_valid = (
-        input2_dtype == pypto_impl.DataType.DT_FP32 and input2_format == pypto_impl.TileOpFormat.TILEOP_NZ
-    )
-    input1_fp8_valid = (
-        input1_dtype == pypto_impl.DataType.DT_FP8E5M2 and input1_format == pypto_impl.TileOpFormat.TILEOP_NZ
-    )
-    input2_fp8_valid = (
-        input2_dtype == pypto_impl.DataType.DT_FP8E5M2 and input2_format == pypto_impl.TileOpFormat.TILEOP_NZ
-    )
-    if input1_fp32_valid or input2_fp32_valid:
+    if (input1_dtype == pypto_impl.DataType.DT_HF8 or input2_dtype == pypto_impl.DataType.DT_HF8) and __is_a2a3_arch():
         raise PyptoError(
-            0xF00002, ValueError("Input tensor with DT_FP32 must use ND format, NZ format is not support currently.")
+            0xF00002,
+            ValueError("Input tensor with DT_HF8 is not supported on A2/A3 platforms, only supported on Ascend 950."),
         )
-    if input1_fp8_valid or input2_fp8_valid:
+    __validate_nz_input(input_tensor1, input_tensor2)
+    if (input1_dtype, input2_dtype) not in input_combos:
         raise PyptoError(
-            0xF00002, ValueError("Input tensor with DT_FP8E5M2 must use ND format, NZ format is not support currently.")
+            0xF00002,
+            ValueError(
+                f"Unsupported input dtype combination: (a={input1_dtype.name}, b={input2_dtype.name}). "
+                "See the input dtype columns of the API docs."
+            ),
         )
-    if not ((input1_dtype in fp8_dtype and input2_dtype in fp8_dtype) or (input1_dtype == input2_dtype)):
-        raise PyptoError(0xF00002, ValueError("Non-FP8 inputs require identical dtypes."))
+    __validate_out_dtype(input1_dtype, out_dtype, extend_params, BASIC_OUT_DTYPES)
+
+
+def __has_quant_scale(extend_params) -> bool:
+    if extend_params is None:
+        return False
+    return extend_params.get('scale_tensor') is not None or extend_params.get('scale', 0.0) != 0.0
+
+
+def __validate_out_dtype(input_dtype, out_dtype, extend_params, basic_out_map) -> None:
+    if input_dtype not in basic_out_map:
+        return
+    allowed_out = QUANT_OUT_DTYPES[input_dtype] if __has_quant_scale(extend_params) else basic_out_map[input_dtype]
+    if out_dtype not in allowed_out:
+        raise PyptoError(
+            0xF00002,
+            ValueError(
+                f"Unsupported out_dtype {out_dtype} for input dtype {input_dtype}. "
+                f"Allowed out_dtype: {allowed_out} (see dtype support tables in the API docs)."
+            ),
+        )
 
 
 def __validate_bias_dimension(input_dim, bias_tensor):
@@ -463,6 +554,12 @@ def __validate_scaled_inputs(input_tensor1, input_tensor2, input_scale1, input_s
         or input_tensor1.GetDataType() == pypto_impl.DataType.DT_FP4_E2M1X2
     ):
         raise PyptoError(0xF00003, RuntimeError("scaled_mm fp4 input only supports DT_FP4_E2M1."))
+
+    if (
+        input_scale1.Format() == pypto_impl.TileOpFormat.TILEOP_NZ
+        or input_scale2.Format() == pypto_impl.TileOpFormat.TILEOP_NZ
+    ):
+        raise PyptoError(0xF00002, ValueError("Scale tensor must use ND format, NZ format is not supported currently."))
 
     if input_dim not in supported_dims:
         raise PyptoError(
@@ -561,9 +658,7 @@ def __validate_scale_k0_dimensions(k_a_scale0_dim, k_b_scale0_dim):
 def __validate_scale_k1_dimensions(k_a_scale1_dim, k_b_scale1_dim, shape_dim_2):
     is_value_concrete = k_a_scale1_dim.is_concrete() and k_b_scale1_dim.is_concrete()
     if is_value_concrete and (
-        k_a_scale1_dim != k_b_scale1_dim
-        or k_a_scale1_dim != shape_dim_2
-        or k_b_scale1_dim != shape_dim_2
+        k_a_scale1_dim != k_b_scale1_dim or k_a_scale1_dim != shape_dim_2 or k_b_scale1_dim != shape_dim_2
     ):
         raise PyptoError(
             0xF00003,
@@ -615,7 +710,17 @@ def __validate_trans_mode(mat_a, mat_b, extend_params):
             and mat_b.GetDataType() != pypto_impl.DataType.DT_FP32
         ):
             raise PyptoError(
-                0xF00003, RuntimeError("The param of trans_mode is only supported when input data type is DT_FP32")
+                0xF00003, RuntimeError("The trans_mode parameter is only supported when input data type is DT_FP32")
+            )
+        if (
+            extend_params.get('trans_mode', pypto_impl.TransMode.CAST_NONE) != pypto_impl.TransMode.CAST_NONE
+            and __is_a2a3_arch()
+        ):
+            raise PyptoError(
+                0xF00002,
+                ValueError(
+                    "The trans_mode parameter is not supported on A2/A3 platforms, only supported on Ascend 950."
+                ),
             )
 
 
