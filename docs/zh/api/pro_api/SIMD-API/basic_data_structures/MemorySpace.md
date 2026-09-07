@@ -40,11 +40,11 @@ class MemorySpace(enum.IntEnum):
 |---|---|---|
 | pypto_pro.language.MemorySpace.DDR | GM | 表示Kernel输入、输出Tensor所在的存储区域。该枚举值用于表示Tensor存储位置，不用作make_tile/make_tile_group的片上Tile分配目标。 |
 | pypto_pro.language.MemorySpace.Vec | UB | Vector Core的工作缓冲区，用于逐元素、归约、排序、纯Vector量化/反量化等SIMD计算。Tile起始地址须按32字节对齐。 |
-| pypto_pro.language.MemorySpace.Mat | L1 Buffer | 用于存放Cube计算的中间数据。数据从GM加载后可搬入L0A Buffer、L0B Buffer、BiasTable Buffer、Scaling、ScaleLeft或ScaleRight空间。Tile起始地址须按32字节对齐。 |
+| pypto_pro.language.MemorySpace.Mat | L1 Buffer | 用于存放Cube计算的中间数据。数据从GM加载后可搬入L0A Buffer、L0B Buffer、BiasTable Buffer、Fixpipe Buffer、L0A_MX Buffer和L0B_MX Buffer。Tile起始地址须按32字节对齐。 |
 | pypto_pro.language.MemorySpace.Left | L0A Buffer | 用于存放矩阵乘的左操作数，与L0B Buffer中的右操作数共同参与Cube计算。Tile起始地址须按512字节对齐。 |
 | pypto_pro.language.MemorySpace.Right | L0B Buffer | 用于存放矩阵乘的右操作数，与L0A Buffer中的左操作数共同参与Cube计算。Tile起始地址须按512字节对齐。 |
 | pypto_pro.language.MemorySpace.Scaling | Fixpipe Buffer | 仅用于FIX数据通路的per-channel随路量化/反量化参数。该空间不是quant/dequant接口的scale存储区。数据需经L1 Buffer搬入：源Tile须为1行，目的Tile数据类型须为DT_INT64或DT_UINT64，目的地址和数据量均须按128字节对齐，单次搬运数据量不得超过4096字节。 |
 | pypto_pro.language.MemorySpace.Acc | L0C Buffer | 用于存放matmul、matmul_acc、matmul_mx等Cube计算的结果或中间累加值。Tile起始地址须按64字节对齐。 |
 | pypto_pro.language.MemorySpace.Bias | BiasTable Buffer | 用于存放矩阵计算的偏置数据。偏置数据不能从GM直接加载，需经L1 Buffer中转。经L1 Buffer搬入时，源Tile须为1行，目的地址和数据量均须按64字节对齐，单次搬运数据量不得超过4096字节。 |
-| pypto_pro.language.MemorySpace.ScaleLeft | L0A Buffer | 仅用于存放MX矩阵乘左操作数的DT_FP8E8M0分组缩放因子。Tile起始地址须按32字节对齐，ScaleLeft地址必须等于L0A Buffer地址右移4位。 |
-| pypto_pro.language.MemorySpace.ScaleRight | L0B Buffer | 仅用于存放MX矩阵乘右操作数的DT_FP8E8M0分组缩放因子。Tile起始地址须按32字节对齐，ScaleRight地址必须等于L0B Buffer地址右移4位。 |
+| pypto_pro.language.MemorySpace.ScaleLeft | L0A_MX Buffer | 仅用于存放MX矩阵乘中左量化系数矩阵。Tile起始地址须按32字节对齐；其地址必须等于配套左矩阵在L0A Buffer中的地址右移4位。 |
+| pypto_pro.language.MemorySpace.ScaleRight | L0B_MX Buffer | 仅用于存放MX矩阵乘中右量化系数矩阵。Tile起始地址须按32字节对齐；其地址必须等于配套右矩阵在L0B Buffer中的地址右移4位。 |

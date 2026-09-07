@@ -8,13 +8,13 @@ PyPTO Pro中有三种核心数据抽象：
 
 | 抽象 | 所在位置 | 创建方式 | 用途 |
 |:---|:---|:---|:---|
-| **Tensor** | 全局内存（GM） | [`pypto_pro.language.Tensor[...]`](../../../../../api/pro_api/SIMD-API/basic_data_structures/Tensor.md) / [`pypto_pro.language.make_tensor`](../../../../../api/pro_api/SIMD-API/operation/resource_management/make_tensor.md) | 带shape和stride的GM Tensor视图 |
-| **Tile** | 片上缓冲区 | [`pypto_pro.language.make_tile`](../../../../../api/pro_api/SIMD-API/operation/resource_management/make_tile.md) | 固定的片上缓冲区，包括UB、L1 Buffer、L0A Buffer、L0B Buffer、L0C Buffer、Bias Buffer和MX缩放因子缓冲区 |
-| **TileGroup** | 片上缓冲区 | [`pypto_pro.language.make_tile_group`](../../../../../api/pro_api/SIMD-API/operation/resource_management/make_tile_group.md) | 一组轮转的Tile，用于双缓冲 / N缓冲 |
+| **Tensor** | 全局内存（GM） | [pypto_pro.language.Tensor[...]](../../../../../api/pro_api/SIMD-API/basic_data_structures/Tensor.md) / [pypto_pro.language.make_tensor](../../../../../api/pro_api/SIMD-API/operation/resource_management/make_tensor.md) | 带shape和stride的GM Tensor视图 |
+| **Tile** | 片上缓冲区 | [pypto_pro.language.make_tile](../../../../../api/pro_api/SIMD-API/operation/resource_management/make_tile.md) | 固定的片上缓冲区，包括UB、L1 Buffer、L0A Buffer、L0B Buffer、L0C Buffer、Bias Buffer、L0A_MX Buffer和L0B_MX Buffer |
+| **TileGroup** | 片上缓冲区 | [pypto_pro.language.make_tile_group](../../../../../api/pro_api/SIMD-API/operation/resource_management/make_tile_group.md) | 一组轮转的Tile，用于双缓冲 / N缓冲 |
 
 ### Tensor
 
-Tensor表示全局内存（GM）中带数据类型的视图，用作Kernel输入和输出。Kernel通过`load`将数据搬入片上Tile，并通过`store`将结果写回Tensor。
+Tensor表示全局内存（GM）中带数据类型的视图，用作Kernel输入和输出。Kernel通过load将数据搬入片上Tile，并通过store将结果写回Tensor。
 
 **在Kernel签名中声明**（最常见形式）：
 
@@ -28,12 +28,12 @@ def add_kernel(
     ...
 ```
 
-- `pypto_pro.language.Tensor[[shape...], dtype]` —— 第一个元素是shape列表，第二个是元素dtype
-- `pypto_pro.language.DYNAMIC`：尺寸在启动时传入，尺寸变化不会产生新的编译变体
-- `pypto_pro.language.STATIC`：尺寸在启动时读取并固化到IR，尺寸变化会选择新的编译变体
+- pypto_pro.language.Tensor[[shape...], dtype] —— 第一个元素是shape列表，第二个是元素dtype
+- pypto_pro.language.DYNAMIC：尺寸在启动时传入，尺寸变化不会产生新的编译变体
+- pypto_pro.language.STATIC：尺寸在启动时读取并固化到IR，尺寸变化会选择新的编译变体
 - 正整数：固定尺寸，启动时必须精确匹配
-- 最后一项使用`...`：从该位置开始的剩余维度均按`pypto_pro.language.STATIC`处理，可用于声明rank在调用时确定的Tensor，例如`pypto_pro.language.Tensor[[pypto_pro.language.DYNAMIC, ...], pypto_pro.language.DT_FP16]`
-- Kernel内通过`x.shape[axis]`读取维度，支持负索引
+- 最后一项使用...：从该位置开始的剩余维度均按pypto_pro.language.STATIC处理，可用于声明rank在调用时确定的Tensor，例如pypto_pro.language.Tensor[[pypto_pro.language.DYNAMIC, ...], pypto_pro.language.DT_FP16]
+- Kernel内通过x.shape[axis]读取维度，支持负索引
 
 Shape标注使用省略号时，省略号必须位于最后，且最多出现一次。省略号表示其后的实际维度均按静态维度处理；输入Tensor的rank或这些维度的值发生变化时，会生成新的编译变体。
 
@@ -53,14 +53,14 @@ def fa_kernel(
     ...
 ```
 
-`pypto_pro.language.make_tensor(ptr, shape, stride=None, dtype=None)`由裸指针结合shape和可选stride构造Tensor视图。省略stride时，接口根据shape自动生成连续的行主序stride；需要表示非连续布局时，可继续传入显式stride。Tensor视图的rank由Kernel中传入的Python `shape`序列确定，序列中的维度值可以来自TilingData等运行时参数。
+pypto_pro.language.make_tensor(ptr, shape, stride=None, dtype=None)由裸指针结合shape和可选stride构造Tensor视图。省略stride时，接口根据shape自动生成连续的行主序stride；需要表示非连续布局时，可继续传入显式stride。Tensor视图的rank由Kernel中传入的Python shape序列确定，序列中的维度值可以来自TilingData等运行时参数。
 
-[`pypto_pro.language.make_ptr(tensor, dtype=None)`](../../../../../api/pro_api/SIMD-API/operation/resource_management/make_ptr.md)从已有Tensor提取底层裸指针。
-省略`dtype`时保留Tensor的元素类型；指定`dtype`时按目标元素类型解释指针，底层地址保持不变。
+[pypto_pro.language.make_ptr(tensor, dtype=None)](../../../../../api/pro_api/SIMD-API/operation/resource_management/make_ptr.md)从已有Tensor提取底层裸指针。
+省略dtype时保留Tensor的元素类型；指定dtype时按目标元素类型解释指针，底层地址保持不变。
 
 ### Tile与TileType
 
-Tile是一块固定的片上缓冲区。[`pypto_pro.language.TileType`](../../../../../api/pro_api/SIMD-API/basic_data_structures/TileType.md)描述一个Tile的shape、dtype以及片上摆放，它本身不分配任何空间，而是传给`make_tile`/`make_tile_group`。
+Tile是一块固定的片上缓冲区。[pypto_pro.language.TileType](../../../../../api/pro_api/SIMD-API/basic_data_structures/TileType.md)描述一个Tile的shape、dtype以及片上摆放，它本身不分配任何空间，而是传给make_tile/make_tile_group。
 
 ```python
 @dataclass
@@ -75,38 +75,38 @@ class TileType:
     compact: Optional[int] = None                # 紧凑摆放模式
 ```
 
-**内存空间**（`pypto_pro.language.MemorySpace`）：
+**内存空间**（pypto_pro.language.MemorySpace）：
 
 | target_memory取值 | 对应缓冲区及用途 |
 |:---|:---|
-| `pypto_pro.language.MemorySpace.Vec` | UB，用于逐元素计算 |
-| `pypto_pro.language.MemorySpace.Mat` | L1 Buffer，用于暂存从GM加载的矩阵数据 |
-| `pypto_pro.language.MemorySpace.Left` | L0A Buffer，用于存放矩阵乘的左操作数 |
-| `pypto_pro.language.MemorySpace.Right` | L0B Buffer，用于存放矩阵乘的右操作数 |
-| `pypto_pro.language.MemorySpace.Acc` | L0C Buffer，用于存放矩阵乘的累加结果（DT_FP32或DT_INT32） |
-| `pypto_pro.language.MemorySpace.Bias` | Bias Buffer，用于存放矩阵乘的融合偏置，由L1 Buffer通过`pypto_pro.language.move`搬入 |
-| `pypto_pro.language.MemorySpace.Scaling` | 量化参数缓冲区 |
-| `pypto_pro.language.MemorySpace.ScaleLeft` | L0A Buffer配套的MX左操作数E8M0缩放因子缓冲区 |
-| `pypto_pro.language.MemorySpace.ScaleRight` | L0B Buffer配套的MX右操作数E8M0缩放因子缓冲区 |
+| pypto_pro.language.MemorySpace.Vec | UB，用于逐元素计算 |
+| pypto_pro.language.MemorySpace.Mat | L1 Buffer，用于暂存从GM加载的矩阵数据 |
+| pypto_pro.language.MemorySpace.Left | L0A Buffer，用于存放矩阵乘的左操作数 |
+| pypto_pro.language.MemorySpace.Right | L0B Buffer，用于存放矩阵乘的右操作数 |
+| pypto_pro.language.MemorySpace.Acc | L0C Buffer，用于存放矩阵乘的累加结果（DT_FP32或DT_INT32） |
+| pypto_pro.language.MemorySpace.Bias | Bias Buffer，用于存放矩阵乘的融合偏置，由L1 Buffer通过pypto_pro.language.move搬入 |
+| pypto_pro.language.MemorySpace.Scaling | 量化参数缓冲区 |
+| pypto_pro.language.MemorySpace.ScaleLeft | L0A_MX Buffer，用于存放MX矩阵乘中的左量化系数矩阵 |
+| pypto_pro.language.MemorySpace.ScaleRight | L0B_MX Buffer，用于存放MX矩阵乘中的右量化系数矩阵 |
 
 > [!NOTE]说明
-> L1 Buffer、L0A Buffer、L0B Buffer、L0C Buffer和MX缩放因子缓冲区会按目标架构推导默认layout，其中部分数据类型还会推导fractal。UB和Bias Buffer的layout由具体算子约束；需要显式指定layout时，须使用该内存空间和算子支持的组合。
+> L1 Buffer、L0A Buffer、L0B Buffer、L0C Buffer、L0A_MX Buffer和L0B_MX Buffer会按目标架构推导默认layout，其中部分数据类型还会推导fractal。UB和Bias Buffer的layout由具体算子约束；需要显式指定layout时，须使用该内存空间和算子支持的组合。
 
 ### TileGroup
 
-TileGroup是用`pypto_pro.language.make_tile_group`声明的一组轮转的Tile，用于实现双缓冲乃至更广义的N缓冲。当一块缓冲区正在被消费时，下一块可以同时被生产，从而让多条pipe重叠以提升吞吐。
+TileGroup是用pypto_pro.language.make_tile_group声明的一组轮转的Tile，用于实现双缓冲乃至更广义的N缓冲。当一块缓冲区正在被消费时，下一块可以同时被生产，从而让多条pipe重叠以提升吞吐。
 
 ```python
 g = pypto_pro.language.make_tile_group(type=<TileType>, addrs=<base|list>, mutex_ids=[...], depth=<optional>)
 ```
 
-- `type` —— 描述组中每一个Tile的`pypto_pro.language.TileType`
-- `mutex_ids` —— 可选；每块Tile使用一个整数或非空整数列表/元组，ID取值范围`[0, 31]`。同一Tile内的ID不得重复，不同Tile可以复用ID
-- `depth` —— Tile数量；`mutex_ids`为`None`或空列表时必填，非空时可由`len(mutex_ids)`推导
-- `addrs` —— 单个基地址（Tile连续排布）或地址列表（每个Tile一个显式地址）
+- type —— 描述组中每一个Tile的pypto_pro.language.TileType
+- mutex_ids —— 可选；每块Tile使用一个整数或非空整数列表/元组，ID取值范围[0, 31]。同一Tile内的ID不得重复，不同Tile可以复用ID
+- depth —— Tile数量；mutex_ids为None或空列表时必填，非空时可由len(mutex_ids)推导
+- addrs —— 单个基地址（Tile连续排布）或地址列表（每个Tile一个显式地址）
 
 > [!NOTE]说明
-> `mutex_ids=None`或`mutex_ids=[]`时，该group不参与`auto_mutex`，跨Pipe同步需由用户自行保证。
+> mutex_ids=None或mutex_ids=[]时，该group不参与auto_mutex，跨Pipe同步需由用户自行保证。
 
 关于Tile和TileGroup的详细使用方法请参考[Tile矢量计算](Tile_vector_computation.md)和[Cube矩阵计算](Cube_matrix_computation.md)。
 
@@ -114,9 +114,9 @@ g = pypto_pro.language.make_tile_group(type=<TileType>, addrs=<base|list>, mutex
 
 PyPTO Pro的算子开发遵循「**搬入→计算→搬出**」三段式流水线范式，与AI Core硬件的多级异步流水特性完全贴合：
 
-1. **搬入（CopyIn）**：通过[`pypto_pro.language.load`](../../../../../api/pro_api/SIMD-API/operation/memory_data_movement/load.md)/[`pypto_pro.language.load_tile`](../../../../../api/pro_api/SIMD-API/operation/memory_data_movement/load_tile.md)将数据从Global Memory搬运至片上缓冲区（UB/L1等）
-2. **计算（Compute）**：在片上缓冲区上完成Tile级别的计算，根据算子类型在`pypto_pro.language.section_vector()`或`pypto_pro.language.section_cube()`上下文中调用对应的计算接口
-3. **搬出（CopyOut）**：通过[`pypto_pro.language.store`](../../../../../api/pro_api/SIMD-API/operation/memory_data_movement/store.md)/[`pypto_pro.language.store_tile`](../../../../../api/pro_api/SIMD-API/operation/memory_data_movement/store_tile.md)将结果从片上缓冲区写回Global Memory
+1. **搬入（CopyIn）**：通过[pypto_pro.language.load](../../../../../api/pro_api/SIMD-API/operation/memory_data_movement/load.md)/[pypto_pro.language.load_tile](../../../../../api/pro_api/SIMD-API/operation/memory_data_movement/load_tile.md)将数据从Global Memory搬运至片上缓冲区（UB/L1等）
+2. **计算（Compute）**：在片上缓冲区上完成Tile级别的计算，根据算子类型在pypto_pro.language.section_vector()或pypto_pro.language.section_cube()上下文中调用对应的计算接口
+3. **搬出（CopyOut）**：通过[pypto_pro.language.store](../../../../../api/pro_api/SIMD-API/operation/memory_data_movement/store.md)/[pypto_pro.language.store_tile](../../../../../api/pro_api/SIMD-API/operation/memory_data_movement/store_tile.md)将结果从片上缓冲区写回Global Memory
 
 AI Core内部的搬运单元（MTE2/MTE1/MTE3等）与计算单元（V/M等）天然支持异步并行。通过TileGroup的N缓冲机制，可以让搬入下一块数据与当前块计算重叠执行，实现流水线吞吐叠加。
 
@@ -126,10 +126,10 @@ PyPTO Pro提供两种Tile分配方式，对应不同的内存管理与同步复�
 
 | 策略 | 分配方式 | 同步管理 | 适用场景 |
 |:---|:---|:---|:---|
-| **自动同步（推荐）** | `pypto_pro.language.make_tile_group` + `auto_mutex=True` | 框架自动插入`mutex_lock`/`mutex_unlock` | 大多数Kernel；流水化/重叠的循环 |
-| **手动同步** | `pypto_pro.language.make_tile` | 显式插入`sync_src`/`sync_dst`、barrier或`mutex_lock`/`mutex_unlock` | 需要精确放置同步操作的流水线 |
+| **自动同步（推荐）** | pypto_pro.language.make_tile_group + auto_mutex=True | 框架自动插入mutex_lock/mutex_unlock | 大多数Kernel；流水化/重叠的循环 |
+| **手动同步** | pypto_pro.language.make_tile | 显式插入sync_src/sync_dst、barrier或mutex_lock/mutex_unlock | 需要精确放置同步操作的流水线 |
 
-常规单缓冲、双缓冲及N缓冲场景使用`make_tile_group`并启用`auto_mutex=True`；需要精确控制同步事件及插入位置的场景使用`make_tile`和显式同步。两种方式可在同一Kernel中使用。
+常规单缓冲、双缓冲及N缓冲场景使用make_tile_group并启用auto_mutex=True；需要精确控制同步事件及插入位置的场景使用make_tile和显式同步。两种方式可在同一Kernel中使用。
 
 三类标准编程范式的详细实践请参考：
 
@@ -143,32 +143,32 @@ AI Core内部存在多条异步并行流水，当一条流水生产的数据被�
 
 ### 自动同步（auto_mutex）
 
-通过`@pypto_pro.language.jit(auto_mutex=True)`启用。框架根据TileGroup中每个Tile的`mutex_id`，在每次使用轮转Tile前后自动插入`mutex_lock`/`mutex_unlock`。该方式适用于常规单缓冲、双缓冲及N缓冲场景。
+通过@pypto_pro.language.jit(auto_mutex=True)启用。框架根据TileGroup中每个Tile的mutex_id，在每次使用轮转Tile前后自动插入mutex_lock/mutex_unlock。该方式适用于常规单缓冲、双缓冲及N缓冲场景。
 
 ### 手动同步
 
-跨Pipe生产者/消费者依赖可通过显式的`pypto_pro.language.system.sync_src`/`pypto_pro.language.system.sync_dst`对进行同步：
+跨Pipe生产者/消费者依赖可通过显式的pypto_pro.language.system.sync_src/pypto_pro.language.system.sync_dst对进行同步：
 
-- `sync_src(set_pipe, wait_pipe, event_id)` —— 生产方SET flag
-- `sync_dst(set_pipe, wait_pipe, event_id)` —— 消费方WAIT flag
+- sync_src(set_pipe, wait_pipe, event_id) —— 生产方SET flag
+- sync_dst(set_pipe, wait_pipe, event_id) —— 消费方WAIT flag
 
 需要显式控制缓冲区互斥时可使用[mutex_lock](../../../../../api/pro_api/SIMD-API/operation/synchronization/mutex_lock.md)和[mutex_unlock](../../../../../api/pro_api/SIMD-API/operation/synchronization/mutex_unlock.md)。需要等待指定流水中此前下发的操作完成时，可根据流水分别使用[bar_m](../../../../../api/pro_api/SIMD-API/operation/synchronization/bar_m.md)、[bar_mte1](../../../../../api/pro_api/SIMD-API/operation/synchronization/bar_mte1.md)、[bar_mte2](../../../../../api/pro_api/SIMD-API/operation/synchronization/bar_mte2.md)、[bar_mte3](../../../../../api/pro_api/SIMD-API/operation/synchronization/bar_mte3.md)或[bar_fix](../../../../../api/pro_api/SIMD-API/operation/synchronization/bar_fix.md)；需要等待本AI Core内全部流水中此前下发的操作完成时，使用[bar_all](../../../../../api/pro_api/SIMD-API/operation/synchronization/bar_all.md)。
 
-PyPTO Pro的流水类型（`pypto_pro.language.PipeType`）与硬件指令流水对应关系：
+PyPTO Pro的流水类型（pypto_pro.language.PipeType）与硬件指令流水对应关系：
 
 | PipeType | 含义 | 典型操作 |
 |:---|:---|:---|
-| `MTE2` | GM→L1/UB搬运 | `pypto_pro.language.load`/`pypto_pro.language.load_tile` |
-| `MTE1` | L1→L0A/L0B/ScaleLeft/ScaleRight搬运 | `pypto_pro.language.move` |
-| `M` | 矩阵计算 | `pypto_pro.language.matmul` / `pypto_pro.language.matmul_mx` |
-| `V` | 向量计算 | `pypto_pro.language.add`/`pypto_pro.language.sub`/... |
-| `MTE3` | UB→GM搬运 | `pypto_pro.language.store`/`pypto_pro.language.store_tile` |
-| `FIX` | L0C→GM搬运 | `pypto_pro.language.store`（Acc→GM） |
+| MTE2 | GM→L1 Buffer/UB搬运 | pypto_pro.language.load/pypto_pro.language.load_tile |
+| MTE1 | L1 Buffer→L0A Buffer/L0B Buffer/L0A_MX Buffer/L0B_MX Buffer搬运 | pypto_pro.language.move |
+| M | 矩阵计算 | pypto_pro.language.matmul / pypto_pro.language.matmul_mx |
+| V | 向量计算 | pypto_pro.language.add/pypto_pro.language.sub/... |
+| MTE3 | UB→GM搬运 | pypto_pro.language.store/pypto_pro.language.store_tile |
+| FIX | L0C Buffer→GM搬运 | pypto_pro.language.store（Acc→GM） |
 
-手动同步的典型模式为：搬入后插入`MTE2→V`同步确保数据就绪再计算，计算后插入`V→MTE3`同步确保计算完成再搬出。在循环场景下还需考虑反向同步（循环间依赖），防止当前迭代覆盖上一迭代未完成的数据。
+手动同步的典型模式为：搬入后插入MTE2→V同步确保数据就绪再计算，计算后插入V→MTE3同步确保计算完成再搬出。在循环场景下还需考虑反向同步（循环间依赖），防止当前迭代覆盖上一迭代未完成的数据。
 
 > [!NOTE]说明
-> `sync_src`/`sync_dst`的参数范围、配对及event ID复用要求参见[`sync_src`/`sync_dst`](../../../../../api/pro_api/SIMD-API/operation/synchronization/sync_src_sync_dst.md)。手动同步属于ISASI类别的高级用法，不保证跨硬件版本兼容。
+> sync_src/sync_dst的参数范围、配对及event ID复用要求参见[sync_src/sync_dst](../../../../../api/pro_api/SIMD-API/operation/synchronization/sync_src_sync_dst.md)。手动同步属于ISASI类别的高级用法，不保证跨硬件版本兼容。
 
 ## TilingData
 

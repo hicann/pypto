@@ -16,11 +16,11 @@
 
 在已有累加器值上累加一次带分组量化系数的矩阵乘结果：
 
-```text
-C = (scaleA ⊗ A) @ (scaleB ⊗ B) + C
-```
+$$
+C_{M \times N} = \left(\mathrm{scale\_a}_{M \times (K/32)} \otimes A_{M \times K}\right) \times \left(\mathrm{scale\_b}_{(K/32) \times N} \otimes B_{K \times N}\right) + C_{M \times N}
+$$
 
-其中，`⊗`表示广播乘法。
+其中，`⊗`表示广播乘法，A、B沿K维度每连续32个元素分别共享scale_a、scale_b中的一个量化系数。
 
 ## 函数原型
 
@@ -45,8 +45,8 @@ pypto_pro.language.matmul_mx_acc(
 | acc_tile | 输入 | 源操作数（已有累加结果），Tile类型，存储空间为L0C Buffer，数据类型为DT_FP32，layout为pypto_pro.language.TensorLayout.NZ，shape必须与dst_tile一致。通常与dst_tile使用同一Tile实现原地累加；其内容应由此前的matmul_mx或matmul_mx_acc初始化。 |
 | lhs_tile | 输入 | 源操作数（A，左矩阵），Tile类型，存储空间为L0A Buffer，数据类型支持DT_FP8E4M3FN、DT_FP8E5M2、DT_FP4E2M1和DT_FP4E1M2，layout为pypto_pro.language.TensorLayout.NZ，K必须为64的倍数。 |
 | rhs_tile | 输入 | 源操作数（B，右矩阵），Tile类型，存储空间为L0B Buffer，数据类型支持DT_FP8E4M3FN、DT_FP8E5M2、DT_FP4E2M1和DT_FP4E1M2。与lhs_tile的数据类型可以不同，但必须同时选自DT_FP8E4M3FN、DT_FP8E5M2，或同时选自DT_FP4E2M1、DT_FP4E1M2。layout为pypto_pro.language.TensorLayout.ZN，K必须为64的倍数。 |
-| scale_a | 输入 | 源操作数（scaleA，左量化系数矩阵），Tile类型，存储空间为ScaleLeft Buffer，数据类型为DT_FP8E8M0，shape为[M, K/32]，layout为pypto_pro.language.TensorLayout.ZZ。每个量化系数对应A矩阵K方向连续32个元素。 |
-| scale_b | 输入 | 源操作数（scaleB，右量化系数矩阵），Tile类型，存储空间为ScaleRight Buffer，数据类型为DT_FP8E8M0，shape为[K/32, N]，layout为pypto_pro.language.TensorLayout.NN。每个量化系数对应B矩阵K方向连续32个元素。 |
+| scale_a | 输入 | 源操作数（左量化系数矩阵），Tile类型，存储空间为ScaleLeft Buffer，数据类型为DT_FP8E8M0，shape为[M, K/32]，layout默认且仅支持pypto_pro.language.TensorLayout.ZZ，fractal默认且仅支持32。每个量化系数对应A矩阵K方向连续32个元素。 |
+| scale_b | 输入 | 源操作数（右量化系数矩阵），Tile类型，存储空间为ScaleRight Buffer，数据类型为DT_FP8E8M0，shape为[K/32, N]，layout默认且仅支持pypto_pro.language.TensorLayout.NN，fractal默认且仅支持32。每个量化系数对应B矩阵K方向连续32个元素。 |
 | phase | 输入 | K维分块累加阶段，pypto_pro.language.AccPhase类型，可选，用于控制矩阵计算与L0C Buffer数据搬出之间的UnitFlag同步。与[pypto_pro.language.STPhase](../../basic_data_structures/STPhase.md)的配合方式见[AccPhase与STPhase配合使用说明](phase.md)。 |
 
 ## 约束说明
@@ -58,7 +58,7 @@ pypto_pro.language.matmul_mx_acc(
   addr(scale_b) = addr(rhs_tile) >> 4
   ```
 
-  硬件根据A/B矩阵首地址定位scaleA/scaleB。使用多组L0A/L0B Tile时，每组地址均须满足上述关系。
+  硬件根据A/B矩阵首地址定位scale_a/scale_b。使用多组L0A/L0B Tile时，每组地址均须满足上述关系。
 
 - 矩阵乘累加操作时，acc_tile应调用[matmul_mx](matmul_mx.md)建立初始结果，后续再调用本接口进行累加操作。
 
@@ -68,7 +68,7 @@ pypto_pro.language.matmul_mx_acc(
 
 ## 调用示例
 
-将K方向分为两个128元素的块，首块调用matmul_mx，末块调用matmul_mx_acc。A和B的完整K方向均包含8个量化系数分组，因此GM中的scaleA/scaleB Tensor物理shape分别为[128, 4, 2]和[4, 128, 2]。
+将K方向分为两个128元素的块，首块调用matmul_mx，末块调用matmul_mx_acc。A和B的完整K方向均包含8个量化系数分组，因此GM中的scale_a/scale_b Tensor物理shape分别为[128, 4, 2]和[4, 128, 2]。
 
 ```python
 import os

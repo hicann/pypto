@@ -39,7 +39,7 @@ pypto_pro.language.load_tile(
 | dst_tile | 输出 | 目的操作数，Tile类型，存储空间为L1 Buffer或UB，首地址必须按32字节对齐。支持DT_FP4E2M1、DT_FP4E1M2、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP16、DT_BF16和DT_FP32。可通过set_validshape设置尾块有效形状。 |
 | src_tensor | 输入 | 源操作数，Tensor类型，存储空间为GM，支持的数据类型与dst_tile一致，排布支持ND、DN和NZ。 |
 | tile_offsets | 输入 | 源Tensor的Tile块偏移，List[int或Scalar]类型。由order选中的维度以Tile块索引为单位，内部乘以Tile对应维度大小；未被选中的维度按绝对元素偏移使用。各项必须为非负整数或运行时整数表达式，换算后的访问范围不得越过Tensor边界。 |
-| order | 输入 | 维度映射，List[int]类型，可选。表示Tile两个维度分别对应源Tensor的哪两个维度；两个轴索引必须互不重复且位于Tensor维度范围内，升序表示不转置，降序表示转置。 |
+| order | 输入 | 维度映射，List[int]类型，可选。表示Tile两个维度分别对应源Tensor的哪两个维度；两个轴索引必须互不重复且位于Tensor维度范围内，升序表示不转置，降序表示转置。搬运MX矩阵乘量化系数时，最后一轴固定作为物理phase轴，不能在order中选择。order省略时，普通Tensor默认取最后两维[ndim-2, ndim-1]；MX矩阵乘量化系数默认取尾轴前两维[ndim-3, ndim-2]。 |
 
 ## 约束说明
 
@@ -47,7 +47,7 @@ pypto_pro.language.load_tile(
 
 - tile_offsets按Tile块索引寻址：最后两项分别乘以Tile的M、N shape，前导项选择batch；换算后的M、N offset需分别按16和Tensor dtype对应的C0对齐。
 
-当前DT_FP8E8M0 Tensor搬入fractal=32的ZZ或NN排布L1 Buffer Tile，仅支持作为matmul_mx或matmul_mx_acc的缩放因子搬运。普通E8M0数据不支持使用该目标组合；满足该组合的load_tile会按MX缩放因子解释，并要求源Tensor的最后一轴是长度为2的物理phase轴。
+当前数据类型为DT_FP8E8M0的Tensor搬入fractal=32的ZZ或NN排布L1 Buffer Tile，仅支持作为matmul_mx或matmul_mx_acc的量化系数搬运。普通E8M0数据不支持使用该目标组合；满足该组合的load_tile会要求源Tensor的维度至少为3，最后一轴固定为物理phase轴，且该轴长度必须是2。
 
 开启auto_mutex时，若连续两次pypto_pro.language.load_tile向同一个UB或L1 Buffer Tile地址搬运数据，并且前一次搬入的数据没有被读取，则必须在两次load_tile之间调用pypto_pro.language.system.bar_mte2()，再复用该地址。
 

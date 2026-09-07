@@ -16,21 +16,21 @@
 
 数据布局枚举，用于描述GM Tensor的存储形式和Tile的数据排列形式。
 
-- **GM Tensor**支持`ND`、`NZ`，默认`ND`。
-- **Tile**支持`ND`、`DN`、`NZ`、`ZN`、`NN`、`ZZ`，默认值由内存空间和芯片架构决定。
+- **GM Tensor**支持ND、NZ，默认ND。
+- **Tile**支持ND、DN、NZ、ZN、NN、ZZ，默认值由内存空间决定。
 
 ## 取值
 
 | 取值 | 数据排列 | 适用对象 | 典型用途 |
 |---|---|---|---|
-| `pl.ND` | 非分形行主序，最后一维连续 | Tensor / Tile | 普通GM Tensor（默认）；UB Tile（默认）；Scaling buffer |
-| `pl.DN` | 非分形列主序 | Tile | UB上`[ROWS, 1]`列向量（归约结果、histogram索引） |
-| `pl.NZ` | NZ分形排列 | Tensor / Tile | GM Tensor；L1 Mat（默认）；A5的L0A（默认）；L0C Acc（默认） |
-| `pl.ZN` | ZN分形排列 | Tile | L0B Right（默认）；转置搬入时的L1 Mat |
-| `pl.ZZ` | ZZ分形排列 | Tile | A3的L0A（默认）；MX矩阵计算中，A矩阵的E8M0分组缩放因子在L1和ScaleLeft中的布局 |
-| `pl.NN` | NN分形排列 | Tile | MX矩阵计算中，B矩阵的E8M0分组缩放因子在L1和ScaleRight中的布局 |
+| pl.ND | 非分形行主序，最后一维连续 | Tensor / Tile | 普通GM Tensor（默认）；UB Tile（默认）；Fixpipe Buffer |
+| pl.DN | 非分形列主序 | Tile | UB上[ROWS, 1]列向量（归约结果、histogram索引） |
+| pl.NZ | NZ分形排列 | Tensor / Tile | GM Tensor；L1 Buffer（默认）；L0A Buffer（默认）；L0C Buffer（默认） |
+| pl.ZN | ZN分形排列 | Tile | L0B Buffer（默认）；转置搬入时的L1 Buffer |
+| pl.ZZ | ZZ分形排列 | Tile | MX矩阵乘中左量化系数矩阵在L1 Buffer和L0A_MX Buffer中的布局 |
+| pl.NN | NN分形排列 | Tile | MX矩阵乘中右量化系数矩阵在L1 Buffer和L0B_MX Buffer中的布局 |
 
-以上短名称分别等价于`pypto_pro.language.TensorLayout.ND`、`DN`、`NZ`、`ZN`、`NN`、`ZZ`。
+以上短名称分别等价于pypto_pro.language.TensorLayout.ND、pypto_pro.language.TensorLayout.DN、pypto_pro.language.TensorLayout.NZ、pypto_pro.language.TensorLayout.ZN、pypto_pro.language.TensorLayout.NN、pypto_pro.language.TensorLayout.ZZ。
 
 ---
 
@@ -38,36 +38,36 @@
 
 ### Tensor布局
 
-GM Tensor支持`ND`（行主序，默认）和`NZ`（分形布局）：
+GM Tensor支持ND（行主序，默认）和NZ（分形布局）：
 
 ```python
 x: pl.Tensor[[64, 128], pl.DT_FP16]                   # 默认 ND
 x_nz: pl.Tensor[[64, 128], pl.DT_FP16, pl.NZ]         # NZ 分形布局
 ```
 
-`pl.NZ`只声明GM内存的布局，不会把普通ND buffer自动转换成NZ。调用kernel前，输入buffer必须已经按NZ物理顺序完成packing；NZ输出也必须使用按NZ格式分配的buffer。高维NZ Tensor的最后两轴固定解释为`[M, N]`，所有前导轴均作为batch轴，不支持在layout中指定任意分形轴。
+pl.NZ只声明GM内存的布局，不会把普通ND buffer自动转换成NZ。调用kernel前，输入buffer必须已经按NZ物理顺序完成packing；NZ输出也必须使用按NZ格式分配的buffer。高维NZ Tensor的最后两轴固定解释为[M, N]，所有前导轴均作为batch轴，不支持在layout中指定任意分形轴。
 
-NZ将逻辑`[..., M, N]`存储为`[..., ceil(N/C0), ceil(M/16), 16, C0]`。`M/N`无需分形对齐，但底层storage必须按`align(M, 16) * align(N, C0)`的容量分配并使用上述NZ物理排布；仅分配`M * N`元素的紧凑buffer不受支持。补齐区不属于逻辑Tensor内容，框架不会为传入的buffer自动扩容或完成packing。INT8、FP8E4M3FN、FP8E5M2、FP8E8M0和HF8的`C0`为32，FP4E2M1和FP4E1M2为64，FP16和BF16为16，FP32和INT32为8。FP4的`M/N`同样按逻辑元素计数，不使用packed字节数作为Tensor shape。
+NZ将逻辑[..., M, N]存储为[..., ceil(N/C0), ceil(M/16), 16, C0]。M/N无需分形对齐，但底层storage必须按align(M, 16) * align(N, C0)的容量分配并使用上述NZ物理排布；仅分配M * N元素的紧凑buffer不受支持。补齐区不属于逻辑Tensor内容，框架不会为传入的buffer自动扩容或完成packing。INT8、FP8E4M3FN、FP8E5M2、FP8E8M0和HF8的C0为32，FP4E2M1和FP4E1M2为64，FP16和BF16为16，FP32和INT32为8。FP4的M/N同样按逻辑元素计数，不使用packed字节数作为Tensor shape。
 
-MX矩阵计算使用的E8M0分组缩放因子在GM中仍声明为普通`ND` Tensor；物理shape和搬运约束见[`matmul_mx`](../operation/matrix_computation/matmul_mx.md)和[`load`](../operation/memory_data_movement/load.md)。
+MX矩阵计算使用的E8M0分组缩放因子在GM中仍声明为普通ND Tensor；物理shape和搬运约束见[matmul_mx](../operation/matrix_computation/matmul_mx.md)和[load](../operation/memory_data_movement/load.md)。
 
 > [!IMPORTANT]重要
-> 普通ND GM Tensor的转置搬运由[`load`](../operation/memory_data_movement/load.md)/[`load_tile`](../operation/memory_data_movement/load_tile.md)的`order`参数决定（`order=[1,0]`即`is_transpose=True`），需与L1 Tile布局`ZN`配合。GM NZ只支持与NZ Tile同布局正序搬运，不支持通过`order`转置。详见下文[转置搬入](#转置搬入)。
+> 普通ND GM Tensor的转置搬运由[load](../operation/memory_data_movement/load.md)/[load_tile](../operation/memory_data_movement/load_tile.md)的order参数决定（order=[1,0]即is_transpose=True），需与L1 Buffer中的Tile布局ZN配合。GM NZ只支持与NZ Tile同布局正序搬运，不支持通过order转置。详见下文[转置搬入](#转置搬入)。
 
 ### Tile布局
 
-Tile通过[`pl.TileType`](TileType.md)的`layout`参数指定。不指定时，默认值由内存空间和芯片架构决定：
+Tile通过[pl.TileType](TileType.md)的layout参数指定。不指定时，默认值由内存空间决定：
 
-| 内存空间 | A3默认 | A5默认 | 额外允许 |
+| 内存空间 | 硬件位置 | 默认布局 | 额外允许 |
 |---|---|---|---|
-| `Vec`（UB） | 无默认值 | 无默认值 | `ND`；`DN`（仅特定API要求的列主序场景）；`NZ` |
-| `Mat`（L1） | `NZ` | `NZ` | `ZN`（转置搬入）；`DT_FP8E8M0`还允许`ZZ`、`NN`；`UINT64`/`INT64`还允许`ND` |
-| `Left`（L0A） | `ZZ` | `NZ` | `ZZ`、`NZ` |
-| `Right`（L0B） | `ZN` | `ZN` | — |
-| `Acc`（L0C） | `NZ` | `NZ` | — |
-| `Scaling` | `ND` | `ND` | — |
-| `ScaleLeft` | — | `ZZ` | — |
-| `ScaleRight` | — | `NN` | — |
+| Vec | UB | 无默认值 | ND；DN（仅特定API要求的列主序场景）；NZ |
+| Mat | L1 Buffer | NZ | ZN（转置搬入）；DT_FP8E8M0还允许ZZ、NN；UINT64/INT64还允许ND |
+| Left | L0A Buffer | NZ | — |
+| Right | L0B Buffer | ZN | — |
+| Acc | L0C Buffer | NZ | — |
+| Scaling | Fixpipe Buffer | ND | — |
+| ScaleLeft | L0A_MX Buffer | ZZ | — |
+| ScaleRight | L0B_MX Buffer | NN | — |
 
 ---
 
@@ -75,20 +75,20 @@ Tile通过[`pl.TileType`](TileType.md)的`layout`参数指定。不指定时，�
 
 ### 转置搬入
 
-GM ND Tensor搬入L1 Mat Tile时，两轴顺序一致可省略`order`；需要交换两轴时，`load`设置`order=[1, 0]`，目标Tile布局使用`ZN`。框架根据`order`生成对应的TLOAD指令。
+GM ND Tensor搬入L1 Buffer中的Tile时，两轴顺序一致可省略order；需要交换两轴时，load设置order=[1, 0]，目标Tile布局使用ZN。框架根据order生成对应的TLOAD指令。
 
-以`C[M, N] = A[M, K] @ B[K, N]`为例：
+以C[M, N] = A[M, K] @ B[K, N]为例：
 
-| 操作数 | Tensor shape | 是否转置 | `load`的`order` | L1 Mat Tile layout |
+| 操作数 | Tensor shape | 是否转置 | load的order | L1 Buffer中的Tile layout |
 |---|---|---|---|---|
-| 左矩阵A | `[M, K]` | 否 | `[0, 1]`（默认） | `NZ`（默认） |
-| 左矩阵A | `[K, M]` | 是 | `[1, 0]` | `ZN` |
-| 右矩阵B | `[K, N]` | 否 | `[0, 1]`（默认） | `NZ`（默认） |
-| 右矩阵B | `[N, K]` | 是 | `[1, 0]` | `ZN` |
+| 左矩阵A | [M, K] | 否 | [0, 1]（默认） | NZ（默认） |
+| 左矩阵A | [K, M] | 是 | [1, 0] | ZN |
+| 右矩阵B | [K, N] | 否 | [0, 1]（默认） | NZ（默认） |
+| 右矩阵B | [N, K] | 是 | [1, 0] | ZN |
 
 #### 左矩阵转置搬入
 
-Tensor shape为`[K, M]`（与L1 Tile的`[M, K]`轴序相反），`load`设置`order=[1, 0]`，L1 Tile配`ZN`：
+Tensor shape为[K, M]（与L1 Buffer中Tile的[M, K]轴序相反），load设置order=[1, 0]，L1 Buffer中的Tile配ZN：
 
 ```python
 @pl.jit(auto_mutex=True)
@@ -116,7 +116,7 @@ def kernel_left_transpose(
 
 #### 右矩阵转置搬入
 
-Tensor shape为`[N, K]`（与L1 Tile的`[K, N]`轴序相反），`load`设置`order=[1, 0]`，L1 Tile配`ZN`：
+Tensor shape为[N, K]（与L1 Buffer中Tile的[K, N]轴序相反），load设置order=[1, 0]，L1 Buffer中的Tile配ZN：
 
 ```python
 @pl.jit(auto_mutex=True)
@@ -144,7 +144,7 @@ def kernel_right_transpose(
 
 ### UB Tile的ND与DN
 
-UB Tile大部分情况使用`ND`（行主序）。`DN`（列主序）仅在特定API要求时使用，典型场景是归约操作产生`[ROWS, 1]`列向量：
+UB Tile大部分情况使用ND（行主序）。DN（列主序）仅在特定API要求时使用，典型场景是归约操作产生[ROWS, 1]列向量：
 
 ```python
 # 普通数据 Tile：ND（行主序）
@@ -158,36 +158,25 @@ tile_red = pl.TileType(shape=[TILE_ROWS, 1], dtype=pl.DT_FP32,
 
 ### Cube分形布局
 
-Cube计算的L1/L0A/L0B/L0C各级Buffer使用分形布局，默认值由内存空间决定：
+Cube计算的L1 Buffer、L0A Buffer、L0B Buffer和L0C Buffer使用分形布局，默认值由内存空间决定：
 
 ```python
-# L1 Mat：默认 NZ
+# L1 Buffer：默认 NZ
 mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32,
                        target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
 
-# L0B Right：默认 ZN
+# L0B Buffer：默认 ZN
 right_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32,
                          target_memory=pl.MemorySpace.Right, layout=pl.ZN)
 
-# L0C Acc：默认 NZ，fp32 需指定 fractal=1024
+# L0C Buffer：默认 NZ，fp32 需指定 fractal=1024
 acc_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32,
                        target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024)
 ```
 
-### A3架构L0A的ZZ布局
-
-A3架构下L0A（左矩阵）默认`ZZ`；A5架构下默认`NZ`。以下为显式指定`ZZ`的用法：
-
-```python
-tile_type = pl.TileType(
-    shape=[128, 128], dtype=pl.DT_FP16,
-    target_memory=pl.MemorySpace.Left, layout=pl.ZZ,
-)
-```
-
 ### NZ Tensor输入输出
 
-Tensor标注为`NZ`时，`pl.load`/`pl.store`按NZ物理布局访问GM，目标/源Tile也必须使用`pl.NZ`。以下示例展示二维GM NZ在UB中的原始搬入和写回：
+Tensor标注为NZ时，pl.load/pl.store按NZ物理布局访问GM，目标/源Tile也必须使用pl.NZ。以下示例展示二维GM NZ在UB中的原始搬入和写回：
 
 ```python
 @pl.jit()
@@ -205,17 +194,17 @@ def copy_nz_kernel(
         pl.store(nz_out, tile, [0, 0])
 ```
 
-高维NZ沿用相同写法，例如`pl.Tensor[[B, H, M, N], dtype, pl.NZ]`固定以最后两轴`M/N`作为分形轴，`B/H`为batch轴。GM NZ不支持通过`order=[1, 0]`转置，也不支持直接搬入ND/ZN Tile。完整分形、offset以及L0C直接写回限制见[`load`](../operation/memory_data_movement/load.md)和[`store`](../operation/memory_data_movement/store.md)。
+高维NZ沿用相同写法，例如pl.Tensor[[B, H, M, N], dtype, pl.NZ]固定以最后两轴M/N作为分形轴，B/H为batch轴。GM NZ不支持通过order=[1, 0]转置，也不支持直接搬入ND/ZN Tile。完整分形、offset以及L0C Buffer直接写回限制见[load](../operation/memory_data_movement/load.md)和[store](../operation/memory_data_movement/store.md)。
 
-### MX scale的ZZ与NN布局
+### MX矩阵乘量化系数的ZZ与NN布局
 
-`ZZ`和`NN`分别用于存放MX矩阵计算中A矩阵和B矩阵的E8M0 scale。L1 Mat Tile默认使用`NZ`，因此A矩阵的scale需要显式指定`ZZ`，B矩阵的scale需要显式指定`NN`；ScaleLeft和ScaleRight Tile则分别默认使用`ZZ`和`NN`。
+ZZ和NN分别用于MX矩阵乘中左量化系数矩阵和右量化系数矩阵。L1 Buffer中的Tile默认使用NZ，因此左量化系数矩阵需要显式指定ZZ，右量化系数矩阵需要显式指定NN；L0A_MX Buffer中的Tile仅支持ZZ，L0B_MX Buffer中的Tile仅支持NN。
 
 ```python
-# A/B矩阵的E8M0 scale逻辑shape分别为[M,G]和[G,N]，其中G=K/32。
+# 左、右量化系数矩阵的逻辑shape分别为[M,G]和[G,N]，其中G=K/32。
 M, G, N = 64, 4, 64
 
-# L1 Mat的默认布局是NZ，因此需要显式指定ZZ或NN。
+# L1 Buffer的默认布局是NZ，因此需要显式指定ZZ或NN。
 scale_a_l1_type = pl.TileType(
     shape=[M, G],
     dtype=pl.DT_FP8E8M0,
@@ -229,7 +218,7 @@ scale_b_l1_type = pl.TileType(
     layout=pl.NN,
 )
 
-# ScaleLeft/ScaleRight分别默认使用ZZ/NN，无需再次指定layout。
+# L0A_MX Buffer/L0B_MX Buffer分别仅支持ZZ/NN；未指定layout时自动采用对应布局。
 scale_a_type = pl.TileType(
     shape=[M, G],
     dtype=pl.DT_FP8E8M0,

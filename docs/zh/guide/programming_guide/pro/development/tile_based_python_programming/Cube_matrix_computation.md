@@ -343,7 +343,7 @@ def kernel(...,
 
 ### MXFP8/MXFP4矩阵乘
 
-MX矩阵乘使用`pypto_pro.language.matmul_mx`/`pypto_pro.language.matmul_mx_acc`，除Left/Right尾数Tile外，还需要分别位于L0A配套ScaleLeft缓冲区和L0B配套ScaleRight缓冲区的E8M0 scale Tile。每个scale对应K方向连续32个尾数元素，K必须为64的倍数。MXFP8支持E4M3/E5M2，MXFP4支持E2M1/E1M2；完整参数约束、scale Tensor布局和调用示例参见[`matmul_mx`](../../../../../api/pro_api/SIMD-API/operation/matrix_computation/matmul_mx.md)和[`matmul_mx_acc`](../../../../../api/pro_api/SIMD-API/operation/matrix_computation/matmul_mx_acc.md)。
+MX矩阵乘使用pypto_pro.language.matmul_mx/pypto_pro.language.matmul_mx_acc，除L0A Buffer/L0B Buffer的Tile外，还需要分别位于L0A_MX Buffer和L0B_MX Buffer的E8M0量化系数Tile。每个量化系数对应K方向连续32个尾数元素，K必须为64的倍数。MXFP8支持DT_FP8E4M3FN/DT_FP8E5M2，MXFP4支持DT_FP4E2M1/DT_FP4E1M2；完整参数约束、量化系数Tensor布局和调用示例参见[matmul_mx](../../../../../api/pro_api/SIMD-API/operation/matrix_computation/matmul_mx.md)和[matmul_mx_acc](../../../../../api/pro_api/SIMD-API/operation/matrix_computation/matmul_mx_acc.md)。
 
 ### K维分块累加
 

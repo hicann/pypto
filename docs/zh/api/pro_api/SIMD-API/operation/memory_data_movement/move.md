@@ -55,11 +55,11 @@ pypto_pro.language.move(
   | UB → L1 Buffer | 源与目的必须相同，支持DT_FP8E4M3FN、DT_FP8E5M2、DT_HF8、DT_FP16、DT_BF16、DT_FP32、DT_FP4E2M1、DT_FP4E1M2、DT_FP8E8M0。 |
   | L1 Buffer → BiasTable Buffer | 支持DT_INT32 → DT_INT32、DT_FP32 → DT_FP32、DT_FP16 → DT_FP32、DT_BF16 → DT_FP32。 |
   | L1 Buffer → Scaling | 源与目的必须相同，支持DT_INT64、DT_UINT64。 |
-  | L1 Buffer → ScaleLeft/ScaleRight | 源与目的必须相同，仅支持DT_FP8E8M0。 |
+  | L1 Buffer → L0A_MX Buffer/L0B_MX Buffer | 源与目的必须相同，仅支持DT_FP8E8M0。 |
   | L0C Buffer → UB/L1 Buffer | 未配置scale时：<br>- 当源为DT_FP32，目的支持DT_FP16、DT_BF16、DT_FP32；<br>配置scale时：<br>- 当源为DT_FP32，目的支持DT_INT8、DT_HF8、DT_FP8E4M3FN、DT_FP16； |
 
 - 尾块场景下，需要搭配pypto_pro.language.set_validshape与[pypto_pro.language.TileType](../../basic_data_structures/TileType.md)中的compact参数使用，否则可能出现精度失败或卡死现象。
-- Mat → ScaleLeft/ScaleRight要求目的Tile必须满足`addr(ScaleLeft) = addr(Left) >> 4`或`addr(ScaleRight) = addr(Right) >> 4`，否则MX矩阵乘时会读取错误的scale。
+- L1 Buffer → L0A_MX Buffer/L0B_MX Buffer要求目的Tile必须满足`addr(ScaleLeft) = addr(Left) >> 4`或`addr(ScaleRight) = addr(Right) >> 4`，否则MX矩阵乘时会读取错误的量化系数。
 
 ## 返回值说明
 
