@@ -2496,7 +2496,7 @@ def _get_memory_capacity(target_memory: MemorySpace) -> int:
     and exports it via PYPTOPRO_JIT_ARCH before kernel parsing, so reading it
     here is reliable. The capacity is queried per-target via
     ``pypto_impl.GetMemoryLimitForArch`` (state-free, no platform-switch
-    staleness), which also owns the memory-space mapping and the arch ->
+    staleness), which also owns the memory-space key mapping and the arch ->
     platform ini selection. Returns 0 (caller warns and skips validation)
     when the capacity cannot be determined, instead of failing the build.
     """
@@ -2504,7 +2504,7 @@ def _get_memory_capacity(target_memory: MemorySpace) -> int:
     from pypto_pro.runtime.platform import get_memory_limit
 
     arch = get_current_arch()
-    cap = get_memory_limit(arch, target_memory.value)
+    cap = get_memory_limit(arch, target_memory.name)
     if cap <= 0:
         import logging
 

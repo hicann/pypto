@@ -356,7 +356,7 @@ void Platform::ReloadMemoryPaths(const std::string& archType)
     }
 }
 
-size_t GetMemoryLimitForArch(const std::string& arch, pypto::ir::MemorySpace space)
+size_t GetMemoryLimitForArch(const std::string& arch, const std::string& space)
 {
     // Arch -> platform ini. PyPTO Pro only supports A5.
     static const std::unordered_map<std::string, std::string> archToIni = {
@@ -366,11 +366,10 @@ size_t GetMemoryLimitForArch(const std::string& arch, pypto::ir::MemorySpace spa
     if (iniIt == archToIni.end()) {
         return 0;
     }
-    // MemorySpace -> MemoryType + ini key, next to the C++ enum it mirrors.
-    static const std::unordered_map<pypto::ir::MemorySpace, std::string> spaceKeys = {
-        {pypto::ir::MemorySpace::Vec, ubSize},   {pypto::ir::MemorySpace::Mat, l1Size},
-        {pypto::ir::MemorySpace::Left, l0aSize}, {pypto::ir::MemorySpace::Right, l0bSize},
-        {pypto::ir::MemorySpace::Acc, l0cSize},
+    // Space key (kMemorySpace*) -> ini key.
+    static const std::unordered_map<std::string, std::string> spaceKeys = {
+        {kMemorySpaceVec, ubSize},    {kMemorySpaceMat, l1Size},  {kMemorySpaceLeft, l0aSize},
+        {kMemorySpaceRight, l0bSize}, {kMemorySpaceAcc, l0cSize},
     };
     const auto keyIt = spaceKeys.find(space);
     if (keyIt == spaceKeys.end()) {

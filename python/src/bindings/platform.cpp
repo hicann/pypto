@@ -33,8 +33,8 @@ void BindPlatform(py::module_& m)
 
     m.def("GetAIVCoreNum", []() -> size_t { return Platform::Instance().GetSoc().GetAIVCoreNum(); });
 
-    m.def("GetMemoryLimitForArch", [](const std::string& arch, size_t memorySpace) -> size_t {
-        return GetMemoryLimitForArch(arch, static_cast<pypto::ir::MemorySpace>(memorySpace));
+    m.def("GetMemoryLimitForArch", [](const std::string& arch, const std::string& space) -> size_t {
+        return GetMemoryLimitForArch(arch, space);
     });
 }
 } // namespace pypto
