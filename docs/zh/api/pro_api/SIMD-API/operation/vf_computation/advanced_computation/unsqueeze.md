@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-将mask_reg的每个bit扩展到目标reg_tensor的对应lane：mask bit为1时对应lane填1，mask bit为0时对应lane填0。
+以dst为操作对象，根据preg进行解压缩。
 
 具体算法如下图所示，dst的首位为0，后续mask[i]对应mask值为1时，dst[i]的值为dst[i-1] + 1；mask[i]对应mask值为0时，dst[i]的值为dst[i-1]。mask最高位被忽略不参与统计。
 

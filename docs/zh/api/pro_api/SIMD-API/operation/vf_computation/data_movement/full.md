@@ -33,7 +33,7 @@ full(src, preg, dtype: Optional[DType] = None, mode: Optional[MergeMode] = None,
 | preg | 输入 | [mask_reg](../mask_reg.md)。Tensor模式必选；Scalar模式可选。 |
 | dtype | 输入 | 可选，指定数据类型。Scalar模式必须输入，Tensor模式可从源寄存器自动推断。 |
 | pos | 输入 | 可选，Tensor模式下选择广播源reg_tensor的哪个元素，对应[DuplicatePos](../types/DuplicatePos.md)类型：<br>- pl.DuplicatePos.LOWEST：默认，广播最低位的元素。<br>- pl.DuplicatePos.HIGHEST：指定广播最高位的元素。 |
-| mode | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- pl.MergeMode.ZEROING（默认），preg未筛选的元素在dst中置0。<br>- pl.MergeMode.MERGING，preg未筛选的元素在dst中保留原值。 |
+| mode | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- pl.MergeMode.ZEROING（默认），preg未筛选的元素在dst中置0。<br>- pl.MergeMode.MERGING当前不支持。 |
 
 ## 约束说明
 

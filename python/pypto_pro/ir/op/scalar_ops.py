@@ -67,7 +67,12 @@ def _ir_add(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, **kwar
 
     dt = getattr(out.type, "dtype", None)
     _check_dtype("add", dt, _BINARY_DTYPES)
-    _check_dtype_match("add", dt, getattr(lhs.type, "dtype", None))
+    # rhs consistency is only enforced for the tile-tile path; the
+    # tile-scalar path keeps the fits-dtype contract in
+    # _create_tile_scalar_op (mirrors the AscendC same-type template).
+    rhs_type = getattr(rhs, "type", None)
+    rhs_dt = getattr(rhs_type, "dtype", None) if isinstance(rhs_type, _ir_core.TileType) else None
+    _check_dtype_match("add", dt, getattr(lhs.type, "dtype", None), rhs_dt)
     return _create_tile_scalar_op(out, lhs, rhs, tile_op="add", scalar_op="adds", span=span, **kwargs)
 
 
@@ -76,7 +81,12 @@ def _ir_sub(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, **kwar
 
     dt = getattr(out.type, "dtype", None)
     _check_dtype("sub", dt, _BINARY_DTYPES)
-    _check_dtype_match("sub", dt, getattr(lhs.type, "dtype", None))
+    # rhs consistency is only enforced for the tile-tile path; the
+    # tile-scalar path keeps the fits-dtype contract in
+    # _create_tile_scalar_op (mirrors the AscendC same-type template).
+    rhs_type = getattr(rhs, "type", None)
+    rhs_dt = getattr(rhs_type, "dtype", None) if isinstance(rhs_type, _ir_core.TileType) else None
+    _check_dtype_match("sub", dt, getattr(lhs.type, "dtype", None), rhs_dt)
     return _create_tile_scalar_op(out, lhs, rhs, tile_op="sub", scalar_op="subs", span=span, **kwargs)
 
 
@@ -85,7 +95,12 @@ def _ir_mul(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, **kwar
 
     dt = getattr(out.type, "dtype", None)
     _check_dtype("mul", dt, _MUL_DTYPES)
-    _check_dtype_match("mul", dt, getattr(lhs.type, "dtype", None))
+    # rhs consistency is only enforced for the tile-tile path; the
+    # tile-scalar path keeps the fits-dtype contract in
+    # _create_tile_scalar_op (mirrors the AscendC same-type template).
+    rhs_type = getattr(rhs, "type", None)
+    rhs_dt = getattr(rhs_type, "dtype", None) if isinstance(rhs_type, _ir_core.TileType) else None
+    _check_dtype_match("mul", dt, getattr(lhs.type, "dtype", None), rhs_dt)
     return _create_tile_scalar_op(out, lhs, rhs, tile_op="mul", scalar_op="muls", span=span, **kwargs)
 
 
@@ -94,7 +109,12 @@ def _ir_div(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, **kwar
 
     dt = getattr(out.type, "dtype", None)
     _check_dtype("div", dt, _DIV_DTYPES)
-    _check_dtype_match("div", dt, getattr(lhs.type, "dtype", None))
+    # rhs consistency is only enforced for the tile-tile path; the
+    # tile-scalar path keeps the fits-dtype contract in
+    # _create_tile_scalar_op (mirrors the AscendC same-type template).
+    rhs_type = getattr(rhs, "type", None)
+    rhs_dt = getattr(rhs_type, "dtype", None) if isinstance(rhs_type, _ir_core.TileType) else None
+    _check_dtype_match("div", dt, getattr(lhs.type, "dtype", None), rhs_dt)
     return _create_tile_scalar_op(out, lhs, rhs, tile_op="div", scalar_op="divs", span=span, **kwargs)
 
 
@@ -103,7 +123,12 @@ def _ir_and(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, **kwar
 
     dt = getattr(out.type, "dtype", None)
     _check_dtype("and", dt, _BITWISE_DTYPES)
-    _check_dtype_match("and", dt, getattr(lhs.type, "dtype", None))
+    # rhs consistency is only enforced for the tile-tile path; the
+    # tile-scalar path keeps the fits-dtype contract in
+    # _create_tile_scalar_op (mirrors the AscendC same-type template).
+    rhs_type = getattr(rhs, "type", None)
+    rhs_dt = getattr(rhs_type, "dtype", None) if isinstance(rhs_type, _ir_core.TileType) else None
+    _check_dtype_match("and", dt, getattr(lhs.type, "dtype", None), rhs_dt)
     return _create_tile_scalar_op(out, lhs, rhs, tile_op="and", scalar_op="ands", span=span, **kwargs)
 
 
@@ -121,7 +146,12 @@ def _ir_minimum(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, di
 
     dt = getattr(out.type, "dtype", None)
     _check_dtype("minimum", dt, _BINARY_DTYPES)
-    _check_dtype_match("minimum", dt, getattr(lhs.type, "dtype", None))
+    # rhs consistency is only enforced for the tile-tile path; the
+    # tile-scalar path keeps the fits-dtype contract in
+    # _create_tile_scalar_op (mirrors the AscendC same-type template).
+    rhs_type = getattr(rhs, "type", None)
+    rhs_dt = getattr(rhs_type, "dtype", None) if isinstance(rhs_type, _ir_core.TileType) else None
+    _check_dtype_match("minimum", dt, getattr(lhs.type, "dtype", None), rhs_dt)
     if dim is not None:
         return _create_dim_op([out, lhs, rhs], row_op="row_min", col_op="col_min", dim=dim, span=span)
     return _create_tile_scalar_op(out, lhs, rhs, tile_op="minimum", scalar_op="mins", span=span, **kwargs)
@@ -138,7 +168,12 @@ def _ir_maximum(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, di
 
     dt = getattr(out.type, "dtype", None)
     _check_dtype("maximum", dt, _BINARY_DTYPES)
-    _check_dtype_match("maximum", dt, getattr(lhs.type, "dtype", None))
+    # rhs consistency is only enforced for the tile-tile path; the
+    # tile-scalar path keeps the fits-dtype contract in
+    # _create_tile_scalar_op (mirrors the AscendC same-type template).
+    rhs_type = getattr(rhs, "type", None)
+    rhs_dt = getattr(rhs_type, "dtype", None) if isinstance(rhs_type, _ir_core.TileType) else None
+    _check_dtype_match("maximum", dt, getattr(lhs.type, "dtype", None), rhs_dt)
     if dim is not None:
         return _create_dim_op([out, lhs, rhs], row_op="row_max", col_op="col_max", dim=dim, span=span)
     return _create_tile_scalar_op(out, lhs, rhs, tile_op="maximum", scalar_op="maxs", span=span, **kwargs)

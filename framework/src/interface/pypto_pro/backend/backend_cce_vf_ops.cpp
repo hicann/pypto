@@ -146,16 +146,6 @@ static std::string VFZeroingOnly(const ir::CallPtr& op, const std::string& op_na
     return "MODE_ZEROING";
 }
 
-// For ops that support both ZEROING and MERGING: default ZEROING, use user value if provided.
-static std::string VFAnyMode(const ir::CallPtr& op)
-{
-    if (!op->HasKwarg("mode")) {
-        return "MODE_ZEROING";
-    }
-    auto mode = static_cast<ir::MergeMode>(op->GetKwarg<int>("mode"));
-    return mode == ir::MergeMode::MERGING ? "MODE_MERGING" : "MODE_ZEROING";
-}
-
 // Check if a DataType is a b8-width type (8-bit storage).
 // Includes INT8, UINT8, BOOL, and all FP8 types (FP8E4M3FN, FP8E5M2, HF8).
 // FP4 types (FP4E2M1, FP4E1M2, FP4) are b4 but stored as b8 (packed 2-per-byte),
@@ -322,6 +312,8 @@ static std::string EmitVFDuplicate(const ir::CallPtr& op, codegen::CodegenBase& 
     DataType src_dt = GetExprDtype(op->args_[1], DataType::FP32);
     CHECK((IsB8Type(src_dt) || src_dt.GetBit() == 16 || src_dt.GetBit() == 32 || src_dt.GetBit() == 64))
         << "vf.full src only supports b8/b16/b32/b64 types, got " << DTypeStr(src_dt);
+    // MERGING is not supported by the underlying vdup/vbr instructions on current device.
+    VFZeroingOnly(op, "vf.full");
     std::string dst = codegen.GetExprAsCode(op->args_[0]);
     std::string src_str = codegen.GetExprAsCode(op->args_[1]);
     // Detect vector-source broadcast: either explicit pos kwarg, or src is a RegTensor variable.
@@ -347,7 +339,7 @@ static std::string EmitVFDuplicate(const ir::CallPtr& op, codegen::CodegenBase& 
             pos = "POS_LOWEST";
         else if (pos == "HIGHEST")
             pos = "POS_HIGHEST";
-        std::string mode = VFAnyMode(op);
+        std::string mode = VFZeroingOnly(op, "vf.full");
         // FP4/HF8/HF4/INT4/UINT4 lack a vdup overload — reinterpret as uint8_t
         std::string cast = GetB8Cast(src_dt);
         // Tensor mode always requires a mask (vdup(dstReg, srcReg, mask))
@@ -372,7 +364,7 @@ static std::string EmitVFDuplicate(const ir::CallPtr& op, codegen::CodegenBase& 
     } else if (op->args_.size() >= 3) {
         // Scalar broadcast with mask: vdup(dst, scalar, preg, MODE_ZEROING/MERGING)
         std::string mask = codegen.GetExprAsCode(op->args_[2]);
-        std::string mode = VFAnyMode(op);
+        std::string mode = VFZeroingOnly(op, "vf.full");
         codegen.Emit("vdup(" + dst + ", " + src_str + ", " + mask + ", " + mode + ");");
     } else {
         // Scalar broadcast without mask: vbr(dst, scalar)
@@ -1040,7 +1032,8 @@ static std::string EmitVFMax(const ir::CallPtr& op, codegen::CodegenBase& codege
     std::string src0 = codegen.GetExprAsCode(op->args_[1]);
     std::string src1 = codegen.GetExprAsCode(op->args_[2]);
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
-    std::string mode = VFAnyMode(op);
+    // MERGING is not supported by the underlying vmax instruction on current device.
+    std::string mode = VFZeroingOnly(op, "vf.max");
     codegen.Emit("vmax(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ", " + mode + ");");
     return "";
 }
@@ -1065,7 +1058,8 @@ static std::string EmitVFAdd(const ir::CallPtr& op, codegen::CodegenBase& codege
     CHECK(dst_dt == s0_dt && dst_dt == s1_dt)
         << "vf.add requires dst, src0, src1 to have the same type, got dst=" << DTypeStr(dst_dt)
         << " src0=" << DTypeStr(s0_dt) << " src1=" << DTypeStr(s1_dt);
-    std::string mode = VFAnyMode(op);
+    // MERGING is not supported by the underlying vadd instruction on current device.
+    std::string mode = VFZeroingOnly(op, "vf.add");
     codegen.Emit("vadd(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ", " + mode + ");");
     return "";
 }
@@ -1560,7 +1554,7 @@ static std::string EmitVFMin(const ir::CallPtr& op, codegen::CodegenBase& codege
     std::string src0 = codegen.GetExprAsCode(op->args_[1]);
     std::string src1 = codegen.GetExprAsCode(op->args_[2]);
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
-    std::string mode = VFAnyMode(op);
+    std::string mode = VFZeroingOnly(op, "vf.min");
     codegen.Emit("vmin(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ", " + mode + ");");
     return "";
 }

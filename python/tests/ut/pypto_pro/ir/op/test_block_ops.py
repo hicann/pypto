@@ -132,12 +132,13 @@ def test_manual_cmp():
     def main(
         a: pl.Tensor[[128, 128], pl.DT_FP32],
         b: pl.Tensor[[128, 128], pl.DT_FP32],
-        output: pl.Tensor[[128, 128], pl.DT_FP32],
+        output: pl.Tensor[[128, 128], pl.DT_UINT8],
     ):
         tile_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32)
         tile_a = pl.make_tile(tile_type, addr=0x7000, size=4096)
         tile_b = pl.make_tile(tile_type, addr=0x8000, size=4096)
-        tile_out = pl.make_tile(tile_type, addr=0x9000, size=4096)
+        mask_type = pl.TileType(shape=[32, 32], dtype=pl.DT_UINT8)
+        tile_out = pl.make_tile(mask_type, addr=0x9000, size=1024)
         pl.load(tile_a, a, [0, 0])
         pl.load(tile_b, b, [0, 0])
         pl.eq(tile_out, tile_a, tile_b)

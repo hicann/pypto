@@ -24,14 +24,14 @@
 
 **mask_reg输入**：根据part选取的模式，将源操作数src的低半部分或者高半部分，展开到目的操作数dst。示意图如下图所示：
 
-**图1** mask_reg输入unpack示意图
+**图2** mask_reg输入unpack示意图
 
 ![mask_reg输入unpack示意图](../../../../figures/mask_unpack_diagram.jpg)
 
 ## 函数原型
 
 ```python
-unpack(src, dtype: Optional[DType] = None, part: Optional[PackPart] = None) -> dst
+unpack(src, part: Optional[PackPart] = None, dtype: Optional[DType] = None) -> dst
 ```
 
 ## 参数说明

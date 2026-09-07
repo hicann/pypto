@@ -121,7 +121,7 @@ class Vf:
         Kwargs:
             dtype: Required for Scalar mode (cannot infer from scalar). Auto-inferred
                 for Tensor mode from the source register.
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
             pos: ``pl.DuplicatePos.LOWEST`` (default) or ``pl.DuplicatePos.HIGHEST``
                 selects which element to broadcast in Tensor mode
 
@@ -337,7 +337,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
 
         Returns:
             Destination register (``RegTensor``) holding the element-wise
@@ -365,7 +365,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
 
         Returns:
             Destination register (``RegTensor``) holding the element-wise
@@ -825,7 +825,11 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
+
+        Returns:
+            Destination register (``RegTensor``) holding ``src[i] << shift[i]``
+            for each active lane.
         """
 
     @staticmethod
@@ -852,8 +856,13 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
             dtype: Data type for type-specific variants (e.g. ``pl.DT_UINT32``)
+
+        Returns:
+            Destination register (``RegTensor``) holding ``src[i] >> shift[i]``
+            for each active lane (logical shift for unsigned src, arithmetic
+            shift for signed src).
         """
 
     @staticmethod
@@ -1107,7 +1116,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
 
         Returns:
             Destination register (``RegTensor``) holding the element-wise
@@ -1580,6 +1589,10 @@ class Vf:
         Kwargs:
             dtype: Destination data type (e.g. ``pl.DT_UINT32``)
             part: ``pl.PackPart.LOWER`` (default) or ``pl.PackPart.UPPER`` --- which half of src to unpack
+
+        Returns:
+            Destination register (``RegTensor``) holding the widened elements
+            of ``src``.
         """
 
     @staticmethod
@@ -1598,12 +1611,17 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
+
+        Returns:
+            Destination register (``RegTensor``) holding ``src[i]`` where
+            ``src[i] >= 0`` and ``src[i] * slope[i]`` otherwise, for each
+            active lane.
         """
 
     @staticmethod
     @_api_decl
-    def mull(src0, src1, preg, mode: Optional[MergeMode] = None):
+    def mull(src0, src1, preg):
         """Long multiply: 32x32->64, output split into lo/hi register pair.
 
         Multiplies two 32-bit registers and produces 64-bit result split
@@ -1618,8 +1636,9 @@ class Vf:
             src1: Second source register (32-bit)
             preg: Predicate mask register
 
-        Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+        Returns:
+            Tuple of destination registers ``(dst_lo, dst_hi)`` holding the low
+            and high 32 bits of the 64-bit product ``src0 * src1``.
         """
 
     @staticmethod
@@ -1706,6 +1725,10 @@ class Vf:
             ureg: UnalignRegForLoad register
             src_ptr: Source UB pointer
             stride: Optional post-update stride in bytes
+
+        Returns:
+            Destination register (``RegTensor``) holding the data loaded from
+            the unaligned UB address.
         """
 
     @staticmethod
@@ -1736,6 +1759,10 @@ class Vf:
 
         Kwargs:
             dtype: Data type for the destination register (e.g. ``pl.DT_UINT32``)
+
+        Returns:
+            Destination register (``RegTensor``) holding one lane per mask bit:
+            1 for active bits, 0 for inactive bits.
         """
 
     @staticmethod
@@ -1849,6 +1876,10 @@ class Vf:
         Args:
             tile: Source UB tile
             stride: Post-update stride (optional positional arg)
+
+        Returns:
+            Destination register (``RegTensor``) holding the data loaded from
+            the source UB tile.
         """
 
     @staticmethod
@@ -1876,7 +1907,11 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
+
+        Returns:
+            Destination register (``RegTensor``) holding ``trunc(src[i])`` for
+            each active lane.
         """
 
     @staticmethod

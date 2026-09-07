@@ -263,8 +263,8 @@ TEST(BackendCCEVFOpsTest, EmitsDeclarationsMasksBroadcastsAndMoves)
     EXPECT_TRUE(codegen.IsMaskRegVar("mask"));
 
     ExpectInvoke(codegen, "vf.full", {"vbr(fp, 2.500000);"}, {fp, Float(2.5)});
-    ExpectInvoke(codegen, "vf.full", {"vdup(fp, 1.000000, mask, MODE_MERGING);"}, {fp, Float(1.0), mask},
-                 {{"mode", EnumValue(ir::MergeMode::MERGING)}});
+    // full rejects MERGING on current device (vdup/vbr have no merging form)
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.full", {fp, Float(1.0), mask}, {{"mode", EnumValue(ir::MergeMode::MERGING)}}));
     codegen.RegisterRegTensorVar("s4");
     ExpectInvoke(codegen, "vf.full", {"POS_HIGHEST", "MODE_ZEROING"}, {s4, s4},
                  {{"pos", EnumValue(ir::DuplicatePos::HIGHEST)}});
@@ -355,7 +355,7 @@ TEST(BackendCCEVFOpsTest, EmitsArithmeticIntrinsics)
     auto f8_src = MakeVar("f8_src", ir::DataType::FP8E4M3FN);
     codegen.RegisterRegTensorVar("f8_src");
     ExpectInvoke(codegen, "vf.full", {"vdup("}, {f8_src, f8_src, mask},
-                 {{"mode", EnumValue(ir::MergeMode::MERGING)}, {"pos", EnumValue(ir::DuplicatePos::LOWEST)}});
+                 {{"mode", EnumValue(ir::MergeMode::ZEROING)}, {"pos", EnumValue(ir::DuplicatePos::LOWEST)}});
 }
 
 TEST(BackendCCEVFOpsTest, EmitsReductionAndPermutationIntrinsics)
@@ -590,6 +590,10 @@ TEST(BackendCCEVFOpsTest, RejectsMergingForZeroingOnlyOps)
     EXPECT_ANY_THROW(Invoke(codegen, "vf.sub", {dst, src0, src1, mask}, merging));
     EXPECT_ANY_THROW(Invoke(codegen, "vf.mul", {dst, src0, src1, mask}, merging));
     EXPECT_ANY_THROW(Invoke(codegen, "vf.div", {dst, src0, src1, mask}, merging));
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.add", {dst, src0, src1, mask}, merging));
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.max", {dst, src0, src1, mask}, merging));
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.min", {dst, src0, src1, mask}, merging));
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.full", {dst, Float(1.0), mask}, merging));
     EXPECT_ANY_THROW(Invoke(codegen, "vf.and_", {dst, src0, src1, mask}, merging));
     EXPECT_ANY_THROW(Invoke(codegen, "vf.xor", {dst, src0, src1, mask}, merging));
     EXPECT_ANY_THROW(Invoke(codegen, "vf.adds", {dst, src0, mask}, merging));

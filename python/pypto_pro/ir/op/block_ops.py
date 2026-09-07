@@ -149,6 +149,10 @@ def _ir_binary_cast(
     span: Span | None = None,
     mode: RoundMode = RoundMode.CAST_ROUND,
 ) -> Expr:
+    # The fused multiply is computed in the source domain: both sources must
+    # share one dtype (the out dtype differs by design -- it is target_type).
+    lhs_dt = getattr(lhs.type, "dtype", None)
+    _check_dtype_match(op_name, lhs_dt, getattr(rhs.type, "dtype", None))
     return _ir_core.create_op_call(
         block_ir_op(op_name),
         [out, lhs, rhs],
@@ -704,14 +708,23 @@ def _ir_insert(
 
 
 def _ir_sel(out: Expr, mask: Expr, lhs: Expr, rhs: Expr, tmp: Expr, *, span: Span | None = None) -> Expr:
-    _check_dtype("sel", getattr(out.type, "dtype", None), _SEL_DTYPES)
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("sel", dt, _SEL_DTYPES)
+    # AscendC SelectImpl enforces dst/src0/src1 to share one type via its
+    # template; the byte-mask tile is intentionally not dtype-constrained.
+    _check_dtype_match("sel", dt, getattr(lhs.type, "dtype", None), getattr(rhs.type, "dtype", None))
     return _ir_core.create_op_call(block_ir_op("sel"), [out, mask, lhs, rhs, tmp], {}, span or _span())
 
 
 def _ir_sels(out: Expr, mask: Expr, src: Expr, tmp: Expr, scalar: Expr, *, span: Span | None = None) -> Expr:
-    _check_dtype("sels", getattr(out.type, "dtype", None), _SEL_DTYPES)
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("sels", dt, _SEL_DTYPES)
+    _check_dtype_match("sels", dt, getattr(src.type, "dtype", None))
     actual_span = span or _span()
     scalar_expr = scalar if isinstance(scalar, Expr) else _normalize_expr(scalar, actual_span)
+    from pypto_pro.language.parser.diagnostics import check_const_expr_fits_dtype
+
+    check_const_expr_fits_dtype(scalar_expr, dt, span=actual_span, api="pl.select")
     return _ir_core.create_op_call(block_ir_op("sels"), [out, mask, src, tmp, scalar_expr], {}, actual_span)
 
 
@@ -956,22 +969,23 @@ def _check_dtype_match(op_name: str, dt: DataType | None, *others: DataType | No
             raise ValueError(f"{op_name}: dtype mismatch between arg0 ({dt}) and arg{i + 1} ({other})")
 
 
-def _check_cmp_out(op_name: str, out: Expr, lhs_dtype: DataType | None) -> None:
+def _check_cmp_out(op_name: str, out: Expr) -> None:
     """Validate the compare destination tile.
 
-    The backend writes the compare result as a 1-byte-per-element mask
-    (AscendC restricts the compare dst to 8-bit types). Accept a uint8/bool
-    mask tile (doc convention) or a tile sharing the lhs dtype (legacy
-    byte-buffer usage); anything else is rejected.
+    AscendC ``Compare`` writes a 1-byte-per-element predicate mask: the
+    pto-isa A2A3 TCMP pins the dst to ``uint8_t`` and the A5 implementation
+    stores the packed mask through a ``uint8_t`` view of the destination
+    buffer. The destination tile must therefore be an 8-bit type (int8,
+    uint8, or bool).
     """
     out_dtype = getattr(getattr(out, "type", None), "dtype", None)
     if out_dtype is None:
         return
-    if out_dtype == lhs_dtype or out_dtype in (DataType.UINT8, DataType.BOOL):
+    if out_dtype in (DataType.INT8, DataType.UINT8, DataType.BOOL):
         return
     raise ValueError(
-        f"{op_name}: unsupported out dtype {out_dtype}, expected uint8/bool mask tile "
-        f"or same dtype as lhs ({lhs_dtype})"
+        f"{op_name}: unsupported out dtype {out_dtype}, expected an 8-bit mask tile "
+        f"(int8/uint8/bool, mirrors AscendC Compare's uint8_t destination)"
     )
 
 
@@ -1251,7 +1265,7 @@ def _ir_cmp(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, cmp_mo
     dt = getattr(lhs.type, "dtype", None)
     _check_dtype("cmp", dt, _CMP_DTYPES)
     _check_dtype_match("cmp", dt, getattr(rhs.type, "dtype", None))
-    _check_cmp_out("cmp", out, dt)
+    _check_cmp_out("cmp", out)
     return _ir_core.create_op_call(
         block_ir_op("cmp"),
         [out, lhs, rhs],
@@ -1266,7 +1280,7 @@ def _ir_cmps(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, cmp_m
     from pypto_pro.language.parser.diagnostics import check_const_expr_fits_dtype
 
     check_const_expr_fits_dtype(rhs, dt, span=span, api="pl.cmps")
-    _check_cmp_out("cmps", out, dt)
+    _check_cmp_out("cmps", out)
     return _ir_core.create_op_call(
         block_ir_op("cmps"),
         [out, lhs, rhs],
@@ -3192,6 +3206,12 @@ def _create_tile_scalar_op(
 
 def _create_dim_op(args: list[Expr], *, row_op: str, col_op: str, dim: int = 0, span: Span | None = None) -> Expr:
     """Dispatch to row-wise or col-wise IR op based on dim."""
+    # Tiles are 2-D and the hardware only has row/column forms: dim must be
+    # exactly 0 (row) or 1 (column). Any other value used to silently fall
+    # through to the column variant.
+    if dim not in (0, 1):
+        op_name = col_op.removeprefix("col_")
+        raise ValueError(f"{op_name}: dim must be 0 (row) or 1 (column), got {dim}")
     ir_name = row_op if dim == 0 else col_op
     return _ir_core.create_op_call(block_ir_op(ir_name), args, {}, span)
 

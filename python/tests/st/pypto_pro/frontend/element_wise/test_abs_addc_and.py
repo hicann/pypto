@@ -1240,9 +1240,10 @@ def kernel_eq_fp32(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+    tm = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec)
     ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
     tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    t_mask = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    t_mask = pl.make_tile(tm, addr=TILE_SIZE * 2, size=TILE_SIZE)
     t_one = pl.make_tile(tf, addr=TILE_SIZE * 3, size=TILE_SIZE)
     t_out = pl.make_tile(tf, addr=TILE_SIZE * 4, size=TILE_SIZE)
     tmp = pl.make_tile(tf, addr=TILE_SIZE * 5, size=TILE_SIZE)
@@ -1266,9 +1267,10 @@ def kernel_eq_int32(
     out: pl.Tensor[[DYN, DYN], pl.DT_INT32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
+    tm = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec)
     ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
     tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    t_mask = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    t_mask = pl.make_tile(tm, addr=TILE_SIZE * 2, size=TILE_SIZE)
     t_one = pl.make_tile(tf, addr=TILE_SIZE * 3, size=TILE_SIZE)
     t_out = pl.make_tile(tf, addr=TILE_SIZE * 4, size=TILE_SIZE)
     tmp = pl.make_tile(tf, addr=TILE_SIZE * 5, size=TILE_SIZE)
@@ -1292,9 +1294,10 @@ def kernel_eq_fp32_unaligned(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+    tm = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec)
     ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
     tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    t_mask = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    t_mask = pl.make_tile(tm, addr=TILE_SIZE * 2, size=TILE_SIZE)
     t_one = pl.make_tile(tf, addr=TILE_SIZE * 3, size=TILE_SIZE)
     t_out = pl.make_tile(tf, addr=TILE_SIZE * 4, size=TILE_SIZE)
     tmp = pl.make_tile(tf, addr=TILE_SIZE * 5, size=TILE_SIZE)
@@ -1367,9 +1370,10 @@ def kernel_select_fp32(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+    tm = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec)
     ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
     tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    t_mask = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    t_mask = pl.make_tile(tm, addr=TILE_SIZE * 2, size=TILE_SIZE)
     t_out = pl.make_tile(tf, addr=TILE_SIZE * 3, size=TILE_SIZE)
     tmp = pl.make_tile(tf, addr=TILE_SIZE * 4, size=TILE_SIZE)
     with pl.section_vector():
@@ -1391,9 +1395,10 @@ def kernel_select_fp32_unaligned(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+    tm = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec)
     ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
     tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    t_mask = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    t_mask = pl.make_tile(tm, addr=TILE_SIZE * 2, size=TILE_SIZE)
     t_out = pl.make_tile(tf, addr=TILE_SIZE * 3, size=TILE_SIZE)
     tmp = pl.make_tile(tf, addr=TILE_SIZE * 4, size=TILE_SIZE)
     pl.set_validshape(ta, [TILE_M, UNALIGN_N])
