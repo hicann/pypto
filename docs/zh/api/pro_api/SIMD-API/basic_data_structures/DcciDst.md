@@ -28,4 +28,4 @@ PYPTO_DECLARE_ENUM(DcciDst,
 )
 ```
 
-显式指定枚举值时，必须与目标对象的存储区域和硬件访问路径匹配，具体约束请参见[dcci](../operation/cache_control/dcci.md)。
+显式指定枚举值时，必须与目标对象的存储区域和硬件访问路径匹配，具体约束请参见[dcci](../cache_control/dcci.md)。

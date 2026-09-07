@@ -13,11 +13,11 @@
 | Kernel函数定义 | 通过@pl.jit声明JIT编译目标 |
 | SIMT函数定义 | 通过@pl.simt.function定义SIMT入口函数，并通过max_threads设置单个线程块的最大线程数 |
 | Tile定义 | 使用[pl.TileType](../../../api/pro_api/SIMD-API/basic_data_structures/TileType.md)定义片上Tile的形状、数据类型和目标内存空间 |
-| Tile分配 | 使用[pl.make_tile](../../../api/pro_api/SIMD-API/operation/resource_management/make_tile.md)分配片上内存 |
-| 数据搬入 | 通过[pl.load](../../../api/pro_api/SIMD-API/operation/memory_data_movement/load.md)将GM数据搬入UB Tile |
+| Tile分配 | 使用[pl.make_tile](../../../api/pro_api/SIMD-API/resource_management/make_tile.md)分配片上内存 |
+| 数据搬入 | 通过[pl.load](../../../api/pro_api/SIMD-API/memory_data_movement/load.md)将GM数据搬入UB Tile |
 | 数据计算 | 通过[pl.simt.launch](../../../api/pro_api/SIMT-API/execution/launch.md)启动一维线程块，每个线程通过[pl.simt.thread_idx](../../../api/pro_api/SIMT-API/execution/thread_idx.md)获取线程编号并更新一个Tile元素 |
 | 流水同步 | 通过pl.system.sync_src和pl.system.sync_dst描述MTE2、SIMT Vector流水和MTE3之间的数据依赖 |
-| 数据搬出 | 通过[pl.store](../../../api/pro_api/SIMD-API/operation/memory_data_movement/store.md)将UB Tile结果写回GM |
+| 数据搬出 | 通过[pl.store](../../../api/pro_api/SIMD-API/memory_data_movement/store.md)将UB Tile结果写回GM |
 
 ## 算子代码实现
 

@@ -16,14 +16,14 @@
 
 调测打印接口，用于打印GM Tensor或Tile的内容，支持全量打印和窗口打印。
 
-- 输入为`Tensor`（GM全局内存张量）时，打印GM上的Tensor数据
-- 输入为`Tile`（通过`make_tile`/`make_tile_group`分配）时，打印Tile数据
+- 输入为Tensor（GM全局内存张量）时，打印GM上的Tensor数据
+- 输入为Tile（通过make_tile/make_tile_group分配）时，打印Tile数据
 
-Tile通过[`pypto_pro.language.make_tile`](../../SIMD-API/operation/resource_management/make_tile.md)或[`pypto_pro.language.make_tile_group`](../../SIMD-API/operation/resource_management/make_tile_group.md)创建。不同内存空间的Tile打印能力不同：
+Tile通过[pypto_pro.language.make_tile](../../SIMD-API/resource_management/make_tile.md)或[pypto_pro.language.make_tile_group](../../SIMD-API/resource_management/make_tile_group.md)创建。不同内存空间的Tile打印能力不同：
 
-- `Vec`(UB) Tile：由后端直接通过`TPRINT`打印，无需`workspace`
-- `Acc`(L0C) Tile：须通过`workspace`参数中转打印（先将Tile数据写回GM，再打印）
-- `Mat`(L1)/`Left`(L0A)/`Right`(L0B) Tile：无法直接打印
+- UB Tile：可直接打印，无需workspace
+- L0C Buffer中的Tile：须通过workspace参数中转打印（先将Tile数据写回GM，再打印）
+- L1 Buffer、L0A Buffer和L0B Buffer中的Tile：无法直接打印
 
 打印结果直接输出到终端。
 
@@ -33,42 +33,30 @@ Tile通过[`pypto_pro.language.make_tile`](../../SIMD-API/operation/resource_man
 pypto_pro.language.dump_data(data, offsets=None, shapes=None, *, workspace=None, loc=False)
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `data` | 输入 | 要打印的数据，可以是Tensor或Tile |
-| `offsets` | 输入 | 可选，窗口起始偏移（各维） |
-| `shapes` | 输入 | 可选，窗口大小（各维） |
-| `workspace` | 输入 | 可选，GM上的临时Tensor，仅用于Acc Tile的中转打印 |
-| `loc` | 输入 | 可选，是否在输出前打印源文件/行号 |
+| data | 输入 | 要打印的数据，必须是Tensor（TensorType）或Tile（TileType），其他类型报TypeError。Tensor暂不支持pypto_pro.language.DT_FP4、pypto_pro.language.DT_FP4E2M1和pypto_pro.language.DT_FP4E1M2类型。 |
+| offsets | 输入 | 可选，窗口起始偏移（各维）。取值为由整型常量或运行时整型标量表达式组成的序列，长度须等于数据的维数；须与shapes同时提供或同时为None。Tile窗口当前仅支持二维Tile。offsets和shapes均为None时打印全部数据。 |
+| shapes | 输入 | 可选，窗口大小（各维）。取值为由整型常量或运行时整型标量表达式组成的序列，长度须等于数据的维数；须与offsets同时提供或同时为None。其中编译期常量必须大于0；Tensor窗口模式还要求最内维stride为编译期常量1。NZ Tensor窗口须保持完整分形：M shape按16对齐，N shape和offset按C0对齐；前导维按batch逐个打印。Tile窗口要求二维且Tile物理shape为编译期常量。 |
+| workspace | 输入 | 可选，GM上的临时Tensor，仅用于L0C Buffer中Tile的中转打印。仅当data为L0C Buffer中的Tile时有效；Tensor传入该参数会报ValueError，其他内存空间的Tile会报错。必须是与Tile dtype相同的GM TensorType，容量至少能容纳完整物理Tile。 |
+| loc | 输入 | 可选，是否在输出前打印源文件/行号，取值为True或False（默认）。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `data` | 输入 | 必须是Tensor（TensorType）或Tile（TileType），其他类型报`TypeError`。Tensor暂不支持`pypto_pro.language.DT_FP4`、`pypto_pro.language.DT_FP4E2M1`和`pypto_pro.language.DT_FP4E1M2`类型 |
-| `offsets` | 输入 | 由整型常量或运行时整型标量表达式组成的序列，长度须等于数据的维数；须与`shapes`同时提供或同时为`None`。Tile窗口当前仅支持二维Tile |
-| `shapes` | 输入 | 由整型常量或运行时整型标量表达式组成的序列，长度须等于数据的维数；须与`offsets`同时提供或同时为`None`。其中编译期常量必须大于0；Tensor窗口模式还要求最内维stride为编译期常量1。NZ Tensor窗口须保持完整分形：M shape按16对齐，N shape和offset按C0对齐；前导维按batch逐个打印。Tile窗口要求二维且Tile物理shape为编译期常量 |
-| `workspace` | 输入 | 仅当`data`为Acc Tile时有效；Tensor传入该参数会报`ValueError`，其他内存空间的Tile会在IR校验时报错。必须是与Tile dtype相同的GM `TensorType`。后端会先将完整Acc Tile写入workspace，即使只打印窗口，workspace也必须至少容纳完整物理Tile；当前仅支持二维、静态物理shape的Acc Tile |
-| `loc` | 输入 | `True`或`False`（默认） |
+### L0C Buffer中的Tile场景
 
-当`offsets`和`shapes`均为`None`（默认）时，打印整个数据的全部数据。
+L0C Buffer中的Tile无法像UB Tile那样直接打印。dump_data会先将Tile数据写回GM上的workspace Tensor，再打印该Tensor，并须满足以下约束：
 
-### Acc（L0C）Tile dump
+- workspace必须是TensorType，可以是核函数参数中的pypto_pro.language.Tensor，也可以通过pypto_pro.language.make_tensor从pypto_pro.language.Ptr构造，不能是Tile
+- workspace的dtype必须与待dump的Tile dtype一致
+- 无论全量dump还是窗口dump，都会先将L0C Buffer中的完整Tile写入workspace，因此其容量须至少覆盖完整物理Tile
+- L0C Buffer中的Tile必须为二维，且物理shape必须是编译期常量
 
-Acc（L0C）Tile无法像Vec Tile那样直接通过`TPRINT`打印。`dump_data`通过`workspace`参数提供一条中转路径：先将Tile数据写回GM上的`workspace` Tensor，再由`TPRINT`打印该Tensor。
+## 返回值说明
 
-使用约束：
-
-- `workspace`必须是`TensorType`，可以是核函数参数中的`pl.Tensor`，也可以通过`pl.make_tensor`从`pl.Ptr`构造，不能是Tile
-- `workspace`的dtype必须与待dump的Tile dtype一致
-- 无论全量dump还是窗口dump，后端都会先将完整Acc Tile写入`workspace`，因此其容量须至少覆盖完整物理Tile
-- Acc Tile必须为二维，且物理shape必须是编译期常量
-
-## 流水类型
-
-V（向量流水）。
+无。
 
 ## 调用示例
 
@@ -110,9 +98,9 @@ vidx = pl.get_block_idx()
 pl.dump_data(out, offsets=[vidx * 4], shapes=[4])
 ```
 
-### Tile Vec输入
+### UB Tile输入
 
-`Vec`(UB) Tile可直接打印，无需`workspace`。`Mat`(L1)/`Left`(L0A)/`Right`(L0B) Tile无法直接打印。
+UB Tile可直接打印，无需workspace。L1 Buffer、L0A Buffer和L0B Buffer中的Tile无法直接打印。
 
 ```python
 import pypto_pro.language as pl
@@ -154,9 +142,9 @@ def dump_data_tile_full_kernel(
     448     450     452     454     456     458     460     462
 ```
 
-### Acc（L0C）Tile输入（需要workspace）
+### L0C Buffer中的Tile输入（需要workspace）
 
-Acc（L0C）Tile需要通过`workspace`参数提供GM上的临时Tensor进行中转。
+L0C Buffer中的Tile需要通过workspace参数提供GM上的临时Tensor进行中转。
 
 全量dump：
 
@@ -208,7 +196,7 @@ def dump_data_tile_acc_fp16_kernel(
         pl.store(out, ac, [0, 0])
 ```
 
-窗口dump（带`offsets`/`shapes`和`workspace`）：
+窗口dump（带offsets/shapes和workspace）：
 
 ```python
 # workspace 声明为 pl.Tensor[[32, 32], pl.DT_FP32]
@@ -216,7 +204,7 @@ def dump_data_tile_acc_fp16_kernel(
 pl.dump_data(ac, offsets=[16, 16], shapes=[8, 8], workspace=workspace)
 ```
 
-窗口模式输出示例（`offsets=[16, 16], shapes=[8, 8]`）：
+窗口模式输出示例（offsets=[16, 16], shapes=[8, 8]）：
 
 ```text
 === [TPRINT Acc Tile Window] Data Type: float32, Layout: NZ, TileType: Acc ===

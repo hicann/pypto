@@ -21,13 +21,13 @@ import pypto_pro.language as pl
 
 ## 逻辑Block与执行域
 
-`block_dim`是启动时配置的逻辑Block数，[`pypto_pro.language.get_block_num()`](../../../../../api/pro_api/SIMD-API/operation/system_variables/get_block_num.md)返回本次启动传入的该值。仅启动Cube或仅启动Vector时，执行域中的逻辑核数与`block_dim`一致；同时启动AIC与AIV时，各执行域的逻辑核数由`block_dim`和AIC:AIV比例共同决定。
+`block_dim`是启动时配置的逻辑Block数，[`pypto_pro.language.get_block_num()`](../../../../../api/pro_api/SIMD-API/system_variables/get_block_num.md)返回本次启动传入的该值。仅启动Cube或仅启动Vector时，执行域中的逻辑核数与`block_dim`一致；同时启动AIC与AIV时，各执行域的逻辑核数由`block_dim`和AIC:AIV比例共同决定。
 
 四个索引接口的语义如下：
 
 - `pypto_pro.language.get_block_num()`：启动时配置的逻辑Block数；
-- [`pypto_pro.language.get_block_idx()`](../../../../../api/pro_api/SIMD-API/operation/system_variables/get_block_idx.md)：当前执行域的全局逻辑核索引；在Vector段中已按subblock展平；
-- [`pypto_pro.language.get_subblock_idx()`](../../../../../api/pro_api/SIMD-API/operation/system_variables/get_subblock_idx.md)：当前逻辑Block内的subblock索引，仅在需要区分同一Block内的AIV时使用；
+- [`pypto_pro.language.get_block_idx()`](../../../../../api/pro_api/SIMD-API/system_variables/get_block_idx.md)：当前执行域的全局逻辑核索引；在Vector段中已按subblock展平；
+- [`pypto_pro.language.get_subblock_idx()`](../../../../../api/pro_api/SIMD-API/system_variables/get_subblock_idx.md)：当前逻辑Block内的subblock索引，仅在需要区分同一Block内的AIV时使用；
 - `pypto_pro.language.get_subblock_num()`：当前执行域每个逻辑Block对应的subblock数量。
 
 仅包含一个执行域的Kernel可直接写成：

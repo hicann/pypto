@@ -8,7 +8,7 @@
 
 ## Kernel函数实现
 
-通过`@pypto_pro.language.jit()`装饰器定义Kernel函数，使用[`pypto_pro.language.printf`](../../../api/pro_api/Utils-API/debugging/printf.md)在Device端打印字符串。[`pypto_pro.language.section_vector()`](../../../api/pro_api/SIMD-API/operation/controlflow/section_vector.md)用于声明该段代码在Vector核上执行，其中`pypto_pro.language.printf`由Scalar流水执行。
+通过`@pypto_pro.language.jit()`装饰器定义Kernel函数，使用[`pypto_pro.language.printf`](../../../api/pro_api/Utils-API/debugging/printf.md)在Device端打印字符串。[`pypto_pro.language.section_vector()`](../../../api/pro_api/SIMD-API/controlflow/section_vector.md)用于声明该段代码在Vector核上执行，其中`pypto_pro.language.printf`由Scalar流水执行。
 
 ```python
 import pypto_pro.language as pl

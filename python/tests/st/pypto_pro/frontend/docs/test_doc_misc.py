@@ -10,8 +10,8 @@
 """UT for doc examples — misc ops.
 
 Verifies kernel examples from:
-  docs/zh/api/pro_api/SIMD-API/operation/transpose_and_element_access/fill_index.md
-  docs/zh/api/pro_api/SIMD-API/operation/memory_vector_computation/transpose_and_element_access/setval.md
+  docs/zh/api/pro_api/SIMD-API/transpose_and_element_access/fill_index.md
+  docs/zh/api/pro_api/SIMD-API/memory_vector_computation/transpose_and_element_access/setval.md
 """
 
 import logging

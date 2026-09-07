@@ -90,7 +90,7 @@ def fa_kernel(
     # Kernel中将tiling字段作为普通运行时标量使用
 ```
 
-上述示例使用[`pypto_pro.language.make_tensor`](../../../../../api/pro_api/SIMD-API/operation/resource_management/make_tensor.md)从裸指针构造固定rank的Tensor视图。也可以保留带类型的[`pypto_pro.language.Tensor`](../../../../../api/pro_api/SIMD-API/basic_data_structures/Tensor.md)输入，并仅使用TilingData传递循环边界、标志和缩放系数。
+上述示例使用[`pypto_pro.language.make_tensor`](../../../../../api/pro_api/SIMD-API/resource_management/make_tensor.md)从裸指针构造固定rank的Tensor视图。也可以保留带类型的[`pypto_pro.language.Tensor`](../../../../../api/pro_api/SIMD-API/basic_data_structures/Tensor.md)输入，并仅使用TilingData传递循环边界、标志和缩放系数。
 两种用法相互独立。
 
 > [!NOTE]说明

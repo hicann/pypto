@@ -29,12 +29,12 @@ pypto_pro.language.simt.atomic_sub(
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| target | 输入 | 目的操作数，Scalar类型。必须直接传入Tile或Tensor的单元素下标访问表达式，例如ub_tile[0, 0]或gm_tensor[0, 0]。<br>- UB Tile：必须位于MemorySpace.Vec，使用ND Layout，支持DT_INT32、DT_UINT32、DT_FP32。<br>- GM Tensor：必须为ND Layout，支持DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64。 |
+| target | 输入 | 目的操作数，Scalar类型。必须直接传入Tile或Tensor的单元素下标访问表达式，例如ub_tile[0, 0]或gm_tensor[0, 0]。<br>- UB Tile：必须位于UB，使用ND，支持DT_INT32、DT_UINT32、DT_FP32。<br>- GM Tensor：必须为ND，支持DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64。 |
 | value | 输入 | 源操作数，Scalar类型，表示减数。数据类型必须与target一致；数值字面量按target的数据类型处理。 |
 
 ## 约束说明
 
-只能在由@pl.simt.function定义的SIMT入口函数或辅助函数中调用。
+只能在由@pypto_pro.language.simt.function定义的SIMT入口函数或辅助函数中调用。
 
 ## 返回值说明
 

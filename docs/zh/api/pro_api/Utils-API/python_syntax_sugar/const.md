@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-创建指定数据类型的编译期常量标量。用于需要显式指定类型的标量值场景，如与`pypto_pro.language.DT_INT32`类型的Tile做比较、初始化索引值等。
+创建指定数据类型的编译期常量标量。用于需要显式指定类型的标量值场景，如与pypto_pro.language.DT_INT32类型的Tile做比较、初始化索引值等。
 
 ## 函数原型
 
@@ -22,23 +22,20 @@
 result = pypto_pro.language.const(value, dtype)
 ```
 
-## 参数类型
+## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `value` | 输入 | 数值常量（int或float） |
-| `dtype` | 输入 | 目标数据类型 |
+| value | 输入 | 数值常量，支持Python int或float常量值。 |
+| dtype | 输入 | 目标数据类型，支持pypto_pro.language.DT_INT8、pypto_pro.language.DT_INT16、pypto_pro.language.DT_INT32、pypto_pro.language.DT_INT64、pypto_pro.language.DT_UINT8、pypto_pro.language.DT_UINT16、pypto_pro.language.DT_UINT32、pypto_pro.language.DT_UINT64、pypto_pro.language.DT_FP16、pypto_pro.language.DT_FP32、pypto_pro.language.DT_BF16、pypto_pro.language.DT_BOOL等。 |
 
-## 参数范围
+## 约束说明
 
-| 参数 | 输入/输出 | 说明 |
-|---|---|---|
-| `value` | 输入 | Python `int`或`float`常量值 |
-| `dtype` | 输入 | `pypto_pro.language.DT_INT8`、`pypto_pro.language.DT_INT16`、`pypto_pro.language.DT_INT32`、`pypto_pro.language.DT_INT64`、`pypto_pro.language.DT_UINT8`、`pypto_pro.language.DT_UINT16`、`pypto_pro.language.DT_UINT32`、`pypto_pro.language.DT_UINT64`、`pypto_pro.language.DT_FP16`、`pypto_pro.language.DT_FP32`、`pypto_pro.language.DT_BF16`、`pypto_pro.language.DT_BOOL`等 |
+无。
 
-## 返回值
+## 返回值说明
 
-标量值（`Scalar`），类型由`dtype`指定。
+标量值（Scalar），类型由dtype指定。
 
 ## 调用示例
 

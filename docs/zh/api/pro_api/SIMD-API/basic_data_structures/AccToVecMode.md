@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-双目标控制的枚举，是[pypto_pro.language.move](../operation/memory_data_movement/move.md)的重要属性，用于L0C Buffer->UB数据搬运场景。
+双目标控制的枚举，是[pypto_pro.language.move](../memory_data_movement/move.md)的重要属性，用于L0C Buffer->UB数据搬运场景。
 
 ## 原型定义
 

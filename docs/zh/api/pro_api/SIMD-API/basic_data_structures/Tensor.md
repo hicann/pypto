@@ -17,7 +17,7 @@
 GM中多维张量类型标注，主要用于：
 
 - Kernel函数中GM张量参数的类型声明。
-- 配合[pypto_pro.language.load](../operation/memory_data_movement/load.md)/[pypto_pro.language.store](../operation/memory_data_movement/store.md)完成GM与L1 Buffer/UB/L0C Buffer之间的数据搬运。
+- 配合[pypto_pro.language.load](../memory_data_movement/load.md)/[pypto_pro.language.store](../memory_data_movement/store.md)完成GM与L1 Buffer/UB/L0C Buffer之间的数据搬运。
 - 通过等号赋值创建别名，与原张量共享同一段GM内存，不产生数据拷贝。支持链式别名；别名一经创建即固定指向，之后将原变量名重新绑定到其他张量，不会改变已有别名的指向。
 
 ## 函数原型
@@ -40,12 +40,12 @@ pypto_pro.language.Tensor.__init__(
 |---|---|---|
 | shape | 输入 | 各维大小列表。<br>- 表现形式如下：<br>&nbsp;&nbsp;- 固定维度：正整数表示，如[64, 128]，调用时对应维度须等于该整数。<br>&nbsp;&nbsp;- 动态维度：pypto_pro.language.DYNAMIC表示，调用时读取实际维度，维度值不参与编译缓存键，不同取值复用同一编译变体。<br>&nbsp;&nbsp;- 编译期特化维度：pypto_pro.language.STATIC表示，调用时读取实际维度，维度值固化到当前编译变体，取值变化时生成新的编译变体。<br>&nbsp;&nbsp;- 末尾`...`：展开剩余维度，各维均按pypto_pro.language.STATIC处理。<br>&nbsp;&nbsp;- 不同策略可混用，如[64, pl.DYNAMIC, pl.STATIC]。<br>- Kernel内可通过`tensor.shape[i]`读取对应维度。 |
 | dtype | 输入 | 元素数据类型，[pypto_pro.language.DataType](DataType.md)枚举值。 |
-| layout | 输入 | 可选，内存布局，[pypto_pro.language.TensorLayout](TensorLayout.md)枚举值。<br>- 支持pypto_pro.language.ND和pypto_pro.language.NZ，不指定时按pypto_pro.language.ND处理。<br>- 配置为pypto_pro.language.NZ时只声明布局，不执行ND→NZ转换。 |
+| layout | 输入 | 可选，内存布局，[pypto_pro.language.TensorLayout](TensorLayout.md)枚举值。<br>- 支持ND和NZ，不指定时按ND处理。<br>- 配置为NZ时只声明布局，不执行ND→NZ转换。 |
 | memref | 输入 | 可选，显式内存引用，pypto_pro.language.MemRef实例。三参数形式中第三项为MemRef实例时按memref解析；需要同时指定layout和memref时使用四参数形式。 |
 
 ## 约束说明
 
-- 搬运约束详见[pypto_pro.language.load](../operation/memory_data_movement/load.md)和[pypto_pro.language.store](../operation/memory_data_movement/store.md)。
+- 搬运约束详见[pypto_pro.language.load](../memory_data_movement/load.md)和[pypto_pro.language.store](../memory_data_movement/store.md)。
 
 ## 返回值说明
 

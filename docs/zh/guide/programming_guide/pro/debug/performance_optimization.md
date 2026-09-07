@@ -136,7 +136,7 @@ with torch_npu.profiler.profile(
 
 ## 多核切分优化
 
-PyPTO Pro通过[`pypto_pro.language.get_block_idx()`](../../../../api/pro_api/SIMD-API/operation/system_variables/get_block_idx.md)和[`pypto_pro.language.get_block_num()`](../../../../api/pro_api/SIMD-API/operation/system_variables/get_block_num.md)进行多核分片。合理的多核策略应同时满足完整覆盖、无重复写和负载均衡。
+PyPTO Pro通过[`pypto_pro.language.get_block_idx()`](../../../../api/pro_api/SIMD-API/system_variables/get_block_idx.md)和[`pypto_pro.language.get_block_num()`](../../../../api/pro_api/SIMD-API/system_variables/get_block_num.md)进行多核分片。合理的多核策略应同时满足完整覆盖、无重复写和负载均衡。
 
 - `block_dim`不应超过对应Kernel模式的平台上限和可独立执行的任务数，否则可能超过可用资源或产生空闲工作单元；模式相关上限参见[Kernel函数](../development/kernel_function.md#blockdim的含义与设置)。
 - 每个Core的工作量应尽量接近，避免将全部尾块或耗时较高的分支集中到少数Core。
@@ -163,7 +163,7 @@ GM访问应尽量连续、对齐并合并为较大的有效搬运。对于会被
 
 ## 流水与多缓冲优化
 
-[`pypto_pro.language.make_tile_group`](../../../../api/pro_api/SIMD-API/operation/resource_management/make_tile_group.md)可为同一逻辑数据声明多块轮转Tile，通过`current()`取得当前Tile、通过`next()`轮转到下一块。配合`@pypto_pro.language.jit(auto_mutex=True)`，编译器根据Tile的mutex信息插入核内流水同步，可用于构建双缓冲或N缓冲。
+[`pypto_pro.language.make_tile_group`](../../../../api/pro_api/SIMD-API/resource_management/make_tile_group.md)可为同一逻辑数据声明多块轮转Tile，通过`current()`取得当前Tile、通过`next()`轮转到下一块。配合`@pypto_pro.language.jit(auto_mutex=True)`，编译器根据Tile的mutex信息插入核内流水同步，可用于构建双缓冲或N缓冲。
 
 优化时应重点检查：
 
@@ -178,7 +178,7 @@ GM访问应尽量连续、对齐并合并为较大的有效搬运。对于会被
 
 ## Cube与Vector协同优化
 
-矩阵类Kernel使用[`pypto_pro.language.section_cube()`](../../../../api/pro_api/SIMD-API/operation/controlflow/section_cube.md)描述Cube任务，向量类处理使用[`pypto_pro.language.section_vector()`](../../../../api/pro_api/SIMD-API/operation/controlflow/section_vector.md)描述Vector任务。混合Kernel应尽量让Cube计算、Vector前后处理和DMA搬运并行，同时避免不必要的数据格式转换和跨存储层往返。
+矩阵类Kernel使用[`pypto_pro.language.section_cube()`](../../../../api/pro_api/SIMD-API/controlflow/section_cube.md)描述Cube任务，向量类处理使用[`pypto_pro.language.section_vector()`](../../../../api/pro_api/SIMD-API/controlflow/section_vector.md)描述Vector任务。混合Kernel应尽量让Cube计算、Vector前后处理和DMA搬运并行，同时避免不必要的数据格式转换和跨存储层往返。
 
 - Cube计算应检查M、N、K方向的Tile Shape、左右矩阵布局、转置方式以及L0A/L0B装载格式。
 - 归约长度较大时，应在Acc/L0C中完成分块累加，再按需要转换并写回。

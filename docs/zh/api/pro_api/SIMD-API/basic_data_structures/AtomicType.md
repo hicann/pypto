@@ -25,4 +25,4 @@ PYPTO_DECLARE_ENUM(AtomicType,
 )
 ```
 
-支持的数据类型及使用约束，请参见[pypto_pro.language.store](../operation/memory_data_movement/store.md#原子累加)。
+支持的数据类型及使用约束，请参见[pypto_pro.language.store](../memory_data_movement/store.md#原子累加)。

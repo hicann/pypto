@@ -4,7 +4,7 @@
 
 ## Matmul+Softmax融合算子
 
-**功能介绍**：该融合算子将矩阵乘法与Softmax激活融合到一个Kernel中，数学表达式为 $out = \text{Softmax}(A \times B)$。其中矩阵乘法 $S = A \times B$ 在Cube流水线上执行，Softmax按行归一化在Vector流水线上执行，中间结果通过Global Memory的workspace中转，Cube与Vector之间通过[`set_cross_core`](../../../api/pro_api/SIMD-API/operation/synchronization/set_cross_core.md)和[`wait_cross_core`](../../../api/pro_api/SIMD-API/operation/synchronization/wait_cross_core.md)进行流水线同步。
+**功能介绍**：该融合算子将矩阵乘法与Softmax激活融合到一个Kernel中，数学表达式为 $out = \text{Softmax}(A \times B)$。其中矩阵乘法 $S = A \times B$ 在Cube流水线上执行，Softmax按行归一化在Vector流水线上执行，中间结果通过Global Memory的workspace中转，Cube与Vector之间通过[`set_cross_core`](../../../api/pro_api/SIMD-API/synchronization/set_cross_core.md)和[`wait_cross_core`](../../../api/pro_api/SIMD-API/synchronization/wait_cross_core.md)进行流水线同步。
 
 - Softmax按行归一化的数学表达式为：
 

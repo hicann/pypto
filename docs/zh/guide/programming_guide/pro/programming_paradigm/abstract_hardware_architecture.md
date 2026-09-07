@@ -23,7 +23,7 @@ Ascend 950PR/Ascend 950DT采用AIC与AIV分离架构：AIC主要执行Cube计算
 | Membase | Local Memory（UB） | Tile + pl.add、pl.sub等Tile API | 每步计算结果写回UB |
 | Regbase | VF Register File | @pl.vector_function中的RegTensor/MaskReg + vf.* API | 中间结果可保留在寄存器，减少UB读写 |
 
-Regbase的寄存器类型和使用约束参见[vf.reg_tensor](../../../../api/pro_api/SIMD-API/operation/vf_computation/reg_tensor.md)。
+Regbase的寄存器类型和使用约束参见[vf.reg_tensor](../../../../api/pro_api/SIMD-API/vf_computation/reg_tensor.md)。
 
 ## 计算单元
 
@@ -86,7 +86,7 @@ Tile是PyPTO Pro对片上缓冲区的编程抽象。[TileType](../../../../api/p
 - **计算数据流**：Vector/Cube访问Local Memory中的数据完成计算，DMA负责Local Memory与Global Memory之间以及各级Local Memory之间的数据流转。
 - **同步信号流**：当不同Pipe的异步任务存在数据依赖或顺序依赖时，通过同步信号约束执行先后；同步信号不是数据本身的流向。
 
-PyPTO Pro推荐使用pl.make_tile_group配合@pl.jit(auto_mutex=True)，由编译器根据Tile的mutex元数据自动插入跨Pipe同步。使用单个pl.make_tile并需要手动控制依赖时，可调用pl.system.sync_src / pl.system.sync_dst。详细说明参见[Tile矢量计算](../development/tile_based_python_programming/Tile_vector_computation.md)和[sync_src / sync_dst](../../../../api/pro_api/SIMD-API/operation/synchronization/sync_src_sync_dst.md)。
+PyPTO Pro推荐使用pl.make_tile_group配合@pl.jit(auto_mutex=True)，由编译器根据Tile的mutex元数据自动插入跨Pipe同步。使用单个pl.make_tile并需要手动控制依赖时，可调用pl.system.sync_src / pl.system.sync_dst。详细说明参见[Tile矢量计算](../development/tile_based_python_programming/Tile_vector_computation.md)、[sync_src](../../../../api/pro_api/SIMD-API/synchronization/sync_src.md)和[sync_dst](../../../../api/pro_api/SIMD-API/synchronization/sync_dst.md)。
 
 ## 多核架构
 

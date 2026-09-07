@@ -25,4 +25,4 @@ PYPTO_DECLARE_ENUM(QuantMode,
 )
 ```
 
-计算公式、参数形状和数据类型约束，请参见[quant](../operation/quantization/quant.md)。
+计算公式、参数形状和数据类型约束，请参见[quant](../quantization/quant.md)。

@@ -15,7 +15,7 @@ JIT编译结果按Tensor静态Shape、TilingKey和datatype等信息区分编译�
 
 ## 基本用法
 
-以下示例使用[`pypto_pro.language.TileType`](../../../../../api/pro_api/SIMD-API/basic_data_structures/TileType.md)定义Tile，通过[`pypto_pro.language.make_tile_group`](../../../../../api/pro_api/SIMD-API/operation/resource_management/make_tile_group.md)分配片上缓冲区，并依次调用[`pypto_pro.language.load`](../../../../../api/pro_api/SIMD-API/operation/memory_data_movement/load.md)、[`pypto_pro.language.add`](../../../../../api/pro_api/SIMD-API/operation/memory_vector_computation/elementwise/add.md)和[`pypto_pro.language.store`](../../../../../api/pro_api/SIMD-API/operation/memory_data_movement/store.md)完成数据搬入、计算和搬出。
+以下示例使用[`pypto_pro.language.TileType`](../../../../../api/pro_api/SIMD-API/basic_data_structures/TileType.md)定义Tile，通过[`pypto_pro.language.make_tile_group`](../../../../../api/pro_api/SIMD-API/resource_management/make_tile_group.md)分配片上缓冲区，并依次调用[`pypto_pro.language.load`](../../../../../api/pro_api/SIMD-API/memory_data_movement/load.md)、[`pypto_pro.language.add`](../../../../../api/pro_api/SIMD-API/memory_vector_computation/elementwise/add.md)和[`pypto_pro.language.store`](../../../../../api/pro_api/SIMD-API/memory_data_movement/store.md)完成数据搬入、计算和搬出。
 
 ```python
 import os

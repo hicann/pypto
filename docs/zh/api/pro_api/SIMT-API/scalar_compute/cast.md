@@ -33,7 +33,7 @@ pypto_pro.language.simt.cast(
 |---|---|---|
 | value | 输入 | 源操作数，Scalar类型，支持DT_FP16、DT_BF16、DT_FP32、DT_INT8、DT_INT16、DT_INT32、DT_INT64、DT_UINT8、DT_UINT16、DT_UINT32和DT_UINT64。Tensor或Tile元素需通过下标访问后传入。 |
 | dtype | 输入 | 目的数据类型，DType类型，支持的数据类型转换见下表。 |
-| mode | 输入 | 可选，舍入模式，[RoundMode](../../SIMD-API/basic_data_structures/RoundMode.md)类型，默认值为pl.RoundMode.CAST_NONE。各数据类型转换支持的舍入模式见下表。 |
+| mode | 输入 | 可选，舍入模式，[RoundMode](../../SIMD-API/basic_data_structures/RoundMode.md)类型，默认值为pypto_pro.language.RoundMode.CAST_NONE。各数据类型转换支持的舍入模式见下表。 |
 
 各源数据类型支持的目的数据类型和舍入模式如下：
 
@@ -178,7 +178,7 @@ pypto_pro.language.simt.cast(
 
 ## 约束说明
 
-只能在由@pl.simt.function定义的SIMT入口函数或辅助函数中调用。
+只能在由@pypto_pro.language.simt.function定义的SIMT入口函数或辅助函数中调用。
 
 DT_FP16或DT_BF16转换为DT_INT8、DT_UINT8、DT_INT16、DT_UINT16时，舍入后的结果会钳位到目的整数类型的取值范围。
 

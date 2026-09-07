@@ -118,7 +118,7 @@ SIMT函数通过参数接收数据，每个线程使用自己的索引访问对�
 | Tensor | 访问Global Memory中的数据 | 通过完整索引取得或更新一个Scalar元素 |
 | Vec Tile | 访问Vector核UB中的数据 | 通过二维索引取得或更新一个Scalar元素 |
 
-传入SIMT函数的Tensor需要使用ND Layout；Tile需要是二维ND Vec Tile。Tensor和Tile必须以完整变量传给pl.simt.launch，元素下标表达式、Slice和Tile Subview不能作为launch实参。具体限制请参见[simt.launch](../../../../api/pro_api/SIMT-API/execution/launch.md)。
+传入SIMT函数的Tensor需要使用ND；Tile需要是二维ND Vec Tile。Tensor和Tile必须以完整变量传给pl.simt.launch，元素下标表达式、Slice和Tile Subview不能作为launch实参。具体限制请参见[simt.launch](../../../../api/pro_api/SIMT-API/execution/launch.md)。
 
 ## 编程示例
 

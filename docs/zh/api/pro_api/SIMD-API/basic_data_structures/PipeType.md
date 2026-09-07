@@ -14,26 +14,44 @@
 
 ## 功能说明
 
-硬件执行单元（流水）的类型枚举，标记某个操作运行在哪条流水上。是同步控制（[sync_src/sync_dst](../operation/synchronization/sync_src_sync_dst.md)、[mutex_lock](../operation/synchronization/mutex_lock.md)等）里set_pipe/wait_pipe/pipe参数的取值来源。
+硬件执行单元（流水）的类型枚举，标记某个操作运行在哪条流水上。是同步控制（[sync_src](../synchronization/sync_src.md)、[sync_dst](../synchronization/sync_dst.md)、[mutex_lock](../synchronization/mutex_lock.md)等）里set_pipe/wait_pipe/pipe参数的取值来源。
 
 昇腾芯片内部有多条并行流水，各自负责不同阶段的数据搬运和计算。正确理解每条流水的职责是写好同步控制的基础。
 
-## 取值
+## 原型定义
 
-| 取值 | 说明 | 硬件角色 |
-|---|---|---|
-| pypto_pro.language.PipeType.MTE1 | 搬运流水1 | L1 Buffer → L0A Buffer/L0B Buffer/BiasTable Buffer/L0A_MX Buffer/L0B_MX Buffer（矩阵操作数与量化系数矩阵搬运） |
-| pypto_pro.language.PipeType.MTE2 | 搬运流水2 | GM → L1 Buffer/UB（load搬入） |
-| pypto_pro.language.PipeType.MTE3 | 搬运流水3 | UB → GM（store搬出）、UB → L1 Buffer（move搬运） |
-| pypto_pro.language.PipeType.M | 矩阵计算流水 | Cube/MAD（matmul计算） |
-| pypto_pro.language.PipeType.V | 向量计算流水 | element-wise、reduce、cast等向量操作 |
-| pypto_pro.language.PipeType.S | 标量流水 | getval/setval等标量操作 |
-| pypto_pro.language.PipeType.FIX | fixpipe流水 | 累加器结果读出（L0C Buffer → UB/GM/L1 Buffer）、quantization/反量化等 |
-| pypto_pro.language.PipeType.ALL | 本AI Core的全部流水 | V/M/MTE1/MTE2/MTE3/FIX等流水 |
+```python
+PYPTO_DECLARE_ENUM(
+    PipeType,
+    MTE1,
+    MTE2,
+    MTE3,
+    M,
+    V,
+    S,
+    FIX,
+    ALL
+)
+```
 
-## 补充说明
+## 参数说明
 
-[load](../operation/memory_data_movement/load.md)、[move](../operation/memory_data_movement/move.md)和[store](../operation/memory_data_movement/store.md)的流水由源/目的内存空间自动决定：
+| 参数值 | 说明 |
+|---|---|
+| MTE1 | 搬运流水1，负责L1 Buffer → L0A Buffer/L0B Buffer/BiasTable Buffer/L0A_MX Buffer/L0B_MX Buffer的数据搬运。 |
+| MTE2 | 搬运流水2，负责GM → L1 Buffer/UB的load搬入。 |
+| MTE3 | 搬运流水3，负责UB → GM的store搬出和UB → L1 Buffer的move搬运。 |
+| M | 矩阵计算流水，负责Cube/MAD等matmul计算。 |
+| V | 向量计算流水，负责element-wise、reduce、cast等向量操作。 |
+| S | 标量流水，负责getval、setval等标量操作。 |
+| FIX | Fixpipe流水，负责累加器结果读出（L0C Buffer → UB/GM/L1 Buffer）以及quantization/反量化等操作。 |
+| ALL | 表示本AI Core的全部流水，包括V、M、MTE1、MTE2、MTE3和FIX等流水。 |
+
+## 约束说明
+
+### 数据搬运场景
+
+[load](../memory_data_movement/load.md)、[move](../memory_data_movement/move.md)和[store](../memory_data_movement/store.md)的流水由源/目的内存空间自动决定：
 
 | 操作 | 源 → 目的 | 流水 |
 |---|---|---|
@@ -48,6 +66,8 @@
 | move | UB → L1 Buffer | MTE3 |
 | move | 其余 | V |
 
+### 流水同步场景
+
 典型同步模式：
 
 | 场景 | set_pipe | wait_pipe | 说明 |
@@ -60,6 +80,8 @@
 | 标量读写 | MTE2/MTE3 | S | getval/setval走标量流水 |
 
 ## 调用示例
+
+### 流水同步
 
 ```python
 import pypto_pro.language as pl

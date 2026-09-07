@@ -16,7 +16,6 @@ Ptr
 QuantMode
 ReluPreMode
 RoundMode
-Scalar
 STPhase
 SyncAllMode
 SyncCoreType

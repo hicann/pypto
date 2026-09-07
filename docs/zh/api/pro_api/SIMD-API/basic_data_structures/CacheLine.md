@@ -25,4 +25,4 @@ PYPTO_DECLARE_ENUM(CacheLine,
 )
 ```
 
-具体使用约束，请参见[dcci](../operation/cache_control/dcci.md)。
+具体使用约束，请参见[dcci](../cache_control/dcci.md)。

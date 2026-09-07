@@ -34,7 +34,7 @@ pypto_pro.language.simt.log2(
 
 ## 约束说明
 
-只能在由@pl.simt.function定义的SIMT入口函数或辅助函数中调用。
+只能在由@pypto_pro.language.simt.function定义的SIMT入口函数或辅助函数中调用。
 
 ## 返回值说明
 

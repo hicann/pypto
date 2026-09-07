@@ -8,9 +8,9 @@ PyPTO Pro中有三种核心数据抽象：
 
 | 抽象 | 所在位置 | 创建方式 | 用途 |
 |:---|:---|:---|:---|
-| **Tensor** | 全局内存（GM） | [pypto_pro.language.Tensor[...]](../../../../../api/pro_api/SIMD-API/basic_data_structures/Tensor.md) / [pypto_pro.language.make_tensor](../../../../../api/pro_api/SIMD-API/operation/resource_management/make_tensor.md) | 带shape和stride的GM Tensor视图 |
-| **Tile** | 片上缓冲区 | [pypto_pro.language.make_tile](../../../../../api/pro_api/SIMD-API/operation/resource_management/make_tile.md) | 固定的片上缓冲区，包括UB、L1 Buffer、L0A Buffer、L0B Buffer、L0C Buffer、Bias Buffer、L0A_MX Buffer和L0B_MX Buffer |
-| **TileGroup** | 片上缓冲区 | [pypto_pro.language.make_tile_group](../../../../../api/pro_api/SIMD-API/operation/resource_management/make_tile_group.md) | 一组轮转的Tile，用于双缓冲 / N缓冲 |
+| **Tensor** | 全局内存（GM） | [pypto_pro.language.Tensor[...]](../../../../../api/pro_api/SIMD-API/basic_data_structures/Tensor.md) / [pypto_pro.language.make_tensor](../../../../../api/pro_api/SIMD-API/resource_management/make_tensor.md) | 带shape和stride的GM Tensor视图 |
+| **Tile** | 片上缓冲区 | [pypto_pro.language.make_tile](../../../../../api/pro_api/SIMD-API/resource_management/make_tile.md) | 固定的片上缓冲区，包括UB、L1 Buffer、L0A Buffer、L0B Buffer、L0C Buffer、Bias Buffer、L0A_MX Buffer和L0B_MX Buffer |
+| **TileGroup** | 片上缓冲区 | [pypto_pro.language.make_tile_group](../../../../../api/pro_api/SIMD-API/resource_management/make_tile_group.md) | 一组轮转的Tile，用于双缓冲 / N缓冲 |
 
 ### Tensor
 
@@ -55,7 +55,7 @@ def fa_kernel(
 
 pypto_pro.language.make_tensor(ptr, shape, stride=None, dtype=None)由裸指针结合shape和可选stride构造Tensor视图。省略stride时，接口根据shape自动生成连续的行主序stride；需要表示非连续布局时，可继续传入显式stride。Tensor视图的rank由Kernel中传入的Python shape序列确定，序列中的维度值可以来自TilingData等运行时参数。
 
-[pypto_pro.language.make_ptr(tensor, dtype=None)](../../../../../api/pro_api/SIMD-API/operation/resource_management/make_ptr.md)从已有Tensor提取底层裸指针。
+[pypto_pro.language.make_ptr(tensor, dtype=None)](../../../../../api/pro_api/SIMD-API/resource_management/make_ptr.md)从已有Tensor提取底层裸指针。
 省略dtype时保留Tensor的元素类型；指定dtype时按目标元素类型解释指针，底层地址保持不变。
 
 ### Tile与TileType
@@ -114,9 +114,9 @@ g = pypto_pro.language.make_tile_group(type=<TileType>, addrs=<base|list>, mutex
 
 PyPTO Pro的算子开发遵循「**搬入→计算→搬出**」三段式流水线范式，与AI Core硬件的多级异步流水特性完全贴合：
 
-1. **搬入（CopyIn）**：通过[pypto_pro.language.load](../../../../../api/pro_api/SIMD-API/operation/memory_data_movement/load.md)/[pypto_pro.language.load_tile](../../../../../api/pro_api/SIMD-API/operation/memory_data_movement/load_tile.md)将数据从Global Memory搬运至片上缓冲区（UB/L1等）
+1. **搬入（CopyIn）**：通过[pypto_pro.language.load](../../../../../api/pro_api/SIMD-API/memory_data_movement/load.md)/[pypto_pro.language.load_tile](../../../../../api/pro_api/SIMD-API/memory_data_movement/load_tile.md)将数据从Global Memory搬运至片上缓冲区（UB/L1等）
 2. **计算（Compute）**：在片上缓冲区上完成Tile级别的计算，根据算子类型在pypto_pro.language.section_vector()或pypto_pro.language.section_cube()上下文中调用对应的计算接口
-3. **搬出（CopyOut）**：通过[pypto_pro.language.store](../../../../../api/pro_api/SIMD-API/operation/memory_data_movement/store.md)/[pypto_pro.language.store_tile](../../../../../api/pro_api/SIMD-API/operation/memory_data_movement/store_tile.md)将结果从片上缓冲区写回Global Memory
+3. **搬出（CopyOut）**：通过[pypto_pro.language.store](../../../../../api/pro_api/SIMD-API/memory_data_movement/store.md)/[pypto_pro.language.store_tile](../../../../../api/pro_api/SIMD-API/memory_data_movement/store_tile.md)将结果从片上缓冲区写回Global Memory
 
 AI Core内部的搬运单元（MTE2/MTE1/MTE3等）与计算单元（V/M等）天然支持异步并行。通过TileGroup的N缓冲机制，可以让搬入下一块数据与当前块计算重叠执行，实现流水线吞吐叠加。
 
@@ -152,7 +152,7 @@ AI Core内部存在多条异步并行流水，当一条流水生产的数据被�
 - sync_src(set_pipe, wait_pipe, event_id) —— 生产方SET flag
 - sync_dst(set_pipe, wait_pipe, event_id) —— 消费方WAIT flag
 
-需要显式控制缓冲区互斥时可使用[mutex_lock](../../../../../api/pro_api/SIMD-API/operation/synchronization/mutex_lock.md)和[mutex_unlock](../../../../../api/pro_api/SIMD-API/operation/synchronization/mutex_unlock.md)。需要等待指定流水中此前下发的操作完成时，可根据流水分别使用[bar_m](../../../../../api/pro_api/SIMD-API/operation/synchronization/bar_m.md)、[bar_mte1](../../../../../api/pro_api/SIMD-API/operation/synchronization/bar_mte1.md)、[bar_mte2](../../../../../api/pro_api/SIMD-API/operation/synchronization/bar_mte2.md)、[bar_mte3](../../../../../api/pro_api/SIMD-API/operation/synchronization/bar_mte3.md)或[bar_fix](../../../../../api/pro_api/SIMD-API/operation/synchronization/bar_fix.md)；需要等待本AI Core内全部流水中此前下发的操作完成时，使用[bar_all](../../../../../api/pro_api/SIMD-API/operation/synchronization/bar_all.md)。
+需要显式控制缓冲区互斥时可使用[mutex_lock](../../../../../api/pro_api/SIMD-API/synchronization/mutex_lock.md)和[mutex_unlock](../../../../../api/pro_api/SIMD-API/synchronization/mutex_unlock.md)。需要等待指定流水中此前下发的操作完成时，可根据流水分别使用[bar_m](../../../../../api/pro_api/SIMD-API/synchronization/bar_m.md)、[bar_mte1](../../../../../api/pro_api/SIMD-API/synchronization/bar_mte1.md)、[bar_mte2](../../../../../api/pro_api/SIMD-API/synchronization/bar_mte2.md)、[bar_mte3](../../../../../api/pro_api/SIMD-API/synchronization/bar_mte3.md)或[bar_fix](../../../../../api/pro_api/SIMD-API/synchronization/bar_fix.md)；需要等待本AI Core内全部流水中此前下发的操作完成时，使用[bar_all](../../../../../api/pro_api/SIMD-API/synchronization/bar_all.md)。
 
 PyPTO Pro的流水类型（pypto_pro.language.PipeType）与硬件指令流水对应关系：
 
@@ -168,7 +168,7 @@ PyPTO Pro的流水类型（pypto_pro.language.PipeType）与硬件指令流水�
 手动同步的典型模式为：搬入后插入MTE2→V同步确保数据就绪再计算，计算后插入V→MTE3同步确保计算完成再搬出。在循环场景下还需考虑反向同步（循环间依赖），防止当前迭代覆盖上一迭代未完成的数据。
 
 > [!NOTE]说明
-> sync_src/sync_dst的参数范围、配对及event ID复用要求参见[sync_src/sync_dst](../../../../../api/pro_api/SIMD-API/operation/synchronization/sync_src_sync_dst.md)。手动同步属于ISASI类别的高级用法，不保证跨硬件版本兼容。
+> sync_src/sync_dst的参数范围、配对及event ID复用要求参见[sync_src](../../../../../api/pro_api/SIMD-API/synchronization/sync_src.md)和[sync_dst](../../../../../api/pro_api/SIMD-API/synchronization/sync_dst.md)。手动同步属于ISASI类别的高级用法，不保证跨硬件版本兼容。
 
 ## TilingData
 

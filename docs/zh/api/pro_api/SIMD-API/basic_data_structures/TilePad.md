@@ -16,24 +16,38 @@
 
 Tile边界不足时的填充方式枚举，用于尾块/非满块场景。
 
-当tile的有效数据区域小于其shape时（如动态维度的尾块），超出有效区域的部分需要按指定模式填充。
+当Tile的有效数据区域小于其shape时（如动态维度的尾块），超出有效区域的部分需要按指定模式填充。
 
-## 取值
+## 原型定义
 
-| 取值 | 说明 | 典型用途 |
-|---|---|---|
-| `pypto_pro.language.TilePad.null` | 不填充（默认） | 大多数场景 |
-| `pypto_pro.language.TilePad.zero` | 补0 | 卷积padding、零初始化 |
-| `pypto_pro.language.TilePad.max` | 补该类型最大值 | 取最小值操作的无效区域 |
-| `pypto_pro.language.TilePad.min` | 补该类型最小值 | flash attention掩码（无效行补FP32 min，被max/softmax忽略） |
+```python
+PYPTO_DECLARE_ENUM(
+    TilePad,
+    null,
+    zero,
+    max,
+    min
+)
+```
 
-## 补充说明
+## 参数说明
 
-**flash attention掩码**：当KV长度不是tile大小的整数倍时，最后一块的无效行需要补FP32最小值，这样在后续的`row_max`和`exp`操作中会被自然忽略。
+| 参数值 | 说明 |
+|---|---|
+| null | 不填充，默认值，适用于不需要处理无效区域的场景。 |
+| zero | 补0，典型用于卷积padding和零初始化。 |
+| max | 补对应数据类型的最大值，典型用于取最小值操作的无效区域。 |
+| min | 补对应数据类型的最小值，典型用于flash attention掩码，使无效行在max/softmax计算中被忽略。 |
 
-**卷积padding**：卷积操作中边界填充零值。
+## 约束说明
+
+在Flash Attention掩码场景中，当KV长度不是Tile大小的整数倍时，最后一块的无效行需要补FP32最小值，使其在后续的row_max和exp操作中被忽略。
+
+在卷积padding场景中，边界区域需要填充零值。
 
 ## 调用示例
+
+### Tile填充模式
 
 ```python
 import pypto_pro.language as pl

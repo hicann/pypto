@@ -12,12 +12,12 @@
 Uses make_tile_group + auto_mutex pattern.
 
 Verifies kernel examples from:
-  docs/zh/api/pro_api/SIMD-API/operation/memory_vector_computation/elementwise/maximum.md
-  docs/zh/api/pro_api/SIMD-API/operation/memory_vector_computation/math_functions/sum.md
-  docs/zh/api/pro_api/SIMD-API/operation/memory_vector_computation/math_functions/argmax.md
-  docs/zh/api/pro_api/SIMD-API/operation/memory_vector_computation/math_functions/argmin.md
-  docs/zh/api/pro_api/SIMD-API/operation/memory_vector_computation/math_functions/expand_max.md
-  docs/zh/api/pro_api/SIMD-API/operation/memory_vector_computation/math_functions/expand_min.md
+  docs/zh/api/pro_api/SIMD-API/memory_vector_computation/elementwise/maximum.md
+  docs/zh/api/pro_api/SIMD-API/memory_vector_computation/math_functions/sum.md
+  docs/zh/api/pro_api/SIMD-API/memory_vector_computation/math_functions/argmax.md
+  docs/zh/api/pro_api/SIMD-API/memory_vector_computation/math_functions/argmin.md
+  docs/zh/api/pro_api/SIMD-API/memory_vector_computation/math_functions/expand_max.md
+  docs/zh/api/pro_api/SIMD-API/memory_vector_computation/math_functions/expand_min.md
 """
 
 import logging

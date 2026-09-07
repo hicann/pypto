@@ -1,6 +1,6 @@
 # 尾块处理
 
-当GM Tensor的shape不能被Tile shape整除时，最后一行或最后一列Tile只包含部分有效数据，这类Tile称为**尾块**。本节介绍如何在PyPTO Pro中使用`valid_shape`和[`pl.set_validshape`](../../../../../api/pro_api/SIMD-API/operation/memory_vector_computation/transpose_and_element_access/set_validshape.md)限定尾块的有效区域，以及何时需要`compact`、`pad`和`pl.fillpad`。
+当GM Tensor的shape不能被Tile shape整除时，最后一行或最后一列Tile只包含部分有效数据，这类Tile称为**尾块**。本节介绍如何在PyPTO Pro中使用`valid_shape`和`pl.set_validshape`限定尾块的有效区域，以及何时需要`compact`、`pad`和`pl.fillpad`。
 
 ## 理解尾块
 

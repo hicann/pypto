@@ -131,7 +131,7 @@ def matmul_kernel(a: pl.Tensor[[pl.DYNAMIC, TILE_K], pl.DT_FP16],
 
 L0C中的结果分形固定为16×16。以FP32/INT32累加结果为例，一个结果分形占用`16 × 16 × 4B = 1024B`，因此需要显式描述硬件分形大小的累加场景使用`fractal=1024`。
 
-下图以FP16类型的40×56矩阵为例，展示`compact=0`时的标准分形布局：GM中的`pypto_pro.language.ND` Tensor通过`pypto_pro.language.load`搬入L1 Buffer的`Mat` Tile，并转换为`pypto_pro.language.NZ`布局。有效区为40×56，按16×16分形对齐后的寻址边界为48×64；分形之间按列优先排列，分形内部按行优先排列。图中白色区域为有效数据，灰色区域为无效区域，其值未必为0。`valid_shape`描述有效区域，`pad`/`pypto_pro.language.fillpad`决定是否以及如何填充无效区域；`compact=1`会按`valid_shape`紧凑解释片上布局，不使用图2所示的完整标准分形边界。
+下图以FP16类型的40×56矩阵为例，展示`compact=0`时的标准分形布局：GM中的`ND` Tensor通过`pypto_pro.language.load`搬入L1 Buffer的`Mat` Tile，并转换为`NZ`布局。有效区为40×56，按16×16分形对齐后的寻址边界为48×64；分形之间按列优先排列，分形内部按行优先排列。图中白色区域为有效数据，灰色区域为无效区域，其值未必为0。`valid_shape`描述有效区域，`pad`/`pypto_pro.language.fillpad`决定是否以及如何填充无效区域；`compact=1`会按`valid_shape`紧凑解释片上布局，不使用图2所示的完整标准分形边界。
 
 **图2** PyPTO Pro中`pypto_pro.language.load`完成ND（GM）到Nz（L1 Mat）的分形转换
 
@@ -144,7 +144,7 @@ L0C中的结果分形固定为16×16。以FP32/INT32累加结果为例，一个�
 - 大Y（Z/N）表示多个分形之间的排列顺序：Z为row major（行主序），N为column major（列主序）。
 - 小x（z/n）表示一个分形内部的元素排列顺序：z为row major（行主序），n为column major（列主序）。
 
-PyPTO Pro使用大写的`pypto_pro.language.NZ`、`pypto_pro.language.ZN`等枚举表示文档中的Nz、Zn格式。以二维矩阵为例，几种常用格式的含义如下：
+PyPTO Pro使用大写的`NZ`、`ZN`等枚举表示文档中的Nz、Zn格式。以二维矩阵为例，几种常用格式的含义如下：
 
 - **ND**：通用线性布局，通常用于GM中的输入和输出Tensor。
 - **Nz**：分形之间按列主序排列，分形内部按行主序排列。对shape为`[M, N]`的矩阵，补齐并拆分为`[M1, M0, N1, N0]`后，物理排列顺序为`[N1, M1, M0, N0]`。
@@ -154,12 +154,12 @@ PyPTO Pro使用大写的`pypto_pro.language.NZ`、`pypto_pro.language.ZN`等枚�
 
 Ascend 950PR/Ascend 950DT的默认数据路径如下：
 
-- GM中的ND数据搬入`Mat`（L1）时转换为`pypto_pro.language.NZ`。
-- A矩阵从`Mat`搬入`Left`（L0A）后保持`pypto_pro.language.NZ`。
-- B矩阵从`Mat`搬入`Right`（L0B）时转换为`pypto_pro.language.ZN`。
-- `matmul`的结果在`Acc`（L0C）中按`pypto_pro.language.NZ`存放。
+- GM中的ND数据搬入`Mat`（L1）时转换为`NZ`。
+- A矩阵从`Mat`搬入`Left`（L0A）后保持`NZ`。
+- B矩阵从`Mat`搬入`Right`（L0B）时转换为`ZN`。
+- `matmul`的结果在`Acc`（L0C）中按`NZ`存放。
 
-当`target_memory`确定后，`layout`和`fractal`通常随之确定，上述默认路径可省略这两个参数。转置搬入等特殊场景需要显式指定`layout`。`layout`描述Tile的物理排布，`TileType.shape`保持逻辑轴语义；例如B矩阵在L0B中仍使用`[K, N]`描述shape，物理布局为`pypto_pro.language.ZN`。
+当`target_memory`确定后，`layout`和`fractal`通常随之确定，上述默认路径可省略这两个参数。转置搬入等特殊场景需要显式指定`layout`。`layout`描述Tile的物理排布，`TileType.shape`保持逻辑轴语义；例如B矩阵在L0B中仍使用`[K, N]`描述shape，物理布局为`ZN`。
 
 下图以FP16输入、FP32累加为例，展示`Left`、`Right`、`Acc` Tile与PyPTO Pro接口的对应关系。
 
@@ -270,16 +270,16 @@ with pl.section_cube():
 
 ### 转置搬入
 
-当输入矩阵的轴序与L1 Tile的轴序相反时（如Tensor为`[K, M]`而Tile为`[M, K]`），需要在搬入时进行转置。通过`load`的`order`参数控制：`order=[1, 0]`表示转置搬入，此时L1 Tile的`layout`需设为`pypto_pro.language.ZN`。
+当输入矩阵的轴序与L1 Tile的轴序相反时（如Tensor为`[K, M]`而Tile为`[M, K]`），需要在搬入时进行转置。通过`load`的`order`参数控制：`order=[1, 0]`表示转置搬入，此时L1 Tile的`layout`需设为`ZN`。
 
 以`C[M, N] = A[M, K] @ B[K, N]`为例：
 
 | 操作数 | Tensor shape | 是否转置 | `load`的`order` | L1 Mat Tile layout |
 |:---|:---|:---|:---|:---|
-| 左矩阵A | `[M, K]` | 否 | `[0, 1]`（默认） | `pypto_pro.language.NZ`（默认） |
-| 左矩阵A | `[K, M]` | 是 | `[1, 0]` | `pypto_pro.language.ZN` |
-| 右矩阵B | `[K, N]` | 否 | `[0, 1]`（默认） | `pypto_pro.language.NZ`（默认） |
-| 右矩阵B | `[N, K]` | 是 | `[1, 0]` | `pypto_pro.language.ZN` |
+| 左矩阵A | `[M, K]` | 否 | `[0, 1]`（默认） | `NZ`（默认） |
+| 左矩阵A | `[K, M]` | 是 | `[1, 0]` | `ZN` |
+| 右矩阵B | `[K, N]` | 否 | `[0, 1]`（默认） | `NZ`（默认） |
+| 右矩阵B | `[N, K]` | 是 | `[1, 0]` | `ZN` |
 
 左矩阵转置搬入示例：
 
@@ -314,7 +314,7 @@ def kernel_left_transpose(
     pl.store(out, acc, [i, j])    # L0C → GM，自动NZ→ND
 ```
 
-如果输出Tensor标注为NZ布局，`store`会将Acc的计算结果按NZ分形直接写入GM，无需额外格式转换：
+如果输出Tensor标注为NZ，`store`会将Acc的计算结果按NZ分形直接写入GM，无需额外格式转换：
 
 ```python
 @pl.jit(auto_mutex=True)
@@ -343,11 +343,11 @@ def kernel(...,
 
 ### MXFP8/MXFP4矩阵乘
 
-MX矩阵乘使用pypto_pro.language.matmul_mx/pypto_pro.language.matmul_mx_acc，除L0A Buffer/L0B Buffer的Tile外，还需要分别位于L0A_MX Buffer和L0B_MX Buffer的E8M0量化系数Tile。每个量化系数对应K方向连续32个尾数元素，K必须为64的倍数。MXFP8支持DT_FP8E4M3FN/DT_FP8E5M2，MXFP4支持DT_FP4E2M1/DT_FP4E1M2；完整参数约束、量化系数Tensor布局和调用示例参见[matmul_mx](../../../../../api/pro_api/SIMD-API/operation/matrix_computation/matmul_mx.md)和[matmul_mx_acc](../../../../../api/pro_api/SIMD-API/operation/matrix_computation/matmul_mx_acc.md)。
+MX矩阵乘使用pypto_pro.language.matmul_mx/pypto_pro.language.matmul_mx_acc，除L0A Buffer/L0B Buffer的Tile外，还需要分别位于L0A_MX Buffer和L0B_MX Buffer的E8M0量化系数Tile。每个量化系数对应K方向连续32个尾数元素，K必须为64的倍数。MXFP8支持DT_FP8E4M3FN/DT_FP8E5M2，MXFP4支持DT_FP4E2M1/DT_FP4E1M2；完整参数约束、量化系数Tensor布局和调用示例参见[matmul_mx](../../../../../api/pro_api/SIMD-API/matrix_computation/matmul_mx.md)和[matmul_mx_acc](../../../../../api/pro_api/SIMD-API/matrix_computation/matmul_mx_acc.md)。
 
 ### K维分块累加
 
-当K维度较大，无法一次装入L1/L0时，需要将K轴切分为多个分块，逐块累加。首块用`pypto_pro.language.matmul`写入累加器，其余块用[`pypto_pro.language.matmul_acc`](../../../../../api/pro_api/SIMD-API/operation/matrix_computation/matmul_acc.md)累加到同一个L0C。
+当K维度较大，无法一次装入L1/L0时，需要将K轴切分为多个分块，逐块累加。首块用`pypto_pro.language.matmul`写入累加器，其余块用[`pypto_pro.language.matmul_acc`](../../../../../api/pro_api/SIMD-API/matrix_computation/matmul_acc.md)累加到同一个L0C。
 
 K维分块累加对正确性有三个硬性要求：
 
@@ -402,7 +402,7 @@ def matmul_acc_kernel(
 ```
 
 > [!NOTE]说明
-> `phase`参数控制Cube（M流水）与FixPipe（FIX流水）之间的硬件unit_flag握手。`phase`配对使用时，框架不自动插入M与FIX之间的软件同步，由硬件unit_flag保证顺序。使用不当会导致精度问题或设备卡死。详见[`phase`使用约束](../../../../../api/pro_api/SIMD-API/operation/matrix_computation/phase.md)。
+> `phase`参数控制Cube（M流水）与FixPipe（FIX流水）之间的硬件unit_flag握手。`phase`配对使用时，框架不自动插入M与FIX之间的软件同步，由硬件unit_flag保证顺序。使用不当会导致精度问题或设备卡死。详见[`phase`使用约束](../../../../../api/pro_api/SIMD-API/matrix_computation/phase.md)。
 
 ## 尾块处理
 

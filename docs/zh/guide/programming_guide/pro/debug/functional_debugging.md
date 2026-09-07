@@ -1,6 +1,6 @@
 # 功能调试
 
-PyPTO Pro采用SPMD执行模型，同一份Kernel代码由多个逻辑AI Core并行执行，各工作单元通过[`pypto_pro.language.get_block_idx()`](../../../../api/pro_api/SIMD-API/operation/system_variables/get_block_idx.md)的全局逻辑索引确定数据分片。`block_dim`配置逻辑Block数；混合Kernel中AIC/AIV的实际逻辑核数还取决于两者比例。功能调试应围绕Kernel的编译、下发、多核切分、片上计算和结果写回逐层开展。
+PyPTO Pro采用SPMD执行模型，同一份Kernel代码由多个逻辑AI Core并行执行，各工作单元通过[`pypto_pro.language.get_block_idx()`](../../../../api/pro_api/SIMD-API/system_variables/get_block_idx.md)的全局逻辑索引确定数据分片。`block_dim`配置逻辑Block数；混合Kernel中AIC/AIV的实际逻辑核数还取决于两者比例。功能调试应围绕Kernel的编译、下发、多核切分、片上计算和结果写回逐层开展。
 
 PyPTO Pro提供[`pypto_pro.language.printf`](../../../../api/pro_api/Utils-API/debugging/printf.md)、[`pypto_pro.language.dump_data`](../../../../api/pro_api/Utils-API/debugging/dump_data.md)、[`pypto_pro.language.pto_assert`](../../../../api/pro_api/Utils-API/debugging/pto_assert.md)和[`pypto_pro.language.trap`](../../../../api/pro_api/Utils-API/debugging/trap.md)等Kernel级调试接口。当Kernel包含`pypto_pro.language.printf`或`pypto_pro.language.dump_data`时，JIT自动启用设备侧调试打印。
 

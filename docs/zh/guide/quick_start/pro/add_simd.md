@@ -12,10 +12,10 @@
 |:---|:---|
 | Kernel函数定义 | 通过`@pl.jit(auto_mutex=True)`声明JIT编译目标，开启自动同步 |
 | Tile定义 | 使用[`pl.TileType`](../../../api/pro_api/SIMD-API/basic_data_structures/TileType.md)定义片上Tile的形状、数据类型和目标内存空间 |
-| Tile分配 | 使用[`pl.make_tile_group`](../../../api/pro_api/SIMD-API/operation/resource_management/make_tile_group.md)分配片上内存，通过`mutex_ids`指定互斥缓冲，框架自动插入同步 |
-| 数据搬入 | 通过[`pl.load`](../../../api/pro_api/SIMD-API/operation/memory_data_movement/load.md)将GM数据搬入UB Tile |
-| 数据计算 | 通过[`pl.add`](../../../api/pro_api/SIMD-API/operation/memory_vector_computation/elementwise/add.md)完成逐元素加法 |
-| 数据搬出 | 通过[`pl.store`](../../../api/pro_api/SIMD-API/operation/memory_data_movement/store.md)将UB Tile结果写回GM |
+| Tile分配 | 使用[`pl.make_tile_group`](../../../api/pro_api/SIMD-API/resource_management/make_tile_group.md)分配片上内存，通过`mutex_ids`指定互斥缓冲，框架自动插入同步 |
+| 数据搬入 | 通过[`pl.load`](../../../api/pro_api/SIMD-API/memory_data_movement/load.md)将GM数据搬入UB Tile |
+| 数据计算 | 通过[`pl.add`](../../../api/pro_api/SIMD-API/memory_vector_computation/elementwise/add.md)完成逐元素加法 |
+| 数据搬出 | 通过[`pl.store`](../../../api/pro_api/SIMD-API/memory_data_movement/store.md)将UB Tile结果写回GM |
 
 ## 算子代码实现
 

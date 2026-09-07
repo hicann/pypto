@@ -58,7 +58,7 @@ def dynamic_kernel(
 
 ### Tile定义与分配
 
-核函数内部使用[`pypto_pro.language.TileType`](../../../../api/pro_api/SIMD-API/basic_data_structures/TileType.md)定义Tile类型，并通过[`pypto_pro.language.make_tile_group`](../../../../api/pro_api/SIMD-API/operation/resource_management/make_tile_group.md)等接口分配片上内存：
+核函数内部使用[`pypto_pro.language.TileType`](../../../../api/pro_api/SIMD-API/basic_data_structures/TileType.md)定义Tile类型，并通过[`pypto_pro.language.make_tile_group`](../../../../api/pro_api/SIMD-API/resource_management/make_tile_group.md)等接口分配片上内存：
 
 ```python
 tt = pypto_pro.language.TileType(shape=[64, 64], dtype=pypto_pro.language.DT_FP16, target_memory=pypto_pro.language.MemorySpace.Vec)
@@ -69,7 +69,7 @@ tile_out = pypto_pro.language.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[
 
 ### 流水段与同步
 
-计算逻辑需要放在[`pypto_pro.language.section_vector()`](../../../../api/pro_api/SIMD-API/operation/controlflow/section_vector.md)上下文中，开启`auto_mutex=True`后，搬运与计算间的流水同步由框架按Tile的mutex自动插入：
+计算逻辑需要放在[`pypto_pro.language.section_vector()`](../../../../api/pro_api/SIMD-API/controlflow/section_vector.md)上下文中，开启`auto_mutex=True`后，搬运与计算间的流水同步由框架按Tile的mutex自动插入：
 
 ```python
 with pypto_pro.language.section_vector():

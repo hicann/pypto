@@ -6,7 +6,7 @@
 
 ### make_tile —— 分配单个Tile
 
-[`pypto_pro.language.make_tile`](../../../../../api/pro_api/SIMD-API/operation/resource_management/make_tile.md)分配一块固定的片上缓冲区。指定`addr`时**必须**同时指定`size`（缓冲区的字节大小）：
+[`pypto_pro.language.make_tile`](../../../../../api/pro_api/SIMD-API/resource_management/make_tile.md)分配一块固定的片上缓冲区。指定`addr`时**必须**同时指定`size`（缓冲区的字节大小）：
 
 ```python
 tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
@@ -19,7 +19,7 @@ tile_out = pl.make_tile(tt, addr=0x4000, size=8192)
 
 ### make_tile的手动同步
 
-由`make_tile`创建的Tile只是一块裸缓冲区，框架**不会**为它插入任何跨pipe的同步。当一个Tile在某条硬件pipe上被生产（例如MTE2加载），又在另一条pipe上被消费（例如V计算）时，**必须自己**用[`pypto_pro.language.system.sync_src`/`pypto_pro.language.system.sync_dst`](../../../../../api/pro_api/SIMD-API/operation/synchronization/sync_src_sync_dst.md)插入同步：
+由`make_tile`创建的Tile只是一块裸缓冲区，框架**不会**为它插入任何跨pipe的同步。当一个Tile在某条硬件pipe上被生产（例如MTE2加载），又在另一条pipe上被消费（例如V计算）时，**必须自己**用[`pypto_pro.language.system.sync_src`](../../../../../api/pro_api/SIMD-API/synchronization/sync_src.md)和[`pypto_pro.language.system.sync_dst`](../../../../../api/pro_api/SIMD-API/synchronization/sync_dst.md)插入同步：
 
 ```python
 with pl.section_vector():
@@ -43,7 +43,7 @@ Pipe类型（`pypto_pro.language.PipeType`）：`MTE2`（GM→L1/UB加载）、`
 
 ## TileGroup —— 自动同步的双缓冲/N缓冲
 
-[`pypto_pro.language.make_tile_group`](../../../../../api/pro_api/SIMD-API/operation/resource_management/make_tile_group.md)声明一组轮转的Tile，用于实现双缓冲及N缓冲。配置非空`mutex_ids`并配合`auto_mutex=True`时，框架在每次使用轮转Tile的前后自动插入`mutex_lock`/`mutex_unlock`；`mutex_ids`为`None`或空列表时，必须通过`depth`指定Tile数量，跨Pipe同步由用户自行保证。
+[`pypto_pro.language.make_tile_group`](../../../../../api/pro_api/SIMD-API/resource_management/make_tile_group.md)声明一组轮转的Tile，用于实现双缓冲及N缓冲。配置非空`mutex_ids`并配合`auto_mutex=True`时，框架在每次使用轮转Tile的前后自动插入`mutex_lock`/`mutex_unlock`；`mutex_ids`为`None`或空列表时，必须通过`depth`指定Tile数量，跨Pipe同步由用户自行保证。
 
 ![PyPTO Pro TileGroup双缓冲的理想化流水时序](../../../../figures/pro/pro_tile_vector_double_buffer.png)
 

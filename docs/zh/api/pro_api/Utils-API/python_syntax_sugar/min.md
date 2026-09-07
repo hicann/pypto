@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-在Kernel代码中可直接使用Python内置`min(lhs, rhs)`，前端会自动将其解析为`pypto_pro.language.min(lhs, rhs)`，取两个标量中的较小值。
+在Kernel代码中可直接使用Python内置min(lhs, rhs)，编译时会自动转换为pypto_pro.language.min(lhs, rhs)，取两个标量中的较小值。
 
 ## 函数原型
 
@@ -24,10 +24,23 @@ result = min(lhs, rhs)
 result = pypto_pro.language.min(lhs, rhs)
 ```
 
+## 参数说明
+
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| `lhs` | 输入 | 左操作数（Python `int`、Python `float`或Kernel内整型或浮点型标量表达式） |
-| `rhs` | 输入 | 右操作数（Python `int`、Python `float`或Kernel内整型或浮点型标量表达式） |
+| lhs | 输入 | 左操作数（Python int、Python float或Kernel内整型或浮点型标量表达式） |
+| rhs | 输入 | 右操作数（Python int、Python float或Kernel内整型或浮点型标量表达式） |
+
+## 约束说明
+
+- **仅用于标量**：用于循环边界、索引计算等场景
+- **Tile逐元素取最小值**：使用pypto_pro.language.minimum
+- **不支持多参数**：仅接受恰好2个参数，min(a, b, c)不支持
+- **同类别约束**：两个操作数须同为整型或同为浮点型，混合int/float会报错
+
+## 返回值说明
+
+返回lhs和rhs中较小的标量值。
 
 ## 调用示例
 
@@ -42,12 +55,3 @@ def example_kernel(...):
     causal_kv_tiles = min(qi + 1, skv_tiles)
     bottom = min(a, 0)
 ```
-
-## 注意事项
-
-- **仅用于标量**：用于循环边界、索引计算等场景
-- **Tile逐元素取最小值**：使用[`pl.minimum`](../../SIMD-API/operation/memory_vector_computation/elementwise/minimum.md)
-- **不支持多参数**：仅接受恰好2个参数，`min(a, b, c)`不支持
-- **同类别约束**：两个操作数须同为整型或同为浮点型，混合int/float会报错
-
-详见[`pl.min`接口文档](../../SIMD-API/operation/memory_vector_computation/math_functions/min.md)。
