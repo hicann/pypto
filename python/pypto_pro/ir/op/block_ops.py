@@ -654,10 +654,13 @@ def _ir_move(
 
     pre_quant_scalar, fp_tile = _resolve_scale_param(scale, actual_span)
 
+    is_quant = pre_quant_scalar is not None or fp_tile is not None
+    _check_layout_dtype("move", src, out, quant=is_quant)
+
     _check_scale_dst_supported(
         getattr(src.type, "dtype", None),
         getattr(out.type, "dtype", None),
-        pre_quant_scalar is not None or fp_tile is not None,
+        is_quant,
         "move",
     )
     if fp_tile is not None and acc_to_vec_mode in {AccToVecMode.DualModeSplitM, AccToVecMode.DualModeSplitN}:
@@ -701,6 +704,7 @@ def _ir_insert(
     span: Span | None = None,
 ) -> Expr:
     actual_span = span or _span()
+    _check_layout_dtype("insert", src, out)
     row, col = _normalize_2d_sequence(offset, "offset", actual_span)
     # Validate offset bounds at Python frontend level
     _validate_offset_bounds("insert", out.type.shape, [row, col])
@@ -1536,6 +1540,469 @@ def _apply_default_layout(tt: "TileType") -> None:
 
 
 
+
+# A5 MOVE / INSERT / MATMUL dtype and layout validation.
+_ANY_LAYOUT = object()
+
+_A5_MOVE_COMBOS = (
+    # Mat -> Bias; layout is not intercepted on this path.
+    ("Mat", "Bias", _ANY_LAYOUT, _ANY_LAYOUT, DataType.INT32, DataType.INT32),
+    ("Mat", "Bias", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP32, DataType.FP32),
+    ("Mat", "Bias", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP16, DataType.FP32),
+    ("Mat", "Bias", _ANY_LAYOUT, _ANY_LAYOUT, DataType.BF16, DataType.FP32),
+
+    # Mat -> Left: destination layout is fixed to NZ.
+    ("Mat", "Left", TensorLayout.NZ, TensorLayout.NZ, DataType.INT8, DataType.INT8),
+    ("Mat", "Left", TensorLayout.NZ, TensorLayout.NZ, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
+    ("Mat", "Left", TensorLayout.NZ, TensorLayout.NZ, DataType.FP8E5M2, DataType.FP8E5M2),
+    ("Mat", "Left", TensorLayout.NZ, TensorLayout.NZ, DataType.HF8, DataType.HF8),
+    ("Mat", "Left", TensorLayout.NZ, TensorLayout.NZ, DataType.FP16, DataType.FP16),
+    ("Mat", "Left", TensorLayout.NZ, TensorLayout.NZ, DataType.BF16, DataType.BF16),
+    ("Mat", "Left", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.FP32),
+    ("Mat", "Left", TensorLayout.NZ, TensorLayout.NZ, DataType.FP4E1M2, DataType.FP4E1M2),
+    ("Mat", "Left", TensorLayout.NZ, TensorLayout.NZ, DataType.FP4E2M1, DataType.FP4E2M1),
+    ("Mat", "Left", TensorLayout.NZ, TensorLayout.NZ, DataType.FP8E8M0, DataType.FP8E8M0),
+    ("Mat", "Left", TensorLayout.ND, TensorLayout.NZ, DataType.INT8, DataType.INT8),
+    ("Mat", "Left", TensorLayout.ND, TensorLayout.NZ, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
+    ("Mat", "Left", TensorLayout.ND, TensorLayout.NZ, DataType.FP8E5M2, DataType.FP8E5M2),
+    ("Mat", "Left", TensorLayout.ND, TensorLayout.NZ, DataType.HF8, DataType.HF8),
+    ("Mat", "Left", TensorLayout.ND, TensorLayout.NZ, DataType.FP16, DataType.FP16),
+    ("Mat", "Left", TensorLayout.ND, TensorLayout.NZ, DataType.BF16, DataType.BF16),
+    ("Mat", "Left", TensorLayout.ND, TensorLayout.NZ, DataType.FP32, DataType.FP32),
+    ("Mat", "Left", TensorLayout.ND, TensorLayout.NZ, DataType.FP4E1M2, DataType.FP4E1M2),
+    ("Mat", "Left", TensorLayout.ND, TensorLayout.NZ, DataType.FP4E2M1, DataType.FP4E2M1),
+    ("Mat", "Left", TensorLayout.ND, TensorLayout.NZ, DataType.FP8E8M0, DataType.FP8E8M0),
+    ("Mat", "Left", TensorLayout.ZN, TensorLayout.NZ, DataType.INT8, DataType.INT8),
+    ("Mat", "Left", TensorLayout.ZN, TensorLayout.NZ, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
+    ("Mat", "Left", TensorLayout.ZN, TensorLayout.NZ, DataType.FP8E5M2, DataType.FP8E5M2),
+    ("Mat", "Left", TensorLayout.ZN, TensorLayout.NZ, DataType.HF8, DataType.HF8),
+    ("Mat", "Left", TensorLayout.ZN, TensorLayout.NZ, DataType.FP16, DataType.FP16),
+    ("Mat", "Left", TensorLayout.ZN, TensorLayout.NZ, DataType.BF16, DataType.BF16),
+    ("Mat", "Left", TensorLayout.ZN, TensorLayout.NZ, DataType.FP32, DataType.FP32),
+    ("Mat", "Left", TensorLayout.ZN, TensorLayout.NZ, DataType.FP4E1M2, DataType.FP4E1M2),
+    ("Mat", "Left", TensorLayout.ZN, TensorLayout.NZ, DataType.FP4E2M1, DataType.FP4E2M1),
+    ("Mat", "Left", TensorLayout.ZN, TensorLayout.NZ, DataType.FP8E8M0, DataType.FP8E8M0),
+    ("Mat", "Left", TensorLayout.ZZ, TensorLayout.NZ, DataType.INT8, DataType.INT8),
+    ("Mat", "Left", TensorLayout.ZZ, TensorLayout.NZ, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
+    ("Mat", "Left", TensorLayout.ZZ, TensorLayout.NZ, DataType.FP8E5M2, DataType.FP8E5M2),
+    ("Mat", "Left", TensorLayout.ZZ, TensorLayout.NZ, DataType.HF8, DataType.HF8),
+    ("Mat", "Left", TensorLayout.ZZ, TensorLayout.NZ, DataType.FP16, DataType.FP16),
+    ("Mat", "Left", TensorLayout.ZZ, TensorLayout.NZ, DataType.BF16, DataType.BF16),
+    ("Mat", "Left", TensorLayout.ZZ, TensorLayout.NZ, DataType.FP32, DataType.FP32),
+    ("Mat", "Left", TensorLayout.ZZ, TensorLayout.NZ, DataType.FP4E1M2, DataType.FP4E1M2),
+    ("Mat", "Left", TensorLayout.ZZ, TensorLayout.NZ, DataType.FP4E2M1, DataType.FP4E2M1),
+    ("Mat", "Left", TensorLayout.ZZ, TensorLayout.NZ, DataType.FP8E8M0, DataType.FP8E8M0),
+
+    # Mat -> Right: destination layout is fixed to ZN.
+    ("Mat", "Right", TensorLayout.NZ, TensorLayout.ZN, DataType.INT8, DataType.INT8),
+    ("Mat", "Right", TensorLayout.NZ, TensorLayout.ZN, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
+    ("Mat", "Right", TensorLayout.NZ, TensorLayout.ZN, DataType.FP8E5M2, DataType.FP8E5M2),
+    ("Mat", "Right", TensorLayout.NZ, TensorLayout.ZN, DataType.HF8, DataType.HF8),
+    ("Mat", "Right", TensorLayout.NZ, TensorLayout.ZN, DataType.FP16, DataType.FP16),
+    ("Mat", "Right", TensorLayout.NZ, TensorLayout.ZN, DataType.BF16, DataType.BF16),
+    ("Mat", "Right", TensorLayout.NZ, TensorLayout.ZN, DataType.FP32, DataType.FP32),
+    ("Mat", "Right", TensorLayout.NZ, TensorLayout.ZN, DataType.FP4E1M2, DataType.FP4E1M2),
+    ("Mat", "Right", TensorLayout.NZ, TensorLayout.ZN, DataType.FP4E2M1, DataType.FP4E2M1),
+    ("Mat", "Right", TensorLayout.NZ, TensorLayout.ZN, DataType.FP8E8M0, DataType.FP8E8M0),
+    ("Mat", "Right", TensorLayout.ND, TensorLayout.ZN, DataType.INT8, DataType.INT8),
+    ("Mat", "Right", TensorLayout.ND, TensorLayout.ZN, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
+    ("Mat", "Right", TensorLayout.ND, TensorLayout.ZN, DataType.FP8E5M2, DataType.FP8E5M2),
+    ("Mat", "Right", TensorLayout.ND, TensorLayout.ZN, DataType.HF8, DataType.HF8),
+    ("Mat", "Right", TensorLayout.ND, TensorLayout.ZN, DataType.FP16, DataType.FP16),
+    ("Mat", "Right", TensorLayout.ND, TensorLayout.ZN, DataType.BF16, DataType.BF16),
+    ("Mat", "Right", TensorLayout.ND, TensorLayout.ZN, DataType.FP32, DataType.FP32),
+    ("Mat", "Right", TensorLayout.ND, TensorLayout.ZN, DataType.FP4E1M2, DataType.FP4E1M2),
+    ("Mat", "Right", TensorLayout.ND, TensorLayout.ZN, DataType.FP4E2M1, DataType.FP4E2M1),
+    ("Mat", "Right", TensorLayout.ND, TensorLayout.ZN, DataType.FP8E8M0, DataType.FP8E8M0),
+    ("Mat", "Right", TensorLayout.ZN, TensorLayout.ZN, DataType.INT8, DataType.INT8),
+    ("Mat", "Right", TensorLayout.ZN, TensorLayout.ZN, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
+    ("Mat", "Right", TensorLayout.ZN, TensorLayout.ZN, DataType.FP8E5M2, DataType.FP8E5M2),
+    ("Mat", "Right", TensorLayout.ZN, TensorLayout.ZN, DataType.HF8, DataType.HF8),
+    ("Mat", "Right", TensorLayout.ZN, TensorLayout.ZN, DataType.FP16, DataType.FP16),
+    ("Mat", "Right", TensorLayout.ZN, TensorLayout.ZN, DataType.BF16, DataType.BF16),
+    ("Mat", "Right", TensorLayout.ZN, TensorLayout.ZN, DataType.FP32, DataType.FP32),
+    ("Mat", "Right", TensorLayout.ZN, TensorLayout.ZN, DataType.FP4E1M2, DataType.FP4E1M2),
+    ("Mat", "Right", TensorLayout.ZN, TensorLayout.ZN, DataType.FP4E2M1, DataType.FP4E2M1),
+    ("Mat", "Right", TensorLayout.ZN, TensorLayout.ZN, DataType.FP8E8M0, DataType.FP8E8M0),
+    ("Mat", "Right", TensorLayout.ZZ, TensorLayout.ZN, DataType.INT8, DataType.INT8),
+    ("Mat", "Right", TensorLayout.ZZ, TensorLayout.ZN, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
+    ("Mat", "Right", TensorLayout.ZZ, TensorLayout.ZN, DataType.FP8E5M2, DataType.FP8E5M2),
+    ("Mat", "Right", TensorLayout.ZZ, TensorLayout.ZN, DataType.HF8, DataType.HF8),
+    ("Mat", "Right", TensorLayout.ZZ, TensorLayout.ZN, DataType.FP16, DataType.FP16),
+    ("Mat", "Right", TensorLayout.ZZ, TensorLayout.ZN, DataType.BF16, DataType.BF16),
+    ("Mat", "Right", TensorLayout.ZZ, TensorLayout.ZN, DataType.FP32, DataType.FP32),
+    ("Mat", "Right", TensorLayout.ZZ, TensorLayout.ZN, DataType.FP4E1M2, DataType.FP4E1M2),
+    ("Mat", "Right", TensorLayout.ZZ, TensorLayout.ZN, DataType.FP4E2M1, DataType.FP4E2M1),
+    ("Mat", "Right", TensorLayout.ZZ, TensorLayout.ZN, DataType.FP8E8M0, DataType.FP8E8M0),
+
+    # Mat -> Scaling; layout is not intercepted, destination dtype is INT64/UINT64.
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP8E4M3FN, DataType.INT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP8E4M3FN, DataType.UINT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP8E5M2, DataType.INT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP8E5M2, DataType.UINT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP8E8M0, DataType.INT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP8E8M0, DataType.UINT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP4E2M1, DataType.INT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP4E2M1, DataType.UINT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP4E1M2, DataType.INT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP4E1M2, DataType.UINT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.HF8, DataType.INT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.HF8, DataType.UINT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.INT8, DataType.INT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.INT8, DataType.UINT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP16, DataType.INT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP16, DataType.UINT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.BF16, DataType.INT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.BF16, DataType.UINT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.INT16, DataType.INT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.INT16, DataType.UINT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP32, DataType.INT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP32, DataType.UINT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.INT32, DataType.INT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.INT32, DataType.UINT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.INT64, DataType.INT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.INT64, DataType.UINT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.UINT8, DataType.INT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.UINT8, DataType.UINT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.UINT16, DataType.INT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.UINT16, DataType.UINT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.UINT32, DataType.INT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.UINT32, DataType.UINT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.UINT64, DataType.INT64),
+    ("Mat", "Scaling", _ANY_LAYOUT, _ANY_LAYOUT, DataType.UINT64, DataType.UINT64),
+
+    # Mat -> ScaleLeft/ScaleRight; src/dst layouts must be ZZ/ZZ and NN/NN respectively.
+    ("Mat", "ScaleLeft", TensorLayout.ZZ, TensorLayout.ZZ, DataType.INT8, DataType.INT8),
+    ("Mat", "ScaleLeft", TensorLayout.ZZ, TensorLayout.ZZ, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
+    ("Mat", "ScaleLeft", TensorLayout.ZZ, TensorLayout.ZZ, DataType.FP8E5M2, DataType.FP8E5M2),
+    ("Mat", "ScaleLeft", TensorLayout.ZZ, TensorLayout.ZZ, DataType.HF8, DataType.HF8),
+    ("Mat", "ScaleLeft", TensorLayout.ZZ, TensorLayout.ZZ, DataType.FP16, DataType.FP16),
+    ("Mat", "ScaleLeft", TensorLayout.ZZ, TensorLayout.ZZ, DataType.BF16, DataType.BF16),
+    ("Mat", "ScaleLeft", TensorLayout.ZZ, TensorLayout.ZZ, DataType.FP32, DataType.FP32),
+    ("Mat", "ScaleLeft", TensorLayout.ZZ, TensorLayout.ZZ, DataType.FP4E1M2, DataType.FP4E1M2),
+    ("Mat", "ScaleLeft", TensorLayout.ZZ, TensorLayout.ZZ, DataType.FP4E2M1, DataType.FP4E2M1),
+    ("Mat", "ScaleLeft", TensorLayout.ZZ, TensorLayout.ZZ, DataType.FP8E8M0, DataType.FP8E8M0),
+    ("Mat", "ScaleRight", TensorLayout.NN, TensorLayout.NN, DataType.INT8, DataType.INT8),
+    ("Mat", "ScaleRight", TensorLayout.NN, TensorLayout.NN, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
+    ("Mat", "ScaleRight", TensorLayout.NN, TensorLayout.NN, DataType.FP8E5M2, DataType.FP8E5M2),
+    ("Mat", "ScaleRight", TensorLayout.NN, TensorLayout.NN, DataType.HF8, DataType.HF8),
+    ("Mat", "ScaleRight", TensorLayout.NN, TensorLayout.NN, DataType.FP16, DataType.FP16),
+    ("Mat", "ScaleRight", TensorLayout.NN, TensorLayout.NN, DataType.BF16, DataType.BF16),
+    ("Mat", "ScaleRight", TensorLayout.NN, TensorLayout.NN, DataType.FP32, DataType.FP32),
+    ("Mat", "ScaleRight", TensorLayout.NN, TensorLayout.NN, DataType.FP4E1M2, DataType.FP4E1M2),
+    ("Mat", "ScaleRight", TensorLayout.NN, TensorLayout.NN, DataType.FP4E2M1, DataType.FP4E2M1),
+    ("Mat", "ScaleRight", TensorLayout.NN, TensorLayout.NN, DataType.FP8E8M0, DataType.FP8E8M0),
+
+    # Ordinary Vec -> Vec; layout is not intercepted.
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP8E5M2, DataType.FP8E5M2),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP8E8M0, DataType.FP8E8M0),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP4E2M1, DataType.FP4E2M1),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP4E1M2, DataType.FP4E1M2),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.HF8, DataType.HF8),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.INT8, DataType.INT8),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP16, DataType.FP16),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.BF16, DataType.BF16),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.INT16, DataType.INT16),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP32, DataType.FP32),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.INT32, DataType.INT32),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.INT64, DataType.INT64),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.UINT8, DataType.UINT8),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.UINT16, DataType.UINT16),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.UINT32, DataType.UINT32),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.UINT64, DataType.UINT64),
+
+    # Dedicated Vec ND -> Vec NZ path.
+    ("Vec", "Vec", TensorLayout.ND, TensorLayout.NZ, DataType.INT8, DataType.INT8),
+    ("Vec", "Vec", TensorLayout.ND, TensorLayout.NZ, DataType.UINT8, DataType.UINT8),
+    ("Vec", "Vec", TensorLayout.ND, TensorLayout.NZ, DataType.INT32, DataType.INT32),
+    ("Vec", "Vec", TensorLayout.ND, TensorLayout.NZ, DataType.FP16, DataType.FP16),
+    ("Vec", "Vec", TensorLayout.ND, TensorLayout.NZ, DataType.BF16, DataType.BF16),
+    ("Vec", "Vec", TensorLayout.ND, TensorLayout.NZ, DataType.FP32, DataType.FP32),
+    ("Vec", "Vec", TensorLayout.ND, TensorLayout.NZ, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
+    ("Vec", "Vec", TensorLayout.ND, TensorLayout.NZ, DataType.FP8E5M2, DataType.FP8E5M2),
+    ("Vec", "Vec", TensorLayout.ND, TensorLayout.NZ, DataType.HF8, DataType.HF8),
+    ("Vec", "Vec", TensorLayout.ND, TensorLayout.NZ, DataType.FP4E1M2, DataType.FP4E1M2),
+    ("Vec", "Vec", TensorLayout.ND, TensorLayout.NZ, DataType.FP4E2M1, DataType.FP4E2M1),
+
+    # Vec -> Mat; destination layout is not intercepted.
+    ("Vec", "Mat", TensorLayout.ND, _ANY_LAYOUT, DataType.INT8, DataType.INT8),
+    ("Vec", "Mat", TensorLayout.ND, _ANY_LAYOUT, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
+    ("Vec", "Mat", TensorLayout.ND, _ANY_LAYOUT, DataType.FP8E5M2, DataType.FP8E5M2),
+    ("Vec", "Mat", TensorLayout.ND, _ANY_LAYOUT, DataType.HF8, DataType.HF8),
+    ("Vec", "Mat", TensorLayout.ND, _ANY_LAYOUT, DataType.FP16, DataType.FP16),
+    ("Vec", "Mat", TensorLayout.ND, _ANY_LAYOUT, DataType.BF16, DataType.BF16),
+    ("Vec", "Mat", TensorLayout.ND, _ANY_LAYOUT, DataType.FP32, DataType.FP32),
+    ("Vec", "Mat", TensorLayout.ND, _ANY_LAYOUT, DataType.FP4E1M2, DataType.FP4E1M2),
+    ("Vec", "Mat", TensorLayout.ND, _ANY_LAYOUT, DataType.FP4E2M1, DataType.FP4E2M1),
+    ("Vec", "Mat", TensorLayout.ND, _ANY_LAYOUT, DataType.FP8E8M0, DataType.FP8E8M0),
+    ("Vec", "Mat", TensorLayout.NZ, _ANY_LAYOUT, DataType.INT8, DataType.INT8),
+    ("Vec", "Mat", TensorLayout.NZ, _ANY_LAYOUT, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
+    ("Vec", "Mat", TensorLayout.NZ, _ANY_LAYOUT, DataType.FP8E5M2, DataType.FP8E5M2),
+    ("Vec", "Mat", TensorLayout.NZ, _ANY_LAYOUT, DataType.HF8, DataType.HF8),
+    ("Vec", "Mat", TensorLayout.NZ, _ANY_LAYOUT, DataType.FP16, DataType.FP16),
+    ("Vec", "Mat", TensorLayout.NZ, _ANY_LAYOUT, DataType.BF16, DataType.BF16),
+    ("Vec", "Mat", TensorLayout.NZ, _ANY_LAYOUT, DataType.FP32, DataType.FP32),
+    ("Vec", "Mat", TensorLayout.NZ, _ANY_LAYOUT, DataType.FP4E1M2, DataType.FP4E1M2),
+    ("Vec", "Mat", TensorLayout.NZ, _ANY_LAYOUT, DataType.FP4E2M1, DataType.FP4E2M1),
+    ("Vec", "Mat", TensorLayout.NZ, _ANY_LAYOUT, DataType.FP8E8M0, DataType.FP8E8M0),
+
+    # Acc -> Vec, non-quantized.
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.FP16),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.BF16),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.FP32),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.INT32, DataType.INT32),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.FP32, DataType.FP16),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.FP32, DataType.BF16),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.FP32, DataType.FP32),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.INT32, DataType.INT32),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.FP16),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.BF16),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.FP32),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.INT32, DataType.INT32),
+)
+
+
+_A5_MOVE_QUANT_COMBOS = (
+    # Acc -> Vec, scalar/vector quantized.
+    # Supported quantized dtype conversions:
+    # FP32 -> INT8 / HF8 / FP16 / FP8E4M3FN / FP32
+    # INT32 -> INT8 / FP16
+
+    # ══ Acc -> Vec · NZ -> ND ══
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.INT8),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.HF8),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.FP16),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.FP8E4M3FN),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.FP32),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.INT32, DataType.INT8),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.INT32, DataType.FP16),
+
+    # ══ Acc -> Vec · NZ -> DN ══
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.FP32, DataType.INT8),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.FP32, DataType.HF8),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.FP32, DataType.FP16),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.FP32, DataType.FP8E4M3FN),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.FP32, DataType.FP32),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.INT32, DataType.INT8),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.INT32, DataType.FP16),
+
+    # ══ Acc -> Vec · NZ -> NZ ══
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.INT8),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.HF8),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.FP16),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.FP8E4M3FN),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.FP32),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.INT32, DataType.INT8),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.INT32, DataType.FP16),
+)
+
+
+_A5_INSERT_COMBOS = (
+    # Vec -> Vec; INSERT constrains dtype but does not intercept layout.
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.INT8, DataType.INT8),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.INT32, DataType.INT32),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP16, DataType.FP16),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.BF16, DataType.BF16),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP32, DataType.FP32),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP8E5M2, DataType.FP8E5M2),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.HF8, DataType.HF8),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP8E8M0, DataType.FP8E8M0),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP4E1M2, DataType.FP4E1M2),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP4E2M1, DataType.FP4E2M1),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.INT8, DataType.INT8),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.INT32, DataType.INT32),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP16, DataType.FP16),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.BF16, DataType.BF16),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP32, DataType.FP32),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP8E5M2, DataType.FP8E5M2),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.HF8, DataType.HF8),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP8E8M0, DataType.FP8E8M0),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP4E1M2, DataType.FP4E1M2),
+    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP4E2M1, DataType.FP4E2M1),
+
+    # Vec -> Mat; destination layout is not intercepted.
+    ("Vec", "Mat", TensorLayout.ND, _ANY_LAYOUT, DataType.INT8, DataType.INT8),
+    ("Vec", "Mat", TensorLayout.ND, _ANY_LAYOUT, DataType.INT32, DataType.INT32),
+    ("Vec", "Mat", TensorLayout.ND, _ANY_LAYOUT, DataType.FP16, DataType.FP16),
+    ("Vec", "Mat", TensorLayout.ND, _ANY_LAYOUT, DataType.BF16, DataType.BF16),
+    ("Vec", "Mat", TensorLayout.ND, _ANY_LAYOUT, DataType.FP32, DataType.FP32),
+    ("Vec", "Mat", TensorLayout.ND, _ANY_LAYOUT, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
+    ("Vec", "Mat", TensorLayout.ND, _ANY_LAYOUT, DataType.FP8E5M2, DataType.FP8E5M2),
+    ("Vec", "Mat", TensorLayout.ND, _ANY_LAYOUT, DataType.HF8, DataType.HF8),
+    ("Vec", "Mat", TensorLayout.ND, _ANY_LAYOUT, DataType.FP8E8M0, DataType.FP8E8M0),
+    ("Vec", "Mat", TensorLayout.ND, _ANY_LAYOUT, DataType.FP4E1M2, DataType.FP4E1M2),
+    ("Vec", "Mat", TensorLayout.ND, _ANY_LAYOUT, DataType.FP4E2M1, DataType.FP4E2M1),
+    ("Vec", "Mat", TensorLayout.NZ, _ANY_LAYOUT, DataType.INT8, DataType.INT8),
+    ("Vec", "Mat", TensorLayout.NZ, _ANY_LAYOUT, DataType.INT32, DataType.INT32),
+    ("Vec", "Mat", TensorLayout.NZ, _ANY_LAYOUT, DataType.FP16, DataType.FP16),
+    ("Vec", "Mat", TensorLayout.NZ, _ANY_LAYOUT, DataType.BF16, DataType.BF16),
+    ("Vec", "Mat", TensorLayout.NZ, _ANY_LAYOUT, DataType.FP32, DataType.FP32),
+    ("Vec", "Mat", TensorLayout.NZ, _ANY_LAYOUT, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
+    ("Vec", "Mat", TensorLayout.NZ, _ANY_LAYOUT, DataType.FP8E5M2, DataType.FP8E5M2),
+    ("Vec", "Mat", TensorLayout.NZ, _ANY_LAYOUT, DataType.HF8, DataType.HF8),
+    ("Vec", "Mat", TensorLayout.NZ, _ANY_LAYOUT, DataType.FP8E8M0, DataType.FP8E8M0),
+    ("Vec", "Mat", TensorLayout.NZ, _ANY_LAYOUT, DataType.FP4E1M2, DataType.FP4E1M2),
+    ("Vec", "Mat", TensorLayout.NZ, _ANY_LAYOUT, DataType.FP4E2M1, DataType.FP4E2M1),
+
+    # Acc -> Vec.
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.FP16),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.BF16),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.FP32),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.INT32, DataType.INT32),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.FP32, DataType.FP16),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.FP32, DataType.BF16),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.FP32, DataType.FP32),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.INT32, DataType.INT32),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.FP16),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.BF16),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.FP32),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.INT32, DataType.INT32),
+
+    # Acc -> Mat.
+    ("Acc", "Mat", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.FP16),
+    ("Acc", "Mat", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.BF16),
+    ("Acc", "Mat", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.FP32),
+    ("Acc", "Mat", TensorLayout.NZ, TensorLayout.NZ, DataType.INT32, DataType.INT32),
+)
+
+
+_A5_MATMUL_DTYPE_COMBOS = (
+    # INT8
+    (DataType.INT8, DataType.INT8, DataType.INT32),
+
+    # FP16 / BF16 / FP32
+    (DataType.FP16, DataType.FP16, DataType.FP32),
+    (DataType.BF16, DataType.BF16, DataType.FP32),
+    (DataType.FP32, DataType.FP32, DataType.FP32),
+
+    # FP8
+    (DataType.FP8E4M3FN, DataType.FP8E4M3FN, DataType.FP32),
+    (DataType.FP8E4M3FN, DataType.FP8E5M2, DataType.FP32),
+    (DataType.FP8E5M2, DataType.FP8E4M3FN, DataType.FP32),
+    (DataType.FP8E5M2, DataType.FP8E5M2, DataType.FP32),
+
+    # HF8
+    (DataType.HF8, DataType.HF8, DataType.FP32),
+)
+
+
+
+
+_MATMUL_DTYPE_COMBOS = {
+    "a5": _A5_MATMUL_DTYPE_COMBOS,
+}
+
+
+def _layout_matches(
+    actual: TensorLayout | None,
+    expected: Any,
+) -> bool:
+    return actual is None or expected is _ANY_LAYOUT or actual == expected
+
+
+def _layout_dtype_combo_matches(
+    actual: tuple[Any, ...],
+    rule: tuple[Any, ...],
+) -> bool:
+    src_loc, dst_loc, src_layout, dst_layout, src_dtype, dst_dtype = actual
+    (
+        rule_src_loc,
+        rule_dst_loc,
+        rule_src_layout,
+        rule_dst_layout,
+        rule_src_dtype,
+        rule_dst_dtype,
+    ) = rule
+
+    # Vec ND -> Vec NZ is a dedicated path.
+    # It must match an explicit ND -> NZ rule instead of the generic
+    # _ANY_LAYOUT -> _ANY_LAYOUT Vec -> Vec rule.
+    if (
+        src_loc == "Vec"
+        and dst_loc == "Vec"
+        and src_layout == TensorLayout.ND
+        and dst_layout == TensorLayout.NZ
+        and rule_src_layout is _ANY_LAYOUT
+        and rule_dst_layout is _ANY_LAYOUT
+    ):
+        return False
+
+    return (
+        src_loc == rule_src_loc
+        and dst_loc == rule_dst_loc
+        and _layout_matches(src_layout, rule_src_layout)
+        and _layout_matches(dst_layout, rule_dst_layout)
+        and src_dtype == rule_src_dtype
+        and dst_dtype == rule_dst_dtype
+    )
+
+
+def _check_matmul_dtype(
+    op_name: str,
+    dst: Expr,
+    lhs: Expr,
+    rhs: Expr,
+    *,
+    bias: Expr | None = None,
+    acc: Expr | None = None,
+) -> None:
+    """Validate MATMUL dtype combinations for configured architectures."""
+
+    from pypto_pro.runtime.jit import get_current_arch
+
+    arch = get_current_arch()
+    combos = _MATMUL_DTYPE_COMBOS.get(arch)
+
+    # 当前平台没有配置 MATMUL frontend dtype rules 时不做硬拦截。
+    if combos is None:
+        return
+
+    lhs_dtype = getattr(lhs.type, "dtype", None)
+    rhs_dtype = getattr(rhs.type, "dtype", None)
+    dst_dtype = getattr(dst.type, "dtype", None)
+
+    # 静态信息不足时避免误伤。
+    if lhs_dtype is None or rhs_dtype is None or dst_dtype is None:
+        return
+
+    combo = (
+        lhs_dtype,
+        rhs_dtype,
+        dst_dtype,
+    )
+
+    if combo not in combos:
+        raise ValueError(
+            f"{op_name}: unsupported dtype combination "
+            f"A={_frontend_dtype_name(lhs_dtype)}, "
+            f"B={_frontend_dtype_name(rhs_dtype)}, "
+            f"C={_frontend_dtype_name(dst_dtype)}; "
+            "please check whether MATMUL supports the current A, B, and C dtypes."
+        )
+
+    if acc is not None:
+        acc_dtype = getattr(acc.type, "dtype", None)
+        if acc_dtype is not None and acc_dtype != dst_dtype:
+            raise ValueError(
+                f"{op_name}: Acc dtype must match C dtype, "
+                f"got Acc={_frontend_dtype_name(acc_dtype)}, "
+                f"C={_frontend_dtype_name(dst_dtype)}."
+            )
+
+    if bias is not None:
+        bias_dtype = getattr(bias.type, "dtype", None)
+        if bias_dtype is not None and bias_dtype != dst_dtype:
+            raise ValueError(
+                f"{op_name}: Bias dtype must match C dtype, "
+                f"got Bias={_frontend_dtype_name(bias_dtype)}, "
+                f"C={_frontend_dtype_name(dst_dtype)}."
+            )
+
+
+
 # CompactMode enum (pto/type.hpp): Null=0, Normal=1, RowPlusOne=2,
 # RowAlignedPadding=3. Any other integer is not a valid compact mode.
 _COMPACT_VALUES = frozenset({0, 1, 2, 3})
@@ -2331,6 +2798,8 @@ _LAYOUT_DTYPE_COMBOS = {
     "load_tile": {"a5": _A5_LOAD_COMBOS},
     "store": {"a5": _A5_STORE_COMBOS, "a5_quant": _A5_STORE_QUANT_COMBOS},
     "store_tile": {"a5": _A5_STORE_COMBOS, "a5_quant": _A5_STORE_QUANT_COMBOS},
+    "move": {"a5": _A5_MOVE_COMBOS, "a5_quant": _A5_MOVE_QUANT_COMBOS},
+    "insert": {"a5": _A5_INSERT_COMBOS},
 }
 
 
@@ -2361,10 +2830,10 @@ def _check_layout_dtype(
     """Validate the layout × dtype combination of a data-movement op.
 
     把 src/dst 解析为六元组 (src_loc, dst_loc, src_layout, dst_layout, src_dtype, dst_dtype)，
-    直接与合法组合表中的六元组全等比较，命中即合法。
+    按操作对应的匹配规则与合法组合表比较，命中即合法。
 
     Args:
-        op: block op name（load / load_tile / store / store_tile）。
+        op: block op name（load / load_tile / store / store_tile / move / insert）。
         src: source operand —— tile 或 tensor。
         dst: destination operand —— tile 或 tensor。
         is_transpose: load 专用——降序 order 时 GM 有效排布为 DN（仅 load 传入）；
@@ -2391,14 +2860,16 @@ def _check_layout_dtype(
     src_dtype = _operand_dtype(src.type)
     dst_dtype = _operand_dtype(dst.type)
     if (
-        src_layout is None
-        or dst_layout is None
-        or src_dtype is None
+        src_dtype is None
         or dst_dtype is None
         or src_loc is None
         or dst_loc is None
     ):
         # 解析不出确定信息（动态/未声明 layout）时不做硬拦截，避免误伤。
+        return
+    if op in ("load", "load_tile", "store", "store_tile") and (
+        src_layout is None or dst_layout is None
+    ):
         return
     if is_transpose is not None and src_loc == "GM":
         src_layout = _effective_gm_layout(src.type, is_transpose)
@@ -2416,13 +2887,15 @@ def _check_layout_dtype(
             dst_layout = TensorLayout.DN
 
     combo = (src_loc, dst_loc, src_layout, dst_layout, src_dtype, dst_dtype)
-    if combo in combos:
+    if any(_layout_dtype_combo_matches(combo, rule) for rule in combos):
         return
     kind = "quantized " if quant else ""
+    src_layout_name = src_layout.name if src_layout is not None else "unknown"
+    dst_layout_name = dst_layout.name if dst_layout is not None else "unknown"
     raise ValueError(
         f"{op}: unsupported {kind}layout/dtype combination "
-        f"src={src_loc}({src_layout.name},{_frontend_dtype_name(src_dtype)}) "
-        f"-> dst={dst_loc}({dst_layout.name},{_frontend_dtype_name(dst_dtype)}); "
+        f"src={src_loc}({src_layout_name},{_frontend_dtype_name(src_dtype)}) "
+        f"-> dst={dst_loc}({dst_layout_name},{_frontend_dtype_name(dst_dtype)}); "
         f"please check whether the data path supports the current memory space, layout, and dtype."
     )
 
@@ -3397,6 +3870,7 @@ def _ir_matmul(dst: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, pha
     _check_tile_memory_space("matmul", "dst_tile", dst, MemorySpace.Acc, "L0C (Acc)")
     _check_tile_memory_space("matmul", "lhs_tile", lhs, MemorySpace.Left, "L0A (Left)")
     _check_tile_memory_space("matmul", "rhs_tile", rhs, MemorySpace.Right, "L0B (Right)")
+    _check_matmul_dtype("matmul", dst, lhs, rhs)
     kwargs: dict[str, Any] = {}
     if phase is not None:
         kwargs["phase"] = phase
@@ -3412,6 +3886,7 @@ def _ir_matmul_acc(
     _check_tile_memory_space("matmul_acc", "acc_tile", acc, MemorySpace.Acc, "L0C (Acc)")
     _check_tile_memory_space("matmul_acc", "lhs_tile", lhs, MemorySpace.Left, "L0A (Left)")
     _check_tile_memory_space("matmul_acc", "rhs_tile", rhs, MemorySpace.Right, "L0B (Right)")
+    _check_matmul_dtype("matmul_acc", dst, lhs, rhs, acc=acc)
     kwargs: dict[str, Any] = {}
     if phase is not None:
         kwargs["phase"] = phase
@@ -3427,6 +3902,7 @@ def _ir_matmul_bias(
     _check_tile_memory_space("matmul_bias", "lhs_tile", lhs, MemorySpace.Left, "L0A (Left)")
     _check_tile_memory_space("matmul_bias", "rhs_tile", rhs, MemorySpace.Right, "L0B (Right)")
     _check_tile_memory_space("matmul_bias", "bias_tile", bias, MemorySpace.Bias, "L0B (Bias)")
+    _check_matmul_dtype("matmul_bias", dst, lhs, rhs, bias=bias)
     kwargs: dict[str, Any] = {}
     if phase is not None:
         kwargs["phase"] = phase
