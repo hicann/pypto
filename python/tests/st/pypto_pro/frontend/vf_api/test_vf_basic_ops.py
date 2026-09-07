@@ -2870,7 +2870,7 @@ def kernel_79_dup_highest_hist_freq(
 def _vf_kernel_81_addr_reg_0(in_a, t_f0):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     for i in pl.range(0, 1, 1):
-        a_reg = vf.create_addr_reg(i, 64, dtype=pl.DT_FP32)
+        a_reg = vf.create_addr_reg(64, dtype=pl.DT_FP32)
         reg = vf.load_align(in_a, a_reg)
         vf.store_align(t_f0, reg, preg, a_reg)
 
@@ -3150,7 +3150,7 @@ def kernel_86_datablock_copy(
 def _vf_kernel_87_mask_addrreg_0(in_a, t_f0):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     for i in pl.range(0, 1, 1):
-        a_reg = vf.create_addr_reg(i, 64, dtype=pl.DT_FP32)
+        a_reg = vf.create_addr_reg(64, dtype=pl.DT_FP32)
         reg_a = vf.load_align(in_a, a_reg, dist=pl.LoadDist.NORM)
         reg_dst = vf.add(reg_a, reg_a, preg)
         vf.store_align(t_f0, reg_dst, preg, a_reg)
@@ -3412,7 +3412,7 @@ def kernel_91_new_feats(
 @pl.vector_function
 def _vf_kernel_92_mask_addrreg_0(in_a, t_u0):
     for i in pl.range(0, 1, 1):
-        a_reg = vf.create_addr_reg(i, 64, dtype=pl.DT_UINT32)
+        a_reg = vf.create_addr_reg(64, dtype=pl.DT_UINT32)
         # pld: MaskReg load with AddrReg offset
         mreg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
         mreg = vf.load_align(in_a, a_reg, dist=pl.LoadDist.NORM)

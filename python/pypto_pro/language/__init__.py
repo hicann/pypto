@@ -125,7 +125,6 @@ __all__ = [
     # Fused ops
     "add_relu",
     "sub_relu",
-    "addc",
     "mul_add_dst",
     "fused_mul_add",
     "fused_mul_add_relu",
@@ -280,7 +279,6 @@ from ._api import (
     add,
     add_relu,
     add_relu_cast,
-    addc,
     and_,
     argmax,
     argmin,

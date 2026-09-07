@@ -242,8 +242,7 @@ class AssignmentParserMixin:
         # Ops in _VF_MASK_DST_OPS produce MaskReg dst(s); declare them via
         # vf.mask_reg. Unified ops (move, interleave, etc.) infer the dst kind
         # from source operands: if any source is a known MaskReg variable, the
-        # dst is declared as MaskReg. (addc/subc carry outputs must be
-        # pre-declared by the user via vf.create_mask.)
+        # dst is declared as MaskReg.
         is_mask_dst = self._is_vf_mask_dst_op(vf_op_name)
         if not is_mask_dst and vf_op_name in self._VF_UNIFIED_OPS:
             is_mask_dst = is_mask_src

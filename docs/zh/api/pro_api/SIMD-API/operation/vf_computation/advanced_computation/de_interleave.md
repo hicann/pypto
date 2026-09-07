@@ -34,10 +34,11 @@ de_interleave(src0, src1, dtype: Optional[DType] = None) -> (dst0, dst1)
 |---|---|---|
 | src0 | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型。<br>- **reg_tensor输入**：源操作数src0、src1和目的操作数dst的数据类型保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32。<br>- **mask_reg输入**：支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32。 |
 | src1 | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，支持的数据类型和src0一致。 |
+| dtype | 输入 | 可选，模板参数对应的数据类型。仅当源操作数为mask_reg时生效，决定按位解交织的位宽。 |
 
 ## 约束说明
 
-- src0和scr1可以为同一个reg_tensor；dst0和dst1不能为同一个reg_tensor，配置为同一个reg_tensor会导致功能异常。
+- src0和src1可以为同一个reg_tensor；dst0和dst1不能为同一个reg_tensor，配置为同一个reg_tensor会导致功能异常。
 
 - 允许源操作数和目的操作数为同一个reg_tensor。
 

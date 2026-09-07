@@ -359,8 +359,8 @@ def example_vf(src_tile, dst_tile):
     one_repeat_size = 64
     repeat_times = 2
     for i in pl.range(0, repeat_times, 1):
-        # offset = i * one_repeat_size，AddrReg自动累进地址
-        a_reg = vf.create_addr_reg(i, one_repeat_size, dtype=pl.DT_FP32)
+        # 偏移量按one_repeat_size自动累加，AddrReg自动累进地址
+        a_reg = vf.create_addr_reg(one_repeat_size, dtype=pl.DT_FP32)
         reg = vf.load_align(src_tile, a_reg)
         vf.store_align(dst_tile, reg, preg, a_reg)
 

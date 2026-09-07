@@ -338,7 +338,7 @@ def example_vf(src_tile, dst_tile):
     one_repeat_size = 64
     repeat_times = 2
     for i in pl.range(0, repeat_times, 1):
-        a_reg = vf.create_addr_reg(i, one_repeat_size, dtype=pl.DT_FP32)
+        a_reg = vf.create_addr_reg(one_repeat_size, dtype=pl.DT_FP32)
         reg = vf.load_align(src_tile, a_reg)
         # store_align也支持AddrReg作为第4个参数，同步偏移目标地址
         vf.store_align(dst_tile, reg, preg, a_reg)

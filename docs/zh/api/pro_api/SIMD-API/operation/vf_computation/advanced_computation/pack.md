@@ -22,16 +22,16 @@
 
 ![reg_tensor输入pack示意图](../../../../figures/pack_diagram.jpg)
 
-**reg_tensor输入**：将源操作数src中的偶数位，根据part选取的模式，提取到dst的低半部分或高半部分。示意图如下图所示：
+**mask_reg输入**：将源操作数src中的偶数位，根据part选取的模式，提取到dst的低半部分或高半部分。示意图如下图所示：
 
-**图1** mask_reg输入pack示意图
+**图2** mask_reg输入pack示意图
 
 ![mask_reg输入pack示意图](../../../../figures/mask_pack_diagram.jpg)
 
 ## 函数原型
 
 ```python
-pack(src, dtype: Optional[DType] = None, part: Optional[PackPart] = None) -> dst
+pack(src, part: Optional[PackPart] = None, dtype: Optional[DType] = None) -> dst
 ```
 
 ## 参数说明

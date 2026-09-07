@@ -152,7 +152,7 @@ def example_vf(src_tile, dst_tile):
     store_ureg = vf.unalign_reg_for_store()
     # create_addr_reg必须在pl.range循环内调用，vag指令参数需绑定到循环层
     for i in pl.range(0, 1, 1):
-        addr_reg = vf.create_addr_reg(i, 64, dtype=pl.DT_FP32)
+        addr_reg = vf.create_addr_reg(64, dtype=pl.DT_FP32)
         # AddrReg模式下vstu支持post_update参数（与vstus一致）
         vf.store_unalign(dst_tile, src_reg, store_ureg, addr_reg, post_update=True)
         # vsta无post_update参数，AddrReg模式直接传入addr_reg即可

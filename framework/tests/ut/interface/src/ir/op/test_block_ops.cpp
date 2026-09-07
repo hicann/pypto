@@ -786,16 +786,6 @@ TEST_F(BlockOpsOutElemwiseTest, BlockXor_WrongArgCount_Throws)
         npu::tile_fwk::Error);
 }
 
-TEST_F(BlockOpsOutElemwiseTest, BlockAddc_FourTiles_ReturnsOutType)
-{
-    auto& reg = OpRegistry::GetInstance();
-    auto call = reg.Create("block.addc",
-                           {MakeTileVar("o", {16, 16}, DataType::FP16), MakeTileVar("a", {16, 16}, DataType::FP16),
-                            MakeTileVar("b", {16, 16}, DataType::FP16), MakeTileVar("c", {16, 16}, DataType::FP16)},
-                           Sp());
-    EXPECT_NE(As<TileType>(call->GetType()), nullptr);
-}
-
 TEST_F(BlockOpsOutElemwiseTest, BlockXors_FourArgs_ReturnsOutType)
 {
     auto& reg = OpRegistry::GetInstance();
@@ -806,42 +796,6 @@ TEST_F(BlockOpsOutElemwiseTest, BlockXors_FourArgs_ReturnsOutType)
     auto rt = As<TileType>(call->GetType());
     ASSERT_NE(rt, nullptr);
     EXPECT_EQ(rt->dtype_, DataType::INT32);
-}
-
-TEST_F(BlockOpsOutElemwiseTest, BlockSubc_FourTiles_ReturnsOutType)
-{
-    auto& reg = OpRegistry::GetInstance();
-    auto call = reg.Create("block.subc",
-                           {MakeTileVar("o", {16, 16}, DataType::FP16), MakeTileVar("a", {16, 16}, DataType::FP16),
-                            MakeTileVar("b", {16, 16}, DataType::FP16), MakeTileVar("c", {16, 16}, DataType::FP16)},
-                           Sp());
-    auto rt = As<TileType>(call->GetType());
-    ASSERT_NE(rt, nullptr);
-    EXPECT_EQ(rt->dtype_, DataType::FP16);
-}
-
-TEST_F(BlockOpsOutElemwiseTest, BlockAddsc_FourArgs_ReturnsOutType)
-{
-    auto& reg = OpRegistry::GetInstance();
-    auto call = reg.Create("block.addsc",
-                           {MakeTileVar("o", {16, 16}, DataType::FP16), MakeTileVar("lhs", {16, 16}, DataType::FP16),
-                            MakeScalarVar("s", DataType::FP16), MakeTileVar("rhs2", {16, 16}, DataType::FP16)},
-                           Sp());
-    auto rt = As<TileType>(call->GetType());
-    ASSERT_NE(rt, nullptr);
-    EXPECT_EQ(rt->dtype_, DataType::FP16);
-}
-
-TEST_F(BlockOpsOutElemwiseTest, BlockSubsc_FourArgs_ReturnsOutType)
-{
-    auto& reg = OpRegistry::GetInstance();
-    auto call = reg.Create("block.subsc",
-                           {MakeTileVar("o", {16, 16}, DataType::FP16), MakeTileVar("lhs", {16, 16}, DataType::FP16),
-                            MakeScalarVar("s", DataType::FP16), MakeTileVar("rhs2", {16, 16}, DataType::FP16)},
-                           Sp());
-    auto rt = As<TileType>(call->GetType());
-    ASSERT_NE(rt, nullptr);
-    EXPECT_EQ(rt->dtype_, DataType::FP16);
 }
 
 TEST_F(BlockOpsOutElemwiseTest, BlockSels_FiveArgs_ReturnsOutType)

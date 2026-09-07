@@ -174,11 +174,6 @@ _BLOCK_OP_TILE_ROLES: dict[str, list] = {
     "not_": ["W", "R"],
     # ===== Type cast =====
     "cast": ["W", "R"],  # cast(out, src, *, mode)
-    # ===== Ternary =====
-    "addc": ["W", "R", "R", "R"],
-    "subc": ["W", "R", "R", "R"],
-    "addsc": ["W", "R", None, "R"],
-    "subsc": ["W", "R", None, "R"],
     # ===== Select / compare =====
     "select": ["W", "R", "R", "R", None],
     "eq": ["W", "R", "R"],

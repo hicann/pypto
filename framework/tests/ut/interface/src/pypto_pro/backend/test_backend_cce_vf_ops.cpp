@@ -269,8 +269,8 @@ TEST(BackendCCEVFOpsTest, EmitsDeclarationsMasksBroadcastsAndMoves)
     ExpectInvoke(codegen, "vf.full", {"POS_HIGHEST", "MODE_ZEROING"}, {s4, s4},
                  {{"pos", EnumValue(ir::DuplicatePos::HIGHEST)}});
 
-    ExpectInvoke(codegen, "vf.create_addr_reg", {"AddrReg addr = vag_b32((4) * 2, (8) * 2);"},
-                 {Int(0), Int(4), Int(1), Int(8)}, {{"dtype", ir::DataType::INT64}}, "addr");
+    ExpectInvoke(codegen, "vf.create_addr_reg", {"AddrReg addr = vag_b32((4) * 2, (8) * 2);"}, {Int(4), Int(8)},
+                 {{"dtype", ir::DataType::INT64}}, "addr");
     EXPECT_TRUE(codegen.IsAddrRegVar("addr"));
     ExpectInvoke(codegen, "vf.move", {"vmov(fp, fp);"}, {fp, fp});
     ExpectInvoke(codegen, "vf.move", {"vmov(fp, fp, mask, MODE_MERGING);"}, {fp, fp, mask});
@@ -420,7 +420,7 @@ TEST(BackendCCEVFOpsTest, EmitsPackAndCastIntrinsics)
 
     ExpectInvoke(codegen, "vf.pack", {"vpack(", "HIGHER"}, {u16, u32},
                  {{"part", EnumValue(ir::PackPart::UPPER)}, {"dtype", ir::DataType::UINT16}});
-    ExpectInvoke(codegen, "vf.pack", {"vdintlv("}, {i32, i64}, {{"dtype", ir::DataType::INT32}});
+    ExpectInvoke(codegen, "vf.pack", {"vdintlv("}, {u32, i64}, {{"dtype", ir::DataType::UINT32}});
     ExpectInvoke(codegen, "vf.unpack", {"vunpack(", "HIGHER"}, {u32, u16},
                  {{"part", EnumValue(ir::PackPart::UPPER)}, {"dtype", ir::DataType::UINT32}});
     ExpectInvoke(codegen, "vf.unpack", {"vintlv("}, {i64, i32}, {{"dtype", ir::DataType::INT64}});

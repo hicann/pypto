@@ -258,31 +258,6 @@ def test_manual_xor():
     assert "block.xor" in _program_ir(main)
 
 
-def test_manual_addc():
-    @pl.jit(auto_mutex=False)
-    def main(
-        a: pl.Tensor[[128, 128], pl.DT_FP32],
-        b: pl.Tensor[[128, 128], pl.DT_FP32],
-        c: pl.Tensor[[128, 128], pl.DT_FP32],
-        output: pl.Tensor[[128, 128], pl.DT_FP32],
-    ):
-        tile_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32)
-        tile_a = pl.make_tile(tile_type, addr=0x1C000, size=4096)
-        tile_b = pl.make_tile(tile_type, addr=0x1D000, size=4096)
-        tile_c = pl.make_tile(tile_type, addr=0x1E000, size=4096)
-        tile_out = pl.make_tile(tile_type, addr=0x1F000, size=4096)
-        pl.load(tile_a, a, [0, 0])
-        pl.load(tile_b, b, [0, 0])
-        pl.load(tile_c, c, [0, 0])
-        pl.addc(tile_out, tile_a, tile_b, tile_c)
-        _test_result = pl.store(output, tile_out, [0, 0])
-
-    main_program, _ = main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
-    main = main_program.get_function(main.__name__)
-
-    assert "block.addc" in _program_ir(main)
-
-
 def test_load_with_dynamic_valid_shape():
     @pl.jit(auto_mutex=False)
     def main(

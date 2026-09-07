@@ -2036,30 +2036,6 @@ REGISTER_BACKEND_OP(BackendCCE, "block.xors")
         return MakeBlockOutTernaryCodegenCCE("TXORS", op, codegen);
     });
 
-REGISTER_BACKEND_OP(BackendCCE, "block.addc")
-    .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-        return MakeBlockOutTernaryCodegenCCE("TADDC", op, codegen);
-    });
-
-REGISTER_BACKEND_OP(BackendCCE, "block.subc")
-    .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-        return MakeBlockOutTernaryCodegenCCE("TSUBC", op, codegen);
-    });
-
-REGISTER_BACKEND_OP(BackendCCE, "block.addsc")
-    .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-        return MakeBlockOutTernaryCodegenCCE("TADDSC", op, codegen);
-    });
-
-REGISTER_BACKEND_OP(BackendCCE, "block.subsc")
-    .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-        return MakeBlockOutTernaryCodegenCCE("TSUBSC", op, codegen);
-    });
-
 REGISTER_BACKEND_OP(BackendCCE, "block.sel")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {

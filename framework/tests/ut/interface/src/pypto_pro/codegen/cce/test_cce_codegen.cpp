@@ -302,8 +302,8 @@ TEST(CCECodegenTest, PreservesSingleIterationLoopForAddrReg)
     auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
     auto loop_var = MakeVar("i", scalar_type);
     auto addr_reg = MakeVar("addr", scalar_type);
-    auto create_addr = std::make_shared<const ir::Call>(
-        "vf.create_addr_reg", std::vector<ir::ExprPtr>{loop_var, MakeConstInt(1)}, scalar_type, ir::Span::Unknown());
+    auto create_addr = std::make_shared<const ir::Call>("vf.create_addr_reg", std::vector<ir::ExprPtr>{MakeConstInt(1)},
+                                                        scalar_type, ir::Span::Unknown());
     auto assign = std::make_shared<const ir::AssignStmt>(addr_reg, create_addr, ir::Span::Unknown());
     auto for_loop = std::make_shared<const ir::ForStmt>(loop_var, MakeConstInt(0), MakeConstInt(1), MakeConstInt(1),
                                                         std::vector<ir::IterArgPtr>{}, assign,

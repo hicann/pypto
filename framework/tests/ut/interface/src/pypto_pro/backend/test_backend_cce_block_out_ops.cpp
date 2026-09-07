@@ -310,9 +310,6 @@ TEST_P(TernaryOpTest, EmitsCorrectCode)
 }
 INSTANTIATE_TEST_SUITE_P(BlockOutTernaryOps, TernaryOpTest,
                          ::testing::Values(SimpleOpParam{"block.xor", "TXOR"}, SimpleOpParam{"block.xors", "TXORS"},
-                                           SimpleOpParam{"block.addc", "TADDC"}, SimpleOpParam{"block.subc", "TSUBC"},
-                                           SimpleOpParam{"block.addsc", "TADDSC"},
-                                           SimpleOpParam{"block.subsc", "TSUBSC"},
                                            SimpleOpParam{"block.gemv_acc", "TGEMV_ACC"},
                                            SimpleOpParam{"block.gemv_bias", "TGEMV_BIAS"}));
 

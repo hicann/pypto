@@ -1543,21 +1543,24 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def pack(src, dtype: Optional[DType] = None,
-             part: Optional[PackPart] = None):
+    def pack(src, part: Optional[PackPart] = None,
+             dtype: Optional[DType] = None):
         r"""Pack/narrow data type (e.g. u32->u16, u16->u8).
 
-        For each element of ``src``, selects the upper or lower half of the
-        wider element and writes it to ``dst`` as a narrower type.
-
-        .. math:: dstReg_i = \text{narrow}_{part}(srcReg_i)
+        For each element of ``src``, extracts the low bits of the element
+        (low 8 bits for b16 sources, low 16 bits for b32 sources, low 32
+        bits for b64 sources) and writes them into the low half or the high
+        half of ``dst`` as selected by ``part``; the other half of ``dst``
+        is zero. ``part`` selects the destination half — it does NOT choose
+        between the upper and lower bits of the source element.
 
         Args:
             src: Source register (wider type)
 
         Kwargs:
+            part: ``pl.PackPart.LOWER`` (default, writes into dst's low half)
+                or ``pl.PackPart.UPPER`` (writes into dst's high half)
             dtype: Destination data type (e.g. ``pl.DT_UINT16``)
-            part: ``pl.PackPart.LOWER`` (default) or ``pl.PackPart.UPPER``
 
         Returns:
             Destination register (``RegTensor``) with the narrowed type.
@@ -1895,30 +1898,25 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def create_addr_reg(index0, stride0, index1=None, stride1=None,
-                        index2=None, stride2=None, index3=None, stride3=None,
+    def create_addr_reg(stride0, stride1=None, stride2=None, stride3=None,
                         dtype: Optional[DType] = None):
         """Create an address offset register for aligned load/store (CreateAddrReg).
 
-        Computes ``offset = index0 * stride0 + index1 * stride1 + ...`` and
-        returns an ``AddrReg`` that can be passed to ``vf.load_align`` /
+        Returns an ``AddrReg`` that can be passed to ``vf.load_align`` /
         ``vf.store_align`` as the offset parameter. Supports 1-4 loop axes
-        (index/stride pairs).
+        (one stride per axis); the offset accumulates by each stride as the
+        bound loop iterates.
 
         Usage::
 
-            aReg = vf.create_addr_reg(i, 64, dtype=pl.DT_FP32)
+            aReg = vf.create_addr_reg(64, dtype=pl.DT_FP32)
             reg = vf.load_align(src_tile, aReg)
             vf.store_align(dst_tile, reg, preg, aReg)
 
         Args:
-            index0: Loop axis 0 index (loop variable)
             stride0: Loop axis 0 stride in elements
-            index1: Optional loop axis 1 index
             stride1: Optional loop axis 1 stride in elements
-            index2: Optional loop axis 2 index
             stride2: Optional loop axis 2 stride in elements
-            index3: Optional loop axis 3 index
             stride3: Optional loop axis 3 stride in elements
 
         Kwargs:

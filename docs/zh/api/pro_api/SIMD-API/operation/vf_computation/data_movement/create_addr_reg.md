@@ -16,25 +16,21 @@
 
 vf.create_addr_reg用于创建地址偏移量寄存器（AddrReg），在多维循环中逐层累加地址偏移。AddrReg可作为vf.load_align和vf.store_align的地址偏移参数，替代直接传入整数偏移量。
 
-偏移量计算公式为offset = index0 * stride0 + index1 * stride1 + ...，支持1-4层循环轴。在循环中，index每次递增1，AddrReg的偏移量自动增加对应的stride。
+偏移量由各循环轴对应的stride决定，支持1-4层循环轴。在循环中，AddrReg的偏移量按各循环轴对应的stride自动累加。
 
 ## 函数原型
 
 ```python
-create_addr_reg(index0, stride0, index1=None, stride1=None, index2=None, stride2=None, index3=None, stride3=None, dtype: Optional[DType] = None) -> a_reg
+create_addr_reg(stride0, stride1=None, stride2=None, stride3=None, dtype: Optional[DType] = None) -> a_reg
 ```
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| index0 | 输入 | 最外层循环轴索引（循环变量）。 |
 | stride0 | 输入 | 最外层循环轴对应的地址偏移量，单位为元素个数。 |
-| index1 | 输入 | 可选，第二层循环轴索引。 |
 | stride1 | 输入 | 可选，第二层循环轴对应的地址偏移量，单位为元素个数。 |
-| index2 | 输入 | 可选，第三层循环轴索引。 |
 | stride2 | 输入 | 可选，第三层循环轴对应的地址偏移量，单位为元素个数。 |
-| index3 | 输入 | 可选，第四层循环轴索引。 |
 | stride3 | 输入 | 可选，第四层循环轴对应的地址偏移量，单位为元素个数。 |
 | dtype | 输入 | 可选，模板参数对应的数据类型（默认pl.DT_FP32）。决定元素宽度：8位宽（DT_INT8、DT_UINT8）/16位宽（DT_INT16、DT_UINT16、DT_FP16、DT_BF16）/32位宽（DT_INT32、DT_UINT32、DT_FP32）/64位宽（DT_INT64、DT_UINT64）。 |
 
@@ -62,8 +58,8 @@ def example_vf(src_tile, dst_tile):
     one_repeat_size = 64
     repeat_times = 2
     for i in pl.range(0, repeat_times, 1):
-        # offset = i * one_repeat_size
-        a_reg = vf.create_addr_reg(i, one_repeat_size, dtype=pl.DT_FP32)
+        # 每次迭代，偏移量自动累加one_repeat_size
+        a_reg = vf.create_addr_reg(one_repeat_size, dtype=pl.DT_FP32)
         reg = vf.load_align(src_tile, a_reg)
         vf.store_align(dst_tile, reg, preg, a_reg)
 

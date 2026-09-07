@@ -17,7 +17,7 @@
  *   - Tile x Tile binary: add, sub, mul, div, rem, maximum, minimum, and, or, shl, shr
  *   - Tile x Scalar binary: adds, subs, muls, divs, rems, ands, ors, shls, shrs, maxs, mins, lrelu
  *   - Unary: neg, exp, sqrt, rsqrt, recip, log, abs, relu, not, cast
- *   - Ternary: xor/xors (with tmp), prelu (with tmp), addc, subc, addsc, subsc
+ *   - Ternary: xor/xors (with tmp), prelu (with tmp)
  *   - Quaternary: sel (mask,lhs,rhs,tmp), sels (mask,src,tmp,scalar)
  *   - Comparison: cmp, cmps
  *   - Scalar-to-tile: expands
@@ -345,56 +345,6 @@ REGISTER_OP("block.xors")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.xors", 4);
-    });
-
-// Three-tile arithmetic (out, tile, tile, tile): 4 args.
-REGISTER_OP("block.addc")
-    .set_op_category("BlockOp")
-    .set_description("Block explicit-output three-tile add: out = lhs + rhs + rhs2")
-    .add_argument("out", "Pre-allocated output tile (TileType)")
-    .add_argument("lhs", "First tile (TileType)")
-    .add_argument("rhs", "Second tile (TileType)")
-    .add_argument("rhs2", "Third tile (TileType)")
-    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
-                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        return DeduceBlockOutTileType(args, kwargs, "block.addc", 4);
-    });
-
-REGISTER_OP("block.subc")
-    .set_op_category("BlockOp")
-    .set_description("Block explicit-output three-tile sub: out = lhs - rhs - rhs2")
-    .add_argument("out", "Pre-allocated output tile (TileType)")
-    .add_argument("lhs", "First tile (TileType)")
-    .add_argument("rhs", "Second tile (TileType)")
-    .add_argument("rhs2", "Third tile (TileType)")
-    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
-                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        return DeduceBlockOutTileType(args, kwargs, "block.subc", 4);
-    });
-
-// (out, tile, scalar, tile): 4 args.
-REGISTER_OP("block.addsc")
-    .set_op_category("BlockOp")
-    .set_description("Block explicit-output tile+scalar+tile add: out = lhs + scalar + rhs2")
-    .add_argument("out", "Pre-allocated output tile (TileType)")
-    .add_argument("lhs", "First tile (TileType)")
-    .add_argument("scalar", "Scalar operand (ScalarType)")
-    .add_argument("rhs2", "Third tile (TileType)")
-    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
-                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        return DeduceBlockOutTileType(args, kwargs, "block.addsc", 4);
-    });
-
-REGISTER_OP("block.subsc")
-    .set_op_category("BlockOp")
-    .set_description("Block explicit-output tile-scalar-tile sub: out = lhs - scalar - rhs2")
-    .add_argument("out", "Pre-allocated output tile (TileType)")
-    .add_argument("lhs", "First tile (TileType)")
-    .add_argument("scalar", "Scalar operand (ScalarType)")
-    .add_argument("rhs2", "Third tile (TileType)")
-    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
-                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        return DeduceBlockOutTileType(args, kwargs, "block.subsc", 4);
     });
 
 // Selection (out, mask, lhs, rhs, tmp): 5 args.

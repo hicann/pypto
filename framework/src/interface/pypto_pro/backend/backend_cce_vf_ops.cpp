@@ -1356,11 +1356,14 @@ static std::string EmitVFDiv(const ir::CallPtr& op, codegen::CodegenBase& codege
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     CHECK(op->args_.size() == 4) << "vf.div requires 4 args (dst, src0, src1, mask)";
     DataType s0_dt = GetExprDtype(op->args_[1]);
-    CHECK((s0_dt.IsInt() || s0_dt == DataType::FP16 || s0_dt == DataType::FP32))
-        << "vf.div src0 only supports INT/UINT/FP16/FP32, got " << DTypeStr(s0_dt);
+    // No vdiv overloads for 8-bit ints (mirrors AscendC DivImpl: u16..i64 + half/float).
+    CHECK((s0_dt.IsInt() || s0_dt == DataType::FP16 || s0_dt == DataType::FP32) && s0_dt != DataType::INT8 &&
+          s0_dt != DataType::UINT8)
+        << "vf.div src0 only supports INT16/UINT16/INT32/UINT32/INT64/UINT64/FP16/FP32, got " << DTypeStr(s0_dt);
     DataType s1_dt = GetExprDtype(op->args_[2]);
-    CHECK((s1_dt.IsInt() || s1_dt == DataType::FP16 || s1_dt == DataType::FP32))
-        << "vf.div src1 only supports INT/UINT/FP16/FP32, got " << DTypeStr(s1_dt);
+    CHECK((s1_dt.IsInt() || s1_dt == DataType::FP16 || s1_dt == DataType::FP32) && s1_dt != DataType::INT8 &&
+          s1_dt != DataType::UINT8)
+        << "vf.div src1 only supports INT16/UINT16/INT32/UINT32/INT64/UINT64/FP16/FP32, got " << DTypeStr(s1_dt);
     DataType vf_div_dst_dt = GetExprDtype(op->args_[0]);
     CHECK(s0_dt == vf_div_dst_dt && s1_dt == vf_div_dst_dt)
         << "vf.div requires dst, src0, src1 to have the same type, got dst=" << DTypeStr(vf_div_dst_dt)
@@ -2081,7 +2084,10 @@ static std::string EmitVFPack(const ir::CallPtr& op, codegen::CodegenBase& codeg
     std::string src = codegen.GetExprAsCode(op->args_[1]);
     std::string part = "LOWER";
     if (op->HasKwarg("part")) {
-        part = VFEnumValueName(ir::EnumToString(static_cast<ir::PackPart>(op->GetKwarg<int>("part"))));
+        int part_val = op->GetKwarg<int>("part");
+        CHECK(part_val == static_cast<int>(ir::PackPart::LOWER) || part_val == static_cast<int>(ir::PackPart::UPPER))
+            << "vf.pack part must be PackPart::LOWER or PackPart::UPPER, got " << part_val;
+        part = VFEnumValueName(ir::EnumToString(static_cast<ir::PackPart>(part_val)));
     }
     if (IsDstMaskReg(op, codegen)) {
         std::string cce_half = (part == "LOWER" || part == "LOWEST") ? "LOWER" : "HIGHER";
@@ -2091,12 +2097,15 @@ static std::string EmitVFPack(const ir::CallPtr& op, codegen::CodegenBase& codeg
 
     DataType src_dt = GetExprDtype(op->args_[1]);
     DataType dst_dt = GetExprDtype(op->args_[0]);
-    CHECK((IsB8Type(src_dt) || src_dt.GetBit() == 16 || src_dt.GetBit() == 32 || src_dt.GetBit() == 64))
-        << "vf.pack src only supports b8/b16/b32/b64 types, got " << DTypeStr(src_dt);
-    // vpack: dst bit width must be half of src
-    CHECK(dst_dt.GetBit() == src_dt.GetBit() / 2)
-        << "vf.pack: dst bit width must be half of src (dst=" << DTypeStr(dst_dt) << " " << dst_dt.GetBit()
-        << "-bit, src=" << DTypeStr(src_dt) << " " << src_dt.GetBit() << "-bit)";
+    // Validate (dst, src) as a pair (mirrors AscendC PackImpl SupportType
+    // tuples): dst is always unsigned and half the src width; src may be
+    // signed or unsigned.
+    //   (UINT8, INT16|UINT16), (UINT16, INT32|UINT32), (UINT32, INT64|UINT64)
+    CHECK((dst_dt == DataType::UINT8 && (src_dt == DataType::INT16 || src_dt == DataType::UINT16)) ||
+          (dst_dt == DataType::UINT16 && (src_dt == DataType::INT32 || src_dt == DataType::UINT32)) ||
+          (dst_dt == DataType::UINT32 && (src_dt == DataType::INT64 || src_dt == DataType::UINT64)))
+        << "vf.pack supports UINT8<-INT16/UINT16, UINT16<-INT32/UINT32, UINT32<-INT64/UINT64 pairs, got dst="
+        << DTypeStr(dst_dt) << " src=" << DTypeStr(src_dt);
 
     if (src_dt.GetBit() == 64) {
         // 64-bit source → 32-bit dst: use DeInterleave with a zero register,
@@ -2117,6 +2126,9 @@ static std::string EmitVFPack(const ir::CallPtr& op, codegen::CodegenBase& codeg
                          ", (RegTensor<uint32_t>&)" + src + ");");
         }
     } else {
+        // MODE_UNKNOWN mirrors AscendC: the C API asc_pack_impl (npu_arch_3510)
+        // passes MODE_UNKNOWN and Reg::PackImpl omits the mode (intrinsic
+        // default), leaving the half not selected by part unspecified.
         std::string cce_part = (part == "LOWER" || part == "LOWEST") ? "LOWER" : "HIGHER";
         codegen.Emit("vpack(" + dst + ", " + src + ", " + cce_part + ", MODE_UNKNOWN);");
     }
@@ -2135,7 +2147,10 @@ static std::string EmitVFUnpack(const ir::CallPtr& op, codegen::CodegenBase& cod
     std::string src = codegen.GetExprAsCode(op->args_[1]);
     std::string part = "LOWER";
     if (op->HasKwarg("part")) {
-        part = VFEnumValueName(ir::EnumToString(static_cast<ir::PackPart>(op->GetKwarg<int>("part"))));
+        int part_val = op->GetKwarg<int>("part");
+        CHECK(part_val == static_cast<int>(ir::PackPart::LOWER) || part_val == static_cast<int>(ir::PackPart::UPPER))
+            << "vf.unpack part must be PackPart::LOWER or PackPart::UPPER, got " << part_val;
+        part = VFEnumValueName(ir::EnumToString(static_cast<ir::PackPart>(part_val)));
     }
 
     if (IsDstMaskReg(op, codegen)) {
@@ -2146,12 +2161,21 @@ static std::string EmitVFUnpack(const ir::CallPtr& op, codegen::CodegenBase& cod
 
     DataType dst_dt = GetExprDtype(op->args_[0]);
     DataType src_dt = GetExprDtype(op->args_[1]);
-    CHECK((IsB8Type(src_dt) || src_dt.GetBit() == 16 || src_dt.GetBit() == 32 || src_dt.GetBit() == 64))
-        << "vf.unpack src only supports b8/b16/b32/b64 types, got " << DTypeStr(src_dt);
-    // vunpack: dst bit width must be double of src
-    CHECK(dst_dt.GetBit() == src_dt.GetBit() * 2)
-        << "vf.unpack: dst bit width must be double of src (dst=" << DTypeStr(dst_dt) << " " << dst_dt.GetBit()
-        << "-bit, src=" << DTypeStr(src_dt) << " " << src_dt.GetBit() << "-bit)";
+    // Validate (dst, src) as a pair (mirrors AscendC UnPackImpl SupportType
+    // tuples): dst is double the src width with matching signedness. FP and
+    // other types are rejected here instead of failing late in bisheng
+    // compilation.
+    //   (INT16, INT8), (UINT16, UINT8), (INT32, INT16),
+    //   (UINT32, UINT16), (INT64, INT32), (UINT64, UINT32)
+    CHECK((dst_dt == DataType::INT16 && src_dt == DataType::INT8) ||
+          (dst_dt == DataType::UINT16 && src_dt == DataType::UINT8) ||
+          (dst_dt == DataType::INT32 && src_dt == DataType::INT16) ||
+          (dst_dt == DataType::UINT32 && src_dt == DataType::UINT16) ||
+          (dst_dt == DataType::INT64 && src_dt == DataType::INT32) ||
+          (dst_dt == DataType::UINT64 && src_dt == DataType::UINT32))
+        << "vf.unpack supports INT16<-INT8, UINT16<-UINT8, INT32<-INT16, UINT32<-UINT16, INT64<-INT32, "
+           "UINT64<-UINT32 pairs, got dst="
+        << DTypeStr(dst_dt) << " src=" << DTypeStr(src_dt);
 
     if (dst_dt.GetBit() == 64) {
         std::string src_ctype = src_dt.ToCTypeString();
@@ -3129,6 +3153,15 @@ static std::string EmitVFCompareImpl(const ir::CallPtr& op, codegen::CodegenBase
     CHECK((s0_dt.IsInt() || s0_dt == DataType::FP16 || s0_dt == DataType::FP32 || s0_dt == DataType::BF16))
         << op->name_ << " source only supports INT/UINT/FP16/FP32/BF16, got " << DTypeStr(s0_dt);
     DataType s1_dt = GetExprDtype(op->args_[2]);
+    // FP8/FP4 types have no vcmp overloads (mirrors AscendC CompareImpl):
+    // reject them for either compared operand and for cmp_dtype.
+    auto is_fp8_fp4 = [](DataType dt) {
+        return dt == DataType::FP8E4M3FN || dt == DataType::FP8E5M2 || dt == DataType::FP8E8M0 || dt == DataType::HF8 ||
+               dt == DataType::FP4 || dt == DataType::FP4E2M1 || dt == DataType::FP4E1M2 || dt == DataType::HF4;
+    };
+    CHECK(!is_fp8_fp4(s0_dt) && !is_fp8_fp4(s1_dt))
+        << op->name_ << " does not support FP8/FP4 compare types, got src0=" << DTypeStr(s0_dt)
+        << " src1=" << DTypeStr(s1_dt);
     // Bit width check: in scalar path, uses is_convertible (allows int64 scalar -> int32 reg)
     // so we defer the strict check to the vector-vector path only.
     // Here we just ensure s1 is not a wider type that can't convert (e.g. float vs int).
@@ -3141,8 +3174,10 @@ static std::string EmitVFCompareImpl(const ir::CallPtr& op, codegen::CodegenBase
     if (!is_scalar_src) {
         if (op->HasKwarg("cmp_dtype")) {
             DataType cmp_dt = op->GetKwarg<DataType>("cmp_dtype");
-            CHECK((cmp_dt.GetBit() == 8 || cmp_dt.GetBit() == 16 || cmp_dt.GetBit() == 32 || cmp_dt.GetBit() == 64))
-                << op->name_ << " cmp_dtype only supports b8/b16/b32/b64 types, got " << DTypeStr(cmp_dt);
+            CHECK((cmp_dt.GetBit() == 8 || cmp_dt.GetBit() == 16 || cmp_dt.GetBit() == 32 || cmp_dt.GetBit() == 64) &&
+                  !is_fp8_fp4(cmp_dt))
+                << op->name_ << " cmp_dtype only supports INT/UINT/FP16/FP32/BF16 (b8/b16/b32/b64), got "
+                << DTypeStr(cmp_dt);
         } else {
             CHECK((s0_dt.GetBit() == s1_dt.GetBit()))
                 << op->name_ << " requires src0 and src1 to have the same bit width, got src0=" << DTypeStr(s0_dt)
@@ -4501,8 +4536,7 @@ REGISTER_BACKEND_OP(BackendCCE, "vf.store")
 static std::string EmitVFCreateAddrReg(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() >= 2 && op->args_.size() <= 8 && op->args_.size() % 2 == 0)
-        << "vf.create_addr_reg requires 2-8 args (1-4 index/stride pairs)";
+    CHECK(op->args_.size() >= 1 && op->args_.size() <= 4) << "vf.create_addr_reg requires 1-4 strides";
     std::string reg_name = codegen.GetCurrentResultTarget();
     // Determine element width from dtype kwarg (default b32)
     DataType dt = DataType::FP32;
@@ -4519,9 +4553,9 @@ static std::string EmitVFCreateAddrReg(const ir::CallPtr& op, codegen::CodegenBa
         vag_fn = "vag_b16";
     else
         vag_fn = "vag_b32";
-    // Collect stride args (every 2nd arg). For b64, each stride is doubled.
+    // Collect stride args. For b64, each stride is doubled.
     std::string stride_args;
-    for (size_t i = 1; i < op->args_.size(); i += 2) {
+    for (size_t i = 0; i < op->args_.size(); ++i) {
         std::string stride = codegen.GetExprAsCode(op->args_[i]);
         if (dt == DataType::UINT64 || dt == DataType::INT64) {
             stride = "(" + stride + ") * 2";

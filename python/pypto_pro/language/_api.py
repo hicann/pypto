@@ -576,11 +576,6 @@ def sub_relu(out: Tile, lhs: Tile, rhs: Tile) -> None:
 
 
 @_api_decl
-def addc(out: Tile, a: Tile, b: Tile, c: Tile) -> None:
-    """Three-operand add: ``out = a + b + c``"""
-
-
-@_api_decl
 def mul_add_dst(out: Tile, lhs: Tile, rhs: Tile) -> None:
     """Fused multiply-add into out: ``out = lhs * rhs + out``"""
 

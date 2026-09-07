@@ -956,6 +956,25 @@ def _check_dtype_match(op_name: str, dt: DataType | None, *others: DataType | No
             raise ValueError(f"{op_name}: dtype mismatch between arg0 ({dt}) and arg{i + 1} ({other})")
 
 
+def _check_cmp_out(op_name: str, out: Expr, lhs_dtype: DataType | None) -> None:
+    """Validate the compare destination tile.
+
+    The backend writes the compare result as a 1-byte-per-element mask
+    (AscendC restricts the compare dst to 8-bit types). Accept a uint8/bool
+    mask tile (doc convention) or a tile sharing the lhs dtype (legacy
+    byte-buffer usage); anything else is rejected.
+    """
+    out_dtype = getattr(getattr(out, "type", None), "dtype", None)
+    if out_dtype is None:
+        return
+    if out_dtype == lhs_dtype or out_dtype in (DataType.UINT8, DataType.BOOL):
+        return
+    raise ValueError(
+        f"{op_name}: unsupported out dtype {out_dtype}, expected uint8/bool mask tile "
+        f"or same dtype as lhs ({lhs_dtype})"
+    )
+
+
 # Per-op supported dtype sets (aligned with ISA static_assert constraints)
 _BINARY_DTYPES: tuple[DataType, ...] = (
     DataType.INT8, DataType.UINT8, DataType.INT16, DataType.UINT16,
@@ -1232,6 +1251,7 @@ def _ir_cmp(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, cmp_mo
     dt = getattr(lhs.type, "dtype", None)
     _check_dtype("cmp", dt, _CMP_DTYPES)
     _check_dtype_match("cmp", dt, getattr(rhs.type, "dtype", None))
+    _check_cmp_out("cmp", out, dt)
     return _ir_core.create_op_call(
         block_ir_op("cmp"),
         [out, lhs, rhs],
@@ -1241,6 +1261,12 @@ def _ir_cmp(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, cmp_mo
 
 
 def _ir_cmps(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, cmp_mode: int | Expr = 0) -> Expr:
+    dt = getattr(lhs.type, "dtype", None)
+    _check_dtype("cmps", dt, _CMP_DTYPES)
+    from pypto_pro.language.parser.diagnostics import check_const_expr_fits_dtype
+
+    check_const_expr_fits_dtype(rhs, dt, span=span, api="pl.cmps")
+    _check_cmp_out("cmps", out, dt)
     return _ir_core.create_op_call(
         block_ir_op("cmps"),
         [out, lhs, rhs],
