@@ -528,16 +528,14 @@ class Tensor:
     @staticmethod
     def _get_assemble_offset(key, shape):
         offsets = []
-        for axis, k in enumerate(key):
-            start, stop, step = k.start, k.stop, k.step
+        for k in key:
+            start, step = k.start, k.step
             if step not in (1, None):
                 raise FeError(ValueError("step must be 1 or None"))
-            if start is None and stop is None:
+            if start is None:
                 offsets.append(0)
             elif isinstance(start, (int, SymbolicScalar)):
                 offsets.append(start)
-            elif isinstance(stop, (int, SymbolicScalar)):
-                offsets.append(stop - shape[axis])
         return offsets
 
     @staticmethod

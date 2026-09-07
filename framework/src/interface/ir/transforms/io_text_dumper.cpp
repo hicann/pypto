@@ -124,6 +124,16 @@ void IRTextDumper::PrintAttrValue(const std::string& key, const std::any& value)
             PrintAttrValue(key, vals[i]);
         }
         stream_ << IR_PUN_RBRACKET;
+    } else if (value.type() == typeid(std::vector<npu::tile_fwk::SymbolicScalar>)) {
+        const auto vals = AnyCast<std::vector<npu::tile_fwk::SymbolicScalar>>(value, key);
+        stream_ << IR_PUN_LBRACKET;
+        for (size_t i = 0; i < vals.size(); ++i) {
+            if (i > 0) {
+                stream_ << IR_PUN_COMMA << " ";
+            }
+            VisitScalarExpr::Visit(stream_, vals[i].Raw());
+        }
+        stream_ << IR_PUN_RBRACKET;
     } else {
         stream_ << "Unsupported";
     }
