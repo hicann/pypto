@@ -11,7 +11,7 @@
 
 """Cross-core sync dependency graph: the single source for all sync insertion.
 
-One model covers sync_only, preload=N and address reuse. Replaces the old
+One model covers preload=0, preload=N and address reuse. Replaces the old
 per-case derivation, which worked per address-overlapping buffer PAIR and so emitted one
 reverse-sync edge where a region with k writers needs k.
 
@@ -35,9 +35,9 @@ both quantities matter: ``dist`` (beat difference) decides inverse-time and cycl
 Assumptions
 -----------
 A1. Each stage advances a cross-core buffer exactly once, so ``slot = task % slot_count``.
-    The whole timeline rests on this. Not validated: supporting more slots per iteration is
-    a likely extension, so a violation is left to show up as a wrong distance rather than
-    being rejected up front.
+    The whole timeline rests on this. A violation shows up as an edge whose distance differs
+    from task to task, which ``Edge.unstable`` records and validate_sync rejects — see
+    _validate._check_stable_distances.
 A2. A buffer variable carries one producer/consumer pair; a stage may touch it repeatedly.
 A3. Sync goes outside the stage call. Op-level detail gets the dependencies right, then
     the result is aggregated back to the stage boundary when emitting.
@@ -54,7 +54,9 @@ from __future__ import annotations
 
 import ast
 from dataclasses import dataclass, field
+import logging
 
+from ._cross_core_scanner import MAX_EVENT_ID
 from ._validate import validate_sync
 
 # ---------------------------------------------------------------------------
@@ -106,21 +108,13 @@ class Edge:
     slot_count: int
     dist: int  # consumer beat - producer beat; < 0 means inverse-time
     task_off: int  # consumer task - producer task; the guard constant
-    unstable: bool = False  # distance differed across tasks => steady state not reached
+    # Distance differed between tasks, i.e. the timeline never settled. Rejected by
+    # validate_sync — see _check_stable_distances for why it cannot be emitted.
+    unstable: bool = False
 
     @property
     def inverse_time(self) -> bool:
         return self.dist < 0
-
-    def __str__(self) -> str:
-        tag = "   <== inverse-time (wait precedes set)" if self.inverse_time else ""
-        if self.unstable:
-            tag += "   <== UNSTABLE (distance varies by task)"
-        return (
-            f"{self.kind:3s} {self.src.stage:11s}({self.src.buffer:10s} {self.src.pipe:4s}) "
-            f"--dist{self.dist:+d}--> {self.dst.stage:11s}({self.dst.buffer:10s} {self.dst.pipe:4s})"
-            f"   task_off={self.task_off:+d}{tag}"
-        )
 
 
 @dataclass
@@ -222,11 +216,11 @@ def build_graph(info, schedule: list) -> SyncGraph:
     """Build the sync dependency graph for one schedule.
 
     ``schedule[stage_idx]`` is that stage's beat offset (its delay):
-      - sync_only  : all zeros (serial, every stage in the same beat)
+      - preload=0  : all zeros (serial, every stage in the same beat)
       - preload=N  : ``_compute_delays(info, N)``
 
     The builder does not care where the schedule came from, which is what makes
-    sync_only a degenerate case of the same model rather than a second code path.
+    the serial schedule a degenerate case of the same model rather than a second code path.
     """
     accesses = collect_accesses(info)
     touched = {a.buffer for a in accesses}
@@ -283,11 +277,15 @@ def build_graph(info, schedule: list) -> SyncGraph:
 
     for lane in lanes.values():
         for i, event in enumerate(lane):
-            if event.acc.role == "R":
+            # Membership, not equality: an "RW" access both reads and writes, so it takes
+            # part on both sides. Comparing for equality dropped it from each in turn — the
+            # access neither waited for the write before it nor counted as a write for the
+            # readers after it.
+            if "R" in event.acc.role:
                 # RAW: the nearest preceding write of the SAME buffer produced this data.
                 for j in range(i - 1, -1, -1):
                     candidate = lane[j]
-                    if candidate.acc.role == "W" and candidate.acc.buffer == event.acc.buffer:
+                    if "W" in candidate.acc.role and candidate.acc.buffer == event.acc.buffer:
                         record("RAW", candidate, event)
                         break
                 continue
@@ -298,13 +296,13 @@ def build_graph(info, schedule: list) -> SyncGraph:
             nearest_write_per_buffer = {}
             for j in range(i - 1, -1, -1):
                 candidate = lane[j]
-                if candidate.acc.role == "W" and candidate.acc.buffer not in nearest_write_per_buffer:
+                if "W" in candidate.acc.role and candidate.acc.buffer not in nearest_write_per_buffer:
                     nearest_write_per_buffer[candidate.acc.buffer] = candidate
             for previous_write in nearest_write_per_buffer.values():
                 readers = [
                     e
                     for e in lane
-                    if e.acc.role == "R"
+                    if "R" in e.acc.role
                     and e.acc.buffer == previous_write.acc.buffer
                     and e.task == previous_write.task
                 ]
@@ -318,7 +316,9 @@ def build_graph(info, schedule: list) -> SyncGraph:
     graph = SyncGraph(accesses, regions, slots, edges, _share_intermediate_war_ids(edges, info))
     # One gate for every check that needs the graph (see _validate). Runs here so the
     # checks see exactly what the emission will, rather than a separately derived view.
-    validate_sync(graph, info)
+    # The cycle walk is done here and handed over: it is graph work, while the verdict on
+    # what a cycle's total distance means is a check.
+    validate_sync(graph, info, find_cycles(graph))
     return graph
 
 
@@ -444,6 +444,65 @@ def _needs_allocated_ids(edge: Edge, war_id_source: dict) -> bool:
     return id(edge) not in war_id_source
 
 
+def _used_event_ids(info) -> set:
+    """Every event id already spoken for by a declared fwd/bwd id list.
+
+    The literal lists live in ``info.sync.lifted_ids``: the ids on the buffers themselves
+    were replaced by variable names, so this is where the actual numbers are.
+    """
+    used = set()
+    for _var, node in info.sync.lifted_ids:
+        if isinstance(node, (ast.List, ast.Tuple)):
+            for element in node.elts:
+                if isinstance(element, ast.Constant) and isinstance(element.value, int):
+                    used.add(element.value)
+    return used
+
+
+def _allocate_event_id_groups(edges: list, used: set) -> list:
+    """One group of event ids per edge, taken from the ids nothing else claims.
+
+    Each edge wants ``slot_count`` ids so its slots can hand over independently. When the
+    pool cannot cover that, edges are degraded to a single shared id — the handover then
+    serialises across slots, which costs parallelism but stays correct. Degradation goes in
+    ascending slot_count order, so the edges that lose the least go first.
+
+    Returns the groups positionally, one per input edge. Nothing is mutated: the previous
+    version wrote an ``"event_ids"`` key back into caller-supplied dicts, a leftover of the
+    old per-PAIR sync model whose other two keys existed only to be printed in a warning.
+    """
+    pool_size = MAX_EVENT_ID + 1
+    free = [i for i in range(pool_size) if i not in used]
+
+    wants = [edge.slot_count for edge in edges]
+    order = sorted(range(len(edges)), key=lambda i: wants[i])
+    degraded = 0
+    while sum(wants) > len(free) and degraded < len(order):
+        idx = order[degraded]
+        if wants[idx] > 1:
+            logging.warning(
+                f"pipeline: not enough event ids for address-reuse sync; degrading "
+                f"{edges[idx].src} -> {edges[idx].dst} from {wants[idx]} ids to 1 "
+                f"(slots will serialize, correctness preserved)."
+            )
+            wants[idx] = 1
+        degraded += 1
+
+    if sum(wants) > len(free):
+        raise ValueError(
+            f"pipeline: not enough free event ids (0-{MAX_EVENT_ID}) for address-reuse "
+            f"sync. Need {sum(wants)}, have {len(free)} free (used: {sorted(used)}). "
+            f"Reduce cross-core buffer id usage or overlaps."
+        )
+
+    groups = []
+    cursor = 0
+    for count in wants:
+        groups.append(free[cursor:cursor + count])
+        cursor += count
+    return groups
+
+
 def allocate_reuse_ids(graph: SyncGraph, info) -> dict:
     """Mint an event-id group per address-reuse edge. Returns {id(edge): ids_node}.
 
@@ -453,10 +512,8 @@ def allocate_reuse_ids(graph: SyncGraph, info) -> dict:
     allocation and emission is how an edge once ended up emitted but unallocated.
 
     Several edges can share one group — two edges between the same pair of accesses describe
-    one handover — hence the keying by access pair. Strategy: ``_allocate_overlap_event_ids``.
+    one handover — hence the keying by access pair.
     """
-    from ._analyzer import _allocate_overlap_event_ids
-
     needing = [edge for edge in graph.edges if _needs_allocated_ids(edge, graph.war_id_source)]
     if not needing:
         return {}
@@ -467,16 +524,14 @@ def allocate_reuse_ids(graph: SyncGraph, info) -> dict:
     for key, edge in zip(keys, needing):
         first_of_pair.setdefault(key, edge)
 
-    pairs = [
-        {"first_stage": edge.dst.stage, "last_stage": edge.src.stage, "slot_count": edge.slot_count}
-        for edge in first_of_pair.values()
-    ]
-    _allocate_overlap_event_ids(info, pairs)
+    # Read the used ids BEFORE declaring the new groups below, or each group would count
+    # itself as taken.
+    id_groups = _allocate_event_id_groups(list(first_of_pair.values()), _used_event_ids(info))
 
     group_name: dict = {}
-    for key, pair in zip(first_of_pair, pairs):
+    for key, ids in zip(first_of_pair, id_groups):
         group_name[key] = f"_pl_overlap_ids_{len(group_name)}"
-        literal = ast.List(elts=[ast.Constant(value=v) for v in pair["event_ids"]], ctx=ast.Load())
+        literal = ast.List(elts=[ast.Constant(value=v) for v in ids], ctx=ast.Load())
         info.sync.lifted_ids.append((group_name[key], literal))
 
     return {id(edge): ast.Name(id=group_name[key], ctx=ast.Load()) for key, edge in zip(keys, needing)}
@@ -502,21 +557,31 @@ def resolve_event_ids(graph: SyncGraph, info) -> dict:
 
     resolved = {}
     for edge in graph.edges:
+        if edge.src.section == edge.dst.section:
+            # Both ends on one core. What is emitted here is CROSS-core sync, and a
+            # cross-core buffer's two users are required to sit on different cores
+            # (_check_cross_core_users), so an edge inside one section can only join two
+            # accesses of the same stage — ordered already by program order and auto_mutex.
+            # Emitting for it would put an extra set/wait pair on the buffer's own event id,
+            # and that pair can release a wait that was meant for the other core's set.
+            # Resolved here rather than in each planner so all three agree on what is live.
+            resolved[id(edge)] = None
+            continue
         if edge.kind == "RAW":
             buf = buffers.get(edge.src.buffer)
             node = buf.fwd_ids_node if buf else None
-            count = buf.fwd_slot_count if buf else 0
+            count = buf.fwd_id_count if buf else 0
         elif (owner := graph.war_id_source.get(id(edge))) is not None:
             # An edge over reused memory whose source is an intermediate form of another
             # buffer's data (see _share_intermediate_war_ids): it releases that buffer's
             # backward ids — the existing sync, not a newly allocated group.
             buf = buffers.get(owner)
             node = buf.bwd_ids_node if buf else None
-            count = buf.bwd_slot_count if buf else 0
+            count = buf.bwd_id_count if buf else 0
         elif edge.src.buffer == edge.dst.buffer:
             buf = buffers.get(edge.src.buffer)
             node = buf.bwd_ids_node if buf else None
-            count = buf.bwd_slot_count if buf else 0
+            count = buf.bwd_id_count if buf else 0
         else:
             # Cross-buffer WAR: no user-declared ids exist for a dependency that only
             # address reuse created, so the framework allocates one (None if the edge
@@ -752,9 +817,3 @@ def sites_for(sites: list, stage: str) -> tuple:
             continue
         (pre if site.side == "pre" else post).append(site)
     return pre, post
-
-
-def format_cycle(path: list, total: int) -> str:
-    """Render one cycle from find_cycles() as a readable route."""
-    route = " -> ".join(f"{a.stage}[{a.buffer} {a.role} {a.pipe}]" for a in path)
-    return f"{route}   (total distance={total})"

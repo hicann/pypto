@@ -110,7 +110,52 @@ def get_store_pipe(src_memory: MemorySpace | None) -> PipeType:
 # Note: cross-core sync MUST distinguish read vs write because the sync
 # direction depends on it.
 
+# ----------------------------------------------------------------------------
+# Per-op tile-argument role table for vector-function (vf.*) ops
+# ----------------------------------------------------------------------------
+#
+# Same shape and meaning as _BLOCK_OP_TILE_ROLES below, for the vf.* ops that
+# touch a UB tile.  Every other vf op works purely on registers and is absent.
+#
+# A table rather than a rule, because no rule holds: the pointer is not always
+# the first argument (the unaligned loads take their alignment-state register
+# there), and the name does not say the direction either --- `gather` reads a
+# tile, `scatter` and `squeeze_store_unalign` write one, and neither starts
+# with "load" or "store".
+#
+# Adding a vf op that reads or writes a UB tile means adding it here too;
+# the pipeline scan reports an op it cannot find when one reaches a buffer
+# that cross-core sync tracks.
+
+_VF_OP_TILE_ROLES: dict[str, list] = {
+    # ===== Aligned =====
+    "load_align": ["R"],  # load_align(src, offset, ...) -> reg
+    "store_align": ["W", None],  # store_align(dst, src, ...)
+    # ===== Unified (AscendC-style Load/Store) =====
+    "load": ["R"],  # load(src_ptr, stride, ...) -> reg
+    "store": ["W", None, None],  # store(dst_ptr, src, count)
+    # ===== Unaligned: arg 0 is the alignment-state register, not the tile =====
+    "load_unalign_pre": [None, "R"],  # load_unalign_pre(ureg, src_ptr)
+    "load_unalign": [None, "R", None],  # load_unalign(ureg, src_ptr, stride)
+    "store_unalign": ["W", None, None, None],  # (dst_ptr, src, align_reg, stride)
+    "store_unalign_post": ["W", None, None],  # (dst_ptr, align_reg, stride)
+    "squeeze_store_unalign": ["W", None, None],  # (dst_ptr, src, align_reg)
+    "squeeze_store_unalign_post": ["W", None],  # (dst_ptr, align_reg)
+    # ===== Indexed =====
+    "gather": ["R", None, None],  # gather(src, indices, mask) -- src is a UB tile
+    "scatter": ["W", None, None, None],  # scatter(base_ptr, src, index, mask)
+}
+
+
 _BLOCK_OP_TILE_ROLES: dict[str, list] = {
+    # ===== Scalar element access (S pipe) =====
+    # Reached both as pl.getval(t, i) / pl.setval(t, i, v) and as the subscript spellings
+    # t[i] / t[i] = v that the parser lowers to them. A scalar read of a tile another core
+    # wrote still has to wait for that write: measured on device, without the handshake the
+    # read returns the buffer's previous contents, and wait_cross_core(pipe=PipeType.S)
+    # fixes it.
+    "getval": ["R", None],  # getval(container, offset) -> scalar
+    "setval": ["W", None, None],  # setval(container, offset, value)
     # ===== Data movement =====
     "load": ["W"],  # load(out, tensor, offsets, ...)
     "load_tile": ["W"],

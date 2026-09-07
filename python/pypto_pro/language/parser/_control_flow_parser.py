@@ -213,13 +213,22 @@ class ControlFlowParserMixin:
         """Probe hook for the pipeline constant-branch collapse (design §3.0).
 
         When ``collect_if_const`` is enabled, record each ``if`` condition's
-        compile-time constness under its normalized source text
-        ``ast.unparse(test_node)``. Disabled by default, so a normal parse is
-        unaffected. Identical condition texts always fold to the same value, so a
-        key collision is harmless (later write agrees with the earlier one)."""
-        if not getattr(self, "collect_if_const", False):
+        compile-time constness under the condition's source POSITION
+        ``(lineno, col_offset)``. Disabled by default, so a normal parse is unaffected.
+
+        The key is a position and not the condition's source text: const folding is
+        program-point accurate, so the same text folds to different values at different
+        points (``flag = 1 ... if flag > 0 ... flag = 0 ... if flag > 0``). One entry per
+        text let the second site's verdict decide the first site as well, and the pipeline
+        pruned a live branch away with nothing to announce it. Column as well as line
+        because one line can hold more than one condition.
+
+        Only the kernel's own body is recorded. It is the only thing the pipeline prunes
+        (see _prune_const_branches), while an inlined callee's ``if`` carries line numbers
+        from ITS file — recording those adds nothing and can collide with a kernel line."""
+        if not getattr(self, "collect_if_const", False) or self.inline_call_stack:
             return
-        self.if_const_map[ast.unparse(test_node)] = (is_const, value)
+        self.if_const_map[(test_node.lineno, test_node.col_offset)] = (is_const, value)
 
     def parse_if_statement(self, stmt: ast.If) -> None:
         """Parse if statement.

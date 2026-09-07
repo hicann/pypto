@@ -14,25 +14,32 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass, field
 
-from ._cross_core_scanner import CrossCoreSyncContext
+from ._astutil import (
+    PL_IS_VALID_FIELD,
+    PL_STRUCT_ARG,
+    PL_TASK_ID_FIELD,
+    call_name,
+    get_funcdef,
+    is_vf_function,
+    slot_accessor,
+    slot_index_field,
+)
+from ._cross_core_scanner import (
+    AccessScanTables,
+    CrossCoreSyncContext,
+    detect_addr_overlaps,
+    scan_all_buffer_memory,
+    scan_all_tile_group_names,
+    scan_buffer_addr_ranges,
+    scan_buffer_mutex_ids,
+    scan_cross_core_buffers,
+    scan_kernel_slot_to_buffer,
+    scan_stage_accesses,
+    scan_tile_group_decls,
+    scan_tuple_fields,
+)
 from ._stage import is_pipeline_stage
 from ._validate import validate_structure
-
-# The one fixed ctx field the pipeline transform adds of its own accord — every other ctx
-# field comes from a stage argument. It is named here because it is written by the
-# transformer (as a plain scalar) and read back through the ctx slot, and the two halves
-# live in different modules: this module decides the ctx layout, the transformer generates
-# the assignments and the guards that read them. One name, so the halves cannot drift.
-#
-# It holds which task the data in this ctx slot belongs to. Auto-sync guards compare it
-# against an edge's skew to tell whether the partner task exists.
-_PL_TASK_ID_FIELD = "_pl_task_id"
-# Marks a stage argument that is a whole struct: the ctx slot is passed in its place, so
-# there is no single field to name (its fields are ctx fields under their own names).
-_PL_STRUCT_ARG = "_pl_struct_arg"
-# The validity flag. Prefixed like every framework field so a user struct field named
-# `is_valid` cannot collide with it.
-_PL_IS_VALID_FIELD = "_pl_is_valid"
 
 
 @dataclass
@@ -45,6 +52,20 @@ class StageCall:
     delay: int  # derived from call order: 0, 1, 2, ...
     pre_stmts: list = field(default_factory=list)  # statements before stage call in same section
     post_stmts: list = field(default_factory=list)  # statements after stage call in same section
+    # The stage's own AST. Resolved once, in analyze_pipeline, because getting it is not
+    # cheap (~0.7 ms: the source is re-read and re-tokenized, see _astutil.get_funcdef) and
+    # three separate passes used to derive it again from func_name. It belongs here for the
+    # same reason args and pre_stmts do — it is part of what was parsed about this stage.
+    # None when the source is unavailable; every reader keeps its own check for that.
+    func_def: ast.FunctionDef | None = None
+    # The statement this stage was found in — the ``with pl.section_*()`` block, or the
+    # bare call when there is no section (which validate_structure then rejects). Recorded
+    # so the transform can ask WHICH statement holds a stage rather than deciding again
+    # from its shape: it used to count every ast.With in the loop as one stage, while the
+    # analyzer counted only the ones actually holding a stage call, and a section holding
+    # anything else — or any unrelated ``with`` — pushed the two out of step. The stages
+    # after it were then emitted from the wrong entries, or ran off the end of the list.
+    source_stmt: ast.stmt | None = None
     # Every buffer access this stage makes, one entry per op in source order:
     # [(buffer, role, pipe), ...]. Per-op rather than collapsed to first/last pipe, so the
     # sync graph can see a local access sitting between two cross-core ones, and so every
@@ -68,24 +89,33 @@ class PipelineInfo:
     scalar_ctx_names: dict = field(default_factory=dict)
     # Maps: stage arg position -> (field_name, fill_expr) | None
     stage_arg_mapping: list[list] = field(default_factory=list)
-    inner_loop_var: str = ""  # inner loop variable (e.g. "ki")
-    inner_loop_range_end: ast.expr | None = None  # e.g. ast node for "skv_tiles"
+    # The loop the stages are pipelined over, and its bounds. Called the PIPELINE loop
+    # throughout, never the "inner" one: the transform used to pipeline only the innermost
+    # of two loops, but a task stream now runs continuously across the enclosing ones, so
+    # there is no inner/outer distinction left to make here.
+    pipeline_loop_var: str = ""  # the loop variable (e.g. "ki")
+    pipeline_loop_end: ast.expr | None = None  # e.g. ast node for "skv_tiles"
     # Step of the pipeline loop, i.e. how far the loop variable moves per iteration.
     # None means an implicit 1. It matters whenever a guard has to reason about a task
     # some iterations away: the loop variable is in whatever unit the user chose, so
     # "n iterations later" is `var + n * step`, not `var + n`. The FA cases step by 1
     # and hide the distinction; the sparse kernel steps by TKV over element offsets.
-    inner_loop_step: ast.expr | None = None
+    pipeline_loop_step: ast.expr | None = None
     # {variable name: IR type class name} from the parser probe (see probe_kernel_facts).
     # The authority on how a stage argument must reach a delayed stage; empty when the
     # caller did not run the probe, in which case everything falls back to pass-through.
     var_types: dict = field(default_factory=dict)
     # {name: section kind} for names bound inside a pl.section_*() block. Their ctx fill
     # must sit in that same section, since the other target cannot see them at all
-    # (see _collect_var_sections).
+    # (see _collect_var_sections). Values are SETS of section kinds: a name bound in both
+    # sections is two variables, one per target, and each fills its own ctx copy.
     var_sections: dict = field(default_factory=dict)
     # The pipeline loop itself, so later passes can tell "inside the loop" from "outside".
     pipeline_loop: ast.For | None = None
+    # Every declared tile group's name, cross-core or not. A kernel-wide declaration fact
+    # rather than a sync one: recognising a slot pick (`g.next()`, `g[i]`) needs the full
+    # set, and both the arrangement (outer_slots) and the access scan read it.
+    group_names: set = field(default_factory=set)
     # {slot variable: (group name, slot count)} for slots chosen OUTSIDE the pipeline loop
     # and consumed inside it. The chosen index travels through ctx so a delayed stage gets
     # the slot from its own iteration, not whatever the variable was last rebound to.
@@ -101,9 +131,6 @@ def analyze_pipeline(func_def: ast.FunctionDef, closure_vars: dict, var_types: d
 
     Looks for the innermost for-loop that contains stage calls inside
     section blocks, and extracts stage ordering, ctx fields, etc.
-
-    Runs on the AST after dead constant branches are pruned (see
-    _prune_const_branches), so it only ever sees plain unconditional stage calls.
 
     Args:
         func_def: The kernel function's AST node
@@ -123,7 +150,7 @@ def analyze_pipeline(func_def: ast.FunctionDef, closure_vars: dict, var_types: d
             stage_func_names.add(name)
 
     # Walk the AST to find the main loop structure.
-    _find_pipeline_loop(func_def.body, info, stage_func_names, closure_vars)
+    _find_pipeline_loop(func_def.body, info, stage_func_names)
 
     # L3/L5: pipeline enabled but no usable stages found.
     if not info.stages:
@@ -138,6 +165,10 @@ def analyze_pipeline(func_def: ast.FunctionDef, closure_vars: dict, var_types: d
             "pipeline loop must contain stage calls wrapped in section blocks."
         )
 
+    # The stages' own ASTs, resolved once here and read from StageCall thereafter.
+    for stage in info.stages:
+        stage.func_def = get_funcdef(closure_vars.get(stage.func_name))
+
     # Which section each name belongs to, so its ctx fill lands in the same one.
     info.var_sections = _collect_var_sections(func_def)
 
@@ -145,21 +176,23 @@ def analyze_pipeline(func_def: ast.FunctionDef, closure_vars: dict, var_types: d
     info.struct_args = _collect_struct_args(func_def, info)
 
     # Every buffer declaration, scanned once and shared by everything that reads them.
-    from ._cross_core_scanner import scan_tile_group_decls
-
     decls = scan_tile_group_decls(func_def)
-
-    # Slots chosen outside the pipeline loop: their index travels through ctx.
-    info.outer_slots = _collect_outer_slots(func_def, info, decls)
-
-    # Derive ctx fields from stage arguments
-    _derive_ctx_fields(info, closure_vars)
+    info.group_names = scan_all_tile_group_names(decls)
 
     # One gate for every check that needs only the parsed structure (see _validate).
     validate_structure(info, func_def, stage_func_names)
 
-    # Scan cross-core buffer accesses for auto-sync
+    # Scan cross-core buffer accesses for auto-sync. Sole writer of info.sync, which the
+    # two steps below then read: what a group is called and how many slots it rotates
+    # through are declaration facts, and re-deriving them per reader is what had
+    # _collect_outer_slots scan the declarations a second time.
     _scan_cross_core(info, func_def, closure_vars, decls)
+
+    # Slots chosen outside the pipeline loop: their index travels through ctx.
+    info.outer_slots = _collect_outer_slots(func_def, info)
+
+    # Derive ctx fields from stage arguments
+    _derive_ctx_fields(info)
 
     # Producer/consumer and address-reuse checks live in validate_sync, which runs once
     # the sync graph exists — see _sync_graph.build_graph.
@@ -174,17 +207,10 @@ def _scan_cross_core(info: PipelineInfo, func_def: ast.FunctionDef, closure_vars
     scans below is the order their errors surface in, so it is deliberate: the cross-core
     scan raises on an unusable declaration, the rest only collect what they can resolve.
     """
-    from ._cross_core_scanner import (
-        detect_addr_overlaps,
-        scan_all_buffer_memory,
-        scan_all_tile_group_names,
-        scan_buffer_addr_ranges,
-        scan_buffer_mutex_ids,
-        scan_cross_core_buffers,
-        scan_kernel_slot_to_buffer,
-        scan_stage_accesses,
-        scan_tuple_fields,
-    )
+    # Filled before the early return below: _collect_outer_slots needs a slot count for
+    # local groups too. This scan raises on nothing — it skips a declaration whose ids will
+    # not resolve — so its position decides nothing about which error a user sees.
+    info.sync.mutex_ids = scan_buffer_mutex_ids(decls, closure_vars)
 
     cross_buffers, lifted_ids = scan_cross_core_buffers(decls, closure_vars)
     info.sync.buffers = cross_buffers
@@ -197,179 +223,68 @@ def _scan_cross_core(info: PipelineInfo, func_def: ast.FunctionDef, closure_vars
     # Detect address overlaps involving cross-core buffers (for auto-sync of
     # address-reused buffers). Local-local overlaps are ignored.
     info.sync.addr_ranges = scan_buffer_addr_ranges(decls, closure_vars)
-    info.sync.mutex_ids = scan_buffer_mutex_ids(decls, closure_vars)
     info.sync.addr_overlaps = detect_addr_overlaps(info.sync.addr_ranges, set(cross_buffers.keys()))
 
-    vf_func_defs = _collect_vf_func_defs(info, closure_vars)
+    vf_func_defs, helper_func_defs = _collect_callable_defs(info, closure_vars)
 
     # Slots taken from cross-core buffers in the kernel body (pipeline loop), for
     # stages that receive a pre-taken slot instead of the buffer group itself.
-    # Every declared group, cross-core or not: a local buffer's slot must resolve too, or the
-    # pipe of an op that touches both kinds cannot be determined (see build_binding_map).
-    group_names = scan_all_tile_group_names(decls)
-    kernel_slot_to_buffer = scan_kernel_slot_to_buffer(func_def, group_names)
-    # Members of an aggregate passed to a stage: the one hop that rejoins a tile to its
-    # declared group when the kernel bundles groups with pl.make_tuple.
-    tuple_fields = scan_tuple_fields(func_def)
+    tables = AccessScanTables(
+        cross_buffers=cross_buffers,
+        all_buffer_memory=all_mem,
+        group_names=info.group_names,
+        kernel_slot_to_buffer=scan_kernel_slot_to_buffer(func_def, info.group_names),
+        # Members of an aggregate passed to a stage: the one hop that rejoins a tile to
+        # its declared group when the kernel bundles groups with pl.make_tuple.
+        tuple_fields=scan_tuple_fields(func_def),
+        vf_func_defs=vf_func_defs,
+        helper_func_defs=helper_func_defs,
+        # Buffers sharing a physical region with another buffer, computed once for the
+        # whole kernel. Not per stage: a region's members may be touched by different
+        # stages, and a per-stage view would miss those.
+        region_members={name for pair in info.sync.addr_overlaps for name in pair},
+    )
 
-    # All @stage function defs (name -> FunctionDef), looked up per stage below.
-    stage_func_defs = {}
-    for s in info.stages:
-        sfd = _try_get_funcdef(closure_vars.get(s.func_name))
-        if sfd is not None:
-            stage_func_defs[s.func_name] = sfd
-    # Buffers sharing a physical region with another buffer, computed once for the whole
-    # kernel. Not per stage: a region's members may be touched by different stages, and a
-    # per-stage view would miss those.
-    region_members = {name for pair in info.sync.addr_overlaps for name in pair}
     for stage in info.stages:
-        fd = stage_func_defs.get(stage.func_name)
-        if fd is None:
+        if stage.func_def is None:
             continue
-        stage.region_access = []
-        scan_stage_accesses(
-            fd,
-            cross_buffers,
-            vf_func_defs,
-            all_mem,
-            region_members,
-            stage.region_access,
-            call_args=stage.args,
-            kernel_slot_map=kernel_slot_to_buffer,
-            tuple_fields=tuple_fields,
-            group_names=group_names,
-        )
+        stage.region_access = scan_stage_accesses(stage.func_def, stage.args, tables)
 
     # Address-reuse sync is not built here. Which edges need it, and which ids they get,
     # both follow from the sync graph (see _sync_graph.allocate_reuse_ids) — deriving that
     # set here as well is what let allocation and emission disagree.
 
 
-def _collect_used_event_ids(info: PipelineInfo) -> set:
-    """Collect all event ids already used by cross-core buffers' fwd/bwd ids.
+def _collect_callable_defs(info: PipelineInfo, closure_vars: dict) -> tuple[dict, dict]:
+    """``(vf_func_defs, helper_func_defs)`` for every function a stage might call.
 
-    The real literal id lists live in info.sync.lifted_ids (fwd/bwd nodes on the
-    buffers were replaced with variable names)."""
-    used = set()
-    for _var, node in info.sync.lifted_ids:
-        if isinstance(node, (ast.List, ast.Tuple)):
-            for e in node.elts:
-                if isinstance(e, ast.Constant) and isinstance(e.value, int):
-                    used.add(e.value)
-    return used
+    Split by the DECORATOR alone: ``@pl.vector_function`` on one side, every other plain
+    function on the other. The access scan treats the two differently — a vector function
+    is one atomic op whose parameter roles are read off its body, while a plain function is
+    simply part of the stage that called it and gets scanned through (see _scan_function).
 
+    Stages are in neither: a stage called from a stage is refused (_check_no_nested_stage).
 
-def _allocate_overlap_event_ids(info: PipelineInfo, reverse_sync_pairs: list):
-    """Allocate event ids (0-15) for each reverse sync, filling each pair's
-    'event_ids' key with a list of ints.
+    Both come from ``closure_vars`` — the kernel's own scope, captured by @pl.jit — and are
+    turned back into ASTs by re-reading their source (see _astutil.get_funcdef), because a
+    helper is defined outside the kernel and so is nowhere in the kernel's own tree.
 
-    Strategy:
-      1. Each pair needs slot_count ids by default.
-      2. Allocate from unused ids (0-15) in order.
-      3. If not enough: degrade pairs (share 1 id across all slots) from smallest
-         slot_count up, logging a warning each time.
-      4. If all degraded to 1 id each and still not enough: raise.
-    """
-    if not reverse_sync_pairs:
-        return
-
-    from ._cross_core_scanner import _MAX_EVENT_ID
-
-    max_event_id = _MAX_EVENT_ID + 1
-    used = _collect_used_event_ids(info)
-    free = [i for i in range(max_event_id) if i not in used]
-
-    # How many ids each pair wants (default: slot_count). May be degraded to 1.
-    wants = [p["slot_count"] for p in reverse_sync_pairs]
-
-    # Degrade (smallest slot_count first) until total demand fits in free ids.
-    # Sort indices by slot_count ascending for degradation order.
-    order = sorted(range(len(reverse_sync_pairs)), key=lambda i: wants[i])
-    deg_ptr = 0
-    while sum(wants) > len(free) and deg_ptr < len(order):
-        idx = order[deg_ptr]
-        if wants[idx] > 1:
-            import logging
-
-            logging.warning(
-                f"pipeline: not enough event ids for address-overlap reverse sync; "
-                f"degrading pair ({reverse_sync_pairs[idx]['first_stage']} -> "
-                f"{reverse_sync_pairs[idx]['last_stage']}) from {wants[idx]} ids to 1 "
-                f"(slots will serialize, correctness preserved)."
-            )
-            wants[idx] = 1
-        deg_ptr += 1
-
-    if sum(wants) > len(free):
-        raise ValueError(
-            f"pipeline: not enough free event ids (0-{max_event_id - 1}) for "
-            f"address-overlap reverse syncs. Need {sum(wants)}, have {len(free)} free "
-            f"(used: {sorted(used)}). Reduce cross-core buffer id usage or overlaps."
-        )
-
-    # Allocate from free ids in order
-    cursor = 0
-    for p, n in zip(reverse_sync_pairs, wants):
-        p["event_ids"] = free[cursor:cursor + n]
-        cursor += n
-
-
-def _collect_vf_func_defs(info: PipelineInfo, closure_vars: dict) -> dict[str, ast.FunctionDef]:
-    """Collect VF helper func defs.
-
-    Includes both @pl.vector_function decorated functions AND plain wrapper
-    functions that transitively call a @pl.vector_function (any depth of
-    indirection). This ensures the cross-core scanner can see through chains
-    like ``stage a → b → c → @pl.vector_function d``.
+    There used to be a transitive closure here that also counted a plain function as a
+    vector one merely for calling one. That made such a wrapper atomic, so any block op it
+    also held was never scanned. Scanning through plain functions removes the need for it.
     """
     stage_names = {s.func_name for s in info.stages}
     vf_func_defs: dict[str, ast.FunctionDef] = {}
-    all_func_defs: dict[str, ast.FunctionDef] = {}
+    helper_func_defs: dict[str, ast.FunctionDef] = {}
     for name, val in closure_vars.items():
-        if callable(val) and name not in stage_names and not is_pipeline_stage(val):
-            fd = _try_get_funcdef(val)
-            if fd is not None:
-                all_func_defs[name] = fd
-                if _is_vf_function(fd):
-                    vf_func_defs[name] = fd
-    # Iteratively include plain functions that call any already-known VF function,
-    # repeating until no new additions (transitive closure).
-    changed = True
-    while changed:
-        changed = False
-        for name, fd in all_func_defs.items():
-            if name in vf_func_defs:
-                continue
-            if _calls_any_vf_function(fd, vf_func_defs):
-                vf_func_defs[name] = fd
-                changed = True
-    return vf_func_defs
-
-
-def _try_get_funcdef(fn) -> ast.FunctionDef | None:
-    """Get the ast.FunctionDef for a Python function object, or None.
-
-    Line numbers are shifted to the ones in the real file. Re-parsing a source snippet
-    numbers it from 1, and every diagnostic that names a node inside a stage body reports
-    whatever this returns — so without the shift those messages point at a line the user
-    cannot find.
-    """
-    import inspect
-    import textwrap
-
-    if fn is None:
-        return None
-    try:
-        lines, start_lineno = inspect.getsourcelines(fn)
-        mod = ast.parse(textwrap.dedent("".join(lines)))
-        # getsourcelines is 1-based and so is the fresh parse, hence the -1.
-        ast.increment_lineno(mod, start_lineno - 1)
-        for node in mod.body:
-            if isinstance(node, ast.FunctionDef):
-                return node
-    except (OSError, TypeError, SyntaxError):
-        return None
-    return None
+        if not callable(val) or name in stage_names or is_pipeline_stage(val):
+            continue
+        func_def = get_funcdef(val)
+        if func_def is None:
+            continue
+        target = vf_func_defs if is_vf_function(func_def) else helper_func_defs
+        target[name] = func_def
+    return vf_func_defs, helper_func_defs
 
 
 def _record_pipeline_loop_info(stmt: ast.For, info: PipelineInfo) -> None:
@@ -381,25 +296,24 @@ def _record_pipeline_loop_info(stmt: ast.For, info: PipelineInfo) -> None:
             "(e.g. `for ki in pl.range(...)`); tuple unpacking is not supported."
         )
     info.pipeline_loop = stmt
-    info.inner_loop_var = stmt.target.id
+    info.pipeline_loop_var = stmt.target.id
     # L6: loop must be pl.range(...) with extractable end bound
-    info.inner_loop_range_end = None
-    info.inner_loop_step = None
+    info.pipeline_loop_end = None
+    info.pipeline_loop_step = None
     if isinstance(stmt.iter, ast.Call):
         args = stmt.iter.args
         if len(args) >= 2:
-            info.inner_loop_range_end = args[1]
+            info.pipeline_loop_end = args[1]
         elif len(args) == 1:
-            info.inner_loop_range_end = args[0]
+            info.pipeline_loop_end = args[0]
         if len(args) >= 3:
-            info.inner_loop_step = args[2]
-    if info.inner_loop_range_end is None:
+            info.pipeline_loop_step = args[2]
+    if info.pipeline_loop_end is None:
         raise ValueError(
-            f"pipeline: pipeline loop `for {info.inner_loop_var} in ...` must iterate "
+            f"pipeline: pipeline loop `for {info.pipeline_loop_var} in ...` must iterate "
             f"over pl.range(start, end[, step]) so the end bound can be extracted "
             f"for the is_valid guard; got an unsupported loop iterable."
         )
-
 
 
 def _nested_search_body(stmt: ast.stmt) -> list[ast.stmt] | None:
@@ -409,9 +323,7 @@ def _nested_search_body(stmt: ast.stmt) -> list[ast.stmt] | None:
     return None
 
 
-def _find_pipeline_loop(
-    stmts: list[ast.stmt], info: PipelineInfo, stage_func_names: set, closure_vars: dict
-):
+def _find_pipeline_loop(stmts: list[ast.stmt], info: PipelineInfo, stage_func_names: set):
     """Recursively find the innermost for-loop containing stage calls."""
     for stmt in stmts:
         if isinstance(stmt, ast.For):
@@ -420,9 +332,7 @@ def _find_pipeline_loop(
                 _record_pipeline_loop_info(stmt, info)
                 return True
         nested_body = _nested_search_body(stmt)
-        if nested_body is not None and _find_pipeline_loop(
-            nested_body, info, stage_func_names, closure_vars
-        ):
+        if nested_body is not None and _find_pipeline_loop(nested_body, info, stage_func_names):
             return True
     return False
 
@@ -437,7 +347,7 @@ def _split_stage_section_body(body: list[ast.stmt], stage_func_names: set):
     for body_stmt in body:
         if stage_call is None:
             if isinstance(body_stmt, ast.Expr) and isinstance(body_stmt.value, ast.Call):
-                func_name = _get_call_func_name(body_stmt.value)
+                func_name = call_name(body_stmt.value)
                 if func_name in stage_func_names:
                     stage_call = body_stmt.value
                     stage_func_name = func_name
@@ -454,7 +364,7 @@ def _extract_stages_from_loop(for_stmt: ast.For, info: PipelineInfo, stage_func_
 
     for stmt in for_stmt.body:
         if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
-            fn = _get_call_func_name(stmt.value)
+            fn = call_name(stmt.value)
             if fn in stage_func_names:
                 info.stages.append(
                     StageCall(
@@ -462,6 +372,7 @@ def _extract_stages_from_loop(for_stmt: ast.For, info: PipelineInfo, stage_func_
                         section_kind="",
                         args=list(stmt.value.args),
                         delay=0,
+                        source_stmt=stmt,
                     )
                 )
                 found_any = True
@@ -473,6 +384,7 @@ def _extract_stages_from_loop(for_stmt: ast.For, info: PipelineInfo, stage_func_
                 continue
             stage_call_info = _extract_stage_from_section(stmt, section_kind, stage_func_names)
             if stage_call_info is not None:
+                stage_call_info.source_stmt = stmt
                 info.stages.append(stage_call_info)
                 found_any = True
 
@@ -485,11 +397,11 @@ def _check_unsupported_section(stmt: ast.With, stage_func_names: set):
         if (
             isinstance(body_stmt, ast.Expr)
             and isinstance(body_stmt.value, ast.Call)
-            and _get_call_func_name(body_stmt.value) in stage_func_names
+            and call_name(body_stmt.value) in stage_func_names
         ):
             raise ValueError(
                 f"pipeline: stage call "
-                f"'{_get_call_func_name(body_stmt.value)}' is inside an "
+                f"'{call_name(body_stmt.value)}' is inside an "
                 f"unsupported `with` block. Stage calls must be wrapped in "
                 f"`with pl.section_cube()` or `with pl.section_vector()`."
             )
@@ -505,12 +417,12 @@ def _extract_stage_from_section(stmt: ast.With, section_kind: str, stage_func_na
         if (
             isinstance(body_stmt, ast.Expr)
             and isinstance(body_stmt.value, ast.Call)
-            and _get_call_func_name(body_stmt.value) in stage_func_names
+            and call_name(body_stmt.value) in stage_func_names
         ):
             raise ValueError(
                 f"pipeline: section block contains multiple stage calls "
                 f"('{stage_func_name}' and "
-                f"'{_get_call_func_name(body_stmt.value)}'). Each "
+                f"'{call_name(body_stmt.value)}'). Each "
                 f"`with pl.section_*()` block must contain exactly one stage call."
             )
     return StageCall(
@@ -536,37 +448,6 @@ def _get_section_kind(with_stmt: ast.With) -> str | None:
     return None
 
 
-def _is_vf_function(func_def: ast.FunctionDef) -> bool:
-    """Check if a function is a VF helper (``@pl.vector_function`` decorated)."""
-    for dec in func_def.decorator_list:
-        if isinstance(dec, ast.Attribute) and dec.attr == "vector_function":
-            return True
-        if isinstance(dec, ast.Name) and dec.id == "vector_function":
-            return True
-    return False
-
-
-def _calls_any_vf_function(func_def: ast.FunctionDef, vf_func_defs: dict[str, ast.FunctionDef]) -> bool:
-    """Check if a function body calls any known VF function (one level of indirection)."""
-    for node in ast.walk(func_def):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            if node.func.id in vf_func_defs:
-                return True
-    return False
-
-
-def _get_call_func_name(call: ast.Call) -> str:
-    """Get the function name from a Call node."""
-    if isinstance(call.func, ast.Name):
-        return call.func.id
-    return ""
-
-
-
-
-
-
-
 def _is_ctx_scalar(name: str, info: PipelineInfo) -> bool:
     """True if ``name`` holds a scalar the ctx slot can carry.
 
@@ -587,17 +468,27 @@ def _is_ctx_scalar(name: str, info: PipelineInfo) -> bool:
 
 
 def _collect_var_sections(func_def: ast.FunctionDef) -> dict:
-    """{name: section kind} for names bound inside a ``pl.section_*()`` block.
+    """``{name: {section kinds it is bound in}}`` for names bound in a ``pl.section_*()``.
 
     A name bound inside a section exists only for that target: the other target's parse
     skips the whole block. So a ctx field fed from such a name has to be filled inside the
-    same section, or the other target would fill it from whatever the name happens to mean
-    there — usually a stale initial value, silently overwriting the real one, since both
-    targets write the same ctx memory.
+    same section — an unwrapped fill is emitted for both targets, and the one that cannot
+    see the name has nothing to fill from.
+
+    A name can be bound in BOTH sections, and that is ordinary rather than a mistake: the
+    two cores walk the same loop nest, so each ends up with its own ``ki``. They really are
+    two variables — each target compiles to its own function with its own ctx array (see
+    the generated ``..._impl_cube`` / ``..._impl_vector``), so nothing is shared and nothing
+    races. Each fills its own copy from the name it can see, which is why this maps to a SET
+    of sections and _build_ctx_field_fills emits one fill per section.
+
+    Recording only the first section, as this did, made the answer depend on which block was
+    written first: swapping the two ``with`` blocks — no change in meaning — flipped which
+    target filled the field and left the other holding a zero.
 
     Names absent from this map come from outside any section and are visible to both.
     """
-    sections: dict = {}
+    sections: dict[str, set] = {}
     for node in ast.walk(func_def):
         if not isinstance(node, ast.With):
             continue
@@ -606,7 +497,7 @@ def _collect_var_sections(func_def: ast.FunctionDef) -> dict:
             continue
         for inner in ast.walk(node):
             if isinstance(inner, ast.Name) and isinstance(inner.ctx, ast.Store):
-                sections.setdefault(inner.id, kind)
+                sections.setdefault(inner.id, set()).add(kind)
     return sections
 
 
@@ -623,30 +514,8 @@ def _is_scalar_expr(node: ast.expr, info: PipelineInfo) -> bool:
     return False
 
 
-def _slot_index_field(group: str) -> str:
-    """Ctx field (and variable) name holding a group's current slot index."""
-    return f"_pl_idx_{group}"
-
-
-def _slot_pick_of(node: ast.expr, groups: set) -> tuple[str, str] | None:
-    """``(group, kind)`` if ``node`` selects a slot of a known group, else None.
-
-    ``kind`` is the accessor name for a method call (only ``next`` advances the group's
-    cursor, so the others must not be rewritten as an advance) or ``"index"`` for ``g[i]``.
-    """
-    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-        if node.func.attr in ("next", "current", "previous"):
-            base = node.func.value
-            if isinstance(base, ast.Name) and base.id in groups:
-                return base.id, node.func.attr
-    if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name):
-        if node.value.id in groups:
-            return node.value.id, "index"
-    return None
-
-
-def _collect_outer_slots(func_def: ast.FunctionDef, info: PipelineInfo, decls: list) -> dict:
-    """{slot variable: (group, slot count)} for slots picked outside the pipeline loop.
+def _collect_outer_slots(func_def: ast.FunctionDef, info: PipelineInfo) -> dict:
+    """{name: (group, kind, slot count)} for slots picked outside the pipeline loop.
 
     A slot picked inside the loop rotates once per beat and is protected by the sync graph;
     one picked outside advances only per outer iteration, while every beat reads it. A
@@ -655,36 +524,41 @@ def _collect_outer_slots(func_def: ast.FunctionDef, info: PipelineInfo, decls: l
     ctx fixes that: each beat snapshots the index it used, and every consumer re-selects
     the slot with its own beat's index.
 
-    Only slots a stage actually consumes are collected; pure bookkeeping slots are left
-    alone. Values are ``(group, kind, slot count)``; the rewrite needs the count as its
-    modulus, so a group whose mutex_ids do not resolve statically is reported as an error
-    rather than silently skipped — skipping it would leave the delayed stage reading the
-    wrong slot with no diagnostic.
-    """
-    # Read off the shared declaration scan; info.sync is not filled until _scan_cross_core.
-    from ._cross_core_scanner import scan_all_tile_group_names, scan_buffer_mutex_ids
+    Renaming the slot before passing it on (``cur = g.current()`` then ``alias = cur``) is
+    followed, because the two halves of the test otherwise land on different statements —
+    the pick names a variable no stage mentions, and the stage's argument is assigned from
+    a plain name rather than an accessor — so each was skipped and the slot went uncarried,
+    silently. Every name along the chain maps to the same entry, since the consumers key on
+    different ones: the rewrite of the pick itself looks up the assignment target, while the
+    ctx field and the stage's argument look up the name the stage was handed.
 
-    groups = scan_all_tile_group_names(decls)
+    Only slots a stage actually consumes are kept; pure bookkeeping slots are left alone.
+    The rewrite needs the slot count as its modulus, so a group whose mutex_ids do not
+    resolve statically is reported as an error rather than silently skipped — skipping it
+    would leave the delayed stage reading the wrong slot with no diagnostic.
+    """
+    groups = info.group_names
     if not groups or info.pipeline_loop is None:
         return {}
-    slot_counts = {name: len(ids) for name, ids in scan_buffer_mutex_ids(decls, info.closure_vars).items()}
+    # One lock per slot. Deliberately no fall-back to addr_ranges (which _sync_graph._slot_count
+    # does have): those are not scanned yet here, and an outer slot needs an EXACT count —
+    # a group whose ids do not resolve is reported below rather than guessed at.
+    slot_counts = {name: len(ids) for name, ids in info.sync.mutex_ids.items()}
 
     consumed = {
         arg.id for stage in info.stages for arg in stage.args if isinstance(arg, ast.Name)
     }
     inside = {id(node) for node in ast.walk(info.pipeline_loop)}
 
-    result: dict = {}
+    picked: dict = {}
     for node in ast.walk(func_def):
         if not (isinstance(node, ast.Assign) and len(node.targets) == 1):
             continue
         target = node.targets[0]
-        if not isinstance(target, ast.Name) or target.id not in consumed:
-            continue
-        if id(node) in inside:
+        if not isinstance(target, ast.Name) or id(node) in inside:
             continue  # picked per beat: the sync graph already covers it
-        pick = _slot_pick_of(node.value, groups)
-        if pick is None:
+        pick = slot_accessor(node.value)
+        if pick is None or pick[0] not in groups:
             continue
         group, kind = pick
         if group not in slot_counts:
@@ -694,8 +568,33 @@ def _collect_outer_slots(func_def: ast.FunctionDef, info: PipelineInfo, decls: l
                 f"statically, so the number of slots is unknown. The transform needs it to "
                 f"give each stage the slot from its own iteration."
             )
-        result[target.id] = (group, kind, slot_counts[group])
-    return result
+        picked[target.id] = (group, kind, slot_counts[group])
+
+    # Follow renames to a fixed point, so a chain of them resolves too.
+    changed = True
+    while changed:
+        changed = False
+        for node in ast.walk(func_def):
+            if not (isinstance(node, ast.Assign) and len(node.targets) == 1):
+                continue
+            target = node.targets[0]
+            if not isinstance(target, ast.Name) or target.id in picked:
+                continue
+            if isinstance(node.value, ast.Name) and node.value.id in picked:
+                picked[target.id] = picked[node.value.id]
+                changed = True
+
+    # A chain counts if a stage takes ANY name along it; every name on that chain is kept,
+    # because the consumers do not all look up the same one.
+    by_entry: dict = {}
+    for name, entry in picked.items():
+        by_entry.setdefault(entry, []).append(name)
+    return {
+        name: entry
+        for entry, names in by_entry.items()
+        if any(n in consumed for n in names)
+        for name in names
+    }
 
 
 def _collect_struct_args(func_def: ast.FunctionDef, info: PipelineInfo) -> dict:
@@ -755,7 +654,7 @@ def _collect_struct_args(func_def: ast.FunctionDef, info: PipelineInfo) -> dict:
     return result
 
 
-def _derive_ctx_fields(info: PipelineInfo, closure_vars: dict):
+def _derive_ctx_fields(info: PipelineInfo):
     """Decide how each stage argument reaches its stage, by the argument's TYPE.
 
     The type is what matters, not whether the value changes across iterations: a scalar can
@@ -800,13 +699,13 @@ def _derive_ctx_fields(info: PipelineInfo, closure_vars: dict):
                     # The whole ctx slot stands in for the struct: same field names, so the
                     # stage body needs no rewriting. Fields are snapshotted individually.
                     ctx_field_set.update(info.struct_args[arg.id])
-                    arg_map.append((_PL_STRUCT_ARG, ast.Name(id=arg.id, ctx=ast.Load())))
+                    arg_map.append((PL_STRUCT_ARG, ast.Name(id=arg.id, ctx=ast.Load())))
                     continue
                 if arg.id in info.outer_slots:
                     # Slot chosen outside the loop: ctx carries the INDEX, and the stage
                     # re-selects the slot with its own beat's index (see _build_stage_args).
                     group = info.outer_slots[arg.id][0]
-                    fname = _slot_index_field(group)
+                    fname = slot_index_field(group)
                     ctx_field_set.add(fname)
                     arg_map.append((fname, ast.Name(id=fname, ctx=ast.Load())))
                     continue
@@ -833,7 +732,7 @@ def _derive_ctx_fields(info: PipelineInfo, closure_vars: dict):
     # name coming from a user struct. The two trailing ones are the transform's own
     # bookkeeping rather than stage data — see their definitions at the top of this module
     # for why each has to travel with the task instead of being read live.
-    info.ctx_fields = [_PL_IS_VALID_FIELD] + sorted(ctx_field_set) + [_PL_TASK_ID_FIELD]
+    info.ctx_fields = [PL_IS_VALID_FIELD] + sorted(ctx_field_set) + [PL_TASK_ID_FIELD]
 
 
 def probe_kernel_facts(kernel_def, bound_signature=None) -> tuple[dict, dict]:
@@ -897,4 +796,11 @@ def probe_kernel_facts(kernel_def, bound_signature=None) -> tuple[dict, dict]:
             existing = if_const.get(k)
             if existing is None or (not existing[0] and v[0]):
                 if_const[k] = v
+            elif existing[0] and v[0] and existing[1] != v[1]:
+                # Both parses folded this site, to different values: the condition is not
+                # target-independent after all. Fall back to dynamic rather than keeping a
+                # verdict that holds for one target only — a branch wrapping a stage then
+                # reports CB3 instead of being pruned down the wrong side. Only two parses
+                # run and Cube is first, so nothing upgrades this back to constant.
+                if_const[k] = (False, None)
     return if_const, var_types

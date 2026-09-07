@@ -1391,6 +1391,8 @@ def make_tile(
 def make_tile_group(*, type: Any, addrs: int | list,
     mutex_ids: list[int | list[int] | tuple[int, ...]] | tuple | None = None,
     depth: int | None = None,
+    fwd_ids: list[int] | tuple[int, ...] | None = None,
+    bwd_ids: list[int] | tuple[int, ...] | None = None,
 ) -> Any:
     """Create a rotating Tile group with optional mutex metadata.
 
@@ -1406,4 +1408,9 @@ def make_tile_group(*, type: Any, addrs: int | list,
             mutex ID count, with no duplicates for one Tile
         depth: Number of Tiles. Required when ``mutex_ids`` is None or empty;
             otherwise inferred from ``len(mutex_ids)``
+        fwd_ids: Optional cross-core event IDs (0..15) marking this group as a
+            producer->consumer channel for the automatic pipeline transform. One
+            per Tile; the transform picks ``fwd_ids[i % N]`` per iteration
+        bwd_ids: Optional cross-core event IDs for the consumer->producer
+            direction (buffer released). Same shape as ``fwd_ids``
     """

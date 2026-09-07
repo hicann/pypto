@@ -13,26 +13,21 @@ from __future__ import annotations
 
 import ast
 import copy
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
 
-from ._analyzer import (
-    _PL_IS_VALID_FIELD,
-    _PL_STRUCT_ARG,
-    _PL_TASK_ID_FIELD,
-    PipelineInfo,
-    _get_call_func_name,
-    _slot_index_field,
-    analyze_pipeline,
+from ._analyzer import PipelineInfo, analyze_pipeline
+from ._astutil import (
+    PL_IS_VALID_FIELD,
+    PL_STRUCT_ARG,
+    PL_TASK_ID_FIELD,
+    call_name,
+    slot_accessor,
+    slot_index_field,
 )
 from ._stage import is_pipeline_stage
-from ._validate import validate_names, validate_schedule
+from ._sync_graph import SyncPlan, build_graph, plan_sync, sites_for
+from ._validate import validate_names
 from .config import PipelineConfig
-
-if TYPE_CHECKING:
-    from ._sync_graph import SyncPlan
-
-
 
 
 def _rewrite_outer_slot_picks(func_body: list[ast.stmt], info: PipelineInfo) -> None:
@@ -60,8 +55,13 @@ def _rewrite_outer_slot_picks(func_body: list[ast.stmt], info: PipelineInfo) -> 
             target = node.targets[0]
             if not isinstance(target, ast.Name) or target.id not in by_group:
                 return node
+            if slot_accessor(node.value) is None:
+                # A rename of a slot (``alias = cur``) carries the same entry so that the
+                # stage's argument resolves, but only the pick itself may be rewritten:
+                # rewriting the rename too would advance the group's index a second time.
+                return node
             group, kind, slots = by_group[target.id]
-            idx_name = _slot_index_field(group)
+            idx_name = slot_index_field(group)
             if kind == "index":
                 index_assign = ast.Assign(
                     targets=[ast.Name(id=idx_name, ctx=ast.Store())],
@@ -98,6 +98,21 @@ def _rewrite_outer_slot_picks(func_body: list[ast.stmt], info: PipelineInfo) -> 
 
     for i, stmt in enumerate(func_body):
         func_body[i] = _Rewriter().visit(stmt)
+
+
+# ---------------------------------------------------------------------------
+# Cross-core sync emission
+#
+# Everything that turns a SyncPlan into statements. Kept together because the sync path
+# is read as a path: plan it (_build_sync_plan), find one stage's sites
+# (_sites_for_stage), render them (_sync_stmts_for), and place the two halves that fall
+# outside the loop (_emit_prefire_and_drain). These used to sit in four separate parts of
+# the file, so following that path meant jumping between them.
+#
+# Nothing here decides WHERE a stage runs — that is arrangement, below. The one thing the
+# two share is the schedule: _schedule_of reads the delays arrangement computed, and the
+# graph is built from them.
+# ---------------------------------------------------------------------------
 
 
 def _build_event_id_index(ids_node: ast.expr, slot_count: int, index_expr: ast.expr) -> ast.expr:
@@ -170,8 +185,6 @@ def _build_sync_plan(info: PipelineInfo):
     to the emitters as a value: planning twice would allocate a second event-id group for
     every address-reuse edge and declare it again.
     """
-    from ._sync_graph import build_graph, plan_sync
-
     return plan_sync(build_graph(info, _schedule_of(info)), info)
 
 
@@ -191,9 +204,99 @@ def _schedule_of(info: PipelineInfo) -> list:
 
 def _sites_for_stage(sync: SyncPlan, stage) -> tuple:
     """(pre_sites, post_sites) for one stage, out of the already-planned in-loop sync."""
-    from ._sync_graph import sites_for
-
     return sites_for(sync.sites, stage.func_name)
+
+
+def _build_lifted_id_decls(info: PipelineInfo) -> list[ast.stmt]:
+    """Declare lifted literal fwd_ids/bwd_ids as variables.
+
+    The buffer's ids_node was rewritten to a Name reference, so sync code uses
+    `var[idx]` instead of the unsupported `(1,2)[idx]` subscript. Shared by the
+    full-pipeline path (_build_declarations) and the serial one (_build_serial_decls).
+    """
+    stmts = []
+    for var_name, literal_node in info.sync.lifted_ids:
+        stmts.append(
+            ast.Assign(
+                targets=[ast.Name(id=var_name, ctx=ast.Store())],
+                value=copy.deepcopy(literal_node),
+                lineno=0,
+            )
+        )
+    return stmts
+
+
+def _build_serial_decls(info: PipelineInfo) -> list[ast.stmt]:
+    """Sync-only's pre-loop declarations: the lifted event-id variables + `_pl_sync_id = 0`.
+
+    Declarations only; the caller appends the sync pre-fire, as on the full-pipeline path.
+    The lifted ids must stay first either way — the pre-fire sets index those variables."""
+    decls = list(_build_lifted_id_decls(info))
+    decls.append(
+        ast.Assign(targets=[ast.Name(id=_PL_SYNC_ID, ctx=ast.Store())], value=ast.Constant(value=0), lineno=0)
+    )
+    return decls
+
+
+def _insert_sync_into_loop_body(body: list[ast.stmt], stage_by_name: dict, sync: SyncPlan) -> None:
+    """Insert wait(before)/set(after) cross-core sync around each stage call in
+    the loop body. Index base is `_pl_sync_id` (current iteration, no delay).
+
+    A stage call sits inside a `with pl.section_*()` block, so its sync is wrapped in
+    that same section.
+    """
+    index_expr = ast.Name(id=_PL_SYNC_ID, ctx=ast.Load())
+    for i, stmt in enumerate(body):
+        if not isinstance(stmt, ast.With):
+            continue
+        # Leaf stage: call inside a section block.
+        for j, inner in enumerate(stmt.body):
+            if isinstance(inner, ast.Expr) and isinstance(inner.value, ast.Call):
+                fname = call_name(inner.value)
+                stage = stage_by_name.get(fname)
+                if stage is not None:
+                    sites = _sites_for_stage(sync, stage)
+                    pre, post = _sync_stmts_for(sites, index_expr)
+                    stmt.body[j:j + 1] = pre + [inner] + post
+                    break
+
+
+def _emit_prefire_and_drain(sync: SyncPlan) -> tuple[list[ast.stmt], list[ast.stmt]]:
+    """Emit the plan's two out-of-loop halves: (sync_prefire, sync_drain).
+
+    Pre-fire supplies the permits a skewed edge's first waits have no partner for; the drain
+    consumes both those permits and the sets the same skew strands at the end, so the two
+    counts match. Both sit outside the loop, where no task counter exists, so their event ids
+    are indexed by a literal.
+
+    Both carry a ``sync_`` prefix at the call sites, because the full-pipeline path emits
+    drain BEATS (_build_drain_beats) after the same loop and the two are unrelated: the
+    beats let the delayed stages finish their tasks, this balances set/wait counts. The
+    prefix marks which of the two concerns a list belongs to — the same split the whole
+    transform is organised around — rather than inventing a second word for `sync.drain`.
+    """
+
+    def emit(sites) -> list[ast.stmt]:
+        by_section: dict[str, list] = {}
+        for site in sites:
+            by_section.setdefault(site.section, []).append((site.op, site.pipe, site.ids_node, site.id_index))
+        out: list[ast.stmt] = []
+        for section_kind, entries in by_section.items():
+            body = [
+                _build_system_sync_stmt(
+                    op, pipe, ast.Subscript(value=copy.deepcopy(ids), slice=ast.Constant(value=idx), ctx=ast.Load())
+                )
+                for op, pipe, ids, idx in entries
+            ]
+            out.append(_wrap_in_section(section_kind, body))
+        return out
+
+    return emit(sync.prefire), emit(sync.drain)
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
 
 def transform_pipeline(
@@ -213,8 +316,9 @@ def transform_pipeline(
         config: Pipeline configuration (depth, dump_generated, etc.)
         var_types: {name: IR type class name} from the parser probe; decides how each
             stage argument reaches its stage (see _derive_ctx_fields).
-        if_const_map: {ast.unparse(test): (is_const, value)} for every ``if`` in the
-            kernel, produced by a probe parse (reuses the parser's constant folding).
+        if_const_map: {(lineno, col_offset) of test: (is_const, value)} for every ``if``
+            in the kernel body, produced by a probe parse (reuses the parser's constant
+            folding).
             Drives the compile-time constant branch collapse before analysis.
         tilingkey_consts: This launch key's concrete tilingkey field values.
         datatype_consts: This launch's concrete datatype symbol values.
@@ -242,10 +346,10 @@ def transform_pipeline(
     # Analyze the serial structure (raises if no usable stages / pipeline loop)
     info = analyze_pipeline(new_func, closure_vars, var_types)
 
-    if config.sync_only:
+    if config.preload == 0:
         # Validation mode: keep the serial loop, only auto-insert cross-core sync.
-        validate_names(new_func, _sync_only_var_names())
-        _transform_sync_only(new_func.body, info, _build_sync_plan(info))
+        validate_names(new_func, _serial_var_names())
+        _transform_serial(new_func.body, info, _build_sync_plan(info))
         ast.fix_missing_locations(new_func)
         return new_func
 
@@ -255,14 +359,13 @@ def transform_pipeline(
     # The names to check depend on the delays: one ctx variable per distinct delay.
     validate_names(new_func, _pipeline_var_names(info))
     # One gate for every check that needs the schedule (see _validate).
-    validate_schedule(info)
 
     # ctx ring buffer depth = max_delay + 1
     max_delay = max((s.delay for s in info.stages), default=0)
     depth = max_delay + 1
 
     # Find and replace the pipeline loop in the function body.
-    _transform_body(new_func.body, info, depth, closure_vars, _build_sync_plan(info))
+    _transform_body(new_func.body, info, depth, _build_sync_plan(info))
 
     ast.fix_missing_locations(new_func)
     return new_func
@@ -272,28 +375,27 @@ def _prune_const_branches(func_def: ast.FunctionDef, closure_vars: dict, if_cons
     """Splice out compile-time-constant if/else around stage calls, in place.
 
     The taken branch's body replaces the whole ``if`` so downstream only sees plain
-    unconditional stage calls. ``if_const_map`` maps ``ast.unparse(test)`` -> (is_const,
-    value), from a probe parse that reuses the parser's constant folding. Raises on a
-    dynamic condition around a stage call.
+    unconditional stage calls. ``if_const_map`` maps a condition's source position
+    ``(lineno, col_offset)`` -> (is_const, value), from a probe parse that reuses the
+    parser's constant folding. Raises on a dynamic condition around a stage call.
     """
     stage_func_names = {name for name, val in closure_vars.items() if is_pipeline_stage(val)}
-    func_def.body = _prune_stmts(func_def.body, stage_func_names, closure_vars, if_const_map)
+    func_def.body = _prune_stmts(func_def.body, stage_func_names, if_const_map)
 
 
-def _prune_stmts(stmts: list[ast.stmt], stage_func_names: set,
-                 closure_vars: dict, if_const_map: dict) -> list[ast.stmt]:
+def _prune_stmts(stmts: list[ast.stmt], stage_func_names: set, if_const_map: dict) -> list[ast.stmt]:
     """Return a new statement list with dead constant stage-bearing branches pruned.
     Recurses into For/With/If bodies; drops ``with`` sections that become empty."""
     out: list[ast.stmt] = []
     for stmt in stmts:
         if isinstance(stmt, ast.If):
-            out.extend(_prune_if(stmt, stage_func_names, closure_vars, if_const_map))
+            out.extend(_prune_if(stmt, stage_func_names, if_const_map))
         elif isinstance(stmt, ast.For):
-            stmt.body = _prune_stmts(stmt.body, stage_func_names, closure_vars, if_const_map)
-            stmt.orelse = _prune_stmts(stmt.orelse, stage_func_names, closure_vars, if_const_map)
+            stmt.body = _prune_stmts(stmt.body, stage_func_names, if_const_map)
+            stmt.orelse = _prune_stmts(stmt.orelse, stage_func_names, if_const_map)
             out.append(stmt)
         elif isinstance(stmt, ast.With):
-            stmt.body = _prune_stmts(stmt.body, stage_func_names, closure_vars, if_const_map)
+            stmt.body = _prune_stmts(stmt.body, stage_func_names, if_const_map)
             if stmt.body:  # drop a section block emptied by pruning
                 out.append(stmt)
         else:
@@ -301,7 +403,7 @@ def _prune_stmts(stmts: list[ast.stmt], stage_func_names: set,
     return out
 
 
-def _prune_if(if_stmt: ast.If, stage_func_names: set, closure_vars: dict, if_const_map: dict) -> list[ast.stmt]:
+def _prune_if(if_stmt: ast.If, stage_func_names: set, if_const_map: dict) -> list[ast.stmt]:
     """Prune a single ``if`` (recursing into elif chains via orelse). Returns the
     replacement statement list for this ``if``.
 
@@ -317,32 +419,36 @@ def _prune_if(if_stmt: ast.If, stage_func_names: set, closure_vars: dict, if_con
     to prune any nested constant ``if``. But a runtime branch must not wrap a stage
     call — that cannot be auto-arranged/synced → CB3.
     """
-    key = ast.unparse(if_stmt.test)
-    is_const, value = if_const_map.get(key, (False, None))
+    # Keyed by the condition's source position, not its text: two sites can be written
+    # the same way and fold to different values (see _record_if_const).
+    is_const, value = if_const_map.get(
+        (if_stmt.test.lineno, if_stmt.test.col_offset), (False, None)
+    )
 
     if not is_const:
         # Runtime conditional: keep it, but a stage call directly inside a runtime
         # branch is unsupported (dynamic dispatch of stages).
         if _branch_contains_stage(if_stmt, stage_func_names):
             raise ValueError(
-                f"pipeline (CB3): branch condition '{key}' wraps a stage call but is not a "
-                "compile-time constant. Dynamic branch stages are unsupported; use a "
-                "compile-time constant condition (e.g. a tiling-key field) or insert sync manually."
+                f"pipeline (CB3): branch condition '{ast.unparse(if_stmt.test)}' at line "
+                f"{if_stmt.test.lineno} wraps a stage call but is not a compile-time "
+                "constant. Dynamic branch stages are unsupported; use a compile-time "
+                "constant condition (e.g. a tiling-key field) or insert sync manually."
             )
-        if_stmt.body = _prune_stmts(if_stmt.body, stage_func_names, closure_vars, if_const_map)
-        if_stmt.orelse = _prune_stmts(if_stmt.orelse, stage_func_names, closure_vars, if_const_map)
+        if_stmt.body = _prune_stmts(if_stmt.body, stage_func_names, if_const_map)
+        if_stmt.orelse = _prune_stmts(if_stmt.orelse, stage_func_names, if_const_map)
         return [if_stmt]
 
     # Compile-time constant: keep only the taken branch (elif chains are nested If
     # nodes in orelse; a plain else is a stmt list; no else → the if vanishes).
     taken = if_stmt.body if value else if_stmt.orelse
-    return _prune_stmts(taken, stage_func_names, closure_vars, if_const_map)
+    return _prune_stmts(taken, stage_func_names, if_const_map)
 
 
 def _branch_contains_stage(if_stmt: ast.If, stage_func_names: set) -> bool:
     """True if any branch of this if (then/elif/else, recursively) calls a stage."""
     for node in ast.walk(if_stmt):
-        if isinstance(node, ast.Call) and _get_call_func_name(node) in stage_func_names:
+        if isinstance(node, ast.Call) and call_name(node) in stage_func_names:
             return True
     return False
 
@@ -360,36 +466,36 @@ def _build_counter_incr(name: str) -> ast.stmt:
     )
 
 
-def _transform_sync_only(func_body: list[ast.stmt], info: PipelineInfo, sync: SyncPlan) -> bool:
+def _transform_serial(func_body: list[ast.stmt], info: PipelineInfo, sync: SyncPlan) -> None:
     """Validation mode: keep the serial loop structure, only auto-insert cross-core
     sync. Two placement rules (that's all there is to it):
 
       1. Stage-to-stage sync goes INSIDE the innermost pipeline loop (the
-         `for <inner_loop_var>` loop): wait/set wrapped around each stage call,
+         pipeline loop): wait/set wrapped around each stage call,
          indexed by `_pl_sync_id % slot_count`.
       2. decls (lifted ids + `_pl_sync_id = 0`) + pre-fire go BEFORE the OUTERMOST
-         loop and post-drain AFTER it, so they run exactly once and `_pl_sync_id`
+         loop and the sync drain AFTER it, so they run exactly once and `_pl_sync_id`
          advances continuously across all outer iterations.
 
     No ctx / guard / delay / extra.
     """
     stage_by_name = {s.func_name: s for s in info.stages}
     # Serial: every stage runs in the same beat, so a zero schedule.
-    pre_fire, post_drain = _emit_war_balance(sync)
+    sync_prefire, sync_drain = _emit_prefire_and_drain(sync)
 
     def transform_loop(site: _LoopSite):
         # Rule 1: stage sync + per-iteration counter, inside the innermost loop.
         # In place (return None); the loop node stays.
-        _insert_sync_into_loop_body(site.pipeline_loop.body, stage_by_name, info, sync)
+        _insert_sync_into_loop_body(site.pipeline_loop.body, stage_by_name, sync)
         site.pipeline_loop.body.append(_build_counter_incr(_PL_SYNC_ID))
         return None
 
-    # Rule 2: decls + pre-fire before the outermost loop, post-drain after it.
-    return _place_around_pipeline_loop(
+    # Rule 2: decls + pre-fire before the outermost loop, the sync drain after it.
+    _place_around_pipeline_loop(
         func_body, info,
         transform_loop=transform_loop,
-        pre_decls=_build_sync_only_decls(info, pre_fire),
-        post_drain=post_drain,
+        before_loop=_build_serial_decls(info) + sync_prefire,
+        after_loop=sync_drain,
     )
 
 
@@ -397,61 +503,63 @@ def _place_around_pipeline_loop(
     func_body: list[ast.stmt],
     info: PipelineInfo,
     transform_loop,
-    pre_decls: list[ast.stmt],
-    post_drain: list[ast.stmt],
-) -> bool:
-    """Shared skeleton for both sync_only and full-pipeline transforms.
+    before_loop: list[ast.stmt],
+    after_loop: list[ast.stmt],
+) -> None:
+    """Shared skeleton for both the serial and full-pipeline transforms.
 
     Locates the pipeline loop and its enclosing outermost loop, then:
       1. calls ``transform_loop(site)`` for the path-specific loop handling. It
-         returns either ``None`` (loop mutated in place — sync_only) or a list of
+         returns either ``None`` (loop mutated in place — serial) or a list of
          statements to REPLACE the pipeline loop node with (full pipeline). It must
          NOT mutate the tree (indices must stay valid until the splices below).
-      2. splices ``pre_decls`` BEFORE the outermost loop and ``post_drain`` AFTER it.
+      2. splices ``before_loop`` BEFORE the outermost loop and ``after_loop`` AFTER it.
 
-    Returns False if no pipeline loop is found.
+    Both lists are named for WHERE they go, not what they hold: the two emission paths put
+    different things there (the serial path only balances the sync, the full pipeline also runs
+    the drain beats), and naming them after one path's contents misreads the other's.
     """
     site = _locate_pipeline_loops(func_body, info.pipeline_loop)
     if site is None:
-        return False
+        # analyze_pipeline found this very node in this very tree, so failing to find it
+        # again means the two searches have drifted apart. Refuse rather than return
+        # quietly: a silent no-op emits the serial kernel with neither ctx nor sync.
+        raise ValueError(
+            "pipeline (internal): the pipeline loop the analyzer found is no longer "
+            "reachable in the kernel body — please report."
+        )
     replacement = transform_loop(site)
 
     top_level = site.pipeline_stmts is site.outer_stmts and site.pipeline_idx == site.outer_idx
     if replacement is not None and top_level:
         # Outermost loop IS the pipeline loop, replaced by N stmts. Splice everything in one go.
-        site.outer_stmts[site.outer_idx:site.outer_idx + 1] = pre_decls + replacement + post_drain
-        return True
+        site.outer_stmts[site.outer_idx:site.outer_idx + 1] = before_loop + replacement + after_loop
+        return
 
     if replacement is not None:
         # Nested: replace the inner pipeline loop; the outer loop node is untouched,
         # so its (stmts, idx) stay valid for the splices below.
         site.pipeline_stmts[site.pipeline_idx:site.pipeline_idx + 1] = replacement
 
-    # Splice drain at outer_idx+1 first (so outer_idx is unaffected), then decls.
-    site.outer_stmts[site.outer_idx + 1:site.outer_idx + 1] = post_drain
-    site.outer_stmts[site.outer_idx:site.outer_idx] = pre_decls
-    return True
+    # Splice the after-loop part at outer_idx+1 first (so outer_idx is unaffected).
+    site.outer_stmts[site.outer_idx + 1:site.outer_idx + 1] = after_loop
+    site.outer_stmts[site.outer_idx:site.outer_idx] = before_loop
 
 
 @dataclass
 class _LoopSite:
     """Where the pipeline loop lives, and its enclosing loop nest.
 
-    - pipeline_stmts/pipeline_idx: the `for <inner_loop_var>` loop — where stage
+    - pipeline_stmts/pipeline_idx: the pipeline loop — where stage
       sync / loop replacement happens.
     - outer_stmts/outer_idx: the OUTERMOST enclosing loop — where declarations go
-      before / drain after (run-once placement). When the pipeline loop is
+      before / the sync drain after (run-once placement). When the pipeline loop is
       top-level, coincides with the pipeline loop.
-    - enclosing_loops: every For on the nest path from the outermost loop down to
-      (but NOT including) the pipeline loop, outermost-first. Used to build the
-      "all outer loops are on their last iteration" predicate that gates drain
-      (extra). Empty when the pipeline loop is itself the outermost (single-level).
     """
     pipeline_stmts: list  # statement list that directly holds the pipeline loop
-    pipeline_idx: int     # index of the pipeline `for <inner_loop_var>` in pipeline_stmts
+    pipeline_idx: int     # index of the pipeline `for <pipeline_loop_var>` in pipeline_stmts
     outer_stmts: list     # statement list that holds the outermost enclosing loop
     outer_idx: int        # index of the outermost loop in outer_stmts
-    enclosing_loops: list = field(default_factory=list)  # list[ast.For], outermost-first, excludes pipeline loop
 
     @property
     def pipeline_loop(self) -> ast.For:
@@ -459,13 +567,13 @@ class _LoopSite:
 
 
 def _locate_pipeline_loops(func_body: list[ast.stmt], pipeline_loop: ast.For) -> "_LoopSite | None":
-    """Locate the pipeline loop, its enclosing outermost loop, and the full nest of
-    loops between them; return a _LoopSite (or None if there is no pipeline loop).
+    """Locate the pipeline loop and its enclosing outermost loop; return a _LoopSite
+    (or None if there is no pipeline loop).
 
     Scans each statement list for a For; descends into For/With bodies. The first
     For on the path down to the pipeline loop is the outermost loop; the pipeline loop
     itself is where the transform happens. When the pipeline loop is top-level, the two
-    coincide and enclosing_loops is empty.
+    coincide.
 
     Matched by node identity, never by loop-variable name: a kernel may well have several
     loops over the same variable (a prologue loop and the pipelined one both counting
@@ -475,13 +583,11 @@ def _locate_pipeline_loops(func_body: list[ast.stmt], pipeline_loop: ast.For) ->
     for i, stmt in enumerate(func_body):
         if isinstance(stmt, ast.For):
             if stmt is pipeline_loop:
-                return _LoopSite(func_body, i, func_body, i, enclosing_loops=[])  # top-level pipeline loop
-            enclosing: list[ast.For] = []
-            inner_site = _find_loop_site(stmt.body, pipeline_loop, enclosing)
+                return _LoopSite(func_body, i, func_body, i)  # top-level pipeline loop
+            inner_site = _find_loop_site(stmt.body, pipeline_loop)
             if inner_site is not None:
                 p_stmts, p_idx = inner_site
-                # `stmt` (this outermost For) plus any nested loops found on the way down.
-                return _LoopSite(p_stmts, p_idx, func_body, i, enclosing_loops=[stmt] + enclosing)
+                return _LoopSite(p_stmts, p_idx, func_body, i)
         elif isinstance(stmt, ast.With):
             inner = _locate_pipeline_loops(stmt.body, pipeline_loop)
             if inner is not None:
@@ -489,68 +595,17 @@ def _locate_pipeline_loops(func_body: list[ast.stmt], pipeline_loop: ast.For) ->
     return None
 
 
-def _find_loop_site(stmts: list[ast.stmt], pipeline_loop: ast.For, enclosing: list | None = None):
+def _find_loop_site(stmts: list[ast.stmt], pipeline_loop: ast.For):
     """Return (stmts, index) of ``pipeline_loop`` within ``stmts`` (descending uniformly
     through For/With bodies), or None if not found. Identity match — see
-    _locate_pipeline_loops for why the loop variable's name will not do.
-
-    If ``enclosing`` is given, every For encountered on the path down to (but not
-    including) the pipeline loop is appended to it, outermost-first."""
+    _locate_pipeline_loops for why the loop variable's name will not do."""
     for i, stmt in enumerate(stmts):
         if stmt is pipeline_loop:
             return stmts, i
         if isinstance(stmt, (ast.For, ast.With)):
-            if enclosing is not None and isinstance(stmt, ast.For):
-                enclosing.append(stmt)
-            found = _find_loop_site(stmt.body, pipeline_loop, enclosing)
+            found = _find_loop_site(stmt.body, pipeline_loop)
             if found is not None:
                 return found
-            if enclosing is not None and isinstance(stmt, ast.For):
-                enclosing.pop()  # backtrack: this For is not on the path to the pipeline loop
-    return None
-
-
-def _build_sync_only_decls(info: PipelineInfo, pre_fire: list[ast.stmt]) -> list[ast.stmt]:
-    """Build the pre-loop declarations: lifted-id decls + the given pre-fire
-    (backward set(bwd)) + `_pl_sync_id = 0`."""
-    decls = list(_build_lifted_id_decls(info))
-    decls.extend(pre_fire)
-    decls.append(
-        ast.Assign(targets=[ast.Name(id=_PL_SYNC_ID, ctx=ast.Store())], value=ast.Constant(value=0), lineno=0)
-    )
-    return decls
-
-
-def _insert_sync_into_loop_body(
-    body: list[ast.stmt], stage_by_name: dict, info: PipelineInfo, sync: SyncPlan
-) -> None:
-    """Insert wait(before)/set(after) cross-core sync around each stage call in
-    the loop body. Index base is `_pl_sync_id` (current iteration, no delay).
-
-    A stage call sits inside a `with pl.section_*()` block, so its sync is wrapped in
-    that same section.
-    """
-    index_expr = ast.Name(id=_PL_SYNC_ID, ctx=ast.Load())
-    for i, stmt in enumerate(body):
-        if not isinstance(stmt, ast.With):
-            continue
-        # Leaf stage: call inside a section block.
-        for j, inner in enumerate(stmt.body):
-            if isinstance(inner, ast.Expr) and isinstance(inner.value, ast.Call):
-                fname = _get_call_name(inner.value)
-                stage = stage_by_name.get(fname)
-                if stage is not None:
-                    sites = _sites_for_stage(sync, stage)
-                    pre, post = _sync_stmts_for(sites, index_expr)
-                    stmt.body[j:j + 1] = pre + [inner] + post
-                    break
-
-
-def _get_call_name(call: ast.Call) -> str | None:
-    if isinstance(call.func, ast.Name):
-        return call.func.id
-    if isinstance(call.func, ast.Attribute):
-        return call.func.attr
     return None
 
 
@@ -607,15 +662,15 @@ def _pipeline_var_names(info: PipelineInfo) -> set[str]:
     """The fixed variables the FULL PIPELINE path introduces.
 
     One entry per distinct delay, because that is how many ctx variables the emitted body
-    declares. Sync-only emits none of these — see _sync_only_var_names.
+    declares. The serial path emits none of these — see _serial_var_names.
     """
-    names = {"_pl_ctx_arr", _PL_TASK_ID_FIELD}
+    names = {"_pl_ctx_arr", PL_TASK_ID_FIELD}
     for stage in info.stages:
         names.add(_ctx_var_name(stage.delay))
     return names
 
 
-def _sync_only_var_names() -> set[str]:
+def _serial_var_names() -> set[str]:
     """The fixed variables the SYNC-ONLY path introduces: just its task counter.
 
     No ctx array, no per-delay ctx variables, no drain count — that path keeps the serial
@@ -628,17 +683,17 @@ def _transform_body(
     func_body: list[ast.stmt],
     info: PipelineInfo,
     depth: int,
-    closure_vars: dict,
     sync: SyncPlan,
-) -> bool:
-    """Full-pipeline transform. Same two placement rules as sync_only (via the
+) -> None:
+    """Full-pipeline transform. Same two placement rules as the serial path (via the
     shared _place_around_pipeline_loop skeleton):
 
       1. The innermost pipeline loop is REPLACED by its preload-pipeline version
          (_build_pipeline_loop: ctx ring buffer + delay + is_valid guards).
       2. declarations (_pl_ctx_arr, _pl_task_id, lifted ids, pre-fire) go BEFORE
-         the OUTERMOST loop; AFTER it come the drain beats that let the delayed stages
-         catch up, then the backward post-drain that balances set(bwd)/wait(bwd).
+         the OUTERMOST loop; AFTER it come the drain BEATS that let the delayed stages
+         catch up, then the sync DRAIN that balances set(bwd)/wait(bwd). The two are
+         unrelated despite both sitting there — see _emit_prefire_and_drain.
     """
     # Make the index behind every outside-the-loop slot pick explicit first, so the ctx can
     # carry it and each stage re-selects its own beat's slot.
@@ -649,42 +704,24 @@ def _transform_body(
         # pipeline_idx stays valid for the skeleton's splice.
         return _build_pipeline_loop(site.pipeline_loop, info, depth, sync)
 
-    pre_fire, post_drain = _emit_war_balance(sync)
-    return _place_around_pipeline_loop(
+    sync_prefire, sync_drain = _emit_prefire_and_drain(sync)
+    _place_around_pipeline_loop(
         func_body, info,
         transform_loop=transform_loop,
-        pre_decls=_build_declarations(info, depth, pre_fire),
-        # Drain beats first, then the balance: the beats emit the set(bwd) the last tasks
-        # still owe, which the waits below then consume.
-        post_drain=_build_drain_beats(info, depth, sync) + post_drain,
+        before_loop=_build_declarations(info, depth) + sync_prefire,
+        # Drain beats first, then the sync drain: the beats emit the set(bwd) the last
+        # tasks still owe, which the waits in the sync drain then consume.
+        after_loop=_build_drain_beats(info, depth, sync) + sync_drain,
     )
 
 
-def _build_lifted_id_decls(info: PipelineInfo) -> list[ast.stmt]:
-    """Declare lifted literal fwd_ids/bwd_ids as variables.
+def _build_declarations(info: PipelineInfo, depth: int) -> list[ast.stmt]:
+    """The full pipeline's pre-loop declarations: `_pl_ctx_arr`, `_pl_task_id`, the
+    lifted event-id variables and the outer-slot rotation counters.
 
-    The buffer's ids_node was rewritten to a Name reference, so sync code uses
-    `var[idx]` instead of the unsupported `(1,2)[idx]` subscript. Shared by the
-    full-pipeline path (_build_declarations) and sync_only (_build_sync_only_decls).
-    """
-    stmts = []
-    for var_name, literal_node in info.sync.lifted_ids:
-        stmts.append(
-            ast.Assign(
-                targets=[ast.Name(id=var_name, ctx=ast.Store())],
-                value=copy.deepcopy(literal_node),
-                lineno=0,
-            )
-        )
-    return stmts
-
-
-def _build_declarations(info: PipelineInfo, depth: int, pre_fire: list[ast.stmt]) -> list[ast.stmt]:
-    """Build the pre-loop declarations for the full pipeline: `_pl_ctx_arr` +
-    `_pl_task_id` + lifted-id decls + the given pre-fire (backward set(bwd)).
-
-    ``pre_fire`` is the first half of _emit_war_balance's matched pair; the caller
-    places the matching post-drain after the outermost loop."""
+    Declarations only. The sync pre-fire that also sits before the loop is appended by the
+    caller, so that each of the two things in that block still has a name of its own —
+    setting up the arrangement's state, and releasing the sync's opening permits."""
     stmts = []
 
     keywords = [ast.keyword(arg=f, value=ast.Constant(value=0)) for f in info.ctx_fields]
@@ -701,13 +738,13 @@ def _build_declarations(info: PipelineInfo, depth: int, pre_fire: list[ast.stmt]
     stmts.append(ctx_assign)
 
     _pl_task_id_assign = ast.Assign(
-        targets=[ast.Name(id=_PL_TASK_ID_FIELD, ctx=ast.Store())],
+        targets=[ast.Name(id=PL_TASK_ID_FIELD, ctx=ast.Store())],
         value=ast.Constant(value=0),
         lineno=0,
     )
     stmts.append(_pl_task_id_assign)
 
-    # Lifted ids (shared with the sync_only path).
+    # Lifted ids (shared with the serial path).
     stmts.extend(_build_lifted_id_decls(info))
 
     # Rotation counters for slots picked outside the pipeline loop. Starting at
@@ -716,47 +753,13 @@ def _build_declarations(info: PipelineInfo, depth: int, pre_fire: list[ast.stmt]
     for group, slots in sorted({(g, n) for g, _kind, n in info.outer_slots.values()}):
         stmts.append(
             ast.Assign(
-                targets=[ast.Name(id=_slot_index_field(group), ctx=ast.Store())],
+                targets=[ast.Name(id=slot_index_field(group), ctx=ast.Store())],
                 value=ast.Constant(value=slots - 1),
                 lineno=0,
             )
         )
 
-    # Pre-fire: release all backward slots before the loop (consumer side) so the
-    # first-round producer wait(bwd) doesn't deadlock. The matching post-drain is
-    # placed after the outermost loop by the caller (kept symmetric because both come
-    # from the same _emit_war_balance call).
-    stmts.extend(pre_fire)
-
     return stmts
-
-
-def _emit_war_balance(sync: SyncPlan) -> tuple[list[ast.stmt], list[ast.stmt]]:
-    """Emit the plan's two out-of-loop halves: (pre_fire, post_drain).
-
-    Pre-fire supplies the permits a skewed edge's first waits have no partner for; drain
-    consumes both those permits and the sets the same skew strands at the tail, so the two
-    counts match. Both sit outside the loop, where no task counter exists, so their event ids
-    are indexed by a literal.
-    """
-
-    def emit(sites) -> list[ast.stmt]:
-        by_section: dict[str, list] = {}
-        for site in sites:
-            by_section.setdefault(site.section, []).append((site.op, site.pipe, site.ids_node, site.id_index))
-        out: list[ast.stmt] = []
-        for section_kind, entries in by_section.items():
-            body = [
-                _build_system_sync_stmt(
-                    op, pipe, ast.Subscript(value=copy.deepcopy(ids), slice=ast.Constant(value=idx), ctx=ast.Load())
-                )
-                for op, pipe, ids, idx in entries
-            ]
-            out.append(_wrap_in_section(section_kind, body))
-        return out
-
-    return emit(sync.prefire), emit(sync.drain)
-
 
 
 def _ctx_field_assign(attr: str, value_node: ast.expr) -> ast.Assign:
@@ -768,40 +771,43 @@ def _ctx_field_assign(attr: str, value_node: ast.expr) -> ast.Assign:
     )
 
 
-
 def _classify_loop_body_stmts(original_for: ast.For, info: PipelineInfo):
     """Walk the pipeline loop body IN ORDER and return an ordered_body list.
 
-    Each entry is either a ("STAGE", stage_idx) marker for a section block holding a stage
-    call, or one of the user's own statements, kept verbatim in its original position.
+    Each entry is either a ("STAGE", stage_idx) marker for the statement that holds a stage
+    call, or one of the user's own statements, kept verbatim. Their order here is the order
+    they were written in; _build_pipeline_loop then emits all of the user's ahead of all the
+    stages, keeping each group's own order.
 
-    Everything that is not a stage call is preserved. The transform does not try to work
-    out which statements "produce" a stage argument and hoist or drop them: values reach
-    the stages through the ctx snapshot taken after these statements have run
-    (_build_ctx_field_fills), so any shape works — a branch, a helper call, a struct field
-    write, several statements building up one value. A preserved assignment whose value is
-    also carried in ctx is dead but harmless; codegen drops it.
+    Which statement holds which stage is looked up, not decided again: the analyzer already
+    settled it when it built info.stages (see StageCall.source_stmt). Deciding here — every
+    ``ast.With`` is one stage — disagreed with the analyzer, which counts only the sections
+    that actually hold a stage call. A section holding anything else, or any unrelated
+    ``with``, then shifted every stage after it onto the wrong entry, and off the end of the
+    list when the shift ran past it.
+
+    Everything that is not a stage call is preserved, including such a section: written in
+    the loop body it ran once per iteration, and kept there it runs once per beat, which is
+    the same thing. The transform does not try to work out which statements "produce" a
+    stage argument, only that they all run before the snapshot takes their values: any
+    shape then works — a branch, a helper call, a struct field write, several statements
+    building up one value — because nothing here has to model how a value was produced. A
+    preserved assignment whose value is also carried in ctx is dead but harmless; codegen
+    drops it.
     """
-    stage_func_names = {s.func_name for s in info.stages}
+    stage_of_stmt = {
+        id(stage.source_stmt): idx
+        for idx, stage in enumerate(info.stages)
+        if stage.source_stmt is not None
+    }
 
     ordered_body = []
-    stage_idx = 0
-
     for stmt in original_for.body:
-        # Section block → a stage call (regenerated with delay/guard/sync)
-        if isinstance(stmt, ast.With):
+        stage_idx = stage_of_stmt.get(id(stmt))
+        if stage_idx is not None:
             ordered_body.append(("STAGE", stage_idx))
-            stage_idx += 1
-            continue
-
-        if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
-            fname = _get_call_name(stmt.value)
-            if fname in stage_func_names:
-                ordered_body.append(("STAGE", stage_idx))
-                stage_idx += 1
-                continue
-
-        ordered_body.append(copy.deepcopy(stmt))
+        else:
+            ordered_body.append(copy.deepcopy(stmt))
 
     return ordered_body
 
@@ -813,31 +819,42 @@ def _build_pipeline_loop(
 
     new_for = copy.deepcopy(original_for)
 
-    # Classify: ordered body (STAGE markers + the user's statements, kept verbatim).
+    # Which loop-body statements hold a stage, and which are the user's own. The last stage
+    # splits the user's in two, and the split is what the serial code already meant:
+    # a statement AHEAD of it feeds a stage of this same iteration, so this beat's snapshot
+    # has to see it, while one AFTER every stage is preparing the next iteration — the loop
+    # counter being the usual one — and this beat's snapshot must NOT see it.
     ordered_body = _classify_loop_body_stmts(original_for, info)
+    last_stage_pos = max(
+        (i for i, item in enumerate(ordered_body) if isinstance(item, tuple)), default=-1
+    )
+    stage_indices = [item[1] for item in ordered_body if isinstance(item, tuple)]
+    before_stages = [item for item in ordered_body[:last_stage_pos + 1] if not isinstance(item, tuple)]
+    after_stages = list(ordered_body[last_stage_pos + 1:])
 
     # Assemble new loop body
     new_body = []
     # 1. Pick this beat's ctx slot and set is_valid.
     new_body.extend(_build_ctx_slot_pick(info, depth))
-    # 2. The user's statements, in their original order, up to the first stage call. This
-    #    is where they compute whatever the stages consume.
-    # 3. Snapshot every ctx field just before the first stage call, so it captures the
-    #    values those statements just produced. Later statements keep their positions; a
-    #    value they change is picked up by the NEXT beat's snapshot, which is the beat that
-    #    reads it back (a delayed stage reads an older slot, never this one).
-    snapshot = _build_ctx_field_fills(info)
-    for item in ordered_body:
-        if isinstance(item, tuple) and item[0] == "STAGE":
-            new_body.extend(snapshot)
-            snapshot = []
-            stage_idx = item[1]
-            new_body.extend(_build_stage_call(info.stages[stage_idx], stage_idx, info, depth, sync))
-        else:
-            new_body.append(item)
-    new_body.extend(snapshot)  # no stage calls at all: keep the fill well-formed
-    # 3. task_id increment (frame-level iteration counter, after all stage calls)
-    new_body.append(_build_counter_incr(_PL_TASK_ID_FIELD))
+    # 2. The user's statements from before the last stage, in the order they wrote them —
+    #    including any that sat BETWEEN two stage calls, which is what lets a value first
+    #    assigned there reach the stage that consumes it. Lifting those over the stages is
+    #    not an approximation: a stage may not return a value (_check_stage_returns), so its
+    #    only effect is on buffers, and a statement touching no buffer cannot observe
+    #    whether a stage has run. Leaving them in place is what made such a value fail to
+    #    compile — the snapshot reads every ctx source, and this one was not assigned yet.
+    new_body.extend(before_stages)
+    # 3. Snapshot every ctx field, after those statements and before every stage, so each
+    #    beat hands all its stages one consistent set of values.
+    new_body.extend(_build_ctx_field_fills(info))
+    # 4. The stages, in their original order.
+    for stage_idx in stage_indices:
+        new_body.extend(_build_stage_call(info.stages[stage_idx], stage_idx, info, depth, sync))
+    # 5. Whatever the user wrote after the last stage, still after it — past the snapshot,
+    #    so what it changes is picked up by the NEXT beat, which is the beat that uses it.
+    new_body.extend(after_stages)
+    # 6. task_id increment (frame-level iteration counter, after all stage calls)
+    new_body.append(_build_counter_incr(PL_TASK_ID_FIELD))
 
     new_for.body = new_body
     return [new_for]
@@ -868,13 +885,13 @@ def _build_drain_beats(info: PipelineInfo, depth: int, sync: SyncPlan) -> list[a
         _build_ctx_slot_assign(depth),
         # No new task this beat. Each stage still checks its OWN (delayed) slot, so it keeps
         # firing while a real task remains behind it.
-        _ctx_field_assign(_PL_IS_VALID_FIELD, ast.Constant(value=0)),
-        _ctx_field_assign(_PL_TASK_ID_FIELD, ast.Name(id=_PL_TASK_ID_FIELD, ctx=ast.Load())),
+        _ctx_field_assign(PL_IS_VALID_FIELD, ast.Constant(value=0)),
+        _ctx_field_assign(PL_TASK_ID_FIELD, ast.Name(id=PL_TASK_ID_FIELD, ctx=ast.Load())),
     ]
     for stage_idx, stage in enumerate(info.stages):
         if stage.delay:
             body.extend(_build_stage_call(stage, stage_idx, info, depth, sync))
-    body.append(_build_counter_incr(_PL_TASK_ID_FIELD))
+    body.append(_build_counter_incr(PL_TASK_ID_FIELD))
 
     return [
         ast.For(
@@ -898,7 +915,7 @@ def _build_ctx_slot_assign(depth: int) -> ast.Assign:
         value=ast.Subscript(
             value=ast.Name(id="_pl_ctx_arr", ctx=ast.Load()),
             slice=ast.BinOp(
-                left=ast.Name(id=_PL_TASK_ID_FIELD, ctx=ast.Load()),
+                left=ast.Name(id=PL_TASK_ID_FIELD, ctx=ast.Load()),
                 op=ast.Mod(),
                 right=ast.Constant(value=depth),
             ),
@@ -925,12 +942,12 @@ def _build_is_valid_guard(info: PipelineInfo) -> ast.If:
     """
     return ast.If(
         test=ast.Compare(
-            left=ast.Name(id=info.inner_loop_var, ctx=ast.Load()),
+            left=ast.Name(id=info.pipeline_loop_var, ctx=ast.Load()),
             ops=[ast.Lt()],
-            comparators=[copy.deepcopy(info.inner_loop_range_end)],
+            comparators=[copy.deepcopy(info.pipeline_loop_end)],
         ),
-        body=[_ctx_field_assign(_PL_IS_VALID_FIELD, ast.Constant(value=1))],
-        orelse=[_ctx_field_assign(_PL_IS_VALID_FIELD, ast.Constant(value=0))],
+        body=[_ctx_field_assign(PL_IS_VALID_FIELD, ast.Constant(value=1))],
+        orelse=[_ctx_field_assign(PL_IS_VALID_FIELD, ast.Constant(value=0))],
         lineno=0,
     )
 
@@ -948,41 +965,43 @@ def _build_ctx_field_fills(info: PipelineInfo) -> list[ast.stmt]:
     rename); a framework field such as _pl_task_id reads its same-named variable.
 
     A field whose source lives inside a ``pl.section_*()`` block gets its fill wrapped in
-    that same section. Both targets write the same ctx memory, but only one of them can see
-    such a name — the other's parse skips the block entirely — so an unwrapped fill would be
-    emitted for both, and the target that cannot see the source would fill the field from a
-    stale initial value and overwrite the real one.
+    that same section: an unwrapped fill is emitted for both targets, and the one whose
+    parse skipped the block has no such name to fill from.
+
+    A source bound in BOTH sections gets a fill in each. The two are different variables —
+    each target compiles to its own function holding its own ctx array — so each fills its
+    own copy from the name it can see. Picking just one section would leave the other
+    target's copy at its initial zero.
     """
-    # Field name -> (fill expression, section it must be emitted in or None).
-    sources: dict[str, tuple[ast.expr, str | None]] = {}
+    # Field name -> (fill expression, the sections it must be emitted in; empty = anywhere).
+    sources: dict[str, tuple[ast.expr, set]] = {}
     for struct_name, fields in info.struct_args.items():
-        section = info.var_sections.get(struct_name)
+        sections = info.var_sections.get(struct_name, set())
         for fname in fields:
             sources[fname] = (
                 ast.Attribute(value=ast.Name(id=struct_name, ctx=ast.Load()), attr=fname, ctx=ast.Load()),
-                section,
+                sections,
             )
     for var_name, field_name in info.scalar_ctx_names.items():
-        sources[field_name] = (ast.Name(id=var_name, ctx=ast.Load()), info.var_sections.get(var_name))
+        sources[field_name] = (ast.Name(id=var_name, ctx=ast.Load()), info.var_sections.get(var_name, set()))
     # A slot index belongs to the section its group is declared in: that is where the
     # counter is advanced, so that is the only target that can fill the field.
     for group, _kind, _slots in info.outer_slots.values():
-        field_name = _slot_index_field(group)
-        sources[field_name] = (ast.Name(id=field_name, ctx=ast.Load()), info.var_sections.get(group))
+        field_name = slot_index_field(group)
+        sources[field_name] = (ast.Name(id=field_name, ctx=ast.Load()), info.var_sections.get(group, set()))
 
     plain: list[ast.stmt] = []
     by_section: dict[str, list[ast.stmt]] = {}
     for field_name in info.ctx_fields:
-        if field_name == _PL_IS_VALID_FIELD:
+        if field_name == PL_IS_VALID_FIELD:
             continue
-        expr, section = sources.get(field_name, (None, None))
-        assign = _ctx_field_assign(
-            field_name, copy.deepcopy(expr) if expr is not None else ast.Name(id=field_name, ctx=ast.Load())
-        )
-        if section is None:
-            plain.append(assign)
-        else:
-            by_section.setdefault(section, []).append(assign)
+        expr, sections = sources.get(field_name, (None, set()))
+        source = expr if expr is not None else ast.Name(id=field_name, ctx=ast.Load())
+        if not sections:
+            plain.append(_ctx_field_assign(field_name, copy.deepcopy(source)))
+            continue
+        for kind in sections:
+            by_section.setdefault(kind, []).append(_ctx_field_assign(field_name, copy.deepcopy(source)))
 
     return plain + [_wrap_in_section(kind, body) for kind, body in sorted(by_section.items())]
 
@@ -1000,7 +1019,7 @@ def _build_stage_ctx_lookup(stage, depth: int) -> tuple[str, list[ast.stmt]]:
             value=ast.Name(id="_pl_ctx_arr", ctx=ast.Load()),
             slice=ast.BinOp(
                 left=ast.BinOp(
-                    left=ast.Name(id=_PL_TASK_ID_FIELD, ctx=ast.Load()),
+                    left=ast.Name(id=PL_TASK_ID_FIELD, ctx=ast.Load()),
                     op=ast.Add(),
                     right=ast.Constant(value=depth - delay),
                 ),
@@ -1025,7 +1044,7 @@ def _build_stage_args(stage, arg_mapping: list, ctx_var: str, info: PipelineInfo
     for i, orig_arg in enumerate(stage.args):
         if i < len(arg_mapping) and arg_mapping[i] is not None:
             field_name = arg_mapping[i][0]  # (field_name, fill_expr) tuple
-            if field_name == _PL_STRUCT_ARG:
+            if field_name == PL_STRUCT_ARG:
                 new_args.append(ast.Name(id=ctx_var, ctx=ast.Load()))
                 continue
             if isinstance(orig_arg, ast.Name) and orig_arg.id in info.outer_slots:
@@ -1070,13 +1089,11 @@ def _wrap_in_section(section_kind: str, body: list[ast.stmt]) -> ast.With:
     )
 
 
-def _build_guarded_stage_body(
-    stage, call_expr: ast.Call, ctx_var: str, info: PipelineInfo, sync: SyncPlan
-) -> list[ast.stmt]:
+def _build_guarded_stage_body(stage, call_expr: ast.Call, ctx_var: str, sync: SyncPlan) -> list[ast.stmt]:
     """Build sync + stage-call statements that run under the ctx validity guard."""
     index_expr = ast.Attribute(
         value=ast.Name(id=ctx_var, ctx=ast.Load()),
-        attr=_PL_TASK_ID_FIELD,
+        attr=PL_TASK_ID_FIELD,
         ctx=ast.Load(),
     )
 
@@ -1102,11 +1119,11 @@ def _build_guarded_stage_body(
 
 
 def _wrap_stage_section(stage, guarded_body: list[ast.stmt], ctx_var: str) -> ast.With:
-    """Wrap a guarded stage body in its original pl.section_* context."""
+    """Guard a stage body on the ctx validity flag, and wrap that in its pl.section_*."""
     guarded_call = ast.If(
         test=ast.Attribute(
             value=ast.Name(id=ctx_var, ctx=ast.Load()),
-            attr=_PL_IS_VALID_FIELD,
+            attr=PL_IS_VALID_FIELD,
             ctx=ast.Load(),
         ),
         body=guarded_body,
@@ -1144,14 +1161,11 @@ def _build_stage_call(
         keywords=[],
     )
 
-    # Build the if-guarded body: pre_stmts (sync) + stage_call + post_stmts (sync)
-    # all INSIDE the is_valid guard. With delay-adjusted index (ctx_var.tick),
-    # sync must be guarded so warmup/drain iterations (is_valid=0) don't execute
-    # wait/set and steal tokens belonging to later valid iterations.
-    # Inside the sync, ctx-field references (e.g. `tick`) are replaced with
-    # `ctx_var.field` so the event_id index uses the delayed task's value
-    # (matching the data this stage actually processes).
-    guarded_body = _build_guarded_stage_body(stage, call_expr, ctx_var, info, sync)
+    # sync + stage call + the user's own surrounding statements, all INSIDE the is_valid
+    # guard: a fill or drain beat carries no task, so letting its wait/set run would
+    # consume permits belonging to a later real one. The event-id index reads
+    # `<ctx_var>._pl_task_id`, i.e. the task THIS stage is handling, not the beat number.
+    guarded_body = _build_guarded_stage_body(stage, call_expr, ctx_var, sync)
     stmts.append(_wrap_stage_section(stage, guarded_body, ctx_var))
 
     return stmts

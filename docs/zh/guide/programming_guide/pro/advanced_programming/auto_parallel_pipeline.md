@@ -33,6 +33,8 @@ def stage1(ki, a, b_l1, a_l1_db, left_db, right_db, acc_db, mm1_vec_db):
 
 ### 2. 声明跨核共享Buffer
 跨核共享Buffer使用make_tile_group接口进行声明，tile数目由用户自主分配，通过fwd_ids和bwd_ids参数配置核间正反向同步id，若未配置，则不会插入对应的核间同步。
+
+其中fwd_ids为正向同步（生产者写完通知消费者），生产者stage之后插入set、消费者stage之前插入wait；bwd_ids为反向同步（消费者用完通知生产者可以覆写），消费者stage之后插入set、生产者stage之前插入wait。只配置fwd_ids时，仅保证消费者读到的是生产者写完的数据，不保证生产者下一轮覆写时消费者已经读完。每次迭代实际使用的id按`ids[迭代序号 % len(ids)]`轮转取用。
 ```python
 import pypto_pro.language as pl
 
@@ -67,15 +69,14 @@ for ki in pl.range(0, N_ITER):
 
 | 参数 | 含义 |
 |---|---|
-| preload | 上游核提前迭代计算的次数。数值越大，越能把数据搬运、计算的延迟掩盖掉，性能通常更好，但会导致头尾开销增大，可根据实际情况调整 |
-| sync_only | True时只插核间同步，不做流水改写，用于验证串行版本精度。 |
+| preload | 上游核提前迭代计算的次数，取值必须大于等于0。数值越大，越能把数据搬运、计算的延迟掩盖掉，性能通常更好，但会导致头尾开销增大，可根据实际情况调整。**配置为0时不做流水改写，只在原串行循环中插入核间同步**，用于验证串行版本精度 |
 
-**建议流程**：先配置**sync_only=True**执行，确认串行流水版本精度正确，再开启preload参数。
+**建议流程**：先配置**preload=0**执行，确认串行版本精度正确，再逐步调大preload开启流水。
 
 ```python
 import pypto_pro.language as pl
 
-@pl.jit(auto_mutex=True, pipeline=pl.pipeline.PipelineConfig(sync_only=True))
+@pl.jit(auto_mutex=True, pipeline=pl.pipeline.PipelineConfig(preload=0))
 def pipeline_demo_kernel(...):
     ...
 ```
@@ -94,10 +95,13 @@ def pipeline_demo_kernel(...):
 ## 使用约束
 - 所有stage调用需要放在同一个for循环内。
 - 暂不支持stage嵌套stage。
+- 跨核Buffer和核内Buffer的make_tile_group声明必须写在kernel函数体内，不支持在被stage调用的普通函数里声明。
 - stage函数不支持有返回值。
 - 每个with pypto_pro.language.section_cube()/pypto_pro.language.section_vector()块里只放单个stage调用，且stage调用需要严格按cube/vector交替排列（C→V→C→V…），不允许连续两个stage落在同一个核上。
 - 允许通过if语句判断stage执行场景，但分支条件必须为编译期常量。
 - fwd_ids/bwd_ids取值范围为0~15。
+- fwd_ids/bwd_ids只支持两种写法：直接写整数列表（fwd_ids=[0, 1]），或写一个在kernel外绑定到整数列表的变量名（IDS = [0, 1] … fwd_ids=IDS）。元素必须是编译期常量整数，不支持切片、拼接、函数调用等表达式形式。
+- fwd_ids/bwd_ids的长度只能等于该Buffer的Tile数，或者等于1。等于1时多个Tile共用同一个同步id，交接会被串行化（性能下降但结果正确），用于同步id不够分配的场景。
 - 允许跨核Buffer之间、跨核Buffer与核内Buffer之间进行地址复用，但最多允许两块Buffer复用，且复用双方的Tile数需要一致。
 - 一个跨核Buffer（通过fwd_ids/bwd_ids标记）需要恰好被两个stage使用，且这两个stage分别在cube和vector上，构成一对一的生产者/消费者关系。
 - 跨核Buffer的Tiles必须随迭代顺序轮转。

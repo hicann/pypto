@@ -37,6 +37,8 @@ pypto_pro.language.make_tile_group(
     addrs: Union[int, List[int]],
     mutex_ids: Optional[Sequence[Union[int, Sequence[int]]]] = None,
     depth: Optional[int] = None,
+    fwd_ids: Optional[Sequence[int]] = None,
+    bwd_ids: Optional[Sequence[int]] = None,
 ) -> TileGroup
 ```
 
@@ -48,6 +50,8 @@ pypto_pro.language.make_tile_group(
 | addrs | 输入 | Tile地址，int或List[int]类型，必须非负并在编译期确定，且满足对应Buffer的地址对齐要求。传入单个基地址时，第i块Tile的地址为base + i × slot_size，其中slot_size为单块Tile占用的字节数；传入地址列表时，列表长度必须等于mutex_ids的长度或depth的值，并按顺序为每块Tile指定地址。地址列表可用于非连续地址排布。 |
 | mutex_ids | 输入 | mutex ID配置，Sequence[int或Sequence[int]]类型，可选，也可传入None或空列表。mutex ID的取值范围为[0, 31]。每块Tile对应的mutex ID数量必须一致，同一块Tile的多个mutex ID不得重复，不同Tile之间可以使用相同的mutex ID。 |
 | depth | 输入 | TileGroup深度，int类型，可选，必须为正的编译期整数。mutex_ids为None或空列表时必须指定depth；未指定depth且mutex_ids非空时，由mutex_ids的长度确定；同时指定时，两者必须相等。 |
+| fwd_ids | 输入 | 仅用于[自动CV并行流水](../../../../../guide/programming_guide/pro/advanced_programming/auto_parallel_pipeline.md)，表示核间正向同步的event id，Sequence[int]类型，可选。未开启自动流水时忽略。 |
+| bwd_ids | 输入 | 仅用于[自动CV并行流水](../../../../../guide/programming_guide/pro/advanced_programming/auto_parallel_pipeline.md)，表示核间反向同步的event id，Sequence[int]类型，可选。未开启自动流水时忽略。 |
 
 ## 约束说明
 

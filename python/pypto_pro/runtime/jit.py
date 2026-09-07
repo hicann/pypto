@@ -968,7 +968,6 @@ def _prepare_codegen_inputs(
             kernel_def._line_offset,
             kernel_def._col_offset,
             kernel_def._source_lines_raw,
-            kernel_def._closure_vars,
         )
         kernel_def._pipeline = None
 

@@ -21,8 +21,6 @@ what they need to already know:
 ``validate_sync(...)``        after the sync graph exists (see _sync_graph)
 ``validate_names(...)``       once the caller knows which variables it will introduce —
                               both emission paths, each passing its own names
-``validate_schedule(info)``   after delays are computed (full pipeline only; sync_only
-                              never computes delays, so it has no schedule to check)
 
 Format checks stay at their point of use: if a buffer's memory space or its id tuple
 cannot be resolved, scanning cannot continue, so those raise where they are read.
@@ -31,6 +29,8 @@ cannot be resolved, scanning cannot continue, so those raise where they are read
 from __future__ import annotations
 
 import ast
+
+from ._astutil import call_name, get_funcdef
 
 
 def buffer_users(graph) -> dict:
@@ -56,18 +56,59 @@ def buffer_users(graph) -> dict:
     }
 
 
-def validate_sync(graph, info) -> None:
+def validate_sync(graph, info, cycles) -> None:
     """Checks that need the sync graph: regions, op-level accesses, users, edges.
 
     Called from _sync_graph once the graph is built.
+
+    ``cycles`` is what ``find_cycles(graph)`` returned. It is passed in rather than
+    computed here because the split is real: walking the graph is the graph's job, while
+    deciding what a cycle's total distance MEANS is a check. Reaching back for the walk
+    would also make this module import a sibling that imports it — the very cycle the
+    lazy import used to paper over.
     """
     users = buffer_users(graph)
     _check_cross_core_users(info, users)
+    _check_event_id_counts(graph, info)
     _check_reuse_mutex_ids(graph, info)
-    _check_no_deadlock_cycle(graph)
+    _check_stable_distances(graph)
+    _check_no_deadlock_cycle(cycles)
 
 
-def _check_no_deadlock_cycle(graph) -> None:
+def _check_stable_distances(graph) -> None:
+    """Every edge must sit at the same distance on every task.
+
+    The whole plan rests on one distance per edge: it decides the skew, and with it how
+    many permits pre-fire releases, how many waits drain consumes, and which task each
+    ``% slot_count`` event id belongs to. ``build_graph`` expands two full rotations past
+    the fill precisely so it has a second sample to compare against; an edge whose distance
+    differs between them never settled, which means assumption A1 — each stage advances a
+    buffer exactly once per iteration — does not hold for it.
+
+    Emitting anyway would take whichever distance the expansion happened to see last and
+    pair every wait with a set belonging to some other task. Reject instead: the flag is
+    cheap to compute and there is nothing sound to emit once it is set.
+    """
+    unstable = [edge for edge in graph.edges if edge.unstable]
+    if not unstable:
+        return
+    detail = "\n".join(
+        f"  {edge.kind} {edge.src} -> {edge.dst}   "
+        f"(dist={edge.dist:+d}, task_off={edge.task_off:+d}, {edge.slot_count} slots)"
+        for edge in unstable
+    )
+    raise ValueError(
+        "pipeline: these cross-core dependencies never reach a steady state — the distance "
+        "between their two ends changes from task to task, so no single wait/set placement "
+        "covers them:\n"
+        f"{detail}\n"
+        "This means a stage advances one of these buffers a different number of times per "
+        "iteration than the slot timeline (task % slot_count) assumes. Take exactly one "
+        "slot per buffer per stage, or give the buffer its own tile_group per handover."
+    )
+
+
+def _check_no_deadlock_cycle(cycles) -> None:
     """A dependency cycle whose distances sum to <= 0 cannot be synchronised at all.
 
     Every edge means "the destination waits for the source". Going around a cycle and
@@ -79,12 +120,10 @@ def _check_no_deadlock_cycle(graph) -> None:
     inverse-time edge (wait placed before the matching set) has been verified to work on
     hardware. Only the total around the cycle decides.
     """
-    from ._sync_graph import find_cycles, format_cycle
-
-    deadlocks = [(path, total) for path, total in find_cycles(graph) if total <= 0]
+    deadlocks = [(path, total) for path, total in cycles if total <= 0]
     if not deadlocks:
         return
-    routes = "\n".join(f"  {format_cycle(path, total)}" for path, total in sorted(deadlocks, key=lambda c: c[1]))
+    routes = "\n".join(f"  {_format_cycle(path, total)}" for path, total in sorted(deadlocks, key=lambda c: c[1]))
     raise ValueError(
         "pipeline: the stage/buffer dependencies form a cycle that no cross-core sync can "
         "satisfy (its distances sum to <= 0, i.e. each side would wait for the other):\n"
@@ -93,6 +132,12 @@ def _check_no_deadlock_cycle(graph) -> None:
         "memory instead of sharing an address, or adding a slot so the dependency reaches "
         "back to an earlier task."
     )
+
+
+def _format_cycle(path: list, total: int) -> str:
+    """Render one cycle from find_cycles() as a readable route."""
+    route = " -> ".join(f"{a.stage}[{a.buffer} {a.role} {a.pipe}]" for a in path)
+    return f"{route}   (total distance={total})"
 
 
 def _check_cross_core_users(info, users: dict) -> None:
@@ -137,6 +182,42 @@ def _check_cross_core_users(info, users: dict) -> None:
             )
 
 
+def _check_event_id_counts(graph, info) -> None:
+    """A direction's event-id list must hold one id per slot, or exactly one id.
+
+    Two counters run side by side and they are not the same thing: the slots turn over on
+    ``task % slot_count``, while the id for a handover is picked with
+    ``ids[task % id_count]``. Only two ratios keep them in step:
+
+      id_count == slot_count   one id per slot; every slot hands over independently.
+      id_count == 1            all slots share one id. Consecutive handovers then queue up
+                               on it, so a slot cannot be released until the previous one
+                               has been — parallelism is lost, correctness is not. This is
+                               the intended way to cope with a shortage of ids, and it is
+                               why the count is not simply required to equal the slots.
+
+    Anything between (three slots on two ids, say) makes the two cycles slide against each
+    other, so a wait pairs with the set of a different slot. Nothing downstream can repair
+    it and it surfaces as an intermittent data race rather than a failure, which is exactly
+    the shape that is worth refusing up front.
+
+    Buffers no stage touches are skipped — _check_cross_core_users reports those instead.
+    """
+    for buf_name, buf in info.sync.buffers.items():
+        region = graph.regions.get(buf_name)
+        if region is None:
+            continue
+        slots = graph.slots[region]
+        for label, id_count in (("fwd_ids", buf.fwd_id_count), ("bwd_ids", buf.bwd_id_count)):
+            if id_count and id_count not in (1, slots):
+                raise ValueError(
+                    f"pipeline: cross-core buffer '{buf_name}' declares {id_count} {label} "
+                    f"but rotates through {slots} slots. Give it one id per slot "
+                    f"({slots} of them), or a single id shared by all slots — any other "
+                    f"count pairs a wait with the set of a different slot."
+                )
+
+
 def _check_reuse_mutex_ids(graph, info) -> None:
     """Buffers sharing a region must share their mutex ids.
 
@@ -166,26 +247,16 @@ def _check_reuse_mutex_ids(graph, info) -> None:
 def validate_names(func_def, framework_names: set) -> None:
     """The variables this transform is about to introduce must not already be in use.
 
-    Separate from validate_schedule because it applies to BOTH emission paths while the
-    schedule check applies to neither but the full pipeline: what a path is allowed to
-    collide over is exactly what that path emits, so each caller passes its own names.
-    Checking one path's names while running the other reports on variables that will never
-    be generated and misses the ones that will.
+    Called by BOTH emission paths, each passing its own names: what a path is allowed to
+    collide over is exactly what that path emits. Checking one path's names while running
+    the other reports on variables that will never be generated and misses the ones that
+    will.
 
     Only fixed names are worth listing. Lifted id variables (``_pl_fwd_ids_<buffer>``) end
     in a user-chosen buffer name, so a collision needs the user to have declared that exact
     derived name — and the parser catches a genuine redefinition anyway.
     """
     _check_name_collisions(func_def, framework_names)
-
-
-def validate_schedule(info) -> None:
-    """Checks that need the schedule — i.e. after delays are computed.
-
-    Full pipeline only: sync_only never runs _compute_delays, so every delay is still 0 and
-    the ordering below is vacuously true there.
-    """
-    _check_delay_order(info)
 
 
 def _check_name_collisions(func_def, framework_names: set) -> None:
@@ -200,40 +271,13 @@ def _check_name_collisions(func_def, framework_names: set) -> None:
         )
 
 
-def _buffers_touched(stage) -> set:
-    """Names of the buffers a stage touches."""
-    return {buf for buf, _role, _pipe in stage.region_access}
-
-
-def _check_delay_order(info) -> None:
-    """A buffer's later user must not be scheduled before its earlier one.
-
-    Which stage is earlier comes from the stage order, not from op-level roles: an
-    in-place op makes a consumer look like a writer, so bucketing by W/R would compare
-    the wrong pair. Equal delays are fine (same beat, ordered by the sync itself); only a
-    later stage with a strictly smaller delay indicates a delay-assignment bug.
-    """
-    by_buf: dict = {}
-    for idx, stage in enumerate(info.stages):
-        for buf_name in _buffers_touched(stage):
-            by_buf.setdefault(buf_name, {}).setdefault(idx, stage)
-
-    for buf, per_stage in by_buf.items():
-        ordered = [per_stage[i] for i in sorted(per_stage)]
-        for earlier, later in zip(ordered, ordered[1:]):
-            if later.delay < earlier.delay:
-                raise ValueError(
-                    f"pipeline (internal): cross-core buffer '{buf}' is used by "
-                    f"'{later.func_name}' (delay={later.delay}) before its earlier user "
-                    f"'{earlier.func_name}' (delay={earlier.delay}). This indicates a "
-                    f"delay-assignment bug — please report."
-                )
-
-
 def validate_structure(info, func_def=None, stage_func_names: set | None = None) -> None:
     """Checks that need only the parsed structure — no sync or schedule information.
 
-    Called from analyze_pipeline once stages, sections, loop info and ctx fields exist.
+    Called from analyze_pipeline once the stages, sections and loop info exist, and before
+    anything is derived from them: none of the checks below reads the ctx layout or the
+    buffer scan, so running first is what lets a malformed stage chain be reported as such
+    instead of as whatever the later passes trip over.
 
     ``func_def`` and ``stage_func_names`` enable the two checks that have to look at the
     whole kernel rather than at the stage list: both catch a shape the transform would
@@ -253,7 +297,7 @@ def _loops_holding_stages(func_def, stage_func_names: set) -> list:
 
     Matches how the stage list is collected (_extract_stages_from_loop looks at a loop's
     direct body only), so an enclosing loop of a pipelined one is not counted: its stages
-    sit in the inner loop's body, not its own.
+    sit in the pipeline loop's body, not its own.
     """
     found = []
     for node in ast.walk(func_def):
@@ -267,7 +311,7 @@ def _loops_holding_stages(func_def, stage_func_names: set) -> list:
                 calls.extend(
                     s.value for s in stmt.body if isinstance(s, ast.Expr) and isinstance(s.value, ast.Call)
                 )
-            if any(_call_name(c) in stage_func_names for c in calls):
+            if any(call_name(c) in stage_func_names for c in calls):
                 found.append(node)
                 break
     return found
@@ -297,20 +341,30 @@ def _check_single_pipeline_loop(func_def, stage_func_names: set) -> None:
 
 
 def _check_no_nested_stage(func_def, info, stage_func_names: set) -> None:
-    """A stage must not call another stage.
+    """A stage must not reach another stage, directly or through the functions it calls.
 
     Sub-stages need their accesses attributed to the sub-stage rather than the caller, and
     sync placed around the inner call — support for that was removed and is pending a
     redesign. Without it the inner stage reads as an ordinary helper call: its buffer
     accesses never reach the dependency graph, so its handovers go unsynchronised.
+
+    The search follows plain helper calls as well, because a stage buried behind one is
+    worse than a directly nested one, not better: the access scan walks helpers but skips
+    stage names inside them, and the analyzer only lists the stages called in the pipeline
+    loop, so such a stage contributes nothing at all — no accesses, no sync, no beat — and
+    says nothing about it.
     """
     stage_defs = {
         node.name: node
         for node in ast.walk(func_def)
         if isinstance(node, ast.FunctionDef) and node.name in stage_func_names
     }
-    # A stage's body usually lives outside the kernel (module level), so also consult the
-    # definitions the analyzer already resolved through closure_vars.
+    # The stages the pipeline loop calls already carry their AST; take those for free.
+    for stage in info.stages:
+        if stage.func_def is not None:
+            stage_defs.setdefault(stage.func_name, stage.func_def)
+    # A stage decorated but never called by the loop is not among them, and a stage's body
+    # usually lives outside the kernel, so the rest are resolved through closure_vars.
     for name in stage_func_names:
         if name in stage_defs:
             continue
@@ -318,45 +372,42 @@ def _check_no_nested_stage(func_def, info, stage_func_names: set) -> None:
         if resolved is not None:
             stage_defs[name] = resolved
 
-    for outer_name, outer_def in stage_defs.items():
-        for node in ast.walk(outer_def):
+    def visit(caller_def, path: tuple) -> None:
+        for node in ast.walk(caller_def):
             if not isinstance(node, ast.Call):
                 continue
-            inner = _call_name(node)
-            if inner in stage_func_names and inner != outer_name:
+            callee = call_name(node)
+            if not callee or callee in path:
+                continue
+            if callee in stage_func_names:
+                chain = " -> ".join(path + (callee,))
+                where = f" via {' -> '.join(path[1:])}," if len(path) > 1 else ""
                 raise ValueError(
-                    f"pipeline: stage '{outer_name}' calls stage '{inner}' (line "
-                    f"{node.lineno}). A stage may not contain another stage — the inner "
-                    f"one's buffer accesses would be attributed to the caller and its "
+                    f"pipeline: stage '{path[0]}' reaches stage '{callee}'{where} at line "
+                    f"{node.lineno} ({chain}). A stage may not contain another stage — the "
+                    f"inner one's buffer accesses would be attributed to the caller and its "
                     f"handovers left unsynchronised.\n"
-                    f"Inline '{inner}' into '{outer_name}', or make it a plain helper "
-                    f"function (drop @pl.pipeline.stage) if it needs no sync of its own."
+                    f"Inline '{callee}' into '{path[0]}', or make it a plain helper function "
+                    f"(drop @pl.pipeline.stage) if it needs no sync of its own."
                 )
+            helper_def = _try_get_funcdef_for(info, callee)
+            if helper_def is not None:
+                visit(helper_def, path + (callee,))
+
+    for outer_name, outer_def in stage_defs.items():
+        visit(outer_def, (outer_name,))
 
 
 def _try_get_funcdef_for(info, name: str):
     """The AST of a stage defined outside the kernel, via the analyzer's closure_vars."""
-    from ._analyzer import _try_get_funcdef
-
-    return _try_get_funcdef(info.closure_vars.get(name))
-
-
-def _call_name(call: ast.Call) -> str:
-    """Callee name for `f(...)` and `obj.f(...)`; "" when neither."""
-    if isinstance(call.func, ast.Name):
-        return call.func.id
-    if isinstance(call.func, ast.Attribute):
-        return call.func.attr
-    return ""
+    return get_funcdef(info.closure_vars.get(name))
 
 
 def _check_stage_returns(info) -> None:
     """A stage must not return a value: the transform calls it for its side effects and
     has nowhere to put a result."""
-    from ._analyzer import _try_get_funcdef
-
     for stage in info.stages:
-        func_def = _try_get_funcdef(info.closure_vars.get(stage.func_name))
+        func_def = stage.func_def
         if func_def is None:
             continue
         for node in ast.walk(func_def):
@@ -403,16 +454,16 @@ def _check_loop_step(info) -> None:
     compare with `<` against the bound; a negative step would need the opposite
     comparison throughout. Rejected rather than half-supported.
     """
-    step = info.inner_loop_step
+    step = info.pipeline_loop_step
     if step is None:
         return  # implicit 1
     if isinstance(step, ast.UnaryOp) and isinstance(step.op, ast.USub):
         raise ValueError(
-            f"pipeline: pipeline loop `for {info.inner_loop_var} in ...` steps backwards "
+            f"pipeline: pipeline loop `for {info.pipeline_loop_var} in ...` steps backwards "
             f"({ast.unparse(step)}). Only forward iteration is supported."
         )
     if isinstance(step, ast.Constant) and isinstance(step.value, int) and step.value <= 0:
         raise ValueError(
-            f"pipeline: pipeline loop `for {info.inner_loop_var} in ...` has step "
+            f"pipeline: pipeline loop `for {info.pipeline_loop_var} in ...` has step "
             f"{step.value}. The step must be a positive value."
         )

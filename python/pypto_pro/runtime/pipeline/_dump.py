@@ -23,7 +23,6 @@ def build_generated_file_source(
     line_offset: int,
     col_offset: int,
     source_lines_raw: list,
-    closure_vars: dict,
 ) -> str:
     """Build a complete, runnable .py source for the transformed kernel.
 

@@ -19,18 +19,28 @@ class PipelineConfig:
     """Configuration for preload pipeline transformation.
 
     Args:
-        preload: Number of times the first stage pre-fires before steady-state
-                 alternation begins. E.g. preload=2 means C1 C1 C1 C2 C1 C2 ...
-                 The actual ctx ring-buffer depth is computed from the stage
-                 delays (max_delay + 1), not from preload directly.
-        sync_only: If True, do NOT transform into a preload pipeline; only
-                 auto-insert cross-core sync around each stage in the original
-                 serial loop. Lets users validate their serial kernel is correct
-                 before enabling the full pipeline. Default False (full pipeline).
+        preload: How many iterations ahead an upstream stage runs. A larger value hides
+                 more of the transfer/compute latency and usually performs better, at the
+                 cost of a longer fill and drain — tune it per kernel.
+                 Concretely it is the delay step between two consecutive stages on the
+                 SAME core (see _compute_delays); the ctx ring-buffer depth follows from
+                 the resulting delays (max_delay + 1), not from preload directly.
 
-    The transformed source is always written to the build directory as
-    ``pipeline_generated.py`` for inspection.
+                 Zero pulls no stage ahead of any other, which leaves the serial loop with
+                 cross-core sync inserted around each stage and nothing else changed. Start
+                 there to confirm the serial kernel is correct, then raise it.
+
+                 Must not be negative: a stage cannot run a negative number of iterations
+                 ahead, and the delays that follow would index the ctx ring from before the
+                 loop began.
     """
 
     preload: int = 2
-    sync_only: bool = False
+
+    def __post_init__(self) -> None:
+        if self.preload < 0:
+            raise ValueError(
+                f"pipeline: preload must be >= 0, got {self.preload}. It is how many "
+                f"iterations ahead a stage runs, so a negative value has no meaning; use "
+                f"preload=0 to keep the serial loop and only insert cross-core sync."
+            )
