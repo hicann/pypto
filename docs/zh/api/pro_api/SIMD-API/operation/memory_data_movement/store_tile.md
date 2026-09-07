@@ -42,7 +42,7 @@ pypto_pro.language.store_tile(
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| dst_tensor | 输出 | 目的操作数，Tensor类型，存储空间为GM，排布支持ND、DN和NZ。支持DT_FP4E2M1、DT_FP4E1M2、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP16、DT_BF16和DT_FP32。写入范围不得越过Tensor边界。 |
+| dst_tensor | 输出 | 目的操作数，Tensor类型，存储空间为GM。支持的数据类型和分形组合详见[约束说明](#约束说明)。写入范围不得越过Tensor边界。 |
 | src_tile | 输入 | 源操作数，Tile类型，存储空间为UB或L0C Buffer。位于UB时通过MTE3流水写回，首地址按32字节对齐；位于L0C Buffer时通过Fixpipe写回，首地址按64字节对齐。 |
 | tile_offsets | 输入 | 目标Tensor的Tile块偏移，List[int或Scalar]类型。由order指定的维度按块索引乘以Tile对应维度大小换算，其余维度按绝对偏移使用；不支持负数索引，换算后的绝对偏移不得超过对应维度的形状。 |
 | relu_pre_mode | 输入 | 预处理模式，pypto_pro.language.ReluPreMode类型，可选。支持ReluPreMode.NormalRelu；scale为逐列量化Tile时不能同时设置该参数。 |
@@ -52,6 +52,14 @@ pypto_pro.language.store_tile(
 | phase | 输入 | 分块写回阶段，[pypto_pro.language.STPhase](../../basic_data_structures/STPhase.md)类型，可选。支持STPhase.Partial和STPhase.Final；scale为逐列量化Tile时不能同时设置该参数。 |
 
 ## 约束说明
+
+### 数据类型和分形要求（与[store](store.md#约束说明)一致）
+
+| 源 → 目的 | 分形要求 | 数据类型要求 |
+|---|---|---|
+| UB → GM | 源与目的分形必须相同，支持ND、DN、NZ。 | 源与目的数据类型位宽必须相同，支持DT_INT8、DT_UINT8、DT_FP16、DT_BF16、DT_INT16、DT_UINT16、DT_FP32、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP8E8M0、DT_FP8E4M3FN、DT_FP8E5M2、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
+| L0C Buffer → GM（不配置scale） | NZ → ND，NZ → NZ。 | 支持DT_FP32 → DT_FP32/DT_FP16/DT_BF16，以及DT_INT32 → DT_INT32/DT_FP16/DT_BF16。 |
+| L0C Buffer → GM（配置scale） | NZ → ND，NZ → NZ。 | 支持DT_FP32 → DT_INT8/DT_HF8/DT_FP8E4M3FN/DT_FP16/DT_BF16/DT_FP32，以及DT_INT32 → DT_INT8/DT_FP16/DT_BF16。 |
 
 当dst_tensor声明为pypto_pro.language.NZ时，其物理排布和完整Tensor shape约束见[TensorLayout](../../basic_data_structures/TensorLayout.md#tensor布局)，同布局搬运、源Tile、order和L0C Buffer直接写回约束与[store](store.md#约束说明)一致。store_tile还需满足以下NZ搬运约束：
 

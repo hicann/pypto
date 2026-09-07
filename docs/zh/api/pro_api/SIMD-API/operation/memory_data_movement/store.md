@@ -40,7 +40,7 @@ pypto_pro.language.store(
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| dst_tensor | 输出 | 目的操作数，Tensor类型，存储空间为GM。源Tile位于UB时支持ND、DN和NZ布局；源Tile位于L0C Buffer时支持ND和NZ布局。写入起始位置和有效写入区域不能超过各维shape。 |
+| dst_tensor | 输出 | 目的操作数，Tensor类型，存储空间为GM。支持的数据类型和分形组合详见[约束说明](#约束说明)。写入起始位置和有效写入区域不能超过各维shape。 |
 | src_tile | 输入 | 源操作数，Tile类型，存储空间为UB或L0C Buffer。UB Tile的首地址须按32字节对齐，L0C Buffer Tile的首地址须按64字节对齐；不支持从L1 Buffer直接写回GM。 |
 | offsets | 输入 | 目标Tensor的元素偏移，List[int或Scalar]类型，长度与dst_tensor的维数相同，不支持负数。 |
 | relu_pre_mode | 输入 | 预处理模式，pypto_pro.language.ReluPreMode类型，可选，仅用于L0C Buffer写回GM时在写回前执行ReLU。支持ReluPreMode.NormalRelu，不能与Tile类型的scale同时使用。 |
@@ -51,13 +51,13 @@ pypto_pro.language.store(
 
 ## 约束说明
 
-### 数据类型
+### 数据类型和分形要求
 
-| 数据通路 | scale | 源数据类型 → 目标数据类型 |
+| 源 → 目的 | 分形要求 | 数据类型要求 |
 |---|---|---|
-| UB → GM | 不支持 | 源Tile和目标Tensor的数据类型必须相同，支持DT_FP4E2M1、DT_FP4E1M2、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP16、DT_BF16和DT_FP32。 |
-| L0C Buffer → GM | 不配置 | 支持DT_FP32 → DT_FP32/DT_FP16/DT_BF16，以及DT_INT32 → DT_INT32。 |
-| L0C Buffer → GM | 配置float、Scalar或Tile类型的scale | 支持DT_FP32 → DT_INT8/DT_HF8/DT_FP8E4M3FN/DT_FP16/DT_FP32，以及DT_INT32 → DT_INT8/DT_FP16。 |
+| UB → GM | 源与目的分形必须相同，支持ND、DN、NZ。 | 源与目的数据类型位宽必须相同，支持DT_INT8、DT_UINT8、DT_FP16、DT_BF16、DT_INT16、DT_UINT16、DT_FP32、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP8E8M0、DT_FP8E4M3FN、DT_FP8E5M2、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
+| L0C Buffer → GM（不配置scale） | NZ → ND，NZ → NZ。 | 支持DT_FP32 → DT_FP32/DT_FP16/DT_BF16，以及DT_INT32 → DT_INT32/DT_FP16/DT_BF16。 |
+| L0C Buffer → GM（配置scale） | NZ → ND，NZ → NZ。 | 支持DT_FP32 → DT_INT8/DT_HF8/DT_FP8E4M3FN/DT_FP16/DT_BF16/DT_FP32，以及DT_INT32 → DT_INT8/DT_FP16/DT_BF16。 |
 
 ### NZ布局
 

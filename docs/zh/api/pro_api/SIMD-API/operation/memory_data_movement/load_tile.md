@@ -36,12 +36,23 @@ pypto_pro.language.load_tile(
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| dst_tile | 输出 | 目的操作数，Tile类型，存储空间为L1 Buffer或UB，首地址必须按32字节对齐。支持DT_FP4E2M1、DT_FP4E1M2、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP16、DT_BF16和DT_FP32。可通过set_validshape设置尾块有效形状。 |
-| src_tensor | 输入 | 源操作数，Tensor类型，存储空间为GM，支持的数据类型与dst_tile一致，排布支持ND、DN和NZ。 |
+| dst_tile | 输出 | 目的操作数，Tile类型，存储空间为L1 Buffer或UB，首地址必须按32字节对齐。支持的数据类型和分形组合详见[约束说明](#约束说明)。可通过set_validshape设置尾块有效形状。 |
+| src_tensor | 输入 | 源操作数，Tensor类型，存储空间为GM，支持的数据类型和分形组合详见[约束说明](#约束说明)。 |
 | tile_offsets | 输入 | 源Tensor的Tile块偏移，List[int或Scalar]类型。由order选中的维度以Tile块索引为单位，内部乘以Tile对应维度大小；未被选中的维度按绝对元素偏移使用。各项必须为非负整数或运行时整数表达式，换算后的访问范围不得越过Tensor边界。 |
 | order | 输入 | 维度映射，List[int]类型，可选。表示Tile两个维度分别对应源Tensor的哪两个维度；两个轴索引必须互不重复且位于Tensor维度范围内，升序表示不转置，降序表示转置。搬运MX矩阵乘量化系数时，最后一轴固定作为物理phase轴，不能在order中选择。order省略时，普通Tensor默认取最后两维[ndim-2, ndim-1]；MX矩阵乘量化系数默认取尾轴前两维[ndim-3, ndim-2]。 |
 
 ## 约束说明
+
+### 数据类型和分形要求（与[load](load.md#约束说明)一致）
+
+| 源 → 目的 | 分形要求 | 数据类型要求 |
+|---|---|---|
+| GM → UB | 源与目的分形必须相同，支持ND、DN、NZ。 | 源与目的数据类型位宽必须相同，支持DT_INT8、DT_UINT8、DT_FP16、DT_BF16、DT_INT16、DT_UINT16、DT_FP32、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP8E8M0、DT_FP8E4M3FN、DT_FP8E5M2、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
+| GM → L1 Buffer | ND → NZ。 | 源与目的数据类型位宽必须相同，支持DT_INT8、DT_UINT8、DT_FP16、DT_BF16、DT_INT16、DT_UINT16、DT_FP32、DT_INT32、DT_UINT32、DT_FP8E8M0、DT_FP8E4M3FN、DT_FP8E5M2、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
+| GM → L1 Buffer | DN → NZ。 | 源与目的数据类型位宽必须相同，支持DT_INT8、DT_UINT8、DT_FP16、DT_BF16、DT_INT16、DT_UINT16、DT_FP32、DT_INT32、DT_UINT32、DT_FP8E8M0、DT_FP8E4M3FN、DT_FP8E5M2、DT_HF8。 |
+| GM → L1 Buffer | DN → ZN，NZ → NZ。 | 源与目的数据类型位宽必须相同，支持DT_INT8、DT_UINT8、DT_FP16、DT_BF16、DT_INT16、DT_UINT16、DT_FP32、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP8E8M0、DT_FP8E4M3FN、DT_FP8E5M2、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
+| GM → L1 Buffer | ND → ND。 | 仅支持DT_INT64、DT_UINT64。 |
+| GM → L1 Buffer | ND/DN → ZZ/NN（仅支持作为matmul_mx或matmul_mx_acc的量化系数搬运）。 | 仅支持DT_FP8E8M0。 |
 
 当src_tensor声明为pypto_pro.language.NZ时，其物理排布和完整Tensor shape约束见[TensorLayout](../../basic_data_structures/TensorLayout.md#tensor布局)，同布局搬运、目标Tile和order约束与[load](load.md#约束说明)一致。load_tile还需满足以下NZ搬运约束：
 
