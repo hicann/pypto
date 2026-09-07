@@ -212,6 +212,7 @@ void DevControlFlowCache::DrcoReadyQueueDataRestore(DynDeviceTaskBase* base, uin
         }
         gq->head = 0;
         gq->tail = 0;
+        gq->executedCount = 0;
         (void)memset_s(reinterpret_cast<uint8_t*>(gq) + sizeof(DrcoGlobalReadyQueue), queueTaskListSize, 0,
                        queueTaskListSize);
     }

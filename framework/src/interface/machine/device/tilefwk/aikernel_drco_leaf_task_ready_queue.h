@@ -125,7 +125,9 @@ struct PerCorePendingQueue {
 
 struct DrcoLocalReadyQueue {
     uint32_t head;
+    uint8_t pad[64 - sizeof(uint32_t)];
     uint32_t tail;
+    uint8_t pad2[64 - sizeof(uint32_t)];
     uint32_t size;
     LeafTaskId taskList[0];
 #ifdef __TILE_FWK_HOST__
@@ -140,9 +142,10 @@ struct DrcoGlobalReadyQueue {
     uint32_t head;
     uint32_t tail;
     uint32_t size;
+    uint32_t executedCount;
     LeafTaskId taskList[0];
-#ifdef __TILE_FWK_HOST__
-    DrcoGlobalReadyQueue() : head(0), tail(0), size(0) {}
+#if defined(__TILE_FWK_HOST__)
+    DrcoGlobalReadyQueue() : head(0), tail(0), size(0), executedCount(0) {}
 
     void UnsafeEnqueue(LeafTaskId task) { taskList[tail++] = DRCO_ENCODE_TASK(task); }
 #endif

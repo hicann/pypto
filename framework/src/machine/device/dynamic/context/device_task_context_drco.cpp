@@ -28,11 +28,30 @@ void DeviceTaskContext::InitDrcoRootFuncList(DynDeviceTask* dyntask)
     uint32_t queueCapacity = dyntask->devTask.coreFunctionCnt;
     uint32_t globalReadyQueueSize = sizeof(npu::tile_fwk::DrcoGlobalReadyQueue) +
                                     queueCapacity * sizeof(npu::tile_fwk::LeafTaskId);
+    uint32_t aicTaskCnt = 0;
+    uint32_t aivTaskCnt = 0;
+    for (uint64_t funcId = 0; funcId < dyntask->dynFuncDataCacheListSize; ++funcId) {
+        auto callList = dyntask->dynFuncDataCacheList[funcId].calleeList;
+        for (size_t opIndex = 0; opIndex < dyntask->dynFuncDataCacheList[funcId].devFunc->GetOperationSize();
+             ++opIndex) {
+            auto coreType = dyntask->cceBinary[callList[opIndex]].coreType;
+            if (coreType == static_cast<int>(CoreType::AIC)) {
+                aicTaskCnt++;
+            } else if (coreType == static_cast<int>(CoreType::AIV)) {
+                aivTaskCnt++;
+            }
+        }
+    }
     for (size_t i = 0; i < npu::tile_fwk::DRCO_QUEUE_MAX; i++) {
         auto* q = workspace_->AllocateDrcoGlobalReadyQueue(globalReadyQueueSize);
         new (q) npu::tile_fwk::DrcoGlobalReadyQueue();
         (void)memset_s(reinterpret_cast<uint8_t*>(q) + sizeof(DrcoGlobalReadyQueue), queueCapacity * sizeof(LeafTaskId),
                        0, queueCapacity * sizeof(LeafTaskId));
+        if (i == npu::tile_fwk::DRCO_QUEUE_AIC) {
+            q->size = aicTaskCnt;
+        } else if (i == npu::tile_fwk::DRCO_QUEUE_AIV) {
+            q->size = aivTaskCnt;
+        }
         rootFuncList->globalReadyQueueList[i].ptr = q;
     }
     uint32_t perCoreSize = sizeof(npu::tile_fwk::PerCorePendingQueue) +

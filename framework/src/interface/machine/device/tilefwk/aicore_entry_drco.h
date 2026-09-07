@@ -70,6 +70,7 @@ INLINE void DrcoBusyBackOff()
 
 constexpr uint16_t SYNC_MODE_SHIFT_VALUE = 4;
 constexpr uint16_t SYNC_FLAG_SHIFT_VALUE = 8;
+constexpr uint32_t BATCH_PUSH_BUF_SIZE = 6;
 
 __aicore__ inline uint16_t GetffstMsg(uint16_t mode, uint16_t flagId)
 {
@@ -206,11 +207,28 @@ INLINE bool DrcoLocalReadyQueuePushTask(__gm__ DrcoLocalReadyQueue* queue, uint3
     return result == 0;
 }
 
+INLINE int DrcoLocalReadyQueueTryBatchPushTask(__gm__ DrcoLocalReadyQueue* queue, uint32_t* readyTaskList, uint32_t n)
+{
+    __gm__ uint32_t* tailPtr = &queue->tail;
+    uint32_t tail = DrcoAtomicLoad(tailPtr);
+    if (tail >= DrcoGmLoad(&queue->size)) {
+        return -1;
+    }
+    uint32_t tailPrev = DrcoAtomicCasTo(&queue->tail, tail, tail + n);
+    if (tailPrev == tail) {
+        for (uint32_t i = 0; i < n; i++) {
+            DrcoAtomicExchTo(&queue->taskList[tail + i], DRCO_ENCODE_TASK(readyTaskList[i]));
+        }
+        return 0;
+    }
+    return 1;
+}
+
 INLINE void DrcoLocalReadyQueuePushBatch(__gm__ DrcoLocalReadyQueue* queue, uint32_t* readyTaskList, uint32_t n)
 {
-    uint32_t tail = DrcoAtomicAddTo(&queue->tail, n);
-    for (uint32_t i = 0; i < n; i++) {
-        DrcoAtomicExchTo(&queue->taskList[tail + i], DRCO_ENCODE_TASK(readyTaskList[i]));
+    int result = DrcoLocalReadyQueueTryBatchPushTask(queue, readyTaskList, n);
+    while (result == 1) {
+        result = DrcoLocalReadyQueueTryBatchPushTask(queue, readyTaskList, n);
     }
 }
 
@@ -390,8 +408,9 @@ struct DrcoDynFuncDataListPush {
 };
 
 template <typename GlobalReadyQueueHandler>
-INLINE void DrcoFlushBatchTasks(__gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList, uint32_t batchTaskIds[][64],
-                                uint32_t batchCount[], uint32_t aicCoreNum)
+INLINE void DrcoFlushBatchTasks(__gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                                uint32_t batchTaskIds[][BATCH_PUSH_BUF_SIZE], uint32_t batchCount[],
+                                uint32_t aicCoreNum)
 {
     for (uint32_t ct = 0; ct < npu::tile_fwk::NUM_CORE_TYPES; ct++) {
         if (batchCount[ct] > 0) {
@@ -405,7 +424,6 @@ template <typename GlobalReadyQueueHandler>
 INLINE void ExecDrcoResolve(ExecuteContext* ctx, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList, uint32_t taskId)
 {
     constexpr uint32_t HUB_STACK_SIZE = 64;
-    constexpr uint32_t BATCH_PUSH_BUF_SIZE = 64;
     uint32_t hubStack[HUB_STACK_SIZE];
     int32_t hubStackTop = -1;
     hubStack[++hubStackTop] = taskId;
@@ -690,9 +708,9 @@ INLINE uint32_t DrcoDynFuncDataListGetFirstTask(__gm__ npu::tile_fwk::DrcoRootFu
             }
         }
 
-        uint32_t execCnt = DrcoAtomicLoad(&rootFuncList->executedTaskCount);
-        uint32_t totCnt = DrcoAtomicLoad(&rootFuncList->totalTaskCount);
-        if (execCnt >= totCnt) {
+        __gm__ DrcoGlobalReadyQueue*
+            myGq = rootFuncList->globalReadyQueueList[static_cast<uint32_t>(npu::tile_fwk::drcoCoreType)].ptr;
+        if (DrcoAtomicLoad(&myGq->executedCount) >= myGq->size) {
             return static_cast<uint32_t>(AICORE_TASK_ALL_FINISH);
         }
     }
@@ -834,7 +852,9 @@ INLINE void ExecDrcoPerCoreTasks(ExecuteContext* ctx, __gm__ npu::tile_fwk::PerC
 #ifdef __HAS_SUB_FUNC__
         ExecDrcoResolve<GlobalReadyQueueHandler>(ctx, rootFuncList, taskId);
 #endif
-        DrcoAtomicAddTo(&rootFuncList->executedTaskCount, 1);
+        __gm__ DrcoGlobalReadyQueue* execQueue = GetDrcoGlobalReadyQueue(
+            rootFuncList, static_cast<uint32_t>(npu::tile_fwk::drcoCoreType));
+        DrcoAtomicAddTo(&execQueue->executedCount, 1);
     }
 }
 
@@ -881,7 +901,9 @@ INLINE void ExecDrcoReadyQueueTasks(ExecuteContext* ctx, __gm__ npu::tile_fwk::D
 #ifdef __HAS_SUB_FUNC__
                 ExecDrcoResolve<GlobalReadyQueueHandler>(ctx, rootFuncList, taskId);
 #endif
-                DrcoAtomicAddTo(&rootFuncList->executedTaskCount, 1);
+                __gm__ DrcoGlobalReadyQueue* execQueue = GetDrcoGlobalReadyQueue(
+                    rootFuncList, static_cast<uint32_t>(npu::tile_fwk::drcoCoreType));
+                DrcoAtomicAddTo(&execQueue->executedCount, 1);
             }
         }
         taskId = DrcoDynFuncDataListGetFirstTask(rootFuncList, blockIdx, outCoreType);
