@@ -151,11 +151,104 @@ def test_per_tensor_scale_relu_fusion(m, n):
 
 # ============================================================================
 # Test 2: per-channel + relu fusion
-# NOTE: per-channel scale (Tensor) is mutually exclusive with relu_pre_mode —
-# the combination "scale=Tensor + relu_pre_mode=NormalRelu" is rejected at parse
-# time (see test_scale_error_handling.py::test_err_per_channel_with_relu).
-# Per-channel quantization MUST be fused with ReLU by the user after the store.
 # ============================================================================
+
+
+def _make_scale_tensor(device: str, scale_values: list) -> torch.Tensor:
+    """Create INT64 scale tensor for per-channel quantization (signed INT8 output)."""
+    scale_bits_list = []
+    for scale_value in scale_values:
+        scale_bits = struct.unpack("!I", struct.pack("!f", scale_value))[0]
+        scale_bits |= 1 << 46  # signed flag for INT8 output
+        scale_bits_list.append(scale_bits)
+    return torch.tensor(scale_bits_list, dtype=torch.int64, device=device).reshape(1, 64)
+
+
+@pl.jit()
+def per_channel_scale_relu_kernel(
+    q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    fp_params: pl.Tensor[[1, pl.DYNAMIC], pl.DT_INT64],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
+):
+    with pl.section_cube():
+        mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
+        q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
+        k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
+
+        fp_mat_type = pl.TileType(shape=[1, 64], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Mat, layout=pl.ND)
+        fp_mat = pl.make_tile(fp_mat_type, addr=0x8000, size=512)
+
+        left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ)
+        q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
+
+        right_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right, layout=pl.ZN)
+        k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
+
+        acc_type = pl.TileType(
+            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+        )
+        acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+
+        fp_type = pl.TileType(shape=[1, 64], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Scaling)
+        fp_tile = pl.make_tile(fp_type, addr=0x0000, size=512)
+
+        pl.load(q_mat, q, [0, 0])
+        pl.load(k_mat, k, [0, 0])
+        pl.load(fp_mat, fp_params, [0, 0])
+        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE1, event_id=0)
+        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE1, event_id=0)
+
+        pl.move(q_left, q_mat)
+        pl.move(k_right, k_mat)
+        pl.system.sync_src(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.M, event_id=0)
+        pl.system.sync_dst(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.M, event_id=0)
+
+        pl.matmul(acc, q_left, k_right)
+        pl.system.sync_src(set_pipe=pl.PipeType.M, wait_pipe=pl.PipeType.FIX, event_id=0)
+        pl.system.sync_dst(set_pipe=pl.PipeType.M, wait_pipe=pl.PipeType.FIX, event_id=0)
+
+        # user-owned data flow: move scale into Scaling tile, sync MTE1->FIX
+        pl.move(fp_tile, fp_mat)
+        pl.system.sync_src(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.FIX, event_id=1)
+        pl.system.sync_dst(set_pipe=pl.PipeType.MTE1, wait_pipe=pl.PipeType.FIX, event_id=1)
+
+        # per-channel scale + relu fusion
+        pl.store(out, acc, [0, 0], scale=fp_tile, relu_pre_mode=pl.ReluPreMode.NormalRelu)
+        pl.system.bar_all()
+
+
+@pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
+def test_per_channel_scale_relu_fusion():
+    """Test per-channel scale (Tile) + relu fusion via the store_fp fixpipe path."""
+    device = ST_DEVICE
+    torch.npu.set_device(device)
+
+    device_name = torch.npu.get_device_name()
+    if "Ascend950" not in device_name:
+        logging.info("Current device is %s, skip.", device_name)
+        return
+
+    q = _make_q(device)
+    k = _make_k(device)
+    out = torch.zeros((64, 64), device=device, dtype=torch.int8)
+
+    scale_values = [0.5 + i * 0.5 for i in range(64)]
+    fp_params = _make_scale_tensor(device, scale_values)
+
+    per_channel_scale_relu_kernel(q, k, fp_params, out)
+    torch.npu.synchronize()
+
+    # Expected: relu(matmul(q, k)) * per-column scale, then quantize to INT8
+    raw_ref = torch.matmul(q, k)
+    relu_ref = torch.relu(raw_ref)
+    scale_tensor_fp32 = torch.tensor(scale_values, dtype=torch.float32, device=device)
+    scaled_ref = relu_ref * scale_tensor_fp32.unsqueeze(0)
+    expected = torch.clamp(torch.round(scaled_ref), -128, 127).to(torch.int8)
+
+    torch.testing.assert_close(out, expected, rtol=0, atol=1)
+    logging.info("test_per_channel_scale_relu_fusion passed!")
 
 
 # ============================================================================
@@ -328,6 +421,7 @@ def test_multiple_scale_values_with_relu():
 
 if __name__ == "__main__":
     test_per_tensor_scale_relu_fusion()
+    test_per_channel_scale_relu_fusion()
     test_dynamic_scale_relu_fusion()
     test_multiple_scale_values_with_relu()
     logging.info("\nAll P1 scale + relu fusion tests passed!")

@@ -252,6 +252,8 @@ def _resolve_scale_param(
 ) -> tuple[Optional["int | Expr"], Optional[Expr]]:
     if scale is None:
         return None, None
+    if isinstance(scale, bool):
+        raise TypeError("scale must be float, int, Expr, or Tile, got bool")
     if isinstance(scale, (int, float)):
         encoded = _encode_deq_scalar(float(scale))
         return encoded, None
@@ -336,10 +338,13 @@ def _ir_store(
     pre_quant_scalar, fp_tile = _resolve_scale_param(scale, actual_span)
     is_quant = pre_quant_scalar is not None or fp_tile is not None
     _check_layout_dtype(op_name, tile, out, quant=is_quant)
-    if fp_tile is not None and relu_pre_mode is not None:
-        raise ValueError("scale (per-channel) cannot be used together with relu_pre_mode")
     if fp_tile is not None and phase is not None:
         raise ValueError("scale (per-channel) cannot be combined with phase")
+    if fp_tile is not None and atomic != AtomicType.AtomicNone:
+        raise ValueError(
+            "scale (per-channel) cannot be combined with atomic — the fixpipe quantization "
+            "path does not emit atomic instructions; per-tensor scalar scale + atomic is supported"
+        )
     kwargs = _build_store_kwargs(
         relu_pre_mode=relu_pre_mode,
         tile_dims=tile_dims,
@@ -415,10 +420,13 @@ def _ir_store_tile(
     pre_quant_scalar, fp_tile = _resolve_scale_param(scale, actual_span)
     is_quant = pre_quant_scalar is not None or fp_tile is not None
     _check_layout_dtype(op_name, tile, out, quant=is_quant)
-    if fp_tile is not None and relu_pre_mode is not None:
-        raise ValueError("scale (per-channel) cannot be used together with relu_pre_mode")
     if fp_tile is not None and phase is not None:
         raise ValueError("scale (per-channel) cannot be combined with phase")
+    if fp_tile is not None and atomic != AtomicType.AtomicNone:
+        raise ValueError(
+            "scale (per-channel) cannot be combined with atomic — the fixpipe quantization "
+            "path does not emit atomic instructions; per-tensor scalar scale + atomic is supported"
+        )
     kwargs = _build_store_kwargs(
         relu_pre_mode=relu_pre_mode,
         tile_dims=tile_dims,
@@ -636,14 +644,20 @@ def _ir_move(
     is_quant = pre_quant_scalar is not None or fp_tile is not None
     _check_layout_dtype("move", src, out, quant=is_quant)
 
-    _check_scale_dst_supported(
-        getattr(src.type, "dtype", None),
-        getattr(out.type, "dtype", None),
-        is_quant,
-        "move",
-    )
-    if fp_tile is not None and acc_to_vec_mode in {AccToVecMode.DualModeSplitM, AccToVecMode.DualModeSplitN}:
-        raise ValueError("scale (per-channel) only supports single-mode acc_to_vec_mode")
+    if offset is not None and (fp_tile is not None or pre_quant_scalar is not None):
+        raise ValueError(
+            "move: offset cannot be combined with scale — the fixpipe quantization "
+            "paths (per-channel Tile or per-tensor scalar) do not support sub-block "
+            "extraction offsets"
+        )
+
+    _dual_modes = {AccToVecMode.DualModeSplitM, AccToVecMode.DualModeSplitN}
+    if (fp_tile is not None or pre_quant_scalar is not None) and acc_to_vec_mode in _dual_modes:
+        raise ValueError(
+            "scale cannot be combined with dual-mode acc_to_vec_mode — the fixpipe dual-destination "
+            "control word does not support quantization (hardware limit); use a single-vec mode "
+            "(SingleModeVec0/SingleModeVec1) or drop the scale"
+        )
     if phase is not None and offset is not None:
         raise ValueError("move: phase cannot be combined with offset (TEXTRACT path does not support unit_flag)")
     kwargs: dict[str, Any] = {}
@@ -1005,24 +1019,6 @@ _SUM_DTYPES: tuple[DataType, ...] = (
 )
 _SEL_DTYPES: tuple[DataType, ...] = _BINARY_DTYPES + (DataType.BOOL,)
 
-
-def _check_scale_dst_supported(src_dtype: DataType | None, dst_dtype: DataType | None, is_quant_active: bool,
-                               op_name: str) -> None:
-    """Reject scale quantization to dtype combinations the hardware fixpipe cannot produce.
-
-    The fixpipe has no unsigned requantization (UINT8 output) and only dequantizes
-    INT32→FP16 (not INT32→BF16); FP32→BF16 only supports a no-scale truncation.
-    These combos compile but fault on device (NPU device error 507015), so surface
-    them as parse-time errors instead of a device crash.
-    """
-    if not is_quant_active:
-        return
-    if dst_dtype == DataType.UINT8:
-        raise ValueError(
-            f"{op_name}: scale quantization to UINT8 is not supported — the hardware "
-            "fixpipe has no unsigned requantization path. Use an INT8 output, or quantize "
-            "in the Vector (UB) domain."
-        )
 
 
 def _resolve_order(
@@ -2753,6 +2749,8 @@ _A5_STORE_QUANT_COMBOS = (
     # FP32 累加量化：NZ → ND / NZ → NZ
     ("Acc", "GM", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.INT8),
     ("Acc", "GM", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.INT8),
+    ("Acc", "GM", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.UINT8),
+    ("Acc", "GM", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.UINT8),
     ("Acc", "GM", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.FP16),
     ("Acc", "GM", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.FP16),
     ("Acc", "GM", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.BF16),
@@ -2766,6 +2764,8 @@ _A5_STORE_QUANT_COMBOS = (
     # INT32 累加量化：NZ → ND / NZ → NZ
     ("Acc", "GM", TensorLayout.NZ, TensorLayout.ND, DataType.INT32, DataType.INT8),
     ("Acc", "GM", TensorLayout.NZ, TensorLayout.NZ, DataType.INT32, DataType.INT8),
+    ("Acc", "GM", TensorLayout.NZ, TensorLayout.ND, DataType.INT32, DataType.UINT8),
+    ("Acc", "GM", TensorLayout.NZ, TensorLayout.NZ, DataType.INT32, DataType.UINT8),
     ("Acc", "GM", TensorLayout.NZ, TensorLayout.ND, DataType.INT32, DataType.FP16),
     ("Acc", "GM", TensorLayout.NZ, TensorLayout.NZ, DataType.INT32, DataType.FP16),
     ("Acc", "GM", TensorLayout.NZ, TensorLayout.ND, DataType.INT32, DataType.BF16),
