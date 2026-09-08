@@ -173,6 +173,7 @@
                 },
                 "auto_mix_partition": {
                     "type": "integer",
+                    "default": 1,
                     "label": {
                         "zh": "控制ReduceCopyMerge Pass中的自动混合子图切分行为。",
                         "en": "Controls the automatic mixed subgraph partitioning behavior in the ReduceCopyMerge Pass."

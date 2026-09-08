@@ -227,6 +227,25 @@ def test_sg_set_atomic_scope():
     pypto.reset_options()
 
 
+def test_auto_mix_partition():
+    # enable (default value is 1)
+    pypto.set_pass_options(auto_mix_partition=1)
+    pass_option = pypto.get_pass_options()
+    assert pass_option["auto_mix_partition"] == 1
+
+    # disable
+    pypto.set_pass_options(auto_mix_partition=0)
+    pass_option = pypto.get_pass_options()
+    assert pass_option["auto_mix_partition"] == 0
+
+    # default after reset (auto_mix_partition is enabled by default)
+    pypto.reset_options()
+    pass_option = pypto.get_pass_options()
+    assert pass_option["auto_mix_partition"] == 1
+
+    pypto.reset_options()
+
+
 def test_vf_options():
     a = pypto.tensor([32, 32], pypto.DT_FP32, "a")
     b = pypto.tensor([32, 32], pypto.DT_FP32, "b")

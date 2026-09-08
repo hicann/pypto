@@ -303,6 +303,7 @@ def set_pass_options(
 
     auto_mix_partition : int
         Control the auto mix partition behavior in ReduceCopyMerge pass.
+        0 disables auto CV Mix graph merging; 1 enables it (default).
 
     sg_set_tunevf_mode : int
         Control the VF (Vector Fusion) tuning pass behavior.
@@ -417,7 +418,7 @@ def get_pass_options() -> Dict[str, Union[str, int, bool, List[int], Dict[int, i
     }
     val = rst.get("sg_set_scope", (-1, False, False))
     result['sg_set_scope'] = (int(val[0]), bool(val[1]), bool(val[2]))
-    result['auto_mix_partition'] = rst.get('auto_mix_partition', 0)
+    result['auto_mix_partition'] = rst.get('auto_mix_partition', 1)
     # sg_set_ooo_scope is stored as the sg_set_atomic_scope config key (converted at set time).
     scope_val = _decode_scope_id(rst.get('sg_set_atomic_scope', [0]))
     result['sg_set_ooo_scope'] = scope_val

@@ -231,8 +231,9 @@ TEST_F(ReduceCopyTest, TestCase2)
     G.GetOp("adds22")->scopeInfo_.cvFuseId = 0;
     ReduceCopyMerge merger;
     merger.RunOnFunction(*function);
-    const int Num2 = 2;
-    EXPECT_EQ(function->GetTotalSubGraphCount(), Num2);
+    // 存在 CV 混合 scope(cvFuseId>=0)时禁用 auto-mix: 仅 {2,3} 经 enforce 路径合并, {0,1} 不再自动合并
+    const int Num3 = 3;
+    EXPECT_EQ(function->GetTotalSubGraphCount(), Num3);
 }
 
 TEST_F(ReduceCopyTest, PreserveOriginalSubgraphId)
@@ -906,6 +907,57 @@ TEST_F(ReduceCopyTest, DdrPredictRejectsSingleAssembleProducerOnUbTensor)
     // T(UB) 单 ASSEMBLE producer -> WillBeDdr 命中 -> isDDR=true -> 拒绝 sg0+sg2 合并 -> 子图数 == 3.
     const int Num3 = 3;
     EXPECT_EQ(function->GetTotalSubGraphCount(), Num3);
+}
+
+// 存在 CV 混合 scope(cvFuseId>=0)时禁用 auto-mix: {0,1} 为该 scope 涉及的子图组(enforce 路径),
+// {2,3} 为满足全部约束的 auto-mix 候选组。对照组(无 scope 标记)中 {2,3} 可被 auto-mix 合并;
+// 存在 scope 标记时仅 {0,1} 经 enforce 路径合并, {2,3} 保持独立, 防止 auto-mix 改变 scope 的切分结果。
+TEST_F(ReduceCopyTest, MixGraphMerger_AutoMixSkippedWhenScopedOpExists)
+{
+    std::vector<std::set<int>> outGraph{{1}, {}, {3}, {}};
+    MergeInput input = BuildSimpleMergeInput(4, outGraph, {{0, 1}, {2, 3}});
+    input.isEnforceMergeGroup = {true, false};
+    input.hasScopedOp = true;
+    input.boundaryTensors = {{300, {0}, {1}, false, {}, {}}, {301, {2}, {3}, false, {}, {}}};
+    input.subgraphToBoundaryTensorIds = {{0}, {0}, {1}, {1}};
+
+    // 对照: 无 scope 标记时 auto-mix 同时合并 {0,1} 和 {2,3}
+    MergeInput noScopeInput = input;
+    noScopeInput.hasScopedOp = false;
+    noScopeInput.isEnforceMergeGroup = {false, false};
+    MixGraphMerger noScopeMerger;
+    MergeOutput noScopeOutput = noScopeMerger.Merge(noScopeInput);
+    const int Num2 = 2;
+    EXPECT_EQ(noScopeOutput.numSubgraphUpdated, Num2);
+
+    // 存在 scope 标记时 auto-mix 被禁用, 仅 CV 混合 scope 涉及的 {0,1} 经 enforce 路径合并
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+    const int Num3 = 3;
+    EXPECT_EQ(output.numSubgraphUpdated, Num3);
+    EXPECT_EQ(output.subgraphIdUpdated[0], output.subgraphIdUpdated[1]);
+    EXPECT_NE(output.subgraphIdUpdated[2], output.subgraphIdUpdated[3]);
+    EXPECT_NE(output.subgraphIdUpdated[0], output.subgraphIdUpdated[2]);
+}
+
+// scope 标记存在但未形成任何 enforce 子图组(如 boundary tensor 带组外端点, IsEnforceMergeBoundary 为
+// false)时, auto-mix 同样被禁用: 门控以 cvFuseId>=0 为准, 不依赖 enforce 子图组的过滤结果, 候选全部跳过。
+TEST_F(ReduceCopyTest, MixGraphMerger_AutoMixSkippedWithoutEnforceGroup)
+{
+    std::vector<std::set<int>> outGraph{{1}, {}, {3}, {}};
+    MergeInput input = BuildSimpleMergeInput(4, outGraph, {{0, 1}, {2, 3}});
+    input.isEnforceMergeGroup = {false, false};
+    input.hasScopedOp = true;
+    input.boundaryTensors = {{300, {0}, {1}, false, {}, {}}, {301, {2}, {3}, false, {}, {}}};
+    input.subgraphToBoundaryTensorIds = {{0}, {0}, {1}, {1}};
+
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+
+    const int Num4 = 4;
+    EXPECT_EQ(output.numSubgraphUpdated, Num4);
+    EXPECT_NE(output.subgraphIdUpdated[0], output.subgraphIdUpdated[1]);
+    EXPECT_NE(output.subgraphIdUpdated[2], output.subgraphIdUpdated[3]);
 }
 
 // enforce 合并超 op 数上限时不拦截, 只打 WARN; 子图照常合并为 1
