@@ -37,9 +37,7 @@ pypto_pro.language.system.mutex_unlock(
 
 - mutex_unlock必须与此前同一pipe、同一mutex_id的mutex_lock成对使用。
 - 不得遗漏mutex_unlock，也不得在未获取对应互斥资源时调用mutex_unlock。
-- mutex_lock和mutex_unlock需要位于对称的控制流路径中，确保每次获取的互斥资源均会被释放。
-- auto_mutex=True仅对带mutex元数据的Tile自动生成互斥操作；显式调用的mutex_unlock仍会保留，自动同步和手动同步可以在同一Kernel中使用。
-- 常规单缓冲、双缓冲和N缓冲场景推荐使用[make_tile_group](../resource_management/make_tile_group.md)配合auto_mutex=True。需要精确控制解锁pipe和插入位置时，再使用mutex_lock和mutex_unlock。
+- 嵌套、复用、控制流及自动mutex等公共约束，参见[pypto_pro.language.system.mutex_lock](mutex_lock.md#约束说明)。
 
 ## 返回值说明
 

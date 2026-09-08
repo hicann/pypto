@@ -30,6 +30,7 @@ pypto_pro.language.system.bar_all() -> None
 
 - 支持在Cube区段或Vector区段中调用。
 - 仅同步当前AI Core内的全部流水，不是多个AI Core之间的全局屏障。多核同步请使用[pypto_pro.language.system.sync_all](sync_all.md)。
+- 本接口会等待当前AI Core内全部流水此前下发的操作完成，可能影响性能。只需要等待一条流水时，应使用对应的单流水屏障接口。
 
 ## 返回值说明
 

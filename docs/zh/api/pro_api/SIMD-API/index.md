@@ -6,7 +6,7 @@
 
 basic_data_structures/index
 memory_data_movement/index
-memory_vector_computation/index
+tile_vector_computation/index
 vf_computation/index
 matrix_computation/index
 quantization/index
