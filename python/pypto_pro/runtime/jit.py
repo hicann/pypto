@@ -128,6 +128,7 @@ class CompiledKernel:
     has_cube: bool = False
     has_vector: bool = True
     target: KernelTarget | None = None
+    needs_print_debug: bool = False
     # Lazily bound launch closure (see _build_launch_entry). It depends only on the
     # fields above, so it is built once instead of on every launch.
     entry: "Callable | None" = dataclasses.field(default=None, compare=False, repr=False)
@@ -701,11 +702,6 @@ def _build_launch_entry(compiled: "CompiledKernel"):
     # identity do not, and _load_lib used to redo both on every launch.
     from pypto_pro.runtime.exception_dump import set_dump_info as _set_dump_info
 
-    param_specs = compiled.param_specs
-    dump_name = compiled.kernel_name
-    dump_dir = compiled.build_dir
-    dump_target = compiled.target
-
     def entry(args: tuple, block_dim: int, stream):
         if has_tiling:
             args = _pack_tiling_arg(args)
@@ -794,7 +790,7 @@ def _build_launch_entry(compiled: "CompiledKernel"):
         # native query will further reduce it to this stream's actual resources.
         if block_dim > 0xFFFFFFFF:
             block_dim = 0xFFFFFFFF
-        _set_dump_info(dump_name, args, param_specs, dump_dir, target=dump_target)
+        _set_dump_info(compiled, args)
         # Resolve limits and launch in one C call, avoiding two torch_npu C-extension
         # calls and Python dict/loop work. Errors return before any device launch.
         actual_block_dim = call_kernel(block_dim, stream._as_parameter_, *abi_args)
@@ -1966,6 +1962,7 @@ class _TileJitKernel:
             kernel_name=cg.kernel_name, build_dir=cg.build_dir,
             has_cube=cg.has_cube, has_vector=cg.has_vector,
             target=target,
+            needs_print_debug=cg.needs_print_debug,
         )
         self._compiled_by_signature[(static_signature, dtype_hash, tilingkey_packed)] = compiled
         return compiled

@@ -156,7 +156,7 @@ def test_compilation_preserves_target_for_cached_launch_and_debug(monkeypatch, t
 def test_debug_command_reuses_compiled_target_without_resolving(monkeypatch, tmp_path):
     """Exception-dump setup runs before launches; it must reuse metadata rather than infer core geometry again."""
     dump = importlib.import_module("pypto_pro.runtime.exception_dump")
-    (tmp_path / "kernel.cpp").write_text("")
+    (tmp_path / "call_kernel.cpp").write_text("")
     monkeypatch.setenv("ASCEND_WORK_PATH", str(tmp_path))
     monkeypatch.setenv("ASCEND_HOME_PATH", "/toolkit")
     monkeypatch.setenv("ASCEND_TOOLKIT_HOME", "/toolkit")
@@ -166,6 +166,10 @@ def test_debug_command_reuses_compiled_target_without_resolving(monkeypatch, tmp
         JitCompileConfig, "resolve_kernel_target", MagicMock(side_effect=AssertionError("Already resolved")),
     )
     target = KernelTarget("test-compiled-target", 1, 1, True)
-    command = dump._build_debug_compile_cmd(str(tmp_path), "probe", target)
+    compiled = jit.CompiledKernel(
+        lib_path="/tmp/test-kernel.so", param_specs=[],
+        kernel_name="probe", build_dir=str(tmp_path), target=target,
+    )
+    command = dump._build_debug_compile_cmd(compiled)
     assert "--cce-aicore-arch=test-compiled-target" in command
     assert "--cce-aicore-arch=dav-c310" not in command
