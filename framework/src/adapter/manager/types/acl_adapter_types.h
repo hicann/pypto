@@ -78,7 +78,7 @@ enum class AclNewFunc { NoBlockingLaunchBegin, NoBlockingLaunchEnd, Bottom };
 
 const std::string newAclLibName = "libacl_rt.so";
 const std::map<AclNewFunc, std::string> aclNewFuncStrMap{
-    {AclNewFunc::NoBlockingLaunchBegin, "aclrtNoBlockingLaunchBegin"},
-    {AclNewFunc::NoBlockingLaunchEnd, "aclrtNoBlockingLaunchEnd"},
+    {AclNewFunc::NoBlockingLaunchBegin, "aclrtNonBlockingLaunchBegin"},
+    {AclNewFunc::NoBlockingLaunchEnd, "aclrtNonBlockingLaunchEnd"},
 };
 } // namespace npu::tile_fwk
