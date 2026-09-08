@@ -332,7 +332,7 @@ Status FunctionUtils::InferOutcastWriteConflict(Function& function)
                 outcast->SetAttr("NORMAL", true);
             }
         }
-        if (MayOverlap(prods)) {
+        if (!IRContext::Get().AssembleNewLogicalTensor() && MayOverlap(prods)) {
             outcast->SetAttr(OpAttributeKey::writeConflict, true);
         }
     }
