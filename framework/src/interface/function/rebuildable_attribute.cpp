@@ -16,7 +16,6 @@
 #include "rebuildable_attribute.h"
 
 #include "tilefwk/pypto_fwk_log.h"
-#include "interface/function/function.h"
 
 namespace npu::tile_fwk {
 

@@ -478,6 +478,12 @@ void BuildControlFlowFromIR(IrBackendContext& ctx, FunctionCache& cache, Linker&
         controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "RUNTIME_RootGetDieId(" << 0 << ");\n";
     }
 
+    ControlFlowEmitCtx cfCtx{cache,          linker,       sectionName,    slotIdxMapping,
+                             group,          rootTileDict, controlFlowOss, expressionOss,
+                             exprHeaderOss,  expName,      exprSrcFiles,   valDependTensorMeta,
+                             ctx.getInputCse};
+    EmitAssumeDivisibleChecks(cfCtx, indent + 1);
+
     if (func->body_ != nullptr) {
         VisitIRStmtForControlFlow(ctx, cache, linker, sectionName, func->body_, func, slotIdxMapping, group,
                                   rootTileDict, controlFlowOss, expressionOss, exprHeaderOss, indent + 1, expName,

@@ -15,7 +15,55 @@ from typing import Dict, List, Optional, Tuple, Union
 from .. import pypto_impl
 from .._op_wrapper import op_wrapper
 from ..config import get_current_scope, set_options
+from ..symbolic_scalar import SymbolicScalar
 from ..tensor import Tensor
+
+
+def assume_divisible(expr: "SymbolicScalar | int", divisor: int) -> "SymbolicScalar":
+    """
+    Assume that ``expr`` is divisible by ``divisor`` at runtime.
+
+    Returns a ``SymbolicScalar`` representing ``expr``. ``SymbolicScalar`` inputs
+    are returned unchanged; ``int`` inputs are converted. The normalized assumption
+    is registered on the Program, enabling the compiler to simplify
+    dynamic valid-shape expressions (e.g. ``min(max(vm - off, 0), T)`` → ``T``)
+    when the user knows the runtime value is always a multiple of ``divisor``.
+
+    By default, this assumption is unchecked at runtime. With
+    ``runtime_debug_mode=4``, codegen lowers every explicitly registered,
+    normalized assumption expression to a modulo assertion at the control-flow
+    entry.
+
+    If ``expr`` is a compile-time constant:
+      - ``expr % divisor != 0`` → raises ``ValueError`` (assumption is provably false)
+      - ``expr % divisor == 0`` → no-op (trivially true)
+
+    Parameters
+    ----------
+    expr : SymbolicScalar | int
+        The runtime scalar expression assumed to be divisible.
+    divisor : int
+        The divisor (must be positive).
+
+    Returns
+    -------
+    SymbolicScalar
+        A symbolic scalar representing ``expr``. Symbolic inputs are returned
+        unchanged; integer inputs are converted.
+    """
+    if isinstance(expr, int):
+        expr = SymbolicScalar(expr)
+    if divisor <= 0:
+        raise ValueError(f"divisor must be positive, got {divisor}")
+    if expr.is_concrete() and int(expr) % divisor != 0:
+        raise ValueError(f"assume_divisible: constant {int(expr)} is not divisible by {divisor}")
+    from ..functions import get_current_function
+
+    func = get_current_function()
+    if func is None:
+        return expr
+    func.base.RegisterDivisibleAssumption(expr, divisor)
+    return expr
 
 
 @op_wrapper

@@ -3546,6 +3546,64 @@ TEST_F(ScheduleOoOTest, DualDst_RunDualDstFuse_ActuallyFusesAndMutatesFunction)
     dualdst_ut::ExpectFusedMetadata(s, g, before);
 }
 
+TEST_F(ScheduleOoOTest, DualDst_FusedCopyPreservesDynamicValidShapeOnNonSplitAxis)
+{
+    auto g = dualdst_ut::BuildDualDstGraph_2({dualdst_ut::TILE_M * 2, dualdst_ut::TILE_N},
+                                             {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {dualdst_ut::TILE_M, 0});
+    const std::vector<SymbolicScalar> validShape = {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar("n")};
+    for (Operation* copy : {g.copy0, g.copy1}) {
+        copy->GetOutputOperand(0)->UpdateDynValidShape(validShape);
+        auto attr = std::dynamic_pointer_cast<CopyOpAttribute>(copy->GetOpAttribute());
+        ASSERT_NE(attr, nullptr);
+        attr->SetToDynValidShape(OpImmediate::Specified(validShape));
+    }
+
+    OoOScheduler s(*g.func);
+    ASSERT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    dualdst_ut::InjectCoreMap(s, g);
+    s.SetEnableDualDst(true);
+    ASSERT_EQ(s.dualDstEngine_.RunDualDstFuse(), SUCCESS);
+
+    Operation* dual = dualdst_ut::FindDualDstOp(*g.func);
+    ASSERT_NE(dual, nullptr);
+    auto attr = std::dynamic_pointer_cast<CopyOpAttribute>(dual->GetOpAttribute());
+    ASSERT_NE(attr, nullptr);
+    const auto fusedValid = OpImmediate::ToSpecified(attr->GetToDynValidShape());
+    ASSERT_EQ(fusedValid.size(), 2u);
+    ASSERT_TRUE(fusedValid[0].ConcreteValid());
+    EXPECT_EQ(fusedValid[0].Concrete(), dualdst_ut::TILE_M * 2);
+    EXPECT_EQ(fusedValid[1].Dump(), "n");
+}
+
+TEST_F(ScheduleOoOTest, DualDst_FusedCopyPreservesDynamicValidShapeOnNonSplitAxis_DirectionN)
+{
+    auto g = dualdst_ut::BuildDualDstGraph_2({dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+                                             {dualdst_ut::TILE_M, dualdst_ut::TILE_N}, {0, 0}, {0, dualdst_ut::TILE_N});
+    const std::vector<SymbolicScalar> validShape = {SymbolicScalar("m"), SymbolicScalar(dualdst_ut::TILE_N)};
+    for (Operation* copy : {g.copy0, g.copy1}) {
+        copy->GetOutputOperand(0)->UpdateDynValidShape(validShape);
+        auto attr = std::dynamic_pointer_cast<CopyOpAttribute>(copy->GetOpAttribute());
+        ASSERT_NE(attr, nullptr);
+        attr->SetToDynValidShape(OpImmediate::Specified(validShape));
+    }
+
+    OoOScheduler s(*g.func);
+    ASSERT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    dualdst_ut::InjectCoreMap(s, g);
+    s.SetEnableDualDst(true);
+    ASSERT_EQ(s.dualDstEngine_.RunDualDstFuse(), SUCCESS);
+
+    Operation* dual = dualdst_ut::FindDualDstOp(*g.func);
+    ASSERT_NE(dual, nullptr);
+    auto attr = std::dynamic_pointer_cast<CopyOpAttribute>(dual->GetOpAttribute());
+    ASSERT_NE(attr, nullptr);
+    const auto fusedValid = OpImmediate::ToSpecified(attr->GetToDynValidShape());
+    ASSERT_EQ(fusedValid.size(), 2u);
+    EXPECT_EQ(fusedValid[0].Dump(), "m");
+    ASSERT_TRUE(fusedValid[1].ConcreteValid());
+    EXPECT_EQ(fusedValid[1].Concrete(), dualdst_ut::TILE_N * 2);
+}
+
 // 验证融合后两个 UB_ALLOC 互相记录 pairedDualDstAlloc，
 // 且 L0C_ALLOC 不会被误标记为 DualDst alloc。
 TEST_F(ScheduleOoOTest, DualDst_AllocQueryHelpers_AfterFuse)

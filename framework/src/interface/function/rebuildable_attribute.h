@@ -94,6 +94,8 @@ public:
         attrDict_[func][name] = base;
     }
 
+    void Clear() { attrDict_.clear(); }
+
     RebuildableAttributeManager() = default;
 
 private:

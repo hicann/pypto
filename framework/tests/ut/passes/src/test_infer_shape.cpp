@@ -16,6 +16,7 @@
 #include "gtest/gtest.h"
 
 #include "interface/tensor/logical_tensor.h"
+#include "interface/program/program.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/tensor/irbuilder.h"
 #include "passes/pass_utils/pass_operation_utils.h"
@@ -91,7 +92,350 @@ void RunInferShapeAndExpect(const std::shared_ptr<Function>& currFunctionPtr, St
     std::cout << currFunctionPtr->Dump() << std::endl;
     EXPECT_EQ(inferShapeTest.PostCheck(*currFunctionPtr), expected);
 }
+
 } // namespace
+
+TEST_F(InferShapeTest, AssumeDivisible_SimplifiesNestedViewTileInChildFunction)
+{
+    auto root = std::make_shared<Function>(Program::GetInstance(), "assume_root", "assume_root", nullptr);
+    auto child = std::make_shared<Function>(Program::GetInstance(), "assume_child", "assume_child", root.get());
+    SymbolicScalar q("q");
+    SymbolicScalar tileIndex("tile_index");
+
+    // These are the two 64-wide child views of a 128-wide parent tile.
+    const auto firstValid = std::min(std::max(std::min(q - tileIndex * 128, 128), 0), 64);
+    const auto secondValid = std::min(std::max(std::min(q - tileIndex * 128, 128) - 64, 0), 64);
+    const auto validWithoutMax = std::min(q - tileIndex * 128, 64);
+    Program::GetInstance().RegisterDivisibleAssumption(q, 128);
+
+    InferDynShape pass;
+    const auto firstResult = pass.SimplifyValidShapeWithAssumptions(*child, firstValid);
+    const auto secondResult = pass.SimplifyValidShapeWithAssumptions(*child, secondValid);
+    const auto noMaxResult = pass.SimplifyValidShapeWithAssumptions(*child, validWithoutMax);
+    EXPECT_TRUE(firstResult.ConcreteValid());
+    EXPECT_TRUE(secondResult.ConcreteValid());
+    EXPECT_TRUE(noMaxResult.ConcreteValid());
+    EXPECT_EQ(firstResult.Concrete(), 64);
+    EXPECT_EQ(secondResult.Concrete(), 64);
+    EXPECT_EQ(noMaxResult.Concrete(), 64);
+    EXPECT_TRUE(Program::GetInstance().IsKnownDivisible(q, 64));
+    EXPECT_TRUE(Program::GetInstance().IsKnownDivisible(q, 64));
+}
+
+TEST_F(InferShapeTest, AssumeDivisible_SimplifiesObservedFlashAttentionValidShapes)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "assume_fa_dump", "assume_fa_dump", nullptr);
+    SymbolicScalar qEnd("q_end");
+    SymbolicScalar qStart("q_start");
+    SymbolicScalar kEnd("k_end");
+    SymbolicScalar kStart("k_start");
+    SymbolicScalar loopIdx3("loop_idx_3");
+    SymbolicScalar loopIdx4("loop_idx_4");
+
+    // Q/K mirror cu_seqlens_[loop_idx_1 + 1] - cu_seqlens_[loop_idx_1].
+    const SymbolicScalar q = qEnd - qStart;
+    const SymbolicScalar k = kEnd - kStart;
+    const SymbolicScalar yq = q - loopIdx3 * 128;
+    const SymbolicScalar yk = k - loopIdx4 * 128;
+    Program::GetInstance().RegisterDivisibleAssumption(q, 128);
+    Program::GetInstance().RegisterDivisibleAssumption(k, 128);
+
+    // 5.1 - 5.4: observed K-side 128 tile valid shapes.
+    const auto kTile0 = std::min(std::max(std::min(yk, 128), 0), 128);
+    const auto kTile1 = std::min(std::max(std::min(yk, 256) + -128, 0), 128);
+    const auto kTile2 = std::min(std::max(std::min(yk, 384) + -256, 0), 128);
+    const auto kTile3 = std::min(std::max(std::min(yk, 512) + -384, 0), 128);
+    const auto kTile4 = std::min(std::max(std::min(yk, 640) + -512, 0), 128);
+
+    // 5.5: observed 128 -> 64 Q-side child Views.
+    const auto qChild1 = std::min(std::max(std::min(yq, 128) + -64, 0), 64);
+    const auto qChild0 = std::min(std::max(std::min(yq, 128), 0), 64);
+
+    InferDynShape pass;
+    const std::vector<SymbolicScalar> expected128 = {kTile0, kTile1, kTile2, kTile3, kTile4};
+    for (const auto& validShape : expected128) {
+        const auto result = pass.SimplifyValidShapeWithAssumptions(*function, validShape);
+        ASSERT_TRUE(result.ConcreteValid());
+        EXPECT_EQ(result.Concrete(), 128);
+    }
+    for (const auto& validShape : {qChild0, qChild1}) {
+        const auto result = pass.SimplifyValidShapeWithAssumptions(*function, validShape);
+        ASSERT_TRUE(result.ConcreteValid());
+        EXPECT_EQ(result.Concrete(), 64);
+    }
+}
+
+TEST_F(InferShapeTest, AssumeDivisible_SimplifiesMultiLevelViewTile)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "assume_multi_level", "assume_multi_level",
+                                               nullptr);
+    SymbolicScalar q("q");
+    SymbolicScalar tileIndex("tile_index");
+    Program::GetInstance().RegisterDivisibleAssumption(q, 128);
+
+    // A 128 -> 64 -> 32 View chain. The expression intentionally retains
+    // nested min caps and offsets instead of relying on prior algebraic
+    // normalization.
+    const auto valid = std::min(std::max(std::min(std::min(q - tileIndex * 128, 256) - 64, 128) - 32, 0), 32);
+
+    InferDynShape pass;
+    const auto result = pass.SimplifyValidShapeWithAssumptions(*function, valid);
+    ASSERT_TRUE(result.ConcreteValid());
+    EXPECT_EQ(result.Concrete(), 32);
+}
+
+TEST_F(InferShapeTest, AssumeDivisible_DoesNotSimplifyWithoutAssumption)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "assume_none", "assume_none", nullptr);
+    SymbolicScalar q("q");
+    SymbolicScalar tileIndex("tile_index");
+    const auto valid = std::min(std::max(std::min(q - tileIndex * 128, 128) - 64, 0), 64);
+
+    InferDynShape pass;
+    const auto result = pass.SimplifyValidShapeWithAssumptions(*function, valid);
+    EXPECT_FALSE(result.ConcreteValid());
+}
+
+TEST_F(InferShapeTest, AssumeDivisible_DoesNotSimplifyNonAlignedRemainingCap)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "assume_non_aligned", "assume_non_aligned",
+                                               nullptr);
+    SymbolicScalar q("q");
+    Program::GetInstance().RegisterDivisibleAssumption(q, 64);
+
+    // P - D is 66, which cannot represent a sequence of complete 64 tiles.
+    const auto valid = std::min(std::max(std::min(q, 130) - 64, 0), 64);
+
+    InferDynShape pass;
+    const auto result = pass.SimplifyValidShapeWithAssumptions(*function, valid);
+    EXPECT_FALSE(result.ConcreteValid());
+}
+
+TEST_F(InferShapeTest, AssumeDivisible_SimplifiesExplicitViewValidShapeAttribute)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "assume_explicit_view", "assume_explicit_view",
+                                               nullptr);
+    const std::vector<int64_t> shape = {64, 64};
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, shape, std::vector<SymbolicScalar>{});
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, shape, std::vector<SymbolicScalar>{});
+    SymbolicScalar q("q");
+    SymbolicScalar n("n");
+    SymbolicScalar tileIndex("tile_index");
+    Program::GetInstance().RegisterDivisibleAssumption(q, 128);
+
+    const auto validM = std::min(std::max(std::min(q - tileIndex * 128, 128) - 64, 0), 64);
+    auto viewAttr = std::make_shared<ViewOpAttribute>(
+        std::vector<int64_t>{0, 0}, MEM_UNKNOWN, std::vector<SymbolicScalar>{}, std::vector<SymbolicScalar>{validM, n});
+    PassOperationUtils::AddOperation(*function, Opcode::OP_VIEW, {input}, {output},
+                                     [&viewAttr](Operation& op) { op.SetOpAttribute(viewAttr); });
+    function->inCasts_.push_back(input);
+    function->outCasts_.push_back(output);
+
+    InferDynShape pass;
+    ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
+    const auto& attrValidShape = viewAttr->GetToDynValidShape();
+    ASSERT_EQ(attrValidShape.size(), 2);
+    EXPECT_TRUE(attrValidShape[0].ConcreteValid());
+    EXPECT_EQ(attrValidShape[0].Concrete(), 64);
+    EXPECT_EQ(attrValidShape[1].Dump(), n.Dump());
+    EXPECT_TRUE(output->GetDynValidShape()[0].ConcreteValid());
+    EXPECT_EQ(output->GetDynValidShape()[0].Concrete(), 64);
+}
+
+TEST_F(InferShapeTest, AssumeDivisible_SimplifiesCopyInValidShapeAttribute)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "assume_copyin", "assume_copyin", nullptr);
+    const std::vector<int64_t> shape = {64, 64};
+    const auto shapeImmediate = OpImmediate::Specified(shape);
+    SymbolicScalar vm("vm");
+    SymbolicScalar n("n");
+    SymbolicScalar tileIndex("tile_index");
+    Program::GetInstance().RegisterDivisibleAssumption(vm, 128);
+
+    const auto validM = std::min(std::max(std::min(vm - tileIndex * 128, 128) + -64, 0), 64);
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, shape, std::vector<SymbolicScalar>{});
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, shape, std::vector<SymbolicScalar>{validM, n});
+    auto copyInAttr = CreateCopyInAttribute(OpImmediate::Specified({0, 0}), MEM_UB, shapeImmediate, shapeImmediate);
+    copyInAttr->SetToDynValidShape(OpImmediate::Specified(std::vector<SymbolicScalar>{validM, n}));
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_COPY_IN, {input}, {output},
+        [&copyInAttr](Operation& op) { op.SetOpAttribute(copyInAttr); }, ir::Span::Unknown(), false);
+    function->inCasts_.push_back(input);
+    function->outCasts_.push_back(output);
+
+    InferDynShape pass;
+    pass.SimplifyAllValidShapes(*function);
+
+    const auto attrValidShape = OpImmediate::ToSpecified(copyInAttr->GetToDynValidShape());
+    ASSERT_EQ(attrValidShape.size(), 2);
+    EXPECT_TRUE(attrValidShape[0].ConcreteValid());
+    EXPECT_EQ(attrValidShape[0].Concrete(), 64);
+    EXPECT_EQ(attrValidShape[1].Dump(), n.Dump());
+    EXPECT_TRUE(output->GetDynValidShape()[0].ConcreteValid());
+    EXPECT_EQ(output->GetDynValidShape()[0].Concrete(), 64);
+}
+
+TEST_F(InferShapeTest, AssumeDivisible_ViewCopyInL0CCopyUB_CoexistSimplifyAndInferShape)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "assume_coexist", "assume_coexist", nullptr);
+    const std::vector<int64_t> shape = {64};
+    const auto shapeImmediate = OpImmediate::Specified(shape);
+    SymbolicScalar vm("vm");
+    SymbolicScalar tileIndex("tile_index");
+    Program::GetInstance().RegisterDivisibleAssumption(vm, 128);
+
+    const auto dynamicValid = std::min(std::max(std::min(vm - tileIndex * 128, 128) + -64, 0), 64);
+
+    auto copyInInput = IRBuilder().CreateTensorVar(DT_FP32, shape, std::vector<SymbolicScalar>{});
+    auto copyInOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, std::vector<SymbolicScalar>{dynamicValid});
+    auto copyInAttr = CreateCopyInAttribute(OpImmediate::Specified({0}), MEM_UB, shapeImmediate, shapeImmediate);
+    copyInAttr->SetToDynValidShape(OpImmediate::Specified(std::vector<SymbolicScalar>{dynamicValid}));
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_COPY_IN, {copyInInput}, {copyInOutput},
+        [&copyInAttr](Operation& op) { op.SetOpAttribute(copyInAttr); }, ir::Span::Unknown(), false);
+
+    auto viewInput = IRBuilder().CreateTensorVar(DT_FP32, shape, std::vector<SymbolicScalar>{dynamicValid});
+    auto viewOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, std::vector<SymbolicScalar>{dynamicValid});
+    auto viewAttr = std::make_shared<ViewOpAttribute>(
+        std::vector<int64_t>{0}, MEM_UNKNOWN, std::vector<SymbolicScalar>{}, std::vector<SymbolicScalar>{dynamicValid});
+    PassOperationUtils::AddOperation(*function, Opcode::OP_VIEW, {viewInput}, {viewOutput},
+                                     [&viewAttr](Operation& op) { op.SetOpAttribute(viewAttr); });
+
+    auto l0cInput = IRBuilder().CreateTensorVar(DT_FP32, shape, std::vector<SymbolicScalar>{dynamicValid});
+    auto l0cOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, std::vector<SymbolicScalar>{dynamicValid});
+    auto l0cAttr = CreateCopyOutAttribute(MEM_UB, OpImmediate::Specified({0}), shapeImmediate, shapeImmediate);
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_L0C_COPY_UB, {l0cInput}, {l0cOutput},
+        [&l0cAttr](Operation& op) { op.SetOpAttribute(l0cAttr); }, ir::Span::Unknown(), false);
+
+    function->inCasts_.push_back(copyInInput);
+    function->inCasts_.push_back(viewInput);
+    function->inCasts_.push_back(l0cInput);
+    function->outCasts_.push_back(copyInOutput);
+    function->outCasts_.push_back(viewOutput);
+    function->outCasts_.push_back(l0cOutput);
+
+    InferDynShape pass;
+    pass.SimplifyAllValidShapes(*function);
+
+    const auto copyInAttrValid = OpImmediate::ToSpecified(copyInAttr->GetToDynValidShape());
+    ASSERT_EQ(copyInAttrValid.size(), 1);
+    EXPECT_TRUE(copyInAttrValid[0].ConcreteValid());
+    EXPECT_EQ(copyInAttrValid[0].Concrete(), 64);
+
+    const auto& viewAttrValid = viewAttr->GetToDynValidShape();
+    ASSERT_EQ(viewAttrValid.size(), 1);
+    EXPECT_TRUE(viewAttrValid[0].ConcreteValid());
+    EXPECT_EQ(viewAttrValid[0].Concrete(), 64);
+
+    EXPECT_TRUE(copyInOutput->GetDynValidShape()[0].ConcreteValid());
+    EXPECT_EQ(copyInOutput->GetDynValidShape()[0].Concrete(), 64);
+    EXPECT_TRUE(viewOutput->GetDynValidShape()[0].ConcreteValid());
+    EXPECT_EQ(viewOutput->GetDynValidShape()[0].Concrete(), 64);
+}
+
+TEST_F(InferShapeTest, AssumeDivisible_RegistersOnRootFunctionAndStoresOwnAssumption)
+{
+    auto root = std::make_shared<Function>(Program::GetInstance(), "assume_owner_root", "assume_owner_root", nullptr);
+    root->SetFunctionType(FunctionType::DYNAMIC);
+    auto loop = std::make_shared<Function>(Program::GetInstance(), "assume_owner_loop", "assume_owner_loop",
+                                           root.get());
+    loop->SetFunctionType(FunctionType::DYNAMIC_LOOP);
+    auto child = std::make_shared<Function>(Program::GetInstance(), "assume_owner_child", "assume_owner_child",
+                                            loop.get());
+    child->SetFunctionType(FunctionType::STATIC);
+    child->SetGraphType(GraphType::BLOCK_GRAPH);
+    SymbolicScalar vm("vm");
+
+    Program::GetInstance().RegisterDivisibleAssumption(vm, 128);
+
+    const auto& rootAssumptions = Program::GetInstance().GetDivisibleAssumptions();
+    const auto it = rootAssumptions.find(vm.Simplify().Dump());
+    ASSERT_NE(it, rootAssumptions.end());
+    EXPECT_EQ(it->second.expression.Dump(), vm.Dump());
+    EXPECT_EQ(it->second.divisors, std::set<int64_t>({128}));
+    EXPECT_TRUE(Program::GetInstance().IsKnownDivisible(vm, 64));
+}
+
+TEST_F(InferShapeTest, AssumeDivisible_StoresNormalizedExpressionIndependentOfRegistrationOrder)
+{
+    auto derivedFirst = std::make_shared<Function>(Program::GetInstance(), "assume_derived_first",
+                                                   "assume_derived_first", nullptr);
+    auto symbolFirst = std::make_shared<Function>(Program::GetInstance(), "assume_symbol_first", "assume_symbol_first",
+                                                  nullptr);
+    SymbolicScalar vm("vm");
+    SymbolicScalar offset("offset");
+    const auto equivalentExpr = (vm - offset) + offset;
+    const auto key = vm.Simplify().Dump();
+
+    Program::GetInstance().RegisterDivisibleAssumption(equivalentExpr, 64);
+    Program::GetInstance().RegisterDivisibleAssumption(vm, 128);
+    Program::GetInstance().RegisterDivisibleAssumption(vm, 128);
+    Program::GetInstance().RegisterDivisibleAssumption(equivalentExpr, 64);
+
+    for (size_t idx = 0; idx < 2U; idx++) {
+        const auto& assumptions = Program::GetInstance().GetDivisibleAssumptions();
+        const auto it = assumptions.find(key);
+        ASSERT_NE(it, assumptions.end());
+        EXPECT_TRUE(it->second.expression.IsSymbol());
+        EXPECT_EQ(it->second.expression.Dump(), vm.Dump());
+        EXPECT_EQ(it->second.divisors, std::set<int64_t>({64, 128}));
+    }
+}
+
+TEST_F(InferShapeTest, AssumeDivisible_RunOnFunctionSavesSimplifiedValidShapeInStaticSnapshot)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "assume_snapshot", "assume_snapshot", nullptr);
+    const std::vector<int64_t> shape = {64};
+    const auto shapeImmediate = OpImmediate::Specified(shape);
+    SymbolicScalar vm("vm");
+    SymbolicScalar tileIndex("tile_index");
+    const auto dynamicValid = std::min(std::max(vm - tileIndex * 128, 0), 64);
+    auto input = IRBuilder().CreateTensorVar(DT_FP32, shape, std::vector<SymbolicScalar>{dynamicValid});
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, shape, std::vector<SymbolicScalar>{dynamicValid});
+    auto copyAttr = CreateCopyOutAttribute(MEM_UB, OpImmediate::Specified({0}), shapeImmediate, shapeImmediate);
+    auto& copyOp = PassOperationUtils::AddOperation(
+        *function, Opcode::OP_L0C_COPY_UB, {input}, {output},
+        [&copyAttr](Operation& op) { op.SetOpAttribute(copyAttr); }, ir::Span::Unknown(), false);
+    function->inCasts_.push_back(input);
+    function->outCasts_.push_back(output);
+    Program::GetInstance().RegisterDivisibleAssumption(vm, 128);
+
+    InferDynShape pass;
+    ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
+
+    ASSERT_TRUE(copyOp.HasAttribute(OpAttributeKey::staticValidShape));
+    const auto staticValidShape = copyOp.GetVectorIntAttribute<int64_t>(OpAttributeKey::staticValidShape);
+    ASSERT_EQ(staticValidShape.size(), 1U);
+    EXPECT_EQ(staticValidShape[0], 64);
+}
+
+TEST_F(InferShapeTest, AssumeDivisible_ChildQueriesRootAssumption)
+{
+    auto root = std::make_shared<Function>(Program::GetInstance(), "assume_root", "assume_root", nullptr);
+    SymbolicScalar q("q");
+
+    Program::GetInstance().RegisterDivisibleAssumption(q, 128);
+    auto child = std::make_shared<Function>(Program::GetInstance(), "assume_child", "assume_child", root.get());
+
+    EXPECT_TRUE(Program::GetInstance().IsKnownDivisible(q, 128));
+    EXPECT_TRUE(Program::GetInstance().IsKnownDivisible(q, 64));
+}
+
+TEST_F(InferShapeTest, AssumeDivisible_RegistrationIsSharedThroughRootFunction)
+{
+    auto root = std::make_shared<Function>(Program::GetInstance(), "assume_root_sibling", "assume_root_sibling",
+                                           nullptr);
+    SymbolicScalar q("q_sibling");
+    auto child = std::make_shared<Function>(Program::GetInstance(), "assume_child_sibling", "assume_child_sibling",
+                                            root.get());
+    auto sibling = std::make_shared<Function>(Program::GetInstance(), "assume_sibling", "assume_sibling", root.get());
+
+    Program::GetInstance().RegisterDivisibleAssumption(q, 128);
+
+    EXPECT_TRUE(Program::GetInstance().IsKnownDivisible(q, 128));
+    EXPECT_FALSE(Program::GetInstance().GetDivisibleAssumptions().empty());
+}
 
 TEST_F(InferShapeTest, TestAdd)
 {

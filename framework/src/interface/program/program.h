@@ -15,6 +15,8 @@
 
 #pragma once
 
+#include <set>
+#include <unordered_map>
 #include "interface/function/function.h"
 #include "interface/cache/function_cache.h"
 
@@ -24,6 +26,11 @@
 
 namespace npu::tile_fwk {
 class ConfigScope;
+
+struct DivisibleAssumption {
+    SymbolicScalar expression;
+    std::set<int64_t> divisors;
+};
 
 class Program {
 public: // public api for torch
@@ -126,6 +133,13 @@ public: // public api for torch
     void ClearEmptyHiddenFunction();
     void SetParamConfig(Function* func, const std::shared_ptr<ConfigScope>& configScope) const;
 
+    void RegisterDivisibleAssumption(const SymbolicScalar& expr, int64_t divisor);
+    bool IsKnownDivisible(const SymbolicScalar& expr, int64_t divisor) const;
+    const std::unordered_map<std::string, DivisibleAssumption>& GetDivisibleAssumptions() const
+    {
+        return divisibleAssumptions_;
+    }
+
 private:
     std::string name_;
     std::vector<std::string> functionMagicNameStack_;
@@ -137,6 +151,7 @@ private:
     FunctionCache functionCache_;
     std::unordered_set<Tensor*> aliveTensors_;
     std::map<std::string, std::shared_ptr<npu::tile_fwk::Function>> functionmap_;
+    std::unordered_map<std::string, DivisibleAssumption> divisibleAssumptions_;
 
     void CreateInitFunction();
     Operation* FinishCurrentFunction(const std::shared_ptr<TensorSlotScope>& scope, bool generateCall);

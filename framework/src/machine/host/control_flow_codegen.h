@@ -46,6 +46,8 @@ struct ControlFlowEmitCtx {
 
 void BuildControlFlow(ControlFlowEmitCtx& ctx, Function* func, int indent);
 
+void EmitAssumeDivisibleChecks(ControlFlowEmitCtx& ctx, int indent);
+
 void GenerateExpression(SymbolicExpressionTable* exprTable, int devRootKey, const std::string& expName,
                         std::vector<std::string>& exprSrcFiles, std::ostringstream& controlFlowOss,
                         std::ostringstream& exprHeaderOss, int indent, const GetInputCse* getInputCse);

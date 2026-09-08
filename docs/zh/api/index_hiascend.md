@@ -208,6 +208,7 @@
     - [pypto.view](tensor_api/operation/pypto-view.md)
     - [pypto.where](tensor_api/operation/pypto-where.md)
     - [pypto.zeros](tensor_api/operation/pypto-zeros.md)
+    - [pypto.experimental.assume_divisible](tensor_api/operation/pypto-experimental-assume_divisible.md)
   - [数据类型](tensor_api/datatype/index.md)
     - [CachePolicy](tensor_api/datatype/CachePolicy.md)
     - [CastMode](tensor_api/datatype/CastMode.md)

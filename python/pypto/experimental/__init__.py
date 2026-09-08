@@ -12,6 +12,7 @@
 
 from .gather import gather_in_l1, gather_in_ub  # noqa: F401
 from .operation import (
+    assume_divisible,  # noqa: F401
     get_operation_options,  # noqa: F401
     nop,  # noqa: F401
     online_softmax,  # noqa: F401
