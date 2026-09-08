@@ -214,6 +214,64 @@ bool IsTensorOffset32BAligned(const LogicalTensorPtr& tensor)
     return (linearOffsetModulo * dataSize) % kOffsetAlignmentBytes == 0;
 }
 
+// VEC 指令要求 UB 操作数地址 32B 对齐。contract-slice 对消会用偏移 view 直接读取上游共享
+// buffer，当 view 的 fromOffset 按 view 输入的连续布局线性化后非 32B 对齐时（如 fp16 输入上
+// 尾轴偏移 8 元素 = 16B），后续视图折叠会让 VEC consumer 产生非对齐访问（aicore errcode
+// 0x800）。此时应保留 CONTRACT+SLICE 拷贝路径（SLICE 输出为独立对齐 buffer），不做对消。
+bool IsViewFromOffset32BAligned(const LogicalTensorPtr& viewInput, const std::vector<int64_t>& fromOffset)
+{
+    if (viewInput == nullptr || fromOffset.size() != viewInput->GetShape().size()) {
+        return false;
+    }
+    const auto elemBytes = static_cast<int64_t>(BytesOf(viewInput->Datatype()));
+    if (elemBytes <= 0) {
+        return false;
+    }
+    constexpr int64_t kOffsetAlignmentBytes = 32;
+    if (elemBytes % kOffsetAlignmentBytes == 0) {
+        return true;
+    }
+    const auto& shape = viewInput->GetShape();
+    int64_t linearOffsetModulo = 0;
+    int64_t strideModulo = elemBytes % kOffsetAlignmentBytes;
+    for (size_t dim = fromOffset.size(); dim-- > 0;) {
+        if (fromOffset[dim] < 0) {
+            return false;
+        }
+        linearOffsetModulo = (linearOffsetModulo + (fromOffset[dim] % kOffsetAlignmentBytes) * strideModulo) %
+                             kOffsetAlignmentBytes;
+        if (dim > 0) {
+            if (shape[dim] <= 0) {
+                return false;
+            }
+            strideModulo = (strideModulo * (shape[dim] % kOffsetAlignmentBytes)) % kOffsetAlignmentBytes;
+            if (strideModulo == 0) {
+                break;
+            }
+        }
+    }
+    return linearOffsetModulo == 0;
+}
+
+// 带动态偏移的版本：动态符号可化简为常量且与静态值一致时按静态值判定；真动态（无法化简）
+// 或 static/dyn 不一致时保守处理——真动态保持既有行为放行，不一致视为不可信直接拦截。
+bool IsViewFromOffset32BAligned(const LogicalTensorPtr& viewInput, const std::vector<int64_t>& fromOffset,
+                                const std::vector<SymbolicScalar>& fromDynOffset)
+{
+    if (!fromDynOffset.empty()) {
+        if (fromDynOffset.size() != fromOffset.size()) {
+            return false;
+        }
+        for (size_t idx = 0; idx < fromDynOffset.size(); ++idx) {
+            auto simplified = fromDynOffset[idx].Simplify();
+            if (simplified.ConcreteValid() && simplified.Concrete() != fromOffset[idx]) {
+                return false;
+            }
+        }
+    }
+    return IsViewFromOffset32BAligned(viewInput, fromOffset);
+}
+
 bool IsRegionWithinShape(const std::vector<int64_t>& offset, const std::vector<int64_t>& shape,
                          const std::vector<int64_t>& outerShape)
 {
@@ -1650,6 +1708,16 @@ bool RemoveRedundantOpUtils::CollectSliceContractSliceRewrites(const SliceContra
                                                *contractAttr, localOffset, localDynOffset)) {
             return false;
         }
+        // 对消产生的 view 以 localOffset 直接读取 contractInput 共享 buffer；偏移非 32B 对齐时
+        // VEC consumer 会产生非对齐 UB 访问，此时保留 CONTRACT+SLICE 拷贝路径不做对消。
+        if (!IsViewFromOffset32BAligned(chain.contractInput, localOffset, localDynOffset)) {
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                              "Skip slice-contract-slice rewrite: localOffset %s of CONTRACT[%d] consumer SLICE[%d] "
+                              "is not 32B aligned.",
+                              IntVectorToString(localOffset).c_str(), chain.contract->GetOpMagic(),
+                              consumer->GetOpMagic());
+            return false;
+        }
 
         SliceContractSliceRewrite rewrite;
         rewrite.consumer = consumer;
@@ -1667,6 +1735,16 @@ bool RemoveRedundantOpUtils::CollectSliceContractSliceRewrites(const SliceContra
                 // The direct source rewrite requires concrete offsets.  Keep the legacy surviving-input
                 // path available for dynamic/otherwise non-composable chains.
                 canComposeOffsets = false;
+            } else if (!IsViewFromOffset32BAligned(chain.sourceTensor, rewrite.composedOffset)) {
+                // Direct source views with misaligned composed offsets fall back to the legacy
+                // surviving-input path, which reads the contract input at the (already checked)
+                // local offset instead.
+                APASS_LOG_DEBUG_F(Elements::Operation,
+                                  "Composed offset %s of CONTRACT[%d] consumer SLICE[%d] direct-source view is not "
+                                  "32B aligned, fall back to the legacy surviving-input path.",
+                                  IntVectorToString(rewrite.composedOffset).c_str(), chain.contract->GetOpMagic(),
+                                  consumer->GetOpMagic());
+                canComposeOffsets = false;
             }
         }
         rewrites.push_back(std::move(rewrite));
@@ -1674,12 +1752,12 @@ bool RemoveRedundantOpUtils::CollectSliceContractSliceRewrites(const SliceContra
     return true;
 }
 
-void RemoveRedundantOpUtils::FoldL1FanoutChain(const SliceContractSliceChain& chain,
-                                               const std::vector<SliceContractSliceRewrite>& rewrites)
+// 计算 L1 fanout 折叠所需的 mergedOffset（前序 slice 偏移 + localOffset）。precedingSlice 非同
+// 内存普通视图、合并偏移越界或非 32B 对齐时返回 false，调用方应保持 precedingSlice 物化不折叠。
+bool RemoveRedundantOpUtils::CollectL1FoldMergedOffsets(const SliceContractSliceChain& chain,
+                                                        const std::vector<SliceContractSliceRewrite>& rewrites,
+                                                        std::vector<MergedOffset>& mergedOffsets)
 {
-    // Multiple L1 consumers share the preceding L1/UB materialization.  Fold the preceding slice into
-    // every consumer when it is a plain same-memory view, so the slice and the contract both disappear;
-    // otherwise keep the slice and remove only the redundant contract.
     auto precedingAttr = GetViewAttr(*chain.precedingSlice);
     bool canFoldPrecedingSlice = precedingAttr->GetFromOffset().size() == chain.sourceTensor->GetShape().size() &&
                                  chain.sourceTensor->GetShape().size() == chain.contractInput->GetShape().size() &&
@@ -1690,19 +1768,40 @@ void RemoveRedundantOpUtils::FoldL1FanoutChain(const SliceContractSliceChain& ch
                                  !HasMemoryTypeTransform(chain.sourceTensor, chain.contractInput) &&
                                  IsConcreteDynOffsetConsistent(precedingAttr->GetFromOffset(),
                                                                precedingAttr->GetFromDynOffset());
-    std::vector<std::pair<std::vector<int64_t>, std::vector<SymbolicScalar>>> mergedOffsets;
-    if (canFoldPrecedingSlice) {
-        for (const auto& rewrite : rewrites) {
-            auto mergedOffset = TensorOffset::Add(precedingAttr->GetFromOffset(), precedingAttr->GetFromDynOffset(),
-                                                  rewrite.localOffset, rewrite.localDynOffset);
-            if (!IsRegionWithinShape(mergedOffset.first, rewrite.consumer->GetOOperands().front()->GetShape(),
-                                     chain.sourceTensor->GetShape())) {
-                canFoldPrecedingSlice = false;
-                break;
-            }
-            mergedOffsets.push_back(std::move(mergedOffset));
-        }
+    if (!canFoldPrecedingSlice) {
+        return false;
     }
+    for (const auto& rewrite : rewrites) {
+        auto mergedOffset = TensorOffset::Add(precedingAttr->GetFromOffset(), precedingAttr->GetFromDynOffset(),
+                                              rewrite.localOffset, rewrite.localDynOffset);
+        if (!IsRegionWithinShape(mergedOffset.first, rewrite.consumer->GetOOperands().front()->GetShape(),
+                                 chain.sourceTensor->GetShape())) {
+            return false;
+        }
+        // 折叠后 consumer 以 mergedOffset 直读 sourceTensor 共享 buffer；偏移非 32B 对齐时 VEC
+        // consumer 会产生非对齐 UB 访问，此时不折叠 precedingSlice，consumer 改读 contractInput
+        // （localOffset 已在 collect 阶段校验对齐）。
+        if (!IsViewFromOffset32BAligned(chain.sourceTensor, mergedOffset.first, mergedOffset.second)) {
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                              "Merged offset %s of CONTRACT[%d] consumer SLICE[%d] L1 fold is not 32B aligned, "
+                              "keep the preceding slice materialization.",
+                              IntVectorToString(mergedOffset.first).c_str(), chain.contract->GetOpMagic(),
+                              rewrite.consumer->GetOpMagic());
+            return false;
+        }
+        mergedOffsets.push_back(std::move(mergedOffset));
+    }
+    return true;
+}
+
+void RemoveRedundantOpUtils::FoldL1FanoutChain(const SliceContractSliceChain& chain,
+                                               const std::vector<SliceContractSliceRewrite>& rewrites)
+{
+    // Multiple L1 consumers share the preceding L1/UB materialization.  Fold the preceding slice into
+    // every consumer when it is a plain same-memory view, so the slice and the contract both disappear;
+    // otherwise keep the slice and remove only the redundant contract.
+    std::vector<MergedOffset> mergedOffsets;
+    const bool canFoldPrecedingSlice = CollectL1FoldMergedOffsets(chain, rewrites, mergedOffsets);
     for (size_t idx = 0; idx < rewrites.size(); ++idx) {
         const auto& rewrite = rewrites[idx];
         auto* consumer = rewrite.consumer;
@@ -2063,6 +2162,15 @@ bool RemoveRedundantOpUtils::CollectContractSliceRewriteInfos(
         if (sliceAttr == nullptr || contractAttr == nullptr ||
             !CalculateContractLocalSliceOffset(contractInput, consumer->GetOOperands().front(), *sliceAttr,
                                                *contractAttr, localOffset, localDynOffset)) {
+            return false;
+        }
+        // 对消产生的 view 直接以 localOffset 读取 contractInput 共享 buffer；偏移非 32B 对齐时
+        // VEC consumer 会产生非对齐 UB 访问，此时保留 CONTRACT+SLICE 拷贝路径不做对消。
+        if (!IsViewFromOffset32BAligned(contractInput, localOffset, localDynOffset)) {
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                              "Skip contract-slice rewrite: localOffset %s of CONTRACT[%d] consumer SLICE[%d] "
+                              "is not 32B aligned.",
+                              IntVectorToString(localOffset).c_str(), op.GetOpMagic(), consumer->GetOpMagic());
             return false;
         }
         bool isFullSlice = IsFullSliceOfContractInput(contractInput, consumer->GetOOperands().front(), localOffset,
