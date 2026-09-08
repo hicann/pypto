@@ -309,7 +309,6 @@ def scaled_mm(
 
 A2A3_ARCHS = ("DAV_1001", "DAV_2201")
 
-# 封闭白名单：输入组合不在表内一律拒绝（来源：接口文档表3输入列）
 INPUT_COMBOS = {
     (pypto_impl.DataType.DT_FP16, pypto_impl.DataType.DT_FP16),
     (pypto_impl.DataType.DT_BF16, pypto_impl.DataType.DT_BF16),
@@ -322,7 +321,6 @@ INPUT_COMBOS = {
     (pypto_impl.DataType.DT_HF8, pypto_impl.DataType.DT_HF8),
 }
 
-# 封闭白名单：输入组合不在表内一律拒绝（来源：scaled_mm文档表3输入列）
 MX_INPUT_COMBOS = {
     (pypto_impl.DataType.DT_FP8E5M2, pypto_impl.DataType.DT_FP8E5M2),
     (pypto_impl.DataType.DT_FP8E5M2, pypto_impl.DataType.DT_FP8E4M3),
@@ -340,6 +338,7 @@ _FLOAT_OUT_DTYPES = (
 BASIC_OUT_DTYPES = {
     pypto_impl.DataType.DT_FP16: (pypto_impl.DataType.DT_FP16, pypto_impl.DataType.DT_FP32),
     pypto_impl.DataType.DT_BF16: (pypto_impl.DataType.DT_BF16, pypto_impl.DataType.DT_FP32),
+    pypto_impl.DataType.DT_FP32: (pypto_impl.DataType.DT_FP32,),
     pypto_impl.DataType.DT_INT8: (pypto_impl.DataType.DT_INT32,),
     pypto_impl.DataType.DT_FP8E5M2: _FLOAT_OUT_DTYPES,
     pypto_impl.DataType.DT_FP8E4M3: _FLOAT_OUT_DTYPES,
