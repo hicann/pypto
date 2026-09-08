@@ -160,7 +160,6 @@ _BLOCK_OP_TILE_ROLES: dict[str, list] = {
     "load": ["W"],  # load(out, tensor, offsets, ...)
     "load_tile": ["W"],
     "store": ["W", "R"],  # store(out, tile, offsets, ...)
-    "store_fp": ["W", "R", "R"],  # store_fp(out, tile, fp_tile, offsets)
     "store_tile": ["W", "R"],
     "move": ["W", "R"],  # move(out, src, ...)
     "move_fp": ["W", "R", "R"],  # move_fp(out, src, fp_tile)

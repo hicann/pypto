@@ -1576,7 +1576,7 @@ _IN_TOL = {"hf8": dict(rtol=1e-3, atol=1e-3), "fp32": dict(rtol=1e-3, atol=1e-3)
 def make_fp_params(scales, device):
     """Encode a per-column fp32 scale vector as the INT64 scaling-tile payload.
 
-    Layout mirrors test_matmul_hifp8.py / test_store_fp.py: the low 32 bits hold the fp32
+    Layout mirrors test_scale_store_tile_per_channel.py: the low 32 bits hold the fp32
     bit-pattern of the scale.
     """
     payload = [struct.unpack("!I", struct.pack("!f", np.float32(s)))[0] for s in scales]

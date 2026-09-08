@@ -10,7 +10,8 @@
 
 /**
  * @file block_ops/out_memory.cpp
- * \brief Block memory operations with explicit output tiles: load, store, store_fp, move, ub_copy, full, fillpad,
+ * \brief Block memory operations with explicit output tiles: load, store, move, ub_copy, full, fillpad,
+ *
  * fillpad_inplace, fillpad_expand.
  *
  * Each block explicit-output op receives the pre-allocated output tile as its first argument
@@ -121,14 +122,14 @@ REGISTER_OP("block.load")
         return args[0]->GetType();
     });
 
-// block.store: (output_tensor, tile, offsets, [pre_quant_scalar]) -> TensorType
+// block.store: (output_tensor, tile, offsets, [scale]) -> TensorType
 REGISTER_OP("block.store")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output store: copy data from a pre-allocated tile to a global tensor.")
     .add_argument("output_tensor", "Destination tensor (TensorType)")
     .add_argument("tile", "Source tile (TileType)")
     .add_argument("offsets", "Offset tuple per dimension (MakeTuple)")
-    .add_argument("pre_quant_scalar", "Optional fixpipe quant scale (ScalarType, low-32-bit float bits)")
+    .add_argument("scale", "Optional fixpipe quant scale (ScalarType or Scaling Tile)")
     .set_attr<std::vector<int>>("tile_dims")
     .set_attr<int>("relu_pre_mode")
     .set_attr<int>("atomic")
@@ -142,30 +143,9 @@ REGISTER_OP("block.store")
         auto offsets = As<MakeTuple>(args[2]);
         CHECK(offsets) << "block.store: arg 2 must be MakeTuple (offsets)";
         if (args.size() == 4) {
-            CHECK(As<ScalarType>(args[3]->GetType())) << "block.store: arg 3 (pre_quant_scalar) must be ScalarType";
+            CHECK(As<ScalarType>(args[3]->GetType()) || As<TileType>(args[3]->GetType()))
+                << "block.store: arg 3 (scale) must be ScalarType or TileType";
         }
-        return out_type;
-    });
-
-// block.store_fp: (output_tensor, tile, fp_tile, offsets) -> TensorType
-REGISTER_OP("block.store_fp")
-    .set_op_category("BlockOp")
-    .set_description(
-        "Block explicit-output floating-point store: copy data from a pre-allocated Acc tile to a global tensor "
-        "using an auxiliary fp tile.")
-    .add_argument("output_tensor", "Destination tensor (TensorType)")
-    .add_argument("tile", "Source tile (TileType, Acc memory)")
-    .add_argument("fp_tile", "Floating-point parameter tile (TileType)")
-    .add_argument("offsets", "Offset tuple per dimension (MakeTuple)")
-    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
-                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        CHECK(args.size() == 4) << "block.store_fp requires 4 arguments, got " << args.size();
-        auto out_type = As<TensorType>(args[0]->GetType());
-        CHECK(out_type) << "block.store_fp: arg 0 must be TensorType";
-        CHECK(As<TileType>(args[1]->GetType())) << "block.store_fp: arg 1 must be TileType";
-        CHECK(As<TileType>(args[2]->GetType())) << "block.store_fp: arg 2 must be TileType";
-        auto offsets = As<MakeTuple>(args[3]);
-        CHECK(offsets) << "block.store_fp: arg 3 must be MakeTuple (offsets)";
         return out_type;
     });
 

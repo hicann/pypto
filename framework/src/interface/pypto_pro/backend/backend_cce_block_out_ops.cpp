@@ -373,15 +373,15 @@ static std::string MakeBlockOutLoadCodegenCCE(const ir::CallPtr& op, codegen::Co
 }
 
 // ============================================================================
-// block.store  -  args = [output_tensor, tile, offsets]
-// Emits: SetShape(...); TASSIGN(tensor_global, ptr + offset); TSTORE(tensor_global, tile);
+// block.store  -  args = [output_tensor, tile, offsets, [scale]]
+// Emits TSTORE with an optional scalar or Scaling Tile scale.
 // The transfer shape is always read from the tile's runtime valid region.
 // ============================================================================
 static std::string MakeBlockOutStoreCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     CHECK(op->args_.size() == 3 || op->args_.size() == 4)
-        << "block.store requires 3 or 4 arguments: output_tensor, tile, offsets, [pre_quant_scalar]";
+        << "block.store requires 3 or 4 arguments: output_tensor, tile, offsets, [scale]";
 
     auto dst_tensor_var_ptr = std::dynamic_pointer_cast<const ir::Var>(op->args_[0]);
     CHECK(dst_tensor_var_ptr != nullptr) << "block.store destination tensor must be a Var";
@@ -401,6 +401,16 @@ static std::string MakeBlockOutStoreCodegenCCE(const ir::CallPtr& op, codegen::C
 
     const std::string dst_tensor_access = codegen.BindGlobalTensor(dst_tensor_var_ptr, op, dst_ptr + " + " + offset,
                                                                    ValidRows(src_tile), ValidCols(src_tile));
+
+    auto fp_tile_type = op->args_.size() == 4 ? ir::As<ir::TileType>(op->args_[3]->GetType()) : nullptr;
+    if (fp_tile_type != nullptr) {
+        CHECK(fp_tile_type->memref_.has_value() &&
+              fp_tile_type->memref_.value()->memorySpace_ == ir::MemorySpace::Scaling)
+            << "block.store scale Tile must be allocated in Scaling memory";
+        std::string fp_tile = codegen.GetExprAsCode(op->args_[3]);
+        EmitTemplated(codegen, "TSTORE", {}, {dst_tensor_access, src_tile, fp_tile});
+        return "";
+    }
 
     // Build template parameters: TSTORE<TileData, GlobalData, AtomicType, ReluPreMode>(dst, src, ...)
     // Per pto-isa: template order is <TileData, GlobalData, AtomicType, ReluPreMode>
@@ -470,51 +480,6 @@ static std::string MakeBlockOutStoreCodegenCCE(const ir::CallPtr& op, codegen::C
     if (atomic_enum == "AtomicType::AtomicAdd") {
         codegen.Emit("set_atomic_none();");
     }
-    return "";
-}
-
-// ============================================================================
-// block.store_fp  -  args = [output_tensor, tile, fp_tile, offsets]
-// Emits: SetShape(...); TASSIGN(tensor_global, ptr + offset); TSTORE_FP(tensor_global, tile, fp_tile);
-// ============================================================================
-static std::string MakeBlockOutStoreFpCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
-{
-    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 4) << "block.store_fp requires 4 arguments: output_tensor, tile, fp_tile, offsets";
-
-    auto dst_tensor_var_ptr = std::dynamic_pointer_cast<const ir::Var>(op->args_[0]);
-    CHECK(dst_tensor_var_ptr != nullptr) << "block.store_fp destination tensor must be a Var";
-
-    auto src_tile_type = ir::As<ir::TileType>(op->args_[1]->GetType());
-    CHECK(src_tile_type != nullptr) << "block.store_fp source must be TileType";
-    CHECK(src_tile_type->memref_.has_value()) << "block.store_fp source tile must have an allocated memory space";
-    if (src_tile_type->memref_.value()->memorySpace_ != ir::MemorySpace::Acc) {
-        throw pypto::ir::ValueError("block.store_fp: source tile must be allocated in Acc memory");
-    }
-
-    auto fp_tile_type = ir::As<ir::TileType>(op->args_[2]->GetType());
-    CHECK(fp_tile_type != nullptr) << "block.store_fp fp tile must be TileType";
-    CHECK(fp_tile_type->memref_.has_value()) << "block.store_fp fp tile must have an allocated memory space";
-    if (fp_tile_type->memref_.value()->memorySpace_ != ir::MemorySpace::Scaling) {
-        throw pypto::ir::ValueError("block.store_fp: fp tile must be allocated in Scaling memory");
-    }
-
-    auto offsets_tuple = std::dynamic_pointer_cast<const ir::MakeTuple>(op->args_[3]);
-    CHECK(offsets_tuple != nullptr) << "block.store_fp fourth argument must be a tuple (offsets)";
-
-    std::string dst_tensor_var = codegen.GetVarName(dst_tensor_var_ptr);
-    auto dst_tensor_type = std::dynamic_pointer_cast<const ir::TensorType>(dst_tensor_var_ptr->GetType());
-    CHECK(dst_tensor_type != nullptr) << "block.store_fp destination must be TensorType";
-    cce::ValidateNZTransfer("block.store_fp", op, op->args_[1], offsets_tuple, dst_tensor_type);
-
-    std::string offset = codegen.ComputeTensorOffset(dst_tensor_type, offsets_tuple);
-    std::string dst_ptr = codegen.GetPointer(dst_tensor_var);
-    std::string src_tile = codegen.GetExprAsCode(op->args_[1]);
-    std::string fp_tile = codegen.GetExprAsCode(op->args_[2]);
-
-    const std::string dst_tensor_access = codegen.BindGlobalTensor(dst_tensor_var_ptr, op, dst_ptr + " + " + offset,
-                                                                   ValidRows(src_tile), ValidCols(src_tile));
-    codegen.Emit("TSTORE_FP(" + dst_tensor_access + ", " + src_tile + ", " + fp_tile + ");");
     return "";
 }
 
@@ -1313,12 +1278,6 @@ REGISTER_BACKEND_OP(BackendCCE, "block.store")
     .set_pipe(ir::PipeType::MTE3)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutStoreCodegenCCE(op, codegen);
-    });
-
-REGISTER_BACKEND_OP(BackendCCE, "block.store_fp")
-    .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-        return MakeBlockOutStoreFpCodegenCCE(op, codegen);
     });
 
 REGISTER_BACKEND_OP(BackendCCE, "block.set_validshape")

@@ -2417,7 +2417,7 @@ AccessArgIndices ResolveAccessArgIndices(const std::string& op_name)
     if (op_name == "block.load") {
         indices.tensor_arg_idx = 1;
         indices.tile_arg_idx = 0;
-    } else if (op_name == "block.store" || op_name == "block.store_fp") {
+    } else if (op_name == "block.store") {
         indices.tensor_arg_idx = 0;
         indices.tile_arg_idx = 1;
     } else if (op_name == "debug.dump_tile") {

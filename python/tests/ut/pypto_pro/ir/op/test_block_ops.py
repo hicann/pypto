@@ -789,6 +789,26 @@ def test_high_dimensional_nz_load_store_use_last_two_axes_by_default():
     assert "block.store" in ir_text
 
 
+def test_store_and_store_tile_with_scaling_tile_use_store_op(monkeypatch):
+    monkeypatch.setenv("PYPTOPRO_JIT_ARCH", "a5")
+
+    @pl.jit(auto_mutex=False)
+    def main(out: pl.Tensor[[64, 64], pl.DT_INT8]):
+        acc_type = pl.TileType(
+            shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
+        )
+        scale_type = pl.TileType(shape=[1, 64], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Scaling)
+        acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+        scale = pl.make_tile(scale_type, addr=0x0000, size=512)
+        pl.store(out, acc, [0, 0], scale=scale)
+        pl.store_tile(out, acc, [0, 0], scale=scale)
+
+    main_program, _ = main.to_kernel_def().parse_target_program(ir.SectionKind.Cube)
+    main = main_program.get_function(main.__name__)
+    ir_text = _program_ir(main)
+    assert ir_text.count("block.store") == 2
+
+
 def test_high_dimensional_nz_load_rejects_non_final_transfer_axes():
     with pytest.raises(ParserSyntaxError, match="NZ transfer only supports the last two tensor axes"):
 

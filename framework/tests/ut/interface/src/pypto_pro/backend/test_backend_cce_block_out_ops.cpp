@@ -1063,7 +1063,7 @@ TEST(BackendCCEBlockOutOps, StoreWithAtomic)
     }
 }
 
-TEST(BackendCCEBlockOutOps, StoreFp)
+TEST(BackendCCEBlockOutOps, StoreWithScalingTile)
 {
     TestableCCECodegen codegen(ir::SectionKind::Vector);
     auto acc_memref = MakeMemRef(ir::MemorySpace::Acc);
@@ -1072,30 +1072,14 @@ TEST(BackendCCEBlockOutOps, StoreFp)
     auto acc_tile = MakeTileType({16, 16}, ir::DataType::FP16, acc_memref);
     auto scaling_tile = MakeTileType({16, 16}, ir::DataType::FP16, scaling_memref);
     codegen.RegisterPointer("tensor", "raw_ptr");
-    auto call = MakeCall("block.store_fp", {MakeVar("tensor", tensor_type), MakeVar("tile", acc_tile),
-                                            MakeVar("fp", scaling_tile), MakeOffsets(0, 0)});
-    auto* info = BackendCCE::Instance().GetOpInfo("block.store_fp");
+    auto call = MakeCall("block.store", {MakeVar("tensor", tensor_type), MakeVar("tile", acc_tile), MakeOffsets(0, 0),
+                                         MakeVar("fp", scaling_tile)});
+    auto* info = BackendCCE::Instance().GetOpInfo("block.store");
     ASSERT_NE(info, nullptr);
     info->codegen_func(call, codegen);
     auto code = codegen.GetEmittedCode();
     EXPECT_CONTAINS(code, "TASSIGN(tensor, raw_ptr + ");
-    EXPECT_CONTAINS(code, "TSTORE_FP(tensor, tile, fp);");
-}
-
-TEST(BackendCCEBlockOutOps, StoreFpWrongSpace)
-{
-    TestableCCECodegen codegen(ir::SectionKind::Vector);
-    auto vec_memref = MakeMemRef(ir::MemorySpace::Vec);
-    auto scaling_memref = MakeMemRef(ir::MemorySpace::Scaling);
-    auto tensor_type = MakeTensorType();
-    auto vec_tile = MakeTileType({16, 16}, ir::DataType::FP16, vec_memref);
-    auto scaling_tile = MakeTileType({16, 16}, ir::DataType::FP16, scaling_memref);
-    codegen.RegisterPointer("tensor", "raw_ptr");
-    auto call = MakeCall("block.store_fp", {MakeVar("tensor", tensor_type), MakeVar("tile", vec_tile),
-                                            MakeVar("fp", scaling_tile), MakeOffsets(0, 0)});
-    auto* info = BackendCCE::Instance().GetOpInfo("block.store_fp");
-    ASSERT_NE(info, nullptr);
-    EXPECT_THROW(info->codegen_func(call, codegen), ir::ValueError);
+    EXPECT_CONTAINS(code, "TSTORE(tensor, tile, fp);");
 }
 
 TEST(BackendCCEBlockOutOps, Move)

@@ -1044,7 +1044,7 @@ TEST_F(BlockOpsOutMatmulTest, BlockMatmul_WrongArgCount_Throws)
 }
 
 // ============================================================================
-// out_memory.cpp: block.load, block.store, block.store_fp
+// out_memory.cpp: block.load, block.store
 // ============================================================================
 
 class BlockOpsOutMemoryTest : public testing::Test {};
@@ -1109,26 +1109,27 @@ TEST_F(BlockOpsOutMemoryTest, BlockStore_NonTensorFirst_Throws)
                  npu::tile_fwk::Error);
 }
 
-TEST_F(BlockOpsOutMemoryTest, BlockStoreFp_ReturnsTensorType)
+TEST_F(BlockOpsOutMemoryTest, BlockStore_ScalingTile_ReturnsTensorType)
 {
     auto& reg = OpRegistry::GetInstance();
     auto tile = MakeTileVar("tile", {16, 32}, DataType::FP32);
     auto fp_tile = MakeTileVar("fp", {16, 32}, DataType::FP32);
     auto offsets = MakeOffsetsTuple({0, 0});
     auto tensor = MakeTensorVar("tensor", {16, 32}, DataType::FP32);
-    auto call = reg.Create("block.store_fp", {tensor, tile, fp_tile, offsets}, Sp());
+    auto call = reg.Create("block.store", {tensor, tile, offsets, fp_tile}, Sp());
     auto rt = As<TensorType>(call->GetType());
     ASSERT_NE(rt, nullptr);
 }
 
-TEST_F(BlockOpsOutMemoryTest, BlockStoreFp_WrongArgCount_Throws)
+TEST_F(BlockOpsOutMemoryTest, BlockStore_InvalidScaleType_Throws)
 {
     auto& reg = OpRegistry::GetInstance();
-    EXPECT_THROW((void)reg.Create("block.store_fp",
-                                  {MakeTileVar("t", {16, 32}, DataType::FP32), MakeOffsetsTuple({0, 0}),
-                                   MakeTensorVar("t2", {16, 32}, DataType::FP32)},
-                                  Sp()),
-                 npu::tile_fwk::Error);
+    EXPECT_THROW(
+        (void)reg.Create("block.store",
+                         {MakeTensorVar("out", {16, 32}, DataType::FP32), MakeTileVar("tile", {16, 32}, DataType::FP32),
+                          MakeOffsetsTuple({0, 0}), MakeTensorVar("scale", {16, 32}, DataType::FP32)},
+                         Sp()),
+        npu::tile_fwk::Error);
 }
 
 // ============================================================================
