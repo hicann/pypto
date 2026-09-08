@@ -35,14 +35,18 @@ PyPTO Pro Kernel的典型数据流如下：
 - **单卡多核层面采用SPMD编程模型**：各逻辑AI Core执行同一份Kernel代码，并根据全局逻辑索引处理不同的数据分片。
 - **单核计算层面采用SIMD并行机制**：单个AI Core内部通过一条指令同时处理多个同构数据元素，完成向量、矩阵或融合计算。
 
-在PyPTO Pro中，`block_dim`表示启动时配置的逻辑Block数量。仅启动Cube或仅启动Vector时，逻辑核数与`block_dim`一致；同时启动AIC与AIV时，各执行域的逻辑核数还取决于AIC:AIV比例。相关接口为：
+在PyPTO Pro中，`block_dim`表示Host请求的逻辑Block数上限。JIT按Stream的有效资源限制计算实际
+启动值`block_num`。仅启动Cube或仅启动Vector时，逻辑核数与`block_num`一致；同时启动AIC与AIV时，
+各执行域的逻辑核数还取决于AIC:AIV比例。相关接口为：
 
 - `pl.get_block_num()`获取本次Kernel启动的Block总数。
 - `pl.get_block_idx()`获取当前执行域的全局逻辑核索引；Vector段返回值已经按subblock展平。
 - `pl.get_subblock_idx()`获取当前逻辑Block内的subblock索引。
 - `pl.get_subblock_num()`获取当前执行域每个逻辑Block对应的subblock数量。
 
-当前1:2混合Kernel中，Cube段的`get_block_idx()`范围为`[0, block_dim)`，Vector段范围为`[0, 2 * block_dim)`。Vector段可直接使用该全局逻辑索引进行数据分片，`get_subblock_idx()`用于区分同一逻辑Block内的AIV。
+当前AIC:AIV为1:2的混合Kernel中，Cube段的`get_block_idx()`范围为`[0, block_num)`，Vector段范围为
+`[0, 2 * block_num)`，其中`block_num = pl.get_block_num()`。Vector段可直接使用该全局逻辑索引
+进行数据分片，`get_subblock_idx()`用于区分同一逻辑Block内的AIV。
 
 SIMD是一种数据并行模型，其核心特征包括：
 

@@ -113,9 +113,9 @@ Kernel执行域决定启动类型：
 - 仅包含`pypto_pro.language.section_cube()`的Kernel编译并启动为Cube（AIC）Kernel，`block_dim`表示启动的AIC逻辑核数。
 - 同时包含`pypto_pro.language.section_vector()`和`pypto_pro.language.section_cube()`的Kernel编译并启动为混合Kernel，`block_dim`表示AIC与AIV的配对执行组数，而不是AIV总数。具体工作单元数取决于AIC:AIV比例。
 
-PyPTO Pro JIT不会自动截断超过平台核数上限的`block_dim`。Host侧应根据Kernel类型和
-[`get_platform_info()`](tile_based_python_programming/multi_core_partitioning_and_Tiling.md#在启动时设置逻辑block数block_dim)
-返回的核数上限计算`block_dim`。
+PyPTO Pro JIT将`block_dim`作为请求上限，每次启动按实际Stream的torch_npu核数限制计算Block数。
+Stream未单独配置时继承Device限制，再回退到硬件核数。Kernel应使用`get_block_num()`分配全部任务，
+避免减少工作核后遗漏Tile。详见[多核切分与Tiling](tile_based_python_programming/multi_core_partitioning_and_Tiling.md#devicestream与作用域限核)。
 
 也可以省略方括号直接调用，此时使用默认`block_dim=1`：
 
@@ -146,17 +146,28 @@ stream.synchronize()
 
 ### blockDim的含义与设置
 
-`block_dim`为启动时传入的基础逻辑Block数，必须是正整数。它在不同Kernel执行模式下的含义如下：
+`block_dim`为Host请求的逻辑Block数上限，必须是正整数。JIT按Stream的有效资源限制计算
+实际启动值`block_num`，Kernel通过`pypto_pro.language.get_block_num()`读取该值。
+它在不同Kernel执行模式下的含义如下：
 
-| Kernel执行模式 | `block_dim`的含义 | 实际工作单元数 | 建议使用的平台上限 |
+| Kernel执行模式 | `block_dim`请求的工作单元 | 实际工作单元数 | Stream资源上限 |
 |:---|:---|:---|:---|
-| 仅Cube | AIC逻辑核数 | AIC：`block_dim` | `cube_core_num` |
-| 仅Vector | AIV逻辑核数 | AIV：`block_dim` | `vector_core_num` |
-| AIC:AIV为1:2的混合Kernel | AIC/AIV配对执行组数 | AIC：`block_dim`；AIV：`2 * block_dim` | `core_num` |
+| 仅Cube | AIC逻辑核数 | AIC：`block_num` | `cube_core_num` |
+| 仅Vector | AIV逻辑核数 | AIV：`block_num` | `vector_core_num` |
+| AIC:AIV为1:2的混合Kernel | AIC/AIV执行组数 | AIC：`block_num`；AIV：`2 * block_num` | 见下文混合Kernel上限 |
 
-Kernel中的`pypto_pro.language.get_block_num()`始终返回启动时传入的`block_dim`。在1:2混合Kernel的Vector段中，`pypto_pro.language.get_subblock_num()`返回2，`pypto_pro.language.get_block_idx()`返回已经按两个AIV subblock展平后的全局逻辑索引，范围为`[0, 2 * block_dim)`；如果需要区分同一执行组内的两个AIV，可使用`pypto_pro.language.get_subblock_idx()`获取0或1。
+`block_num`可能小于Host请求的`block_dim`，数据切分应使用实际Block数。在AIC:AIV为1:2的混合Kernel的Vector段中，
+`pypto_pro.language.get_subblock_num()`返回2，`pypto_pro.language.get_block_idx()`返回已经按两个AIV
+subblock展平后的全局逻辑索引，范围为`[0, 2 * block_num)`；如果需要区分同一执行组内的两个AIV，
+可使用`pypto_pro.language.get_subblock_idx()`获取0或1。
 
-JIT只校验`block_dim`的类型和正值，不会按平台核数上限自动截断。Host侧应根据Kernel执行模式、平台核数和任务分片数计算合法值。详细计算方式参见[多核切分与Tiling](tile_based_python_programming/multi_core_partitioning_and_Tiling.md#在启动时设置逻辑block数block_dim)。
+例如，Host请求`block_dim=12`，Stream限制为4个Cube Core和6个Vector Core时，混合Kernel实际启动
+`block_num=3`个执行组，包含3个AIC和6个AIV。
+
+JIT校验`block_dim`的类型和正值，并按Stream的有效资源限制减少实际启动值。
+仅Cube、仅Vector和AIC:AIV为1:2的混合Kernel的上限分别为`cube_core_num`、`vector_core_num`和
+`min(cube_core_num, vector_core_num // 2)`。详细计算方式参见
+[多核切分与Tiling](tile_based_python_programming/multi_core_partitioning_and_Tiling.md#在启动时设置逻辑block数block_dim)。
 
 ## Tiling参数化
 

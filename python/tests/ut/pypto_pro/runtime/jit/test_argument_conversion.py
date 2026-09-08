@@ -17,6 +17,7 @@ handed to ``call_kernel``. No hardware or external tools are required.
 
 import ctypes
 import importlib
+import logging
 import sys
 from unittest.mock import MagicMock
 
@@ -60,6 +61,8 @@ torch = importlib.import_module("torch")
 def _mock_torch():
     """Inject mock torch into sys.modules for the duration of each test only."""
     _jit_mod = importlib.import_module("pypto_pro.runtime.jit")
+    _torch_mock.npu.get_stream_limit.reset_mock(side_effect=True, return_value=True)
+    _torch_mock.npu.get_stream_limit.side_effect = AssertionError("The native launcher owns resource queries")
 
     _saved_torch = sys.modules.get("torch")
     _saved_npu = sys.modules.get("torch.npu")
@@ -91,9 +94,11 @@ class _FakeCallKernel:
         self.calls = []
         self.argtypes = None
         self.restype = "unset"
+        self.result = None
 
     def __call__(self, *args):
         self.calls.append(args)
+        return args[0] if self.result is None else self.result
 
 
 class _FakeLib:
@@ -140,7 +145,7 @@ def launch(monkeypatch):
         fn = lib.call_kernel
         block_dim, _stream, *values = fn.calls[-1]
         assert block_dim == _BLOCK_DIM
-        assert fn.restype is None, "restype must be declared so ctypes skips the int conversion"
+        assert fn.restype is ctypes.c_int64, "negative native errors need all 64 result bits"
         # blockDim and stream lead the C signature; the rest lines up with `values`.
         assert fn.argtypes[:2] == [ctypes.c_uint32, ctypes.c_void_p]
         declared = fn.argtypes[2:]
@@ -578,3 +583,108 @@ def test_packed_dyn_dim_mismatch_with_unpacked_param(launch):
     )
     with pytest.raises(TypeError, match="K"):
         launch(specs, args)
+
+
+def test_cached_launch_passes_actual_stream_without_python_query(monkeypatch):
+    """Binding and cached launches must use the native topology without consulting Python compile configuration."""
+    lib = _FakeLib()
+    monkeypatch.setattr(_jit, "ctypes", _CtypesProxy(lib))
+    config_lookup = MagicMock(side_effect=AssertionError("Core usage belongs only in generated C++"))
+    monkeypatch.setattr(_jit, "get_jit_compile_config", config_lookup)
+    streams = [MagicMock(), MagicMock(), _FAKE_STREAM]
+    _torch_mock.npu.current_stream.side_effect = streams[:2]
+    target = _jit.KernelTarget("test-compiled-target", 1, 1, True)
+    compiled = CompiledKernel(lib_path="<fake>", param_specs=[], target=target)
+    dump = importlib.import_module("pypto_pro.runtime.exception_dump")
+    set_dump_info = MagicMock()
+    monkeypatch.setattr(dump, "set_dump_info", set_dump_info)
+    try:
+        _jit._launch(compiled, (), 12, None)
+        entry = compiled.entry
+        _jit._launch(compiled, (), 12, None)
+        _jit._launch(compiled, (), 12, streams[2])
+        assert compiled.entry is entry
+        assert [call[0] for call in lib.call_kernel.calls] == [12, 12, 12]
+        assert [call[1] for call in lib.call_kernel.calls] == [s._as_parameter_ for s in streams]
+        _torch_mock.npu.get_stream_limit.assert_not_called()
+        config_lookup.assert_not_called()
+        assert len(set_dump_info.call_args_list) == 3
+        assert all(call.kwargs["target"] is target for call in set_dump_info.call_args_list)
+    finally:
+        _torch_mock.npu.current_stream.side_effect = None
+
+
+@pytest.mark.parametrize("requested", [1 << 32, (1 << 32) + 1, 1 << 100])
+def test_large_request_saturates_before_native_abi_conversion(monkeypatch, requested):
+    """A valid Python upper bound must not wrap to zero or one before the native resource clamp."""
+    lib = _FakeLib()
+    monkeypatch.setattr(_jit, "ctypes", _CtypesProxy(lib))
+    _jit._launch(CompiledKernel(lib_path="<fake>", param_specs=[]), (), requested, _FAKE_STREAM)
+    assert lib.call_kernel.calls[-1][0] == 0xFFFFFFFF
+
+
+@pytest.mark.parametrize(
+    "kind,detail",
+    [
+        (1, 0),
+        (2, 0),
+        (2, 1),
+        (3, 507000),
+        (4, 0xFFFFFFFF),
+        (9, 1),
+    ],
+)
+def test_launch_propagates_native_errors(monkeypatch, kind, detail):
+    """All native errors retain their full code without querying or interpreting the compiler's core topology."""
+    lib = _FakeLib()
+    lib.call_kernel.result = -((kind << 32) | detail)
+    monkeypatch.setattr(_jit, "ctypes", _CtypesProxy(lib))
+    config_lookup = MagicMock(side_effect=AssertionError("Reporting a native error must not need core usage"))
+    monkeypatch.setattr(_jit, "get_jit_compile_config", config_lookup)
+    compiled = CompiledKernel(lib_path="<fake>", param_specs=[], has_cube=True, has_vector=True)
+    with pytest.raises(RuntimeError, match=f"^Kernel launch failed with error code {lib.call_kernel.result}$"):
+        _jit._launch(compiled, (), 8, _FAKE_STREAM)
+    assert lib.call_kernel.restype is ctypes.c_int64
+    _torch_mock.npu.get_stream_limit.assert_not_called()
+    config_lookup.assert_not_called()
+
+
+def test_capture_log_uses_native_block_count(monkeypatch, caplog):
+    """Logging the host request would misreport captured nodes after the native launcher clamps them."""
+    lib = _FakeLib()
+    lib.call_kernel.result = 3
+    monkeypatch.setattr(_jit, "ctypes", _CtypesProxy(lib))
+    npu_module = MagicMock()
+    npu_module.npu.is_current_stream_capturing.return_value = True
+    monkeypatch.setitem(sys.modules, "torch_npu", npu_module)
+    with caplog.at_level(logging.INFO):
+        _jit._launch(CompiledKernel(lib_path="<fake>", param_specs=[]), (), 12, _FAKE_STREAM)
+    assert "graph capture mode (block_dim=3)" in caplog.text
+    assert "block_dim=12" not in caplog.text
+
+
+def test_explicit_stream_validated_once_at_launcher_creation(monkeypatch):
+    """A foreign stream can expose a pointer too; reject it before ACL dereferences that handle."""
+    class NPUStream:
+        _as_parameter_ = 0x1234
+
+    class ForeignStream:
+        _as_parameter_ = 0xDEAD
+
+    monkeypatch.setattr(_torch_mock.npu, "Stream", NPUStream)
+    kernel = _jit._TileJitKernel(lambda: None, arch="a5")
+    with pytest.raises(TypeError, match="stream must be torch.npu.Stream or None"):
+        kernel[ForeignStream(), 8]
+
+    stream = NPUStream()
+    launcher = kernel[stream, 8]
+    monkeypatch.setattr(kernel, "_validate_launch_arch", lambda: None)
+    monkeypatch.setattr(kernel, "_ensure_compiled", lambda *_args, **_kwargs: None)
+    launches = []
+    monkeypatch.setattr(_jit, "_launch", lambda _compiled, _args, blocks, target: launches.append((blocks, target)))
+    # Invalidating the type only after construction detects an accidental hot-path
+    # isinstance check without requiring an NPU to create the test's stream.
+    monkeypatch.setattr(_torch_mock.npu, "Stream", None)
+    launcher()
+    launcher()
+    assert launches == [(8, stream), (8, stream)]

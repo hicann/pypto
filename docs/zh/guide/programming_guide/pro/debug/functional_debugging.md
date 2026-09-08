@@ -151,7 +151,7 @@ torch.testing.assert_close(
 
 | 现象 | 重点检查项 |
 |---|---|
-| 单核正确，多核错误 | 数据分片是否遗漏或重叠，`block_dim`与`pypto_pro.language.get_block_num()`是否一致，尾块是否分配均衡。 |
+| 单核正确，多核错误 | 数据分片是否遗漏或重叠，是否按`pypto_pro.language.get_block_num()`返回的实际Block数切分，尾块是否分配均衡。 |
 | 仅部分Shape错误 | Tile数量的向上取整、尾块有效Shape、补齐值、动态stride和边界条件。 |
 | 仅某个TilingKey错误 | 启动时Key字段、Key有效性约束、编译期分支以及对应产物目录。 |
 | 结果整体错位 | `make_tensor`的Shape和stride、load/store偏移、布局解释和转置设置。 |

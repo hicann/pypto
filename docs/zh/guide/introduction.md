@@ -177,7 +177,8 @@ PyPTO Pro应用程序相应地包含Host代码和Device代码。Host侧使用Pyt
 一个昇腾NPU通常包含多个AI Core，每个AI Core内部具有标量、向量和矩阵运算单元以及片上存储。PyPTO Pro使用逻辑Block描述并行任务，启动Kernel时通过`block_dim`配置逻辑Block数量：
 
 - `pypto_pro.language.get_block_num()`获取本次启动的Block总数。
-- `pypto_pro.language.get_block_idx()`获取当前执行域中逻辑AI Core的全局索引。仅启动Cube或仅启动Vector时，其范围为`[0, block_num)`；1:2混合Kernel的Vector段中，其范围为`[0, 2 * block_num)`。
+- `pypto_pro.language.get_block_idx()`获取当前执行域中逻辑AI Core的全局索引。仅启动Cube或仅启动Vector时，其范围为`[0, block_num)`；
+  AIC:AIV为1:2的混合Kernel的Vector段中，其范围为`[0, 2 * block_num)`。
 - `pypto_pro.language.get_subblock_idx()`获取当前逻辑Block内的subblock索引，仅在混合Kernel需要区分同一Block内的AIV时使用；Vector段的`get_block_idx()`已经包含该信息。
 
 PyPTO Pro采用外层SPMD与内层SIMD结合的并行方式。SPMD（Single Program Multiple Data，单程序多数据）表示多个逻辑AI Core执行同一份Kernel代码，并依据全局逻辑索引处理不同的数据分片；SIMD（Single Instruction Multiple Data，单指令多数据）表示AI Core内部的一条指令同时处理多个同构数据元素，适合矩阵、向量及融合计算。

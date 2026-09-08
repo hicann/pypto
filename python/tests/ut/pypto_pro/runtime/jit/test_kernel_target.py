@@ -1,0 +1,171 @@
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# -----------------------------------------------------------------------------------------------------------
+"""Keep compiler target selection, emitted launch geometry and debug compilation consistent."""
+
+from dataclasses import replace
+import importlib
+from pathlib import Path
+from unittest.mock import MagicMock
+
+from pypto_pro.runtime.compile_config import JitCompileConfig, KernelTarget, get_jit_compile_config
+import pytest
+
+jit = importlib.import_module("pypto_pro.runtime.jit")
+
+
+@pytest.fixture
+def future_config():
+    """A hypothetical 1:1 architecture must coexist with A5; its compiler name is a test-only placeholder."""
+    config = get_jit_compile_config()
+    return replace(
+        config,
+        kernel_targets={
+            **config.kernel_targets,
+            "future": {"cube_vec": KernelTarget("test-mixed-1-1", 1, 1, True)},
+        },
+        memory_arch_flags={**config.memory_arch_flags, "future": "-DTEST_MEMORY_ARCH"},
+    )
+
+
+@pytest.mark.parametrize("arch,prefix,memory", [
+    ("a2", "dav-c220", "-DMEMORY_BASE"),
+    ("a3", "dav-c220", "-DMEMORY_BASE"),
+    ("a5", "dav-c310", "-DREGISTER_BASE"),
+])
+@pytest.mark.parametrize("cube,vector,suffix,cores,fat_object", [
+    (True, False, "-cube", (1, 0), False),
+    (False, True, "-vec", (0, 1), False),
+    (True, True, "", (1, 2), True),
+])
+def test_existing_targets_preserve_compiler_flags_and_geometry(
+    arch, prefix, memory, cube, vector, suffix, cores, fat_object,
+):
+    """An architecture or mode mapping change must not alter either half of the compiled launch ABI."""
+    config = get_jit_compile_config()
+    target = config.resolve_kernel_target(arch, has_cube=cube, has_vector=vector)
+    flags = config.build_bisheng_flags(toolkit_home="/toolkit", arch=arch, target=target, enable_print_debug=False)
+    caller = jit._generate_caller_cpp([], "kernel.cpp", "probe", target=target)
+    assert target.npu_arch == prefix + suffix
+    assert (target.aic_per_block, target.aiv_per_block) == cores
+    assert target.fat_object is fat_object
+    assert f"--cce-aicore-arch={prefix}{suffix}" in flags
+    assert ("--cce-fatobj-link" in flags) is fat_object
+    assert memory in flags
+    assert f"ResolveLaunchBlockDim<{cores[0]}, {cores[1]}>" in caller
+
+
+def test_architecture_specific_mixed_geometry_is_independent(future_config):
+    """A future 1:1 target must not overwrite the 1:2 rule of an existing architecture."""
+    a5 = future_config.resolve_kernel_target(" A5 ", has_cube=True, has_vector=True)
+    future = future_config.resolve_kernel_target("future", has_cube=True, has_vector=True)
+    assert (a5.aic_per_block, a5.aiv_per_block) == (1, 2)
+    assert (future.aic_per_block, future.aiv_per_block) == (1, 1)
+
+
+def test_missing_architecture_is_not_assumed_to_use_a5_geometry():
+    """Adding an extensible target table must not advertise unsupported A6 compilation."""
+    with pytest.raises(RuntimeError, match="kernel_targets.*a6"):
+        get_jit_compile_config().resolve_kernel_target("a6", has_cube=True, has_vector=True)
+
+
+def test_missing_kernel_mode_is_not_replaced_with_mixed_target(future_config):
+    """A missing single-engine compiler target cannot safely use a mixed binary's launch ABI."""
+    with pytest.raises(RuntimeError, match=r"kernel_targets.future.cube"):
+        future_config.resolve_kernel_target("future", has_cube=True, has_vector=False)
+
+
+def test_empty_kernel_is_rejected_before_selecting_flags():
+    """The old default arch variant could hide a kernel with neither execution engine."""
+    with pytest.raises(ValueError, match="add a target section"):
+        get_jit_compile_config().resolve_kernel_target("a5", has_cube=False, has_vector=False)
+
+
+@pytest.mark.parametrize("cube,vector,missing", [(True, False, "vector"), (False, True, "cube")])
+def test_cross_sync_still_requires_both_engines(cube, vector, missing):
+    """Switching flag generation to a descriptor must retain the incomplete-sync diagnostic."""
+    target = get_jit_compile_config().resolve_kernel_target("a5", has_cube=cube, has_vector=vector)
+    with pytest.raises(ValueError, match=f"{missing} code is missing"):
+        jit._build_bisheng_flags("/toolkit", "a5", target, has_cross_sync=True, enable_print_debug=False)
+
+
+@pytest.mark.parametrize("arch,cores", [("a5", (1, 2)), ("future", (1, 1))])
+def test_shared_library_and_caller_use_the_same_resolved_target(monkeypatch, tmp_path, future_config, arch, cores):
+    """Capture a real build command and caller; independently resolving either half would permit ABI drift."""
+    target = future_config.resolve_kernel_target(arch, has_cube=True, has_vector=True)
+    monkeypatch.setattr(jit, "get_jit_compile_config", lambda: future_config)
+    monkeypatch.setattr(
+        JitCompileConfig, "resolve_kernel_target", MagicMock(side_effect=AssertionError("Already resolved")),
+    )
+    monkeypatch.setenv("ASCEND_TOOLKIT_HOME", "/toolkit")
+    monkeypatch.setenv("ASCEND_HOME_PATH", "/toolkit")
+    monkeypatch.setattr(jit.shutil, "which", lambda _: "/toolkit/bin/bisheng")
+    captured = []
+
+    def compile_stub(_bisheng, flags, build_arch, paths, _links, _timeout, output_path):
+        captured.append((flags, build_arch, Path(paths.final_kernel).read_text()))
+        Path(output_path).write_bytes(b"compiled test library")
+        return True
+
+    monkeypatch.setattr(jit, "_run_bisheng", compile_stub)
+    cg = jit.CodegenResult(
+        build_dir=str(tmp_path), content="", kernel_name="probe", kernel_params=[],
+        caller_cross_core_sync=True, bisheng_cross_sync=True, needs_print_debug=True,
+        has_cube=True, has_vector=True,
+    )
+    library = jit._build_jit_so(cg, arch, clean_up=False, compile_timeout=30, target=target)
+    assert Path(library).read_bytes() == b"compiled test library"
+    assert len(captured) == 1
+    flags, build_arch, caller = captured[0]
+    assert build_arch == arch
+    assert f"--cce-aicore-arch={target.npu_arch}" in flags
+    assert "--cce-fatobj-link" in flags
+    assert "--cce-enable-print" in flags
+    assert f"ResolveLaunchBlockDim<{cores[0]}, {cores[1]}>" in caller
+
+
+def test_compilation_preserves_target_for_cached_launch_and_debug(monkeypatch, tmp_path):
+    """The compiled object must retain the exact descriptor selected when its binary was built."""
+    config = get_jit_compile_config()
+    resolve = MagicMock(wraps=config.resolve_kernel_target)
+    config_proxy = MagicMock()
+    config_proxy.resolve_kernel_target = resolve
+    monkeypatch.setattr(jit, "get_jit_compile_config", lambda: config_proxy)
+    monkeypatch.setattr(jit, "_setup_arch_env", lambda arch: arch)
+    cg = jit.CodegenResult(
+        build_dir=str(tmp_path), content="", kernel_name="probe", kernel_params=[],
+        caller_cross_core_sync=False, bisheng_cross_sync=False, needs_print_debug=False,
+        has_cube=True, has_vector=True,
+    )
+    monkeypatch.setattr(jit, "_codegen", lambda *_args, **_kwargs: cg)
+    build = MagicMock(return_value="/tmp/test-kernel.so")
+    monkeypatch.setattr(jit, "_build_jit_so", build)
+    kernel = jit._TileJitKernel(lambda: None, arch="a5", compile_timeout=30)
+    monkeypatch.setattr(kernel, "to_kernel_def", lambda *_args, **_kwargs: None)
+    compiled = kernel._compile_variant(None, (None, None, None, None), None, ())
+    resolve.assert_called_once_with("a5", has_cube=True, has_vector=True)
+    assert compiled.target is build.call_args.kwargs["target"]
+    assert compiled.target is config.kernel_targets["a5"]["cube_vec"]
+
+
+def test_debug_command_reuses_compiled_target_without_resolving(monkeypatch, tmp_path):
+    """Exception-dump setup runs before launches; it must reuse metadata rather than infer core geometry again."""
+    dump = importlib.import_module("pypto_pro.runtime.exception_dump")
+    (tmp_path / "kernel.cpp").write_text("")
+    monkeypatch.setenv("ASCEND_WORK_PATH", str(tmp_path))
+    monkeypatch.setenv("ASCEND_HOME_PATH", "/toolkit")
+    monkeypatch.setenv("ASCEND_TOOLKIT_HOME", "/toolkit")
+    monkeypatch.setenv("PYPTOPRO_JIT_ARCH", "a5")
+    monkeypatch.setattr(dump.shutil, "which", lambda _: "/toolkit/bin/bisheng")
+    monkeypatch.setattr(
+        JitCompileConfig, "resolve_kernel_target", MagicMock(side_effect=AssertionError("Already resolved")),
+    )
+    target = KernelTarget("test-compiled-target", 1, 1, True)
+    command = dump._build_debug_compile_cmd(str(tmp_path), "probe", target)
+    assert "--cce-aicore-arch=test-compiled-target" in command
+    assert "--cce-aicore-arch=dav-c310" not in command

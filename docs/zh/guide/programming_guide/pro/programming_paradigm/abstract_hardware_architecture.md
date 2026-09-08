@@ -92,7 +92,7 @@ PyPTO Pro推荐使用pl.make_tile_group配合@pl.jit(auto_mutex=True)，由编�
 
 PyPTO Pro采用SPMD编程模型。各逻辑AI Core执行相同程序，并根据全局逻辑索引处理不同数据分片。pl.get_block_num()返回启动时配置的逻辑Block数量，pl.get_block_idx()返回当前执行域的全局逻辑核索引。
 
-在同时启动AIC与AIV的1:2混合Kernel中，每个逻辑Block对应一个AIC和两个AIV：
+在AIC:AIV为1:2的混合Kernel中，每个逻辑Block对应一个AIC和两个AIV：
 
 ```text
 block_dim个逻辑Block

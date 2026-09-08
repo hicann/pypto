@@ -21,11 +21,26 @@ CCE_BACKEND = "cce"
 
 
 @dataclass(frozen=True)
+class KernelTarget:
+    """Compiler target and its AIC/AIV participants per logical launch block.
+
+    Core counts describe the emitted binary's ABI. Keeping them with the compiler
+    target allows different architectures to use different mixed-core ratios,
+    independently of the device or stream's currently available resources.
+    """
+
+    npu_arch: str
+    aic_per_block: int
+    aiv_per_block: int
+    fat_object: bool
+
+
+@dataclass(frozen=True)
 class JitCompileConfig:
     """Compile settings owned by one PyPTO Pro JIT backend."""
 
     backend: str
-    npu_arch: Mapping[str, Mapping[str, str]]
+    kernel_targets: Mapping[str, Mapping[str, KernelTarget]]
     memory_arch_flags: Mapping[str, str]
     arch_flags: tuple[str, ...]
     fatobj_flags: tuple[str, ...]
@@ -49,22 +64,20 @@ class JitCompileConfig:
         *,
         toolkit_home: str,
         arch: str,
-        has_cube: bool,
-        has_vec: bool,
+        target: KernelTarget,
         enable_print_debug: bool,
     ) -> list[str]:
         arch = arch.strip().lower()
-        npu_arch = self._resolve_npu_arch(arch, has_cube, has_vec)
         variables = {
             "toolkit_home": toolkit_home,
             "mem_arch": self._resolve_memory_arch_flag(arch),
-            "npu_arch": npu_arch,
+            "npu_arch": target.npu_arch,
         }
         common = self._format_values(self.common_flags, variables)
         if enable_print_debug:
             common.extend(self._format_values(self.print_debug_flags, variables))
         flags = self._format_values(self.arch_flags, variables)
-        if has_cube and has_vec:
+        if target.fat_object:
             flags.extend(self._format_values(self.fatobj_flags, variables))
         return [*flags, *common]
 
@@ -94,16 +107,19 @@ class JitCompileConfig:
             link_args.append(library if library.startswith("-l") else f"-l{library}")
         return link_args
 
-    def _resolve_npu_arch(self, arch: str, has_cube: bool, has_vec: bool) -> str:
-        arch_key = self._resolve_arch_key(arch)
-        arch_config = self.npu_arch.get(arch_key)
+    def resolve_kernel_target(self, arch: str, *, has_cube: bool, has_vector: bool) -> KernelTarget:
+        """Resolve once so compiler flags and launch geometry consume the same ABI."""
+        if not (has_cube or has_vector):
+            raise ValueError("Cannot compile a kernel without cube or vector code; add a target section")
+        arch_key = self._resolve_arch_key(arch.strip().lower())
+        arch_config = self.kernel_targets.get(arch_key)
         if arch_config is None:
-            raise RuntimeError(f"JIT compile config does not define npu_arch for arch '{arch}'")
-        variant = "cube_vec" if has_cube and has_vec else "cube" if has_cube else "vec" if has_vec else "default"
-        npu_arch = arch_config.get(variant)
-        if npu_arch is None:
-            raise RuntimeError(f"JIT compile config does not define npu_arch.{arch_key}.{variant}")
-        return npu_arch
+            raise RuntimeError(f"JIT compile config does not define kernel_targets for arch '{arch}'")
+        variant = "cube_vec" if has_cube and has_vector else "cube" if has_cube else "vec"
+        target = arch_config.get(variant)
+        if target is None:
+            raise RuntimeError(f"JIT compile config does not define kernel_targets.{arch_key}.{variant}")
+        return target
 
     def _resolve_memory_arch_flag(self, arch: str) -> str:
         arch_key = self._resolve_arch_key(arch)
@@ -119,18 +135,16 @@ class JitCompileConfig:
 
 _DEFAULT_CCE_JIT_COMPILE_CONFIG = JitCompileConfig(
     backend=CCE_BACKEND,
-    npu_arch={
+    kernel_targets={
         "a2a3": {
-            "cube_vec": "dav-c220",
-            "cube": "dav-c220-cube",
-            "vec": "dav-c220-vec",
-            "default": "dav-c220",
+            "cube_vec": KernelTarget("dav-c220", aic_per_block=1, aiv_per_block=2, fat_object=True),
+            "cube": KernelTarget("dav-c220-cube", aic_per_block=1, aiv_per_block=0, fat_object=False),
+            "vec": KernelTarget("dav-c220-vec", aic_per_block=0, aiv_per_block=1, fat_object=False),
         },
         "a5": {
-            "cube_vec": "dav-c310",
-            "cube": "dav-c310-cube",
-            "vec": "dav-c310-vec",
-            "default": "dav-c310",
+            "cube_vec": KernelTarget("dav-c310", aic_per_block=1, aiv_per_block=2, fat_object=True),
+            "cube": KernelTarget("dav-c310-cube", aic_per_block=1, aiv_per_block=0, fat_object=False),
+            "vec": KernelTarget("dav-c310-vec", aic_per_block=0, aiv_per_block=1, fat_object=False),
         },
     },
     memory_arch_flags={
@@ -202,7 +216,7 @@ _DEFAULT_CCE_JIT_COMPILE_CONFIG = JitCompileConfig(
         "{ascend_home}/pkg_inc/runtime/runtime",
     ),
     link_dirs=("{ascend_home}/lib64/",),
-    link_libraries=("runtime", "profapi"),
+    link_libraries=("runtime", "profapi", "ascendcl"),
 )
 
 

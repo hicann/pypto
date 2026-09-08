@@ -21,11 +21,14 @@ import pypto_pro.language as pl
 
 ## 逻辑Block与执行域
 
-`block_dim`是启动时配置的逻辑Block数，[`pypto_pro.language.get_block_num()`](../../../../../api/pro_api/SIMD-API/system_variables/get_block_num.md)返回本次启动传入的该值。仅启动Cube或仅启动Vector时，执行域中的逻辑核数与`block_dim`一致；同时启动AIC与AIV时，各执行域的逻辑核数由`block_dim`和AIC:AIV比例共同决定。
+`block_dim`是请求的逻辑Block数上限，JIT根据实际启动Stream的核数限制计算本次启动值。
+[`pypto_pro.language.get_block_num()`](../../../../../api/pro_api/SIMD-API/system_variables/get_block_num.md)
+返回限核后的实际Block数。仅启动Cube或仅启动Vector时，执行域中的逻辑核数与实际Block数一致；
+同时启动AIC与AIV时，各执行域的逻辑核数由实际Block数和AIC:AIV比例共同决定。
 
 四个索引接口的语义如下：
 
-- `pypto_pro.language.get_block_num()`：启动时配置的逻辑Block数；
+- `pypto_pro.language.get_block_num()`：限核后实际启动的逻辑Block数；
 - [`pypto_pro.language.get_block_idx()`](../../../../../api/pro_api/SIMD-API/system_variables/get_block_idx.md)：当前执行域的全局逻辑核索引；在Vector段中已按subblock展平；
 - [`pypto_pro.language.get_subblock_idx()`](../../../../../api/pro_api/SIMD-API/system_variables/get_subblock_idx.md)：当前逻辑Block内的subblock索引，仅在需要区分同一Block内的AIV时使用；
 - `pypto_pro.language.get_subblock_num()`：当前执行域每个逻辑Block对应的subblock数量。
@@ -45,15 +48,18 @@ core_id = pl.get_block_idx()       # 0..31
 | AIC:AIV为1:2的混合Kernel | Cube | `[0, block_num)` | `block_num` |
 | AIC:AIV为1:2的混合Kernel | Vector | `[0, 2 * block_num)` | `block_num * get_subblock_num()` |
 
-其中`block_num = pypto_pro.language.get_block_num()`。在1:2混合Kernel的Vector段中，`pypto_pro.language.get_subblock_num()`返回2。
+其中`block_num = pypto_pro.language.get_block_num()`。在AIC:AIV为1:2的混合Kernel的Vector段中，
+`pypto_pro.language.get_subblock_num()`返回2。
 
-![1:2混合Kernel中逻辑Block与Cube、Vector执行域的索引映射](../../../../figures/pro/pro_multicore_spmd_mapping.png)
+![AIC:AIV为1:2的混合Kernel中逻辑Block与Cube、Vector执行域的索引映射](../../../../figures/pro/pro_multicore_spmd_mapping.png)
 
-上图以`block_dim=8`为例：Cube执行域包含8个AIC工作单元，Vector执行域包含16个AIV工作单元；Vector侧的`pypto_pro.language.get_block_idx()`是展平后的全局AIV逻辑索引。
+上图以实际启动8个逻辑Block为例：Cube执行域包含8个AIC工作单元，Vector执行域包含16个AIV工作单元；
+Vector侧的`pypto_pro.language.get_block_idx()`是展平后的全局AIV逻辑索引。
 
 ### `get_subblock_idx`：逻辑Block内的subblock索引
 
-在1:2混合Kernel中，`pypto_pro.language.get_subblock_idx()`可区分同一逻辑Block对应的两个AIV，返回`0`或`1`。例如让两个AIV分别处理Tile的前半行和后半行：
+在AIC:AIV为1:2的混合Kernel中，`pypto_pro.language.get_subblock_idx()`可区分同一逻辑Block对应的两个AIV，
+返回`0`或`1`。例如让两个AIV分别处理Tile的前半行和后半行：
 
 ```python
 with pl.section_vector():
@@ -145,8 +151,8 @@ kernel[block_dim](x, y, z)           # 默认Stream，只给逻辑Block数
 kernel(x, y, z)                       # 默认Stream，block_dim=1
 ```
 
-- `stream`：NPU Stream；传`None`时使用默认Stream。
-- `block_dim`：本次启动传入的逻辑Block数；Kernel中的`get_block_num()`返回该值。
+- `stream`：NPU Stream；传`None`时使用调用时的当前Stream。
+- `block_dim`：请求的逻辑Block数上限；Kernel中的`get_block_num()`返回限核后的实际值。
 
 ```python
 # 例：请求32个逻辑Block
@@ -181,9 +187,44 @@ block_dim = min(max_blocks, total_tiles)
 kernel[None, block_dim](x, y, z)
 ```
 
-JIT启动不会自动截断超过平台上限的`block_dim`。仅Cube Kernel使用`cube_core_num`作为
-上限，仅Vector Kernel使用`vector_core_num`作为上限，混合Kernel使用`core_num`作为配对
-执行组数上限。Host侧必须根据Kernel类型和任务Tile数计算合法的`block_dim`后再启动。
+JIT每次启动通过C++启动器查询Stream的有效资源限制，并将请求的`block_dim`限制在可用资源以内。
+仅Cube Kernel使用`cube_core_num`，仅Vector Kernel使用`vector_core_num`，当前AIC:AIV为1:2的混合Kernel使用
+`min(cube_core_num, vector_core_num // 2)`作为Block数上限。混合Kernel无法组成一个完整执行组时，
+JIT在启动前报错，避免缺少同步参与者造成死锁。Host仍可按任务Tile数减少请求的Block数。
+
+### Device、Stream与作用域限核
+
+三种torch_npu接口使用同一启动路径，无需重新编译Kernel：
+
+```python
+import torch_npu
+
+device = torch.npu.current_device()
+torch.npu.set_device_limit(device, cube_num=8, vector_num=16)
+stream = torch.npu.Stream()
+torch.npu.set_stream_limit(stream, cube_num=4, vector_num=6)
+kernel[stream, 32](x, y, z)
+
+with torch.npu.npugraph_ex.scope.limit_core_num(2, 4, stream=stream):
+    kernel[stream, 32](x, y, z)
+
+torch.npu.reset_stream_limit(stream)
+```
+
+Stream配置优先于Device配置；未配置Stream时继承Device限制，未配置Device时使用硬件核数。
+Stream可覆盖Device默认值，而不是与Device值取最小值。`set_device_limit`在当前torch_npu中每进程
+只允许调用一次；反复修改限核值应使用Stream接口。作用域退出（包括异常退出）恢复该Stream之前的限制。
+显式`stream`参数仅指定限核目标，不切换当前Stream；Kernel必须在该Stream上启动。
+省略作用域的`stream`参数时，作用域在进入时选取当前Stream。
+
+**限核会改变Kernel中的Block数。** 数据切分应使用`get_block_num()`构造跨步循环；
+混合Vector段按独立AIV切分时，步长为`get_block_num() * get_subblock_num()`。
+固定每个Block只处理一个Tile，或用Host请求的核数作为循环步长，在核数减少时会遗漏任务。
+此功能限制启动的工作Block数，不会自动把任意固定逻辑网格改写为更少工作核上的调度程序。
+
+图捕获时按每个节点启动时的Stream限制确定Block数；原始`NPUGraph.replay()`不会重新查询资源限制，
+改变限制后需重新捕获。`torch.compile(backend="npugraph_ex")`中的作用域由后端转换为Stream限核操作；
+PyPTO Kernel应通过已注册的`torch.library`自定义算子进入图，以便在实际捕获时执行启动逻辑。
 
 ---
 
@@ -524,14 +565,14 @@ with pl.section_cube():
 
 ```python
 # 仅Cube或仅Vector的Kernel：分配当前核的任务
-num_cores = pl.get_block_num()      # 等于启动时传入的block_dim
+num_cores = pl.get_block_num()      # 限核后实际启动的Block数
 core_id = pl.get_block_idx()        # 0 .. num_cores-1
 
 total_tiles = m_tiles * n_tiles
 for idx in pl.range(core_id, total_tiles, num_cores):
     ...
 
-# 1:2混合Kernel的Vector段：
+# AIC:AIV为1:2的混合Kernel的Vector段：
 num_cores = pl.get_block_num() * pl.get_subblock_num()
 core_id = pl.get_block_idx()        # 已按subblock展平
 
