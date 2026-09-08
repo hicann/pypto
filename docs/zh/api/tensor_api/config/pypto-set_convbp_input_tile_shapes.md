@@ -45,9 +45,9 @@ TileShape需要满足以下约束条件：
 
         - tileML1：需小于Win或者为Win的整数倍，即 `tileML1 <= Win` 或 `tileML1 % Win == 0`（HinWin合轴切分，M方向保证不跨Win行）
 
-        - tileNL1：需为Cin0的倍数，即 `tileNL1 % 16 == 0`，且 `tileNL1 <= Cin`（Cin维度切分）
+        - tileNL1：需为Cin0的倍数，即 `tileNL1 % 16 == 0`
 
-        - tileKL1：需为 `Cout0 × Kh × Kw` 的倍数，即 `tileKL1 % (16 * Kh * Kw) == 0`，且 `tileKL1 <= CeilAlign(Cout, Cout0) * Kh * Kw`（Cout×Kh×Kw维度切分，L1上KhKw全载，Cout按Cout0切分）
+        - tileKL1：需为 `Cout0 × Kh × Kw` 的倍数，即 `tileKL1 % (16 * Kh * Kw) == 0`
 
     - ConvBpTileL0Info各维度值需满足对齐约束：
 
