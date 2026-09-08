@@ -108,8 +108,7 @@ private:
     void FindFilterLtags(Operation* allocOp, std::set<Operation*>& filterLtags);
 
     LogicalTensorPtr CreateLocalTensor(LogicalTensorPtr spillTensor);
-    LogicalTensorPtr CreateGMTensor(LogicalTensorPtr spillTensor, LogicalTensorPtr actualSpillTensor, int spillMemId,
-                                    DataType gmDtype = DT_BOTTOM);
+    LogicalTensorPtr CreateGMTensor(LogicalTensorPtr ref, int spillMemId, DataType dtype);
     Operation* CreateAllocOp(LogicalTensorPtr oOperand);
     void RegisterLocalBuffer(const LogicalTensorPtr& localTensor);
     void RegisterTensorAllocOp(Operation* allocOp);
@@ -120,7 +119,7 @@ private:
     Operation* CreateCopyoutOp(Operation* spillOp, LogicalTensorPtr iOperand, LogicalTensorPtr oOperand,
                                std::vector<OpImmediate> offset);
 
-    const std::vector<int64_t>& GetLargerShape(const std::vector<int64_t>& shape1, const std::vector<int64_t>& shape2);
+    static LogicalTensorPtr GetMirrorRef(const SpillPlan& plan, LogicalTensorPtr spillTensor);
 
     void TakeOverScheduleSlot(Operation* oldOp, Operation* newOp);
 
