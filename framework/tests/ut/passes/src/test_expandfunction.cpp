@@ -147,6 +147,23 @@ bool HasNormalTokenNamed(const std::vector<ir::VarPtr>& tokens, const std::strin
     return false;
 }
 
+void ExpectSliceContractHaveDistinctRaws(Function& function)
+{
+    for (auto& op : function.Operations(false)) {
+        if (op.GetOpcode() != Opcode::OP_SLICE && op.GetOpcode() != Opcode::OP_CONTRACT) {
+            continue;
+        }
+        EXPECT_FALSE(op.GetIOperands().empty());
+        EXPECT_FALSE(op.GetOOperands().empty());
+        if (op.GetIOperands().empty() || op.GetOOperands().empty() || op.GetIOperands()[0] == nullptr ||
+            op.GetOOperands()[0] == nullptr) {
+            continue;
+        }
+        EXPECT_NE(op.GetIOperands()[0]->GetRawTensor(), op.GetOOperands()[0]->GetRawTensor())
+            << op.GetOpcodeStr() << "[" << op.GetOpMagic() << "] input/output share the same RawTensor";
+    }
+}
+
 } // namespace
 
 struct ScopeCfg {
@@ -346,6 +363,7 @@ TEST_F(TestExpandFunctionPass, ExpandFunctionUTest2)
     EXPECT_EQ(slice_num, kNumOne);
     EXPECT_EQ(contract_num, kNumOne);
     EXPECT_EQ(nop_num, kNumOne);
+    ExpectSliceContractHaveDistinctRaws(*currFunctionPtr);
 }
 
 /*
@@ -506,6 +524,7 @@ TEST_F(TestExpandFunctionPass, AssembleReshapeToOutcastWithTokenShouldExpand)
     EXPECT_EQ(sliceNum, kNumOne);
     EXPECT_EQ(contractNum, kNumOne);
     EXPECT_TRUE(contractHasWrite);
+    ExpectSliceContractHaveDistinctRaws(*currFunctionPtr);
 }
 
 /*
@@ -555,6 +574,7 @@ TEST_F(TestExpandFunctionPass, AssembleReshapeToNonOutcastShouldExpand)
     EXPECT_EQ(assembleNum, kNumZero);
     EXPECT_EQ(sliceNum, kNumOne);
     EXPECT_EQ(contractNum, kNumOne);
+    ExpectSliceContractHaveDistinctRaws(*currFunctionPtr);
 }
 
 /*
@@ -607,6 +627,7 @@ TEST_F(TestExpandFunctionPass, AssembleReshapeToOutcastWithDeletedReshapeShouldE
     EXPECT_EQ(assembleNum, kNumZero);
     EXPECT_EQ(sliceNum, kNumOne);
     EXPECT_EQ(contractNum, kNumOne);
+    ExpectSliceContractHaveDistinctRaws(*currFunctionPtr);
 }
 
 /*
