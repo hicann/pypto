@@ -458,7 +458,7 @@ public:
     VarPtr ParseLogicalTensorVar(const std::string& varName)
     {
         auto atPos = varName.find('@');
-        int memoryId = std::stoi(varName.substr(atPos + 1));
+        int rawmagic = std::stoi(varName.substr(atPos + 1));
         std::string name = varName.substr(0, atPos);
 
         MUST_VALID(attrs, ParseAttrList());
@@ -487,8 +487,8 @@ public:
         npu::tile_fwk::IRBuilder builder;
         npu::tile_fwk::LogicalTensorPtr tensor = builder.CreateTensorVar(dtype, shape,
                                                                          npu::tile_fwk::TileOpFormat::TILEOP_ND, name);
-        if (memoryId >= 0) {
-            tensor->tensor->memoryId = memoryId;
+        if (rawmagic >= 0) {
+            tensor->tensor->rawmagic = rawmagic;
         }
         if (!offset.empty()) {
             tensor->offset = offset;
@@ -871,7 +871,7 @@ public:
             return Error("expected variable name, got '" + name + "'");
         }
         ++cur_;
-        // strip '@memoryId' suffix for symbol table lookup
+        // strip '@rawmagic' suffix for symbol table lookup
         auto atPos = name.find('@');
         if (atPos != std::string::npos) {
             name = name.substr(0, atPos);
