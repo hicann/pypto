@@ -40,6 +40,9 @@ struct LoadedBundle {
     std::vector<uint8_t> ctrlFlowCache; // DevControlFlowCache blob (may be empty for old bundles)
     std::vector<uint8_t> symbolMeta;    // JSON dynamic-workspace symbols (empty -> static workspace fallback)
 
+    // Stable logical name used by asynchronous AICORE/AICPU exception callbacks.
+    std::string displayName;
+
     // Per-shape dynamic cell-match stride patches, computed host-side by EvalWorkspaceForShapes and written into
     // the aicpu launch args. Empty for ops with no dynamic cell-match table.
     std::vector<dynamic::DevDynamicCellMatchStridePatch> cellMatchStridePatches;

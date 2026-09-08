@@ -19,6 +19,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "adapter/api/runtime_define.h"                     // RtStream
@@ -35,7 +36,7 @@ namespace npu::tile_fwk::dynamic {
 // memBudget for the launch shape. Returns 0 on success.
 int LaunchBundleKernelOnce(const std::vector<uint8_t>& devProgBinary, void* binHandle, uint64_t cacheKey,
                            const std::vector<DeviceTensorData>& tensorList,
-                           const std::vector<uint8_t>& hostCtrlFlowCache,
+                           const std::vector<uint8_t>& hostCtrlFlowCache, const std::string& displayName,
                            const std::vector<DevDynamicCellMatchStridePatch>& cellMatchStridePatches,
                            void* workspaceAddr, RtStream aicoreStream, bool streamSynchronize,
                            const DeviceLauncherConfig& config = DeviceLauncherConfig());

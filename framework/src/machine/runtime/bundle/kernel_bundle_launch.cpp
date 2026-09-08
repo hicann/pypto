@@ -17,6 +17,8 @@
 
 #include <atomic>
 #include <cstddef>
+#include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -87,11 +89,23 @@ int BundleLaunchAicore(AclRtStream aicoreStream, void* kernel, RtArgsEx& rtArgs,
     HostProf::GetInstance().ReportHostProfInfo(aicoreStream, startTime, blockDim, MSPF_GE_TASK_TYPE_MIX_AIC, true);
     return ret;
 }
+
+std::string MakeAicpuOpName(const std::string& displayName, uint64_t bundleKey)
+{
+    constexpr size_t maxNameSize = sizeof(AiCpuArgs::opName) - 1;
+    if (displayName.size() <= maxNameSize) {
+        return displayName;
+    }
+    char keySuffix[18] = {};
+    (void)std::snprintf(keySuffix, sizeof(keySuffix), "_%016llx", static_cast<unsigned long long>(bundleKey));
+    const size_t prefixSize = maxNameSize - std::strlen(keySuffix);
+    return displayName.substr(0, prefixSize) + keySuffix;
+}
 } // namespace
 
 int LaunchBundleKernelOnce(const std::vector<uint8_t>& devProgBinary, void* binHandle, uint64_t cacheKey,
                            const std::vector<DeviceTensorData>& tensorList,
-                           const std::vector<uint8_t>& hostCtrlFlowCache,
+                           const std::vector<uint8_t>& hostCtrlFlowCache, const std::string& displayName,
                            const std::vector<DevDynamicCellMatchStridePatch>& cellMatchStridePatches,
                            void* workspaceAddr, RtStream aicoreStream, bool streamSynchronize,
                            const DeviceLauncherConfig& config)
@@ -125,6 +139,12 @@ int LaunchBundleKernelOnce(const std::vector<uint8_t>& devProgBinary, void* binH
     auto* aicpuArgs = new (aicpuArgBuf.data()) AiCpuArgs();
     aicpuArgs->kArgs.inputs = nullptr;
     aicpuArgs->kArgs.outputs = nullptr;
+    const std::string aicpuOpName = MakeAicpuOpName(displayName, cacheKey);
+    if (strcpy_s(aicpuArgs->opName, sizeof(aicpuArgs->opName), aicpuOpName.c_str()) != 0) {
+        MACHINE_LOGE(DevCommonErr::PARAM_CHECK_FAILED, "[kernel-bundle] invalid AICPU op name: %s",
+                     aicpuOpName.c_str());
+        return -1;
+    }
 
     // Fill device-side kArgs: cfgdata (base-0 devProg), metadata, distributed ctx. Topology is re-derived from
     // the target platform in DeviceInitTilingData.
@@ -210,8 +230,7 @@ int LaunchBundleKernelOnce(const std::vector<uint8_t>& devProgBinary, void* binH
         return rc;
     }
 
-    static const char kBundleKernelName[] = "PyPTO_bundle_kernel";
-    kernelArgs[0] = const_cast<char*>(kBundleKernelName);
+    kernelArgs[0] = const_cast<char*>(displayName.c_str());
     kernelArgs[4] = reinterpret_cast<int64_t*>(aicpuArgs + 1); // inputp
     kernelArgs[5] = aicpuArgs->kArgs.cfgdata;                  // 5 is cfgdata
     kernelArgs[6] = reinterpret_cast<DevTensorData*>(reinterpret_cast<int64_t*>(aicpuArgs + 1) + 2);
