@@ -281,6 +281,12 @@ int DeviceStitchContext::DecideIncastOutcast(uint64_t taskId)
             ItemPoolIter iter = desc.GetRtOutcastIter();
             auto& rtOutcast = workspace_->GetRuntimeOutcastTensor(iter);
             uintdevptr_t addr = rtOutcast.Addr();
+            if (addr == 0 && rtOutcast.property == RuntimeTensorMemProperty::BOUNDARY_OUTCAST) {
+                WsAllocation alloc = workspace_->AllocateBoundaryOutcastSlot(src->GetRawName());
+                workspace_->RuntimeOutcastTensorReplaceAddrWithoutRecycle(iter, alloc,
+                                                                          RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
+                addr = rtOutcast.Addr();
+            }
             workspace_->RuntimeOutcastTensorDeref(rtOutcast);
             desc = AddressDescriptor::MakeFromAddress(addr);
         }
