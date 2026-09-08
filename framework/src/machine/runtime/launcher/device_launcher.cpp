@@ -667,7 +667,7 @@ uint8_t* DeviceLauncher::PrepareLaunch(KernelBinary* kernel, std::vector<DeviceT
     HOST_PERF_TRACE(TracePhase::LaunchAttachStream);
     auto& cacheMgr = CtrlFlowCacheManager::Instance();
     // findOrBuildDevCache===>kermode FindCtrlFlowcache
-    uint8_t* ctrlFlowCache = cacheMgr.FindOrBuildDevCache(kernel, tensors);
+    uint8_t* ctrlFlowCache = cacheMgr.FindOrBuildDevCache(kernel, tensors, IsCaptureMode());
     HOST_PERF_TRACE(TracePhase::FindCtrlFlowCache);
     // The one place kernel-bundle packing is decided, for every launch mode and both cache flavours. The cache
     // build above has by now stashed its bytes with the hook (value-dependent ops stash nothing, which is what
