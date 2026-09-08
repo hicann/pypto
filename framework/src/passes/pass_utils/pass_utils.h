@@ -129,4 +129,7 @@ public:
 
     static std::vector<SymbolicScalar> CreateConstIntVector(const std::vector<int64_t>& values);
 };
+
+// 逐维 offset + shape 求交, 只看区域不看 memId。要求两者维数相同。
+bool IsOverlapping(const LogicalTensor& a, const LogicalTensor& b);
 } // namespace npu::tile_fwk

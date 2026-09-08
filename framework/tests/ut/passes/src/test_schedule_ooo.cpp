@@ -35,6 +35,8 @@
 #include "passes/block_graph_pass/schedule_ooo/pre_schedule/cluster_list_sort.h"
 #include "passes/block_graph_pass/schedule_ooo/pre_schedule/core_assign.h"
 #include "passes/block_graph_pass/schedule_ooo/pre_schedule/prior_dfs_sort.h"
+#include "passes/block_graph_pass/schedule_ooo/pre_schedule/task_splitter.h"
+#include "passes/pass_utils/pass_utils.h"
 #include "passes/block_graph_pass/schedule_ooo/schedule_ooo.h"
 #include "passes/tile_graph_pass/graph_constraint/infer_dyn_shape.h"
 
@@ -262,6 +264,48 @@ TEST_F(ScheduleOoOTest, TestTokenDependency)
     ASSERT_EQ(scheduler.Init(function->Operations().DuplicatedOpList()), SUCCESS);
     EXPECT_EQ(scheduler.state_.depManager.GetPredecessors(consumer).count(producer), 1U);
     EXPECT_EQ(scheduler.state_.depManager.GetSuccessors(producer).count(consumer), 1U);
+}
+
+// 任务切分直读 IR 连边、不查依赖图, 所以 token 边要单独补一趟。
+TEST_F(ScheduleOoOTest, TaskSplitSeesTokenEdge)
+{
+    ComputationalGraphBuilder graph;
+    EXPECT_TRUE(graph.AddTensors(DataType::DT_FP32, {16, 16}, {"in1", "out1", "in2", "out2"}));
+    EXPECT_TRUE(graph.AddOp(Opcode::OP_ADDS, {"in1"}, {"out1"}, "TokenProducer", true));
+    EXPECT_TRUE(graph.AddOp(Opcode::OP_MULS, {"in2"}, {"out2"}, "TokenConsumer", true));
+    auto* function = graph.GetFunction();
+    auto* producer = graph.GetOp("TokenProducer");
+    auto* consumer = graph.GetOp("TokenConsumer");
+    ASSERT_NE(function, nullptr);
+    ASSERT_NE(producer, nullptr);
+    ASSERT_NE(consumer, nullptr);
+
+    // 两条链之间没有任何数据边, 唯一的联系就是这条 token。
+    auto token = IRBuilder().CreateTokenVar(producer->GetSpan());
+    producer->result_token_ = {token};
+    consumer->tokens_.push_back(token);
+    function->GetVarDependency().AddProducer(token,
+                                             std::static_pointer_cast<const ir::Stmt>(producer->shared_from_this()));
+    function->GetVarDependency().AddConsumer(token,
+                                             std::static_pointer_cast<const ir::Stmt>(consumer->shared_from_this()));
+
+    TaskSplitter splitter;
+    splitter.opList_ = function->Operations(false).DuplicatedOpList();
+    splitter.BuildOpGraph();
+    // 一个 op 一个 task, 这样 task 图上的边就是 op 之间的边, 判据不受聚簇策略干扰。
+    int opNum = static_cast<int>(splitter.opList_.size());
+    std::vector<int> clusterIds(opNum);
+    for (int i = 0; i < opNum; i++) {
+        clusterIds[i] = i;
+    }
+    std::vector<std::set<int>> inGraph;
+    std::vector<std::set<int>> outGraph;
+    splitter.BuildInOutGraph(inGraph, outGraph, clusterIds, opNum);
+
+    int producerIdx = splitter.opMagicToIdx_[producer->GetOpMagic()];
+    int consumerIdx = splitter.opMagicToIdx_[consumer->GetOpMagic()];
+    EXPECT_EQ(outGraph[producerIdx].count(consumerIdx), 1U);
+    EXPECT_EQ(inGraph[consumerIdx].count(producerIdx), 1U);
 }
 
 TEST_F(ScheduleOoOTest, SimtOpUses216KBForUbScheduling)
@@ -830,6 +874,79 @@ TEST_F(ScheduleOoOTest, TestSpillAssemble)
     EXPECT_EQ(res, SUCCESS);
     res = ooOScheduler.SeqSchedule();
     EXPECT_EQ(res, SUCCESS);
+}
+
+// 写后写不变量: 凡是排在回载之后又跟它写同一片字节的 op, 回载都得是它的前驱。
+static void ExpectReloadOrderedBeforeConflictingWrites(ScheduleState& state)
+{
+    for (auto* copyin : state.orderedOps) {
+        if (COPY_IN_OPS.count(copyin->GetOpcode()) == 0) {
+            continue;
+        }
+        for (const auto& reloaded : copyin->GetOOperands()) {
+            if (reloaded == nullptr) {
+                continue;
+            }
+            for (auto* other : state.orderedOps) {
+                if (other == copyin || state.IsOpRetired(other) || USE_LESS_OPS.count(other->GetOpcode()) != 0 ||
+                    state.GetExecOrder(other) <= state.GetExecOrder(copyin)) {
+                    continue;
+                }
+                bool conflicts = false;
+                for (const auto& written : other->GetOOperands()) {
+                    if (written == nullptr || written->memoryrange.memId != reloaded->memoryrange.memId ||
+                        written->shape.size() != reloaded->shape.size()) {
+                        continue;
+                    }
+                    conflicts = conflicts || IsOverlapping(*reloaded, *written);
+                }
+                if (!conflicts) {
+                    continue;
+                }
+                EXPECT_EQ(state.depManager.GetSuccessors(copyin).count(other), 1U)
+                    << "reload " << state.GetOpInfo(copyin) << " is not ordered before conflicting write "
+                    << state.GetOpInfo(other);
+            }
+        }
+    }
+}
+
+// 分片回载会把还没执行的原写改指到新 buffer, 于是它和回载写同一块地 —— 这正是规则 R 要接住的冲突。
+TEST_F(ScheduleOoOTest, SpillReloadOrderedBeforeConflictingWrite)
+{
+    ComputationalGraphBuilder subGraph;
+    std::vector<std::string> tensorNames{"t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "t10", "t11"};
+    std::vector<MemoryType> tensorMemTypes{
+        MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR,
+        MemoryType::MEM_UB,         MemoryType::MEM_UB,         MemoryType::MEM_UB,         MemoryType::MEM_UB,
+        MemoryType::MEM_UB,         MemoryType::MEM_UB,         MemoryType::MEM_UB};
+    std::vector<Opcode> opCodes{Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC,
+                                Opcode::OP_UB_ALLOC, Opcode::OP_COPY_IN,  Opcode::OP_COPY_IN,  Opcode::OP_COPY_IN,
+                                Opcode::OP_COPY_IN,  Opcode::OP_ADD,      Opcode::OP_ADD,      Opcode::OP_ADD};
+    std::vector<std::vector<std::string>> ioperands{{},     {},     {},     {},           {},           {"t1"},
+                                                    {"t2"}, {"t3"}, {"t4"}, {"t5", "t6"}, {"t7", "t8"}, {"t9", "t10"}};
+    std::vector<std::vector<std::string>> ooperands{{"t5"}, {"t6"}, {"t7"}, {"t8"},  {"t9"}, {"t5"},
+                                                    {"t6"}, {"t7"}, {"t8"}, {"t10"}, {"t9"}, {"t11"}};
+    std::vector<std::string> opNames{"Alloc1",  "Alloc2",  "Alloc3",  "Alloc4", "Alloc5", "Copyin1",
+                                     "Copyin2", "Copyin3", "Copyin4", "Add1",   "Add2",   "Add3"};
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {128, 128}, tensorMemTypes, tensorNames, 0), true);
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    Function* function = subGraph.GetFunction();
+    ASSERT_NE(function, nullptr);
+
+    // t10/t11 复用 t5 的地: 腾走 t5 之后这几个写会被改指到回载出来的新 buffer。
+    subGraph.GetTensor("t10")->memoryrange.memId = subGraph.GetTensor("t5")->memoryrange.memId;
+    subGraph.GetTensor("t11")->memoryrange.memId = subGraph.GetTensor("t5")->memoryrange.memId;
+
+    OptimizeSort sort(function->Operations().DuplicatedOpList(), *function);
+    ASSERT_EQ(sort.SortOps(), SUCCESS);
+    OoOScheduler ooOScheduler(*function);
+    ASSERT_EQ(ooOScheduler.Init(sort.operations), SUCCESS);
+    std::rotate(ooOScheduler.state_.orderedOps.begin(), ooOScheduler.state_.orderedOps.begin() + 6,
+                ooOScheduler.state_.orderedOps.begin() + 11);
+    ASSERT_EQ(ooOScheduler.SeqSchedule(), SUCCESS);
+
+    ExpectReloadOrderedBeforeConflictingWrites(ooOScheduler.state_);
 }
 
 TEST_F(ScheduleOoOTest, TestSchedule)

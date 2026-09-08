@@ -73,6 +73,7 @@ struct SpillPlan {
     bool crossedNd2nz{false};                     // 上溯走过了 ND2NZ -> 回载要重做分形
     bool replaceInput{false}; // 回载能从 DDR 直搬回这一级 -> 换输入; 否则 (L0C) 顶替消费者
     SingleSpillCreatedOps created;
+    std::vector<Operation*> reloadCopyinOps; // 本轮回载的 copyin, 分片时多条; 补 token 用
 };
 
 // 插进调度序列的一批 op, 每个带自己占的 memId 列表。

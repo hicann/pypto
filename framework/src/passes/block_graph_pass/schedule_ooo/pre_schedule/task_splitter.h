@@ -41,6 +41,8 @@ public:
     void BuildOpGraph();
     void BuildInOutGraph(std::vector<std::set<int>>& inGraph, std::vector<std::set<int>>& outGraph,
                          std::vector<int>& clusterIds, int clusterNum);
+    void AddTaskEdge(std::vector<std::set<int>>& inGraph, std::vector<std::set<int>>& outGraph,
+                     const std::vector<int>& clusterIds, int currTaskIdx, Operation* consumerOp);
     TaskGraph BuildTaskGraph();
     void BuildSameLayerConnectionWithBack();
     void BuildSameLayerConnectionWithFront();

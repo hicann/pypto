@@ -155,6 +155,22 @@ TEST_F(PassTokenUtilsTest, CopyTokenDependency)
     EXPECT_TRUE(dep.HasConsumer(copiedOp.result_token_.front(), std::static_pointer_cast<const ir::Stmt>(ops[2])));
     EXPECT_NE(std::find(ops[2]->tokens_.begin(), ops[2]->tokens_.end(), copiedOp.result_token_.front()),
               ops[2]->tokens_.end());
+
+    // 过户与拷贝的差别: 拷贝后源 op 两侧不动(上面已验), 过户后源 op 两侧清空、约束整体易主。
+    auto& takeOverOp = ops[1]->CloneOperation(*func, ops[1]->GetIOperands(), ops[1]->GetOOperands());
+    PassTokenUtils::TransferTokenDependency(*func, *ops[1], takeOverOp);
+    auto takeOverStmt = std::static_pointer_cast<const ir::Stmt>(takeOverOp.shared_from_this());
+    EXPECT_TRUE(ops[1]->tokens_.empty());
+    EXPECT_TRUE(ops[1]->result_token_.empty());
+    // 入边换消费侧, 产出者不动。
+    EXPECT_TRUE(dep.HasConsumer(inputToken, takeOverStmt));
+    EXPECT_FALSE(dep.HasConsumer(inputToken, std::static_pointer_cast<const ir::Stmt>(ops[1])));
+    EXPECT_TRUE(dep.HasProducer(inputToken, std::static_pointer_cast<const ir::Stmt>(ops[0])));
+    // 出边换产出侧, 消费者不动。
+    EXPECT_TRUE(dep.HasProducer(outputToken, takeOverStmt));
+    EXPECT_FALSE(dep.HasProducer(outputToken, std::static_pointer_cast<const ir::Stmt>(ops[1])));
+    EXPECT_TRUE(dep.HasConsumer(outputToken, std::static_pointer_cast<const ir::Stmt>(ops[2])));
+    EXPECT_EQ(std::count(takeOverOp.result_token_.begin(), takeOverOp.result_token_.end(), outputToken), 1);
 }
 
 TEST_F(PassTokenUtilsTest, MoveResultTokensToProducers)
@@ -212,4 +228,35 @@ TEST_F(PassTokenUtilsTest, CleanupDeletedTokenDependency)
     EXPECT_TRUE(ops[1]->tokens_.empty());
     EXPECT_TRUE(ops[1]->result_token_.empty());
     EXPECT_TRUE(ops[2]->tokens_.empty());
+}
+
+// 建序约束: 有产出 token 就复用, 没有才新建; 空指针元素要跳过, 否则会拿 nullptr 去建依赖。
+TEST_F(PassTokenUtilsTest, LinkTokenDependency)
+{
+    Function* func = BuildFourOpTokenFunction("PassUtilsLinkToken");
+    ASSERT_NE(func, nullptr);
+    auto& ops = func->operations_;
+    ASSERT_GE(ops.size(), 4);
+    auto& dep = func->GetVarDependency();
+
+    auto existing = MakeToken("existingToken");
+    ops[0]->result_token_ = {existing};
+    PassTokenUtils::LinkTokenDependency(*func, *ops[0], *ops[1]);
+    EXPECT_EQ(ops[0]->result_token_.size(), 1U);
+    EXPECT_TRUE(dep.HasProducer(existing, ToStmtPtr(*ops[0])));
+    EXPECT_TRUE(dep.HasConsumer(existing, ToStmtPtr(*ops[1])));
+
+    ops[1]->result_token_.clear();
+    PassTokenUtils::LinkTokenDependency(*func, *ops[1], *ops[2]);
+    ASSERT_EQ(ops[1]->result_token_.size(), 1U);
+    ASSERT_NE(ops[1]->result_token_.front(), nullptr);
+    EXPECT_TRUE(dep.HasProducer(ops[1]->result_token_.front(), ToStmtPtr(*ops[1])));
+    EXPECT_TRUE(dep.HasConsumer(ops[1]->result_token_.front(), ToStmtPtr(*ops[2])));
+
+    auto usable = MakeToken("usableToken");
+    ops[2]->result_token_ = {nullptr, usable};
+    PassTokenUtils::LinkTokenDependency(*func, *ops[2], *ops[3]);
+    EXPECT_TRUE(dep.HasProducer(usable, ToStmtPtr(*ops[2])));
+    EXPECT_TRUE(dep.HasConsumer(usable, ToStmtPtr(*ops[3])));
+    EXPECT_FALSE(dep.HasDependency(nullptr));
 }

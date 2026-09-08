@@ -415,18 +415,27 @@ void TaskSplitter::BuildInOutGraph(std::vector<std::set<int>>& inGraph, std::vec
     for (int i = 0; i < opNum; i++) {
         int currTaskIdx = clusterIds[i];
         for (auto consumerOp : opList_[i]->ConsumerOpsOrdered()) {
-            if (opMagicToIdx_.count(consumerOp->GetOpMagic()) == 0) {
-                continue;
-            }
-            int nextOpIdx = opMagicToIdx_[consumerOp->GetOpMagic()];
-            int nextTaskIdx = clusterIds[nextOpIdx];
-            if (currTaskIdx == nextTaskIdx) {
-                continue;
-            }
-            outGraph[currTaskIdx].insert(nextTaskIdx);
-            inGraph[nextTaskIdx].insert(currTaskIdx);
+            AddTaskEdge(inGraph, outGraph, clusterIds, currTaskIdx, consumerOp);
+        }
+        // token 边与数据边落进同一张图, 成环判断因此不用区分边的来源。
+        for (auto* consumerOp : opList_[i]->ConsumerOpsByToken()) {
+            AddTaskEdge(inGraph, outGraph, clusterIds, currTaskIdx, consumerOp);
         }
     }
+}
+
+void TaskSplitter::AddTaskEdge(std::vector<std::set<int>>& inGraph, std::vector<std::set<int>>& outGraph,
+                               const std::vector<int>& clusterIds, int currTaskIdx, Operation* consumerOp)
+{
+    if (consumerOp == nullptr || opMagicToIdx_.count(consumerOp->GetOpMagic()) == 0) {
+        return;
+    }
+    int nextTaskIdx = clusterIds[opMagicToIdx_[consumerOp->GetOpMagic()]];
+    if (currTaskIdx == nextTaskIdx) {
+        return;
+    }
+    outGraph[currTaskIdx].insert(nextTaskIdx);
+    inGraph[nextTaskIdx].insert(currTaskIdx);
 }
 
 // 建立TaskGraph

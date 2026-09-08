@@ -211,6 +211,55 @@ void PassTokenUtils::MoveResultTokensToProducers(Function& function, const std::
     }
 }
 
+// 建一条 producerOp -> consumerOp 的序约束, producer 已有产出 token 就复用。
+void PassTokenUtils::LinkTokenDependency(Function& function, Operation& producerOp, Operation& consumerOp)
+{
+    if (&producerOp == &consumerOp) {
+        return;
+    }
+    // result_token_ 里可能有空指针, 取第一个非空的复用。拿到 nullptr 会在 VarDependency 里
+    // 造空键, 而 AddTokenConsumer 对 nullptr 直接返回 —— 落 IR 这一半会静默失效。
+    ir::VarPtr token = nullptr;
+    for (const auto& existing : producerOp.result_token_) {
+        if (existing != nullptr) {
+            token = existing;
+            break;
+        }
+    }
+    if (token == nullptr) {
+        token = IRBuilder().CreateTokenVar(producerOp.GetSpan());
+        producerOp.result_token_.push_back(token);
+    }
+    function.GetVarDependency().AddProducer(token, AsStmtPtr(producerOp));
+    AddTokenConsumer(function, token, consumerOp);
+}
+
+// newOp 顶替 oldOp: 两侧序约束整体过户。oldOp 是被替换而非消失, 故不能直接清。
+void PassTokenUtils::TransferTokenDependency(Function& function, Operation& oldOp, Operation& newOp)
+{
+    if (&oldOp == &newOp) {
+        return;
+    }
+    auto& dependency = function.GetVarDependency();
+    for (const auto& token : oldOp.tokens_) {
+        MoveTokenConsumer(function, token, oldOp, newOp);
+    }
+    oldOp.tokens_.clear();
+    auto oldStmt = AsStmtPtr(oldOp);
+    auto newStmt = AsStmtPtr(newOp);
+    for (const auto& token : oldOp.result_token_) {
+        if (token == nullptr) {
+            continue;
+        }
+        dependency.RemoveProducer(token, oldStmt);
+        dependency.AddProducer(token, newStmt);
+        if (std::find(newOp.result_token_.begin(), newOp.result_token_.end(), token) == newOp.result_token_.end()) {
+            newOp.result_token_.push_back(token);
+        }
+    }
+    oldOp.result_token_.clear();
+}
+
 void PassTokenUtils::CleanupDeletedTokenDependency(Function& function, const std::vector<Operation*>& deletedOps)
 {
     auto& dependency = function.GetVarDependency();
