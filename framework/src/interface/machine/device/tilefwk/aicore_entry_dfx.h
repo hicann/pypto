@@ -138,6 +138,14 @@ INLINE void AddMetricStatistic(ExecuteContext* ctx, uint32_t seqNo, uint32_t tas
     }
 }
 
+INLINE void RecordMetricHubStatistic(ExecuteContext* ctx, uint32_t taskId, int32_t subGraphId)
+{
+    if (unlikely(ctx->profLevel == PRO_LEVEL2 || ctx->profLevel == PRO_LEVEL1)) {
+        int64_t t1 = get_sys_cnt();
+        AddMetricStatistic(ctx, ctx->SeqNo(), taskId, subGraphId, t1);
+    }
+}
+
 INLINE void DfxProcWhenCoreExit(ExecuteContext* ctx, __gm__ KernelArgs* args, __gm__ Metrics* metric)
 {
     PerfTraceRecord(INVALID_DEV_TASK_ID, ctx->aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_WAIT_EXIT_NOTIFY);

@@ -460,6 +460,7 @@ INLINE void ExecDrcoResolve(ExecuteContext* ctx, __gm__ npu::tile_fwk::DrcoRootF
                 uint32_t
                     succCoreType = ctx->cachedDevTasks[ctx->curLeafTaskParallelIdx].cceBinary[cceBinaryIndex].coreType;
                 if (succCoreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::HUB)) {
+                    RecordMetricHubStatistic(ctx, succTaskId, npu::tile_fwk::FuncID(succTaskId));
                     if (hubStackTop + 1 < HUB_STACK_SIZE) {
                         hubStack[++hubStackTop] = succTaskId;
                     } else {
@@ -500,6 +501,7 @@ INLINE void ExecDrcoResolve(ExecuteContext* ctx, __gm__ npu::tile_fwk::DrcoRootF
                                                     .cceBinary[cceBinaryIndex]
                                                     .coreType;
                         if (succCoreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::HUB)) {
+                            RecordMetricHubStatistic(ctx, succTaskId, npu::tile_fwk::FuncID(succTaskId));
                             if (hubStackTop + 1 < HUB_STACK_SIZE) {
                                 hubStack[++hubStackTop] = succTaskId;
                             } else {
