@@ -8,6 +8,7 @@
         PyptoLaunch;
         PyptoWorkspaceFromMemory;
         PyptoLaunchFromMemory;
+        _ZNSt3any17_Manager_internalIlE9_S_manage*;
     local:
         *;
 };
