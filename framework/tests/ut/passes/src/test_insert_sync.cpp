@@ -14,6 +14,7 @@
  */
 #include <gtest/gtest.h>
 #include "symbolic_scalar_test_utils.h"
+#include "computational_graph_builder.h"
 #include "tilefwk/platform.h"
 #include "interface/operation/attribute.h"
 #include "interface/tensor/irbuilder.h"
@@ -1105,6 +1106,132 @@ TEST_F(InsertSyncTest, TestEnableDebugAllSameCoreType)
     EXPECT_EQ(ops[IS_NUM2]->GetOpcode(), Opcode::OP_CAST);
     VerifyBarAll(ops, IS_NUM3);
     EXPECT_EQ(ops[IS_NUM4]->GetOpcode(), Opcode::OP_EXP);
+}
+
+// 按真实场景 mla_prolog_quant Unroll128 的 kr_cache 量化写回构造计算图
+// (dump: op[38965/38968/38971/38974]):
+//   incast b0/b1 --COPY_IN--> cin_i --ADD--> add_i(各路量化结果src)
+//   incast kr_idx --COPY_IN--> idx_i(各路散写索引)
+//   incast kr_cache 直连 INDEX_OUTCAST 第3输入, 4 路共享并共写 kr_cache_out(outcast, WAW)
+// kr_cache_out 与 kr_cache 原地读改写(对照真实 dump: 3901/3943 的 mem_id 同为 3636)
+static void BuildKrCacheWritebackGraph(ComputationalGraphBuilder& subGraph)
+{
+    std::vector<std::string> tensorNames{"b0",   "b1",   "cin0",   "cin1",     "cin2",        "cin3",
+                                         "add0", "add1", "add2",   "add3",     "idx0",        "idx1",
+                                         "idx2", "idx3", "kr_idx", "kr_cache", "kr_cache_out"};
+    std::vector<MemoryType> memTypes{
+        MemoryType::MEM_DEVICE_DDR, // b0 (incast)
+        MemoryType::MEM_DEVICE_DDR, // b1 (incast)
+        MemoryType::MEM_UB,         // cin0
+        MemoryType::MEM_UB,         // cin1
+        MemoryType::MEM_UB,         // cin2
+        MemoryType::MEM_UB,         // cin3
+        MemoryType::MEM_UB,         // add0
+        MemoryType::MEM_UB,         // add1
+        MemoryType::MEM_UB,         // add2
+        MemoryType::MEM_UB,         // add3
+        MemoryType::MEM_UB,         // idx0
+        MemoryType::MEM_UB,         // idx1
+        MemoryType::MEM_UB,         // idx2
+        MemoryType::MEM_UB,         // idx3
+        MemoryType::MEM_DEVICE_DDR, // kr_idx (incast)
+        MemoryType::MEM_DEVICE_DDR, // kr_cache (incast)
+        MemoryType::MEM_DEVICE_DDR, // kr_cache_out (outcast)
+    };
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {256, 256}, memTypes, tensorNames, 0), true);
+    std::vector<Opcode> opCodes{
+        Opcode::OP_COPY_IN,       Opcode::OP_COPY_IN,       Opcode::OP_COPY_IN,       Opcode::OP_COPY_IN,
+        Opcode::OP_ADD,           Opcode::OP_ADD,           Opcode::OP_ADD,           Opcode::OP_ADD,
+        Opcode::OP_COPY_IN,       Opcode::OP_COPY_IN,       Opcode::OP_COPY_IN,       Opcode::OP_COPY_IN,
+        Opcode::OP_INDEX_OUTCAST, Opcode::OP_INDEX_OUTCAST, Opcode::OP_INDEX_OUTCAST, Opcode::OP_INDEX_OUTCAST};
+    std::vector<std::vector<std::string>> ioperands{{"b0"},
+                                                    {"b1"},
+                                                    {"b0"},
+                                                    {"b1"},
+                                                    {"cin0", "cin1"},
+                                                    {"cin1", "cin2"},
+                                                    {"cin2", "cin3"},
+                                                    {"cin3", "cin0"},
+                                                    {"kr_idx"},
+                                                    {"kr_idx"},
+                                                    {"kr_idx"},
+                                                    {"kr_idx"},
+                                                    {"add0", "idx0", "kr_cache"},
+                                                    {"add1", "idx1", "kr_cache"},
+                                                    {"add2", "idx2", "kr_cache"},
+                                                    {"add3", "idx3", "kr_cache"}};
+    std::vector<std::vector<std::string>> ooperands{
+        {"cin0"}, {"cin1"}, {"cin2"}, {"cin3"}, {"add0"},         {"add1"},         {"add2"},         {"add3"},
+        {"idx0"}, {"idx1"}, {"idx2"}, {"idx3"}, {"kr_cache_out"}, {"kr_cache_out"}, {"kr_cache_out"}, {"kr_cache_out"}};
+    std::vector<std::string> opNames{"cpin0",    "cpin1",    "cpin2",    "cpin3",   "add0",  "add1",
+                                     "add2",     "add3",     "cpin4",    "cpin5",   "cpin6", "cpin7",
+                                     "outcast0", "outcast1", "outcast2", "outcast3"};
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    auto krCache = subGraph.GetTensor("kr_cache");
+    auto krCacheOut = subGraph.GetTensor("kr_cache_out");
+    ASSERT_NE(krCache, nullptr);
+    ASSERT_NE(krCacheOut, nullptr);
+    krCacheOut->memoryrange.memId = krCache->memoryrange.memId;
+    EXPECT_EQ(subGraph.SetInCast({"b0", "b1", "kr_idx", "kr_cache"}), true);
+    EXPECT_EQ(subGraph.SetOutCast({"kr_cache_out"}), true);
+}
+
+// 收集 opLogPtr 中全部 INDEX_OUTCAST 的索引
+static std::vector<size_t> CollectOutcastIdxs(const std::vector<Operation*>& opLogPtr)
+{
+    std::vector<size_t> outcastIdxs;
+    for (size_t j = 0; j < opLogPtr.size(); j++) {
+        if (opLogPtr[j]->GetOpcode() == Opcode::OP_INDEX_OUTCAST) {
+            outcastIdxs.push_back(j);
+        }
+    }
+    return outcastIdxs;
+}
+
+// 禁止 AIV0↔AIV1 同步: 按 BuildKrCacheWritebackGraph 的 kr_cache 写回形态构造,
+// 相邻路经 kr_cache(WAR, DDR同mem_id) 与 kr_cache_out(WAW) 建立数据依赖后, 被交替分到
+// AIV0/AIV1 即触发 InjectWaitFlag 的 AIV0/AIV1 同步拦截, InjectSync 必须传播 FAILED 且不标记 issued
+TEST_F(InsertSyncTest, TestInjectSyncFailOnAiv0Aiv1Sync)
+{
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestAiv0Aiv1SyncFail",
+                                                  "TestAiv0Aiv1SyncFail", nullptr);
+    rootFuncPtr->rootFunc_ = rootFuncPtr.get();
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestAiv0Aiv1SyncFailLeaf",
+                                                      "TestAiv0Aiv1SyncFailLeaf", rootFuncPtr.get());
+    ASSERT_TRUE(currFunctionPtr != nullptr);
+    rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), currFunctionPtr.get());
+
+    ComputationalGraphBuilder subGraph;
+    BuildKrCacheWritebackGraph(subGraph);
+    Function* function = subGraph.GetFunction();
+    ASSERT_NE(function, nullptr);
+
+    auto opLogPtr = function->Operations(false).DuplicatedOpList();
+    ASSERT_EQ(opLogPtr.size(), static_cast<size_t>(IS_NUM16));
+    // 模拟 OoOSchedule 对 4 路 INDEX_OUTCAST 的交替分核结果(AIV0/AIV0/AIV1/AIV1, 对照真实 dump)
+    for (size_t i = 0; i < IS_NUM4; i++) {
+        auto outcast = subGraph.GetOp("outcast" + std::to_string(i));
+        ASSERT_NE(outcast, nullptr);
+        outcast->SetAIVCore(i < IS_NUM2 ? AIVCore::AIV0 : AIVCore::AIV1);
+    }
+
+    PipeSync ps;
+    DataDependencySearcher dataDependencySearcher;
+    ProcessOpList(ps, dataDependencySearcher, opLogPtr);
+    std::vector<IndexOp> synced;
+    BuildDeps(ps, dataDependencySearcher, opLogPtr, synced);
+    // 相邻路共写 kr_cache_out(WAW) 且经 kr_cache 构成 WAR(DDR同mem_id), 必须已建立依赖
+    auto outcastIdxs = CollectOutcastIdxs(opLogPtr);
+    ASSERT_EQ(outcastIdxs.size(), static_cast<size_t>(IS_NUM4));
+    EXPECT_GT(ps.depOps_[outcastIdxs[1]].waitPipe.size(), static_cast<size_t>(0));
+    // fixture 的 AdjustCopyOpTileCfg 将所有 op 的 aivCore 固定为 AIV0, 此处按模拟的 OoO 分核结果
+    // 修正 4 路 INDEX_OUTCAST 在 depOps_ 中的 aivCore(AIV0/AIV0/AIV1/AIV1, 对照真实 dump)
+    for (size_t i = 0; i < IS_NUM4; i++) {
+        ps.depOps_[outcastIdxs[i]].selfPipeCore.aivCore = (i < IS_NUM2) ? AIVCore::AIV0 : AIVCore::AIV1;
+    }
+    // outcast2(AIV1) 与其等待的 outcast1(AIV0) 构成 AIV0↔AIV1 跨核依赖, 必须被拦截
+    EXPECT_EQ(ps.InjectSync(*currFunctionPtr, opLogPtr, outcastIdxs[2], synced), FAILED);
+    EXPECT_FALSE(ps.depOps_[outcastIdxs[2]].issued);
 }
 
 // 全同 coreType(AIC): AIC→AIC 同核心场景，BAR_ALL 的 AIVCore 取自 nextOp(AIC 算子)，其值为 UNSPECIFIED

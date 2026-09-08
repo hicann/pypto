@@ -4413,6 +4413,136 @@ TEST_F(ScheduleOoOTest, SortOpsEmptyInput)
     EXPECT_TRUE(sort.GetOperations().empty());
 }
 
+// 参考真实场景 mla_prolog_quant Unroll128 的 kr_cache 量化写回(dump: op[38965/38968/38971/38974]),
+// 逐边对照真实来源链做等比简化, 图中不存在悬空 tensor:
+//   src 链(真实: incast->COPY_IN->CAST/MUL/ADD->RESHAPE->src)  简化为  incast(b0,b1) -> COPY_IN -> ADD -> src_i
+//   idx 链(真实: incast[3919]->COPY_IN->idx[28797])            简化为  incast(kr_idx) -> COPY_IN -> idx_i
+//   cache 链(真实: incast[3901] 直连 INDEX_OUTCAST 第3输入)     保持    incast(kr_cache) 直连
+// 4 路 INDEX_OUTCAST(src_i, idx_i, kr_cache) -> kr_cache_out: 共享 kr_cache 并共写 kr_cache_out(WAW)
+static void BuildKrCacheOutcastGraph(ComputationalGraphBuilder& subGraph, Function** function)
+{
+    // 函数输入 incast: b0/b1(量化数据), kr_idx(散写索引), kr_cache(写回基址)
+    // 中间: cin0..3(add的COPY_IN输入) add0..3(src链) idx0..idx3(idx的COPY_IN输出)
+    //       kr_cache_out: 函数输出(outcast)
+    std::vector<std::string> tensorNames{"b0",   "b1",   "cin0",   "cin1",     "cin2",        "cin3",
+                                         "add0", "add1", "add2",   "add3",     "idx0",        "idx1",
+                                         "idx2", "idx3", "kr_idx", "kr_cache", "kr_cache_out"};
+    std::vector<Opcode> opCodes{
+        Opcode::OP_COPY_IN,       Opcode::OP_COPY_IN,       Opcode::OP_COPY_IN,       Opcode::OP_COPY_IN,
+        Opcode::OP_ADD,           Opcode::OP_ADD,           Opcode::OP_ADD,           Opcode::OP_ADD,
+        Opcode::OP_COPY_IN,       Opcode::OP_COPY_IN,       Opcode::OP_COPY_IN,       Opcode::OP_COPY_IN,
+        Opcode::OP_INDEX_OUTCAST, Opcode::OP_INDEX_OUTCAST, Opcode::OP_INDEX_OUTCAST, Opcode::OP_INDEX_OUTCAST};
+    std::vector<std::vector<std::string>> ioperands{{"b0"},
+                                                    {"b1"},
+                                                    {"b0"},
+                                                    {"b1"},
+                                                    {"cin0", "cin1"},
+                                                    {"cin1", "cin2"},
+                                                    {"cin2", "cin3"},
+                                                    {"cin3", "cin0"},
+                                                    {"kr_idx"},
+                                                    {"kr_idx"},
+                                                    {"kr_idx"},
+                                                    {"kr_idx"},
+                                                    {"add0", "idx0", "kr_cache"},
+                                                    {"add1", "idx1", "kr_cache"},
+                                                    {"add2", "idx2", "kr_cache"},
+                                                    {"add3", "idx3", "kr_cache"}};
+    std::vector<std::vector<std::string>> ooperands{
+        {"cin0"}, {"cin1"}, {"cin2"}, {"cin3"}, {"add0"},         {"add1"},         {"add2"},         {"add3"},
+        {"idx0"}, {"idx1"}, {"idx2"}, {"idx3"}, {"kr_cache_out"}, {"kr_cache_out"}, {"kr_cache_out"}, {"kr_cache_out"}};
+    std::vector<std::string> opNames{"cpin0",    "cpin1",    "cpin2",    "cpin3",   "add0",  "add1",
+                                     "add2",     "add3",     "cpin4",    "cpin5",   "cpin6", "cpin7",
+                                     "outcast0", "outcast1", "outcast2", "outcast3"};
+    // 内存布局(对照真实图): incast与outcast在DDR, COPY_IN输出与计算中间量在UB
+    std::vector<MemoryType> tensorMemTypes{
+        MemoryType::MEM_DEVICE_DDR, // b0 (incast)
+        MemoryType::MEM_DEVICE_DDR, // b1 (incast)
+        MemoryType::MEM_UB,         // cin0
+        MemoryType::MEM_UB,         // cin1
+        MemoryType::MEM_UB,         // cin2
+        MemoryType::MEM_UB,         // cin3
+        MemoryType::MEM_UB,         // add0
+        MemoryType::MEM_UB,         // add1
+        MemoryType::MEM_UB,         // add2
+        MemoryType::MEM_UB,         // add3
+        MemoryType::MEM_UB,         // idx0
+        MemoryType::MEM_UB,         // idx1
+        MemoryType::MEM_UB,         // idx2
+        MemoryType::MEM_UB,         // idx3
+        MemoryType::MEM_DEVICE_DDR, // kr_idx (incast)
+        MemoryType::MEM_DEVICE_DDR, // kr_cache (incast)
+        MemoryType::MEM_DEVICE_DDR, // kr_cache_out (outcast)
+    };
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {256, 256}, tensorMemTypes, tensorNames, 0), true);
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    // 函数IO(对照真实 dump: 数据 incast/3919/3901 在 incasts, 3943 在 outcasts)
+    EXPECT_EQ(subGraph.SetInCast({"b0", "b1", "kr_idx", "kr_cache"}), true);
+    EXPECT_EQ(subGraph.SetOutCast({"kr_cache_out"}), true);
+    *function = subGraph.GetFunction();
+    EXPECT_NE(*function, nullptr);
+}
+
+// 在 task 图中定位 op 所在 task, 未找到返回 -1
+static int FindTaskIdOfOp(const TaskGraph& tasks, const Operation* op)
+{
+    for (size_t t = 0; t < tasks.tasks.size(); t++) {
+        for (auto opPtr : tasks.tasks[t].opList_) {
+            if (opPtr == op) {
+                return static_cast<int>(t);
+            }
+        }
+    }
+    return -1;
+}
+
+TEST_F(ScheduleOoOTest, TaskSplitterUnionIndexOutcastOnSameOutcast)
+{
+    ComputationalGraphBuilder subGraph;
+    Function* function = nullptr;
+    BuildKrCacheOutcastGraph(subGraph, &function);
+    // 反向对照: 第 5 路 INDEX_OUTCAST 写独立 outcast(不同 memId)且走独立计算链, 不应与共享组被误合并
+    std::vector<std::string> extraNames{"cin4", "add4", "idx4", "kr_idx2", "kr_cache2", "kr_cache_out2"};
+    std::vector<MemoryType> extraMemTypes{MemoryType::MEM_UB,         MemoryType::MEM_UB,
+                                          MemoryType::MEM_UB,         MemoryType::MEM_DEVICE_DDR,
+                                          MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR};
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {256, 256}, extraMemTypes, extraNames, 0), true);
+    EXPECT_EQ(subGraph.AddOps({Opcode::OP_COPY_IN, Opcode::OP_ADD, Opcode::OP_COPY_IN, Opcode::OP_INDEX_OUTCAST},
+                              {{"b0"}, {"cin4", "b1"}, {"kr_idx2"}, {"add4", "idx4", "kr_cache2"}},
+                              {{"cin4"}, {"add4"}, {"idx4"}, {"kr_cache_out2"}}, {"cpin8", "add4", "cpin9", "outcast4"},
+                              true),
+              true);
+    EXPECT_EQ(subGraph.SetOutCast({"kr_cache_out2"}), true);
+    std::vector<Operation*> outcasts;
+    for (const std::string& name : std::vector<std::string>{"outcast0", "outcast1", "outcast2", "outcast3"}) {
+        auto op = subGraph.GetOp(name);
+        ASSERT_NE(op, nullptr);
+        outcasts.push_back(op);
+    }
+    auto outcast4 = subGraph.GetOp("outcast4");
+    ASSERT_NE(outcast4, nullptr);
+
+    auto opList = function->Operations(false).DuplicatedOpList();
+    TaskSplitter splitter;
+    splitter.SplitGraph(opList);
+    // 验证共享同一 outcast 的 4 路 INDEX_OUTCAST 落入同一 task(修复前各自独立 cluster, 必不满足)
+    int firstTaskId = -1;
+    for (auto op : outcasts) {
+        int taskId = FindTaskIdOfOp(splitter.GetTaskGraph(), op);
+        ASSERT_NE(taskId, -1);
+        if (firstTaskId == -1) {
+            firstTaskId = taskId;
+        }
+        EXPECT_EQ(taskId, firstTaskId);
+    }
+    // 反向断言: 写不同 outcast 的 outcast4 不得与共享组合并(防分组键放宽导致过度合并)
+    int task4Id = FindTaskIdOfOp(splitter.GetTaskGraph(), outcast4);
+    ASSERT_NE(task4Id, -1);
+    EXPECT_NE(task4Id, firstTaskId);
+    // 同 task 即保证同核: MarkInternalSubgraphID 按 task 整体赋 AIVCore(纯 AIV 图下其 targetTypes>1
+    // 前置约束不满足, 故此处不调用), task 内 op 的核一致性由 task 归属直接保证
+}
+
 // 图结构：
 //   copy_in1 -> add1 -> add2 -> add3 -> copy_out1   (depth=4, 源点={copy_in1})
 //   copy_in1 -> mul1 -> copy_out2                    (depth=2, 源点={copy_in1})

@@ -49,6 +49,7 @@ public:
     void UnionCrossCoreAICToAIV(DSUWithOrder& dsu);
     void UnionL0CToL1CopyIn(DSUWithOrder& dsu);
     void UnionCombineOps(DSUWithOrder& dsu);
+    void UnionIndexOutcastOps(DSUWithOrder& dsu);
     void UnionVecClustersByDep(DSUWithOrder& dsu);
     void MergeSmallVecClusters(DSUWithOrder& dsu);
     void UnionCubeClustersByDep(DSUWithOrder& dsu);

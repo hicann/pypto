@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <map>
 #include <queue>
 #include <stack>
 
@@ -558,6 +559,43 @@ void TaskSplitter::UnionSameLayerConnections(DSUWithOrder& dsu)
     for (auto pr : sameLayerConnection_) {
         if (opCoreTypes_[pr.first] == opCoreTypes_[pr.second]) {
             dsu.Union(pr.first, pr.second);
+        }
+    }
+}
+
+// Union 共享相同 outcast 的 INDEX_OUTCAST: 两 op 间无 producer-consumer 边,
+// 但存在同 tensor 的读写依赖, 若被分到不同 AIV 会触发 InsertSync 的 AIV0/AIV1 同步拦截
+void TaskSplitter::UnionIndexOutcastOps(DSUWithOrder& dsu)
+{
+    // key: 输出 tensor 的 memId(与 HasDataDependency 的 WAR 判定口径一致:
+    // ddrTensorSame = memId 相同, 如 kr_cache 原地写回场景 dst 与输出共享内存)
+    std::map<int, std::vector<size_t>> outcastGroups;
+    for (size_t i = 0; i < opList_.size(); i++) {
+        Operation* op = opList_[i];
+        if (op->GetOpcode() != Opcode::OP_INDEX_OUTCAST || op->GetOOperands().empty()) {
+            continue;
+        }
+        int outMemId = op->GetOOperands()[0]->memoryrange.memId;
+        // memId 未初始化时跳过(对齐 AddAlloc 对 memId==-1 的处理口径), 避免不相关 op 静默落入同组
+        if (outMemId < 0) {
+            APASS_LOG_ERROR_F(Elements::Operation, "%d INDEX_OUTCAST output tensor memId is uninitialized, skip union.",
+                              op->GetOpMagic());
+            continue;
+        }
+        outcastGroups[outMemId].push_back(i);
+    }
+    for (auto& group : outcastGroups) {
+        const auto& opIndices = group.second;
+        for (size_t k = 1; k < opIndices.size(); k++) {
+            // 与同文件其他 union 规则口径一致: 仅合并同核类型 op, 防止 isCube 覆盖或前序规则
+            // 已将某侧并入 AIC cluster 时发生 AIC/AIV cluster 误合并
+            if (opCoreTypes_[opIndices[k]] != opCoreTypes_[opIndices[0]]) {
+                APASS_LOG_WARN_F(Elements::Operation,
+                                 "Skip union of INDEX_OUTCAST[%d] and [%d] with different core types.",
+                                 opList_[opIndices[0]]->GetOpMagic(), opList_[opIndices[k]]->GetOpMagic());
+                continue;
+            }
+            dsu.Union(opIndices[0], opIndices[k]);
         }
     }
 }
@@ -1274,6 +1312,8 @@ int TaskSplitter::BuildCluster(std::vector<int>& clusterIds, std::vector<Schedul
     UnionSameLayerConnections(dsu);
     // Step 3: Assemble/CopyIn/CopyOut 合并（同核类型）
     UnionCombineOps(dsu);
+    // Step 3.1: 共享相同 outcast 的 INDEX_OUTCAST 合并（同核类型）
+    UnionIndexOutcastOps(dsu);
     // Step 4.1: 将夹在同 atomicScope op 之间的 reshape 继承 atomicScope
     PropagateAtomicScopeToReshape();
     // Step 4.2: 按 atomicScopeId 合并同组连通 op

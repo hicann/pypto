@@ -816,7 +816,17 @@ Status PipeSync::InjectWaitFlag(Function& function, size_t idx, std::vector<Inde
         PipeCoreRealEx currPipeRealEx(currPipe.pipeStart, currPipe.core, currPipe.aivCore);
         if ((setPipe.aivCore == AIVCore::AIV0 && currPipe.aivCore == AIVCore::AIV1) ||
             (setPipe.aivCore == AIVCore::AIV1 && currPipe.aivCore == AIVCore::AIV0)) {
-            APASS_LOG_ERROR_F(Elements::Operation, "Sync between AIV0 and AIV1 happened.");
+            APASS_LOG_ERROR_F(
+                Elements::Operation,
+                "Sync between AIV0 and AIV1 happened. wait op idx: %zu, wait op: %s[%d], set op idx: %zu, "
+                "set op: %s[%d], setPipe: {pipeStart %s, pipeEnd %s, core %d, aivCore %d}, currPipe: "
+                "{pipeStart %s, pipeEnd %s, core %d, aivCore %d}.",
+                idx, oriOpList_[idx]->GetOpcodeStr().c_str(), oriOpList_[idx]->GetOpMagic(), ele,
+                oriOpList_[ele]->GetOpcodeStr().c_str(), oriOpList_[ele]->GetOpMagic(),
+                GetPipeTypeDict().Find(setPipe.pipeStart).c_str(), GetPipeTypeDict().Find(setPipe.pipeEnd).c_str(),
+                static_cast<int>(setPipe.core), static_cast<int>(setPipe.aivCore),
+                GetPipeTypeDict().Find(currPipe.pipeStart).c_str(), GetPipeTypeDict().Find(currPipe.pipeEnd).c_str(),
+                static_cast<int>(currPipe.core), static_cast<int>(currPipe.aivCore));
             return FAILED;
         }
         int eventId = setWaitPairMap_[{ele, idx}];
@@ -926,7 +936,10 @@ Status PipeSync::InjectSync(Function& function, const std::vector<Operation*>& o
     }
 
     // insert wait_flag
-    InjectWaitFlag(function, idx, syncedOpLog);
+    if (InjectWaitFlag(function, idx, syncedOpLog) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "InjectSync failed at function InjectWaitFlag.");
+        return FAILED;
+    }
 
     // insert current operation
     syncedOpLog.emplace_back(std::make_pair(idx * SEQUENCE_IDX, std::ref(*opLogPtr[idx])));
