@@ -255,7 +255,7 @@ void TiledViewOperationRecursive(Function& function, const TileShape& tileShape,
                 newFromDynOffset.push_back(baseFromDynOffset[i] + SymbolicScalar(output.tileInfo.offset[i]));
             }
         }
-        auto tileValidShape = GetViewValidShape(operand->GetDynValidShape(), newFromOffset, newFromDynOffset,
+        auto tileValidShape = GetViewValidShape(attr->GetToDynValidShape(), output.tileInfo.offset, {},
                                                 output.tileInfo.shape);
         resultTile->UpdateDynValidShape(tileValidShape);
         auto& viewOp = function.AddRawOperation(Opcode::OP_SLICE, {operand}, {resultTile});

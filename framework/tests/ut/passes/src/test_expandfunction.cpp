@@ -1434,5 +1434,74 @@ TEST_F(TestExpandFunctionPass, AssembleWriteGoesToContractAndConsumedOnNextAssem
     EXPECT_EQ(contractConsumingFirstWrite, 1);
 }
 
+// VIEW toDynValidShape is tighter than input-clip. Expanded SLICEs must inherit
+// the per-tile clip of that VIEW attr, not GetViewValidShape(input, fromOffset).
+TEST_F(TestExpandFunctionPass, ViewExpandSlicesToDynValidShape)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestExpandViewValidShape",
+                                                      "TestExpandViewValidShape", nullptr);
+    ASSERT_NE(currFunctionPtr, nullptr);
+
+    std::vector<int64_t> shape = {kNumExpSix, kNumExpSix};
+    std::vector<int64_t> tileShape = {kNumExpFive, kNumExpSix};
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto viewOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto expOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+
+    auto tighterValid = SymbolicScalar::FromConcrete({10, kNumExpSix});
+    viewOut->UpdateDynValidShape(tighterValid);
+
+    auto& viewOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast}, {viewOut});
+    auto& expOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {viewOut}, {expOut});
+    auto& assembleOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {expOut}, {outCast});
+
+    std::vector<int64_t> offsets = {0, 0};
+    viewOp.SetOpAttribute(
+        std::make_shared<ViewOpAttribute>(offsets, SymbolicScalar::FromConcrete(offsets), tighterValid));
+    assembleOp.SetOpAttribute(CreateAssembleOpAttr());
+    viewOp.tileShape_.SetVecTile(tileShape);
+    expOp.tileShape_.SetVecTile(tileShape);
+    assembleOp.tileShape_.SetVecTile(tileShape);
+
+    currFunctionPtr->inCasts_.push_back(inCast);
+    currFunctionPtr->outCasts_.push_back(outCast);
+    currFunctionPtr->SetGraphType(GraphType::TENSOR_GRAPH);
+
+    ExpandFunction expand;
+    EXPECT_EQ(expand.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    auto expectFirst = GetViewValidShape(tighterValid, {0, 0}, {}, tileShape);
+    auto expectSecond = GetViewValidShape(tighterValid, {kNumExpFive, 0}, {}, tileShape);
+    bool sawFirst = false;
+    bool sawSecond = false;
+    for (auto& op : currFunctionPtr->Operations(false)) {
+        if (op.GetOpcode() != Opcode::OP_SLICE || op.GetIOperands().empty() || op.GetIOperands()[0] != inCast) {
+            continue;
+        }
+        auto sliceAttr = std::dynamic_pointer_cast<ViewOpAttribute>(op.GetOpAttribute());
+        ASSERT_NE(sliceAttr, nullptr);
+        ASSERT_FALSE(op.GetOOperands().empty());
+        const auto& fromOffset = sliceAttr->GetFromOffset();
+        ASSERT_GE(fromOffset.size(), 1u);
+        const auto& expect = (fromOffset[0] == 0) ? expectFirst : expectSecond;
+        if (fromOffset[0] == 0) {
+            sawFirst = true;
+        } else if (fromOffset[0] == kNumExpFive) {
+            sawSecond = true;
+        } else {
+            continue;
+        }
+        ASSERT_EQ(sliceAttr->GetToDynValidShape().size(), expect.size());
+        ASSERT_EQ(op.GetOOperands()[0]->GetDynValidShape().size(), expect.size());
+        for (size_t i = 0; i < expect.size(); ++i) {
+            EXPECT_EQ(sliceAttr->GetToDynValidShape()[i].Dump(), expect[i].Dump());
+            EXPECT_EQ(op.GetOOperands()[0]->GetDynValidShape()[i].Dump(), expect[i].Dump());
+        }
+    }
+    EXPECT_TRUE(sawFirst);
+    EXPECT_TRUE(sawSecond);
+}
+
 } // namespace tile_fwk
 } // namespace npu
