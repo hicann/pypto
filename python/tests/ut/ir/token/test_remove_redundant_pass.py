@@ -417,3 +417,24 @@ def test_remove_disjoint_write_dependency_for_input_tensor():
     )
     check_snapshot(before_remove, BEFORE_IR_16)
     check_snapshot(after_remove, IR_16)
+
+
+BEFORE_IR_17 = _GOLDEN_DIR / "BEFORE_IR_17.pypto"
+
+
+IR_17 = _GOLDEN_DIR / "IR_17.pypto"
+
+
+def test_shared_view_keeps_overlap():
+    """A shared read token must account for every view that produces it."""
+    def foo_two_views(io, src):
+        pypto.view(io, [8, 16], [0, 0])
+        pypto.view(io, [8, 16], [16, 0])
+        pypto.assemble(src, [16, 0], io)
+    before_remove, after_remove = _run_passes(
+        foo_two_views,
+        _tensor((32, 16), "io"),
+        _tensor((8, 16), "src"),
+    )
+    check_snapshot(before_remove, BEFORE_IR_17)
+    check_snapshot(after_remove, IR_17)
