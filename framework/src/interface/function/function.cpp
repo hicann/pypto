@@ -1805,6 +1805,9 @@ void Function::EraseOperations(bool eraseRelatedTensor, bool sorted, SortOperati
     if (eraseRelatedTensor) {
         EraseRelatedTensors(removeCandidiateTensor, removeProducerTensor, inOutCastSet);
     }
+
+    RefreshVarDependency();
+
     if (sorted) {
         SortOperations(mode);
     }

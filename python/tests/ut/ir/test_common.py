@@ -7,14 +7,25 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 """Common helpers shared across ir.Pass tests (merge_stmts_into_if and friends)."""
-
+from contextlib import contextmanager
 import difflib
 import logging
 import os
 from pathlib import Path
 from typing import Any
 
+import pypto
 from pypto import ir, pil
+
+
+@contextmanager
+def npuarch(arch: str):
+    try:
+        old_arch = pypto.platform.npuarch
+        pypto.platform.npuarch = arch
+        yield
+    finally:
+        pypto.platform.npuarch = old_arch
 
 
 def check_snapshot(func: Any, golden_path: Path) -> None:
@@ -42,6 +53,7 @@ def _ssa_verify(verifier, prog, name):
         print(f"{prog}\n")
         print(ir.IRVerifier.generate_report(diagnostic))
         raise SyntaxError(f"IR verification failed after {name}")
+
 
 def ssa_verify(func, desc: str = ""):
     verifier = ir.IRVerifier.create_default()
