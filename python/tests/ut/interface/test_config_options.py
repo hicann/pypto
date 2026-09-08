@@ -13,7 +13,12 @@
 import inspect
 
 import pypto
-from pypto.experimental import get_operation_options, set_operation_options
+from pypto.experimental import (
+    get_operation_options,
+    get_runtime_options,
+    set_operation_options,
+    set_runtime_options,
+)
 
 
 def test_print_options():
@@ -77,6 +82,30 @@ def test_operation_option():
     set_operation_options(combine_axis=True)
     option = get_operation_options()
     assert option["combine_axis"]
+
+
+def test_runtime_option_stitch_function_num_per_pool():
+    pypto.reset_options()
+    # default [0, 0, 0] is provided by the runtime section of tile_fwk_config.json
+    assert get_runtime_options()["stitch_function_num_per_pool"] == [0, 0, 0]
+    assert "stitch_function_num_per_pool" not in get_operation_options()
+
+    set_runtime_options(stitch_function_num_per_pool=[64, 1, 1])
+    option = get_runtime_options()
+    assert option["stitch_function_num_per_pool"] == [64, 1, 1]
+
+    pypto.reset_options()
+    assert get_runtime_options()["stitch_function_num_per_pool"] == [0, 0, 0]
+
+
+def test_runtime_option_stitch_function_num_per_pool_invalid():
+    for invalid in ([64, 1], [64, 1, 1, 1], "abc", [64, -1, 1], [64, 1025, 1], [64, 1, 1.5], [64, True, 1]):
+        try:
+            set_runtime_options(stitch_function_num_per_pool=invalid)
+            assert False, f"Should raise ValueError for {invalid}"
+        except ValueError as e:
+            assert "Invalid stitch_function_num_per_pool" in str(e)
+    pypto.reset_options()
 
 
 def test_global_option():

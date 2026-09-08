@@ -1060,6 +1060,9 @@ class ConfigScope:
     def get_operation_options(self):
         return self.get_options("operation")
 
+    def get_runtime_options(self):
+        return self.get_options("runtime")
+
     def get_vec_tile_shapes(self):
         return self._options.get("vec_tile_shapes")
 

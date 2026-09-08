@@ -233,6 +233,8 @@
     - [pypto.loop\_unroll](tensor_api/controlflow/pypto-loop_unroll.md)
   - [配置](tensor_api/config/index.md)
     - [pypto.frontend.jit](tensor_api/config/pypto-frontend-jit.md)
+    - [pypto.experimental.get_runtime_options](tensor_api/config/pypto-experimental-get_runtime_options.md)
+    - [pypto.experimental.set_runtime_options](tensor_api/config/pypto-experimental-set_runtime_options.md)
     - [pypto.get\_codegen\_options](tensor_api/config/pypto-get_codegen_options.md)
     - [pypto.get\_conv\_tile\_shapes](tensor_api/config/pypto-get_conv_tile_shapes.md)
     - [pypto.get_convbp_input_tile_shapes](tensor_api/config/pypto-get_convbp_input_tile_shapes.md)

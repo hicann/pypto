@@ -117,6 +117,9 @@ RuntimeWorkspaceConfig LoadRuntimeWorkspaceConfig(uint32_t maxUnrollTimes)
     cfg.maxWorkspaceBytes = GetMaxWorkspaceBytes();
     cfg.stitchNumMax = (cfg.maxWorkspaceBytes == 0) ? ConfiguredStitchFunctionMaxNum() :
                                                       EffectiveStitchNumMax(maxUnrollTimes);
+    // stitch_function_num_per_pool is an experimental runtime option configured via
+    // pypto.experimental.set_runtime_options(stitch_function_num_per_pool=[...]).
+    // Default [0, 0, 0] comes from tile_fwk_config.json under the "runtime" section.
     const auto stitchFunctionNumPerPool = config::GetRuntimeOption<std::vector<int64_t>>(STITCH_FUNCTION_NUM_PER_POOL);
     if (stitchFunctionNumPerPool.size() != STITCH_FUNCTION_NUM_PER_POOL_SIZE) {
         throw std::runtime_error("stitch_function_num_per_pool must contain exactly 3 elements");
