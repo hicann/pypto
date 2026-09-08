@@ -1238,7 +1238,13 @@ def get_subblock_idx() -> int:
 
 @_api_decl
 def get_block_num() -> int:
-    """Get the total number of blocks."""
+    """Get the launched worker block count after applying the stream's core limits.
+
+    This can be smaller than the host's requested ``kernel[stream, block_dim]``.
+    Use this runtime count as the work-distribution stride so limiting cores does
+    not leave tiles unprocessed. Mixed Vector sections have this many blocks times
+    ``get_subblock_num()`` vector workers.
+    """
 
 
 @_api_decl

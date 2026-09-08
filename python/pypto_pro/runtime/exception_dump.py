@@ -41,6 +41,7 @@ import shutil
 import torch
 
 from pypto_pro import DataType
+from pypto_pro.runtime.compile_config import KernelTarget
 
 _PL_DTYPE_TO_ACL_DTYPE: dict[str, int] = {
     str(DataType.FP32): 0,    # ACL_FLOAT
@@ -65,8 +66,7 @@ _lib: ctypes.CDLL | None = None
 _registered: bool = False
 _cached_build_dir: str = ""
 _cached_kernel_name: str = ""
-_cached_has_cube: bool = False
-_cached_has_vector: bool = True
+_cached_target: KernelTarget | None = None
 
 
 def _ensure_lib() -> ctypes.CDLL:
@@ -128,7 +128,7 @@ def register_callback() -> bool:
 
 
 def _build_debug_compile_cmd(build_dir: str, kernel_name: str,
-                             has_cube: bool, has_vector: bool) -> str:
+                             target: KernelTarget | None) -> str:
     """Pre-construct the bisheng -g compile command for the C++ callback to execute.
 
     Returns a shell command string that:
@@ -139,7 +139,7 @@ def _build_debug_compile_cmd(build_dir: str, kernel_name: str,
     Returns empty string if any prerequisite is missing (bisheng not found,
     kernel.cpp missing, env vars unset, etc.) so the callback skips compilation.
     """
-    if not build_dir:
+    if not build_dir or target is None:
         return ""
     kernel_cpp = os.path.join(build_dir, "kernel.cpp")
     if not os.path.isfile(kernel_cpp):
@@ -170,12 +170,11 @@ def _build_debug_compile_cmd(build_dir: str, kernel_name: str,
 
     cfg = get_jit_compile_config()
 
-    npu_arch = cfg._resolve_npu_arch(arch, has_cube=has_cube, has_vec=has_vector)
     mem_arch = cfg._resolve_memory_arch_flag(arch)
     variables = {
         "toolkit_home": toolkit_home,
         "mem_arch": mem_arch,
-        "npu_arch": npu_arch,
+        "npu_arch": target.npu_arch,
     }
     common = cfg._format_values(cfg.common_flags, variables)
     arch_flags = cfg._format_values(cfg.arch_flags, variables)
@@ -199,14 +198,13 @@ def _build_debug_compile_cmd(build_dir: str, kernel_name: str,
 
 
 def set_dump_info(kernel_name: str, args: tuple, param_specs: list, build_dir: str = "",
-                  has_cube: bool = False, has_vector: bool = True) -> None:
+                  target: KernelTarget | None = None) -> None:
     """Cache tensor info from runtime args and param_specs before kernel launch."""
-    global _cached_build_dir, _cached_kernel_name, _cached_has_cube, _cached_has_vector
+    global _cached_build_dir, _cached_kernel_name, _cached_target
     if build_dir:
         _cached_build_dir = build_dir
     _cached_kernel_name = kernel_name
-    _cached_has_cube = has_cube
-    _cached_has_vector = has_vector
+    _cached_target = target
 
     if not _cached_build_dir or not os.path.isdir(_cached_build_dir):
         logging.warning("exception dump skipped: not a jit scenario (build_dir unavailable)")
@@ -254,7 +252,7 @@ def set_dump_info(kernel_name: str, args: tuple, param_specs: list, build_dir: s
     lib = _ensure_lib()
 
     debug_cmd = _build_debug_compile_cmd(
-        _cached_build_dir, _cached_kernel_name, _cached_has_cube, _cached_has_vector
+        _cached_build_dir, _cached_kernel_name, _cached_target
     )
     lib.pro_set_debug_cmd(debug_cmd.encode("utf-8"))
 

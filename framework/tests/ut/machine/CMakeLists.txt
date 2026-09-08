@@ -14,7 +14,10 @@ file(GLOB_RECURSE _Sources src/*.cpp)
 list(APPEND _Sources ${PTO_FWK_SRC_ROOT}/framework/src/machine/device/dynamic/aicore_prof.cpp)
 list(APPEND _Sources ${PTO_FWK_SRC_ROOT}/framework/src/machine/device/distributed/shmem_wait_until.cpp)
 list(APPEND _Sources ${PTO_FWK_SRC_ROOT}/framework/src/machine/device/machine_interface/pypto_aicpu_interface.cpp)
-set(_Include ${CMAKE_CURRENT_SOURCE_DIR}/include)
+set(_Include
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${PTO_FWK_SRC_ROOT}/python/pypto_pro/include
+)
 
 PTO_Fwk_UTest_AddCaseLib(
         TARGET ${_Target}

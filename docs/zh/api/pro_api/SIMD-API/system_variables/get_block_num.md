@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-获取当前任务配置的逻辑Block数量，用于多核控制和数据偏移计算。
+获取本次实际启动的逻辑Block数量，用于多核控制和数据偏移计算。
 
 ## 函数原型
 
@@ -32,15 +32,18 @@ val = pypto_pro.language.get_block_num()
 
 ## 返回值说明
 
-返回设备运行时产生的整型标量值，可用于Kernel内整数运算和索引。其值等于本次实际
-返回启动时传入的block_dim。PyPTO Pro JIT不会根据平台核数上限自动截断该值，
-Host侧应在启动前计算合法的逻辑Block数。
+返回设备运行时产生的整型标量值，其值为限核后实际启动的逻辑Block数，可用于Kernel内整数运算和索引。
+JIT每次启动通过C++启动器查询实际Stream的有效资源限制，按Kernel执行域和配对比例限制Host请求的`block_dim`。
+因此返回值可能小于Host请求值；数据切分应使用本接口返回值作为循环步长，避免遗漏任务。
 
-仅启动Cube（AIC）或仅启动Vector（AIV）时，该值等于执行域逻辑核数。1:2 AIC/AIV混合Kernel中，该值表示逻辑Block数；AIC逻辑核数为get_block_num()，AIV逻辑核数为get_block_num() × get_subblock_num()。
+仅启动Cube（AIC）或仅启动Vector（AIV）时，该值等于执行域逻辑核数。
+在AIC:AIV为1:2的混合Kernel中，该值表示逻辑Block数；AIC逻辑核数为`get_block_num()`，
+AIV逻辑核数为`get_block_num() * get_subblock_num()`。
 
 ## 调用示例
 
-下面是一个仅包含Vector段的多核Kernel：通过Kernel[None, NUM_CORES]形式启动2个逻辑Block，每个AIV读取逻辑Block总数，并配合pypto_pro.language.get_block_idx()处理64行逐元素加法。
+下面是一个仅包含Vector段的多核Kernel：用`kernel[None, NUM_CORES](...)`请求最多2个逻辑Block，
+每个AIV按实际Block数跨步处理64行Tile，即使限为1个Block也能覆盖全部128行。
 
 ```python
 import pypto_pro.language as pl
@@ -60,13 +63,14 @@ def multicore_add_kernel(
     tile_c = pl.make_tile_group(type=tt, addrs=0x8000, mutex_ids=[2])
     with pl.section_vector():
         vidx = pl.get_block_idx()              # 当前AIV的全局逻辑索引
-        _bnum = pl.get_block_num()             # 启动时配置的逻辑Block数
-        offset = vidx * 64                     # 第vidx个AIV处理[vidx*64, +64)行
-        cur_a = tile_a.current()
-        cur_b = tile_b.current()
-        cur_c = tile_c.current()
-        pl.load(cur_a, x, [offset, 0])
-        pl.load(cur_b, y, [offset, 0])
-        pl.add(cur_c, cur_a, cur_b)
-        pl.store(z, cur_c, [offset, 0])
+        num_blocks = pl.get_block_num()
+        for tile_idx in pl.range(vidx, 2, num_blocks):
+            offset = tile_idx * 64
+            cur_a = tile_a.current()
+            cur_b = tile_b.current()
+            cur_c = tile_c.current()
+            pl.load(cur_a, x, [offset, 0])
+            pl.load(cur_b, y, [offset, 0])
+            pl.add(cur_c, cur_a, cur_b)
+            pl.store(z, cur_c, [offset, 0])
 ```
