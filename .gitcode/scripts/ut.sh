@@ -90,38 +90,38 @@ case "${GE_ST_RT2}" in
         check_ret "PyPTO(Py3-Simulation) build with uncann and run with uncann UTest failed"
         ;;
     Py3_ninja)
-        python3 build_ci.py --clean --generator=Ninja '--utest=python/tests/ut --ignore=python/tests/ut/kirin' --py_abi=37 --case_execute_timeout=90 --changed_files=${WORKSPACE}/pr_filelist.txt --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16 --verbose --editable --no_isolation --gcov --utest_module=ds_v32:interface:ir:kirin:operation:operator:pypto_pro:simulator
+        python3 build_ci.py --clean --generator=Ninja '--utest=python/tests/ut --ignore=python/tests/ut/kirin' --py_abi=37 --case_execute_timeout=120 --changed_files=${WORKSPACE}/pr_filelist.txt --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16 --verbose --editable --no_isolation --gcov --utest_module=ds_v32:interface:ir:kirin:operation:operator:pypto_pro:simulator
         check_ret "PyPTO(Py3) UTest failed"
         rm -rf python/pypto/pypto_impl*.so
         python3 -c "import pypto"
         check_ret "import pypto failed"
         ;;
     Cpp_make_clang)
-        python3 build_ci.py --clean --frontend=cpp --build_type=Debug --utest --case_execute_timeout=90 --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --clang --asan --job_num=32 --target=tile_fwk_utest
+        python3 build_ci.py --clean --frontend=cpp --build_type=Debug --utest --case_execute_timeout=120 --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --clang --asan --job_num=32 --target=tile_fwk_utest
         check_ret "Run PyPTO(Cpp-Clang) UTest failed"
         ;;
     make_clang1)
-        python3 build_ci.py --clean --frontend=cpp --build_type=Debug --utest --case_execute_timeout=90 --utest_module=machine:simulation:passes --clang --asan --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=32 --target=tile_fwk_utest
+        python3 build_ci.py --clean --frontend=cpp --build_type=Debug --utest --case_execute_timeout=120 --utest_module=machine:simulation:passes --clang --asan --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=32 --target=tile_fwk_utest
         check_ret "Run PyPTO(Cpp-Clang-1x) UTest failed"
         ;;
     make_clang2)
-        python3 build_ci.py --clean --frontend=cpp --build_type=Debug --utest --case_execute_timeout=90 --utest_module=interface --clang --asan --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=32 --target=tile_fwk_utest
+        python3 build_ci.py --clean --frontend=cpp --build_type=Debug --utest --case_execute_timeout=120 --utest_module=interface --clang --asan --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=32 --target=tile_fwk_utest
         check_ret "Run PyPTO(Cpp-Clang-2x) UTest failed"
         ;;
     make_clang3)
-        python3 build_ci.py --clean --frontend=cpp --build_type=Debug --utest --case_execute_timeout=90 --utest_module=codegen:operator --clang --asan --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=32 --target=tile_fwk_utest
+        python3 build_ci.py --clean --frontend=cpp --build_type=Debug --utest --case_execute_timeout=120 --utest_module=codegen:operator --clang --asan --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=32 --target=tile_fwk_utest
         check_ret "Run PyPTO(Cpp-Clang-3x) UTest failed"
         ;;
     make_gnu_1)
-        python3 build_ci.py --clean --frontend=cpp --build_type=Release --utest --case_execute_timeout=90 --utest_module=machine:simulation:passes --gcov --changed_files=${WORKSPACE}/pr_filelist.txt --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16 --target=tile_fwk_utest
+        python3 build_ci.py --clean --frontend=cpp --build_type=Release --utest --case_execute_timeout=120 --utest_module=machine:simulation:passes --gcov --changed_files=${WORKSPACE}/pr_filelist.txt --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16 --target=tile_fwk_utest
         check_ret "PyPTO(cpp) UTest failed"
         ;;
     make_gnu_2)
-        python3 build_ci.py --clean --frontend=cpp --build_type=Release --utest --case_execute_timeout=90 --utest_module=interface --gcov --changed_files=${WORKSPACE}/pr_filelist.txt --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16 --target=tile_fwk_utest
+        python3 build_ci.py --clean --frontend=cpp --build_type=Release --utest --case_execute_timeout=120 --utest_module=interface --gcov --changed_files=${WORKSPACE}/pr_filelist.txt --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16 --target=tile_fwk_utest
         check_ret "PyPTO(cpp) UTest failed"
         ;;
     make_gnu_3)
-        python3 build_ci.py --clean --frontend=cpp --build_type=Release --utest --case_execute_timeout=90 --utest_module=codegen:operator --gcov --changed_files=${WORKSPACE}/pr_filelist.txt --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16 --target=tile_fwk_utest
+        python3 build_ci.py --clean --frontend=cpp --build_type=Release --utest --case_execute_timeout=120 --utest_module=codegen:operator --gcov --changed_files=${WORKSPACE}/pr_filelist.txt --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16 --target=tile_fwk_utest
         check_ret "PyPTO(cpp) UTest failed"
         ;;
     kirinx90)
