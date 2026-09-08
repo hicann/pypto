@@ -973,7 +973,7 @@ bool MergeViewAssembleUtils::BuildProducerGroupFusion(Function& function, const 
                                                     GetFirstSpan(pair),
                                                     GetChainScopeInfo(pair),
                                                     GetRmwModeAttrKey(rmwModeAttr),
-                                                    {},
+                                                    GetMergedAssembleOpcode(pair),
                                                     {},
                                                     atomicSemanticAttr.fromReduceAcc,
                                                     atomicSemanticAttr.fromExplicitRmw});
@@ -1109,7 +1109,7 @@ Status MergeViewAssembleUtils::AppendProducerGroupFusions(Function& function)
         replacements.reserve(fusion.replacements.size());
         for (const auto& replacement : fusion.replacements) {
             auto attr = std::make_shared<AssembleOpAttribute>(replacement.offset, replacement.dynOffset);
-            auto& mergedOp = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_ASSEMBLE, {replacement.input},
+            auto& mergedOp = irBuilder_.CreateTensorOpStmt(function, replacement.opcode, {replacement.input},
                                                            {replacement.output}, replacement.span);
             mergedOp.SetScopeInfo(replacement.scopeInfo);
             mergedOp.SetOpAttribute(attr);
