@@ -88,4 +88,4 @@ print("SIMT kernel passed!")
 > - pl.simt.thread_idx().x返回当前线程在线程块X维的编号，取值范围为[0, 256)，每个线程访问Tile中的一个元素。
 > - pl.load通过MTE2流水将输入搬入UB，pl.simt.launch在SIMT Vector流水上更新Tile，pl.store通过MTE3流水将结果搬回GM。
 > - 不同流水之间存在数据依赖，因此需要成对调用pl.system.sync_src和pl.system.sync_dst显式同步。
-> - 如需进一步了解PyPTO Pro的SIMT编程模型，请参阅[SIMT编程模型](../../programming_guide/pro/programming_paradigm/simt_programming.md)。
+> - 如需进一步了解PyPTO Pro的SIMT编程模型，请参阅[SIMT编程范式](../../programming_guide/pro/programming_paradigm/SIMT/programming_paradigm.md)。

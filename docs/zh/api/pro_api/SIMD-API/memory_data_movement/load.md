@@ -243,7 +243,7 @@ with pl.section_vector():
     pl.store(out, tile, [row_off, col_off])   # 只写回有效区
 ```
 
-valid_shape、pypto_pro.language.set_validshape、pad、pypto_pro.language.fillpad和pypto_pro.language.compact的配合方式，详见[尾块处理](../../../../guide/programming_guide/pro/development/tile_based_python_programming/tail_block_handling.md)。
+valid_shape、pypto_pro.language.set_validshape、pad、pypto_pro.language.fillpad和pypto_pro.language.compact的配合方式，详见[尾块处理](../../../../guide/programming_guide/pro/development/tiling/multi_core_tiling.md#尾块处理)。
 
 ### Cube侧转置场景
 

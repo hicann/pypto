@@ -1,18 +1,16 @@
-# 编程范式概述
+# 编程范式
 
 PyPTO Pro面向昇腾NPU的AI Core算子开发，采用外层多核SPMD并行与内层单核SIMD并行结合的编程范式，并以Tile作为核内计算和数据搬运的主要载体。开发者通过Python接口显式描述多核数据切分、片上数据搬运和计算逻辑，框架负责Kernel编译、加载与任务下发。
-
-对于适合显式线程索引、条件分支、原子操作和不规则访存的AIV计算场景，PyPTO Pro还提供补充的[SIMT编程模型](simt_programming.md)。
 
 ## Host与Device协作
 
 一个基于昇腾处理器的异构系统通常包含CPU与昇腾NPU。其中，CPU及其内存称为Host与Host Memory；NPU及其内存称为Device与Device Memory。
 
-基于昇腾的PyPTO Pro应用程序通常包含两部分：一部分运行在Host CPU上，使用Python（PyTorch）编程；另一部分运行在NPU上，使用PyPTO Pro编写[核函数Kernel](../development/kernel_function.md)。Host端通过PyTorch张量在Device Memory上准备输入输出数据，调用Kernel函数触发JIT编译并下发NPU任务，通过`torch.npu.synchronize()`等待核函数执行完成。Host代码与Kernel可写在同一个`.py`文件中。
+基于昇腾的PyPTO Pro应用程序通常包含两部分：一部分运行在Host CPU上，使用Python（PyTorch）编程；另一部分运行在NPU上，使用PyPTO Pro编写[核函数Kernel](../../development/kernel_function.md)。Host端通过PyTorch张量在Device Memory上准备输入输出数据，调用Kernel函数触发JIT编译并下发NPU任务，通过`torch.npu.synchronize()`等待核函数执行完成。Host代码与Kernel可写在同一个`.py`文件中。
 
 **图1**Kernel调度示意图
 
-![Kernel调度示意图](../../../figures/pro/kernel_scheduling_diagram.png)
+![Kernel调度示意图](../../../../figures/pro/kernel_scheduling_diagram.png)
 
 | 角色 | 职责 |
 |:---|:---|
@@ -26,7 +24,7 @@ PyPTO Pro Kernel的典型数据流如下：
 3. Device端的AI Core通过`load`/`load_tile`将数据从Global Memory搬入片上缓冲区，完成Tile级别的计算，再通过`store`/`store_tile`将结果写回Global Memory。
 4. Host端同步后访问结果。
 
-关于Kernel下发、Stream选择和同步方式，请参考[AI Core算子JIT编译基本用法](../development/compilation_and_execution/JIT_compilation.md#kernel下发stream与同步)。
+关于Kernel下发、Stream选择和同步方式，请参考[AI Core算子JIT编译基本用法](../../development/compilation_and_execution/JIT_compilation.md#kernel下发stream与同步)。
 
 ## SPMD嵌套SIMD编程范式
 
@@ -77,7 +75,7 @@ PyPTO Pro算子开发通常包含以下四个步骤：
 
 AI Core片上存储空间有限，无法一次性加载超大尺寸Tensor。实际开发中通常迭代完成分块搬运、分批计算和结果写回，并通过TileGroup的N缓冲流水减少数据搬运带来的等待。
 
-多核切分通常采用跨步分配：第`core_id`个AI Core处理序号为`core_id, core_id+num_cores, core_id+2*num_cores, ...`的Tile，使各核处理的Tile数量最多相差1。详细实践请参考[多核切分与Tiling](../development/tile_based_python_programming/multi_core_partitioning_and_Tiling.md)。
+多核切分通常采用跨步分配：第`core_id`个AI Core处理序号为`core_id, core_id+num_cores, core_id+2*num_cores, ...`的Tile，使各核处理的Tile数量最多相差1。详细实践请参考[多核Tiling切分](../../development/tiling/multi_core_tiling.md)。
 
 ## Tile编程模型
 
@@ -128,7 +126,7 @@ def fused_kernel(cube_input, intermediate, output):
 
 `@pl.pipeline.stage`本身只为函数添加stage标记，不改变函数行为。设置`pipeline=pl.pipeline.PipelineConfig(...)`后，编译器识别循环中的stage调用，分析各阶段对Tile的读写依赖，自动插入Cube与Vector之间的核间同步，并将串行阶段转换为Preload流水，使不同迭代的Cube和Vector阶段可以重叠执行。`preload`用于配置稳态流水开始前首个阶段的预执行次数。未启用Pipeline变换的融合Kernel仍可直接使用`pl.system.set_cross_core`和`pl.system.wait_cross_core`手动管理核间同步。
 
-关于Tile和TileGroup的详细使用方法，请参考[基于Tile的Python编程](../development/tile_based_python_programming/Python_programming_overview.md)。
+关于Tile和TileGroup的详细使用方法，请参考[Tensor创建和操作](../../development/tensor_creation_and_operations.md)。
 
 ## 矢量计算模式
 
@@ -137,7 +135,7 @@ Ascend 950PR/Ascend 950DT在UB存储体系的基础上提供向量寄存器编�
 - **Memory矢量计算**：通过Tile API在UB上完成数据缓存与计算，数据流为“Global Memory → UB → Global Memory”，适合通用矢量计算场景。
 - **Reg矢量计算**：通过`@pl.vector_function`定义VF函数，使用`vf.*`接口在向量寄存器上完成计算，数据流为“Global Memory → UB → Register → UB → Global Memory”，适合需要精细化调优的高性能场景。
 
-Reg矢量计算的详细说明，请参考[Reg矢量计算编程](../development/tile_based_python_programming/Reg_vector_computation.md)。
+Reg矢量计算的详细说明，请参考[Reg计算](../../development/vector_computation/reg_computation.md)。
 
 ## PyPTO Pro编程接口
 
@@ -151,7 +149,7 @@ PyPTO Pro以Tile API和Reg API两类SIMD接口为主，同时提供补充的SIMT
 | **Reg API（VF计算）** | 基于寄存器编程 | 通过`@pl.vector_function`定义VF函数，使用`vf.*`接口直接操作向量寄存器 | 自主管理寄存器数据加载和存储，用于精细化调优与高性能实现 |
 | **SIMT API** | 基于线程编程 | 通过`@pl.simt.function`定义逐线程函数，使用`pl.simt.launch`启动线程块 | 适合显式线程索引、条件分支、原子操作和不规则访存 |
 
-此外，PyPTO Pro提供Utils API，包括Python语法糖以及`printf`、`pto_assert`、`dump_data`和`trap`等调试接口。详细接口说明请参考[SIMD API](../../../../api/index.md)、[SIMT API](../../../../api/index.md)和[Utils API](../../../../api/index.md)。
+此外，PyPTO Pro提供Utils API，包括Python语法糖以及`printf`、`pto_assert`、`dump_data`和`trap`等调试接口。详细接口说明请参考[SIMD API](../../../../../api/index.md)、[SIMT API](../../../../../api/index.md)和[Utils API](../../../../../api/index.md)。
 
 ## 控制流
 
@@ -192,9 +190,9 @@ else:
 
 详细的编程方法请参考：
 
-- [Tile核函数](../development/kernel_function.md)
-- [基于Tile的Python编程](../development/tile_based_python_programming/Python_programming_overview.md)
-- [SIMT编程模型](simt_programming.md)
+- [Tile核函数](../../development/kernel_function.md)
+- [Tensor创建和操作](../../development/tensor_creation_and_operations.md)
+- [SIMT编程范式](../SIMT/programming_paradigm.md)
 
 ## 小结
 
