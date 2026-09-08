@@ -201,30 +201,26 @@ void SpillEngine::RegisterLocalBuffer(const LogicalTensorPtr& localTensor)
                                                                  localTensor->GetMemoryTypeOriginal());
 }
 
-const std::vector<int64_t>& SpillEngine::GetLargerShape(const std::vector<int64_t>& shape1,
-                                                        const std::vector<int64_t>& shape2)
+// rawshape 用镜像里躺的那份数据的: 上溯单源存的是那一跳的输入, 与 spillTensor 隔着 ND2NZ, 排布不同。
+LogicalTensorPtr SpillEngine::GetMirrorRef(const SpillPlan& plan, LogicalTensorPtr spillTensor)
 {
-    for (size_t i = 0; i < shape1.size(); i++) {
-        if (shape1[i] > shape2[i]) {
-            return shape1;
-        }
+    if (plan.kind == SpillKind::WalkUp && plan.sources.size() == 1) {
+        return plan.sources.front().tensor;
     }
-    return shape2;
+    return spillTensor;
 }
 
-LogicalTensorPtr SpillEngine::CreateGMTensor(LogicalTensorPtr spillTensor, LogicalTensorPtr actualSpillTensor,
-                                             int spillMemId, DataType gmDtype)
+// 新开的 workspace 由镜像整块独占, 原点与覆盖范围认自己的。
+LogicalTensorPtr SpillEngine::CreateGMTensor(LogicalTensorPtr ref, int spillMemId, DataType dtype)
 {
-    DataType dtype = (gmDtype == DT_BOTTOM) ? spillTensor->Datatype() : gmDtype;
-    std::shared_ptr<RawTensor> gmRawTensor = std::make_shared<RawTensor>(
-        dtype, GetLargerShape(spillTensor->tensor->rawshape, actualSpillTensor->tensor->rawshape),
-        TileOpFormat::TILEOP_ND, "WorkspaceGm");
-    LogicalTensorPtr gmTensor = irBuilder_.CreateTensorVar(
-        gmRawTensor, spillTensor->GetOffset(), actualSpillTensor->GetShape(), std::vector<SymbolicScalar>{});
+    const std::vector<int64_t>& gmShape = ref->tensor->rawshape;
+    std::shared_ptr<RawTensor> gmRawTensor = std::make_shared<RawTensor>(dtype, gmShape, TileOpFormat::TILEOP_ND,
+                                                                         "WorkspaceGm");
+    LogicalTensorPtr gmTensor = irBuilder_.CreateTensorVar(gmRawTensor, std::vector<int64_t>(gmShape.size(), 0),
+                                                           gmShape, std::vector<SymbolicScalar>{});
     gmTensor->SetMemoryTypeToBe(MemoryType::MEM_DEVICE_DDR);
     gmTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR);
-    gmTensor->UpdateDynValidShape(spillTensor->GetDynValidShape());
-    gmTensor->tensor->rawshape = GetLargerShape(spillTensor->tensor->rawshape, actualSpillTensor->tensor->rawshape);
+    gmTensor->UpdateDynValidShape(ref->GetDynValidShape());
     int64_t baseOffset = 0;
     TileRange range;
     if (ReserveWorkspaceRange(spillMemId, gmTensor->tensor->GetRawDataSize(), baseOffset, range) != SUCCESS) {
@@ -1026,12 +1022,10 @@ Status SpillEngine::ReplaceConsumersWithCopyin(const SpillMirror& mirror, Operat
     return SUCCESS;
 }
 
-// 尺寸由 GetLargerShape 在源与 spill buffer 之间挑: 只有大搬小那一种源比整块大,
-// 多源时每片都比整块小、挑中的恒是 spill buffer, 所以取哪个源当参照都一样。
 Status SpillEngine::PrepareSpillMirror(int spillMemId, const SpillPlan& plan, LogicalTensorPtr spillTensor,
                                        SpillMirror& mirror)
 {
-    mirror.gmTensor = CreateGMTensor(spillTensor, plan.sources.front().tensor, spillMemId, mirror.dtype);
+    mirror.gmTensor = CreateGMTensor(GetMirrorRef(plan, spillTensor), spillMemId, mirror.dtype);
     if (mirror.gmTensor == nullptr) {
         APASS_LOG_ERROR_F(Elements::Tensor, "Spill: create mirror for tensor[%d] failed.", spillMemId);
         return FAILED;
