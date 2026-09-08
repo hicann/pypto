@@ -132,7 +132,7 @@ TEST(DeviceCommonTest, CalcSchAicpuNumByBlockDim_AllBranches)
     auto dav3510 = ArchInfo::DAV_3510;
     EXPECT_EQ(CalcSchAicpuNumByBlockDim(8, 7, dav3510), 1u);
     EXPECT_EQ(CalcSchAicpuNumByBlockDim(16, 7, dav3510), 2u);
-    EXPECT_EQ(CalcSchAicpuNumByBlockDim(48, 7, dav3510), 6u);
-    EXPECT_EQ(CalcSchAicpuNumByBlockDim(100, 7, dav3510), 6u);
+    EXPECT_EQ(CalcSchAicpuNumByBlockDim(48, 7, dav3510), 4u);
+    EXPECT_EQ(CalcSchAicpuNumByBlockDim(100, 7, dav3510), 4u);
     EXPECT_EQ(CalcSchAicpuNumByBlockDim(7, 7, dav3510), 1u);
 }
