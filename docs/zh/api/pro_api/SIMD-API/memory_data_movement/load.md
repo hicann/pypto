@@ -52,16 +52,16 @@ pypto_pro.language.load(
 | GM → L1 Buffer | ND → ND。 | 仅支持DT_INT64、DT_UINT64。 |
 | GM → L1 Buffer | ND/DN → ZZ/NN（仅支持作为matmul_mx或matmul_mx_acc的量化系数搬运）。 | 仅支持DT_FP8E8M0。 |
 
-当src_tensor声明为NZ时，其物理排布、分形轴和完整Tensor shape约束见[TensorLayout](../basic_data_structures/TensorLayout.md)。load还需满足以下NZ搬运约束：
+- 当src_tensor声明为NZ时，其物理排布、分形轴和完整Tensor shape约束见[TensorLayout](../basic_data_structures/TensorLayout.md)。load还需满足以下NZ搬运约束：
 
 - Tile形状和有效M、N须满足M按16、N按Tensor数据类型对应的C0对齐，N方向偏移也须按C0对齐。
 - 高维offset的前导项选择batch，最后两项为M、N方向的逻辑元素坐标。
 
-当前数据类型为DT_FP8E8M0的Tensor搬入fractal=32的ZZ或NN排布L1 Buffer Tile，仅支持作为matmul_mx或matmul_mx_acc的量化系数搬运。普通E8M0数据不支持使用该目标组合；满足该组合的load会要求源Tensor的维度至少为3，最后一轴固定为物理phase轴，且该轴长度必须是2。
+- 当前数据类型为DT_FP8E8M0的Tensor搬入fractal=32的ZZ或NN排布L1 Buffer Tile，仅支持作为matmul_mx或matmul_mx_acc的量化系数搬运。普通E8M0数据不支持使用该目标组合；满足该组合的load会要求源Tensor的维度至少为3，最后一轴固定为物理phase轴，且该轴长度必须是2。
 
-开启auto_mutex时，若连续两次pypto_pro.language.load向同一个UB或L1 Buffer Tile地址搬运数据，并且前一次搬入的数据没有被读取，则必须在两次load之间调用pypto_pro.language.system.bar_mte2()，再复用该地址。
+- 开启auto_mutex时，若连续两次pypto_pro.language.load向同一个UB或L1 Buffer Tile地址搬运数据，并且前一次搬入的数据没有被读取，则必须在两次load之间调用pypto_pro.language.system.bar_mte2()，再复用该地址。
 
-关于复用Tile地址的完整同步规则，请参考下文“Tile地址复用与流水同步”。
+- 关于复用Tile地址的完整同步规则，请参考下文“Tile地址复用与流水同步”。
 
 ## 返回值说明
 
@@ -243,7 +243,7 @@ with pl.section_vector():
     pl.store(out, tile, [row_off, col_off])   # 只写回有效区
 ```
 
-valid_shape、pypto_pro.language.set_validshape、pad、pypto_pro.language.fillpad和pypto_pro.language.compact的配合方式，详见[尾块处理](../../../../guide/programming_guide/pro/development/tiling/multi_core_tiling.md#尾块处理)。
+在多核任务中计算尾块数量、有效形状和任务索引的方法，详见[尾块处理](../../../../guide/programming_guide/pro/development/tiling/multi_core_tiling.md#尾块处理)。
 
 ### Cube侧转置场景
 

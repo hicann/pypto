@@ -36,7 +36,7 @@ div(src0, src1, preg, mode: Optional[MergeMode] = None, precision: Optional[bool
 
 ## 约束说明
 
-无
+无。
 
 ## 返回值说明
 

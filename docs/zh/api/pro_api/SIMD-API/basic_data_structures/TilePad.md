@@ -41,9 +41,9 @@ PYPTO_DECLARE_ENUM(
 
 ## 约束说明
 
-在Flash Attention掩码场景中，当KV长度不是Tile大小的整数倍时，最后一块的无效行需要补FP32最小值，使其在后续的row_max和exp操作中被忽略。
+- 在Flash Attention掩码场景中，当KV长度不是Tile大小的整数倍时，最后一块的无效行需要补FP32最小值，使其在后续的row_max和exp操作中被忽略。
 
-在卷积padding场景中，边界区域需要填充零值。
+- 在卷积padding场景中，边界区域需要填充零值。
 
 ## 调用示例
 

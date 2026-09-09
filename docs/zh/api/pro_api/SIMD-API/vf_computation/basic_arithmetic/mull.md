@@ -42,7 +42,7 @@ mull(src0, src1, preg) -> (dst_lo, dst_hi)
 
 ## 约束说明
 
-无
+无。
 
 ## 返回值说明
 

@@ -43,7 +43,7 @@ addc(src0, src1, carry_src, preg, mode: Optional[MergeMode] = None) -> (carry, d
 
 ## 约束说明
 
-无
+无。
 
 ## 返回值说明
 

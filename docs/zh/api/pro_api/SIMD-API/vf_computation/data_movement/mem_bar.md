@@ -53,7 +53,7 @@ mem_bar(mode: Optional[MemBarMode] = None)
 
 ## 约束说明
 
-无
+无。
 
 ## 返回值说明
 

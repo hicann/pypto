@@ -40,7 +40,7 @@ unsqueeze(mask, dtype: Optional[DType] = None) -> dst
 
 ## 约束说明
 
-无
+无。
 
 ## 返回值说明
 

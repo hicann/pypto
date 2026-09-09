@@ -37,7 +37,7 @@ full(src, preg, dtype: Optional[DType] = None, mode: Optional[MergeMode] = None,
 
 ## 约束说明
 
-无
+无。
 
 ## 返回值说明
 

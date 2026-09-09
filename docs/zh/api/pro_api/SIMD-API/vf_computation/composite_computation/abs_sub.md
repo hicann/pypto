@@ -39,7 +39,7 @@ abs_sub(src0, src1, preg, mode: Optional[MergeMode] = None) -> dst
 
 ## 约束说明
 
-无
+无。
 
 ## 返回值说明
 

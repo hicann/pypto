@@ -48,7 +48,7 @@ shift_right(src, shift, preg, mode: Optional[MergeMode] = None, dtype: Optional[
 
 ## 约束说明
 
-无
+无。
 
 ## 返回值说明
 

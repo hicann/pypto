@@ -1,215 +1,219 @@
 # Kernel核函数创建
 
-Tile核函数（Kernel Function）是在NPU设备侧执行的Python函数。它由Host端代码调用，PyPTO Pro框架自动将其编译为硬件指令，并调度到AI Core上执行。每个Kernel函数通过显式的Tile定义、数据搬运和同步控制，精确管理片上计算流程。
+Kernel是在AI Core上执行的函数。使用`pypto_pro.language.jit`声明Kernel，在函数签名中定义输入、输出和运行时参数，在函数体中组织数据搬运与计算。
 
-## 核函数的定义
+## 定义Kernel
 
-定义Tile核函数时需要遵循以下规则：
+### 使用jit装饰器
 
-### 使用JIT装饰器
-
-必须使用`@pypto_pro.language.jit()`装饰器标识该函数为Kernel函数，PyPTO Pro框架会将其编译为NPU可执行的二进制。
-
-### 参数类型标注
-
-Tensor输入输出通常使用[`pypto_pro.language.Tensor`](../../../../api/pro_api/SIMD-API/basic_data_structures/Tensor.md)标注，并指定张量的形状和数据类型：
+Kernel函数必须使用`@pypto_pro.language.jit()`装饰：
 
 ```python
-@pypto_pro.language.jit()
-def my_kernel(x: pypto_pro.language.Tensor[[64, 64], pypto_pro.language.DT_FP16],
-              y: pypto_pro.language.Tensor[[64, 64], pypto_pro.language.DT_FP16],
-              out: pypto_pro.language.Tensor[[64, 64], pypto_pro.language.DT_FP16]):
+import pypto_pro.language as pl
+
+
+@pl.jit(auto_mutex=True)
+def add_kernel(
+    x: pl.Tensor[[64, 64], pl.DT_FP16],
+    y: pl.Tensor[[64, 64], pl.DT_FP16],
+    out: pl.Tensor[[64, 64], pl.DT_FP16],
+):
     ...
 ```
 
-根据数据和参数的组织方式，Kernel还支持以下参数类型：
+`jit`在首次启动Kernel时解析函数体并触发编译。JIT流程、编译签名和编译选项参考[JIT编译](compilation_and_execution/JIT_compilation.md)。
 
-| 参数类型 | 典型用途 |
+### 声明Kernel参数
+
+Kernel参数需要通过类型标注明确数据类型和传递方式：
+
+| 参数类型 | 用途 |
 | --- | --- |
-| `pypto_pro.language.Tensor[[shape], dtype]` | shape和数据类型可在签名中确定的Tensor |
-| [`pypto_pro.language.Ptr[dtype]`](../../../../api/pro_api/SIMD-API/basic_data_structures/Ptr.md) | 裸指针输入输出；常与TilingData配合重建动态shape的Tensor视图 |
-| `pypto_pro.language.DT_*` | 运行时标量参数，例如`pypto_pro.language.DT_INT64`、`pypto_pro.language.DT_FP32` |
-| TilingData类 | 传递shape、循环边界、算子选择器等结构化运行时参数 |
+| [`pypto_pro.language.Tensor`](../../../../api/pro_api/SIMD-API/basic_data_structures/Tensor.md) | 接收GM中的多维数据；在类型中声明shape、dtype和可选layout。 |
+| [`pypto_pro.language.Ptr`](../../../../api/pro_api/SIMD-API/basic_data_structures/Ptr.md) | 接收裸指针；通常使用`pypto_pro.language.make_tensor`构造Tensor视图。 |
+| `pypto_pro.language.DT_*` | 接收整型、浮点型等运行时标量。 |
+| TilingData类 | 接收shape、stride、循环边界等结构化运行时参数。 |
 
-下面的示例通过`pypto_pro.language.Ptr`和TilingData重建动态shape的Tensor视图。当前JIT要求
-TilingData位于Kernel形参和启动实参的末尾：
+Tensor参数适合直接使用调用侧Tensor的shape；Ptr参数适合由TilingData提供shape和stride：
 
 ```python
 from dataclasses import dataclass
 
+import pypto_pro.language as pl
+
+
 @dataclass
 class AddTiling:
-    m: int
-    n: int
+    rows: int
+    cols: int
 
-@pypto_pro.language.jit(auto_mutex=True)
+
+@pl.jit(auto_mutex=True)
 def dynamic_kernel(
-    x: pypto_pro.language.Ptr[pypto_pro.language.DT_FP16],
-    out: pypto_pro.language.Ptr[pypto_pro.language.DT_FP16],
-    scale: pypto_pro.language.DT_FP32,
+    x: pl.Ptr[pl.DT_FP16],
+    out: pl.Ptr[pl.DT_FP16],
+    scale: pl.DT_FP32,
     tiling: AddTiling,
 ):
-    tensor_x = pypto_pro.language.make_tensor(x, [tiling.m, tiling.n])
-    tensor_out = pypto_pro.language.make_tensor(out, [tiling.m, tiling.n])
+    tensor_x = pl.make_tensor(x, [tiling.rows, tiling.cols])
+    tensor_out = pl.make_tensor(out, [tiling.rows, tiling.cols])
     ...
 ```
 
-核函数不支持返回值，计算结果通过与`pypto_pro.language.Tensor`或`pypto_pro.language.Ptr`输出参数对应的缓冲区写回。
+TilingData必须位于Kernel形参列表和启动实参列表的末尾。完整字段和传输规则参考[Tiling结果传输](tiling/tiling_result_transfer.md#tilingdata)。
 
-### Tile定义与分配
+Kernel不返回Python值。计算结果通过Tensor或Ptr对应的GM区域写回。
 
-核函数内部使用[`pypto_pro.language.TileType`](../../../../api/pro_api/SIMD-API/basic_data_structures/TileType.md)定义Tile类型，并通过[`pypto_pro.language.make_tile_group`](../../../../api/pro_api/SIMD-API/resource_management/make_tile_group.md)等接口分配片上内存：
+### 定义执行域
 
-```python
-tt = pypto_pro.language.TileType(shape=[64, 64], dtype=pypto_pro.language.DT_FP16, target_memory=pypto_pro.language.MemorySpace.Vec)
-tile_x = pypto_pro.language.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
-tile_y = pypto_pro.language.make_tile_group(type=tt, addrs=0x2000, mutex_ids=[1])
-tile_out = pypto_pro.language.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[2])
-```
+使用`pypto_pro.language.section_vector()`和`pypto_pro.language.section_cube()`定义计算代码所在的执行域：
 
-### 流水段与同步
-
-计算逻辑需要放在[`pypto_pro.language.section_vector()`](../../../../api/pro_api/SIMD-API/controlflow/section_vector.md)上下文中，开启`auto_mutex=True`后，搬运与计算间的流水同步由框架按Tile的mutex自动插入：
+| Kernel组成 | 执行方式 |
+| --- | --- |
+| 仅包含Vector执行域 | 启动Vector Kernel。 |
+| 仅包含Cube执行域 | 启动Cube Kernel。 |
+| 同时包含Cube和Vector执行域 | 启动混合Kernel。 |
 
 ```python
-with pypto_pro.language.section_vector():
-    cur_x = tile_x.current()
-    cur_y = tile_y.current()
-    cur_out = tile_out.current()
-    pypto_pro.language.load(cur_x, x, [0, 0])
-    pypto_pro.language.load(cur_y, y, [0, 0])
-    pypto_pro.language.add(cur_out, cur_x, cur_y)
-    pypto_pro.language.store(out, cur_out, [0, 0])
+import pypto_pro.language as pl
+
+
+@pl.jit(auto_mutex=True)
+def mixed_kernel(
+    x: pl.Ptr[pl.DT_FP16],
+    out: pl.Ptr[pl.DT_FP16],
+):
+    with pl.section_cube():
+        # 矩阵计算代码
+        ...
+
+    with pl.section_vector():
+        # 矢量计算代码
+        ...
 ```
 
-### 其他规则
+执行域决定可使用的指令、片上Buffer以及`block_dim`的含义。Vector计算参考[Tile计算](vector_computation/tile_computation.md)和[Reg计算](vector_computation/reg_computation.md)，矩阵计算参考[Cube计算](cube_computation.md)。
 
-- 运行时标量形参使用`pypto_pro.language.DT_*`类型标注，Host侧传入对应的Python标量值。
-- 使用TilingData时，必须将其放在Kernel形参和启动实参的末尾。
-- 可以使用`auto_mutex=True`参数启用自动互斥锁插入。
+### 组织Kernel函数体
 
-## 核函数的调用
+Kernel函数体通常按照以下顺序组织：
 
-PyPTO Pro中核函数通过方括号启动语法发起，方括号内指定Stream和`block_dim`（逻辑Block数）：
+1. 定义Tile类型并绑定片上Buffer。
+2. 进入Vector或Cube执行域。
+3. 根据逻辑Block索引划分当前核的任务。
+4. 将数据从GM搬入片上Buffer。
+5. 执行矢量或矩阵计算。
+6. 将结果写回GM。
+
+下面只展示Kernel结构，Tile创建和计算参数由相应章节说明：
+
+```python
+import pypto_pro.language as pl
+
+
+@pl.jit(auto_mutex=True)
+def add_kernel(
+    x: pl.Tensor[[64, 64], pl.DT_FP16],
+    y: pl.Tensor[[64, 64], pl.DT_FP16],
+    out: pl.Tensor[[64, 64], pl.DT_FP16],
+):
+    tile_type = pl.TileType(
+        shape=[64, 64],
+        dtype=pl.DT_FP16,
+        target_memory=pl.MemorySpace.Vec,
+    )
+    tile_x = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0])
+    tile_y = pl.make_tile_group(type=tile_type, addrs=0x2000, mutex_ids=[1])
+    tile_out = pl.make_tile_group(type=tile_type, addrs=0x4000, mutex_ids=[2])
+
+    with pl.section_vector():
+        cur_x = tile_x.current()
+        cur_y = tile_y.current()
+        cur_out = tile_out.current()
+        pl.load(cur_x, x, [0, 0])
+        pl.load(cur_y, y, [0, 0])
+        pl.add(cur_out, cur_x, cur_y)
+        pl.store(out, cur_out, [0, 0])
+```
+
+Tile声明、地址和TileGroup操作参考[Tile创建和操作](tile_creation_and_operations.md)。`auto_mutex=True`只负责框架能够识别的Tile数据依赖；需要显式同步的场景参考[同步API](../../../../api/pro_api/SIMD-API/synchronization/index.md)。
+
+## 调用Kernel
+
+Kernel使用方括号指定启动配置，使用圆括号传入函数实参：
+
+| 调用形式 | 含义 |
+| --- | --- |
+| `kernel(args...)` | 使用当前Stream，`block_dim=1`。 |
+| `kernel[block_dim](args...)` | 使用当前Stream，并指定逻辑Block数。 |
+| `kernel[stream, block_dim](args...)` | 指定Stream和逻辑Block数。 |
+| `kernel[stream, block_dim, tiling_key](args...)` | 选择TilingKey对应的编译实例。 |
+| `kernel[stream, block_dim, tiling_key, datatype](args...)` | 同时选择TilingKey和datatype特化实例。 |
+
+使用TilingKey或datatype特化时，必须通过方括号传入相应字典。
+仅使用datatype特化时，datatype字典位于第三项；同时使用TilingKey和datatype时，两者分别位于第三项和第四项。
 
 ```python
 import os
-# 准备输入数据
+
+import torch
+import torch_npu
+
+
 device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 device = f"npu:{device_id}"
-a = torch.rand(64, 64, device=device, dtype=torch.float16)
-b = torch.rand(64, 64, device=device, dtype=torch.float16)
-out = torch.empty(64, 64, device=device, dtype=torch.float16)
+torch.npu.set_device(device)
 
-# 方括号启动语法：[stream, block_dim]
-# None表示默认Stream，num_cores指定逻辑Block数
-add_kernel[None, num_cores](a, b, out)
+x = torch.rand(64, 64, device=device, dtype=torch.float16)
+y = torch.rand(64, 64, device=device, dtype=torch.float16)
+out = torch.empty_like(x)
+
+add_kernel[None, 1](x, y, out)
 torch.npu.synchronize()
 ```
 
-Kernel执行域决定启动类型：
-
-- 仅包含`pypto_pro.language.section_vector()`的Kernel编译并启动为Vector（AIV）Kernel，`block_dim`表示启动的AIV逻辑核数。
-- 仅包含`pypto_pro.language.section_cube()`的Kernel编译并启动为Cube（AIC）Kernel，`block_dim`表示启动的AIC逻辑核数。
-- 同时包含`pypto_pro.language.section_vector()`和`pypto_pro.language.section_cube()`的Kernel编译并启动为混合Kernel，`block_dim`表示AIC与AIV的配对执行组数，而不是AIV总数。具体工作单元数取决于AIC:AIV比例。
-
-PyPTO Pro JIT将`block_dim`作为请求上限，每次启动按实际Stream的torch_npu核数限制计算Block数。
-Stream未单独配置时继承Device限制，再回退到硬件核数。Kernel应使用`get_block_num()`分配全部任务，
-避免减少工作核后遗漏Tile。详见[多核Tiling切分](tiling/multi_core_tiling.md#devicestream与作用域限核)。
-
-也可以省略方括号直接调用，此时使用默认`block_dim=1`：
-
-```python
-add_kernel(a, b, out)
-torch.npu.synchronize()
-```
-
-使用`tiling_key`或`datatype`特化的Kernel必须通过方括号语法提供对应的特化字典，不能省略方括号直接调用。
-
-核函数的调用是异步的。首次调用时触发JIT编译；在同一Python进程中，同一Kernel对象以相同编译签名再次调用时复用编译结果。重新启动Python进程后会重新执行生成与编译流程。
+Kernel启动相对于Host异步执行。在Host读取结果、检查精度或统计完整执行时间之前，需要同步对应的Stream。
 
 ### stream的含义与设置
 
-`stream`指定Kernel下发的NPU执行流。传入`None`表示使用当前Stream：
+`stream`指定Kernel下发的NPU执行流。传入`None`时使用当前Stream；显式传入Stream时，可以只等待该Stream上的任务：
 
 ```python
-kernel[None, num_cores](x, out)
-```
+import torch
+import torch_npu
 
-也可以显式传入`torch.npu.Stream`，并仅同步该Stream：
 
-```python
 stream = torch.npu.Stream()
-kernel[stream, num_cores](x, out)
+add_kernel[stream, num_cores](x, y, out)
 stream.synchronize()
 ```
 
+同一Stream中的任务按照下发顺序执行。不同Stream之间存在数据依赖时，需要通过Stream同步机制显式建立依赖。
+
 ### blockDim的含义与设置
 
-`block_dim`为Host请求的逻辑Block数上限，必须是正整数。JIT按Stream的有效资源限制计算
-实际启动值`block_num`，Kernel通过`pypto_pro.language.get_block_num()`读取该值。
-它在不同Kernel执行模式下的含义如下：
+`block_dim`是Host请求的逻辑Block数上限，必须是正整数。Kernel通过`pypto_pro.language.get_block_num()`读取实际生效的Block数。
 
-| Kernel执行模式 | `block_dim`请求的工作单元 | 实际工作单元数 | Stream资源上限 |
-|:---|:---|:---|:---|
-| 仅Cube | AIC逻辑核数 | AIC：`block_num` | `cube_core_num` |
-| 仅Vector | AIV逻辑核数 | AIV：`block_num` | `vector_core_num` |
-| AIC:AIV为1:2的混合Kernel | AIC/AIV执行组数 | AIC：`block_num`；AIV：`2 * block_num` | 见下文混合Kernel上限 |
+| Kernel类型 | `block_dim`的含义 | 实际工作单元数 |
+| --- | --- | --- |
+| Vector Kernel | AIV逻辑Block数 | AIV为`block_num`。 |
+| Cube Kernel | AIC逻辑Block数 | AIC为`block_num`。 |
+| Cube与Vector混合Kernel | AIC与AIV执行组数 | AIC为`block_num`；AIV为`block_num * get_subblock_num()`。 |
 
-`block_num`可能小于Host请求的`block_dim`，数据切分应使用实际Block数。在AIC:AIV为1:2的混合Kernel的Vector段中，
-`pypto_pro.language.get_subblock_num()`返回2，`pypto_pro.language.get_block_idx()`返回已经按两个AIV
-subblock展平后的全局逻辑索引，范围为`[0, 2 * block_num)`；如果需要区分同一执行组内的两个AIV，
-可使用`pypto_pro.language.get_subblock_idx()`获取0或1。
+实际`block_num`可能因Stream限核而小于`block_dim`。多核任务切分必须使用`pypto_pro.language.get_block_num()`计算循环步长；混合Kernel的Vector侧还需要乘以`pypto_pro.language.get_subblock_num()`。核数计算、索引映射和限核规则参考[多核Tiling切分](tiling/multi_core_tiling.md#在启动时设置逻辑block数block_dim)。
 
-例如，Host请求`block_dim=12`，Stream限制为4个Cube Core和6个Vector Core时，混合Kernel实际启动
-`block_num=3`个执行组，包含3个AIC和6个AIV。
+## 使用TilingKey和datatype
 
-JIT校验`block_dim`的类型和正值，并按Stream的有效资源限制减少实际启动值。
-仅Cube、仅Vector和AIC:AIV为1:2的混合Kernel的上限分别为`cube_core_num`、`vector_core_num`和
-`min(cube_core_num, vector_core_num // 2)`。详细计算方式参见
-[多核Tiling切分](tiling/multi_core_tiling.md#在启动时设置逻辑block数block_dim)。
-
-## Tiling参数化
-
-`@pypto_pro.language.jit()`支持通过`tiling_key`参数实现Tiling参数化，在启动时通过字典选择不同的Kernel实例化，使每种模式各编一份专用Kernel（消除死分支、拿到最优指令）：
+TilingKey用于选择有限的编译期模式，datatype用于根据输入或输出数据类型生成专用实例：
 
 ```python
-from pypto_pro.runtime.tilingkey import TilingKeyField
+import pypto_pro.language as pl
 
-class MyTilingKey:
-    NeedAttnMask = TilingKeyField(bits=1, values=[0, 1])
 
-@pypto_pro.language.jit(tiling_key=MyTilingKey)
-def my_kernel(x: pypto_pro.language.Tensor[[64, 64], pypto_pro.language.DT_FP16], out: pypto_pro.language.Tensor[[64, 64], pypto_pro.language.DT_FP16]):
-    ...
+key = {"UseScale": 1, "BlockM": 128}
+datatype = {"x": pl.DT_FP16, "out": pl.DT_FP16}
 
-# 启动时通过字典选择实例化
-my_kernel[None, num_cores, {"NeedAttnMask": 1}](x, out)
-my_kernel[None, num_cores, {"NeedAttnMask": 0}](x, out)
+kernel[None, block_dim, key, datatype](x, out, tiling)
 ```
 
-`tiling_key`的完整说明（字段定义、`is_valid`校验、与TilingData的组合、运行时标志与TilingKey的选型对照表）请参考[TilingKey](tiling/tiling_result_transfer.md#tilingkey)。
-
-## JIT配置选项
-
-`@pypto_pro.language.jit()`装饰器支持以下配置选项：
-
-| 选项 | 说明 | 默认值 |
-|:---|:---|:---|
-| arch | 目标架构，当前可选“a5”；None为自动检测当前受支持设备的架构 | None |
-| auto_mutex | 是否启用自动互斥锁插入 | True |
-| compile_timeout | 编译超时时间（秒）；显式设置时使用该值，传入或保持`None`时先读取当前PyPTO配置作用域，作用域也未配置时使用600秒 | None（有效默认值为600秒） |
-| name | 自定义Kernel名称，用于构建产物路径隔离 | None |
-| tiling_key | Tiling键类型，用于Tiling参数化 | None |
-| pipeline | PipelineConfig，用于自动预取流水变换 | None |
-| datatype | 数据类型特化，用于同一Kernel支持多种数据类型 | None |
-
-```python
-@pypto_pro.language.jit(arch="a5", auto_mutex=True, compile_timeout=200)
-def my_kernel(x: pypto_pro.language.Tensor[[64, 64], pypto_pro.language.DT_FP16],
-              out: pypto_pro.language.Tensor[[64, 64], pypto_pro.language.DT_FP16]):
-    ...
-```
-
-> [!NOTE]说明
-> Kernel特有的选项通过`@pypto_pro.language.jit()`配置；Host、Pass、CodeGen、验证和调试等共享编译配置通过`pypto.options(...)`配置。完整说明参见[JIT编译](compilation_and_execution/JIT_compilation.md#编译配置)。
+TilingKey的声明、编码和启动规则参考[Tiling结果传输](tiling/tiling_result_transfer.md#tilingkey)。datatype字段由`@pypto_pro.language.jit(datatype=...)`声明，具体编译行为参考[JIT编译](compilation_and_execution/JIT_compilation.md#编译签名与复用)。

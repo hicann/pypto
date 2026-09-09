@@ -207,11 +207,11 @@ def test_add():
 
 ## 多核切分与Tiling
 
-多核切分（跨步循环、启动核数、UB容量预算、Host↔Device传递Tiling数据、均衡Tiling方法论）的详细说明请参考[多核Tiling切分](../tiling/multi_core_tiling.md)。
+跨步循环、启动核数和负载均衡参考[多核Tiling切分](../tiling/multi_core_tiling.md)，运行时Tiling参数的传递参考[Tiling结果传输](../tiling/tiling_result_transfer.md)。
 
 ## 尾块处理
 
-当GM上的`pypto_pro.language.Tensor`的shape不能被Tile shape整除时，边界上会出现比Tile小的“不完整块”。尾块处理涉及`valid_shape`、`set_validshape`、`pad`、`fillpad`和`compact`等参数的协同，详细说明请参考[尾块处理](../tiling/multi_core_tiling.md#尾块处理)。
+当GM上的`pypto_pro.language.Tensor`的shape不能被Tile shape整除时，边界上会出现比Tile小的“不完整块”。尾块数量、有效形状和多核任务分配参考[尾块处理](../tiling/multi_core_tiling.md#尾块处理)。
 
 ## N缓冲（循环）用法
 

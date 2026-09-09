@@ -35,21 +35,21 @@ bool[N]    # N 个 BOOL 元素
 
 ## 约束说明
 
-使用int[N]、float[N]或bool[N]标注时，文件开头须包含from __future__ import annotations，使字段标注以字符串形式保留并由PyPTO解析。
+- 使用int[N]、float[N]或bool[N]标注时，文件开头须包含from __future__ import annotations，使字段标注以字符串形式保留并由PyPTO解析。
 
-运行时使用普通Python序列为数组字段赋值，序列长度必须与声明的N一致：
+- 运行时使用普通Python序列为数组字段赋值，序列长度必须与声明的N一致：
 
-```python
-tiling = MyTiling(m=64, n=128, offsets=[0, 64, 128, 192])
-```
+  ```python
+  tiling = MyTiling(m=64, n=128, offsets=[0, 64, 128, 192])
+  ```
 
-在Kernel中可通过下标访问数组元素，也可以先读取整个数组字段再访问。常量下标越界时编译报错；数组元素类型相同时，也支持使用运行时下标。
+- 在Kernel中可通过下标访问数组元素，也可以先读取整个数组字段再访问。常量下标越界时编译报错；数组元素类型相同时，也支持使用运行时下标。
 
-```python
-first_offset = tiling.offsets[0]
-offsets = tiling.offsets
-current_offset = offsets[index]
-```
+  ```python
+  first_offset = tiling.offsets[0]
+  offsets = tiling.offsets
+  current_offset = offsets[index]
+  ```
 
 ## 返回值说明
 

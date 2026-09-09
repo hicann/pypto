@@ -30,7 +30,7 @@ get_saturation_flag(mode: SaturationFlagMode) -> bool
 
 ## 约束说明
 
-无
+无。
 
 ## 返回值说明
 

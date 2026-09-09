@@ -44,10 +44,10 @@ pypto_pro.language.dequant(
 
 ## 约束说明
 
-1. out、src、scale和offset应使用互不重叠的UB区域；本接口不保证地址重叠时的结果。
-2. scale和offset必须覆盖src的每个有效行，不能依赖参数Tile最后一行或最后一列隐式扩展。
-3. 计算使用FP32。scale或offset中的NaN、Inf按照FP32运算传播；超出FP32范围的结果按目标硬件浮点规则处理。
-4. 接口只定义src.valid_shape有效区域内的输出；有效区域外的内容未定义。
+- out、src、scale和offset应使用互不重叠的UB区域；本接口不保证地址重叠时的结果。
+- scale和offset必须覆盖src的每个有效行，不能依赖参数Tile最后一行或最后一列隐式扩展。
+- 计算使用FP32。scale或offset中的NaN、Inf按照FP32运算传播；超出FP32范围的结果按目标硬件浮点规则处理。
+- 接口只定义src.valid_shape有效区域内的输出；有效区域外的内容未定义。
 
 ## 返回值说明
 

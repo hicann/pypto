@@ -35,7 +35,7 @@ ln(src, preg, mode: Optional[MergeMode] = None, precision: Optional[bool] = None
 
 ## 约束说明
 
-无
+无。
 
 ## 返回值说明
 
