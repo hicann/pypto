@@ -112,7 +112,7 @@ TEST_F(RemoveRedundantOpTest, TestIntermediateOutcast)
     Function* func = Program::GetInstance().GetFunctionByRawName("TENSOR_RemoveRedundantOpFunction");
     npu::tile_fwk::RemoveRedundantOp removeRedundantOp;
     auto oriOpList = func->Operations(true);
-    EXPECT_EQ(oriOpList.size(), 17) << "Before the Pass, there should be 17 operations";
+    EXPECT_EQ(oriOpList.size(), 16) << "Before the Pass, there should be 16 operations";
     int ori_view_count = 0;
     int ori_assemble_count = 0;
     for (auto& op : oriOpList) {
@@ -123,7 +123,7 @@ TEST_F(RemoveRedundantOpTest, TestIntermediateOutcast)
         }
     }
     EXPECT_EQ(ori_view_count, 0) << "There should be no VIEW ops before RemoveRedundantOp";
-    EXPECT_EQ(ori_assemble_count, 3) << "There should be 3 ASSEMBLE ops before RemoveRedundantOp";
+    EXPECT_EQ(ori_assemble_count, 2) << "There should be 2 ASSEMBLE ops before RemoveRedundantOp";
     EXPECT_EQ(removeRedundantOp.PreCheck(*func), SUCCESS);
     EXPECT_EQ(removeRedundantOp.RunOnFunction(*func), SUCCESS);
     EXPECT_EQ(removeRedundantOp.PostCheck(*func), SUCCESS);

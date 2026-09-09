@@ -55,6 +55,7 @@ private:
         std::vector<SymbolicScalar> localDynOffset;
         bool isFullSlice = false;
     };
+    using MergedOffset = std::pair<std::vector<int64_t>, std::vector<SymbolicScalar>>;
 
     Status ProcessImpl(Function& function, std::vector<Operation*>& newOps, bool& operationUpdated);
     Status ProcessViewAssembleLikeImpl(Function& function, std::vector<Operation*>& newOps, bool& operationUpdated);
@@ -69,6 +70,9 @@ private:
     static bool CollectSliceContractSliceRewrites(const SliceContractSliceChain& chain, bool isFanout,
                                                   bool keepL1Fanout, std::vector<SliceContractSliceRewrite>& rewrites,
                                                   bool& canComposeOffsets);
+    static bool CollectL1FoldMergedOffsets(const SliceContractSliceChain& chain,
+                                           const std::vector<SliceContractSliceRewrite>& rewrites,
+                                           std::vector<MergedOffset>& mergedOffsets);
     static void FoldL1FanoutChain(const SliceContractSliceChain& chain,
                                   const std::vector<SliceContractSliceRewrite>& rewrites);
     static void RewriteComposableFanoutChain(const SliceContractSliceChain& chain,

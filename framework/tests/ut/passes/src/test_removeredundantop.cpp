@@ -3926,5 +3926,265 @@ TEST_F(TestRemoveRedundantOpPass, MultipleContractsSameOutputShouldNotFold)
     EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumZero);
     EXPECT_EQ(exp.GetInputOperand(kSizeZero), sliceOutput);
 }
+
+/*
+ContractSliceMisalignedLocalOffset (fp16)
+input{8,16}->contract{0,0}->contractOutput{8,16}->slice{0,8}->sliceOutput{8,8}->exp->out
+The slice offset {0,8} linearizes to 8*2=16B on the fp16 input, which is not 32B aligned.  Folding
+the contract+slice pair into a direct view would let the VEC consumer read the shared buffer at a
+misaligned UB address (aicore errcode 0x800), so the CONTRACT+SLICE copy path must stay.
+*/
+TEST_F(TestRemoveRedundantOpPass, ContractSliceMisalignedLocalOffsetShouldKeepCopyPath)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "ContractSliceMisalignedLocal",
+                                               "ContractSliceMisalignedLocal", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> fullShape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> partShape = {kNumEight, kNumEight};
+    std::vector<int64_t> zeroOffset = {kNumZero, kNumZero};
+    std::vector<int64_t> misalignedOffset = {kNumZero, kNumEight};
+    auto input = IRBuilder().CreateTensorVar(DT_FP16, fullShape, CreateTestConstIntVector(fullShape));
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP16, fullShape, CreateTestConstIntVector(fullShape));
+    auto sliceOutput = IRBuilder().CreateTensorVar(DT_FP16, partShape, CreateTestConstIntVector(partShape));
+    auto output = IRBuilder().CreateTensorVar(DT_FP16, partShape, CreateTestConstIntVector(partShape),
+                                              TileOpFormat::TILEOP_ND, "out");
+
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_CONTRACT, {input}, {contractOutput},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(zeroOffset)); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_SLICE, {contractOutput}, {sliceOutput},
+        [&misalignedOffset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(misalignedOffset)); });
+    auto& exp = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {sliceOutput}, {output});
+
+    function->inCasts_ = {input};
+    function->outCasts_ = {output};
+
+    std::vector<Operation*> newOps;
+    bool operationUpdated = false;
+    ASSERT_EQ(RemoveRedundantOpUtils::ProcessContractSlice(*function, newOps, operationUpdated), SUCCESS);
+
+    EXPECT_FALSE(operationUpdated);
+    EXPECT_TRUE(newOps.empty());
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumOne);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumOne);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumZero);
+    EXPECT_EQ(exp.GetInputOperand(kSizeZero), sliceOutput);
+}
+
+/*
+ContractSliceAlignedLocalOffset (fp16)
+input{8,32}->contract{0,0}->contractOutput{8,32}->slice{0,16}->sliceOutput{8,16}->exp->out
+The slice offset {0,16} linearizes to 16*2=32B on the fp16 input, which is 32B aligned.  The
+alignment guard must not over-block: the contract+slice pair is still folded into a direct view.
+*/
+TEST_F(TestRemoveRedundantOpPass, ContractSliceAlignedLocalOffsetShouldGenerateView)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "ContractSliceAlignedLocal",
+                                               "ContractSliceAlignedLocal", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> fullShape = {kNumEight, kNumExpFive};
+    std::vector<int64_t> partShape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> zeroOffset = {kNumZero, kNumZero};
+    std::vector<int64_t> alignedOffset = {kNumZero, kNumExpFour};
+    auto input = IRBuilder().CreateTensorVar(DT_FP16, fullShape, CreateTestConstIntVector(fullShape));
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP16, fullShape, CreateTestConstIntVector(fullShape));
+    auto sliceOutput = IRBuilder().CreateTensorVar(DT_FP16, partShape, CreateTestConstIntVector(partShape));
+    auto output = IRBuilder().CreateTensorVar(DT_FP16, partShape, CreateTestConstIntVector(partShape),
+                                              TileOpFormat::TILEOP_ND, "out");
+
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_CONTRACT, {input}, {contractOutput},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(zeroOffset)); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_SLICE, {contractOutput}, {sliceOutput},
+        [&alignedOffset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(alignedOffset)); });
+    auto& exp = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {sliceOutput}, {output});
+
+    function->inCasts_ = {input};
+    function->outCasts_ = {output};
+
+    std::vector<Operation*> newOps;
+    bool operationUpdated = false;
+    ASSERT_EQ(RemoveRedundantOpUtils::ProcessContractSlice(*function, newOps, operationUpdated), SUCCESS);
+
+    EXPECT_TRUE(operationUpdated);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumZero);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumZero);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumOne);
+    auto* generatedView = FindSingleOp(function, Opcode::OP_VIEW);
+    ASSERT_NE(generatedView, nullptr);
+    EXPECT_EQ(generatedView->GetIOperands().front(), input);
+    EXPECT_EQ(exp.GetInputOperand(kSizeZero), generatedView->GetOOperands().front());
+    auto viewAttr = std::dynamic_pointer_cast<ViewOpAttribute>(generatedView->GetOpAttribute());
+    ASSERT_NE(viewAttr, nullptr);
+    EXPECT_EQ(viewAttr->GetFromOffset(), alignedOffset);
+}
+
+/*
+SliceContractSliceMisalignedLocalOffset (fp16)
+input{8,16}->slice{0,0}->contractInput{8,16}->contract{0,0}->contractOutput{8,16}
+                                                       ->slice{0,8}->sliceOutput{8,8}->exp->out
+The trailing slice reads the contract input at a 16B tail-dim offset (8 fp16 elements), so folding
+the chain into a direct view would produce a misaligned UB access.  The whole slice-contract-slice
+chain stays materialized.
+*/
+TEST_F(TestRemoveRedundantOpPass, SliceContractSliceMisalignedLocalOffsetShouldKeepCopyPath)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "SliceContractSliceMisalignedLocal",
+                                               "SliceContractSliceMisalignedLocal", nullptr);
+    ASSERT_NE(function, nullptr);
+
+    std::vector<int64_t> fullShape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> partShape = {kNumEight, kNumEight};
+    std::vector<int64_t> zeroOffset = {kNumZero, kNumZero};
+    std::vector<int64_t> misalignedOffset = {kNumZero, kNumEight};
+    auto input = IRBuilder().CreateTensorVar(DT_FP16, fullShape, CreateTestConstIntVector(fullShape));
+    auto contractInput = IRBuilder().CreateTensorVar(DT_FP16, fullShape, CreateTestConstIntVector(fullShape));
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP16, fullShape, CreateTestConstIntVector(fullShape));
+    auto sliceOutput = IRBuilder().CreateTensorVar(DT_FP16, partShape, CreateTestConstIntVector(partShape));
+    auto output = IRBuilder().CreateTensorVar(DT_FP16, partShape, CreateTestConstIntVector(partShape),
+                                              TileOpFormat::TILEOP_ND, "out");
+
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_SLICE, {input}, {contractInput},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(zeroOffset)); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_CONTRACT, {contractInput}, {contractOutput},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(zeroOffset)); });
+    PassOperationUtils::AddOperation(
+        *function, Opcode::OP_SLICE, {contractOutput}, {sliceOutput},
+        [&misalignedOffset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(misalignedOffset)); });
+    auto& exp = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {sliceOutput}, {output});
+
+    function->inCasts_ = {input};
+    function->outCasts_ = {output};
+
+    std::vector<Operation*> newOps;
+    bool operationUpdated = false;
+    ASSERT_EQ(RemoveRedundantOpUtils::ProcessContractSlice(*function, newOps, operationUpdated), SUCCESS);
+
+    EXPECT_FALSE(operationUpdated);
+    EXPECT_TRUE(newOps.empty());
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumOne);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumTwo);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumZero);
+    EXPECT_EQ(exp.GetInputOperand(kSizeZero), sliceOutput);
+}
+
+namespace {
+struct L1FanoutFoldGraph {
+    std::shared_ptr<Function> function;
+    LogicalTensorPtr input;
+    LogicalTensorPtr precedingOutput;
+};
+
+// input{8,32}->slice{precedingOffset}(same-mem view)->contractInput{8,32-preOffset[1]}->contract{0,0}
+// ->contractOutput->{slice{0,0}(To=L1)->exp->out0, slice{0,0}(To=L1)->exp->out1}
+L1FanoutFoldGraph BuildL1FanoutFoldGraph(const std::string& name, const std::vector<int64_t>& precedingOffset)
+{
+    L1FanoutFoldGraph graph;
+    graph.function = std::make_shared<Function>(Program::GetInstance(), name, name, nullptr);
+    std::vector<int64_t> sourceShape = {kNumEight, kNumExpFive};
+    std::vector<int64_t> innerShape = {kNumEight, kNumExpFive - precedingOffset[kSizeOne]};
+    std::vector<int64_t> zeroOffset = {kNumZero, kNumZero};
+    graph.input = IRBuilder().CreateTensorVar(DT_FP16, sourceShape, CreateTestConstIntVector(sourceShape));
+    graph.precedingOutput = IRBuilder().CreateTensorVar(DT_FP16, innerShape, CreateTestConstIntVector(innerShape));
+    auto contractOutput = IRBuilder().CreateTensorVar(DT_FP16, innerShape, CreateTestConstIntVector(innerShape));
+    auto sliceOutput0 = IRBuilder().CreateTensorVar(DT_FP16, innerShape, CreateTestConstIntVector(innerShape));
+    auto sliceOutput1 = IRBuilder().CreateTensorVar(DT_FP16, innerShape, CreateTestConstIntVector(innerShape));
+    sliceOutput0->SetMemoryTypeBoth(MemoryType::MEM_L1);
+    sliceOutput1->SetMemoryTypeBoth(MemoryType::MEM_L1);
+    PassOperationUtils::AddOperation(
+        *graph.function, Opcode::OP_SLICE, {graph.input}, {graph.precedingOutput},
+        [&precedingOffset](Operation& op) { op.SetOpAttribute(std::make_shared<ViewOpAttribute>(precedingOffset)); });
+    PassOperationUtils::AddOperation(
+        *graph.function, Opcode::OP_CONTRACT, {graph.precedingOutput}, {contractOutput},
+        [&zeroOffset](Operation& op) { op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(zeroOffset)); });
+    for (const auto& sliceOutput : {sliceOutput0, sliceOutput1}) {
+        auto l1Attr = std::make_shared<ViewOpAttribute>(zeroOffset);
+        l1Attr->SetToType(MemoryType::MEM_L1);
+        PassOperationUtils::AddOperation(*graph.function, Opcode::OP_SLICE, {contractOutput}, {sliceOutput},
+                                         [&l1Attr](Operation& op) { op.SetOpAttribute(l1Attr); });
+    }
+    auto out0 = IRBuilder().CreateTensorVar(DT_FP16, innerShape, CreateTestConstIntVector(innerShape),
+                                            TileOpFormat::TILEOP_ND, "out0");
+    auto out1 = IRBuilder().CreateTensorVar(DT_FP16, innerShape, CreateTestConstIntVector(innerShape),
+                                            TileOpFormat::TILEOP_ND, "out1");
+    PassOperationUtils::AddOperation(*graph.function, Opcode::OP_EXP, {sliceOutput0}, {out0});
+    PassOperationUtils::AddOperation(*graph.function, Opcode::OP_EXP, {sliceOutput1}, {out1});
+    graph.function->inCasts_ = {graph.input};
+    graph.function->outCasts_ = {out0, out1};
+    return graph;
+}
+
+std::vector<const Operation*> FindSlicesWithInput(const std::shared_ptr<Function>& function,
+                                                  const LogicalTensorPtr& input)
+{
+    std::vector<const Operation*> slices;
+    for (const auto& op : function->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_SLICE && op.GetIOperands().front() == input) {
+            slices.push_back(&op);
+        }
+    }
+    return slices;
+}
+} // namespace
+
+/*
+SliceContractSliceL1FanoutMisalignedMergedOffset (fp16): graph built by BuildL1FanoutFoldGraph with
+precedingOffset {0,8}, i.e. input{8,32}->slice{0,8}(same-mem view)->contractInput{8,24}->contract
+->{slice{0,0}(To=L1)->exp->out0, slice{0,0}(To=L1)->exp->out1}.  All consumers are L1 slices
+(keepL1Fanout).  The preceding offset {0,8} linearizes to 16B on the fp16 source, so the merged offset
+{0,8} is not 32B aligned: the L1 fold must keep the preceding slice materialization and let the
+consumers read the contract input at the (aligned) local offset {0,0} instead.
+*/
+TEST_F(TestRemoveRedundantOpPass, SliceContractSliceL1FanoutMisalignedMergedOffsetShouldKeepMaterialization)
+{
+    auto graph = BuildL1FanoutFoldGraph("L1FanoutMisalignedMerged", {kNumZero, kNumEight});
+    std::vector<Operation*> newOps;
+    bool operationUpdated = false;
+    ASSERT_EQ(RemoveRedundantOpUtils::Process(*graph.function, newOps, operationUpdated), SUCCESS);
+    EXPECT_TRUE(operationUpdated);
+    EXPECT_EQ(CountOpcode(graph.function, Opcode::OP_CONTRACT), kNumZero);
+    EXPECT_EQ(CountOpcode(graph.function, Opcode::OP_SLICE), kNumThree);
+    EXPECT_EQ(CountOpcode(graph.function, Opcode::OP_VIEW), kNumZero);
+    const auto consumers = FindSlicesWithInput(graph.function, graph.precedingOutput);
+    ASSERT_EQ(consumers.size(), 2UL);
+    for (const auto* consumer : consumers) {
+        auto attr = std::dynamic_pointer_cast<ViewOpAttribute>(consumer->GetOpAttribute());
+        ASSERT_NE(attr, nullptr);
+        EXPECT_EQ(attr->GetTo(), MemoryType::MEM_L1);
+        EXPECT_EQ(attr->GetFromOffset(), (std::vector<int64_t>{kNumZero, kNumZero}));
+    }
+}
+
+/*
+SliceContractSliceL1FanoutAlignedMergedOffset (fp16): same graph as the misaligned case but built with
+precedingOffset {0,16} (contractInput{8,16}).  The preceding offset linearizes to 32B on the fp16
+source, so the merged offset {0,16} is aligned and the L1 fold must proceed: consumers read the source
+tensor directly at {0,16}, and the preceding slice and the contract both disappear.
+*/
+TEST_F(TestRemoveRedundantOpPass, SliceContractSliceL1FanoutAlignedMergedOffsetShouldFoldToSource)
+{
+    auto graph = BuildL1FanoutFoldGraph("L1FanoutAlignedMerged", {kNumZero, kNumExpFour});
+    std::vector<Operation*> newOps;
+    bool operationUpdated = false;
+    ASSERT_EQ(RemoveRedundantOpUtils::Process(*graph.function, newOps, operationUpdated), SUCCESS);
+    EXPECT_TRUE(operationUpdated);
+    EXPECT_EQ(CountOpcode(graph.function, Opcode::OP_CONTRACT), kNumZero);
+    EXPECT_EQ(CountOpcode(graph.function, Opcode::OP_SLICE), kNumTwo);
+    EXPECT_EQ(CountOpcode(graph.function, Opcode::OP_VIEW), kNumZero);
+    const auto consumers = FindSlicesWithInput(graph.function, graph.input);
+    ASSERT_EQ(consumers.size(), 2UL);
+    for (const auto* consumer : consumers) {
+        auto attr = std::dynamic_pointer_cast<ViewOpAttribute>(consumer->GetOpAttribute());
+        ASSERT_NE(attr, nullptr);
+        EXPECT_EQ(attr->GetTo(), MemoryType::MEM_L1);
+        EXPECT_EQ(attr->GetFromOffset(), (std::vector<int64_t>{kNumZero, kNumExpFour}));
+    }
+}
 } // namespace tile_fwk
 } // namespace npu

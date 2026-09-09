@@ -2671,10 +2671,10 @@ TEST_F(SplitLargeFanoutTensorTest, DynamicDslExpandAndSplitPerfGuard)
         auto c = CountSplitByShape(*f, largeShape, tileShape);
         int pathCnt = sq * b * (d / 8);                         // each {b,1,d} view expands to b*(d/8) tiles
         EXPECT_EQ(c.vCnt, static_cast<size_t>(pathCnt));        // q -> tile view-like ops
-        EXPECT_EQ(c.aCnt, static_cast<size_t>(pathCnt + sq));   // split CONTRACTs plus versioned addTmp ASSEMBLEs
+        EXPECT_EQ(c.aCnt, static_cast<size_t>(pathCnt));        // split CONTRACTs, boundary ASSEMBLEs merged into them
         EXPECT_EQ(c.vLargeShape, static_cast<size_t>(pathCnt)); // VIEW from q
         EXPECT_EQ(c.vTileShape, static_cast<size_t>(0));        // identity view-like ops on tiles are merged
-        EXPECT_EQ(c.aLargeShape, static_cast<size_t>(sq));      // versioned ASSEMBLEs into addTmp
+        EXPECT_EQ(c.aLargeShape, static_cast<size_t>(pathCnt)); // CONTRACTs write into out directly
         EXPECT_EQ(c.aTileShape, static_cast<size_t>(0));        // no assemble-like op writes directly to a tile
         EXPECT_LT(elapsedMs, thresholdMs);
     }

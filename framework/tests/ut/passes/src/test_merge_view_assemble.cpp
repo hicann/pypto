@@ -190,11 +190,11 @@ TEST_F(MergeViewAssembleTest, TestMergeViewAssemble)
 {
     constexpr int32_t tilex = 8;
     constexpr int32_t tiley = 16;
-    constexpr int expectedOps = 9;
+    constexpr int expectedOps = 8;
     constexpr int expected_view = 0;
     constexpr int expected_slice = 4;
     constexpr int expected_add = 2;
-    constexpr int expected_assemble = 1;
+    constexpr int expected_assemble = 0;
     constexpr int expected_contract = 2;
     std::vector<int64_t> shape{16, 16};
     Tensor a(DT_FP32, shape, "a");
@@ -245,7 +245,7 @@ TEST_F(MergeViewAssembleTest, TestMergeViewAssemble)
 
     // ================== Verify Pass Effect ==================
     auto updated_operations = currentFunction->Operations();
-    EXPECT_EQ(updated_operations.size(), expectedOps) << "9 operations should remain";
+    EXPECT_EQ(updated_operations.size(), expectedOps) << "8 operations should remain";
     int view_count = 0;
     int slice_count = 0;
     int add_count = 0;
@@ -268,7 +268,7 @@ TEST_F(MergeViewAssembleTest, TestMergeViewAssemble)
     EXPECT_EQ(view_count, expected_view) << "0 VIEW operations should remain";
     EXPECT_EQ(slice_count, expected_slice) << "4 SLICE operations should remain";
     EXPECT_EQ(add_count, expected_add) << "2 ADD operations should remain";
-    EXPECT_EQ(assemble_count, expected_assemble) << "1 boundary ASSEMBLE operation should remain";
+    EXPECT_EQ(assemble_count, expected_assemble) << "0 boundary ASSEMBLE operation should remain";
     EXPECT_EQ(contract_count, expected_contract) << "2 CONTRACT operation should remain";
 
     // Check the offset of the View operation
@@ -1708,6 +1708,232 @@ TEST_F(MergeViewAssembleTest, ProducerGroupWithCoverageHoleDoesNotFuse)
     EXPECT_NE(function->GetTensorMap().GetTensorByMagic(middle->GetMagic()), nullptr);
 }
 
+TEST_F(MergeViewAssembleTest, ProducerGroupWithContractDownstreamMergesToContract)
+{
+    Program program;
+    auto function = std::make_unique<Function>(program, "producer_group_contract", "producer_group_contract", nullptr);
+    IRBuilder builder;
+    auto firstInput = builder.CreateTensorVar(*function, DataType::DT_FP32, {2, 4});
+    auto secondInput = builder.CreateTensorVar(*function, DataType::DT_FP32, {2, 4});
+    auto middle = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+    auto output = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+    auto finalOutput = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+    function->inCasts_ = {firstInput, secondInput};
+    function->outCasts_ = {finalOutput};
+
+    auto& first = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {firstInput}, {middle});
+    first.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto& second = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {secondInput}, {middle});
+    second.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{2, 0}));
+    auto& downstream = builder.CreateTensorOpStmt(*function, Opcode::OP_CONTRACT, {middle}, {output});
+    downstream.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{1, 0}));
+    builder.CreateTensorOpStmt(*function, Opcode::OP_ABS, {output}, {finalOutput});
+    function->BuildTensorMap();
+
+    MergeViewAssemble pass;
+    ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
+
+    std::vector<Operation*> replacements;
+    for (auto& op : function->Operations(false)) {
+        if (op.GetOpcode() == Opcode::OP_CONTRACT) {
+            replacements.emplace_back(&op);
+            EXPECT_EQ(op.GetOOperands().front(), output);
+        }
+        EXPECT_NE(op.GetOpcode(), Opcode::OP_ASSEMBLE);
+    }
+    ASSERT_EQ(replacements.size(), 2);
+    EXPECT_EQ(output->GetProducers().size(), 2);
+    for (auto* replacement : replacements) {
+        auto attr = std::dynamic_pointer_cast<AssembleOpAttribute>(replacement->GetOpAttribute());
+        ASSERT_NE(attr, nullptr);
+        auto input = replacement->GetIOperands().front();
+        EXPECT_EQ(attr->GetToOffset(),
+                  input == firstInput ? std::vector<int64_t>({1, 0}) : std::vector<int64_t>({3, 0}));
+    }
+    EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(middle->GetMagic()), nullptr);
+}
+
+TEST_F(MergeViewAssembleTest, ProducerGroupWithAssembleDownstreamKeepsAssembleOpcode)
+{
+    Program program;
+    auto function = std::make_unique<Function>(program, "producer_group_assemble", "producer_group_assemble", nullptr);
+    IRBuilder builder;
+    auto firstInput = builder.CreateTensorVar(*function, DataType::DT_FP32, {2, 4});
+    auto secondInput = builder.CreateTensorVar(*function, DataType::DT_FP32, {2, 4});
+    auto middle = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+    auto output = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+    auto finalOutput = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+    function->inCasts_ = {firstInput, secondInput};
+    function->outCasts_ = {finalOutput};
+
+    auto& first = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {firstInput}, {middle});
+    first.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto& second = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {secondInput}, {middle});
+    second.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{2, 0}));
+    auto& downstream = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {middle}, {output});
+    downstream.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{1, 0}));
+    builder.CreateTensorOpStmt(*function, Opcode::OP_ABS, {output}, {finalOutput});
+    function->BuildTensorMap();
+
+    MergeViewAssemble pass;
+    ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
+
+    std::vector<Operation*> replacements;
+    for (auto& op : function->Operations(false)) {
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            replacements.emplace_back(&op);
+            EXPECT_EQ(op.GetOOperands().front(), output);
+        }
+        EXPECT_NE(op.GetOpcode(), Opcode::OP_CONTRACT);
+    }
+    ASSERT_EQ(replacements.size(), 2);
+    EXPECT_EQ(output->GetProducers().size(), 2);
+    for (auto* replacement : replacements) {
+        auto attr = std::dynamic_pointer_cast<AssembleOpAttribute>(replacement->GetOpAttribute());
+        ASSERT_NE(attr, nullptr);
+        auto input = replacement->GetIOperands().front();
+        EXPECT_EQ(attr->GetToOffset(),
+                  input == firstInput ? std::vector<int64_t>({1, 0}) : std::vector<int64_t>({3, 0}));
+    }
+    EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(middle->GetMagic()), nullptr);
+}
+
+TEST_F(MergeViewAssembleTest, ProducerGroupWithContractProducersMergesToContract)
+{
+    Program program;
+    auto function = std::make_unique<Function>(program, "producer_group_contract_producer",
+                                               "producer_group_contract_producer", nullptr);
+    IRBuilder builder;
+    auto firstInput = builder.CreateTensorVar(*function, DataType::DT_FP32, {2, 4});
+    auto secondInput = builder.CreateTensorVar(*function, DataType::DT_FP32, {2, 4});
+    auto middle = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+    auto output = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+    auto finalOutput = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+    function->inCasts_ = {firstInput, secondInput};
+    function->outCasts_ = {finalOutput};
+
+    auto& first = builder.CreateTensorOpStmt(*function, Opcode::OP_CONTRACT, {firstInput}, {middle});
+    first.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto& second = builder.CreateTensorOpStmt(*function, Opcode::OP_CONTRACT, {secondInput}, {middle});
+    second.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{2, 0}));
+    auto& downstream = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {middle}, {output});
+    downstream.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{1, 0}));
+    builder.CreateTensorOpStmt(*function, Opcode::OP_ABS, {output}, {finalOutput});
+    function->BuildTensorMap();
+
+    MergeViewAssemble pass;
+    ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
+
+    std::vector<Operation*> replacements;
+    for (auto& op : function->Operations(false)) {
+        if (op.GetOpcode() == Opcode::OP_CONTRACT) {
+            replacements.emplace_back(&op);
+            EXPECT_EQ(op.GetOOperands().front(), output);
+        }
+    }
+    ASSERT_EQ(replacements.size(), 2);
+    EXPECT_EQ(output->GetProducers().size(), 2);
+    for (auto* replacement : replacements) {
+        auto attr = std::dynamic_pointer_cast<AssembleOpAttribute>(replacement->GetOpAttribute());
+        ASSERT_NE(attr, nullptr);
+        auto input = replacement->GetIOperands().front();
+        EXPECT_EQ(attr->GetToOffset(),
+                  input == firstInput ? std::vector<int64_t>({1, 0}) : std::vector<int64_t>({3, 0}));
+    }
+    EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(middle->GetMagic()), nullptr);
+}
+
+TEST_F(MergeViewAssembleTest, ProducerGroupWithMixedProducersMergesPerPairOpcode)
+{
+    Program program;
+    auto function = std::make_unique<Function>(program, "producer_group_mixed_producer",
+                                               "producer_group_mixed_producer", nullptr);
+    IRBuilder builder;
+    auto firstInput = builder.CreateTensorVar(*function, DataType::DT_FP32, {2, 4});
+    auto secondInput = builder.CreateTensorVar(*function, DataType::DT_FP32, {2, 4});
+    auto middle = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+    auto output = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+    auto finalOutput = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+    function->inCasts_ = {firstInput, secondInput};
+    function->outCasts_ = {finalOutput};
+
+    auto& first = builder.CreateTensorOpStmt(*function, Opcode::OP_CONTRACT, {firstInput}, {middle});
+    first.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto& second = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {secondInput}, {middle});
+    second.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{2, 0}));
+    auto& downstream = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {middle}, {output});
+    downstream.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{1, 0}));
+    builder.CreateTensorOpStmt(*function, Opcode::OP_ABS, {output}, {finalOutput});
+    function->BuildTensorMap();
+
+    MergeViewAssemble pass;
+    ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
+
+    Operation* contractReplacement = nullptr;
+    Operation* assembleReplacement = nullptr;
+    for (auto& op : function->Operations(false)) {
+        if (op.GetOpcode() == Opcode::OP_CONTRACT) {
+            ASSERT_EQ(contractReplacement, nullptr);
+            contractReplacement = &op;
+        } else if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            ASSERT_EQ(assembleReplacement, nullptr);
+            assembleReplacement = &op;
+        }
+    }
+    ASSERT_NE(contractReplacement, nullptr);
+    ASSERT_NE(assembleReplacement, nullptr);
+    EXPECT_EQ(contractReplacement->GetIOperands().front(), firstInput);
+    EXPECT_EQ(contractReplacement->GetOOperands().front(), output);
+    EXPECT_EQ(assembleReplacement->GetIOperands().front(), secondInput);
+    EXPECT_EQ(assembleReplacement->GetOOperands().front(), output);
+    auto contractAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(contractReplacement->GetOpAttribute());
+    ASSERT_NE(contractAttr, nullptr);
+    EXPECT_EQ(contractAttr->GetToOffset(), std::vector<int64_t>({1, 0}));
+    auto assembleAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(assembleReplacement->GetOpAttribute());
+    ASSERT_NE(assembleAttr, nullptr);
+    EXPECT_EQ(assembleAttr->GetToOffset(), std::vector<int64_t>({3, 0}));
+    EXPECT_EQ(output->GetProducers().size(), 2);
+    EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(middle->GetMagic()), nullptr);
+}
+
+TEST_F(MergeViewAssembleTest, ProducerGroupWithContractProducerAndContractDownstreamDoesNotFuse)
+{
+    Program program;
+    auto function = std::make_unique<Function>(program, "producer_group_contract_pair", "producer_group_contract_pair",
+                                               nullptr);
+    IRBuilder builder;
+    auto firstInput = builder.CreateTensorVar(*function, DataType::DT_FP32, {2, 4});
+    auto secondInput = builder.CreateTensorVar(*function, DataType::DT_FP32, {2, 4});
+    auto middle = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+    auto output = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+    auto finalOutput = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+    function->inCasts_ = {firstInput, secondInput};
+    function->outCasts_ = {finalOutput};
+
+    auto& first = builder.CreateTensorOpStmt(*function, Opcode::OP_CONTRACT, {firstInput}, {middle});
+    first.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto& second = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {secondInput}, {middle});
+    second.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{2, 0}));
+    auto& downstream = builder.CreateTensorOpStmt(*function, Opcode::OP_CONTRACT, {middle}, {output});
+    downstream.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{1, 0}));
+    builder.CreateTensorOpStmt(*function, Opcode::OP_ABS, {output}, {finalOutput});
+    function->BuildTensorMap();
+
+    MergeViewAssemble pass;
+    ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
+
+    size_t contractCount = 0;
+    size_t assembleCount = 0;
+    for (auto& op : function->Operations(false)) {
+        contractCount += op.GetOpcode() == Opcode::OP_CONTRACT;
+        assembleCount += op.GetOpcode() == Opcode::OP_ASSEMBLE;
+    }
+    EXPECT_EQ(contractCount, 2);
+    EXPECT_EQ(assembleCount, 1);
+    EXPECT_EQ(output->GetProducers().size(), 1);
+    EXPECT_NE(function->GetTensorMap().GetTensorByMagic(middle->GetMagic()), nullptr);
+}
+
 TEST_F(MergeViewAssembleTest, SplitLogicalTensorVersionStopsLinearFusion)
 {
     Program program;
@@ -1743,6 +1969,50 @@ TEST_F(MergeViewAssembleTest, SplitLogicalTensorVersionStopsLinearFusion)
         assembleCount += op.GetOpcode() == Opcode::OP_ASSEMBLE;
     }
     EXPECT_EQ(assembleCount, 3);
+    EXPECT_NE(function->GetTensorMap().GetTensorByMagic(oldVersion->GetMagic()), nullptr);
+    EXPECT_NE(function->GetTensorMap().GetTensorByMagic(newVersion->GetMagic()), nullptr);
+    EXPECT_TRUE(function->GetVarDependency().HasProducer(warToken, ToStmtPtr(read)));
+    EXPECT_TRUE(function->GetVarDependency().HasConsumer(warToken, ToStmtPtr(newWrite)));
+}
+
+TEST_F(MergeViewAssembleTest, SplitLogicalTensorVersionWithContractProducerStopsLinearFusion)
+{
+    Program program;
+    auto function = std::make_unique<Function>(program, "split_version_contract", "split_version_contract", nullptr);
+    IRBuilder builder;
+    auto sharedRaw = builder.CreateRawTensor(DataType::DT_FP32, Shape{4, 4});
+    auto oldInput = builder.CreateTensorVar(*function, DataType::DT_FP32, {2, 4});
+    auto newInput = builder.CreateTensorVar(*function, DataType::DT_FP32, {2, 4});
+    auto oldVersion = builder.CreateTensorVar(*function, sharedRaw, {0, 0}, {4, 4});
+    auto newVersion = builder.CreateTensorVar(*function, sharedRaw, {0, 0}, {4, 4});
+    auto readOutput = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+    auto output = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+    function->inCasts_ = {oldInput, newInput};
+    function->outCasts_ = {readOutput, output};
+
+    auto& oldWrite = builder.CreateTensorOpStmt(*function, Opcode::OP_CONTRACT, {oldInput}, {oldVersion});
+    oldWrite.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto& read = builder.CreateTensorOpStmt(*function, Opcode::OP_ABS, {oldVersion}, {readOutput});
+    auto& newWrite = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {newInput}, {newVersion});
+    newWrite.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{2, 0}));
+    auto& downstream = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {newVersion}, {output});
+    downstream.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto warToken = AddTokenEdge(*function, read, newWrite);
+    function->BuildTensorMap();
+    function->GetTensorMap().Insert(oldVersion, false);
+    function->GetTensorMap().Insert(newVersion, false);
+
+    MergeViewAssemble pass;
+    ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
+
+    size_t assembleCount = 0;
+    size_t contractCount = 0;
+    for (auto& op : function->Operations(false)) {
+        assembleCount += op.GetOpcode() == Opcode::OP_ASSEMBLE;
+        contractCount += op.GetOpcode() == Opcode::OP_CONTRACT;
+    }
+    EXPECT_EQ(assembleCount, 2);
+    EXPECT_EQ(contractCount, 1);
     EXPECT_NE(function->GetTensorMap().GetTensorByMagic(oldVersion->GetMagic()), nullptr);
     EXPECT_NE(function->GetTensorMap().GetTensorByMagic(newVersion->GetMagic()), nullptr);
     EXPECT_TRUE(function->GetVarDependency().HasProducer(warToken, ToStmtPtr(read)));
