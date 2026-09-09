@@ -408,7 +408,21 @@ static std::string MakeBlockOutStoreCodegenCCE(const ir::CallPtr& op, codegen::C
               fp_tile_type->memref_.value()->memorySpace_ == ir::MemorySpace::Scaling)
             << "block.store scale Tile must be allocated in Scaling memory";
         std::string fp_tile = codegen.GetExprAsCode(op->args_[3]);
-        EmitTemplated(codegen, "TSTORE", {}, {dst_tensor_access, src_tile, fp_tile});
+        // Per-channel scale (Scaling Tile) + optional ReluPreMode fusion:
+        // TSTORE_FP<TileData, GlobalData, FpTileData, AtomicType, ReluPreMode>(dst, src, fp)
+        // per pto-isa TSTORE_FP template order (verified on A5).
+        std::string relu_template = op->HasKwarg("relu_pre_mode") ?
+                                        GetReluPreModeCCE(op->GetKwarg<int>("relu_pre_mode")) :
+                                        "";
+        if (!relu_template.empty()) {
+            std::string src_type = TileTypeStringForTemplate(codegen, src_tile, op->args_[1]);
+            std::string fp_type = TileTypeStringForTemplate(codegen, fp_tile, op->args_[3]);
+            codegen.Emit("TSTORE_FP<" + src_type + ", decltype(" + dst_tensor_access + "), " + fp_type +
+                         ", AtomicType::AtomicNone, " + relu_template + ">(" + dst_tensor_access + ", " + src_tile +
+                         ", " + fp_tile + ");");
+        } else {
+            EmitTemplated(codegen, "TSTORE", {}, {dst_tensor_access, src_tile, fp_tile});
+        }
         return "";
     }
 
