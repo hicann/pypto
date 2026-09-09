@@ -31,13 +31,14 @@ pypto_pro.language.system.wait_cross_core(
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| pipe | 输入 | [pypto_pro.language.PipeType](../basic_data_structures/PipeType.md)枚举值，表示等待期间被阻塞的硬件流水。接口只阻塞该流水中尚未下发的后续指令，已经下发的指令仍可继续执行。等待完成后，该流水才能继续执行后续指令。sync_mode为INTER_BLOCK、INTER_SUBBLOCK或INTRA_BLOCK时，可取M、V、MTE1、MTE2、MTE3、FIX，不支持S和ALL；sync_mode为UNICAST_BLOCK时还可取S，但仍不支持ALL。该值可以与配对的pypto_pro.language.system.set_cross_core的pipe不同。 |
-| event_id | 输入 | 核间同步事件ID。支持Python整型常量或运行时整数Scalar表达式。Python整型常量当前只能取0～15。动态表达式须由调用方保证运行时取值合法：INTER_BLOCK、INTER_SUBBLOCK、INTRA_BLOCK取0～15；UNICAST_BLOCK在AIV侧取0～15，在AIC侧取0～31。UNICAST_BLOCK中AIC侧0～15对应AIV0，16～31对应AIV1；AIV侧始终取0～15。除该映射外，配对的SET和WAIT使用相同事件号。[pypto_pro.language.system.sync_all](sync_all.md)内部使用事件ID 11～14，与本接口同时使用时不得将这些ID用于尚未完成的手工核间同步，并应避免与自动流水编排分配的事件ID冲突。 |
+| pipe | 输入 | [pypto_pro.language.PipeType](../basic_data_structures/PipeType.md)枚举值，表示等待期间被阻塞的硬件流水。接口只阻塞该流水中尚未下发的后续指令，已经下发的指令仍可继续执行。等待完成后，该流水才能继续执行后续指令。所有sync_mode均可取M、V、MTE1、MTE2、MTE3、FIX、S，不支持ALL。该值可以与配对的pypto_pro.language.system.set_cross_core的pipe不同。 |
+| event_id | 输入 | 核间同步事件ID。支持Python整型常量或运行时整数Scalar表达式。Python整型常量当前只能取0～15。动态表达式须由调用方保证运行时取值合法：INTER_BLOCK、INTER_SUBBLOCK、INTRA_BLOCK取0～15；UNICAST_BLOCK在AIV侧取0～15，在AIC侧取0～31。UNICAST_BLOCK中，AIV0发送的0～15与AIC等待的0～15配对，AIV1发送的0～15与AIC等待的16～31配对；AIC发送的0～15与AIV0等待的0～15配对，AIC发送的16～31与AIV1等待的0～15配对。事件ID的计数器、复用、SET顺序、SyncAll占用冲突及自动流水编排冲突等约束，参见[pypto_pro.language.system.set_cross_core](set_cross_core.md#参数说明)。 |
 | sync_mode | 输入 | 核间同步模式，用于指定参与同步的核以及SET/WAIT信号的配对方式。须与配对的pypto_pro.language.system.set_cross_core使用相同模式，取值参见[pypto_pro.language.CrossCoreSyncMode](CrossCoreSyncMode.md)。 |
 
 ## 约束说明
 
-- 必须存在与当前调用匹配的pypto_pro.language.system.set_cross_core，并保证所有参与同步的核均能到达同步点，否则可能发生死锁。多流或多算子并发时，须保证同步所需的核能够同时执行。
+- 必须存在与当前调用匹配的pypto_pro.language.system.set_cross_core，并保证所有参与同步的核均能到达同步点，否则可能发生死锁。
+- 使用INTER_BLOCK时还需满足[pypto_pro.language.system.set_cross_core的约束](set_cross_core.md#约束说明)。
 
 ## 返回值说明
 

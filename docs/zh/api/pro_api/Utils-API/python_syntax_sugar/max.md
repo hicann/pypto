@@ -34,7 +34,7 @@ result = pypto_pro.language.max(lhs, rhs)
 ## 约束说明
 
 - **仅用于标量**：用于循环边界、索引计算等场景
-- **Tile逐元素取最大值**：使用[pypto_pro.language.maximum](../../SIMD-API/memory_vector_computation/elementwise/maximum.md)
+- **Tile逐元素取最大值**：使用[pypto_pro.language.maximum](../../SIMD-API/tile_vector_computation/elementwise/maximum.md)
 - **不支持多参数**：仅接受恰好2个参数，max(a, b, c)不支持
 - **同类别约束**：两个操作数须同为整型或同为浮点型，混合int/float会报错
 

@@ -50,7 +50,7 @@ SOFT模式下，workspaces按下表组合。列表元素按类型和Tile所在�
 - gm_workspace：Tensor类型，存储空间为GM，数据类型为DT_INT32。作为所有参与核共享的同步空间，仅供本组SOFT屏障使用；首次执行Kernel前将其初始化为0。
 - ub_workspace：Tile类型，存储空间为UB，数据类型为DT_INT32。作为AIV核本地使用的同步空间，用于AIV_ONLY和MIX。
 - l1_workspace：Tile类型，存储空间为L1 Buffer，数据类型为DT_INT32。作为AIC核本地使用的同步空间，用于AIC_ONLY和MIX。
-- used_cores：可选的Python int或整数Scalar表达式。AIV_ONLY时表示参与的AIV数量，AIC_ONLY时表示参与的AIC数量，MIX时表示参与的AIC和AIV总数。省略或传0时，根据Kernel的编译和启动配置确定参与核数。
+- used_cores：可选的Python int或整数Scalar表达式，只能取0或正整数。AIV_ONLY时表示参与的AIV数量，AIC_ONLY时表示参与的AIC数量，MIX时表示参与的AIC和AIV总数。省略或传0时，根据Kernel的编译和启动配置确定参与核数；取正整数时，不得超过对应core_type实际启动的参与核数量。
 
 GM workspace按参与核数每核至少预留32字节；UB workspace至少与GM workspace等大；L1 workspace至少预留32字节。例如8个核参与同步，GM和UB workspace分别至少需要8 * 32 = 256字节。GM workspace不得与业务数据或其他同时执行的屏障复用，Kernel执行期间不得由其他逻辑修改。
 
@@ -58,9 +58,12 @@ GM workspace按参与核数每核至少预留32字节；UB workspace至少与GM 
 
 - 所有参与同步的核必须以相同顺序执行相同次数的sync_all。若循环次数或分支条件不一致，导致部分核少执行或多执行sync_all，可能发生死锁。MIX模式下，AIC侧与AIV侧的调用必须一一对应。
 - 纯Vector Kernel使用AIV_ONLY，纯Cube Kernel使用AIC_ONLY。MIX模式要求Cube侧AIC和Vector侧AIV都执行对应的sync_all；只在一侧调用会使另一侧无法到达屏障，导致Kernel超时。
-- used_cores小于已启动核数时，只能由选定的used_cores个核调用该SOFT屏障，未参与的核不得进入同一屏障。
+- 到达同一个SOFT屏障的所有核必须使用同一个GM workspace，并传入相同的used_cores。used_cores取正整数时，必须等于实际进入该屏障的核数；未参与的核不得进入同一屏障。
+- 多流或多个算子并发执行，且并发算子申请的核数总和超过物理核数时，如果至少两个并发算子使用sync_all，部分核可能因未被调度而无法到达屏障，造成死锁。须保证每个同步算子所需的核能够同时执行。
 - sync_all建立参与核之间的屏障。屏障前后需要跨核读写GM数据时，还需满足相应的数据可见性要求。
 - 与set_cross_core/wait_cross_core并用时，两侧的MIX屏障必须位于该SET/WAIT对的同一侧；禁止Cube侧先执行sync_all再SET、Vector侧先WAIT再执行sync_all，否则会形成环形等待。
+- HARD模式会占用核间同步事件ID：AIV_ONLY在AIV侧占用14，AIC_ONLY在AIC侧占用11；MIX在AIC侧占用11～13、在AIV侧占用12～13，MIX 1:2场景的AIC还会占用28和29。与set_cross_core/wait_cross_core同时使用时，不得将这些事件ID用于尚未完成的手工核间同步。SOFT模式不占用核间同步事件ID。
+- 对应core_type的全部目标核均参与同步时，优先使用HARD模式；只需部分核参与同步时，使用SOFT模式并通过used_cores指定参与核数量。
 
 ## 返回值说明
 
