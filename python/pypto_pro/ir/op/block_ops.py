@@ -1741,62 +1741,74 @@ _A5_MOVE_COMBOS = (
 _A5_MOVE_QUANT_COMBOS = (
     # Acc -> Vec, scalar/vector quantized.
     # Supported quantized dtype conversions:
-    # FP32 -> INT8 / HF8 / FP16 / FP8E4M3FN / FP32
-    # INT32 -> INT8 / FP16
+    # FP32 -> INT8 / UINT8 / HF8 / FP16 / BF16 / FP8E4M3FN / FP32
+    # INT32 -> INT8 / UINT8 / FP16 / BF16
 
     # ══ Acc -> Vec · NZ -> ND ══
     ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.INT8),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.UINT8),
     ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.HF8),
     ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.FP16),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.BF16),
     ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.FP8E4M3FN),
     ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.FP32),
     ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.INT32, DataType.INT8),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.INT32, DataType.UINT8),
     ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.INT32, DataType.FP16),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.ND, DataType.INT32, DataType.BF16),
 
     # ══ Acc -> Vec · NZ -> DN ══
     ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.FP32, DataType.INT8),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.FP32, DataType.UINT8),
     ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.FP32, DataType.HF8),
     ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.FP32, DataType.FP16),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.FP32, DataType.BF16),
     ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.FP32, DataType.FP8E4M3FN),
     ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.FP32, DataType.FP32),
     ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.INT32, DataType.INT8),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.INT32, DataType.UINT8),
     ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.INT32, DataType.FP16),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.DN, DataType.INT32, DataType.BF16),
 
     # ══ Acc -> Vec · NZ -> NZ ══
     ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.INT8),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.UINT8),
     ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.HF8),
     ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.FP16),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.BF16),
     ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.FP8E4M3FN),
     ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.FP32),
     ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.INT32, DataType.INT8),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.INT32, DataType.UINT8),
     ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.INT32, DataType.FP16),
+    ("Acc", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.INT32, DataType.BF16),
 )
 
 
 _A5_INSERT_COMBOS = (
-    # Vec -> Vec; INSERT constrains dtype but does not intercept layout.
-    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.INT8, DataType.INT8),
-    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.INT32, DataType.INT32),
-    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP16, DataType.FP16),
-    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.BF16, DataType.BF16),
-    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP32, DataType.FP32),
-    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
-    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP8E5M2, DataType.FP8E5M2),
-    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.HF8, DataType.HF8),
-    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP8E8M0, DataType.FP8E8M0),
-    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP4E1M2, DataType.FP4E1M2),
-    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP4E2M1, DataType.FP4E2M1),
-    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.INT8, DataType.INT8),
-    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.INT32, DataType.INT32),
-    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP16, DataType.FP16),
-    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.BF16, DataType.BF16),
-    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP32, DataType.FP32),
-    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
-    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP8E5M2, DataType.FP8E5M2),
-    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.HF8, DataType.HF8),
-    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP8E8M0, DataType.FP8E8M0),
-    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP4E1M2, DataType.FP4E1M2),
-    ("Vec", "Vec", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP4E2M1, DataType.FP4E2M1),
+    # Vec -> Vec; ND -> ND, NZ -> NZ
+    ("Vec", "Vec", TensorLayout.ND, TensorLayout.ND, DataType.INT8, DataType.INT8),
+    ("Vec", "Vec", TensorLayout.ND, TensorLayout.ND, DataType.INT32, DataType.INT32),
+    ("Vec", "Vec", TensorLayout.ND, TensorLayout.ND, DataType.FP16, DataType.FP16),
+    ("Vec", "Vec", TensorLayout.ND, TensorLayout.ND, DataType.BF16, DataType.BF16),
+    ("Vec", "Vec", TensorLayout.ND, TensorLayout.ND, DataType.FP32, DataType.FP32),
+    ("Vec", "Vec", TensorLayout.ND, TensorLayout.ND, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
+    ("Vec", "Vec", TensorLayout.ND, TensorLayout.ND, DataType.FP8E5M2, DataType.FP8E5M2),
+    ("Vec", "Vec", TensorLayout.ND, TensorLayout.ND, DataType.HF8, DataType.HF8),
+    ("Vec", "Vec", TensorLayout.ND, TensorLayout.ND, DataType.FP8E8M0, DataType.FP8E8M0),
+    ("Vec", "Vec", TensorLayout.ND, TensorLayout.ND, DataType.FP4E1M2, DataType.FP4E1M2),
+    ("Vec", "Vec", TensorLayout.ND, TensorLayout.ND, DataType.FP4E2M1, DataType.FP4E2M1),
+    ("Vec", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.INT8, DataType.INT8),
+    ("Vec", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.INT32, DataType.INT32),
+    ("Vec", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP16, DataType.FP16),
+    ("Vec", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.BF16, DataType.BF16),
+    ("Vec", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP32, DataType.FP32),
+    ("Vec", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP8E4M3FN, DataType.FP8E4M3FN),
+    ("Vec", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP8E5M2, DataType.FP8E5M2),
+    ("Vec", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.HF8, DataType.HF8),
+    ("Vec", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP8E8M0, DataType.FP8E8M0),
+    ("Vec", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP4E1M2, DataType.FP4E1M2),
+    ("Vec", "Vec", TensorLayout.NZ, TensorLayout.NZ, DataType.FP4E2M1, DataType.FP4E2M1),
 
     # Vec -> Mat; destination layout is not intercepted.
     ("Vec", "Mat", TensorLayout.ND, _ANY_LAYOUT, DataType.INT8, DataType.INT8),

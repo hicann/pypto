@@ -35,8 +35,8 @@ pypto_pro.language.move(
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| dst_tile | 输出 | 目的操作数，Tile类型，支持的数据类型详见[约束说明](#约束说明)。 |
-| src_tile | 输入 | 源操作数，Tile类型，支持的数据类型详见[约束说明](#约束说明)。 |
+| dst_tile | 输出 | 目的操作数，Tile类型，支持的数据类型与分形详见[约束说明](#约束说明)。 |
+| src_tile | 输入 | 源操作数，Tile类型，支持的数据类型与分形详见[约束说明](#约束说明)。 |
 | offset | 输入 | 可选，表示小Tile在大Tile中的相对位置，格式为[offset_m, offset_n]，单位为元素个数。<br>- 当源操作数的shape >= 目的操作数的shape时，表示从源操作数的第offset_m行offset_n列开始读，数据的搬运量取自目的操作数的valid_shape。<br>- 当源操作数的shape < 目的操作数的shape时，表示从目的操作数的第offset_m行offset_n列开始写，数据的搬运量取自源操作数的valid_shape。 |
 | acc_to_vec_mode | 输入 | 可选，L0C Buffer→UB搬运时是否开启双目标搬运模式，[pypto_pro.language.AccToVecMode](../basic_data_structures/AccToVecMode.md)类型。 |
 | relu_pre_mode | 输入 | 可选，L0C Buffer→UB搬运时是否开启随路ReLU操作，[pypto_pro.language.ReluPreMode](../basic_data_structures/ReluPreMode.md)类型。 |
@@ -45,18 +45,23 @@ pypto_pro.language.move(
 
 ## 约束说明
 
-- 数据类型约束：
+- 数据类型及分形约束：
 
-  | 源 → 目的 | 数据类型要求 |
-  |---|---|
-  | L1 Buffer → L0A Buffer | 源与目的必须相同，支持DT_FP8E4M3FN、DT_FP8E5M2、DT_HF8、DT_FP16、DT_BF16、DT_FP32、DT_FP4E2M1、DT_FP4E1M2、DT_FP8E8M0。 |
-  | L1 Buffer → L0B Buffer | 源与目的必须相同，支持DT_FP8E4M3FN、DT_FP8E5M2、DT_HF8、DT_FP16、DT_BF16、DT_FP32、DT_FP4E2M1、DT_FP4E1M2、DT_FP8E8M0。 |
-  | UB → UB | 源与目的必须相同，支持DT_UINT8、DT_INT32、DT_FP8E4M3FN、DT_FP8E5M2、DT_HF8、DT_FP16、DT_BF16、DT_FP32、DT_FP4E2M1、DT_FP4E1M2。 |
-  | UB → L1 Buffer | 源与目的必须相同，支持DT_FP8E4M3FN、DT_FP8E5M2、DT_HF8、DT_FP16、DT_BF16、DT_FP32、DT_FP4E2M1、DT_FP4E1M2、DT_FP8E8M0。 |
-  | L1 Buffer → BiasTable Buffer | 支持DT_INT32 → DT_INT32、DT_FP32 → DT_FP32、DT_FP16 → DT_FP32、DT_BF16 → DT_FP32。 |
-  | L1 Buffer → Fixpipe Buffer | 源与目的必须相同，支持DT_INT64、DT_UINT64。 |
-  | L1 Buffer → L0A_MX Buffer/L0B_MX Buffer | 源与目的必须相同，仅支持DT_FP8E8M0。 |
-  | L0C Buffer → UB/L1 Buffer | 未配置scale时：<br>- 当源为DT_FP32，目的支持DT_FP16、DT_BF16、DT_FP32；<br>配置scale时：<br>- 当源为DT_FP32，目的支持DT_INT8、DT_HF8、DT_FP8E4M3FN、DT_FP16； |
+  | 源 → 目的 | 分形要求 | 数据类型要求 |
+  |---|---|---|
+  | L1 Buffer → L0A Buffer | 源支持ND、NZ、ZN、ZZ，目的固定为NZ。 | 源与目的必须相同，支持DT_INT8、DT_FP8E4M3FN、DT_FP8E5M2、DT_HF8、DT_FP16、DT_BF16、DT_FP32、DT_FP4E2M1、DT_FP4E1M2、DT_FP8E8M0。 |
+  | L1 Buffer → L0B Buffer | 源支持ND、NZ、ZN、ZZ，目的固定为ZN。 | 源与目的必须相同，支持DT_INT8、DT_FP8E4M3FN、DT_FP8E5M2、DT_HF8、DT_FP16、DT_BF16、DT_FP32、DT_FP4E2M1、DT_FP4E1M2、DT_FP8E8M0。 |
+  | UB → UB（目的Tile的shape不大于源Tile） | 不校验分形。 | 源与目的必须相同。<br>- 非ND → NZ：支持DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP16、DT_BF16、DT_FP32、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。<br>- ND → NZ：支持DT_INT8、DT_UINT8、DT_INT32、DT_FP16、DT_BF16、DT_FP32、DT_FP8E4M3FN、DT_FP8E5M2、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
+  | UB → UB（目的Tile的shape大于源Tile） | ND → ND、NZ → NZ。 | 源与目的必须相同，支持DT_INT8、DT_INT32、DT_FP16、DT_BF16、DT_FP32、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
+  | UB → L1 Buffer（目的Tile的shape不大于源Tile） | 源支持ND、NZ，目的不校验分形。 | 源与目的必须相同，支持DT_INT8、DT_FP8E4M3FN、DT_FP8E5M2、DT_HF8、DT_FP16、DT_BF16、DT_FP32、DT_FP4E2M1、DT_FP4E1M2、DT_FP8E8M0。 |
+  | UB → L1 Buffer（目的Tile的shape大于源Tile） | 源支持ND、NZ，目的不校验分形。 | 源与目的必须相同，支持DT_INT8、DT_INT32、DT_FP16、DT_BF16、DT_FP32、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
+  | L1 Buffer → BiasTable Buffer | 不校验分形。 | 支持DT_INT32 → DT_INT32、DT_FP32 → DT_FP32、DT_FP16 → DT_FP32、DT_BF16 → DT_FP32。 |
+  | L1 Buffer → Fixpipe Buffer | 不校验分形。 | 目的必须为DT_INT64或DT_UINT64，源数据类型不做限制。 |
+  | L1 Buffer → L0A_MX Buffer | 源与目的分形均为ZZ。 | 源与目的必须相同，仅支持DT_FP8E8M0。 |
+  | L1 Buffer → L0B_MX Buffer | 源与目的分形均为NN。 | 源与目的必须相同，仅支持DT_FP8E8M0。 |
+  | L0C Buffer → UB（不配置scale） | NZ → ND，NZ → DN，NZ → NZ。 | 支持DT_FP32 → DT_FP32/DT_FP16/DT_BF16，以及DT_INT32 → DT_INT32。 |
+  | L0C Buffer → UB（配置scale） | NZ → ND，NZ → DN，NZ → NZ。 | 支持DT_FP32 → DT_INT8/DT_UINT8/DT_HF8/DT_FP16/DT_BF16/DT_FP8E4M3FN/DT_FP32，以及DT_INT32 → DT_INT8/DT_UINT8/DT_FP16/DT_BF16。 |
+  | L0C Buffer → L1 Buffer（仅支持目的Tile的shape大于源Tile） | NZ → NZ。 | 支持DT_FP32 → DT_FP32/DT_FP16/DT_BF16，以及DT_INT32 → DT_INT32。 |
 
 - 尾块场景下，需要搭配pypto_pro.language.set_validshape与[pypto_pro.language.TileType](../basic_data_structures/TileType.md)中的compact参数使用，否则可能出现精度失败或卡死现象。
 - L1 Buffer → L0A_MX Buffer/L0B_MX Buffer要求目的Tile必须满足L0A_MX Buffer地址 = L0A Buffer地址 >> 4或L0B_MX Buffer地址 = L0B Buffer地址 >> 4，否则MX矩阵乘时会读取错误的量化系数。

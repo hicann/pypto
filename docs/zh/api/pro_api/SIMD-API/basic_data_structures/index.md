@@ -4,6 +4,7 @@
 :maxdepth: 1
 :titlesonly:
 
+AccPhase
 AccToVecMode
 AtomicType
 CacheLine
