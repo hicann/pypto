@@ -22,26 +22,33 @@ On AICORE error, CANN asynchronously invokes the callback which writes
 dump files (tensor data + ``_host.o``) to
 ``ASCEND_WORK_PATH/extra-info/data-dump/<device_id>/``.
 
-The callback also automatically compiles the kernel with ``-g`` via bisheng
-and places the debug ``.o`` in the dump directory, so that ``msnpureport``
-can resolve source line numbers.  No manual intervention is needed — the
-compile command is pre-constructed by :func:`set_dump_info` (called before
+The callback also automatically recompiles the JIT caller (``call_kernel.cpp``,
+which includes ``kernel.cpp``) with ``-g`` via bisheng — same flags as the JIT
+build, so the device code stays bit-identical to what was launched — and places
+the resulting ``<kernel_name>_call_kernel.so`` in the dump directory. That one
+artifact serves both offline reproduction (ctypes relaunch) and Error-PC
+symbolization (fixedPCOffset -> source line). No manual intervention is
+needed — the command is pre-constructed by :func:`set_dump_info` (called before
 every kernel launch) and cached in the C++ shim for the callback to execute.
 """
 
 from __future__ import annotations
 
 import ctypes
+import glob
 import logging
 import os
 from pathlib import Path
 import shlex
 import shutil
+from typing import TYPE_CHECKING
 
 import torch
 
 from pypto_pro import DataType
-from pypto_pro.runtime.compile_config import KernelTarget
+
+if TYPE_CHECKING:
+    from pypto_pro.runtime.jit import CompiledKernel
 
 _PL_DTYPE_TO_ACL_DTYPE: dict[str, int] = {
     str(DataType.FP32): 0,    # ACL_FLOAT
@@ -61,12 +68,8 @@ _PL_DTYPE_TO_ACL_DTYPE: dict[str, int] = {
 }
 
 _MAX_DIMS = 8
-
 _lib: ctypes.CDLL | None = None
 _registered: bool = False
-_cached_build_dir: str = ""
-_cached_kernel_name: str = ""
-_cached_target: KernelTarget | None = None
 
 
 def _ensure_lib() -> ctypes.CDLL:
@@ -127,22 +130,35 @@ def register_callback() -> bool:
     return _registered
 
 
-def _build_debug_compile_cmd(build_dir: str, kernel_name: str,
-                             target: KernelTarget | None) -> str:
-    """Pre-construct the bisheng -g compile command for the C++ callback to execute.
+def _build_debug_compile_cmd(compiled: "CompiledKernel") -> str:
+    """Pre-construct the shell command for the C++ callback to execute.
 
     Returns a shell command string that:
       1. mkdir -p the dump directory
-      2. compiles kernel.cpp with -g via bisheng
-      3. outputs <dump_dir>/<kernel_name>_debug.o
+      2. recompiles call_kernel.cpp (which includes kernel.cpp) with -g and the
+         exact same flags the JIT used, linking it into
+         <dump_dir>/<kernel_name>_call_kernel.so
+
+    The -g build carries DWARF for the device code while leaving the device
+    .text bit-identical to the launched binary (verified: -g and linking never
+    rewrite the embedded kernel image), so this single artifact serves BOTH
+    offline reproduction (ctypes.CDLL + call_kernel relaunch) and Error-PC
+    symbolization (fixedPCOffset -> source line via the embedded line table).
 
     Returns empty string if any prerequisite is missing (bisheng not found,
-    kernel.cpp missing, env vars unset, etc.) so the callback skips compilation.
+    call_kernel.cpp missing, env vars unset, etc.) so the callback skips
+    compilation.
     """
-    if not build_dir or target is None:
+    build_dir = compiled.build_dir
+    kernel_name = compiled.kernel_name
+    has_print_debug = compiled.needs_print_debug
+    target = compiled.target
+    jit_lib_path = compiled.lib_path
+
+    if not build_dir:
         return ""
-    kernel_cpp = os.path.join(build_dir, "kernel.cpp")
-    if not os.path.isfile(kernel_cpp):
+    caller_cpp = os.path.join(build_dir, "call_kernel.cpp")
+    if not os.path.isfile(caller_cpp):
         return ""
 
     work_path = os.environ.get("ASCEND_WORK_PATH", "")
@@ -151,7 +167,7 @@ def _build_debug_compile_cmd(build_dir: str, kernel_name: str,
 
     device_id = os.environ.get("TILE_FWK_DEVICE_ID", "0")
     dump_dir = os.path.join(work_path, "extra-info", "data-dump", device_id)
-    debug_o_path = os.path.join(dump_dir, f"{kernel_name}_debug.o")
+    so_path = os.path.join(dump_dir, f"{kernel_name}_call_kernel.so")
 
     ascend_home = os.environ.get("ASCEND_HOME_PATH", "")
     if not ascend_home:
@@ -164,49 +180,61 @@ def _build_debug_compile_cmd(build_dir: str, kernel_name: str,
         return ""
 
     from pypto_pro.runtime.compile_config import get_jit_compile_config
-    from pypto_pro.runtime.jit import _build_llvm_args, get_current_arch
+    from pypto_pro.runtime.jit import get_current_arch
 
     arch = get_current_arch()
 
     cfg = get_jit_compile_config()
 
-    mem_arch = cfg._resolve_memory_arch_flag(arch)
-    variables = {
-        "toolkit_home": toolkit_home,
-        "mem_arch": mem_arch,
-        "npu_arch": target.npu_arch,
-    }
-    common = cfg._format_values(cfg.common_flags, variables)
-    arch_flags = cfg._format_values(cfg.arch_flags, variables)
-    include_flags = cfg.runtime_include_flags(ascend_home)
-    llvm_args = _build_llvm_args(arch)
+    if target is None:
+        return ""
 
+    # Mirror the JIT's own shared-library invocation (see jit._compile_shared_library):
+    # same arch/fatobj/print-debug flags (all resolved from the same KernelTarget the
+    # JIT used), same llvm args and link args, only -g and the output location differ.
     cmd_parts = [
         shlex.quote(bisheng),
-        *[shlex.quote(f) for f in arch_flags],
-        *[shlex.quote(f) for f in common],
-        "-g",
-        "-xcce",
-        *[shlex.quote(f) for f in include_flags],
-        *[shlex.quote(f) for f in llvm_args],
-        "-c",
-        shlex.quote(kernel_cpp),
-        "-o",
-        shlex.quote(debug_o_path),
+        *[shlex.quote(f) for f in cfg.build_bisheng_flags(
+            toolkit_home=toolkit_home,
+            arch=arch,
+            target=target,
+            enable_print_debug=has_print_debug,
+        )],
+        *[shlex.quote(f) for f in cfg.runtime_include_flags(ascend_home)],
+        *[shlex.quote(f) for f in cfg.build_llvm_args(arch)],
     ]
-    return f"mkdir -p {shlex.quote(dump_dir)} && {' '.join(cmd_parts)}"
+    cmd_parts.append("-g")
+    cmd_parts.append(shlex.quote(caller_cpp))
+    cmd_parts.extend(shlex.quote(f) for f in cfg.runtime_link_args(ascend_home))
+    cmd_parts.extend(["-o", shlex.quote(so_path)])
+
+    cmd = f"mkdir -p {shlex.quote(dump_dir)} && {' '.join(cmd_parts)}"
+
+    # Copy the kernel sources next to the .so so the dump directory is fully
+    # self-contained: the repro tool and the user never need the (ephemeral)
+    # build directory to read the source lines the Error PC resolves to.
+    cpp_sources = sorted(glob.glob(os.path.join(build_dir, "*.cpp")))
+    if cpp_sources:
+        cmd += " && cp " + " ".join(shlex.quote(f) for f in cpp_sources) + f" {shlex.quote(dump_dir)}/"
+
+    # Preserve the original JIT-launched library (call_kernel_<digest>.so) as
+    # well: the -g rebuild is verified bit-identical in .text, but keeping the
+    # exact launched bytes allows audit/compare and a highest-fidelity repro
+    # path that does not depend on that verification.
+    if jit_lib_path and os.path.isfile(jit_lib_path):
+        cmd += f" && cp {shlex.quote(jit_lib_path)} {shlex.quote(dump_dir)}/"
+
+    return cmd
 
 
-def set_dump_info(kernel_name: str, args: tuple, param_specs: list, build_dir: str = "",
-                  target: KernelTarget | None = None) -> None:
-    """Cache tensor info from runtime args and param_specs before kernel launch."""
-    global _cached_build_dir, _cached_kernel_name, _cached_target
-    if build_dir:
-        _cached_build_dir = build_dir
-    _cached_kernel_name = kernel_name
-    _cached_target = target
+def set_dump_info(compiled: "CompiledKernel", args: tuple) -> None:
+    """Cache tensor info from runtime args before kernel launch.
 
-    if not _cached_build_dir or not os.path.isdir(_cached_build_dir):
+    Everything the exception-dump callback needs about the kernel's identity
+    and artifacts (name, build dir, arch mix, launched .so) is read from the
+    CompiledKernel; ``args`` is the only per-launch input.
+    """
+    if not compiled.build_dir or not os.path.isdir(compiled.build_dir):
         logging.warning("exception dump skipped: not a jit scenario (build_dir unavailable)")
         return
 
@@ -221,7 +249,7 @@ def set_dump_info(kernel_name: str, args: tuple, param_specs: list, build_dir: s
     flat_shapes: list[int] = []
     shape_counts: list[int] = []
 
-    for arg, spec in zip(args, param_specs):
+    for arg, spec in zip(args, compiled.param_specs):
         kind_name = spec.kind.name
         if kind_name in ("TENSOR", "PTR"):
             if arg is None:
@@ -251,10 +279,7 @@ def set_dump_info(kernel_name: str, args: tuple, param_specs: list, build_dir: s
 
     lib = _ensure_lib()
 
-    debug_cmd = _build_debug_compile_cmd(
-        _cached_build_dir, _cached_kernel_name, _cached_target
-    )
-    lib.pro_set_debug_cmd(debug_cmd.encode("utf-8"))
+    lib.pro_set_debug_cmd(_build_debug_compile_cmd(compiled).encode("utf-8"))
 
     if num_tensors == 0:
         return
@@ -267,7 +292,7 @@ def set_dump_info(kernel_name: str, args: tuple, param_specs: list, build_dir: s
     c_counts = (ctypes.c_int32 * num_tensors)(*shape_counts)
 
     lib.pro_set_dump_info(
-        kernel_name.encode("utf-8"),
+        compiled.kernel_name.encode("utf-8"),
         num_tensors,
         c_types,
         c_sizes,

@@ -609,7 +609,7 @@ def test_cached_launch_passes_actual_stream_without_python_query(monkeypatch):
         _torch_mock.npu.get_stream_limit.assert_not_called()
         config_lookup.assert_not_called()
         assert len(set_dump_info.call_args_list) == 3
-        assert all(call.kwargs["target"] is target for call in set_dump_info.call_args_list)
+        assert all(call.args[0] is compiled for call in set_dump_info.call_args_list)
     finally:
         _torch_mock.npu.current_stream.side_effect = None
 
