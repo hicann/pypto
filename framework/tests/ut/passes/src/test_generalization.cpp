@@ -277,7 +277,7 @@ TEST_F(GeneralizetionTest, TestReshapeToAll)
     Tensor out_tensor4(DT_FP32, shape6, "out_tensor4");
 
     Tensor idxs(DT_INT32, {256, 256}, "idxs");
-    Tensor keyStates(DT_INT32, {256, 256}, "keyStates");
+    Tensor keyStates(DT_FP32, {256, 256}, "keyStates");
     int minusTwo = -2;
 
     FUNCTION("C")
@@ -316,7 +316,7 @@ TEST_F(GeneralizetionTest, TestAssembleToAll)
     Tensor result3(DT_FP32, {128, 128}, "result3");
 
     Tensor idxs(DT_INT32, {128, 128}, "idxs");
-    Tensor keyStates(DT_INT32, {128, 128}, "keyStates");
+    Tensor keyStates(DT_FP32, {128, 128}, "keyStates");
     int minusTwo = -2;
 
     FUNCTION("C")
@@ -369,7 +369,7 @@ TEST_F(GeneralizetionTest, TestViewToAll)
     Tensor result3(DT_FP32, {128, 128}, "result3");
 
     Tensor idxs(DT_INT32, {128, 128}, "idxs");
-    Tensor keyStates(DT_INT32, {128, 128}, "keyStates");
+    Tensor keyStates(DT_FP32, {128, 128}, "keyStates");
     int minusTwo = -2;
 
     FUNCTION("C")
@@ -417,7 +417,7 @@ TEST_F(GeneralizetionTest, TestScatterUpdateToAll)
     Tensor result3(DT_FP32, {128, 128}, "result3");
 
     Tensor idxs(DT_INT32, {128, 128}, "idxs");
-    Tensor keyStates(DT_INT32, {128, 128}, "keyStates");
+    Tensor keyStates(DT_FP32, {128, 128}, "keyStates");
     int minusTwo = -2, minusOne = -1;
 
     FUNCTION("C")
@@ -465,7 +465,7 @@ TEST_F(GeneralizetionTest, TestTransposeToAll)
     Tensor result3(DT_FP32, {128, 128}, "result3");
 
     Tensor idxs(DT_INT32, {128, 128}, "idxs");
-    Tensor keyStates(DT_INT32, {128, 128}, "keyStates");
+    Tensor keyStates(DT_FP32, {128, 128}, "keyStates");
     int minusTwo = -2;
 
     FUNCTION("C")

@@ -281,6 +281,13 @@ static void CheckScatterUpdateIndex(const Tensor& index)
 
 static void CheckScatterUpdateInvalid(const Tensor& dst, const Tensor& index, const Tensor& src)
 {
+    static const std::unordered_set<DataType> SCATTER_UPDATE_A2A3_TYPES = {DT_FP32,  DT_FP16,  DT_BF16,
+                                                                           DT_INT32, DT_INT16, DT_INT8};
+    static const std::unordered_set<DataType> SCATTER_UPDATE_A5_TYPES = {DT_FP32,  DT_FP16,  DT_BF16,
+                                                                         DT_INT32, DT_INT16, DT_INT8};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(SCATTER_UPDATE_A2A3_TYPES, SCATTER_UPDATE_A5_TYPES);
+    CheckTensorDataType(dst.GetStorage(), supportedTypes, "SCATTERUPDATE");
+    CheckTensorsDataTypeConsistency(dst.GetStorage(), src.GetStorage(), "SCATTERUPDATE");
     std::vector<LogicalTensorPtr> tensors = {dst.GetStorage(), src.GetStorage()};
     CheckTensorsDimConsistency(tensors, "SCATTERUPDATE");
     CheckScatterUpdateIndex(index);
