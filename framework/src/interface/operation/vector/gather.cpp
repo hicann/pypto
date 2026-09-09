@@ -300,8 +300,8 @@ Tensor GatherElements(const Tensor& params, const Tensor& indices, int axis)
     }
     static const std::unordered_set<DataType> a2a3Types = {DT_FP32,   DT_FP16,  DT_BF16,  DT_INT32,
                                                            DT_UINT32, DT_INT16, DT_UINT16};
-    static const std::unordered_set<DataType> a5Types = {DT_FP32,  DT_FP16,   DT_BF16,  DT_INT32, DT_UINT32,
-                                                         DT_INT16, DT_UINT16, DT_INT64, DT_UINT64};
+    static const std::unordered_set<DataType> a5Types = {DT_FP32,   DT_FP16,  DT_BF16,  DT_INT32,
+                                                         DT_UINT32, DT_INT16, DT_UINT16};
     const auto& supportedTypes = GetSupportedDataTypesByArch(a2a3Types, a5Types);
     CheckTensorDataType(params.GetStorage(), supportedTypes, "GATHERELEMENTS");
     std::unordered_set<DataType> indexSupportedTypes = {DT_INT32, DT_INT64};
