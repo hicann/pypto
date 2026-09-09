@@ -28,11 +28,15 @@
 #include "machine/runtime/bundle/pack/kernel_bundle_packer.h"
 #include "machine/runtime/bundle/pack/kernel_bundle_pack.h"
 #include "machine/utils/dynamic/dev_encode_function_param.h"
+#ifndef TILE_FWK_BUNDLE_STANDALONE
 #include "machine/compile/aicore_compiler.h"
+#endif
 #include "interface/function/function.h"
 
 using namespace npu::tile_fwk;
 namespace npu::tile_fwk::dynamic {
+void FillExceptionKernelDisplayName(const char* kernelName, AdxExceptionDumpInfo* exceptionDumpInfo);
+
 constexpr int32_t MAX_AICPU_ARG_NUM = 7;
 
 static bool PackAndDumpBundle(const std::vector<uint8_t>& kernelBinary, const DyndevFunctionAttribute* dynAttr,
@@ -74,6 +78,7 @@ void DumpBundledKernel(const DyndevFunctionAttribute* dynAttr, const char* kerne
     PackAndDumpBundle(dynAttr->kernelBinary, dynAttr, kernelName, "");
 }
 
+#ifndef TILE_FWK_BUNDLE_STANDALONE
 void DumpNoSubFuncBundledKernel(const DyndevFunctionAttribute* dynAttr, Function* func, const char* kernelName)
 {
     if (dynAttr == nullptr || func == nullptr || kernelName == nullptr) {
@@ -122,6 +127,7 @@ void DumpNoSubFuncBundledKernel(const DyndevFunctionAttribute* dynAttr, Function
     // 3. 打包并 dump
     PackAndDumpBundle(noSubFuncKernel, dynAttr, kernelName, "_nosubfunc");
 }
+#endif
 
 void GetTensorInfo(uint32_t inputSize, DevTensorData* tensorData, AdxExceptionDumpInfo* exceptionDumpInfo)
 {
@@ -161,21 +167,32 @@ void GetTensorInfo(uint32_t inputSize, DevTensorData* tensorData, AdxExceptionDu
     }
     exceptionDumpInfo->extraTensorNum = inputSize;
     DumpBundledKernel(dynAttr.get(), exceptionDumpInfo->kernelName);
+#ifndef TILE_FWK_BUNDLE_STANDALONE
     // 触发 __HAS_SUB_FUNC__ 未定义的二进制编译并打包 dump（失败仅 WARNING 降级）
     DumpNoSubFuncBundledKernel(dynAttr.get(), func, exceptionDumpInfo->kernelName);
+#endif
 }
 
 int32_t GetAicoreExceptionDumpInfo(std::vector<void*> kernelArg, AdxExceptionDumpInfo* exceptionDumpInfo)
 {
+    if (kernelArg.size() <= 6 || kernelArg[4] == nullptr || kernelArg[6] == nullptr) {
+        MACHINE_LOGW("GetAicoreExceptionDumpInfo failed: incomplete kernel args");
+        return static_cast<int32_t>(npu::tile_fwk::MachineError::DUMP_DFX);
+    }
     int64_t* tensor = static_cast<int64_t*>(kernelArg[4]);
-    uint32_t tensorSize = tensor[0] - tensor[1];
-    MACHINE_LOGD("GetAicoreExceptionDumpInfo: tensorSize=%u, outputTensorSize:[%ld]", tensorSize, tensor[1]);
+    // Mixed operand list: ABI is still [nMixed, nOut=0], dump uses nMixed only (no in/out split).
+    if (tensor[0] < 0) {
+        MACHINE_LOGW("GetAicoreExceptionDumpInfo failed: negative mixed tensor count n=%ld", tensor[0]);
+        return static_cast<int32_t>(npu::tile_fwk::MachineError::DUMP_DFX);
+    }
+    MACHINE_LOGD("GetAicoreExceptionDumpInfo: mixedCount=[%ld]", tensor[0]);
     auto tensorData = (DevTensorData*)kernelArg[6];
-    GetTensorInfo(tensorSize, tensorData, exceptionDumpInfo);
+    GetTensorInfo(static_cast<uint32_t>(tensor[0]), tensorData, exceptionDumpInfo);
     return 0;
 }
 
-int32_t GetDeviceExceptionDumpInfo(RtAicoreExDetailInfo& aicoreExceptionInfo, AdxExceptionDumpInfo* exceptionDumpInfo)
+int32_t GetDeviceExceptionDumpInfo(RtAicoreExDetailInfo& aicoreExceptionInfo, AdxExceptionDumpInfo* exceptionDumpInfo,
+                                   uint32_t exceptionDumpSize)
 {
     auto kernelArgAddr = aicoreExceptionInfo.exceptionArgs.argAddr;
     auto argsSize = aicoreExceptionInfo.exceptionArgs.argsize;
@@ -206,6 +223,9 @@ int32_t GetDeviceExceptionDumpInfo(RtAicoreExDetailInfo& aicoreExceptionInfo, Ad
         MACHINE_LOGI("Current exception info not PyPTO, which kernelName is[%s]", kernelName);
         return 0;
     }
+    for (uint32_t i = 0; i < exceptionDumpSize; ++i) {
+        FillExceptionKernelDisplayName(kernelName, &exceptionDumpInfo[i]);
+    }
     exceptionDumpInfo->argAddr = kernelArgAddr;
     exceptionDumpInfo->argssize = argsSize;
     auto exceptionKernelInfo = aicoreExceptionInfo.exceptionArgs.exceptionKernelInfo;
@@ -226,6 +246,17 @@ void FillExceptionKernelName(const char* kernelName, AdxExceptionDumpInfo* excep
         if (ret != 0) {
             MACHINE_LOGW("Mem cpy kernelDisplayName from exceptionKernelInfo failed");
         }
+    }
+}
+
+void FillExceptionKernelDisplayName(const char* kernelName, AdxExceptionDumpInfo* exceptionDumpInfo)
+{
+    if (kernelName == nullptr) {
+        return;
+    }
+    const auto ret = strcpy_s(exceptionDumpInfo->kernelDisplayName, MAX_KERNEL_BUF_LEN, kernelName);
+    if (ret != 0) {
+        MACHINE_LOGW("Mem cpy kernelDisplayName failed");
     }
 }
 
@@ -267,15 +298,13 @@ int32_t GetAicpuExceptionDumpInfo(RtAicpuExDetailInfo& aicpuExcepitionInfo, AdxE
         MACHINE_LOGD("Aicpu kernelArgs is not suitable pypto");
         return 0;
     }
-    // aicpu Op whose functionName == kerneName
+
     if (aicpuExcepitionInfo.functionName != nullptr &&
         strncmp(aicpuExcepitionInfo.functionName, "DynTileFwkKernelServer", strlen("DynTileFwkKernelServer")) != 0) {
         MACHINE_LOGI("Current exception info is not PyPTO");
         return 0;
     }
 
-    std::string aicpuPyptoName = "PyPTO_Aicpu_" + Program::GetInstance().GetLastFunction()->GetOriginalRawName();
-    FillExceptionKernelName(aicpuPyptoName.c_str(), exceptionDumpInfo);
     MACHINE_LOGI("Current argAddr is %p, argSize: %u", kernelArgAddr, argSize);
     std::vector<uint8_t> kernelArg(argSize);
     int rc = RuntimeMemcpyDirect(kernelArg.data(), argSize, kernelArgAddr, argSize, RtMemcpyKind::DEVICE_TO_HOST);
@@ -285,13 +314,31 @@ int32_t GetAicpuExceptionDumpInfo(RtAicpuExDetailInfo& aicpuExcepitionInfo, AdxE
     }
 
     npu::tile_fwk::AiCpuArgs* aicpuArgs = (AiCpuArgs*)kernelArg.data();
+    const char* runtimeKernelName = nullptr;
+    if (aicpuExcepitionInfo.kernelName != nullptr && aicpuExcepitionInfo.kernelName[0] != '\0') {
+        runtimeKernelName = aicpuExcepitionInfo.kernelName;
+    } else if (aicpuExcepitionInfo.functionName != nullptr && aicpuExcepitionInfo.functionName[0] != '\0') {
+        runtimeKernelName = aicpuExcepitionInfo.functionName;
+    }
+    FillExceptionKernelName(runtimeKernelName, exceptionDumpInfo);
+
+    auto* lastFunc = Program::GetInstance().GetLastFunction();
+    std::string displayName;
+    const size_t opNameSize = strnlen(aicpuArgs->opName, sizeof(aicpuArgs->opName));
+    if (opNameSize != 0) {
+        displayName.assign(aicpuArgs->opName, opNameSize);
+    } else if (lastFunc != nullptr) {
+        displayName = "PyPTO_Aicpu_" + lastFunc->GetOriginalRawName();
+    } else {
+        displayName = "PyPTO_Aicpu_bundle_kernel";
+    }
+    FillExceptionKernelDisplayName(displayName.c_str(), exceptionDumpInfo);
     // device kernelArgs
     [[maybe_unused]] DeviceKernelArgs deviceKernelArgs = aicpuArgs->kArgs;
-    // tensor info
+    // Mixed operand list: [nMixed, nOut=0] then DevTensorData[nMixed].
     int64_t* tensorInfo = (int64_t*)(aicpuArgs + 1);
-    int64_t inputSize = tensorInfo[0];
     auto tensorData = (DevTensorData*)(tensorInfo + 2);
-    GetTensorInfo(inputSize, tensorData, exceptionDumpInfo);
+    GetTensorInfo(static_cast<uint32_t>(tensorInfo[0]), tensorData, exceptionDumpInfo);
     return 0;
 }
 
@@ -305,7 +352,7 @@ int32_t DeviceExceptionDumpCallBack(RtExceptionInfo* exceptionInfo, AdxException
         if (ret != 0) {
             return ret;
         }
-        return GetDeviceExceptionDumpInfo(expandInfo.u.aicoreInfo, &exceptionDumpInfo[0]);
+        return GetDeviceExceptionDumpInfo(expandInfo.u.aicoreInfo, &exceptionDumpInfo[0], exceptionDumpSize);
     }
     if (expandInfo.type == RtExceptionExpandType::AICPU) {
         return GetAicpuExceptionDumpInfo(expandInfo.u.aicpuInfo, &exceptionDumpInfo[0]);

@@ -16,6 +16,8 @@
 #include "machine/runtime/bundle/kernel_bundle_loader.h"
 
 #include <cstring>
+#include <iomanip>
+#include <sstream>
 
 #include "machine/runtime/bundle/kernel_bundle_crc32.h"
 #include "machine/runtime/bundle/kernel_bundle_format.h"
@@ -53,6 +55,31 @@ void FoldTlvIntoBundleKey(uint64_t& key, uint32_t type, uint32_t crc, uint64_t l
             key = (key ^ ((word >> (byte * 8)) & 0xFFULL)) * kFnvPrime;
         }
     }
+}
+
+std::string BundleKeyName(uint64_t bundleKey)
+{
+    std::ostringstream os;
+    os << "PyPTO_bundle_" << std::hex << std::setw(16) << std::setfill('0') << bundleKey;
+    return os.str();
+}
+
+std::string BundlePathName(const std::string& path, uint64_t bundleKey)
+{
+    const size_t separator = path.find_last_of("/\\");
+    std::string name = separator == std::string::npos ? path : path.substr(separator + 1);
+    constexpr const char* suffix = ".pyptokb";
+    constexpr size_t suffixSize = 8;
+    if (name.size() >= suffixSize && name.compare(name.size() - suffixSize, suffixSize, suffix) == 0) {
+        name.erase(name.size() - suffixSize);
+    }
+    if (name.empty()) {
+        return BundleKeyName(bundleKey);
+    }
+    if (name.compare(0, 5, "PyPTO") != 0) {
+        name = "PyPTO_bundle_" + name;
+    }
+    return name;
 }
 } // namespace
 
@@ -129,6 +156,7 @@ std::shared_ptr<LoadedBundle> KernelBundleLoader::LoadFromMemory(const uint8_t* 
         return nullptr;
     }
     b->bundleKey = bundleKey;
+    b->displayName = BundleKeyName(bundleKey);
     MACHINE_LOGI("[kernel-bundle] loaded: bundleKey=%#lx hashKey=%#lx workspaceSize=%lu archInfo=%u ctrlCache=%zuB "
                  "symbolMeta=%zuB",
                  b->bundleKey, b->GetHashKey(), b->GetWorkspaceSize(), b->GetArchInfo(), b->ctrlFlowCache.size(),
@@ -144,7 +172,11 @@ std::shared_ptr<LoadedBundle> KernelBundleLoader::LoadFromFile(const std::string
         MACHINE_LOGE(DevCommonErr::FILE_ERROR, "[kernel-bundle] failed to read %s", path.c_str());
         return nullptr;
     }
-    return LoadFromMemory(raw.data(), raw.size());
+    auto bundle = LoadFromMemory(raw.data(), raw.size());
+    if (bundle != nullptr) {
+        bundle->displayName = BundlePathName(path, bundle->bundleKey);
+    }
+    return bundle;
 }
 
 } // namespace npu::tile_fwk::bundle

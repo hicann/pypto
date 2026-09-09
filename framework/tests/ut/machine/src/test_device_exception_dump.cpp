@@ -267,11 +267,13 @@ TEST_F(DeviceExceptionDumpTest, TestAicoreExceptionWithMultipleTensors)
 
 TEST_F(DeviceExceptionDumpTest, TestAicoreExceptionWithOutputTensors)
 {
+    // Mixed operand list is counted in nIn; nOut is unused for dump.
     char kernelName[] = "PyPTO_OutputTensorKernel";
     int64_t inputOutputInfo[2] = {2, 1};
     std::vector<uint8_t> tensorBuf0(32, 0xAB);
     std::vector<uint8_t> tensorBuf1(16, 0xCD);
-    DevTensorData tensorData[2] = {};
+    std::vector<uint8_t> tensorBuf2(8, 0xEF);
+    DevTensorData tensorData[3] = {};
     tensorData[0].address = reinterpret_cast<uint64_t>(tensorBuf0.data());
     tensorData[0].dataType = static_cast<int32_t>(DataType::DT_FP32);
     tensorData[0].shape.dim[0] = 4;
@@ -282,6 +284,11 @@ TEST_F(DeviceExceptionDumpTest, TestAicoreExceptionWithOutputTensors)
     tensorData[1].shape.dim[0] = 4;
     tensorData[1].shape.dim[1] = 4;
     tensorData[1].shape.dimSize = 2;
+    tensorData[2].address = reinterpret_cast<uint64_t>(tensorBuf2.data());
+    tensorData[2].dataType = static_cast<int32_t>(DataType::DT_FP32);
+    tensorData[2].shape.dim[0] = 2;
+    tensorData[2].shape.dim[1] = 2;
+    tensorData[2].shape.dimSize = 2;
     std::vector<void*> kernelArg(MAX_AICPU_ARG_NUM, nullptr);
     kernelArg[KERNEL_NAME_IDX] = kernelName;
     kernelArg[INPUT_OUTPUT_IDX] = inputOutputInfo;
@@ -298,12 +305,13 @@ TEST_F(DeviceExceptionDumpTest, TestAicoreExceptionWithOutputTensors)
     EXPECT_EQ(ret, 0);
     EXPECT_EQ(mode, AdxExceptionDumpMode::ADX_DUMP_MODE_OVERWRITE);
     EXPECT_EQ(realSize, 1);
-    EXPECT_EQ(dumpInfo.extraTensorNum, 1);
+    EXPECT_EQ(dumpInfo.extraTensorNum, 2);
 }
 
 TEST_F(DeviceExceptionDumpTest, TestAicoreExceptionWithExceptionKernelInfoBin)
 {
     char exceptionKernelName[] = "PyPTO_BinTestKernel";
+    char bundleDisplayName[] = "PyPTO_bundle_bin_test";
     int64_t inputOutputInfo[2] = {1, 0};
     uint8_t binBuf[128] = {};
     std::vector<uint8_t> tensorBuf(32, 0xAB);
@@ -314,7 +322,7 @@ TEST_F(DeviceExceptionDumpTest, TestAicoreExceptionWithExceptionKernelInfoBin)
     tensorData[0].shape.dim[1] = 8;
     tensorData[0].shape.dimSize = 2;
     std::vector<void*> kernelArg(MAX_AICPU_ARG_NUM, nullptr);
-    kernelArg[KERNEL_NAME_IDX] = exceptionKernelName;
+    kernelArg[KERNEL_NAME_IDX] = bundleDisplayName;
     kernelArg[INPUT_OUTPUT_IDX] = inputOutputInfo;
     kernelArg[TENSOR_DATA_IDX] = tensorData;
     RtExceptionInfo exceptionInfo = {};
@@ -334,7 +342,7 @@ TEST_F(DeviceExceptionDumpTest, TestAicoreExceptionWithExceptionKernelInfoBin)
     EXPECT_EQ(realSize, 1);
     EXPECT_EQ(dumpInfo.bin, exceptionInfo.expandInfo.u.aicoreInfo.exceptionArgs.exceptionKernelInfo.bin);
     EXPECT_STREQ(dumpInfo.kernelName, exceptionKernelName);
-    EXPECT_STREQ(dumpInfo.kernelDisplayName, exceptionKernelName);
+    EXPECT_STREQ(dumpInfo.kernelDisplayName, bundleDisplayName);
 }
 
 TEST_F(DeviceExceptionDumpTest, TestAicoreExceptionWithNullExceptionKernelName)
@@ -371,7 +379,7 @@ TEST_F(DeviceExceptionDumpTest, TestAicoreExceptionWithNullExceptionKernelName)
     EXPECT_EQ(dumpInfo.bin, exceptionInfo.expandInfo.u.aicoreInfo.exceptionArgs.exceptionKernelInfo.bin);
     // kernelName should remain empty when exceptionKernelInfo.kernelName is nullptr
     EXPECT_STREQ(dumpInfo.kernelName, "");
-    EXPECT_STREQ(dumpInfo.kernelDisplayName, "");
+    EXPECT_STREQ(dumpInfo.kernelDisplayName, "PyPTO_NullKernelName");
 }
 
 TEST_F(DeviceExceptionDumpTest, TestNonAicoreExceptionTypeFFTSPlus)
@@ -391,13 +399,16 @@ TEST_F(DeviceExceptionDumpTest, TestNonAicoreExceptionTypeFFTSPlus)
 // ============================ AICPU exception dump tests ============================
 
 static void BuildAicpuArgBuffer(std::vector<uint8_t>& buffer, int64_t inputSize,
-                                const std::vector<DevTensorData>& tensors)
+                                const std::vector<DevTensorData>& tensors, const char* opName = nullptr)
 {
     size_t totalSize = sizeof(AiCpuArgs) + DEV_TENSOR_DATA_OFFSET * sizeof(int64_t) +
                        tensors.size() * sizeof(DevTensorData);
     buffer.assign(totalSize, 0);
     auto* args = reinterpret_cast<AiCpuArgs*>(buffer.data());
     args->kArgs = DeviceKernelArgs{};
+    if (opName != nullptr) {
+        ASSERT_EQ(strcpy_s(args->opName, sizeof(args->opName), opName), 0);
+    }
     int64_t* tensorInfo = reinterpret_cast<int64_t*>(buffer.data() + sizeof(AiCpuArgs));
     tensorInfo[0] = inputSize;
     tensorInfo[1] = 0;
@@ -468,7 +479,7 @@ TEST_F(DeviceExceptionDumpTest, TestAicpuExceptionWithNullFunctionName)
     exceptionInfo.expandInfo.u.aicpuInfo.functionName = nullptr;
     auto ret = ExceptionDumpCallBack(&exceptionInfo, &dumpInfo, dumpSize, &realSize, &mode);
     EXPECT_EQ(ret, 0);
-    EXPECT_STREQ(dumpInfo.kernelName, "PyPTO_Aicpu_TestFunc");
+    EXPECT_STREQ(dumpInfo.kernelName, "");
     EXPECT_STREQ(dumpInfo.kernelDisplayName, "PyPTO_Aicpu_TestFunc");
 }
 
@@ -503,7 +514,7 @@ TEST_F(DeviceExceptionDumpTest, TestAicpuExceptionWithValidTensors)
     EXPECT_EQ(ret, 0);
     EXPECT_EQ(mode, AdxExceptionDumpMode::ADX_DUMP_MODE_OVERWRITE);
     EXPECT_EQ(realSize, 1);
-    EXPECT_STREQ(dumpInfo.kernelName, "PyPTO_Aicpu_TestFunc");
+    EXPECT_STREQ(dumpInfo.kernelName, "DynTileFwkKernelServer");
     EXPECT_STREQ(dumpInfo.kernelDisplayName, "PyPTO_Aicpu_TestFunc");
     EXPECT_EQ(dumpInfo.extraTensorNum, 2);
 }
@@ -530,4 +541,67 @@ TEST_F(DeviceExceptionDumpTest, TestAicpuExceptionWithZeroAddressTensor)
     auto ret = ExceptionDumpCallBack(&exceptionInfo, &dumpInfo, dumpSize, &realSize, &mode);
     EXPECT_EQ(ret, 0);
     EXPECT_EQ(dumpInfo.extraTensorNum, 1);
+}
+
+TEST_F(DeviceExceptionDumpTest, TestAicpuExceptionOfflineUsesOpName)
+{
+    Program::GetInstance().SetLastFunction(nullptr);
+    std::vector<uint8_t> buffer;
+    BuildAicpuArgBuffer(buffer, 0, {}, "PyPTO_bundle_valuedep");
+    RtExceptionInfo exceptionInfo = {};
+    AdxExceptionDumpInfo dumpInfo = {};
+    uint32_t dumpSize = 1;
+    uint32_t realSize = 0;
+    AdxExceptionDumpMode mode = AdxExceptionDumpMode::ADX_DUMP_MODE_NONE;
+    exceptionInfo.expandInfo.type = RtExceptionExpandType::AICPU;
+    exceptionInfo.expandInfo.u.aicpuInfo.argAddr = buffer.data();
+    exceptionInfo.expandInfo.u.aicpuInfo.argsize = static_cast<uint32_t>(buffer.size());
+    exceptionInfo.expandInfo.u.aicpuInfo.functionName = "DynTileFwkKernelServer";
+    exceptionInfo.expandInfo.u.aicpuInfo.kernelName = "DynTileFwkKernelServer";
+    auto ret = ExceptionDumpCallBack(&exceptionInfo, &dumpInfo, dumpSize, &realSize, &mode);
+    EXPECT_EQ(ret, 0);
+    EXPECT_STREQ(dumpInfo.kernelName, "DynTileFwkKernelServer");
+    EXPECT_STREQ(dumpInfo.kernelDisplayName, "PyPTO_bundle_valuedep");
+}
+
+TEST_F(DeviceExceptionDumpTest, TestAicpuExceptionOfflineUsesFunctionNameFallback)
+{
+    Program::GetInstance().SetLastFunction(nullptr);
+    std::vector<uint8_t> buffer;
+    BuildAicpuArgBuffer(buffer, 0, {});
+    RtExceptionInfo exceptionInfo = {};
+    AdxExceptionDumpInfo dumpInfo = {};
+    uint32_t dumpSize = 1;
+    uint32_t realSize = 0;
+    AdxExceptionDumpMode mode = AdxExceptionDumpMode::ADX_DUMP_MODE_NONE;
+    exceptionInfo.expandInfo.type = RtExceptionExpandType::AICPU;
+    exceptionInfo.expandInfo.u.aicpuInfo.argAddr = buffer.data();
+    exceptionInfo.expandInfo.u.aicpuInfo.argsize = static_cast<uint32_t>(buffer.size());
+    exceptionInfo.expandInfo.u.aicpuInfo.functionName = "DynTileFwkKernelServer";
+    exceptionInfo.expandInfo.u.aicpuInfo.kernelName = nullptr;
+    auto ret = ExceptionDumpCallBack(&exceptionInfo, &dumpInfo, dumpSize, &realSize, &mode);
+    EXPECT_EQ(ret, 0);
+    EXPECT_STREQ(dumpInfo.kernelName, "DynTileFwkKernelServer");
+    EXPECT_STREQ(dumpInfo.kernelDisplayName, "PyPTO_Aicpu_bundle_kernel");
+}
+
+TEST_F(DeviceExceptionDumpTest, TestAicpuExceptionOfflineUsesBundleFallback)
+{
+    Program::GetInstance().SetLastFunction(nullptr);
+    std::vector<uint8_t> buffer;
+    BuildAicpuArgBuffer(buffer, 0, {});
+    RtExceptionInfo exceptionInfo = {};
+    AdxExceptionDumpInfo dumpInfo = {};
+    uint32_t dumpSize = 1;
+    uint32_t realSize = 0;
+    AdxExceptionDumpMode mode = AdxExceptionDumpMode::ADX_DUMP_MODE_NONE;
+    exceptionInfo.expandInfo.type = RtExceptionExpandType::AICPU;
+    exceptionInfo.expandInfo.u.aicpuInfo.argAddr = buffer.data();
+    exceptionInfo.expandInfo.u.aicpuInfo.argsize = static_cast<uint32_t>(buffer.size());
+    exceptionInfo.expandInfo.u.aicpuInfo.functionName = nullptr;
+    exceptionInfo.expandInfo.u.aicpuInfo.kernelName = nullptr;
+    auto ret = ExceptionDumpCallBack(&exceptionInfo, &dumpInfo, dumpSize, &realSize, &mode);
+    EXPECT_EQ(ret, 0);
+    EXPECT_STREQ(dumpInfo.kernelName, "");
+    EXPECT_STREQ(dumpInfo.kernelDisplayName, "PyPTO_Aicpu_bundle_kernel");
 }

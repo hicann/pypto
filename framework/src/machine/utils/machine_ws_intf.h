@@ -105,7 +105,7 @@ struct AiCpuArgs {
     DeviceKernelArgs kArgs;
     const char kernelName[32] = {"DynTileFwkKernelServer"};
     const char soName[32] = {"libaicpu_extend_kernels.so"};
-    const char opName[32] = {""};
+    char opName[32] = {""};
 };
 
 struct LogHead {

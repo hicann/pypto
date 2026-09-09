@@ -135,8 +135,8 @@ int LaunchImpl(const std::shared_ptr<LoadedBundle>& bundle, const PyptoTensorDes
                                                 static_cast<int>(head->devArgs.nrValidAic);
 
     return dynamic::LaunchBundleKernelOnce(bundle->devProgram, binHandle, bundle->bundleKey, inputs,
-                                           bundle->ctrlFlowCache, bundle->cellMatchStridePatches, workspaceAddr,
-                                           static_cast<RtStream>(stream), sync != 0, config);
+                                           bundle->ctrlFlowCache, bundle->displayName, bundle->cellMatchStridePatches,
+                                           workspaceAddr, static_cast<RtStream>(stream), sync != 0, config);
 }
 } // namespace
 
