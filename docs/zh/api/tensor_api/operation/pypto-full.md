@@ -49,7 +49,7 @@ full(size: List[int], fill_value: Union[int, float, Element], dtype: DataType, *
 
 3. Tensor数据类型说明：
    <!-- npu="950" id4 -->
-   - Ascend 950PR/Ascend 950DT：DT_FP32，DT_FP16，DT_BF16，DT_INT8，DT_INT16，DT_INT32，DT_UINT8，DT_UINT16，DT_UINT32，DT_BOOL，DT_INT64，DT_UINT64。
+   - Ascend 950PR/Ascend 950DT：DT_FP32，DT_FP16，DT_BF16，DT_INT8，DT_INT16，DT_INT32，DT_UINT8，DT_UINT16，DT_UINT32，DT_BOOL。
    <!-- end id4 -->
    <!-- npu="A3" id5 -->
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP32，DT_FP16，DT_BF16，DT_INT8，DT_INT16，DT_INT32，DT_UINT8，DT_UINT16，DT_UINT32，DT_BOOL。
