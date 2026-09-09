@@ -824,6 +824,14 @@ void ExecuteOpRange(ExecuteOperationContext* ctx)
             int64_t tileIdxVal = tileIdx.Concrete();
             Element tileIdxElem = Element(start.GetDataType(), tileIdxVal);
             curStart = start + step * tileIdxElem;
+        } else {
+            std::vector<OpImmediate> dynScalarImmList = {OpImmediate::Specified(tileIdx)};
+            auto resolved = ctx->opInter->EvaluateOpImmediate(ctx->frame, dynScalarImmList);
+            if (!resolved.empty()) {
+                int64_t tileIdxVal = resolved[0];
+                Element tileIdxElem = Element(start.GetDataType(), tileIdxVal);
+                curStart = start + step * tileIdxElem;
+            }
         }
     }
     Element end;
