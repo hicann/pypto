@@ -779,7 +779,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def select(src0, src1, preg, mode: Optional[MergeMode] = None):
+    def select(src0, src1, preg):
         r"""Conditional select between two source registers.
 
         For each lane ``i``, selects ``src_true[i]`` when ``mask[i]`` is active
@@ -794,9 +794,6 @@ class Vf:
             src_true: Register selected when mask bit is 1
             src_false: Register selected when mask bit is 0
             preg: Predicate mask register
-
-        Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
 
         Returns:
             Destination register (``RegTensor``) holding the selected
@@ -834,8 +831,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def shift_right(src, shift, preg, mode: Optional[MergeMode] = None,
-                    dtype: Optional[DType] = None):
+    def shift_right(src, shift, preg, mode: Optional[MergeMode] = None):
         """Right shift: ``dst[i] = src[i] >> shift``
 
         The shift amount may be a scalar (all lanes shifted by the same amount,
@@ -857,7 +853,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Data type for type-specific variants (e.g. ``pl.DT_UINT32``)
 
         Returns:
             Destination register (``RegTensor``) holding ``src[i] >> shift[i]``
@@ -894,7 +889,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def eq(src0, src1, preg, cmp_dtype: Optional[DType] = None):
+    def eq(src0, src1, preg):
         """Element-wise equality comparison.
 
         Compares two source elements and writes the result to the
@@ -913,7 +908,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def ne(src0, src1, preg, cmp_dtype: Optional[DType] = None):
+    def ne(src0, src1, preg):
         """Element-wise not-equal comparison.
 
         Args:
@@ -927,7 +922,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def lt(src0, src1, preg, cmp_dtype: Optional[DType] = None):
+    def lt(src0, src1, preg):
         """Element-wise less-than comparison.
 
         Args:
@@ -941,7 +936,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def gt(src0, src1, preg, cmp_dtype: Optional[DType] = None):
+    def gt(src0, src1, preg):
         """Element-wise greater-than comparison.
 
         Args:
@@ -955,7 +950,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def le(src0, src1, preg, cmp_dtype: Optional[DType] = None):
+    def le(src0, src1, preg):
         """Element-wise less-or-equal comparison.
 
         Args:
@@ -969,7 +964,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def ge(src0, src1, preg, cmp_dtype: Optional[DType] = None):
+    def ge(src0, src1, preg):
         """Element-wise greater-or-equal comparison.
 
         Args:
@@ -983,8 +978,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def squeeze(src, preg, gather_mode: Optional[SqueezeMode] = None,
-                dtype: Optional[DType] = None):
+    def squeeze(src, preg, gather_mode: Optional[SqueezeMode] = None):
         """Squeeze mask to index register (vsqz instruction).
 
         Converts active mask bits into a packed index sequence in the
@@ -998,7 +992,6 @@ class Vf:
 
         Kwargs:
             gather_mode: ``pl.SqueezeMode.STORE_REG`` or ``pl.SqueezeMode.NO_STORE_REG``
-            dtype: Data type for the destination register (e.g. ``pl.DT_UINT32``)
 
         Returns:
             Destination register (``RegTensor``) with packed/squeezed elements.
@@ -1643,7 +1636,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def addc(src0, src1, carry_src, preg, mode: Optional[MergeMode] = None):
+    def addc(src0, src1, carry_src, preg):
         """Add with carry (vaddcs): ``carry_out, dst = src0 + src1 + carry_in``
 
         Used for multi-word (e.g. 64-bit) arithmetic on 32-bit registers.
@@ -1660,14 +1653,11 @@ class Vf:
 
         Returns:
             (carry_out, dst): carry-out flag register and the sum register
-
-        Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
         """
 
     @staticmethod
     @_api_decl
-    def subc(src0, src1, borrow_src, preg, mode: Optional[MergeMode] = None):
+    def subc(src0, src1, borrow_src, preg):
         """Subtract with borrow (vsubcs): ``borrow_out, dst = src0 - src1 - borrow_in``
 
         Used for multi-word (e.g. 64-bit) arithmetic on 32-bit registers.
@@ -1684,9 +1674,6 @@ class Vf:
 
         Returns:
             (borrow_out, dst): borrow-out flag register and the difference register
-
-        Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
         """
 
     @staticmethod
@@ -1748,7 +1735,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def unsqueeze(preg, dtype: Optional[DType] = None):
+    def unsqueeze(preg):
         """Unsqueeze mask bits into a register (vusqz instruction).
 
         Expands each mask bit into the corresponding register lane
@@ -1756,9 +1743,6 @@ class Vf:
 
         Args:
             preg: Mask register to unsqueeze
-
-        Kwargs:
-            dtype: Data type for the destination register (e.g. ``pl.DT_UINT32``)
 
         Returns:
             Destination register (``RegTensor``) holding one lane per mask bit:

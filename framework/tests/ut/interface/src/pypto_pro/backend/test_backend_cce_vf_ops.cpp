@@ -330,7 +330,7 @@ TEST(BackendCCEVFOpsTest, EmitsArithmeticIntrinsics)
     ExpectInvoke(codegen, "vf.log10",
                  {"vcmps_lt(", "8388608.0f", "0.43429448190325176f", "-6.923689900271567f", "vsel("}, {dst, src0, mask},
                  {{"precision", true}});
-    ExpectInvoke(codegen, "vf.div", {"vdiv(", "vmuls(", "vmula(", "vadd("}, {dst, src0, src1, mask},
+    ExpectInvoke(codegen, "vf.div", {"vdiv(", "vmuls(", "vmula(", "vcmps_ge(", "vabs("}, {dst, src0, src1, mask},
                  {{"precision", true}});
     expect_unary("vf.relu", {"vrelu("});
     expect_unary("vf.neg", {"vneg("});
@@ -730,11 +730,13 @@ TEST(BackendCCEVFOpsTest, EmitsCompareHistogramAndMaskConversions)
     ExpectInvoke(codegen, "vf.histograms", {"chistv2("}, {u16, u8, mask}, {{"bin_type", EnumValue(ir::BinType::BIN0)}});
 
     ExpectInvoke(codegen, "vf.eq", {"vcmps_eq("}, {mask, fp32, Float(1.0), mask});
-    ExpectInvoke(codegen, "vf.ne", {"vcmp_ne("}, {mask, fp32, fp16, mask}, {{"cmp_dtype", ir::DataType::UINT8}});
-    ExpectInvoke(codegen, "vf.lt", {"vcmp_lt("}, {mask, fp32, fp16, mask}, {{"cmp_dtype", ir::DataType::UINT8}});
-    ExpectInvoke(codegen, "vf.gt", {"vcmp_gt("}, {mask, fp32, fp16, mask}, {{"cmp_dtype", ir::DataType::UINT8}});
-    ExpectInvoke(codegen, "vf.le", {"vcmp_le("}, {mask, fp32, fp16, mask}, {{"cmp_dtype", ir::DataType::UINT8}});
-    ExpectInvoke(codegen, "vf.ge", {"vcmp_ge("}, {mask, fp32, fp16, mask}, {{"cmp_dtype", ir::DataType::UINT8}});
+    // Vector-vector compare requires src0/src1 to have the same type (AscendC
+    // CompareImpl takes both sources as one register type U).
+    ExpectInvoke(codegen, "vf.ne", {"vcmp_ne("}, {mask, fp32, fp32, mask});
+    ExpectInvoke(codegen, "vf.lt", {"vcmp_lt("}, {mask, fp32, fp32, mask});
+    ExpectInvoke(codegen, "vf.gt", {"vcmp_gt("}, {mask, fp32, fp32, mask});
+    ExpectInvoke(codegen, "vf.le", {"vcmp_le("}, {mask, fp32, fp32, mask});
+    ExpectInvoke(codegen, "vf.ge", {"vcmp_ge("}, {mask, fp32, fp32, mask});
     ExpectInvoke(codegen, "vf.squeeze", {"vsqz(", "MODE_NO_STORED"}, {i32, fp16, mask},
                  {{"gather_mode", EnumValue(ir::SqueezeMode::NO_STORE_REG)}});
     ExpectInvoke(codegen, "vf.arange", {"vci(i32, 3, DEC_ORDER)"}, {i32, Int(3)},
@@ -1871,14 +1873,16 @@ TEST(BackendCCEVFOpsTest, HighPrecisionDivEmitsTempRegsAndInstructions)
     auto src1 = MakeVar("src1");
     auto mask = MakeVar("mask", ir::DataType::UINT32);
 
-    // div high-precision: emits RegTensor<float> temps + FMA sequence
+    // div high-precision: emits RegTensor<float> temps + full DivPrecisionImpl
+    // sequence (bypass mask, subnormal scaling, +/-1 ulp rounding correction)
     auto emitted = Invoke(codegen, "vf.div", {dst, src0, src1, mask}, {{"precision", true}});
-    ExpectContains(emitted, {"RegTensor<float>", "vmuls(", "vmula(", "vdiv(", "vadd("});
-    // Should NOT emit subnormal threshold (div uses FMA, not subnormal scaling)
+    ExpectContains(emitted, {"RegTensor<float>", "vmuls(", "vmula(", "vdiv(", "vcmps_ge(", "vabs("});
+    // Should NOT emit a subnormal threshold constant (div scales via exponent
+    // extraction, not a fixed threshold)
     EXPECT_EQ(emitted.find("0x007FFFFF"), std::string::npos) << emitted;
 }
 
-TEST(BackendCCEVFOpsTest, HighPrecisionDivFp16EmitsHalfTypeRegs)
+TEST(BackendCCEVFOpsTest, HighPrecisionDivRejectsFp16)
 {
     CapturingCCECodegen codegen(ir::SectionKind::Vector);
     auto dst = MakeVar("dst", ir::DataType::FP16);
@@ -1886,10 +1890,9 @@ TEST(BackendCCEVFOpsTest, HighPrecisionDivFp16EmitsHalfTypeRegs)
     auto src1 = MakeVar("src1", ir::DataType::FP16);
     auto mask = MakeVar("mask", ir::DataType::UINT32);
 
-    auto emitted = Invoke(codegen, "vf.div", {dst, src0, src1, mask}, {{"precision", true}});
-    ExpectContains(emitted, {"RegTensor<half>", "vmuls(", "vmula(", "vdiv(", "vadd("});
-    EXPECT_EQ(emitted.find("RegTensor<float>"), std::string::npos)
-        << "FP16 div should not use RegTensor<float>: " << emitted;
+    // AscendC restricts div precision mode to float (DivPrecisionImpl static_assert);
+    // half 1ULP uses a different algorithm (DivIEEE754HalfImpl).
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.div", {dst, src0, src1, mask}, {{"precision", true}}));
 }
 
 TEST(BackendCCEVFOpsTest, HighPrecisionDivRejectsNonFloat)
@@ -1983,11 +1986,76 @@ TEST(BackendCCEVFOpsTest, HighPrecisionHalfEmitsHalfTypeRegsAndConstants)
     ExpectContains(emitted, {"RegTensor<half>", "1024.0f", "-3.01029995663981f", "0.43429448190325176f"});
 
     emitted = Invoke(codegen, "vf.sqrt", {dst, src, mask}, {{"precision", true}});
-    ExpectContains(emitted, {"RegTensor<half>", "4096.0f", "0.000244140625f"});
+    // Scale-down compensation is 2^-6 (sqrt(2^12) = 2^6), mirroring AscendC 0x2400.
+    ExpectContains(emitted, {"RegTensor<half>", "4096.0f", "0.015625f"});
 
     emitted = Invoke(codegen, "vf.exp", {dst, src, mask}, {{"precision", true}});
     ExpectContains(emitted, {"RegTensor<half>"});
     EXPECT_EQ(emitted.find("0x007FFFFF"), std::string::npos) << "FP16 should use 0x03FF, not 0x007FFFFF: " << emitted;
+}
+
+TEST(BackendCCEVFOpsTest, CompareRejectsMixedDtypeSources)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    auto i32_src = MakeVar("i32_src", ir::DataType::INT32);
+    auto u32_src = MakeVar("u32_src", ir::DataType::UINT32);
+    auto fp32_src = MakeVar("fp32_src", ir::DataType::FP32);
+    codegen.RegisterRegTensorVar("i32_src");
+    codegen.RegisterRegTensorVar("u32_src");
+    codegen.RegisterRegTensorVar("fp32_src");
+    codegen.RegisterMaskRegVar("mask");
+
+    // AscendC CompareImpl takes both sources as one register type U — mixed
+    // dtypes (even equal bit width) are rejected, no reinterpret casts.
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.eq", {mask, i32_src, u32_src, mask}));
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.lt", {mask, i32_src, u32_src, mask}));
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.eq", {mask, fp32_src, i32_src, mask}));
+    // Same-type positive control still takes the vector form.
+    ExpectInvoke(codegen, "vf.eq", {"vcmp_eq("}, {mask, i32_src, i32_src, mask});
+}
+
+TEST(BackendCCEVFOpsTest, BitCastEmitsReferenceCast)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto bf16_reg = MakeVar("bf16_reg", ir::DataType::BF16);
+    auto u32_reg = MakeVar("u32_reg", ir::DataType::UINT32);
+    auto view = MakeVar("view", ir::DataType::UINT16);
+    codegen.RegisterRegTensorVar("bf16_reg");
+    codegen.RegisterRegTensorVar("u32_reg");
+    const auto* info = BackendCCE::Instance().GetOpInfo("vf.bit_cast");
+    ASSERT_NE(info, nullptr);
+
+    // Nested (1-arg) form: the inline reference cast is RETURNED for the parent
+    // op to inline, not emitted.
+    auto ret = info->codegen_func(MakeCall("vf.bit_cast", {bf16_reg}, {{"dtype", ir::DataType::UINT16}}), codegen);
+    EXPECT_EQ(ret, "(RegTensor<uint16_t> &)bf16_reg");
+    ret = info->codegen_func(MakeCall("vf.bit_cast", {u32_reg}, {{"dtype", ir::DataType::UINT32}}), codegen);
+    EXPECT_EQ(ret, "(RegTensor<uint32_t> &)u32_reg");
+
+    // Assignment (2-arg) form: view register bound to the reference cast.
+    ExpectInvoke(codegen, "vf.bit_cast", {"view = (RegTensor<uint16_t>&)bf16_reg;"}, {view, bf16_reg},
+                 {{"dtype", ir::DataType::UINT16}});
+}
+
+TEST(BackendCCEVFOpsTest, BitCastViewFeedsVectorCompare)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto preg_b8 = MakeVar("preg_b8", ir::DataType::UINT8);
+    auto vreg_high = MakeVar("vreg_high", ir::DataType::UINT8);
+    auto idx_high = MakeVar("idx_high", ir::DataType::UINT32);
+    auto idx_view = MakeVar("idx_high_view", ir::DataType::UINT8);
+    codegen.RegisterRegTensorVar("vreg_high");
+    codegen.RegisterRegTensorVar("idx_high");
+    codegen.RegisterRegTensorVar("idx_high_view");
+    codegen.RegisterMaskRegVar("preg_b8");
+
+    // The parser materializes a nested bit_cast into a temp register; the compare
+    // must dispatch the temp to the vector form (vcmp_eq), not vcmps_eq.
+    Invoke(codegen, "vf.bit_cast", {idx_view, idx_high}, {{"dtype", ir::DataType::UINT8}});
+    ExpectInvoke(codegen, "vf.eq", {"vcmp_eq("}, {preg_b8, vreg_high, idx_view, preg_b8});
+    EXPECT_EQ(Invoke(codegen, "vf.eq", {preg_b8, vreg_high, idx_view, preg_b8}).find("vcmps_"), std::string::npos)
+        << "u8 register source must not take the scalar compare path";
 }
 
 } // namespace

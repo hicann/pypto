@@ -152,7 +152,7 @@ def reduce_and_cast_sk_vf(
     f16_even = vf.astype(di_reg_0, preg_b32, layout=pl.CastLayout.ZERO, dtype=pl.DT_BF16)
     f16_odd = vf.astype(di_reg_1, preg_b32, layout=pl.CastLayout.ONE, dtype=pl.DT_BF16)
     f16_combined = vf.xor(f16_even, f16_odd, preg_u16)
-    preg_nan = vf.eq(f16_combined, nan_mask, preg_u16, cmp_dtype=pl.DT_UINT16)
+    preg_nan = vf.eq(vf.bit_cast(f16_combined, dtype=pl.DT_UINT16), nan_mask, preg_u16)
     key_reg = vf.select(all_one, f16_combined, preg_nan)
     sign_reg = vf.and_(key_reg, sign_mask, preg_u16)
     preg_sign = vf.gt(sign_reg, zero_u16, preg_u16)
@@ -165,7 +165,7 @@ def reduce_and_cast_sk_vf(
     f16_even = vf.astype(di_reg_0, preg_b32, layout=pl.CastLayout.ZERO, dtype=pl.DT_BF16)
     f16_odd = vf.astype(di_reg_1, preg_b32, layout=pl.CastLayout.ONE, dtype=pl.DT_BF16)
     f16_combined = vf.xor(f16_even, f16_odd, preg_u16)
-    preg_nan = vf.eq(f16_combined, nan_mask, preg_u16, cmp_dtype=pl.DT_UINT16)
+    preg_nan = vf.eq(vf.bit_cast(f16_combined, dtype=pl.DT_UINT16), nan_mask, preg_u16)
     key_reg = vf.select(all_one, f16_combined, preg_nan)
     sign_reg = vf.and_(key_reg, sign_mask, preg_u16)
     preg_sign = vf.gt(sign_reg, zero_u16, preg_u16)
@@ -278,7 +278,7 @@ def find_high_bin_and_histograms_low(
 
     for i in pl.range(0, hist_loop):
         vreg_low, vreg_high = vf.load_align(score_u16_tile, i * 256, dist=pl.LoadDist.DINTLV_B8, dtype=pl.DT_UINT8)
-        preg_eq = vf.eq(vreg_high, idx_high, preg_b8, cmp_dtype=pl.DT_UINT8)
+        preg_eq = vf.eq(vreg_high, vf.bit_cast(idx_high, dtype=pl.DT_UINT8), preg_b8)
         cout0 = vf.histograms(vreg_low, preg_eq, bin_type=pl.BinType.BIN0, hist_type=pl.HistType.ACCUMULATE)
         cout1 = vf.histograms(vreg_low, preg_eq, bin_type=pl.BinType.BIN1, hist_type=pl.HistType.ACCUMULATE)
 

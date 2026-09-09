@@ -430,7 +430,6 @@ class CallParserMixin:
         "dtype",
         "target_type",
         "out_dtype",
-        "cmp_dtype",
         # VF-op enum kwargs (from _VF_KWARG_ENUMS, minus cmp_mode)
         "pattern",
         "merge_mode",

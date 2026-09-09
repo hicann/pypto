@@ -50,6 +50,33 @@ TypePtr DeduceVFScalarType([[maybe_unused]] const std::vector<ExprPtr>& args,
     return std::make_shared<ScalarType>(DataType::FP32);
 }
 
+// Bit-cast keeps the source's register nature: casting a RegTensor view must
+// deduce a TileType of the target dtype (same shape/memref/tile view), so a
+// materialized temp is declared as RegTensor<T> — a ScalarType deduction would
+// emit a scalar temp that cannot hold the vector register.
+TypePtr DeduceVFBitCastType(const std::vector<ExprPtr>& args,
+                            const std::vector<std::pair<std::string, std::any>>& kwargs)
+{
+    DataType target = DataType::FP32;
+    for (const auto& [key, value] : kwargs) {
+        if (key == "dtype") {
+            target = AnyCast<DataType>(value, "kwarg: dtype");
+            break;
+        }
+    }
+    if (!args.empty()) {
+        if (auto tile_type = As<TileType>(args[0]->GetType())) {
+            return std::make_shared<TileType>(tile_type->shape_, target, tile_type->memref_, tile_type->tileView_,
+                                              tile_type->hardwareInfo_);
+        }
+        if (auto tensor_type = As<TensorType>(args[0]->GetType())) {
+            return std::make_shared<TensorType>(tensor_type->shape_, target, tensor_type->memref_,
+                                                tensor_type->tensor_view_);
+        }
+    }
+    return std::make_shared<ScalarType>(target);
+}
+
 TypePtr DeduceVFMaskType([[maybe_unused]] const std::vector<ExprPtr>& args,
                          const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
@@ -449,7 +476,7 @@ REGISTER_OP("vf.bit_cast")
     .add_argument("dst", "Destination register")
     .add_argument("src", "Source register")
     .set_attr<DataType>("dtype")
-    .f_deduce_type(DeduceVFScalarType);
+    .f_deduce_type(DeduceVFBitCastType);
 
 REGISTER_OP("vf.mul_dst_add")
     .set_op_category("VFOp")
@@ -515,7 +542,6 @@ REGISTER_OP("vf.mull")
     .add_argument("src0", "Source register 0")
     .add_argument("src1", "Source register 1")
     .add_argument("mask", "Mask register")
-    .set_attr<int>("mode")
     .f_deduce_type(DeduceVFFromDstArg);
 
 REGISTER_OP("vf.addc")
@@ -527,7 +553,6 @@ REGISTER_OP("vf.addc")
     .add_argument("src1", "Source register 1")
     .add_argument("carry_in", "Input carry flag register")
     .add_argument("mask", "Mask register")
-    .set_attr<int>("mode")
     .f_deduce_type(DeduceVFFromDstArg);
 
 REGISTER_OP("vf.subc")
@@ -539,7 +564,6 @@ REGISTER_OP("vf.subc")
     .add_argument("src1", "Source register 1")
     .add_argument("borrow_in", "Input borrow flag register")
     .add_argument("mask", "Mask register")
-    .set_attr<int>("mode")
     .f_deduce_type(DeduceVFFromDstArg);
 
 REGISTER_OP("vf.exp_sub")
@@ -581,7 +605,6 @@ REGISTER_OP("vf.select")
     .add_argument("src_true", "True branch register")
     .add_argument("src_false", "False branch register")
     .add_argument("mask", "Mask register")
-    .set_attr<int>("mode")
     .f_deduce_type(DeduceVFFromDstArg);
 
 REGISTER_OP("vf.update_mask")
@@ -615,7 +638,6 @@ REGISTER_OP("vf.eq")
     .add_argument("src0", "First source register")
     .add_argument("src1", "Second source register")
     .add_argument("mask_src", "Source mask register")
-    .set_attr<DataType>("cmp_dtype")
     .f_deduce_type(DeduceVFMaskType);
 
 REGISTER_OP("vf.ne")
@@ -625,7 +647,6 @@ REGISTER_OP("vf.ne")
     .add_argument("src0", "First source register")
     .add_argument("src1", "Second source register")
     .add_argument("mask_src", "Source mask register")
-    .set_attr<DataType>("cmp_dtype")
     .f_deduce_type(DeduceVFMaskType);
 
 REGISTER_OP("vf.lt")
@@ -635,7 +656,6 @@ REGISTER_OP("vf.lt")
     .add_argument("src0", "First source register")
     .add_argument("src1", "Second source register")
     .add_argument("mask_src", "Source mask register")
-    .set_attr<DataType>("cmp_dtype")
     .f_deduce_type(DeduceVFMaskType);
 
 REGISTER_OP("vf.gt")
@@ -645,7 +665,6 @@ REGISTER_OP("vf.gt")
     .add_argument("src0", "First source register")
     .add_argument("src1", "Second source register")
     .add_argument("mask_src", "Source mask register")
-    .set_attr<DataType>("cmp_dtype")
     .f_deduce_type(DeduceVFMaskType);
 
 REGISTER_OP("vf.le")
@@ -655,7 +674,6 @@ REGISTER_OP("vf.le")
     .add_argument("src0", "First source register")
     .add_argument("src1", "Second source register")
     .add_argument("mask_src", "Source mask register")
-    .set_attr<DataType>("cmp_dtype")
     .f_deduce_type(DeduceVFMaskType);
 
 REGISTER_OP("vf.ge")
@@ -665,7 +683,6 @@ REGISTER_OP("vf.ge")
     .add_argument("src0", "First source register")
     .add_argument("src1", "Second source register")
     .add_argument("mask_src", "Source mask register")
-    .set_attr<DataType>("cmp_dtype")
     .f_deduce_type(DeduceVFMaskType);
 REGISTER_OP("vf.squeeze")
 
