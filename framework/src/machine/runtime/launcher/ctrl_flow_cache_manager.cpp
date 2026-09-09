@@ -63,7 +63,8 @@ CtrlFlowCacheManager& CtrlFlowCacheManager::Instance()
     return instance;
 }
 
-uint8_t* CtrlFlowCacheManager::FindOrBuildDevCache(KernelBinary* kernel, std::vector<DeviceTensorData>& tensors)
+uint8_t* CtrlFlowCacheManager::FindOrBuildDevCache(KernelBinary* kernel, std::vector<DeviceTensorData>& tensors,
+                                                   bool isCaptureMode)
 {
     // Device RT entry: skip find/build entirely for value-depend programs.
     // Actual Emulation build path is separately gated in EmulationLauncher.
@@ -84,6 +85,9 @@ uint8_t* CtrlFlowCacheManager::FindOrBuildDevCache(KernelBinary* kernel, std::ve
         kernel->SetCtrlFlowCacheReplay(devCache != nullptr);
         COMPILER_LOGD("find ctrlflow cache: %p", devCache);
         return devCache;
+    }
+    if (isCaptureMode) {
+        return nullptr;
     }
     // Value-depend with cpu tensors: single-slot cache keyed by data+shape hash.
     uint64_t currentHash = ComputeValueDependHash(tensors, valueDependIndices);

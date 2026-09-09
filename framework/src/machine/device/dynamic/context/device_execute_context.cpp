@@ -225,13 +225,16 @@ int DeviceExecuteContext::GELaunchPartialCache(DevStartArgs* startArgs, PushTask
         GELaunchRunCached(startArgs, tPushTask);
     }
     DEV_TRACE_DEBUG(CtrlEvent(none(), ControlFlowCacheFullRunControl()));
-    ret = RunInit(startArgs, tPushTask);
-    if (unlikely(ret != DEVICE_MACHINE_OK)) {
-        return DEVICE_MACHINE_ERROR;
-    }
-    ret = RunControlFlow(startArgs);
-    if (unlikely(ret != DEVICE_MACHINE_OK)) {
-        return DEVICE_MACHINE_ERROR;
+    if (!devProg->ctrlFlowCacheAnchor->IsActivatedFullCache(startArgs)) {
+        ret = RunInit(startArgs, tPushTask);
+        if (unlikely(ret != DEVICE_MACHINE_OK)) {
+            return DEVICE_MACHINE_ERROR;
+        }
+        ret = RunControlFlow(startArgs);
+        if (unlikely(ret != DEVICE_MACHINE_OK)) {
+            return DEVICE_MACHINE_ERROR;
+        }
+        DEV_IF_INFO { workspace.LogTuningSummary(); }
     }
     return ret;
 }

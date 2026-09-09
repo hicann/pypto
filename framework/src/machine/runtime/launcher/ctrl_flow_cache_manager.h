@@ -79,7 +79,7 @@ public:
     CtrlFlowCacheManager(const CtrlFlowCacheManager&) = delete;
     CtrlFlowCacheManager& operator=(const CtrlFlowCacheManager&) = delete;
 
-    uint8_t* FindOrBuildDevCache(KernelBinary* kernel, std::vector<DeviceTensorData>& tensors);
+    uint8_t* FindOrBuildDevCache(KernelBinary* kernel, std::vector<DeviceTensorData>& tensors, bool IsCaptureMode);
 
     DevControlFlowCache* GetHostCtrlFlowCache(KernelBinary* kernel, std::vector<DeviceTensorData>& tensors,
                                               uint8_t* devCache, std::vector<uint8_t>& hostCache);

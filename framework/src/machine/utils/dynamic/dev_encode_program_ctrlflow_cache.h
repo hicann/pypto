@@ -345,6 +345,9 @@ struct DevControlFlowCache {
         if (deviceTaskSkippedCount != 0) {
             return false;
         }
+        if (isRecordingStopped != 0) {
+            return false;
+        }
         if (!MatchInputOutput(startArgs)) {
             return false;
         }
