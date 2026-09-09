@@ -8,7 +8,7 @@ AI Core的抽象硬件架构可以分为**计算单元、存储单元、搬运�
 
 **图1 Ascend 950PR/Ascend 950DT AI Core硬件架构**
 
-![Ascend 950PR/Ascend 950DT AI Core硬件架构](../../../figures/pro/hardware_architecture_950.png)
+![Ascend 950PR/Ascend 950DT AI Core硬件架构](../../../../figures/pro/hardware_architecture_950.png)
 
 Ascend 950PR/Ascend 950DT采用AIC与AIV分离架构：AIC主要执行Cube计算，AIV主要执行Vector和SIMT计算。Host侧下发的算子指令序列进入AI Core后，由Scalar计算单元负责控制逻辑和指令发射；Vector、Cube等计算单元分别执行向量计算和矩阵计算，DMA搬运单元执行数据搬运。计算数据通常在Global Memory和Local Memory之间流转；当计算和搬运存在依赖时，需要通过同步信号约束不同单元的执行顺序。
 
@@ -23,7 +23,7 @@ Ascend 950PR/Ascend 950DT采用AIC与AIV分离架构：AIC主要执行Cube计算
 | Membase | Local Memory（UB） | Tile + pl.add、pl.sub等Tile API | 每步计算结果写回UB |
 | Regbase | VF Register File | @pl.vector_function中的RegTensor/MaskReg + vf.* API | 中间结果可保留在寄存器，减少UB读写 |
 
-Regbase的寄存器类型和使用约束参见[vf.reg_tensor](../../../../api/pro_api/SIMD-API/vf_computation/reg_tensor.md)。
+Regbase的寄存器类型和使用约束参见[vf.reg_tensor](../../../../../api/pro_api/SIMD-API/vf_computation/reg_tensor.md)。
 
 ## 计算单元
 
@@ -44,9 +44,9 @@ AI Core中的计算单元主要包括Scalar、Vector和Cube三类。
 
 **图2 SIMD-Reg向量计算内存层级**
 
-![SIMD-Reg向量计算内存层级](../../../figures/pro/simd_reg_vector_memory_hierarchy.jpg)
+![SIMD-Reg向量计算内存层级](../../../../figures/pro/simd_reg_vector_memory_hierarchy.jpg)
 
-PyPTO Pro使用[TileType.target_memory](../../../../api/pro_api/SIMD-API/basic_data_structures/TileType.md)将Tile映射到不同的片上缓冲区：
+PyPTO Pro使用[TileType.target_memory](../../../../../api/pro_api/SIMD-API/basic_data_structures/TileType.md)将Tile映射到不同的片上缓冲区：
 
 | pl.MemorySpace | 物理缓冲区 | 典型角色 |
 |:---|:---|:---|
@@ -59,7 +59,7 @@ PyPTO Pro使用[TileType.target_memory](../../../../api/pro_api/SIMD-API/basic_d
 | ScaleLeft | L0A_MX Buffer | 左量化系数矩阵 |
 | ScaleRight | L0B_MX Buffer | 右量化系数矩阵 |
 
-完整枚举说明参见[pl.MemorySpace](../../../../api/pro_api/SIMD-API/basic_data_structures/MemorySpace.md)。
+完整枚举说明参见[pl.MemorySpace](../../../../../api/pro_api/SIMD-API/basic_data_structures/MemorySpace.md)。
 
 DMA（Direct Memory Access）搬运单元负责Global Memory与Local Memory之间的数据搬入、搬出，以及不同层级Local Memory之间的数据流转。PyPTO Pro中常见路径如下：
 
@@ -76,7 +76,7 @@ DMA（Direct Memory Access）搬运单元负责Global Memory与Local Memory之�
 
 ## Tile与硬件存储的映射
 
-Tile是PyPTO Pro对片上缓冲区的编程抽象。[TileType](../../../../api/pro_api/SIMD-API/basic_data_structures/TileType.md)使用shape、dtype和target_memory描述Tile的逻辑形状、数据类型及所在的片上存储空间；矩阵场景还可以通过布局相关属性描述是否转置及内层分型。开发者通常只需选择目标存储空间，布局细节可沿用对应内存空间的默认值。
+Tile是PyPTO Pro对片上缓冲区的编程抽象。[TileType](../../../../../api/pro_api/SIMD-API/basic_data_structures/TileType.md)使用shape、dtype和target_memory描述Tile的逻辑形状、数据类型及所在的片上存储空间；矩阵场景还可以通过布局相关属性描述是否转置及内层分型。开发者通常只需选择目标存储空间，布局细节可沿用对应内存空间的默认值。
 
 ## 执行流程与同步机制
 
@@ -86,7 +86,7 @@ Tile是PyPTO Pro对片上缓冲区的编程抽象。[TileType](../../../../api/p
 - **计算数据流**：Vector/Cube访问Local Memory中的数据完成计算，DMA负责Local Memory与Global Memory之间以及各级Local Memory之间的数据流转。
 - **同步信号流**：当不同Pipe的异步任务存在数据依赖或顺序依赖时，通过同步信号约束执行先后；同步信号不是数据本身的流向。
 
-PyPTO Pro推荐使用pl.make_tile_group配合@pl.jit(auto_mutex=True)，由编译器根据Tile的mutex元数据自动插入跨Pipe同步。使用单个pl.make_tile并需要手动控制依赖时，可调用pl.system.sync_src / pl.system.sync_dst。详细说明参见[Tile矢量计算](../development/tile_based_python_programming/Tile_vector_computation.md)、[sync_src](../../../../api/pro_api/SIMD-API/synchronization/sync_src.md)和[sync_dst](../../../../api/pro_api/SIMD-API/synchronization/sync_dst.md)。
+PyPTO Pro推荐使用pl.make_tile_group配合@pl.jit(auto_mutex=True)，由编译器根据Tile的mutex元数据自动插入跨Pipe同步。使用单个pl.make_tile并需要手动控制依赖时，可调用pl.system.sync_src / pl.system.sync_dst。详细说明参见[Tile计算](../../development/vector_computation/tile_computation.md)、[sync_src](../../../../../api/pro_api/SIMD-API/synchronization/sync_src.md)和[sync_dst](../../../../../api/pro_api/SIMD-API/synchronization/sync_dst.md)。
 
 ## 多核架构
 
@@ -102,4 +102,4 @@ block_dim个逻辑Block
 
 pl.get_subblock_idx()用于区分同一逻辑Block内的AIV，返回0或1；Vector段的pl.get_block_idx()是展平后的全局AIV逻辑索引，可直接用于数据分片。
 
-多核和subblock切分方法参见[多核切分与Tiling](../development/tile_based_python_programming/multi_core_partitioning_and_Tiling.md)。
+多核和subblock切分方法参见[多核Tiling切分](../../development/tiling/multi_core_tiling.md)。

@@ -1,4 +1,4 @@
-# AI Core算子离线二进制编译基本用法
+# 离线二进制编译
 
 PyPTO Pro Kernel可以接入算子工程的离线编译流程，生成AI Core算子二进制并随算子包发布。安装算子包后，可以通过aclnn调用算子；如需通过图模式调用，还需要补充`op_graph`、Graph Infer和GE算子原型注册等交付件。
 

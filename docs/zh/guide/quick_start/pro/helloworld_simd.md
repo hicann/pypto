@@ -58,4 +58,4 @@ python3 hello_world.py
 
 > [!NOTE]说明
 >
-> 如需进一步了解PyPTO Pro的SIMD编程模型，请参阅[编程范式概述](../../programming_guide/pro/programming_paradigm/programming_paradigm_overview.md)。
+> 如需进一步了解PyPTO Pro的SIMD编程模型，请参阅[SIMD编程范式](../../programming_guide/pro/programming_paradigm/SIMD/programming_paradigm.md)。

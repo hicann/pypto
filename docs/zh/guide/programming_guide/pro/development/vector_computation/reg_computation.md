@@ -1,4 +1,4 @@
-# Reg矢量计算编程
+# Reg计算
 
 Reg矢量计算直接使用SIMD Register File保存向量数据和中间结果。PyPTO Pro通过`@pypto_pro.language.vector_function`定义VF函数，并在函数内使用[`vf.*` API](../../../../../api/index.md)表达寄存器加载、计算和存储。
 
@@ -146,4 +146,4 @@ with pl.section_vector():
 3. Tile/Membase实现中存在明显的中间结果UB往返。
 4. 经过性能分析确认寄存器方案能带来收益。
 
-普通向量计算仍建议先使用[Tile矢量计算](Tile_vector_computation.md)完成正确实现，再针对热点替换为VF计算。
+普通向量计算仍建议先使用[Tile计算](tile_computation.md)完成正确实现，再针对热点替换为VF计算。

@@ -1,4 +1,4 @@
-# AI Core算子JIT编译基本用法
+# JIT编译
 
 当开发者完成Kernel函数的编写后，通过`@pypto_pro.language.jit()`装饰器即可实现即时编译（JIT），无需手动执行编译命令。
 

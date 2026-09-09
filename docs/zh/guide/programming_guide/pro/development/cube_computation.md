@@ -1,4 +1,4 @@
-# Cube矩阵计算编程
+# Cube计算
 
 本文介绍如何在PyPTO Pro中使用Tile API编写基于L1 Buffer、L0A Buffer、L0B Buffer、L0C Buffer等片上存储的**矩阵计算代码**。
 
@@ -17,7 +17,7 @@ Cube矩阵计算的基本步骤为：数据搬入 → 数据加载 → 计算 �
 
 **图1**Cube矩阵计算的数据流和硬件流水
 
-![Cube矩阵计算的数据流和硬件流水](../../../../figures/pro/cube_matrix_computation_data_flow.png)
+![Cube矩阵计算的数据流和硬件流水](../../../figures/pro/cube_matrix_computation_data_flow.png)
 
 ## 矩阵计算内存管理
 
@@ -135,7 +135,7 @@ L0C中的结果分形固定为16×16。以FP32/INT32累加结果为例，一个�
 
 **图2** PyPTO Pro中`pypto_pro.language.load`完成ND（GM）到Nz（L1 Mat）的分形转换
 
-![PyPTO Pro中pypto_pro.language.load完成ND（GM）到Nz（L1 Mat）的分形转换](../../../../figures/pro/cube_matrix_nd_to_nz.png)
+![PyPTO Pro中pypto_pro.language.load完成ND（GM）到Nz（L1 Mat）的分形转换](../../../figures/pro/cube_matrix_nd_to_nz.png)
 
 #### 分形格式的命名
 
@@ -165,7 +165,7 @@ Ascend 950PR/Ascend 950DT的默认数据路径如下：
 
 **图3** PyPTO Pro矩阵乘法的Nz × Zn = Nz分形组合（FP16输入）
 
-![PyPTO Pro矩阵乘法的Nz × Zn = Nz分形组合](../../../../figures/pro/cube_matrix_fractal_formats_950.png)
+![PyPTO Pro矩阵乘法的Nz × Zn = Nz分形组合](../../../figures/pro/cube_matrix_fractal_formats_950.png)
 
 ### Cube侧同步
 
@@ -241,7 +241,7 @@ L1_ADDR[18:0] = {BANK[18], BANK_DEPTH[17:8], BG[7:5], BANK_WIDTH[4:0]}
 
 **图4** Ascend 950 L1 Buffer（`pypto_pro.language.MemorySpace.Mat`）内存结构
 
-![Ascend 950 L1 Buffer（pypto_pro.language.MemorySpace.Mat）内存结构](../../../../figures/pro/cube_matrix_l1_buffer_bank.png)
+![Ascend 950 L1 Buffer（pypto_pro.language.MemorySpace.Mat）内存结构](../../../figures/pro/cube_matrix_l1_buffer_bank.png)
 
 ### GM → L1搬运
 
@@ -343,11 +343,11 @@ def kernel(...,
 
 ### MXFP8/MXFP4矩阵乘
 
-MX矩阵乘使用pypto_pro.language.matmul_mx/pypto_pro.language.matmul_mx_acc，除L0A Buffer/L0B Buffer的Tile外，还需要分别位于L0A_MX Buffer和L0B_MX Buffer的E8M0量化系数Tile。每个量化系数对应K方向连续32个尾数元素，K必须为64的倍数。MXFP8支持DT_FP8E4M3FN/DT_FP8E5M2，MXFP4支持DT_FP4E2M1/DT_FP4E1M2；完整参数约束、量化系数Tensor布局和调用示例参见[matmul_mx](../../../../../api/pro_api/SIMD-API/matrix_computation/matmul_mx.md)和[matmul_mx_acc](../../../../../api/pro_api/SIMD-API/matrix_computation/matmul_mx_acc.md)。
+MX矩阵乘使用pypto_pro.language.matmul_mx/pypto_pro.language.matmul_mx_acc，除L0A Buffer/L0B Buffer的Tile外，还需要分别位于L0A_MX Buffer和L0B_MX Buffer的E8M0量化系数Tile。每个量化系数对应K方向连续32个尾数元素，K必须为64的倍数。MXFP8支持DT_FP8E4M3FN/DT_FP8E5M2，MXFP4支持DT_FP4E2M1/DT_FP4E1M2；完整参数约束、量化系数Tensor布局和调用示例参见[matmul_mx](../../../../api/pro_api/SIMD-API/matrix_computation/matmul_mx.md)和[matmul_mx_acc](../../../../api/pro_api/SIMD-API/matrix_computation/matmul_mx_acc.md)。
 
 ### K维分块累加
 
-当K维度较大，无法一次装入L1/L0时，需要将K轴切分为多个分块，逐块累加。首块用`pypto_pro.language.matmul`写入累加器，其余块用[`pypto_pro.language.matmul_acc`](../../../../../api/pro_api/SIMD-API/matrix_computation/matmul_acc.md)累加到同一个L0C。
+当K维度较大，无法一次装入L1/L0时，需要将K轴切分为多个分块，逐块累加。首块用`pypto_pro.language.matmul`写入累加器，其余块用[`pypto_pro.language.matmul_acc`](../../../../api/pro_api/SIMD-API/matrix_computation/matmul_acc.md)累加到同一个L0C。
 
 K维分块累加对正确性有三个硬性要求：
 
@@ -402,7 +402,7 @@ def matmul_acc_kernel(
 ```
 
 > [!NOTE]说明
-> `phase`参数控制Cube（M流水）与FixPipe（FIX流水）之间的硬件unit_flag握手。`phase`配对使用时，框架不自动插入M与FIX之间的软件同步，由硬件unit_flag保证顺序。使用不当会导致精度问题或设备卡死。详见[`phase`使用约束](../../../../../api/pro_api/SIMD-API/matrix_computation/phase.md)。
+> `phase`参数控制Cube（M流水）与FixPipe（FIX流水）之间的硬件unit_flag握手。`phase`配对使用时，框架不自动插入M与FIX之间的软件同步，由硬件unit_flag保证顺序。使用不当会导致精度问题或设备卡死。详见[`phase`使用约束](../../../../api/pro_api/SIMD-API/matrix_computation/phase.md)。
 
 ## 尾块处理
 
@@ -431,7 +431,7 @@ valid_n = pl.min(TILE_N, N - j * TILE_N)
 pl.set_validshape(cur_acc, [valid_m, valid_n])
 ```
 
-详细的尾块处理参数协同请参考[尾块处理](tail_block_handling.md)。
+详细的尾块处理参数协同请参考[尾块处理](tiling/multi_core_tiling.md#尾块处理)。
 
 ## 完整示例
 
@@ -521,5 +521,5 @@ print("Matmul kernel passed!")
 > - `make_tile_group`在`section_cube`外部声明，与Add等Vector示例风格一致。
 > - L1使用双缓冲（`mutex_ids`长度为2），L0A/L0B/L0C使用单缓冲（`mutex_ids`长度为1）。
 > - `auto_mutex=True`由框架自动管理各Tile的mutex锁。
-> - 多核切分通过`pypto_pro.language.range(core_id, M // TILE_M, num_cores)`实现跨步分配，详见[多核切分与Tiling](multi_core_partitioning_and_Tiling.md)。
+> - 多核切分通过`pypto_pro.language.range(core_id, M // TILE_M, num_cores)`实现跨步分配，详见[多核Tiling切分](tiling/multi_core_tiling.md)。
 > - 上例K恰好为一个Tile，无需K维分块累加。K需要分块时请参考上文[K维分块累加](#k维分块累加)。

@@ -1,6 +1,4 @@
-# 编译与运行
-
-本节介绍PyPTO Pro算子的编译与运行方式。
+# 编译与执行
 
 ```{toctree}
 :maxdepth: 1

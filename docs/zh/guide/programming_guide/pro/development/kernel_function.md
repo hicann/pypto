@@ -1,4 +1,4 @@
-# Tile核函数
+# Kernel核函数创建
 
 Tile核函数（Kernel Function）是在NPU设备侧执行的Python函数。它由Host端代码调用，PyPTO Pro框架自动将其编译为硬件指令，并调度到AI Core上执行。每个Kernel函数通过显式的Tile定义、数据搬运和同步控制，精确管理片上计算流程。
 
@@ -115,7 +115,7 @@ Kernel执行域决定启动类型：
 
 PyPTO Pro JIT将`block_dim`作为请求上限，每次启动按实际Stream的torch_npu核数限制计算Block数。
 Stream未单独配置时继承Device限制，再回退到硬件核数。Kernel应使用`get_block_num()`分配全部任务，
-避免减少工作核后遗漏Tile。详见[多核切分与Tiling](tile_based_python_programming/multi_core_partitioning_and_Tiling.md#devicestream与作用域限核)。
+避免减少工作核后遗漏Tile。详见[多核Tiling切分](tiling/multi_core_tiling.md#devicestream与作用域限核)。
 
 也可以省略方括号直接调用，此时使用默认`block_dim=1`：
 
@@ -167,7 +167,7 @@ subblock展平后的全局逻辑索引，范围为`[0, 2 * block_num)`；如果�
 JIT校验`block_dim`的类型和正值，并按Stream的有效资源限制减少实际启动值。
 仅Cube、仅Vector和AIC:AIV为1:2的混合Kernel的上限分别为`cube_core_num`、`vector_core_num`和
 `min(cube_core_num, vector_core_num // 2)`。详细计算方式参见
-[多核切分与Tiling](tile_based_python_programming/multi_core_partitioning_and_Tiling.md#在启动时设置逻辑block数block_dim)。
+[多核Tiling切分](tiling/multi_core_tiling.md#在启动时设置逻辑block数block_dim)。
 
 ## Tiling参数化
 
@@ -188,7 +188,7 @@ my_kernel[None, num_cores, {"NeedAttnMask": 1}](x, out)
 my_kernel[None, num_cores, {"NeedAttnMask": 0}](x, out)
 ```
 
-`tiling_key`的完整说明（字段定义、`is_valid`校验、与TilingData的组合、运行时标志与TilingKey的选型对照表）请参考[多核切分与Tiling](tile_based_python_programming/multi_core_partitioning_and_Tiling.md#tiling-key--编译期特化而非运行时传值)。
+`tiling_key`的完整说明（字段定义、`is_valid`校验、与TilingData的组合、运行时标志与TilingKey的选型对照表）请参考[TilingKey](tiling/tiling_result_transfer.md#tilingkey)。
 
 ## JIT配置选项
 

@@ -67,4 +67,4 @@ print("Add kernel passed!")
 > - `tile_group.current()`获取当前可用缓冲。
 > - `pl.section_vector()`标记后续代码在Vector流水单元上执行。
 > - 昇腾NPU对FP16和BF16有原生硬件加速，建议在算子开发中优先考虑这些数据类型。
-> - 如需进一步了解PyPTO Pro的SIMD编程模型，请参阅[编程范式概述](../../programming_guide/pro/programming_paradigm/programming_paradigm_overview.md)。
+> - 如需进一步了解PyPTO Pro的SIMD编程模型，请参阅[SIMD编程范式](../../programming_guide/pro/programming_paradigm/SIMD/programming_paradigm.md)。
