@@ -18,6 +18,8 @@
 #include "interface/operation/attribute.h"
 #include "tensor/symbolic_scalar.h"
 
+#include <string>
+
 namespace npu::tile_fwk {
 namespace {
 ScalarImmediateType EvaluateSymbolicCallRuntimeGetInputShapeDimSize(EvaluateSymbol* evaluateSymbol,
@@ -63,14 +65,21 @@ ScalarImmediateType EvaluateSymbolicCallRuntimeGetTensorDataInt32(EvaluateSymbol
 {
     UNUSED(offsetList);
     auto inoutDataPair = evaluateSymbol->GetInoutDataPair();
-    std::shared_ptr<LogicalTensorData> view;
-    if (ioType == GET_TENSOR_DATA_OPERAND_IOTYPE_INCAST) {
-        view = inoutDataPair->GetIncastDataViewList()[ioTypeIndex];
-    } else if (ioType == GET_TENSOR_DATA_OPERAND_IOTYPE_OUTCAST) {
-        view = inoutDataPair->GetOutcastDataViewList()[ioTypeIndex];
-    } else {
-        FE_ASSERT(false);
-    }
+    FE_ASSERT(inoutDataPair != nullptr) << "GetTensorData eval failed: current frame has no FunctionIODataPair, ioType="
+                                        << ioType << ", ioTypeIndex=" << ioTypeIndex;
+    FE_ASSERT(ioType == GET_TENSOR_DATA_OPERAND_IOTYPE_INCAST || ioType == GET_TENSOR_DATA_OPERAND_IOTYPE_OUTCAST)
+        << "GetTensorData eval failed: invalid ioType=" << ioType << ", ioTypeIndex=" << ioTypeIndex;
+    const auto& viewList = (ioType == GET_TENSOR_DATA_OPERAND_IOTYPE_INCAST) ? inoutDataPair->GetIncastDataViewList() :
+                                                                               inoutDataPair->GetOutcastDataViewList();
+    FE_ASSERT(ioTypeIndex >= 0 && static_cast<size_t>(ioTypeIndex) < viewList.size())
+        << "GetTensorData eval failed: " << (ioType == GET_TENSOR_DATA_OPERAND_IOTYPE_INCAST ? "incast" : "outcast")
+        << " index " << ioTypeIndex << " out of range (list size=" << viewList.size()
+        << "); the (ioType, ioTypeIndex) of RUNTIME_GetTensorDataInt32 symbol is not "
+           "remapped after graph transform (op moved to another function)";
+    std::shared_ptr<LogicalTensorData> view = viewList[ioTypeIndex];
+    FE_ASSERT(view != nullptr) << "GetTensorData eval failed: "
+                               << (ioType == GET_TENSOR_DATA_OPERAND_IOTYPE_INCAST ? "incast" : "outcast") << " index "
+                               << ioTypeIndex << " resolved a null data view";
     auto elt = view->GetElement(0);
     auto ret = static_cast<ScalarImmediateType>(elt.Cast<int64_t>());
     return ret;
