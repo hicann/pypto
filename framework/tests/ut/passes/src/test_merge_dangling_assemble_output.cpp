@@ -58,6 +58,11 @@ protected:
         return function_->AddRawOperation(Opcode::OP_ASSEMBLE, {source}, {output});
     }
 
+    Operation& AddAtomicRmw(const LogicalTensorPtr& source, const LogicalTensorPtr& output)
+    {
+        return function_->AddRawOperation(Opcode::OP_ATOMIC_RMW, {source}, {output});
+    }
+
     Operation& AddConsumer(const LogicalTensorPtr& input)
     {
         auto rhs = MakeTensor("rhs");
@@ -264,6 +269,25 @@ TEST_F(MergeDanglingAssembleOutputTest, MergeByVersionOrderWithoutToken)
     EXPECT_EQ(assemble2.GetOutputOperand(0), version2);
     EXPECT_TRUE(version1->GetProducers().empty());
     EXPECT_EQ(function_->GetTensorMap().GetTensorByMagic(version1->GetMagic()), nullptr);
+}
+
+TEST_F(MergeDanglingAssembleOutputTest, MergeDanglingAtomicRmwIntoObservableAssembleVersion)
+{
+    auto source = MakeTensor("source");
+    auto base = MakeTensor("base");
+    auto atomicVersion = MakeVersion(base);
+    auto assembleVersion = MakeVersion(base);
+
+    auto& atomicRmw = AddAtomicRmw(source, atomicVersion);
+    auto& assemble = AddAssemble(source, assembleVersion);
+    AddConsumer(assembleVersion);
+
+    ASSERT_EQ(RunPass(), SUCCESS);
+
+    EXPECT_EQ(atomicRmw.GetOutputOperand(0), assembleVersion);
+    EXPECT_EQ(assemble.GetOutputOperand(0), assembleVersion);
+    EXPECT_TRUE(atomicVersion->GetProducers().empty());
+    EXPECT_EQ(function_->GetTensorMap().GetTensorByMagic(atomicVersion->GetMagic()), nullptr);
 }
 
 /*

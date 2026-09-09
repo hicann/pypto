@@ -54,7 +54,7 @@ MergeDanglingAssembleOutput::VersionGroups MergeDanglingAssembleOutput::BuildVer
 {
     std::unordered_map<RawTensor*, VersionGroup> byRawTensor;
     for (auto& op : function.Operations(false)) {
-        if (op.GetOpcode() != Opcode::OP_ASSEMBLE || op.GetOutputOperandSize() != 1) {
+        if (op.GetOutputOperandSize() != 1) {
             continue;
         }
         auto output = op.GetOutputOperand(0);
