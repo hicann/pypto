@@ -46,11 +46,11 @@ pypto_pro.language.simt.bitcast(
 
 ## 约束说明
 
-只能在由@pypto_pro.language.simt.function定义的SIMT入口函数或辅助函数中调用。
+- 只能在由@pypto_pro.language.simt.function定义的SIMT入口函数或辅助函数中调用。
 
-源数据类型和目的数据类型的位宽必须相同，不支持相同数据类型之间的转换。
+- 源数据类型和目的数据类型的位宽必须相同，不支持相同数据类型之间的转换。
 
-NaN、无穷、负零和无效浮点编码均按原始位模式保留，不进行规范化。
+- NaN、无穷、负零和无效浮点编码均按原始位模式保留，不进行规范化。
 
 ## 返回值说明
 

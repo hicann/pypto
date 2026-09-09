@@ -1,175 +1,183 @@
 # Tensor创建和操作
 
-PyPTO Pro基于Python前端，提供了一套完整的DSL用于描述NPU上的Kernel计算。本章介绍PyPTO Pro编程中的核心数据结构与参数化机制。
+Tensor用于描述GM中的多维数据，作为Kernel的输入、输出或由裸指针构造的数据视图。Tensor记录数据类型、shape、stride和layout等信息，但不负责申请GM内存。Kernel计算使用的片上缓冲区由Tile表示，相关内容请参考[Tile创建和操作](tile_creation_and_operations.md)。
 
-## 核心数据结构
+## 在Kernel签名中声明Tensor
 
-PyPTO Pro中有三种核心数据抽象：
-
-| 抽象 | 所在位置 | 创建方式 | 用途 |
-|:---|:---|:---|:---|
-| **Tensor** | 全局内存（GM） | [pypto_pro.language.Tensor[...]](../../../../api/pro_api/SIMD-API/basic_data_structures/Tensor.md) / [pypto_pro.language.make_tensor](../../../../api/pro_api/SIMD-API/resource_management/make_tensor.md) | 带shape和stride的GM Tensor视图 |
-| **Tile** | 片上缓冲区 | [pypto_pro.language.make_tile](../../../../api/pro_api/SIMD-API/resource_management/make_tile.md) | 固定的片上缓冲区，包括UB、L1 Buffer、L0A Buffer、L0B Buffer、L0C Buffer、Bias Buffer、L0A_MX Buffer和L0B_MX Buffer |
-| **TileGroup** | 片上缓冲区 | [pypto_pro.language.make_tile_group](../../../../api/pro_api/SIMD-API/resource_management/make_tile_group.md) | 一组轮转的Tile，用于双缓冲 / N缓冲 |
-
-### Tensor
-
-Tensor表示全局内存（GM）中带数据类型的视图，用作Kernel输入和输出。Kernel通过load将数据搬入片上Tile，并通过store将结果写回Tensor。
-
-**在Kernel签名中声明**（最常见形式）：
+Host侧使用PyTorch在NPU上创建输入和输出数据，Kernel通过`pypto_pro.language.Tensor`类型标注接收这些数据。Tensor类型标注的基本形式如下：
 
 ```python
-@pypto_pro.language.jit(auto_mutex=True)
-def add_kernel(
-    x: pypto_pro.language.Tensor[[pypto_pro.language.DYNAMIC, pypto_pro.language.DYNAMIC], pypto_pro.language.DT_FP16],   # 输入GM Tensor
-    y: pypto_pro.language.Tensor[[pypto_pro.language.DYNAMIC, pypto_pro.language.DYNAMIC], pypto_pro.language.DT_FP16],   # 输入GM Tensor
-    z: pypto_pro.language.Tensor[[pypto_pro.language.DYNAMIC, pypto_pro.language.DYNAMIC], pypto_pro.language.DT_FP16],   # 输出GM Tensor
+import pypto_pro.language as pl
+
+
+@pl.jit(auto_mutex=True)
+def kernel(
+    x: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP16],
+    out: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP16],
 ):
     ...
 ```
 
-- pypto_pro.language.Tensor[[shape...], dtype] —— 第一个元素是shape列表，第二个是元素dtype
-- pypto_pro.language.DYNAMIC：尺寸在启动时传入，尺寸变化不会产生新的编译变体
-- pypto_pro.language.STATIC：尺寸在启动时读取并固化到IR，尺寸变化会选择新的编译变体
-- 正整数：固定尺寸，启动时必须精确匹配
-- 最后一项使用...：从该位置开始的剩余维度均按pypto_pro.language.STATIC处理，可用于声明rank在调用时确定的Tensor，例如pypto_pro.language.Tensor[[pypto_pro.language.DYNAMIC, ...], pypto_pro.language.DT_FP16]
-- Kernel内通过x.shape[axis]读取维度，支持负索引
-
-Shape标注使用省略号时，省略号必须位于最后，且最多出现一次。省略号表示其后的实际维度均按静态维度处理；输入Tensor的rank或这些维度的值发生变化时，会生成新的编译变体。
-
-**由裸指针构造运行时shape视图**：
+`Tensor[[shape...], dtype]`中的第一个参数是shape，第二个参数是元素数据类型。还可以使用第三个参数声明GM数据的layout：
 
 ```python
-@pypto_pro.language.jit(auto_mutex=True)
-def fa_kernel(
-    q: pypto_pro.language.Ptr[pypto_pro.language.DT_FP16],
-    k: pypto_pro.language.Ptr[pypto_pro.language.DT_FP16],
-    v: pypto_pro.language.Ptr[pypto_pro.language.DT_FP16],
-    o: pypto_pro.language.Ptr[pypto_pro.language.DT_FP16],
+import pypto_pro.language as pl
+
+
+nz_tensor: pl.Tensor[[64, 128], pl.DT_FP16, pl.NZ]
+```
+
+layout标注只描述GM中已有数据的排布，不执行ND与NZ之间的数据转换。数据转换由支持相应格式的搬运接口完成。
+
+### Shape声明方式
+
+Tensor的每一维可以使用以下方式声明：
+
+| 声明方式 | 含义 | 对编译变体的影响 |
+|:---|:---|:---|
+| 正整数 | 固定维度，启动时实际尺寸必须与声明一致 | 尺寸固定 |
+| `pypto_pro.language.DYNAMIC` | 运行时动态维度 | 维度值变化时复用同一编译变体 |
+| `pypto_pro.language.STATIC` | 编译期特化维度 | 维度值变化时生成新的编译变体 |
+| 末尾的`...` | 展开剩余维度，各维均按`STATIC`处理 | rank或维度值变化时生成新的编译变体 |
+
+不同方式可以混合使用：
+
+```python
+import pypto_pro.language as pl
+
+
+# 固定、动态和编译期特化维度混合声明。
+x: pl.Tensor[[64, pl.DYNAMIC, pl.STATIC], pl.DT_FP16]
+
+# rank在调用时确定；第一个维度为DYNAMIC，其余维度按STATIC处理。
+y: pl.Tensor[[pl.DYNAMIC, ...], pl.DT_FP16]
+```
+
+省略号最多出现一次且必须位于shape末尾。Tensor的完整类型约束请参考[pypto_pro.language.Tensor](../../../../api/pro_api/SIMD-API/basic_data_structures/Tensor.md)。
+
+## 从Ptr或Tensor创建Tensor视图
+
+当Kernel接收裸指针或需要用新的shape、stride解释已有Tensor时，可以调用`pypto_pro.language.make_tensor`创建Tensor视图：
+
+```python
+pypto_pro.language.make_tensor(
+    ptr,
+    shape,
+    stride=None,
+    dtype=None,
+)
+```
+
+`ptr`可以是`pypto_pro.language.Ptr`或已有Tensor。新Tensor与源对象共享同一段GM地址；`make_tensor`不申请内存，也不复制或重排数据。
+
+### 创建连续Tensor视图
+
+省略`stride`时，框架根据shape生成连续的行主序stride：
+
+```python
+import pypto_pro.language as pl
+
+
+tensor = pl.make_tensor(ptr, [8, 16])
+# 等价于：tensor = pl.make_tensor(ptr, [8, 16], [16, 1])
+```
+
+shape中的维度既可以是编译期整数，也可以是Kernel中的运行时整型Scalar表达式。因此，动态shape也可以通过TilingData传入后用于创建固定rank的Tensor视图：
+
+```python
+import pypto_pro.language as pl
+
+
+@pl.jit(auto_mutex=True)
+def dynamic_kernel(
+    x: pl.Ptr[pl.DT_FP16],
+    out: pl.Ptr[pl.DT_FP16],
     tiling: OpTiling,
 ):
-    # 由裸指针构造带类型的二维视图
-    tensor_q = pypto_pro.language.make_tensor(q, [tiling.sq, tiling.d])
+    tensor_x = pl.make_tensor(x, [tiling.m, tiling.n])
+    tensor_out = pl.make_tensor(out, [tiling.m, tiling.n])
     ...
 ```
 
-pypto_pro.language.make_tensor(ptr, shape, stride=None, dtype=None)由裸指针结合shape和可选stride构造Tensor视图。省略stride时，接口根据shape自动生成连续的行主序stride；需要表示非连续布局时，可继续传入显式stride。Tensor视图的rank由Kernel中传入的Python shape序列确定，序列中的维度值可以来自TilingData等运行时参数。
+TilingData的声明和传入方式请参考[Tiling结果传输](tiling/tiling_result_transfer.md#tilingdata)。
 
-[pypto_pro.language.make_ptr(tensor, dtype=None)](../../../../api/pro_api/SIMD-API/resource_management/make_ptr.md)从已有Tensor提取底层裸指针。
-省略dtype时保留Tensor的元素类型；指定dtype时按目标元素类型解释指针，底层地址保持不变。
+### 创建带显式stride的Tensor视图
 
-### Tile与TileType
-
-Tile是一块固定的片上缓冲区。[pypto_pro.language.TileType](../../../../api/pro_api/SIMD-API/basic_data_structures/TileType.md)描述一个Tile的shape、dtype以及片上摆放，它本身不分配任何空间，而是传给make_tile/make_tile_group。
+显式传入`stride`可以描述行间不连续或轴交换后的GM视图。stride的单位是元素，不是字节：
 
 ```python
-@dataclass
-class TileType:
-    shape: Sequence[int]                 # 例如 [128, 128]
-    dtype: DataType                      # pypto_pro.language.DT_FP16, pypto_pro.language.DT_FP32, ...
-    target_memory: MemorySpace = MemorySpace.Vec
-    valid_shape: Optional[Sequence[int]] = None  # 逻辑有效区域（< shape）
-    layout: Optional[TensorLayout] = None        # Tile的分型（ND/DN/NZ/ZN/NN/ZZ）
-    fractal: Optional[int] = None                # fractal大小
-    pad: Optional[int] = None                    # TilePad.null/zero/max/min
-    compact: Optional[int] = None                # 紧凑摆放模式
+import pypto_pro.language as pl
+
+
+# 每行包含16个连续元素，相邻两行的起始位置相隔32个元素。
+pitched = pl.make_tensor(ptr, [8, 16], [32, 1])
+
+# normal[i, j]与transposed[j, i]指向相同地址。
+normal = pl.make_tensor(ptr, [8, 16], [16, 1])
+transposed = pl.make_tensor(ptr, [16, 8], [1, 16])
 ```
 
-**内存空间**（pypto_pro.language.MemorySpace）：
+上述操作只改变逻辑索引到GM地址的映射，不会转置或搬运原数据。调用方需要保证shape、stride和dtype描述的访问范围没有超出源内存。详细参数说明请参考[pypto_pro.language.make_tensor](../../../../api/pro_api/SIMD-API/resource_management/make_tensor.md)。
 
-| target_memory取值 | 对应缓冲区及用途 |
-|:---|:---|
-| pypto_pro.language.MemorySpace.Vec | UB，用于逐元素计算 |
-| pypto_pro.language.MemorySpace.Mat | L1 Buffer，用于暂存从GM加载的矩阵数据 |
-| pypto_pro.language.MemorySpace.Left | L0A Buffer，用于存放矩阵乘的左操作数 |
-| pypto_pro.language.MemorySpace.Right | L0B Buffer，用于存放矩阵乘的右操作数 |
-| pypto_pro.language.MemorySpace.Acc | L0C Buffer，用于存放矩阵乘的累加结果（DT_FP32或DT_INT32） |
-| pypto_pro.language.MemorySpace.Bias | Bias Buffer，用于存放矩阵乘的融合偏置，由L1 Buffer通过pypto_pro.language.move搬入 |
-| pypto_pro.language.MemorySpace.Scaling | 量化参数缓冲区 |
-| pypto_pro.language.MemorySpace.ScaleLeft | L0A_MX Buffer，用于存放MX矩阵乘中的左量化系数矩阵 |
-| pypto_pro.language.MemorySpace.ScaleRight | L0B_MX Buffer，用于存放MX矩阵乘中的右量化系数矩阵 |
+## 读取Tensor的Shape
 
-> [!NOTE]说明
-> L1 Buffer、L0A Buffer、L0B Buffer、L0C Buffer、L0A_MX Buffer和L0B_MX Buffer会按目标架构推导默认layout，其中部分数据类型还会推导fractal。UB和Bias Buffer的layout由具体算子约束；需要显式指定layout时，须使用该内存空间和算子支持的组合。
-
-### TileGroup
-
-TileGroup是用pypto_pro.language.make_tile_group声明的一组轮转的Tile，用于实现双缓冲乃至更广义的N缓冲。当一块缓冲区正在被消费时，下一块可以同时被生产，从而让多条pipe重叠以提升吞吐。
+Kernel内通过`tensor.shape[axis]`读取Tensor维度，`axis`支持负索引。读取到的维度可以参与地址计算、循环边界和多核切分：
 
 ```python
-g = pypto_pro.language.make_tile_group(type=<TileType>, addrs=<base|list>, mutex_ids=[...], depth=<optional>)
+m = x.shape[0]
+n = x.shape[-1]
+tile_rows = (m + TILE_M - 1) // TILE_M
+tile_cols = (n + TILE_N - 1) // TILE_N
 ```
 
-- type —— 描述组中每一个Tile的pypto_pro.language.TileType
-- mutex_ids —— 可选；每块Tile使用一个整数或非空整数列表/元组，ID取值范围[0, 31]。同一Tile内的ID不得重复，不同Tile可以复用ID
-- depth —— Tile数量；mutex_ids为None或空列表时必填，非空时可由len(mutex_ids)推导
-- addrs —— 单个基地址（Tile连续排布）或地址列表（每个Tile一个显式地址）
+对于`DYNAMIC`维度，shape值在运行时取得；对于`STATIC`维度，shape值会固化到相应编译变体中。
 
-> [!NOTE]说明
-> mutex_ids=None或mutex_ids=[]时，该group不参与auto_mutex，跨Pipe同步需由用户自行保证。
+## Tensor别名和指针转换
 
-关于Tile和TileGroup的详细使用方法请参考[Tile计算](vector_computation/tile_computation.md)和[Cube计算](cube_computation.md)。
+### 创建Tensor别名
 
-## 编程范式
+通过Python赋值可以为Tensor创建别名。别名与原Tensor指向同一段GM内存，不产生数据复制：
 
-PyPTO Pro的算子开发遵循「**搬入→计算→搬出**」三段式流水线范式，与AI Core硬件的多级异步流水特性完全贴合：
+```python
+original_input = input_tensor
+original_input_alias = original_input
 
-1. **搬入（CopyIn）**：通过[pypto_pro.language.load](../../../../api/pro_api/SIMD-API/memory_data_movement/load.md)/[pypto_pro.language.load_tile](../../../../api/pro_api/SIMD-API/memory_data_movement/load_tile.md)将数据从Global Memory搬运至片上缓冲区（UB/L1等）
-2. **计算（Compute）**：在片上缓冲区上完成Tile级别的计算，根据算子类型在pypto_pro.language.section_vector()或pypto_pro.language.section_cube()上下文中调用对应的计算接口
-3. **搬出（CopyOut）**：通过[pypto_pro.language.store](../../../../api/pro_api/SIMD-API/memory_data_movement/store.md)/[pypto_pro.language.store_tile](../../../../api/pro_api/SIMD-API/memory_data_movement/store_tile.md)将结果从片上缓冲区写回Global Memory
+# 重新绑定原变量不会改变已有别名的指向。
+input_tensor = replacement_tensor
+```
 
-AI Core内部的搬运单元（MTE2/MTE1/MTE3等）与计算单元（V/M等）天然支持异步并行。通过TileGroup的N缓冲机制，可以让搬入下一块数据与当前块计算重叠执行，实现流水线吞吐叠加。
+### 从Tensor获取Ptr
 
-### 两档内存管理策略
+`pypto_pro.language.make_ptr`可以从Tensor提取底层指针，也可以为已有Ptr创建新的元素类型视图：
 
-PyPTO Pro提供两种Tile分配方式，对应不同的内存管理与同步复杂度：
+```python
+import pypto_pro.language as pl
 
-| 策略 | 分配方式 | 同步管理 | 适用场景 |
-|:---|:---|:---|:---|
-| **自动同步（推荐）** | pypto_pro.language.make_tile_group + auto_mutex=True | 框架自动插入mutex_lock/mutex_unlock | 大多数Kernel；流水化/重叠的循环 |
-| **手动同步** | pypto_pro.language.make_tile | 显式插入sync_src/sync_dst、barrier或mutex_lock/mutex_unlock | 需要精确放置同步操作的流水线 |
 
-常规单缓冲、双缓冲及N缓冲场景使用make_tile_group并启用auto_mutex=True；需要精确控制同步事件及插入位置的场景使用make_tile和显式同步。两种方式可在同一Kernel中使用。
+ptr = pl.make_ptr(tensor)
+fp16_ptr = pl.make_ptr(byte_ptr, dtype=pl.DT_FP16)
+```
 
-三类标准编程范式的详细实践请参考：
+返回的Ptr与源对象共享地址。指定`dtype`只改变地址的元素类型解释，不会转换原数据；调用方需要保证地址对齐和可访问范围正确。详细说明请参考[pypto_pro.language.make_ptr](../../../../api/pro_api/SIMD-API/resource_management/make_ptr.md)。
 
-- [Tile计算](vector_computation/tile_computation.md)：矢量类算子（Vector单元）
-- [Cube计算](cube_computation.md)：矩阵类算子（Cube单元）
-- 融合类算子：通过stage机制联动Cube与Vector，框架自动完成Preload核间流水编排
+需要对Ptr按元素进行偏移时，可以使用[pypto_pro.language.addptr](../../../../api/pro_api/SIMD-API/resource_management/addptr.md)，再通过`make_tensor`将偏移后的地址包装为Tensor视图。这种方式常用于将一块GM Workspace划分为多个区域。
 
-## 同步机制概述
+## Tensor与Tile之间的数据搬运
 
-AI Core内部存在多条异步并行流水，当一条流水生产的数据被另一条流水消费时，必须插入同步事件确保数据依赖正确。PyPTO Pro提供两种同步模式：
+Tensor位于GM，不能直接作为Tile计算接口的片上操作数。Kernel通常先将Tensor中的数据搬入Tile，完成计算后再将结果搬回Tensor：
 
-### 自动同步（auto_mutex）
+```python
+import pypto_pro.language as pl
 
-通过@pypto_pro.language.jit(auto_mutex=True)启用。框架根据TileGroup中每个Tile的mutex_id，在每次使用轮转Tile前后自动插入mutex_lock/mutex_unlock。该方式适用于常规单缓冲、双缓冲及N缓冲场景。
 
-### 手动同步
+with pl.section_vector():
+    pl.load(input_tile, input_tensor, [row_offset, col_offset])
+    # Tile计算过程省略。
+    pl.store(output_tensor, output_tile, [row_offset, col_offset])
+```
 
-跨Pipe生产者/消费者依赖可通过显式的pypto_pro.language.system.sync_src/pypto_pro.language.system.sync_dst对进行同步：
+- `load`和`store`使用Tensor中的元素坐标定位搬运起点。
+- `load_tile`和`store_tile`按Tile网格坐标定位数据块。
+- 搬运范围、stride、layout和尾块约束由具体搬运接口检查。
 
-- sync_src(set_pipe, wait_pipe, event_id) —— 生产方SET flag
-- sync_dst(set_pipe, wait_pipe, event_id) —— 消费方WAIT flag
-
-需要显式控制缓冲区互斥时可使用[mutex_lock](../../../../api/pro_api/SIMD-API/synchronization/mutex_lock.md)和[mutex_unlock](../../../../api/pro_api/SIMD-API/synchronization/mutex_unlock.md)。需要等待指定流水中此前下发的操作完成时，可根据流水分别使用[bar_m](../../../../api/pro_api/SIMD-API/synchronization/bar_m.md)、[bar_mte1](../../../../api/pro_api/SIMD-API/synchronization/bar_mte1.md)、[bar_mte2](../../../../api/pro_api/SIMD-API/synchronization/bar_mte2.md)、[bar_mte3](../../../../api/pro_api/SIMD-API/synchronization/bar_mte3.md)或[bar_fix](../../../../api/pro_api/SIMD-API/synchronization/bar_fix.md)；需要等待本AI Core内全部流水中此前下发的操作完成时，使用[bar_all](../../../../api/pro_api/SIMD-API/synchronization/bar_all.md)。
-
-PyPTO Pro的流水类型（pypto_pro.language.PipeType）与硬件指令流水对应关系：
-
-| PipeType | 含义 | 典型操作 |
-|:---|:---|:---|
-| MTE2 | GM→L1 Buffer/UB搬运 | pypto_pro.language.load/pypto_pro.language.load_tile |
-| MTE1 | L1 Buffer→L0A Buffer/L0B Buffer/L0A_MX Buffer/L0B_MX Buffer搬运 | pypto_pro.language.move |
-| M | 矩阵计算 | pypto_pro.language.matmul / pypto_pro.language.matmul_mx |
-| V | 向量计算 | pypto_pro.language.add/pypto_pro.language.sub/... |
-| MTE3 | UB→GM搬运 | pypto_pro.language.store/pypto_pro.language.store_tile |
-| FIX | L0C Buffer→GM搬运 | pypto_pro.language.store（Acc→GM） |
-
-手动同步的典型模式为：搬入后插入MTE2→V同步确保数据就绪再计算，计算后插入V→MTE3同步确保计算完成再搬出。在循环场景下还需考虑反向同步（循环间依赖），防止当前迭代覆盖上一迭代未完成的数据。
-
-> [!NOTE]说明
-> sync_src/sync_dst的参数范围、配对及event ID复用要求参见[sync_src](../../../../api/pro_api/SIMD-API/synchronization/sync_src.md)和[sync_dst](../../../../api/pro_api/SIMD-API/synchronization/sync_dst.md)。手动同步属于ISASI类别的高级用法，不保证跨硬件版本兼容。
-
-## TilingData
-
-TilingData用于将**运行时参数**——shape、stride、循环边界、算子选择器、缩放系数等——传给已编译Kernel，而无需将它们固化在Kernel签名中。详细说明请参考[TilingData](tiling/tiling_result_transfer.md#tilingdata)。
+Tensor只描述GM数据视图；Tile的创建、片上地址和缓冲区管理请参考[Tile创建和操作](tile_creation_and_operations.md)，Tile上的矢量计算请参考[Tile计算](vector_computation/tile_computation.md)，矩阵计算请参考[Cube计算](cube_computation.md)。

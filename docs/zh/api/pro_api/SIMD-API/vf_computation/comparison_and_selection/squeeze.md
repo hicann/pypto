@@ -40,7 +40,7 @@ squeeze(src, preg, gather_mode: Optional[SqueezeMode] = None, dtype: Optional[DT
 
 ## 约束说明
 
-无
+无。
 
 ## 返回值说明
 

@@ -1,105 +1,155 @@
 # 抽象硬件架构
 
-AI Core是AI处理器的计算核心，AI处理器内部包含多个AI Core。本节介绍AI Core的并行计算架构抽象。PyPTO Pro基于该抽象提供Tile、内存空间和计算/搬运接口，屏蔽不同硬件实现的部分差异，开发者无需直接操作底层指令参数即可描述核内计算。
+SIMD计算分别使用AIV上的Vector计算资源和AIC上的Cube计算资源，并通过片上存储、数据搬运单元和同步机制组成完整的数据通路。SIMT的线程执行资源请参考[SIMT抽象硬件架构](../SIMT/abstract_hardware_architecture.md)。
 
-## 概览
+## SIMD硬件组成
 
-AI Core的抽象硬件架构可以分为**计算单元、存储单元、搬运单元**三类核心组件。计算单元负责执行标量、向量和矩阵计算，存储单元负责保存输入、输出和中间数据，搬运单元负责在不同存储层级之间转移数据。下图展示Ascend 950PR/Ascend 950DT中三类组件在AI Core中的位置关系和协同方式。
+AI Core中的SIMD硬件分为AIC和AIV：
 
-**图1 Ascend 950PR/Ascend 950DT AI Core硬件架构**
+- **AIV**主要承担Tile矢量计算和Reg矢量计算。其SIMD相关资源包括Scalar、Unified Buffer（UB）、Vector Register File、Vector计算单元以及MTE2/MTE3搬运流水。
+- **AIC**主要承担Cube矩阵计算。其资源包括Scalar、L1 Buffer、L0A/L0B/L0C Buffer、Cube计算单元以及MTE2/MTE1/M/FIX等流水。
+- **GM和L2 Cache**位于AI Core之外，为多个AIC和AIV提供全局数据。
 
-![Ascend 950PR/Ascend 950DT AI Core硬件架构](../../../../figures/pro/hardware_architecture_950.png)
+**图1 AI Core硬件架构**
 
-Ascend 950PR/Ascend 950DT采用AIC与AIV分离架构：AIC主要执行Cube计算，AIV主要执行Vector和SIMT计算。Host侧下发的算子指令序列进入AI Core后，由Scalar计算单元负责控制逻辑和指令发射；Vector、Cube等计算单元分别执行向量计算和矩阵计算，DMA搬运单元执行数据搬运。计算数据通常在Global Memory和Local Memory之间流转；当计算和搬运存在依赖时，需要通过同步信号约束不同单元的执行顺序。
+![AIC、AIV、存储、计算和搬运单元的关系](../../../../figures/pro/hardware_architecture_950.png)
 
-在PyPTO Pro中，核函数中的Python控制流对应Scalar侧控制逻辑；pl.section_vector()和pl.section_cube()分别描述Vector、Cube侧任务；pl.load、pl.move、pl.store等接口描述DMA搬运任务。
+图中黑色实线表示主要数据流，橙色虚线表示指令流。AIV中的SIMD VF指令队列、Vector Register File和Vector单元对应SIMD矢量计算；AIC中的Cube指令队列、矩阵Buffer和Cube单元对应SIMD矩阵计算。图中同时绘制了SIMT资源，用于说明共享的AIV硬件位置，不属于本章展开范围。
 
-## 向量计算方式
+PyPTO Pro提供三种SIMD计算方式：
 
-当前硬件支持Membase和Regbase两种向量计算方式，PyPTO Pro对这两种计算方式的抽象如下：
-
-| 计算方式 | 数据暂存位置 | PyPTO Pro表达 | 特点 |
+| 计算方式 | 执行位置 | 主要数据载体 | 主要执行单元 |
 |:---|:---|:---|:---|
-| Membase | Local Memory（UB） | Tile + pl.add、pl.sub等Tile API | 每步计算结果写回UB |
-| Regbase | VF Register File | @pl.vector_function中的RegTensor/MaskReg + vf.* API | 中间结果可保留在寄存器，减少UB读写 |
+| Tile矢量计算（Membase） | AIV | UB中的Vec Tile | Vector计算单元 |
+| Reg矢量计算（Regbase） | AIV | UB Tile和Vector Register中的RegTensor | Reg向量执行单元、Aux Scalar和DMA单元 |
+| Cube矩阵计算 | AIC | L1、L0A、L0B和L0C中的矩阵Tile | Cube计算单元 |
 
-Regbase的寄存器类型和使用约束参见[vf.reg_tensor](../../../../../api/pro_api/SIMD-API/vf_computation/reg_tensor.md)。
+## AIV矢量计算架构
 
-## 计算单元
+AIV负责SIMD矢量指令的控制、数据搬运和执行。Kernel中的Python控制流和标量表达式由Scalar侧处理；Scalar将搬运和矢量指令发射到对应的指令队列，MTE和Vector相关单元异步执行这些任务。
 
-AI Core中的计算单元主要包括Scalar、Vector和Cube三类。
+### Tile矢量计算
 
-| 组件名称 | 组件功能 | PyPTO Pro中的对应概念 |
-|:---|:---|:---|
-| Scalar | 执行地址计算、循环控制等标量工作，并把向量计算、矩阵计算、数据搬运和同步任务发射给对应单元。 | 核函数中的Python控制流、标量表达式和pl.system.*同步接口 |
-| Vector | 负责执行向量运算。 | pl.section_vector()中的Tile向量API，以及@pl.vector_function中的vf.* API |
-| Cube | 负责执行矩阵运算。 | pl.section_cube()中的pl.matmul、pl.matmul_acc、pl.matmul_mx、pl.matmul_mx_acc等矩阵API |
-
-## 存储单元和搬运单元
-
-存储单元按使用位置分为Local Memory和Global Memory。
-
-- **Local Memory**：AI Core片内存储，用于暂存从Global Memory搬入的数据分片，并保存计算输出和中间结果。数据可供Vector、Cube等计算单元访问，继续参与片内计算，或通过搬运单元写回Global Memory。
-- **Global Memory**：Device侧全局存储，是Local Memory中数据搬入和搬出的主要来源或目的位置；PyPTO Pro使用Tensor表达其中的数据视图。
-
-**图2 SIMD-Reg向量计算内存层级**
-
-![SIMD-Reg向量计算内存层级](../../../../figures/pro/simd_reg_vector_memory_hierarchy.jpg)
-
-PyPTO Pro使用[TileType.target_memory](../../../../../api/pro_api/SIMD-API/basic_data_structures/TileType.md)将Tile映射到不同的片上缓冲区：
-
-| pl.MemorySpace | 物理缓冲区 | 典型角色 |
-|:---|:---|:---|
-| Vec | UB（Unified Buffer） | 向量计算的输入、输出和中间结果 |
-| Mat | L1 Buffer | GM与L0A/L0B之间的矩阵暂存 |
-| Left | L0A Buffer | matmul左操作数 |
-| Right | L0B Buffer | matmul右操作数 |
-| Acc | L0C Buffer | matmul累加结果（通常为FP32/INT32） |
-| Scaling | Fixpipe Buffer | 量化、反量化参数 |
-| ScaleLeft | L0A_MX Buffer | 左量化系数矩阵 |
-| ScaleRight | L0B_MX Buffer | 右量化系数矩阵 |
-
-完整枚举说明参见[pl.MemorySpace](../../../../../api/pro_api/SIMD-API/basic_data_structures/MemorySpace.md)。
-
-DMA（Direct Memory Access）搬运单元负责Global Memory与Local Memory之间的数据搬入、搬出，以及不同层级Local Memory之间的数据流转。PyPTO Pro中常见路径如下：
-
-| 搬运或计算路径 | Pipe | PyPTO Pro接口 |
-|:---|:---|:---|
-| GM → L1/UB | MTE2 | pl.load / pl.load_tile |
-| L1 → L0A/L0B | MTE1 | pl.move |
-| L1 → L0A_MX Buffer/L0B_MX Buffer | MTE1 | pl.move |
-| L0A × L0B → L0C | M | pl.matmul / pl.matmul_acc |
-| MX L0A × L0B → L0C | M | pl.matmul_mx / pl.matmul_mx_acc |
-| UB → GM | MTE3 | pl.store / pl.store_tile |
-| L0C → GM | FIX | pl.store / pl.store_tile |
-| UB ↔ VF Register File | VF load/store | vf.load* / vf.store* |
-
-## Tile与硬件存储的映射
-
-Tile是PyPTO Pro对片上缓冲区的编程抽象。[TileType](../../../../../api/pro_api/SIMD-API/basic_data_structures/TileType.md)使用shape、dtype和target_memory描述Tile的逻辑形状、数据类型及所在的片上存储空间；矩阵场景还可以通过布局相关属性描述是否转置及内层分型。开发者通常只需选择目标存储空间，布局细节可沿用对应内存空间的默认值。
-
-## 执行流程与同步机制
-
-理解抽象硬件架构时，还需要从三个视角区分各单元之间的关系：
-
-- **异步指令流**：Scalar侧将计算、搬运等任务发射到Vector、Cube、DMA等单元的指令队列，各执行单元在各自Pipe上异步执行。
-- **计算数据流**：Vector/Cube访问Local Memory中的数据完成计算，DMA负责Local Memory与Global Memory之间以及各级Local Memory之间的数据流转。
-- **同步信号流**：当不同Pipe的异步任务存在数据依赖或顺序依赖时，通过同步信号约束执行先后；同步信号不是数据本身的流向。
-
-PyPTO Pro推荐使用pl.make_tile_group配合@pl.jit(auto_mutex=True)，由编译器根据Tile的mutex元数据自动插入跨Pipe同步。使用单个pl.make_tile并需要手动控制依赖时，可调用pl.system.sync_src / pl.system.sync_dst。详细说明参见[Tile计算](../../development/vector_computation/tile_computation.md)、[sync_src](../../../../../api/pro_api/SIMD-API/synchronization/sync_src.md)和[sync_dst](../../../../../api/pro_api/SIMD-API/synchronization/sync_dst.md)。
-
-## 多核架构
-
-PyPTO Pro采用SPMD编程模型。各逻辑AI Core执行相同程序，并根据全局逻辑索引处理不同数据分片。pl.get_block_num()返回启动时配置的逻辑Block数量，pl.get_block_idx()返回当前执行域的全局逻辑核索引。
-
-在AIC:AIV为1:2的混合Kernel中，每个逻辑Block对应一个AIC和两个AIV：
+Tile矢量计算以Unified Buffer中的Vec Tile作为输入、输出和中间数据。其基本硬件数据路径为：
 
 ```text
-block_dim个逻辑Block
-├── Cube段：block_dim个AIC，get_block_idx()范围为[0, block_dim)
-└── Vector段：2 * block_dim个AIV，get_block_idx()范围为[0, 2 * block_dim)
+GM ──MTE2──> UB
+               │
+               V
+          Vector计算
+               │
+GM <──MTE3── UB
 ```
 
-pl.get_subblock_idx()用于区分同一逻辑Block内的AIV，返回0或1；Vector段的pl.get_block_idx()是展平后的全局AIV逻辑索引，可直接用于数据分片。
+PyPTO Pro中的接口与硬件路径对应如下：
 
-多核和subblock切分方法参见[多核Tiling切分](../../development/tiling/multi_core_tiling.md)。
+| 硬件行为 | Pipe | PyPTO Pro表达 |
+|:---|:---|:---|
+| GM数据搬入UB | MTE2 | `pypto_pro.language.load`、`load_tile` |
+| UB上的批量矢量计算 | V | `pypto_pro.language.add`、`sub`、`sum`等Tile API |
+| UB数据写回GM | MTE3 | `pypto_pro.language.store`、`store_tile` |
+
+Tile使用`pypto_pro.language.MemorySpace.Vec`映射到UB。`TileType`描述Tile的shape、dtype和layout，`make_tile`或`make_tile_group`将Tile绑定到UB中的具体地址。详细创建方式请参考[Tile创建和操作](../../development/tile_creation_and_operations.md)。
+
+### Reg矢量计算
+
+Reg矢量计算在Tile矢量数据路径上增加Vector Register File。GM中的数据必须先搬入UB，再由VF搬运接口加载到Vector Register；计算完成后按相反方向写回：
+
+```text
+GM → UB → Vector Register File
+              ↓
+          Reg矢量计算
+              ↓
+GM ← UB ← Vector Register File
+```
+
+**图2 Reg矢量计算内存层级**
+
+![GM、UB和Vector Register File的层级关系](../../../../figures/pro/register_memory_hierarchy.jpg)
+
+Vector侧参与Reg矢量计算的主要硬件资源如下：
+
+- **Vector Register File**：保存VF加载的数据、计算中间结果和待写回结果。
+- **Reg向量执行单元**：从Vector Register File读取操作数，执行`vf.*`矢量指令并写回寄存器。
+- **Aux Scalar**：处理VF函数中的地址、循环等辅助标量计算。
+- **DMA单元**：在UB与Vector Register File之间搬运数据。
+
+**图3 Reg矢量执行单元**
+
+![Aux Scalar、Reg向量执行单元、DMA、Register File和UB的关系](../../../../figures/pro/register_execution_unit.jpg)
+
+PyPTO Pro使用`@pypto_pro.language.vector_function`定义VF函数，使用RegTensor和MaskReg保存寄存器数据，并通过`vf.load*`、`vf.store*`在UB与Vector Register之间搬运。RegTensor的数据类型和寄存器限制请参考[vf.reg_tensor](../../../../../api/pro_api/SIMD-API/vf_computation/reg_tensor.md)，完整编程方法请参考[Reg计算](../../development/vector_computation/reg_computation.md)。
+
+## AIC矩阵计算架构
+
+AIC使用Cube单元执行矩阵乘加。矩阵数据从GM进入AIC后，依次经过L1和L0级片上存储；Cube从L0A和L0B读取矩阵块，将累加结果写入L0C。
+
+```text
+                            ┌──MTE1──> L0A──┐
+GM ──MTE2──> L1 ┤                   ├──M──> L0C──FIX──> GM
+                            └──MTE1──> L0B──┘
+```
+
+主要存储空间和对应数据如下：
+
+| `pypto_pro.language.MemorySpace` | 物理存储 | 典型作用 |
+|:---|:---|:---|
+| `Mat` | L1 Buffer | GM与L0A/L0B之间的矩阵暂存 |
+| `Left` | L0A Buffer | Cube左矩阵操作数 |
+| `Right` | L0B Buffer | Cube右矩阵操作数 |
+| `Acc` | L0C Buffer | 矩阵累加值和计算结果 |
+| `Bias` | Bias Buffer | 矩阵计算的融合偏置 |
+| `Scaling` | Fixpipe Buffer | 量化或反量化参数 |
+| `ScaleLeft` | L0A_MX Buffer | MX矩阵计算的左量化系数矩阵 |
+| `ScaleRight` | L0B_MX Buffer | MX矩阵计算的右量化系数矩阵 |
+
+AIC各Pipe及其典型接口如下：
+
+| Pipe | 硬件行为 | PyPTO Pro表达 |
+|:---|:---|:---|
+| MTE2 | GM搬入L1 | `load`、`load_tile` |
+| MTE1 | L1搬入L0A/L0B及MX Buffer | `move` |
+| M | Cube矩阵计算 | `matmul`、`matmul_acc`、`matmul_mx`、`matmul_mx_acc` |
+| FIX | L0C结果搬出 | `store`、`store_tile` |
+
+矩阵Tile通常使用NZ、ZN等分形布局。不同MemorySpace具有相应的默认layout和fractal约束，数据搬运接口可以在支持的路径上完成格式转换。矩阵存储布局、L1地址规划和Cube计算流程请参考[Cube计算](../../development/cube_computation.md)。
+
+## 存储层级与数据对象
+
+SIMD编程涉及GM、片上Buffer和Vector Register三个层级：
+
+| 存储层级 | 可见范围 | PyPTO Pro数据对象 | 特点 |
+|:---|:---|:---|:---|
+| GM | Device上的多个AI Core | Tensor、Ptr | 容量大，是Kernel输入、输出和Workspace所在位置 |
+| AIV片上存储 | 当前AIV | `MemorySpace.Vec`中的Tile | 延迟和带宽优于GM，容量有限，需要显式规划地址和复用 |
+| AIC片上存储 | 当前AIC | Mat、Left、Right、Acc等Tile | 按矩阵数据通路分层，layout和分形约束更强 |
+| Vector Register File | 当前VF函数 | RegTensor、MaskReg | 用于Reg矢量计算，生命周期局限于VF函数 |
+
+Tensor不能直接作为片上计算单元的操作数。数据需要通过搬运接口进入对应Tile；Reg矢量计算还需要继续将UB Tile加载到Vector Register。各层数据对象只描述所在存储和数据视图，不隐式申请其他层级的内存，也不会自动完成数据搬运。
+
+## 指令流、数据流与同步流
+
+理解SIMD硬件执行时，需要区分三类关系：
+
+- **指令流**：Scalar解析控制逻辑并把搬运、计算和同步任务发射到不同指令队列。
+- **数据流**：MTE、DMA、Vector和Cube单元按照各自的数据路径读取或写入GM、片上Buffer和寄存器。
+- **同步流**：当一条Pipe生产的数据将被另一条Pipe消费时，通过事件或mutex约束执行顺序。同步信号只表达依赖，不搬运数据。
+
+各Pipe异步执行，因此源码中的先后顺序不等同于硬件上的完成顺序。例如，Tile矢量计算通常包含“MTE2搬入完成后V才能读取”和“V计算完成后MTE3才能搬出”两条依赖；Cube计算则包含MTE2、MTE1、M和FIX之间的依赖链。
+
+PyPTO Pro提供两种同步方式：
+
+- 使用`make_tile_group`配置mutex元数据，并通过`@pypto_pro.language.jit(auto_mutex=True)`让框架根据Tile读写关系插入同步。
+- 使用`make_tile`时，通过`pypto_pro.language.system.sync_src`和`sync_dst`显式表达生产Pipe和消费Pipe的依赖。
+
+自动同步、TileGroup轮转和手动同步的使用边界请参考[Tile创建和操作](../../development/tile_creation_and_operations.md)和[Tile计算](../../development/vector_computation/tile_computation.md)。
+
+## AIC与AIV的并行关系
+
+多个AIC或AIV可以并行执行同一份Kernel，并通过全局逻辑核索引处理不同数据分片。纯Vector Kernel使用AIV资源，纯Cube Kernel使用AIC资源；Cube/Vector混合Kernel同时使用两类资源。
+
+混合Kernel采用AIC:AIV为1:2的映射。每个逻辑Block包含一个AIC和两个AIV，两个AIV通过subblock索引区分。硬件映射在PyPTO Pro中由`get_block_num()`、`get_block_idx()`、`get_subblock_num()`和`get_subblock_idx()`等接口呈现，详细语义请参考[SIMD编程范式](programming_paradigm.md#多核spmd与核内simd)和[多核Tiling切分](../../development/tiling/multi_core_tiling.md)。
+
+## 小结
+
+SIMD硬件包含AIV上的Tile/Reg矢量数据路径和AIC上的Cube矩阵数据路径。Tensor、Tile和RegTensor分别表示GM、片上Buffer和Vector Register中的数据；MTE、Vector、Cube和FIX等Pipe异步执行，通过自动mutex或显式事件同步保证数据依赖。开发者据此选择计算方式、规划存储层级并组织搬运与计算流水。

@@ -37,7 +37,7 @@ gt(src0, src1, preg, cmp_dtype: Optional[DType] = None) -> dst_mask
 
 ## 约束说明
 
-无
+无。
 
 ## 返回值说明
 

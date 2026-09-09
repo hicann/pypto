@@ -1,161 +1,155 @@
 # JIT编译
 
-当开发者完成Kernel函数的编写后，通过`@pypto_pro.language.jit()`装饰器即可实现即时编译（JIT），无需手动执行编译命令。
+使用`@pypto_pro.language.jit()`声明的Kernel在首次启动时完成解析、代码生成和编译，不需要单独执行编译命令。JIT适合Kernel开发、功能验证和性能调试。
 
 ## JIT编译流程
 
-JIT编译的流程如下：
+首次启动Kernel时依次执行以下步骤：
 
-1. 首次调用被`@pypto_pro.language.jit()`装饰的函数时，PyPTO Pro解析函数体中的Tile定义、数据搬运和计算操作，构建PyPTO IR。
-2. 编译器对PyPTO IR执行适用的Pass优化。
-3. 编译器通过CodeGen生成针对NPU的代码，并编译为可执行产物。
-4. 在同一Python进程中，同一Kernel对象以相同编译签名再次调用时，复用内存中记录的编译结果，无需重复编译。
+1. 绑定Kernel实参和启动配置，确定动态参数与编译期特化信息。
+2. 解析Kernel函数体，生成PyPTO IR。
+3. 对IR执行Pass优化和校验。
+4. 生成Device代码和Host侧Launcher。
+5. 编译并加载产物，然后向指定Stream下发Kernel。
 
-JIT编译结果按Tensor静态Shape、TilingKey和datatype等信息区分编译签名。该复用范围仅限当前Python进程；重新启动进程后会重新执行生成与编译流程，`build`目录中的文件主要用于执行和调试，不作为跨进程持久化JIT缓存。
+编译和执行都由一次Kernel调用触发。Kernel启动相对于Host异步，但首次调用会先等待当前编译实例生成完成。
 
-## 基本用法
+## 触发JIT编译
 
-以下示例使用[`pypto_pro.language.TileType`](../../../../../api/pro_api/SIMD-API/basic_data_structures/TileType.md)定义Tile，通过[`pypto_pro.language.make_tile_group`](../../../../../api/pro_api/SIMD-API/resource_management/make_tile_group.md)分配片上缓冲区，并依次调用[`pypto_pro.language.load`](../../../../../api/pro_api/SIMD-API/memory_data_movement/load.md)、[`pypto_pro.language.add`](../../../../../api/pro_api/SIMD-API/tile_vector_computation/elementwise/add.md)和[`pypto_pro.language.store`](../../../../../api/pro_api/SIMD-API/memory_data_movement/store.md)完成数据搬入、计算和搬出。
+Kernel首次通过`kernel[stream, block_dim](...)`启动时触发JIT编译。以下以已定义的`add_kernel`为例，展示首次启动和同一编译签名下的复用：
 
 ```python
-import os
-import pypto_pro.language as pl
 import torch
 import torch_npu
 
-@pl.jit(auto_mutex=True)
-def add_kernel(
-    a: pl.Tensor[[64, 64], pl.DT_FP16],
-    b: pl.Tensor[[64, 64], pl.DT_FP16],
-    out: pl.Tensor[[64, 64], pl.DT_FP16],
-):
-    tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
-    tile_b = pl.make_tile_group(type=tt, addrs=0x2000, mutex_ids=[1])
-    tile_out = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[2])
 
-    with pl.section_vector():
-        cur_a = tile_a.current()
-        cur_b = tile_b.current()
-        cur_out = tile_out.current()
-        pl.load(cur_a, a, [0, 0])
-        pl.load(cur_b, b, [0, 0])
-        pl.add(cur_out, cur_a, cur_b)
-        pl.store(out, cur_out, [0, 0])
+x = torch.rand(64, 64, device="npu:0", dtype=torch.float16)
+y = torch.rand_like(x)
+out = torch.empty_like(x)
 
-# 首次调用触发JIT编译
-device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
-device = f"npu:{device_id}"
-torch.npu.set_device(device)
-a = torch.rand(64, 64, device=device, dtype=torch.float16)
-b = torch.rand(64, 64, device=device, dtype=torch.float16)
-out = torch.empty(64, 64, device=device, dtype=torch.float16)
-
-# None表示使用PyTorch NPU当前Stream，1表示启动1个逻辑Block
-add_kernel[None, 1](a, b, out)        # 首次启动：编译 + 执行
+# 首次启动：编译并执行。
+add_kernel[None, 1](x, y, out)
 torch.npu.synchronize()
 
-add_kernel[None, 1](a, b, out)        # 相同编译签名：直接执行
+# 编译签名相同时复用当前进程中的编译结果。
+add_kernel[None, 1](x, y, out)
 ```
 
-## Kernel下发、Stream与同步
+Kernel的定义和启动语法参考[Kernel核函数创建](../kernel_function.md)。
 
-JIT编译完成后，Kernel会被提交到NPU执行。启动语法为`kernel[stream, block_dim](...)`：
+## 编译签名与复用
 
-- `stream`指定任务下发使用的PyTorch NPU Stream，传入`None`表示使用当前Stream。
-- `block_dim`指定启动时使用的逻辑Block数量。各执行域中的逻辑AI Core执行同一份Kernel代码，并通过`pypto_pro.language.get_block_idx()`的全局逻辑索引区分数据分片；混合Kernel中AIC/AIV的实际逻辑核数还取决于两者比例。
+同一Kernel对象按照编译签名区分编译实例。以下信息可能产生不同实例：
 
-Kernel下发相对于Host异步执行。Host调用Kernel后会继续执行后续代码，不会自动等待NPU计算完成。因此，在读取输出、进行精度比较或统计Kernel耗时之前，需要同步对应的Stream：
+| 信息 | 对编译实例的影响 |
+| --- | --- |
+| Tensor固定维度 | 声明为固定值的维度必须匹配；不同静态签名使用不同实例。 |
+| `pypto_pro.language.STATIC`维度 | 运行时取值参与特化，值变化时生成新实例。 |
+| `pypto_pro.language.DYNAMIC`维度 | 维度值不参与特化，值变化时复用实例。 |
+| TilingKey | 每个合法Key对应一个专用实例。 |
+| datatype | 每组数据类型组合对应一个专用实例。 |
+| 编译目标 | 目标在Kernel对象创建时确定；不同目标使用不同的Kernel对象。 |
 
-```python
-# 使用当前Stream启动Kernel。
-add_kernel[None, num_cores](a, b, out)
+TilingData字段是运行时数据，字段值变化不会单独产生编译实例。静态与动态shape的声明方式参考[Tensor创建和操作](../tensor_creation_and_operations.md)，TilingData和TilingKey的区别参考[Tiling结果传输](../tiling/tiling_result_transfer.md)。
 
-# 等待当前设备上已下发的任务完成。
-torch.npu.synchronize()
-result = out.cpu()
-```
+`stream`和`block_dim`只影响本次启动，不参与编译签名；调整Stream或逻辑Block数不会因此生成新的编译实例。
 
-也可以显式创建并传入Stream，只等待该Stream上的任务：
+`pypto.options(...)`中的编译配置也不参与编译签名。配置只在某个签名首次编译时读取；命中当前Kernel对象的已有编译实例后，改变配置不会触发重新编译。需要让新配置生效时，应创建新的Kernel对象或重新启动Python进程。
 
-```python
-stream = torch.npu.Stream()
-add_kernel[stream, num_cores](a, b, out)
-stream.synchronize()
-```
+JIT复用范围限于当前Python进程。重新启动进程后会重新执行生成和编译流程；`build`目录中的文件用于加载和调试，不作为跨进程持久化缓存。
 
-同一Stream内的任务按照下发顺序执行。使用不同Stream时，如果任务之间存在数据依赖，需要通过PyTorch NPU的Stream同步机制显式建立依赖，避免后一个任务在前一个任务完成前访问数据。
+## jit装饰器配置
 
-## 架构指定
+`@pypto_pro.language.jit()`配置当前Kernel的编译行为：
 
-通过`arch`参数可以指定目标NPU架构。当前可显式指定`"a5"`，也可以省略该参数以自动检测架构：
-
-```python
-# 指定A5架构
-@pl.jit(arch="a5")
-def kernel_a5(x, out):
-    ...
-
-# 自动检测（默认）
-@pl.jit()
-def kernel_auto(x, out):
-    ...
-```
-
-| arch值 | 对应产品 |
-|:---|:---|
-| “a5” | Ascend 950PR/Ascend 950DT |
-| None | 自动检测当前受支持设备的架构 |
-
-## 编译配置
-
-`@pypto_pro.language.jit()`用于配置单个Kernel特有的选项，例如`arch`、`auto_mutex`、`pipeline`、`tiling_key`、`datatype`和`compile_timeout`。PyPTO Pro的编译流程同时使用PyPTO统一配置，可通过`pypto.options(...)`以装饰器或上下文管理器的方式设置当前作用域，无需修改源码配置文件或重新安装。
+| 参数 | 说明 | 默认值 |
+| --- | --- | --- |
+| `auto_mutex` | 是否根据TileGroup的mutex元数据自动处理可识别的数据依赖。 | `True` |
+| `compile_timeout` | 当前Kernel的编译超时时间，单位为秒。 | `None` |
+| `name` | 自定义Kernel名称，用于区分编译产物。 | `None` |
+| `tiling_key` | 绑定TilingKey Schema。 | `None` |
+| `datatype` | 声明参与数据类型特化的Kernel参数。 | `None` |
+| `pipeline` | 配置自动流水变换。 | `None` |
+| `arch` | 指定编译目标；通常省略并由运行环境自动确定。 | `None` |
 
 ```python
-import pypto
 import pypto_pro.language as pl
 
 
-@pl.jit(auto_mutex=True)
-def add_kernel(a, b, out):
+@pl.jit(auto_mutex=True, compile_timeout=1200, name="add_kernel")
+def add_kernel(x, y, out):
     ...
+```
+
+TilingKey和datatype的定义及启动参数位置参考[Kernel核函数创建](../kernel_function.md#使用tilingkey和datatype)。自动流水配置参考[自动并行流水](../../advanced_programming/auto_parallel_pipeline.md)。
+
+## 编译配置
+
+Host、Pass、CodeGen、验证和调试等共享配置通过`pypto.options(...)`作用于当前编译作用域：
+
+```python
+import pypto
 
 
 with pypto.options(
     host_options={"compile_timeout": 1200},
     pass_options={"enable_slice": False},
 ):
-    add_kernel[None, 1](a, b, out)
+    add_kernel[None, 1](x, y, out)
 ```
 
-也可以使用`pypto.set_host_options(...)`、`pypto.set_pass_options(...)`、`pypto.set_codegen_options(...)`、`pypto.set_verify_options(...)`和`pypto.set_debug_options(...)`设置当前作用域。常用配置分类如下：
+也可以分别使用`pypto.set_host_options()`、`pypto.set_pass_options()`、`pypto.set_codegen_options()`、`pypto.set_verify_options()`和`pypto.set_debug_options()`。主要配置分类如下：
 
-| 分类 | `pypto.options(...)`参数 | 主要配置项 |
-|:---|:---|:---|
-| Host编译控制 | `host_options` | `compile_stage`、`compile_monitor_enable`、`compile_timeout`、`compile_timeout_stage`、`compile_monitor_print_interval` |
-| Pass控制 | `pass_options` | `vec_nbuffer_setting`、`cube_l1_reuse_setting`、`cube_nbuffer_setting`、`sg_set_scope`、`sg_set_ooo_scope`、`ooo_sched_mode`、`auto_mix_partition`、`sg_set_tunevf_mode`、`enable_slice` |
-| CodeGen控制 | `codegen_options` | `support_dynamic_aligned`、`soc_version`、`enable_pmu_trace`、`vf_options` |
-| Pass验证 | `verify_options` | `enable_pass_verify`、`pass_verify_save_tensor`、`pass_verify_save_tensor_dir`、`pass_verify_pass_filter`、`pass_verify_error_tol` |
-| 调试 | `debug_options` | `compile_debug_mode`、`runtime_debug_mode`、`dump_pass_graph` |
-| 运行时 | `runtime_options` | `device_sched_mode`、`run_mode`、`stitch_function_max_num`、`max_workspace_kb`、`valid_shape_optimize`、`ready_on_host_tensors`、`device_sched_parallelism`、`launch_sched_aicpu_num`、`launch_early_mode` |
-| 算子行为 | `operation_options` | `combine_axis`等算子级配置 |
-| Tile与矩阵规格 | `vec_tile_shapes`、`cube_tile_shapes`、`conv_tile_shapes`、`convbp_tile_shapes`、`matrix_size` | 指定编译作用域使用的Tile和矩阵规格 |
+| 分类 | `pypto.options(...)`参数 | 用途 |
+| --- | --- | --- |
+| Host编译控制 | `host_options` | 编译阶段、编译监控和超时。 |
+| Pass控制 | `pass_options` | 流水、Buffer复用、调度和切分等Pass选项。 |
+| CodeGen控制 | `codegen_options` | 代码生成、PMU和VF相关选项。 |
+| Pass验证 | `verify_options` | Pass结果校验和中间Tensor保存。 |
+| 调试 | `debug_options` | 编译、运行时和Pass图调试。 |
+| 运行时 | `runtime_options` | 调度、Workspace和运行模式。 |
+| 算子行为 | `operation_options` | 算子级行为配置。 |
+| Tile与矩阵规格 | `vec_tile_shapes`、`cube_tile_shapes`等 | 设置当前编译作用域使用的Tile和矩阵规格。 |
 
-各配置项的类型、取值约束和默认值分别见[`pypto.set_host_options`](../../../../../api/tensor_api/config/pypto-set_host_options.md)、[`pypto.set_pass_options`](../../../../../api/tensor_api/config/pypto-set_pass_options.md)、[`pypto.set_codegen_options`](../../../../../api/tensor_api/config/pypto-set_codegen_options.md)、[`pypto.set_verify_options`](../../../../../api/tensor_api/config/pypto-set_verify_options.md)和[`pypto.set_debug_options`](../../../../../api/tensor_api/config/pypto-set_debug_options.md)。`pypto_pro.language.jit`不直接接收`host_options`、`pass_options`等字典；这些字典应传给`pypto.options(...)`。
+配置项的类型和取值范围参考[`pypto.set_host_options`](../../../../../api/tensor_api/config/pypto-set_host_options.md)、[`pypto.set_pass_options`](../../../../../api/tensor_api/config/pypto-set_pass_options.md)、[`pypto.set_codegen_options`](../../../../../api/tensor_api/config/pypto-set_codegen_options.md)、[`pypto.set_verify_options`](../../../../../api/tensor_api/config/pypto-set_verify_options.md)和[`pypto.set_debug_options`](../../../../../api/tensor_api/config/pypto-set_debug_options.md)。这些配置字典传给`pypto.options(...)`，不能作为`pypto_pro.language.jit`的参数。
 
-编译超时的有效默认值为600秒。显式设置`@pypto_pro.language.jit(compile_timeout=...)`时直接使用装饰器中的值；装饰器参数为`None`或省略时，先读取当前作用域中的`host_options["compile_timeout"]`；当前作用域也未配置时，最终使用600秒。
+### 编译超时配置
 
-`framework/src/interface/configs/tile_fwk_config.json`保存安装时的基础默认值。一般开发场景应优先使用上述作用域配置接口，不建议通过修改该文件来配置单个Kernel。
+`compile_timeout`按照以下优先级确定：
+
+1. `@pypto_pro.language.jit(compile_timeout=...)`中显式设置的值。
+2. 当前`pypto.options()`作用域中的`host_options["compile_timeout"]`。
+3. 框架默认值600秒。
+
+编译监控的开关、总耗时阈值和阶段阈值通过`host_options`配置。
+
+## Kernel下发与同步
+
+编译完成后，JIT通过Host侧Launcher将Kernel提交到指定Stream。`kernel[None, block_dim](...)`使用当前Stream，`kernel[stream, block_dim](...)`使用显式Stream。
+
+Kernel下发是异步操作。在读取输出、检查精度或统计完整执行时间前，同步相应Stream：
+
+```python
+import torch
+import torch_npu
+
+
+stream = torch.npu.Stream()
+add_kernel[stream, num_cores](x, y, out)
+stream.synchronize()
+```
+
+Stream和`block_dim`的完整说明参考[Kernel核函数创建](../kernel_function.md#调用kernel)。
 
 ## 编译产物
 
-JIT编译完成后，编译产物默认输出到`./build/{kernel_name}__{arch}/`目录下（`{arch}`为目标架构，如`a5`）。每个编译实例均使用独立的TilingKey子目录：使用TilingKey时为`tk_{packed}/`，其中`{packed}`为Key的十六进制打包值；未使用TilingKey时为`tk_none/`。使用datatype特化时，TilingKey子目录位于`dt_{hash}/`下；使用静态签名特化时，基础目录名称还会包含对应的签名后缀。主要产物位于当前编译实例的`tk_{packed}/`或`tk_none/`目录下，包括：
+未设置`ASCEND_WORK_PATH`时，JIT产物以`./build/`为根目录；设置后，以`${ASCEND_WORK_PATH}/PYPTO_PRO/build/`为根目录。Kernel目录名称以`{kernel_name}__{arch}`开头，并可能包含静态签名、Device和Rank等后缀；datatype和TilingKey实例还会分别使用`dt_{hash}`和`tk_{packed}`（未使用TilingKey时为`tk_none`）子目录。主要文件包括：
 
-- **kernel.cpp**：CodeGen生成的Device侧C++源码，包含Kernel的计算逻辑实现。
-- **call_kernel.cpp / call_kernel_{hash}.so**：Host侧Launcher源码及其编译后的共享库，负责参数打包和Kernel下发。共享库文件名包含12位内容哈希，例如`call_kernel_a1b2c3d4e5f6.so`。
-- **tiling头文件**（`*_tiling.h`）：当Kernel包含TilingData参数时生成，描述tiling结构体的C布局。
+| 文件 | 作用 |
+| --- | --- |
+| `kernel.cpp` | CodeGen生成的Device侧源码。 |
+| `call_kernel.cpp` | Host侧Launcher源码，负责参数打包和Kernel下发。 |
+| `call_kernel_{hash}.so` | 编译后的Launcher共享库。 |
+| `*_tiling.h` | 使用TilingData时生成的结构体头文件。 |
 
-如需调试宏展开问题，可在编译目录下手动执行`bisheng -xcce -DREGISTER_BASE -E -I$ASCEND_TOOLKIT_HOME/include -I$ASCEND_HOME_PATH --cce-aicore-arch=dav-c310 kernel.cpp > kernel.cce.i`，生成宏展开后的CCE源码`kernel.cce.i`。
-
-> [!NOTE]说明
-> 默认情况下，编译成功后`kernel.cpp`和`call_kernel.cpp`等中间源文件会保留在产物目录中，便于调试。若需查看Device侧生成的代码，可直接阅读`kernel.cpp`。
+编译失败时，优先结合错误日志和`kernel.cpp`定位解析、代码生成或工具链问题。编译成功后，中间源码默认保留在产物目录中，可用于核对生成代码。

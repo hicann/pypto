@@ -54,15 +54,15 @@ pypto_pro.language.load_tile(
 | GM → L1 Buffer | ND → ND。 | 仅支持DT_INT64、DT_UINT64。 |
 | GM → L1 Buffer | ND/DN → ZZ/NN（仅支持作为matmul_mx或matmul_mx_acc的量化系数搬运）。 | 仅支持DT_FP8E8M0。 |
 
-当src_tensor声明为NZ时，其物理排布和完整Tensor shape约束见[TensorLayout](../basic_data_structures/TensorLayout.md)，同布局搬运、目标Tile和order约束与[load](load.md#约束说明)一致。load_tile还需满足以下NZ搬运约束：
+- 当src_tensor声明为NZ时，其物理排布和完整Tensor shape约束见[TensorLayout](../basic_data_structures/TensorLayout.md)，同布局搬运、目标Tile和order约束与[load](load.md#约束说明)一致。load_tile还需满足以下NZ搬运约束：
 
 - tile_offsets按Tile块索引寻址：最后两项分别乘以Tile的M、N shape，前导项选择batch；换算后的M、N offset需分别按16和Tensor dtype对应的C0对齐。
 
-当前数据类型为DT_FP8E8M0的Tensor搬入fractal=32的ZZ或NN排布L1 Buffer Tile，仅支持作为matmul_mx或matmul_mx_acc的量化系数搬运。普通E8M0数据不支持使用该目标组合；满足该组合的load_tile会要求源Tensor的维度至少为3，最后一轴固定为物理phase轴，且该轴长度必须是2。
+- 当前数据类型为DT_FP8E8M0的Tensor搬入fractal=32的ZZ或NN排布L1 Buffer Tile，仅支持作为matmul_mx或matmul_mx_acc的量化系数搬运。普通E8M0数据不支持使用该目标组合；满足该组合的load_tile会要求源Tensor的维度至少为3，最后一轴固定为物理phase轴，且该轴长度必须是2。
 
-开启auto_mutex时，若连续两次pypto_pro.language.load_tile向同一个UB或L1 Buffer Tile地址搬运数据，并且前一次搬入的数据没有被读取，则必须在两次load_tile之间调用pypto_pro.language.system.bar_mte2()，再复用该地址。
+- 开启auto_mutex时，若连续两次pypto_pro.language.load_tile向同一个UB或L1 Buffer Tile地址搬运数据，并且前一次搬入的数据没有被读取，则必须在两次load_tile之间调用pypto_pro.language.system.bar_mte2()，再复用该地址。
 
-load_tile复用Tile地址的同步规则与load接口一致；详细说明请参考[load](load.md)文档中的“Tile地址复用与流水同步”。
+- load_tile复用Tile地址的同步规则与load接口一致；详细说明请参考[load](load.md)文档中的“Tile地址复用与流水同步”。
 
 ## 返回值说明
 

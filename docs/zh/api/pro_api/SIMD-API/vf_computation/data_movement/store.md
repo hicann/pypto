@@ -32,7 +32,7 @@ store(tile, src, count)
 
 ## 约束说明
 
-无
+无。
 
 ## 返回值说明
 

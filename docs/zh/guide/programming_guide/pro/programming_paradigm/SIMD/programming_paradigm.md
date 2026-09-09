@@ -1,199 +1,96 @@
 # 编程范式
 
-PyPTO Pro面向昇腾NPU的AI Core算子开发，采用外层多核SPMD并行与内层单核SIMD并行结合的编程范式，并以Tile作为核内计算和数据搬运的主要载体。开发者通过Python接口显式描述多核数据切分、片上数据搬运和计算逻辑，框架负责Kernel编译、加载与任务下发。
+SIMD（Single Instruction Multiple Data，单指令多数据）以数据块为主要编程对象，一条指令同时对多个同构数据元素执行相同操作。PyPTO Pro使用Tensor、Tile和RegTensor表示不同存储层级中的数据，并将多核数据切分和核内批量计算组织在同一个Kernel中。
 
-## Host与Device协作
+PyPTO Pro的SIMD编程包含三种主要计算方式：基于UB Tile的矢量计算、基于Vector Register的Reg矢量计算，以及基于L1/L0 Tile的Cube矩阵计算。三者都以批量数据为操作对象，适合访存和计算较规整、并行度较高的算子。
 
-一个基于昇腾处理器的异构系统通常包含CPU与昇腾NPU。其中，CPU及其内存称为Host与Host Memory；NPU及其内存称为Device与Device Memory。
+## 多核SPMD与核内SIMD
 
-基于昇腾的PyPTO Pro应用程序通常包含两部分：一部分运行在Host CPU上，使用Python（PyTorch）编程；另一部分运行在NPU上，使用PyPTO Pro编写[核函数Kernel](../../development/kernel_function.md)。Host端通过PyTorch张量在Device Memory上准备输入输出数据，调用Kernel函数触发JIT编译并下发NPU任务，通过`torch.npu.synchronize()`等待核函数执行完成。Host代码与Kernel可写在同一个`.py`文件中。
+PyPTO Pro SIMD Kernel采用“外层多核SPMD + 内层单核SIMD”的两级并行方式：
 
-**图1**Kernel调度示意图
+- **多核SPMD（Single Program Multiple Data）**：多个逻辑AI Core执行同一份Kernel代码，各核通过逻辑索引处理不同的数据分片。
+- **核内SIMD**：每个AI Core使用Vector或Cube指令批量处理当前数据分片中的多个元素。
 
-![Kernel调度示意图](../../../../figures/pro/kernel_scheduling_diagram.png)
-
-| 角色 | 职责 |
-|:---|:---|
-| **Host（CPU）** | 通过PyTorch张量准备输入输出数据；调用Kernel函数触发JIT编译和NPU任务下发；同步等待结果 |
-| **Device（NPU）** | 执行编译后的Kernel二进制；在AI Core上完成Tile级别的数据搬运与计算；将结果写回Global Memory |
-
-PyPTO Pro Kernel的典型数据流如下：
-
-1. Host端通过PyTorch张量在NPU上准备输入输出数据。
-2. Host端调用Kernel函数，框架完成JIT编译并下发任务。
-3. Device端的AI Core通过`load`/`load_tile`将数据从Global Memory搬入片上缓冲区，完成Tile级别的计算，再通过`store`/`store_tile`将结果写回Global Memory。
-4. Host端同步后访问结果。
-
-关于Kernel下发、Stream选择和同步方式，请参考[AI Core算子JIT编译基本用法](../../development/compilation_and_execution/JIT_compilation.md#kernel下发stream与同步)。
-
-## SPMD嵌套SIMD编程范式
-
-昇腾NPU采用**外层多核SPMD（Single Program Multiple Data）并行 + 内层单核SIMD（Single Instruction Multiple Data）并行**的双层架构。
-
-- **单卡多核层面采用SPMD编程模型**：各逻辑AI Core执行同一份Kernel代码，并根据全局逻辑索引处理不同的数据分片。
-- **单核计算层面采用SIMD并行机制**：单个AI Core内部通过一条指令同时处理多个同构数据元素，完成向量、矩阵或融合计算。
-
-在PyPTO Pro中，`block_dim`表示Host请求的逻辑Block数上限。JIT按Stream的有效资源限制计算实际
-启动值`block_num`。仅启动Cube或仅启动Vector时，逻辑核数与`block_num`一致；同时启动AIC与AIV时，
-各执行域的逻辑核数还取决于AIC:AIV比例。相关接口为：
-
-- `pl.get_block_num()`获取本次Kernel启动的Block总数。
-- `pl.get_block_idx()`获取当前执行域的全局逻辑核索引；Vector段返回值已经按subblock展平。
-- `pl.get_subblock_idx()`获取当前逻辑Block内的subblock索引。
-- `pl.get_subblock_num()`获取当前执行域每个逻辑Block对应的subblock数量。
-
-当前AIC:AIV为1:2的混合Kernel中，Cube段的`get_block_idx()`范围为`[0, block_num)`，Vector段范围为
-`[0, 2 * block_num)`，其中`block_num = pl.get_block_num()`。Vector段可直接使用该全局逻辑索引
-进行数据分片，`get_subblock_idx()`用于区分同一逻辑Block内的AIV。
-
-SIMD是一种数据并行模型，其核心特征包括：
-
-- **单指令驱动**：并行计算单元执行相同的操作。
-- **数据同构**：参与计算的数据具有一致的数据类型和操作方式。
-- **同步执行**：同一条指令批量处理多个数据元素。
-
-SIMD主要适用于数据密集、操作规整、无分支或分支较少的计算任务，包括图像处理、音频信号处理、矩阵乘法、卷积和逐元素数学运算等场景。
-
-## AI Core算子类型
-
-根据算子计算逻辑使用的硬件单元，AI Core算子可分为三类：
-
-- **矢量类算子**：主要使用Vector计算单元完成元素级、逻辑类和数据重组类计算，在PyPTO Pro中通过`pl.section_vector()`标记执行域。
-- **矩阵类算子**：主要使用Cube计算单元完成矩阵乘、张量卷积等计算，在PyPTO Pro中通过`pl.section_cube()`标记执行域。
-- **融合类算子**：联动Cube与Vector计算单元协同计算。开发者可以手动插入核间同步并编排流水；在支持自动Pipeline变换的场景中，也可以使用`@pl.pipeline.stage`标记计算阶段，由框架自动插入核间同步并完成Preload核间流水编排。
-
-AI Core中Scalar、Vector、Cube、存储和搬运单元的详细说明，请参考[抽象硬件架构](abstract_hardware_architecture.md)。
-
-## Kernel通用开发流程
-
-PyPTO Pro算子开发通常包含以下四个步骤：
-
-1. **Tiling（分块）设计**：将全局数据划分为数据分片，并为各AI Core分配处理范围。
-2. **数据搬入**：调用`pl.load`/`pl.load_tile`等接口，将数据从Global Memory搬入L1 Buffer、UB等片上存储。
-3. **数据计算**：在`pl.section_vector()`或`pl.section_cube()`中调用Tile计算API，完成向量、矩阵或融合计算。
-4. **数据搬出**：调用`pl.store`/`pl.store_tile`等接口，将计算结果写回Global Memory。
-
-AI Core片上存储空间有限，无法一次性加载超大尺寸Tensor。实际开发中通常迭代完成分块搬运、分批计算和结果写回，并通过TileGroup的N缓冲流水减少数据搬运带来的等待。
-
-多核切分通常采用跨步分配：第`core_id`个AI Core处理序号为`core_id, core_id+num_cores, core_id+2*num_cores, ...`的Tile，使各核处理的Tile数量最多相差1。详细实践请参考[多核Tiling切分](../../development/tiling/multi_core_tiling.md)。
-
-## Tile编程模型
-
-PyPTO Pro使用Tile作为NPU核内计算的载体，通过Tile操作描述完整的SPMD计算流程。计算以Tensor作为输入，通过搬运操作将数据从Tensor搬入Tile，经过Tile级别的核内计算后，再将结果从Tile搬回Tensor。
-
-传统NPU SIMD算子编程主要面临以下问题：
-
-1. 不同算子的多核Tiling切分差异较大。
-2. 不同算子的缓冲区复用方式差异较大。
-3. offset计算和底层指令参数填写复杂且容易出错。
-4. 核内、核间流水排布和同步插入较为复杂。
-
-PyPTO Pro保留由开发者控制多核Tiling切分和缓冲区复用的能力，并通过以下机制简化编程：
-
-### Tile抽象
-
-PyPTO Pro使用二维Tile描述核内缓冲区。开发者只需表达Tile在Global Memory中Tensor上的坐标，无需手工将多维坐标转换为一维offset；Tile API同时封装了底层指令参数。
-
-### TileGroup与自动核内同步
-
-对于Cube、Vector核内流水，PyPTO Pro通过`pl.make_tile_group`将同一流水线中轮转使用的多块Tile封装为一组。开发者通过`next()`和`current()`获取当前Tile，并通过`mutex_ids`标识缓冲区。使用`@pl.jit(auto_mutex=True)`编译Kernel时，框架会根据Tile的mutex信息自动插入核内同步。
-
-### 自动核间流水编排
-
-对于支持自动Pipeline变换的Cube、Vector融合算子，stage是流水编排的基本单位。开发者使用`@pl.pipeline.stage`装饰器标记一个计算函数，再在Kernel循环的`pl.section_cube()`或`pl.section_vector()`执行域中调用该函数。`section_cube`和`section_vector`用于指定代码运行在哪类计算单元上，stage则用于划分编译器可以分析和重排的流水阶段。下面仅展示代码组织结构，省略Tensor和Tile声明：
+Host启动Kernel时通过`block_dim`指定逻辑Block数上限。Kernel内使用`pypto_pro.language.get_block_num()`取得实际Block数，使用`pypto_pro.language.get_block_idx()`取得当前执行域的全局逻辑核索引：
 
 ```python
-@pl.pipeline.stage
-def cube_stage(cube_input, intermediate):
-    # Cube阶段
-    ...
+import pypto_pro.language as pl
 
 
-@pl.pipeline.stage
-def vector_stage(intermediate, output):
-    # Vector阶段
-    ...
-
-
-@pl.jit(pipeline=pl.pipeline.PipelineConfig(preload=2))
-def fused_kernel(cube_input, intermediate, output):
-    for i in pl.range(0, NUM_TILES):
-        with pl.section_cube():
-            cube_stage(cube_input, intermediate)
-        with pl.section_vector():
-            vector_stage(intermediate, output)
-```
-
-`@pl.pipeline.stage`本身只为函数添加stage标记，不改变函数行为。设置`pipeline=pl.pipeline.PipelineConfig(...)`后，编译器识别循环中的stage调用，分析各阶段对Tile的读写依赖，自动插入Cube与Vector之间的核间同步，并将串行阶段转换为Preload流水，使不同迭代的Cube和Vector阶段可以重叠执行。`preload`用于配置稳态流水开始前首个阶段的预执行次数。未启用Pipeline变换的融合Kernel仍可直接使用`pl.system.set_cross_core`和`pl.system.wait_cross_core`手动管理核间同步。
-
-关于Tile和TileGroup的详细使用方法，请参考[Tensor创建和操作](../../development/tensor_creation_and_operations.md)。
-
-## 矢量计算模式
-
-Ascend 950PR/Ascend 950DT在UB存储体系的基础上提供向量寄存器编程能力，形成“Global Memory → UB → Register”的存储层级。PyPTO Pro相应提供两种矢量计算模式：
-
-- **Memory矢量计算**：通过Tile API在UB上完成数据缓存与计算，数据流为“Global Memory → UB → Global Memory”，适合通用矢量计算场景。
-- **Reg矢量计算**：通过`@pl.vector_function`定义VF函数，使用`vf.*`接口在向量寄存器上完成计算，数据流为“Global Memory → UB → Register → UB → Global Memory”，适合需要精细化调优的高性能场景。
-
-Reg矢量计算的详细说明，请参考[Reg计算](../../development/vector_computation/reg_computation.md)。
-
-## PyPTO Pro编程接口
-
-传统裸指针编程需要开发者手工完成内存偏移计算、维度拆分和边界校验。Tensor抽象使用Shape、Stride、数据类型和内存布局等信息描述高维数据；Tile则作为核内计算、存储和数据搬运的物理载体，衔接全局Tensor和底层硬件。
-
-PyPTO Pro以Tile API和Reg API两类SIMD接口为主，同时提供补充的SIMT接口：
-
-| API层级 | 编程模式 | 特点 | 主要用途 |
-|----------|----------|------|----------|
-| **Tile API** | 基于Tile编程 | 通过`make_tile`/`make_tile_group`分配片上缓冲区，使用`auto_mutex=True`自动管理核内同步与N缓冲流水 | 适配大多数算子开发场景，兼顾硬件控制能力和开发效率 |
-| **Reg API（VF计算）** | 基于寄存器编程 | 通过`@pl.vector_function`定义VF函数，使用`vf.*`接口直接操作向量寄存器 | 自主管理寄存器数据加载和存储，用于精细化调优与高性能实现 |
-| **SIMT API** | 基于线程编程 | 通过`@pl.simt.function`定义逐线程函数，使用`pl.simt.launch`启动线程块 | 适合显式线程索引、条件分支、原子操作和不规则访存 |
-
-此外，PyPTO Pro提供Utils API，包括Python语法糖以及`printf`、`pto_assert`、`dump_data`和`trap`等调试接口。详细接口说明请参考[SIMD API](../../../../../api/index.md)、[SIMT API](../../../../../api/index.md)和[Utils API](../../../../../api/index.md)。
-
-## 控制流
-
-### 循环
-
-Kernel内使用`pl.range(start, end, step)`表达循环：
-
-```python
 num_cores = pl.get_block_num()
 core_id = pl.get_block_idx()
 
-for i in pl.range(core_id, m_tile_num, num_cores):
-    for j in pl.range(0, n_tile_num, 1):
-        ...
+# 第core_id个逻辑核以num_cores为步长处理数据块。
+for tile_idx in pl.range(core_id, tile_num, num_cores):
+    ...
 ```
 
-### 条件分支
+常用的跨步切分让各核处理的数据块数量最多相差1，并避免由单个核串行遍历全部数据。完整的Block数计算和多核切分方法请参考[多核Tiling切分](../../development/tiling/multi_core_tiling.md)。
 
-Kernel支持Python原生`if`、`elif`和`else`：
+### 纯Vector、纯Cube与混合Kernel
 
-```python
-if tiling.opkind[4] == 0:
-    pl.add(tile_c, tile_a, tile_b)
-elif tiling.opkind[4] == 1:
-    pl.sub(tile_c, tile_a, tile_b)
-else:
-    pl.mul(tile_c, tile_a, tile_b)
-```
+SIMD Kernel可以只使用一种执行域，也可以组合Vector和Cube执行域：
 
-## 编程流程
+| Kernel类型 | 执行资源 | `get_block_idx()`的含义 |
+|:---|:---|:---|
+| 纯Vector Kernel | AIV | 当前Vector逻辑核的全局索引 |
+| 纯Cube Kernel | AIC | 当前Cube逻辑核的全局索引 |
+| Cube/Vector混合Kernel | AIC和AIV | 在各自执行域中返回相应的全局逻辑核索引 |
 
-使用PyPTO Pro开发算子的典型流程如下：
+混合Kernel采用AIC:AIV为1:2的映射。一个逻辑Block对应一个AIC和两个AIV；当`block_num = pypto_pro.language.get_block_num()`时，Cube执行域有`block_num`个逻辑核，Vector执行域有`2 * block_num`个逻辑核。
 
-1. **定义Kernel函数**：使用`@pl.jit()`装饰器标记Kernel，通过`pl.Tensor`声明输入输出。
-2. **定义Tile与TileGroup**：通过`pl.TileType`描述Tile的Shape、数据类型和内存空间，通过`pl.make_tile`或`pl.make_tile_group`分配片上缓冲区。
-3. **编写计算逻辑**：在`pl.section_vector()`或`pl.section_cube()`中，使用搬运和计算接口完成Kernel逻辑。
-4. **Host端调用**：通过`kernel[stream, block_dim](*args)`启动Kernel。
+**图1 混合Kernel的逻辑Block映射**
 
-详细的编程方法请参考：
+![AIC与AIV为1比2时的逻辑Block和执行域映射](../../../../figures/pro/pro_multicore_spmd_mapping.png)
 
-- [Tile核函数](../../development/kernel_function.md)
-- [Tensor创建和操作](../../development/tensor_creation_and_operations.md)
-- [SIMT编程范式](../SIMT/programming_paradigm.md)
+Vector执行域中的`get_block_idx()`已经是展平后的全局AIV逻辑索引。需要区分同一个逻辑Block内的两个AIV时，可以使用`pypto_pro.language.get_subblock_idx()`。
+
+## SIMD数据对象
+
+PyPTO Pro使用不同的数据对象表示SIMD数据在存储层级中的位置：
+
+| 数据对象 | 数据位置 | 作用 |
+|:---|:---|:---|
+| Tensor | GM | 描述Kernel输入、输出或Workspace中的多维数据视图 |
+| Tile | UB、L1 Buffer、L0A/L0B/L0C Buffer等片上存储 | 表示当前分块的数据，是Tile矢量计算和Cube计算的操作数 |
+| TileGroup | 与Tile相同 | 管理一组轮转Tile，用于单缓冲、双缓冲和N缓冲 |
+| RegTensor、MaskReg | Vector Register File | 保存Reg矢量计算的输入、中间结果和输出 |
+
+Tensor表示全局数据，Tile表示当前AI Core处理的局部数据块。开发者通过Tiling将大Tensor划分成多个Tile，再由不同逻辑核和不同循环迭代处理这些Tile。Tensor和Tile的创建方式分别参见[Tensor创建和操作](../../development/tensor_creation_and_operations.md)和[Tile创建和操作](../../development/tile_creation_and_operations.md)。
+
+## SIMD计算方式
+
+### Tile矢量计算
+
+Tile矢量计算也称Membase矢量计算，以UB中的二维Tile作为计算对象，在`pypto_pro.language.section_vector()`执行域中完成批量运算。Tile API适合逐元素、归约、数据类型转换和数据重排等通用矢量场景。
+
+Tile分配、数据搬运、计算接口、缓冲区轮转和尾块处理请参考[Tile计算](../../development/vector_computation/tile_computation.md)；完整可执行示例请参考[Add算子快速入门](../../../../quick_start/pro/add_simd.md)。
+
+### Reg矢量计算
+
+Reg矢量计算也称Regbase矢量计算，通过`@pypto_pro.language.vector_function`定义VF函数，并在函数内使用`vf.*`接口操作Vector Register File中的RegTensor和MaskReg。中间结果可以保留在寄存器中，适合计算链较长、需要减少UB往返访问的高性能场景。
+
+VF函数不能独立启动，需要由外层JIT Kernel在Vector执行域中调用。寄存器数据类型、VF函数、加载存储和计算接口的完整规则请参考[Reg计算](../../development/vector_computation/reg_computation.md)。
+
+### Cube矩阵计算
+
+Cube计算使用L1 Buffer、L0A Buffer、L0B Buffer和L0C Buffer中的矩阵Tile，通过一条矩阵指令并行完成一个矩阵分块的乘加运算。Kernel使用`pypto_pro.language.section_cube()`标识Cube执行域。
+
+开发者根据矩阵分块选择Tile shape并组织矩阵计算。矩阵分形、片上地址、数据搬运和计算接口请参考[Cube计算](../../development/cube_computation.md)；完整示例请参考[Matmul算子快速入门](../../../../quick_start/pro/matmul_simd.md)。
+
+## SIMD Kernel开发流程
+
+使用PyPTO Pro开发SIMD算子通常包含以下步骤：
+
+1. **确定计算方式**：根据数据访问和计算特点选择Tile矢量、Reg矢量或Cube矩阵计算。
+2. **设计多核与Tile切分**：确定`block_dim`、各核的数据范围、Tile shape和尾块处理方式。
+3. **声明Tensor参数**：在Kernel签名中描述GM输入、输出和Workspace的数据类型、shape及layout。
+4. **规划片上数据**：根据计算方式选择Tile所在的MemorySpace和数据排布。
+5. **编写执行域**：在`section_vector()`或`section_cube()`中表达相应的SIMD计算。
+6. **编译和启动**：使用`@pypto_pro.language.jit`编译Kernel，在Host侧通过`kernel[stream, block_dim](...)`启动。
+
+SIMD适合对连续或规则分块数据执行相同操作。若算法更适合逐线程索引、不规则访存、复杂分支或原子更新，应考虑[SIMT编程范式](../SIMT/programming_paradigm.md)。
 
 ## 小结
 
-PyPTO Pro以SPMD+SIMD编程范式将同一份Kernel分发到多个AI Core执行，并通过Tile和Reg两级接口表达Vector、Cube及融合计算。开发者显式控制多核数据切分和片上缓冲区使用，框架则通过Tile、TileGroup和stage机制简化指令参数、核内同步及核间流水的表达。
+PyPTO Pro SIMD编程以多核SPMD完成全局数据切分，以Tile或寄存器上的SIMD指令完成核内批量计算。Tensor表示GM数据，Tile表示片上Buffer数据，RegTensor表示Vector Register数据；执行域决定代码使用Vector还是Cube资源。具体的数据搬运、计算接口和性能流水由对应的算子开发专题展开。

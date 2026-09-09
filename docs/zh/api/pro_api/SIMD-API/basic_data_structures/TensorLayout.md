@@ -46,17 +46,17 @@ PYPTO_DECLARE_ENUM(
 
 ## 约束说明
 
-GM Tensor仅支持ND（行主序，默认）和NZ（分形布局）。
+- GM Tensor仅支持ND（行主序，默认）和NZ（分形布局）。
 
-NZ只声明GM内存的布局，不会把普通ND buffer自动转换成NZ。调用Kernel前，输入buffer必须已经按NZ物理顺序完成packing；NZ输出也必须使用按NZ格式分配的buffer。高维NZ Tensor的最后两轴固定解释为[M, N]，所有前导轴均作为batch轴，不支持在layout中指定任意分形轴。
+- NZ只声明GM内存的布局，不会把普通ND buffer自动转换成NZ。调用Kernel前，输入buffer必须已经按NZ物理顺序完成packing；NZ输出也必须使用按NZ格式分配的buffer。高维NZ Tensor的最后两轴固定解释为[M, N]，所有前导轴均作为batch轴，不支持在layout中指定任意分形轴。
 
-NZ将逻辑[..., M, N]存储为[..., ceil(N/C0), ceil(M/16), 16, C0]。M/N无需分形对齐，但实际存储空间必须按align(M, 16) × align(N, C0)的容量分配并使用上述NZ物理排布；仅分配M × N元素的紧凑buffer不受支持。补齐区不属于逻辑Tensor内容，框架不会为传入的buffer自动扩容或完成packing。INT8、FP8E4M3FN、FP8E5M2、FP8E8M0和HF8的C0为32，FP4E2M1和FP4E1M2为64，FP16和BF16为16，FP32和INT32为8。FP4的M/N同样按逻辑元素计数，不使用packed字节数作为Tensor shape。
+- NZ将逻辑[..., M, N]存储为[..., ceil(N/C0), ceil(M/16), 16, C0]。M/N无需分形对齐，但实际存储空间必须按align(M, 16) × align(N, C0)的容量分配并使用上述NZ物理排布；仅分配M × N元素的紧凑buffer不受支持。补齐区不属于逻辑Tensor内容，框架不会为传入的buffer自动扩容或完成packing。INT8、FP8E4M3FN、FP8E5M2、FP8E8M0和HF8的C0为32，FP4E2M1和FP4E1M2为64，FP16和BF16为16，FP32和INT32为8。FP4的M/N同样按逻辑元素计数，不使用packed字节数作为Tensor shape。
 
-MX矩阵计算使用的E8M0分组缩放因子在GM中仍声明为普通ND Tensor；物理shape和搬运约束见[matmul_mx](../matrix_computation/matmul_mx.md)和[load](../memory_data_movement/load.md)。
+- MX矩阵计算使用的E8M0分组缩放因子在GM中仍声明为普通ND Tensor；物理shape和搬运约束见[matmul_mx](../matrix_computation/matmul_mx.md)和[load](../memory_data_movement/load.md)。
 
-普通ND GM Tensor的转置搬运由[load](../memory_data_movement/load.md)/[load_tile](../memory_data_movement/load_tile.md)的order参数决定（order=[1,0]即is_transpose=True），需与L1 Buffer中的Tile布局ZN配合。GM NZ只支持与NZ Tile同布局正序搬运，不支持通过order转置。详见下文[转置搬入](#转置搬入)。
+- 普通ND GM Tensor的转置搬运由[load](../memory_data_movement/load.md)/[load_tile](../memory_data_movement/load_tile.md)的order参数决定（order=[1,0]即is_transpose=True），需与L1 Buffer中的Tile布局ZN配合。GM NZ只支持与NZ Tile同布局正序搬运，不支持通过order转置。详见下文[转置搬入](#转置搬入)。
 
-Tile的布局约束请参见[pypto_pro.language.TileType](TileType.md)。
+- Tile的布局约束请参见[pypto_pro.language.TileType](TileType.md)。
 
 ## 调用示例
 

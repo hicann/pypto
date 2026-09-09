@@ -28,7 +28,7 @@ unalign_reg_for_store() -> align_reg
 
 ## 约束说明
 
-无
+无。
 
 ## 返回值说明
 

@@ -43,12 +43,12 @@ pypto_pro.language.system.dcci(
 
 ## 约束说明
 
-1. cache_line和dst必须在编译期确定，不能由运行时Scalar或Tensor动态选择。
-2. SINGLE_CACHE_LINE只覆盖一个64字节缓存行。处理地址区间[addr, addr + bytes)时，调用次数至少为该区间覆盖的缓存行数，不能只对首地址调用一次。
-3. ENTIRE_DATA_CACHE作用于整个数据缓存，offset不会缩小其作用范围；该模式开销大于单缓存行操作。
-4. DCCI不是同步原语。生产者通过MTE3等流水写出数据后，必须先同步到S流水再执行DCCI或发布标志；消费者也必须先完成相应跨核等待，再执行缓存处理和数据读取。具体事件号和同步模式由上层通信协议决定。
-5. target为UB Tile，或dst选择CACHELINE_UB时，调用前必须确保CTRL寄存器的CTRL[49]已置1以开启UB datacache模式；本接口不会自动修改该控制位。
-6. 频繁对整个缓存执行DCCI会造成明显性能损失；已知共享数据范围时应优先按64字节缓存行处理。
+- cache_line和dst必须在编译期确定，不能由运行时Scalar或Tensor动态选择。
+- SINGLE_CACHE_LINE只覆盖一个64字节缓存行。处理地址区间[addr, addr + bytes)时，调用次数至少为该区间覆盖的缓存行数，不能只对首地址调用一次。
+- ENTIRE_DATA_CACHE作用于整个数据缓存，offset不会缩小其作用范围；该模式开销大于单缓存行操作。
+- DCCI不是同步原语。生产者通过MTE3等流水写出数据后，必须先同步到S流水再执行DCCI或发布标志；消费者也必须先完成相应跨核等待，再执行缓存处理和数据读取。具体事件号和同步模式由上层通信协议决定。
+- target为UB Tile，或dst选择CACHELINE_UB时，调用前必须确保CTRL寄存器的CTRL[49]已置1以开启UB datacache模式；本接口不会自动修改该控制位。
+- 频繁对整个缓存执行DCCI会造成明显性能损失；已知共享数据范围时应优先按64字节缓存行处理。
 
 ## 返回值说明
 

@@ -49,7 +49,7 @@ histograms(src, preg, bin_type: Optional[BinType] = None, hist_type: Optional[Hi
 
 ## 约束说明
 
-无
+无。
 
 ## 返回值说明
 

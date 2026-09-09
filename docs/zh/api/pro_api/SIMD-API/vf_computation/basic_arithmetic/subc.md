@@ -37,7 +37,7 @@ subc(src0, src1, borrow_src, preg, mode: Optional[MergeMode] = None) -> (borrow,
 
 ## 约束说明
 
-无
+无。
 
 ## 返回值说明
 
