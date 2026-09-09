@@ -20,6 +20,7 @@
 #include "ir/transforms/base/visitor.h"
 
 #include "interface/tensor/ir.h"
+#include "interface/tensor/symbolic_scalar.h"
 #include "interface/tensor/logical_tensor.h"
 
 namespace pypto {
@@ -49,6 +50,12 @@ private:
     {
         var_uses.insert(op.get());
         IRVisitor::VisitExpr_(op);
+    }
+    // Symbolic scalar expressions (if conditions, scalar yield/continue values) keep their
+    // operand vars in RawSymbolicExpression, invisible to the base visitor's traversal.
+    void VisitExpr_(const ScalarExprPtr& op) override
+    {
+        npu::tile_fwk::SymbolicScalar::FromExpr(op).GetVarRefs(var_uses);
     }
     void VisitStmt_(const YieldStmtPtr& op) override
     {

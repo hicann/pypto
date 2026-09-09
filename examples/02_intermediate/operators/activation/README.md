@@ -6,7 +6,7 @@
 
 在现代 Transformer 架构（如 LLaMA, GPT, PaLM）中，经常会用到一些非标准的激活函数。本样例演示了以下激活函数的 PyPTO 实现：
 - **SiLU (Swish)**: `x * sigmoid(x)`。
-- **GELU**: 高斯误差线性单元的近似实现。
+- **GELU**: `x * 0.5 * (1 + erf(x / sqrt(2)))`，精确公式。
 - **SwiGLU**: `Swish(gate) * up`，门控线性单元的一种。
 - **GeGLU**: `GELU(gate) * up`。
 

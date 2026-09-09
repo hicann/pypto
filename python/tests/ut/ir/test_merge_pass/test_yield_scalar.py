@@ -9,12 +9,14 @@
 from pathlib import Path
 
 import pypto
+from pypto.pil.compile_pipeline import compile_new_ir
 
 from ..test_common import check_snapshot, run_merge_pass
 
 _GOLDEN_DIR = Path(__file__).parent
 
 IR = _GOLDEN_DIR / "test_yield_scalar.pypto"
+IR1 = _GOLDEN_DIR / "test_yield_scalar1.pypto"
 
 def test_yield_symbolic_scalar():
     def foo(x, y):
@@ -29,3 +31,22 @@ def test_yield_symbolic_scalar():
     out = pypto.Tensor((32, 32), pypto.DT_FP32, 'out')
     func = run_merge_pass(foo, a, out)
     check_snapshot(func, IR)
+
+
+def test_yield_symbolic_scalar1():
+    def foo(x, y):
+        pypto.set_vec_tile_shapes(16, 16)
+        n = 0
+        for _ in pypto.loop(10):
+            n += 32
+        if n > 128:
+            y[:] = x + 1
+        else:
+            y[:] = x + 2
+
+    a = pypto.Tensor((32, 32), pypto.DT_FP32, 'a')
+    out = pypto.Tensor((-1, 32), pypto.DT_FP32, 'out')
+    func = run_merge_pass(foo, a, out)
+    check_snapshot(func, IR1)
+
+    compile_new_ir(foo, a, out)

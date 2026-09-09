@@ -339,7 +339,7 @@ void IRTextDumper::PrintVarRef(const VarPtr& var)
     stream_ << IR_PUN_VARNAME << var->name_;
     if (As<LogicalTensorType>(var->GetType())) {
         auto t = std::dynamic_pointer_cast<const LogicalTensor>(var);
-        stream_ << IR_PUN_MEMREF << std::to_string(t->tensor->memoryId);
+        stream_ << IR_PUN_MEMREF << std::to_string(t->tensor->rawmagic);
     }
 }
 

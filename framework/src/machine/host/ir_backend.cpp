@@ -40,6 +40,12 @@ void FindExprFromForStmt(IrBackendContext& ctx, FunctionCache& cache, Linker& li
 {
     SymbolicScalar iterSymbol(forStmt->loopVar_->name_);
     linker.AddSymbol(iterSymbol);
+    for (const auto& iterArg : forStmt->iterArgs_) {
+        if (ir::As<ir::ScalarType>(iterArg->iterVar_->GetType())) {
+            SymbolicScalar iterArgSymbol(iterArg->iterVar_->name_);
+            linker.AddSymbol(iterArgSymbol);
+        }
+    }
     for (auto& retVar : forStmt->returnVars_) {
         if (ir::As<ir::ScalarType>(retVar->GetType())) {
             SymbolicScalar retSymbol(retVar->name_);
@@ -357,6 +363,22 @@ void VisitForStmtForControlFlow(IrBackendContext& ctx, FunctionCache& cache, Lin
     InsertCacheStopForContrlFlow(ctx, forStmt.get(), dynFunc, valDependTensorMeta);
     InsertWaitAicoreStartForControlFlow(forStmt.get(), indent, controlFlowOss, valDependTensorMeta);
 
+    for (const auto& iterArg : forStmt->iterArgs_) {
+        if (!ir::As<ir::ScalarType>(iterArg->iterVar_->GetType())) {
+            continue;
+        }
+        const auto& initValue = iterArg->initValue_;
+        controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "VALUE_" << iterArg->iterVar_->name_ << " = ";
+        if (initValue != nullptr && ir::As<ir::NoneType>(initValue->GetType()) == nullptr &&
+            std::dynamic_pointer_cast<const RawSymbolicScalar>(initValue) != nullptr) {
+            controlFlowOss << SymbolicExpressionTable::BuildExpression(ExprPtrToSymbolicScalar(initValue).Raw(),
+                                                                       getInputCseMap);
+        } else {
+            controlFlowOss << 0;
+        }
+        controlFlowOss << ";\n";
+    }
+
     controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "LOOP(" << iterVar << ", " << iterBegin << ", " << iterEnd
                    << ", " << iterStep << ") {\n";
     controlFlowOss << std::setw((indent + 1) * TABSIZE) << ' ' << "VALUE_" << iterSymbolName << " = " << iterVar
@@ -374,6 +396,28 @@ void VisitForStmtForControlFlow(IrBackendContext& ctx, FunctionCache& cache, Lin
                               rootTileDict, controlFlowOss, expressionOss, exprHeaderOss, indent + 1, expName,
                               exprSrcFiles, valDependTensorMeta, forStmt->returnVars_);
 
+    // Per-iteration phi update for scalar loop-carried values: the trailing ContinueStmt of
+    // the loop body carries the new carried values; materialize them into the iterVar slots.
+    // A loop without a trailing ContinueStmt (e.g. no carried values) has nothing to update.
+    const auto& bodySeq = forStmt->body_;
+    if (bodySeq != nullptr && !bodySeq->stmts_.empty()) {
+        if (auto contStmt = ir::As<ir::ContinueStmt>(bodySeq->stmts_.back())) {
+            ASSERT(DevCommonErr::PARAM_CHECK_FAILED, contStmt->value_.size() == forStmt->iterArgs_.size())
+                << "ContinueStmt values (" << contStmt->value_.size() << ") must match iterArgs ("
+                << forStmt->iterArgs_.size() << ")";
+            for (size_t i = 0; i < forStmt->iterArgs_.size(); i++) {
+                const auto& iterArg = forStmt->iterArgs_[i];
+                if (!ir::As<ir::ScalarType>(iterArg->iterVar_->GetType())) {
+                    continue;
+                }
+                auto contExpr = ExprPtrToSymbolicScalar(contStmt->value_[i]);
+                auto exprStr = SymbolicExpressionTable::BuildExpression(contExpr.Raw(), getInputCseMap);
+                controlFlowOss << std::setw((indent + 1) * TABSIZE) << ' ' << "VALUE_" << iterArg->iterVar_->name_
+                               << " = " << exprStr << ";\n";
+            }
+        }
+    }
+
     if (needCrossDie) {
         controlFlowOss << std::setw((indent + 1) * TABSIZE) << ' ' << "RUNTIME_ClearLoopDieId(" << iterSymbolName
                        << ");\n";
@@ -383,6 +427,17 @@ void VisitForStmtForControlFlow(IrBackendContext& ctx, FunctionCache& cache, Lin
                        << "RUNTIME_RootStitch(RUNTIME_FUNCKEY_PARALLEL_FOR_END); // leave parallel for loop \n";
     }
     controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "}\n";
+
+    // Loop exit binding: returnVars capture the final carried values.
+    for (size_t i = 0; i < forStmt->iterArgs_.size() && i < forStmt->returnVars_.size(); i++) {
+        const auto& iterArg = forStmt->iterArgs_[i];
+        if (!ir::As<ir::ScalarType>(iterArg->iterVar_->GetType()) ||
+            !ir::As<ir::ScalarType>(forStmt->returnVars_[i]->GetType())) {
+            continue;
+        }
+        controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "VALUE_" << forStmt->returnVars_[i]->name_ << " = "
+                       << "VALUE_" << iterArg->iterVar_->name_ << ";\n";
+    }
 }
 
 void VisitIRStmtForControlFlow(IrBackendContext& ctx, FunctionCache& cache, Linker& linker,

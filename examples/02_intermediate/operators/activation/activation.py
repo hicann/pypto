@@ -14,7 +14,7 @@ Custom Activation Functions Example for PyPTO
 This example demonstrates how to implement custom activation functions by composing
 PyPTO operations. It shows:
 - SiLU (Swish) activation: x * sigmoid(x)
-- GELU activation: x * sigmoid(1.702 * x) approximation
+- GELU activation: x * 0.5 * (1 + erf(x / sqrt(2)))
 - SwiGLU activation: Swish(gate) * up
 - GeGLU activation: GELU(gate) * up
 - Custom activation composition patterns
@@ -151,15 +151,15 @@ def gelu_activation_kernel(x: pypto.Tensor(), out: pypto.Tensor()):
     """
     GELU (Gaussian Error Linear Unit) activation function.
 
-    Uses approximation: x * sigmoid(1.702 * x)
-    This is a fast approximation of the full GELU formula, the magnitude of the maximum error is approximately 0.02.
+    Uses the exact formula: x * 0.5 * (1 + erf(x / sqrt(2))),
+    which matches torch.nn.functional.gelu default behavior (approximate='none').
     """
     configure_tiling(x)
 
-    # GELU approximation: x * sigmoid(1.702 * x)
-    x_scaled = x * 1.702
-    # NOTE: `1.702 * x` leads to `TypeError: unsupported operand type(s) for *: 'float' and 'Tensor'`
-    out[:] = x * pypto.sigmoid(x_scaled)
+    # Exact GELU: x * 0.5 * (1 + erf(x / sqrt(2)))
+    x_scaled = x * 0.7071067811865476
+    erf_val = pypto.erf(x_scaled)
+    out[:] = x * 0.5 * (erf_val + 1.0)
 
 
 @pypto.options(pass_options={"enable_slice": True})
@@ -240,17 +240,17 @@ def test_swiglu(device_id: int = None, dynamic: bool = False) -> None:
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def geglu_activation_kernel(gate: pypto.Tensor(), up: pypto.Tensor(), out: pypto.Tensor()):
     """
-    GELU (Gaussian Error Linear Unit) activation function.
+    GeGLU activation function: GELU(gate) * up
 
-    Uses approximation: x * sigmoid(1.702 * x)
-    This is a fast approximation of the full GELU formula.
+    GELU uses the exact formula: x * 0.5 * (1 + erf(x / sqrt(2))),
+    which matches torch.nn.functional.gelu default behavior (approximate='none').
     """
     configure_tiling(gate)
 
-    # GELU approximation: x * sigmoid(1.702 * x)
-    # Need to design a function to reuse GeLU function in a nested function call
-    gate_scaled = gate * 1.702
-    gelu_gate = gate * pypto.sigmoid(gate_scaled)
+    # Exact GELU: x * 0.5 * (1 + erf(x / sqrt(2)))
+    gate_scaled = gate * 0.7071067811865476
+    erf_val = pypto.erf(gate_scaled)
+    gelu_gate = gate * 0.5 * (erf_val + 1.0)
     out[:] = gelu_gate * up
 
 

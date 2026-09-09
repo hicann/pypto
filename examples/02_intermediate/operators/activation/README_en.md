@@ -6,7 +6,7 @@ This sample demonstrates how to compose basic PyPTO operators to implement custo
 
 In modern Transformer architectures (such as LLaMA, GPT, and PaLM), non-standard activation functions are commonly used. This sample demonstrates the PyPTO implementation of the following activation functions:
 - **SiLU (Swish)**: `x * sigmoid(x)`.
-- **GELU**: An approximate implementation of the Gaussian Error Linear Unit.
+- **GELU**: `x * 0.5 * (1 + erf(x / sqrt(2)))`, the exact formula.
 - **SwiGLU**: `Swish(gate) * up`, a type of gated linear unit.
 - **GeGLU**: `GELU(gate) * up`.
 

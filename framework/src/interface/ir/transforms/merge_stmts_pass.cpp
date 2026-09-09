@@ -27,13 +27,42 @@ namespace pypto::ir {
 
 namespace {
 
+using npu::tile_fwk::AsLogicalTensor;
 using npu::tile_fwk::LogicalTensor;
 using npu::tile_fwk::Operation;
+using npu::tile_fwk::RawTensor;
 using utils::LookupVarInExpr;
 using utils::SubstituteVars;
 using utils::VarExprMap;
 
 constexpr char kLoopCondsAttr[] = "_loop_conds";
+
+class RawDefCollector : public IRVisitor {
+public:
+    using IRVisitor::VisitStmt_;
+
+    bool DefinesRaw(const Var* var) const { return rawDefs_.count(var) > 0; }
+
+    bool ViewsRaw(const Var* var) const { return viewDefs_.count(var) > 0 && rawDefs_.count(var) == 0; }
+
+    void VisitStmt_(const TensorOpStmtPtr& op) override
+    {
+        bool inPlace = op->opcode_ == "ASSEMBLE" || op->opcode_ == "ASSEMBLE_SSA" || op->opcode_ == "ATOMIC_RMW";
+        for (auto& var : op->result_) {
+            if (inPlace) {
+                viewDefs_.insert(var.get());
+            } else {
+                rawDefs_.insert(var.get());
+                viewDefs_.erase(var.get());
+            }
+        }
+        IRVisitor::VisitStmt_(op);
+    }
+
+private:
+    std::unordered_set<const Var*> rawDefs_;
+    std::unordered_set<const Var*> viewDefs_;
+};
 
 struct BranchClassification {
     bool thenDead;
@@ -393,10 +422,28 @@ private:
         // use varList to ensure clone order and naming is deterministic
         std::sort(varList.begin(), varList.end(), [](auto& a, auto& b) { return a->name_ < b->name_; });
         for (auto& v : varList) {
-            if (auto lt = std::dynamic_pointer_cast<const LogicalTensor>(v)) {
-                cloneMap[v] = lt->Clone();
-            } else {
-                cloneMap[v] = v->Clone();
+            cloneMap[v] = v->Clone();
+        }
+
+        RawDefCollector collector;
+        collector.VisitStmt(thenBody);
+
+        std::unordered_map<int, std::shared_ptr<RawTensor>> cloneRaw;
+        for (auto& v : varList) {
+            if (!collector.DefinesRaw(v.get())) {
+                continue;
+            }
+            if (auto lt = AsLogicalTensor(v)) {
+                cloneRaw.try_emplace(lt->tensor->rawmagic, AsLogicalTensor(cloneMap[v])->tensor);
+            }
+        }
+        for (auto& v : varList) {
+            if (!collector.ViewsRaw(v.get())) {
+                continue;
+            }
+            if (auto lt = AsLogicalTensor(v)) {
+                auto it = cloneRaw.find(lt->tensor->rawmagic);
+                AsLogicalTensor(cloneMap[v])->tensor = it != cloneRaw.end() ? it->second : lt->tensor;
             }
         }
 
