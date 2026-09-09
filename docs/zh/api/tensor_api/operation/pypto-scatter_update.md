@@ -36,10 +36,10 @@ scatter_update(input: Tensor, dim: int, index: Tensor, src: Tensor) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT32，DT_INT16。<br>支持的维度：2维，4维<br>2维Shape[blockNum * blockSize, d]，4维Shape[blockNum, blockSize, 1, d]<br>不支持空Tensor；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input   | 输入      | 支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT32，DT_INT16，DT_INT8。<br>支持的维度：2维，4维<br>2维Shape[blockNum * blockSize, d]，4维Shape[blockNum, blockSize, 1, d]<br>不支持空Tensor；Shape Size不大于2147483647（即INT32_MAX）。 |
 | dim     | 输入      | 请保持默认值-2。 |
 | index   | 输入      | input的一组索引。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_INT64，DT_INT32，DT_INT16。<br>支持的维度：2维<br>Shape[b, s] |
-| src     | 输入      | src是一组更新值。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT32，DT_INT16。数据类型和input保持一致<br>支持的维度：2维，4维<br>2维Shape[b * s, d]，4维Shape[b, s, 1, d]<br>不支持空Tensor；Shape Size不大于2147483647（即INT32_MAX）。 |
+| src     | 输入      | src是一组更新值。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT32，DT_INT16，DT_INT8。数据类型和input保持一致<br>支持的维度：2维，4维<br>2维Shape[b * s, d]，4维Shape[b, s, 1, d]<br>不支持空Tensor；Shape Size不大于2147483647（即INT32_MAX）。 |
 
 ## 返回值说明
 
@@ -49,14 +49,16 @@ scatter_update(input: Tensor, dim: int, index: Tensor, src: Tensor) -> Tensor
 
 broadcast约束：不支持broadcast。
 
+索引约束：当index中包含指向同一目标位置的重复索引时，写入顺序以及最终写入结果不保证确定性。
+
 Tensor格式约束：Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
 
 ViewShape约束：2维场景下ViewShape为\[viewB \* s, d\]，4维场景下ViewShape为\[viewB, viewS, 1, d\]，尾轴d不做切分。2维场景下，\[viewB \* s, d\]针对src做切分，其第0维是index的第1维s的倍数，\[viewB, s\]针对index做切分。4维场景下，\[viewB, viewS, 1, d\]针对src做切分，\[viewB, viewS\]针对index做切分。
 
-TileShape约束：2维场景下TileShape为\[tileS, d\]，4维场景下TileShape为\[tileB, tileS, 1, d\]。尾轴d不做切分。2维场景下，TileShape针对src做切分，\[1,tileS\]针对index做切分，tileB是输入index的第1维s的约数，如src为\[12, 64\]，index为\[3, 4\]，TileShape为\[TileS, 64\]，其中，TileS可以是1、2、4。4维场景下，TileShape针对src做切分，并且，\[tileB, tileS\]针对index做切分。由于TileShape的切分针对src和index，切块大小之和应小于UB限制。
+TileShape约束：2维场景下TileShape为\[tileSize, d\]，4维场景下TileShape为\[tileB, tileS, 1, d\]。尾轴d不做切分。设index.shape\[1\]为s。2维场景下，当TileShape\[0\]不大于s时，TileShape\[0\]必须是s的约数；当TileShape\[0\]大于s时，TileShape\[0\]必须是s的倍数。例如src为\[12, 64\]、index为\[3, 4\]时，TileShape可以为\[1, 64\]、\[2, 64\]、\[4, 64\]、\[8, 64\]或\[12, 64\]。4维场景下，TileShape针对src做切分，并且，\[tileB, tileS\]针对index做切分。由于TileShape的切分针对src和index，切块大小之和应小于UB限制。
 
 二维示例：
-input：[16, 8]，index：[5, 2]，src：[10, 8]，viewShape：[viewB \* s, 8]，viewB需要是整数，即第0维是s的倍数，tileShape：[tileS, 8]，tileS需要是s的约数即1或者2。
+input：[16, 8]，index：[5, 2]，src：[10, 8]，viewShape：[viewB \* s, 8]，viewB需要是整数，即第0维是s的倍数。TileShape\[0\]不大于s时可以为1或者2；TileShape\[0\]大于s时必须是s的倍数，例如4、6、8或10。
 
 ## 调用示例
 

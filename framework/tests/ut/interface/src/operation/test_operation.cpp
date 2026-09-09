@@ -48,6 +48,24 @@ TEST_F(OperationOpsTest, CheckIndexAddParamsInvalid_FP16_Overflow)
     EXPECT_THROW(IndexAdd_(self, src, indices, axis, alpha), std::exception);
 }
 
+TEST_F(OperationOpsTest, ScatterUpdate_InconsistentDataType)
+{
+    Tensor dst(DT_FP32, {8, 8});
+    Tensor index(DT_INT32, {1, 2});
+    Tensor src(DT_FP16, {2, 8});
+
+    EXPECT_THROW(ScatterUpdate(dst, index, src, -2), std::exception);
+}
+
+TEST_F(OperationOpsTest, ScatterUpdate_UnsupportedDataType)
+{
+    Tensor dst(DT_UINT8, {8, 8});
+    Tensor index(DT_INT32, {1, 2});
+    Tensor src(DT_UINT8, {2, 8});
+
+    EXPECT_THROW(ScatterUpdate(dst, index, src, -2), std::exception);
+}
+
 TEST_F(OperationOpsTest, Range_UnsupportedStartDataType)
 {
     Element start(DT_INT8, 0);
