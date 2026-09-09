@@ -14,11 +14,7 @@
 
 ## 功能说明
 
-把UB或L0C Buffer中的Tile按绝对元素坐标写回GM，是与[pypto_pro.language.load](load.md)对应的写回接口。写回过程中可以融合ReLU、量化或原子累加。
-
-源Tile支持位于UB或L0C Buffer，不支持从L1 Buffer直接写回GM。
-
-如果希望按“第几块Tile”定位写出位置，需要使用[pypto_pro.language.store_tile](store_tile.md)。
+把UB或L0C Buffer中的Tile按绝对元素坐标写回GM，与[pypto_pro.language.load](load.md)对应。数据搬运过程中支持随路ReLU、量化或原子累加等操作。
 
 ## 函数原型
 
@@ -40,18 +36,18 @@ pypto_pro.language.store(
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| dst_tensor | 输出 | 目的操作数，Tensor类型，存储空间为GM。支持的数据类型和分形组合详见[约束说明](#约束说明)。写入起始位置和有效写入区域不能超过各维shape。 |
-| src_tile | 输入 | 源操作数，Tile类型，存储空间为UB或L0C Buffer。UB Tile的首地址须按32字节对齐，L0C Buffer Tile的首地址须按64字节对齐；不支持从L1 Buffer直接写回GM。 |
-| offsets | 输入 | 目标Tensor的元素偏移，List[int或Scalar]类型，长度与dst_tensor的维数相同，不支持负数。 |
-| relu_pre_mode | 输入 | 预处理模式，pypto_pro.language.ReluPreMode类型，可选，仅用于L0C Buffer写回GM时在写回前执行ReLU。支持ReluPreMode.NormalRelu，不能与Tile类型的scale同时使用。 |
-| scale | 输入 | 量化比例，float、Scalar或Tile类型，可选，仅用于L0C Buffer写回GM。Scalar支持DT_FP32、DT_INT32和DT_INT64。Tile用于按列分别设置比例，须位于Fixpipe Buffer对应的Fixpipe Buffer，数据类型为DT_INT64，shape为[1, N]，其中N是16的倍数且不大于512。不支持Tensor类型和[N, 1]形式。 |
-| order | 输入 | 维度映射，List[int]类型，可选。指定源Tile各维度对应的目标Tensor维度；各维度编号必须在目标Tensor的维度范围内、不能重复并按升序排列，省略时对应目标Tensor的最后两个维度。 |
-| atomic | 输入 | 原子写模式，[pypto_pro.language.AtomicType](../basic_data_structures/AtomicType.md)类型，可选。支持AtomicNone和AtomicAdd。 |
-| phase | 输入 | 分块写回阶段，[pypto_pro.language.STPhase](../basic_data_structures/STPhase.md)类型，可选，用于L0C Buffer中多步矩阵计算结果写回GM。不能与Tile类型的scale同时使用。 |
+| dst_tensor | 输出 | 目的操作数，Tensor类型，存储空间为GM。支持的数据类型和分形组合详见[约束说明](#约束说明)。 |
+| src_tile | 输入 | 源操作数，Tile类型，存储空间为UB或L0C Buffer。<br>- UB Tile的首地址须按32字节对齐；<br>- L0C Buffer Tile的首地址须按64字节对齐。 |
+| offsets | 输入 | 可选，表示目的Tensor各维度的绝对元素坐标，List[int或Scalar]类型，长度须与目的Tensor的维数相同。<br>- 不支持负数。<br>- 对于高维NZ Tensor，最后两项对应M、N方向。 |
+| relu_pre_mode | 输入 | 可选，L0C Buffer→GM搬运时是否开启随路ReLU操作，[pypto_pro.language.ReluPreMode](../basic_data_structures/ReluPreMode.md)类型。 |
+| scale | 输入 | 可选，是否使能量化功能及设置量化模式下的量化参数，数据在搬出L0C时由FixPipe乘以该比例并转换到目的数据类型。不同的传入形式会影响量化粒度，支持如下类型：<br>- **float类型**：直接传入固定值（如scale = 2.0），适用于整块tile使用同一比例。<br>- **Scalar类型**：量化比例在运行时确定，需按数据类型传值。<br>&nbsp;&nbsp;- DT_FP32：直接传原始比例值（如0.5）。<br>&nbsp;&nbsp;- DT_INT32、DT_INT64：传预编码的float32位模式转成的整数（如`struct.pack("!f", 0.5)`）。<br>- **Tile类型**：每列使用独立比例，需满足以下要求：<br>&nbsp;&nbsp;- target_memory必须为pl.MemorySpace.Scaling。<br>&nbsp;&nbsp;- shape为[1, N]（列量化），N必须是16的倍数且N ≤ 512。<br>&nbsp;&nbsp;- dtype为DT_INT64。<br>&nbsp;&nbsp;- 不支持与双目标搬运（AccToVecMode.DualModeSplitM / AccToVecMode.DualModeSplitN）同时使用。<br>&nbsp;&nbsp;- 目的操作数的Tile数据类型为DT_INT8时，Scaling tile每个DT_INT64元素的bit46需置1，用于选择有符号量化；未置位时L0C Buffer中的负值会被按无符号解读。<br>&nbsp;&nbsp;- 用户需要先把比例数据从GM搬到L1，再搬到Scaling，并完成MTE1→FIX同步。 |
+| order | 输入 | 可选，维度映射，List[int]类型，指定源Tile各维度对应的目标Tensor维度。<br>- 各维度编号必须在目标Tensor的维度范围内、不能重复。<br>- 仅支持按升序排列。<br>- 省略时对应目标Tensor的最后两个维度。GM分型为NZ时，只能指定为目标Tensor的最后两个维度。 |
+| atomic | 输入 | 可选，原子写模式，[pypto_pro.language.AtomicType](../basic_data_structures/AtomicType.md)类型。 |
+| phase | 输入 | 可选，分块写回阶段，[pypto_pro.language.STPhase](../basic_data_structures/STPhase.md)类型。<br>- 不支持与Tile类型的scale同时使用。 |
 
 ## 约束说明
 
-### 数据类型和分形要求
+- 数据类型和分形要求
 
 | 源 → 目的 | 分形要求 | 数据类型要求 |
 |---|---|---|
@@ -59,25 +55,13 @@ pypto_pro.language.store(
 | L0C Buffer → GM（不配置scale） | NZ → ND，NZ → NZ。 | 支持DT_FP32 → DT_FP32/DT_FP16/DT_BF16，以及DT_INT32 → DT_INT32/DT_FP16/DT_BF16。 |
 | L0C Buffer → GM（配置scale） | NZ → ND，NZ → NZ。 | 支持DT_FP32 → DT_INT8/DT_UINT8/DT_HF8/DT_FP8E4M3FN/DT_FP16/DT_BF16/DT_FP32，以及DT_INT32 → DT_INT8/DT_UINT8/DT_FP16/DT_BF16。 |
 
-### NZ
+- GM NZ布局：其物理排布、分形轴和完整Tensor的shape约束见[TensorLayout](../basic_data_structures/TensorLayout.md)。store还需满足以下NZ搬运约束：
+  - Tile shape和valid M/N须满足M按16、N按目标Tensor dtype对应的C0对齐，N方向offset也须按C0对齐。
+  - L0C Buffer中的Tile直接写回GM时，若一次写入多个N分形（valid N大于C0），写回范围须覆盖目标Tensor完整的NZ物理M轴。若部分M跨多个N分形时，需先搬到UB，再从UB写回GM。
 
-当dst_tensor声明为NZ时，其物理排布、分形轴和完整Tensor shape约束见[TensorLayout](../basic_data_structures/TensorLayout.md)。store还需满足以下NZ搬运约束：
-
-- 仅支持NZ Tile到GM NZ的同布局搬运，源Tile位于UB或L0C Buffer；order省略或指定Tensor最后两轴的正序。
-- Tile shape和valid M/N须满足M按16、N按目标Tensor dtype对应的C0对齐，N方向offset也须按C0对齐。
-- 高维offset的前导项选择batch，最后两项为M、N方向的逻辑元素坐标。
-
-L0C Buffer中的NZ Tile直接写回GM NZ时，仅支持以下场景之一：有效M等于源Tile的M维大小向上对齐至16的倍数，或有效N不大于C0。不满足时，需先搬到UB，再从UB写回GM。
-
-### 原子累加
-
-- AtomicAdd仅适用于从UB或L0C Buffer写回GM的store操作，load和move等接口不支持原子累加。
-- 源Tile位于UB时，源Tile与目标Tensor的数据类型必须相同，支持DT_INT8、DT_INT16、DT_FP16、DT_BF16、DT_INT32和DT_FP32。
-- 源Tile位于L0C Buffer且不配置scale时，支持DT_FP32 → DT_FP32/DT_FP16/DT_BF16，以及DT_INT32 → DT_INT32。
-- 源Tile位于L0C Buffer且配置float或Scalar类型的scale时，支持DT_FP32 → DT_INT8/DT_FP16/DT_FP32，以及DT_INT32 → DT_INT8/DT_FP16。源、目的数据类型不同时，先转换为目标数据类型，再执行原子累加。
 - 接口不会自动清零目标Tensor。首次累加前，调用方必须将目标区域初始化为零或预期的累加初值。
+
 - 多核同时累加同一目标地址时，每次更新具有原子性。由于浮点加法不满足结合律，更新顺序不同时结果可能存在微小差异。
-- AtomicAdd不能与Tile类型的scale同时使用。
 
 ## 返回值说明
 
@@ -110,28 +94,4 @@ def add_kernel(
         pl.load(cur_b, b, [0, 0])
         pl.add(cur_out, cur_a, cur_b)
         pl.store(out, cur_out, [0, 0])
-```
-
-### 写回前融合ReLU
-
-```python
-pl.store(relu_out, acc, [0, 0], relu_pre_mode=pl.ReluPreMode.NormalRelu)
-```
-
-### 原子累加
-
-```python
-# 多核或多步累加到同一GM位置
-pl.store(dk_out, fp32_row_tile, [b_id, g_id, single_indice, 0], atomic=pl.AtomicType.AtomicAdd)
-
-# 将L0C Buffer中的矩阵计算结果原子累加到GM
-pl.store(out, acc.current(), [0, 0], atomic=pl.AtomicType.AtomicAdd)
-```
-
-### 分阶段矩阵计算结果写回
-
-```python
-pl.matmul(acc, left, right, phase=pl.AccPhase.Partial)
-pl.matmul_acc(acc, acc, next_left, next_right, phase=pl.AccPhase.Final)
-pl.store(out_tensor, acc, [i, j], phase=pl.STPhase.Final)
 ```
