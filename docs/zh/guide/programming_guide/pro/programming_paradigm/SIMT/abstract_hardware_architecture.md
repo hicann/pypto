@@ -1,17 +1,31 @@
 # 抽象硬件架构
 
-PyPTO Pro的SIMT函数运行在支持SIMT模式的AIV上，目前支持Ascend 950PR/Ascend 950DT。SIMT允许同一条指令中的不同Thread独立寻址和计算，适合离散数据访问和复杂控制逻辑等场景。
+SIMT编程允许不同Thread独立寻址和计算，适合表达离散数据访问、复杂控制逻辑和线程协作。PyPTO Pro的SIMT函数运行在支持SIMT模式的AIV上。
 
-昇腾NPU包含多个AIV。每个AIV内部包含Warp调度与计算资源、寄存器和Unified Buffer（UB）；AIV外部的Global Memory由不同AIV共享，L2 Cache位于Global Memory与各AIV之间。
+## 硬件组成
 
-SIMT多线程计算涉及的主要硬件资源如下：
+昇腾NPU包含多个AIV。每个AIV包含SIMT计算资源、寄存器和Unified Buffer（UB），AIV外部的L2 Cache和Global Memory由多个AIV共享。SIMT多线程计算主要涉及以下硬件资源。
 
-- **Warp调度与计算资源**：硬件将一个Thread Block划分为多个Warp，每个Warp包含32个Thread。同一Warp中的Thread执行相同指令，Vector侧计算资源完成各Thread的运算。
-- **寄存器**：每个Thread拥有独立的寄存器，用于保存参数、局部变量和中间结果。AIV上的寄存器总量有限，入口函数配置的最大Thread数量会影响单个Thread可使用的寄存器资源。
-- **Unified Buffer（UB）**：UB中的一部分空间作为Thread Block内共享内存，供块内Thread交换数据；另一部分作为Data Cache，用于缓存SIMT线程访问的Global Memory数据。PyPTO Pro使用`MemorySpace.Vec`中的二维ND Tile表示可由Thread Block共享的数据。
-- **L2 Cache**：L2 Cache由所有AIV共享，位于Global Memory与各AIV的Data Cache之间，用于缓存Global Memory数据并降低访问延迟，由硬件自动管理。
-- **Global Memory**：Global Memory保存输入、输出和跨Thread Block共享的数据，PyPTO Pro使用Tensor表示其中的数据。SIMT线程读取Global Memory时，数据经过L2 Cache和AIV上的Data Cache后进入Thread私有寄存器。
+### SIMT计算资源
 
-在PyPTO Pro中，外层JIT Kernel负责分配Vec Tile并组织Global Memory与UB之间的数据搬运，再在`pl.section_vector()`中通过`pl.simt.launch`启动SIMT入口函数。`pl.simt.launch`配置Thread Block尺寸并传递Tensor、Vec Tile或Scalar，不单独配置Data Cache空间。
+SIMT计算资源负责组织并执行Thread任务。一个Thread Block包含多个Thread，各Thread执行同一份SIMT函数，并根据各自的线程索引访问和处理数据。不同Thread可以具有独立的局部变量，也可以根据运行时条件执行不同的控制分支。
 
-线程与Warp的组织方式参见[线程架构](../../development/vector_computation/simt_computation.md#线程架构)。
+### 寄存器
+
+每个Thread拥有独立的寄存器，用于保存函数参数、线程索引、局部变量和中间结果。AIV上的寄存器总量有限，Thread Block内的Thread数量以及单个Thread的计算复杂度都会影响寄存器资源的使用。
+
+### Unified Buffer
+
+UB中的部分空间用于保存Thread Block内共享的数据，支持块内Thread交换和复用中间结果；部分空间作为Data Cache，缓存SIMT线程访问的Global Memory数据。
+
+### L2 Cache和Global Memory
+
+Global Memory用于保存输入、输出以及不同Thread Block访问的数据。L2 Cache位于AIV与Global Memory之间，由多个AIV共享并由硬件管理。SIMT线程访问Global Memory时，数据经过L2 Cache和AIV内的Data Cache，最终进入Thread私有寄存器。
+
+## PyPTO Pro中的编程映射
+
+PyPTO Pro中的数据对象与上述硬件存储资源对应如下：
+
+- Thread私有的Scalar通常保存在寄存器中，用于表示线程索引、局部变量和中间结果。
+- Tile位于UB中，可由同一Thread Block内的Thread共享。
+- Tensor位于Global Memory中，用于保存输入、输出和全局数据。

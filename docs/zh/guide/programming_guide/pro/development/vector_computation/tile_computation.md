@@ -1,273 +1,410 @@
 # Tile计算
 
-本章介绍基于Tile的Vector侧编程方法，包括Tile分配、数据搬运、双缓冲流水、尾块处理和多核切分。
+Tile计算是PyPTO Pro在Vector侧提供的Memory矢量计算方式。开发者以片上Tile为输入和输出，通过Tile API对Tile有效区域中的多个数据元素执行批量计算，适合逐元素运算、归约、类型转换和数据重排等规则计算。
 
-## Tile分配
+一个完整算子的典型数据链路如下：
 
-### make_tile —— 分配单个Tile
-
-[`pypto_pro.language.make_tile`](../../../../../api/pro_api/SIMD-API/resource_management/make_tile.md)分配一块固定的片上缓冲区。指定`addr`时**必须**同时指定`size`（缓冲区的字节大小）：
-
-```python
-tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-tile_a = pl.make_tile(tt, addr=0x0000, size=8192)
-tile_b = pl.make_tile(tt, addr=0x2000, size=8192)
-tile_out = pl.make_tile(tt, addr=0x4000, size=8192)
+```text
+Tensor → 数据搬入 → 输入Tile → Tile计算 → 输出Tile → 数据搬出 → Tensor
 ```
 
-`size`是缓冲区的字节大小：`prod(shape) * dtype_bytes`。例如`[64, 64]`的FP16 Tile = `64*64*2 = 8192`字节。
+Tile及TileGroup的创建、片上地址和数据搬运等内容由[Tile创建和操作](../tile_creation_and_operations.md)介绍。
 
-### make_tile的手动同步
+## Tile计算方式
 
-由`make_tile`创建的Tile只是一块裸缓冲区，框架**不会**为它插入任何跨pipe的同步。当一个Tile在某条硬件pipe上被生产（例如MTE2加载），又在另一条pipe上被消费（例如V计算）时，**必须自己**用[`pypto_pro.language.system.sync_src`](../../../../../api/pro_api/SIMD-API/synchronization/sync_src.md)和[`pypto_pro.language.system.sync_dst`](../../../../../api/pro_api/SIMD-API/synchronization/sync_dst.md)插入同步：
+Tile计算在Vector执行域中执行，Tile API采用预先准备输出Tile的方式表达计算，接口不会创建或返回新的Tile：
 
 ```python
 with pl.section_vector():
-    pl.load(tile_a, a, [0, 0])
-    pl.load(tile_b, b, [0, 0])
-    pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-    pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-    pl.add(tile_out, tile_a, tile_b)
-    pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-    pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-    pl.store(out, tile_out, [0, 0])
+    pl.add(out_tile, lhs_tile, rhs_tile)
 ```
 
-- `sync_src(set_pipe, wait_pipe, event_id)` —— SET flag（生产方）
-- `sync_dst(set_pipe, wait_pipe, event_id)` —— WAIT flag（消费方）
-- `event_id` —— flag ID；静态取值范围为`[0, 7]`，动态整数Scalar的运行时数值也必须在该范围内；仅在上一次flag已被对应的`sync_dst`消费后才可复用同一ID
+上例对lhs_tile和rhs_tile的有效区域逐元素相加，并将结果写入out_tile。Tile计算接口通常遵循以下形式：
 
-`sync_src`/`sync_dst`的pipe组合和ID必须完全一致。前端只校验单次调用的参数，不会跨分支或循环证明两个接口已正确成对。
+```text
+pl.operation(out, input_0, input_1, ..., optional_parameters)
+```
 
-Pipe类型（`pypto_pro.language.PipeType`）：`MTE2`（GM→L1/UB加载）、`MTE1`（L1→L0搬运）、`M`（矩阵计算）、`FIX`（L0C结果搬运）、`V`（向量计算）、`MTE3`（UB→GM存储）等。
+- out是保存计算结果的目的Tile，需要在调用接口前准备完成。
+- 输入可以是Tile；部分接口也支持Scalar或Python标量常量。
+- 计算作用于Tile的有效区域，输入输出的shape、valid shape、数据类型和layout需要满足对应接口的约束。
+- 部分接口支持原地计算，即out可以与某个输入使用同一Tile；未明确说明时不能假定支持原地计算。
 
-## TileGroup —— 自动同步的双缓冲/N缓冲
+## 支持的计算操作
 
-[`pypto_pro.language.make_tile_group`](../../../../../api/pro_api/SIMD-API/resource_management/make_tile_group.md)声明一组轮转的Tile，用于实现双缓冲及N缓冲。配置非空`mutex_ids`并配合`auto_mutex=True`时，框架在每次使用轮转Tile的前后自动插入`mutex_lock`/`mutex_unlock`；`mutex_ids`为`None`或空列表时，必须通过`depth`指定Tile数量，跨Pipe同步由用户自行保证。
+PyPTO Pro当前公开的Tile矢量计算操作如下：
 
-![PyPTO Pro TileGroup双缓冲的理想化流水时序](../../../../figures/pro/pro_tile_vector_double_buffer.png)
+| 计算类型 | 主要用途 |
+|---|---|
+| [逐元素计算](../../../../../api/pro_api/SIMD-API/tile_vector_computation/elementwise/index.md) | 对Tile中的对应元素执行算术、逻辑或激活计算。 |
+| [比较](../../../../../api/pro_api/SIMD-API/tile_vector_computation/comparison/index.md) | 逐元素比较并生成按位压缩的掩码Tile。 |
+| [选择](../../../../../api/pro_api/SIMD-API/tile_vector_computation/selection/index.md) | 根据掩码从两个输入中逐元素选择结果。 |
+| [类型转换](../../../../../api/pro_api/SIMD-API/tile_vector_computation/type_conversion/index.md) | 将源Tile有效区域中的元素转换为目的Tile的数据类型。 |
+| [数学函数](../../../../../api/pro_api/SIMD-API/tile_vector_computation/math_functions/index.md) | 使用标量填充Tile，或沿指定维度执行求和归约。 |
+| [复合计算](../../../../../api/pro_api/SIMD-API/tile_vector_computation/composite_computation/index.md) | 完成Tile与标量的乘加计算。 |
+| [融合矢量计算](../../../../../api/pro_api/SIMD-API/tile_vector_computation/fused_vector_computation/index.md) | 在一次接口调用中完成加法和ReLU激活。 |
+| [转置](../../../../../api/pro_api/SIMD-API/tile_vector_computation/transpose_and_element_access/index.md) | 交换二维Tile的两个轴。 |
 
-图中输入TileGroup和输出TileGroup分别拥有两个缓冲槽；第`t`轮使用
-`slot = t % 2`。流水稳定后，MTE2搬入下一块、Vector计算当前块和MTE3搬出上一块可以
-占用不同Pipe并行执行。
+各接口支持的数据类型、存储空间、layout和原地计算方式可能不同，应以[Tile矢量计算API](../../../../../api/pro_api/SIMD-API/tile_vector_computation/index.md)中的说明为准。
+
+## 常用计算模式
+
+### Tile与Tile逐元素计算
+
+两个输入Tile的对应元素参与计算，结果写入目的Tile：
 
 ```python
-tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-
-# 双缓冲：mutex_ids长度为2
-a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
-b_db = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[2, 3])
-c_db = pl.make_tile_group(type=tile_type, addrs=0x20000, mutex_ids=[30, 31])
-
-# 两块Tile，仅使用轮转/下标能力，不配置mutex元数据
-rotation_group = pl.make_tile_group(
-    type=tile_type, addrs=0x30000, mutex_ids=None, depth=2)
+pl.add(out_tile, lhs_tile, rhs_tile)
+pl.mul(out_tile, lhs_tile, rhs_tile)
+pl.maximum(out_tile, lhs_tile, rhs_tile)
 ```
 
-### 游标接口
+使用这类接口前，需要根据对应API确认输入输出Tile的shape、valid shape、数据类型和layout是否匹配。
 
-| 方法 | 游标效果 | 返回值 |
-|:---|:---|:---|
-| `g.next()` | 前进+1 | 新索引处的Tile（`(cur+1) % N`） |
-| `g.current()` | 不变 | 当前索引处的Tile |
-| `g.previous()` | 不变 | 前一个Tile（`(cur-1) % N`） |
-| `g[i]` | 不变 | 按照索引取第i个Tile |
+### Tile与Scalar逐元素计算
 
-`next()`是主力：每次循环迭代调用一次以取“下一块缓冲区”，游标按N取模回绕。`current()`在同一迭代中多个算子共享同一块缓冲区时使用。`previous()`在不扰动游标的情况下窥视前一块缓冲区。
-
-### addrs的两种写法
-
-- **单个基地址**→ Tile连续排布：`base + i * slot_size`
-- **地址列表**（长度 == `len(mutex_ids)`/确定的`depth`）→ 每个Tile一个显式的、可不连续的地址
+部分接口支持Tile与Scalar计算，同一个Scalar会参与Tile有效区域中每个元素的运算。例如：
 
 ```python
-# 连续基地址
-a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
-
-# 离散地址
-db = pl.make_tile_group(type=tile_type, addrs=[0x0, 0x10000], mutex_ids=[0, 1])
+pl.add(out_tile, src_tile, 1.0)
 ```
 
-## 数据搬运
+Tile-Scalar并不是所有逐元素接口的通用能力，Scalar类型也需要与Tile元素类型兼容。
 
-GM Tensor与片上Tile之间的数据搬运通过以下接口完成：
+### 原地计算
 
-| 算子 | 方向 | 偏移语义 |
-|:---|:---|:---|
-| `pypto_pro.language.load` | GM → Tile | 绝对元素偏移 |
-| `pypto_pro.language.load_tile` | GM → Tile | 按Tile索引：offset = `index * tile_shape` |
-| `pypto_pro.language.store` | Tile → GM | 绝对元素偏移 |
-| `pypto_pro.language.store_tile` | Tile → GM | 按Tile索引 |
-
-![PyPTO Pro Tile矢量计算的数据通路与搬运接口](../../../../figures/pro/pro_tile_vector_dataflow.png)
-
-图中的MTE2和MTE3分别对应搬入、搬出流水；`pypto_pro.language.load_tile`/`pypto_pro.language.store_tile`与
-`pypto_pro.language.load`/`pypto_pro.language.store`走相同的数据通路，区别在于坐标采用Tile索引还是绝对元素偏移。
+接口明确支持原地计算时，可以复用输入Tile保存结果。例如，以下代码依次完成加法和ReLU：
 
 ```python
-# 按Tile索引：[i, j]选取第(i,j)个TILE_M x TILE_N块
-pl.load_tile(tile_a, x, [i, j])      # 先目标Tile，再源Tensor，最后坐标
-pl.store_tile(z, tile_c, [i, j])     # 先目标Tensor，再源Tile，最后坐标
-
-# 绝对偏移：[row, col]是进入Tensor的元素偏移
-pl.load(tile_a, x, [i, j])
-pl.store(z, tile_c, [i, j])
+pl.add(out_tile, lhs_tile, rhs_tile)
+pl.relu(out_tile, out_tile)
 ```
 
-`load_tile`/`store_tile`会自动把每个Tile坐标乘以Tile的shape，因此按“Tile”来索引，无需手动计算字节/元素偏移。
+原地计算可以减少中间Tile，但会覆盖原数据。如果后续计算仍需使用输入值，应使用独立的输出Tile。
 
-### Tile切片
+### 比较与选择
 
-在`pl.section_vector()`中，可以使用二维切片语法从UB Tile中选取一个矩形区域：
+比较接口生成按位压缩的掩码，选择接口根据掩码选择结果：
+
+```python
+pl.eq(mask_tile, lhs_tile, rhs_tile)
+pl.select(out_tile, mask_tile, lhs_tile, fallback_tile, tmp_tile)
+```
+
+掩码Tile、临时Tile以及输入输出Tile的类型和layout需要满足对应接口的要求。
+
+### 归约计算
+
+归约接口可以沿指定维度对二维Tile求和：
+
+```python
+pl.sum(out_tile, src_tile, tmp_tile, dim=0)
+pl.sum(out_tile, src_tile, tmp_tile, dim=1)
+```
+
+源Tile形状为[M, N]时，dim=0的输出形状为[M, 1]，dim=1的输出形状为[1, N]。不同归约方向支持的数据类型存在差异。
+
+### 类型与布局转换
+
+类型转换接口将Tile转换为目的Tile的数据类型，目标类型由out_tile.dtype决定；转置接口交换二维Tile的两个轴：
+
+```python
+pl.cast(out_tile, src_tile, mode=pl.RoundMode.CAST_ROUND)
+pl.transpose(transposed_tile, src_tile)
+```
+
+这两个接口都将结果写入预先准备的目的Tile。舍入模式、数据类型组合以及shape与对齐要求参见对应API说明。
+
+## 完成一次Tile计算
+
+一次Tile计算可以按照以下思路组织：
+
+1. **确定计算语义**：明确计算属于逐元素、比较选择、归约、类型转换还是数据重排，并选择对应的Tile API。
+2. **确定输入输出关系**：根据接口原型准备输入、输出和临时Tile，确认shape、valid shape、数据类型及layout满足接口约束。
+3. **编排计算操作**：在Vector执行域中调用一个或多个Tile API，将前一个操作的输出Tile作为后一个操作的输入Tile。
+4. **处理数据依赖**：当Tile在数据搬运流水与Vector计算流水之间传递时，使用自动Mutex或显式同步保证生产者先于消费者完成。
+5. **处理尾块**：当实际数据范围小于Tile物理shape时，设置正确的valid shape，使计算只作用于有效区域。
+
+以下片段先对两个输入Tile逐元素相加，再对结果执行ReLU激活。代码假设输入、输出Tile已经创建，输入数据已经搬入，并且计算前后的跨流水依赖由外层Kernel处理：
 
 ```python
 with pl.section_vector():
-    tile = tile_group.next()
-    pl.load(tile, src, [0, 0])
-
-    # 选取第2～5行、第16～49列，对应shape为[4, 34]
-    sub_tile = tile[2:6, 16:50]
-    pl.store(dst, sub_tile, [0, 0])
+    pl.add(out_tile, lhs_tile, rhs_tile)
+    pl.relu(out_tile, out_tile)
 ```
 
-切片结果仍是Tile，与原Tile共享UB缓冲区，不会分配或复制数据；修改切片区域也会修改原Tile的对应区域。切片采用Python风格的半开区间，支持整型常量或运行时整型Scalar作为起止位置，也可以省略结束位置以选取到对应维度末尾。
+该计算由两个Tile操作组成：逐元素加法先将结果写入out_tile，ReLU再原地更新同一Tile。两个操作均在Vector计算流水上执行，不需要在二者之间插入跨Pipe同步。
 
-使用Tile切片时应注意以下限制：
-
-- 源对象必须是位于UB的二维Tile，layout为ND或DN；Tensor不能使用该切片语法，访问Tensor时仍需通过`pl.load`或`pl.store`的offset参数定位。
-- 结束位置超过Tile物理shape时会截断到该维度末尾。每一维截断后必须满足`0 <= start < stop`，不支持生成空切片。
-- 如果原Tile设置了`valid_shape`，切片的有效区域还会受到原有效区域限制。例如原Tile的`valid_shape`为`[6, 40]`时，`tile[2:6, 16:50]`得到的有效shape为`[4, 24]`。切片起点不能超过原Tile对应维度的有效范围。
-- 不支持步长切片和负数索引，例如`tile[::2, :]`或`tile[-1:, :]`均不属于支持的用法。
-
-## 完整示例 —— 逐元素加法（双缓冲）
+如果选择融合接口，可以写为：
 
 ```python
-import os
+pl.add_relu(out_tile, lhs_tile, rhs_tile)
+```
 
+pypto_pro.language.add_relu会在计算过程中修改lhs_tile。只有在后续不再需要其原始数据，并且输入输出满足该接口约束时，才能用融合写法替代前述计算链。
+
+## 尾块处理
+
+当GM Tensor的shape不能被Tile shape整除时，最后一行或最后一列Tile只包含部分有效数据，这类Tile称为**尾块**。本节介绍如何使用valid_shape限定尾块的有效区域，以及何时需要配置compact、pad并填充无效区域。
+
+### 理解尾块
+
+以二维Tensor为例，设Tensor shape为[M, N]，Tile shape为[TILE_M, TILE_N]，两个方向的Tile数量为：
+
+```python
+m_tiles = (M + TILE_M - 1) // TILE_M
+n_tiles = (N + TILE_N - 1) // TILE_N
+```
+
+当M % TILE_M != 0时会产生尾行，当N % TILE_N != 0时会产生尾列；两者同时出现时，右下角为尾角。
+
+![二维Tensor中的满块、尾行、尾列和尾角](../../../../figures/pro/pro_tail_tile_grid.png)
+
+对于第i行、第j列Tile，当前有效行列数可按下式计算：
+
+```python
+valid_rows = pl.min(M - i * TILE_M, TILE_M)
+valid_cols = pl.min(N - j * TILE_N, TILE_N)
+```
+
+### shape与valid_shape
+
+TileType.shape和TileType.valid_shape描述的对象不同：
+
+| 参数 | 作用 |
+| --- | --- |
+| shape | Tile的物理规格，决定片上缓冲区大小和寻址边界 |
+| valid_shape | 当前Tile中真正有效的行列范围 |
+
+![Tile物理shape与逻辑valid_shape的关系](../../../../figures/pro/pro_tail_shape_validshape.png)
+
+对于每次运行时有效尺寸可能不同的尾块，建议在[TileType](../../../../../api/pro_api/SIMD-API/basic_data_structures/TileType.md)中显式声明动态有效形状：
+
+```python
+tile_type = pl.TileType(
+    shape=[64, 128],
+    dtype=pl.DT_FP16,
+    target_memory=pl.MemorySpace.Vec,
+    valid_shape=[-1, -1],
+)
+```
+
+valid_shape=[-1, -1]表示两个维度都由运行时决定。如果只有一个维度动态，也可以使用如[64, -1]的声明。有效形状必须为正整数，且不能超过shape对应维度。
+
+### 标准处理流程
+
+尾块处理的关键顺序是：**先设置有效形状，再搬入和计算**。
+
+![尾块的计算、有效形状设置、搬入、计算和搬出流程](../../../../figures/pro/pro_tail_processing_flow.png)
+
+```python
+tile_a = a_group.next()
+tile_b = b_group.next()
+tile_c = c_group.next()
+
+valid_rows = pl.min(M - i * TILE_M, TILE_M)
+valid_cols = pl.min(N - j * TILE_N, TILE_N)
+
+# 必须先设置，使随后的 load、计算和 store 使用同一有效区。
+pl.set_validshape(tile_a, [valid_rows, valid_cols])
+pl.set_validshape(tile_b, [valid_rows, valid_cols])
+pl.set_validshape(tile_c, [valid_rows, valid_cols])
+
+pl.load_tile(tile_a, a, [i, j])
+pl.load_tile(tile_b, b, [i, j])
+pl.add(tile_c, tile_a, tile_b)
+pl.store_tile(c, tile_c, [i, j])
+```
+
+pypto_pro.language.set_validshape会更新Tile或TileGroup的当前有效范围。在上述顺序中：
+
+- 数据搬入操作只从GM搬入有效区域，避免尾块越界读。
+- 向量计算使用当前有效区域。
+- 数据写回操作只写回有效区域，避免越界写。
+
+> 应在数据搬入前设置valid_shape，用于约束GM搬入；在数据搬入后设置仅影响后续操作。
+
+#### Tile与TileGroup
+
+每个缓冲区的有效形状不同时，应分别为TileGroup获取的Tile设置valid_shape：
+
+```python
+tile = tile_group.next()
+pl.set_validshape(tile, [valid_rows, valid_cols])
+```
+
+如果TileGroup中的所有缓冲区在整个Kernel期间都使用同一有效形状，可以对TileGroup统一设置：
+
+```python
+pl.set_validshape(tile_group, [valid_rows, valid_cols])
+```
+
+对逐块变化的尾块，应在每次获取Tile后设置当前块的有效形状。
+
+### compact的作用
+
+compact描述搬运、重排或矩阵计算路径对Tile片上物理排布的解释方式；valid_shape描述Tile的实际有效区域。设置valid_shape时需要按对应数据路径配置compact。
+
+| 值 | 含义 | 典型用途 |
+| --- | --- | --- |
+| None或0 | 不启用紧凑模式 | 满块或对应API不需要紧凑布局的路径 |
+| 1 | normal紧凑模式 | Mat→Left/Right、Acc搬出等需要按有效尺寸紧凑排列的分形或Cube路径 |
+| 2 | RowPlusOne模式 | 明确要求额外一行物理空间的特定NZ路径 |
+
+当前A5的Vec ND搬入和写回操作使用valid_shape控制实际搬运行列，使用物理shape作为UB跨度，因此本节的逐元素Vec尾块不需要配置compact。当数据路径涉及Mat→Left/Right、Acc搬出等分形转换，需要按动态M/N调整片上排布时，配置compact=1。
+
+compact=2适用于明确要求RowPlusOne布局的特定路径。
+
+### 何时需要填充无效区域
+
+valid_shape只标记哪些元素有效，不会自动给无效区域写入数值。如果后续操作会读取整个物理Tile，需要使用pad指定安全填充值，并显式执行填充操作。
+
+| 计算语义 | 建议填充值 |
+| --- | --- |
+| 逐元素加、减、乘，且计算与写回都遵循valid_shape | 通常不需要填充 |
+| 求和 | zero |
+| 求最大值或softmax前的最大值归约 | min |
+| 求最小值 | max |
+
+下面示例将src的无效区域填为0：
+
+```python
+src_type = pl.TileType(
+    shape=[64, 128],
+    dtype=pl.DT_FP16,
+    target_memory=pl.MemorySpace.Vec,
+    valid_shape=[-1, -1],
+)
+dst_type = pl.TileType(
+    shape=[64, 128],
+    dtype=pl.DT_FP16,
+    target_memory=pl.MemorySpace.Vec,
+    pad=pl.TilePad.zero,
+)
+
+src = src_group.next()
+dst = dst_group.next()
+pl.set_validshape(src, [valid_rows, valid_cols])
+pl.load(src, x, [row_offset, col_offset])
+pl.fillpad(dst, src)
+```
+
+pad指定填充语义，pypto_pro.language.fillpad才会执行填充。矩阵计算尾块通常使用valid_shape和compact=1将有效尺寸传递给L1/L0及后续矩阵计算，不应笼统地将所有矩阵尾块都归类为需要填充；是否填充取决于具体数据路径和后续算子语义。
+
+### 完整示例：二维加法的四类尾块
+
+下面的Kernel支持动态二维shape。它使用64 × 128的物理Tile，通过逐块计算valid_rows和valid_cols，同时处理满块、尾行、尾列和尾角。
+
+```python
 import pypto_pro.language as pl
 import torch
-import torch_npu
-from pypto_pro.runtime.platform import get_platform_info
 
-TILE_M = 128
+TILE_M = 64
 TILE_N = 128
 
+
 @pl.jit(auto_mutex=True)
-def add_kernel(
+def add_tail_kernel(
     x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
     y: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
     z: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
 ):
-    tile_type = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16,
-                            target_memory=pl.MemorySpace.Vec)
-
-    a_db = pl.make_tile_group(type=tile_type, addrs=0x0000,  mutex_ids=[0, 1])
-    b_db = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[2, 3])
-    c_db = pl.make_tile_group(type=tile_type, addrs=0x20000, mutex_ids=[30, 31])
+    tile_type = pl.TileType(
+        shape=[TILE_M, TILE_N],
+        dtype=pl.DT_FP16,
+        target_memory=pl.MemorySpace.Vec,
+        valid_shape=[-1, -1],
+    )
+    a_group = pl.make_tile_group(
+        type=tile_type, addrs=[0x0000, 0x4000], mutex_ids=[0, 1])
+    b_group = pl.make_tile_group(
+        type=tile_type, addrs=[0x8000, 0xC000], mutex_ids=[2, 3])
+    c_group = pl.make_tile_group(
+        type=tile_type, addrs=[0x10000, 0x14000], mutex_ids=[30, 31])
 
     with pl.section_vector():
-        num_cores = pl.get_block_num()
-        core_id   = pl.get_block_idx()
-        m_tile_num = x.shape[0] // TILE_M
-        n_tile_num = x.shape[1] // TILE_N
+        m = x.shape[0]
+        n = x.shape[1]
+        m_tiles = (m + TILE_M - 1) // TILE_M
+        n_tiles = (n + TILE_N - 1) // TILE_N
 
-        for i in pl.range(core_id, m_tile_num, num_cores):
-            for j in pl.range(0, n_tile_num, 1):
-                tile_a = a_db.next()
-                tile_b = b_db.next()
-                tile_c = c_db.next()
+        for i in pl.range(0, m_tiles, 1):
+            for j in pl.range(0, n_tiles, 1):
+                tile_a = a_group.next()
+                tile_b = b_group.next()
+                tile_c = c_group.next()
+
+                valid_rows = pl.min(m - i * TILE_M, TILE_M)
+                valid_cols = pl.min(n - j * TILE_N, TILE_N)
+                pl.set_validshape(tile_a, [valid_rows, valid_cols])
+                pl.set_validshape(tile_b, [valid_rows, valid_cols])
+                pl.set_validshape(tile_c, [valid_rows, valid_cols])
+
                 pl.load_tile(tile_a, x, [i, j])
                 pl.load_tile(tile_b, y, [i, j])
                 pl.add(tile_c, tile_a, tile_b)
                 pl.store_tile(z, tile_c, [i, j])
 
-
-def test_add():
-    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
-    device = f"npu:{device_id}"
-    torch.npu.set_device(device)
-    M_SIZE, N_SIZE = 8192, 4096
-    total_tiles = M_SIZE // TILE_M
-    # block_dim取平台可用AIV数量和任务Tile数量中的较小值。
-    num_cores = min(get_platform_info().vector_core_num, total_tiles)
-    torch.manual_seed(0)
-    x = torch.rand([M_SIZE, N_SIZE], device=device, dtype=torch.float16)
-    y = torch.rand([M_SIZE, N_SIZE], device=device, dtype=torch.float16)
-    z = torch.empty([M_SIZE, N_SIZE], device=device, dtype=torch.float16)
-
-    add_kernel[None, num_cores](x, y, z)
-    torch.npu.synchronize()
-    torch.testing.assert_close(z, x + y)
+device = "npu:0"
+x = torch.randn(129, 257, dtype=torch.float16, device=device)
+y = torch.randn_like(x)
+z = torch.empty_like(x)
+add_tail_kernel[None, 1](x, y, z)
+torch.npu.synchronize()
+torch.testing.assert_close(z, x + y, rtol=1e-3, atol=1e-3)
 ```
 
-要点：
+129 × 257在两个维度上均包含尾块，因此示例覆盖满块、行尾块、列尾块和角尾块四类Tile，并分别设置对应的valid_shape。
 
-- `@pypto_pro.language.jit(auto_mutex=True)` —— 对带mutex元数据的TileGroup访问自动插入mutex同步；其他数据依赖仍需显式处理
-- `kernel[None, num_cores](...)`：方括号启动参数为`[stream, block_dim]`；`None`表示默认Stream
+### 常见问题
 
-## 多核切分与Tiling
-
-跨步循环、启动核数和负载均衡参考[多核Tiling切分](../tiling/multi_core_tiling.md)，运行时Tiling参数的传递参考[Tiling结果传输](../tiling/tiling_result_transfer.md)。
-
-## 尾块处理
-
-当GM上的`pypto_pro.language.Tensor`的shape不能被Tile shape整除时，边界上会出现比Tile小的“不完整块”。尾块数量、有效形状和多核任务分配参考[尾块处理](../tiling/multi_core_tiling.md#尾块处理)。
-
-## N缓冲（循环）用法
-
-N缓冲就是一个带N个mutex id的TileGroup，在循环里用`next()`驱动。游标按N取模前进，缓冲区像一个环一样被复用：
+#### 在数据搬入后设置valid_shape
 
 ```python
-# 三缓冲（N=3）：游标走 0,1,2,0,1,2,...
-ring = pl.make_tile_group(
-    type=pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
-    addrs=0x0000, mutex_ids=[0, 1, 2])
-
-for t in pl.range(0, num_tiles, 1):
-    buf = ring.next()            # 环中的下一个槽，并自动插入同步
-    pl.load_tile(buf, src, [t, 0])
-    pl.matmul(acc, buf, weights)
+# 错误：本次 load 已经发生，无法再用 valid_shape 限制它。
+pl.load(tile, x, offsets)
+pl.set_validshape(tile, [valid_rows, valid_cols])
 ```
 
-缓冲区环深度应满足**环深度 ≥ 预取深度 + 1**。深度为N的环最多允许`N-1`个Tile同时在途，避免生产者覆盖消费者仍在使用的缓冲区。
-
-## make_tile vs make_tile_group小结
-
-| 方面 | `make_tile` | `make_tile_group` |
-|:---|:---|:---|
-| 分配 | 一块固定缓冲区（`addr`+`size`） | N块轮转缓冲区（`addrs`+`mutex_ids`） |
-| 缓冲区选择 | 通过Tile变量直接指定 | `next()/current()/previous()`游标 |
-| 跨pipe同步 | **手动**`sync_src`/`sync_dst`对 | 带mutex元数据且配合`auto_mutex=True`时**自动** |
-| 双/N缓冲 | 手动（多个Tile + 乒乓同步） | 内建（`mutex_ids`的长度） |
-| 适用场景 | 紧凑、手动调优的单趟流水线 | 大多数Kernel；流水化/重叠的循环 |
-
-> [!NOTE]说明
-> 常规单缓冲、双缓冲及N缓冲场景使用`make_tile_group`并启用`auto_mutex=True`；需要精确控制同步事件及插入位置的场景使用`make_tile`和显式同步。两种方式可在同一Kernel中使用。
-
-## 常见问题
-
-> 尾块相关的常见问题请参考[尾块处理](../tiling/multi_core_tiling.md#常见问题)。
-> 多核切分相关的使用限制请参考[多核Tiling切分](../tiling/multi_core_tiling.md#使用限制与建议)。
-
-## 速查
+应调整为：
 
 ```python
-# --- Tile（片上）---
-tt   = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-tile = pl.make_tile(tt, addr=0x0)  # addr必选；size缺省时由tt推导为128*128*2
-# pipe间手动同步：
-pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-
-# --- TileGroup（轮转、自动同步）---
-g = pl.make_tile_group(type=tt, addrs=0x0, mutex_ids=[0, 1])  # 双缓冲
-a = g.next()       # 游标前进，返回下一个槽（+ 自动mutex）
-c = g.current()    # 同一个槽，不前进
-p = g.previous()   # 前一个槽，不前进
-
-# --- 数据搬运 ---
-pl.load(dst_tile, src_tensor, [r, c])         # 绝对偏移
-pl.load_tile(dst_tile, src_tensor, [i, j])    # 按Tile索引
-pl.store(dst_tensor, src_tile, [r, c])
-pl.store_tile(dst_tensor, src_tile, [i, j])
+pl.set_validshape(tile, [valid_rows, valid_cols])
+pl.load(tile, x, offsets)
 ```
+
+#### 测试只使用满块shape
+
+例如物理Tile为[64, 128]，测试仍使用[64, 128]的Tensor，只能证明满块路径可用，不能证明尾块不越界。尾块测试应至少包含一组两个维度均小于物理Tile的shape，或一组两个维度均不整除Tile的大shape。
+
+#### 只给输入Tile设置valid_shape
+
+输入Tile、计算结果Tile和写回Tile应对同一逻辑区域使用一致的有效形状。遗漏输出Tile可能导致越界写或写回无效数据。
+
+#### 把pad当成自动填充
+
+pad只声明填充值，不会单独产生填充操作。需要对无效区域进行实际填充时，应显式调用填充接口。
+
+#### 对所有尾块执行填充
+
+逐元素计算通常只需要正确设置有效形状。只有后续操作会读取无效区域，且无效值会影响结果时，才需要选择与计算语义匹配的填充值。
+
+### 参数选择速查
+
+| 场景 | valid_shape | compact | 填充方式 |
+| --- | --- | --- | --- |
+| 固定shape且全部为满块 | 默认或与shape一致 | 按对应API要求 | 不需要 |
+| 向量逐元素ND动态尾块 | [-1, -1]，逐块设置 | 不需要 | 通常不需要 |
+| 尾块后执行求和 | [-1, -1] | 按对应API要求 | 使用zero填充 |
+| 尾块后执行最大值归约 | [-1, -1] | 按对应API要求 | 使用min填充 |
+| Cube动态尾块 | 为Mat/Left/Right/Acc设置对应有效尺寸 | 1 | 由具体数据路径和算子语义决定 |
+
+## 计算约束与建议
+
+- Tile API通常以输出Tile作为第一个参数，计算结果写入该Tile，不能按Tensor表达式的方式接收返回值。
+- 不同接口对shape、valid shape、数据类型、layout和内存空间的要求不同，组合接口时需要同时满足前后两个操作的约束。
+- 只在API明确支持时使用Tile-Scalar、原地计算或输入输出复用。
+- 部分选择和归约接口需要额外的掩码或临时Tile，应在设计片上空间时一并考虑。
+- 计算前后的跨Pipe依赖必须正确同步，具体接口参见[同步控制](../../../../../api/pro_api/SIMD-API/synchronization/index.md)。
+
+Tile计算的完整接口列表参见[Tile矢量计算API](../../../../../api/pro_api/SIMD-API/tile_vector_computation/index.md)。

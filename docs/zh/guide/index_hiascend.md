@@ -32,7 +32,7 @@
     - [PyTorch集成和接入](programming_guide/tensor/pytorch_integration.md)
   - [PyPTO Pro编程指南](programming_guide/pro/index.md)
     - [编程范式](programming_guide/pro/programming_paradigm/index.md)
-      - [编程模型概述](programming_guide/pro/programming_paradigm/programming_model_overview.md)
+      - [编程范式概述](programming_guide/pro/programming_paradigm/programming_paradigm_overview.md)
       - [SIMD编程](programming_guide/pro/programming_paradigm/SIMD/index.md)
         - [编程范式](programming_guide/pro/programming_paradigm/SIMD/programming_paradigm.md)
         - [抽象硬件架构](programming_guide/pro/programming_paradigm/SIMD/abstract_hardware_architecture.md)

@@ -4,7 +4,7 @@
 :maxdepth: 1
 :titlesonly:
 
-programming_model_overview
+programming_paradigm_overview
 SIMD/index
 SIMT/index
 ```
