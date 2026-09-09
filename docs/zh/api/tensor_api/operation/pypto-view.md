@@ -33,6 +33,8 @@ view(input: Tensor, shape: List[int] = None, offsets: List[Union[int, SymbolicSc
 | valid_shape | 输入      | 取出视图块的有效数据大小。<br>需要保证valid_shape小于input的Shape；在类似page_attention场景下，当输入的kv_cache等张量包含无效数据时，无法正确推导输出的validshape，需要手动传入； |
 | dtype       | 输入      | 返回值的数据类型，允许将输入数据解读为不同数据类型 |
 
+`valid_shape` 可以配合 `pypto.experimental.assume_divisible` 使用。当某个动态标量已知可被 tile shape 整除时，可通过 `assume_divisible` 声明该事实，帮助编译器消除该轴逐 tile 动态 valid shape，使能 dualdst 等依赖静态 valid shape 的优化。
+
 ## 返回值说明
 
 返回输出Tensor，Tensor的数据类型和input相同，Shape为参数shape指定大小，若指定了valid\_shape，则真实大小为valid\_shape。若指定dtype，则会将输入按照dtype进行读取。

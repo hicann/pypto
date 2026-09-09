@@ -79,7 +79,19 @@ void BindFunction(py::module_& m)
              })
         .def_property_readonly(
             "original_body", [](const Function& self) -> ir::SeqStmtsPtr { return self.originalBody_; },
-            "Original function body statement");
+            "Original function body statement")
+        .def(
+            "RegisterDivisibleAssumption",
+            [](Function&, const SymbolicScalar& expr, int64_t divisor) {
+                Program::GetInstance().RegisterDivisibleAssumption(expr, divisor);
+            },
+            py::arg("expr"), py::arg("divisor"), "Register an assumption that expr is divisible by divisor")
+        .def(
+            "IsKnownDivisible",
+            [](const Function&, const SymbolicScalar& expr, int64_t divisor) {
+                return Program::GetInstance().IsKnownDivisible(expr, divisor);
+            },
+            py::arg("expr"), py::arg("divisor"), "Check if expr is known to be divisible by divisor");
 
     // Add a function to get the last function from the Program
     m.def(

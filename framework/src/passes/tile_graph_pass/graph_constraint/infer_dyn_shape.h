@@ -26,6 +26,8 @@ public:
     ~InferDynShape() override {}
     Status RunOnFunction(Function& function) override;
     Status PostCheck(Function& function) override;
+    SymbolicScalar SimplifyValidShapeWithAssumptions(const Function& function, const SymbolicScalar& shape) const;
+    void SimplifyAllValidShapes(Function& function);
     void RecordStaticValidShapeOnL0CCopyUB(Function& function);
 };
 } // namespace tile_fwk

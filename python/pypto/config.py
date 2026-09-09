@@ -592,7 +592,10 @@ def set_debug_options(
         1: enabled, one-click to enable execution-related configs (e.g. swimlane graph);
         2: enable AICORE_MODEL simulation;
         3: enable runtime dependency-verification data dump;
-        4: enable runtime GM memory out-of-bounds check.
+        4: enable runtime GM memory out-of-bounds checks and emit modulo assertions
+           at the control-flow entry for every explicitly registered, normalized
+           `assume_divisible` expression; compiler-derived expressions that were
+           not explicitly registered are not checked.
 
     dump_pass_graph : List[str]
         Pass identifiers to dump computation graph and print IR. Empty list disables it.

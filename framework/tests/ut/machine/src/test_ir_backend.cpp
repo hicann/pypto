@@ -31,11 +31,17 @@
 #include "interface/tensor/irbuilder.h"
 #include "interface/utils/id_gen.h"
 #include "machine/host/backend.h"
+#include "machine/host/control_flow_codegen.h"
 #include "machine/host/expr_generator.h"
 #include "machine/host/ir_backend.h"
 #include "tilefwk/tilefwk.h"
 
 using namespace npu::tile_fwk;
+
+namespace npu::tile_fwk {
+void EmitDynamicLoopOpen(ControlFlowEmitCtx& ctx, Function* func, const std::shared_ptr<DynloopFunctionAttribute>& attr,
+                         int indent);
+}
 
 namespace {
 ir::Span Sp() { return ir::Span("test_ir_backend", 1, 1); }
@@ -116,6 +122,17 @@ struct GetInputCseTestSetup {
 
     void Bind(IrBackendContext& irBackendCtx) { irBackendCtx.getInputCse = &getInputCse; }
 };
+
+size_t CountOccurrences(const std::string& text, const std::string& needle)
+{
+    size_t count = 0;
+    size_t pos = 0;
+    while ((pos = text.find(needle, pos)) != std::string::npos) {
+        ++count;
+        pos += needle.size();
+    }
+    return count;
+}
 } // namespace
 
 class TestSuite_IrBackend : public testing::Test {
@@ -137,7 +154,140 @@ struct ControlFlowCtx {
     ValDependTensorMeta meta;
 };
 
+std::string EmitLegacyControlFlowEntryAndDynamicLoopOpen(
+    int64_t runtimeDebugMode, const std::vector<std::pair<SymbolicScalar, int64_t>>& assumptions,
+    const std::vector<SymbolicScalar>& runtimeSymbols)
+{
+    config::SetDebugOption(CFG_RUNTIME_DBEUG_MODE, runtimeDebugMode);
+    DynFuncFixture dynFixture;
+    LinkerFixture linkerFixture;
+    ControlFlowCtx ctx;
+    const std::string sectionName = ".pypto";
+    const std::string expName = "expression.h";
+    auto loop = std::make_shared<Function>(Program::GetInstance(), "assume_loop_magic", "assume_loop",
+                                           dynFixture.dynFunc.get());
+    loop->SetFunctionType(FunctionType::DYNAMIC_LOOP);
+    LoopRange range(SymbolicScalar(0), SymbolicScalar(4), SymbolicScalar(1));
+    auto attr = std::make_shared<DynloopFunctionAttribute>("loop_idx", range, range);
+    loop->SetDynloopAttribute(attr);
+    for (const auto& [expression, divisor] : assumptions) {
+        Program::GetInstance().RegisterDivisibleAssumption(expression, divisor);
+    }
+    for (const auto& symbol : runtimeSymbols) {
+        linkerFixture.symbolTable.AddSymbol(symbol);
+    }
+    ControlFlowEmitCtx emitCtx{ctx.cache,
+                               *linkerFixture.linker,
+                               sectionName,
+                               ctx.slotIdxMapping,
+                               ctx.group,
+                               ctx.rootTileDict,
+                               ctx.controlFlowOss,
+                               ctx.expressionOss,
+                               ctx.exprHeaderOss,
+                               expName,
+                               ctx.exprSrcFiles,
+                               ctx.meta,
+                               nullptr};
+    EmitAssumeDivisibleChecks(emitCtx, 1);
+    EmitDynamicLoopOpen(emitCtx, loop.get(), attr, 1);
+    return ctx.controlFlowOss.str();
+}
+
 static ir::ForStmtPtr AsForStmt(const ir::StmtPtr& stmt) { return std::dynamic_pointer_cast<const ir::ForStmt>(stmt); }
+
+TEST_F(TestSuite_IrBackend, Mode4EmitsRuntimeCheckBeforeLoop)
+{
+    SymbolicScalar vm("vm");
+    const auto source = EmitLegacyControlFlowEntryAndDynamicLoopOpen(CFG_RUNTIME_DEBUG_GM_OUT_OF_BOUNDS, {{vm, 128}},
+                                                                     {vm});
+    const auto checkPos = source.find("if ((VALUE_vm % 128) != 0) {");
+    const auto loopPos = source.find("LOOP(");
+    ASSERT_NE(checkPos, std::string::npos);
+    ASSERT_NE(loopPos, std::string::npos);
+    EXPECT_LT(checkPos, loopPos);
+    EXPECT_NE(source.find("__builtin_trap();"), std::string::npos);
+    EXPECT_EQ(CountOccurrences(source, "% 128"), 1U);
+    EXPECT_EQ(CountOccurrences(source, "__builtin_trap();"), 1U);
+}
+
+TEST_F(TestSuite_IrBackend, NonMode4DoesNotEmitRuntimeCheck)
+{
+    SymbolicScalar vm("vm");
+    for (const int64_t mode : {int64_t{0}, CFG_RUNTIME_DEBUG_VERIFY}) {
+        const auto source = EmitLegacyControlFlowEntryAndDynamicLoopOpen(mode, {{vm, 128}}, {vm});
+        EXPECT_EQ(source.find("% 128"), std::string::npos) << "runtime_debug_mode=" << mode;
+        EXPECT_EQ(source.find("__builtin_trap();"), std::string::npos) << "runtime_debug_mode=" << mode;
+    }
+}
+
+TEST_F(TestSuite_IrBackend, Mode4EmitsRuntimeCheckForCompositeExpression)
+{
+    SymbolicScalar qEnd("q_end");
+    SymbolicScalar qStart("q_start");
+    const auto source = EmitLegacyControlFlowEntryAndDynamicLoopOpen(CFG_RUNTIME_DEBUG_GM_OUT_OF_BOUNDS,
+                                                                     {{qEnd - qStart, 128}}, {qEnd, qStart});
+
+    EXPECT_NE(source.find("VALUE_q_end - VALUE_q_start"), std::string::npos);
+    EXPECT_NE(source.find("% 128"), std::string::npos);
+    EXPECT_EQ(CountOccurrences(source, "__builtin_trap();"), 1U);
+}
+
+TEST_F(TestSuite_IrBackend, Mode4EmitsRuntimeCheckForDirectInputShapeCall)
+{
+    const auto inputShape = ExprPtrToSymbolicScalar(MakeGetInputShapeDimExpr("ARG_source", 0));
+    const auto source = EmitLegacyControlFlowEntryAndDynamicLoopOpen(CFG_RUNTIME_DEBUG_GM_OUT_OF_BOUNDS,
+                                                                     {{inputShape, 128}}, {});
+
+    EXPECT_NE(source.find("RUNTIME_GetInputShapeDim"), std::string::npos);
+    EXPECT_NE(source.find("% 128"), std::string::npos);
+    EXPECT_EQ(CountOccurrences(source, "__builtin_trap();"), 1U);
+}
+
+TEST_F(TestSuite_IrBackend, BuildControlFlow_Mode4EmitsRootRuntimeCheckOnce)
+{
+    config::SetDebugOption(CFG_RUNTIME_DBEUG_MODE, CFG_RUNTIME_DEBUG_GM_OUT_OF_BOUNDS);
+    DynFuncFixture dynFixture;
+    LinkerFixture linkerFixture;
+    ControlFlowCtx ctx;
+
+    const std::string workDir = "control_flow_assume_divisible_" + std::to_string(getpid());
+    const std::string emitDir = workDir + "/pypto/kernel_aicpu";
+    ASSERT_EQ(mkdir(workDir.c_str(), 0755), 0);
+    ASSERT_EQ(mkdir((workDir + "/pypto").c_str(), 0755), 0);
+    ASSERT_EQ(mkdir(emitDir.c_str(), 0755), 0);
+    setenv("ASCEND_WORK_PATH", workDir.c_str(), 1);
+    config::SetCodeGenConfig(KEY_FIXED_OUTPUT_PATH, true);
+
+    SymbolicScalar vm("vm");
+    Program::GetInstance().RegisterDivisibleAssumption(vm, 128);
+    linkerFixture.symbolTable.AddSymbol(vm);
+    const std::string sectionName = ".pypto";
+    const std::string expName = "expression.h";
+    ControlFlowEmitCtx emitCtx{ctx.cache,
+                               *linkerFixture.linker,
+                               sectionName,
+                               ctx.slotIdxMapping,
+                               ctx.group,
+                               ctx.rootTileDict,
+                               ctx.controlFlowOss,
+                               ctx.expressionOss,
+                               ctx.exprHeaderOss,
+                               expName,
+                               ctx.exprSrcFiles,
+                               ctx.meta,
+                               nullptr};
+
+    BuildControlFlow(emitCtx, dynFixture.dynFunc.get(), 0);
+    const auto output = ctx.controlFlowOss.str();
+    EXPECT_NE(output.find("ControlFlowEntry"), std::string::npos);
+    EXPECT_EQ(CountOccurrences(output, "% 128"), 1U);
+    EXPECT_EQ(CountOccurrences(output, "__builtin_trap();"), 1U);
+
+    unsetenv("ASCEND_WORK_PATH");
+    std::string rmCmd = "rm -rf " + workDir;
+    ASSERT_EQ(system(rmCmd.c_str()), 0);
+}
 
 TEST_F(TestSuite_IrBackend, ExprPtrToSymbolicScalar_AllCases)
 {
@@ -615,6 +765,47 @@ TEST_F(TestSuite_IrBackend, BuildControlFlowFromIR_EmitsGetInputCseStackInits)
     const std::string expectedInit = "  int64_t CSE_sd[1];\n  CSE_sd[0] = " + cse.key + ";\n";
     EXPECT_NE(output.find("ControlFlowEntry"), std::string::npos);
     EXPECT_NE(output.find(expectedInit), std::string::npos);
+
+    unsetenv("ASCEND_WORK_PATH");
+    std::string rmCmd = "rm -rf " + workDir;
+    ASSERT_EQ(system(rmCmd.c_str()), 0);
+}
+
+TEST_F(TestSuite_IrBackend, BuildControlFlowFromIR_Mode4EmitsRuntimeCheck)
+{
+    config::SetDebugOption(CFG_RUNTIME_DBEUG_MODE, CFG_RUNTIME_DEBUG_GM_OUT_OF_BOUNDS);
+    DynFuncFixture dynFixture;
+    LinkerFixture linkerFixture;
+    ControlFlowCtx ctx;
+
+    const std::string workDir = "ir_backend_assume_divisible_" + std::to_string(getpid());
+    const std::string emitDir = workDir + "/pypto/kernel_aicpu";
+    ASSERT_EQ(mkdir(workDir.c_str(), 0755), 0);
+    ASSERT_EQ(mkdir((workDir + "/pypto").c_str(), 0755), 0);
+    ASSERT_EQ(mkdir(emitDir.c_str(), 0755), 0);
+    setenv("ASCEND_WORK_PATH", workDir.c_str(), 1);
+    config::SetCodeGenConfig(KEY_FIXED_OUTPUT_PATH, true);
+
+    SymbolicScalar vm("vm");
+    Program::GetInstance().RegisterDivisibleAssumption(vm, 128);
+    linkerFixture.symbolTable.AddSymbol(vm);
+    auto loopVar = IRContext::Get().MakeVar("loop_idx", std::make_shared<ir::ScalarType>(ir::DataType::INT64), Sp());
+    const auto forStmt = Builder().CreateForStmt(
+        loopVar, Builder().CreateConstInt(0).AsExpr(), Builder().CreateConstInt(4).AsExpr(),
+        Builder().CreateConstInt(1).AsExpr(), {}, Builder().CreateSeqStmts({}, Sp()), {}, Sp());
+    dynFixture.dynFunc->body_ = Builder().CreateSeqStmts({forStmt}, Sp());
+
+    BuildControlFlowFromIR(ctx.irBackendCtx, ctx.cache, *linkerFixture.linker, ".pypto", dynFixture.dynFunc.get(),
+                           ctx.slotIdxMapping, ctx.group, ctx.rootTileDict, ctx.controlFlowOss, ctx.expressionOss,
+                           ctx.exprHeaderOss, 0, "expr", ctx.exprSrcFiles, ctx.meta);
+    const auto output = ctx.controlFlowOss.str();
+    const auto checkPos = output.find("if ((VALUE_vm % 128) != 0) {");
+    const auto loopPos = output.find("  LOOP(");
+    ASSERT_NE(checkPos, std::string::npos);
+    ASSERT_NE(loopPos, std::string::npos);
+    EXPECT_LT(checkPos, loopPos);
+    EXPECT_EQ(CountOccurrences(output, "% 128"), 1U);
+    EXPECT_EQ(CountOccurrences(output, "__builtin_trap();"), 1U);
 
     unsetenv("ASCEND_WORK_PATH");
     std::string rmCmd = "rm -rf " + workDir;

@@ -15,6 +15,7 @@
 #include <unordered_set>
 
 #include "interface/configs/config_manager.h"
+#include "interface/program/program.h"
 #include "interface/machine/device/tilefwk/core_func_data.h"
 #include "interface/operation/operation.h"
 #include "interface/program/program.h"
@@ -275,6 +276,7 @@ void BuildControlFlowDynamic(ControlFlowEmitCtx& ctx, Function* func, int indent
     if (NeedCrossDie(func)) {
         ctx.controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "RUNTIME_RootGetDieId(" << 0 << ");\n";
     }
+    EmitAssumeDivisibleChecks(ctx, indent + 1);
     for (auto& callee : GetCalleeList(ctx.cache, func)) {
         BuildControlFlow(ctx, callee, indent + 1);
     }
@@ -294,6 +296,39 @@ const std::unordered_map<std::string, std::string>* GetInputCseMap(const Control
         return &ctx.getInputCse->keyToName;
     }
     return nullptr;
+}
+
+void EmitAssumeDivisibleChecks(ControlFlowEmitCtx& ctx, int indent)
+{
+    // Mode 4 emits host-side modulo checks for every explicitly registered assumption. The expression is normalized
+    // when registered and lowered here to ordinary C/C++; runtime executes it with the actual dynamic values.
+    if (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) != CFG_RUNTIME_DEBUG_GM_OUT_OF_BOUNDS) {
+        return;
+    }
+
+    const auto& assumptions = Program::GetInstance().GetDivisibleAssumptions();
+    const auto* getInputCseMap = GetInputCseMap(ctx);
+    std::vector<std::string> keys;
+    keys.reserve(assumptions.size());
+    for (const auto& [key, assumption] : assumptions) {
+        (void)assumption;
+        keys.push_back(key);
+    }
+    std::sort(keys.begin(), keys.end());
+    for (const auto& key : keys) {
+        const auto& assumption = assumptions.at(key);
+        const auto& expression = assumption.expression;
+        if (!expression.IsValid()) {
+            continue;
+        }
+        const std::string runtimeValue = SymbolicExpressionTable::BuildExpression(expression.Raw(), getInputCseMap);
+        for (const int64_t divisor : assumption.divisors) {
+            ctx.controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "if ((" << runtimeValue << " % " << divisor
+                               << ") != 0) {\n";
+            ctx.controlFlowOss << std::setw((indent + 1) * TABSIZE) << ' ' << "__builtin_trap();\n";
+            ctx.controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "}\n";
+        }
+    }
 }
 
 void EmitDynloopCondTree(ControlFlowEmitCtx& ctx, const std::shared_ptr<DynloopFunctionPathNode>& node, int condIndent)
@@ -335,7 +370,6 @@ void EmitDynamicLoopOpen(ControlFlowEmitCtx& ctx, Function* func, const std::sha
     }
     MarkValueDependDisableCache(ctx, func);
     InsertWaitCoreStartForLoopBounds(attr, ctx.controlFlowOss, ctx.valDependTensorMeta, indent);
-
     const auto* getInputCseMap = GetInputCseMap(ctx);
     const std::string iterVar = "VAR_" + attr->iterSymbolName;
     const std::string iterBegin = SymbolicExpressionTable::BuildExpression(attr->Begin().Raw(), getInputCseMap);

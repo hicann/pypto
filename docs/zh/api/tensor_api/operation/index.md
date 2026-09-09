@@ -50,6 +50,7 @@ pypto-exp
 pypto-exp2
 pypto-expand_clone
 pypto-expand_exp_dif
+pypto-experimental-assume_divisible
 pypto-experimental-gather_in_l1
 pypto-experimental-gather_in_ub
 pypto-experimental-get_operation_options

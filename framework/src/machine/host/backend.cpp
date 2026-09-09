@@ -778,6 +778,10 @@ int GetRootFuncNum(std::shared_ptr<DyndevFunctionAttribute> attr)
 static void CollectExpressions(IrBackendContext& ctx, FunctionCache& cache, Linker& linker, Function* function,
                                bool useNewIr)
 {
+    for (const auto& [key, assumption] : Program::GetInstance().GetDivisibleAssumptions()) {
+        (void)key;
+        linker.GetSymbolTable()->AddSymbolFromExpression(assumption.expression);
+    }
     if (useNewIr) {
         MACHINE_LOGI("BuildControlFlow: using new SCF IR traversal");
         FindAllExpressionFromIR(ctx, cache, linker, function);

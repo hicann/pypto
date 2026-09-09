@@ -578,14 +578,18 @@ void DualDstEngine::SetDualDstCopyAttr(Operation* C, LogicalTensorPtr l0cIn, con
     int64_t direction = dualDstL0CDirection_.count(l0cIn) ? dualDstL0CDirection_[l0cIn] : 0;
     std::vector<int64_t> realShape = (direction == 0) ? std::vector<int64_t>{eM + lM, eN} :
                                                         std::vector<int64_t>{eM, eN + lN};
-    std::vector<SymbolicScalar> validShape;
-    validShape.reserve(realShape.size());
-    for (auto dim : realShape)
-        validShape.push_back(SymbolicScalar(dim));
+    auto validShape = attrE->GetToDynValidShape();
+    if (validShape.size() != kCopyUbGeometryDimCount) {
+        validShape = OpImmediate::Specified(realShape);
+    } else {
+        // Only the split axis becomes the combined full tile.  The orthogonal
+        // axis may still be dynamic and must keep the original valid shape.
+        validShape[direction] = OpImmediate::Specified(realShape[direction]);
+    }
 
     auto copyAttr = std::make_shared<CopyOpAttribute>(
         attrE->GetFromOffset(), p.tensorEarly->GetMemoryTypeOriginal(), OpImmediate::Specified(realShape),
-        OpImmediate::Specified(l0cIn->tensor->GetDynRawShape()), OpImmediate::Specified(validShape));
+        OpImmediate::Specified(l0cIn->tensor->GetDynRawShape()), validShape);
     copyAttr->SetToOffset(attrE->GetToOffset());
     C->SetOpAttribute(copyAttr);
     C->SetAttribute(OpAttributeKey::splitMN, direction);

@@ -15,6 +15,7 @@
 
 #include <sstream>
 #include <iostream>
+#include <algorithm>
 #include <fstream>
 #include <unordered_set>
 
@@ -92,6 +93,7 @@ void Program::Reset()
     IRContext::Get().Reset();
     ResetTensorSlotManager();
     // KernelBinary::pinnedGraph_ holds shared_ptr refs; clearing the map must not ~Function.
+    divisibleAssumptions_.clear();
     functionmap_.clear();
     functionMagicNameStack_.clear();
     currentFunctionMagicName_ = PROGRAM_ENTRY_FUNCTION_NAME;
@@ -820,4 +822,27 @@ std::shared_ptr<Function> Program::GetFunctionSharedPtr(Function* rawPtr)
     FE_LOGW("not find function ptr in function map");
     return nullptr;
 }
+
+void Program::RegisterDivisibleAssumption(const SymbolicScalar& expr, int64_t divisor)
+{
+    const auto normalizedExpr = expr.Simplify();
+    const auto key = normalizedExpr.Dump();
+    auto it = divisibleAssumptions_.try_emplace(key, DivisibleAssumption{normalizedExpr, {}}).first;
+    it->second.divisors.insert(divisor);
+}
+
+bool Program::IsKnownDivisible(const SymbolicScalar& expr, int64_t divisor) const
+{
+    if (divisor <= 0) {
+        return false;
+    }
+    if (expr.ConcreteValid()) {
+        return expr.Concrete() % divisor == 0;
+    }
+    const auto key = expr.Simplify().Dump();
+    const auto it = divisibleAssumptions_.find(key);
+    return it != divisibleAssumptions_.end() && std::any_of(it->second.divisors.begin(), it->second.divisors.end(),
+                                                            [divisor](int64_t d) { return d % divisor == 0; });
+}
+
 } // namespace npu::tile_fwk
