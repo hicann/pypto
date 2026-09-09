@@ -85,7 +85,8 @@ Status ReduceCopyMerge::RunOnFunction(Function& function)
     MergeInput mergeInputTmp;
     APASS_LOG_DEBUG_F(Elements::Operation, "Subgraph Info after ReduceCopy Pass:");
     BuildGraph(function, mergeInputTmp);
-    if (enableAutoMix && function.GetTotalSubGraphCount() == subgraphNumBefore) {
+    // 存在 CV 混合 scope 时 auto-mix 被有意跳过, 不属于"性能评估后不合并"的场景, 不告警
+    if (enableAutoMix && !mergeInput.hasScopedOp && function.GetTotalSubGraphCount() == subgraphNumBefore) {
         APASS_LOG_WARN_F(Elements::Operation, "CV mix merging was not performed, since fusion would degrade "
                                               "performance or may cause loop on this computation graph.");
     }
@@ -236,6 +237,9 @@ Status ReduceCopyMerge::BuildGraph(Function& function, MergeInput& mergeInput)
     mergeInput.subGraphInGraph.resize(subgraphNum);
     for (auto& op : function.Operations()) {
         int src = op.GetSubgraphID();
+        if (op.GetCvFuseId() >= 0) {
+            mergeInput.hasScopedOp = true;
+        }
         bool isCube = op.HasAttr(OpAttributeKey::isCube) && op.GetBoolAttribute(OpAttributeKey::isCube);
         int opLatency = op.GetLatency();
         if (isCube) {
@@ -1107,6 +1111,11 @@ MergeOutput MixGraphMerger::Merge(const MergeInput& input)
         return mOutput;
     }
     Initialize(input);
+    // 存在 CV 混合 scope(cvFuseId>=0)时禁用 auto-mix, 该 scope 涉及的子图由 enforce 路径合并为 Mix 子图,
+    // 防止 auto-mix 改变手动 scope 的切分结果
+    if (input.hasScopedOp && enableAutoMix) {
+        APASS_LOG_INFO_F(Elements::Operation, "Auto mix partition is skipped since scoped op exists.");
+    }
     const int mergeLoopNum = 5;
     for (int mergeLoopStep = 0; mergeLoopStep < mergeLoopNum; mergeLoopStep++) {
         APASS_LOG_DEBUG_F(Elements::Operation, "Enter merge loop %d.", mergeLoopStep);
@@ -1133,7 +1142,7 @@ MergeOutput MixGraphMerger::Merge(const MergeInput& input)
                                       "Merge group %zu [%s] skipped due to constraints, see above for reason.", i,
                                       IntVecToStr(actualGroup).c_str());
                 }
-            } else if (enableAutoMix && mergeLoopStep != 0 && input.isValidMergeGroup[i] &&
+            } else if (!input.hasScopedOp && enableAutoMix && mergeLoopStep != 0 && input.isValidMergeGroup[i] &&
                        CanMergeWithConstraints(actualGroup)) {
                 APASS_LOG_DEBUG_F(Elements::Operation, "Merge group %zu succeeded: actualGroup=%s.", i,
                                   IntVecToStr(actualGroup).c_str());

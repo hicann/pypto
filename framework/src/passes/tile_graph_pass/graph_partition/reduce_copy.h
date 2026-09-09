@@ -53,6 +53,7 @@ struct MergeInput {
     std::vector<std::vector<int>> mergeGroup;
     std::vector<bool> isEnforceMergeGroup;
     std::vector<bool> isValidMergeGroup;
+    bool hasScopedOp{false}; // 图中存在 cvFuseId>=0 的 op(仅 CV 混合 scope 分配 cvFuseId, 纯 scope 保持 -1)
     std::vector<BoundaryTensorInfo> boundaryTensors;
     std::vector<std::vector<int>> subgraphToBoundaryTensorIds;
 };
