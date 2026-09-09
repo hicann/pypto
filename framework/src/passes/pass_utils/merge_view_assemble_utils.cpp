@@ -691,11 +691,11 @@ const MergeViewAssembleUtils::ConsumerCacheEntry& MergeViewAssembleUtils::BuildT
     auto iter = tensorConsumerCache_.emplace(tensorMagic, ConsumerCacheEntry{}).first;
     auto& cacheEntry = iter->second;
     cacheEntry.producerCount = tensor->GetProducers().size();
-    cacheEntry.allProducersAreAssemble = cacheEntry.producerCount != 0;
+    cacheEntry.allProducersAreAssembleLike = cacheEntry.producerCount != 0;
     for (auto* producer : tensor->GetProducers()) {
         if (producer == nullptr || producer->BelongTo() != &function || producer->IsDeleted() ||
-            producer->GetOpcode() != Opcode::OP_ASSEMBLE) {
-            cacheEntry.allProducersAreAssemble = false;
+            !IsAssembleLikeOpcode(producer->GetOpcode())) {
+            cacheEntry.allProducersAreAssembleLike = false;
             break;
         }
     }
@@ -763,7 +763,7 @@ Status MergeViewAssembleUtils::BuildConsumerCache(Function& function)
 Status MergeViewAssembleUtils::DiscoverProducerGroupFusions(Function& function)
 {
     for (auto* op : candidateOps_) {
-        if (op == nullptr || op->GetOpcode() != Opcode::OP_ASSEMBLE || op->oOperand.empty()) {
+        if (op == nullptr || !IsAssembleLikeOpcode(op->GetOpcode()) || op->oOperand.empty()) {
             continue;
         }
         const auto& middle = op->oOperand.front();
@@ -817,7 +817,7 @@ bool MergeViewAssembleUtils::HasCompleteStaticCoverage(const LogicalTensorPtr& m
         boundaries[dim] = {0, targetShape[dim]};
     }
     for (auto* producer : producers) {
-        if (producer == nullptr || producer->GetOpcode() != Opcode::OP_ASSEMBLE || producer->iOperand.size() != 1 ||
+        if (producer == nullptr || !IsAssembleLikeOpcode(producer->GetOpcode()) || producer->iOperand.size() != 1 ||
             producer->oOperand.size() != 1) {
             return false;
         }
@@ -903,7 +903,7 @@ bool MergeViewAssembleUtils::HasSplitVersionContribution(const LogicalTensorPtr&
             continue;
         }
         for (auto* producer : version->GetProducers()) {
-            if (producer != nullptr && !producer->IsDeleted() && producer->GetOpcode() == Opcode::OP_ASSEMBLE) {
+            if (producer != nullptr && !producer->IsDeleted() && IsAssembleLikeOpcode(producer->GetOpcode())) {
                 return true;
             }
         }
@@ -915,7 +915,7 @@ bool MergeViewAssembleUtils::BuildProducerGroupFusion(Function& function, const 
                                                       const ConsumerCacheEntry& consumers)
 {
     if (middle == nullptr || consumers.hasAssembleChainStopper || consumers.assembleConsumers.size() != 1 ||
-        !consumers.allProducersAreAssemble || IsFunctionBoundaryTensor(function, middle)) {
+        !consumers.allProducersAreAssembleLike || IsFunctionBoundaryTensor(function, middle)) {
         return false;
     }
     auto* downstream = consumers.assembleConsumers.front();
@@ -926,9 +926,12 @@ bool MergeViewAssembleUtils::BuildProducerGroupFusion(Function& function, const 
     std::vector<Operation*> producers;
     for (auto* producer : middle->GetProducers()) {
         if (producer == nullptr || producer->BelongTo() != &function || producer->IsDeleted() ||
-            visitedOp_.count(producer->GetOpMagic()) != 0 || producer->GetOpcode() != Opcode::OP_ASSEMBLE ||
+            visitedOp_.count(producer->GetOpMagic()) != 0 || !IsAssembleLikeOpcode(producer->GetOpcode()) ||
             producer->iOperand.size() != 1 || producer->oOperand.size() != 1 ||
             producer->oOperand.front()->GetMagic() != middle->GetMagic()) {
+            return false;
+        }
+        if (!CanMergeAssembleLikeChain({producer}, downstream->GetOpcode())) {
             return false;
         }
         producers.emplace_back(producer);

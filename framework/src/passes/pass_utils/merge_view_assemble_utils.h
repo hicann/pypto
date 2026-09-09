@@ -84,7 +84,7 @@ public:
         // Any non-assemble consumer stops an assemble chain at this tensor.
         bool hasAssembleChainStopper = false;
         size_t producerCount = 0;
-        bool allProducersAreAssemble = false;
+        bool allProducersAreAssembleLike = false;
     };
 
     static Status MergeViewAssemble(Function& function);
