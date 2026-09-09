@@ -260,7 +260,7 @@ def _resolve_scale_param(
         if isinstance(scale_type, _ir_core.TileType):
             # User-prepared Scaling tile (per-channel): already validated by
             # _auto_alloc_scaling_tile_hook before the builder runs; resolve it
-            # here to the store_fp/move_fp operand.
+            # here to the store/move Scaling Tile operand.
             return None, scale
         if not isinstance(scale_type, _ir_core.ScalarType):
             raise TypeError(
@@ -340,9 +340,6 @@ def _ir_store(
         raise ValueError("scale (per-channel) cannot be used together with relu_pre_mode")
     if fp_tile is not None and phase is not None:
         raise ValueError("scale (per-channel) cannot be combined with phase")
-    if fp_tile is not None:
-        return _ir_core.create_op_call(block_ir_op("store_fp"), [out, tile, fp_tile, offsets_tuple], {}, actual_span)
-
     kwargs = _build_store_kwargs(
         relu_pre_mode=relu_pre_mode,
         tile_dims=tile_dims,
@@ -352,7 +349,9 @@ def _ir_store(
         phase=phase,
     )
     operands: list[Expr] = [out, tile, offsets_tuple]
-    if pre_quant_scalar is not None:
+    if fp_tile is not None:
+        operands.append(fp_tile)
+    elif pre_quant_scalar is not None:
         pre_quant_operand = (
             ConstInt(pre_quant_scalar, DataType.UINT64, actual_span)
             if isinstance(pre_quant_scalar, int)
@@ -360,26 +359,6 @@ def _ir_store(
         )
         operands.append(pre_quant_operand)
     return _ir_core.create_op_call(block_ir_op(op_name), operands, kwargs, actual_span)
-
-
-def _ir_store_fp(
-    out: Expr,
-    tile: Expr,
-    fp_tile: Expr,
-    offsets: Sequence[int | Expr] | _ir_core.MakeTuple,
-    *,
-    span: Span | None = None,
-) -> Expr:
-    actual_span = span or _span()
-    offsets_tuple = _to_make_tuple(offsets, actual_span)
-    # Validate offset bounds at Python frontend level
-    _validate_offset_bounds("store_fp", out.type.shape, offsets_tuple.elements)
-    return _ir_core.create_op_call(
-        block_ir_op("store_fp"),
-        [out, tile, fp_tile, offsets_tuple],
-        {},
-        actual_span,
-    )
 
 
 def _ir_store_tile(
@@ -440,8 +419,6 @@ def _ir_store_tile(
         raise ValueError("scale (per-channel) cannot be used together with relu_pre_mode")
     if fp_tile is not None and phase is not None:
         raise ValueError("scale (per-channel) cannot be combined with phase")
-    if fp_tile is not None:
-        return _ir_core.create_op_call(block_ir_op("store_fp"), [out, tile, fp_tile, abs_offsets], {}, actual_span)
     kwargs = _build_store_kwargs(
         relu_pre_mode=relu_pre_mode,
         tile_dims=tile_dims,
@@ -451,7 +428,9 @@ def _ir_store_tile(
         phase=phase,
     )
     operands: list[Expr] = [out, tile, abs_offsets]
-    if pre_quant_scalar is not None:
+    if fp_tile is not None:
+        operands.append(fp_tile)
+    elif pre_quant_scalar is not None:
         pre_quant_operand = (
             ConstInt(pre_quant_scalar, DataType.UINT64, actual_span)
             if isinstance(pre_quant_scalar, int)
@@ -2769,7 +2748,7 @@ _A5_STORE_COMBOS = (
     ("Acc", "GM", TensorLayout.NZ, TensorLayout.NZ, DataType.INT32, DataType.BF16),
 )
 
-# a5 store 量化合法组合表（store / store_tile 带 scale → store_fp 路径）
+# a5 store 量化合法组合表（store / store_tile 带 scale）
 _A5_STORE_QUANT_COMBOS = (
     # FP32 累加量化：NZ → ND / NZ → NZ
     ("Acc", "GM", TensorLayout.NZ, TensorLayout.ND, DataType.FP32, DataType.INT8),
@@ -2838,7 +2817,7 @@ def _check_layout_dtype(
         dst: destination operand —— tile 或 tensor。
         is_transpose: load 专用——降序 order 时 GM 有效排布为 DN（仅 load 传入）；
                       为 None 时 GM 排布取 tensor 声明值（store 场景）。
-        quant: 量化路径时查 `a5_quant` 子表（store 带 scale / store_fp），
+        quant: 量化路径时查 `a5_quant` 子表（store 带 scale），
                非量化时查 `a5` 主表；量化组合仅 Acc→GM 有效，不与其他路径混检。
     """
     from pypto_pro.runtime.jit import get_current_arch
@@ -3612,7 +3591,7 @@ def _auto_alloc_scaling_tile_hook(self, call: ast.Call, kwargs: dict) -> None:
     as ``scale``. This hook only validates it — no auto-allocation of
     Scaling/Mat tiles and no sync events are emitted. The validated tile stays
     in the ``scale`` kwarg and is resolved by ``_resolve_scale_param`` in the
-    builder to the store_fp/move_fp operand.
+    builder to the store/move Scaling Tile operand.
 
     A GM Tensor scale is rejected at parse time: the automatic per-channel path
     (auto-allocated Mat intermediate + auto sync events) has been removed; users
@@ -3766,7 +3745,6 @@ def _ir_expand_div(out: Expr, src: Expr, scalar: Expr, *, span: Span | None = No
 register_table(
     {
         # args + kwargs -> builder
-        "store_fp": OpSpec(builder=_ir_store_fp),
         "move": OpSpec(builder=_ir_move, pre_hooks=[_auto_alloc_scaling_tile_hook]),
         "insert": OpSpec(builder=_ir_insert),
         "getval": OpSpec(builder=_ir_getval),

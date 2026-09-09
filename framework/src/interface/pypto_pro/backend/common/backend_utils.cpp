@@ -151,7 +151,7 @@ void ValidateNZTransfer(const std::string& op_name, const ir::CallPtr& op, const
     CHECK(!col_offset.has_value() || col_offset.value() % c0 == 0)
         << op_name << ": NZ column offset must be divisible by C0";
 
-    // In a GM transfer, an Acc tile can only appear as the source of store/store_fp.
+    // In a GM transfer, an Acc tile can only appear as the source of store.
     // Enforce the extra direct-store window restriction for that path.
     if (!tile_type->memref_.has_value() || tile_type->memref_.value()->memorySpace_ != ir::MemorySpace::Acc) {
         return;
