@@ -64,7 +64,20 @@ private:
         bool changed{false};
     };
 
-    using ProducerMap = std::unordered_map<const Var*, size_t>;
+    using ProducerMap = std::unordered_map<const Var*, std::vector<size_t>>;
+
+    static bool ContainsProducer(const std::vector<size_t>& producers, size_t producer)
+    {
+        return std::find(producers.begin(), producers.end(), producer) != producers.end();
+    }
+
+    static bool HasReachableProducer(const std::vector<size_t>& producers, size_t current,
+                                     const std::vector<bool>& reachable)
+    {
+        return std::any_of(producers.begin(), producers.end(), [current, &reachable](size_t producer) {
+            return producer < current && reachable[producer];
+        });
+    }
 
     static std::optional<TokenKind> GetTokenKind(const VarPtr& token)
     {
@@ -250,10 +263,10 @@ private:
         ProducerMap producers;
         for (size_t i = 0; i < nodes.size(); ++i) {
             for (const auto& result : nodes[i].op->result_) {
-                producers.emplace(result.get(), i);
+                producers[result.get()].push_back(i);
             }
             for (const auto& token : nodes[i].op->result_token_) {
-                producers.emplace(token.get(), i);
+                producers[token.get()].push_back(i);
             }
         }
         return producers;
@@ -265,7 +278,7 @@ private:
         for (const auto& arg : consumer.op->args_) {
             for (const auto* use : utils::CollectVarUses(arg)) {
                 auto it = producers.find(use);
-                if (it != producers.end() && it->second == producer) {
+                if (it != producers.end() && ContainsProducer(it->second, producer)) {
                     return true;
                 }
             }
@@ -275,20 +288,26 @@ private:
                 continue;
             }
             auto it = producers.find(token.get());
-            if (it != producers.end() && it->second == producer) {
+            if (it != producers.end() && ContainsProducer(it->second, producer)) {
                 return true;
             }
         }
         return false;
     }
 
-    static std::optional<size_t> FindTokenProducer(const ProducerMap& producers, const VarPtr& token, size_t consumer)
+    static std::vector<size_t> FindTokenProducers(const ProducerMap& producers, const VarPtr& token, size_t consumer)
     {
         auto it = producers.find(token.get());
-        if (it == producers.end() || it->second >= consumer) {
-            return std::nullopt;
+        if (it == producers.end()) {
+            return {};
         }
-        return it->second;
+        std::vector<size_t> result;
+        for (auto producer : it->second) {
+            if (producer < consumer) {
+                result.push_back(producer);
+            }
+        }
+        return result;
     }
 
     static bool IsReachable(const std::vector<Node>& nodes, const ProducerMap& producers, size_t from, size_t to,
@@ -302,7 +321,7 @@ private:
             for (const auto& arg : node.op->args_) {
                 for (const auto* use : utils::CollectVarUses(arg)) {
                     auto it = producers.find(use);
-                    if (it != producers.end() && it->second < current && reachable[it->second]) {
+                    if (it != producers.end() && HasReachableProducer(it->second, current, reachable)) {
                         reachable[current] = true;
                         break;
                     }
@@ -319,7 +338,7 @@ private:
                     continue;
                 }
                 auto it = producers.find(token.get());
-                if (it != producers.end() && it->second < current && reachable[it->second]) {
+                if (it != producers.end() && HasReachableProducer(it->second, current, reachable)) {
                     reachable[current] = true;
                     break;
                 }
@@ -337,12 +356,14 @@ private:
             if (!kind || (*kind != TokenKind::READ && *kind != TokenKind::WRITE)) {
                 continue;
             }
-            auto producer = FindTokenProducer(producers, token, consumerIndex);
-            if (!producer) {
+            auto tokenProducers = FindTokenProducers(producers, token, consumerIndex);
+            if (tokenProducers.empty()) {
                 continue;
             }
 
-            if (IsReachable(nodes, producers, *producer, consumerIndex, token)) {
+            if (std::all_of(tokenProducers.begin(), tokenProducers.end(), [&](size_t producer) {
+                    return IsReachable(nodes, producers, producer, consumerIndex, token);
+                })) {
                 consumer.tokens.erase(consumer.tokens.begin() + static_cast<std::ptrdiff_t>(tokenIndex));
                 consumer.changed = true;
                 return true;
@@ -351,15 +372,19 @@ private:
             // The first-stage token optimization is intentionally local to the
             // current SCF block.  Control-flow users (continue/yield/break) do
             // not prevent removing a proven-disjoint dependency inside it.
-            if (!AccessesAreDisjoint(nodes[*producer], consumer, token, *kind)) {
+            if (!std::all_of(tokenProducers.begin(), tokenProducers.end(), [&](size_t producer) {
+                    return AccessesAreDisjoint(nodes[producer], consumer, token, *kind);
+                })) {
                 continue;
             }
 
             consumer.tokens.erase(consumer.tokens.begin() + static_cast<std::ptrdiff_t>(tokenIndex));
-            for (const auto& predecessorToken : nodes[*producer].tokens) {
-                if (std::find(consumer.tokens.begin(), consumer.tokens.end(), predecessorToken) ==
-                    consumer.tokens.end()) {
-                    consumer.tokens.push_back(predecessorToken);
+            for (auto producer : tokenProducers) {
+                for (const auto& predecessorToken : nodes[producer].tokens) {
+                    if (std::find(consumer.tokens.begin(), consumer.tokens.end(), predecessorToken) ==
+                        consumer.tokens.end()) {
+                        consumer.tokens.push_back(predecessorToken);
+                    }
                 }
             }
             consumer.changed = true;
