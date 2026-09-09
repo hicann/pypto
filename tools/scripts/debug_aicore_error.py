@@ -579,6 +579,7 @@ def codegen_bundle_script(
         "",
         "rc = _BUNDLE_LIB.PyptoLaunch(_bundle_path, _descs, len(_descs), _ws_ptr, None, 1)",
         "if rc != 0:",
+        '    print(f"PyptoLaunch failed, rc={rc}.")',
         "    sys.exit(1)",
         "torch.npu.synchronize()",
         'print("Bundle execution completed.")',
@@ -742,11 +743,55 @@ def _enrich_from_plog(msaicerr_out: str, sections: Dict[str, str],
 
     # 7. [MSAICERR-WORKAROUND] 多 extend info 场景修正：第一条 errcode 全 0 时，重新匹配到第一条非全 0 的 extend info
     #    msaicerr 修复后可移除本调用
-    _fix_multi_extend_info(plog_dir, sections, sec1_content, msaicerr_out)
+    _fix_multi_extend_info(plog_dir, sections, sec1_content, msaicerr_out, report_dir)
+
+
+def _select_bundled_kernel_by_earliest_output_dir(candidates: List[str]) -> str:
+    """
+    多卡/多进程场景下，-p 目录可能同时存在多份 pypto/output_<时间戳>_<host>_<pid>/ 编译产物。
+
+    每一份产物位于独立的 output_* 目录下，代表一个子进程（一张卡）的 kernel 编译输出；
+    多份产物的同名 .pyptokb 内容一致（同一 kernel 代码），异常复现应选用时间最早的
+    output_* 目录中的那份，与 msaicerr 解析的"最早一次报错"保持一致。
+
+    规则：
+      - 仅 1 个候选：直接返回；
+      - 多个候选分属多个 output_* 目录：取目录名（含定长时间戳 YYYYMMDD_HHMMSS_fff）
+        字典序最小者，即时间最早的那份；
+      - 同一 output_* 目录下出现多个不同 kernel 名：属"单进程多 kernel 报错"场景，
+        无法确定复现目标，报错提示用户介入。
+    """
+    by_dir: Dict[str, List[str]] = {}
+    for p in candidates:
+        parent = os.path.dirname(os.path.abspath(p))
+        by_dir.setdefault(parent, []).append(p)
+
+    ordered_dirs = sorted(by_dir, key=lambda d: os.path.basename(d))
+    if len(ordered_dirs) > 1:
+        _print_log("INFO", "Multiple kernel compile output directories found in -p directory: "
+                   + ", ".join(os.path.basename(d) for d in ordered_dirs))
+
+    earliest_dir = ordered_dirs[0]
+    earliest_group = by_dir[earliest_dir]
+    print(earliest_group)
+    if len(earliest_group) > 1:
+        raise RuntimeError(
+            f"Found {len(earliest_group)} kernels in the earliest output directory "
+            f"{earliest_dir}, cannot determine the reproduction target:\n"
+            + "\n".join(f"  {p}" for p in earliest_group)
+        )
+
+    path = earliest_group[0]
+    _print_log("INFO", f"{len(candidates)} candidates found, "
+               f"use the one in the earliest output directory: {path}")
+    return path
 
 
 def _find_bundled_kernel(report_dir: str) -> Optional[str]:
-    """从 -p 目录下 find -name 'PyPTO*0_mix_aic.pyptokb' 获取 .pyptokb 路径（排除 _nosubfunc 后缀）。"""
+    """从 -p 目录下 find -name 'PyPTO*0_mix_aic.pyptokb' 获取 .pyptokb 路径（排除 _nosubfunc 后缀）。
+
+    多卡场景下可能命中多个 output_* 目录中的同名产物，统一取时间最早目录中的那份。
+    """
     try:
         result = subprocess.run(
             ["find", report_dir, "-name", "PyPTO*0_mix_aic.pyptokb",
@@ -765,19 +810,18 @@ def _find_bundled_kernel(report_dir: str) -> Optional[str]:
         _print_log("WARNING", "PyPTO*0_mix_aic.pyptokb not found under -p directory")
         return None
     if len(lines) > 1:
-        raise RuntimeError(
-            f"Found {len(lines)} PyPTO*0_mix_aic.pyptokb files, "
-            "multiple AIC errors in one -p directory is not supported:\n"
-            + "\n".join(f"  {p}" for p in lines)
-        )
-
-    path = lines[0]
-    _print_log("INFO", f"Found bundled kernel: {path}")
+        path = _select_bundled_kernel_by_earliest_output_dir(lines)
+    else:
+        path = lines[0]
+        _print_log("INFO", f"Found bundled kernel: {path}")
     return path
 
 
 def _find_undef_bundled_kernel(report_dir: str) -> Optional[str]:
-    """从 -p 目录下 find -name 'PyPTO*0_mix_aic_nosubfunc.pyptokb' 获取 *_nosubfunc.pyptokb 路径。"""
+    """从 -p 目录下 find -name 'PyPTO*0_mix_aic_nosubfunc.pyptokb' 获取 *_nosubfunc.pyptokb 路径。
+
+    多卡场景下可能命中多个 output_* 目录中的同名产物，统一取时间最早目录中的那份。
+    """
     try:
         result = subprocess.run(
             ["find", report_dir, "-name", "PyPTO*0_mix_aic_nosubfunc.pyptokb"],
@@ -795,15 +839,44 @@ def _find_undef_bundled_kernel(report_dir: str) -> Optional[str]:
         _print_log("WARNING", "PyPTO*0_mix_aic_nosubfunc.pyptokb not found under -p directory")
         return None
     if len(lines) > 1:
-        raise RuntimeError(
-            f"Found {len(lines)} PyPTO*0_mix_aic_nosubfunc.pyptokb files, "
-            "multiple AIC errors in one -p directory is not supported:\n"
-            + "\n".join(f"  {p}" for p in lines)
-        )
-
-    path = lines[0]
-    _print_log("INFO", f"Found undef bundled kernel: {path}")
+        path = _select_bundled_kernel_by_earliest_output_dir(lines)
+    else:
+        path = lines[0]
+        _print_log("INFO", f"Found undef bundled kernel: {path}")
     return path
+
+
+def _find_kernel_file_in_report_dir(report_dir: str, kernel_name: str) -> Optional[str]:
+    """从 -p 目录下 find -name '<kernel_name>*.o' 获取 kernel file (.o) 路径。
+
+    多卡/多进程场景下，不同报错产物目录（如 extra-info/data-dump/<N>）中可能存放
+    同名 .o 产物，统一取文件修改时间最早的（与最早一次报错对应）。
+    """
+    if not report_dir or not os.path.isdir(report_dir):
+        return None
+    try:
+        result = subprocess.run(
+            ["find", report_dir, "-name", f"{kernel_name}*.o"],
+            capture_output=True, text=True, timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        _print_log("WARNING", "Phase C: find kernel file timed out (30s)")
+        return None
+    except Exception as e:
+        _print_log("WARNING", f"find kernel file failed: {e}")
+        return None
+
+    lines = [ln.strip() for ln in result.stdout.splitlines() if ln.strip()]
+    if not lines:
+        _print_log("WARNING", f"kernel file ({kernel_name}*.o) not found under -p directory")
+        return None
+    if len(lines) > 1:
+        # 多个同名产物，按文件修改时间取最早的一份
+        lines = sorted(lines, key=lambda p: os.path.getmtime(p) if os.path.isfile(p) else float("inf"))
+        _print_log("INFO", f"Multiple kernel files found, use the earliest one (by mtime): {lines[0]}")
+    else:
+        _print_log("INFO", f"Found re-matched kernel file: {lines[0]}")
+    return lines[0]
 
 
 def _parse_core_type_from_earliest_error_info(plog_dir: str) -> Optional[str]:
@@ -984,6 +1057,78 @@ def _parse_fixed_pc_from_plog(plog_dir: str, core_id: str, core_type: Optional[s
     }
 
 
+# [MSAICERR-WORKAROUND] 多 extend info 场景修正配套：从 kernel_symbol_locator.cpp 的
+# "Error symbol information" 行中匹配 kernel symbol，解析出 kernel 名（如 PyPTO_add_kernel_0）。
+def _parse_kernel_name_from_plog(plog_dir: str, core_id: str, core_type: str) -> Optional[str]:
+    """
+    grep kernel_symbol_locator.cpp 中 'Error symbol information' 行，
+    用 core id + core type 匹配 symbol，提取 kernel 名。
+
+    symbol 形如 PyPTO_add_kernel_0_mix_aic+0x60 / PyPTO_add_kernel_0_mix_aiv+0x70，
+    解析结果为去掉变体后缀与偏移后的 kernel 名：PyPTO_add_kernel_0。
+    """
+    try:
+        result = subprocess.run(
+            ["grep", "-rn", "kernel_symbol_locator.cpp", plog_dir],
+            capture_output=True, text=True, timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        _print_log("WARNING", "Phase C: grep kernel_symbol_locator.cpp timed out (30s)")
+        return None
+    except Exception as e:
+        _print_log("WARNING", f"grep kernel_symbol_locator.cpp failed: {e}")
+        return None
+
+    if result.returncode != 0 or not result.stdout.strip():
+        _print_log("WARNING", "kernel_symbol_locator.cpp not found in plog")
+        return None
+
+    parsed = []
+    for line in result.stdout.strip().split("\n"):
+        if "Error symbol information" not in line:
+            continue
+        m = re.search(r'coreId=(\d+),\s*coreType=(\d+).*?symbol=(\S+)', line)
+        if not m:
+            continue
+        parsed.append({
+            "coreId": m.group(1),
+            "coreType": m.group(2),
+            "symbol": m.group(3).rstrip(".").strip(),
+        })
+
+    if not parsed:
+        _print_log("WARNING", "No kernel_symbol_locator line with 'Error symbol information' found in plog")
+        return None
+
+    # 优先匹配 coreId + coreType，其次仅 coreId，与 _parse_fixed_pc_from_plog 策略一致
+    match = None
+    for p in parsed:
+        if p["coreId"] == core_id and p["coreType"] == core_type:
+            match = p
+            break
+    if match is None:
+        for p in parsed:
+            if p["coreId"] == core_id:
+                match = p
+                break
+    if match is None:
+        match = parsed[0]
+        _print_log("WARNING", f"No match found for coreId={core_id}, coreType={core_type}"
+                   f" ({len(parsed)} total), using coreId={match['coreId']},"
+                   f" coreType={match['coreType']}")
+
+    return _kernel_name_from_symbol(match["symbol"])
+
+
+def _kernel_name_from_symbol(symbol: str) -> str:
+    """从 kernel symbol（如 PyPTO_add_kernel_0_mix_aiv+0x70）提取 kernel 名（如 PyPTO_add_kernel_0）。"""
+    base = symbol.split("+", 1)[0].rstrip(".")
+    for suffix in ("_mix_aic_nosubfunc", "_mix_aiv_nosubfunc", "_mix_aic", "_mix_aiv"):
+        if base.endswith(suffix):
+            return base[:-len(suffix)]
+    return base
+
+
 def _extract_kernel_file(sec1_content: str, msaicerr_out: str) -> Optional[str]:
     """从 section 1 中提取 kernel file 路径（`.o` 文件）。"""
     m = re.search(r'kernel\s+file\s*:\s*(\S+)', sec1_content, re.IGNORECASE)
@@ -1038,7 +1183,8 @@ def _run_llvm_symbolizer(kernel_file: Optional[str], pc_offset: str) -> Optional
 
 # [MSAICERR-WORKAROUND] 多 extend info 场景修正，msaicerr 修复后可整体移除本函数
 def _fix_multi_extend_info(plog_dir: str, sections: Dict[str, str],
-                           sec1_content: str, msaicerr_out: str) -> None:
+                           sec1_content: str, msaicerr_out: str,
+                           report_dir: str = "") -> None:
     """
     修正 msaicerr section 2/3 在多 extend info 场景下的错误匹配。
 
@@ -1082,11 +1228,33 @@ def _fix_multi_extend_info(plog_dir: str, sections: Dict[str, str],
         sections[sec2_key] = sections[sec2_key].rstrip() + \
             f"\n(re-matched) AIC_ERROR : {target['errcode']}"
 
-    # 2. 用新 core id + core type 重新匹配 fixedPC
+    # 2.1 用新 core id + core type 重新匹配 fixedPC
     pc_match = _parse_fixed_pc_from_plog(plog_dir, target["core_id"], target["core_type"])
     if pc_match is None:
         _print_log("WARNING", "re-matched fixedPC not found, skip section 3 append")
         return
+
+    kernel_file = _extract_kernel_file(sec1_content, msaicerr_out)
+
+    # 2.2 如果 sec1 的 kernel file 不含 PyPTO 字符（多 AIC_ERROR 下 msaicerr 可能选错文件），
+    #     则需要用新 core id + core type 重新匹配 symbol 来修正 kernel file
+    if kernel_file is None or "PyPTO" not in kernel_file:
+        # 2.2.1 用新 core id + core type 重新匹配 symbol，提取 kernel 名
+        kernel_name = _parse_kernel_name_from_plog(plog_dir, target["core_id"], target["core_type"])
+        if kernel_name is None:
+            _print_log("ERROR", "re-matched kernel symbol not found in plog")
+            sys.exit(1)
+        if not kernel_name.startswith("PyPTO"):
+            _print_log("ERROR", f"re-matched kernel name does not start with 'PyPTO': {kernel_name}")
+            sys.exit(1)
+        _print_log("INFO", f"re-matched kernel name from plog symbol: {kernel_name}")
+
+        # 2.2.2 在 -p 目录下重新查找包含该 kernelname 前缀、时间戳最早的 kernel file path
+        kernel_file = _find_kernel_file_in_report_dir(report_dir, kernel_name)
+        if kernel_file is None:
+            _print_log("ERROR", "re-matched kernel file not found under -p directory, exit")
+            sys.exit(1)
+        _print_log("INFO", f"re-matched kernel file from -p directory: {kernel_file}")
 
     # 3. section 3 后追加重新匹配的 fixedPC + llvm-symbolizer
     sec3_key = _find_section_key(sections, "3. Operator Error Line Number")
@@ -1094,10 +1262,10 @@ def _fix_multi_extend_info(plog_dir: str, sections: Dict[str, str],
         _print_log("WARNING", "section 3 (Operator Error Line Number) not found, skip fixedPC append")
         return
 
-    kernel_file = _extract_kernel_file(sec1_content, msaicerr_out)
     extra = (
         f"\n(re-matched) core id           : {target['core_id']}"
         f"\n(re-matched) core type         : {target['core_type']}"
+        f"\n(re-matched) kernel file        : {kernel_file}"
         f"\n(re-matched) fixedStartPC       : {pc_match['fixedStartPC']}"
         f"\n(re-matched) fixedCurrentPC     : {pc_match['fixedCurrentPC']}"
         f"\n(re-matched) fixedPCOffset      : {pc_match['fixedPCOffset']}"
