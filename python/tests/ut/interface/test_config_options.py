@@ -199,7 +199,7 @@ def test_sg_set_atomic_scope():
 
 
 def test_auto_mix_partition():
-    # enable (default value is 1)
+    # enable
     pypto.set_pass_options(auto_mix_partition=1)
     pass_option = pypto.get_pass_options()
     assert pass_option["auto_mix_partition"] == 1
@@ -209,10 +209,10 @@ def test_auto_mix_partition():
     pass_option = pypto.get_pass_options()
     assert pass_option["auto_mix_partition"] == 0
 
-    # default after reset (auto_mix_partition is enabled by default)
+    # default after reset (auto_mix_partition is disabled by default)
     pypto.reset_options()
     pass_option = pypto.get_pass_options()
-    assert pass_option["auto_mix_partition"] == 1
+    assert pass_option["auto_mix_partition"] == 0
 
     pypto.reset_options()
 
