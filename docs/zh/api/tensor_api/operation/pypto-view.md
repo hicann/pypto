@@ -41,6 +41,7 @@ view(input: Tensor, shape: List[int] = None, offsets: List[Union[int, SymbolicSc
 
 - **需要valid_shape时必须用pypto.view**：当需要指定`valid_shape`（动态有效数据大小）时，不能使用`[]`切片语法，必须使用显式的`pypto.view`接口
 - 输入张量input和输入shape的维度数量需要一致。
+- **view的写入与源input相互隔离**：对view的写入（含view[:] = ...）只作用于view自身，不会写回源input；而view的读取与源input保持联动，input后续被修改，读取view可感知修改。若需要将数据写回源Tensor（例如在循环中向persistent buffer分片累积写入的场景），请使用pypto.assemble(value, offsets, dest)。
 
 ## 调用示例
 
