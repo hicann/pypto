@@ -57,7 +57,14 @@ def inline(fn: Callable) -> Callable:
 
 
 def vector_function(fn: Callable) -> Callable:
-    """Mark a callable as a vector-function body expanded at its call site."""
+    """Mark a callable as a vector-function body expanded at its call site.
+
+    VF register operations must be used inside these functions. The body may
+    call other vector functions and use scalar expressions, ``pl.range``,
+    ``pl.min``, ``pl.max``, and ``pl.const``. Other ``pl.*`` calls belong outside
+    the vector function; pass their results as arguments instead. Execution
+    domain violations are reported by the parser at the offending call.
+    """
     _mark_vector_function(fn)
     return fn
 
