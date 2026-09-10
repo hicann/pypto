@@ -154,6 +154,7 @@ def loop_body_shapes(
         tick = tick + 1                   # zone 3: prepares the NEXT iteration
 
 
+@pytest.mark.soc("950")
 def test_loop_body_shapes_on_device():
     """Iteration ki must see the scale zone 1 computed for it, not another beat's."""
     torch.manual_seed(7)
@@ -168,6 +169,7 @@ def test_loop_body_shapes_on_device():
     assert (out[:NT * TM].float().cpu() - golden[:NT * TM].cpu()).abs().max().item() <= ATOL
 
 
+@pytest.mark.soc("950")
 def test_allowed_shapes_are_placed_correctly():
     src = _generated(loop_body_shapes)
     body = src[src.index("for ki in pl.range"):].split("for _pl_drain")[0]
@@ -222,6 +224,7 @@ def struct_filled_in_by_helper(
             consume(ki, sh, leftg)
 
 
+@pytest.mark.soc("950")
 def test_zone1_call_runs_before_the_snapshot():
     """A zone-1 call that assigns nothing but fills in a struct still supplies the snapshot."""
     src = _generated(struct_filled_in_by_helper)
@@ -460,6 +463,7 @@ def one_stage_called_twice(
             produce(ki, 3.0, src, out, sh, ub)   # sync belongs to the NAME
 
 
+@pytest.mark.soc("950")
 @pytest.mark.parametrize(
     "kernel, message",
     [
