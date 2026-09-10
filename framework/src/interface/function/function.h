@@ -358,6 +358,10 @@ enum class ParamDirection {
 struct DyndevFunctionAttribute {
     std::vector<std::reference_wrapper<const Tensor>> startArgsInputTensorList;
     std::vector<std::reference_wrapper<const Tensor>> startArgsOutputTensorList;
+    // Holds shared ownership of the input slot tensors so they outlive the references
+    // in startArgsInputTensorList; slot tensors may be migrated by SetSameSlot and
+    // would otherwise be destructed before the function attribute is consumed.
+    std::vector<std::shared_ptr<Tensor>> startArgsInputSlotTensorList;
 
     std::vector<std::shared_ptr<LogicalTensor>> startArgsInputLogicalTensorList;
     std::vector<std::shared_ptr<LogicalTensor>> startArgsOutputLogicalTensorList;
