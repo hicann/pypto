@@ -29,6 +29,8 @@ public:
     static void MoveTokenDependencyBeforeRemoveOp(Function& function, Operation& op);
     static void CopyTokenDependency(Function& function, Operation& originOp, Operation& copiedOp);
     static void AddTokenConsumer(Function& function, const ir::VarPtr& token, Operation& consumerOp);
+    static void LinkTokenDependency(Function& function, Operation& producerOp, Operation& consumerOp);
+    static void TransferTokenDependency(Function& function, Operation& oldOp, Operation& newOp);
     static void MoveResultTokensToProducers(Function& function, const std::vector<Operation*>& sourceOps,
                                             const std::vector<Operation*>& targetProducerOps,
                                             const std::unordered_set<ir::StmtPtr>& skippedConsumers);

@@ -23,10 +23,74 @@
 #include "tilefwk/symbolic_scalar.h"
 #include "passes/pass_utils/reschedule_utils.h"
 #include "passes/pass_utils/mem_path_utils.h"
+#include "passes/pass_utils/pass_token_utils.h"
+#include "passes/pass_utils/pass_utils.h"
 
 namespace npu::tile_fwk {
 
 constexpr int32_t DEFAULT_LATENCY = 511;
+
+namespace {
+
+// 写后写冲突判据: 同一块地 + 都在写 + 区域重叠, 不按 opcode 名字判。
+bool ConflictsWith(const LogicalTensorPtr& reloaded, Operation* op, int memId)
+{
+    for (const auto& written : op->GetOOperands()) {
+        if (written == nullptr || written->memoryrange.memId != memId) {
+            continue;
+        }
+        // 维数不等会让 IsOverlapping 越界, 判不出就当重叠。
+        if (written->shape.size() != reloaded->shape.size() || IsOverlapping(*reloaded, *written)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// 回载写的那片字节, 往后还写它的 op 必须排在回载之后, 否则旧数据盖掉新结果。
+void OrderReloadBeforeConflictingWrites(ScheduleState& state, Function& function,
+                                        const std::vector<Operation*>& reloadCopyins)
+{
+    // 回载 copyin 恒为单输出, 空 vector 取 front 是 UB, 故只在此处判一次。
+    if (reloadCopyins.empty() || reloadCopyins.front()->GetOOperands().empty()) {
+        return;
+    }
+    // 本轮回载共用一个 memId(分片抄自整块), 扫一遍收候选写者就够。
+    int memId = reloadCopyins.front()->GetOOperands().front()->memoryrange.memId;
+    std::unordered_set<Operation*> reloadSet(reloadCopyins.begin(), reloadCopyins.end());
+    std::vector<Operation*> writers;
+    for (auto* op : state.orderedOps) {
+        // 同轮分片写的是互不相交的片, 彼此不用排序。
+        if (reloadSet.count(op) != 0 || state.IsOpRetired(op) || USE_LESS_OPS.count(op->GetOpcode()) != 0) {
+            continue;
+        }
+        for (const auto& written : op->GetOOperands()) {
+            if (written != nullptr && written->memoryrange.memId == memId) {
+                writers.push_back(op);
+                break;
+            }
+        }
+    }
+    for (auto* copyin : reloadCopyins) {
+        const LogicalTensorPtr& reloaded = copyin->GetOOperands().front();
+        int copyinOrder = state.GetExecOrder(copyin);
+        auto& successors = state.depManager.GetSuccessors(copyin);
+        for (auto* op : writers) {
+            // 判据按代价从低到高短路: 查表, 查已有边, 最后才逐 operand 判重叠。
+            if (state.GetExecOrder(op) <= copyinOrder || successors.count(op) != 0 ||
+                !ConflictsWith(reloaded, op, memId)) {
+                continue;
+            }
+            // token 落 IR 供下次重建复现, AddDependency 让本轮立刻生效。
+            PassTokenUtils::LinkTokenDependency(function, *copyin, *op);
+            state.depManager.AddDependency(copyin, op);
+            APASS_LOG_DEBUG_F(Elements::Operation, "Spill: order reload %s before conflicting write %s.",
+                              state.GetOpInfo(copyin).c_str(), state.GetOpInfo(op).c_str());
+        }
+    }
+}
+
+} // namespace
 
 void SpillEngine::EmitInitDDRBuffer(const LogicalTensorPtr& t, DDRBufferKind kind)
 {
@@ -793,7 +857,12 @@ Status SpillEngine::SpillBuffer(int memId, Operation* spillAllocOp, SpillContext
         ReloadFromDDR(memId, spillTensor, spillOp, spillAllocOp, plan, ctx) != SUCCESS) {
         return FAILED;
     }
-    return FinalizeSpill(memId, spillTensor, spillAllocOp, plan, ctx);
+    if (FinalizeSpill(memId, spillTensor, spillAllocOp, plan, ctx) != SUCCESS) {
+        return FAILED;
+    }
+    // 必须在 FinalizeSpill 之后: 更早 memId 还没刷完。
+    OrderReloadBeforeConflictingWrites(state_, function_, plan.reloadCopyinOps);
+    return SUCCESS;
 }
 
 // 阶段①: 解析源、定镜像分组、必要时定逐片回载的计划, 纯读。
@@ -1012,6 +1081,13 @@ Status SpillEngine::ReloadIntoNewBuffer(int spillMemId, LogicalTensorPtr spillTe
         return FAILED;
     }
     ctx.newAllocOps.push_back(allocOp);
+    // 分片回载下 created.copyinOp 为空, opMemIdMap 才记全了本轮产物。
+    for (const auto& entry : opMemIdMap) {
+        if (entry.first == allocOp || USE_LESS_OPS.count(entry.first->GetOpcode()) != 0) {
+            continue;
+        }
+        plan.reloadCopyinOps.push_back(entry.first);
+    }
     plan.created.Record(nullptr, allocOp, wholeCopyin, gmTensor);
     return SUCCESS;
 }
@@ -1135,6 +1211,8 @@ Status SpillEngine::DropWritesWithoutReaders(LogicalTensorPtr spillTensor, Spill
         state_.bufRefCount.erase(memId);
     }
     DetachOrphanedProducers(orphaned);
+    // EraseOperations 不碰 VarDependency, 残留的死 op 会在下一轮重建时挂死调度。
+    PassTokenUtils::CleanupDeletedTokenDependency(function_, orphaned.ops);
     function_.EraseOperations(false, false);
     APASS_LOG_DEBUG_F(Elements::Operation, "Spill: dropped %zu writes without readers.", orphaned.ops.size());
     return SUCCESS;
@@ -1260,6 +1338,8 @@ Status SpillEngine::FreeSpilledBuffer(int memId, CoreLocationType freeCore)
 
 void SpillEngine::TakeOverScheduleSlot(Operation* oldOp, Operation* newOp)
 {
+    // 顶替不是删除, oldOp 两侧的序约束要整体过户。
+    PassTokenUtils::TransferTokenDependency(function_, *oldOp, *newOp);
     std::replace(state_.orderedOps.begin(), state_.orderedOps.end(), oldOp, newOp);
     APASS_LOG_DEBUG_F(Elements::Operation, "Replace %s with %s in exec order.", state_.GetOpInfo(oldOp).c_str(),
                       state_.GetOpInfo(newOp).c_str());
