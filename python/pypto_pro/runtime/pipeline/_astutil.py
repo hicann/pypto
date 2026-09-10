@@ -12,15 +12,10 @@
 """What every pipeline module needs and none of them owns: the generated-code name
 vocabulary, and the syntactic forms the transform has to recognise.
 
-This module imports nothing from its siblings, and nothing here knows about
-PipelineInfo, the sync graph or the transform. That is the point: the analyzer, the
-scanner, the graph and the validator all need these, and before they lived here each
-module either kept its own copy or reached sideways for someone else's — which is how
-the analyzer's idea of "a call to a stage" came to differ from the validator's, and how
-two modules ended up with separate spellings of "is this a slot accessor".
-
-Keeping it a leaf is also what lets ``_validate`` import from here without an import
-cycle; add nothing to this module that needs a sibling.
+A leaf on purpose — it imports nothing from its siblings and knows nothing about
+PipelineInfo, the sync graph or the transform. That is what lets ``_validate`` import
+from here without a cycle, and what keeps one spelling of "a call to a stage" or "a slot
+accessor" for every module that asks. Add nothing here that needs a sibling.
 """
 
 from __future__ import annotations
@@ -32,13 +27,18 @@ import textwrap
 # ---------------------------------------------------------------------------
 # Generated-code names
 #
-# The ``_pl_`` prefix is reserved for the transform (validate_names refuses a kernel
-# that already uses one). Each name below is written by one module and read back by
-# another, so it is spelled once, here, and the halves cannot drift apart.
-# ---------------------------------------------------------------------------
+# The ``_pl_`` prefix is reserved for the transform (validate_names refuses a kernel that
+# already uses one). Each name below is written by one module and read back by another, so
+# it is spelled once, here.
 
 # Which task the data in a ctx slot belongs to. The analyzer places it in the ctx layout,
 # the transformer both assigns it and reads it back as the event-id index.
+#
+# This is the ctx FIELD only. The running counter that fills it is a variable of the same
+# name with a different lifetime: the field travels with a snapshot, so a delayed stage
+# reading `ctx._pl_task_id` gets ITS task's number, while the variable belongs to the loop
+# and moves on every beat. Several pipeline loops each need their own counter, while the
+# fields stay one per ctx struct. See task_id_var below.
 PL_TASK_ID_FIELD = "_pl_task_id"
 # The validity flag. Prefixed like every framework field so a user struct field named
 # `is_valid` cannot collide with it.
@@ -53,6 +53,15 @@ def slot_index_field(group: str) -> str:
     return f"_pl_idx_{group}"
 
 
+def task_id_var(loop_index: int) -> str:
+    """The running task counter VARIABLE of one pipeline loop.
+
+    Distinct from PL_TASK_ID_FIELD, which names the ctx field this counter is snapshotted
+    into — see the comment there. Loop 0 keeps the bare name.
+    """
+    return PL_TASK_ID_FIELD if loop_index == 0 else f"{PL_TASK_ID_FIELD}_{loop_index}"
+
+
 # ---------------------------------------------------------------------------
 # Syntax recognition
 # ---------------------------------------------------------------------------
@@ -61,13 +70,9 @@ def slot_index_field(group: str) -> str:
 def call_name(call: ast.Call) -> str:
     """The callee of a plainly-called function: ``f(...)`` -> ``"f"``; anything else -> ``""``.
 
-    Deliberately blind to ``obj.f(...)``. Every caller uses this to recognise a call to a
-    name bound in the kernel's closure — a ``@stage`` function — and an attribute call is a
+    Deliberately blind to ``obj.f(...)``. Every caller uses this to recognise a call to a name
+    bound in the kernel's closure — a ``@stage`` function — while an attribute call is a
     method on some object that merely shares the name.
-
-    This replaced three near-copies that had drifted apart on exactly that point: the
-    analyzer's stage extraction was strict while two of the checks accepted the attribute
-    form, so a check could count a loop the extraction would then skip.
     """
     if isinstance(call, ast.Call) and isinstance(call.func, ast.Name):
         return call.func.id
@@ -76,19 +81,18 @@ def call_name(call: ast.Call) -> str:
 
 # The accessors that resolve a tile group handle to one of its tiles. Only ``next``
 # advances the group's cursor; the others read it where it stands, which is why the kind
-# is reported rather than just the group (see _buffer_parser._lower_group_accessor).
+# is reported rather than just the group.
 _GROUP_ACCESSORS = ("next", "current", "previous")
 
 
 def slot_accessor(node: ast.expr) -> tuple[str, str] | None:
     """``(group, kind)`` if ``node`` selects a slot of a tile group, else None.
 
-    Both spellings are recognised: ``group.next()/current()/previous()`` gives that
-    accessor as the kind, and ``group[i]`` gives ``"index"``.
+    Both spellings are recognised: ``group.next()/current()/previous()`` gives that accessor
+    as the kind, and ``group[i]`` gives ``"index"``.
 
     The group name is returned unfiltered — callers that only care about declared groups
-    check membership themselves, because they do not all hold the same set (the kernel
-    knows every declaration, a stage body only its own parameters).
+    check membership themselves, since they do not all hold the same set.
     """
     if isinstance(node, ast.Call):
         func = node.func
@@ -104,10 +108,8 @@ def slot_accessor(node: ast.expr) -> tuple[str, str] | None:
 def is_vf_function(func_def: ast.FunctionDef) -> bool:
     """True if ``func_def`` carries the ``@pl.vector_function`` decorator.
 
-    Only the decorator counts. A plain function that merely CALLS a vector function is a
-    different thing: the access scan treats it as a VF helper for role propagation, but its
-    body can still hold block ops that nothing looks at (see
-    _validate._check_no_block_ops_in_helpers).
+    Only the decorator counts: a plain function that merely CALLS a vector function is a
+    different thing.
     """
     for dec in func_def.decorator_list:
         if isinstance(dec, ast.Attribute) and dec.attr == "vector_function":
@@ -120,10 +122,9 @@ def is_vf_function(func_def: ast.FunctionDef) -> bool:
 def get_funcdef(fn) -> ast.FunctionDef | None:
     """The ``ast.FunctionDef`` for a Python function object, or None.
 
-    Line numbers are shifted to the ones in the real file. Re-parsing a source snippet
-    numbers it from 1, and every diagnostic that names a node inside a stage body reports
-    whatever this returns — so without the shift those messages point at a line the user
-    cannot find.
+    Line numbers are shifted to the ones in the real file: re-parsing a source snippet numbers
+    it from 1, and every diagnostic naming a node inside a stage body reports what this
+    returns.
     """
     if fn is None:
         return None

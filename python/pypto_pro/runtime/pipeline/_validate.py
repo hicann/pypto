@@ -9,18 +9,15 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-"""Checks on a kernel's pipeline structure, gathered in one place.
+"""Checks on a kernel's pipeline structure, gathered in one place, grouped by what they
+need to already know:
 
-Checks used to sit wherever the data happened to be parsed — some inside scanning loops,
-some mid-way through analyze_pipeline, some in the transformer. Adding one meant finding
-the right scanning function and editing it. They are collected here instead, grouped by
-what they need to already know:
-
-``validate_structure(info)``  after the stage sequence, sections, loop info and ctx
-                              fields are known, before any sync scanning
-``validate_sync(...)``        after the sync graph exists (see _sync_graph)
-``validate_names(...)``       once the caller knows which variables it will introduce —
-                              both emission paths, each passing its own names
+``validate_kernel_structure``  every pipeline in the kernel, before any per-loop work
+``validate_structure(info)``   after one pipeline's stages, sections, loop info and ctx
+                               fields are known, before any sync scanning
+``validate_sync(...)``         after the sync graph exists (see _sync_graph)
+``validate_names(...)``        once the caller knows which variables it will introduce —
+                               both emission paths, each passing its own names
 
 Format checks stay at their point of use: if a buffer's memory space or its id tuple
 cannot be resolved, scanning cannot continue, so those raise where they are read.
@@ -30,20 +27,16 @@ from __future__ import annotations
 
 import ast
 
-from ._astutil import call_name, get_funcdef
+from ._astutil import call_name, get_funcdef, slot_accessor
 
 
 def buffer_users(graph) -> dict:
     """``{buffer: [(stage_idx, stage, section, roles), ...]}``, ordered by stage.
 
-    One entry per stage that touches the buffer, with ``roles`` the set of op-level roles
-    it uses there. This is what the sync checks below reason over, and it is also the
-    right basis for deciding producer vs consumer: whichever stage comes FIRST produces
-    the data, later ones consume it.
-
-    Op-level roles cannot decide that on their own. A consumer may well write — an in-place
-    ``pl.muls`` on the buffer shows up as a write yet the stage is still consuming what the
-    previous stage left there. "Consumer" means "uses the buffer", not "only reads it".
+    One entry per stage that touches the buffer, with ``roles`` the set of op-level roles it
+    uses there. Also the basis for producer vs consumer: whichever stage comes FIRST produces
+    the data, later ones consume it. Op-level roles cannot decide that — a consumer may write
+    too (an in-place ``pl.muls``), so "consumer" means "uses the buffer", not "only reads it".
     """
     by_buf: dict = {}
     for acc in graph.accesses:
@@ -56,16 +49,34 @@ def buffer_users(graph) -> dict:
     }
 
 
+def validate_kernel_buffers(sync, used: set) -> None:
+    """Every declared cross-core buffer must be used by at least one pipeline.
+
+    ``used`` is every buffer any pipeline touches, handed in rather than gathered here so
+    this module keeps importing nothing but its own leaf helper.
+
+    The per-loop half lives in _check_cross_core_users, which cannot say anything here: a
+    buffer belonging to another loop is legitimately absent from this one. Unused ANYWHERE
+    still means ids were declared for a handover that never happens.
+    """
+    for buf_name, buf in sync.buffers.items():
+        if buf.fwd_ids_node is None and buf.bwd_ids_node is None:
+            continue  # not a cross-core buffer
+        if buf_name not in used:
+            raise ValueError(
+                f"pipeline: cross-core buffer '{buf_name}' declares fwd_ids/bwd_ids but no "
+                f"stage in any pipeline loop touches it, so there is no cross-core handover "
+                f"to synchronise. Either drop those keywords or pass this buffer to the "
+                f"stages that share it."
+            )
+
+
 def validate_sync(graph, info, cycles) -> None:
     """Checks that need the sync graph: regions, op-level accesses, users, edges.
 
-    Called from _sync_graph once the graph is built.
-
-    ``cycles`` is what ``find_cycles(graph)`` returned. It is passed in rather than
-    computed here because the split is real: walking the graph is the graph's job, while
-    deciding what a cycle's total distance MEANS is a check. Reaching back for the walk
-    would also make this module import a sibling that imports it — the very cycle the
-    lazy import used to paper over.
+    Called from _sync_graph once the graph is built. ``cycles`` is what ``find_cycles(graph)``
+    returned, passed in because walking the graph is the graph's job while deciding what a
+    cycle's total distance MEANS is a check.
     """
     users = buffer_users(graph)
     _check_cross_core_users(info, users)
@@ -78,16 +89,12 @@ def validate_sync(graph, info, cycles) -> None:
 def _check_stable_distances(graph) -> None:
     """Every edge must sit at the same distance on every task.
 
-    The whole plan rests on one distance per edge: it decides the skew, and with it how
-    many permits pre-fire releases, how many waits drain consumes, and which task each
-    ``% slot_count`` event id belongs to. ``build_graph`` expands two full rotations past
-    the fill precisely so it has a second sample to compare against; an edge whose distance
-    differs between them never settled, which means assumption A1 — each stage advances a
-    buffer exactly once per iteration — does not hold for it.
-
-    Emitting anyway would take whichever distance the expansion happened to see last and
-    pair every wait with a set belonging to some other task. Reject instead: the flag is
-    cheap to compute and there is nothing sound to emit once it is set.
+    The whole plan rests on one distance per edge: it decides the skew, and with it how many
+    permits pre-fire releases, how many waits drain consumes, and which task each
+    ``% slot_count`` event id belongs to. ``build_graph`` expands two full rotations past the
+    fill so it has a second sample to compare against; an edge whose distance differs between
+    them violates assumption A1, and emitting anyway would pair every wait with a set
+    belonging to some other task.
     """
     unstable = [edge for edge in graph.edges if edge.unstable]
     if not unstable:
@@ -111,14 +118,12 @@ def _check_stable_distances(graph) -> None:
 def _check_no_deadlock_cycle(cycles) -> None:
     """A dependency cycle whose distances sum to <= 0 cannot be synchronised at all.
 
-    Every edge means "the destination waits for the source". Going around a cycle and
-    ending up at the same task or a later one (total <= 0) asks each side to wait for the
-    other, so no wait/set placement can satisfy it — the kernel would hang on hardware.
+    Every edge means "the destination waits for the source", so a cycle closing on the same
+    task or a later one asks each side to wait for the other and hangs on hardware.
 
-    A positive total is healthy: the cycle closes on an EARLIER task, which is just a
-    cross-iteration pipeline. A single negative edge is also fine on its own — an
-    inverse-time edge (wait placed before the matching set) has been verified to work on
-    hardware. Only the total around the cycle decides.
+    A positive total is healthy — the cycle closes on an EARLIER task, an ordinary
+    cross-iteration pipeline. A single negative edge is also fine: an inverse-time edge (wait
+    placed before the matching set) works on hardware. Only the total decides.
     """
     deadlocks = [(path, total) for path, total in cycles if total <= 0]
     if not deadlocks:
@@ -143,28 +148,34 @@ def _format_cycle(path: list, total: int) -> str:
 def _check_cross_core_users(info, users: dict) -> None:
     """A buffer declared with fwd/bwd ids must hand data from one core to another.
 
-    Three ways that can fail to hold, none of them currently caught, and all of them
-    producing sync that is at best useless:
+    Counted PER PIPELINE LOOP, so the same buffer may be handed over in each of several
+    loops, each handover a complete pair of its own.
 
-      one user      nobody on the other side. Its sets pile up unanswered, and the
-                    hardware faults once an id is set more than 15 times unmatched.
-      same core     both users on cube, or both on vector. No core boundary is crossed,
-                    so cross-core sync is not what orders them.
-      3+ users      one variable is standing in for several producer/consumer pairs.
-                    Ids are resolved per buffer, so two pairs would share one id group
-                    and their differently-skewed edges would interleave. Declare a
-                    separate tile_group per pair (the same `addrs` may be reused).
+      no users      this loop does not use the buffer; another one does. Legal. Unused by
+                    EVERY loop is caught once, in validate_kernel_buffers.
+      one user      nobody on the other side WITHIN this loop. Its sets pile up unanswered,
+                    and the hardware faults once an id is set more than 15 times unmatched.
+                    A handover reaching across two loops has this shape and is not supported.
+      same core     both users on cube, or both on vector — no core boundary is crossed.
+      3+ users      one variable standing in for several producer/consumer pairs IN ONE LOOP.
+                    Ids are resolved per buffer, so two pairs would share one id group and
+                    their differently-skewed edges would interleave. Declare a separate
+                    tile_group per pair (the same `addrs` may be reused).
     """
     for buf_name, buf in info.sync.buffers.items():
         if buf.fwd_ids_node is None and buf.bwd_ids_node is None:
             continue  # not a cross-core buffer
         entries = users.get(buf_name, [])
         names = [e[1] for e in entries]
-        if len(entries) < 2:
+        if not entries:
+            continue  # used by another pipeline loop; validate_kernel_buffers catches unused
+        if len(entries) == 1:
             raise ValueError(
-                f"pipeline: cross-core buffer '{buf_name}' is used by {len(entries)} stage(s) "
-                f"{names}, so there is no cross-core handover to synchronise. Either drop its "
-                f"fwd_ids/bwd_ids or have a second stage use it."
+                f"pipeline: cross-core buffer '{buf_name}' is used by only one stage "
+                f"{names} in this pipeline loop, so the handover has no other side here. "
+                f"Each pipeline loop must hold a complete producer/consumer pair — its sync "
+                f"balances within the loop, so a handover reaching into another loop is not "
+                f"supported."
             )
         if len(entries) > 2:
             raise ValueError(
@@ -185,21 +196,17 @@ def _check_cross_core_users(info, users: dict) -> None:
 def _check_event_id_counts(graph, info) -> None:
     """A direction's event-id list must hold one id per slot, or exactly one id.
 
-    Two counters run side by side and they are not the same thing: the slots turn over on
-    ``task % slot_count``, while the id for a handover is picked with
-    ``ids[task % id_count]``. Only two ratios keep them in step:
+    Two counters run side by side: slots turn over on ``task % slot_count``, while the id for
+    a handover is picked with ``ids[task % id_count]``. Only two ratios keep them in step:
 
       id_count == slot_count   one id per slot; every slot hands over independently.
-      id_count == 1            all slots share one id. Consecutive handovers then queue up
-                               on it, so a slot cannot be released until the previous one
-                               has been — parallelism is lost, correctness is not. This is
-                               the intended way to cope with a shortage of ids, and it is
-                               why the count is not simply required to equal the slots.
+      id_count == 1            all slots share one id. Consecutive handovers queue up on it,
+                               costing parallelism but not correctness — the intended way to
+                               cope with a shortage of ids.
 
     Anything between (three slots on two ids, say) makes the two cycles slide against each
-    other, so a wait pairs with the set of a different slot. Nothing downstream can repair
-    it and it surfaces as an intermittent data race rather than a failure, which is exactly
-    the shape that is worth refusing up front.
+    other, so a wait pairs with the set of a different slot — an intermittent data race
+    rather than a failure.
 
     Buffers no stage touches are skipped — _check_cross_core_users reports those instead.
     """
@@ -221,10 +228,9 @@ def _check_event_id_counts(graph, info) -> None:
 def _check_reuse_mutex_ids(graph, info) -> None:
     """Buffers sharing a region must share their mutex ids.
 
-    A mutex locks an ADDRESS. Two buffers over the same memory holding different locks do
-    not exclude each other at all, so the intra-core ordering auto_mutex is supposed to
-    provide silently disappears — and it does not show up as a failure right away, which
-    makes it the kind of race that surfaces much later.
+    A mutex locks an ADDRESS, so two buffers over the same memory holding different locks do
+    not exclude each other at all and the intra-core ordering auto_mutex provides silently
+    disappears.
     """
     by_region: dict = {}
     for buf_name, region in graph.regions.items():
@@ -247,14 +253,11 @@ def _check_reuse_mutex_ids(graph, info) -> None:
 def validate_names(func_def, framework_names: set) -> None:
     """The variables this transform is about to introduce must not already be in use.
 
-    Called by BOTH emission paths, each passing its own names: what a path is allowed to
-    collide over is exactly what that path emits. Checking one path's names while running
-    the other reports on variables that will never be generated and misses the ones that
-    will.
+    Called by BOTH emission paths, each passing its own names: what a path may collide over
+    is exactly what that path emits.
 
-    Only fixed names are worth listing. Lifted id variables (``_pl_fwd_ids_<buffer>``) end
-    in a user-chosen buffer name, so a collision needs the user to have declared that exact
-    derived name — and the parser catches a genuine redefinition anyway.
+    Only fixed names are worth listing. Lifted id variables (``_pl_fwd_ids_<buffer>``) end in
+    a user-chosen buffer name, and the parser catches a genuine redefinition anyway.
     """
     _check_name_collisions(func_def, framework_names)
 
@@ -271,88 +274,90 @@ def _check_name_collisions(func_def, framework_names: set) -> None:
         )
 
 
+def validate_kernel_structure(infos: list, preload) -> None:
+    """Structural checks about the KERNEL as a whole, not about one pipeline.
+
+    Handed every pipeline the kernel holds, so it can check how they sit together; run from
+    inside the per-loop gate it would report the same thing once per loop.
+
+    ``preload`` is the config value, taken as a value rather than as the config object so
+    this module stays a leaf that knows about ASTs and nothing else.
+    """
+    _check_preload_count(preload, len(infos))
+    _check_distinct_outer_loops(infos)
+
+
+def _check_preload_count(preload, loop_count: int) -> None:
+    """One preload per pipeline loop, or one for all of them.
+
+    A mismatched list is refused rather than padded or truncated: which loop each value was
+    meant for is exactly what a wrong length makes unknowable.
+    """
+    if not isinstance(preload, tuple) or len(preload) == loop_count:
+        return
+    raise ValueError(
+        f"pipeline: preload has {len(preload)} values {list(preload)} but the kernel holds "
+        f"{loop_count} pipeline loop(s). Give one value per loop, in source order, or a "
+        f"single value to use for all of them."
+    )
+
+
+def _check_distinct_outer_loops(infos: list) -> None:
+    """Two pipelines may not hang off the same enclosing loop.
+
+    A pipeline's declarations and pre-fire go before its outermost enclosing loop and its
+    drain after it, so one task stream runs continuously across that loop. Two pipelines
+    sharing it would land both sets in the same two places, putting the first one's drain
+    after every iteration of the second.
+
+    Nesting a pipeline loop inside another kernel loop is the normal shape and unaffected.
+    """
+    seen: dict = {}
+    for info in infos:
+        outer = info.outer_loop
+        if outer is None:
+            continue
+        first = seen.setdefault(id(outer), info)
+        if first is not info:
+            raise ValueError(
+                f"pipeline: the pipeline loops at line {first.pipeline_loop.lineno} and line "
+                f"{info.pipeline_loop.lineno} are both inside the loop at line "
+                f"{outer.lineno}, but each pipeline places its declarations before that loop "
+                f"and its drain after it, so they cannot share one.\n"
+                f"Move one of them out, or put the stages of both into a single loop."
+            )
+
+
 def validate_structure(info, func_def=None, stage_func_names: set | None = None) -> None:
     """Checks that need only the parsed structure — no sync or schedule information.
 
-    Called from analyze_pipeline once the stages, sections and loop info exist, and before
-    anything is derived from them: none of the checks below reads the ctx layout or the
-    buffer scan, so running first is what lets a malformed stage chain be reported as such
-    instead of as whatever the later passes trip over.
+    Called from analyze_pipeline once the stages, sections and loop info exist and before
+    anything is derived from them, so a malformed stage chain is reported as such rather than
+    as whatever a later pass trips over.
 
-    ``func_def`` and ``stage_func_names`` enable the two checks that have to look at the
-    whole kernel rather than at the stage list: both catch a shape the transform would
-    otherwise SKIP silently, which is worse than refusing it.
+    ``func_def`` and ``stage_func_names`` enable the one check that looks at the whole kernel
+    rather than at the stage list.
     """
     _check_stage_returns(info)
     _check_stage_sections(info)
+    _check_unique_stage_names(info)
     _check_alternating_sections(info)
+    _check_nothing_between_stages(info)
     _check_loop_step(info)
     if func_def is not None and stage_func_names:
-        _check_single_pipeline_loop(func_def, stage_func_names)
         _check_no_nested_stage(func_def, info, stage_func_names)
-
-
-def _loops_holding_stages(func_def, stage_func_names: set) -> list:
-    """Every for-loop whose OWN body calls a stage — i.e. every candidate pipeline loop.
-
-    Matches how the stage list is collected (_extract_stages_from_loop looks at a loop's
-    direct body only), so an enclosing loop of a pipelined one is not counted: its stages
-    sit in the pipeline loop's body, not its own.
-    """
-    found = []
-    for node in ast.walk(func_def):
-        if not isinstance(node, ast.For):
-            continue
-        for stmt in node.body:
-            calls = []
-            if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
-                calls.append(stmt.value)
-            elif isinstance(stmt, ast.With):
-                calls.extend(
-                    s.value for s in stmt.body if isinstance(s, ast.Expr) and isinstance(s.value, ast.Call)
-                )
-            if any(call_name(c) in stage_func_names for c in calls):
-                found.append(node)
-                break
-    return found
-
-
-def _check_single_pipeline_loop(func_def, stage_func_names: set) -> None:
-    """Only one loop may drive the pipeline.
-
-    The transform builds one ctx ring, one task counter and one drain for the whole kernel,
-    so a second loop calling stages of its own would need a second set of all three. Today
-    the search stops at the first such loop and the rest are left untouched — no ctx, no
-    sync, no drain — which looks like it worked. Refuse instead.
-
-    Nesting is fine and unaffected: an enclosing loop holds the pipelined loop in its body,
-    not stage calls, so it is not one of these.
-    """
-    loops = _loops_holding_stages(func_def, stage_func_names)
-    if len(loops) > 1:
-        where = ", ".join(f"line {loop.lineno}" for loop in loops)
-        raise ValueError(
-            f"pipeline: {len(loops)} separate loops call pipeline stages ({where}), but the "
-            f"transform pipelines exactly one loop — the others would be left without ctx, "
-            f"sync or drain.\n"
-            f"Put the stages of one pipeline in a single loop, or split the kernel so each "
-            f"loop is its own @pl.jit function."
-        )
 
 
 def _check_no_nested_stage(func_def, info, stage_func_names: set) -> None:
     """A stage must not reach another stage, directly or through the functions it calls.
 
-    Sub-stages need their accesses attributed to the sub-stage rather than the caller, and
-    sync placed around the inner call — support for that was removed and is pending a
-    redesign. Without it the inner stage reads as an ordinary helper call: its buffer
-    accesses never reach the dependency graph, so its handovers go unsynchronised.
+    Sub-stages need their accesses attributed to the sub-stage and sync placed around the
+    inner call; support for that was removed pending a redesign. Without it the inner stage
+    reads as an ordinary helper call and its handovers go unsynchronised.
 
-    The search follows plain helper calls as well, because a stage buried behind one is
-    worse than a directly nested one, not better: the access scan walks helpers but skips
-    stage names inside them, and the analyzer only lists the stages called in the pipeline
-    loop, so such a stage contributes nothing at all — no accesses, no sync, no beat — and
-    says nothing about it.
+    The search follows plain helper calls too: the access scan walks helpers but skips stage
+    names inside them, and the analyzer only lists the stages called in the pipeline loop, so
+    a stage buried behind a helper contributes nothing at all — no accesses, no sync, no beat.
     """
     stage_defs = {
         node.name: node
@@ -429,6 +434,55 @@ def _check_stage_sections(info) -> None:
             )
 
 
+def _check_unique_stage_names(info) -> None:
+    """A stage function may be called only once per pipeline loop.
+
+    Sync sites are looked up by stage name (_sync_graph records it on every access), so two
+    stages sharing a name would each emit the other's waits and sets.
+    """
+    seen = set()
+    for stage in info.stages:
+        if stage.func_name in seen:
+            raise ValueError(
+                f"pipeline: stage '{stage.func_name}' is called more than once in this "
+                f"pipeline loop. A stage is identified by its function name — its sync "
+                f"belongs to that name — so each stage of the chain needs its own function.\n"
+                f"Give the repeated step a second stage function, even if it only calls a "
+                f"shared helper."
+            )
+        seen.add(stage.func_name)
+
+
+def _check_nothing_between_stages(info) -> None:
+    """Between the first and the last stage the loop body holds stages and nothing else.
+
+    A stage runs once per TASK; every other statement in the loop body runs once per BEAT.
+    Written between two stages, a statement reads as belonging to one of them and does not,
+    so the loop body is split in three: statements before the first stage, the stage chain,
+    statements after the last one.
+
+    Runs on the pruned tree (transform_pipeline folds compile-time-constant branches first),
+    so an `if` that selects between stages is already gone by the time this looks.
+    """
+    if info.pipeline_loop is None or not info.stages:
+        return
+    holders = {id(s.source_stmt) for s in info.stages if s.source_stmt}
+    positions = [i for i, stmt in enumerate(info.pipeline_loop.body) if id(stmt) in holders]
+    if not positions:
+        return
+    for stmt in info.pipeline_loop.body[positions[0]:positions[-1]]:
+        if id(stmt) in holders:
+            continue
+        raise ValueError(
+            f"pipeline: the statement at line {stmt.lineno} "
+            f"(`{ast.unparse(stmt).splitlines()[0]}`) sits between two stage calls. Only "
+            f"stage calls belong there — a stage runs once per task, every other statement "
+            f"runs once per beat, and between two stages there is no saying which it "
+            f"follows.\n"
+            f"Move it to the start or the end of the pipeline loop body, or into a stage."
+        )
+
+
 def _check_alternating_sections(info) -> None:
     """The stage chain has to alternate cube/vector.
 
@@ -447,12 +501,76 @@ def _check_alternating_sections(info) -> None:
             )
 
 
+def validate_slot_picks(info, tracked: set, helper_defs: dict) -> None:
+    """A tracked buffer's slot may only be taken inside a stage, not in the loop body.
+
+    A slot belongs to a TASK, and the sync graph reads a buffer's slot as
+    ``task % slot_count``. A stage takes one once per task; a statement in the loop body
+    takes one once per ITERATION, and a delayed stage's task is not the current iteration —
+    it also takes one during the drain, where the loop body no longer runs. Sharing a
+    group's cursor between the two hands the stage a slot that is not its task's, and with
+    it the wrong event id.
+
+    ``tracked`` is what the sync graph follows: cross-core buffers and the ones sharing
+    their address (AccessScanTables.tracks). A purely local group's rotation is the user's
+    own — nothing here indexes it, and auto_mutex orders the accesses whatever the cursor
+    does.
+
+    Every spelling counts, wherever it sits: a bare `g.next()`, one buried in a larger
+    expression, and one inside a helper the loop body calls. A stage's own body is not
+    searched — helper_defs holds no stage.
+
+    Outside the pipeline loop is a different mechanism and unaffected: such a slot's index is
+    carried through ctx, so every stage re-selects the slot of the task it is handling.
+    """
+    if info.pipeline_loop is None or not tracked:
+        return
+    _reject_slot_picks(info.pipeline_loop, tracked, helper_defs, frozenset(), "")
+
+
+def _reject_slot_picks(tree, groups: set, helper_defs: dict, seen: frozenset, where: str) -> None:
+    """Raise on any slot pick in ``tree``, following calls into the helpers it makes.
+
+    ``groups`` are the names that hold a tracked group in this tree's own scope: the buffer
+    names at the top, and inside a helper the parameters one was passed to.
+    """
+    for node in ast.walk(tree):
+        pick = slot_accessor(node)
+        if pick is not None and pick[0] in groups:
+            group, kind = pick
+            accessor = "[...]" if kind == "index" else f".{kind}()"
+            raise ValueError(
+                f"pipeline: line {node.lineno}{where} takes a slot from tile group '{group}' "
+                f"(`{group}{accessor}`) inside the pipeline loop but outside any stage. A slot "
+                f"belongs to one task, and in the loop body only a stage runs once per task — "
+                f"the rest runs once per beat, including the fill and drain beats where there "
+                f"is no task at all.\n"
+                f"Take the slot inside the stage function, or outside the pipeline loop, where "
+                f"its index is carried through ctx."
+            )
+        if not isinstance(node, ast.Call):
+            continue
+        callee = helper_defs.get(call_name(node))
+        if callee is None or callee.name in seen:
+            continue
+        params = [a.arg for a in callee.args.args]
+        passed = {
+            params[pos]
+            for pos, arg in enumerate(node.args)
+            if pos < len(params) and isinstance(arg, ast.Name) and arg.id in groups
+        }
+        if passed:
+            _reject_slot_picks(
+                callee, passed, helper_defs, seen | {callee.name},
+                f" of `{callee.name}` (called from line {node.lineno})",
+            )
+
+
 def _check_loop_step(info) -> None:
     """The pipeline loop must count upwards.
 
-    Guards that reason about a task some iterations away compute `var + n * step` and
-    compare with `<` against the bound; a negative step would need the opposite
-    comparison throughout. Rejected rather than half-supported.
+    Guards that reason about a task some iterations away compute `var + n * step` and compare
+    with `<` against the bound; a negative step would need the opposite comparison throughout.
     """
     step = info.pipeline_loop_step
     if step is None:
