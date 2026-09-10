@@ -211,6 +211,9 @@ public:
     Status AppendMergedAssembleOperations(Function& function);
     Status AppendProducerGroupFusions(Function& function);
 
+    // Remove legacy result tokens replaced by per-merged-op new tokens.
+    void CleanupLegacyResultTokens(Function& function);
+
     // Cleanup methods
     Status CleanUp(Function& function);
     bool hasTokenDependencies_ = false;

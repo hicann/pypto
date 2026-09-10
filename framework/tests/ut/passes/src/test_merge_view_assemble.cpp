@@ -2382,5 +2382,71 @@ TEST_F(MergeViewAssembleTest, ContractContractChainShouldNotMerge)
     }
     EXPECT_EQ(contractCount, 2);
 }
+
+/*
+ * 扇出场景的 WAR token 接管：
+ *   shared --SLICE(head, result_token=warToken)--> mid --VIEW_i--> out_i (outcast), i = 0..2
+ *   contract_in --CONTRACT--> contract_out (outcast), contract 等待 warToken
+ * slice_head 与每个 view_i 各合并成一条链，产出 3 个 merged SLICE。每个 merged SLICE
+ * 必须产出自己的新 token 且都被 contract 等待（token 单生产者约束），旧 warToken 被清理。
+ */
+TEST_F(MergeViewAssembleTest, FanoutViewChainResultTokenPropagatesToEveryMergedSlice)
+{
+    ComputationalGraphBuilder G;
+    EXPECT_TRUE(G.AddTensors(DataType::DT_FP32, {10, 10},
+                             {"shared", "mid", "out_0", "out_1", "out_2", "contract_in", "contract_out"}));
+    EXPECT_TRUE(G.AddOp(Opcode::OP_SLICE, {"shared"}, {"mid"}, "slice_head", true));
+    EXPECT_TRUE(G.AddOp(Opcode::OP_VIEW, {"mid"}, {"out_0"}, "view_0", true));
+    EXPECT_TRUE(G.AddOp(Opcode::OP_VIEW, {"mid"}, {"out_1"}, "view_1", true));
+    EXPECT_TRUE(G.AddOp(Opcode::OP_VIEW, {"mid"}, {"out_2"}, "view_2", true));
+    EXPECT_TRUE(G.AddOp(Opcode::OP_CONTRACT, {"contract_in"}, {"contract_out"}, "contract", true));
+    EXPECT_TRUE(G.SetInCast({"shared", "contract_in"}));
+    EXPECT_TRUE(G.SetOutCast({"out_0", "out_1", "out_2", "contract_out"}));
+    SetSimpleViewAttr(G.GetOp("slice_head"), {0, 0});
+    SetSimpleViewAttr(G.GetOp("view_0"), {0, 0});
+    SetSimpleViewAttr(G.GetOp("view_1"), {0, 0});
+    SetSimpleViewAttr(G.GetOp("view_2"), {0, 0});
+    SetSimpleAssembleAttr(G.GetOp("contract"), {0, 0});
+
+    Function* function = G.GetFunction();
+    ASSERT_NE(function, nullptr);
+    Operation* sliceHead = G.GetOp("slice_head");
+    Operation* contract = G.GetOp("contract");
+    ASSERT_NE(sliceHead, nullptr);
+    ASSERT_NE(contract, nullptr);
+    auto warToken = AddTokenEdge(*function, *sliceHead, *contract);
+
+    MergeViewAssemble mergePass;
+    ASSERT_EQ(mergePass.RunOnFunction(*function), SUCCESS);
+
+    // 扇出的 3 条 [slice_head, view_i] 链合并成 3 个 SLICE
+    std::vector<Operation*> mergedSlices;
+    std::vector<ir::VarPtr> newTokens;
+    for (auto& op : function->Operations(false)) {
+        if (op.GetOpcode() == Opcode::OP_SLICE && !op.IsDeleted()) {
+            mergedSlices.emplace_back(&op);
+            for (const auto& token : op.result_token_) {
+                newTokens.emplace_back(token);
+            }
+        }
+    }
+    ASSERT_EQ(mergedSlices.size(), 3);
+    ASSERT_EQ(newTokens.size(), 3);
+
+    // 每个 merged slice 恰好生产一个新 token（单生产者），且全部被 contract 等待
+    auto& dependency = function->GetVarDependency();
+    for (auto* mergedSlice : mergedSlices) {
+        ASSERT_EQ(mergedSlice->result_token_.size(), 1);
+        EXPECT_EQ(dependency.GetProducers(mergedSlice->result_token_.front()).size(), 1);
+        EXPECT_TRUE(dependency.HasProducer(mergedSlice->result_token_.front(), ToStmtPtr(*mergedSlice)));
+        EXPECT_NE(std::find(contract->tokens_.begin(), contract->tokens_.end(), mergedSlice->result_token_.front()),
+                  contract->tokens_.end());
+        EXPECT_TRUE(dependency.HasConsumer(mergedSlice->result_token_.front(), ToStmtPtr(*contract)));
+    }
+
+    // 旧 token 已被全部新 token 接管，不得残留
+    EXPECT_EQ(std::find(contract->tokens_.begin(), contract->tokens_.end(), warToken), contract->tokens_.end());
+    EXPECT_FALSE(dependency.HasDependency(warToken));
+}
 } // namespace tile_fwk
 } // namespace npu

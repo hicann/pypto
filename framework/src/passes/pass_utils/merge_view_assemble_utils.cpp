@@ -260,21 +260,27 @@ void ClearLinearTokenDependency(Function& function, const std::vector<Operation*
         bool producerInChain = chainSet.count(snapshot.producer) != 0;
         bool isResultToken = std::find(tokenDependency.resultTokens.begin(), tokenDependency.resultTokens.end(),
                                        snapshot.token) != tokenDependency.resultTokens.end();
+        if (isResultToken) {
+            // 保留旧 token 的 varDependency：扇出场景下同一 producer 的 result token 会被多条
+            // 合并链共享，后续链仍需收集它及其外部消费者；统一由 CleanupLegacyResultTokens 移除。
+            if (producerInChain && snapshot.producer != nullptr) {
+                auto& producerTokens = snapshot.producer->result_token_;
+                producerTokens.erase(std::remove(producerTokens.begin(), producerTokens.end(), snapshot.token),
+                                     producerTokens.end());
+            }
+            continue;
+        }
         for (auto* consumer : snapshot.consumers) {
-            if (chainSet.count(consumer) != 0 || (producerInChain && !isResultToken)) {
+            if (chainSet.count(consumer) != 0 || producerInChain) {
                 dependency.RemoveConsumer(snapshot.token, ToStmtPtr(*consumer));
                 RemoveToken(*consumer, snapshot.token);
             }
         }
         if (producerInChain && snapshot.producer != nullptr) {
             dependency.RemoveProducer(snapshot.token, ToStmtPtr(*snapshot.producer));
-            auto& producerTokens = snapshot.producer->result_token_;
-            producerTokens.erase(std::remove(producerTokens.begin(), producerTokens.end(), snapshot.token),
-                                 producerTokens.end());
         }
-        if (producerInChain && !isResultToken) {
-            dependency.RemoveVar(snapshot.token);
-        } else if (dependency.GetProducers(snapshot.token).empty() && dependency.GetConsumers(snapshot.token).empty()) {
+        if (producerInChain ||
+            (dependency.GetProducers(snapshot.token).empty() && dependency.GetConsumers(snapshot.token).empty())) {
             dependency.RemoveVar(snapshot.token);
         }
     }
@@ -291,10 +297,17 @@ void ApplyLinearTokenDependency(Function& function, Operation& mergedOp,
         AddTokenConsumer(function, token, mergedOp);
     }
     for (const auto& resultToken : tokenDependency.resultTokens) {
-        AddUnique(mergedOp.result_token_, resultToken);
-        function.GetVarDependency().AddProducer(resultToken, ToStmtPtr(mergedOp));
+        if (resultToken == nullptr) {
+            continue;
+        }
+        // token 只允许单生产者：merged op 产出新 token 接管旧 token 的全部外部消费者。
+        // 扇出场景下同一旧 token 被多条链共享时，每条链的 merged op 各产一个新 token，
+        // 消费者等待全部新 token，与原语义（等旧 token 的唯一生产者）保持一致。
+        auto newToken = IRBuilder().CreateTokenVar(mergedOp.GetSpan());
+        AddUnique(mergedOp.result_token_, newToken);
+        function.GetVarDependency().AddProducer(newToken, ToStmtPtr(mergedOp));
         for (const auto& consumerStmt : tokenDependency.resultTokenConsumers) {
-            AddTokenConsumer(function, resultToken, *ToOperation(consumerStmt));
+            AddTokenConsumer(function, newToken, *ToOperation(consumerStmt));
         }
     }
 }
@@ -1039,12 +1052,44 @@ Status MergeViewAssembleUtils::ProcessOperations(Function& function)
         APASS_LOG_ERROR_F(Elements::Function, "AppendMergedAssembleOperations phase failed.");
         return FAILED;
     }
+    CleanupLegacyResultTokens(function);
     status = AppendProducerGroupFusions(function);
     if (status != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "AppendProducerGroupFusions phase failed.");
         return status;
     }
     return status;
+}
+
+void MergeViewAssembleUtils::CleanupLegacyResultTokens(Function& function)
+{
+    auto& dependency = function.GetVarDependency();
+    std::vector<ir::VarPtr> legacyTokens;
+    auto collectTokens = [&legacyTokens](const TokenDependency& tokenDependency) {
+        for (const auto& token : tokenDependency.resultTokens) {
+            AddUnique(legacyTokens, token);
+        }
+    };
+    for (const auto& viewOp : viewOpToAppend_) {
+        collectTokens(viewOp.tokenDependency);
+    }
+    for (const auto& assembleOp : assembleOpToAppend_) {
+        collectTokens(assembleOp.tokenDependency);
+    }
+    for (const auto& token : legacyTokens) {
+        if (token == nullptr) {
+            continue;
+        }
+        // 拷贝一份消费者：RemoveVar 会使 GetConsumers 返回的引用失效。
+        auto consumers = dependency.GetConsumers(token);
+        for (const auto& consumerStmt : consumers) {
+            auto* consumer = ToOperation(consumerStmt);
+            if (consumer != nullptr) {
+                RemoveToken(*consumer, token);
+            }
+        }
+        dependency.RemoveVar(token);
+    }
 }
 
 Status MergeViewAssembleUtils::AppendMergedViewOperations(Function& function)
