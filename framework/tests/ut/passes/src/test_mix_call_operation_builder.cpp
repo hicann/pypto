@@ -14,7 +14,11 @@
  * */
 #include <gtest/gtest.h>
 #include "interface/tensor/irbuilder.h"
+#define private public
+#define protected public
 #include "passes/block_graph_pass/mix_subgraph_split/mix_call_operation_builder.h"
+#undef private
+#undef protected
 #include "computational_graph_builder.h"
 #include "symbolic_scalar_test_utils.h"
 #include "interface/tensor/irbuilder.h"
@@ -996,9 +1000,41 @@ TEST_F(MixCallOperationBuilderTest, TestFindIOpAttrOffsetFromActualIncastsWithIn
     std::set<LogicalTensorPtr> processedOutcasts;
     ExtractInfo extractInfo{iOffsets, oOffsets, processedIncasts, processedOutcasts};
 
-    bool result = builder->FindIOpAttrOffsetFromActualIncasts(actualIncasts, extractInfo, originalMixFunc.get());
+    bool result = builder->FindIOpAttrOffsetFromActualIncasts(actualIncasts, extractInfo, originalMixFunc.get(),
+                                                              nullptr);
 
     EXPECT_FALSE(result) << "FindIOpAttrOffsetFromActualIncasts should return false for invalid tensor";
+}
+
+TEST_F(MixCallOperationBuilderTest, TestFindIOpAttrOffsetFromActualIncastsWithCallOpFallback)
+{
+    auto leafFunc = createFunctionWithInvokeInfo("leaf_func");
+    auto originalMixFunc = createFunctionWithOps("original_mix");
+
+    // 该incast不参与原Mix function的任何op（两级查找均无法命中），
+    // 仅作为原CALL op的输入并携带有效COA偏移，覆盖回退路径的成功分支
+    const std::vector<int64_t> shape = {MS_NUM16, MS_NUM16};
+    auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+
+    auto originalCallOp = createCallOpWithoutAttribute(*rootFunc);
+    originalCallOp->ReplaceIOperand(0, incast);
+    originalCallOp->SetIOpAtt(0, OFFSET_INPUT1);
+
+    std::vector<std::shared_ptr<LogicalTensor>> actualIncasts = {incast};
+
+    std::vector<OperandAttribute> iOffsets;
+    std::vector<OperandAttribute> oOffsets;
+    std::set<LogicalTensorPtr> processedIncasts;
+    std::set<LogicalTensorPtr> processedOutcasts;
+    ExtractInfo extractInfo{iOffsets, oOffsets, processedIncasts, processedOutcasts};
+
+    bool result = builder->FindIOpAttrOffsetFromActualIncasts(actualIncasts, extractInfo, originalMixFunc.get(),
+                                                              originalCallOp);
+
+    EXPECT_TRUE(result) << "FindIOpAttrOffsetFromActualIncasts should succeed via originalCallOp fallback";
+    ASSERT_EQ(extractInfo.iOffsets.size(), 1) << "Fallback attr should be extracted into iOffsets";
+    EXPECT_EQ(extractInfo.iOffsets[0].offset, OFFSET_INPUT1);
+    EXPECT_TRUE(extractInfo.processedIncasts.count(incast) > 0) << "Fallback incast should be marked processed";
 }
 
 TEST_F(MixCallOperationBuilderTest, TestFindOOpAttrOffsetFromActualOutcastsWithEmptyShape)

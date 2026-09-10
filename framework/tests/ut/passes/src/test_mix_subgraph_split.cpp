@@ -15,7 +15,11 @@
 #include <gtest/gtest.h>
 #include "symbolic_scalar_test_utils.h"
 #include "interface/tensor/irbuilder.h"
+#define private public
+#define protected public
 #include "passes/block_graph_pass/mix_subgraph_split.h"
+#undef private
+#undef protected
 #include "computational_graph_builder.h"
 #include "interface/tensor/irbuilder.h"
 
@@ -1020,6 +1024,148 @@ TEST_F(MixSubgraphSplitTest, TestDependOperand)
     copyin2->SetAsDeleted();
     function->EraseOperations();
     EXPECT_EQ(tensor4->GetDependOps().size(), 0);
+}
+
+namespace {
+// 构造 RUNTIME_GetTensorDataInt32Dim1(index, ioType, ioTypeIndex, address, offset...) 形式的调用表达式，
+// 使 GetTensorDataUsage 能按 (ioType, ioTypeIndex) 提取引用（ioType=0 即 INCAST）
+SymbolicScalar CreateGetTensorDataCall(IRBuilder& builder, int ioType, int ioTypeIndex)
+{
+    SymbolicScalar handler(AddRuntimePrefix("GetTensorDataInt32Dim1"));
+    SymbolicScalar addr = SymbolicScalar(AddRuntimeCoaPrefix("GET_PARAM_ADDR"))(builder.CreateConstInt(-1),
+                                                                                builder.CreateConstInt(110));
+    return handler(builder.CreateConstInt(0), builder.CreateConstInt(ioType), builder.CreateConstInt(ioTypeIndex), addr,
+                   builder.CreateConstInt(0));
+}
+} // namespace
+
+// CollectGetTensorDataIncasts：MixSubgraphSplit值依赖补回的看护用例
+class MixDependencyAnalyzerTest : public ::testing::Test {
+public:
+    static void SetUpTestCase() {}
+    static void TearDownTestCase() {}
+
+    void SetUp() override
+    {
+        Program::GetInstance().Reset();
+        config::Reset();
+        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
+        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
+        mixFunc = std::make_shared<Function>(Program::GetInstance(), "test_mix_func", "test_mix_func", nullptr);
+        mixFunc->SetGraphType(GraphType::BLOCK_GRAPH);
+        mixFunc->SetFunctionType(FunctionType::STATIC);
+        analyzer = std::make_unique<MixDependencyAnalyzer>();
+    }
+
+    void TearDown() override
+    {
+        analyzer.reset();
+        mixFunc.reset();
+    }
+
+    // 创建incast并登记到原Mix函数：incastIdx即期望被补回的引用下标
+    std::shared_ptr<LogicalTensor> CreateAndRegisterIncast(const std::vector<int64_t>& shape)
+    {
+        auto tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_INT32, shape, CreateTestConstIntVector(shape));
+        mixFunc->inCasts_.push_back(tensor);
+        return tensor;
+    }
+
+    // 在原Mix函数中创建携带 GetTensorData 引用的op（借 OP_VEC_DUP 的 dynScalar 动态属性通道）
+    Operation& CreateOpWithGetTensorDataRef(const std::shared_ptr<LogicalTensor>& input,
+                                            const std::shared_ptr<LogicalTensor>& output, int ioType, int ioTypeIndex)
+    {
+        auto& op = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_VEC_DUP, {input}, {output});
+        op.SetAttribute(OpAttributeKey::dynScalar, CreateGetTensorDataCall(builder, ioType, ioTypeIndex));
+        return op;
+    }
+
+protected:
+    std::shared_ptr<Function> mixFunc;
+    std::unique_ptr<MixDependencyAnalyzer> analyzer;
+    IRBuilder builder;
+};
+
+// 正常补回：引用的incast被加入每个component的allIncasts
+TEST_F(MixDependencyAnalyzerTest, TestCollectGetTensorDataIncastsNormal)
+{
+    const std::vector<int64_t> shape = {16, 16};
+    auto incast = CreateAndRegisterIncast(shape);
+    auto internal = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    CreateOpWithGetTensorDataRef(internal, output, GET_TENSOR_DATA_OPERAND_IOTYPE_INCAST, 0);
+
+    std::vector<InternalComponentInfo> components = {{0, "comp_0"}, {1, "comp_1"}};
+
+    analyzer->CollectGetTensorDataIncasts(components, mixFunc.get());
+
+    EXPECT_EQ(analyzer->allIncasts.size(), 2) << "Both components should receive the incast";
+    for (size_t comp = 0; comp < components.size(); comp++) {
+        const auto& incasts = analyzer->allIncasts[comp];
+        ASSERT_EQ(incasts.size(), 1) << "Component " << comp << " should have exactly one incast";
+        EXPECT_EQ(incasts[0].tensor, incast) << "Component " << comp << " should reference the registered incast";
+    }
+}
+
+// idx越界跳过：引用的incast下标超出原函数incast列表
+TEST_F(MixDependencyAnalyzerTest, TestCollectGetTensorDataIncastsIndexOutOfRange)
+{
+    const std::vector<int64_t> shape = {16, 16};
+    auto internal = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    // incast列表为空，ioTypeIndex=0必然越界
+    CreateOpWithGetTensorDataRef(internal, output, GET_TENSOR_DATA_OPERAND_IOTYPE_INCAST, 0);
+
+    std::vector<InternalComponentInfo> components = {{0, "comp_0"}};
+
+    analyzer->CollectGetTensorDataIncasts(components, mixFunc.get());
+
+    EXPECT_TRUE(analyzer->allIncasts.empty()) << "Out-of-range incast index should be skipped";
+}
+
+// incast已存在去重：component的allIncasts中已有该tensor时不重复添加
+TEST_F(MixDependencyAnalyzerTest, TestCollectGetTensorDataIncastsDeduplicate)
+{
+    const std::vector<int64_t> shape = {16, 16};
+    auto incast = CreateAndRegisterIncast(shape);
+    auto internal = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    CreateOpWithGetTensorDataRef(internal, output, GET_TENSOR_DATA_OPERAND_IOTYPE_INCAST, 0);
+
+    std::vector<InternalComponentInfo> components = {{0, "comp_0"}};
+    // 预置该incast已存在于component 0
+    analyzer->allIncasts[0].emplace_back(incast, -1, 0);
+
+    analyzer->CollectGetTensorDataIncasts(components, mixFunc.get());
+
+    ASSERT_EQ(analyzer->allIncasts[0].size(), 1) << "Existing incast should not be duplicated";
+    EXPECT_EQ(analyzer->allIncasts[0][0].tensor, incast);
+}
+
+// originalMixFunc为null：直接返回，不产生任何依赖
+TEST_F(MixDependencyAnalyzerTest, TestCollectGetTensorDataIncastsNullFunction)
+{
+    std::vector<InternalComponentInfo> components = {{0, "comp_0"}};
+
+    analyzer->CollectGetTensorDataIncasts(components, nullptr);
+
+    EXPECT_TRUE(analyzer->allIncasts.empty()) << "Null originalMixFunc should be skipped";
+}
+
+// OUTCAST类型引用不补回（当前仅处理INCAST）
+TEST_F(MixDependencyAnalyzerTest, TestCollectGetTensorDataIncastsSkipsOutcast)
+{
+    const std::vector<int64_t> shape = {16, 16};
+    auto incast = CreateAndRegisterIncast(shape);
+    auto internal = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    CreateOpWithGetTensorDataRef(internal, output, GET_TENSOR_DATA_OPERAND_IOTYPE_OUTCAST, 0);
+
+    std::vector<InternalComponentInfo> components = {{0, "comp_0"}};
+
+    analyzer->CollectGetTensorDataIncasts(components, mixFunc.get());
+
+    EXPECT_TRUE(analyzer->allIncasts.empty()) << "OUTCAST references should not be collected as incasts";
 }
 } // namespace tile_fwk
 } // namespace npu

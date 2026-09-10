@@ -74,7 +74,8 @@ private:
     // 参数提取函数
     void FindIOpAttrOffsetAndOOpAttrOffset(Function& leafFunc, const SubfuncInvokeInfoTy& invokeInfo,
                                            std::vector<OperandAttribute>& iOffsets,
-                                           std::vector<OperandAttribute>& oOffsets, Function* originalMixFunc) const;
+                                           std::vector<OperandAttribute>& oOffsets, Function* originalMixFunc,
+                                           Operation* originalCallOp) const;
     bool FindIOpAttrOffsetFromIncast(const SubfuncInvokeInfoTy& invokeInfo, Function& leafFunc,
                                      ExtractInfo& extractInfo) const;
     bool FindOOpAttrOffsetFromOutcast(const SubfuncInvokeInfoTy& invokeInfo, Function& leafFunc,
@@ -82,13 +83,15 @@ private:
     bool FindIOOpAttrOffsetGlobalTensor(const SubfuncInvokeInfoTy& invokeInfo, Function& leafFunc,
                                         ExtractInfo& extractInfo) const;
     bool FindIOpAttrOffsetFromActualIncasts(const std::vector<std::shared_ptr<LogicalTensor>>& actualIncasts,
-                                            ExtractInfo& extractInfo, Function* originalMixFunc) const;
+                                            ExtractInfo& extractInfo, Function* originalMixFunc,
+                                            Operation* originalCallOp) const;
     bool FindOOpAttrOffsetFromActualOutcasts(const std::vector<std::shared_ptr<LogicalTensor>>& actualOutcasts,
                                              ExtractInfo& extractInfo, Function* originalMixFunc) const;
 
     OperandAttribute GetOperandAttr(int opMagic, int operandIdx, Function& leafFunc, bool isOutput) const;
     OperandAttribute FindOriginalAttrInMixFunction(LogicalTensorPtr tensor, Function* originalMixFunc) const;
     OperandAttribute FindOriginalAttrInMixFunctionByRawMagic(LogicalTensorPtr tensor, Function* originalMixFunc) const;
+    OperandAttribute FindOriginalAttrInOriginalCallOp(LogicalTensorPtr tensor, Operation* originalCallOp) const;
     void SetCallOpAttribute(Function& leafFunc, Operation& callOp, Operation* originalCallOp,
                             CallOpAttribute* originalCallAttr, uint64_t newProgramID, uint64_t componentIndex,
                             SubgraphToFunction& subgraphToFunction, CallOpCreationInfo& info);
