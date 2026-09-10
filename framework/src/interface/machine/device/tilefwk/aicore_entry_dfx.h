@@ -141,6 +141,19 @@ INLINE void AddMetricStatistic(ExecuteContext* ctx, uint32_t seqNo, uint32_t tas
 INLINE void RecordMetricHubStatistic(ExecuteContext* ctx, uint32_t taskId, int32_t subGraphId)
 {
     if (unlikely(ctx->profLevel == PRO_LEVEL2 || ctx->profLevel == PRO_LEVEL1)) {
+#ifdef __DAV_V310
+        // set mix event info for new taskstat
+        auto m = (__gm__ Metrics*)(ctx->args->shakeBuffer[SHAK_BUF_DFX_DATA_INDEX]);
+        if (m && m->taskCount < MAX_DFX_TASK_NUM_PER_CORE) {
+            __gm__ TaskStat* taskStat = &m->tasks[m->taskCount];
+            __gm__ TaskStat* prevTask = &m->tasks[m->taskCount - 1]; // hub task wont be first taskStat
+            taskStat->perfDataBaseAddr = reinterpret_cast<uint64_t>(m);
+            taskStat->setEventAddr = prevTask->setEventAddr + prevTask->setEventNum * sizeof(uint64_t);
+            taskStat->waitEventAddr = prevTask->waitEventAddr + prevTask->waitEventNum * sizeof(uint64_t);
+            taskStat->setEventNum = 0;
+            taskStat->waitEventNum = 0;
+        }
+#endif
         int64_t t1 = get_sys_cnt();
         AddMetricStatistic(ctx, ctx->SeqNo(), taskId, subGraphId, t1);
     }
