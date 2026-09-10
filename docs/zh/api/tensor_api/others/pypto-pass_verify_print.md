@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-在精度调试Verify特性使能时，使用该接口保存指定TTensor计算的结果到数据文件。
+在精度调试Verify特性使能时，使用该接口保存指定Tensor计算的结果到数据文件。
 
 ## 函数原型
 
@@ -26,8 +26,8 @@ pass_verify_print(*values, cond: Union[int, SymbolicScalar] = 1) -> None
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| *values | 输入      | 含义：指定打印的数据或信息。 <br> 说明：pypto.Tensor：打印tensor的数据；int/pypto.SymbolicScalar：打印相应的值；其它Python对象：打印相应的字符串表示 <br> 类型：List[pypto.Tensor,int,pypto.SymbolicScalar,Object] <br> 取值范围：NA <br> 默认值：NA |
-| cond    | 输入      | 含义：指定打印数据的满足条件 <br> 说明：表达式计算结果为1：打印指定数据；表达式计算结果为0：不打印数据；该参数可省略，省略时使用默认值，不支持显式传入None。 <br> 类型：Union[int,pypto.SymbolicScalar] <br> 取值范围：0,1 <br> 默认值：1 |
+| *values | 输入      | 含义：指定打印的数据或信息。 <br> 说明：pypto.Tensor：打印tensor的数据；int/pypto.SymbolicScalar：打印相应的值；其他Python对象：打印相应的字符串表示 <br> 类型：List[pypto.Tensor,int,pypto.SymbolicScalar,Object] <br> 取值范围：NA <br> 默认值：NA |
+| cond    | 输入      | 含义：指定打印数据满足的条件 <br> 说明：表达式计算结果为1：打印指定数据；表达式计算结果为0：不打印数据；该参数可省略，省略时使用默认值，不支持显式传入None。 <br> 类型：Union[int,pypto.SymbolicScalar] <br> 取值范围：0,1 <br> 默认值：1 |
 
 ## 返回值说明
 
@@ -35,7 +35,7 @@ pass_verify_print(*values, cond: Union[int, SymbolicScalar] = 1) -> None
 
 ## 约束说明
 
-该函数需设置pypto.set_verify_options(enable_pass_verify=True)后生效。
+该函数需在设置pypto.set_verify_options(enable_pass_verify=True)后生效。
 
 ## 调用示例
 
