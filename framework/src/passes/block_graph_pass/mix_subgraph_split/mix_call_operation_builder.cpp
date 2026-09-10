@@ -112,7 +112,8 @@ Status MixCallOperationBuilder::CreateCallOpInRootFunction(Function& rootFunc, F
     APASS_LOG_INFO_F(Elements::Tensor, "Created operands for new callOp %d: %zu inputs, %zu outputs",
                      callOp.GetOpMagic(), newIOperands.size(), newOOperands.size());
     // 寻找新call op的IOpAttrOffset和OOpAttrOffset
-    FindIOpAttrOffsetAndOOpAttrOffset(leafFunc, invokeInfo, info.iOffsets, info.oOffsets, originalMixFunc);
+    FindIOpAttrOffsetAndOOpAttrOffset(leafFunc, invokeInfo, info.iOffsets, info.oOffsets, originalMixFunc,
+                                      originalCallOp);
     callOp.SetOperandAttr(info.iOffsets, info.oOffsets);
     SetCallOpAttribute(leafFunc, callOp, originalCallOp, originalCallAttr, newProgramID, componentIndex,
                        subgraphToFunction, info);
@@ -246,11 +247,9 @@ int MixCallOperationBuilder::FindTensorIndexInList(int tensorMagic,
     return -1;
 }
 
-void MixCallOperationBuilder::FindIOpAttrOffsetAndOOpAttrOffset(Function& leafFunc,
-                                                                const SubfuncInvokeInfoTy& invokeInfo,
-                                                                std::vector<OperandAttribute>& iOffsets,
-                                                                std::vector<OperandAttribute>& oOffsets,
-                                                                Function* originalMixFunc) const
+void MixCallOperationBuilder::FindIOpAttrOffsetAndOOpAttrOffset(
+    Function& leafFunc, const SubfuncInvokeInfoTy& invokeInfo, std::vector<OperandAttribute>& iOffsets,
+    std::vector<OperandAttribute>& oOffsets, Function* originalMixFunc, Operation* originalCallOp) const
 {
     // 清空offset向量
     iOffsets.clear();
@@ -280,7 +279,7 @@ void MixCallOperationBuilder::FindIOpAttrOffsetAndOOpAttrOffset(Function& leafFu
         return;
     }
     // 然后处理传播依赖添加的参数（在actualIncasts中但不在InvokeInfo中）
-    if (!FindIOpAttrOffsetFromActualIncasts(actualIncasts, extractInfo, originalMixFunc)) {
+    if (!FindIOpAttrOffsetFromActualIncasts(actualIncasts, extractInfo, originalMixFunc, originalCallOp)) {
         return;
     }
     // 处理传播依赖添加的outcast参数（在actualOutcasts中但不在InvokeInfo中）
@@ -387,7 +386,7 @@ bool MixCallOperationBuilder::FindIOOpAttrOffsetGlobalTensor(const SubfuncInvoke
 
 bool MixCallOperationBuilder::FindIOpAttrOffsetFromActualIncasts(
     const std::vector<std::shared_ptr<LogicalTensor>>& actualIncasts, ExtractInfo& extractInfo,
-    Function* originalMixFunc) const
+    Function* originalMixFunc, Operation* originalCallOp) const
 {
     // 然后处理传播依赖添加的参数（在actualIncasts中但不在InvokeInfo中）
     for (const auto& incast : actualIncasts) {
@@ -398,6 +397,11 @@ bool MixCallOperationBuilder::FindIOpAttrOffsetFromActualIncasts(
         // 这是传播依赖添加的参数，需要特殊处理
         // 在原始Mix function中查找这个tensor的offset
         auto attr = FindOriginalAttrInMixFunction(incast, originalMixFunc);
+        if (attr.offset == -1) {
+            // GetTensorData引用的incast没有消费op，原Mix function的op上查不到，
+            // 从原CALL op的operand attr中取COA偏移
+            attr = FindOriginalAttrInOriginalCallOp(incast, originalCallOp);
+        }
         if (attr.offset == -1) {
             APASS_LOG_ERROR_F(Elements::Tensor, "Failed to find offset for propagated incast tensor %d!",
                               incast->GetRawMagic());
@@ -471,6 +475,34 @@ OperandAttribute MixCallOperationBuilder::FindOriginalAttrInMixFunctionByRawMagi
         }
     }
     return -1;
+}
+
+OperandAttribute MixCallOperationBuilder::FindOriginalAttrInOriginalCallOp(LogicalTensorPtr tensor,
+                                                                           Operation* originalCallOp) const
+{
+    if (tensor == nullptr || originalCallOp == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Tensor, "Tensor or original callOp is nullptr in FindOriginalAttrInOriginalCallOp");
+        return -1;
+    }
+    int tensorMagic = tensor->GetRawMagic();
+    const auto& iOperands = originalCallOp->GetIOperands();
+    OperandAttribute matchedAttr{-1};
+    for (size_t i = 0; i < iOperands.size(); i++) {
+        if (iOperands[i] != nullptr && iOperands[i]->GetRawMagic() == tensorMagic) {
+            auto attr = originalCallOp->GetIOpAttr(i);
+            if (attr.offset != -1) {
+                if (matchedAttr.offset == -1) {
+                    matchedAttr = attr;
+                } else if (matchedAttr.offset != attr.offset) {
+                    APASS_LOG_WARN_F(Elements::Tensor,
+                                     "Tensor %d matches multiple original CALL op input offsets (%d, %d); "
+                                     "using the first match.",
+                                     tensorMagic, matchedAttr.offset, attr.offset);
+                }
+            }
+        }
+    }
+    return matchedAttr;
 }
 
 OperandAttribute MixCallOperationBuilder::FindOriginalAttrInMixFunction(LogicalTensorPtr tensor,

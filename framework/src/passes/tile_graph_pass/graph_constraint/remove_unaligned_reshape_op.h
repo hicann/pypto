@@ -54,6 +54,9 @@ private:
     void CollectReshapeOps(Function& function);
     void ReplaceDynUnalignedReshapeOps(Function& function);
     void ReplaceDynUnalignedReshapeOpsForUB(Function& function, Operation& op);
+    // 将copy-in输出侧全部VIEW消费者的动态from-offset下沉进copy-in的from-offset，
+    // 使copy-in按收缩后的box搬运，VIEW退化为纯常量列偏移（常量路径codegen可正确处理）
+    void FoldConsumerViewOffsetIntoCopyIn(Operation& copyInOp);
     void ReplaceDynUnalignedReshapeOpsForDDR(Function& function, Operation& op);
     void InsertReshapeCopy(Function& function, Operation& op);
     bool ProcessCopyOutOfDDRReshape(Operation* copyOutOp);

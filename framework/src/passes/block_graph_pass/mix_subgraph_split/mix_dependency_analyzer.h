@@ -80,6 +80,11 @@ public:
     // 可以优化一下，只消除了外部的
     // 本质上就是看是否存在冗余依赖
     void EliminateRedundantDependencies();
+    // 7.补回GetTensorData引用的incast
+    // GetTensorData的值依赖在Pass SubgraphToFunction中删除DEPEND COPY_IN后不再体现于op数据流，
+    // 需要显式扫描op动态属性中的RUNTIME_GetTensorData引用，将被引用的incast补回各component，
+    // 否则切分后的子函数丢失该输入，设备侧按COA地址槽取到未绑定的地址
+    void CollectGetTensorDataIncasts(const std::vector<InternalComponentInfo>& components, Function* originalMixFunc);
 
     // 基于可达性移除冗余的外部依赖
     void EliminateRedundantOuterDeps(const std::vector<std::vector<bool>>& innerDeps,

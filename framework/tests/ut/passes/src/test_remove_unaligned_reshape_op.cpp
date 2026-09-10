@@ -23,7 +23,11 @@
 #include "interface/function/function.h"
 #include "interface/tensor/irbuilder.h"
 #include "symbolic_scalar_test_utils.h"
+#define private public
+#define protected public
 #include "passes/tile_graph_pass/graph_constraint/remove_unaligned_reshape_op.h"
+#undef private
+#undef protected
 #include "passes/tile_graph_pass/graph_constraint/pad_local_buffer.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
@@ -1583,4 +1587,230 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestRawIdClosureAcrossTensorVersionsPreserv
               currentCopyOut.tokens_.end());
     EXPECT_TRUE(currFunctionPtr->GetVarDependency().HasProducer(token, ToStmtPtr(oldCopyOut)));
     EXPECT_TRUE(currFunctionPtr->GetVarDependency().HasConsumer(token, ToStmtPtr(currentCopyOut)));
+}
+
+namespace {
+constexpr int64_t FOLD_RAW_ROWS = 285;
+constexpr int64_t FOLD_RAW_COLS = 64;
+constexpr int64_t FOLD_TILE_ROWS = 5;
+constexpr int64_t FOLD_TILE_COLS = 32;
+} // namespace
+
+// FoldConsumerViewOffsetIntoCopyIn：视图动态偏移下沉进reshape copy-in的看护用例
+class FoldConsumerViewOffsetTest : public ::testing::Test {
+public:
+    static void SetUpTestCase() {}
+    static void TearDownTestCase() {}
+
+    void SetUp() override
+    {
+        Program::GetInstance().Reset();
+        config::Reset();
+        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
+        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
+        func = std::make_shared<Function>(Program::GetInstance(), "test_fold_func", "test_fold_func", nullptr);
+        func->SetGraphType(GraphType::BLOCK_GRAPH);
+        func->SetFunctionType(FunctionType::STATIC);
+        pass = std::make_unique<RemoveUnalignedReshape>();
+    }
+
+    void TearDown() override
+    {
+        pass.reset();
+        func.reset();
+    }
+
+    // 构造 RESHAPE_COPY_IN: GM[285,64] → UB output，from-offset全0、shape=[285,64]
+    Operation& CreateReshapeCopyIn(const std::shared_ptr<LogicalTensor>& output)
+    {
+        auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(
+            DT_FP32, {FOLD_RAW_ROWS, FOLD_RAW_COLS}, CreateTestConstIntVector({FOLD_RAW_ROWS, FOLD_RAW_COLS}));
+        input->SetMemoryTypeBoth(MEM_DEVICE_DDR);
+        auto& copyInOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_RESHAPE_COPY_IN, {input}, {output});
+        auto copyAttr = std::make_shared<CopyOpAttribute>(
+            OpImmediate::Specified(CreateTestConstIntVector({0, 0})), MEM_DEVICE_DDR,
+            OpImmediate::Specified(std::vector<int64_t>{FOLD_RAW_ROWS, FOLD_RAW_COLS}),
+            OpImmediate::Specified(std::vector<int64_t>{FOLD_RAW_ROWS, FOLD_RAW_COLS}),
+            OpImmediate::Specified(output->GetDynValidShape()));
+        copyInOp.SetOpAttribute(copyAttr);
+        return copyInOp;
+    }
+
+    // 构造VIEW消费者：from = (rowDyn, colConst)，fromDynOffset为权威值
+    Operation& CreateViewConsumer(const std::shared_ptr<LogicalTensor>& input,
+                                  const std::shared_ptr<LogicalTensor>& output, const SymbolicScalar& rowOffset,
+                                  int64_t colOffset)
+    {
+        auto& viewOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_VIEW, {input}, {output});
+        auto viewAttr = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, colOffset});
+        viewAttr->SetFromOffset(std::vector<int64_t>{0, colOffset}, {rowOffset, SymbolicScalar(colOffset)});
+        viewOp.SetOpAttribute(viewAttr);
+        return viewOp;
+    }
+
+    std::shared_ptr<LogicalTensor> MakeUbTensor(const std::vector<int64_t>& shape,
+                                                const std::vector<SymbolicScalar>& validShape)
+    {
+        auto tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, validShape);
+        tensor->SetMemoryTypeBoth(MEM_UB);
+        return tensor;
+    }
+
+protected:
+    std::shared_ptr<Function> func;
+    std::unique_ptr<RemoveUnalignedReshape> pass;
+};
+
+// 正常下沉：动态行偏移+常量列偏移，copy-in属性收缩、view退化为常量列偏移
+TEST_F(FoldConsumerViewOffsetTest, FoldWithDynamicRowOffset)
+{
+    auto rowOffset = CreateTestScalarVar("loop_idx_b_idx_mul_5");
+    auto output = MakeUbTensor({FOLD_RAW_ROWS, FOLD_RAW_COLS},
+                               CreateTestConstIntVector({FOLD_RAW_ROWS, FOLD_RAW_COLS}));
+    auto& copyInOp = CreateReshapeCopyIn(output);
+
+    auto view1Out = MakeUbTensor({FOLD_TILE_ROWS, FOLD_TILE_COLS},
+                                 CreateTestConstIntVector({FOLD_TILE_ROWS, FOLD_TILE_COLS}));
+    auto view2Out = MakeUbTensor({FOLD_TILE_ROWS, FOLD_TILE_COLS},
+                                 CreateTestConstIntVector({FOLD_TILE_ROWS, FOLD_TILE_COLS}));
+    auto& view1 = CreateViewConsumer(output, view1Out, rowOffset, 0);
+    auto& view2 = CreateViewConsumer(output, view2Out, rowOffset, FOLD_TILE_COLS);
+    (void)view1;
+    (void)view2;
+
+    pass->FoldConsumerViewOffsetIntoCopyIn(copyInOp);
+
+    // copy-in输出收缩为view并集box [5,64]
+    ASSERT_EQ(copyInOp.GetOOperands().size(), 1);
+    auto shrunk = copyInOp.GetOOperands().front();
+    EXPECT_EQ(shrunk->GetShape(), (std::vector<int64_t>{FOLD_TILE_ROWS, FOLD_RAW_COLS}));
+
+    // from-offset折入动态行偏移、列为并集起点0
+    auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyInOp.GetOpAttribute());
+    ASSERT_NE(copyAttr, nullptr);
+    auto fromOffset = OpImmediate::ToSpecified(copyAttr->GetFromOffset());
+    ASSERT_EQ(fromOffset.size(), 2);
+    EXPECT_FALSE(fromOffset[0].IsImmediate()) << "Row offset should keep the dynamic component";
+    EXPECT_EQ(fromOffset[1].Concrete(), 0);
+
+    // 两个view退化为纯常量列偏移
+    auto attr1 = std::dynamic_pointer_cast<ViewOpAttribute>(view1.GetOpAttribute());
+    auto attr2 = std::dynamic_pointer_cast<ViewOpAttribute>(view2.GetOpAttribute());
+    ASSERT_NE(attr1, nullptr);
+    ASSERT_NE(attr2, nullptr);
+    EXPECT_EQ(attr1->GetFromOffset(), (std::vector<int64_t>{0, 0}));
+    EXPECT_EQ(attr2->GetFromOffset(), (std::vector<int64_t>{0, FOLD_TILE_COLS}));
+    // view输入已重接到shrunk
+    EXPECT_EQ(view1.GetIOperands().front(), shrunk);
+    EXPECT_EQ(view2.GetIOperands().front(), shrunk);
+    EXPECT_TRUE(output->GetConsumers().empty()) << "Old output should have no consumers after fold";
+}
+
+// 混合非VIEW消费者早退：图保持不变
+TEST_F(FoldConsumerViewOffsetTest, FoldSkippedWithNonViewConsumer)
+{
+    auto rowOffset = CreateTestScalarVar("loop_idx_b_idx_mul_5");
+    auto output = MakeUbTensor({FOLD_RAW_ROWS, FOLD_RAW_COLS},
+                               CreateTestConstIntVector({FOLD_RAW_ROWS, FOLD_RAW_COLS}));
+    auto& copyInOp = CreateReshapeCopyIn(output);
+
+    auto viewOut = MakeUbTensor({FOLD_TILE_ROWS, FOLD_TILE_COLS},
+                                CreateTestConstIntVector({FOLD_TILE_ROWS, FOLD_TILE_COLS}));
+    auto& view = CreateViewConsumer(output, viewOut, rowOffset, 0);
+    auto castOut = MakeUbTensor({FOLD_RAW_ROWS, FOLD_RAW_COLS},
+                                CreateTestConstIntVector({FOLD_RAW_ROWS, FOLD_RAW_COLS}));
+    auto& castOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_CAST, {output}, {castOut});
+    (void)castOp;
+
+    pass->FoldConsumerViewOffsetIntoCopyIn(copyInOp);
+
+    EXPECT_EQ(copyInOp.GetOOperands().front(), output) << "Copy-in output should stay unchanged";
+    EXPECT_EQ(view.GetIOperands().front(), output) << "View input should stay unchanged";
+}
+
+// 末维偏移非常量早退：图保持不变
+TEST_F(FoldConsumerViewOffsetTest, FoldSkippedWithDynamicLastDimOffset)
+{
+    auto rowOffset = CreateTestScalarVar("loop_idx_b_idx_mul_5");
+    auto colOffset = CreateTestScalarVar("dynamic_col_offset");
+    auto output = MakeUbTensor({FOLD_RAW_ROWS, FOLD_RAW_COLS},
+                               CreateTestConstIntVector({FOLD_RAW_ROWS, FOLD_RAW_COLS}));
+    auto& copyInOp = CreateReshapeCopyIn(output);
+
+    auto viewOut = MakeUbTensor({FOLD_TILE_ROWS, FOLD_TILE_COLS},
+                                CreateTestConstIntVector({FOLD_TILE_ROWS, FOLD_TILE_COLS}));
+    auto& view = CreateViewConsumer(output, viewOut, rowOffset, 0);
+    // 末维改为动态偏移
+    auto viewAttr = std::dynamic_pointer_cast<ViewOpAttribute>(view.GetOpAttribute());
+    viewAttr->SetFromOffset(std::vector<int64_t>{0, 0}, {rowOffset, colOffset});
+
+    pass->FoldConsumerViewOffsetIntoCopyIn(copyInOp);
+
+    EXPECT_EQ(copyInOp.GetOOperands().front(), output) << "Copy-in output should stay unchanged";
+    EXPECT_EQ(view.GetIOperands().front(), output) << "View input should stay unchanged";
+}
+
+// 多view列并集box计算：中间列起点+不同列宽，box覆盖并集且view列偏移相对化
+TEST_F(FoldConsumerViewOffsetTest, FoldWithMultiViewColumnUnion)
+{
+    auto rowOffset = CreateTestScalarVar("loop_idx_b_idx_mul_5");
+    auto output = MakeUbTensor({FOLD_RAW_ROWS, FOLD_RAW_COLS},
+                               CreateTestConstIntVector({FOLD_RAW_ROWS, FOLD_RAW_COLS}));
+    auto& copyInOp = CreateReshapeCopyIn(output);
+
+    // 三个view：列起点0/16/48，宽16/32/16，并集[0,64)
+    auto view1Out = MakeUbTensor({FOLD_TILE_ROWS, 16}, CreateTestConstIntVector({FOLD_TILE_ROWS, 16}));
+    auto view2Out = MakeUbTensor({FOLD_TILE_ROWS, 32}, CreateTestConstIntVector({FOLD_TILE_ROWS, 32}));
+    auto view3Out = MakeUbTensor({FOLD_TILE_ROWS, 16}, CreateTestConstIntVector({FOLD_TILE_ROWS, 16}));
+    auto& view1 = CreateViewConsumer(output, view1Out, rowOffset, 0);
+    auto& view2 = CreateViewConsumer(output, view2Out, rowOffset, 16);
+    auto& view3 = CreateViewConsumer(output, view3Out, rowOffset, 48);
+    (void)view1;
+    (void)view2;
+    (void)view3;
+
+    pass->FoldConsumerViewOffsetIntoCopyIn(copyInOp);
+
+    auto shrunk = copyInOp.GetOOperands().front();
+    EXPECT_EQ(shrunk->GetShape(), (std::vector<int64_t>{FOLD_TILE_ROWS, FOLD_RAW_COLS}))
+        << "Box should cover column union";
+
+    auto attr1 = std::dynamic_pointer_cast<ViewOpAttribute>(view1.GetOpAttribute());
+    auto attr2 = std::dynamic_pointer_cast<ViewOpAttribute>(view2.GetOpAttribute());
+    auto attr3 = std::dynamic_pointer_cast<ViewOpAttribute>(view3.GetOpAttribute());
+    ASSERT_NE(attr1, nullptr);
+    ASSERT_NE(attr2, nullptr);
+    ASSERT_NE(attr3, nullptr);
+    EXPECT_EQ(attr1->GetFromOffset(), (std::vector<int64_t>{0, 0}));
+    EXPECT_EQ(attr2->GetFromOffset(), (std::vector<int64_t>{0, 16}));
+    EXPECT_EQ(attr3->GetFromOffset(), (std::vector<int64_t>{0, 48}));
+}
+
+// 无消费者早退
+TEST_F(FoldConsumerViewOffsetTest, FoldSkippedWithNoConsumer)
+{
+    auto output = MakeUbTensor({FOLD_RAW_ROWS, FOLD_RAW_COLS},
+                               CreateTestConstIntVector({FOLD_RAW_ROWS, FOLD_RAW_COLS}));
+    auto& copyInOp = CreateReshapeCopyIn(output);
+
+    pass->FoldConsumerViewOffsetIntoCopyIn(copyInOp);
+
+    EXPECT_EQ(copyInOp.GetOOperands().front(), output) << "No consumer means no fold";
+}
+
+// 纯常量偏移不触发（无动态分量）
+TEST_F(FoldConsumerViewOffsetTest, FoldSkippedWithAllConstantOffsets)
+{
+    auto output = MakeUbTensor({FOLD_RAW_ROWS, FOLD_RAW_COLS},
+                               CreateTestConstIntVector({FOLD_RAW_ROWS, FOLD_RAW_COLS}));
+    auto& copyInOp = CreateReshapeCopyIn(output);
+
+    auto viewOut = MakeUbTensor({FOLD_TILE_ROWS, FOLD_TILE_COLS},
+                                CreateTestConstIntVector({FOLD_TILE_ROWS, FOLD_TILE_COLS}));
+    auto& view = CreateViewConsumer(output, viewOut, SymbolicScalar(5), 0);
+    (void)view;
+
+    pass->FoldConsumerViewOffsetIntoCopyIn(copyInOp);
+
+    EXPECT_EQ(copyInOp.GetOOperands().front(), output) << "All-constant offsets should not trigger fold";
 }

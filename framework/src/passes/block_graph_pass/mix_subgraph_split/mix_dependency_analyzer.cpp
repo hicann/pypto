@@ -379,6 +379,39 @@ void MixDependencyAnalyzer::EliminateRedundantDependencies()
     EliminateRedundantInnerDeps(innerDeps);
 }
 
+void MixDependencyAnalyzer::CollectGetTensorDataIncasts(const std::vector<InternalComponentInfo>& components,
+                                                        Function* originalMixFunc)
+{
+    if (originalMixFunc == nullptr || components.empty()) {
+        return;
+    }
+    std::set<int> incastIndices;
+    for (auto& op : originalMixFunc->Operations(false)) {
+        if (op.IsNOP()) {
+            continue;
+        }
+        for (const auto& usage : GetTensorDataUsage(op.GetDynamicAttributeList())) {
+            if (usage.first == GET_TENSOR_DATA_OPERAND_IOTYPE_INCAST) {
+                incastIndices.insert(usage.second);
+            }
+        }
+    }
+    const auto& incasts = originalMixFunc->GetIncast();
+    for (int idx : incastIndices) {
+        if (idx < 0 || idx >= static_cast<int>(incasts.size())) {
+            continue;
+        }
+        for (size_t i = 0; i < components.size(); i++) {
+            if (!ContainsTensor(allIncasts[i], incasts[idx])) {
+                allIncasts[i].emplace_back(incasts[idx], -1, 0);
+                APASS_LOG_INFO_F(Elements::Tensor,
+                                 "Added GetTensorData incast tensor %d to component %zu of function %s",
+                                 incasts[idx]->GetRawMagic(), i, originalMixFunc->GetRawName().c_str());
+            }
+        }
+    }
+}
+
 Status MixDependencyAnalyzer::ProcessDependencyAnalyzer(const AnalyzerInput& input, AnalyzerOutput& output)
 {
     Reset();
@@ -417,6 +450,8 @@ Status MixDependencyAnalyzer::ProcessDependencyAnalyzer(const AnalyzerInput& inp
     // 步骤5：消除冗余依赖
     APASS_LOG_INFO_F(Elements::Tensor, "Step 5: Eliminating redundant dependencies...");
     EliminateRedundantDependencies();
+    // 步骤6：补回GetTensorData引用的incast（放在冗余消除之后，避免被当作可消除的传递依赖删掉）
+    CollectGetTensorDataIncasts(input.components, input.originalMixFunc);
     output.subgraphToFunction = subgraphToFunction;
     output.internalDeps = internalDeps;
     output.allIncasts = allIncasts;

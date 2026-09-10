@@ -723,6 +723,33 @@ void Function::GetTensorDataRefreshIO(const GetTensorDataIODescDict& iodescDict)
             attr.get() = GetTensorDataFillIO(iodescDict, attr.get());
         }
     }
+    std::set<std::shared_ptr<LogicalTensor>> tensorSet;
+    for (auto& incast : inCasts_) {
+        tensorSet.insert(incast);
+    }
+    for (auto& outcast : outCasts_) {
+        tensorSet.insert(outcast);
+    }
+    for (auto& op : Operations(false)) {
+        for (auto& iOperand : op.GetIOperands()) {
+            tensorSet.insert(iOperand);
+        }
+        for (auto& oOperand : op.GetOOperands()) {
+            tensorSet.insert(oOperand);
+        }
+    }
+    for (auto& tensor : tensorSet) {
+        for (auto& shape : tensor->GetDynValidShape()) {
+            shape = GetTensorDataFillIO(iodescDict, shape);
+        }
+        if (tensor->GetDynOffset().size() != 0) {
+            std::vector<SymbolicScalar> refreshedDynOffset;
+            for (auto& offset : tensor->GetDynOffset()) {
+                refreshedDynOffset.push_back(GetTensorDataFillIO(iodescDict, offset));
+            }
+            tensor->UpdateOffset(TensorOffset(tensor->GetOffset(), refreshedDynOffset));
+        }
+    }
 }
 
 void Function::BeginFunction(const std::vector<std::reference_wrapper<const Tensor>>& explicitOpArgs)
