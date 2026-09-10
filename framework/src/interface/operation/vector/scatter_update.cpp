@@ -295,7 +295,7 @@ static void CheckScatterUpdateInvalid(const Tensor& dst, const Tensor& index, co
     CheckScatterUpdateInput(dst);
 }
 
-Tensor ScatterUpdate(const Tensor& dst, const Tensor& index, const Tensor& src, int axis, std::string cacheMode,
+Tensor ScatterUpdate(Tensor& dst, const Tensor& index, const Tensor& src, int axis, std::string cacheMode,
                      int chunkSize)
 {
     DECLARE_TRACER();
@@ -325,6 +325,8 @@ Tensor ScatterUpdate(const Tensor& dst, const Tensor& index, const Tensor& src, 
         CALL(ScatterUpdate, *Program::GetInstance().GetCurrentFunction(), result.GetStorage(), dst.GetStorage(),
              index.GetStorage(), src.GetStorage(), axis, cacheMode, chunkSize);
     }
+
+    dst = result;
     return result;
 }
 

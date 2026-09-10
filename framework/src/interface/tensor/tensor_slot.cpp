@@ -466,6 +466,7 @@ void TensorSlotManager::SetSameSlot(const LogicalTensorPtr& src, const LogicalTe
     if (srcTensor->Id() == dstTensor->Id()) {
         return;
     }
+
     // Migrate all tensors pointing to dst's old slot to src's slot, so no prior
     // links are lost regardless of link order or direction.
     for (auto& [lt, tensor] : slotTensorDict) {
@@ -491,6 +492,23 @@ void TensorSlotManager::MarkInput(const Tensor& tensor)
     FE_LOGD("MarkInput push input name[%s].", inputName.c_str());
 
     LogOperation(slot, "input");
+}
+
+void TensorSlotManager::UpdateInputSlot(size_t idx, const Tensor& tensor)
+{
+    FE_ASSERT(idx < inputSlotList.size())
+        << "UpdateInputSlot idx: " << idx << " out of range, size: " << inputSlotList.size();
+    TensorSlot slot = TensorSlot::CreateTensor(tensor);
+    TensorSlot oldSlot = inputSlotList[idx];
+    if (slot == oldSlot) {
+        return;
+    }
+    inputSlotDict.erase(oldSlot);
+    inputSlotList[idx] = slot;
+    if (inputSlotDict.count(slot) == 0) {
+        inputSlotDict[slot] = idx;
+    }
+    LogOperation(slot, "updateInput");
 }
 
 void TensorSlotManager::MarkOutput(const Tensor& tensor)

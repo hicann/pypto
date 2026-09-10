@@ -157,12 +157,17 @@ void RootFunctionBuilder::InitDynFunc(const ir::FunctionPtr& irFunc)
     dynFunc_->SetSpan(irFunc->span_);
     dynFunc_->SetDyndevAttribute(std::make_shared<DyndevFunctionAttribute>());
     auto attr = dynFunc_->GetDyndevAttribute();
+    auto slotManager = program_.GetTensorSlotManager();
 
     for (const auto& param : irFunc->params_) {
         auto lt = AsLogicalTensor(param);
         ASSERT(lt) << "RootFunctionBuilder: param is not a LogicalTensor: " << param->name_;
         logicalParams_.push_back(lt);
         attr->startArgsInputLogicalTensorList.push_back(lt);
+        auto tensor = slotManager->GetSlotTensor(lt);
+        attr->startArgsInputSlotTensorList.emplace_back(tensor);
+        attr->startArgsInputTensorList.emplace_back(*tensor);
+        slotManager->MarkInput(*tensor);
     }
     program_.SetCurrentDynamicFunction(dynFunc_.get());
 }
@@ -465,8 +470,9 @@ void RootFunctionBuilder::BuildDynSlotScope()
 
     for (size_t idx = 0; idx < logicalParams_.size(); idx++) {
         auto tensor = slotManager->GetSlotTensor(logicalParams_[idx]);
-        attr->startArgsInputTensorList.emplace_back(*tensor);
-        slotManager->MarkInput(*tensor);
+        slotManager->UpdateInputSlot(idx, *tensor);
+        attr->startArgsInputTensorList[idx] = *tensor;
+        attr->startArgsInputSlotTensorList[idx] = tensor;
     }
 
     dynFunc_->InferParamDirection();

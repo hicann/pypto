@@ -424,7 +424,7 @@ void BindOperation(py::module_& m)
         "Tensor index_select.");
     m.def(
         "ScatterUpdate",
-        [](const Tensor& dst, const Tensor& index, const Tensor& src, int axis, std::string cacheMode, int chunkSize) {
+        [](Tensor& dst, const Tensor& index, const Tensor& src, int axis, std::string cacheMode, int chunkSize) {
             return npu::tile_fwk::ScatterUpdate(dst, index, src, axis, cacheMode, chunkSize);
         },
         py::arg("dst"), py::arg("index"), py::arg("src"), py::arg("axis") = SCATTER_UPDATE_DIM,

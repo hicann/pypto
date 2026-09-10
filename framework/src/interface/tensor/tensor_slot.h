@@ -272,6 +272,7 @@ struct TensorSlotManager {
     std::vector<int> LookupSlotIndexConst(const std::vector<std::reference_wrapper<const Tensor>>& tensorList);
 
     void MarkInput(const Tensor& tensor);
+    void UpdateInputSlot(size_t idx, const Tensor& tensor);
     void MarkOutput(const Tensor& tensor);
     void MarkInplace(const Tensor& out, const Tensor& in);
 

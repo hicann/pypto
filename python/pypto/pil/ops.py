@@ -37,6 +37,7 @@ _patch_methods = [
     (pypto, "index_put_", 0),
     (pypto, "index_add_", 0),
     (pypto, "atomic_add", 2),
+    (pypto, "scatter_update", 0),
 ]
 
 _orig_assemble = pypto.assemble
