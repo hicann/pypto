@@ -131,6 +131,7 @@ class ControlFlowParserMixin:
 
     def parse_for_loop(self, stmt: ast.For) -> None:
         """Parse for loop with pl.range()."""
+        self._validate_loop_orelse(stmt)
         iter_call = self._validate_for_loop_iterator(stmt)
         loop_var_name = self._parse_for_loop_target(stmt)
         range_args = self._parse_range_call(iter_call)
@@ -175,6 +176,7 @@ class ControlFlowParserMixin:
         Args:
             stmt: While AST node
         """
+        self._validate_loop_orelse(stmt)
         entry_env = dict(self.const_env)
         writes = _assignment_writes(stmt.body)
         self.const_env = {name: value for name, value in entry_env.items() if name not in writes}
@@ -425,6 +427,14 @@ class ControlFlowParserMixin:
             span=self.span_tracker.get_span(stmt.iter),
             hint=self._ITERATOR_HINT,
         )
+
+    def _validate_loop_orelse(self, stmt: ast.For | ast.While) -> None:
+        if stmt.orelse:
+            kind = "for" if isinstance(stmt, ast.For) else "while"
+            raise ParserSyntaxError(
+                f"'{kind}-else' is not supported",
+                span=self.span_tracker.get_span(stmt.orelse[0]),
+            )
 
     def _parse_for_loop_target(self, stmt: ast.For) -> str:
         """Parse for loop target, returning the loop variable name."""

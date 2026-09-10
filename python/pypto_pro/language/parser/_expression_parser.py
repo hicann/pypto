@@ -21,6 +21,7 @@ from pypto_pro.ir._operators import make_binary as _make_binary
 from pypto_pro.ir._utils import _normalize_expr
 
 from ._expr_evaluator import ExprEvaluator
+from ._utils import _const_int_value
 from .diagnostics import (
     FinalRejectionError,
     ParserSyntaxError,
@@ -1192,6 +1193,40 @@ class ExpressionParserMixin:
 
         return ir.create_op_call("block.tile_valid_shape", [base_expr], {"axis": axis}, span)
 
+    @staticmethod
+    def _validate_subscript_value(
+        value: ir.Expr,
+        kind: str,
+        axis: int,
+        span: ir.Span,
+        upper_bound: ir.Expr | None = None,
+    ) -> int | None:
+        """Validate an index or slice bound and return its static value when available."""
+        value_type = getattr(value, "type", None)
+        if not (isinstance(value_type, ir.ScalarType) and value_type.dtype.is_int()):
+            raise ParserTypeError(
+                f"{kind} for axis {axis} must be an integer scalar, got {value_type}",
+                span=span,
+            )
+
+        value_int = _const_int_value(value)
+        if value_int is not None and value_int < 0:
+            raise ParserSyntaxError(
+                f"{kind} for axis {axis} must be non-negative, got {value_int}",
+                span=span,
+                hint="Use an index greater than or equal to 0; Tile and Tensor subscripts do not "
+                "support Python-style negative indexing",
+            )
+
+        upper_value = _const_int_value(upper_bound) if upper_bound is not None else None
+        if value_int is not None and upper_value is not None and value_int >= upper_value:
+            raise ParserTypeError(
+                f"{kind} {value_int} for axis {axis} is out of range for dimension size {upper_value}",
+                span=span,
+                hint=f"Use an index in [0, {upper_value})",
+            )
+        return value_int
+
     def _parse_scalar_subscript_index(
         self,
         container_expr: ir.Expr,
@@ -1221,7 +1256,9 @@ class ExpressionParserMixin:
                     span=span,
                     hint="Use A[i, j] for scalar access or A[x:, :] for sub-view",
                 )
-            return self.parse_expression(slice_node)
+            index = self.parse_expression(slice_node)
+            self._validate_subscript_value(index, "Subscript index", 0, span, shape[0])
+            return index
 
         # A[i, j, ...] — multi-dimensional coordinate
         elts = slice_node.elts
@@ -1233,7 +1270,9 @@ class ExpressionParserMixin:
                 hint=f"Use {len(shape)} indices to match the container shape",
             )
         indices = [self.parse_expression(e) for e in elts]
-        from pypto_pro.language.parser._utils import _const_int_value
+
+        for axis, index in enumerate(indices):
+            self._validate_subscript_value(index, "Subscript index", axis, span, shape[axis])
 
         offset = indices[-1]
         stride = shape[-1]
@@ -1264,7 +1303,8 @@ class ExpressionParserMixin:
 
         Result tile preserves the original shape (row_stride unchanged);
         codegen auto-emits SetValidShape with the sub-window dimensions.
-        - If slice exceeds tile shape → error.
+        - If slice start reaches/exceeds tile shape → error.
+        - If slice end exceeds tile shape → clamp to the tile shape.
         - If slice exceeds tile valid_shape → clamp to (valid_shape - start).
         """
         container_type = container_expr.type
@@ -1334,8 +1374,6 @@ class ExpressionParserMixin:
                 hint=f"Use {len(shape)} indices to match the tile shape",
             )
 
-        from pypto_pro.language.parser._utils import _const_int_value
-
         # valid_shape for clamping: compile-time (TileType.tile_view) or runtime
         # (set_validshape, tracked by tile var name).
         ct_valid = None
@@ -1355,30 +1393,45 @@ class ExpressionParserMixin:
                     span=span,
                     hint="Tile slices must use ':' for all dimensions",
                 )
+            if s.step is not None:
+                step = self.parse_expression(s.step)
+                if _const_int_value(step) != 1:
+                    raise ParserSyntaxError(
+                        f"Tile slice step for axis {i} must be the compile-time integer 1",
+                        span=span,
+                        hint="Omit the step or use a contiguous slice with step 1",
+                    )
             start = ir.ConstInt(0, DataType.INDEX, span) if s.lower is None else self.parse_expression(s.lower)
             dim_starts.append(start)
-            start_val = _const_int_value(start)
+            start_val = self._validate_subscript_value(start, "Tile slice start", i, span)
 
             # Compute slice size: upper - start (upper defaults to shape[i]).
             # Clamp upper to shape[i] (Python slice semantics): a[16:77] on a
             # length-64 dim becomes a[16:64], not an error.
             upper = shape[i] if s.upper is None else self.parse_expression(s.upper)
             shape_val = _const_int_value(shape[i])
-            upper_val = _const_int_value(upper)
+            upper_val = self._validate_subscript_value(upper, "Tile slice end", i, span)
+            effective_upper_val = upper_val
+            if shape_val is not None:
+                effective_upper_val = (
+                    shape_val if effective_upper_val is None else min(effective_upper_val, shape_val)
+                )
             if shape_val is not None and upper_val is not None and upper_val > shape_val:
                 upper = ir.ConstInt(shape_val, DataType.INDEX, span)
                 upper_val = shape_val
+            if (
+                start_val is not None
+                and effective_upper_val is not None
+                and start_val >= effective_upper_val
+            ):
+                raise ParserSyntaxError(
+                    f"Tile slice for axis {i} must satisfy start < min(end, shape), "
+                    f"got start={start_val}, end={upper_val}, shape={shape_val}",
+                    span=span,
+                    hint="Tile slices cannot be empty, reversed, or start outside the Tile shape",
+                )
             size = upper if start_val == 0 else upper - start
             size_val = _const_int_value(size)
-
-            # Check against declared shape: start must not exceed shape
-            if start_val is not None and shape_val is not None:
-                if start_val > shape_val:
-                    raise ParserSyntaxError(
-                        f"Tile slice start ({start_val}) exceeds shape dim {i} ({shape_val})",
-                        span=span,
-                        hint=f"Slice start must not exceed shape[{i}]",
-                    )
 
             for vs in (
                 ct_valid[i] if ct_valid is not None and i < len(ct_valid) else None,
@@ -1389,11 +1442,11 @@ class ExpressionParserMixin:
                 vs_val = _const_int_value(vs)
                 if vs_val is not None and vs_val >= 0 and start_val is not None:
                     remaining = vs_val - start_val
-                    if remaining < 0:
+                    if remaining <= 0:
                         raise ParserSyntaxError(
-                            f"Tile slice start ({start_val}) exceeds valid_shape dim {i} ({vs_val})",
+                            f"Tile slice start ({start_val}) must be less than valid_shape dim {i} ({vs_val})",
                             span=span,
-                            hint=f"Slice start must not exceed valid_shape[{i}]",
+                            hint=f"Use a slice start in [0, valid_shape[{i}])",
                         )
                     if size_val is not None:
                         if size_val > remaining:

@@ -877,7 +877,20 @@ _SCALAR_UNSUPPORTED_DTYPES: tuple[DataType, ...] = (
 )
 
 
-def _check_scalar_supported_dtype(op_name: str, container: Expr) -> None:
+def _check_scalar_access_supported(op_name: str, container: Expr, span: Span) -> None:
+    """Validate the container constraints for scalar getval/setval access."""
+    tile_type = container.type
+    if isinstance(tile_type, _IRTileType):
+        memref = getattr(tile_type, "memref", None)
+        memory_space = getattr(memref, "memory_space_", None)
+        if memory_space is not None and memory_space != MemorySpace.Vec:
+            from pypto_pro.language.parser.diagnostics import ParserTypeError
+
+            raise ParserTypeError(
+                f"{op_name}: Tile element access requires a Vec-memory Tile (UB), got {memory_space.name}",
+                span=span,
+            )
+
     dtype = container.type.dtype
     if any(dtype == d for d in _SCALAR_UNSUPPORTED_DTYPES):
         raise TypeError(
@@ -1124,7 +1137,7 @@ def _ir_getval(container: Expr, offset: int | Expr, *, span: Span | None = None)
             hint="getval reads a scalar from a Tile/Tensor slot; to access a struct/tiling "
             "field, use attribute access (e.g. tiling.axis1) instead.",
         )
-    _check_scalar_supported_dtype("getval", container)
+    _check_scalar_access_supported("getval", container, actual_span)
     offset_expr = offset if isinstance(offset, Expr) else _normalize_expr(offset, actual_span, int_dtype=DataType.INDEX)
     return _ir_core.create_op_call(block_ir_op("getval"), [container, offset_expr], {}, actual_span)
 
@@ -1141,7 +1154,7 @@ def _ir_setval(container: Expr, offset: int | Expr, value: int | float | Expr, *
             hint="setval writes a scalar into a Tile/Tensor slot; to write a struct/tiling "
             "field, use attribute assignment (e.g. tiling.axis1 = ...) instead.",
         )
-    _check_scalar_supported_dtype("setval", container)
+    _check_scalar_access_supported("setval", container, actual_span)
     offset_expr = offset if isinstance(offset, Expr) else _normalize_expr(offset, actual_span, int_dtype=DataType.INDEX)
     if not isinstance(value, Expr):
         container_dtype = container.type.dtype
