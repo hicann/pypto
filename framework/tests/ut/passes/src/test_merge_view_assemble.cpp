@@ -1677,6 +1677,57 @@ TEST_F(MergeViewAssembleTest, NestedCompleteProducerGroupFusionsDoNotOverlap)
     EXPECT_NE(function->GetTensorMap().GetTensorByMagic(concatMiddle->GetMagic()), nullptr);
 }
 
+TEST_F(MergeViewAssembleTest, ProducerGroupWithIntermediateViewConsumerKeepsDataEdge)
+{
+    for (bool withToken : {false, true}) {
+        Program program;
+        auto function = std::make_unique<Function>(program, "producer_group_fanout", "producer_group_fanout", nullptr);
+        IRBuilder builder;
+        auto firstInput = builder.CreateTensorVar(*function, DataType::DT_FP32, {2, 4});
+        auto secondInput = builder.CreateTensorVar(*function, DataType::DT_FP32, {2, 4});
+        auto middle = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+        auto viewOutput = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+        auto output = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+        function->inCasts_ = {firstInput, secondInput};
+        function->outCasts_ = {viewOutput, output};
+
+        auto& first = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {firstInput}, {middle});
+        first.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+        auto& second = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {secondInput}, {middle});
+        second.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{2, 0}));
+        auto& view = builder.CreateTensorOpStmt(*function, Opcode::OP_VIEW, {middle}, {viewOutput});
+        view.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+        auto& downstream = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {middle}, {output});
+        downstream.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+        if (withToken) {
+            AddTokenEdge(*function, first, view);
+        }
+        function->BuildTensorMap();
+
+        MergeViewAssemble pass;
+        ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
+        EXPECT_EQ(middle->GetProducers().size(), 2);
+        EXPECT_EQ(view.GetIOperands().front(), middle);
+        EXPECT_FALSE(first.IsDeleted());
+        EXPECT_FALSE(second.IsDeleted());
+        if (withToken) {
+            ASSERT_EQ(output->GetProducers().size(), 1);
+            EXPECT_EQ((*output->GetProducers().begin())->GetIOperands().front(), middle);
+            ASSERT_EQ(view.tokens_.size(), 1);
+            EXPECT_TRUE(function->GetVarDependency().HasProducer(view.tokens_.front(), ToStmtPtr(first)));
+        } else {
+            ASSERT_EQ(output->GetProducers().size(), 2);
+            for (auto* producer : output->GetProducers()) {
+                const auto& input = producer->GetIOperands().front();
+                EXPECT_TRUE(input == firstInput || input == secondInput);
+                auto attr = std::dynamic_pointer_cast<AssembleOpAttribute>(producer->GetOpAttribute());
+                ASSERT_NE(attr, nullptr);
+                EXPECT_EQ(attr->GetToOffset(), (std::vector<int64_t>{input == firstInput ? 0 : 2, 0}));
+            }
+        }
+    }
+}
+
 TEST_F(MergeViewAssembleTest, ProducerGroupWithCoverageHoleDoesNotFuse)
 {
     Program program;
@@ -2059,6 +2110,55 @@ TEST_F(MergeViewAssembleTest, AssembleChainWithIntermediateViewConsumerKeepsData
     ASSERT_EQ(remainingView->GetIOperands().size(), 1);
     EXPECT_EQ(remainingView->GetIOperands().front(), middle);
     EXPECT_FALSE(middle->GetProducers().empty());
+    ASSERT_EQ(output->GetProducers().size(), 1);
+    EXPECT_EQ((*output->GetProducers().begin())->GetIOperands().front(), input);
+}
+
+TEST_F(MergeViewAssembleTest, AssembleChainWithIntermediateTokenConsumerKeepsDataEdge)
+{
+    Program program;
+    auto function = std::make_unique<Function>(program, "assemble_view_fanout", "assemble_view_fanout", nullptr);
+    IRBuilder builder;
+    auto input = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+    auto middle = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+    auto viewOutput = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+    auto output = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+    function->inCasts_ = {input};
+    function->outCasts_ = {viewOutput, output};
+
+    auto& first = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {input}, {middle});
+    first.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto& view = builder.CreateTensorOpStmt(*function, Opcode::OP_VIEW, {middle}, {viewOutput});
+    view.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto& second = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {middle}, {output});
+    second.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto token = AddTokenEdge(*function, first, view);
+    function->BuildTensorMap();
+
+    MergeViewAssemble pass;
+    ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
+
+    size_t assembleCount = 0;
+    size_t viewCount = 0;
+    Operation* remainingView = nullptr;
+    for (auto& op : function->Operations(false)) {
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            ++assembleCount;
+        } else if (op.GetOpcode() == Opcode::OP_VIEW) {
+            ++viewCount;
+            remainingView = &op;
+        }
+    }
+    EXPECT_EQ(assembleCount, 2);
+    EXPECT_EQ(viewCount, 1);
+    ASSERT_NE(remainingView, nullptr);
+    ASSERT_EQ(remainingView->GetIOperands().size(), 1);
+    EXPECT_EQ(remainingView->GetIOperands().front(), middle);
+    EXPECT_FALSE(middle->GetProducers().empty());
+    ASSERT_EQ(output->GetProducers().size(), 1);
+    EXPECT_EQ((*output->GetProducers().begin())->GetIOperands().front(), middle);
+    EXPECT_TRUE(function->GetVarDependency().HasProducer(token, ToStmtPtr(first)));
+    EXPECT_TRUE(function->GetVarDependency().HasConsumer(token, ToStmtPtr(view)));
 }
 
 TEST_F(MergeViewAssembleTest, ShmemSetPredicateConsumerStopsViewChainFusion)

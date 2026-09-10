@@ -720,6 +720,7 @@ const MergeViewAssembleUtils::ConsumerCacheEntry& MergeViewAssembleUtils::BuildT
 
 Status MergeViewAssembleUtils::BuildConsumerCache(Function& function)
 {
+    hasTokenDependencies_ = false;
     auto operations = function.Operations(false);
     consumerCache_.reserve(operations.size());
     tensorConsumerCache_.reserve(operations.size());
@@ -742,6 +743,7 @@ Status MergeViewAssembleUtils::BuildConsumerCache(Function& function)
         recordTensor(outcast);
     }
     for (auto& operation : operations) {
+        hasTokenDependencies_ |= !operation.tokens_.empty() || !operation.result_token_.empty();
         for (const auto& input : operation.GetIOperands()) {
             recordTensor(input);
         }
@@ -914,8 +916,9 @@ bool MergeViewAssembleUtils::HasSplitVersionContribution(const LogicalTensorPtr&
 bool MergeViewAssembleUtils::BuildProducerGroupFusion(Function& function, const LogicalTensorPtr& middle,
                                                       const ConsumerCacheEntry& consumers)
 {
-    if (middle == nullptr || consumers.hasAssembleChainStopper || consumers.assembleConsumers.size() != 1 ||
-        !consumers.allProducersAreAssembleLike || IsFunctionBoundaryTensor(function, middle)) {
+    if (middle == nullptr || (hasTokenDependencies_ && consumers.hasAssembleChainStopper) ||
+        consumers.assembleConsumers.size() != 1 || !consumers.allProducersAreAssembleLike ||
+        IsFunctionBoundaryTensor(function, middle)) {
         return false;
     }
     auto* downstream = consumers.assembleConsumers.front();
@@ -1129,7 +1132,9 @@ Status MergeViewAssembleUtils::AppendProducerGroupFusions(Function& function)
         }
         RewriteProducerGroupTokens(function, fusion, replacements);
         for (auto* producer : fusion.producers) {
-            producer->SetAsDeleted();
+            if (!GetConsumers(*producer).hasAssembleChainStopper) {
+                producer->SetAsDeleted();
+            }
         }
         fusion.downstream->SetAsDeleted();
     }
@@ -1396,7 +1401,7 @@ Status MergeViewAssembleUtils::MergeAssembleChain(Function& function, Operation&
 
     // 2. 处理消费者
     const auto& consumers = GetConsumers(operation);
-    bool chainEnd = consumers.assembleConsumers.empty() || consumers.hasAssembleChainStopper;
+    bool chainEnd = consumers.assembleConsumers.empty() || (hasTokenDependencies_ && consumers.hasAssembleChainStopper);
     Status status = ProcessAssembleConsumers(function, consumers, chain, chainEnd, effectiveScopeId);
     if (status != SUCCESS) {
         return status;
@@ -1424,7 +1429,7 @@ Status MergeViewAssembleUtils::ProcessAssembleConsumers(Function& function, cons
                                                         std::vector<Operation*>& chain, bool& chainEnd,
                                                         int effectiveScopeId)
 {
-    if (consumers.hasAssembleChainStopper || consumers.assembleConsumers.empty()) {
+    if ((hasTokenDependencies_ && consumers.hasAssembleChainStopper) || consumers.assembleConsumers.empty()) {
         return SUCCESS;
     }
     Operation* currentOp = chain.back();
@@ -1515,8 +1520,14 @@ Status MergeViewAssembleUtils::ProcessAssembleChainEnd(Function& function, std::
                             GetRmwModeAttrKey(rmwModeAttr), GetMergedAssembleOpcode(chain), tokenDependency,
                             atomicSemanticAttr.fromReduceAcc, atomicSemanticAttr.fromExplicitRmw);
     ClearLinearTokenDependency(function, chain, tokenDependency);
+    // Keep intermediate writes needed by side consumers, as in the legacy chain fusion.
+    const bool hasSideConsumer = std::any_of(chain.begin(), chain.end() - 1, [this](const Operation* op) {
+        return GetConsumers(*op).hasAssembleChainStopper;
+    });
     for (auto* op : chain) {
-        op->SetAsDeleted();
+        if (!hasSideConsumer || op == chain.back()) {
+            op->SetAsDeleted();
+        }
     }
     function.GetTensorMap().Erase(endTensor);
 
