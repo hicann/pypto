@@ -56,6 +56,11 @@ struct MergeInput {
     bool hasScopedOp{false}; // 图中存在 cvFuseId>=0 的 op(仅 CV 混合 scope 分配 cvFuseId, 纯 scope 保持 -1)
     std::vector<BoundaryTensorInfo> boundaryTensors;
     std::vector<std::vector<int>> subgraphToBoundaryTensorIds;
+    // 每个 sg 所属的 feedback loop-carry 通路集合(空=不在任何环路上), 通路按"环"归类:
+    // 共享子图的多条 slot 链属同一环(如 online softmax 的 out/sum/max), 同环内可互相合并。
+    // 环路上的 sg 只允许与"通路归属完全相同"的 sg 合并, 防止通路外分支被吞进 carry 链。
+    // 空向量 = 前端无 slot scope / 无 feedback slot, 门控不启用。
+    std::vector<std::set<int>> subgraphLoopPaths;
 };
 
 struct MergeOutput {
@@ -80,6 +85,8 @@ private:
     int mVisitStamp{0};
     std::unordered_set<int> mGlobalOutputSinks; // 出度0子图: 不作为任何 boundary tensor producer, 即最终输出端点
     std::unordered_set<int> mWarnedInnerTensorMagics; // 已输出过 WARN 的 tensor, 跨 merge loop 迭代去重防打屏
+    // 每个 root 的 loop-carry 通路集合(成员原始集合的并集), 供同通路门控使用
+    std::vector<std::set<int>> mRootLoopPaths;
     // cached merged graph (avoid redundant rebuild in CanMergeWithoutCycle)
     std::vector<std::set<int>> mCachedOutGraph;
     std::vector<std::set<int>> mCachedInGraph;
@@ -101,6 +108,7 @@ private:
     void MergeNodesInCachedGraph(int root, const std::set<int>& del);
     void UpdateOutput();
     bool CheckLatencyConstraint(const std::vector<int>& actualGroup);
+    bool CheckLoopPathConsistency(const std::vector<int>& actualGroup);
     bool CheckMergeBenefitByStructuralPattern(const std::vector<int>& actualGroup);
     bool CheckNoExternalUseOfMergedInnerTensor(const std::vector<int>& actualGroup, bool checkByCvFuseId = false);
     bool IsInvalidMergedInnerTensor(int tensorId, const std::unordered_set<int>& mergedRoots, std::vector<int>& prodIn,
@@ -124,7 +132,8 @@ private:
     Status BuildGraph(Function& function, MergeInput& mergeInput);
     Status BuildMergeGroup(Function& function, MergeInput& mergeInput);
     void CombineForkSubgraph(Function& function, MergeInput& mergeInput);
-    Status MarkNoMergeSubgraph(Function& function);
+    Status MarkNoMergeSubgraph(Function& function, MergeInput& mergeInput);
+    void MarkFeedbackSubgraphs(Function& function, MergeInput& mergeInput);
     void UpdateConnectRecord(Function& function, MergeInput& mergeInput);
     void UpdateBoundaryTensorSize(LogicalTensorPtr& tensor, int tensorSize);
     void RecordBoundaryTensorInfo(LogicalTensorPtr& tensor, MergeInput& mergeInput, const std::set<int>& connectGraphs);
