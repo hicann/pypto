@@ -26,13 +26,20 @@ pypto_pro.language.insert(dst_tile: Tile, src_tile: Tile, offset: List[int]) -> 
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| dst_tile | 输出 | 目的操作数，Tile类型，支持DT_FP4E2M1、DT_FP4E1M2、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_INT8、DT_INT32、DT_FP16、DT_BF16和DT_FP32。 |
-| src_tile | 输入 | 源操作数，Tile类型，支持的数据类型与dst_tile一致。 |
+| dst_tile | 输出 | 目的操作数，Tile类型，支持的数据类型和分形组合详见[约束说明](#约束说明)。 |
+| src_tile | 输入 | 源操作数，Tile类型，支持的数据类型和分形组合详见[约束说明](#约束说明)。 |
 | offset | 输入 | 位置偏移，List[int]类型，长度必须为2，格式为[row, col]。源Tile的左上角对齐到目标Tile的offset位置；offset[0]为目标Tile的行偏移row，offset[1]为列偏移col。row和col必须是非负整数或运行时整数表达式，且源Tile的有效区域必须完整落入目标Tile。 |
 
 ## 约束说明
 
-无。
+- 数据类型及分形约束：
+
+  | 源 → 目的 | 分形要求 | 数据类型要求 |
+  |---|---|---|
+  | UB → UB | ND → ND、NZ → NZ。 | 源与目的必须相同，支持DT_INT8、DT_INT32、DT_FP16、DT_BF16、DT_FP32、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
+  | UB → L1 Buffer | 源支持ND、NZ，目的不校验分形。 | 源与目的必须相同，支持DT_INT8、DT_INT32、DT_FP16、DT_BF16、DT_FP32、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
+  | L0C Buffer → UB | NZ → ND，NZ → DN，NZ → NZ。 | 支持DT_FP32 → DT_FP32/DT_FP16/DT_BF16，以及DT_INT32 → DT_INT32。 |
+  | L0C Buffer → L1 Buffer | NZ → NZ。 | 支持DT_FP32 → DT_FP32/DT_FP16/DT_BF16，以及DT_INT32 → DT_INT32。 |
 
 ## 返回值说明
 
