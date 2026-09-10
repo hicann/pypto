@@ -23,7 +23,7 @@ $$dstReg_i = \begin{cases} 1 & \text{if } src0_i > src1_i \\ 0 & \text{otherwise
 ## 函数原型
 
 ```python
-gt(src0, src1, preg, cmp_dtype: Optional[DType] = None) -> dst_mask
+gt(src0, src1, preg) -> dst_mask
 ```
 
 ## 参数说明
@@ -33,7 +33,6 @@ gt(src0, src1, preg, cmp_dtype: Optional[DType] = None) -> dst_mask
 | src0 | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32。src0和src1可以是同一个reg_tensor。 |
 | src1 | 输入 | 比较操作数，可以是标量或[reg_tensor](../reg_tensor.md)，数据类型与src0一致。 |
 | preg | 输入 | [mask_reg](../mask_reg.md)，指定参与比较的元素范围。通过preg参数控制的未选中元素在目的操作数中被置零。 |
-| cmp_dtype | 输入 | 可选，向量比较时指定比较位宽的数据类型。若未传入，则根据src0的dtype自动推断；若传入，则按指定数据类型宽度进行比较。例如将DT_UINT16寄存器按DT_UINT8宽度比较时，传入cmp_dtype=pypto_pro.language.DT_UINT8。 |
 
 ## 约束说明
 

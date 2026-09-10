@@ -1368,20 +1368,100 @@ static std::string EmitVFDiv(const ir::CallPtr& op, codegen::CodegenBase& codege
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
     std::string mode = VFZeroingOnly(op, "vf.div");
     if (op->HasKwarg("precision") && op->GetKwarg<bool>("precision")) {
-        CHECK((s0_dt == DataType::FP16 || s0_dt == DataType::FP32))
-            << "vf.div high-precision mode only supports FP16/FP32, got " << DTypeStr(s0_dt);
-        std::string r = dst + "_r_";
-        std::string neg_b = dst + "_neg_b_";
-        std::string e = dst + "_e_";
-        std::string ctype = s0_dt.ToCTypeString();
-        codegen.Emit("RegTensor<" + ctype + "> " + r + " = (RegTensor<" + ctype + ">&)" + src0 + ";");
-        codegen.Emit("RegTensor<" + ctype + "> " + neg_b + ";");
-        codegen.Emit("RegTensor<" + ctype + "> " + e + ";");
-        codegen.Emit("vdiv(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ", " + mode + ");");
-        codegen.Emit("vmuls(" + neg_b + ", " + src1 + ", -1.0f, " + mask + ", " + mode + ");");
-        codegen.Emit("vmula(" + r + ", " + neg_b + ", " + dst + ", " + mask + ", " + mode + ");");
-        codegen.Emit("vdiv(" + e + ", " + r + ", " + src1 + ", " + mask + ", " + mode + ");");
-        codegen.Emit("vadd(" + dst + ", " + dst + ", " + e + ", " + mask + ", " + mode + ");");
+        // Mirrors AscendC DivPrecisionImpl (vec_binary_impl.h:868-976): error-
+        // complementation quotient correction with inf/nan/zero bypass and
+        // subnormal-input scaling. AscendC restricts precision mode to float
+        // (static_assert); half 1ULP uses a different algorithm
+        // (DivIEEE754HalfImpl), so it is rejected here.
+        CHECK(s0_dt == DataType::FP32) << "vf.div high-precision mode only supports FP32, got " << DTypeStr(s0_dt);
+        const std::string p = dst + "_p_";
+        const std::string pall = p + "all", nz = p + "nz", infnan = p + "infn", z = p + "z", q0 = p + "q0";
+        const std::string m_inf = p + "minf", m_zero = p + "mzero", m_scale = p + "mscale";
+        const std::string m_cmp = p + "mcmp", expbits = p + "expb", scratch = p + "scr", expo = p + "expo";
+        const std::string kreg = p + "k", thrvec = p + "thr", zerovec = p + "zv", newexp = p + "newexp";
+        const std::string scalebits = p + "sb", scale = p + "sc", one = p + "one";
+        const std::string asc = p + "asc", bsc = p + "bsc", y = p + "y";
+        const std::string r = p + "r", rpre = p + "rpre", rnext = p + "rnext", zpre = p + "zpre", znext = p + "znext";
+        codegen.Emit("MaskReg " + pall + " = pset_b8(PAT_ALL);");
+        codegen.Emit("RegTensor<uint32_t> " + nz + ";");
+        codegen.Emit("RegTensor<uint32_t> " + infnan + ";");
+        codegen.Emit("RegTensor<float> " + z + ";");
+        codegen.Emit("RegTensor<float> " + q0 + ";");
+        codegen.Emit("MaskReg " + m_inf + ";");
+        codegen.Emit("MaskReg " + m_zero + ";");
+        // Inf/nan/zero bypass (DivPrecisionImpl:908-914): set the sign bit of the
+        // quotient, then >= 0xFF800000 (unsigned) catches +/-Inf, +/-0 and NaNs.
+        codegen.Emit("vdup(" + nz + ", (int32_t)0x80000000, " + pall + ", " + mode + ");");
+        codegen.Emit("vdiv(" + z + ", " + src0 + ", " + src1 + ", " + mask + ", " + mode + ");");
+        codegen.Emit("vor(" + infnan + ", (RegTensor<uint32_t>&)" + z + ", " + nz + ", " + mask + ", " + mode + ");");
+        codegen.Emit("vmov(" + q0 + ", " + z + ");");
+        codegen.Emit("vcmps_eq(" + m_zero + ", " + z + ", 0.0f, " + mask + ");");
+        codegen.Emit("vcmps_ge(" + m_inf + ", " + infnan + ", (uint32_t)0xFF800000, " + mask + ");");
+        codegen.Emit("por(" + m_inf + ", " + m_inf + ", " + m_zero + ", " + mask + ");");
+        // Subnormal-input scaling (DivPrecisionImpl:916-950): scale a/b by 2^k with
+        // k = max(-64 - exp(a), 0) so the residual stays in the normal range.
+        codegen.Emit("RegTensor<uint32_t> " + expbits + ";");
+        codegen.Emit("RegTensor<uint32_t> " + scratch + ";");
+        codegen.Emit("RegTensor<int32_t> " + expo + ";");
+        codegen.Emit("RegTensor<int32_t> " + kreg + ";");
+        codegen.Emit("RegTensor<int32_t> " + thrvec + ";");
+        codegen.Emit("RegTensor<int32_t> " + zerovec + ";");
+        codegen.Emit("RegTensor<int32_t> " + newexp + ";");
+        codegen.Emit("RegTensor<uint32_t> " + scalebits + ";");
+        codegen.Emit("RegTensor<float> " + scale + ";");
+        codegen.Emit("RegTensor<float> " + one + ";");
+        codegen.Emit("RegTensor<float> " + asc + ";");
+        codegen.Emit("RegTensor<float> " + bsc + ";");
+        codegen.Emit("RegTensor<float> " + y + ";");
+        codegen.Emit("MaskReg " + m_scale + ";");
+        codegen.Emit("vdup(" + scratch + ", (int32_t)0x7F800000, " + mask + ", " + mode + ");");
+        codegen.Emit("vand(" + expbits + ", (RegTensor<uint32_t>&)" + src0 + ", " + scratch + ", " + mask + ", " +
+                     mode + ");");
+        codegen.Emit("vshrs(" + expbits + ", " + expbits + ", (int16_t)23, " + mask + ", " + mode + ");");
+        codegen.Emit("vdup(" + scratch + ", (int32_t)127, " + mask + ", " + mode + ");");
+        codegen.Emit("vsub(" + expo + ", (RegTensor<int32_t>&)" + expbits + ", (RegTensor<int32_t>&)" + scratch + ", " +
+                     mask + ", " + mode + ");");
+        codegen.Emit("vcmps_lt(" + m_scale + ", " + expo + ", (int32_t)-64, " + mask + ");");
+        codegen.Emit("vdup(" + thrvec + ", (int32_t)-64, " + mask + ", " + mode + ");");
+        codegen.Emit("vdup(" + zerovec + ", (int32_t)0, " + mask + ", " + mode + ");");
+        codegen.Emit("vsub(" + kreg + ", " + thrvec + ", " + expo + ", " + mask + ", " + mode + ");");
+        codegen.Emit("vmax(" + kreg + ", " + kreg + ", " + zerovec + ", " + mask + ", " + mode + ");");
+        codegen.Emit("vadds(" + newexp + ", " + kreg + ", (int32_t)127, " + m_scale + ", " + mode + ");");
+        codegen.Emit("vshls(" + scalebits + ", (RegTensor<uint32_t>&)" + newexp + ", (int16_t)23, " + m_scale + ", " +
+                     mode + ");");
+        codegen.Emit("vdup(" + one + ", 1.0f, " + mask + ", " + mode + ");");
+        codegen.Emit("vsel(" + scale + ", (RegTensor<float>&)" + scalebits + ", " + one + ", " + m_scale + ");");
+        codegen.Emit("vmul(" + asc + ", " + src0 + ", " + scale + ", " + mask + ", " + mode + ");");
+        codegen.Emit("vmul(" + bsc + ", " + src1 + ", " + scale + ", " + mask + ", " + mode + ");");
+        // Corrected quotient (DivPrecisionImpl:952-975): r = a' - x1*b', pick the
+        // bit-pattern neighbor of x1 (-1/+1 ulp) with the smaller |residual|, then
+        // bypass invalid lanes back to the raw quotient.
+        codegen.Emit("vmuls(" + y + ", " + bsc + ", -1.0f, " + mask + ", " + mode + ");");
+        codegen.Emit("RegTensor<float> " + r + ";");
+        codegen.Emit("RegTensor<float> " + rpre + ";");
+        codegen.Emit("RegTensor<float> " + rnext + ";");
+        codegen.Emit("RegTensor<float> " + zpre + ";");
+        codegen.Emit("RegTensor<float> " + znext + ";");
+        codegen.Emit("MaskReg " + m_cmp + ";");
+        codegen.Emit("vmov(" + r + ", " + asc + ");");
+        codegen.Emit("vmula(" + r + ", " + z + ", " + y + ", " + mask + ", " + mode + ");");
+        codegen.Emit("vadds((RegTensor<int32_t>&)" + zpre + ", (RegTensor<int32_t>&)" + z + ", (int32_t)-1, " + mask +
+                     ", " + mode + ");");
+        codegen.Emit("vadds((RegTensor<int32_t>&)" + znext + ", (RegTensor<int32_t>&)" + z + ", (int32_t)1, " + mask +
+                     ", " + mode + ");");
+        codegen.Emit("vmov(" + rpre + ", " + asc + ");");
+        codegen.Emit("vmov(" + rnext + ", " + asc + ");");
+        codegen.Emit("vmula(" + rpre + ", " + zpre + ", " + y + ", " + mask + ", " + mode + ");");
+        codegen.Emit("vmula(" + rnext + ", " + znext + ", " + y + ", " + mask + ", " + mode + ");");
+        codegen.Emit("vabs(" + r + ", " + r + ", " + mask + ", " + mode + ");");
+        codegen.Emit("vabs(" + rpre + ", " + rpre + ", " + mask + ", " + mode + ");");
+        codegen.Emit("vabs(" + rnext + ", " + rnext + ", " + mask + ", " + mode + ");");
+        codegen.Emit("vcmp_lt(" + m_cmp + ", " + r + ", " + rpre + ", " + mask + ");");
+        codegen.Emit("vsel(" + r + ", " + r + ", " + rpre + ", " + m_cmp + ");");
+        codegen.Emit("vsel(" + z + ", " + z + ", " + zpre + ", " + m_cmp + ");");
+        codegen.Emit("vcmp_lt(" + m_cmp + ", " + rnext + ", " + r + ", " + mask + ");");
+        codegen.Emit("vsel(" + z + ", " + znext + ", " + z + ", " + m_cmp + ");");
+        codegen.Emit("vsel(" + dst + ", " + q0 + ", " + z + ", " + m_inf + ");");
     } else {
         codegen.Emit("vdiv(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ", " + mode + ");");
     }
@@ -1700,7 +1780,10 @@ static std::string EmitVFSqrt(const ir::CallPtr& op, codegen::CodegenBase& codeg
             codegen.Emit("vmuls(" + tp + ", " + sc + ", 4096.0f, " + mask + ", " + mode + ");");
             codegen.Emit("vsel(" + sc + ", " + tp + ", " + sc + ", " + mc + ");");
             codegen.Emit("vsqrt(" + dc + ", " + sc + ", " + mask + ", " + mode + ");");
-            codegen.Emit("vmuls(" + tp + ", " + dc + ", 0.000244140625f, " + mask + ", " + mode + ");");
+            // AscendC SqrtImpl PRECISION_1ULP_FTZ_FALSE (half): multiplyFactor1 = 0x2400 = 2^-6.
+            // sqrt(2^12) = 2^6, so the scale-down compensation is 2^-6 — NOT the FP32
+            // branch's 2^-12, which made subnormal results come out 1/64 too small.
+            codegen.Emit("vmuls(" + tp + ", " + dc + ", 0.015625f, " + mask + ", " + mode + ");");
             codegen.Emit("vsel(" + dst + ", " + tp + ", " + dc + ", " + mc + ");");
         } else {
             codegen.Emit("union { uint32_t i; float f; } " + dst + "_thr_ = {0x007FFFFF};");
@@ -3148,7 +3231,7 @@ static std::string EmitVFCompareImpl(const ir::CallPtr& op, codegen::CodegenBase
         << op->name_ << " source only supports INT/UINT/FP16/FP32/BF16, got " << DTypeStr(s0_dt);
     DataType s1_dt = GetExprDtype(op->args_[2]);
     // FP8/FP4 types have no vcmp overloads (mirrors AscendC CompareImpl):
-    // reject them for either compared operand and for cmp_dtype.
+    // reject them for either compared operand.
     auto is_fp8_fp4 = [](DataType dt) {
         return dt == DataType::FP8E4M3FN || dt == DataType::FP8E5M2 || dt == DataType::FP8E8M0 || dt == DataType::HF8 ||
                dt == DataType::FP4 || dt == DataType::FP4E2M1 || dt == DataType::FP4E1M2 || dt == DataType::HF4;
@@ -3166,17 +3249,11 @@ static std::string EmitVFCompareImpl(const ir::CallPtr& op, codegen::CodegenBase
         is_scalar_src = !codegen.IsRegTensorVar(src1_name);
     }
     if (!is_scalar_src) {
-        if (op->HasKwarg("cmp_dtype")) {
-            DataType cmp_dt = op->GetKwarg<DataType>("cmp_dtype");
-            CHECK((cmp_dt.GetBit() == 8 || cmp_dt.GetBit() == 16 || cmp_dt.GetBit() == 32 || cmp_dt.GetBit() == 64) &&
-                  !is_fp8_fp4(cmp_dt))
-                << op->name_ << " cmp_dtype only supports INT/UINT/FP16/FP32/BF16 (b8/b16/b32/b64), got "
-                << DTypeStr(cmp_dt);
-        } else {
-            CHECK((s0_dt.GetBit() == s1_dt.GetBit()))
-                << op->name_ << " requires src0 and src1 to have the same bit width, got src0=" << DTypeStr(s0_dt)
-                << " src1=" << DTypeStr(s1_dt) << ". Pass cmp_dtype to compare different-width regs.";
-        }
+        // AscendC CompareImpl takes both sources as the same register type U —
+        // mixed dtypes (even equal bit width) are rejected, no reinterpret casts.
+        CHECK(s0_dt == s1_dt) << op->name_
+                              << " requires src0 and src1 to have the same type, got src0=" << DTypeStr(s0_dt)
+                              << " src1=" << DTypeStr(s1_dt);
     } else {
         // Scalar compare: is_convertible allows scalar to be wider than reg
         CHECK(s1_dt.GetBit() >= s0_dt.GetBit())
@@ -3198,14 +3275,8 @@ static std::string EmitVFCompareImpl(const ir::CallPtr& op, codegen::CodegenBase
         src1 = CoerceScalarToInt(op->args_[2], s0_dt, src1);
         codegen.Emit("vcmps_" + suffix + "(" + mask_dst + ", " + src0 + ", " + src1 + ", " + mask_src + ");");
     } else {
-        DataType canonical = GetExprDtype(op->args_[1]);
-        if (op->HasKwarg("cmp_dtype")) {
-            canonical = op->GetKwarg<DataType>("cmp_dtype");
-        }
-        std::string cast_prefix = "(RegTensor<" + canonical.ToCTypeString() + "> &)";
-        std::string s0_expr = (s0_dt == canonical) ? src0 : (cast_prefix + src0);
-        std::string s1_expr = (s1_dt == canonical) ? src1 : (cast_prefix + src1);
-        codegen.Emit("vcmp_" + suffix + "(" + mask_dst + ", " + s0_expr + ", " + s1_expr + ", " + mask_src + ");");
+        // Same-type operands (enforced above): no reinterpret casts needed.
+        codegen.Emit("vcmp_" + suffix + "(" + mask_dst + ", " + src0 + ", " + src1 + ", " + mask_src + ");");
     }
     return "";
 }
@@ -4649,9 +4720,13 @@ static std::string EmitVFBitCast(const ir::CallPtr& op, codegen::CodegenBase& co
         // Return the cast expression directly so it inlines into the parent op's
         // instruction call, matching the documented behaviour:
         //   vor(reg_c, (RegTensor<uint8_t>&)reg_a, (RegTensor<uint8_t>&)reg_b, preg, MODE_ZEROING);
-        // When the parser materializes the result into a temp variable (_expr_tmp_N),
-        // VisitStmt_(AssignStmtPtr) emits "auto _expr_tmp_N = (RegTensor<T>&)src;"
-        // which properly declares the variable.
+        // The parser materializes this form into its own temp variable, whose
+        // `auto` declaration takes the cast's C++ type (RegTensor<T>) — register
+        // it here so register-taking ops (compare, select, ...) dispatch the
+        // temp to the vector form instead of the scalar one.
+        if (!codegen.GetCurrentResultTarget().empty()) {
+            codegen.RegisterRegTensorVar(codegen.GetCurrentResultTarget());
+        }
         return "(RegTensor<" + target_dt.ToCTypeString() + "> &)" + src;
     }
     return "";
