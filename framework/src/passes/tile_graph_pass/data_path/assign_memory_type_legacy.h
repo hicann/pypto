@@ -127,6 +127,8 @@ private:
 
     MemoryType InferAssembleTempOriginal(const LogicalTensorPtr& output) const;
 
+    bool AreAllConsumersL1Views(const LogicalTensorPtr& output) const;
+
     bool CanUseDirectAssemblePath(Operation& operation, MemoryType from, MemoryType to);
 
     bool IsAssembleToOffsetAligned(Operation& operation, const LogicalTensorPtr& output);

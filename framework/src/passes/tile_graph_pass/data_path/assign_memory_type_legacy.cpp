@@ -1105,16 +1105,13 @@ MemoryType AssignMemoryType::InferAssembleTempOriginal(const LogicalTensorPtr& o
     }
     MemoryType tempOriginal = MemoryType::MEM_UNKNOWN;
     bool hasL1ViewTarget = false;
-    bool hasUnknownViewTarget = false;
     auto requirements = inserter.GetConsumerRequirements(output);
     for (const auto& item : requirements) {
         auto consumerOp = item.first;
         MemoryType candidate = item.second;
         if (consumerOp != nullptr && consumerOp->GetOpcode() == Opcode::OP_VIEW) {
             auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(consumerOp->GetOpAttribute());
-            if (viewOpAttribute == nullptr || viewOpAttribute->GetTo() == MemoryType::MEM_UNKNOWN) {
-                hasUnknownViewTarget = true;
-            } else {
+            if (viewOpAttribute != nullptr) {
                 hasL1ViewTarget = hasL1ViewTarget || viewOpAttribute->GetTo() == MemoryType::MEM_L1;
                 if (candidate == MemoryType::MEM_UNKNOWN) {
                     candidate = viewOpAttribute->GetTo();
@@ -1130,10 +1127,33 @@ MemoryType AssignMemoryType::InferAssembleTempOriginal(const LogicalTensorPtr& o
             return MemoryType::MEM_DEVICE_DDR;
         }
     }
-    if (tempOriginal == MemoryType::MEM_L1 && hasL1ViewTarget && hasUnknownViewTarget) {
+    // 因 L1 View 消费者推导出 L1 时，要求输出的所有消费者都是目标 L1 的 View，
+    // 否则设置为MEM_UNKNOWN，避免为其他消费者生成以 L1（Mat 型 tile）为源的 TStore（不支持 Mat 源存储）
+    if (tempOriginal == MemoryType::MEM_L1 && hasL1ViewTarget && !AreAllConsumersL1Views(output)) {
         return MemoryType::MEM_UNKNOWN;
     }
     return tempOriginal;
+}
+
+bool AssignMemoryType::AreAllConsumersL1Views(const LogicalTensorPtr& output) const
+{
+    if (output == nullptr) {
+        return false;
+    }
+    const auto& consumers = output->GetConsumers();
+    if (consumers.empty()) {
+        return false;
+    }
+    for (const auto& consumerOp : consumers) {
+        if (consumerOp == nullptr || consumerOp->GetOpcode() != Opcode::OP_VIEW) {
+            return false;
+        }
+        auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(consumerOp->GetOpAttribute());
+        if (viewOpAttribute == nullptr || viewOpAttribute->GetTo() != MemoryType::MEM_L1) {
+            return false;
+        }
+    }
+    return true;
 }
 
 bool AssignMemoryType::CanUseDirectAssemblePath(Operation& operation, MemoryType from, MemoryType to)
