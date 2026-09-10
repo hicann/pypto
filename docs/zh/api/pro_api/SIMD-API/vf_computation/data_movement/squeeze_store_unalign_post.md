@@ -45,7 +45,6 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
@@ -60,7 +59,6 @@ def example_vf(src_tile, dst_tile):
     # squeeze_store_unalign_post: flush remaining bytes from AR
     vf.squeeze_store_unalign_post(dst_tile, align_reg)
 
-
 @pl.jit()
 def example_kernel(
     a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
@@ -73,13 +71,8 @@ def example_kernel(
     t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf(in_a, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
-
 
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
@@ -92,7 +85,6 @@ def test_example():
     torch.npu.synchronize()
     # squeeze with ALL mask compresses all 64 elements, store writes them to out
     torch.testing.assert_close(out, a, rtol=1e-5, atol=1e-5)
-
 
 if __name__ == "__main__":
     test_example()

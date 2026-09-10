@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
@@ -155,6 +155,524 @@ static bool IsB8Type(DataType dt) { return dt.GetBit() <= 8; }
 // Check if a DataType is a b16-width type (16-bit storage).
 static bool IsB16Type(DataType dt) { return dt.GetBit() == 16; }
 
+// ============================================================================
+// B64 helper: deinterleave a b64 RegTensor into b32 low/high halves.
+// Emits temp RegTensor declarations and a vdintlv instruction.
+// After call, {prefix}_lo_ holds the low 32 bits and {prefix}_hi_ holds the
+// high 32 bits of each b64 element (32 meaningful elements in positions 0-31).
+// ============================================================================
+static void EmitB64Deinterleave(codegen::CCECodegen& codegen, const std::string& prefix, const std::string& b64_reg)
+{
+    std::string lo = prefix + "_lo_";
+    std::string hi = prefix + "_hi_";
+    std::string zero = prefix + "_zero_";
+    std::string dump = prefix + "_ddump_";
+    std::string m = prefix + "_dm_";
+    codegen.Emit("RegTensor<uint32_t> " + lo + ";");
+    codegen.Emit("RegTensor<uint32_t> " + hi + ";");
+    codegen.Emit("RegTensor<uint32_t> " + zero + ";");
+    codegen.Emit("RegTensor<uint32_t> " + dump + ";");
+    codegen.Emit("MaskReg " + m + " = pset_b32(PAT_ALL);");
+    codegen.Emit("vdup(" + zero + ", 0, " + m + ", MODE_ZEROING);");
+    codegen.Emit("vdintlv(" + lo + ", " + hi + ", (RegTensor<uint32_t>&)" + b64_reg + ", " + zero + ");");
+}
+
+// ============================================================================
+// B64 helper: interleave b32 low/high halves into a b64 RegTensor.
+// Emits a vintlv instruction that combines lo and hi into b64_dst.
+// ============================================================================
+static void EmitB64Interleave(codegen::CCECodegen& codegen, const std::string& b64_dst, const std::string& lo,
+                              const std::string& hi, const std::string& prefix)
+{
+    std::string dump = prefix + "_idump_";
+    codegen.Emit("RegTensor<uint32_t> " + dump + ";");
+    codegen.Emit("vintlv((RegTensor<uint32_t>&)" + b64_dst + ", " + dump + ", (RegTensor<uint32_t>&)" + lo +
+                 ", (RegTensor<uint32_t>&)" + hi + ");");
+}
+
+// ============================================================================
+// B64 helper: emit a b64 ZEROING mask application.
+// Emits vsel(dst, src, zero_b64, mask) to zero out inactive b64 elements.
+// The b64 mask is packed to b32 via ppack, then expanded via pintlv_b32
+// (mirrors AscendC CopyMerging: ppack + pintlv_b32 to produce a b32 mask
+// where each b64 element's 2 b32 halves share the same mask bit).
+// ============================================================================
+static void EmitB64Zeroing(codegen::CCECodegen& codegen, const std::string& dst, const std::string& src,
+                           const std::string& mask, const std::string& prefix)
+{
+    std::string zero = prefix + "_zero64_";
+    std::string m = prefix + "_zm_";
+    std::string packed_m = prefix + "_pm_";
+    std::string expanded_m = prefix + "_em_";
+    std::string dump_m = prefix + "_dm_";
+    codegen.Emit("RegTensor<uint32_t> " + zero + ";");
+    codegen.Emit("MaskReg " + m + " = pset_b32(PAT_ALL);");
+    codegen.Emit("vdup(" + zero + ", 0, " + m + ", MODE_ZEROING);");
+    // Pack b64 mask to b32, then expand back to b32 width (mirrors AscendC
+    // CopyMerging: ppack + pintlv_b32)
+    codegen.Emit("MaskReg " + packed_m + ";");
+    codegen.Emit("ppack(" + packed_m + ", " + mask + ", LOWER);");
+    codegen.Emit("MaskReg " + expanded_m + ", " + dump_m + ";");
+    codegen.Emit("pintlv_b32(" + expanded_m + ", " + dump_m + ", " + packed_m + ", " + packed_m + ");");
+    codegen.Emit("vsel((RegTensor<uint32_t>&)" + dst + ", (RegTensor<uint32_t>&)" + src + ", " + zero + ", " +
+                 expanded_m + ");");
+}
+
+// ============================================================================
+// B64 helper: emit a b32 bitwise instruction over b64 registers with a b64
+// mask (mirrors AscendC AndImpl/XorImpl/OrImpl/NotImpl b64 path): pack the b64
+// mask (2-bit-per-element) to a b32 mask via ppack, deinterleave each operand
+// into low/high u32 halves, apply the b32 bitwise instruction on both halves
+// with the packed mask, then interleave the halves back into the b64 dst.
+// MODE_ZEROING zeroes both halves of an inactive element, matching b64 zeroing
+// semantics. Bitwise ops are sign-agnostic, so u32 halves are used for both
+// INT64 and UINT64.
+// ============================================================================
+static void EmitB64Bitwise(codegen::CCECodegen& codegen, const std::string& instruction,
+                           const std::vector<std::string>& srcs, const std::string& dst, const std::string& mask,
+                           const std::string& mode, const std::string& prefix)
+{
+    std::string packed_m = prefix + "_pm_";
+    codegen.Emit("MaskReg " + packed_m + ";");
+    codegen.Emit("ppack(" + packed_m + ", " + mask + ", LOWER);");
+    std::string lo_args;
+    std::string hi_args;
+    for (size_t i = 0; i < srcs.size(); ++i) {
+        EmitB64Deinterleave(codegen, prefix + "s" + std::to_string(i), srcs[i]);
+        lo_args += prefix + "s" + std::to_string(i) + "_lo_, ";
+        hi_args += prefix + "s" + std::to_string(i) + "_hi_, ";
+    }
+    std::string lo_d = prefix + "_lod_";
+    std::string hi_d = prefix + "_hid_";
+    codegen.Emit("RegTensor<uint32_t> " + lo_d + ";");
+    codegen.Emit("RegTensor<uint32_t> " + hi_d + ";");
+    codegen.Emit(instruction + "(" + lo_d + ", " + lo_args + packed_m + ", " + mode + ");");
+    codegen.Emit(instruction + "(" + hi_d + ", " + hi_args + packed_m + ", " + mode + ");");
+    EmitB64Interleave(codegen, dst, lo_d, hi_d, prefix + "_ilv");
+}
+
+// ============================================================================
+// B64 helper: reduce SUM via the hierarchical 16-bit carry decomposition
+// (mirrors AscendC ReduceSumB64Impl). The b64 src is deinterleaved into
+// low/high u32 halves; each 64-bit element is split into 16-bit lanes whose
+// vcadd partial sums are combined with carries.
+// ============================================================================
+static void EmitB64ReduceSum(codegen::CCECodegen& codegen, const std::string& dst, const std::string& src,
+                             const std::string& mask)
+{
+    const std::string p = dst + "_b64rs_";
+    const std::string pm = p + "pm";
+    codegen.Emit("MaskReg " + pm + ";");
+    codegen.Emit("ppack(" + pm + ", " + mask + ", LOWER);");
+    EmitB64Deinterleave(codegen, p + "s", src);
+    const std::string lo_s = p + "s_lo_";
+    const std::string hi_s = p + "s_hi_";
+    const std::string low_f = p + "lowf_";
+    const std::string low_r = p + "lowr_";
+    const std::string mid_r = p + "midr_";
+    const std::string hi_r = p + "hir_";
+    const std::string tmp_r = p + "tmpr_";
+    const std::string lo32 = p + "lo32_";
+    const std::string dump = p + "dump_";
+    codegen.Emit("RegTensor<uint32_t> " + low_f + ";");
+    codegen.Emit("RegTensor<uint32_t> " + low_r + ";");
+    codegen.Emit("RegTensor<uint32_t> " + mid_r + ";");
+    codegen.Emit("RegTensor<uint32_t> " + hi_r + ";");
+    codegen.Emit("RegTensor<uint32_t> " + tmp_r + ";");
+    codegen.Emit("RegTensor<uint32_t> " + lo32 + ";");
+    codegen.Emit("RegTensor<uint32_t> " + dump + ";");
+    codegen.Emit("vdup(" + low_f + ", (int32_t)0xFFFF, " + pm + ", MODE_ZEROING);");
+    codegen.Emit("vand(" + low_r + ", " + low_f + ", " + lo_s + ", " + pm + ", MODE_ZEROING);");
+    codegen.Emit("vcadd(" + low_r + ", " + low_r + ", " + pm + ", MODE_ZEROING);");
+    codegen.Emit("vshrs(" + mid_r + ", " + lo_s + ", (int16_t)16, " + pm + ", MODE_ZEROING);");
+    codegen.Emit("vcadd(" + mid_r + ", " + mid_r + ", " + pm + ", MODE_ZEROING);");
+    codegen.Emit("vcadd(" + hi_r + ", " + hi_s + ", " + pm + ", MODE_ZEROING);");
+    codegen.Emit("vshrs(" + tmp_r + ", " + low_r + ", (int16_t)16, " + pm + ", MODE_ZEROING);");
+    codegen.Emit("vadd(" + mid_r + ", " + mid_r + ", " + tmp_r + ", " + pm + ", MODE_ZEROING);");
+    codegen.Emit("vshrs(" + tmp_r + ", " + mid_r + ", (int16_t)16, " + pm + ", MODE_ZEROING);");
+    codegen.Emit("vadd(" + hi_r + ", " + hi_r + ", " + tmp_r + ", " + pm + ", MODE_ZEROING);");
+    codegen.Emit("vand(" + low_r + ", " + low_r + ", " + low_f + ", " + pm + ", MODE_ZEROING);");
+    codegen.Emit("vand(" + mid_r + ", " + mid_r + ", " + low_f + ", " + pm + ", MODE_ZEROING);");
+    codegen.Emit("vintlv((RegTensor<uint16_t>&)" + lo32 + ", (RegTensor<uint16_t>&)" + tmp_r +
+                 ", (RegTensor<uint16_t>&)" + low_r + ", (RegTensor<uint16_t>&)" + mid_r + ");");
+    codegen.Emit("vintlv((RegTensor<uint32_t>&)" + dst + ", (RegTensor<uint32_t>&)" + dump +
+                 ", (RegTensor<uint32_t>&)" + lo32 + ", (RegTensor<uint32_t>&)" + hi_r + ");");
+}
+
+static void EmitB64ReduceMaxMin(codegen::CCECodegen& codegen, const std::string& dst, const std::string& src,
+                                const std::string& mask, bool is_max, bool is_signed)
+{
+    const std::string p = dst + "_b64rm_";
+    const std::string pm = p + "pm";
+    codegen.Emit("MaskReg " + pm + ";");
+    codegen.Emit("ppack(" + pm + ", " + mask + ", LOWER);");
+    EmitB64Deinterleave(codegen, p + "s", src);
+    const std::string lo_s = p + "s_lo_";
+    const std::string hi_s = p + "s_hi_";
+    const std::string red = is_max ? "vcmax" : "vcmin";
+    const std::string hi_r = p + "hir_";
+    const std::string bcast = p + "bc_";
+    const std::string eq_m = p + "eqm_";
+    const std::string lo_r = p + "lor_";
+    const std::string dump = p + "dump_";
+    codegen.Emit("MaskReg " + eq_m + ";");
+    codegen.Emit("RegTensor<uint32_t> " + hi_r + ";");
+    codegen.Emit("RegTensor<uint32_t> " + bcast + ";");
+    codegen.Emit("RegTensor<uint32_t> " + lo_r + ";");
+    codegen.Emit("RegTensor<uint32_t> " + dump + ";");
+    // The hi half holds the SIGNED b32 view of an int64 element: the hi-half
+    // reduce must compare signed for INT64 (a negative int64 has a hi half
+    // that is huge when viewed as u32; mirrors Int64RowMinMax's s32/u32
+    // split). The lo half is an unsigned magnitude in both cases.
+    const std::string hi_sc = is_signed ? "(RegTensor<int32_t>&)" : "(RegTensor<uint32_t>&)";
+    codegen.Emit(red + "(" + hi_sc + hi_r + ", " + hi_sc + hi_s + ", " + pm + ", MODE_ZEROING);");
+    // Register broadcast uses the 5-arg vdup (mask + POS + MODE); the 4-arg
+    // form only accepts a scalar (mirrors Int64RowMinMax's highDup broadcast).
+    codegen.Emit("vdup(" + bcast + ", " + hi_r + ", " + pm + ", POS_LOWEST, MODE_ZEROING);");
+    codegen.Emit("vcmp_eq(" + eq_m + ", " + bcast + ", " + hi_s + ", " + pm + ");");
+    codegen.Emit(red + "(" + lo_r + ", " + lo_s + ", " + eq_m + ", MODE_ZEROING);");
+    codegen.Emit("vintlv((RegTensor<uint32_t>&)" + dst + ", (RegTensor<uint32_t>&)" + dump +
+                 ", (RegTensor<uint32_t>&)" + lo_r + ", (RegTensor<uint32_t>&)" + hi_r + ");");
+}
+
+static void EmitB64Div(codegen::CCECodegen& codegen, const std::string& dst, const std::string& src0,
+                       const std::string& src1, const std::string& mask, bool is_signed)
+{
+    const std::string p = dst + "_div_";
+    const std::string all_m = p + "_allm_";
+    const std::string pm = p + "_pm_";
+    const std::string cy = p + "_cy_";
+    const std::string cy1 = p + "_cy1_";
+    codegen.Emit("MaskReg " + all_m + " = pset_b32(PAT_ALL);");
+    codegen.Emit("MaskReg " + pm + ";");
+    codegen.Emit("MaskReg " + cy + ";");
+    codegen.Emit("MaskReg " + cy1 + ";");
+    codegen.Emit("ppack(" + pm + ", " + mask + ", LOWER);");
+    // Deinterleave the b64 sources into lo/hi u32 half pairs (each half has 64
+    // lanes: 32 meaningful + 32 zeros from the deinterleave zero operand).
+    const std::string s0 = p + "s0", s0_lo = s0 + "_lo", s0_hi = s0 + "_hi";
+    const std::string s1 = p + "s1", s1_lo = s1 + "_lo", s1_hi = s1 + "_hi";
+    const std::string z = p + "z", z_lo = z + "_lo", z_hi = z + "_hi";
+    const std::string dz = p + "_dz";
+    codegen.Emit("RegTensor<uint32_t> " + s0_lo + ";");
+    codegen.Emit("RegTensor<uint32_t> " + s0_hi + ";");
+    codegen.Emit("RegTensor<uint32_t> " + s1_lo + ";");
+    codegen.Emit("RegTensor<uint32_t> " + s1_hi + ";");
+    codegen.Emit("RegTensor<uint32_t> " + z_lo + ";");
+    codegen.Emit("RegTensor<uint32_t> " + z_hi + ";");
+    codegen.Emit("RegTensor<uint32_t> " + dz + ";");
+    codegen.Emit("vdup(" + z_lo + ", 0, " + all_m + ", MODE_ZEROING);");
+    codegen.Emit("vdup(" + z_hi + ", 0, " + all_m + ", MODE_ZEROING);");
+    codegen.Emit("vdintlv((RegTensor<uint32_t>&)" + s0_lo + ", (RegTensor<uint32_t>&)" + s0_hi +
+                 ", (RegTensor<uint32_t>&)" + src0 + ", (RegTensor<uint32_t>&)" + z_lo + ");");
+    codegen.Emit("vdintlv((RegTensor<uint32_t>&)" + s1_lo + ", (RegTensor<uint32_t>&)" + s1_hi +
+                 ", (RegTensor<uint32_t>&)" + src1 + ", (RegTensor<uint32_t>&)" + z_hi + ");");
+    // Composite b64 helper emissions over {x_lo, x_hi} u32 half pairs.
+    auto VmulUsingU32 = [&](const std::string& d, const std::string& a, const std::string& b, const std::string& m) {
+        codegen.Emit("vmull((RegTensor<uint32_t>&)" + d + "_lo, (RegTensor<uint32_t>&)" + d +
+                     "_hi, (RegTensor<uint32_t>&)" + a + "_lo, (RegTensor<uint32_t>&)" + b + "_lo, " + m + ");");
+        codegen.Emit("vmula((RegTensor<uint32_t>&)" + d + "_hi, (RegTensor<uint32_t>&)" + a +
+                     "_lo, (RegTensor<uint32_t>&)" + b + "_hi, " + m + ", MODE_ZEROING);");
+        codegen.Emit("vmula((RegTensor<uint32_t>&)" + d + "_hi, (RegTensor<uint32_t>&)" + a +
+                     "_hi, (RegTensor<uint32_t>&)" + b + "_lo, " + m + ", MODE_ZEROING);");
+    };
+    auto VnotInPlace = [&](const std::string& x, const std::string& m) {
+        codegen.Emit("vnot((RegTensor<uint32_t>&)" + x + "_lo, (RegTensor<uint32_t>&)" + x + "_lo, " + m +
+                     ", MODE_ZEROING);");
+        codegen.Emit("vnot((RegTensor<uint32_t>&)" + x + "_hi, (RegTensor<uint32_t>&)" + x + "_hi, " + m +
+                     ", MODE_ZEROING);");
+    };
+    auto AddB64 = [&](const std::string& d, const std::string& a, const std::string& b, const std::string& m) {
+        codegen.Emit("vaddc(" + cy + ", " + d + "_lo, " + a + "_lo, " + b + "_lo, " + m + ");");
+        codegen.Emit("vaddcs(" + cy + ", " + d + "_hi, " + a + "_hi, " + b + "_hi, " + cy + ", " + m + ");");
+    };
+    auto VsubUsingU32 = [&](const std::string& d, const std::string& a, const std::string& b, const std::string& m) {
+        codegen.Emit("vsubc(" + cy + ", " + d + "_lo, " + a + "_lo, " + b + "_lo, " + m + ");");
+        codegen.Emit("vsubcs(" + cy + ", " + d + "_hi, " + a + "_hi, " + b + "_hi, " + cy + ", " + m + ");");
+    };
+    auto VaddUsingU32 = [&](const std::string& d, const std::string& a, const std::string& b, const std::string& m) {
+        codegen.Emit("vaddc(" + cy + ", " + d + "_lo, " + a + "_lo, " + b + "_lo, " + m + ");");
+        codegen.Emit("vaddcs(" + cy + ", " + d + "_hi, " + a + "_hi, " + b + "_hi, " + cy + ", " + m + ");");
+    };
+    auto VselUsingU32 = [&](const std::string& d, const std::string& a, const std::string& b, const std::string& m) {
+        codegen.Emit("vsel((RegTensor<uint32_t>&)" + d + "_lo, (RegTensor<uint32_t>&)" + a +
+                     "_lo, (RegTensor<uint32_t>&)" + b + "_lo, " + m + ");");
+        codegen.Emit("vsel((RegTensor<uint32_t>&)" + d + "_hi, (RegTensor<uint32_t>&)" + a +
+                     "_hi, (RegTensor<uint32_t>&)" + b + "_hi, " + m + ");");
+    };
+    auto VcmpEqUsingU32 = [&](const std::string& d, const std::string& a, const std::string& b, const std::string& m) {
+        codegen.Emit("vcmp_eq(" + d + "_l, " + a + "_lo, " + b + "_lo, " + m + ");");
+        codegen.Emit("vcmp_eq(" + d + "_h, " + a + "_hi, " + b + "_hi, " + m + ");");
+        codegen.Emit("pand(" + d + ", " + d + "_l, " + d + "_h, " + m + ");");
+    };
+    auto VcmpGeUsingU32 = [&](const std::string& d, const std::string& a, const std::string& b, const std::string& m) {
+        codegen.Emit("vcmp_eq(" + d + "_heq, " + a + "_hi, " + b + "_hi, " + m + ");");
+        codegen.Emit("vcmp_ge(" + d + "_lge, " + a + "_lo, " + b + "_lo, " + m + ");");
+        codegen.Emit("vcmp_ge(" + d + "_hge, " + a + "_hi, " + b + "_hi, " + m + ");");
+        codegen.Emit("psel(" + d + ", " + d + "_lge, " + d + "_hge, " + d + "_heq);");
+    };
+    auto VcmpLtUsingU32 = [&](const std::string& d, const std::string& a, const std::string& b, const std::string& m) {
+        codegen.Emit("vcmp_eq(" + d + "_heq, " + a + "_hi, " + b + "_hi, " + m + ");");
+        codegen.Emit("vcmp_lt(" + d + "_llt, " + a + "_lo, " + b + "_lo, " + m + ");");
+        codegen.Emit("vcmp_lt(" + d + "_hlt, " + a + "_hi, " + b + "_hi, " + m + ");");
+        codegen.Emit("psel(" + d + ", " + d + "_llt, " + d + "_hlt, " + d + "_heq);");
+    };
+    auto VbrU32 = [&](const std::string& d, const std::string& hi_val, const std::string& lo_val) {
+        codegen.Emit("vdup(" + d + "_hi, (int32_t)(" + hi_val + "), " + all_m + ", MODE_ZEROING);");
+        codegen.Emit("vdup(" + d + "_lo, (int32_t)(" + lo_val + "), " + all_m + ", MODE_ZEROING);");
+    };
+    auto DeclPair = [&](const std::string& base) {
+        codegen.Emit("RegTensor<uint32_t> " + base + "_lo;");
+        codegen.Emit("RegTensor<uint32_t> " + base + "_hi;");
+    };
+    auto DeclU32 = [&](const std::string& name) { codegen.Emit("RegTensor<uint32_t> " + name + ";"); };
+    // B128Calc: vb = high64(va * vb + s) (mirrors AscendC B128Calc; vb is both
+    // read and written, va and s are read-only). Uses two carry masks (mirrors
+    // the carry0/carry1 pair in the reference: the second vaddc's carry-out
+    // must not clobber the first, which is still consumed by the next vaddcs).
+    auto B128Calc = [&](const std::string& tag, const std::string& va, const std::string& vb, const std::string& s,
+                        const std::string& m) {
+        const std::string m0l = tag + "m0l", m0h = tag + "m0h", m1l = tag + "m1l", m1h = tag + "m1h";
+        const std::string m2l = tag + "m2l", m2h = tag + "m2h", m3l = tag + "m3l", m3h = tag + "m3h";
+        const std::string dd0 = tag + "dd0", dd1 = tag + "dd1";
+        DeclU32(m0l);
+        DeclU32(m0h);
+        DeclU32(m1l);
+        DeclU32(m1h);
+        DeclU32(m2l);
+        DeclU32(m2h);
+        DeclU32(m3l);
+        DeclU32(m3h);
+        DeclU32(dd0);
+        DeclU32(dd1);
+        codegen.Emit("vmull((RegTensor<uint32_t>&)" + m0l + ", (RegTensor<uint32_t>&)" + m0h +
+                     ", (RegTensor<uint32_t>&)" + va + "_lo, (RegTensor<uint32_t>&)" + vb + "_lo, " + m + ");");
+        codegen.Emit("vmull((RegTensor<uint32_t>&)" + m1l + ", (RegTensor<uint32_t>&)" + m1h +
+                     ", (RegTensor<uint32_t>&)" + va + "_lo, (RegTensor<uint32_t>&)" + vb + "_hi, " + m + ");");
+        codegen.Emit("vmull((RegTensor<uint32_t>&)" + m2l + ", (RegTensor<uint32_t>&)" + m2h +
+                     ", (RegTensor<uint32_t>&)" + va + "_hi, (RegTensor<uint32_t>&)" + vb + "_lo, " + m + ");");
+        codegen.Emit("vmull((RegTensor<uint32_t>&)" + m3l + ", (RegTensor<uint32_t>&)" + m3h +
+                     ", (RegTensor<uint32_t>&)" + va + "_hi, (RegTensor<uint32_t>&)" + vb + "_hi, " + m + ");");
+        codegen.Emit("vaddc(" + cy + ", " + dd0 + ", " + m0h + ", " + m1l + ", " + m + ");");
+        codegen.Emit("vaddc(" + cy1 + ", " + dd1 + ", " + dd0 + ", " + m2l + ", " + m + ");");
+        codegen.Emit("vaddcs(" + cy + ", " + dd0 + ", " + m3l + ", " + m1h + ", " + cy + ", " + m + ");");
+        codegen.Emit("vaddcs(" + cy1 + ", " + vb + "_lo, " + dd0 + ", " + m2h + ", " + cy1 + ", " + m + ");");
+        codegen.Emit("vaddcs(" + cy + ", " + dd0 + ", " + s + ", " + m3h + ", " + cy + ", " + m + ");");
+        codegen.Emit("vaddcs(" + cy + ", " + vb + "_hi, " + s + ", " + dd0 + ", " + cy1 + ", " + m + ");");
+    };
+    // Abs of src0/src1 via hi-half sign compare + borrow-chain neg + vsel
+    // (mirrors AbsUsingS32). Unsigned passes through unchanged.
+    const std::string abs0 = p + "abs0", abs1 = p + "abs1";
+    const std::string abs0_lo = abs0 + "_lo", abs0_hi = abs0 + "_hi";
+    const std::string abs1_lo = abs1 + "_lo", abs1_hi = abs1 + "_hi";
+    DeclPair(abs0);
+    DeclPair(abs1);
+    const std::string ac0 = p + "ac0", ac1 = p + "ac1", ac2 = p + "ac2";
+    const std::string at20 = p + "at20", at30 = p + "at30";
+    const std::string bc0 = p + "bc0", bc1 = p + "bc1", bc2 = p + "bc2";
+    const std::string bt20 = p + "bt20", bt30 = p + "bt30";
+    codegen.Emit("MaskReg " + ac0 + ";");
+    codegen.Emit("MaskReg " + ac1 + ";");
+    codegen.Emit("MaskReg " + ac2 + ";");
+    codegen.Emit("RegTensor<int32_t> " + at20 + ";");
+    codegen.Emit("RegTensor<int32_t> " + at30 + ";");
+    codegen.Emit("MaskReg " + bc0 + ";");
+    codegen.Emit("MaskReg " + bc1 + ";");
+    codegen.Emit("MaskReg " + bc2 + ";");
+    codegen.Emit("RegTensor<int32_t> " + bt20 + ";");
+    codegen.Emit("RegTensor<int32_t> " + bt30 + ";");
+    if (is_signed) {
+        codegen.Emit("vcmp_lt(" + p + "ac0, (RegTensor<int32_t>&)" + s0_hi + ", (RegTensor<int32_t>&)" + z_hi + ", " +
+                     pm + ");");
+        codegen.Emit("vsubc(" + p + "ac1, (RegTensor<int32_t>&)" + p + "at20, (RegTensor<int32_t>&)" + z_lo +
+                     ", (RegTensor<int32_t>&)" + s0_lo + ", " + p + "ac0);");
+        codegen.Emit("vsubcs(" + p + "ac2, (RegTensor<int32_t>&)" + p + "at30, (RegTensor<int32_t>&)" + z_hi +
+                     ", (RegTensor<int32_t>&)" + s0_hi + ", " + p + "ac1, " + pm + ");");
+        codegen.Emit("vsel((RegTensor<int32_t>&)" + abs0_lo + ", (RegTensor<int32_t>&)" + p +
+                     "at20, (RegTensor<int32_t>&)" + s0_lo + ", " + p + "ac0);");
+        codegen.Emit("vsel((RegTensor<int32_t>&)" + abs0_hi + ", (RegTensor<int32_t>&)" + p +
+                     "at30, (RegTensor<int32_t>&)" + s0_hi + ", " + p + "ac0);");
+        codegen.Emit("vcmp_lt(" + p + "bc0, (RegTensor<int32_t>&)" + s1_hi + ", (RegTensor<int32_t>&)" + z_hi + ", " +
+                     pm + ");");
+        codegen.Emit("vsubc(" + p + "bc1, (RegTensor<int32_t>&)" + p + "bt20, (RegTensor<int32_t>&)" + z_lo +
+                     ", (RegTensor<int32_t>&)" + s1_lo + ", " + p + "bc0);");
+        codegen.Emit("vsubcs(" + p + "bc2, (RegTensor<int32_t>&)" + p + "bt30, (RegTensor<int32_t>&)" + z_hi +
+                     ", (RegTensor<int32_t>&)" + s1_hi + ", " + p + "bc1, " + pm + ");");
+        codegen.Emit("vsel((RegTensor<int32_t>&)" + abs1_lo + ", (RegTensor<int32_t>&)" + p +
+                     "bt20, (RegTensor<int32_t>&)" + s1_lo + ", " + p + "bc0);");
+        codegen.Emit("vsel((RegTensor<int32_t>&)" + abs1_hi + ", (RegTensor<int32_t>&)" + p +
+                     "bt30, (RegTensor<int32_t>&)" + s1_hi + ", " + p + "bc0);");
+    } else {
+        codegen.Emit("vmov((RegTensor<int32_t>&)" + abs0_lo + ", (RegTensor<int32_t>&)" + s0_lo + ");");
+        codegen.Emit("vmov((RegTensor<int32_t>&)" + abs0_hi + ", (RegTensor<int32_t>&)" + s0_hi + ");");
+        codegen.Emit("vmov((RegTensor<int32_t>&)" + abs1_lo + ", (RegTensor<int32_t>&)" + s1_lo + ");");
+        codegen.Emit("vmov((RegTensor<int32_t>&)" + abs1_hi + ", (RegTensor<int32_t>&)" + s1_hi + ");");
+    }
+    // 64-bit constants: qZero = all-ones (div-by-zero result); one = 1.
+    const std::string qz = p + "qz", c1 = p + "c1";
+    DeclU32(qz + "_lo");
+    DeclU32(qz + "_hi");
+    DeclU32(c1 + "_lo");
+    DeclU32(c1 + "_hi");
+    VbrU32(qz, "-1", "-1");
+    VbrU32(c1, "0", "1");
+    // zeroMask: divisor == 0 (VcmpEqUsingU32 on both halves).
+    const std::string zero_m = p + "zm", nonzero_m = p + "nzm";
+    const std::string one_m = p + "om", nonone_m = p + "nom";
+    codegen.Emit("MaskReg " + zero_m + ", " + zero_m + "_l, " + zero_m + "_h;");
+    codegen.Emit("MaskReg " + nonzero_m + ";");
+    codegen.Emit("MaskReg " + one_m + ", " + one_m + "_l, " + one_m + "_h;");
+    codegen.Emit("MaskReg " + nonone_m + ";");
+    VcmpEqUsingU32(zero_m, s1, z, pm);
+    codegen.Emit("pnot(" + nonzero_m + ", " + zero_m + ", " + pm + ");");
+    // oneMask: abs(divisor) == 1.
+    VcmpEqUsingU32(one_m, abs1, c1, pm);
+    codegen.Emit("pnot(" + nonone_m + ", " + one_m + ", " + pm + ");");
+    // Newton work mask + (unsigned-only) pre-checks (mirrors DivU64Impl):
+    // divisor > INT64_MAX (hi half negative as int32) invalidates the f32
+    // reciprocal path; the quotient is 1 (src0 >= src1) or 0 (src0 < src1).
+    // usrc1_m keeps the "large divisor" meaning until the final bypass select,
+    // so the work-mask construction uses a separate notlarge_m mask.
+    const std::string work_m = p + "wm", usrc1_m = p + "u1m", srccmp_m = p + "scm", cmpdiv_m = p + "cdm";
+    const std::string ge0 = p + "ge0";
+    const std::string notlarge_m = p + "nlm";
+    const std::string q = p + "q", q_lo = q + "_lo", q_hi = q + "_hi";
+    codegen.Emit("MaskReg " + work_m + ";");
+    codegen.Emit("MaskReg " + usrc1_m + ";");
+    codegen.Emit("MaskReg " + srccmp_m + ";");
+    codegen.Emit("MaskReg " + cmpdiv_m + ";");
+    codegen.Emit("MaskReg " + ge0 + ";");
+    codegen.Emit("MaskReg " + notlarge_m + ";");
+    // Temp masks written by VcmpGeUsingU32/VcmpLtUsingU32 (shared across call
+    // sites, declared once here).
+    codegen.Emit("MaskReg " + srccmp_m + "_heq, " + srccmp_m + "_lge, " + srccmp_m + "_hge;");
+    codegen.Emit("MaskReg " + srccmp_m + "_llt, " + srccmp_m + "_hlt;");
+    codegen.Emit("MaskReg " + ge0 + "_heq, " + ge0 + "_lge, " + ge0 + "_hge;");
+    DeclU32(q_lo);
+    DeclU32(q_hi);
+    if (!is_signed) {
+        codegen.Emit("vcmp_lt(" + usrc1_m + ", (RegTensor<int32_t>&)" + s1_hi + ", (RegTensor<int32_t>&)" + z_hi +
+                     ", " + pm + ");");
+        VcmpGeUsingU32(srccmp_m, s0, s1, pm);
+        codegen.Emit("pand(" + cmpdiv_m + ", " + srccmp_m + ", " + usrc1_m + ", " + pm + ");");
+        VselUsingU32(q, c1, z, cmpdiv_m);
+        VcmpLtUsingU32(srccmp_m, s0, s1, pm);
+        codegen.Emit("pand(" + cmpdiv_m + ", " + srccmp_m + ", " + usrc1_m + ", " + pm + ");");
+        VselUsingU32(q, z, c1, cmpdiv_m);
+        codegen.Emit("vcmp_ge(" + notlarge_m + ", (RegTensor<int32_t>&)" + s1_hi + ", (RegTensor<int32_t>&)" + z_hi +
+                     ", " + pm + ");");
+        codegen.Emit("pand(" + work_m + ", " + nonzero_m + ", " + notlarge_m + ", " + pm + ");");
+        codegen.Emit("pand(" + work_m + ", " + work_m + ", " + nonone_m + ", " + pm + ");");
+    } else {
+        codegen.Emit("pand(" + work_m + ", " + nonone_m + ", " + nonzero_m + ", " + pm + ");");
+    }
+    // Newton-Raphson reciprocal refinement.
+    const std::string t2 = p + "t2f", t3 = p + "t3f", t4 = p + "t4u";
+    const std::string t2o = p + "t2o", t2c = p + "t2c", t2d = p + "t2d";
+    const std::string prl = p + "prl", prh = p + "prh", cf0 = p + "cf0", cf1 = p + "cf1";
+    const std::string ci0 = p + "ci0", ci1 = p + "ci1";
+    const std::string t5 = p + "t5", t6 = p + "t6", t7 = p + "t7", t8 = p + "t8", t9 = p + "t9";
+    const std::string d0 = p + "d0", d1 = p + "d1";
+    const std::string t5_lo = t5 + "_lo", t5_hi = t5 + "_hi";
+    const std::string t6_lo = t6 + "_lo", t6_hi = t6 + "_hi";
+    codegen.Emit("RegTensor<float> " + t2 + ";");
+    codegen.Emit("RegTensor<float> " + t3 + ";");
+    codegen.Emit("RegTensor<float> " + t2o + ";");
+    codegen.Emit("RegTensor<float> " + t2c + ";");
+    codegen.Emit("RegTensor<float> " + t2d + ";");
+    DeclU32(t4);
+    // prl/prh receive the interleaved b64 divisor (s64 view), cf0/cf1 the
+    // split f32 halves, ci0/ci1 the converted s64 reciprocal (mirrors
+    // Int64ToFloat / FloatToInt64 in the reference).
+    codegen.Emit("RegTensor<int64_t> " + prl + ";");
+    codegen.Emit("RegTensor<int64_t> " + prh + ";");
+    codegen.Emit("RegTensor<float> " + cf0 + ";");
+    codegen.Emit("RegTensor<float> " + cf1 + ";");
+    codegen.Emit("RegTensor<int64_t> " + ci0 + ";");
+    codegen.Emit("RegTensor<int64_t> " + ci1 + ";");
+    DeclPair(t5);
+    DeclPair(t6);
+    DeclPair(t7);
+    DeclPair(t8);
+    DeclPair(t9);
+    DeclU32(d0);
+    DeclU32(d1);
+    // VcvtS642F32(t2c, abs1): re-interleave the halves to b64, convert to f32,
+    // then compact. The s64->f32 vcvt writes its 32 results to the EVEN f32
+    // lanes only, so the converted values must be gathered to consecutive
+    // lanes 0-31 with a vdintlv before the divide (mirrors Int64ToFloat's
+    // vcvt + vdintlv tail).
+    // vintlv must use a single element view for all four arguments: the s32
+    // v64 overload takes vector_s32 refs for the dst pair and vector_s32
+    // values for the lo/hi sources (mirrors Int64ToFloat's (vector_s32&)
+    // casts; mixing s32 dsts with u32 srcs matches no overload).
+    codegen.Emit("vintlv((RegTensor<int32_t>&)" + prl + ", (RegTensor<int32_t>&)" + prh + ", (RegTensor<int32_t>&)" +
+                 abs1_lo + ", (RegTensor<int32_t>&)" + abs1_hi + ");");
+    codegen.Emit("vcvt(" + t2 + ", " + prl + ", " + all_m + ", ROUND_R, PART_EVEN);");
+    codegen.Emit("vcvt(" + t2o + ", " + prh + ", " + all_m + ", ROUND_R, PART_EVEN);");
+    codegen.Emit("vdintlv((RegTensor<float>&)" + t2c + ", (RegTensor<float>&)" + t2d + ", (RegTensor<float>&)" + t2 +
+                 ", (RegTensor<float>&)" + t2o + ");");
+    // F32PreProcess(t4, t3, t2c): 1.0 / divisor_f32, then the f32 exponent bias.
+    codegen.Emit("vdup(" + t3 + ", 1.0f, " + all_m + ", MODE_ZEROING);");
+    codegen.Emit("vdiv(" + t3 + ", " + t3 + ", " + t2c + ", " + work_m + ", MODE_ZEROING);");
+    codegen.Emit("vadds(" + t4 + ", (RegTensor<uint32_t>&)" + t3 + ", (int32_t)0x1FFFFFFE, " + work_m + ");");
+    // VcvtF322S64(t5, t4): f32 -> s64 (the 6-arg overload: ROUND + RS + PART).
+    codegen.Emit("vintlv(" + cf0 + ", " + cf1 + ", (RegTensor<float>&)" + t4 + ", (RegTensor<float>&)" + t4 + ");");
+    codegen.Emit("vcvt(" + ci0 + ", " + cf0 + ", " + all_m + ", ROUND_Z, RS_DISABLE, PART_EVEN);");
+    codegen.Emit("vcvt(" + ci1 + ", " + cf1 + ", " + all_m + ", ROUND_Z, RS_DISABLE, PART_EVEN);");
+    codegen.Emit("vdintlv((RegTensor<int32_t>&)" + t5_lo + ", (RegTensor<int32_t>&)" + t5_hi +
+                 ", (RegTensor<int32_t>&)" + ci0 + ", (RegTensor<int32_t>&)" + ci1 + ");");
+    // Newton refinement: t6 = -(abs1 * t5) + 1.
+    VmulUsingU32(t6, abs1, t5, work_m);
+    VnotInPlace(t6, work_m);
+    AddB64(t6, t6, c1, work_m);
+    codegen.Emit("vdup(" + t4 + ", 0, " + all_m + ", MODE_ZEROING);");
+    // Refinement rounds via B128Calc (128-bit square/product high parts).
+    B128Calc(p + "r1", t5, t6, t4, work_m);
+    VaddUsingU32(t7, t5, t6, work_m);
+    VmulUsingU32(t6, abs1, t7, work_m);
+    VnotInPlace(t6, work_m);
+    AddB64(t6, t6, c1, work_m);
+    B128Calc(p + "r2", t7, t6, t4, work_m);
+    VaddUsingU32(t6, t7, t6, work_m);
+    B128Calc(p + "r3", abs0, t6, t4, work_m);
+    // Final correction: two conditional subtract + increment rounds.
+    VmulUsingU32(t7, t6, abs1, work_m);
+    VsubUsingU32(t7, abs0, t7, work_m);
+    VcmpGeUsingU32(ge0, t7, abs1, work_m);
+    VsubUsingU32(t8, t7, abs1, ge0);
+    AddB64(t9, t6, c1, ge0);
+    VselUsingU32(t7, t8, t7, ge0);
+    VselUsingU32(t6, t9, t6, ge0);
+    VcmpGeUsingU32(ge0, t7, abs1, work_m);
+    AddB64(t9, t6, c1, ge0);
+    VselUsingU32(t6, t9, t6, ge0);
+    VselUsingU32(t6, abs0, t6, one_m);
+    if (!is_signed) {
+        VselUsingU32(t6, q, t6, usrc1_m);
+    }
+    // DivSignCal + negate the quotient when the operand signs differ (signed).
+    // The negation (0 - q) runs under the full mask (mirrors
+    // Int64DivSignedRestoreSign: the negate happens on every lane and the
+    // following vsel picks the original quotient on same-sign lanes).
+    if (is_signed) {
+        const std::string s0ge_m = p + "s0ge", s1ge_m = p + "s1ge", sign_m = p + "sign";
+        codegen.Emit("MaskReg " + s0ge_m + ", " + s1ge_m + ", " + sign_m + ";");
+        codegen.Emit("vcmp_ge(" + s0ge_m + ", (RegTensor<int32_t>&)" + s0_hi + ", (RegTensor<int32_t>&)" + z_lo + ", " +
+                     pm + ");");
+        codegen.Emit("vcmp_ge(" + s1ge_m + ", (RegTensor<int32_t>&)" + s1_hi + ", (RegTensor<int32_t>&)" + z_lo + ", " +
+                     pm + ");");
+        codegen.Emit("pxor(" + sign_m + ", " + s0ge_m + ", " + s1ge_m + ", " + pm + ");");
+        codegen.Emit("pnot(" + sign_m + ", " + sign_m + ", " + pm + ");");
+        VsubUsingU32(t8, z, t6, all_m);
+        VselUsingU32(t6, t6, t8, sign_m);
+    }
+    // Divisor == 0 -> all-ones quotient; assemble the interleaved dst.
+    VselUsingU32(t6, qz, t6, zero_m);
+    codegen.Emit("vintlv((RegTensor<uint32_t>&)" + dst + ", (RegTensor<uint32_t>&)" + d1 + ", (RegTensor<uint32_t>&)" +
+                 t6_lo + ", (RegTensor<uint32_t>&)" + t6_hi + ");");
+}
+
 // Check if a DataType lacks a direct vdup/vlds/vsts intrinsic overload and
 // must be reinterpreted as uint8_t. The bisheng __VF_VDUP/__VF_VLDS/__VF_VSTS
 // macros only instantiate overloads for u8/s8/u16/s16/f16/u32/s32/f32/bf16/
@@ -219,6 +737,26 @@ static std::string ResolveOffsetArg(codegen::CCECodegen& codegen, const ir::Expr
 // CreateMask — declares MaskReg + emits VF init instruction
 // ============================================================================
 
+// For b64 element width (INT64/UINT64) on a single-register trait, the hardware
+// interprets mask bits at 2-bit-per-element granularity. Since pset_b32 produces
+// 1-bit-per-b32-element masks, we must:
+//   1. Remap H/Q patterns to VL16/VL8 (punpack doubles the bit count, so the
+//      source pattern must be halved to compensate).
+//   2. Emit punpack(reg, reg, LOWER) after pset_b32 to expand each bit into a
+//      pair, matching the 2-bit-per-b64-element mask width.
+// This mirrors AscendC CreateMaskImpl<T, mode, RegTraitNumOne> for sizeof(T)==8.
+static ir::MaskPattern RemapB64MaskPattern(ir::MaskPattern pattern)
+{
+    switch (pattern) {
+        case ir::MaskPattern::H:
+            return ir::MaskPattern::VL16;
+        case ir::MaskPattern::Q:
+            return ir::MaskPattern::VL8;
+        default:
+            return pattern;
+    }
+}
+
 static std::string EmitVFCreateMask(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
@@ -230,6 +768,10 @@ static std::string EmitVFCreateMask(const ir::CallPtr& op, codegen::CodegenBase&
     // FP4 types (GetBit()==4) are b8 storage (packed 2-per-byte), treated as b8
     CHECK(IsB8Type(dtype) || dtype.GetBit() == 16 || dtype.GetBit() == 32 || dtype.GetBit() == 64)
         << "vf.create_mask dtype must be b8/b16/b32/b64, got " << DTypeStr(dtype);
+    bool is_b64 = (dtype.GetBit() == 64);
+    if (is_b64) {
+        pattern = RemapB64MaskPattern(pattern);
+    }
     std::string reg_name = codegen.GetCurrentResultTarget();
     codegen.Emit("MaskReg " + reg_name + ";");
     codegen.RegisterMaskRegVar(reg_name);
@@ -288,10 +830,15 @@ static std::string EmitVFCreateMask(const ir::CallPtr& op, codegen::CodegenBase&
     // Select pset instruction based on data element size (not mask type)
     // float/int32 (4 bytes) → pset_b32, half/bf16 (2 bytes) → pset_b16, int8 (1 byte) → pset_b8
     // FP8/FP4 types are b8 storage → pset_b8
+    // b64 (INT64/UINT64): pset_b32 + punpack(LOWER) — punpack expands each bit
+    // into a pair to match the 2-bit-per-element mask width for 8-byte elements.
     if (IsB8Type(dtype)) {
         codegen.Emit(reg_name + " = pset_b8(" + pat + ");");
-    } else if (dtype.GetBit() == 32 || dtype.GetBit() == 64) {
+    } else if (dtype.GetBit() == 32 || is_b64) {
         codegen.Emit(reg_name + " = pset_b32(" + pat + ");");
+        if (is_b64) {
+            codegen.Emit("punpack(" + reg_name + ", " + reg_name + ", LOWER);");
+        }
     } else {
         // FP16, BF16, UINT16, INT16 etc. (2 bytes)
         codegen.Emit(reg_name + " = pset_b16(" + pat + ");");
@@ -314,6 +861,11 @@ static std::string EmitVFDuplicate(const ir::CallPtr& op, codegen::CodegenBase& 
         << "vf.full src only supports b8/b16/b32/b64 types, got " << DTypeStr(src_dt);
     // MERGING is not supported by the underlying vdup/vbr instructions on current device.
     VFZeroingOnly(op, "vf.full");
+    // The fill width follows the DST tile. The Scalar-mode ``dtype`` kwarg is
+    // what the frontend uses to declare dst (a bare int literal is an
+    // INDEX-typed 64-bit placeholder, so it must not be compared against dst
+    // nor route a b16/b32 fill into the b64 split path).
+    DataType dst_dt = GetExprDtype(op->args_[0]);
     std::string dst = codegen.GetExprAsCode(op->args_[0]);
     std::string src_str = codegen.GetExprAsCode(op->args_[1]);
     // Detect vector-source broadcast: either explicit pos kwarg, or src is a RegTensor variable.
@@ -332,9 +884,6 @@ static std::string EmitVFDuplicate(const ir::CallPtr& op, codegen::CodegenBase& 
     if (is_vector_src) {
         // Vector-source broadcast (Tensor mode): vdup(dst, src_vec, mask, POS_xxx, MODE)
         // pos kwarg: "LOWEST" -> POS_LOWEST, "HIGHEST" -> POS_HIGHEST
-        DataType dst_dt = GetExprDtype(op->args_[0]);
-        CHECK(dst_dt == src_dt) << "vf.full (vector-source) requires dst and src to have the same type, got dst="
-                                << DTypeStr(dst_dt) << " src=" << DTypeStr(src_dt);
         if (pos.empty() || pos == "LOWEST")
             pos = "POS_LOWEST";
         else if (pos == "HIGHEST")
@@ -365,10 +914,46 @@ static std::string EmitVFDuplicate(const ir::CallPtr& op, codegen::CodegenBase& 
         // Scalar broadcast with mask: vdup(dst, scalar, preg, MODE_ZEROING/MERGING)
         std::string mask = codegen.GetExprAsCode(op->args_[2]);
         std::string mode = VFZeroingOnly(op, "vf.full");
-        codegen.Emit("vdup(" + dst + ", " + src_str + ", " + mask + ", " + mode + ");");
+        // The fill width follows DST: an int literal is INDEX-typed (64-bit)
+        // and must not route a b16/b32 fill into the b64 split path.
+        if (dst_dt.GetBit() == 64) {
+            // B64 has no vdup single-register overload; create two b32 halves,
+            // vdup each with packed b32 mask, then vintlv into b64 dst
+            // (mirrors AscendC DuplicateB64Impl + MaskPack).
+            std::string p = dst + "_dup_";
+            std::string packed_m = p + "_pm_";
+            codegen.Emit("MaskReg " + packed_m + ";");
+            codegen.Emit("ppack(" + packed_m + ", " + mask + ", LOWER);");
+            std::string lo_d = p + "_lo_";
+            std::string hi_d = p + "_hi_";
+            std::string cast_type = (dst_dt == DataType::INT64) ? "(int64_t)" : "(uint64_t)";
+            codegen.Emit("RegTensor<uint32_t> " + lo_d + ";");
+            codegen.Emit("RegTensor<uint32_t> " + hi_d + ";");
+            codegen.Emit("vdup(" + lo_d + ", (uint32_t)(" + cast_type + "(" + src_str + ")), " + packed_m + ", " +
+                         mode + ");");
+            codegen.Emit("vdup(" + hi_d + ", (uint32_t)((" + cast_type + "(" + src_str + ")) >> 32), " + packed_m +
+                         ", " + mode + ");");
+            EmitB64Interleave(codegen, dst, lo_d, hi_d, p + "_ilv");
+        } else {
+            codegen.Emit("vdup(" + dst + ", " + src_str + ", " + mask + ", " + mode + ");");
+        }
     } else {
         // Scalar broadcast without mask: vbr(dst, scalar)
-        codegen.Emit("vbr(" + dst + ", " + src_str + ");");
+        if (dst_dt.GetBit() == 64) {
+            // B64 has no vbr single-register overload; create two b32 halves,
+            // vbr each, then vintlv into b64 dst (mirrors AscendC DuplicateB64Impl).
+            std::string p = dst + "_br_";
+            std::string lo_d = p + "_lo_";
+            std::string hi_d = p + "_hi_";
+            std::string cast_type = (dst_dt == DataType::INT64) ? "(int64_t)" : "(uint64_t)";
+            codegen.Emit("RegTensor<uint32_t> " + lo_d + ";");
+            codegen.Emit("RegTensor<uint32_t> " + hi_d + ";");
+            codegen.Emit("vbr(" + lo_d + ", (uint32_t)(" + cast_type + "(" + src_str + ")));");
+            codegen.Emit("vbr(" + hi_d + ", (uint32_t)((" + cast_type + "(" + src_str + ")) >> 32));");
+            EmitB64Interleave(codegen, dst, lo_d, hi_d, p + "_ilv");
+        } else {
+            codegen.Emit("vbr(" + dst + ", " + src_str + ");");
+        }
     }
     return "";
 }
@@ -1034,7 +1619,55 @@ static std::string EmitVFMax(const ir::CallPtr& op, codegen::CodegenBase& codege
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
     // MERGING is not supported by the underlying vmax instruction on current device.
     std::string mode = VFZeroingOnly(op, "vf.max");
-    codegen.Emit("vmax(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ", " + mode + ");");
+    if (s0_dt.GetBit() == 64) {
+        // B64 max via deinterleave + b32 compare + vsel + interleave.
+        // For INT64: compare high halves (signed), then low halves (unsigned) on tie.
+        // For UINT64: compare high halves (unsigned), then low halves (unsigned) on tie.
+        std::string p = dst + "_max_";
+        EmitB64Deinterleave(codegen, p + "s0", src0);
+        EmitB64Deinterleave(codegen, p + "s1", src1);
+        std::string lo0 = p + "s0_lo_", hi0 = p + "s0_hi_";
+        std::string lo1 = p + "s1_lo_", hi1 = p + "s1_hi_";
+        std::string all_m = p + "_allm_";
+        codegen.Emit("MaskReg " + all_m + " = pset_b32(PAT_ALL);");
+        // Compare high halves
+        std::string hi_gt = p + "_higt_";
+        std::string hi_eq = p + "_hieq_";
+        std::string lo_gt = p + "_logt_";
+        codegen.Emit("MaskReg " + hi_gt + ";");
+        codegen.Emit("MaskReg " + hi_eq + ";");
+        codegen.Emit("MaskReg " + lo_gt + ";");
+        if (s0_dt == DataType::INT64) {
+            codegen.Emit("vcmp_gt(" + hi_gt + ", (RegTensor<int32_t>&)" + hi0 + ", (RegTensor<int32_t>&)" + hi1 + ", " +
+                         all_m + ");");
+            codegen.Emit("vcmp_eq(" + hi_eq + ", (RegTensor<int32_t>&)" + hi0 + ", (RegTensor<int32_t>&)" + hi1 + ", " +
+                         all_m + ");");
+        } else {
+            codegen.Emit("vcmp_gt(" + hi_gt + ", " + hi0 + ", " + hi1 + ", " + all_m + ");");
+            codegen.Emit("vcmp_eq(" + hi_eq + ", " + hi0 + ", " + hi1 + ", " + all_m + ");");
+        }
+        codegen.Emit("vcmp_gt(" + lo_gt + ", " + lo0 + ", " + lo1 + ", " + all_m + ");");
+        // Combine: src0 > src1 iff hi_gt OR (hi_eq AND lo_gt)
+        std::string eq_lo = p + "_eqlo_";
+        std::string s0_gt = p + "_s0gt_";
+        codegen.Emit("MaskReg " + eq_lo + ";");
+        codegen.Emit("MaskReg " + s0_gt + ";");
+        codegen.Emit("pand(" + eq_lo + ", " + hi_eq + ", " + lo_gt + ", " + all_m + ");");
+        codegen.Emit("por(" + s0_gt + ", " + hi_gt + ", " + eq_lo + ", " + all_m + ");");
+        // Select: dst = src0 > src1 ? src0 : src1 (per b32 half)
+        std::string lo_dst = p + "_lod_";
+        std::string hi_dst = p + "_hid_";
+        codegen.Emit("RegTensor<uint32_t> " + lo_dst + ";");
+        codegen.Emit("RegTensor<uint32_t> " + hi_dst + ";");
+        codegen.Emit("vsel(" + lo_dst + ", " + lo0 + ", " + lo1 + ", " + s0_gt + ");");
+        codegen.Emit("vsel(" + hi_dst + ", " + hi0 + ", " + hi1 + ", " + s0_gt + ");");
+        // Interleave back to b64
+        EmitB64Interleave(codegen, dst, lo_dst, hi_dst, p + "_ilv");
+        // Apply ZEROING
+        EmitB64Zeroing(codegen, dst, dst, mask, p + "_zero");
+    } else {
+        codegen.Emit("vmax(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ", " + mode + ");");
+    }
     return "";
 }
 
@@ -1060,7 +1693,33 @@ static std::string EmitVFAdd(const ir::CallPtr& op, codegen::CodegenBase& codege
         << " src0=" << DTypeStr(s0_dt) << " src1=" << DTypeStr(s1_dt);
     // MERGING is not supported by the underlying vadd instruction on current device.
     std::string mode = VFZeroingOnly(op, "vf.add");
-    codegen.Emit("vadd(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ", " + mode + ");");
+    if (s0_dt.GetBit() == 64) {
+        // B64 add: Mirrors AscendC AddB64Impl (vaddc + vaddcs carry-chain).
+        // Uses CalTraitOneByTransToTraitTwo pattern: ppack mask, deinterleave both sources,
+        // AddB64 (vaddc + vaddcs), interleave back.
+        std::string p = dst + "_add_";
+        std::string b32_cast = (s0_dt == DataType::INT64) ? "(RegTensor<int32_t>&)" : "(RegTensor<uint32_t>&)";
+        std::string packed_m = p + "_pm_";
+        codegen.Emit("MaskReg " + packed_m + ";");
+        codegen.Emit("ppack(" + packed_m + ", " + mask + ", LOWER);");
+        EmitB64Deinterleave(codegen, p + "s0", src0);
+        EmitB64Deinterleave(codegen, p + "s1", src1);
+        std::string lo0 = p + "s0_lo_", hi0 = p + "s0_hi_";
+        std::string lo1 = p + "s1_lo_", hi1 = p + "s1_hi_";
+        std::string carry = p + "_carry_";
+        std::string lo_d = p + "_lod_";
+        std::string hi_d = p + "_hid_";
+        codegen.Emit("MaskReg " + carry + ";");
+        codegen.Emit("RegTensor<uint32_t> " + lo_d + ";");
+        codegen.Emit("RegTensor<uint32_t> " + hi_d + ";");
+        codegen.Emit("vaddc(" + carry + ", " + b32_cast + lo_d + ", " + b32_cast + lo0 + ", " + b32_cast + lo1 + ", " +
+                     packed_m + ");");
+        codegen.Emit("vaddcs(" + carry + ", " + b32_cast + hi_d + ", " + b32_cast + hi0 + ", " + b32_cast + hi1 + ", " +
+                     carry + ", " + packed_m + ");");
+        EmitB64Interleave(codegen, dst, lo_d, hi_d, p + "_ilv");
+    } else {
+        codegen.Emit("vadd(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ", " + mode + ");");
+    }
     return "";
 }
 
@@ -1085,7 +1744,33 @@ static std::string EmitVFSub(const ir::CallPtr& op, codegen::CodegenBase& codege
         << "vf.sub requires dst, src0, src1 to have the same type, got dst=" << DTypeStr(dst_dt)
         << " src0=" << DTypeStr(s0_dt) << " src1=" << DTypeStr(s1_dt);
     std::string mode = VFZeroingOnly(op, "vf.sub");
-    codegen.Emit("vsub(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ", " + mode + ");");
+    if (s0_dt.GetBit() == 64) {
+        // B64 sub: Mirrors AscendC SubB64Impl (vsubc + vsubcs borrow-chain).
+        // Uses CalTraitOneByTransToTraitTwo pattern: ppack mask, deinterleave both sources,
+        // SubB64 (vsubc + vsubcs), interleave back.
+        std::string p = dst + "_sub_";
+        std::string b32_cast = (s0_dt == DataType::INT64) ? "(RegTensor<int32_t>&)" : "(RegTensor<uint32_t>&)";
+        std::string packed_m = p + "_pm_";
+        codegen.Emit("MaskReg " + packed_m + ";");
+        codegen.Emit("ppack(" + packed_m + ", " + mask + ", LOWER);");
+        EmitB64Deinterleave(codegen, p + "s0", src0);
+        EmitB64Deinterleave(codegen, p + "s1", src1);
+        std::string lo0 = p + "s0_lo_", hi0 = p + "s0_hi_";
+        std::string lo1 = p + "s1_lo_", hi1 = p + "s1_hi_";
+        std::string borrow = p + "_borrow_";
+        std::string lo_d = p + "_lod_";
+        std::string hi_d = p + "_hid_";
+        codegen.Emit("MaskReg " + borrow + ";");
+        codegen.Emit("RegTensor<uint32_t> " + lo_d + ";");
+        codegen.Emit("RegTensor<uint32_t> " + hi_d + ";");
+        codegen.Emit("vsubc(" + borrow + ", " + b32_cast + lo_d + ", " + b32_cast + lo0 + ", " + b32_cast + lo1 + ", " +
+                     packed_m + ");");
+        codegen.Emit("vsubcs(" + borrow + ", " + b32_cast + hi_d + ", " + b32_cast + hi0 + ", " + b32_cast + hi1 +
+                     ", " + borrow + ", " + packed_m + ");");
+        EmitB64Interleave(codegen, dst, lo_d, hi_d, p + "_ilv");
+    } else {
+        codegen.Emit("vsub(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ", " + mode + ");");
+    }
     return "";
 }
 
@@ -1138,7 +1823,12 @@ static std::string EmitVFAnd(const ir::CallPtr& op, codegen::CodegenBase& codege
     std::string s0_expr = (s0_dt == dst_dt) ? src0 : (cast_prefix + src0);
     std::string s1_expr = (s1_dt == dst_dt) ? src1 : (cast_prefix + src1);
     std::string mode = VFZeroingOnly(op, "vf.and_");
-    codegen.Emit("vand(" + dst + ", " + s0_expr + ", " + s1_expr + ", " + mask + ", " + mode + ");");
+    if (dst_dt.GetBit() == 64) {
+        // B64 bitwise via b32 vand (mirrors AscendC AndImpl b64 path, see EmitB64Bitwise).
+        EmitB64Bitwise(codegen, "vand", {s0_expr, s1_expr}, dst, mask, mode, dst + "_and_");
+    } else {
+        codegen.Emit("vand(" + dst + ", " + s0_expr + ", " + s1_expr + ", " + mask + ", " + mode + ");");
+    }
     return "";
 }
 
@@ -1191,7 +1881,13 @@ static std::string EmitVFBinaryBitwise(const ir::CallPtr& op, codegen::CodegenBa
     std::string s0_expr = (s0_dt == dst_dt) ? src0 : (cast_prefix + src0);
     std::string s1_expr = (s1_dt == dst_dt) ? src1 : (cast_prefix + src1);
     std::string mode = VFZeroingOnly(op, op_name);
-    codegen.Emit(instruction + "(" + dst + ", " + s0_expr + ", " + s1_expr + ", " + mask + ", " + mode + ");");
+    if (dst_dt.GetBit() == 64) {
+        // B64 bitwise via b32 instruction (mirrors AscendC XorImpl/OrImpl b64 path, see EmitB64Bitwise).
+        std::string p = dst + "_" + instruction.substr(1) + "_";
+        EmitB64Bitwise(codegen, instruction, {s0_expr, s1_expr}, dst, mask, mode, p);
+    } else {
+        codegen.Emit(instruction + "(" + dst + ", " + s0_expr + ", " + s1_expr + ", " + mask + ", " + mode + ");");
+    }
     return "";
 }
 
@@ -1268,6 +1964,18 @@ static std::string EmitVFReduceImpl(const ir::CallPtr& op, codegen::CodegenBase&
             << op->name_ << " only supports ZEROING mode on current device, but got MERGING";
         mode = merge_mode == ir::MergeMode::MERGING ? "MODE_MERGING" : "MODE_ZEROING";
     }
+    if (!datablock && src_dt.GetBit() == 64) {
+        // B64 reduce (INT64/UINT64): no native b64 vcadd/vcmax/vcmin. Defer to
+        // the b64 emulation helpers (mirrors AscendC ReduceSumB64Impl /
+        // ReduceMaxB64Impl / ReduceMinB64Impl). The result lands in element 0
+        // of dst; the remaining dst lanes are don't-care.
+        if (reduce_mode == "SUM") {
+            EmitB64ReduceSum(codegen, dst, src, mask);
+        } else {
+            EmitB64ReduceMaxMin(codegen, dst, src, mask, reduce_mode == "MAX", src_dt == DataType::INT64);
+        }
+        return "";
+    }
     codegen.Emit(intrinsic + "(" + dst + ", " + src + ", " + mask + ", " + mode + ");");
     return "";
 }
@@ -1310,7 +2018,40 @@ static std::string EmitVFMul(const ir::CallPtr& op, codegen::CodegenBase& codege
     std::string src1 = codegen.GetExprAsCode(op->args_[2]);
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
     std::string mode = VFZeroingOnly(op, "vf.mul");
-    codegen.Emit("vmul(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ", " + mode + ");");
+    if (s0_dt.GetBit() == 64) {
+        // B64 mul: Mirrors AscendC MulB64Impl (vmull + vmula).
+        // MulB64Impl uses B64TraitOneToTraitTwo to split both sources into b32 halves,
+        // then vmull (32x32→64 long multiply) + vmula (cross-term accumulate).
+        std::string p = dst + "_mul_";
+        // AscendC MulB64Impl: vmull always uses uint32_t (unsigned 32x32→64);
+        // vmula uses int32_t for int64_t (signed cross-term), uint32_t for uint64_t.
+        std::string vmull_cast = "(RegTensor<uint32_t>&)";
+        std::string vmula_cast = (s0_dt == DataType::INT64) ? "(RegTensor<int32_t>&)" : "(RegTensor<uint32_t>&)";
+        // Pack b64 mask to b32 (mirrors MaskPack in CalTraitOneByTransToTraitTwo)
+        std::string packed_m = p + "_pm_";
+        codegen.Emit("MaskReg " + packed_m + ";");
+        codegen.Emit("ppack(" + packed_m + ", " + mask + ", LOWER);");
+        // Deinterleave src0 and src1 to b32 halves
+        EmitB64Deinterleave(codegen, p + "s0", src0);
+        EmitB64Deinterleave(codegen, p + "s1", src1);
+        std::string lo0 = p + "s0_lo_", hi0 = p + "s0_hi_";
+        std::string lo1 = p + "s1_lo_", hi1 = p + "s1_hi_";
+        // MulB64: vmull (lo0 × lo1 → dst_lo, dst_hi) + vmula (lo0 × hi1 → dst_hi) + vmula (hi0 × lo1 → dst_hi)
+        std::string lo_d = p + "_lod_";
+        std::string hi_d = p + "_hid_";
+        codegen.Emit("RegTensor<uint32_t> " + lo_d + ";");
+        codegen.Emit("RegTensor<uint32_t> " + hi_d + ";");
+        codegen.Emit("vmull(" + vmull_cast + lo_d + ", " + vmull_cast + hi_d + ", " + vmull_cast + lo0 + ", " +
+                     vmull_cast + lo1 + ", " + packed_m + ");");
+        codegen.Emit("vmula(" + vmula_cast + hi_d + ", " + vmula_cast + lo0 + ", " + vmula_cast + hi1 + ", " +
+                     packed_m + ", MODE_ZEROING);");
+        codegen.Emit("vmula(" + vmula_cast + hi_d + ", " + vmula_cast + hi0 + ", " + vmula_cast + lo1 + ", " +
+                     packed_m + ", MODE_ZEROING);");
+        // Interleave back (mirrors B64TraitTwoToTraitOne)
+        EmitB64Interleave(codegen, dst, lo_d, hi_d, p + "_ilv");
+    } else {
+        codegen.Emit("vmul(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ", " + mode + ");");
+    }
     return "";
 }
 
@@ -1367,6 +2108,14 @@ static std::string EmitVFDiv(const ir::CallPtr& op, codegen::CodegenBase& codege
     std::string src1 = codegen.GetExprAsCode(op->args_[2]);
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
     std::string mode = VFZeroingOnly(op, "vf.div");
+    if (s0_dt.GetBit() == 64) {
+        // B64 division (INT64/UINT64): Newton-Raphson reciprocal refinement
+        // mirroring AscendC DivS64Impl / DivU64Impl. No native b64 vdiv.
+        CHECK(!(op->HasKwarg("precision") && op->GetKwarg<bool>("precision")))
+            << "vf.div precision mode only supports FP16/FP32";
+        EmitB64Div(codegen, dst, src0, src1, mask, s0_dt == DataType::INT64);
+        return "";
+    }
     if (op->HasKwarg("precision") && op->GetKwarg<bool>("precision")) {
         // Mirrors AscendC DivPrecisionImpl (vec_binary_impl.h:868-976): error-
         // complementation quotient correction with inf/nan/zero bypass and
@@ -1479,15 +2228,17 @@ static std::string EmitVFMuls(const ir::CallPtr& op, codegen::CodegenBase& codeg
     CHECK(op->args_.size() == 4) << "vf.muls requires 4 args (dst, src, scalar, mask)";
     DataType src_dt = GetExprDtype(op->args_[1]);
     CHECK((src_dt == DataType::INT16 || src_dt == DataType::UINT16 || src_dt == DataType::INT32 ||
-           src_dt == DataType::UINT32 || src_dt == DataType::FP16 || src_dt == DataType::FP32))
-        << "vf.muls src only supports INT16/UINT16/INT32/UINT32/FP16/FP32, got " << DTypeStr(src_dt);
+           src_dt == DataType::UINT32 || src_dt == DataType::INT64 || src_dt == DataType::UINT64 ||
+           src_dt == DataType::FP16 || src_dt == DataType::FP32))
+        << "vf.muls src only supports INT16/UINT16/INT32/UINT32/INT64/UINT64/FP16/FP32, got " << DTypeStr(src_dt);
     DataType scalar_dt = GetExprDtype(op->args_[2]);
     if (scalar_dt == DataType::INDEX) {
         scalar_dt = src_dt;
     }
     CHECK((scalar_dt == DataType::INT16 || scalar_dt == DataType::UINT16 || scalar_dt == DataType::INT32 ||
-           scalar_dt == DataType::UINT32 || scalar_dt == DataType::FP16 || scalar_dt == DataType::FP32))
-        << "vf.muls scalar only supports INT16/UINT16/INT32/UINT32/FP16/FP32, got " << DTypeStr(scalar_dt);
+           scalar_dt == DataType::UINT32 || scalar_dt == DataType::INT64 || scalar_dt == DataType::UINT64 ||
+           scalar_dt == DataType::FP16 || scalar_dt == DataType::FP32))
+        << "vf.muls scalar only supports INT16/UINT16/INT32/UINT32/INT64/UINT64/FP16/FP32, got " << DTypeStr(scalar_dt);
     DataType vf_muls_dst_dt = GetExprDtype(op->args_[0]);
     CHECK(src_dt == vf_muls_dst_dt) << "vf.muls requires src and dst to have the same type, got dst="
                                     << DTypeStr(vf_muls_dst_dt) << " src=" << DTypeStr(src_dt);
@@ -1497,7 +2248,48 @@ static std::string EmitVFMuls(const ir::CallPtr& op, codegen::CodegenBase& codeg
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
     std::string mode = VFZeroingOnly(op, "vf.muls");
     scalar_str = CoerceScalarToInt(op->args_[2], src_dt, scalar_str);
-    codegen.Emit("vmuls(" + dst + ", " + src + ", " + scalar_str + ", " + mask + ", " + mode + ");");
+    if (src_dt.GetBit() == 64) {
+        // B64 Muls: dst = src * scalar. Mirrors AscendC MulsImpl: Duplicate(scalar) + Mul(src, scalar_reg).
+        std::string p = dst + "_muls_";
+        std::string cast_type = (src_dt == DataType::INT64) ? "(int64_t)" : "(uint64_t)";
+        // AscendC MulB64Impl: vmull always uses uint32_t (unsigned 32x32→64);
+        // vmula uses int32_t for int64_t (signed cross-term), uint32_t for uint64_t.
+        std::string vmull_cast = "(RegTensor<uint32_t>&)";
+        std::string vmula_cast = (src_dt == DataType::INT64) ? "(RegTensor<int32_t>&)" : "(RegTensor<uint32_t>&)";
+        // Pack b64 mask to b32 (mirrors MaskPack in CalTraitOneByTransToTraitTwo)
+        std::string packed_m = p + "_pm_";
+        codegen.Emit("MaskReg " + packed_m + ";");
+        codegen.Emit("ppack(" + packed_m + ", " + mask + ", LOWER);");
+        // Broadcast scalar to b32 halves (mirrors DuplicateB64Impl)
+        std::string all_m = p + "_allm_";
+        codegen.Emit("MaskReg " + all_m + " = pset_b32(PAT_ALL);");
+        std::string lo_sc = p + "_losc_";
+        std::string hi_sc = p + "_hisc_";
+        codegen.Emit("RegTensor<uint32_t> " + lo_sc + ";");
+        codegen.Emit("RegTensor<uint32_t> " + hi_sc + ";");
+        codegen.Emit("vdup(" + lo_sc + ", (int32_t)(" + cast_type + "(" + scalar_str + ")), " + all_m +
+                     ", MODE_ZEROING);");
+        codegen.Emit("vdup(" + hi_sc + ", (int32_t)((" + cast_type + "(" + scalar_str + ")) >> 32), " + all_m +
+                     ", MODE_ZEROING);");
+        // Deinterleave src to b32 halves (mirrors B64TraitOneToTraitTwo)
+        EmitB64Deinterleave(codegen, p + "s", src);
+        std::string lo_s = p + "s_lo_", hi_s = p + "s_hi_";
+        // MulB64: vmull (lo_s × lo_sc → dst_lo, dst_hi) + vmula (lo_s × hi_sc → dst_hi) + vmula (hi_s × lo_sc → dst_hi)
+        std::string lo_d = p + "_lod_";
+        std::string hi_d = p + "_hid_";
+        codegen.Emit("RegTensor<uint32_t> " + lo_d + ";");
+        codegen.Emit("RegTensor<uint32_t> " + hi_d + ";");
+        codegen.Emit("vmull(" + vmull_cast + lo_d + ", " + vmull_cast + hi_d + ", " + vmull_cast + lo_s + ", " +
+                     vmull_cast + lo_sc + ", " + packed_m + ");");
+        codegen.Emit("vmula(" + vmula_cast + hi_d + ", " + vmula_cast + lo_s + ", " + vmula_cast + hi_sc + ", " +
+                     packed_m + ", MODE_ZEROING);");
+        codegen.Emit("vmula(" + vmula_cast + hi_d + ", " + vmula_cast + hi_s + ", " + vmula_cast + lo_sc + ", " +
+                     packed_m + ", MODE_ZEROING);");
+        // Interleave back (mirrors B64TraitTwoToTraitOne)
+        EmitB64Interleave(codegen, dst, lo_d, hi_d, p + "_ilv");
+    } else {
+        codegen.Emit("vmuls(" + dst + ", " + src + ", " + scalar_str + ", " + mask + ", " + mode + ");");
+    }
     return "";
 }
 
@@ -1635,7 +2427,50 @@ static std::string EmitVFMin(const ir::CallPtr& op, codegen::CodegenBase& codege
     std::string src1 = codegen.GetExprAsCode(op->args_[2]);
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
     std::string mode = VFZeroingOnly(op, "vf.min");
-    codegen.Emit("vmin(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ", " + mode + ");");
+    if (s0_dt.GetBit() == 64) {
+        // B64 min via deinterleave + b32 compare + vsel + interleave.
+        // min = src1 when src0 > src1, else src0 (i.e., pick the smaller).
+        std::string p = dst + "_min_";
+        EmitB64Deinterleave(codegen, p + "s0", src0);
+        EmitB64Deinterleave(codegen, p + "s1", src1);
+        std::string lo0 = p + "s0_lo_", hi0 = p + "s0_hi_";
+        std::string lo1 = p + "s1_lo_", hi1 = p + "s1_hi_";
+        std::string all_m = p + "_allm_";
+        codegen.Emit("MaskReg " + all_m + " = pset_b32(PAT_ALL);");
+        std::string hi_gt = p + "_higt_";
+        std::string hi_eq = p + "_hieq_";
+        std::string lo_gt = p + "_logt_";
+        codegen.Emit("MaskReg " + hi_gt + ";");
+        codegen.Emit("MaskReg " + hi_eq + ";");
+        codegen.Emit("MaskReg " + lo_gt + ";");
+        if (s0_dt == DataType::INT64) {
+            codegen.Emit("vcmp_gt(" + hi_gt + ", (RegTensor<int32_t>&)" + hi0 + ", (RegTensor<int32_t>&)" + hi1 + ", " +
+                         all_m + ");");
+            codegen.Emit("vcmp_eq(" + hi_eq + ", (RegTensor<int32_t>&)" + hi0 + ", (RegTensor<int32_t>&)" + hi1 + ", " +
+                         all_m + ");");
+        } else {
+            codegen.Emit("vcmp_gt(" + hi_gt + ", " + hi0 + ", " + hi1 + ", " + all_m + ");");
+            codegen.Emit("vcmp_eq(" + hi_eq + ", " + hi0 + ", " + hi1 + ", " + all_m + ");");
+        }
+        codegen.Emit("vcmp_gt(" + lo_gt + ", " + lo0 + ", " + lo1 + ", " + all_m + ");");
+        std::string eq_lo = p + "_eqlo_";
+        std::string s0_gt = p + "_s0gt_";
+        codegen.Emit("MaskReg " + eq_lo + ";");
+        codegen.Emit("MaskReg " + s0_gt + ";");
+        codegen.Emit("pand(" + eq_lo + ", " + hi_eq + ", " + lo_gt + ", " + all_m + ");");
+        codegen.Emit("por(" + s0_gt + ", " + hi_gt + ", " + eq_lo + ", " + all_m + ");");
+        // Select: min = src0 > src1 ? src1 : src0 (pick smaller)
+        std::string lo_dst = p + "_lod_";
+        std::string hi_dst = p + "_hid_";
+        codegen.Emit("RegTensor<uint32_t> " + lo_dst + ";");
+        codegen.Emit("RegTensor<uint32_t> " + hi_dst + ";");
+        codegen.Emit("vsel(" + lo_dst + ", " + lo1 + ", " + lo0 + ", " + s0_gt + ");");
+        codegen.Emit("vsel(" + hi_dst + ", " + hi1 + ", " + hi0 + ", " + s0_gt + ");");
+        EmitB64Interleave(codegen, dst, lo_dst, hi_dst, p + "_ilv");
+        EmitB64Zeroing(codegen, dst, dst, mask, p + "_zero");
+    } else {
+        codegen.Emit("vmin(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ", " + mode + ");");
+    }
     return "";
 }
 
@@ -1709,7 +2544,50 @@ static std::string EmitVFAbs(const ir::CallPtr& op, codegen::CodegenBase& codege
     std::string src = codegen.GetExprAsCode(op->args_[1]);
     std::string mask = codegen.GetExprAsCode(op->args_[2]);
     std::string mode = VFZeroingOnly(op, "vf.abs");
-    codegen.Emit("vabs(" + dst + ", " + src + ", " + mask + ", " + mode + ");");
+    if (src_dt == DataType::INT64) {
+        // B64 abs: abs(x) = x if x >= 0, -x if x < 0.
+        // Mirrors AscendC AbsB64Impl: vbr(0) + vcmp_lt + Sub(vsubc) + SubC(vsubcs) + vsel.
+        std::string p = dst + "_abs_";
+        // Deinterleave src to get b32 low/high halves
+        EmitB64Deinterleave(codegen, p + "s", src);
+        std::string lo_s = p + "s_lo_", hi_s = p + "s_hi_";
+        std::string all_m = p + "_allm_";
+        codegen.Emit("MaskReg " + all_m + " = pset_b32(PAT_ALL);");
+        // Zero register (vbr equivalent)
+        std::string zero_reg = p + "_zero_";
+        codegen.Emit("RegTensor<int32_t> " + zero_reg + ";");
+        codegen.Emit("vdup(" + zero_reg + ", 0, " + all_m + ", MODE_ZEROING);");
+        // Sign mask: hi_s < 0 (signed)
+        std::string sign_m = p + "_sign_";
+        codegen.Emit("MaskReg " + sign_m + ";");
+        codegen.Emit("vcmp_lt(" + sign_m + ", (RegTensor<int32_t>&)" + hi_s + ", (RegTensor<int32_t>&)" + zero_reg +
+                     ", " + all_m + ");");
+        // Negate via borrow-chain sub: neg = 0 - src
+        // vsubc: borrow = (0 < lo_s), neg_lo = 0 - lo_s
+        // vsubcs: neg_hi = 0 - hi_s - borrow
+        std::string borrow = p + "_borrow_";
+        std::string lo_n = p + "_nlo_";
+        std::string hi_n = p + "_nhi_";
+        codegen.Emit("MaskReg " + borrow + ";");
+        codegen.Emit("RegTensor<int32_t> " + lo_n + ";");
+        codegen.Emit("RegTensor<int32_t> " + hi_n + ";");
+        codegen.Emit("vsubc(" + borrow + ", " + lo_n + ", " + zero_reg + ", (RegTensor<int32_t>&)" + lo_s + ", " +
+                     sign_m + ");");
+        codegen.Emit("vsubcs(" + borrow + ", " + hi_n + ", " + zero_reg + ", (RegTensor<int32_t>&)" + hi_s + ", " +
+                     borrow + ", " + sign_m + ");");
+        // Select: if negative -> neg, else -> src (per b32 half)
+        // All vsel operands must be the same type (int32_t).
+        std::string lo_dst = p + "_lod_";
+        std::string hi_dst = p + "_hid_";
+        codegen.Emit("RegTensor<int32_t> " + lo_dst + ";");
+        codegen.Emit("RegTensor<int32_t> " + hi_dst + ";");
+        codegen.Emit("vsel(" + lo_dst + ", " + lo_n + ", (RegTensor<int32_t>&)" + lo_s + ", " + sign_m + ");");
+        codegen.Emit("vsel(" + hi_dst + ", " + hi_n + ", (RegTensor<int32_t>&)" + hi_s + ", " + sign_m + ");");
+        EmitB64Interleave(codegen, dst, lo_dst, hi_dst, p + "_ilv");
+        EmitB64Zeroing(codegen, dst, dst, mask, p + "_zero");
+    } else {
+        codegen.Emit("vabs(" + dst + ", " + src + ", " + mask + ", " + mode + ");");
+    }
     return "";
 }
 
@@ -1739,7 +2617,12 @@ static std::string EmitVFNot(const ir::CallPtr& op, codegen::CodegenBase& codege
         return "";
     }
     std::string mode = VFZeroingOnly(op, "vf.not_");
-    codegen.Emit("vnot(" + dst + ", " + src + ", " + mask + ", " + mode + ");");
+    if (src_dt.GetBit() == 64) {
+        // B64 bitwise via b32 vnot (mirrors AscendC NotImpl b64 path, see EmitB64Bitwise).
+        EmitB64Bitwise(codegen, "vnot", {src}, dst, mask, mode, dst + "_not_");
+    } else {
+        codegen.Emit("vnot(" + dst + ", " + src + ", " + mask + ", " + mode + ");");
+    }
     return "";
 }
 
@@ -1822,6 +2705,46 @@ static std::string EmitVFRelu(const ir::CallPtr& op, codegen::CodegenBase& codeg
     std::string src = codegen.GetExprAsCode(op->args_[1]);
     std::string mask = codegen.GetExprAsCode(op->args_[2]);
     std::string mode = VFZeroingOnly(op, "vf.relu");
+    if (src_dt == DataType::INT64) {
+        // B64 relu (mirrors AscendC ReluB64Impl: Maxs(src, 0)): deinterleave +
+        // scalar(0) two-stage compare + vsel + interleave. No native b64 vrelu.
+        std::string p = dst + "_relu_";
+        std::string packed_m = p + "_pm_";
+        codegen.Emit("MaskReg " + packed_m + ";");
+        codegen.Emit("ppack(" + packed_m + ", " + mask + ", LOWER);");
+        EmitB64Deinterleave(codegen, p + "s", src);
+        std::string lo_s = p + "s_lo_", hi_s = p + "s_hi_";
+        std::string all_m = p + "_allm_";
+        codegen.Emit("MaskReg " + all_m + " = pset_b32(PAT_ALL);");
+        std::string lo_sc = p + "_losc_", hi_sc = p + "_hisc_";
+        codegen.Emit("RegTensor<uint32_t> " + lo_sc + ";");
+        codegen.Emit("RegTensor<uint32_t> " + hi_sc + ";");
+        codegen.Emit("vdup(" + lo_sc + ", (int32_t)0, " + all_m + ", MODE_ZEROING);");
+        codegen.Emit("vdup(" + hi_sc + ", (int32_t)0, " + all_m + ", MODE_ZEROING);");
+        // src > 0 iff hi > 0 (signed) OR (hi == 0 AND lo > 0, unsigned).
+        std::string hi_gt = p + "_higt_", hi_eq = p + "_hieq_", lo_gt = p + "_logt_";
+        std::string eq_lo = p + "_eqlo_", gt = p + "_gt_";
+        codegen.Emit("MaskReg " + hi_gt + ";");
+        codegen.Emit("MaskReg " + hi_eq + ";");
+        codegen.Emit("MaskReg " + lo_gt + ";");
+        codegen.Emit("MaskReg " + eq_lo + ";");
+        codegen.Emit("MaskReg " + gt + ";");
+        codegen.Emit("vcmp_gt(" + hi_gt + ", (RegTensor<int32_t>&)" + hi_s + ", (RegTensor<int32_t>&)" + hi_sc + ", " +
+                     packed_m + ");");
+        codegen.Emit("vcmp_eq(" + hi_eq + ", (RegTensor<int32_t>&)" + hi_s + ", (RegTensor<int32_t>&)" + hi_sc + ", " +
+                     packed_m + ");");
+        codegen.Emit("vcmp_gt(" + lo_gt + ", " + lo_s + ", " + lo_sc + ", " + packed_m + ");");
+        codegen.Emit("pand(" + eq_lo + ", " + hi_eq + ", " + lo_gt + ", " + packed_m + ");");
+        codegen.Emit("por(" + gt + ", " + hi_gt + ", " + eq_lo + ", " + packed_m + ");");
+        std::string lo_d = p + "_lod_", hi_d = p + "_hid_";
+        codegen.Emit("RegTensor<uint32_t> " + lo_d + ";");
+        codegen.Emit("RegTensor<uint32_t> " + hi_d + ";");
+        codegen.Emit("vsel(" + lo_d + ", " + lo_s + ", " + lo_sc + ", " + gt + ");");
+        codegen.Emit("vsel(" + hi_d + ", " + hi_s + ", " + hi_sc + ", " + gt + ");");
+        EmitB64Interleave(codegen, dst, lo_d, hi_d, p + "_ilv");
+        EmitB64Zeroing(codegen, dst, dst, mask, p + "_zero");
+        return "";
+    }
     codegen.Emit("vrelu(" + dst + ", " + src + ", " + mask + ", " + mode + ");");
     return "";
 }
@@ -1847,7 +2770,40 @@ static std::string EmitVFNeg(const ir::CallPtr& op, codegen::CodegenBase& codege
     std::string src = codegen.GetExprAsCode(op->args_[1]);
     std::string mask = codegen.GetExprAsCode(op->args_[2]);
     std::string mode = VFZeroingOnly(op, "vf.neg");
-    codegen.Emit("vneg(" + dst + ", " + src + ", " + mask + ", " + mode + ");");
+    if (src_dt == DataType::INT64 || src_dt == DataType::UINT64) {
+        // B64 neg: dst = 0 - src. Mirrors AscendC NegB64Impl: Duplicate(0) + Sub(0, src).
+        // Sub for b64 uses vsubc + vsubcs borrow-chain (mirrors SubB64Impl).
+        std::string p = dst + "_neg_";
+        std::string b32_cast = (src_dt == DataType::INT64) ? "(RegTensor<int32_t>&)" : "(RegTensor<uint32_t>&)";
+        // Pack b64 mask to b32 (mirrors MaskPack in CalTraitOneByTransToTraitTwo)
+        std::string packed_m = p + "_pm_";
+        codegen.Emit("MaskReg " + packed_m + ";");
+        codegen.Emit("ppack(" + packed_m + ", " + mask + ", LOWER);");
+        // Zero register (vbr equivalent)
+        std::string all_m = p + "_allm_";
+        codegen.Emit("MaskReg " + all_m + " = pset_b32(PAT_ALL);");
+        std::string zero_reg = p + "_zero_";
+        codegen.Emit("RegTensor<int32_t> " + zero_reg + ";");
+        codegen.Emit("vdup(" + zero_reg + ", 0, " + all_m + ", MODE_ZEROING);");
+        // Deinterleave src to b32 halves (mirrors B64TraitOneToTraitTwo)
+        EmitB64Deinterleave(codegen, p + "s", src);
+        std::string lo_s = p + "s_lo_", hi_s = p + "s_hi_";
+        // SubB64: vsubc + vsubcs (borrow-chain sub: 0 - src)
+        std::string borrow = p + "_borrow_";
+        std::string lo_d = p + "_lod_";
+        std::string hi_d = p + "_hid_";
+        codegen.Emit("MaskReg " + borrow + ";");
+        codegen.Emit("RegTensor<uint32_t> " + lo_d + ";");
+        codegen.Emit("RegTensor<uint32_t> " + hi_d + ";");
+        codegen.Emit("vsubc(" + borrow + ", " + b32_cast + lo_d + ", " + b32_cast + zero_reg + ", " + b32_cast + lo_s +
+                     ", " + packed_m + ");");
+        codegen.Emit("vsubcs(" + borrow + ", " + b32_cast + hi_d + ", " + b32_cast + zero_reg + ", " + b32_cast + hi_s +
+                     ", " + borrow + ", " + packed_m + ");");
+        // Interleave back (mirrors B64TraitTwoToTraitOne)
+        EmitB64Interleave(codegen, dst, lo_d, hi_d, p + "_ilv");
+    } else {
+        codegen.Emit("vneg(" + dst + ", " + src + ", " + mask + ", " + mode + ");");
+    }
     return "";
 }
 
@@ -1876,7 +2832,52 @@ static std::string EmitVFAdds(const ir::CallPtr& op, codegen::CodegenBase& codeg
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
     std::string mode = VFZeroingOnly(op, "vf.adds");
     scalar_str = CoerceScalarToInt(op->args_[2], src_dt, scalar_str);
-    codegen.Emit("vadds(" + dst + ", " + src + ", " + scalar_str + ", " + mask + ", " + mode + ");");
+    if (src_dt.GetBit() == 64) {
+        // B64 Adds: dst = src + scalar.
+        // Mirrors AscendC AddsImpl: Duplicate(scalar) + Add(src, scalar_reg).
+        // Duplicate → DuplicateB64Impl (vdup b32 halves → interleave to b64).
+        // Add → CalTraitOneByTransToTraitTwo (ppack mask → deinterleave both
+        // → AddB64Impl: vaddc + vaddcs → interleave back).
+        std::string p = dst + "_adds_";
+        std::string cast_type = (src_dt == DataType::INT64) ? "(int64_t)" : "(uint64_t)";
+        std::string b32_cast = (src_dt == DataType::INT64) ? "(RegTensor<int32_t>&)" : "(RegTensor<uint32_t>&)";
+        // 1. Pack b64 mask to b32 (mirrors MaskPack in CalTraitOneByTransToTraitTwo)
+        std::string packed_m = p + "_pm_";
+        codegen.Emit("MaskReg " + packed_m + ";");
+        codegen.Emit("ppack(" + packed_m + ", " + mask + ", LOWER);");
+        // 2. Broadcast scalar to b32 halves (mirrors DuplicateB64Impl)
+        std::string all_m = p + "_allm_";
+        codegen.Emit("MaskReg " + all_m + " = pset_b32(PAT_ALL);");
+        std::string lo_sc = p + "_losc_";
+        std::string hi_sc = p + "_hisc_";
+        codegen.Emit("RegTensor<uint32_t> " + lo_sc + ";");
+        codegen.Emit("RegTensor<uint32_t> " + hi_sc + ";");
+        codegen.Emit("vdup(" + lo_sc + ", (int32_t)(" + cast_type + "(" + scalar_str + ")), " + all_m +
+                     ", MODE_ZEROING);");
+        codegen.Emit("vdup(" + hi_sc + ", (int32_t)((" + cast_type + "(" + scalar_str + ")) >> 32), " + all_m +
+                     ", MODE_ZEROING);");
+        // 3. Deinterleave src to b32 halves (mirrors B64TraitOneToTraitTwo)
+        EmitB64Deinterleave(codegen, p + "s", src);
+        std::string lo_s = p + "s_lo_", hi_s = p + "s_hi_";
+        // 4. AddB64: vaddc + vaddcs (mirrors AddB64Impl, using packed b32 mask)
+        std::string carry = p + "_carry_";
+        std::string lo_d = p + "_lod_";
+        std::string hi_d = p + "_hid_";
+        codegen.Emit("MaskReg " + carry + ";");
+        codegen.Emit("RegTensor<uint32_t> " + lo_d + ";");
+        codegen.Emit("RegTensor<uint32_t> " + hi_d + ";");
+        codegen.Emit("vaddc(" + carry + ", " + b32_cast + lo_d + ", " + b32_cast + lo_s + ", " + b32_cast + lo_sc +
+                     ", " + packed_m + ");");
+        codegen.Emit("vaddcs(" + carry + ", " + b32_cast + hi_d + ", " + b32_cast + hi_s + ", " + b32_cast + hi_sc +
+                     ", " + carry + ", " + packed_m + ");");
+        // 5. Interleave back (mirrors B64TraitTwoToTraitOne)
+        EmitB64Interleave(codegen, dst, lo_d, hi_d, p + "_ilv");
+        // No separate EmitB64Zeroing — AscendC ZEROING mode relies on vaddc/vaddcs
+        // producing 0 for inactive elements (mask-controlled). The packed b32 mask
+        // ensures correct element selection.
+    } else {
+        codegen.Emit("vadds(" + dst + ", " + src + ", " + scalar_str + ", " + mask + ", " + mode + ");");
+    }
     return "";
 }
 
@@ -1904,7 +2905,46 @@ static std::string EmitVFSubs(const ir::CallPtr& op, codegen::CodegenBase& codeg
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
     std::string mode = VFZeroingOnly(op, "vf.subs");
     scalar_str = CoerceScalarToInt(op->args_[2], src_dt, scalar_str);
-    codegen.Emit("vadds(" + dst + ", " + src + ", -(" + scalar_str + "), " + mask + ", " + mode + ");");
+    if (src_dt.GetBit() == 64) {
+        // B64 Subs: dst = src - scalar → broadcast scalar, then borrow-chain sub
+        // (mirrors AscendC Subs → Duplicate + Sub → SubB64Impl: vsubc + vsubcs).
+        std::string p = dst + "_subs_";
+        std::string cast_type = (src_dt == DataType::INT64) ? "(int64_t)" : "(uint64_t)";
+        std::string b32_cast = (src_dt == DataType::INT64) ? "(RegTensor<int32_t>&)" : "(RegTensor<uint32_t>&)";
+        // 1. Pack b64 mask to b32 (mirrors MaskPack in CalTraitOneByTransToTraitTwo)
+        std::string packed_m = p + "_pm_";
+        codegen.Emit("MaskReg " + packed_m + ";");
+        codegen.Emit("ppack(" + packed_m + ", " + mask + ", LOWER);");
+        // 2. Broadcast scalar to b32 halves (mirrors DuplicateB64Impl)
+        std::string all_m = p + "_allm_";
+        codegen.Emit("MaskReg " + all_m + " = pset_b32(PAT_ALL);");
+        std::string lo_sc = p + "_losc_";
+        std::string hi_sc = p + "_hisc_";
+        codegen.Emit("RegTensor<uint32_t> " + lo_sc + ";");
+        codegen.Emit("RegTensor<uint32_t> " + hi_sc + ";");
+        codegen.Emit("vdup(" + lo_sc + ", (int32_t)(" + cast_type + "(" + scalar_str + ")), " + all_m +
+                     ", MODE_ZEROING);");
+        codegen.Emit("vdup(" + hi_sc + ", (int32_t)((" + cast_type + "(" + scalar_str + ")) >> 32), " + all_m +
+                     ", MODE_ZEROING);");
+        // 3. Deinterleave src to b32 halves (mirrors B64TraitOneToTraitTwo)
+        EmitB64Deinterleave(codegen, p + "s", src);
+        std::string lo_s = p + "s_lo_", hi_s = p + "s_hi_";
+        // 4. SubB64: vsubc + vsubcs (mirrors SubB64Impl, using packed b32 mask)
+        std::string borrow = p + "_borrow_";
+        std::string lo_d = p + "_lod_";
+        std::string hi_d = p + "_hid_";
+        codegen.Emit("MaskReg " + borrow + ";");
+        codegen.Emit("RegTensor<uint32_t> " + lo_d + ";");
+        codegen.Emit("RegTensor<uint32_t> " + hi_d + ";");
+        codegen.Emit("vsubc(" + borrow + ", " + b32_cast + lo_d + ", " + b32_cast + lo_s + ", " + b32_cast + lo_sc +
+                     ", " + packed_m + ");");
+        codegen.Emit("vsubcs(" + borrow + ", " + b32_cast + hi_d + ", " + b32_cast + hi_s + ", " + b32_cast + hi_sc +
+                     ", " + borrow + ", " + packed_m + ");");
+        // 5. Interleave back (mirrors B64TraitTwoToTraitOne)
+        EmitB64Interleave(codegen, dst, lo_d, hi_d, p + "_ilv");
+    } else {
+        codegen.Emit("vadds(" + dst + ", " + src + ", -(" + scalar_str + "), " + mask + ", " + mode + ");");
+    }
     return "";
 }
 
@@ -1933,7 +2973,58 @@ static std::string EmitVFMins(const ir::CallPtr& op, codegen::CodegenBase& codeg
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
     std::string mode = VFZeroingOnly(op, "vf.mins");
     scalar_str = CoerceScalarToInt(op->args_[2], src_dt, scalar_str);
-    codegen.Emit("vmins(" + dst + ", " + src + ", " + scalar_str + ", " + mask + ", " + mode + ");");
+    if (src_dt.GetBit() == 64) {
+        // B64 mins: min(src, scalar) via deinterleave + scalar compare + vsel + interleave.
+        std::string p = dst + "_mins_";
+        EmitB64Deinterleave(codegen, p + "s", src);
+        std::string lo_s = p + "s_lo_", hi_s = p + "s_hi_";
+        std::string all_m = p + "_allm_";
+        codegen.Emit("MaskReg " + all_m + " = pset_b32(PAT_ALL);");
+        // Broadcast scalar to b32 halves
+        std::string cast_type = (src_dt == DataType::INT64) ? "(int64_t)" : "(uint64_t)";
+        std::string lo_scalar = p + "_losc_";
+        std::string hi_scalar = p + "_hisc_";
+        codegen.Emit("RegTensor<uint32_t> " + lo_scalar + ";");
+        codegen.Emit("RegTensor<uint32_t> " + hi_scalar + ";");
+        codegen.Emit("vdup(" + lo_scalar + ", (int32_t)(" + cast_type + "(" + scalar_str + ")), " + all_m +
+                     ", MODE_ZEROING);");
+        codegen.Emit("vdup(" + hi_scalar + ", (int32_t)((" + cast_type + "(" + scalar_str + ")) >> 32), " + all_m +
+                     ", MODE_ZEROING);");
+        // Compare: src < scalar → pick src, else pick scalar
+        std::string hi_lt = p + "_hilt_";
+        std::string hi_eq = p + "_hieq_";
+        std::string lo_lt = p + "_lolt_";
+        codegen.Emit("MaskReg " + hi_lt + ";");
+        codegen.Emit("MaskReg " + hi_eq + ";");
+        codegen.Emit("MaskReg " + lo_lt + ";");
+        if (src_dt == DataType::INT64) {
+            codegen.Emit("vcmp_lt(" + hi_lt + ", (RegTensor<int32_t>&)" + hi_s + ", (RegTensor<int32_t>&)" + hi_scalar +
+                         ", " + all_m + ");");
+            codegen.Emit("vcmp_eq(" + hi_eq + ", (RegTensor<int32_t>&)" + hi_s + ", (RegTensor<int32_t>&)" + hi_scalar +
+                         ", " + all_m + ");");
+        } else {
+            codegen.Emit("vcmp_lt(" + hi_lt + ", " + hi_s + ", " + hi_scalar + ", " + all_m + ");");
+            codegen.Emit("vcmp_eq(" + hi_eq + ", " + hi_s + ", " + hi_scalar + ", " + all_m + ");");
+        }
+        codegen.Emit("vcmp_lt(" + lo_lt + ", " + lo_s + ", " + lo_scalar + ", " + all_m + ");");
+        std::string eq_lo = p + "_eqlo_";
+        std::string s_lt = p + "_slt_";
+        codegen.Emit("MaskReg " + eq_lo + ";");
+        codegen.Emit("MaskReg " + s_lt + ";");
+        codegen.Emit("pand(" + eq_lo + ", " + hi_eq + ", " + lo_lt + ", " + all_m + ");");
+        codegen.Emit("por(" + s_lt + ", " + hi_lt + ", " + eq_lo + ", " + all_m + ");");
+        // Select: min = src < scalar ? src : scalar
+        std::string lo_dst = p + "_lod_";
+        std::string hi_dst = p + "_hid_";
+        codegen.Emit("RegTensor<uint32_t> " + lo_dst + ";");
+        codegen.Emit("RegTensor<uint32_t> " + hi_dst + ";");
+        codegen.Emit("vsel(" + lo_dst + ", " + lo_s + ", " + lo_scalar + ", " + s_lt + ");");
+        codegen.Emit("vsel(" + hi_dst + ", " + hi_s + ", " + hi_scalar + ", " + s_lt + ");");
+        EmitB64Interleave(codegen, dst, lo_dst, hi_dst, p + "_ilv");
+        EmitB64Zeroing(codegen, dst, dst, mask, p + "_zero");
+    } else {
+        codegen.Emit("vmins(" + dst + ", " + src + ", " + scalar_str + ", " + mask + ", " + mode + ");");
+    }
     return "";
 }
 
@@ -1962,7 +3053,57 @@ static std::string EmitVFMaxs(const ir::CallPtr& op, codegen::CodegenBase& codeg
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
     std::string mode = VFZeroingOnly(op, "vf.maxs");
     scalar_str = CoerceScalarToInt(op->args_[2], src_dt, scalar_str);
-    codegen.Emit("vmaxs(" + dst + ", " + src + ", " + scalar_str + ", " + mask + ", " + mode + ");");
+    if (src_dt.GetBit() == 64) {
+        // B64 maxs: max(src, scalar) via deinterleave + scalar compare + vsel + interleave.
+        std::string p = dst + "_maxs_";
+        EmitB64Deinterleave(codegen, p + "s", src);
+        std::string lo_s = p + "s_lo_", hi_s = p + "s_hi_";
+        std::string all_m = p + "_allm_";
+        codegen.Emit("MaskReg " + all_m + " = pset_b32(PAT_ALL);");
+        std::string cast_type = (src_dt == DataType::INT64) ? "(int64_t)" : "(uint64_t)";
+        std::string lo_scalar = p + "_losc_";
+        std::string hi_scalar = p + "_hisc_";
+        codegen.Emit("RegTensor<uint32_t> " + lo_scalar + ";");
+        codegen.Emit("RegTensor<uint32_t> " + hi_scalar + ";");
+        codegen.Emit("vdup(" + lo_scalar + ", (int32_t)(" + cast_type + "(" + scalar_str + ")), " + all_m +
+                     ", MODE_ZEROING);");
+        codegen.Emit("vdup(" + hi_scalar + ", (int32_t)((" + cast_type + "(" + scalar_str + ")) >> 32), " + all_m +
+                     ", MODE_ZEROING);");
+        // Compare: src > scalar → pick src, else pick scalar
+        std::string hi_gt = p + "_higt_";
+        std::string hi_eq = p + "_hieq_";
+        std::string lo_gt = p + "_logt_";
+        codegen.Emit("MaskReg " + hi_gt + ";");
+        codegen.Emit("MaskReg " + hi_eq + ";");
+        codegen.Emit("MaskReg " + lo_gt + ";");
+        if (src_dt == DataType::INT64) {
+            codegen.Emit("vcmp_gt(" + hi_gt + ", (RegTensor<int32_t>&)" + hi_s + ", (RegTensor<int32_t>&)" + hi_scalar +
+                         ", " + all_m + ");");
+            codegen.Emit("vcmp_eq(" + hi_eq + ", (RegTensor<int32_t>&)" + hi_s + ", (RegTensor<int32_t>&)" + hi_scalar +
+                         ", " + all_m + ");");
+        } else {
+            codegen.Emit("vcmp_gt(" + hi_gt + ", " + hi_s + ", " + hi_scalar + ", " + all_m + ");");
+            codegen.Emit("vcmp_eq(" + hi_eq + ", " + hi_s + ", " + hi_scalar + ", " + all_m + ");");
+        }
+        codegen.Emit("vcmp_gt(" + lo_gt + ", " + lo_s + ", " + lo_scalar + ", " + all_m + ");");
+        std::string eq_lo = p + "_eqlo_";
+        std::string s_gt = p + "_sgt_";
+        codegen.Emit("MaskReg " + eq_lo + ";");
+        codegen.Emit("MaskReg " + s_gt + ";");
+        codegen.Emit("pand(" + eq_lo + ", " + hi_eq + ", " + lo_gt + ", " + all_m + ");");
+        codegen.Emit("por(" + s_gt + ", " + hi_gt + ", " + eq_lo + ", " + all_m + ");");
+        // Select: max = src > scalar ? src : scalar
+        std::string lo_dst = p + "_lod_";
+        std::string hi_dst = p + "_hid_";
+        codegen.Emit("RegTensor<uint32_t> " + lo_dst + ";");
+        codegen.Emit("RegTensor<uint32_t> " + hi_dst + ";");
+        codegen.Emit("vsel(" + lo_dst + ", " + lo_s + ", " + lo_scalar + ", " + s_gt + ");");
+        codegen.Emit("vsel(" + hi_dst + ", " + hi_s + ", " + hi_scalar + ", " + s_gt + ");");
+        EmitB64Interleave(codegen, dst, lo_dst, hi_dst, p + "_ilv");
+        EmitB64Zeroing(codegen, dst, dst, mask, p + "_zero");
+    } else {
+        codegen.Emit("vmaxs(" + dst + ", " + src + ", " + scalar_str + ", " + mask + ", " + mode + ");");
+    }
     return "";
 }
 
@@ -2038,7 +3179,12 @@ static std::string EmitVFInterleave(const ir::CallPtr& op, codegen::CodegenBase&
     DataType dst0_dt = GetExprDtype(op->args_[0]);
     CHECK(src0_dt == dst0_dt) << "vf.interleave requires src and dst to have the same type, got dst="
                               << DTypeStr(dst0_dt) << " src=" << DTypeStr(src0_dt);
-    codegen.Emit("vintlv(" + dst0 + ", " + dst1 + ", " + src0 + ", " + src1 + ");");
+    if (src0_dt.GetBit() == 64) {
+        codegen.Emit("vintlv((RegTensor<uint32_t>&)" + dst0 + ", (RegTensor<uint32_t>&)" + dst1 +
+                     ", (RegTensor<uint32_t>&)" + src0 + ", (RegTensor<uint32_t>&)" + src1 + ");");
+    } else {
+        codegen.Emit("vintlv(" + dst0 + ", " + dst1 + ", " + src0 + ", " + src1 + ");");
+    }
     return "";
 }
 
@@ -2087,7 +3233,67 @@ static std::string EmitVFAbsSub(const ir::CallPtr& op, codegen::CodegenBase& cod
     std::string src1 = codegen.GetExprAsCode(op->args_[2]);
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
     std::string mode = VFZeroingOnly(op, "vf.abs_sub");
-    codegen.Emit("vabsdif(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ", " + mode + ");");
+    if (s0_dt == DataType::INT64) {
+        // B64 abs_sub: |src0 - src1| = abs(vsub(src0, src1)).
+        // vsub has no b64 single-register overload; use deinterleave + vsub/vsubc
+        // borrow-chain (mirrors AscendC SubB64Impl for int64_t).
+        std::string p = dst + "_abssub_";
+        std::string diff_m = p + "_diffm_";
+        codegen.Emit("MaskReg " + diff_m + " = pset_b32(PAT_ALL);");
+        // Deinterleave both sources to b32 low/high halves
+        EmitB64Deinterleave(codegen, p + "s0", src0);
+        EmitB64Deinterleave(codegen, p + "s1", src1);
+        std::string lo0 = p + "s0_lo_", hi0 = p + "s0_hi_";
+        std::string lo1 = p + "s1_lo_", hi1 = p + "s1_hi_";
+        // Sub with borrow: diff_lo = src0_lo - src1_lo, borrow = (src0_lo < src1_lo)
+        std::string borrow = p + "_borrow_";
+        std::string lo_d = p + "_dl_";
+        std::string hi_d = p + "_dh_";
+        codegen.Emit("MaskReg " + borrow + ";");
+        codegen.Emit("RegTensor<int32_t> " + lo_d + ";");
+        codegen.Emit("RegTensor<int32_t> " + hi_d + ";");
+        codegen.Emit("vsubc(" + borrow + ", " + lo_d + ", (RegTensor<int32_t>&)" + lo0 + ", (RegTensor<int32_t>&)" +
+                     lo1 + ", " + diff_m + ");");
+        codegen.Emit("vsubcs(" + borrow + ", " + hi_d + ", (RegTensor<int32_t>&)" + hi0 + ", (RegTensor<int32_t>&)" +
+                     hi1 + ", " + borrow + ", " + diff_m + ");");
+        // Now diff = {lo_d, hi_d}. Compute abs via sign check + negate.
+        std::string all_m = p + "_allm_";
+        codegen.Emit("MaskReg " + all_m + " = pset_b32(PAT_ALL);");
+        // Zero register (vbr equivalent)
+        std::string zero_reg = p + "_zero_";
+        codegen.Emit("RegTensor<int32_t> " + zero_reg + ";");
+        codegen.Emit("vdup(" + zero_reg + ", 0, " + all_m + ", MODE_ZEROING);");
+        // Sign mask: hi_d < 0 (signed)
+        std::string sign_m = p + "_sign_";
+        codegen.Emit("MaskReg " + sign_m + ";");
+        codegen.Emit("vcmp_lt(" + sign_m + ", (RegTensor<int32_t>&)" + hi_d + ", (RegTensor<int32_t>&)" + zero_reg +
+                     ", " + all_m + ");");
+        // Negate via borrow-chain sub: neg = 0 - diff
+        // vsubc: borrow = (0 < lo_d), neg_lo = 0 - lo_d
+        // vsubcs: neg_hi = 0 - hi_d - borrow
+        std::string borrow2 = p + "_borrow2_";
+        std::string lo_n = p + "_nlo_";
+        std::string hi_n = p + "_nhi_";
+        codegen.Emit("MaskReg " + borrow2 + ";");
+        codegen.Emit("RegTensor<int32_t> " + lo_n + ";");
+        codegen.Emit("RegTensor<int32_t> " + hi_n + ";");
+        codegen.Emit("vsubc(" + borrow2 + ", " + lo_n + ", " + zero_reg + ", (RegTensor<int32_t>&)" + lo_d + ", " +
+                     sign_m + ");");
+        codegen.Emit("vsubcs(" + borrow2 + ", " + hi_n + ", " + zero_reg + ", (RegTensor<int32_t>&)" + hi_d + ", " +
+                     borrow2 + ", " + sign_m + ");");
+        // Select: if negative -> neg, else -> diff (per b32 half)
+        // All vsel operands must be the same type (int32_t).
+        std::string lo_dst = p + "_lod_";
+        std::string hi_dst = p + "_hid_";
+        codegen.Emit("RegTensor<int32_t> " + lo_dst + ";");
+        codegen.Emit("RegTensor<int32_t> " + hi_dst + ";");
+        codegen.Emit("vsel(" + lo_dst + ", " + lo_n + ", (RegTensor<int32_t>&)" + lo_d + ", " + sign_m + ");");
+        codegen.Emit("vsel(" + hi_dst + ", " + hi_n + ", (RegTensor<int32_t>&)" + hi_d + ", " + sign_m + ");");
+        EmitB64Interleave(codegen, dst, lo_dst, hi_dst, p + "_ilv");
+        EmitB64Zeroing(codegen, dst, dst, mask, p + "_zero");
+    } else {
+        codegen.Emit("vabsdif(" + dst + ", " + src0 + ", " + src1 + ", " + mask + ", " + mode + ");");
+    }
     return "";
 }
 
@@ -2117,7 +3323,63 @@ static std::string EmitVFAxpy(const ir::CallPtr& op, codegen::CodegenBase& codeg
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
     std::string mode = VFZeroingOnly(op, "vf.axpy");
     scalar_str = CoerceScalarToInt(op->args_[2], src_dt, scalar_str);
-    codegen.Emit("vaxpy(" + dst + ", " + src + ", " + scalar_str + ", " + mask + ", " + mode + ");");
+    if (src_dt == DataType::INT64 || src_dt == DataType::UINT64) {
+        // B64 Axpy: dst = src * scalar + dst → Muls (Duplicate + MulB64Impl) + Add (AddB64Impl).
+        // Mirrors AscendC AxpyImpl for b64.
+        std::string p = dst + "_axpy_";
+        std::string cast_type = (src_dt == DataType::INT64) ? "(int64_t)" : "(uint64_t)";
+        // AscendC MulB64Impl: vmull always uses uint32_t (unsigned 32x32→64);
+        // vmula uses int32_t for int64_t (signed cross-term), uint32_t for uint64_t.
+        std::string vmull_cast = "(RegTensor<uint32_t>&)";
+        std::string vmula_cast = (src_dt == DataType::INT64) ? "(RegTensor<int32_t>&)" : "(RegTensor<uint32_t>&)";
+        std::string b32_cast = (src_dt == DataType::INT64) ? "(RegTensor<int32_t>&)" : "(RegTensor<uint32_t>&)";
+        // 1. Pack b64 mask to b32 (mirrors MaskPack in CalTraitOneByTransToTraitTwo)
+        std::string packed_m = p + "_pm_";
+        codegen.Emit("MaskReg " + packed_m + ";");
+        codegen.Emit("ppack(" + packed_m + ", " + mask + ", LOWER);");
+        // 2. Broadcast scalar as b32 halves (mirrors DuplicateB64Impl)
+        std::string all_m = p + "_allm_";
+        codegen.Emit("MaskReg " + all_m + " = pset_b32(PAT_ALL);");
+        std::string lo_sc = p + "_losc_";
+        std::string hi_sc = p + "_hisc_";
+        codegen.Emit("RegTensor<uint32_t> " + lo_sc + ";");
+        codegen.Emit("RegTensor<uint32_t> " + hi_sc + ";");
+        codegen.Emit("vdup(" + lo_sc + ", (int32_t)(" + cast_type + "(" + scalar_str + ")), " + all_m +
+                     ", MODE_ZEROING);");
+        codegen.Emit("vdup(" + hi_sc + ", (int32_t)((" + cast_type + "(" + scalar_str + ")) >> 32), " + all_m +
+                     ", MODE_ZEROING);");
+        // 3. Deinterleave src
+        EmitB64Deinterleave(codegen, p + "s", src);
+        std::string lo_s = p + "s_lo_", hi_s = p + "s_hi_";
+        // 4. MulB64: vmull + vmula (32×32→64 long multiply)
+        std::string mul_lo = p + "_mul_lo_";
+        std::string mul_hi = p + "_mul_hi_";
+        codegen.Emit("RegTensor<uint32_t> " + mul_lo + ";");
+        codegen.Emit("RegTensor<uint32_t> " + mul_hi + ";");
+        codegen.Emit("vmull(" + vmull_cast + mul_lo + ", " + vmull_cast + mul_hi + ", " + vmull_cast + lo_s + ", " +
+                     vmull_cast + lo_sc + ", " + packed_m + ");");
+        codegen.Emit("vmula(" + vmula_cast + mul_hi + ", " + vmula_cast + lo_s + ", " + vmula_cast + hi_sc + ", " +
+                     packed_m + ", MODE_ZEROING);");
+        codegen.Emit("vmula(" + vmula_cast + mul_hi + ", " + vmula_cast + hi_s + ", " + vmula_cast + lo_sc + ", " +
+                     packed_m + ", MODE_ZEROING);");
+        // 5. Deinterleave dst (for AddB64: dst = mul_result + dst)
+        EmitB64Deinterleave(codegen, p + "d", dst);
+        std::string lo_d = p + "d_lo_", hi_d = p + "d_hi_";
+        // 6. AddB64: vaddc + vaddcs (carry-chain add, using packed b32 mask)
+        std::string carry = p + "_carry_";
+        std::string add_lo = p + "_add_lo_";
+        std::string add_hi = p + "_add_hi_";
+        codegen.Emit("MaskReg " + carry + ";");
+        codegen.Emit("RegTensor<uint32_t> " + add_lo + ";");
+        codegen.Emit("RegTensor<uint32_t> " + add_hi + ";");
+        codegen.Emit("vaddc(" + carry + ", " + b32_cast + add_lo + ", " + b32_cast + mul_lo + ", " + b32_cast + lo_d +
+                     ", " + packed_m + ");");
+        codegen.Emit("vaddcs(" + carry + ", " + b32_cast + add_hi + ", " + b32_cast + mul_hi + ", " + b32_cast + hi_d +
+                     ", " + carry + ", " + packed_m + ");");
+        EmitB64Interleave(codegen, dst, add_lo, add_hi, p + "_ilv");
+    } else {
+        codegen.Emit("vaxpy(" + dst + ", " + src + ", " + scalar_str + ", " + mask + ", " + mode + ");");
+    }
     return "";
 }
 
@@ -2347,8 +3609,51 @@ static std::string EmitVFShift(const ir::CallPtr& op, codegen::CodegenBase& code
     std::string shift = codegen.GetExprAsCode(op->args_[2]);
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
     std::string mode = VFZeroingOnly(op, op_name);
-    if (ShiftAmountIsRegister(op, codegen)) {
-        // vshl/vshr (vector): shift reg must be signed int (int8/int16/int32/int64)
+    if (src_dt.GetBit() == 64) {
+        // B64 shift via deinterleave + b32 shift + cross-half carry + interleave.
+        // Scalar shift only (shift amount is a compile-time or runtime scalar).
+        std::string p = dst + "_shift_";
+        EmitB64Deinterleave(codegen, p + "s", src);
+        std::string lo_s = p + "s_lo_", hi_s = p + "s_hi_";
+        std::string all_m = p + "_allm_";
+        codegen.Emit("MaskReg " + all_m + " = pset_b32(PAT_ALL);");
+        std::string lo_dst = p + "_lod_";
+        std::string hi_dst = p + "_hid_";
+        codegen.Emit("RegTensor<uint32_t> " + lo_dst + ";");
+        codegen.Emit("RegTensor<uint32_t> " + hi_dst + ";");
+        if (op_name == "vf.shift_left") {
+            // Left shift: lo_dst = lo << N, carry = lo >> (32-N), hi_dst = (hi << N) | carry
+            std::string carry = p + "_carry_";
+            codegen.Emit("RegTensor<uint32_t> " + carry + ";");
+            codegen.Emit("vshls(" + lo_dst + ", " + lo_s + ", (int16_t)(" + shift + "), " + all_m + ", MODE_ZEROING);");
+            codegen.Emit("vshrs(" + carry + ", " + lo_s + ", (int16_t)(32 - (" + shift + ")), " + all_m +
+                         ", MODE_ZEROING);");
+            codegen.Emit("vshls(" + hi_dst + ", " + hi_s + ", (int16_t)(" + shift + "), " + all_m + ", MODE_ZEROING);");
+            codegen.Emit("vor(" + hi_dst + ", " + hi_dst + ", " + carry + ", " + all_m + ", MODE_ZEROING);");
+        } else {
+            // Right shift: for INT64 (arithmetic), for UINT64 (logical)
+            std::string carry = p + "_carry_";
+            codegen.Emit("RegTensor<uint32_t> " + carry + ";");
+            if (src_dt == DataType::INT64) {
+                // Arithmetic right shift: sign-extend hi. The vshrs overload
+                // requires dst and src to have the same signedness, so the hi
+                // half is shifted in the int32 domain on both sides (mirrors
+                // AscendC ShiftR<int32_t>).
+                codegen.Emit("vshrs((RegTensor<int32_t>&)" + hi_dst + ", (RegTensor<int32_t>&)" + hi_s +
+                             ", (int16_t)(" + shift + "), " + all_m + ", MODE_ZEROING);");
+            } else {
+                codegen.Emit("vshrs(" + hi_dst + ", " + hi_s + ", (int16_t)(" + shift + "), " + all_m +
+                             ", MODE_ZEROING);");
+            }
+            codegen.Emit("vshls(" + carry + ", " + hi_s + ", (int16_t)(32 - (" + shift + ")), " + all_m +
+                         ", MODE_ZEROING);");
+            codegen.Emit("vshrs(" + lo_dst + ", " + lo_s + ", (int16_t)(" + shift + "), " + all_m + ", MODE_ZEROING);");
+            codegen.Emit("vor(" + lo_dst + ", " + lo_dst + ", " + carry + ", " + all_m + ", MODE_ZEROING);");
+        }
+        EmitB64Interleave(codegen, dst, lo_dst, hi_dst, p + "_ilv");
+        EmitB64Zeroing(codegen, dst, dst, mask, p + "_zero");
+    } else if (ShiftAmountIsRegister(op, codegen)) {
+        // AscendC ShiftLeft/Right (vector): shift reg must be signed int (int8/int16/int32/int64)
         DataType shift_dt = GetExprDtype(op->args_[2]);
         CHECK(shift_dt == DataType::INT8 || shift_dt == DataType::INT16 || shift_dt == DataType::INT32 ||
               shift_dt == DataType::INT64)
@@ -2962,6 +4267,15 @@ static std::string EmitVFCast(const ir::CallPtr& op, codegen::CodegenBase& codeg
     } else if (is_float_to_same_int) {
         // vcvt(dst, src, mask, ROUND, RS, MODE_ZEROING) — no PART
         codegen.Emit("vcvt(" + dst + ", " + src + ", " + mask + ", " + round + ", " + sat + ", " + mode_value + ");");
+    } else if (src_dtype == DataType::FP32 && dst_dtype == DataType::INT64) {
+        // FP32→INT64: __VF_VCVTFI_SAT_PART(f32, s64) — the overload takes
+        // (dst, src, mask, ROUND, RS, PART, MODE): the 5th arg is the
+        // rounding-saturation flag and the 6th is PART_EVEN/PART_ODD (mirrors
+        // AscendC CastImpl: vcvt(..., round, sat, part, mode), 7 args).
+        CHECK(layout == "ZERO" || layout == "ONE")
+            << "vf.astype FP32->INT64 only supports layout ZERO/ONE, got " << layout;
+        codegen.Emit("vcvt(" + dst + ", " + src + ", " + mask + ", " + round + ", " + sat + ", " + part + ", " +
+                     mode_value + ");");
     } else if (is_float_to_wider_int || is_cross_width) {
         // vcvt(dst, src, mask, ROUND, PART, MODE_ZEROING) — no RS
         codegen.Emit("vcvt(" + dst + ", " + src + ", " + mask + ", " + round + ", " + part + ", " + mode_value + ");");
@@ -3111,7 +4425,12 @@ static std::string EmitVFDeInterleave(const ir::CallPtr& op, codegen::CodegenBas
     std::string cast_prefix = "(RegTensor<" + dst_dt.ToCTypeString() + "> &)";
     std::string s0_expr = (s0_dt == dst_dt) ? src0 : (cast_prefix + src0);
     std::string s1_expr = (s1_dt == dst_dt) ? src1 : (cast_prefix + src1);
-    codegen.Emit("vdintlv(" + dst0 + ", " + dst1 + ", " + s0_expr + ", " + s1_expr + ");");
+    if (dst_dt.GetBit() == 64) {
+        codegen.Emit("vdintlv((RegTensor<uint32_t>&)" + dst0 + ", (RegTensor<uint32_t>&)" + dst1 +
+                     ", (RegTensor<uint32_t>&)" + s0_expr + ", (RegTensor<uint32_t>&)" + s1_expr + ");");
+    } else {
+        codegen.Emit("vdintlv(" + dst0 + ", " + dst1 + ", " + s0_expr + ", " + s1_expr + ");");
+    }
     return "";
 }
 
@@ -3132,18 +4451,36 @@ static std::string EmitVFSelect(const ir::CallPtr& op, codegen::CodegenBase& cod
         codegen.Emit("psel(" + dst + ", " + src_true + ", " + src_false + ", " + mask + ");");
         return "";
     }
-    // Doc: select supports BOOL/INT8/UINT8/INT16/UINT16/FP16/BF16/INT32/UINT32/FP32
+    // Doc: select supports BOOL/INT8/UINT8/INT16/UINT16/FP16/BF16/INT32/UINT32/FP32/INT64/UINT64
     DataType dst_dt = GetExprDtype(op->args_[0]);
-    CHECK(dst_dt == DataType::INT8 || dst_dt == DataType::UINT8 || dst_dt == DataType::BOOL ||
-          dst_dt == DataType::INT16 || dst_dt == DataType::UINT16 || dst_dt == DataType::FP16 ||
-          dst_dt == DataType::BF16 || dst_dt == DataType::INT32 || dst_dt == DataType::UINT32 ||
-          dst_dt == DataType::FP32)
-        << "vf.select only supports BOOL/INT8/UINT8/INT16/UINT16/FP16/BF16/INT32/UINT32/FP32, got " << DTypeStr(dst_dt);
+    CHECK(IsB8Type(dst_dt) || dst_dt.GetBit() == 16 || dst_dt.GetBit() == 32 || dst_dt.GetBit() == 64)
+        << "vf.select only supports b8/b16/b32/b64 types, got " << DTypeStr(dst_dt);
     DataType st_dt = GetExprDtype(op->args_[1]);
     DataType sf_dt = GetExprDtype(op->args_[2]);
     CHECK(dst_dt.GetBit() == st_dt.GetBit() && dst_dt.GetBit() == sf_dt.GetBit())
         << "vf.select requires dst, src_true, src_false to have the same bit width, got dst=" << dst_dt.GetBit()
         << "-bit src_true=" << st_dt.GetBit() << "-bit src_false=" << sf_dt.GetBit() << "-bit";
+    if (dst_dt.GetBit() == 64) {
+        // B64 select: deinterleave both sources, vsel on both b32 halves, interleave back.
+        // Mirrors AscendC SelectImpl: B64TraitOneToTraitTwo + vsel(reg[0], reg[1]) + B64TraitTwoToTraitOne.
+        std::string p = dst + "_sel_";
+        EmitB64Deinterleave(codegen, p + "t", src_true);
+        EmitB64Deinterleave(codegen, p + "f", src_false);
+        std::string lot = p + "t_lo_", hit = p + "t_hi_";
+        std::string lof = p + "f_lo_", hif = p + "f_hi_";
+        // Pack b64 mask to b32 for vsel (mirrors MaskPack in AscendC)
+        std::string packed_m = p + "_pm_";
+        codegen.Emit("MaskReg " + packed_m + ";");
+        codegen.Emit("ppack(" + packed_m + ", " + mask + ", LOWER);");
+        std::string lo_dst = p + "_lod_";
+        std::string hi_dst = p + "_hid_";
+        codegen.Emit("RegTensor<uint32_t> " + lo_dst + ";");
+        codegen.Emit("RegTensor<uint32_t> " + hi_dst + ";");
+        codegen.Emit("vsel(" + lo_dst + ", " + lot + ", " + lof + ", " + packed_m + ");");
+        codegen.Emit("vsel(" + hi_dst + ", " + hit + ", " + hif + ", " + packed_m + ");");
+        EmitB64Interleave(codegen, dst, lo_dst, hi_dst, p + "_ilv");
+        return "";
+    }
     std::string cast_prefix = "(RegTensor<" + dst_dt.ToCTypeString() + "> &)";
     std::string st_expr = (st_dt == dst_dt) ? src_true : (cast_prefix + src_true);
     std::string sf_expr = (sf_dt == dst_dt) ? src_false : (cast_prefix + src_false);
@@ -3164,12 +4501,14 @@ static std::string EmitVFUpdateMask(const ir::CallPtr& op, codegen::CodegenBase&
     // Default to b32 (float), use dtype kwarg to select b16 or b8
     bool use_b8 = false;
     bool use_b16 = false;
+    bool use_b64 = false;
     if (op->HasKwarg("dtype")) {
         auto dtype = op->GetKwarg<DataType>("dtype");
         CHECK(IsB8Type(dtype) || dtype.GetBit() == 16 || dtype.GetBit() == 32 || dtype.GetBit() == 64)
             << "vf.update_mask dtype must be b8/b16/b32/b64, got " << DTypeStr(dtype);
         use_b8 = (dtype == DataType::UINT8 || dtype == DataType::INT8);
         use_b16 = (dtype.GetBit() == 16);
+        use_b64 = (dtype.GetBit() == 64);
     }
     // plt_b32/plt_b16 requires uint32_t& reference, so declare a variable first
     std::string scalar_var = "_vf_mask_scalar_" + std::to_string(codegen.GetTileOffsetCounter());
@@ -3181,7 +4520,12 @@ static std::string EmitVFUpdateMask(const ir::CallPtr& op, codegen::CodegenBase&
     } else if (use_b16) {
         codegen.Emit(reg_name + " = plt_b16(" + scalar_var + ", POST_UPDATE);");
     } else {
+        // b32 and b64 both use plt_b32; b64 additionally needs punpack to expand
+        // each bit into a pair, matching the 2-bit-per-element mask width.
         codegen.Emit(reg_name + " = plt_b32(" + scalar_var + ", POST_UPDATE);");
+        if (use_b64) {
+            codegen.Emit("punpack(" + reg_name + ", " + reg_name + ", LOWER);");
+        }
     }
     return "";
 }
@@ -3273,10 +4617,103 @@ static std::string EmitVFCompareImpl(const ir::CallPtr& op, codegen::CodegenBase
         suffix = "le";
     if (is_scalar_src) {
         src1 = CoerceScalarToInt(op->args_[2], s0_dt, src1);
-        codegen.Emit("vcmps_" + suffix + "(" + mask_dst + ", " + src0 + ", " + src1 + ", " + mask_src + ");");
+        if (s0_dt.GetBit() == 64) {
+            // B64 scalar compare: deinterleave src0, broadcast scalar halves, compare b32.
+            // Must pack b64 mask to b32 (MaskPack) and unpack result (MaskUnPack),
+            // matching AscendC CompareImpl for b64 RegTraitNumOne.
+            std::string p = mask_dst + "_cmps_";
+            std::string packed_m = p + "_pm_";
+            codegen.Emit("MaskReg " + packed_m + ";");
+            codegen.Emit("ppack(" + packed_m + ", " + mask_src + ", LOWER);");
+            EmitB64Deinterleave(codegen, p + "s", src0);
+            std::string lo_s = p + "s_lo_", hi_s = p + "s_hi_";
+            std::string cast_type = (s0_dt == DataType::INT64) ? "(int64_t)" : "(uint64_t)";
+            std::string lo_sc = p + "_losc_";
+            std::string hi_sc = p + "_hisc_";
+            codegen.Emit("RegTensor<uint32_t> " + lo_sc + ";");
+            codegen.Emit("RegTensor<uint32_t> " + hi_sc + ";");
+            codegen.Emit("vdup(" + lo_sc + ", (int32_t)(" + cast_type + "(" + src1 + ")), " + packed_m +
+                         ", MODE_ZEROING);");
+            codegen.Emit("vdup(" + hi_sc + ", (int32_t)((" + cast_type + "(" + src1 + ")) >> 32), " + packed_m +
+                         ", MODE_ZEROING);");
+            // Compare high halves
+            std::string hi_r = p + "_hir_";
+            std::string hi_eq = p + "_hieq_";
+            codegen.Emit("MaskReg " + hi_r + ";");
+            codegen.Emit("MaskReg " + hi_eq + ";");
+            if (s0_dt == DataType::INT64) {
+                codegen.Emit("vcmp_" + suffix + "(" + hi_r + ", (RegTensor<int32_t>&)" + hi_s +
+                             ", (RegTensor<int32_t>&)" + hi_sc + ", " + packed_m + ");");
+                codegen.Emit("vcmp_eq(" + hi_eq + ", (RegTensor<int32_t>&)" + hi_s + ", (RegTensor<int32_t>&)" + hi_sc +
+                             ", " + packed_m + ");");
+            } else {
+                codegen.Emit("vcmp_" + suffix + "(" + hi_r + ", " + hi_s + ", " + hi_sc + ", " + packed_m + ");");
+                codegen.Emit("vcmp_eq(" + hi_eq + ", " + hi_s + ", " + hi_sc + ", " + packed_m + ");");
+            }
+            // Compare low halves (always unsigned) for equality tie-break
+            std::string lo_r = p + "_lor_";
+            codegen.Emit("MaskReg " + lo_r + ";");
+            codegen.Emit("vcmp_" + suffix + "(" + lo_r + ", " + lo_s + ", " + lo_sc + ", " + packed_m + ");");
+            // For EQ: result = hi_eq AND lo_eq (lo_r is eq result)
+            // For NE: result = NOT(hi_eq AND lo_eq)
+            // For GT/GE/LT/LE: psel(lowCmp, highCmp, highEq) — if highEq pick lowCmp, else pick highCmp.
+            // Matches AscendC CompareScalarImpl b64 path.
+            if (cmp_mode == "EQ") {
+                codegen.Emit("pand(" + mask_dst + ", " + hi_eq + ", " + lo_r + ", " + packed_m + ");");
+            } else if (cmp_mode == "NE") {
+                // NE: low_ne OR high_ne. lo_r is vcmp_ne(low), hi_r is vcmp_ne(high).
+                codegen.Emit("por(" + mask_dst + ", " + lo_r + ", " + hi_r + ", " + packed_m + ");");
+            } else {
+                codegen.Emit("psel(" + mask_dst + ", " + lo_r + ", " + hi_r + ", " + hi_eq + ");");
+            }
+            codegen.Emit("punpack(" + mask_dst + ", " + mask_dst + ", LOWER);");
+        } else {
+            codegen.Emit("vcmps_" + suffix + "(" + mask_dst + ", " + src0 + ", " + src1 + ", " + mask_src + ");");
+        }
     } else {
-        // Same-type operands (enforced above): no reinterpret casts needed.
-        codegen.Emit("vcmp_" + suffix + "(" + mask_dst + ", " + src0 + ", " + src1 + ", " + mask_src + ");");
+        if (s0_dt.GetBit() == 64) {
+            // B64 vector compare: deinterleave both sources, compare b32 halves.
+            // Must pack b64 mask to b32 (MaskPack) and unpack result (MaskUnPack),
+            // matching AscendC CompareImpl for b64 RegTraitNumOne.
+            std::string p = mask_dst + "_cmpv_";
+            std::string packed_m = p + "_pm_";
+            codegen.Emit("MaskReg " + packed_m + ";");
+            codegen.Emit("ppack(" + packed_m + ", " + mask_src + ", LOWER);");
+            EmitB64Deinterleave(codegen, p + "s0", src0);
+            EmitB64Deinterleave(codegen, p + "s1", src1);
+            std::string lo0 = p + "s0_lo_", hi0 = p + "s0_hi_";
+            std::string lo1 = p + "s1_lo_", hi1 = p + "s1_hi_";
+            std::string hi_r = p + "_hir_";
+            std::string hi_eq = p + "_hieq_";
+            codegen.Emit("MaskReg " + hi_r + ";");
+            codegen.Emit("MaskReg " + hi_eq + ";");
+            if (s0_dt == DataType::INT64) {
+                codegen.Emit("vcmp_" + suffix + "(" + hi_r + ", (RegTensor<int32_t>&)" + hi0 +
+                             ", (RegTensor<int32_t>&)" + hi1 + ", " + packed_m + ");");
+                codegen.Emit("vcmp_eq(" + hi_eq + ", (RegTensor<int32_t>&)" + hi0 + ", (RegTensor<int32_t>&)" + hi1 +
+                             ", " + packed_m + ");");
+            } else {
+                codegen.Emit("vcmp_" + suffix + "(" + hi_r + ", " + hi0 + ", " + hi1 + ", " + packed_m + ");");
+                codegen.Emit("vcmp_eq(" + hi_eq + ", " + hi0 + ", " + hi1 + ", " + packed_m + ");");
+            }
+            std::string lo_r = p + "_lor_";
+            codegen.Emit("MaskReg " + lo_r + ";");
+            codegen.Emit("vcmp_" + suffix + "(" + lo_r + ", " + lo0 + ", " + lo1 + ", " + packed_m + ");");
+            if (cmp_mode == "EQ") {
+                codegen.Emit("pand(" + mask_dst + ", " + hi_eq + ", " + lo_r + ", " + packed_m + ");");
+            } else if (cmp_mode == "NE") {
+                // NE: low_ne OR high_ne. lo_r is vcmp_ne(low), hi_r is vcmp_ne(high).
+                codegen.Emit("por(" + mask_dst + ", " + lo_r + ", " + hi_r + ", " + packed_m + ");");
+            } else {
+                // GT/GE/LT/LE: psel(lowCmp, highCmp, highEq) — if highEq pick lowCmp, else pick highCmp.
+                // Matches AscendC CompareInt64Impl/CompareUint64Impl.
+                codegen.Emit("psel(" + mask_dst + ", " + lo_r + ", " + hi_r + ", " + hi_eq + ");");
+            }
+            codegen.Emit("punpack(" + mask_dst + ", " + mask_dst + ", LOWER);");
+        } else {
+            // Same-type operands (enforced above): no reinterpret casts needed.
+            codegen.Emit("vcmp_" + suffix + "(" + mask_dst + ", " + src0 + ", " + src1 + ", " + mask_src + ");");
+        }
     }
     return "";
 }
@@ -3353,17 +4790,21 @@ static std::string EmitVFArange(const ir::CallPtr& op, codegen::CodegenBase& cod
     else if (dst_dt == DataType::UINT32)
         elem_type = "int32_t";
     // b64 (INT64/UINT64): single vci does not support 8-byte elements.
-    // Replicate ArangeB64 using pure bisheng intrinsics:
-    //   1. vci int32 low-half (0,1,2,...) into a temp RegTensor<int32_t>
-    //   2. vneg if DECREASE_ORDER (produces 0,-1,-2,...)
-    //   3. vdup int32 high-half = 0
-    //   4. vintlv to interleave low/high into dst (RegTensor<int64_t>)
-    //   5. vadds to add the scalar start offset (as b64)
+    // Build the index in u32 halves, fold in the 64-bit start scalar with a
+    // carry chain (mirrors EmitVFAdds' b64 scalar add: vdup the scalar halves,
+    // vaddc/vaddcs), then vintlv the halves into dst:
+    //   lo = i + (u32)start;  hi = (u32)(start >> 32) + carry
+    // (b64 vadds on a single 256B RegTensor<int64_t> is not callable — the
+    // bisheng overload takes vector_2xvl_s64 512B register pairs.)
+    // NOTE: DECREASE_ORDER assumes non-negative results (no borrow from the
+    // low half into the sign-extended high half).
     if (dst_dt == DataType::INT64 || dst_dt == DataType::UINT64) {
         std::string lo = dst + "_b64_lo_";
         std::string hi = dst + "_b64_hi_";
         std::string dump = dst + "_b64_dump_";
         std::string m = dst + "_b64_m_";
+        std::string cast_type = (dst_dt == DataType::INT64) ? "(int64_t)" : "(uint64_t)";
+        std::string b32_cast = (dst_dt == DataType::INT64) ? "(RegTensor<int32_t>&)" : "(RegTensor<uint32_t>&)";
         codegen.Emit("RegTensor<int32_t> " + lo + ";");
         codegen.Emit("RegTensor<int32_t> " + hi + ";");
         codegen.Emit("RegTensor<int32_t> " + dump + ";");
@@ -3371,11 +4812,27 @@ static std::string EmitVFArange(const ir::CallPtr& op, codegen::CodegenBase& cod
         codegen.Emit("vci(" + lo + ", 0, INC_ORDER);");
         if (is_decrease) {
             codegen.Emit("vneg(" + lo + ", " + lo + ", " + m + ", MODE_ZEROING);");
+            // Sign-extend the negated low half: lane 0 keeps hi=0, lanes i>=1
+            // extend to 0xFFFFFFFF so the pair holds the b64 value -i.
+            codegen.Emit("vshrs(" + hi + ", " + lo + ", (int16_t)31, " + m + ", MODE_ZEROING);");
+        } else {
+            codegen.Emit("vdup(" + hi + ", 0, " + m + ", MODE_ZEROING);");
         }
-        codegen.Emit("vdup(" + hi + ", 0, " + m + ", MODE_ZEROING);");
+        std::string sc_lo = dst + "_b64_sclo_";
+        std::string sc_hi = dst + "_b64_schi_";
+        std::string carry = dst + "_b64_carry_";
+        codegen.Emit("RegTensor<uint32_t> " + sc_lo + ";");
+        codegen.Emit("RegTensor<uint32_t> " + sc_hi + ";");
+        codegen.Emit("MaskReg " + carry + ";");
+        codegen.Emit("vdup(" + sc_lo + ", (int32_t)(" + cast_type + "(" + start + ")), " + m + ", MODE_ZEROING);");
+        codegen.Emit("vdup(" + sc_hi + ", (int32_t)((" + cast_type + "(" + start + ")) >> 32), " + m +
+                     ", MODE_ZEROING);");
+        codegen.Emit("vaddc(" + carry + ", " + b32_cast + lo + ", " + b32_cast + lo + ", " + b32_cast + sc_lo + ", " +
+                     m + ");");
+        codegen.Emit("vaddcs(" + carry + ", " + b32_cast + hi + ", " + b32_cast + hi + ", " + b32_cast + sc_hi + ", " +
+                     carry + ", " + m + ");");
         codegen.Emit("vintlv((RegTensor<uint32_t> &)" + dst + ", (RegTensor<uint32_t> &)" + dump +
                      ", (RegTensor<uint32_t> &)" + lo + ", (RegTensor<uint32_t> &)" + hi + ");");
-        codegen.Emit("vadds(" + dst + ", " + dst + ", (int64_t)(" + start + "), " + m + ", MODE_ZEROING);");
         return "";
     }
     // Non-b64: vci INC_ORDER generates value, value+1, ..., value+VL-1.
@@ -3492,6 +4949,46 @@ static std::string EmitVFGather(const ir::CallPtr& op, codegen::CodegenBase& cod
             CHECK(src_dt.GetBit() == 32) << "vf.gather (NORM) b32 requires b32 src, got src=" << DTypeStr(src_dt);
             CHECK(idx_dt == DataType::UINT32)
                 << "vf.gather (NORM) b32 dst requires UINT32 index, got " << DTypeStr(idx_dt);
+        } else if (dst_dt.GetBit() == 64) {
+            CHECK(src_dt.GetBit() == 64) << "vf.gather (NORM) b64 requires b64 src, got src=" << DTypeStr(src_dt);
+            CHECK(idx_dt == DataType::UINT32)
+                << "vf.gather (NORM) b64 dst requires UINT32 index, got " << DTypeStr(idx_dt);
+        }
+        if (dst_dt.GetBit() == 64) {
+            // B64 gather: vgather2 has no b64 single-register overload.
+            // Mirrors AscendC DataCopyGatherB64Impl: pack mask, compute odd/even
+            // b32 indices (index*2, index*2+1), vgather2 each b32 half, interleave.
+            std::string p = dst + "_gather_";
+            std::string packed_m = p + "_pm_";
+            std::string vl32_m = p + "_vl32_";
+            std::string all_m = p + "_allm_";
+            std::string and_m = p + "_andm_";
+            std::string lo_idx = p + "_loi_";
+            std::string hi_idx = p + "_hii_";
+            std::string lo_reg = p + "_lor_";
+            std::string hi_reg = p + "_hir_";
+            std::string tmp_reg = p + "_tmp_";
+            codegen.Emit("MaskReg " + packed_m + ";");
+            codegen.Emit("ppack(" + packed_m + ", " + mask + ", LOWER);");
+            // MaskAnd with VL32: b64 has 32 elements → 64 b32 slots after ppack,
+            // but only first 32 b32 slots are valid. Mirrors AscendC
+            // DataCopyGatherB64Impl: MaskAnd(dstMask, dstMask, lowerMask, preg).
+            codegen.Emit("MaskReg " + vl32_m + " = pset_b32(PAT_VL32);");
+            codegen.Emit("MaskReg " + all_m + " = pset_b32(PAT_ALL);");
+            codegen.Emit("MaskReg " + and_m + ";");
+            codegen.Emit("pand(" + and_m + ", " + packed_m + ", " + vl32_m + ", " + all_m + ");");
+            codegen.Emit("RegTensor<uint32_t> " + lo_idx + ";");
+            codegen.Emit("RegTensor<uint32_t> " + hi_idx + ";");
+            codegen.Emit("vmuls(" + lo_idx + ", (RegTensor<uint32_t> &)" + indices + ", (uint32_t)2, " + and_m +
+                         ", MODE_ZEROING);");
+            codegen.Emit("vadds(" + hi_idx + ", " + lo_idx + ", (uint32_t)1, " + and_m + ", MODE_ZEROING);");
+            codegen.Emit("RegTensor<uint32_t> " + lo_reg + ";");
+            codegen.Emit("RegTensor<uint32_t> " + hi_reg + ";");
+            std::string ub_ptr = GetUBufPtr(codegen, op->args_[1], "uint32_t");
+            codegen.Emit("vgather2(" + lo_reg + ", " + ub_ptr + ", " + lo_idx + ", " + and_m + ");");
+            codegen.Emit("vgather2(" + hi_reg + ", " + ub_ptr + ", " + hi_idx + ", " + and_m + ");");
+            EmitB64Interleave(codegen, dst, lo_reg, hi_reg, p + "_ilv");
+            return "";
         }
         std::string idx_c_type = use_vgather2_bc ? "uint32_t" : ((dst_dt.GetBit() >= 32) ? "uint32_t" : "uint16_t");
         std::string dst_expr = dst;
@@ -3880,6 +5377,42 @@ static std::string EmitVFScatter(const ir::CallPtr& op, codegen::CodegenBase& co
     }
     std::string base_c_type = src_dt.ToCTypeString();
     std::string base_ptr = GetUBufPtr(codegen, op->args_[0], base_c_type);
+    if (src_dt.GetBit() == 64) {
+        // B64 scatter: vscatter has no b64 single-register overload.
+        // Mirrors AscendC DataCopyScatterB64Impl: pack mask, compute odd/even
+        // b32 indices (index*2, index*2+1), deinterleave src into b32 halves,
+        // vscatter each half.
+        std::string p = src + "_scatter_";
+        std::string packed_m = p + "_pm_";
+        std::string vl32_m = p + "_vl32_";
+        std::string all_m = p + "_allm_";
+        std::string and_m = p + "_andm_";
+        std::string odd_idx = p + "_oi_";
+        std::string even_idx = p + "_ei_";
+        std::string lo_reg = p + "_lor_";
+        std::string hi_reg = p + "_hir_";
+        std::string dump = p + "_dump_";
+        codegen.Emit("MaskReg " + packed_m + ";");
+        codegen.Emit("ppack(" + packed_m + ", " + mask + ", LOWER);");
+        codegen.Emit("MaskReg " + vl32_m + " = pset_b32(PAT_VL32);");
+        codegen.Emit("MaskReg " + all_m + " = pset_b32(PAT_ALL);");
+        codegen.Emit("MaskReg " + and_m + ";");
+        codegen.Emit("pand(" + and_m + ", " + packed_m + ", " + vl32_m + ", " + all_m + ");");
+        codegen.Emit("RegTensor<uint32_t> " + odd_idx + ";");
+        codegen.Emit("RegTensor<uint32_t> " + even_idx + ";");
+        codegen.Emit("vmuls(" + odd_idx + ", (RegTensor<uint32_t> &)" + index + ", (uint32_t)2, " + and_m +
+                     ", MODE_ZEROING);");
+        codegen.Emit("vadds(" + even_idx + ", " + odd_idx + ", (uint32_t)1, " + and_m + ", MODE_ZEROING);");
+        codegen.Emit("RegTensor<uint32_t> " + lo_reg + ";");
+        codegen.Emit("RegTensor<uint32_t> " + hi_reg + ";");
+        codegen.Emit("RegTensor<uint32_t> " + dump + ";");
+        codegen.Emit("vdintlv(" + lo_reg + ", " + hi_reg + ", (RegTensor<uint32_t>&)" + src +
+                     ", (RegTensor<uint32_t>&)" + src + ");");
+        std::string ub_ptr = GetUBufPtr(codegen, op->args_[0], "uint32_t");
+        codegen.Emit("vscatter(" + lo_reg + ", " + ub_ptr + ", " + odd_idx + ", " + and_m + ");");
+        codegen.Emit("vscatter(" + hi_reg + ", " + ub_ptr + ", " + even_idx + ", " + and_m + ");");
+        return "";
+    }
     std::string idx_c_type = (src_dt.GetBit() >= 32) ? "uint32_t" : "uint16_t";
     codegen.Emit("vscatter(" + src + ", " + base_ptr + ", (RegTensor<" + idx_c_type + "> &)" + index + ", " + mask +
                  ");");
@@ -4557,13 +6090,8 @@ static std::string EmitVFStore(const ir::CallPtr& op, codegen::CodegenBase& code
     } else {
         count = std::to_string(max_count);
     }
-    // UINT64: vstus/vstas have no uint64_t overload, must reinterpret as uint32_t pairs.
-    // INT64 has a direct overload (asc_storeunalign_impl has int64_t but not uint64_t).
-    bool is_u64 = (src_dt == DataType::UINT64);
-    std::string ptr_type = is_u64 ? "uint32_t" : (NeedsB8Reinterpret(src_dt) ? "uint8_t" : src_dt.ToCTypeString());
-    std::string src_expr = is_u64 ? ("(RegTensor<uint32_t>&)" + codegen.GetExprAsCode(op->args_[1])) :
-                                    codegen.GetExprAsCode(op->args_[1]);
-    std::string effective_count = is_u64 ? ("(" + count + ") * 2") : count;
+    std::string ptr_type = NeedsB8Reinterpret(src_dt) ? "uint8_t" : src_dt.ToCTypeString();
+    std::string src_expr = codegen.GetExprAsCode(op->args_[1]);
     // vstus/vstas use POST_UPDATE so the pointer is advanced internally by vstus
     // and vstas flushes the tail at the advanced position. This matches AscendC
     // StoreImpl which always uses POST_MODE_UPDATE via DataCopyUnAlignImpl.
@@ -4571,8 +6099,20 @@ static std::string EmitVFStore(const ir::CallPtr& op, codegen::CodegenBase& code
     static int store_counter = 0;
     std::string ureg_name = "__ureg_st_" + std::to_string(store_counter++);
     codegen.Emit("UnalignReg " + ureg_name + ";");
-    codegen.Emit("vstus(" + ureg_name + ", " + effective_count + ", " + src_expr + ", " + dst_ptr + ", POST_UPDATE);");
-    codegen.Emit("vstas(" + ureg_name + ", " + dst_ptr + ", 0, POST_UPDATE);");
+    // B64 single-register: vstus/vstas have no 8-byte-element overload; reinterpret
+    // as uint32_t pairs and double the count (mirrors AscendC DataCopyUnAlignImpl
+    // b64 path; bitwise-identical for both INT64 and UINT64).
+    if (src_dt.GetBit() == 64) {
+        std::string b32_count = "(" + count + ") * 2";
+        std::string ptr_var = codegen.GetOrCreateVFTilePtr(op->args_[0], /*is_post_update=*/true);
+        std::string b32_ptr = "(__ubuf__ uint32_t*&)" + ptr_var;
+        codegen.Emit("vstus(" + ureg_name + ", " + b32_count + ", (RegTensor<uint32_t>&)" +
+                     codegen.GetExprAsCode(op->args_[1]) + ", " + b32_ptr + ", POST_UPDATE);");
+        codegen.Emit("vstas(" + ureg_name + ", " + b32_ptr + ", 0, POST_UPDATE);");
+    } else {
+        codegen.Emit("vstus(" + ureg_name + ", " + count + ", " + src_expr + ", " + dst_ptr + ", POST_UPDATE);");
+        codegen.Emit("vstas(" + ureg_name + ", " + dst_ptr + ", 0, POST_UPDATE);");
+    }
     return "";
 }
 
@@ -4658,12 +6198,8 @@ static std::string EmitVFMove(const ir::CallPtr& op, codegen::CodegenBase& codeg
     }
     if (!is_mask_dst) {
         DataType src_dt = GetExprDtype(op->args_[1]);
-        CHECK(src_dt == DataType::INT8 || src_dt == DataType::UINT8 || src_dt == DataType::BOOL ||
-              src_dt == DataType::INT16 || src_dt == DataType::UINT16 || src_dt == DataType::FP16 ||
-              src_dt == DataType::BF16 || src_dt == DataType::INT32 || src_dt == DataType::UINT32 ||
-              src_dt == DataType::FP32)
-            << "vf.move src only supports BOOL/INT8/UINT8/INT16/UINT16/FP16/BF16/INT32/UINT32/FP32, got "
-            << DTypeStr(src_dt);
+        CHECK(IsB8Type(src_dt) || src_dt.GetBit() == 16 || src_dt.GetBit() == 32 || src_dt.GetBit() == 64)
+            << "vf.move src only supports b8/b16/b32/b64 types, got " << DTypeStr(src_dt);
         DataType vf_move_dst_dt = GetExprDtype(op->args_[0]);
         CHECK(src_dt == vf_move_dst_dt) << "vf.move requires src and dst to have the same type, got dst="
                                         << DTypeStr(vf_move_dst_dt) << " src=" << DTypeStr(src_dt);
@@ -4679,7 +6215,24 @@ static std::string EmitVFMove(const ir::CallPtr& op, codegen::CodegenBase& codeg
                 CHECK(mode_val == ir::MergeMode::MERGING) << "vf.move only supports MERGING mode on current device";
             }
             std::string mode = "MODE_MERGING";
-            codegen.Emit("vmov(" + dst + ", " + src + ", " + mask + ", " + mode + ");");
+            DataType src_dt = GetExprDtype(op->args_[1]);
+            if (src_dt == DataType::BOOL) {
+                codegen.Emit("vmov((RegTensor<int8_t>&)" + dst + ", (RegTensor<int8_t>&)" + src + ", " + mask + ", " +
+                             mode + ");");
+            } else if (src_dt.GetBit() == 64) {
+                std::string p = dst + "_mov_";
+                std::string tm = p + "tm_";
+                std::string m0 = p + "m0_";
+                std::string m1 = p + "m1_";
+                codegen.Emit("MaskReg " + tm + ";");
+                codegen.Emit("ppack(" + tm + ", " + mask + ", LOWER);");
+                codegen.Emit("MaskReg " + m0 + ", " + m1 + ";");
+                codegen.Emit("pintlv_b32(" + m0 + ", " + m1 + ", " + tm + ", " + tm + ");");
+                codegen.Emit("vmov((RegTensor<uint32_t>&)" + dst + ", (RegTensor<uint32_t>&)" + src + ", " + m0 + ", " +
+                             mode + ");");
+            } else {
+                codegen.Emit("vmov(" + dst + ", " + src + ", " + mask + ", " + mode + ");");
+            }
         }
     } else {
         if (is_mask_dst) {

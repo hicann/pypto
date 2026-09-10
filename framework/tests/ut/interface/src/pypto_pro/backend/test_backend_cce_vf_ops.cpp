@@ -260,6 +260,15 @@ TEST(BackendCCEVFOpsTest, EmitsDeclarationsMasksBroadcastsAndMoves)
                  {{"pattern", EnumValue(ir::MaskPattern::ALL)}, {"dtype", ir::DataType::FP8E4M3FN}}, "mask_fp8");
     ExpectInvoke(codegen, "vf.create_mask", {"pset_b8("}, {},
                  {{"pattern", EnumValue(ir::MaskPattern::ALL)}, {"dtype", ir::DataType::FP4E2M1}}, "mask_fp4");
+    // b64 (INT64/UINT64): pset_b32 + punpack(LOWER)
+    ExpectInvoke(codegen, "vf.create_mask", {"pset_b32(", "punpack(", "LOWER"}, {},
+                 {{"pattern", EnumValue(ir::MaskPattern::ALL)}, {"dtype", ir::DataType::INT64}}, "mask_i64");
+    // b64 H pattern remapped to VL16 before pset_b32 + punpack
+    ExpectInvoke(codegen, "vf.create_mask", {"pset_b32(PAT_VL16)", "punpack("}, {},
+                 {{"pattern", EnumValue(ir::MaskPattern::H)}, {"dtype", ir::DataType::INT64}}, "mask_i64_h");
+    // b64 Q pattern remapped to VL8 before pset_b32 + punpack
+    ExpectInvoke(codegen, "vf.create_mask", {"pset_b32(PAT_VL8)", "punpack("}, {},
+                 {{"pattern", EnumValue(ir::MaskPattern::Q)}, {"dtype", ir::DataType::UINT64}}, "mask_u64_q");
     EXPECT_TRUE(codegen.IsMaskRegVar("mask"));
 
     ExpectInvoke(codegen, "vf.full", {"vbr(fp, 2.500000);"}, {fp, Float(2.5)});
@@ -307,6 +316,28 @@ TEST(BackendCCEVFOpsTest, EmitsArithmeticIntrinsics)
     expect_binary("vf.abs_sub", "vabsdif(");
     expect_binary("vf.mul_dst_add", "vmadd(");
     expect_binary("vf.prelu", "vprelu(");
+
+    // B64 bitwise ops (mirrors AscendC b64 path): b64 mask packed via ppack,
+    // operands deinterleaved into u32 lo/hi halves, b32 vand/vxor/vor/vnot per
+    // half with the packed mask, halves re-interleaved into the b64 dst.
+    auto dst64 = MakeVar("dst64", ir::DataType::INT64);
+    auto src64a = MakeVar("src64a", ir::DataType::INT64);
+    auto src64b = MakeVar("src64b", ir::DataType::INT64);
+    auto mask64 = MakeVar("mask64", ir::DataType::UINT64);
+    ExpectInvoke(codegen, "vf.and_",
+                 {"ppack(dst64_and__pm_, mask64, LOWER)", "vdintlv(dst64_and_s0_lo_", "vand(dst64_and__lod_",
+                  "vand(dst64_and__hid_", "vintlv((RegTensor<uint32_t>&)dst64"},
+                 {dst64, src64a, src64b, mask64}, zeroing);
+    ExpectInvoke(codegen, "vf.xor",
+                 {"ppack(dst64_xor__pm_, mask64, LOWER)", "vxor(dst64_xor__lod_", "vxor(dst64_xor__hid_",
+                  "vintlv((RegTensor<uint32_t>&)dst64"},
+                 {dst64, src64a, src64b, mask64}, zeroing);
+    ExpectInvoke(codegen, "vf.or_", {"ppack(dst64_or__pm_", "vor(dst64_or__lod_", "vor(dst64_or__hid_"},
+                 {dst64, src64a, src64b, mask64}, zeroing);
+    ExpectInvoke(codegen, "vf.not_",
+                 {"ppack(dst64_not__pm_", "vdintlv(dst64_not_s0_lo_", "vnot(dst64_not__lod_", "vnot(dst64_not__hid_",
+                  "vintlv((RegTensor<uint32_t>&)dst64"},
+                 {dst64, src64a, mask64}, zeroing);
 
     const auto expect_unary = [&](const std::string& name, const std::vector<std::string>& expected) {
         ExpectInvoke(codegen, name, expected, {dst, src0, mask}, zeroing);
@@ -725,6 +756,9 @@ TEST(BackendCCEVFOpsTest, EmitsCompareHistogramAndMaskConversions)
     ExpectInvoke(codegen, "vf.update_mask", {"plt_b8("}, {Int(17)}, {{"dtype", ir::DataType::UINT8}}, "mask8");
     ExpectInvoke(codegen, "vf.update_mask", {"plt_b16("}, {Int(17)}, {{"dtype", ir::DataType::FP16}}, "mask16");
     ExpectInvoke(codegen, "vf.update_mask", {"plt_b32("}, {Int(17)}, {}, "mask32");
+    // b64 update_mask: plt_b32 + punpack(LOWER)
+    ExpectInvoke(codegen, "vf.update_mask", {"plt_b32(", "punpack(", "LOWER"}, {Int(17)},
+                 {{"dtype", ir::DataType::INT64}}, "mask64");
     ExpectInvoke(codegen, "vf.histograms", {"dhistv2("}, {u16, u8, mask},
                  {{"bin_type", EnumValue(ir::BinType::BIN1)}, {"hist_type", EnumValue(ir::HistType::FREQUENCY)}});
     ExpectInvoke(codegen, "vf.histograms", {"chistv2("}, {u16, u8, mask}, {{"bin_type", EnumValue(ir::BinType::BIN0)}});
@@ -892,8 +926,9 @@ TEST(BackendCCEVFOpsTest, EmitsStoreWithUint64Reinterpret)
         codegen, "vf.store",
         {"UnalignReg __ureg_st_", "vstus(", "vstas(", "POST_UPDATE", "(RegTensor<uint32_t>&)", "uint32_t", "* 2"},
         {u64_tile, u64_reg, Int(7)});
-    // INT64: no reinterpret needed, count used as-is
-    ExpectInvoke(codegen, "vf.store", {"UnalignReg __ureg_st_", "vstus(", "vstas(", "POST_UPDATE", ", 7,"},
+    // INT64: same b64 path as UINT64 (u32 reinterpret + count doubling).
+    ExpectInvoke(codegen, "vf.store",
+                 {"UnalignReg __ureg_st_", "vstus(", "vstas(", "POST_UPDATE", "(RegTensor<uint32_t>&)", "* 2"},
                  {i64_tile, i64_reg, Int(7)});
     // Verify UINT64 uses uint32_t ptr cast (tile is uint64_t, cast to uint32_t)
     auto u64_out = Invoke(codegen, "vf.store", {u64_tile, u64_reg, Int(7)});
@@ -1203,6 +1238,229 @@ TEST(BackendCCEVFOpsTest, EmitsB64LoadStoreAndNewCastPaths)
 }
 
 // ============================================================================
+// ============================================================================
+// B64 arithmetic/shift/arange emulation sequences (INT64/UINT64 lowering).
+// ============================================================================
+
+TEST(BackendCCEVFOpsTest, EmitsB64ArithmeticShiftAndArangeSequences)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto dst64 = MakeVar("dst64", ir::DataType::INT64);
+    auto src64a = MakeVar("src64a", ir::DataType::INT64);
+    auto src64b = MakeVar("src64b", ir::DataType::INT64);
+    auto dstu64 = MakeVar("dstu64", ir::DataType::UINT64);
+    auto srcu64 = MakeVar("srcu64", ir::DataType::UINT64);
+    auto i64 = MakeVar("i64", ir::DataType::INT64);
+    auto fp32 = MakeVar("fp32", ir::DataType::FP32);
+    auto mask64 = MakeVar("mask64", ir::DataType::UINT64);
+
+    const Kwargs zeroing = {{"mode", EnumValue(ir::MergeMode::ZEROING)}};
+
+    // Add: ppack mask + deinterleave both sources + vaddc/vaddcs carry chain.
+    ExpectInvoke(codegen, "vf.add",
+                 {"ppack(dst64_add__pm_, mask64, LOWER)", "vdintlv(dst64_add_s0_lo_", "vaddc(dst64_add__carry_",
+                  "vaddcs(dst64_add__carry_", "vintlv((RegTensor<uint32_t>&)dst64"},
+                 {dst64, src64a, src64b, mask64}, zeroing);
+    // Sub: borrow chain via vsubc/vsubcs.
+    ExpectInvoke(codegen, "vf.sub", {"vsubc(dst64_sub__", "vsubcs(dst64_sub__", "vintlv((RegTensor<uint32_t>&)dst64"},
+                 {dst64, src64a, src64b, mask64}, zeroing);
+    // Mul: vmull (32x32->64) + two vmula cross-terms (int32 view for INT64).
+    ExpectInvoke(codegen, "vf.mul",
+                 {"vmull((RegTensor<uint32_t>&)dst64_mul__lod_", "vmula((RegTensor<int32_t>&)dst64_mul__hid_",
+                  "vintlv((RegTensor<uint32_t>&)dst64"},
+                 {dst64, src64a, src64b, mask64}, zeroing);
+    // Max/Min: per-half compare + vsel + interleave.
+    ExpectInvoke(codegen, "vf.max",
+                 {"vdintlv(dst64_max_s0_lo_", "vcmp_gt(", "vsel(", "vintlv((RegTensor<uint32_t>&)dst64"},
+                 {dst64, src64a, src64b, mask64}, zeroing);
+    ExpectInvoke(codegen, "vf.min", {"vdintlv(dst64_min_s0_lo_", "vcmp", "vsel(", "vintlv((RegTensor<uint32_t>&)dst64"},
+                 {dst64, src64a, src64b, mask64}, zeroing);
+    // Neg: ppack mask + borrow chain (0 - src) + interleave.
+    ExpectInvoke(codegen, "vf.neg",
+                 {"ppack(dst64_neg__pm_, mask64, LOWER)", "vsubc(", "vsubcs(", "vintlv((RegTensor<uint32_t>&)dst64"},
+                 {dst64, src64a, mask64}, zeroing);
+    // Abs (INT64): sign compare on the hi half + neg borrow chain + vsel.
+    ExpectInvoke(codegen, "vf.abs", {"vdintlv(dst64_abs_s_lo_", "vcmp_lt(", "vsubc(", "vsubcs(", "vsel("},
+                 {dst64, src64a, mask64}, zeroing);
+    // Adds: 64-bit scalar broadcast to b32 halves + carry chain.
+    ExpectInvoke(
+        codegen, "vf.adds",
+        {"vdup(dst64_adds__losc_, (int32_t)((int64_t)(5))", "vaddc(", "vaddcs(", "vintlv((RegTensor<uint32_t>&)dst64"},
+        {dst64, src64a, Int(5), mask64}, zeroing);
+    // Muls: scalar broadcast + vmull/vmula cross-terms.
+    ExpectInvoke(codegen, "vf.muls", {"ppack(dst64_muls__pm_, mask64, LOWER)", "vmull(", "vmula("},
+                 {dst64, src64a, Int(5), mask64}, zeroing);
+    // Maxs: scalar broadcast + per-half compare + vsel.
+    ExpectInvoke(codegen, "vf.maxs", {"vdup(dst64_maxs__losc_", "vcmp", "vsel(", "vintlv((RegTensor<uint32_t>&)dst64"},
+                 {dst64, src64a, Int(5), mask64}, zeroing);
+
+    // Shift right (INT64): the arithmetic hi-half shift must use int32 views on
+    // BOTH dst and src — the vshrs overloads require matching signedness.
+    ExpectInvoke(codegen, "vf.shift_right",
+                 {"vdintlv(dst64_shift_s_lo_", "vshrs((RegTensor<int32_t>&)dst64_shift__hid_", "vshls(",
+                  "vintlv((RegTensor<uint32_t>&)dst64"},
+                 {dst64, src64a, Int(2), mask64}, zeroing);
+    // Shift left (INT64): logical u32 halves + vor cross-half carry.
+    ExpectInvoke(codegen, "vf.shift_left", {"vshls(", "vshrs(", "vor(", "vintlv((RegTensor<uint32_t>&)dst64"},
+                 {dst64, src64a, Int(2), mask64}, zeroing);
+    // Shift right (UINT64): logical u32 hi-half shift (no int32 cast).
+    ExpectInvoke(codegen, "vf.shift_right", {"vshrs(dstu64_shift__hid_", "vintlv((RegTensor<uint32_t>&)dstu64"},
+                 {dstu64, srcu64, Int(2), mask64}, zeroing);
+
+    // Cast: FP32->INT64 cross-width uses the 7-arg vcvt (ROUND, RS, PART, MODE).
+    ExpectInvoke(codegen, "vf.astype", {"vcvt(i64, fp32, mask64, ROUND_R, RS_DISABLE, PART_EVEN, MODE_ZEROING);"},
+                 {i64, fp32, mask64}, {{"dtype", ir::DataType::INT64}});
+    // Cast: INT64->FP32 keeps the 6-arg (ROUND, PART, MODE) form.
+    ExpectInvoke(codegen, "vf.astype", {"vcvt(fp32, i64, mask64, ROUND_R, PART_EVEN, MODE_ZEROING);"},
+                 {fp32, i64, mask64}, {{"dtype", ir::DataType::FP32}});
+
+    // Arange (INT64): vci index + vdup hi + 64-bit start fold via vaddc/vaddcs
+    // carry chain + vintlv.
+    ExpectInvoke(codegen, "vf.arange",
+                 {"vci(dst64_b64_lo_", "vdup(dst64_b64_hi_, 0", "vdup(dst64_b64_sclo_, (int32_t)((int64_t)(5))",
+                  "vaddc(dst64_b64_carry_", "vaddcs(dst64_b64_carry_", "vintlv((RegTensor<uint32_t> &)dst64"},
+                 {dst64, Int(5)}, {{"dtype", ir::DataType::INT64}});
+    // Arange (INT64, DECREASE_ORDER): vneg the index, same carry chain.
+    ExpectInvoke(codegen, "vf.arange", {"vneg(dst64_b64_lo_", "vaddcs(dst64_b64_carry_"}, {dst64, Int(5)},
+                 {{"index_order", EnumValue(ir::IndexOrder::DECREASE_ORDER)}, {"dtype", ir::DataType::INT64}});
+}
+
+// ============================================================================
+// B64 div / reduce max/min / relu emulation sequences (INT64/UINT64 lowering).
+// ============================================================================
+
+TEST(BackendCCEVFOpsTest, EmitsB64DivReduceAndReluSequences)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto dst64 = MakeVar("dst64", ir::DataType::INT64);
+    auto src64a = MakeVar("src64a", ir::DataType::INT64);
+    auto src64b = MakeVar("src64b", ir::DataType::INT64);
+    auto dstu64 = MakeVar("dstu64", ir::DataType::UINT64);
+    auto srcu64a = MakeVar("srcu64a", ir::DataType::UINT64);
+    auto srcu64b = MakeVar("srcu64b", ir::DataType::UINT64);
+    auto mask64 = MakeVar("mask64", ir::DataType::UINT64);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+
+    const Kwargs zeroing = {{"mode", EnumValue(ir::MergeMode::ZEROING)}};
+
+    // Div (INT64): ppack mask + deinterleave + signed abs (vsubc/vsubcs borrow
+    // chain) + f32 reciprocal + B128Calc refinement rounds + sign restore.
+    // The reciprocal vintlv/vdintlv must use the s32 element view on ALL four
+    // arguments (mixing s32 dsts with u32 srcs matches no bisheng overload).
+    // The s64->f32 vcvt lands results on even f32 lanes only — the compacting
+    // vdintlv before the vdiv is mandatory (mirrors Int64ToFloat).
+    ExpectInvoke(
+        codegen, "vf.div",
+        {"ppack(dst64_div__pm_, mask64, LOWER)", "vdintlv((RegTensor<uint32_t>&)dst64_div_s0_lo", "vsubc(dst64_div_ac1",
+         "vmull((RegTensor<uint32_t>&)dst64_div_r1m0l", "vintlv((RegTensor<int32_t>&)dst64_div_prl",
+         "vcvt(dst64_div_t2f, dst64_div_prl", "vcvt(dst64_div_t2o, dst64_div_prh",
+         "vdintlv((RegTensor<float>&)dst64_div_t2c", "vdiv(dst64_div_t3f, dst64_div_t3f, dst64_div_t2c",
+         "vdintlv((RegTensor<int32_t>&)dst64_div_t5_lo", "vintlv((RegTensor<uint32_t>&)dst64"},
+        {dst64, src64a, src64b, mask64}, zeroing);
+    // Div (UINT64): abs is a vmov copy, plus the large-divisor (u1m) bypass.
+    ExpectInvoke(codegen, "vf.div",
+                 {"vmov((RegTensor<int32_t>&)dstu64_div_abs0_lo", "vcmp_lt(dstu64_div_u1m,", "vcmp_ge(dstu64_div_nlm,",
+                  "vintlv((RegTensor<uint32_t>&)dstu64"},
+                 {dstu64, srcu64a, srcu64b, mask64}, zeroing);
+
+    // Reduce max/min (b64): per-half vcmax/vcmin + 5-arg register broadcast
+    // (mask + POS + MODE; the 4-arg form only accepts a scalar) + eq-mask
+    // second pass (no native b64 reduce). The hi-half reduce compares SIGNED
+    // for INT64 (negative int64 hi halves are huge when viewed as u32).
+    ExpectInvoke(codegen, "vf.reduce_max",
+                 {"ppack(dst64_b64rm_pm, mask, LOWER)", "vcmax((RegTensor<int32_t>&)dst64_b64rm_hir_",
+                  "vdup(dst64_b64rm_bc_, dst64_b64rm_hir_, dst64_b64rm_pm, POS_LOWEST, MODE_ZEROING);",
+                  "vcmp_eq(dst64_b64rm_eqm_", "vcmax(dst64_b64rm_lor_", "vintlv((RegTensor<uint32_t>&)dst64"},
+                 {dst64, src64a, mask});
+    ExpectInvoke(codegen, "vf.reduce_min",
+                 {"vcmin((RegTensor<int32_t>&)dst64_b64rm_hir_", "vcmp_eq(dst64_b64rm_eqm_", "vcmin(dst64_b64rm_lor_"},
+                 {dst64, src64a, mask});
+
+    // Relu (INT64): ppack mask + hi/lo two-stage compare vs scalar(0) + vsel +
+    // interleave + b64 zeroing (no native b64 vrelu).
+    ExpectInvoke(codegen, "vf.relu",
+                 {"ppack(dst64_relu__pm_, mask64, LOWER)", "vdup(dst64_relu__losc_, (int32_t)0",
+                  "vcmp_gt(dst64_relu__higt_", "vcmp_eq(dst64_relu__hieq_", "vsel(dst64_relu__lod_",
+                  "ppack(dst64_relu__zero_pm_", "vintlv((RegTensor<uint32_t>&)dst64"},
+                 {dst64, src64a, mask64}, zeroing);
+}
+
+// ============================================================================
+// B64 select / compare / interleave / abs_sub / full / move emulation
+// sequences (INT64 lowering).
+// ============================================================================
+
+TEST(BackendCCEVFOpsTest, EmitsB64SelectCompareAndMiscSequences)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto dst64 = MakeVar("dst64", ir::DataType::INT64);
+    auto dst64b = MakeVar("dst64b", ir::DataType::INT64);
+    auto src64a = MakeVar("src64a", ir::DataType::INT64);
+    auto src64b = MakeVar("src64b", ir::DataType::INT64);
+    auto cmp_dst = MakeVar("cmp_dst", ir::DataType::INT64);
+    auto mask64 = MakeVar("mask64", ir::DataType::UINT64);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    codegen.RegisterRegTensorVar("dst64");
+    codegen.RegisterRegTensorVar("dst64b");
+    codegen.RegisterRegTensorVar("src64a");
+    codegen.RegisterRegTensorVar("src64b");
+    codegen.RegisterMaskRegVar("cmp_dst");
+
+    // Select (b64): deinterleave both sources + ppack mask + vsel per half +
+    // interleave back (no native b64 vsel over b64 pairs).
+    ExpectInvoke(codegen, "vf.select",
+                 {"ppack(dst64_sel__pm_, mask64, LOWER)", "vdintlv(dst64_sel_t_lo_", "vdintlv(dst64_sel_f_lo_",
+                  "vsel(dst64_sel__lod_", "vintlv((RegTensor<uint32_t>&)dst64"},
+                 {dst64, src64a, src64b, mask64});
+
+    // Compare (b64, vector EQ): ppack mask + per-half vcmp_eq (signed int32
+    // views on the SOURCES for INT64) + pand + punpack (the b64 result mask is
+    // expanded back to 2-bit-per-element granularity).
+    ExpectInvoke(codegen, "vf.eq",
+                 {"ppack(cmp_dst_cmpv__pm_, mask, LOWER)", "vdintlv(cmp_dst_cmpv_s0_lo_",
+                  "vcmp_eq(cmp_dst_cmpv__hir_, (RegTensor<int32_t>&)cmp_dst_cmpv_s0_hi_",
+                  "pand(cmp_dst, cmp_dst_cmpv__hieq_, cmp_dst_cmpv__lor_", "punpack(cmp_dst, cmp_dst, LOWER)"},
+                 {cmp_dst, src64a, src64b, mask});
+
+    // Compare (b64, scalar GT): scalar broadcast to b32 halves + SIGNED hi-half
+    // compare (int32 views on the SOURCES for INT64) + psel tie-break via hi_eq
+    // (mirrors CompareScalarImpl b64 path).
+    ExpectInvoke(codegen, "vf.gt",
+                 {"ppack(cmp_dst_cmps__pm_, mask, LOWER)", "vdup(cmp_dst_cmps__losc_, (int32_t)((int64_t)(5))",
+                  "vcmp_gt(cmp_dst_cmps__hir_, (RegTensor<int32_t>&)cmp_dst_cmps_s_hi_",
+                  "psel(cmp_dst, cmp_dst_cmps__lor_", "punpack(cmp_dst, cmp_dst, LOWER)"},
+                 {cmp_dst, src64a, Int(5), mask});
+
+    // Interleave/de_interleave (b64): all operands reinterpreted as u32.
+    ExpectInvoke(codegen, "vf.interleave", {"vintlv((RegTensor<uint32_t>&)dst64, (RegTensor<uint32_t>&)dst64b"},
+                 {dst64, dst64b, src64a, src64b});
+    ExpectInvoke(codegen, "vf.de_interleave", {"vdintlv((RegTensor<uint32_t>&)dst64, (RegTensor<uint32_t>&)dst64b"},
+                 {dst64, dst64b, src64a, src64b});
+
+    // AbsSub (b64): borrow-chain sub + signed sign-check + negate + vsel +
+    // interleave + b64 zeroing (no native b64 vabsdif).
+    ExpectInvoke(
+        codegen, "vf.abs_sub",
+        {"vdintlv(dst64_abssub_s0_lo_", "vsubc(dst64_abssub__borrow_, dst64_abssub__dl_", "vcmp_lt(dst64_abssub__sign_",
+         "vsel(dst64_abssub__lod_", "ppack(dst64_abssub__zero_pm_", "vintlv((RegTensor<uint32_t>&)dst64"},
+        {dst64, src64a, src64b, mask64});
+
+    // Full (b64): scalar broadcast duplicates the value into two b32 halves
+    // then interleaves (masked: vdup halves; unmasked: vbr halves).
+    ExpectInvoke(codegen, "vf.full",
+                 {"ppack(dst64_dup__pm_, mask, LOWER)", "vdup(dst64_dup__lo_, (uint32_t)((int64_t)(5))",
+                  "vintlv((RegTensor<uint32_t>&)dst64"},
+                 {dst64, Int(5), mask});
+    ExpectInvoke(codegen, "vf.full", {"vbr(dst64_br__lo_, (uint32_t)((int64_t)(5))"}, {dst64, Int(5)});
+
+    // Move (b64): the b64 mask is expanded via pintlv_b32 so both b32 halves
+    // share the element's mask bit, then vmov runs on the u32 view.
+    ExpectInvoke(
+        codegen, "vf.move",
+        {"ppack(dst64_mov_tm_, mask64, LOWER)", "pintlv_b32(dst64_mov_m0_", "vmov((RegTensor<uint32_t>&)dst64"},
+        {dst64, src64a, mask64});
+}
+
 // Tests for load_align/store_align validation CHECKs
 // ============================================================================
 
@@ -1475,16 +1733,16 @@ TEST(BackendCCEVFOpsTest, MulsRejectsUnlistedIntTypes)
 {
     CapturingCCECodegen codegen(ir::SectionKind::Vector);
     auto i8_src = MakeVar("i8_src", ir::DataType::INT8);
-    auto i64_src = MakeVar("i64_src", ir::DataType::INT64);
+    auto u8_src = MakeVar("u8_src", ir::DataType::UINT8);
     auto mask = MakeVar("mask", ir::DataType::UINT32);
     codegen.RegisterRegTensorVar("i8_src");
-    codegen.RegisterRegTensorVar("i64_src");
+    codegen.RegisterRegTensorVar("u8_src");
     const Kwargs zeroing = {{"mode", EnumValue(ir::MergeMode::ZEROING)}};
 
-    // INT8 src not in the 6-type list → should reject
+    // INT8/UINT8 src not in the supported type list (b16/b32/b64 int + FP16/FP32)
+    // → should reject. INT64/UINT64 are supported via the b64 emulation path.
     EXPECT_ANY_THROW(Invoke(codegen, "vf.muls", {i8_src, i8_src, Float(2.0), mask}, zeroing));
-    // INT64 src not in the 6-type list → should reject
-    EXPECT_ANY_THROW(Invoke(codegen, "vf.muls", {i64_src, i64_src, Float(2.0), mask}, zeroing));
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.muls", {u8_src, u8_src, Float(2.0), mask}, zeroing));
 }
 
 TEST(BackendCCEVFOpsTest, CompareScalarCoercesFloatToInt)
@@ -1527,8 +1785,14 @@ TEST(BackendCCEVFOpsTest, AxpyAcceptsIndexScalar)
     codegen.RegisterRegTensorVar("i64_src");
     const Kwargs zeroing = {{"mode", EnumValue(ir::MergeMode::ZEROING)}};
 
-    // Python int 2 → ConstInt(INDEX) → allowed for axpy
-    ExpectInvoke(codegen, "vf.axpy", {"vaxpy("}, {i64_dst, i64_src, Int(2), mask}, zeroing);
+    // Python int 2 → ConstInt(INDEX) → allowed for axpy. B64 axpy lowers to
+    // the Muls+Add emulation (no native b64 vaxpy): scalar broadcast +
+    // MulB64 + AddB64 carry chain + interleave.
+    ExpectInvoke(codegen, "vf.axpy",
+                 {"ppack(i64_dst_axpy__pm_", "vdup(i64_dst_axpy__losc_, (int32_t)((int64_t)(2))",
+                  "vmull((RegTensor<uint32_t>&)i64_dst_axpy__mul_lo_", "vaddc(i64_dst_axpy__carry_",
+                  "vintlv((RegTensor<uint32_t>&)i64_dst"},
+                 {i64_dst, i64_src, Int(2), mask}, zeroing);
 }
 
 TEST(BackendCCEVFOpsTest, AxpyCoercesFloatScalarToInt64)
@@ -1541,8 +1805,10 @@ TEST(BackendCCEVFOpsTest, AxpyCoercesFloatScalarToInt64)
     codegen.RegisterRegTensorVar("i64_src");
     const Kwargs zeroing = {{"mode", EnumValue(ir::MergeMode::ZEROING)}};
 
-    // INT64 src + float 3.5 → coerced to "3"
-    ExpectInvoke(codegen, "vf.axpy", {"vaxpy(", ", 3, "}, {i64_dst, i64_src, Float(3.5), mask}, zeroing);
+    // INT64 src + float 3.5 → coerced to int 3 in the b64 scalar broadcast
+    auto emitted = Invoke(codegen, "vf.axpy", {i64_dst, i64_src, Float(3.5), mask}, zeroing);
+    ExpectContains(emitted, {"vdup(i64_dst_axpy__losc_, (int32_t)((int64_t)(3))", "vaddc(i64_dst_axpy__carry_"});
+    EXPECT_EQ(emitted.find("3.5"), std::string::npos) << "Scalar should be coerced to int: " << emitted;
 }
 
 TEST(BackendCCEVFOpsTest, StoreAlignAddrRegRejectsNonMaskArg2)
@@ -1630,7 +1896,11 @@ TEST(BackendCCEVFOpsTest, ReduceSumAcceptsInt64)
     auto i64_src = MakeVar("i64_src", ir::DataType::INT64);
     auto mask = MakeVar("mask", ir::DataType::UINT32);
 
-    ExpectInvoke(codegen, "vf.reduce_sum", {"vcadd("}, {i64_dst, i64_src, mask});
+    // B64 sum lowers to the 16-bit carry decomposition (no native b64 vcadd).
+    ExpectInvoke(codegen, "vf.reduce_sum",
+                 {"ppack(i64_dst_b64rs_pm, mask, LOWER)", "vdup(i64_dst_b64rs_lowf_, (int32_t)0xFFFF",
+                  "vcadd(i64_dst_b64rs_lowr_", "vintlv((RegTensor<uint32_t>&)i64_dst"},
+                 {i64_dst, i64_src, mask});
 }
 
 TEST(BackendCCEVFOpsTest, ReduceSumAcceptsUint64)
@@ -1640,7 +1910,10 @@ TEST(BackendCCEVFOpsTest, ReduceSumAcceptsUint64)
     auto u64_src = MakeVar("u64_src", ir::DataType::UINT64);
     auto mask = MakeVar("mask", ir::DataType::UINT32);
 
-    ExpectInvoke(codegen, "vf.reduce_sum", {"vcadd("}, {u64_dst, u64_src, mask});
+    ExpectInvoke(
+        codegen, "vf.reduce_sum",
+        {"ppack(u64_dst_b64rs_pm, mask, LOWER)", "vcadd(u64_dst_b64rs_lowr_", "vintlv((RegTensor<uint32_t>&)u64_dst"},
+        {u64_dst, u64_src, mask});
 }
 
 TEST(BackendCCEVFOpsTest, ReduceSumRejectsBf16)

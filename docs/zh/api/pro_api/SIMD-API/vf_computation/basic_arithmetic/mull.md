@@ -88,11 +88,7 @@ def example_kernel(
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.load(in_b, b, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf(in_a, in_b, t_lo, t_hi)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out_lo, t_lo, [0, 0])
         pl.store(out_hi, t_hi, [0, 0])
 

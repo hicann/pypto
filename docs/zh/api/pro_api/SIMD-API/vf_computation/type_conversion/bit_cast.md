@@ -59,7 +59,6 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf_bit_cast_assign(src_tile_a, src_tile_b, dst_tile):
     preg_u32 = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
@@ -73,7 +72,6 @@ def example_vf_bit_cast_assign(src_tile_a, src_tile_b, dst_tile):
     reg_c = vf.xor(reg_a_u32, reg_b_u32, preg_u32)
     # 结果以 UINT32 粒度存储
     vf.store_align(dst_tile, reg_c, preg_u32)
-
 
 @pl.jit()
 def example_kernel(
@@ -91,13 +89,8 @@ def example_kernel(
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.load(in_b, b, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf_bit_cast_assign(in_a, in_b, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
-
 
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
@@ -112,7 +105,6 @@ def test_example():
     # bit_cast 仅改变类型标签，比特模式不变，xor 结果与直接对位模式异或一致
     # 使用位级比较避免 NaN 精度问题
     assert torch.equal(out.view(torch.int32), a.view(torch.int32) ^ b.view(torch.int32))
-
 
 if __name__ == "__main__":
     test_example()
@@ -129,7 +121,6 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf_hf8_to_uint8(src_tile_a, src_tile_b, dst_tile):
     # b8 掩码（UINT8 / HF8 元素宽度）
@@ -142,7 +133,6 @@ def example_vf_hf8_to_uint8(src_tile_a, src_tile_b, dst_tile):
                    vf.bit_cast(reg_b, dtype=pl.DT_UINT8), preg_b8)
     # 以 b8 粒度存储
     vf.store_align(dst_tile, reg_c, preg_b8)
-
 
 @pl.jit()
 def example_kernel(
@@ -160,13 +150,8 @@ def example_kernel(
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.load(in_b, b, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf_hf8_to_uint8(in_a, in_b, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
-
 
 def test_example_hf8():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
@@ -183,7 +168,6 @@ def test_example_hf8():
     # bit_cast 仅改变类型标签，比特模式不变，or 结果与直接对字节按位或一致
     expected = a.view(torch.uint8) | b.view(torch.uint8)
     torch.testing.assert_close(out, expected, rtol=0, atol=0)
-
 
 if __name__ == "__main__":
     test_example_hf8()

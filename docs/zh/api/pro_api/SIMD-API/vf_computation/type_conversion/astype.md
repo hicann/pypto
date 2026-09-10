@@ -205,7 +205,6 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
@@ -215,7 +214,6 @@ def example_vf(src_tile, dst_tile):
     # BF16→FP32，widen back for store
     reg_f32 = vf.astype(reg_bf16, preg, dtype=pl.DT_FP32)
     vf.store_align(dst_tile, reg_f32, preg)
-
 
 @pl.jit()
 def example_kernel(
@@ -229,13 +227,8 @@ def example_kernel(
     t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf(in_a, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
-
 
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
@@ -247,7 +240,6 @@ def test_example():
     example_kernel[None, core_nums](a, out)
     torch.npu.synchronize()
     torch.testing.assert_close(out, a.to(torch.bfloat16).to(torch.float32), rtol=1e-3, atol=1e-3)
-
 
 if __name__ == "__main__":
     test_example()
@@ -262,7 +254,6 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf_fp32_to_fp16(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
@@ -272,7 +263,6 @@ def example_vf_fp32_to_fp16(src_tile, dst_tile):
     # FP16→FP32，扩展回 FP32 用于搬出
     reg_f32 = vf.astype(reg_f16, preg, dtype=pl.DT_FP32)
     vf.store_align(dst_tile, reg_f32, preg)
-
 
 @pl.jit()
 def example_kernel_fp32_to_fp16(
@@ -286,13 +276,8 @@ def example_kernel_fp32_to_fp16(
     t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf_fp32_to_fp16(in_a, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
-
 
 def test_example_fp32_to_fp16():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
@@ -304,7 +289,6 @@ def test_example_fp32_to_fp16():
     example_kernel_fp32_to_fp16[None, core_nums](a, out)
     torch.npu.synchronize()
     torch.testing.assert_close(out, a.to(torch.float16).to(torch.float32), rtol=1e-3, atol=1e-3)
-
 
 if __name__ == "__main__":
     test_example_fp32_to_fp16()
@@ -319,7 +303,6 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf_round(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
@@ -328,7 +311,6 @@ def example_vf_round(src_tile, dst_tile):
     reg_i = vf.astype(reg_a, preg, dtype=pl.DT_INT32, round_mode=pl.VFRoundMode.CAST_RINT)
     reg_f = vf.astype(reg_i, preg, dtype=pl.DT_FP32)
     vf.store_align(dst_tile, reg_f, preg)
-
 
 @pl.jit()
 def example_kernel_round(
@@ -342,13 +324,8 @@ def example_kernel_round(
     t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf_round(in_a, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
-
 
 def test_example_2():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
@@ -360,7 +337,6 @@ def test_example_2():
     example_kernel_round[None, core_nums](a, out)
     torch.npu.synchronize()
     torch.testing.assert_close(out, a.to(torch.int32).to(torch.float32), rtol=0, atol=1.0)
-
 
 if __name__ == "__main__":
     test_example_2()
@@ -375,7 +351,6 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf_fp8(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
@@ -386,7 +361,6 @@ def example_vf_fp8(src_tile, dst_tile):
     # FP8E4M3FN → FP32，还原为 FP32 用于存储
     reg_f32 = vf.astype(reg_f8, preg, dtype=pl.DT_FP32)
     vf.store_align(dst_tile, reg_f32, preg)
-
 
 @pl.jit()
 def example_kernel_fp8(
@@ -400,13 +374,8 @@ def example_kernel_fp8(
     t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf_fp8(in_a, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
-
 
 def test_example_fp8():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
@@ -420,7 +389,6 @@ def test_example_fp8():
     # layout=ZERO 时 FP8 结果在偶数半区，验证偶数索引位置
     expected = a.to(torch.float8_e4m3fn).to(torch.float32)
     torch.testing.assert_close(out[:, ::2], expected[:, ::2], rtol=1e-2, atol=1e-2)
-
 
 if __name__ == "__main__":
     test_example_fp8()
@@ -436,7 +404,6 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf_fp4(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_BF16)
@@ -447,7 +414,6 @@ def example_vf_fp4(src_tile, dst_tile):
     # FP4E2M1 → BF16，还原为 BF16 用于存储
     reg_bf16 = vf.astype(reg_f4, preg, dtype=pl.DT_BF16)
     vf.store_align(dst_tile, reg_bf16, preg)
-
 
 @pl.jit()
 def example_kernel_fp4(
@@ -461,19 +427,13 @@ def example_kernel_fp4(
     t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf_fp4(in_a, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
-
 
 # FP4 E2M1 可表示值为 [0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0] 及其负数
 # 硬件采用 ROUND_R（round-to-nearest-even）舍入
 _FP4_E2M1_VALUES = np.array([0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0], dtype=np.float32)
 _FP4_E2M1_EVEN_MASK = np.array([True, False, True, False, True, False, True, False])
-
 
 def test_example_fp4():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
@@ -502,7 +462,6 @@ def test_example_fp4():
     expected = torch.from_numpy(sign * _FP4_E2M1_VALUES[idx]).to(device=device, dtype=torch.bfloat16)
     torch.testing.assert_close(out[:, ::2], expected[:, ::2], rtol=1e-1, atol=1e-1)
 
-
 if __name__ == "__main__":
     test_example_fp4()
     print("PASSED")
@@ -516,7 +475,6 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf_hf8(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP16)
@@ -527,7 +485,6 @@ def example_vf_hf8(src_tile, dst_tile):
     # HF8 → FP16（2x widening），还原为 FP16 用于存储
     reg_f16 = vf.astype(reg_hf8, preg, dtype=pl.DT_FP16)
     vf.store_align(dst_tile, reg_f16, preg)
-
 
 @pl.jit()
 def example_kernel_hf8(
@@ -541,13 +498,8 @@ def example_kernel_hf8(
     t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf_hf8(in_a, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
-
 
 def test_example_hf8():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
@@ -561,8 +513,54 @@ def test_example_hf8():
     # layout=ZERO 时 HF8 结果在偶数半区，验证偶数索引位置
     torch.testing.assert_close(out[:, ::2], a[:, ::2], rtol=1e-1, atol=1e-1)
 
-
 if __name__ == "__main__":
     test_example_hf8()
+    print("PASSED")
+```
+
+### INT64数据类型示例
+
+```python
+import os
+import pypto_pro.language as pl
+import torch
+import torch_npu
+
+@pl.vector_function
+def example_vf_int64(src_tile, dst_tile):
+    preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_INT64)
+    reg_a = vf.load_align(src_tile, 0)
+    reg_f32 = vf.astype(reg_a, preg, dtype=pl.DT_FP32)
+    reg_out = vf.astype(reg_f32, preg, dtype=pl.DT_INT64)
+    vf.store_align(dst_tile, reg_out, preg)
+
+@pl.jit()
+def example_kernel_int64(
+    a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT64],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT64],
+):
+    tf = pl.TileType(shape=[1, 32], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Vec)
+    in_a_grp = pl.make_tile_group(type=tf, addrs=0, mutex_ids=[0])
+    in_a = in_a_grp.current()
+    t_out_grp = pl.make_tile_group(type=tf, addrs=256, mutex_ids=[1])
+    t_out = t_out_grp.current()
+    with pl.section_vector():
+        pl.load(in_a, a, [0, 0])
+        example_vf_int64(in_a, t_out)
+        pl.store(out, t_out, [0, 0])
+
+def test_example_int64():
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
+    core_nums = 1
+    torch.npu.set_device(device)
+    a = torch.randint(-100, 100, [1, 32], device=device, dtype=torch.int64)
+    out = torch.empty([1, 32], device=device, dtype=torch.int64)
+    example_kernel_int64[None, core_nums](a, out)
+    torch.npu.synchronize()
+    torch.testing.assert_close(out, a, rtol=0, atol=0)
+
+if __name__ == "__main__":
+    test_example_int64()
     print("PASSED")
 ```

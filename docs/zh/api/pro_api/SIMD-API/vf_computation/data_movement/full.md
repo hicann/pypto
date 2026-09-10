@@ -29,7 +29,7 @@ full(src, preg, dtype: Optional[DType] = None, mode: Optional[MergeMode] = None,
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| src | 输入 | 源操作数，为标量值或者[reg_tensor](../reg_tensor.md)。源操作数src与目的操作数dst的数据类型保持一致。<br>- **Scalar模式**：标量值，广播到寄存器各元素。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32。<br>- **Tensor模式**：[reg_tensor](../reg_tensor.md)，广播其最低位或最高位元素。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
+| src | 输入 | 源操作数，为标量值或者[reg_tensor](../reg_tensor.md)。源操作数src与目的操作数dst的数据类型保持一致。<br>- **Scalar模式**：标量值，广播到寄存器各元素。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64。<br>- **Tensor模式**：[reg_tensor](../reg_tensor.md)，广播其最低位或最高位元素。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
 | preg | 输入 | [mask_reg](../mask_reg.md)。Tensor模式必选；Scalar模式可选。 |
 | dtype | 输入 | 可选，指定数据类型。Scalar模式必须输入，Tensor模式可从源寄存器自动推断。 |
 | pos | 输入 | 可选，Tensor模式下选择广播源reg_tensor的哪个元素，对应[DuplicatePos](../types/DuplicatePos.md)类型：<br>- pypto_pro.language.DuplicatePos.LOWEST：默认，广播最低位的元素。<br>- pypto_pro.language.DuplicatePos.HIGHEST：指定广播最高位的元素。 |
@@ -70,8 +70,6 @@ def example_kernel(
     t_out = t_out_grp.current()
     with pl.section_vector():
         example_vf(t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
 def test_example():
@@ -124,11 +122,7 @@ def example_kernel_fp8(
     t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf_fp8(in_a, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
 def test_example_fp8():
@@ -185,11 +179,7 @@ def example_kernel_fp4(
     t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf_fp4(in_a, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
 def test_example_fp4():
@@ -247,11 +237,7 @@ def example_kernel_hf8(
     t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf_hf8(in_a, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
 def test_example_hf8():
@@ -306,11 +292,7 @@ def example_kernel_fp8e8m0(
     t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf_fp8e8m0(in_a, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
 def test_example_fp8e8m0():
@@ -330,5 +312,51 @@ def test_example_fp8e8m0():
 
 if __name__ == "__main__":
     test_example_fp8e8m0()
+    print("PASSED")
+```
+
+### INT64数据类型示例
+
+```python
+import os
+import pypto_pro.language as pl
+import torch
+import torch_npu
+
+@pl.vector_function
+def example_vf_int64(src_tile, dst_tile):
+    preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_INT64)
+    reg_a = vf.load_align(src_tile, 0)
+    reg_out = vf.full(42, preg, dtype=pl.DT_INT64)
+    vf.store_align(dst_tile, reg_out, preg)
+
+@pl.jit()
+def example_kernel_int64(
+    a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT64],
+    out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT64],
+):
+    tf = pl.TileType(shape=[1, 32], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Vec)
+    in_a_grp = pl.make_tile_group(type=tf, addrs=0, mutex_ids=[0])
+    in_a = in_a_grp.current()
+    t_out_grp = pl.make_tile_group(type=tf, addrs=256, mutex_ids=[1])
+    t_out = t_out_grp.current()
+    with pl.section_vector():
+        pl.load(in_a, a, [0, 0])
+        example_vf_int64(in_a, t_out)
+        pl.store(out, t_out, [0, 0])
+
+def test_example_int64():
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    device = f"npu:{device_id}"
+    core_nums = 1
+    torch.npu.set_device(device)
+    a = torch.randint(-100, 100, [1, 32], device=device, dtype=torch.int64)
+    out = torch.empty([1, 32], device=device, dtype=torch.int64)
+    example_kernel_int64[None, core_nums](a, out)
+    torch.npu.synchronize()
+    torch.testing.assert_close(out, torch.full([1, 32], 42, dtype=torch.int64, device=device), rtol=0, atol=0)
+
+if __name__ == "__main__":
+    test_example_int64()
     print("PASSED")
 ```
