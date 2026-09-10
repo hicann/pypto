@@ -64,6 +64,38 @@ std::string BundleKeyName(uint64_t bundleKey)
     return os.str();
 }
 
+void ResetCachedOperandUseList(dynamic::DevAscendFunction& func,
+                               dynamic::DevLocalVector<dynamic::DevAscendFunctionCallOperandUse>& uses)
+{
+    for (size_t useIdx = 0; useIdx < uses.size(); ++useIdx) {
+        func.At(uses, static_cast<int>(useIdx)).cachedAttrBase = nullptr;
+    }
+}
+
+// Host control-flow execution can populate these lazy caches before an exception bundle is
+// dumped. They are process-local pointers, not relocatable program data. Clear all operand
+// use lists so the consumer recomputes each pointer from its own function and offsetAttrIdx.
+void ResetCachedOperandAttributes(std::vector<uint8_t>& program)
+{
+    auto* prog = reinterpret_cast<dynamic::DevAscendProgram*>(program.data());
+    const auto base = reinterpret_cast<uint64_t>(prog);
+    prog->RelocProgram(0, base);
+    for (size_t i = 0; i < prog->GetFunctionSize(); ++i) {
+        auto* func = prog->GetFunction(static_cast<int>(i));
+        for (size_t incastIdx = 0; incastIdx < func->GetIncastSize(); ++incastIdx) {
+            auto& incast = func->GetIncast(static_cast<int>(incastIdx));
+            ResetCachedOperandUseList(*func, incast.consumerList);
+            ResetCachedOperandUseList(*func, incast.stitchPolicyFullCoverConsumerList);
+        }
+        for (size_t outcastIdx = 0; outcastIdx < func->GetOutcastSize(); ++outcastIdx) {
+            auto& outcast = func->GetOutcast(static_cast<int>(outcastIdx));
+            ResetCachedOperandUseList(*func, outcast.producerConsumerList);
+            ResetCachedOperandUseList(*func, outcast.stitchPolicyFullCoverProducerList);
+        }
+    }
+    prog->RelocProgram(base, 0);
+}
+
 std::string BundlePathName(const std::string& path, uint64_t bundleKey)
 {
     const size_t separator = path.find_last_of("/\\");
@@ -155,6 +187,7 @@ std::shared_ptr<LoadedBundle> KernelBundleLoader::LoadFromMemory(const uint8_t* 
         MACHINE_LOGE(DevCommonErr::FILE_ERROR, "[kernel-bundle] missing DEV_PROGRAM segment");
         return nullptr;
     }
+    ResetCachedOperandAttributes(b->devProgram);
     b->bundleKey = bundleKey;
     b->displayName = BundleKeyName(bundleKey);
     MACHINE_LOGI("[kernel-bundle] loaded: bundleKey=%#lx hashKey=%#lx workspaceSize=%lu archInfo=%u ctrlCache=%zuB "
