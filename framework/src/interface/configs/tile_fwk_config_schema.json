@@ -328,7 +328,6 @@
                         "en": "Stitch function depths for the three pools in precise Workspace mode, ordered as [rootInner, inner-temporal outcast, exclusive outcast]. [0,0,0] disables precise mode; any other value enables it. A pool with no actual requirement may use 0, while a required pool must use at least 1."
                     }
                 },
-
                 "run_mode": {
                     "type": "integer",
                     "label": {
