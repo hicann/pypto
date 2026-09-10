@@ -33,6 +33,13 @@
 
 namespace npu::tile_fwk {
 
+// 自动合并护栏(实测依据: progress1/dump_graphs 四 kernel Before dump, 2026-09-04):
+// 单次合并组的总工作量(AIC+AIV)上限。候选组超过该规模意味着串行 carry 脊柱与并行分支
+// 已被融进同一巨型 kernel(mla sg143: 1.24M cycles, 4858-op, e2e +244%/+327%), 拒绝。
+// 取值依据: 必须放行 gqa 全融合组 213,934 cycles(合并到 1 最优, 1163us)与
+// mha_grad 101,220 cycles; 拒绝 mla 巨型组与 sparse 跨拷贝组(>250k)。
+constexpr int kAutoMixMaxMergeLatency = 250000;
+
 static bool IsValidMergeGroup(const std::vector<int>& mergeGroup, const std::unordered_set<int>& noMergeSubgraph)
 {
     for (int subidx : mergeGroup) {
@@ -54,7 +61,7 @@ Status ReduceCopyMerge::RunOnFunction(Function& function)
     }
     size_t subgraphNumBefore = function.GetTotalSubGraphCount();
     MergeInput mergeInput;
-    mergeInput.maxLatency = 1e7;
+    mergeInput.maxLatency = kAutoMixMaxMergeLatency;
     mergeInput.maxSubgraphAICOpNum = maxSubgraphAICOpNum;
     mergeInput.maxSubgraphAIVOpNum = maxSubgraphAIVOpNum;
     mergeInput.aivRatio = {1e-6, 1e6};
@@ -62,7 +69,7 @@ Status ReduceCopyMerge::RunOnFunction(Function& function)
                       function.GetMagicName().c_str(), mergeInput.maxSubgraphAICOpNum, mergeInput.maxSubgraphAIVOpNum);
     APASS_LOG_INFO_F(Elements::Operation, "Subgraph Info before ReduceCopy Pass:");
     BuildGraph(function, mergeInput);
-    MarkNoMergeSubgraph(function);
+    MarkNoMergeSubgraph(function, mergeInput);
     BuildMergeGroup(function, mergeInput);
     CombineForkSubgraph(function, mergeInput);
     MixGraphMerger merger;
@@ -175,7 +182,151 @@ static void MarkCrossSubgraph(Function& function, std::unordered_set<int>& noMer
     }
 }
 
-Status ReduceCopyMerge::MarkNoMergeSubgraph(Function& function)
+static void MarkLoopCarryPathSubgraphs(const MergeInput& mergeInput, const std::set<int>& readerSgs,
+                                       const std::set<int>& writerSgs, int pathId,
+                                       std::vector<std::set<int>>& subgraphLoopPaths)
+{
+    if (readerSgs.empty() || writerSgs.empty()) {
+        return;
+    }
+    std::vector<bool> forwardReach(mergeInput.numSubgraph, false);
+    std::vector<bool> backwardReach(mergeInput.numSubgraph, false);
+    std::vector<int> stack;
+    for (int sg : readerSgs) {
+        forwardReach[sg] = true;
+        stack.push_back(sg);
+    }
+    while (!stack.empty()) {
+        int cur = stack.back();
+        stack.pop_back();
+        for (int next : mergeInput.subGraphOutGraph[cur]) {
+            if (!forwardReach[next]) {
+                forwardReach[next] = true;
+                stack.push_back(next);
+            }
+        }
+    }
+    for (int sg : writerSgs) {
+        backwardReach[sg] = true;
+        stack.push_back(sg);
+    }
+    while (!stack.empty()) {
+        int cur = stack.back();
+        stack.pop_back();
+        for (int prev : mergeInput.subGraphInGraph[cur]) {
+            if (!backwardReach[prev]) {
+                backwardReach[prev] = true;
+                stack.push_back(prev);
+            }
+        }
+    }
+    for (int sg = 0; sg < mergeInput.numSubgraph; ++sg) {
+        if (forwardReach[sg] && backwardReach[sg]) {
+            subgraphLoopPaths[sg].insert(pathId);
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                              "Subgraph %d is on feedback loop-carry path of slot %d (merge only within same path).",
+                              sg, pathId);
+        }
+    }
+}
+
+// 目的: 一次遍历收集全部 feedback slot 的写端/读端子图集合(写端=产出该 slot outcast
+// tensor 的算子所在子图, 读端=消费该 slot incast tensor 的算子所在子图), 按 slot 分发,
+// 避免逐 slot 全量扫描; 越界防御收敛到循环条件(槽位表与 IO 表约定平行, 见 RemoveOutcast)
+static void CollectFeedbackSlotEndSgs(Function& function, const std::set<int>& feedbackSlots,
+                                      std::map<int, std::set<int>>& slotWriters,
+                                      std::map<int, std::set<int>>& slotReaders)
+{
+    auto slotScope = function.GetSlotScope();
+    if (slotScope == nullptr) {
+        return;
+    }
+    auto& incastSlots = slotScope->ioslot.incastSlot;
+    auto& outcastSlots = slotScope->ioslot.outcastSlot;
+    auto& incasts = function.GetIncast();
+    auto& outcasts = function.GetOutcast();
+    // 槽位表与 IO 表的平行约定由多个生产方维护(BuildIncastOutcastSlot/RemoveOutcast/LoopUnroll/
+    // LoadJson), 失配时尾部条目被跳过会导致对应 slot 的通路不标记、门控静默失效, 留 WARN 便于定位
+    if (outcasts.size() != outcastSlots.size()) {
+        APASS_LOG_WARN_F(Elements::Operation, "outcasts(%zu) vs outcastSlot(%zu) size mismatch, tail entries skipped.",
+                         outcasts.size(), outcastSlots.size());
+    }
+    if (incasts.size() != incastSlots.size()) {
+        APASS_LOG_WARN_F(Elements::Operation, "incasts(%zu) vs incastSlot(%zu) size mismatch, tail entries skipped.",
+                         incasts.size(), incastSlots.size());
+    }
+    for (size_t i = 0; i < outcasts.size() && i < outcastSlots.size(); ++i) {
+        for (int s : outcastSlots[i]) {
+            if (feedbackSlots.count(s) > 0) {
+                for (auto& op : outcasts[i]->GetProducers()) {
+                    slotWriters[s].insert(op->GetSubgraphID());
+                }
+            }
+        }
+    }
+    for (size_t i = 0; i < incasts.size() && i < incastSlots.size(); ++i) {
+        for (int s : incastSlots[i]) {
+            if (feedbackSlots.count(s) > 0) {
+                for (auto& op : incasts[i]->GetConsumers()) {
+                    slotReaders[s].insert(op->GetSubgraphID());
+                }
+            }
+        }
+    }
+}
+
+// 目的: 通路归属按"环"而非单条 slot 链归类 —— 同一环的多条 carry 链(如 online softmax 的
+// out/sum/max)迭代域相同, 链间合并不改变执行次数语义, 按链归类会误判为异路而阻断融合;
+// 判定同环的依据是两条链存在共享子图(某子图同时位于两条链的读写端), 共享子图会将环的
+// 迭代耦合, 归一安全; 互相独立的环仍保持不同通路。
+// 不变量: 前端 pypto.frontend.jit 的 loop_unroll + 原位赋值版本化保证同一条环上的多条
+// carry 链必共享至少一个端点子图(同迭代体内读写三件套的算子落在同一 sg), 因此"共享端点
+// 归组"能覆盖所有合法同环形态; 不共享端点的两条 slot 链属于不同迭代环, 归为异路正确。
+static void MarkLoopGroupedCarryPaths(const MergeInput& mergeInput, const std::vector<int>& slotList,
+                                      const std::vector<std::set<int>>& readers,
+                                      const std::vector<std::set<int>>& writers,
+                                      std::vector<std::set<int>>& subgraphLoopPaths)
+{
+    int slotNum = static_cast<int>(slotList.size());
+    std::vector<int> parent(slotNum);
+    std::iota(parent.begin(), parent.end(), 0);
+    auto findRoot = [&parent](int x) {
+        while (parent[x] != x) {
+            parent[x] = parent[parent[x]];
+            x = parent[x];
+        }
+        return x;
+    };
+    std::unordered_map<int, int> sgToSlot;
+    for (int i = 0; i < slotNum; ++i) {
+        std::set<int> ends = readers[i];
+        ends.insert(writers[i].begin(), writers[i].end());
+        for (int sg : ends) {
+            auto it = sgToSlot.find(sg);
+            if (it != sgToSlot.end()) {
+                parent[findRoot(it->second)] = findRoot(i);
+            } else {
+                sgToSlot[sg] = i;
+            }
+        }
+    }
+    for (int i = 0; i < slotNum; ++i) {
+        if (findRoot(i) != i) {
+            continue;
+        }
+        std::set<int> loopReaders;
+        std::set<int> loopWriters;
+        for (int j = 0; j < slotNum; ++j) {
+            if (findRoot(j) == i) {
+                loopReaders.insert(readers[j].begin(), readers[j].end());
+                loopWriters.insert(writers[j].begin(), writers[j].end());
+            }
+        }
+        MarkLoopCarryPathSubgraphs(mergeInput, loopReaders, loopWriters, slotList[i], subgraphLoopPaths);
+    }
+}
+
+Status ReduceCopyMerge::MarkNoMergeSubgraph(Function& function, MergeInput& mergeInput)
 {
     noMergeSubgraph.clear();
     noMergeSubgraphEnforce.clear();
@@ -216,7 +367,51 @@ Status ReduceCopyMerge::MarkNoMergeSubgraph(Function& function)
             APASS_LOG_DEBUG_F(Elements::Operation, "Subgraph %d has inner DDR tensor.", i);
         }
     }
+    MarkFeedbackSubgraphs(function, mergeInput);
     return SUCCESS;
+}
+
+void ReduceCopyMerge::MarkFeedbackSubgraphs(Function& function, MergeInput& mergeInput)
+{
+    auto slotScope = function.GetSlotScope();
+    if (slotScope == nullptr) {
+        return;
+    }
+    auto& incastSlots = slotScope->ioslot.incastSlot;
+    auto& outcastSlots = slotScope->ioslot.outcastSlot;
+
+    std::set<int> incastSlotSet;
+    for (auto& slots : incastSlots) {
+        for (int s : slots) {
+            incastSlotSet.insert(s);
+        }
+    }
+    std::set<int> outcastSlotSet;
+    for (auto& slots : outcastSlots) {
+        for (int s : slots) {
+            outcastSlotSet.insert(s);
+        }
+    }
+
+    std::set<int> feedbackSlots;
+    std::set_intersection(incastSlotSet.begin(), incastSlotSet.end(), outcastSlotSet.begin(), outcastSlotSet.end(),
+                          std::inserter(feedbackSlots, feedbackSlots.begin()));
+    if (feedbackSlots.empty()) {
+        return;
+    }
+
+    mergeInput.subgraphLoopPaths.assign(mergeInput.numSubgraph, std::set<int>());
+    std::map<int, std::set<int>> slotWriters;
+    std::map<int, std::set<int>> slotReaders;
+    CollectFeedbackSlotEndSgs(function, feedbackSlots, slotWriters, slotReaders);
+    std::vector<int> slotList(feedbackSlots.begin(), feedbackSlots.end());
+    std::vector<std::set<int>> readers(slotList.size());
+    std::vector<std::set<int>> writers(slotList.size());
+    for (size_t i = 0; i < slotList.size(); ++i) {
+        readers[i] = std::move(slotReaders[slotList[i]]);
+        writers[i] = std::move(slotWriters[slotList[i]]);
+    }
+    MarkLoopGroupedCarryPaths(mergeInput, slotList, readers, writers, mergeInput.subgraphLoopPaths);
 }
 
 Status ReduceCopyMerge::BuildGraph(Function& function, MergeInput& mergeInput)
@@ -480,6 +675,9 @@ static bool ValidateInput(const MergeInput& input)
     if (!input.subgraphToBoundaryTensorIds.empty() && static_cast<int>(input.subgraphToBoundaryTensorIds.size()) != n) {
         return false;
     }
+    if (!input.subgraphLoopPaths.empty() && static_cast<int>(input.subgraphLoopPaths.size()) != n) {
+        return false;
+    }
     for (int i = 0; i < n; ++i) {
         if (input.subgraphAICLatency[i] < 0 || input.subgraphAIVLatency[i] < 0) {
             return false;
@@ -497,6 +695,8 @@ void MixGraphMerger::Initialize(const MergeInput& input)
     for (int i = 0; i < input.numSubgraph; ++i) {
         mParent[i] = i;
     }
+    // root 的 loop-carry 通路集合: 初始为各原始子图自身集合, 合并时取并集
+    mRootLoopPaths = input.subgraphLoopPaths;
     mOutput.numSubgraphUpdated = input.numSubgraph;
     mOutput.subgraphIdUpdated.resize(input.numSubgraph);
     for (int i = 0; i < input.numSubgraph; ++i) {
@@ -988,10 +1188,42 @@ bool MixGraphMerger::CheckMergeBenefitByStructuralPattern(const std::vector<int>
     return true;
 }
 
+bool MixGraphMerger::CheckLoopPathConsistency(const std::vector<int>& actualGroup)
+{
+    // 同通路门控(carry 约束原则的语义化实现):
+    // 候选组内所有成员的 loop-carry 通路归属必须完全相同 ——
+    //   同一环路(集合相同且非空): 链内合并, 串行性原本就存在, 放行;
+    //   全部空集: 与 carry 无关的普通合并, 按既有规则处理, 放行;
+    //   混杂(路径成员 + 空集/异环成员): 并行分支被吞进 carry 链, 串行链拖住并行体, 拒绝。
+    // subgraphLoopPaths 为空向量表示前端无 slot scope/feedback slot, 门控不启用。
+    if (mRootLoopPaths.empty()) {
+        return true;
+    }
+    const std::set<int>* ref = nullptr;
+    for (int root : actualGroup) {
+        const auto& paths = mRootLoopPaths[root];
+        if (ref == nullptr) {
+            ref = &paths;
+            continue;
+        }
+        if (*ref != paths) {
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                              "Merge skipped: loop-carry path mismatch inside group [%s] "
+                              "(merging carry chain with outside branch).",
+                              IntVecToStr(actualGroup).c_str());
+            return false;
+        }
+    }
+    return true;
+}
+
 bool MixGraphMerger::CanMergeWithConstraints(const std::vector<int>& actualGroup)
 {
     if (actualGroup.size() <= 1) {
         APASS_LOG_DEBUG_F(Elements::Operation, "Merge skipped: already merged.");
+        return false;
+    }
+    if (!CheckLoopPathConsistency(actualGroup)) {
         return false;
     }
     if (!CanMergeWithoutCycle(actualGroup)) {
@@ -1026,6 +1258,17 @@ void MixGraphMerger::PerformMerge(const std::vector<int>& actualGroup)
     int root = actualGroup[0];
     for (size_t i = 1; i < actualGroup.size(); ++i) {
         UnionSets(root, actualGroup[i]);
+    }
+    // 合并后真实 root 继承组内全部成员的通路归属。union-by-rank 可能使集合根轮转离开
+    // actualGroup[0], 必须以 FindParent 重取的根为落点(与 ApplyMergeToGraph 同一时机取根),
+    // 否则 enforce 路径(不经过同通路门控, 集合可异构)真实 root 会漏继承, 后续门控静默失效
+    if (!mRootLoopPaths.empty()) {
+        int newRoot = FindParent(actualGroup[0]);
+        for (int sg : actualGroup) {
+            if (sg != newRoot) {
+                mRootLoopPaths[newRoot].insert(mRootLoopPaths[sg].begin(), mRootLoopPaths[sg].end());
+            }
+        }
     }
     ApplyMergeToGraph(actualGroup);
     UpdateBoundaryTensorIndex(actualGroup);

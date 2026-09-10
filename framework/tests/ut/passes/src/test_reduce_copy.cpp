@@ -981,5 +981,270 @@ TEST_F(ReduceCopyTest, MixGraphMerger_EnforceOpNumExceedsWarnsButMerges)
     EXPECT_EQ(output.subgraphIdUpdated[0], output.subgraphIdUpdated[1]);
 }
 
+// ============================================================================
+// 本次修改 UT: 250k 时延护栏 + slot-scope carry 识别 + 同通路门控
+// 对应 reduce_copy.cpp 的 kAutoMixMaxMergeLatency / MarkFeedbackSubgraphs 系列 /
+// CheckLoopPathConsistency / MergeInput::subgraphLoopPaths
+// ============================================================================
+
+namespace {
+constexpr int kExpLatencyCap = 250000; // 与 reduce_copy.cpp 的 kAutoMixMaxMergeLatency 保持一致
+} // namespace
+
+// 时延护栏边界: 组总延迟(AIC+AIV) 260020 > 250k 拒绝, 120020 限内放行
+TEST_F(ReduceCopyTest, MixGraphMerger_LatencyCap250kBoundaryCheck)
+{
+    std::vector<std::set<int>> outGraph{{1}, {}, {3}, {}};
+    MergeInput input = BuildSimpleMergeInput(4, outGraph, {{0, 1}, {2, 3}});
+    input.maxLatency = kExpLatencyCap;
+    input.subgraphAICLatency = {130000, 130000, 60000, 60000};
+    input.subgraphAIVLatency = {10, 10, 10, 10};
+    MixGraphMerger merger;
+    merger.mInput = input;
+    merger.mParent = {0, 1, 2, 3};
+    EXPECT_FALSE(merger.CheckLatencyConstraint({0, 1}));
+    EXPECT_TRUE(merger.CheckLatencyConstraint({2, 3}));
+}
+
+// 自动合并路径: 链 {0,1,2} 总延迟 360030 > 250k, 合并被拒, 子图数保持 3
+// (结构检查已放行: 边界张量构成 1:1 链, 拒绝只来自时延护栏)
+TEST_F(ReduceCopyTest, Merge_LatencyCap250kBlocksOversizeChain)
+{
+    std::vector<std::set<int>> outGraph{{1}, {2}, {}};
+    MergeInput input = BuildSimpleMergeInput(3, outGraph, {{0, 1, 2}});
+    input.isEnforceMergeGroup = {false};
+    input.maxLatency = kExpLatencyCap;
+    input.subgraphAICLatency = {120000, 120000, 120000};
+    input.subgraphAIVLatency = {10, 10, 10};
+    input.boundaryTensors = {{100, {0}, {1}, true, {}, {}}, {101, {1}, {2}, true, {}, {}}};
+    input.subgraphToBoundaryTensorIds = {{0}, {0, 1}, {1}};
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+    EXPECT_EQ(output.numSubgraphUpdated, 3);
+}
+
+// 同图总延迟 180030 <= 250k: 合并放行, 收敛到 1 子图 (gqa 全融合组 213934 cycles 的场景抽象)
+TEST_F(ReduceCopyTest, Merge_LatencyCap250kAllowsChainUnderLimit)
+{
+    std::vector<std::set<int>> outGraph{{1}, {2}, {}};
+    MergeInput input = BuildSimpleMergeInput(3, outGraph, {{0, 1, 2}});
+    input.isEnforceMergeGroup = {false};
+    input.maxLatency = kExpLatencyCap;
+    input.subgraphAICLatency = {60000, 60000, 60000};
+    input.subgraphAIVLatency = {10, 10, 10};
+    input.boundaryTensors = {{100, {0}, {1}, true, {}, {}}, {101, {1}, {2}, true, {}, {}}};
+    input.subgraphToBoundaryTensorIds = {{0}, {0, 1}, {1}};
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+    EXPECT_EQ(output.numSubgraphUpdated, 1);
+}
+
+// 同通路门控: carry 环上成员(sg0/sg1, path={7})与环外成员(sg2/sg3, path={})混合的候选组拒绝;
+// 同环链与全环外组合放行
+TEST_F(ReduceCopyTest, MixGraphMerger_LoopPathConsistency_MixedMembershipRejected)
+{
+    MergeInput input = BuildSimpleMergeInput(4, {{1}, {2}, {3}, {}}, {});
+    input.subgraphLoopPaths = {{7}, {7}, {}, {}}; // sg0/sg1 在 carry 环 7 上, sg2/sg3 环外
+    MixGraphMerger merger;
+    merger.mInput = input;
+    merger.mRootLoopPaths = input.subgraphLoopPaths;
+    merger.mParent = {0, 1, 2, 3};
+    EXPECT_FALSE(merger.CheckLoopPathConsistency({0, 1, 2}));
+    EXPECT_FALSE(merger.CheckLoopPathConsistency({0, 2}));
+    EXPECT_TRUE(merger.CheckLoopPathConsistency({0, 1}));
+    EXPECT_TRUE(merger.CheckLoopPathConsistency({2, 3}));
+}
+
+// 无 slot 信息(subgraphLoopPaths 为空, 如 mha_grad / 无 feedback slot 的 kernel)时门控不启用
+TEST_F(ReduceCopyTest, MixGraphMerger_LoopPathConsistencyDisabledWithoutSlotInfo)
+{
+    MergeInput input = BuildSimpleMergeInput(3, {{1}, {2}, {}}, {});
+    input.subgraphLoopPaths = {};
+    MixGraphMerger merger;
+    merger.mInput = input;
+    merger.mRootLoopPaths = input.subgraphLoopPaths;
+    merger.mParent = {0, 1, 2};
+    EXPECT_TRUE(merger.CheckLoopPathConsistency({0, 1, 2}));
+}
+
+// 全 Merge 集成: carry 环上(sg0/sg1)与环外支路(sg2)混合的候选组被门控拦截, 保持 3 子图
+TEST_F(ReduceCopyTest, Merge_LoopPathGateBlocksBranchAbsorption)
+{
+    std::vector<std::set<int>> outGraph{{1}, {2}, {}};
+    MergeInput input = BuildSimpleMergeInput(3, outGraph, {{0, 1, 2}});
+    input.isEnforceMergeGroup = {false};
+    input.subgraphLoopPaths = {{7}, {7}, {}};
+    input.boundaryTensors = {{100, {0}, {1}, true, {}, {}}, {101, {1}, {2}, true, {}, {}}};
+    input.subgraphToBoundaryTensorIds = {{0}, {0, 1}, {1}};
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+    EXPECT_EQ(output.numSubgraphUpdated, 3);
+}
+
+// 同环全成员: 链内合并不受门控影响, 收敛到 1 子图 (gqa 29->1 场景抽象)
+TEST_F(ReduceCopyTest, Merge_LoopPathGateAllowsSamePathChain)
+{
+    std::vector<std::set<int>> outGraph{{1}, {2}, {}};
+    MergeInput input = BuildSimpleMergeInput(3, outGraph, {{0, 1, 2}});
+    input.isEnforceMergeGroup = {false};
+    input.subgraphLoopPaths = {{7}, {7}, {7}};
+    input.boundaryTensors = {{100, {0}, {1}, true, {}, {}}, {101, {1}, {2}, true, {}, {}}};
+    input.subgraphToBoundaryTensorIds = {{0}, {0, 1}, {1}};
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+    EXPECT_EQ(output.numSubgraphUpdated, 1);
+}
+
+// 无 slot 信息: 门控不启用 -> 收敛到 1 子图 (mla / gqa-PATH0 等无 feedback slot 场景)
+TEST_F(ReduceCopyTest, Merge_NoSlotInfoGateDisabledMergesAll)
+{
+    std::vector<std::set<int>> outGraph{{1}, {2}, {}};
+    MergeInput input = BuildSimpleMergeInput(3, outGraph, {{0, 1, 2}});
+    input.isEnforceMergeGroup = {false};
+    input.boundaryTensors = {{100, {0}, {1}, true, {}, {}}, {101, {1}, {2}, true, {}, {}}};
+    input.subgraphToBoundaryTensorIds = {{0}, {0, 1}, {1}};
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+    EXPECT_EQ(output.numSubgraphUpdated, 1);
+}
+
+// 端到端(RunOnFunction): feedback slot 7 标记 carry 链 sg0(读 incast)->sg1(写 outcast),
+// 下游环外支路 sg2 被门控拦住不并入 carry 链; sg2/sg3(全环外)自行合并 -> 2 子图
+TEST_F(ReduceCopyTest, RunOnFunction_CarrySlotGateKeepsBranchSeparate)
+{
+    ComputationalGraphBuilder G;
+    std::vector<std::string> incasts;
+    std::vector<std::string> outcasts;
+    std::string carryIn = AddIncast(G, "carryIn", incasts);
+    std::string k0 = AddIncast(G, "k0", incasts);
+    std::string c0 = AddCubeMatmulFrom(G, 0, carryIn, k0); // sg0: carry reader (AIC)
+    std::string carryOut = AddVecSG(G, 1, c0, "carryOut"); // sg1: carry writer (AIV)
+    outcasts.push_back(carryOut);
+    std::string v2 = AddVecSG(G, 2, carryOut, "v2"); // sg2: 环外支路 (AIV)
+    outcasts.push_back(v2);
+    std::string k3 = AddIncast(G, "k3", incasts);
+    (void)AddCubeMatmulFrom(G, 3, v2, k3); // sg3: 环外支路 (AIC)
+    Function* function = G.GetFunction();
+    function->SetTotalSubGraphCount(4);
+    ASSERT_EQ(G.SetInCast(incasts), true);
+    ASSERT_EQ(G.SetOutCast(outcasts), true);
+    auto slotScope = std::make_shared<TensorSlotScope>(function);
+    slotScope->ioslot.incastSlot = {{7}, {}};
+    slotScope->ioslot.outcastSlot = {{7}, {}};
+    function->SetSlotScope(slotScope);
+    function->paramConfigs_.autoMixPartition = 1;
+    ReduceCopyMerge merger;
+    EXPECT_EQ(merger.RunOnFunction(*function), SUCCESS);
+    // sg0+sg1(同环, carryOut 1:1 链)合并; carryOut 边连接的环外 sg2 被门控拦住 -> 2 子图
+    const int Num2 = 2;
+    EXPECT_EQ(function->GetTotalSubGraphCount(), Num2);
+}
+
+// 双 feedback slot(7/8) 共享读端子图 sg0 —— online softmax 的 out/sum/max 同环抽象:
+// 两条 carry 链共享端点 -> 并查集归为同一环, sg0/sg1/sg2 同 pathId, 链间合并放行 -> 1 子图
+// (若按链独立归类, sg0={7,8}/sg1={7}/sg2={8} 通路混杂会被误拒 -> 3 子图)
+TEST_F(ReduceCopyTest, RunOnFunction_SharedEndpointSlotsGroupIntoSameRing)
+{
+    ComputationalGraphBuilder G;
+    std::vector<std::string> incasts;
+    std::vector<std::string> outcasts;
+    std::string carryInA = AddIncast(G, "carryInA", incasts);     // slot 7 incast
+    std::string carryInB = AddIncast(G, "carryInB", incasts);     // slot 8 incast
+    std::string c0 = AddCubeMatmulFrom(G, 0, carryInA, carryInB); // sg0: 两条链共享的 carry reader
+    std::string o7 = AddVecSG(G, 1, c0, "o7");                    // sg1: slot 7 writer
+    outcasts.push_back(o7);
+    std::string o8 = AddVecSG(G, 2, c0, "o8"); // sg2: slot 8 writer
+    outcasts.push_back(o8);
+    Function* function = G.GetFunction();
+    function->SetTotalSubGraphCount(3);
+    ASSERT_EQ(G.SetInCast(incasts), true);
+    ASSERT_EQ(G.SetOutCast(outcasts), true);
+    auto slotScope = std::make_shared<TensorSlotScope>(function);
+    slotScope->ioslot.incastSlot = {{7}, {8}};
+    slotScope->ioslot.outcastSlot = {{7}, {8}};
+    function->SetSlotScope(slotScope);
+    function->paramConfigs_.autoMixPartition = 1;
+    ReduceCopyMerge merger;
+    EXPECT_EQ(merger.RunOnFunction(*function), SUCCESS);
+    const int Num1 = 1;
+    EXPECT_EQ(function->GetTotalSubGraphCount(), Num1);
+}
+
+// 双 feedback slot 无共享端点(独立环): 环1 sg0(读i7)->sg1(写o7), 环2 sg2(读i8)->sg3(写o8);
+// o7 同时作为跨环边被 sg2 消费, 候选组 {0,1,2,3} 通路混杂({7},{7},{8},{8})被门控拒绝,
+// 同环子组 {0,1}/{2,3} 各自合并 -> 2 子图 (无 slot 信息时同图会合并到 1)
+TEST_F(ReduceCopyTest, RunOnFunction_IndependentRingsRejectCrossRingMerge)
+{
+    ComputationalGraphBuilder G;
+    std::vector<std::string> incasts;
+    std::vector<std::string> outcasts;
+    std::string carryInA = AddIncast(G, "carryInA", incasts); // slot 7
+    std::string k0 = AddIncast(G, "k0", incasts);
+    std::string c0 = AddCubeMatmulFrom(G, 0, carryInA, k0); // sg0: 环1 reader
+    std::string o7 = AddVecSG(G, 1, c0, "o7");              // sg1: 环1 writer
+    outcasts.push_back(o7);
+    std::string carryInB = AddIncast(G, "carryInB", incasts); // slot 8
+    std::string c2 = AddCubeMatmulFrom(G, 2, o7, carryInB);   // sg2: 环2 reader, 消费 o7 形成跨环边
+    std::string o8 = AddVecSG(G, 3, c2, "o8");                // sg3: 环2 writer
+    outcasts.push_back(o8);
+    Function* function = G.GetFunction();
+    function->SetTotalSubGraphCount(4);
+    ASSERT_EQ(G.SetInCast(incasts), true);
+    ASSERT_EQ(G.SetOutCast(outcasts), true);
+    auto slotScope = std::make_shared<TensorSlotScope>(function);
+    slotScope->ioslot.incastSlot = {{7}, {}, {8}};
+    slotScope->ioslot.outcastSlot = {{7}, {8}};
+    function->SetSlotScope(slotScope);
+    function->paramConfigs_.autoMixPartition = 1;
+    ReduceCopyMerge merger;
+    EXPECT_EQ(merger.RunOnFunction(*function), SUCCESS);
+    const int Num2 = 2;
+    EXPECT_EQ(function->GetTotalSubGraphCount(), Num2);
+}
+
+// 多轮合并含 root 轮转的通路继承: 先合并 {1,2}(root=1, 秩1), 再合并 {0,1} —— GetActualGroup
+// 升序返回 {0,1}, actualGroup[0]=0(秩0) 按秩挂在 1 下, 真实 root=sg1; 异构通路集合 {9}/{7}
+// 必须完整累计到真实 root(写错到 actualGroup[0]=0 的条目会使 root 残缺为 {7})
+TEST_F(ReduceCopyTest, Merge_RootRotationAccumulatesLoopPathsOnRealRoot)
+{
+    std::vector<std::set<int>> outGraph{{1}, {2}, {}};
+    MergeInput input = BuildSimpleMergeInput(3, outGraph, {{1, 2}, {0, 1}});
+    input.subgraphLoopPaths = {{9}, {7}, {7}};
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+    EXPECT_EQ(output.numSubgraphUpdated, 1);
+    EXPECT_EQ(output.subgraphIdUpdated[0], output.subgraphIdUpdated[1]);
+    EXPECT_EQ(output.subgraphIdUpdated[1], output.subgraphIdUpdated[2]);
+    EXPECT_EQ(merger.FindParent(0), 1); // 根轮转到 sg1, actualGroup[0]=0 已不是集合根
+    std::set<int> expected{7, 9};
+    EXPECT_EQ(merger.mRootLoopPaths[merger.FindParent(0)], expected);
+}
+
+// 对照: 同图无 slotScope 时门控不启用, 全部合并到 1 子图 (mla / gqa-PATH0 场景)
+TEST_F(ReduceCopyTest, RunOnFunction_NoSlotScopeMergesAll)
+{
+    ComputationalGraphBuilder G;
+    std::vector<std::string> incasts;
+    std::vector<std::string> outcasts;
+    std::string carryIn = AddIncast(G, "carryIn", incasts);
+    std::string k0 = AddIncast(G, "k0", incasts);
+    std::string c0 = AddCubeMatmulFrom(G, 0, carryIn, k0);
+    std::string carryOut = AddVecSG(G, 1, c0, "carryOut");
+    outcasts.push_back(carryOut);
+    std::string v2 = AddVecSG(G, 2, carryOut, "v2");
+    outcasts.push_back(v2);
+    std::string k3 = AddIncast(G, "k3", incasts);
+    (void)AddCubeMatmulFrom(G, 3, v2, k3);
+    Function* function = G.GetFunction();
+    function->SetTotalSubGraphCount(4);
+    ASSERT_EQ(G.SetInCast(incasts), true);
+    ASSERT_EQ(G.SetOutCast(outcasts), true);
+    function->paramConfigs_.autoMixPartition = 1;
+    ReduceCopyMerge merger;
+    EXPECT_EQ(merger.RunOnFunction(*function), SUCCESS);
+    const int Num1 = 1;
+    EXPECT_EQ(function->GetTotalSubGraphCount(), Num1);
+}
+
 } // namespace tile_fwk
 } // namespace npu
