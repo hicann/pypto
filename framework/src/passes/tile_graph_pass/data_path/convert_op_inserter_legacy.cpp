@@ -33,7 +33,10 @@ namespace legacy {
 const std::unordered_set<DataType> kA2A3SupportedDtypes = {DT_INT4, DT_INT8, DT_UINT8, DT_FP16, DT_BF16, DT_INT16};
 const std::unordered_set<DataType> kA5SupportedDtypes = {DT_INT4, DT_INT8, DT_UINT8, DT_FP16,
                                                          DT_BF16, DT_HF8,  DT_FP8,   DT_FP32};
-const std::unordered_set<DataType> l0c2l1SupportedDtypes = {DT_FP16, DT_BF16};
+const std::unordered_set<DataType> kL0C2L1SupportedDtypes = {DT_FP16, DT_BF16};
+const std::unordered_set<DataType> kUb2L1SupportedDtypes = {DT_FP32, DT_FP16,    DT_BF16,   DT_INT8,
+                                                            DT_HF8,  DT_FP8E5M2, DT_FP8E4M3};
+const std::unordered_set<DataType> kL0C2UbSupportedDtypes = {DT_FP32, DT_FP16, DT_BF16, DT_INT8, DT_INT32};
 
 const static std::unordered_map<NPUArch, std::unordered_set<DataType>> kArch2SupportedDtypes = {
     {NPUArch::DAV_1001, kA2A3SupportedDtypes},
@@ -343,7 +346,7 @@ bool ConvertInserter::FitL0C2L1(const LogicalTensorPtr& tensor)
         return false;
     }
     auto dim2Size = shape[1] * BytesOf(tensor->Datatype());
-    return (l0c2l1SupportedDtypes.find(tensor->Datatype()) != l0c2l1SupportedDtypes.end()) &&
+    return (kL0C2L1SupportedDtypes.find(tensor->Datatype()) != kL0C2L1SupportedDtypes.end()) &&
            (shape[0] % L0C2L1_DIM1_SHAPE_RESTICT == 0) && (dim2Size % L0C2L1_DIM2_BYTE_RESTICT == 0);
 }
 
@@ -386,7 +389,19 @@ bool ConvertInserter::FitUB2L1(const LogicalTensorPtr& tensor) const
     if (shape.size() != MATMUL_DIM_NUM) {
         return false;
     }
-    return true;
+    return IsUb2L1SupportedDtype(tensor);
+}
+
+// UB2L1仅支持fp32/fp16/bf16/int8/hif8/fp8e5m2/fp8e4m3
+bool ConvertInserter::IsUb2L1SupportedDtype(const LogicalTensorPtr& tensor) const
+{
+    return kUb2L1SupportedDtypes.find(tensor->Datatype()) != kUb2L1SupportedDtypes.end();
+}
+
+// L0C2UB仅支持fp32/fp16/bf16/int8/int32
+bool ConvertInserter::IsL0C2UbSupportedDtype(const LogicalTensorPtr& tensor) const
+{
+    return kL0C2UbSupportedDtypes.find(tensor->Datatype()) != kL0C2UbSupportedDtypes.end();
 }
 
 bool ConvertInserter::HasParallelDifferentConsumerRequirement(const LogicalTensorPtr& tensor,
@@ -430,6 +445,36 @@ Status ConvertInserter::ProcessConvertPath(const Operation& op, const std::share
             paths = {currTensorMemOri, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1};
         } else {
             paths = {currTensorMemOri, MemoryType::MEM_L1};
+        }
+    } else if (currTensorMemOri == MemoryType::MEM_UB && requiredMemoryType == MemoryType::MEM_L1) {
+        // 特殊处理UB2L1：平台无直连边或数据类型不支持时路径中插入DDR
+        bool needDDRTrans = !Platform::Instance().GetDie().HasDirectPath(currTensorMemOri, requiredMemoryType) ||
+                            !IsUb2L1SupportedDtype(oOperand);
+        if (needDDRTrans) {
+            APASS_LOG_DEBUG_F(Elements::Tensor,
+                              "Use DDR transit path for tensor %d because platform has no direct %s -> %s edge or "
+                              "dtype %s is not supported by UB2L1.",
+                              oOperand->magic, BriefMemoryTypeToString(currTensorMemOri).c_str(),
+                              BriefMemoryTypeToString(requiredMemoryType).c_str(),
+                              DataType2String(oOperand->Datatype()));
+            paths = {currTensorMemOri, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1};
+        } else {
+            paths = {currTensorMemOri, MemoryType::MEM_L1};
+        }
+    } else if (currTensorMemOri == MemoryType::MEM_L0C && requiredMemoryType == MemoryType::MEM_UB) {
+        // 特殊处理L0C2UB：平台无直连边或数据类型不支持时路径中插入DDR
+        bool needDDRTrans = !Platform::Instance().GetDie().HasDirectPath(currTensorMemOri, requiredMemoryType) ||
+                            !IsL0C2UbSupportedDtype(oOperand);
+        if (needDDRTrans) {
+            APASS_LOG_DEBUG_F(Elements::Tensor,
+                              "Use DDR transit path for tensor %d because platform has no direct %s -> %s edge or "
+                              "dtype %s is not supported by L0C2UB.",
+                              oOperand->magic, BriefMemoryTypeToString(currTensorMemOri).c_str(),
+                              BriefMemoryTypeToString(requiredMemoryType).c_str(),
+                              DataType2String(oOperand->Datatype()));
+            paths = {currTensorMemOri, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB};
+        } else {
+            paths = {currTensorMemOri, MemoryType::MEM_UB};
         }
     } else {
         // 常规场景：查platform硬件配置获取path处理

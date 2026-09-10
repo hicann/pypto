@@ -494,7 +494,7 @@ Status AssignMemoryType::InferReshapeL0C2UBAndUB2L1PatternLiteNPU(Operation& op)
     auto& consumers = output->GetConsumers();
 
     // l0c2ub pattern: batchmatmul case: cube op -> contract(s) -> reshape op -> slice(s)/contract(s) -> vector
-    if (IsReshapeCubeToVecL0C2UBPattern(op) && FitsTensorInUb(input)) {
+    if (IsReshapeCubeToVecL0C2UBPattern(op) && FitsTensorInUb(input) && inserter.IsL0C2UbSupportedDtype(input)) {
         for (auto& producer : producers) {
             auto& producerInput = producer->iOperand.front();
             auto& producerOutput = producer->oOperand.front();
@@ -520,7 +520,7 @@ Status AssignMemoryType::InferReshapeL0C2UBAndUB2L1PatternLiteNPU(Operation& op)
     // ub2l1 pattern:
     // 1. vector op -> slice(s)/contract(s) -> reshape op -> slice(s) from l1 -> slice(s) from l0a -> cube
     // 2. vector op -> contract(s) -> slice(s) -> reshape op -> slice(s) from l1 -> slice(s) from l0a -> cube
-    if (IsReshapeVecToCubeUB2L1Pattern(op) && FitsTensorInUb(output)) {
+    if (IsReshapeVecToCubeUB2L1Pattern(op) && FitsTensorInUb(output) && inserter.IsUb2L1SupportedDtype(output)) {
         for (auto& producer : producers) {
             auto& producerInput = producer->iOperand.front();
             auto& producerOutput = producer->oOperand.front();
@@ -792,7 +792,7 @@ bool AssignMemoryType::TryHandleSpecialDirectMemoryPath(Operation& operation, Me
     }
     bool isA5 = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510);
     if (isA5 && from == MemoryType::MEM_L0C && to == MemoryType::MEM_UB) {
-        directPath = true;
+        directPath = (input != nullptr) && inserter.IsL0C2UbSupportedDtype(input);
         return true;
     }
     if (isA5 && from == MemoryType::MEM_UB && to == MemoryType::MEM_L1) {
@@ -2755,6 +2755,14 @@ Status AssignMemoryType::TryUpgradeSliceContractPath(Operation& sliceOp, MemoryT
         if (input == nullptr || input->GetMemoryTypeOriginal() != sourceType) {
             return SUCCESS;
         }
+        if (sourceType == MemoryType::MEM_L0C && targetType == MemoryType::MEM_UB &&
+            !inserter.IsL0C2UbSupportedDtype(input)) {
+            return SUCCESS;
+        }
+        if (sourceType == MemoryType::MEM_UB && targetType == MemoryType::MEM_L1 &&
+            !inserter.IsUb2L1SupportedDtype(input)) {
+            return SUCCESS;
+        }
         if (requireMatrixShape && input->GetShape().size() != kMatrixShapeDimCount) {
             return SUCCESS;
         }
@@ -2846,6 +2854,14 @@ Status AssignMemoryType::TryUpgradeSingleContractSlicePath(Operation& contractOp
     for (auto* producer : middle->GetProducers()) {
         auto producerInput = producer->iOperand.front();
         if (producerInput == nullptr || producerInput->GetMemoryTypeOriginal() != sourceType) {
+            return SUCCESS;
+        }
+        if (sourceType == MemoryType::MEM_L0C && targetType == MemoryType::MEM_UB &&
+            !inserter.IsL0C2UbSupportedDtype(producerInput)) {
+            return SUCCESS;
+        }
+        if (sourceType == MemoryType::MEM_UB && targetType == MemoryType::MEM_L1 &&
+            !inserter.IsUb2L1SupportedDtype(producerInput)) {
             return SUCCESS;
         }
         if (requireMatrixShape && producerInput->GetShape().size() != kMatrixShapeDimCount) {
