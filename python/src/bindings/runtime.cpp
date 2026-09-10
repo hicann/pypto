@@ -512,25 +512,23 @@ public:
         }
     }
 
-    void UpdateLaunchEarlyMode(KernelBinary* kernel)
+    int UpdateLaunchEarlyMode(KernelBinary* kernel)
     {
-        if (launchEarlyMode_ < 0) {
-            if (!kernel->HasValueDepend() || isReadyOnHostTensorsSet_) {
-                launchEarlyMode_ = 0;
-            } else {
-                launchEarlyMode_ = 2;
-            }
+        int launchEarlyMode = 2;
+        if (!kernel->HasValueDepend() || isReadyOnHostTensorsSet_) {
+            launchEarlyMode = 0;
         }
+        return launchEarlyMode;
     }
 
     void Launch(KernelBinary* kernel, AclRtStream aicoreStream, std::vector<DeviceTensorData>& tensors,
                 uint8_t* ctrlFlowCache, int64_t* workspace)
     {
         SetTensorData(tensors);
-        UpdateLaunchEarlyMode(kernel);
+        int launchEarlyMode = UpdateLaunchEarlyMode(kernel);
         COMPILER_LOGD("Workspace %p cfgcache %p", workspace, ctrlFlowCache);
         DeviceLauncher::LaunchKernel(aicoreStream, ctrlFlowCache, kernel, workspace, tensors, isDebugMode_,
-                                     launchEarlyMode_);
+                                     launchEarlyMode);
     }
 
     bool IsAicoreModelMode() const { return launchMode_ == LaunchMode::AICORE_MODEL; }
@@ -569,15 +567,6 @@ private:
     {
         if (!module.attr("_runtime_options").is_none()) {
             auto runtimeOptions = module.attr("_runtime_options").cast<py::dict>();
-            auto run_mode = runtimeOptions.contains("run_mode") ? runtimeOptions["run_mode"].cast<int>() :
-                                                                  CFG_RUN_MODE_SIM;
-            if (run_mode == CFG_RUN_MODE_SIM) { // sim mode do not need early launch
-                launchEarlyMode_ = 0;
-            } else {
-                if (runtimeOptions.contains("launch_early_mode")) {
-                    launchEarlyMode_ = runtimeOptions["launch_early_mode"].cast<int>();
-                }
-            }
             isReadyOnHostTensorsSet_ = runtimeOptions.contains("ready_on_host_tensors");
         }
 
@@ -624,7 +613,6 @@ private:
     int intervalSec{60};
     double timeoutSec{static_cast<double>(config::GetHostOption<int>(TIMEOUT_SEC))};
     int totalTimeoutSec{600};
-    int launchEarlyMode_{-1};
     bool isReadyOnHostTensorsSet_{false};
 
     std::vector<KernelBinary*> kernels;

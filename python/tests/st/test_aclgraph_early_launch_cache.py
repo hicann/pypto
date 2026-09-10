@@ -28,12 +28,7 @@ REPLAY_COUNT = 8
 TILING = 32
 SHAPE = (64, 64)
 
-_RUNTIME = {
-    "launch_early_mode": 1,
-}
-
-
-@pypto.frontend.jit(runtime_options=_RUNTIME)
+@pypto.frontend.jit()
 def add_kernel(
     a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
     b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
@@ -44,7 +39,7 @@ def add_kernel(
     c.move(pypto.add(a, b))
 
 
-@pypto.frontend.jit(runtime_options=_RUNTIME)
+@pypto.frontend.jit()
 def mul_kernel(
     a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
     b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),

@@ -63,7 +63,6 @@ def kernel_function(...):
 | ready_on_host_tensors           | 含义：标记在Host端准备好的Kernel入口函数的输入tensor名称列表。<br> 说明：如果算子的计算逻辑对某输入tensor有值依赖(即获取了tensor的值)，且此tensor的device数据在Host端已提前准备好，那么cpu的控制流可以提前发射或者在Host侧执行以提升性能。该配置项有两种输入形式：如果在Host端无法获取值依赖tensor的值，可以通过["tensor1", "tensor2", ...]配置值依赖算子名称实现控制流的提前发射；如果在Host端能够获取值依赖tensor的值，可以将值依赖tensor对应的cpu tensor作为算子入参，并通过[["tensor1_npu", "tensor2_cpu"], ["tensor2_npu", "tensor2_cpu"], ...]来配置npu tensor与cpu tensor的配对关系，来让框架在Host端进行控制流展开以提升性能。<br> 类型：list of string 或者 list of list of strings <br> 默认值：空列表 <br> 影响pass范围：NA |
 | device_sched_parallelism        | 含义：当算子中pypto.loop设置了可并行标记(parallel=True)时,此配置项用于指定pypto.loop在调度执行时的并行度 <br> 说明：使用此配置项前，请确保标记为可并行的pypto.loop的各个迭代之间不存在任何依赖关系，满足并行调度的条件。当并行度大于1时，该pypto.loop的多个迭代任务将被并发调度执行。需要注意的是，并行度数值越大，所需的workspace内存使用量也越大，通常与设置的并行度成倍数关系。<br> 类型：int <br> 取值范围:1 ~ 8 <br> 默认值： 1 <br> 影响pass范围：NA |
 | launch_sched_aicpu_num        | 含义：指定启动的Schedule AICPU线程数量 <br> 说明：当指定的数量大于硬件最大可用aicpu数量或者小于等于0时,将启用硬件自动计算值。不同型号最大可用aicpu数量有所差异，详细请参见[约束说明](#约束说明)。<br> 类型：int <br> 取值范围:1 ~ 7 <br> 默认值： 7 <br> 影响pass范围：NA |
-| launch_early_mode        | 含义：aicpu提前发射模式，支持aicpu不等待aicore启动后再启动 <br> 说明：当开启提前发射后，可以减少aicpu启动头开销，提升性能，但是aicpu提前发射会提前占用aicpu资源，在接入整网或者hccl用aicpu做通信域展开时会存在aicpu由于竞争而资源不够的情况，可能会导致功能问题。0：仅capture模式提前发射； <br> 1：所有模式都提前发射； <br> 2：所有模式都不提前发射 <br> 类型：int <br> 取值范围:0 ~ 2 <br> 不同型号的默认值有所差异，详细请参见[约束说明](#约束说明)。<br> 影响pass范围：NA |
 
 实验性运行时配置不在上表中，请使用[pypto.experimental.set_runtime_options](./pypto-experimental-set_runtime_options.md)。
 
@@ -89,16 +88,6 @@ def kernel_function(...):
    <!-- npu="910b" id6 -->
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：最大可用aicpu数量为5。
    <!-- end id6 -->
-7. launch_early_mode默认值说明：
-   <!-- npu="950" id7 -->
-   - Ascend 950PR/Ascend 950DT：2
-   <!-- end id7 -->
-   <!-- npu="A3" id8 -->
-   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：0
-   <!-- end id8 -->
-   <!-- npu="910b" id9 -->
-   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：0
-   <!-- end id9 -->
 
 **pypto.Tensor[...]说明**：
 
