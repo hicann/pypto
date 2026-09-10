@@ -384,9 +384,13 @@ class ASTParser(
                 # @pl.vector_function: the entire body is a VF section scope.
                 with self.builder.section(ir.SectionKind.VF, func_span):
                     self.scope_manager.enter_scope("section")
-                    for stmt in body_stmts:
-                        self.parse_statement(stmt)
-                    self.scope_manager.exit_scope(leak_vars=False)
+                    self.inline_vf_depth += 1
+                    try:
+                        for stmt in body_stmts:
+                            self.parse_statement(stmt)
+                    finally:
+                        self.inline_vf_depth -= 1
+                        self.scope_manager.exit_scope(leak_vars=False)
             else:
                 for stmt in body_stmts:
                     self.parse_statement(stmt)

@@ -62,7 +62,14 @@ Regbase在Tile/Membase的“数据搬入 → 计算 → 数据搬出”基础上
 
 ### VF函数与执行域
 
-使用`@pypto_pro.language.vector_function`声明VF函数。函数体隐式处于VF执行域，只能调用`vf.*`操作；Tile参数的类型由调用点推导。VF函数通常从UB Tile加载寄存器，完成一段连续计算，再把结果存回UB Tile。
+使用`@pypto_pro.language.vector_function`声明VF函数。函数体隐式处于VF执行域，使用`vf.*`操作加载、计算和存储寄存器；Tile参数的类型由调用点推导。
+
+`vf.*`操作只能在VF函数内使用，放在`pl.section_vector()`内仍需要通过VF函数调用。
+VF函数可以调用其他VF函数，并使用标量表达式、`pl.range`循环以及标量`pl.min`、`pl.max`、`pl.const`。
+其他`pl.*`调用（包括Tile操作、同步操作和`pl.section_vector()`/`pl.section_cube()`）应放在VF函数外，
+需要的结果通过参数传入。TileGroup的`next()`/`current()`/`previous()`同样如此：游标推进会产生标量运算，
+不能进入VF执行域，应在调用侧选好Tile后作为参数传入。`pl.DT_*`和枚举常量仍可在VF函数内使用。
+违反执行域限制时，前端解析器会在对应调用处报错。
 
 ```python
 import pypto_pro.language as pl

@@ -26,6 +26,8 @@ from pypto_pro.ir._utils import _is_int
 from pypto_pro.ir.op._op_registry import _OP_REGISTRY
 from pypto_pro.ir.op.block_ops import block_ir_op
 
+from .. import _api as _language_api
+from .._vf_api import Vf
 from ._control_flow_parser import _is_bare_return
 from ._expr_evaluator import ExprEvaluator
 from ._span_tracker import SpanTracker
@@ -602,15 +604,43 @@ class CallParserMixin:
         }
     )
 
-    @staticmethod
-    def _extract_op_name(func: ast.expr) -> str | None:
-        """Extract a normalized op name from an attribute-access call node.
+    # The pl.* calls a VF body may still make. Everything in the body lowers into
+    # one VEC_SCOPE, which bisheng requires to hold VF instructions only, so the
+    # survivors are exactly the ops that lower to a scalar expression or a loop
+    # bound and emit no pipe, buffer or section work of their own.
+    _VF_SCALAR_PL_OPS: frozenset[str] = frozenset({"range", "min", "max", "const"})
 
-        pl.tensor.add  -> "tensor.add"
-        pl.add_scalar  -> "add_scalar"
-        vf.add         -> "vf.add"  (vf prefix retained)
-        bare_name      -> None      (no module prefix)
+    # Tile-group cursor accessors, lowered by _route_ir_node_method rather than by
+    # the op registry. Named here because that route emits a struct.set plus scalar
+    # arithmetic, which is plain CCE work and must not land in a VEC_SCOPE.
+    _TILE_GROUP_ACCESSORS: frozenset[str] = frozenset({"next", "current", "previous"})
+
+    def _extract_op_name(self, func: ast.expr) -> str | None:
+        """Extract a normalized op name from a call's callee node.
+
+        pl.system.bar_all -> "system.bar_all"
+        pl.add_scalar     -> "add_scalar"
+        vf.add            -> "vf.add"  (vf prefix retained)
+        bare_name         -> the op an imported alias stands for, otherwise None
+
+        A bare name is resolved by identity against the API declarations, not by
+        their ``__module__`` string: an alias such as ``m = vf.create_mask`` would
+        otherwise reach parse_call as a plain callable and smuggle a VF
+        instruction past the execution-domain check in _validate_op_scope, and a
+        renamed declaration module would silently reopen that bypass instead of
+        failing loudly.
         """
+        if isinstance(func, ast.Name):
+            resolved = self.expr_evaluator.closure_vars.get(func.id)
+            name = getattr(resolved, "__name__", None)
+            if not isinstance(name, str):
+                return None
+            if getattr(Vf, name, None) is resolved:
+                return f"vf.{name}"
+            if getattr(_language_api, name, None) is resolved:
+                return name
+            return None
+
         attrs: list[str] = []
         node: ast.expr = func
         while isinstance(node, ast.Attribute):
@@ -620,8 +650,10 @@ class CallParserMixin:
             attrs.insert(0, node.id)
         if len(attrs) < 2:
             return None
-        if attrs[0] == "vf":
-            return ".".join(attrs)
+        if attrs[0] == "vf" or self.expr_evaluator.closure_vars.get(attrs[0]) is Vf:
+            return ".".join(["vf", *attrs[1:]])
+        if attrs[1] == "Vf":
+            return ".".join(["vf", *attrs[2:]])
         return ".".join(attrs[1:])
 
     @staticmethod
@@ -645,15 +677,14 @@ class CallParserMixin:
         """Check if an AST statement is a docstring (string constant expression)."""
         return isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, str)
 
-    @staticmethod
-    def _is_vf_op_call(call_node: ast.expr) -> str | None:
+    def _is_vf_op_call(self, call_node: ast.expr) -> str | None:
         """Check if an AST node is a ``vf.xxx(...)`` call.
 
         Returns the VF op name (e.g. ``"add"``) if yes, ``None`` otherwise.
         """
         if not isinstance(call_node, ast.Call):
             return None
-        op_name = CallParserMixin._extract_op_name(call_node.func)
+        op_name = self._extract_op_name(call_node.func)
         if op_name is None or not op_name.startswith("vf."):
             return None
         return op_name[3:]  # strip "vf." prefix
@@ -964,7 +995,7 @@ class CallParserMixin:
         """
         func = call.func
 
-        if isinstance(func, ast.Attribute):
+        if isinstance(func, ast.Attribute) or self._extract_op_name(func) is not None:
             return self.parse_op_call(call)
 
         # Handle bare-name calls to external IR functions or inline Python callables.
@@ -998,6 +1029,12 @@ class CallParserMixin:
         """
         op_name = self._extract_op_name(call.func)
 
+        # Ahead of _route_ir_node_method: that route parses the receiver and emits
+        # the tile-group cursor bump, so a call from the wrong execution domain has
+        # to be rejected before its side effects reach the section being built.
+        if op_name is not None:
+            self._validate_op_scope(op_name, call)
+
         result = self._route_ir_node_method(call)
         if result is not None:
             return result
@@ -1029,6 +1066,43 @@ class CallParserMixin:
             return op_func(self, call)
 
         return self._default_op_func(op_name, call)
+
+    def _validate_op_scope(self, op_name: str, call: ast.Call) -> None:
+        """Check the execution domain before parsing operands or emitting IR.
+
+        Every dispatch in parse_op_call runs behind this check, the tile-group
+        route included: those routes lower their own operands and emit IR, so a
+        check placed after them would reject the call only once its side effects
+        already sat in the section being built.
+
+        VF assignments bypass normal call dispatch and must also use this check.
+        Match VF instructions by namespace so newly added operations inherit
+        the same restriction.
+        """
+        span = self.span_tracker.get_span(call)
+        if op_name.startswith("vf."):
+            if self.inline_vf_depth == 0:
+                raise ParserSyntaxError(
+                    f"Operation '{op_name}' can only be used inside @pl.vector_function",
+                    span=span,
+                    hint="Move VF register operations into a @pl.vector_function helper and call it from the kernel.",
+                )
+            return
+        if self.inline_vf_depth == 0:
+            return
+        if op_name in self._TILE_GROUP_ACCESSORS:
+            raise ParserSyntaxError(
+                f"Tile-group accessor '.{op_name}()' cannot be used inside @pl.vector_function",
+                span=span,
+                hint="Select the tile in the calling kernel and pass it to the vector function as an argument.",
+            )
+        if op_name not in self._VF_SCALAR_PL_OPS:
+            raise ParserSyntaxError(
+                f"Operation 'pl.{op_name}' is not supported inside @pl.vector_function",
+                span=span,
+                hint="VF bodies support vf.* operations, pl.range, and scalar pl.min/pl.max/pl.const. "
+                "Move other pl.* operations outside the vector function and pass their results as arguments.",
+            )
 
     def parse_op_kwargs(self, call: ast.Call) -> dict[str, Any]:
         """Parse keyword arguments for an operation call."""

@@ -79,6 +79,7 @@ class AssignmentParserMixin:
         # assignment and must NOT be intercepted.
         vf_op = self._is_vf_op_call(stmt.value)
         if vf_op is not None:
+            self._validate_op_scope(f"vf.{vf_op}", stmt.value)
             dst_count = self._get_vf_op_dst_count(vf_op)
             if dst_count is not None and dst_count > 0:
                 self._parse_vf_assignment(target, stmt, vf_op, span)

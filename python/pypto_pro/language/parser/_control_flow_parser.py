@@ -301,6 +301,13 @@ class ControlFlowParserMixin:
         attr = self._get_with_context_attr(stmt)
         span = self.span_tracker.get_span(stmt)
 
+        if attr in ("section_vector", "section_cube") and self.inline_vf_depth:
+            raise ParserSyntaxError(
+                f"Section 'pl.{attr}' cannot be nested inside @pl.vector_function",
+                span=span,
+                hint="Place Cube/Vector sections in the calling kernel and invoke the vector function from there.",
+            )
+
         # Check if this is pl.section_vector() or pl.section_cube()
         if attr == "section_vector":
             self._parse_target_section(stmt.body, ir.SectionKind.Vector, span)
