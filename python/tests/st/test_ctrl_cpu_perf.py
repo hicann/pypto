@@ -49,16 +49,14 @@ _BLOCK_NUM = _S2_TILE // _BLOCK
 
 # 定标时 ENABLE_PERF_EVT 必须为 0（仓库默认）。这是编译期宏，打开后
 # PerfBegin/End 会增加 ctrl 耗时，不能和 DUMP_DEVICE_PERF 看护一起用。
-# 数据来自多次上板：每次 30 轮、去掉前 2 轮。
-#   EXEC_DYN 均值 206~217us（最差 216.87），单轮最大 264.20
-#   首个 DEV_TASK_BUILD 均值 114~120us（最差 119.53），单轮最大 156.44
-# 28 轮均值上限：最差均值 * 1.20
-# 单轮 EXEC_DYN 上限：多次实测的单轮最大 * 1.15（单轮最大已含波动，只留小余量）
-# 单轮首个 DEV_TASK_BUILD 上限：多次实测的单轮最大 * 1.35
-_MEAN_EXEC_DYN_US = 260.3
-_MEAN_FIRST_BUILD_US = 143.5
-_MAX_EXEC_DYN_US = 303.9
-_MAX_FIRST_BUILD_US = 211.2
+# 数据来自 0 卡 11 次压测（2026-09-09）：每次 30 轮、去掉前 2 轮、峰值先做 IQR 离群点过滤。
+#   EXEC_DYN 均值 171.85~196.02us（最差 196.02），IQR 过滤后单轮最大最差 222.04
+#   首个 DEV_TASK_BUILD 均值 93.70~107.77us（最差 107.77），IQR 过滤后单轮最大最差 124.66
+# 门限 = 最差实测（过滤后）* 1.20，峰值门限按单轮波动大小微调（max_first * 1.28）。
+_MEAN_EXEC_DYN_US = 235.0
+_MEAN_FIRST_BUILD_US = 130.0
+_MAX_EXEC_DYN_US = 266.0
+_MAX_FIRST_BUILD_US = 160.0
 
 # 单轮首个 DEV_TASK_BUILD 门禁超限提示：先排查当前修改是否引入 ctrl cpu 效率回退，再考虑环境波动。
 _MAX_FIRST_GATE_HINT = (
@@ -318,6 +316,31 @@ def _mean(values: List[float]) -> float:
     return statistics.mean(values) if values else 0.0
 
 
+def _filter_outliers_iqr(values: List[float], factor: float = 1.5) -> List[float]:
+    """使用 IQR 方法剔除统计离群点，返回 [Q1 - factor*IQR, Q3 + factor*IQR] 范围内的值。
+
+    标准因子 1.5 可剔除温和离群点，若环境波动较大可改用 2.0 或 3.0。
+    """
+    if len(values) < 4:
+        return values
+    sorted_vals = sorted(values)
+    n = len(sorted_vals)
+    q1 = sorted_vals[n // 4]
+    q3 = sorted_vals[3 * n // 4]
+    iqr = q3 - q1
+    if iqr == 0.0:
+        return values
+    lower = q1 - factor * iqr
+    upper = q3 + factor * iqr
+    n_before = len(values)
+    filtered = [v for v in values if lower <= v <= upper]
+    n_removed = n_before - len(filtered)
+    if n_removed:
+        print(f"  IQR outlier filter: removed {n_removed}/{n_before} values "
+              f"(q1={q1:.2f}, q3={q3:.2f}, iqr={iqr:.2f}, bounds=[{lower:.2f}, {upper:.2f}])")
+    return filtered
+
+
 @pypto.options(pass_options={"enable_slice": True})
 def test_ctrl_cpu_perf():
     """看护 AICPU-CTRL EXEC_DYN 与首个 DEV_TASK_BUILD（30 轮去头 2）。"""
@@ -351,15 +374,21 @@ def test_ctrl_cpu_perf():
     first_vals = [item[3] for item in steady]
     mean_exec = _mean(exec_vals)
     mean_first = _mean(first_vals)
-    max_exec = max(exec_vals)
-    max_first = max(first_vals)
+    # 对峰值做 IQR 离群点过滤，剔除环境波动引入的异常尖峰后再取最大值。
+    # 均值看护（mean_exec / mean_first）已经足够稳定，不参与过滤。
+    filtered_exec = _filter_outliers_iqr(exec_vals)
+    filtered_first = _filter_outliers_iqr(first_vals)
+    max_exec = max(filtered_exec) if filtered_exec else max(exec_vals)
+    max_first = max(filtered_first) if filtered_first else max(first_vals)
     std_exec = statistics.pstdev(exec_vals) if len(exec_vals) > 1 else 0.0
     std_first = statistics.pstdev(first_vals) if len(first_vals) > 1 else 0.0
     print(
         "ctrl_cpu_perf calib: "
         f"n={len(steady)} n_build={steady[0][1]} "
         f"mean_exec={mean_exec:.2f} std_exec={std_exec:.2f} max_exec={max_exec:.2f} "
-        f"mean_first={mean_first:.2f} std_first={std_first:.2f} max_first={max_first:.2f}"
+        f"(raw_max={max(exec_vals):.2f}) "
+        f"mean_first={mean_first:.2f} std_first={std_first:.2f} max_first={max_first:.2f} "
+        f"(raw_max={max(first_vals):.2f})"
     )
 
     assert mean_exec <= _MEAN_EXEC_DYN_US, (
