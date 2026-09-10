@@ -170,6 +170,58 @@ public:
         }
         return false;
     }
+
+    void BuildAssembleL1ViewAndNonViewConsumerGraph(ComputationalGraphBuilder& G)
+    {
+        const Shape shape{NUM_32, NUM_32};
+        G.AddTensor(DataType::DT_FP16, shape, MemoryType::MEM_DEVICE_DDR, "incast");
+        G.AddTensor(DataType::DT_FP16, shape, MemoryType::MEM_UNKNOWN, "add_out");
+        G.AddTensor(DataType::DT_FP16, shape, MemoryType::MEM_UNKNOWN, "assemble1_out");
+        G.AddTensor(DataType::DT_FP16, shape, MemoryType::MEM_UNKNOWN, "assemble2_out");
+        G.AddTensor(DataType::DT_FP16, shape, MemoryType::MEM_UNKNOWN, "view1_out");
+        G.AddTensor(DataType::DT_FP16, shape, MemoryType::MEM_UNKNOWN, "view2_out");
+        G.AddTensor(DataType::DT_FP16, shape, MemoryType::MEM_UNKNOWN, "view4_out");
+        G.AddTensor(DataType::DT_FP16, shape, MemoryType::MEM_UNKNOWN, "view6_out");
+        G.AddTensor(DataType::DT_FP16, shape, MemoryType::MEM_UNKNOWN, "l1_in1");
+        G.AddTensor(DataType::DT_FP16, shape, MemoryType::MEM_UNKNOWN, "l1_in2");
+        G.AddTensors(DataType::DT_FP16, shape, {MemoryType::MEM_L0B, MemoryType::MEM_L0B}, {"l0b_in1", "l0b_in2"});
+        G.AddTensors(DataType::DT_FP16, shape, {MemoryType::MEM_L0C, MemoryType::MEM_L0C},
+                     {"matmul1_out", "matmul2_out"});
+        G.AddTensors(DataType::DT_FP16, shape, {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR},
+                     {"outcast1", "outcast2"});
+
+        G.AddOp(Opcode::OP_ADDS, {"incast"}, {"add_out"}, "add_gather");
+        G.AddOp(Opcode::OP_ASSEMBLE, {"add_out"}, {"assemble1_out"}, "assemble1");
+        G.GetOp("assemble1")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(Offset{0, 0}));
+        G.AddOp(Opcode::OP_ASSEMBLE, {"assemble1_out"}, {"assemble2_out"}, "assemble2");
+        G.GetOp("assemble2")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(Offset{0, 0}));
+
+        G.AddOp(Opcode::OP_VIEW, {"assemble1_out"}, {"view1_out"}, "view1");
+        G.GetOp("view1")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L1));
+        G.AddOp(Opcode::OP_VIEW, {"assemble2_out"}, {"view2_out"}, "view2");
+        G.GetOp("view2")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L1));
+        G.AddOp(Opcode::OP_VIEW, {"view2_out"}, {"view4_out"}, "view4");
+        G.GetOp("view4")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L0A));
+        G.AddOp(Opcode::OP_VIEW, {"view1_out"}, {"view6_out"}, "view6");
+        G.GetOp("view6")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L0A));
+        G.AddOp(Opcode::OP_VIEW, {"incast"}, {"l1_in1"}, "gather_to_l1_1");
+        G.GetOp("gather_to_l1_1")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L1));
+        G.AddOp(Opcode::OP_VIEW, {"l1_in1"}, {"l0b_in1"}, "l1_to_l0b_1");
+        G.GetOp("l1_to_l0b_1")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L0B));
+        G.AddOp(Opcode::OP_VIEW, {"incast"}, {"l1_in2"}, "gather_to_l1_2");
+        G.GetOp("gather_to_l1_2")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L1));
+        G.AddOp(Opcode::OP_VIEW, {"l1_in2"}, {"l0b_in2"}, "l1_to_l0b_2");
+        G.GetOp("l1_to_l0b_2")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L0B));
+
+        G.AddOp(Opcode::OP_A_MUL_B, {"view4_out", "l0b_in1"}, {"matmul1_out"}, "amulb1");
+        G.AddOp(Opcode::OP_A_MUL_B, {"view6_out", "l0b_in2"}, {"matmul2_out"}, "amulb2");
+        G.AddOp(Opcode::OP_ASSEMBLE, {"matmul1_out"}, {"outcast1"}, "assemble_out1");
+        G.GetOp("assemble_out1")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(Offset{0, 0}));
+        G.AddOp(Opcode::OP_ASSEMBLE, {"matmul2_out"}, {"outcast2"}, "assemble_out2");
+        G.GetOp("assemble_out2")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(Offset{0, 0}));
+        G.SetInCast({"incast"});
+        G.SetOutCast({"outcast1", "outcast2"});
+    }
 };
 
 TEST_F(LegacyAssignMemoryTypeTest, AddReshape)
@@ -2550,6 +2602,20 @@ TEST_F(LegacyAssignMemoryTypeTest, TestUB2L1AssembleDirectPathNotDdrFallback)
     }
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
     Platform::Instance().ReloadMemoryPaths("2201");
+}
+
+TEST_F(LegacyAssignMemoryTypeTest, AssembleL1ViewAndNonViewConsumerFallbackDdr)
+{
+    ComputationalGraphBuilder G;
+    BuildAssembleL1ViewAndNonViewConsumerGraph(G);
+
+    AssignMemoryType assignMemoryType;
+    Function* function = G.GetFunction();
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(assignMemoryType.PostCheck(*function), SUCCESS);
+
+    ASSERT_EQ(G.GetOp("assemble2")->GetIOperands().size(), 1);
+    EXPECT_NE(G.GetOp("assemble2")->GetIOperands().front()->GetMemoryTypeOriginal(), MemoryType::MEM_L1);
 }
 
 // 为 conv 算子增加的临时规避动作测试，规避动作删除后此测试跟随删除。
