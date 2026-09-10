@@ -432,17 +432,25 @@ void RootFunctionBuilder::BuildPathFuncSlotScope(Function* pathFunc, const std::
         scope->ioslot.incastSlot[idx] = {tensor->Id()};
     }
 
+    std::unordered_map<std::shared_ptr<RawTensor>, LogicalTensorPtr> outcastByRawTensor;
     scope->ioslot.outcastSlot.resize(originalOutcasts.size());
     for (size_t idx = 0; idx < originalOutcasts.size(); idx++) {
         auto tensor = slotManager->GetSlotTensor(originalOutcasts[idx]);
         scope->ioslot.outcastSlot[idx] = {tensor->Id()};
+        outcastByRawTensor.emplace(originalOutcasts[idx]->GetRawTensor(), originalOutcasts[idx]);
     }
 
     for (auto& op : pathFunc->Operations(false)) {
         if ((op.GetOpcode() == Opcode::OP_ASSEMBLE && op.HasAttr("dassemble")) ||
             op.GetOpcode() == Opcode::OP_ASSEMBLE_SSA || op.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
             for (auto& oOperand : op.GetOOperands()) {
-                auto tensor = slotManager->GetSlotTensor(oOperand);
+                // Internal assembles use root-local storage. Only boundary outcasts need
+                // runtime slots, and all SSA versions of an outcast share its slot.
+                auto outcast = outcastByRawTensor.find(oOperand->GetRawTensor());
+                if (outcast == outcastByRawTensor.end()) {
+                    continue;
+                }
+                auto tensor = slotManager->GetSlotTensor(outcast->second);
                 slotManager->TensorWrite(*tensor, SlotProperty::ASSEMBLE_DST);
             }
         }

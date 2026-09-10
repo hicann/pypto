@@ -243,7 +243,7 @@ public:
 };
 
 // ============================================================================
-// Dedup: two dassemble ops targeting the same intermediate tensor
+// Dedup: two dassemble ops targeting the same intermediate consumed by a later loop
 //        => constructAssembleSlotList should contain exactly 1 slot
 // ============================================================================
 TEST_F(IrFuncBuilderTest, TestConstructAssembleSlotList_DedupSameSlot)
@@ -251,10 +251,16 @@ TEST_F(IrFuncBuilderTest, TestConstructAssembleSlotList_DedupSameSlot)
     IrFuncSetup setup("DedupSameSlot");
 
     auto a = setup.MakeParam("a");
+    auto out = setup.MakeParam("out");
     auto aux = setup.MakeLocal("aux");
 
     setup.AddDassemble(a, aux);
     setup.AddDassemble(a, aux);
+    auto initStmts = setup.stmts;
+    setup.stmts.clear();
+    setup.AddDassemble(aux, out);
+    setup.WrapStmtsInForLoop("i");
+    setup.stmts.insert(setup.stmts.begin(), initStmts.begin(), initStmts.end());
 
     auto irFunc = setup.BuildIrFunction("DedupSameSlot");
     auto irProg = std::make_shared<ir::Program>(std::vector<ir::FunctionPtr>{irFunc}, "test", Sp());
@@ -263,7 +269,7 @@ TEST_F(IrFuncBuilderTest, TestConstructAssembleSlotList_DedupSameSlot)
     (void)createRoot(irProg);
 
     auto hiddenFuncs = FindHiddenFuncs();
-    ASSERT_EQ(hiddenFuncs.size(), 1u);
+    ASSERT_EQ(hiddenFuncs.size(), 2u);
 
     auto slots = CollectConstructAssembleSlots();
     EXPECT_EQ(slots.size(), 1u) << "Expected 1 slot (deduplicated), got " << slots.size();
@@ -322,8 +328,8 @@ TEST_F(IrFuncBuilderTest, TestConstructAssembleSlotList_ContinuationBranchKeepsE
 }
 
 // ============================================================================
-// Mixed: one dassemble to function param (excluded) + one to intermediate (kept)
-//        => constructAssembleSlotList should contain exactly 1 slot
+// A root-local intermediate needs no runtime slot. The parameter output needs
+// an assemble slot but no runtime construction.
 // ============================================================================
 TEST_F(IrFuncBuilderTest, TestConstructAssembleSlotList_MixedParamAndIntermediate)
 {
@@ -346,7 +352,32 @@ TEST_F(IrFuncBuilderTest, TestConstructAssembleSlotList_MixedParamAndIntermediat
     ASSERT_EQ(hiddenFuncs.size(), 1u);
 
     auto slots = CollectConstructAssembleSlots();
-    EXPECT_EQ(slots.size(), 1u) << "Expected 1 slot (aux only, out excluded), got " << slots.size();
+    EXPECT_TRUE(slots.empty());
+    auto slotManager = Program::GetInstance().GetTensorSlotManager();
+    EXPECT_EQ(slotManager->assembleSlotSet.size(), 1u);
+    EXPECT_EQ(slotManager->assembleSlotSet.count(TensorSlot::CreateTensor(*slotManager->GetSlotTensor(out))), 1u);
+    EXPECT_EQ(slotManager->GetSlotTensor(aux, false), nullptr);
+}
+
+TEST_F(IrFuncBuilderTest, TestAssembleSlotSharedByOutputVersions)
+{
+    IrFuncSetup setup("AssembleSlotSharedByOutputVersions");
+    auto input = setup.MakeParam("input");
+    auto output = setup.MakeParam("output");
+    auto version = setup.builder.CreateTensorVar(*setup.fwkFunc, output->GetRawTensor(), output->GetOffset(),
+                                                 output->GetShape(), output->GetDynValidShape());
+    setup.AddDassemble(input, output, Offset{0, 0});
+    setup.AddDassemble(input, version, Offset{0, 0});
+    setup.stmts.push_back(std::make_shared<ir::ReturnStmt>(std::vector<ir::ExprPtr>{input, version}, Sp()));
+
+    auto irFunc = setup.BuildIrFunction("AssembleSlotSharedByOutputVersions");
+    auto irProg = std::make_shared<ir::Program>(std::vector<ir::FunctionPtr>{irFunc}, "test", Sp());
+    (void)pypto::ir::pass::CreateRootFunctions()(irProg);
+
+    auto slotManager = Program::GetInstance().GetTensorSlotManager();
+    EXPECT_EQ(slotManager->assembleSlotSet.size(), 1u);
+    EXPECT_EQ(slotManager->assembleSlotSet.count(TensorSlot::CreateTensor(*slotManager->GetSlotTensor(output))), 1u);
+    EXPECT_TRUE(CollectConstructAssembleSlots().empty());
 }
 
 TEST_F(IrFuncBuilderTest, TestNonInplaceStorageAliasDoesNotUseParamSlot)
