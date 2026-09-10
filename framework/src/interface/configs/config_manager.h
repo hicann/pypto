@@ -236,6 +236,7 @@ public:
     const std::string& LogFile();
     void ResetLog(const std::string& path = "");
     void SetLogRotationEnabled(bool enabled) { logRotationEnabled_ = enabled; }
+    bool IsLogRotationEnabled() const { return logRotationEnabled_; }
 
 private:
     GlobalPassConfigs globalPassConfigs_;
