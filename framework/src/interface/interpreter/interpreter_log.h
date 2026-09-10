@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cstdarg>
+#include <cstdio>
 #include <cstdint>
 #include <string>
 
@@ -25,6 +26,7 @@ enum class LogLevel : uint8_t { kDebug = 0, kInfo, kWarn, kEvent, kError };
 const std::string& LogFilePath();
 void SetLogFilePath(const std::string& path);
 void Log(LogLevel level, const char* fmt, ...) __attribute__((format(printf, 2, 3)));
+void LogToFile(FILE* file, LogLevel level, const char* fmt, ...) __attribute__((format(printf, 3, 4)));
 } // namespace npu::tile_fwk::interpreter
 
 #define INTERPRETER_LOGD(...) npu::tile_fwk::interpreter::Log(npu::tile_fwk::interpreter::LogLevel::kDebug, __VA_ARGS__)
@@ -38,3 +40,8 @@ void Log(LogLevel level, const char* fmt, ...) __attribute__((format(printf, 2, 
                                     static_cast<uint32_t>(errCode) & 0xFFFFF, #errCode, ##__VA_ARGS__)
 
 #define INTERPRETER_LOGE_FULL(errCode, fmt, ...) INTERPRETER_LOGE(errCode, fmt, ##__VA_ARGS__)
+
+#define INTERPRETER_LOGE_TO_FILE(file, errCode, fmt, ...)                                                            \
+    npu::tile_fwk::interpreter::LogToFile(file, npu::tile_fwk::interpreter::LogLevel::kError,                        \
+                                          "ErrCode: F%05X! Enum: %s " fmt, static_cast<uint32_t>(errCode) & 0xFFFFF, \
+                                          #errCode, ##__VA_ARGS__)

@@ -13,6 +13,10 @@
  * \brief Interpreter logging helpers and macros implementation.
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include "interface/interpreter/interpreter_log.h"
 
 #include <cinttypes>
@@ -23,7 +27,6 @@
 #include <algorithm>
 #include <mutex>
 #include <string>
-#include <unordered_map>
 #include <sys/syscall.h>
 #include <unistd.h>
 
@@ -90,19 +93,22 @@ int GetGlobalLogThreshold()
     return threshold;
 }
 
-const std::unordered_map<LogLevel, int>& CanonicalLevelMap()
-{
-    static const std::unordered_map<LogLevel, int> kMap = {
-        {LogLevel::kDebug, 0}, {LogLevel::kInfo, 1}, {LogLevel::kWarn, 2}, {LogLevel::kError, 3}, {LogLevel::kEvent, 5},
-    };
-    return kMap;
-}
-
 int ToCanonicalLevel(LogLevel level)
 {
-    const auto& levelMap = CanonicalLevelMap();
-    const auto it = levelMap.find(level);
-    return it != levelMap.end() ? it->second : kDefaultGlobalLogThreshold;
+    switch (level) {
+        case LogLevel::kDebug:
+            return 0;
+        case LogLevel::kInfo:
+            return 1;
+        case LogLevel::kWarn:
+            return 2;
+        case LogLevel::kError:
+            return 3;
+        case LogLevel::kEvent:
+            return 5;
+        default:
+            return kDefaultGlobalLogThreshold;
+    }
 }
 
 struct LogContext {
@@ -212,7 +218,7 @@ bool FormatLogMessage(const char* fmt, va_list args, LogFormatScratch& scratch)
     return formattedOk;
 }
 
-void EmitLogLineToOutputs(LogLevel level, const char* msgPtr)
+void WritePrefixedLine(FILE* file, LogLevel level, const char* msgPtr)
 {
     std::time_t now = std::time(nullptr);
     std::tm localTm{};
@@ -221,26 +227,10 @@ void EmitLogLineToOutputs(LogLevel level, const char* msgPtr)
     (void)std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M:%S", &localTm);
     const uint64_t threadId = static_cast<uint64_t>(syscall(SYS_gettid));
     const char* levelStr = LevelToString(level);
-
-    auto& context = GetLogContext();
-    std::lock_guard<std::mutex> lock(context.mutex);
-    if (context.logFile == nullptr) {
-        context.logFile = fopen(context.logFilePath.c_str(), "a");
-        if (context.logFile == nullptr) {
-            return;
-        }
-    }
-
-    fprintf(context.logFile, "[%s][%s][tid:%" PRIu64 "] %s\n", timeBuf, levelStr, threadId, msgPtr);
-    fflush(context.logFile);
-    if (context.printToStdout) {
-        fprintf(stdout, "[%s][%s][tid:%" PRIu64 "] %s\n", timeBuf, levelStr, threadId, msgPtr);
-        fflush(stdout);
-    }
+    fprintf(file, "[%s][%s][tid:%" PRIu64 "] %s\n", timeBuf, levelStr, threadId, msgPtr);
 }
 
-void WriteLine(LogLevel level, const char* fmt, va_list args) __attribute__((format(printf, 2, 0)));
-void WriteLine(LogLevel level, const char* fmt, va_list args)
+__attribute__((format(printf, 3, 0))) void WriteLineImpl(FILE* file, LogLevel level, const char* fmt, va_list args)
 {
     constexpr size_t kStackBufSize = 1024U;
     char stackBuf[kStackBufSize];
@@ -249,7 +239,24 @@ void WriteLine(LogLevel level, const char* fmt, va_list args)
     if (!FormatLogMessage(fmt, args, scratch)) {
         return;
     }
-    EmitLogLineToOutputs(level, scratch.msg);
+    if (file != nullptr) {
+        WritePrefixedLine(file, level, scratch.msg);
+        fflush(file);
+        return;
+    }
+    auto& context = GetLogContext();
+    std::lock_guard<std::mutex> lock(context.mutex);
+    if (context.logFile == nullptr) {
+        context.logFile = fopen(context.logFilePath.c_str(), "a");
+        if (context.logFile == nullptr) {
+            return;
+        }
+    }
+    WritePrefixedLine(context.logFile, level, scratch.msg);
+    fflush(context.logFile);
+    if (context.printToStdout) {
+        WritePrefixedLine(stdout, level, scratch.msg);
+    }
 }
 } // namespace
 
@@ -277,7 +284,19 @@ void Log(LogLevel level, const char* fmt, ...)
 
     va_list args;
     va_start(args, fmt);
-    WriteLine(level, fmt, args);
+    WriteLineImpl(nullptr, level, fmt, args);
+    va_end(args);
+}
+
+void LogToFile(FILE* file, LogLevel level, const char* fmt, ...)
+{
+    if (file == nullptr || !ShouldWriteLevel(level)) {
+        return;
+    }
+
+    va_list args;
+    va_start(args, fmt);
+    WriteLineImpl(file, level, fmt, args);
     va_end(args);
 }
 } // namespace npu::tile_fwk::interpreter

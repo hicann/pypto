@@ -2585,11 +2585,12 @@ TEST_F(DynamicOpsTest, Range)
     std::string logOutput = CaptureLogFileAndEcho([]() {
         config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
         config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+        TileShape::Current().SetVecTile(2);
 
-        int64_t size = 5;
         Element start(DT_INT32, 1);
-        Element end(DT_INT32, 10);
+        Element end(DT_INT32, 99);
         Element step(DT_INT32, 2);
+        int64_t size = 49;
 
         Tensor out(DT_INT32, {size}, "out");
         ProgramData::GetInstance().AppendInputs({});
@@ -2597,7 +2598,10 @@ TEST_F(DynamicOpsTest, Range)
             RawTensorData::CreateConstantTensor<int32_t>(out, 0),
         });
 
-        std::vector<int32_t> expected_data = {1, 3, 5, 7, 9};
+        std::vector<int32_t> expected_data(size);
+        for (int64_t i = 0; i < size; ++i) {
+            expected_data[i] = static_cast<int32_t>(1 + i * 2);
+        }
         ProgramData::GetInstance().AppendGoldens({
             RawTensorData::CreateTensor<int32_t>(out, expected_data),
         });

@@ -143,7 +143,7 @@ void RecordFunc::EndFunction()
         recordLoopFunc_.reset();
     }
 
-    if (IsVerifyEnable()) {
+    if (IsVerifyEnable() && ConfigManager::Instance().IsLogRotationEnabled()) {
         FE_LOGI("FlowVerify has been enabled.");
         config::SetRunDataOption(KEY_VERIFY_PATH, config::GetAbsoluteTopFolder() + "/verify");
     }

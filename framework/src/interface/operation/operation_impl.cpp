@@ -186,7 +186,8 @@ void TiledAssembleRecursive(Function& function, const TileShape& tileShape, size
 {
     if (cur == input.tensor.GetShape().size()) {
         auto operand = input.tensor.GetStorage();
-        auto inputTile = operand->View(function, input.tileInfo.shape, input.tileInfo.offset);
+        auto inputTile = std::make_shared<LogicalTensor>(function, operand->Datatype(), input.tileInfo.shape,
+                                                         operand->Format(), operand->Symbol());
 
         std::vector<int64_t> fromOffset = input.tileInfo.offset;
         std::vector<SymbolicScalar> fromDynOffset;
@@ -239,7 +240,9 @@ void TiledViewOperationRecursive(Function& function, const TileShape& tileShape,
                                  const std::shared_ptr<LogicalTensor>& operand, std::shared_ptr<ViewOpAttribute> attr)
 {
     if (cur == output.tensor.GetShape().size()) {
-        auto resultTile = output.tensor.GetStorage()->View(function, output.tileInfo.shape, output.tileInfo.offset);
+        auto resultParent = output.tensor.GetStorage();
+        auto resultTile = std::make_shared<LogicalTensor>(function, resultParent->Datatype(), output.tileInfo.shape,
+                                                          resultParent->Format(), resultParent->Symbol());
         const auto& baseFromOffset = attr->GetFromOffset();
         const auto& baseFromDynOffset = attr->GetFromDynOffset();
         size_t offsetSize = std::min(baseFromOffset.size(), output.tileInfo.offset.size());
@@ -255,7 +258,7 @@ void TiledViewOperationRecursive(Function& function, const TileShape& tileShape,
                 newFromDynOffset.push_back(baseFromDynOffset[i] + SymbolicScalar(output.tileInfo.offset[i]));
             }
         }
-        auto tileValidShape = GetViewValidShape(operand->GetDynValidShape(), newFromOffset, newFromDynOffset,
+        auto tileValidShape = GetViewValidShape(attr->GetToDynValidShape(), output.tileInfo.offset, {},
                                                 output.tileInfo.shape);
         resultTile->UpdateDynValidShape(tileValidShape);
         auto& viewOp = function.AddRawOperation(Opcode::OP_SLICE, {operand}, {resultTile});
@@ -265,7 +268,6 @@ void TiledViewOperationRecursive(Function& function, const TileShape& tileShape,
         }
         viewOp.SetOpAttribute(viewAttr);
 
-        auto resultParent = output.tensor.GetStorage();
         auto& contractOp = function.AddRawOperation(Opcode::OP_CONTRACT, {resultTile}, {resultParent});
         contractOp.SetAttr("NeedCopy", true);
         auto* currentTileOp = ExpandFunction::GetCurrentTileOp();

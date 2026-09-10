@@ -312,15 +312,16 @@ bool FlowVerifier::VerifyResult(const std::vector<std::shared_ptr<LogicalTensor>
             INTERPRETER_LOGE_FULL(VerifyResultScene::VERIFY_RESULT_MISMATCH,
                                   "%s Verify for %zu data view list index %zu result FAILED", key.c_str(),
                                   goldenDataViewList.size(), k);
-            INTERPRETER_LOGE_FULL(VerifyResultScene::VERIFY_RESULT_MISMATCH, "[VERIFY:FAIL] %s, %s, %s, %s, %s",
-                                  functionInterpreter_->execDumpPassName.c_str(),
-                                  functionInterpreter_->execDumpFunPath.c_str(),
-                                  functionInterpreter_->GetLoopSymbolString().c_str(),
-                                  std::to_string(tensorDatalist[k]->GetRawTensor()->GetRawMagic()).c_str(),
-                                  tensorDatalist[k]->GetRawTensor()->GetSymbol().c_str());
+            INTERPRETER_LOGE_TO_FILE(functionInterpreter_->execDumpErrorFile, VerifyResultScene::VERIFY_RESULT_MISMATCH,
+                                     "[VERIFY:FAIL] %s, %s, %s, %s, %s", functionInterpreter_->execDumpPassName.c_str(),
+                                     functionInterpreter_->execDumpFunPath.c_str(),
+                                     functionInterpreter_->GetLoopSymbolString().c_str(),
+                                     std::to_string(tensorDatalist[k]->GetRawTensor()->GetRawMagic()).c_str(),
+                                     tensorDatalist[k]->GetRawTensor()->GetSymbol().c_str());
             std::ostringstream oss;
             tensorGraphResult.DumpDataDetail(oss);
-            INTERPRETER_LOGE_FULL(VerifyResultScene::VERIFY_RESULT_MISMATCH, "%s", oss.str().c_str());
+            INTERPRETER_LOGE_TO_FILE(functionInterpreter_->execDumpErrorFile, VerifyResultScene::VERIFY_RESULT_MISMATCH,
+                                     "%s", oss.str().c_str());
             ProgrameInfo[toIndex(ProgrameInfoCsvHeader::verifyResult)] = "FAIL";
             result = false;
         } else {
@@ -529,7 +530,8 @@ void FlowVerifier::VerifyTensorGraph(Function* entry,
         }
     } catch (std::exception& e) {
         std::string msg = e.what();
-        INTERPRETER_LOGE_FULL(VerifyResultScene::VERIFY_RESULT_MISMATCH, "%s", ParseErrorMsg(msg).c_str());
+        INTERPRETER_LOGE_TO_FILE(functionInterpreter_->execDumpErrorFile, VerifyResultScene::VERIFY_RESULT_MISMATCH,
+                                 "%s", ParseErrorMsg(msg).c_str());
         WriteException();
         throw std::runtime_error(e.what());
     }
@@ -616,7 +618,8 @@ void FlowVerifier::VerifyPass(Function* func, int passIndex, const std::string& 
                                   func->GetMagicName().c_str(), passIdentifier.c_str(), passIndex, captureIndex,
                                   e.what());
             std::string msg = e.what();
-            INTERPRETER_LOGE_FULL(VerifyResultScene::VERIFY_RESULT_MISMATCH, "%s", ParseErrorMsg(msg).c_str());
+            INTERPRETER_LOGE_TO_FILE(functionInterpreter_->execDumpErrorFile, VerifyResultScene::VERIFY_RESULT_MISMATCH,
+                                     "%s", ParseErrorMsg(msg).c_str());
             WriteException();
             checkResult = false;
             continue;
