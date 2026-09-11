@@ -1136,25 +1136,6 @@ Status RemoveRedundantAssemble::HandleReshapeToAssemble(
                       assembleOp.GetOpMagic(), producer->GetIOperands()[0]->GetMagic(),
                       IntVecToStr(newRawShape).c_str(), IntVecToStr(newDynOffset).c_str());
     Shape newShape = GetStaticShapeForDynAxes(newRawShape);
-    if (!assembleOp.IsDeleted()) {
-        // When Assemble is kept, its own offset propagation is still active; pushing the same offset here would
-        // make CopyIn/CopyOut consumers observe the offset twice, so only rawShape is synchronized.
-        APASS_LOG_DEBUG_F(Elements::Operation,
-                          "Skip pushing Assemble offset to Reshape input because Assemble op:%s[%d] is not deleted.",
-                          assembleOp.GetOpcodeStr().c_str(), assembleOp.GetOpMagic());
-        for (auto copyOut : producer->GetIOperands()[0]->GetProducers()) {
-            if (copyOut == nullptr || copyOut->IsDeleted() || !IsCopyOut(copyOut->GetOpcode())) {
-                continue;
-            }
-            auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyOut->GetOpAttribute());
-            if (copyAttr != nullptr) {
-                copyAttr->SetRawShape(OpImmediate::Specified(newShape));
-            }
-        }
-        producer->GetIOperands()[0]->tensor->UpdateRawShape(newShape);
-        producer->GetIOperands()[0]->tensor->UpdateDynRawShape(newDynRawShape);
-        return SUCCESS;
-    }
     if (UpdateCopyOutBeforeReshape(producer->GetIOperands()[0], newShape, newDynOffset) != SUCCESS) {
         return FAILED;
     }

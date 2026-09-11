@@ -25,6 +25,8 @@
 
 namespace npu {
 namespace tile_fwk {
+constexpr size_t kMaxCopyShapeDim = 5;
+
 void InsertOpForViewAssemble::InsertViewAssemble(Function& function, Operation* viewOp, Operation* assembleOp)
 {
     auto& moveOutTensorPtr = viewOp->GetOOperands()[0];
@@ -83,6 +85,12 @@ void InsertOpForViewAssemble::InsertCopyForSharedInput(Function& function, Opera
 {
     auto input = assembleOp->GetIOperands()[0];
     if (input->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR) {
+        return;
+    }
+    if (input->GetShape().size() > kMaxCopyShapeDim) {
+        APASS_LOG_WARN_F(Elements::Tensor,
+                         "Skip isolating shared assemble input [%d]: shape dim [%zu] exceeds pto-isa copy limit [%zu].",
+                         input->GetMagic(), input->GetShape().size(), kMaxCopyShapeDim);
         return;
     }
     auto ubLimit = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB);
