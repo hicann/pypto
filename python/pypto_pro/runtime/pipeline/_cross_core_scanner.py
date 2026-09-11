@@ -9,10 +9,9 @@
 
 """Cross-core access scanner for preload pipeline auto-sync.
 
-Pure-AST analysis. Scans the kernel body for cross-core NBuffer declarations
-(those configured with cross_core_forward_id / cross_core_backward_id), then
-scans each @stage function body to determine, for each cross-core buffer it
-touches, the access role (W/R) and the pipe of the op that does the access.
+Pure-AST analysis. Scans the kernel body for cross-core tile-group declarations (those
+carrying fwd_ids/bwd_ids), then scans each @stage body to determine, per buffer it
+touches, the access role (R/W/RW) and the pipe of the op doing the access.
 
 The result drives automatic wait/set_cross_core insertion at stage boundaries.
 """
@@ -23,6 +22,8 @@ import ast
 from dataclasses import dataclass, field
 
 from pypto.pypto_impl.ir import MemorySpace
+from pypto_pro.language import _api as _language_api
+from pypto_pro.language._vf_api import Vf
 from pypto_pro.language.parser._op_pipeline import (
     _BLOCK_OP_TILE_ROLES,
     _VF_OP_TILE_ROLES,
@@ -34,10 +35,8 @@ from pypto_pro.language.parser._op_pipeline import (
 
 from ._astutil import call_name, slot_accessor
 
-# Highest usable cross-core event id. A hardware limit: ids run 0..15, and an
-# out-of-range id only fails once the kernel runs on device. Shared with _sync_graph,
-# which allocates from the same pool for address-reuse edges, so it carries no
-# module-private underscore.
+# Highest usable cross-core event id: a hardware limit. Shared with _sync_graph, which
+# allocates from the same pool for address-reuse edges.
 MAX_EVENT_ID = 15
 
 # MemorySpace attribute name (as written in pl.MemorySpace.<X>) -> enum value
@@ -78,25 +77,42 @@ class CrossCoreBuffer:
 
     fwd_ids_node: ast.expr | None  # AST node for cross_core_forward_id value (e.g. a Name)
     bwd_ids_node: ast.expr | None  # AST node for cross_core_backward_id value
-    # How many ids each direction declares. NOT the buffer's slot count: a buffer may
-    # share one id across all its slots (see _validate._check_event_id_counts). This is the
-    # modulus of the id pick, `ids[task % id_count]`, while the slots turn over on
-    # `task % slot_count`.
-    fwd_id_count: int
-    bwd_id_count: int
+    # The ids themselves, resolved from whichever spelling was used (see _resolve_event_ids).
+    # Kept rather than only counted: the address-reuse allocator needs to know which ids are
+    # already spoken for, including those given by name.
+    fwd_ids: tuple[int, ...] = ()
+    bwd_ids: tuple[int, ...] = ()
+
+    @property
+    def fwd_id_count(self) -> int:
+        """How many ids the forward direction declares. NOT the buffer's slot count: a
+        buffer may share one id across all its slots (see _validate._check_event_id_counts).
+        This is the modulus of the id pick, `ids[task % id_count]`, while the slots turn
+        over on `task % slot_count`."""
+        return len(self.fwd_ids)
+
+    @property
+    def bwd_id_count(self) -> int:
+        """How many ids the backward direction declares — see fwd_id_count."""
+        return len(self.bwd_ids)
 
 
 @dataclass
 class CrossCoreSyncContext:
     """Buffer declarations and memory layout the sync graph is built from.
 
-    Populated by _scan_cross_core() during analysis.
+    Populated by _analyzer._scan_kernel_buffers() during analysis.
     """
 
     # Buffer declarations: name -> CrossCoreBuffer (only cross-core buffers with fwd/bwd ids)
     buffers: dict = field(default_factory=dict)
-    # Lifted literal fwd_ids/bwd_ids: [(var_name, ast_literal)] to declare as variables
+    # Lifted literal fwd_ids/bwd_ids: [(var_name, ast_literal, buffer_name)], each declared
+    # with the pipeline loop that uses that buffer.
     lifted_ids: list = field(default_factory=list)
+    # Event-id groups the framework allocated for address reuse: [(var_name, ast_literal)].
+    # Kernel-level so the NAMES run continuously across loops; which entries belong to which
+    # loop is recorded on that loop's SyncPlan, and the ids inside may repeat between loops.
+    reuse_ids: list = field(default_factory=list)
     # Per-buffer slot address ranges: name -> (memory, [(start, end), ...] per slot).
     # Covers ALL buffers (cross-core + local) for address-overlap detection.
     addr_ranges: dict = field(default_factory=dict)
@@ -113,21 +129,12 @@ class CrossCoreSyncContext:
 class AccessScanTables:
     """The kernel-level tables the per-op ACCESS scan resolves names against.
 
-    Distinct from what the DECLARATION scans produce (addr_ranges, mutex_ids,
-    addr_overlaps — those go into CrossCoreSyncContext and model the sync graph). Every
-    field here answers one question instead: *a name appears inside a stage body — which
-    declared buffer is it, and on which pipe is this op touching it?*
+    Every field answers the same question: *a name appears inside a stage body — which
+    declared buffer is it, and on which pipe is this op touching it?* Resolved once for the
+    whole kernel and only read afterwards, so they travel as one value.
 
-    All seven are resolved once for the whole kernel and only read afterwards, so they
-    travel as one value rather than as seven parameters threaded through five call levels.
-    That is not only tidier: they used to be positional, untyped and partly defaulted to
-    ``None``, so a swapped pair silently mis-attributed accesses and a forgotten argument
-    silently scanned nothing — and a missing access is a missing sync.
-
-    What deliberately does NOT live here is the per-stage ``stage_slot_to_buffer``. It has
-    a different lifetime (rebuilt per stage) and a different role: it is not a table the
-    scan consults but the RESULT of consulting these — see
-    _build_slot_to_buffer_from_bindings.
+    The per-stage ``stage_slot_to_buffer`` deliberately lives elsewhere: it is not a table
+    the scan consults but the result of consulting these (_build_slot_to_buffer_from_bindings).
     """
 
     # Cross-core buffer declarations: name -> CrossCoreBuffer. Membership decides whether
@@ -144,47 +151,36 @@ class AccessScanTables:
     # tuple variable -> {field: source variable}, the one hop that rejoins a tile to its
     # group when the kernel bundles groups with pl.make_tuple.
     tuple_fields: dict
-    # ``@pl.vector_function`` name -> FunctionDef. One atomic op each: the scan does not
-    # walk into them, it reads their parameter roles (see _scan_vf_roles).
+    # ``@pl.vector_function`` name -> FunctionDef. One atomic op each: the scan reads their
+    # parameter roles instead of walking in (see _scan_vf_roles).
     vf_func_defs: dict
-    # Every OTHER plain function a stage may call -> FunctionDef. These are walked through
-    # as part of the calling stage (see _scan_function).
+    # Every OTHER plain function a stage may call -> FunctionDef. Walked through as part of
+    # the calling stage (see _scan_function).
     helper_func_defs: dict
-    # Buffers sharing a physical region with another buffer. They are recorded even when
-    # not cross-core themselves, because a write over shared memory still has to be ordered.
-    region_members: set
+    # Buffers whose address range overlaps another buffer's, recorded even when not
+    # cross-core themselves: a write over shared memory still has to be ordered. NOT the
+    # sync graph's "region", which is every buffer's memory area, reuse or not.
+    addr_shared: set
+    # The kernel's enclosing scope, for resolving what a callee name stands for (see
+    # resolve_op_name).
+    closure_vars: dict
+
+    def tracks(self, buf: str | None) -> bool:
+        """True if the sync graph follows this buffer: cross-core, or sharing an address
+        with one. Everything else is the user's own, and auto_mutex orders it."""
+        return buf is not None and (buf in self.cross_buffers or buf in self.addr_shared)
 
 
 @dataclass
 class TileGroupDecl:
     """One ``x = pl.make_tile_group(...)`` statement, as written.
 
-    Purely syntactic: the keyword nodes are handed over unevaluated, and nothing here is
-    validated. Every scan below reads the fields it needs from this and decides for itself
-    what to do when a value will not resolve — some skip the buffer, some raise. Keeping
-    those decisions in the scans (and their original call order) is what makes the single
-    pass a refactor rather than a change in which error a user sees first.
+    Purely syntactic: the ``_node`` fields are unevaluated AST, and each scan below decides
+    for itself what to do when a value will not resolve.
 
-    One field per keyword, rather than a dict of them: the six are the whole of
-    make_tile_group's signature and every scan asks for them by literal name, so a dict
-    only made the set look open-ended while turning a misspelled key into a silent None.
-
-    ``_node`` marks the fields that are unevaluated AST — deliberately, because
-    ``decl.mutex_ids_node`` and ``info.sync.mutex_ids`` are NOT the same thing (one is what
-    was written, the other the resolved ints). ``memory`` carries no suffix because it is
-    the one field already interpreted.
-
-    Two things are resolved here rather than left to each scan, since each used to be
-    re-derived per reader:
-
-    ``type_node`` is the ``pl.TileType(...)`` call itself even when the source wrote a
-    variable (``tt = pl.TileType(...)`` … ``type=tt``) — the far more common spelling, and
-    the one the API docs use. Every reader wants the tile type, none wants the name it was
-    reached through, so the hop is taken once here.
-
-    ``memory`` is read off that type node by pattern-matching ``target_memory=
-    pl.MemorySpace.<X>``. Not evaluation: it needs no closure and cannot fail for a reason
-    a scan would want to report differently.
+    Two things are resolved here rather than per reader: ``type_node`` is the
+    ``pl.TileType(...)`` call itself even when the source wrote a variable bound to it, and
+    ``memory`` is ``target_memory`` read off that node by pattern matching.
     """
 
     names: list[str]  # every variable this statement binds (targets that are plain Names)
@@ -200,9 +196,7 @@ class TileGroupDecl:
 def scan_tile_group_decls(kernel_func_def: ast.FunctionDef) -> list[TileGroupDecl]:
     """Every ``pl.make_tile_group(...)`` declaration in the kernel body, in AST order.
 
-    The one pass over the kernel body that all buffer-declaration scans share. They used to
-    walk it once each, repeating the same "is this an Assign of a make_tile_group call, and
-    what does it bind" prologue and re-evaluating the same keywords several times over.
+    The one pass over the kernel body that all buffer-declaration scans share.
     """
     tile_types = _scan_tile_type_decls(kernel_func_def)
     decls: list[TileGroupDecl] = []
@@ -213,8 +207,7 @@ def scan_tile_group_decls(kernel_func_def: ast.FunctionDef) -> list[TileGroupDec
         if not _is_make_tile_group(call):
             continue
         written = {kw.arg: kw.value for kw in call.keywords if kw.arg}
-        # `type=tt` -> the pl.TileType(...) call `tt` was bound to, so every scan below
-        # sees the tile type itself rather than the name it arrived under.
+        # `type=tt` -> the pl.TileType(...) call `tt` was bound to.
         type_node = written.get("type")
         if isinstance(type_node, ast.Name) and type_node.id in tile_types:
             type_node = tile_types[type_node.id]
@@ -237,9 +230,8 @@ def scan_tile_group_decls(kernel_func_def: ast.FunctionDef) -> list[TileGroupDec
 def _scan_tile_type_decls(kernel_func_def: ast.FunctionDef) -> dict[str, ast.Call]:
     """``{name: the pl.TileType(...) call it was bound to}`` in the kernel body.
 
-    One hop, which is all the spelling needs: a tile type is written once and handed to
-    make_tile_group by name. Chains of aliases are not followed — nobody writes them, and
-    an unresolved name simply leaves ``kwargs["type"]`` as it was.
+    One hop, which is all the spelling needs. An unresolved name simply leaves
+    ``kwargs["type"]`` as it was.
     """
     result: dict[str, ast.Call] = {}
     for node in ast.walk(kernel_func_def):
@@ -256,10 +248,8 @@ def _scan_tile_type_decls(kernel_func_def: ast.FunctionDef) -> dict[str, ast.Cal
 def scan_all_tile_group_names(decls: list[TileGroupDecl]) -> set[str]:
     """Every variable bound directly to a ``pl.make_tile_group(...)`` result.
 
-    Deliberately independent of mutex_ids and cross-core ids: a group whose ids are not
-    statically resolvable is still a group, and callers that only need to recognise slot
-    selection (``g.next()``, ``g[i]``) must not miss it. Aliases are not followed, so
-    ``alias = g`` leaves ``alias`` unrecognised.
+    Independent of mutex_ids and cross-core ids: a group whose ids do not resolve statically
+    is still a group, and callers that recognise slot selection must not miss it.
     """
     return {name for decl in decls for name in decl.names}
 
@@ -450,16 +440,16 @@ def scan_cross_core_buffers(
     """Pick out the cross-core tile-group declarations (those carrying fwd/bwd ids).
 
     The only declaration scan that raises: a buffer asking for cross-core sync must have a
-    resolvable memory space and valid id tuples, or no sync can be generated for it. The
-    scans that merely collect layout information skip what they cannot resolve instead.
+    resolvable memory space and valid id tuples, or no sync can be generated for it.
 
     Returns:
-        (dict mapping buffer variable name -> CrossCoreBuffer,
-         lifted_ids: list of (var_name, ast_literal) for literal fwd/bwd ids
-         that need to be declared as variables before the pipeline loop)
+        (name -> CrossCoreBuffer,
+         lifted_ids: (var_name, ast_literal, buffer_name) for literal fwd/bwd ids that must
+         be declared as variables before the pipeline loop; the buffer name travels with
+         them so the declaration lands with the pipeline that uses that buffer.)
     """
     result: dict[str, CrossCoreBuffer] = {}
-    lifted_ids: list[tuple[str, ast.expr]] = []
+    lifted_ids: list[tuple[str, ast.expr, str]] = []
 
     for decl in decls:
         fwd_node = decl.fwd_ids_node
@@ -470,15 +460,15 @@ def scan_cross_core_buffers(
         bufname = decl.names[0] if decl.names else "<tile_group>"
 
         _validate_buffer_memory(decl, bufname)
-        fwd_count, bwd_count = _validate_ids(fwd_node, bwd_node, bufname, closure_vars)
+        fwd_ids, bwd_ids = _validate_ids(fwd_node, bwd_node, bufname, closure_vars)
         fwd_node, bwd_node = _lift_literal_ids(fwd_node, bwd_node, bufname, lifted_ids)
 
         for name in decl.names:
             result[name] = CrossCoreBuffer(
                 fwd_ids_node=fwd_node,
                 bwd_ids_node=bwd_node,
-                fwd_id_count=fwd_count,
-                bwd_id_count=bwd_count,
+                fwd_ids=fwd_ids,
+                bwd_ids=bwd_ids,
             )
 
     return result, lifted_ids
@@ -494,17 +484,16 @@ def _validate_buffer_memory(decl: TileGroupDecl, bufname: str) -> None:
         )
 
 
-def _validate_ids(fwd_node, bwd_node, bufname: str, closure_vars: dict) -> tuple[int, int]:
-    """L11: how many ids each direction declares, once they are known to be usable.
+def _validate_ids(fwd_node, bwd_node, bufname: str, closure_vars: dict) -> tuple[tuple, tuple]:
+    """L11: the ids each direction declares, once they are known to be usable.
 
-    Checks the spelling and the values. How MANY there must be depends on how many slots
-    the buffer rotates through, which is not known here — see
-    _validate._check_event_id_counts, which asks the graph.
+    Checks the spelling and the values. How MANY there must be depends on the buffer's slot
+    count, which is not known here — see _validate._check_event_id_counts.
     """
-    counts = []
+    resolved = []
     for label, node in (("fwd_ids", fwd_node), ("bwd_ids", bwd_node)):
         if node is None:
-            counts.append(0)
+            resolved.append(())
             continue
         ids = _resolve_event_ids(node, bufname, label, closure_vars)
         if not ids:
@@ -512,27 +501,27 @@ def _validate_ids(fwd_node, bwd_node, bufname: str, closure_vars: dict) -> tuple
                 f"pipeline: cross-core buffer '{bufname}' {label} is empty. Drop the "
                 f"keyword if this buffer needs no sync in that direction."
             )
-        # Cross-core event ids are a hardware resource limited to 0..15; an out-of-range id
-        # only fails once the kernel runs on device, so reject it where the source is known.
+        # Cross-core event ids are a hardware resource limited to 0..15; an out-of-range id only
+        # fails once the kernel runs on device, so reject it where the source is known.
         bad = [v for v in ids if not 0 <= v <= MAX_EVENT_ID]
         if bad:
             raise ValueError(
                 f"pipeline: cross-core buffer '{bufname}' {label} contains out-of-range "
                 f"event id(s) {bad}; cross-core event ids must be in 0..{MAX_EVENT_ID}."
             )
-        counts.append(len(ids))
-    return counts[0], counts[1]
+        resolved.append(tuple(ids))
+    return resolved[0], resolved[1]
 
 
 def _lift_literal_ids(fwd_node, bwd_node, bufname: str, lifted_ids: list) -> tuple[ast.expr, ast.expr]:
     """Lift literal fwd_ids/bwd_ids to variable names for codegen compatibility."""
     if fwd_node is not None and isinstance(fwd_node, (ast.Tuple, ast.List)):
         var_name = f"_pl_fwd_ids_{bufname}"
-        lifted_ids.append((var_name, fwd_node))
+        lifted_ids.append((var_name, fwd_node, bufname))
         fwd_node = ast.Name(id=var_name, ctx=ast.Load())
     if bwd_node is not None and isinstance(bwd_node, (ast.Tuple, ast.List)):
         var_name = f"_pl_bwd_ids_{bufname}"
-        lifted_ids.append((var_name, bwd_node))
+        lifted_ids.append((var_name, bwd_node, bufname))
         bwd_node = ast.Name(id=var_name, ctx=ast.Load())
     return fwd_node, bwd_node
 
@@ -540,11 +529,9 @@ def _lift_literal_ids(fwd_node, bwd_node, bufname: str, lifted_ids: list) -> tup
 def _is_subview(node: ast.expr) -> bool:
     """Whether ``node`` is ``tile[...]`` with a slice among its indices — a sub-view.
 
-    A sub-view is a window onto the SAME memory as the tile it came from, which gives it
-    two properties that have to stay consistent: it resolves to that tile's buffer
-    (build_binding_map), and it is not itself an access, because no data moves until
-    something uses the view (_handle_tile_subscript). Writing the test out twice would let
-    those two drift apart, so both ask here.
+    A sub-view is a window onto the same memory as its parent tile, so it resolves to that
+    tile's buffer (build_binding_map) and is not itself an access (_handle_tile_subscript).
+    Both ask here so the two cannot drift apart.
     """
     if not isinstance(node, ast.Subscript):
         return False
@@ -555,11 +542,7 @@ def _is_subview(node: ast.expr) -> bool:
 
 
 def _slot_accessor_group_name(value: ast.expr) -> str | None:
-    """Group name for a slot accessor expression, or None if it is not one.
-
-    Which spellings count is _astutil.slot_accessor's business; nothing here needs the
-    accessor kind, only which group the tile came from.
-    """
+    """Group name for a slot accessor expression, or None if it is not one."""
     accessor = slot_accessor(value)
     return accessor[0] if accessor else None
 
@@ -578,15 +561,11 @@ def _get_slot_accessor_assignment(node: ast.AST, param_names: set[str]) -> tuple
 
 
 def scan_kernel_slot_to_buffer(func_def: ast.FunctionDef, buffer_names: set[str]) -> dict[str, str]:
-    """Scan the kernel body for `slot = buf.next()` (or .current()/.previous()),
-    mapping slot variable -> buffer name.
+    """``{slot variable: buffer name}`` for ``slot = buf.next()/.current()/.previous()``
+    taken in the KERNEL body and passed on as a stage argument.
 
-    This handles the case where the user takes a slot OUTSIDE the stage function
-    (in the pipeline loop) and passes the slot tile as a stage argument.
-
-    Covers EVERY declared buffer, not just the cross-core ones: a local buffer's slot has to
-    be traceable too, because an op's pipe is decided by the memory spaces of all its tiles
-    — the local side of a `pl.move` included.
+    Covers EVERY declared buffer, not just the cross-core ones: an op's pipe is decided by
+    the memory spaces of all its tiles, the local side of a ``pl.move`` included.
     """
     result: dict[str, str] = {}
     for node in ast.walk(func_def):
@@ -604,24 +583,20 @@ def build_binding_map(
 ) -> dict[str, tuple[str, bool]]:
     """Build the name -> (buffer, is_group) binding map for a stage function body.
 
-    Resolves all names that reference a cross-core buffer (directly or indirectly)
-    within this function scope. Handles:
-      (a) Formal params bound via call-site positional args (the actual is a declared tile
-          group — cross-core or local — or a slot taken from one in the kernel body).
-      (b) .next()/.current()/.previous() calls in the body: slot = group.next().
-      (c) Pure Name-to-Name alias assignments: tmp = some_known_name.
-      (d) Member reads off an aggregate param: grp = agg.field, where the call site passed a
-          `pl.make_tuple(field=...)` — rejoins the chain the aggregate broke.
+    Resolves all names that reference a declared tile group, directly or indirectly:
+      (a) formal params bound by call-site position;
+      (b) ``slot = group.next()`` in the body;
+      (c) plain alias assignments ``tmp = known``;
+      (d) ``grp = agg.field`` off an aggregate param the call site built with pl.make_tuple.
 
-    Steps (b) through (d) iterate until stable (supports alias chains).
+    (b)-(d) iterate until stable, so alias chains resolve.
 
     Args:
         func_def: the stage function AST.
-        call_args: list of AST args from the call site. If None, returns empty
-            (no name-collision guessing).
-        tables: the kernel-level lookup tables (see AccessScanTables). Of these, only
-            group_names, kernel_slot_to_buffer and tuple_fields are consulted here —
-            this is the one place kernel_slot_to_buffer is read at all.
+        call_args: AST args from the call site. None returns empty — no name-collision
+            guessing.
+        tables: kernel-level lookup tables; only group_names, kernel_slot_to_buffer and
+            tuple_fields are read here.
 
     Returns: {name: (buffer_declared_name, is_group)}
     """
@@ -639,12 +614,9 @@ def build_binding_map(
         if pos >= len(param_names) or not isinstance(arg, ast.Name):
             continue
         actual = arg.id
-        # A local group is bound under its real name just like a cross-core one. Only
-        # cross-core buffers get sync of their own, but a local buffer still has to be
-        # traceable: an op's pipe follows the memory spaces of ALL its tiles, so the local
-        # side of a `pl.move` needs a name that resolves. Leaving it out here is what made
-        # the scan fall back to the FORMAL parameter name, which only ever matched by the
-        # convention that call sites name their arguments after the parameters.
+        # A local group is bound under its real name just like a cross-core one: only cross-core
+        # buffers get sync of their own, but an op's pipe follows the memory spaces of ALL its
+        # tiles, so the local side of a `pl.move` needs a name that resolves.
         if actual in tables.group_names:
             result[param_names[pos]] = (actual, True)
         elif actual in tables.kernel_slot_to_buffer:
@@ -666,10 +638,9 @@ def build_binding_map(
             if target in result:
                 continue  # already resolved
 
-            # (d) grp = agg.field -> the variable the call site put in that field. Recorded
-            # even when that variable is a LOCAL tile group: an op's pipe is decided by the
-            # memory spaces of ALL its tiles, so the local side of a `move` has to resolve
-            # too. Not being a cross-core buffer keeps it out of the access records.
+            # (d) grp = agg.field -> the variable the call site put in that field. Recorded even for a
+            # LOCAL group, which pipe resolution needs; not being cross-core keeps it out of the
+            # access records.
             if isinstance(node.value, ast.Attribute) and isinstance(node.value.value, ast.Name):
                 fields = aggregates.get(node.value.value.id)
                 if fields is not None:
@@ -683,12 +654,8 @@ def build_binding_map(
                 source_name = _slot_accessor_group_name(node.value)
                 if source_name is not None and source_name in result:
                     src_buf, src_is_group = result[source_name]
-                    # A slot taken from a group, or a sub-view carved out of a tile: either
-                    # way the result names memory belonging to src_buf. Only the group case
-                    # used to be handled, so `sub = slot[i:, :]` resolved to nothing and
-                    # every op on `sub` was dropped from the scan without a word — and with
-                    # it any check that works by resolving an argument to a buffer,
-                    # _reject_untabled_op included.
+                    # A slot taken from a group, or a sub-view carved out of a tile: either way
+                    # the result names memory belonging to src_buf.
                     if src_is_group or _is_subview(node.value):
                         result[target] = (src_buf, False)
                         changed = True
@@ -706,16 +673,9 @@ def _build_slot_to_buffer_from_bindings(
 ) -> dict[str, str]:
     """This stage's ``name -> buffer`` map, covering ALL params (for pipe resolution).
 
-    Not a second scan of what ``tables.kernel_slot_to_buffer`` already holds, but its
-    product: the kernel-body slot a call site passed in arrives here through
-    build_binding_map, RE-KEYED from the kernel's variable name to the formal parameter
-    name (``cur_k = k_db.next(); compute_qk(cur_k)`` against ``def compute_qk(k_tile)``
-    yields ``k_tile -> k_db``, never ``cur_k``). That is the key the stage body's ops are
-    written against. On top of it come the slots taken inside this body.
-
-    - Names with is_group=False → directly map to their buffer (they are slots).
-    - Names from `slot = param.next()` for ANY param → map to param's resolved name
-      (for non-cross-core params, resolved name = param name itself for pipe calc).
+    Built from build_binding_map's result, which has already re-keyed a kernel-body slot
+    from the kernel's variable name to the formal parameter name — the key the stage body's
+    ops are written against. On top of it come the slots taken inside this body.
     """
     stage_slot_to_buffer: dict[str, str] = {}
     # All resolved slot names (is_group=False) → buffer
@@ -743,43 +703,81 @@ def _scan_function(
 ) -> None:
     """Record every buffer access this function makes, in source order, into ``out``.
 
-    Walks the calls in the body and dispatches on what each one is:
+    Dispatches on what each call is:
 
         ``pl.<op>(...)``            a block op            -> _handle_block_op
         a ``@pl.vector_function``   one atomic op         -> _handle_vf_call
         any other plain function    part of THIS function -> recurse into it
-        a stage                     not reachable here    -> refused by _check_no_nested_stage
 
-    The third case is the reason this takes a whole function rather than a statement list.
-    A helper a stage calls is not a separate unit of work — it is the stage, factored out —
-    so its accesses belong to the stage's list and are recorded straight into the same
-    ``out``. (A nested STAGE would be the opposite: its own node, with its own sync around
-    it. That is the mix-stage case and is not supported yet.) Before this, the walk stopped
-    at the stage's own body, so a ``pl.move`` inside a helper was scanned by nobody while
-    the parser inlined and ran it — a missing sync with nothing to announce it.
+    A helper a stage calls is the stage, factored out, so its accesses go into the same
+    ``out``. (A nested STAGE would be its own node with its own sync; not supported yet.)
 
-    ``bindings`` is this function's ``name -> (buffer, is_group)`` map; each recursion
-    re-derives the callee's from the caller's by argument position. ``seen`` holds the names
-    already on the current chain, so a cycle terminates instead of recursing forever.
+    ``bindings`` is this function's ``name -> (buffer, is_group)`` map, re-derived per
+    recursion by argument position; ``seen`` holds the names on the current chain so a cycle
+    terminates.
 
-    Control flow is deliberately ignored: an op inside a branch is recorded exactly like
-    an unconditional one. The graph then syncs every pipe a buffer is touched on, which
-    over-approximates when a path skips some of them but is never short of a sync. Working
-    out which pipes a given path really uses would need condition reasoning, and getting
-    that wrong drops syncs rather than adding them.
+    Control flow is ignored: an op inside a branch is recorded like an unconditional one.
+    The graph then syncs every pipe a buffer is touched on — an over-approximation, never a
+    missing sync.
     """
     slot_to_buffer = _build_slot_to_buffer_from_bindings(func_def, bindings)
-    for stmt in func_def.body:
+    _reject_tile_returning_function(func_def, bindings, slot_to_buffer)
+    _scan_stmts(func_def.body, bindings, slot_to_buffer, tables, out, seen)
+
+
+def _reject_tile_returning_function(func_def: ast.FunctionDef, bindings: dict, slot_to_buffer: dict) -> None:
+    """A function a stage calls must not hand a tile or a tile group back to its caller.
+
+    Buffers are followed by NAME — a parameter by argument position, a slot by its group. A
+    return value has neither, so the caller binds it to a name that resolves to nothing and
+    every op on it goes unrecorded and unsynchronised.
+
+    Pass the buffer in as an argument instead; returning a scalar read out of one
+    (``return t[i, j]``) is untouched by this.
+    """
+    for node in ast.walk(func_def):
+        if not isinstance(node, ast.Return) or node.value is None:
+            continue
+        value = node.value
+        held = None
+        if isinstance(value, ast.Name) and (value.id in bindings or value.id in slot_to_buffer):
+            held = value.id
+        else:
+            pick = slot_accessor(value)
+            if pick is not None:
+                group, kind = pick
+                entry = bindings.get(group)
+                # `.next()` only means one thing; `g[i]` is a slot pick when g is a GROUP and
+                # an element read when it is a tile, which is a scalar and perfectly fine.
+                if kind != "index" or (entry is not None and entry[1]):
+                    held = group
+        if held is not None:
+            raise ValueError(
+                f"pipeline: '{func_def.name}' returns `{ast.unparse(value)}` (line "
+                f"{node.lineno}), a tile or tile group. The scan follows a buffer by the "
+                f"name it is bound to — a parameter, or a slot taken from one — and a "
+                f"returned value arrives under a name of the caller's own that resolves to "
+                f"nothing, so the ops the caller runs on it get no synchronisation.\n"
+                f"Pass the buffer in as an argument instead."
+            )
+
+
+def _scan_stmts(stmts: list, bindings: dict, slot_to_buffer: dict, tables: AccessScanTables,
+                out: list, seen: set) -> None:
+    """Record every buffer access these statements make, in source order, into ``out``.
+
+    The dispatch half of _scan_function, split out because it works on a statement list
+    while the ``name -> buffer`` map it needs is derived from a whole function. The pipeline
+    loop's own body is such a list and must be scanned by exactly this logic.
+    """
+    for stmt in stmts:
         for node, is_aug_target in _iter_accessors_in_order(stmt):
             if isinstance(node, ast.Subscript):
                 _handle_tile_subscript(node, is_aug_target, slot_to_buffer, tables, out)
                 continue
-            if (
-                isinstance(node.func, ast.Attribute)
-                and isinstance(node.func.value, ast.Name)
-                and node.func.value.id == "pl"
-            ):
-                _handle_block_op(node, slot_to_buffer, tables, out)
+            op_name = resolve_op_name(node.func, tables.closure_vars)
+            if op_name is not None and _vf_op_of(op_name) is None:
+                _handle_block_op(node, op_name.rsplit(".", 1)[-1], slot_to_buffer, tables, out)
                 continue
             name = call_name(node)
             if not name:
@@ -802,13 +800,44 @@ def _scan_function(
             )
 
 
+def reject_buffer_access_outside_stages(loop_body: list, tables: AccessScanTables, group_names: set) -> None:
+    """Refuse a statement in the pipeline loop's own body that touches a tracked buffer.
+
+    Only a stage's accesses are scanned, and the wait/set the transform emits sit around a
+    stage call, so such a statement would get no sync at all — and it is not replayed in the
+    drain either. Silently wrong, hence refused.
+
+    Tracked means what the sync graph tracks: a cross-core buffer, or one sharing its
+    address. Work on a purely local buffer is left alone, so an unrelated store can stay out
+    of a stage on purpose.
+
+    Stage calls need no special case: a stage is in neither vf_func_defs nor
+    helper_func_defs, so the scan walks straight past one.
+    """
+    bindings = {name: (name, True) for name in group_names}
+    bindings.update({var: (buf, False) for var, buf in tables.kernel_slot_to_buffer.items()})
+    for stmt in loop_body:
+        touched: list = []
+        _scan_stmts([stmt], bindings, dict(tables.kernel_slot_to_buffer), tables, touched, set())
+        if not touched:
+            continue
+        buffers = sorted({access[0] for access in touched})
+        raise ValueError(
+            f"pipeline: the statement at line {stmt.lineno} touches buffer(s) {buffers} that "
+            f"cross-core sync tracks, but it is not inside a stage. Only a stage's accesses "
+            f"are scanned, and the wait/set the transform emits sit around the stage call, "
+            f"so this access would get no synchronisation at all.\n"
+            f"Move it into a stage. Work on a buffer that no cross-core handover involves "
+            f"may stay here."
+        )
+
+
 def _bind_callee_params(callee: ast.FunctionDef, call_args: list, bindings: dict, slot_to_buffer: dict) -> dict:
     """The callee's ``name -> (buffer, is_group)`` map, from the caller's by argument position.
 
-    Same shape as build_binding_map, different source: that one resolves a call site in the
-    KERNEL body against the declarations, this one resolves a call site inside a function
-    against what that function already knows. ``slot_to_buffer`` is consulted as well as
-    ``bindings`` because it holds the names the accessor scan added on top of them.
+    Same shape as build_binding_map, but resolves a call site inside a function against what
+    that function already knows. ``slot_to_buffer`` is consulted too, since it holds the
+    names the accessor scan added on top of ``bindings``.
     """
     params = [a.arg for a in callee.args.args if a.arg != "self"]
     result: dict[str, tuple[str, bool]] = {}
@@ -825,16 +854,9 @@ def _bind_callee_params(callee: ast.FunctionDef, call_args: list, bindings: dict
 def _reject_tile_group_decl(func_def: ast.FunctionDef, name: str) -> None:
     """A tile group must be declared in the kernel body, not in a function it calls.
 
-    Every table the transform keys on — group names, mutex ids, address ranges, the
-    cross-core buffers themselves — is indexed by the variable name the declaration binds,
-    and scan_tile_group_decls fills them from the kernel body alone. A group declared in a
-    helper is therefore in none of them: accesses to it resolve to nothing and are dropped,
-    silently, which is the failure this refuses.
-
-    Supporting it would mean more than scanning further. A factory helper returns its groups
-    to the caller under different names, so their identity would have to be traced through
-    the return; and one called twice would give a single declaration two identities, which
-    a name-keyed model cannot express at all.
+    Every table the transform keys on is indexed by the variable name the declaration binds,
+    and scan_tile_group_decls fills them from the kernel body alone — so a group declared in
+    a helper is in none of them and its accesses are silently dropped.
     """
     for node in ast.walk(func_def):
         if isinstance(node, ast.Call) and _is_make_tile_group(node):
@@ -850,12 +872,9 @@ def _reject_tile_group_decl(func_def: ast.FunctionDef, name: str) -> None:
 def _block_op_roles(node: ast.Call, op_name: str) -> list | None:
     """The argument roles for this call, or None when the table does not cover the op.
 
-    An op whose ``mode=`` changes what it reads and writes has one table entry per mode,
-    named ``<op>_<mode lowercased>`` — ``fillpad`` carries ``fillpad_inplace`` (its first
-    argument becomes RW) and ``fillpad_expand``. Looking that name up, rather than testing
-    for one op and one mode as this used to, is what makes the convention usable: a new
-    mode-dependent op needs a table entry and nothing here. It also reaches
-    ``fillpad_expand``, which the single hard-coded INPLACE test never could.
+    An op whose ``mode=`` changes what it reads and writes has one entry per mode, named
+    ``<op>_<mode lowercased>`` (e.g. ``fillpad_inplace``, ``fillpad_expand``). A new
+    mode-dependent op then needs a table entry and nothing here.
     """
     for kw in node.keywords:
         if kw.arg == "mode" and isinstance(kw.value, ast.Attribute):
@@ -868,23 +887,17 @@ def _block_op_roles(node: ast.Call, op_name: str) -> list | None:
 def _reject_untabled_op(node: ast.Call, op_name: str, stage_slot_to_buffer: dict, tables) -> None:
     """Refuse an op that touches a tracked buffer but has no roles in the table.
 
-    The table is written by hand and the framework keeps gaining ops, so it runs behind —
-    at the time of writing it covers 90 while more than twenty ops that take tiles are
-    absent. Reaching one of those used to mean returning quietly: the access went
-    unrecorded, no wait/set was generated for it, and nothing said so.
+    The hand-written table runs behind the framework's op set, and reaching an uncovered op
+    used to mean recording nothing — a missing wait/set with nothing to announce it.
 
-    Refusing only when a resolved argument is a buffer the graph tracks keeps this silent
-    for the ops it should be silent for — ``pl.range``, a tile type, anything on purely
-    local tiles — and loud exactly where the omission would have cost a sync.
-
-    Same reasoning as _block_op_pipe: there is no safe default. Guessing "read" drops the
-    producer's set, guessing "write" drops the consumer's wait; either way the handover is
-    unenforced and the kernel is intermittently wrong rather than broken.
+    Refusing only when a resolved argument is a buffer the graph tracks keeps this quiet for
+    ops on purely local tiles. There is no safe default: guessing "read" drops the producer's
+    set, guessing "write" drops the consumer's wait.
     """
     touched = []
     for arg in node.args:
         buf = _tile_arg_buffer(arg, stage_slot_to_buffer)
-        if buf is not None and (buf in tables.cross_buffers or buf in tables.region_members):
+        if tables.tracks(buf):
             touched.append(buf)
     if not touched:
         return
@@ -901,24 +914,23 @@ def _reject_untabled_op(node: ast.Call, op_name: str, stage_slot_to_buffer: dict
     )
 
 
-def _handle_block_op(node: ast.Call, stage_slot_to_buffer: dict, tables: AccessScanTables, out: list) -> None:
-    """Record a single pl.<op>(...) call."""
-    op_name = node.func.attr
-    # Descriptor-only ops (set_validshape and whatever joins it) rewrite a tile's metadata
-    # and never touch its data, so they can neither race nor need a handover. The parser
-    # already keeps that set for auto_mutex and says so — "auto_mutex / sync insertion can
-    # skip them" — this is the sync-insertion half finally reading it. Asking here, before
-    # the role lookup, is also what keeps _reject_untabled_op honest: an op absent from the
-    # role table is then genuinely unclassified rather than merely harmless.
+def _handle_block_op(
+    node: ast.Call, op_name: str, stage_slot_to_buffer: dict, tables: AccessScanTables, out: list
+) -> None:
+    """Record a single block-op call. ``op_name`` is resolved by the caller (resolve_op_name)."""
+    # Descriptor-only ops (set_validshape and the like) rewrite a tile's metadata and never
+    # touch its data, so they can neither race nor need a handover; the parser already keeps
+    # that set for auto_mutex. Asking before the role lookup also keeps _reject_untabled_op
+    # honest: an op absent from the role table is then genuinely unclassified.
     if not op_accesses_buffer(op_name):
         return
     roles = _block_op_roles(node, op_name)
     if roles is None:
         _reject_untabled_op(node, op_name, stage_slot_to_buffer, tables)
         return
-    # One record per buffer, not per argument: an op is a single point in time, so a buffer
-    # it both reads and writes is one RW access. The pipe is a property of the op (see
-    # _block_op_pipe, which is handed the whole call), so merging cannot lose one.
+    # One record per buffer, not per argument: an op is a single point in time, so a buffer it
+    # both reads and writes is one RW access. The pipe is a property of the op, so merging
+    # cannot lose one.
     merged: dict[str, str] = {}
     pipe = None
     for argpos, arg in enumerate(node.args):
@@ -928,13 +940,13 @@ def _handle_block_op(node: ast.Call, stage_slot_to_buffer: dict, tables: AccessS
         role = roles[argpos]
         if role is None:
             continue
-        if buf not in tables.cross_buffers and buf not in tables.region_members:
+        if not tables.tracks(buf):
             continue
         if pipe is None:
             pipe = _block_op_pipe(op_name, node, stage_slot_to_buffer, tables.all_buffer_memory)
         _merge_role(merged, buf, role)
     for buf, role in merged.items():
-        _record_region_access(out, buf, role, pipe)
+        _record_access(out, buf, role, pipe)
 
 
 def _handle_tile_subscript(
@@ -943,23 +955,19 @@ def _handle_tile_subscript(
 ) -> None:
     """Record ``tile[i, j]`` / ``tile[i, j] = v`` — one scalar element, on the S pipe.
 
-    A tile is two-dimensional, so an element access is written with two indices. The parser
-    requires the index count to equal the container's rank and rejects ``tile[i]`` on a
-    rank-2 tile outright, which is what makes skipping every non-tuple index safe here:
-    the shapes that get skipped do not compile in the first place.
+    Non-tuple indices are skipped: the parser requires the index count to equal the
+    container's rank, so those shapes do not compile in the first place.
 
-    A sub-view (a slice among the indices) is not an element access — see _is_subview. It
-    resolves to its parent's buffer instead, so ops on it are still scanned.
-
-    A tile-group subscript (``group[i]``) is not an access either — it selects a slot — and
-    needs no test of its own: only tiles reach ``stage_slot_to_buffer``, never a group's name.
+    A sub-view (a slice among the indices) is not an element access — see _is_subview — and
+    a group subscript (``group[i]``) selects a slot, which needs no test since only tiles
+    reach ``stage_slot_to_buffer``.
     """
     if not isinstance(node.value, ast.Name):
         return
     if _is_subview(node) or not isinstance(node.slice, ast.Tuple):
         return
     buf = stage_slot_to_buffer.get(node.value.id)
-    if buf is None or (buf not in tables.cross_buffers and buf not in tables.region_members):
+    if not tables.tracks(buf):
         return
     if is_aug_target:
         role, pipe_op = "RW", "setval"
@@ -967,7 +975,7 @@ def _handle_tile_subscript(
         role, pipe_op = "W", "setval"
     else:
         role, pipe_op = "R", "getval"
-    _record_region_access(out, buf, role, _pipe_name(get_op_pipe(pipe_op)))
+    _record_access(out, buf, role, _pipe_name(get_op_pipe(pipe_op)))
 
 
 def _handle_vf_call(node: ast.Call, stage_slot_to_buffer: dict, tables: AccessScanTables, out: list) -> None:
@@ -984,37 +992,33 @@ def _handle_vf_call(node: ast.Call, stage_slot_to_buffer: dict, tables: AccessSc
         buf = _tile_arg_buffer(arg, stage_slot_to_buffer)
         if buf is None or argpos >= len(vf_params):
             continue
-        if buf in tables.cross_buffers or buf in tables.region_members:
+        if tables.tracks(buf):
             tile_params[vf_params[argpos]] = buf
     if not tile_params:
         return
-    vf_roles = _scan_vf_roles(vf_def, tables.vf_func_defs, tile_params)
+    vf_roles = _scan_vf_roles(vf_def, tables.vf_func_defs, tile_params, tables.closure_vars)
     # Merged per buffer for the same reason as a block op: one call is one access, even
     # when the same buffer arrives at two parameters with different roles.
     merged: dict[str, str] = {}
     for param, role in vf_roles.items():
         _merge_role(merged, tile_params[param], role)
     for buf, role in merged.items():
-        _record_region_access(out, buf, role, "V")
+        _record_access(out, buf, role, "V")
 
 
 def _iter_accessors_in_order(node: ast.AST):
     """Yield the ast.Call and ast.Subscript nodes under ``node``, in execution order.
 
-    Subscripts come along because ``t[i]`` and ``t[i] = v`` ARE accesses — the parser
-    lowers them to getval/setval — and they are the spelling the docs use, so a scan that
-    only looked at calls saw neither.
+    Subscripts come along because ``t[i]`` and ``t[i] = v`` ARE accesses — the parser lowers
+    them to getval/setval.
 
-    An assignment yields its value before its targets, which is the order the machine runs
-    them in and the reverse of the field order ast would otherwise give. It matters for
-    ``t[i, j] = t[k, l]``: recording the write first would let the read find that write as
-    the nearest preceding one and stop there, never reaching the write it depends on.
+    An assignment yields its value before its targets, the order the machine runs them in.
+    It matters for ``t[i, j] = t[k, l]``: recording the write first would let the read find
+    that write as its nearest preceding one.
 
-    Each node comes back paired with a flag saying whether it is the target of an augmented
-    assignment. ``t[i, j] += v`` is a read AND a write of that element — the parser rewrites
-    it to ``t[i, j] = t[i, j] + v``, materialising a Load of the target — but it does so on
-    its own tree, so what is scanned here still carries a lone Store that would otherwise
-    look like a plain write.
+    Each node is paired with a flag saying whether it is an augmented assignment's target.
+    ``t[i, j] += v`` reads AND writes that element, but the tree scanned here still carries
+    a lone Store.
     """
     if isinstance(node, ast.Assign):
         children = [(node.value, False), *((t, False) for t in node.targets)]
@@ -1035,14 +1039,12 @@ def scan_stage_accesses(
 ) -> list:
     """One stage's buffer accesses, ``[(buffer, role, pipe), ...]`` one entry per op.
 
-    Control flow is ignored (see _scan_function). Returns the list rather than filling one
-    handed in: it is the single output, and as an out-parameter it sat in the middle of
-    six read-only lookups where nothing marked it as the one thing being written.
+    Control flow is ignored (see _scan_function).
 
     Args:
         stage_func_def: the @stage function AST.
-        call_args: the AST args from the call site. None means the bindings cannot be
-            resolved, and the scan yields nothing — name-collision guessing is not done.
+        call_args: AST args from the call site. None means the bindings cannot be resolved
+            and the scan yields nothing — name-collision guessing is not done.
         tables: the kernel-level lookup tables (see AccessScanTables).
     """
     bindings = build_binding_map(stage_func_def, call_args, tables)
@@ -1088,12 +1090,9 @@ def scan_tuple_fields(kernel_func_def: ast.FunctionDef) -> dict[str, dict[str, s
     """``{tuple variable: {field name: the variable it was built from}}`` for each
     ``x = pl.make_tuple(field=var, ...)`` in the kernel body.
 
-    A stage handed an aggregate reads its members back out as ``agg.field``, which breaks the
-    chain from a tile back to its declared tile group. This records the one hop needed to
-    rejoin it — see rule (d) in build_binding_map.
-
-    Only keyword members bound to a plain name are recorded: those are the ones a field
-    access can be traced through.
+    Reading a member back as ``agg.field`` breaks the chain from a tile to its declared
+    group; this records the one hop that rejoins it — rule (d) in build_binding_map. Only
+    keyword members bound to a plain name are traceable, so only those are recorded.
     """
     result: dict[str, dict[str, str]] = {}
     for node in ast.walk(kernel_func_def):
@@ -1122,9 +1121,8 @@ def _get_ctor_name(call: ast.Call) -> str | None:
 def _const_int(node: ast.expr) -> int | None:
     """The integer a literal element denotes, or None if it is not one.
 
-    A negative literal parses as ``UnaryOp(USub, Constant)`` rather than ``Constant(-n)``,
-    so matching only Constant would read ``-1`` as "not an integer" instead of as the
-    out-of-range id it is.
+    A negative literal parses as ``UnaryOp(USub, Constant)``, so matching only Constant
+    would read ``-1`` as "not an integer" instead of as the out-of-range id it is.
     """
     sign = 1
     if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
@@ -1137,23 +1135,16 @@ def _const_int(node: ast.expr) -> int | None:
 def _resolve_event_ids(node: ast.expr, bufname: str, label: str, closure_vars: dict) -> list[int]:
     """The integer event ids behind an ``fwd_ids=`` / ``bwd_ids=`` node.
 
-    Exactly two spellings are supported, and deliberately no more::
+    Exactly two spellings are supported::
 
         fwd_ids=[0, 1]          # a literal list (or tuple)
         IDS = [0, 1]
         fwd_ids=IDS             # a name bound to one outside the kernel
 
-    Every element must be a compile-time integer. That is stricter than it used to be, and
-    the strictness is what makes the ids usable: the list is emitted VERBATIM ahead of the
+    Every element must be a compile-time integer: the list is emitted VERBATIM ahead of the
     loop as ``_pl_fwd_ids_<buffer> = [...]`` and only then subscripted at runtime, so an
-    element this scan cannot evaluate is also an element whose meaning in the generated
-    kernel is anyone's guess — a name that does not exist there, or a nested list that
-    makes ``event_id`` a list. Both used to pass silently.
-
-    Anything else (a slice, a concatenation, a call, a name bound to a non-sequence) is
-    refused rather than half-supported: these ids are a handful of numbers the user writes
-    once, so the cost of the restriction is a line of source, while accepting an expression
-    means the framework has to agree with the parser about how to evaluate it.
+    element this scan cannot evaluate is one whose meaning in the generated kernel is
+    anyone's guess. Anything else is refused rather than half-supported.
     """
     hint = (
         f"Write it as a literal list of integers (`{label}=[0, 1]`), or as a name bound to "
@@ -1193,11 +1184,9 @@ def _resolve_event_ids(node: ast.expr, bufname: str, label: str, closure_vars: d
 
 
 def _tile_arg_buffer(arg: ast.expr, stage_slot_to_buffer: dict[str, str]) -> str | None:
-    """If arg is a bare slot variable (from group.next()) that maps to a buffer,
-    return the buffer name; else None.
+    """The buffer behind a bare slot variable argument, or None.
 
-    New API: group.next() returns a bare tile, so op args are plain Names
-    (e.g. pl.move(qk_left, cur_k)), not `slot.tile` attributes.
+    ``group.next()`` returns a bare tile, so op args are plain Names (``pl.move(left, cur_k)``).
     """
     if isinstance(arg, ast.Name):
         return stage_slot_to_buffer.get(arg.id)
@@ -1210,9 +1199,8 @@ def _block_op_pipe(
     """Determine the pipe name for a block op accessing a cross-core buffer.
 
     Raises when the pipe cannot be determined. There is no safe default: the pipe decides
-    which queue the wait/set lands on, so guessing puts the sync on a queue the op never
-    runs on — and a section only has some of the pipes, so a guess can even name one that
-    does not exist on that core. Either way the dependency goes unenforced, silently.
+    which queue the wait/set lands on, and a section only has some of the pipes, so a guess
+    can even name one that does not exist on that core.
     """
     if op_name == "move":
         # move(dst, src): pipe depends on src/dst memory
@@ -1263,13 +1251,12 @@ def _pipe_name(pipe) -> str:
     return getattr(pipe, "name", str(pipe).split(".")[-1])
 
 
-def _record_region_access(out: list, buf: str, role: str, pipe: str) -> None:
+def _record_access(out: list, buf: str, role: str, pipe: str) -> None:
     """Append one op-level access.
 
     Kept per-op rather than collapsed to (first_pipe, last_pipe): the graph needs each
     access as its own node, and a pair of endpoints cannot express a local access sitting
-    BETWEEN two cross-core ones. The role comes straight from the op's argument roles — a
-    buffer may legitimately be read and written within one stage.
+    BETWEEN two cross-core ones.
     """
     out.append((buf, role, pipe))
 
@@ -1292,11 +1279,9 @@ def _root_name(node):
 def _merge_role(result: dict[str, str], key: str, role: str | None) -> None:
     """Fold one more role for ``key`` into ``result``: differing roles become "RW".
 
-    Used both for a VF's parameters and for the arguments of a single block op. In the
-    latter, "differing roles for one key" means the same buffer reached the op at both a
-    read and a write position — an in-place call such as ``pl.muls(x, x, 2.0)``. That is
-    ONE access to the buffer, not two, and recording it as two is what let its read find
-    its own write as the nearest preceding one and stop there, never reaching the producer.
+    Used for a VF's parameters and for one block op's arguments alike. In the latter,
+    differing roles mean the same buffer reached the op at both a read and a write position
+    (``pl.muls(x, x, 2.0)``) — ONE access, not two.
     """
     existing = result.get(key)
     if existing is None:
@@ -1308,15 +1293,9 @@ def _merge_role(result: dict[str, str], key: str, role: str | None) -> None:
 def _vf_param_aliases(vf_func_def: ast.FunctionDef, param_names: set[str]) -> dict[str, str]:
     """Local names in a VF body that stand for one of its parameters.
 
-    A VF reaches UB only through its parameters, but it rarely names them at the point of
-    use. Two spellings cover every alias in the tree: ``src_ub0 = input_tile`` and
-    ``src_ub1 = input_tile + TS_HALF`` — a plain rename, or a rename at an offset. Both name
-    memory belonging to that parameter, so a load or store through either is a load or store
-    of the parameter.
-
-    Chains resolve by iterating to a fixed point. Without this the role was simply dropped:
-    `_vf_scatter_backward` writes through two such aliases, which left one parameter with no
-    role at all and marked another read-only when it is read AND written.
+    A VF reaches UB only through its parameters but rarely names them at the point of use.
+    Two spellings cover it: ``src = input_tile`` and ``src = input_tile + OFF`` — a rename,
+    or a rename at an offset. Chains resolve by iterating to a fixed point.
     """
     aliases: dict[str, str] = {}
     changed = True
@@ -1354,21 +1333,55 @@ def _vf_pointer_param(arg: ast.expr, param_names: set[str], aliases: dict[str, s
     return aliases.get(root)
 
 
-def _is_vf_command(call: ast.Call) -> bool:
-    """``vf.<op>(...)`` — one machine op, as opposed to a call to another vector function."""
-    return (
-        isinstance(call.func, ast.Attribute)
-        and isinstance(call.func.value, ast.Name)
-        and call.func.value.id == "vf"
-    )
+def resolve_op_name(func: ast.expr, closure_vars: dict) -> str | None:
+    """The op a callee names, or None if it names no op.
+
+        vf.add / Vf.add / pl.Vf.add / a bare `add` imported from Vf  -> "vf.add"
+        pl.move / any other alias for the language module            -> "move"
+        pl.system.bar_all                                            -> "system.bar_all"
+
+    Mirrors the parser's own resolution (``_call_parser._extract_op_name``): the leading
+    name is the user's import alias and does not identify the op, so a module is recognised
+    by IDENTITY against the API objects rather than by the name it was bound to. Keep the
+    two in step — a spelling the parser accepts but this does not is an access the scan
+    never records, and an access nobody records is a handover nobody synchronises.
+    """
+    if isinstance(func, ast.Name):
+        resolved = closure_vars.get(func.id)
+        name = getattr(resolved, "__name__", None)
+        if not isinstance(name, str):
+            return None
+        if getattr(Vf, name, None) is resolved:
+            return f"vf.{name}"
+        if getattr(_language_api, name, None) is resolved:
+            return name
+        return None
+
+    attrs: list[str] = []
+    node: ast.expr = func
+    while isinstance(node, ast.Attribute):
+        attrs.insert(0, node.attr)
+        node = node.value
+    if isinstance(node, ast.Name):
+        attrs.insert(0, node.id)
+    if len(attrs) < 2:
+        return None
+    if attrs[0] == "vf" or closure_vars.get(attrs[0]) is Vf:
+        return ".".join(["vf", *attrs[1:]])
+    if attrs[1] == "Vf":
+        return ".".join(["vf", *attrs[2:]])
+    return ".".join(attrs[1:])
+
+
+def _vf_op_of(name: str | None) -> str | None:
+    """The vf op ``name`` stands for, or None if it stands for something else."""
+    return name[3:] if name is not None and name.startswith("vf.") else None
 
 
 def _nested_vf_def(call: ast.Call, vf_func_defs: dict) -> ast.FunctionDef | None:
     """The vector function this call invokes, or None if it does not invoke one.
 
-    Membership of ``vf_func_defs`` is the test, and that set is built from the decorator
-    (see _collect_callable_defs) — the surest signal there is, and one a name alone does
-    not give.
+    Membership of ``vf_func_defs`` is the test, and that set is built from the decorator.
     """
     if not isinstance(call.func, ast.Name):
         return None
@@ -1376,27 +1389,21 @@ def _nested_vf_def(call: ast.Call, vf_func_defs: dict) -> ast.FunctionDef | None
 
 
 def _record_vf_call_role(
-    call: ast.Call, vf_name: str, param_names: set[str], aliases: dict[str, str],
+    call: ast.Call, op: str, vf_name: str, param_names: set[str], aliases: dict[str, str],
     tile_params: dict[str, str], result: dict[str, str]
 ) -> None:
     """Record what one ``vf.<op>(...)`` call does to the tiles it was handed.
 
-    Reads the argument roles from _VF_OP_TILE_ROLES rather than deducing them from the op
-    name. There is nothing to deduce from: `gather` reads a tile, `scatter` writes one, and
-    the unaligned loads keep their alignment-state register where every other op keeps the
-    pointer. This used to guess the pointer's position from the argument count, on the
-    premise that the aligned load had a statement form taking the destination register
-    first — a form its own documentation says does not exist.
+    Argument roles come from _VF_OP_TILE_ROLES rather than from the op name: `gather` reads
+    a tile, `scatter` writes one, and the unaligned loads keep their alignment-state register
+    where every other op keeps the pointer.
 
-    Only arguments naming a parameter in ``tile_params`` are considered. The rest cannot
-    matter: a VF reaches UB solely through its parameters, and the ones missing from that
-    map hold scalars at this call site. That is also what makes the refusal below safe to
-    raise on the spot — reaching an untabled op with a tile is unambiguous, whereas most vf
-    ops take no tile at all and their absence from the table is the normal case.
+    Only arguments naming a parameter in ``tile_params`` are considered — a VF reaches UB
+    solely through its parameters, and the rest hold scalars at this call site. That is what
+    makes refusing an untabled op safe to do on the spot.
 
-    ``call`` must be a vf command; the caller decides that (see _is_vf_command).
+    ``call`` must be a vf command; the caller decides that (see resolve_op_name).
     """
-    op = call.func.attr
     roles = _VF_OP_TILE_ROLES.get(op)
     for argpos, arg in enumerate(call.args):
         param = _vf_pointer_param(arg, param_names, aliases)
@@ -1418,43 +1425,39 @@ def _record_vf_call_role(
 
 
 def _scan_vf_roles(
-    vf_func_def: ast.FunctionDef, vf_func_defs: dict, tile_params: dict[str, str], path: tuple = ()
+    vf_func_def: ast.FunctionDef, vf_func_defs: dict, tile_params: dict[str, str],
+    closure_vars: dict, path: tuple = ()
 ) -> dict[str, str]:
     """R/W roles for the parameters of ``vf_func_def`` that hold a tile at this call site.
 
-    ``tile_params`` maps such a parameter to the buffer it was handed, and is the reason
-    this takes a call site at all: which parameters are tiles is not written down anywhere
-    in a VF — they are as often scalars — but the caller resolved exactly that before
-    getting here, so passing it down beats rediscovering or deferring it.
+    ``tile_params`` maps such a parameter to the buffer it was handed. Which parameters are
+    tiles is nowhere written in a VF, but the caller resolved exactly that before getting
+    here.
 
-    A VF called from another VF is part of it, the same way a plain helper is part of the
-    stage that calls it: its effect is folded into the caller's parameters by argument
-    position, which is the whole of that folding, because a VF touches UB only through its
-    parameters. The same positional mapping carries ``tile_params`` inward.
-
-    ``path`` holds the VFs already on this chain. Guarding against the direct self-call
-    alone, as this did, leaves A -> B -> A to recurse until the stack runs out.
+    A VF called from another VF is part of it, the way a plain helper is part of its stage:
+    its effect folds into the caller's parameters by argument position, which is the whole
+    of the folding, and the same mapping carries ``tile_params`` inward. ``path`` holds the
+    VFs already on this chain, so A -> B -> A terminates.
     """
     param_names = {a.arg for a in vf_func_def.args.args if a.arg != "self"}
     aliases = _vf_param_aliases(vf_func_def, param_names)
     result: dict[str, str] = {}
     path = path + (vf_func_def.name,)
 
-    # A call in a VF body is one of a closed set, and each kind is handled on its own line
-    # rather than by falling through the other's guard:
+    # A call in a VF body is one of a closed set:
     #
-    #   vf.<op>(...)        one machine op                  -> _record_vf_call_role
-    #   another VF          part of THIS one                -> recurse
-    #   pl.range / pl.min   loop and scalar scaffolding      -> nothing to record
+    #   vf.<op>(...)        one machine op              -> _record_vf_call_role
+    #   another VF          part of THIS one            -> recurse
+    #   pl.range / pl.min   loop and scalar scaffolding -> nothing to record
     #
     # Nothing else can appear: the parser refuses a vector function that calls an ordinary
-    # helper ("cannot call non-vector inline function"), so there is no fourth case to
-    # guess at here.
+    # helper.
     for node in ast.walk(vf_func_def):
         if not isinstance(node, ast.Call):
             continue
-        if _is_vf_command(node):
-            _record_vf_call_role(node, vf_func_def.name, param_names, aliases, tile_params, result)
+        vf_op = _vf_op_of(resolve_op_name(node.func, closure_vars))
+        if vf_op is not None:
+            _record_vf_call_role(node, vf_op, vf_func_def.name, param_names, aliases, tile_params, result)
             continue
         callee_def = _nested_vf_def(node, vf_func_defs)
         if callee_def is None or callee_def.name in path:
@@ -1473,7 +1476,7 @@ def _scan_vf_roles(
             outer_of[callee_params[argpos]] = param
         if not callee_tiles:
             continue
-        callee_roles = _scan_vf_roles(callee_def, vf_func_defs, callee_tiles, path)
+        callee_roles = _scan_vf_roles(callee_def, vf_func_defs, callee_tiles, closure_vars, path)
         for callee_param, role in callee_roles.items():
             _merge_role(result, outer_of[callee_param], role)
     return result

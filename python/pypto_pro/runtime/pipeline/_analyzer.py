@@ -28,6 +28,7 @@ from ._cross_core_scanner import (
     AccessScanTables,
     CrossCoreSyncContext,
     detect_addr_overlaps,
+    reject_buffer_access_outside_stages,
     scan_all_buffer_memory,
     scan_all_tile_group_names,
     scan_buffer_addr_ranges,
@@ -39,7 +40,13 @@ from ._cross_core_scanner import (
     scan_tuple_fields,
 )
 from ._stage import is_pipeline_stage
-from ._validate import validate_structure
+from ._validate import (
+    validate_kernel_buffers,
+    validate_kernel_structure,
+    validate_slot_picks,
+    validate_structure,
+)
+from .config import PipelineConfig
 
 
 @dataclass
@@ -50,75 +57,75 @@ class StageCall:
     section_kind: str  # "cube" or "vector"
     args: list  # list of ast.expr nodes (call arguments)
     delay: int  # derived from call order: 0, 1, 2, ...
-    pre_stmts: list = field(default_factory=list)  # statements before stage call in same section
-    post_stmts: list = field(default_factory=list)  # statements after stage call in same section
-    # The stage's own AST. Resolved once, in analyze_pipeline, because getting it is not
-    # cheap (~0.7 ms: the source is re-read and re-tokenized, see _astutil.get_funcdef) and
-    # three separate passes used to derive it again from func_name. It belongs here for the
-    # same reason args and pre_stmts do — it is part of what was parsed about this stage.
-    # None when the source is unavailable; every reader keeps its own check for that.
+    # The stage's own AST, resolved once in analyze_pipeline (re-reading the source is not
+    # cheap, ~0.7 ms). None when the source is unavailable; every reader checks.
     func_def: ast.FunctionDef | None = None
-    # The statement this stage was found in — the ``with pl.section_*()`` block, or the
-    # bare call when there is no section (which validate_structure then rejects). Recorded
-    # so the transform can ask WHICH statement holds a stage rather than deciding again
-    # from its shape: it used to count every ast.With in the loop as one stage, while the
-    # analyzer counted only the ones actually holding a stage call, and a section holding
-    # anything else — or any unrelated ``with`` — pushed the two out of step. The stages
-    # after it were then emitted from the wrong entries, or ran off the end of the list.
+    # The statement this stage was found in — the ``with pl.section_*()`` block, or the bare
+    # call when there is no section. The transform looks up WHICH statement holds a stage
+    # here rather than deciding again from its shape, which a section holding anything else
+    # would throw out of step.
     source_stmt: ast.stmt | None = None
     # Every buffer access this stage makes, one entry per op in source order:
     # [(buffer, role, pipe), ...]. Per-op rather than collapsed to first/last pipe, so the
     # sync graph can see a local access sitting between two cross-core ones, and so every
     # pipe a buffer is touched on gets its own node (and hence its own sync).
-    region_access: list = field(default_factory=list)
+    buffer_access: list = field(default_factory=list)
 
 
 @dataclass
 class PipelineInfo:
-    """Extracted pipeline structure from the serial kernel."""
+    """One pipeline: the stages of a single loop, plus the kernel facts they need.
 
+    A kernel may hold several pipeline loops; analyze_pipeline returns one of these per loop.
+    Which group a field is in decides whether a second loop gets its own copy:
+
+      per-loop   stages, pipeline_loop*, struct_args, outer_slots, ctx_fields, ctx_sources,
+                 scalar_ctx_names, stage_arg_mapping — everything derived FROM the stages.
+      kernel     sync, group_names, var_sections, closure_vars, var_types — declarations and
+                 scope, SHARED BY REFERENCE with every other loop's info. The event-id
+                 bookkeeping in sync has to be one object.
+
+    Sharing them is what keeps the rest of the module unchanged: every pass reads
+    ``info.<field>`` and sees one complete pipeline, whether the kernel holds one or five.
+    """
+    # Which pipeline this is, in source order. Generated names carry it, so two loops'
+    # ctx arrays and counters cannot collide (loop 0 keeps the bare names).
+    loop_index: int = 0
     stages: list[StageCall] = field(default_factory=list)
     ctx_fields: list[str] = field(default_factory=list)
-    # {struct variable name: [field names]} for every pl.struct passed to a stage. Its
-    # fields become ctx fields under their own names, so a stage body written against the
-    # struct (`ri.ki`) reads the ctx slot unchanged — the slot IS a struct.
+    # {ctx field: (fill expression, {sections to emit the fill in})}. ctx_fields comes from
+    # its keys, so a field cannot be declared without a source.
+    ctx_sources: dict = field(default_factory=dict)
+    # {struct variable: [field names]} per pl.struct passed to a stage. Its fields become ctx
+    # fields under their own names, so a stage body reading `ri.ki` needs no rewriting.
     struct_args: dict = field(default_factory=dict)
-    # {variable name: ctx field name} for scalars. Normally identical, but a scalar whose
-    # name collides with a struct field gets a prefixed field: the struct's field name is
-    # fixed by the stage body, the scalar's is not, so the scalar yields.
+    # {variable: ctx field name} for scalars. Identical unless the name collides with a
+    # struct field, whose name is fixed by the stage body, so the scalar yields.
     scalar_ctx_names: dict = field(default_factory=dict)
-    # Maps: stage arg position -> (field_name, fill_expr) | None
+    # Maps: stage arg position -> ctx field name | None (the argument passes through).
     stage_arg_mapping: list[list] = field(default_factory=list)
-    # The loop the stages are pipelined over, and its bounds. Called the PIPELINE loop
-    # throughout, never the "inner" one: the transform used to pipeline only the innermost
-    # of two loops, but a task stream now runs continuously across the enclosing ones, so
-    # there is no inner/outer distinction left to make here.
+    # The loop the stages are pipelined over, and its bounds.
     pipeline_loop_var: str = ""  # the loop variable (e.g. "ki")
     pipeline_loop_end: ast.expr | None = None  # e.g. ast node for "skv_tiles"
-    # Step of the pipeline loop, i.e. how far the loop variable moves per iteration.
-    # None means an implicit 1. It matters whenever a guard has to reason about a task
-    # some iterations away: the loop variable is in whatever unit the user chose, so
-    # "n iterations later" is `var + n * step`, not `var + n`. The FA cases step by 1
-    # and hide the distinction; the sparse kernel steps by TKV over element offsets.
+    # None means an implicit 1. The variable is in the user's own unit, so "n iterations
+    # later" is `var + n * step`.
     pipeline_loop_step: ast.expr | None = None
-    # {variable name: IR type class name} from the parser probe (see probe_kernel_facts).
-    # The authority on how a stage argument must reach a delayed stage; empty when the
-    # caller did not run the probe, in which case everything falls back to pass-through.
+    # {variable: IR type class name} from the parser probe; decides how a stage argument
+    # reaches a delayed stage. Empty without the probe, and then everything passes through.
     var_types: dict = field(default_factory=dict)
-    # {name: section kind} for names bound inside a pl.section_*() block. Their ctx fill
-    # must sit in that same section, since the other target cannot see them at all
-    # (see _collect_var_sections). Values are SETS of section kinds: a name bound in both
-    # sections is two variables, one per target, and each fills its own ctx copy.
+    # {name: {section kinds it is bound in}}. A name bound in a section is invisible to the
+    # other target, so its ctx fill has to sit in that same section — one per section.
     var_sections: dict = field(default_factory=dict)
     # The pipeline loop itself, so later passes can tell "inside the loop" from "outside".
     pipeline_loop: ast.For | None = None
-    # Every declared tile group's name, cross-core or not. A kernel-wide declaration fact
-    # rather than a sync one: recognising a slot pick (`g.next()`, `g[i]`) needs the full
-    # set, and both the arrangement (outer_slots) and the access scan read it.
+    # The outermost loop enclosing it (itself when top-level). This pipeline's declarations
+    # go before it and its drain after it, and two pipelines may not share one.
+    outer_loop: ast.For | None = None
+    # Every declared tile group's name, cross-core or not: recognising a slot pick needs the
+    # full set. Kernel-wide.
     group_names: set = field(default_factory=set)
-    # {slot variable: (group name, slot count)} for slots chosen OUTSIDE the pipeline loop
-    # and consumed inside it. The chosen index travels through ctx so a delayed stage gets
-    # the slot from its own iteration, not whatever the variable was last rebound to.
+    # {slot variable: (group, slot count)} for slots chosen OUTSIDE the pipeline loop. The
+    # index travels through ctx, so a delayed stage gets the slot of its own iteration.
     outer_slots: dict = field(default_factory=dict)
     # Cross-core sync context (buffers, memory, lifted ids)
     sync: CrossCoreSyncContext = field(default_factory=CrossCoreSyncContext)
@@ -126,34 +133,42 @@ class PipelineInfo:
     closure_vars: dict = field(default_factory=dict)
 
 
-def analyze_pipeline(func_def: ast.FunctionDef, closure_vars: dict, var_types: dict | None = None) -> PipelineInfo:
-    """Analyze a serial kernel function AST to extract pipeline structure.
+def analyze_pipeline(
+    func_def: ast.FunctionDef,
+    closure_vars: dict,
+    config: PipelineConfig,
+    var_types: dict | None = None,
+) -> list:
+    """Analyze a serial kernel AST: one PipelineInfo per pipeline loop, in source order.
 
-    Looks for the innermost for-loop that contains stage calls inside
-    section blocks, and extracts stage ordering, ctx fields, etc.
+    Every legality check runs here, config included, so the transform can assume the shape it
+    is handed is one it can emit. validate_names is the exception: it checks the framework's
+    own generated names rather than the user's code.
+
+    Kernel-level facts — declarations, scope, the sync context — are derived once and shared by
+    reference with every loop's info; everything derived from a loop's stages is per loop.
+
+    Structure is validated before the buffer scan, so a malformed stage chain is reported as
+    such rather than as whatever the scan trips over.
 
     Args:
         func_def: The kernel function's AST node
         closure_vars: Closure variables (module-level constants, stage functions)
+        config: the pipeline configuration, whose preload must match the loops found here
+        var_types: {name: IR type class name} from the parser probe
 
     Returns:
-        PipelineInfo with all extracted information
+        [PipelineInfo, ...], one per pipeline loop, in source order.
     """
-    info = PipelineInfo()
-    info.closure_vars = closure_vars
-    info.var_types = var_types or {}
-
     # Find all stage functions.
     stage_func_names = set()
     for name, val in closure_vars.items():
         if is_pipeline_stage(val):
             stage_func_names.add(name)
 
-    # Walk the AST to find the main loop structure.
-    _find_pipeline_loop(func_def.body, info, stage_func_names)
-
+    pipeline_loops = _find_pipeline_loops(func_def.body, stage_func_names)
     # L3/L5: pipeline enabled but no usable stages found.
-    if not info.stages:
+    if not pipeline_loops:
         if not stage_func_names:
             raise ValueError(
                 "pipeline: no @pl.pipeline.stage functions found, but pipeline=... was "
@@ -165,119 +180,186 @@ def analyze_pipeline(func_def: ast.FunctionDef, closure_vars: dict, var_types: d
             "pipeline loop must contain stage calls wrapped in section blocks."
         )
 
-    # The stages' own ASTs, resolved once here and read from StageCall thereafter.
-    for stage in info.stages:
-        stage.func_def = get_funcdef(closure_vars.get(stage.func_name))
+    # Which section each name belongs to, so its ctx fill lands in the same one. A kernel
+    # fact: it answers which section a NAME is bound in, which no loop can change.
+    var_sections = _collect_var_sections(func_def)
 
-    # Which section each name belongs to, so its ctx fill lands in the same one.
-    info.var_sections = _collect_var_sections(func_def)
-
-    # Structs passed to stages: their fields become ctx fields (see _collect_struct_args).
-    info.struct_args = _collect_struct_args(func_def, info)
+    infos = []
+    for loop_index, (loop, stages, outer_loop) in enumerate(pipeline_loops):
+        info = PipelineInfo()
+        info.loop_index = loop_index
+        info.outer_loop = outer_loop
+        # Shared by reference — see PipelineInfo. sync is filled in below, after the
+        # structural checks, and every info sees the same object filling up.
+        info.closure_vars = closure_vars
+        info.var_types = var_types or {}
+        info.var_sections = var_sections
+        info.stages = stages
+        _record_pipeline_loop_info(loop, info)
+        # The stages' own ASTs, resolved once here and read from StageCall thereafter.
+        for stage in stages:
+            stage.func_def = get_funcdef(closure_vars.get(stage.func_name))
+        # Structs passed to stages: their fields become ctx fields (see _collect_struct_args).
+        info.struct_args = _collect_struct_args(func_def, info)
+        infos.append(info)
 
     # Every buffer declaration, scanned once and shared by everything that reads them.
     decls = scan_tile_group_decls(func_def)
-    info.group_names = scan_all_tile_group_names(decls)
+    group_names = scan_all_tile_group_names(decls)
+    sync = CrossCoreSyncContext()
+    for info in infos:
+        info.group_names = group_names
+        info.sync = sync
 
-    # One gate for every check that needs only the parsed structure (see _validate).
-    validate_structure(info, func_def, stage_func_names)
+    # Two gates for the checks that need only the parsed structure (see _validate): one
+    # about the kernel as a whole, one per pipeline.
+    validate_kernel_structure(infos, config.preload)
+    for info in infos:
+        validate_structure(info, func_def, stage_func_names)
 
-    # Scan cross-core buffer accesses for auto-sync. Sole writer of info.sync, which the
-    # two steps below then read: what a group is called and how many slots it rotates
-    # through are declaration facts, and re-deriving them per reader is what had
-    # _collect_outer_slots scan the declarations a second time.
-    _scan_cross_core(info, func_def, closure_vars, decls)
+    # Scan the cross-core buffer declarations for auto-sync. Sole writer of info.sync, which
+    # the per-loop steps below read: what a group is called and how many slots it rotates
+    # through are declaration facts, derived once.
+    # Every function a stage or a loop-body statement might call, resolved once.
+    callable_defs = _collect_callable_defs(closure_vars)
+    tables = _scan_kernel_buffers(sync, func_def, closure_vars, decls, group_names, callable_defs)
 
-    # Slots chosen outside the pipeline loop: their index travels through ctx.
-    info.outer_slots = _collect_outer_slots(func_def, info)
+    for info in infos:
+        # Slots chosen outside the pipeline loop: their index travels through ctx. Ahead of the
+        # access scan so an unusable pick is reported as a pick, not as whichever op in a stage
+        # body first failed to resolve the slot.
+        info.outer_slots = _collect_outer_slots(info)
+        # What each stage touches, which is the one half of the scan that is per pipeline.
+        if tables is not None:
+            _scan_loop_accesses(info, tables)
+            # And nothing outside a stage may touch what the graph tracks: its accesses would
+            # be scanned by nobody and synchronised by nobody, and its cursor would hand the
+            # stages a slot that is not their task's.
+            tracked = set(tables.cross_buffers) | tables.addr_shared
+            validate_slot_picks(info, tracked, tables.helper_func_defs)
+            reject_buffer_access_outside_stages(info.pipeline_loop.body, tables, info.group_names)
+    # Every declared cross-core buffer must be used by SOME pipeline. The per-loop check in
+    # validate_sync cannot see that: a buffer another loop uses is legitimately absent there.
+    validate_kernel_buffers(sync, set().union(*(buffers_touched(i) for i in infos)))
 
-    # Derive ctx fields from stage arguments
-    _derive_ctx_fields(info)
+    for info in infos:
+        # Derive ctx fields from stage arguments
+        _derive_ctx_fields(info)
 
     # Producer/consumer and address-reuse checks live in validate_sync, which runs once
     # the sync graph exists — see _sync_graph.build_graph.
 
-    return info
+    return infos
 
 
-def _scan_cross_core(info: PipelineInfo, func_def: ast.FunctionDef, closure_vars: dict, decls: list):
-    """Scan cross-core buffers + each stage's accesses, store into info.
+def _scan_kernel_buffers(
+    sync: CrossCoreSyncContext,
+    func_def: ast.FunctionDef,
+    closure_vars: dict,
+    decls: list,
+    group_names: set,
+    callable_defs: tuple,
+) -> AccessScanTables | None:
+    """Fill ``sync`` from the kernel's buffer declarations; return the lookup tables.
+
+    The kernel-level half of the buffer scan: declarations, addresses and the name tables,
+    all of which every pipeline loop in the kernel shares. The per-loop half — what each
+    stage actually touches — is _scan_loop_accesses.
+
+    Returns None when the kernel declares no cross-core buffer, which is also the point
+    the old single function returned early at: with nothing to hand over there is no sync
+    to plan, and the tables would have no reader.
 
     ``decls`` is the shared one-pass result from scan_tile_group_decls. The order of the
     scans below is the order their errors surface in, so it is deliberate: the cross-core
     scan raises on an unusable declaration, the rest only collect what they can resolve.
     """
-    # Filled before the early return below: _collect_outer_slots needs a slot count for
-    # local groups too. This scan raises on nothing — it skips a declaration whose ids will
-    # not resolve — so its position decides nothing about which error a user sees.
-    info.sync.mutex_ids = scan_buffer_mutex_ids(decls, closure_vars)
+    # Filled before the early return below: _collect_outer_slots needs a slot count for local
+    # groups too. This scan raises on nothing, so its position affects no diagnostic.
+    sync.mutex_ids = scan_buffer_mutex_ids(decls, closure_vars)
 
     cross_buffers, lifted_ids = scan_cross_core_buffers(decls, closure_vars)
-    info.sync.buffers = cross_buffers
-    info.sync.lifted_ids = lifted_ids
+    sync.buffers = cross_buffers
+    sync.lifted_ids = lifted_ids
     if not cross_buffers:
-        return
+        return None
 
     all_mem = scan_all_buffer_memory(decls)
 
     # Detect address overlaps involving cross-core buffers (for auto-sync of
     # address-reused buffers). Local-local overlaps are ignored.
-    info.sync.addr_ranges = scan_buffer_addr_ranges(decls, closure_vars)
-    info.sync.addr_overlaps = detect_addr_overlaps(info.sync.addr_ranges, set(cross_buffers.keys()))
+    sync.addr_ranges = scan_buffer_addr_ranges(decls, closure_vars)
+    sync.addr_overlaps = detect_addr_overlaps(sync.addr_ranges, set(cross_buffers.keys()))
 
-    vf_func_defs, helper_func_defs = _collect_callable_defs(info, closure_vars)
+    vf_func_defs, helper_func_defs = callable_defs
 
     # Slots taken from cross-core buffers in the kernel body (pipeline loop), for
     # stages that receive a pre-taken slot instead of the buffer group itself.
-    tables = AccessScanTables(
+    return AccessScanTables(
         cross_buffers=cross_buffers,
         all_buffer_memory=all_mem,
-        group_names=info.group_names,
-        kernel_slot_to_buffer=scan_kernel_slot_to_buffer(func_def, info.group_names),
+        group_names=group_names,
+        kernel_slot_to_buffer=scan_kernel_slot_to_buffer(func_def, group_names),
         # Members of an aggregate passed to a stage: the one hop that rejoins a tile to
         # its declared group when the kernel bundles groups with pl.make_tuple.
         tuple_fields=scan_tuple_fields(func_def),
         vf_func_defs=vf_func_defs,
         helper_func_defs=helper_func_defs,
+        closure_vars=closure_vars,
         # Buffers sharing a physical region with another buffer, computed once for the
         # whole kernel. Not per stage: a region's members may be touched by different
         # stages, and a per-stage view would miss those.
-        region_members={name for pair in info.sync.addr_overlaps for name in pair},
+        addr_shared={name for pair in sync.addr_overlaps for name in pair},
     )
 
+    # Address-reuse sync is not built here: which edges need it and which ids they get both
+    # follow from the sync graph (see _sync_graph.allocate_reuse_ids).
+
+
+def buffers_touched(info: PipelineInfo) -> set:
+    """Every buffer the stages of ONE pipeline touch.
+
+    Read off the stages' buffer_access, which is where the per-loop half of the buffer scan
+    put it (_scan_loop_accesses). Three readers ask this question — the kernel-level "is any
+    buffer unused" check, the event-id allocator ("which ids are taken here"), and the
+    declaration builder ("which ids does this loop declare") — and they must agree, so they
+    all come here rather than each writing the comprehension out.
+    """
+    return {access[0] for stage in info.stages for access in stage.buffer_access}
+
+
+def _scan_loop_accesses(info: PipelineInfo, tables: AccessScanTables) -> None:
+    """Record what every stage of ONE pipeline touches, into each stage's buffer_access.
+
+    The per-loop half of the buffer scan (see _scan_kernel_buffers). Per stage rather than
+    per kernel because a stage belongs to exactly one pipeline, and the sync graph is built
+    from one pipeline's accesses.
+    """
     for stage in info.stages:
         if stage.func_def is None:
             continue
-        stage.region_access = scan_stage_accesses(stage.func_def, stage.args, tables)
-
-    # Address-reuse sync is not built here. Which edges need it, and which ids they get,
-    # both follow from the sync graph (see _sync_graph.allocate_reuse_ids) — deriving that
-    # set here as well is what let allocation and emission disagree.
+        stage.buffer_access = scan_stage_accesses(stage.func_def, stage.args, tables)
 
 
-def _collect_callable_defs(info: PipelineInfo, closure_vars: dict) -> tuple[dict, dict]:
+def _collect_callable_defs(closure_vars: dict) -> tuple[dict, dict]:
     """``(vf_func_defs, helper_func_defs)`` for every function a stage might call.
 
     Split by the DECORATOR alone: ``@pl.vector_function`` on one side, every other plain
-    function on the other. The access scan treats the two differently — a vector function
-    is one atomic op whose parameter roles are read off its body, while a plain function is
-    simply part of the stage that called it and gets scanned through (see _scan_function).
+    function on the other. The access scan treats them differently — a vector function is one
+    atomic op whose parameter roles are read off its body, while a plain function is part of
+    the stage that called it and gets scanned through (see _scan_function).
 
-    Stages are in neither: a stage called from a stage is refused (_check_no_nested_stage).
+    Stages are in neither, which the decorator settles on its own; nothing needs to be handed
+    in, so this is a kernel-level fact shared by every pipeline.
 
-    Both come from ``closure_vars`` — the kernel's own scope, captured by @pl.jit — and are
-    turned back into ASTs by re-reading their source (see _astutil.get_funcdef), because a
-    helper is defined outside the kernel and so is nowhere in the kernel's own tree.
-
-    There used to be a transitive closure here that also counted a plain function as a
-    vector one merely for calling one. That made such a wrapper atomic, so any block op it
-    also held was never scanned. Scanning through plain functions removes the need for it.
+    Both come from ``closure_vars`` — the kernel's scope, captured by @pl.jit — and are turned
+    back into ASTs by re-reading their source (see _astutil.get_funcdef), because a helper is
+    defined outside the kernel and so is nowhere in the kernel's own tree.
     """
-    stage_names = {s.func_name for s in info.stages}
     vf_func_defs: dict[str, ast.FunctionDef] = {}
     helper_func_defs: dict[str, ast.FunctionDef] = {}
     for name, val in closure_vars.items():
-        if not callable(val) or name in stage_names or is_pipeline_stage(val):
+        if not callable(val) or is_pipeline_stage(val):
             continue
         func_def = get_funcdef(val)
         if func_def is None:
@@ -323,50 +405,83 @@ def _nested_search_body(stmt: ast.stmt) -> list[ast.stmt] | None:
     return None
 
 
-def _find_pipeline_loop(stmts: list[ast.stmt], info: PipelineInfo, stage_func_names: set):
-    """Recursively find the innermost for-loop containing stage calls."""
+def _find_pipeline_loops(stmts: list[ast.stmt], stage_func_names: set, outer: ast.For | None = None) -> list:
+    """Every for-loop that drives a pipeline, as ``[(loop, stages, outer), ...]``, SOURCE ORDER.
+
+    A candidate is a loop whose OWN body calls stages, directly or inside a ``pl.section_*()``
+    block; an enclosing loop holds the pipelined one rather than stage calls, so nesting is
+    unaffected.
+
+    ``outer`` is the first ``for`` on the path down from the kernel body — the loop this
+    pipeline's declarations and drain are placed around, with ``with`` blocks transparent to it,
+    as they are to the placement search. A top-level pipeline loop is its own outer loop.
+    Tracked on the way down, since this walk already knows the path.
+
+    The search neither stops at a match nor skips a matched loop's body: a second stage-bearing
+    loop, wherever it sits, is a fact the caller has to see.
+
+    Source order is the order the loops are transformed in, and the order ``preload`` is matched
+    against when given one value per loop.
+    """
+    found = []
     for stmt in stmts:
         if isinstance(stmt, ast.For):
-            stages_found = _extract_stages_from_loop(stmt, info, stage_func_names)
-            if stages_found:
-                _record_pipeline_loop_info(stmt, info)
-                return True
+            stages = _extract_stages_from_loop(stmt, stage_func_names)
+            if stages:
+                found.append((stmt, stages, outer or stmt))
         nested_body = _nested_search_body(stmt)
-        if nested_body is not None and _find_pipeline_loop(nested_body, info, stage_func_names):
-            return True
-    return False
+        if nested_body is not None:
+            enclosing = outer or (stmt if isinstance(stmt, ast.For) else None)
+            found.extend(_find_pipeline_loops(nested_body, stage_func_names, enclosing))
+    return found
 
 
-def _split_stage_section_body(body: list[ast.stmt], stage_func_names: set):
-    """Find one stage call in a section body and split pre/post statements."""
-    pre_stmts = []
-    post_stmts = []
-    stage_call = None
-    stage_func_name = None
+def _stage_call_in_section(body: list[ast.stmt], stage_func_names: set):
+    """The stage call a section holds, as ``(name, call)``, or ``(None, None)`` for none.
 
-    for body_stmt in body:
-        if stage_call is None:
-            if isinstance(body_stmt, ast.Expr) and isinstance(body_stmt.value, ast.Call):
-                func_name = call_name(body_stmt.value)
-                if func_name in stage_func_names:
-                    stage_call = body_stmt.value
-                    stage_func_name = func_name
-                    continue
-            pre_stmts.append(body_stmt)
-        else:
-            post_stmts.append(body_stmt)
-    return stage_func_name, stage_call, pre_stmts, post_stmts
+    A section holding a stage may hold nothing else: everything in the pipeline loop between
+    the first and the last stage is a stage and only a stage. Statements belong at the top or
+    the bottom of the loop body, where they run once per beat, or inside the stage function.
+    """
+    calls = [
+        (call_name(s.value), s.value)
+        for s in body
+        if isinstance(s, ast.Expr) and isinstance(s.value, ast.Call) and call_name(s.value) in stage_func_names
+    ]
+    if not calls:
+        return None, None
+    if len(calls) > 1:
+        raise ValueError(
+            f"pipeline: section block contains multiple stage calls ('{calls[0][0]}' and "
+            f"'{calls[1][0]}'). Each `with pl.section_*()` block must contain exactly one "
+            f"stage call."
+        )
+    if len(body) > 1:
+        extra = next(s for s in body if not (isinstance(s, ast.Expr) and s.value is calls[0][1]))
+        raise ValueError(
+            f"pipeline: the section holding stage '{calls[0][0]}' also contains the statement "
+            f"at line {extra.lineno} (`{ast.unparse(extra).splitlines()[0]}`). A section that "
+            f"holds a stage may hold nothing else.\n"
+            f"Move it to the start or the end of the pipeline loop body, where it runs once "
+            f"per beat, or into the stage function itself."
+        )
+    return calls[0]
 
 
-def _extract_stages_from_loop(for_stmt: ast.For, info: PipelineInfo, stage_func_names: set) -> bool:
-    """Extract stage calls from a for-loop body (expecting interleaved sections)."""
-    found_any = False
+def _extract_stages_from_loop(for_stmt: ast.For, stage_func_names: set) -> list:
+    """The stage calls in a for-loop body (expecting interleaved sections), in order.
+
+    Returns them rather than appending to a PipelineInfo: the finder probes every loop in
+    the kernel, and probing that also accumulates would pour several loops' stages into
+    one list. An empty list means this loop drives no pipeline.
+    """
+    stages: list = []
 
     for stmt in for_stmt.body:
         if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
             fn = call_name(stmt.value)
             if fn in stage_func_names:
-                info.stages.append(
+                stages.append(
                     StageCall(
                         func_name=fn,
                         section_kind="",
@@ -375,7 +490,6 @@ def _extract_stages_from_loop(for_stmt: ast.For, info: PipelineInfo, stage_func_
                         source_stmt=stmt,
                     )
                 )
-                found_any = True
                 continue
         if isinstance(stmt, ast.With):
             section_kind = _get_section_kind(stmt)
@@ -385,10 +499,9 @@ def _extract_stages_from_loop(for_stmt: ast.For, info: PipelineInfo, stage_func_
             stage_call_info = _extract_stage_from_section(stmt, section_kind, stage_func_names)
             if stage_call_info is not None:
                 stage_call_info.source_stmt = stmt
-                info.stages.append(stage_call_info)
-                found_any = True
+                stages.append(stage_call_info)
 
-    return found_any
+    return stages
 
 
 def _check_unsupported_section(stmt: ast.With, stage_func_names: set):
@@ -408,30 +521,15 @@ def _check_unsupported_section(stmt: ast.With, stage_func_names: set):
 
 
 def _extract_stage_from_section(stmt: ast.With, section_kind: str, stage_func_names: set) -> StageCall | None:
-    """Extract a stage call from a section block, with L2 validation."""
-    stage_func_name, stage_call, pre_stmts, post_stmts = _split_stage_section_body(stmt.body, stage_func_names)
+    """Extract a stage call from a section block, or None if it holds no stage."""
+    stage_func_name, stage_call = _stage_call_in_section(stmt.body, stage_func_names)
     if stage_call is None:
         return None
-    # L2: check for a second stage call in same section
-    for body_stmt in post_stmts:
-        if (
-            isinstance(body_stmt, ast.Expr)
-            and isinstance(body_stmt.value, ast.Call)
-            and call_name(body_stmt.value) in stage_func_names
-        ):
-            raise ValueError(
-                f"pipeline: section block contains multiple stage calls "
-                f"('{stage_func_name}' and "
-                f"'{call_name(body_stmt.value)}'). Each "
-                f"`with pl.section_*()` block must contain exactly one stage call."
-            )
     return StageCall(
         func_name=stage_func_name,
         section_kind=section_kind,
         args=stage_call.args,
         delay=0,
-        pre_stmts=pre_stmts,
-        post_stmts=post_stmts,
     )
 
 
@@ -448,43 +546,40 @@ def _get_section_kind(with_stmt: ast.With) -> str | None:
     return None
 
 
-def _is_ctx_scalar(name: str, info: PipelineInfo) -> bool:
-    """True if ``name`` holds a scalar the ctx slot can carry.
+# A tile group is a handle too, but shares TupleType with pl.struct, so _name_role
+# separates those two by name.
+_HANDLE_TYPES = frozenset({"TensorType", "TileType"})
 
-    Every scalar a stage takes is carried, whether or not it changes across iterations:
-    snapshotting one that never changes costs a field and stores the same value each beat,
-    while trying to work out which ones change means reasoning about how each value was
-    produced — and getting that wrong drops a value silently. One field per scalar is the
-    cheaper mistake.
 
-    Types come from the parser probe (info.var_types). Without it — a caller that skipped
-    the probe — nothing is treated as a ctx scalar and every argument passes through, which
-    is what the pipeline did before types were available.
+def _name_role(name: str, info: PipelineInfo) -> str:
+    """Classify a name for the ctx slot, by its type from the parser probe (info.var_types).
 
-    A scalar bound inside a section is still carried; its fill is simply emitted inside that
-    section (see _build_ctx_field_fills), which is where the name exists.
+    handle  a tensor, tile or tile group: a reference, fixed for the whole task stream.
+    const   no typed binding of its own, hence a compile-time constant (a closure constant,
+            an enum, a nested list).
+    live    everything else — a scalar, or a struct whose fields the slot carries. Its value
+            belongs to one beat.
     """
-    return info.var_types.get(name) == "ScalarType"
+    kind = info.var_types.get(name)
+    if kind is None:
+        return "const"
+    if kind in _HANDLE_TYPES:
+        return "handle"
+    if kind == "TupleType" and name not in info.struct_args:
+        return "handle"  # a tile group, or any other tuple: a handle rather than a value
+    return "live"
 
 
 def _collect_var_sections(func_def: ast.FunctionDef) -> dict:
     """``{name: {section kinds it is bound in}}`` for names bound in a ``pl.section_*()``.
 
-    A name bound inside a section exists only for that target: the other target's parse
-    skips the whole block. So a ctx field fed from such a name has to be filled inside the
-    same section — an unwrapped fill is emitted for both targets, and the one that cannot
-    see the name has nothing to fill from.
+    A name bound inside a section exists only for that target — the other target's parse skips
+    the block — so a ctx field fed from it has to be filled inside the same section.
 
-    A name can be bound in BOTH sections, and that is ordinary rather than a mistake: the
-    two cores walk the same loop nest, so each ends up with its own ``ki``. They really are
-    two variables — each target compiles to its own function with its own ctx array (see
-    the generated ``..._impl_cube`` / ``..._impl_vector``), so nothing is shared and nothing
-    races. Each fills its own copy from the name it can see, which is why this maps to a SET
-    of sections and _build_ctx_field_fills emits one fill per section.
-
-    Recording only the first section, as this did, made the answer depend on which block was
-    written first: swapping the two ``with`` blocks — no change in meaning — flipped which
-    target filled the field and left the other holding a zero.
+    A name bound in BOTH sections is two variables, not a conflict: each target compiles to its
+    own function with its own ctx array (``..._impl_cube`` / ``..._impl_vector``), so each fills
+    its own copy from the name it can see. Hence a SET of sections, and one fill per section in
+    _build_ctx_field_fills.
 
     Names absent from this map come from outside any section and are visible to both.
     """
@@ -501,48 +596,41 @@ def _collect_var_sections(func_def: ast.FunctionDef) -> dict:
     return sections
 
 
-def _is_scalar_expr(node: ast.expr, info: PipelineInfo) -> bool:
-    """True if this expression is scalar-valued: arithmetic over scalars and constants."""
-    if isinstance(node, ast.Constant):
-        return True
-    if isinstance(node, ast.Name):
-        return _is_ctx_scalar(node.id, info)
-    if isinstance(node, ast.BinOp):
-        return _is_scalar_expr(node.left, info) and _is_scalar_expr(node.right, info)
-    if isinstance(node, ast.UnaryOp):
-        return _is_scalar_expr(node.operand, info)
-    return False
+def _travels_in_ctx(node: ast.expr, info: PipelineInfo) -> bool:
+    """True if this stage argument has to be snapshotted into the ctx slot.
+
+    False for an argument that reads the same on every beat and can stay where it was
+    written: one mentioning a handle, or none of whose names is live (``3``, ``BASE * 2``).
+    """
+    roles = {_name_role(n.id, info) for n in ast.walk(node) if isinstance(n, ast.Name)}
+    if "handle" in roles:
+        return False
+    return "live" in roles
 
 
-def _collect_outer_slots(func_def: ast.FunctionDef, info: PipelineInfo) -> dict:
+def _collect_outer_slots(info: PipelineInfo) -> dict:
     """{name: (group, kind, slot count)} for slots picked outside the pipeline loop.
 
-    A slot picked inside the loop rotates once per beat and is protected by the sync graph;
-    one picked outside advances only per outer iteration, while every beat reads it. A
-    delayed stage handling an older beat then sees whatever the variable was last rebound
-    to — the wrong slot as soon as the outer iteration turns over. Carrying the INDEX in
-    ctx fixes that: each beat snapshots the index it used, and every consumer re-selects
-    the slot with its own beat's index.
+    Such a slot advances once per outer iteration while every beat reads it, so a delayed stage
+    would see whatever the variable was last rebound to. Carrying the INDEX in ctx fixes that:
+    each beat snapshots the index it used, and every stage re-selects the slot with its own.
 
-    Renaming the slot before passing it on (``cur = g.current()`` then ``alias = cur``) is
-    followed, because the two halves of the test otherwise land on different statements —
-    the pick names a variable no stage mentions, and the stage's argument is assigned from
-    a plain name rather than an accessor — so each was skipped and the slot went uncarried,
-    silently. Every name along the chain maps to the same entry, since the consumers key on
-    different ones: the rewrite of the pick itself looks up the assignment target, while the
-    ctx field and the stage's argument look up the name the stage was handed.
+    Renames are followed to a fixed point and every name on the chain keeps its entry, because
+    the consumers key on different ones — the rewrite on the assignment target, the ctx field
+    and the stage argument on the name the stage was handed.
 
-    Only slots a stage actually consumes are kept; pure bookkeeping slots are left alone.
-    The rewrite needs the slot count as its modulus, so a group whose mutex_ids do not
-    resolve statically is reported as an error rather than silently skipped — skipping it
-    would leave the delayed stage reading the wrong slot with no diagnostic.
+    Searched inside THIS pipeline's outer loop only. A pick above it runs once for the whole
+    task stream, so the variable never moves and the argument passes through; and two
+    pipelines' outer loops are disjoint, which keeps their same-named picks apart.
+
+    Only slots a stage consumes are kept. A group whose mutex_ids do not resolve statically is
+    an error rather than a skip: the rewrite needs the count as its modulus.
     """
     groups = info.group_names
-    if not groups or info.pipeline_loop is None:
+    if not groups or info.pipeline_loop is None or info.outer_loop is None:
         return {}
-    # One lock per slot. Deliberately no fall-back to addr_ranges (which _sync_graph._slot_count
-    # does have): those are not scanned yet here, and an outer slot needs an EXACT count —
-    # a group whose ids do not resolve is reported below rather than guessed at.
+    # One lock per slot. No fall-back to addr_ranges (which _sync_graph._slot_count has): they
+    # are not scanned yet here, and an outer slot needs an EXACT count.
     slot_counts = {name: len(ids) for name, ids in info.sync.mutex_ids.items()}
 
     consumed = {
@@ -551,15 +639,23 @@ def _collect_outer_slots(func_def: ast.FunctionDef, info: PipelineInfo) -> dict:
     inside = {id(node) for node in ast.walk(info.pipeline_loop)}
 
     picked: dict = {}
-    for node in ast.walk(func_def):
-        if not (isinstance(node, ast.Assign) and len(node.targets) == 1):
+    for node in ast.walk(info.outer_loop):
+        if not isinstance(node, ast.Assign) or id(node) in inside:
+            continue  # picked per beat: the sync graph already covers it
+        pick = slot_accessor(node.value) if len(node.targets) == 1 else None
+        if pick is None or pick[0] not in groups:
+            _reject_buried_slot_pick(node, groups)
             continue
         target = node.targets[0]
-        if not isinstance(target, ast.Name) or id(node) in inside:
-            continue  # picked per beat: the sync graph already covers it
-        pick = slot_accessor(node.value)
-        if pick is None or pick[0] not in groups:
+        if not isinstance(target, ast.Name):
             continue
+        if target.id in picked:
+            raise ValueError(
+                f"pipeline: '{target.id}' is assigned a slot more than once outside the "
+                f"pipeline loop (line {node.lineno}). Its stages would each have to know "
+                f"which of those picks is the current one, and the index ctx carries is one "
+                f"per name. Use a separate variable per pick."
+            )
         group, kind = pick
         if group not in slot_counts:
             raise ValueError(
@@ -574,7 +670,7 @@ def _collect_outer_slots(func_def: ast.FunctionDef, info: PipelineInfo) -> dict:
     changed = True
     while changed:
         changed = False
-        for node in ast.walk(func_def):
+        for node in ast.walk(info.outer_loop):
             if not (isinstance(node, ast.Assign) and len(node.targets) == 1):
                 continue
             target = node.targets[0]
@@ -595,6 +691,27 @@ def _collect_outer_slots(func_def: ast.FunctionDef, info: PipelineInfo) -> dict:
         if any(n in consumed for n in names)
         for name in names
     }
+
+
+def _reject_buried_slot_pick(node: ast.Assign, groups: set) -> None:
+    """Refuse an assignment that takes a slot somewhere inside a larger expression.
+
+    ``slot = g.next()`` is the only spelling the transform can rewrite: it has to replace
+    the pick with an explicit index, and an accessor buried in a conditional, a call
+    argument or a tuple gives it no single statement to replace. Such an assignment is not
+    recognised as a pick at all, so without this it would be skipped in silence and the
+    delayed stage would read whatever the variable was last set to.
+    """
+    for sub_node in ast.walk(node.value):
+        buried = slot_accessor(sub_node)
+        if buried is not None and buried[0] in groups:
+            raise ValueError(
+                f"pipeline: line {node.lineno} takes a slot from tile group "
+                f"'{buried[0]}' inside a larger expression "
+                f"(`{ast.unparse(node.value)}`). A slot picked outside the pipeline loop "
+                f"must be assigned on its own (`slot = {buried[0]}.next()`), because the "
+                f"transform replaces that statement with an explicit index for ctx to carry."
+            )
 
 
 def _collect_struct_args(func_def: ast.FunctionDef, info: PipelineInfo) -> dict:
@@ -619,11 +736,10 @@ def _collect_struct_args(func_def: ast.FunctionDef, info: PipelineInfo) -> dict:
     # Names bound inside the pipeline loop cannot be a stable struct: they would be
     # rebound every beat, which is the user-managed ring buffer case above.
     loop_bound: set = set()
-    for stage in info.stages:
-        for stmt in stage.pre_stmts + stage.post_stmts:
-            for node in ast.walk(stmt):
-                if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
-                    loop_bound.add(node.id)
+    for stmt in info.pipeline_loop.body if info.pipeline_loop else []:
+        for node in ast.walk(stmt):
+            if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+                loop_bound.add(node.id)
 
     result: dict = {}
     for node in ast.walk(func_def):
@@ -657,25 +773,16 @@ def _collect_struct_args(func_def: ast.FunctionDef, info: PipelineInfo) -> dict:
 def _derive_ctx_fields(info: PipelineInfo):
     """Decide how each stage argument reaches its stage, by the argument's TYPE.
 
-    The type is what matters, not whether the value changes across iterations: a scalar can
-    ride in the ctx slot, so it always does; a Tile cannot (the slot holds scalars) and
-    travels as the index that selects it; a struct travels as its fields; a tensor or tile
-    group is a handle to one object and does not need to travel at all.
+    A scalar rides in the ctx slot; a Tile cannot (the slot holds scalars) and travels as the
+    index that selects it; a struct travels as its fields; a tensor or tile group is a handle
+    and does not travel at all. The type has an exact answer from the parser probe
+    (info.var_types), while "does this value change?" would mean reasoning about how it was
+    produced, and a wrong answer there silently feeds a delayed stage the current beat's value.
 
-    Asking "does this change?" instead means reasoning about how each value was produced —
-    through a branch, a helper call, an alias — and a wrong answer there silently feeds a
-    delayed stage the current beat's value. Asking "what is this?" has an exact answer from
-    the parser probe (info.var_types), and one extra ctx field for a value that never
-    changes is the cheaper mistake.
+    Sets two fields of ``info``:
 
-    stage_arg_mapping stores per-stage, per-arg: None (fixed) or (field_name, fill_expr).
-    - field_name: the ctx struct field name (e.g. "ki" or "_pl_arg_compute_qk_1")
-    - fill_expr: the expression the ctx field is filled FROM, evaluated at the snapshot
-      point inside the loop body — after the user's statements for this beat have run.
-      For a plain Name (scalar or struct) that is the variable itself; the point of
-      reading the variable rather than re-deriving its value is that the framework then
-      needs no understanding of HOW the user computed it (a branch, a helper function,
-      several statements — all work the same).
+      stage_arg_mapping  per argument — the ctx field it reads, or None if it passes through.
+      ctx_sources        per ctx field — its fill expression and the sections to emit it in.
     """
     struct_fields = {f for fields in info.struct_args.values() for f in fields}
     # A scalar whose name collides with a struct field is renamed. The struct's field names
@@ -688,8 +795,36 @@ def _derive_ctx_fields(info: PipelineInfo):
             info.scalar_ctx_names[name] = f"_pl_{name}" if name in struct_fields else name
         return info.scalar_ctx_names[name]
 
-    ctx_field_set = set()
+    info.ctx_sources = {}
     info.stage_arg_mapping = []
+
+    def register(field_name: str, fill: ast.expr, sections: set) -> None:
+        """Record a ctx field and what fills it. Re-registering the same field is normal."""
+        info.ctx_sources[field_name] = (fill, sections)
+
+    def register_struct(struct_name: str) -> None:
+        """Register a struct's fields under their own names, read as `<struct>.<field>`."""
+        sections = info.var_sections.get(struct_name, set())
+        for fname in info.struct_args[struct_name]:
+            register(
+                fname,
+                ast.Attribute(value=ast.Name(id=struct_name, ctx=ast.Load()), attr=fname, ctx=ast.Load()),
+                sections,
+            )
+
+    def register_slot_index(slot_name: str) -> str:
+        """Register the index field of an outer slot, read from its like-named counter and
+        filled in the section its group is declared in."""
+        group = info.outer_slots[slot_name][0]
+        fname = slot_index_field(group)
+        register(fname, ast.Name(id=fname, ctx=ast.Load()), info.var_sections.get(group, set()))
+        return fname
+
+    def register_scalar(var_name: str) -> str:
+        """Register a scalar's field, read under the variable's own name."""
+        fname = scalar_field(var_name)
+        register(fname, ast.Name(id=var_name, ctx=ast.Load()), info.var_sections.get(var_name, set()))
+        return fname
 
     for stage in info.stages:
         arg_map = []
@@ -698,41 +833,35 @@ def _derive_ctx_fields(info: PipelineInfo):
                 if arg.id in info.struct_args:
                     # The whole ctx slot stands in for the struct: same field names, so the
                     # stage body needs no rewriting. Fields are snapshotted individually.
-                    ctx_field_set.update(info.struct_args[arg.id])
-                    arg_map.append((PL_STRUCT_ARG, ast.Name(id=arg.id, ctx=ast.Load())))
+                    register_struct(arg.id)
+                    arg_map.append(PL_STRUCT_ARG)
                     continue
                 if arg.id in info.outer_slots:
                     # Slot chosen outside the loop: ctx carries the INDEX, and the stage
                     # re-selects the slot with its own beat's index (see _build_stage_args).
-                    group = info.outer_slots[arg.id][0]
-                    fname = slot_index_field(group)
-                    ctx_field_set.add(fname)
-                    arg_map.append((fname, ast.Name(id=fname, ctx=ast.Load())))
+                    arg_map.append(register_slot_index(arg.id))
                     continue
-                if _is_ctx_scalar(arg.id, info):
-                    fname = scalar_field(arg.id)
-                    ctx_field_set.add(fname)
-                    arg_map.append((fname, ast.Name(id=arg.id, ctx=ast.Load())))
+                if _travels_in_ctx(arg, info):
+                    arg_map.append(register_scalar(arg.id))
                 else:
                     arg_map.append(None)
                 continue
-            # An expression: snapshot whatever it evaluates to, under a name of its own.
-            # Scalar-valued expressions are the only ones that can travel in the ctx slot,
-            # and a non-scalar one cannot be turned into a slot index either, since the
-            # index it was built from is not recoverable from the expression.
-            if _is_scalar_expr(arg, info):
+            # An expression: a field of its own, filled from the expression, in the stage's
+            # own section — where the field is read and every name in it exists.
+            if _travels_in_ctx(arg, info):
+                # Unique because a stage function appears once per loop
+                # (_validate._check_unique_stage_names).
                 field_name = f"_pl_arg_{stage.func_name}_{argpos}"
-                ctx_field_set.add(field_name)
-                arg_map.append((field_name, arg))
+                register(field_name, arg, {stage.section_kind})
+                arg_map.append(field_name)
             else:
                 arg_map.append(None)
         info.stage_arg_mapping.append(arg_map)
 
-    # Framework fields all carry the _pl_ prefix so they can never collide with a field
-    # name coming from a user struct. The two trailing ones are the transform's own
-    # bookkeeping rather than stage data — see their definitions at the top of this module
-    # for why each has to travel with the task instead of being read live.
-    info.ctx_fields = [PL_IS_VALID_FIELD] + sorted(ctx_field_set) + [PL_TASK_ID_FIELD]
+    # Framework fields carry the _pl_ prefix so they cannot collide with a user struct's
+    # field. The two trailing ones are the transform's own bookkeeping, not stage data, and
+    # so the only fields with no ctx_sources entry.
+    info.ctx_fields = [PL_IS_VALID_FIELD] + sorted(info.ctx_sources) + [PL_TASK_ID_FIELD]
 
 
 def probe_kernel_facts(kernel_def, bound_signature=None) -> tuple[dict, dict]:
@@ -787,20 +916,15 @@ def probe_kernel_facts(kernel_def, bound_signature=None) -> tuple[dict, dict]:
 
         scope.define_var = _define
         parser.parse_function(kernel_def._func_def, func_type=kernel_def._func_type)
-        # Merge, preferring a CONSTANT verdict: a compile-time-constant condition is
-        # target-independent, so if EITHER the Cube or Vector parse folded it to a
-        # constant, keep that. Only when no parse found it constant is it dynamic.
-        # (A single target may skip a section — the other target's section holds the
-        # real fold; blind update() would let a later (False, None) clobber it.)
+        # Merge, preferring a CONSTANT verdict: a target that skips a section never sees the
+        # condition, so a later (False, None) must not clobber the other target's fold.
         for k, v in parser.if_const_map.items():
             existing = if_const.get(k)
             if existing is None or (not existing[0] and v[0]):
                 if_const[k] = v
             elif existing[0] and v[0] and existing[1] != v[1]:
-                # Both parses folded this site, to different values: the condition is not
-                # target-independent after all. Fall back to dynamic rather than keeping a
-                # verdict that holds for one target only — a branch wrapping a stage then
-                # reports CB3 instead of being pruned down the wrong side. Only two parses
-                # run and Cube is first, so nothing upgrades this back to constant.
+                # Both parses folded it, to different values: not target-independent after all. Fall back
+                # to dynamic so a branch wrapping a stage reports CB3 rather than being pruned down a side
+                # that is right for one target only.
                 if_const[k] = (False, None)
     return if_const, var_types

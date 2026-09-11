@@ -11,6 +11,7 @@
 
 """Pipeline configuration."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 
@@ -19,28 +20,45 @@ class PipelineConfig:
     """Configuration for preload pipeline transformation.
 
     Args:
-        preload: How many iterations ahead an upstream stage runs. A larger value hides
-                 more of the transfer/compute latency and usually performs better, at the
-                 cost of a longer fill and drain — tune it per kernel.
-                 Concretely it is the delay step between two consecutive stages on the
-                 SAME core (see _compute_delays); the ctx ring-buffer depth follows from
-                 the resulting delays (max_delay + 1), not from preload directly.
+        preload: How many iterations ahead an upstream stage runs — one value, or one per
+                 pipeline loop when the kernel holds several (in source order); a single value
+                 applies to all of them. A larger value hides more of the transfer/compute
+                 latency, at the cost of a longer fill and drain — tune it per kernel.
+                 Concretely it is the delay step between two consecutive stages on the SAME
+                 core (see _compute_delays); the ctx ring-buffer depth follows from the
+                 resulting delays (max_delay + 1), not from preload directly.
 
-                 Zero pulls no stage ahead of any other, which leaves the serial loop with
-                 cross-core sync inserted around each stage and nothing else changed. Start
-                 there to confirm the serial kernel is correct, then raise it.
+                 Zero pulls no stage ahead of any other, leaving the serial loop with
+                 cross-core sync inserted around each stage. Start there to confirm the serial
+                 kernel is correct, then raise it.
 
-                 Must not be negative: a stage cannot run a negative number of iterations
-                 ahead, and the delays that follow would index the ctx ring from before the
-                 loop began.
+                 Must not be negative.
     """
 
-    preload: int = 2
+    preload: int | tuple[int, ...] = 2
 
     def __post_init__(self) -> None:
-        if self.preload < 0:
-            raise ValueError(
-                f"pipeline: preload must be >= 0, got {self.preload}. It is how many "
-                f"iterations ahead a stage runs, so a negative value has no meaning; use "
-                f"preload=0 to keep the serial loop and only insert cross-core sync."
-            )
+        if isinstance(self.preload, Sequence):
+            # Frozen dataclasses derive __hash__ from their fields, and a list is not
+            # hashable, so a sequence is stored as a tuple whatever the user wrote.
+            object.__setattr__(self, "preload", tuple(self.preload))
+            if not self.preload:
+                raise ValueError(
+                    "pipeline: preload is an empty sequence. Give one value per pipeline "
+                    "loop, or a single value to use for all of them."
+                )
+        for value in self.preload if isinstance(self.preload, tuple) else (self.preload,):
+            if value < 0:
+                raise ValueError(
+                    f"pipeline: preload must be >= 0, got {value}. It is how many "
+                    f"iterations ahead a stage runs, so a negative value has no meaning; use "
+                    f"preload=0 to keep the serial loop and only insert cross-core sync."
+                )
+
+    def preload_of(self, loop_index: int) -> int:
+        """This pipeline loop's preload.
+
+        A single value is shared by every loop rather than meaning "the first one only": one
+        number reads as a property of the kernel.
+        """
+        return self.preload[loop_index] if isinstance(self.preload, tuple) else self.preload

@@ -11,9 +11,7 @@
 
 """Cross-core sync dependency graph: the single source for all sync insertion.
 
-One model covers preload=0, preload=N and address reuse. Replaces the old
-per-case derivation, which worked per address-overlapping buffer PAIR and so emitted one
-reverse-sync edge where a region with k writers needs k.
+One model covers preload=0, preload=N and address reuse.
 
 Model
 -----
@@ -35,19 +33,17 @@ both quantities matter: ``dist`` (beat difference) decides inverse-time and cycl
 Assumptions
 -----------
 A1. Each stage advances a cross-core buffer exactly once, so ``slot = task % slot_count``.
-    The whole timeline rests on this. A violation shows up as an edge whose distance differs
-    from task to task, which ``Edge.unstable`` records and validate_sync rejects — see
-    _validate._check_stable_distances.
+    A violation shows up as an edge whose distance differs from task to task, which
+    ``Edge.unstable`` records and _validate._check_stable_distances rejects.
 A2. A buffer variable carries one producer/consumer pair; a stage may touch it repeatedly.
 A3. Sync goes outside the stage call. Op-level detail gets the dependencies right, then
     the result is aggregated back to the stage boundary when emitting.
 
 Control flow inside a stage is ignored on purpose: an access in a branch counts like an
 unconditional one, so a buffer touched on several pipes gets a sync on every one of them.
-That over-syncs when a path skips some, and the cost is real (a wait blocks its pipe even
-on iterations that never touch the buffer), but the error only ever goes in the safe
-direction. Narrowing it down would take reasoning about the branch conditions, and a wrong
-answer there drops a sync instead — see stage_control_flow_design.md.
+That over-syncs when a path skips some, but the error only ever goes in the safe
+direction — narrowing it down needs reasoning about branch conditions, and a wrong answer
+there drops a sync instead.
 """
 
 from __future__ import annotations
@@ -125,9 +121,8 @@ class SyncGraph:
     regions: dict  # buffer name -> region id
     slots: dict  # region id -> slot count
     edges: list
-    # {id(edge): buffer name} for WAR edges that release ANOTHER buffer's backward ids
-    # rather than a group of their own — see _share_intermediate_war_ids. A conclusion of
-    # building the graph, so it lives with the edges it describes.
+    # {id(edge): buffer name} for WAR edges that release ANOTHER buffer's backward ids rather
+    # than a group of their own — see _share_intermediate_war_ids.
     war_id_source: dict = field(default_factory=dict)
 
 
@@ -139,11 +134,9 @@ class SyncGraph:
 def _slot_count(info, buffer: str) -> int:
     """How many slots a buffer rotates through, i.e. the modulus of ``task % slot_count``.
 
-    Read from the buffer's mutex_ids — one lock per slot — rather than from the length of
-    its address ranges. Both give the same number, but an address range additionally needs
-    the tile's shape and dtype to resolve, and scan_buffer_addr_ranges is allowed to skip a
-    buffer it cannot size (it only costs address-reuse detection). The slot count is not
-    optional: every buffer in the graph needs it, so it must not ride on that.
+    Read from the buffer's mutex_ids — one lock per slot — rather than from its address
+    ranges: both give the same number, but scan_buffer_addr_ranges is allowed to skip a
+    buffer it cannot size, while every buffer in the graph needs a slot count.
     """
     ids = info.sync.mutex_ids.get(buffer)
     if ids:
@@ -198,7 +191,7 @@ def collect_accesses(info) -> list:
         # two mutually exclusive if-branches), and duplicates would duplicate every edge
         # and set/wait pair through them.
         seen = set()
-        for buf_name, role, pipe in stage.region_access:
+        for buf_name, role, pipe in stage.buffer_access:
             if (buf_name, role, pipe) in seen:
                 continue
             seen.add((buf_name, role, pipe))
@@ -277,10 +270,8 @@ def build_graph(info, schedule: list) -> SyncGraph:
 
     for lane in lanes.values():
         for i, event in enumerate(lane):
-            # Membership, not equality: an "RW" access both reads and writes, so it takes
-            # part on both sides. Comparing for equality dropped it from each in turn — the
-            # access neither waited for the write before it nor counted as a write for the
-            # readers after it.
+            # Membership, not equality: an "RW" access both reads and writes, so it takes part on
+            # both sides.
             if "R" in event.acc.role:
                 # RAW: the nearest preceding write of the SAME buffer produced this data.
                 for j in range(i - 1, -1, -1):
@@ -314,10 +305,9 @@ def build_graph(info, schedule: list) -> SyncGraph:
         for (kind, src, dst), (dist, task_off, unstable) in found.items()
     ]
     graph = SyncGraph(accesses, regions, slots, edges, _share_intermediate_war_ids(edges, info))
-    # One gate for every check that needs the graph (see _validate). Runs here so the
-    # checks see exactly what the emission will, rather than a separately derived view.
-    # The cycle walk is done here and handed over: it is graph work, while the verdict on
-    # what a cycle's total distance means is a check.
+    # One gate for every check that needs the graph (see _validate), run here so the checks
+    # see exactly what the emission will. The cycle walk is graph work and is done here; the
+    # verdict on what a cycle's total distance means is a check.
     validate_sync(graph, info, find_cycles(graph))
     return graph
 
@@ -361,15 +351,13 @@ def find_cycles(graph: SyncGraph) -> list:
 def _gating_readers(readers: list) -> list:
     """Which readers of a batch must be waited for before its slot may be overwritten.
 
-    The latest read on every pipe, one edge each. Same-pipe reads need only their latest,
+    The latest read on every pipe, one edge each; same-pipe reads need only their latest,
     since their queue already runs them in order.
 
-    Waiting for the single latest read overall would be enough only if the earlier reads
-    were guaranteed to precede it. Program order plus auto_mutex give that within a
-    straight-line stage, but not when the latest read sits in a branch: on a path that
-    skips it the earlier reads still happen with nothing releasing them. Telling the two
-    cases apart needs condition reasoning, and being wrong here drops a sync, so every
-    pipe gets its own edge either way.
+    The single latest read overall would do only if the earlier reads were guaranteed to
+    precede it — true within a straight-line stage, but not when the latest read sits in a
+    branch that a path skips. Telling the two apart needs condition reasoning, and being
+    wrong drops a sync.
     """
     per_pipe: dict = {}
     for reader in readers:
@@ -382,15 +370,14 @@ def _gating_readers(readers: list) -> list:
 def _share_intermediate_war_ids(edges: list, info) -> dict:
     """Point WAR edges at the backward ids of the buffer whose data they really guard.
 
-    A buffer with no cross-core ids of its own is not a channel — it holds the same batch
-    of data in another form (an fp16 copy, say). So within a group of WAR edges sharing a
+    A buffer with no cross-core ids of its own is not a channel — it holds the same batch of
+    data in another form (an fp16 copy, say). So within a group of WAR edges sharing a
     destination and task offset, when exactly one source buffer owns ids, every edge in the
-    group releases *that* buffer's backward ids instead of a freshly allocated group. Since
-    a set and a wait on one id pair up by arrival, N edges become N set/wait pairs on the
-    same id and stay balanced. Several owners mean genuinely separate channels, left alone.
+    group releases *that* buffer's backward ids instead of a freshly allocated group: N edges
+    become N set/wait pairs on the same id and stay balanced. Several owners mean genuinely
+    separate channels, left alone.
 
-    The edges themselves all survive: each guards one pipe, and dropping all but the latest
-    would need the earlier reads to be ordered before it — which a branch can break.
+    Every edge survives — each guards one pipe (see _gating_readers).
 
     Returns {id(edge): owning buffer name}, for SyncGraph.war_id_source.
     """
@@ -444,18 +431,22 @@ def _needs_allocated_ids(edge: Edge, war_id_source: dict) -> bool:
     return id(edge) not in war_id_source
 
 
-def _used_event_ids(info) -> set:
-    """Every event id already spoken for by a declared fwd/bwd id list.
+def _used_event_ids(graph: SyncGraph, info) -> set:
+    """Every event id already spoken for by a buffer THIS pipeline loop touches.
 
-    The literal lists live in ``info.sync.lifted_ids``: the ids on the buffers themselves
-    were replaced by variable names, so this is where the actual numbers are.
+    Scoped to the loop, not the kernel: two pipeline loops run one after another and each
+    balances its own sync, so an id another loop declares is free here. With sixteen ids in
+    the hardware, a kernel-wide view would run the pool down for no reason.
+
+    Read from the buffer declarations, not from the lifted literals: only the literal
+    spelling is lifted, so ``fwd_ids=IDS`` would be invisible to the allocator.
     """
     used = set()
-    for _var, node in info.sync.lifted_ids:
-        if isinstance(node, (ast.List, ast.Tuple)):
-            for element in node.elts:
-                if isinstance(element, ast.Constant) and isinstance(element.value, int):
-                    used.add(element.value)
+    for buf_name in {access.buffer for access in graph.accesses}:
+        decl = info.sync.buffers.get(buf_name)
+        if decl is not None:
+            used.update(decl.fwd_ids)
+            used.update(decl.bwd_ids)
     return used
 
 
@@ -467,9 +458,7 @@ def _allocate_event_id_groups(edges: list, used: set) -> list:
     serialises across slots, which costs parallelism but stays correct. Degradation goes in
     ascending slot_count order, so the edges that lose the least go first.
 
-    Returns the groups positionally, one per input edge. Nothing is mutated: the previous
-    version wrote an ``"event_ids"`` key back into caller-supplied dicts, a leftover of the
-    old per-PAIR sync model whose other two keys existed only to be printed in a warning.
+    Returns the groups positionally, one per input edge; nothing is mutated.
     """
     pool_size = MAX_EVENT_ID + 1
     free = [i for i in range(pool_size) if i not in used]
@@ -508,8 +497,8 @@ def allocate_reuse_ids(graph: SyncGraph, info) -> dict:
 
     Address reuse creates a dependency the user never declared ids for, so the framework
     allocates one and declares it as a variable ahead of the loop. Which edges need this is
-    derived here, in the same place the allocation happens: deriving it separately for
-    allocation and emission is how an edge once ended up emitted but unallocated.
+    derived in the same place the allocation happens, so an edge cannot be emitted without
+    being allocated.
 
     Several edges can share one group — two edges between the same pair of accesses describe
     one handover — hence the keying by access pair.
@@ -526,13 +515,16 @@ def allocate_reuse_ids(graph: SyncGraph, info) -> dict:
 
     # Read the used ids BEFORE declaring the new groups below, or each group would count
     # itself as taken.
-    id_groups = _allocate_event_id_groups(list(first_of_pair.values()), _used_event_ids(info))
+    id_groups = _allocate_event_id_groups(list(first_of_pair.values()), _used_event_ids(graph, info))
 
     group_name: dict = {}
     for key, ids in zip(first_of_pair, id_groups):
-        group_name[key] = f"_pl_overlap_ids_{len(group_name)}"
+        # Numbered across the whole kernel, not per call: a per-call counter would give the second
+        # loop variable names the first already declared. The ids INSIDE the groups are per loop
+        # and may repeat.
+        group_name[key] = f"_pl_overlap_ids_{len(info.sync.reuse_ids)}"
         literal = ast.List(elts=[ast.Constant(value=v) for v in ids], ctx=ast.Load())
-        info.sync.lifted_ids.append((group_name[key], literal))
+        info.sync.reuse_ids.append((group_name[key], literal))
 
     return {id(edge): ast.Name(id=group_name[key], ctx=ast.Load()) for key, edge in zip(keys, needing)}
 
@@ -558,13 +550,11 @@ def resolve_event_ids(graph: SyncGraph, info) -> dict:
     resolved = {}
     for edge in graph.edges:
         if edge.src.section == edge.dst.section:
-            # Both ends on one core. What is emitted here is CROSS-core sync, and a
-            # cross-core buffer's two users are required to sit on different cores
-            # (_check_cross_core_users), so an edge inside one section can only join two
-            # accesses of the same stage — ordered already by program order and auto_mutex.
-            # Emitting for it would put an extra set/wait pair on the buffer's own event id,
-            # and that pair can release a wait that was meant for the other core's set.
-            # Resolved here rather than in each planner so all three agree on what is live.
+            # Both ends on one core. A cross-core buffer's two users must sit on different cores
+            # (_check_cross_core_users), so an edge inside one section can only join two accesses of
+            # the same stage, already ordered by program order and auto_mutex. Emitting for it would
+            # put an extra set/wait pair on the buffer's own event id, which can release a wait meant
+            # for the other core's set. Resolved here so all three planners agree on what is live.
             resolved[id(edge)] = None
             continue
         if edge.kind == "RAW":
@@ -650,12 +640,11 @@ def plan_sync_sites(graph: SyncGraph, event_ids: dict) -> list:
                 f"but within one task the stage order runs them the other way round. "
                 f"Reorder the stages, or stop sharing the address."
             )
-        # A negative skew means the consumer waits on a task that has not run yet. The only
-        # way to let those tail waits through is a guard reading the loop variable, and that
-        # question — "does the partner task still exist?" — cannot be answered from the inner
-        # loop: the partner may belong to the NEXT outer iteration, where it does exist while
-        # the test says otherwise. Answering it properly needs this core's total task count,
-        # a runtime value. So the shape is rejected rather than synchronised approximately.
+        # A negative skew means the consumer waits on a task that has not run yet. Letting those
+        # tail waits through needs a guard answering "does the partner task still exist?", which
+        # the inner loop cannot: the partner may belong to the NEXT outer iteration. Answering it
+        # properly needs this core's total task count, a runtime value — so the shape is rejected
+        # rather than synchronised approximately.
         if skew < 0:
             raise ValueError(
                 f"pipeline: sync edge {edge.src} -> {edge.dst} runs inverse-time at this "
@@ -743,12 +732,11 @@ def plan_prefire(graph: SyncGraph, event_ids: dict) -> list:
 
     A WAR edge with skew ``n`` pairs ``dst(task t)`` with ``src(task t - n)``, so its first
     ``n`` waits have no partner behind them. Pre-firing ``n`` permits lets exactly those
-    through and leaves the wait itself unconditional.
+    through and leaves the wait itself unconditional; the matching drain consumes them.
 
-    The alternative — guarding those waits on a task counter — was dropped: a guard has to
-    ask "does the partner task exist?", and the only counters available are per-loop, which
-    cannot answer that once the loop nest has more than one level. Pre-fire never asks the
-    question; it just supplies the missing permits. The matching drain consumes them.
+    Guarding those waits on a task counter instead was dropped: a guard has to ask whether
+    the partner task exists, and the only counters available are per-loop, which cannot
+    answer that once the loop nest has more than one level.
     """
     prefire = []
     for edge in graph.edges:
@@ -790,6 +778,10 @@ class SyncPlan:
     sites: list  # in-loop, indexed by the running task id
     prefire: list  # before the outermost loop, literal id indices
     drain: list  # after the outermost loop, literal id indices
+    # The event-id groups allocated while planning THIS loop, as [(var_name, ast_literal)].
+    # Declared with this loop rather than with the kernel, so another loop's groups are not
+    # repeated ahead of it.
+    reuse_ids: list = field(default_factory=list)
 
 
 def plan_sync(graph: SyncGraph, info) -> SyncPlan:
@@ -797,15 +789,18 @@ def plan_sync(graph: SyncGraph, info) -> SyncPlan:
 
     Resolving is a step of its own, ahead of the three planners, because it ALLOCATES: an
     address-reuse edge has no user-declared ids, so the framework mints a group and appends
-    its declaration to ``info.sync.lifted_ids``. Resolving per planner made the generated
-    variable numbering depend on which one asked first; doing it here makes the ids a
-    function of the graph, and all three planners read the same answer.
+    its declaration to ``info.sync.reuse_ids``. Doing it here makes the ids a function of the
+    graph, and all three planners read the same answer.
     """
+    # Everything appended to the kernel-level list from here on was allocated for THIS
+    # plan, which is what the slice below picks out.
+    first_new = len(info.sync.reuse_ids)
     event_ids = resolve_event_ids(graph, info)
     return SyncPlan(
         sites=plan_sync_sites(graph, event_ids),
         prefire=plan_prefire(graph, event_ids),
         drain=plan_drain(graph, event_ids),
+        reuse_ids=info.sync.reuse_ids[first_new:],
     )
 
 
