@@ -1,4 +1,4 @@
-# PyPTO Tensor编程指南
+# PyPTO Tensor编程
 
 ```{toctree}
 :maxdepth: 1

@@ -6,9 +6,9 @@
 
 basic_data_structures/index
 memory_data_movement/index
-tile_vector_computation/index
-vf_computation/index
-matrix_computation/index
+tile_computation/index
+reg_computation/index
+cube_computation/index
 quantization/index
 controlflow/index
 resource_management/index

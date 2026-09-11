@@ -77,6 +77,8 @@ dynamic_tensor: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32]
 ### Tensor别名
 
 ```python
+import pypto_pro.language as pl
+
 # 一级别名和链式别名均指向首次传入的input_tensor
 original_input_alias = input_tensor
 original_input_alias_chain = original_input_alias

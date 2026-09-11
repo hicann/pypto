@@ -37,13 +37,11 @@ PYPTO_DECLARE_ENUM(
 | null | 不填充，默认值，适用于不需要处理无效区域的场景。 |
 | zero | 补0，典型用于卷积padding和零初始化。 |
 | max | 补对应数据类型的最大值，典型用于取最小值操作的无效区域。 |
-| min | 补对应数据类型的最小值，典型用于flash attention掩码，使无效行在max/softmax计算中被忽略。 |
+| min | 补对应数据类型的最小值，典型用于取最大值操作的无效区域。 |
 
 ## 约束说明
 
-- 在Flash Attention掩码场景中，当KV长度不是Tile大小的整数倍时，最后一块的无效行需要补FP32最小值，使其在后续的row_max和exp操作中被忽略。
-
-- 在卷积padding场景中，边界区域需要填充零值。
+无。
 
 ## 调用示例
 
@@ -55,11 +53,7 @@ import pypto_pro.language as pl
 tt = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16,
                  target_memory=pl.MemorySpace.Vec)
 
-# 补零（卷积 padding）
+# 补零
 tt_pad = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16,
                      target_memory=pl.MemorySpace.Vec, pad=pl.TilePad.zero)
-
-# 补最小值（flash attention 掩码）
-tt_mask = pl.TileType(shape=[64, 128], dtype=pl.DT_FP32,
-                      target_memory=pl.MemorySpace.Vec, pad=pl.TilePad.min)
 ```

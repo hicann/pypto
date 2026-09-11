@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-核间同步模式枚举，用于指定[set_cross_core](set_cross_core.md)和[wait_cross_core](wait_cross_core.md)参与同步的核以及SET/WAIT信号的配对方式。
+核间同步模式枚举，用于指定[set_cross_core](../synchronization/set_cross_core.md)和[wait_cross_core](../synchronization/wait_cross_core.md)参与同步的核以及SET/WAIT信号的配对方式。
 
 ## 原型定义
 
@@ -36,4 +36,4 @@ PYPTO_DECLARE_ENUM(CrossCoreSyncMode,
 | INTRA_BLOCK | 模式值为2。同一AI Core内的AIC与全部AIV同步。AIV到AIC方向须由AIV0和AIV1分别发送信号，AIC等待两路信号；AIC到AIV方向由AIC发送信号，AIV0和AIV1分别等待。该值为set_cross_core和wait_cross_core的默认同步模式。 |
 | UNICAST_BLOCK | 模式值为3。同一AI Core内的AIC与单个AIV同步。AIC侧事件ID 0～15对应AIV0，16～31对应AIV1；AIV侧事件ID取0～15。 |
 
-具体事件ID范围、流水限制及各模式的SET/WAIT配对要求，请参见[set_cross_core](set_cross_core.md)和[wait_cross_core](wait_cross_core.md)。
+具体事件ID范围、流水限制及各模式的SET/WAIT配对要求，请参见[set_cross_core](../synchronization/set_cross_core.md)和[wait_cross_core](../synchronization/wait_cross_core.md)。

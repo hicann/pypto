@@ -41,6 +41,8 @@ PYPTO_DECLARE_ENUM(AccToVecMode,
 ### DualModeSplitM模式下的尾块场景
 
 ```python
+import pypto_pro.language as pl
+
 # cube section: 用户只需设置实际 valid_M，无需手动对齐
 pl.set_validshape(ac, [valid_M, N])       # valid_M=33
 pl.matmul(ac, al, br)
@@ -58,6 +60,8 @@ else:
 ### DualModeSplitN模式下的尾块场景
 
 ```python
+import pypto_pro.language as pl
+
 # cube section: 用户只需设置实际 valid_N，无需手动对齐
 pl.set_validshape(ac, [TILE, valid_N])     # valid_N=33
 pl.matmul(ac, al, br)

@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-原子写模式枚举，在指定GM地址上进行原子加操作。
+GM写入模式枚举，用于指定写回GM时采用普通写或原子累加写。
 
 ## 原型定义
 
@@ -25,4 +25,4 @@ PYPTO_DECLARE_ENUM(AtomicType,
 )
 ```
 
-支持的数据类型及使用约束，请参见[pypto_pro.language.store](../memory_data_movement/store.md#原子累加)。
+支持的数据类型及使用约束，请参见[pypto_pro.language.store](../memory_data_movement/store.md#约束说明)。
