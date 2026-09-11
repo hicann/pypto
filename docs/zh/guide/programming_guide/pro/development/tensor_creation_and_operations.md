@@ -4,7 +4,7 @@ Tensor用于描述GM中的多维数据，作为Kernel的输入、输出或由裸
 
 ## 在Kernel签名中声明Tensor
 
-Host侧使用PyTorch在NPU上创建输入和输出数据，Kernel通过`pypto_pro.language.Tensor`类型标注接收这些数据。Tensor类型标注的基本形式如下：
+Host侧使用PyTorch在NPU上创建输入和输出数据，Kernel通过pypto_pro.language.Tensor类型标注接收这些数据。Tensor类型标注的基本形式如下：
 
 ```python
 import pypto_pro.language as pl
@@ -18,7 +18,7 @@ def kernel(
     ...
 ```
 
-`Tensor[[shape...], dtype]`中的第一个参数是shape，第二个参数是元素数据类型。还可以使用第三个参数声明GM数据的layout：
+Tensor[[shape...], dtype]中的第一个参数是shape，第二个参数是元素数据类型。还可以使用第三个参数声明GM数据的layout：
 
 ```python
 import pypto_pro.language as pl
@@ -27,7 +27,7 @@ import pypto_pro.language as pl
 nz_tensor: pl.Tensor[[64, 128], pl.DT_FP16, pl.NZ]
 ```
 
-layout标注只描述GM中已有数据的排布，不执行ND与NZ之间的数据转换。数据转换由支持相应格式的搬运接口完成。
+layout标注只描述GM中已有数据的排布，不执行不同layout之间的数据转换。数据转换由支持相应格式的搬运接口完成。
 
 ### Shape声明方式
 
@@ -36,9 +36,9 @@ Tensor的每一维可以使用以下方式声明：
 | 声明方式 | 含义 | 对编译变体的影响 |
 |:---|:---|:---|
 | 正整数 | 固定维度，启动时实际尺寸必须与声明一致 | 尺寸固定 |
-| `pypto_pro.language.DYNAMIC` | 运行时动态维度 | 维度值变化时复用同一编译变体 |
-| `pypto_pro.language.STATIC` | 编译期特化维度 | 维度值变化时生成新的编译变体 |
-| 末尾的`...` | 展开剩余维度，各维均按`STATIC`处理 | rank或维度值变化时生成新的编译变体 |
+| pypto_pro.language.DYNAMIC | 运行时动态维度 | 维度值变化时复用同一编译变体 |
+| pypto_pro.language.STATIC | 编译期特化维度 | 维度值变化时生成新的编译变体 |
+| 末尾的... | 展开剩余维度，各维均按STATIC处理 | rank或维度值变化时生成新的编译变体 |
 
 不同方式可以混合使用：
 
@@ -57,7 +57,7 @@ y: pl.Tensor[[pl.DYNAMIC, ...], pl.DT_FP16]
 
 ## 从Ptr或Tensor创建Tensor视图
 
-当Kernel接收裸指针或需要用新的shape、stride解释已有Tensor时，可以调用`pypto_pro.language.make_tensor`创建Tensor视图：
+当Kernel接收裸指针或需要用新的shape、stride解释已有Tensor时，可以调用pypto_pro.language.make_tensor创建Tensor视图：
 
 ```python
 pypto_pro.language.make_tensor(
@@ -68,11 +68,11 @@ pypto_pro.language.make_tensor(
 )
 ```
 
-`ptr`可以是`pypto_pro.language.Ptr`或已有Tensor。新Tensor与源对象共享同一段GM地址；`make_tensor`不申请内存，也不复制或重排数据。
+ptr可以是pypto_pro.language.Ptr或已有Tensor。新Tensor与源对象共享同一段GM地址；make_tensor不申请内存，也不复制或重排数据。
 
 ### 创建连续Tensor视图
 
-省略`stride`时，框架根据shape生成连续的行主序stride：
+省略stride时，框架根据shape生成连续的行主序stride：
 
 ```python
 import pypto_pro.language as pl
@@ -103,7 +103,7 @@ TilingData的声明和传入方式请参考[Tiling结果传输](tiling/tiling_re
 
 ### 创建带显式stride的Tensor视图
 
-显式传入`stride`可以描述行间不连续或轴交换后的GM视图。stride的单位是元素，不是字节：
+显式传入stride可以描述行间不连续或轴交换后的GM视图。stride包含的元素个数必须与shape的维数相同，单位是元素，不是字节。对于不足8 bit的数据类型，最后一维stride必须是编译期常量1：
 
 ```python
 import pypto_pro.language as pl
@@ -121,7 +121,7 @@ transposed = pl.make_tensor(ptr, [16, 8], [1, 16])
 
 ## 读取Tensor的Shape
 
-Kernel内通过`tensor.shape[axis]`读取Tensor维度，`axis`支持负索引。读取到的维度可以参与地址计算、循环边界和多核切分：
+Kernel内通过tensor.shape[axis]读取Tensor维度。axis必须是编译期整数，支持负索引。读取到的维度可以参与地址计算、循环边界和多核切分：
 
 ```python
 m = x.shape[0]
@@ -130,7 +130,7 @@ tile_rows = (m + TILE_M - 1) // TILE_M
 tile_cols = (n + TILE_N - 1) // TILE_N
 ```
 
-对于`DYNAMIC`维度，shape值在运行时取得；对于`STATIC`维度，shape值会固化到相应编译变体中。
+对于DYNAMIC维度，shape值在运行时取得；对于STATIC维度，shape值会固化到相应编译变体中。
 
 ## Tensor别名和指针转换
 
@@ -148,7 +148,7 @@ input_tensor = replacement_tensor
 
 ### 从Tensor获取Ptr
 
-`pypto_pro.language.make_ptr`可以从Tensor提取底层指针，也可以为已有Ptr创建新的元素类型视图：
+pypto_pro.language.make_ptr可以从Tensor提取底层指针，也可以为已有Ptr创建新的元素类型视图：
 
 ```python
 import pypto_pro.language as pl
@@ -158,9 +158,9 @@ ptr = pl.make_ptr(tensor)
 fp16_ptr = pl.make_ptr(byte_ptr, dtype=pl.DT_FP16)
 ```
 
-返回的Ptr与源对象共享地址。指定`dtype`只改变地址的元素类型解释，不会转换原数据；调用方需要保证地址对齐和可访问范围正确。详细说明请参考[pypto_pro.language.make_ptr](../../../../api/pro_api/SIMD-API/resource_management/make_ptr.md)。
+返回的Ptr与源对象共享地址。指定dtype只改变地址的元素类型解释，不会转换原数据；调用方需要保证地址对齐和可访问范围正确。详细说明请参考[pypto_pro.language.make_ptr](../../../../api/pro_api/SIMD-API/resource_management/make_ptr.md)。
 
-需要对Ptr按元素进行偏移时，可以使用[pypto_pro.language.addptr](../../../../api/pro_api/SIMD-API/resource_management/addptr.md)，再通过`make_tensor`将偏移后的地址包装为Tensor视图。这种方式常用于将一块GM Workspace划分为多个区域。
+需要对Ptr按元素进行偏移时，可以使用[pypto_pro.language.addptr](../../../../api/pro_api/SIMD-API/resource_management/addptr.md)，再通过make_tensor将偏移后的地址包装为Tensor视图。addptr不支持不足8 bit的数据类型，需先通过make_ptr重解释为DT_UINT8并按字节偏移。这种方式常用于将一块GM Workspace划分为多个区域。
 
 ## Tensor与Tile之间的数据搬运
 
@@ -176,8 +176,8 @@ with pl.section_vector():
     pl.store(output_tensor, output_tile, [row_offset, col_offset])
 ```
 
-- `load`和`store`使用Tensor中的元素坐标定位搬运起点。
-- `load_tile`和`store_tile`按Tile网格坐标定位数据块。
-- 搬运范围、stride、layout和尾块约束由具体搬运接口检查。
+- load和store使用Tensor中的元素坐标定位搬运起点。
+- load_tile和store_tile按Tile网格坐标定位数据块。
+- 搬运范围、stride、layout和尾块受具体搬运接口约束；编译期可确定的非法参数由框架检查，动态访问范围由调用方保证。
 
 Tensor只描述GM数据视图；Tile的创建、片上地址和缓冲区管理请参考[Tile创建和操作](tile_creation_and_operations.md)，Tile上的矢量计算请参考[Tile计算](vector_computation/tile_computation.md)，矩阵计算请参考[Cube计算](cube_computation.md)。

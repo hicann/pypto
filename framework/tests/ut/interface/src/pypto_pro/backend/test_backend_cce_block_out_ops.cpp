@@ -1527,7 +1527,7 @@ TEST(BackendCCEBlockOutOps, Quant)
     auto callAsym = MakeCallWithKwargs(
         "block.quant", {MakeVar("dst", tile), MakeVar("src", tile), MakeVar("scale", tile), MakeVar("offset", tile)},
         {{"mode", 1}});
-    EXPECT_CONTAINS(RunCodegen("block.quant", callAsym), "TQUANT<QuantType::INT8_ASYM>(dst, src, scale, offset);");
+    EXPECT_CONTAINS(RunCodegen("block.quant", callAsym), "TQUANT<QuantType::INT8_ASYM>(dst, src, scale, &offset);");
 }
 
 TEST(BackendCCEBlockOutOps, Dequant)

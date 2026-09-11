@@ -37,16 +37,15 @@ pypto_pro.language.matmul_acc(
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| dst_tile | 输出 | 目的操作数，Tile类型，存储空间为L0C Buffer，形状为[M, N]，且形状和数据类型必须与acc_tile一致。数据类型为DT_FP32或DT_INT32，具体类型由乘法输入的数据类型组合决定。排布必须为NZ；未显式指定fractal时，DT_FP32和DT_INT32使用1024。通常与acc_tile指定为同一个Tile，以执行原地累加。M、N的有效取值范围均为[1, 4095]。 |
+| dst_tile | 输出 | 目的操作数，Tile类型，存储空间为L0C Buffer，形状为[M, N]，且形状和数据类型必须与acc_tile一致。数据类型为DT_FP32或DT_INT32，具体类型由乘法输入的数据类型组合决定。layout必须为NZ；未显式指定fractal时，DT_FP32和DT_INT32使用1024。通常与acc_tile指定为同一个Tile，以执行原地累加。M、N的有效取值范围均为[1, 4095]。 |
 | acc_tile | 输入 | 源操作数（已有累加结果），Tile类型，存储空间为L0C Buffer。形状和数据类型必须与dst_tile一致，且内容必须由此前的matmul或matmul_acc操作初始化。K维首块应使用matmul初始化，不能直接对未初始化的L0C Buffer执行matmul_acc。 |
-| lhs_tile | 输入 | 源操作数（左矩阵），Tile类型，存储空间为L0A Buffer，形状为[M, K]，排布支持NZ和ZZ。M、K的有效取值范围均为[1, 4095]。支持的数据类型组合为：DT_FP16 × DT_FP16 → DT_FP32、DT_BF16 × DT_BF16 → DT_FP32、DT_FP32 × DT_FP32 → DT_FP32、DT_INT8 × DT_INT8 → DT_INT32、DT_HF8 × DT_HF8 → DT_FP32；DT_FP8E4M3FN和DT_FP8E5M2可任意两两组合，输出为DT_FP32。 |
-| rhs_tile | 输入 | 源操作数（右矩阵），Tile类型，存储空间为L0B Buffer，形状为[K, N]，排布必须为ZN。K维必须与lhs_tile一致，N的有效取值范围为[1, 4095]。数据类型必须与lhs_tile共同满足上述支持组合。 |
-| phase | 输入 | K维分块累加阶段，[pypto_pro.language.AccPhase](../basic_data_structures/AccPhase.md)类型，可选。使用时必须与store或store_tile的[pypto_pro.language.STPhase](../basic_data_structures/STPhase.md)正确配对，详见[AccPhase与STPhase配合使用说明](phase.md)。 |
+| lhs_tile | 输入 | 源操作数（左矩阵），Tile类型，存储空间为L0A Buffer，形状为[M, K]，layout必须为NZ。M、K的有效取值范围均为[1, 4095]。支持的数据类型组合为：DT_FP16 × DT_FP16 → DT_FP32、DT_BF16 × DT_BF16 → DT_FP32、DT_FP32 × DT_FP32 → DT_FP32、DT_INT8 × DT_INT8 → DT_INT32、DT_HF8 × DT_HF8 → DT_FP32；DT_FP8E4M3FN和DT_FP8E5M2可任意两两组合，输出为DT_FP32。 |
+| rhs_tile | 输入 | 源操作数（右矩阵），Tile类型，存储空间为L0B Buffer，形状为[K, N]，layout必须为ZN，N的有效取值范围为[1, 4095]。K维必须与lhs_tile一致。数据类型必须与lhs_tile共同满足上述支持组合。 |
+| phase | 输入 | K维分块累加阶段，[pypto_pro.language.AccPhase](../basic_data_structures/AccPhase.md)类型，可选。使用时必须与store、store_tile或move的[pypto_pro.language.STPhase](../basic_data_structures/STPhase.md)正确配对，详见[AccPhase与STPhase配合使用说明](phase.md)。 |
 
 ## 约束说明
 
-- 启用phase后，非末块使用pypto_pro.language.AccPhase.Partial，末块使用pypto_pro.language.AccPhase.Final，并与store或store_tile的[pypto_pro.language.STPhase](../basic_data_structures/STPhase.md)配合使用。
-- DT_FP32或DT_INT32结果进行K维分块累加时，L0C Buffer Tile的fractal应设置为1024，并在计算前后通过pypto_pro.language.system.set_mm_layout_transform开启和关闭L0C Buffer读出方向转换。
+- 启用phase后，非末块使用pypto_pro.language.AccPhase.Partial，末块使用pypto_pro.language.AccPhase.Final，并与store、store_tile或move的[pypto_pro.language.STPhase](../basic_data_structures/STPhase.md)配合使用。
 
 ## 返回值说明
 
@@ -90,7 +89,6 @@ def matmul_acc_kernel(
         addrs=0x0000, mutex_ids=[8])
 
     with pl.section_cube():
-        pl.system.set_mm_layout_transform(enabled=True)
         ac = acc.current()
         for k in pl.range(0, K_SIZE_ACC, TILE):     # K 维分块（累加）
             cur_a = a_l1.next()
@@ -106,5 +104,4 @@ def matmul_acc_kernel(
             else:
                 pl.matmul_acc(ac, ac, al, br, phase=pl.AccPhase.Final)    # 末块累加（K=2 块）
         pl.store(c, ac, [0, 0], phase=pl.STPhase.Final)
-        pl.system.set_mm_layout_transform(enabled=False)
 ```

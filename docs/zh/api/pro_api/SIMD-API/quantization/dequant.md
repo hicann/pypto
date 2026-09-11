@@ -20,7 +20,7 @@ $$
 out_{i,j}=\left(\operatorname{FP32}(src_{i,j})-offset_{i,0}\right)\times scale_{i,0}
 $$
 
-计算顺序为：整数源数据扩展并转换为FP32、减去offset、乘以scale。若与[quant](quant.md)配套使用，量化阶段传入的乘子通常为本接口scale的倒数。
+计算顺序为：整数源数据扩展并转换为FP32、减去offset、乘以scale。若与[quant](quant.md)配套使用，量化阶段传入的系数通常为本接口scale的倒数。
 
 ## 函数原型
 
@@ -37,17 +37,10 @@ pypto_pro.language.dequant(
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| out | 输出 | UB、RowMajor、DT_FP32 Tile；逻辑shape和valid_shape须与src一致。 |
-| src | 输入 | UB、RowMajor Tile，dtype为DT_INT8或DT_INT16；逻辑shape和valid_shape须与out一致。 |
-| scale | 输入 | UB、RowMajor、DT_FP32 Tile。若out.valid_shape=[M,N]，则scale.valid_shape须为[M,1]，物理shape的行数不得小于M且列数必须为1；第i行的scale[i,0]广播到输出第i行全部有效列。 |
-| offset | 输入 | UB、RowMajor、DT_FP32 Tile，物理shape和valid_shape均须与scale一致；第i行的offset[i,0]广播到对应数据行。对称量化数据须传入全零Tile，本参数不能省略。 |
-
-## 约束说明
-
-- out、src、scale和offset应使用互不重叠的UB区域；本接口不保证地址重叠时的结果。
-- scale和offset必须覆盖src的每个有效行，不能依赖参数Tile最后一行或最后一列隐式扩展。
-- 计算使用FP32。scale或offset中的NaN、Inf按照FP32运算传播；超出FP32范围的结果按目标硬件浮点规则处理。
-- 接口只定义src.valid_shape有效区域内的输出；有效区域外的内容未定义。
+| out | 输出 | 目的操作数，Tile类型，存储空间为UB，数据类型为DT_FP32，layout必须为ND；shape和valid_shape须与src一致。 |
+| src | 输入 | 源操作数，Tile类型，存储空间为UB，数据类型为DT_INT8或DT_INT16，layout必须为ND；shape和valid_shape须与out一致。 |
+| scale | 输入 | 反量化系数，Tile类型，存储空间为UB，数据类型为DT_FP32，layout为ND或DN。若out.valid_shape=[M,N]，则scale.valid_shape须为[M,1]，shape的行数不得小于M且列数必须为1；第i行的scale[i,0]广播到输出第i行全部有效列。 |
+| offset | 输入 | 量化零点，Tile类型，存储空间为UB，数据类型为DT_FP32，layout为ND或DN，shape和valid_shape均须与scale一致；第i行的offset[i,0]广播到对应数据行。本参数不能省略；对称量化时传入全零Tile。 |
 
 ## 返回值说明
 
