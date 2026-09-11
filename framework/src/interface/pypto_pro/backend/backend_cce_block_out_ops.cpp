@@ -2262,7 +2262,7 @@ static std::string MakeBlockOutQuantCodegenCCE(const ir::CallPtr& op, codegen::C
         std::string src = codegen.GetExprAsCode(op->args_[1]);
         std::string scale = codegen.GetExprAsCode(op->args_[2]);
         std::string offset = codegen.GetExprAsCode(op->args_[3]);
-        codegen.Emit("TQUANT<QuantType::INT8_ASYM>(" + dst + ", " + src + ", " + scale + ", " + offset + ");");
+        codegen.Emit("TQUANT<QuantType::INT8_ASYM>(" + dst + ", " + src + ", " + scale + ", &" + offset + ");");
     } else {
         CHECK(false) << "block.quant: unknown mode " << ir::EnumToString(mode);
     }

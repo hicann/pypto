@@ -37,15 +37,15 @@ pypto_pro.language.matmul(
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| dst_tile | 输出 | 目的操作数，Tile类型，存储空间为L0C Buffer，形状为[M, N]。支持的数据类型和分形组合详见[约束说明](#约束说明)。支持通过valid_shape或pypto_pro.language.set_validshape设置尾块的有效形状，有效M、N必须与实际矩阵乘结果范围一致。 |
-| lhs_tile | 输入 | 源操作数（左矩阵），Tile类型，存储空间为L0A Buffer，形状为[M, K]，K必须与rhs_tile的K维一致。支持的数据类型和分形组合详见[约束说明](#约束说明)。 |
-| rhs_tile | 输入 | 源操作数（右矩阵），Tile类型，存储空间为L0B Buffer，形状为[K, N]，K必须与lhs_tile的K维一致。支持的数据类型和分形组合详见[约束说明](#约束说明)。 |
+| dst_tile | 输出 | 目的操作数，Tile类型，存储空间为L0C Buffer，形状为[M, N]，layout必须为NZ。数据类型为DT_FP32或DT_INT32时，fractal未指定则自动设为1024。支持通过valid_shape或pypto_pro.language.set_validshape设置尾块的有效形状，有效M、N必须与实际矩阵乘结果范围一致。支持的数据类型组合详见[约束说明](#约束说明)。 |
+| lhs_tile | 输入 | 源操作数（左矩阵），Tile类型，存储空间为L0A Buffer，形状为[M, K]，layout必须为NZ，K必须与rhs_tile的K维一致。支持的数据类型组合详见[约束说明](#约束说明)。 |
+| rhs_tile | 输入 | 源操作数（右矩阵），Tile类型，存储空间为L0B Buffer，形状为[K, N]，layout必须为ZN，K必须与lhs_tile的K维一致。支持的数据类型组合详见[约束说明](#约束说明)。 |
 | bias_tile | 输入 | 源操作数（可选偏置），Tile类型，存储空间为BiasTable Buffer，形状为[1, N]。偏置沿M维广播，数据类型必须与dst_tile一致。传入本参数时，在Fixpipe阶段融合偏置加法，无需额外调用pypto_pro.language.add。只能作为第四个位置参数传入。 |
 | phase | 输入 | 可选，开启硬件unitFlag机制，[pypto_pro.language.AccPhase](../basic_data_structures/AccPhase.md)类型。与[pypto_pro.language.STPhase](../basic_data_structures/STPhase.md)的配合方式见[AccPhase与STPhase配合使用说明](phase.md)。 |
 
 ## 约束说明
 
-- 数据类型及分形约束：
+- 数据类型约束：
 
   | lhs_tile（L0A Buffer） | rhs_tile（L0B Buffer） | dst_tile（L0C Buffer） |
   |---|---|---|
@@ -217,7 +217,6 @@ def matmul_k_split_bias_kernel(
         addrs=0x0000, mutex_ids=[12])
 
     with pl.section_cube():
-        pl.system.set_mm_layout_transform(enabled=True)
         ac = acc.current()
         for k in pl.range(0, K_SPLIT, TILE):
             cur_a = a_l1.next()
@@ -240,5 +239,4 @@ def matmul_k_split_bias_kernel(
             else:
                 pl.matmul_acc(ac, ac, al, br, phase=pl.AccPhase.Final)
         pl.store(c, ac, [0, 0], phase=pl.STPhase.Final)
-        pl.system.set_mm_layout_transform(enabled=False)
 ```

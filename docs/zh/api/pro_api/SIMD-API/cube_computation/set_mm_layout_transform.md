@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-切换matmul的Fixpipe结果读出方向。开启后，Fixpipe沿N方向从L0C Buffer读取数据。
+用于matmul计算中切换Fixpipe结果读出方向。开启后，Fixpipe沿N方向从L0C Buffer读取数据。
 
 ## 函数原型
 
@@ -26,12 +26,11 @@ pypto_pro.language.system.set_mm_layout_transform(*, enabled: bool) -> None
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| enabled | 输入 | 布局转换开关，bool类型，必须在编译期确定。True表示Fixpipe沿N方向从L0C Buffer读取数据，False表示沿M方向读取数据。仅在matmul的K维分块累加场景中使用，须在K循环前开启，并在写回GM后关闭。 |
+| enabled | 输入 | Fixpipe结果读出方向切换开关，bool类型，必须在编译期确定。True表示沿N方向读取，False表示沿M方向读取。仅在matmul计算与Fixpipe需要并行访问同一块L0C Buffer时使用。 |
 
 ## 约束说明
 
-- 本接口仅用于矩阵乘K维分块累加场景。进入K维累加前设置为True，完成L0C Buffer到GM的写回后设置为False。
-- 未使用K维分块累加的单次矩阵乘不需要调用本接口。
+- 仅当matmul计算与Fixpipe并行访问同一块L0C Buffer时使用；完成结果搬出后将enabled设为False。两者串行执行或使用不同L0C Buffer时无需调用。
 
 ## 返回值说明
 
@@ -39,7 +38,7 @@ pypto_pro.language.system.set_mm_layout_transform(*, enabled: bool) -> None
 
 ## 调用示例
 
-### K维分块累加时切换L0C Buffer读出方向
+### K维分块累加时切换Fixpipe结果读出方向
 
 ```python
 import pypto_pro.language as pl
@@ -73,6 +72,7 @@ def mm_layout_kernel(
         addrs=0x0000, mutex_ids=[8])
 
     with pl.section_cube():
+        # 当前流水调度要求Fixpipe沿N方向读取结果。
         pl.system.set_mm_layout_transform(enabled=True)
         ac = acc.current()
         for k in pl.range(0, K_SIZE_ACC, TILE_ACC):

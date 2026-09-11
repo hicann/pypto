@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-matmul / matmul_acc / matmul_mx / matmul_mx_acc的phase参数（pypto_pro.language.AccPhase）与store / store_tile / move的phase参数（pypto_pro.language.STPhase）共同控制Cube（矩阵乘）与Fixpipe（L0C→GM或L0C→UB搬运）之间的**unit_flag硬件握手**。正确使用phase可以省去软件同步、提升流水并行度；使用不当则会导致精度问题或设备卡死。
+matmul / matmul_acc / matmul_mx / matmul_mx_acc的phase参数（pypto_pro.language.AccPhase）与store / store_tile / move的phase参数（pypto_pro.language.STPhase）共同控制Cube（矩阵乘）与Fixpipe（L0C→GM或L0C→UB搬运）之间的**unit_flag硬件握手**。正确使用phase可以省去两条流水在L0C Buffer上的软件同步、提升流水并行度；使用不当则会导致精度问题或设备卡死。
 
-本文是AccPhase与[STPhase](../basic_data_structures/STPhase.md)的配合使用说明，不是独立接口文档。STPhase.md说明枚举本身及各枚举值的语义；本文重点说明两个枚举之间的配对关系、硬件握手机制和典型使用方式。
+本文是[AccPhase](../basic_data_structures/AccPhase.md)与[STPhase](../basic_data_structures/STPhase.md)的配合使用说明，不是独立接口文档，重点说明两个枚举之间的配对关系、硬件握手机制和典型使用方式。
 
 ## 硬件unit_flag机制
 
@@ -50,17 +50,17 @@ phase=pypto_pro.language.STPhase.Partial或phase=pypto_pro.language.STPhase.Fina
 
 ## phase与自动同步的关系
 
-| 配置 | 自动同步 | 同步机制 |
+| 配置 | L0C Buffer同步 | 同步机制 |
 |---|---|---|
-| 配置了phase |**不自动插入同步** | 靠硬件unit_flag实现Matmul（M流水）与Fixpipe之间的同步 |
-| 未配置phase |**自动插入同步** | 框架自动插入M流水与Fixpipe之间的软件同步 |
+| 配置了phase | 不插入matmul计算流水与Fixpipe之间的软件同步 | 靠硬件unit_flag实现matmul计算流水与Fixpipe之间的同步；L1 Buffer、L0A Buffer和L0B Buffer等其他Tile的自动同步不受影响 |
+| 未配置phase | 插入matmul计算流水与Fixpipe之间的软件同步 | 框架通过软件同步保证matmul计算流水与Fixpipe的执行顺序 |
 
 ## 使用约束
 
 如果phase使用不当，可能会导致精度问题或者卡死现象。使用时必须保证：
 
-1. **配对使用**：如果任一matmul系列接口使用了phase，对应的store或store_tile也需要使用phase。
-2. **Final收尾**：对于同一块L0C，matmul系列接口的最后一轮写操作，以及store或store_tile的最后一轮读操作，必须使用Final模式。
+1. **配对使用**：如果任一matmul系列接口使用了phase，对应的store、store_tile或move也需要使用phase。
+2. **Final收尾**：对于同一块L0C，matmul系列接口的最后一轮写操作，以及store、store_tile或move的最后一轮读操作，必须使用Final模式。
 
 ## 错误案例
 
@@ -91,7 +91,7 @@ pl.store(out, ac, [0, 0])
 
 **原因**：
 
-- **软件同步角度**：store未配置phase，框架会自动插入Fixpipe同步；但matmul配置了phase，不会自动插入M流水同步。两种同步机制不匹配。
+- **软件同步角度**：store未配置phase，框架会自动插入Fixpipe同步；但matmul配置了phase，不会自动插入matmul计算流水同步。两种同步机制不匹配。
 - **硬件unit_flag角度**：store未配置phase，不受硬件unit_flag值影响，Fixpipe不会等待unit_flag。
 
 上述两种情况，Fixpipe搬运L0C数据都不会严格等待Matmul计算完成，导致读到未完成的数据。
