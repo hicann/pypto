@@ -1,0 +1,19 @@
+# pypto.Tensor.index\_add\_
+
+<!-- md-trans-meta sourceCommit=d92d51ac286ac6802735f52dae2fade039bbc9b3 translatedAt=2026-08-26T02:46:53.409Z pushedAt=2026-08-28T11:36:17.381Z -->
+
+## Applicable Products
+
+- Ascend 950PR/Ascend 950DT: Supported
+- Atlas A3 training products/Atlas A3 inference products: Supported
+- Atlas A2 training products/Atlas A2 inference products: Supported
+
+## Prototype
+
+```python
+index_add_(self, dim: int, index: 'Tensor', source: 'Tensor', *, alpha: Optional[List[Union[int, float]]] = 1) -> 'Tensor'
+```
+
+## Description
+
+See [pypto.index\_add\_](../operation/pypto-index_add_.md).

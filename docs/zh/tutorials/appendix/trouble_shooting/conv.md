@@ -28,7 +28,7 @@ Operation阶段校验TileShape配置超出硬件缓存空间限制，包括L0A�
 
 1. 根据报错日志中提示的缓存名称（L0A/L0B/L0C/L1）和实际tile值，结合当前芯片型号的buffer大小，计算占用空间是否超限。
 2. 减小对应维度的Tile大小，使`tileH * tileW * tileK * sizeof（dtype） ≤ L0A_size`等约束满足。
-3. 参考TileShape空间约束说明：[pypto.set_conv_tile_shapes]（../api/config/pypto-set_conv_tile_shapes.md）。
+3. 参考TileShape空间约束说明：[pypto.set_conv_tile_shapes](../../../api/config/pypto-set_conv_tile_shapes.md)。
 
    ```python
    # 正确示例-基于test_conv.py: test_conv2d_fp16_basic_with_bias

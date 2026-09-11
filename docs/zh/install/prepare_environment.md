@@ -1,4 +1,4 @@
-﻿# 环境部署
+# 环境部署
 
 在使用PyPTO开发或运行之前，请您先参考下面步骤完成基础环境搭建和编译安装，确保已安装NPU驱动、固件和CANN软件（`Ascend-cann-toolkit`和`Ascend-cann-ops`）等。
 
