@@ -239,8 +239,6 @@ void CheckL0TileTiling(DataType outType, const ConvAttrParam& attrParam, const T
         int64_t kd = weightTensor.GetShape()[NCDHW_D_IDX];
         int64_t dout = ConvComputeDo(inputTensor, weightTensor, attrParam);
         numTileL0 *= dout;
-        kAL1 *= kd;
-        kBL1 *= kd;
         oriK *= kd;
     }
     if (numTileL0 * CeilDiv(oriK, tileK) > MAX_LOOP) {
