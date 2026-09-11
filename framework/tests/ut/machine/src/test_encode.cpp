@@ -453,9 +453,8 @@ TEST_F(TestDevEncode, test_memory_driven_runtime_outcast_cache_depth)
     EXPECT_EQ(devProg->memBudget.tensor.runtimeOutcastPoolSize,
               devProg->slotSize * (outcastDepth + 1) * devProg->GetParallelism());
 
-    const uint64_t totalOutcastSlots = devProg->memBudget.tensor.BoundaryAndInnerTemporalOutcastSlotNum();
-    EXPECT_GE(totalOutcastSlots, static_cast<uint64_t>(std::max(outcastDepth, 2u)));
-    EXPECT_GT(devProg->memBudget.tensor.devTaskBoundaryOutcastNum, 0u);
+    // Assemble writes OUTPUT → Encode IO dual: not InnerTemporal; no Boundary either in this case.
+    EXPECT_EQ(devProg->memBudget.tensor.devTaskInnerTemporalOutcastNum, 0u);
     EXPECT_LE(devProg->memBudget.tensor.devTaskInnerTemporalOutcastNum,
               devProg->memBudget.tensor.slottableOutcastSlotSize * kEff * SLOTS_NEED_ALLOC_SIZE);
     EXPECT_EQ(devProg->controlFlowCache.runtimeBackup.workspace.tensorAllocators[0].slottedOutcastsBlockList.size(),
@@ -799,14 +798,15 @@ TEST_F(TestDevEncode, test_workspace_flex_io_outcast_skips_assemble_mark)
     const WorkspaceDesc flex = CollectWorkspaceDesc(func, *devProg, dyndev->constructAssembleNeedAllocRuntimeSlots);
     devProg->RelocProgram(progAddr, 0);
 
-    EXPECT_EQ(flex.totalAssembleOutcastSlot, dyndev->inoutLink.assembleSlotIndexList.size());
+    // OUTPUT assemble is still named, but skipped from IT budget.
+    EXPECT_EQ(flex.totalAssembleOutcastSlot, 0u);
     EXPECT_LE(flex.totalExclusiveOutcastSlot, devProg->slotSize);
     EXPECT_LT(flex.totalAssembleOutcastSlot, dyndev->inoutLink.inputSlotIndexList.size());
 
     const uint32_t stitchNumMax = ConfiguredStitchFunctionMaxNum();
     WorkspaceDesc flexWs = flex;
     (void)ResolveStitchDepthConfig(flexWs, MakeNonMemoryDrivenCfg(stitchNumMax));
-    EXPECT_EQ(flexWs.totalAssembleOutcastSlot, dyndev->inoutLink.assembleSlotIndexList.size());
+    EXPECT_EQ(flexWs.totalAssembleOutcastSlot, 0u);
     EXPECT_LT(flexWs.devTaskBoundaryOutcastNum, devProg->slotSize * stitchNumMax);
 }
 
