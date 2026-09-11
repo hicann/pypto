@@ -22,7 +22,12 @@
 ## 函数原型
 
 ```python
-pypto_pro.language.pto_assert(condition, format_str=None, *args, *, loc=False)
+pypto_pro.language.pto_assert(
+    condition: bool,
+    format_str: Optional[str] = None,
+    *args,
+    loc: bool = False,
+) -> None
 ```
 
 ## 参数说明

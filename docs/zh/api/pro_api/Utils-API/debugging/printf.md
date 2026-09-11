@@ -21,7 +21,11 @@
 ## 函数原型
 
 ```python
-pypto_pro.language.printf(format_str, *args, *, loc=False)
+pypto_pro.language.printf(
+    format_str: str,
+    *args,
+    loc: bool = False,
+) -> None
 ```
 
 ## 参数说明

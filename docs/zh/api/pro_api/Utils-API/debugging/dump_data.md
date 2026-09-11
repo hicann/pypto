@@ -30,7 +30,15 @@ Tile通过[pypto_pro.language.make_tile](../../SIMD-API/resource_management/make
 ## 函数原型
 
 ```python
-pypto_pro.language.dump_data(data, offsets=None, shapes=None, *, workspace=None, loc=False)
+pypto_pro.language.dump_data(
+    data: Union[Tensor, Tile],
+    offsets: Optional[List[int]] = None,
+    shapes: Optional[List[int]] = None,
+    *,
+    workspace: Optional[Tensor] = None,
+    loc: bool = False,
+    flag: Optional[str] = None,
+) -> None
 ```
 
 ## 参数说明
@@ -42,6 +50,7 @@ pypto_pro.language.dump_data(data, offsets=None, shapes=None, *, workspace=None,
 | shapes | 输入 | 可选，窗口大小（各维）。取值为由整型常量或运行时整型标量表达式组成的序列，长度须等于数据的维数；须与offsets同时提供或同时为None。其中编译期常量必须大于0；Tensor窗口模式还要求最内维stride为编译期常量1。NZ Tensor窗口须保持完整分形：M shape按16对齐，N shape和offset按C0对齐；前导维按batch逐个打印。Tile窗口要求二维且Tile物理shape为编译期常量。 |
 | workspace | 输入 | 可选，GM上的临时Tensor，仅用于L0C Buffer中Tile的中转打印。仅当data为L0C Buffer中的Tile时有效；Tensor传入该参数会报ValueError，其他内存空间的Tile会报错。必须是与Tile dtype相同的GM TensorType，容量至少能容纳完整物理Tile。 |
 | loc | 输入 | 可选，是否在输出前打印源文件/行号，取值为True或False（默认）。 |
+| flag | 输入 | 可选，字符串标签，必须是编译时常量，不能是运行时变量。提供时在dump输出前单独打印一行标记`=== [flag] <flag> ===`，用于区分多个dump点的输出。 |
 
 ## 约束说明
 
@@ -79,11 +88,9 @@ def dump_data_tensor_full_kernel(
 全量dump输出示例：
 
 ```text
-=== [TPRINT GlobalTensor] Data Type: int32, Layout: ND ===
-  Shape: [1, 1, 1, 16]
+=== [dump_tensor] dtype: int32, Layout: ND, shape=[1,1,1,1,16] ===
   Batch [0, 0, 0]:
-      0       10       20       30       40       50       60       70
-     80       90      100      110      120      130      140      150
+0 10 20 30 40 50 60 70 80 90 100 110 120 130 140 150
 ```
 
 动态偏移示例：
@@ -98,6 +105,21 @@ vidx = pl.get_block_idx()
 pl.dump_data(out, offsets=[vidx * 4], shapes=[4])
 ```
 
+带标签输出（用于区分多个dump点）：
+
+```python
+pl.dump_data(out, flag="checkpoint_A")
+```
+
+标签输出示例：
+
+```text
+=== [flag] checkpoint_A ===
+=== [dump_tensor] dtype: int32, Layout: ND, shape=[1,1,1,1,16] ===
+  Batch [0, 0, 0]:
+0 10 20 30 40 50 60 70 80 90 100 110 120 130 140 150
+```
+
 ### UB Tile输入
 
 UB Tile可直接打印，无需workspace。L1 Buffer、L0A Buffer和L0B Buffer中的Tile无法直接打印。
@@ -108,11 +130,11 @@ import pypto_pro.language as pl
 
 @pl.jit(auto_mutex=True)
 def dump_data_tile_full_kernel(
-    a: pl.Tensor[[32, 32], pl.DT_INT32],
-    b: pl.Tensor[[32, 32], pl.DT_INT32],
-    out: pl.Tensor[[32, 32], pl.DT_INT32],
+    a: pl.Tensor[[8, 8], pl.DT_INT32]
+    b: pl.Tensor[[8, 8], pl.DT_INT32]
+    out: pl.Tensor[[8, 8], pl.DT_INT32]
 ):
-    tt = pl.TileType(shape=[32, 32], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
+    tt = pl.TileType(shape=[8, 8], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
     ta_group = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
     tb_group = pl.make_tile_group(type=tt, addrs=0x1000, mutex_ids=[1])
     tc_group = pl.make_tile_group(type=tt, addrs=0x2000, mutex_ids=[2])
@@ -130,16 +152,15 @@ def dump_data_tile_full_kernel(
 全量dump输出示例：
 
 ```text
-=== [TPRINT Tile] Data Type: int32, Layout: ND, TileType: Vec ===
-  Source Shape: [32, 32]
-      0       2       4       6       8      10      12      14
-     64      66      68      70      72      74      76      78
-    128     130     132     134     136     138     140     142
-    192     194     196     198     200     202     204     206
-    256     258     260     262     264     266     268     270
-    320     322     324     326     328     330     332     334
-    384     386     388     390     392     394     396     398
-    448     450     452     454     456     458     460     462
+=== [dump_tile] dtype: int32, shape=[8,8], valid=[8,8], Layout: ND ===
+0 2 4 6 8 10 12 14
+16 18 20 22 24 26 28 30
+32 34 36 38 40 42 44 46
+48 50 52 54 56 58 60 62
+64 66 68 70 72 74 76 78
+80 82 84 86 88 90 92 94
+96 98 100 102 104 106 108 110
+112 114 116 118 120 122 124 126
 ```
 
 ### L0C Buffer中的Tile输入（需要workspace）
@@ -196,30 +217,22 @@ def dump_data_tile_acc_fp16_kernel(
         pl.store(out, ac, [0, 0])
 ```
 
-窗口dump（带offsets/shapes和workspace）：
-
-```python
-# workspace 声明为 pl.Tensor[[32, 32], pl.DT_FP32]
-# 打印 Acc Tile 中偏移 [16, 16]、大小 8x8 的窗口
-pl.dump_data(ac, offsets=[16, 16], shapes=[8, 8], workspace=workspace)
-```
-
 窗口模式输出示例（offsets=[16, 16], shapes=[8, 8]）：
 
 ```text
 === [TPRINT Acc Tile Window] Data Type: float32, Layout: NZ, TileType: Acc ===
   Source Shape: [64, 64], Window Offsets: [16, 16], Requested Shape: [8, 8], Valid Shape: [8, 8]
-  3.2298 -15.6709  -9.2879 -12.3104 -16.4727  14.4406   3.6175 -14.7739
- -5.8024  -9.9790   8.3985   2.1331   0.1348 -12.8909   0.1361  -3.0442
-  2.4974   1.5251 -13.1748   5.9634   6.1657   0.8389  13.8052 -11.0019
- -7.0973   2.4425  -3.5134   0.2277 -12.4192 -14.7564   6.8491 -15.4198
-  4.8601  -0.9246  -5.6728  -4.2165  12.5482  -3.1285   8.9953  -8.2000
- 15.5239  -6.9626  -2.0870   5.0846   0.7985  -0.8446  -4.7134  15.3558
-  9.5928   9.8900  -1.1198   7.5672   0.0275   8.6235   0.7186   6.4263
- -2.8095  -1.8578   1.4832  -7.0184   8.0429   4.5278   1.3108  16.0369
+   2.435661  21.525450  -2.534927  -3.354072  -1.637453  -7.538389  -5.316622   7.327333
+   3.319994   4.183826   9.192725 -15.309023   5.075872  15.763545  -1.755892  -7.553324
+  -6.676492  -1.058733  -2.251584  -8.538083  -0.172604   9.005786  -1.326701   7.341187
+   5.795816 -12.892869   3.342661   3.139680  10.270340  -0.026452  -2.230551   3.213134
+   3.064780  -5.402464  -0.289040  -4.588926  -0.931392 -12.228477 -20.040319  10.303446
+  -5.076264   0.564521  11.335535  -0.019537  -1.963741   4.344845  -0.789701   7.402071
+ -13.048984  -7.837986 -16.793615   5.720566  -6.111812 -27.283802   1.088718  -7.852593
+ -10.569035   7.459199   5.887267   7.939989   1.122919   4.743242 -10.458792  -0.729014
 ```
 
-在循环中使用动态偏移：
+在分块循环中使用窗口dump：
 
 ```python
 for i in pl.range(0, 256, 64):
