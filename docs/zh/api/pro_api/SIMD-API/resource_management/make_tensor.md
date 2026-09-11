@@ -114,3 +114,94 @@ def workspace_kernel(
         pl.load(t, ws_buf, [32, 0])
         pl.store(out, t, [32, 0])
 ```
+
+### 重建Tensor视图并合并连续维度
+
+pypto_pro.language.make_tensor可以在不搬运数据的情况下，通过shape和stride重建GM Tensor视图，用于调整维数、形状或步长，以及合并连续维度。新Tensor视图与原Tensor共享存储空间，其stride必须与实际内存排布一致。
+
+通过pypto_pro.language.Ptr重建视图时，将Kernel参数声明为pypto_pro.language.Ptr[dtype]，并在函数体内调用pypto_pro.language.make_tensor(ptr, shape, stride)。shape中的各维长度可以来自运行时TilingData，但shape列表的长度必须在编译期确定。
+
+#### 通过Ptr创建Tensor视图
+
+```python
+@pl.jit()
+def k(q: pl.Ptr[pl.DT_FP16], tiling: OpTiling):
+    # 行优先 => stride = [n*d, d, 1]；shape/stride 全部来自 tiling
+    tensor_q = pl.make_tensor(q, [tiling.sq, tiling.n, tiling.d],
+                              [tiling.n * tiling.d, tiling.d, 1])
+    # 之后 tensor_q 的用法与 pl.Tensor 参数完全相同
+```
+
+pypto_pro.language.make_tensor的第一个参数也可以是已有的pypto_pro.language.Tensor。新视图与原Tensor共享地址，并使用新指定的shape、stride和可选dtype。
+
+合轴是将GM Tensor中相邻且连续的两个维度合并为一个维度。与通过order从多维Tensor中选择两个维度不同，合轴会降低Tensor视图的维数，使其与二维Tile对应。典型用途如下：
+
+- 对于FlashAttention的TND或BSND排布，将批次维B和序列维S合并为总token维B × S，即TND中的T维，使一次load可以跨批次连续读取多行。
+- 对于维数不同的Host输入，将前若干连续维度合并，在Kernel内构造固定的二维[M, N]视图。
+
+#### 合并连续维度
+
+仅当待合并的维度在内存中连续且不存在间隔时，才能合轴。对于行优先ND排布的[d0, d1, d2]，其stride为[d1 × d2, d2, 1]：
+
+- 合并d0与d1后，新维度大小为d0 × d1，stride取内层维度d1的stride。合并条件为stride(d0) = d1 × stride(d1)。
+- 如果d0与d1之间存在Padding，即stride(d0) > d1 × stride(d1)，则不能合并，否则Padding区域会被当作有效数据读取。
+
+#### 将[B, S, D]合并为[B × S, D]
+
+通过pypto_pro.language.make_tensor合并连续维度并构造低一维的Tensor视图，再调用load搬入Tile。
+
+```python
+# 原始 GM：q 是 [B, S, D]，行优先连续，stride = [S*D, D, 1]
+q: pl.Tensor[[B, S, D], pl.DT_FP16]
+
+# 合轴：B、S 合并成一维 B*S，stride 取里层的 D
+q_merged = pl.make_tensor(q, [B * S, D], [D, 1])   # 复用 q 的指针，不搬数据
+
+# 现在 q_merged 是二维 [B*S, D]，直接按 Tile 索引 load
+tile = pl.make_tile(pl.TileType(shape=[TS, D], dtype=pl.DT_FP16,
+                                target_memory=pl.MemorySpace.Vec), addr=0x0, size=TS*D*2)
+pl.load_tile(tile, q_merged, [t, 0])   # 第 t 块 = 合并轴上的第 [t*TS : (t+1)*TS] 行
+```
+
+若要读取原始Tensor中第b个批次的第s行，合并后的行号为b × S + s。
+
+#### 使用运行时形状合并为[M, N]
+
+Kernel可以接收指针和TilingData，将Host侧2～4维输入的形状合并为固定的二维Tensor视图。N为最内层维度，M为其余维度的乘积。
+
+```python
+@pl.jit(auto_mutex=True)
+def add_dynrank_kernel(x: pl.Ptr[pl.DT_FP16], y: pl.Ptr[pl.DT_FP16],
+                       z: pl.Ptr[pl.DT_FP16], tiling: AddTiling):
+    N = tiling.shape[3]
+    M = tiling.shape[0] * tiling.shape[1] * tiling.shape[2]   # 前三维合轴成 M
+    tensor_x = pl.make_tensor(x, [M, N], [N, 1])              # 折叠成二维 [M, N]
+    tensor_y = pl.make_tensor(y, [M, N], [N, 1])
+    tensor_z = pl.make_tensor(z, [M, N], [N, 1])
+    ...
+    pl.load_tile(tile_a, tensor_x, [i, j])                    # 之后就是普通二维 load
+```
+
+逐元素算子只依赖连续的元素顺序，因此可以将[2, 4, 256, 256]、[8, 256, 256]和[512, 512]等不同形状合并为[M, N]，由同一个Kernel处理。Kernel内通过pypto_pro.language.make_tensor构造的视图始终为二维。
+
+#### 将BSND排布转换为TND视图
+
+FlashAttention的TND排布将批次与序列合并为总token维T = ΣS_i。对于形状为[B, S, N, D]的BSND Tensor，如果各批次的S相同且数据在内存中连续，可以合并B、S维，构造TND视图。
+
+```python
+# BSND -> 把 B、S 合成 T = B*S（N、D 保留），stride 取里层
+q_tnd = pl.make_tensor(q, [B * S, N, D], [N * D, D, 1])
+# 再用 order 在 [T, N, D] 里挑 (T, D) 两维
+pl.load_tile(q_tile, q_tnd, [t_off, n_idx, 0], order=[0, 2])
+```
+
+#### 小结
+
+| 步骤 | 做法 |
+|------|------|
+| 1. 确认可合轴 | 被合并的两维在内存里连续（无padding）。 |
+| 2. 重建视图   | pypto_pro.language.make_tensor(src, 合并后的shape, 合并后的stride)，stride取里层维的stride。 |
+| 3. 正常load  | 合并后的Tensor维数更低，按普通二维 / 多维场景load即可。 |
+| 4. 偏移换算   | 合并轴的行号 = 外层下标 * 里层大小 + 里层下标。 |
+
+> **合轴约束**：被合并的维度必须连续，stride必须与实际内存排布一致。违反上述约束会读取错误位置或Padding区域的数据。排查精度问题时，可改用未合轴的逐维Tensor视图进行对比验证。
