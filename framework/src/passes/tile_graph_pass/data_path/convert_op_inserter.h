@@ -158,6 +158,12 @@ public:
     // 检查是否适合 UB2L1 小搬大
     bool FitUB2L1(const LogicalTensorPtr& tensor) const;
 
+    // ub2l1场景，限制数据类型
+    bool IsUb2L1SupportedDtype(const LogicalTensorPtr& tensor) const;
+
+    // l0c2ub场景，限制数据类型
+    bool IsL0C2UbSupportedDtype(const LogicalTensorPtr& tensor) const;
+
     // 判断同一源 tensor 是否有并行 consumer 需要不同的 memory 去向
     bool HasParallelDifferentConsumerRequirement(const LogicalTensorPtr& tensor, MemoryType targetType) const;
 

@@ -2090,6 +2090,94 @@ TEST_F(LegacyAssignMemoryTypeTest, TestUB2L1SmallToLarge)
     Platform::Instance().ReloadMemoryPaths("2201");
 }
 
+// 负向用例（A5 + view/assemble legacy 路径）：UB2L1 不支持的 dtype（int32）应降级为经 DDR 搬运，不再生成 UB->L1 直连
+TEST_F(LegacyAssignMemoryTypeTest, TestUB2L1UnsupportDataTypeDdrFallback)
+{
+    // 设置 A5 平台
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Platform::Instance().ReloadMemoryPaths("3510");
+    config::SetHostConfig(KEY_STRATEGY, "AssignMemoryTypeTestStrategy");
+    std::vector<int64_t> shapeA = {NUM_32, NUM_64};
+    std::vector<int64_t> shapeB = {NUM_64, NUM_64};
+    std::vector<int64_t> shapeC = {NUM_32, NUM_64};
+    PROGRAM("AssignMemoryTest")
+    {
+        Tensor inputA1(DataType::DT_INT32, shapeA, "A1");
+        Tensor inputA2(DataType::DT_INT32, shapeA, "A2");
+        Tensor inputB1(DataType::DT_INT32, shapeB, "B1");
+        Tensor inputB2(DataType::DT_INT32, shapeB, "B2");
+        Tensor out(DataType::DT_INT32, shapeC, "output");
+        SetFullTestStrategy();
+        Function* originFunction = nullptr;
+
+        config::SetBuildStatic(true);
+        FUNCTION("TestUB2L1UnsupportDataTypeDdrFallback", {inputA1, inputA2, inputB1, inputB2, out})
+        {
+            // 1. Vector 操作: Add 输出 UB（int32 不支持 UB2L1 直连）
+            TileShape::Current().SetVecTile(NUM_16, NUM_32);
+            Tensor add1 = Add(inputA1, inputA2); // (32, 64) UB
+            Tensor add2 = Add(inputB1, inputB2); // (64, 64) UB
+
+            // 2. Cube 操作: MatMul 需要 L1 输入，int32 不支持 UB->L1 直连，应经 DDR 中转
+            TileShape::Current().SetCubeTile({NUM_32, NUM_32}, {NUM_64, NUM_64}, {NUM_64, NUM_64});
+            Tensor result = Matrix::Matmul(out.GetDataType(), add1, add2); // (32, 64) @ (64, 64) = (32, 64)
+            out = result;
+        }
+        originFunction = Program::GetInstance().GetFunctionByRawName("TENSOR_TestUB2L1UnsupportDataTypeDdrFallback");
+        ASSERT_NE(originFunction, nullptr) << "Function pointer is null";
+        // 验证不存在 UB->L1 直连转换，且经 DDR 中转搬运
+        EXPECT_EQ(CountMemoryPath(originFunction, MemoryType::MEM_UB, MemoryType::MEM_L1), 0);
+        EXPECT_GE(CountMemoryPath(originFunction, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1), 1);
+    }
+    // 恢复平台设置
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+    Platform::Instance().ReloadMemoryPaths("2201");
+}
+
+// 回归用例（2201/A2A3）：platforminfo.ini 中 2201 无 UB->L1 直连边，任何 dtype 都不允许生成 UB->L1 直连
+TEST_F(LegacyAssignMemoryTypeTest, TestUB2L1On2201NoDirectPath)
+{
+    // 设置 2201 平台
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_2201);
+    Platform::Instance().ReloadMemoryPaths("2201");
+    config::SetHostConfig(KEY_STRATEGY, "AssignMemoryTypeTestStrategy");
+    std::vector<int64_t> shapeA = {NUM_32, NUM_64};
+    std::vector<int64_t> shapeB = {NUM_64, NUM_64};
+    std::vector<int64_t> shapeC = {NUM_32, NUM_64};
+    PROGRAM("AssignMemoryTest")
+    {
+        Tensor inputA1(DataType::DT_FP16, shapeA, "A1");
+        Tensor inputA2(DataType::DT_FP16, shapeA, "A2");
+        Tensor inputB1(DataType::DT_FP16, shapeB, "B1");
+        Tensor inputB2(DataType::DT_FP16, shapeB, "B2");
+        Tensor out(DataType::DT_FP16, shapeC, "output");
+        SetFullTestStrategy();
+        Function* originFunction = nullptr;
+
+        config::SetBuildStatic(true);
+        FUNCTION("TestUB2L1On2201NoDirectPath", {inputA1, inputA2, inputB1, inputB2, out})
+        {
+            // 1. Vector 操作: Add 输出 UB（fp16 属于 UB2L1 支持 dtype，但 2201 无直连边）
+            TileShape::Current().SetVecTile(NUM_16, NUM_32);
+            Tensor add1 = Add(inputA1, inputA2); // (32, 64) UB
+            Tensor add2 = Add(inputB1, inputB2); // (64, 64) UB
+
+            // 2. Cube 操作: MatMul 需要 L1 输入，2201 无 UB->L1 直连边，应经 DDR 中转
+            TileShape::Current().SetCubeTile({NUM_32, NUM_32}, {NUM_64, NUM_64}, {NUM_64, NUM_64});
+            Tensor result = Matrix::Matmul(out.GetDataType(), add1, add2); // (32, 64) @ (64, 64) = (32, 64)
+            out = result;
+        }
+        originFunction = Program::GetInstance().GetFunctionByRawName("TENSOR_TestUB2L1On2201NoDirectPath");
+        ASSERT_NE(originFunction, nullptr) << "Function pointer is null";
+        // 验证不存在 UB->L1 直连转换
+        EXPECT_EQ(CountMemoryPath(originFunction, MemoryType::MEM_UB, MemoryType::MEM_L1), 0);
+        EXPECT_GE(CountMemoryPath(originFunction, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1), 1);
+    }
+    // 恢复平台设置
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+    Platform::Instance().ReloadMemoryPaths("2201");
+}
+
 TEST_F(LegacyAssignMemoryTypeTest, TestHf8CastRightMatmulUB2L1)
 {
     // FP32 -> HF8 cast is only supported on A5, and this case verifies the A5 UB->L1 path.

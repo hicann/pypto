@@ -415,7 +415,7 @@ Status AssignMemoryType::InferReshapeL0C2UBAndUB2L1PatternLiteNPU(Operation& op)
     auto& consumers = output->GetConsumers();
 
     // l0c2ub pattern: batchmatmul case: cube op -> assemble(s) -> reshape op -> view(s)/assemble(s) -> vector
-    if (IsReshapeCubeToVecL0C2UBPattern(op) && FitsTensorInUb(input)) {
+    if (IsReshapeCubeToVecL0C2UBPattern(op) && FitsTensorInUb(input) && inserter.IsL0C2UbSupportedDtype(input)) {
         for (auto& producer : producers) {
             auto& producerInput = producer->iOperand.front();
             auto& producerOutput = producer->oOperand.front();
@@ -441,7 +441,7 @@ Status AssignMemoryType::InferReshapeL0C2UBAndUB2L1PatternLiteNPU(Operation& op)
     // ub2l1 pattern:
     // 1. vector op -> view(s)/assemble(s) -> reshape op -> view(s) from l1 -> view(s) from l0a -> cube
     // 2. vector op -> assemble(s) -> view(s) -> reshape op -> view(s) from l1 -> view(s) from l0a -> cube
-    if (IsReshapeVecToCubeUB2L1Pattern(op) && FitsTensorInUb(output)) {
+    if (IsReshapeVecToCubeUB2L1Pattern(op) && FitsTensorInUb(output) && inserter.IsUb2L1SupportedDtype(output)) {
         for (auto& producer : producers) {
             auto& producerInput = producer->iOperand.front();
             auto& producerOutput = producer->oOperand.front();
@@ -655,7 +655,7 @@ bool AssignMemoryType::TryHandleSpecialDirectMemoryPath(Operation& operation, Me
     }
     bool isA5 = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510);
     if (isA5 && from == MemoryType::MEM_L0C && to == MemoryType::MEM_UB) {
-        directPath = true;
+        directPath = (input != nullptr) && inserter.IsL0C2UbSupportedDtype(input);
         return true;
     }
     if (isA5 && from == MemoryType::MEM_UB && to == MemoryType::MEM_L1) {
@@ -2133,6 +2133,7 @@ void AssignMemoryType::ProcessL0C2UBSmallToLarge(Function& function)
         bool isVecTileShapeValid = CheckL0C2UBInnerAxisAligned(iOperand, oOperand);
         bool canUseUb = !HasParallelDifferentConsumerRequirement(iOperand, MemoryType::MEM_UB) &&
                         AreAllConsumerRequirementsTowardsUb(inserter, oOperand) &&
+                        inserter.IsL0C2UbSupportedDtype(iOperand) &&
                         IsDimMultiple(oOperand->GetShape(), iOperand->GetShape()) && isConsumerOutputMultiple &&
                         isVecTileShapeValid && FitsAssembleOutputMemoryLimit(oOperand, MemoryType::MEM_UB);
         if (!canUseUb) {
@@ -2172,6 +2173,14 @@ void AssignMemoryType::ProcessL0C2UBLargeToSmall(Function& function)
             inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
             continue;
         }
+        if (iOperand->GetMemoryTypeOriginal() == MEM_L0C && !inserter.IsL0C2UbSupportedDtype(iOperand)) {
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                              "L0C2UB large to small: dtype %s of tensor %d is not supported by L0C2UB, "
+                              "downgrade to DDR",
+                              DataType2String(iOperand->Datatype()), iOperand->magic);
+            inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
+            continue;
+        }
         if (iOperand->GetMemoryTypeOriginal() == MEM_L0C &&
             (!IsDimMultiple(iOperand->GetShape(), oOperand->GetShape()) || !isVecTileShapeValid)) {
             inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
@@ -2195,6 +2204,14 @@ void AssignMemoryType::ProcessUB2L1SmallToLarge(Function& function)
         }
         if (iOperand->GetShape().size() != kMatrixShapeDimCount ||
             oOperand->GetShape().size() != kMatrixShapeDimCount) {
+            continue;
+        }
+        if (!inserter.IsUb2L1SupportedDtype(iOperand)) {
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                              "UB2L1 small to large: dtype %s of tensor %d is not supported by UB2L1, "
+                              "downgrade to DDR",
+                              DataType2String(iOperand->Datatype()), iOperand->magic);
+            oOperand->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
             continue;
         }
         if (ShouldSkipUB2L1SmallToLarge(iOperand, oOperand)) {
@@ -2255,6 +2272,14 @@ void AssignMemoryType::ProcessUB2L1LargeToSmall(Function& function)
         }
         if (iOperand->GetShape().size() != kMatrixShapeDimCount ||
             oOperand->GetShape().size() != kMatrixShapeDimCount) {
+            inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
+            continue;
+        }
+        if (!inserter.IsUb2L1SupportedDtype(iOperand)) {
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                              "UB2L1 large to small: dtype %s of tensor %d is not supported by UB2L1, "
+                              "downgrade to DDR",
+                              DataType2String(iOperand->Datatype()), iOperand->magic);
             inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
             continue;
         }
