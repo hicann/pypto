@@ -14,12 +14,12 @@
 
 ## 功能说明
 
-插入trap指令强制中止执行，用于调试。无条件中止，不接受任何参数。
+强制中止Kernel执行，用于调试。无条件中止，不接受任何参数。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.trap()
+pypto_pro.language.trap() -> None
 ```
 
 ## 参数说明
