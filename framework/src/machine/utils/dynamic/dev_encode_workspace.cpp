@@ -526,17 +526,24 @@ static void ProcessDevFunctionOutcasts(WorkspaceDesc::WorkspacePerRootFunctionDe
                  devFunc->rootInnerTensorWsMemoryRequirement, devFunc->exclusiveOutcastWsMemoryRequirement);
 }
 
+// ASSEMBLE_OUTCAST that still needs IT alloc: skip Encode INPUT/OUTPUT (EXTERNAL).
+static bool IsAssembleOutcastNeedAlloc(const FlexSlotInfo& slot)
+{
+    return slot.kindSet.Contains(RuntimeSlotKind::ASSEMBLE_OUTCAST) && !slot.kindSet.Contains(RuntimeSlotKind::INPUT) &&
+           !slot.kindSet.Contains(RuntimeSlotKind::OUTPUT);
+}
+
 static std::pair<uint64_t, SymbolicScalar> ComputeAssembleOutcastMem(const std::vector<FlexSlotInfo>& slots)
 {
     uint64_t maxStaticAssembleOutcastMem = std::accumulate(
         slots.begin(), slots.end(), UINT64_C(0), [](uint64_t acc, const FlexSlotInfo& slot) {
-            return std::max(acc,
-                            (slot.kindSet.Contains(RuntimeSlotKind::ASSEMBLE_OUTCAST) ? slot.maxAssembleDstMemReq : 0));
+            return std::max(acc, (IsAssembleOutcastNeedAlloc(slot) ? slot.maxAssembleDstMemReq : 0));
         });
 
     SymbolicScalar maxDynamicAssembleOutcastMem = std::accumulate(
         slots.begin(), slots.end(), SymbolicScalar(0), [](SymbolicScalar acc, const FlexSlotInfo& slot) {
-            return std::max(acc, slot.dynMemReq.IsValid() ? slot.dynMemReq : SymbolicScalar(0));
+            return std::max(acc, (IsAssembleOutcastNeedAlloc(slot) && slot.dynMemReq.IsValid()) ? slot.dynMemReq :
+                                                                                                  SymbolicScalar(0));
         });
 
     return {maxStaticAssembleOutcastMem, maxDynamicAssembleOutcastMem};
@@ -668,9 +675,7 @@ static void FinalizeWorkspaceDescSlotBudgets(WorkspaceDesc& desc, const std::vec
     desc.totalExclusiveOutcastSlot = std::count_if(slots.begin(), slots.end(), [](const FlexSlotInfo& slot) {
         return slot.kindSet.Contains(RuntimeSlotKind::EXCLUSIVE_OUTCAST);
     });
-    desc.totalAssembleOutcastSlot = std::count_if(slots.begin(), slots.end(), [](const FlexSlotInfo& slot) {
-        return slot.kindSet.Contains(RuntimeSlotKind::ASSEMBLE_OUTCAST);
-    });
+    desc.totalAssembleOutcastSlot = std::count_if(slots.begin(), slots.end(), IsAssembleOutcastNeedAlloc);
 }
 
 WorkspaceDesc CollectWorkspaceDesc(Function* func, DevAscendProgram& devProg,
