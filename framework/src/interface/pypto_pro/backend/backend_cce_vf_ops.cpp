@@ -41,6 +41,21 @@ static std::string VFEnumValueName(const char* full_name)
     return sep ? std::string(sep + 1) : std::string(full_name);
 }
 
+// The dist kwarg is type-erased to a raw int at the Python/C++ boundary
+// (ConvertKwargsDict extracts the pybind enum's .value), so the backend cannot
+// tell which dist enum type the value came from. It can still reject ints that
+// are not a valid enumerator of the op's own dist enum — EnumToString yields
+// "UNKNOWN" for those — e.g. the load-only DINTLV/E2B_B16+ values passed to
+// store_align. In-range cross-enum values are undetectable here.
+static std::string VFCheckedDistName(int dist_val, bool is_load, const std::string& op_name)
+{
+    const char* full_name = is_load ? ir::EnumToString(static_cast<ir::LoadDist>(dist_val)) :
+                                      ir::EnumToString(static_cast<ir::StoreDist>(dist_val));
+    CHECK(std::strcmp(full_name, "UNKNOWN") != 0) << op_name << " dist=" << dist_val << " is not a valid "
+                                                  << (is_load ? "ir::LoadDist" : "ir::StoreDist") << " enumerator";
+    return VFEnumValueName(full_name);
+}
+
 // Format a DataType for log messages in the frontend DT_XXX style.
 static std::string DTypeStr(const DataType& dt) { return "DT_" + ir::DTypeToString(dt); }
 
@@ -824,8 +839,13 @@ static std::string EmitVFCreateMask(const ir::CallPtr& op, codegen::CodegenBase&
             pat = "PAT_Q";
             break;
         default:
-            pat = "PAT_ALL";
-            break;
+            // The pattern kwarg is type-erased to int at the Python/C++ boundary;
+            // an out-of-enum value must not silently fall back to PAT_ALL.
+            // Unreachable for values produced by the front end (0..14 all have
+            // a case above) — this only guards direct IR construction paths.
+            CHECK(false) << "vf.create_mask pattern=" << static_cast<int>(pattern)
+                         << " is not a valid ir::MaskPattern enumerator";
+            return "";
     }
     // Select pset instruction based on data element size (not mask type)
     // float/int32 (4 bytes) → pset_b32, half/bf16 (2 bytes) → pset_b16, int8 (1 byte) → pset_b8
@@ -1001,6 +1021,13 @@ static std::string EmitVFLoadAlign(const ir::CallPtr& op, codegen::CodegenBase& 
         std::string dst1 = codegen.GetExprAsCode(op->args_[1]);
         std::string offset_str = ResolveOffsetArg(codegen, op->args_[3], op->args_[2]);
         DataType dst_dt = GetExprDtype(op->args_[0]);
+        // The dual-load instruction loads both dsts at dst0's element width:
+        // dst1 must have the same bit width (equal-width reinterpreting views
+        // stay legal, mirroring the de_interleave validation).
+        DataType dst1_dt = GetExprDtype(op->args_[1]);
+        CHECK(dst_dt.GetBit() == dst1_dt.GetBit())
+            << "vf.load_align 4-arg (de-interleave) requires dst0 and dst1 to have the same bit width, got dst0="
+            << DTypeStr(dst_dt) << " dst1=" << DTypeStr(dst1_dt);
         // Pointer type follows the register's declared dtype. When it differs
         // from the tile's dtype, adjust the offset by the element-width ratio so
         // the byte address stays correct (mirrors b64→b32 stride*2).
@@ -1015,7 +1042,7 @@ static std::string EmitVFLoadAlign(const ir::CallPtr& op, codegen::CodegenBase& 
         }
         std::string dintlv_mode;
         if (op->HasKwarg("dist")) {
-            dintlv_mode = VFEnumValueName(ir::EnumToString(static_cast<ir::LoadDist>(op->GetKwarg<int>("dist"))));
+            dintlv_mode = VFCheckedDistName(op->GetKwarg<int>("dist"), /*is_load=*/true, "vf.load_align");
             CHECK(dintlv_mode == "DINTLV_B8" || dintlv_mode == "DINTLV_B16" || dintlv_mode == "DINTLV_B32")
                 << "vf.load_align 4-arg (de-interleave) form requires dist=DINTLV_B8/B16/B32, got " << dintlv_mode;
         } else {
@@ -1053,7 +1080,7 @@ static std::string EmitVFLoadAlign(const ir::CallPtr& op, codegen::CodegenBase& 
         if (dst_is_mask) {
             std::string mode = "NORM";
             if (op->HasKwarg("dist")) {
-                mode = VFEnumValueName(ir::EnumToString(static_cast<ir::LoadDist>(op->GetKwarg<int>("dist"))));
+                mode = VFCheckedDistName(op->GetKwarg<int>("dist"), /*is_load=*/true, "vf.load_align");
                 CHECK(mode == "NORM" || mode == "US" || mode == "DS")
                     << "vf.load_align 2-arg (MaskReg) only supports NORM/US/DS dist, got " << mode;
             }
@@ -1062,7 +1089,7 @@ static std::string EmitVFLoadAlign(const ir::CallPtr& op, codegen::CodegenBase& 
         } else {
             // RegTensor 2-arg form: vlds with hardcoded NORM, dist kwarg not supported
             if (op->HasKwarg("dist")) {
-                auto dist_val = VFEnumValueName(ir::EnumToString(static_cast<ir::LoadDist>(op->GetKwarg<int>("dist"))));
+                auto dist_val = VFCheckedDistName(op->GetKwarg<int>("dist"), /*is_load=*/true, "vf.load_align");
                 CHECK(dist_val == "NORM")
                     << "vf.load_align 2-arg (RegTensor) only supports NORM dist, got " << dist_val;
             }
@@ -1107,7 +1134,7 @@ static std::string EmitVFLoadAlign(const ir::CallPtr& op, codegen::CodegenBase& 
     // name (e.g. "DS"), which plds accepts directly and vlds maps to Bxx suffix.
     std::string mode = "NORM";
     if (op->HasKwarg("dist"))
-        mode = VFEnumValueName(ir::EnumToString(static_cast<ir::LoadDist>(op->GetKwarg<int>("dist"))));
+        mode = VFCheckedDistName(op->GetKwarg<int>("dist"), /*is_load=*/true, "vf.load_align");
     // 3-arg form (single dst) cannot use DINTLV modes (de-interleave requires 2 dsts)
     CHECK(mode != "DINTLV_B8" && mode != "DINTLV_B16" && mode != "DINTLV_B32")
         << "vf.load_align with 3 args (single dst) does not support DINTLV dist, "
@@ -1237,17 +1264,19 @@ static std::string EmitVFLoadAlign(const ir::CallPtr& op, codegen::CodegenBase& 
         vlds_mode = mode;
     }
     std::string cast = GetB8Cast(dst_dt);
-    // B64 types (INT64/UINT64): load as b32 (mirrors AscendC DataCopyImpl b64 path)
+    // B64 types (INT64/UINT64): load as b32 (mirrors AscendC DataCopyImpl b64
+    // path, which passes the resolved dist through unchanged)
     if (dst_dt.GetBit() == 64) {
         std::string b32_ptr;
         if (post_update) {
             b32_ptr = codegen.GetOrCreateVFTilePtr(op->args_[1], /*is_post_update=*/true);
             std::string post_offset = "(" + effective_offset + ") * 2";
             codegen.Emit("vlds((RegTensor<uint32_t>&)" + dst + ", (__ubuf__ uint32_t*&)" + b32_ptr + ", " +
-                         post_offset + ", NORM, POST_UPDATE);");
+                         post_offset + ", " + vlds_mode + ", POST_UPDATE);");
         } else {
             b32_ptr = GetUBufPtr(codegen, op->args_[1], "uint32_t");
-            codegen.Emit("vlds((RegTensor<uint32_t>&)" + dst + ", " + b32_ptr + ", " + effective_offset + ", NORM);");
+            codegen.Emit("vlds((RegTensor<uint32_t>&)" + dst + ", " + b32_ptr + ", " + effective_offset + ", " +
+                         vlds_mode + ");");
         }
     } else if (post_update) {
         // B64 register types need stride doubled (postUpdateStride * 2 for 8-byte elements)
@@ -1291,7 +1320,7 @@ static std::string EmitVFStoreAlign(const ir::CallPtr& op, codegen::CodegenBase&
         CHECK(!op->HasKwarg("repeat_stride")) << "vf.store_align (MaskReg src) does not support repeat_stride";
         std::string dist = "NORM";
         if (op->HasKwarg("dist")) {
-            dist = VFEnumValueName(ir::EnumToString(static_cast<ir::StoreDist>(op->GetKwarg<int>("dist"))));
+            dist = VFCheckedDistName(op->GetKwarg<int>("dist"), /*is_load=*/false, "vf.store_align");
             // pst/psts: only supports NORM and PACK dist
             CHECK(dist == "NORM" || dist == "PACK" || dist == "PK")
                 << "vf.store_align (MaskReg) only supports NORM/PACK dist, got " << dist;
@@ -1320,38 +1349,14 @@ static std::string EmitVFStoreAlign(const ir::CallPtr& op, codegen::CodegenBase&
         codegen.Emit("psts(" + src_reg + ", " + ub_ptr + ", 0, " + dist + ");");
         return "";
     }
-    // AddrReg offset path: when 4th arg is an AddrReg variable,
-    // emit vst(src, ptr, areg, dist, mask) — 5 args (note: vst, not vsts)
-    if (op->args_.size() >= 4) {
-        std::string addr_reg = codegen.GetExprAsCode(op->args_[3]);
-        if (codegen.IsAddrRegVar(addr_reg)) {
-            // Verify args[2] is a MaskReg
-            auto mask_var_4 = ir::As<ir::Var>(op->args_[2]);
-            CHECK(mask_var_4 != nullptr)
-                << "vf.store_align (AddrReg) requires args[2] to be a mask register, but got non-Var type";
-            CHECK(codegen.IsMaskRegVar(codegen.GetVarName(mask_var_4)))
-                << "vf.store_align (AddrReg) requires args[2] to be a mask register";
-            std::string mask_reg = codegen.GetExprAsCode(op->args_[2]);
-            std::string ptr_type = "float";
-            if (auto scalar_type = ir::As<ir::ScalarType>(op->args_[1]->GetType())) {
-                ptr_type = DtypeToPtrType(scalar_type->dtype_);
-            }
-            std::string dst_ptr = GetUBufPtr(codegen, op->args_[0], ptr_type);
-            // Auto-select dist based on src dtype
-            std::string dist = "NORM_B32";
-            if (IsB8Type(src_dt))
-                dist = "NORM_B8";
-            else if (IsB16Type(src_dt))
-                dist = "NORM_B16";
-            codegen.Emit("vst(" + cast + src_reg + ", " + dst_ptr + ", " + addr_reg + ", " + dist + ", " + mask_reg +
-                         ");");
-            return "";
-        }
-    }
-    // Get kwargs with defaults
+    // Resolve the dist kwarg for the single-source paths (vst/vsts). The MaskReg
+    // path above handles its own NORM/PACK dist. Coarse names (NORM,
+    // FIRST_ELEMENT, PACK, PACK4, INTLV) auto-expand to the element-width
+    // variant based on the src dtype; width-qualified names map to the CCE
+    // DistVST constants (mirrors AscendC Reg::StoreDist / GetStoreDist).
     std::string dist = "";
     if (op->HasKwarg("dist")) {
-        dist = VFEnumValueName(ir::EnumToString(static_cast<ir::StoreDist>(op->GetKwarg<int>("dist"))));
+        dist = VFCheckedDistName(op->GetKwarg<int>("dist"), /*is_load=*/false, "vf.store_align");
     }
     if (dist.empty()) {
         // Auto-select default dist based on src dtype (uses NORM_B8/B16/B32 by element width)
@@ -1403,6 +1408,66 @@ static std::string EmitVFStoreAlign(const ir::CallPtr& op, codegen::CodegenBase&
             dist = "INTLV_B16";
         else
             dist = "INTLV_B32";
+    } else if (dist == "FIRST_ELEMENT_B8" || dist == "FIRST_ELEMENT_B16" || dist == "FIRST_ELEMENT_B32") {
+        // Explicit-width variants (mirrors AscendC Reg::StoreDist): map to the CCE
+        // DistVST constants; NORM_Bx/INTLV_Bx already match and pass through as-is.
+        dist = "ONEPT" + dist.substr(std::strlen("FIRST_ELEMENT"));
+    } else if (dist == "PACK_B16" || dist == "PACK_B32" || dist == "PACK_B64") {
+        dist = "PK" + dist.substr(std::strlen("PACK"));
+    } else if (dist == "PACK4_B32") {
+        dist = "PK4_B32";
+    }
+    // AddrReg offset path: when 4th arg is an AddrReg variable,
+    // emit vst(src, ptr, areg, dist, mask) — 5 args (note: vst, not vsts).
+    // The resolved dist is honored here as well (previously the dist kwarg was
+    // silently ignored in this path and NORM_Bx was always used).
+    if (op->args_.size() >= 4) {
+        std::string addr_reg = codegen.GetExprAsCode(op->args_[3]);
+        if (codegen.IsAddrRegVar(addr_reg)) {
+            // Verify args[2] is a MaskReg
+            auto mask_var_4 = ir::As<ir::Var>(op->args_[2]);
+            CHECK(mask_var_4 != nullptr)
+                << "vf.store_align (AddrReg) requires args[2] to be a mask register, but got non-Var type";
+            CHECK(codegen.IsMaskRegVar(codegen.GetVarName(mask_var_4)))
+                << "vf.store_align (AddrReg) requires args[2] to be a mask register";
+            // vst has no post mode — the AddrReg offset must be recreated each
+            // iteration via vf.create_addr_reg
+            CHECK(!(op->HasKwarg("post_update") && op->GetKwarg<bool>("post_update")))
+                << "vf.store_align (AddrReg) does not support post_update; recreate the AddrReg offset each "
+                   "iteration via vf.create_addr_reg";
+            // vsstb (DataBlock copy) has no AddrReg form
+            CHECK(!op->HasKwarg("data_copy_mode")) << "vf.store_align (AddrReg) does not support data_copy_mode";
+            // vst (AddrReg) is a single-source intrinsic: INTLV dists need two
+            // source registers (vsts dual form)
+            CHECK(dist != "INTLV_B8" && dist != "INTLV_B16" && dist != "INTLV_B32")
+                << "vf.store_align (AddrReg) does not support INTLV dist (requires two source registers), got " << dist;
+            std::string mask_reg = codegen.GetExprAsCode(op->args_[2]);
+            std::string ptr_type = "float";
+            if (auto scalar_type = ir::As<ir::ScalarType>(op->args_[1]->GetType())) {
+                ptr_type = DtypeToPtrType(scalar_type->dtype_);
+            }
+            std::string dst_ptr = GetUBufPtr(codegen, op->args_[0], ptr_type);
+            std::string vst_src = cast + src_reg;
+            std::string vst_mask = mask_reg;
+            if (src_dt.GetBit() == 64) {
+                // b64: simulate with b32 vst — reinterpret the register/pointer as
+                // int32 and expand the b64-element mask to per-b32-lane bits
+                // (ppack + pintlv_b32, mirrors the AscendC DataCopyImpl vst-areg
+                // b64 path); dist passes through unchanged
+                std::string packed_mask = mask_reg + "_b32lo_";
+                std::string dump_mask = mask_reg + "_b32hi_";
+                codegen.Emit("MaskReg " + packed_mask + ";");
+                codegen.Emit("MaskReg " + dump_mask + ";");
+                codegen.Emit("ppack(" + packed_mask + ", " + mask_reg + ", LOWER);");
+                codegen.Emit("pintlv_b32(" + packed_mask + ", " + dump_mask + ", " + packed_mask + ", " + packed_mask +
+                             ");");
+                vst_src = "(RegTensor<int32_t>&)" + src_reg;
+                vst_mask = packed_mask;
+                dst_ptr = GetUBufPtr(codegen, op->args_[0], "int32_t");
+            }
+            codegen.Emit("vst(" + vst_src + ", " + dst_ptr + ", " + addr_reg + ", " + dist + ", " + vst_mask + ");");
+            return "";
+        }
     }
     bool post_update = false;
     if (op->HasKwarg("post_update")) {
@@ -3171,11 +3236,10 @@ static std::string EmitVFInterleave(const ir::CallPtr& op, codegen::CodegenBase&
     // vintlv requires src0/src1 to be b8/b16/b32/b64
     DataType src0_dt = GetExprDtype(op->args_[2]);
     DataType src1_dt = GetExprDtype(op->args_[3]);
-    CHECK((src0_dt.GetBit() == 8 || src0_dt.GetBit() == 16 || src0_dt.GetBit() == 32 || src0_dt.GetBit() == 64))
+    CHECK((IsB8Type(src0_dt) || src0_dt.GetBit() == 16 || src0_dt.GetBit() == 32 || src0_dt.GetBit() == 64))
         << "vf.interleave only supports b8/b16/b32/b64 types, got " << DTypeStr(src0_dt);
-    CHECK((src0_dt.GetBit() == src1_dt.GetBit()))
-        << "vf.interleave requires src0 and src1 to have the same bit width, got src0=" << DTypeStr(src0_dt)
-        << " src1=" << DTypeStr(src1_dt);
+    CHECK((src0_dt == src1_dt)) << "vf.interleave requires src0 and src1 to have the same type, got src0="
+                                << DTypeStr(src0_dt) << " src1=" << DTypeStr(src1_dt);
     DataType dst0_dt = GetExprDtype(op->args_[0]);
     CHECK(src0_dt == dst0_dt) << "vf.interleave requires src and dst to have the same type, got dst="
                               << DTypeStr(dst0_dt) << " src=" << DTypeStr(src0_dt);
@@ -3863,6 +3927,12 @@ static std::string EmitVFCast(const ir::CallPtr& op, codegen::CodegenBase& codeg
     DataType dst_dtype = GetExprDtype(op->args_[0]);
     CHECK(src_dtype != dst_dtype) << "vf.astype: src and dst must have different types (both are "
                                   << DTypeStr(src_dtype) << ")";
+    // vcvt has no uint64 overloads on this device, and the AscendC Cast micro
+    // instruction it mirrors doesn't support uint64 either — reject early
+    // instead of failing late in bisheng.
+    CHECK(src_dtype != DataType::UINT64 && dst_dtype != DataType::UINT64)
+        << "vf.astype does not support DT_UINT64 (no vcvt overload), got src=" << DTypeStr(src_dtype)
+        << " dst=" << DTypeStr(dst_dtype);
     std::string dst = codegen.GetExprAsCode(op->args_[0]);
     std::string src = codegen.GetExprAsCode(op->args_[1]);
     std::string mask = codegen.GetExprAsCode(op->args_[2]);
@@ -4416,20 +4486,28 @@ static std::string EmitVFDeInterleave(const ir::CallPtr& op, codegen::CodegenBas
         codegen.Emit(pdintlv_op + "(" + dst0 + ", " + dst1 + ", " + src0 + ", " + src1 + ");");
         return "";
     }
-    // vdintlv overloads are keyed on the dst element type; if src dtype differs
-    // (e.g. u16 reg reinterpreted as u8 to split into byte streams, mirroring
-    // `(RegTensor<uint8_t>&)vreg0U16` in vf_topk.h:60), emit a reinterpret cast.
+    // DeInterleave requires all four operands to have the same dtype (mirrors
+    // AscendC DeInterleaveImpl: dst0/dst1/src0/src1 are one register type U and
+    // vdintlv is keyed on that element type). Cross-dtype reinterpretation is
+    // the caller's job — cast explicitly first, e.g. the
+    // `(RegTensor<uint8_t>&)vreg0U16` pattern in vf_topk.h:60.
     DataType dst_dt = GetExprDtype(op->args_[0]);
+    DataType dst1_dt = GetExprDtype(op->args_[1]);
     DataType s0_dt = GetExprDtype(op->args_[2]);
     DataType s1_dt = GetExprDtype(op->args_[3]);
-    std::string cast_prefix = "(RegTensor<" + dst_dt.ToCTypeString() + "> &)";
-    std::string s0_expr = (s0_dt == dst_dt) ? src0 : (cast_prefix + src0);
-    std::string s1_expr = (s1_dt == dst_dt) ? src1 : (cast_prefix + src1);
+    CHECK((IsB8Type(s0_dt) || s0_dt.GetBit() == 16 || s0_dt.GetBit() == 32 || s0_dt.GetBit() == 64))
+        << "vf.de_interleave only supports b8/b16/b32/b64 types, got " << DTypeStr(s0_dt);
+    CHECK(s0_dt == s1_dt) << "vf.de_interleave requires src0 and src1 to have the same type, got src0="
+                          << DTypeStr(s0_dt) << " src1=" << DTypeStr(s1_dt);
+    CHECK(s0_dt == dst_dt) << "vf.de_interleave requires dst0 and src0 to have the same type, got dst0="
+                           << DTypeStr(dst_dt) << " src0=" << DTypeStr(s0_dt);
+    CHECK(dst1_dt == dst_dt) << "vf.de_interleave requires dst0 and dst1 to have the same type, got dst0="
+                             << DTypeStr(dst_dt) << " dst1=" << DTypeStr(dst1_dt);
     if (dst_dt.GetBit() == 64) {
         codegen.Emit("vdintlv((RegTensor<uint32_t>&)" + dst0 + ", (RegTensor<uint32_t>&)" + dst1 +
-                     ", (RegTensor<uint32_t>&)" + s0_expr + ", (RegTensor<uint32_t>&)" + s1_expr + ");");
+                     ", (RegTensor<uint32_t>&)" + src0 + ", (RegTensor<uint32_t>&)" + src1 + ");");
     } else {
-        codegen.Emit("vdintlv(" + dst0 + ", " + dst1 + ", " + s0_expr + ", " + s1_expr + ");");
+        codegen.Emit("vdintlv(" + dst0 + ", " + dst1 + ", " + src0 + ", " + src1 + ");");
     }
     return "";
 }
@@ -4735,6 +4813,11 @@ static std::string EmitVFSqueeze(const ir::CallPtr& op, codegen::CodegenBase& co
            src_dt == DataType::UINT16 || src_dt == DataType::INT32 || src_dt == DataType::UINT32 ||
            src_dt == DataType::FP16 || src_dt == DataType::FP32))
         << "vf.squeeze src only supports INT8/UINT8/INT16/UINT16/INT32/UINT32/FP16/FP32, got " << DTypeStr(src_dt);
+    // Doc: dst supports the same type list as src
+    CHECK((dst_dt == DataType::INT8 || dst_dt == DataType::UINT8 || dst_dt == DataType::INT16 ||
+           dst_dt == DataType::UINT16 || dst_dt == DataType::INT32 || dst_dt == DataType::UINT32 ||
+           dst_dt == DataType::FP16 || dst_dt == DataType::FP32))
+        << "vf.squeeze dst only supports INT8/UINT8/INT16/UINT16/INT32/UINT32/FP16/FP32, got " << DTypeStr(dst_dt);
     std::string dst_expr = dst;
     std::string src_expr = src;
     if (dst_dt != src_dt) {
@@ -4859,18 +4942,21 @@ static std::string EmitVFGather(const ir::CallPtr& op, codegen::CodegenBase& cod
                                      << "mask is not supported in reg→reg form; got " << op->args_.size() << " args";
         CHECK(!op->HasKwarg("data_copy_mode")) << "vf.gather (reg→reg) does not support data_copy_mode "
                                                << "(only Tile→Reg form supports it)";
-        // Supports b8/b16/b32; src and dst must have the same type; index bit width
-        // must match src. No b64 support (vselr limitation).
+        // Supports b8/b16/b32; src and dst must have the same type (not just the
+        // same bit width — e.g. FP16 src with BF16 dst must be rejected); b64 is
+        // not supported (vselr limitation, mirrors AscendC GatherImpl
+        // SupportBytes<1,2,4> and the gather.md reg→reg type table).
         DataType dst_dt = GetExprDtype(op->args_[0]);
         DataType src_dt = GetExprDtype(op->args_[1]);
         DataType idx_dt = GetExprDtype(op->args_[2]);
+        CHECK(src_dt.GetBit() != 64) << "vf.gather (reg→reg) does not support b64 types (vselr limitation), got "
+                                     << DTypeStr(src_dt);
         CHECK((src_dt.GetBit() == idx_dt.GetBit()))
             << "vf.gather (reg→reg) requires index bit width to match src, got src=" << DTypeStr(src_dt)
             << " index=" << DTypeStr(idx_dt);
         DataType gather_dst_dt = GetExprDtype(op->args_[0]);
-        CHECK(src_dt.GetBit() == gather_dst_dt.GetBit())
-            << "vf.gather (reg→reg) requires src and dst to have the same bit width, got dst="
-            << DTypeStr(gather_dst_dt) << " src=" << DTypeStr(src_dt);
+        CHECK(src_dt == gather_dst_dt) << "vf.gather (reg→reg) requires src and dst to have the same type, got dst="
+                                       << DTypeStr(gather_dst_dt) << " src=" << DTypeStr(src_dt);
         std::string dst = codegen.GetExprAsCode(op->args_[0]);
         std::string src = codegen.GetExprAsCode(op->args_[1]);
         std::string indices = codegen.GetExprAsCode(op->args_[2]);
@@ -5331,14 +5417,19 @@ static std::string EmitVFLoadUnalign(const ir::CallPtr& op, codegen::CodegenBase
     if (op->args_.size() >= 4) {
         std::string stride = codegen.GetExprAsCode(op->args_[3]);
         std::string src_ptr = codegen.GetOrCreateVFTilePtr(op->args_[2], /*is_post_update=*/true);
-        if (ptr_type != "float") {
-            src_ptr = "(__ubuf__ " + ptr_type + " *&)" + src_ptr;
-        }
         int elem_bytes = static_cast<int>(dst_dt.GetBit() / 8);
         if (elem_bytes <= 0)
             elem_bytes = 4;
-        std::string effective_stride = (elem_bytes == 8) ? ("(" + stride + ") * 2") : stride;
-        codegen.Emit("vldus(" + dst + ", " + ureg + ", " + src_ptr + ", " + effective_stride + ", POST_UPDATE);");
+        bool is_b64 = (elem_bytes == 8);
+        // AscendC cast rules (dav_m510 load_impl.h DataCopyUnAlignImpl):
+        //   vldus (stride): b64 is simulated as uint32_t with stride*2, else native
+        std::string eff_ptr_type = is_b64 ? "uint32_t" : ptr_type;
+        std::string dst_expr = is_b64 ? ("(RegTensor<uint32_t>&)" + dst) : dst;
+        if (eff_ptr_type != "float") {
+            src_ptr = "(__ubuf__ " + eff_ptr_type + " *&)" + src_ptr;
+        }
+        std::string effective_stride = is_b64 ? ("(" + stride + ") * 2") : stride;
+        codegen.Emit("vldus(" + dst_expr + ", " + ureg + ", " + src_ptr + ", " + effective_stride + ", POST_UPDATE);");
     } else {
         std::string src_ptr = GetUBufPtr(codegen, op->args_[2], ptr_type);
         codegen.Emit("vldus(" + dst + ", " + ureg + ", " + src_ptr + ");");

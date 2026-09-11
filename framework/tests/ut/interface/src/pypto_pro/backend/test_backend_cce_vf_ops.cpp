@@ -410,7 +410,7 @@ TEST(BackendCCEVFOpsTest, EmitsReductionAndPermutationIntrinsics)
     ExpectInvoke(codegen, "vf.reduce_max", {"vcmax("}, {dst, src0, mask});
     ExpectInvoke(codegen, "vf.reduce_min", {"vcgmin("}, {dst, src0, mask}, {{"datablock", true}});
     ExpectInvoke(codegen, "vf.interleave", {"vintlv("}, {dst, dst2, src0, src1});
-    ExpectInvoke(codegen, "vf.de_interleave", {"vdintlv("}, {dst, dst2, src0, int_src});
+    ExpectInvoke(codegen, "vf.de_interleave", {"vdintlv("}, {dst, dst2, src0, src1});
     ExpectInvoke(codegen, "vf.pair_reduce_sum", {"vcpadd("}, {dst, src0, mask}, zeroing);
     ExpectInvoke(codegen, "vf.axpy", {"vaxpy("}, {dst, src0, Float(0.25), mask}, zeroing);
     ExpectInvoke(codegen, "vf.shift_left", {"vshls("}, {int_dst, int_src0, Int(2), mask}, zeroing);
@@ -1603,6 +1603,176 @@ TEST(BackendCCEVFOpsTest, StoreAlignExplicitNormDistExpandsToWidthQualified)
     ExpectContains(emitted, {"vsts(", "NORM_B32"});
     EXPECT_EQ(emitted.find("NORM,"), std::string::npos)
         << "Should expand NORM to NORM_B32, not emit bare NORM: " << emitted;
+}
+
+TEST(BackendCCEVFOpsTest, StoreAlignExplicitWidthQualifiedDist)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP16);
+    auto fp16 = MakeVar("fp16", ir::DataType::FP16);
+    auto fp16b = MakeVar("fp16b", ir::DataType::FP16);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    codegen.RegisterRegTensorVar("fp16");
+    codegen.RegisterRegTensorVar("fp16b");
+    codegen.RegisterMaskRegVar("mask");
+
+    // Width-qualified dists select the granularity explicitly and are not
+    // overridden by the src dtype (fp16 src + explicit NORM_B8 stays NORM_B8).
+    auto emitted = Invoke(codegen, "vf.store_align", {tile, fp16, mask}, {{"dist", EnumValue(ir::StoreDist::NORM_B8)}});
+    ExpectContains(emitted, {"vsts(", "NORM_B8"});
+
+    // FIRST_ELEMENT_Bx maps to the ONEPT_Bx CCE DistVST constant
+    emitted = Invoke(codegen, "vf.store_align", {tile, fp16, mask},
+                     {{"dist", EnumValue(ir::StoreDist::FIRST_ELEMENT_B16)}});
+    ExpectContains(emitted, {"ONEPT_B16"});
+
+    // PACK_Bx maps to the PK_Bx CCE DistVST constant
+    emitted = Invoke(codegen, "vf.store_align", {tile, fp16, mask}, {{"dist", EnumValue(ir::StoreDist::PACK_B32)}});
+    ExpectContains(emitted, {"PK_B32"});
+
+    // PACK4_B32 maps to the PK4_B32 CCE DistVST constant
+    emitted = Invoke(codegen, "vf.store_align", {tile, fp16, mask}, {{"dist", EnumValue(ir::StoreDist::PACK4_B32)}});
+    ExpectContains(emitted, {"PK4_B32"});
+
+    // INTLV_Bx dual-source with explicit granularity
+    emitted = Invoke(codegen, "vf.store_align", {tile, fp16, fp16b, mask},
+                     {{"dist", EnumValue(ir::StoreDist::INTLV_B8)}});
+    ExpectContains(emitted, {"vsts(", "INTLV_B8"});
+}
+
+TEST(BackendCCEVFOpsTest, StoreAlignAddrRegHonorsDist)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP16);
+    auto tile64 = MakeTile("tile64", ir::DataType::INT64);
+    auto fp16 = MakeVar("fp16", ir::DataType::FP16);
+    auto i64 = MakeVar("i64", ir::DataType::INT64);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    auto addr = MakeVar("addr", ir::DataType::INT64);
+    codegen.RegisterAddrRegVar("addr");
+    codegen.RegisterRegTensorVar("fp16");
+    codegen.RegisterRegTensorVar("i64");
+    codegen.RegisterMaskRegVar("mask");
+
+    // Default (no dist): auto-select NORM_B16 by src dtype
+    ExpectInvoke(codegen, "vf.store_align", {"vst(fp16", "NORM_B16"}, {tile, fp16, mask, addr});
+    // Explicit coarse dist expands by dtype (previously ignored in this path)
+    auto emitted = Invoke(codegen, "vf.store_align", {tile, fp16, mask, addr},
+                          {{"dist", EnumValue(ir::StoreDist::FIRST_ELEMENT)}});
+    ExpectContains(emitted, {"vst(", "ONEPT_B16"});
+    // Explicit width-qualified dist passes through (previously ignored)
+    emitted = Invoke(codegen, "vf.store_align", {tile, fp16, mask, addr},
+                     {{"dist", EnumValue(ir::StoreDist::PACK_B32)}});
+    ExpectContains(emitted, {"vst(", "PK_B32"});
+    // INTLV dist requires two source registers → reject with single-source AddrReg
+    EXPECT_ANY_THROW(
+        Invoke(codegen, "vf.store_align", {tile, fp16, mask, addr}, {{"dist", EnumValue(ir::StoreDist::INTLV)}}));
+    // vst has no post mode → reject post_update with AddrReg
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.store_align", {tile, fp16, mask, addr}, {{"post_update", true}}));
+    // b64: vst simulated via int32 reinterpret + ppack/pintlv_b32 mask expansion
+    emitted = Invoke(codegen, "vf.store_align", {tile64, i64, mask, addr});
+    ExpectContains(emitted, {"ppack(", "pintlv_b32(", "(RegTensor<int32_t>&)i64", "NORM_B32"});
+}
+
+TEST(BackendCCEVFOpsTest, LoadUnalignB64SimAndSqueezeDstWhitelist)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile64 = MakeTile("tile64", ir::DataType::INT64);
+    auto fp16 = MakeVar("fp16", ir::DataType::FP16);
+    auto bf16 = MakeVar("bf16", ir::DataType::BF16);
+    auto i64 = MakeVar("i64", ir::DataType::INT64);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    auto ureg = MakeVar("ureg", ir::DataType::INT64);
+    codegen.RegisterUnalignRegVar("ureg");
+    codegen.RegisterRegTensorVar("fp16");
+    codegen.RegisterRegTensorVar("bf16");
+    codegen.RegisterRegTensorVar("i64");
+    codegen.RegisterMaskRegVar("mask");
+
+    // load_unalign b64 with stride: simulated as uint32_t with stride*2
+    // (mirrors AscendC DataCopyUnAlignImpl)
+    auto emitted = Invoke(codegen, "vf.load_unalign", {i64, ureg, tile64, Int(4)});
+    ExpectContains(emitted, {"(RegTensor<uint32_t>&)i64", "(__ubuf__ uint32_t", "(4) * 2"});
+    // squeeze: dst must be in the doc type list (same as src)
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.squeeze", {bf16, fp16, mask}));
+}
+
+TEST(BackendCCEVFOpsTest, LoadAlignDualDstWidthAndB64Dist)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP16);
+    auto tile64 = MakeTile("tile64", ir::DataType::INT64);
+    auto fp16 = MakeVar("fp16", ir::DataType::FP16);
+    auto bf16 = MakeVar("bf16", ir::DataType::BF16);
+    auto i64 = MakeVar("i64", ir::DataType::INT64);
+    auto u32 = MakeVar("u32", ir::DataType::UINT32);
+    codegen.RegisterRegTensorVar("fp16");
+    codegen.RegisterRegTensorVar("bf16");
+    codegen.RegisterRegTensorVar("i64");
+    codegen.RegisterRegTensorVar("u32");
+
+    // 4-arg (de-interleave) form: dst1 is loaded at dst0's element width, so a
+    // dst0/dst1 bit width mismatch is rejected
+    EXPECT_ANY_THROW(
+        Invoke(codegen, "vf.load_align", {fp16, u32, tile, Int(0)}, {{"dist", EnumValue(ir::LoadDist::DINTLV_B16)}}));
+    // equal-width reinterpreting views stay legal
+    ExpectInvoke(codegen, "vf.load_align", {"vlds(", "DINTLV_B16"}, {fp16, bf16, tile, Int(0)},
+                 {{"dist", EnumValue(ir::LoadDist::DINTLV_B16)}});
+    // load_align b64: the resolved dist is passed through (not forced to NORM),
+    // mirroring the AscendC DataCopyImpl b64 path
+    ExpectInvoke(codegen, "vf.load_align", {"(RegTensor<uint32_t>&)i64", "BRC_B32"}, {i64, tile64, Int(0)},
+                 {{"dist", EnumValue(ir::LoadDist::BRC)}});
+}
+
+TEST(BackendCCEVFOpsTest, RejectsDistOutsideOpEnum)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP16);
+    auto fp16 = MakeVar("fp16", ir::DataType::FP16);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    codegen.RegisterRegTensorVar("fp16");
+    codegen.RegisterMaskRegVar("mask");
+
+    // The dist kwarg is type-erased to int at the Python/C++ boundary, so the
+    // backend validates that the value is a valid enumerator of the op's own
+    // dist enum: load-only values beyond the StoreDist range (DINTLV_B8 = 20)
+    // and out-of-range garbage are rejected. In-range cross-enum values are
+    // undetectable here (the enum type is lost at the int boundary).
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.store_align", {tile, fp16, mask}, {{"dist", 20}}));
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.load_align", {fp16, tile, Int(0)}, {{"dist", 30}}));
+}
+
+TEST(BackendCCEVFOpsTest, RejectsCreateMaskPatternOutsideEnum)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+
+    // The pattern kwarg is type-erased to int: an out-of-enum value must not
+    // silently fall back to PAT_ALL. (In-range values that alias another
+    // enum's numeric value, e.g. MaskWidth.B16 == 1 == MaskPattern.ALLF, are
+    // indistinguishable after type erasure and are treated as legal
+    // MaskPattern members.)
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.create_mask", {}, {{"pattern", 99}}, "mask"));
+}
+
+TEST(BackendCCEVFOpsTest, RejectsAstypeUint64)
+{
+    CapturingCCECodegen codegen(ir::SectionKind::Vector);
+    auto tile = MakeTile("tile", ir::DataType::FP32);
+    auto u64 = MakeVar("u64", ir::DataType::UINT64);
+    auto f32 = MakeVar("f32", ir::DataType::FP32);
+    auto i64 = MakeVar("i64", ir::DataType::INT64);
+    auto mask = MakeVar("mask", ir::DataType::UINT32);
+    codegen.RegisterRegTensorVar("u64");
+    codegen.RegisterRegTensorVar("f32");
+    codegen.RegisterRegTensorVar("i64");
+    codegen.RegisterMaskRegVar("mask");
+
+    // vcvt has no uint64 overloads, and the AscendC Cast micro instruction
+    // doesn't support uint64 either — reject early instead of failing late
+    // in bisheng.
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.astype", {f32, u64, mask}, {{"dtype", ir::DataType::FP32}}));
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.astype", {u64, f32, mask}, {{"dtype", ir::DataType::UINT64}}));
+    EXPECT_ANY_THROW(Invoke(codegen, "vf.astype", {i64, u64, mask}, {{"dtype", ir::DataType::INT64}}));
 }
 
 TEST(BackendCCEVFOpsTest, StoreAlignInt64NormalStoreEmitsB32Simulation)

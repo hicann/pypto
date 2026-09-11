@@ -204,11 +204,16 @@ class Vf:
                 ``[row, col]`` list/tuple (linear offset = ``row * shape[1] + col``)
 
         Kwargs:
-            dist: ``pl.StoreDist.NORM`` (default), ``pl.StoreDist.NORM_B16``,
-                  ``pl.StoreDist.FIRST_ELEMENT``, ``pl.StoreDist.PACK``,
-                  ``pl.StoreDist.PACK4``, ``pl.StoreDist.INTLV`` / ``INTLV_B32``
-                  (interleaved, requires two src registers),
-                  ``pl.StoreDist.PACK`` for MaskReg src (psts PK mode)
+            dist: ``pl.StoreDist`` value selecting the store distribution pattern.
+                Coarse names (``NORM`` (default), ``FIRST_ELEMENT``, ``PACK``,
+                ``PACK4``, ``INTLV``) auto-select the granularity variant from
+                the source dtype; width-qualified names select it explicitly
+                (mirrors AscendC Reg::StoreDist): ``NORM_B8``/``NORM_B16``/
+                ``NORM_B32``, ``FIRST_ELEMENT_B8``/``_B16``/``_B32``,
+                ``PACK_B16``/``_B32``/``_B64``, ``PACK4_B32``,
+                ``INTLV_B8``/``_B16``/``_B32``. ``INTLV``/``INTLV_Bx``
+                (interleaved) requires two src registers.
+                ``pl.StoreDist.PACK`` for MaskReg src (psts PK mode)
             post_update: True to auto-advance destination address after store
             data_copy_mode: ``pl.DataCopyMode.DATA_BLOCK_COPY`` for vsstb instruction
             block_stride: DataBlock copy block stride

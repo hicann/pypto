@@ -185,7 +185,13 @@ PYPTO_DECLARE_ENUM(MaskWidth, B32, B16)
 PYPTO_DECLARE_ENUM(LoadDist, NORM, BRC, BRC_B8, BRC_B16, BRC_B32, US, US_B8, US_B16, DS, DS_B8, DS_B16, UNPK, UNPK_B8,
                    UNPK_B16, UNPK_B32, UNPK4, BLK, E2B, E2B_B16, E2B_B32, DINTLV_B8, DINTLV_B16, DINTLV_B32)
 
-PYPTO_DECLARE_ENUM(StoreDist, NORM, NORM_B16, FIRST_ELEMENT, PACK, PACK4, INTLV, INTLV_B32)
+// StoreDist: coarse names (NORM/FIRST_ELEMENT/PACK/PACK4/INTLV) auto-expand to the
+// element-width variant based on the source dtype; the width-qualified names
+// (mirroring AscendC Reg::StoreDist) select the granularity explicitly.
+// Append-only: existing numeric values are serialized in IR payloads.
+PYPTO_DECLARE_ENUM(StoreDist, NORM, NORM_B16, FIRST_ELEMENT, PACK, PACK4, INTLV, INTLV_B32, NORM_B8, NORM_B32,
+                   FIRST_ELEMENT_B8, FIRST_ELEMENT_B16, FIRST_ELEMENT_B32, PACK_B16, PACK_B32, PACK_B64, PACK4_B32,
+                   INTLV_B8, INTLV_B16)
 
 PYPTO_DECLARE_ENUM(DataCopyMode, NORM, DATA_BLOCK_LOAD, DATA_BLOCK_COPY)
 
