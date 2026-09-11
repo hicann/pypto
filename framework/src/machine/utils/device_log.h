@@ -128,47 +128,47 @@ inline void DeviceLogSplitDebug(const char* func, const char* format, Args... ar
         }                                                                    \
     } while (false)
 
-#define DEV_DEBUG(fmt, ...)                                                                  \
-    do {                                                                                     \
-        if (unlikely(!HardBranchTrue(verboseDebug) || IsLogEnableDebug())) {                 \
-            dlog_debug(LOG_MOD_ID, "%lu %s\n" #fmt, GET_TID(), __FUNCTION__, ##__VA_ARGS__); \
-        }                                                                                    \
-    } while (false)
-
-#define DEV_INFO(fmt, ...)                                                                  \
+#define DEV_DEBUG(fmt, ...)                                                                 \
     do {                                                                                    \
-        if (unlikely(!HardBranchTrue(verboseInfo) || IsLogEnableInfo())) {                  \
-            dlog_info(LOG_MOD_ID, "%lu %s\n" #fmt, GET_TID(), __FUNCTION__, ##__VA_ARGS__); \
+        if (unlikely(!HardBranchTrue(verboseDebug) || IsLogEnableDebug())) {                \
+            dlog_debug(LOG_MOD_ID, "%lu %s\n" fmt, GET_TID(), __FUNCTION__, ##__VA_ARGS__); \
         }                                                                                   \
     } while (false)
 
-#define DEV_WARN(fmt, ...)                                                                  \
+#define DEV_INFO(fmt, ...)                                                                 \
+    do {                                                                                   \
+        if (unlikely(!HardBranchTrue(verboseInfo) || IsLogEnableInfo())) {                 \
+            dlog_info(LOG_MOD_ID, "%lu %s\n" fmt, GET_TID(), __FUNCTION__, ##__VA_ARGS__); \
+        }                                                                                  \
+    } while (false)
+
+#define DEV_WARN(fmt, ...)                                                                 \
+    do {                                                                                   \
+        if (IsLogEnableWarn()) {                                                           \
+            dlog_warn(LOG_MOD_ID, "%lu %s\n" fmt, GET_TID(), __FUNCTION__, ##__VA_ARGS__); \
+        }                                                                                  \
+    } while (false)
+
+#define DEV_ERROR(errCode, fmt, ...)                                                        \
     do {                                                                                    \
-        if (IsLogEnableWarn()) {                                                            \
-            dlog_warn(LOG_MOD_ID, "%lu %s\n" #fmt, GET_TID(), __FUNCTION__, ##__VA_ARGS__); \
+        if (IsLogEnableError()) {                                                           \
+            dlog_error(LOG_MOD_ID, "%lu %s\nErrCode: F%05X! " fmt, GET_TID(), __FUNCTION__, \
+                       static_cast<uint32_t>(errCode) & 0xFFFFF, ##__VA_ARGS__);            \
+            DEV_ATRACE(fmt, ##__VA_ARGS__);                                                 \
         }                                                                                   \
     } while (false)
 
-#define DEV_ERROR(errCode, fmt, ...)                                                         \
-    do {                                                                                     \
-        if (IsLogEnableError()) {                                                            \
-            dlog_error(LOG_MOD_ID, "%lu %s\nErrCode: F%05X! " #fmt, GET_TID(), __FUNCTION__, \
-                       static_cast<uint32_t>(errCode) & 0xFFFFF, ##__VA_ARGS__);             \
-            DEV_ATRACE(fmt, ##__VA_ARGS__);                                                  \
-        }                                                                                    \
+#define DEV_EVENT(fmt, ...)                                                                           \
+    do {                                                                                              \
+        dlog_info(LOG_MOD_ID | RUN_LOG_MASK, "%lu %s\n" fmt, GET_TID(), __FUNCTION__, ##__VA_ARGS__); \
     } while (false)
 
-#define DEV_EVENT(fmt, ...)                                                                            \
-    do {                                                                                               \
-        dlog_info(LOG_MOD_ID | RUN_LOG_MASK, "%lu %s\n" #fmt, GET_TID(), __FUNCTION__, ##__VA_ARGS__); \
-    } while (false)
-
-#define DEV_TRACE_LOG_ERROR(errCode, fmt, ...)                                               \
-    do {                                                                                     \
-        if (IsLogEnableError()) {                                                            \
-            dlog_error(LOG_MOD_ID, "%lu %s\nErrCode: F%05X! " #fmt, GET_TID(), __FUNCTION__, \
-                       static_cast<uint32_t>(errCode) & 0xFFFFF, ##__VA_ARGS__);             \
-        }                                                                                    \
+#define DEV_TRACE_LOG_ERROR(errCode, fmt, ...)                                              \
+    do {                                                                                    \
+        if (IsLogEnableError()) {                                                           \
+            dlog_error(LOG_MOD_ID, "%lu %s\nErrCode: F%05X! " fmt, GET_TID(), __FUNCTION__, \
+                       static_cast<uint32_t>(errCode) & 0xFFFFF, ##__VA_ARGS__);            \
+        }                                                                                   \
     } while (false)
 
 #define DEV_VERBOSE_DEBUG(fmt, ...)                           \
