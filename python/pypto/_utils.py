@@ -10,8 +10,10 @@
 # -----------------------------------------------------------------------------------------------------------
 """ """
 
+import collections.abc
 import functools
 import sys
+import typing
 from typing import List, Sequence, Union
 
 from . import pypto_impl
@@ -82,6 +84,34 @@ def to_sym(value) -> pypto_impl.SymbolicScalar:
 
 def to_syms(value: Union[Sequence[int], Sequence[SymbolicScalar]]) -> List[pypto_impl.SymbolicScalar]:
     return [to_sym(v) for v in value]
+
+
+def check_type(value, expect_type, arg_name, expect_len=None):
+    origin = typing.get_origin(expect_type)
+    if origin is None:
+        origin_types = expect_type if isinstance(expect_type, tuple) else (expect_type,)
+        elem_types = None
+    else:
+        origin_map = {list: (list,), collections.abc.Sequence: (list, tuple), tuple: (tuple,), dict: (dict,)}
+        origin_types = origin_map.get(origin, (origin,))
+        elem_types = typing.get_args(expect_type)
+    if not isinstance(value, origin_types):
+        names = " or ".join(t.__name__ for t in origin_types)
+        raise TypeError(f"{arg_name} must be {names}, got {type(value).__name__}")
+    if expect_len is not None and len(value) != expect_len:
+        raise TypeError(f"{arg_name} must have length {expect_len}, got {len(value)}")
+    if not elem_types:
+        return
+    for i, item in enumerate(value):
+        spec = elem_types[i] if len(elem_types) == 2 and origin_types == (tuple,) else elem_types[0]
+        if typing.get_origin(spec) is typing.Union:
+            allowed = typing.get_args(spec)
+            if not isinstance(item, allowed):
+                names = " or ".join(t.__name__ for t in allowed)
+                raise TypeError(f"{arg_name}[{i}] must be {names}, got {type(item).__name__}")
+        elif isinstance(spec, type) and typing.get_origin(spec) is None:
+            if not isinstance(item, spec):
+                raise TypeError(f"{arg_name}[{i}] must be {spec.__name__}, got {type(item).__name__}")
 
 
 def ceildiv(a: SymInt, b: SymInt) -> SymInt:

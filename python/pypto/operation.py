@@ -14,7 +14,7 @@ from typing import Dict, List, Optional, Sequence, Tuple, Union, overload
 
 from . import pypto_impl
 from ._op_wrapper import op_wrapper
-from ._utils import to_syms
+from ._utils import check_type, source_location, to_syms
 from .enum import AtomicRMWMode, DataType
 from .error import FeError
 from .symbolic_scalar import SymbolicScalar
@@ -118,16 +118,35 @@ def assemble(
     ...
 
 
+@source_location
 def assemble(*args, parallel: bool = False) -> None:
-    if isinstance(args[0], Sequence):
+    if len(args) == 3:
+        src, offsets, dst = args
+        check_type(src, Tensor, "assemble(): src")
+        check_type(offsets, Sequence[Union[int, SymbolicScalar]], "assemble(): offsets")
+        check_type(dst, Tensor, "assemble(): dst")
+        pypto_impl.Assemble(src.base(), to_syms(offsets), dst.base(), parallel)
+    elif len(args) == 2:
         srcs, dst = args
+        if not isinstance(srcs, (list, tuple)):
+            hint = " If you intend to use the single-source form (src, offsets, dst)," \
+                   " you are missing the 'offsets' argument." if isinstance(srcs, Tensor) else ""
+            raise TypeError(f"assemble(): srcs must be list or tuple, got {type(srcs).__name__}.{hint}")
         if len(srcs) == 0:
             return
+        check_type(dst, Tensor, "assemble(): dst")
+        for idx, item in enumerate(srcs):
+            check_type(item, (list, tuple), f"assemble(): srcs[{idx}]", expect_len=2)
+            src_item, offsets_item = item
+            check_type(src_item, Tensor, f"assemble(): srcs[{idx}][0]")
+            check_type(offsets_item, Sequence[Union[int, SymbolicScalar]], f"assemble(): srcs[{idx}][1]")
         srcs = [(src.base(), to_syms(offsets)) for src, offsets in srcs]
         pypto_impl.Assemble(srcs, dst.base(), parallel)
     else:
-        src, offsets, dst = args
-        pypto_impl.Assemble(src.base(), to_syms(offsets), dst.base(), parallel)
+        raise TypeError(
+            f"assemble() expects 3 positional arguments (src, offsets, dst) or "
+            f"2 positional arguments (srcs, dst), but got {len(args)}."
+        )
 
 
 def min(a: "SymbolicScalar | int", b: "SymbolicScalar | int") -> "SymbolicScalar":

@@ -11,11 +11,15 @@
 """Test pypto.frontend.jit kernel dynamic shape error behavior."""
 
 import logging
+from typing import Sequence, Union
 
 import pytest
 import torch
 
 import pypto
+from pypto._utils import check_type
+from pypto.symbolic_scalar import SymbolicScalar
+from pypto.tensor import Tensor
 
 logging.basicConfig(level=logging.INFO, format="", force=True)
 SIM_RUNTIME_OPTIONS = {"run_mode": pypto.RunMode.SIM}
@@ -151,6 +155,58 @@ def test_view_valid_shape_reshape_inplace_error():
         kernel_view_valid_shape_reshape_inplace_error(q, out)
 
 
+def test_assemble_arg_count_and_hint():
+    src = pypto.Tensor([4, 16], pypto.DT_INT32)
+    dst = pypto.Tensor([4, 32], pypto.DT_INT32)
+    with pytest.raises(Exception, match="but got 0"):
+        pypto.assemble()
+    with pytest.raises(Exception, match="but got 4"):
+        pypto.assemble(src, [0, 0], dst, True)
+    with pytest.raises(Exception, match="missing the 'offsets' argument"):
+        pypto.assemble(src, dst)
+
+
+def test_assemble_valid_calls_not_blocked():
+    @pypto.frontend.jit(runtime_options=SIM_RUNTIME_OPTIONS)
+    def k_single(x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
+                 y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32)):
+        pypto.set_vec_tile_shapes(32, 32)
+        pypto.assemble(x, [0, 0], y)
+
+    @pypto.frontend.jit(runtime_options=SIM_RUNTIME_OPTIONS)
+    def k_multi(x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
+                y: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32)):
+        pypto.set_vec_tile_shapes(32, 32)
+        pypto.assemble([(x, [0, 0])], y, parallel=True)
+
+    x = torch.ones(4, 16, dtype=torch.int32)
+    y = torch.zeros(4, 32, dtype=torch.int32)
+    k_single(x, y)
+    k_multi(x, y)
+
+
+def test_check_type_pass():
+    check_type(pypto.Tensor([4, 16], pypto.DT_INT32), Tensor, "src")
+    check_type([0, 1], (list, tuple), "offsets")
+    check_type((0, 1), (list, tuple), "offsets")
+    check_type([0, 1], Sequence[int], "offsets")
+    check_type([0, SymbolicScalar(1)], Sequence[Union[int, SymbolicScalar]], "offsets")
+    check_type([1, 2], (list, tuple), "pair", expect_len=2)
+
+
+def test_check_type_fail():
+    with pytest.raises(TypeError, match="src.*Tensor.*int"):
+        check_type(42, Tensor, "src")
+    with pytest.raises(TypeError, match="offsets.*list or tuple.*int"):
+        check_type(42, (list, tuple), "offsets")
+    with pytest.raises(TypeError, match="offsets.*list or tuple.*int"):
+        check_type(42, Sequence[int], "offsets")
+    with pytest.raises(TypeError, match="offsets\\[1\\].*int.*float"):
+        check_type([0, 0.5], Sequence[int], "offsets")
+    with pytest.raises(TypeError, match="pair.*length 2"):
+        check_type([1, 2, 3], (list, tuple), "pair", expect_len=2)
+
+
 # ------------------------------------------------------------------------------
 # Entry point
 # ------------------------------------------------------------------------------
@@ -162,5 +218,9 @@ if __name__ == "__main__":
     test_assemble_dynamic_shape_error()
     test_dynamic_reshape_error()
     test_view_valid_shape_reshape_inplace_error()
+    test_check_type_pass()
+    test_check_type_fail()
+    test_assemble_arg_count_and_hint()
+    test_assemble_valid_calls_not_blocked()
 
     logging.info("All dynamic shape error tests passed.")
