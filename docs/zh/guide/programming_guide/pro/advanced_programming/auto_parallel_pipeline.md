@@ -200,7 +200,7 @@ def stage2(ki, sub_id, mm1_vec_db, relu_vec_db, relu_nz_db, p_mat_db):
     relu_vec = relu_vec_db.next()
     pl.relu(relu_vec, mm1_vec)
     relu_nz = relu_nz_db.next()
-    pl.move(relu_nz, relu_vec)  # ND -> NZ，insert 要求源 tile 为 NZ 格式
+    pl.move(relu_nz, relu_vec)  # ND -> NZ，insert要求源Tile为NZ
     p_mat = p_mat_db.next()
     pl.insert(p_mat, relu_nz, [sub_id * TILE_HALF, 0])
 

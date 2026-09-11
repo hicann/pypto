@@ -8,6 +8,7 @@ AccPhase
 AccToVecMode
 AtomicType
 CacheLine
+CrossCoreSyncMode
 DataType
 DcciDst
 FillPadMode

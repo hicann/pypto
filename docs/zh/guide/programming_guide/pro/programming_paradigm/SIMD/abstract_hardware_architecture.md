@@ -78,7 +78,7 @@ Vector侧参与Reg矢量计算的主要硬件资源如下：
 
 ![Aux Scalar、Reg向量执行单元、DMA、Register File和UB的关系](../../../../figures/pro/register_execution_unit.jpg)
 
-PyPTO Pro使用`@pypto_pro.language.vector_function`定义VF函数，使用RegTensor和MaskReg保存寄存器数据，并通过`vf.load*`、`vf.store*`在UB与Vector Register之间搬运。RegTensor的数据类型和寄存器限制请参考[vf.reg_tensor](../../../../../api/pro_api/SIMD-API/vf_computation/reg_tensor.md)，完整编程方法请参考[Reg计算](../../development/vector_computation/reg_computation.md)。
+PyPTO Pro使用`@pypto_pro.language.vector_function`定义VF函数，使用RegTensor和MaskReg保存寄存器数据，并通过`vf.load*`、`vf.store*`在UB与Vector Register之间搬运。RegTensor的数据类型和寄存器限制请参考[vf.reg_tensor](../../../../../api/pro_api/SIMD-API/reg_computation/reg_tensor.md)，完整编程方法请参考[Reg计算](../../development/vector_computation/reg_computation.md)。
 
 ## AIC矩阵计算架构
 

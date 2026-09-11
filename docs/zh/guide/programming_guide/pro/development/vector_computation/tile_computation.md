@@ -36,16 +36,16 @@ PyPTO Pro当前公开的Tile矢量计算操作如下：
 
 | 计算类型 | 主要用途 |
 |---|---|
-| [逐元素计算](../../../../../api/pro_api/SIMD-API/tile_vector_computation/elementwise/index.md) | 对Tile中的对应元素执行算术、逻辑或激活计算。 |
-| [比较](../../../../../api/pro_api/SIMD-API/tile_vector_computation/comparison/index.md) | 逐元素比较并生成按位压缩的掩码Tile。 |
-| [选择](../../../../../api/pro_api/SIMD-API/tile_vector_computation/selection/index.md) | 根据掩码从两个输入中逐元素选择结果。 |
-| [类型转换](../../../../../api/pro_api/SIMD-API/tile_vector_computation/type_conversion/index.md) | 将源Tile有效区域中的元素转换为目的Tile的数据类型。 |
-| [数学函数](../../../../../api/pro_api/SIMD-API/tile_vector_computation/math_functions/index.md) | 使用标量填充Tile，或沿指定维度执行求和归约。 |
-| [复合计算](../../../../../api/pro_api/SIMD-API/tile_vector_computation/composite_computation/index.md) | 完成Tile与标量的乘加计算。 |
-| [融合矢量计算](../../../../../api/pro_api/SIMD-API/tile_vector_computation/fused_vector_computation/index.md) | 在一次接口调用中完成加法和ReLU激活。 |
-| [转置](../../../../../api/pro_api/SIMD-API/tile_vector_computation/transpose_and_element_access/index.md) | 交换二维Tile的两个轴。 |
+| [逐元素计算](../../../../../api/pro_api/SIMD-API/tile_computation/elementwise/index.md) | 对Tile中的对应元素执行算术、逻辑或激活计算。 |
+| [比较](../../../../../api/pro_api/SIMD-API/tile_computation/comparison/index.md) | 逐元素比较并生成按位压缩的掩码Tile。 |
+| [选择](../../../../../api/pro_api/SIMD-API/tile_computation/selection/index.md) | 根据掩码从两个输入中逐元素选择结果。 |
+| [类型转换](../../../../../api/pro_api/SIMD-API/tile_computation/type_conversion/index.md) | 将源Tile有效区域中的元素转换为目的Tile的数据类型。 |
+| [数学函数](../../../../../api/pro_api/SIMD-API/tile_computation/math_functions/index.md) | 使用标量填充Tile，或沿指定维度执行求和归约。 |
+| [复合计算](../../../../../api/pro_api/SIMD-API/tile_computation/composite_computation/index.md) | 完成Tile与标量的乘加计算。 |
+| [融合矢量计算](../../../../../api/pro_api/SIMD-API/tile_computation/fused_vector_computation/index.md) | 在一次接口调用中完成加法和ReLU激活。 |
+| [转置](../../../../../api/pro_api/SIMD-API/tile_computation/transpose_and_element_access/index.md) | 交换二维Tile的两个轴。 |
 
-各接口支持的数据类型、存储空间、layout和原地计算方式可能不同，应以[Tile矢量计算API](../../../../../api/pro_api/SIMD-API/tile_vector_computation/index.md)中的说明为准。
+各接口支持的数据类型、存储空间、layout和原地计算方式可能不同，应以[Tile计算API](../../../../../api/pro_api/SIMD-API/tile_computation/index.md)中的说明为准。
 
 ## 常用计算模式
 
@@ -407,4 +407,4 @@ pad只声明填充值，不会单独产生填充操作。需要对无效区域�
 - 部分选择和归约接口需要额外的掩码或临时Tile，应在设计片上空间时一并考虑。
 - 计算前后的跨Pipe依赖必须正确同步，具体接口参见[同步控制](../../../../../api/pro_api/SIMD-API/synchronization/index.md)。
 
-Tile计算的完整接口列表参见[Tile矢量计算API](../../../../../api/pro_api/SIMD-API/tile_vector_computation/index.md)。
+Tile计算的完整接口列表参见[Tile计算API](../../../../../api/pro_api/SIMD-API/tile_computation/index.md)。

@@ -1,4 +1,4 @@
-# 矩阵计算
+# Cube计算
 
 ```{toctree}
 :maxdepth: 1

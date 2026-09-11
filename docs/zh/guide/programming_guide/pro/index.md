@@ -1,4 +1,4 @@
-# PyPTO Pro编程指南
+# PyPTO Pro编程
 
 ```{toctree}
 :maxdepth: 1

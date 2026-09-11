@@ -66,7 +66,7 @@ layout不指定时，按内存空间自动取默认值：
 
 ### 普通紧凑模式的数据排布
 
-```python
+```text
   举例：L0A Buffer中Tile的物理shape=[64, 64]，数据类型为FP16，valid_shape=[8, 24]，NZ格式，由此可知：
         1、分形粒度D=16行×16列，共512字节（0x200）；
         2、实际搬运数据的有效空间为[ceil16(8), ceil16(24)] = [16, 32]，共2个分形；
@@ -97,7 +97,7 @@ layout不指定时，按内存空间自动取默认值：
 
 ### RowPlusOne紧凑模式的数据排布
 
-```python
+```text
   举例：UB Tile的物理shape=[64, 64]，NZ格式
 
   配置 compact=1：分形列首尾相接
@@ -171,20 +171,6 @@ tail_type = pl.TileType(
     shape=[64, 128], dtype=pl.DT_FP16,
     target_memory=pl.MemorySpace.Vec,
     valid_shape=[-1, -1], compact=1,
-)
-```
-
-### 带填充模式的Tile
-
-```python
-import pypto_pro.language as pl
-
-# pad=pl.TilePad.min：flash attention 掩码场景，无效行补 FP32 最小值
-mask_type = pl.TileType(
-    shape=[64, 128], dtype=pl.DT_FP32,
-    target_memory=pl.MemorySpace.Vec,
-    valid_shape=[-1, -1], compact=1,
-    pad=pl.TilePad.min,
 )
 ```
 

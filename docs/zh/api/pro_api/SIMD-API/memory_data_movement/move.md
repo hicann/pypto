@@ -41,7 +41,7 @@ pypto_pro.language.move(
 | acc_to_vec_mode | 输入 | 可选，L0C Buffer→UB搬运时是否开启双目标搬运模式，[pypto_pro.language.AccToVecMode](../basic_data_structures/AccToVecMode.md)类型。 |
 | relu_pre_mode | 输入 | 可选，L0C Buffer→UB搬运时是否开启随路ReLU操作，[pypto_pro.language.ReluPreMode](../basic_data_structures/ReluPreMode.md)类型。 |
 | scale | 输入 | 可选，是否使能量化功能及设置量化模式下的量化参数，数据在搬出L0C Buffer时由Fixpipe乘以该比例并转换到目的数据类型。不同的传入形式会影响量化粒度，支持如下类型：<br>- **float类型**：直接传入固定值（如scale = 2.0），适用于整块Tile使用同一比例。<br>- **Scalar类型**：量化比例在运行时确定，需按数据类型传值。<br>&nbsp;&nbsp;- DT_FP32：直接传原始比例值（如0.5）。<br>&nbsp;&nbsp;- DT_INT32、DT_INT64：传预编码的float32位模式转成的整数（如struct.pack("!f", 0.5)）。<br>- **Tile类型**：每列使用独立比例，需满足以下要求：<br>&nbsp;&nbsp;- 目标存储区域必须为Fixpipe Buffer。<br>&nbsp;&nbsp;- shape为[1, N]（列量化），N必须是16的倍数且N ≤ 512。<br>&nbsp;&nbsp;- dtype为DT_INT64。<br>&nbsp;&nbsp;- 不支持与双目标搬运（AccToVecMode.DualModeSplitM / AccToVecMode.DualModeSplitN）同时使用。<br>&nbsp;&nbsp;- 目的操作数的Tile数据类型为DT_INT8时，Fixpipe Buffer中的Tile每个DT_INT64元素的bit46需置1，用于选择有符号量化；未置位时L0C Buffer中的负值会被按无符号解读。<br>&nbsp;&nbsp;- 用户需要先把比例数据从GM搬到L1 Buffer，再搬到Fixpipe Buffer，并完成MTE1→FIX同步。|
-| phase | 输入 | 可选，详见 [phase 使用约束](../matrix_computation/phase.md) |
+| phase | 输入 | 可选，详见 [phase 使用约束](../cube_computation/phase.md) |
 
 ## 约束说明
 
@@ -129,6 +129,64 @@ if __name__ == "__main__":
     ref = torch.matmul(a.float(), b.float())
     torch.testing.assert_close(out, ref, rtol=2e-2, atol=2e-2)
     print(f"max diff = {(out - ref).abs().max().item()}")
+```
+
+### UB数据转置写入L1 Buffer
+
+当左矩阵或右矩阵由Vector计算在UB中产生时，可先通过pypto_pro.language.move将ND转换为NZ，再将结果写入L1 Buffer：
+
+- 不转置时，L1 Buffer Tile使用NZ，shape与UB中的NZ Tile相同。
+- 转置时，L1 Buffer Tile使用ZN，shape的两个维度与UB中的NZ Tile互换。源Tile的NZ [R, C]与目的Tile的ZN [C, R]表示相同的物理分形。
+
+| 矩阵 | 是否转置 | UB中的NZ Tile | L1 Buffer Tile |
+|---|---|---|---|
+| 左矩阵A[M, K] | 否 | shape=[M, K] | shape=[M, K]，NZ |
+| 左矩阵A[M, K] | 是 | shape=[K, M] | shape=[M, K]，ZN |
+| 右矩阵B[K, N] | 否 | shape=[K, N] | shape=[K, N]，NZ |
+| 右矩阵B[K, N] | 是 | shape=[N, K] | shape=[K, N]，ZN |
+
+分块写入L1 Buffer时，可通过offset指定写入位置；源Tile的有效区域必须完整落入目的Tile范围内。
+
+以下示例中，vector_result表示Vector计算产生的[K, M]数据。第一次move将其转换为NZ，第二次move将其转置写入L1 Buffer，得到供左矩阵使用的[M, K]、ZN数据。
+
+```python
+import pypto_pro.language as pl
+
+M, K = 64, 128
+
+# 前序Vector计算的输出：UB中的ND [K, M]
+vector_result = pl.make_tile(
+    pl.TileType(
+        shape=[K, M], dtype=pl.DT_FP16,
+        target_memory=pl.MemorySpace.Vec, layout=pl.ND,
+    ),
+    addr=0x0000,
+    size=K * M * 2,
+)
+
+# ND转换为NZ时使用的UB Tile
+vector_nz = pl.make_tile(
+    pl.TileType(
+        shape=[K, M], dtype=pl.DT_FP16,
+        target_memory=pl.MemorySpace.Vec, layout=pl.NZ,
+    ),
+    addr=0x4000,
+    size=K * M * 2,
+)
+
+# 转置后的数据写入L1 Buffer，逻辑shape为[M, K]
+lhs_l1 = pl.make_tile(
+    pl.TileType(
+        shape=[M, K], dtype=pl.DT_FP16,
+        target_memory=pl.MemorySpace.Mat, layout=pl.ZN,
+    ),
+    addr=0x20000,
+    size=M * K * 2,
+)
+
+with pl.section_vector():
+    pl.move(vector_nz, vector_result)  # ND [K, M] → NZ [K, M]
+    pl.move(lhs_l1, vector_nz)         # NZ [K, M] → ZN [M, K]
 ```
 
 ### 量化参数的使用
