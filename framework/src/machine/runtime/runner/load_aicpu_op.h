@@ -45,6 +45,10 @@ struct AicpuLaunchDesc {
     uint32_t soNameOffset = 0;
 };
 
+// Resolve the initialized built-in handle inside the runtime library. Bundle callers must not
+// instantiate the header-inline LoadAicpuOp singleton in their own shared library.
+int LaunchPyptoRunWithHostArgs(const AicpuLaunchDesc& desc);
+
 class LoadAicpuOp {
 public:
     LoadAicpuOp() = default;

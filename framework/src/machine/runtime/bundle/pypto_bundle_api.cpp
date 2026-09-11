@@ -26,6 +26,7 @@
 #include "machine/runtime/runner/kernel_binary.h"
 #include "tilefwk/data_type.h"
 #include "tilefwk/error_code.h"
+#include "tilefwk/error_manager.h"
 #include "tilefwk/platform.h"
 #include "tilefwk/pypto_fwk_log.h"
 
@@ -134,9 +135,13 @@ int LaunchImpl(const std::shared_ptr<LoadedBundle>& bundle, const PyptoTensorDes
     config.blockdim = head->ctrlBlockDim != 0 ? static_cast<int>(head->ctrlBlockDim) :
                                                 static_cast<int>(head->devArgs.nrValidAic);
 
-    return dynamic::LaunchBundleKernelOnce(bundle->devProgram, binHandle, bundle->bundleKey, inputs,
-                                           bundle->ctrlFlowCache, bundle->displayName, bundle->cellMatchStridePatches,
-                                           workspaceAddr, static_cast<RtStream>(stream), sync != 0, config);
+    int rc = dynamic::LaunchBundleKernelOnce(bundle->devProgram, binHandle, bundle->bundleKey, inputs,
+                                             bundle->ctrlFlowCache, bundle->displayName, bundle->cellMatchStridePatches,
+                                             workspaceAddr, static_cast<RtStream>(stream), sync != 0, config);
+    if (rc != 0) {
+        ErrorManager::Instance().OutputErrorMessage();
+    }
+    return rc;
 }
 } // namespace
 
