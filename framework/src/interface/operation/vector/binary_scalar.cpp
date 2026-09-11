@@ -206,8 +206,9 @@ void TiledBinaryOperationScalar(Function& function, const TileShape& tileShape, 
             int64_t intermediateBytes = (NUM_VALUE_6 * tileFootprint * BytesOf(DT_INT32)) +
                                         (NUM_VALUE_2 * tileFootprint * BytesOf(DT_FP32)) +
                                         NUM_VALUE_4 * tileH * maskCols + GCD_TSEL_TMP_BYTES;
-            auto tempTensor = std::make_shared<LogicalTensor>(function, DT_UINT8,
-                                                              std::vector<int64_t>{intermediateBytes});
+            Shape tempShape(resultTile->shape.size(), 1);
+            tempShape[tempShape.size() - 1] = intermediateBytes;
+            auto tempTensor = std::make_shared<LogicalTensor>(function, DT_UINT8, tempShape);
             auto& tmpOp = function.AddOperation(opNameCode, {inputTile1}, {resultTile, tempTensor});
             tmpOp.SetAttribute(OpAttributeKey::scalar, value);
             tmpOp.SetAttribute(OP_ATTR_PREFIX + "reverseOperand", reverseOperand);
