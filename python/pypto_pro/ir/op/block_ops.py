@@ -2896,11 +2896,17 @@ def _check_layout_dtype(
     kind = "quantized " if quant else ""
     src_layout_name = src_layout.name if src_layout is not None else "unknown"
     dst_layout_name = dst_layout.name if dst_layout is not None else "unknown"
+    hint = (
+        " Hint: if the Tile dtype is not supported by store, use `pl.reinterpret` to view it as a "
+        "same-bit-width supported dtype, then store it."
+        if op in ("store", "store_tile")
+        else ""
+    )
     raise ValueError(
         f"{op}: unsupported {kind}layout/dtype combination "
         f"src={src_loc}({src_layout_name},{_frontend_dtype_name(src_dtype)}) "
         f"-> dst={dst_loc}({dst_layout_name},{_frontend_dtype_name(dst_dtype)}); "
-        f"please check whether the data path supports the current memory space, layout, and dtype."
+        f"please check whether the data path supports the current memory space, layout, and dtype.{hint}"
     )
 
 

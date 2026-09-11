@@ -192,13 +192,13 @@ stream.synchronize()
 
 ### blockDim的含义与设置
 
-`block_dim`是Host请求的逻辑Block数上限，必须是正整数。Kernel通过`pypto_pro.language.get_block_num()`读取实际生效的Block数。
+block_dim是Host请求的逻辑Block数上限，必须是正整数，且不得超过当前平台对应执行域的物理核容量。Kernel通过pypto_pro.language.get_block_num()读取实际生效的Block数。
 
-| Kernel类型 | `block_dim`的含义 | 实际工作单元数 |
+| Kernel类型 | block_dim的含义 | 实际工作单元数 |
 | --- | --- | --- |
-| Vector Kernel | AIV逻辑Block数 | AIV为`block_num`。 |
-| Cube Kernel | AIC逻辑Block数 | AIC为`block_num`。 |
-| Cube与Vector混合Kernel | AIC与AIV执行组数 | AIC为`block_num`；AIV为`block_num * get_subblock_num()`。 |
+| Vector Kernel | AIV逻辑Block数 | AIV为block_num。 |
+| Cube Kernel | AIC逻辑Block数 | AIC为block_num。 |
+| Cube与Vector混合Kernel | AIC与AIV执行组数 | AIC为block_num；AIV为block_num * pypto_pro.language.get_block_num()。 |
 
 实际`block_num`可能因Stream限核而小于`block_dim`。多核任务切分必须使用`pypto_pro.language.get_block_num()`计算循环步长；混合Kernel的Vector侧还需要乘以`pypto_pro.language.get_subblock_num()`。核数计算、索引映射和限核规则参考[多核Tiling切分](tiling/multi_core_tiling.md#在启动时设置逻辑block数block_dim)。
 

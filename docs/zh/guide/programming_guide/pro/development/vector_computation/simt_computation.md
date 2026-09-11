@@ -115,7 +115,7 @@ Tensor和Tile需要以完整变量传入。启动接口的完整约束参见[lau
 
 ### 4. 启动Device侧Kernel
 
-Host侧通过Bracket Launch语法将外层JIT Kernel启动到Device执行。如果一次SIMT计算需要多个Thread Block，需要使用相应数量的Vector逻辑Block启动外层Kernel：
+Host侧通过Bracket Launch语法将外层JIT Kernel启动到Device执行。如果一次SIMT计算需要多个Thread Block，需要设置相应数量的block_dim启动外层Kernel。Host侧block_dim的设置参见[多核Tiling切分](../tiling/multi_core_tiling.md#在启动时设置逻辑block数block_dim)：
 
 ```python
 THREADS = 256
@@ -123,7 +123,7 @@ blocks = (task_count + THREADS - 1) // THREADS
 transform_kernel[stream, blocks](input_tensor, output, task_count, scale, bias)
 ```
 
-每个Vector逻辑Block启动一个Thread Block，因此一维配置下本次SIMT计算最多覆盖blocks * THREADS个任务。多出的Thread由入口函数中的边界条件屏蔽。
+每个Vector逻辑Block启动一个Thread Block，因此一维配置下本次SIMT计算最多覆盖blocks * THREADS个任务。
 
 ## 示例：使用SIMT实现Gather
 
