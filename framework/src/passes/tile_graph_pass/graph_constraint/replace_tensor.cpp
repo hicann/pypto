@@ -759,7 +759,7 @@ Status ReplaceTensor::BackwardAssemble(Operation* op, LogicalTensorPtr& rootTens
     if (op->GetIOperands()[0]->GetConsumers().size() > 1) {
         forRoots.push(op->GetIOperands()[0]);
         for (auto& consumer : op->GetIOperands()[0]->GetConsumers()) {
-            if (consumer->GetOpcode() == Opcode::OP_COPY_IN) {
+            if (IsCopyIn(consumer->GetOpcode())) {
                 if (UpdateCopyInAttr(consumer) == FAILED) {
                     APASS_LOG_ERROR_F(Elements::Operation, "Update copyIn[%d] attr failed.", consumer->GetOpMagic());
                     return FAILED;
@@ -1305,6 +1305,15 @@ Status ReplaceTensor::InsertNeedCopy(Function& function)
               [](const Operation* a, const Operation* b) { return a->GetOpMagic() < b->GetOpMagic(); });
     for (auto& needInsertCopyAssOp : sortedOps) {
         auto input = needInsertCopyAssOp->GetIOperands()[0];
+        constexpr size_t kMaxCopyShapeDim = 5;
+        if (input->GetShape().size() > kMaxCopyShapeDim) {
+            APASS_LOG_WARN_F(Elements::Tensor,
+                             "Skip inserting copy for op [%s:%d]: input [%d] shape dim [%zu] exceeds pto-isa copy "
+                             "limit [%zu].",
+                             needInsertCopyAssOp->GetOpcodeStr().c_str(), needInsertCopyAssOp->GetOpMagic(),
+                             input->GetMagic(), input->GetShape().size(), kMaxCopyShapeDim);
+            continue;
+        }
         if (input->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
             InsertCopyUBOp(function, needInsertCopyAssOp, input);
         } else if (input->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {

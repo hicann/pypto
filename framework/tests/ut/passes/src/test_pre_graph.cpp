@@ -1378,6 +1378,57 @@ TEST_F(PreGraphTest, TestRemoveRedundantAssembleKeepsReshapeInputOffset)
     EXPECT_EQ(reshapeOutput->tensor->GetRawShape(), (std::vector<int64_t>{8, 8, 32}));
 }
 
+TEST_F(PreGraphTest, TestRemoveRedundantAssemblePushesOffsetForKeptRebasedAssemble)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP16, {8, 32}, MemoryType::MEM_L0C, "copy_src");
+    G.AddTensor(DataType::DT_FP16, {8, 32}, "reshape_input");
+    G.AddTensor(DataType::DT_FP16, {1, 8, 32}, "reshape_output");
+    G.AddTensor(DataType::DT_FP16, {8, 8, 32}, MemoryType::MEM_DEVICE_DDR, "assemble_output");
+    G.AddTensor(DataType::DT_FP16, {1, 8, 32}, MemoryType::MEM_UB, "copyin_output");
+
+    auto reshapeInput = G.GetTensor("reshape_input");
+    auto reshapeOutput = G.GetTensor("reshape_output");
+    auto assembleOutput = G.GetTensor("assemble_output");
+    // ReplaceTensor::BackUpdateAssemble re-bases the kept Assemble input onto the destination raw
+    // tensor and refreshes its offset to the Assemble destination offset.
+    reshapeOutput->tensor = assembleOutput->tensor;
+    assembleOutput->UpdateOffset(std::vector<int64_t>{0, 0, 0});
+    reshapeOutput->UpdateOffset(std::vector<int64_t>{6, 0, 0});
+
+    G.AddOp(Opcode::OP_COPY_OUT, {"copy_src"}, {"reshape_input"}, "COPYOUT");
+    auto copyOut = G.GetOp("COPYOUT");
+    auto copyAttr = std::make_shared<CopyOpAttribute>(
+        MemoryType::MEM_L0C, OpImmediate::Specified(std::vector<int64_t>{0, 0}),
+        OpImmediate::Specified(std::vector<int64_t>{8, 32}), OpImmediate::Specified(std::vector<int64_t>{8, 32}));
+    copyOut->SetOpAttribute(copyAttr);
+
+    G.AddOp(Opcode::OP_RESHAPE, {"reshape_input"}, {"reshape_output"}, "RESHAPE");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"reshape_output"}, {"assemble_output"}, "ASSEMBLE");
+    auto assemble = G.GetOp("ASSEMBLE");
+    auto assembleAttr = std::make_shared<AssembleOpAttribute>(
+        MemoryType::MEM_DEVICE_DDR, std::vector<int64_t>{6, 0, 0},
+        OpImmediate::ToSpecified(OpImmediate::Specified(std::vector<int64_t>{6, 0, 0})));
+    assemble->SetOpAttribute(assembleAttr);
+    // A second consumer of the Reshape output keeps the Assemble alive.
+    G.AddOp(Opcode::OP_COPY_IN, {"reshape_output"}, {"copyin_output"}, "COPYIN_KEEP");
+    auto copyIn = G.GetOp("COPYIN_KEEP");
+    auto copyInAttr = std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified(std::vector<int64_t>{0, 0, 0}), MemoryType::MEM_UB,
+        OpImmediate::Specified(std::vector<int64_t>{1, 8, 32}), OpImmediate::Specified(std::vector<int64_t>{1, 8, 32}));
+    copyIn->SetOpAttribute(copyInAttr);
+    G.SetOutCast({"assemble_output"});
+
+    RemoveRedundantAssemble pass;
+    EXPECT_EQ(pass.DeleteRedundantAssemble(*G.GetFunction()), SUCCESS);
+    // The kept Assemble is position-preserving (it copies the tile onto itself), so the offset must
+    // still be transferred to the preceding CopyOut instead of being applied twice at runtime.
+    EXPECT_FALSE(assemble->IsDeleted());
+    CompareOpImmediateVector(copyAttr->GetToOffset(), {48, 0});
+    EXPECT_EQ(reshapeInput->tensor->GetRawShape(), (std::vector<int64_t>{64, 32}));
+    EXPECT_EQ(reshapeOutput->tensor->GetRawShape(), (std::vector<int64_t>{8, 8, 32}));
+}
+
 TEST_F(PreGraphTest, TestMergeCompleteViewCopyoutFamily)
 {
     ComputationalGraphBuilder G;

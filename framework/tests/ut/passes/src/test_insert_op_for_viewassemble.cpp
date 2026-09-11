@@ -338,5 +338,37 @@ TEST_F(TestInsertCopyPass, TestOversizedSharedDdrAssembleInputSkipsCopyInOut)
         EXPECT_NE(op.GetOpcode(), Opcode::OP_COPY_OUT);
     }
 }
+
+TEST_F(TestInsertCopyPass, TestSixDimSharedDdrAssembleInputSkipsCopyInOut)
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "TestSixDimSharedDdrInput",
+                                               "TestSixDimSharedDdrInput", nullptr);
+    std::vector<int64_t> shape = {1, 1, 1, 32, 18, 16};
+    std::vector<int64_t> offset = {kSizeZero, kSizeZero, kSizeZero, kSizeZero, kSizeZero, kSizeZero};
+    auto makeDdrTensor = [&shape]() {
+        auto tensor = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+        tensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
+        return tensor;
+    };
+
+    auto input = makeDdrTensor();
+    auto sharedInput = makeDdrTensor();
+    auto assembleOutput = makeDdrTensor();
+    auto otherOutput = makeDdrTensor();
+    PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {input}, {sharedInput});
+    auto& assemble = PassOperationUtils::AddOperation(*function, Opcode::OP_ASSEMBLE, {sharedInput}, {assembleOutput});
+    assemble.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_DEVICE_DDR, offset));
+    PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {sharedInput}, {otherOutput});
+
+    InsertOpForViewAssemble pass;
+    EXPECT_EQ(pass.RunOnFunction(*function), SUCCESS);
+    auto operations = function->Operations();
+    EXPECT_EQ(operations.size(), 3u);
+    EXPECT_EQ(assemble.GetIOperands().front(), sharedInput);
+    for (const auto& op : operations) {
+        EXPECT_NE(op.GetOpcode(), Opcode::OP_COPY_IN);
+        EXPECT_NE(op.GetOpcode(), Opcode::OP_COPY_OUT);
+    }
+}
 } // namespace tile_fwk
 } // namespace npu
