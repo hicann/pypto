@@ -30,7 +30,7 @@ AIV负责SIMD矢量指令的控制、数据搬运和执行。Kernel中的Python�
 
 ### Tile矢量计算
 
-Tile矢量计算以Unified Buffer中的Vec Tile作为输入、输出和中间数据。其基本硬件数据路径为：
+Tile矢量计算以UB中的Vec Tile作为输入、输出和中间数据。其基本硬件数据路径为：
 
 ```text
 GM ──MTE2──> UB

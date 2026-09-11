@@ -1,10 +1,12 @@
 # 编程范式概述
 
-PyPTO Pro采用Host与Device协同的异构编程方式，Host代码运行在CPU上，负责设备资源管理、Host Memory与Device Memory之间的数据搬运、计算任务下发和结果同步；Device代码运行在NPU上，负责执行实际的计算任务，提供SIMD和SIMT两种并行编程方式。当前支持Ascend 950PR和Ascend 950DT。
+PyPTO Pro采用Host与Device协同的异构编程方式。其中，Host代码运行在CPU上，负责设备资源管理、Host Memory与Device Memory之间的数据搬运、计算任务下发和结果同步；Device代码运行在NPU上，负责执行实际的计算任务，提供SIMD和SIMT两种并行编程方式。当前支持Ascend 950PR和Ascend 950DT。
 
-## 多层并行执行
+## 并行执行模型：SIMD与SIMT
 
-PyPTO Pro的并行执行包含外层多核SPMD与核内SIMD、SIMT两个层次：
+为编写高性能的Device端代码，首先需要理解底层的并行计算原理。在高性能并行编程领域，SIMD和SIMT是两种主流的并行执行模型，它们定义了指令驱动多计算单元协同工作的核心机制，是提升程序数据吞吐量、优化计算性能的关键技术，也是学习PyPTO Pro编程的核心内容。
+
+PyPTO Pro的并行执行流程：
 
 1. Host启动一个JIT Kernel，并指定本次执行使用的逻辑Block数量。
 2. 多个逻辑Block以SPMD（Single Program Multiple Data，单程序多数据）方式执行同一份Kernel程序，并根据各自的逻辑索引处理不同的数据分片。
@@ -15,15 +17,15 @@ SPMD负责组织多个逻辑AI Core之间的任务并行，SIMD和SIMT负责描�
 
 ## SIMD（单指令多数据）
 
-SIMD（Single Instruction Multiple Data，单指令多数据）是一种数据并行模型。一条指令在同一时钟周期对多个同构数据元素执行相同操作，从而提高单位指令的数据处理量。
+SIMD（Single Instruction Multiple Data，单指令多数据）是一种数据并行模型。核心逻辑是：一条指令在同一个时钟周期内，对多个数据元素执行完全相同的操作，实现数据的批量并行处理。
 
 PyPTO Pro使用Tensor描述Global Memory中的数据，使用Tile描述片上存储中的数据块。开发者以Tile或Vector Register为主要编程对象，不需要逐个描述每个数据元素的相同计算。
 
 ### 核心特征
 
-- **单指令驱动**：一条指令同时对多个数据元素执行相同操作。
-- **数据同构**：参与计算的数据通常类型相同、排布规则，便于批量处理。
-- **同步执行**：各数据元素按照相同的指令节奏完成计算，不需要逐元素调度。
+- **单指令驱动**：所有并行计算单元同步执行同一条指令，操作完全一致；
+- **数据同构**：要求参与计算的数据类型统一、长度相同，确保指令可批量处理；
+- **同步执行**：所有数据的操作在同一个指令周期内完成，无独立调度逻辑，执行节奏完全统一。
 
 ### 适用场景
 
@@ -89,7 +91,7 @@ PyPTO Pro算子的典型开发与运行流程如下：
 建议继续阅读以下内容：
 
 - [PyPTO Pro快速入门](../../../quick_start/pro/index.md)：通过完整算子示例了解Kernel定义、编译和运行流程。
-- [SIMD编程](SIMD/index.md)：了解SPMD多核并行、Tile编程、矢量计算和矩阵计算。
+- [SIMD编程](SIMD/index.md)：了解SPMD多核并行、Tile编程、SIMD矢量计算和矩阵计算。
 - [SIMT编程](SIMT/index.md)：了解线程架构、内存层级、SIMT函数、同步和原子操作。
 - [Kernel核函数创建](../development/kernel_function.md)：了解Kernel参数、逻辑Block和启动方式。
 - [编译与执行](../development/compilation_and_execution/index.md)：了解JIT编译和离线二进制编译。

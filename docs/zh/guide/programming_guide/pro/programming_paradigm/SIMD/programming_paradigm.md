@@ -37,7 +37,7 @@ SIMD Kernel可以只使用一种执行域，也可以组合Vector和Cube执行�
 | 纯Cube Kernel | AIC | 当前Cube逻辑核的全局索引 |
 | Cube/Vector混合Kernel | AIC和AIV | 在各自执行域中返回相应的全局逻辑核索引 |
 
-混合Kernel采用AIC:AIV为1:2的映射。一个逻辑Block对应一个AIC和两个AIV；当`block_num = pypto_pro.language.get_block_num()`时，Cube执行域有`block_num`个逻辑核，Vector执行域有`2 * block_num`个逻辑核。
+混合Kernel采用AIC:AIV为1:2的映射。一个逻辑Block对应一个AIC和两个AIV；当`block_num = pypto_pro.language.get_block_num()`时，表示Cube执行域有`block_num`个逻辑核，Vector执行域有`2 * block_num`个逻辑核。
 
 **图1 混合Kernel的逻辑Block映射**
 
