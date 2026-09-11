@@ -170,6 +170,11 @@ int LoadAicpuOp::GetBuiltInOpBinHandle(int64_t* devArgsAddr)
     return LaunchAicpuServerInit(devArgsAddr);
 }
 
+int LaunchPyptoRunWithHostArgs(const AicpuLaunchDesc& desc)
+{
+    return LoadAicpuOp::GetInstance().LaunchBuiltInOpWithHostArgs(desc, "PyptoRun");
+}
+
 int LoadAicpuOp::LaunchBuiltInOpWithHostArgs(const AicpuLaunchDesc& desc, const std::string& funcName) const
 {
     RtFuncHandle funcHandle;

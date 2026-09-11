@@ -32,6 +32,7 @@
 #include "machine/runtime/context/stream_context.h"
 #include "machine/runtime/context/device_launcher_context.h"
 #include "machine/runtime/runner/runtime_utils.h"
+#include "machine/runtime/runner/load_aicpu_op.h"
 #include "machine/runtime/runner/host_prof.h"
 #include "machine/runtime/launcher/device_launcher.h"
 #include "machine/runtime/launcher/cell_match_dynamic.h"
@@ -40,12 +41,12 @@ namespace npu::tile_fwk::dynamic {
 
 namespace {
 // aicpu launch primitive (topology from devProg), kept here so device_launcher stays free of bundle code.
-int BundleLaunchAicpu(RtAicpuArgsEx& rtArgs, DevAscendProgram* devProg)
+int BundleLaunchAicpu(AicpuLaunchDesc& launchDesc, DevAscendProgram* devProg)
 {
     auto ctrlStream = GetStreamContext().GetCtrlStream();
     auto schedStream = GetStreamContext().GetScheStream();
     int ret = 0;
-    auto args = (AiCpuArgs*)rtArgs.args;
+    auto args = launchDesc.args;
     const int nrAicpu = static_cast<int>(devProg->devArgs.nrAicpu);
     const bool launchSchedSameCluster = static_cast<int>(devProg->devArgs.launchSchedSameCluster);
     if (launchSchedSameCluster) {
@@ -55,9 +56,9 @@ int BundleLaunchAicpu(RtAicpuArgsEx& rtArgs, DevAscendProgram* devProg)
     args->kArgs.parameter.ctrlBlockNum = static_cast<int>(devProg->ctrlBlockDim);
     auto startTime = MspfSysCycleTime();
     args->kArgs.parameter.runMode = RUN_SPLITTED_STREAM_CTRL;
-    ret = RuntimeAicpuKernelLaunchExWithArgs(static_cast<uint32_t>(npu::tile_fwk::RtKernelType::AICPU_KFC),
-                                             "AST_DYN_AICPU", 1, &rtArgs, nullptr, ctrlStream,
-                                             RT_KERNEL_USE_SPECIAL_TIMEOUT);
+    launchDesc.stream = ctrlStream;
+    launchDesc.blockDim = 1U;
+    ret = LaunchPyptoRunWithHostArgs(launchDesc);
     HostProf::GetInstance().ReportHostProfInfo(ctrlStream, startTime, 1, MSPF_GE_TASK_TYPE_AI_CPU, false);
     if (ret != RT_SUCCESS) {
         return ret;
@@ -68,9 +69,9 @@ int BundleLaunchAicpu(RtAicpuArgsEx& rtArgs, DevAscendProgram* devProg)
     args->kArgs.parameter.runMode = RUN_SPLITTED_STREAM_SCHE;
     startTime = MspfSysCycleTime();
     const int scheCpuNum = static_cast<int>(devProg->devArgs.scheCpuNum);
-    ret = RuntimeAicpuKernelLaunchExWithArgs(static_cast<uint32_t>(npu::tile_fwk::RtKernelType::AICPU_KFC),
-                                             "AST_DYN_AICPU", nrAicpu, &rtArgs, nullptr, schedStream,
-                                             RT_KERNEL_USE_SPECIAL_TIMEOUT);
+    launchDesc.stream = schedStream;
+    launchDesc.blockDim = static_cast<uint32_t>(nrAicpu);
+    ret = LaunchPyptoRunWithHostArgs(launchDesc);
     HostProf::GetInstance().ReportHostProfInfo(schedStream, startTime, scheCpuNum, MSPF_GE_TASK_TYPE_AI_CPU, false);
     return ret;
 }
@@ -187,19 +188,16 @@ int LaunchBundleKernelOnce(const std::vector<uint8_t>& devProgBinary, void* binH
     aicpuArgs->kArgs.runtimeDynamicCellMatchAddr = reinterpret_cast<uint64_t>(cellMatchAddr);
     aicpuArgs->kArgs.runtimeDynamicCellMatchCapacity = cellMatchAddr != nullptr ? dynamicCellMatchBytes : 0;
 
-    // rt args.
-    RtAicpuArgsEx rtAicpuArgs;
-    (void)memset_s(&rtAicpuArgs, sizeof(RtAicpuArgsEx), 0, sizeof(RtAicpuArgsEx));
-    rtAicpuArgs.kernelNameAddrOffset = offsetof(AiCpuArgs, kernelName);
-    rtAicpuArgs.soNameAddrOffset = offsetof(AiCpuArgs, soName);
-    rtAicpuArgs.hostInputInfoNum = 1;
-    RtHostInputInfo hostInfo;
+    // Resolve the entry through PyptoRun; only the input tensor pointer needs host-args relocation.
+    AicpuLaunchDesc aicpuLaunchDesc{};
+    AicpuHostInput hostInfo{};
     hostInfo.addrOffset = offsetof(AiCpuArgs, kArgs.inputs);
     hostInfo.dataOffset = sizeof(AiCpuArgs);
-    rtAicpuArgs.hostInputInfoPtr = &hostInfo;
-    rtAicpuArgs.timeout = AICPU_EXECUTE_TIMEOUT;
-    rtAicpuArgs.args = aicpuArgs;
-    rtAicpuArgs.argsSize = static_cast<uint32_t>(aicpuArgBuf.size() * sizeof(int64_t));
+    aicpuLaunchDesc.hostInputs = &hostInfo;
+    aicpuLaunchDesc.hostInputNum = 1;
+    aicpuLaunchDesc.timeout = AICPU_EXECUTE_TIMEOUT;
+    aicpuLaunchDesc.args = aicpuArgs;
+    aicpuLaunchDesc.argsSize = static_cast<uint32_t>(aicpuArgBuf.size() * sizeof(int64_t));
 
     std::vector<void*> kernelArgs(0x7, nullptr);
     RtArgsEx rtAicoreArgs;
@@ -224,7 +222,7 @@ int LaunchBundleKernelOnce(const std::vector<uint8_t>& devProgBinary, void* binH
         return rc;
     }
 
-    rc = BundleLaunchAicpu(rtAicpuArgs, devProg);
+    rc = BundleLaunchAicpu(aicpuLaunchDesc, devProg);
     if (rc != RT_SUCCESS) {
         MACHINE_LOGE(HostLauncherErr::LAUNCH_BUILTIN_OP_NULL_FAILED, "[kernel-bundle] launch aicpu failed: %d", rc);
         return rc;
