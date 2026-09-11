@@ -52,7 +52,7 @@ python3 build_ci.py --clean --no_isolation
 > [!NOTE] 并行度与内存
 >
 > - 若未指定编译并行度，将默认根据 CPU 核数和可用内存（含 cgroup 内存上限）自动计算。
-> - 也可通过 `-j` 参数或环境变量 `PYPTO_BUILD_JOB_NUM` 显式覆盖，两者在 `pip install .` 和 `build_ci.py` 入口均生效。
+> - 也可通过`-j`参数或环境变量`PYPTO_BUILD_JOB_NUM`显式覆盖，在`build_ci.py`入口生效。
 
 ### 安装
 
@@ -60,16 +60,18 @@ python3 build_ci.py --clean --no_isolation
 
 ```bash
 cd build_out
-bash ./cann-pypto_${pypto_version}_${os_arch}.run --full -q --pylocal
+bash ./cann-pypto_${pypto_version}_${os_arch}.run --full -q --pylocal --install-path=${install_path}
 ```
 
 变量含义说明：
 
 - \$\{pypto_version}：表示PyPTO包版本号，例如`9.1.0`。
 - \$\{os_arch}：表示操作系统和CPU架构信息，例如`linux-aarch64`。
+- \$\{install_path}：表示指定安装路径，**须与CANN toolkit安装路径一致**。未指定时，root用户默认安装到`/usr/local/Ascend`，非root用户默认安装到`~/Ascend`。
 - `--full`：表示执行完整安装。
 - `-q`：表示静默安装。
 - `--pylocal`：安装软件包时，是否将python相关信息安装到CANN软件包的安装路径。
+- `--install-path`：指定安装路径。自定义CANN安装路径场景下必须显式传入，否则会安装到默认路径，可能导致首次安装失败或误覆盖/卸载已预装的PyPTO。
 
 ## 安装验证
 
