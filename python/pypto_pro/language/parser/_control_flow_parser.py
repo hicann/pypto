@@ -16,8 +16,18 @@ from typing import Any
 
 from pypto.pypto_impl import ir
 from pypto.pypto_impl.ir import DataType
+from pypto_pro.ir._limits import INT64_MAX, INT64_MIN, from_storage_int
 
-from .diagnostics import ParserSyntaxError, ParserTypeError, UnsupportedFeatureError
+from ._expr_evaluator import ExprEvaluator
+from .diagnostics import (
+    FinalRejectionError,
+    ParserSyntaxError,
+    ParserTypeError,
+    UnsupportedFeatureError,
+    check_in_range,
+)
+
+_UINT16_MAX = 65535
 
 
 def _is_bare_return(stmt: ast.Return) -> bool:
@@ -488,12 +498,93 @@ class ControlFlowParserMixin:
 
         if len(call.args) == 1:
             stop = self.parse_expression(call.args[0])
+            self._check_range_bound(stop, call.args[0], subject="stop")
         elif len(call.args) == 2:
             start = self.parse_expression(call.args[0])
             stop = self.parse_expression(call.args[1])
+            self._check_range_bound(start, call.args[0], subject="start")
+            self._check_range_bound(stop, call.args[1], subject="stop")
         else:
             start = self.parse_expression(call.args[0])
             stop = self.parse_expression(call.args[1])
             step = self.parse_expression(call.args[2])
+            self._check_range_bound(start, call.args[0], subject="start")
+            self._check_range_bound(stop, call.args[1], subject="stop")
+            self._check_range_bound(step, call.args[2], subject="step", is_step=True)
+
+        self._check_range_overflow(start, stop, step, call)
 
         return {"start": start, "stop": stop, "step": step}
+
+    def _reject_non_integer_scalar(self, expr: Any, node: ast.expr, *, subject: str) -> None:
+        """Reject a pl.range() bound that is not an integer scalar."""
+        scalar_type = getattr(expr, "type", None) if isinstance(expr, ir.Expr) else None
+        if not isinstance(scalar_type, ir.ScalarType):
+            raise FinalRejectionError(
+                f"pl.range(): {subject} must be an integer scalar, got '{ast.unparse(node)}'",
+                span=self.span_tracker.get_span(node),
+                hint=(
+                    "pl.range() bounds must be an integer scalar "
+                    "(not a tuple/list, string, dtype, tile/tensor, or None)."
+                ),
+            )
+
+        dtype = scalar_type.dtype
+        if dtype == DataType.BOOL:
+            bad = "bool"
+        elif dtype.is_float():
+            bad = "float"
+        else:
+            return
+        raise FinalRejectionError(
+            f"pl.range(): {subject} must be an integer, got {bad}",
+            span=self.span_tracker.get_span(node),
+            hint="pl.range() bounds must be integer-typed (no float or bool).",
+        )
+
+    def _check_range_bound(self, expr: Any, node: ast.expr, *, subject: str, is_step: bool = False) -> None:
+        """Validate the type and numeric range of a single pl.range() argument."""
+        self._reject_non_integer_scalar(expr, node, subject=subject)
+
+        found, value = ExprEvaluator.ir_to_python_value(expr)
+        if not found:
+            return
+        value = from_storage_int(expr.value, expr.type.dtype)
+
+        in_vf = self.inline_vf_depth > 0
+        hi = _UINT16_MAX if in_vf else INT64_MAX
+        if is_step:
+            lo = 1
+            hint = f"pl.range() step must be a positive integer in [1, {hi}]."
+        elif in_vf:
+            lo = 0
+            hint = "Inside a vector function, pl.range() bounds must be in [0, 65535] (uint16)."
+        else:
+            lo = INT64_MIN
+            hint = "pl.range() bounds must fit int64."
+
+        check_in_range(
+            value,
+            lo,
+            hi,
+            subject=f"pl.range() {subject}",
+            span=self.span_tracker.get_span(node),
+            hint=hint,
+        )
+
+    def _check_range_overflow(self, start: Any, stop: Any, step: Any, call: ast.Call) -> None:
+        """Reject a loop whose variable would overflow its type on the final step."""
+        fs, s = ExprEvaluator.ir_to_python_value(start)
+        ft, t = ExprEvaluator.ir_to_python_value(stop)
+        fp, p = ExprEvaluator.ir_to_python_value(step)
+        if not (fs and ft and fp) or t <= s:
+            return
+
+        peak = s + ((t - s - 1) // p) * p + p
+        hi = _UINT16_MAX if self.inline_vf_depth > 0 else INT64_MAX
+        if peak > hi:
+            raise FinalRejectionError(
+                f"pl.range(): loop variable reaches {peak} on the final step, exceeding {hi}",
+                span=self.span_tracker.get_span(call),
+                hint="Reduce stop/step so that the last increment stays within the loop variable's range.",
+            )
