@@ -29,7 +29,6 @@ enum class PassType : int32_t {
 };
 
 enum class PassName {
-    MERGE_DANGLING_ASSEMBLE_OUTPUT,
     LOOP_UNROLL,
     INFER_TENSOR_FORMAT,
     AUTO_CAST,
@@ -82,7 +81,6 @@ enum class PassName {
 };
 
 inline const std::map<PassName, const char*> kPassNameStringMap = {
-    {PassName::MERGE_DANGLING_ASSEMBLE_OUTPUT, "MergeDanglingAssembleOutput"},
     {PassName::LOOP_UNROLL, "LoopUnroll"},
     {PassName::INFER_TENSOR_FORMAT, "InferTensorFormat"},
     {PassName::AUTO_CAST, "AutoCast"},

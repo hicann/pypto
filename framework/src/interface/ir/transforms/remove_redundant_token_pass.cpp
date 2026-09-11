@@ -60,6 +60,7 @@ private:
 
     struct Node {
         TensorOpStmtPtr op;
+        std::vector<VarPtr> results;
         std::vector<VarPtr> tokens;
         bool changed{false};
     };
@@ -104,6 +105,10 @@ private:
         const auto& shape = tensor->GetShape();
         auto shapeForOverlap = SymbolicScalar::FromConcrete(shape);
         const auto& dynValidShape = tensor->GetDynValidShape();
+        if (std::any_of(shape.begin(), shape.end(), [](int64_t dim) { return dim == -1; }) &&
+            dynValidShape.size() != shape.size()) {
+            return {};
+        }
         for (size_t i = 0; i < shape.size(); ++i) {
             if (shape[i] == -1) {
                 shapeForOverlap[i] = dynValidShape[i];
@@ -262,7 +267,7 @@ private:
     {
         ProducerMap producers;
         for (size_t i = 0; i < nodes.size(); ++i) {
-            for (const auto& result : nodes[i].op->result_) {
+            for (const auto& result : nodes[i].results) {
                 producers[result.get()].push_back(i);
             }
             for (const auto& token : nodes[i].op->result_token_) {
@@ -270,6 +275,128 @@ private:
             }
         }
         return producers;
+    }
+
+    class DataUseCollector : public IRVisitor {
+    public:
+        using IRVisitor::VisitStmt_;
+
+        const std::unordered_set<const Var*>& Uses() const { return uses_; }
+
+    private:
+        void VisitVarLike_(const VarPtr& op) override { uses_.insert(op.get()); }
+
+        void VisitStmt_(const AssignStmtPtr& op) override { VisitExpr(op->value_); }
+
+        void VisitStmt_(const TensorOpStmtPtr& op) override
+        {
+            for (const auto& arg : op->args_) {
+                VisitExpr(arg);
+            }
+            for (const auto& token : op->tokens_) {
+                VisitExpr(token);
+            }
+        }
+
+        void VisitStmt_(const ScalarOpStmtPtr& op) override
+        {
+            for (const auto& arg : op->args_) {
+                VisitExpr(arg);
+            }
+        }
+
+        void VisitStmt_(const IfStmtPtr& op) override
+        {
+            VisitExpr(op->condition_);
+            VisitStmt(op->thenBody_);
+            if (op->elseBody_) {
+                VisitStmt(*op->elseBody_);
+            }
+        }
+
+        void VisitStmt_(const ForStmtPtr& op) override
+        {
+            VisitExpr(op->start_);
+            VisitExpr(op->stop_);
+            VisitExpr(op->step_);
+            for (const auto& iterArg : op->iterArgs_) {
+                VisitExpr(iterArg->initValue_);
+            }
+            VisitStmt(op->body_);
+        }
+
+        std::unordered_set<const Var*> uses_;
+    };
+
+    struct ProducerResult {
+        size_t nodeIndex;
+        LogicalTensorPtr output;
+    };
+
+    static std::vector<std::vector<ProducerResult>> BuildProducerResultGroups(const std::vector<Node>& nodes)
+    {
+        std::unordered_map<RawTensor*, std::vector<size_t>> rawGroups;
+        for (size_t nodeIndex = 0; nodeIndex < nodes.size(); ++nodeIndex) {
+            const auto& node = nodes[nodeIndex];
+            if (node.results.size() != 1) {
+                continue;
+            }
+            auto output = AsLogicalTensor(node.results.front());
+            if (!output || !output->GetRawTensor()) {
+                continue;
+            }
+            rawGroups[output->GetRawTensor().get()].push_back(nodeIndex);
+        }
+
+        std::vector<std::vector<ProducerResult>> resultGroups;
+        for (const auto& rawGroup : rawGroups) {
+            const auto& nodeIndices = rawGroup.second;
+            if (nodeIndices.size() < 2) {
+                continue;
+            }
+
+            std::vector<ProducerResult> group;
+            group.reserve(nodeIndices.size());
+            for (auto nodeIndex : nodeIndices) {
+                const auto& node = nodes[nodeIndex];
+                auto output = AsLogicalTensor(node.results.front());
+                group.push_back(ProducerResult{nodeIndex, output});
+            }
+            if (group.size() < 2) {
+                continue;
+            }
+            resultGroups.push_back(std::move(group));
+        }
+        return resultGroups;
+    }
+
+    static bool MergeDanglingProducerResults(const std::vector<StmtPtr>& statements, std::vector<Node>& nodes)
+    {
+        DataUseCollector useCollector;
+        for (const auto& statement : statements) {
+            useCollector.VisitStmt(statement);
+        }
+
+        bool changed = false;
+        for (const auto& group : BuildProducerResultGroups(nodes)) {
+            for (size_t index = 0; index < group.size(); ++index) {
+                const auto& candidate = group[index];
+                if (useCollector.Uses().count(candidate.output.get()) != 0) {
+                    continue;
+                }
+                for (size_t next = index + 1; next < group.size(); ++next) {
+                    const auto& sink = group[next];
+                    if (useCollector.Uses().count(sink.output.get()) == 0) {
+                        continue;
+                    }
+                    nodes[candidate.nodeIndex].results[0] = sink.output;
+                    nodes[candidate.nodeIndex].changed = true;
+                    changed = true;
+                    break;
+                }
+            }
+        }
+        return changed;
     }
 
     static bool DependsOn(size_t producer, const Node& consumer, const ProducerMap& producers,
@@ -410,9 +537,10 @@ private:
         std::vector<Node> nodes;
         for (const auto& stmt : statements) {
             if (auto op = As<TensorOpStmt>(stmt)) {
-                nodes.push_back({op, op->tokens_, false});
+                nodes.push_back({op, op->result_, op->tokens_, false});
             }
         }
+        bool changed = MergeDanglingProducerResults(statements, nodes);
         auto producers = BuildProducerMap(nodes);
 
         for (size_t consumerIndex = 0; consumerIndex < nodes.size(); ++consumerIndex) {
@@ -420,7 +548,6 @@ private:
             }
         }
 
-        bool changed = false;
         size_t nodeIndex = 0;
         for (auto& stmt : statements) {
             if (!As<TensorOpStmt>(stmt)) {
@@ -430,7 +557,7 @@ private:
             if (!node.changed) {
                 continue;
             }
-            stmt = npu::tile_fwk::RebuildTensorOpStmt(node.op, node.op->result_, node.op->result_token_, node.op->args_,
+            stmt = npu::tile_fwk::RebuildTensorOpStmt(node.op, node.results, node.op->result_token_, node.op->args_,
                                                       std::move(node.tokens), node.op->span_);
             changed = true;
         }
