@@ -211,8 +211,12 @@ public:
     Status AppendMergedAssembleOperations(Function& function);
     Status AppendProducerGroupFusions(Function& function);
 
+    // Remove legacy result tokens replaced by per-merged-op new tokens.
+    void CleanupLegacyResultTokens(Function& function);
+
     // Cleanup methods
     Status CleanUp(Function& function);
+    bool hasTokenDependencies_ = false;
     std::unordered_set<int> visitedOp_;
     std::unordered_map<int, const ConsumerCacheEntry*> consumerCache_;
     std::unordered_map<int, ConsumerCacheEntry> tensorConsumerCache_;
