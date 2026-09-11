@@ -31,13 +31,13 @@ ffn\_shared\_expert\_quant算子对应GLM4.5网络中MoE共享专家的计算逻
 
 ```text
 ERROR:root:Record function share_expert_moe_main failed: ASSERTION FAILED: kSizeA == kSizeB
-Matrix K dimemsion mismatch, kSizeA: 384, kSizeB: 8
+Matrix K dimension mismatch, kSizeA: 384, kSizeB: 8
 , func ConstructTensorGraph, file cube_operation_impl.cpp, line 1220
 libtile_fwk_interface.so(npu::tile_fwk::Tensor npu::tile_fwk::Matrix::ConstructTensorGraph<false, false, false>(npu::tile_fwk::DataType, npu::tile_fwk::Tensor const&, npu::tile_fwk::Tensor const&, npu::tile_fwk::Tensor const&, npu::tile_fwk::Matrix::MatmulExtendParam const&)+0x25d) [0x7fe34630ad3d]
 libtile_fwk_interface.so(npu::tile_fwk::Tensor npu::tile_fwk::Matrix::Matmul<false, false, false>(npu::tile_fwk::DataType, npu::tile_fwk::Tensor const&, npu::tile_fwk::Tensor const&)+0x14e) [0x7fe34630b51e]
 ```
 
-获取关键信息"Matrix K dimemsion mismatch"，得知错误由某Matmul操作传入的Tensor Shape的K轴不相等引起。
+获取关键信息"Matrix K dimension mismatch"，得知错误由某Matmul操作传入的Tensor Shape的K轴不相等引起。
 
 ## 解决方案
 
