@@ -11,10 +11,9 @@
 ```bash
 # 手动准备第三方源码包后设置
 export PYPTO_THIRD_PARTY_PATH=<path-to-thirdparty>
-
-# 然后执行编译
-python3 -m pip install . --verbose
 ```
+
+设置完成后，再执行编译和安装。
 
 ## 使用约束
 
