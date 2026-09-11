@@ -129,8 +129,8 @@ void DeviceExecuteContext::GELaunchRunCached(DevStartArgs* startArgs, PushTaskEn
         DynDeviceTask* dynTask = reinterpret_cast<DynDeviceTask*>(
             devProg->ctrlFlowCacheAnchor->deviceTaskCacheList[index].dynTaskBase);
         devProg->ctrlFlowCacheAnchor->PredCountDataRestore(dynTask);
-        devProg->ctrlFlowCacheAnchor->ReadyQueueDataRestore(dynTask, devProg->devArgs.nrValidAic);
-        devProg->ctrlFlowCacheAnchor->DieReadyQueueDataRestore(dynTask, devProg->devArgs.nrValidAic);
+        devProg->ctrlFlowCacheAnchor->ReadyQueueDataRestore(dynTask, startArgs->nrValidAic);
+        devProg->ctrlFlowCacheAnchor->DieReadyQueueDataRestore(dynTask, startArgs->nrValidAic);
         devProg->ctrlFlowCacheAnchor->MixTaskDataRestore(dynTask);
         taskContext.UpdateReadyTaskNum(dynTask->readyQueueBackup->readyTaskNum);
 
@@ -310,14 +310,16 @@ void DeviceExecuteContext::CalcControlMaxAicore()
         }
     }
 
+    // InitDyn already resolved per-round nrValidAic onto DevStartArgs; Submit only runs after RunInit sets args.
+    const uint32_t nrValidAic = args->nrValidAic;
     if (currentMaxC_ == 0 && currentMaxV_ == 0) {
-        currentMaxC_ = devProg->devArgs.nrValidAic;
+        currentMaxC_ = nrValidAic;
         currentMaxV_ = currentMaxC_ * AIV_NUM_PER_AI_CORE;
         return;
     }
 
-    uint32_t oriAivNum = devProg->devArgs.nrValidAic * AIV_NUM_PER_AI_CORE;
-    currentMaxC_ = currentMaxC_ >= devProg->devArgs.nrValidAic ? devProg->devArgs.nrValidAic : currentMaxC_;
+    uint32_t oriAivNum = nrValidAic * AIV_NUM_PER_AI_CORE;
+    currentMaxC_ = currentMaxC_ >= nrValidAic ? nrValidAic : currentMaxC_;
     currentMaxV_ = currentMaxV_ >= oriAivNum ? oriAivNum : currentMaxV_;
     if (devProg->devArgs.archInfo == ArchInfo::DAV_3510) {
         if (currentMaxC_ * AIV_NUM_PER_AI_CORE >= currentMaxV_) {

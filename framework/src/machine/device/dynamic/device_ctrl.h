@@ -293,7 +293,16 @@ public:
 
         devStartArgs->syncFlag = 0;
         devStartArgs->InitProgram(devProg, reinterpret_cast<uint64_t>(devStartArgs));
-        devStartArgs->devCtrlState.schAicpuNum = devProg->devArgs.scheCpuNum;
+        // Bind 控核结果到本 round 的 ring slot，避免改写共享 DevProg.devArgs.nrValidAic（多 shape 重叠会竞态）
+        const uint32_t capacityNrValidAic = devProg->devArgs.nrValidAic;
+        const uint32_t capacityScheCpuNum = devProg->devArgs.scheCpuNum;
+        devStartArgs->nrValidAic = ResolveRoundNrValidAic(kargs->parameter.ctrlBlockNum, capacityNrValidAic);
+        devStartArgs->scheCpuNum = ResolveRoundScheCpuNum(devStartArgs->nrValidAic, capacityScheCpuNum,
+                                                          devProg->devArgs.archInfo);
+        DEV_INFO("Round topology: ctrlBlockNum=%lu nrValidAic=%u scheCpuNum=%u (capacity aic=%u sche=%u)",
+                 kargs->parameter.ctrlBlockNum, devStartArgs->nrValidAic, devStartArgs->scheCpuNum, capacityNrValidAic,
+                 capacityScheCpuNum);
+        devStartArgs->devCtrlState.schAicpuNum = devStartArgs->scheCpuNum;
         devStartArgs->devCtrlState.taskCtrlIndex = 0;
         devStartArgs->devScheState.threadIdx = CTRL_THREAD_INDEX;
         devStartArgs->devScheState.finished = 0;

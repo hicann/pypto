@@ -102,13 +102,11 @@ TEST(DeviceScheExtraTest, RunSchDeInit)
 TEST(DeviceScheExtraTest, RunSchInit)
 {
     DynMachineManager mgr;
-    DeviceArgs args{};
-    args.scheCpuNum = 2;
 
-    mgr.RunSchInit(&args);
+    mgr.RunSchInit(2);
     EXPECT_TRUE(mgr.initSch_.load());
 
-    mgr.RunSchInit(&args);
+    mgr.RunSchInit(2);
 }
 
 TEST(DeviceScheExtraTest, UpdateScheNumForCtrl)
@@ -184,26 +182,16 @@ TEST(DeviceScheExtraTest, SignalReg)
     mgr.SignalReg([](int, siginfo_t*, void*) {});
 }
 
-TEST(DeviceScheExtraTest, ReCalcDevArgsAicoreNum_Changed)
-{
-    DynMachineManager mgr;
-    DeviceKernelArgs kargs{};
-    kargs.parameter.ctrlBlockNum = 4;
-    DevAscendProgram devProg{};
-    devProg.devArgs.nrValidAic = 8;
-    mgr.ReCalcDevArgsAicoreNum(&kargs, &devProg);
-    EXPECT_EQ(devProg.devArgs.nrValidAic, 4u);
-}
+TEST(DeviceScheExtraTest, ResolveRoundNrValidAic_PreferCtrlBlockNum) { EXPECT_EQ(ResolveRoundNrValidAic(4, 8), 4u); }
 
-TEST(DeviceScheExtraTest, ReCalcDevArgsAicoreNum_Unchanged)
+TEST(DeviceScheExtraTest, ResolveRoundNrValidAic_FallbackCapacity) { EXPECT_EQ(ResolveRoundNrValidAic(0, 8), 8u); }
+
+TEST(DeviceScheExtraTest, ResolveRoundScheCpuNum_ShrinkWithinCapacity)
 {
-    DynMachineManager mgr;
-    DeviceKernelArgs kargs{};
-    kargs.parameter.ctrlBlockNum = 0;
-    DevAscendProgram devProg{};
-    devProg.devArgs.nrValidAic = 8;
-    mgr.ReCalcDevArgsAicoreNum(&kargs, &devProg);
-    EXPECT_EQ(devProg.devArgs.nrValidAic, 8u);
+    // Small blockDim should shrink sche count; never exceed capacity.
+    uint32_t roundSche = ResolveRoundScheCpuNum(1, 4, ArchInfo::DAV_3510);
+    EXPECT_EQ(roundSche, 1u);
+    EXPECT_LE(roundSche, 4u);
 }
 
 TEST(DeviceScheExtraTest, AllocThreadIdx_UnknownArch)
