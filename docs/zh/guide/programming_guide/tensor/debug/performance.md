@@ -325,7 +325,7 @@ for b, k in pypto.loop_unroll(A.shape[0] // 64, unroll_list=[64, 16, 4], name="A
    else :
       pypto.set_vec_tile_shapes(64, 64)
 
-   tile_a = A[b * 64:(b + k) * 64, :]  #
+   tile_a = A[b * 64:(b + k) * 64, :]
    tile_a = tile_a + 2
    B[b * 64:, :] = tile_a
 ```
@@ -360,7 +360,7 @@ pypto.set_cube_tile_shapes([128, 128], [128, 512], [128, 128])
 
 - 首先，需要满足特定Operation对TileShape的规格约束。如scatter update要求尾轴TileShape和Shape一致，即不对尾轴进行切分。各个Operation的具体限制可以参考相关接口文档。
 
-- 其次，要保证Operation的输入与输出Tensor可以在UB中分配内存，因此TileShape不能过大。同时由于子图和搬运的数据块较小会导致性能劣化，因此TileShape又不能过小。以Atlas A3 训练系列产品为例，UB的缓存容量为192kb。因此合适的初始TileShape是既满足Operation的要求，又使得数据块大小在16到64KB之间，尾轴32B对齐。
+- 其次，要保证Operation的输入与输出Tensor可以在UB中分配内存，因此TileShape不能过大。同时由于子图和搬运的数据块较小会导致性能劣化，因此TileShape又不能过小。以Atlas A3 训练系列产品为例，UB的缓存容量为192KB。因此合适的初始TileShape是既满足Operation的要求，又使得数据块大小在16到64KB之间，尾轴32B对齐。
 
 - 此外，归约类计算(Reduce运算，如：sum、max、min等)尽可能不要在归约轴上进行切分。例如，输入Shape为(56, 1024)的RMSNorm，它的最后一维TileShape应当设为1024。下图的上半部分是对reduce轴切分的RMSNorm的泳道图例子，多个子图的输出需要在同一个子图进行reduce操作，导致产生GM搬运和调度开销。下半部分是不对reduce轴切分的例子，此时上下游子图合并，没有GM搬运和调度开销。
 
@@ -507,7 +507,7 @@ CubeNBuffer针对的是不能使能L1Reuse的场景，此类场景较少，主�
 
 **Vector广度方向合图**
 
-Vector运算场景下通过[set_pass_options](../../../../api/tensor_api/config/pypto-set_pass_options.md)接口的`vec_nbuffer_setting`参数配置广度方向的合图操作。需要注意的是，应先进行前面的优化步骤将上下游子图的切分和合并调到较合适后，再尝试使用vecNBuffer来进行广度合并。当泳道图内有同构子图组具有大量的小子图（耗时在10u以下）时，应该使用该功能进行优化，以减少调度开销和kernel的头开销。
+Vector运算场景下通过[set_pass_options](../../../../api/tensor_api/config/pypto-set_pass_options.md)接口的`vec_nbuffer_setting`参数配置广度方向的合图操作。需要注意的是，应先进行前面的优化步骤将上下游子图的切分和合并调到较合适后，再尝试使用vecNBuffer来进行广度合并。当泳道图内有同构子图组具有大量的小子图（耗时在10us以下）时，应该使用该功能进行优化，以减少调度开销和kernel的头开销。
 
 `vec_nbuffer_setting`参数的配置方式与`cube_nbuffer_setting`相似。
 
