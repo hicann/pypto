@@ -21,6 +21,7 @@
 namespace npu::tile_fwk {
 const char* GetRetcodeMessage(int32_t retcode);
 bool IsPyPTOAicoreException(const AclRtExceptionInfo* exceptionInfo);
+bool IsPyPTOAicpuException(const AclRtExceptionInfo* exceptionInfo);
 void PyPTOExceptionInfoCallBack(AclRtExceptionInfo* exceptionInfo);
 void InitializeErrorCallback();
 } // namespace npu::tile_fwk

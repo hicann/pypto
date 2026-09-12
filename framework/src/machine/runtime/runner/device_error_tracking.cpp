@@ -21,6 +21,7 @@
 #include "tilefwk/device_error_code.h"
 #include "tilefwk/error_code.h"
 #include "tilefwk/pypto_fwk_log.h"
+#include "tilefwk/error_manager.h"
 
 namespace npu::tile_fwk {
 
@@ -184,19 +185,42 @@ bool IsPyPTOAicoreException(const AclRtExceptionInfo* exceptionInfo)
     return kernelName != nullptr && std::strncmp(kernelName, "PyPTO", 5) == 0;
 }
 
+bool IsPyPTOAicpuException(const AclRtExceptionInfo* exceptionInfo)
+{
+    if (exceptionInfo == nullptr || exceptionInfo->expandInfo.type != RtExceptionExpandType::AICPU) {
+        return false;
+    }
+    const char* functionName = exceptionInfo->expandInfo.u.aicpuInfo.functionName;
+    return functionName != nullptr &&
+           std::strncmp(functionName, "DynTileFwkKernelServer", std::strlen("DynTileFwkKernelServer")) == 0;
+}
+
 void PyPTOExceptionInfoCallBack(AclRtExceptionInfo* exceptionInfo)
 {
-    if (!IsPyPTOAicoreException(exceptionInfo)) {
+    if (IsPyPTOAicpuException(exceptionInfo)) {
+        const auto& info = exceptionInfo->expandInfo.u.aicpuInfo;
+        const char* errMsg = GetRetcodeMessage(static_cast<int32_t>(exceptionInfo->retcode));
+        PYPTO_HOST_LOGE_WITH_ERRCODE(
+            MACHINE, InternalError::MACHINE_INNER_ERROR,
+            "%s, device_id: %u, stream_id: %u, task_id: %u, retcode: %u, kernelName: %s, functionName: %s, soName: %s",
+            errMsg, exceptionInfo->deviceid, exceptionInfo->streamid, exceptionInfo->taskid, exceptionInfo->retcode,
+            info.kernelName != nullptr ? info.kernelName : "(null)", info.functionName,
+            info.soName != nullptr ? info.soName : "(null)");
+        ErrorManager::Instance().OutputErrorMessage();
+
         return;
     }
+    if (IsPyPTOAicoreException(exceptionInfo)) {
+        const char* errMsg = GetRetcodeMessage(static_cast<int32_t>(exceptionInfo->retcode));
+        const char* kernelName = exceptionInfo->expandInfo.u.aicoreInfo.exceptionArgs.exceptionKernelInfo.kernelName;
 
-    const char* errMsg = GetRetcodeMessage(static_cast<int32_t>(exceptionInfo->retcode));
-    const char* kernelName = exceptionInfo->expandInfo.u.aicoreInfo.exceptionArgs.exceptionKernelInfo.kernelName;
-
-    PYPTO_HOST_LOGE_WITH_ERRCODE(AICORE, InternalError::COMMON_INNER_ERROR,
-                                 "%s, device_id: %u, stream_id: %u, task_id: %u, retcode: %u, kernelName: %s", errMsg,
-                                 exceptionInfo->deviceid, exceptionInfo->streamid, exceptionInfo->taskid,
-                                 exceptionInfo->retcode, kernelName);
+        PYPTO_HOST_LOGE_WITH_ERRCODE(MACHINE, InternalError::COMMON_INNER_ERROR,
+                                     "%s, device_id: %u, stream_id: %u, task_id: %u, retcode: %u, kernelName: %s",
+                                     errMsg, exceptionInfo->deviceid, exceptionInfo->streamid, exceptionInfo->taskid,
+                                     exceptionInfo->retcode, kernelName);
+        ErrorManager::Instance().OutputErrorMessage();
+        return;
+    }
 }
 
 void InitializeErrorCallback()
