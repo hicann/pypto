@@ -135,7 +135,7 @@ void DeviceWorkspaceAllocator::LogTuningUsage(uint64_t taskId, size_t stitchCoun
         DEV_INFO("[Workspace Runtime Pool] parallelId=%u, "
                  "rootInner={current=%" PRIu64 ",peak=%" PRIu64 ",capacity=%" PRIu64 "}, "
                  "exclusiveOutcast={current=%" PRIu64 ",peak=%" PRIu64 ",capacity=%" PRIu64 "}, "
-                 "innerTemporalOutcast={currentSlots=%" PRIu64 ",peakSlots=%" PRIu64 ",capacitySlots=%" PRIu64 "}.",
+                 "assembleOutcast={currentSlots=%" PRIu64 ",peakSlots=%" PRIu64 ",capacitySlots=%" PRIu64 "}.",
                  i, rootCurrent, peak.rootInnerBytes, rootCapacity, exclusiveCurrent, peak.exclusiveOutcastBytes,
                  exclusiveCapacity, innerCurrent, peak.innerTemporalOutcastSlots, innerCapacity);
         const uint64_t rootInnerDepth = CeilDiv(peak.rootInnerBytes, tensorBudget.workspacePool.rootInnerUnitBytes);
@@ -149,7 +149,7 @@ void DeviceWorkspaceAllocator::LogTuningUsage(uint64_t taskId, size_t stitchCoun
     }
     DEV_INFO("[Workspace Runtime Tuning] taskId=%" PRIu64 ", stitchCount=%zu, "
              "configuredDepths={rootInner=%u,innerTemporal=%u,exclusive=%u}, "
-             "recommendedDepths={rootInner=%" PRIu64 ",innerTemporal=%" PRIu64 ",exclusive=%" PRIu64 "}.",
+             "recommendedDepths={rootInner=%" PRIu64 ",assembleOutcast=%" PRIu64 ",exclusive=%" PRIu64 "}.",
              taskId, stitchCount, tensorBudget.workspacePool.stitchFunctionNumPerPool[0],
              tensorBudget.workspacePool.stitchFunctionNumPerPool[1],
              tensorBudget.workspacePool.stitchFunctionNumPerPool[2],
@@ -589,7 +589,7 @@ void DeviceWorkspaceAllocator::LogTuningSummary() const
         DEV_INFO("[Workspace Runtime Summary] parallelId=%u, "
                  "rootInner={peak=%" PRIu64 ",capacity=%" PRIu64 "}, "
                  "exclusiveOutcast={peak=%" PRIu64 ",capacity=%" PRIu64 "}, "
-                 "innerTemporalOutcast={peakSlots=%" PRIu64 ",capacitySlots=%" PRIu64 "}.",
+                 "assembleOutcast={peakSlots=%" PRIu64 ",capacitySlots=%" PRIu64 "}.",
                  i, peak.rootInnerBytes, rootCapacity, peak.exclusiveOutcastBytes, exclusiveCapacity,
                  peak.innerTemporalOutcastSlots, tensorBudget.devTaskInnerTemporalOutcastNum);
         const uint64_t rootInnerDepth = CeilDiv(peak.rootInnerBytes, tensorBudget.workspacePool.rootInnerUnitBytes);
@@ -615,9 +615,9 @@ void DeviceWorkspaceAllocator::LogTuningSummary() const
     };
     DEV_INFO("[Workspace Runtime Recommendation] "
              "actualDepths={rootInner=%u,innerTemporal=%u,exclusive=%u}, "
-             "recommendedDepths={rootInner=%" PRIu64 ",innerTemporal=%" PRIu64 ",exclusive=%" PRIu64 "}, "
+             "recommendedDepths={rootInner=%" PRIu64 ",assembleOutcast=%" PRIu64 ",exclusive=%" PRIu64 "}, "
              "depthMemory={rawPerParallelBytes={rootInner=%" PRIu64 ",innerTemporal=%" PRIu64 ",exclusive=%" PRIu64
-             "}, nextDepthTotalBytes={rootInner=%" PRIu64 ",innerTemporal=%" PRIu64 ",exclusive=%" PRIu64
+             "}, nextDepthTotalBytes={rootInner=%" PRIu64 ",assembleOutcast=%" PRIu64 ",exclusive=%" PRIu64
              "}, parallelism=%u}.",
              tensorBudget.workspacePool.stitchFunctionNumPerPool[0],
              tensorBudget.workspacePool.stitchFunctionNumPerPool[1],

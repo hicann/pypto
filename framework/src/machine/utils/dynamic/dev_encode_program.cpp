@@ -130,7 +130,7 @@ void DevAscendProgram::DumpBasicInfo(const int indent, std::ostringstream& oss) 
     oss << INDENTINNER << "#memoryDrivenWorkspace:" << memBudget.tensor.memoryDrivenWorkspace << "\n";
     oss << INDENTINNER << "#preciseWorkspaceEnabled:" << memBudget.tensor.workspacePool.preciseWorkspaceEnabled << "\n";
     oss << INDENTINNER << "#rootInnerDepth:" << memBudget.tensor.workspacePool.stitchFunctionNumPerPool[0] << "\n";
-    oss << INDENTINNER << "#innerTemporalOutcastDepth:" << memBudget.tensor.workspacePool.stitchFunctionNumPerPool[1]
+    oss << INDENTINNER << "#assembleOutcastDepth:" << memBudget.tensor.workspacePool.stitchFunctionNumPerPool[1]
         << "\n";
     oss << INDENTINNER << "#exclusiveOutcastDepth:" << memBudget.tensor.workspacePool.stitchFunctionNumPerPool[2]
         << "\n";

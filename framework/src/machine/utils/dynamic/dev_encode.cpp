@@ -3247,7 +3247,7 @@ static void ValidateCtrlFlowCacheBackupCapacity(const EncodeDevAscendProgramInfo
     ASSERT(DevCommonErr::PARAM_CHECK_FAILED, ctrlFlowSlotBackupCount >= requiredSlotBlocks)
         << "Control flow cache slot backup capacity is smaller than boundary outcast slot budget, backup="
         << ctrlFlowSlotBackupCount << ", boundary=" << wsDesc.devTaskBoundaryOutcastNum
-        << ", innerTemporal=" << wsDesc.devTaskInnerTemporalOutcastNum;
+        << ", assembleOutcast=" << wsDesc.devTaskInnerTemporalOutcastNum;
 }
 
 static void EncodeProgramMetadataWorkspace(DevAscendProgram* base)
