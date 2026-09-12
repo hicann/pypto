@@ -8,58 +8,71 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-/*!
- * \file test_device_error_tracking.cpp
- * \brief UT for filtering the process-global runtime exception callback to PyPTO tasks only.
- */
-
 #include <gtest/gtest.h>
 
 #include "adapter/api/runtime_define.h"
 #include "machine/runtime/runner/device_error_tracking.h"
+#include "tilefwk/device_error_code.h"
+#include "tilefwk/error_manager.h"
 
 using namespace npu::tile_fwk;
 
-class DeviceErrorTrackingTest : public testing::Test {};
+class DeviceErrorTrackingTest : public testing::Test {
+protected:
+    void SetUp() override { ErrorManager::Instance().OutputErrorMessage(true); }
+    void TearDown() override { ErrorManager::Instance().OutputErrorMessage(true); }
+};
 
-TEST_F(DeviceErrorTrackingTest, NullExceptionIsNotPyPTO) { EXPECT_FALSE(IsPyPTOAicoreException(nullptr)); }
-
-TEST_F(DeviceErrorTrackingTest, NonPyPTOAicoreNameIsIgnored)
+TEST_F(DeviceErrorTrackingTest, AicpuNamesMatchPrefix)
 {
-    RtExceptionInfo exceptionInfo = {};
-    exceptionInfo.expandInfo.type = RtExceptionExpandType::AICORE;
-    exceptionInfo.expandInfo.u.aicoreInfo.exceptionArgs.exceptionKernelInfo.bin = reinterpret_cast<void*>(0x2000);
-    exceptionInfo.expandInfo.u.aicoreInfo.exceptionArgs.exceptionKernelInfo.kernelName = "OtherKernel";
-    EXPECT_FALSE(IsPyPTOAicoreException(&exceptionInfo));
+    RtExceptionInfo info = {};
+    info.expandInfo.type = RtExceptionExpandType::AICPU;
+    EXPECT_FALSE(IsPyPTOAicpuException(&info));
+    for (const char* name : {"DynTileFwkKernelServer", "DynTileFwkKernelServerInit", "DynTileFwkKernelServerOther"}) {
+        info.expandInfo.u.aicpuInfo.functionName = name;
+        EXPECT_TRUE(IsPyPTOAicpuException(&info));
+    }
+    for (const char* name : {"", "OtherKernel", "DynTileFwkKernel"}) {
+        info.expandInfo.u.aicpuInfo.functionName = name;
+        EXPECT_FALSE(IsPyPTOAicpuException(&info));
+    }
 }
 
-TEST_F(DeviceErrorTrackingTest, NullAicoreKernelNameIsNotPyPTO)
+TEST_F(DeviceErrorTrackingTest, UnrelatedExceptionsAreIgnored)
 {
-    RtExceptionInfo exceptionInfo = {};
-    exceptionInfo.expandInfo.type = RtExceptionExpandType::AICORE;
-    EXPECT_FALSE(IsPyPTOAicoreException(&exceptionInfo));
+    RtExceptionInfo info = {};
+    testing::internal::CaptureStderr();
+    PyPTOExceptionInfoCallBack(nullptr);
+    info.expandInfo.type = RtExceptionExpandType::FFTS_PLUS;
+    PyPTOExceptionInfoCallBack(&info);
+    info.expandInfo.type = RtExceptionExpandType::AICORE;
+    info.expandInfo.u.aicoreInfo.exceptionArgs.exceptionKernelInfo.kernelName = "OtherKernel";
+    PyPTOExceptionInfoCallBack(&info);
+    info = {};
+    info.expandInfo.type = RtExceptionExpandType::AICPU;
+    info.expandInfo.u.aicpuInfo.functionName = "OtherKernel";
+    PyPTOExceptionInfoCallBack(&info);
+    EXPECT_TRUE(testing::internal::GetCapturedStderr().empty());
 }
 
-TEST_F(DeviceErrorTrackingTest, PyPTOAicoreNameIsAccepted)
+TEST_F(DeviceErrorTrackingTest, AicpuExceptionIsOutput)
 {
-    RtExceptionInfo exceptionInfo = {};
-    exceptionInfo.expandInfo.type = RtExceptionExpandType::AICORE;
-    exceptionInfo.expandInfo.u.aicoreInfo.exceptionArgs.exceptionKernelInfo.bin = reinterpret_cast<void*>(0x1000);
-    exceptionInfo.expandInfo.u.aicoreInfo.exceptionArgs.exceptionKernelInfo.kernelName = "PyPTO_test_kernel";
-    EXPECT_TRUE(IsPyPTOAicoreException(&exceptionInfo));
+    RtExceptionInfo info = {};
+    info.expandInfo.type = RtExceptionExpandType::AICPU;
+    info.expandInfo.u.aicpuInfo.functionName = "DynTileFwkKernelServerInit";
+    info.retcode = PYPTO_DEVICE_ERROR_AICPU_EXCEPTION;
+    testing::internal::CaptureStderr();
+    PyPTOExceptionInfoCallBack(&info);
+    EXPECT_FALSE(testing::internal::GetCapturedStderr().empty());
 }
 
-TEST_F(DeviceErrorTrackingTest, AicpuExceptionIsIgnored)
+TEST_F(DeviceErrorTrackingTest, AicoreExceptionIsOutput)
 {
-    RtExceptionInfo exceptionInfo = {};
-    exceptionInfo.expandInfo.type = RtExceptionExpandType::AICPU;
-    exceptionInfo.expandInfo.u.aicpuInfo.functionName = "DynTileFwkKernelServer";
-    EXPECT_FALSE(IsPyPTOAicoreException(&exceptionInfo));
-}
-
-TEST_F(DeviceErrorTrackingTest, UnsupportedExceptionTypeIsIgnored)
-{
-    RtExceptionInfo exceptionInfo = {};
-    exceptionInfo.expandInfo.type = RtExceptionExpandType::FFTS_PLUS;
-    EXPECT_FALSE(IsPyPTOAicoreException(&exceptionInfo));
+    RtExceptionInfo info = {};
+    info.expandInfo.type = RtExceptionExpandType::AICORE;
+    info.expandInfo.u.aicoreInfo.exceptionArgs.exceptionKernelInfo.kernelName = "PyPTO_test_kernel";
+    info.retcode = PYPTO_DEVICE_ERROR_AICORE_EXCEPTION;
+    testing::internal::CaptureStderr();
+    PyPTOExceptionInfoCallBack(&info);
+    EXPECT_FALSE(testing::internal::GetCapturedStderr().empty());
 }
