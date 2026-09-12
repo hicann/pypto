@@ -114,12 +114,12 @@ struct DynMachineManager {
     };
 
     static int AllocThreadIdxForDav3510(DeviceArgs* devArgs, int cpu, int& curThreadIdx, std::atomic<int>& threadIdx,
-                                        std::atomic<uint64_t>& cpumask, std::atomic<int>& arbitrationLevel,
-                                        std::atomic<uint64_t>& arbitrationCpumask,
+                                        std::atomic<uint64_t>& cpumask, int& arbitratedScheNum,
+                                        std::atomic<int>& arbitrationLevel, std::atomic<uint64_t>& arbitrationCpumask,
                                         std::atomic<uint64_t>& threadIdxBitmap)
     {
-        return AllocThreadIdxForDav3510Impl(devArgs, cpu, curThreadIdx, threadIdx, cpumask, arbitrationLevel,
-                                            arbitrationCpumask, threadIdxBitmap);
+        return AllocThreadIdxForDav3510Impl(devArgs, cpu, curThreadIdx, threadIdx, cpumask, arbitratedScheNum,
+                                            arbitrationLevel, arbitrationCpumask, threadIdxBitmap);
     }
 
     static int AllocThreadIdxForDav2201(DeviceArgs* devArgs, int cpu, int& curThreadIdx, std::atomic<int>& threadIdx,
@@ -144,8 +144,8 @@ struct DynMachineManager {
         int cpu = ++simCpuId;
 #endif
         if (devArgs->archInfo == ArchInfo::DAV_3510) {
-            ret = AllocThreadIdxForDav3510(devArgs, cpu, curThreadIdx, threadIdx, cpumask, arbitrationLevel,
-                                           arbitrationCpumask, threadIdxBitmap);
+            ret = AllocThreadIdxForDav3510(devArgs, cpu, curThreadIdx, threadIdx, cpumask, arbitratedScheNum,
+                                           arbitrationLevel, arbitrationCpumask, threadIdxBitmap);
         } else if (devArgs->archInfo == ArchInfo::DAV_2201) {
             ret = AllocThreadIdxForDav2201(devArgs, cpu, curThreadIdx, threadIdx, cpumask, arbitratedScheNum,
                                            arbitrationLevel);

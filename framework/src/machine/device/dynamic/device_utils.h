@@ -78,13 +78,13 @@ constexpr uint64_t TIMEOUT_A2A3_100US = 5000ULL;                    // 100us
 constexpr uint64_t TIMEOUT_A2A3_1MS = 50000ULL;                     // 1ms
 constexpr uint64_t TIMEOUT_A2A3_2MS = 100000ULL;                    // 2ms
 constexpr uint64_t TIMEOUT_A2A3_3MS = 150000ULL;                    // 3ms
-constexpr uint64_t TIMEOUT_A2A3_55MS = 2750000ULL;                  // 55ms
+constexpr uint64_t TIMEOUT_A2A3_100MS = 5000000ULL;                 // 100ms
 constexpr uint64_t TIMEOUT_A2A3_1SEC = 50000000ULL;                 // 1s
 constexpr uint64_t TIMEOUT_A2A3_10SEC = 500000000;                  // 10s
 constexpr uint64_t TIMEOUT_A2A3_1MIN = 3000000000ULL;               // 1min
 constexpr uint64_t TIMEOUT_A2A3_20MIN = 60000000000ULL;             // 20min
 constexpr uint64_t TIMEOUT_A5_50US = 50000ULL;                      // 50us
-constexpr uint64_t TIMEOUT_A5_55MS = 55000000ULL;                   // 55ms
+constexpr uint64_t TIMEOUT_A5_100MS = 100000000ULL;                 // 100ms
 constexpr uint64_t TIMEOUT_A5_1SEC = 1000000000ULL;                 // 1s
 constexpr uint64_t TIMEOUT_A5_5SEC = 5000000000ULL;                 // 5s
 constexpr uint64_t TIMEOUT_A5_10SEC = 10000000000;                  // 10s
@@ -264,10 +264,10 @@ inline uint64_t CurrentTime()
     return mono / NSEC_PER_USEC;
 }
 
-// 55ms：规避 device OS 对单 AICPU 连跑 ~950ms 强制让出 ~50ms 的节流误超时
+// 100ms：规避 device OS 对单 AICPU 连跑 ~950ms 强制让出 ~50ms，再叠加系统调度延迟后切回任务可能超过 55ms 的节流误超时
 inline uint64_t GetOsThrottleSafeWaitTimeout(ArchInfo archInfo)
 {
-    return (archInfo == ArchInfo::DAV_3510) ? TIMEOUT_A5_55MS : TIMEOUT_A2A3_55MS;
+    return (archInfo == ArchInfo::DAV_3510) ? TIMEOUT_A5_100MS : TIMEOUT_A2A3_100MS;
 }
 
 // Timeout check macros
