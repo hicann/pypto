@@ -16,8 +16,8 @@
 
 从起始值start生成索引序列，用于构造索引向量。通过index_order选择生成方向：
 
-- pypto_pro.language.IndexOrder.INCREASE_ORDER（默认）：递增，dst[i] = start + i。
-- pypto_pro.language.IndexOrder.DECREASE_ORDER：递减，dst[i] = start - i。
+- pypto_pro.language.IndexOrder.INCREASE_ORDER（默认）：递增，以传入的start为起始值。
+- pypto_pro.language.IndexOrder.DECREASE_ORDER：递减，以传入的start为最终值。
 
 ## 函数原型
 
@@ -67,11 +67,7 @@ def example_kernel(
     t_out_grp = pl.make_tile_group(type=tu, addrs=0x0, mutex_ids=[0])
     t_out = t_out_grp.current()
     with pl.section_vector():
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf(t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
 def test_example():
@@ -112,11 +108,7 @@ def example_kernel_dec(
     t_out_grp = pl.make_tile_group(type=tu, addrs=0x0, mutex_ids=[0])
     t_out = t_out_grp.current()
     with pl.section_vector():
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf_dec(t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
 def test_example_2():

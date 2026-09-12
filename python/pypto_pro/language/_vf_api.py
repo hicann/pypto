@@ -202,11 +202,16 @@ class Vf:
                 ``[row, col]`` list/tuple (linear offset = ``row * shape[1] + col``)
 
         Kwargs:
-            dist: ``pl.StoreDist.NORM`` (default), ``pl.StoreDist.NORM_B16``,
-                  ``pl.StoreDist.FIRST_ELEMENT``, ``pl.StoreDist.PACK``,
-                  ``pl.StoreDist.PACK4``, ``pl.StoreDist.INTLV`` / ``INTLV_B32``
-                  (interleaved, requires two src registers),
-                  ``pl.StoreDist.PACK`` for MaskReg src (psts PK mode)
+            dist: ``pl.StoreDist`` value selecting the store distribution pattern.
+                Coarse names (``NORM`` (default), ``FIRST_ELEMENT``, ``PACK``,
+                ``PACK4``, ``INTLV``) auto-select the granularity variant from
+                the source dtype; width-qualified names select it explicitly
+                (mirrors AscendC Reg::StoreDist): ``NORM_B8``/``NORM_B16``/
+                ``NORM_B32``, ``FIRST_ELEMENT_B8``/``_B16``/``_B32``,
+                ``PACK_B16``/``_B32``/``_B64``, ``PACK4_B32``,
+                ``INTLV_B8``/``_B16``/``_B32``. ``INTLV``/``INTLV_Bx``
+                (interleaved) requires two src registers.
+                ``pl.StoreDist.PACK`` for MaskReg src (psts PK mode)
             post_update: True to auto-advance destination address after store
             data_copy_mode: ``pl.DataCopyMode.DATA_BLOCK_COPY`` for vsstb instruction
             block_stride: DataBlock copy block stride
@@ -388,7 +393,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
 
         Returns:
             Destination register (``RegTensor``) holding the element-wise
@@ -412,7 +417,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
 
         Returns:
             Destination register (``RegTensor``) holding the element-wise
@@ -436,7 +441,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
             precision: When ``True``, enables high-precision mode using the
                 error-compensation algorithm (0-ulp precision error). Only
                 effective for ``DT_FP32`` source type. Default ``False``
@@ -463,7 +468,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
 
         Returns:
             Destination register (``RegTensor``) holding ``src * scalar``
@@ -471,7 +476,6 @@ class Vf:
 
         Note:
             Does not support UINT8/INT8/BF16/INT64/UINT64 types.
-            MERGING mode is not supported; only ZEROING (default).
         """
 
     @staticmethod
@@ -493,7 +497,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
 
         Returns:
             Destination register (``RegTensor``), updated in-place.
@@ -516,7 +520,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
 
         Returns:
             Destination register (``RegTensor``) holding the element-wise
@@ -540,7 +544,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
 
         Returns:
             Destination register (``RegTensor``) holding the element-wise
@@ -565,7 +569,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
             dtype: Data type for type-specific variants (e.g. ``pl.DT_UINT16``)
 
         Returns:
@@ -590,7 +594,7 @@ class Vf:
 
         Kwargs:
             datablock: ``True`` to use datablock-granularity reduction (vcgadd)
-            merge_mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            merge_mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
 
         Returns:
             Destination register (``RegTensor``) with the reduction result in
@@ -614,7 +618,7 @@ class Vf:
 
         Kwargs:
             datablock: ``True`` to use datablock-granularity reduction (vcgmax)
-            merge_mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            merge_mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
 
         Returns:
             Destination register (``RegTensor``) with the reduction result in
@@ -638,7 +642,7 @@ class Vf:
 
         Kwargs:
             datablock: ``True`` to use datablock-granularity reduction (vcgmin)
-            merge_mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            merge_mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
 
         Returns:
             Destination register (``RegTensor``) with the reduction result in
@@ -663,7 +667,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
             precision: When ``True``, enables high-precision mode that
                 preserves subnormal output results (1-ulp precision error).
                 Only effective for ``DT_FP32`` source type. Default ``False``
@@ -1082,7 +1086,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
             precision: When ``True``, enables high-precision mode that
                 preserves subnormal output results (1-ulp precision error).
                 Only effective for ``DT_FP32`` source type. Default ``False``
@@ -1133,7 +1137,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
             precision: When ``True``, enables high-precision mode that
                 preserves subnormal output results (1-ulp precision error).
                 Only effective for ``DT_FP32`` source type. Default ``False``
@@ -1159,7 +1163,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
 
         Returns:
             Destination register (``RegTensor``) holding the absolute
@@ -1182,7 +1186,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
 
         Returns:
             Destination register (``RegTensor``) holding the bitwise
@@ -1207,7 +1211,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
             precision: When ``True``, enables high-precision mode that
                 preserves subnormal output results (1-ulp precision error).
                 Only effective for ``DT_FP32`` source type. Default ``False``
@@ -1233,7 +1237,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
 
         Returns:
             Destination register (``RegTensor``) holding ``max(0, src)``
@@ -1255,7 +1259,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device..
 
         Returns:
             Destination register (``RegTensor``) holding the negated
@@ -1278,7 +1282,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
 
         Returns:
             Destination register (``RegTensor``) holding ``src + scalar``
@@ -1302,7 +1306,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
 
         Returns:
             Destination register (``RegTensor``) holding ``src - scalar``
@@ -1325,7 +1329,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
 
         Returns:
             Destination register (``RegTensor``) holding the element-wise
@@ -1348,7 +1352,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
 
         Returns:
             Destination register (``RegTensor``) holding the element-wise
@@ -1373,7 +1377,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
 
         Returns:
             Destination register (``RegTensor``) holding the Leaky
@@ -1426,7 +1430,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
 
         Returns:
             Destination register (``RegTensor``) with pairwise sums.
@@ -1449,7 +1453,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
 
         Returns:
             Destination register (``RegTensor``) holding the absolute
@@ -1475,7 +1479,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
 
         Returns:
             Destination register (``RegTensor``), updated in-place.
@@ -1537,7 +1541,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
 
         Returns:
             Destination register (``RegTensor``), updated in-place.
@@ -1784,7 +1788,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
             precision: When ``True``, enables high-precision mode that
                 preserves subnormal output results (1-ulp precision error).
                 Only effective for ``DT_FP32`` source type. Default ``False``
@@ -1812,7 +1816,7 @@ class Vf:
             preg: Predicate mask register
 
         Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default) or ``pl.MergeMode.MERGING``
+            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
             precision: When ``True``, enables high-precision mode that
                 preserves subnormal output results (1-ulp precision error).
                 Only effective for ``DT_FP32`` source type. Default ``False``

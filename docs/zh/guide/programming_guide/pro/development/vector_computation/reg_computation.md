@@ -1,6 +1,6 @@
 # Reg计算
 
-Reg矢量计算直接使用SIMD Register File保存向量数据和中间结果。PyPTO Pro通过`@pypto_pro.language.vector_function`定义VF函数，并在函数内使用[`vf.*` API](../../../../../api/index.md)表达寄存器加载、计算和存储。
+Reg矢量计算直接使用SIMD Register File保存向量数据和中间结果。PyPTO Pro通过@pypto_pro.language.vector_function定义VF函数，并在函数内使用[vf.* API](../../../../../api/index.md)表达寄存器加载、计算和存储。
 
 > [!NOTE]说明
 > Reg矢量计算依赖VF Register File，使用前请确认对应VF API的支持范围。
@@ -13,9 +13,9 @@ Reg矢量计算将一段连续计算保留在寄存器中，仅在计算链入�
 
 | 维度 | Tile/Membase向量计算 | Regbase向量计算 |
 |:---|:---|:---|
-| 数据载体 | UB中的`Tile` | Register File中的`RegTensor` / `MaskReg` |
-| 中间结果 | 通常写回UB | 可由后续`vf.*`操作直接消费 |
-| PyPTO Pro接口 | `pypto_pro.language.add`、`pypto_pro.language.sub`、`pypto_pro.language.sum`等 | `vf.add`、`vf.sub`、`vf.reduce_*`等 |
+| 数据载体 | UB中的Tile | Register File中的RegTensor / MaskReg |
+| 中间结果 | 通常写回UB | 可由后续vf.*操作直接消费 |
+| PyPTO Pro接口 | pypto_pro.language.add、pypto_pro.language.sub、pypto_pro.language.sum等 | vf.add、vf.sub、vf.reduce_*等 |
 | 适用场景 | 通用向量计算、快速实现 | 连续计算链、需要降低UB往返开销的高性能场景 |
 
 ## 硬件组成
@@ -46,11 +46,11 @@ PyPTO Pro中各阶段的接口对应关系如下：
 
 | 数据路径 | PyPTO Pro表达 |
 |:---|:---|
-| GM → UB | `pypto_pro.language.load` / `pypto_pro.language.load_tile` |
-| UB → Register File | `vf.load` / `vf.load_align` / `vf.load_unalign`等 |
-| Register File内计算 | `vf.add`、`vf.mul`、`vf.reduce_sum`等 |
-| Register File → UB | `vf.store` / `vf.store_align` / `vf.store_unalign`等 |
-| UB → GM | `pypto_pro.language.store` / `pypto_pro.language.store_tile` |
+| GM → UB | pypto_pro.language.load / pypto_pro.language.load_tile |
+| UB → Register File | vf.load / vf.load_align / vf.load_unalign等 |
+| Register File内计算 | vf.add、vf.mul、vf.reduce_sum等 |
+| Register File → UB | vf.store / vf.store_align / vf.store_unalign等 |
+| UB → GM | pypto_pro.language.store / pypto_pro.language.store_tile |
 
 ## 编程模型
 
@@ -62,13 +62,13 @@ Regbase在Tile/Membase的“数据搬入 → 计算 → 数据搬出”基础上
 
 ### VF函数与执行域
 
-使用`@pypto_pro.language.vector_function`声明VF函数。函数体隐式处于VF执行域，使用`vf.*`操作加载、计算和存储寄存器；Tile参数的类型由调用点推导。
+使用@pypto_pro.language.vector_function声明VF函数。函数体隐式处于VF执行域，使用vf.*操作加载、计算和存储寄存器；Tile参数的类型由调用点推导。
 
-`vf.*`操作只能在VF函数内使用，放在`pl.section_vector()`内仍需要通过VF函数调用。
-VF函数可以调用其他VF函数，并使用标量表达式、`pl.range`循环以及标量`pl.min`、`pl.max`、`pl.const`。
-其他`pl.*`调用（包括Tile操作、同步操作和`pl.section_vector()`/`pl.section_cube()`）应放在VF函数外，
-需要的结果通过参数传入。TileGroup的`next()`/`current()`/`previous()`同样如此：游标推进会产生标量运算，
-不能进入VF执行域，应在调用侧选好Tile后作为参数传入。`pl.DT_*`和枚举常量仍可在VF函数内使用。
+vf.*操作只能在VF函数内使用，放在pypto_pro.language.section_vector()内仍需要通过VF函数调用。
+VF函数可以调用其他VF函数，并使用标量表达式、pypto_pro.language.range循环以及标量pypto_pro.language.min、pypto_pro.language.max、pypto_pro.language.const。
+其他pypto_pro.language.*调用（包括Tile操作、同步操作和pypto_pro.language.section_vector()/pypto_pro.language.section_cube()）应放在VF函数外，
+需要的结果通过参数传入。TileGroup的next()/current()/previous()同样如此：游标推进会产生标量运算，
+不能进入VF执行域，应在调用侧选好Tile后作为参数传入。pypto_pro.language.DT_*和枚举常量仍可在VF函数内使用。
 违反执行域限制时，前端解析器会在对应调用处报错。
 
 ```python
@@ -85,7 +85,7 @@ def add_vf(src_a, src_b, dst):
     vf.store_align(dst, reg_out, preg)
 ```
 
-外层`@pypto_pro.language.jit` Kernel负责GM与UB之间的搬运以及跨Pipe同步，并在`pypto_pro.language.section_vector()`中调用VF函数：
+外层@pypto_pro.language.jit Kernel负责GM与UB之间的搬运以及跨Pipe同步，并在pypto_pro.language.section_vector()中调用VF函数：
 
 ```python
 @pl.jit(auto_mutex=True)
@@ -110,11 +110,11 @@ def add_kernel(
         pl.store(out, tile_out, [0, 0])
 ```
 
-完整可运行示例和寄存器生命周期说明参见[`vf.reg_tensor`](../../../../../api/pro_api/SIMD-API/reg_computation/reg_tensor.md)。
+完整可运行示例和寄存器生命周期说明参见[vf.reg_tensor](../../../../../api/pro_api/SIMD-API/reg_computation/reg_tensor.md)。
 
 ### VF函数中的Tile指针偏移
 
-VF函数接收的Tile参数可以使用`tile + offset`进行线性元素偏移，偏移后的表达式可传给`vf.load_align`、`vf.store_align`等访存接口。例如，下面的VF函数按行读取源Tile，并将结果连续写入目标Tile：
+VF函数接收的Tile参数可以使用tile + offset进行线性元素偏移，偏移后的表达式可传给vf.load_align、vf.store_align等访存接口。例如，下面的VF函数按行读取源Tile，并将结果连续写入目标Tile：
 
 ```python
 @pl.vector_function
@@ -125,9 +125,9 @@ def copy_rows(dst_tile, src_tile, row_count, col_count, src_stride):
         vf.store_align(dst_tile + row * col_count, vreg, preg)
 ```
 
-`offset`的单位是元素，可以是整型常量或运行时整型Scalar。`tile + offset`只形成偏移后的指针表达式，不会创建新的Tile，也不携带shape或`valid_shape`信息。
+offset的单位是元素，可以是整型常量或运行时整型Scalar。tile + offset只形成偏移后的指针表达式，不会创建新的Tile，也不携带shape或valid_shape信息。
 
-VF函数内不支持`tile[row_start:row_stop, col_start:col_stop]`切片。如果需要先选取二维区域，应在`pl.section_vector()`中创建子Tile，再将其传给VF函数：
+VF函数内不支持tile[row_start:row_stop, col_start:col_stop]切片。如果需要先选取二维区域，应在pypto_pro.language.section_vector()中创建子Tile，再将其传给VF函数：
 
 ```python
 with pl.section_vector():
@@ -140,9 +140,9 @@ with pl.section_vector():
 
 ## 同步与依赖
 
-- GM↔UB搬运与Vector/VF计算之间的跨Pipe依赖，由TileGroup + `auto_mutex=True`自动管理，或使用`pypto_pro.language.system.sync_src` / `pypto_pro.language.system.sync_dst`手动管理。
-- VF函数内存在UB写后读、写后写等局部依赖时，按接口要求使用`vf.mem_bar`指定对应模式。
-- Register File中存在直接数据依赖的`vf.*`表达式应保持清晰的数据流关系，避免在未初始化寄存器上执行计算。
+- GM↔UB搬运与Vector/VF计算之间的跨Pipe依赖，由TileGroup + auto_mutex=True自动管理，或使用pypto_pro.language.system.sync_src / pypto_pro.language.system.sync_dst手动管理。
+- VF函数内存在UB写后读、写后写等局部依赖时，按接口要求使用vf.mem_bar指定对应模式。
+- Register File中存在直接数据依赖的vf.*表达式应保持清晰的数据流关系，避免在未初始化寄存器上执行计算。
 
 ## 使用建议
 

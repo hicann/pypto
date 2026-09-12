@@ -79,17 +79,29 @@ store_align(tile, src, *args, dist: Optional[StoreDist] = None, data_copy_mode: 
 
   | dist取值 | 含义 | 对齐约束（Byte） |
   |---|---|---|
-  | pypto_pro.language.StoreDist.NORM | 正常模式，搬运VL数据。64位宽数据类型DT_INT64、DT_UINT64只支持此模式。 | 32 |
-  | pypto_pro.language.StoreDist.FIRST_ELEMENT | 忽略mask，仅向dst搬出src第一个元素。 | 按dtype宽度 |
-  | pypto_pro.language.StoreDist.PACK | 压缩模式，根据mask将src中有效元素的低半部分bit数据连续存储于dst中。 | min(32, VL/2) |
-  | pypto_pro.language.StoreDist.PACK4 | 4元素压缩模式，根据mask将src中有效元素的低8bit（四分之一）数据连续存储于dst中。 | min(32, VL/4) |
+  | pypto_pro.language.StoreDist.NORM | 正常模式（通用），根据数据类型自动选择位宽粒度，搬运VL数据。64位宽数据类型DT_INT64、DT_UINT64只支持此模式。 | 32 |
+  | pypto_pro.language.StoreDist.NORM_B8 | 按8位宽类型普通存储，搬运VL数据。 | 32 |
+  | pypto_pro.language.StoreDist.NORM_B16 | 按16位宽类型普通存储，搬运VL数据。 | 32 |
+  | pypto_pro.language.StoreDist.NORM_B32 | 按32位宽类型普通存储，搬运VL数据。 | 32 |
+  | pypto_pro.language.StoreDist.FIRST_ELEMENT | 忽略mask，仅向dst搬出src第一个元素（通用），根据数据类型自动选择位宽粒度。 | 按dtype宽度 |
+  | pypto_pro.language.StoreDist.FIRST_ELEMENT_B8 | 忽略mask，仅向dst搬出src第一个元素，数据类型为8位宽类型。 | 1 |
+  | pypto_pro.language.StoreDist.FIRST_ELEMENT_B16 | 忽略mask，仅向dst搬出src第一个元素，数据类型为16位宽类型。 | 2 |
+  | pypto_pro.language.StoreDist.FIRST_ELEMENT_B32 | 忽略mask，仅向dst搬出src第一个元素，数据类型为32位宽类型。 | 4 |
+  | pypto_pro.language.StoreDist.PACK | 压缩模式（通用），根据mask将src中有效元素的低半部分bit数据连续存储于dst中，根据数据类型自动选择位宽粒度。 | min(32, VL/2) |
+  | pypto_pro.language.StoreDist.PACK_B16 | 压缩模式，根据mask将src中有效元素的低半部分bit数据按16位宽类型连续存储于dst中。 | min(32, VL/2) |
+  | pypto_pro.language.StoreDist.PACK_B32 | 压缩模式，根据mask将src中有效元素的低半部分bit数据按32位宽类型连续存储于dst中。 | min(32, VL/2) |
+  | pypto_pro.language.StoreDist.PACK_B64 | 压缩模式，根据mask将src中有效元素的低半部分bit数据按64位宽类型连续存储于dst中。 | min(32, VL/2) |
+  | pypto_pro.language.StoreDist.PACK4 | 4元素压缩模式（通用），根据mask将src中有效元素的低8bit（四分之一）数据连续存储于dst中。 | min(32, VL/4) |
+  | pypto_pro.language.StoreDist.PACK4_B32 | 4元素压缩模式，按32位宽类型粒度将src中有效元素的低8bit（四分之一）数据连续存储于dst中。 | min(32, VL/4) |
 
   **表2** reg_tensor双搬出模式dist参数说明
 
   | dist取值 | 含义 | 对齐约束（Byte） |
   |---|---|---|
-  | pypto_pro.language.StoreDist.INTLV | 交错存储，将src0、src1中的元素交错存储于dst中。 | 32 |
-  | pypto_pro.language.StoreDist.INTLV_B32 | 32位宽粒度交错存储。 | 32 |
+  | pypto_pro.language.StoreDist.INTLV | 交错存储（通用），将src0、src1中的元素交错存储于dst中，根据数据类型自动选择位宽粒度。 | 32 |
+  | pypto_pro.language.StoreDist.INTLV_B8 | 按8位宽类型交错存储，将src0、src1中的元素交错存储于dst中。 | 32 |
+  | pypto_pro.language.StoreDist.INTLV_B16 | 按16位宽类型交错存储，将src0、src1中的元素交错存储于dst中。 | 32 |
+  | pypto_pro.language.StoreDist.INTLV_B32 | 按32位宽粒度交错存储，将src0、src1中的元素交错存储于dst中。 | 32 |
 
   **表3** mask_reg模式dist参数说明
 
@@ -141,11 +153,7 @@ def example_kernel(
     t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf(in_a, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
 def test_example():
@@ -194,11 +202,7 @@ def example_kernel(
     t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf(in_a, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
 def test_example_2():
@@ -245,11 +249,7 @@ def example_kernel(
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.load(t_out, out, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf(in_a, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
 def test_example_6():
@@ -298,11 +298,7 @@ def example_kernel(
     t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf(in_a, t_out, 2)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
 def test_example_7():
@@ -355,11 +351,7 @@ def example_kernel(
     t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf(in_a, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
 def test_example_3():
@@ -420,11 +412,7 @@ def example_kernel(
     t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf(in_a, t_mask, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
 def test_example_4():
@@ -476,11 +464,7 @@ def example_kernel(
     t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf(in_a, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
 def test_example_5():
@@ -534,11 +518,7 @@ def example_kernel_fp8(
     t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf_fp8(in_a, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
 def test_example_fp8():

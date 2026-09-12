@@ -828,21 +828,47 @@ MaskReg dst:
     py::enum_<ir::StoreDist>(ir, "StoreDist", R"pbdoc(
 Data distribution pattern for vf.store_align.
 
+Coarse names (NORM/FIRST_ELEMENT/PACK/PACK4/INTLV) auto-select the
+granularity variant from the source dtype. Width-qualified names select
+the granularity explicitly (mirrors AscendC Reg::StoreDist).
+
 Members:
-    NORM          normal aligned store (default)
-    NORM_B16      normal store with B16 granularity
-    FIRST_ELEMENT store lane 0 only (first element)
-    PACK          compressed store (pack lower bits)
-    PACK4         4-element compressed store
-    INTLV         interleaved store (auto B8/B16/B32 based on dtype)
-    INTLV_B32     interleaved store at B32 granularity)pbdoc")
+    NORM               normal aligned store (default); auto B8/B16/B32 by dtype
+    NORM_B8            normal store with B8 granularity
+    NORM_B16           normal store with B16 granularity
+    NORM_B32           normal store with B32 granularity
+    FIRST_ELEMENT      store lane 0 only (first element); auto B8/B16/B32 by dtype
+    FIRST_ELEMENT_B8   store lane 0 only, B8 granularity
+    FIRST_ELEMENT_B16  store lane 0 only, B16 granularity
+    FIRST_ELEMENT_B32  store lane 0 only, B32 granularity
+    PACK               compressed store (pack lower bits); auto B16/B32/B64 by dtype
+    PACK_B16           compressed store, B16 granularity
+    PACK_B32           compressed store, B32 granularity
+    PACK_B64           compressed store, B64 granularity
+    PACK4              4-element compressed store (B32 granularity)
+    PACK4_B32          4-element compressed store, B32 granularity
+    INTLV              interleaved store; auto B8/B16/B32 by dtype (two source regs)
+    INTLV_B8           interleaved store at B8 granularity (two source regs)
+    INTLV_B16          interleaved store at B16 granularity (two source regs)
+    INTLV_B32          interleaved store at B32 granularity (two source regs))pbdoc")
         .value("NORM", ir::StoreDist::NORM)
         .value("NORM_B16", ir::StoreDist::NORM_B16)
         .value("FIRST_ELEMENT", ir::StoreDist::FIRST_ELEMENT)
         .value("PACK", ir::StoreDist::PACK)
         .value("PACK4", ir::StoreDist::PACK4)
         .value("INTLV", ir::StoreDist::INTLV)
-        .value("INTLV_B32", ir::StoreDist::INTLV_B32);
+        .value("INTLV_B32", ir::StoreDist::INTLV_B32)
+        .value("NORM_B8", ir::StoreDist::NORM_B8)
+        .value("NORM_B32", ir::StoreDist::NORM_B32)
+        .value("FIRST_ELEMENT_B8", ir::StoreDist::FIRST_ELEMENT_B8)
+        .value("FIRST_ELEMENT_B16", ir::StoreDist::FIRST_ELEMENT_B16)
+        .value("FIRST_ELEMENT_B32", ir::StoreDist::FIRST_ELEMENT_B32)
+        .value("PACK_B16", ir::StoreDist::PACK_B16)
+        .value("PACK_B32", ir::StoreDist::PACK_B32)
+        .value("PACK_B64", ir::StoreDist::PACK_B64)
+        .value("PACK4_B32", ir::StoreDist::PACK4_B32)
+        .value("INTLV_B8", ir::StoreDist::INTLV_B8)
+        .value("INTLV_B16", ir::StoreDist::INTLV_B16);
 
     py::enum_<ir::DataCopyMode>(ir, "DataCopyMode", R"pbdoc(
 Data copy granularity for vf.load_align / store_align / gather.

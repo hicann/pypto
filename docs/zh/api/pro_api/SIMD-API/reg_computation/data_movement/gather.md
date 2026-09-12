@@ -99,7 +99,6 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf(src_tile, index_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
@@ -108,7 +107,6 @@ def example_vf(src_tile, index_tile, dst_tile):
     # 根据索引从src_tile按元素收集到dst_reg
     dst_reg = vf.gather(src_tile, index_reg, preg)
     vf.store_align(dst_tile, dst_reg, preg)
-
 
 @pl.jit()
 def example_kernel(
@@ -127,13 +125,8 @@ def example_kernel(
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.load(in_idx, idx, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf(in_a, in_idx, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
-
 
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
@@ -146,7 +139,6 @@ def test_example():
     example_kernel[None, core_nums](a, idx, out)
     torch.npu.synchronize()
     torch.testing.assert_close(out, a, rtol=1e-5, atol=1e-5)
-
 
 if __name__ == "__main__":
     test_example()
@@ -161,7 +153,6 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf_datablock(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
@@ -175,7 +166,6 @@ def example_vf_datablock(src_tile, dst_tile):
                         data_copy_mode=pl.DataCopyMode.DATA_BLOCK_LOAD)
     vf.store_align(dst_tile, dst_reg, preg)
 
-
 @pl.jit()
 def example_kernel(
     a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
@@ -188,13 +178,8 @@ def example_kernel(
     t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf_datablock(in_a, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
-
 
 def test_example_2():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
@@ -206,7 +191,6 @@ def test_example_2():
     example_kernel[None, core_nums](a, out)
     torch.npu.synchronize()
     torch.testing.assert_close(out, a, rtol=1e-5, atol=1e-5)
-
 
 if __name__ == "__main__":
     test_example_2()
@@ -221,7 +205,6 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf_int8(src_tile, index_tile, dst_tile):
     # 8位宽源数据gather到16位宽dst，mask为16位宽粒度
@@ -232,7 +215,6 @@ def example_vf_int8(src_tile, index_tile, dst_tile):
     dst_reg = vf.gather(src_tile, index_reg, preg)
     # 显式指定NORM_B16：8位宽gather结果为16位宽格式，需按16位宽存储
     vf.store_align(dst_tile, dst_reg, preg, dist=pl.StoreDist.NORM_B16)
-
 
 @pl.jit()
 def example_kernel_int8(
@@ -252,13 +234,8 @@ def example_kernel_int8(
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.load(in_idx, idx, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf_int8(in_a, in_idx, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
-
 
 def test_example_int8():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
@@ -278,7 +255,6 @@ def test_example_int8():
     expected = a[:, :128].to(torch.uint8).to(torch.int16)
     torch.testing.assert_close(out, expected, rtol=0, atol=0)
 
-
 if __name__ == "__main__":
     test_example_int8()
     print("PASSED")
@@ -292,7 +268,6 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf_fp16(src_tile, index_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP16)
@@ -300,7 +275,6 @@ def example_vf_fp16(src_tile, index_tile, dst_tile):
     index_reg = vf.load_align(index_tile, 0, dtype=pl.DT_UINT16)
     dst_reg = vf.gather(src_tile, index_reg, preg)
     vf.store_align(dst_tile, dst_reg, preg)
-
 
 @pl.jit()
 def example_kernel_fp16(
@@ -319,13 +293,8 @@ def example_kernel_fp16(
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.load(in_idx, idx, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf_fp16(in_a, in_idx, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
-
 
 def test_example_fp16():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
@@ -341,7 +310,6 @@ def test_example_fp16():
     # gather后dst为identity
     torch.testing.assert_close(out, a, rtol=1e-3, atol=1e-3)
 
-
 if __name__ == "__main__":
     test_example_fp16()
     print("PASSED")
@@ -354,7 +322,6 @@ import os
 import pypto_pro.language as pl
 import torch
 import torch_npu
-
 
 @pl.vector_function
 def example_vf_int8_datablock(src_tile, dst_tile):
@@ -369,7 +336,6 @@ def example_vf_int8_datablock(src_tile, dst_tile):
                         data_copy_mode=pl.DataCopyMode.DATA_BLOCK_LOAD)
     vf.store_align(dst_tile, dst_reg, preg)
 
-
 @pl.jit()
 def example_kernel_int8_db(
     a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
@@ -382,13 +348,8 @@ def example_kernel_int8_db(
     t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf_int8_datablock(in_a, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
-
 
 def test_example_int8_db():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
@@ -403,7 +364,6 @@ def test_example_int8_db():
     # gather后dst为identity（索引0,32,64,...,224对应8个DataBlock）
     torch.testing.assert_close(out, a, rtol=0, atol=0)
 
-
 if __name__ == "__main__":
     test_example_int8_db()
     print("PASSED")
@@ -417,7 +377,6 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf_gather_reg(src_tile, index_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_INT8)
@@ -425,7 +384,6 @@ def example_vf_gather_reg(src_tile, index_tile, dst_tile):
     index_reg = vf.load_align(index_tile, 0, dtype=pl.DT_UINT8)
     dst_reg = vf.gather(src_reg, index_reg)
     vf.store_align(dst_tile, dst_reg, preg)
-
 
 @pl.jit()
 def example_kernel_gather_reg(
@@ -443,13 +401,8 @@ def example_kernel_gather_reg(
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.load(in_idx, idx, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf_gather_reg(in_a, in_idx, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
-
 
 def test_example_gather_reg():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
@@ -465,7 +418,6 @@ def test_example_gather_reg():
     # DT_INT8→DT_INT8 gather，类型保持不变
     torch.testing.assert_close(out, a[:, :128], rtol=0, atol=0)
 
-
 if __name__ == "__main__":
     test_example_gather_reg()
     print("PASSED")
@@ -479,7 +431,6 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
-
 @pl.vector_function
 def example_vf_fp16_bc(src_tile, index_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP16)
@@ -490,7 +441,6 @@ def example_vf_fp16_bc(src_tile, index_tile, dst_tile):
     dst_reg = vf.gather(src_tile, index_reg, preg)
     # NORM_B16：按16位粒度存储，128个b16写入256字节
     vf.store_align(dst_tile, dst_reg, preg, dist=pl.StoreDist.NORM_B16)
-
 
 @pl.jit()
 def example_kernel_fp16_bc(
@@ -509,13 +459,8 @@ def example_kernel_fp16_bc(
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.load(in_idx, idx, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf_fp16_bc(in_a, in_idx, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
-
 
 def test_example_fp16_bc():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
@@ -533,7 +478,6 @@ def test_example_fp16_bc():
     expected = torch.zeros([1, 128], device=device, dtype=torch.float16)
     expected[:, ::2] = a[:, :64]
     torch.testing.assert_close(out, expected, rtol=1e-3, atol=1e-3)
-
 
 if __name__ == "__main__":
     test_example_fp16_bc()

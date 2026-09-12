@@ -83,11 +83,7 @@ def example_kernel(
     t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf_scalar(in_a, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
 def test_example():
@@ -139,11 +135,7 @@ def example_kernel_vector(
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.load(in_shift, shift, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf_vector(in_a, in_shift, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
 
 def test_example_2():

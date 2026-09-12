@@ -71,15 +71,13 @@ def example_kernel(
     # 在section_vector外部设置CAST饱和模式为全局开启
     pl.set_saturation_flag(mode=pl.SaturationFlagMode.CAST, enable=True)
     tf = pl.TileType(shape=[1, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    in_a = pl.make_tile(tf, addr=0, size=256)
-    t_out = pl.make_tile(tf, addr=256, size=256)
+    in_a_grp = pl.make_tile_group(type=tf, addrs=0, mutex_ids=[0])
+    in_a = in_a_grp.current()
+    t_out_grp = pl.make_tile_group(type=tf, addrs=256, mutex_ids=[1])
+    t_out = t_out_grp.current()
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         example_vf(in_a, t_out)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, t_out, [0, 0])
     # 恢复不饱和模式
     pl.set_saturation_flag(mode=pl.SaturationFlagMode.CAST, enable=False)
