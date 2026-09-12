@@ -4191,5 +4191,93 @@ TEST_F(TestRemoveRedundantOpPass, SliceContractSliceL1FanoutAlignedMergedOffsetS
         EXPECT_EQ(attr->GetFromOffset(), (std::vector<int64_t>{kNumZero, kNumExpFour}));
     }
 }
+/*
+TestReduceAccViewWithMaxZeroClampShouldRemove
+viewIn{8,16}(DDR)[reduce_acc_view_dim,16]->view->viewOut{8,16}(DDR)[RUNTIME_Max(reduce_acc_view_dim,0),16]
+                                                            ->reduceAcc->outCast{8,16}
+view 输出仅被 ReduceAcc 消费且输入输出有效形状仅相差无效的 RUNTIME_Max(expr, 0) 截断时，
+放宽比较后视为冗余 view 并删除，ReduceAcc 直连 viewIn
+*/
+TEST_F(TestRemoveRedundantOpPass, ReduceAccViewWithMaxZeroClampShouldRemove)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReduceAccViewClampRemove",
+                                                      "TestReduceAccViewClampRemove", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> offset = {kNumZero, kNumZero};
+    auto viewIn = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    viewIn->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto viewOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    viewOut->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+
+    auto reduceDim = CreateTestScalarVar("reduce_acc_view_dim");
+    viewIn->UpdateDynValidShape({reduceDim, SymbolicScalar(kNumExpFour)});
+    viewOut->UpdateDynValidShape({reduceDim.Max(kNumZero), SymbolicScalar(kNumExpFour)});
+    EXPECT_EQ(viewIn->GetDynValidShape()[0].Dump(), "reduce_acc_view_dim");
+    EXPECT_EQ(viewOut->GetDynValidShape()[0].Dump(), "RUNTIME_Max(reduce_acc_view_dim, 0)");
+
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {viewIn}, {viewOut}, [&offset](Operation& op) {
+        op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
+    });
+    auto& reduceAcc = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_REDUCE_ACC, {viewOut}, {outCast});
+
+    currFunctionPtr->inCasts_.push_back(viewIn);
+    currFunctionPtr->outCasts_.push_back(outCast);
+
+    RemoveRedundantOp pass;
+    EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    EXPECT_EQ(CountOpcode(currFunctionPtr, Opcode::OP_VIEW), kNumZero) << "view differing only by Max(expr,0) clamp "
+                                                                          "for ReduceAcc should be removed";
+    EXPECT_EQ(reduceAcc.GetInputOperand(kSizeZero), viewIn);
+}
+
+/*
+TestReduceAccViewWithMaxZeroClampAndOtherConsumerShouldKeep
+viewIn{8,16}(DDR)[reduce_acc_view_dim,16]->view->viewOut{8,16}(DDR)[RUNTIME_Max(reduce_acc_view_dim,0),16]
+                                                            ->reduceAcc->outCast1{8,16}
+                                                            ->exp->outCast2{8,16}
+view 输出除 ReduceAcc 外还有其它消费方时不放宽有效形状比较，
+有效形状不同的 view 不删除
+*/
+TEST_F(TestRemoveRedundantOpPass, ReduceAccViewWithMaxZeroClampAndOtherConsumerShouldKeep)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestReduceAccViewClampKeep",
+                                                      "TestReduceAccViewClampKeep", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> offset = {kNumZero, kNumZero};
+    auto viewIn = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    viewIn->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto viewOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    viewOut->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto outCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+
+    auto reduceDim = CreateTestScalarVar("reduce_acc_view_dim");
+    viewIn->UpdateDynValidShape({reduceDim, SymbolicScalar(kNumExpFour)});
+    viewOut->UpdateDynValidShape({reduceDim.Max(kNumZero), SymbolicScalar(kNumExpFour)});
+
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {viewIn}, {viewOut}, [&offset](Operation& op) {
+        op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
+    });
+    auto& reduceAcc = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_REDUCE_ACC, {viewOut}, {outCast1});
+    auto& expOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {viewOut}, {outCast2});
+
+    currFunctionPtr->inCasts_.push_back(viewIn);
+    currFunctionPtr->outCasts_.push_back(outCast1);
+    currFunctionPtr->outCasts_.push_back(outCast2);
+
+    RemoveRedundantOp pass;
+    EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    EXPECT_EQ(CountOpcode(currFunctionPtr, Opcode::OP_VIEW), kNumOne) << "view with non-ReduceAcc consumer should "
+                                                                         "not relax dyn valid shape compare";
+    EXPECT_EQ(reduceAcc.GetInputOperand(kSizeZero), viewOut);
+    EXPECT_EQ(expOp.GetInputOperand(kSizeZero), viewOut);
+}
 } // namespace tile_fwk
 } // namespace npu

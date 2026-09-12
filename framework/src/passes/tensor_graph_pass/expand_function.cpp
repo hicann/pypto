@@ -254,6 +254,45 @@ std::unordered_set<Operation*> CollectAssembleOutcastSkipExpandOps(Function& fun
     return skipExpandOps;
 }
 
+// #if 0 // 暂时注释：改用 6002.diff 的 TileShapeResolver 方案验证
+// // GatherInUB 的 params 输入（第 0 个操作数）通常是对 GM 大缓冲的整体别名 view（如 KV cache）。
+// // slice 模式下若按 tile 网格展开为 SLICE + CONTRACT(NeedCopy=true)，会把整个缓冲逐 tile 物化
+// // 搬运（如 262144 行缓冲会产生 16384 个 SLICE+CONTRACT 对），既导致图规模爆炸，又引入全量
+// // GM<->UB 往返。GatherInUB 的输入本身要求 DDR（GM 直读），该类 view 保留穿透别名语义不展开，
+// // 与 legacy 行为一致。
+std::unordered_set<Operation*> CollectGatherInUbParamViewSkipOps(const std::vector<OperationPtr>& tensorOperations)
+{
+    std::unordered_set<Operation*> skipExpandOps;
+    for (const auto& opPtr : tensorOperations) {
+        if (opPtr == nullptr || opPtr->GetOpcode() != Opcode::OP_VIEW || opPtr->GetOOperands().size() != 1) {
+            continue;
+        }
+        const auto& output = opPtr->GetOOperands().front();
+        if (output == nullptr) {
+            continue;
+        }
+        // 仅当输出全部被 GatherInUB 作为 params(第 0 个输入)消费时跳过展开，
+        // 其它消费方仍按原逻辑展开，避免影响需要物化的场景
+        const auto& consumers = output->GetConsumers();
+        if (consumers.empty()) {
+            continue;
+        }
+        bool gatherParamOnly = true;
+        for (auto* consumer : consumers) {
+            if (consumer == nullptr || consumer->GetOpcode() != Opcode::OP_GATHER_IN_UB ||
+                consumer->GetIOperands().empty() || consumer->GetIOperands().front() != output) {
+                gatherParamOnly = false;
+                break;
+            }
+        }
+        if (gatherParamOnly) {
+            skipExpandOps.insert(opPtr.get());
+        }
+    }
+    return skipExpandOps;
+}
+// #endif
+
 bool IsMatmulOpcode(Opcode opcode)
 {
     static const std::unordered_set<Opcode> kMatmulOps = {Opcode::OP_A_MUL_B,  Opcode::OP_A_MULACC_B,
@@ -688,6 +727,9 @@ Status ExpandFunction::Expandfunction(Function& function) const
     if (expandViewAssemble) {
         auto outcastSkipOps = CollectAssembleOutcastSkipExpandOps(function, tensorOperations);
         skipExpandOps.insert(outcastSkipOps.begin(), outcastSkipOps.end());
+        // 暂时注释：改用 6002.diff 的 TileShapeResolver 方案验证
+        auto gatherParamSkipOps = CollectGatherInUbParamViewSkipOps(tensorOperations);
+        skipExpandOps.insert(gatherParamSkipOps.begin(), gatherParamSkipOps.end());
         RefreshViewAssembleTileShapes(tensorOperations, skipExpandOps);
     }
     if (ClearIOOperand(tensorOperations) != SUCCESS) {

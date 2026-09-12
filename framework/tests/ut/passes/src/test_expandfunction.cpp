@@ -1524,5 +1524,156 @@ TEST_F(TestExpandFunctionPass, ViewExpandSlicesToDynValidShape)
     EXPECT_TRUE(sawSecond);
 }
 
+namespace {
+// 仅统计以 input 为第 0 个输入的指定 opcode 操作数（GatherInUB 展开会围绕自身 view 输入生成
+// SLICE/CONTRACT，需按输入 tensor 区分 view 展开 slice 与 gather 物化 slice）
+uint32_t CountOpsWithInput(Function& function, Opcode opcode, const LogicalTensorPtr& input)
+{
+    uint32_t count = kNumZero;
+    for (auto& op : function.Operations()) {
+        if (op.GetOpcode() != opcode || op.GetIOperands().empty() || op.GetIOperands()[kSizeZero] != input) {
+            continue;
+        }
+        ++count;
+    }
+    return count;
+}
+
+// 仅统计以 output 为第 0 个输出的指定 opcode 操作数
+uint32_t CountOpsWithOutput(Function& function, Opcode opcode, const LogicalTensorPtr& output)
+{
+    uint32_t count = kNumZero;
+    for (auto& op : function.Operations()) {
+        if (op.GetOpcode() != opcode || op.GetOOperands().empty() || op.GetOOperands()[kSizeZero] != output) {
+            continue;
+        }
+        ++count;
+    }
+    return count;
+}
+
+uint32_t CountOpsWithOpcode(Function& function, Opcode opcode)
+{
+    uint32_t count = kNumZero;
+    for (auto& op : function.Operations()) {
+        if (op.GetOpcode() == opcode) {
+            ++count;
+        }
+    }
+    return count;
+}
+} // namespace
+
+/*
+TESTExpandFunctionGatherInUbParamView
+kvCache{64,64}(DDR)->view->kvView{64,64}(DDR)
+kvView(第0个输入params), bIdx{1,64}, s1Idx{1,64}->gatherInUB->gatherOut{64,64}
+view 输出仅被 GatherInUB 作为 params(第 0 个输入)消费时保留穿透别名语义不展开：
+不生成以 kvCache 为输入的 slice，也不生成写 kvView 的 contract，view 原样保留；
+gatherInUB 正常按 vec tile 展开
+*/
+TEST_F(TestExpandFunctionPass, GatherInUbParamViewShouldNotExpand)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestGatherInUbParamView",
+                                                      "TestGatherInUbParamView", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {kNumExpSix, kNumExpSix};
+    std::vector<int64_t> idxShape = {kNumOne, kNumExpSix};
+    std::vector<int64_t> offset = {kNumZero, kNumZero};
+    std::vector<int64_t> tileShape = {kNumExpFive, kNumExpSix};
+    auto kvCache = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    kvCache->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto kvView = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    kvView->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto bIdx = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_INT32, idxShape, CreateTestConstIntVector(idxShape));
+    auto s1Idx = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_INT32, idxShape, CreateTestConstIntVector(idxShape));
+    auto gatherOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+
+    auto& viewOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {kvCache}, {kvView});
+    viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
+    viewOp.tileShape_.SetVecTile(tileShape);
+    auto& gatherOp = PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_GATHER_IN_UB, {kvView, bIdx, s1Idx}, {gatherOut},
+        [](Operation& op) { op.SetAttribute(OpAttributeKey::blockSize, static_cast<int64_t>(kNumExpFour)); });
+    gatherOp.tileShape_.SetVecTile(tileShape);
+
+    currFunctionPtr->inCasts_.push_back(kvCache);
+    currFunctionPtr->inCasts_.push_back(bIdx);
+    currFunctionPtr->inCasts_.push_back(s1Idx);
+    currFunctionPtr->outCasts_.push_back(gatherOut);
+    currFunctionPtr->SetGraphType(GraphType::TENSOR_GRAPH);
+
+    ExpandFunction expandfunctionpass;
+    auto status = expandfunctionpass.RunOnFunction(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+
+    EXPECT_EQ(CountOpsWithInput(*currFunctionPtr, Opcode::OP_VIEW, kvCache), kNumOne)
+        << "GatherInUB params view should keep alias semantic and not expand";
+    EXPECT_EQ(CountOpsWithInput(*currFunctionPtr, Opcode::OP_SLICE, kvCache), kNumZero)
+        << "No slice on kvCache should be generated for the skipped params view";
+    EXPECT_EQ(CountOpsWithOutput(*currFunctionPtr, Opcode::OP_CONTRACT, kvView), kNumZero)
+        << "No contract writing kvView should be generated for the skipped params view";
+    EXPECT_EQ(CountOpsWithOpcode(*currFunctionPtr, Opcode::OP_GATHER_IN_UB), kNumTwo)
+        << "GatherInUB should expand per vec tile";
+}
+
+/*
+TESTExpandFunctionGatherInUbParamViewWithOtherConsumer
+kvCache{64,64}(DDR)->view->kvView{64,64}(DDR)->gatherInUB(第0个输入params)->gatherOut{64,64}
+                                          ->exp->expOut{64,64}
+view 输出除 GatherInUB(params) 外还存在其它消费方时不跳过展开：
+view 按 vec tile {32,64} 物化为 2 个以 kvCache 为输入的 slice 和 2 个写 kvView 的 contract
+*/
+TEST_F(TestExpandFunctionPass, GatherInUbParamViewWithOtherConsumerShouldExpand)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestGatherInUbViewOtherConsumer",
+                                                      "TestGatherInUbViewOtherConsumer", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {kNumExpSix, kNumExpSix};
+    std::vector<int64_t> idxShape = {kNumOne, kNumExpSix};
+    std::vector<int64_t> offset = {kNumZero, kNumZero};
+    std::vector<int64_t> tileShape = {kNumExpFive, kNumExpSix};
+    auto kvCache = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    kvCache->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto kvView = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    kvView->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto bIdx = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_INT32, idxShape, CreateTestConstIntVector(idxShape));
+    auto s1Idx = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_INT32, idxShape, CreateTestConstIntVector(idxShape));
+    auto gatherOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto expOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+
+    auto& viewOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {kvCache}, {kvView});
+    viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
+    viewOp.tileShape_.SetVecTile(tileShape);
+    auto& gatherOp = PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_GATHER_IN_UB, {kvView, bIdx, s1Idx}, {gatherOut},
+        [](Operation& op) { op.SetAttribute(OpAttributeKey::blockSize, static_cast<int64_t>(kNumExpFour)); });
+    gatherOp.tileShape_.SetVecTile(tileShape);
+    auto& expOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {kvView}, {expOut});
+    expOp.tileShape_.SetVecTile(tileShape);
+
+    currFunctionPtr->inCasts_.push_back(kvCache);
+    currFunctionPtr->inCasts_.push_back(bIdx);
+    currFunctionPtr->inCasts_.push_back(s1Idx);
+    currFunctionPtr->outCasts_.push_back(gatherOut);
+    currFunctionPtr->outCasts_.push_back(expOut);
+    currFunctionPtr->SetGraphType(GraphType::TENSOR_GRAPH);
+
+    ExpandFunction expandfunctionpass;
+    auto status = expandfunctionpass.RunOnFunction(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+
+    EXPECT_EQ(CountOpsWithInput(*currFunctionPtr, Opcode::OP_VIEW, kvCache), kNumZero)
+        << "view with consumer other than GatherInUB params should expand";
+    EXPECT_EQ(CountOpsWithInput(*currFunctionPtr, Opcode::OP_SLICE, kvCache), kNumTwo)
+        << "view should materialize into 2 slices on kvCache with vec tile {32,64}";
+    EXPECT_EQ(CountOpsWithOutput(*currFunctionPtr, Opcode::OP_CONTRACT, kvView), kNumTwo)
+        << "view should materialize into 2 contracts writing kvView";
+    EXPECT_EQ(CountOpsWithOpcode(*currFunctionPtr, Opcode::OP_GATHER_IN_UB), kNumTwo);
+    EXPECT_EQ(CountOpsWithOpcode(*currFunctionPtr, Opcode::OP_EXP), kNumTwo);
+}
+
 } // namespace tile_fwk
 } // namespace npu
