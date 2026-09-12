@@ -63,9 +63,13 @@ public:
             }
         }
         // 设置属性
+        // 原有 OP_ASSEMBLE 同时表示视图和搬运语义，现搬运语义拆分到 OP_CONTRACT，
+        // OP_CONTRACT 需做与 OP_ASSEMBLE 相同的处理。
+        const bool forceUpdateDynValidShape = op->GetOpcode() == Opcode::OP_COPY_OUT ||
+                                              op->GetOpcode() == Opcode::OP_CONTRACT ||
+                                              op->GetOpcode() == Opcode::OP_ASSEMBLE;
         for (size_t i = 0; i < op->GetOOperands().size(); ++i) {
-            if (op->GetOOperands()[i]->GetDynValidShape().empty() || op->GetOpcode() == Opcode::OP_COPY_OUT ||
-                op->GetOpcode() == Opcode::OP_ASSEMBLE) {
+            if (op->GetOOperands()[i]->GetDynValidShape().empty() || forceUpdateDynValidShape) {
                 op->GetOOperands()[i]->UpdateDynValidShape(outValidShapes[i]);
             }
         }
