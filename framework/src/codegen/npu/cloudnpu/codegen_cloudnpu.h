@@ -28,6 +28,8 @@ public:
 private:
     void GenFuncBody(Function& subFunc, Function& topFunc, std::ostringstream& oss) override;
 
+    void BuildIncludes(std::ostringstream& oss) const override;
+
     bool IsEnablePMUTrace() const;
     void PrintPMUTraceAhead(const Function& subFunc, std::ostringstream& oss);
     void PrintPMUTraceAfter(std::ostringstream& oss) const;

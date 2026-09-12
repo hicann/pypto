@@ -21,6 +21,7 @@
 #include "tilefwk/aicpu_common.h"
 #include "tilefwk/aicore_runtime.h"
 #include "tilefwk/aicore_print.h"
+#include "tilefwk/aicore_asc_debug.h"
 #include "tilefwk/core_func_data.h"
 
 // device switch head file begin
@@ -279,7 +280,6 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId, uint
 #else
     int64_t gmStackAddr = cachedTask.header->stackWorkSpaceAddr + ctx->blockIdx * cachedTask.header->stackWorkSpaceSize;
 #endif
-
     __gm__ TaskStat* taskStat = nullptr;
     taskStat = InitTaskStat(ctx);
 

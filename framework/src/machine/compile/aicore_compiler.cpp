@@ -34,10 +34,11 @@
 namespace npu::tile_fwk {
 namespace {
 constexpr const size_t CMD_SIZE_1K = 1024;
-constexpr const size_t CMD_SIZE_2K = 2048;
+constexpr const size_t CMD_SIZE_4K = 4096;
 constexpr const char* BISHENG_PROGRAM_CMD = "bisheng";
 constexpr const char* BISHENG_LD_CMD = "ld.lld";
 constexpr const char* RUN_TO_LOG_SCRIPT_NAME = "run_to_log.sh";
+constexpr const char* ENV_ASCEND_HOME_PATH = "ASCEND_HOME_PATH";
 
 static std::string QuoteShellArg(const std::string& arg)
 {
@@ -81,6 +82,22 @@ static void LogBishengCompileFailure(const std::string& logPath)
     } else {
         MACHINE_LOGE(HostBackEndErr::COMPILE_CCEC_FAILED, "Compile ccec failed.");
     }
+}
+
+// Keep -Werror on the TU; -isystem treats ASC headers as system headers.
+static std::string BuildAscPrintfCompileFlags()
+{
+    const char* ascendHome = std::getenv(ENV_ASCEND_HOME_PATH);
+    if (ascendHome == nullptr) {
+        return "";
+    }
+    const std::string ascRoot = std::string(ascendHome) + "/asc";
+    const std::string ascInclude = ascRoot + "/include";
+    if (!IsPathExist(ascInclude)) {
+        return "";
+    }
+    return "-D__ENABLE_ASC_PRINTF__ -isystem " + QuoteShellArg(ascInclude) + " -isystem " + QuoteShellArg(ascRoot) +
+           " ";
 }
 } // namespace
 
@@ -143,10 +160,12 @@ static int CompileCoreMachine(const std::string& objFile, bool isCube, uint64_t 
     const std::string requiresSimtMacro = requiresSimt ? "-DREQUIRES_SIMT=1" : "-DREQUIRES_SIMT=0";
     const std::string simtCompileOption = requiresSimt ? "-mllvm -cce-dyn-kernel-stack-size=false" : "";
     std::string ccecCmd;
-    ccecCmd.resize(CMD_SIZE_2K);
+    ccecCmd.resize(CMD_SIZE_4K);
     std::string includePath = GetPyptoLibPath() + "/../include/tile_fwk";
-    int ret = snprintf_s(ccecCmd.data(), CMD_SIZE_2K, CMD_SIZE_2K - 1,
-                         "%s -c -O3 -g -x cce -Wall -Werror -std=c++17 "
+    const std::string ascPrintfFlags = BuildAscPrintfCompileFlags();
+    constexpr const char* warningFlags = "-Wall -Werror";
+    int ret = snprintf_s(ccecCmd.data(), CMD_SIZE_4K, CMD_SIZE_4K - 1,
+                         "%s -c -O3 -g -x cce %s -std=c++17 "
                          "--cce-aicore-only "
                          "--cce-aicore-arch=%s "
                          "-mllvm -cce-aicore-stack-size=0x8000 "
@@ -164,16 +183,18 @@ static int CompileCoreMachine(const std::string& objFile, bool isCube, uint64_t 
                          "%s "
                          "%s "
                          "%s "
+                         "%s "
                          "-I%s/tileop/arch32 "
                          "-I%s/ "
                          "-I%s/include/tileop/arch32 "
                          "-I%s/include/ "
                          "-o %s %s %s %s",
-                         BISHENG_PROGRAM_CMD, cc_opt.c_str(), simtCompileOption.c_str(),
+                         BISHENG_PROGRAM_CMD, warningFlags, cc_opt.c_str(), simtCompileOption.c_str(),
                          std::to_string(tilingKey).c_str(), opType.c_str(), funcRawName.c_str(), headFile.c_str(),
                          requiresSimtMacro.c_str(), hasSubFunc.c_str(), coreType.c_str(), enableAicoreResolve.c_str(),
-                         includePath.c_str(), includePath.c_str(), GetPyptoLibPath().c_str(), GetPyptoLibPath().c_str(),
-                         objFile.c_str(), aicoreSrcFile.c_str(), davArch.c_str(), enableMainBlock.c_str());
+                         ascPrintfFlags.c_str(), includePath.c_str(), includePath.c_str(), GetPyptoLibPath().c_str(),
+                         GetPyptoLibPath().c_str(), objFile.c_str(), aicoreSrcFile.c_str(), davArch.c_str(),
+                         enableMainBlock.c_str());
     if (ret < 0) {
         MACHINE_LOGE(HostBackEndErr::COMPILE_AICORE_FAILED, "Compile aicore construct cmd failed.");
         return ret;

@@ -18,9 +18,45 @@
 #include "codegen/utils/codegen_utils.h"
 #include "codegen/utils/parallel_execute.h"
 #include "interface/configs/config_manager_ng.h"
+#include "utils/file_utils.h"
 
 namespace npu::tile_fwk {
+namespace {
+std::string QuoteShellArg(const std::string& arg)
+{
+    std::string escaped = "'";
+    for (char c : arg) {
+        if (c == '\'') {
+            escaped += "'\\''";
+        } else {
+            escaped += c;
+        }
+    }
+    escaped += "'";
+    return escaped;
+}
+} // namespace
+
 const int PMU_ID_FROM_FUNC_HASH_LEN = 3;
+
+void CodeGenCloudNPU::BuildIncludes(std::ostringstream& oss) const
+{
+    CodeGenNPU::BuildIncludes(oss);
+
+    // Match aicore_compiler entry flags: -isystem + shell-quoted ASC paths.
+    const char* ascendHome = std::getenv(ENV_ASCEND_HOME_PATH.c_str());
+    if (ascendHome == nullptr) {
+        return;
+    }
+    const std::string ascRoot = std::string(ascendHome) + "/asc";
+    const std::string ascInclude = ascRoot + "/include";
+    if (!IsPathExist(ascInclude)) {
+        return;
+    }
+    oss << "-D__ENABLE_ASC_PRINTF__ "
+        << "-isystem " << QuoteShellArg(ascInclude) << " "
+        << "-isystem " << QuoteShellArg(ascRoot) << " ";
+}
 
 bool CodeGenCloudNPU::IsEnablePMUTrace() const
 {
