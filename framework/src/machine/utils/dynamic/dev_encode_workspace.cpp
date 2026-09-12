@@ -317,7 +317,7 @@ void LogWorkspaceEncodeSummary(int kMin, const DevAscendProgram& devProg, const 
         "stitchMax=%u, stitch_1=%lu bytes, encoded_tensor_budget=%lu bytes, context_workspace=%lu bytes, metadata=%lu "
         "bytes, "
         "max_workspace_kb=%lu KB, memory_driven=%d, precise_workspace=%u, "
-        "rootInnerDepth=%u, innerTemporalDepth=%u, exclusiveDepth=%u, "
+        "rootInnerDepth=%u, assembleOutcast=%u, exclusiveDepth=%u, "
         "rootInnerUnitBytes=%lu, runtimeOutcastPoolSize=%u bytes.",
         kMin, runtimeCfg.stitchNumMax, depthConfig.kEff, depthConfig.outcastCacheDepth,
         depthConfig.runtimeOutcastPoolDepth, devProg.memBudget.tensor.devTaskBoundaryOutcastNum,
