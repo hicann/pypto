@@ -1377,6 +1377,7 @@ _DEFAULT_LAYOUTS_A5: dict[MemorySpace, TensorLayout] = {
     MemorySpace.Mat: TensorLayout.NZ,
     MemorySpace.Left: TensorLayout.NZ,
     MemorySpace.Right: TensorLayout.ZN,
+    MemorySpace.Bias: TensorLayout.ND,
     MemorySpace.Scaling: TensorLayout.ND,
     MemorySpace.Acc: TensorLayout.NZ,
     MemorySpace.ScaleLeft: TensorLayout.ZZ,
@@ -1533,11 +1534,11 @@ def _apply_default_layout(tt: "TileType") -> None:
 _ANY_LAYOUT = object()
 
 _A5_MOVE_COMBOS = (
-    # Mat -> Bias; layout is not intercepted on this path.
-    ("Mat", "Bias", _ANY_LAYOUT, _ANY_LAYOUT, DataType.INT32, DataType.INT32),
-    ("Mat", "Bias", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP32, DataType.FP32),
-    ("Mat", "Bias", _ANY_LAYOUT, _ANY_LAYOUT, DataType.FP16, DataType.FP32),
-    ("Mat", "Bias", _ANY_LAYOUT, _ANY_LAYOUT, DataType.BF16, DataType.FP32),
+    # Mat -> Bias; the BiasTable destination is row-major (ND).
+    ("Mat", "Bias", _ANY_LAYOUT, TensorLayout.ND, DataType.INT32, DataType.INT32),
+    ("Mat", "Bias", _ANY_LAYOUT, TensorLayout.ND, DataType.FP32, DataType.FP32),
+    ("Mat", "Bias", _ANY_LAYOUT, TensorLayout.ND, DataType.FP16, DataType.FP32),
+    ("Mat", "Bias", _ANY_LAYOUT, TensorLayout.ND, DataType.BF16, DataType.FP32),
 
     # Mat -> Left: destination layout is fixed to NZ.
     ("Mat", "Left", TensorLayout.NZ, TensorLayout.NZ, DataType.INT8, DataType.INT8),
