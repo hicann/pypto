@@ -269,7 +269,7 @@ TEST(CCECodegenTest, GeneratesNativeLoopJumpsAndReturn)
     CCECodegen codegen(ir::SectionKind::Vector);
     std::string generated = codegen.GenerateSingle(MakeProgram(body, {condition}), "a5");
 
-    EXPECT_NE(generated.find("for (uint64_t i"), std::string::npos);
+    EXPECT_NE(generated.find("for (int64_t i"), std::string::npos);
     EXPECT_NE(generated.find("continue;"), std::string::npos);
     EXPECT_NE(generated.find("while (condition_"), std::string::npos);
     EXPECT_NE(generated.find("break;"), std::string::npos);
@@ -312,7 +312,7 @@ TEST(CCECodegenTest, PreservesSingleIterationLoopForAddrReg)
     CCECodegen codegen(ir::SectionKind::Vector);
     std::string generated = codegen.GenerateSingle(MakeProgram(for_loop), "a5");
 
-    EXPECT_NE(generated.find("for (uint64_t i"), std::string::npos);
+    EXPECT_NE(generated.find("for (int64_t i"), std::string::npos);
     EXPECT_NE(generated.find("AddrReg addr"), std::string::npos);
     EXPECT_NE(generated.find("vag_b32(1)"), std::string::npos);
 }

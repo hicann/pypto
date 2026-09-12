@@ -1639,7 +1639,7 @@ void CCECodegen::VisitStmt_(const ir::ForStmtPtr& op)
     // --- Emit for-loop with hoisting ---
     // In __VEC_SCOPE__, bisheng requires uint16_t loop variables AND the bound expression to also
     // resolve to uint16_t (otherwise -Wcce-compat -Werror fails the build), so cast inside a VF section.
-    std::string loop_type = IsInVFSection() ? "uint16_t" : "uint64_t";
+    std::string loop_type = IsInVFSection() ? "uint16_t" : "int64_t";
     std::string stop_expr = IsInVFSection() ? ("(uint16_t)(" + stop + ")") : stop;
     // Perf: in a VF section, hoist a NON-constant loop bound into a `const` local
     // and use that as the trip count.  A literal-constant bound is already ideal,

@@ -116,6 +116,6 @@ def test_ssbuf_tiling_header_uses_volatile_fields():
 
 def test_struct_scalar_initializers_are_cast_to_member_type():
     cpp = _compile_to_cce(struct_scalar_initializer_kernel)
-    assert "for (uint64_t work_id_0 = 0;" in cpp
+    assert "for (int64_t work_id_0 = 0;" in cpp
     assert ".workId=static_cast<int64_t>(work_id_0)" in cpp
     assert ".offset=static_cast<int64_t>(" in cpp
