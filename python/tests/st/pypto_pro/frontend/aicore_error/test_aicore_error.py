@@ -26,6 +26,9 @@ debug_aicore_error_pro_repro.py 离线复现工具的端到端流程：
 3. test_cube_dump_and_repro：纯 cube kernel（dav-c310-cube）matmul 后
    fixpipe（Acc->GM）越界写出的异常，与前两个用例的 MTE2 读 / MTE3 写
    构成不同管线错误，交叉验证定位正确性。
+4. test_ptr_scalar_dump_and_repro：纯 pl.Ptr + scalar 入参的 kernel
+   （make_tensor 在函数体内构造形状），覆盖无 shape 签名的 ABI 恢复
+   路径——scalar 值与 PTR addr/size 均依赖 launch-args sidecar。
 
 注意：
   - 不要设置 NPU_COLLECT_PATH，否则 dump 模式变为 norm_dump，不生成 dump 文件。
@@ -430,6 +433,82 @@ def test_cube_dump_and_repro():
     work_dir = _make_work_dir("cube_dump_and_repro")
     trigger = work_dir / "trigger_cube_oob.py"
     trigger.write_text(_CUBE_OOB_TRIGGER)
+
+    result = _run_subprocess(trigger, str(work_dir))
+    assert result.returncode == 0, f"Trigger failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+    assert "DONE" in result.stdout, f"trigger script not completed:\n{result.stdout}"
+
+    _assert_dump_and_repro(str(work_dir))
+
+
+# ---------------------------------------------------------------------------
+# 4. pl.Ptr + scalar 入参的 kernel 异常（子进程隔离）
+# ---------------------------------------------------------------------------
+
+_PTR_SCALAR_OOB_TRIGGER = """\
+#!/usr/bin/env python3
+from __future__ import annotations
+import os, sys, logging
+import torch
+import pypto_pro.language as pl
+
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+
+@pl.jit(auto_mutex=True)
+def ptr_oob_store_kernel(
+    a_ptr: pl.Ptr[pl.DT_UINT8],
+    out_ptr: pl.Ptr[pl.DT_UINT8],
+    m_valid: pl.DT_INT64,
+    n_valid: pl.DT_INT64,
+):
+    \"\"\"PTR + scalar 入参：make_tensor 构造后 vec store_tile 越界写。\"\"\"
+    io_dtype = pl.DT_FP16
+    a = pl.make_tensor(a_ptr, [m_valid, n_valid], [n_valid, 1], dtype=io_dtype)
+    out = pl.make_tensor(out_ptr, [m_valid, n_valid], [n_valid, 1], dtype=io_dtype)
+
+    tt_vec = pl.TileType(shape=[64, 64], dtype=io_dtype, target_memory=pl.MemorySpace.Vec)
+    vec = pl.make_tile_group(type=tt_vec, addrs=0x0000, mutex_ids=[0])
+
+    with pl.section_vector():
+        cur_vec = vec.current()
+        pl.load_tile(cur_vec, a, [0, 0])
+        pl.store_tile(out, cur_vec, [65535, 0])
+
+
+dev = f"npu:{os.environ.get('TILE_FWK_DEVICE_ID', '0')}"
+torch.npu.set_device(dev)
+a = torch.rand(64, 64, device=dev, dtype=torch.float16)
+out = torch.zeros(64, 64, device=dev, dtype=torch.float16)
+
+ptr_oob_store_kernel(a, out, 64, 64)
+try:
+    torch.npu.synchronize()
+    print("ERROR: No AICORE error raised")
+    sys.exit(1)
+except Exception as e:
+    print(f"AICORE error raised: {e}")
+
+print("DONE")
+"""
+
+
+@pytest.mark.soc("950")
+def test_ptr_scalar_dump_and_repro():
+    """pl.Ptr + scalar 入参 kernel 的越界异常：上抛 + dump + 离线复现 + 定位。
+
+    覆盖纯 pl.Ptr（无 shape）与独立 scalar（int64 m/n）入参样式的 ABI
+    恢复路径——与 pl.Tensor（shape 随签名走 dyn 参数）不同，这类 kernel
+    的形状完全由 scalar 描述，复现工具必须依赖 launch-args sidecar 中的
+    scalar 值与 PTR 的 addr/size 才能重建调用，不依赖 dump 文件的 dyn
+    推导。触发方式为 vec store_tile 越界写（MTE3 路径）。
+    """
+    _check_npu()
+    logging.info("------------test_ptr_scalar_dump_and_repro--------------")
+
+    work_dir = _make_work_dir("ptr_scalar_dump_and_repro")
+    trigger = work_dir / "trigger_ptr_scalar_oob.py"
+    trigger.write_text(_PTR_SCALAR_OOB_TRIGGER)
 
     result = _run_subprocess(trigger, str(work_dir))
     assert result.returncode == 0, f"Trigger failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"

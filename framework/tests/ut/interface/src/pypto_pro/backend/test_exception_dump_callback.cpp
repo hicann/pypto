@@ -11,7 +11,12 @@
 
 #include <gtest/gtest.h>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <cerrno>
+#include <string>
+#include <sys/stat.h>
 #include <vector>
 
 extern "C" {
@@ -21,6 +26,7 @@ void pro_set_dump_info(const char* kernelName, int32_t numTensors, const int32_t
                        const int32_t* shapeCounts, int32_t maxDims);
 void pro_clear_dump_info();
 void pro_set_debug_cmd(const char* cmd);
+void pro_set_launch_meta(const char* json);
 int32_t pro_test_exception_dump_callback(uint32_t dumpSize, uint32_t* realSize, uint32_t* mode, char* outKernelName,
                                          uint32_t kernelNameBufSize, uint32_t* outExtraTensorNum);
 int32_t pro_test_exception_dump_callback_nullptr();
@@ -97,6 +103,61 @@ TEST_F(ExceptionDumpCallbackTest, SetDebugCmdOverwritesPreviousCmd)
 {
     pro_set_debug_cmd("echo first");
     pro_set_debug_cmd("echo second");
+}
+
+TEST_F(ExceptionDumpCallbackTest, SetLaunchMetaWithNullJson) { pro_set_launch_meta(nullptr); }
+
+TEST_F(ExceptionDumpCallbackTest, SetLaunchMetaWithEmptyJson) { pro_set_launch_meta(""); }
+
+TEST_F(ExceptionDumpCallbackTest, SetLaunchMetaWithValidJson) { pro_set_launch_meta("{\"block_dim\":16}"); }
+
+TEST_F(ExceptionDumpCallbackTest, SetLaunchMetaOverwritesPreviousJson)
+{
+    pro_set_launch_meta("{\"block_dim\":1}");
+    pro_set_launch_meta("{\"block_dim\":16,\"abi\":[]}");
+}
+
+TEST_F(ExceptionDumpCallbackTest, ClearDumpInfoClearsLaunchMeta)
+{
+    pro_set_launch_meta("{\"block_dim\":16}");
+    pro_clear_dump_info();
+}
+
+TEST_F(ExceptionDumpCallbackTest, CallbackWritesLaunchMetaFile)
+{
+    std::string workPath = testing::TempDir();
+    ASSERT_NE(::setenv("ASCEND_WORK_PATH", workPath.c_str(), 1), -1);
+    ASSERT_NE(::setenv("TILE_FWK_DEVICE_ID", "0", 1), -1);
+
+    // 测试上下文不经 CANN，目录需手动创建（逐级，容忍已存在）
+    std::string dumpDir = std::string(workPath) + "/extra-info/data-dump/0";
+    for (const std::string& dir :
+         {std::string(workPath) + "/extra-info", std::string(workPath) + "/extra-info/data-dump", dumpDir}) {
+        ASSERT_TRUE(::mkdir(dir.c_str(), 0755) == 0 || errno == EEXIST) << "mkdir failed: " << dir;
+    }
+
+    pro_set_dump_info("meta_kernel", 0, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, 8);
+    pro_set_launch_meta(
+        "{\"kernel_name\":\"meta_kernel\",\"block_dim\":16,\"abi\":[{\"kind\":\"scalar\",\"value\":256}]}");
+
+    uint32_t realSize = 0;
+    uint32_t mode = 0;
+    char kernelName[1024] = {0};
+    uint32_t extraTensorNum = 0;
+    int32_t ret = pro_test_exception_dump_callback(1, &realSize, &mode, kernelName, sizeof(kernelName),
+                                                   &extraTensorNum);
+    EXPECT_EQ(ret, 0);
+
+    std::string metaPath = std::string(workPath) + "/extra-info/data-dump/0/meta_kernel_launch_args.json";
+    FILE* file = std::fopen(metaPath.c_str(), "rb");
+    ASSERT_NE(file, nullptr);
+    char buf[512] = {0};
+    size_t n = std::fread(buf, 1, sizeof(buf) - 1, file);
+    std::fclose(file);
+    EXPECT_EQ(std::string(buf, n),
+              "{\"kernel_name\":\"meta_kernel\",\"block_dim\":16,\"abi\":[{\"kind\":\"scalar\",\"value\":256}]}");
+    ::unsetenv("ASCEND_WORK_PATH");
+    ::unsetenv("TILE_FWK_DEVICE_ID");
 }
 
 TEST_F(ExceptionDumpCallbackTest, RegisterCallbackReturnsResultCode)

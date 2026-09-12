@@ -790,7 +790,7 @@ def _build_launch_entry(compiled: "CompiledKernel"):
         # native query will further reduce it to this stream's actual resources.
         if block_dim > 0xFFFFFFFF:
             block_dim = 0xFFFFFFFF
-        _set_dump_info(compiled, args)
+        _set_dump_info(compiled, args, block_dim)
         # Resolve limits and launch in one C call, avoiding two torch_npu C-extension
         # calls and Python dict/loop work. Errors return before any device launch.
         actual_block_dim = call_kernel(block_dim, stream._as_parameter_, *abi_args)

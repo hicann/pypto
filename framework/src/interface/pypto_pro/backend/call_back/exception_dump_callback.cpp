@@ -15,13 +15,15 @@
 #include <cstring>
 #include <dlfcn.h>
 #include <string>
+#include <unistd.h>
 #include <vector>
 
 #include "core/logging.h"
 
 static constexpr int32_t MAX_KERNEL_BUF_LEN = 1024;
 static constexpr int32_t MAX_TENSOR_NUM = 128;
-static constexpr int32_t MAX_DEBUG_CMD_LEN = 8192;
+static constexpr int32_t MAX_DEBUG_CMD_LEN = 65536;
+static constexpr int32_t MAX_LAUNCH_META_LEN = 32768;
 
 enum class AdxTensorType : int32_t { INPUT, OUTPUT, WORKSPACE };
 enum class AdxAddressType : int32_t { TRADITIONAL, NOTILING, RAW };
@@ -63,6 +65,7 @@ using AdumpRegExceptionDumpCallBack = int32_t (*)(AdumpExceptionDumpCallback);
 static std::vector<AdxTensorInfo> g_cachedTensors;
 static char g_kernelName[MAX_KERNEL_BUF_LEN] = {0};
 static char g_debugCmd[MAX_DEBUG_CMD_LEN] = {0};
+static char g_launchMeta[MAX_LAUNCH_META_LEN] = {0};
 static bool g_debugCmdExecuted = false;
 static bool g_registered = false;
 static void* g_adumpHandle = nullptr;
@@ -91,6 +94,36 @@ static AdumpRegExceptionDumpCallBack LoadAdumpRegFunc()
         dlsym(g_adumpHandle,
               "_ZN3Adx29AdumpRegExceptionDumpCallbackEPFjPvPNS_17ExceptionDumpInfoEjPjPNS_17ExceptionDumpModeEE"));
     return g_regFunc;
+}
+
+static void WriteLaunchMetaFile()
+{
+    if (g_launchMeta[0] == '\0') {
+        return;
+    }
+    // ASCEND_WORK_PATH may be unset; fall back to the process cwd so the
+    // launch meta lands next to CANN's own dump data files (which use the
+    // same default).
+    char cwdBuf[4096] = {0};
+    const char* workPath = std::getenv("ASCEND_WORK_PATH");
+    if (workPath == nullptr || workPath[0] == '\0') {
+        if (getcwd(cwdBuf, sizeof(cwdBuf)) == nullptr) {
+            IR_LOGW() << "ProExceptionDumpCallback: getcwd failed, launch meta skipped";
+            return;
+        }
+        workPath = cwdBuf;
+    }
+    const char* deviceId = std::getenv("TILE_FWK_DEVICE_ID");
+    std::string devId = (deviceId != nullptr && deviceId[0] != '\0') ? deviceId : "0";
+    std::string dumpDir = std::string(workPath) + "/extra-info/data-dump/" + devId;
+    std::string metaPath = dumpDir + "/" + g_kernelName + "_launch_args.json";
+    FILE* file = std::fopen(metaPath.c_str(), "w");
+    if (file == nullptr) {
+        IR_LOGW() << "ProExceptionDumpCallback: write launch meta failed: " << metaPath;
+        return;
+    }
+    std::fwrite(g_launchMeta, 1, std::strlen(g_launchMeta), file);
+    std::fclose(file);
 }
 
 static int32_t ProExceptionDumpCallback(void* exceptionInfo, AdxExceptionDumpInfo* exceptionDumpInfo,
@@ -125,6 +158,8 @@ static int32_t ProExceptionDumpCallback(void* exceptionInfo, AdxExceptionDumpInf
     }
 
     *exceptionDumpRealSize = exceptionDumpSize;
+
+    WriteLaunchMetaFile();
 
     if (g_debugCmd[0] != '\0' && !g_debugCmdExecuted) {
         g_debugCmdExecuted = true;
@@ -188,6 +223,7 @@ void pro_clear_dump_info()
     g_cachedTensors.clear();
     g_kernelName[0] = '\0';
     g_debugCmd[0] = '\0';
+    g_launchMeta[0] = '\0';
     g_debugCmdExecuted = false;
 }
 
@@ -199,6 +235,18 @@ void pro_set_debug_cmd(const char* cmd)
     }
     std::snprintf(g_debugCmd, MAX_DEBUG_CMD_LEN, "%s", cmd);
     g_debugCmdExecuted = false;
+}
+
+void pro_set_launch_meta(const char* json)
+{
+    if (json == nullptr || json[0] == '\0') {
+        g_launchMeta[0] = '\0';
+        return;
+    }
+    int written = std::snprintf(g_launchMeta, MAX_LAUNCH_META_LEN, "%s", json);
+    if (written < 0 || static_cast<size_t>(written) >= MAX_LAUNCH_META_LEN) {
+        IR_LOGW() << "pro_set_launch_meta: launch meta truncated (" << written << " >= " << MAX_LAUNCH_META_LEN << ")";
+    }
 }
 
 #ifdef ENABLE_TESTS
