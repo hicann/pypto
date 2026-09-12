@@ -38,7 +38,6 @@
 #include "ir/stmt.h"
 #include "ir/kind_traits.h"
 #include "ir/transforms/base/mutator.h"
-#include "ir/transforms/passes.h"
 #include "ir/transforms/structural_comparison.h"
 #include "ir/type.h"
 #include "tilefwk/error.h"
@@ -46,6 +45,15 @@
 namespace pypto {
 namespace codegen {
 using ir::DataType;
+
+namespace {
+
+std::string TupleItemName(const std::string& tuple_name, size_t index)
+{
+    return tuple_name + "__item_" + std::to_string(index);
+}
+
+} // namespace
 
 CCECodegen::CCECodegen(ir::SectionKind target) : backend_(backend::GetBackend()), target_(target)
 {
@@ -215,12 +223,9 @@ private:
         return changed;
     }
 
-    // ConvertToSSA (which runs before inlining) snapshots each loop-carried
-    // value's live SSA version at a break/continue and stores it in value_, so
-    // the backend can write those values back before the jump. The base mutator
-    // returns Break/Continue unchanged, so without these overrides the snapshot
-    // references keep their pre-inline names and become undefined (or collide
-    // with outer-scope vars) once the rest of the body is prefix-renamed.
+    // The parser snapshots each loop-carried value's live SSA version at a
+    // break/continue. Rename those operands together with the inlined body so
+    // their references cannot retain pre-inline names.
     ir::StmtPtr VisitStmt_(const ir::BreakStmtPtr& op) override
     {
         std::vector<ir::ExprPtr> new_values;
@@ -418,7 +423,7 @@ private:
 
 void CCECodegen::PreScanKernel(const ir::FunctionPtr& kernel_func)
 {
-    CollectVarReadNames(kernel_func->body_, var_read_names_);
+    mutex_pipes_.clear();
     CollectMutexPipeInfo(kernel_func->body_);
 }
 
@@ -431,8 +436,6 @@ void CCECodegen::ResetFunctionGenerationState()
     emitted_tile_types_.clear();
     emitted_tile_aliases_.clear();
 
-    var_read_names_.clear();
-    var_read_counts_.clear();
     mutex_pipes_.clear();
 
     current_target_var_.clear();
@@ -580,20 +583,13 @@ std::string CCECodegen::GenerateSingle(const ir::ProgramPtr& program, const std:
     ResetFunctionGenerationState();
     arch_ = arch;
 
-    // Capture the tuple/struct field-name side table from the entry program (may be null).
-    // Passes below rebuild the Program (dropping this annotation), but the TupleType pointers
-    // they key on stay valid, so codegen reads names through this captured table.
+    // Capture the tuple/struct field-name side table from the input program.
     debug_info_ = program->GetDebugInfo();
-
-    // break/continue are handled natively in VisitStmt_(Break/Continue) below.
-    // ConvertToSSA still models loop-carried scalars as iter_args +
-    // a trailing yield, so the native-jump visitors write those values back before jumping.
-    ir::ProgramPtr ssa_program = ir::pass::ConvertToSSA()(program);
 
     ir::FunctionPtr kernel_func;
     std::vector<ir::FunctionPtr> simt_funcs;
     simt_callees_.clear();
-    for (const auto& func_entry : ssa_program->functions_) {
+    for (const auto& func_entry : program->functions_) {
         const auto& func = func_entry.second;
         if (func->funcType_ == ir::FunctionType::SIMT_VF) {
             simt_funcs.push_back(func);
@@ -666,11 +662,11 @@ namespace {
  * \brief Collect tile definitions sourced from block.make_tile calls.
  *
  * Scans AssignStmt nodes and records each block.make_tile allocation with:
- *   - The var that holds the result (or a synthetic var_N for tuple elements)
+ *   - The var that holds the result (or a synthetic var__item_N for tuple elements)
  *   - The TileType of the allocation
  *   - The SectionKind in which the make_tile appears (nullopt = shared/outside section)
  *
- * Inline tuple elements are named with a flat depth-first index (var_0, var_1, ...).
+ * Inline tuple elements are named with a dedicated suffix (var__item_0, var__item_1, ...).
  */
 class MakeTileDefCollector : public ir::IRVisitor {
     using ir::IRVisitor::VisitExpr_;
@@ -782,27 +778,6 @@ std::vector<ir::VarPtr> CollectDynamicDimVars(const ir::FunctionPtr& func)
         }
     }
     return dyn_dim_vars;
-}
-
-bool IsOnlyYieldStmts(const ir::StmtPtr& stmt)
-{
-    if (!stmt) {
-        return false;
-    }
-    if (ir::As<ir::YieldStmt>(stmt)) {
-        return true;
-    }
-
-    auto seq = ir::As<ir::SeqStmts>(stmt);
-    if (!seq || seq->stmts_.empty()) {
-        return false;
-    }
-    for (const auto& st : seq->stmts_) {
-        if (!ir::As<ir::YieldStmt>(st)) {
-            return false;
-        }
-    }
-    return true;
 }
 
 } // namespace
@@ -1346,6 +1321,7 @@ void CCECodegen::EmitFullPhiIf(const ir::IfStmtPtr& op)
 
     emitter_.EmitLine("if (" + condition + ") {");
     emitter_.IncreaseIndent();
+    yield_buffer_.clear();
     VisitStmt(op->thenBody_);
     EmitYieldAssignments(op->returnVars_);
     emitter_.DecreaseIndent();
@@ -1353,6 +1329,7 @@ void CCECodegen::EmitFullPhiIf(const ir::IfStmtPtr& op)
     if (op->elseBody_.has_value()) {
         emitter_.EmitLine("} else {");
         emitter_.IncreaseIndent();
+        yield_buffer_.clear();
         VisitStmt(*op->elseBody_);
         EmitYieldAssignments(op->returnVars_);
         emitter_.DecreaseIndent();
@@ -1366,48 +1343,23 @@ void CCECodegen::VisitStmt_(const ir::IfStmtPtr& op)
     INTERNAL_CHECK(op->condition_ != nullptr) << "Internal error: IfStmt has null condition";
     INTERNAL_CHECK(op->thenBody_ != nullptr) << "Internal error: IfStmt has null then_body";
 
-    // Drop phi return_vars with no downstream consumer. The SSA pass
-    // conservatively inserts phi nodes whenever a variable is re-assigned
-    // across control flow, but if no one reads the phi output, emitting a
-    // declaration + per-branch yield-assignment is pure dead code.
-    ir::IfStmtPtr effective_op = op;
-    if (!op->returnVars_.empty()) {
-        bool any_used = false;
-        for (const auto& rv : op->returnVars_) {
-            if (rv && var_read_names_.count(rv->name_)) {
-                any_used = true;
-                break;
-            }
-        }
-        if (!any_used) {
-            // An else-body consisting only of YieldStmts also becomes dead once
-            // return_vars are dropped ->the yields have no consumer.
-            std::optional<ir::StmtPtr> new_else = op->elseBody_;
-            if (new_else.has_value() && IsOnlyYieldStmts(*new_else)) {
-                new_else = std::nullopt;
-            }
-            effective_op = std::make_shared<ir::IfStmt>(op->condition_, op->thenBody_, new_else,
-                                                        std::vector<ir::VarPtr>{}, op->span_);
-        }
-    }
-
-    EmitFullPhiIf(effective_op);
+    EmitFullPhiIf(op);
 }
 
 // ========================================================================
-// Phase 5 helpers: ForStmt iter-arg registration and yield assignments
+// Phase 5 helpers: ForStmt iter-arg registration and carried assignments
 // ========================================================================
 
 bool CCECodegen::CheckEmitVariable(const ir::VarPtr& target, ir::ExprPtr& value, bool initialize)
 {
-    // The target is a declared slot, so its type must always be resolved.
-    INTERNAL_CHECK(!ir::As<ir::NoneType>(target->GetType()))
-        << "Variable '" << target->name_ << "' has an unresolved type";
+    const auto& targetType = target->GetType();
+    if (ir::As<ir::UnknownType>(targetType) || ir::As<ir::NoneType>(targetType)) {
+        return false;
+    }
 
-    // A NoneType source carries no value: it is the `None` sentinel on a slot with no initial
-    // value, or the placeholder a yield/break/continue emits for a merge variable that a branch
-    // never wrote. Either way there is nothing to assign.
-    if (value && ir::As<ir::NoneType>(value->GetType())) {
+    // UnknownType and NoneType sources are valueless. Initialization still
+    // declares a valid target slot; a later write-back is skipped completely.
+    if (value && (ir::As<ir::UnknownType>(value->GetType()) || ir::As<ir::NoneType>(value->GetType()))) {
         value = nullptr;
     }
     // A control-flow back edge carries a value the body never modified, so the yielded
@@ -1502,7 +1454,7 @@ void CCECodegen::EmitTupleVariable(const std::string& name, const ir::TupleTypeP
         std::vector<ir::ExprPtr> elements;
         elements.reserve(type->types_.size());
         for (size_t i = 0; i < type->types_.size(); ++i) {
-            std::string element_name = name + "_" + std::to_string(i);
+            std::string element_name = TupleItemName(name, i);
             ir::ExprPtr element_value = source ? source->elements_[i] : nullptr;
             // A struct is a leaf: it has a C++ type name of its own, so it is declared and
             // assigned whole. Only a tuple without one is taken apart further.
@@ -1529,7 +1481,7 @@ void CCECodegen::EmitTupleVariable(const std::string& name, const ir::TupleTypeP
         ir::ExprPtr element_value = source ? source->elements_[i] : nullptr;
         if (auto element_type = ir::As<ir::TupleType>(type->types_[i]);
             element_type && GetStructName(element_type) == nullptr) {
-            EmitTupleVariable(name + "_" + std::to_string(i), element_type, element_value, false);
+            EmitTupleVariable(TupleItemName(name, i), element_type, element_value, false);
             continue;
         }
         auto element = ir::As<ir::Var>(target->second->elements_[i]);
@@ -1555,25 +1507,14 @@ std::vector<std::string> CCECodegen::RegisterLoopIterArgs(const std::vector<ir::
     return iterArgNames;
 }
 
-void CCECodegen::EmitCarriedAssignments(const std::vector<ir::IterArgPtr>& targets,
-                                        const std::vector<ir::ExprPtr>& sources)
+void CCECodegen::EmitCarriedAssignments(const std::vector<ir::VarPtr>& targets, const std::vector<ir::ExprPtr>& sources)
 {
     CHECK(targets.size() == sources.size())
         << "Loop-carried write-back expects " << targets.size() << " values but got " << sources.size();
 
     for (size_t i = 0; i < targets.size(); ++i) {
-        const auto& var = targets[i]->iterVar_;
-        EmitVariable(var, sources[i], false);
+        EmitVariable(targets[i], sources[i], false);
     }
-}
-
-void CCECodegen::EmitForYieldAssignments(const std::vector<ir::IterArgPtr>& iterArgs)
-{
-    if (yield_buffer_.empty()) {
-        return;
-    }
-    EmitCarriedAssignments(iterArgs, yield_buffer_);
-    yield_buffer_.clear();
 }
 
 void CCECodegen::RegisterLoopReturnVars(const std::vector<ir::VarPtr>& returnVars,
@@ -1653,43 +1594,48 @@ void CCECodegen::VisitStmt_(const ir::ForStmtPtr& op)
     }
     std::string header = "for (" + loop_type + " " + loop_var_name + " = " + start + "; " + loop_var_name + " < " +
                          stop_expr + "; " + loop_var_name + " += " + step + ") {";
-    EmitLoop(header, op->body_, op->iterArgs_, op->returnVars_, iter_arg_names);
+    EmitLoop(header, op->body_, op->iterArgs_, op->returnVars_, iter_arg_names, false);
 }
 
 void CCECodegen::EmitLoop(const std::string& header, const ir::StmtPtr& body,
                           const std::vector<ir::IterArgPtr>& iterArgs, const std::vector<ir::VarPtr>& returnVars,
-                          const std::vector<std::string>& iterArgNames)
+                          const std::vector<std::string>& iterArgNames, bool separateWhileResults)
 {
-    // The iter-arg slots are declared before the loop: every type they can take is known up
-    // front, including a struct name, which codegen seeds from IRDebugInfo at entry rather than
-    // discovering as it walks the body. An UnknownType init (the `None` sentinel for a slot with
-    // no initial value) becomes a plain declaration inside EmitVariable.
+    // The iter-arg slots are declared before the loop. Loop carries only include
+    // bindings defined before the loop, so every slot has an initial value.
+    std::vector<ir::VarPtr> iterVars;
+    iterVars.reserve(iterArgs.size());
     for (const auto& iterArg : iterArgs) {
+        iterVars.push_back(iterArg->iterVar_);
         EmitVariable(iterArg->iterVar_, iterArg->initValue_, true);
     }
-    if (!iterArgs.empty()) {
+    if (separateWhileResults) {
+        for (const auto& returnVar : returnVars) {
+            context_.RegisterVar(returnVar, context_.SanitizeName(returnVar));
+            EmitVariable(returnVar, nullptr, true);
+        }
+    }
+    if (!iterArgs.empty() || (separateWhileResults && !returnVars.empty())) {
         emitter_.EmitLine("");
     }
 
     emitter_.EmitLine(header);
     emitter_.IncreaseIndent();
 
-    // Expose this loop's write-back targets so a native break/continue in the body can assign its
-    // self-described carried values (BreakStmt::value_) to the iter_args before jumping.
-    loop_target_stack_.push_back(iterArgs);
-    yield_buffer_.clear();
+    // For loops share one carried slot set. While loops keep the back-edge slots and
+    // break-result slots independent because their inferred types may differ.
+    loop_target_stack_.push_back(LoopWritebackTargets{iterVars, separateWhileResults ? returnVars : iterVars});
     VisitStmt(body);
     loop_target_stack_.pop_back();
-
-    if (!iterArgs.empty()) {
-        EmitForYieldAssignments(iterArgs);
-    }
 
     emitter_.DecreaseIndent();
     emitter_.EmitLine("}");
 
-    // Return variables capture the final iteration values; alias them to iter_args.
-    RegisterLoopReturnVars(returnVars, iterArgNames);
+    // For return variables capture the final iter-arg values through aliases. While
+    // return variables were declared independently and are written only by break.
+    if (!separateWhileResults) {
+        RegisterLoopReturnVars(returnVars, iterArgNames);
+    }
 }
 
 void CCECodegen::VisitStmt_(const ir::WhileStmtPtr& op)
@@ -1703,10 +1649,8 @@ void CCECodegen::VisitStmt_(const ir::WhileStmtPtr& op)
         << "WhileStmt iter_args size (" << op->iterArgs_.size() << ") must equal return_vars size ("
         << op->returnVars_.size() << ")";
 
-    // Native break/continue inside the body are emitted directly; each
-    // jump carries its own loop-carried values (BreakStmt::value_, populated by ConvertToSSA) and
-    // writes them to the iter_args before jumping. The body otherwise ends in a YieldStmt that feeds
-    // the loop-carried iter_args on the normal loop-back path.
+    // Every loop path ends in parser-created BreakStmt/ContinueStmt values.
+    // Continue updates iter_args; break updates the independent return_vars.
     std::vector<std::string> iter_arg_names = RegisterLoopIterArgs(op->iterArgs_);
 
     // The condition is re-evaluated each iteration, so emit it inline in the while header.
@@ -1716,34 +1660,34 @@ void CCECodegen::VisitStmt_(const ir::WhileStmtPtr& op)
     std::string condition = current_expr_value_;
     current_expr_value_ = "";
 
-    EmitLoop("while (" + condition + ") {", op->body_, op->iterArgs_, op->returnVars_, iter_arg_names);
+    EmitLoop("while (" + condition + ") {", op->body_, op->iterArgs_, op->returnVars_, iter_arg_names, true);
 }
 
 // ========================================================================
 // Native break/continue support
 // ========================================================================
 
-// Write a native jump's self-described carried values (BreakStmt/ContinueStmt::value_, populated by
-// ConvertToSSA) back to the innermost loop's iter_args before the jump skips the trailing yield.
-void CCECodegen::EmitJumpCarriedWriteback(const std::vector<ir::ExprPtr>& values)
+// Write a native jump's self-described carried values to the matching slots before jumping.
+void CCECodegen::EmitJumpCarriedWriteback(const std::vector<ir::ExprPtr>& values, bool isBreak)
 {
     if (values.empty() || loop_target_stack_.empty()) {
         return; // bare jump: loop carries nothing, or jump is outside a tracked loop
     }
-    EmitCarriedAssignments(loop_target_stack_.back(), values);
+    const auto& targets = loop_target_stack_.back();
+    EmitCarriedAssignments(isBreak ? targets.breakVars : targets.continueVars, values);
 }
 
 void CCECodegen::VisitStmt_(const ir::BreakStmtPtr& op)
 {
     INTERNAL_CHECK(op != nullptr) << "Internal error: null BreakStmt";
-    EmitJumpCarriedWriteback(op->value_);
+    EmitJumpCarriedWriteback(op->value_, true);
     emitter_.EmitLine("break;");
 }
 
 void CCECodegen::VisitStmt_(const ir::ContinueStmtPtr& op)
 {
     INTERNAL_CHECK(op != nullptr) << "Internal error: null ContinueStmt";
-    EmitJumpCarriedWriteback(op->value_);
+    EmitJumpCarriedWriteback(op->value_, false);
     emitter_.EmitLine("continue;");
 }
 
@@ -1753,7 +1697,7 @@ void CCECodegen::VisitStmt_(const ir::SeqStmtsPtr& op)
     for (const auto& stmt : op->stmts_) {
         VisitStmt(stmt);
         // A native break/continue/return ends this straight-line sequence; statements after it are
-        // unreachable (e.g. the dead trailing yield ConvertToSSA leaves after a body-tail jump).
+        // unreachable even when a conservative control-flow producer left a trailing terminator.
         if (ir::As<ir::BreakStmt>(stmt) || ir::As<ir::ContinueStmt>(stmt) || ir::As<ir::ReturnStmt>(stmt)) {
             break;
         }
@@ -1772,8 +1716,9 @@ void CCECodegen::VisitExpr_(const ir::VarPtr& op)
     INTERNAL_CHECK(op != nullptr) << "Internal error: null Var";
     std::string name = context_.SanitizeName(op);
     auto it = tuple_var_to_make_tuple_.find(name);
-    if (it == tuple_var_to_make_tuple_.end())
+    if (it == tuple_var_to_make_tuple_.end()) {
         it = tuple_var_to_make_tuple_.find(name + "_0");
+    }
     // Positional tuple Var: produce the underlying MakeTuple in current_tuple_
     // (with _0 SSA fallback). Empty current_expr_value_ signals "no direct identifier".
     current_tuple_ = (it != tuple_var_to_make_tuple_.end()) ? it->second : nullptr;
@@ -2397,8 +2342,8 @@ public:
             std::vector<ir::TileTypePtr> tile_types;
             CollectTileTypesFromType(var_type, tile_types);
             for (size_t i = 0; i < tile_types.size(); ++i) {
-                // Create a synthetic Var for each tuple element: varname_0, varname_1, ...
-                auto elem_var = std::make_shared<ir::Var>(target_var->name_ + "_" + std::to_string(i), tile_types[i],
+                // Tuple leaves use a dedicated namespace so they cannot collide with SSA versions.
+                auto elem_var = std::make_shared<ir::Var>(TupleItemName(target_var->name_, i), tile_types[i],
                                                           target_var->span_);
                 tile_vars_.emplace_back(elem_var, tile_types[i]);
             }
@@ -2592,85 +2537,6 @@ std::vector<std::pair<ir::VarPtr, ir::TileTypePtr>> CCECodegen::CollectTileVaria
     TileCollector collector;
     collector.VisitStmt(stmt);
     return collector.tile_vars_;
-}
-
-namespace {
-// Collect names of Var nodes that appear in any read position ->Call args,
-// Yield values, AssignStmt RHS, return values, expressions inside subscripts,
-// for-loop ranges, etc. A phi return_var whose name is not in this set has
-// no consumer and can be safely dropped from IfStmt codegen.
-class VarReadCollector : public ir::IRVisitor {
-public:
-    using ir::IRVisitor::VisitExpr_;
-    using ir::IRVisitor::VisitStmt_;
-
-    std::set<std::string> var_read_names_;
-    std::unordered_map<std::string, int> var_read_counts_;
-
-    // Any time we visit a Var as a sub-expression (via the default Expr walk),
-    // it is in a read position ->the write site is an AssignStmt.var_ which
-    // the default Stmt walker does not route through VisitExpr.
-    void VisitExpr_(const ir::VarPtr& op) override
-    {
-        if (op) {
-            var_read_names_.insert(op->name_);
-            var_read_counts_[op->name_]++;
-        }
-    }
-
-    void VisitStmt_(const ir::AssignStmtPtr& op) override
-    {
-        // Skip op->var_ (LHS is a definition, not a use). Walk the RHS.
-        if (op && op->value_)
-            VisitExpr(op->value_);
-    }
-
-    void VisitStmt_(const ir::IfStmtPtr& op) override
-    {
-        // Skip op->return_vars_ ->they are phi outputs (definitions), not reads.
-        // Walk condition + branches explicitly.
-        if (!op)
-            return;
-        if (op->condition_)
-            VisitExpr(op->condition_);
-        if (op->thenBody_)
-            VisitStmt(op->thenBody_);
-        if (op->elseBody_.has_value() && *op->elseBody_)
-            VisitStmt(*op->elseBody_);
-    }
-
-    void VisitStmt_(const ir::ForStmtPtr& op) override
-    {
-        // Similar concern for For loops: return_vars_ (output iter args) are
-        // written, not read, on each iteration's phi merge.
-        if (!op)
-            return;
-        if (op->start_)
-            VisitExpr(op->start_);
-        if (op->stop_)
-            VisitExpr(op->stop_);
-        if (op->step_)
-            VisitExpr(op->step_);
-        for (const auto& ia : op->iterArgs_) {
-            if (ia && ia->initValue_)
-                VisitExpr(ia->initValue_);
-        }
-        if (op->body_)
-            VisitStmt(op->body_);
-    }
-};
-
-} // namespace
-
-void CCECodegen::CollectVarReadNames(const ir::StmtPtr& stmt, std::set<std::string>& out) const
-{
-    if (!stmt)
-        return;
-    VarReadCollector collector;
-    collector.VisitStmt(stmt);
-    out = std::move(collector.var_read_names_);
-    // Also populate read counts on the mutable codegen instance
-    const_cast<CCECodegen*>(this)->var_read_counts_ = std::move(collector.var_read_counts_);
 }
 
 namespace {

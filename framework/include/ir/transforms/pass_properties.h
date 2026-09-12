@@ -25,11 +25,6 @@ inline const PassProperties kSplitChunkedLoopsProperties{
 inline const PassProperties kInterchangeChunkLoopsProperties{
     {IRProperty::TypeChecked, IRProperty::SSAForm}, {IRProperty::TypeChecked, IRProperty::SSAForm}, {}};
 
-inline const PassProperties kConvertToSSAProperties{
-    {IRProperty::TypeChecked},
-    {IRProperty::TypeChecked, IRProperty::SSAForm},
-    {IRProperty::NormalizedStmtStructure, IRProperty::FlattenedSingleStmt}};
-
 inline const PassProperties kFlattenCallExprProperties{
     {IRProperty::TypeChecked},
     {IRProperty::TypeChecked, IRProperty::NoNestedCalls},

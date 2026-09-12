@@ -370,7 +370,7 @@ TEST(BackendCceOpsTest, SyncSrcDyn)
 
     codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body, {event_id}), "a3");
-    EXPECT_NE(generated.find("set_flag(PIPE_M, PIPE_V, (event_t)event_id_0);"), std::string::npos);
+    EXPECT_NE(generated.find("set_flag(PIPE_M, PIPE_V, (event_t)event_id);"), std::string::npos);
 }
 
 TEST(BackendCceOpsTest, SyncDstDyn)
@@ -383,7 +383,7 @@ TEST(BackendCceOpsTest, SyncDstDyn)
 
     codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body, {event_id}), "a3");
-    EXPECT_NE(generated.find("wait_flag(PIPE_M, PIPE_V, (event_t)event_id_0);"), std::string::npos);
+    EXPECT_NE(generated.find("wait_flag(PIPE_M, PIPE_V, (event_t)event_id);"), std::string::npos);
 }
 
 // ============================================================================
@@ -553,10 +553,10 @@ TEST(BackendCceOpsTest, CubeCrossCoreDynamicA5IntraBlockSignalsBothVectorSubcore
 
     codegen::CCECodegen codegen(ir::SectionKind::Cube);
     auto generated = codegen.GenerateSingle(MakeProgram(body, {event_id}), "a5");
-    EXPECT_NE(generated.find("set_intra_block(PIPE_V, event_id_0);"), std::string::npos);
-    EXPECT_NE(generated.find("set_intra_block(PIPE_V, event_id_0 + 16);"), std::string::npos);
-    EXPECT_NE(generated.find("wait_intra_block(PIPE_V, event_id_0);"), std::string::npos);
-    EXPECT_NE(generated.find("wait_intra_block(PIPE_V, event_id_0 + 16);"), std::string::npos);
+    EXPECT_NE(generated.find("set_intra_block(PIPE_V, event_id);"), std::string::npos);
+    EXPECT_NE(generated.find("set_intra_block(PIPE_V, event_id + 16);"), std::string::npos);
+    EXPECT_NE(generated.find("wait_intra_block(PIPE_V, event_id);"), std::string::npos);
+    EXPECT_NE(generated.find("wait_intra_block(PIPE_V, event_id + 16);"), std::string::npos);
 }
 
 // ============================================================================
@@ -719,7 +719,7 @@ TEST(BackendCceOpsTest, ManualDynamicMutexDoesNotGloballyDisableAutoVMutexSkip)
     codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body, {dynamic_id}), "a5");
     EXPECT_EQ(generated.find("get_buf(PIPE_V, 6, 0);"), std::string::npos);
-    EXPECT_NE(generated.find("get_buf(PIPE_MTE2, manual_id_0, 0);"), std::string::npos);
+    EXPECT_NE(generated.find("get_buf(PIPE_MTE2, manual_id, 0);"), std::string::npos);
 }
 
 TEST(BackendCceOpsTest, MutexDynDedupUnlocksFirstOccurrencesInInputOrder)
@@ -737,10 +737,10 @@ TEST(BackendCceOpsTest, MutexDynDedupUnlocksFirstOccurrencesInInputOrder)
 
     codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body, {id0, id1}), "a5");
-    auto release_id0 = generated.find("rls_buf(PIPE_S, id0_0, 0);");
-    auto release_id1 = generated.find("rls_buf(PIPE_S, id1_0, 0);", release_id0);
-    auto duplicate_guard = generated.find("if ((id0_0 != id0_0) && (id0_0 != id1_0)) {", release_id1);
-    auto duplicate_release = generated.find("rls_buf(PIPE_S, id0_0, 0);", duplicate_guard);
+    auto release_id0 = generated.find("rls_buf(PIPE_S, id0, 0);");
+    auto release_id1 = generated.find("rls_buf(PIPE_S, id1, 0);", release_id0);
+    auto duplicate_guard = generated.find("if ((id0 != id0) && (id0 != id1)) {", release_id1);
+    auto duplicate_release = generated.find("rls_buf(PIPE_S, id0, 0);", duplicate_guard);
     EXPECT_NE(release_id0, std::string::npos);
     EXPECT_NE(release_id1, std::string::npos);
     EXPECT_NE(duplicate_guard, std::string::npos);
@@ -766,13 +766,13 @@ TEST(BackendCceOpsTest, MutexDynSkipsDedupWithinOneTile)
 
     codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body, {output0, output1, source}), "a5");
-    const std::string same_tile_guard = "if ((output1_0 != output0_0)) {";
-    const std::string cross_tile_guard = "if ((source_0 != output0_0) && (source_0 != output1_0)) {";
-    auto acquire_output0 = generated.find("get_buf(PIPE_S, output0_0, 0);");
-    auto acquire_output1 = generated.find("get_buf(PIPE_S, output1_0, 0);", acquire_output0);
+    const std::string same_tile_guard = "if ((output1 != output0)) {";
+    const std::string cross_tile_guard = "if ((source != output0) && (source != output1)) {";
+    auto acquire_output0 = generated.find("get_buf(PIPE_S, output0, 0);");
+    auto acquire_output1 = generated.find("get_buf(PIPE_S, output1, 0);", acquire_output0);
     auto acquire_source_guard = generated.find(cross_tile_guard, acquire_output1);
-    auto release_output0 = generated.find("rls_buf(PIPE_S, output0_0, 0);", acquire_source_guard);
-    auto release_output1 = generated.find("rls_buf(PIPE_S, output1_0, 0);", release_output0);
+    auto release_output0 = generated.find("rls_buf(PIPE_S, output0, 0);", acquire_source_guard);
+    auto release_output1 = generated.find("rls_buf(PIPE_S, output1, 0);", release_output0);
     auto release_source_guard = generated.find(cross_tile_guard, release_output1);
     EXPECT_EQ(generated.find(same_tile_guard), std::string::npos);
     EXPECT_NE(acquire_output0, std::string::npos);

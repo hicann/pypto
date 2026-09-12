@@ -63,7 +63,7 @@ def test_tiling_param_lowered_to_single_struct():
     assert isinstance(kernel, ir.Function)
     # The tiling class is lowered to a single struct (TupleType) parameter.
     assert len(kernel.params) == 2
-    assert kernel.params[1].name == "tiling"
+    assert kernel.params[1].name == "tiling_0"
     assert isinstance(kernel.params[1].type, ir.TupleType)
     assert len(kernel.params[1].type.types) == 2
 
@@ -120,7 +120,7 @@ def test_tensors_plus_tiling_last():
     # Tensors stay individual params; tiling collapses to one struct param last.
     assert len(kernel.params) == 3
     param_names = [p.name for p in kernel.params]
-    assert param_names == ["x", "y", "tiling"]
+    assert param_names == ["x_0", "y_0", "tiling_0"]
     assert isinstance(kernel.params[2].type, ir.TupleType)
 
 
@@ -143,7 +143,7 @@ def test_tiling_name_registered_as_struct_in_scope():
 
     assert isinstance(kernel, ir.Function)
     assert len(kernel.params) == 2
-    assert kernel.params[1].name == "tiling"
+    assert kernel.params[1].name == "tiling_0"
     assert isinstance(kernel.params[1].type, ir.TupleType)
 
 
@@ -164,9 +164,9 @@ def test_tiling_field_access_lowers_to_getitem():
 
     assert isinstance(kernel, ir.Function)
     assert len(kernel.params) == 2
-    assert kernel.params[1].name == "tiling"
+    assert kernel.params[1].name == "tiling_0"
     # tiling.x lowers to tiling[0] (field index 0 of the struct).
-    assert "getitem(%tiling, 0)" in str(kernel)
+    assert "getitem(%tiling_0, 0)" in str(kernel)
 
 
 def test_tiling_registry_reset_between_functions():
@@ -349,7 +349,7 @@ def test_array_subscript_access():
     assert isinstance(kernel, ir.Function)
     assert len(kernel.params) == 2
     assignments = [stmt for stmt in kernel.body.stmts if isinstance(stmt, ir.AssignStmt)]
-    result = next(stmt for stmt in assignments if stmt.var.name == "result")
+    result = next(stmt for stmt in assignments if stmt.var.name == "result_0")
     assert isinstance(result.value, ir.GetItemExpr)
     assert isinstance(result.value.value, ir.Var)
     assert isinstance(result.value.slice, ir.ConstInt)
@@ -358,7 +358,7 @@ def test_array_subscript_access():
     field = next(stmt for stmt in assignments if stmt.var.name == result.value.value.name)
     assert isinstance(field.value, ir.GetItemExpr)
     assert isinstance(field.value.value, ir.Var)
-    assert field.value.value.name == "tiling"
+    assert field.value.value.name == "tiling_0"
     assert isinstance(field.value.slice, ir.ConstInt)
     assert field.value.slice.value == 0
 
@@ -415,7 +415,7 @@ def test_array_bare_name_resolves_to_nested_tuple():
 
     assert isinstance(kernel, ir.Function)
     # tiling.offsets lowers to tiling[0], the nested tuple holding the array elements.
-    assert "getitem(%tiling, 0)" in str(kernel)
+    assert "getitem(%tiling_0, 0)" in str(kernel)
 
 
 def test_array_out_of_bounds_raises_error():

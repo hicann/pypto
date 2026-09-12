@@ -12,13 +12,23 @@
 from __future__ import annotations
 
 import ast
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Callable
 
 from pypto.pypto_impl import ir
 from pypto.pypto_impl.ir import DataType
 from pypto_pro.ir._limits import INT64_MAX, INT64_MIN, from_storage_int
 
 from ._expr_evaluator import ExprEvaluator
+from ._scope_manager import (
+    ConstantState,
+    ControlFlowInfo,
+    JumpInfo,
+    JumpKind,
+    LocalScope,
+    LoopVarState,
+    PhiState,
+)
 from .diagnostics import (
     FinalRejectionError,
     ParserSyntaxError,
@@ -52,17 +62,20 @@ def _target_names(target: ast.expr) -> set[str]:
     return set()
 
 
-def _assignment_writes(statements: list[ast.stmt]) -> set[str]:
+def collect_written_vars(
+    statements: list[ast.stmt], *, ignore_assignment: Callable[[ast.Assign], bool] | None = None
+) -> set[str]:
     """Collect names that a control-flow region can rebind.
 
-    This intentionally mirrors ConvertToSSA's AssignmentCollector: loop
-    iterators are local, while assignments in nested regions remain writes of
-    the surrounding region.
+    Loop iterators are local, while assignments in nested regions remain writes
+    of the surrounding region.
     """
     writes: set[str] = set()
 
     def visit(stmt: ast.stmt) -> None:
         if isinstance(stmt, ast.Assign):
+            if ignore_assignment is not None and ignore_assignment(stmt):
+                return
             for target in stmt.targets:
                 writes.update(_target_names(target))
         elif isinstance(stmt, ast.AugAssign):
@@ -84,6 +97,17 @@ def _assignment_writes(statements: list[ast.stmt]) -> set[str]:
     for statement in statements:
         visit(statement)
     return writes
+
+
+@dataclass
+class _LoopMergeSlot:
+    """The minimum state needed for one loop-carried source binding."""
+
+    name: str
+    init_value: ir.Expr
+    iter_var: ir.Var
+    state: LoopVarState
+    mutex_iter_vars: tuple[ir.Var, ...] = ()
 
 
 def validate_single_tail_return(func_def: ast.FunctionDef, context: str) -> tuple[ast.Return, str, str] | None:
@@ -118,6 +142,274 @@ class ControlFlowParserMixin:
     _ITERATOR_ERROR = "For loop must use pl.range()"
     _ITERATOR_HINT = "Use pl.range() as the iterator"
 
+    def _is_empty_control_flow_value(self, value: ir.Expr) -> bool:
+        return isinstance(value, ir.Var) and value.name in self._empty_control_flow_values
+
+    def _mark_empty_control_flow_value(self, value: ir.Var) -> None:
+        self._empty_control_flow_values.add(value.name)
+
+    def collect_written_vars(self, statements: list[ast.stmt]) -> set[str]:
+        """Collect source rebindings, excluding mutable VF register writes."""
+
+        def is_vf_register_write(stmt: ast.Assign) -> bool:
+            op_name = self._is_vf_op_call(stmt.value)
+            if op_name is None:
+                return False
+            dst_count = self._get_vf_op_dst_count(op_name)
+            return dst_count is not None and dst_count > 0
+
+        return collect_written_vars(statements, ignore_assignment=is_vf_register_write)
+
+    def _merge_tile_mutex_meta_pair(
+        self, first_value: ir.Expr, second_value: ir.Expr, span: ir.Span
+    ) -> tuple[tuple[ir.Expr, ...], tuple[ir.Expr, ...], list[Any]] | None:
+        """Align two runtime mutex-id lists and union their static candidates."""
+        if not self._auto_mutex:
+            return None
+        first_meta = self._tile_mutex_meta.get(first_value)
+        second_meta = self._tile_mutex_meta.get(second_value)
+        if first_meta is None and second_meta is None:
+            return None
+        if first_meta is None or second_meta is None:
+            present_meta = first_meta if first_meta is not None else second_meta
+            if not present_meta[1]:
+                return None
+            raise ParserTypeError(
+                "Cannot merge Tile values when only one input carries mutex metadata",
+                span=span,
+                hint="Ensure all values come from the same auto-mutex tile-group flow",
+            )
+        first_mutex_ids, first_candidates = first_meta
+        second_mutex_ids, second_candidates = second_meta
+        if len(first_mutex_ids) != len(second_mutex_ids):
+            if not first_candidates and len(first_mutex_ids) == 1:
+                first_mutex_ids = tuple(first_mutex_ids) * len(second_mutex_ids)
+            elif not second_candidates and len(second_mutex_ids) == 1:
+                second_mutex_ids = tuple(second_mutex_ids) * len(first_mutex_ids)
+            else:
+                raise ParserTypeError(
+                    "cannot merge tile mutex metadata with different ID counts: "
+                    f"{len(first_mutex_ids)} and {len(second_mutex_ids)}",
+                    span=span,
+                )
+        candidates = list(
+            dict.fromkeys(list(first_candidates or ()) + list(second_candidates or ()))
+        )
+        return tuple(first_mutex_ids), tuple(second_mutex_ids), candidates
+
+    def _merge_control_flow_mutex_ids(
+        self, values: list[ir.Expr], span: ir.Span
+    ) -> tuple[list[tuple[ir.Expr, ...]], list[Any]] | None:
+        """Align one explicit Tile slot's mutex ids across its CFG inputs."""
+        if not self._auto_mutex or not values:
+            return None
+        if len(values) == 1:
+            mutex_meta = self._tile_mutex_meta.get(values[0])
+            if mutex_meta is None:
+                return None
+            mutex_ids, candidates = mutex_meta
+            return [tuple(mutex_ids)], list(candidates or ())
+        if len(values) == 2:
+            merged = self._merge_tile_mutex_meta_pair(values[0], values[1], span)
+            if merged is None:
+                return None
+            first_mutex_ids, second_mutex_ids, candidates = merged
+            return [tuple(first_mutex_ids), tuple(second_mutex_ids)], candidates
+
+        exemplar = next(
+            (
+                value
+                for value in values
+                if (meta := self._tile_mutex_meta.get(value)) is not None and meta[1]
+            ),
+            None,
+        )
+        if exemplar is None:
+            return None
+
+        tile_mutex_id_outputs: list[tuple[ir.Expr, ...]] = []
+        candidates: list[Any] = []
+        for value in values:
+            merged = self._merge_tile_mutex_meta_pair(value, exemplar, span)
+            if merged is None:
+                raise ParserTypeError("Cannot merge Tile values without mutex metadata", span=span)
+            value_mutex_ids, _, value_candidates = merged
+            tile_mutex_id_outputs.append(tuple(value_mutex_ids))
+            candidates.extend(value_candidates)
+        return tile_mutex_id_outputs, list(dict.fromkeys(candidates))
+
+    def _create_mutex_id_vars(
+        self, name: str, count: int, span: ir.Span
+    ) -> tuple[ir.Var, ...]:
+        return tuple(
+            self.builder.var(
+                f"{name}__mutexid" if index == 0 else f"{name}__mutexid_{index}",
+                ir.ScalarType(DataType.INDEX),
+                span,
+            )
+            for index in range(count)
+        )
+
+    def _parse_statement_list(self, statements: list[ast.stmt]) -> JumpKind | None:
+        """Parse statements until the current scope has terminated."""
+        local_scope = self.scope_manager.current_scope
+        for statement in statements:
+            self.parse_statement(statement)
+            if local_scope.jump_kind is not None:
+                break
+        return local_scope.jump_kind
+
+    def _parse_control_flow_region(
+        self, statements: list[ast.stmt], scope_type: str
+    ) -> JumpKind:
+        """Parse one if/loop block, add its default jump, and dispatch it."""
+        jump_kind = self._parse_statement_list(statements)
+        local_scope = self.scope_manager.current_scope
+        if jump_kind is None:
+            jump_kind = self._default_jump_kind(scope_type)
+            if jump_kind is None:
+                raise ValueError(f"Unsupported control-flow scope type: {scope_type}")
+            local_scope.set_jump(jump_kind)
+
+        loop_info = self.scope_manager.loop_info
+        if scope_type in ("for", "while") and loop_info is not None and loop_info.flatten:
+            return jump_kind
+
+        self.dispatch_jump(jump_kind)
+        return jump_kind
+
+    @staticmethod
+    def _default_jump_kind(scope_type: str) -> JumpKind | None:
+        if scope_type == "if":
+            return JumpKind.YIELD
+        if scope_type in ("for", "while"):
+            return JumpKind.CONTINUE
+        return None
+
+    def _current_span(self) -> ir.Span:
+        return self.span_tracker.get_span(self._current_node)
+
+    def _as_control_flow_value(self, name: str, value: Any, span: ir.Span) -> ir.Expr:
+        """Convert the current parser binding into one legal jump output."""
+        if (
+            isinstance(value, ir.Expr)
+            and not isinstance(value.type, ir.UnknownType)
+            and not self._contains_tile_group_type(value.type)
+        ):
+            return value
+        return self.builder.var(name, ir.NoneType.get(), span)
+
+    def dispatch_jump(self, jump_kind: JumpKind) -> JumpInfo | None:
+        """Create an empty terminator and record its named merge outputs."""
+        if jump_kind is JumpKind.RETURN:
+            return None
+
+        info = self.scope_manager.if_info if jump_kind is JumpKind.YIELD else self.scope_manager.loop_info
+        if info is None:
+            raise RuntimeError(f"{jump_kind.value} is missing its control-flow owner")
+
+        span = self._current_span()
+        outputs = [
+            self._as_control_flow_value(
+                name, self.lookup_expr_by_name(name), span
+            )
+            for name in info.merge_names
+        ]
+
+        if jump_kind is JumpKind.YIELD:
+            jump_op = ir.YieldStmt([], span)
+        elif jump_kind is JumpKind.BREAK:
+            jump_op = ir.BreakStmt([], span)
+        elif jump_kind is JumpKind.CONTINUE:
+            jump_op = ir.ContinueStmt([], span)
+        else:
+            raise ValueError(f"Unsupported jump kind: {jump_kind}")
+        self.builder.emit(jump_op)
+        jump_info = JumpInfo(jump_op, tuple(outputs))
+        info.jumps.append(jump_info)
+        return jump_info
+
+    def _infer_phi_states(self, info: ControlFlowInfo) -> list[PhiState]:
+        if not info.jumps:
+            return []
+        output_count = len(info.jumps[0].outputs)
+        states = [PhiState() for _ in range(output_count)]
+        for jump in info.jumps:
+            if len(jump.outputs) != output_count:
+                raise TypeError("control-flow jump output counts must match")
+            for state, value in zip(states, jump.outputs, strict=True):
+                if self._is_empty_control_flow_value(value):
+                    continue
+                state.propagate(value)
+        return states
+
+    def _update_phi_constant(self, result: ir.Var, state: PhiState) -> None:
+        """Record PhiState's complete constant value under the result SSA name."""
+        if state.constant_state is not ConstantState.MAY_BE_CONSTANT:
+            return
+        assert state.constant_value is not None
+        self.const_env[result.name] = state.constant_value
+
+    def _enter_region(self, body: ir.SeqStmts) -> None:
+        self.builder.builder.set_insert_point(ir.InsertPoint(body))
+
+    def _leave_region(self) -> None:
+        self.builder.builder.clear_insert_point()
+
+    def _parse_if_region(
+        self,
+        statements: list[ast.stmt],
+        span: ir.Span,
+    ) -> tuple[ir.SeqStmts, LocalScope]:
+        """Parse one branch/body into an off-tree SeqStmts."""
+        body = ir.SeqStmts(span)
+        self._enter_region(body)
+        self.scope_manager.enter_scope("if")
+        local_scope = self.scope_manager.current_scope
+        try:
+            self._parse_control_flow_region(statements, "if")
+        finally:
+            self.scope_manager.exit_scope(leak_vars=False)
+            self._leave_region()
+        return body, local_scope
+
+    def _flatten_while_region(self, statements: list[ast.stmt]) -> None:
+        """Parse a flattened while and consume its loop-local jump."""
+        self.scope_manager.enter_scope("while")
+        previous_while = self.in_while_loop
+        self.in_while_loop = True
+        with self.scope_manager.change_loop_info(ControlFlowInfo((), flatten=True)):
+            self._parse_control_flow_region(statements, "while")
+        self.scope_manager.exit_scope(leak_vars=True)
+        self.in_while_loop = previous_while
+
+    @staticmethod
+    def _can_flatten_while(statements: list[ast.stmt]) -> bool:
+        """Return whether the lowered loop reaches an unconditional top-level break."""
+        break_index = next(
+            (index for index, statement in enumerate(statements) if isinstance(statement, ast.Break)),
+            None,
+        )
+        if break_index is None:
+            return False
+
+        def has_current_loop_jump(node: ast.AST) -> bool:
+            if isinstance(node, (ast.For, ast.While, ast.AsyncFor)):
+                return False
+            if isinstance(node, (ast.Break, ast.Continue)):
+                return True
+            return any(has_current_loop_jump(child) for child in ast.iter_child_nodes(node))
+
+        return not any(has_current_loop_jump(statement) for statement in statements[:break_index])
+
+    def _validate_loop_orelse(self, stmt: ast.For | ast.While) -> None:
+        if stmt.orelse:
+            kind = "for" if isinstance(stmt, ast.For) else "while"
+            raise ParserSyntaxError(
+                f"'{kind}-else' is not supported",
+                span=self.span_tracker.get_span(stmt.orelse[0]),
+            )
+
     @staticmethod
     def _get_with_context_attr(stmt: ast.With) -> str | None:
         """Return the context manager attribute name for supported with calls."""
@@ -139,87 +431,270 @@ class ControlFlowParserMixin:
         except Exception:
             return "<unknown>"
 
+    @staticmethod
+    def _as_index_expr(value: int | ir.Expr, span: ir.Span) -> ir.Expr:
+        return value if isinstance(value, ir.Expr) else ir.ConstInt(value, DataType.INDEX, span)
+
+    def _select_loop_merge_inputs(
+        self, writes: set[str], span: ir.Span
+    ) -> tuple[tuple[str, ir.Expr], ...]:
+        """Keep explicit loop writes whose values exist before the loop."""
+        merge_inputs = []
+        for name in sorted(writes):
+            value = self.lookup_expr_by_name(name)
+            if value is None:
+                continue
+            merge_inputs.append((name, self._as_control_flow_value(name, value, span)))
+        return tuple(merge_inputs)
+
+    def _create_loop_slots(
+        self, merge_inputs: tuple[tuple[str, ir.Expr], ...], span: ir.Span
+    ) -> list[_LoopMergeSlot]:
+        """Create main-value carries for the selected explicit merge names."""
+        slots: list[_LoopMergeSlot] = []
+        for name, init_value in merge_inputs:
+            state = LoopVarState(
+                PhiState(constant_state=ConstantState.NONCONSTANT),
+                PhiState(),
+            )
+            if self._is_empty_control_flow_value(init_value):
+                iter_var = self.builder.var(name, init_value.type, span)
+                self._mark_empty_control_flow_value(iter_var)
+                self._transfer_tile_sync_metadata(iter_var, init_value)
+            else:
+                state.body_phi.propagate(init_value)
+                if state.body_phi.ty is None:
+                    raise TypeError(f"Loop phi state for '{name}' has no IR type")
+                iter_var = self.builder.var(name, state.body_phi.ty, span)
+            slots.append(
+                _LoopMergeSlot(
+                    name=name,
+                    init_value=init_value,
+                    iter_var=iter_var,
+                    state=state,
+                )
+            )
+        return slots
+
+    def _prepare_loop_mutex_iter_vars(
+        self, slots: list[_LoopMergeSlot], span: ir.Span
+    ) -> None:
+        """Expose provisional mutex iter vars while parsing the loop body."""
+        if not self._auto_mutex:
+            return
+        for slot in slots:
+            if not isinstance(slot.init_value.type, ir.TileType):
+                continue
+            mutex_meta = self._tile_mutex_meta.get(slot.init_value)
+            if mutex_meta is None:
+                continue
+            mutex_ids, candidates = mutex_meta
+            slot.mutex_iter_vars = self._create_mutex_id_vars(
+                slot.name, len(mutex_ids), span
+            )
+            self._tile_mutex_meta[slot.iter_var] = (
+                slot.mutex_iter_vars,
+                list(candidates or ()),
+            )
+
+    def _parse_loop_region(
+        self,
+        statements: list[ast.stmt],
+        scope_type: str,
+        span: ir.Span,
+        slots: list[_LoopMergeSlot],
+        loop_binding: tuple[str, ir.Var] | None = None,
+    ) -> ir.SeqStmts:
+        body = ir.SeqStmts(span)
+        self._enter_region(body)
+        self.scope_manager.enter_scope(scope_type)
+        previous_for = self.in_for_loop
+        previous_while = self.in_while_loop
+        self.in_for_loop = scope_type == "for" or previous_for
+        self.in_while_loop = scope_type == "while" or previous_while
+        try:
+            if loop_binding is not None:
+                self.scope_manager.define_var(loop_binding[0], loop_binding[1], allow_redef=True, span=span)
+            for slot in slots:
+                self.scope_manager.define_var(slot.name, slot.iter_var, allow_redef=True, span=span)
+            self._parse_control_flow_region(statements, scope_type)
+        finally:
+            self.scope_manager.exit_scope(leak_vars=False)
+            self.in_for_loop = previous_for
+            self.in_while_loop = previous_while
+            self._leave_region()
+        return body
+
+    def _finalize_loop_slots(
+        self,
+        slots: list[_LoopMergeSlot],
+        info: ControlFlowInfo,
+        span: ir.Span,
+        *,
+        is_for_loop: bool,
+    ) -> tuple[
+        list[ir.IterArg],
+        list[ir.Var],
+        list[tuple[str, ir.Var, PhiState]],
+    ]:
+        finalized: list[tuple[_LoopMergeSlot, ir.Var, ir.Var]] = []
+        for jump in info.jumps:
+            if len(jump.outputs) != len(slots):
+                raise TypeError("loop jump output count must match the collected merge slots")
+            is_continue = isinstance(jump.jump_op, ir.ContinueStmt)
+            is_break = isinstance(jump.jump_op, ir.BreakStmt)
+            if not is_continue and not is_break:
+                raise TypeError("loop ControlFlowInfo can only contain break or continue jumps")
+            for slot, value in zip(slots, jump.outputs, strict=True):
+                if self._is_empty_control_flow_value(value):
+                    continue
+                if is_for_loop or is_continue:
+                    slot.state.body_phi.propagate(value, fail_eagerly=True)
+                if is_for_loop or is_break:
+                    slot.state.result_phi.propagate(value)
+
+        for slot in slots:
+            state = slot.state
+            merged_type = state.body_phi.ty or slot.iter_var.type
+            final_iter_var = slot.iter_var
+            if not ir.structural_equal(slot.iter_var.type, merged_type, enable_auto_mapping=False):
+                final_iter_var = ir.Var(slot.iter_var.name, merged_type, slot.iter_var.span)
+                slot.iter_var = final_iter_var
+            if state.result_phi.ty is None:
+                return_var = self.builder.var(slot.name, ir.NoneType.get(), span)
+                self._mark_empty_control_flow_value(return_var)
+            else:
+                return_var = self.builder.var(slot.name, state.result_phi.ty, span)
+            finalized.append((slot, final_iter_var, return_var))
+
+        iter_args: list[ir.IterArg] = []
+        return_vars: list[ir.Var] = []
+        merged_bindings: list[tuple[str, ir.Var, PhiState]] = []
+        for slot, iter_var, return_var in finalized:
+            iter_args.append(self.builder.builder.create_iter_arg(iter_var, slot.init_value))
+            return_vars.append(return_var)
+            merged_bindings.append((slot.name, return_var, slot.state.result_phi))
+
+        # Mutex ids are framework-generated companion values. Infer and append
+        # them only after all source-visible main slots have completed Phi inference.
+        mutex_outputs_by_jump: list[list[ir.Expr]] = [[] for _ in info.jumps]
+        for index, (slot, iter_var, return_var) in enumerate(finalized):
+            if not isinstance(iter_var.type, ir.TileType) and not isinstance(return_var.type, ir.TileType):
+                continue
+
+            values = [slot.init_value]
+            values.extend(jump.outputs[index] for jump in info.jumps)
+            mutex_merge = self._merge_control_flow_mutex_ids(values, span)
+            if mutex_merge is None:
+                continue
+            mutex_ids_by_source, candidates = mutex_merge
+            init_mutex_ids, *mutex_ids_by_jump = mutex_ids_by_source
+            if not slot.mutex_iter_vars:
+                slot.mutex_iter_vars = self._create_mutex_id_vars(
+                    slot.name, len(init_mutex_ids), span
+                )
+            mutex_return_vars = self._create_mutex_id_vars(
+                slot.name, len(init_mutex_ids), span
+            )
+            for mutex_iter_var, mutex_init_value in zip(
+                slot.mutex_iter_vars, init_mutex_ids, strict=True
+            ):
+                iter_args.append(
+                    self.builder.builder.create_iter_arg(
+                        mutex_iter_var, mutex_init_value
+                    )
+                )
+            return_vars.extend(mutex_return_vars)
+            for jump_mutex_ids, tile_mutex_ids in zip(
+                mutex_outputs_by_jump, mutex_ids_by_jump, strict=True
+            ):
+                jump_mutex_ids.extend(tile_mutex_ids)
+
+            if isinstance(return_var.type, ir.TileType):
+                self._tile_mutex_meta[return_var] = (mutex_return_vars, candidates)
+
+        for jump, jump_mutex_ids in zip(info.jumps, mutex_outputs_by_jump, strict=True):
+            if jump.jump_op is None:
+                raise RuntimeError("loop jump is missing its terminator")
+            self.builder.builder.update_jump_values(jump.jump_op, [*jump.outputs, *jump_mutex_ids])
+
+        return iter_args, return_vars, merged_bindings
+
     def parse_for_loop(self, stmt: ast.For) -> None:
-        """Parse for loop with pl.range()."""
+        """Parse a natural ``for`` directly into an SSA ForStmt."""
         self._validate_loop_orelse(stmt)
         iter_call = self._validate_for_loop_iterator(stmt)
         loop_var_name = self._parse_for_loop_target(stmt)
         range_args = self._parse_range_call(iter_call)
-
-        entry_env = dict(self.const_env)
-        writes = _assignment_writes(stmt.body)
-        self.const_env = {name: value for name, value in entry_env.items() if name not in writes}
-
-        loop_var = self.builder.var(loop_var_name, ir.ScalarType(DataType.INDEX))
         span = self.span_tracker.get_span(stmt)
-
-        try:
-            with self.builder.for_loop(
-                loop_var,
-                range_args["start"],
-                range_args["stop"],
-                range_args["step"],
-                span,
-            ) as loop:
-                self._parse_for_loop_body(stmt, loop, loop_var, loop_var_name)
-        finally:
-            self.const_env = {name: value for name, value in entry_env.items() if name not in writes}
+        writes = self.collect_written_vars(stmt.body)
+        merge_inputs = self._select_loop_merge_inputs(writes, span)
+        merge_names = tuple(name for name, _ in merge_inputs)
+        slots = self._create_loop_slots(merge_inputs, span)
+        for slot in slots:
+            if not self._is_empty_control_flow_value(slot.init_value):
+                slot.state.result_phi.propagate(slot.init_value)
+        info = ControlFlowInfo(merge_names)
+        self._prepare_loop_mutex_iter_vars(slots, span)
+        loop_var = self.builder.var(loop_var_name, ir.ScalarType(DataType.INDEX), span)
+        with self.scope_manager.change_loop_info(info):
+            body = self._parse_loop_region(
+                stmt.body, "for", span, slots, (loop_var_name, loop_var)
+            )
+        iter_args, return_vars, merged_bindings = self._finalize_loop_slots(
+            slots, info, span, is_for_loop=True
+        )
+        for_stmt = self.builder.builder.create_for_stmt(
+            loop_var,
+            self._as_index_expr(range_args["start"], span),
+            self._as_index_expr(range_args["stop"], span),
+            self._as_index_expr(range_args["step"], span),
+            iter_args,
+            body,
+            return_vars,
+            span,
+        )
+        self.builder.emit(for_stmt)
+        for name, return_var, state in merged_bindings:
+            self.scope_manager.define_var(name, return_var, allow_redef=True, span=span)
+            self._update_phi_constant(return_var, state)
 
     def parse_while_loop(self, stmt: ast.While) -> None:
-        """Parse natural while loop syntax.
-
-        Natural while syntax: while condition: body
-
-        The condition is lowered into the loop body so any statements emitted
-        while evaluating it (for example getval plus auto-mutex synchronization)
-        execute on every iteration::
-
-            while True:
-                condition = <original condition>
-                if not condition:
-                    break
-                <original body>
-
-        This creates a WhileStmt without iter_args (non-SSA form). The C++
-        ConvertToSSA pass will convert it to SSA form if needed.
-
-        Args:
-            stmt: While AST node
-        """
+        """Lower a natural while to ``while True`` with an SSA-carrying break guard."""
         self._validate_loop_orelse(stmt)
-        entry_env = dict(self.const_env)
-        writes = _assignment_writes(stmt.body)
-        self.const_env = {name: value for name, value in entry_env.items() if name not in writes}
         span = self.span_tracker.get_span(stmt)
+        loop_body = stmt.body
+        if not (isinstance(stmt.test, ast.Constant) and stmt.test.value is True):
+            break_test = ast.copy_location(ast.UnaryOp(op=ast.Not(), operand=stmt.test), stmt.test)
+            break_stmt = ast.copy_location(ast.Break(), stmt)
+            break_if = ast.copy_location(
+                ast.If(test=break_test, body=[break_stmt], orelse=[]), stmt
+            )
+            ast.fix_missing_locations(break_if)
+            loop_body = [break_if, *stmt.body]
 
-        prev_loop_builder = self.current_loop_builder
-        prev_in_while_loop = self.in_while_loop
-        try:
-            with self.builder.while_loop(ir.ConstBool(True, span), span) as loop:
-                self.current_loop_builder = loop
-                self.in_while_loop = True
-                self.scope_manager.enter_scope("while")
+        if self._can_flatten_while(loop_body):
+            self._flatten_while_region(loop_body)
+            return
 
-                break_test = ast.copy_location(
-                    ast.UnaryOp(op=ast.Not(), operand=stmt.test),
-                    stmt.test,
-                )
-                break_condition = self.parse_expression(break_test)
-                if isinstance(break_condition, ir.ConstBool):
-                    if break_condition.value:
-                        self.builder.break_stmt(span)
-                else:
-                    with self.builder.if_stmt(break_condition, span):
-                        self.builder.break_stmt(span)
-
-                for body_stmt in stmt.body:
-                    self.parse_statement(body_stmt)
-
-                self.scope_manager.exit_scope(leak_vars=True)
-        finally:
-            self.in_while_loop = prev_in_while_loop
-            self.current_loop_builder = prev_loop_builder
-            self.const_env = {name: value for name, value in entry_env.items() if name not in writes}
+        writes = self.collect_written_vars(stmt.body)
+        merge_inputs = self._select_loop_merge_inputs(writes, span)
+        merge_names = tuple(name for name, _ in merge_inputs)
+        slots = self._create_loop_slots(merge_inputs, span)
+        info = ControlFlowInfo(merge_names)
+        self._prepare_loop_mutex_iter_vars(slots, span)
+        with self.scope_manager.change_loop_info(info):
+            body = self._parse_loop_region(loop_body, "while", span, slots)
+        iter_args, return_vars, merged_bindings = self._finalize_loop_slots(
+            slots, info, span, is_for_loop=False
+        )
+        while_stmt = self.builder.builder.create_while_stmt(
+            ir.ConstBool(True, span), iter_args, body, return_vars, span
+        )
+        self.builder.emit(while_stmt)
+        for name, return_var, state in merged_bindings:
+            self.scope_manager.define_var(name, return_var, allow_redef=True, span=span)
+            self._update_phi_constant(return_var, state)
 
     def _record_if_const(self, test_node: ast.expr, is_const: bool, value) -> None:
         """Record each ``if`` condition's compile-time constness for the auto-pipeline's branch pruning."""
@@ -228,53 +703,82 @@ class ControlFlowParserMixin:
         self.if_const_map[(test_node.lineno, test_node.col_offset)] = (is_const, value)
 
     def parse_if_statement(self, stmt: ast.If) -> None:
-        """Parse if statement.
-
-        Variables from both branches leak to the outer scope, and the
-        C++ ConvertToSSA pass handles creating phi nodes.
-
-        Args:
-            stmt: If AST node
-        """
+        """Parse an IfStmt using only its reachable Yield predecessors."""
         condition = self.parse_expression(stmt.test)
         span = self.span_tracker.get_span(stmt)
 
         if isinstance(condition, (ir.ConstBool, ir.ConstInt)):
             is_true = condition.value if isinstance(condition, ir.ConstBool) else condition.value != 0
             self._record_if_const(stmt.test, True, bool(is_true))
-            for branch_stmt in stmt.body if is_true else stmt.orelse:
-                self.parse_statement(branch_stmt)
+            self._parse_statement_list(stmt.body if is_true else stmt.orelse)
             return
 
         self._record_if_const(stmt.test, False, None)
+        writes = tuple(sorted(self.collect_written_vars([*stmt.body, *stmt.orelse])))
+        info = ControlFlowInfo(writes)
+        with self.scope_manager.change_if_info(info):
+            then_body, _ = self._parse_if_region(stmt.body, span)
 
-        entry_env = dict(self.const_env)
-        writes = _assignment_writes([*stmt.body, *stmt.orelse])
+        # If then has no Yield predecessor, emit a result-less structured If
+        # and flatten the original else into the parent region.
+        if not info.jumps:
+            synthetic_else = ir.SeqStmts([ir.YieldStmt([], span)], span)
+            self.builder.emit(
+                self.builder.builder.create_if_stmt(condition, then_body, synthetic_else, [], span)
+            )
+            self._parse_statement_list(stmt.orelse)
+            return
 
-        outer_in_if_stmt = self.in_if_stmt
-        with self.builder.if_stmt(condition, span) as if_builder:
-            self.current_if_builder = if_builder
-            self.in_if_stmt = True
+        with self.scope_manager.change_if_info(info):
+            else_body, _ = self._parse_if_region(stmt.orelse, span)
 
-            self.scope_manager.enter_scope("if")
-            self.const_env = dict(entry_env)
-            for then_stmt in stmt.body:
-                self.parse_statement(then_stmt)
-            self.scope_manager.exit_scope(leak_vars=True)
+        phi_states = self._infer_phi_states(info)
+        if len(phi_states) != len(writes):
+            raise TypeError("If jump output count must match the collected merge names")
 
-            if stmt.orelse:
-                if_builder.else_()
-                self.scope_manager.enter_scope("else")
-                self.const_env = dict(entry_env)
-                for else_stmt in stmt.orelse:
-                    self.parse_statement(else_stmt)
-                self.scope_manager.exit_scope(leak_vars=True)
+        merged_bindings: list[tuple[str, ir.Var, PhiState]] = []
+        return_vars: list[ir.Var] = []
+        jump_mutex_id_outputs: list[list[ir.Expr]] = [[] for _ in info.jumps]
+        for name, state in zip(writes, phi_states, strict=True):
+            if state.ty is None:
+                merged_var = self.builder.var(name, ir.NoneType.get(), span)
+                self._mark_empty_control_flow_value(merged_var)
+            else:
+                merged_var = self.builder.var(name, state.ty, span)
+            return_vars.append(merged_var)
+            merged_bindings.append((name, merged_var, state))
 
-        self.const_env = {name: value for name, value in entry_env.items() if name not in writes}
-        # Restore the enclosing value (not hard-False) so a nested if exiting doesn't clear
-        # the outer if's flag.
-        self.in_if_stmt = outer_in_if_stmt
-        self.current_if_builder = None
+        # Mutex ids are framework-generated companion values. Add them only
+        # after all source-visible main slots have completed Phi inference.
+        for index, (name, merged_var, state) in enumerate(merged_bindings):
+            if not isinstance(state.ty, ir.TileType):
+                continue
+            values = [jump.outputs[index] for jump in info.jumps]
+            mutex_merge = self._merge_control_flow_mutex_ids(values, span)
+            if mutex_merge is None:
+                continue
+            tile_mutex_id_outputs, candidates = mutex_merge
+            mutex_vars = self._create_mutex_id_vars(
+                name, len(tile_mutex_id_outputs[0]), span
+            )
+            return_vars.extend(mutex_vars)
+            for jump_mutex_ids, tile_mutex_ids in zip(
+                jump_mutex_id_outputs, tile_mutex_id_outputs, strict=True
+            ):
+                jump_mutex_ids.extend(tile_mutex_ids)
+            self._tile_mutex_meta[merged_var] = (mutex_vars, candidates)
+
+        for jump, jump_mutex_ids in zip(info.jumps, jump_mutex_id_outputs, strict=True):
+            if jump.jump_op is None:
+                raise RuntimeError("materialized If yield is missing its terminator")
+            self.builder.builder.update_jump_values(jump.jump_op, [*jump.outputs, *jump_mutex_ids])
+
+        self.builder.emit(
+            self.builder.builder.create_if_stmt(condition, then_body, else_body, return_vars, span)
+        )
+        for name, merged_var, state in merged_bindings:
+            self.scope_manager.define_var(name, merged_var, allow_redef=True, span=span)
+            self._update_phi_constant(merged_var, state)
 
     def parse_with_statement(self, stmt: ast.With) -> None:
         """Parse with statement for scope contexts.
@@ -337,7 +841,8 @@ class ControlFlowParserMixin:
             )
 
         if _is_bare_return(stmt):
-            self.builder.return_stmt(None, span)
+            self.builder.emit(ir.ReturnStmt([], span))
+            self.scope_manager.current_scope.set_jump(JumpKind.RETURN)
             return
 
         if self._current_func_type == ir.FunctionType.SimtCallee:
@@ -360,7 +865,8 @@ class ControlFlowParserMixin:
                     ),
                 )
             return_expr = self.parse_expression(stmt.value)
-        self.builder.return_stmt([return_expr], span)
+        self.builder.emit(ir.ReturnStmt([return_expr], span))
+        self.scope_manager.current_scope.set_jump(JumpKind.RETURN)
 
     def parse_break(self, stmt: ast.Break) -> None:
         """Parse break statement.
@@ -374,8 +880,7 @@ class ControlFlowParserMixin:
                 span=self.span_tracker.get_span(stmt),
                 hint="break can only be used inside a for or while loop",
             )
-        span = self.span_tracker.get_span(stmt)
-        self.builder.break_stmt(span)
+        self.scope_manager.current_scope.set_jump(JumpKind.BREAK)
 
     def parse_continue(self, stmt: ast.Continue) -> None:
         """Parse continue statement.
@@ -389,8 +894,7 @@ class ControlFlowParserMixin:
                 span=self.span_tracker.get_span(stmt),
                 hint="continue can only be used inside a for or while loop",
             )
-        span = self.span_tracker.get_span(stmt)
-        self.builder.continue_stmt(span)
+        self.scope_manager.current_scope.set_jump(JumpKind.CONTINUE)
 
     def _parse_target_section(
         self,
@@ -403,8 +907,7 @@ class ControlFlowParserMixin:
             return
 
         self.matched_target = True
-        for body_stmt in body:
-            self.parse_statement(body_stmt)
+        self._parse_statement_list(body)
 
     def _validate_for_loop_iterator(self, stmt: ast.For) -> ast.Call:
         """Validate that for loop uses pl.range().
@@ -447,28 +950,6 @@ class ControlFlowParserMixin:
                 hint="Use: for i in pl.range(n)",
             )
         return stmt.target.id
-
-    def _parse_for_loop_body(
-        self,
-        stmt: ast.For,
-        loop: Any,
-        loop_var: ir.Var,
-        loop_var_name: str,
-    ) -> None:
-        """Parse the body of a for loop inside the loop context."""
-        prev_loop_builder = self.current_loop_builder
-        prev_in_for_loop = self.in_for_loop
-        self.current_loop_builder = loop
-        self.in_for_loop = True
-        self.scope_manager.enter_scope("for")
-        self.scope_manager.define_var(loop_var_name, loop_var, allow_redef=True)
-
-        for body_stmt in stmt.body:
-            self.parse_statement(body_stmt)
-
-        self.scope_manager.exit_scope(leak_vars=True)
-        self.in_for_loop = prev_in_for_loop
-        self.current_loop_builder = prev_loop_builder
 
     def _parse_range_call(self, call: ast.Call) -> dict[str, Any]:
         """Parse pl.range() call arguments.

@@ -62,7 +62,7 @@ def _retensor_cce_dtype_kernel(src: pl.Tensor[[64, 128], pl.DT_FP16], out: pl.Te
 
 def test_make_ptr_cce_emits_reinterpret_cast():
     cpp = _compile_to_cce(_make_ptr_cce_kernel)
-    # Raw uint8 param p_0 reinterpreted as half*.
+    # Raw uint8 param p reinterpreted as half*.
     assert "((__gm__ half*)(p_0))" in cpp
 
 

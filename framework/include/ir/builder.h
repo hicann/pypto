@@ -345,6 +345,8 @@ public:
     BreakStmtPtr Break(const Span& span);
     ContinueStmtPtr Continue(const Span& span);
 
+    void UpdateJumpValues(const StmtPtr& jump_op, std::vector<ExprPtr> values);
+
     // ========== Context State Queries ==========
 
     /**

@@ -55,7 +55,7 @@ class AssignmentParserMixin:
 
         # Register in scope
         self.scope_manager.define_var(var_name, var, span=span)
-        self._update_const_env(var_name, value_expr)
+        self._update_var_envs(var, value_expr)
 
     def parse_assignment(self, stmt: ast.Assign) -> None:
         """Parse regular assignment: var = value or tuple unpacking.
@@ -307,7 +307,7 @@ class AssignmentParserMixin:
             self.scope_manager.define_var(elt.id, var, span=span)
             const_item = value_expr.elements[i] if isinstance(value_expr, ir.MakeTuple) else item_expr
             self._transfer_tile_sync_metadata(var, const_item)
-            self._update_const_env(elt.id, const_item)
+            self._update_var_envs(var, const_item)
 
     def _parse_name_assignment(self, var_name: str, stmt: ast.Assign) -> None:
         span = self.span_tracker.get_span(stmt)
@@ -331,33 +331,9 @@ class AssignmentParserMixin:
                 self.scope_manager.register_mask_reg_var(var_name)
             if self._auto_mutex:
                 self._emit_auto_mutex_unlocks()
-            self._update_const_env(var_name, value_expr)
+            self._update_var_envs(var, value_expr)
         else:
             self.scope_manager.define_var(var_name, value_expr, span=span)
-            self._update_const_env(var_name, value_expr)
-
-    def _coemit_tile_mutexid_companion(self, var, mm) -> None:
-        """Co-emit companion scalars for every mutex id alongside ``var = <tile>``.
-
-        Called from _transfer_tile_sync_metadata (before define_var rebinds the name), for any
-        assignment whose value carries tile mutex meta ``mm = (buf_ids, ids)``. The companions are
-        re-recorded as ``_tile_mutex_meta[var] = (companion_vars, mutex_ids)`` so the use site
-        stays on the single _tile_mutex_meta path; ConvertToSSA phi-merges the companion by
-        name in lockstep with the tile pointer, so an if/else-selected tile locks the branch
-        chosen at runtime. ScopeManager merges candidate ids when a control-flow scope exits.
-        """
-        buf_ids, mutex_ids = mm
-        companion_vars = []
-        for index, buf_id in enumerate(buf_ids):
-            suffix = "" if index == 0 else f"_{index}"
-            companion_name = f"{var.name}__mutexid{suffix}"
-            companion_var = self.builder.var(companion_name, ir.ScalarType(DataType.INDEX), var.span)
-            self.builder.assign(companion_var, buf_id, var.span)
-            companion_vars.append(companion_var)
-        self._tile_mutex_meta[var] = (
-            tuple(companion_vars),
-            list(dict.fromkeys(mutex_ids or ())),
-        )
 
     def _parse_struct_field_assignment(self, target: ast.Attribute, stmt: ast.Assign, span: ir.Span) -> None:
         """Lower ``base.field = rhs`` to ``EvalStmt(struct.set(base, rhs, field=...))``.

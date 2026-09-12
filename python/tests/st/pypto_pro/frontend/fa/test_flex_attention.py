@@ -915,8 +915,8 @@ def flex_attention(
         b_idx = 0
         s1_size_acc = 0
         s2_size_acc = 0
-        actual_s1 = 0
-        actual_s2 = 0
+        actual_s1 = pl.astype(0, pl.DT_INT32)
+        actual_s2 = pl.astype(0, pl.DT_INT32)
         s1o_acc = 0
         ctx_arr = pl.struct_array(
             4,
@@ -1116,8 +1116,8 @@ def flex_attention(
         b_idx = 0
         s1_size_acc = 0
         s2_size_acc = 0
-        actual_s1 = 0
-        actual_s2 = 0
+        actual_s1 = pl.astype(0, pl.DT_INT32)
+        actual_s2 = pl.astype(0, pl.DT_INT32)
         s1o_acc = 0
 
         # StructArray(3) for pipeline context tracking (same as original)
@@ -1182,7 +1182,7 @@ def flex_attention(
             s1_idx = s1o_size % cur_b_s1o
             s1_size = pl.min(TS, actual_s1 - s1_idx * TS)
 
-            sq_acc = 0
+            sq_acc = pl.astype(0, pl.DT_INT32)
             if b_idx > 0:
                 sq_acc = pl.getval(actual_seq_q, b_idx - 1)
             q_off = sq_acc + s1_idx * TS

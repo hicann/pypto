@@ -238,3 +238,32 @@ def _parse_typed_constant(self, call: ast.Call):
         check_fits_dtype(float(value), dtype, subject="value", span=span, api="pl.const")
         return _ir_core.ConstFloat(float(value), dtype, span)
     return make_const_int(int(value), dtype, span=span, subject="value", api="pl.const")
+
+
+@op_impl("astype")
+def _parse_scalar_astype(self, call: ast.Call):
+    from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError
+
+    span = self.span_tracker.get_span(call)
+    if call.keywords or len(call.args) != 2:
+        raise ParserSyntaxError(
+            "pl.astype() requires exactly 2 positional arguments: value and dtype",
+            span=span,
+            hint="Use pl.astype(value, pl.DT_INT32)",
+        )
+
+    value = self.parse_expression(call.args[0])
+    if not isinstance(value, _ir_core.Expr) or not isinstance(value.type, _ir_core.ScalarType):
+        value_type = getattr(value, "type", type(value).__name__)
+        raise ParserTypeError(
+            f"pl.astype() first argument must be a Scalar, got {value_type}",
+            span=span,
+        )
+
+    dtype = self.parse_expression(call.args[1])
+    if not isinstance(dtype, _ir_core.DataType):
+        raise ParserTypeError(
+            f"pl.astype() second argument must be a dtype (pl.DT_*), got {type(dtype).__name__}",
+            span=span,
+        )
+    return _ir_core.cast(value, dtype, span)

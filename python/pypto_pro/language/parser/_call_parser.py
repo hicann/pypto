@@ -275,16 +275,22 @@ class _InlineReturnLowerer(ast.NodeTransformer):
         return ast.copy_location(ast.If(test=condition, body=[break_stmt], orelse=[]), location)
 
     def visit_Return(self, node: ast.Return):
-        lowered: list[ast.stmt] = []
-        if not _is_bare_return(node):
-            lowered.append(self._assignment(self._return_val_name, node.value, node))
+        value = (
+            ast.copy_location(ast.Constant(value=None), node)
+            if _is_bare_return(node)
+            else node.value
+        )
+        lowered: list[ast.stmt] = [self._assignment(self._return_val_name, value, node)]
         returned = ast.copy_location(ast.Constant(value=True), node)
         lowered.append(self._assignment(self._returned_name, returned, node))
         lowered.append(ast.copy_location(ast.Break(), node))
         return lowered
 
-    def _lower_loop(self, node: ast.For | ast.While) -> list[ast.stmt]:
+    def _lower_loop(self, node: ast.For | ast.While) -> ast.stmt | list[ast.stmt]:
+        has_return = any(isinstance(child, ast.Return) for child in ast.walk(node))
         lowered_loop = self.generic_visit(node)
+        if not has_return:
+            return lowered_loop
         return [lowered_loop, self._return_checkpoint(node)]
 
     def visit_For(self, node: ast.For):
@@ -293,30 +299,25 @@ class _InlineReturnLowerer(ast.NodeTransformer):
     def visit_While(self, node: ast.While):
         return self._lower_loop(node)
 
-    def lower(self, body: list[ast.stmt]) -> list[ast.stmt]:
+    def lower(self, body: list[ast.stmt], location: ast.AST) -> list[ast.stmt]:
         module = ast.Module(body=body, type_ignores=[])
         self.visit(module)
-        location = body[0]
-        return_val_init = self._assignment(
-            self._return_val_name,
-            ast.copy_location(ast.Constant(value=None), location),
-            location,
-        )
         returned_init = self._assignment(
             self._returned_name,
             ast.copy_location(ast.Constant(value=False), location),
             location,
         )
+        fallback_return = self.visit_Return(ast.copy_location(ast.Return(value=None), location))
         wrapper = ast.copy_location(
             ast.While(
                 test=ast.copy_location(ast.Constant(value=True), location),
-                body=[returned_init, *module.body, ast.copy_location(ast.Break(), location)],
+                body=[returned_init, *module.body, *fallback_return],
                 orelse=[],
             ),
             location,
         )
         ast.fix_missing_locations(wrapper)
-        return [return_val_init, wrapper]
+        return [wrapper]
 
 
 # Builtin function names that map to pl.* ops (syntax sugar).
@@ -657,22 +658,6 @@ class CallParserMixin:
         return ".".join(attrs[1:])
 
     @staticmethod
-    def _needs_return_lowering(func_def: ast.FunctionDef) -> bool:
-        """Check whether a helper's returns have to be lowered onto a merge variable.
-
-        A lone return that is the helper's final top-level statement does not: there is only one
-        exit, so the body runs as-is and the return expression is parsed at the call site. The
-        call then yields whatever that expression evaluates to, including Python-level values
-        such as tile groups, which have no IR representation to merge in the first place.
-
-        Every other shape -- an early return, a return nested in control flow, several returns,
-        or none at all -- goes through `_InlineReturnLowerer`.
-        """
-        body = [stmt for stmt in func_def.body if not CallParserMixin._is_docstring(stmt)]
-        returns = [node for node in ast.walk(func_def) if isinstance(node, ast.Return)]
-        return not (len(returns) == 1 and bool(body) and body[-1] is returns[0])
-
-    @staticmethod
     def _is_docstring(stmt: ast.stmt) -> bool:
         """Check if an AST statement is a docstring (string constant expression)."""
         return isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, str)
@@ -718,8 +703,7 @@ class CallParserMixin:
 
         A directly inlined parameter normally aliases the caller expression.  If
         the helper assigns to it, however, it needs its own IR definition before
-        entering control flow so ConvertToSSA can carry it through branches and
-        loops.
+        entering control flow so the parser can carry it through branches and loops.
         """
         param_names = {param.arg for param in params}
         assigned: set[str] = set()
@@ -1442,7 +1426,6 @@ class CallParserMixin:
             )
 
         old_closure = self.expr_evaluator.closure_vars
-        old_const_env = self.const_env
         self.expr_evaluator.closure_vars = {**template.closure_vars, **old_closure}
         try:
             bound = self._bind_inline_arguments(func_name, template.func_def, call, span)
@@ -1457,14 +1440,11 @@ class CallParserMixin:
             func_def = copy.deepcopy(template.func_def)
             renamer = _InlineLocalRenamer(local_names, prefix)
             body = [renamer.visit(stmt) for stmt in func_def.body if not self._is_docstring(stmt)]
-            needs_return_lowering = not template.is_vector_function and self._needs_return_lowering(func_def)
-            trailing_return = None
-            if needs_return_lowering:
-                body = _InlineReturnLowerer(return_val_name, returned_name).lower(body)
+            lower_inline_return = not template.is_vector_function
+            if lower_inline_return:
+                body = _InlineReturnLowerer(return_val_name, returned_name).lower(body, func_def)
             else:
                 ast.fix_missing_locations(func_def)
-                if not template.is_vector_function and body and isinstance(body[-1], ast.Return):
-                    trailing_return = body.pop()
 
             locked_vf_refs: list = []
             if template.is_vector_function and self._auto_mutex:
@@ -1481,7 +1461,6 @@ class CallParserMixin:
             if template.is_vector_function:
                 self.inline_vf_depth += 1
             self.scope_manager.enter_scope("inline")
-            self.const_env = dict(self.const_env)
 
             old_span_tracker = self.span_tracker
             self.span_tracker = template.span_tracker
@@ -1500,33 +1479,38 @@ class CallParserMixin:
                     else:
                         value = expr
                     self.scope_manager.define_var(renamed_name, value, allow_redef=True)
-                    self._update_const_env(renamed_name, expr)
+                    self._update_var_envs(value, expr)
+
+                if lower_inline_return:
+                    undefined_return = self.builder.var(return_val_name, ir.NoneType.get(), span)
+                    self._mark_empty_control_flow_value(undefined_return)
+                    self.scope_manager.define_var(
+                        return_val_name, undefined_return, allow_redef=True, span=span
+                    )
+                    if self._auto_mutex:
+                        self._tile_mutex_meta[undefined_return] = (
+                            (ir.ConstInt(-1, ir.DataType.INDEX, span),),
+                            [],
+                        )
 
                 if is_outermost_vf:
                     with self.builder.section(ir.SectionKind.VF, span):
                         self.scope_manager.enter_scope("section")
                         try:
-                            for stmt in body:
-                                self.parse_statement(stmt)
+                            self._parse_statement_list(body)
                         finally:
                             self.scope_manager.exit_scope(leak_vars=False)
                 else:
-                    for stmt in body:
-                        self.parse_statement(stmt)
+                    self._parse_statement_list(body)
                 if template.is_vector_function:
                     return None
-                if needs_return_lowering:
-                    return self.scope_manager.lookup_var_bounded(return_val_name)
-                if trailing_return is not None and trailing_return.value is not None:
-                    return self.parse_expression(trailing_return.value)
-                return None
+                return self.lookup_expr_by_name(return_val_name)
             finally:
                 self.span_tracker = old_span_tracker
                 self.scope_manager.exit_scope(leak_vars=False)
                 self.inline_call_stack.pop()
                 if template.is_vector_function:
                     self.inline_vf_depth -= 1
-                self.const_env = old_const_env
                 if locked_vf_refs:
                     self._emit_inline_vf_mutex_unlock(locked_vf_refs, span)
         finally:

@@ -2228,6 +2228,11 @@ class IRBuilder:
             The created continue statement
         """
 
+    def update_jump_values(
+        self, jump_op: YieldStmt | BreakStmt | ContinueStmt, values: list[Expr]
+    ) -> None:
+        """Replace values carried by a control-flow jump during IR construction."""
+
     @overload
     def create_function(
         self,
@@ -2389,6 +2394,7 @@ def type_equal(a: Expr, b: Expr) -> bool:
         True if the types are equal, False otherwise
     """
 
+
 class Pass:
 
     def __call__(self, program: Program):
@@ -2397,10 +2403,6 @@ class Pass:
         Args:
             program: Program to apply the pass on
         """
-
-    @staticmethod
-    def convert_to_ssa() -> Pass:
-        """Convert the program to SSA form."""
 
     @staticmethod
     def init_mem_ref() -> Pass:

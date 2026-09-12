@@ -11,10 +11,19 @@
 
 from __future__ import annotations
 
-__all__ = ["_const_int_value", "_is_const_int"]
-
+__all__ = ["_const_int_value", "_is_const_expr", "_is_const_int"]
 
 from pypto.pypto_impl import ir
+
+
+def _is_const_expr(expr: object) -> bool:
+    """Return whether an IR expression is a recursively constant value."""
+    if isinstance(expr, (ir.ConstInt, ir.ConstBool, ir.ConstFloat)):
+        return True
+    return (
+        isinstance(expr, ir.MakeTuple)
+        and all(_is_const_expr(element) for element in expr.elements)
+    )
 
 
 def _is_const_int(value: object) -> bool:

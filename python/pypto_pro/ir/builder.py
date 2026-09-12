@@ -65,6 +65,7 @@ class IRBuilder:
         self.builder = CppIRBuilder()
         self._begin_spans: dict[int, ir.Span] = {}  # Track begin spans for multi-line contexts
         self._ctx_counter = 0  # Counter for unique context IDs
+        self._all_vars: dict[str, str] = {}
 
     @staticmethod
     def capture_call_span() -> ir.Span:
@@ -129,6 +130,7 @@ class IRBuilder:
         self._begin_spans[ctx_id] = begin_span
 
         self.builder.begin_function(name, begin_span, func_type)
+        self._all_vars.clear()
         builder_obj = FunctionBuilder(self)
         try:
             yield builder_obj
@@ -348,7 +350,19 @@ class IRBuilder:
             Var: The created variable
         """
         actual_span = span if span is not None else self.capture_call_span()
-        return self.builder.var(name, var_type, actual_span)
+        var_name = self._new_var_name(name)
+        return self.builder.var(var_name, var_type, actual_span)
+
+    def _new_var_name(self, name: str) -> str:
+        """Allocate the next physical SSA name for one source-level name."""
+        origin = self._all_vars.get(name, name)
+        index = 0
+        var_name = f"{origin}_{index}"
+        while var_name in self._all_vars:
+            index += 1
+            var_name = f"{origin}_{index}"
+        self._all_vars[var_name] = origin
+        return var_name
 
     def assign(
         self,
@@ -450,7 +464,7 @@ class IRBuilder:
         else:
             final_type = inferred_type
 
-        var = self.builder.var(name, final_type, actual_span)
+        var = self.var(name, final_type, actual_span)
         self.builder.assign(var, value_expr, actual_span)
         return var
 
@@ -760,7 +774,8 @@ class FunctionBuilder:
             Var: The parameter variable
         """
         actual_span = span if span is not None else self.builder.capture_call_span()
-        return self.builder.builder.func_arg(name, param_type, actual_span)
+        param_name = self.builder._new_var_name(name)
+        return self.builder.builder.func_arg(param_name, param_type, actual_span)
 
     def return_type(self, ret_type: ir.Type) -> None:
         """Add return type to the function.

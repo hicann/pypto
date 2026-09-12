@@ -186,6 +186,7 @@ __all__ = [
     "min",
     "max",
     "const",
+    "astype",
     # Control flow
     "range",
     "section_vector",
@@ -282,6 +283,7 @@ from ._api import (
     and_,
     argmax,
     argmin,
+    astype,
     axpy,
     cast,
     const,

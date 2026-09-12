@@ -38,23 +38,28 @@ def _mixed_multi_mutex_ids_kernel(x: pl.Tensor[[64, 32], pl.DT_FP16]):
 def test_cce_dynamic_mutex_dedup_skips_same_tile_comparisons():
     cpp = _compile_to_cce(_mixed_multi_mutex_ids_kernel)
 
-    same_tile_guard = "(output_tile__mutexid_1_0 != output_tile__mutexid_0)"
+    source_mutex = "_tg_source_group_mutex_ids_0[index_0]"
+    output_mutex0 = "_tg_output_group_mutex_ids_0[index_0]"
+    output_mutex1 = "_tg_output_group_mutex_ids_1_0[index_0]"
+    same_tile_guard = f"({output_mutex1} != {output_mutex0})"
     cross_tile_guard = (
-        "(source_tile__mutexid_0 != output_tile__mutexid_0) && "
-        "(source_tile__mutexid_0 != output_tile__mutexid_1_0)"
+        f"({source_mutex} != {output_mutex0}) && "
+        f"({source_mutex} != {output_mutex1})"
     )
+    assert "source_tile__mutexid" not in cpp
+    assert "output_tile__mutexid" not in cpp
     assert same_tile_guard not in cpp
     assert cpp.count(cross_tile_guard) == 2
-    assert cpp.count("get_buf(PIPE_S, output_tile__mutexid_0, 0);") == 2
-    assert cpp.count("get_buf(PIPE_S, output_tile__mutexid_1_0, 0);") == 2
-    assert cpp.count("rls_buf(PIPE_S, output_tile__mutexid_1_0, 0);") == 2
-    assert cpp.count("rls_buf(PIPE_S, output_tile__mutexid_0, 0);") == 2
+    assert cpp.count(f"get_buf(PIPE_S, {output_mutex0}, 0);") == 2
+    assert cpp.count(f"get_buf(PIPE_S, {output_mutex1}, 0);") == 2
+    assert cpp.count(f"rls_buf(PIPE_S, {output_mutex1}, 0);") == 2
+    assert cpp.count(f"rls_buf(PIPE_S, {output_mutex0}, 0);") == 2
 
-    acquire_output0 = cpp.index("get_buf(PIPE_V, output_tile__mutexid_0, 0);")
-    acquire_output1 = cpp.index("get_buf(PIPE_V, output_tile__mutexid_1_0, 0);", acquire_output0)
+    acquire_output0 = cpp.index(f"get_buf(PIPE_V, {output_mutex0}, 0);")
+    acquire_output1 = cpp.index(f"get_buf(PIPE_V, {output_mutex1}, 0);", acquire_output0)
     acquire_source = cpp.index(cross_tile_guard, acquire_output1)
-    release_output0 = cpp.index("rls_buf(PIPE_V, output_tile__mutexid_0, 0);", acquire_source)
-    release_output1 = cpp.index("rls_buf(PIPE_V, output_tile__mutexid_1_0, 0);", release_output0)
+    release_output0 = cpp.index(f"rls_buf(PIPE_V, {output_mutex0}, 0);", acquire_source)
+    release_output1 = cpp.index(f"rls_buf(PIPE_V, {output_mutex1}, 0);", release_output0)
     release_source = cpp.index(cross_tile_guard, release_output1)
     assert acquire_output0 < acquire_output1 < acquire_source
     assert release_output0 < release_output1 < release_source

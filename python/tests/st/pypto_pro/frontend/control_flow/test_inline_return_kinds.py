@@ -349,8 +349,8 @@ def _for_if_return(limit):
     """for 套 if return:break 只跳出 for,循环后要再判一次 returned 才跳出 helper。"""
     for index in pl.range(0, limit, 1):
         if index >= 2:
-            return index * 10
-    return limit
+            return pl.astype(index * 10, pl.DT_INT32)
+    return pl.astype(limit, pl.DT_INT32)
 
 
 def _if_for_return(flag, limit):
@@ -358,16 +358,16 @@ def _if_for_return(flag, limit):
     if flag:
         for index in pl.range(0, limit, 1):
             if index >= 3:
-                return index * 100
-        return 0
-    return limit
+                return pl.astype(index * 100, pl.DT_INT32)
+        return pl.astype(0, pl.DT_INT32)
+    return pl.astype(limit, pl.DT_INT32)
 
 
 def _then_only_return(value):
     """只有 then 分支 return,另一条边落到 if 之后的 return。"""
     if value > 4:
-        return value + 1
-    return value
+        return pl.astype(value + 1, pl.DT_INT32)
+    return pl.astype(value, pl.DT_INT32)
 
 
 def _else_only_return(value):
@@ -375,16 +375,16 @@ def _else_only_return(value):
     if value > 4:
         value = value + 1
     else:
-        return 0
-    return value
+        return pl.astype(0, pl.DT_INT32)
+    return pl.astype(value, pl.DT_INT32)
 
 
 def _both_branches_return(value):
     """两个分支都 return:if 合流出来的值没有任何可达的使用者。"""
     if value > 4:
-        return value + 1
+        return pl.astype(value + 1, pl.DT_INT32)
     else:
-        return value - 1
+        return pl.astype(value - 1, pl.DT_INT32)
 
 
 @pl.jit()

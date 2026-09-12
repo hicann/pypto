@@ -21,7 +21,7 @@ from pypto_pro.ir._operators import make_binary as _make_binary
 from pypto_pro.ir._utils import _normalize_expr
 
 from ._expr_evaluator import ExprEvaluator
-from ._utils import _const_int_value
+from ._utils import _const_int_value, _is_const_expr
 from .diagnostics import (
     FinalRejectionError,
     ParserSyntaxError,
@@ -46,25 +46,21 @@ def _is_enum_value(value: Any) -> bool:
     )
 
 
-def _scalar_branches_reconcilable(then_type: Any, else_type: Any) -> bool:
-    """Whether two ternary branch types differ only by same-category scalar dtype.
-
-    Such pairs (e.g. ``INT32`` from a tensor read vs ``INDEX`` from a shape access, or
-    two float widths) are promoted to a common dtype when the if statement is finalized
-    in the builder, mirroring the promotion binary operators already perform. Non-scalar
-    or cross-category (int vs float) mismatches are not reconcilable here.
-    """
-    if not isinstance(then_type, ir.ScalarType) or not isinstance(else_type, ir.ScalarType):
-        return False
-    then_dtype = then_type.dtype
-    else_dtype = else_type.dtype
-    both_int = then_dtype.is_int() and else_dtype.is_int()
-    both_float = then_dtype.is_float() and else_dtype.is_float()
-    return both_int or both_float
-
-
 class ExpressionParserMixin:
     """Mixin containing expression, attribute, and subscript parsing."""
+
+    def lookup_expr_by_name(self, name: str) -> Any | None:
+        """Resolve a parser name to its current expression."""
+        value = self.scope_manager.lookup_var_bounded(name)
+        if not isinstance(value, ir.Var):
+            return value
+
+        constant = self.const_env.get(value.name)
+        if constant is not None:
+            return constant
+
+        make_tuple = self.make_tuple_env.get(value.name)
+        return make_tuple if make_tuple is not None else value
 
     def local_binding(self, name: str) -> "tuple[str, Any] | None":
         """How *name* is bound inside the kernel, or None if it is not bound there.
@@ -73,6 +69,8 @@ class ExpressionParserMixin:
         parsing and by compile-time evaluation so the two cannot disagree:
 
         * ``("const", <IR constant>)`` — folded in ``const_env`` (``addr = 0x10000``);
+        * ``("runtime", <MakeTuple>)`` — an immutable tuple expression containing
+          one or more runtime values;
         * ``("parse_time", <object>)`` — bound to a value that has no IR form and
           therefore only exists while parsing (``dt = pl.DT_FP16``);
         * ``("runtime", <IR expression>)`` — a value that only exists at run time.
@@ -80,13 +78,18 @@ class ExpressionParserMixin:
         A name not bound in the kernel returns None and falls back to the
         enclosing Python scope, matching Python's own scoping.
         """
-        const = self.const_env.get(name)
-        if const is not None:
-            return ("const", const)
-        scoped = self.scope_manager.lookup_var_bounded(name)
-        if scoped is None:
+        value = self.lookup_expr_by_name(name)
+        if value is None:
             return None
-        return ("runtime", scoped) if isinstance(scoped, ir.Expr) else ("parse_time", scoped)
+        if isinstance(value, ir.Expr) and isinstance(value.type, ir.NoneType):
+            raise ParserTypeError(
+                f"Variable '{name}' has no valid type on every reachable control-flow path",
+                span=self._current_span(),
+                hint="Define the variable with one compatible type on every path before using it.",
+            )
+        if _is_const_expr(value):
+            return ("const", value)
+        return ("runtime", value) if isinstance(value, ir.Expr) else ("parse_time", value)
 
     @staticmethod
     def _const_scalar_value(expr: ir.Expr) -> bool | int | float | None:
@@ -297,9 +300,9 @@ class ExpressionParserMixin:
 
         A merge slot with no initial value is seeded with ``slot = None`` before its control
         flow. Treating that seed as a tile whose buffer is unknown gives the mutex-id companion
-        a definition at the same place, so ConvertToSSA carries the companion out of the loop in
-        lockstep with the slot itself and a use after the loop locks the buffer the run actually
-        selected. The empty candidate list marks the seed as holding no buffer of its own, and
+        a definition at the same place, so loop construction carries the companion in lockstep
+        with the slot itself and a use after the loop locks the buffer the run actually selected.
+        The empty candidate list marks the seed as holding no buffer of its own, and
         auto_mutex skips locking on it (see tile_mutex_lock_meta).
         """
         none_expr = self.builder.builder.none()
@@ -633,7 +636,6 @@ class ExpressionParserMixin:
         )
 
     def parse_ifexp(self, expr: ast.IfExp) -> ir.Expr:
-        span = self.span_tracker.get_span(expr)
         condition = self.parse_expression(expr.test)
 
         if isinstance(condition, (ir.ConstBool, ir.ConstInt)):
@@ -646,93 +648,32 @@ class ExpressionParserMixin:
                 self._reject_ternary_branch(result, chosen, "chosen", None)
             return result
 
+        for branch, branch_name in ((expr.body, "then"), (expr.orelse, "else")):
+            success, branch_value = self.expr_evaluator.try_eval_expr(branch)
+            if success and _is_enum_value(branch_value):
+                self._reject_ternary_branch(branch_value, branch, branch_name, expr.test)
+
         tmp_name = f"_ifexpr_tmp_{self._ifexpr_tmp_counter}"
         self._ifexpr_tmp_counter += 1
-
-        with self.builder.if_stmt(condition, span) as if_builder:
-            then_value = self.parse_expression(expr.body, nested=False)
-            if not isinstance(then_value, ir.Expr):
-                self._reject_ternary_branch(then_value, expr.body, "then", expr.test)
-            # auto_mutex: for a tile ternary, yield the chosen tile's mutex id alongside the
-            # tile so ConvertToSSA phi-merges the id in lockstep with the pointer (arbitrary
-            # nesting). Probe each branch's id expr; both must be tiles-with-meta to add it.
-            then_mutexids, then_ids = self._ternary_branch_mutexid(then_value)
-            if_builder.return_var(tmp_name, then_value.type, span)
-            if then_mutexids is not None:
-                for index in range(len(then_mutexids)):
-                    suffix = "" if index == 0 else f"_{index}"
-                    if_builder.return_var(
-                        f"{tmp_name}__mutexid{suffix}", ir.ScalarType(DataType.INDEX), span
-                    )
-                self.builder.emit(ir.YieldStmt([then_value, *then_mutexids], span))
-            else:
-                self.builder.emit(ir.YieldStmt([then_value], span))
-
-            if_builder.else_(span)
-            else_value = self.parse_expression(expr.orelse, nested=False)
-            if not isinstance(else_value, ir.Expr):
-                self._reject_ternary_branch(else_value, expr.orelse, "else", expr.test)
-            if not ir.structural_equal(
-                then_value.type, else_value.type, enable_auto_mapping=False
-            ) and not _scalar_branches_reconcilable(then_value.type, else_value.type):
-                raise ParserTypeError(
-                    f"Ternary expression branches have mismatched types: "
-                    f"then-branch has type {then_value.type}, "
-                    f"else-branch has type {else_value.type}",
-                    span=span,
-                    hint="A ternary yields one value, so both branches must land in the same "
-                    "variable: cast the narrower branch, or split the ternary into an if/else "
-                    "that assigns each type separately.",
-                )
-            # Same-category scalar branches with differing dtypes (e.g. INT32 vs INDEX)
-            # are promoted to a common dtype when the if statement is finalized.
-            else_mutexids, else_ids = self._ternary_branch_mutexid(else_value)
-            # Mutex return vars are declared in the then branch based only on
-            # then_mutexids; both branches must then yield the same arity. If one branch is a
-            # tile-with-mutex and the other is not, we cannot honor that -> reject explicitly
-            # rather than emit an ill-formed if (mismatched yield count).
-            if (then_mutexids is None) != (else_mutexids is None):
-                raise ParserTypeError(
-                    "Ternary selecting a tile must have both branches carry a mutex id; "
-                    "one branch has no tile mutex metadata",
-                    span=span,
-                    hint="Ensure both branches are tiles from a tile_group (auto_mutex), "
-                         "or neither is",
-                )
-            if then_mutexids is not None and else_mutexids is not None:
-                if len(then_mutexids) != len(else_mutexids):
-                    raise ParserTypeError(
-                        f"cannot merge tile mutex metadata with different ID counts: "
-                        f"{len(then_mutexids)} and {len(else_mutexids)}",
-                        span=span,
-                    )
-                self.builder.emit(ir.YieldStmt([else_value, *else_mutexids], span))
-            else:
-                self.builder.emit(ir.YieldStmt([else_value], span))
-
-        return_var = if_builder.output(0)
-        self.scope_manager.define_var(tmp_name, return_var, span=span)
-
-        # The remaining outputs are mutex-id phis. Record them on the result like a plain
-        # tile's mutex meta, so the use site (and any enclosing ternary) reads it through the
-        # single _tile_mutex_meta path -- each buf_id is a runtime-chosen id var.
-        if then_mutexids is not None and else_mutexids is not None:
-            mutexid_vars = tuple(if_builder.output(index + 1) for index in range(len(then_mutexids)))
-            union_ids = list(dict.fromkeys(list(then_ids) + list(else_ids)))
-            self._tile_mutex_meta[return_var] = (mutexid_vars, union_ids)
-
-        return return_var
-
-    def _ternary_branch_mutexid(self, branch_value):
-        """Return ``(buf_ids, mutex_ids)`` for a ternary branch, or ``(None, None)``.
-
-        Both a plain tile and a nested ternary result carry their id in _tile_mutex_meta
-        (every buf_id is an ir.Expr: ConstInt / slot GetItemExpr / companion var), so
-        the meta tuple can be returned as-is; nesting chains through the same lookup.
-        """
-        if not self._auto_mutex:
-            return None, None
-        return self._tile_mutex_meta.get(branch_value) or (None, None)
+        then_assign = ast.copy_location(
+            ast.Assign(targets=[ast.Name(id=tmp_name, ctx=ast.Store())], value=expr.body),
+            expr.body,
+        )
+        else_assign = ast.copy_location(
+            ast.Assign(targets=[ast.Name(id=tmp_name, ctx=ast.Store())], value=expr.orelse),
+            expr.orelse,
+        )
+        lowered_if = ast.copy_location(
+            ast.If(test=expr.test, body=[then_assign], orelse=[else_assign]),
+            expr,
+        )
+        ast.fix_missing_locations(lowered_if)
+        self.parse_if_statement(lowered_if)
+        result = self.lookup_expr_by_name(tmp_name)
+        if not isinstance(result, ir.Expr):
+            branch = expr.body if result is None else expr.orelse
+            self._reject_ternary_branch(result, branch, "runtime", expr.test)
+        return result
 
     def make_named_tuple(self, elements: list, field_names, span: ir.Span) -> ir.Expr:
         """Build a named ``MakeTuple`` and record its type's field names.
@@ -810,22 +751,6 @@ class ExpressionParserMixin:
             IR expression
         """
         span = self.span_tracker.get_span(attr)
-
-        if isinstance(attr.value, ast.Name):
-            obj_name = attr.value.id
-            field_name = attr.attr
-
-            # Scope holds the let-bound Var; the original MakeTuple (if any)
-            # lives in const_env. Fold the const MakeTuple read first, then
-            # fall back to the runtime Var for a GetItemExpr lowering.
-            obj_expr = self.scope_manager.lookup_var_bounded(obj_name)
-            if isinstance(obj_expr, ir.Expr):
-                const_obj = self.const_env.get(obj_name)
-                if isinstance(const_obj, ir.MakeTuple) and not self._is_struct_array_tuple(const_obj):
-                    obj_expr = const_obj
-                lowered = self.lower_attr_access(obj_expr, field_name, span)
-                if lowered is not None:
-                    return lowered
 
         # Generic pybind enum constant (pl.MemorySpace.Vec, pl.RoundMode.CAST_FLOOR,
         # pl.DT_FP16, pl.QuantMode.SYM, pl.STPhase.Partial, ...): evaluate the
@@ -977,23 +902,17 @@ class ExpressionParserMixin:
             self._tile_mutex_meta[item_expr] = meta
         return item_expr
 
-    def _is_const_expr(self, expr: Any) -> bool:
-        """Return whether *expr* is a parser-propagatable IR constant."""
-        if isinstance(expr, (ir.ConstInt, ir.ConstBool, ir.ConstFloat)):
-            return True
-        # MakeTuple is immutable.  struct_array is the sole exception because
-        # its elements are mutable structs whose static and dynamic accesses
-        # must share CCE's backing array.
-        return isinstance(expr, ir.MakeTuple) and not self._is_struct_array_tuple(expr)
-
     def _is_struct_array_tuple(self, tuple_value: ir.MakeTuple) -> bool:
         return tuple_value in self._struct_array_tuples
 
-    def _update_const_env(self, name: str, value: Any) -> None:
-        if isinstance(value, ir.Expr) and self._is_const_expr(value):
-            self.const_env[name] = value
-        else:
-            self.const_env.pop(name, None)
+    def _update_var_envs(self, target: Any, value: Any) -> None:
+        """Record parser-known values under the destination's physical SSA name."""
+        if not isinstance(target, ir.Var):
+            return
+        if _is_const_expr(value):
+            self.const_env[target.name] = value
+        if isinstance(value, ir.MakeTuple) and not self._is_struct_array_tuple(value):
+            self.make_tuple_env[target.name] = value
 
     def _fold_const_binop(self, op_name: str, operation: ir.BinaryExpr, span: ir.Span) -> ir.Expr | None:
         """Fold a validated binary scalar operation using its promoted operands."""
@@ -1114,18 +1033,6 @@ class ExpressionParserMixin:
             span=span,
             hint="Use: x in (a, b, c), x in pl.range(10), or x in <compile-time-list>",
         )
-
-    def _restore_tuple_var_for_unfolded_getitem(self, value_expr: ir.Expr) -> ir.Expr:
-        """Recover a tuple Var when an un-folded GetItem has its MakeTuple value."""
-        if not isinstance(value_expr, ir.MakeTuple):
-            return value_expr
-        for name, const_value in self.const_env.items():
-            if const_value is not value_expr:
-                continue
-            scoped_value = self.scope_manager.lookup_var_bounded(name)
-            if isinstance(scoped_value, ir.Expr) and isinstance(scoped_value.type, ir.TupleType):
-                return scoped_value
-        return value_expr
 
     def _parse_tensor_shape_subscript(
         self,

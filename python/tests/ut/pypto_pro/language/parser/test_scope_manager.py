@@ -10,7 +10,16 @@
 # -----------------------------------------------------------------------------------------------------------
 """Unit tests for ScopeManager."""
 
-from pypto_pro.language.parser._scope_manager import ScopeManager, SSAViolationError
+from pypto_pro import ir
+from pypto_pro.language.parser._scope_manager import (
+    ConstantState,
+    ControlFlowInfo,
+    JumpKind,
+    PhiState,
+    ScopeManager,
+    SSAViolationError,
+)
+from pypto_pro.language.parser.diagnostics import ParserTypeError
 import pytest
 
 
@@ -158,3 +167,148 @@ def test_scope_isolation():
     assert sm.is_defined("x")
     # y is no longer accessible after exiting its scope
     assert not sm.is_defined("y")
+
+
+def test_control_flow_info_contexts_restore_nested_state():
+    sm = ScopeManager()
+    outer_loop = ControlFlowInfo(("loop_value",))
+    inner_loop = ControlFlowInfo(("nested_value",))
+    branch = ControlFlowInfo(("branch_value",))
+
+    with sm.change_loop_info(outer_loop):
+        assert sm.loop_info is outer_loop
+        with sm.change_if_info(branch), sm.change_loop_info(inner_loop):
+            assert sm.if_info is branch
+            assert sm.loop_info is inner_loop
+        assert sm.if_info is None
+        assert sm.loop_info is outer_loop
+
+    assert sm.loop_info is None
+
+
+def test_local_scope_keeps_first_jump_kind():
+    sm = ScopeManager()
+    sm.enter_scope("if")
+    local = sm.current_scope
+
+    local.set_jump(JumpKind.BREAK)
+    local.set_jump(JumpKind.YIELD)
+
+    assert local.jump_kind is JumpKind.BREAK
+
+
+def test_phi_state_merges_type_and_equal_constants():
+    span = ir.Span.unknown()
+    state = PhiState()
+    first_value = ir.ConstInt(1, ir.DataType.INT32, span)
+    second_value = ir.ConstInt(1, ir.DataType.INT32, span)
+
+    state.propagate(first_value)
+    state.propagate(second_value)
+
+    assert isinstance(state.ty, ir.ScalarType)
+    assert state.ty.dtype == ir.DataType.INT32
+    assert state.constant_state is ConstantState.MAY_BE_CONSTANT
+    assert ir.structural_equal(state.constant_value, first_value, enable_auto_mapping=False)
+
+
+def test_phi_state_merges_tuple_as_one_constant_value():
+    span = ir.Span.unknown()
+    state = PhiState()
+    first_value = ir.MakeTuple(
+        [
+            ir.ConstInt(1, ir.DataType.INT32, span),
+            ir.ConstInt(2, ir.DataType.INT32, span),
+        ],
+        span,
+    )
+    second_value = ir.MakeTuple(
+        [
+            ir.ConstInt(1, ir.DataType.INT32, span),
+            ir.ConstInt(2, ir.DataType.INT32, span),
+        ],
+        span,
+    )
+
+    state.propagate(first_value)
+    state.propagate(second_value)
+
+    assert isinstance(state.ty, ir.TupleType)
+    assert state.constant_state is ConstantState.MAY_BE_CONSTANT
+    assert ir.structural_equal(state.constant_value, first_value, enable_auto_mapping=False)
+
+
+def test_phi_state_does_not_keep_partially_equal_tuple_constant():
+    span = ir.Span.unknown()
+    state = PhiState()
+    first_value = ir.MakeTuple(
+        [
+            ir.ConstInt(1, ir.DataType.INT32, span),
+            ir.ConstInt(2, ir.DataType.INT32, span),
+        ],
+        span,
+    )
+    second_value = ir.MakeTuple(
+        [
+            ir.ConstInt(1, ir.DataType.INT32, span),
+            ir.ConstInt(3, ir.DataType.INT32, span),
+        ],
+        span,
+    )
+    state.propagate(first_value)
+    state.propagate(second_value)
+
+    assert isinstance(state.ty, ir.TupleType)
+    assert state.constant_state is ConstantState.NONCONSTANT
+    assert state.constant_value is None
+
+
+def test_phi_state_marks_mismatched_runtime_types_invalid():
+    span = ir.Span.unknown()
+    state = PhiState()
+    first = ir.Var("first", ir.ScalarType(ir.DataType.INT32), span)
+    second = ir.Var("second", ir.ScalarType(ir.DataType.INT64), span)
+
+    state.propagate(first)
+    state.propagate(second)
+
+    assert isinstance(state.ty, ir.NoneType)
+
+
+def test_phi_state_keeps_none_as_an_invalid_type():
+    span = ir.Span.unknown()
+    state = PhiState()
+    none_value = ir.Var("None", ir.NoneType.get(), span)
+    int_value = ir.Var("value", ir.ScalarType(ir.DataType.INT32), span)
+
+    state.propagate(none_value)
+    state.propagate(int_value)
+
+    assert isinstance(state.ty, ir.NoneType)
+
+
+def test_phi_state_eager_invalid_fails_only_after_a_concrete_type():
+    span = ir.Span.unknown()
+    invalid = ir.Var("invalid", ir.NoneType.get(), span)
+    concrete = ir.Var("concrete", ir.ScalarType(ir.DataType.INT32), span)
+
+    state = PhiState()
+    state.propagate(invalid, fail_eagerly=True)
+    state.propagate(concrete, fail_eagerly=True)
+    assert isinstance(state.ty, ir.NoneType)
+
+    concrete_first = PhiState()
+    concrete_first.propagate(concrete)
+    with pytest.raises(ParserTypeError, match="invalid type"):
+        concrete_first.propagate(invalid, fail_eagerly=True)
+
+
+def test_phi_state_can_start_nonconstant_for_loop_body():
+    span = ir.Span.unknown()
+    constant = ir.ConstInt(1, ir.DataType.INT32, span)
+    state = PhiState(constant_state=ConstantState.NONCONSTANT)
+
+    state.propagate(constant)
+
+    assert state.constant_state is ConstantState.NONCONSTANT
+    assert state.constant_value is None

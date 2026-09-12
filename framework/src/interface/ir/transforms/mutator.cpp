@@ -150,7 +150,8 @@ ProgramPtr IRMutator::VisitProgram(const ProgramPtr& program)
     if (!changed) {
         return program;
     }
-    return std::make_shared<const Program>(std::move(new_functions), program->name_, program->span_);
+    return std::make_shared<const Program>(std::move(new_functions), program->name_, program->span_,
+                                           program->debugInfo_);
 }
 
 FunctionPtr IRMutator::VisitFunction(const FunctionPtr& func)

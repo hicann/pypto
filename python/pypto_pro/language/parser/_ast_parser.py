@@ -29,7 +29,7 @@ from ._call_parser import CallParserMixin, _check_type_compatible
 from ._control_flow_parser import ControlFlowParserMixin, validate_single_tail_return
 from ._expr_evaluator import ExprEvaluator
 from ._expression_parser import ExpressionParserMixin
-from ._scope_manager import ScopeManager
+from ._scope_manager import JumpKind, ScopeManager
 from ._span_tracker import SpanTracker
 from ._struct_parser import StructParserMixin
 from ._type_resolver import TypeResolver
@@ -134,7 +134,7 @@ class ASTParser(
         # Keep the Expr itself as the key. A bare id(expr) does not retain the
         # Python IR wrapper and can be reused by an unrelated expression.
         self._tile_mutex_meta: dict[ir.Expr, tuple] = {}
-        self.scope_manager = ScopeManager(strict_ssa=strict_ssa, tile_mutex_meta=self._tile_mutex_meta)
+        self.scope_manager = ScopeManager(strict_ssa=strict_ssa)
         self._tilingkey_consts = tilingkey_consts
         self._datatype_consts = datatype_consts
         # Concrete tilingkey field values (per launch key) are injected as closure constants
@@ -148,7 +148,8 @@ class ASTParser(
         # local_binding lets every compile-time position (make_tile_group addrs/mutex_ids,
         # shapes, axes, ``x in <list>``, ...) read kernel-local names such as
         # ``addr = 0x10000``, which live in the parser rather than in the closure.
-        # Bound as a method: const_env is created further down and swapped during inlining.
+        # Bound as a method: const_env is created further down and remains append-only
+        # because its keys are globally unique physical SSA names.
         self.expr_evaluator = ExprEvaluator(
             closure_vars=merged_closure,
             span_tracker=self.span_tracker,
@@ -191,10 +192,20 @@ class ASTParser(
         self._ifexpr_tmp_counter: int = 0
         # Maps group Expr objects -> (depth, per-tile mutex IDs, memory).
         self.tile_group_meta: dict[ir.Expr, tuple] = {}
+        # Tile-group handles use TupleType in IR. Retain their exact types so
+        # control-flow merging can reject handles nested inside other tuples.
+        self._tile_group_types: list[ir.TupleType] = []
         # Parser-only constant environment. Runtime bindings remain exclusively in
-        # ScopeManager as Vars; this map only says which names can safely be
-        # substituted while parsing the current control-flow path.
+        # ScopeManager as Vars; this map records constants by physical SSA name.
         self.const_env: dict[str, ir.Expr] = {}
+        # Immutable tuple expressions remain addressable through their physical SSA
+        # names even when their elements are runtime values. This is separate from
+        # const_env so dynamic tuples do not participate in constant propagation.
+        self.make_tuple_env: dict[str, ir.MakeTuple] = {}
+        # Physical SSA names that only carry the valueless initial retval used by
+        # inline-return lowering.  They are valid IR operands, but not semantic
+        # inputs to control-flow type or constant inference.
+        self._empty_control_flow_values: set[str] = set()
         # struct_array is the sole mutable tuple container and must retain
         # GetItemExpr alias semantics; every other MakeTuple is immutable.
         self._struct_array_tuples: set[ir.MakeTuple] = set()
@@ -386,14 +397,16 @@ class ASTParser(
                     self.scope_manager.enter_scope("section")
                     self.inline_vf_depth += 1
                     try:
-                        for stmt in body_stmts:
-                            self.parse_statement(stmt)
+                        self._parse_statement_list(body_stmts)
                     finally:
                         self.inline_vf_depth -= 1
                         self.scope_manager.exit_scope(leak_vars=False)
             else:
-                for stmt in body_stmts:
-                    self.parse_statement(stmt)
+                self._parse_statement_list(body_stmts)
+
+            if self.scope_manager.current_scope.jump_kind is None:
+                self.builder.emit(ir.ReturnStmt([], self._current_span()))
+                self.scope_manager.current_scope.set_jump(JumpKind.RETURN)
 
         self.scope_manager.exit_scope()
         result = f.get_result()
@@ -516,23 +529,24 @@ class ASTParser(
     def _parse_pass_statement(self, stmt: ast.Pass) -> None:
         pass  # No-op: pass statements are valid in DSL functions
 
-    def _transfer_tile_sync_metadata(self, var: ir.Var, value_expr: ir.Expr | None = None) -> None:
-        """Transfer tile sync metadata from value expression to the assigned variable.
+    def _transfer_tile_sync_metadata(
+        self, target: ir.Expr, value_expr: ir.Expr | None = None
+    ) -> None:
+        """Transfer tile sync metadata from a value expression to its target expression.
 
-        When ``var = value_expr``, re-key any tile-group or tile-mutex metadata
-        stored under ``value_expr`` to ``var``, so that subsequent
-        auto_mutex lookups on the variable name find the correct sync info.
+        When ``target = value_expr``, re-key any tile-group or tile-mutex metadata
+        stored under ``value_expr`` to ``target``, so that subsequent
+        auto_mutex lookups on the target find the correct sync info.
+        This updates parser metadata only and does not emit companion IR.
         """
         if value_expr is None:
             return
         gm = self.tile_group_meta.get(value_expr)
         if gm is not None:
-            self.tile_group_meta[var] = gm
-        mm = self._tile_mutex_meta.get(value_expr)
-        if mm is not None:
-            self._tile_mutex_meta[var] = mm
-            if isinstance(var, ir.Var):
-                self._coemit_tile_mutexid_companion(var, mm)
+            self.tile_group_meta[target] = gm
+        mutex_meta = self._tile_mutex_meta.get(value_expr)
+        if mutex_meta is not None:
+            self._tile_mutex_meta[target] = mutex_meta
 
     def _validate_tiling_params(
         self,
@@ -611,9 +625,9 @@ class ASTParser(
     def _hoist_closure_tuples(self) -> None:
         """Anchor convertible closure tuple/list values at function entry.
 
-        Name reads intentionally continue to fold through ``const_env`` to the
-        original MakeTuple.  The emitted lets exist only to give CCE a stable
-        lexical location for backing-array materialization.
+        Name reads intentionally continue to resolve to the original MakeTuple.
+        The emitted lets exist only to give CCE a stable lexical location for
+        backing-array materialization.
         """
         seen: dict[int, tuple[ir.MakeTuple, ir.Var]] = {}
         span = ir.Span.unknown()
@@ -626,7 +640,8 @@ class ASTParser(
             # Only flat sequences are anchored. A nested one is a multi-dimensional array,
             # which has no CCE backing-array form, so hoisting it would emit a tuple whose
             # elements have no C++ name of their own -- and the point of the hoist is to give
-            # the backing array a home. Names like these reach the body through const_env.
+            # the backing array a home. Names like these reach the body through
+            # the parser's value environments.
             if any(isinstance(v, (tuple, list)) for v in value):
                 continue
             entry = seen.get(id(value))
@@ -643,4 +658,4 @@ class ASTParser(
             else:
                 tuple_expr, tuple_var = entry
             self.scope_manager.define_var(var_name, tuple_var, allow_redef=True)
-            self.const_env[var_name] = tuple_expr
+            self._update_var_envs(tuple_var, tuple_expr)

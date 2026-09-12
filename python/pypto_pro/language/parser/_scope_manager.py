@@ -7,225 +7,252 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-"""Scope management and SSA verification for IR parsing."""
+"""Scope and control-flow state used while parsing Python into SSA IR."""
 
 from __future__ import annotations
 
-__all__ = ["ScopeManager", "SSAViolationError", "ScopeIsolationError"]
+__all__ = [
+    "ConstantState",
+    "ControlFlowInfo",
+    "JumpInfo",
+    "JumpKind",
+    "LocalScope",
+    "LoopVarState",
+    "PhiState",
+    "ScopeManager",
+    "SSAViolationError",
+    "ScopeIsolationError",
+]
 
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+import enum
 from typing import Any
 
-from pypto.pypto_impl.ir import Expr
-from pypto_pro.ir import Span
+from pypto.pypto_impl import ir
 
+from ._utils import _is_const_expr
 from .diagnostics import ParserTypeError, ScopeIsolationError, SSAViolationError
 
 
-class ScopeManager:
-    """Manages variable scopes and optionally enforces SSA properties."""
+class JumpKind(enum.Enum):
+    """Terminator kind for one parser-local code block."""
 
-    def __init__(
+    YIELD = "yield"
+    CONTINUE = "continue"
+    BREAK = "break"
+    RETURN = "return"
+
+
+@dataclass(frozen=True)
+class JumpInfo:
+    """One emitted terminator and the source values carried by its CFG edge."""
+
+    jump_op: ir.YieldStmt | ir.BreakStmt | ir.ContinueStmt | None
+    outputs: tuple[ir.Expr, ...]
+
+
+@dataclass
+class ControlFlowInfo:
+    """Merge state owned by one If or Loop operation."""
+
+    merge_names: tuple[str, ...]
+    flatten: bool = False
+    jumps: list[JumpInfo] = field(default_factory=list)
+
+
+class ConstantState(enum.Enum):
+    """Constant propagation state for one control-flow value."""
+
+    UNSET = 0
+    MAY_BE_CONSTANT = 1
+    NONCONSTANT = 2
+
+
+def _type_equal(lhs: ir.Type, rhs: ir.Type) -> bool:
+    return ir.structural_equal(lhs, rhs, enable_auto_mapping=False)
+
+
+@dataclass
+class PhiState:
+    """Cutile-compatible type and constant inference for one control-flow result."""
+
+    ty: ir.Type | None = None
+    last_span: ir.Span | None = None
+    constant_state: ConstantState = ConstantState.UNSET
+    constant_value: ir.Expr | None = None
+
+    def propagate(
         self,
-        strict_ssa: bool = False,
-        tile_mutex_meta: dict[Any, tuple[Any, Any]] | None = None,
-    ):
-        """Initialize scope manager.
+        src: ir.Expr,
+        *,
+        fail_eagerly: bool = False,
+    ) -> None:
+        """Merge one reachable predecessor using cutile's propagation order."""
+        src_ty = src.type
+        if self.ty is None:
+            self.ty = src_ty
+            self.last_span = src.span
+        elif isinstance(src_ty, ir.NoneType):
+            if fail_eagerly and not isinstance(self.ty, ir.NoneType):
+                raise ParserTypeError(
+                    "Loop-carried variable has an invalid type on a jump path",
+                    span=src.span,
+                )
+            self.ty = src_ty
+        elif not isinstance(self.ty, ir.NoneType):
+            if not _type_equal(self.ty, src_ty):
+                if fail_eagerly:
+                    raise ParserTypeError(
+                        f"Type depends on path taken: {src_ty} vs. {self.ty}",
+                        span=src.span,
+                    )
+                self.ty = ir.NoneType.get()
+            self.last_span = src.span
 
-        Args:
-            strict_ssa: If True, enforce SSA (single assignment per variable).
-                       If False (default), allow variable reassignment.
-            tile_mutex_meta: Shared parser metadata mapping tile expressions to
-                             their runtime mutex expression and candidate ids.
-        """
+        if isinstance(src_ty, ir.NoneType):
+            self.constant_state = ConstantState.NONCONSTANT
+            self.constant_value = None
+            return
+
+        if not _is_const_expr(src):
+            self.constant_state = ConstantState.NONCONSTANT
+            self.constant_value = None
+        elif self.constant_state is ConstantState.UNSET:
+            self.constant_state = ConstantState.MAY_BE_CONSTANT
+            self.constant_value = src
+        elif (
+            self.constant_state is ConstantState.MAY_BE_CONSTANT
+            and not ir.structural_equal(
+                self.constant_value, src, enable_auto_mapping=False
+            )
+        ):
+            self.constant_state = ConstantState.NONCONSTANT
+            self.constant_value = None
+
+
+@dataclass
+class LoopVarState:
+    """Separate loop-header and loop-result phi state for one carried variable."""
+
+    body_phi: PhiState
+    result_phi: PhiState
+
+
+@dataclass
+class LocalScope:
+    """Bindings and termination state for one lexical scope."""
+
+    scope_type: str
+    variables: dict[str, Any] = field(default_factory=dict)
+    jump_kind: JumpKind | None = None
+
+    def __contains__(self, name: str) -> bool:
+        return name in self.variables
+
+    def __getitem__(self, name: str) -> Any:
+        return self.variables[name]
+
+    def __setitem__(self, name: str, value: Any) -> None:
+        self.variables[name] = value
+
+    def items(self):
+        return self.variables.items()
+
+    def set_jump(self, kind: JumpKind) -> None:
+        if self.jump_kind is None:
+            self.jump_kind = kind
+
+
+class ScopeManager:
+    """Manage lexical bindings and the active If/Loop merge states."""
+
+    def __init__(self, strict_ssa: bool = False):
         self.strict_ssa = strict_ssa
-        self._tile_mutex_meta = tile_mutex_meta
-        self.scopes: list[dict[str, Any]] = [{}]  # Stack of scope dictionaries
-        self.assignments: dict[str, int] = {}  # Track assignment count per variable
-        self.scope_types: list[str] = ["global"]  # Track type of each scope
-        self.var_spans: list[dict[str, Span]] = [{}]  # Track span for each variable definition
-        self.mask_reg_vars: set[str] = set()  # Variable names declared as MaskReg
+        self.scopes: list[LocalScope] = [LocalScope("global")]
+        self.assignments: dict[str, int] = {}
+        self.mask_reg_vars: set[str] = set()
+        self.if_info: ControlFlowInfo | None = None
+        self.loop_info: ControlFlowInfo | None = None
+
+    @property
+    def current_scope(self) -> LocalScope:
+        return self.scopes[-1]
 
     def enter_scope(self, scope_type: str) -> None:
-        """Enter a new scope.
-
-        Args:
-            scope_type: Type of scope ('function', 'for', 'if')
-        """
-        self.scopes.append({})
-        self.var_spans.append({})
-        self.scope_types.append(scope_type)
+        self.scopes.append(LocalScope(scope_type))
 
     def exit_scope(self, leak_vars: bool = False) -> dict[str, Any]:
-        """Exit current scope and return defined variables.
-
-        Args:
-            leak_vars: If True, copy all variables from exiting scope to parent scope.
-                       Used for plain syntax where variables should be visible after for/if.
-
-        Returns:
-            Dictionary of variables defined in the exited scope
-        """
         if len(self.scopes) <= 1:
             raise RuntimeError("Cannot exit global scope")
 
-        scope_vars = self.scopes.pop()
-        self.var_spans.pop()
-        self.scope_types.pop()
+        local_scope = self.scopes.pop()
+        if leak_vars:
+            self.current_scope.variables.update(local_scope.variables)
+        return local_scope.variables
 
-        self._merge_tile_mutex_meta_to_outer(scope_vars, leak_vars)
+    @contextmanager
+    def change_if_info(self, info: ControlFlowInfo) -> Iterator[None]:
+        old_info, self.if_info = self.if_info, info
+        try:
+            yield
+        finally:
+            self.if_info = old_info
 
-        # Leak variables to parent scope if requested
-        if leak_vars and self.scopes:
-            parent_scope = self.scopes[-1]
-            for name, value in scope_vars.items():
-                parent_scope[name] = value
-
-        return scope_vars
-
-    def _merge_tile_mutex_meta_to_outer(self, scope_vars: dict[str, Any], leak_vars: bool) -> None:
-        """Merge final inner mutex candidates into the nearest outer binding."""
-        if self._tile_mutex_meta is None:
-            return
-
-        for name, inner_var in scope_vars.items():
-            if not isinstance(inner_var, Expr):
-                continue
-            inner_meta = self._tile_mutex_meta.get(inner_var)
-            if inner_meta is None:
-                continue
-
-            outer_var = self.lookup_var(name)
-            if outer_var is None:
-                continue
-
-            outer_meta = self._tile_mutex_meta.get(outer_var)
-            if outer_meta is None:
-                continue
-
-            inner_mutex_ids, inner_ids = inner_meta
-            outer_mutex_ids, outer_ids = outer_meta
-            outer_mutex_id_count = len(outer_mutex_ids)
-            inner_mutex_id_count = len(inner_mutex_ids)
-            if outer_mutex_id_count != inner_mutex_id_count:
-                raise ParserTypeError(
-                    f"cannot merge tile mutex metadata with different ID counts: "
-                    f"{outer_mutex_id_count} and {inner_mutex_id_count}"
-                )
-            merged_ids = list(dict.fromkeys(list(outer_ids or ()) + list(inner_ids or ())))
-
-            if leak_vars:
-                self._tile_mutex_meta[inner_var] = (inner_mutex_ids, merged_ids)
-            else:
-                self._tile_mutex_meta[outer_var] = (outer_mutex_ids, merged_ids)
+    @contextmanager
+    def change_loop_info(self, info: ControlFlowInfo) -> Iterator[None]:
+        old_info, self.loop_info = self.loop_info, info
+        try:
+            yield
+        finally:
+            self.loop_info = old_info
 
     def register_mask_reg_var(self, name: str) -> None:
-        """Mark a variable as a MaskReg (mask register).
-
-        Called when a variable is declared via vf.mask_reg, vf.create_mask,
-        vf.update_mask, or any op whose dst is inferred to be MaskReg.
-        Enables input-type-based dst inference for unified ops.
-        """
+        """Mark a variable as a MaskReg for unified VF destination inference."""
         self.mask_reg_vars.add(name)
 
     def is_mask_reg_var(self, name: str) -> bool:
-        """Return True if the variable was declared as a MaskReg."""
         return name in self.mask_reg_vars
 
     def define_var(self, name: str, value: Any, allow_redef: bool = False, span: Any | None = None) -> None:
-        """Define a variable in the current scope.
+        """Define a source variable in the current local scope."""
+        local_scope = self.current_scope
+        if name in local_scope and not allow_redef and self.strict_ssa:
+            old_value = local_scope[name]
+            previous_span = old_value.span if isinstance(old_value, ir.IRNode) else None
+            raise SSAViolationError(
+                f"Variable '{name}' is already defined",
+                span=span,
+                previous_span=previous_span,
+                hint="Use a different variable name for each assignment (SSA form requires unique names)",
+                note="Each variable can only be assigned once per scope",
+            )
 
-        Args:
-            name: Variable name
-            value: Variable value/node
-            allow_redef: If True, allow redefinition (for iter_args and parameters)
-            span: Optional source location span for error reporting
-
-        Raises:
-            SSAViolationError: If strict_ssa=True and variable is already defined in current scope
-        """
-        current_scope = self.scopes[-1]
-        current_spans = self.var_spans[-1]
-
-        # Check SSA: variable should not already be defined in current scope
-        if name in current_scope and not allow_redef:
-            if self.strict_ssa:
-                # Get the previous definition span
-                previous_span = current_spans.get(name)
-
-                raise SSAViolationError(
-                    f"Variable '{name}' is already defined",
-                    span=span,
-                    previous_span=previous_span,
-                    hint="Use a different variable name for each assignment (SSA form requires unique names)",
-                    note="Each variable can only be assigned once per scope",
-                )
-            # In non-SSA mode: just update the variable (no error)
-
-        current_scope[name] = value
-        if span is not None:
-            current_spans[name] = span
-
-        # Track assignment count globally
-        if name not in self.assignments:
-            self.assignments[name] = 0
-        self.assignments[name] += 1
+        local_scope[name] = value
+        self.assignments[name] = self.assignments.get(name, 0) + 1
 
     def lookup_var(self, name: str) -> Any | None:
-        """Lookup variable in scope chain.
-
-        Args:
-            name: Variable name to look up
-
-        Returns:
-            Variable value/node if found, None otherwise
-        """
-        # Search from innermost to outermost scope
-        for scope in reversed(self.scopes):
-            if name in scope:
-                return scope[name]
+        for local_scope in reversed(self.scopes):
+            if name in local_scope:
+                return local_scope[name]
         return None
 
     def lookup_var_bounded(self, name: str, barrier: str = "inline") -> Any | None:
-        """Lookup variable, stopping at the nearest scope of type ``barrier``.
-
-        Used to prevent inline functions from capturing IR variables from the
-        caller's scope. Variables defined within the inline scope (params,
-        locals) are found; variables in outer scopes beyond the barrier are not.
-        """
-        for i in range(len(self.scopes) - 1, -1, -1):
-            if name in self.scopes[i]:
-                return self.scopes[i][name]
-            if self.scope_types[i] == barrier:
+        """Look up a variable without crossing the nearest barrier scope."""
+        for local_scope in reversed(self.scopes):
+            if name in local_scope:
+                return local_scope[name]
+            if local_scope.scope_type == barrier:
                 return None
         return None
 
     def is_defined(self, name: str) -> bool:
-        """Check if variable is defined in any accessible scope.
-
-        Args:
-            name: Variable name
-
-        Returns:
-            True if variable is defined, False otherwise
-        """
         return self.lookup_var(name) is not None
 
     def current_scope_type(self) -> str:
-        """Get the type of the current scope.
-
-        Returns:
-            Scope type string ('global', 'function', 'for', 'if')
-        """
-        return self.scope_types[-1]
+        return self.current_scope.scope_type
 
     def in_scope_type(self, scope_type: str) -> bool:
-        """Check if currently in a specific scope type.
-
-        Args:
-            scope_type: Type to check for
-
-        Returns:
-            True if in the specified scope type
-        """
-        return scope_type in self.scope_types
+        return any(local_scope.scope_type == scope_type for local_scope in self.scopes)

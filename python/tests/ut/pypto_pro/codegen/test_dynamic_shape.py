@@ -85,6 +85,7 @@ def add_kernel_shape_subscript(
     a_tile = pl.make_tile(tile_type, addr=0x0000, size=1024)
     b_tile = pl.make_tile(tile_type, addr=0x0400, size=1024)
     result = pl.make_tile(tile_type, addr=0x0800, size=1024)
+    out = output
     for i in pl.range(0, m_var, 2):
         offset_1 = i * 2
         pl.load(a_tile, a, [offset_1, 0])
@@ -106,6 +107,7 @@ def static_shape_negative_subscript(
     output: pl.Tensor[[2, 128], pl.DT_FP32],
 ):
     n = a.shape[-1]
+    out = output
     for _ in pl.range(0, n, 1):
         out = output
     _test_result = out
@@ -124,6 +126,7 @@ def dynamic_shape_tuple_unpack(
     a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC, 128, 64], pl.DT_FP32],
 ):
     m, n, _, _ = a.shape
+    out = a
     for _ in pl.range(0, m, 1):
         out = a
     _test_result = out
@@ -141,6 +144,7 @@ def compile_time_shape_axis(
     output: pl.Tensor[[2, 128], pl.DT_FP32],
 ):
     n = a.shape[0]
+    out = output
     for _ in pl.range(0, n, 1):
         out = output
     _test_result = out

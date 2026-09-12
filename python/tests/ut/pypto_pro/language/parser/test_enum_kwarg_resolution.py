@@ -344,6 +344,26 @@ def test_vf_enum_kwarg_closure_var():
 
 
 @pytest.mark.soc("950")
+def test_vf_register_writes_are_not_loop_carried_ssa_values():
+    @pl.vector_function
+    def vf_body(in_a):
+        for _ in pl.range(1):
+            src0 = vf.load_align(in_a, 0)
+            src1 = vf.load_align(in_a, 0)
+            dst0, dst1 = vf.de_interleave(src0, src1)
+
+    @pl.jit()
+    def kernel(a: pl.Tensor[[_VF_N, _VF_M], pl.DT_FP32]):
+        tf = pl.TileType(shape=[_VF_N, _VF_M], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+        in_a = pl.make_tile(tf, addr=0, size=_VF_TILE_SIZE)
+        with pl.section_vector():
+            pl.load(in_a, a, [0, 0])
+            vf_body(in_a)
+
+    kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
+@pytest.mark.soc("950")
 def test_vf_enum_kwarg_int_rejected():
     """A VF-op enum kwarg given a raw int raises ParserTypeError."""
     with pytest.raises(ParserTypeError, match="expects an enum value"):

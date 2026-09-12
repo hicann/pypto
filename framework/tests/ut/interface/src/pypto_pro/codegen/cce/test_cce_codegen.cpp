@@ -168,15 +168,14 @@ TEST(CCECodegenTest, EmitsTargetSpecificTilingStructCopy)
 
     CCECodegen cube_codegen(ir::SectionKind::Cube);
     auto cube = cube_codegen.GenerateSingle(program, "a5");
-    EXPECT_NE(cube.find("copy_data_align64((uint8_t*)&tiling_0, (__gm__ uint8_t *)tiling_0_ptr"), std::string::npos);
+    EXPECT_NE(cube.find("copy_data_align64((uint8_t*)&tiling, (__gm__ uint8_t *)tiling_ptr"), std::string::npos);
     EXPECT_EQ(cube.find("copy_gm_to_ubuf_align_v2"), std::string::npos);
 
     CCECodegen vector_codegen(ir::SectionKind::Vector);
     auto vector = vector_codegen.GenerateSingle(program, "a5");
-    EXPECT_NE(vector.find("tiling_0_in_ub"), std::string::npos);
+    EXPECT_NE(vector.find("tiling_in_ub"), std::string::npos);
     EXPECT_NE(vector.find("copy_gm_to_ubuf_align_v2"), std::string::npos);
-    EXPECT_NE(vector.find("copy_data_align64((uint8_t*)&tiling_0, (__ubuf__ uint8_t *)tiling_0_in_ub"),
-              std::string::npos);
+    EXPECT_NE(vector.find("copy_data_align64((uint8_t*)&tiling, (__ubuf__ uint8_t *)tiling_in_ub"), std::string::npos);
 }
 
 TEST(CCECodegenTest, RejectsUnprojectedOrWrongTargetSections)
@@ -271,7 +270,7 @@ TEST(CCECodegenTest, GeneratesNativeLoopJumpsAndReturn)
 
     EXPECT_NE(generated.find("for (int64_t i"), std::string::npos);
     EXPECT_NE(generated.find("continue;"), std::string::npos);
-    EXPECT_NE(generated.find("while (condition_"), std::string::npos);
+    EXPECT_NE(generated.find("while (condition"), std::string::npos);
     EXPECT_NE(generated.find("break;"), std::string::npos);
     EXPECT_NE(generated.find("return;"), std::string::npos);
 }
@@ -282,9 +281,11 @@ TEST(CCECodegenTest, WritesBackLoopCarriedValueBeforeContinue)
     auto loop_var = MakeVar("i", scalar_type);
     auto iter_arg = std::make_shared<const ir::IterArg>("acc", scalar_type, MakeConstInt(0), ir::Span::Unknown());
     auto return_var = MakeVar("acc_out", scalar_type);
-    auto update = std::make_shared<const ir::AssignStmt>(iter_arg->iterVar_, MakeConstInt(7), ir::Span::Unknown());
+    auto updated = MakeVar("acc_updated", scalar_type);
+    auto update = std::make_shared<const ir::AssignStmt>(updated, MakeConstInt(7), ir::Span::Unknown());
     auto loop_body = std::make_shared<const ir::SeqStmts>(
-        std::vector<ir::StmtPtr>{update, std::make_shared<const ir::ContinueStmt>(ir::Span::Unknown())},
+        std::vector<ir::StmtPtr>{
+            update, std::make_shared<const ir::ContinueStmt>(std::vector<ir::ExprPtr>{updated}, ir::Span::Unknown())},
         ir::Span::Unknown());
     auto for_loop = std::make_shared<const ir::ForStmt>(loop_var, MakeConstInt(0), MakeConstInt(2), MakeConstInt(1),
                                                         std::vector<ir::IterArgPtr>{iter_arg}, loop_body,
@@ -293,7 +294,7 @@ TEST(CCECodegenTest, WritesBackLoopCarriedValueBeforeContinue)
     CCECodegen codegen(ir::SectionKind::Vector);
     std::string generated = codegen.GenerateSingle(MakeProgram(for_loop), "a5");
 
-    EXPECT_NE(generated.find("acc = acc_"), std::string::npos);
+    EXPECT_NE(generated.find("acc = acc_updated;"), std::string::npos);
     EXPECT_NE(generated.find("continue;"), std::string::npos);
 }
 
@@ -501,7 +502,7 @@ TEST(CCECodegenTest, RejectsDynamicTupleWithoutBackingArray)
     EXPECT_THROW((void)codegen.GetExprAsCode(unowned), std::exception);
 }
 
-TEST(CCECodegenTest, DropsUnusedIfPhiAndYieldOnlyElse)
+TEST(CCECodegenTest, EmitsUnusedIfPhiWithoutDce)
 {
     auto bool_type = std::make_shared<const ir::ScalarType>(ir::DataType::BOOL);
     auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
@@ -518,8 +519,8 @@ TEST(CCECodegenTest, DropsUnusedIfPhiAndYieldOnlyElse)
     std::string generated = codegen.GenerateSingle(MakeProgram(if_stmt, {condition}), "a5");
 
     EXPECT_NE(generated.find("if (condition"), std::string::npos);
-    EXPECT_EQ(generated.find("unused_phi"), std::string::npos);
-    EXPECT_EQ(generated.find("} else {"), std::string::npos);
+    EXPECT_NE(generated.find("unused_phi"), std::string::npos);
+    EXPECT_NE(generated.find("} else {"), std::string::npos);
 }
 
 TEST(CCECodegenTest, MergesArrayTuplePhiThroughOneBackingArray)
@@ -551,13 +552,13 @@ TEST(CCECodegenTest, MergesArrayTuplePhiThroughOneBackingArray)
     CCECodegen codegen(ir::SectionKind::Vector);
     std::string generated = codegen.GenerateSingle(MakeProgram(body, {condition, index}), "a5");
 
-    EXPECT_EQ(CountOccurrences(generated, "int64_t selected_0[2];"), 1);
-    EXPECT_NE(generated.find("selected_0[0] = left_0[0];"), std::string::npos);
-    EXPECT_NE(generated.find("selected_0[1] = left_0[1];"), std::string::npos);
-    EXPECT_NE(generated.find("selected_0[0] = right_0[0];"), std::string::npos);
-    EXPECT_NE(generated.find("selected_0[1] = right_0[1];"), std::string::npos);
-    EXPECT_NE(generated.find("selected_0[index_0]"), std::string::npos);
-    EXPECT_EQ(generated.find("selected_0_0"), std::string::npos);
+    EXPECT_EQ(CountOccurrences(generated, "int64_t selected[2];"), 1);
+    EXPECT_NE(generated.find("selected[0] = left[0];"), std::string::npos);
+    EXPECT_NE(generated.find("selected[1] = left[1];"), std::string::npos);
+    EXPECT_NE(generated.find("selected[0] = right[0];"), std::string::npos);
+    EXPECT_NE(generated.find("selected[1] = right[1];"), std::string::npos);
+    EXPECT_NE(generated.find("selected[index]"), std::string::npos);
+    EXPECT_EQ(generated.find("selected__item_0"), std::string::npos);
 }
 
 TEST(CCECodegenTest, RejectsHomogeneousTupleOfTuples)
@@ -613,11 +614,11 @@ TEST(CCECodegenTest, FlattensAggregateTuplePhiIntoLeafSlots)
     CCECodegen codegen(ir::SectionKind::Vector);
     std::string generated = codegen.GenerateSingle(MakeProgram(body, {condition}, debug_info), "a5");
 
-    EXPECT_EQ(generated.find("selected_0[2]"), std::string::npos);
-    EXPECT_NE(generated.find("int64_t selected_0_0;"), std::string::npos);
-    EXPECT_NE(generated.find("bool selected_0_1;"), std::string::npos);
-    EXPECT_NE(generated.find("selected_0_0 = 1;"), std::string::npos);
-    EXPECT_NE(generated.find("selected_0_1 = false;"), std::string::npos);
+    EXPECT_EQ(generated.find("selected[2]"), std::string::npos);
+    EXPECT_NE(generated.find("int64_t selected__item_0;"), std::string::npos);
+    EXPECT_NE(generated.find("bool selected__item_1;"), std::string::npos);
+    EXPECT_NE(generated.find("selected__item_0 = 1;"), std::string::npos);
+    EXPECT_NE(generated.find("selected__item_1 = false;"), std::string::npos);
 }
 
 TEST(CCECodegenTest, WritesBackWhileCarriedValueBeforeBreak)
@@ -627,8 +628,9 @@ TEST(CCECodegenTest, WritesBackWhileCarriedValueBeforeBreak)
     auto condition = MakeVar("condition", bool_type);
     auto iter_arg = std::make_shared<const ir::IterArg>("acc", scalar_type, MakeConstInt(0), ir::Span::Unknown());
     auto return_var = MakeVar("acc_out", scalar_type);
-    auto update = std::make_shared<const ir::AssignStmt>(iter_arg->iterVar_, MakeConstInt(9), ir::Span::Unknown());
-    auto break_stmt = std::make_shared<const ir::BreakStmt>(ir::Span::Unknown());
+    auto updated = MakeVar("acc_updated", scalar_type);
+    auto update = std::make_shared<const ir::AssignStmt>(updated, MakeConstInt(9), ir::Span::Unknown());
+    auto break_stmt = std::make_shared<const ir::BreakStmt>(std::vector<ir::ExprPtr>{updated}, ir::Span::Unknown());
     auto loop_body = std::make_shared<const ir::SeqStmts>(std::vector<ir::StmtPtr>{update, break_stmt},
                                                           ir::Span::Unknown());
     auto while_loop = std::make_shared<const ir::WhileStmt>(condition, std::vector<ir::IterArgPtr>{iter_arg}, loop_body,
@@ -639,7 +641,7 @@ TEST(CCECodegenTest, WritesBackWhileCarriedValueBeforeBreak)
 
     EXPECT_NE(generated.find("int64_t acc = 0;"), std::string::npos);
     EXPECT_NE(generated.find("while (condition"), std::string::npos);
-    size_t writeback = generated.find("acc = acc_");
+    size_t writeback = generated.find("acc_out = acc_updated;");
     size_t jump = generated.find("break;");
     ASSERT_NE(writeback, std::string::npos);
     ASSERT_NE(jump, std::string::npos);
@@ -669,16 +671,16 @@ TEST(CCECodegenTest, GeneratesTensorDescriptorAndLoadFromAccessShape)
 
     // The declaration's dims are DYNAMIC and each access resizes them in place, so the access
     // shape shows up in the load's SetShape rather than in the hoisted type.
-    EXPECT_NE(generated.find("using input_0ShapeDim5 = pto::TileShape2D<half, pto::DYNAMIC, pto::DYNAMIC,"),
+    EXPECT_NE(generated.find("using inputShapeDim5 = pto::TileShape2D<half, pto::DYNAMIC, pto::DYNAMIC,"),
               std::string::npos);
-    EXPECT_NE(generated.find("input_0StrideDim5, Layout::ND>;"), std::string::npos);
-    EXPECT_NE(generated.find("using input_0StrideDim5 = pto::Stride<-1, -1, -1, -1, -1>;"), std::string::npos);
-    EXPECT_NE(generated.find("input_0Type input_0(input_0_ptr"), std::string::npos);
-    EXPECT_NE(generated.find("input_0StrideDim5(1, 1, 1, 128, 1)"), std::string::npos);
-    EXPECT_NE(generated.find("input_0.SetShape<pto::GlobalTensorDim::DIM_3, pto::GlobalTensorDim::DIM_4>"),
+    EXPECT_NE(generated.find("inputStrideDim5, Layout::ND>;"), std::string::npos);
+    EXPECT_NE(generated.find("using inputStrideDim5 = pto::Stride<-1, -1, -1, -1, -1>;"), std::string::npos);
+    EXPECT_NE(generated.find("inputType input(input_ptr"), std::string::npos);
+    EXPECT_NE(generated.find("inputStrideDim5(1, 1, 1, 128, 1)"), std::string::npos);
+    EXPECT_NE(generated.find("input.SetShape<pto::GlobalTensorDim::DIM_3, pto::GlobalTensorDim::DIM_4>"),
               std::string::npos);
     EXPECT_NE(generated.find("TLOAD(tile"), std::string::npos);
-    EXPECT_NE(generated.find(", input_0);"), std::string::npos);
+    EXPECT_NE(generated.find(", input);"), std::string::npos);
 }
 
 TEST(CCECodegenTest, ResolvesTensorAliasAndTransposeLayout)
@@ -705,11 +707,11 @@ TEST(CCECodegenTest, ResolvesTensorAliasAndTransposeLayout)
     CCECodegen codegen(ir::SectionKind::Vector);
     std::string generated = codegen.GenerateSingle(MakeProgram(body, {input}), "a5");
 
-    EXPECT_NE(generated.find("input_0StrideDim5, Layout::DN"), std::string::npos);
-    EXPECT_NE(generated.find("input_0StrideDim5(1, 1, 1, 1, 128)"), std::string::npos);
+    EXPECT_NE(generated.find("inputStrideDim5, Layout::DN"), std::string::npos);
+    EXPECT_NE(generated.find("inputStrideDim5(1, 1, 1, 1, 128)"), std::string::npos);
     EXPECT_EQ(generated.find("aliasShapeDim5"), std::string::npos);
     EXPECT_NE(generated.find("TLOAD(tile"), std::string::npos);
-    EXPECT_NE(generated.find(", input_0);"), std::string::npos);
+    EXPECT_NE(generated.find(", input);"), std::string::npos);
 }
 
 TEST(CCECodegenTest, HoistsAutoDeclaredVFDestinations)
@@ -759,8 +761,8 @@ TEST(CCECodegenTest, HoistsDynamicVFLoopBoundAsUint16)
     CCECodegen codegen(ir::SectionKind::Vector);
     std::string generated = codegen.GenerateSingle(MakeProgram(vf_section, {limit}), "a5");
 
-    EXPECT_NE(generated.find("const uint16_t i_0_ub = (uint16_t)(limit_0)"), std::string::npos);
-    EXPECT_NE(generated.find("for (uint16_t i_0 = 0; i_0 < i_0_ub; i_0 += 1)"), std::string::npos);
+    EXPECT_NE(generated.find("const uint16_t i_ub = (uint16_t)(limit)"), std::string::npos);
+    EXPECT_NE(generated.find("for (uint16_t i = 0; i < i_ub; i += 1)"), std::string::npos);
 }
 
 TEST(CCECodegenTest, EmitsKernelTileValidShapeGetters)

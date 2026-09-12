@@ -40,7 +40,7 @@ def test_simple_for_loop():
     # Function body should be a for loop
     body = _single_stmt(func.body)
     assert isinstance(body, ir.ForStmt)
-    assert body.loop_var.name == "i"
+    assert body.loop_var.name == "i_0"
 
 
 def test_for_loop_with_iter_args():

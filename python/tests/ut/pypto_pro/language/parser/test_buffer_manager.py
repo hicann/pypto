@@ -331,8 +331,8 @@ def test_depth_must_equal_mutex_ids_length():
 # ---------------------------------------------------------------------------
 
 
-def test_subscript_const_index_materializes_mutex_companions():
-    """A literal index keeps its slot while mutex IDs use companion variables."""
+def test_subscript_const_index_uses_static_mutex_ids():
+    """A literal index keeps its slot and uses its static mutex IDs directly."""
 
     @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[32, 32], pl.DT_FP16]):
@@ -697,9 +697,12 @@ def test_multi_mutex_ids_survive_ternary_merge():
         tile = g[0] if choose > 0 else g[1]
         pl.load(tile, gm_q, [0, 0])
 
-    ir_str = _ir_to_str(_parse_kernel(k))
-    assert "tile__mutexid" in ir_str, ir_str
-    assert "tile__mutexid_1" in ir_str, ir_str
+    program = _parse_kernel(k)
+    func = program.get_function(k.__name__)
+    if_stmt = next(stmt for stmt in func.body.stmts if isinstance(stmt, ir.IfStmt))
+    ir_str = _ir_to_str(program)
+    assert len(if_stmt.return_vars) == 3
+    assert all("__mutexid" in var.name for var in if_stmt.return_vars[1:])
     assert "system.mutex_lock_dyn" in ir_str, ir_str
 
 
@@ -716,7 +719,7 @@ def test_same_name_control_flow_rejects_different_mutex_id_counts():
 
     with pytest.raises(
         ParserTypeError,
-        match="cannot merge tile mutex metadata with different ID counts: 1 and 2",
+        match="cannot merge tile mutex metadata with different ID counts: 2 and 1",
     ):
         _parse_kernel(k)
 
@@ -736,6 +739,159 @@ def test_same_name_control_flow_merges_equal_mutex_id_counts():
     assert "tile__mutexid" in ir_str, ir_str
     assert "tile__mutexid_1" in ir_str, ir_str
     assert "system.mutex_lock_dyn" in ir_str, ir_str
+
+
+def test_loop_appends_mutex_ids_after_explicit_merge_slots():
+    @pl.jit(auto_mutex=True)
+    def k(gm_q: pl.Tensor[[32, 32], pl.DT_FP16], choose: pl.DT_INT32):
+        tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
+        group = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[[0, 1], [2, 3]])
+        tile = group[0]
+        count = 0
+        for _ in pl.range(2):
+            if choose > 0:
+                tile = group[1]
+            count = count + 1
+        pl.load(tile, gm_q, [0, 0])
+
+    program = _parse_kernel(k)
+    func = program.get_function(k.__name__)
+    for_stmt = next(stmt for stmt in func.body.stmts if isinstance(stmt, ir.ForStmt))
+
+    assert len(for_stmt.iter_args) == 4
+    assert len(for_stmt.return_vars) == 4
+    assert all("__mutexid" not in arg.iterVar.name for arg in for_stmt.iter_args[:2])
+    assert all("tile__mutexid" in arg.iterVar.name for arg in for_stmt.iter_args[2:])
+    assert all("__mutexid" not in var.name for var in for_stmt.return_vars[:2])
+    assert all("tile__mutexid" in var.name for var in for_stmt.return_vars[2:])
+
+    continue_stmt = for_stmt.body.stmts[-1]
+    assert isinstance(continue_stmt, ir.ContinueStmt)
+    assert len(continue_stmt.value) == 4
+    assert all("__mutexid" not in value.name for value in continue_stmt.value[:2])
+    assert all("tile__mutexid" in value.name for value in continue_stmt.value[2:])
+
+
+def test_while_aligns_mutex_ids_for_every_break_and_continue():
+    @pl.jit(auto_mutex=True)
+    def k(gm_q: pl.Tensor[[32, 32], pl.DT_FP16], limit: pl.DT_INT32):
+        tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
+        group = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[[0, 1], [2, 3]])
+        other_group = pl.make_tile_group(type=tt, addrs=0x4000, mutex_ids=[[4, 5], [6, 7]])
+        tile = group[0]
+        index = 0
+        while index < limit:
+            if index == 1:
+                tile = other_group[1]
+                break
+            if index == 2:
+                tile = group[0]
+                index = index + 1
+                continue
+            tile = group[1]
+            index = index + 1
+        pl.load(tile, gm_q, [0, 0])
+
+    program = _parse_kernel(k)
+    func = program.get_function(k.__name__)
+    while_stmt = next(stmt for stmt in func.body.stmts if isinstance(stmt, ir.WhileStmt))
+    ir_str = _ir_to_str(program)
+
+    jumps = []
+
+    def collect_jumps(body):
+        for stmt in body.stmts:
+            if isinstance(stmt, (ir.BreakStmt, ir.ContinueStmt)):
+                jumps.append(stmt)
+            elif isinstance(stmt, ir.IfStmt):
+                collect_jumps(stmt.then_body)
+                collect_jumps(stmt.else_body)
+
+    collect_jumps(while_stmt.body)
+    assert len(jumps) >= 3
+    assert len(while_stmt.iter_args) == 4
+    assert len(while_stmt.return_vars) == 4
+    assert all(isinstance(arg.iterVar.type, ir.ScalarType) for arg in while_stmt.iter_args[2:4])
+    assert all(isinstance(var.type, ir.ScalarType) for var in while_stmt.return_vars[2:4])
+    for jump in jumps:
+        assert len(jump.value) == 4
+        assert all("__mutexid" not in value.name for value in jump.value[:2])
+        assert all(isinstance(value.type, ir.ScalarType) for value in jump.value[2:4])
+    assert "mutex_ids=[0, 1, 2, 3, 4, 5, 6, 7]" in ir_str
+
+
+def test_loop_rejects_different_mutex_id_counts_for_one_slot():
+    @pl.jit(auto_mutex=True)
+    def k(gm_q: pl.Tensor[[32, 32], pl.DT_FP16], limit: pl.DT_INT32):
+        tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
+        one_id_group = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0])
+        two_id_group = pl.make_tile_group(type=tt, addrs=0x2000, mutex_ids=[[1, 2]])
+        tile = one_id_group[0]
+        index = 0
+        while index < limit:
+            if index > 0:
+                tile = two_id_group[0]
+                break
+            index = index + 1
+        pl.load(tile, gm_q, [0, 0])
+
+    with pytest.raises(
+        ParserTypeError,
+        match="cannot merge tile mutex metadata with different ID counts: 2 and 1",
+    ):
+        _parse_kernel(k)
+
+
+def test_loop_rejects_mutex_tile_result_with_non_tile_body():
+    @pl.jit(auto_mutex=True)
+    def k(gm_q: pl.Tensor[[32, 32], pl.DT_FP16], limit: pl.DT_INT32):
+        tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
+        group = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[[0, 1]])
+        tile = None
+        while True:
+            if limit == 1:
+                tile = group[0]
+                break
+        pl.load(tile, gm_q, [0, 0])
+
+    with pytest.raises(
+        ParserTypeError,
+        match="Cannot merge Tile values when only one input carries mutex metadata",
+    ):
+        _parse_kernel(k)
+
+
+def test_loop_allows_non_mutex_tile_body_with_scalar_result():
+    @pl.jit(auto_mutex=True)
+    def k(gm_q: pl.Tensor[[32, 32], pl.DT_FP16], limit: pl.DT_INT32):
+        tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
+        value = pl.make_tile(tt, addr=0)
+        while True:
+            if limit == 1:
+                value = limit  # noqa: F841
+                break
+
+    program = _parse_kernel(k)
+    func = program.get_function(k.__name__)
+    while_stmt = next(stmt for stmt in func.body.stmts if isinstance(stmt, ir.WhileStmt))
+
+    assert len(while_stmt.iter_args) == 1
+    assert len(while_stmt.return_vars) == 1
+    assert isinstance(while_stmt.iter_args[0].iterVar.type, ir.TileType)
+    assert isinstance(while_stmt.return_vars[0].type, ir.ScalarType)
+
+
+def test_undefined_branch_produces_unknown_type_on_use():
+    @pl.jit(auto_mutex=True)
+    def k(gm_q: pl.Tensor[[32, 32], pl.DT_FP16], choose: pl.DT_INT32):
+        tt = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat)
+        group = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[[0, 1]])
+        if choose > 0:
+            tile = group[0]
+        pl.load(tile, gm_q, [0, 0])
+
+    with pytest.raises(ParserTypeError, match="has no valid type on every reachable control-flow path"):
+        _parse_kernel(k)
 
 
 def test_ternary_rejects_different_mutex_id_counts():

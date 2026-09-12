@@ -817,7 +817,11 @@ def t09_dynamic_control_flow(
                     pl.set_validshape(tile_x, [1, valid_n])
                     pl.set_validshape(tile_y, [1, valid_n])
                     pl.set_validshape(tile_out, [1, valid_n])
-                selected_event = event_id if condition else (row + col // TILE_N) % 2
+                selected_event = (
+                    event_id
+                    if condition
+                    else pl.astype((row + col // TILE_N) % 2, pl.DT_INT64)
+                )
                 pl.load(tile_x, x, [row, col])
                 pl.load(tile_y, y, [row, col])
                 if row % 2 == 0:

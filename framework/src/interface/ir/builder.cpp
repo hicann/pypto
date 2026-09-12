@@ -540,6 +540,24 @@ ContinueStmtPtr IRBuilder::Continue(const Span& span)
     return continue_stmt;
 }
 
+void IRBuilder::UpdateJumpValues(const StmtPtr& jump_op, std::vector<ExprPtr> values)
+{
+    IRCHECK(jump_op != nullptr) << "Jump statement must not be null";
+    switch (jump_op->GetKind()) {
+        case ObjectKind::YieldStmt:
+            const_cast<YieldStmt*>(static_cast<const YieldStmt*>(jump_op.get()))->value_ = std::move(values);
+            return;
+        case ObjectKind::BreakStmt:
+            const_cast<BreakStmt*>(static_cast<const BreakStmt*>(jump_op.get()))->value_ = std::move(values);
+            return;
+        case ObjectKind::ContinueStmt:
+            const_cast<ContinueStmt*>(static_cast<const ContinueStmt*>(jump_op.get()))->value_ = std::move(values);
+            return;
+        default:
+            IRCHECK(false) << "Expected YieldStmt, BreakStmt, or ContinueStmt, got " << jump_op->TypeName();
+    }
+}
+
 // ========== Context State Queries ==========
 
 BuildContext* IRBuilder::CurrentContext()

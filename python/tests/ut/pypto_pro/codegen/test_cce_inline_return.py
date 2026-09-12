@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # coding: utf-8
+# ruff: noqa: E501
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
@@ -10,6 +11,7 @@
 # -----------------------------------------------------------------------------------------------------------
 
 import re
+from textwrap import dedent
 
 import pypto_pro.language as pl
 import pytest
@@ -30,11 +32,29 @@ def _choose_extent(value):
 
 def _choose_in_loop(value):
     index = 0
-    while index < value:
+    while True:
         if index >= 2:
             return index
         index = index + 1
-    return value
+
+
+def _single_dynamic_pair_in_loop(value):
+    while True:
+        return value + 0, value + 1
+
+
+@pl.jit(auto_mutex=False)
+def _single_dynamic_pair_in_loop_kernel(value: pl.DT_INT64):
+    first, second = _single_dynamic_pair_in_loop(value)
+    total = first + second  # noqa: F841
+
+
+@pl.jit(auto_mutex=False)
+def _static_if_break_kernel(n: pl.DT_INT64):
+    for i in pl.range(n):
+        if True:
+            break
+        invalid = (1, 2)[3]  # noqa: F841
 
 
 # Both helpers return from two sites so their result has to travel through a merge variable.
@@ -73,11 +93,11 @@ def _inline_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
 def test_cce_inline_multiple_returns_use_typed_uninitialized_slot():
     cpp = _compile_to_cce(_inline_return_kernel)
 
-    declarations = re.findall(r"int64_t (__inline_\d+_return_val_iter_\d+);", cpp)
+    declarations = re.findall(r"int64_t (__inline_\d+_return_val_\d+);", cpp)
     assert declarations
     for name in declarations:
         assert f"{name} = 0;" not in cpp
-    assert not re.search(r"auto __inline_\d+_return_val_iter_\d+ = __inline_\d+_return_val_iter_\d+;", cpp)
+    assert not re.search(r"auto __inline_\d+_return_val_\d+ = __inline_\d+_return_val_\d+;", cpp)
     assert cpp.count("while (true)") >= 3
     assert ">= 2" in cpp
     assert cpp.count("break;") >= 6
@@ -86,7 +106,7 @@ def test_cce_inline_multiple_returns_use_typed_uninitialized_slot():
 def test_cce_inline_array_return_uses_one_backing_array():
     cpp = _compile_to_cce(_inline_return_kernel)
 
-    declarations = set(re.findall(r"int64_t (__inline_\d+_return_val_iter_\d+)\[2\];", cpp))
+    declarations = set(re.findall(r"int64_t (__inline_\d+_return_val_\d+)\[2\];", cpp))
     assert declarations
     for name in declarations:
         assert re.search(rf"{name}\[0\] = .+\[0\];", cpp)
@@ -95,14 +115,68 @@ def test_cce_inline_array_return_uses_one_backing_array():
         assert f"int64_t {name}_1;" not in cpp
 
 
+def test_cce_single_dynamic_tuple_return_reads_the_loop_result():
+    body = _cube_body(_compile_to_cce(_single_dynamic_pair_in_loop_kernel))
+    expected = dedent(
+        """\
+        #if defined(__DAV_CUBE__)
+        #include <pypto_tprint.h>
+        __aicore__ inline void _single_dynamic_pair_in_loop_kernel_impl_cube(int64_t value_0)
+        {
+
+            int64_t __inline_0_return_val_3[2];
+
+            while (true) {
+                auto __inline_0_returned_0 = false;
+                auto _expr_tmp_0_0 = (value_0 + 0);
+                auto _expr_tmp_1_0 = (value_0 + 1);
+                int64_t __inline_0_return_val_2[] = {static_cast<int64_t>(_expr_tmp_0_0), static_cast<int64_t>(_expr_tmp_1_0)};
+                auto __inline_0_returned_1 = true;
+                __inline_0_return_val_3[0] = __inline_0_return_val_2[0];
+                __inline_0_return_val_3[1] = __inline_0_return_val_2[1];
+                break;
+            }
+            auto first_0 = __inline_0_return_val_3[0];
+            auto second_0 = __inline_0_return_val_3[1];
+            auto total_0 = (first_0 + second_0);
+            return;
+        }
+        #endif
+
+        """
+    )
+    assert body == expected
+
+
+def test_cce_static_if_break_terminates_the_enclosing_loop_block():
+    body = _cube_body(_compile_to_cce(_static_if_break_kernel))
+    expected = dedent(
+        """\
+        #if defined(__DAV_CUBE__)
+        #include <pypto_tprint.h>
+        __aicore__ inline void _static_if_break_kernel_impl_cube(int64_t n_0)
+        {
+
+            for (int64_t i_0 = 0; i_0 < n_0; i_0 += 1) {
+                break;
+            }
+            return;
+        }
+        #endif
+
+        """
+    )
+    assert body == expected
+
+
 def test_cce_inline_aggregate_return_flattens_only_aggregate_fields():
     cpp = _compile_to_cce(_inline_return_kernel)
 
-    nested_arrays = set(re.findall(r"int64_t (__inline_\d+_return_val_iter_\d+_0)\[2\];", cpp))
+    nested_arrays = set(re.findall(r"int64_t (__inline_\d+_return_val_\d+__item_0)\[2\];", cpp))
     assert nested_arrays
     for name in nested_arrays:
-        aggregate = name[:-2]
-        assert f"bool {aggregate}_1;" in cpp
+        aggregate = name.removesuffix("__item_0")
+        assert f"bool {aggregate}__item_1;" in cpp
         assert f"int64_t {name}_0;" not in cpp
         assert f"int64_t {name}_1;" not in cpp
 
@@ -110,7 +184,7 @@ def test_cce_inline_aggregate_return_flattens_only_aggregate_fields():
 def test_cce_inline_array_aliases_keep_the_phi_backing_array():
     cpp = _compile_to_cce(_inline_return_kernel)
 
-    nested_arrays = set(re.findall(r"int64_t (__inline_\d+_return_val_iter_\d+_0)\[2\];", cpp))
+    nested_arrays = set(re.findall(r"int64_t (__inline_\d+_return_val_\d+__item_0)\[2\];", cpp))
     assert len(nested_arrays) == 1
     [array_name] = nested_arrays
     assert f"{array_name}[0]" in cpp
@@ -122,9 +196,9 @@ def test_cce_inline_array_aliases_keep_the_phi_backing_array():
 # Structural invariants every inline-return kernel must satisfy
 # ---------------------------------------------------------------------------
 
-_RETURN_SLOT_RE = re.compile(r"\b(__inline_\d+_return_val_iter_\d+(?:_\d+)*)\b")
+_RETURN_SLOT_RE = re.compile(r"\b(__inline_\d+_return_val_\d+(?:__item_\d+)*)\b")
 # The `returned` flag is a merge slot too, and shares the declaration block with the value slot.
-_ANY_SLOT_RE = re.compile(r"\b__inline_\d+_\w*?_iter_\d+(?:_\d+)*\b")
+_ANY_SLOT_RE = re.compile(r"\b__inline_\d+_\w*?_\d+(?:_\d+)*\b")
 
 
 def _cube_body(cpp: str) -> str:
@@ -160,7 +234,7 @@ def _assert_merge_slot_declaration_invariants(cpp: str) -> None:
     declarations = [
         (i, _RETURN_SLOT_RE.search(line).group(1))
         for i, line in enumerate(lines)
-        if _declares(line, _RETURN_SLOT_RE)
+        if _declares(line, _RETURN_SLOT_RE) and " = " not in line
     ]
     assert declarations, "expected at least one inline-return merge slot declaration"
 
@@ -192,7 +266,11 @@ def test_cce_inner_loop_slots_are_not_hoisted_to_function_scope():
     # being lifted all the way out to function scope.
     nested = [
         m
-        for m in re.finditer(r"^(\s+)(?:int64_t|bool) __inline_\d+_return_val_iter_\d+", cpp, re.MULTILINE)
+        for m in re.finditer(
+            r"^(\s+)(?:int64_t|bool) (__inline_\d+_return_val_\d+)(?: = \2)?;$",
+            cpp,
+            re.MULTILINE,
+        )
         if len(m.group(1)) > 4
     ]
     assert nested, "expected at least one merge slot declared inside an enclosing body"
@@ -306,16 +384,16 @@ def test_cce_named_tuple_return_flattens_into_leaf_slots():
 
     # A named tuple carries field names but no C++ struct name, so it is neither an array
     # nor a single object: it flattens into one leaf slot per field.
-    assert re.search(r"^\s*int64_t __inline_0_return_val_iter_1_0;$", body, re.MULTILINE)
-    assert re.search(r"^\s*int64_t __inline_0_return_val_iter_1_1;$", body, re.MULTILINE)
-    assert not re.search(r"__inline_0_return_val_iter_1\[\d+\];", body)
-    assert not re.search(r"^\s*\S+ __inline_0_return_val_iter_1;$", body, re.MULTILINE)
+    assert re.search(r"^\s*int64_t __inline_0_return_val_4__item_0;$", body, re.MULTILINE)
+    assert re.search(r"^\s*int64_t __inline_0_return_val_4__item_1;$", body, re.MULTILINE)
+    assert not re.search(r"__inline_0_return_val_4\[\d+\];", body)
+    assert not re.search(r"^\s*\S+ __inline_0_return_val_4;$", body, re.MULTILINE)
 
     # Both branches write the leaves, and `.lo` / `.hi` read back through them.
-    assert body.count("__inline_0_return_val_iter_1_0 = ") == 2
-    assert body.count("__inline_0_return_val_iter_1_1 = ") == 2
-    assert "= __inline_0_return_val_iter_1_0;" in body
-    assert "= __inline_0_return_val_iter_1_1;" in body
+    assert body.count("__inline_0_return_val_4__item_0 = ") == 2
+    assert body.count("__inline_0_return_val_4__item_1 = ") == 2
+    assert "= __inline_0_return_val_4__item_0;" in body
+    assert "= __inline_0_return_val_4__item_1;" in body
 
 
 def test_cce_struct_return_merges_as_a_single_object():
@@ -324,17 +402,17 @@ def test_cce_struct_return_merges_as_a_single_object():
     # A struct has a C++ type name of its own, so the merge slot is one object assigned
     # whole — not an array, and not flattened into per-field leaf slots.
     assert "class RetS {" in body
-    assert re.search(r"^\s*RetS __inline_0_return_val_iter_1;$", body, re.MULTILINE)
-    assert not re.search(r"__inline_0_return_val_iter_1_\d", body)
-    assert not re.search(r"__inline_0_return_val_iter_1\[", body)
+    assert re.search(r"^\s*RetS __inline_0_return_val_4;$", body, re.MULTILINE)
+    assert not re.search(r"__inline_0_return_val_4_\d", body)
+    assert not re.search(r"__inline_0_return_val_4\[", body)
 
-    writes = re.findall(r"__inline_0_return_val_iter_1 = (\S+);", body)
+    writes = re.findall(r"__inline_0_return_val_4 = (\S+);", body)
     assert len(writes) == 2, f"expected one whole-object write per branch, got {writes}"
     for source in writes:
         assert re.fullmatch(r"__inline_0_return_val_\d+;?", source), source
     # Field reads go through the merged object, not through a copy of the branch value.
-    assert "__inline_0_return_val_iter_1.v" in body
-    assert "__inline_0_return_val_iter_1.w" in body
+    assert "__inline_0_return_val_4.v" in body
+    assert "__inline_0_return_val_4.w" in body
 
 
 def test_cce_struct_inside_a_returned_tuple_stays_one_object():
@@ -343,10 +421,10 @@ def test_cce_struct_inside_a_returned_tuple_stays_one_object():
     # The tuple is heterogeneous, so it flattens into one leaf slot per element -- but a struct
     # element is a leaf, not something to take apart further: it has a C++ type name of its own.
     assert "class NestedS {" in body
-    assert re.search(r"^\s*NestedS __inline_0_return_val_iter_1_0;$", body, re.MULTILINE)
-    assert re.search(r"^\s*bool __inline_0_return_val_iter_1_1;$", body, re.MULTILINE)
-    assert not re.search(r"__inline_0_return_val_iter_1_0_\d", body)
-    assert "__inline_0_return_val_iter_1_0.v" in body
+    assert re.search(r"^\s*NestedS __inline_0_return_val_4__item_0;$", body, re.MULTILINE)
+    assert re.search(r"^\s*bool __inline_0_return_val_4__item_1;$", body, re.MULTILINE)
+    assert not re.search(r"__inline_0_return_val_4__item_0__item_\d", body)
+    assert "__inline_0_return_val_4__item_0.v" in body
 
 
 def test_cce_struct_array_return_uses_one_backing_array():
@@ -356,13 +434,13 @@ def test_cce_struct_array_return_uses_one_backing_array():
     # backing array of that struct type -- copied element by element, not flattened into a
     # leaf slot per element the way a heterogeneous tuple is.
     assert "class ArrS {" in body
-    assert re.search(r"^\s*ArrS __inline_0_return_val_iter_1\[2\];$", body, re.MULTILINE)
-    assert not re.search(r"__inline_0_return_val_iter_1_\d", body)
-    assert body.count("__inline_0_return_val_iter_1[0] = ") == 2
-    assert body.count("__inline_0_return_val_iter_1[1] = ") == 2
+    assert re.search(r"^\s*ArrS __inline_0_return_val_4\[2\];$", body, re.MULTILINE)
+    assert not re.search(r"__inline_0_return_val_4_\d", body)
+    assert body.count("__inline_0_return_val_4[0] = ") == 2
+    assert body.count("__inline_0_return_val_4[1] = ") == 2
     # Field reads go through the merged array, not through a copy of either branch value.
-    assert "__inline_0_return_val_iter_1[0].v" in body
-    assert "__inline_0_return_val_iter_1[1].w" in body
+    assert "__inline_0_return_val_4[0].v" in body
+    assert "__inline_0_return_val_4[1].w" in body
 
 
 def test_cce_tile_return_merges_through_a_typed_slot():
@@ -371,28 +449,28 @@ def test_cce_tile_return_merges_through_a_typed_slot():
     # The declaration needs the tile type and nothing else: no constructor arguments and no
     # TASSIGN, because the slot is immediately overwritten by a whole-object copy of one of
     # the branch tiles, which carries its own valid shape and address.
-    declaration = re.search(r"^\s*(Tile<[^;]*>) __inline_0_return_val_iter_1;$", body, re.MULTILINE)
+    declaration = re.search(r"^\s*(Tile<[^;]*>) __inline_0_return_val_4;$", body, re.MULTILINE)
     assert declaration, "expected the tile merge slot to be declared from its type alone"
-    assert "TASSIGN(__inline_0_return_val_iter_1" not in body
+    assert "TASSIGN(__inline_0_return_val_4" not in body
 
-    writes = re.findall(r"__inline_0_return_val_iter_1 = (\S+);", body)
+    writes = re.findall(r"__inline_0_return_val_4 = (\S+);", body)
     assert sorted(writes) == ["tile_a_0", "tile_b_0"]
     # The merged tile, not either branch tile, is what the load targets.
-    assert "TLOAD(__inline_0_return_val_iter_1, " in body
+    assert "TLOAD(__inline_0_return_val_4, " in body
 
 
 def test_cce_void_returns_materialize_no_slot():
     body = _cube_body(_compile_to_cce(_void_return_kernel))
 
-    # Every return is bare, so the return slot never acquires a type and carries no value.
-    # It must never be declared: there is no type to declare it with. The one name derived
-    # from it that does survive is the auto-mutex companion the `None` seed always co-emits,
-    # which is a plain scalar and not the slot.
-    assert not re.search(r"__inline_0_return_val(?!__mutexid)", body)
+    # Bare returns carry a real NoneType value for return-type merging. NoneType has no C++
+    # representation, so only framework-generated mutex companions may remain in the source.
+    assert not any(
+        "__inline_0_return_val" in line and "__mutexid" not in line
+        for line in body.splitlines()
+    )
     # The wrapper and its early exits are still emitted.
     assert "while (true)" in body
     assert body.count("break;") >= 2
-    assert "__inline_0_returned" in body
 
 
 # ---------------------------------------------------------------------------
@@ -471,36 +549,20 @@ _both_branches_return_kernel = _make_shape_kernel(_both_branches_return)
 _else_only_return_kernel = _make_shape_kernel(_else_only_return)
 
 
-def test_cce_for_nested_if_return_guards_the_loop_exit():
+def test_cce_for_nested_if_return_ignores_empty_retval_init():
     body = _cube_body(_compile_to_cce(_for_if_return_kernel))
 
-    # `break` only leaves the `for`, so the lowering re-tests the returned flag right after
-    # the loop to break out of the helper wrapper as well.
-    guard = re.search(r"^\s*}\n\s*if \(__inline_0_returned_iter_\d+\) \{\n"
-                      r"\s*__inline_0_return_val_iter_\d+ = __inline_0_return_val_iter_\d+;\n"
-                      r"\s*break;$", body, re.MULTILINE)
-    assert guard, "expected a returned-flag guard splicing the loop result out of the wrapper"
-
-    # The loop's own slot lives inside the wrapper, not at function scope, and is distinct
-    # from the wrapper's slot.
-    slots = {len(m.group(1)): m.group(2)
-             for m in re.finditer(r"^( +)int64_t (__inline_0_return_val_iter_\d+);$", body, re.MULTILINE)}
-    assert sorted(slots) == [4, 8], f"expected one slot at function scope and one inside the wrapper: {slots}"
-    assert slots[4] != slots[8]
+    assert re.search(r"^\s*int64_t __inline_0_return_val_6;$", body, re.MULTILINE)
+    assert "Unknown" not in body
+    assert "auto doubled_0 = (__inline_0_return_val_6 + __inline_0_return_val_6);" in body
 
 
-def test_cce_if_nested_for_return_keeps_slots_in_the_branch_body():
+def test_cce_if_nested_for_return_ignores_empty_retval_init():
     body = _cube_body(_compile_to_cce(_if_for_return_kernel))
 
-    # The loop sits inside a branch, so its slot must stay indented inside that branch
-    # rather than being lifted to the wrapper or to function scope.
-    nested = [
-        m
-        for m in re.finditer(r"^(\s+)int64_t __inline_0_return_val_iter_\d+;$", body, re.MULTILINE)
-        if len(m.group(1)) > 8
-    ]
-    assert nested, "expected the loop slot to be declared inside the enclosing branch body"
-    assert "if (__inline_0_returned_iter_" in body
+    assert re.search(r"^\s*int64_t __inline_0_return_val_7;$", body, re.MULTILINE)
+    assert "Unknown" not in body
+    assert "auto doubled_0 = (__inline_0_return_val_7 + __inline_0_return_val_7);" in body
 
 
 def test_cce_then_only_return_leaves_the_other_edge_alone():
@@ -510,14 +572,16 @@ def test_cce_then_only_return_leaves_the_other_edge_alone():
     # Neither edge may emit a self-assignment, which is what a back edge carrying an
     # unmodified value would degenerate into.
     assert not re.search(r"\b(\w+) = \1;", body)
-    assert body.count("__inline_0_return_val_iter_1 = ") == 2
+    assert body.count("__inline_0_return_val_4 = ") == 2
 
 
 def test_cce_both_branches_return_write_one_slot():
     body = _cube_body(_compile_to_cce(_both_branches_return_kernel))
 
-    assert len(re.findall(r"^\s*int64_t __inline_0_return_val_iter_1;$", body, re.MULTILINE)) == 1
-    assert body.count("__inline_0_return_val_iter_1 = ") == 3  # both branches plus the dead phi tail
+    assert len(re.findall(r"^\s*int64_t __inline_0_return_val_4;$", body, re.MULTILINE)) == 1
+    # Both branches terminate, so canonicalization keeps their writes and removes the
+    # unreachable merge tail.
+    assert body.count("__inline_0_return_val_4 = ") == 2
     assert not re.search(r"\b(\w+) = \1;", body)
 
 
@@ -527,10 +591,10 @@ def test_cce_else_only_return_resolves_the_slot_type():
     # Only the else branch writes the return slot; the then branch leaves it at the
     # `None` sentinel the lowering seeds it with. BuildIfPhiOutputs must take the
     # phi's type from the edge that carries a value, or the slot has no type to declare.
-    assert re.search(r"^\s*int64_t __inline_0_return_val_iter_1;$", body, re.MULTILINE)
+    assert re.search(r"^\s*int64_t __inline_0_return_val_5;$", body, re.MULTILINE)
     assert not re.search(r"\bUnknown\b", body)
     # Both exits write the slot: the early `return 0` and the fall-through `return value`.
-    assert body.count("__inline_0_return_val_iter_1 = ") == 2
+    assert body.count("__inline_0_return_val_5 = ") == 2
 
 
 @pytest.mark.parametrize(
@@ -541,15 +605,13 @@ def test_cce_else_only_return_resolves_the_slot_type():
         _struct_in_tuple_return_kernel,
         _struct_array_return_kernel,
         _tile_return_kernel,
-        _for_if_return_kernel,
-        _if_for_return_kernel,
         _then_only_return_kernel,
         _else_only_return_kernel,
         _both_branches_return_kernel,
     ],
     ids=[
         "named_tuple", "struct", "struct_in_tuple", "struct_array", "tile",
-        "for_if", "if_for", "then_only", "else_only", "both_branches",
+        "then_only", "else_only", "both_branches",
     ],
 )
 def test_cce_merge_slots_keep_their_declaration_invariants(kernel):

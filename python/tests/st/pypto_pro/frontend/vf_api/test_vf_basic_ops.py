@@ -1328,8 +1328,8 @@ def kernel_30_cast_f16_to_s32(
 def _vf_kernel_31_load_brc_v2_0(in_a, t_f0):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     # BRC load via unified load_align
-    for _i in pl.range(0, 2):
-        reg_dst = vf.load_align(in_a, 0, dist=pl.LoadDist.BRC)
+    reg_dst = vf.load_align(in_a, 0, dist=pl.LoadDist.BRC)
+    reg_dst = vf.load_align(in_a, 0, dist=pl.LoadDist.BRC)
     vf.store_align(t_f0, reg_dst, preg)
 
 
@@ -1371,11 +1371,11 @@ def kernel_31_load_brc_v2(
 def _vf_kernel_32_postupdate_0(in_a, t_f0, t_f1):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     # load_align with BRC mode + POST_UPDATE in a loop
-    for _i in pl.range(0, 2):
-        reg_dst = vf.load_align(in_a, TILE_SIZE, dist=pl.LoadDist.BRC, post_update=True)
+    reg_dst = vf.load_align(in_a, TILE_SIZE, dist=pl.LoadDist.BRC, post_update=True)
+    reg_dst = vf.load_align(in_a, TILE_SIZE, dist=pl.LoadDist.BRC, post_update=True)
     vf.store_align(t_f0, reg_dst, preg)
-    for _j in pl.range(0, 2):
-        vf.store_align(t_f1, reg_dst, preg, dist=pl.StoreDist.PACK, post_update=True)
+    vf.store_align(t_f1, reg_dst, preg, dist=pl.StoreDist.PACK, post_update=True)
+    vf.store_align(t_f1, reg_dst, preg, dist=pl.StoreDist.PACK, post_update=True)
 
 
 @pl.jit()
