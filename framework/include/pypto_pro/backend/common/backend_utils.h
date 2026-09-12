@@ -44,6 +44,20 @@ CompareAttrs GetCompareAttrs(const ir::CallPtr& op);
 
 namespace cce {
 
+/// Positions of the operands of a GM access op (tile <-> tensor transfer:
+/// block.load / block.store / debug.dump_tile). tensor/tile name the GM-side
+/// tensor and the tile operand; offsets names the offset-tuple position.
+/// Scalar-container ops (getval/setval) deliberately stay out: consumers
+/// like the CCE tensor-declaration collector treat every contract op as a
+/// tile-tensor transfer.
+struct AccessArgIndices {
+    int tensor_arg_idx = -1;
+    int tile_arg_idx = -1;
+    int offsets_arg_idx = -1;
+};
+
+AccessArgIndices ResolveAccessArgIndices(const std::string& op_name);
+
 bool IsNZTensorType(const ir::TensorTypePtr& tensor_type);
 /// Whether a block.load is an MX scale load. Such a load declares its own GlobalTensor at the
 /// op -- TileShape2D maps rows/cols into layout-specific dims that the shared per-layout

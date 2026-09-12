@@ -1226,8 +1226,10 @@ void CCECodegen::VisitStmt_(const ir::YieldStmtPtr& op)
 
 void CCECodegen::EmitYieldAssignments(const std::vector<ir::VarPtr>& return_vars)
 {
-    if (return_vars.empty() || yield_buffer_.empty())
+    if (return_vars.empty() || yield_buffer_.empty()) {
+        yield_buffer_.clear();
         return;
+    }
     CHECK(return_vars.size() == yield_buffer_.size()) << "IfStmt yield values must match its return variables";
     for (size_t i = 0; i < return_vars.size(); ++i) {
         EmitVariable(return_vars[i], yield_buffer_[i], false);
@@ -2406,29 +2408,9 @@ public:
     }
 };
 
-struct AccessArgIndices {
-    int tensor_arg_idx = -1;
-    int tile_arg_idx = -1;
-};
-
-AccessArgIndices ResolveAccessArgIndices(const std::string& op_name)
-{
-    AccessArgIndices indices;
-    if (op_name == "block.load") {
-        indices.tensor_arg_idx = 1;
-        indices.tile_arg_idx = 0;
-    } else if (op_name == "block.store") {
-        indices.tensor_arg_idx = 0;
-        indices.tile_arg_idx = 1;
-    } else if (op_name == "debug.dump_tile") {
-        indices.tensor_arg_idx = 3;
-        indices.tile_arg_idx = 0;
-    }
-    return indices;
-}
-
 // Access window shape: the tile operand's shape, which is what the access transfers.
-std::optional<std::vector<ir::ExprPtr>> ResolveAccessShape(const ir::CallPtr& op, const AccessArgIndices& indices)
+std::optional<std::vector<ir::ExprPtr>> ResolveAccessShape(const ir::CallPtr& op,
+                                                           const backend::cce::AccessArgIndices& indices)
 {
     if (indices.tile_arg_idx >= 0 && indices.tile_arg_idx < static_cast<int>(op->args_.size())) {
         const auto& tile_arg = op->args_[indices.tile_arg_idx];
@@ -2444,7 +2426,7 @@ std::optional<std::vector<ir::ExprPtr>> ResolveAccessShape(const ir::CallPtr& op
 // variants, not one.
 bool IsColumnAccess(const ir::CallPtr& op)
 {
-    auto shape = ResolveAccessShape(op, ResolveAccessArgIndices(op->name_));
+    auto shape = ResolveAccessShape(op, backend::cce::ResolveAccessArgIndices(op->name_));
     if (!shape || shape->empty()) {
         return false;
     }
@@ -2483,7 +2465,7 @@ public:
 
     void VisitExpr_(const ir::CallPtr& op) override
     {
-        AccessArgIndices indices = ResolveAccessArgIndices(op->name_);
+        backend::cce::AccessArgIndices indices = backend::cce::ResolveAccessArgIndices(op->name_);
         if (indices.tensor_arg_idx >= 0 && static_cast<int>(op->args_.size()) > indices.tensor_arg_idx) {
             auto tensor_var = std::dynamic_pointer_cast<const ir::Var>(op->args_[indices.tensor_arg_idx]);
             RecordTensorDef(op, ResolveTensorAlias(tensor_var), indices);
@@ -2510,7 +2492,7 @@ private:
     // construction. Accesses that disagree land in different variants instead of overwriting
     // each other -- which is what used to silently give one of them the wrong layout.
     void RecordTensorDef(const ir::CallPtr& op, const std::shared_ptr<const ir::Var>& tensor_var,
-                         const AccessArgIndices& indices)
+                         const backend::cce::AccessArgIndices& indices)
     {
         if (!tensor_var) {
             return;
@@ -2550,7 +2532,7 @@ std::string TensorLayoutVariantKey(const ir::CallPtr& op)
     // Exactly the inputs GenerateGlobalTensorTypeDeclaration reads: two accesses with the same
     // key produce the same declaration and share it. NZ tensors are always single-variant --
     // their declaration is driven by the fractal layout, not by these kwargs.
-    const AccessArgIndices indices = ResolveAccessArgIndices(op->name_);
+    const backend::cce::AccessArgIndices indices = backend::cce::ResolveAccessArgIndices(op->name_);
     if (indices.tensor_arg_idx < 0 || static_cast<int>(op->args_.size()) <= indices.tensor_arg_idx) {
         return "";
     }

@@ -1641,6 +1641,97 @@ REGISTER_BACKEND_OP(BackendCCE, "debug.trap")
     });
 
 // ============================================================================
+// Sanitizer log record - device-side write of one per-detection variable-size
+// record into the GM log buffer passed as the trailing `sanitizer_log`
+// parameter. One op covers every detection type: the leading det_id argument
+// selects the record layout on the host side (pypto_pro.runtime.
+// sanitizer_replay decodes by det_id); the trailing three arguments are the
+// hidden log-buffer pointer / capacity and the span id.
+//   args = [det_id, field..., log_ptr, capacity, span_id]
+//   record = [det_id, field...] (rec_u32 = args.size() - 3)
+// The buffer region per sub-block is [ctr u32, records...], where ctr is the
+// region's u32-word offset past itself and the capacity
+// (`sanitizer_log_capacity` scalar) is the per-region u32 word budget for
+// records.
+// ============================================================================
+
+namespace {
+
+void EmitSanitizerLogPrologue(codegen::CCECodegen& codegen, const std::string& log, const std::string& capacity)
+{
+    // Region addressing. A mixed kernel runs the Cube part on the AICs and
+    // the Vector part on the AIVs of the SAME launch, so both parts share
+    // one log buffer and their region indices must never overlap (the
+    // append counter is a plain read-modify-write; two writers on one
+    // region silently drop records). The Vector part is therefore offset by
+    // the block count: Cube covers [0, block_num), Vector covers
+    // [block_num, block_num + block_num * subblockdim) = at most [N, 3N),
+    // which the host allocation of 4 * block_dim regions holds. A
+    // vector-only kernel wastes the first block_num regions, which is safe.
+    // Sub-block addressing follows the established get_block_idx() backend-op
+    // contract: the Vector target computes the global AIV index, so each
+    // sub-block gets its own region even when several AIVs run under one
+    // AIC block.
+    std::string block_idx;
+    if (codegen.GetTarget() == ir::SectionKind::Vector) {
+        block_idx = "(int32_t)(get_block_num() + get_block_idx() * get_subblockdim() + get_subblockid())";
+    } else {
+        block_idx = "(int32_t)(get_block_idx())";
+    }
+
+    // Append-mode logging, no atomics: each executing sub-block targets its own
+    // region (independently addressable via the global block index above), so
+    // the leading counter is only written by this single writer. This keeps
+    // every loop iteration's record (no overwrite) without relying on a GM
+    // atomic instruction. Region layout: [ctr u32, records...], ctr is the
+    // u32-word offset of the first free record (read, incremented, written
+    // back); buffer size = sub_block_count * (capacity + 1) * 4 bytes.
+    codegen.Emit("if (" + log + " != 0) {");
+    codegen.Emit("  int32_t __log_block = " + block_idx + ";");
+    codegen.Emit("  __gm__ uint32_t* __log_base = reinterpret_cast<__gm__ uint32_t*>(" + log +
+                 ") + "
+                 "static_cast<uint64_t>(__log_block) * (static_cast<uint64_t>(" +
+                 capacity + ") + 1u);");
+    codegen.Emit("  uint32_t __log_off = __log_base[0];");
+}
+
+} // namespace
+
+static std::string MakeSanitizerLogCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+{
+    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+    // args = [det_id, field..., log_ptr, capacity, span_id] -> at least the
+    // det_id, the two hidden buffer parameters and the span id.
+    CHECK(op->args_.size() >= 4) << "block.sanitizer_log requires (det_id, field..., log_ptr, capacity, span_id)";
+
+    const size_t n = op->args_.size();
+    std::string det_id = codegen.GetExprAsCode(op->args_[0]);
+    // Hidden log-buffer parameters: resolve their final (SSA-suffixed) names.
+    std::string log = codegen.GetExprAsCode(op->args_[n - 3]);
+    std::string capacity = codegen.GetExprAsCode(op->args_[n - 2]);
+    std::string span_id = codegen.GetExprAsCode(op->args_[n - 1]);
+    // Record size in u32 words: det_id + fields + span_id (fields exclude the
+    // hidden log/capacity parameters).
+    const uint32_t rec_u32 = static_cast<uint32_t>(n) - 2u;
+
+    EmitSanitizerLogPrologue(codegen, log, capacity);
+    codegen.Emit("  if (__log_off + " + std::to_string(rec_u32) + "u <= static_cast<uint32_t>(" + capacity + ")) {");
+    codegen.Emit("    __gm__ uint32_t* __log_rec = __log_base + 1u + __log_off;");
+    codegen.Emit("    __log_rec[0] = static_cast<uint32_t>(" + det_id + ");  // det_id");
+    for (size_t i = 1; i + 3 < n; ++i) {
+        codegen.Emit("    __log_rec[" + std::to_string(i) + "] = static_cast<int32_t>(" +
+                     codegen.GetExprAsCode(op->args_[i]) + ");");
+    }
+    codegen.Emit("    __log_rec[" + std::to_string(rec_u32 - 1u) + "] = static_cast<uint32_t>(" + span_id + ");");
+    codegen.Emit("    __log_base[0] = __log_off + " + std::to_string(rec_u32) + "u;");
+    codegen.Emit("  }");
+    codegen.Emit("}");
+    return "";
+}
+
+REGISTER_BACKEND_OP(BackendCCE, "block.sanitizer_log").set_pipe(ir::PipeType::S).f_codegen(MakeSanitizerLogCodegenCCE);
+
+// ============================================================================
 // Language operations: get_block_num, get_subblock_idx
 // ============================================================================
 

@@ -100,7 +100,9 @@ void BindPasses(py::module_& m)
                     "Simplify symbolic scalars under their enclosing branch condition")
         .def_static("create_root_functions", &pass::CreateRootFunctions, "Create root functions from IR")
         .def_static("finalize_dynamic_function", &pass::FinalizeDynamicFunction,
-                    "Finalize dynamic functions built from new IR");
+                    "Finalize dynamic functions built from new IR")
+        .def_static("sanitizer", &pass::Sanitizer,
+                    "Create a sanitizer instrumentation pass (stateless; every check value travels in the records)");
 
     py::class_<PassInstrument, std::shared_ptr<PassInstrument>>(m, "PassInstrument",
                                                                 "Abstract base class for pass instrumentation")
