@@ -1045,6 +1045,46 @@ TEST_F(SubgraphToFunctionTest, ReshapeDependencyHandling)
     EXPECT_TRUE(found) << "ABS_SG1 subgraph entry not found in topology";
 }
 
+TEST_F(SubgraphToFunctionTest, ExportsFunctionOutcastWrittenAndReadInSameSubgraph)
+{
+    ComputationalGraphBuilder G;
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP32, {16, 16},
+                             {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB, MemoryType::MEM_DEVICE_DDR,
+                              MemoryType::MEM_UB, MemoryType::MEM_DEVICE_DDR},
+                             {"x", "ub", "buf", "ub2", "y"}));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_COPY_IN, {"x"}, {"ub"}, "copy_in_x"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_COPY_OUT, {"ub"}, {"buf"}, "copy_out_buf"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_COPY_IN, {"buf"}, {"ub2"}, "copy_in_buf"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_COPY_OUT, {"ub2"}, {"y"}, "copy_out_y"));
+    ASSERT_TRUE(G.SetInCast({"x"}));
+    ASSERT_TRUE(G.SetOutCast({"buf", "y"}));
+    for (const char* name : {"copy_in_x", "copy_out_buf", "copy_in_buf", "copy_out_y"}) {
+        G.GetOp(name)->UpdateSubgraphID(0);
+    }
+
+    Function* function = G.GetFunction();
+    ASSERT_NE(function, nullptr);
+    function->SetTotalSubGraphCount(1);
+
+    SubgraphToFunction pass;
+    ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
+    ASSERT_NE(function->rootFunc_, nullptr);
+    ASSERT_EQ(function->rootFunc_->programs_.size(), 1U);
+
+    const int bufRawMagic = G.GetTensor("buf")->GetRawMagic();
+    auto containsBuf = [bufRawMagic](const auto& tensors) {
+        return std::any_of(tensors.begin(), tensors.end(), [bufRawMagic](const auto& tensor) {
+            return tensor != nullptr && tensor->GetRawMagic() == bufRawMagic;
+        });
+    };
+    EXPECT_TRUE(containsBuf(function->rootFunc_->programs_.begin()->second->GetOutcast()));
+    bool callProducesBuf = false;
+    for (const auto& op : function->rootFunc_->Operations()) {
+        callProducesBuf = callProducesBuf || containsBuf(op.GetOOperands());
+    }
+    EXPECT_TRUE(callProducesBuf);
+}
+
 TEST_F(SubgraphToFunctionTest, LightweightStableSortIgnoresInplaceSelfDependency)
 {
     Program program;

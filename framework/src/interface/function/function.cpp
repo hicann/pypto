@@ -17,6 +17,7 @@
 #include <queue>
 #include <algorithm>
 #include <unordered_map>
+#include <unordered_set>
 #include "interface/inner/pre_def.h"
 #include "interface/cache/hash.h"
 #include "interface/operation/opcode.h"
@@ -3355,6 +3356,7 @@ std::vector<std::vector<SymbolicScalar>> Function::NormalizeCoa(std::vector<Oper
 {
     std::unordered_map<int, Operation*> opmagicToOp;
     std::unordered_map<LogicalTensorPtr, int> processedOperands;
+    std::unordered_set<Operation*> normalizedOps;
 
     opmagicToOp.reserve(operations_.size());
     for (auto& op : operations_) {
@@ -3364,9 +3366,9 @@ std::vector<std::vector<SymbolicScalar>> Function::NormalizeCoa(std::vector<Oper
     int coaIndex = COA_INDEX_BASE;
     std::vector<std::vector<SymbolicScalar>> coaLists;
     coaLists.reserve(incastPosition.size() + outcastPosition.size());
-    NormalizeCoaForInCasts(iOpAttr, coaLists, coaIndex, processedOperands, opmagicToOp);
-    NormalizeCoaForOutCasts(oOpAttr, coaLists, coaIndex, processedOperands, opmagicToOp);
-    NormalizeCoaForNormalOperands(coaLists, coaIndex, processedOperands);
+    NormalizeCoaForInCasts(iOpAttr, coaLists, coaIndex, processedOperands, normalizedOps, opmagicToOp);
+    NormalizeCoaForOutCasts(oOpAttr, coaLists, coaIndex, processedOperands, normalizedOps, opmagicToOp);
+    NormalizeCoaForNormalOperands(coaLists, coaIndex, processedOperands, normalizedOps);
     NormalizeCoaForSpecialInfo(coaLists, coaIndex);
 
     return coaLists;
@@ -3411,6 +3413,7 @@ static bool IsOutcastCopyOutChain(Operation* op, std::vector<Operation*>& copyOu
 void Function::NormalizeCoaForInCasts(std::vector<OperandAttribute>& iOpAttr,
                                       std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
                                       std::unordered_map<LogicalTensorPtr, int>& processedOperands,
+                                      std::unordered_set<Operation*>& normalizedOps,
                                       const std::unordered_map<int, Operation*>& opmagicToOp)
 {
     bool valueToIndex = parent_->GetFunctionType() == FunctionType::DYNAMIC_LOOP_PATH;
@@ -3418,6 +3421,7 @@ void Function::NormalizeCoaForInCasts(std::vector<OperandAttribute>& iOpAttr,
     for (auto [opmagic, k] : incastPosition) {
         auto op = opmagicToOp.at(opmagic);
         if (op->GetIOpAttrOffset(k) != -1) {
+            normalizedOps.insert(op);
             continue;
         }
         std::vector<SymbolicScalar> operandCoaList;
@@ -3435,6 +3439,7 @@ void Function::NormalizeCoaForInCasts(std::vector<OperandAttribute>& iOpAttr,
                 for (auto copyIn : copyInList) {
                     operandCoaList = NormalizeCopyIn(copyIn, coaIndex, valueToIndex);
                     copyIn->SetIOpAtt(isReshape ? 0 : k, coaIndex);
+                    normalizedOps.insert(copyIn);
                     if (!isReshape) {
                         iOpAttr.emplace_back(coaIndex);
                     }
@@ -3448,6 +3453,7 @@ void Function::NormalizeCoaForInCasts(std::vector<OperandAttribute>& iOpAttr,
                     coaIndex += operandCoaList.size();
                     coaLists.emplace_back(std::move(operandCoaList));
                 }
+                normalizedOps.insert(op);
                 continue;
             }
             auto iOperand = op->GetInputOperand(k);
@@ -3455,6 +3461,7 @@ void Function::NormalizeCoaForInCasts(std::vector<OperandAttribute>& iOpAttr,
             if (it != processedOperands.end()) {
                 op->SetIOpAtt(k, it->second);
                 iOpAttr.emplace_back(it->second);
+                normalizedOps.insert(op);
                 continue;
             }
             operandCoaList = NormalizeTensor(iOperand, coaIndex, false, op->GetOpcode() == Opcode::OP_NOP);
@@ -3462,6 +3469,7 @@ void Function::NormalizeCoaForInCasts(std::vector<OperandAttribute>& iOpAttr,
         }
         op->SetIOpAtt(k, coaIndex);
         iOpAttr.emplace_back(coaIndex);
+        normalizedOps.insert(op);
         coaIndex += operandCoaList.size();
         coaLists.emplace_back(std::move(operandCoaList));
     }
@@ -3470,6 +3478,7 @@ void Function::NormalizeCoaForInCasts(std::vector<OperandAttribute>& iOpAttr,
 void Function::NormalizeCoaForOutCasts(std::vector<OperandAttribute>& oOpAttr,
                                        std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
                                        std::unordered_map<LogicalTensorPtr, int>& processedOperands,
+                                       std::unordered_set<Operation*>& normalizedOps,
                                        const std::unordered_map<int, Operation*>& opmagicToOp)
 {
     bool valueToIndex = parent_->GetFunctionType() == FunctionType::DYNAMIC_LOOP_PATH;
@@ -3477,6 +3486,7 @@ void Function::NormalizeCoaForOutCasts(std::vector<OperandAttribute>& oOpAttr,
     for (auto [opmagic, k] : outcastPosition) {
         auto op = opmagicToOp.at(opmagic);
         if (op->GetOOpAttrOffset(k) != -1) {
+            normalizedOps.insert(op);
             continue;
         }
         bool isAtomic = op->GetOOperands()[0]->HasAttr(OpAttributeKey::writeConflict);
@@ -3492,10 +3502,12 @@ void Function::NormalizeCoaForOutCasts(std::vector<OperandAttribute>& oOpAttr,
             bool isReshape = op->GetOpcode() == Opcode::OP_RESHAPE;
             for (auto copyOut : copyOutList) {
                 if (copyOut->GetOOpAttrOffset(0) != -1) {
+                    normalizedOps.insert(copyOut);
                     continue;
                 }
                 operandCoaList = NormalizeCopyOut(copyOut, coaIndex, valueToIndex);
                 copyOut->SetOOpAtt(isReshape ? 0 : k, coaIndex, false);
+                normalizedOps.insert(copyOut);
                 if (!isReshape) {
                     oOpAttr.emplace_back(coaIndex, isAtomic);
                 }
@@ -3509,6 +3521,7 @@ void Function::NormalizeCoaForOutCasts(std::vector<OperandAttribute>& oOpAttr,
                 coaIndex += operandCoaList.size();
                 coaLists.emplace_back(std::move(operandCoaList));
             }
+            normalizedOps.insert(op);
             continue;
         } else {
             auto oOperand = op->GetOutputOperand(k);
@@ -3516,6 +3529,7 @@ void Function::NormalizeCoaForOutCasts(std::vector<OperandAttribute>& oOpAttr,
             if (it != processedOperands.end()) {
                 op->SetOOpAtt(k, it->second, isAtomic);
                 oOpAttr.emplace_back(it->second, isAtomic);
+                normalizedOps.insert(op);
                 continue;
             }
             operandCoaList = NormalizeTensor(oOperand, coaIndex, false);
@@ -3523,25 +3537,56 @@ void Function::NormalizeCoaForOutCasts(std::vector<OperandAttribute>& oOpAttr,
         }
         op->SetOOpAtt(k, coaIndex, isAtomic);
         oOpAttr.emplace_back(coaIndex, isAtomic);
+        normalizedOps.insert(op);
         coaIndex += operandCoaList.size();
         coaLists.emplace_back(std::move(operandCoaList));
     }
 }
 
 void Function::NormalizeCoaForNormalOperands(std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
-                                             std::unordered_map<LogicalTensorPtr, int>& processedOperands)
+                                             std::unordered_map<LogicalTensorPtr, int>& processedOperands,
+                                             const std::unordered_set<Operation*>& normalizedOps)
 {
     std::unordered_set<LogicalTensorPtr> inOutCasts;
     inOutCasts.insert(inCasts_.begin(), inCasts_.end());
     inOutCasts.insert(outCasts_.begin(), outCasts_.end());
+    std::unordered_set<int> outcastRawMagics;
+    for (const auto& outcast : outCasts_) {
+        if (outcast != nullptr) {
+            outcastRawMagics.insert(outcast->GetRawMagic());
+        }
+    }
     bool valueToIndex = parent_->GetFunctionType() == FunctionType::DYNAMIC_LOOP_PATH;
     for (auto& op : operations_) {
         if (op->GetOpcode() == Opcode::OP_NOP) {
             continue;
         }
+        // In/outcast 规范化只覆盖已登记 operand。多输出 op（如 INDEX_ADD 的 tmp）仍要处理剩余操作数，
+        // 不能因 op 已在 normalizedOps 中就整算子跳过。
+        if (normalizedOps.count(op.get()) == 0) {
+            if (IsCopyIn(op->GetOpcode()) && !op->GetIOperands().empty() &&
+                outcastRawMagics.count(op->GetInputOperand(0)->GetRawMagic()) > 0) {
+                auto operandCoaList = NormalizeCopyIn(op.get(), coaIndex, valueToIndex);
+                op->SetIOpAtt(0, coaIndex);
+                coaIndex += operandCoaList.size();
+                coaLists.emplace_back(std::move(operandCoaList));
+                continue;
+            }
+            if (IsCopyOut(op->GetOpcode()) && !op->GetOOperands().empty() &&
+                outcastRawMagics.count(op->GetOutputOperand(0)->GetRawMagic()) > 0) {
+                auto operandCoaList = NormalizeCopyOut(op.get(), coaIndex, valueToIndex);
+                op->SetOOpAtt(0, coaIndex, false);
+                coaIndex += operandCoaList.size();
+                coaLists.emplace_back(std::move(operandCoaList));
+                continue;
+            }
+        }
         for (size_t i = 0; i < op->GetInputOperandSize(); i++) {
             auto iOperand = op->GetInputOperand(i);
-            if ((op->GetIOpAttrOffset(i) != -1) || (inOutCasts.count(iOperand) > 0)) {
+            if (op->GetIOpAttrOffset(i) != -1) {
+                continue;
+            }
+            if (inOutCasts.count(iOperand) > 0) {
                 continue;
             }
             auto it = processedOperands.find(iOperand);
@@ -3558,7 +3603,10 @@ void Function::NormalizeCoaForNormalOperands(std::vector<std::vector<SymbolicSca
         }
         for (size_t i = 0; i < op->GetOutputOperandSize(); i++) {
             auto oOperand = op->GetOutputOperand(i);
-            if ((op->GetOOpAttrOffset(i) != -1) || (inOutCasts.count(oOperand) > 0)) {
+            if (op->GetOOpAttrOffset(i) != -1) {
+                continue;
+            }
+            if (inOutCasts.count(oOperand) > 0) {
                 continue;
             }
             // 对于Copy类多输出Op，由于InferParamIndex对每个输出都需要通过专属的coaIndex传递Validshape给codegen，故需要给此类op所有输出都进行normalize
