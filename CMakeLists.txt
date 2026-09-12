@@ -148,13 +148,17 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                 framework/src/interface/configs/tile_fwk_types.json
                 framework/src/interface/configs/tile_fwk_config_schema.json
                 framework/src/platform/parser/platforminfo.ini
-                framework/src/platform/parser/simulation_platform/platform_config/A2A3.ini
-                framework/src/platform/parser/simulation_platform/platform_config/950DT_957x.ini
-                framework/src/platform/parser/simulation_platform/platform_config/950PR_957x.ini
-                framework/src/platform/parser/simulation_platform/platform_config/950DT_9581.ini
-                framework/src/platform/parser/simulation_platform/platform_config/950DT_9581x.ini
-                framework/src/platform/parser/simulation_platform/platform_config/950DT_958x.ini
-                framework/src/platform/parser/simulation_platform/platform_config/950PR_958x.ini
+                framework/src/platform/parser/simulation_platform/platform_config/Ascend910B1.ini
+                framework/src/platform/parser/simulation_platform/platform_config/Ascend910B2.ini
+                framework/src/platform/parser/simulation_platform/platform_config/Ascend910B3.ini
+                framework/src/platform/parser/simulation_platform/platform_config/Ascend910B4.ini
+                framework/src/platform/parser/simulation_platform/platform_config/Ascend910_9363.ini
+                framework/src/platform/parser/simulation_platform/platform_config/Ascend950DT_9572.ini
+                framework/src/platform/parser/simulation_platform/platform_config/Ascend950PR_9579.ini
+                framework/src/platform/parser/simulation_platform/platform_config/Ascend950DT_9581.ini
+                framework/src/platform/parser/simulation_platform/platform_config/Ascend950DT_9581X.ini
+                framework/src/platform/parser/simulation_platform/platform_config/Ascend950DT_9582.ini
+                framework/src/platform/parser/simulation_platform/platform_config/Ascend950PR_9589.ini
                 framework/src/platform/parser/simulation_platform/platform_config/Kirin9030.ini
                 framework/src/platform/parser/simulation_platform/platform_config/KirinX90.ini
             DESTINATION ${PyPTO_WhlName}/lib/configs

@@ -20,7 +20,6 @@
 
 namespace npu {
 namespace tile_fwk {
-const std::string platformConfigEnv = "PLATFORM_CONFIG_PATH";
 const std::string version = "version";
 const std::string aic = "AIC";
 const std::string aiv = "AIV";

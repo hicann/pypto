@@ -707,7 +707,7 @@ TEST_F(CostModelTest, TestGetCyclesForPassA5)
     const std::string opCode = "CAST";
     std::vector<std::vector<int>> shape = {{1, 1, 1, 1}};
     DataType dtype = DataType::DT_INT4;
-    config::SetPlatformConfig("device_platform", "ASCEND_950PR_9579");
+    config::SetPlatformConfig("device_platform", "Ascend950PR_9579");
     config::SetSimConfig(KEY_ACCURACY_LEVEL, 1);
     int64_t cycle = CostModel::GetCyclesForPass(opCode, shape, dtype);
     EXPECT_GT(cycle, 0);
@@ -718,7 +718,7 @@ TEST_F(CostModelTest, TestGetCyclesForPassCopyIn)
     const std::string opCode = "COPY_IN";
     std::vector<std::vector<int>> shape = {{1, 1, 1, 1}};
     DataType dtype = DataType::DT_INT4;
-    config::SetPlatformConfig("device_platform", "ASCEND_950PR_9579");
+    config::SetPlatformConfig("device_platform", "Ascend950PR_9579");
     config::SetSimConfig(KEY_ACCURACY_LEVEL, 1);
     int64_t cycle = CostModel::GetCyclesForPass(opCode, shape, dtype);
     EXPECT_GT(cycle, 0);
@@ -729,7 +729,7 @@ TEST_F(CostModelTest, TestGetCyclesForPassCopyOut)
     const std::string opCode = "COPY_OUT";
     std::vector<std::vector<int>> shape = {{1, 1, 1, 1}};
     DataType dtype = DataType::DT_INT4;
-    config::SetPlatformConfig("device_platform", "ASCEND_950PR_9579");
+    config::SetPlatformConfig("device_platform", "Ascend950PR_9579");
     config::SetSimConfig(KEY_ACCURACY_LEVEL, 1);
     int64_t cycle = CostModel::GetCyclesForPass(opCode, shape, dtype);
     EXPECT_GT(cycle, 0);
@@ -740,7 +740,7 @@ TEST_F(CostModelTest, TestGetCyclesForPassSimulate)
     const std::string opCode = "WHERE_TT";
     std::vector<std::vector<int>> shape = {{1, 1, 1, 1}};
     DataType dtype = DataType::DT_INT4;
-    config::SetPlatformConfig("device_platform", "ASCEND_950PR_9579");
+    config::SetPlatformConfig("device_platform", "Ascend950PR_9579");
     config::SetSimConfig(KEY_ACCURACY_LEVEL, 1);
     int64_t cycle = CostModel::GetCyclesForPass(opCode, shape, dtype);
     EXPECT_GT(cycle, 0);
@@ -753,7 +753,7 @@ TEST_F(CostModelTest, TestGetCyclesForPassSo)
     const std::string opCode = "L1_TO_L0A";
     std::vector<std::vector<int>> shape = {{1, 1, 1, 1}};
     DataType dtype = DataType::DT_INT4;
-    config::SetPlatformConfig("device_platform", "ASCEND_950PR_9579");
+    config::SetPlatformConfig("device_platform", "Ascend950PR_9579");
     config::SetSimConfig(KEY_ACCURACY_LEVEL, 1);
     std::string soPath = "libtile_fwk_simulation.so";
     void* handle = dlopen(soPath.c_str(), RTLD_LAZY);

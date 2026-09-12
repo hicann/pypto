@@ -23,7 +23,7 @@ namespace npu::tile_fwk {
 const std::string version = "version";
 const std::string socVersionInfo = "SoC_version";
 const std::string npuArchInfo = "NpuArch";
-const std::string shortSocVer = "Short_SoC_version";
+const std::string socSeriesInfo = "Short_SoC_version";
 const std::string socInfo = "SoCInfo";
 const std::string cubeVectorMix = "cube_vector_mix";
 const std::string aiCoreCnt = "ai_core_cnt";
@@ -263,15 +263,19 @@ void Platform::SetMemoryLimit(const PlatformParser& parser)
 void Platform::LoadPlatformInfo(const PlatformParser& parser)
 {
     std::string archType;
-    std::string shortSocVersion;
+    std::string socVersion;
+    std::string socSeries;
     std::string cvMix;
     std::unordered_map<std::string, std::string> versionInfo;
     PLATFORM_LOGD("Start load platform info.");
     if (parser.GetStringVal(version, npuArchInfo, archType)) {
         GetSoc().SetNPUArch(archType);
     }
-    if (parser.GetStringVal(version, shortSocVer, shortSocVersion)) {
-        GetSoc().SetShortSocVersion(shortSocVersion);
+    if (parser.GetStringVal(version, socVersionInfo, socVersion)) {
+        GetSoc().SetSocVersion(socVersion);
+    }
+    if (parser.GetStringVal(version, socSeriesInfo, socSeries)) {
+        GetSoc().SetSocSeries(socSeries);
     }
     if (IsLiteNPU(GetSoc().GetNPUArch()) &&
         parser.GetStringVal(socInfo, cubeVectorMix, cvMix)) { // for litenpu ini CV mix, cloudnpu ini uses different key
@@ -358,9 +362,10 @@ void Platform::ReloadMemoryPaths(const std::string& archType)
 
 size_t GetMemoryLimitForArch(const std::string& arch, const std::string& space)
 {
-    // Arch -> platform ini. PyPTO Pro only supports A5.
+    // Arch (machine-level legacy name kept as pypto_pro API) -> standard soc_version ini.
+    // PyPTO Pro only supports A5 (NPU_ARCH 3510, Ascend950 series).
     static const std::unordered_map<std::string, std::string> archToIni = {
-        {"a5", "950PR_957x"},
+        {"a5", "Ascend950PR_9579"},
     };
     const auto iniIt = archToIni.find(arch);
     if (iniIt == archToIni.end()) {
