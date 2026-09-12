@@ -29,44 +29,64 @@
 #include "cann_host_runtime.h"
 
 namespace npu::tile_fwk {
+// Standard soc_version (chip bin within a soc_series), consistent with CANN platform_config ini naming,
+// e.g. Ascend950PR_9589 / Ascend910B2 / Kirin9030. One ini file per soc_version.
 enum class DPlatform {
     ASCEND_910B1,
     ASCEND_910B2,
     ASCEND_910B3,
     ASCEND_910B4,
-    ASCEND_910C4,
+    ASCEND_910_9363,
+    ASCEND_950DT_9572,
     ASCEND_950PR_9579,
-    ASCEND_950DT_9582,
-    ASCEND_950PR_9582,
-    ASCEND_950DT_9579,
-    KIRIN_9030,
-    KIRIN_X90,
     ASCEND_950DT_9581,
     ASCEND_950DT_9581X,
+    ASCEND_950DT_9582,
+    ASCEND_950PR_9589,
+    KIRIN_9030,
+    KIRIN_X90,
 
     UNKNOWN_DEVICE,
 };
 
-inline DPlatform StringToDpaltform(std::string platform)
+inline DPlatform StringToDPlatform(std::string platform)
 {
-    std::unordered_map<std::string, DPlatform> mappings = {
+    const std::unordered_map<std::string, DPlatform> mappings = {
+        {"Ascend910B1", DPlatform::ASCEND_910B1},
+        {"Ascend910B2", DPlatform::ASCEND_910B2},
+        {"Ascend910B3", DPlatform::ASCEND_910B3},
+        {"Ascend910B4", DPlatform::ASCEND_910B4},
+        {"Ascend910_9363", DPlatform::ASCEND_910_9363},
+        {"Ascend950DT_9572", DPlatform::ASCEND_950DT_9572},
+        {"Ascend950PR_9579", DPlatform::ASCEND_950PR_9579},
+        {"Ascend950DT_9581", DPlatform::ASCEND_950DT_9581},
+        {"Ascend950DT_9581X", DPlatform::ASCEND_950DT_9581X},
+        {"Ascend950DT_9582", DPlatform::ASCEND_950DT_9582},
+        {"Ascend950PR_9589", DPlatform::ASCEND_950PR_9589},
+        {"Kirin9030", DPlatform::KIRIN_9030},
+        {"KirinX90", DPlatform::KIRIN_X90},
+        // Deprecated device_platform formats, kept for compatibility. Legacy values whose names did not
+        // match the actual chip bin are mapped to the real soc_version of the ini they used to load:
+        // ASCEND_950DT_9579 -> Ascend950DT_9572, ASCEND_950PR_9582 -> Ascend950PR_9589.
         {"ASCEND_910B1", DPlatform::ASCEND_910B1},
         {"ASCEND_910B2", DPlatform::ASCEND_910B2},
         {"ASCEND_910B3", DPlatform::ASCEND_910B3},
         {"ASCEND_910B4", DPlatform::ASCEND_910B4},
-        {"ASCEND_910C4", DPlatform::ASCEND_910C4},
+        {"ASCEND_910_9363", DPlatform::ASCEND_910_9363},
+        {"ASCEND_950DT_9572", DPlatform::ASCEND_950DT_9572},
+        {"ASCEND_950DT_9579", DPlatform::ASCEND_950DT_9572},
         {"ASCEND_950PR_9579", DPlatform::ASCEND_950PR_9579},
         {"ASCEND_950DT_9581", DPlatform::ASCEND_950DT_9581},
         {"ASCEND_950DT_9581X", DPlatform::ASCEND_950DT_9581X},
+        {"ASCEND_950DT_9582", DPlatform::ASCEND_950DT_9582},
+        {"ASCEND_950PR_9582", DPlatform::ASCEND_950PR_9589},
+        {"ASCEND_950PR_9589", DPlatform::ASCEND_950PR_9589},
         {"KIRIN_9030", DPlatform::KIRIN_9030},
         {"KIRIN_X90", DPlatform::KIRIN_X90},
-        {"ASCEND_950DT_9582", DPlatform::ASCEND_950DT_9582},
-        {"ASCEND_950PR_9582", DPlatform::ASCEND_950PR_9582},
-        {"ASCEND_950DT_9579", DPlatform::ASCEND_950DT_9579},
     };
 
-    if (mappings.count(platform)) {
-        return mappings[platform];
+    if (mappings.count(platform) != 0) {
+        return mappings.at(platform);
     }
 
     return DPlatform::UNKNOWN_DEVICE;
@@ -386,13 +406,41 @@ inline std::string NPUArchToString(NPUArch npu_arch)
 
 inline bool IsLiteNPU(NPUArch arch) { return arch == NPUArch::DAV_3113 || arch == NPUArch::DAV_3003; }
 
+// NPU_ARCH (core architecture) of each standard soc_version, consistent with the NpuArch key
+// in CANN platform_config ini, e.g. Ascend950PR_9589 -> 3510, Ascend910B2 -> 2201.
+inline NPUArch DPlatformToNPUArch(DPlatform platform)
+{
+    switch (platform) {
+        case DPlatform::ASCEND_910B1:
+        case DPlatform::ASCEND_910B2:
+        case DPlatform::ASCEND_910B3:
+        case DPlatform::ASCEND_910B4:
+        case DPlatform::ASCEND_910_9363:
+            return NPUArch::DAV_2201;
+        case DPlatform::ASCEND_950DT_9572:
+        case DPlatform::ASCEND_950PR_9579:
+        case DPlatform::ASCEND_950DT_9581:
+        case DPlatform::ASCEND_950DT_9581X:
+        case DPlatform::ASCEND_950DT_9582:
+        case DPlatform::ASCEND_950PR_9589:
+            return NPUArch::DAV_3510;
+        case DPlatform::KIRIN_9030:
+            return NPUArch::DAV_3113;
+        case DPlatform::KIRIN_X90:
+            return NPUArch::DAV_3003;
+        default:
+            return NPUArch::DAV_UNKNOWN;
+    }
+}
+
 enum class SoCAICToAIVCoreRatio { ONE_AIC_TO_ONE_AIV_CORE, ONE_AIC_TO_TWO_AIV_CORE, UNSUPPORTED_AIC_TO_AIV_CORE_RATIO };
 
 class SoC {
 private:
     Die die_;
     NPUArch version_;
-    std::string short_soc_ver_;
+    std::string soc_version_;
+    std::string soc_series_;
     size_t dies_cnt_;
     size_t ai_core_cnt_;
     size_t cube_core_cnt_;
@@ -404,14 +452,16 @@ public:
     void SetDie(const Die& die) { die_ = die; }
     void SetNPUArch(NPUArch version) { version_ = version; }
     void SetNPUArch(const std::string& version);
-    void SetShortSocVersion(const std::string& version) { short_soc_ver_ = version; }
+    void SetSocVersion(const std::string& version) { soc_version_ = version; }
+    void SetSocSeries(const std::string& series) { soc_series_ = series; }
     void SetDiesNum(size_t cnt) { dies_cnt_ = cnt; }
     void SetCCECVersion(const std::unordered_map<std::string, std::string>& ver);
 
     Die& GetDies() { return die_; }
     NPUArch GetNPUArch() const { return version_; }
     size_t GetDiesNum() const { return dies_cnt_; }
-    std::string GetShortSocVersion() const { return short_soc_ver_; }
+    std::string GetSocVersion() const { return soc_version_; }
+    std::string GetSocSeries() const { return soc_series_; }
     std::string GetCCECVersion(std::string CoreType);
 
     SoCAICToAIVCoreRatio GetAICToAIVCoreRatio()
@@ -447,7 +497,8 @@ public:
         std::stringstream ss;
         ss << "{\n";
         ss << "SOC_INFO : {\n";
-        ss << "    \"SHORT_SOC_VERSION\" : \"" << short_soc_ver_ << "\",\n";
+        ss << "    \"SOC_VERSION\" : \"" << soc_version_ << "\",\n";
+        ss << "    \"SOC_SERIES\" : \"" << soc_series_ << "\",\n";
         ss << "    \"NPU_ARCH\" : " << static_cast<int>(version_) << ",\n";
         ss << "    \"DIES_NUM\" : " << dies_cnt_ << ",\n";
         ss << "    \"AI_CPU_NUM\" : " << ai_cpu_cnt_ << ",\n";

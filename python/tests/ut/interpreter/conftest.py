@@ -61,7 +61,9 @@ def _force_950_platform(request):
 
     prev_arch = pypto.platform.npuarch
     pypto.platform.npuarch = "DAV_3510"
-    pypto.set_codegen_options(soc_version="Ascend950")
+    # The 950 pipeline is selected by NPU_ARCH (DAV_3510); no soc_version override is needed: platform
+    # specs keep the default bin (same behavior as before the platform config normalization), and there
+    # is no soc_series config entry - platform inis are keyed by soc_version (chip bin) only.
     pypto.set_host_options(compile_stage=pypto.CompStage.EXECUTE_GRAPH)
     yield
     pypto.platform.npuarch = prev_arch
@@ -104,9 +106,8 @@ def _compile_only_no_launch(monkeypatch):
         pto_tensors = self._convert_tensors_with_metadata(torch_tensors, tensor_defs)
         with pypto.options("jit_scope"):
             self._set_config_option()
-            # Re-apply after jit option merge so 950 target / stage stick.
+            # Re-apply after jit option merge so the 950 stage sticks.
             if pypto.platform.npuarch == "DAV_3510":
-                pypto.set_codegen_options(soc_version="Ascend950")
                 pypto.set_host_options(compile_stage=pypto.CompStage.EXECUTE_GRAPH)
             pypto_impl.DeviceInit()
             self.compile(pto_tensors)

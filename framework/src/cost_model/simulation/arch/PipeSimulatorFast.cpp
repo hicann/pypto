@@ -430,9 +430,12 @@ extern "C" __attribute__((visibility("default"))) int64_t GetCyclesForPass(const
                                                                            const std::vector<std::vector<int>>& shape,
                                                                            DataType dtype)
 {
-    std::string archType = config::GetPlatformConfig("device_platform", "ASCEND_950PR_9579") == "ASCEND_950PR_9579" ?
-                               "A5" :
-                               "A2A3";
+    // Select the pipe simulator by the NPU_ARCH of the configured soc_version (not by machine type):
+    // NpuArch 3510 (Ascend950 series) -> "A5", NpuArch 2201/3113/3003 -> "A2A3" (cost model internal arch types).
+    // Both standard ("Ascend950PR_9579") and deprecated ("ASCEND_950PR_9579") device_platform formats are accepted.
+    std::string socVersion = config::GetPlatformConfig("device_platform", "Ascend910B2");
+    NPUArch npuArch = DPlatformToNPUArch(StringToDPlatform(socVersion));
+    std::string archType = npuArch == NPUArch::DAV_3510 ? "A5" : "A2A3";
     auto simPtr = CreateSimulator(archType);
     return simPtr->PostSimulateForPass(op, shape, dtype);
 }
