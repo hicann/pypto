@@ -251,6 +251,19 @@ Pass CreateRootFunctions();
  * \brief Finalize dynamic functions built from new IR (post create_root_functions).
  */
 Pass FinalizeDynamicFunction();
+
+/**
+ * \brief Create a sanitizer instrumentation pass
+ *
+ * Injects block.sanitizer_log records and the hidden log-buffer parameters
+ * into the entry function, accumulating the replay metadata (span table,
+ * tile table) into \p meta. The caller keeps \p meta alive as long as the
+ * pass; call the pass once per program (the Cube and Vector programs of one
+ * kernel share one meta so the tables accumulate over both).
+ */
+/// Sanitizer instrumentation pass. Stateless: every check value travels
+/// in the records; the replay tool supplies the source file for locations.
+Pass Sanitizer();
 } // namespace pass
 
 /**

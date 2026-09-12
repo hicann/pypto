@@ -61,6 +61,24 @@ CompareAttrs GetCompareAttrs(const ir::CallPtr& op)
 
 namespace cce {
 
+AccessArgIndices ResolveAccessArgIndices(const std::string& op_name)
+{
+    AccessArgIndices indices;
+    if (op_name == "block.load") {
+        indices.tensor_arg_idx = 1;
+        indices.tile_arg_idx = 0;
+        indices.offsets_arg_idx = 2;
+    } else if (op_name == "block.store") {
+        indices.tensor_arg_idx = 0;
+        indices.tile_arg_idx = 1;
+        indices.offsets_arg_idx = 2;
+    } else if (op_name == "debug.dump_tile") {
+        indices.tensor_arg_idx = 3;
+        indices.tile_arg_idx = 0;
+    }
+    return indices;
+}
+
 bool IsNZTensorType(const ir::TensorTypePtr& tensor_type)
 {
     return tensor_type && tensor_type->tensor_view_.has_value() &&
