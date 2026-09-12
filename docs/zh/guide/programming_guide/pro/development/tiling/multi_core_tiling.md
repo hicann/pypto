@@ -221,8 +221,9 @@ for task_idx in pl.range(core_id, total_tiles, core_num):
 
 ## 使用限制与建议
 
-- 不要把启动时传入的`block_dim`当作实际核数，Kernel内使用`pypto_pro.language.get_block_num()`。
-- 混合Kernel的Vector工作单元数需要乘以`pypto_pro.language.get_subblock_num()`；纯Vector Kernel不需要。
-- `block_dim`不能替代Tiling设计。任务粒度过大时负载不均，粒度过小时调度和重复搬运开销会增大。
+- Host侧启动Kernel时，传入的block_dim不得超过当前平台对应执行域的物理核容量。
+- 不要把启动时传入的block_dim当作实际核数，Kernel内使用pypto_pro.language.get_block_num()。
+- 混合Kernel的Vector工作单元数需要乘以pypto_pro.language.get_subblock_num()；纯Vector Kernel不需要。
+- block_dim不能替代Tiling设计。任务粒度过大时负载不均，粒度过小时调度和重复搬运开销会增大。
 - 多核切分只负责分配任务，不提供逻辑Block之间的隐式同步。
 - 运行时shape、循环边界等参数通过TilingData传递；有限的编译期模式通过TilingKey选择，参考[Tiling结果传输](tiling_result_transfer.md)。
