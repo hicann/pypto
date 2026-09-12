@@ -88,6 +88,19 @@ def test_tile_type_bias_single_row_allowed():
     assert "block.make_tile" in ir_str
 
 
+def test_tile_type_bias_non_nd_layout_rejected():
+    @pl.jit(arch="a5")
+    def k(x: pl.Tensor[[1, 128], pl.DT_FP32]):
+        tt = pl.TileType(
+            shape=[1, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Bias, layout=pl.DN
+        )
+        g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0])
+        _ = g.next()
+
+    with pytest.raises(ParserError, match="Bias tiles require layout in \\{ND\\}"):
+        _parse(k)
+
+
 def test_move_mat_fp16_to_bias_allowed():
     # FP16 Mat -> FP32 Bias is the standard bias-feed path (TMovToBt half->float).
     @pl.jit

@@ -55,7 +55,7 @@ pypto_pro.language.move(
   | UB → UB（目的Tile的shape大于源Tile） | ND → ND、NZ → NZ。 | 源与目的必须相同，支持DT_INT8、DT_INT32、DT_FP16、DT_BF16、DT_FP32、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
   | UB → L1 Buffer（目的Tile的shape不大于源Tile） | 源支持ND、NZ，目的不校验分形。 | 源与目的必须相同，支持DT_INT8、DT_FP8E4M3FN、DT_FP8E5M2、DT_HF8、DT_FP16、DT_BF16、DT_FP32、DT_FP4E2M1、DT_FP4E1M2、DT_FP8E8M0。 |
   | UB → L1 Buffer（目的Tile的shape大于源Tile） | 源支持ND、NZ，目的不校验分形。 | 源与目的必须相同，支持DT_INT8、DT_INT32、DT_FP16、DT_BF16、DT_FP32、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
-  | L1 Buffer → BiasTable Buffer | 不校验分形。 | 支持DT_INT32 → DT_INT32、DT_FP32 → DT_FP32、DT_FP16 → DT_FP32、DT_BF16 → DT_FP32。 |
+  | L1 Buffer → BiasTable Buffer | 目的layout固定为ND。 | 支持DT_INT32 → DT_INT32、DT_FP32 → DT_FP32、DT_FP16 → DT_FP32、DT_BF16 → DT_FP32。 |
   | L1 Buffer → Fixpipe Buffer | 不校验分形。 | 目的必须为DT_INT64或DT_UINT64，源数据类型不做限制。 |
   | L1 Buffer → L0A_MX Buffer | 源与目的分形均为ZZ。 | 源与目的必须相同，仅支持DT_FP8E8M0。 |
   | L1 Buffer → L0B_MX Buffer | 源与目的分形均为NN。 | 源与目的必须相同，仅支持DT_FP8E8M0。 |
