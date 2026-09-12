@@ -45,8 +45,9 @@ std::string CodeGenOpNPU::GenSyncWaitOp() const { return PrintSyncInSingleKernel
 
 void InsertSetSysCnt(std::ostringstream& oss)
 {
+    // Capture may leave taskStat null; guard to avoid AICore OOB.
     oss << "#ifdef OPEN_MIX_PERF\n";
-    oss << "{\n";
+    oss << "if (taskStat != nullptr) {\n";
     oss << "    __gm__ uint64_t* setEventBase = reinterpret_cast<__gm__ uint64_t*>(taskStat->perfDataBaseAddr + "
            "taskStat->setEventAddr);\n";
     oss << "    setEventBase[taskStat->setEventNum++] = get_sys_cnt();\n";
@@ -65,8 +66,9 @@ std::string CodeGenOpNPU::GenCVSyncSetOp() const
 
 void InsertWaitSysCnt(std::ostringstream& oss)
 {
+    // Capture may leave taskStat null; guard to avoid AICore OOB.
     oss << "#ifdef OPEN_MIX_PERF\n";
-    oss << "{\n";
+    oss << "if (taskStat != nullptr) {\n";
     oss << "    __gm__ uint64_t* waitEventBase = reinterpret_cast<__gm__ uint64_t*>(taskStat->perfDataBaseAddr + "
            "taskStat->waitEventAddr);\n";
     oss << "    waitEventBase[taskStat->waitEventNum++] = get_sys_cnt();\n";

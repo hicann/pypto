@@ -64,7 +64,7 @@ If you want to quickly experience the usage and development process of PyPTO, re
 ## Documentation Resources
 
 If you want to deeply experience the project features and modify the source code, refer to the following documents for detailed tutorials.
-- [Documentation Center](https://pypto.gitcode.com): Detailed documentation for the current release version, including programming guides (with debugging and tuning tools), API references, and more.
+- [Documentation Center](https://pypto.gitcode.com): Detailed documentation for the current release version, including PyPTO Operator Development, PyPTO API references, and more.
 - [Sample Code](https://gitcode.com/cann/pypto/blob/master/examples/): Rich sample code from basic to advanced applications.
 
 ## Directory Structure
