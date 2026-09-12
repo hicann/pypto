@@ -214,8 +214,10 @@ TEST(BackendCceOpsTest, DebugTrap)
     ASSERT_NE(info, nullptr);
     EXPECT_EQ(info->pipe, ir::PipeType::S);
 
+    auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
     codegen::CCECodegen codegen(ir::SectionKind::Vector);
-    EXPECT_EQ(info->codegen_func(call, codegen), "return");
+    auto generated = codegen.GenerateSingle(MakeProgram(body), "a5");
+    EXPECT_NE(generated.find("trap();"), std::string::npos);
 }
 
 // ============================================================================
