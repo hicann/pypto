@@ -28,7 +28,6 @@
 #include <cctype>
 #include <cstdio>
 #include <iomanip>
-#include <numeric>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -526,26 +525,20 @@ static void ProcessDevFunctionOutcasts(WorkspaceDesc::WorkspacePerRootFunctionDe
                  devFunc->rootInnerTensorWsMemoryRequirement, devFunc->exclusiveOutcastWsMemoryRequirement);
 }
 
-// ASSEMBLE_OUTCAST that still needs IT alloc: skip Encode INPUT/OUTPUT (EXTERNAL).
-static bool IsAssembleOutcastNeedAlloc(const FlexSlotInfo& slot)
+// Only slots codegen marked with RUNTIME_SlotMarkNeedAlloc get device-side IT memory, i.e. the runtime slots in
+// DyndevFunctionAttribute::constructAssembleNeedAllocRuntimeSlots (same numbering as slots); others must not count.
+static std::pair<uint64_t, SymbolicScalar> ComputeAssembleOutcastMem(
+    const std::vector<FlexSlotInfo>& slots, const std::unordered_set<int>& constructAssembleNeedAllocSlots)
 {
-    return slot.kindSet.Contains(RuntimeSlotKind::ASSEMBLE_OUTCAST) && !slot.kindSet.Contains(RuntimeSlotKind::INPUT) &&
-           !slot.kindSet.Contains(RuntimeSlotKind::OUTPUT);
-}
-
-static std::pair<uint64_t, SymbolicScalar> ComputeAssembleOutcastMem(const std::vector<FlexSlotInfo>& slots)
-{
-    uint64_t maxStaticAssembleOutcastMem = std::accumulate(
-        slots.begin(), slots.end(), UINT64_C(0), [](uint64_t acc, const FlexSlotInfo& slot) {
-            return std::max(acc, (IsAssembleOutcastNeedAlloc(slot) ? slot.maxAssembleDstMemReq : 0));
-        });
-
-    SymbolicScalar maxDynamicAssembleOutcastMem = std::accumulate(
-        slots.begin(), slots.end(), SymbolicScalar(0), [](SymbolicScalar acc, const FlexSlotInfo& slot) {
-            return std::max(acc, (IsAssembleOutcastNeedAlloc(slot) && slot.dynMemReq.IsValid()) ? slot.dynMemReq :
-                                                                                                  SymbolicScalar(0));
-        });
-
+    uint64_t maxStaticAssembleOutcastMem = 0;
+    SymbolicScalar maxDynamicAssembleOutcastMem(0);
+    for (int slotIdx : constructAssembleNeedAllocSlots) {
+        const FlexSlotInfo& slot = slots[slotIdx];
+        maxStaticAssembleOutcastMem = std::max(maxStaticAssembleOutcastMem, slot.maxAssembleDstMemReq);
+        if (slot.dynMemReq.IsValid()) {
+            maxDynamicAssembleOutcastMem = std::max(maxDynamicAssembleOutcastMem, slot.dynMemReq);
+        }
+    }
     return {maxStaticAssembleOutcastMem, maxDynamicAssembleOutcastMem};
 }
 
@@ -582,21 +575,18 @@ static bool IsRuntimeDynamicPartialWithSlotRoot(const DevAscendProgramUpdate& pa
 }
 
 static bool IsRuntimeDynamicPartialNeedAlloc(const DevAscendProgramUpdate& partial,
-                                             const std::shared_ptr<DyndevFunctionAttribute>& dynAttr,
-                                             const std::unordered_set<int>& constructAssembleNeedAllocSlots)
+                                             const std::shared_ptr<DyndevFunctionAttribute>& dynAttr)
 {
-    (void)constructAssembleNeedAllocSlots;
     return partial.stitchCtrlBitMask != STITCH_CTRL_NONE && IsRuntimeDynamicPartialWithSlotRoot(partial, dynAttr);
 }
 
-static SymbolicScalar ComputeMaxDynamicCellMatchTableMemPerSlot(
-    Function* func, DevAscendProgram& devProg, const std::unordered_set<int>& constructAssembleNeedAllocSlots)
+static SymbolicScalar ComputeMaxDynamicCellMatchTableMemPerSlot(Function* func, DevAscendProgram& devProg)
 {
     auto dynAttr = func->GetDyndevAttribute();
     SymbolicScalar maxDynamicTableMem(0);
     for (size_t i = 0; i < devProg.updateList.size(); ++i) {
         auto& partial = devProg.At(devProg.updateList, i);
-        if (!IsRuntimeDynamicPartialNeedAlloc(partial, dynAttr, constructAssembleNeedAllocSlots)) {
+        if (!IsRuntimeDynamicPartialNeedAlloc(partial, dynAttr)) {
             continue;
         }
         int slotIndex = partial.slotIndex;
@@ -666,16 +656,19 @@ static void AccumulateRootFunctionIntoWorkspaceDesc(WorkspaceDesc& desc, Functio
 }
 
 static void FinalizeWorkspaceDescSlotBudgets(WorkspaceDesc& desc, const std::vector<FlexSlotInfo>& slots,
+                                             const std::unordered_set<int>& constructAssembleNeedAllocSlots,
                                              uint64_t maxPerCoreSpilledMem, uint64_t maxRootMaxExclusiveOutcastMem)
 {
-    auto [maxStaticAssembleOutcastMem, maxDynamicAssembleOutcastMem] = ComputeAssembleOutcastMem(slots);
+    auto [maxStaticAssembleOutcastMem, maxDynamicAssembleOutcastMem] = ComputeAssembleOutcastMem(
+        slots, constructAssembleNeedAllocSlots);
     desc.maxLeafPerCoreSpilledMem = AlignUp(maxPerCoreSpilledMem, TENSOR_ADDR_ALIGNMENT);
     desc.maxStaticOutcastMem = std::max(maxRootMaxExclusiveOutcastMem, maxStaticAssembleOutcastMem);
     desc.maxDynamicAssembleOutcastMem = maxDynamicAssembleOutcastMem;
     desc.totalExclusiveOutcastSlot = std::count_if(slots.begin(), slots.end(), [](const FlexSlotInfo& slot) {
         return slot.kindSet.Contains(RuntimeSlotKind::EXCLUSIVE_OUTCAST);
     });
-    desc.totalAssembleOutcastSlot = std::count_if(slots.begin(), slots.end(), IsAssembleOutcastNeedAlloc);
+    // One inner-temporal assemble slot per codegen-emitted RUNTIME_SlotMarkNeedAlloc.
+    desc.totalAssembleOutcastSlot = constructAssembleNeedAllocSlots.size();
 }
 
 WorkspaceDesc CollectWorkspaceDesc(Function* func, DevAscendProgram& devProg,
@@ -703,18 +696,18 @@ WorkspaceDesc CollectWorkspaceDesc(Function* func, DevAscendProgram& devProg,
                                                 maxRootMaxExclusiveOutcastMem, maxPerCoreSpilledMem);
     }
 
-    FinalizeWorkspaceDescSlotBudgets(desc, slots, maxPerCoreSpilledMem, maxRootMaxExclusiveOutcastMem);
+    FinalizeWorkspaceDescSlotBudgets(desc, slots, constructAssembleNeedAllocSlots, maxPerCoreSpilledMem,
+                                     maxRootMaxExclusiveOutcastMem);
 
     uint64_t dynamicCellMatchSlotNum = 0;
     for (size_t i = 0; i < devProg.updateList.size(); ++i) {
         auto& partial = devProg.At(devProg.updateList, i);
-        if (IsRuntimeDynamicPartialNeedAlloc(partial, dynAttr, constructAssembleNeedAllocSlots)) {
+        if (IsRuntimeDynamicPartialNeedAlloc(partial, dynAttr)) {
             dynamicCellMatchSlotNum++;
         }
     }
     desc.cellMatch.dynamicCellMatchSlotNum = dynamicCellMatchSlotNum;
-    desc.cellMatch.maxDynamicCellMatchTableMem = ComputeMaxDynamicCellMatchTableMemPerSlot(
-        func, devProg, constructAssembleNeedAllocSlots);
+    desc.cellMatch.maxDynamicCellMatchTableMem = ComputeMaxDynamicCellMatchTableMemPerSlot(func, devProg);
     return desc;
 }
 
@@ -745,9 +738,9 @@ WorkspaceDesc CollectWorkspaceDescFromHostEncodeList(Function* func, const Dynde
                                                 maxRootMaxExclusiveOutcastMem, maxPerCoreSpilledMem);
     }
 
-    FinalizeWorkspaceDescSlotBudgets(desc, slots, maxPerCoreSpilledMem, maxRootMaxExclusiveOutcastMem);
+    FinalizeWorkspaceDescSlotBudgets(desc, slots, constructAssembleNeedAllocSlots, maxPerCoreSpilledMem,
+                                     maxRootMaxExclusiveOutcastMem);
 
-    (void)constructAssembleNeedAllocSlots;
     desc.cellMatch.dynamicCellMatchSlotNum = 0;
     desc.cellMatch.maxDynamicCellMatchTableMem = SymbolicScalar(0);
     return desc;
