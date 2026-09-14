@@ -84,7 +84,10 @@ void DevAscendFunctionDupped::DumpTopo(std::ofstream& os, int seqNo, int funcIdx
             os << "," << MakeTaskID(funcIdx, func->At(succList, j));
         }
         auto& stitch = GetOperationStitch(opIdx);
-        stitch.ForEach([&os](uint32_t id) { os << "," << id; });
+        stitch.ForEach([&os](uint32_t id) {
+            // strip DRCO core-class bits (bit30-29) so topo dump stays raw for host tooling
+            os << "," << (id & TASKID_FROM_CTRL_TOPO_MASK);
+        });
         os << "\n";
     }
 }

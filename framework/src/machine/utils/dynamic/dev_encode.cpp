@@ -535,13 +535,15 @@ void DevAscendFunction::InitOperation(
     const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
     const std::unordered_map<uint64_t, int>& calleeHashIndexDict, const std::vector<int32_t>& stitchIndexList,
     const std::vector<int>& noPredOpList, const std::vector<int>& noSuccOpList,
-    const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict, bool fillContent)
+    const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict,
+    const std::vector<CceCodeInfo>& cceCodeInfoList, bool fillContent)
 {
     InitOperationNoPredNoSuccIndices(initOffset, callList, callOpPredDict, callOpSuccDict, noPredOpList, noSuccOpList,
                                      fillContent);
     InitOperationBufferLayouts(initOffset, callList, callOpSuccDict, copyOutResolveSuccIndexListDict);
     FillOperationEncodedContent(expressionTable, callList, tlist, rawList, callOpPredDict, callOpSuccDict,
-                                calleeHashIndexDict, stitchIndexList, copyOutResolveSuccIndexListDict, fillContent);
+                                calleeHashIndexDict, stitchIndexList, copyOutResolveSuccIndexListDict, cceCodeInfoList,
+                                fillContent);
 }
 
 void DevAscendFunction::InitOperationNoPredNoSuccIndices(
@@ -606,6 +608,7 @@ void DevAscendFunction::InitOperationBufferLayouts(
     opAttrOffsetList_.HostInitDataSizeOffset(initOffset, callList.size());
     opCalleeList_.HostInitDataSizeOffset(initOffset, callList.size());
     operationSuccList_.HostInitDataSizeOffset(initOffset, sucSize);
+    drcoEncodedSuccList_.HostInitDataSizeOffset(initOffset, sucSize);
     operationSuccInfoList_.HostInitDataSizeOffset(initOffset, callList.size());
     operationCopyOutResolveSuccIndexList_.HostInitDataSizeOffset(initOffset, copyOutResolveSuccIdxSize);
 }
@@ -616,13 +619,14 @@ void DevAscendFunction::FillOperationEncodedContent(
     const std::unordered_map<Operation*, uint64_t>& callOpPredDict,
     const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
     const std::unordered_map<uint64_t, int>& calleeHashIndexDict, const std::vector<int32_t>& stitchIndexList,
-    const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict, bool fillContent)
+    const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict,
+    const std::vector<CceCodeInfo>& cceCodeInfoList, bool fillContent)
 {
     ONFILLCONTENT
     {
         auto* dupData = reinterpret_cast<DevAscendFunctionDuppedData*>(&At(duppedData_, 0));
         PopulateOperationEncodedContent(expressionTable, callList, tlist, rawList, callOpSuccDict, calleeHashIndexDict,
-                                        stitchIndexList, copyOutResolveSuccIndexListDict, dupData);
+                                        stitchIndexList, copyOutResolveSuccIndexListDict, cceCodeInfoList, dupData);
         VerifyOperationEncodedContent(callList, callOpPredDict, dupData);
         dupData->GetSource() = this;
         for (size_t index = 0; index < callList.size(); index++) {
@@ -642,7 +646,7 @@ void DevAscendFunction::PopulateOperationEncodedContent(
     const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
     const std::unordered_map<uint64_t, int>& calleeHashIndexDict, const std::vector<int32_t>& stitchIndexList,
     const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict,
-    DevAscendFunctionDuppedData* dupData)
+    const std::vector<CceCodeInfo>& cceCodeInfoList, DevAscendFunctionDuppedData* dupData)
 {
     int operanSize = 0;
     int staticAttributeSize = 0;
@@ -652,7 +656,8 @@ void DevAscendFunction::PopulateOperationEncodedContent(
         PopulateOneEncodedOpOperandsAndAttrs(index, operanSize, staticAttributeSize, expressionTable, callList, tlist,
                                              rawList, calleeHashIndexDict, stitchIndexList);
         PopulateOneEncodedOpGraphEdges(index, sucSize, copyOutResolveSuccIdxSize, callList, callOpSuccDict,
-                                       copyOutResolveSuccIndexListDict, stitchIndexList, dupData);
+                                       copyOutResolveSuccIndexListDict, stitchIndexList, calleeHashIndexDict,
+                                       cceCodeInfoList, dupData);
     }
 }
 
@@ -731,7 +736,8 @@ void DevAscendFunction::PopulateOneEncodedOpGraphEdges(
     size_t index, int& sucSize, int& copyOutResolveSuccIdxSize, const OrderedSet<Operation*>& callList,
     const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
     const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict,
-    const std::vector<int32_t>& stitchIndexList, DevAscendFunctionDuppedData* dupData)
+    const std::vector<int32_t>& stitchIndexList, const std::unordered_map<uint64_t, int>& calleeHashIndexDict,
+    const std::vector<CceCodeInfo>& cceCodeInfoList, DevAscendFunctionDuppedData* dupData)
 {
     Operation* op = callList[index];
     DevAscendOperation& staticField = At(operationList_, index);
@@ -747,6 +753,20 @@ void DevAscendFunction::PopulateOneEncodedOpGraphEdges(
     for (int k = 0; k < opSuccSize; k++) {
         uint32_t succ = callList.GetIndex(callOpSuccDict.find(op)->second[k]);
         At(staticField.depGraphSuccList, k) = succ;
+        // Parallel DRCO-only entry: succOpIdx | (succ CoreType << 29).
+        auto succCallop = std::static_pointer_cast<CallOpAttribute>(callList[succ]->GetOpAttribute());
+        uint32_t succCoreType = cceCodeInfoList[calleeHashIndexDict.at(succCallop->GetCalleeHash().GetHash())].coreType;
+        // Fail fast when the encoded table is actually consumed (same gate as the stitch-side
+        // check): a successor not consumable by the DRCO resolve would OOB-index batchTaskIds
+        // on device (AICPU-dispatch graphs may legally carry such successors, so no assert there).
+        static const bool drcoConsume = IsAicoreResolveEnabled() &&
+                                        config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) != CFG_RUN_MODE_SIM;
+        if (drcoConsume) {
+            ASSERT(DevCommonErr::PARAM_INVALID, npu::tile_fwk::IsValidDrcoCoreType(succCoreType))
+                << "DRCO successor coreType " << succCoreType << " (succ op " << succ << ") is not consumable";
+        }
+        At(drcoEncodedSuccList_, sucSize + k) = static_cast<int32_t>(
+            npu::tile_fwk::EncodeDrcoCoreType(static_cast<uint32_t>(succ), succCoreType));
         At(operationList_, succ).depGraphPredCount++;
         dupData->GetOperationCurrPredCount(succ)++;
     }
@@ -2419,7 +2439,7 @@ struct EncodeDevAscendFunctionInfo {
         devFunc->InitTensor(initOffset, tensorList, rawTensorList, fillContent);
         devFunc->InitOperation(initOffset, expressionTable, callList, tensorList, rawTensorList, callOpPredDict,
                                callOpSuccDict, calleeHashIndexDict, stitchIndexList, noPredOpList, noSuccOpList,
-                               copyOutResolveSuccIndexListDict, fillContent);
+                               copyOutResolveSuccIndexListDict, cceCodeInfoList, fillContent);
         devFunc->InitWrapInfo(initOffset, callList, fillContent, calleeHashIndexDict, cceCodeInfoList);
 
         MarkResolveBitmaps(devFunc, initOffset, fillContent);

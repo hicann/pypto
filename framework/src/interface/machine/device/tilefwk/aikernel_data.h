@@ -55,6 +55,25 @@ struct CoreFuncParam {
 #define TASKID_DEVTASK_DCCI_BITS 1
 #define TASKID_DEVTASK_DCCI_MASK ((1 << TASKID_DEVTASK_DCCI_BITS) - 1)
 
+/* DRCO-only: CoreType enum encoded into taskId bit31-29 (rspflag/pingpong/dcci flags, all consumed
+ * only by the AICPU-dispatch path, which never runs under DRCO). Host encodes at DRCO successor-table
+ * / stitch; device decodes to skip cceBinaryIndexList + cceBinary GM dereference. Per-core dispatch
+ * queues stay unencoded: the queue slot already fixes the core type and ExecDrcoPerCoreTasks reads
+ * only FuncID/TaskID. Bit28 (parallel-index MSB) left intact. */
+constexpr uint32_t TASKID_DRCO_CT_SHIFT = TASKID_TASK_BITS + TASKID_FUNC_BITS + TASKID_PARALLEL_INDEX_BITS;
+constexpr uint32_t TASKID_DRCO_CT_MASK = 0x7;
+
+INLINE bool IsValidDrcoCoreType(uint32_t coreType)
+{
+    return coreType == static_cast<uint32_t>(CoreType::AIV) || coreType == static_cast<uint32_t>(CoreType::AIC) ||
+           coreType == static_cast<uint32_t>(CoreType::HUB) || coreType == static_cast<uint32_t>(CoreType::HUB_MIX);
+}
+
+INLINE uint32_t EncodeDrcoCoreType(uint32_t taskId, uint32_t coreType)
+{
+    return taskId | (coreType << TASKID_DRCO_CT_SHIFT);
+}
+
 #define TASKID_SHIFT32 32
 #define TASKID_FROM_CTRL_TOPO_MASK ((1 << (TASKID_TASK_BITS + TASKID_FUNC_BITS)) - 1)
 
@@ -75,6 +94,13 @@ INLINE uint32_t DevTaskDcciFlag(uint32_t taskId)
 {
     return (taskId >> (TASKID_TASK_BITS + TASKID_FUNC_BITS + TASKID_PARALLEL_INDEX_BITS)) & TASKID_DEVTASK_DCCI_MASK;
 }
+
+INLINE uint32_t MakeDrcoTaskId(uint32_t funcIdx, uint32_t opIdx, uint32_t coreType)
+{
+    return EncodeDrcoCoreType(MakeTaskID(funcIdx, opIdx), coreType);
+}
+
+INLINE uint32_t DrcoTaskCoreTypeOf(uint32_t taskId) { return (taskId >> TASKID_DRCO_CT_SHIFT) & TASKID_DRCO_CT_MASK; }
 
 #define REG_VAL_DEVTASK_ID_BITS 24
 #define REG_VAL_DEVTASK_ID_MASK ((1 << REG_VAL_DEVTASK_ID_BITS) - 1)

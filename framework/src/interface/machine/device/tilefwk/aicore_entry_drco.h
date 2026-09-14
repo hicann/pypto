@@ -747,14 +747,12 @@ INLINE void DrcoFlushBatchTasks(DrcoEntryState* state, __gm__ npu::tile_fwk::Drc
 }
 
 INLINE void DrcoResolveDependOnce(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
-                                  uint32_t succTaskId, uint32_t succOpIdx, __gm__ npu::tile_fwk::DynFuncData* funcData,
-                                  uint32_t hubStack[], int32_t& hubStackTop,
+                                  uint32_t succTaskId, uint32_t hubStack[], int32_t& hubStackTop,
                                   uint32_t succTaskIdListCoreList[][BATCH_PUSH_BUF_SIZE],
                                   uint32_t succTaskIdListSizeCoreList[])
 {
     TraceEvent(state, succTaskId, EVENT_RESOLVE());
-    int cceBinaryIndex = funcData->cceBinaryIndexList[succOpIdx];
-    uint32_t succCoreType = state->ctx.cachedDevTaskCurr->cceBinary[cceBinaryIndex].coreType;
+    uint32_t succCoreType = npu::tile_fwk::DrcoTaskCoreTypeOf(succTaskId);
     if (succCoreType < npu::tile_fwk::NUM_CORE_TYPES) {
         succTaskIdListCoreList[succCoreType][succTaskIdListSizeCoreList[succCoreType]++] = succTaskId;
         if (succTaskIdListSizeCoreList[succCoreType] >= BATCH_PUSH_BUF_SIZE) {
@@ -775,14 +773,11 @@ INLINE void DrcoResolveDependOnce(DrcoEntryState* state, __gm__ npu::tile_fwk::D
 // stitch 节点 defer 消费侧专用：stitch 后继不出现 hub，无需 hubStack/HUB_MIX 分支，
 // 按核类型 batch push 即可（类型越界走 global 队列兜底，防数组越界）
 INLINE void DrcoResolveDependOnceCore(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
-                                      uint32_t succTaskId, uint32_t succOpIdx,
-                                      __gm__ npu::tile_fwk::DynFuncData* funcData,
-                                      uint32_t succTaskIdListCoreList[][BATCH_PUSH_BUF_SIZE],
+                                      uint32_t succTaskId, uint32_t succTaskIdListCoreList[][BATCH_PUSH_BUF_SIZE],
                                       uint32_t succTaskIdListSizeCoreList[])
 {
     TraceEvent(state, succTaskId, EVENT_RESOLVE());
-    int cceBinaryIndex = funcData->cceBinaryIndexList[succOpIdx];
-    uint32_t succCoreType = state->ctx.cachedDevTaskCurr->cceBinary[cceBinaryIndex].coreType;
+    uint32_t succCoreType = npu::tile_fwk::DrcoTaskCoreTypeOf(succTaskId);
     if (succCoreType < npu::tile_fwk::NUM_CORE_TYPES) {
         succTaskIdListCoreList[succCoreType][succTaskIdListSizeCoreList[succCoreType]++] = succTaskId;
         if (succTaskIdListSizeCoreList[succCoreType] >= BATCH_PUSH_BUF_SIZE) {
@@ -803,15 +798,15 @@ INLINE void DrcoResolveStitchNodeTasks(DrcoEntryState* state, __gm__ npu::tile_f
 {
     TraceEvent(state, curTaskId, EVENT_SUCC_DYNAMIC(node->nodeSize));
     for (uint32_t i = 0; i < node->nodeSize; i++) {
-        uint32_t succTaskId = node->nodeTaskList[i];
+        uint32_t succTaskId = node->nodeTaskList[i]; // already coreType-encoded at build time
         uint32_t succFuncId = npu::tile_fwk::FuncID(succTaskId);
         uint32_t succOpIdx = npu::tile_fwk::TaskID(succTaskId);
         auto* succFuncData = &state->ctx.cachedDevTaskCurr->funcDataList[succFuncId];
         __gm__ npu::tile_fwk::DrcoRootFuncData* succRootFuncData = &succFuncData->drcoRootFuncData;
         int32_t old = DrcoAtomicResolveDependOnce(&succRootFuncData->predCount[succOpIdx]);
         if (old == 1) {
-            DrcoResolveDependOnce(state, rootFuncList, succTaskId, succOpIdx, succFuncData, hubStack, hubStackTop,
-                                  succTaskIdListCoreList, succTaskIdListSizeCoreList);
+            DrcoResolveDependOnce(state, rootFuncList, succTaskId, hubStack, hubStackTop, succTaskIdListCoreList,
+                                  succTaskIdListSizeCoreList);
         }
     }
 }
@@ -841,12 +836,15 @@ INLINE void DrcoResolveDepend(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoR
         uint16_t staticSize = succInfo->staticSize;
         TraceEvent(state, curTaskId, EVENT_SUCC_STATIC(staticSize));
         for (uint16_t i = staticIndex; i < staticIndex + staticSize; i++) {
-            uint32_t succOpIdx = succStaticList[i];
+            uint32_t succEncoded = succStaticList[i];
+            uint32_t succOpIdx = succEncoded & TASKID_TASK_MASK;
             int32_t old = DrcoAtomicResolveDependOnce(&predCount[succOpIdx]);
             if (old == 1) {
-                uint32_t succTaskId = npu::tile_fwk::MakeTaskID(funcIdx, succOpIdx);
-                DrcoResolveDependOnce(state, rootFuncList, succTaskId, succOpIdx, funcData, hubStack, hubStackTop,
-                                      succTaskIdListCoreList, succTaskIdListSizeCoreList);
+                uint32_t succCoreType = (succEncoded >> npu::tile_fwk::TASKID_DRCO_CT_SHIFT) &
+                                        npu::tile_fwk::TASKID_DRCO_CT_MASK;
+                uint32_t succTaskId = npu::tile_fwk::MakeDrcoTaskId(funcIdx, succOpIdx, succCoreType);
+                DrcoResolveDependOnce(state, rootFuncList, succTaskId, hubStack, hubStackTop, succTaskIdListCoreList,
+                                      succTaskIdListSizeCoreList);
             }
         }
 
@@ -932,15 +930,19 @@ __aicore__ INLINE static uint32_t ResolveHubMixTask(DrcoEntryState* state,
     uint16_t mixStaticIndex = mixSuccInfoList[opIdx].staticIndex;
     uint16_t mixStaticSize = mixSuccInfoList[opIdx].staticSize;
     for (uint16_t j = mixStaticIndex; j < mixStaticIndex + mixStaticSize; j++) {
-        uint32_t mixSuccOpIdx = mixSuccStaticList[j];
-        uint32_t mixSuccTaskId = npu::tile_fwk::MakeTaskID(funcIdx, mixSuccOpIdx);
-        int mixBinIdx = mixCceBinaryIndexList[mixSuccOpIdx];
-        auto& mixBin = state->ctx.cachedDevTasks[state->ctx.curLeafTaskParallelIdx].cceBinary[mixBinIdx];
+        uint32_t mixSuccEncoded = mixSuccStaticList[j];
+        uint32_t mixSuccOpIdx = mixSuccEncoded & TASKID_TASK_MASK;
+        uint32_t mixSuccCoreType = (mixSuccEncoded >> npu::tile_fwk::TASKID_DRCO_CT_SHIFT) &
+                                   npu::tile_fwk::TASKID_DRCO_CT_MASK;
+        uint32_t mixSuccTaskId = npu::tile_fwk::MakeDrcoTaskId(funcIdx, mixSuccOpIdx, mixSuccCoreType);
         DRCO_LOG(&state->ctx, "MIX resolve taskId=%u", mixSuccTaskId);
-        if (mixBin.coreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::AIC)) {
+        if (mixSuccCoreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::AIC)) {
             aicTaskId = mixSuccTaskId;
         } else {
-            npu::tile_fwk::MixHubC2VReadyQueue* dstAddr = body + mixBin.wrapVecId;
+            npu::tile_fwk::MixHubC2VReadyQueue* dstAddr = body +
+                                                          state->ctx.cachedDevTasks[state->ctx.curLeafTaskParallelIdx]
+                                                              .cceBinary[mixCceBinaryIndexList[mixSuccOpIdx]]
+                                                              .wrapVecId;
             if (!MixTaskPush(state, mixSuccTaskId, dstAddr)) {
                 DrcoRootFuncListGlobalReadyQueuePush(rootFuncList, mixSuccTaskId,
                                                      static_cast<uint32_t>(npu::tile_fwk::CoreType::AIV));
@@ -1007,15 +1009,15 @@ INLINE void DrcoStitchNodeMatrixPopResolve(DrcoEntryState* state, __gm__ npu::ti
         __gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode*
             node = (__gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode*)nodeAddr;
         for (uint32_t i = 0; i < node->nodeSize; i++) {
-            uint32_t succTaskId = node->nodeTaskList[i];
+            uint32_t succTaskId = node->nodeTaskList[i]; // already coreType-encoded at build time
             uint32_t succFuncId = npu::tile_fwk::FuncID(succTaskId);
             uint32_t succOpIdx = npu::tile_fwk::TaskID(succTaskId);
             auto* succFuncData = &state->ctx.cachedDevTaskCurr->funcDataList[succFuncId];
             __gm__ npu::tile_fwk::DrcoRootFuncData* succRootFuncData = &succFuncData->drcoRootFuncData;
             int32_t old = DrcoAtomicResolveDependOnce(&succRootFuncData->predCount[succOpIdx]);
             if (old == 1) {
-                DrcoResolveDependOnceCore(state, rootFuncList, succTaskId, succOpIdx, succFuncData,
-                                          succTaskIdListCoreList, succTaskIdListSizeCoreList);
+                DrcoResolveDependOnceCore(state, rootFuncList, succTaskId, succTaskIdListCoreList,
+                                          succTaskIdListSizeCoreList);
             }
         }
     }
@@ -1305,12 +1307,8 @@ INLINE void ExecDrcoPerCoreTasks(DrcoEntryState* state, __gm__ npu::tile_fwk::Pe
 
 INLINE bool IsHubTask(DrcoEntryState* state, uint32_t taskId)
 {
-    uint32_t funcIdx = npu::tile_fwk::FuncID(taskId);
-    uint32_t opIdx = npu::tile_fwk::TaskID(taskId);
-    auto& fd = state->ctx.cachedDevTasks[state->ctx.curLeafTaskParallelIdx].funcDataList[funcIdx];
-    int binIdx = fd.cceBinaryIndexList[opIdx];
-    uint32_t taskCoreType = state->ctx.cachedDevTasks[state->ctx.curLeafTaskParallelIdx].cceBinary[binIdx].coreType;
-    return taskCoreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::HUB);
+    (void)state;
+    return npu::tile_fwk::DrcoTaskCoreTypeOf(taskId) == static_cast<uint32_t>(npu::tile_fwk::CoreType::HUB);
 }
 
 INLINE void ExecDrcoReadyQueueTaskOnce(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
@@ -1326,9 +1324,6 @@ INLINE void ExecDrcoReadyQueueTaskOnce(DrcoEntryState* state, __gm__ npu::tile_f
         }
     }
 #endif
-    if ((taskId & AICORE_FIN_MASK) != 0) {
-        return;
-    }
     if (IsHubTask(state, taskId)) {
         DrcoResolveDepend(state, rootFuncList, taskId);
     } else {

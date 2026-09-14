@@ -936,7 +936,9 @@ void DevControlFlowCache::RelocDuppedDataAndDynFuncData(RelocRange& relocProgram
 
     if (dynData->drcoRootFuncData.predCount != nullptr) {
         relocCtrlCache.Reloc(dynData->drcoRootFuncData.predCount);
-        relocProgram.Reloc(dynData->drcoRootFuncData.succStaticList);
+        // succStaticList points at the encode-time program-resident table (DrcoEncodedSuccList),
+        // nullable when the function has no static successors.
+        relocProgram.RelocNullable(dynData->drcoRootFuncData.succStaticList);
         relocCtrlCache.Reloc(dynData->drcoRootFuncData.succStitchList);
         relocProgram.Reloc(dynData->drcoRootFuncData.succInfoList);
     }

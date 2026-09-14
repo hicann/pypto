@@ -20,6 +20,27 @@
 
 namespace npu::tile_fwk::dynamic {
 namespace {
+// DRCO-only: encode coreType class (bit30-29) into the stitch taskId at build time, so the
+// aicore resolve path decodes locally and never dereferences cceBinaryIndexList/cceBinary.
+// Non-DRCO mode keeps the raw taskId; DRCU readers use masked FuncID/TaskID, unaffected.
+static inline uint32_t MakeDrcoStitchTaskId(DevAscendProgram* devProg, DevAscendFunctionDupped& consumerDup,
+                                            uint32_t consumerIdx, size_t consumerOperationIdx)
+{
+    uint32_t taskId = MakeTaskID(consumerIdx, consumerOperationIdx);
+    if (unlikely(!devProg->devArgs.enableAicoreResolve)) {
+        return taskId;
+    }
+    uint32_t calleeIdx = consumerDup.GetSource()->GetCalleeIndexAddr()[consumerOperationIdx];
+    uint32_t coreType = devProg->GetCceBinary(0)[calleeIdx].coreType;
+    if (!npu::tile_fwk::IsValidDrcoCoreType(coreType)) {
+        DEV_ERROR(CtrlErr::CTRL_FLOW_EXEC_FAILED,
+                  "#drco.stitch.encode: unexpected succ coreType=%u (func=%u op=%u), fallback to AIV.", coreType,
+                  consumerIdx, static_cast<uint32_t>(consumerOperationIdx));
+        coreType = static_cast<uint32_t>(CoreType::AIV);
+    }
+    return npu::tile_fwk::EncodeDrcoCoreType(taskId, coreType);
+}
+
 struct HandleCellMatchFull {
     static inline uint32_t Process(int index, const DevCellMatchTableDesc& desc, uint32_t* cellMatchTableData,
                                    uint64_t* matchCount, DevAscendFunctionDupped* prevDup,
@@ -367,7 +388,9 @@ void DeviceStitchContext::HandleOneStitch(DevAscendFunctionDupped& producerDup, 
         return;
     }
 
-    PushBackTask(producerStitchList, MakeTaskID(consumerIdx, consumerOperationIdx), workspace);
+    PushBackTask(producerStitchList,
+                 MakeDrcoStitchTaskId(workspace->GetDevProg(), consumerDup, consumerIdx, consumerOperationIdx),
+                 workspace);
     consumerDup.GetOperationCurrPredCount(consumerOperationIdx)++;
 
     auto* producerFunc = producerDup.GetSource();

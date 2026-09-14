@@ -207,7 +207,11 @@ void DeviceTaskContext::BuildDrcoRootFuncData(DynFuncData* dyndata, DevAscendFun
     }
     auto* rootFuncData = &dyndata->drcoRootFuncData;
     rootFuncData->predCount = aicorePredCount;
-    rootFuncData->succStaticList = reinterpret_cast<int32_t*>(&source->GetOperationSucc(0));
+    // DRCO consumes the encode-time coreType-encoded successor table (program memory, zero copy).
+    // The source operationSuccList_ stays untouched (shared with DRCU/aicpu resolve).
+    rootFuncData->succStaticList = source->GetDrcoEncodedSuccAddr();
+    // Stitch successors are encoded at build time (MakeDrcoStitchTaskId in device_stitch_context),
+    // the shared linked nodes are consumed directly, no flattened copy here.
     rootFuncData->succStitchList = &stitchedFunc.DupDataForDynFuncData()->GetStitch(0).Head();
     rootFuncData->succInfoList = &source->GetOperationSuccInfo(0);
     dyndata->cceBinaryIndexList = source->GetCalleeIndexAddr();

@@ -90,6 +90,8 @@ public:
     uint32_t RootFuncMaxCallOpsize() const { return rootFuncMaxCallOpsize_; }
     uint16_t StitchCacheEpoch() const { return static_cast<uint16_t>(devProg_->stitchCacheEpoch_ & 0xFFFFU); }
 
+    DevAscendProgram* GetDevProg() const { return devProg_; }
+
 #if DEBUG_INFINITE_LIFETIME
     uintdevptr_t DumpTensorWsBaseAddr() const { return dumpTensorWsAllocator_.MemBaseAddr(); }
     uint64_t DumpTensorWsSize() const { return dumpTensorWsAllocator_.Capacity(); }
