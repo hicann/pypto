@@ -184,23 +184,24 @@ struct DynMachineManager {
         return ret;
     }
 
-    int RunSche(DeviceKernelArgs* kargs, const KernelCtrlEntry& entry, int threadIdx, int arbitratedScheNum)
+    int RunSche(DeviceKernelArgs* kargs, const KernelCtrlEntry& entry, int threadIdx, int arbitratedScheNum,
+                DeviceArgs* roundDevArgs)
     {
         UNUSED(entry);
 
-        DeviceArgs* devArgs = PtrToPtr<int64_t, DeviceArgs>(kargs->cfgdata);
         DEV_INFO("DeviceMode=%s, isDeviceMode=%d, stage=%s, threadIdx=%d", IsDeviceMode() ? "device" : "sim",
                  IsDeviceMode(), "RunSche.before", threadIdx);
         DEV_INFO("ThreadScheEnter idx=%d", threadIdx);
 
-        DEV_INFO("TaskType=%d, threadIdx=%d, aicNum=%u, aivNum=%u, aicpuNum=%u, validAicNum=%u.",
-                 static_cast<int>(devArgs->taskType), threadIdx, devArgs->nrAic, devArgs->nrAiv, devArgs->nrAicpu,
-                 devArgs->nrValidAic);
-        DEV_INFO("devQueueAddr=%#lx, sharedBuffer=%#lx, coreRegAddr=%#lx, corePmuAddr=%#lx.", devArgs->devQueueAddr,
-                 devArgs->sharedBuffer, devArgs->coreRegAddr, devArgs->corePmuAddr);
+        DEV_INFO("TaskType=%d, threadIdx=%d, aicNum=%u, aivNum=%u, aicpuNum=%u, validAicNum=%u, scheCpuNum=%u.",
+                 static_cast<int>(roundDevArgs->taskType), threadIdx, roundDevArgs->nrAic, roundDevArgs->nrAiv,
+                 roundDevArgs->nrAicpu, roundDevArgs->nrValidAic, roundDevArgs->scheCpuNum);
+        DEV_INFO("devQueueAddr=%#lx, sharedBuffer=%#lx, coreRegAddr=%#lx, corePmuAddr=%#lx.",
+                 roundDevArgs->devQueueAddr, roundDevArgs->sharedBuffer, roundDevArgs->coreRegAddr,
+                 roundDevArgs->corePmuAddr);
         DEV_TRACE_DEBUG(schema::ScheEvent(threadIdx, schema::ThreadStart()));
 
-        devArgs->toSubMachineConfig = kargs->toSubMachineConfig;
+        roundDevArgs->toSubMachineConfig = kargs->toSubMachineConfig;
         SchduleContext localContext;
         int schedIdx = threadIdx - SCHE_THREAD_START_IDX;
         schMachine_.SetStachSchduleContext(schedIdx, &localContext);
@@ -208,18 +209,18 @@ struct DynMachineManager {
         DevStartArgs* devStartArgs = reinterpret_cast<DevStartArgs*>(
             devProg->GetRuntimeDataList()->GetRuntimeDataCurrent());
         schMachine_.SetDevSchedSyncMode(kargs->schedSyncMode);
-        int ret = schMachine_.RunThread(threadIdx, devStartArgs, devArgs, schedIdx, arbitratedScheNum);
+        int ret = schMachine_.RunThread(threadIdx, devStartArgs, roundDevArgs, schedIdx, arbitratedScheNum);
 
         DEV_INFO("ThreadScheLeave idx=%d ret=%d", threadIdx, ret);
         return ret;
     }
 
-    void RunSchInit(DeviceArgs* args)
+    void RunSchInit(uint32_t capacityScheCpuNum)
     {
         if (initSch_.load()) {
             return;
         }
-        schMachine_.init(args->scheCpuNum);
+        schMachine_.init(capacityScheCpuNum);
         initSch_.store(true);
     }
 
@@ -246,7 +247,8 @@ struct DynMachineManager {
     {
         if (++schExitNum_ == devArgs.nrAicpu) {
             scheFinishRound_.fetch_add(1, std::memory_order_acq_rel);
-            ResetDroppedThreadTaskQueues(runtimeDataCurrent, devArgs.scheCpuNum, arbitratedScheNum);
+            // Queue array is sized by capacity scheCpuNum on shared DevProg, not per-round scheCpuNum.
+            ResetDroppedThreadTaskQueues(runtimeDataCurrent, devProg->devArgs.scheCpuNum, arbitratedScheNum);
             UpdateScheNumForCtrl(runtimeDataCurrent, MAX_SCHEDULE_AICPU_NUM);
             RunSchPost(devProg);
             RunSchDeInit();
@@ -335,7 +337,7 @@ struct DynMachineManager {
         DEV_VERBOSE_DEBUG("#trace.round.start: round=%lu", kargs->parameter.globalRound);
         ctrlStartRound_.fetch_add(1, std::memory_order_acq_rel);
         initCtrl_.store(true);
-        ReCalcDevArgsAicoreNum(kargs, PtrToPtr<int64_t, DevAscendProgram>(kargs->cfgdata));
+        // Round topology (nrValidAic/scheCpuNum) is bound in InitDyn -> DevStartArgs ring slot.
         int ret = RunCtrlInitNoLock(kargs, entry);
         if (ret != 0) {
             initCtrl_.store(false);
@@ -354,15 +356,6 @@ struct DynMachineManager {
         initCtrl_.store(false);
         PerfEvtMgr::Instance().AddCtrlTurn();
         return ret;
-    }
-
-    void ReCalcDevArgsAicoreNum(DeviceKernelArgs* kargs, DevAscendProgram* devProg)
-    {
-        if (kargs->parameter.ctrlBlockNum != 0 &&
-            static_cast<uint32_t>(kargs->parameter.ctrlBlockNum) != devProg->devArgs.nrValidAic) {
-            devProg->devArgs.nrValidAic = kargs->parameter.ctrlBlockNum;
-            DEV_INFO("control aicore before launch, nrValidAic changed to %lu", kargs->parameter.ctrlBlockNum);
-        }
     }
 
     static int WaitForCtrlAndRingBuffer(DevAscendProgram* devProg, ArchInfo archInfo, int& threadIdx,
@@ -403,12 +396,19 @@ struct DynMachineManager {
     {
         DevAscendProgram* devProg = PtrToPtr<int64_t, DevAscendProgram>(kargs->cfgdata);
         auto beginTime = GetCycles(); // After wait, the devStartArgs should be ready.
-        ReCalcDevArgsAicoreNum(kargs, devProg);
-        auto devArgs = devProg->devArgs;
+        // One local DeviceArgs: capacity fields from shared DevProg, then overlay per-round topology.
+        DeviceArgs roundArgs = devProg->devArgs;
+        const uint32_t capacityScheCpuNum = roundArgs.scheCpuNum;
+        roundArgs.nrValidAic = ResolveRoundNrValidAic(kargs->parameter.ctrlBlockNum, roundArgs.nrValidAic);
+        roundArgs.scheCpuNum = ResolveRoundScheCpuNum(roundArgs.nrValidAic, capacityScheCpuNum, roundArgs.archInfo);
+        DEV_INFO("Sche round topology: ctrlBlockNum=%lu nrValidAic=%u scheCpuNum=%u (capacity sche=%u)",
+                 kargs->parameter.ctrlBlockNum, roundArgs.nrValidAic, roundArgs.scheCpuNum, capacityScheCpuNum);
+
         int threadIdx = -1;
-        RunSchInit(&devArgs);
-        int arbitratedScheNum = devArgs.scheCpuNum;
-        if (AllocThreadIdx(&devArgs, threadIdx, globalThreadIdx_, cpumask_, arbitratedScheNum, arbitrationLevel_,
+        // schMachine_ init once with capacity so later rounds can still use up to capacity sche threads.
+        RunSchInit(capacityScheCpuNum);
+        int arbitratedScheNum = static_cast<int>(roundArgs.scheCpuNum);
+        if (AllocThreadIdx(&roundArgs, threadIdx, globalThreadIdx_, cpumask_, arbitratedScheNum, arbitrationLevel_,
                            simCpuId_, arbitrationCpumask_, threadIdxBitmap_) != DEVICE_MACHINE_OK) {
             DEV_ERROR(ThreadErr::THREAD_CPU_ALLOC_FAILED, "#sche.thread.init: Current cpu[%d] alloc thread failed.",
                       sched_getcpu());
@@ -417,7 +417,7 @@ struct DynMachineManager {
             return npu::tile_fwk::dynamic::DEVICE_MACHINE_ERROR;
         }
         if (threadIdx != -1) {
-            int waitCtrlRet = WaitForCtrlAndRingBuffer(devProg, devArgs.archInfo, threadIdx, arbitratedScheNum,
+            int waitCtrlRet = WaitForCtrlAndRingBuffer(devProg, roundArgs.archInfo, threadIdx, arbitratedScheNum,
                                                        ctrlWaitLevel_, ctrlStartRound_, scheFinishRound_);
             if (waitCtrlRet != DEVICE_MACHINE_OK) {
                 DEV_ERROR(SchedErr::WAIT_CTRL_TIMEOUT,
@@ -435,11 +435,13 @@ struct DynMachineManager {
         DevStartArgs* runtimeDataCurrent = reinterpret_cast<DevStartArgs*>(
             devProg->GetRuntimeDataList()->GetRuntimeDataCurrent());
         if (threadIdx != -1 && threadIdx <= arbitratedScheNum) {
+            // Topology already from this launch's ctrlBlockNum (same as CTRL InitDyn); no need to re-read slot.
             DEV_VERBOSE_DEBUG("#trace.round.start: round=%lu tid=%d", kargs->parameter.globalRound, threadIdx);
-            DEV_INFO("SchedThreadEnter idx=%d round=%d", threadIdx, (int)kargs->parameter.globalRound);
+            DEV_INFO("SchedThreadEnter idx=%d round=%d nrValidAic=%u scheCpuNum=%u", threadIdx,
+                     (int)kargs->parameter.globalRound, roundArgs.nrValidAic, roundArgs.scheCpuNum);
             UpdateScheNumForCtrl(runtimeDataCurrent, arbitratedScheNum);
-            ResetDroppedThreadTaskQueues(runtimeDataCurrent, devArgs.scheCpuNum, arbitratedScheNum);
-            ret = RunSche(kargs, entry, threadIdx, arbitratedScheNum);
+            ResetDroppedThreadTaskQueues(runtimeDataCurrent, capacityScheCpuNum, arbitratedScheNum);
+            ret = RunSche(kargs, entry, threadIdx, arbitratedScheNum, &roundArgs);
             DEV_INFO("SchedThreadLeave idx=%d ret=%d", threadIdx, ret);
             if (ret != DEVICE_MACHINE_OK) {
                 DeviceTrace::GetInstance().ReportTraceMsg();
@@ -448,7 +450,7 @@ struct DynMachineManager {
             DEV_VERBOSE_DEBUG("#trace.round.end: round=%lu tid=%d ret=%d", kargs->parameter.globalRound, threadIdx,
                               ret);
         }
-        return SyncSchExit(devProg, devArgs, ret, runtimeDataCurrent, arbitratedScheNum);
+        return SyncSchExit(devProg, roundArgs, ret, runtimeDataCurrent, arbitratedScheNum);
     }
 
     int Entry(DeviceKernelArgs* kargs, const KernelCtrlEntry& entry)

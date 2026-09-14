@@ -47,6 +47,21 @@ inline uint32_t CalcSchAicpuNumByBlockDim(uint32_t blockDim, uint32_t aiCpuNum, 
     return blockDim / dynamic::MAX_MNG_AICORE_AVG_NUM + 1;
 }
 
+// Per-launch effective AIC count: prefer ctrlBlockNum (host 控核), else DevProg capacity.
+inline uint32_t ResolveRoundNrValidAic(uint64_t ctrlBlockNum, uint32_t fallbackNrValidAic)
+{
+    return ctrlBlockNum != 0 ? static_cast<uint32_t>(ctrlBlockNum) : fallbackNrValidAic;
+}
+
+// Per-launch sche count from effective AIC; never exceed DevProg capacity (queue/shm sized by capacity).
+inline uint32_t ResolveRoundScheCpuNum(uint32_t nrValidAic, uint32_t capacityScheCpuNum, ArchInfo archInfo)
+{
+    // Reconstruct CalcSch's aiCpuNum scale from capacity (launch nrAicpu may already be shrunk / == sche).
+    uint32_t aiCpuNum = capacityScheCpuNum + dynamic::MAX_CONTROL_FLOW_AICPU_NUM;
+    uint32_t roundSche = CalcSchAicpuNumByBlockDim(nrValidAic, aiCpuNum, archInfo);
+    return roundSche < capacityScheCpuNum ? roundSche : capacityScheCpuNum;
+}
+
 const int DEVICE_MAX_AICPU_NUM = 7;
 const uint16_t AICPU_EXECUTE_TIMEOUT = 1080; // 18min
 

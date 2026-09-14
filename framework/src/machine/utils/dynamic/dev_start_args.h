@@ -60,6 +60,10 @@ struct DevStartArgs : DevStartArgsBase {
     uint64_t inputSymbolSize;
     const void* controlFlowEntry{nullptr};
 
+    // Per-round topology (ring slot local). Do not use shared DevProg.devArgs.nrValidAic across overlapping launches.
+    uint32_t nrValidAic{0};
+    uint32_t scheCpuNum{0};
+
     DeviceRuntimeDataDesc deviceRuntimeDataDesc;
     DevCtrlState devCtrlState;
     DevScheState devScheState;
