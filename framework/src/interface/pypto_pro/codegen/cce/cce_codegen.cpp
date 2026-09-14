@@ -55,6 +55,46 @@ std::string TupleItemName(const std::string& tuple_name, size_t index)
 
 } // namespace
 
+std::string BuildFP32FmodExpression(const std::string& lhs, const std::string& rhs)
+{
+    // Binary long division of normalized significands avoids quotient overflow
+    // and cancellation. Integer shifts also preserve subnormals and signed zero.
+    std::ostringstream code;
+    code << "({"
+         << "float __x = (" << lhs << "); float __y = (" << rhs << ");"
+         << "uint32_t __ux = reinterpret_cast<uint32_t&>(__x);"
+         << "uint32_t __uy = reinterpret_cast<uint32_t&>(__y);"
+         << "uint32_t __sign = __ux & 0x80000000u;"
+         << "uint32_t __ax = __ux & 0x7fffffffu, __ay = __uy & 0x7fffffffu;"
+         << "uint32_t __result = __ux;"
+         << "if (__ay == 0 || __ax >= 0x7f800000u || __ay > 0x7f800000u) {"
+         << "__result = 0x7fc00000u;"
+         << "} else if (__ax >= __ay) {"
+         << "int __ex = (int)(__ax >> 23), __ey = (int)(__ay >> 23);"
+         << "uint32_t __mx = __ax & 0x007fffffu, __my = __ay & 0x007fffffu;"
+         << "if (__ex == 0) {"
+         << "__ex = 1; while (__mx < 0x00800000u) { __mx <<= 1; --__ex; }"
+         << "} else { __mx |= 0x00800000u; }"
+         << "if (__ey == 0) {"
+         << "__ey = 1; while (__my < 0x00800000u) { __my <<= 1; --__ey; }"
+         << "} else { __my |= 0x00800000u; }"
+         << "while (__ex > __ey) {"
+         << "if (__mx >= __my) { __mx -= __my; }"
+         << "__mx <<= 1; --__ex;"
+         << "}"
+         << "if (__mx >= __my) { __mx -= __my; }"
+         << "if (__mx == 0) { __result = __sign; } else {"
+         << "while (__mx < 0x00800000u) { __mx <<= 1; --__ex; }"
+         << "if (__ex > 0) { __result = (__mx & 0x007fffffu) | ((uint32_t)__ex << 23); }"
+         << "else { __result = __mx >> (1 - __ex); }"
+         << "__result |= __sign;"
+         << "}"
+         << "}"
+         << "reinterpret_cast<float&>(__result);"
+         << "})";
+    return code.str();
+}
+
 CCECodegen::CCECodegen(ir::SectionKind target) : backend_(backend::GetBackend()), target_(target)
 {
     CHECK(target_ == ir::SectionKind::Cube || target_ == ir::SectionKind::Vector)
@@ -2162,6 +2202,100 @@ void CCECodegen::VisitExpr_(const ir::CallPtr& op)
 
 // ---- Binary Operators ----
 
+namespace {
+
+std::string BuildPythonIntegerDivModExpression(const std::string& left, const std::string& right, const DataType& dtype,
+                                               bool return_remainder)
+{
+    INTERNAL_CHECK(dtype.IsInt()) << "Internal error: integer FloorDiv/FloorMod requires an integer dtype";
+    const std::string cpp_type = dtype.ToCTypeString();
+    if (dtype.IsSignedInt()) {
+        std::ostringstream code;
+        code << "({" << cpp_type << " __pypto_lhs = (" << left << "), __pypto_rhs = (" << right << ");";
+        if (return_remainder) {
+            code << cpp_type << " __pypto_rem = __pypto_lhs % __pypto_rhs;"
+                 << "__pypto_rem + "
+                    "((__pypto_rem != 0 && ((__pypto_rem < 0) != (__pypto_rhs < 0))) ? __pypto_rhs : 0);})";
+        } else {
+            // C++ evaluates && left-to-right. The common same-sign index path therefore avoids computing a remainder.
+            code << cpp_type << " __pypto_quot = __pypto_lhs / __pypto_rhs;"
+                 << "__pypto_quot - (((__pypto_lhs < 0) != (__pypto_rhs < 0)) && "
+                    "(__pypto_lhs % __pypto_rhs != 0));})";
+        }
+        return code.str();
+    }
+    return "(" + left + (return_remainder ? " % " : " / ") + right + ")";
+}
+
+std::string BuildFP32FloorExpression(const std::string& value)
+{
+    // Clear the fractional significand bits directly because the CCE scalar floor intrinsic is unavailable.
+    std::ostringstream code;
+    code << "({float __pypto_floor_input = (" << value << ");"
+         << "uint32_t __pypto_floor_bits = reinterpret_cast<uint32_t&>(__pypto_floor_input);"
+         << "uint32_t __pypto_floor_abs = __pypto_floor_bits & 0x7fffffffu;"
+         << "uint32_t __pypto_floor_exp = __pypto_floor_abs >> 23;"
+         << "float __pypto_floor_result = __pypto_floor_input;"
+         << "if (__pypto_floor_abs != 0 && __pypto_floor_exp < 127u) {"
+         << "__pypto_floor_result = (__pypto_floor_bits & 0x80000000u) ? -1.0f : 0.0f;"
+         << "} else if (__pypto_floor_exp >= 127u && __pypto_floor_exp < 150u) {"
+         << "uint32_t __pypto_floor_frac_mask = (1u << (150u - __pypto_floor_exp)) - 1u;"
+         << "if (__pypto_floor_abs & __pypto_floor_frac_mask) {"
+         << "uint32_t __pypto_floor_trunc_bits = __pypto_floor_bits & ~__pypto_floor_frac_mask;"
+         << "__pypto_floor_result = reinterpret_cast<float&>(__pypto_floor_trunc_bits);"
+         << "if (__pypto_floor_bits & 0x80000000u) { __pypto_floor_result -= 1.0f; }"
+         << "}"
+         << "}"
+         << "__pypto_floor_result;})";
+    return code.str();
+}
+
+std::string BuildPythonFloatDivModExpression(const std::string& left, const std::string& right, const DataType& dtype,
+                                             bool return_remainder)
+{
+    INTERNAL_CHECK(dtype.IsFloat()) << "Internal error: floating-point FloorDiv/FloorMod requires a float dtype";
+    const std::string cpp_type = dtype.ToCTypeString();
+    std::ostringstream code;
+    code << "({float __pypto_lhs = (float)(" << left << "), __pypto_rhs = (float)(" << right << ");"
+         << "float __pypto_mod = " << BuildFP32FmodExpression("__pypto_lhs", "__pypto_rhs") << ";";
+    if (return_remainder) {
+        code << "if (__pypto_mod == 0.0f) {"
+             << "uint32_t __pypto_zero = reinterpret_cast<uint32_t&>(__pypto_rhs) & 0x80000000u;"
+             << "__pypto_mod = reinterpret_cast<float&>(__pypto_zero);"
+             << "} else if ((__pypto_rhs < 0.0f) != (__pypto_mod < 0.0f)) {"
+             << "__pypto_mod += __pypto_rhs;"
+             << "}";
+        code << "(" << cpp_type << ")__pypto_mod;})";
+        return code.str();
+    }
+    code << "float __pypto_div = (__pypto_lhs - __pypto_mod) / __pypto_rhs;"
+         << "if (__pypto_mod != 0.0f && ((__pypto_rhs < 0.0f) != (__pypto_mod < 0.0f))) {"
+         << "__pypto_div -= 1.0f;"
+         << "}"
+         << "float __pypto_floor_div;"
+         << "if (__pypto_div != 0.0f) {"
+         << "__pypto_floor_div = " << BuildFP32FloorExpression("__pypto_div") << ";"
+         << "if (__pypto_div - __pypto_floor_div > 0.5f) { __pypto_floor_div += 1.0f; }"
+         << "} else {"
+         << "uint32_t __pypto_zero = (reinterpret_cast<uint32_t&>(__pypto_lhs) ^ "
+            "reinterpret_cast<uint32_t&>(__pypto_rhs)) & 0x80000000u;"
+         << "__pypto_floor_div = reinterpret_cast<float&>(__pypto_zero);"
+         << "}"
+         << "(" << cpp_type << ")__pypto_floor_div;})";
+    return code.str();
+}
+
+std::string BuildPythonDivModExpression(const std::string& left, const std::string& right, const DataType& dtype,
+                                        bool return_remainder)
+{
+    if (dtype.IsFloat()) {
+        return BuildPythonFloatDivModExpression(left, right, dtype, return_remainder);
+    }
+    return BuildPythonIntegerDivModExpression(left, right, dtype, return_remainder);
+}
+
+} // namespace
+
 #define IMPLEMENT_BINARY_OP(OpType, OpName, CppOp)                            \
     void CCECodegen::VisitExpr_(const ir::OpType##Ptr& op)                    \
     {                                                                         \
@@ -2177,8 +2311,6 @@ void CCECodegen::VisitExpr_(const ir::CallPtr& op)
 IMPLEMENT_BINARY_OP(Add, "Add", "+")
 IMPLEMENT_BINARY_OP(Sub, "Sub", "-")
 IMPLEMENT_BINARY_OP(Mul, "Mul", "*")
-IMPLEMENT_BINARY_OP(FloorDiv, "FloorDiv", "/")
-IMPLEMENT_BINARY_OP(FloorMod, "FloorMod", "%")
 IMPLEMENT_BINARY_OP(FloatDiv, "FloatDiv", "/")
 
 // Comparison operators
@@ -2202,6 +2334,34 @@ IMPLEMENT_BINARY_OP(BitShiftLeft, "BitShiftLeft", "<<")
 IMPLEMENT_BINARY_OP(BitShiftRight, "BitShiftRight", ">>")
 
 #undef IMPLEMENT_BINARY_OP
+
+// C++ signed division truncates toward zero, and C++ has no floating-point modulo operator.
+// Lower both integer and floating-point FloorDiv/FloorMod explicitly to match Python semantics.
+void CCECodegen::VisitExpr_(const ir::FloorDivPtr& op)
+{
+    INTERNAL_CHECK(op != nullptr) << "Internal error: null FloorDiv";
+    auto scalar_type = ir::As<ir::ScalarType>(op->GetType());
+    INTERNAL_CHECK(scalar_type != nullptr) << "Internal error: FloorDiv result must be a scalar";
+    VisitExpr(op->left_);
+    const std::string left = current_expr_value_;
+    VisitExpr(op->right_);
+    const std::string right = current_expr_value_;
+
+    current_expr_value_ = BuildPythonDivModExpression(left, right, scalar_type->dtype_, false);
+}
+
+void CCECodegen::VisitExpr_(const ir::FloorModPtr& op)
+{
+    INTERNAL_CHECK(op != nullptr) << "Internal error: null FloorMod";
+    auto scalar_type = ir::As<ir::ScalarType>(op->GetType());
+    INTERNAL_CHECK(scalar_type != nullptr) << "Internal error: FloorMod result must be a scalar";
+    VisitExpr(op->left_);
+    const std::string left = current_expr_value_;
+    VisitExpr(op->right_);
+    const std::string right = current_expr_value_;
+
+    current_expr_value_ = BuildPythonDivModExpression(left, right, scalar_type->dtype_, true);
+}
 
 // Special binary operators (function calls)
 void CCECodegen::VisitExpr_(const ir::MinPtr& op)

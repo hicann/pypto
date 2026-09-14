@@ -71,6 +71,9 @@ struct TensorDef {
  */
 [[nodiscard]] std::string TensorLayoutVariantKey(const ir::CallPtr& op);
 
+/// Build a side-effect-free FP32 fmod expression for CCE device code.
+[[nodiscard]] std::string BuildFP32FmodExpression(const std::string& lhs, const std::string& rhs);
+
 /// Definition of one user-visible C++ class materialized from a TupleType.
 struct StructDefinition {
     std::string name;

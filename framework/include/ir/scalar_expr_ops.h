@@ -141,6 +141,20 @@ inline BinaryOperands PromoteIntBinaryOperands(const ExprPtr& left, const ExprPt
     return {MaybeCast(left, promotedDtype, span), MaybeCast(right, promotedDtype, span), promotedDtype};
 }
 
+inline BinaryOperands PromoteFloorDivModOperands(const ExprPtr& left, const ExprPtr& right, const std::string& opName,
+                                                 const Span& span)
+{
+    DataType leftDtype = NormalizeBoolDtype(GetScalarDtype(left, span));
+    DataType rightDtype = NormalizeBoolDtype(GetScalarDtype(right, span));
+    auto isSupported = [](const DataType& dtype) {
+        return dtype.IsInt() || dtype == DataType::FP16 || dtype == DataType::BF16 || dtype == DataType::FP32;
+    };
+    IRCHECK(isSupported(leftDtype) && isSupported(rightDtype))
+        << "Operator '" << opName << "' supports integer, FP16, BF16, or FP32 dtype, got " << leftDtype.ToString()
+        << " and " << rightDtype.ToString() << " at " << span.ToString();
+    return PromoteBinaryOperands(left, right, opName, span);
+}
+
 // ========== Binary Operator Construction Functions ==========
 
 inline ExprPtr MakeCast(const ExprPtr& operand, DataType dtype, const Span& span = Span::Unknown())
@@ -174,13 +188,13 @@ inline ExprPtr MakeFloatDiv(const ExprPtr& left, const ExprPtr& right, const Spa
 
 inline ExprPtr MakeFloorDiv(const ExprPtr& left, const ExprPtr& right, const Span& span = Span::Unknown())
 {
-    auto operands = PromoteBinaryOperands(left, right, "floordiv", span);
+    auto operands = PromoteFloorDivModOperands(left, right, "floordiv", span);
     return std::make_shared<FloorDiv>(operands.left, operands.right, operands.dtype, span);
 }
 
 inline ExprPtr MakeFloorMod(const ExprPtr& left, const ExprPtr& right, const Span& span = Span::Unknown())
 {
-    auto operands = PromoteBinaryOperands(left, right, "mod", span);
+    auto operands = PromoteFloorDivModOperands(left, right, "mod", span);
     return std::make_shared<FloorMod>(operands.left, operands.right, operands.dtype, span);
 }
 

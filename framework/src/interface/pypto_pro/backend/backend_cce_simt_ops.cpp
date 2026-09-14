@@ -747,44 +747,7 @@ std::string MakeSimtFmodCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& 
     CHECK(input.dtype == ir::DataType::FP32) << "simt.fmod requires FP32";
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     const std::string rhs = codegen.GetExprAsCode(op->args_[1]);
-
-    // Binary long division of normalized significands avoids quotient overflow
-    // and cancellation. Integer shifts also preserve subnormals and signed zero.
-    // Keep the implementation local to the expression, like SIMT sin/cos lowering.
-    std::ostringstream s;
-    s << "({"
-      << "float __x = (" << input.operand << "); float __y = (" << rhs << ");"
-      << "uint32_t __ux = reinterpret_cast<uint32_t&>(__x);"
-      << "uint32_t __uy = reinterpret_cast<uint32_t&>(__y);"
-      << "uint32_t __sign = __ux & 0x80000000u;"
-      << "uint32_t __ax = __ux & 0x7fffffffu, __ay = __uy & 0x7fffffffu;"
-      << "uint32_t __result = __ux;"
-      << "if (__ay == 0 || __ax >= 0x7f800000u || __ay > 0x7f800000u) {"
-      << "__result = 0x7fc00000u;"
-      << "} else if (__ax >= __ay) {"
-      << "int __ex = (int)(__ax >> 23), __ey = (int)(__ay >> 23);"
-      << "uint32_t __mx = __ax & 0x007fffffu, __my = __ay & 0x007fffffu;"
-      << "if (__ex == 0) {"
-      << "__ex = 1; while (__mx < 0x00800000u) { __mx <<= 1; --__ex; }"
-      << "} else { __mx |= 0x00800000u; }"
-      << "if (__ey == 0) {"
-      << "__ey = 1; while (__my < 0x00800000u) { __my <<= 1; --__ey; }"
-      << "} else { __my |= 0x00800000u; }"
-      << "while (__ex > __ey) {"
-      << "if (__mx >= __my) { __mx -= __my; }"
-      << "__mx <<= 1; --__ex;"
-      << "}"
-      << "if (__mx >= __my) { __mx -= __my; }"
-      << "if (__mx == 0) { __result = __sign; } else {"
-      << "while (__mx < 0x00800000u) { __mx <<= 1; --__ex; }"
-      << "if (__ex > 0) { __result = (__mx & 0x007fffffu) | ((uint32_t)__ex << 23); }"
-      << "else { __result = __mx >> (1 - __ex); }"
-      << "__result |= __sign;"
-      << "}"
-      << "}"
-      << "reinterpret_cast<float&>(__result);"
-      << "})";
-    return s.str();
+    return pypto::codegen::BuildFP32FmodExpression(input.operand, rhs);
 }
 
 std::string MakeSimtSinCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
