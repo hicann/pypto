@@ -62,15 +62,11 @@ import torch_npu
 @pl.vector_function
 def example_vf_bit_cast_assign(src_tile_a, src_tile_b, dst_tile):
     preg_u32 = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
-    # 加载 FP32 数据
     reg_a = vf.load_align(src_tile_a, 0)
     reg_b = vf.load_align(src_tile_b, 0)
-    # 赋值形式：将 FP32 寄存器按位重解释为 UINT32
     reg_a_u32 = vf.bit_cast(reg_a, dtype=pl.DT_UINT32)
     reg_b_u32 = vf.bit_cast(reg_b, dtype=pl.DT_UINT32)
-    # 对 UINT32 视图执行异或
     reg_c = vf.xor(reg_a_u32, reg_b_u32, preg_u32)
-    # 结果以 UINT32 粒度存储
     vf.store_align(dst_tile, reg_c, preg_u32)
 
 @pl.jit()
@@ -102,8 +98,6 @@ def test_example():
     out = torch.empty([1, 64], device=device, dtype=torch.float32)
     example_kernel[None, core_nums](a, b, out)
     torch.npu.synchronize()
-    # bit_cast 仅改变类型标签，比特模式不变，xor 结果与直接对位模式异或一致
-    # 使用位级比较避免 NaN 精度问题
     assert torch.equal(out.view(torch.int32), a.view(torch.int32) ^ b.view(torch.int32))
 
 if __name__ == "__main__":
@@ -123,15 +117,11 @@ import torch_npu
 
 @pl.vector_function
 def example_vf_hf8_to_uint8(src_tile_a, src_tile_b, dst_tile):
-    # b8 掩码（UINT8 / HF8 元素宽度）
     preg_b8 = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT8)
-    # 以 HF8 类型加载，RegTensor 包含 256 个 HF8 元素
     reg_a = vf.load_align(src_tile_a, 0, dtype=pl.DT_HF8)
     reg_b = vf.load_align(src_tile_b, 0, dtype=pl.DT_HF8)
-    # 嵌套参数形式：将 HF8 寄存器按位重解释为 UINT8 后执行按位或
     reg_c = vf.or_(vf.bit_cast(reg_a, dtype=pl.DT_UINT8),
                    vf.bit_cast(reg_b, dtype=pl.DT_UINT8), preg_b8)
-    # 以 b8 粒度存储
     vf.store_align(dst_tile, reg_c, preg_b8)
 
 @pl.jit()
@@ -165,7 +155,6 @@ def test_example_hf8():
     out = torch.empty([1, 256], device=device, dtype=torch.uint8)
     example_kernel[None, core_nums](a, b, out)
     torch.npu.synchronize()
-    # bit_cast 仅改变类型标签，比特模式不变，or 结果与直接对字节按位或一致
     expected = a.view(torch.uint8) | b.view(torch.uint8)
     torch.testing.assert_close(out, expected, rtol=0, atol=0)
 

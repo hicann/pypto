@@ -32,8 +32,8 @@ full(src, preg, dtype: Optional[DType] = None, mode: Optional[MergeMode] = None,
 | src | 输入 | 源操作数，为标量值或者[reg_tensor](../reg_tensor.md)。源操作数src与目的操作数dst的数据类型保持一致。<br>- **Scalar模式**：标量值，广播到寄存器各元素。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64。<br>- **Tensor模式**：[reg_tensor](../reg_tensor.md)，广播其最低位或最高位元素。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
 | preg | 输入 | [mask_reg](../mask_reg.md)。Tensor模式必选；Scalar模式可选。 |
 | dtype | 输入 | 可选，指定数据类型。Scalar模式必须输入，Tensor模式可从源寄存器自动推断。 |
-| pos | 输入 | 可选，Tensor模式下选择广播源reg_tensor的哪个元素，对应[DuplicatePos](../types/DuplicatePos.md)类型：<br>- pypto_pro.language.DuplicatePos.LOWEST：默认，广播最低位的元素。<br>- pypto_pro.language.DuplicatePos.HIGHEST：指定广播最高位的元素。 |
 | mode | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- pypto_pro.language.MergeMode.ZEROING（默认），preg未筛选的元素在dst中置0。<br>- pypto_pro.language.MergeMode.MERGING当前不支持。 |
+| pos | 输入 | 可选，Tensor模式下选择广播源reg_tensor的哪个元素，对应[DuplicatePos](../types/DuplicatePos.md)类型：<br>- pypto_pro.language.DuplicatePos.LOWEST：默认，广播最低位的元素。<br>- pypto_pro.language.DuplicatePos.HIGHEST：指定广播最高位的元素。 |
 
 ## 约束说明
 
@@ -56,7 +56,6 @@ import torch_npu
 @pl.vector_function
 def example_vf(dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
-    # 标量广播到reg_tensor各元素，可不带掩码或带掩码
     max0 = vf.full(3.0, dtype=pl.DT_FP32)
     sum0 = vf.full(0.0, preg, dtype=pl.DT_FP32)
     vf.store_align(dst_tile, max0, preg)
@@ -97,15 +96,10 @@ import torch_npu
 
 @pl.vector_function
 def example_vf_fp8(src_tile, dst_tile):
-    # full 使用 b8 掩码（FP8 元素宽度）
     preg_f8 = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP8E4M3FN)
-    # astype/store 使用 b32 掩码（FP32 元素宽度）
     preg_f32 = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
-    # 加载 FP8E4M3FN 数据，reg_tensor 包含 256 个 FP8 元素
     reg_f8 = vf.load_align(src_tile, 0, dtype=pl.DT_FP8E4M3FN)
-    # Tensor 模式：广播最低位 FP8 元素到所有 256 个 lane
     reg_dup = vf.full(reg_f8, preg_f8)
-    # FP8 → FP32 转换（4x 扩展，256 个 FP8 → 64 个 FP32）
     reg_f32 = vf.astype(reg_dup, preg_f32, dtype=pl.DT_FP32)
     vf.store_align(dst_tile, reg_f32, preg_f32)
 
@@ -134,8 +128,6 @@ def test_example_fp8():
     out = torch.empty([1, 64], device=device, dtype=torch.float32)
     example_kernel_fp8[None, core_nums](a, out)
     torch.npu.synchronize()
-    # full 广播最低位 FP8 元素到所有 lane，astype layout=ZERO 取每 4 个 FP8 中的第 0 个
-    # 所有输出元素均等于第一个 FP8 元素的 FP32 值
     expected = a[:, :1].to(torch.float32).expand([1, 64])
     torch.testing.assert_close(out, expected, rtol=1e-2, atol=1e-2)
 
@@ -154,15 +146,10 @@ import torch_npu
 
 @pl.vector_function
 def example_vf_fp4(src_tile, dst_tile):
-    # full 使用 b8 掩码（FP4 以 b8 打包存储）
     preg_f4 = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP4E1M2)
-    # astype/store 使用 b16 掩码（BF16 元素宽度）
     preg_bf16 = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_BF16)
-    # 以 FP4E1M2 类型加载，reg_tensor 包含 256 个 b8 元素（512 个 FP4）
     reg_f4 = vf.load_align(src_tile, 0, dtype=pl.DT_FP4E1M2)
-    # Tensor 模式：广播最低位 b8 元素到所有 256 个 lane
     reg_dup = vf.full(reg_f4, preg_f4)
-    # FP4 → BF16 转换（2x 扩展，256 个 b8 → 128 个 BF16）
     reg_bf16 = vf.astype(reg_dup, preg_bf16, dtype=pl.DT_BF16)
     vf.store_align(dst_tile, reg_bf16, preg_bf16)
 
@@ -187,13 +174,11 @@ def test_example_fp4():
     device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
-    # FP4E1M2 以 b8 打包存储（2 个 FP4/字节），0x44 编码两个 1.0 值（code=4）
     a = torch.randint(0, 256, [1, 256], device=device, dtype=torch.uint8)
-    a[:, 0] = 0x44  # 首字节编码 FP4 1.0
+    a[:, 0] = 0x44
     out = torch.empty([1, 128], device=device, dtype=torch.bfloat16)
     example_kernel_fp4[None, core_nums](a, out)
     torch.npu.synchronize()
-    # full 广播首字节 0x44 到所有 lane，所有 FP4 均为 1.0，转换为 BF16 后全为 1.0
     expected = torch.ones([1, 128], device=device, dtype=torch.bfloat16)
     torch.testing.assert_close(out, expected, rtol=0, atol=0)
 
@@ -212,15 +197,10 @@ import torch_npu
 
 @pl.vector_function
 def example_vf_hf8(src_tile, dst_tile):
-    # full 使用 b8 掩码（HF8 元素宽度）
     preg_hf8 = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_HF8)
-    # astype/store 使用 b16 掩码（FP16 元素宽度）
     preg_f16 = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP16)
-    # 加载 HF8 数据，reg_tensor 包含 256 个 HF8 元素
     reg_hf8 = vf.load_align(src_tile, 0, dtype=pl.DT_HF8)
-    # Tensor 模式：广播最低位 HF8 元素到所有 256 个 lane
     reg_dup = vf.full(reg_hf8, preg_hf8)
-    # HF8 → FP16 转换（2x 扩展，256 个 HF8 → 128 个 FP16）
     reg_f16 = vf.astype(reg_dup, preg_f16, dtype=pl.DT_FP16)
     vf.store_align(dst_tile, reg_f16, preg_f16)
 
@@ -245,13 +225,11 @@ def test_example_hf8():
     device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
-    # 创建 HF8 数据（1.0 在 HF8 中可精确表示）
     a = torch.ones([1, 256], device=device, dtype=torch.float32)
     a = torch_npu.npu_dtype_cast(a, torch_npu.hifloat8)
     out = torch.empty([1, 128], device=device, dtype=torch.float16)
     example_kernel_hf8[None, core_nums](a, out)
     torch.npu.synchronize()
-    # full 广播最低位 HF8 元素到所有 lane，转换为 FP16 后全为 1.0
     expected = torch.ones([1, 128], device=device, dtype=torch.float16)
     torch.testing.assert_close(out, expected, rtol=1e-3, atol=1e-3)
 
@@ -270,13 +248,9 @@ import torch_npu
 
 @pl.vector_function
 def example_vf_fp8e8m0(src_tile, dst_tile):
-    # full/store 使用 b8 掩码（FP8E8M0 元素宽度）
     preg_f8 = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP8E8M0)
-    # 以 FP8E8M0 类型加载，reg_tensor 包含 256 个 FP8E8M0 元素
     reg_f8 = vf.load_align(src_tile, 0, dtype=pl.DT_FP8E8M0)
-    # Tensor 模式：广播最低位 FP8E8M0 元素到所有 256 个 lane
     reg_dup = vf.full(reg_f8, preg_f8)
-    # 直接存储 FP8E8M0（b8 宽度，无 astype 转换）
     vf.store_align(dst_tile, reg_dup, preg_f8)
 
 @pl.jit()
@@ -300,13 +274,11 @@ def test_example_fp8e8m0():
     device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
-    # FP8E8M0 以 b8 存储。首字节设为 0x7E（exponent=127，对应 scale=2^0=1.0）
     a = torch.zeros([1, 256], device=device, dtype=torch.uint8)
     a[:, 0] = 0x7E
     out = torch.empty([1, 256], device=device, dtype=torch.uint8)
     example_kernel_fp8e8m0[None, core_nums](a, out)
     torch.npu.synchronize()
-    # full 广播首字节 0x7E 到所有 256 个 lane
     expected = torch.full([1, 256], 0x7E, device=device, dtype=torch.uint8)
     torch.testing.assert_close(out, expected, rtol=0, atol=0)
 

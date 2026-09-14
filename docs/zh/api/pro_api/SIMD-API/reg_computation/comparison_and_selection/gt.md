@@ -57,9 +57,7 @@ def example_vf(src_a, src_b, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg_a = vf.load_align(src_a, 0)
     reg_b = vf.load_align(src_b, 0)
-    # 向量比较
     dst_mask = vf.gt(reg_a, reg_b, preg)
-    # 标量比较：dst_mask = vf.gt(reg_a, 0.0, preg)
     reg_out = vf.select(reg_a, reg_b, dst_mask)
     vf.store_align(dst_tile, reg_out, preg)
 

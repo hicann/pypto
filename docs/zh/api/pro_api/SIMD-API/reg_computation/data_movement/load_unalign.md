@@ -69,8 +69,8 @@ load_unalign(align_reg, tile, stride=None, post_update: bool = False) -> dst
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| Tile | 输入 | 源操作数，Tile地址，起始地址需要32字节对齐。目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
 | align_reg | 输入/输出 | 非对齐寄存器，UnalignRegForLoad类型，用于存储非32字节的数据，寄存器大小为32字节（由vf.load_unalign_init()创建）。 |
+| tile | 输入 | 源操作数，Tile地址，起始地址需要32字节对齐。目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
 | stride | 输入 | 可选，地址更新步长，单位：元素个数。仅在post_update=True时有效。 |
 | post_update | 输入 | 可选，True时搬运后地址自动累进，默认False。 |
 
@@ -80,7 +80,7 @@ load_unalign(align_reg, tile, stride=None, post_update: bool = False) -> dst
 
 ## 返回值说明
 
-返回dst目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。
+返回dst目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型和tile中的说明一致。
 
 ## 调用示例
 
@@ -96,7 +96,6 @@ import torch_npu
 def example_vf(src_tile, dst_tile):
     ureg = vf.load_unalign_init()
     vf.load_unalign_pre(ureg, src_tile)
-    # 非对齐搬入：ureg缓存跨对齐边界数据
     src_reg = vf.load_unalign(ureg, src_tile, post_update=True)
     store_ureg = vf.unalign_reg_for_store()
     vf.store_unalign(dst_tile, src_reg, store_ureg, 64, post_update=True)
@@ -144,16 +143,11 @@ import torch_npu
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
-    # 非对齐搬入初始化，只需在迭代开始前调用一次
     ureg = vf.load_unalign_init()
     vf.load_unalign_pre(ureg, src_tile)
-    # 非对齐搬出初始化
     store_ureg = vf.unalign_reg_for_store()
-    # 带步长形式：stride=64指定每次搬运后地址累进64个元素
     src_reg = vf.load_unalign(ureg, src_tile, 64, post_update=True)
-    # 非对齐搬出配套使用
     vf.store_unalign(dst_tile, src_reg, store_ureg, 64, post_update=True)
-    # 循环结束后刷出剩余数据
     vf.store_unalign_post(dst_tile, store_ureg, 64, post_update=True)
 
 @pl.jit()

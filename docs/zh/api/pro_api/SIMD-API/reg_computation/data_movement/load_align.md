@@ -68,7 +68,7 @@ load_align(tile, offset=None, dist: Optional[LoadDist] = None, dtype: Optional[D
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| Tile | 输入 | 源操作数，Tile地址。地址需要32字节对齐。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
+| tile | 输入 | 源操作数，Tile地址。地址需要32字节对齐。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
 | offset | 输入 | 可选，地址偏移参数，根据传入类型自动分派搬运接口。在**连续搬运模式**和**mask_reg模式**下单位为元素个数，在**非连续搬运模式**时为mask。<br>- **连续搬运模式**：<br>&nbsp;&nbsp;- **整数或[row, col]列表**：整数偏移在代码生成时转换为指针算术Tile + offset。<br>&nbsp;&nbsp;&nbsp;&nbsp;[row, col]列表的线性偏移为row * shape[1] + col，row单位为Tile的列数（即set_validshape[m, n]的n），col单位为元素个数，两者均支持表达式。<br>&nbsp;&nbsp;- **AddrReg**（由vf.create_addr_reg创建）：实际搬运Tile地址为Tile + AddrReg中存储的偏移量。<br>&nbsp;&nbsp;&nbsp;&nbsp;每次迭代需先调用vf.create_addr_reg设定偏移量再调用搬运指令。<br>- **非连续搬运模式**（DataBlock加载模式，data_copy_mode=pypto_pro.language.DataCopyMode.DATA_BLOCK_COPY时）：该模式下offset位置改为传入控制有效元素的mask_reg，<br>&nbsp;&nbsp;某个DataBlock在mask中对应的32bit有任意一位为1时搬入，全为0时不读取且dst对应位置置0。<br>&nbsp;&nbsp;- 当post_update=True时，搬运后源地址自动累进repeat_stride步长，每次迭代无需手动更新地址。<br>&nbsp;&nbsp;- 当post_update=False时，搬运后地址不更新。<br>- **mask_reg模式**（需先用vf.create_mask预声明）：<br>&nbsp;&nbsp;- **整数**：仅在post_update=True时生效；post_update=False时不支持整数offset。<br>&nbsp;&nbsp;- **AddrReg**（由vf.create_addr_reg创建）：实际搬运Tile地址为srcAddr + AddrReg中存储的偏移量。 |
 | dist | 输入 | 可选，数据分布模式，对应[LoadDist](../types/LoadDist.md)类型，具体模式根据是**reg_tensor单搬入模式**、**reg_tensor双搬入模式**还是**mask_reg模式**请分别参见[约束说明](#约束说明)中各表。 |
 | dtype | 输入 | 可选，指定目标[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)的数据类型。当源Tile的数据类型与期望的寄存器数据类型不一致时需要指定（例如源Tile为DT_FP32但需要按DT_UINT32位重解释加载到寄存器）。默认从源Tile的数据类型推断。 |
@@ -147,10 +147,8 @@ import torch_npu
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
-    # 普通对齐加载：第二个参数为元素偏移
     src0 = vf.load_align(src_tile, 0)
     vf.store_align(dst_tile, src0, preg)
-    # post-update模式：搬运后地址自动累进，适合循环内连续加载
     reg = vf.load_align(src_tile, 0, post_update=True)
     vf.store_align(dst_tile, reg, preg)
 
@@ -196,9 +194,7 @@ import torch_npu
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
-    # DINTLV_B32：将64个DT_FP32元素按32位宽粒度拆分为偶数/奇数两组
     dst_even, dst_odd = vf.load_align(src_tile, 0, dist=pl.LoadDist.DINTLV_B32)
-    # 偶数元素存储到输出
     vf.store_align(dst_tile, dst_even, preg)
 
 @pl.jit()
@@ -225,7 +221,6 @@ def test_example_2():
     out = torch.empty([1, 64], device=device, dtype=torch.float32)
     example_kernel[None, core_nums](a, out)
     torch.npu.synchronize()
-    # DINTLV_B32读取2*VL=128个元素，偶数索引拆分后得到64个元素
     expected = a[:, ::2]
     torch.testing.assert_close(out, expected, rtol=1e-5, atol=1e-5)
 
@@ -245,8 +240,6 @@ import torch_npu
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
-    # 使用 [row, col] 列表偏移：从第1行第0列开始加载
-    # 等价于vf.load_align(src_tile, 1 * 64 + 0) 即vf.load_align(src_tile, 64)
     reg = vf.load_align(src_tile, [1, 0])
     vf.store_align(dst_tile, reg, preg)
 
@@ -274,7 +267,6 @@ def test_example_5():
     out = torch.empty([1, 64], device=device, dtype=torch.float32)
     example_kernel[None, core_nums](a, out)
     torch.npu.synchronize()
-    # 加载的是src_tile的第1行（即a[1, :]）
     torch.testing.assert_close(out, a[1:2, :], rtol=1e-5, atol=1e-5)
 
 if __name__ == "__main__":
@@ -292,8 +284,6 @@ import torch_npu
 def example_vf(src_tile, dst_tile, n_rows):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     for i in pl.range(n_rows):
-        # [i, 0]：row表达式i，col = 0
-        # 线性偏移 = i * 64 + 0 = i * 64，逐行加载
         reg = vf.load_align(src_tile, [i, 0])
         vf.store_align(dst_tile + i * 64, reg, preg)
 
@@ -321,7 +311,6 @@ def test_example_6():
     out = torch.empty([2, 64], device=device, dtype=torch.float32)
     example_kernel[None, core_nums](a, out)
     torch.npu.synchronize()
-    # 循环加载src第0、1行并依次存入dst，结果等于完整拷贝
     torch.testing.assert_close(out, a, rtol=1e-5, atol=1e-5)
 
 if __name__ == "__main__":
@@ -343,7 +332,6 @@ def example_vf(src_tile, dst_tile):
     one_repeat_size = 64
     repeat_times = 2
     for i in pl.range(0, repeat_times, 1):
-        # 偏移量按one_repeat_size自动累加，AddrReg自动累进地址
         a_reg = vf.create_addr_reg(one_repeat_size, dtype=pl.DT_FP32)
         reg = vf.load_align(src_tile, a_reg)
         vf.store_align(dst_tile, reg, preg, a_reg)
@@ -391,16 +379,11 @@ import torch_npu
 def example_vf(src_tile, mask_buf_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg_a = vf.load_align(src_tile, 0)
-    # 比较生成掩码，存储到Tile（PK压缩模式：32B [mask_reg](../mask_reg.md) → 16B Tile）
     cmp_mask = vf.ge(reg_a, 0.0, preg)
     vf.store_align(mask_buf_tile, cmp_mask, dist=pl.StoreDist.PACK)
     vf.mem_bar(mode=pl.MemBarMode.VST_VLD)
-    # 从Tile加载掩码到mask_reg（plds指令），US上采样模式与PK互补（16B → 32B）
-    # dist为可选参数（默认NORM）；此处用US是为了与上面的PK存储互补
-    # 需先用create_mask预声明mask_reg的dtype，避免从DT_UINT32 Tile推断出错误dtype
     loaded_mask = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     loaded_mask = vf.load_align(mask_buf_tile, dist=pl.LoadDist.US)
-    # 使用加载的掩码控制运算：mask=1处取abs，mask=0处置零
     reg_dst = vf.abs(reg_a, loaded_mask)
     vf.store_align(dst_tile, reg_dst, preg)
 
@@ -450,10 +433,7 @@ import torch_npu
 @pl.vector_function
 def example_vf_fp8(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
-    # 以 FP8E4M3FN 类型加载，RegTensor 包含 256 个 FP8 元素
     reg_f8 = vf.load_align(src_tile, 0, dtype=pl.DT_FP8E4M3FN)
-    # FP8 → FP32 为 4x 扩展转换，layout=ZERO(PART_P0) 取每 4 个 FP8 中的第 0 个
-    # 256 个 FP8 → 64 个 FP32
     reg_f32 = vf.astype(reg_f8, preg, dtype=pl.DT_FP32)
     vf.store_align(dst_tile, reg_f32, preg)
 
@@ -483,7 +463,6 @@ def test_example_fp8():
     example_kernel_fp8[None, core_nums](a, out)
     torch.npu.synchronize()
     expected = a.to(torch.float32)
-    # layout=ZERO(PART_P0) 取 FP8 索引 0,4,8,...,252，对应 expected 的每 4 个元素取第 0 个
     torch.testing.assert_close(out, expected[:, ::4], rtol=1e-2, atol=1e-2)
 
 if __name__ == "__main__":
@@ -504,9 +483,7 @@ import torch_npu
 @pl.vector_function
 def example_vf_hf8_store(src_tile, dst_tile):
     preg_b8 = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_HF8)
-    # 以 HF8 类型加载，RegTensor 包含 256 个 HF8 元素
     reg_hf8 = vf.load_align(src_tile, 0, dtype=pl.DT_HF8)
-    # 直接以 HF8 类型存储回 Tile
     vf.store_align(dst_tile, reg_hf8, preg_b8)
 
 @pl.jit()
@@ -533,7 +510,6 @@ def test_example_hf8_store():
     out = torch.empty([1, 256], device=device, dtype=torch.uint8)
     example_kernel_hf8_store[None, core_nums](a, out)
     torch.npu.synchronize()
-    # HF8 直接搬运，数据应一致
     torch.testing.assert_close(out, a, rtol=0, atol=0)
 
 if __name__ == "__main__":
@@ -556,21 +532,15 @@ import torch_npu
 @pl.vector_function
 def example_vf_hf8_to_fp32(src_tile, dst_tile):
     preg_b32 = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
-    # 以 FP32 类型加载，64 个 FP32 = 256B
     reg_f32 = vf.load_align(src_tile, 0)
-    # FP32 → HF8，4x缩窄转换，layout=ZERO 将结果放在第0个子区
     reg_hf8 = vf.astype(reg_f32, preg_b32, dtype=pl.DT_HF8, layout=pl.CastLayout.ZERO,
                         round_mode=pl.VFRoundMode.CAST_ROUND, saturate=pl.SaturateMode.ON)
-    # HF8 → FP32，layout=ZERO 读取第0个子区（有效数据），存储到 dst[0:64]
     reg_f32_zero = vf.astype(reg_hf8, preg_b32, dtype=pl.DT_FP32, layout=pl.CastLayout.ZERO)
     vf.store_align(dst_tile, reg_f32_zero, preg_b32, 0)
-    # HF8 → FP32，layout=ONE 读取第1个子区（无有效数据），存储到 dst[64:128]
     reg_f32_one = vf.astype(reg_hf8, preg_b32, dtype=pl.DT_FP32, layout=pl.CastLayout.ONE)
     vf.store_align(dst_tile, reg_f32_one, preg_b32, 64)
-    # HF8 → FP32，layout=TWO 读取第2个子区（无有效数据），存储到 dst[128:192]
     reg_f32_two = vf.astype(reg_hf8, preg_b32, dtype=pl.DT_FP32, layout=pl.CastLayout.TWO)
     vf.store_align(dst_tile, reg_f32_two, preg_b32, 128)
-    # HF8 → FP32，layout=THREE 读取第3个子区（无有效数据），存储到 dst[192:256]
     reg_f32_three = vf.astype(reg_hf8, preg_b32, dtype=pl.DT_FP32, layout=pl.CastLayout.THREE)
     vf.store_align(dst_tile, reg_f32_three, preg_b32, 192)
 
@@ -599,10 +569,7 @@ def test_example_hf8_to_fp32():
     out = torch.empty([1, 256], device=device, dtype=torch.float32)
     example_kernel_hf8_to_fp32[None, core_nums](a, out)
     torch.npu.synchronize()
-    # layout=ZERO 往返转换，结果在 out[0:64]，有效数据
-    # HF8为8位浮点，精度较低，往返转换存在精度损失
     torch.testing.assert_close(out[:, 0:64], a, rtol=1e-1, atol=1e-1)
-    # layout=ONE/TWO/THREE 读取未写入的子区，结果在 out[64:256]，应为0
     torch.testing.assert_close(out[:, 64:256], torch.zeros([1, 192], device=device, dtype=torch.float32), rtol=0, atol=0)
 
 if __name__ == "__main__":

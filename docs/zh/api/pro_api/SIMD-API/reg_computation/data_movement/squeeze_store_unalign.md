@@ -30,7 +30,7 @@ squeeze_store_unalign(tile, src, align_reg)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| Tile | 输出 | 目的操作数，Tile地址。 |
+| tile | 输出 | 目的操作数，Tile地址。 |
 | src | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)类型。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64。 |
 | align_reg | 输入 | alignment tracker寄存器（由vf.unalign_reg_for_store()创建）。 |
 
@@ -58,14 +58,10 @@ import torch_npu
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg_src = vf.load_align(src_tile, 0)
-    # clear AR register before squeeze (required for deterministic ureg state)
     vf.clear_spr()
-    # squeeze with STORE_REG: compress valid elements, write byte count to AR
     reg_sq = vf.squeeze(reg_src, preg, gather_mode=pl.SqueezeMode.STORE_REG)
     align_reg = vf.unalign_reg_for_store()
-    # squeeze_store_unalign: read AR for implicit stride
     vf.squeeze_store_unalign(dst_tile, reg_sq, align_reg)
-    # squeeze_store_unalign_post: flush remaining bytes from AR
     vf.squeeze_store_unalign_post(dst_tile, align_reg)
 
 @pl.jit()
@@ -92,7 +88,6 @@ def test_example():
     out = torch.zeros([1, 64], device=device, dtype=torch.float32)
     example_kernel[None, core_nums](a, out)
     torch.npu.synchronize()
-    # squeeze with ALL mask compresses all 64 elements, store writes them to out
     torch.testing.assert_close(out, a, rtol=1e-5, atol=1e-5)
 
 if __name__ == "__main__":

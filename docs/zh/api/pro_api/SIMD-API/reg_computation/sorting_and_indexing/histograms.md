@@ -67,11 +67,8 @@ import torch_npu
 def example_vf(src_tile, dst_tile):
     preg_b8 = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT8)
     preg_b16 = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT16)
-    # 加载DT_UINT8数据用于直方图统计
     vreg = vf.load_align(src_tile, 0, dtype=pl.DT_UINT8)
-    # 初始化直方图累加寄存器为零
     dst_reg = vf.full(0, preg_b16, dtype=pl.DT_UINT16)
-    # 累加直方图统计结果到dst_reg
     dst_reg = vf.histograms(vreg, preg_b8, bin_type=pl.BinType.BIN0, hist_type=pl.HistType.ACCUMULATE)
     vf.store_align(dst_tile, dst_reg, preg_b16)
 
@@ -96,12 +93,10 @@ def test_example():
     device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
-    # 生成256个UINT8随机数据（值域0~255）
     a = torch.randint(0, 256, [1, 256], device=device, dtype=torch.uint8)
     out = torch.empty([1, 128], device=device, dtype=torch.int16)
     example_kernel[None, core_nums](a, out)
     torch.npu.synchronize()
-    # 验证累计直方图：dst[n] = count(src中值<=n且在BIN0区间[0,127]的元素数)
     src_np = a.cpu().numpy().flatten()
     expected = torch.zeros(128, dtype=torch.int32, device=device)
     for v in src_np:

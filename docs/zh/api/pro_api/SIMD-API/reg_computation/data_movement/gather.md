@@ -102,9 +102,7 @@ import torch_npu
 @pl.vector_function
 def example_vf(src_tile, index_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
-    # 先加载索引寄存器
     index_reg = vf.load_align(index_tile, 0)
-    # 根据索引从src_tile按元素收集到dst_reg
     dst_reg = vf.gather(src_tile, index_reg, preg)
     vf.store_align(dst_tile, dst_reg, preg)
 
@@ -156,12 +154,9 @@ import torch_npu
 @pl.vector_function
 def example_vf_datablock(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
-    # 生成元素索引 [0, 1, 2, ..., 63]
     reg_idx = vf.arange(0, dtype=pl.DT_UINT32)
-    # 转换为字节偏移：shift_left 5等价于 ×32（每个DataBlock 32字节）
     preg_u = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
     reg_idx_b = vf.shift_left(reg_idx, 5, preg_u)
-    # 根据字节偏移从src_tile按DataBlock收集到dst_reg
     dst_reg = vf.gather(src_tile, reg_idx_b, preg,
                         data_copy_mode=pl.DataCopyMode.DATA_BLOCK_LOAD)
     vf.store_align(dst_tile, dst_reg, preg)
@@ -207,13 +202,9 @@ import torch_npu
 
 @pl.vector_function
 def example_vf_int8(src_tile, index_tile, dst_tile):
-    # 8位宽源数据gather到16位宽dst，mask为16位宽粒度
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_INT16)
-    # 索引必须以DT_UINT16加载（8位/16位宽数据要求DT_UINT16索引）
     index_reg = vf.load_align(index_tile, 0, dtype=pl.DT_UINT16)
-    # gather：每个索引收集一个8位宽元素，零扩展到16位宽
     dst_reg = vf.gather(src_tile, index_reg, preg)
-    # 显式指定NORM_B16：8位宽gather结果为16位宽格式，需按16位宽存储
     vf.store_align(dst_tile, dst_reg, preg, dist=pl.StoreDist.NORM_B16)
 
 @pl.jit()
@@ -242,16 +233,11 @@ def test_example_int8():
     device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
-    # 256个DT_INT8元素，使用前128个索引收集前128个元素
     a = torch.randint(-128, 127, [1, 256], device=device, dtype=torch.int8)
-    # 索引值0~127，每个索引收集一个8位宽元素
     idx = torch.arange(128, device=device, dtype=torch.int32).reshape([1, 128]).to(torch.uint16)
-    # 输出为DT_INT16（8位宽gather结果零扩展到16位宽）
     out = torch.empty([1, 128], device=device, dtype=torch.int16)
     example_kernel_int8[None, core_nums](a, idx, out)
     torch.npu.synchronize()
-    # gather后每个8位宽元素零扩展到16位宽（高8位补0，非符号扩展）
-    # 例如int8(-40)=0xD8零扩展为int16(216)=0x00D8
     expected = a[:, :128].to(torch.uint8).to(torch.int16)
     torch.testing.assert_close(out, expected, rtol=0, atol=0)
 
@@ -271,7 +257,6 @@ import torch_npu
 @pl.vector_function
 def example_vf_fp16(src_tile, index_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP16)
-    # 索引必须以DT_UINT16加载（16位宽数据要求DT_UINT16索引）
     index_reg = vf.load_align(index_tile, 0, dtype=pl.DT_UINT16)
     dst_reg = vf.gather(src_tile, index_reg, preg)
     vf.store_align(dst_tile, dst_reg, preg)
@@ -302,12 +287,10 @@ def test_example_fp16():
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 128], device=device, dtype=torch.float16)
-    # 索引值0~127，每个索引收集一个DT_FP16元素
     idx = torch.arange(128, device=device, dtype=torch.int32).reshape([1, 128]).to(torch.uint16)
     out = torch.empty([1, 128], device=device, dtype=torch.float16)
     example_kernel_fp16[None, core_nums](a, idx, out)
     torch.npu.synchronize()
-    # gather后dst为identity
     torch.testing.assert_close(out, a, rtol=1e-3, atol=1e-3)
 
 if __name__ == "__main__":
@@ -325,13 +308,10 @@ import torch_npu
 
 @pl.vector_function
 def example_vf_int8_datablock(src_tile, dst_tile):
-    # 8位宽数据mask为8位宽粒度
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_INT8)
-    # 生成DataBlock索引：0, 32, 64, ...（每个DataBlock 32字节）
     preg_u32 = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
     reg_idx = vf.arange(0, dtype=pl.DT_UINT32)
     reg_idx_b = vf.shift_left(reg_idx, 5, preg_u32)
-    # 按DataBlock收集
     dst_reg = vf.gather(src_tile, reg_idx_b, preg,
                         data_copy_mode=pl.DataCopyMode.DATA_BLOCK_LOAD)
     vf.store_align(dst_tile, dst_reg, preg)
@@ -356,12 +336,10 @@ def test_example_int8_db():
     device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
-    # 256个DT_INT8元素 = 8个DataBlock（每个32字节）
     a = torch.randint(-128, 127, [1, 256], device=device, dtype=torch.int8)
     out = torch.empty([1, 256], device=device, dtype=torch.int8)
     example_kernel_int8_db[None, core_nums](a, out)
     torch.npu.synchronize()
-    # gather后dst为identity（索引0,32,64,...,224对应8个DataBlock）
     torch.testing.assert_close(out, a, rtol=0, atol=0)
 
 if __name__ == "__main__":
@@ -410,12 +388,10 @@ def test_example_gather_reg():
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randint(-128, 127, [1, 256], device=device, dtype=torch.int8)
-    # 前128个索引，收集前128个元素
     idx = torch.arange(128, device=device, dtype=torch.int32).to(torch.uint8).reshape([1, 128])
     out = torch.empty([1, 128], device=device, dtype=torch.int8)
     example_kernel_gather_reg[None, core_nums](a, idx, out)
     torch.npu.synchronize()
-    # DT_INT8→DT_INT8 gather，类型保持不变
     torch.testing.assert_close(out, a[:, :128], rtol=0, atol=0)
 
 if __name__ == "__main__":
@@ -434,12 +410,8 @@ import torch_npu
 @pl.vector_function
 def example_vf_fp16_bc(src_tile, index_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP16)
-    # 索引以DT_UINT32加载（16位宽数据 + DT_UINT32索引）
     index_reg = vf.load_align(index_tile, 0, dtype=pl.DT_UINT32)
-    # gather：每个DT_UINT32索引收集一个DT_FP16元素
-    # 结果中每个元素占32位（低16位为数据，高16位补零），共64个有效元素占128个b16 lane
     dst_reg = vf.gather(src_tile, index_reg, preg)
-    # NORM_B16：按16位粒度存储，128个b16写入256字节
     vf.store_align(dst_tile, dst_reg, preg, dist=pl.StoreDist.NORM_B16)
 
 @pl.jit()
@@ -468,13 +440,10 @@ def test_example_fp16_bc():
     core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 128], device=device, dtype=torch.float16)
-    # 索引值0~63，DT_UINT32类型
     idx = torch.arange(64, device=device, dtype=torch.int32).reshape([1, 64])
-    # 输出为128个FP16（256字节），其中偶数位置为有效gather数据
     out = torch.empty([1, 128], device=device, dtype=torch.float16)
     example_kernel_fp16_bc[None, core_nums](a, idx, out)
     torch.npu.synchronize()
-    # vgather2_bc结果：偶数位置为有效数据，奇数位置为零
     expected = torch.zeros([1, 128], device=device, dtype=torch.float16)
     expected[:, ::2] = a[:, :64]
     torch.testing.assert_close(out, expected, rtol=1e-3, atol=1e-3)

@@ -50,9 +50,7 @@ def example_kernel(
     a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
 ):
-    # 读取CTRL[60]（全局覆盖位）的当前值
     global_mode = pl.get_ctrl_spr(60, 60)
-    # 读取CTRL[48]（FLOAT饱和位）的当前值
     float_sat = pl.get_ctrl_spr(48, 48)
     tf = pl.TileType(shape=[1, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     in_a_grp = pl.make_tile_group(type=tf, addrs=0, mutex_ids=[0])

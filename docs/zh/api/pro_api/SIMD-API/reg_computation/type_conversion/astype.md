@@ -48,7 +48,7 @@ vf.astype用于数据类型精度转换，将源操作数数据类型转换成�
 ## 函数原型
 
 ```python
-astype(src, preg, dtype: DType, layout: Optional[CastLayout] = None, round_mode: Optional[VFRoundMode] = None, saturate: Optional[SaturateMode] = None)
+astype(src, preg, dtype: DType, layout: Optional[CastLayout] = None, round_mode: Optional[VFRoundMode] = None, saturate: Optional[SaturateMode] = None, mode: Optional[MergeMode] = None) -> dst
 ```
 
 ## 参数说明
@@ -209,9 +209,7 @@ import torch_npu
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg_a = vf.load_align(src_tile, 0)
-    # FP32→BF16，layout=pl.CastLayout.ZERO 放偶数半区
     reg_bf16 = vf.astype(reg_a, preg, dtype=pl.DT_BF16, layout=pl.CastLayout.ZERO)
-    # BF16→FP32，widen back for store
     reg_f32 = vf.astype(reg_bf16, preg, dtype=pl.DT_FP32)
     vf.store_align(dst_tile, reg_f32, preg)
 
@@ -258,9 +256,7 @@ import torch_npu
 def example_vf_fp32_to_fp16(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg_a = vf.load_align(src_tile, 0)
-    # FP32→FP16，缩窄转换，layout=pl.CastLayout.ZERO 放偶数半区
     reg_f16 = vf.astype(reg_a, preg, dtype=pl.DT_FP16, layout=pl.CastLayout.ZERO)
-    # FP16→FP32，扩展回 FP32 用于搬出
     reg_f32 = vf.astype(reg_f16, preg, dtype=pl.DT_FP32)
     vf.store_align(dst_tile, reg_f32, preg)
 
@@ -307,7 +303,6 @@ import torch_npu
 def example_vf_round(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg_a = vf.load_align(src_tile, 0)
-    # FP32→INT32，round_mode=CAST_ODD 使用 Von Neumann 舍入
     reg_i = vf.astype(reg_a, preg, dtype=pl.DT_INT32, round_mode=pl.VFRoundMode.CAST_RINT)
     reg_f = vf.astype(reg_i, preg, dtype=pl.DT_FP32)
     vf.store_align(dst_tile, reg_f, preg)
@@ -355,10 +350,8 @@ import torch_npu
 def example_vf_fp8(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg_a = vf.load_align(src_tile, 0)
-    # FP32 → FP8E4M3FN，layout=ZERO 放偶数半区，仅支持 CAST_RINT
     reg_f8 = vf.astype(reg_a, preg, dtype=pl.DT_FP8E4M3FN, layout=pl.CastLayout.ZERO,
                        round_mode=pl.VFRoundMode.CAST_RINT, saturate=pl.SaturateMode.ON)
-    # FP8E4M3FN → FP32，还原为 FP32 用于存储
     reg_f32 = vf.astype(reg_f8, preg, dtype=pl.DT_FP32)
     vf.store_align(dst_tile, reg_f32, preg)
 
@@ -386,7 +379,6 @@ def test_example_fp8():
     out = torch.empty([1, 64], device=device, dtype=torch.float32)
     example_kernel_fp8[None, core_nums](a, out)
     torch.npu.synchronize()
-    # layout=ZERO 时 FP8 结果在偶数半区，验证偶数索引位置
     expected = a.to(torch.float8_e4m3fn).to(torch.float32)
     torch.testing.assert_close(out[:, ::2], expected[:, ::2], rtol=1e-2, atol=1e-2)
 
@@ -408,10 +400,8 @@ import torch_npu
 def example_vf_fp4(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_BF16)
     reg_a = vf.load_align(src_tile, 0, dtype=pl.DT_BF16)
-    # BF16 → FP4E2M1，layout=ZERO 放偶数半区
     reg_f4 = vf.astype(reg_a, preg, dtype=pl.DT_FP4E2M1, layout=pl.CastLayout.ZERO,
                        round_mode=pl.VFRoundMode.CAST_RINT)
-    # FP4E2M1 → BF16，还原为 BF16 用于存储
     reg_bf16 = vf.astype(reg_f4, preg, dtype=pl.DT_BF16)
     vf.store_align(dst_tile, reg_bf16, preg)
 
@@ -430,8 +420,6 @@ def example_kernel_fp4(
         example_vf_fp4(in_a, t_out)
         pl.store(out, t_out, [0, 0])
 
-# FP4 E2M1 可表示值为 [0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0] 及其负数
-# 硬件采用 ROUND_R（round-to-nearest-even）舍入
 _FP4_E2M1_VALUES = np.array([0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0], dtype=np.float32)
 _FP4_E2M1_EVEN_MASK = np.array([True, False, True, False, True, False, True, False])
 
@@ -444,19 +432,13 @@ def test_example_fp4():
     out = torch.empty([1, 128], device=device, dtype=torch.bfloat16)
     example_kernel_fp4[None, core_nums](a, out)
     torch.npu.synchronize()
-    # layout=ZERO 时 FP4 结果在偶数半区，验证偶数索引位置
     a_np = a.cpu().float().numpy()
     sign = np.sign(a_np)
     abs_val = np.abs(a_np)
-    # 计算到每个可表示值的距离
     dist = np.abs(abs_val[..., None] - _FP4_E2M1_VALUES)
     min_dist = dist.min(axis=-1)
-    # 找到所有距离最小的候选值
     is_nearest = dist == min_dist[..., None]
-    # 当存在多个等距候选时，选择 code 为偶数的值（round-to-nearest-even）
-    # FP4 E2M1 的 code 为 [0,1,2,3,4,5,6,7]，偶数 code 对应索引 0,2,4,6
     candidates = is_nearest & _FP4_E2M1_EVEN_MASK
-    # 若有偶数候选则选它，否则选唯一的最近值
     has_even = candidates.any(axis=-1)
     idx = np.where(has_even, np.argmax(candidates, axis=-1), np.argmin(dist, axis=-1))
     expected = torch.from_numpy(sign * _FP4_E2M1_VALUES[idx]).to(device=device, dtype=torch.bfloat16)
@@ -479,10 +461,8 @@ import torch_npu
 def example_vf_hf8(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP16)
     reg_a = vf.load_align(src_tile, 0, dtype=pl.DT_FP16)
-    # FP16 → HF8（2x narrowing），layout=ZERO 放偶数半区
     reg_hf8 = vf.astype(reg_a, preg, dtype=pl.DT_HF8, layout=pl.CastLayout.ZERO,
                         round_mode=pl.VFRoundMode.CAST_ROUND, saturate=pl.SaturateMode.ON)
-    # HF8 → FP16（2x widening），还原为 FP16 用于存储
     reg_f16 = vf.astype(reg_hf8, preg, dtype=pl.DT_FP16)
     vf.store_align(dst_tile, reg_f16, preg)
 
@@ -510,7 +490,6 @@ def test_example_hf8():
     out = torch.empty([1, 128], device=device, dtype=torch.float16)
     example_kernel_hf8[None, core_nums](a, out)
     torch.npu.synchronize()
-    # layout=ZERO 时 HF8 结果在偶数半区，验证偶数索引位置
     torch.testing.assert_close(out[:, ::2], a[:, ::2], rtol=1e-1, atol=1e-1)
 
 if __name__ == "__main__":

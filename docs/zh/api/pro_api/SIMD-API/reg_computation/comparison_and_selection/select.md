@@ -163,12 +163,9 @@ import torch_npu
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg = vf.load_align(src_tile, 0)
-    # 生成两个互补掩码
-    mask_a = vf.ge(reg, 0.0, preg)   # reg >= 0处为1
-    mask_b = vf.lt(reg, 0.0, preg)   # reg < 0处为1
-    # preg全1，所以sel结果 = mask_a
+    mask_a = vf.ge(reg, 0.0, preg)
+    mask_b = vf.lt(reg, 0.0, preg)
     preg_sel = vf.select(mask_a, mask_b, preg)
-    # 使用sel掩码做abs：reg >= 0处取abs（即自身），否则置零
     reg_dst = vf.abs(reg, preg_sel)
     vf.store_align(dst_tile, reg_dst, preg)
 

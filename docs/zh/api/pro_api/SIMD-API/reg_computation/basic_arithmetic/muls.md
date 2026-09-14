@@ -21,7 +21,7 @@ $$dstReg_i = srcReg_i \times scalar$$
 ## 函数原型
 
 ```python
-muls(src, scaler, preg, mode: Optional[MergeMode] = None) -> dst
+muls(src, scalar, preg, mode: Optional[MergeMode] = None) -> dst
 ```
 
 ## 参数说明
@@ -29,7 +29,7 @@ muls(src, scaler, preg, mode: Optional[MergeMode] = None) -> dst
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
 | src | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)，源操作数src与目的操作数dst的数据类型保持一致。支持的数据类型为：DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_FP16、DT_FP32、DT_INT64、DT_UINT64。 |
-| scaler | 输入 | 标量源操作数。 |
+| scalar | 输入 | 标量源操作数。 |
 | preg | 输入 | [mask_reg](../mask_reg.md)。 |
 | mode | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- pypto_pro.language.MergeMode.ZEROING（默认），preg未筛选的元素在dst中置0。<br>- pypto_pro.language.MergeMode.MERGING当前不支持。 |
 

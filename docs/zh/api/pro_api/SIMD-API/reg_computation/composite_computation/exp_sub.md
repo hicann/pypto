@@ -167,7 +167,6 @@ def test_example_half_to_float():
     out = torch.empty([1, 64], device=device, dtype=torch.float32)
     example_kernel_half_to_float[None, core_nums](a, b, out)
     torch.npu.synchronize()
-    # layout=ZERO取偶数位（第0、2、4...个）DT_FP16元素参与计算，输出64个DT_FP32
     torch.testing.assert_close(out, torch.exp(a[:, 0::2].float() - b[:, 0::2].float()), rtol=1e-3, atol=1e-3)
 
 if __name__ == "__main__":

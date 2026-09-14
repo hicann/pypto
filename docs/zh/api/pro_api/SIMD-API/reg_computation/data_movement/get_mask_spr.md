@@ -64,9 +64,7 @@ import torch_npu
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg = vf.load_align(src_tile, 0)
-    # 从SPR读取掩码到mask_reg（movp_b32指令）
     spr_mask = vf.get_mask_spr(width=pl.MaskWidth.B32)
-    # 使用读取的掩码做abs：前32个元素取abs，其余置零
     reg_dst = vf.abs(reg, spr_mask)
     vf.store_align(dst_tile, reg_dst, preg)
 
@@ -97,7 +95,6 @@ def test_example():
     out = torch.empty([1, 64], device=device, dtype=torch.float32)
     example_kernel[None, core_nums](a, out)
     torch.npu.synchronize()
-    # 前32个元素取abs，后32个置零
     expected = torch.zeros_like(a)
     expected[:, :32] = torch.abs(a[:, :32])
     torch.testing.assert_close(out, expected, rtol=1e-5, atol=1e-5)

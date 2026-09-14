@@ -52,10 +52,7 @@ import torch_npu
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg = vf.load_align(src_tile, 0)
-    # FP32→INT16，缩窄转换，layout=ZERO放偶数半区
-    # 不指定saturate参数，使用set_saturation_flag设置的全局饱和模式
     reg_i16 = vf.astype(reg, preg, dtype=pl.DT_INT16, layout=pl.CastLayout.ZERO)
-    # INT16→FP32，扩展回FP32用于搬出
     reg_f32 = vf.astype(reg_i16, preg, dtype=pl.DT_FP32)
     vf.store_align(dst_tile, reg_f32, preg)
 
@@ -64,7 +61,6 @@ def example_kernel(
     a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
 ):
-    # 设置CAST饱和模式
     pl.set_saturation_flag(mode=pl.SaturationFlagMode.CAST, enable=True)
     tf = pl.TileType(shape=[1, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     in_a_grp = pl.make_tile_group(type=tf, addrs=0, mutex_ids=[0])
@@ -75,19 +71,16 @@ def example_kernel(
         pl.load(in_a, a, [0, 0])
         example_vf(in_a, t_out)
         pl.store(out, t_out, [0, 0])
-    # 恢复CTRL[59]到默认值
     pl.reset_ctrl_spr(59, 59)
 
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
     torch.npu.set_device(device)
-    # 使用超出INT16范围的值测试饱和效果
     a = torch.randn([1, 64], device=device, dtype=torch.float32) * 50000
     out = torch.empty([1, 64], device=device, dtype=torch.float32)
     example_kernel[None, 1](a, out)
     torch.npu.synchronize()
-    # 饱和模式下，超出[-32768,32767]的值被钳位，再转回FP32
     expected = a.clamp(-32768, 32767).to(torch.int16).to(torch.float32)
     torch.testing.assert_close(out, expected, rtol=0, atol=1.0)
 

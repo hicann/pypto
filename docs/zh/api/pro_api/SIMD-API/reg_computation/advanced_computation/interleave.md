@@ -119,10 +119,8 @@ def example_vf(src_tile, dst_tile):
     mask_full = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     mask_m3 = vf.create_mask(pattern=pl.MaskPattern.M3, dtype=pl.DT_FP32)
     reg = vf.load_align(src_tile, 0)
-    # 交织后解交织为roundtrip，掩码恢复原值
     new_mask0, new_mask1 = vf.interleave(mask_full, mask_m3)
     new_mask0, new_mask1 = vf.de_interleave(new_mask0, new_mask1)
-    # new_mask0恢复为ALL，用其做abs：对所有元素取绝对值
     reg_dst = vf.abs(reg, new_mask0)
     vf.store_align(dst_tile, reg_dst, preg)
 
@@ -172,9 +170,7 @@ def example_vf_int64(src_a, src_b, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_INT64)
     reg_a = vf.load_align(src_a, 0)
     reg_b = vf.load_align(src_b, 0)
-    # interleave: dst0 = [a0, b0, a1, b1, ...], dst1 = [a2, b2, a3, b3, ...]
     dst0, dst1 = vf.interleave(reg_a, reg_b)
-    # de_interleave: recover original a and b from interleaved result
     rec_a, rec_b = vf.de_interleave(dst0, dst1)
     vf.store_align(dst_tile, rec_a, preg)
 
@@ -207,7 +203,6 @@ def test_example_int64():
     out = torch.empty([1, 32], device=device, dtype=torch.int64)
     example_kernel_int64[None, core_nums](a, b, out)
     torch.npu.synchronize()
-    # de_interleave recovers the original reg_a from the interleaved result
     torch.testing.assert_close(out, a, rtol=0, atol=0)
 
 if __name__ == "__main__":

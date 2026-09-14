@@ -62,7 +62,6 @@ import torch_npu
 
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
-    # update_mask从标量值生成掩码
     preg = vf.update_mask(0xFFFFFFFF, dtype=pl.DT_FP16)
     reg = vf.load_align(src_tile, 0)
     vf.store_align(dst_tile, reg, preg)
