@@ -21,6 +21,7 @@
 #include "interface/operation/vector/gather_mask_common.h"
 #include "tensor_transformation.h"
 #include "tilefwk/error_code.h"
+#include "interface/configs/config_manager.h"
 
 namespace npu::tile_fwk {
 
@@ -164,12 +165,7 @@ LogicalTensorPtr TensorGatherOperation(Function& function, const LogicalTensorPt
 
 void CheckGatherParamsInvalid(const Tensor& params, const Tensor& indices, int axis, const std::string& opName)
 {
-    static const std::unordered_set<DataType> a2a3Types = {DT_FP32, DT_FP16,   DT_BF16,   DT_INT32, DT_INT16,
-                                                           DT_INT8, DT_UINT32, DT_UINT16, DT_UINT8};
-    static const std::unordered_set<DataType> a5Types = {DT_FP32,    DT_FP16,    DT_BF16,   DT_INT32, DT_INT16,
-                                                         DT_INT8,    DT_UINT32,  DT_UINT16, DT_UINT8, DT_BOOL,
-                                                         DT_FP8E4M3, DT_FP8E5M2, DT_FP8E8M0};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(a2a3Types, a5Types);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_GATHER);
     CheckTensorDataType(params.GetStorage(), supportedTypes, opName);
     CheckFp8ArchSupport(params, opName);
     std::unordered_set<DataType> indexSupportedTypes = {DT_INT32, DT_INT64};
@@ -298,11 +294,7 @@ Tensor GatherElements(const Tensor& params, const Tensor& indices, int axis)
         CHECK(VectorErrorCode::ERR_PARAM_INVALID, indices.GetShape()[i] <= params.GetShape()[i])
             << "The shape of params and indices should be equal";
     }
-    static const std::unordered_set<DataType> a2a3Types = {DT_FP32,   DT_FP16,  DT_BF16,  DT_INT32,
-                                                           DT_UINT32, DT_INT16, DT_UINT16};
-    static const std::unordered_set<DataType> a5Types = {DT_FP32,   DT_FP16,  DT_BF16,  DT_INT32,
-                                                         DT_UINT32, DT_INT16, DT_UINT16};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(a2a3Types, a5Types);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_GATHER_ELEMENT);
     CheckTensorDataType(params.GetStorage(), supportedTypes, "GATHERELEMENTS");
     std::unordered_set<DataType> indexSupportedTypes = {DT_INT32, DT_INT64};
     CheckTensorDataType(indices.GetStorage(), indexSupportedTypes, "GATHERELEMENTS");

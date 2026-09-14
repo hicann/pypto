@@ -20,6 +20,7 @@
 #include "interface/utils/operator_tracer.h"
 #include "passes/pass_utils/graph_utils.h"
 #include "tilefwk/error_code.h"
+#include "interface/configs/config_manager.h"
 
 namespace npu::tile_fwk {
 
@@ -70,9 +71,7 @@ Tensor Relu(const Tensor& self)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Relu");
 
-    static const std::unordered_set<DataType> RELU_A2A3_TYPES = {DT_FP16, DT_BF16, DT_FP32, DT_INT32, DT_INT16};
-    static const std::unordered_set<DataType> RELU_A5_TYPES = {DT_FP16, DT_BF16, DT_FP32, DT_INT32, DT_INT16, DT_INT64};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(RELU_A2A3_TYPES, RELU_A5_TYPES);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_RELU);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "Relu");
     RETURN_CALL(UnaryOperation<UnaryOpType::RELU>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
 }
@@ -96,10 +95,7 @@ Tensor Abs(const Tensor& self)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Abs");
 
-    static const std::unordered_set<DataType> ABS_A2A3_TYPES = {DT_FP16, DT_BF16, DT_FP32};
-    static const std::unordered_set<DataType> ABS_A5_TYPES = {DT_FP16,  DT_BF16,  DT_FP32, DT_INT8,
-                                                              DT_INT16, DT_INT32, DT_INT64};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(ABS_A2A3_TYPES, ABS_A5_TYPES);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_ABS);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "Abs");
     RETURN_CALL(UnaryOperation<UnaryOpType::ABS>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
 }
@@ -117,9 +113,7 @@ Tensor Neg(const Tensor& self)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Neg");
 
-    static const std::unordered_set<DataType> NEG_A2A3_TYPES = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
-    static const std::unordered_set<DataType> NEG_A5_TYPES = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32, DT_INT64};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(NEG_A2A3_TYPES, NEG_A5_TYPES);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_NEG);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "NEG");
     CheckTensorDimRange(self.GetStorage(), 1, NUM_VALUE_4, "NEG");
     CheckTensorShapeSize(self.GetStorage(), "NEG");
@@ -260,9 +254,7 @@ Tensor Round(const Tensor& self, const int& decimals)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Round");
 
-    static const std::unordered_set<DataType> ROUND_A2A3_TYPES = {DT_FP32, DT_FP16, DT_BF16, DT_INT32};
-    static const std::unordered_set<DataType> ROUND_A5_TYPES = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT64};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(ROUND_A2A3_TYPES, ROUND_A5_TYPES);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_ROUND);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "ROUND");
     CheckTensorDimRange(self.GetStorage(), 1, NUM_VALUE_4, "ROUND");
     CheckTensorShapeSize(self.GetStorage(), "ROUND");

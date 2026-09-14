@@ -26,11 +26,11 @@
 
 ### 产品线与架构对照
 
-| npu 标签值 | 产品线 | 对应架构 | pypto 集合 |
-|-----------|--------|---------|-----------|
-| `950` | Ascend 950PR/950DT | A5 | `{OP}_A5_TYPES` |
-| `A3` | Atlas A3 训练/推理系列 | A2/A3 | `{OP}_A2A3_TYPES` |
-| `910b` | Atlas A2 训练/推理系列 | A2/A3 | `{OP}_A2A3_TYPES` |
+| npu 标签值 | 产品线 | 对应架构 | pypto JSON 配置 |
+|-----------|--------|---------|----------------|
+| `950` | Ascend 950PR/950DT | A5 | `a5_supported_op_dtypes.json` |
+| `A3` | Atlas A3 训练/推理系列 | A2/A3 | `a2a3_supported_op_dtypes.json` |
+| `910b` | Atlas A2 训练/推理系列 | A2/A3 | `a2a3_supported_op_dtypes.json` |
 
 ### 修改规则
 
@@ -89,4 +89,4 @@ Tensor支持的数据类型为：DT_FP16，DT_FP32，DT_BF16，DT_INT8，DT_UINT
 14. DT_FP8E5M2
 15. DT_FP8E8M0
 
-> 实际顺序应与源码中 `supportedTypes` 集合的顺序保持一致。如果现有文档已有特定顺序，保持一致即可。
+> 实际顺序应与对应 JSON 配置中 `ops.{OPCODE}.input_dtypes` 的顺序保持一致。如果现有文档已有特定顺序，保持一致即可。

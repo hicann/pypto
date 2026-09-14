@@ -2045,12 +2045,7 @@ void TiledGatherInUB(Function& function, const TileShape& tileShape, const Logic
 Tensor experimental::GatherInUB(const Tensor& params, const Tensor& indices, const Tensor& blockTable, int blockSize,
                                 int axis)
 {
-    static const std::unordered_set<DataType> a2a3Types = {DT_FP32, DT_FP16,   DT_BF16,   DT_INT32, DT_INT16,
-                                                           DT_INT8, DT_UINT32, DT_UINT16, DT_UINT8};
-    static const std::unordered_set<DataType> a5Types = {DT_FP32,    DT_FP16,    DT_BF16,   DT_INT32, DT_INT16,
-                                                         DT_INT8,    DT_UINT32,  DT_UINT16, DT_UINT8, DT_BOOL,
-                                                         DT_FP8E4M3, DT_FP8E5M2, DT_FP8E8M0};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(a2a3Types, a5Types);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_GATHER_IN_UB);
     CheckTensorDataType(params.GetStorage(), supportedTypes, "GatherInUB");
 
     (void)axis;

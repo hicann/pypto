@@ -21,6 +21,7 @@
 #include "interface/operation/vector/gather_mask_common.h"
 #include "tensor_transformation.h"
 #include "tilefwk/error_code.h"
+#include "interface/configs/config_manager.h"
 
 namespace npu::tile_fwk {
 
@@ -127,11 +128,7 @@ void TensorScatterElementS(Function& function, const ScatterElementSPara& scatte
 static void CheckScatterElementSParamsInvalid(const Tensor& self, const Tensor& indices, int axis,
                                               const ScatterMode reduce)
 {
-    static const std::unordered_set<DataType> SCATTER_A2A3_TYPES = {DT_FP32,  DT_FP16,  DT_BF16,  DT_INT8,
-                                                                    DT_UINT8, DT_INT16, DT_INT32, DT_INT64};
-    static const std::unordered_set<DataType> SCATTER_A5_TYPES = {DT_FP32,  DT_FP16,  DT_BF16,  DT_INT8,
-                                                                  DT_UINT8, DT_INT16, DT_INT32, DT_INT64};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(SCATTER_A2A3_TYPES, SCATTER_A5_TYPES);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_SCATTER_ELEMENT);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "SCATTER");
     std::unordered_set<DataType> indexSupportedTypes = {DT_INT32, DT_INT64};
     CheckTensorDataType(indices.GetStorage(), indexSupportedTypes, "SCATTER");
@@ -298,11 +295,7 @@ void TensorScatter(Function& function, const ScatterPara& scatterPara)
 static void CheckScatterParamsInvalid(const Tensor& self, const Tensor& indices, const Tensor& src, int axis,
                                       const ScatterMode reduce)
 {
-    static const std::unordered_set<DataType> SCATTER_A2A3_TYPES = {DT_FP32,  DT_FP16,  DT_BF16,  DT_INT8,
-                                                                    DT_UINT8, DT_INT16, DT_INT32, DT_INT64};
-    static const std::unordered_set<DataType> SCATTER_A5_TYPES = {DT_FP32,  DT_FP16,  DT_BF16,  DT_INT8,
-                                                                  DT_UINT8, DT_INT16, DT_INT32, DT_INT64};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(SCATTER_A2A3_TYPES, SCATTER_A5_TYPES);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_SCATTER);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "SCATTER");
     CheckTensorsDataTypeConsistency(self.GetStorage(), src.GetStorage(), "SCATTER");
     std::unordered_set<DataType> indexSupportedTypes = {DT_INT32, DT_INT64};

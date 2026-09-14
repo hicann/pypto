@@ -30,7 +30,7 @@ from .converter import from_torch
 from .enum import *
 from .op import *
 from .operation import *
-from .operator import *
+from .operator import sigmoid, softmax, rms_norm
 from .pass_config import *
 from .cost_model import *
 from ._utils import ceildiv, bytes_of

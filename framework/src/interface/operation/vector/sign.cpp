@@ -20,6 +20,7 @@
 #include "interface/utils/operator_tracer.h"
 #include "passes/pass_utils/graph_utils.h"
 #include "tilefwk/error_code.h"
+#include "interface/configs/config_manager.h"
 
 namespace npu::tile_fwk {
 
@@ -123,11 +124,7 @@ Tensor Sign(const Tensor& self)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Sign");
 
-    static const std::unordered_set<DataType> SIGN_A2A3_TYPES = {DT_FP16,  DT_BF16, DT_INT16,
-                                                                 DT_INT32, DT_FP32, DT_INT8};
-    static const std::unordered_set<DataType> SIGN_A5_TYPES = {DT_FP16, DT_BF16, DT_INT16, DT_INT32,
-                                                               DT_FP32, DT_INT8, DT_INT64};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(SIGN_A2A3_TYPES, SIGN_A5_TYPES);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_SIGN);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "SIGN");
     CheckTensorDimRange(self.GetStorage(), 1, NUM_VALUE_4, "SIGN");
     CheckTensorShapeSize(self.GetStorage(), "SIGN");

@@ -165,6 +165,12 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
             COMPONENT pypto
     )
 
+    # 安装 各平台算子支持的 dtype 配置
+    install(DIRECTORY framework/src/interface/configs/platform_op_supported_dtypes/
+            DESTINATION ${PyPTO_WhlName}/lib/configs/platform_op_supported_dtypes
+            COMPONENT pypto
+    )
+
     # 安装 脚本文件
     install(FILES
                 tools/profiling/draw_swim_lane.py

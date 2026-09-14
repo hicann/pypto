@@ -21,8 +21,12 @@
 #include <unistd.h>
 #include <type_traits>
 #include <set>
+#include <unordered_map>
+#include <unordered_set>
+#include <mutex>
 #include "utils/file_utils.h"
 #include "interface/configs/config_manager_ng.h"
+#include "interface/operation/opcode.h"
 #include "tilefwk/config.h"
 #include "tilefwk/function.h"
 #include "tilefwk/platform.h"
@@ -136,6 +140,15 @@ public:
     const InternalGlobalConfig& GetInternalConfig() const { return globalConfigs_; }
     void SetInternalConfig(const InternalGlobalConfig& globalConfig) { globalConfigs_ = globalConfig; }
 
+    const std::unordered_map<NPUArch,
+                             std::unordered_map<std::string, std::unordered_map<Opcode, std::unordered_set<DataType>>>>&
+    GetPlatformSupportedOpDtypesMap() const
+    {
+        return platformSupportedOpDtypesMap_;
+    }
+
+    const std::unordered_set<DataType>& GetOpSupportedInputDtypes(const Opcode& opcode);
+
     template <typename T>
     auto GetPlatformConfig(const std::string& key, const T& defaultValue)
     {
@@ -244,6 +257,10 @@ private:
     nlohmann::json json_;
     nlohmann::json originJson_;
     bool logRotationEnabled_ = true;
+    std::once_flag platformSupportedOpDtypesLoaded_;
+    std::unordered_map<NPUArch,
+                       std::unordered_map<std::string, std::unordered_map<Opcode, std::unordered_set<DataType>>>>
+        platformSupportedOpDtypesMap_;
 
     ConfigManager();
 
@@ -251,6 +268,8 @@ private:
 
     static const nlohmann::json* GetJsonNode(const nlohmann::json& root, const std::vector<std::string>& keys);
     void RefreshGlobalPassCfg();
+    void LoadPlatformSupportedOpDtypes();
+    void DumpPlatformSupportedOpDtypes() const;
 
     template <typename T>
     static void SetConfig(nlohmann::json& root, const std::vector<std::string>& keys, const T& value)

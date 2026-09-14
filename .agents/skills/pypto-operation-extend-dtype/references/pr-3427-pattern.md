@@ -1,6 +1,8 @@
 # PR 变更模式分析
 
-本文件是对两个 GitCode PR 的完整变更模式分析，作为新增 dtype 支持的实现参考。
+> ⚠️ **已废弃**：本文件描述的历史 PR 变更模式基于 `GetSupportedDataTypesByArch` + 每个 operation 内联的 `{OP}_A2A3_TYPES` / `{OP}_A5_TYPES` / `SupportedDataTypesMap` 静态集合。该机制已被**删除**。新架构见 [pr-6074-pattern.md](pr-6074-pattern.md)（JSON 配置 + `ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode)`），详细映射见 [dtype-mapping.md](dtype-mapping.md)。本文件仅保留作为背景参考。
+
+本文件是对两个 GitCode PR 的完整变更模式分析（已废弃的历史实现）。
 
 - [PR #3427](https://gitcode.com/cann/pypto/pull/3427) — 架构区分型（模式 A/B）
 - [PR #4887](https://gitcode.com/cann/pypto/pull/4887) — 直接修改 supportedTypes 型（模式 C）
@@ -55,7 +57,12 @@ std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
 ```cpp
 static const std::unordered_set<DataType> a2a3Types = {DT_FP16, DT_FP32, DT_BF16};
 static const std::unordered_set<DataType> a5Types   = {DT_FP16, DT_FP32, DT_BF16, DT_INT16};
-const auto& supportedTypes = GetSupportedDataTypesByArch(a2a3Types, a5Types);
+static const SupportedDataTypesMap supportedTypesMap = {
+    {NPUArch::DAV_1001, a2a3Types},
+    {NPUArch::DAV_2201, a2a3Types},
+    {NPUArch::DAV_3510, a5Types},
+};
+const auto& supportedTypes = GetSupportedDataTypesByArch(supportedTypesMap);
 ```
 
 **PR 中的实际变更示例**（compare.cpp）：
@@ -67,14 +74,20 @@ std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
 // 修改后 — A5 新增 DT_INT16
 static const std::unordered_set<DataType> CMP_A2A3_TYPES = {DT_FP16, DT_FP32, DT_BF16};
 static const std::unordered_set<DataType> CMP_A5_TYPES   = {DT_FP16, DT_FP32, DT_BF16, DT_INT16};
-const auto& supportedTypes = GetSupportedDataTypesByArch(CMP_A2A3_TYPES, CMP_A5_TYPES);
+static const SupportedDataTypesMap CMP_SUPPORTED_TYPES = {
+    {NPUArch::DAV_1001, CMP_A2A3_TYPES},
+    {NPUArch::DAV_2201, CMP_A2A3_TYPES},
+    {NPUArch::DAV_3510, CMP_A5_TYPES},
+};
+const auto& supportedTypes = GetSupportedDataTypesByArch(CMP_SUPPORTED_TYPES);
 ```
 
 **关键要点**：
 1. 将局部变量改为 `static const` 全局/文件级常量，避免重复构造
-2. 使用 `{OP}_A2A3_TYPES` 和 `{OP}_A5_TYPES` 命名约定
-3. 通过 `GetSupportedDataTypesByArch()` 进行架构分派
-4. 所有重载函数中的 supportedTypes 都需要修改
+2. 使用 `{OP}_A2A3_TYPES` 和 `{OP}_A5_TYPES` 命名约定（需要为 Lite 架构单独限定时可另加 `{OP}_KIRIN9030_TYPES` / `{OP}_KIRINX90_TYPES`）
+3. 定义 `SupportedDataTypesMap` 映射表，将各 `NPUArch` 枚举映射到对应集合
+4. 通过单参数 `GetSupportedDataTypesByArch(map)` 进行架构分派
+5. 所有重载函数中的 supportedTypes 都需要修改
 
 ### 模式 2：统一扩展型（C++ 源码修改）
 
@@ -89,7 +102,12 @@ std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_INT32, DT_IN
 // 修改后 — 统一新增 DT_UINT8, DT_UINT16, DT_UINT32
 static const std::unordered_set<DataType> TRANSPOSE_A2A3_TYPES = {DT_INT8, DT_UINT8, DT_INT16, DT_UINT16, DT_INT32, DT_UINT32, DT_FP16, DT_FP32, DT_BF16};
 static const std::unordered_set<DataType> TRANSPOSE_A5_TYPES = {DT_INT8, DT_UINT8, DT_INT16, DT_UINT16, DT_INT32, DT_UINT32, DT_FP16, DT_FP32, DT_BF16};
-const auto& supportedTypes = GetSupportedDataTypesByArch(TRANSPOSE_A2A3_TYPES, TRANSPOSE_A5_TYPES);
+static const SupportedDataTypesMap TRANSPOSE_SUPPORTED_TYPES = {
+    {NPUArch::DAV_1001, TRANSPOSE_A2A3_TYPES},
+    {NPUArch::DAV_2201, TRANSPOSE_A2A3_TYPES},
+    {NPUArch::DAV_3510, TRANSPOSE_A5_TYPES},
+};
+const auto& supportedTypes = GetSupportedDataTypesByArch(TRANSPOSE_SUPPORTED_TYPES);
 ```
 
 ### 模式 3：架构区分型（API 文档修改）
@@ -188,7 +206,7 @@ Compare_test_21,"[32, 32], [32, 32]","int16, int16","ND, ND","[-100, 100], [-100
 
 ## 共享工具变更
 
-`operation_common.cpp` 和 `operation_common.h` 中的 `GetSupportedDataTypesByArch` 函数在 PR 中主要是格式调整，其核心逻辑（通过 `NPUArch::DAV_3510` 判断 A5 架构）保持不变。该函数是所有架构区分型 operation 的基础。
+> ⚠️ `GetSupportedDataTypesByArch` 函数及其 `SupportedDataTypesMap` / `DataTypesSet` 定义已被删除，由 `ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode)` 取代（读取 `platform_op_supported_dtypes/*.json` 配置）。dtype 扩展不再修改 `operation_common.cpp/.h`，只需修改 JSON 配置。新架构见 [pr-6074-pattern.md](pr-6074-pattern.md)，详细映射见 [dtype-mapping.md](dtype-mapping.md)。
 
 ## 注意事项
 
@@ -247,10 +265,12 @@ Tensor支持的数据类型为：DT_INT8, DT_UINT8, DT_INT16, DT_UINT16, DT_INT3
 3. **变更极简**：只需在集合初始化列表中追加新 DT_* 值，无需新增变量或调用
 4. **文档同样简单**：直接在 dtype 列表末尾追加，无需区分产品线
 
-### 模式选择决策树
+### 模式选择决策树（历史，已废弃）
+
+> 当前实现已不再使用以下决策树。现在的 dtype 扩展只需修改 `platform_op_supported_dtypes/*.json` 中的 `ops.{OPCODE}.input_dtypes`，参见 [dtype-mapping.md](dtype-mapping.md)。
 
 ```
-源码中是否有 GetSupportedDataTypesByArch 调用？
+源码中是否有 GetSupportedDataTypesByArch 调用？（历史）
 ├── 是 → 检查 {OP}_A2A3_TYPES 和 {OP}_A5_TYPES 内容是否相同
 │       ├── 不同 → 模式 A（架构区分型）
 │       └── 相同 → 模式 B（统一扩展型）
@@ -268,4 +288,4 @@ Tensor支持的数据类型为：DT_INT8, DT_UINT8, DT_INT16, DT_UINT16, DT_INT3
 | 变更复杂度 | 较高（需修改两个集合） | 极低（直接追加） |
 | 典型 operation | add, sub, compare, where | concat（部分场景） |
 
-> 注意：同一个 operation 在不同时期可能采用不同模式。例如 Concat 在 PR 3427 中使用模式 B（通过 `GetSupportedDataTypesByArch`），但在 PR 4887 中因为新增 int64/uint64 而发现 `CheckCat` 函数中直接使用了局部变量 `supportedTypes`（模式 C）。实际修改时应以源码当前的实际写法为准。
+> 注意：同一个 operation 在不同时期可能采用不同模式。例如 Concat 在 PR 3427 中使用模式 B（通过 `GetSupportedDataTypesByArch`），但在 PR 4887 中因为新增 int64/uint64 而发现 `CheckCat` 函数中直接使用了局部变量 `supportedTypes`（模式 C）。以上均为历史实现；当前实现统一通过 JSON 配置维护 dtype（参见 [dtype-mapping.md](dtype-mapping.md)），不再区分模式 A/B/C。

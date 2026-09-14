@@ -60,20 +60,71 @@
 
 ## 架构区分说明
 
-pypto 使用 `GetSupportedDataTypesByArch(a2a3Types, a5Types)` 函数根据 NPU 架构返回不同的 dtype 集合：
+pypto 通过 `ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode)` 查询某个 opcode 在当前 NPU 架构下支持的输入 dtype。支持的 dtype **不再硬编码在 operation 的 `.cpp` 源码中**，而是集中定义在 JSON 配置文件中：
 
-```cpp
-const std::unordered_set<DataType>& GetSupportedDataTypesByArch(
-    const std::unordered_set<DataType>& a2a3Types,
-    const std::unordered_set<DataType>& a5Types)
+- `framework/src/interface/configs/platform_op_supported_dtypes/a2a3_supported_op_dtypes.json`
+- `framework/src/interface/configs/platform_op_supported_dtypes/a5_supported_op_dtypes.json`
+- `framework/src/interface/configs/platform_op_supported_dtypes/kirin9030_supported_op_dtypes.json`
+- `framework/src/interface/configs/platform_op_supported_dtypes/kirinx90_supported_op_dtypes.json`
+
+每个 JSON 的结构：
+
+```json
 {
-    bool isA5Architecture = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510);
-    return isA5Architecture ? a5Types : a2a3Types;
+    "npu_arch": 2201,
+    "ops": {
+        "ADD":  { "input_dtypes": ["int16", "int32", "fp16", "float32", "bf16"] },
+        "ADDS": { "input_dtypes": ["int16", "int32", "fp16", "float32", "bf16"] }
+    }
 }
 ```
 
-- **A2/A3 架构**：`NPUArch::DAV_3510` 以外的架构，使用 `a2a3Types` 集合
-- **A5 架构**：`NPUArch::DAV_3510`，使用 `a5Types` 集合
+- `npu_arch`：`NPUArch` 枚举的整数值（见下表）。
+- `ops`：opcode 字符串 → `input_dtypes` 数组。opcode 字符串是 `OpcodeManager` 注册的 str（`Opcode::OP_ADD` → `"ADD"`，标量版 `Opcode::OP_ADDS` → `"ADDS"`，`Maximum` → `"MAXIMUM"` 等）。
+- dtype 字符串使用 `STR_DATA_TYPE_MAP`（`framework/include/tilefwk/data_type.h:230`）的小写友好名。
+
+C++ 层读取函数（`framework/src/interface/configs/config_manager.h/.cpp`）：
+
+```cpp
+const std::unordered_set<DataType>& ConfigManager::Instance().GetOpSupportedInputDtypes(const Opcode& opcode);
+```
+
+该函数根据 `Platform::Instance().GetSoc().GetNPUArch()` 查表，只读 `input_dtypes` 类别，返回当前架构下该 opcode 的 dtype 集合（未配置时返回空集，会导致 dtype 检查报错 `Data type DT_xxx is not in supported types`）。
+
+### JSON dtype 字符串映射（STR_DATA_TYPE_MAP）
+
+| DT_* 枚举 | JSON 字符串 | DT_* 枚举 | JSON 字符串 |
+|-----------|------------|-----------|------------|
+| DT_INT4 | int4 | DT_UINT8 | uint8 |
+| DT_INT8 | int8 | DT_UINT16 | uint16 |
+| DT_INT16 | int16 | DT_UINT32 | uint32 |
+| DT_INT32 | int32 | DT_UINT64 | uint64 |
+| DT_INT64 | int64 | DT_BOOL | bool |
+| DT_FP8 | fp8 | DT_DOUBLE | double |
+| DT_FP16 | fp16 | DT_FP8E4M3 | fp8e4m3 |
+| DT_FP32 | float32（注意不是 fp32） | DT_FP8E5M2 | fp8e5m2 |
+| DT_BF16 | bf16 | DT_FP8E8M0 | fp8e8m0 |
+| DT_HF4 | hf4 | DT_FP4_E2M1 | fp4_e2m1 |
+| DT_HF8 | hf8 | DT_FP4_E1M2 | fp4_e1m2 |
+
+> 注意：DT_FP32 在 JSON 中的键是 `float32`（`fp32` 不在 `STR_DATA_TYPE_MAP` 中）。
+
+### NPUArch 枚举与 JSON 文件对照
+
+`framework/include/tilefwk/platform.h` 中定义：
+
+```cpp
+enum class NPUArch { DAV_1001 = 1001, DAV_2201 = 2201, DAV_3510 = 3510, DAV_3003 = 3003, DAV_3113 = 3113, DAV_UNKNOWN };
+```
+
+| JSON 文件 | npu_arch | NPUArch | 架构 |
+|-----------|----------|---------|------|
+| a2a3_supported_op_dtypes.json | 2201 | DAV_2201 | A2/A3（云侧 Atlas A2/A3 系列） |
+| a5_supported_op_dtypes.json | 3510 | DAV_3510 | A5（Ascend 950PR/950DT） |
+| kirin9030_supported_op_dtypes.json | 3113 | DAV_3113 | kirin9030（Lite 端侧） |
+| kirinx90_supported_op_dtypes.json | 3003 | DAV_3003 | kirinX90（Lite 端侧） |
+
+> 历史上 A2/A3 同时映射 `DAV_1001` 与 `DAV_2201`；当前 JSON 以单一 `npu_arch=2201`（`DAV_2201`）代表 A2/A3 平台。
 
 ## pto-isa 中的架构目录
 

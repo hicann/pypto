@@ -23,7 +23,8 @@ description: 为现有 PyPTO operation 新增 dtype 支持。自动完成 pto-is
 |------|---------|-------------|
 | [references/dtype-mapping.md](references/dtype-mapping.md) | DT_* 枚举与 C++ 类型、pto-isa 类型名的完整映射表 | 阶段 1 和 阶段 2 开始时读取 |
 | [references/operation-location-guide.md](references/operation-location-guide.md) | operation 名称到源码、文档、测试、pto-isa 头文件的定位指南 | 阶段 1 开始时读取 |
-| [references/pr-3427-pattern.md](references/pr-3427-pattern.md) | PR 3427 和 PR 4887 的完整变更模式分析（三种模式），作为实现参考 | 阶段 3 开始时读取 |
+| [references/pr-6074-pattern.md](references/pr-6074-pattern.md) | 新架构（JSON 配置 + `GetOpSupportedInputDtypes`）说明，含 opcode 对照表、实现要点、验证方式 | 阶段 3 开始时读取 |
+| [references/pr-3427-pattern.md](references/pr-3427-pattern.md) | 历史 PR（3427/4887）变更模式分析，属已废弃的 `GetSupportedDataTypesByArch` 时代，仅作背景参考 | 按需读取 |
 | [references/test-case-format.md](references/test-case-format.md) | CSV 测试用例格式规范、JSON 自动生成机制与测试执行指南 | 阶段 4 开始时读取 |
 | [scripts/check_dtype_support.py](scripts/check_dtype_support.py) | 检查 pypto operation 源码中是否已支持目标 dtype | 阶段 1 执行 |
 | [scripts/check_pto_isa_support.py](scripts/check_pto_isa_support.py) | 检查 pto-isa 头文件中是否已支持目标 dtype | 阶段 2 执行 |
@@ -56,11 +57,11 @@ description: 为现有 PyPTO operation 新增 dtype 支持。自动完成 pto-is
    ```
 
 4. 分析脚本输出的 JSON 结果：
-   - 如果 dtype 已在 **a2a3Types** 和 **a5Types** 中都存在 → 报告「已支持」，任务结束。
-   - 如果 dtype 仅在其中一个架构集合中存在 → 报告部分支持情况，继续阶段 2 确认 pto-isa 是否允许扩展另一架构。
+   - 如果 dtype 已在目标架构的 JSON 配置中都存在 → 报告「已支持」，任务结束。
+   - 如果 dtype 仅在部分架构的 JSON 配置中存在 → 报告部分支持情况，继续阶段 2 确认 pto-isa 是否允许扩展另一架构。
    - 如果 dtype 完全不存在 → 继续阶段 2。
 
-5. 如果需要手动确认，在 operation 的 `.cpp` 源码中搜索 `{OP}_A2A3_TYPES` 和 `{OP}_A5_TYPES`（或对应的 `supportedTypes` 集合），确认 dtype 的存在性。
+5. 如果需要手动确认，在 `framework/src/interface/configs/platform_op_supported_dtypes/{arch}_supported_op_dtypes.json` 中查看该 opcode 的 `input_dtypes` 数组，确认 dtype 的存在性。
 
 ### 阶段 2：检查 pto-isa 是否已支持目标 dtype
 
@@ -88,55 +89,37 @@ description: 为现有 PyPTO operation 新增 dtype 支持。自动完成 pto-is
    - 如果 `static_assert` 中未列出目标类型，但头文件中有基于 `sizeof(T)` 的通用检查（如 `sizeof(T) == 1 || sizeof(T) == 2 || sizeof(T) == 4 || sizeof(T) == 8`），说明该操作通过通用路径支持多种 dtype，间接支持目标类型。
    - 脚本输出的 `dtype_status` 中 `supported_via_sizeof: true` 表示通过 sizeof 检查间接支持。
 
-### 阶段 3：修改 C++ 源码
+### 阶段 3：修改 dtype 配置 JSON
 
-1. 读取 [references/pr-3427-pattern.md](references/pr-3427-pattern.md) 以理解标准变更模式。
+> 支持的 dtype 已从 operation 的 `.cpp` 源码迁移到 JSON 配置文件。新增 dtype 现在只需修改对应架构的 JSON 文件，**无需改动 C++ 源码**。
+
+1. 读取 [references/dtype-mapping.md](references/dtype-mapping.md) 了解 JSON 配置格式、opcode 字符串、dtype 字符串映射与 NPUArch 对照；新架构与 opcode 对照表见 [references/pr-6074-pattern.md](references/pr-6074-pattern.md)。
 2. 读取 [templates/dtype-extension-checklist.md](templates/dtype-extension-checklist.md) 以跟踪变更项。
-3. 定位 operation 的 `.cpp` 源码文件（参见 [references/operation-location-guide.md](references/operation-location-guide.md)）。
-4. 检查 operation 使用哪种 dtype 集合模式。有三种模式，根据源码实际写法选择对应的修改方式：
+3. 确定该 operation 对应的 opcode 字符串：
+   - 标量/张量 overload 对应不同 opcode。例如 `Add(Tensor, Tensor)` → `"ADD"`，`Add(Tensor, Element)` → `"ADDS"`；`Maximum` → `"MAXIMUM"`，其标量版 → `"MAXS"`。
+   - 在 `framework/src/interface/operation/vector/{file}.cpp` 中查找 `ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_XXX)`，即可确定每个 overload 使用的 opcode。
+   - 多个 overload 可能共用一个 opcode（如 `Full` → `"VEC_DUP"`），也可能各自独立（如 `Where` → `"WHERE_TT"/"WHERE_TS"/"WHERE_ST"/"WHERE_SS"`）；`Amax/Amin/Sum` → `"ROWMAX_SINGLE"/"ROWMIN_SINGLE"/"ROWSUM_SINGLE"`。
+4. 确定目标架构对应的 JSON 文件：
+   - a2a3 → `a2a3_supported_op_dtypes.json`
+   - a5 → `a5_supported_op_dtypes.json`
+   - kirin9030 → `kirin9030_supported_op_dtypes.json`
+   - kirinx90 → `kirinx90_supported_op_dtypes.json`
+5. 在该 JSON 的 `ops.{OPCODE}.input_dtypes` 数组中追加目标 dtype（使用 `STR_DATA_TYPE_MAP` 的小写友好名，DT_INT64 → `int64`、DT_FP32 → `float32`）：
 
-   **变更模式 A（架构区分型）**——源码中使用 `{OP}_A2A3_TYPES` 和 `{OP}_A5_TYPES` 两个独立集合，通过 `GetSupportedDataTypesByArch()` 分派：
+   修改前（a5_supported_op_dtypes.json）：
 
-   ```cpp
-   // 修改前
-   static const std::unordered_set<DataType> ADD_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
-   static const std::unordered_set<DataType> ADD_A5_TYPES = {DT_INT32, DT_FP32, DT_INT16, DT_FP16, DT_BF16, DT_UINT8, DT_INT8};
-
-   // 修改后（在 A5 集合中新增 DT_INT64, DT_UINT64）
-   static const std::unordered_set<DataType> ADD_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
-   static const std::unordered_set<DataType> ADD_A5_TYPES = {DT_INT32, DT_FP32, DT_INT16, DT_FP16, DT_BF16, DT_UINT8, DT_INT8, DT_INT64, DT_UINT64};
+   ```json
+   "ADD": { "input_dtypes": ["int16", "int32", "fp16", "float32", "bf16", "uint8", "int8"] }
    ```
 
-   **变更模式 B（统一扩展型）**——源码中使用 `{OP}_A2A3_TYPES` 和 `{OP}_A5_TYPES` 但两个集合内容相同，通过 `GetSupportedDataTypesByArch()` 分派：
+   修改后（A5 新增 int64/uint64）：
 
-   ```cpp
-   // 修改前 — 两个集合内容相同
-   const auto& supportedTypes = GetSupportedDataTypesByArch(TRANSPOSE_A2A3_TYPES, TRANSPOSE_A5_TYPES);
-
-   // 修改后（在两个集合中都新增）
-   static const std::unordered_set<DataType> TRANSPOSE_A2A3_TYPES = {..., DT_INT8, DT_UINT8};
-   static const std::unordered_set<DataType> TRANSPOSE_A5_TYPES = {..., DT_INT8, DT_UINT8};
+   ```json
+   "ADD": { "input_dtypes": ["int16", "int32", "int64", "fp16", "float32", "bf16", "uint8", "int8", "uint64"] }
    ```
 
-   **变更模式 C（直接修改 supportedTypes 型）**——源码中直接使用局部变量 `supportedTypes`，不区分架构，不调用 `GetSupportedDataTypesByArch()`。参见 PR [#4887](https://gitcode.com/cann/pypto/pull/4887)：
-
-   ```cpp
-   // 修改前 — CheckCat 函数中的局部变量
-   std::unordered_set<DataType> supportedTypes = {DT_INT8, DT_UINT8, DT_INT16, DT_UINT16,
-                                                  DT_INT32, DT_UINT32, DT_FP16, DT_FP32, DT_BF16};
-
-   // 修改后（直接在集合中追加 DT_INT64, DT_UINT64）
-   std::unordered_set<DataType> supportedTypes = {DT_INT8, DT_UINT8, DT_INT16, DT_UINT16,
-                                                  DT_INT32, DT_UINT32, DT_FP16, DT_FP32, DT_BF16,
-                                                  DT_INT64, DT_UINT64};
-   ```
-
-5. **如何判断使用哪种模式**：在源码中搜索 operation 对应的 dtype 检查代码：
-   - 如果找到 `{OP}_A2A3_TYPES` / `{OP}_A5_TYPES` 且内容不同 → 模式 A
-   - 如果找到 `{OP}_A2A3_TYPES` / `{OP}_A5_TYPES` 且内容相同 → 模式 B
-   - 如果只找到局部变量 `supportedTypes = {...}` 且无 `GetSupportedDataTypesByArch` 调用 → 模式 C
-6. **重要**：如果 operation 有多个函数重载（如 Tensor/Tensor、Tensor/Element、Element/Tensor），每个重载中的 supportedTypes 都需要修改。
-7. 如果 pto-isa 中该 dtype 需要特殊的 `if constexpr` 分支（如 int64 使用 `Int64Binary`），确认 pypto 源码中没有额外的 dtype 限制逻辑需要修改。
+6. **如果 operation 有多个分发 opcode**（如 `Add` 的张量/标量 overload 分别为 `ADD`/`ADDS`），每个 opcode 的 `input_dtypes` 都需要修改。
+7. 对于没有独立 opcode 的复合 operation（如 `Clip`，内部拆解为 `Maximum`/`Minimum`），其 dtype 检查逻辑仍在 `.cpp` 内联保留，需直接修改该 `.cpp` 中对应的局部集合。
 
 ### 阶段 4：更新文档与编写测试用例
 
@@ -231,7 +214,7 @@ description: 为现有 PyPTO operation 新增 dtype 支持。自动完成 pto-is
      - golden 生成失败：检查 `vector_operator_golden.py` 中是否已注册该 operation 的 golden 函数
      - 精度比对失败：可能是数据范围不当、shape 不匹配等
 
-4. **架构限制说明**：如果新增 dtype 仅在 A5 架构支持（pto-isa a2a3 不支持），则只能在 A5 板子（Ascend 950PR/950DT）上验证。在 A2 板子（Ascend 910）上运行会因 `GetSupportedDataTypesByArch` 返回的 A2A3 集合不含该 dtype 而被拦截，这是预期行为。
+4. **架构限制说明**：如果新增 dtype 仅在 A5 架构支持（pto-isa a2a3 不支持），则只能在 A5 板子（Ascend 950PR/950DT）上验证。在 A2 板子（Ascend 910）上运行会因 `GetOpSupportedInputDtypes` 返回的 A2A3 集合不含该 dtype 而被拦截（报错 `Data type DT_xxx is not in supported types`），这是预期行为。
 
 ## 输出
 
@@ -248,7 +231,7 @@ description: 为现有 PyPTO operation 新增 dtype 支持。自动完成 pto-is
 
 | 文件 | 变更类型 | 说明 |
 |------|---------|------|
-| framework/src/interface/operation/vector/{file}.cpp | 修改 | 在 {OP}_A2A3_TYPES / {OP}_A5_TYPES 中新增 dtype |
+| framework/src/interface/configs/platform_op_supported_dtypes/{arch}_supported_op_dtypes.json | 修改 | 在 `ops.{OPCODE}.input_dtypes` 中新增 dtype |
 | docs/zh/api/tensor_api/operation/pypto-{op}.md | 修改 | 更新约束说明中的 dtype 表格 |
 | framework/tests/st/operation/test_case/{Op}_st_test_cases.csv | 修改 | 新增 N 条测试用例 |
 
@@ -272,5 +255,5 @@ description: 为现有 PyPTO operation 新增 dtype 支持。自动完成 pto-is
 3. 文档中的 `<!-- npu -->` 标签格式必须保持一致，不得破坏已有的 id 编号体系。
 4. **不要手动编辑 JSON 测试用例文件**——JSON 由 `run_operation_test_with_config.py` 脚本从 CSV 自动生成，手动编辑会被覆盖。只需编辑 CSV 文件。
 5. **不要直接运行 gtest 二进制执行测试**——必须通过 `run_operation_test_with_config.py` 脚本执行，该脚本会自动生成 golden 数据。直接运行 gtest 会因缺少 golden 数据而全部失败。
-6. 如果 operation 有多个函数重载，所有重载的 supportedTypes 都需要修改。
+6. 如果 operation 有多个函数重载（对应多个分发 opcode，如 `ADD`/`ADDS`），所有 opcode 的 `input_dtypes` 都需要修改。
 7. 修改源码时保持现有代码风格和格式，不做无关改动。

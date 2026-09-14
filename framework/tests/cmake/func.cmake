@@ -241,6 +241,7 @@ function(PTO_Fwk_GTest_AddExe)
             COMMAND ${CMAKE_COMMAND} -E remove_directory ${InstallConfigsDir}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${InstallConfigsDir}
             COMMAND ln -sf "${PTO_FWK_SRC_ROOT}/framework/src/interface/configs/*.json"                         "${InstallConfigsDir}/"
+            COMMAND ln -sf "${PTO_FWK_SRC_ROOT}/framework/src/interface/configs/platform_op_supported_dtypes"    "${InstallConfigsDir}/platform_op_supported_dtypes"
             COMMAND ln -sf "${PTO_FWK_SRC_ROOT}/framework/src/passes/pass_config/tile_fwk_platform_info.json"   "${InstallConfigsDir}/"
             COMMAND ln -sf "${PTO_FWK_SRC_ROOT}/framework/src/platform/parser/platforminfo.ini"   "${InstallConfigsDir}/"
             COMMAND ln -sf "${PTO_FWK_SRC_ROOT}/framework/src/platform/parser/simulation_platform/platform_config/*.ini"   "${InstallConfigsDir}/"

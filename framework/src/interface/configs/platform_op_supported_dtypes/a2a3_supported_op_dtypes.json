@@ -1,0 +1,541 @@
+{
+    "npu_arch": 2201,
+    "ops": {
+        "ABS": {
+            "input_dtypes": [
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "ADD": {
+            "input_dtypes": [
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "ADDS": {
+            "input_dtypes": [
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "BITWISEAND": {
+            "input_dtypes": [
+                "int8",
+                "int16",
+                "int32",
+                "uint8",
+                "uint16",
+                "uint32"
+            ]
+        },
+        "BITWISEANDS": {
+            "input_dtypes": [
+                "int8",
+                "int16",
+                "int32",
+                "uint8",
+                "uint16",
+                "uint32"
+            ]
+        },
+        "BITWISELEFTSHIFT": {
+            "input_dtypes": [
+                "int16",
+                "uint16"
+            ]
+        },
+        "BITWISELEFTSHIFTS": {
+            "input_dtypes": [
+                "int16",
+                "uint16"
+            ]
+        },
+        "BITWISENOT": {
+            "input_dtypes": [
+                "int8",
+                "int16",
+                "int32",
+                "uint8",
+                "uint16",
+                "uint32"
+            ]
+        },
+        "BITWISEOR": {
+            "input_dtypes": [
+                "int8",
+                "int16",
+                "int32",
+                "uint8",
+                "uint16",
+                "uint32"
+            ]
+        },
+        "BITWISEORS": {
+            "input_dtypes": [
+                "int8",
+                "int16",
+                "int32",
+                "uint8",
+                "uint16",
+                "uint32"
+            ]
+        },
+        "BITWISERIGHTSHIFT": {
+            "input_dtypes": [
+                "int16",
+                "uint16"
+            ]
+        },
+        "BITWISERIGHTSHIFTS": {
+            "input_dtypes": [
+                "int16",
+                "uint16"
+            ]
+        },
+        "BITWISEXOR": {
+            "input_dtypes": [
+                "int8",
+                "int16",
+                "int32",
+                "uint8",
+                "uint16",
+                "uint32"
+            ]
+        },
+        "BITWISEXORS": {
+            "input_dtypes": [
+                "int8",
+                "int16",
+                "int32",
+                "uint8",
+                "uint16",
+                "uint32"
+            ]
+        },
+        "CMP": {
+            "input_dtypes": [
+                "fp16",
+                "float32"
+            ]
+        },
+        "CMPS": {
+            "input_dtypes": [
+                "fp16",
+                "float32"
+            ]
+        },
+        "DIV": {
+            "input_dtypes": [
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "DIVS": {
+            "input_dtypes": [
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "EXPAND": {
+            "input_dtypes": [
+                "int8",
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16",
+                "uint8",
+                "uint16",
+                "uint32",
+                "bool"
+            ]
+        },
+        "FLOORDIV": {
+            "input_dtypes": [
+                "int8",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16",
+                "uint8"
+            ]
+        },
+        "FLOORDIVS": {
+            "input_dtypes": [
+                "int8",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16",
+                "uint8"
+            ]
+        },
+        "GATHER": {
+            "input_dtypes": [
+                "int8",
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16",
+                "uint8",
+                "uint16",
+                "uint32"
+            ]
+        },
+        "GATHER_ELEMENT": {
+            "input_dtypes": [
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16",
+                "uint16",
+                "uint32"
+            ]
+        },
+        "GATHER_IN_UB": {
+            "input_dtypes": [
+                "int8",
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16",
+                "uint8",
+                "uint16",
+                "uint32"
+            ]
+        },
+        "LOGICALNOT": {
+            "input_dtypes": [
+                "int8",
+                "fp16",
+                "float32",
+                "bf16",
+                "uint8",
+                "bool"
+            ]
+        },
+        "MAXIMUM": {
+            "input_dtypes": [
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "MAXS": {
+            "input_dtypes": [
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "MINIMUM": {
+            "input_dtypes": [
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "MINS": {
+            "input_dtypes": [
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "MUL": {
+            "input_dtypes": [
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "MULS": {
+            "input_dtypes": [
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "NEG": {
+            "input_dtypes": [
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "RELU": {
+            "input_dtypes": [
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "REM": {
+            "input_dtypes": [
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "REMRS": {
+            "input_dtypes": [
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "REMS": {
+            "input_dtypes": [
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "ROUND": {
+            "input_dtypes": [
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "ROWMAX_SINGLE": {
+            "input_dtypes": [
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "ROWMIN_SINGLE": {
+            "input_dtypes": [
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "ROWSUM_SINGLE": {
+            "input_dtypes": [
+                "int16",
+                "int32",
+                "float32",
+                "bf16"
+            ]
+        },
+        "SBITWISELEFTSHIFT": {
+            "input_dtypes": [
+                "int16",
+                "uint16"
+            ]
+        },
+        "SBITWISERIGHTSHIFT": {
+            "input_dtypes": [
+                "int16",
+                "uint16"
+            ]
+        },
+        "SCATTER": {
+            "input_dtypes": [
+                "int8",
+                "int16",
+                "int32",
+                "int64",
+                "fp16",
+                "float32",
+                "bf16",
+                "uint8"
+            ]
+        },
+        "SCATTER_ELEMENT": {
+            "input_dtypes": [
+                "int8",
+                "int16",
+                "int32",
+                "int64",
+                "fp16",
+                "float32",
+                "bf16",
+                "uint8"
+            ]
+        },
+        "SCATTER_UPDATE": {
+            "input_dtypes": [
+                "int8",
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "SIGN": {
+            "input_dtypes": [
+                "int8",
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "SUB": {
+            "input_dtypes": [
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "SUBS": {
+            "input_dtypes": [
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "TRANSPOSE_MOVEIN": {
+            "input_dtypes": [
+                "int8",
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16",
+                "uint8",
+                "uint16",
+                "uint32"
+            ]
+        },
+        "TRANSPOSE_MOVEOUT": {
+            "input_dtypes": [
+                "int8",
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16",
+                "uint8",
+                "uint16",
+                "uint32"
+            ]
+        },
+        "TRANSPOSE_VNCHWCONV": {
+            "input_dtypes": [
+                "int8",
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16",
+                "uint8",
+                "uint16",
+                "uint32"
+            ]
+        },
+        "TRIUL": {
+            "input_dtypes": [
+                "int8",
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "VEC_DUP": {
+            "input_dtypes": [
+                "int8",
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16",
+                "uint8",
+                "uint16",
+                "uint32",
+                "bool"
+            ]
+        },
+        "WHERE_SS": {
+            "input_dtypes": [
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "WHERE_ST": {
+            "input_dtypes": [
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "WHERE_TS": {
+            "input_dtypes": [
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        },
+        "WHERE_TT": {
+            "input_dtypes": [
+                "int16",
+                "int32",
+                "fp16",
+                "float32",
+                "bf16"
+            ]
+        }
+    }
+}

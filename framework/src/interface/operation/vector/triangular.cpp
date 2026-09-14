@@ -19,6 +19,7 @@
 #include "interface/utils/operator_tracer.h"
 #include "passes/pass_utils/graph_utils.h"
 #include "tilefwk/error_code.h"
+#include "interface/configs/config_manager.h"
 
 namespace npu::tile_fwk {
 
@@ -74,10 +75,7 @@ void TiledTriUL(Function& function, const TileShape& tileShape, const TriULPara&
 
 void CheckTriULOperationParams(const Tensor& input, const std::string& opName)
 {
-    static const std::unordered_set<DataType> a2a3Types = {DT_FP32, DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_INT8};
-    static const std::unordered_set<DataType> a5Types = {DT_FP32, DT_FP16,   DT_BF16,   DT_INT16, DT_INT32,
-                                                         DT_INT8, DT_UINT16, DT_UINT32, DT_INT64, DT_UINT64};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(a2a3Types, a5Types);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_TRIUL);
     CheckTensorDataType(input.GetStorage(), supportedTypes, opName);
     CheckTensorDimRange(input.GetStorage(), NUM_VALUE_2, NUM_VALUE_5, opName);
     CheckTensorShapeSize(input.GetStorage(), opName);

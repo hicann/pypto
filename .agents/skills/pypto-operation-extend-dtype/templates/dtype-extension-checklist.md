@@ -31,22 +31,21 @@
 {paste_script_output}
 ```
 
-## 阶段 3：C++ 源码修改
+## 阶段 3：dtype 配置 JSON 修改
 
-- [ ] 定位源码文件: `framework/src/interface/operation/vector/{file}.cpp`
-- [ ] 找到 `{OP}_A2A3_TYPES` 定义
-- [ ] 找到 `{OP}_A5_TYPES` 定义
-- [ ] 修改 A2A3 集合（如需要）
-- [ ] 修改 A5 集合（如需要）
-- [ ] 检查所有函数重载是否都已修改
-- [ ] 确认无编译错误
+- [ ] 确定 operation 对应的 opcode 字符串（在 `.cpp` 中查找 `GetOpSupportedInputDtypes(Opcode::OP_XXX)`）
+- [ ] 确定目标架构对应的 JSON 文件（a2a3/a5/kirin9030/kirinx90）
+- [ ] 定位 JSON 文件: `framework/src/interface/configs/platform_op_supported_dtypes/{arch}_supported_op_dtypes.json`
+- [ ] 在 `ops.{OPCODE}.input_dtypes` 数组中追加目标 dtype（使用 `STR_DATA_TYPE_MAP` 小写友好名，如 `int64`、`float32`）
+- [ ] 如果 operation 有多个分发 opcode（如 `ADD`/`ADDS`），每个 opcode 都要修改
+- [ ] 无独立 opcode 的复合 operation（如 `Clip`）：确认是否需修改 `.cpp` 内联集合
+- [ ] 确认 JSON 语法正确
 
 修改详情：
 ```
-文件: {file_path}
-修改的变量: {var_names}
-新增的 DT_* 值: {dt_values}
-修改的重载函数: {overload_list}
+JSON 文件: {json_path}
+opcode: {OPCODE}
+新增 dtype: {dtype_list}
 ```
 
 ## 阶段 4a：API 文档更新
@@ -103,7 +102,7 @@ C++ ST 测试: PASS / FAIL ({passed}/{total} 用例通过)
 
 | # | 文件 | 变更类型 | 说明 |
 |---|------|---------|------|
-| 1 | framework/src/interface/operation/vector/{file}.cpp | 修改 | {description} |
+| 1 | framework/src/interface/configs/platform_op_supported_dtypes/{arch}_supported_op_dtypes.json | 修改 | {description} |
 | 2 | docs/zh/api/tensor_api/operation/pypto-{op}.md | 修改 | {description} |
 | 3 | framework/tests/st/operation/test_case/{Op}_st_test_cases.csv | 修改 | 新增 N 条测试用例 |
 

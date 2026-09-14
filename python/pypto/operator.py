@@ -14,6 +14,14 @@ import pypto
 from pypto import Tensor
 
 
+def is_lite_npu() -> bool:
+    codegen_options = pypto.get_codegen_options()
+    soc_version = ""
+    if "soc_version" in codegen_options:
+        soc_version = codegen_options["soc_version"]
+    return soc_version in ["Kirin9030", "KirinX90"]
+
+
 def sigmoid(input: Tensor) -> Tensor:
     """Return a tensor containing the element-wise sigmoid values of input.
         The sigmoid function is a common activation function in machine learning,
@@ -40,30 +48,36 @@ def sigmoid(input: Tensor) -> Tensor:
     Input x:[-3.0, 0.0, 2.0, 5.0]
     Output y:[0.0474, 0.5000, 0.8808, 0.9933]
     """
-    codegen_options = pypto.get_codegen_options()
+    if is_lite_npu():
+        return sigmoid_no_cast(input)
+    return sigmoid_fp32_cast(input)
 
-    soc_version = ""
-    if "soc_version" in codegen_options:
-        soc_version = codegen_options["soc_version"]
 
+def sigmoid_fp32_cast(input: Tensor) -> Tensor:
     dtype = input.dtype
     f_1 = 1.0
     f_nega_1 = -1.0
 
-    if soc_version in ["Kirin9030", "KirinX90"]:
-        exp_res = pypto.exp(pypto.mul(input, f_nega_1))
-        res = pypto.add(exp_res, f_1)
-        ones = pypto.full(res.shape, 1.0, dtype, valid_shape=res.valid_shape)
-        res = pypto.div(ones, res, pypto.PrecisionType.INTRINSIC)
-    else:
-        input = pypto.cast(input, pypto.DT_FP32)
-        exp_res = pypto.exp(pypto.mul(input, f_nega_1))
-        res = pypto.add(exp_res, f_1)
-        ones = pypto.full(res.shape, 1.0, pypto.DT_FP32, valid_shape=res.valid_shape)
-        res = pypto.div(ones, res, pypto.PrecisionType.INTRINSIC)
+    input = pypto.cast(input, pypto.DT_FP32)
+    exp_res = pypto.exp(pypto.mul(input, f_nega_1))
+    res = pypto.add(exp_res, f_1)
+    ones = pypto.full(res.shape, 1.0, pypto.DT_FP32, valid_shape=res.valid_shape)
+    res = pypto.div(ones, res, pypto.PrecisionType.INTRINSIC)
 
-        if dtype != pypto.DT_FP32:
-            res = pypto.cast(res, dtype)
+    if dtype != pypto.DT_FP32:
+        res = pypto.cast(res, dtype)
+    return res
+
+
+def sigmoid_no_cast(input: Tensor) -> Tensor:
+    dtype = input.dtype
+    f_1 = 1.0
+    f_nega_1 = -1.0
+
+    exp_res = pypto.exp(pypto.mul(input, f_nega_1))
+    res = pypto.add(exp_res, f_1)
+    ones = pypto.full(res.shape, 1.0, dtype, valid_shape=res.valid_shape)
+    res = pypto.div(ones, res, pypto.PrecisionType.INTRINSIC)
     return res
 
 
@@ -98,6 +112,12 @@ def softmax(input: Tensor, dim: int) -> Tensor:
     Input x:[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]
     Output y:[[0.0900, 0.2447, 0.6652], [0.0900, 0.2447, 0.6652]]
     """
+    if is_lite_npu():
+        return softmax_no_cast(input, dim)
+    return softmax_fp32_cast(input, dim)
+
+
+def softmax_fp32_cast(input: Tensor, dim: int) -> Tensor:
     dtype = input.dtype
     input = pypto.cast(input, pypto.DT_FP32)
 
@@ -106,9 +126,17 @@ def softmax(input: Tensor, dim: int) -> Tensor:
     exp_res = pypto.exp(sub_res)
     esum = pypto.sum(exp_res, dim, True)
     output = pypto.div(exp_res, esum, pypto.PrecisionType.INTRINSIC)
-
     if dtype != pypto.DT_FP32:
         output = pypto.cast(output, dtype)
+    return output
+
+
+def softmax_no_cast(input: Tensor, dim: int) -> Tensor:
+    rowmax = pypto.amax(input, dim, True)
+    sub_res = pypto.sub(input, rowmax)
+    exp_res = pypto.exp(sub_res)
+    esum = pypto.sum(exp_res, dim, True)
+    output = pypto.div(exp_res, esum, pypto.PrecisionType.INTRINSIC)
     return output
 
 
@@ -143,6 +171,12 @@ def rms_norm(input: Tensor, gamma: Tensor = None, epsilon: float = 1e-6) -> Tens
     Output y: [[0.3651, 0.7302, 1.0954, 1.4605],
                [0.7580, 0.9097, 1.0613, 1.2129]]
     """
+    if is_lite_npu():
+        return rms_norm_no_cast(input, gamma, epsilon)
+    return rms_norm_fp32_cast(input, gamma, epsilon)
+
+
+def rms_norm_fp32_cast(input: Tensor, gamma: Tensor = None, epsilon: float = 1e-6) -> Tensor:
     in_dtype = input.dtype
     x = pypto.cast(input, pypto.DT_FP32)
 
@@ -162,4 +196,23 @@ def rms_norm(input: Tensor, gamma: Tensor = None, epsilon: float = 1e-6) -> Tens
 
     if in_dtype != pypto.DT_FP32:
         y = pypto.cast(y, in_dtype)
+    return y
+
+
+def rms_norm_no_cast(input: Tensor, gamma: Tensor = None, epsilon: float = 1e-6) -> Tensor:
+    in_dtype = input.dtype
+
+    n = input.shape[-1]
+
+    y = pypto.sqrt(pypto.sum(input * input * (1.0 / n), -1, keepdim=True) + epsilon)
+
+    ones = pypto.full(y.shape, 1.0, in_dtype)
+    y = pypto.div(input * ones, y, pypto.PrecisionType.INTRINSIC)
+
+    if gamma is not None:
+        rank = input.dim
+        shape = [1] * rank
+        shape[-1] = gamma.shape[0]
+        g = pypto.reshape(gamma, shape)
+        y *= g
     return y

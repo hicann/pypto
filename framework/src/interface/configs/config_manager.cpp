@@ -51,6 +51,16 @@ static const nlohmann::json* GetJsonChild(const nlohmann::json& root, const std:
     return GetJsonNode(root, {key});
 }
 
+static DataType StringToDataType(const std::string& str)
+{
+    auto it = STR_DATA_TYPE_MAP.find(str);
+    return it != STR_DATA_TYPE_MAP.end() ? it->second : DataType::DT_BOTTOM;
+}
+
+static bool IsValidNPUArch(NPUArch arch) { return NPUArchToString(arch) != "UNKNOWN_NPU_ARCH"; }
+
+constexpr const char* kSupportedInputDtypesKey = "input_dtypes";
+
 ConfigManager::ConfigManager() { Initialize(); }
 
 ConfigManager& ConfigManager::Instance()
@@ -116,6 +126,111 @@ Status ConfigManager::Initialize()
     }
 
     return SUCCESS;
+}
+
+void ConfigManager::LoadPlatformSupportedOpDtypes()
+{
+    const std::string dirPath = RealPath(GetPyptoLibPath() + "/configs/platform_op_supported_dtypes");
+    if (!IsPathExist(dirPath)) {
+        FE_LOGW("Platform supported op dtypes directory %s does not exist.", dirPath.c_str());
+        return;
+    }
+    FE_LOGI("Load platform supported op dtypes from %s.", dirPath.c_str());
+    auto files = GetFiles(dirPath, "json");
+    for (const auto& file : files) {
+        const std::string filePath = dirPath + "/" + file;
+        FE_LOGI("Reading platform op dtype config %s.", filePath.c_str());
+        std::ifstream ifs(filePath);
+        if (!ifs.is_open()) {
+            FE_LOGE(FeError::INVALID_FILE, "Open file %s failed.", filePath.c_str());
+            continue;
+        }
+        nlohmann::json j;
+        ifs >> j;
+        ifs.close();
+        FE_LOGI("Parsed platform op dtype config %s.", filePath.c_str());
+        if (!j.is_object() || !j.contains("npu_arch") || !j["npu_arch"].is_number() || !j.contains("ops") ||
+            !j["ops"].is_object()) {
+            FE_LOGW("Invalid platform op dtype config %s.", file.c_str());
+            continue;
+        }
+        auto arch = static_cast<NPUArch>(j["npu_arch"].get<int>());
+        if (!IsValidNPUArch(arch)) {
+            FE_LOGW("Unrecognized npu_arch in %s.", file.c_str());
+            continue;
+        }
+        const auto& ops = j["ops"];
+        for (auto it = ops.begin(); it != ops.end(); ++it) {
+            const std::string& opcodeStr = it.key();
+            if (!OpcodeManager::Inst().HasOpcode(opcodeStr)) {
+                continue;
+            }
+            Opcode opcode = OpcodeManager::Inst().GetOpcode(opcodeStr);
+            const auto& categories = it.value();
+            if (!categories.is_object()) {
+                continue;
+            }
+            for (auto catIt = categories.begin(); catIt != categories.end(); ++catIt) {
+                if (!catIt.value().is_array()) {
+                    continue;
+                }
+                std::unordered_set<DataType> dtypes;
+                for (const auto& dtypeItem : catIt.value()) {
+                    DataType dtype = StringToDataType(dtypeItem.get<std::string>());
+                    if (dtype != DataType::DT_BOTTOM) {
+                        dtypes.insert(dtype);
+                    }
+                }
+                platformSupportedOpDtypesMap_[arch][catIt.key()][opcode] = dtypes;
+            }
+        }
+    }
+}
+
+void ConfigManager::DumpPlatformSupportedOpDtypes() const
+{
+    if (platformSupportedOpDtypesMap_.empty()) {
+        FE_LOGI("platformSupportedOpDtypesMap is empty.");
+        return;
+    }
+    for (const auto& [arch, categories] : platformSupportedOpDtypesMap_) {
+        FE_LOGI("platformSupportedOpDtypesMap arch=%s:", NPUArchToString(arch).c_str());
+        for (const auto& [category, opMap] : categories) {
+            for (const auto& [opcode, dtypes] : opMap) {
+                std::string dtypesStr;
+                for (const auto& dtype : dtypes) {
+                    dtypesStr += DataType2String(dtype);
+                    dtypesStr += " ";
+                }
+                FE_LOGI("  category=%s opcode=%s dtypes={%s}", category.c_str(),
+                        OpcodeManager::Inst().GetOpcodeStr(opcode).c_str(), dtypesStr.c_str());
+            }
+        }
+    }
+}
+
+const std::unordered_set<DataType>& ConfigManager::GetOpSupportedInputDtypes(const Opcode& opcode)
+{
+    std::call_once(platformSupportedOpDtypesLoaded_, [this]() {
+        LoadPlatformSupportedOpDtypes();
+        DumpPlatformSupportedOpDtypes();
+    });
+
+    static const std::unordered_set<DataType> kEmptyDtypes;
+    NPUArch arch = Platform::Instance().GetSoc().GetNPUArch();
+    auto archIt = platformSupportedOpDtypesMap_.find(arch);
+    if (archIt == platformSupportedOpDtypesMap_.end()) {
+        return kEmptyDtypes;
+    }
+    auto kindIt = archIt->second.find(kSupportedInputDtypesKey);
+    if (kindIt == archIt->second.end()) {
+        return kEmptyDtypes;
+    }
+    auto opIt = kindIt->second.find(opcode);
+    if (opIt == kindIt->second.end()) {
+        return kEmptyDtypes;
+    }
+    return opIt->second;
 }
 
 void ConfigManager::RefreshGlobalPassCfg()

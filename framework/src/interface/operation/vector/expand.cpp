@@ -20,6 +20,7 @@
 #include "interface/utils/operator_tracer.h"
 #include "tilefwk/error_code.h"
 #include "tilefwk/platform.h"
+#include "interface/configs/config_manager.h"
 
 namespace npu::tile_fwk {
 
@@ -197,11 +198,7 @@ Tensor Expand(const Tensor& self, const std::vector<int64_t>& dstShape, std::vec
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Expand");
 
-    static const std::unordered_set<DataType> EXPAND_A2A3_TYPES = {DT_BF16,  DT_FP32,  DT_FP16,   DT_INT8,   DT_INT16,
-                                                                   DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_BOOL};
-    static const std::unordered_set<DataType> EXPAND_A5_TYPES = {DT_BF16,  DT_FP32,  DT_FP16,   DT_INT8,   DT_INT16,
-                                                                 DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_BOOL};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(EXPAND_A2A3_TYPES, EXPAND_A5_TYPES);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_EXPAND);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "EXPAND");
     CheckTensorDimRange(self.GetStorage(), 1, NUM_VALUE_4, "EXPAND");
     CheckTensorShapeSize(self.GetStorage(), "EXPAND");

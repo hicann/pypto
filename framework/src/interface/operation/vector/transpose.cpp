@@ -18,6 +18,7 @@
 #include "interface/utils/operator_tracer.h"
 #include "tilefwk/error_code.h"
 #include "tilefwk/platform.h"
+#include "interface/configs/config_manager.h"
 
 namespace npu::tile_fwk {
 
@@ -262,13 +263,7 @@ Tensor Transpose(const Tensor& self, std::vector<int> perm)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Transpose");
 
-    static const std::unordered_set<DataType> TRANSPOSE_A2A3_TYPES = {DT_FP16,   DT_BF16, DT_UINT8, DT_INT8,  DT_INT16,
-                                                                      DT_UINT16, DT_FP32, DT_INT32, DT_UINT32};
-    static const std::unordered_set<DataType> TRANSPOSE_A5_TYPES = {
-        DT_FP16,  DT_BF16,   DT_UINT8, DT_INT8,    DT_INT16,   DT_UINT16, DT_FP32,
-        DT_INT32, DT_UINT32, DT_HF8,   DT_FP8E4M3, DT_FP8E5M2, DT_FP8E8M0};
-
-    const auto& supportedTypes = GetSupportedDataTypesByArch(TRANSPOSE_A2A3_TYPES, TRANSPOSE_A5_TYPES);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_TRANSPOSE_VNCHWCONV);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "TRANSPOSE");
     CheckTensorDimRange(self.GetStorage(), 1, NUM_VALUE_5, "TRANSPOSE");
     CheckTensorShapeSize(self.GetStorage(), "TRANSPOSE");

@@ -32,11 +32,7 @@ Tensor BitwiseAnd(const Tensor& self, const Tensor& other)
     CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseAnd");
 
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "BITWISEAND");
-    static const std::unordered_set<DataType> BITWISE_A2A3_TYPES = {DT_INT16, DT_UINT16, DT_INT8,
-                                                                    DT_UINT8, DT_INT32,  DT_UINT32};
-    static const std::unordered_set<DataType> BITWISE_A5_TYPES = {DT_INT16, DT_UINT16, DT_INT8,  DT_UINT8,
-                                                                  DT_INT32, DT_UINT32, DT_INT64, DT_UINT64};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISE_A2A3_TYPES, BITWISE_A5_TYPES);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_BITWISEAND);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "BITWISEAND");
     RETURN_CALL(BinaryOperation<BinaryOpType::BITWISEAND>, *Program::GetInstance().GetCurrentFunction(), self, other);
 }
@@ -48,11 +44,7 @@ Tensor BitwiseOr(const Tensor& self, const Tensor& other)
     CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseOr");
 
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "BITWISEOR");
-    static const std::unordered_set<DataType> BITWISE_A2A3_TYPES = {DT_INT16, DT_UINT16, DT_INT8,
-                                                                    DT_UINT8, DT_INT32,  DT_UINT32};
-    static const std::unordered_set<DataType> BITWISE_A5_TYPES = {DT_INT16, DT_UINT16, DT_INT8,  DT_UINT8,
-                                                                  DT_INT32, DT_UINT32, DT_INT64, DT_UINT64};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISE_A2A3_TYPES, BITWISE_A5_TYPES);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_BITWISEOR);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "BITWISEOR");
     RETURN_CALL(BinaryOperation<BinaryOpType::BITWISEOR>, *Program::GetInstance().GetCurrentFunction(), self, other);
 }
@@ -64,11 +56,7 @@ Tensor BitwiseXor(const Tensor& self, const Tensor& other)
     CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseXor");
 
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "BITWISEXOR");
-    static const std::unordered_set<DataType> BITWISE_A2A3_TYPES = {DT_INT16, DT_UINT16, DT_INT8,
-                                                                    DT_UINT8, DT_INT32,  DT_UINT32};
-    static const std::unordered_set<DataType> BITWISE_A5_TYPES = {DT_INT16, DT_UINT16, DT_INT8,  DT_UINT8,
-                                                                  DT_INT32, DT_UINT32, DT_INT64, DT_UINT64};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISE_A2A3_TYPES, BITWISE_A5_TYPES);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_BITWISEXOR);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "BITWISEXOR");
     RETURN_CALL(BinaryOperation<BinaryOpType::BITWISEXOR>, *Program::GetInstance().GetCurrentFunction(), self, other);
 }
@@ -81,11 +69,7 @@ Tensor BitwiseNot(const Tensor& self)
     if (self.GetDataType() == DT_BOOL) {
         return LogicalNot(self);
     }
-    static const std::unordered_set<DataType> BITWISE_A2A3_TYPES = {DT_INT16, DT_UINT16, DT_INT8,
-                                                                    DT_UINT8, DT_INT32,  DT_UINT32};
-    static const std::unordered_set<DataType> BITWISE_A5_TYPES = {DT_INT16, DT_UINT16, DT_INT8,  DT_UINT8,
-                                                                  DT_INT32, DT_UINT32, DT_INT64, DT_UINT64};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISE_A2A3_TYPES, BITWISE_A5_TYPES);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_BITWISENOT);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "BitwiseNot");
     RETURN_CALL(UnaryOperation<UnaryOpType::BITWISENOT>, *Program::GetInstance().GetCurrentFunction(),
                 self.GetStorage());
@@ -326,10 +310,6 @@ LogicalTensorPtr TensorBitwiseShiftOperationSelfScalar(Function& function, const
 }
 
 namespace {
-const std::unordered_set<DataType> BITWISESHIFT_A2A3_TYPES = {DT_INT16, DT_UINT16};
-const std::unordered_set<DataType> BITWISESHIFT_A5_TYPES = {DT_INT16, DT_UINT16, DT_INT32, DT_UINT32,
-                                                            DT_INT8,  DT_UINT8,  DT_INT64, DT_UINT64};
-
 // 按目标 dtype 构造位移标量 Element：uint64 不经 int64 中转，避免大值符号翻转。
 Element CastShiftScalarToDtype(const Element& scalar, DataType dtype)
 {
@@ -346,7 +326,7 @@ Tensor BitwiseRightShift(const Tensor& self, const Tensor& other)
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseRightShift");
     CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseRightShift");
 
-    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISESHIFT_A2A3_TYPES, BITWISESHIFT_A5_TYPES);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_BITWISERIGHTSHIFT);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "BitwiseRightShift");
     RETURN_CALL(BitwiseShiftOperation<BitwiseShiftOpType::BITWISERIGHTSHIFT>,
                 *Program::GetInstance().GetCurrentFunction(), self, other);
@@ -357,7 +337,7 @@ Tensor BitwiseRightShift(const Tensor& self, const Element& other)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseRightShift");
 
-    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISESHIFT_A2A3_TYPES, BITWISESHIFT_A5_TYPES);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_BITWISERIGHTSHIFTS);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "BitwiseRightShift");
     Element newOther = other;
     if (self.GetDataType() != other.GetDataType()) {
@@ -372,7 +352,7 @@ Tensor BitwiseRightShift(const Element& self, const Tensor& other)
     DECLARE_TRACER();
     CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseRightShift");
 
-    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISESHIFT_A2A3_TYPES, BITWISESHIFT_A5_TYPES);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_SBITWISERIGHTSHIFT);
     CheckTensorDataType(other.GetStorage(), supportedTypes, "BitwiseRightShift");
     Element newSelf = self;
     if (self.GetDataType() != other.GetDataType()) {
@@ -388,7 +368,7 @@ Tensor BitwiseLeftShift(const Tensor& self, const Tensor& other)
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseLeftShift");
     CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseLeftShift");
 
-    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISESHIFT_A2A3_TYPES, BITWISESHIFT_A5_TYPES);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_BITWISELEFTSHIFT);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "BitwiseLeftShift");
     RETURN_CALL(BitwiseShiftOperation<BitwiseShiftOpType::BITWISELEFTSHIFT>,
                 *Program::GetInstance().GetCurrentFunction(), self, other);
@@ -399,7 +379,7 @@ Tensor BitwiseLeftShift(const Tensor& self, const Element& other)
     DECLARE_TRACER();
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseLeftShift");
 
-    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISESHIFT_A2A3_TYPES, BITWISESHIFT_A5_TYPES);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_BITWISELEFTSHIFTS);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "BitwiseLeftShift");
     Element newOther = other;
     if (self.GetDataType() != other.GetDataType()) {
@@ -414,7 +394,7 @@ Tensor BitwiseLeftShift(const Element& self, const Tensor& other)
     DECLARE_TRACER();
     CheckTensorFormat(other.GetStorage(), {TileOpFormat::TILEOP_NZ}, "BitwiseLeftShift");
 
-    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISESHIFT_A2A3_TYPES, BITWISESHIFT_A5_TYPES);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_SBITWISELEFTSHIFT);
     CheckTensorDataType(other.GetStorage(), supportedTypes, "BitwiseLeftShift");
     Element newSelf = self;
     if (self.GetDataType() != other.GetDataType()) {

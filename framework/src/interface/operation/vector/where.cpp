@@ -18,6 +18,7 @@
 #include "tilefwk/error_code.h"
 #include "passes/pass_utils/graph_utils.h"
 #include "tensor_transformation.h"
+#include "interface/configs/config_manager.h"
 
 namespace npu::tile_fwk {
 
@@ -471,10 +472,7 @@ Tensor Where(const Tensor& condition, const Tensor& input, const Tensor& other)
 
     static const std::unordered_set<DataType> conditionTypes = {DT_BOOL, DT_UINT8};
     CheckTensorDataType(condition.GetStorage(), conditionTypes, "WHERE");
-    static const std::unordered_set<DataType> a2a3InputTypes = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
-    static const std::unordered_set<DataType> a5InputTypes = {DT_INT32, DT_FP32, DT_INT16, DT_FP16,  DT_BF16,
-                                                              DT_UINT8, DT_INT8, DT_INT64, DT_UINT64};
-    const auto& inputTypes = GetSupportedDataTypesByArch(a2a3InputTypes, a5InputTypes);
+    const auto& inputTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_WHERE_TT);
     CheckTensorDataType(input.GetStorage(), inputTypes, "WHERE");
     CheckTensorDimRange(condition.GetStorage(), 1, NUM_VALUE_4, "WHERE");
     CheckTensorShapeSize(condition.GetStorage(), "WHERE");
@@ -495,10 +493,7 @@ Tensor Where(const Tensor& condition, const Tensor& input, const Element& otherV
 
     static const std::unordered_set<DataType> conditionTypes = {DT_BOOL, DT_UINT8};
     CheckTensorDataType(condition.GetStorage(), conditionTypes, "WHERE");
-    static const std::unordered_set<DataType> a2a3InputTypes = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
-    static const std::unordered_set<DataType> a5InputTypes = {DT_INT32, DT_FP32, DT_INT16, DT_FP16,  DT_BF16,
-                                                              DT_UINT8, DT_INT8, DT_INT64, DT_UINT64};
-    const auto& inputTypes = GetSupportedDataTypesByArch(a2a3InputTypes, a5InputTypes);
+    const auto& inputTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_WHERE_TS);
     CheckTensorDataType(input.GetStorage(), inputTypes, "WHERE");
     CheckTensorDimRange(condition.GetStorage(), 1, NUM_VALUE_4, "WHERE");
     CheckTensorShapeSize(condition.GetStorage(), "WHERE");
@@ -516,10 +511,7 @@ Tensor Where(const Tensor& condition, const Element& inputValue, const Tensor& o
 
     static const std::unordered_set<DataType> conditionTypes = {DT_BOOL, DT_UINT8};
     CheckTensorDataType(condition.GetStorage(), conditionTypes, "WHERE");
-    static const std::unordered_set<DataType> a2a3InputTypes = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
-    static const std::unordered_set<DataType> a5InputTypes = {DT_INT32, DT_FP32, DT_INT16, DT_FP16,  DT_BF16,
-                                                              DT_UINT8, DT_INT8, DT_INT64, DT_UINT64};
-    const auto& inputTypes = GetSupportedDataTypesByArch(a2a3InputTypes, a5InputTypes);
+    const auto& inputTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_WHERE_ST);
     CheckTensorDataType(other.GetStorage(), inputTypes, "WHERE");
     CheckTensorDimRange(condition.GetStorage(), 1, NUM_VALUE_4, "WHERE");
     CheckTensorShapeSize(condition.GetStorage(), "WHERE");

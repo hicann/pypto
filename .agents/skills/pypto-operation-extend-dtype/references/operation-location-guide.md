@@ -75,20 +75,23 @@ pto-isa 头文件命名规则：`T{PascalCaseOp}.hpp`
 
 ## 定位策略
 
-### 策略 1：通过 dtype 集合名称定位
+### 策略 1：通过 opcode 字符串定位
 
-如果已知 operation 的 dtype 集合前缀（如 `ADD_`），可以直接在源码目录中搜索：
+如果已知 operation 对应的 opcode 字符串（如 `"ADD"`），可以：
 
 ```bash
-# 在 pypto 源码中搜索 dtype 集合定义
-grep -rn "ADD_A2A3_TYPES\|ADD_A5_TYPES" framework/src/interface/operation/
+# 在 dtype 配置 JSON 中搜索 opcode 的 input_dtypes
+grep -n '"ADD"' framework/src/interface/configs/platform_op_supported_dtypes/*.json
+
+# 在 pypto 源码中搜索 opcode 枚举与分派调用
+grep -rn "OP_ADD\b" framework/src/interface/operation/vector/
 ```
 
 ### 策略 2：通过 operation 名称定位
 
 ```bash
-# 在 pypto 源码中搜索 operation 名称
-grep -rn "\"Add\"\|GetBinaryOpName\|ADD_A2A3" framework/src/interface/operation/vector/
+# 在 pypto 源码中搜索 operation 名称与分派调用
+grep -rn "\"Add\"\|GetBinaryOpName\|OP_ADD" framework/src/interface/operation/vector/
 ```
 
 ### 策略 3：通过 pto-isa 头文件定位
@@ -146,10 +149,10 @@ API 文档文件名格式：`pypto-{op}.md`，其中 `{op}` 为 operation 的小
 
 ## pto-isa 架构目录对照
 
-| 架构名 | pto-isa 目录 | pypto 架构判定 | 对应产品 |
+| 架构名 | pto-isa 目录 | pypto 架构判定（`NPUArch`） | 对应产品 |
 |--------|-------------|---------------|---------|
-| A2/A3 | `include/pto/npu/a2a3/` | 非 `DAV_3510` | Atlas A2/A3 训练/推理系列 |
+| A2/A3 | `include/pto/npu/a2a3/` | `DAV_1001` / `DAV_2201` | Atlas A2/A3 训练/推理系列 |
 | A5 | `include/pto/npu/a5/` | `DAV_3510` | Ascend 950PR/950DT |
 | A6 | `include/pto/npu/a6/` | - | A6 平台 |
-| kirin9030 | `include/pto/npu/kirin9030/` | - | kirin9030 平台 |
-| kirinX90 | `include/pto/npu/kirinX90/` | - | kirinX90 平台 |
+| kirin9030 | `include/pto/npu/kirin9030/` | `DAV_3113` | kirin9030 平台（Lite） |
+| kirinX90 | `include/pto/npu/kirinX90/` | `DAV_3003` | kirinX90 平台（Lite） |

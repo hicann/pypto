@@ -21,6 +21,7 @@
 #include "interface/operation/vector/gather_mask_common.h"
 #include "tensor_transformation.h"
 #include "tilefwk/error_code.h"
+#include "interface/configs/config_manager.h"
 
 namespace npu::tile_fwk {
 
@@ -281,11 +282,7 @@ static void CheckScatterUpdateIndex(const Tensor& index)
 
 static void CheckScatterUpdateInvalid(const Tensor& dst, const Tensor& index, const Tensor& src)
 {
-    static const std::unordered_set<DataType> SCATTER_UPDATE_A2A3_TYPES = {DT_FP32,  DT_FP16,  DT_BF16,
-                                                                           DT_INT32, DT_INT16, DT_INT8};
-    static const std::unordered_set<DataType> SCATTER_UPDATE_A5_TYPES = {DT_FP32,  DT_FP16,  DT_BF16,
-                                                                         DT_INT32, DT_INT16, DT_INT8};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(SCATTER_UPDATE_A2A3_TYPES, SCATTER_UPDATE_A5_TYPES);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_SCATTER_UPDATE);
     CheckTensorDataType(dst.GetStorage(), supportedTypes, "SCATTERUPDATE");
     CheckTensorsDataTypeConsistency(dst.GetStorage(), src.GetStorage(), "SCATTERUPDATE");
     std::vector<LogicalTensorPtr> tensors = {dst.GetStorage(), src.GetStorage()};

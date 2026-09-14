@@ -206,4 +206,4 @@ python3 tools/scripts/run_operation_test_with_config.py Add -s 26 -e 27 -d 0
 
 ### 架构限制
 
-如果新增 dtype 仅在 A5 架构支持（pto-isa a2a3 不支持），则只能在 A5 板子（Ascend 950PR/950DT）上验证。在 A2 板子（Ascend 910）上运行时，`GetSupportedDataTypesByArch` 返回的 A2A3 集合不含该 dtype，dtype 检查会拦截并报错 `Data type DT_xxx is not in supported types`，这是预期行为。
+如果新增 dtype 仅在 A5 架构支持（pto-isa a2a3 不支持），则只能在 A5 板子（Ascend 950PR/950DT）上验证。在 A2 板子（Ascend 910）上运行时，`GetOpSupportedInputDtypes` 返回的 A2A3 集合不含该 dtype，dtype 检查会拦截并报错 `Data type DT_xxx is not in supported types`，这是预期行为。

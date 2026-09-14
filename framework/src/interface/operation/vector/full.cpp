@@ -18,6 +18,7 @@
 #include "interface/utils/operator_tracer.h"
 #include "tilefwk/error_code.h"
 #include "tilefwk/platform.h"
+#include "interface/configs/config_manager.h"
 
 namespace npu::tile_fwk {
 
@@ -71,11 +72,7 @@ Tensor Full(const Element& src, DataType dtype, const std::vector<int64_t>& dstS
             std::vector<SymbolicScalar> validShape)
 {
     DECLARE_TRACER();
-    static const std::unordered_set<DataType> FULL_A2A3_TYPES = {DT_FP32,  DT_FP16,  DT_BF16,   DT_INT8,   DT_INT16,
-                                                                 DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_BOOL};
-    static const std::unordered_set<DataType> FULL_A5_TYPES = {DT_FP32,  DT_FP16,  DT_BF16,   DT_INT8,   DT_INT16,
-                                                               DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_BOOL};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(FULL_A2A3_TYPES, FULL_A5_TYPES);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_VEC_DUP);
     CheckTensorDataType(dtype, supportedTypes, "FULL");
     CheckDstShapeDimRange(dstShape, 1, NUM_VALUE_4, "FULL");
     CheckDstShapeSize(dstShape, "FULL");
@@ -91,11 +88,7 @@ Tensor Full(const SymbolicScalar& dynSrc, DataType dtype, const std::vector<int6
             std::vector<SymbolicScalar> validShape)
 {
     DECLARE_TRACER();
-    static const std::unordered_set<DataType> FULL_A2A3_TYPES = {DT_FP32,  DT_FP16,  DT_BF16,   DT_INT8,   DT_INT16,
-                                                                 DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_BOOL};
-    static const std::unordered_set<DataType> FULL_A5_TYPES = {DT_FP32,  DT_FP16,  DT_BF16,   DT_INT8,   DT_INT16,
-                                                               DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_BOOL};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(FULL_A2A3_TYPES, FULL_A5_TYPES);
+    const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_VEC_DUP);
     CheckTensorDataType(dtype, supportedTypes, "FULL");
     CheckDstShapeDimRange(dstShape, 1, NUM_VALUE_4, "FULL");
     CheckDstShapeSize(dstShape, "FULL");

@@ -335,13 +335,6 @@ void CheckBinaryInputTensors(const LogicalTensorPtr& tensor1, const LogicalTenso
     CheckTensorsShapeConsistencyOrBroadcast({tensor1, tensor2}, opName);
     CheckTensorsFormatConsistency(tensor1, tensor2, opName);
 }
-const std::unordered_set<DataType>& GetSupportedDataTypesByArch(const std::unordered_set<DataType>& a2a3Types,
-                                                                const std::unordered_set<DataType>& a5Types)
-{
-    bool isA5Architecture = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510);
-    return isA5Architecture ? a5Types : a2a3Types;
-}
-
 void CheckInt64Broadcast(const LogicalTensorPtr& tensor1, const LogicalTensorPtr& tensor2, const std::string& opName)
 {
     auto dtype = tensor1->Datatype();
