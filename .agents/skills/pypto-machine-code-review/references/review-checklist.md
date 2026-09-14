@@ -110,15 +110,18 @@
 
 验证方法：读 [references/perf-rules.md](perf-rules.md) 原则逐条对照；grep `std::vector|std::map|new |malloc` 在 `framework/src/machine/device/dynamic/*` 热路径文件中是否出现。
 
-参考代码：
-```text
-framework/src/machine/utils/dynamic/item_pool.h
-framework/src/machine/utils/dynamic/vector.h
-framework/src/machine/utils/dynamic/spsc_queue.h
-framework/src/machine/utils/dynamic/device_task.h
-framework/src/machine/utils/dynamic/dev_encode_program_ctrlflow_cache.h
-framework/src/machine/device/dynamic/aot_binary.h
-framework/src/machine/device/dynamic/device_sche.cpp
-framework/src/machine/device/dynamic/aicore_manager.h
-framework/src/machine/runtime/memory_utils/memory_pool.cpp  # NormalizedRtMemcpy
-```
+---
+
+## §7 时序 / 重叠流水 / OS 节流
+
+当 PR 涉及 `device_sche*`、`aicore_manager`、`device_ctrl`、`dev_start_args`、`device_launcher`、handshake、超时、ring、early-launch、`KernelArgs` / sharedBuffer、控核拓扑时额外检查。
+
+详细原则见 [references/timing-race-rules.md](timing-race-rules.md)（**必读**后再下评审结论）。
+
+| # | 检查项 | 级别 | 典型问题 |
+|---|---|---|---|
+| 7.1 | 按读者集合处理共享状态：跨流水读者的字段禁止按轮次原地改；仅 ctrl 串行使用的 DevProg 字段允许写 | Blocker | 把本轮 `nrValidAic`/`scheCpuNum` 写回共享 `DevProg.devArgs`；sche 入口仍读共享拓扑 |
+| 7.2 | 回收等最后读者（AICore），且 STOP 可见 → 清槽 → barrier → GOODBYE；fence 不得放进可选分支 | Blocker | sche `Deallocate` 后 ctrl 立刻 restore 同 slot；GOODBYE 早于清 `parallelDevTask` |
+| 7.3 | 超时即功能失败且在等其他 AICPU 的路径 ≥ OS 节流窗口；可降级探测保持短超时 | Blocker | 硬失败 spin 仍用 50µs，对端被节流约 50ms 后误报 `ARBIT_FAILED` / `WAIT_CTRL_TIMEOUT` |
+
+验证方法：读 [references/timing-race-rules.md](timing-race-rules.md)；对每处共享 store 列出 ctrl/sche/aicore 读者与 early-launch 重叠窗口；对停核/slot 复用核对 fence 顺序；对新增等待核对失败是硬报错还是降级。

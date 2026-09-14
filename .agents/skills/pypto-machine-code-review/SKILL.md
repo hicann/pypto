@@ -1,11 +1,11 @@
 ---
 name: pypto-machine-code-review
-description: PyPTO machine 侧（framework/src/machine）代码检视与行级 review 意见提交。覆盖 CANN weak 符号保护、CRC/哈希算法正确性、AOT/cache 碰撞、内存对齐、弱符号空指针、离线打包 bundle、AICPU 热路径高性能编码（禁 STL/堆分配、显式指针、平凡默构、以存代算、循环外提、Host 严禁随意 rtMemcpy）等 machine 侧 C++ 改动的检视清单，并通过 GitCode API 将检视意见提交到 PR 的具体代码行（diff_comment）。当用户提到 review PR、检视代码、代码评审、machine code review、行级评论、diff_comment、提交检视意见、AICPU 性能、禁容器、平凡初始化、热路径、ctrl cpu、schedule 时使用。触发词：review PR、检视代码、代码评审、machine code review、行级评论、diff_comment、提交检视意见、AICPU 高性能编码、禁容器、平凡初始化、热路径。
+description: PyPTO machine 侧（framework/src/machine）代码检视与行级 review 意见提交。覆盖 CANN weak 符号保护、CRC/哈希算法正确性、AOT/cache 碰撞、内存对齐、弱符号空指针、离线打包 bundle、AICPU 热路径高性能编码（禁 STL/堆分配、显式指针、平凡默构、以存代算、循环外提、Host 严禁随意 rtMemcpy）、时序/重叠流水/OS 节流（跨流水共享状态、slot 复用、硬失败等待）等 machine 侧 C++ 改动的检视清单，并通过 GitCode API 将检视意见提交到 PR 的具体代码行（diff_comment）。当用户提到 review PR、检视代码、代码评审、machine code review、行级评论、diff_comment、提交检视意见、AICPU 性能、禁容器、平凡初始化、热路径、ctrl cpu、schedule、时序竞态、OS 节流、early launch、handshake 超时、常稳时使用。触发词：review PR、检视代码、代码评审、machine code review、行级评论、diff_comment、提交检视意见、AICPU 高性能编码、禁容器、平凡初始化、热路径、时序竞态、OS 节流、early launch、handshake 超时、常稳。
 ---
 
 # PyPTO Machine Code Review
 
-对 `framework/src/machine/` 下 C++ 改动进行代码检视（含 AICPU 热路径性能原则），并将检视意见通过 GitCode API 提交到 PR 的**具体代码行**（diff_comment，显示在 diff 视图对应行旁）。
+对 `framework/src/machine/` 下 C++ 改动进行代码检视（含 AICPU 热路径性能原则、时序/重叠流水纪律），并将检视意见通过 GitCode API 提交到 PR 的**具体代码行**（diff_comment，显示在 diff 视图对应行旁）。
 
 ## 何时使用
 
@@ -14,6 +14,7 @@ description: PyPTO machine 侧（framework/src/machine）代码检视与行级 r
 - 用户要求审查 `framework/src/machine/` 下 C++ 改动（bundle/launcher/runner/device/aot_binary/device_sche 等）
 - 用户修改 / 新增 AICPU Control-Flow / Schedule 热路径代码（`device_*`、`device_sche*`、`dev_workspace`、`item_pool`、`aot_binary`、`spsc_queue`、CF cache、stitch/task build）
 - 用户提到 AICPU 性能、禁容器、平凡初始化、热路径、ctrl cpu、schedule、`MakeDynDeviceTask`
+- 用户提到时序竞态、OS 节流、early launch、handshake 超时、常稳、控核拓扑、slot 复用
 
 **不要**用本 skill 替代：
 - workspace 内存诊断 → `pypto-machine-workspace`
@@ -46,8 +47,11 @@ description: PyPTO machine 侧（framework/src/machine）代码检视与行级 r
 - §4 范围纪律（无关改动混入、死代码删除）
 - §5 bundle 专项（format/header/TLV/CRC/对齐）
 - §6 AICPU 热路径性能（禁 STL/堆分配、显式指针、平凡默构、以存代算、循环外提、指针遍历、Host 严禁随意 rtMemcpy）
+- §7 时序 / 重叠流水 / OS 节流（跨流水共享状态、slot 复用与先清后放、硬失败等待覆盖节流）
 
 **若 §6 命中**（PR 涉及 AICPU 热路径），额外读 [references/perf-rules.md](references/perf-rules.md)（详细原则，至少覆盖 §2.1–§2.5、§2.9–§2.11、§2.10.1、§2.14）。
+
+**若 §7 命中**（PR 涉及 `device_sche*` / `aicore_manager` / `device_ctrl` / `dev_start_args` / `device_launcher` / handshake / 超时 / ring / early-launch / sharedBuffer / 控核），额外读 [references/timing-race-rules.md](references/timing-race-rules.md)。
 
 **同时读** [references/memory-rules.md](references/memory-rules.md)（内存规则），将其与内置清单合并执行。该文件表格为空时跳过；非空时按相同流程命中记录。
 
@@ -143,12 +147,24 @@ description: PyPTO machine 侧（framework/src/machine）代码检视与行级 r
 
 违反 §6 / `perf-rules.md` §2.1–§2.5、§2.9、§2.11、§2.10.1、§2.14：**即使功能正确，也视为回归。**
 
+### 时序 / 重叠流水（§7 命中时）
+
+| 必须 | 禁止 |
+|---|---|
+| 按读者集合判定：仅 ctrl 串行使用的 DevProg 字段允许写 | 把 DevProg 一律只读，或把 ctrl 私有字段当跨流水竞态 |
+| 跨流水读者的本轮状态进 `DevStartArgs` / slot | 按轮次原地改 `nrValidAic` / `scheCpuNum` / sharedBuffer 任务槽 |
+| 回收等 AICore；STOP 可见 → 清槽 → barrier → GOODBYE | 只等 sche 就复用 slot；fence 放进可选分支 |
+| 硬失败且等其他 AICPU 的等待 ≥ OS 节流窗口 | 硬失败路径继续用远小于节流窗口的短超时 |
+
+违反 §7 / `timing-race-rules.md`：**即使功能正确，也视为常稳回归。**
+
 ## 参考文件
 
 | File | Purpose | Load Timing |
 |------|---------|-------------|
-| [references/review-checklist.md](references/review-checklist.md) | machine 侧 C++ 检视清单（6 大类，含 AICPU 热路径性能） | 阶段 2 开始前必读 |
+| [references/review-checklist.md](references/review-checklist.md) | machine 侧 C++ 检视清单（7 大类，含 AICPU 热路径与时序重叠） | 阶段 2 开始前必读 |
 | [references/perf-rules.md](references/perf-rules.md) | AICPU 热路径性能规则（原则全文，含 ARMv8 特化） | §6 命中时必读 |
+| [references/timing-race-rules.md](references/timing-race-rules.md) | 时序 / 重叠流水 / OS 节流（按读者集合、先清后放、硬失败等待） | §7 命中时必读 |
 | [references/memory-rules.md](references/memory-rules.md) | 内存规则（跨核数据一致性 U4–U7 等） | 阶段 2 与内置清单合并执行 |
 | [references/gitcode-review-api.md](references/gitcode-review-api.md) | GitCode 行级评论 API 字段对照与踩坑 | 阶段 3 提交前必读 |
 | [scripts/submit_review_comments.py](scripts/submit_review_comments.py) | 批量提交 diff_comment 脚本 | 阶段 3 方式 A |
