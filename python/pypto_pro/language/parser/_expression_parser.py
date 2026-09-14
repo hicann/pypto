@@ -918,6 +918,13 @@ class ExpressionParserMixin:
         """Fold a validated binary scalar operation using its promoted operands."""
         left_value = self._const_scalar_value(operation.left)
         right_value = self._const_scalar_value(operation.right)
+        if op_name in ("truediv", "floordiv", "mod") and right_value == 0:
+            operator = {"truediv": "/", "floordiv": "//", "mod": "%"}[op_name]
+            raise ParserSyntaxError(
+                f"Operator '{operator}' does not allow a zero divisor",
+                span=span,
+                hint="Use a nonzero divisor",
+            )
         if left_value is None or right_value is None:
             return None
         dtype = operation.type.dtype

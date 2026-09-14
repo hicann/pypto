@@ -464,6 +464,72 @@ TEST(CCECodegenTest, HandlesStaticTupleGetItemWithoutBackingArray)
     EXPECT_EQ(codegen.GetExprAsCode(item), "22");
 }
 
+TEST(CCECodegenTest, EmitsPythonSemanticsForFloorDivAndMod)
+{
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
+    auto dividend = MakeVar("dividend", scalar_type);
+    auto divisor = MakeVar("divisor", scalar_type);
+    auto floor_div = std::make_shared<const ir::FloorDiv>(dividend, divisor, ir::DataType::INT64, ir::Span::Unknown());
+    auto floor_mod = std::make_shared<const ir::FloorMod>(dividend, divisor, ir::DataType::INT64, ir::Span::Unknown());
+    CCECodegen codegen(ir::SectionKind::Vector);
+
+    const std::string div_code = codegen.GetExprAsCode(floor_div);
+    EXPECT_NE(div_code.find("__pypto_quot = __pypto_lhs / __pypto_rhs"), std::string::npos);
+    EXPECT_NE(div_code.find("((__pypto_lhs < 0) != (__pypto_rhs < 0)) &&"), std::string::npos);
+    EXPECT_NE(div_code.find("(__pypto_lhs % __pypto_rhs != 0)"), std::string::npos);
+    EXPECT_EQ(div_code.find("__pypto_rem ="), std::string::npos);
+    EXPECT_EQ(CountOccurrences(div_code, "(dividend)"), 1U);
+    EXPECT_EQ(CountOccurrences(div_code, "(divisor)"), 1U);
+
+    const std::string mod_code = codegen.GetExprAsCode(floor_mod);
+    EXPECT_NE(mod_code.find("__pypto_rem +"), std::string::npos);
+    EXPECT_NE(mod_code.find("(__pypto_rem < 0) != (__pypto_rhs < 0)"), std::string::npos);
+    EXPECT_EQ(CountOccurrences(mod_code, "(dividend)"), 1U);
+    EXPECT_EQ(CountOccurrences(mod_code, "(divisor)"), 1U);
+
+    auto float_type = std::make_shared<const ir::ScalarType>(ir::DataType::FP32);
+    auto float_dividend = MakeVar("float_dividend", float_type);
+    auto float_divisor = MakeVar("float_divisor", float_type);
+    auto float_floor_div = std::make_shared<const ir::FloorDiv>(float_dividend, float_divisor, ir::DataType::FP32,
+                                                                ir::Span::Unknown());
+    auto float_floor_mod = std::make_shared<const ir::FloorMod>(float_dividend, float_divisor, ir::DataType::FP32,
+                                                                ir::Span::Unknown());
+
+    const std::string float_div_code = codegen.GetExprAsCode(float_floor_div);
+    EXPECT_NE(float_div_code.find("__pypto_div = (__pypto_lhs - __pypto_mod) / __pypto_rhs"), std::string::npos);
+    EXPECT_NE(float_div_code.find("__pypto_floor_result = __pypto_floor_input"), std::string::npos);
+    EXPECT_NE(float_div_code.find("__pypto_floor_exp = __pypto_floor_abs >> 23"), std::string::npos);
+    EXPECT_NE(float_div_code.find("__pypto_floor_frac_mask = (1u << (150u - __pypto_floor_exp)) - 1u"),
+              std::string::npos);
+    EXPECT_EQ(float_div_code.find("__pypto_floor_exp == 0xffu"), std::string::npos);
+    EXPECT_EQ(float_div_code.find("__pypto_div_mod"), std::string::npos);
+    EXPECT_EQ(CountOccurrences(float_div_code, "while (__ex > __ey)"), 1U);
+    EXPECT_EQ(float_div_code.find("__floorf("), std::string::npos);
+    EXPECT_NE(float_div_code.find("__pypto_div -= 1.0f"), std::string::npos);
+    EXPECT_EQ(float_div_code.find("__pypto_mod += __pypto_rhs"), std::string::npos);
+    EXPECT_EQ(CountOccurrences(float_div_code, "(float_dividend)"), 1U);
+    EXPECT_EQ(CountOccurrences(float_div_code, "(float_divisor)"), 1U);
+
+    const std::string float_mod_code = codegen.GetExprAsCode(float_floor_mod);
+    EXPECT_NE(float_mod_code.find("__pypto_mod += __pypto_rhs"), std::string::npos);
+    EXPECT_NE(float_mod_code.find("reinterpret_cast<float&>(__result)"), std::string::npos);
+    EXPECT_EQ(CountOccurrences(float_mod_code, "(float_dividend)"), 1U);
+    EXPECT_EQ(CountOccurrences(float_mod_code, "(float_divisor)"), 1U);
+}
+
+TEST(CCECodegenTest, KeepsNativeFloorDivAndModForUnsignedIntegers)
+{
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::UINT64);
+    auto dividend = MakeVar("dividend", scalar_type);
+    auto divisor = MakeVar("divisor", scalar_type);
+    auto floor_div = std::make_shared<const ir::FloorDiv>(dividend, divisor, ir::DataType::UINT64, ir::Span::Unknown());
+    auto floor_mod = std::make_shared<const ir::FloorMod>(dividend, divisor, ir::DataType::UINT64, ir::Span::Unknown());
+    CCECodegen codegen(ir::SectionKind::Vector);
+
+    EXPECT_EQ(codegen.GetExprAsCode(floor_div), "(dividend / divisor)");
+    EXPECT_EQ(codegen.GetExprAsCode(floor_mod), "(dividend % divisor)");
+}
+
 TEST(CCECodegenTest, EmitsArrayAccessForUnmaterializedTupleVar)
 {
     auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);

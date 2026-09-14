@@ -11,7 +11,10 @@
 
 """Constant-folding coverage for Python scalar expressions."""
 
+import math
+
 import pypto_pro.language as pl
+from pypto_pro.language.parser.diagnostics import ParserSyntaxError
 import pytest
 
 from pypto.pypto_impl import ir
@@ -190,24 +193,77 @@ def test_pl_and_builtin_min_max_fold_with_numeric_promotion():
     _assert_constant(values["builtin_max"], 2.5, ir.DataType.FP32)
 
 
-def test_unsafe_folds_keep_validated_ir_nodes():
+def test_invalid_shift_keeps_validated_ir_node():
     @pl.jit(auto_mutex=False)
     def unsafe_constants(_jit_entry: pl.DT_INT64):
-        zero_div = 1 / 0
-        zero_floordiv = 1 // 0
         negative_shift = 1 << -1
-        float_floordiv = 3.0 // 2.0
-        float_mod = 3.0 % 2.0
 
     unsafe_constants_program, _ = unsafe_constants.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     unsafe_constants = unsafe_constants_program.get_function(unsafe_constants.__name__)
 
     values = _assignments(unsafe_constants)
-    assert isinstance(values["zero_div"], ir.FloatDiv)
-    assert isinstance(values["zero_floordiv"], ir.FloorDiv)
     assert isinstance(values["negative_shift"], ir.BitShiftLeft)
-    _assert_constant(values["float_floordiv"], 1.0, ir.DataType.FP32)
-    _assert_constant(values["float_mod"], 1.0, ir.DataType.FP32)
+
+
+def test_compile_time_zero_divisor_is_rejected():
+    @pl.jit(auto_mutex=False)
+    def truediv_zero(value: pl.DT_INT32):
+        result = value / 0
+
+    @pl.jit(auto_mutex=False)
+    def floordiv_zero(value: pl.DT_INT32):
+        result = value // 0
+
+    @pl.jit(auto_mutex=False)
+    def modulo_zero(value: pl.DT_INT32):
+        result = value % -0.0
+
+    for kernel, operator in ((truediv_zero, "/"), (floordiv_zero, "//"), (modulo_zero, "%")):
+        with pytest.raises(ParserSyntaxError, match=rf"Operator '{operator}' does not allow a zero divisor"):
+            kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
+@pytest.mark.parametrize("dtype", [pl.DT_FP16, pl.DT_BF16, pl.DT_FP32])
+@pytest.mark.parametrize(
+    "lhs,rhs",
+    [
+        (-7.0, 2.0),
+        (7.0, -2.0),
+        (-7.0, -2.0),
+        (1.5, 0.5),
+        (1.0, 0.1),
+        (0.0, -2.0),
+        (-0.0, 2.0),
+    ],
+)
+def test_float_divmod_constants_fold_with_promoted_dtype(dtype, lhs, rhs):
+    left = ir.ConstFloat(lhs, dtype, ir.Span.unknown())
+    right = ir.ConstFloat(rhs, dtype, ir.Span.unknown())
+
+    @pl.jit(auto_mutex=False)
+    def folded_float(_jit_entry: pl.DT_INT64):
+        quotient = left // right
+        remainder = left % right
+
+    program, _ = folded_float.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    values = _assignments(program.get_function(folded_float.__name__))
+    _assert_constant(values["quotient"], lhs // rhs, dtype)
+    _assert_constant(values["remainder"], lhs % rhs, dtype)
+    assert math.copysign(1.0, values["quotient"].value) == math.copysign(1.0, lhs // rhs)
+    assert math.copysign(1.0, values["remainder"].value) == math.copysign(1.0, lhs % rhs)
+
+
+def test_float_divmod_constants_can_define_static_tile_shape():
+    @pl.jit(auto_mutex=False)
+    def static_float_shape(_jit_entry: pl.DT_INT64):
+        cols = 8.0 // 2.0
+        rows = 7.0 % 2.0
+        tile_type = pl.TileType(shape=[int(rows), int(cols)], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+        tile = pl.make_tile(tile_type, addr=0, size=32)
+
+    program, _ = static_float_shape.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    values = _assignments(program.get_function(static_float_shape.__name__))
+    assert list(values["tile"].type.shape) == [1, 4]
 
 
 def test_nonconstant_operands_keep_runtime_ir():
