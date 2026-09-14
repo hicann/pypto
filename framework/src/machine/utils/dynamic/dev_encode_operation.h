@@ -45,7 +45,7 @@ struct DevAscendOperation {
     DevLocalVector<SymInt> attrList; // opattr[0] -> hash
     int32_t stitchIndex;
     uint32_t depGraphPredCount;
-    DevLocalVector<int> depGraphSuccList;
+    DevLocalVector<uint32_t> depGraphSuccList;
     DevLocalVector<int> depGraphCopyOutResolveSuccIndexList;
     uint64_t debugOpmagic; // DEBUG_ONLY
 };

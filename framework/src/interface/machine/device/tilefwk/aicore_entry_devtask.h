@@ -25,6 +25,7 @@ INLINE void UpdateCacheDevTask(ExecuteContext* ctx, uint32_t parallelIdx, int64_
     ctx->cachedDevTasks[parallelIdx].seqNo = header->seqNo;
     ctx->cachedDevTasks[parallelIdx].funcDataList = (__gm__ DynFuncData*)(header + 1);
     ctx->cachedDevTasks[parallelIdx].cceBinary = (__gm__ npu::tile_fwk::DynFuncBin*)(header->cceBinary);
+    ctx->cachedDevTaskCurr = &ctx->cachedDevTasks[parallelIdx];
 }
 
 INLINE volatile __gm__ ParallelDevTask* GetCoreFunctionData(ExecuteContext* ctx)

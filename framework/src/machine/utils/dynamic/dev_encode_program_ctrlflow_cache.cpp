@@ -228,6 +228,24 @@ void DevControlFlowCache::DrcoReadyQueueDataRestore(DynDeviceTaskBase* base, uin
                            queueTaskListSize);
         }
     }
+    for (uint32_t ct = 0; ct < npu::tile_fwk::DRCO_QUEUE_MAX; ct++) {
+        for (uint32_t i = 0; i < npu::tile_fwk::NUM_LOCAL_GROUPS; i++) {
+            auto* matrix = base->drcoRootFuncList->localReadyMatrixArray[ct][i];
+            if (matrix == nullptr) {
+                continue;
+            }
+            (void)memset_s(matrix->taskList, sizeof(matrix->taskList), 0, sizeof(matrix->taskList));
+        }
+    }
+    // 槽内为 stitch 节点指针，复位为 nullptr，避免 cache 重放后残留悬空指针
+    for (uint32_t ct = 0; ct < npu::tile_fwk::DRCO_QUEUE_MAX; ct++) {
+        auto* stitchNodeMatrix = base->drcoRootFuncList->stitchNodeMatrixArray[ct];
+        if (stitchNodeMatrix == nullptr) {
+            continue;
+        }
+        (void)memset_s(stitchNodeMatrix->stitchNodeList, sizeof(stitchNodeMatrix->stitchNodeList), 0,
+                       sizeof(stitchNodeMatrix->stitchNodeList));
+    }
     base->drcoRootFuncList->executedTaskCount = 0;
     base->drcoRootFuncList->devTaskFinished = 0;
 }
@@ -1018,6 +1036,14 @@ void DevControlFlowCache::RelocDrcoRootFuncList(RelocRange& relocCtrlCache, DynD
             for (uint32_t i = 0; i < npu::tile_fwk::NUM_LOCAL_GROUPS; i++) {
                 relocCtrlCache.Reloc(drcoRootFuncList->localReadyQueueArray[ct][i]);
             }
+        }
+        for (uint32_t ct = 0; ct < npu::tile_fwk::DRCO_QUEUE_MAX; ct++) {
+            for (uint32_t i = 0; i < npu::tile_fwk::NUM_LOCAL_GROUPS; i++) {
+                relocCtrlCache.Reloc(drcoRootFuncList->localReadyMatrixArray[ct][i]);
+            }
+        }
+        for (uint32_t ct = 0; ct < npu::tile_fwk::DRCO_QUEUE_MAX; ct++) {
+            relocCtrlCache.Reloc(drcoRootFuncList->stitchNodeMatrixArray[ct]);
         }
     }
 }

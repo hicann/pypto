@@ -102,7 +102,7 @@ private:
     DevLocalVector<SymInt> operationAttrList_;
     DevLocalVector<int> opAttrOffsetList_;
     DevLocalVector<int> opCalleeList_;
-    DevLocalVector<int> operationSuccList_;
+    DevLocalVector<uint32_t> operationSuccList_;
     DevLocalVector<npu::tile_fwk::DevAscendFunctionOperationSuccInfo> operationSuccInfoList_;
     DevLocalVector<int> operationCopyOutResolveSuccIndexList_;
 
@@ -348,7 +348,7 @@ public:
             uint32_t target = stack[--stackSize];
             for (size_t op = 0; op < opCount; op++) {
                 size_t succSize;
-                const int* succList = GetOperationDepGraphSuccAddr(static_cast<int>(op), succSize);
+                const uint32_t* succList = GetOperationDepGraphSuccAddr(static_cast<int>(op), succSize);
                 for (size_t j = 0; j < succSize; j++) {
                     if (static_cast<uint32_t>(succList[j]) != target)
                         continue;
@@ -442,8 +442,8 @@ public:
 
     inline void FillOpAttrs(DevCceBinary* cceInfo) { (void)cceInfo; }
 
-    inline int GetOperationSucc(size_t idx) const { return At(operationSuccList_, idx); }
-    inline int& GetOperationSucc(size_t idx) { return At(operationSuccList_, idx); }
+    inline uint32_t GetOperationSucc(size_t idx) const { return At(operationSuccList_, idx); }
+    inline uint32_t& GetOperationSucc(size_t idx) { return At(operationSuccList_, idx); }
 
     inline npu::tile_fwk::DevAscendFunctionOperationSuccInfo GetOperationSuccInfo(size_t operationIndex) const
     {
@@ -463,7 +463,7 @@ public:
         return At(operationList_, operationIndex).depGraphPredCount;
     }
 
-    inline const DevLocalVector<int>& GetOperationDepGraphSuccList(int operationIndex) const
+    inline const DevLocalVector<uint32_t>& GetOperationDepGraphSuccList(int operationIndex) const
     {
         return At(operationList_, operationIndex).depGraphSuccList;
     }
@@ -473,7 +473,7 @@ public:
         return At(operationList_, operationIndex).depGraphCopyOutResolveSuccIndexList;
     }
 
-    inline const int* GetOperationDepGraphSuccAddr(int operationIndex, size_t& size) const
+    inline const uint32_t* GetOperationDepGraphSuccAddr(int operationIndex, size_t& size) const
     {
         auto& succList = At(operationList_, operationIndex).depGraphSuccList;
         size = succList.size();

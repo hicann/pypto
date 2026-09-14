@@ -745,7 +745,7 @@ void DevAscendFunction::PopulateOneEncodedOpGraphEdges(
 
     staticField.depGraphSuccList.AssignRangeOffsetSize(operationSuccList_, sucSize, opSuccSize);
     for (int k = 0; k < opSuccSize; k++) {
-        int succ = callList.GetIndex(callOpSuccDict.find(op)->second[k]);
+        uint32_t succ = callList.GetIndex(callOpSuccDict.find(op)->second[k]);
         At(staticField.depGraphSuccList, k) = succ;
         At(operationList_, succ).depGraphPredCount++;
         dupData->GetOperationCurrPredCount(succ)++;

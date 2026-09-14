@@ -961,6 +961,7 @@ TEST_F(TestDeviceTaskContext, InitReadyQueues_EnableAicoreResolve_CreatesDrcoRoo
     CreateMockDevAscendProgram(&devProg, ArchInfo::DAV_3510);
     devProg.stitchFunctionsize = 100;
     devProg.devArgs.enableAicoreResolve = true;
+    devProg.devArgs.nrValidAic = 4;
     devProg.controlFlowCache.cacheData = DevRelocVector<uint8_t>(kControlFlowCacheSize, controlFlowCacheBuf.get());
     devProg.controlFlowCache.isRecording = true;
 
@@ -986,6 +987,16 @@ TEST_F(TestDeviceTaskContext, InitReadyQueues_EnableAicoreResolve_CreatesDrcoRoo
     for (uint32_t ct = 0; ct < npu::tile_fwk::NUM_CORE_TYPES; ++ct) {
         for (uint32_t i = 0; i < npu::tile_fwk::NUM_LOCAL_GROUPS; ++i) {
             EXPECT_NE(dyntask->drcoRootFuncList->localReadyQueueArray[ct][i], nullptr);
+        }
+    }
+    // 全局 stitch 节点矩阵按核类型各一个：行 = blockIdx，列 = LOCAL_GROUP_SIZE，初始全空
+    for (uint32_t ct = 0; ct < npu::tile_fwk::DRCO_QUEUE_MAX; ++ct) {
+        auto* stitchNodeMatrix = dyntask->drcoRootFuncList->stitchNodeMatrixArray[ct];
+        ASSERT_NE(stitchNodeMatrix, nullptr);
+        for (uint32_t r = 0; r < npu::tile_fwk::MAX_AICORE_NUM_FOR_QUEUE; ++r) {
+            for (uint32_t c = 0; c < npu::tile_fwk::LOCAL_GROUP_SIZE; ++c) {
+                EXPECT_EQ(stitchNodeMatrix->stitchNodeList[r][c], nullptr);
+            }
         }
     }
     for (size_t i = 0; i < READY_QUEUE_SIZE; ++i) {

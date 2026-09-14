@@ -58,7 +58,7 @@ std::string DevAscendFunction::DumpOperationAttr(int operationIndex, uint64_t* r
     std::ostringstream oss;
     oss << SchemaGetCoa(operationIndex, runtimeExpressionList, dumpIndex).Dump();
     oss << " " << schema::pred(GetOperationDepGraphPredCount(operationIndex)).Dump();
-    const DevLocalVector<int>& succList = GetOperationDepGraphSuccList(operationIndex);
+    const DevLocalVector<uint32_t>& succList = GetOperationDepGraphSuccList(operationIndex);
     std::vector<schema::operation> succDataList;
     for (size_t j = 0; j < succList.size(); j++) {
         succDataList.push_back(At(succList, j));

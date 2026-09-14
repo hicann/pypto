@@ -355,7 +355,7 @@ void DeviceTaskContext::ResolveEarlyDepends(DynDeviceTask* dyntask, size_t funcI
     DEV_VERBOSE_DEBUG("ResolveEarlyDepends:: funcdup %p", &dyntask->stitchedList[funcIndex]);
     for (size_t index = 0; index < succSize; ++index) {
         auto succIdx = succList[index];
-        DEV_VERBOSE_DEBUG("ResolveEarlyDepends inner func %d opindex %d succfunc %d succOpIdx %d",
+        DEV_VERBOSE_DEBUG("ResolveEarlyDepends inner func %d opindex %d succfunc %d succOpIdx %u",
                           static_cast<int>(funcIndex), static_cast<int>(opIdx), static_cast<int>(funcIndex), succIdx);
         doResolve(dyntask, cceBinary[callList[succIdx]].coreType, funcIndex, succIdx, predList, hasWrap, isMultiDie);
     }

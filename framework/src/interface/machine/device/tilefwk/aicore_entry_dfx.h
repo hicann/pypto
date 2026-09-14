@@ -53,6 +53,7 @@ struct ExecuteContext {
         __gm__ DynFuncData* funcDataList{nullptr};
         __gm__ DynFuncBin* cceBinary{nullptr};
     } cachedDevTasks[npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM];
+    CachedDevTask* cachedDevTaskCurr;
     uint64_t lastTaskFinishCycle{0};
     AicoreDevTaskMetric aicoreDevTaskMetric;
 #if ENABLE_AICORE_PRINT

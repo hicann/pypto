@@ -9,28 +9,79 @@
  */
 
 /*!
- * \file aicore_entry_drco.h
- * \brief DRCO (Dependency Resolving by aiCOre) scheduling flow for aicore_entry.h.
+ * \file aicore_state_drco.h
+ * \brief DRCO (Dependency Resolving by aiCOre) scheduling flow for aicore_state.h.
  */
 
 #ifndef AICORE_ENTRY_DRCO_H
 #define AICORE_ENTRY_DRCO_H
 
+#ifndef __ASCENDC_INCLUDE_INTERNAL_HEADERS__
+#define __ASCENDC_INCLUDE_INTERNAL_HEADERS__
+#define __AICORE_ASC_PRINTF_DEFINED_INTERNAL__
+#endif
+// Skip CANN print_common_head(): ASC_DEVKIT_TIMESTAMP is a devkit build id, not runtime time.
+#ifndef __NPU_DEVICE__
+#define __NPU_DEVICE__
+#define __AICORE_ASC_PRINTF_DEFINED_NPU_DEVICE__
+#endif
+#include "impl/utils/debug/asc_aicore_printf_impl.h"
+#ifdef __AICORE_ASC_PRINTF_DEFINED_NPU_DEVICE__
+#undef __NPU_DEVICE__
+#undef __AICORE_ASC_PRINTF_DEFINED_NPU_DEVICE__
+#endif
+#ifdef __AICORE_ASC_PRINTF_DEFINED_INTERNAL__
+#undef __ASCENDC_INCLUDE_INTERNAL_HEADERS__
+#undef __AICORE_ASC_PRINTF_DEFINED_INTERNAL__
+#endif
+
+#if defined(__AIV__) && defined(__MIX__)
+#define AICORE_ASC_PRINTF_CORE_ID() (get_block_idx() * get_subblockdim() + get_subblockid() + get_block_num())
+#else
+#define AICORE_ASC_PRINTF_CORE_ID() (get_block_idx())
+#endif
+
+#define AICORE_ASC_PRINTF_WITH_CORE(core_id, fmt, ...) \
+    __asc_aicore::printf("[core=%u][t=%lu] " fmt, static_cast<uint32_t>(core_id), get_sys_cnt(), ##__VA_ARGS__)
+#define AICORE_PRINTF(fmt, ...) AICORE_ASC_PRINTF_WITH_CORE(AICORE_ASC_PRINTF_CORE_ID(), fmt, ##__VA_ARGS__)
+
 #ifdef __DAV_C310__
 
-// device switch head file begin
+#if defined(__MIX__)
+#define IS_MIX 1
+#else
+#define IS_MIX 0
+#endif
+
+#if defined(__AIV__)
+#define IS_AIV 1
+#else
+#define IS_AIV 0
+#endif
+
+#if defined(__AIC__)
+#define IS_AIC 1
+#else
+#define IS_AIC 0
+#endif
+
 namespace npu::tile_fwk {
 
 #if defined(__AIV__)
-constexpr CoreType drcoCoreType = CoreType::AIV;
+constexpr uint32_t DRCO_CORE_TYPE = static_cast<uint32_t>(CoreType::AIV);
 #elif defined(__AIC__)
-constexpr CoreType drcoCoreType = CoreType::AIC;
+constexpr uint32_t DRCO_CORE_TYPE = static_cast<uint32_t>(CoreType::AIC);
 #else
-constexpr CoreType drcoCoreType = CoreType::MIX;
+constexpr uint32_t DRCO_CORE_TYPE = static_cast<uint32_t>(CoreType::MIX);
 #endif
 
 } // namespace npu::tile_fwk
-// device switch head file end
+
+using npu::tile_fwk::DRCO_CORE_TYPE;
+using npu::tile_fwk::LOCAL_GROUP_SIZE;
+
+using npu::tile_fwk::FuncID;
+using npu::tile_fwk::TaskID;
 
 #define DRCO_DCCI_SINGLE_CACHE_LINE(ptr) dcci((__gm__ uint8_t*)ptr, SINGLE_CACHE_LINE, CACHELINE_OUT)
 #define DRCO_DCCI_ENTIRE_DATA_CACHE() dcci((__gm__ void*)0, ENTIRE_DATA_CACHE, CACHELINE_OUT)
@@ -38,10 +89,10 @@ constexpr CoreType drcoCoreType = CoreType::MIX;
 #define DRCO_BUSY_BACKOFF_CYC 500
 
 #if ENABLE_AICORE_PRINT
-#define DRCO_LOGD(ctx, fmt, ...) AICORE_LOGD((ctx)->logger.Context(), fmt, ##__VA_ARGS__)
+#define DRCO_LOG(ctx, fmt, ...) AICORE_LOGE((ctx)->logger.Context(), fmt, ##__VA_ARGS__)
 #else
-#define DRCO_LOGD(ctx, fmt, ...) \
-    do {                         \
+#define DRCO_LOG(ctx, fmt, ...) \
+    do {                        \
     } while (0)
 #endif
 
@@ -57,11 +108,11 @@ INLINE void DrcoBusyBackOff()
     if ((loopCount % 1000 == 0)) {                                    \
         uint64_t elapsed = get_sys_cnt() - t0;                        \
         if (!warningSet && elapsed > AICORE_WARNING_CYCLES) {         \
-            SetWarningStatus(entry.args, lastStatus);                 \
+            SetWarningStatus(state->args, lastStatus);                \
             warningSet = true;                                        \
         }                                                             \
         if (elapsed > (timelen)) {                                    \
-            SetLastWordStatus(entry.args, lastStatus);                \
+            SetLastWordStatus(state->args, lastStatus);               \
             SyncAllMix();                                             \
             Trap();                                                   \
             return nullptr;                                           \
@@ -71,6 +122,7 @@ INLINE void DrcoBusyBackOff()
 constexpr uint16_t SYNC_MODE_SHIFT_VALUE = 4;
 constexpr uint16_t SYNC_FLAG_SHIFT_VALUE = 8;
 constexpr uint32_t BATCH_PUSH_BUF_SIZE = 6;
+constexpr uint32_t HUB_STACK_SIZE = 64;
 
 __aicore__ inline uint16_t GetffstMsg(uint16_t mode, uint16_t flagId)
 {
@@ -129,11 +181,144 @@ INLINE void DrcoGmStoreArray(__gm__ T* ptr, uint32_t idx, T value)
     DRCO_DCCI_SINGLE_CACHE_LINE(&ptr[idx]);
 }
 
+INLINE uint32_t DrcoAtomicLoad(__gm__ uint32_t* ptr) { return static_cast<uint32_t>(atomicCAS(ptr, 0, 0)); }
+
+INLINE uint32_t DrcoAtomicAddToS32(__gm__ int32_t* ptr, int32_t value)
+{
+    return static_cast<uint32_t>(atomicAdd(ptr, value));
+}
+
+INLINE uint32_t DrcoAtomicAddToU32(__gm__ uint32_t* ptr, uint32_t value)
+{
+    return static_cast<uint32_t>(atomicAdd(ptr, value));
+}
+
+INLINE uint32_t DrcoAtomicCasToU32(__gm__ uint32_t* ptr, uint32_t compare, uint32_t value)
+{
+    return static_cast<uint32_t>(atomicCAS(ptr, compare, value));
+}
+
+INLINE uint32_t DrcoAtomicExchToU32(__gm__ uint32_t* ptr, uint32_t value)
+{
+    return static_cast<uint32_t>(atomicExch(ptr, value));
+}
+
+INLINE uint64_t DrcoAtomicCasToU64(__gm__ uint64_t* ptr, uint64_t compare, uint64_t value)
+{
+    return static_cast<uint64_t>(atomicCAS(ptr, compare, value));
+}
+
 using DrcoDeviceTask = npu::tile_fwk::DrcoDeviceTask;
 using DrcoDeviceTaskReadyQueue = npu::tile_fwk::DrcoDeviceTaskReadyQueue;
 using DrcoGlobalReadyQueue = npu::tile_fwk::DrcoGlobalReadyQueue;
 using DrcoGlobalReadyQueuePtr = npu::tile_fwk::DrcoGlobalReadyQueuePtr;
 using DrcoLocalReadyQueue = npu::tile_fwk::DrcoLocalReadyQueue;
+using DrcoLocalReadyMatrix = npu::tile_fwk::DrcoLocalReadyMatrix;
+using DrcoGlobalStitchNodeMatrix = npu::tile_fwk::DrcoGlobalStitchNodeMatrix;
+
+// 不确定bisheng在处理小于 64bit 的结构体的时候，是否能够完全保存在寄存器中，先用 uint64_t + bit 计算的方式处理
+typedef uint64_t BlockDesc;
+
+template <uint64_t lo, uint64_t hi>
+INLINE uint64_t BlockDescInsert(BlockDesc data)
+{
+    return (data & (((uint64_t)1 << (hi - lo)) - 1)) << lo;
+}
+template <uint64_t lo, uint64_t hi>
+INLINE uint64_t BlockDescExtract(BlockDesc data)
+{
+    return (data >> lo) & (((uint64_t)1 << (hi - lo)) - 1);
+}
+INLINE uint64_t BlockDescExtract(BlockDesc data, uint64_t lo, uint64_t hi)
+{
+    return (data >> lo) & (((uint64_t)1 << (hi - lo)) - 1);
+}
+
+INLINE BlockDesc BlockDescCreate(uint64_t blockIdx, uint64_t typedBlockIdx, uint64_t validAicNum, uint64_t validAivNum)
+{
+    return BlockDescInsert<24, 32>(blockIdx) | BlockDescInsert<16, 24>(typedBlockIdx) |
+           BlockDescInsert<8, 16>(validAivNum) | BlockDescInsert<0, 8>(validAicNum);
+}
+INLINE uint32_t BlockDescBlockIdx(BlockDesc desc) { return BlockDescExtract<24, 32>(desc); }
+INLINE uint32_t BlockDescTypedBlockIdx(BlockDesc desc) { return BlockDescExtract<16, 24>(desc); }
+INLINE uint32_t BlockDescValidCoreNum(BlockDesc desc, bool isAiv)
+{
+    return BlockDescExtract(desc, 0 + isAiv * 8, 8 + isAiv * 8);
+}
+
+#define ENABLE_AICORE_TRACE 0
+
+struct DrcoEntryState {
+    BlockDesc blockDesc;
+    __gm__ KernelArgs* args;
+    __gm__ Metrics* metric;
+    ExecuteContext ctx;
+    __gm__ npu::tile_fwk::RuntimeDataRingBufferHeadData* runtimeDataRingBufferHeadData;
+    __gm__ npu::tile_fwk::DevStartArgsBase* base;
+    __gm__ DrcoDeviceTaskReadyQueue* deviceTaskReadyQueue;
+    uint8_t lastMixResourceType;
+
+    uint32_t readyMatrixPushGroupIndex;
+    uint32_t readyMatrixPopRowIndex;
+
+#if ENABLE_AICORE_TRACE
+    struct TraceEventStatistic {
+        uint32_t taskIndex;
+        struct TraceEvent {
+            uint64_t timestamp;
+            uint32_t taskId;
+
+#define EVENT_SIZE 0x400
+#define EVENT(hi, lo) (((hi) << 16) | ((lo) & 0xffff))
+#define EVENT_LEAF_START() EVENT(1, 0x1001)
+#define EVENT_LEAF_END() EVENT(2, 0x1002)
+#define EVENT_RESOLVE() EVENT(3, 0)
+#define EVENT_PUSH_LOCAL(group) EVENT(4, group)
+#define EVENT_PUSH_GLOBAL() EVENT(5, 0)
+#define EVENT_SUCC_STATIC(size) EVENT(6, size)
+#define EVENT_SUCC_DYNAMIC(size) EVENT(7, size)
+#define EVENT_STITCH_NODE(size) EVENT(8, size)
+#define EVENT_FETCH_START() EVENT(9, 0x1000)
+#define EVENT_FETCH_END() EVENT(9, 0x2000)
+            uint32_t eventCode;
+        } traceEventList[EVENT_SIZE];
+    } traceEventStatistic;
+#endif
+};
+#define FUNCID_TASKID(id) FuncID(id), TaskID(id)
+
+#if ENABLE_AICORE_TRACE
+INLINE static void _TraceInit(DrcoEntryState* state) { state->traceEventStatistic.taskIndex = 0; }
+
+INLINE static void _TraceEvent(DrcoEntryState* state, uint32_t taskId, uint32_t eventCode)
+{
+    if (state->traceEventStatistic.taskIndex < EVENT_SIZE) {
+        auto* code = &state->traceEventStatistic.traceEventList[state->traceEventStatistic.taskIndex++];
+        code->timestamp = get_sys_cnt();
+        code->taskId = taskId;
+        code->eventCode = eventCode;
+    }
+}
+
+INLINE static void _TracePrint(DrcoEntryState* state)
+{
+    auto traceEventStatistic = &state->traceEventStatistic;
+    AICORE_PRINTF("total=%d\n", traceEventStatistic->taskIndex);
+    for (uint32_t i = 0; i < traceEventStatistic->taskIndex; i++) {
+        auto event = &traceEventStatistic->traceEventList[i];
+        AICORE_PRINTF("timestamp=%llu, code=%x taskId=%d:%d duration=%llu\n", (unsigned long long)event->timestamp,
+                      event->eventCode, FUNCID_TASKID(event->taskId),
+                      i == 0 ? 0 : (event->timestamp - traceEventStatistic->traceEventList[i - 1].timestamp));
+    }
+}
+#define TraceInit(state) _TraceInit(state)
+#define TraceEvent(state, taskId, eventCode) _TraceEvent(state, taskId, eventCode)
+#define TracePrint(state) _TracePrint(state)
+#else
+#define TraceInit(state)
+#define TraceEvent(state, taskId, eventCode)
+#define TracePrint(state)
+#endif
 
 INLINE __gm__ DrcoDeviceTask* GetCurrentDeviceTask(__gm__ DrcoDeviceTaskReadyQueue* queue)
 {
@@ -148,18 +333,11 @@ INLINE __gm__ DrcoDeviceTask* GetCurrentDeviceTask(__gm__ DrcoDeviceTaskReadyQue
     return nullptr;
 }
 
-INLINE uint32_t DrcoAtomicLoad(__gm__ uint32_t* ptr) { return static_cast<uint32_t>(atomicAdd(ptr, 0)); }
-
-INLINE uint32_t DrcoAtomicAddToSigned(__gm__ int32_t* ptr, int32_t value)
+INLINE uint32_t DrcoAtomicResolveDependOnce(__gm__ int32_t* ptr)
 {
-    return static_cast<uint32_t>(atomicAdd(ptr, value));
-}
-
-INLINE uint32_t DrcoAtomicAddToSignedClaim(__gm__ int32_t* ptr, int32_t value)
-{
-    uint32_t ptrValue = static_cast<uint32_t>(atomicAdd(ptr, value));
-    if (ptrValue == 1 || atomicAdd(ptr, 0) == 0) {
-        uint32_t result = static_cast<uint32_t>(atomicCAS(reinterpret_cast<__gm__ uint32_t*>(ptr), 0, 0xffff));
+    uint32_t ptrValue = static_cast<uint32_t>(atomicAdd(ptr, -1));
+    if (ptrValue == 1 || atomicCAS(ptr, 0, 0) == 0) {
+        uint32_t result = static_cast<uint32_t>(atomicCAS(ptr, 0, 0xffff));
         if (result == 0) {
             return 1;
         }
@@ -168,20 +346,55 @@ INLINE uint32_t DrcoAtomicAddToSignedClaim(__gm__ int32_t* ptr, int32_t value)
     return ptrValue;
 }
 
-INLINE uint32_t DrcoAtomicAddTo(__gm__ uint32_t* ptr, uint32_t value)
+// ==================== LocalReadyMatrix 原语：push 遍历一行 / pop 遍历一列 ====================
+
+INLINE uint32_t DrcoLocalReadyMatrixGetRowIdx(uint32_t localIdx) { return localIdx % npu::tile_fwk::LOCAL_GROUP_SIZE; }
+
+// 遍历 rowIdx 行的有效列 [0, validCoreNum)，依次 CAS 写入多个任务，返回实际写入个数；
+// 每个 CAS 成功的任务记录 EVENT_PUSH_LOCAL(groupIdx) 事件（打点写入的 group）
+// 写入流程 4：多余的任务依次写到后续核的矩阵，具体行由 coreIdx % N 决定；只写有效列，无主列不写
+INLINE uint32_t DrcoLocalReadyMatrixPushBatch(DrcoEntryState* state, __gm__ DrcoLocalReadyMatrix* matrix,
+                                              uint32_t groupIdx, uint32_t rowIdx, uint32_t* readyTaskList, uint32_t n)
 {
-    return static_cast<uint32_t>(atomicAdd(ptr, value));
+    uint32_t validCoreNum = DrcoGmLoad(&matrix->validCoreNum);
+    uint32_t pushed = 0;
+    for (uint32_t col = 0; col < validCoreNum && pushed < n; col++) {
+        uint32_t prev = DrcoAtomicCasToU32(&matrix->taskList[rowIdx][col], 0, DRCO_ENCODE_TASK(readyTaskList[pushed]));
+        if (prev == 0) {
+            TraceEvent(state, readyTaskList[pushed], EVENT_PUSH_LOCAL(groupIdx));
+            pushed++;
+        }
+    }
+    return pushed;
 }
 
-INLINE uint32_t DrcoAtomicCasTo(__gm__ uint32_t* ptr, uint32_t compare, uint32_t value)
+// 遍历 colIdx 整列，把所有待执行任务依次 pop 出来，CAS(task -> 0) 抢占成功即独占该任务；
+// 从 state->matrixRowIndex（核本地游标，前一次 pop 结束处）起环形扫描，摊平重复扫描开销。
+// 每核只 pop 自己固定的一列（colIdx = 本地编号 % N），单游标即该列游标；
+// maxCount 限制本次最多取出的个数；游标保存为最后扫描行的下一行，未扫到的行下次优先
+INLINE uint32_t DrcoLocalReadyMatrixPopColTasks(DrcoEntryState* state, __gm__ DrcoLocalReadyMatrix* matrix,
+                                                uint32_t colIdx, uint32_t* outTaskList, uint32_t maxCount)
 {
-    return static_cast<uint32_t>(atomicCAS(ptr, compare, value));
+    constexpr uint32_t rowCnt = npu::tile_fwk::LOCAL_GROUP_SIZE;
+    uint32_t count = 0;
+    uint32_t start = state->readyMatrixPopRowIndex;
+    uint32_t next = start;
+    for (uint32_t i = 0; i < rowCnt && count < maxCount; i++) {
+        uint32_t row = (start + i) % rowCnt;
+        next = (row + 1) % rowCnt;
+        uint32_t taskId = DrcoAtomicCasToU32(&matrix->taskList[row][colIdx], 0, 0);
+        if (taskId == 0) {
+            continue;
+        }
+        if (DrcoAtomicCasToU32(&matrix->taskList[row][colIdx], taskId, 0) == taskId) {
+            outTaskList[count++] = DRCO_DECODE_TASK(taskId);
+        }
+    }
+    state->readyMatrixPopRowIndex = next;
+    return count;
 }
 
-INLINE uint32_t DrcoAtomicExchTo(__gm__ uint32_t* ptr, uint32_t value)
-{
-    return static_cast<uint32_t>(atomicExch(ptr, value));
-}
+// ==================== LocalReadyQueue 原语 ====================
 
 INLINE int DrcoLocalReadyQueueTryPushTask(__gm__ DrcoLocalReadyQueue* queue, uint32_t readyTask)
 {
@@ -190,9 +403,9 @@ INLINE int DrcoLocalReadyQueueTryPushTask(__gm__ DrcoLocalReadyQueue* queue, uin
     if (tail >= DrcoGmLoad(&queue->size)) {
         return -1;
     }
-    uint32_t tailPrev = DrcoAtomicCasTo(&queue->tail, tail, tail + 1);
+    uint32_t tailPrev = DrcoAtomicCasToU32(&queue->tail, tail, tail + 1);
     if (tailPrev == tail) {
-        DrcoAtomicExchTo(&queue->taskList[tailPrev], DRCO_ENCODE_TASK(readyTask));
+        DrcoAtomicExchToU32(&queue->taskList[tailPrev], DRCO_ENCODE_TASK(readyTask));
         return 0;
     }
     return 1;
@@ -214,10 +427,10 @@ INLINE int DrcoLocalReadyQueueTryBatchPushTask(__gm__ DrcoLocalReadyQueue* queue
     if (tail >= DrcoGmLoad(&queue->size)) {
         return -1;
     }
-    uint32_t tailPrev = DrcoAtomicCasTo(&queue->tail, tail, tail + n);
+    uint32_t tailPrev = DrcoAtomicCasToU32(&queue->tail, tail, tail + n);
     if (tailPrev == tail) {
         for (uint32_t i = 0; i < n; i++) {
-            DrcoAtomicExchTo(&queue->taskList[tail + i], DRCO_ENCODE_TASK(readyTaskList[i]));
+            DrcoAtomicExchToU32(&queue->taskList[tail + i], DRCO_ENCODE_TASK(readyTaskList[i]));
         }
         return 0;
     }
@@ -239,7 +452,7 @@ INLINE uint32_t DrcoLocalReadyQueueGetFirstTask(__gm__ DrcoLocalReadyQueue* queu
     if (head >= tail) {
         return static_cast<uint32_t>(AICORE_TASK_NO_INCOME);
     }
-    uint32_t headPrev = DrcoAtomicCasTo(&queue->head, head, head + 1);
+    uint32_t headPrev = DrcoAtomicCasToU32(&queue->head, head, head + 1);
     if (headPrev != head) {
         return static_cast<uint32_t>(AICORE_TASK_FETCH_CONFLICT);
     }
@@ -251,25 +464,22 @@ INLINE uint32_t DrcoLocalReadyQueueGetFirstTask(__gm__ DrcoLocalReadyQueue* queu
     return DRCO_DECODE_TASK(taskId);
 }
 
-INLINE uint32_t DrcoPerCorePendingQueueGetFirstTask(__gm__ npu::tile_fwk::PerCorePendingQueue* queue)
+// 类型内本地编号：blockIdx < nrValidAic（AIC 核）为 blockIdx，否则（AIV 核）为 blockIdx - nrValidAic。
+// LocalQueue/LocalMatrix 统一按此编号索引：group = 本地编号 / N，行/列 = 本地编号 % N
+INLINE uint32_t DrcoGetCoreTypedIdx(uint32_t blockIdx, uint32_t nrValidAic)
 {
-    uint32_t head = DrcoGmLoad(&queue->head);
-    uint32_t size = DrcoGmLoad(&queue->size);
-    if (head >= size) {
-        return static_cast<uint32_t>(AICORE_TASK_NO_INCOME);
-    }
-    uint32_t taskId = DrcoGmLoadArray(queue->taskList, head);
-    DrcoGmStore(&queue->head, head + 1);
-    return taskId;
+    return blockIdx < nrValidAic ? blockIdx : blockIdx - nrValidAic;
 }
+
+// ==================== GlobalReadyQueue 原语 (not used) ====================
 
 INLINE int DrcoGlobalReadyQueueTryPushLastTask(__gm__ DrcoGlobalReadyQueue* queue, uint32_t readyTask)
 {
     __gm__ uint32_t* tailPtr = &queue->tail;
     uint32_t tail = DrcoAtomicLoad(tailPtr);
-    uint32_t tailPrev = DrcoAtomicCasTo(&queue->tail, tail, tail + 1);
+    uint32_t tailPrev = DrcoAtomicCasToU32(&queue->tail, tail, tail + 1);
     if (tailPrev == tail) {
-        DrcoAtomicExchTo(&queue->taskList[tailPrev], DRCO_ENCODE_TASK(readyTask));
+        DrcoAtomicExchToU32(&queue->taskList[tailPrev], DRCO_ENCODE_TASK(readyTask));
         return 0;
     }
     return 1;
@@ -288,7 +498,7 @@ INLINE uint32_t DrcoGlobalReadyQueueTryGetFirstTask(__gm__ DrcoGlobalReadyQueue*
     uint32_t head = DrcoAtomicLoad(&queue->head);
     uint32_t tail = DrcoAtomicLoad(&queue->tail);
     if (head < tail) {
-        uint32_t headPrev = DrcoAtomicCasTo(&queue->head, head, head + 1);
+        uint32_t headPrev = DrcoAtomicCasToU32(&queue->head, head, head + 1);
         if (headPrev == head) {
             uint32_t taskId = DrcoAtomicLoad(&queue->taskList[headPrev]);
             while (taskId == 0) {
@@ -313,8 +523,44 @@ INLINE uint32_t DrcoGlobalReadyQueueGetFirstTask(__gm__ DrcoGlobalReadyQueue* qu
     return taskId;
 }
 
-INLINE __gm__ DrcoGlobalReadyQueue* GetDrcoGlobalReadyQueue(__gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
-                                                            uint32_t readyQueueCoreType)
+INLINE uint32_t DrcoGlobalReadyQueueTryGetFirstTaskList(__gm__ DrcoGlobalReadyQueue* queue, uint32_t* taskIdList,
+                                                        uint32_t taskIdListCapa)
+{
+    uint32_t head = DrcoAtomicLoad(&queue->head);
+    uint32_t tail = DrcoAtomicLoad(&queue->tail);
+    if (head < tail) {
+        uint32_t rest = tail - head;
+        uint32_t count = rest < taskIdListCapa ? rest : taskIdListCapa;
+        uint32_t headPrev = DrcoAtomicCasToU32(&queue->head, head, head + count);
+        if (headPrev == head) {
+            for (uint32_t idx = 0; idx < count; idx++) {
+                uint32_t taskId = DrcoAtomicLoad(&queue->taskList[headPrev + idx]);
+                while (taskId == 0) {
+                    taskId = DrcoAtomicLoad(&queue->taskList[headPrev + idx]);
+                }
+                taskIdList[idx] = DRCO_DECODE_TASK(taskId);
+            }
+            return count;
+        }
+        return static_cast<uint32_t>(AICORE_TASK_FETCH_CONFLICT);
+    }
+    return 0;
+}
+
+INLINE uint32_t DrcoGlobalReadyQueueGetFirstTaskList(__gm__ DrcoGlobalReadyQueue* queue, uint32_t* taskIdList,
+                                                     uint32_t taskIdListCapa)
+{
+    uint32_t count = static_cast<uint32_t>(AICORE_TASK_FETCH_CONFLICT);
+    while (count == static_cast<uint32_t>(AICORE_TASK_FETCH_CONFLICT)) {
+        count = DrcoGlobalReadyQueueTryGetFirstTaskList(queue, taskIdList, taskIdListCapa);
+    }
+    return count;
+}
+
+// ==================== RootFuncList 原语 ====================
+
+INLINE __gm__ DrcoGlobalReadyQueue* DrcoRootFuncListGetGlobalReadyQueue(
+    __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList, uint32_t readyQueueCoreType)
 {
     if (readyQueueCoreType < npu::tile_fwk::DRCO_QUEUE_MAX) {
         return rootFuncList->globalReadyQueueList[readyQueueCoreType].ptr;
@@ -322,8 +568,8 @@ INLINE __gm__ DrcoGlobalReadyQueue* GetDrcoGlobalReadyQueue(__gm__ npu::tile_fwk
     return nullptr;
 }
 
-INLINE __gm__ DrcoLocalReadyQueue* GetDrcoLocalReadyQueue(__gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
-                                                          uint32_t readyQueueCoreType, uint32_t groupIdx)
+INLINE __gm__ DrcoLocalReadyQueue* DrcoRootFuncListGetLocalReadyQueue(
+    __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList, uint32_t readyQueueCoreType, uint32_t groupIdx)
 {
     if (readyQueueCoreType < npu::tile_fwk::NUM_CORE_TYPES && groupIdx < npu::tile_fwk::NUM_LOCAL_GROUPS) {
         return rootFuncList->localReadyQueueArray[readyQueueCoreType][groupIdx];
@@ -331,284 +577,385 @@ INLINE __gm__ DrcoLocalReadyQueue* GetDrcoLocalReadyQueue(__gm__ npu::tile_fwk::
     return nullptr;
 }
 
-INLINE uint32_t GetDrcoLocalMaxGroups(uint32_t aicCoreNum)
+INLINE __gm__ DrcoLocalReadyMatrix* DrcoRootFuncListGetLocalReadyMatrix(
+    __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList, uint32_t readyMatrixCoreType, uint32_t groupIdx)
 {
-    uint32_t maxGroups = (aicCoreNum + npu::tile_fwk::LOCAL_GROUP_SIZE - 1) / npu::tile_fwk::LOCAL_GROUP_SIZE;
-    if (maxGroups > npu::tile_fwk::NUM_LOCAL_GROUPS) {
-        maxGroups = npu::tile_fwk::NUM_LOCAL_GROUPS;
+    if (readyMatrixCoreType < npu::tile_fwk::NUM_CORE_TYPES && groupIdx < npu::tile_fwk::NUM_LOCAL_GROUPS) {
+        return rootFuncList->localReadyMatrixArray[readyMatrixCoreType][groupIdx];
     }
-    return maxGroups;
+    return nullptr;
 }
 
-struct DrcoDynFuncDataListPush {
-    INLINE static void Push(__gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList, uint32_t succTaskId,
-                            uint32_t succCoreType)
-    {
-        __gm__ DrcoGlobalReadyQueue* globalQueue = GetDrcoGlobalReadyQueue(rootFuncList, succCoreType);
-        if (globalQueue != nullptr) {
-            DrcoGlobalReadyQueuePushLastTask(globalQueue, succTaskId);
+template <uint32_t stitchMatrixCoreType>
+INLINE __gm__ DrcoGlobalStitchNodeMatrix* DrcoRootFuncListGetStitchNodeMatrix(
+    __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList)
+{
+    return rootFuncList->stitchNodeMatrixArray[stitchMatrixCoreType];
+}
+
+INLINE static void DrcoRootFuncListGlobalReadyQueuePush(__gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                                                        uint32_t succTaskId, uint32_t succCoreType)
+{
+    __gm__ DrcoGlobalReadyQueue* globalQueue = DrcoRootFuncListGetGlobalReadyQueue(rootFuncList, succCoreType);
+    if (globalQueue != nullptr) {
+        DrcoGlobalReadyQueuePushLastTask(globalQueue, succTaskId);
+    }
+}
+
+INLINE __gm__ DrcoLocalReadyQueue* DrcoDynFuncDataListGetIdleQueue(__gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                                                                   uint32_t succCoreType, uint32_t groupCount,
+                                                                   uint32_t startOff)
+{
+    for (uint32_t i = 0; i < groupCount; i++) {
+        uint32_t groupIdx = (startOff + i) % groupCount;
+        __gm__ DrcoLocalReadyQueue* queue = DrcoRootFuncListGetLocalReadyQueue(rootFuncList, succCoreType, groupIdx);
+        if (queue == nullptr) {
+            continue;
+        }
+        uint32_t head = DrcoAtomicLoad(&queue->head);
+        uint32_t tail = DrcoAtomicLoad(&queue->tail);
+        if (head >= tail) {
+            return queue;
         }
     }
+    return nullptr;
+}
 
-    INLINE static __gm__ DrcoLocalReadyQueue* GetIdleQue(__gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
-                                                         uint32_t succCoreType, uint32_t groupCount,
-                                                         uint32_t groupOffset, uint32_t startOff)
-    {
-        for (uint32_t i = 0; i < groupCount; i++) {
-            uint32_t groupIdx = groupOffset + (startOff + i) % groupCount;
-            __gm__ DrcoLocalReadyQueue* queue = GetDrcoLocalReadyQueue(rootFuncList, succCoreType, groupIdx);
-            if (queue == nullptr) {
-                continue;
-            }
-            uint32_t head = DrcoAtomicLoad(&queue->head);
-            uint32_t tail = DrcoAtomicLoad(&queue->tail);
-            if (head >= tail) {
-                return queue;
-            }
+INLINE uint32_t DrcoDynFuncDataListPushMatrixBatch(DrcoEntryState* state,
+                                                   __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                                                   uint32_t succCoreType, uint32_t groupCount, uint32_t rowIdx,
+                                                   uint32_t* succTaskIdList, uint32_t succTaskIdListSize)
+{
+    uint32_t pushed = 0;
+    uint32_t i = 0;
+    uint32_t groupIndex = state->readyMatrixPushGroupIndex;
+    for (i = 0; i < groupCount && pushed < succTaskIdListSize; i++) {
+        uint32_t groupIdx = (groupIndex + i) % groupCount;
+        __gm__ DrcoLocalReadyMatrix* matrix = DrcoRootFuncListGetLocalReadyMatrix(rootFuncList, succCoreType, groupIdx);
+        if (matrix == nullptr) {
+            continue;
         }
-        return nullptr;
+        pushed += DrcoLocalReadyMatrixPushBatch(state, matrix, groupIdx, rowIdx, &succTaskIdList[pushed],
+                                                succTaskIdListSize - pushed);
     }
+    state->readyMatrixPushGroupIndex = (groupIndex + i) % groupCount;
+    return pushed;
+}
 
-    INLINE static void PushBatch(__gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList, uint32_t* succTaskIds,
-                                 uint32_t count, uint32_t succCoreType, uint32_t aicCoreNum)
-    {
-        uint32_t coreNum = succCoreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::AIV) ? aicCoreNum * 2 :
-                                                                                                 aicCoreNum;
-        uint32_t groupCount = (coreNum + npu::tile_fwk::LOCAL_GROUP_SIZE - 1) / npu::tile_fwk::LOCAL_GROUP_SIZE;
-        if (groupCount > npu::tile_fwk::NUM_LOCAL_GROUPS) {
-            groupCount = npu::tile_fwk::NUM_LOCAL_GROUPS;
+INLINE uint32_t DrcoDynFuncDataListPushBatchLocalMatrix(DrcoEntryState* state,
+                                                        __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                                                        uint32_t* succTaskIdList, uint32_t succTaskIdListSize,
+                                                        uint32_t succCoreType, uint32_t groupCount,
+                                                        uint32_t typedBlockIdx)
+{
+    uint32_t rowIdx = DrcoLocalReadyMatrixGetRowIdx(typedBlockIdx);
+
+    uint32_t pushed = 0;
+    for (int i = 0; i < LOCAL_GROUP_SIZE && pushed < succTaskIdListSize; i++) {
+        uint32_t oncePushed = DrcoDynFuncDataListPushMatrixBatch(state, rootFuncList, succCoreType, groupCount,
+                                                                 (rowIdx + i) % npu::tile_fwk::LOCAL_GROUP_SIZE,
+                                                                 succTaskIdList + pushed, succTaskIdListSize - pushed);
+        pushed += oncePushed;
+    }
+    return pushed;
+}
+
+INLINE void DrcoDynFuncDataListPushBatchLocalQueue(DrcoEntryState* state,
+                                                   __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                                                   uint32_t* succTaskIdList, uint32_t succTaskIdListSize,
+                                                   uint32_t succCoreType, uint32_t groupCount, uint32_t typedBlockIdx)
+{
+    // 剩余任务溢出到本类型 local ready queue：
+    // 份额递减分配 ceil(size/2)→当前队列、ceil(size/4)→+1 队列、ceil(size/8)→+2 …，
+    // 当前队列整批放不下则环形换下一个 group；递减份额取尽后，最后不足一批的剩余全部放进当前队列
+    uint32_t groupStart = typedBlockIdx / npu::tile_fwk::LOCAL_GROUP_SIZE;
+    uint32_t groupIdx = groupStart;
+    uint32_t batchTaskIdx = 0;
+    uint32_t rem = succTaskIdListSize;
+    uint32_t shift = 1;
+    while (rem > 0) {
+        uint32_t batch = (succTaskIdListSize + (1u << shift) - 1) >> shift;
+        if (batch > rem) {
+            batch = rem;
         }
-        uint32_t groupOffset = succCoreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::AIV) ?
-                                   aicCoreNum / npu::tile_fwk::LOCAL_GROUP_SIZE :
-                                   0;
-        uint32_t startOff = get_block_idx() / npu::tile_fwk::LOCAL_GROUP_SIZE;
-        uint32_t pushed = 0;
-        while (count > 0) {
-            __gm__ DrcoLocalReadyQueue* idleQueue = GetIdleQue(rootFuncList, succCoreType, groupCount, groupOffset,
-                                                               startOff);
-            if (idleQueue == nullptr) {
-                break;
-            }
-            uint32_t pushN = count > npu::tile_fwk::LOCAL_GROUP_SIZE ? npu::tile_fwk::LOCAL_GROUP_SIZE : count;
-            DrcoLocalReadyQueuePushBatch(idleQueue, &succTaskIds[pushed], pushN);
-            pushed += pushN;
-            count -= pushN;
-            startOff++;
-        }
-        if (count > 0) {
-            __gm__ DrcoGlobalReadyQueue* globalQueue = GetDrcoGlobalReadyQueue(rootFuncList, succCoreType);
-            if (globalQueue != nullptr) {
-                uint32_t tail = DrcoAtomicAddTo(&globalQueue->tail, count);
-                for (uint32_t i = 0; i < count; i++) {
-                    DrcoAtomicExchTo(&globalQueue->taskList[tail + i], DRCO_ENCODE_TASK(succTaskIds[pushed + i]));
+        bool batchPushed = false;
+        for (uint32_t g = 0; g < groupCount; g++) {
+            uint32_t queueIdx = (groupIdx + g) % groupCount;
+            __gm__ DrcoLocalReadyQueue* localQueue = DrcoRootFuncListGetLocalReadyQueue(rootFuncList, succCoreType,
+                                                                                        queueIdx);
+            // 原子预留 tail..tail+batch-1；容量不足或被其他核抢满则换下一个队列
+            while (true) {
+                uint32_t tail = DrcoAtomicLoad(&localQueue->tail);
+                if (tail + batch > DrcoGmLoad(&localQueue->size)) {
+                    break;
+                }
+                uint32_t tailPrev = DrcoAtomicCasToU32(&localQueue->tail, tail, tail + batch);
+                if (tailPrev == tail) {
+                    for (uint32_t i = 0; i < batch; i++) {
+                        uint32_t succTaskId = succTaskIdList[batchTaskIdx + i];
+                        DrcoAtomicExchToU32(&localQueue->taskList[tail + i], DRCO_ENCODE_TASK(succTaskId));
+                        TraceEvent(state, succTaskId, EVENT_PUSH_LOCAL(queueIdx));
+                    }
+                    batchTaskIdx += batch;
+                    rem -= batch;
+                    groupIdx = (queueIdx + 1) % groupCount;
+                    batchPushed = true;
+                    break;
                 }
             }
+            if (batchPushed) {
+                break;
+            }
         }
+        if (!batchPushed) {
+            break;
+        }
+        shift++;
     }
-};
+}
 
-template <typename GlobalReadyQueueHandler>
-INLINE void DrcoFlushBatchTasks(__gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
-                                uint32_t batchTaskIds[][BATCH_PUSH_BUF_SIZE], uint32_t batchCount[],
-                                uint32_t aicCoreNum)
+INLINE void DrcoDynFuncDataListPushBatch(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                                         uint32_t* succTaskIdList, uint32_t succTaskIdListSize, uint32_t succCoreType)
 {
-    for (uint32_t ct = 0; ct < npu::tile_fwk::NUM_CORE_TYPES; ct++) {
-        if (batchCount[ct] > 0) {
-            GlobalReadyQueueHandler::PushBatch(rootFuncList, batchTaskIds[ct], batchCount[ct], ct, aicCoreNum);
-            batchCount[ct] = 0;
+    BlockDesc blockDesc = state->blockDesc;
+    uint32_t validCoreNum = BlockDescValidCoreNum(blockDesc,
+                                                  succCoreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::AIV));
+    uint32_t groupCount = (validCoreNum + npu::tile_fwk::LOCAL_GROUP_SIZE - 1) / npu::tile_fwk::LOCAL_GROUP_SIZE;
+    uint32_t typedBlockIdx = BlockDescTypedBlockIdx(blockDesc);
+
+    uint32_t pushed = DrcoDynFuncDataListPushBatchLocalMatrix(state, rootFuncList, succTaskIdList, succTaskIdListSize,
+                                                              succCoreType, groupCount, typedBlockIdx);
+    succTaskIdListSize -= pushed;
+
+    if (succTaskIdListSize > 0) {
+        DrcoDynFuncDataListPushBatchLocalQueue(state, rootFuncList, succTaskIdList + pushed, succTaskIdListSize,
+                                               succCoreType, groupCount, typedBlockIdx);
+    }
+}
+
+INLINE void DrcoFlushBatchTasks(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                                uint32_t succTaskIdListCoreList[][BATCH_PUSH_BUF_SIZE],
+                                uint32_t succTaskIdListSizeCoreList[])
+{
+    for (uint32_t coreType = 0; coreType < npu::tile_fwk::NUM_CORE_TYPES; coreType++) {
+        if (succTaskIdListSizeCoreList[coreType] > 0) {
+            DrcoDynFuncDataListPushBatch(state, rootFuncList, succTaskIdListCoreList[coreType],
+                                         succTaskIdListSizeCoreList[coreType], coreType);
+            succTaskIdListSizeCoreList[coreType] = 0;
         }
     }
 }
 
-template <typename GlobalReadyQueueHandler>
-INLINE void ExecDrcoResolve(ExecuteContext* ctx, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList, uint32_t taskId)
+INLINE void DrcoResolveDependOnce(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                                  uint32_t succTaskId, uint32_t succOpIdx, __gm__ npu::tile_fwk::DynFuncData* funcData,
+                                  uint32_t hubStack[], int32_t& hubStackTop,
+                                  uint32_t succTaskIdListCoreList[][BATCH_PUSH_BUF_SIZE],
+                                  uint32_t succTaskIdListSizeCoreList[])
 {
-    constexpr uint32_t HUB_STACK_SIZE = 64;
+    TraceEvent(state, succTaskId, EVENT_RESOLVE());
+    int cceBinaryIndex = funcData->cceBinaryIndexList[succOpIdx];
+    uint32_t succCoreType = state->ctx.cachedDevTaskCurr->cceBinary[cceBinaryIndex].coreType;
+    if (succCoreType < npu::tile_fwk::NUM_CORE_TYPES) {
+        succTaskIdListCoreList[succCoreType][succTaskIdListSizeCoreList[succCoreType]++] = succTaskId;
+        if (succTaskIdListSizeCoreList[succCoreType] >= BATCH_PUSH_BUF_SIZE) {
+            DrcoFlushBatchTasks(state, rootFuncList, succTaskIdListCoreList, succTaskIdListSizeCoreList);
+        }
+    } else if (succCoreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::HUB_MIX)) {
+        DrcoRootFuncListGlobalReadyQueuePush(rootFuncList, succTaskId, npu::tile_fwk::DRCO_QUEUE_MIX);
+    } else {
+        RecordMetricHubStatistic(&state->ctx, succTaskId, npu::tile_fwk::FuncID(succTaskId));
+        if (hubStackTop + 1 < HUB_STACK_SIZE) {
+            hubStack[++hubStackTop] = succTaskId;
+        } else {
+            DrcoRootFuncListGlobalReadyQueuePush(rootFuncList, succTaskId, DRCO_CORE_TYPE);
+        }
+    }
+}
+
+// stitch 节点 defer 消费侧专用：stitch 后继不出现 hub，无需 hubStack/HUB_MIX 分支，
+// 按核类型 batch push 即可（类型越界走 global 队列兜底，防数组越界）
+INLINE void DrcoResolveDependOnceCore(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                                      uint32_t succTaskId, uint32_t succOpIdx,
+                                      __gm__ npu::tile_fwk::DynFuncData* funcData,
+                                      uint32_t succTaskIdListCoreList[][BATCH_PUSH_BUF_SIZE],
+                                      uint32_t succTaskIdListSizeCoreList[])
+{
+    TraceEvent(state, succTaskId, EVENT_RESOLVE());
+    int cceBinaryIndex = funcData->cceBinaryIndexList[succOpIdx];
+    uint32_t succCoreType = state->ctx.cachedDevTaskCurr->cceBinary[cceBinaryIndex].coreType;
+    if (succCoreType < npu::tile_fwk::NUM_CORE_TYPES) {
+        succTaskIdListCoreList[succCoreType][succTaskIdListSizeCoreList[succCoreType]++] = succTaskId;
+        if (succTaskIdListSizeCoreList[succCoreType] >= BATCH_PUSH_BUF_SIZE) {
+            DrcoFlushBatchTasks(state, rootFuncList, succTaskIdListCoreList, succTaskIdListSizeCoreList);
+        }
+    } else {
+        DrcoRootFuncListGlobalReadyQueuePush(rootFuncList, succTaskId, DRCO_CORE_TYPE);
+    }
+}
+
+// 就地遍历单个 stitch 节点解依赖：DrcoResolveDepend 首节点路径与矩阵 push 失败兜底共用，
+// 走完整 DrcoResolveDependOnce 路由（含 hub 处理）
+INLINE void DrcoResolveStitchNodeTasks(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                                       __gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode* node,
+                                       uint32_t curTaskId, uint32_t hubStack[], int32_t& hubStackTop,
+                                       uint32_t succTaskIdListCoreList[][BATCH_PUSH_BUF_SIZE],
+                                       uint32_t succTaskIdListSizeCoreList[])
+{
+    TraceEvent(state, curTaskId, EVENT_SUCC_DYNAMIC(node->nodeSize));
+    for (uint32_t i = 0; i < node->nodeSize; i++) {
+        uint32_t succTaskId = node->nodeTaskList[i];
+        uint32_t succFuncId = npu::tile_fwk::FuncID(succTaskId);
+        uint32_t succOpIdx = npu::tile_fwk::TaskID(succTaskId);
+        auto* succFuncData = &state->ctx.cachedDevTaskCurr->funcDataList[succFuncId];
+        __gm__ npu::tile_fwk::DrcoRootFuncData* succRootFuncData = &succFuncData->drcoRootFuncData;
+        int32_t old = DrcoAtomicResolveDependOnce(&succRootFuncData->predCount[succOpIdx]);
+        if (old == 1) {
+            DrcoResolveDependOnce(state, rootFuncList, succTaskId, succOpIdx, succFuncData, hubStack, hubStackTop,
+                                  succTaskIdListCoreList, succTaskIdListSizeCoreList);
+        }
+    }
+}
+
+INLINE void DrcoResolveDepend(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                              uint32_t taskId)
+{
+    uint32_t succTaskIdListCoreList[npu::tile_fwk::NUM_CORE_TYPES][BATCH_PUSH_BUF_SIZE];
+    uint32_t succTaskIdListSizeCoreList[npu::tile_fwk::NUM_CORE_TYPES] = {0};
+
     uint32_t hubStack[HUB_STACK_SIZE];
     int32_t hubStackTop = -1;
     hubStack[++hubStackTop] = taskId;
-
-    uint32_t batchTaskIds[npu::tile_fwk::NUM_CORE_TYPES][BATCH_PUSH_BUF_SIZE];
-    uint32_t batchCount[npu::tile_fwk::NUM_CORE_TYPES] = {0};
     while (hubStackTop >= 0) {
         uint32_t curTaskId = hubStack[hubStackTop--];
         uint32_t funcIdx = npu::tile_fwk::FuncID(curTaskId);
-        auto funcData = &ctx->cachedDevTasks[ctx->curLeafTaskParallelIdx].funcDataList[funcIdx];
-        DRCO_DCCI_SINGLE_CACHE_LINE(funcData);
-        DRCO_DCCI_SINGLE_CACHE_LINE((__gm__ uint8_t*)funcData + 64);
-        DRCO_DCCI_SINGLE_CACHE_LINE((__gm__ uint8_t*)funcData + 128);
+        uint32_t operIdx = npu::tile_fwk::TaskID(curTaskId);
 
+        auto funcData = &state->ctx.cachedDevTaskCurr->funcDataList[funcIdx];
         __gm__ npu::tile_fwk::DrcoRootFuncData* rootFuncData = &funcData->drcoRootFuncData;
         __gm__ npu::tile_fwk::DevAscendFunctionOperationSuccInfo* succInfoList = rootFuncData->succInfoList;
         __gm__ int32_t* succStaticList = rootFuncData->succStaticList;
-        __gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode** succStitchList = rootFuncData->succStitchList;
         __gm__ int32_t* predCount = rootFuncData->predCount;
+        volatile __gm__ npu::tile_fwk::DevAscendFunctionOperationSuccInfo* succInfo = &succInfoList[operIdx];
 
-        uint32_t operationIndex = npu::tile_fwk::TaskID(curTaskId);
-        volatile __gm__ npu::tile_fwk::DevAscendFunctionOperationSuccInfo* succInfo = &succInfoList[operationIndex];
         uint16_t staticIndex = succInfo->staticIndex;
         uint16_t staticSize = succInfo->staticSize;
-        uint32_t stitchIndex = succInfo->stitchIndex;
-
+        TraceEvent(state, curTaskId, EVENT_SUCC_STATIC(staticSize));
         for (uint16_t i = staticIndex; i < staticIndex + staticSize; i++) {
             uint32_t succOpIdx = succStaticList[i];
-            int32_t old = DrcoAtomicAddToSignedClaim(&predCount[succOpIdx], -1);
+            int32_t old = DrcoAtomicResolveDependOnce(&predCount[succOpIdx]);
             if (old == 1) {
                 uint32_t succTaskId = npu::tile_fwk::MakeTaskID(funcIdx, succOpIdx);
-                DRCO_LOGD(ctx, "resolve static cur=%u succ=%u", curTaskId, succTaskId);
-                int cceBinaryIndex = funcData->cceBinaryIndexList[succOpIdx];
-                uint32_t
-                    succCoreType = ctx->cachedDevTasks[ctx->curLeafTaskParallelIdx].cceBinary[cceBinaryIndex].coreType;
-                if (succCoreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::HUB)) {
-                    RecordMetricHubStatistic(ctx, succTaskId, npu::tile_fwk::FuncID(succTaskId));
-                    if (hubStackTop + 1 < HUB_STACK_SIZE) {
-                        hubStack[++hubStackTop] = succTaskId;
-                    } else {
-                        GlobalReadyQueueHandler::Push(rootFuncList, succTaskId,
-                                                      static_cast<uint32_t>(npu::tile_fwk::drcoCoreType));
-                    }
-                } else if (succCoreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::HUB_MIX)) {
-                    GlobalReadyQueueHandler::Push(rootFuncList, succTaskId, npu::tile_fwk::DRCO_QUEUE_MIX);
-                } else if (succCoreType < npu::tile_fwk::NUM_CORE_TYPES) {
-                    batchTaskIds[succCoreType][batchCount[succCoreType]++] = succTaskId;
-                    if (batchCount[succCoreType] >= BATCH_PUSH_BUF_SIZE) {
-                        DrcoFlushBatchTasks<GlobalReadyQueueHandler>(rootFuncList, batchTaskIds, batchCount,
-                                                                     ctx->aicCoreNum);
-                    }
-                }
+                DrcoResolveDependOnce(state, rootFuncList, succTaskId, succOpIdx, funcData, hubStack, hubStackTop,
+                                      succTaskIdListCoreList, succTaskIdListSizeCoreList);
             }
         }
 
+        uint32_t stitchIndex = succInfo->stitchIndex;
         if (stitchIndex != 0) {
-            for (__gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode* node = succStitchList[stitchIndex];
-                 node != nullptr; node = node->nodeNext) {
-                for (uint32_t i = 0; i < node->nodeSize; i++) {
-                    uint32_t succTaskId = node->nodeTaskList[i];
-                    uint32_t succFuncId = npu::tile_fwk::FuncID(succTaskId);
-                    uint32_t succOpIdx = npu::tile_fwk::TaskID(succTaskId);
-                    auto* succFuncData = &ctx->cachedDevTasks[ctx->curLeafTaskParallelIdx].funcDataList[succFuncId];
-                    DRCO_DCCI_SINGLE_CACHE_LINE(succFuncData);
-                    DRCO_DCCI_SINGLE_CACHE_LINE((__gm__ uint8_t*)succFuncData + 64);
-                    DRCO_DCCI_SINGLE_CACHE_LINE((__gm__ uint8_t*)succFuncData + 128);
-                    __gm__ npu::tile_fwk::DrcoRootFuncData* succRootFuncData = &succFuncData->drcoRootFuncData;
-                    int32_t old = DrcoAtomicAddToSignedClaim(&succRootFuncData->predCount[succOpIdx], -1);
-                    if (old == 1) {
-                        DRCO_LOGD(ctx, "resolve stitch cur=%u succ=%u", curTaskId, succTaskId);
-                        int cceBinaryIndex = ctx->cachedDevTasks[ctx->curLeafTaskParallelIdx]
-                                                 .funcDataList[succFuncId]
-                                                 .cceBinaryIndexList[succOpIdx];
-                        uint32_t succCoreType = ctx->cachedDevTasks[ctx->curLeafTaskParallelIdx]
-                                                    .cceBinary[cceBinaryIndex]
-                                                    .coreType;
-                        if (succCoreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::HUB)) {
-                            RecordMetricHubStatistic(ctx, succTaskId, npu::tile_fwk::FuncID(succTaskId));
-                            if (hubStackTop + 1 < HUB_STACK_SIZE) {
-                                hubStack[++hubStackTop] = succTaskId;
-                            } else {
-                                GlobalReadyQueueHandler::Push(rootFuncList, succTaskId,
-                                                              static_cast<uint32_t>(npu::tile_fwk::drcoCoreType));
-                            }
-                        } else if (succCoreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::HUB_MIX)) {
-                            GlobalReadyQueueHandler::Push(rootFuncList, succTaskId, npu::tile_fwk::DRCO_QUEUE_MIX);
-                        } else if (succCoreType < npu::tile_fwk::NUM_CORE_TYPES) {
-                            batchTaskIds[succCoreType][batchCount[succCoreType]++] = succTaskId;
-                            if (batchCount[succCoreType] >= BATCH_PUSH_BUF_SIZE) {
-                                DrcoFlushBatchTasks<GlobalReadyQueueHandler>(rootFuncList, batchTaskIds, batchCount,
-                                                                             ctx->aicCoreNum);
-                            }
+            __gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode** succStitchList = rootFuncData->succStitchList;
+            // 先保存首节点，其余节点一次性 push 到本类型 localStitchNodeMatrix 自己的行，由消费核
+            // fetch 时 pop 解依赖（摊平长链遍历开销）；push 结束后再统一就地解依赖：首节点 +
+            // 首个 push 失败起的剩余链尾（矩阵写不进则整段链尾就地兜底，保证前向推进）
+            __gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode* firstNode = succStitchList[stitchIndex];
+            __gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode* fallbackNode = nullptr;
+            __gm__ DrcoGlobalStitchNodeMatrix* matrix = DrcoRootFuncListGetStitchNodeMatrix<DRCO_CORE_TYPE>(
+                rootFuncList);
+
+            BlockDesc blockDesc = state->blockDesc;
+            uint32_t rowCnt = BlockDescValidCoreNum(blockDesc, IS_AIV);
+            uint32_t coreTypeIdx = BlockDescTypedBlockIdx(blockDesc);
+            uint32_t colIdx = BlockDescBlockIdx(blockDesc) % npu::tile_fwk::DrcoGlobalStitchNodeMatrix::COL_SIZE;
+            if (firstNode != nullptr) {
+                uint32_t start = 0;
+
+                for (__gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode* node = firstNode->nodeNext;
+                     node != nullptr && fallbackNode == nullptr; node = node->nodeNext) {
+                    bool filled = false;
+                    for (uint32_t i = 0; i < rowCnt; i++) {
+                        uint32_t rowIdx = (coreTypeIdx + start + i) % rowCnt;
+                        __gm__ uint64_t* slot = reinterpret_cast<__gm__ uint64_t*>(
+                            &matrix->stitchNodeList[rowIdx][colIdx]);
+                        uint64_t prev = DrcoAtomicCasToU64(slot, 0, reinterpret_cast<uint64_t>(node));
+                        if (prev == 0) {
+                            start = start + i + 1;
+                            filled = true;
+                            break;
                         }
                     }
+                    if (filled) {
+                        TraceEvent(state, curTaskId, EVENT_STITCH_NODE(node->nodeSize));
+                    } else {
+                        fallbackNode = node;
+                    }
                 }
+
+                DrcoResolveStitchNodeTasks(state, rootFuncList, firstNode, curTaskId, hubStack, hubStackTop,
+                                           succTaskIdListCoreList, succTaskIdListSizeCoreList);
+            }
+            for (__gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode* node = fallbackNode; node != nullptr;
+                 node = node->nodeNext) {
+                DrcoResolveStitchNodeTasks(state, rootFuncList, node, curTaskId, hubStack, hubStackTop,
+                                           succTaskIdListCoreList, succTaskIdListSizeCoreList);
             }
         }
     }
-    DrcoFlushBatchTasks<GlobalReadyQueueHandler>(rootFuncList, batchTaskIds, batchCount, ctx->aicCoreNum);
+    DrcoFlushBatchTasks(state, rootFuncList, succTaskIdListCoreList, succTaskIdListSizeCoreList);
 }
 
-#ifndef __TILE_FWK_HOST__
-struct MixTaskPush {
-    __aicore__ INLINE static bool Push(uint32_t succTaskId, npu::tile_fwk::HubC2VReadyQueue* buf, ExecuteContext* ctx)
-    {
+__aicore__ INLINE static bool MixTaskPush(DrcoEntryState* state, uint32_t succTaskId,
+                                          npu::tile_fwk::MixHubC2VReadyQueue* buf)
+{
 #if defined(__AIV__)
-        (void)ctx;
-        return false;
+    (void)state;
+    return false;
 #else
-        if (npu::tile_fwk::HubC2VReadyQueue::Push(buf, succTaskId)) {
-            DRCO_LOGD(ctx, "body push task=%d", (int)succTaskId);
-            return true;
-        }
-        return false;
-#endif
+    if (npu::tile_fwk::MixHubC2VReadyQueue::Push(buf, succTaskId)) {
+        DRCO_LOG(&state->ctx, "MIX C2V push task=%d", (int)succTaskId);
+        return true;
     }
-};
+    return false;
+#endif
+}
 
-__aicore__ INLINE static uint32_t ResolveHubMixTask(ExecuteContext* ctx,
+__aicore__ INLINE static uint32_t ResolveHubMixTask(DrcoEntryState* state,
                                                     __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
-                                                    uint32_t hubMixTaskId, npu::tile_fwk::HubC2VReadyQueue* body)
+                                                    uint32_t hubMixTaskId, npu::tile_fwk::MixHubC2VReadyQueue* body)
 {
     uint32_t funcIdx = npu::tile_fwk::FuncID(hubMixTaskId);
     uint32_t opIdx = npu::tile_fwk::TaskID(hubMixTaskId);
-    auto funcData = &ctx->cachedDevTasks[ctx->curLeafTaskParallelIdx].funcDataList[funcIdx];
+    auto funcData = &state->ctx.cachedDevTasks[state->ctx.curLeafTaskParallelIdx].funcDataList[funcIdx];
     __gm__ npu::tile_fwk::DevAscendFunctionOperationSuccInfo* mixSuccInfoList = funcData->drcoRootFuncData.succInfoList;
     __gm__ int32_t* mixSuccStaticList = funcData->drcoRootFuncData.succStaticList;
     __gm__ int* mixCceBinaryIndexList = funcData->cceBinaryIndexList;
-    __gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode** mixSuccStitchList = funcData->drcoRootFuncData
-                                                                                      .succStitchList;
-    uint32_t mixStitchIndex = mixSuccInfoList[opIdx].stitchIndex;
     uint32_t aicTaskId = static_cast<uint32_t>(AICORE_TASK_INIT);
 
-    if (mixStitchIndex != 0) {
-        for (__gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode* node = mixSuccStitchList[mixStitchIndex];
-             node != nullptr; node = node->nodeNext) {
-            for (uint32_t i = 0; i < node->nodeSize; i++) {
-                uint32_t mixSuccTaskId = node->nodeTaskList[i];
-                uint32_t mixSuccFuncId = npu::tile_fwk::FuncID(mixSuccTaskId);
-                uint32_t mixSuccOpIdx = npu::tile_fwk::TaskID(mixSuccTaskId);
-                auto& stitchFuncData = ctx->cachedDevTasks[ctx->curLeafTaskParallelIdx].funcDataList[mixSuccFuncId];
-                int mixBinIdx = stitchFuncData.cceBinaryIndexList[mixSuccOpIdx];
-                auto& mixBin = ctx->cachedDevTasks[ctx->curLeafTaskParallelIdx].cceBinary[mixBinIdx];
-                DRCO_LOGD(ctx, "mix stitch resolve taskId=%u", mixSuccTaskId);
-                if (mixBin.coreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::AIC)) {
-                    aicTaskId = mixSuccTaskId;
-                } else {
-                    npu::tile_fwk::HubC2VReadyQueue* dstAddr = body + mixBin.wrapVecId;
-                    if (!MixTaskPush::Push(mixSuccTaskId, dstAddr, ctx)) {
-                        DrcoDynFuncDataListPush::Push(rootFuncList, mixSuccTaskId,
-                                                      static_cast<uint32_t>(npu::tile_fwk::CoreType::AIV));
-                    }
-                }
-            }
-        }
-    } else {
-        uint16_t mixStaticIndex = mixSuccInfoList[opIdx].staticIndex;
-        uint16_t mixStaticSize = mixSuccInfoList[opIdx].staticSize;
-        for (uint16_t j = mixStaticIndex; j < mixStaticIndex + mixStaticSize; j++) {
-            uint32_t mixSuccOpIdx = mixSuccStaticList[j];
-            uint32_t mixSuccTaskId = npu::tile_fwk::MakeTaskID(funcIdx, mixSuccOpIdx);
-            int mixBinIdx = mixCceBinaryIndexList[mixSuccOpIdx];
-            auto& mixBin = ctx->cachedDevTasks[ctx->curLeafTaskParallelIdx].cceBinary[mixBinIdx];
-            DRCO_LOGD(ctx, "mix resolve taskId=%u", mixSuccTaskId);
-            if (mixBin.coreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::AIC)) {
-                aicTaskId = mixSuccTaskId;
-            } else {
-                npu::tile_fwk::HubC2VReadyQueue* dstAddr = body + mixBin.wrapVecId;
-                if (!MixTaskPush::Push(mixSuccTaskId, dstAddr, ctx)) {
-                    DrcoDynFuncDataListPush::Push(rootFuncList, mixSuccTaskId,
-                                                  static_cast<uint32_t>(npu::tile_fwk::CoreType::AIV));
-                }
+    uint16_t mixStaticIndex = mixSuccInfoList[opIdx].staticIndex;
+    uint16_t mixStaticSize = mixSuccInfoList[opIdx].staticSize;
+    for (uint16_t j = mixStaticIndex; j < mixStaticIndex + mixStaticSize; j++) {
+        uint32_t mixSuccOpIdx = mixSuccStaticList[j];
+        uint32_t mixSuccTaskId = npu::tile_fwk::MakeTaskID(funcIdx, mixSuccOpIdx);
+        int mixBinIdx = mixCceBinaryIndexList[mixSuccOpIdx];
+        auto& mixBin = state->ctx.cachedDevTasks[state->ctx.curLeafTaskParallelIdx].cceBinary[mixBinIdx];
+        DRCO_LOG(&state->ctx, "MIX resolve taskId=%u", mixSuccTaskId);
+        if (mixBin.coreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::AIC)) {
+            aicTaskId = mixSuccTaskId;
+        } else {
+            npu::tile_fwk::MixHubC2VReadyQueue* dstAddr = body + mixBin.wrapVecId;
+            if (!MixTaskPush(state, mixSuccTaskId, dstAddr)) {
+                DrcoRootFuncListGlobalReadyQueuePush(rootFuncList, mixSuccTaskId,
+                                                     static_cast<uint32_t>(npu::tile_fwk::CoreType::AIV));
             }
         }
     }
     return aicTaskId;
 }
-#endif
 
 INLINE __gm__ DrcoLocalReadyQueue* TryGetOtherLocalQue(__gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
                                                        uint32_t coreType, uint32_t groupIdx)
 {
     for (uint32_t g = 1; g < npu::tile_fwk::NUM_LOCAL_GROUPS; g++) {
         uint32_t victim = (groupIdx + g) % npu::tile_fwk::NUM_LOCAL_GROUPS;
-        __gm__ DrcoLocalReadyQueue* que = GetDrcoLocalReadyQueue(rootFuncList, coreType, victim);
+        __gm__ DrcoLocalReadyQueue* que = DrcoRootFuncListGetLocalReadyQueue(rootFuncList, coreType, victim);
         if (que == nullptr) {
             continue;
         }
@@ -621,190 +968,291 @@ INLINE __gm__ DrcoLocalReadyQueue* TryGetOtherLocalQue(__gm__ npu::tile_fwk::Drc
     return nullptr;
 }
 
-INLINE uint32_t DrcoDynFuncDataListGetFirstTask(__gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
-                                                [[maybe_unused]] int32_t blockIdx, uint32_t& outCoreType)
+// LocalMatrix 版 TryGetOtherLocalQue：找其他 group 中自己列还有任务的矩阵（窃取）
+INLINE __gm__ DrcoLocalReadyMatrix* TryGetOtherLocalMatrix(__gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                                                           uint32_t coreType, uint32_t groupIdx, uint32_t colIdx)
 {
-    uint64_t t0 = get_sys_cnt();
-    uint32_t coreType = static_cast<uint32_t>(npu::tile_fwk::drcoCoreType);
-    uint32_t groupIdx = static_cast<uint32_t>(blockIdx) / npu::tile_fwk::LOCAL_GROUP_SIZE;
-    if (groupIdx >= npu::tile_fwk::NUM_LOCAL_GROUPS) {
-        groupIdx = npu::tile_fwk::NUM_LOCAL_GROUPS - 1;
+    for (uint32_t g = 1; g < npu::tile_fwk::NUM_LOCAL_GROUPS; g++) {
+        uint32_t victim = (groupIdx + g) % npu::tile_fwk::NUM_LOCAL_GROUPS;
+        __gm__ DrcoLocalReadyMatrix* matrix = DrcoRootFuncListGetLocalReadyMatrix(rootFuncList, coreType, victim);
+        if (matrix == nullptr) {
+            continue;
+        }
+        for (uint32_t row = 0; row < npu::tile_fwk::LOCAL_GROUP_SIZE; row++) {
+            if (DrcoAtomicLoad(&matrix->taskList[row][colIdx]) != 0) {
+                return matrix;
+            }
+        }
     }
-    __gm__ DrcoLocalReadyQueue* localQueue = GetDrcoLocalReadyQueue(rootFuncList, coreType, groupIdx);
-    __gm__ DrcoGlobalReadyQueue* globalReadyQueue = GetDrcoGlobalReadyQueue(rootFuncList, coreType);
+    return nullptr;
+}
+
+// 消费本核行上的 defer stitch 节点：与 PopColTasks 相同的两阶段 CAS 抢占
+// （CAS(0,0) 原子读 → CAS(node,nullptr) 独占），节点内任务就地解依赖后 batch push；
+// 节点内容 host 侧构建后不可变，指针 CAS 发布即可；只 pop 自己类型内编号对应的行
+INLINE void DrcoStitchNodeMatrixPopResolve(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                                           __gm__ DrcoGlobalStitchNodeMatrix* matrix, uint32_t rowIdx)
+{
+    uint32_t succTaskIdListCoreList[npu::tile_fwk::NUM_CORE_TYPES][BATCH_PUSH_BUF_SIZE];
+    uint32_t succTaskIdListSizeCoreList[npu::tile_fwk::NUM_CORE_TYPES] = {0};
+    for (uint32_t col = 0; col < DrcoGlobalStitchNodeMatrix::COL_SIZE; col++) {
+        __gm__ uint64_t* slot = reinterpret_cast<__gm__ uint64_t*>(&matrix->stitchNodeList[rowIdx][col]);
+        uint64_t nodeAddr = DrcoAtomicCasToU64(slot, 0, 0);
+        if (nodeAddr == 0) {
+            continue;
+        }
+        if (DrcoAtomicCasToU64(slot, nodeAddr, 0) != nodeAddr) {
+            continue;
+        }
+        __gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode*
+            node = (__gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode*)nodeAddr;
+        for (uint32_t i = 0; i < node->nodeSize; i++) {
+            uint32_t succTaskId = node->nodeTaskList[i];
+            uint32_t succFuncId = npu::tile_fwk::FuncID(succTaskId);
+            uint32_t succOpIdx = npu::tile_fwk::TaskID(succTaskId);
+            auto* succFuncData = &state->ctx.cachedDevTaskCurr->funcDataList[succFuncId];
+            __gm__ npu::tile_fwk::DrcoRootFuncData* succRootFuncData = &succFuncData->drcoRootFuncData;
+            int32_t old = DrcoAtomicResolveDependOnce(&succRootFuncData->predCount[succOpIdx]);
+            if (old == 1) {
+                DrcoResolveDependOnceCore(state, rootFuncList, succTaskId, succOpIdx, succFuncData,
+                                          succTaskIdListCoreList, succTaskIdListSizeCoreList);
+            }
+        }
+    }
+    DrcoFlushBatchTasks(state, rootFuncList, succTaskIdListCoreList, succTaskIdListSizeCoreList);
+}
+
+INLINE void DrcoDynFuncDataListFetchResolveStitchNodeMatrix(DrcoEntryState* state,
+                                                            __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                                                            uint32_t typedBlockIdx)
+{
+    __gm__ DrcoGlobalStitchNodeMatrix* stitchNodeMatrix = DrcoRootFuncListGetStitchNodeMatrix<DRCO_CORE_TYPE>(
+        rootFuncList);
+    DrcoStitchNodeMatrixPopResolve(state, rootFuncList, stitchNodeMatrix, typedBlockIdx);
+}
+
+INLINE bool DrcoDynFuncDataListFetchTaskMixHubC2VReadyQueue(DrcoEntryState* state,
+                                                            __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                                                            uint32_t& resultCoreType,
+                                                            uint32_t resultTaskIdList[LOCAL_GROUP_SIZE],
+                                                            uint32_t& resultTaskIdCount, uint32_t blockIdx)
+{
+    if (IS_MIX && IS_AIV) {
+        __gm__ npu::tile_fwk::PerCorePendingQueue* perCoreQueue = rootFuncList->perCorePendingQueueArray[blockIdx];
+        uint32_t bodyTaskId = 0;
+        if (npu::tile_fwk::MixHubC2VReadyQueue::Pop(perCoreQueue->mixHubC2VReadyQueue, bodyTaskId)) {
+            resultTaskIdList[0] = bodyTaskId;
+            resultTaskIdCount = 1;
+            resultCoreType = npu::tile_fwk::DRCO_QUEUE_AIV;
+            return true;
+        }
+    }
+    return false;
+}
+
+INLINE bool DrcoDynFuncDataListFetchTaskMixHub(DrcoEntryState* state,
+                                               __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                                               uint32_t& resultCoreType, uint32_t resultTaskIdList[LOCAL_GROUP_SIZE],
+                                               uint32_t& resultTaskIdCount)
+{
+    if (IS_MIX && IS_AIC) {
+        __gm__ DrcoLocalReadyQueue* mixLocalQueue = rootFuncList
+                                                        ->localReadyQueueArray[npu::tile_fwk::DRCO_QUEUE_MIX][0];
+        if (mixLocalQueue != nullptr) {
+            DRCO_DCCI_SINGLE_CACHE_LINE(mixLocalQueue);
+            uint32_t mixTaskId = static_cast<uint32_t>(AICORE_TASK_FETCH_CONFLICT);
+            while (mixTaskId == static_cast<uint32_t>(AICORE_TASK_FETCH_CONFLICT)) {
+                mixTaskId = DrcoLocalReadyQueueGetFirstTask(mixLocalQueue);
+            }
+            if (mixTaskId != static_cast<uint32_t>(AICORE_TASK_NO_INCOME)) {
+                resultTaskIdList[0] = mixTaskId;
+                resultTaskIdCount = 1;
+                resultCoreType = npu::tile_fwk::DRCO_QUEUE_MIX;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+INLINE bool DrcoDynFuncDataListFetchTaskLocalReadyMatrix(DrcoEntryState* state,
+                                                         __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                                                         uint32_t& resultCoreType,
+                                                         uint32_t resultTaskIdList[LOCAL_GROUP_SIZE],
+                                                         uint32_t& resultTaskIdCount,
+                                                         __gm__ DrcoLocalReadyMatrix* localReadyMatrix, uint32_t colIdx)
+{
+    uint32_t count = DrcoLocalReadyMatrixPopColTasks(state, localReadyMatrix, colIdx, resultTaskIdList,
+                                                     npu::tile_fwk::LOCAL_GROUP_SIZE);
+    if (count > 0) {
+        resultTaskIdCount = count;
+        resultCoreType = DRCO_CORE_TYPE;
+        return true;
+    }
+    return false;
+}
+
+INLINE bool DrcoDynFuncDataListFetchTaskLocalReadyQueue(
+    DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList, uint32_t& resultCoreType,
+    uint32_t resultTaskIdList[LOCAL_GROUP_SIZE], uint32_t& resultTaskIdCount, uint32_t groupIdx, uint32_t validCoreNum)
+{
+    uint32_t queueGroupCount = (validCoreNum + LOCAL_GROUP_SIZE - 1) / LOCAL_GROUP_SIZE;
+    for (uint32_t i = 0; i < queueGroupCount; i++) {
+        uint32_t queueGroupIdx = (groupIdx + i) % queueGroupCount;
+        __gm__ DrcoLocalReadyQueue* localReadyQueue = DrcoRootFuncListGetLocalReadyQueue(rootFuncList, DRCO_CORE_TYPE,
+                                                                                         queueGroupIdx);
+        if (localReadyQueue == nullptr) {
+            continue;
+        }
+        DRCO_DCCI_SINGLE_CACHE_LINE(localReadyQueue);
+        uint32_t taskId = static_cast<uint32_t>(AICORE_TASK_FETCH_CONFLICT);
+        while (taskId == static_cast<uint32_t>(AICORE_TASK_FETCH_CONFLICT)) {
+            taskId = DrcoLocalReadyQueueGetFirstTask(localReadyQueue);
+        }
+        if (taskId != static_cast<uint32_t>(AICORE_TASK_NO_INCOME)) {
+            resultTaskIdList[0] = taskId;
+            resultTaskIdCount = 1;
+            resultCoreType = DRCO_CORE_TYPE;
+            break;
+        }
+    }
+    if (resultTaskIdCount > 0) {
+        return true;
+    }
+    return false;
+}
+
+INLINE uint32_t DrcoDynFuncDataListFetchTask(DrcoEntryState* state,
+                                             __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                                             uint32_t& resultCoreType, uint32_t resultTaskIdList[LOCAL_GROUP_SIZE])
+{
+    TraceEvent(state, 0xffffffff, EVENT_FETCH_START());
+    BlockDesc blockDesc = state->blockDesc;
+    uint32_t blockIdx = BlockDescBlockIdx(blockDesc);
+    uint32_t typedBlockIdx = BlockDescTypedBlockIdx(blockDesc);
+    uint32_t groupIdx = typedBlockIdx / npu::tile_fwk::LOCAL_GROUP_SIZE;
+    uint32_t validCoreNum = BlockDescValidCoreNum(blockDesc, IS_AIV);
+
+    __gm__ DrcoLocalReadyMatrix* localReadyMatrix = DrcoRootFuncListGetLocalReadyMatrix(rootFuncList, DRCO_CORE_TYPE,
+                                                                                        groupIdx);
+    uint32_t colIdx = DrcoLocalReadyMatrixGetRowIdx(typedBlockIdx);
+    __gm__ DrcoGlobalReadyQueue* globalReadyQueue = DrcoRootFuncListGetGlobalReadyQueue(rootFuncList, DRCO_CORE_TYPE);
+    uint32_t resultTaskIdCount = 0;
+
+    uint64_t t0 = get_sys_cnt();
     while (true) {
         if (get_sys_cnt() - t0 > AICORE_LEAF_TASK_RUN_TIMEOUT) {
             Trap();
         }
-#if defined(__AIV__)
-        __gm__ npu::tile_fwk::PerCorePendingQueue* myPerCoreQueue = rootFuncList->perCorePendingQueueArray[blockIdx];
-        if (myPerCoreQueue != nullptr) {
-            uint32_t bodyTaskId = 0;
-            if (npu::tile_fwk::HubC2VReadyQueue::Pop(myPerCoreQueue->body, bodyTaskId)) {
-                outCoreType = npu::tile_fwk::DRCO_QUEUE_AIV;
-                return bodyTaskId;
-            }
-        }
-#endif
 
-#if defined(__AIC__)
-        {
-            __gm__ DrcoLocalReadyQueue* mixLocalQueue = rootFuncList
-                                                            ->localReadyQueueArray[npu::tile_fwk::DRCO_QUEUE_MIX][0];
-            if (mixLocalQueue != nullptr) {
-                DRCO_DCCI_SINGLE_CACHE_LINE(mixLocalQueue);
-                uint32_t mixTaskId = static_cast<uint32_t>(AICORE_TASK_FETCH_CONFLICT);
-                while (mixTaskId == static_cast<uint32_t>(AICORE_TASK_FETCH_CONFLICT)) {
-                    mixTaskId = DrcoLocalReadyQueueGetFirstTask(mixLocalQueue);
-                }
-                if (mixTaskId != static_cast<uint32_t>(AICORE_TASK_NO_INCOME)) {
-                    outCoreType = npu::tile_fwk::DRCO_QUEUE_MIX;
-                    return mixTaskId;
-                }
-            }
-        }
-#endif
-        if (localQueue != nullptr) {
-            uint32_t taskId = static_cast<uint32_t>(AICORE_TASK_FETCH_CONFLICT);
-            while (taskId == static_cast<uint32_t>(AICORE_TASK_FETCH_CONFLICT)) {
-                taskId = DrcoLocalReadyQueueGetFirstTask(localQueue);
-            }
-            if (taskId == static_cast<uint32_t>(AICORE_TASK_NO_INCOME)) {
-                __gm__ DrcoLocalReadyQueue* otherQue = TryGetOtherLocalQue(rootFuncList, coreType, groupIdx);
-                if (otherQue != nullptr) {
-                    taskId = static_cast<uint32_t>(AICORE_TASK_FETCH_CONFLICT);
-                    while (taskId == static_cast<uint32_t>(AICORE_TASK_FETCH_CONFLICT)) {
-                        taskId = DrcoLocalReadyQueueGetFirstTask(otherQue);
-                    }
-                }
-            }
-            if (taskId != static_cast<uint32_t>(AICORE_TASK_NO_INCOME) &&
-                taskId != static_cast<uint32_t>(AICORE_TASK_FETCH_CONFLICT)) {
-                outCoreType = static_cast<uint32_t>(npu::tile_fwk::drcoCoreType);
-                return taskId;
-            }
-        }
+        DrcoDynFuncDataListFetchResolveStitchNodeMatrix(state, rootFuncList, typedBlockIdx);
 
-#if defined(__AIC__)
-        {
-            __gm__ DrcoGlobalReadyQueue*
-                mixGlobalQueue = rootFuncList->globalReadyQueueList[npu::tile_fwk::DRCO_QUEUE_MIX].ptr;
-            if (mixGlobalQueue != nullptr) {
-                DRCO_DCCI_SINGLE_CACHE_LINE(mixGlobalQueue);
-                uint32_t mixTaskId = DrcoGlobalReadyQueueGetFirstTask(mixGlobalQueue);
-                if (mixTaskId != static_cast<uint32_t>(AICORE_TASK_NO_INCOME) &&
-                    mixTaskId != static_cast<uint32_t>(AICORE_TASK_ALL_FINISH)) {
-                    outCoreType = npu::tile_fwk::DRCO_QUEUE_MIX;
-                    return mixTaskId;
-                }
-            }
+        if (DrcoDynFuncDataListFetchTaskMixHubC2VReadyQueue(state, rootFuncList, resultCoreType, resultTaskIdList,
+                                                            resultTaskIdCount, blockIdx)) {
+            break;
         }
-#endif
-        if (globalReadyQueue != nullptr) {
-            uint32_t taskId = DrcoGlobalReadyQueueGetFirstTask(globalReadyQueue);
-            if (taskId != static_cast<uint32_t>(AICORE_TASK_NO_INCOME) &&
-                taskId != static_cast<uint32_t>(AICORE_TASK_ALL_FINISH) &&
-                taskId != static_cast<uint32_t>(AICORE_TASK_FETCH_CONFLICT)) {
-                outCoreType = static_cast<uint32_t>(npu::tile_fwk::drcoCoreType);
-                return taskId;
-            }
+        if (DrcoDynFuncDataListFetchTaskMixHub(state, rootFuncList, resultCoreType, resultTaskIdList,
+                                               resultTaskIdCount)) {
+            break;
         }
-
-        __gm__ DrcoGlobalReadyQueue*
-            myGq = rootFuncList->globalReadyQueueList[static_cast<uint32_t>(npu::tile_fwk::drcoCoreType)].ptr;
-        if (DrcoAtomicLoad(&myGq->executedCount) >= myGq->size) {
-            return static_cast<uint32_t>(AICORE_TASK_ALL_FINISH);
+        if (DrcoDynFuncDataListFetchTaskLocalReadyMatrix(state, rootFuncList, resultCoreType, resultTaskIdList,
+                                                         resultTaskIdCount, localReadyMatrix, colIdx)) {
+            break;
+        }
+        if (DrcoDynFuncDataListFetchTaskLocalReadyQueue(state, rootFuncList, resultCoreType, resultTaskIdList,
+                                                        resultTaskIdCount, groupIdx, validCoreNum)) {
+            break;
+        }
+        if (DrcoAtomicLoad(&globalReadyQueue->executedCount) >= globalReadyQueue->size) {
+            resultTaskIdCount = static_cast<uint32_t>(AICORE_TASK_ALL_FINISH);
+            break;
         }
     }
+    TraceEvent(state, 0xffffffff, EVENT_FETCH_END());
+    return resultTaskIdCount;
 }
 
-struct DrcoEntryState {
-    int32_t blockIdx;
-    __gm__ KernelArgs* args;
-    __gm__ Metrics* metric;
-    ExecuteContext ctx;
-    __gm__ npu::tile_fwk::RuntimeDataRingBufferHeadData* runtimeDataRingBufferHeadData;
-    __gm__ npu::tile_fwk::DevStartArgsBase* base;
-    __gm__ DrcoDeviceTaskReadyQueue* deviceTaskReadyQueue;
-    uint8_t lastMixResourceType;
-};
-
-INLINE void InitDrcoEntry(DrcoEntryState& entry, int64_t cfgdata)
+INLINE void InitDrcoEntry(DrcoEntryState* state, int64_t cfgdata)
 {
+    auto devArgs = (DeviceArgs*)cfgdata;
     uint64_t start = get_sys_cnt();
 #if defined(__AIV__) && defined(__MIX__)
-    entry.blockIdx = get_block_idx() * get_subblockdim() + get_subblockid() + get_block_num();
+    uint32_t blockIdx = get_block_idx() * get_subblockdim() + get_subblockid() + get_block_num();
 #else
-    entry.blockIdx = get_block_idx();
+    uint32_t blockIdx = get_block_idx();
 #endif
-    auto devArgs = (DeviceArgs*)cfgdata;
-    entry.args = (__gm__ KernelArgs*)(devArgs->sharedBuffer + entry.blockIdx * SHARED_BUFFER_SIZE);
-    __gm__ Metrics* metric = (__gm__ Metrics*)(entry.args->shakeBuffer[SHAK_BUF_DFX_DATA_INDEX]);
-    entry.metric = metric;
-    entry.ctx.args = entry.args;
-    entry.ctx.blockIdx = entry.blockIdx;
+    uint32_t typedBlockIdx = DrcoGetCoreTypedIdx(blockIdx, devArgs->nrValidAic);
+    state->blockDesc = BlockDescCreate(blockIdx, typedBlockIdx, devArgs->nrValidAic, devArgs->nrValidAic * 2);
+    state->args = (__gm__ KernelArgs*)(devArgs->sharedBuffer +
+                                       BlockDescBlockIdx(state->blockDesc) * SHARED_BUFFER_SIZE);
+    __gm__ Metrics* metric = (__gm__ Metrics*)(state->args->shakeBuffer[SHAK_BUF_DFX_DATA_INDEX]);
+    state->metric = metric;
+    state->ctx.args = state->args;
+    state->ctx.blockIdx = BlockDescBlockIdx(state->blockDesc);
     __gm__ DevDfxArgs* devDfxAddr = (__gm__ DevDfxArgs*)devArgs->devDfxArgAddr;
-    entry.ctx.aicoreDevTaskMetric.devTaskMetricEnable = devDfxAddr->isOpenPerfTrace != 0;
-    entry.ctx.profLevel = devDfxAddr->profLevel;
-    entry.ctx.aicCoreNum = devArgs->nrValidAic;
+    state->ctx.aicoreDevTaskMetric.devTaskMetricEnable = devDfxAddr->isOpenPerfTrace != 0;
+    state->ctx.profLevel = devDfxAddr->profLevel;
+    state->ctx.aicCoreNum = devArgs->nrValidAic;
+
     uint8_t aicoreLogLevel = static_cast<uint8_t>(AicoreLogLevel::NONE);
 #if ENABLE_AICORE_PRINT
     if (devDfxAddr->logLevel >= 0) {
         aicoreLogLevel = static_cast<uint8_t>(devDfxAddr->logLevel);
     }
 #endif
-    if (entry.ctx.aicoreDevTaskMetric.devTaskMetricEnable && metric->turnNum < MAX_ROUND_NUM) {
+    if (state->ctx.aicoreDevTaskMetric.devTaskMetricEnable && metric->turnNum < MAX_ROUND_NUM) {
         uint64_t round = metric->turnNum;
-        entry.ctx.aicoreDevTaskMetric.devTaskMetric = &(metric->aicoreDevTaskInfo[round]);
-        PerfTraceRecord(INVALID_DEV_TASK_ID, entry.ctx.aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_BEGIN, start);
+        state->ctx.aicoreDevTaskMetric.devTaskMetric = &(metric->aicoreDevTaskInfo[round]);
+        PerfTraceRecord(INVALID_DEV_TASK_ID, state->ctx.aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_BEGIN,
+                        start);
     }
 
     set_mask_norm();
-    entry.lastMixResourceType = static_cast<uint8_t>(MixResourceType::MIX_UNKNOWN);
+    state->lastMixResourceType = static_cast<uint8_t>(MixResourceType::MIX_UNKNOWN);
 
-    PerfTraceRecord(INVALID_DEV_TASK_ID, entry.ctx.aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_INIT);
+    PerfTraceRecord(INVALID_DEV_TASK_ID, state->ctx.aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_INIT);
 
-    InitCtx(&entry.ctx, metric, nullptr, aicoreLogLevel);
+    InitCtx(&state->ctx, metric, nullptr, aicoreLogLevel);
 
-    entry.runtimeDataRingBufferHeadData = (__gm__ npu::tile_fwk::RuntimeDataRingBufferHeadData*)
-                                              devArgs->runtimeDataRingBufferAddr;
-    DRCO_DCCI_SINGLE_CACHE_LINE(entry.runtimeDataRingBufferHeadData);
-    entry.base = npu::tile_fwk::RuntimeDataRingBufferHeadData::GetRuntimeDataCurrent(
-        entry.runtimeDataRingBufferHeadData);
-    DRCO_DCCI_SINGLE_CACHE_LINE(entry.base);
-    entry.deviceTaskReadyQueue = DrcoGmLoad(&entry.base->drcoDeviceTaskReadyQueue);
+    state->runtimeDataRingBufferHeadData = (__gm__ npu::tile_fwk::RuntimeDataRingBufferHeadData*)
+                                               devArgs->runtimeDataRingBufferAddr;
+    DRCO_DCCI_SINGLE_CACHE_LINE(state->runtimeDataRingBufferHeadData);
+    state->base = npu::tile_fwk::RuntimeDataRingBufferHeadData::GetRuntimeDataCurrent(
+        state->runtimeDataRingBufferHeadData);
+    DRCO_DCCI_SINGLE_CACHE_LINE(state->base);
+    state->deviceTaskReadyQueue = DrcoGmLoad(&state->base->drcoDeviceTaskReadyQueue);
 }
 
-INLINE __gm__ DrcoDeviceTask* GetDrcoDeviceTask(DrcoEntryState& entry, bool& isFirstTask, uint64_t t0,
+INLINE __gm__ DrcoDeviceTask* GetDrcoDeviceTask(DrcoEntryState* state, bool& isFirstTask, uint64_t t0,
                                                 uint64_t& loopCount, bool& warningSet)
 {
-    if (entry.blockIdx == 0) {
+    if (BlockDescBlockIdx(state->blockDesc) == 0) {
         if (!isFirstTask) {
-            uint32_t oldHead = DrcoAtomicLoad(&entry.deviceTaskReadyQueue->head);
-            DrcoAtomicCasTo(&entry.deviceTaskReadyQueue->head, oldHead, oldHead + 1);
+            uint32_t oldHead = DrcoAtomicLoad(&state->deviceTaskReadyQueue->head);
+            DrcoAtomicCasToU32(&state->deviceTaskReadyQueue->head, oldHead, oldHead + 1);
         }
         isFirstTask = false;
         __gm__ DrcoDeviceTask* deviceTask = nullptr;
         while (true) {
             DRCO_LEADER_TIMEOUT_CHECK(t0, loopCount, AICORE_LEAF_TASK_RUN_TIMEOUT, STAGE_RUN_LEAFTASK_TIMEOUT);
-            if (entry.deviceTaskReadyQueue == nullptr) {
-                DRCO_DCCI_SINGLE_CACHE_LINE(entry.runtimeDataRingBufferHeadData);
-                entry.base = npu::tile_fwk::RuntimeDataRingBufferHeadData::GetRuntimeDataCurrent(
-                    entry.runtimeDataRingBufferHeadData);
-                DRCO_DCCI_SINGLE_CACHE_LINE(entry.base);
-                entry.deviceTaskReadyQueue = DrcoGmLoad(&entry.base->drcoDeviceTaskReadyQueue);
-                if (entry.deviceTaskReadyQueue == nullptr) {
+            if (state->deviceTaskReadyQueue == nullptr) {
+                DRCO_DCCI_SINGLE_CACHE_LINE(state->runtimeDataRingBufferHeadData);
+                state->base = npu::tile_fwk::RuntimeDataRingBufferHeadData::GetRuntimeDataCurrent(
+                    state->runtimeDataRingBufferHeadData);
+                DRCO_DCCI_SINGLE_CACHE_LINE(state->base);
+                state->deviceTaskReadyQueue = DrcoGmLoad(&state->base->drcoDeviceTaskReadyQueue);
+                if (state->deviceTaskReadyQueue == nullptr) {
                     DrcoBusyBackOff();
                     continue;
                 }
             }
-            deviceTask = GetCurrentDeviceTask(entry.deviceTaskReadyQueue);
+            deviceTask = GetCurrentDeviceTask(state->deviceTaskReadyQueue);
             if (deviceTask == nullptr) {
-                uint32_t qHead = DrcoAtomicLoad(&entry.deviceTaskReadyQueue->head);
-                uint32_t qTail = DrcoGmLoad(&entry.deviceTaskReadyQueue->tail);
+                uint32_t qHead = DrcoAtomicLoad(&state->deviceTaskReadyQueue->head);
+                uint32_t qTail = DrcoGmLoad(&state->deviceTaskReadyQueue->tail);
                 if (qHead < qTail) {
                     __gm__ DrcoDeviceTask*
-                        elem = &entry.deviceTaskReadyQueue
+                        elem = &state->deviceTaskReadyQueue
                                     ->dynFuncDataListList[qHead % npu::tile_fwk::DEVICE_TASK_QUEUE_SIZE];
                     if (DrcoGmLoad(&elem->dynFuncDataList) == nullptr) {
                         break;
@@ -816,99 +1264,93 @@ INLINE __gm__ DrcoDeviceTask* GetDrcoDeviceTask(DrcoEntryState& entry, bool& isF
             break;
         }
         SyncAllMix();
-        DRCO_LOGD(&entry.ctx, "leader got task=%p head=%u", deviceTask,
-                  DrcoAtomicLoad(&entry.deviceTaskReadyQueue->head));
         return deviceTask;
     }
 
     SyncAllMix();
-    if (entry.deviceTaskReadyQueue == nullptr) {
-        DRCO_DCCI_SINGLE_CACHE_LINE(entry.runtimeDataRingBufferHeadData);
-        entry.base = npu::tile_fwk::RuntimeDataRingBufferHeadData::GetRuntimeDataCurrent(
-            entry.runtimeDataRingBufferHeadData);
-        DRCO_DCCI_SINGLE_CACHE_LINE(entry.base);
-        entry.deviceTaskReadyQueue = DrcoGmLoad(&entry.base->drcoDeviceTaskReadyQueue);
+    if (state->deviceTaskReadyQueue == nullptr) {
+        DRCO_DCCI_SINGLE_CACHE_LINE(state->runtimeDataRingBufferHeadData);
+        state->base = npu::tile_fwk::RuntimeDataRingBufferHeadData::GetRuntimeDataCurrent(
+            state->runtimeDataRingBufferHeadData);
+        DRCO_DCCI_SINGLE_CACHE_LINE(state->base);
+        state->deviceTaskReadyQueue = DrcoGmLoad(&state->base->drcoDeviceTaskReadyQueue);
     }
-    __gm__ DrcoDeviceTask* deviceTask = GetCurrentDeviceTask(entry.deviceTaskReadyQueue);
-    DRCO_LOGD(&entry.ctx, "follower bi=%d got task=%p", entry.blockIdx, deviceTask);
+    __gm__ DrcoDeviceTask* deviceTask = GetCurrentDeviceTask(state->deviceTaskReadyQueue);
     return deviceTask;
 }
 
-template <typename GlobalReadyQueueHandler>
-INLINE void ExecDrcoPerCoreTasks(ExecuteContext* ctx, __gm__ npu::tile_fwk::PerCorePendingQueue* myPerCoreQueue,
-                                 __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList, uint8_t& lastMixResourceType,
-                                 bool& isFirstTask)
+INLINE void ExecLeafFunction(DrcoEntryState* state, uint32_t taskId)
 {
-    while (DrcoGmLoad(&myPerCoreQueue->size) > DrcoGmLoad(&myPerCoreQueue->head)) {
-        uint32_t taskId = DrcoPerCorePendingQueueGetFirstTask(myPerCoreQueue);
-        if (taskId == static_cast<uint32_t>(AICORE_TASK_NO_INCOME)) {
-            break;
-        }
-        if (isFirstTask) {
-            PerfTraceRecord(ctx->SeqNo(), ctx->aicoreDevTaskMetric.devTaskMetric,
-                            PERF_TRACE_CORE_DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK);
-            isFirstTask = false;
-        }
-        DRCO_LOGD(ctx, "pc exec=%u", taskId);
-        ExecCoreFunctionKernel(ctx, taskId, lastMixResourceType);
-#ifdef __HAS_SUB_FUNC__
-        ExecDrcoResolve<GlobalReadyQueueHandler>(ctx, rootFuncList, taskId);
-#endif
-        __gm__ DrcoGlobalReadyQueue* execQueue = GetDrcoGlobalReadyQueue(
-            rootFuncList, static_cast<uint32_t>(npu::tile_fwk::drcoCoreType));
-        DrcoAtomicAddTo(&execQueue->executedCount, 1);
-    }
+    TraceEvent(state, taskId, EVENT_LEAF_START());
+
+    ExecCoreFunctionKernel(&state->ctx, taskId, state->lastMixResourceType);
+
+    TraceEvent(state, taskId, EVENT_LEAF_END());
 }
 
-INLINE bool IsHubTask(ExecuteContext* ctx, uint32_t taskId)
+INLINE void ExecDrcoPerCoreTasks(DrcoEntryState* state, __gm__ npu::tile_fwk::PerCorePendingQueue* perCoreQueue,
+                                 __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList)
+{
+    uint32_t perCoreQueueSize = DrcoGmLoad(&perCoreQueue->size);
+    uint32_t perCoreQueueHead = DrcoGmLoad(&perCoreQueue->head);
+    while (perCoreQueueSize > perCoreQueueHead) {
+        uint32_t taskId = DrcoGmLoadArray(perCoreQueue->taskList, perCoreQueueHead);
+        ExecLeafFunction(state, taskId);
+        DrcoResolveDepend(state, rootFuncList, taskId);
+        perCoreQueueHead++;
+    }
+    __gm__ DrcoGlobalReadyQueue* execQueue = DrcoRootFuncListGetGlobalReadyQueue(rootFuncList, DRCO_CORE_TYPE);
+    DrcoAtomicAddToU32(&execQueue->executedCount, perCoreQueueHead);
+}
+
+INLINE bool IsHubTask(DrcoEntryState* state, uint32_t taskId)
 {
     uint32_t funcIdx = npu::tile_fwk::FuncID(taskId);
     uint32_t opIdx = npu::tile_fwk::TaskID(taskId);
-    auto& fd = ctx->cachedDevTasks[ctx->curLeafTaskParallelIdx].funcDataList[funcIdx];
+    auto& fd = state->ctx.cachedDevTasks[state->ctx.curLeafTaskParallelIdx].funcDataList[funcIdx];
     int binIdx = fd.cceBinaryIndexList[opIdx];
-    uint32_t taskCoreType = ctx->cachedDevTasks[ctx->curLeafTaskParallelIdx].cceBinary[binIdx].coreType;
+    uint32_t taskCoreType = state->ctx.cachedDevTasks[state->ctx.curLeafTaskParallelIdx].cceBinary[binIdx].coreType;
     return taskCoreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::HUB);
 }
 
-template <typename GlobalReadyQueueHandler>
-INLINE void ExecDrcoReadyQueueTasks(ExecuteContext* ctx, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
-                                    [[maybe_unused]] __gm__ npu::tile_fwk::PerCorePendingQueue* myPerCoreQueue,
-                                    int32_t blockIdx, uint8_t& lastMixResourceType, bool& devTaskReadyQueFirstTask)
+INLINE void ExecDrcoReadyQueueTaskOnce(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                                       [[maybe_unused]] __gm__ npu::tile_fwk::PerCorePendingQueue* perCoreQueue,
+                                       uint32_t taskId, uint32_t outCoreType)
 {
+#if defined(__MIX__) && defined(__AIC__)
+    if (outCoreType == npu::tile_fwk::DRCO_QUEUE_MIX) {
+        uint32_t aicTaskId = ResolveHubMixTask(state, rootFuncList, taskId, perCoreQueue->mixHubC2VReadyQueue);
+        if (aicTaskId != static_cast<uint32_t>(AICORE_TASK_INIT)) {
+            DRCO_LOG(&state->ctx, "MIX exec=%u", aicTaskId);
+            taskId = aicTaskId;
+        }
+    }
+#endif
+    if ((taskId & AICORE_FIN_MASK) != 0) {
+        return;
+    }
+    if (IsHubTask(state, taskId)) {
+        DrcoResolveDepend(state, rootFuncList, taskId);
+    } else {
+        ExecLeafFunction(state, taskId);
+        DrcoResolveDepend(state, rootFuncList, taskId);
+        __gm__ DrcoGlobalReadyQueue* execQueue = DrcoRootFuncListGetGlobalReadyQueue(rootFuncList, DRCO_CORE_TYPE);
+        DrcoAtomicAddToU32(&execQueue->executedCount, 1);
+    }
+}
+
+INLINE void ExecDrcoReadyQueueTasks(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                                    __gm__ npu::tile_fwk::PerCorePendingQueue* perCoreQueue)
+{
+    uint32_t taskIdList[LOCAL_GROUP_SIZE];
+
     uint32_t outCoreType = 0;
-    uint32_t taskId = DrcoDynFuncDataListGetFirstTask(rootFuncList, blockIdx, outCoreType);
-    while (taskId != static_cast<uint32_t>(AICORE_TASK_ALL_FINISH)) {
-#if defined(__AIC__)
-        if (outCoreType == npu::tile_fwk::DRCO_QUEUE_MIX) {
-            uint32_t aicTaskId = ResolveHubMixTask(ctx, rootFuncList, taskId, myPerCoreQueue->body);
-            if (aicTaskId != static_cast<uint32_t>(AICORE_TASK_INIT)) {
-                DRCO_LOGD(ctx, "mix exec=%u", aicTaskId);
-                taskId = aicTaskId;
-            }
+    uint32_t taskCount = DrcoDynFuncDataListFetchTask(state, rootFuncList, outCoreType, taskIdList);
+    while (taskCount != static_cast<uint32_t>(AICORE_TASK_ALL_FINISH)) {
+        for (uint32_t i = 0; i < taskCount; i++) {
+            ExecDrcoReadyQueueTaskOnce(state, rootFuncList, perCoreQueue, taskIdList[i], outCoreType);
         }
-#endif
-        if ((taskId & AICORE_FIN_MASK) == 0) {
-            if (IsHubTask(ctx, taskId)) {
-#ifdef __HAS_SUB_FUNC__
-                ExecDrcoResolve<GlobalReadyQueueHandler>(ctx, rootFuncList, taskId);
-#endif
-            } else {
-                DRCO_LOGD(ctx, "gq exec=%u", taskId);
-                if (devTaskReadyQueFirstTask) {
-                    PerfTraceRecord(ctx->SeqNo(), ctx->aicoreDevTaskMetric.devTaskMetric,
-                                    PERF_TRACE_CORE_DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK);
-                    devTaskReadyQueFirstTask = false;
-                }
-                ExecCoreFunctionKernel(ctx, taskId, lastMixResourceType);
-#ifdef __HAS_SUB_FUNC__
-                ExecDrcoResolve<GlobalReadyQueueHandler>(ctx, rootFuncList, taskId);
-#endif
-                __gm__ DrcoGlobalReadyQueue* execQueue = GetDrcoGlobalReadyQueue(
-                    rootFuncList, static_cast<uint32_t>(npu::tile_fwk::drcoCoreType));
-                DrcoAtomicAddTo(&execQueue->executedCount, 1);
-            }
-        }
-        taskId = DrcoDynFuncDataListGetFirstTask(rootFuncList, blockIdx, outCoreType);
+        taskCount = DrcoDynFuncDataListFetchTask(state, rootFuncList, outCoreType, taskIdList);
     }
 }
 
@@ -921,64 +1363,68 @@ INLINE void KernelEntryDrco(int64_t ffts_addr, int64_t inputs, int64_t outputs, 
     UNUSED(workspace);
     UNUSED(tilingdata);
 
-    DrcoEntryState entry = {};
-    InitDrcoEntry(entry, cfgdata);
+    DrcoEntryState state = {};
+    InitDrcoEntry(&state, cfgdata);
+    TraceInit(&state);
 
     bool isFirstTask = true;
     AICORE_TIMEOUT_CHECK_BEGIN(t0, loop_count);
     while (true) {
-        __gm__ DrcoDeviceTask* deviceTask = GetDrcoDeviceTask(entry, isFirstTask, t0, loop_count, warningSet);
+        __gm__ DrcoDeviceTask* deviceTask = GetDrcoDeviceTask(&state, isFirstTask, t0, loop_count, warningSet);
         if (deviceTask == nullptr) {
             break;
         }
 
-        UpdateCacheDevTask(&entry.ctx, entry.ctx.curLeafTaskParallelIdx, (int64_t)deviceTask->dynFuncDataList);
+        UpdateCacheDevTask(&state.ctx, state.ctx.curLeafTaskParallelIdx, (int64_t)deviceTask->dynFuncDataList);
         __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList = deviceTask->drcoRootFuncList;
-        entry.ctx.lastTaskFinishCycle = 0;
+        state.ctx.lastTaskFinishCycle = 0;
 
-        __gm__ npu::tile_fwk::PerCorePendingQueue* myPerCoreQueue = DrcoGmLoad(
-            &rootFuncList->perCorePendingQueueArray[entry.blockIdx]);
-        DRCO_DCCI_SINGLE_CACHE_LINE(myPerCoreQueue);
+        __gm__ npu::tile_fwk::PerCorePendingQueue* perCoreQueue = DrcoGmLoad(
+            &rootFuncList->perCorePendingQueueArray[BlockDescBlockIdx(state.blockDesc)]);
+        DRCO_DCCI_SINGLE_CACHE_LINE(perCoreQueue);
 #if defined(__MIX__)
 #if defined(__AIV__)
-        myPerCoreQueue->body = reinterpret_cast<npu::tile_fwk::HubC2VReadyQueue*>(
-            get_subblockid() == 1 ? sizeof(npu::tile_fwk::HubC2VReadyQueue) : 0);
+        perCoreQueue->mixHubC2VReadyQueue = reinterpret_cast<npu::tile_fwk::MixHubC2VReadyQueue*>(
+            get_subblockid() == 1 ? sizeof(npu::tile_fwk::MixHubC2VReadyQueue) : 0);
         wait_intra_block(PIPE_S, EVENT_ID14);
 #else
-        myPerCoreQueue->body = reinterpret_cast<npu::tile_fwk::HubC2VReadyQueue*>(0);
-        npu::tile_fwk::HubC2VReadyQueue::Init(myPerCoreQueue->body);
-        npu::tile_fwk::HubC2VReadyQueue::Init(myPerCoreQueue->body + 1);
+        perCoreQueue->mixHubC2VReadyQueue = reinterpret_cast<npu::tile_fwk::MixHubC2VReadyQueue*>(0);
+        npu::tile_fwk::MixHubC2VReadyQueue::Init(perCoreQueue->mixHubC2VReadyQueue);
+        npu::tile_fwk::MixHubC2VReadyQueue::Init(perCoreQueue->mixHubC2VReadyQueue + 1);
         set_intra_block(PIPE_S, EVENT_ID14);                      // 作用于Vec0
         set_intra_block(PIPE_S, EVENT_ID14 + EVENT_NUMS_PER_AIV); // 作用与Vec1
 #endif
 #endif
         if (DrcoGmLoad(&rootFuncList->totalTaskCount) == 0) {
-            uint32_t oldHead = DrcoAtomicLoad(&entry.deviceTaskReadyQueue->head);
-            DrcoAtomicCasTo(&entry.deviceTaskReadyQueue->head, oldHead, oldHead + 1);
+            uint32_t oldHead = DrcoAtomicLoad(&state.deviceTaskReadyQueue->head);
+            DrcoAtomicCasToU32(&state.deviceTaskReadyQueue->head, oldHead, oldHead + 1);
             continue;
         }
 
-        bool devTaskFirstTask = true;
-        ExecDrcoPerCoreTasks<DrcoDynFuncDataListPush>(&entry.ctx, myPerCoreQueue, rootFuncList,
-                                                      entry.lastMixResourceType, devTaskFirstTask);
-        ExecDrcoReadyQueueTasks<DrcoDynFuncDataListPush>(&entry.ctx, rootFuncList, myPerCoreQueue, entry.blockIdx,
-                                                         entry.lastMixResourceType, devTaskFirstTask);
+        state.readyMatrixPopRowIndex = 0;
+        state.readyMatrixPushGroupIndex = BlockDescTypedBlockIdx(state.blockDesc) / npu::tile_fwk::LOCAL_GROUP_SIZE;
+        PerfTraceRecord(state.ctx.SeqNo(), state.ctx.aicoreDevTaskMetric.devTaskMetric,
+                        PERF_TRACE_CORE_DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK);
+        ExecDrcoPerCoreTasks(&state, perCoreQueue, rootFuncList);
+        ExecDrcoReadyQueueTasks(&state, rootFuncList, perCoreQueue);
 
         SyncAllMix();
-        if (entry.blockIdx == 0) {
+        if (BlockDescBlockIdx(state.blockDesc) == 0) {
             DrcoGmStore(&rootFuncList->devTaskFinished, (uint32_t)1);
         }
-        DfxProcWhenDevTaskStop(&entry.ctx, entry.args, entry.metric, !devTaskFirstTask);
+        DfxProcWhenDevTaskStop(&state.ctx, state.args, state.metric, true);
     }
-    if (entry.blockIdx == 0) {
-        entry.deviceTaskReadyQueue->head = 0;
-        entry.deviceTaskReadyQueue->tail = 0;
-        uint64_t finished = DrcoGmLoad(&entry.runtimeDataRingBufferHeadData->indexFinished.value) + 1;
-        DrcoGmStore(&entry.runtimeDataRingBufferHeadData->indexFinished.value, finished);
+    if (BlockDescBlockIdx(state.blockDesc) == 0) {
+        state.deviceTaskReadyQueue->head = 0;
+        state.deviceTaskReadyQueue->tail = 0;
+        uint64_t finished = DrcoGmLoad(&state.runtimeDataRingBufferHeadData->indexFinished.value) + 1;
+        DrcoGmStore(&state.runtimeDataRingBufferHeadData->indexFinished.value, finished);
     }
 
-    entry.args->taskEntry.reserved[0] = entry.ctx.profLevel;
-    DfxProcWhenCoreExit(&entry.ctx, entry.args, entry.metric);
+    state.args->taskEntry.reserved[0] = state.ctx.profLevel;
+    DfxProcWhenCoreExit(&state.ctx, state.args, state.metric);
+
+    TracePrint(&state);
     return;
 }
 

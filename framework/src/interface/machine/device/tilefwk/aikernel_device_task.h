@@ -56,7 +56,6 @@ struct DynFuncBin {
 };
 
 constexpr uint32_t MAX_AICORE_NUM_FOR_QUEUE = 108;
-constexpr uint32_t LOCAL_GROUP_SIZE = 6;
 constexpr uint32_t NUM_LOCAL_GROUPS = (MAX_AICORE_NUM_FOR_QUEUE + LOCAL_GROUP_SIZE - 1) / LOCAL_GROUP_SIZE;
 constexpr uint32_t NUM_CORE_TYPES = 2;
 
@@ -79,12 +78,37 @@ constexpr uint32_t DRCO_QUEUE_AIC = 1;
 constexpr uint32_t DRCO_QUEUE_MIX = 2;
 constexpr uint32_t DRCO_QUEUE_MAX = 3;
 
+// 全局 stitch 节点矩阵：按核类型各一个（DRCO_QUEUE_MAX 个），每个合并对应类型的
+// （× group）矩阵为单一二维数组，行按核类型内本地编号索引（AIC = blockIdx，
+// AIV = blockIdx - nrValidAic，行数上限 MAX_AICORE_NUM_FOR_QUEUE），列 = LOCAL_GROUP_SIZE；
+// push 只写本类型核的行，pop 只读自己类型内编号对应的行
+struct DrcoGlobalStitchNodeMatrix {
+    enum {
+        COL_SIZE = 1,
+    };
+    __gm__ DevAscendFunctionDuppedStitchNode* stitchNodeList[MAX_AICORE_NUM_FOR_QUEUE][COL_SIZE];
+#ifdef __TILE_FWK_HOST__
+    DrcoGlobalStitchNodeMatrix()
+    {
+        for (uint32_t i = 0; i < MAX_AICORE_NUM_FOR_QUEUE; i++) {
+            for (uint32_t j = 0; j < COL_SIZE; j++) {
+                stitchNodeList[i][j] = nullptr;
+            }
+        }
+    }
+#endif
+};
+
 struct DrcoRootFuncList {
     DrcoGlobalReadyQueuePtr globalReadyQueueList[DRCO_QUEUE_MAX];
     uint32_t globalQueueInitTail[DRCO_QUEUE_MAX];
 
     __gm__ PerCorePendingQueue* perCorePendingQueueArray[MAX_AICORE_NUM_FOR_QUEUE];
+
     __gm__ DrcoLocalReadyQueue* localReadyQueueArray[DRCO_QUEUE_MAX][NUM_LOCAL_GROUPS];
+    __gm__ DrcoLocalReadyMatrix* localReadyMatrixArray[DRCO_QUEUE_MAX][NUM_LOCAL_GROUPS];
+    __gm__ DrcoGlobalStitchNodeMatrix* stitchNodeMatrixArray[DRCO_QUEUE_MAX];
+
     alignas(64) uint32_t totalTaskCount;
     alignas(64) uint32_t devTaskFinished;
     alignas(64) uint32_t executedTaskCount;

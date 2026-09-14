@@ -552,6 +552,20 @@ npu::tile_fwk::DrcoLocalReadyQueue* DeviceWorkspaceAllocator::AllocateDrcoLocalR
     return allocation.As<npu::tile_fwk::DrcoLocalReadyQueue>();
 }
 
+npu::tile_fwk::DrcoLocalReadyMatrix* DeviceWorkspaceAllocator::AllocateDrcoLocalReadyMatrix(uint64_t size)
+{
+    WsAllocation allocation = ControlFlowAllocateSlab(devProg_, size,
+                                                      SlabAlloc(size, WsAicpuSlabMemType::LOCAL_READY_QUE));
+    return allocation.As<npu::tile_fwk::DrcoLocalReadyMatrix>();
+}
+
+npu::tile_fwk::DrcoGlobalStitchNodeMatrix* DeviceWorkspaceAllocator::AllocateDrcoStitchNodeMatrix(uint64_t size)
+{
+    WsAllocation allocation = ControlFlowAllocateSlab(devProg_, size,
+                                                      SlabAlloc(size, WsAicpuSlabMemType::LOCAL_READY_QUE));
+    return allocation.As<npu::tile_fwk::DrcoGlobalStitchNodeMatrix>();
+}
+
 void DeviceWorkspaceAllocator::ResetAicpuMemCounter()
 {
 #if DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_FULL
@@ -1057,7 +1071,11 @@ uint32_t DeviceWorkspaceAllocator::PerCorePendingQueSlabMemObjSize()
 
 uint32_t DeviceWorkspaceAllocator::LocalReadyQueSlabMemObjSize()
 {
-    return sizeof(npu::tile_fwk::DrcoLocalReadyQueue) + devProg_->stitchFunctionsize * sizeof(uint32_t);
+    // LOCAL_READY_QUE slab 同时承载 local ready queue/matrix 与全局 stitch 节点矩阵，
+    // 单对象最大尺寸取三者最大值，避免合并后的 stitch 矩阵超出 slab 单对象上限
+    uint32_t queueSize = sizeof(npu::tile_fwk::DrcoLocalReadyQueue) + devProg_->stitchFunctionsize * sizeof(uint32_t);
+    uint32_t stitchMatrixSize = sizeof(npu::tile_fwk::DrcoGlobalStitchNodeMatrix);
+    return queueSize > stitchMatrixSize ? queueSize : stitchMatrixSize;
 }
 
 uint32_t DeviceWorkspaceAllocator::GlobalReadyQueSlabMemObjSize()

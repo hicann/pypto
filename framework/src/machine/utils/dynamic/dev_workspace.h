@@ -341,6 +341,10 @@ public:
 
     npu::tile_fwk::DrcoLocalReadyQueue* AllocateDrcoLocalReadyQueue(uint64_t size);
 
+    npu::tile_fwk::DrcoLocalReadyMatrix* AllocateDrcoLocalReadyMatrix(uint64_t size);
+
+    npu::tile_fwk::DrcoGlobalStitchNodeMatrix* AllocateDrcoStitchNodeMatrix(uint64_t size);
+
     void ResetAicpuMemCounter();
 
     void RewindMemoryDumper();

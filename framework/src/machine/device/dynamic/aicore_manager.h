@@ -1762,7 +1762,7 @@ private:
         size_t succIndexSize;
         const int* succIndexList = func->GetOperationDepGraphCopyOutResolveSuccIndexAddr(opIndex, succIndexSize);
         size_t succSize;
-        const int* succList = func->GetOperationDepGraphSuccAddr(opIndex, succSize);
+        const uint32_t* succList = func->GetOperationDepGraphSuccAddr(opIndex, succSize);
         // here we don't use resolveIndexBase + 1, because at the beginning, resolveIndexBase is 0. And we resolve from
         // 0.
         for (int i = succIndexList[resolveIndexBase]; i < succIndexList[currResolveIndex + 1]; i++) {

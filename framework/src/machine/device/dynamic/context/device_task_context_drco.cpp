@@ -61,6 +61,8 @@ void DeviceTaskContext::InitDrcoRootFuncList(DynDeviceTask* dyntask)
         new (perCoreQueue) npu::tile_fwk::PerCorePendingQueue();
         rootFuncList->perCorePendingQueueArray[i] = perCoreQueue;
     }
+    uint32_t nrValidAic = devProg_->devArgs.nrValidAic;
+    constexpr uint32_t groupSize = npu::tile_fwk::LOCAL_GROUP_SIZE;
     uint32_t localSize = sizeof(npu::tile_fwk::DrcoLocalReadyQueue);
     localSize += queueCapacity * sizeof(npu::tile_fwk::LeafTaskId);
     for (uint32_t ct = 0; ct < npu::tile_fwk::DRCO_QUEUE_MAX; ct++) {
@@ -71,6 +73,35 @@ void DeviceTaskContext::InitDrcoRootFuncList(DynDeviceTask* dyntask)
                            queueCapacity * sizeof(LeafTaskId), 0, queueCapacity * sizeof(LeafTaskId));
             rootFuncList->localReadyQueueArray[ct][i] = localQueue;
         }
+    }
+    // LocalMatrix 分配：数组按类型内本地编号索引（AIC 本地编号 = blockIdx ∈ [0, nrValidAic)，
+    // AIV 本地编号 = blockIdx - nrValidAic ∈ [0, 2*nrValidAic)），组内本地编号 [i*N, (i+1)*N)
+    // 连续映射到列 [0, N)；validCoreNum = 该组内该类型核数，尾组不足 N 时为剩余数，
+    // 天然构成列 [0, validCoreNum) 前缀（无 MIX 边界组问题）
+    auto matrixValidCoreNum = [groupSize](uint32_t groupIdx, uint32_t coreCount) -> uint32_t {
+        uint32_t valid = coreCount > groupIdx * groupSize ? coreCount - groupIdx * groupSize : 0;
+        return valid > groupSize ? groupSize : valid;
+    };
+    for (uint32_t ct = 0; ct < npu::tile_fwk::DRCO_QUEUE_MAX; ct++) {
+        for (uint32_t i = 0; i < npu::tile_fwk::NUM_LOCAL_GROUPS; i++) {
+            uint32_t validCoreNum = 0;
+            if (ct == npu::tile_fwk::DRCO_QUEUE_AIC) {
+                validCoreNum = matrixValidCoreNum(i, nrValidAic);
+            } else if (ct == npu::tile_fwk::DRCO_QUEUE_AIV) {
+                validCoreNum = matrixValidCoreNum(i, nrValidAic * 2);
+            }
+            auto* localMatrix = workspace_->AllocateDrcoLocalReadyMatrix(sizeof(npu::tile_fwk::DrcoLocalReadyMatrix));
+            new (localMatrix) npu::tile_fwk::DrcoLocalReadyMatrix(validCoreNum);
+            rootFuncList->localReadyMatrixArray[ct][i] = localMatrix;
+        }
+    }
+    // 全局 stitch 节点矩阵按核类型各一个：行 = blockIdx，列 = LOCAL_GROUP_SIZE，
+    // 每个核只向本类型的矩阵 push/由本类型核 pop；slot 语义为节点指针（nullptr = 空闲）
+    for (uint32_t ct = 0; ct < npu::tile_fwk::DRCO_QUEUE_MAX; ct++) {
+        auto* stitchNodeMatrix = workspace_->AllocateDrcoStitchNodeMatrix(
+            sizeof(npu::tile_fwk::DrcoGlobalStitchNodeMatrix));
+        new (stitchNodeMatrix) npu::tile_fwk::DrcoGlobalStitchNodeMatrix();
+        rootFuncList->stitchNodeMatrixArray[ct] = stitchNodeMatrix;
     }
     rootFuncList->totalTaskCount = dyntask->devTask.coreFunctionCnt;
     rootFuncList->executedTaskCount = 0;
