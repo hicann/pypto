@@ -18,6 +18,7 @@
 
 #include "machine/utils/dynamic/rebuildable_workspace_desc.h"
 #include "interface/tensor/irbuilder.h"
+#include "interface/tensor/runtime_slot.h"
 #include "machine/utils/dynamic/dev_encode_program_ctrlflow_cache.h"
 #include "machine/utils/dynamic/dev_encode_workspace.h"
 #include "machine/utils/dynamic/workspace_budget_calculator.h"
@@ -808,6 +809,56 @@ TEST_F(TestDevEncode, test_workspace_flex_io_outcast_skips_assemble_mark)
     (void)ResolveStitchDepthConfig(flexWs, MakeNonMemoryDrivenCfg(stitchNumMax));
     EXPECT_EQ(flexWs.totalAssembleOutcastSlot, 0u);
     EXPECT_LT(flexWs.devTaskBoundaryOutcastNum, devProg->slotSize * stitchNumMax);
+}
+
+// reshape(inplace=true) on a function input still lands in IncastOutcastLink::assembleSlotIndexList, but codegen
+// emits no RUNTIME_SlotMarkNeedAlloc for it, so it never enters constructAssembleNeedAllocRuntimeSlots.
+TEST_F(TestDevEncode, test_encode_reshape_inplace_assemble_outcast_filtered)
+{
+    Program::GetInstance().Reset();
+    config::Reset();
+    config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
+    config::SetRuntimeOption(STITCH_FUNCTION_MAX_NUM, 64);
+    TileShape::Current().SetVecTile(32, 32);
+    TileShape::Current().SetCubeTile({32, 32}, {32, 32}, {32, 32});
+    constexpr int kLoopCount = 4;
+    int s = 32;
+    Tensor t0(DT_FP32, {s, s}, "t0");
+    Tensor t1(DT_FP32, {s, s}, "t1");
+    Tensor out(DT_FP32, {kLoopCount * s, s}, "out");
+
+    FUNCTION("workspace_reshape_inplace_input", {t0, t1}, {out})
+    {
+        auto reshaped = Reshape(t0, std::vector<SymbolicScalar>{SymbolicScalar(s), SymbolicScalar(s)}, true);
+        LOOP("workspace_reshape_inplace_input_L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(kLoopCount))
+        {
+            Assemble(t1, {0, 0}, reshaped);
+            Assemble(reshaped, {i * s, 0}, out);
+        }
+    }
+
+    Function* func = Program::GetInstance().GetLastFunction();
+    ASSERT_NE(func, nullptr);
+    auto dyndev = func->GetDyndevAttribute();
+    ASSERT_NE(dyndev, nullptr);
+    DevAscendProgram* devProg = reinterpret_cast<DevAscendProgram*>(dyndev->devProgBinary.data());
+    ASSERT_NE(devProg, nullptr);
+
+    const uint64_t progAddr = reinterpret_cast<uint64_t>(devProg);
+    devProg->RelocProgram(0, progAddr);
+    const WorkspaceDesc desc = CollectWorkspaceDesc(func, *devProg, dyndev->constructAssembleNeedAllocRuntimeSlots);
+    devProg->RelocProgram(progAddr, 0);
+
+    // Slots carrying the ASSEMBLE_OUTCAST kind vs the ones actually budgeted:
+    // the reshape(inplace) ones are filtered out.
+    size_t assembleOutcastNum = 0;
+    for (const auto& kindSet : dyndev->inoutLink.runtimeSlotKindSetList) {
+        if (kindSet.Contains(RuntimeSlotKind::ASSEMBLE_OUTCAST)) {
+            assembleOutcastNum++;
+        }
+    }
+    EXPECT_LT(desc.totalAssembleOutcastSlot, assembleOutcastNum);
+    EXPECT_EQ(desc.totalAssembleOutcastSlot, dyndev->constructAssembleNeedAllocRuntimeSlots.size());
 }
 
 TEST_F(TestDevEncode, test_encode_multi_op_chain)
