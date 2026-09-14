@@ -279,6 +279,16 @@ public:
     void GenerateGlobalTensorTypeDeclaration(const TensorDef& def);
 
     /**
+     * \brief Emit a fresh [1, numel] ND GlobalTensor declaration over *tensor_var*, in place.
+     *
+     * For GM-writing ops whose declaration has no consumer other than the op itself (e.g.
+     * block.init_output): the declaration is a linearized [1, numel] view -- *numel_expr*
+     * is the C++ element-count product of the tensor's shape dims (static dims fold to
+     * literals, dynamic dims reference runtime scalars). Returns a unique instance name
+     * ("<base>__io<n>"), so repeated calls each get their own declaration with no dedup.
+     */
+    std::string DeclareFlatGlobalTensor(const ir::VarPtr& tensor_var, const std::string& numel_expr);
+    /**
      * \brief Look up every prescanned layout variant of a tensor by its cce variable name.
      *
      * Empty when the name was never accessed by a block.load/store (no declaration needed);
@@ -589,6 +599,7 @@ private:
     /// Prescan: (tensor cce name, layout key) ->TensorDef. One entry per layout an access needs,
     /// so every variant of one tensor is a contiguous range (see GetTensorDefs).
     std::map<std::pair<std::string, std::string>, TensorDef> tensor_defs_;
+    int flat_tensor_decl_count_ = 0; ///< Monotonic suffix for DeclareFlatGlobalTensor names, reset per function
     std::map<std::string, std::string> tile_addresses_; ///< tile_name ->TASSIGN address expression
 
     std::map<std::pair<bool, std::string>, std::string>

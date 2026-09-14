@@ -498,6 +498,101 @@ static std::string MakeBlockOutStoreCodegenCCE(const ir::CallPtr& op, codegen::C
 }
 
 // ============================================================================
+// block.init_output  -  args = [tensor, offset, size, value]
+// Initializes a GM tensor region with a scalar value.
+// Emits: (GlobalTensor declaration in place, when the prescan collected none);
+//        temp UB tile decl; TEXPANDS(temp, value); V→MTE3 sync;
+//        for-loop: SetValidShape; SetShape; TASSIGN(tensor, ptr+offset);
+//        TSTORE(tensor, temp);
+// ============================================================================
+static std::string MakeBlockOutInitOutputCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+{
+    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+    CHECK(op->args_.size() == 4) << "block.init_output requires 4 arguments: tensor, offset, size, value";
+    auto tensor_var = std::dynamic_pointer_cast<const ir::Var>(op->args_[0]);
+    CHECK(tensor_var != nullptr) << "block.init_output: tensor must be a Var";
+    auto tensor_type = std::dynamic_pointer_cast<const ir::TensorType>(tensor_var->GetType());
+    CHECK(tensor_type != nullptr) << "block.init_output: tensor must be TensorType";
+
+    // Declaration (fresh per call, uniquely named): this op addresses GM through flat
+    // element offsets (TASSIGN(ptr + offset) + SetShape(1, chunk)), so a [1, numel] ND
+    // view over the whole tensor is all it needs. numel is the product of the tensor's
+    // shape dims -- static dims fold to literals, dynamic dims reference runtime scalars.
+    // Resolve the base pointer under the tensor's own name first: the flat instance name
+    // is only a declaration name, never a pointer key.
+    std::string numel_expr;
+    for (const auto& dim : tensor_type->shape_) {
+        numel_expr += numel_expr.empty() ? "" : " * ";
+        numel_expr += codegen.GetExprAsCode(dim);
+    }
+    if (numel_expr.empty()) {
+        numel_expr = "1";
+    }
+    std::string ptr = codegen.GetPointer(codegen.GetVarName(tensor_var));
+    std::string tensor_name = codegen.DeclareFlatGlobalTensor(tensor_var, numel_expr);
+
+    std::string ctype = tensor_type->dtype_.ToCTypeString();
+    std::string offset = codegen.GetExprAsCode(op->args_[1]);
+    std::string size = codegen.GetExprAsCode(op->args_[2]);
+    std::string value = codegen.GetExprAsCode(op->args_[3]);
+
+    // aicore does not allow implicit conversion from integer (incl. INDEX) scalars to
+    // float element types; cast the scalar directly to the tensor's element type.
+    auto scalar_type = ir::As<ir::ScalarType>(op->args_[3]->GetType());
+    if (scalar_type && (scalar_type->dtype_ == DataType::INDEX || scalar_type->dtype_.IsInt()) &&
+        tensor_type->dtype_.IsFloat()) {
+        value = "(" + ctype + ")(" + value + ")";
+    }
+
+    // Chunk size: MAX_REPEAT_TIMES(256) * ONE_BLK_SIZE(32) / sizeof(T) elements.
+    size_t dtype_bits = tensor_type->dtype_.GetBit();
+    CHECK(dtype_bits > 0) << "block.init_output: unsupported dtype with 0 bits";
+    size_t dtype_bytes = (dtype_bits + 7) / 8;
+    size_t chunk_elems = (256 * 32) / dtype_bytes;
+    // B64 dtypes: TEXPANDS lowers to Int64Fill, whose single vsts (low/high interleaved
+    // store of two vector registers) covers at most 512 bytes = 64 int64/uint64 elements.
+    // Clamp the temp UB tile to that width so TEXPANDS fills it completely.
+    if (dtype_bytes == 8) {
+        chunk_elems = std::min(chunk_elems, size_t(64));
+    }
+    std::string chunk_str = std::to_string(chunk_elems);
+
+    // Use a temp UB Tile at address 0x0. init_output runs before tile allocation,
+    // so UB 0x0 is exclusively owned by this op. Suffix the tile with the flat-tensor
+    // declaration's counter so repeated calls in one kernel each get their own name.
+    std::string temp_type = "pto::Tile<pto::TileType::Vec, " + ctype + ", 1, " + chunk_str +
+                            ", pto::BLayout::RowMajor, -1, -1, pto::SLayout::NoneBox, 512>";
+    std::string temp = tensor_name + "_tile";
+    codegen.Emit(temp_type + " " + temp + "(1, " + chunk_str + ");");
+    codegen.Emit("TASSIGN(" + temp + ", 0x0);");
+
+    // Fill UB tile with value (V pipe).
+    codegen.Emit("get_buf(PIPE_V, 0, 0);");
+    codegen.Emit("TEXPANDS(" + temp + ", " + value + ");");
+    codegen.Emit("rls_buf(PIPE_V, 0, 0);");
+
+    // Loop: copy chunks from UB to GM (MTE3 pipe) via TSTORE.
+    codegen.Emit("get_buf(PIPE_MTE3, 0, 0);");
+    codegen.Emit("for (int64_t __io_i = 0; __io_i < static_cast<int64_t>(" + size + "); __io_i += " + chunk_str +
+                 ") {");
+    codegen.Emit("    int64_t __io_chunk = (" + chunk_str + " < (static_cast<int64_t>(" + size + ") - __io_i)) ? " +
+                 chunk_str + " : (static_cast<int64_t>(" + size + ") - __io_i);");
+    codegen.Emit("    " + temp + ".SetValidShape(1, __io_chunk);");
+    codegen.Emit("    " + tensor_name +
+                 ".SetShape<pto::GlobalTensorDim::DIM_3, pto::GlobalTensorDim::DIM_4>(1, __io_chunk);");
+    codegen.Emit("    TASSIGN(" + tensor_name + ", " + ptr + " + (" + offset + " + __io_i));");
+    codegen.Emit("    TSTORE(" + tensor_name + ", " + temp + ");");
+    codegen.Emit("}");
+    codegen.Emit("rls_buf(PIPE_MTE3, 0, 0);");
+
+    // No pipe_barrier here: it would only drain the current (AIV) core's pipes and
+    // give a false sense of cross-core synchronization. Cross-core visibility of the
+    // GM writes is the caller's responsibility — use system.sync_all (or equivalent)
+    // after this op when data is consumed by other cores / the cube sub-core.
+    return "";
+}
+
+// ============================================================================
 // block.insert  - args = [dst, src, row, col]
 // ============================================================================
 static std::string MakeBlockOutInsertCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
@@ -1292,6 +1387,12 @@ REGISTER_BACKEND_OP(BackendCCE, "block.store")
     .set_pipe(ir::PipeType::MTE3)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
         return MakeBlockOutStoreCodegenCCE(op, codegen);
+    });
+
+REGISTER_BACKEND_OP(BackendCCE, "block.init_output")
+    .set_pipe(ir::PipeType::V)
+    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
+        return MakeBlockOutInitOutputCodegenCCE(op, codegen);
     });
 
 REGISTER_BACKEND_OP(BackendCCE, "block.set_validshape")

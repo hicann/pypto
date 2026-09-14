@@ -432,6 +432,7 @@ void CCECodegen::ResetFunctionGenerationState()
     context_.Clear();
     tensor_to_pointer_.clear();
     tensor_defs_.clear();
+    flat_tensor_decl_count_ = 0;
     tile_addresses_.clear();
     emitted_tile_types_.clear();
     emitted_tile_aliases_.clear();
@@ -2999,6 +3000,33 @@ void CCECodegen::GenerateGlobalTensorTypeDeclaration(const TensorDef& def)
                       stride_type_name + ", " + layout_arg + ">;");
 
     EmitGlobalTensorInstance(var_name, var_name, base_pointer, "", stride_args);
+}
+
+std::string CCECodegen::DeclareFlatGlobalTensor(const ir::VarPtr& tensor_var, const std::string& numel_expr)
+{
+    const std::string base_name = context_.SanitizeName(tensor_var);
+    // Fresh declaration per call under a unique name (no dedup bookkeeping): the caller
+    // (block.init_output) is its sole consumer and addresses GM through flat element
+    // offsets, so the declaration is simply a [1, numel] ND view over the tensor --
+    // shape and stride both carry the element-count product, which constant-folds when
+    // every dim is static.
+    const std::string var_name = base_name + "__io" + std::to_string(flat_tensor_decl_count_++);
+    auto tensor_type = ir::As<ir::TensorType>(tensor_var->GetType());
+    INTERNAL_CHECK(tensor_type != nullptr) << "Internal error: DeclareFlatGlobalTensor requires a TensorType";
+    INTERNAL_CHECK(HasPointer(base_name)) << "Internal error: tensor '" << base_name << "' has no base pointer";
+    const std::string element_type = tensor_type->dtype_.ToCTypeString();
+    const std::string shape_type = var_name + "ShapeDim5";
+    const std::string stride_type = var_name + "StrideDim5";
+    const std::string global_type = var_name + "Type";
+    emitter_.EmitLine("using " + shape_type + " = pto::TileShape2D<" + element_type +
+                      ", pto::DYNAMIC, pto::DYNAMIC, Layout::ND>;");
+    emitter_.EmitLine("using " + stride_type + " = pto::Stride<-1, -1, -1, -1, -1>;");
+    emitter_.EmitLine("using " + global_type + " = GlobalTensor<" + element_type + ", " + shape_type + ", " +
+                      stride_type + ", Layout::ND>;");
+    emitter_.EmitLine(global_type + " " + var_name + "(" + GetPointer(base_name) + ", " + shape_type + "(1, " +
+                      numel_expr + "), " + stride_type + "(1, 1, 1, " + numel_expr + ", 1));");
+    emitter_.EmitLine("");
+    return var_name;
 }
 
 } // namespace codegen

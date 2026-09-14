@@ -448,6 +448,32 @@ def _ir_store_tile(
     return _ir_core.create_op_call(block_ir_op("store"), operands, kwargs, actual_span)
 
 
+def _ir_init_output(
+    tensor: Expr,
+    *,
+    offset: Expr | int = 0,
+    size: Expr | int,
+    value: Expr | int | float = 0,
+    span: Span | None = None,
+) -> Expr:
+    actual_span = span or _span()
+
+    if not isinstance(tensor.type, _ir_core.TensorType):
+        raise ValueError(f"init_output: tensor must be a Tensor, got {type(tensor.type).__name__}")
+    _check_dtype("init_output", getattr(tensor.type, "dtype", None), _INIT_OUTPUT_DTYPES)
+
+    offset_expr = _normalize_expr(offset, actual_span)
+    size_expr = _normalize_expr(size, actual_span)
+    value_expr = _normalize_expr(value, actual_span)
+
+    return _ir_core.create_op_call(
+        block_ir_op("init_output"),
+        [tensor, offset_expr, size_expr, value_expr],
+        {},
+        actual_span,
+    )
+
+
 def _tile_shape_ints(tile_type: "_IRTileType") -> list[int] | None:
     """Return the compile-time integer shape of a TileType, or None if any
     dimension is not a static constant (skip check — never over-rejects)."""
@@ -1031,6 +1057,14 @@ _SUM_DTYPES: tuple[DataType, ...] = (
     DataType.INT64, DataType.UINT64,
 )
 _SEL_DTYPES: tuple[DataType, ...] = _BINARY_DTYPES + (DataType.BOOL,)
+# init_output fills GM through a flat [1, numel] view, so only the element width
+# matters: the doc-supported b8/b16/b32/b64 integer and float types.
+_INIT_OUTPUT_DTYPES: tuple[DataType, ...] = (
+    DataType.UINT8, DataType.INT8,
+    DataType.UINT16, DataType.INT16, DataType.BF16, DataType.FP16,
+    DataType.UINT32, DataType.INT32, DataType.FP32,
+    DataType.UINT64, DataType.INT64,
+)
 
 
 
@@ -3823,6 +3857,7 @@ register_table(
     "load_tile": OpSpec(builder=_ir_load_tile, pre_hooks=[_resolve_order_kwarg]),
     "store": OpSpec(builder=_ir_store, pre_hooks=[_auto_alloc_scaling_tile_hook, _resolve_order_kwarg]),
     "store_tile": OpSpec(builder=_ir_store_tile, pre_hooks=[_auto_alloc_scaling_tile_hook, _resolve_order_kwarg]),
+    "init_output": OpSpec(builder=_ir_init_output),
         # kwargs only
         "set_mask_count": OpSpec(builder=_ir_set_mask_count, parse_args=False),
         "set_mask_norm": OpSpec(builder=_ir_set_mask_norm, parse_args=False),

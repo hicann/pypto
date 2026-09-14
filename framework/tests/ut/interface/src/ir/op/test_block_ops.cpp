@@ -1256,6 +1256,43 @@ TEST_F(BlockOpsOutMemoryTest, BlockSetValidshape_ReturnsOutType)
 }
 
 // ============================================================================
+// out_memory.cpp: block.init_output
+// ============================================================================
+
+TEST_F(BlockOpsOutMemoryTest, BlockInitOutput_ReturnsIndexScalar)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto call = reg.Create(
+        "block.init_output",
+        {MakeTensorVar("tensor", {64, 128}, DataType::FP32), MakeScalarVar("offset", DataType::INT64),
+         MakeScalarVar("size", DataType::INT64), MakeScalarVar("value", DataType::FP32)},
+        Sp());
+    auto rt = As<ScalarType>(call->GetType());
+    ASSERT_NE(rt, nullptr);
+    EXPECT_EQ(rt->dtype_, DataType::INDEX);
+}
+
+TEST_F(BlockOpsOutMemoryTest, BlockInitOutput_WrongArgCount_Throws)
+{
+    auto& reg = OpRegistry::GetInstance();
+    EXPECT_THROW((void)reg.Create("block.init_output",
+                                  {MakeTensorVar("t", {64, 128}, DataType::FP32),
+                                   MakeScalarVar("offset", DataType::INT64), MakeScalarVar("size", DataType::INT64)},
+                                  Sp()),
+                 npu::tile_fwk::Error);
+}
+
+TEST_F(BlockOpsOutMemoryTest, BlockInitOutput_NonTensorFirst_Throws)
+{
+    auto& reg = OpRegistry::GetInstance();
+    EXPECT_THROW((void)reg.Create("block.init_output",
+                                  {MakeScalarVar("s", DataType::FP32), MakeScalarVar("offset", DataType::INT64),
+                                   MakeScalarVar("size", DataType::INT64), MakeScalarVar("value", DataType::FP32)},
+                                  Sp()),
+                 npu::tile_fwk::Error);
+}
+
+// ============================================================================
 // out_memory.cpp: block.fillpad, block.fillpad_expand
 // ============================================================================
 

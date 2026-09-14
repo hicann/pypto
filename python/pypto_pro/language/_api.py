@@ -207,6 +207,38 @@ def store_tile(
 
 
 @_api_decl
+def init_output(
+    tensor: Tensor,
+    *,
+    offset: int = 0,
+    size: int,
+    value: Union[int, float, Scalar] = 0,
+) -> None:
+    """Initialize a region of a GM Tensor with a scalar value.
+
+    The framework allocates a temporary UB buffer, fills it with *value*
+    via the V pipeline (Duplicate), then copies it to GM via the MTE3
+    pipeline (DataCopyPad).  V→MTE3 synchronization is inserted
+    automatically.  Must be called before Tile buffer allocation
+    (``make_tile_group`` etc.).
+
+    This op never emits a cross-core barrier (``pipe_barrier`` would only
+    drain the calling core's pipes).  When the initialized GM data is
+    consumed by other cores or the cube sub-core (e.g. a subsequent
+    ``pl.matmul``), the caller must explicitly call
+    ``pl.system.sync_all(core_type=pl.SyncCoreType.MIX)`` on both sides
+    (or an equivalent cross-core sync primitive) after this call.
+
+    Args:
+        tensor: Destination GM Tensor to initialize.
+        offset: Element-level offset from the start of *tensor* (default 0).
+        size: Number of elements to initialize.
+        value: Fill value — int/float literal or ``pl.const()`` scalar;
+            must be type-compatible with *tensor*'s dtype (default 0).
+    """
+
+
+@_api_decl
 def move(
     dst_tile: Tile,
     src_tile: Tile,

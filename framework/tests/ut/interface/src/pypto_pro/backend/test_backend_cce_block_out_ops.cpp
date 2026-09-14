@@ -640,6 +640,144 @@ TEST(BackendCCEBlockOutOps, Load)
     EXPECT_CONTAINS(code, "SetShape");
 }
 
+TEST(BackendCCEBlockOutOps, InitOutput)
+{
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
+    codegen.RegisterPointer("tensor", "raw_ptr");
+    auto tensor = MakeTensorVar("tensor", {64, 64}, ir::DataType::FP32);
+    auto call = MakeCall("block.init_output", {tensor, MakeConstInt(0), MakeConstInt(4096), MakeConstInt(0)});
+    auto* info = BackendCCE::Instance().GetOpInfo("block.init_output");
+    ASSERT_NE(info, nullptr);
+    info->codegen_func(call, codegen);
+    auto code = codegen.GetEmittedCode();
+    // In-place flat declaration: fresh [1, numel] ND view, numel = product of shape dims
+    // (constant-folded here), stride matching the [1, numel] row-major view.
+    EXPECT_CONTAINS(code,
+                    "using tensor__io0ShapeDim5 = pto::TileShape2D<float, pto::DYNAMIC, pto::DYNAMIC, Layout::ND>;");
+    EXPECT_CONTAINS(code, "using tensor__io0StrideDim5 = pto::Stride<-1, -1, -1, -1, -1>;");
+    EXPECT_CONTAINS(
+        code, "using tensor__io0Type = GlobalTensor<float, tensor__io0ShapeDim5, tensor__io0StrideDim5, Layout::ND>;");
+    EXPECT_CONTAINS(code, "tensor__io0Type tensor__io0(raw_ptr, tensor__io0ShapeDim5(1, 64 * 64), "
+                          "tensor__io0StrideDim5(1, 1, 1, 64 * 64, 1));");
+    EXPECT_CONTAINS(code, "pto::Tile<pto::TileType::Vec, float, 1, 2048,");
+    EXPECT_CONTAINS(code, "tensor__io0_tile(1, 2048);");
+    EXPECT_CONTAINS(code, "TASSIGN(tensor__io0_tile, 0x0);");
+    EXPECT_CONTAINS(code, "TEXPANDS(tensor__io0_tile, (float)(0));");
+    EXPECT_CONTAINS(code, "for (int64_t __io_i = 0; __io_i < static_cast<int64_t>(4096); __io_i += 2048) {");
+    EXPECT_CONTAINS(code, "tensor__io0_tile.SetValidShape(1, __io_chunk);");
+    EXPECT_CONTAINS(code,
+                    "tensor__io0.SetShape<pto::GlobalTensorDim::DIM_3, pto::GlobalTensorDim::DIM_4>(1, __io_chunk);");
+    EXPECT_CONTAINS(code, "TASSIGN(tensor__io0, raw_ptr + (0 + __io_i));");
+    EXPECT_CONTAINS(code, "TSTORE(tensor__io0, tensor__io0_tile);");
+    EXPECT_NOT_CONTAINS(code, "pipe_barrier");
+}
+
+TEST(BackendCCEBlockOutOps, InitOutput_FloatValueNotCasted)
+{
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
+    codegen.RegisterPointer("tensor", "raw_ptr");
+    auto tensor = MakeTensorVar("tensor", {100}, ir::DataType::FP16);
+    auto value = std::make_shared<const ir::ConstFloat>(1.5, ir::DataType::FP32, ir::Span::Unknown());
+    auto call = MakeCall("block.init_output", {tensor, MakeConstInt(8), MakeConstInt(100), value});
+    auto* info = BackendCCE::Instance().GetOpInfo("block.init_output");
+    ASSERT_NE(info, nullptr);
+    info->codegen_func(call, codegen);
+    auto code = codegen.GetEmittedCode();
+    EXPECT_CONTAINS(code, "__io_i += 4096)");
+    EXPECT_CONTAINS(code, "TEXPANDS(tensor__io0_tile, 1.5f);");
+    EXPECT_NOT_CONTAINS(code, "(float)((int64_t)(");
+    EXPECT_CONTAINS(code, "TASSIGN(tensor__io0, raw_ptr + (8 + __io_i));");
+}
+
+TEST(BackendCCEBlockOutOps, InitOutput_IntTensorValueNotCasted)
+{
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
+    codegen.RegisterPointer("tensor", "raw_ptr");
+    auto tensor = MakeTensorVar("tensor", {512}, ir::DataType::INT8);
+    auto call = MakeCall("block.init_output", {tensor, MakeConstInt(0), MakeConstInt(512), MakeConstInt(3)});
+    auto* info = BackendCCE::Instance().GetOpInfo("block.init_output");
+    ASSERT_NE(info, nullptr);
+    info->codegen_func(call, codegen);
+    auto code = codegen.GetEmittedCode();
+    EXPECT_CONTAINS(code, "__io_i += 8192)");
+    EXPECT_CONTAINS(code, "TEXPANDS(tensor__io0_tile, 3);");
+    EXPECT_NOT_CONTAINS(code, "(float)((int64_t)(");
+}
+
+// B64 dtypes: TEXPANDS lowers to Int64Fill, whose single vsts covers at most 512 bytes
+// (64 int64/uint64 elements). The temp UB tile must be clamped to 64 elements so the
+// whole tile is filled before TSTORE copies it to GM.
+TEST(BackendCCEBlockOutOps, InitOutput_B64ChunkClampedTo64)
+{
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
+    codegen.RegisterPointer("tensor", "raw_ptr");
+    auto tensor = MakeTensorVar("tensor", {1024}, ir::DataType::INT64);
+    auto call = MakeCall("block.init_output", {tensor, MakeConstInt(0), MakeConstInt(1024), MakeConstInt(0)});
+    auto* info = BackendCCE::Instance().GetOpInfo("block.init_output");
+    ASSERT_NE(info, nullptr);
+    info->codegen_func(call, codegen);
+    auto code = codegen.GetEmittedCode();
+    EXPECT_CONTAINS(code, "pto::Tile<pto::TileType::Vec, int64_t, 1, 64,");
+    EXPECT_CONTAINS(code, "tensor__io0_tile(1, 64);");
+    EXPECT_CONTAINS(code, "for (int64_t __io_i = 0; __io_i < static_cast<int64_t>(1024); __io_i += 64) {");
+    EXPECT_CONTAINS(code, "TSTORE(tensor__io0, tensor__io0_tile);");
+}
+
+// init_output addresses GM through flat element offsets over a [1, numel] ND view, so
+// layout is irrelevant: an NZ tensor emits exactly the same code as an ND one.
+TEST(BackendCCEBlockOutOps, InitOutput_NzTensorUsesFlatNdView)
+{
+    TestableCCECodegen codegen(ir::SectionKind::Vector);
+    codegen.RegisterPointer("tensor", "raw_ptr");
+    auto tensor = MakeTensorVar("tensor", {128, 128}, ir::DataType::FP16, ir::TensorLayout::NZ);
+    auto call = MakeCall("block.init_output", {tensor, MakeConstInt(0), MakeConstInt(128 * 128), MakeConstInt(0)});
+    auto* info = BackendCCE::Instance().GetOpInfo("block.init_output");
+    ASSERT_NE(info, nullptr);
+    info->codegen_func(call, codegen);
+    auto code = codegen.GetEmittedCode();
+    EXPECT_CONTAINS(code, "using tensor__io0ShapeDim5 = pto::TileShape2D<half, pto::DYNAMIC, pto::DYNAMIC, "
+                          "Layout::ND>;");
+    EXPECT_CONTAINS(code, "TEXPANDS(tensor__io0_tile, (half)(0));");
+    EXPECT_CONTAINS(code, "tensor__io0.SetShape<pto::GlobalTensorDim::DIM_3, pto::GlobalTensorDim::DIM_4>(1, "
+                          "__io_chunk);");
+    EXPECT_CONTAINS(code, "TSTORE(tensor__io0, tensor__io0_tile);");
+}
+
+// A dynamic-shape tensor has no static access shape: the declaration is still a [1, numel]
+// ND view, with numel carried as the runtime product of the dynamic dims.
+TEST(BackendCCEBlockOutOps, GeneratesInitOutputDynamicShapeFallback)
+{
+    auto dim = MakeVar("m", std::make_shared<const ir::ScalarType>(ir::DataType::INT64));
+    auto base = MakeVar("tensor_base", std::make_shared<const ir::PtrType>(ir::DataType::FP32));
+    ir::TensorView view({}, ir::TensorLayout::ND, base);
+    auto tensor_type = std::make_shared<const ir::TensorType>(std::vector<ir::ExprPtr>{dim, dim}, ir::DataType::FP32,
+                                                              std::optional<ir::MemRefPtr>(std::nullopt),
+                                                              std::optional<ir::TensorView>(view));
+    auto tensor = MakeVar("tensor", tensor_type);
+    auto init = MakeCall("block.init_output", {tensor, MakeConstInt(0), MakeConstInt(128), MakeConstInt(0)});
+    const auto generated = GenerateKernel({std::make_shared<const ir::EvalStmt>(init, ir::Span::Unknown())}, {tensor},
+                                          ir::SectionKind::Vector);
+
+    EXPECT_CONTAINS(generated, "using tensor__io0ShapeDim5 = pto::TileShape2D<float, pto::DYNAMIC, pto::DYNAMIC, "
+                               "Layout::ND>;");
+    EXPECT_CONTAINS(generated, "using tensor__io0StrideDim5 = pto::Stride<-1, -1, -1, -1, -1>;");
+    EXPECT_CONTAINS(generated, "tensor__io0ShapeDim5(1, m * m)");
+    EXPECT_CONTAINS(generated, "tensor__io0StrideDim5(1, 1, 1, m * m, 1)");
+    EXPECT_CONTAINS(generated, "TASSIGN(tensor__io0, tensor_ptr + (0 + __io_i));");
+    EXPECT_CONTAINS(generated, "__io_i < static_cast<int64_t>(128);");
+}
+
+TEST(BackendCCEBlockOutOps, GeneratesDumpTileThroughFullCodegen)
+{
+    auto tile = MakeVar("tile", MakeTileType());
+    auto dump = MakeCall("debug.dump_tile", {tile});
+    const auto generated = GenerateKernel(
+        {MakeTileAssign(tile), std::make_shared<const ir::EvalStmt>(dump, ir::Span::Unknown())}, {},
+        ir::SectionKind::Vector);
+
+    EXPECT_CONTAINS(generated, "TPRINT(tile);");
+}
+
 TEST(BackendCCEBlockOutOps, GeneratesHighDimensionalNzLoadAndStore)
 {
     auto nz_hw = ir::HardwareInfo(ir::TileLayout::col_major, ir::TileLayout::row_major, 512);

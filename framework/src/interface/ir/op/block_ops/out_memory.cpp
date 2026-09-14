@@ -313,5 +313,26 @@ REGISTER_OP("block.set_validshape")
         return DeduceBlockOutTileType(args, kwargs, "block.set_validshape", 3);
     });
 
+// block.init_output: (tensor, offset, size, value) -> void
+// Initializes a region of a GM tensor with a scalar value. The framework
+// allocates a temporary UB buffer, fills it via V (Duplicate), then copies
+// to GM via MTE3 (DataCopyPad). Must be used before Tile buffer allocation.
+REGISTER_OP("block.init_output")
+    .set_op_category("BlockOp")
+    .set_description("Initialize a region of a global tensor with a scalar value. "
+                     "Internally allocates a temp UB buffer, fills it with the scalar (V pipe), "
+                     "and copies to GM (MTE3 pipe) with automatic V->MTE3 sync.")
+    .add_argument("tensor", "Destination global tensor (TensorType)")
+    .add_argument("offset", "Element-level offset from tensor start (ScalarType or constant)")
+    .add_argument("size", "Number of elements to initialize (ScalarType or constant)")
+    .add_argument("value", "Fill value (ScalarType or constant)")
+    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
+                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        CHECK(args.size() == 4) << "block.init_output requires 4 arguments, got " << args.size();
+        auto tensor_type = As<TensorType>(args[0]->GetType());
+        CHECK(tensor_type) << "block.init_output: arg 0 must be a TensorType";
+        return std::make_shared<ScalarType>(DataType::INDEX);
+    });
+
 } // namespace ir
 } // namespace pypto
