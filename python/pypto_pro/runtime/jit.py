@@ -111,6 +111,8 @@ class ParamSpec:
     dtype: DataType | None  # element dtype; None for tiling struct params
     # Tensor dims: positive int = static, str = named dynamic var, -1 = unnamed dynamic; None for ptr/scalar.
     shape: list[int | str] | None
+    # Data direction of tensor params: "in" (read-only) or "out" (kernel stores into it).
+    direction: str | None = None
 
 
 @dataclasses.dataclass
@@ -455,15 +457,42 @@ def _get_kernel_ir_function(prog):
     )
 
 
-def _extract_param_specs(prog) -> list[ParamSpec]:
+def _infer_store_targets_ast(program_source_ast) -> set:
+    """Names of tensor params passed to ``pl.store`` in the kernel source AST.
+
+    Walks the parsed Python AST of the kernel body; the first positional argument
+    of every ``<name>.store(...)`` call whose base name matches a ``pl``-style
+    attribute (``pl.store(dst, src, offset)``) is a store target.
+    """
+    import ast as _ast
+
+    targets: set = set()
+    for node in _ast.walk(program_source_ast):
+        if (
+            isinstance(node, _ast.Call)
+            and isinstance(node.func, _ast.Attribute)
+            and node.func.attr == "store"
+            and node.args
+            and isinstance(node.args[0], _ast.Name)
+        ):
+            targets.add(node.args[0].id)
+    return targets
+
+
+def _extract_param_specs(prog, store_targets: set | None = None) -> list[ParamSpec]:
     """Extract parameter descriptions from the kernel function in an ir.Program."""
     func = _get_kernel_ir_function(prog)
+    store_targets = store_targets or set()
     specs: list[ParamSpec] = []
     for var in func.params:
         t = var.type
         if isinstance(t, TensorType):
             shape = [s.value if isinstance(s, ConstInt) else (s.name if isinstance(s, Var) else -1) for s in t.shape]
-            specs.append(ParamSpec(var.name, ParamKind.TENSOR, t.dtype, shape))
+            # IR names may carry a binding suffix (source ``out`` -> ``out_0``);
+            # match store targets by the source-level basename.
+            base_name = var.name.rsplit("_", 1)[0] if var.name.rsplit("_", 1)[-1].isdigit() else var.name
+            direction = "out" if base_name in store_targets or var.name in store_targets else "in"
+            specs.append(ParamSpec(var.name, ParamKind.TENSOR, t.dtype, shape, direction))
         elif isinstance(t, PtrType):
             specs.append(ParamSpec(var.name, ParamKind.PTR, t.dtype, None))
         elif isinstance(t, TupleType):
@@ -825,6 +854,130 @@ def _get_mlir_code(result):
     return result if isinstance(result, str) else "".join(result.values())
 
 
+# aclDataType ids (acl_base.h) for the aclprofTensor.dataType field; keyed by str(DataType).
+_ACL_DTYPE_MAP = {
+    "fp32": 0,
+    "fp16": 1,
+    "int8": 2,
+    "int32": 3,
+    "uint8": 4,
+    "int16": 6,
+    "uint16": 7,
+    "uint32": 8,
+    "int64": 9,
+    "uint64": 10,
+    "float64": 11,
+    "double": 11,
+    "bool": 12,
+    "bf16": 27,
+    "bfloat16": 27,
+    "fp8": 28,
+    "hf8": 34,
+    "fp8e5m2": 35,
+    "fp8e4m3": 36,
+    "fp8e8m0": 37,
+    "fp4e2m1": 40,
+    "fp4e1m2": 41,
+}
+
+_ACL_FORMAT_ND = 2  # aclFormat::ACL_FORMAT_ND
+
+
+def _prof_shape_token(dim, dims_in_scope: set) -> str:
+    """C++ expression for one tensor dim inside the generated launcher.
+
+    Static dims become literals; named dynamic dims reference the matching
+    int32_t dim parameter the launcher already receives; unknown dynamics
+    (``-1``) degrade to 0.
+    """
+    if isinstance(dim, int) and dim > 0:
+        return str(dim)
+    if isinstance(dim, str) and dim in dims_in_scope:
+        return f"static_cast<uint32_t>({dim})"
+    return "0"
+
+
+def _generate_prof_range_snippet(
+    kernel_name: str,
+    param_specs: list[ParamSpec],
+    dims_in_scope: set,
+) -> tuple[str, str, str]:
+    """Generate the aclprof tensor-info range (push/pop) wrapped around the launch.
+
+    Mirrors the asc-devkit torch_library_report_tensor sample: an
+    ``aclprofEventAttributes`` carrying ``aclprofTensorInfo`` is pushed right
+    before the ``<<<>>>`` launch and popped right after, so msprof associates
+    op name/type and per-tensor in/out, dtype, format and shape with the kernel.
+    Reporting uses the ``aclprof*`` interfaces declared in ``acl/acl_prof.h``
+    and exported by libmsprofiler (added to the link line in
+    :func:`_compile_shared_library`); the ``ProfStr2Id`` alias in libprofapi
+    crashes with std::bad_alloc and must not be used. Failures are ignored:
+    profiling metadata must never break the launch.
+    """
+    tensors = [s for s in param_specs if s.kind == ParamKind.TENSOR]
+    if not tensors:
+        return "", "", ""
+
+    tensor_inits = []
+    for spec in tensors:
+        dims = list(spec.shape or [])
+        shape_tokens = [_prof_shape_token(d, dims_in_scope) for d in dims]
+        padded = shape_tokens[:8] + ["0"] * (8 - min(len(shape_tokens), 8))
+        tensor_type = 1 if spec.direction == "out" else 0
+        acl_dtype = _ACL_DTYPE_MAP.get(str(spec.dtype), 0)
+        shape_str = "{" + ", ".join(padded) + "}"
+        tensor_inits.append(
+            f"        {{{tensor_type}, {_ACL_FORMAT_ND}, {acl_dtype}, "
+            f"{min(len(dims), 8)}, {shape_str}}},"
+        )
+
+    op_name = f"PYPTO_{kernel_name}"
+    # The block opens before the tensor descriptions and closes AFTER the pop:
+    # aclprofRangePushEx hands msprof a pointer to the stack tensors/info, and the
+    # Tx plugin may read them until the matching pop -- the locals must stay in
+    # scope across the kernel launch (official sample keeps push/launch/pop in
+    # one scope for the same reason). ``MsprofGetPath`` (weak, libprofapi) gates
+    # the ~1.5us push/pop pair on an active collection session: a non-empty
+    # profiler result path means a profiler is running; a toolkit without the
+    # symbol links it to null and we report unconditionally, as before.
+    return (
+        "#include \"acl/acl_prof.h\"\n"
+        "// Weak: a toolkit without it links to null and we report unconditionally, as before.\n"
+        "extern \"C\" __attribute__((weak)) char *MsprofGetPath();\n",
+        "    {\n"
+        "        // Skip the push/pop pair unless a profiler is collecting; empty path means off.\n"
+        "        const char *pyptoProfPath = (MsprofGetPath != nullptr) ? MsprofGetPath() : nullptr;\n"
+        "        const bool pyptoProfOn =\n"
+        "            (MsprofGetPath == nullptr) || (pyptoProfPath != nullptr && pyptoProfPath[0] != '\\0');\n"
+        "        // Outside the guard on purpose: libmsprofiler dereferences these pointers when the\n"
+        "        // launch below is reported, so the storage has to outlive the <<<>>> line.\n"
+        "        aclprofTensor pyptoProfTensors[] = {\n"
+        + "\n".join(tensor_inits)
+        + "\n        };\n"
+        "        aclprofTensorInfo pyptoProfInfo;\n"
+        "        aclprofEventAttributes pyptoProfAttrs;\n"
+        "        if (pyptoProfOn) {\n"
+        "        pyptoProfInfo.opNameId = aclprofStr2Id(\"" + op_name + "\");\n"
+        "        pyptoProfInfo.opTypeId = aclprofStr2Id(\"PyPTO\");\n"
+        "        pyptoProfInfo.resv = 0;\n"
+        f"        pyptoProfInfo.tensorNum = {len(tensor_inits)};\n"
+        "        pyptoProfInfo.kernelType = 0;\n"
+        "        pyptoProfInfo.blockNums = blockDim;\n"
+        "        pyptoProfInfo.stream = stream;\n"
+        "        pyptoProfInfo.tensors = pyptoProfTensors;\n"
+        "        pyptoProfAttrs.version = 1;\n"
+        "        pyptoProfAttrs.size = sizeof(pyptoProfAttrs.message);\n"
+        "        pyptoProfAttrs.messageType = 0;\n"
+        "        pyptoProfAttrs.message.tensorInfo = &pyptoProfInfo;\n"
+        "        (void)aclprofRangePushEx(&pyptoProfAttrs);\n"
+        "        }\n",
+        "        if (pyptoProfOn) {\n"
+        "            (void)aclprofRangePop();\n"
+        "        }\n"
+        "    }\n",
+    )
+
+
 def _generate_caller_cpp(
     kernel_params: list[tuple[str, str, bool]],
     kernel_cpp_name: str,
@@ -834,6 +987,7 @@ def _generate_caller_cpp(
     global_entry: str = "",
     *,
     target: KernelTarget,
+    prof_param_specs: list[ParamSpec] | None = None,
 ) -> str:
     """Generate extern "C" wrapper that calls the __global__ kernel.
 
@@ -846,6 +1000,9 @@ def _generate_caller_cpp(
             Reserved compatibility switch from compile(); currently this wrapper
             does not need extra caller-side code changes for print debug.
         target: The same resolved compiler target used to build the shared library.
+        prof_param_specs:
+            IR param specs (with tensor direction/shape) used to emit the
+            aclprof tensor-info range around the launch; None disables it.
 
     Returns:
         Generated caller.cpp content as string
@@ -874,8 +1031,16 @@ def _generate_caller_cpp(
             "    rtGetC2cCtrlAddr(&ffts, &fftsLen);\n"
         )
 
+    prof_include, prof_push, prof_pop = ("", "", "")
+    if prof_param_specs:
+        dims_in_scope = {name for _, name, _is_ptr in kernel_params}
+        prof_include, prof_push, prof_pop = _generate_prof_range_snippet(
+            kernel_name, prof_param_specs, dims_in_scope
+        )
+
     return (
         '#include "pypto_launch.h"\n'
+        f'{prof_include}'
         f'{sync_include}'
         f'#include "{kernel_cpp_name}"\n'
         f'{global_entry}'
@@ -888,7 +1053,9 @@ def _generate_caller_cpp(
         "    }\n"
         "    blockDim = static_cast<uint32_t>(launchDim);\n"
         f"{sync_setup}"
+        f"{prof_push}"
         f"    {kernel_name}<<<blockDim, nullptr, stream>>>({call_args});\n"
+        f"{prof_pop}"
         "    return launchDim;\n"
         "}\n"
     )
@@ -1037,6 +1204,7 @@ def _codegen_target_cce(
     arch: str,
     build_dir: str,
     target: ir.SectionKind,
+    store_targets: set | None = None,
 ) -> CodegenResult:
     """CCE codegen for one target-specific Program.
 
@@ -1058,7 +1226,7 @@ def _codegen_target_cce(
     # change without breaking JIT launch parameter discovery.
     kernel_func = _get_kernel_ir_function(prog)
     kernel_name = kernel_func.name
-    param_specs = _extract_param_specs(prog)
+    param_specs = _extract_param_specs(prog, store_targets)
     entry_params = _entry_params_from_param_specs(param_specs)
     has_ffts = "set_ffts_base_addr" in cpp_code
     has_cross_sync = has_ffts or "set_intra_block" in cpp_code
@@ -1198,9 +1366,12 @@ def _parse_and_codegen_targets(
         for target in target_list:
             programs[target] = sanitizer_pass(programs[target])
 
+    store_targets = _infer_store_targets_ast(kernel_def.func_def)
     results = {
         target: (
-            _codegen_target_cce(programs.get(target), arch, build_dir, target=target)
+            _codegen_target_cce(
+                programs.get(target), arch, build_dir, target=target, store_targets=store_targets
+            )
             if matched.get(target)
             else None
         )
@@ -1307,6 +1478,12 @@ def _compile_shared_library(
     if not ascend_home_path:
         raise RuntimeError("ASCEND_HOME_PATH is not set")
     link_args = _runtime_link_args(ascend_home_path)
+    # The generated caller references the aclprof* tensor-info range interfaces
+    # (aclprofStr2Id / aclprofRangePushEx / aclprofRangePop, declared in
+    # acl/acl_prof.h); they are exported by libmsprofiler.so in the runtime lib
+    # dir, so make sure it is on the link line.
+    if "-lmsprofiler" not in link_args:
+        link_args = link_args + ["-lmsprofiler"]
 
     resolved_enable_print_debug = generated.needs_print_debug
     flags = _build_bisheng_flags(
@@ -1414,6 +1591,7 @@ def _build_jit_so(
         enable_print_debug=resolved_print_debug,
         global_entry=global_entry,
         target=target,
+        prof_param_specs=cg.param_specs,
     )
     _atomic_write_text(Path(paths.final_kernel), caller_content)
 
