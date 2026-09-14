@@ -347,12 +347,12 @@ public:
         }
 
 #ifndef __TILE_FWK_HOST__
-        int64_t delta = (int64_t)(&data_[remote_->head_ % size_]) & (CACHE_LINE_SIZE - 1);
+        int64_t delta = (int64_t)(&data_[remote_->head_ % size_]) & (AicorePrintConst::CACHE_LINE_SIZE - 1);
         int64_t off = remote_->head_ - delta;
 
         while (off < head_) {
             dcci(&data_[off % size_], SINGLE_CACHE_LINE, CACHELINE_OUT);
-            off += CACHE_LINE_SIZE;
+            off += AicorePrintConst::CACHE_LINE_SIZE;
         }
 
         remote_->head_ = head_;

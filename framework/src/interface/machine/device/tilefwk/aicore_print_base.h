@@ -23,10 +23,6 @@
 
 #define ENABLE_AICORE_PRINT 0
 
-#ifndef CACHE_LINE_SIZE
-#define CACHE_LINE_SIZE 64
-#endif
-
 // A5: FP8/HF8 supported, L1 not supported; A2/A3: opposite
 #if defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3510)
 #define SUPPORT_FP8_HF8_PRINT 1
@@ -37,6 +33,9 @@
 #endif
 
 namespace AicorePrintConst {
+// Prefer constexpr over a global macro: ASC kernel_utils_constants.h also
+// declares CACHE_LINE_SIZE as a const, and a #define would break that include.
+constexpr size_t CACHE_LINE_SIZE = 64;
 constexpr size_t INDEXED_INDEX_SIZE = 8;
 constexpr size_t TENSOR_RANGE_SIZE = 8;
 constexpr size_t NAMELEN_FIELD_SIZE = 2;

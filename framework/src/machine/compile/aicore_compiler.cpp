@@ -87,6 +87,9 @@ static void LogBishengCompileFailure(const std::string& logPath)
 // Keep -Werror on the TU; -isystem treats ASC headers as system headers.
 static std::string BuildAscPrintfCompileFlags()
 {
+    if (!IsAicorePrintEnabled()) {
+        return "";
+    }
     const char* ascendHome = std::getenv(ENV_ASCEND_HOME_PATH);
     if (ascendHome == nullptr) {
         return "";
@@ -96,8 +99,11 @@ static std::string BuildAscPrintfCompileFlags()
     if (!IsPathExist(ascInclude)) {
         return "";
     }
-    return "-D__ENABLE_ASC_PRINTF__ -isystem " + QuoteShellArg(ascInclude) + " -isystem " + QuoteShellArg(ascRoot) +
-           " ";
+    // -DTILING_KEY_VAR=0: new ASC sys_macros.h defines strong g_tilingKey unless TILING_KEY_VAR is
+    // preset; PyPTO links entry/mid/leaf multi-TU and would otherwise hit duplicate symbol. Same
+    // flag AscendC uses for multi-file kernels that do not need tiling-key vars.
+    return "-D__ENABLE_ASC_PRINTF__ -DTILING_KEY_VAR=0 -isystem " + QuoteShellArg(ascInclude) + " -isystem " +
+           QuoteShellArg(ascRoot) + " ";
 }
 } // namespace
 

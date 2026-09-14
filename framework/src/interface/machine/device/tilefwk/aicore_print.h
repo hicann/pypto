@@ -309,7 +309,7 @@ INLINE void AiCorePrintL0CTensor(LogContext* ctx, __cc__ const T* data, int64_t 
 
     while (offset < totalBytes) {
         dcci((__gm__ uint8_t*)staging + offset, SINGLE_CACHE_LINE, CACHELINE_OUT);
-        offset += CACHE_LINE_SIZE;
+        offset += AicorePrintConst::CACHE_LINE_SIZE;
     }
 
     AiCorePrintGmTensor<T>(ctx, staging, end, begin, name);
@@ -380,7 +380,7 @@ INLINE void AiCorePrintL1Tensor(LogContext* ctx, __cbuf__ const T* data, int64_t
 
     while (offset < totalBytes) {
         dcci((__gm__ uint8_t*)staging + offset, SINGLE_CACHE_LINE, CACHELINE_OUT);
-        offset += CACHE_LINE_SIZE;
+        offset += AicorePrintConst::CACHE_LINE_SIZE;
     }
 
     AiCorePrintGmTensor<T>(ctx, staging, count, 0, name);

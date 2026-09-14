@@ -16,7 +16,16 @@
 #pragma once
 
 #if IS_AICORE && defined(__ENABLE_ASC_PRINTF__)
+// See aicore_asc_printf.h: suppress ASC g_tilingKey strong definition for multi-TU link.
+#ifndef TILING_KEY_VAR
+#define TILING_KEY_VAR 0
+#define __AICORE_ASC_DUMP_DEFINED_TILING_KEY_VAR__
+#endif
 #include "utils/debug/asc_dump.h"
+#ifdef __AICORE_ASC_DUMP_DEFINED_TILING_KEY_VAR__
+#undef TILING_KEY_VAR
+#undef __AICORE_ASC_DUMP_DEFINED_TILING_KEY_VAR__
+#endif
 
 // Pointer-based dump (PyPTO machine / codegen has no AscendC LocalTensor / GlobalTensor).
 // desc: user tag (e.g. line id); dump_size: element count. Disabled when ASCENDC_DUMP=0.

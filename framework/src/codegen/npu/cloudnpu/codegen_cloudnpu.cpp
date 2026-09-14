@@ -18,6 +18,7 @@
 #include "codegen/utils/codegen_utils.h"
 #include "codegen/utils/parallel_execute.h"
 #include "interface/configs/config_manager_ng.h"
+#include "interface/utils/common.h"
 #include "utils/file_utils.h"
 
 namespace npu::tile_fwk {
@@ -43,7 +44,9 @@ void CodeGenCloudNPU::BuildIncludes(std::ostringstream& oss) const
 {
     CodeGenNPU::BuildIncludes(oss);
 
-    // Match aicore_compiler entry flags: -isystem + shell-quoted ASC paths.
+    if (!IsAicorePrintEnabled()) {
+        return;
+    }
     const char* ascendHome = std::getenv(ENV_ASCEND_HOME_PATH.c_str());
     if (ascendHome == nullptr) {
         return;
@@ -53,7 +56,8 @@ void CodeGenCloudNPU::BuildIncludes(std::ostringstream& oss) const
     if (!IsPathExist(ascInclude)) {
         return;
     }
-    oss << "-D__ENABLE_ASC_PRINTF__ "
+    // -DTILING_KEY_VAR=0: suppress ASC g_tilingKey strong defs across multi-TU leaf link.
+    oss << "-D__ENABLE_ASC_PRINTF__ -DTILING_KEY_VAR=0 "
         << "-isystem " << QuoteShellArg(ascInclude) << " "
         << "-isystem " << QuoteShellArg(ascRoot) << " ";
 }

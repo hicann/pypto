@@ -485,6 +485,18 @@ inline bool IsAicoreResolveEnabled()
     return result;
 }
 
+// Opt-in: enable AICore ASC printf/dump (aicore_asc_debug) at compile time.
+// When unset/false, leaf/mid kernels do not get -D__ENABLE_ASC_PRINTF__.
+inline bool IsAicorePrintEnabled()
+{
+    static const bool result = []() {
+        std::string value = GetEnvVar("PYPTO_ENABLE_AICORE_PRINT", true, true);
+        return (value == "true");
+    }();
+
+    return result;
+}
+
 // 判断环境变量 export ASCEND_RT_LAUNCH_BLOCKING是否为1
 inline bool IsLaunchBlockingEnabled()
 {

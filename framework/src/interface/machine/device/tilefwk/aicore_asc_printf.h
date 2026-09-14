@@ -16,6 +16,13 @@
 #pragma once
 
 #if IS_AICORE && defined(__ENABLE_ASC_PRINTF__)
+// New ASC sys_macros.h emits a strong g_tilingKey unless TILING_KEY_VAR is preset; PyPTO links
+// multiple AICORE TUs (entry/mid/leaf), so suppress the definition. Matches AscendC multi-file
+// compile (-DTILING_KEY_VAR=0).
+#ifndef TILING_KEY_VAR
+#define TILING_KEY_VAR 0
+#define __AICORE_ASC_PRINTF_DEFINED_TILING_KEY_VAR__
+#endif
 // Do NOT include CANN's umbrella utils/debug/asc_printf.h: for arch 3510 it also drags in
 // asc_printf_simt_impl.h -> __clang_cce_simt_atomic.h, which defines atomicExch function
 // templates. When the same translation unit also compiles aicore_entry_drco.h (DRCO uses the
@@ -38,6 +45,10 @@
 #ifdef __AICORE_ASC_PRINTF_DEFINED_INTERNAL__
 #undef __ASCENDC_INCLUDE_INTERNAL_HEADERS__
 #undef __AICORE_ASC_PRINTF_DEFINED_INTERNAL__
+#endif
+#ifdef __AICORE_ASC_PRINTF_DEFINED_TILING_KEY_VAR__
+#undef TILING_KEY_VAR
+#undef __AICORE_ASC_PRINTF_DEFINED_TILING_KEY_VAR__
 #endif
 
 // Prefer PYPTO_AICORE_PRINTF_WITH_CORE(ctx->blockIdx, ...): get_subblockdim() may become 0 after

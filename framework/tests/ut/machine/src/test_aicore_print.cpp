@@ -766,8 +766,8 @@ TEST_F(AiCorePrintUTest, Fp8E5M2Const_CorrectValues)
 // Section 9: 编译条件功能测试 - 宏定义值验证
 // ============================================================================
 
-// 测试 CACHE_LINE_SIZE 宏为 64 字节
-TEST_F(AiCorePrintUTest, CompileConditions_CacheLineSize) { EXPECT_EQ(CACHE_LINE_SIZE, 64); }
+// 测试 AicorePrintConst::CACHE_LINE_SIZE 为 64 字节
+TEST_F(AiCorePrintUTest, CompileConditions_CacheLineSize) { EXPECT_EQ(AicorePrintConst::CACHE_LINE_SIZE, 64u); }
 
 // 测试 __TILE_FWK_HOST__ 宏在当前编译环境已定义(Host 测试可用)
 TEST_F(AiCorePrintUTest, HostEnvironmentDefined)
