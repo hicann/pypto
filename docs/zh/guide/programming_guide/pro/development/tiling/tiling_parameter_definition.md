@@ -1,13 +1,13 @@
-# Tiling结果传输
+# Tiling参数定义与传递
 
-Host侧Tiling生成的参数通过TilingData或TilingKey传给Kernel：
+Tiling参数在Host侧计算后传给Kernel，由TilingKey和TilingData共同承担：
 
-| 类型 | 生效阶段 | 适用内容 |
+| 类型 | 生效阶段 | 承担的部分 |
 | --- | --- | --- |
-| TilingData | Kernel运行时 | shape、stride、循环边界、缩放系数等随调用变化的参数。 |
-| TilingKey | Kernel编译时 | 算法分支、Tile模板、数据排布等有限的离散模式。 |
+| TilingKey | Kernel编译时 | 选择本次使用哪一套实现，例如对齐与非对齐、不同的Tile模板或数据排布。候选数量有限，每个取值组合生成一个专用Kernel实例。 |
+| TilingData | Kernel运行时 | 携带这一套实现所需的具体数值，例如shape、stride、循环边界和缩放系数。数值变化时复用同一份已编译的Kernel。 |
 
-TilingData改变时复用同一份已编译Kernel；不同TilingKey分别生成专用Kernel实例。一次调用可以同时使用两者。
+即TilingKey决定走哪个分支，TilingData提供该分支运行所需的数据。本文分别说明两者的声明、传递方式，以及配合使用的方法。Tiling的概念和切分层次参见[Tiling概述](tiling_overview.md)。
 
 ## TilingData
 
@@ -29,24 +29,46 @@ class AddTiling:
 
 ### 字段类型
 
-TilingData支持标量和定长数组：
-
-| Python标注 | IR dtype | 设备侧成员 |
-| --- | --- | --- |
-| `int` | `INDEX` | `int64_t` |
-| `float` | `FP32` | `float` |
-| `bool` | `BOOL` | `bool` |
-| `int[N]` | `INDEX` | `int64_t[N]` |
-| `float[N]` | `FP32` | `float[N]` |
-| `bool[N]` | `BOOL` | `bool[N]` |
+TilingData的字段支持标量`int`、`float`、`bool`，以及对应的定长数组`int[N]`、`float[N]`、`bool[N]`。
 
 字段声明需满足以下要求：
 
-- 类中至少包含一个字段，每个字段只能使用表中列出的类型。
+- 类中至少包含一个字段，每个字段只能使用上述类型。
 - 定长数组的长度`N`必须直接写成1～2048的整数值；运行时传入的列表长度必须与声明一致。
 - 使用`int[N]`、`float[N]`或`bool[N]`时，需要启用`from __future__ import annotations`。
 - 字段可以设置`dataclass`默认值；数组默认值使用`dataclasses.field(default_factory=...)`。
 - 字段顺序决定设备侧结构体的字段顺序、偏移和对齐，不能在Host侧和设备侧使用不同顺序解释同一份数据。
+
+### 在Host侧传入TilingData
+
+Host侧构造TilingData实例，并将其放在Kernel启动实参列表末尾（下面的`add_kernel`是一个接收`AddTiling`的Kernel，定义见[在Kernel中读取TilingData](#在kernel中读取tilingdata)）：
+
+```python
+tiling = AddTiling(
+    rows=513,
+    cols=511,
+    scale=1.0,
+    strides=[511, 1],
+)
+
+block_dim = 8
+add_kernel[None, block_dim](x, y, z, tiling)
+```
+
+使用默认值时，未显式传入的字段采用`dataclass`默认值：
+
+```python
+from dataclasses import dataclass, field
+
+
+@dataclass
+class CopyTiling:
+    length: int
+    scale: float = 1.0
+    offsets: int[4] = field(default_factory=lambda: [0, 0, 0, 0])
+```
+
+带默认值的字段必须位于无默认值字段之后。
 
 ### 在Kernel中读取TilingData
 
@@ -87,43 +109,6 @@ TilingData字段是运行时值，可以用于：
 - 运行时`if`条件和算术表达式。
 
 TilingData字段不能用于要求编译期Python常量的参数，例如`TileType`的静态`shape`。这类有限候选项应通过TilingKey选择。
-
-### 在Host侧传入TilingData
-
-Host侧构造TilingData实例，并将其放在Kernel启动实参列表末尾：
-
-```python
-tiling = AddTiling(
-    rows=513,
-    cols=511,
-    scale=1.0,
-    strides=[511, 1],
-)
-
-block_dim = 8
-add_kernel[None, block_dim](x, y, z, tiling)
-```
-
-框架按照字段定义顺序和原生`ctypes`对齐规则生成结构体字节，再把数据传给Kernel。
-
-**图1 TilingData从Host传入Kernel**
-
-![TilingData从Host传入Kernel](../../../../figures/pro/pro_tilingdata_host_kernel_flow.png "TilingData从Host传入Kernel")
-
-使用默认值时，未显式传入的字段采用`dataclass`默认值：
-
-```python
-from dataclasses import dataclass, field
-
-
-@dataclass
-class CopyTiling:
-    length: int
-    scale: float = 1.0
-    offsets: int[4] = field(default_factory=lambda: [0, 0, 0, 0])
-```
-
-带默认值的字段必须位于无默认值字段之后。
 
 ## TilingKey
 
@@ -237,7 +222,7 @@ add_kernel[None, block_dim, key](x, y, z, tiling)
 | --- | --- |
 | 每次调用都可能变化，且不要求重新生成代码 | TilingData |
 | 候选数量有限，并影响代码分支、Tile模板或排布 | TilingKey |
-| 只决定启动的逻辑Block数 | `block_dim`，参考[多核Tiling切分](multi_core_tiling.md#在启动时设置逻辑block数block_dim) |
+| 只决定启动的核数 | `block_dim`，参考[blockDim的含义与设置](../kernel_function.md#blockdim的含义与设置) |
 
 ## 使用限制与建议
 

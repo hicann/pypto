@@ -60,7 +60,7 @@ def dynamic_kernel(
     ...
 ```
 
-TilingData必须位于Kernel形参列表和启动实参列表的末尾。完整字段和传输规则参考[Tiling结果传输](tiling/tiling_result_transfer.md#tilingdata)。
+TilingData必须位于Kernel形参列表和启动实参列表的末尾。完整字段和传输规则参考[Tiling参数定义与传递](tiling/tiling_parameter_definition.md#tilingdata)。
 
 Kernel不返回Python值。计算结果通过Tensor或Ptr对应的GM区域写回。
 
@@ -200,7 +200,7 @@ block_dim是Host请求的逻辑Block数上限，必须是正整数，且不得�
 | Cube Kernel | AIC逻辑Block数 | AIC为block_num。 |
 | Cube与Vector混合Kernel | AIC与AIV执行组数 | AIC为block_num；AIV为block_num * pypto_pro.language.get_block_num()。 |
 
-实际`block_num`可能因Stream限核而小于`block_dim`。多核任务切分必须使用`pypto_pro.language.get_block_num()`计算循环步长；混合Kernel的Vector侧还需要乘以`pypto_pro.language.get_subblock_num()`。核数计算、索引映射和限核规则参考[多核Tiling切分](tiling/multi_core_tiling.md#在启动时设置逻辑block数block_dim)。
+实际`block_num`可能因Stream限核而小于`block_dim`。多核任务切分必须使用`pypto_pro.language.get_block_num()`计算循环步长；混合Kernel的Vector侧还需要乘以`pypto_pro.language.get_subblock_num()`。按核数划分任务和计算核索引的方法参考[多核Tiling切分](tiling/multi_core_tiling.md#多核切分的基本写法)。
 
 ## 使用TilingKey和datatype
 
@@ -216,4 +216,4 @@ datatype = {"x": pl.DT_FP16, "out": pl.DT_FP16}
 kernel[None, block_dim, key, datatype](x, out, tiling)
 ```
 
-TilingKey的声明、编码和启动规则参考[Tiling结果传输](tiling/tiling_result_transfer.md#tilingkey)。datatype字段由`@pypto_pro.language.jit(datatype=...)`声明，具体编译行为参考[JIT编译](compilation_and_execution/JIT_compilation.md#编译签名与复用)。
+TilingKey的声明、编码和启动规则参考[Tiling参数定义与传递](tiling/tiling_parameter_definition.md#tilingkey)。datatype字段由`@pypto_pro.language.jit(datatype=...)`声明，具体编译行为参考[JIT编译](compilation_and_execution/JIT_compilation.md#编译签名与复用)。

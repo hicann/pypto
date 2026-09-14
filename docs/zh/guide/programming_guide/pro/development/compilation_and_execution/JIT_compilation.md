@@ -50,7 +50,7 @@ Kernel的定义和启动语法参考[Kernel核函数创建](../kernel_function.m
 | datatype | 每组数据类型组合对应一个专用实例。 |
 | 编译目标 | 目标在Kernel对象创建时确定；不同目标使用不同的Kernel对象。 |
 
-TilingData字段是运行时数据，字段值变化不会单独产生编译实例。静态与动态shape的声明方式参考[Tensor创建和操作](../tensor_creation_and_operations.md)，TilingData和TilingKey的区别参考[Tiling结果传输](../tiling/tiling_result_transfer.md)。
+TilingData字段是运行时数据，字段值变化不会单独产生编译实例。静态与动态shape的声明方式参考[Tensor创建和操作](../tensor_creation_and_operations.md)，TilingData和TilingKey的区别参考[Tiling参数定义与传递](../tiling/tiling_parameter_definition.md)。
 
 `stream`和`block_dim`只影响本次启动，不参与编译签名；调整Stream或逻辑Block数不会因此生成新的编译实例。
 
