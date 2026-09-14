@@ -118,7 +118,7 @@ PyPTO在计算图编译的各Pass阶段拥有完整的中间表示，可翻译�
 - 不支持特定pass，特定pass（例如SubgraphToFunction）属于中间的优化过程缺少完整计算信息，工具内部做自动跳过处理。
 - 不支持pass间的自动对比校验（需人工进行数据对比）。
 - 不支持程序退出后在任意运行环境构造并模拟计算。需在算子编译期间，所对应的主机CPU及进程上构造并模拟计算。
-- 不支持基于昇腾AI处理器调用Ascend C构造并模拟计算。
+- 不支持基于AI处理器调用Ascend C构造并模拟计算。
 - 不支持基于GPU构造并模拟计算。
 - 不支持包含GATHER_IN_UB和GATHER_IN_L1两个operation的校验。
 - 如ExpandFunction校验结果出现B200BU报错，则该场景仅在InferDynShape后校验结果有效。

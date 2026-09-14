@@ -4,7 +4,7 @@ SIMT编程允许不同Thread独立寻址和计算，适合表达离散数据访�
 
 ## 硬件组成
 
-昇腾NPU包含多个AIV。每个AIV包含SIMT计算资源、寄存器和Unified Buffer（UB），AIV外部的L2 Cache和Global Memory由多个AIV共享。SIMT多线程计算主要涉及以下硬件资源。
+AI处理器包含多个AIV。每个AIV包含SIMT计算资源、寄存器和Unified Buffer（UB），AIV外部的L2 Cache和Global Memory由多个AIV共享。SIMT多线程计算主要涉及以下硬件资源。
 
 ### SIMT计算资源
 

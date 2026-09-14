@@ -86,7 +86,7 @@ Host侧stream同步失败：`LaunchAicoreKernel`中`DynamicLaunchSynchronize`返
 
 **可能原因**
 
-- AICore执行异常后stream同步失败。
+- AI Core执行异常后stream同步失败。
 - Debug模式下profiling数据同步后stream同步失败。
 - 底层Runtime stream同步超时或状态异常。
 

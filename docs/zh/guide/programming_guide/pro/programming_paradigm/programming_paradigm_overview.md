@@ -63,7 +63,7 @@ SIMT适合需要逐线程控制或难以使用规整Tile计算表达的场景，
 
 ## AI Core硬件基础
 
-昇腾NPU包含多个AI Core，多个AI Core可以并行处理不同的数据分片。AI Core内部包含Scalar、Vector、Cube、片上存储和数据搬运等单元：
+AI处理器包含多个AI Core，多个AI Core可以并行处理不同的数据分片。AI Core内部包含Scalar、Vector、Cube、片上存储和数据搬运等单元：
 
 | 硬件组成 | 主要职责 | PyPTO Pro中的对应表达 |
 |---|---|---|

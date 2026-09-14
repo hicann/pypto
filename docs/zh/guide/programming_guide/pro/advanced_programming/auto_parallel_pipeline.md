@@ -19,7 +19,7 @@ CV融合算子中，cube和vector的计算相互依赖，若按串行流水执�
 
 ## 使用方法
 
-### 1. 编写stage函数
+### 编写stage函数
 
 需要用户将算子划分为若干个计算流程，每个计算流程对应一个stage函数，通过@pypto_pro.language.pipeline.stage装饰器进行标识。
 
@@ -34,7 +34,7 @@ def stage1(ki, a, b_l1, a_l1_db, left_db, right_db, acc_db, mm1_vec_db):
     ...  # 普通的 Tile/Buffer 操作，不用写任何同步
 ```
 
-### 2. 声明跨核共享Buffer
+### 声明跨核共享Buffer
 
 跨核共享Buffer使用make_tile_group接口进行声明，tile数目由用户自主分配，通过fwd_ids和bwd_ids参数配置核间正反向同步id，若未配置，则不会插入对应的核间同步。
 
@@ -52,7 +52,7 @@ mm1_vec_db = pl.make_tile_group(
 )
 ```
 
-### 3. 编写主循环
+### 编写主循环
 
 主循环内stage函数按照依赖关系顺序进行书写，需要保证stage之间为CV交替。
 
@@ -90,7 +90,7 @@ for kj in pl.range(0, M_ITER):        # 第二条流水
         stage4(kj, ...)
 ```
 
-### 4. 开启流水变换
+### 开启流水变换
 
 在pypto_pro.language.jit接口中通过PipelineConfig参数进行配置：
 
@@ -126,7 +126,7 @@ def pipeline_demo_kernel(...):
     ...
 ```
 
-### 5. 查看生成的代码
+### 查看生成的代码
 
 框架自动生成的并行流水代码保存在编译产物目录下，文件名为pipeline_generated.py，用户可以在该代码的基础上继续修改调试。
 

@@ -46,7 +46,7 @@ PyPTO Pro当前提供以下SIMT编程能力：
 
 当前版本的SIMT计算流程包括定义SIMT函数、配置启动参数、定义外层JIT Kernel和启动Device侧Kernel。
 
-### 1. 定义SIMT函数
+### 定义SIMT函数
 
 #### 入口函数
 
@@ -86,11 +86,11 @@ def transform(
 
 示例中的边界判断用于避免多出的Thread越界访问。涉及共享数据依赖时，参见[同步](#同步)和[原子操作](#原子操作)。
 
-### 2. 配置pypto_pro.language.simt.launch
+### 配置pypto_pro.language.simt.launch
 
 pypto_pro.language.simt.launch通过callee指定SIMT入口函数，通过threads设置Thread Block尺寸，通过args传递函数参数。callee必须是配置了max_threads的入口函数；threads的各维乘积不能超过该值；args的数量、顺序和类型需要与入口函数的形参一致。
 
-### 3. 定义外层JIT Kernel
+### 定义外层JIT Kernel
 
 当前版本需要在外层JIT Kernel的Vector执行域中调用启动接口。以下代码启动步骤1定义的transform入口函数：
 
@@ -113,7 +113,7 @@ def transform_kernel(
 
 Tensor和Tile需要以完整变量传入。启动接口的完整约束参见[launch](../../../../../api/pro_api/SIMT-API/execution/launch.md)。
 
-### 4. 启动Device侧Kernel
+### 启动Device侧Kernel
 
 Host侧通过Bracket Launch语法将外层JIT Kernel启动到Device执行。如果一次SIMT计算需要多个Thread Block，需要设置相应数量的block_dim启动外层Kernel。Host侧block_dim的设置参见[多核Tiling切分](../tiling/multi_core_tiling.md#在启动时设置逻辑block数block_dim)：
 

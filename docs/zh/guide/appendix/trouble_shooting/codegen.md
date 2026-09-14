@@ -89,7 +89,7 @@ Compiler Monitor 默认开启（Watchdog 机制）。编译开始时在 INFO 日
 
 1. **Prepare**：前端准备（import 至开始 stash 编译任务）
 2. **Pass**：图编译 Pass
-3. **HostMachine**：动态场景下的控制流构建/编译、AICore 连接与 Encode 等
+3. **HostMachine**：动态场景下的控制流构建/编译、AI Core连接与Encode等
 4. **CodeGen**：CCE 代码生成及二进制编译（含 FuncToBin 子阶段，不单独展示）
 
 瓶颈阶段判定：将 `compile_timeout` 均分到上述四个阶段，耗时超过该平均阈值的阶段记入 `DetectedStage`。

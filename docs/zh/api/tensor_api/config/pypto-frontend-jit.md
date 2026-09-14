@@ -22,7 +22,7 @@
 - **类型注解**: 在函数签名中明确指定张量的形状和数据类型
 - **直接调用**: 测试时可直接传入torch张量及其他类型的变量，无需显式转换
 - **动态形状支持**: 配合`pypto.DYNAMIC`支持运行时变化的维度
-- **多运行模式**: 支持NPU和SIM（模拟器）两种运行模式
+- **多运行模式**: 支持AI处理器和SIM（模拟器）两种运行模式
 
 ## 函数原型
 
@@ -55,8 +55,8 @@ def kernel_function(...):
 
 | 参数名                         | 说明                                                         |
 | ------------------------------ | ------------------------------------------------------------ |
-| device_sched_mode               | 含义：设置计算子图的调度模式 <br> 说明：0：代表默认调度模式，ready子图放入共享队列，各个调度线程抢占子图进行发送，子图获取发送遵循先入先出； <br> 1：代表L2cache亲和调度模式，选择最新依赖ready的子图优先下发，达到复用L2cache的效果； <br> 2：公平调度模式，aicpu上多线程调度管理多个aicore的时候，下发子图会尽量控制在多线程间的公平性，此模式会带来额外的调度管理开销； <br> 3：代表同时开启L2cache亲和调度模式以及公平调度模式； <br> 类型：int <br> 取值范围：0或1或2或3 <br> 默认值：0 <br> 影响pass范围：NA |
-| stitch_function_max_num        | 含义：该配置用来指定运行时一次stitch构建的loop迭代数量，从而控制算子运行时一次调度执行的子图数量。数值越大，并行度越高。 <br> 说明：旨在用户不感知内存使用上限的情况下，通过扩大stitch构建的loop数量提升并行度，减少stitch构建和调度的交互次数。使用场景：单算子开发、workspace没有明确限额。并行度提高时，AICORE使用率更高，但运行时临时内存占用会随之上升；配置过大时stitch构建开销增加，可能会造成调度等待stitch构建的情况，端到端性能不一定更好。未设置内存上限（`max_workspace_kb=0`）时，并行度与内存预留均由本配置决定；一旦设置了有效的`max_workspace_kb`，并行度及内存由`max_workspace_kb`控制。<br> 并行度已满足预期、需要再降低内存时，请使用[pypto.experimental.set_runtime_options](./pypto-experimental-set_runtime_options.md)。 <br> 类型：int <br> 取值范围:1 ~ 1024 <br> 默认值：128 <br> 影响pass范围：NA |
+| device_sched_mode               | 含义：设置计算子图的调度模式 <br> 说明：0：代表默认调度模式，ready子图放入共享队列，各个调度线程抢占子图进行发送，子图获取发送遵循先入先出； <br> 1：代表L2cache亲和调度模式，选择最新依赖ready的子图优先下发，达到复用L2cache的效果； <br> 2：公平调度模式，aicpu上多线程调度管理多个AI Core的时候，下发子图会尽量控制在多线程间的公平性，此模式会带来额外的调度管理开销； <br> 3：代表同时开启L2cache亲和调度模式以及公平调度模式； <br> 类型：int <br> 取值范围：0或1或2或3 <br> 默认值：0 <br> 影响pass范围：NA |
+| stitch_function_max_num        | 含义：该配置用来指定运行时一次stitch构建的loop迭代数量，从而控制算子运行时一次调度执行的子图数量。数值越大，并行度越高。 <br> 说明：旨在用户不感知内存使用上限的情况下，通过扩大stitch构建的loop数量提升并行度，减少stitch构建和调度的交互次数。使用场景：单算子开发、workspace没有明确限额。并行度提高时，AI Core使用率更高，但运行时临时内存占用会随之上升；配置过大时stitch构建开销增加，可能会造成调度等待stitch构建的情况，端到端性能不一定更好。未设置内存上限（`max_workspace_kb=0`）时，并行度与内存预留均由本配置决定；一旦设置了有效的`max_workspace_kb`，并行度及内存由`max_workspace_kb`控制。<br> 并行度已满足预期、需要再降低内存时，请使用[pypto.experimental.set_runtime_options](./pypto-experimental-set_runtime_options.md)。 <br> 类型：int <br> 取值范围:1 ~ 1024 <br> 默认值：128 <br> 影响pass范围：NA |
 | max_workspace_kb               | 含义：为算子运行时的workspace内存占用设置总量上限，单位为KB。 <br> 说明：旨在算子执行存在workspace内存限制时，按总量上限压缩运行时workspace内存及并行度。`0`表示关闭。开启后取值必须严格大于当前算子可运行的最小workspace，否则会编译报错提示。使用场景：整网部署、NPU内存不足或申请失败。该配置生效后可能使临时内存不足以支撑目标并行度，stitch构建的loop数量变少，性能下降。本配置有效时，内存预留及并行度不再按`stitch_function_max_num`计算。配置过大可能增加占用甚至OOM；与`device_sched_parallelism`同时增大时，内存通常按并行度倍增。<br>若需提升并行度，请使用[pypto.experimental.set_runtime_options](./pypto-experimental-set_runtime_options.md)。 <br> 类型：int <br> 取值范围：0 ~ 2147483647 <br> 默认值：0 <br> 影响pass范围：NA |
 | run_mode                       | 含义：设置计算子图的执行设备 <br> 说明：<br> 0：表示在NPU上执行 <br> 1：表示在模拟器上执行 <br> 类型：int或`pypto.RunMode`枚举 <br> 取值范围：0或者1 <br> 默认值：根据是否设置CANN的环境变量来决定。如果设置了环境变量，则在NPU上执行；否则在模拟器上执行 <br> 影响pass范围：NA |
 | valid_shape_optimize            | 含义：动态shape场景，validshape编译优化选项，打开该选项后，动态轴的Loop循环中，主块（shape与validshape相等）采用静态shape编译，尾块采用动态shape编译 <br> 说明：<br> 0：默认值，表示关闭validshape编译优化选项，所有Loop循环均采用动态shape进行编译 <br> 1：表示打开validshape编译优化选项 <br> 类型：int <br> 取值范围：0或者1 <br> 默认值：0 <br> 影响pass范围：NA |

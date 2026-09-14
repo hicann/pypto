@@ -53,14 +53,14 @@ conv(input_conv, weight, out_dtype, strides, paddings, dilations, *, groups=1, t
 
 ## 约束说明
 
-### 1. Shape合法性约束
+### Shape合法性约束
 
 - 输入特征图（input_conv）：Batch、Cin、Hin、Win、Din维度必须在 [1, 1000000] 范围内；
 - 卷积核（weight）：Cout、Kh、Kw、Kd维度必须在 [1, 1000000] 范围内；
 - 偏置（bias_tensor）：shape必须等于 [Cout]，否则校验失败；
 - 输出特征图：Hout、Wout、Dout维度必须在 [1, 1000000] 范围内。
 
-### 2. 属性参数合法性约束
+### 属性参数合法性约束
 
 - 基础维度匹配约束：
   - strides维度数必须与卷积维度匹配（2D conv长度=2，3D conv长度=3）；
@@ -79,17 +79,17 @@ conv(input_conv, weight, out_dtype, strides, paddings, dilations, *, groups=1, t
   - Cout（输出通道数）必须能被groups整除；
   - CinFmap = CinWeight × groups。
 
-### 3. 缓存空间约束
+### 缓存空间约束
 
 - 调用conv接口前，必须通过pypto.set_conv_tile_shapes接口设置L1/L0层级的卷积TileShape切分大小。
 
-### 4. 功能支持约束
+### 功能支持约束
 
 - transposed=True（转置卷积）暂不支持，调用会抛出RuntimeError；
 - input_conv/weight仅支持DT_FP16、DT_BF16、DT_FP32数据类型，其他类型会抛出ValueError；
 - input_conv与weight的维度必须一致（如input_conv为4D则weight也需为4D），否则抛出RuntimeError。
 
-### 5. 动态轴切分支持
+### 动态轴切分支持
 
 卷积算子支持的动态轴切分维度如下：
 
@@ -102,7 +102,7 @@ conv(input_conv, weight, out_dtype, strides, paddings, dilations, *, groups=1, t
 | Wout       |    √     | TileShape动态切分 + 前端循环       | Wout维度动态切分，配合前端循环实现完整覆盖                           |
 | Cin        |    ×     | -       | Cin维度暂不支持动态轴切分，请使用set_conv_tile_shapes接口实现Cin和k的tile切分                   |
 
-### 6. 数据类型约束
+### 数据类型约束
 
 <!-- npu="950" id9 -->
 - Ascend 950PR/Ascend 950DT：支持的数据类型为DT_FP16、DT_BF16、DT_FP32。input_conv、weight、bias和out的数据类型需要相同。

@@ -1,5 +1,7 @@
 # PyPTO
 
+English | [简体中文](./README.md)
+
 ## Latest Updates
 - 2026/04/10: Version 0.2.0 released, changing frontend expression methods, improving ease of use, enhancing features and performance, refining module capabilities, and optimizing development experience and runtime efficiency.
 - 2026/03/30: Version v0.1.2 released, supporting cluster training scenarios, optimizing framework compilation performance and basic performance, and fixing known network integration issues.

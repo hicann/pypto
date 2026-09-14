@@ -66,5 +66,5 @@ print("Add kernel passed!")
 > - `pl.make_tile_group`通过`mutex_ids`分配缓冲，框架在`auto_mutex=True`时自动插入同步，开发者无需手写`sync_src`/`sync_dst`。
 > - `tile_group.current()`获取当前可用缓冲。
 > - `pl.section_vector()`标记后续代码在Vector流水单元上执行。
-> - 昇腾NPU对FP16和BF16有原生硬件加速，建议在算子开发中优先考虑这些数据类型。
+> - AI处理器对FP16和BF16有原生硬件加速，建议在算子开发中优先考虑这些数据类型。
 > - 如需进一步了解PyPTO Pro的SIMD编程模型，请参阅[SIMD编程范式](../../programming_guide/pro/programming_paradigm/SIMD/programming_paradigm.md)。

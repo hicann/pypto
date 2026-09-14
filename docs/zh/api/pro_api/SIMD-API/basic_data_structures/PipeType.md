@@ -16,7 +16,7 @@
 
 硬件执行单元（流水）的类型枚举，标记某个操作运行在哪条流水上。是同步控制（[sync_src](../synchronization/sync_src.md)、[sync_dst](../synchronization/sync_dst.md)、[mutex_lock](../synchronization/mutex_lock.md)等）里set_pipe/wait_pipe/pipe参数的取值来源。
 
-昇腾芯片内部有多条并行流水，各自负责不同阶段的数据搬运和计算。正确理解每条流水的职责是写好同步控制的基础。
+AI处理器内部有多条并行流水，各自负责不同阶段的数据搬运和计算。正确理解每条流水的职责是写好同步控制的基础。
 
 ## 原型定义
 

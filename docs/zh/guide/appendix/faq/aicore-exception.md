@@ -1,8 +1,8 @@
-# AICore kernel执行异常
+# AI Core kernel执行异常
 
 ## 问题现象描述
 
-AICore kernel执行期间发生异常（硬件trap、执行超时、core挂死），报错信息如下：
+AI Core kernel执行期间发生异常（硬件trap、执行超时、core挂死），报错信息如下：
 
 ```text
 ErrCode: F1FFFF! Enum: InternalError::COMMON_INNER_ERROR. aicore exception, device_id: 0, stream_id: 61, task_id: 5929, retcode: 507015, kernelName: PyPTO_fusion_kernel_0_mix_aic
@@ -108,7 +108,7 @@ AiCore Print支持以下数据类型：
 
 ### 使用步骤
 
-### 1. 启用追踪日志
+### 启用追踪日志
 
 修改配置文件：
 
@@ -127,13 +127,13 @@ AiCore Print支持以下数据类型：
 #define ENABLE_AICORE_PRINT 1
 ```
 
-### 2. 重新编译安装
+### 重新编译安装
 
 ```bash
 rm -rf build_out/ && python build_ci.py && pip install build_out/pypto*whl --force-reinstall --no-deps
 ```
 
-### 3. 在kernel CCE文件中添加打印代码
+### 在kernel CCE文件中添加打印代码
 
 **重要流程说明**：
 
@@ -196,9 +196,9 @@ __gm__ T* l0c_staging = (__gm__ T*)(param->funcData->workspaceAddr);
 
 **关键注意事项**：
 1. 首次运行或切换用例删除kernel_aic*，同一用例重复运行保留修改。
-2. capture 模式下，要看aicore 日志的输出，必须在replay 之后，增加pypto.runtime._device_synchronize()，否则无法输出aicore 日志
+2. capture 模式下，要看AI Core 日志的输出，必须在replay 之后，增加pypto.runtime._device_synchronize()，否则无法输出AI Core日志
 
-### 4. 运行测试并查看打印结果
+### 运行测试并查看打印结果
 
 **重要**：以下命令必须**一次性完整执行**（使用`&&`连接），不要拆分为多个命令：
 
@@ -364,7 +364,7 @@ AICORE_LOGD(param->ctx, "INT8 input loaded");
 "parallel_compile": 1
 ```
 
-### 7. AIC kernel中调用AiCorePrintUbTensor编译报错
+### AIC kernel中调用AiCorePrintUbTensor编译报错
 
 AIC (Cube核) kernel中使用`AiCorePrintUbTensor`时，编译器会触发`static_assert`:
 
@@ -380,7 +380,7 @@ error: static assertion failed due to requirement '!std::is_same_v<float, float>
 
 **解决方案**：将`AiCorePrintUbTensor`调用移到AIV (Vector核) kernel中，或使用`AiCorePrintGmTensor`打印已搬到GM的数据。
 
-### 8. AIC kernel中使用AICORE_LOGD打印UB数据值触发error 271
+### AIC kernel中使用AICORE_LOGD打印UB数据值触发error 271
 
 在AIC kernel的CCE文件中使用如下代码：
 
@@ -403,7 +403,7 @@ errorStr: The MPU address access is invalid
 - AIC kernel中仅使用`%p`打印UB地址值（不读取数据），这是安全的
 - 检查AIC kernel的CCE代码，删除所有对UB地址空间做`[]`下标访问的表达式
 
-### 9. AIC kernel中尝试TStoreVec / copy_ubuf_to_gm搬运UB数据编译报错
+### AIC kernel中尝试TStoreVec / copy_ubuf_to_gm搬运UB数据编译报错
 
 在AIC kernel中调用`TStoreVec`、`copy_ubuf_to_gm`、`copy_ubuf_to_gm_align_v2`等接口编译报错：
 
