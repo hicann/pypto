@@ -25,6 +25,7 @@ import argparse
 import dataclasses
 import glob
 import inspect
+import json
 import logging
 import os
 import re
@@ -129,6 +130,80 @@ def _parse_dump_file(dump_file: str) -> Tuple[str, List[TensorInfo]]:
     return kernel_name, tensors
 
 
+# C type name in call_kernel.cpp -> ctypes expression for argtypes binding.
+_C_CTYPE_MAP = {
+    "void*": "ctypes.c_void_p",
+    "uint8_t*": "ctypes.c_void_p",
+    "uint16_t*": "ctypes.c_void_p",
+    "uint32_t*": "ctypes.c_void_p",
+    "uint64_t*": "ctypes.c_void_p",
+    "int8_t*": "ctypes.c_void_p",
+    "int16_t*": "ctypes.c_void_p",
+    "int32_t*": "ctypes.c_void_p",
+    "int64_t*": "ctypes.c_void_p",
+    "float*": "ctypes.c_void_p",
+    "double*": "ctypes.c_void_p",
+    "bool": "ctypes.c_bool",
+    "int8_t": "ctypes.c_int8",
+    "uint8_t": "ctypes.c_uint8",
+    "int16_t": "ctypes.c_int16",
+    "uint16_t": "ctypes.c_uint16",
+    "int32_t": "ctypes.c_int32",
+    "uint32_t": "ctypes.c_uint32",
+    "int64_t": "ctypes.c_int64",
+    "uint64_t": "ctypes.c_uint64",
+    "float": "ctypes.c_float",
+    "double": "ctypes.c_double",
+}
+
+
+def _load_launch_meta(dump_dir: str, kernel_name: str) -> Optional[dict]:
+    """Load the <kernel>_launch_args.json sidecar written by the exception-dump callback.
+
+    It records the full launch ABI in signature order (ptr / scalar / tiling
+    args plus block_dim), which the dump data file alone cannot recover.
+    """
+    path = os.path.join(dump_dir, f"{kernel_name}_launch_args.json")
+    if not os.path.isfile(path):
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            meta = json.load(f)
+        if isinstance(meta, dict) and isinstance(meta.get("abi"), list):
+            return meta
+        logging.warning(f"launch-args sidecar malformed, ignored: {path}")
+    except (OSError, ValueError) as exc:
+        logging.warning(f"launch-args sidecar unreadable ({exc}), ignored: {path}")
+    return None
+
+
+def _parse_call_kernel_signature(ck_cpp: str) -> Tuple[List[str], List[str]]:
+    """Parse call_kernel.cpp's extern "C" entry into (arg names, ctypes exprs).
+
+    Args are those after (blockDim, stream), in ABI order. The return type is
+    ignored (void or int64_t alike). Unknown C types yield a None entry; the
+    caller then skips argtypes binding rather than mis-binding values.
+    """
+    try:
+        with open(ck_cpp, encoding="utf-8", errors="replace") as f:
+            ck_text = f.read()
+    except OSError:
+        return [], []
+    m = re.search(r'extern\s+"C"\s+\w+\s+call_kernel\s*\((.*?)\)', ck_text, re.S)
+    if not m:
+        return [], []
+    params = [p.strip() for p in m.group(1).split(",") if p.strip()]
+    arg_names: List[str] = []
+    arg_ctypes: List[str] = []
+    for p in params[2:]:
+        toks = p.split()
+        if len(toks) < 2:
+            return [], []
+        arg_names.append(toks[-1].lstrip("*"))
+        arg_ctypes.append(_C_CTYPE_MAP.get(" ".join(toks[:-1])))
+    return arg_names, arg_ctypes
+
+
 def _find_call_kernel_so(work_dir: str, dump_dir: Optional[str] = None,
                          kernel_name: Optional[str] = None) -> Optional[str]:
     """查找 call_kernel.so。
@@ -190,13 +265,17 @@ def _elf_sections(data: bytes) -> Dict[str, Tuple[int, int]]:
     return out
 
 
-def _find_bisheng_tools() -> Optional[Tuple[str, str]]:
-    """Locate the bisheng toolchain's ld.lld + llvm-objdump used by the CCE JIT.
+def _find_bisheng_tools() -> Optional[Tuple[str, str, str]]:
+    """Locate the bisheng toolchain's ld.lld + llvm-objdump + llvm-symbolizer.
 
     The pair relocations in the embedded device ELF's .debug_line are applied at
     link time by this lld, so linking the embedded ELF once through it yields a
-    file whose line table stock LLVM consumers (llvm-objdump -d -l) can decode.
-    Returns (ld_lld, llvm_objdump) or None when the toolchain is unavailable.
+    file whose line table stock LLVM consumers can decode.  llvm-symbolizer
+    with --inlines then extracts the full inline call chain (intrinsic →
+    user kernel) from the linked DWARF.
+
+    Returns (ld_lld, llvm_objdump, llvm_symbolizer) or None when the toolchain
+    is unavailable.
     """
     override = os.environ.get("PYPTO_BISHENG_BIN")
     roots = []
@@ -207,37 +286,62 @@ def _find_bisheng_tools() -> Optional[Tuple[str, str]]:
         roots.append(os.path.join(ascend, "tools", "bisheng_compiler", "bin"))
         roots.append(os.path.join(ascend, "..", "tools", "bisheng_compiler", "bin"))
         roots.append(os.path.join(ascend, "bin"))
+        roots.append(os.path.join(ascend, "tools", "mssanitizer", "bin"))
+        roots.append(os.path.join(ascend, "tools", "msopprof", "bin"))
     candidates = []
     for root in roots:
         ld = os.path.join(root, "ld.lld")
         objdump = os.path.join(root, "llvm-objdump")
-        if os.path.isfile(ld) and os.path.isfile(objdump):
-            candidates.append((ld, objdump))
-    return candidates[0] if candidates else None
+        symbolizer = os.path.join(root, "llvm-symbolizer")
+        if os.path.isfile(ld) and os.path.isfile(objdump) and os.path.isfile(symbolizer):
+            candidates.append((ld, objdump, symbolizer))
+    if candidates:
+        return candidates[0]
+    # Fallback: look for llvm-symbolizer separately if not in the same dir
+    for root in roots:
+        ld = os.path.join(root, "ld.lld")
+        objdump = os.path.join(root, "llvm-objdump")
+        if not os.path.isfile(ld) or not os.path.isfile(objdump):
+            continue
+        for sym_root in roots:
+            symbolizer = os.path.join(sym_root, "llvm-symbolizer")
+            if os.path.isfile(symbolizer):
+                return (ld, objdump, symbolizer)
+    return None
 
 
-def _resolve_pc_to_source_via_tools(so_path: str, pc: int, tools: Tuple[str, str],
-                                    symbol: str = "", symbol_offset: int = 0) -> Optional[Tuple[str, int]]:
-    """Resolve a device Error-PC to (file, line) via the bisheng toolchain.
+def _resolve_pc_to_source_via_tools(so_path: str, pc: int, tools: Tuple[str, str, str],
+                                    symbol: str = "", symbol_offset: int = 0
+                                    ) -> Optional[Tuple[str, int, List[Tuple[str, int]]]]:
+    """Resolve a device Error-PC to (file, line, inline_chain) via bisheng tools.
 
     1. Cut the embedded device ELF (section __aicore_rel_binary) out of the .so.
-    2. ld.lld -shared -Ttext=0 links it, applying the CCE pair relocations to
+    2. ld.lld -Ttext=0 links it, applying the CCE pair relocations to
        .debug_line and placing .text at address 0 (PC offsets need no rebase).
+       (-shared is NOT used: kernels with pl.printf reference
+       DebugTunnel globals whose R_AICORE_MOVADRP_G4 relocations are rejected
+       in shared mode; plain relocation output links fine.)
     3. When the plog carries symbol+offset, rebase the PC through the symbol
        table: fatobj (mix) kernels have their AIV entry symbol at a non-zero
        .text offset, which shifts fixedPCOffset by exactly that amount.
-    4. llvm-objdump -d -l interleaves source markers with instruction
-       addresses; replay the (marker, address) pairs and pick the last row
-       whose address is <= pc.
+    4. llvm-symbolizer --inlines maps the PC to the FULL inline call chain
+       (innermost intrinsic → outer helper → user kernel code), upgrading the
+       localization from "which intrinsic" to "which user-kernel call site".
+       Falls back to llvm-objdump -d -l (single row) when the symbolizer is
+       unavailable.
 
     The linked device ELF is persisted next to the .so as
     <kernel>_device_linked.so (relocations applied, .text at 0), so the dump
     directory keeps a directly-symbolizable device image for offline analysis.
+
+    Returns (file, line, chain) where chain is a list of (file, line) from
+    innermost to outermost inline frame; chain has a single entry on the
+    objdump fallback path.
     """
     import shutil
     import tempfile
 
-    ld, objdump = tools
+    ld, objdump, symbolizer = tools
     data = open(so_path, "rb").read()
     outer = _elf_sections(data)
     rel = outer.get("__aicore_rel_binary")
@@ -250,7 +354,7 @@ def _resolve_pc_to_source_via_tools(so_path: str, pc: int, tools: Tuple[str, str
             f.write(data[rel[0]:rel[0] + rel[1]])
         linked = os.path.join(tmp, "device_linked.so")
         try:
-            subprocess.run([ld, "-shared", "-Ttext=0", obj, "-o", linked],
+            subprocess.run([ld, "-Ttext=0", obj, "-o", linked],
                            capture_output=True, timeout=120, check=True)
         except (subprocess.SubprocessError, OSError):
             return None
@@ -272,35 +376,86 @@ def _resolve_pc_to_source_via_tools(so_path: str, pc: int, tools: Tuple[str, str
                         break
             except (subprocess.SubprocessError, OSError, ValueError):
                 pass
-        try:
-            result = subprocess.run(
-                [objdump, "-d", "-l", linked],
-                capture_output=True, text=True, timeout=120,
-            )
-        except (subprocess.SubprocessError, OSError):
-            return None
-        if result.returncode != 0:
-            return None
-        rows: List[Tuple[int, str, int]] = []
-        marker = re.compile(r"^(.+[^()]):(\d+)$")
-        addr_re = re.compile(r"^\s+([0-9a-fA-F]+):")
-        cur_file: Optional[str] = None
-        cur_line = 0
-        for raw in result.stdout.splitlines():
-            line = raw.rstrip()
-            m = marker.match(line)
-            if m and "/" in m.group(1):
-                cur_file, cur_line = m.group(1), int(m.group(2))
-                continue
-            ma = addr_re.match(line)
-            if ma and cur_file is not None:
-                rows.append((int(ma.group(1), 16), cur_file, cur_line))
-        valid = [r for r in rows if r[2] and r[0] <= pc]
-        if not valid:
-            return None
-        return valid[-1][1], valid[-1][2]
+        chain = _resolve_pc_via_symbolizer(symbolizer, linked, pc)
+        if chain is not None:
+            # Pick the innermost user-source frame (not CANN include headers,
+            # not call_kernel.cpp) as primary, so the user sees the exact
+            # instruction call site (e.g. the TSTORE line) in their kernel,
+            # not the outermost dispatch wrapper.
+            primary_file, primary_line = chain[-1]
+            for c_file, c_line in chain:
+                if "/include/" not in c_file and not c_file.endswith("call_kernel.cpp"):
+                    primary_file, primary_line = c_file, c_line
+                    break
+            return primary_file, primary_line, chain
+        return _resolve_pc_via_objdump(objdump, linked, pc)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _resolve_pc_via_symbolizer(symbolizer: str, linked: str, pc: int
+                               ) -> Optional[List[Tuple[str, int]]]:
+    """Map PC to the full inline chain via llvm-symbolizer --inlines.
+
+    Output pairs (function name, file:line:col) from innermost to outermost;
+    e.g. an inlined intrinsic reports the intrinsic header frame followed by
+    each enclosing inline site up to the user kernel. Returns [(file, line)...]
+    or None when the tool is unavailable or no frame resolves.
+    """
+    try:
+        result = subprocess.run(
+            [symbolizer, "--obj", linked, "--inlines", "--output-style=LLVM"],
+            input=f"0x{pc:x}\n", capture_output=True, text=True, timeout=120,
+        )
+    except (subprocess.SubprocessError, OSError):
+        return None
+    if result.returncode != 0:
+        return None
+    raw = [s.strip() for s in result.stdout.splitlines()]
+    # Strip empty lines; remainder is pairs of (func, file:line:col) from
+    # innermost to outermost. Empty lines appear when a frame's DILocation
+    # spans multiple scopes — skip them conservatively.
+    lines = [s for s in raw if s]
+    loc_re = re.compile(r"^(.+):(\d+):(\d+)$")
+    chain: List[Tuple[str, int]] = []
+    for i in range(0, len(lines) - 1, 2):
+        m = loc_re.match(lines[i + 1])
+        if m and "/" in m.group(1):
+            chain.append((m.group(1), int(m.group(2))))
+    return chain if chain else None
+
+
+def _resolve_pc_via_objdump(objdump: str, linked: str, pc: int
+                            ) -> Optional[Tuple[str, int, List[Tuple[str, int]]]]:
+    """Fallback: map PC to a single (file, line) via llvm-objdump -d -l."""
+    try:
+        result = subprocess.run(
+            [objdump, "-d", "-l", linked],
+            capture_output=True, text=True, timeout=120,
+        )
+    except (subprocess.SubprocessError, OSError):
+        return None
+    if result.returncode != 0:
+        return None
+    rows: List[Tuple[int, str, int]] = []
+    marker = re.compile(r"^(.+[^()]):(\d+)$")
+    addr_re = re.compile(r"^\s+([0-9a-fA-F]+):")
+    cur_file: Optional[str] = None
+    cur_line = 0
+    for raw in result.stdout.splitlines():
+        line = raw.rstrip()
+        m = marker.match(line)
+        if m and "/" in m.group(1):
+            cur_file, cur_line = m.group(1), int(m.group(2))
+            continue
+        ma = addr_re.match(line)
+        if ma and cur_file is not None:
+            rows.append((int(ma.group(1), 16), cur_file, cur_line))
+    valid = [r for r in rows if r[2] and r[0] <= pc]
+    if not valid:
+        return None
+    src = (valid[-1][1], valid[-1][2])
+    return src[0], src[1], [src]
 
 
 def _resolve_pc_to_source(so_path: str, pc: int, symbol: str = "", symbol_offset: int = 0) -> Optional[Tuple[str, int]]:
@@ -309,8 +464,26 @@ def _resolve_pc_to_source(so_path: str, pc: int, symbol: str = "", symbol_offset
     The device code's .debug_line carries CCE pair relocations that stock DWARF
     consumers cannot apply. The toolchain's own ld.lld applies them at link
     time, so the embedded device ELF is linked once (-Ttext=0, no rebase
-    needed) and decoded with the toolchain's llvm-objdump. Returns None when
-    the toolchain is unavailable.
+    needed) and decoded with llvm-symbolizer (preferred) or llvm-objdump
+    (fallback). Returns None when the toolchain is unavailable.
+    """
+    tools = _find_bisheng_tools()
+    if tools is None:
+        logging.warning("bisheng toolchain not found, Error-PC source line unavailable")
+        return None
+    result = _resolve_pc_to_source_via_tools(
+        so_path, pc, tools, symbol=symbol, symbol_offset=symbol_offset)
+    if result:
+        return result[0], result[1]
+    return None
+
+
+def _resolve_pc_to_source_with_chain(so_path: str, pc: int, symbol: str = "", symbol_offset: int = 0
+                                     ) -> Optional[Tuple[str, int, List[Tuple[str, int]]]]:
+    """Like _resolve_pc_to_source, but returns the full inline chain.
+
+    Returns (file, line, chain) where chain is [(file, line), ...] from
+    innermost (intrinsic) to outermost (kernel entry), or None.
     """
     tools = _find_bisheng_tools()
     if tools is None:
@@ -335,12 +508,134 @@ def _source_snippet(src_file: str, src_line: int, context: int = 3) -> str:
     return "\n".join(out) + "\n"
 
 
+# -------------------------------------------------------------------
+# Timeout-class diagnosis: msnpureport singlecommit (inter-core sync check)
+# -------------------------------------------------------------------
+
+_TIMEOUT_SIGNATURE = re.compile(r"times out|timeout|trap", re.IGNORECASE)
+
+
+def _find_msnpureport() -> str:
+    """Locate the msnpureport driver tool (mirrors debug_aicore_error.py)."""
+    env_path = os.environ.get("MSNPUREPORT_PATH", "")
+    if env_path and os.path.isfile(env_path):
+        return env_path
+    ascend_home = os.environ.get("ASCEND_HOME_PATH", "")
+    if ascend_home:
+        ascend_root = os.path.dirname(os.path.abspath(ascend_home))
+        cand = os.path.join(ascend_root, "driver", "tools", "msnpureport")
+        if os.path.isfile(cand):
+            return cand
+    return "/usr/local/Ascend/driver/tools/msnpureport"
+
+
+def _is_docker_env() -> bool:
+    if os.path.exists("/.dockerenv"):
+        return True
+    try:
+        with open("/proc/1/cgroup", "r") as f:
+            content = f.read()
+            if "docker" in content or "kubepods" in content:
+                return True
+    except (OSError, PermissionError):
+        pass
+    return False
+
+
+def _msnpureport_set_singlecommit(enable: bool, device_id: int, is_docker: bool = False):
+    """Enable/disable device singlecommit mode. Returns (success, cmd_str, output)."""
+    val = "1" if enable else "0"
+    cmd = [_find_msnpureport(), "config", "--set", "--singlecommit", val, "-d", str(device_id)]
+    if is_docker:
+        cmd.append("--docker")
+    cmd_str = " ".join(cmd)
+    action = "enable" if enable else "restore"
+    logging.info(f"{action} singlecommit: {cmd_str}")
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        output = result.stdout.strip()
+        if result.stderr:
+            output += "\n" + result.stderr.strip()
+        return result.returncode == 0, cmd_str, output
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        return False, cmd_str, f"[ERROR] {exc}"
+
+
+def run_singlecommit_diagnosis(script_path: str, device_id: int, out_dir: str,
+                               timeout: int) -> dict:
+    """Re-run the repro under singlecommit=1; the caller analyzes the result.
+
+    singlecommit serializes task commit on the device, removing inter-core
+    concurrency. For timeout-class faults the trap PC parks in compiler
+    internals (e.g. PrintState) and is useless; under singlecommit the
+    snapshot lands on the real stuck loop, so the caller re-parses the
+    singlecommit run's plog for ALL stuck cores' ErrorPCs afterwards.
+
+    Uses ``out_dir`` directly as the ASCEND_WORK_PATH for the singlecommit
+    run (no subdirectory); the caller's ``since=sc_start`` time window isolates
+    the plog records that belong to this run.
+
+    Returns {executed, passed, sc_work, sc_start, output, log}. Device config
+    is always restored (finally). ``executed`` is False only when msnpureport
+    is unavailable/enabling failed; a subprocess timeout still counts as
+    executed (the device may have written plog records before the kill).
+    """
+    result: dict = {"executed": False, "passed": False, "sc_work": "",
+                    "sc_start": 0.0, "output": "", "log": ""}
+    if not os.path.isfile(_find_msnpureport()):
+        result["log"] = "msnpureport not found, singlecommit diagnosis skipped\n"
+        logging.warning(result["log"].strip())
+        return result
+
+    is_docker = _is_docker_env()
+    sc_work = out_dir
+    result["sc_work"] = sc_work
+
+    ok, cmd_str, msn_out = _msnpureport_set_singlecommit(True, device_id, is_docker)
+    log_lines: List[str] = [f"msnpureport enable single-step: {cmd_str}", msn_out, ""]
+    if not ok:
+        logging.warning(f"enable singlecommit failed: {msn_out}")
+        _msnpureport_set_singlecommit(False, device_id, is_docker)
+        result["log"] = "\n".join(log_lines) + "\n"
+        return result
+
+    run_output = ""
+    try:
+        env = os.environ.copy()
+        env["ASCEND_WORK_PATH"] = sc_work
+        logging.info("========== Re-executing under singlecommit=1 ==========")
+        result["sc_start"] = time.time()
+        try:
+            r = subprocess.run([sys.executable, script_path], capture_output=True,
+                               text=True, timeout=timeout, env=env)
+            run_output = r.stdout or ""
+            if r.stderr:
+                run_output += "\n[stderr]\n" + r.stderr
+            result["passed"] = r.returncode == 0
+            result["executed"] = True
+        except subprocess.TimeoutExpired:
+            run_output = f"[ERROR] repro timed out ({timeout}s) under singlecommit=1"
+            result["executed"] = True
+        result["output"] = run_output
+    finally:
+        ok2, cmd_str2, msn_out2 = _msnpureport_set_singlecommit(False, device_id, is_docker)
+        log_lines.append(f"Re-execute (singlecommit=1):\n{run_output}")
+        log_lines += ["", f"msnpureport restore: {cmd_str2}",
+                      msn_out2 if ok2 else f"[ERROR] restore failed: {msn_out2}", ""]
+    result["log"] = "\n".join(log_lines) + "\n"
+    return result
+
+
 def _locate_error_pc(so_path: str, work_dir: str, since: float) -> Optional[Tuple[int, str, Optional[Tuple[str, int]]]]:
     """Locate the Error PC from freshly written plogs and resolve it to source.
 
     Embedded verbatim (together with the resolver helpers) into generated
     repro scripts so they can print the localization themselves. Returns
     (pc, symbol, (file, line) | None) or None.
+
+    Searches ``work_dir/log`` first, then falls back to the default ascend
+    log path (``~/ascend/log``) so that scripts work even when
+    ``ASCEND_WORK_PATH`` is not exported.
 
     The symbol line carries the true PC as symbol+offset; it is preferred over
     fixedPCOffset, whose zero-based normalization assumes a single kernel
@@ -351,17 +646,18 @@ def _locate_error_pc(so_path: str, work_dir: str, since: float) -> Optional[Tupl
     pc_line_re = re.compile(r"Error PC information\..*?fixedPCOffset=0x([0-9a-fA-F]+)")
     sym_re = re.compile(r"Error symbol information\..*?symbol=(\S+?)(?:\+0x([0-9a-fA-F]+))?\.?\s*$", re.MULTILINE)
     plogs: List[Tuple[float, str]] = []
-    base = os.path.join(work_dir, "log")
-    if os.path.isdir(base):
-        for root, _, fnames in os.walk(base):
-            for fname in fnames:
-                fpath = os.path.join(root, fname)
-                try:
-                    mtime = os.path.getmtime(fpath)
-                except OSError:
-                    continue
-                if mtime >= since:
-                    plogs.append((mtime, fpath))
+    for base_dir in (os.path.join(work_dir, "log"),
+                     os.path.join(os.path.expanduser("~"), "ascend", "log")):
+        if os.path.isdir(base_dir):
+            for root, _, fnames in os.walk(base_dir):
+                for fname in fnames:
+                    fpath = os.path.join(root, fname)
+                    try:
+                        mtime = os.path.getmtime(fpath)
+                    except OSError:
+                        continue
+                    if mtime >= since:
+                        plogs.append((mtime, fpath))
     for _, plog in sorted(plogs, reverse=True):
         try:
             with open(plog, encoding="utf-8", errors="replace") as f:
@@ -381,6 +677,131 @@ def _locate_error_pc(so_path: str, work_dir: str, since: float) -> Optional[Tupl
     return None
 
 
+_PC_ALL_RE = re.compile(
+    r"Error PC information\.\s*coreId=(\d+),\s*coreType=(\d+).*?"
+    r"fixedPCOffset=0x([0-9a-fA-F]+)")
+_SYM_ALL_RE = re.compile(
+    r"Error symbol information\.\s*coreId=(\d+),\s*coreType=(\d+),\s*"
+    r"symbol=(\S+?)(?:\+0x([0-9a-fA-F]+))?\.?\s*$",
+    re.MULTILINE)
+
+
+def _locate_error_pcs(so_path: str, work_dir: str, since: float) -> List[dict]:
+    """Collect the ErrorPC of EVERY stuck core from a run's own plog.
+
+    A cv-fusion (mix) kernel hangs with cube and vector cores parked at
+    DIFFERENT wait points — the pair of stuck locations is the evidence of a
+    deadlock, so only reporting the first record hides one side. This walks
+    the same plog set as the embedded single-record locator but parses ALL
+    "Error PC information" / "Error symbol information" lines, pairs them by
+    (coreId, coreType), aggregates identical (coreType, PC, symbol) records
+    and resolves each to a source line.
+
+    Returns a list of {core_type, core_ids, pc, symbol, symbol_offset, src}
+    in first-seen order. (Kept separate from _locate_error_pc, which is
+    embedded verbatim into generated repro scripts and must stay
+    self-contained.)
+    """
+    plogs: List[Tuple[float, str]] = []
+    for base_dir in (os.path.join(work_dir, "log"),
+                     os.path.join(os.path.expanduser("~"), "ascend", "log")):
+        if os.path.isdir(base_dir):
+            for root, _, fnames in os.walk(base_dir):
+                for fname in fnames:
+                    fpath = os.path.join(root, fname)
+                    try:
+                        mtime = os.path.getmtime(fpath)
+                    except OSError:
+                        continue
+                    if mtime >= since:
+                        plogs.append((mtime, fpath))
+
+    pcs_by_core: Dict[Tuple[str, str], List[int]] = {}
+    syms_by_core: Dict[Tuple[str, str], List[Tuple[str, int]]] = {}
+    for _, plog in sorted(plogs, reverse=True):
+        try:
+            with open(plog, encoding="utf-8", errors="replace") as f:
+                text = f.read()
+        except OSError:
+            continue
+        if not _PC_ALL_RE.search(text):
+            continue
+        for m in _PC_ALL_RE.finditer(text):
+            pcs_by_core.setdefault((m.group(1), m.group(2)), []).append(int(m.group(3), 16))
+        for m in _SYM_ALL_RE.finditer(text):
+            sym = m.group(3)
+            off = int(m.group(4), 16) if m.group(4) else 0
+            syms_by_core.setdefault((m.group(1), m.group(2)), []).append((sym, off))
+        break  # all records belong to this (newest matching) plog
+
+    aggregated: Dict[Tuple[str, int, str, int], dict] = {}
+    for key, pcs in pcs_by_core.items():
+        syms = syms_by_core.get(key, [])
+        for i, pc in enumerate(pcs):
+            sym, off = syms[i] if i < len(syms) else ("", 0)
+            akey = (key[1], pc, sym, off)
+            rec = aggregated.get(akey)
+            if rec is None:
+                rec = {"core_type": int(key[1]), "core_ids": set(), "pc": pc,
+                       "symbol": sym, "symbol_offset": off, "src": None}
+                aggregated[akey] = rec
+            rec["core_ids"].add(int(key[0]))
+
+    records = []
+    for rec in aggregated.values():
+        resolved = _resolve_pc_to_source_with_chain(so_path, rec["pc"],
+                                                    symbol=rec["symbol"],
+                                                    symbol_offset=rec["symbol_offset"])
+        if resolved:
+            rec["src"] = (resolved[0], resolved[1])
+            rec["inline_chain"] = resolved[2]
+        else:
+            rec["src"] = None
+            rec["inline_chain"] = None
+        rec["core_ids"] = sorted(rec["core_ids"])
+        records.append(rec)
+    return records
+
+
+def _format_error_pc_records(records: List[dict], dump_dir: str) -> str:
+    """Render all stuck-core records (one per aggregated PC) for the report.
+
+    Each record shows the inline chain (innermost → outermost frame) so the
+    user sees not only the intrinsic that faulted but also which call site in
+    their kernel code reached it.
+    """
+    if not records:
+        return "Error PC not found in plog (symbol locator output absent)\n"
+    out: List[str] = []
+    for rec in records:
+        label = "AICORE(cube)" if rec["core_type"] == 0 else "AIVECTOR(vec)"
+        sym_repr = f"{rec['symbol']}+0x{rec['symbol_offset']:x}" if rec["symbol"] else "<unknown>"
+        out.append(f"[{label} cores={','.join(str(c) for c in rec['core_ids'])}] "
+                   f"ErrorPC: 0x{rec['pc']:x}  symbol={sym_repr}")
+        chain = rec.get("inline_chain") or []
+        if chain:
+            src_file, src_line = rec["src"] if rec["src"] is not None else chain[-1]
+            for idx, (c_file, c_line) in enumerate(chain):
+                # Prefer the source copies shipped inside the dump dir so the
+                # report never depends on the (ephemeral) build tree.
+                local_copy = os.path.join(dump_dir, os.path.basename(c_file))
+                if os.path.isfile(local_copy):
+                    c_file = local_copy
+                arrow = "->" if os.path.basename(c_file) == os.path.basename(src_file) and c_line == src_line else " |"
+                out.append(f"    {arrow} {c_file}:{c_line}")
+            src_file, src_line = rec["src"] if rec["src"] is not None else chain[-1]
+            logging.info(f"[{label}] ErrorPC 0x{rec['pc']:x} ({sym_repr}) -> {src_file}:{src_line}")
+            snippet = _source_snippet(src_file, src_line)
+            if snippet:
+                out.append(snippet.rstrip("\n"))
+        else:
+            out.append("    Source: <line table not resolvable in call_kernel.so>")
+            logging.warning(f"[{label}] ErrorPC 0x{rec['pc']:x} ({sym_repr}) -> "
+                            "source line not resolvable")
+        out.append("")
+    return "\n".join(out)
+
+
 def codegen_test_script(
     call_kernel_so: str,
     kernel_name: str,
@@ -389,6 +810,8 @@ def codegen_test_script(
     device_id: int,
     output_path: str,
     block_dim: int = 1,
+    launch_meta: Optional[dict] = None,
+    work_dir: str = "",
 ) -> None:
     """生成单算子复现脚本。"""
     with open(dump_file, "rb") as f:
@@ -429,30 +852,77 @@ def codegen_test_script(
         load_lines.append(f"    {var}_np, device=device).view({torch_dtype})")
         tensor_vars.append(var)
 
-    # Dynamic-shape tail args: the launch ABI is
-    # call_kernel(block_dim, stream, ptr..., int32 dyn...) where each
-    # __pypto_dyn_<param>_<k> arg takes the k-th dim of that tensor param's
-    # runtime shape. Parse the call_kernel.cpp copy shipped in the dump dir to
-    # bind them exactly; without it the C side would read garbage registers.
-    dyn_vals: List[str] = []
+    # Launch ABI binding. The C entry is
+    # call_kernel(blockDim, stream, <ptr/scalar/tiling args...>, int32 dyn...)
+    # where each __pypto_dyn_<param>_<k> arg takes the k-th dim of that tensor
+    # param's runtime shape. Two sources rebuild it:
+    #   1. <kernel>_launch_args.json sidecar (preferred): the exception-time
+    #      record of every ABI arg plus block_dim — covers standalone scalars
+    #      and multi-block launches that the signature alone cannot express.
+    #   2. call_kernel.cpp signature alone (fallback, single-block, ptr-only):
+    #      tensors in dump order, dyn args from shapes.
     ck_cpp = os.path.join(os.path.dirname(call_kernel_so), "call_kernel.cpp")
+    arg_names: List[str] = []
+    arg_ctypes: List[str] = []
     if os.path.isfile(ck_cpp):
-        try:
-            with open(ck_cpp, encoding="utf-8", errors="replace") as f:
-                ck_text = f.read()
-            m = re.search(r'extern "C" void call_kernel\((.*?)\)', ck_text, re.S)
-            params = [p.strip() for p in m.group(1).split(",")] if m else []
-            arg_names = [p.split()[-1].lstrip("*") for p in params[2:]]
-            ptr_names = [n for n in arg_names if not n.startswith("__pypto_dyn_")]
-            var_by_param = dict(zip(ptr_names, tensor_vars))
-            for name in arg_names:
-                dm = re.fullmatch(r"__pypto_dyn_(.+)_(\d+)", name)
-                if dm and dm.group(1) in var_by_param:
-                    dyn_vals.append(f"{var_by_param[dm.group(1)]}.shape[{dm.group(2)}]")
-        except (OSError, AttributeError, IndexError):
-            dyn_vals = []
+        arg_names, arg_ctypes = _parse_call_kernel_signature(ck_cpp)
+    have_signature = bool(arg_names) and all(ct is not None for ct in arg_ctypes)
+
+    dyn_vals: List[str] = []
+    launch_exprs: List[str] = []
+
+    if launch_meta is not None and launch_meta.get("abi"):
+        var_by_addr = {t.addr: var for t, var in zip(tensors_sorted, tensor_vars)}
+        used_vars: set = set()
+        var_by_name: Dict[str, str] = {}
+        for entry in launch_meta["abi"]:
+            if entry.get("kind") != "ptr":
+                continue
+            name = str(entry.get("name", ""))
+            var = var_by_addr.get(int(entry.get("addr") or 0))
+            if var is None:
+                var = next((v for v in tensor_vars if v not in used_vars), None)
+            if var is None:
+                logging.warning(f"launch-args: no dumped tensor for ptr '{name}', passing null")
+            else:
+                used_vars.add(var)
+                var_by_name[name] = var
+        for entry in launch_meta["abi"]:
+            if entry.get("kind") == "ptr":
+                var = var_by_name.get(str(entry.get("name", "")))
+                launch_exprs.append(f"ctypes.c_void_p({var}.data_ptr())" if var else "ctypes.c_void_p(0)")
+            else:
+                value = entry.get("value")
+                # Plain literal when argtypes binds the width; otherwise pin
+                # int64 so a wide scalar cannot be truncated by ctypes' default.
+                if have_signature:
+                    launch_exprs.append(repr(value))
+                else:
+                    launch_exprs.append(f"ctypes.c_int64({value!r})")
+        for name in arg_names:
+            dm = re.fullmatch(r"__pypto_dyn_(.+)_(\d+)", name)
+            if dm and dm.group(1) in var_by_name:
+                dyn_vals.append(f"{var_by_name[dm.group(1)]}.shape[{dm.group(2)}]")
+    else:
+        ptr_names = [n for n in arg_names if not n.startswith("__pypto_dyn_")]
+        var_by_param = dict(zip(ptr_names, tensor_vars))
+        for name in arg_names:
+            dm = re.fullmatch(r"__pypto_dyn_(.+)_(\d+)", name)
+            if dm and dm.group(1) in var_by_param:
+                dyn_vals.append(f"{var_by_param[dm.group(1)]}.shape[{dm.group(2)}]")
+        launch_exprs = [f"ctypes.c_void_p({v}.data_ptr())" for v in tensor_vars]
+
     if not dyn_vals:
         logging.warning("call_kernel.cpp signature not usable, launching without dynamic-shape args")
+
+    # Bind argtypes when the parsed signature covers every launch value — this
+    # is what makes wide int64 scalars survive the ctypes call. arg_names
+    # already includes the dyn tail, so arg_ctypes alone completes the list.
+    argtypes_expr: Optional[str] = None
+    if have_signature and len(arg_names) == len(launch_exprs) + len(dyn_vals):
+        argtypes_expr = (
+            "[ctypes.c_uint32, ctypes.c_void_p, " + ", ".join(arg_ctypes) + "]"
+        )
 
     lines = [
         "#!/usr/bin/env python3",
@@ -486,6 +956,10 @@ def codegen_test_script(
     lines.append("")
     lines.append(inspect.getsource(_find_bisheng_tools).rstrip())
     lines.append("")
+    lines.append(inspect.getsource(_resolve_pc_via_symbolizer).rstrip())
+    lines.append("")
+    lines.append(inspect.getsource(_resolve_pc_via_objdump).rstrip())
+    lines.append("")
     lines.append(inspect.getsource(_resolve_pc_to_source_via_tools).rstrip())
     lines.append("")
     lines.append(inspect.getsource(_resolve_pc_to_source).rstrip())
@@ -501,25 +975,33 @@ def codegen_test_script(
         f"_so_path = r'{call_kernel_so}'",
         "_SO = ctypes.CDLL(_so_path)",
         "",
+        f"_work_dir = r'{work_dir}'",
+        "",
     ]
     lines.extend(load_lines)
     lines += [
         "",
-        f"_args = [{', '.join(tensor_vars)}]",
-        "_ctypes_args = [ctypes.c_void_p(t.data_ptr()) for t in _args]",
+        f"_launch_vals = [{', '.join(launch_exprs)}]",
         f"_dyn_args = [{', '.join(dyn_vals)}]",
         "_stream = torch.npu.current_stream()",
         f"_block_dim = {block_dim}",
         "",
+    ]
+    if argtypes_expr:
+        lines += [
+            f"_SO.call_kernel.argtypes = {argtypes_expr}",
+            "",
+        ]
+    lines += [
         "print(f'Launching kernel with block_dim={_block_dim}')",
-        "_SO.call_kernel(_block_dim, getattr(_stream, '_as_parameter_'), *_ctypes_args, *_dyn_args)",
+        "_SO.call_kernel(_block_dim, getattr(_stream, '_as_parameter_'), *_launch_vals, *_dyn_args)",
         "try:",
         "    torch.npu.synchronize()",
         "    print('PASS: No AICORE error — execution succeeded')",
         "    sys.exit(0)",
         "except Exception as e:",
         "    print(f'FAIL: AICORE error reproduced: {e}')",
-        "    _work = os.environ.get('ASCEND_WORK_PATH', os.getcwd())",
+        "    _work = os.environ.get('ASCEND_WORK_PATH') or _work_dir",
         "    _hit = _locate_error_pc(_so_path, _work, time.time() - 120.0)",
         "    if _hit:",
         "        _pc, _sym, _src = _hit",
@@ -582,7 +1064,7 @@ def main():
     dump_file = None
     for fname in sorted(os.listdir(dump_dir)):
         fpath = os.path.join(dump_dir, fname)
-        if os.path.isfile(fpath) and not fname.endswith(("_host.o", "_debug.o", ".so", ".cpp", ".h")):
+        if os.path.isfile(fpath) and not fname.endswith(("_host.o", "_debug.o", ".so", ".cpp", ".h", ".json")):
             dump_file = fpath
             break
     if dump_file is None:
@@ -602,13 +1084,30 @@ def main():
         sys.exit(1)
     logging.info(f"call_kernel.so = {call_kernel_so}")
 
+    launch_meta = _load_launch_meta(dump_dir, kernel_name)
+    block_dim = 1
+    if launch_meta is not None:
+        recorded = launch_meta.get("block_dim")
+        if isinstance(recorded, int) and recorded > 0:
+            block_dim = recorded
+            logging.info(f"block_dim = {block_dim} (from launch-args sidecar)")
+        else:
+            logging.warning("launch-args sidecar has no block_dim, defaulting to 1")
+
     script_path = os.path.join(args.out, "test_single_op.py")
-    codegen_test_script(call_kernel_so, kernel_name, dump_file, tensors, device_id, script_path, block_dim=1)
+    codegen_test_script(call_kernel_so, kernel_name, dump_file, tensors, device_id, script_path,
+                        block_dim=block_dim, launch_meta=launch_meta, work_dir=work_dir)
 
     logging.info("========== Executing Single-Operator Test ==========")
     repro_start = time.time()
+    # Pin ASCEND_WORK_PATH so the repro run's plog lands in work_dir/log,
+    # where _locate_error_pcs looks for it (the caller's env may point
+    # elsewhere or be unset, losing the Error PC records).
+    repro_env = os.environ.copy()
+    repro_env["ASCEND_WORK_PATH"] = work_dir
     try:
-        result = subprocess.run([sys.executable, script_path], capture_output=True, text=True, timeout=args.t)
+        result = subprocess.run([sys.executable, script_path], capture_output=True, text=True,
+                                timeout=args.t, env=repro_env)
     except subprocess.TimeoutExpired:
         logging.error(f"Test script timed out ({args.t}s)")
         sys.exit(1)
@@ -619,32 +1118,26 @@ def main():
     print(output)
 
     pc_info = ""
+    sc_info = ""
     if result.returncode != 0:
         logging.info("FAIL: AICORE error reproduced")
-        pc_hit = _locate_error_pc(call_kernel_so, work_dir, repro_start)
-        if pc_hit is None:
-            pc_info = "Error PC not found in plog (symbol locator output absent)\n"
-            logging.warning(pc_info.strip())
-        else:
-            pc, symbol, src = pc_hit
-            if src is not None:
-                src_file, src_line = src
-                # The kernel sources are copied into the dump dir by the
-                # exception callback; prefer the local copy over the (possibly
-                # deleted) build tree so the dump stays self-contained.
-                local_copy = os.path.join(dump_dir, os.path.basename(src_file))
-                if os.path.isfile(local_copy):
-                    src_file = local_copy
-                pc_info = (f"ErrorPC: 0x{pc:x}\nSymbol: {symbol or '<unknown>'}\n"
-                           f"Source: {src_file}:{src_line}\n")
-                logging.info(f"ErrorPC 0x{pc:x} ({symbol or '?'}) -> {src_file}:{src_line}")
-                snippet = _source_snippet(src_file, src_line)
-                if snippet:
-                    pc_info += snippet
-            else:
-                pc_info = (f"ErrorPC: 0x{pc:x}\nSymbol: {symbol or '<unknown>'}\n"
-                           f"Source: <line table not resolvable in call_kernel.so>\n")
-                logging.warning(f"ErrorPC 0x{pc:x} ({symbol or '?'}) -> source line not resolvable")
+        records = _locate_error_pcs(call_kernel_so, work_dir, repro_start)
+        pc_info = _format_error_pc_records(records, dump_dir)
+        if _TIMEOUT_SIGNATURE.search(output):
+            logging.info("Timeout-class failure: re-reproducing under singlecommit=1")
+            sc = run_singlecommit_diagnosis(script_path, device_id, args.out, args.t)
+            sc_info += "Singlecommit diagnosis (timeout-class):\n" + sc["log"]
+            if sc["executed"]:
+                if sc["passed"]:
+                    conclusion = ("Conclusion: PASS in singlecommit mode -> inter-core "
+                                  "synchronization issue (concurrency/timing)\n")
+                    sc_info += conclusion
+                    logging.info(conclusion.strip())
+                else:
+                    sc_info += ("Conclusion: still FAIL in singlecommit mode -> not an "
+                                "inter-core sync issue; stuck cores of this run:\n")
+                    sc_records = _locate_error_pcs(call_kernel_so, sc["sc_work"], sc["sc_start"])
+                    sc_info += _format_error_pc_records(sc_records, dump_dir)
     else:
         logging.info("PASS: No AICORE error — execution succeeded")
 
@@ -659,6 +1152,18 @@ def main():
             f.write(f"\nError PC localization:\n{pc_info}\n")
         f.write(f"\nExecution result (exit code={result.returncode}):\n{output}")
     logging.info(f"Report saved: {report_path}")
+
+    if sc_info:
+        sc_path = os.path.join(args.out, "reproduction_report--singlecommit.txt")
+        with open(sc_path, "w") as f:
+            f.write(f"Kernel: {kernel_name}\nDevice: {device_id}\n"
+                    f"call_kernel.so: {call_kernel_so}\ndump file: {dump_file}\n")
+            for t in tensors:
+                _fmt = f"  {t.io_type}[{t.index}] addr=0x{t.addr:x}"
+                f.write(f"{_fmt} size={t.size} dtype={t.dtype_str} shape={t.shape}\n")
+            f.write(f"\n{sc_info}")
+            f.write(f"\nExecution result (exit code={result.returncode}):\n{output}")
+        logging.info(f"Singlecommit report saved: {sc_path}")
 
 
 if __name__ == "__main__":
