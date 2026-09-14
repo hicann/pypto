@@ -237,7 +237,7 @@ private:
     void DowngradeConsumerRequirements(const LogicalTensorPtr& tensor, MemoryType fromType);
     void ProcessL0C2L1SmallToLarge(Function& function);
     void ProcessL0C2L1LargeToSmall(Function& function);
-    bool CheckL0C2UBInnerAxisAligned(const LogicalTensorPtr& copyShapeTensor, const LogicalTensorPtr& ubOutputTensor);
+    bool CheckUBTileShape(const LogicalTensorPtr& moveTensor);
     bool CheckConsumerViewShapeMultiple(const LogicalTensorPtr& output, const LogicalTensorPtr& input);
     void ProcessL0C2UBSmallToLarge(Function& function);
     void ProcessL0C2UBLargeToSmall(Function& function);
@@ -256,6 +256,8 @@ private:
 static constexpr double UB_THRESHOLD_ASSEMBLE = 0.35;
 static constexpr double UB_THRESHOLD_NORMAL = 1.0;
 static constexpr double L1_THRESHOLD = 0.5;
+static constexpr uint16_t L0C_TILE_SIZE = 16;
+static constexpr uint16_t INT8_ALIGN_SIZE = 32;
 } // namespace npu::tile_fwk::legacy
 
 #endif // TILE_FWK_ASSIGN_MEMORY_TYPE_LEGACY_H
