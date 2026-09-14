@@ -112,6 +112,52 @@ bool CanRemoveAssembleByWriteRelation(Function& function, const Operation& op)
     }
     return true;
 }
+
+// 有效形状恒非负，最外层 RUNTIME_Max(expr, 0) 截断不改变取值；剥离该无效截断返回内部表达式串，
+// 用于识别仅相差一层截断的等价表达式。不满足剥离条件时原样返回。
+std::string StripUselessMaxZeroClamp(const std::string& dump)
+{
+    constexpr char kMaxPrefix[] = "RUNTIME_Max(";
+    constexpr char kZeroSuffix[] = ", 0)";
+    const size_t prefixLen = sizeof(kMaxPrefix) - 1;
+    const size_t suffixLen = sizeof(kZeroSuffix) - 1;
+    if (dump.size() <= prefixLen + suffixLen || dump.compare(0, prefixLen, kMaxPrefix) != 0 ||
+        dump.compare(dump.size() - suffixLen, suffixLen, kZeroSuffix) != 0) {
+        return dump;
+    }
+    std::string inner = dump.substr(prefixLen, dump.size() - prefixLen - suffixLen);
+    // 中间表达式括号必须平衡，确保 ", 0)" 属于最外层 Max 的第二个参数
+    int32_t depth = 0;
+    for (char c : inner) {
+        if (c == '(') {
+            depth++;
+        } else if (c == ')') {
+            depth--;
+            if (depth < 0) {
+                return dump;
+            }
+        }
+    }
+    if (depth != 0) {
+        return dump;
+    }
+    return inner;
+}
+
+// VIEW 输出是否仅被 ReduceAcc 消费；放宽有效形状比较仅限该场景
+bool IsReduceAccExclusiveConsumer(const LogicalTensorPtr& tensor)
+{
+    if (tensor == nullptr) {
+        return false;
+    }
+    const auto& consumers = tensor->GetConsumers();
+    if (consumers.empty()) {
+        return false;
+    }
+    return std::all_of(consumers.begin(), consumers.end(), [](const Operation* consumer) {
+        return consumer != nullptr && consumer->GetOpcode() == Opcode::OP_REDUCE_ACC;
+    });
+}
 } // namespace
 
 bool EqualInOutShape(const Operation& op)
@@ -125,7 +171,7 @@ bool EqualInOutShape(const Operation& op)
     return (equalMemType && equalShape);
 }
 
-bool EqualInOut(const Operation& op)
+bool EqualInOut(const Operation& op, bool relaxMaxZeroClamp)
 {
     auto in = op.GetIOperands().front();
     auto out = op.GetOOperands().front();
@@ -135,7 +181,13 @@ bool EqualInOut(const Operation& op)
         auto inDynValidShape = in->GetDynValidShape();
         auto outDynValidShape = out->GetDynValidShape();
         for (size_t i = 0; i < inDynValidShape.size(); i++) {
-            if (inDynValidShape[i].Dump() != outDynValidShape[i].Dump()) {
+            if (inDynValidShape[i].Dump() == outDynValidShape[i].Dump()) {
+                continue;
+            }
+            // 仅 ReduceAcc 消费的 VIEW 允许剥离无效的 RUNTIME_Max(expr, 0) 外层截断后再比较：
+            // slice 模式下该别名 VIEW 与其输入（Contract 输出）的有效形状可能仅相差这一层截断
+            if (!relaxMaxZeroClamp || StripUselessMaxZeroClamp(inDynValidShape[i].Dump()) !=
+                                          StripUselessMaxZeroClamp(outDynValidShape[i].Dump())) {
                 equalDynValidShape = false;
                 break;
             }
@@ -155,7 +207,9 @@ bool RemoveRedundantOp::ProcessRedundantOpWithDynShape(Operation& op) const
                           op.GetOpMagic());
         return false;
     }
-    if (!EqualInOut(op)) {
+    bool relaxMaxZeroClamp = op.GetOpcode() == Opcode::OP_VIEW && op.GetOOperands().size() == 1 &&
+                             IsReduceAccExclusiveConsumer(op.GetOOperands().front());
+    if (!EqualInOut(op, relaxMaxZeroClamp)) {
         APASS_LOG_DEBUG_F(Elements::Operation,
                           "op[%d]'s input and output has unequal shape and dynshape, skip removing.", op.GetOpMagic());
         return false;
