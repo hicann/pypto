@@ -295,7 +295,7 @@ struct FunctionFrame {
     {
         if (tensorDataViewDict.count(tensor)) {
             const auto& existingView = tensorDataViewDict[tensor];
-            if (validShape.empty() || existingView->GetValidShape() == validShape) {
+            if (validShape.empty() || existingView->GetValidShape() == validShape || callop != nullptr) {
                 return existingView;
             }
             size_t requiredSize = RawTensorData::CalcRequiredSize(dtype, rawShape);

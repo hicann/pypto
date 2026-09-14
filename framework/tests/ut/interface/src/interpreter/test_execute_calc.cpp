@@ -25,6 +25,7 @@
 #include "interface/interpreter/function.h"
 #include "interface/interpreter/operation.h"
 #include "interface/inner/tilefwk.h"
+#include "interface/operation/operation_impl.h"
 
 namespace npu::tile_fwk {
 class CalcCommonTest : public testing::Test {
@@ -41,6 +42,64 @@ public:
 
     void TearDown() override {}
 };
+
+TEST_F(CalcCommonTest, ExecuteOpAMulBWith5DMxScaleAndBias)
+{
+    const std::vector<int64_t> matrixAShape = {2, 1, 2, 64};
+    const std::vector<int64_t> matrixBShape = {1, 3, 64, 2};
+    const std::vector<int64_t> scaleAShape = {2, 1, 1, 2, 2};
+    const std::vector<int64_t> scaleBShape = {1, 3, 2, 1, 2};
+    const std::vector<int64_t> biasShape = {1, 2};
+    const std::vector<int64_t> outputShape = {2, 3, 2, 2};
+
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestAMulBWith5DMxScale", "TestAMulBWith5DMxScale",
+                                           nullptr);
+    auto matrixA = std::make_shared<LogicalTensor>(*func, DT_FP32, matrixAShape);
+    auto matrixB = std::make_shared<LogicalTensor>(*func, DT_FP32, matrixBShape);
+    auto scaleA = std::make_shared<LogicalTensor>(*func, DT_FP8E8M0, scaleAShape);
+    auto scaleB = std::make_shared<LogicalTensor>(*func, DT_FP8E8M0, scaleBShape);
+    auto bias = std::make_shared<LogicalTensor>(*func, DT_FP32, biasShape);
+    auto output = std::make_shared<LogicalTensor>(*func, DT_FP32, outputShape);
+    auto& matmulOp = func->AddOperation(Opcode::OP_A_MUL_B, {matrixA, matrixB, scaleA, scaleB, bias}, {output});
+    matmulOp.SetAttribute(Matrix::A_MUL_B_SCALE_A_COPY_IN_MODE, static_cast<int64_t>(Matrix::CopyInMode::DN2NZ));
+    matmulOp.SetAttribute(Matrix::A_MUL_B_SCALE_B_COPY_IN_MODE, static_cast<int64_t>(Matrix::CopyInMode::DN2NZ));
+    matmulOp.GetTileShapeForSetting().GetCubeTile().k = {0, 0, 0};
+
+    Tensor matrixATensor(DT_FP32, matrixAShape);
+    Tensor matrixBTensor(DT_FP32, matrixBShape);
+    Tensor scaleATensor(DT_FP8E8M0, scaleAShape);
+    Tensor scaleBTensor(DT_FP8E8M0, scaleBShape);
+    Tensor biasTensor(DT_FP32, biasShape);
+    Tensor outputTensor(DT_FP32, outputShape);
+    auto matrixAData = RawTensorData::CreateConstantTensor(matrixATensor, 1.0f);
+    auto matrixBData = RawTensorData::CreateConstantTensor(matrixBTensor, 1.0f);
+    auto scaleAData = RawTensorData::CreateTensor<uint8_t>(scaleATensor,
+                                                           {0x7F, 0x7F, 0x7F, 0x7F, 0x80, 0x80, 0x80, 0x80});
+    auto scaleBData = RawTensorData::CreateTensor<uint8_t>(
+        scaleBTensor, {0x7F, 0x7F, 0x7F, 0x7F, 0x80, 0x80, 0x80, 0x80, 0x81, 0x81, 0x81, 0x81});
+    auto biasData = RawTensorData::CreateConstantTensor(biasTensor, 5.0f);
+    auto outputData = RawTensorData::CreateConstantTensor(outputTensor, 0.0f);
+
+    std::vector<LogicalTensorDataPtr> inputViews = {
+        std::make_shared<LogicalTensorData>(matrixAData), std::make_shared<LogicalTensorData>(matrixBData),
+        std::make_shared<LogicalTensorData>(scaleAData), std::make_shared<LogicalTensorData>(scaleBData),
+        std::make_shared<LogicalTensorData>(biasData)};
+    auto outputView = std::make_shared<LogicalTensorData>(outputData);
+    std::vector<LogicalTensorDataPtr> outputViews = {outputView};
+    auto inoutDataPair = std::make_shared<FunctionIODataPair>();
+    FunctionFrame frame(func.get(), nullptr, nullptr, inoutDataPair, 0);
+    OperationInterpreter opInter;
+    ExecuteOperationContext ctx = {&frame, &opInter, &matmulOp, &inputViews, nullptr, &outputViews};
+
+    opInter.ExecuteOperation(&ctx);
+
+    const std::vector<float> batchGolden = {69.0f, 133.0f, 261.0f, 133.0f, 261.0f, 517.0f};
+    for (size_t batch = 0; batch < batchGolden.size(); ++batch) {
+        for (size_t index = 0; index < 4; ++index) {
+            EXPECT_FLOAT_EQ(outputView->Get<float>(batch * 4 + index), batchGolden[batch]);
+        }
+    }
+}
 
 // 测试带有脏数据的Reshape操作
 TEST_F(CalcCommonTest, UnalignedReshape)
