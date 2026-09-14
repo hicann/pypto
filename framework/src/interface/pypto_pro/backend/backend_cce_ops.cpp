@@ -1095,6 +1095,22 @@ static std::string MakeSetCtrlSprCodegenCCE(const ir::CallPtr& op, codegen::Code
     int8_t startBit = static_cast<int8_t>(start_val->value_);
     int8_t endBit = static_cast<int8_t>(end_val->value_);
     CheckCtrlBitRange(startBit, endBit);
+    auto value_const = ir::As<ir::ConstInt>(op->args_[2]);
+    if (value_const != nullptr && startBit >= 6 && endBit <= 10) {
+        // CTRL[8:6]=3'b111 (atomic operand dtype) and CTRL[10:9]=2'b11 (atomic op
+        // type) are undefined encodings that fault the device — reject up front.
+        int64_t v = value_const->value_ & ((int64_t(1) << (endBit - startBit + 1)) - 1);
+        if (startBit <= 6 && endBit >= 8 && ((v >> (6 - startBit)) & 0x7) == 0x7) {
+            CHECK(false) << "set_ctrl_spr: value " << value_const->value_
+                         << " sets CTRL[8:6]=3'b111, an undefined atomic operand dtype "
+                         << "(supported: 0-6 = none/float/half/int16/int32/int8/bfloat16)";
+        }
+        if (startBit <= 9 && endBit >= 10 && ((v >> (9 - startBit)) & 0x3) == 0x3) {
+            CHECK(false) << "set_ctrl_spr: value " << value_const->value_
+                         << " sets CTRL[10:9]=2'b11, an undefined atomic op type "
+                         << "(supported: 0-2 = ADD/MAX/MIN)";
+        }
+    }
     std::string value = codegen.GetExprAsCode(op->args_[2]);
     if (endBit - startBit == 63) {
         codegen.Emit("set_ctrl(" + value + ");");

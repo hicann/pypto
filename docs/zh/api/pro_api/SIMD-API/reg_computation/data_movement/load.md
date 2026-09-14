@@ -35,7 +35,7 @@ load(tile, stride) -> dst
 
 ## 返回值说明
 
-返回dst目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型请参见[约束说明](#约束说明)。不支持双寄存器模式。
+返回dst目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型和Tile一致。不支持双寄存器模式。
 
 ## 调用示例
 
@@ -50,7 +50,6 @@ import torch_npu
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
-    # 简单加载：支持非32字节对齐地址
     src_reg = vf.load(src_tile)
     vf.store_align(dst_tile, src_reg, preg)
 
