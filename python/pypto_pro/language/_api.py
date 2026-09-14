@@ -1191,6 +1191,16 @@ def const(value: Union[int, float], dtype: DType) -> Scalar:
     """
 
 
+@_api_decl
+def astype(x: Scalar, dtype: DType) -> Scalar:
+    """Convert a runtime scalar expression to ``dtype``.
+
+    Args:
+        x: Source scalar expression
+        dtype: Destination data type, e.g. ``pl.DT_INT32``
+    """
+
+
 # ===================================================================
 # Section G: Control flow
 # ===================================================================

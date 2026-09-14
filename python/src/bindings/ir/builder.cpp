@@ -517,6 +517,9 @@ void BindIRBuilder(py::module_& m)
              "Returns:\n"
              "    ContinueStmt: The created continue statement")
 
+        .def("update_jump_values", &IRBuilder::UpdateJumpValues, py::arg("jump_op"), py::arg("values"),
+             "Replace the values carried by a YieldStmt, BreakStmt, or ContinueStmt during IR construction.")
+
         .def(
             "create_function",
             [](IRBuilder& self, std::string name, std::vector<ir::VarPtr> params, std::vector<ir::TypePtr> returnTypes,

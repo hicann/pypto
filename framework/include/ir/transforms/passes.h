@@ -162,15 +162,10 @@ Pass BasicMemoryReuse();
 Pass AllocateMemoryAddr();
 
 /**
- * \brief Create an SSA conversion pass
- */
-Pass ConvertToSSA();
-
-/**
  * \brief Outline InCore scopes into separate functions
  *
  * Requirements:
- * - Input IR must be in SSA form (run ConvertToSSA first)
+ * - Input IR must already be in SSA form
  * - Only processes Opaque functions
  */
 Pass OutlineIncoreScopes();
@@ -281,7 +276,6 @@ Pass Sanitizer();
  * Usage:
  * @code
  *   PassPipeline pipeline;
- *   pipeline.AddPass(pass::ConvertToSSA());
  *   pipeline.AddPass(pass::FlattenCallExpr());
  *   pipeline.AddPass(pass::RunVerifier());
  *   auto result = pipeline.Run(program);

@@ -76,9 +76,10 @@ def test_while_loop_natural_syntax():
     # Print the function
     printed = pypto_pro.ir.python_print(while_natural)
 
-    # Check that natural syntax is present
+    # Natural while is represented as an SSA-carrying loop with an in-body exit guard.
     assert "while" in printed
-    assert "x < n" in printed or "x<n" in printed
+    assert "< n" in printed
+    assert "break" in printed
 
     # Verify structural properties
     assert isinstance(while_natural, ir.Function)

@@ -115,7 +115,7 @@ def _transposed_only_kernel(x: pl.Tensor[[TILE, TILE], pl.DT_FP16], out: pl.Tens
 def test_two_row_axes_get_one_declaration_each():
     """Two orders that differ only in their row axis still need one declaration each."""
     source = _compile_to_cce(_mixed_row_axis_kernel)
-    decls = _global_tensor_decls(source, "x_0")
+    decls = _global_tensor_decls(source, "x")
 
     assert len(decls) == 2, f"expected one declaration per layout, got {decls}"
 
@@ -138,7 +138,7 @@ def test_each_load_walks_the_axes_its_own_order_names():
 def test_row_major_and_transposed_do_not_share_a_declaration():
     """A transposed load must not drag the row-major one into Layout::DN with it."""
     source = _compile_to_cce(_transposed_only_kernel)
-    decls = _global_tensor_decls(source, "x_0")
+    decls = _global_tensor_decls(source, "x")
 
     assert len(decls) == 1, f"one layout must stay one declaration, got {decls}"
     assert "Layout::DN" in decls[0]
@@ -150,7 +150,7 @@ def test_row_major_and_transposed_do_not_share_a_declaration():
 def test_repeating_one_order_reuses_its_declaration():
     """Only a *differing* layout adds a declaration; the same order twice does not."""
     source = _compile_to_cce(_single_order_kernel)
-    decls = _global_tensor_decls(source, "x_0")
+    decls = _global_tensor_decls(source, "x")
 
     assert len(decls) == 1, f"one layout must stay one declaration, got {decls}"
     assert decls[0].startswith("using x_0Type ")

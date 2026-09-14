@@ -466,3 +466,20 @@ def test_call_kwargs_conversion():
     # Error case: unsupported type
     with pytest.raises(TypeError):
         ir.Call("test_op", [a], {"bad": object()}, span)
+
+
+@pytest.mark.parametrize("jump_type", [ir.YieldStmt, ir.BreakStmt, ir.ContinueStmt])
+def test_update_jump_values_preserves_statement_identity(jump_type):
+    span = ir.Span.unknown()
+    jump = jump_type([], span)
+    value = ir.ConstInt(7, ir.INT32, span)
+    identity = id(jump)
+    builder = ir.IRBuilder()
+
+    builder.update_jump_values(jump, [value])
+
+    assert id(jump) == identity
+    assert len(jump.value) == 1
+    assert isinstance(jump.value[0], ir.ConstInt)
+    assert jump.value[0].value == 7
+    assert jump.value[0].type.dtype == ir.INT32

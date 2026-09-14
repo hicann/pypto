@@ -112,8 +112,7 @@ public:
     /**
      * \brief Generate a single C++ file from a PyPTO IR Program
      *
-     * Runs the ConvertToSSA IR pass,
-     * then generates a single __global__ AICORE kernel with:
+     * Generates a single __global__ AICORE kernel from SSA IR with:
      * - PTO-style function signature
      * - Target-specific function naming and DAV macro guards
      * - constexpr for compile-time constants
@@ -485,24 +484,16 @@ private:
      */
     std::vector<std::string> RegisterLoopIterArgs(const std::vector<ir::IterArgPtr>& iterArgs);
 
-    /**
-     * \brief Emit yield-to-iter-arg assignments at the end of a loop body.
-     *
-     * Resolves aliases and skips self-assignments.
-     */
-    void EmitForYieldAssignments(const std::vector<ir::IterArgPtr>& iterArgs);
-
     /// Write source expressions to typed loop-carried slots, skipping self-assignments.
     /// TupleType is dispatched here by its CCE representation: tuples with a
     /// backing array are copied element-wise, while aggregates recurse into leaf slots.
     /// Shared by If/loop yields and native jumps.
-    void EmitCarriedAssignments(const std::vector<ir::IterArgPtr>& targets, const std::vector<ir::ExprPtr>& sources);
+    void EmitCarriedAssignments(const std::vector<ir::VarPtr>& targets, const std::vector<ir::ExprPtr>& sources);
 
     /// Generate `type name`, `type name = value`, or `name = value`. A null value
     /// omits assignment; initialize controls whether the generated statement includes the type.
-    /// Shared entry validation for EmitVariable: type-checks the write and drops the two kinds
-    /// of no-op — a valueless (UnknownType) source and a back edge that yields the slot to
-    /// itself. Returns false when nothing is left to emit.
+    /// Shared entry validation for EmitVariable: skips UnknownType/NoneType targets, treats
+    /// UnknownType/NoneType sources as valueless, and drops self-assignment back edges.
     bool CheckEmitVariable(const ir::VarPtr& target, ir::ExprPtr& value, bool initialize);
     void EmitVariable(const ir::VarPtr& target, ir::ExprPtr value, bool initialize);
     void EmitTupleVariable(const std::string& name, const ir::TupleTypePtr& type, const ir::ExprPtr& value,
@@ -514,19 +505,17 @@ private:
      * \brief Emit a C++ loop shared by both loop kinds.
      *
      * The caller supplies the fully-formed loop header line ("for (...) {" or "while (...) {");
-     * everything else — body emission, loop-carried write-back on the trailing yield, and
-     * return-var registration — is identical. A native break/continue in the body
-     * carries its own loop-carried values (BreakStmt::value_, populated by ConvertToSSA) and writes
-     * them back via loop_target_stack_ before jumping.
+     * For loops write both break and continue values to the iter-arg slots. While loops keep
+     * continue values in iter-arg slots and break values in independent return-var slots.
      */
     void EmitLoop(const std::string& header, const ir::StmtPtr& body, const std::vector<ir::IterArgPtr>& iterArgs,
-                  const std::vector<ir::VarPtr>& returnVars, const std::vector<std::string>& iterArgNames);
+                  const std::vector<ir::VarPtr>& returnVars, const std::vector<std::string>& iterArgNames,
+                  bool separateWhileResults);
 
     // --- Native break/continue support ---
 
-    /// Write a native jump's self-described carried values to the innermost loop's iter_args
-    /// (loop_target_stack_.back()) before the jump skips the trailing yield.
-    void EmitJumpCarriedWriteback(const std::vector<ir::ExprPtr>& values);
+    /// Write a native jump's self-described values to the innermost loop's matching slots.
+    void EmitJumpCarriedWriteback(const std::vector<ir::ExprPtr>& values, bool isBreak);
 
     // --- Phase 6: GenerateSinglePrologue helpers ---
 
@@ -582,7 +571,7 @@ private:
     std::string current_target_var_;              ///< INPUT: Assignment target variable name (for Call expressions)
     std::string current_expr_value_;              ///< OUTPUT: Inline C++ value for scalar / tile expressions
     ir::MakeTuplePtr current_tuple_;              ///< OUTPUT: underlying MakeTuple for tuple-typed expressions
-    std::vector<ir::ExprPtr> yield_buffer_;       ///< Yield expressions buffered while emitting control flow
+    std::vector<ir::ExprPtr> yield_buffer_;       ///< If-branch Yield expressions awaiting phi assignment
     const ir::IRDebugInfo* debug_info_ = nullptr; ///< Tuple/struct field names, captured at GenerateSingle entry
     std::map<std::string, std::string> tiling_headers_;          ///< Tiling struct headers (filename -> content)
     std::map<std::string, StructDefinition> struct_definitions_; ///< Struct type name ->definition
@@ -606,15 +595,16 @@ private:
         vf_tile_ptrs_; ///< (is_post_update, VF tile expr code) -> hoisted vf_tile_ptr_N var. A dedicated var (e.g. a
                        ///< POST_UPDATE store cursor) and a plain base pointer to the same tile are kept separate, so a
                        ///< cursor store does not corrupt a base load of the same tile.
-    std::vector<std::string> section_hoisted_decls_; ///< VF section decls hoisted before __VEC_SCOPE__ (pre mem_bar)
-    std::set<std::string> var_read_names_;           ///< Var names read anywhere in the function body
-    std::unordered_map<std::string, int> var_read_counts_; ///< Var name ->read count
-    std::map<int, std::set<ir::PipeType>> mutex_pipes_;    ///< buf_id ->pipes in this target Program
+    std::vector<std::string> section_hoisted_decls_;    ///< VF section decls hoisted before __VEC_SCOPE__ (pre mem_bar)
+    std::map<int, std::set<ir::PipeType>> mutex_pipes_; ///< buf_id ->pipes in this target Program
 
-    /// Per active loop: the write-back target C++ names (its iter_arg names), pushed while the loop
-    /// body is emitted. A native break/continue assigns its self-described carried values
-    /// (BreakStmt::value_) to loop_target_stack_.back() before jumping. Innermost loop = back().
-    std::vector<std::vector<ir::IterArgPtr>> loop_target_stack_;
+    struct LoopWritebackTargets {
+        std::vector<ir::VarPtr> continueVars;
+        std::vector<ir::VarPtr> breakVars;
+    };
+
+    /// Per active loop, keep separate continue and break write-back slots.
+    std::vector<LoopWritebackTargets> loop_target_stack_;
 
     /**
      * \brief Pre-scan the IR for mutex_id ->pipe mappings.
@@ -624,18 +614,6 @@ private:
      * synchronization is unnecessary (V→V ops execute in order within the pipe).
      */
     void CollectMutexPipeInfo(const ir::StmtPtr& stmt);
-
-    /**
-     * \brief Pre-scan the IR for all Var names appearing in read positions
-     * (Call args, Yield values, AssignStmt/ReturnStmt values, subscripts, etc.).
-     *
-     * Used to drop IfStmt phi return_vars that have no downstream consumer ->
-     * the SSA pass conservatively
-     * inserts phi nodes whenever a variable is re-assigned across control flow, but if the resulting phi var is never
-     * read afterwards, EmitFullPhiIf would emit a dead declaration and
-     * unused branch assignments.
-     */
-    void CollectVarReadNames(const ir::StmtPtr& stmt, std::set<std::string>& out) const;
 
     int tile_offset_counter_ = 0; ///< Counter for unique tile-offset GetItemExpr temp names
     int vf_tile_ptr_counter_ = 0; ///< Counter for unique VF base-ptr var names (vf_tile_ptr_N)

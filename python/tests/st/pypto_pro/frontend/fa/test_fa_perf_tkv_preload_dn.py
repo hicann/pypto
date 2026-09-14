@@ -697,27 +697,22 @@ def fa_perf_tkv_preload_dn_kernel(
         prev2_ki = 0
         prev2_q_count = 0
         prev2_skv_tiles = 0
+        softmax_tiles = pl.make_tuple(
+            qk_vec=qk_vec, qk_vec1=qk_vec1, tmp_vec=tmp_vec, p_f16=p_f16,
+            reduce_dst_rm=reduce_dst_rm,
+            global_max_rm_buf=global_max_rm_buf,
+            global_sum_rm_buf=global_sum_rm_buf,
+            exp_corr_rm_fifo=exp_corr_rm_fifo,
+            tile_nz=tile_nz,
+        )
+        gu_tiles = pl.make_tuple(
+            pv_vec=pv_vec, pv_vec1=pv_vec1, running_o=running_o,
+            exp_corr_fifo=exp_corr_fifo,
+            global_sum_buf=global_sum_buf,
+            o_f16=o_f16,
+        )
         for qi in pl.range(core_id, sq_tiles, num_cores):
             sq_off = qi * TS
-            softmax_tiles = pl.make_tuple(
-                qk_vec=qk_vec,
-                qk_vec1=qk_vec1,
-                tmp_vec=tmp_vec,
-                p_f16=p_f16,
-                reduce_dst_rm=reduce_dst_rm,
-                global_max_rm_buf=global_max_rm_buf,
-                global_sum_rm_buf=global_sum_rm_buf,
-                exp_corr_rm_fifo=exp_corr_rm_fifo,
-                tile_nz=tile_nz,
-            )
-            gu_tiles = pl.make_tuple(
-                pv_vec=pv_vec,
-                pv_vec1=pv_vec1,
-                running_o=running_o,
-                exp_corr_fifo=exp_corr_fifo,
-                global_sum_buf=global_sum_buf,
-                o_f16=o_f16,
-            )
 
             for ki in pl.range(0, skv_tiles):
                 buf_idx = (q_count * skv_tiles + ki) % 2

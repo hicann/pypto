@@ -16,7 +16,8 @@ import pytest
 
 
 def _find_assign(func, name):
-    return next(stmt for stmt in func.body.stmts if isinstance(stmt, ir.AssignStmt) and stmt.var.name == name)
+    ssa_name = f"{name}_0"
+    return next(stmt for stmt in func.body.stmts if isinstance(stmt, ir.AssignStmt) and stmt.var.name == ssa_name)
 
 
 # =============================================================================
@@ -155,7 +156,7 @@ def test_chain_runtime_lowers_to_nested_getitem():
     stmt = _find_assign(kernel, "val")
     assert isinstance(stmt.value, ir.GetItemExpr)
     assert isinstance(stmt.value.value, ir.Var)
-    assert stmt.value.value.name == "s"
+    assert stmt.value.value.name == "s_0"
     assert stmt.value.slice.value == 0
 
 
@@ -270,7 +271,7 @@ def test_chain_same_level_multi_field_folds():
 # =============================================================================
 
 def test_chain_tile_group_next():
-    """info.buf.next() lowers to a dynamic tile select + mutex id."""
+    """info.buf.next() lowers to a dynamic tile select without a companion assignment."""
 
     @pl.jit(auto_mutex=False)
     def kernel(_jit_entry: pl.DT_INT64):
@@ -288,12 +289,11 @@ def test_chain_tile_group_next():
         if isinstance(stmt, ir.AssignStmt) and stmt.var.name.startswith("_bufidx_")
     )
     assert isinstance(idx.value, ir.FloorMod)
-    mutex = next(
-        stmt
+    assert isinstance(_find_assign(kernel, "t").value, ir.GetItemExpr)
+    assert all(
+        not (isinstance(stmt, ir.AssignStmt) and stmt.var.name.endswith("__mutexid"))
         for stmt in kernel.body.stmts
-        if isinstance(stmt, ir.AssignStmt) and stmt.var.name.endswith("__mutexid")
     )
-    assert isinstance(mutex.value, ir.GetItemExpr)
 
 
 def test_chain_tile_group_current():
@@ -310,12 +310,7 @@ def test_chain_tile_group_current():
     kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     kernel = kernel_program.get_function(kernel.__name__)
 
-    mutex = next(
-        stmt
-        for stmt in kernel.body.stmts
-        if isinstance(stmt, ir.AssignStmt) and stmt.var.name.endswith("__mutexid")
-    )
-    assert isinstance(mutex.value, ir.GetItemExpr)
+    assert isinstance(_find_assign(kernel, "t").value, ir.GetItemExpr)
 
 
 def test_chain_tile_group_previous():
@@ -332,12 +327,7 @@ def test_chain_tile_group_previous():
     kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     kernel = kernel_program.get_function(kernel.__name__)
 
-    mutex = next(
-        stmt
-        for stmt in kernel.body.stmts
-        if isinstance(stmt, ir.AssignStmt) and stmt.var.name.endswith("__mutexid")
-    )
-    assert isinstance(mutex.value, ir.GetItemExpr)
+    assert isinstance(_find_assign(kernel, "t").value, ir.GetItemExpr)
 
 
 def test_chain_tile_group_method_sequence():
@@ -360,7 +350,7 @@ def test_chain_tile_group_method_sequence():
 
 
 def test_chain_tile_group_single_slot():
-    """Single-slot tile group: no cursor, static const mutex id."""
+    """Single-slot tile group lowers directly without a cursor."""
 
     @pl.jit(auto_mutex=False)
     def kernel(_jit_entry: pl.DT_INT64):
@@ -373,13 +363,10 @@ def test_chain_tile_group_single_slot():
     kernel_program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     kernel = kernel_program.get_function(kernel.__name__)
 
-    mutex = next(
-        stmt
-        for stmt in kernel.body.stmts
-        if isinstance(stmt, ir.AssignStmt) and stmt.var.name.endswith("__mutexid")
-    )
-    assert isinstance(mutex.value, ir.ConstInt)
-    assert mutex.value.value == 20
+    tile = _find_assign(kernel, "t")
+    assert isinstance(tile.value, ir.GetItemExpr)
+    assert isinstance(tile.value.slice, ir.ConstInt)
+    assert tile.value.slice.value == 0
 
 
 def test_chain_tile_group_acc_multi_slot():
@@ -407,12 +394,7 @@ def test_chain_tile_group_acc_multi_slot():
         if isinstance(stmt, ir.AssignStmt) and stmt.var.name.startswith("_bufidx_")
     )
     assert isinstance(idx.value, ir.FloorMod)
-    mutex = next(
-        stmt
-        for stmt in kernel.body.stmts
-        if isinstance(stmt, ir.AssignStmt) and stmt.var.name.endswith("__mutexid")
-    )
-    assert isinstance(mutex.value, ir.GetItemExpr)
+    assert isinstance(_find_assign(kernel, "acc").value, ir.GetItemExpr)
 
 
 def test_chain_tile_group_unknown_method():

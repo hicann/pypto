@@ -545,7 +545,7 @@ def test_cached_simt_function_rejects_incompatible_argument_type():
             pl.simt.launch(entry, threads=32, args=(integer,))
             pl.simt.launch(entry, threads=32, args=(floating,))
 
-    with pytest.raises(ParserTypeError, match="SIMT parameter 'value' annotated as"):
+    with pytest.raises(ParserTypeError, match="SIMT parameter 'value_0' annotated as"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 

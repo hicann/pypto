@@ -50,8 +50,63 @@ def test_inline_helper_multiple_value_returns_use_one_wrapper():
     ]
 
     assert len(helper_loops) == 1
-    assert len(return_assigns) == 3  # Unknown init plus the two concrete return assignments.
-    assert len({stmt.var.name for stmt in return_assigns}) == 1
+    assert len(return_assigns) == 2
+    assert len({stmt.var.name for stmt in return_assigns}) == 2
+    return_iter_arg = next(
+        arg for arg in helper_loops[0].iter_args if arg.iterVar.name.startswith("__inline_0_return_val")
+    )
+    assert isinstance(return_iter_arg.initValue.type, ir.NoneType)
+
+
+def test_inline_helper_top_level_return_flattens_lowered_wrapper():
+    def choose(value):
+        adjusted = value + 1
+        return adjusted
+        unreachable = missing_name + 1  # noqa: F821, F841
+
+    @pl.jit(auto_mutex=False)
+    def caller(value: pl.DT_INT64):
+        selected = choose(value)
+        _test_result = selected + 1
+
+    caller_program, _ = caller.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    caller_ir = caller_program.get_function(caller.__name__)
+
+    statements = list(_walk_statements(caller_ir.body))
+    assert not any(isinstance(stmt, ir.WhileStmt) for stmt in statements)
+    assert any(
+        isinstance(stmt, ir.AssignStmt) and stmt.var.name.startswith("__inline_0_return_val")
+        for stmt in statements
+    )
+    assert any(
+        isinstance(stmt, ir.AssignStmt) and stmt.var.name.startswith("_test_result")
+        for stmt in statements
+    )
+
+
+def test_inline_helper_tuple_return_after_nested_loop_flattens_wrapper():
+    def resolve(value):
+        result = value
+        for i in pl.range(1):
+            if i > 0:
+                break
+            result = result + i
+        return result, value
+
+    @pl.jit(auto_mutex=False)
+    def caller(value: pl.DT_INT64):
+        first, second = resolve(value)
+        _test_result = first + second
+
+    caller_program, _ = caller.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    caller_ir = caller_program.get_function(caller.__name__)
+
+    statements = list(_walk_statements(caller_ir.body))
+    assert not any(isinstance(stmt, ir.WhileStmt) for stmt in statements)
+    assert any(
+        isinstance(stmt, ir.AssignStmt) and stmt.var.name.startswith("__inline_0_return_val")
+        for stmt in statements
+    )
 
 
 def test_inline_helper_return_inside_loop_adds_propagation_guard():
@@ -76,8 +131,90 @@ def test_inline_helper_return_inside_loop_adds_propagation_guard():
 
     assert isinstance(guard, ir.IfStmt)
     assert isinstance(guard.condition, ir.Var)
-    assert guard.condition.name == "__inline_0_returned"
+    assert guard.condition.name.startswith("__inline_0_returned")
     assert any(isinstance(stmt, ir.BreakStmt) for stmt in _walk_statements(guard.then_body))
+
+
+def test_inline_helper_dynamic_loop_return_does_not_merge_initial_empty_value():
+    def choose(value):
+        index = 0
+        while index < value:
+            if index >= 2:
+                return value
+            index = index + 1
+        return value
+
+    @pl.jit(auto_mutex=False)
+    def caller(value: pl.DT_INT64):
+        selected = choose(value)
+        _test_result = selected + 1
+
+    caller_program, _ = caller.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    caller_ir = caller_program.get_function(caller.__name__)
+    result_assign = next(
+        stmt
+        for stmt in _walk_statements(caller_ir.body)
+        if isinstance(stmt, ir.AssignStmt) and stmt.var.name.startswith("_test_result")
+    )
+    assert isinstance(result_assign.var.type, ir.ScalarType)
+
+
+def test_inline_helper_nested_if_returns_preserve_fallthrough_retval_state():
+    def choose(branch, left, right, value):
+        if branch:
+            if left:
+                return value
+        else:
+            if right:
+                return value
+        return value
+
+    @pl.jit(auto_mutex=False)
+    def caller(
+        branch: pl.DT_BOOL,
+        left: pl.DT_BOOL,
+        right: pl.DT_BOOL,
+        value: pl.DT_INT64,
+    ):
+        selected = choose(branch, left, right, value)
+        _test_result = selected + 1
+
+    caller_program, _ = caller.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    caller_ir = caller_program.get_function(caller.__name__)
+    result_assign = next(
+        stmt
+        for stmt in _walk_statements(caller_ir.body)
+        if isinstance(stmt, ir.AssignStmt) and stmt.var.name.startswith("_test_result")
+    )
+    retval_results = [
+        var
+        for stmt in _walk_statements(caller_ir.body)
+        if isinstance(stmt, ir.IfStmt)
+        for var in stmt.return_vars
+        if var.name.startswith("__inline_0_return_val")
+    ]
+    assert isinstance(result_assign.var.type, ir.ScalarType)
+    assert any(isinstance(var.type, ir.NoneType) for var in retval_results)
+    assert all(not isinstance(var.type, ir.UnknownType) for var in retval_results)
+
+
+def test_inline_helper_dynamic_loop_preserves_real_return_type_conflict():
+    def choose(value):
+        index = 0
+        while index < value:
+            if index >= 2:
+                return index
+            index = index + 1
+        return value
+
+    with pytest.raises(ParserTypeError, match="has no valid type on every reachable control-flow path"):
+
+        @pl.jit(auto_mutex=False)
+        def caller(value: pl.DT_INT64):
+            selected = choose(value)
+            _test_result = selected + 1
+
+        caller.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_inline_helper_loop_guard_folds_constant_false():
@@ -129,9 +266,13 @@ def test_inline_helper_bare_returns_share_return_state():
 
     statements = list(_walk_statements(caller.body))
     assert sum(isinstance(stmt, ir.WhileStmt) for stmt in statements) == 1
-    assert sum(
-        isinstance(stmt, ir.AssignStmt) and stmt.var.name == "__inline_0_return_val" for stmt in statements
-    ) == 1
+    return_assigns = [
+        stmt
+        for stmt in statements
+        if isinstance(stmt, ir.AssignStmt) and stmt.var.name.startswith("__inline_0_return_val")
+    ]
+    assert len(return_assigns) == 2
+    assert all(isinstance(stmt.var.type, ir.NoneType) for stmt in return_assigns)
 
 
 def test_inline_helper_mixed_bare_and_value_returns_share_return_val():
@@ -148,9 +289,14 @@ def test_inline_helper_mixed_bare_and_value_returns_share_return_val():
     caller = caller_program.get_function(caller.__name__)
 
     statements = list(_walk_statements(caller.body))
-    assert sum(
-        isinstance(stmt, ir.AssignStmt) and stmt.var.name == "__inline_0_return_val" for stmt in statements
-    ) == 2
+    return_assigns = [
+        stmt
+        for stmt in statements
+        if isinstance(stmt, ir.AssignStmt) and stmt.var.name.startswith("__inline_0_return_val")
+    ]
+    assert len(return_assigns) == 2
+    assert any(isinstance(stmt.var.type, ir.NoneType) for stmt in return_assigns)
+    assert any(isinstance(stmt.var.type, ir.ScalarType) for stmt in return_assigns)
 
 
 def test_inline_helper_without_return_uses_default_return_val():
@@ -167,27 +313,49 @@ def test_inline_helper_without_return_uses_default_return_val():
     caller = caller_program.get_function(caller.__name__)
 
     statements = list(_walk_statements(caller.body))
-    wrapper = next(stmt for stmt in caller.body.stmts if isinstance(stmt, ir.WhileStmt))
-    loop_index = next(i for i, stmt in enumerate(wrapper.body.stmts) if isinstance(stmt, ir.ForStmt))
-    assert not isinstance(wrapper.body.stmts[loop_index + 1], ir.IfStmt)
-    assert sum(
-        isinstance(stmt, ir.AssignStmt) and stmt.var.name == "__inline_0_return_val" for stmt in statements
-    ) == 1
+    assert not any(isinstance(stmt, ir.WhileStmt) for stmt in statements)
+    return_assigns = [
+        stmt
+        for stmt in statements
+        if isinstance(stmt, ir.AssignStmt) and stmt.var.name.startswith("__inline_0_return_val")
+    ]
+    assert len(return_assigns) == 1
+    assert isinstance(return_assigns[0].var.type, ir.NoneType)
 
 
-def test_inline_helper_value_return_can_fall_through():
+def test_inline_helper_target_section_does_not_finalize_wrapper_loop():
+    def update(value):
+        with pl.section_vector():
+            _updated = value + 1
+
+    @pl.jit(auto_mutex=False)
+    def caller(value: pl.DT_INT64):
+        update(value)
+        _test_result = value
+
+    caller_program, matched = caller.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    caller_ir = caller_program.get_function(caller.__name__)
+
+    assert matched
+    assert any(
+        isinstance(stmt, ir.AssignStmt) and stmt.var.name.startswith("__inline_0__updated")
+        for stmt in _walk_statements(caller_ir.body)
+    )
+
+
+def test_inline_helper_value_return_fallthrough_merges_conservative_none():
     def choose(value):
         if value > 0:
             return value
 
-    @pl.jit(auto_mutex=False)
-    def caller(value: pl.DT_INT64):
-        _test_result = choose(value)
+    with pytest.raises(ParserTypeError, match="has no valid type on every reachable control-flow path"):
 
-    caller_program, _ = caller.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
-    caller = caller_program.get_function(caller.__name__)
+        @pl.jit(auto_mutex=False)
+        def caller(value: pl.DT_INT64):
+            selected = choose(value)
+            _test_result = selected + 1
 
-    assert any(isinstance(stmt, ir.WhileStmt) for stmt in caller.body.stmts)
+        caller.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_kernel_uses_runtime_tile_valid_shape_ir():

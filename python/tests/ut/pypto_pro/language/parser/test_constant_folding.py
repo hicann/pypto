@@ -19,7 +19,7 @@ from pypto.pypto_impl import ir
 
 def _assignments(func: ir.Function) -> dict[str, ir.Expr]:
     return {
-        stmt.var.name: stmt.value
+        stmt.var.name.removesuffix("_0"): stmt.value
         for stmt in func.body.stmts
         if isinstance(stmt, ir.AssignStmt)
     }
@@ -231,6 +231,41 @@ def test_nonconstant_operands_keep_runtime_ir():
     assert values["positive"].type.dtype == ir.DataType.INT32
     assert isinstance(values["positive_bool"], ir.Var)
     assert values["positive_bool"].type.dtype == ir.DataType.BOOL
+
+
+def test_inline_helper_constant_conditions_fold_independently_at_multiple_call_sites():
+    def choose(cond):
+        if cond == 0:
+            return 11
+        if cond == 1:
+            return 22
+        if cond == 2:
+            return 33
+        return 44
+
+    @pl.jit(auto_mutex=False)
+    def folded_calls(_jit_entry: pl.DT_INT64):
+        first = choose(0)
+        second = choose(1)
+        third = choose(2)
+        fallback = choose(9)
+        first_is_constant = first == 11
+        second_is_constant = second == 22
+        third_is_constant = third == 33
+        fallback_is_constant = fallback == 44
+        combined = first + second + third + fallback
+
+    program, _ = folded_calls.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    values = _assignments(program.get_function(folded_calls.__name__))
+
+    for name in (
+        "first_is_constant",
+        "second_is_constant",
+        "third_is_constant",
+        "fallback_is_constant",
+    ):
+        _assert_constant(values[name], True, ir.DataType.BOOL)
+    _assert_constant(values["combined"], 110, ir.DataType.INDEX)
 
 
 def test_unary_plus_is_identity_for_non_scalar_operand():

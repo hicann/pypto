@@ -12,6 +12,8 @@
 
 from pypto_pro import ir
 import pypto_pro.language as pl
+from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError
+import pytest
 
 
 def test_loop_without_iter_args():
@@ -37,6 +39,26 @@ def test_loop_without_iter_args():
     assert isinstance(loop_without_iter_args, ir.Function)
 
 
+def test_target_section_jump_is_dispatched_by_enclosing_loop_body():
+    @pl.jit(auto_mutex=False)
+    def func(value: pl.DT_INT64):
+        for _ in pl.range(1):
+            with pl.section_vector():
+                break
+            unreachable = value + 1  # noqa: F841
+        _test_result = value
+
+    program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func_ir = program.get_function(func.__name__)
+    for_stmt = next(stmt for stmt in func_ir.body.stmts if isinstance(stmt, ir.ForStmt))
+
+    assert sum(isinstance(stmt, ir.BreakStmt) for stmt in for_stmt.body.stmts) == 1
+    assert all(
+        not (isinstance(stmt, ir.AssignStmt) and stmt.var.name.startswith("unreachable"))
+        for stmt in for_stmt.body.stmts
+    )
+
+
 def test_loop_carried_constant_is_not_folded_in_body():
     @pl.jit(auto_mutex=False)
     def func(n: pl.DT_INT64):
@@ -51,7 +73,9 @@ def test_loop_carried_constant_is_not_folded_in_body():
     for_stmt = _find_for_stmt(func)
     body = for_stmt.body.stmts
     observed_assignment = next(
-        stmt for stmt in body if isinstance(stmt, ir.AssignStmt) and stmt.var.name == "observed"
+        stmt
+        for stmt in body
+        if isinstance(stmt, ir.AssignStmt) and stmt.var.name.startswith("observed")
     )
     assert isinstance(observed_assignment.value, ir.Var)
 
@@ -63,11 +87,529 @@ def test_static_if_only_emits_selected_branch():
             selected = 7
         else:
             selected = (1, 2)[3]  # noqa: F841
+        observed = selected + 1  # noqa: F841
 
     func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     func = func_program.get_function(func.__name__)
 
     assert all(not isinstance(stmt, ir.IfStmt) for stmt in func.body.stmts)
+
+
+def test_dynamic_if_type_mismatch_is_deferred_until_use():
+    @pl.jit(auto_mutex=False)
+    def unused_mismatch(flag: pl.DT_BOOL):
+        if flag:
+            value = pl.const(1, pl.DT_INT32)
+        else:
+            value = pl.const(2, pl.DT_INT64)  # noqa: F841
+
+    unused_program, _ = unused_mismatch.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    unused_mismatch = unused_program.get_function(unused_mismatch.__name__)
+    if_stmt = next(stmt for stmt in unused_mismatch.body.stmts if isinstance(stmt, ir.IfStmt))
+    assert isinstance(if_stmt.return_vars[0].type, ir.NoneType)
+
+    with pytest.raises(ParserTypeError, match="has no valid type on every reachable control-flow path"):
+
+        @pl.jit(auto_mutex=False)
+        def used_mismatch(flag: pl.DT_BOOL):
+            if flag:
+                value = pl.const(1, pl.DT_INT32)
+            else:
+                value = pl.const(2, pl.DT_INT64)
+            result = value + 1
+            _test_result = result
+
+        used_mismatch.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
+def test_dynamic_if_parser_only_merge_is_deferred_until_use():
+    @pl.jit(auto_mutex=False)
+    def unused_parser_value(flag: pl.DT_BOOL):
+        if flag:
+            tile_type = pl.TileType(shape=[16], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+        else:
+            tile_type = pl.TileType(shape=[32], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)  # noqa: F841
+
+    unused_program, _ = unused_parser_value.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    unused_func = unused_program.get_function(unused_parser_value.__name__)
+    if_stmt = next(stmt for stmt in unused_func.body.stmts if isinstance(stmt, ir.IfStmt))
+    assert isinstance(if_stmt.return_vars[0].type, ir.NoneType)
+
+    with pytest.raises(ParserTypeError, match="has no valid type on every reachable control-flow path"):
+
+        @pl.jit(auto_mutex=False)
+        def used_parser_value(flag: pl.DT_BOOL):
+            if flag:
+                tile_type = pl.TileType(shape=[16], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+            else:
+                tile_type = pl.TileType(shape=[32], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+            _test_result = tile_type
+
+        used_parser_value.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
+def test_dynamic_if_missing_binding_uses_none_type_input():
+    @pl.jit(auto_mutex=False)
+    def func(flag: pl.DT_BOOL):
+        if flag:
+            value = 1  # noqa: F841
+
+    program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func_ir = program.get_function(func.__name__)
+    if_stmt = next(stmt for stmt in func_ir.body.stmts if isinstance(stmt, ir.IfStmt))
+    else_yield = if_stmt.else_body.stmts[-1]
+
+    assert isinstance(else_yield, ir.YieldStmt)
+    assert isinstance(else_yield.value[0].type, ir.NoneType)
+    assert isinstance(if_stmt.return_vars[0].type, ir.NoneType)
+
+
+def test_none_type_binding_is_rejected_when_used():
+    with pytest.raises(ParserTypeError, match="has no valid type on every reachable control-flow path"):
+
+        @pl.jit(auto_mutex=False)
+        def func(_jit_entry: pl.DT_INT64):
+            value = None
+            observed = value  # noqa: F841
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
+def test_dynamic_if_nested_tile_group_merge_is_deferred_until_use():
+    @pl.jit(auto_mutex=False)
+    def unused_tile_group(flag: pl.DT_BOOL):
+        tile_type = pl.TileType(
+            shape=[1, 16], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec
+        )
+        group = pl.make_tile_group(type=tile_type, addrs=0, mutex_ids=[0])
+        container = (group, 1)
+        if flag:
+            selected = container
+        else:
+            selected = container  # noqa: F841
+
+    program, _ = unused_tile_group.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func_ir = program.get_function(unused_tile_group.__name__)
+    if_stmt = next(stmt for stmt in func_ir.body.stmts if isinstance(stmt, ir.IfStmt))
+    assert isinstance(if_stmt.return_vars[0].type, ir.NoneType)
+
+    with pytest.raises(ParserTypeError, match="has no valid type on every reachable control-flow path"):
+
+        @pl.jit(auto_mutex=False)
+        def used_tile_group(flag: pl.DT_BOOL):
+            tile_type = pl.TileType(
+                shape=[1, 16], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec
+            )
+            group = pl.make_tile_group(type=tile_type, addrs=0, mutex_ids=[0])
+            container = (group, 1)
+            if flag:
+                selected = container
+            else:
+                selected = container
+            observed = selected  # noqa: F841
+
+        used_tile_group.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
+def test_dynamic_loop_parser_only_merge_is_deferred_until_use():
+    @pl.jit(auto_mutex=False)
+    def unused_parser_value(_jit_entry: pl.DT_INT64):
+        tile_type = pl.TileType(shape=[16], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+        for _ in pl.range(1):
+            tile_type = pl.TileType(shape=[32], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)  # noqa: F841
+
+    unused_program, _ = unused_parser_value.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    unused_func = unused_program.get_function(unused_parser_value.__name__)
+    for_stmt = next(stmt for stmt in unused_func.body.stmts if isinstance(stmt, ir.ForStmt))
+    assert isinstance(for_stmt.return_vars[0].type, ir.NoneType)
+
+    with pytest.raises(ParserTypeError, match="has no valid type on every reachable control-flow path"):
+
+        @pl.jit(auto_mutex=False)
+        def used_parser_value(_jit_entry: pl.DT_INT64):
+            tile_type = pl.TileType(shape=[16], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+            for _ in pl.range(1):
+                tile_type = pl.TileType(shape=[32], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+            _test_result = tile_type
+
+        used_parser_value.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
+def test_astype_reconciles_dynamic_if_scalar_types():
+    @pl.jit(auto_mutex=False)
+    def reconciled(flag: pl.DT_BOOL):
+        if flag:
+            value = pl.const(1, pl.DT_INT32)
+        else:
+            value = pl.astype(pl.const(2, pl.DT_INT64), pl.DT_INT32)
+        result = value + 1
+        _test_result = result
+
+    reconciled_program, _ = reconciled.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    reconciled = reconciled_program.get_function(reconciled.__name__)
+    if_stmt = next(stmt for stmt in reconciled.body.stmts if isinstance(stmt, ir.IfStmt))
+    merged_type = if_stmt.return_vars[0].type
+    assert isinstance(merged_type, ir.ScalarType)
+    assert merged_type.dtype == ir.DataType.INT32
+    assert any(
+        isinstance(stmt, ir.AssignStmt) and isinstance(stmt.value, ir.Cast)
+        for stmt in if_stmt.else_body.stmts
+    )
+
+
+def test_ssa_names_avoid_user_suffix_collisions():
+    @pl.jit(auto_mutex=False)
+    def func(_jit_entry: pl.DT_INT64):
+        x = 1
+        x_1 = 2  # noqa: F841
+        x = 3  # noqa: F841
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
+    names = [
+        stmt.var.name
+        for stmt in func.body.stmts
+        if isinstance(stmt, ir.AssignStmt) and stmt.var.name.startswith("x")
+    ]
+    assert names == ["x_0", "x_1_0", "x_1"]
+
+
+def test_loop_carries_preexisting_break_value():
+    @pl.jit(auto_mutex=False)
+    def func(n: pl.DT_INT64):
+        value = pl.const(0, pl.DT_INT32)
+        for _ in pl.range(n):
+            value = pl.const(1, pl.DT_INT32)
+            break
+        _test_result = value
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
+    for_stmt = _find_for_stmt(func)
+    assert len(for_stmt.iter_args) == 1
+    assert for_stmt.iter_args[0].initValue.type.dtype == ir.DataType.INT32
+    assert for_stmt.iter_args[0].iterVar.type.dtype == ir.DataType.INT32
+    assert for_stmt.return_vars[0].type.dtype == ir.DataType.INT32
+    break_stmt = next(stmt for stmt in for_stmt.body.stmts if isinstance(stmt, ir.BreakStmt))
+    assert break_stmt.value[0].type.dtype == ir.DataType.INT32
+
+
+def test_loop_does_not_carry_body_local_binding():
+    @pl.jit(auto_mutex=False)
+    def func(n: pl.DT_INT64):
+        for _ in pl.range(n):
+            local = pl.const(1, pl.DT_INT32)  # noqa: F841
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
+    for_stmt = _find_for_stmt(func)
+    assert not for_stmt.iter_args
+    assert not for_stmt.return_vars
+    assert isinstance(for_stmt.body.stmts[-1], ir.ContinueStmt)
+    assert not for_stmt.body.stmts[-1].value
+
+
+def test_if_continue_branch_does_not_yield_and_loop_fallthrough_continues():
+    @pl.jit(auto_mutex=False)
+    def func(n: pl.DT_INT64):
+        value = pl.const(0, pl.DT_INT64)
+        for _ in pl.range(n):
+            if value == 1:
+                value = pl.const(2, pl.DT_INT64)
+                continue
+            value = value + 1
+        _test_result = value
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
+    for_stmt = _find_for_stmt(func)
+    guard = next(stmt for stmt in for_stmt.body.stmts if isinstance(stmt, ir.IfStmt))
+
+    assert isinstance(guard.then_body.stmts[-1], ir.ContinueStmt)
+    assert all(not isinstance(stmt, ir.YieldStmt) for stmt in guard.then_body.stmts)
+    assert isinstance(guard.else_body.stmts[-1], ir.YieldStmt)
+    assert isinstance(for_stmt.body.stmts[-1], ir.ContinueStmt)
+
+
+def test_if_else_break_uses_only_then_yield_for_if_phi():
+    @pl.jit(auto_mutex=False)
+    def func(n: pl.DT_INT64):
+        value = pl.const(0, pl.DT_INT64)
+        for i in pl.range(n):
+            if i > 0:
+                value = pl.const(1, pl.DT_INT64)
+            else:
+                value = pl.const(2, pl.DT_INT64)
+                break
+            value = value + 1
+        _test_result = value
+
+    program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    for_stmt = _find_for_stmt(program.get_function(func.__name__))
+    branch = next(stmt for stmt in for_stmt.body.stmts if isinstance(stmt, ir.IfStmt))
+
+    assert len(branch.return_vars) == 1
+    assert isinstance(branch.then_body.stmts[-1], ir.YieldStmt)
+    assert len(branch.then_body.stmts[-1].value) == 1
+    assert isinstance(branch.else_body.stmts[-1], ir.BreakStmt)
+    assert len(branch.else_body.stmts[-1].value) == 1
+    assert isinstance(for_stmt.body.stmts[-1], ir.ContinueStmt)
+
+
+def test_if_both_branches_jump_stops_enclosing_statement_list():
+    @pl.jit(auto_mutex=False)
+    def func(n: pl.DT_INT64):
+        value = pl.const(0, pl.DT_INT64)
+        for i in pl.range(n):
+            if i > 0:
+                break
+            else:
+                continue
+            invalid = (1, 2)[3]  # noqa: F841
+        _test_result = value
+
+    program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    for_stmt = _find_for_stmt(program.get_function(func.__name__))
+
+    branch_index = next(i for i, stmt in enumerate(for_stmt.body.stmts) if isinstance(stmt, ir.IfStmt))
+    branch = for_stmt.body.stmts[branch_index]
+    assert isinstance(branch.then_body.stmts[-1], ir.BreakStmt)
+    assert isinstance(for_stmt.body.stmts[branch_index + 1], ir.ContinueStmt)
+    assert sum(isinstance(stmt, ir.ContinueStmt) for stmt in for_stmt.body.stmts) == 1
+    assert all(
+        not (isinstance(stmt, ir.AssignStmt) and stmt.var.name.startswith("invalid"))
+        for stmt in for_stmt.body.stmts
+    )
+
+
+def test_break_type_conflict_fails_eagerly():
+    with pytest.raises(ParserTypeError, match="Type depends on path taken"):
+
+        @pl.jit(auto_mutex=False)
+        def func(n: pl.DT_INT64):
+            value = pl.const(0, pl.DT_INT32)
+            for i in pl.range(n):
+                if i > 0:
+                    value = pl.const(1, pl.DT_INT64)
+                    break
+                value = pl.const(2, pl.DT_INT32)  # noqa: F841
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
+def test_continue_type_conflict_fails_eagerly():
+    with pytest.raises(ParserTypeError, match="Type depends on path taken"):
+
+        @pl.jit(auto_mutex=False)
+        def func(n: pl.DT_INT64):
+            value = pl.const(0, pl.DT_INT32)
+            for _ in pl.range(n):
+                value = pl.const(1, pl.DT_INT64)  # noqa: F841
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
+def test_while_body_and_result_types_are_independent():
+    @pl.jit(auto_mutex=False)
+    def func(flag: pl.DT_BOOL):
+        value = pl.const(0, pl.DT_INT32)
+        while True:
+            if flag:
+                value = pl.const(1, pl.DT_INT64)
+                break
+            value = pl.const(2, pl.DT_INT32)
+            continue
+        _test_result = value
+
+    program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    while_stmt = next(
+        stmt
+        for stmt in program.get_function(func.__name__).body.stmts
+        if isinstance(stmt, ir.WhileStmt)
+    )
+
+    assert while_stmt.iter_args[0].iterVar.type.dtype == ir.DataType.INT32
+    assert while_stmt.return_vars[0].type.dtype == ir.DataType.INT64
+
+
+def test_while_body_type_conflict_fails_eagerly_after_valid_iter_use():
+    with pytest.raises(ParserTypeError, match="Type depends on path taken"):
+
+        @pl.jit(auto_mutex=False)
+        def func(flag: pl.DT_BOOL):
+            value = pl.const(0, pl.DT_INT32)
+            while True:
+                next_value = value + 1
+                if flag:
+                    value = pl.const(1, pl.DT_INT64)
+                    continue
+                value = next_value
+                continue
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
+def test_while_result_type_conflict_is_deferred_when_result_is_unused():
+    @pl.jit(auto_mutex=False)
+    def func(flag: pl.DT_BOOL):
+        value = pl.const(0, pl.DT_INT32)
+        while True:
+            if flag:
+                value = pl.const(1, pl.DT_INT64)
+                break
+            value = pl.const(2.0, pl.DT_FP32)  # noqa: F841
+            break
+        _test_result = flag
+
+    program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    while_stmt = next(
+        stmt
+        for stmt in program.get_function(func.__name__).body.stmts
+        if isinstance(stmt, ir.WhileStmt)
+    )
+
+    assert while_stmt.iter_args[0].iterVar.type.dtype == ir.DataType.INT32
+    assert isinstance(while_stmt.return_vars[0].type, ir.NoneType)
+
+
+def test_statement_list_stops_after_direct_break():
+    @pl.jit(auto_mutex=False)
+    def func(n: pl.DT_INT64):
+        value = pl.const(0, pl.DT_INT64)
+        for _ in pl.range(n):
+            break
+            value = (1, 2)[3]
+        _test_result = value
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
+    for_stmt = _find_for_stmt(func)
+
+    assert len(for_stmt.body.stmts) == 1
+    assert isinstance(for_stmt.body.stmts[0], ir.BreakStmt)
+
+
+def test_phi_state_propagates_equal_branch_constant():
+    @pl.jit(auto_mutex=False)
+    def func(flag: pl.DT_BOOL):
+        if flag:
+            value = 1
+        else:
+            value = 1
+        if value == 1:
+            selected = 2  # noqa: F841
+        else:
+            selected = (1, 2)[3]  # noqa: F841
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
+    if_stmts = [stmt for stmt in func.body.stmts if isinstance(stmt, ir.IfStmt)]
+
+    assert len(if_stmts) == 1
+
+
+def test_tuple_is_one_if_merge_value_and_one_constant():
+    @pl.jit(auto_mutex=False)
+    def func(flag: pl.DT_BOOL):
+        if flag:
+            pair = (1, 2)
+        else:
+            pair = (1, 2)
+        first = pair[0]
+        _test_result = first
+
+    program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func_ir = program.get_function(func.__name__)
+    if_stmt = next(stmt for stmt in func_ir.body.stmts if isinstance(stmt, ir.IfStmt))
+    then_yield = if_stmt.then_body.stmts[-1]
+    else_yield = if_stmt.else_body.stmts[-1]
+
+    assert len(if_stmt.return_vars) == 1
+    assert isinstance(if_stmt.return_vars[0].type, ir.TupleType)
+    assert isinstance(then_yield, ir.YieldStmt)
+    assert isinstance(else_yield, ir.YieldStmt)
+    assert len(then_yield.value) == 1
+    assert len(else_yield.value) == 1
+    assert isinstance(then_yield.value[0], ir.MakeTuple)
+    assert isinstance(else_yield.value[0], ir.MakeTuple)
+    first = next(
+        stmt
+        for stmt in func_ir.body.stmts
+        if isinstance(stmt, ir.AssignStmt) and stmt.var.name.startswith("first")
+    )
+    assert isinstance(first.value, ir.ConstInt)
+    assert first.value.value == 1
+
+
+def test_const_env_uses_latest_physical_ssa_binding():
+    @pl.jit(auto_mutex=False)
+    def func(n: pl.DT_INT64):
+        value = 1
+        value = n
+        if value == 1:
+            selected = 2  # noqa: F841
+        else:
+            selected = 3  # noqa: F841
+
+    program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func_ir = program.get_function(func.__name__)
+
+    assert any(isinstance(stmt, ir.IfStmt) for stmt in func_ir.body.stmts)
+
+
+def test_for_result_preserves_equal_constant_across_zero_and_continue_paths():
+    @pl.jit(auto_mutex=False)
+    def func(n: pl.DT_INT64):
+        value = 0
+        for _ in pl.range(n):
+            value = 0
+        if value == 0:
+            selected = 1  # noqa: F841
+        else:
+            selected = (1, 2)[3]  # noqa: F841
+
+    program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func_ir = program.get_function(func.__name__)
+    for_stmt = next(stmt for stmt in func_ir.body.stmts if isinstance(stmt, ir.ForStmt))
+
+    assert sum(isinstance(stmt, ir.IfStmt) for stmt in func_ir.body.stmts) == 0
+    assert isinstance(for_stmt.iter_args[0].initValue, ir.ConstInt)
+    assert isinstance(for_stmt.body.stmts[-1].value[0], ir.ConstInt)
+
+
+def test_dynamic_ifexp_returns_constant_when_phi_is_constant():
+    @pl.jit(auto_mutex=False)
+    def func(flag: pl.DT_BOOL):
+        selected = 1 if flag else 1
+        _test_result = selected
+
+    program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func_ir = program.get_function(func.__name__)
+    if_stmt = next(stmt for stmt in func_ir.body.stmts if isinstance(stmt, ir.IfStmt))
+    selected = next(
+        stmt
+        for stmt in func_ir.body.stmts
+        if isinstance(stmt, ir.AssignStmt) and stmt.var.name.startswith("selected")
+    )
+    then_yield = if_stmt.then_body.stmts[-1]
+    else_yield = if_stmt.else_body.stmts[-1]
+
+    assert len(if_stmt.return_vars) == 1
+    assert isinstance(then_yield.value[0], ir.ConstInt)
+    assert isinstance(else_yield.value[0], ir.ConstInt)
+    assert isinstance(selected.value, ir.ConstInt)
+    assert selected.value.value == 1
+
+
+def test_function_scope_gets_implicit_return_jump():
+    @pl.jit(auto_mutex=False)
+    def func(_jit_entry: pl.DT_INT64):
+        value = 1  # noqa: F841
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
+
+    assert isinstance(func.body.stmts[-1], ir.ReturnStmt)
 
 
 def _find_for_stmt(func: ir.Function) -> ir.ForStmt:
@@ -131,6 +673,7 @@ def test_scalar_param_as_stop():
 
     @pl.jit(auto_mutex=False)
     def scalar_stop(n: pl.DT_INT64, x: pl.Tensor[[64], pl.DT_FP32]):
+        y = x
         for _ in pl.range(n):
             y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
         _test_result = y
@@ -142,7 +685,7 @@ def test_scalar_param_as_stop():
     for_stmt = _find_for_stmt(scalar_stop)
     # stop should be a Var reference to the Scalar parameter 'n'
     assert isinstance(for_stmt.stop, ir.Var)
-    assert for_stmt.stop.name == "n"
+    assert for_stmt.stop.name == "n_0"
     assert isinstance(for_stmt.stop.type, ir.ScalarType)
 
 
@@ -153,6 +696,7 @@ def test_scalar_param_as_start_stop():
     def scalar_start_stop(
         n: pl.DT_INT64, x: pl.Tensor[[64], pl.DT_FP32]
     ):
+        y = x
         for _ in pl.range(0, n):
             y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
         _test_result = y
@@ -164,32 +708,32 @@ def test_scalar_param_as_start_stop():
     for_stmt = _find_for_stmt(scalar_start_stop)
     assert isinstance(for_stmt.start, ir.ConstInt)
     assert isinstance(for_stmt.stop, ir.Var)
-    assert for_stmt.stop.name == "n"
+    assert for_stmt.stop.name == "n_0"
 
 
-def test_scalar_param_as_start_stop_step():
-    """Test pl.range(0, n, s) where n and s are DT_INT64 scalar parameters."""
-
+def test_scalar_param_as_for_step_is_accepted():
     @pl.jit(auto_mutex=False)
-    def scalar_full_range(
-        n: pl.DT_INT64,
-        s: pl.DT_INT64,
-        x: pl.Tensor[[64], pl.DT_FP32],
-    ):
-        for _ in pl.range(0, n, s):
-            y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
-        _test_result = y
+    def scalar_full_range(n: pl.DT_INT64, step: pl.DT_INT64):
+        for _ in pl.range(0, n, step):
+            pass
 
-    scalar_full_range_program, _ = scalar_full_range.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
-    scalar_full_range = scalar_full_range_program.get_function(scalar_full_range.__name__)
-
-    assert isinstance(scalar_full_range, ir.Function)
-    for_stmt = _find_for_stmt(scalar_full_range)
-    assert isinstance(for_stmt.start, ir.ConstInt)
-    assert isinstance(for_stmt.stop, ir.Var)
-    assert for_stmt.stop.name == "n"
+    program, _ = scalar_full_range.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    for_stmt = _find_for_stmt(program.get_function(scalar_full_range.__name__))
     assert isinstance(for_stmt.step, ir.Var)
-    assert for_stmt.step.name == "s"
+    assert for_stmt.step.name == "step_0"
+
+
+def test_positive_folded_for_step_is_accepted():
+    @pl.jit(auto_mutex=False)
+    def folded_step(n: pl.DT_INT64):
+        step = 1 + 1
+        for _ in pl.range(0, n, step):
+            pass
+
+    program, _ = folded_step.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    for_stmt = _find_for_stmt(program.get_function(folded_step.__name__))
+    assert isinstance(for_stmt.step, ir.ConstInt)
+    assert for_stmt.step.value == 2
 
 
 def test_scalar_expression_as_stop():
@@ -197,6 +741,7 @@ def test_scalar_expression_as_stop():
 
     @pl.jit(auto_mutex=False)
     def scalar_expr_stop(n: pl.DT_INT64, x: pl.Tensor[[64], pl.DT_FP32]):
+        y = x
         for _ in pl.range(n * 2):  # type: ignore[operator]
             y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
         _test_result = y
@@ -215,6 +760,7 @@ def test_scalar_complex_expression_as_stop():
     def scalar_complex_expr(
         n: pl.DT_INT64, x: pl.Tensor[[64], pl.DT_FP32]
     ):
+        y = x
         for _ in pl.range(n * 2 + 1):  # type: ignore[operator]
             y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
         _test_result = y
@@ -233,6 +779,7 @@ def test_scalar_floordiv_expression_as_stop():
     def scalar_floordiv_expr(
         n: pl.DT_INT64, x: pl.Tensor[[64], pl.DT_FP32]
     ):
+        y = x
         for _ in pl.range(n // 4):  # type: ignore[operator]
             y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
         _test_result = y
@@ -245,7 +792,7 @@ def test_scalar_floordiv_expression_as_stop():
 
 
 def test_natural_while_loop():
-    """Test natural while loop syntax (non-SSA form)."""
+    """Test natural while loop syntax."""
 
     @pl.jit(auto_mutex=False)
     def natural_while(n: pl.DT_INT64):
@@ -264,14 +811,121 @@ def test_natural_while_loop():
     while_stmt = _find_while_stmt(natural_while)
     assert isinstance(while_stmt, ir.WhileStmt)
 
-    # Natural syntax has no iter_args initially (ConvertToSSA adds them later)
-    assert len(while_stmt.iter_args) == 0
-    assert len(while_stmt.return_vars) == 0
+    assert len(while_stmt.iter_args) == 1
+    assert len(while_stmt.return_vars) == 1
 
     _assert_lowered_while_guard(while_stmt, ir.Lt)
 
     # Body should be present
     assert while_stmt.body is not None
+
+
+def test_while_true_with_only_top_level_break_is_flattened():
+    @pl.jit(auto_mutex=False)
+    def flatten_once(value: pl.DT_INT64):
+        result = value
+        while True:
+            result = result + 1
+            break
+        _test_result = result
+
+    program, _ = flatten_once.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = program.get_function(flatten_once.__name__)
+
+    assert not any(isinstance(stmt, ir.WhileStmt) for stmt in func.body.stmts)
+    assert any(
+        isinstance(stmt, ir.AssignStmt) and stmt.var.name.startswith("_test_result")
+        for stmt in func.body.stmts
+    )
+
+
+def test_while_true_with_nested_break_is_not_flattened():
+    @pl.jit(auto_mutex=False)
+    def keep_loop(value: pl.DT_INT64):
+        result = value
+        while True:
+            if result > 0:
+                break
+            result = result + 1
+            break
+        _test_result = result
+
+    program, _ = keep_loop.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = program.get_function(keep_loop.__name__)
+
+    assert isinstance(_find_while_stmt(func), ir.WhileStmt)
+
+
+def test_while_flatten_ignores_jumps_owned_by_nested_loop():
+    @pl.jit(auto_mutex=False)
+    def flatten_outer(value: pl.DT_INT64):
+        result = value
+        while True:
+            for i in pl.range(1):
+                if i > 0:
+                    break
+                continue
+            result = result + 1
+            break
+        _test_result = result
+
+    program, _ = flatten_outer.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = program.get_function(flatten_outer.__name__)
+
+    assert not any(isinstance(stmt, ir.WhileStmt) for stmt in func.body.stmts)
+    assert any(isinstance(stmt, ir.ForStmt) for stmt in func.body.stmts)
+
+
+def test_while_true_with_nested_continue_is_not_flattened():
+    @pl.jit(auto_mutex=False)
+    def keep_loop(flag: pl.DT_BOOL):
+        while True:
+            if flag:
+                continue
+            break
+
+    program, _ = keep_loop.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = program.get_function(keep_loop.__name__)
+
+    assert isinstance(_find_while_stmt(func), ir.WhileStmt)
+
+
+def test_while_without_exit_candidate_has_empty_result():
+    @pl.jit(auto_mutex=False)
+    def loop_forever(value: pl.DT_INT64):
+        while True:
+            value = value + 1
+
+    program, _ = loop_forever.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = program.get_function(loop_forever.__name__)
+    while_stmt = _find_while_stmt(func)
+
+    assert isinstance(while_stmt.iter_args[0].iterVar.type, ir.ScalarType)
+    assert isinstance(while_stmt.return_vars[0].type, ir.NoneType)
+
+
+def test_for_else_is_rejected_before_loop_parsing():
+    @pl.jit(auto_mutex=False)
+    def invalid_for_else(_jit_entry: pl.DT_INT64):
+        for _ in pl.range(1):
+            pass
+        else:
+            pass
+
+    with pytest.raises(ParserSyntaxError, match="'for-else' is not supported"):
+        invalid_for_else.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
+def test_while_else_is_rejected_before_loop_parsing():
+    @pl.jit(auto_mutex=False)
+    def invalid_while_else(value: pl.DT_INT64):
+        while value > 0:
+            break
+        else:
+            pass
+
+    with pytest.raises(ParserSyntaxError, match="'while-else' is not supported"):
+        invalid_while_else.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_natural_while_loop_with_initialization():
@@ -297,8 +951,8 @@ def test_natural_while_loop_with_initialization():
 
     _assert_lowered_while_guard(while_stmt, ir.Lt)
 
-    # Natural form has no SSA iter_args
-    assert len(while_stmt.iter_args) == 0
+    assert len(while_stmt.iter_args) == 2
+    assert len(while_stmt.return_vars) == 2
 
 
 def test_while_loop_with_tensors():

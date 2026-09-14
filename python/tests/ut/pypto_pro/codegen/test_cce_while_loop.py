@@ -17,6 +17,7 @@ temporary lowering details such as synthetic while guards or SSA slot names.
 
 import logging
 import re
+from textwrap import dedent
 
 import pypto_pro.language as pl
 
@@ -184,6 +185,8 @@ def _for_continue_kernel(
         if i == 2:
             continue
         acc = acc + i
+    for _j in pl.range(acc):
+        pl.system.bar_all()
 
 
 @pl.jit
@@ -196,6 +199,32 @@ def _for_break_kernel(
         if i == 3:
             break
         acc = acc + i
+
+
+@pl.jit
+def _loop_tuple_kernel(
+    a: pl.Tensor[[64, 128], pl.DT_FP16],
+):
+    tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    tile_a = pl.make_tile(tile_type, addr=0x0000, size=16384)
+    tile_b = pl.make_tile(tile_type, addr=0x4000, size=16384)
+    tile_c = pl.make_tile(tile_type, addr=0x8000, size=16384)
+    bundle = pl.make_tuple(a=tile_a, b=tile_b, c=tile_c)
+    for _i in pl.range(1):
+        bundle = pl.make_tuple(a=tile_a, b=tile_b, c=tile_c)
+    pl.add(bundle.c, bundle.c, bundle.c)
+
+
+@pl.jit(auto_mutex=False)
+def _while_independent_body_result_kernel(flag: pl.DT_BOOL, result_value: pl.DT_INT64):
+    value = pl.const(0, pl.DT_INT32)
+    while True:
+        if flag:
+            value = result_value + 0
+            break
+        value = pl.const(2, pl.DT_INT32)
+        continue
+    _test_result = value + 1  # noqa: F841
 
 
 # ---------------------------------------------------------------------------
@@ -278,7 +307,7 @@ def test_cce_for_continue():
     assert "_can_continue" not in cpp, "Native continue needs no flag"
     assert "continue;" in cpp, "Expected a native C++ continue"
     _assert_materialized_jump_guard(cpp, "== 2", "continue;")
-    assert "acc_0" in cpp, "Loop-carried acc threaded through the for loop"
+    assert re.search(r"\bacc_\d+\b", cpp), "Loop-carried acc threaded through the for loop"
 
 
 def test_cce_for_break():
@@ -289,3 +318,45 @@ def test_cce_for_break():
     assert "_can_continue" not in cpp, "Native break needs no flag"
     assert "break;" in cpp, "Expected a native C++ break"
     _assert_materialized_jump_guard(cpp, "== 3", "break;")
+
+
+def test_cce_loop_tuple_return_propagates_as_one_value():
+    cpp = _compile_to_cce(_loop_tuple_kernel)
+
+    assert "TADD(bundle_1__item_2, bundle_1__item_2, bundle_1__item_2);" in cpp
+    assert "TADD(bundle_0," not in cpp
+
+
+def test_cce_while_body_and_result_use_independent_slots():
+    cpp = _compile_to_cce(_while_independent_body_result_kernel)
+    body = cpp.split("#if defined(__DAV_VEC__)")[0]
+    expected = dedent(
+        """\
+        #if defined(__DAV_CUBE__)
+        #include <pypto_tprint.h>
+        __aicore__ inline void _while_independent_body_result_kernel_impl_cube(bool flag_0, int64_t result_value_0)
+        {
+
+            auto value_0 = 0;
+            int32_t value_1 = 0;
+            int64_t value_4;
+
+            while (true) {
+                if (flag_0) {
+                    auto value_2 = (result_value_0 + 0);
+                    value_4 = value_2;
+                    break;
+                } else {
+                }
+                auto value_3 = 2;
+                value_1 = 2;
+                continue;
+            }
+            auto _test_result_0 = (value_4 + 1);
+            return;
+        }
+        #endif
+
+        """
+    )
+    assert body == expected

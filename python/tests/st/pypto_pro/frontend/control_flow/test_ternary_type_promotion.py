@@ -7,11 +7,11 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-"""ternary type-promotion control_flow 前端测试。
+"""ternary 显式类型统一 control_flow 前端测试。
 
 测试覆盖场景:
-  1. 覆盖同整数类别三元表达式类型提升：DT_INT8/DT_INT16/DT_INT32/DT_INT64 与 INDEX。
-  2. 覆盖浮点类别三元表达式类型提升：DT_FP16 与 DT_FP32。
+  1. 覆盖整数三元表达式通过 astype 统一类型：DT_INT8/DT_INT16/DT_INT32/DT_INT64 与 INDEX。
+  2. 覆盖浮点三元表达式通过 astype 统一类型：DT_FP16 与 DT_FP32。
   3. 覆盖 seqused_q/seqused_k 标量读取与 shape[1] INDEX 混用的真实 used-size 场景。
   4. 覆盖深层嵌套三元表达式，确保内层 if 表达式位于正确控制流上下文。
 """
@@ -50,35 +50,75 @@ def ternary_promote_nested_int_kernel(
         flag4 = pl.getval(int32_data, 4) > 0
 
         nested_value = (
-            (pl.getval(int16_data, 0) if flag1 else pl.getval(int32_data, 5))
+            (
+                pl.astype(pl.getval(int16_data, 0), pl.DT_INT64)
+                if flag1
+                else pl.astype(pl.getval(int32_data, 5), pl.DT_INT64)
+            )
             if flag0
             else (
-                (data_len if flag2 else pl.getval(int32_data, 6))
+                (
+                    pl.astype(data_len, pl.DT_INT64)
+                    if flag2
+                    else pl.astype(pl.getval(int32_data, 6), pl.DT_INT64)
+                )
                 if flag1
                 else (
-                    (pl.getval(int32_data, 7) if flag3 else pl.getval(int64_data, 0))
+                    (
+                        pl.astype(pl.getval(int32_data, 7), pl.DT_INT64)
+                        if flag3
+                        else pl.getval(int64_data, 0)
+                    )
                     if flag2
                     else (
-                        (pl.getval(int8_data, 0) if flag4 else pl.getval(int32_data, 8))
+                        (
+                            pl.astype(pl.getval(int8_data, 0), pl.DT_INT64)
+                            if flag4
+                            else pl.astype(pl.getval(int32_data, 8), pl.DT_INT64)
+                        )
                         if flag3
-                        else (pl.getval(int16_data, 1) if flag4 else pl.getval(int64_data, 1))
+                        else (
+                            pl.astype(pl.getval(int16_data, 1), pl.DT_INT64)
+                            if flag4
+                            else pl.getval(int64_data, 1)
+                        )
                     )
                 )
             )
         )
 
-        int32_index_value = pl.getval(int32_data, 5) if flag0 else data_len
-        index_int32_value = data_len if flag1 else pl.getval(int32_data, 6)
-        int32_int64_value = pl.getval(int32_data, 7) if flag2 else pl.getval(int64_data, 0)
-        int16_int32_value = pl.getval(int16_data, 0) if flag0 else pl.getval(int32_data, 9)
-        int16_int64_value = pl.getval(int16_data, 1) if flag1 else pl.getval(int64_data, 1)
-        int8_int32_value = pl.getval(int8_data, 0) if flag2 else pl.getval(int32_data, 9)
+        int32_index_value = (
+            pl.astype(pl.getval(int32_data, 5), pl.DT_INT64)
+            if flag0
+            else pl.astype(data_len, pl.DT_INT64)
+        )
+        index_int32_value = (
+            pl.astype(data_len, pl.DT_INT64)
+            if flag1
+            else pl.astype(pl.getval(int32_data, 6), pl.DT_INT64)
+        )
+        int32_int64_value = (
+            pl.astype(pl.getval(int32_data, 7), pl.DT_INT64) if flag2 else pl.getval(int64_data, 0)
+        )
+        int16_int32_value = (
+            pl.astype(pl.getval(int16_data, 0), pl.DT_INT64)
+            if flag0
+            else pl.astype(pl.getval(int32_data, 9), pl.DT_INT64)
+        )
+        int16_int64_value = (
+            pl.astype(pl.getval(int16_data, 1), pl.DT_INT64) if flag1 else pl.getval(int64_data, 1)
+        )
+        int8_int32_value = (
+            pl.astype(pl.getval(int8_data, 0), pl.DT_INT64)
+            if flag2
+            else pl.astype(pl.getval(int32_data, 9), pl.DT_INT64)
+        )
 
         pl.setval(out, 0, nested_value)
         pl.setval(out, 1, int32_index_value)
         pl.setval(out, 2, index_int32_value)
         pl.setval(out, 3, int32_int64_value)
-        pl.setval(out, 4, data_len)
+        pl.setval(out, 4, pl.astype(data_len, pl.DT_INT64))
         pl.setval(out, 5, int16_int32_value)
         pl.setval(out, 6, int16_int64_value)
         pl.setval(out, 7, int8_int32_value)
@@ -103,31 +143,47 @@ def ternary_promote_nested_float_kernel(
         flag4 = pl.getval(guard, 4) > 0
 
         nested_value = (
-            (pl.getval(fp16_data, 0) if flag1 else pl.getval(fp32_data, 0))
+            (pl.astype(pl.getval(fp16_data, 0), pl.DT_FP32) if flag1 else pl.getval(fp32_data, 0))
             if flag0
             else (
-                (pl.getval(fp32_data, 1) if flag2 else pl.getval(fp16_data, 1))
+                (pl.getval(fp32_data, 1) if flag2 else pl.astype(pl.getval(fp16_data, 1), pl.DT_FP32))
                 if flag1
                 else (
-                    (pl.getval(fp16_data, 2) if flag3 else pl.getval(fp32_data, 2))
+                    (pl.astype(pl.getval(fp16_data, 2), pl.DT_FP32) if flag3 else pl.getval(fp32_data, 2))
                     if flag2
                     else (
-                        (pl.getval(fp32_data, 3) if flag4 else pl.getval(fp16_data, 3))
+                        (pl.getval(fp32_data, 3) if flag4 else pl.astype(pl.getval(fp16_data, 3), pl.DT_FP32))
                         if flag3
-                        else (pl.getval(fp16_data, 4) if flag4 else pl.getval(fp32_data, 4))
+                        else (
+                            pl.astype(pl.getval(fp16_data, 4), pl.DT_FP32)
+                            if flag4
+                            else pl.getval(fp32_data, 4)
+                        )
                     )
                 )
             )
         )
 
-        fp16_fp32_value = pl.getval(fp16_data, 0) if flag0 else pl.getval(fp32_data, 0)
-        fp32_fp16_value = pl.getval(fp32_data, 1) if flag1 else pl.getval(fp16_data, 1)
+        fp16_fp32_value = (
+            pl.astype(pl.getval(fp16_data, 0), pl.DT_FP32) if flag0 else pl.getval(fp32_data, 0)
+        )
+        fp32_fp16_value = (
+            pl.getval(fp32_data, 1) if flag1 else pl.astype(pl.getval(fp16_data, 1), pl.DT_FP32)
+        )
 
         pl.setval(out, 0, nested_value)
         pl.setval(out, 1, fp16_fp32_value)
         pl.setval(out, 2, fp32_fp16_value)
-        pl.setval(out, 3, pl.getval(fp16_data, 2) if flag2 else pl.getval(fp32_data, 2))
-        pl.setval(out, 4, pl.getval(fp32_data, 3) if flag3 else pl.getval(fp16_data, 3))
+        pl.setval(
+            out,
+            3,
+            pl.astype(pl.getval(fp16_data, 2), pl.DT_FP32) if flag2 else pl.getval(fp32_data, 2),
+        )
+        pl.setval(
+            out,
+            4,
+            pl.getval(fp32_data, 3) if flag3 else pl.astype(pl.getval(fp16_data, 3), pl.DT_FP32),
+        )
 
 
 # =============================================================================
@@ -150,8 +206,16 @@ def ternary_promote_used_size_kernel(
     k_used = pl.getval(used_flags, 1) > 0
 
     with pl.section_vector():
-        q_used_size = pl.getval(seqused_q, b_idx) if q_used else s1_dim
-        k_used_size = pl.getval(seqused_k, b_idx) if k_used else s2_dim
+        q_used_size = (
+            pl.astype(pl.getval(seqused_q, b_idx), pl.DT_INT64)
+            if q_used
+            else pl.astype(s1_dim, pl.DT_INT64)
+        )
+        k_used_size = (
+            pl.astype(pl.getval(seqused_k, b_idx), pl.DT_INT64)
+            if k_used
+            else pl.astype(s2_dim, pl.DT_INT64)
+        )
         pl.setval(out, 0, q_used_size)
         pl.setval(out, 1, k_used_size)
 

@@ -657,11 +657,11 @@ TEST(BackendCCEBlockOutOps, GeneratesHighDimensionalNzLoadAndStore)
 
     EXPECT_CONTAINS(generated, "pto::TileShape2D<half, pto::DYNAMIC, pto::DYNAMIC, Layout::NZ>");
     EXPECT_CONTAINS(generated, "pto::BaseShape2D<half, pto::DYNAMIC, pto::DYNAMIC, Layout::NZ>");
-    EXPECT_CONTAINS(generated, "tensor_0StrideDim5(64, 64)");
-    EXPECT_CONTAINS(generated, "tensor_0.SetShape<pto::GlobalTensorDim::DIM_1, pto::GlobalTensorDim::DIM_2>");
+    EXPECT_CONTAINS(generated, "tensorStrideDim5(64, 64)");
+    EXPECT_CONTAINS(generated, "tensor.SetShape<pto::GlobalTensorDim::DIM_1, pto::GlobalTensorDim::DIM_2>");
     EXPECT_CONTAINS(generated, "1 * 3 * 64 * 64 + 2 * 64 * 64 + 16 * 64 + 16 * 16");
-    EXPECT_CONTAINS(generated, "TLOAD(tile_0, tensor_0);");
-    EXPECT_CONTAINS(generated, "TSTORE(tensor_0, tile_0);");
+    EXPECT_CONTAINS(generated, "TLOAD(tile, tensor);");
+    EXPECT_CONTAINS(generated, "TSTORE(tensor, tile);");
 }
 
 TEST(BackendCCEBlockOutOps, GeneratesFp8NzLoadAndStore)
@@ -681,8 +681,8 @@ TEST(BackendCCEBlockOutOps, GeneratesFp8NzLoadAndStore)
 
     EXPECT_CONTAINS(generated, "pto::TileShape2D<float8_e4m3_t, pto::DYNAMIC, pto::DYNAMIC, Layout::NZ>");
     EXPECT_CONTAINS(generated, "32 * 64 + 16 * 32");
-    EXPECT_CONTAINS(generated, "TLOAD(tile_0, tensor_0);");
-    EXPECT_CONTAINS(generated, "TSTORE(tensor_0, tile_0);");
+    EXPECT_CONTAINS(generated, "TLOAD(tile, tensor);");
+    EXPECT_CONTAINS(generated, "TSTORE(tensor, tile);");
 }
 
 TEST(BackendCCEBlockOutOps, GeneratesPackedFp4NzLoadAndStore)
@@ -701,12 +701,12 @@ TEST(BackendCCEBlockOutOps, GeneratesPackedFp4NzLoadAndStore)
 
     EXPECT_CONTAINS(generated, "pto::TileShape2D<float4_e2m1x2_t, pto::DYNAMIC, pto::DYNAMIC, Layout::NZ>");
     EXPECT_CONTAINS(generated, "pto::BaseShape2D<float4_e2m1x2_t, pto::DYNAMIC, pto::DYNAMIC, Layout::NZ>");
-    EXPECT_CONTAINS(generated, "tensor_0StrideDim5(80, 192)");
-    EXPECT_CONTAINS(generated, "tensor_0ShapeDim5 tensor_0_shape_");
-    EXPECT_CONTAINS(generated, "tensor_0.SetShape<pto::GlobalTensorDim::DIM_1, pto::GlobalTensorDim::DIM_2>");
+    EXPECT_CONTAINS(generated, "tensorStrideDim5(80, 192)");
+    EXPECT_CONTAINS(generated, "tensorShapeDim5 tensor_shape_");
+    EXPECT_CONTAINS(generated, "tensor.SetShape<pto::GlobalTensorDim::DIM_1, pto::GlobalTensorDim::DIM_2>");
     EXPECT_CONTAINS(generated, "(64 * 80 + 48 * 64) / 2");
-    EXPECT_CONTAINS(generated, "TLOAD(tile_0, tensor_0);");
-    EXPECT_CONTAINS(generated, "TSTORE(tensor_0, tile_0);");
+    EXPECT_CONTAINS(generated, "TLOAD(tile, tensor);");
+    EXPECT_CONTAINS(generated, "TSTORE(tensor, tile);");
 }
 
 TEST(BackendCCEBlockOutOps, RejectsUnsupportedNzTileLayoutAndTranspose)
@@ -756,7 +756,7 @@ TEST(BackendCCEBlockOutOps, PadsNonAlignedNzTensorShapeAndRejectsInvalidOffsetRa
     const auto generated = generate_load({2, 3, 70, 50}, {1, 2, 64, 48});
     EXPECT_CONTAINS(generated, "pto::TileShape2D<half, pto::DYNAMIC, pto::DYNAMIC, Layout::NZ>");
     EXPECT_CONTAINS(generated, "pto::BaseShape2D<half, pto::DYNAMIC, pto::DYNAMIC, Layout::NZ>");
-    EXPECT_CONTAINS(generated, "tensor_0StrideDim5(80, 64)");
+    EXPECT_CONTAINS(generated, "tensorStrideDim5(80, 64)");
     EXPECT_CONTAINS(generated, "1 * 3 * 80 * 64 + 2 * 80 * 64 + 48 * 80 + 64 * 16");
 
     auto tensor = MakeTensorVar("high_dim_tensor", {2, 3, 64, 64}, ir::DataType::FP16, ir::TensorLayout::NZ);
@@ -809,16 +809,16 @@ TEST(BackendCCEBlockOutOps, InfersHighDimensionalMxScaleLoadFromDestinationAndOr
     EXPECT_CONTAINS(a_code, "pto::TileShape2D<float8_e8m0_t");
     EXPECT_CONTAINS(a_code, "Layout::MX_A_ND");
     EXPECT_CONTAINS(a_code, "pto::Stride<pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, 1>");
-    EXPECT_CONTAINS(a_code, "scale_a_0StrideDim5(1, 1, 3 * 3 * 2, 2, 1)");
-    EXPECT_CONTAINS(a_code, "TASSIGN(scale_a_0, scale_a_0_ptr + (1 * (64 * 3 * 3 * 2) + 4 * (3 * 3 * 2) + 2 * (3 * 2) "
+    EXPECT_CONTAINS(a_code, "scale_aStrideDim5(1, 1, 3 * 3 * 2, 2, 1)");
+    EXPECT_CONTAINS(a_code, "TASSIGN(scale_a, scale_a_ptr + (1 * (64 * 3 * 3 * 2) + 4 * (3 * 3 * 2) + 2 * (3 * 2) "
                             "+ 1 * (2) + 0));");
-    EXPECT_CONTAINS(a_code, "TLOAD(out_a_0, scale_a_0);");
+    EXPECT_CONTAINS(a_code, "TLOAD(out_a, scale_a);");
 
     const auto b_code = GenerateMxLoadKernel(MakeTensorVar("scale_b", {2, 64, 3, 3, 2}, ir::DataType::FP8E8M0),
                                              MakeVar("out_b", nn_tile), {1, 4, 2, 1, 0},
                                              {{"tile_dims", std::vector<int>{1, 3}}, {"is_transpose", true}});
     EXPECT_CONTAINS(b_code, "Layout::MX_B_DN");
-    EXPECT_CONTAINS(b_code, "TLOAD(out_b_0, scale_b_0);");
+    EXPECT_CONTAINS(b_code, "TLOAD(out_b, scale_b);");
 }
 
 TEST(BackendCCEBlockOutOps, RejectsMxScaleLoadSelectingPhysicalPhaseAxis)
@@ -860,22 +860,22 @@ TEST(BackendCCEBlockOutOps, InfersAllMxScaleLayouts)
 
     const auto a_nd = infer({64, 3, 2}, zz_tile, {4, 1, 0}, false);
     EXPECT_CONTAINS(a_nd, "Layout::MX_A_ND");
-    EXPECT_CONTAINS(a_nd, "scale_0StrideDim5(1, 1, 3 * 2, 2, 1)");
+    EXPECT_CONTAINS(a_nd, "scaleStrideDim5(1, 1, 3 * 2, 2, 1)");
     EXPECT_CONTAINS(a_nd, "4 * (3 * 2) + 1 * (2) + 0");
 
     const auto a_dn = infer({3, 64, 2}, zz_tile, {1, 4, 0}, true);
     EXPECT_CONTAINS(a_dn, "Layout::MX_A_DN");
-    EXPECT_CONTAINS(a_dn, "scale_0StrideDim5(1, 1, 64 * 2, 2, 1)");
+    EXPECT_CONTAINS(a_dn, "scaleStrideDim5(1, 1, 64 * 2, 2, 1)");
     EXPECT_CONTAINS(a_dn, "1 * (64 * 2) + 4 * (2) + 0");
 
     const auto b_nd = infer({3, 64, 2}, nn_tile, {1, 4, 0}, false);
     EXPECT_CONTAINS(b_nd, "Layout::MX_B_ND");
-    EXPECT_CONTAINS(b_nd, "scale_0StrideDim5(1, 1, 64 * 2, 2, 1)");
+    EXPECT_CONTAINS(b_nd, "scaleStrideDim5(1, 1, 64 * 2, 2, 1)");
     EXPECT_CONTAINS(b_nd, "1 * (64 * 2) + 4 * (2) + 0");
 
     const auto b_dn = infer({64, 3, 2}, nn_tile, {4, 1, 0}, true);
     EXPECT_CONTAINS(b_dn, "Layout::MX_B_DN");
-    EXPECT_CONTAINS(b_dn, "scale_0StrideDim5(1, 1, 3 * 2, 2, 1)");
+    EXPECT_CONTAINS(b_dn, "scaleStrideDim5(1, 1, 3 * 2, 2, 1)");
     EXPECT_CONTAINS(b_dn, "4 * (3 * 2) + 1 * (2) + 0");
 }
 
@@ -888,7 +888,7 @@ TEST(BackendCCEBlockOutOps, InfersMxScaleLoadWithMiddleGroupAxis)
                                                 MakeVar("out", nn_tile), {1, 1, 1, 4, 0},
                                                 {{"tile_dims", std::vector<int>{1, 3}}});
     EXPECT_CONTAINS(generated, "Layout::MX_B_ND");
-    EXPECT_CONTAINS(generated, "scale_0StrideDim5(1, 1, 3 * 64 * 2, 2, 1)");
+    EXPECT_CONTAINS(generated, "scaleStrideDim5(1, 1, 3 * 64 * 2, 2, 1)");
     EXPECT_CONTAINS(generated, "1 * (3 * 3 * 64 * 2) + 1 * (3 * 64 * 2) + 1 * (64 * 2) + 4 * (2) + 0");
 }
 
@@ -912,12 +912,12 @@ TEST(BackendCCEBlockOutOps, InfersMxLayoutPerLoadForSameTensor)
                                            std::make_shared<const ir::EvalStmt>(a_load, ir::Span::Unknown()),
                                            std::make_shared<const ir::EvalStmt>(b_load, ir::Span::Unknown())},
                                           {tensor}, ir::SectionKind::Cube);
-    EXPECT_CONTAINS(generated, "using scale_0Type = GlobalTensor<float8_e8m0_t, scale_0ShapeDim5, scale_0StrideDim5, "
+    EXPECT_CONTAINS(generated, "using scaleType = GlobalTensor<float8_e8m0_t, scaleShapeDim5, scaleStrideDim5, "
                                "Layout::MX_A_ND>;");
-    EXPECT_CONTAINS(generated, "using scale_0__v1Type = GlobalTensor<float8_e8m0_t, scale_0__v1ShapeDim5, "
-                               "scale_0__v1StrideDim5, Layout::MX_B_DN>;");
-    EXPECT_CONTAINS(generated, "TLOAD(out_a_0, scale_0);");
-    EXPECT_CONTAINS(generated, "TLOAD(out_b_0, scale_0__v1);");
+    EXPECT_CONTAINS(generated, "using scale__v1Type = GlobalTensor<float8_e8m0_t, scale__v1ShapeDim5, "
+                               "scale__v1StrideDim5, Layout::MX_B_DN>;");
+    EXPECT_CONTAINS(generated, "TLOAD(out_a, scale);");
+    EXPECT_CONTAINS(generated, "TLOAD(out_b, scale__v1);");
 }
 
 // The inferred MX view is a GlobalTensor declaration hoisted to the prologue; each load resizes
@@ -930,9 +930,9 @@ TEST(BackendCCEBlockOutOps, HoistsInferredMxViewToPrologue)
     const auto generated = GenerateMxLoadKernel(MakeTensorVar("scale", {64, 1, 2}, ir::DataType::FP8E8M0),
                                                 MakeVar("tile", tile_type), {0, 0, 0},
                                                 {{"tile_dims", std::vector<int>{0, 1}}});
-    EXPECT_CONTAINS(generated, "using scale_0ShapeDim5 = pto::TileShape2D<float8_e8m0_t");
-    EXPECT_CONTAINS(generated, "scale_0.SetShape<pto::GlobalTensorDim::DIM_2, pto::GlobalTensorDim::DIM_3>");
-    EXPECT_CONTAINS(generated, "TLOAD(tile_0, scale_0);");
+    EXPECT_CONTAINS(generated, "using scaleShapeDim5 = pto::TileShape2D<float8_e8m0_t");
+    EXPECT_CONTAINS(generated, "scale.SetShape<pto::GlobalTensorDim::DIM_2, pto::GlobalTensorDim::DIM_3>");
+    EXPECT_CONTAINS(generated, "TLOAD(tile, scale);");
 }
 
 TEST(BackendCCEBlockOutOps, Store)
@@ -973,9 +973,9 @@ TEST(BackendCCEBlockOutOps, GeneratesLoadAndStoreThroughFullCodegen)
     codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body, {tensor}), "a5");
 
-    EXPECT_CONTAINS(generated, "TASSIGN(tensor_0, tensor_0_ptr + ");
+    EXPECT_CONTAINS(generated, "TASSIGN(tensor, tensor_ptr + ");
     EXPECT_CONTAINS(generated, "TLOAD(tile");
-    EXPECT_CONTAINS(generated, "TSTORE(tensor_0, tile");
+    EXPECT_CONTAINS(generated, "TSTORE(tensor, tile");
 }
 
 TEST(BackendCCEBlockOutOps, StoreWithPhase)
@@ -1300,8 +1300,8 @@ TEST(BackendCCEBlockOutOps, SsbufStore)
     auto code = RunSsbufCodegen("block.ssbuf_store");
     EXPECT_CONTAINS(code, "class SsbufStruct {\npublic:\n    volatile int32_t value;");
     EXPECT_CONTAINS(code, "reinterpret_cast<__ssbuf__ uint32_t*>((uint64_t)(0))");
-    EXPECT_CONTAINS(code, "reinterpret_cast<const uint32_t*>(&struct_var_0)");
-    EXPECT_CONTAINS(code, "sizeof(struct_var_0) / sizeof(uint32_t)");
+    EXPECT_CONTAINS(code, "reinterpret_cast<const uint32_t*>(&struct_var)");
+    EXPECT_CONTAINS(code, "sizeof(struct_var) / sizeof(uint32_t)");
 }
 
 TEST(BackendCCEBlockOutOps, SsbufLoad)
@@ -1309,8 +1309,8 @@ TEST(BackendCCEBlockOutOps, SsbufLoad)
     auto code = RunSsbufCodegen("block.ssbuf_load");
     EXPECT_CONTAINS(code, "class SsbufStruct {\npublic:\n    volatile int32_t value;");
     EXPECT_CONTAINS(code, "reinterpret_cast<__ssbuf__ uint32_t*>((uint64_t)(0))");
-    EXPECT_CONTAINS(code, "reinterpret_cast<uint32_t*>(&struct_var_0)");
-    EXPECT_CONTAINS(code, "sizeof(struct_var_0) / sizeof(uint32_t)");
+    EXPECT_CONTAINS(code, "reinterpret_cast<uint32_t*>(&struct_var)");
+    EXPECT_CONTAINS(code, "sizeof(struct_var) / sizeof(uint32_t)");
 }
 
 TEST(BackendCCEBlockOutOps, Fillpad)
@@ -1600,7 +1600,7 @@ TEST(BackendCCEBlockOutOps, GeneratesStructCreateThroughAssignStmt)
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a5");
 
     EXPECT_CONTAINS(generated, "class MyStruct");
-    EXPECT_CONTAINS(generated, "MyStruct result_0 = {");
+    EXPECT_CONTAINS(generated, "MyStruct result = {");
     EXPECT_CONTAINS(generated, ".f0=v0");
     EXPECT_CONTAINS(generated, ".f1=v1");
 }

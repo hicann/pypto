@@ -112,7 +112,7 @@ def test_static_subscript_of_let_bound_tuple_is_folded():
 
     selected = next(
         stmt for stmt in func.body.stmts
-        if isinstance(stmt, ir.AssignStmt) and stmt.var.name == "selected"
+        if isinstance(stmt, ir.AssignStmt) and stmt.var.name == "selected_0"
     )
     assert isinstance(selected.value, ir.ConstInt)
 
@@ -130,11 +130,11 @@ def test_struct_array_static_subscript_remains_getitem():
 
     slot = next(
         stmt for stmt in func.body.stmts
-        if isinstance(stmt, ir.AssignStmt) and stmt.var.name == "slot"
+        if isinstance(stmt, ir.AssignStmt) and stmt.var.name == "slot_0"
     )
     assert isinstance(slot.value, ir.GetItemExpr)
     assert isinstance(slot.value.value, ir.Var)
-    assert slot.value.value.name == "slots"
+    assert slot.value.value.name == "slots_0"
 
 
 def test_named_tuple_static_field_is_folded_with_runtime_fields():
@@ -246,7 +246,7 @@ def test_dynamic_index_keeps_folded_tuple_through_base_expression():
     dynamic_read = None
     for stmt in func.body.stmts:
         if (isinstance(stmt, ir.AssignStmt)
-                and stmt.var.name == "selected"
+                and stmt.var.name == "selected_0"
                 and isinstance(stmt.value, ir.GetItemExpr)):
             dynamic_read = stmt.value
             break
@@ -262,7 +262,7 @@ def test_nested_tuple_has_anchor_but_remains_make_tuple_expression():
     func = func_program.get_function(func.__name__)
 
     assignments = [stmt for stmt in func.body.stmts if isinstance(stmt, ir.AssignStmt)]
-    outer = next(stmt for stmt in assignments if stmt.var.name == "outer")
+    outer = next(stmt for stmt in assignments if stmt.var.name == "outer_0")
     assert isinstance(outer.value, ir.MakeTuple)
     nested = outer.value.elements[1]
     assert isinstance(nested, ir.MakeTuple)

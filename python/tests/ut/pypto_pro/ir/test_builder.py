@@ -41,8 +41,8 @@ def test_simple_function_with_auto_span():
     assert func.name == "my_func"
     assert len(func.params) == 2
     assert len(func.return_types) == 1
-    assert func.params[0].name == "x"
-    assert func.params[1].name == "y"
+    assert func.params[0].name == "x_0"
+    assert func.params[1].name == "y_0"
     assert func.body is not None
 
 
@@ -84,6 +84,31 @@ def test_function_with_multiple_statements():
     assert func is not None
     assert isinstance(func.body, ir.SeqStmts)
     assert len(func.body.stmts) == 2
+
+
+def test_var_name_is_unique_within_function():
+    ib = IRBuilder()
+
+    with ib.function("reassign") as f:
+        param = f.param("x", ir.ScalarType(DataType.INT64))
+        first = ib.var("x", ir.ScalarType(DataType.INT64))
+        second = ib.var(first.name, ir.ScalarType(DataType.INT64))
+
+    assert param.name == "x_0"
+    assert first.name == "x_1"
+    assert second.name == "x_2"
+
+
+def test_var_names_reset_for_each_function():
+    ib = IRBuilder()
+
+    with ib.function("first"):
+        first = ib.var("x", ir.ScalarType(DataType.INT64))
+    with ib.function("second"):
+        second = ib.var("x", ir.ScalarType(DataType.INT64))
+
+    assert first.name == "x_0"
+    assert second.name == "x_0"
 
 
 def test_nested_function_error():
@@ -183,7 +208,7 @@ def test_let_with_inferred_type():
         # let() should infer the type from the expression
         x = ib.let("x", const)
 
-        assert x.name == "x"
+        assert x.name == "x_0"
         assert isinstance(x.type, ir.ScalarType)
         assert x.type.dtype == DataType.INT64
 
@@ -205,7 +230,7 @@ def test_let_with_type_validation():
         explicit_type = ir.ScalarType(DataType.INT64)
         x = ib.let("x", const, var_type=explicit_type)
 
-        assert x.name == "x"
+        assert x.name == "x_0"
         assert isinstance(x.type, ir.ScalarType)
         assert x.type.dtype == DataType.INT64
 
@@ -258,7 +283,7 @@ def test_let_with_scalar_value():
         # let() should handle int values via _normalize_expr
         x = ib.let("x", 42)
 
-        assert x.name == "x"
+        assert x.name == "x_0"
         # Type should be inferred from the normalized expression
         assert isinstance(x.type, ir.ScalarType)
 
@@ -279,7 +304,7 @@ def test_let_with_tensor_expr():
         # let() should infer TensorType from the create operation
         t = ib.let("t", tensor_create)
 
-        assert t.name == "t"
+        assert t.name == "t_0"
         assert isinstance(t.type, ir.TensorType)
         assert t.type.dtype == DataType.FP32
 
@@ -302,7 +327,7 @@ def test_let_with_binary_expr():
         # let() should infer type from Add expression
         result = ib.let("result", add_expr)
 
-        assert result.name == "result"
+        assert result.name == "result_0"
         assert isinstance(result.type, ir.ScalarType)
         assert result.type.dtype == DataType.INT64
 
@@ -321,7 +346,7 @@ def test_let_with_explicit_span():
         const = ir.ConstInt(42, DataType.INT64, ir.Span.unknown())
         x = ib.let("x", const, span=my_span)
 
-        assert x.name == "x"
+        assert x.name == "x_0"
         assert x.span.filename == "test.py"
         assert x.span.begin_line == 100
 

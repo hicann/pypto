@@ -118,8 +118,8 @@ def test_closure_tuple_has_entry_anchor_and_folded_reads():
     func = func_program.get_function(func.__name__)
 
     assignments = [stmt for stmt in func.body.stmts if isinstance(stmt, ir.AssignStmt)]
-    anchor = next(stmt for stmt in assignments if stmt.var.name == "values")
-    selected = next(stmt for stmt in assignments if stmt.var.name == "selected")
+    anchor = next(stmt for stmt in assignments if stmt.var.name == "values_0")
+    selected = next(stmt for stmt in assignments if stmt.var.name == "selected_0")
     assert isinstance(anchor.value, ir.MakeTuple)
     assert isinstance(selected.value, ir.GetItemExpr)
     assert selected.value.value is anchor.value

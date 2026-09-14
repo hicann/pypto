@@ -253,8 +253,8 @@ def seg_window(rule, gs, ge, r0, c0):
 
 def calc_loop(start, end, work_id, b_idx, s1_o_acc, s1_size_acc, s2_size_acc, actual_seq_q, actual_seq_kv, n_dim):
     for _ in pl.range(start, end):
-        actual_s1 = 0
-        actual_s2 = 0
+        actual_s1 = pl.astype(0, pl.DT_INT32)
+        actual_s2 = pl.astype(0, pl.DT_INT32)
         if b_idx == 0:
             actual_s1 = pl.getval(actual_seq_q, b_idx)
             actual_s2 = pl.getval(actual_seq_kv, b_idx)
@@ -1068,8 +1068,8 @@ def fa_tnd_with_mask_kernel(
         b_idx = 0
         s1_size_acc = 0
         s2_size_acc = 0
-        actual_s1 = 0
-        actual_s2 = 0
+        actual_s1 = pl.astype(0, pl.DT_INT32)
+        actual_s2 = pl.astype(0, pl.DT_INT32)
         s1_o_acc = 0
         ctx_arr = pl.struct_array(
             4, "CubeCtx", n_idx=0, qi=0, ki=0, task_id=0, s1SizeAcc=0, s2SizeAcc=0, s1_size=0, s2_size=0
@@ -1238,8 +1238,8 @@ def fa_tnd_with_mask_kernel(
         b_idx = 0
         s1_size_acc = 0
         s2_size_acc = 0
-        actual_s1 = 0
-        actual_s2 = 0
+        actual_s1 = pl.astype(0, pl.DT_INT32)
+        actual_s2 = pl.astype(0, pl.DT_INT32)
         s1_o_acc = 0
         segment_idx = 0
 
@@ -1305,7 +1305,7 @@ def fa_tnd_with_mask_kernel(
             segment_idx, segment_acc, cross_segment = calc_segment_idx(b_idx, s1_idx, segment_starts, actual_s1)
             s1_size = pl.min(TS, actual_s1 - s1_idx * TS)
 
-            sq_acc = 0
+            sq_acc = pl.astype(0, pl.DT_INT32)
             if b_idx > 0:
                 sq_acc = pl.getval(actual_seq_q, b_idx - 1)
             q_off = sq_acc + s1_idx * TS

@@ -939,8 +939,8 @@ def flex_attention_bf16(
         two_c = pl.getval(work_ranges, core_id * 4 + 3)
         task_id = 0
         b_idx = 0
-        actual_s1 = 0
-        actual_s2 = 0
+        actual_s1 = pl.astype(0, pl.DT_INT32)
+        actual_s2 = pl.astype(0, pl.DT_INT32)
         s1o_acc = 0
         ctx_arr = pl.struct_array(4, "CubeCtx", n_idx=0, kv_n_idx=0, qi=0, ki=0,
                                   task_id=0, kv_page=0, kv_slot=0, s1_size=0, s2_size=0, loop_count=0)
@@ -1092,8 +1092,8 @@ def flex_attention_bf16(
         task_id = 0
         q_count = 0
         b_idx = 0
-        actual_s1 = 0
-        actual_s2 = 0
+        actual_s1 = pl.astype(0, pl.DT_INT32)
+        actual_s2 = pl.astype(0, pl.DT_INT32)
         s1o_acc = 0
 
         # StructArray(3) for pipeline context tracking (same as original)
