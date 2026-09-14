@@ -64,7 +64,7 @@ store_unalign(tile, src, align_reg, stride=None, post_update: bool = False)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| Tile | 输出 | 目的操作数，Tile地址。 |
+| tile | 输出 | 目的操作数，Tile地址。 |
 | src | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)或者[mask_reg](../mask_reg.md)类型，目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
 | align_reg | 输入 | alignment tracker寄存器（由vf.unalign_reg_for_store()创建）。 |
 | stride | 输入 | 可选，存储元素个数或地址寄存器。<br>- 当为整型标量时，代表地址更新步长，仅post_update = True时有效。<br>- 当为AddrReg（由vf.create_addr_reg创建）时，使用向量偏移地址替代标量stride。src为reg_tensor时为必选输入；src为mask_reg时不传stride。 |
@@ -146,12 +146,9 @@ def example_vf(src_tile, dst_tile):
     vf.load_unalign_pre(ureg, src_tile)
     src_reg = vf.load_unalign(ureg, src_tile, post_update=True)
     store_ureg = vf.unalign_reg_for_store()
-    # create_addr_reg必须在pl.range循环内调用，vag指令参数需绑定到循环层
     for i in pl.range(0, 1, 1):
         addr_reg = vf.create_addr_reg(64, dtype=pl.DT_FP32)
-        # AddrReg模式下vstu支持post_update参数（与vstus一致）
         vf.store_unalign(dst_tile, src_reg, store_ureg, addr_reg, post_update=True)
-        # vsta无post_update参数，AddrReg模式直接传入addr_reg即可
         vf.store_unalign_post(dst_tile, store_ureg, addr_reg)
 
 @pl.jit()
@@ -200,10 +197,8 @@ def example_vf(src_tile, mask_buf_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg_a = vf.load_align(src_tile, 0)
     cmp_mask = vf.ge(reg_a, 0.0, preg)
-    # mask_reg非对齐存储（pstu指令），32位宽模式将32B mask_reg打包为8B写入Tile
     ureg = vf.unalign_reg_for_store()
     vf.store_unalign(mask_buf_tile, cmp_mask, ureg)
-    # 必须flush alignment tracker中剩余的未对齐字节，否则数据滞留不到达Tile
     vf.store_unalign_post(mask_buf_tile, ureg, 0, post_update=True)
 
 @pl.jit()
@@ -228,15 +223,11 @@ def test_example_2():
     device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
-    # pstu 32位宽: 32B mask_reg → 8B (2 DT_UINT32)，bit i = (a[i] >= 0)
-    # 全正输入 → 全部掩码位为1 → 打包结果非零
     a = torch.ones([1, 64], device=device, dtype=torch.float32)
     out = torch.zeros([1, 64], device=device, dtype=torch.int32)
     example_kernel[None, core_nums](a, out)
     torch.npu.synchronize()
-    # pstu+vstar写入位置由ureg对齐状态决定，检查整个输出是否有非零值
     assert (out != 0).any(), "全正输入应产生非零打包掩码"
-    # 全负输入 → 全部掩码位为0 → 打包结果为零
     a = -torch.ones([1, 64], device=device, dtype=torch.float32)
     out = torch.zeros([1, 64], device=device, dtype=torch.int32)
     example_kernel[None, core_nums](a, out)

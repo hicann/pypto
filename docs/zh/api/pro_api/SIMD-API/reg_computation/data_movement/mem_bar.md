@@ -73,10 +73,8 @@ def example_vf(in_a, t_f0):
     reg_a = vf.load_align(in_a, 0)
     reg_t = vf.add(reg_a, reg_a, preg)
     vf.store_align(t_f0, reg_t, preg)
-    # 写-写屏障：保证对同一Tile的两次store有序
     vf.mem_bar(mode=pl.MemBarMode.VST_VST)
     reg_r = vf.load_align(t_f0, 0)
-    # 全量矢量屏障
     vf.mem_bar(mode=pl.MemBarMode.VV_ALL)
     vf.store_align(t_f0, reg_r, preg)
 

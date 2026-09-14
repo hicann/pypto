@@ -128,12 +128,9 @@ import torch_npu
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg = vf.load_align(src_tile, 0)
-    # 生成比较掩码：reg >= 0的位置为1
     mask_a = vf.ge(reg, 0.0, preg)
-    # pack提取偶数位到低半部分，unpack再展开恢复，roundtrip后掩码不变
     preg_packed = vf.pack(mask_a, part=pl.PackPart.LOWER)
     preg_unpacked = vf.unpack(preg_packed, part=pl.PackPart.LOWER)
-    # 使用恢复后的掩码做abs：reg >= 0处取abs（即自身），否则置零
     reg_dst = vf.abs(reg, preg_unpacked)
     vf.store_align(dst_tile, reg_dst, preg)
 

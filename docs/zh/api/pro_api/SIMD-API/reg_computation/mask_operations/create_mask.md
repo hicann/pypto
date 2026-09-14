@@ -123,7 +123,6 @@ import torch_npu
 
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
-    # create_mask创建mask_reg，供后续算子做掩码控制
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg = vf.load_align(src_tile, 0)
     vf.store_align(dst_tile, reg, preg)

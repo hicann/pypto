@@ -48,7 +48,6 @@ import torch_npu
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg = vf.load_align(src_tile, 0)
-    # Squeeze会将有效元素字节数写入AddrReg寄存器
     reg_sq = vf.squeeze(reg, preg)
     vf.store_align(dst_tile, reg_sq, preg)
 
@@ -66,7 +65,6 @@ def example_kernel(
         pl.load(in_a, a, [0, 0])
         example_vf(in_a, t_out)
         pl.store(out, t_out, [0, 0])
-    # 在Kernel的非VF区域读取AddrReg寄存器
     ar_value = pl.get_spr()
 
 def test_example():

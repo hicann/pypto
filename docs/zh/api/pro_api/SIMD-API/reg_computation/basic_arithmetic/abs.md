@@ -46,7 +46,7 @@ abs(src, preg, mode: Optional[MergeMode] = None) -> dst
 
 ## 约束说明
 
-- 当目的操作数和源操作数数据类型不一致时，目的操作数和源操作数不可重叠。
+无。
 
 ## 返回值说明
 

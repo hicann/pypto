@@ -44,7 +44,6 @@ import torch_npu
 
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
-    # clear_spr清除特殊寄存器，重置累加寄存器
     vf.clear_spr()
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg = vf.load_align(src_tile, 0)

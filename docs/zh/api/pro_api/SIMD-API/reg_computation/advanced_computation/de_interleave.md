@@ -119,10 +119,8 @@ def example_vf(src_tile, dst_tile):
     mask_full = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     mask_m3 = vf.create_mask(pattern=pl.MaskPattern.M3, dtype=pl.DT_FP32)
     reg = vf.load_align(src_tile, 0)
-    # 先交织再解交织，掩码恢复原值
     new_mask0, new_mask1 = vf.interleave(mask_full, mask_m3)
     new_mask0, new_mask1 = vf.de_interleave(new_mask0, new_mask1)
-    # new_mask0恢复为ALL，用其做abs：对所有元素取绝对值
     reg_dst = vf.abs(reg, new_mask0)
     vf.store_align(dst_tile, reg_dst, preg)
 

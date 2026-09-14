@@ -56,7 +56,6 @@ import torch_npu
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
-    # [reg_tensor](../reg_tensor.md) move — 将reg_a的内容复制到reg_b
     reg_a = vf.load_align(src_tile, 0)
     reg_b = vf.move(reg_a, preg)
     src_mask = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
@@ -107,11 +106,8 @@ import torch_npu
 def example_vf(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg = vf.load_align(src_tile, 0)
-    # 生成比较掩码：reg >= 0的位置为1
     mask_a = vf.ge(reg, 0.0, preg)
-    # 复制掩码
     dst_mask = vf.move(mask_a)
-    # 使用复制后的掩码做abs：reg >= 0处取abs（即自身），否则置零
     reg_dst = vf.abs(reg, dst_mask)
     vf.store_align(dst_tile, reg_dst, preg)
 
@@ -158,11 +154,8 @@ import torch_npu
 @pl.vector_function
 def example_vf_fp8(src_tile, dst_tile):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
-    # 加载 FP8E4M3FN 数据，reg_tensor 包含 256 个 FP8 元素
     reg_f8 = vf.load_align(src_tile, 0, dtype=pl.DT_FP8E4M3FN)
-    # FP8 → FP32 转换（4x 扩展，256 个 FP8 → 64 个 FP32）
     reg_f32 = vf.astype(reg_f8, preg, dtype=pl.DT_FP32)
-    # move 搬运 FP32 数据
     reg_dst = vf.move(reg_f32, preg)
     vf.store_align(dst_tile, reg_dst, preg)
 
@@ -192,7 +185,6 @@ def test_example_fp8():
     example_kernel_fp8[None, core_nums](a, out)
     torch.npu.synchronize()
     expected = a.to(torch.float32)
-    # FP8→FP32 4x 扩展，layout=ZERO(PART_P0) 取 FP8 索引 0,4,8,...,252
     torch.testing.assert_close(out, expected[:, ::4], rtol=1e-2, atol=1e-2)
 
 if __name__ == "__main__":

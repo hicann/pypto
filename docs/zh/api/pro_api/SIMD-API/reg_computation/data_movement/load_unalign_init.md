@@ -46,7 +46,6 @@ import torch_npu
 
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
-    # 分配非对齐搬入缓存寄存器
     ureg = vf.load_unalign_init()
     vf.load_unalign_pre(ureg, src_tile)
     src_reg = vf.load_unalign(ureg, src_tile, post_update=True)

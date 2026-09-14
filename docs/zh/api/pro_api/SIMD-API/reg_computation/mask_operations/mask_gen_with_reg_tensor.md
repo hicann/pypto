@@ -70,12 +70,8 @@ import torch_npu
 
 @pl.vector_function
 def example_vf(src_tile, dst_tile):
-    # 加载数据到reg_tensor
     reg = vf.load_align(src_tile, 0)
-    # 从reg_tensor的offset=0处生成mask_reg
-    # mask的比特位由reg_tensor指定DataBlock的数据比特决定
     dst = vf.mask_gen_with_reg_tensor(reg, offset=0)
-    # 使用生成的mask控制存储
     vf.store_align(dst_tile, reg, dst)
 
 @pl.jit()
@@ -98,8 +94,6 @@ def test_example():
     device = f"npu:{device_id}"
     core_nums = 1
     torch.npu.set_device(device)
-    # 所有元素填充0xFFFFFFFF（全1比特），使DataBlock 0的64 bit全为1，
-    # 生成的mask_reg为全1，所有元素均参与存储，输出等于输入
     a = torch.full([1, 64], -1, device=device, dtype=torch.int32)
     out = torch.empty([1, 64], device=device, dtype=torch.int32)
     example_kernel[None, core_nums](a, out)

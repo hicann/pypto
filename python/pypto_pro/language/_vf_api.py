@@ -454,7 +454,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def muls(src, scaler, preg, mode: Optional[MergeMode] = None):
+    def muls(src, scalar, preg, mode: Optional[MergeMode] = None):
         r"""Multiply all elements by a scalar.
 
         For each lane ``i`` where ``mask[i]`` is active, multiplies ``src[i]``
