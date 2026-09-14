@@ -305,17 +305,15 @@ def kernel_5_neg_adds(
 
 
 @pl.vector_function
-def _vf_kernel_6_subs_mins_0(in_a, t_f0, t_f1):
+def _vf_kernel_6_mins_0(in_a, t_f0):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     reg_a = vf.load_align(in_a, 0)
-    reg_dst = vf.subs(reg_a, 1.5, preg)
-    vf.store_align(t_f0, reg_dst, preg)
     reg_dst = vf.mins(reg_a, 0.5, preg)
-    vf.store_align(t_f1, reg_dst, preg)
+    vf.store_align(t_f0, reg_dst, preg)
 
 
 @pl.jit()
-def kernel_6_subs_mins(
+def kernel_6_mins(
     a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
     b: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
     out_f0: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
@@ -329,7 +327,6 @@ def kernel_6_subs_mins(
     in_a = pl.make_tile(tf, addr=VA_IN_A, size=TILE_SIZE)
     in_b = pl.make_tile(tf, addr=VA_IN_B, size=TILE_SIZE)
     t_f0 = pl.make_tile(tf, addr=VA_F0, size=TILE_SIZE)
-    t_f1 = pl.make_tile(tf, addr=VA_F1, size=TILE_SIZE)
     t_u0 = pl.make_tile(tu, addr=VA_U0, size=TILE_SIZE)
     t_u1 = pl.make_tile(tu, addr=VA_U1, size=TILE_SIZE)
     t_u2 = pl.make_tile(tu, addr=VA_U2, size=TILE_SIZE)
@@ -338,11 +335,10 @@ def kernel_6_subs_mins(
         pl.load(in_b, b, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        _vf_kernel_6_subs_mins_0(in_a, t_f0, t_f1)
+        _vf_kernel_6_mins_0(in_a, t_f0)
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out_f0, t_f0, [0, 0])
-        pl.store(out_f1, t_f1, [0, 0])
         pl.store(out_u0, t_u0, [0, 0])
         pl.store(out_u1, t_u1, [0, 0])
         pl.store(out_u2, t_u2, [0, 0])
@@ -3461,7 +3457,7 @@ _KERNELS = [
     kernel_3_reduce_sum_max,
     kernel_4_reduce_min_relu,
     kernel_5_neg_adds,
-    kernel_6_subs_mins,
+    kernel_6_mins,
     kernel_7_maxs_lrelu,
     kernel_8_reduce_db_sum_max,
     kernel_9_reduce_db_min_pair,
@@ -3594,9 +3590,8 @@ def test_vf_basic_ops():
     torch.testing.assert_close(f1, a_fp32 + 3.14, rtol=1e-5, atol=1e-5)
     logging.info("Kernel 5 (Neg, Adds) PASSED")
     f0, f1, *_ = _run_kernel(6, a_fp32, b_fp32, device)
-    torch.testing.assert_close(f0, a_fp32 - 1.5, rtol=1e-5, atol=1e-5)
-    torch.testing.assert_close(f1, torch.minimum(a_fp32, torch.tensor(0.5, device=device)), rtol=1e-5, atol=1e-5)
-    logging.info("Kernel 6 (Subs, Mins) PASSED")
+    torch.testing.assert_close(f0, torch.minimum(a_fp32, torch.tensor(0.5, device=device)), rtol=1e-5, atol=1e-5)
+    logging.info("Kernel 6 (Mins) PASSED")
     f0, f1, *_ = _run_kernel(7, a_fp32, b_fp32, device)
     torch.testing.assert_close(f0, torch.maximum(a_fp32, torch.tensor(-0.5, device=device)), rtol=1e-5, atol=1e-5)
     torch.testing.assert_close(f1, torch.where(a_fp32 >= 0, a_fp32, a_fp32 * 0.1), rtol=1e-5, atol=1e-5)

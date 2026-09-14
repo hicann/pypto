@@ -170,7 +170,6 @@ TEST(BackendCCEVFOpsTest, RegistersExpectedVectorFunctionOperations)
                                             "vf.relu",
                                             "vf.neg",
                                             "vf.adds",
-                                            "vf.subs",
                                             "vf.mins",
                                             "vf.maxs",
                                             "vf.leaky_relu",
@@ -373,7 +372,6 @@ TEST(BackendCCEVFOpsTest, EmitsArithmeticIntrinsics)
     };
     expect_scalar("vf.muls", "vmuls(");
     expect_scalar("vf.adds", "vadds(");
-    expect_scalar("vf.subs", "vadds(");
     expect_scalar("vf.mins", "vmins(");
     expect_scalar("vf.maxs", "vmaxs(");
     expect_scalar("vf.leaky_relu", "vlrelu(");
@@ -1832,8 +1830,6 @@ TEST(BackendCCEVFOpsTest, CoercesFloatScalarToIntForInt32Src)
     ExpectInvoke(codegen, "vf.adds", {"vadds(", ", 3, "}, {i32_dst, i32_src, Float(3.5), mask}, zeroing);
     ExpectInvoke(codegen, "vf.mins", {"vmins(", ", 3, "}, {i32_dst, i32_src, Float(3.5), mask}, zeroing);
     ExpectInvoke(codegen, "vf.maxs", {"vmaxs(", ", 3, "}, {i32_dst, i32_src, Float(3.5), mask}, zeroing);
-    // subs emits -(scalar), so 3.5→3 → "-(3)"
-    ExpectInvoke(codegen, "vf.subs", {"vadds(", ", -(3), "}, {i32_dst, i32_src, Float(3.5), mask}, zeroing);
     // 0.9 should be truncated to 0
     ExpectInvoke(codegen, "vf.muls", {"vmuls(", ", 0, "}, {i32_dst, i32_src, Float(0.9), mask}, zeroing);
     // 1e10 should wrap to int32: static_cast<int32_t>(10000000000) = 1410065408

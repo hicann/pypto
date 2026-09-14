@@ -1017,7 +1017,7 @@ _BITWISE_DTYPES: tuple[DataType, ...] = (
 )
 _NEG_DTYPES: tuple[DataType, ...] = (
     DataType.INT16, DataType.UINT16, DataType.INT32, DataType.UINT32,
-    DataType.INT64, DataType.UINT64, DataType.FP16, DataType.FP32, DataType.BF16,
+    DataType.FP16, DataType.FP32, DataType.BF16,
 )
 _ABS_DTYPES: tuple[DataType, ...] = (
     DataType.INT8, DataType.INT16, DataType.INT32, DataType.FP16, DataType.FP32,

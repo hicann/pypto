@@ -167,6 +167,11 @@ static std::string VFZeroingOnly(const ir::CallPtr& op, const std::string& op_na
 // so they are also treated as b8 for load/store mode selection.
 static bool IsB8Type(DataType dt) { return dt.GetBit() <= 8; }
 
+// Integer types with a native VF arithmetic instruction form (vadd/vsub/vmax/
+// vcmp ... have no 4-bit form, so INT4/UINT4 must be rejected up front).
+static bool IsArithIntType(DataType dt) { return dt.IsInt() && dt.GetBit() >= 8; }
+static bool IsArithSignedIntType(DataType dt) { return dt.IsSignedInt() && dt.GetBit() >= 8; }
+
 // Check if a DataType is a b16-width type (16-bit storage).
 static bool IsB16Type(DataType dt) { return dt.GetBit() == 16; }
 
@@ -1669,10 +1674,10 @@ static std::string EmitVFMax(const ir::CallPtr& op, codegen::CodegenBase& codege
     // Parser args order: [dst, src0, src1, mask]
     CHECK(op->args_.size() == 4) << "vf.max requires 4 args (dst, src0, src1, mask)";
     DataType s0_dt = GetExprDtype(op->args_[1]);
-    CHECK((s0_dt.IsInt() || s0_dt == DataType::FP16 || s0_dt == DataType::FP32 || s0_dt == DataType::BF16))
+    CHECK((IsArithIntType(s0_dt) || s0_dt == DataType::FP16 || s0_dt == DataType::FP32 || s0_dt == DataType::BF16))
         << "vf.max src only supports supported types, got " << DTypeStr(s0_dt);
     DataType s1_dt = GetExprDtype(op->args_[2]);
-    CHECK((s1_dt.IsInt() || s1_dt == DataType::FP16 || s1_dt == DataType::FP32 || s1_dt == DataType::BF16))
+    CHECK((IsArithIntType(s1_dt) || s1_dt == DataType::FP16 || s1_dt == DataType::FP32 || s1_dt == DataType::BF16))
         << "vf.max src only supports supported types, got " << DTypeStr(s1_dt);
     DataType vf_max_dst_dt = GetExprDtype(op->args_[0]);
     CHECK(s0_dt == vf_max_dst_dt && s1_dt == vf_max_dst_dt)
@@ -1749,7 +1754,7 @@ static std::string EmitVFAdd(const ir::CallPtr& op, codegen::CodegenBase& codege
     std::string src1 = codegen.GetExprAsCode(op->args_[2]);
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
     DataType s0_dt = GetExprDtype(op->args_[1]);
-    CHECK((s0_dt.IsInt() || s0_dt == DataType::FP16 || s0_dt == DataType::FP32 || s0_dt == DataType::BF16))
+    CHECK((IsArithIntType(s0_dt) || s0_dt == DataType::FP16 || s0_dt == DataType::FP32 || s0_dt == DataType::BF16))
         << "vf.add src0 only supports INT/UINT/FP16/FP32/BF16, got " << DTypeStr(s0_dt);
     DataType dst_dt = GetExprDtype(op->args_[0]);
     DataType s1_dt = GetExprDtype(op->args_[2]);
@@ -1801,7 +1806,7 @@ static std::string EmitVFSub(const ir::CallPtr& op, codegen::CodegenBase& codege
     std::string src1 = codegen.GetExprAsCode(op->args_[2]);
     std::string mask = codegen.GetExprAsCode(op->args_[3]);
     DataType s0_dt = GetExprDtype(op->args_[1]);
-    CHECK((s0_dt.IsInt() || s0_dt == DataType::FP16 || s0_dt == DataType::FP32 || s0_dt == DataType::BF16))
+    CHECK((IsArithIntType(s0_dt) || s0_dt == DataType::FP16 || s0_dt == DataType::FP32 || s0_dt == DataType::BF16))
         << "vf.sub src0 only supports INT/UINT/FP16/FP32/BF16, got " << DTypeStr(s0_dt);
     DataType dst_dt = GetExprDtype(op->args_[0]);
     DataType s1_dt = GetExprDtype(op->args_[2]);
@@ -1989,7 +1994,7 @@ static std::string EmitVFReduceImpl(const ir::CallPtr& op, codegen::CodegenBase&
     if (datablock) {
         // Datablock reduce only supports b16/b32 (no b64, no BF16)
         CHECK((src_dt.GetBit() == 16 || src_dt.GetBit() == 32) &&
-              (src_dt.IsInt() || src_dt == DataType::FP16 || src_dt == DataType::FP32))
+              (IsArithIntType(src_dt) || src_dt == DataType::FP16 || src_dt == DataType::FP32))
             << op->name_ << " (datablock) src only supports b16/b32 INT/UINT/FP16/FP32, got " << DTypeStr(src_dt);
         DataType reduce_dst_dt = GetExprDtype(op->args_[0]);
         CHECK(src_dt == reduce_dst_dt) << op->name_ << " requires src and dst to have the same type, got dst="
@@ -1997,7 +2002,7 @@ static std::string EmitVFReduceImpl(const ir::CallPtr& op, codegen::CodegenBase&
     } else {
         // Non-datablock reduce supports b16/b32/b64 (no BF16)
         CHECK((src_dt.GetBit() == 16 || src_dt.GetBit() == 32 || src_dt.GetBit() == 64) &&
-              (src_dt.IsInt() || src_dt == DataType::FP16 || src_dt == DataType::FP32))
+              (IsArithIntType(src_dt) || src_dt == DataType::FP16 || src_dt == DataType::FP32))
             << op->name_ << " src only supports b16/b32/b64 INT/UINT/FP16/FP32, got " << DTypeStr(src_dt);
         DataType reduce_dst_dt = GetExprDtype(op->args_[0]);
         CHECK(src_dt == reduce_dst_dt) << op->name_ << " requires src and dst to have the same type, got dst="
@@ -2157,11 +2162,11 @@ static std::string EmitVFDiv(const ir::CallPtr& op, codegen::CodegenBase& codege
     CHECK(op->args_.size() == 4) << "vf.div requires 4 args (dst, src0, src1, mask)";
     DataType s0_dt = GetExprDtype(op->args_[1]);
     // No vdiv overloads for 8-bit ints (mirrors AscendC DivImpl: u16..i64 + half/float).
-    CHECK((s0_dt.IsInt() || s0_dt == DataType::FP16 || s0_dt == DataType::FP32) && s0_dt != DataType::INT8 &&
+    CHECK((IsArithIntType(s0_dt) || s0_dt == DataType::FP16 || s0_dt == DataType::FP32) && s0_dt != DataType::INT8 &&
           s0_dt != DataType::UINT8)
         << "vf.div src0 only supports INT16/UINT16/INT32/UINT32/INT64/UINT64/FP16/FP32, got " << DTypeStr(s0_dt);
     DataType s1_dt = GetExprDtype(op->args_[2]);
-    CHECK((s1_dt.IsInt() || s1_dt == DataType::FP16 || s1_dt == DataType::FP32) && s1_dt != DataType::INT8 &&
+    CHECK((IsArithIntType(s1_dt) || s1_dt == DataType::FP16 || s1_dt == DataType::FP32) && s1_dt != DataType::INT8 &&
           s1_dt != DataType::UINT8)
         << "vf.div src1 only supports INT16/UINT16/INT32/UINT32/INT64/UINT64/FP16/FP32, got " << DTypeStr(s1_dt);
     DataType vf_div_dst_dt = GetExprDtype(op->args_[0]);
@@ -2478,10 +2483,10 @@ static std::string EmitVFMin(const ir::CallPtr& op, codegen::CodegenBase& codege
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     CHECK(op->args_.size() == 4) << "vf.min requires 4 args (dst, src0, src1, mask)";
     DataType s0_dt = GetExprDtype(op->args_[1]);
-    CHECK((s0_dt.IsInt() || s0_dt == DataType::FP16 || s0_dt == DataType::FP32 || s0_dt == DataType::BF16))
+    CHECK((IsArithIntType(s0_dt) || s0_dt == DataType::FP16 || s0_dt == DataType::FP32 || s0_dt == DataType::BF16))
         << "vf.min src only supports supported types, got " << DTypeStr(s0_dt);
     DataType s1_dt = GetExprDtype(op->args_[2]);
-    CHECK((s1_dt.IsInt() || s1_dt == DataType::FP16 || s1_dt == DataType::FP32 || s1_dt == DataType::BF16))
+    CHECK((IsArithIntType(s1_dt) || s1_dt == DataType::FP16 || s1_dt == DataType::FP32 || s1_dt == DataType::BF16))
         << "vf.min src only supports supported types, got " << DTypeStr(s1_dt);
     DataType vf_min_dst_dt = GetExprDtype(op->args_[0]);
     CHECK(s0_dt == vf_min_dst_dt && s1_dt == vf_min_dst_dt)
@@ -2597,7 +2602,7 @@ static std::string EmitVFAbs(const ir::CallPtr& op, codegen::CodegenBase& codege
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     CHECK(op->args_.size() == 3) << "vf.abs requires 3 args (dst, src, mask)";
     DataType src_dt = GetExprDtype(op->args_[1]);
-    CHECK((src_dt.IsSignedInt() || src_dt == DataType::FP16 || src_dt == DataType::FP32))
+    CHECK((IsArithSignedIntType(src_dt) || src_dt == DataType::FP16 || src_dt == DataType::FP32))
         << "vf.abs src only supports INT8/INT16/INT32/INT64/FP16/FP32, got " << DTypeStr(src_dt);
     DataType vf_abs_dst_dt = GetExprDtype(op->args_[0]);
     CHECK(src_dt == vf_abs_dst_dt) << "vf.abs requires src and dst to have the same type, got dst="
@@ -2823,7 +2828,7 @@ static std::string EmitVFNeg(const ir::CallPtr& op, codegen::CodegenBase& codege
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     CHECK(op->args_.size() == 3) << "vf.neg requires 3 args (dst, src, mask)";
     DataType src_dt = GetExprDtype(op->args_[1]);
-    CHECK((src_dt.IsSignedInt() || src_dt == DataType::FP16 || src_dt == DataType::FP32))
+    CHECK((IsArithSignedIntType(src_dt) || src_dt == DataType::FP16 || src_dt == DataType::FP32))
         << "vf.neg src only supports INT8/INT16/INT32/INT64/FP16/FP32, got " << DTypeStr(src_dt);
     DataType vf_neg_dst_dt = GetExprDtype(op->args_[0]);
     CHECK(src_dt == vf_neg_dst_dt) << "vf.neg requires src and dst to have the same type, got dst="
@@ -2881,7 +2886,7 @@ static std::string EmitVFAdds(const ir::CallPtr& op, codegen::CodegenBase& codeg
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     CHECK(op->args_.size() == 4) << "vf.adds requires 4 args (dst, src, scalar, mask)";
     DataType src_dt = GetExprDtype(op->args_[1]);
-    CHECK((src_dt.IsInt() || src_dt == DataType::FP16 || src_dt == DataType::FP32 || src_dt == DataType::BF16))
+    CHECK((IsArithIntType(src_dt) || src_dt == DataType::FP16 || src_dt == DataType::FP32 || src_dt == DataType::BF16))
         << "vf.adds src only supports supported types, got " << DTypeStr(src_dt);
     DataType scalar_dt = GetExprDtype(op->args_[2]);
     CHECK((scalar_dt.IsInt() || scalar_dt == DataType::FP16 || scalar_dt == DataType::FP32 ||
@@ -2947,73 +2952,6 @@ static std::string EmitVFAdds(const ir::CallPtr& op, codegen::CodegenBase& codeg
 }
 
 // ============================================================================
-// Subs — vadds with negated scalar (scalar subtraction: dst = src - scalar)
-// ============================================================================
-
-static std::string EmitVFSubs(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
-{
-    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    CHECK(op->args_.size() == 4) << "vf.subs requires 4 args (dst, src, scalar, mask)";
-    DataType src_dt = GetExprDtype(op->args_[1]);
-    CHECK((src_dt.IsInt() || src_dt == DataType::FP16 || src_dt == DataType::FP32 || src_dt == DataType::BF16))
-        << "vf.subs src only supports INT/UINT/FP16/FP32/BF16, got " << DTypeStr(src_dt);
-    DataType scalar_dt = GetExprDtype(op->args_[2]);
-    CHECK((scalar_dt.IsInt() || scalar_dt == DataType::FP16 || scalar_dt == DataType::FP32 ||
-           scalar_dt == DataType::BF16))
-        << "vf.subs scalar only supports INT/UINT/FP16/FP32/BF16, got " << DTypeStr(scalar_dt);
-    DataType vf_subs_dst_dt = GetExprDtype(op->args_[0]);
-    CHECK(src_dt == vf_subs_dst_dt) << "vf.subs requires src and dst to have the same type, got dst="
-                                    << DTypeStr(vf_subs_dst_dt) << " src=" << DTypeStr(src_dt);
-    std::string dst = codegen.GetExprAsCode(op->args_[0]);
-    std::string src = codegen.GetExprAsCode(op->args_[1]);
-    std::string scalar_str = codegen.GetExprAsCode(op->args_[2]);
-    std::string mask = codegen.GetExprAsCode(op->args_[3]);
-    std::string mode = VFZeroingOnly(op, "vf.subs");
-    scalar_str = CoerceScalarToInt(op->args_[2], src_dt, scalar_str);
-    if (src_dt.GetBit() == 64) {
-        // B64 Subs: dst = src - scalar → broadcast scalar, then borrow-chain sub
-        // (mirrors AscendC Subs → Duplicate + Sub → SubB64Impl: vsubc + vsubcs).
-        std::string p = dst + "_subs_";
-        std::string cast_type = (src_dt == DataType::INT64) ? "(int64_t)" : "(uint64_t)";
-        std::string b32_cast = (src_dt == DataType::INT64) ? "(RegTensor<int32_t>&)" : "(RegTensor<uint32_t>&)";
-        // 1. Pack b64 mask to b32 (mirrors MaskPack in CalTraitOneByTransToTraitTwo)
-        std::string packed_m = p + "_pm_";
-        codegen.Emit("MaskReg " + packed_m + ";");
-        codegen.Emit("ppack(" + packed_m + ", " + mask + ", LOWER);");
-        // 2. Broadcast scalar to b32 halves (mirrors DuplicateB64Impl)
-        std::string all_m = p + "_allm_";
-        codegen.Emit("MaskReg " + all_m + " = pset_b32(PAT_ALL);");
-        std::string lo_sc = p + "_losc_";
-        std::string hi_sc = p + "_hisc_";
-        codegen.Emit("RegTensor<uint32_t> " + lo_sc + ";");
-        codegen.Emit("RegTensor<uint32_t> " + hi_sc + ";");
-        codegen.Emit("vdup(" + lo_sc + ", (int32_t)(" + cast_type + "(" + scalar_str + ")), " + all_m +
-                     ", MODE_ZEROING);");
-        codegen.Emit("vdup(" + hi_sc + ", (int32_t)((" + cast_type + "(" + scalar_str + ")) >> 32), " + all_m +
-                     ", MODE_ZEROING);");
-        // 3. Deinterleave src to b32 halves (mirrors B64TraitOneToTraitTwo)
-        EmitB64Deinterleave(codegen, p + "s", src);
-        std::string lo_s = p + "s_lo_", hi_s = p + "s_hi_";
-        // 4. SubB64: vsubc + vsubcs (mirrors SubB64Impl, using packed b32 mask)
-        std::string borrow = p + "_borrow_";
-        std::string lo_d = p + "_lod_";
-        std::string hi_d = p + "_hid_";
-        codegen.Emit("MaskReg " + borrow + ";");
-        codegen.Emit("RegTensor<uint32_t> " + lo_d + ";");
-        codegen.Emit("RegTensor<uint32_t> " + hi_d + ";");
-        codegen.Emit("vsubc(" + borrow + ", " + b32_cast + lo_d + ", " + b32_cast + lo_s + ", " + b32_cast + lo_sc +
-                     ", " + packed_m + ");");
-        codegen.Emit("vsubcs(" + borrow + ", " + b32_cast + hi_d + ", " + b32_cast + hi_s + ", " + b32_cast + hi_sc +
-                     ", " + borrow + ", " + packed_m + ");");
-        // 5. Interleave back (mirrors B64TraitTwoToTraitOne)
-        EmitB64Interleave(codegen, dst, lo_d, hi_d, p + "_ilv");
-    } else {
-        codegen.Emit("vadds(" + dst + ", " + src + ", -(" + scalar_str + "), " + mask + ", " + mode + ");");
-    }
-    return "";
-}
-
-// ============================================================================
 // Mins — vmins (scalar minimum)
 // ============================================================================
 
@@ -3022,7 +2960,7 @@ static std::string EmitVFMins(const ir::CallPtr& op, codegen::CodegenBase& codeg
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     CHECK(op->args_.size() == 4) << "vf.mins requires 4 args (dst, src, scalar, mask)";
     DataType src_dt = GetExprDtype(op->args_[1]);
-    CHECK((src_dt.IsInt() || src_dt == DataType::FP16 || src_dt == DataType::FP32 || src_dt == DataType::BF16))
+    CHECK((IsArithIntType(src_dt) || src_dt == DataType::FP16 || src_dt == DataType::FP32 || src_dt == DataType::BF16))
         << "vf.mins src only supports supported types, got " << DTypeStr(src_dt);
     DataType scalar_dt = GetExprDtype(op->args_[2]);
     CHECK((scalar_dt.IsInt() || scalar_dt == DataType::FP16 || scalar_dt == DataType::FP32 ||
@@ -3102,7 +3040,7 @@ static std::string EmitVFMaxs(const ir::CallPtr& op, codegen::CodegenBase& codeg
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     CHECK(op->args_.size() == 4) << "vf.maxs requires 4 args (dst, src, scalar, mask)";
     DataType src_dt = GetExprDtype(op->args_[1]);
-    CHECK((src_dt.IsInt() || src_dt == DataType::FP16 || src_dt == DataType::FP32 || src_dt == DataType::BF16))
+    CHECK((IsArithIntType(src_dt) || src_dt == DataType::FP16 || src_dt == DataType::FP32 || src_dt == DataType::BF16))
         << "vf.maxs src only supports supported types, got " << DTypeStr(src_dt);
     DataType scalar_dt = GetExprDtype(op->args_[2]);
     CHECK((scalar_dt.IsInt() || scalar_dt == DataType::FP16 || scalar_dt == DataType::FP32 ||
@@ -4649,7 +4587,7 @@ static std::string EmitVFCompareImpl(const ir::CallPtr& op, codegen::CodegenBase
     std::string mask_src = codegen.GetExprAsCode(op->args_[3]);
     // vcmp supports: u8,s8,u16,s16,u32,s32,half,float,bf16,u64,s64 (no bool, no FP8)
     DataType s0_dt = GetExprDtype(op->args_[1]);
-    CHECK((s0_dt.IsInt() || s0_dt == DataType::FP16 || s0_dt == DataType::FP32 || s0_dt == DataType::BF16))
+    CHECK((IsArithIntType(s0_dt) || s0_dt == DataType::FP16 || s0_dt == DataType::FP32 || s0_dt == DataType::BF16))
         << op->name_ << " source only supports INT/UINT/FP16/FP32/BF16, got " << DTypeStr(s0_dt);
     DataType s1_dt = GetExprDtype(op->args_[2]);
     // FP8/FP4 types have no vcmp overloads (mirrors AscendC CompareImpl):
@@ -5137,8 +5075,10 @@ static std::string EmitVFStoreUnAlign(const ir::CallPtr& op, codegen::CodegenBas
     CHECK(op->args_.size() == 4) << "vf.store_unalign requires 4 args (dst, vreg, ureg, stride|areg); "
                                  << "use vf.squeeze_store_unalign for strideless (vstur) mode";
     DataType src_dt = GetExprDtype(op->args_[1]);
-    // vstus/vstu support b8/b16/b32/b64 element widths
-    CHECK(src_dt.GetBit() == 8 || src_dt.GetBit() == 16 || src_dt.GetBit() == 32 || src_dt.GetBit() == 64)
+    // vstus/vstu support b8/b16/b32/b64 element widths. b8 covers the 4-bit
+    // FP4 types (packed 2-per-byte), mirroring the load_unalign side and the
+    // DataCopyUnAlignImpl b8->uint8_t cast rule.
+    CHECK(IsB8Type(src_dt) || src_dt.GetBit() == 16 || src_dt.GetBit() == 32 || src_dt.GetBit() == 64)
         << "vf.store_unalign source only supports b8/b16/b32/b64 types, got " << DTypeStr(src_dt);
     auto ureg_var = ir::As<ir::Var>(op->args_[2]);
     if (ureg_var) {
@@ -5750,10 +5690,6 @@ REGISTER_BACKEND_OP(BackendCCE, "vf.adds")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFAdds(op, codegen); });
 
-REGISTER_BACKEND_OP(BackendCCE, "vf.subs")
-    .set_pipe(ir::PipeType::V)
-    .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFSubs(op, codegen); });
-
 REGISTER_BACKEND_OP(BackendCCE, "vf.mins")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) { return EmitVFMins(op, codegen); });
@@ -6289,8 +6225,12 @@ static std::string EmitVFMove(const ir::CallPtr& op, codegen::CodegenBase& codeg
     }
     if (!is_mask_dst) {
         DataType src_dt = GetExprDtype(op->args_[1]);
-        CHECK(IsB8Type(src_dt) || src_dt.GetBit() == 16 || src_dt.GetBit() == 32 || src_dt.GetBit() == 64)
-            << "vf.move src only supports b8/b16/b32/b64 types, got " << DTypeStr(src_dt);
+        // AscendC Move supports bool + the standard int/float types; the FP8/FP4
+        // family and 4-bit ints are not part of the Move contract.
+        CHECK(src_dt == DataType::BOOL || IsArithIntType(src_dt) || src_dt == DataType::FP16 ||
+              src_dt == DataType::BF16 || src_dt == DataType::FP32)
+            << "vf.move src only supports BOOL/INT8/UINT8/INT16/UINT16/INT32/UINT32/INT64/UINT64/FP16/BF16/FP32, got "
+            << DTypeStr(src_dt);
         DataType vf_move_dst_dt = GetExprDtype(op->args_[0]);
         CHECK(src_dt == vf_move_dst_dt) << "vf.move requires src and dst to have the same type, got dst="
                                         << DTypeStr(vf_move_dst_dt) << " src=" << DTypeStr(src_dt);

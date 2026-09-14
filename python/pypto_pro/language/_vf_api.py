@@ -1291,30 +1291,6 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def subs(src, scalar, preg, mode: Optional[MergeMode] = None):
-        r"""Subtract scalar from each element.
-
-        For each lane ``i`` where ``mask[i]`` is active, subtracts the scalar
-        value from ``src[i]`` and writes the result to ``dst[i]``.  Implemented
-        as ``vadds(dst, src, -scalar, ...)``.
-
-        .. math:: dstReg_i = srcReg_i - scalar
-
-        Args:
-            src: Source register
-            scalar: Scalar subtrahend value
-            preg: Predicate mask register
-
-        Kwargs:
-            mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-
-        Returns:
-            Destination register (``RegTensor``) holding ``src - scalar``
-            for each active lane.
-        """
-
-    @staticmethod
-    @_api_decl
     def mins(src, scalar, preg, mode: Optional[MergeMode] = None):
         r"""Element-wise minimum with scalar.
 

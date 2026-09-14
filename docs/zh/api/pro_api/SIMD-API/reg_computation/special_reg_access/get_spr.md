@@ -34,7 +34,7 @@ get_spr() -> ar_value
 
 ## 返回值说明
 
-返回ar_value目标reg_tensor。
+返回ar_value标量值。
 
 ## 调用示例
 

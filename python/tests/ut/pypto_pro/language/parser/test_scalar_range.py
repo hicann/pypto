@@ -51,17 +51,6 @@ def _adds_body(dtype, scalar):
     return vf_body
 
 
-def _subs_body(dtype, scalar):
-    @pl.vector_function
-    def vf_body(in_a, t_out):
-        preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=dtype)
-        reg_a = vf.load_align(in_a, 0)
-        reg_out = vf.subs(reg_a, scalar, preg)
-        vf.store_align(t_out, reg_out, preg)
-
-    return vf_body
-
-
 def _muls_body(dtype, scalar):
     @pl.vector_function
     def vf_body(in_a, t_out):
@@ -120,7 +109,6 @@ def _shift_right_body(dtype, scalar):
 # The parser resolves ``vf.<op>`` from the AST, so each op needs its own literal call site.
 _VF_BODIES = {
     "adds": _adds_body,
-    "subs": _subs_body,
     "muls": _muls_body,
     "mins": _mins_body,
     "maxs": _maxs_body,
@@ -155,7 +143,7 @@ def _parse_vf_scalar_kernel(dtype, op_name, scalar):
 # API fit: a literal scalar operand must fit the operand's element dtype
 # ---------------------------------------------------------------------------
 @pytest.mark.soc("950")
-@pytest.mark.parametrize("op_name", ["adds", "subs", "muls", "mins", "maxs"])
+@pytest.mark.parametrize("op_name", ["adds", "muls", "mins", "maxs"])
 @pytest.mark.parametrize(
     ("dtype", "scalar", "expected"),
     [

@@ -391,16 +391,6 @@ REGISTER_OP("vf.adds")
     .set_attr<int>("mode")
     .f_deduce_type(DeduceVFFromDstArg);
 
-REGISTER_OP("vf.subs")
-    .set_op_category("VFOp")
-    .set_description("Scalar subtraction")
-    .add_argument("dst", "Destination register")
-    .add_argument("src", "Source register")
-    .add_argument("scalar", "Scalar subtrahend")
-    .add_argument("mask", "Mask register")
-    .set_attr<int>("mode")
-    .f_deduce_type(DeduceVFFromDstArg);
-
 REGISTER_OP("vf.mins")
     .set_op_category("VFOp")
     .set_description("Scalar minimum")

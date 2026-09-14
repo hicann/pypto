@@ -16,8 +16,8 @@
 
 从起始值start生成索引序列，用于构造索引向量。通过index_order选择生成方向：
 
-- pypto_pro.language.IndexOrder.INCREASE_ORDER（默认）：递增，dst[i] = start + i。
-- pypto_pro.language.IndexOrder.DECREASE_ORDER：递减，dst[i] = start - i。
+- pypto_pro.language.IndexOrder.INCREASE_ORDER（默认）：递增，以传入的start为起始值。
+- pypto_pro.language.IndexOrder.DECREASE_ORDER：递减，以传入的start为最终值。
 
 ## 函数原型
 
