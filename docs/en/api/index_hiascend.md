@@ -508,9 +508,7 @@
 
 - [Symbolization](symbolic/index.md)
 
-  - [Introduction to pypto.SymbolicScalar
-
-](symbolic/pypto-SymbolicScalar_introduction.md)
+  - [Introduction to pypto.SymbolicScalar](symbolic/pypto-SymbolicScalar_introduction.md)
 
   - [pypto.SymbolicScalar Constructor](symbolic/pypto-SymbolicScalar_constructor.md)
 
