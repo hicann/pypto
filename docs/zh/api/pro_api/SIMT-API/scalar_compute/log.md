@@ -30,7 +30,7 @@ pypto_pro.language.simt.log(
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| value | 输入 | 源操作数，Scalar类型，支持DT_FP16、DT_BF16和DT_FP32，实数定义域为value > 0。Tensor或Tile元素需通过下标访问后传入。 |
+| value | 输入 | 源操作数，Scalar类型，支持DT_FP16、DT_BF16和DT_FP32。Tensor或Tile元素需通过下标访问后传入。 |
 
 ## 约束说明
 
@@ -38,7 +38,13 @@ pypto_pro.language.simt.log(
 
 ## 返回值说明
 
-返回源操作数的自然对数，数据类型与输入一致。
+返回源操作数的自然对数，数据类型与输入一致。特殊值如下：
+
+| value取值 | 返回值 |
+|---|---|
+| `+Inf` | `+Inf` |
+| `-Inf`、`NaN`或有限负数 | `NaN` |
+| `±0` | `-Inf` |
 
 ## 调用示例
 

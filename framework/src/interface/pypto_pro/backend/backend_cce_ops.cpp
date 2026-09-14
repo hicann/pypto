@@ -1623,9 +1623,11 @@ static std::string MakeDebugAssertCodegenCCE(const ir::CallPtr& op, codegen::Cod
     return "";
 }
 
-static std::string MakeDebugTrapCodegenCCE(const ir::CallPtr& /*op*/, codegen::CodegenBase& /*codegen_base*/)
+static std::string MakeDebugTrapCodegenCCE(const ir::CallPtr& /*op*/, codegen::CodegenBase& codegen_base)
 {
-    return "return";
+    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+    codegen.Emit("trap();");
+    return "";
 }
 
 REGISTER_BACKEND_OP(BackendCCE, "debug.assert")
