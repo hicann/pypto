@@ -26,7 +26,6 @@
 #include "interface/configs/config_manager.h"
 #include "interface/utils/simt_utils.h"
 #include "passes/pass_log/pass_log.h"
-#include "passes/pass_utils/alignment_utils.h"
 #include "passes/pass_utils/checker_utils.h"
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_utils/graph_utils.h"
@@ -2454,19 +2453,19 @@ Status AssignMemoryType::ProcessL0C2L1LargeToSmall(Function& function)
     return SUCCESS;
 }
 
-bool AssignMemoryType::CheckL0C2UBInnerAxisAligned(const LogicalTensorPtr& copyShapeTensor,
-                                                   const LogicalTensorPtr& ubOutputTensor)
+bool AssignMemoryType::CheckUBTileShape(const LogicalTensorPtr& moveTensor)
 {
-    if (copyShapeTensor == nullptr || copyShapeTensor->GetShape().empty()) {
+    if (moveTensor == nullptr || moveTensor->GetShape().size() < 2) {
         return false;
     }
-    const int64_t alignBase = AlignmentUtils::GetLastDimAlignBase(ubOutputTensor);
-    if (alignBase > 0 && copyShapeTensor->GetShape().back() % alignBase == 0) {
+    const int64_t alignElems = (moveTensor->Datatype() == DataType::DT_INT8) ? INT8_ALIGN_SIZE : L0C_TILE_SIZE;
+    if (moveTensor->GetShape()[0] % alignElems == 0 && moveTensor->GetShape()[1] % alignElems == 0) {
         return true;
     }
     APASS_LOG_DEBUG_F(Elements::Tensor,
-                      "Set tensor %d original memory type to DDR since inner N axis is not 32-byte aligned.",
-                      copyShapeTensor->magic);
+                      "Set tensor %d original memory type to DDR since tile shape of moved block "
+                      "is not 16-element aligned (int8 requires 32-element).",
+                      moveTensor->magic);
     return false;
 }
 
@@ -2721,7 +2720,7 @@ bool AssignMemoryType::CanUseL0C2L1UpgradePath(Operation& operation)
 
 Status AssignMemoryType::TryUpgradeSliceContractPath(Operation& sliceOp, MemoryType sourceType, MemoryType targetType,
                                                      const std::string& reason, bool requireMatrixShape,
-                                                     bool checkL0C2UBConstraints, bool checkUb2L1Constraints)
+                                                     bool checkUbTileShape, bool checkUb2L1Constraints)
 {
     constexpr size_t kMatrixShapeDimCount = 2;
     if (sliceOp.GetOpcode() != Opcode::OP_SLICE || sliceOp.iOperand.empty() || sliceOp.oOperand.empty()) {
@@ -2747,7 +2746,7 @@ Status AssignMemoryType::TryUpgradeSliceContractPath(Operation& sliceOp, MemoryT
         (middle->GetShape().size() != kMatrixShapeDimCount || target->GetShape().size() != kMatrixShapeDimCount)) {
         return SUCCESS;
     }
-    if (checkL0C2UBConstraints && !FitsAssembleOutputMemoryLimit(middle, targetType)) {
+    if (checkUbTileShape && !FitsAssembleOutputMemoryLimit(middle, targetType)) {
         return SUCCESS;
     }
     for (auto* producer : middle->GetProducers()) {
@@ -2766,7 +2765,7 @@ Status AssignMemoryType::TryUpgradeSliceContractPath(Operation& sliceOp, MemoryT
         if (requireMatrixShape && input->GetShape().size() != kMatrixShapeDimCount) {
             return SUCCESS;
         }
-        if (checkL0C2UBConstraints && !CheckL0C2UBInnerAxisAligned(input, middle)) {
+        if (checkUbTileShape && !CheckUBTileShape(input)) {
             return SUCCESS;
         }
         if (sourceType == MemoryType::MEM_L0C && targetType == MemoryType::MEM_L1 &&
@@ -2800,7 +2799,7 @@ Status AssignMemoryType::TryUpgradeSliceContractPath(Operation& sliceOp, MemoryT
 
 Status AssignMemoryType::TryUpgradeSingleContractSlicePath(Operation& contractOp, MemoryType sourceType,
                                                            MemoryType targetType, const std::string& reason,
-                                                           bool requireMatrixShape, bool checkL0C2UBConstraints,
+                                                           bool requireMatrixShape, bool checkUbTileShape,
                                                            bool checkUb2L1Constraints)
 {
     constexpr size_t kMatrixShapeDimCount = 2;
@@ -2894,7 +2893,7 @@ Status AssignMemoryType::TryUpgradeSingleContractSlicePath(Operation& contractOp
         if (!shapeCompatible) {
             return SUCCESS;
         }
-        if (checkL0C2UBConstraints && !CheckL0C2UBInnerAxisAligned(output, output)) {
+        if (checkUbTileShape && !CheckUBTileShape(output)) {
             return SUCCESS;
         }
         if (checkUb2L1Constraints) {
