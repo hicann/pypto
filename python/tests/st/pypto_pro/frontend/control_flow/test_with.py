@@ -223,6 +223,8 @@ WITH_SECTION_CUBE_KERNELS = {
 @pytest.mark.soc("950")
 @pypto.options(pass_options={"enable_slice": False})
 def test_with_section_cube():
+    # Let kernel discovery reach every variant before validating any output.
+    checks = []
     device = ST_DEVICE
     torch.npu.set_device(device)
     device_name = torch.npu.get_device_name()
@@ -238,8 +240,12 @@ def test_with_section_cube():
         kernel(x, y, z)
         torch.npu.synchronize()
         z_ref = torch.matmul(x.float(), y.float())
-        torch.testing.assert_close(z, z_ref, atol=atol, rtol=rtol)
-        logging.info("test_with_section_cube [%s] passed! x=[64,32] y=[32,64] z=[64,64] dtype=%s", label, tdt)
+        case = f"test_with_section_cube [{label}] x=[64,32] y=[32,64] z=[64,64] dtype={tdt}"
+        checks.append((z, z_ref, atol, rtol, case))
+
+    for actual, expected, atol, rtol, case in checks:
+        torch.testing.assert_close(actual, expected, atol=atol, rtol=rtol, msg=case)
+        logging.info("%s passed!", case)
 
 
 # ===================================================================

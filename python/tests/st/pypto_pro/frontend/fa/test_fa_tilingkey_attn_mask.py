@@ -751,15 +751,16 @@ def test_fa_tilingkey_attn_mask():
         q_t, k_t, v_t, o_causal, work_ranges, attn_mask
     )
     torch.npu.synchronize()
-    o_causal_ref = flash_attention_causal_ref_bs(q_t, k_t, v_t, d)
-    torch.testing.assert_close(o_causal, o_causal_ref, rtol=5e-3, atol=5e-3)
-    logging.info("NeedAttnMask=1 (causal+mask) PASS: max|diff|=%.6f", (o_causal - o_causal_ref).abs().max().item())
-
     o_full = torch.zeros((b, sq, n, d), device=device, dtype=torch.float16)
     fa_tilingkey_attn_mask_kernel[None, actual_num_cores, {"NeedAttnMask": 0}](
         q_t, k_t, v_t, o_full, work_ranges, attn_mask
     )
     torch.npu.synchronize()
+    # Reach both tiling keys before output checks stop precompile discovery.
+    o_causal_ref = flash_attention_causal_ref_bs(q_t, k_t, v_t, d)
+    torch.testing.assert_close(o_causal, o_causal_ref, rtol=5e-3, atol=5e-3)
+    logging.info("NeedAttnMask=1 (causal+mask) PASS: max|diff|=%.6f", (o_causal - o_causal_ref).abs().max().item())
+
     o_full_ref = flash_attention_full_ref_bs(q_t, k_t, v_t, d)
     torch.testing.assert_close(o_full, o_full_ref, rtol=5e-3, atol=5e-3)
     logging.info("NeedAttnMask=0 (full) PASS: max|diff|=%.6f", (o_full - o_full_ref).abs().max().item())

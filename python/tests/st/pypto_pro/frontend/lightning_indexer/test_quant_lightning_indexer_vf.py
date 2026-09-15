@@ -923,11 +923,13 @@ def make_quant_lightning_indexer_vf_kernel(
 # ================================================================
 
 
-def reference_quant_lightning_indexer(query, key, weights, q_scale, k_scale, topk, sparse_mode):
+def reference_quant_lightning_indexer(query, key, weights, q_scale, k_scale, topk, sparse_mode, row_indices=None):
     """Reference implementation supporting GQA.
 
     n1 = query head num, n2 = kv head num, g_size = n1/n2.
-    Returns (indices [b, sq, n2, topk], qk_reduced [b, sq, n2, sk]).
+    row_indices selects original query rows; outputs use that row order. Keeping
+    original row numbers and Sq preserves the causal mask when sampling.
+    Returns (indices [b, selected_sq, n2, topk], scores [b, selected_sq, n2, sk]).
     """
     b, sq, n1, d = query.shape
     _, sk, n2, _ = key.shape
@@ -938,6 +940,12 @@ def reference_quant_lightning_indexer(query, key, weights, q_scale, k_scale, top
     w = weights.detach().cpu().float()  # [b, sq, n1]
     qs = q_scale.detach().cpu().float()  # [b, sq, n1]
     ks = k_scale.detach().cpu().float()  # [b, sk, n2]
+
+    original_sq = sq
+    row_ids = torch.arange(sq) if row_indices is None else torch.tensor(list(row_indices), dtype=torch.int64)
+    if row_indices is not None:
+        q, w, qs = q[:, row_ids], w[:, row_ids], qs[:, row_ids]
+        sq = len(row_ids)
 
     # Accumulate per-head weighted scores into qk_reduced[b, sq, n2, sk]
     qk_reduced = torch.zeros(b, sq, n2, sk, dtype=torch.float32)
@@ -961,7 +969,7 @@ def reference_quant_lightning_indexer(query, key, weights, q_scale, k_scale, top
         qk_reduced[:, :, gi, :] = qk_reduced[:, :, gi, :] * ks[:, :, gi].unsqueeze(1)
 
     if sparse_mode == 3:
-        mask = torch.tril(torch.ones(sq, sk), diagonal=sk - sq)
+        mask = torch.arange(sk).unsqueeze(0) <= row_ids.unsqueeze(1) + sk - original_sq
         qk_reduced = qk_reduced * mask.unsqueeze(0).unsqueeze(2)
 
     # Convert to DT_BF16 sortable key for ranking (matches NPU behavior:
@@ -986,7 +994,7 @@ def reference_quant_lightning_indexer(query, key, weights, q_scale, k_scale, top
 
 
 def _evaluate_topk_quality(
-    npu_indices, ref_indices, ref_qk, topk, sk, recall_threshold=0.80, sparse_mode=0, sq=None, rows_to_sample=None
+    npu_indices, ref_indices, ref_qk, topk, sk, recall_threshold=0.80, sparse_mode=0, sq=None, row_indices=None
 ):
     """Score the NPU output against the reference top-k indices.
 
@@ -994,11 +1002,13 @@ def _evaluate_topk_quality(
     Score ratio = mean(qk[npu_indices]) / mean(qk[ref_indices])
 
     npu_indices: [b, sq, n2, topk]
-    ref_indices: [b, sq, n2, topk]
-    ref_qk:     [b, sq, n2, sk] — reduced scores per kv head (used only for score ratio)
+    ref_indices: [b, selected_sq, n2, topk]
+    ref_qk: [b, selected_sq, n2, sk] — reduced scores per kv head (used only for score ratio)
+    row_indices gives the original query rows, in the same order as the reference.
     """
     b, sq_dim, n2_dim, _ = npu_indices.shape
-    npu = npu_indices.cpu().to(torch.int64).numpy()
+    row_indices = list(range(sq_dim) if row_indices is None else row_indices)
+    npu = npu_indices.cpu()[:, row_indices].to(torch.int64).numpy()
     ref = ref_indices.cpu().to(torch.int64).numpy()
     qk = ref_qk.cpu().numpy()  # [b, sq, n2, sk]
 
@@ -1009,14 +1019,8 @@ def _evaluate_topk_quality(
     rows_checked = 0
     row_recalls = []
 
-    if rows_to_sample is None or rows_to_sample >= sq_dim:
-        row_indices = range(sq_dim)
-    else:
-        step = max(1, int(128 / max(rows_to_sample, 1)))
-        row_indices = range(0, sq_dim, step)
-
     for bi in range(b):
-        for si in row_indices:
+        for reference_row, si in enumerate(row_indices):
             for gi in range(n2_dim):
                 # Skip rows where validS2Len <= 0 (sparse_mode=3 only)
                 if sparse_mode == 3 and sq is not None:
@@ -1032,9 +1036,9 @@ def _evaluate_topk_quality(
                         row_recalls.append((bi, gi, si, 1.0, vec_valid_s2_len, vec_valid_s2_len))
                         continue
 
-                npu_row = npu[bi, si, gi]
-                ref_row = ref[bi, si, gi]
-                qk_row = qk[bi, si, gi]  # [sk]
+                npu_row = npu[bi, reference_row, gi]
+                ref_row = ref[bi, reference_row, gi]
+                qk_row = qk[bi, reference_row, gi]  # [sk]
 
                 # NPU valid indices (in [0, sk))
                 valid_mask = (npu_row >= 0) & (npu_row < sk)
@@ -1075,13 +1079,12 @@ def _evaluate_topk_quality(
     logging.info(f"  Valid-index rate:    {valid_rate:.4f}")
     logging.info(f"  Mean recall:         {mean_recall:.4f}")
     logging.info(f"  Mean score ratio:    {mean_score_ratio:.4f}")
-    display_row = 0
-    if sparse_mode == 3 and sq is not None:
-        display_row = sq - 1
-    logging.info(f"  NPU[0,{display_row},0,:8]:   {npu[0, display_row, 0, :8].tolist()}")
-    logging.info(f"  Ref[0,{display_row},0,:8]:   {ref[0, display_row, 0, :8].tolist()}")
-    npu_sorted = sorted(npu[0, display_row, 0, :topk].tolist())
-    ref_sorted = sorted(ref[0, display_row, 0, :topk].tolist())
+    display_index = -1 if sparse_mode == 3 and sq is not None else 0
+    display_row = row_indices[display_index]
+    logging.info(f"  NPU[0,{display_row},0,:8]:   {npu[0, display_index, 0, :8].tolist()}")
+    logging.info(f"  Ref[0,{display_row},0,:8]:   {ref[0, display_index, 0, :8].tolist()}")
+    npu_sorted = sorted(npu[0, display_index, 0, :topk].tolist())
+    ref_sorted = sorted(ref[0, display_index, 0, :topk].tolist())
     logging.info(f"  NPU sorted[:16]:      {npu_sorted[:16]}")
     logging.info(f"  Ref sorted[:16]:      {ref_sorted[:16]}")
     logging.info(f"  NPU sorted[-16:]:     {npu_sorted[-16:]}")
@@ -1104,6 +1107,7 @@ def _evaluate_topk_quality(
 
 
 @pytest.mark.soc("950")
+@pytest.mark.skip_jit_discovery(reason="Single kernel with an expensive CPU reference; run both only once")
 @pl.jit()
 @pypto.options(pass_options={"enable_slice": False})
 def test_quant_lightning_indexer_vf():
@@ -1169,12 +1173,12 @@ def test_quant_lightning_indexer_vf():
         # reference implementation uses DT_INT32; values are identical since sk <= 32767).
         sorted_indices_i32 = sorted_indices.cpu().to(torch.int32)
 
+        # Preserve the existing coverage: all small-case rows, every fourth row
+        # for large cases (2,048 of 8,192), with the same stable top-k tie ordering.
+        row_indices = range(0, sq, 1 if sq <= 2048 else 4)
         ref_indices, ref_qk = reference_quant_lightning_indexer(
-            query, key, weights.float(), q_scale.float(), k_scale.float(), topk, sparse_mode
+            query, key, weights.float(), q_scale.float(), k_scale.float(), topk, sparse_mode, row_indices=row_indices
         )
-
-        # Small cases: evaluate every row; large cases: sample to bound runtime.
-        rows_to_sample = None if sq <= 2048 else 32
         metrics = _evaluate_topk_quality(
             sorted_indices_i32,
             ref_indices,
@@ -1184,7 +1188,7 @@ def test_quant_lightning_indexer_vf():
             recall_threshold=0.999,
             sparse_mode=sparse_mode,
             sq=sq,
-            rows_to_sample=rows_to_sample,
+            row_indices=row_indices,
         )
 
         assert metrics['mean_recall'] >= 0.999, (

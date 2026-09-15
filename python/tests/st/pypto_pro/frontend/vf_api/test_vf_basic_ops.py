@@ -3552,6 +3552,23 @@ def _run_kernel(kernel_num, a_fp32, b_fp32, device, idx_u0=None):
     return out_f0, out_f1, out_u0, out_u1, out_u2
 
 
+def _run_all_kernels(a_fp32, b_fp32, device):
+    """Reach every kernel before accuracy assertions stop precompile discovery.
+
+    Each result owns five 64-element tensors, so retaining all 75 results uses
+    less than 100 KiB of tensor data. Real device launches remain sequential.
+    """
+    a_pos = torch.abs(a_fp32) + 0.1
+    b_pos = torch.abs(b_fp32) + 0.1
+    idx = torch.arange(M, device=device, dtype=torch.int32).reshape([N, M]).to(torch.uint32)
+    results = {}
+    for number in _KERNEL_MAP:
+        a = a_pos if number in (34, 35, 40, 48, 50) else a_fp32
+        b = b_pos if number == 50 else b_fp32
+        results[number] = _run_kernel(number, a, b, device, idx_u0=idx if number == 62 else None)
+    return results
+
+
 @pytest.mark.soc("950")
 @pypto.options(pass_options={"enable_slice": False})
 def test_vf_basic_ops():
@@ -3564,115 +3581,116 @@ def test_vf_basic_ops():
     a_bits = float_to_uint32_bits(a_fp32)
     b_bits = float_to_uint32_bits(b_fp32)
     db_elems = 8
-    f0, f1, *_ = _run_kernel(0, a_fp32, b_fp32, device)
+    results = _run_all_kernels(a_fp32, b_fp32, device)
+    f0, f1, *_ = results[0]
     torch.testing.assert_close(f0, torch.minimum(a_fp32, b_fp32), rtol=1e-5, atol=1e-5)
     torch.testing.assert_close(f1, torch.exp(a_fp32), rtol=1e-3, atol=1e-3)
     logging.info("Kernel 0 (Min, Exp) PASSED")
-    f0, f1, *_ = _run_kernel(1, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[1]
     torch.testing.assert_close(f0, torch.abs(a_fp32), rtol=1e-5, atol=1e-5)
     torch.testing.assert_close(f1, torch.sqrt(torch.abs(a_fp32)), rtol=1e-3, atol=1e-3)
     logging.info("Kernel 1 (Abs, Sqrt) PASSED")
-    _, _, u0, u1, u2 = _run_kernel(2, a_fp32, b_fp32, device)
+    _, _, u0, u1, u2 = results[2]
     torch.testing.assert_close(u0, (a_bits | b_bits).to(torch.int32))
     torch.testing.assert_close(u1, (~a_bits & 0xFFFFFFFF).to(torch.int32))
     torch.testing.assert_close(u2, ((a_bits << 2) & 0xFFFFFFFF).to(torch.int32))
     logging.info("Kernel 2 (Or, Not, ShiftLefts) PASSED")
-    f0, f1, *_ = _run_kernel(3, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[3]
     torch.testing.assert_close(f0.flatten()[0], a_fp32.sum(), rtol=1e-2, atol=1e-2)
     torch.testing.assert_close(f1.flatten()[0], a_fp32.max(), rtol=1e-5, atol=1e-5)
     logging.info("Kernel 3 (ReduceSum, ReduceMax) PASSED")
-    f0, f1, *_ = _run_kernel(4, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[4]
     torch.testing.assert_close(f0.flatten()[0], a_fp32.min(), rtol=1e-5, atol=1e-5)
     torch.testing.assert_close(f1, torch.relu(a_fp32), rtol=1e-5, atol=1e-5)
     logging.info("Kernel 4 (ReduceMin, Relu) PASSED")
-    f0, f1, *_ = _run_kernel(5, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[5]
     torch.testing.assert_close(f0, -a_fp32, rtol=1e-5, atol=1e-5)
     torch.testing.assert_close(f1, a_fp32 + 3.14, rtol=1e-5, atol=1e-5)
     logging.info("Kernel 5 (Neg, Adds) PASSED")
-    f0, f1, *_ = _run_kernel(6, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[6]
     torch.testing.assert_close(f0, torch.minimum(a_fp32, torch.tensor(0.5, device=device)), rtol=1e-5, atol=1e-5)
     logging.info("Kernel 6 (Mins) PASSED")
-    f0, f1, *_ = _run_kernel(7, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[7]
     torch.testing.assert_close(f0, torch.maximum(a_fp32, torch.tensor(-0.5, device=device)), rtol=1e-5, atol=1e-5)
     torch.testing.assert_close(f1, torch.where(a_fp32 >= 0, a_fp32, a_fp32 * 0.1), rtol=1e-5, atol=1e-5)
     logging.info("Kernel 7 (Maxs, LeakyRelu) PASSED")
-    f0, f1, *_ = _run_kernel(8, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[8]
     torch.testing.assert_close(f0.flatten()[0], a_flat[0:db_elems].sum(), rtol=1e-4, atol=1e-4)
     torch.testing.assert_close(f1.flatten()[0], a_flat[0:db_elems].max(), rtol=1e-5, atol=1e-5)
     logging.info("Kernel 8 (ReduceSumDatablock, ReduceMaxDatablock) PASSED")
-    f0, f1, *_ = _run_kernel(9, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[9]
     torch.testing.assert_close(f0.flatten()[0], a_flat[0:db_elems].min(), rtol=1e-5, atol=1e-5)
     torch.testing.assert_close(f1.flatten()[0], a_flat[0] + a_flat[1], rtol=1e-4, atol=1e-4)
     logging.info("Kernel 9 (ReduceMinDatablock, PairReduceSum) PASSED")
-    f0, f1, *_ = _run_kernel(10, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[10]
     torch.testing.assert_close(f0, torch.abs(a_fp32 - b_fp32), rtol=1e-5, atol=1e-5)
     torch.testing.assert_close(f1, a_fp32 * 2.0 + b_fp32, rtol=1e-5, atol=1e-5)
     logging.info("Kernel 10 (AbsSub, Axpy) PASSED")
-    f0, f1, *_ = _run_kernel(11, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[11]
     torch.testing.assert_close(f0, a_fp32, rtol=1e-5, atol=1e-5)
     torch.testing.assert_close(f1, a_fp32 * b_fp32 + b_fp32, rtol=1e-4, atol=1e-4)
     logging.info("Kernel 11 (Copy, Madd) PASSED")
-    f0, f1, *_ = _run_kernel(12, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[12]
     torch.testing.assert_close(f0, torch.where(a_fp32 >= 0, a_fp32, a_fp32 * b_fp32), rtol=1e-5, atol=1e-5)
     torch.testing.assert_close(f1, a_fp32 * b_fp32, rtol=1e-5, atol=1e-5)
     logging.info("Kernel 12 (PRelu, Mul) PASSED")
-    _, _, u0, u1, _ = _run_kernel(13, a_fp32, b_fp32, device)
+    _, _, u0, u1, _ = results[13]
     assert u0.dtype == torch.int32
     assert u1.dtype == torch.int32
     logging.info("Kernel 13 (ShiftLeft, ShiftRight) PASSED")
-    _, _, u0, u1, _ = _run_kernel(14, a_fp32, b_fp32, device)
+    _, _, u0, u1, _ = results[14]
     a_u64 = float_to_uint32_bits(a_fp32)
     b_u64 = float_to_uint32_bits(b_fp32)
     product = a_u64 * b_u64
     torch.testing.assert_close(u0, (product & 0xFFFFFFFF).to(torch.int32))
     torch.testing.assert_close(u1, ((product >> 32) & 0xFFFFFFFF).to(torch.int32))
     logging.info("Kernel 14 (Mull) PASSED")
-    _, _, u0, *_ = _run_kernel(15, a_fp32, b_fp32, device)
+    _, _, u0, *_ = results[15]
     assert u0.dtype == torch.int32
     logging.info("Kernel 15 (Compares, Unsqueeze, Interleave) PASSED")
-    f0, *_ = _run_kernel(16, a_fp32, b_fp32, device)
+    f0, *_ = results[16]
     torch.testing.assert_close(f0, a_fp32, rtol=1e-5, atol=1e-5)
     logging.info("Kernel 16 (LoadUnalign) PASSED")
     # Kernel 19: ArangeDescend + LoadAlignBrc (codegen smoke test)
-    f0, f1, *_ = _run_kernel(19, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[19]
     assert f0.dtype == torch.float32
     logging.info("Kernel 19 (ArangeDescend, LoadAlignBrc) PASSED")
     # Kernel 20: Rint + LoadAlignUnpack (codegen smoke test)
-    f0, f1, *_ = _run_kernel(20, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[20]
     assert f1.dtype == torch.float32
     logging.info("Kernel 20 (Rint, LoadAlignUnpack) PASSED")
     # Kernel 21: SqueezeV2 + LoadAlignUnpack (codegen smoke test)
-    f0, f1, *_ = _run_kernel(21, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[21]
     assert f0.dtype == torch.float32
     assert f1.dtype == torch.float32
     logging.info("Kernel 21 (SqueezeV2, LoadAlignUnpack) PASSED")
     # Kernel 22: Cast DT_FP32 → DT_INT32 (truncation) → DT_FP32 roundtrip
-    f0, *_ = _run_kernel(22, a_fp32, b_fp32, device)
+    f0, *_ = results[22]
     expected_trunc = a_fp32.to(torch.int32).to(torch.float32)
     torch.testing.assert_close(f0, expected_trunc, rtol=1e-5, atol=1e-5)
     logging.info("Kernel 22 (Cast FP32→INT32→FP32 trunc) PASSED")
     # Kernel 23: Cast DT_FP32 → DT_INT32 (floor) → DT_FP32 roundtrip
-    f0, *_ = _run_kernel(23, a_fp32, b_fp32, device)
+    f0, *_ = results[23]
     expected_floor_int = torch.floor(a_fp32).to(torch.int32).to(torch.float32)
     torch.testing.assert_close(f0, expected_floor_int, rtol=1e-5, atol=1e-5)
     logging.info("Kernel 23 (Cast FP32→INT32→FP32 floor) PASSED")
     # Kernel 24: Cast DT_FP32 → DT_FP16 → DT_FP32 roundtrip
-    f0, *_ = _run_kernel(24, a_fp32, b_fp32, device)
+    f0, *_ = results[24]
     expected_f16_round = a_fp32.to(torch.float16).to(torch.float32)
     torch.testing.assert_close(f0, expected_f16_round, rtol=1e-3, atol=1e-3)
     logging.info("Kernel 24 (Cast FP32→FP16→FP32) PASSED")
     # Kernel 25: UnpackUpper + UnpackLower (codegen smoke test)
-    _, _, u0, u1, _ = _run_kernel(25, a_fp32, b_fp32, device)
+    _, _, u0, u1, _ = results[25]
     assert u0.dtype == torch.int32
     assert u1.dtype == torch.int32
     logging.info("Kernel 25 (UnpackUpper, UnpackLower) PASSED")
     # Kernel 26: StoreAlignPack + StoreAlignIntlv (codegen smoke test)
-    f0, _, u0, *_ = _run_kernel(26, a_fp32, b_fp32, device)
+    f0, _, u0, *_ = results[26]
     assert f0.dtype == torch.float32
     assert u0.dtype == torch.int32
     logging.info("Kernel 26 (StoreAlignPack, StoreAlignIntlv) PASSED")
     # Kernel 27: Duplicate (scalar broadcast + vector-source broadcast)
-    f0, f1, *_ = _run_kernel(27, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[27]
     # f0 should be all 2.5 (scalar broadcast)
     expected_scalar = torch.full([N, M], 2.5, device=device, dtype=torch.float32)
     torch.testing.assert_close(f0, expected_scalar, rtol=1e-5, atol=1e-5)
@@ -3681,72 +3699,72 @@ def test_vf_basic_ops():
     torch.testing.assert_close(f1, expected_vec_brc, rtol=1e-5, atol=1e-5)
     logging.info("Kernel 27 (Duplicate scalar + vector) PASSED")
     # Kernel 28: GetMaskSprB32 (codegen smoke test)
-    f0, *_ = _run_kernel(28, a_fp32, b_fp32, device)
+    f0, *_ = results[28]
     assert f0.dtype == torch.float32
     logging.info("Kernel 28 (GetMaskSprB32) PASSED")
     # Kernel 29: StoreAlignPackV2 (codegen smoke test)
-    f0, *_ = _run_kernel(29, a_fp32, b_fp32, device)
+    f0, *_ = results[29]
     assert f0.dtype == torch.float32
     logging.info("Kernel 29 (StoreAlignPackV2) PASSED")
     # Kernel 30: Cast FP32→FP16→INT32→FP32 roundtrip (tests float_to_wider_int branch)
-    f0, *_ = _run_kernel(30, a_fp32, b_fp32, device)
+    f0, *_ = results[30]
     expected_f16_s32 = a_fp32.to(torch.float16).to(torch.int32).to(torch.float32)
     torch.testing.assert_close(f0, expected_f16_s32, rtol=1e-3, atol=1e-3)
     logging.info("Kernel 30 (Cast FP16→INT32→FP32) PASSED")
     # Kernel 31: LoadAlignBrcV2 in loop context (codegen smoke test)
-    f0, *_ = _run_kernel(31, a_fp32, b_fp32, device)
+    f0, *_ = results[31]
     assert f0.dtype == torch.float32
     logging.info("Kernel 31 (LoadAlignBrcV2 in loop) PASSED")
     # Kernel 32: Postupdate variants (BRC load + pack store with POST_UPDATE)
-    f0, *_ = _run_kernel(32, a_fp32, b_fp32, device)
+    f0, *_ = results[32]
     assert f0.dtype == torch.float32
     logging.info("Kernel 32 (Postupdate BRC load + pack store) PASSED")
     # Kernel 34: Ln (use positive inputs)
     a_pos = torch.abs(a_fp32) + 0.1
-    f0, *_ = _run_kernel(34, a_pos, b_fp32, device)
+    f0, *_ = results[34]
     torch.testing.assert_close(f0, torch.log(a_pos), rtol=1e-3, atol=1e-3)
     logging.info("Kernel 34 (Ln) PASSED")
     # Kernel 35: Rsqrt + Copy (use positive inputs for rsqrt)
-    f0, f1, *_ = _run_kernel(35, a_pos, b_fp32, device)
+    f0, f1, *_ = results[35]
     torch.testing.assert_close(f1, a_pos, rtol=1e-5, atol=1e-5)
     logging.info("Kernel 35 (Rsqrt, Copy) PASSED")
-    f0, f1, *_ = _run_kernel(36, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[36]
     torch.testing.assert_close(f0, b_fp32 + a_fp32 * a_fp32, rtol=1e-4, atol=1e-4)
     torch.testing.assert_close(f1, a_fp32, rtol=1e-5, atol=1e-5)
     logging.info("Kernel 36 (Mla, Copy) PASSED")
-    f0, f1, *_ = _run_kernel(37, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[37]
     torch.testing.assert_close(f0, torch.abs(a_fp32 - b_fp32), rtol=1e-5, atol=1e-5)
     torch.testing.assert_close(f1, torch.abs(b_fp32 - a_fp32), rtol=1e-5, atol=1e-5)
     logging.info("Kernel 37 (AbsSub) PASSED")
     # Kernel 38: Avg + Add3
-    f0, f1, *_ = _run_kernel(38, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[38]
     torch.testing.assert_close(f0, (a_fp32 + b_fp32) / 2.0, rtol=1e-5, atol=1e-5)
     torch.testing.assert_close(f1, 2.0 * a_fp32 + b_fp32, rtol=1e-5, atol=1e-5)
     logging.info("Kernel 38 (Avg, Add3) PASSED")
     # Kernel 39: SelectR (vselr gather by identity index) + Max
-    f0, f1, *_ = _run_kernel(39, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[39]
     torch.testing.assert_close(f0, a_fp32[:, :1].expand_as(a_fp32), rtol=1e-5, atol=1e-5)
     torch.testing.assert_close(f1, torch.max(a_fp32, b_fp32), rtol=1e-5, atol=1e-5)
     logging.info("Kernel 39 (SelectR, Max) PASSED")
     # Kernel 40: Log2 + Log10 (use positive inputs)
-    f0, f1, *_ = _run_kernel(40, a_pos, b_fp32, device)
+    f0, f1, *_ = results[40]
     torch.testing.assert_close(f0, torch.log2(a_pos), rtol=1e-3, atol=1e-3)
     torch.testing.assert_close(f1, torch.log10(a_pos), rtol=1e-3, atol=1e-3)
     logging.info("Kernel 40 (Log2, Log10) PASSED")
-    f0, *_ = _run_kernel(42, a_fp32, b_fp32, device)
+    f0, *_ = results[42]
     assert f0.dtype == torch.float32
     logging.info("Kernel 42 (CastFp162S4, CastS42Fp16) PASSED")
-    f0, *_ = _run_kernel(46, a_fp32, b_fp32, device)
+    f0, *_ = results[46]
     assert f0.dtype == torch.float32
     logging.info("Kernel 46 (MaskAnd/Or/Xor/Not) PASSED")
-    f0, *_ = _run_kernel(47, a_fp32, b_fp32, device)
+    f0, *_ = results[47]
     assert f0.dtype == torch.float32
     logging.info("Kernel 47 (LoadSimple, StoreSimple) PASSED")
     a_pos = torch.abs(a_fp32) + 0.1
-    f0, *_ = _run_kernel(48, a_pos, b_fp32, device)
+    f0, *_ = results[48]
     torch.testing.assert_close(f0, torch.log(a_pos), rtol=1e-3, atol=1e-3)
     logging.info("Kernel 48 (Log/vln) PASSED")
-    f0, f1, *_ = _run_kernel(49, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[49]
     torch.testing.assert_close(f0, torch.trunc(a_fp32), rtol=1e-5, atol=1e-5)
     # mask depends on bit 0 of b's IEEE754 repr — just verify codegen produces valid output
     assert f1.shape == a_fp32.shape and f1.dtype == torch.float32
@@ -3754,76 +3772,75 @@ def test_vf_basic_ops():
     # Kernel 50: Sub, Div (use positive inputs for div)
     a_pos = torch.abs(a_fp32) + 0.1
     b_pos = torch.abs(b_fp32) + 0.1
-    f0, f1, *_ = _run_kernel(50, a_pos, b_pos, device)
+    f0, f1, *_ = results[50]
     torch.testing.assert_close(f0, a_pos - b_pos, rtol=1e-5, atol=1e-5)
     torch.testing.assert_close(f1, a_pos / b_pos, rtol=1e-3, atol=1e-3)
     logging.info("Kernel 50 (Sub, Div) PASSED")
     # Kernel 51: Muls, And, Xor
-    f0, _, u0, u1, _ = _run_kernel(51, a_fp32, b_fp32, device)
+    f0, _, u0, u1, _ = results[51]
     torch.testing.assert_close(f0, a_fp32 * 2.5, rtol=1e-5, atol=1e-5)
     torch.testing.assert_close(u0, (a_bits & b_bits).to(torch.int32))
     torch.testing.assert_close(u1, (a_bits ^ b_bits).to(torch.int32))
     logging.info("Kernel 51 (Muls, And, Xor) PASSED")
     # Kernel 52: ShiftRights (scalar right shift)
-    _, _, u0, *_ = _run_kernel(52, a_fp32, b_fp32, device)
+    _, _, u0, *_ = results[52]
     torch.testing.assert_close(u0, ((a_bits >> 2) & 0xFFFFFFFF).to(torch.int32))
     logging.info("Kernel 52 (ShiftRights) PASSED")
     # Kernel 53: DeInterleave (roundtrip: interleave then de_interleave)
-    f0, f1, *_ = _run_kernel(53, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[53]
     torch.testing.assert_close(f0, a_fp32, rtol=1e-5, atol=1e-5)
     torch.testing.assert_close(f1, b_fp32, rtol=1e-5, atol=1e-5)
     logging.info("Kernel 53 (DeInterleave roundtrip) PASSED")
     # Kernel 54: Pack, Unpack (smoke test)
-    _, _, u0, *_ = _run_kernel(54, a_fp32, b_fp32, device)
+    _, _, u0, *_ = results[54]
     assert u0.dtype == torch.int32
     logging.info("Kernel 54 (Pack, Unpack) PASSED")
     # Kernel 56: MulAddDst, MulsCast
-    f0, f1, *_ = _run_kernel(56, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[56]
     torch.testing.assert_close(f0, b_fp32 * a_fp32 + b_fp32, rtol=1e-4, atol=1e-4)
     torch.testing.assert_close(f1, (a_fp32 * 2.0).to(torch.float16).to(torch.float32), rtol=1e-3, atol=1e-3)
     logging.info("Kernel 56 (MulAddDst, MulsCast) PASSED")
     # Kernel 57: Compare (vector-vector GT, select a where a>b else b = max(a,b))
-    f0, *_ = _run_kernel(57, a_fp32, b_fp32, device)
+    f0, *_ = results[57]
     torch.testing.assert_close(f0, torch.max(a_fp32, b_fp32), rtol=1e-5, atol=1e-5)
     logging.info("Kernel 57 (Compare) PASSED")
     # Kernel 58: CastS42Bf16, CastS42Int16 (smoke test)
-    f0, f1, *_ = _run_kernel(58, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[58]
     assert f0.dtype == torch.float32
     assert f1.dtype == torch.float32
     logging.info("Kernel 58 (CastS42Bf16, CastS42Int16) PASSED")
     # Kernel 59: LoadASimple, StoreASimple (2*a)
-    f0, *_ = _run_kernel(59, a_fp32, b_fp32, device)
+    f0, *_ = results[59]
     torch.testing.assert_close(f0, a_fp32 * 2.0, rtol=1e-5, atol=1e-5)
     logging.info("Kernel 59 (LoadASimple, StoreASimple) PASSED")
     # Kernel 60: LoadUAlign, StoreUAlign (2*a)
-    f0, *_ = _run_kernel(60, a_fp32, b_fp32, device)
+    f0, *_ = results[60]
     torch.testing.assert_close(f0, a_fp32 * 2.0, rtol=1e-5, atol=1e-5)
     logging.info("Kernel 60 (LoadUAlign, StoreUAlign) PASSED")
     # Kernel 61: LoadUnalignPostUpdate (identity load)
-    f0, *_ = _run_kernel(61, a_fp32, b_fp32, device)
+    f0, *_ = results[61]
     torch.testing.assert_close(f0, a_fp32, rtol=1e-5, atol=1e-5)
     logging.info("Kernel 61 (LoadUnalignPostUpdate) PASSED")
     # Kernel 62: Scatter (identity scatter with loaded index)
-    idx = torch.arange(M, device=device, dtype=torch.int32).reshape([N, M]).to(torch.uint32)
-    f0, *_ = _run_kernel(62, a_fp32, b_fp32, device, idx_u0=idx)
+    f0, *_ = results[62]
     torch.testing.assert_close(f0, a_fp32, rtol=1e-5, atol=1e-5)
     logging.info("Kernel 62 (Scatter) PASSED")
     # Kernel 65: UpdateMask (smoke test)
-    f0, *_ = _run_kernel(65, a_fp32, b_fp32, device)
+    f0, *_ = results[65]
     assert f0.dtype == torch.float32
     logging.info("Kernel 65 (UpdateMask) PASSED")
     # Kernel 66: MaskOr, MaskXor (smoke test — stored with mask, not ALL)
-    f0, f1, *_ = _run_kernel(66, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[66]
     assert f0.dtype == torch.float32
     assert f1.dtype == torch.float32
     logging.info("Kernel 66 (MaskOr, MaskXor) PASSED")
     # Kernel 67: MaskMov, MaskSel (smoke test)
-    f0, f1, *_ = _run_kernel(67, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[67]
     assert f0.dtype == torch.float32
     assert f1.dtype == torch.float32
     logging.info("Kernel 67 (MaskMov, MaskSel) PASSED")
     # Kernel 68: MaskLoad, MaskStore (mask roundtrip via UB, stored with ALL preg)
-    f0, *_ = _run_kernel(68, a_fp32, b_fp32, device)
+    f0, *_ = results[68]
     torch.testing.assert_close(
         f0,
         torch.where(a_fp32 >= 0, torch.abs(a_fp32), torch.tensor(0.0, device=device)),
@@ -3832,11 +3849,11 @@ def test_vf_basic_ops():
     )
     logging.info("Kernel 68 (MaskLoad, MaskStore) PASSED")
     # Kernel 69: MaskPack, MaskUnpack (smoke test)
-    f0, *_ = _run_kernel(69, a_fp32, b_fp32, device)
+    f0, *_ = results[69]
     assert f0.dtype == torch.float32
     logging.info("Kernel 69 (MaskPack, MaskUnpack) PASSED")
     # Kernel 71: Cast cross-width (S16→FP32, S32→FP16, FP16→BF16)
-    f0, f1, *_ = _run_kernel(71, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[71]
     # f0: FP32→S16→FP32 roundtrip (truncate to int16 range then back)
     expected_s16 = torch.clamp(torch.trunc(a_fp32), -32768, 32767).to(torch.float32)
     torch.testing.assert_close(f0, expected_s16, rtol=1e-5, atol=1.0)
@@ -3844,10 +3861,10 @@ def test_vf_basic_ops():
     assert f1.dtype == torch.float32
     logging.info("Kernel 71 (Cast cross-width: S16/DT_FP32, S32/DT_FP16, DT_FP16/DT_BF16) PASSED")
     # Kernel 73: LoadAlign DATA_BLOCK_LOAD (vsldb codegen smoke test)
-    f0, *_ = _run_kernel(73, a_fp32, b_fp32, device)
+    f0, *_ = results[73]
     assert f0.dtype == torch.float32
     logging.info("Kernel 73 (LoadAlign DATA_BLOCK_LOAD/vsldb) PASSED")
-    f0, f1, *_ = _run_kernel(79, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[79]
     # f0: broadcast HIGHEST element of a_fp32 to all lanes
     expected_highest = torch.full([N, M], a_fp32.flatten()[-1].item(), device=device, dtype=torch.float32)
     torch.testing.assert_close(f0, expected_highest, rtol=1e-5, atol=1e-5)
@@ -3856,21 +3873,21 @@ def test_vf_basic_ops():
     torch.testing.assert_close(f1, expected_lowest, rtol=1e-5, atol=1e-5)
     logging.info("Kernel 79 (Duplicate pos=HIGHEST/LOWEST) PASSED")
     # Kernel 81: CreateAddrReg — use AddrReg for aligned load/store offset
-    f0, *_ = _run_kernel(81, a_fp32, b_fp32, device)
+    f0, *_ = results[81]
     torch.testing.assert_close(f0, a_fp32, rtol=1e-5, atol=1e-5)
     logging.info("Kernel 81 (CreateAddrReg load/store) PASSED")
     # Kernel 82: Move — RegTensor move (masked) + MaskReg move (unmasked)
-    f0, f1, *_ = _run_kernel(82, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[82]
     torch.testing.assert_close(f0, a_fp32, rtol=1e-5, atol=1e-5)
     torch.testing.assert_close(f1, a_fp32 + a_fp32, rtol=1e-5, atol=1e-5)
     logging.info("Kernel 82 (Move RegTensor + MaskReg) PASSED")
     # Kernel 83: GetSpr (get_ar) + MoveMask (get_mask_spr)
-    f0, f1, *_ = _run_kernel(83, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[83]
     assert f0.dtype == torch.float32
     assert f1.dtype == torch.float32
     logging.info("Kernel 83 (GetSpr + MoveMask) PASSED")
     # Kernel 84: Full (Duplicate) reg-to-reg broadcast — pos=LOWEST + pos=HIGHEST
-    f0, f1, *_ = _run_kernel(84, a_fp32, b_fp32, device)
+    f0, f1, *_ = results[84]
     # f0: broadcast lowest element of a_fp32 to all lanes
     expected_lowest = torch.full([N, M], a_fp32.flatten()[0].item(), device=device, dtype=torch.float32)
     torch.testing.assert_close(f0, expected_lowest, rtol=1e-5, atol=1e-5)
@@ -3878,32 +3895,32 @@ def test_vf_basic_ops():
     expected_highest = torch.full([N, M], b_fp32.flatten()[-1].item(), device=device, dtype=torch.float32)
     torch.testing.assert_close(f1, expected_highest, rtol=1e-5, atol=1e-5)
     logging.info("Kernel 84 (Full reg-to-reg LOWEST + HIGHEST) PASSED")
-    f0, *_ = _run_kernel(85, a_fp32, b_fp32, device)
+    f0, *_ = results[85]
     torch.testing.assert_close(f0, a_fp32 * 2.0, rtol=1e-5, atol=1e-5)
     logging.info("Kernel 85 (MemBar VST_VST + VV_ALL) PASSED")
-    f0, *_ = _run_kernel(86, a_fp32, b_fp32, device)
+    f0, *_ = results[86]
     assert f0.dtype == torch.float32
     logging.info("Kernel 86 (LoadAlign DATA_BLOCK_COPY) PASSED")
-    f0, *_ = _run_kernel(87, a_fp32, b_fp32, device)
+    f0, *_ = results[87]
     torch.testing.assert_close(f0, a_fp32 * 2.0, rtol=1e-5, atol=1e-5)
     logging.info("Kernel 87 (AddrReg offset + dist) PASSED")
     # Kernel 88: load_align with LoadDist.NORM for MaskReg dst
-    f0, *_ = _run_kernel(88, a_fp32, b_fp32, device)
+    f0, *_ = results[88]
     assert f0.dtype == torch.float32
     logging.info("Kernel 88 (LoadDist NORM) PASSED")
     # Kernel 89: astype with CAST_ODD round mode (smoke test compiles + valid float)
-    f0, *_ = _run_kernel(89, a_fp32, b_fp32, device)
+    f0, *_ = results[89]
     assert f0.dtype == torch.float32
     logging.info("Kernel 89 (Cast CAST_ODD) PASSED")
     # Kernel 90: 4-level nested VF — result = exp(sqrt(abs(a)) + 1.0)
-    f0, *_ = _run_kernel(90, a_fp32, b_fp32, device)
+    f0, *_ = results[90]
     torch.testing.assert_close(f0, torch.exp(torch.sqrt(torch.abs(a_fp32)) + 1.0), rtol=1e-3, atol=1e-3)
     logging.info("Kernel 90 (4-level nested VF) PASSED")
-    f0, f1, u0, *_ = _run_kernel(91, a_fp32, b_fp32, device)
+    f0, f1, u0, *_ = results[91]
     assert f0.dtype == torch.float32 and f1.dtype == torch.float32 and u0.dtype == torch.int32
     logging.info("Kernel 91 (arange u32 / exp_sub / muls_cast layout=ONE) PASSED")
     # Kernel 92: MaskReg + AddrReg round-trip (pld + pst) (smoke)
-    _, _, u0, *_ = _run_kernel(92, a_fp32, b_fp32, device)
+    _, _, u0, *_ = results[92]
     assert u0.dtype == torch.int32
     logging.info("Kernel 92 (load_align pld + store_align pst) PASSED")
     logging.info("All VF basic ops tests PASSED!")

@@ -26,6 +26,7 @@ rows than the destination (the walk must stay inside the destination's fractal);
 between-group step; and 1-byte and 4-byte dtypes, which change how many elements a group spans.
 """
 
+from functools import lru_cache
 import logging
 import os
 
@@ -62,10 +63,18 @@ def _nz_geometry(rows, cols, itemsize, compact):
     return c0, cols // c0, virtual_row
 
 
-def _make_kernel(rows, cols, dtype, compact, src_rows, flat_rows, c0, nz_bytes):
+# Retain the JIT object across discovery and execution; only static factory
+# arguments enter this cache, so runtime tensor values still run independently.
+@lru_cache(maxsize=None)
+def _make_kernel(rows, cols, torch_dtype, compact, src_rows, flat_rows, c0, nz_bytes):
     """ND -> NZ move, read back through a row-major alias of the destination's address."""
 
-    @pl.jit(auto_mutex=True)
+    dtype = {torch.float16: pl.DT_FP16, torch.float32: pl.DT_FP32, torch.int8: pl.DT_INT8}[torch_dtype]
+
+    # Concurrent specializations need distinct source and library directories.
+    kernel_name = f"nd2nz_{rows}_{cols}_{dtype}_{compact}_{src_rows}_{flat_rows}_{c0}_{nz_bytes}"
+
+    @pl.jit(auto_mutex=True, name=kernel_name)
     def kernel(x: pl.Tensor[[rows, cols], dtype], out: pl.Tensor[[flat_rows, c0], dtype]):
         nd_type = pl.TileType(
             shape=[rows, cols], dtype=dtype, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
@@ -96,7 +105,7 @@ def _make_kernel(rows, cols, dtype, compact, src_rows, flat_rows, c0, nz_bytes):
     return kernel
 
 
-def _run(rows, cols, torch_dtype, dtype, compact=1, src_rows=None):
+def _run(rows, cols, torch_dtype, compact=1, src_rows=None):
     device = ST_DEVICE
     _require_a5(device)
     src_rows = rows if src_rows is None else src_rows
@@ -110,7 +119,7 @@ def _run(rows, cols, torch_dtype, dtype, compact=1, src_rows=None):
     x = (torch.arange(rows * cols, device=device, dtype=torch.int32).reshape(rows, cols) % 251).to(torch_dtype)
     out = torch.zeros((flat_rows, c0), device=device, dtype=torch_dtype)
 
-    _make_kernel(rows, cols, dtype, compact, src_rows, flat_rows, c0, flat_rows * c0 * itemsize)(x, out)
+    _make_kernel(rows, cols, torch_dtype, compact, src_rows, flat_rows, c0, flat_rows * c0 * itemsize)(x, out)
     torch.npu.synchronize()
 
     # dst[panel][row][lane] == src[row][panel * c0 + lane], for the rows actually moved.
@@ -127,58 +136,58 @@ def _run(rows, cols, torch_dtype, dtype, compact=1, src_rows=None):
 @pytest.mark.soc("950")
 def test_single_column_group():
     """fp16 spans 128 elements per register, so 128 columns is exactly one group."""
-    _run(32, 128, torch.float16, pl.DT_FP16)
+    _run(32, 128, torch.float16)
 
 
 @pytest.mark.soc("950")
 def test_two_column_groups():
     """Two groups, so the step between them is exercised at all."""
-    _run(32, 256, torch.float16, pl.DT_FP16)
+    _run(32, 256, torch.float16)
 
 
 @pytest.mark.soc("950")
 def test_four_column_groups():
     """More groups than the 8 panels one store scatters across, so the step compounds."""
-    _run(16, 512, torch.float16, pl.DT_FP16)
+    _run(16, 512, torch.float16)
 
 
 @pytest.mark.soc("950")
 def test_single_source_row():
     """One row per group: the row walk runs once and must still land each group."""
-    _run(16, 256, torch.float16, pl.DT_FP16, src_rows=1)
+    _run(16, 256, torch.float16, src_rows=1)
 
 
 @pytest.mark.soc("950")
 def test_source_shorter_than_destination():
     """The destination's fractal geometry comes from its own valid rows, not the source's."""
-    _run(32, 256, torch.float16, pl.DT_FP16, src_rows=17)
+    _run(32, 256, torch.float16, src_rows=17)
 
 
 @pytest.mark.soc("950")
 def test_row_plus_one_compact():
     """compact=2 pads each panel by a row, changing the between-group step."""
-    _run(32, 256, torch.float16, pl.DT_FP16, compact=2)
+    _run(32, 256, torch.float16, compact=2)
 
 
 @pytest.mark.soc("950")
 def test_row_plus_one_compact_partial_rows():
     """The padded-panel step together with a short source."""
-    _run(32, 256, torch.float16, pl.DT_FP16, compact=2, src_rows=17)
+    _run(32, 256, torch.float16, compact=2, src_rows=17)
 
 
 @pytest.mark.soc("950")
 def test_fp32_narrower_group():
     """fp32 spans 64 elements per register, so 256 columns is four groups."""
-    _run(32, 256, torch.float32, pl.DT_FP32)
+    _run(32, 256, torch.float32)
 
 
 @pytest.mark.soc("950")
 def test_int8_byte_path():
     """1-byte dtypes are reinterpreted as uint8_t before the walk."""
-    _run(32, 512, torch.int8, pl.DT_INT8)
+    _run(32, 512, torch.int8)
 
 
 @pytest.mark.soc("950")
 def test_int8_byte_path_partial_rows():
     """The byte path with a short source, covering its pointer handling too."""
-    _run(32, 512, torch.int8, pl.DT_INT8, src_rows=9)
+    _run(32, 512, torch.int8, src_rows=9)

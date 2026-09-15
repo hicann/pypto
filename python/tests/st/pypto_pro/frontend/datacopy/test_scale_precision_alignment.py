@@ -18,6 +18,7 @@
 不存在的上层 API，已在本次修复中移除，统一改为与 Torch golden（CPU 模拟）对比。
 """
 
+from functools import lru_cache
 import logging
 import os
 import struct
@@ -50,6 +51,9 @@ def _make_scale_tensor(device: str, scale_values: list) -> torch.Tensor:
     return torch.tensor(scale_bits_list, dtype=torch.int64, device=device).reshape(1, 64)
 
 
+# Retain the JIT object across discovery and execution; only static factory
+# arguments enter this cache, so runtime tensor values still run independently.
+@lru_cache(maxsize=None)
 def _make_per_tensor_store_kernel(scale_value: float):
     """Factory: per-tensor FP32->INT8 store kernel with a compile-time float scale."""
 
@@ -96,6 +100,7 @@ def _make_per_tensor_store_kernel(scale_value: float):
     return kernel
 
 
+@lru_cache(maxsize=None)
 def _make_per_tensor_relu_kernel(scale_value: float):
     """Factory: per-tensor FP32->INT8 store kernel with scale + ReLU fusion."""
 

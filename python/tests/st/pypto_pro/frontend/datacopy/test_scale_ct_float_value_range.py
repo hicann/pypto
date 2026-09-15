@@ -14,6 +14,7 @@
 正 / 负 / 零 / 单位 / 分数 / 极小 / 极大值测试，直接验证 ``_encode_deq_scalar``。
 """
 
+from functools import lru_cache
 import logging
 import os
 
@@ -45,6 +46,9 @@ def _make_k(device: str) -> torch.Tensor:
     return torch.eye(64, device=device, dtype=torch.float32)
 
 
+# Retain the JIT object across discovery and execution; only static factory
+# arguments enter this cache, so runtime tensor values still run independently.
+@lru_cache(maxsize=None)
 def _make_ct_kernel(scale_value: float):
     """Factory: FP32->INT8 store kernel with a compile-time float scale literal."""
 

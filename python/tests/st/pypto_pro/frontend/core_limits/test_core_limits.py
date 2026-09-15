@@ -201,6 +201,7 @@ def test_capture_scopes_and_replay(stream, kind):
         torch.npu.synchronize()
 
 
+@pytest.mark.skip_jit_discovery(reason="Device-limit probe compiles and runs in its own process")
 def test_device_limit_in_subprocess():
     """Device setters are once-per-process; isolate them and prove stream override can exceed the device default."""
     result = subprocess.run(

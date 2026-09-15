@@ -18,6 +18,7 @@
   5. 覆盖边界场景：scalar 参数驱动 range stop/step、if flag、while condition 和函数边界。
 """
 
+from functools import lru_cache
 import logging
 import os
 
@@ -41,6 +42,7 @@ DTYPES_ALL = [
     (pl.DT_INT32, torch.int32, "int32", 0, 0),
 ]
 DTYPES_FP16 = [DTYPES_ALL[0]]
+DTYPE_BY_LABEL = {label: dtype for dtype, _, label, _, _ in DTYPES_ALL}
 
 _FP32_INT32 = (pl.DT_FP32, pl.DT_INT32)
 
@@ -77,7 +79,11 @@ def _ref(tdt, fn, x, y):
 # ===================================================================
 
 
-def make_for_scalar_stop_kernel(dtype, name_suffix=""):
+# Retain the JIT object across discovery and execution; only static factory
+# arguments enter this cache, so runtime tensor values still run independently.
+@lru_cache(maxsize=None)
+def make_for_scalar_stop_kernel(dtype_label, name_suffix=""):
+    dtype = DTYPE_BY_LABEL[dtype_label]
     # =============================================================================
     # Test 1: 标量 stop 参数驱动 for
     #         scalar stop parameter drives for loop
@@ -126,7 +132,9 @@ def make_for_scalar_stop_kernel(dtype, name_suffix=""):
 # ===================================================================
 
 
-def make_for_scalar_step_kernel(dtype, name_suffix=""):
+@lru_cache(maxsize=None)
+def make_for_scalar_step_kernel(dtype_label, name_suffix=""):
+    dtype = DTYPE_BY_LABEL[dtype_label]
     # =============================================================================
     # Test 2: 标量 step 参数驱动 for
     #         scalar step parameter drives for loop
@@ -163,7 +171,9 @@ def make_for_scalar_step_kernel(dtype, name_suffix=""):
 # ===================================================================
 
 
-def make_if_scalar_flag_kernel(dtype, name_suffix=""):
+@lru_cache(maxsize=None)
+def make_if_scalar_flag_kernel(dtype_label, name_suffix=""):
+    dtype = DTYPE_BY_LABEL[dtype_label]
     # =============================================================================
     # Test 3: 标量 flag 驱动 if
     #         scalar flag drives if branch
@@ -203,7 +213,9 @@ def make_if_scalar_flag_kernel(dtype, name_suffix=""):
 # ===================================================================
 
 
-def make_while_scalar_cond_kernel(dtype, name_suffix=""):
+@lru_cache(maxsize=None)
+def make_while_scalar_cond_kernel(dtype_label, name_suffix=""):
+    dtype = DTYPE_BY_LABEL[dtype_label]
     # =============================================================================
     # Test 4: 标量条件驱动 while
     #         scalar condition drives while loop
@@ -241,7 +253,9 @@ def make_while_scalar_cond_kernel(dtype, name_suffix=""):
 # ===================================================================
 
 
-def make_for_if_break_scalar_kernel(dtype, name_suffix=""):
+@lru_cache(maxsize=None)
+def make_for_if_break_scalar_kernel(dtype_label, name_suffix=""):
+    dtype = DTYPE_BY_LABEL[dtype_label]
     # =============================================================================
     # Test 5: 标量参数 + for/if break
     #         scalar parameter + for/if break
@@ -296,7 +310,9 @@ def _mul(a, b):
     return a * b
 
 
-def make_func_range_bound_kernel(dtype, name_suffix=""):
+@lru_cache(maxsize=None)
+def make_func_range_bound_kernel(dtype_label, name_suffix=""):
+    dtype = DTYPE_BY_LABEL[dtype_label]
     # =============================================================================
     # Test 7: 函数边界驱动 range
     #         function bound drives range
@@ -336,7 +352,9 @@ def make_func_range_bound_kernel(dtype, name_suffix=""):
 # ===================================================================
 
 
-def make_if_func_bool_expr_kernel(dtype, name_suffix=""):
+@lru_cache(maxsize=None)
+def make_if_func_bool_expr_kernel(dtype_label, name_suffix=""):
+    dtype = DTYPE_BY_LABEL[dtype_label]
     # =============================================================================
     # Test 8: 函数布尔表达式驱动 if
     #         function boolean expression drives if branch
@@ -377,21 +395,21 @@ def make_if_func_bool_expr_kernel(dtype, name_suffix=""):
 
 @pytest.mark.soc("950")
 @pypto.options(pass_options={"enable_slice": False})
-def test_for_scalar_stop():
+@pytest.mark.parametrize("pl_dt,tdt,label,atol,rtol", DTYPES_ALL, ids=[entry[2] for entry in DTYPES_ALL])
+def test_for_scalar_stop(pl_dt, tdt, label, atol, rtol):
     device = ST_DEVICE
     torch.npu.set_device(device)
     torch.manual_seed(0)
     shape = [128, 64]
-    for pl_dt, tdt, label, atol, rtol in DTYPES_ALL:
-        kernel = make_for_scalar_stop_kernel(pl_dt, f"for_scalar_stop_{label}")
-        x, y, z = _gen(shape, tdt, device)
-        kernel(x, y, z, 1)
-        torch.npu.synchronize()
-        z_ref = torch.zeros(shape, device=device, dtype=tdt)
-        z_ref[:64, :] = _ref(tdt, lambda a, b: a + b, x[:64, :], y[:64, :])
-        z_ref[64:, :] = _ref(tdt, lambda a, b: a - b, x[64:, :], y[64:, :])
-        torch.testing.assert_close(z, z_ref, atol=atol, rtol=rtol)
-        logging.info("test_for_scalar_stop [%s] passed! shape=%s", label, shape)
+    kernel = make_for_scalar_stop_kernel(label, f"for_scalar_stop_{label}")
+    x, y, z = _gen(shape, tdt, device)
+    kernel(x, y, z, 1)
+    torch.npu.synchronize()
+    z_ref = torch.zeros(shape, device=device, dtype=tdt)
+    z_ref[:64, :] = _ref(tdt, lambda a, b: a + b, x[:64, :], y[:64, :])
+    z_ref[64:, :] = _ref(tdt, lambda a, b: a - b, x[64:, :], y[64:, :])
+    torch.testing.assert_close(z, z_ref, atol=atol, rtol=rtol)
+    logging.info("test_for_scalar_stop [%s] passed! shape=%s", label, shape)
 
 
 @pytest.mark.soc("950")
@@ -402,7 +420,7 @@ def test_for_scalar_step():
     torch.manual_seed(0)
     shape = [128, 64]
     for pl_dt, tdt, label, atol, rtol in DTYPES_FP16:
-        kernel = make_for_scalar_step_kernel(pl_dt, f"for_scalar_step_{label}")
+        kernel = make_for_scalar_step_kernel(label, f"for_scalar_step_{label}")
         x, y, z = _gen(shape, tdt, device)
         kernel(x, y, z, shape[0] // TILE_M, 1)
         torch.npu.synchronize()
@@ -419,7 +437,7 @@ def test_if_scalar_flag():
     torch.manual_seed(0)
     shape = [128, 64]
     for pl_dt, tdt, label, atol, rtol in DTYPES_FP16:
-        kernel = make_if_scalar_flag_kernel(pl_dt, f"if_scalar_flag_{label}")
+        kernel = make_if_scalar_flag_kernel(label, f"if_scalar_flag_{label}")
         x, y, z_add = _gen(shape, tdt, device)
         z_sub = torch.zeros(shape, device=device, dtype=tdt)
         kernel(x, y, z_add, 1)
@@ -441,7 +459,7 @@ def test_while_scalar_cond():
     torch.manual_seed(0)
     shape = [128, 64]
     for pl_dt, tdt, label, atol, rtol in DTYPES_FP16:
-        kernel = make_while_scalar_cond_kernel(pl_dt, f"while_scalar_cond_{label}")
+        kernel = make_while_scalar_cond_kernel(label, f"while_scalar_cond_{label}")
         x, y, z = _gen(shape, tdt, device)
         kernel(x, y, z, 2)
         torch.npu.synchronize()
@@ -458,7 +476,7 @@ def test_for_if_break_scalar():
     torch.manual_seed(0)
     shape = [192, 128]
     for pl_dt, tdt, label, atol, rtol in DTYPES_FP16:
-        kernel = make_for_if_break_scalar_kernel(pl_dt, f"for_if_break_scalar_{label}")
+        kernel = make_for_if_break_scalar_kernel(label, f"for_if_break_scalar_{label}")
         x, y, z = _gen(shape, tdt, device)
         kernel(x, y, z, 1)
         torch.npu.synchronize()
@@ -478,7 +496,7 @@ def test_func_range_bound():
     torch.manual_seed(0)
     shape = [128, 64]
     for pl_dt, tdt, label, atol, rtol in DTYPES_FP16:
-        kernel = make_func_range_bound_kernel(pl_dt, f"func_range_bound_{label}")
+        kernel = make_func_range_bound_kernel(label, f"func_range_bound_{label}")
         x, y, z = _gen(shape, tdt, device)
         kernel(x, y, z)
         torch.npu.synchronize()
@@ -495,7 +513,7 @@ def test_if_func_bool_expr():
     torch.manual_seed(0)
     shape = [128, 64]
     for pl_dt, tdt, label, atol, rtol in DTYPES_FP16:
-        kernel = make_if_func_bool_expr_kernel(pl_dt, f"if_func_bool_expr_{label}")
+        kernel = make_if_func_bool_expr_kernel(label, f"if_func_bool_expr_{label}")
         x, y, z = _gen(shape, tdt, device)
         kernel(x, y, z)
         torch.npu.synchronize()
