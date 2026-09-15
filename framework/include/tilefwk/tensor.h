@@ -204,6 +204,14 @@ public:
     std::vector<SymbolicScalar>& GetValidShape() const;
 
     /**
+     * \brief Get the valid shape information of the specified axis of Tensor.
+     *
+     * \param axis : The axis of the valid shape to be obtained.
+     * \return SymbolicScalar : The valid shape of the specified axis, if valid shape missing, return shape.
+     */
+    SymbolicScalar GetValidShape(int axis) const;
+
+    /**
      * \brief Get the format of the tensor.
      *
      * \return TileOpFormat : The format of the tensor.

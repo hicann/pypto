@@ -237,6 +237,22 @@ int32_t Tensor::GetShape(int axis) const
 
 std::vector<SymbolicScalar>& Tensor::GetValidShape() const { return storage_->GetDynValidShape(); }
 
+SymbolicScalar Tensor::GetValidShape(int axis) const
+{
+    auto n = Dim();
+    if (axis < 0) {
+        axis += n;
+    }
+    FE_ASSERT(FeError::OUT_OF_RANGE, axis >= 0 && static_cast<size_t>(axis) < n)
+        << "Axis index " << axis << " is out of range [0, " << (n - 1) << "].";
+
+    auto& dynShape = storage_->GetDynValidShape();
+    if (dynShape.empty()) {
+        return storage_->shape[axis];
+    }
+    return dynShape[axis];
+}
+
 TileOpFormat Tensor::Format() const { return storage_->Format(); }
 
 void Tensor::SetCachePolicy(CachePolicy policy, bool value)
