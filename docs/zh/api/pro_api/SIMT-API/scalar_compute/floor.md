@@ -34,7 +34,7 @@ pypto_pro.language.simt.floor(
 
 ## 约束说明
 
-只能在由@pypto_pro.language.simt.function定义的SIMT入口函数或辅助函数中调用。
+只能在由@pypto_pro.language.vector_function(mode="simt")定义的SIMT入口函数或辅助函数中调用。
 
 ## 返回值说明
 
@@ -45,7 +45,7 @@ pypto_pro.language.simt.floor(
 ```python
 import pypto_pro.language as pl
 
-@pl.simt.function(max_threads=256)
+@pl.vector_function(mode="simt", max_threads=256)
 def bucket_start(
     position: pl.Tensor[[1, 256], pl.DT_FP32],
     output: pl.Tensor[[1, 256], pl.DT_FP32],
@@ -60,5 +60,5 @@ def simt_floor_kernel(
     output: pl.Tensor[[1, 256], pl.DT_FP32],
 ):
     with pl.section_vector():
-        pl.simt.launch(bucket_start, threads=256, args=(position, output))
+        bucket_start[256](position, output)
 ```

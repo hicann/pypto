@@ -15,7 +15,7 @@ import torch
 ELEMENTS = 128
 
 
-@pl.simt.function(max_threads=ELEMENTS)
+@pl.vector_function(mode="simt", max_threads=ELEMENTS)
 def multiply_high(
     lhs_i32: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
     rhs_i32: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
@@ -53,23 +53,8 @@ def simt_mul_hi(
     out_u64: pl.Tensor[[1, ELEMENTS], pl.DT_UINT64],
 ):
     with pl.section_vector():
-        pl.simt.launch(
-            multiply_high,
-            threads=ELEMENTS,
-            args=(
-                lhs_i32,
-                rhs_i32,
-                lhs_u32,
-                rhs_u32,
-                lhs_i64,
-                rhs_i64,
-                lhs_u64,
-                rhs_u64,
-                out_i32,
-                out_u32,
-                out_i64,
-                out_u64,
-            ),
+        multiply_high[ELEMENTS](
+            lhs_i32, rhs_i32, lhs_u32, rhs_u32, lhs_i64, rhs_i64, lhs_u64, rhs_u64, out_i32, out_u32, out_i64, out_u64
         )
 
 
@@ -87,9 +72,7 @@ def test_mul_hi_all_supported_dtypes(a5_device, assert_simt_close):
             half = 1 << (bits - 1)
             edges = [0, 1, 2, half - 1, half, half + 1, upper - 1, upper]
         pairs = [(x, y) for x in edges for y in edges] * 2
-        arguments.extend(
-            torch.tensor(values, dtype=dtype).reshape(1, ELEMENTS).to(a5_device) for values in zip(*pairs)
-        )
+        arguments.extend(torch.tensor(values, dtype=dtype).reshape(1, ELEMENTS).to(a5_device) for values in zip(*pairs))
         goldens.append(torch.tensor([(x * y) >> bits for x, y in pairs], dtype=dtype).reshape(1, ELEMENTS))
 
     outputs = tuple(torch.empty((1, ELEMENTS), dtype=dtype, device=a5_device) for _, dtype, _ in dtypes)

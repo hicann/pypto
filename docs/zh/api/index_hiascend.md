@@ -510,7 +510,6 @@
       - [pypto_pro.language.struct_array](pro_api/SIMD-API/utilities/struct_array.md)
   - [SIMT API](pro_api/SIMT-API/index.md)
     - [执行模型](pro_api/SIMT-API/execution/index.md)
-      - [pypto_pro.language.simt.launch](pro_api/SIMT-API/execution/launch.md)
       - [pypto_pro.language.simt.thread_idx](pro_api/SIMT-API/execution/thread_idx.md)
       - [pypto_pro.language.simt.block_dim](pro_api/SIMT-API/execution/block_dim.md)
       - [pypto_pro.language.simt.block_idx](pro_api/SIMT-API/execution/block_idx.md)

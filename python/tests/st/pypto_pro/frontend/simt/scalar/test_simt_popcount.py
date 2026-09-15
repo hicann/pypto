@@ -15,7 +15,7 @@ import torch
 ELEMENTS = 128
 
 
-@pl.simt.function(max_threads=ELEMENTS)
+@pl.vector_function(mode="simt", max_threads=ELEMENTS)
 def count_bits(
     src32: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],
     src64: pl.Tensor[[1, ELEMENTS], pl.DT_UINT64],
@@ -35,7 +35,7 @@ def simt_popcount(
     count64: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
 ):
     with pl.section_vector():
-        pl.simt.launch(count_bits, threads=ELEMENTS, args=(src32, src64, count32, count64))
+        count_bits[ELEMENTS](src32, src64, count32, count64)
 
 
 @pytest.mark.soc("950")

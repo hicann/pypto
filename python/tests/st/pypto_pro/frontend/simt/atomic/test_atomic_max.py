@@ -45,7 +45,7 @@ def _assert_target(state, expected):
     torch.testing.assert_close(state[0, 0], expected, rtol=0, atol=0)
 
 
-@pl.simt.function(max_threads=THREADS)
+@pl.vector_function(mode="simt", max_threads=THREADS)
 def atomic_max_ub_all_dtypes(
     int32_tile,
     uint32_tile,
@@ -101,17 +101,7 @@ def simt_atomic_max_ub_all_dtypes(
         pl.load(fp32_tile, fp32_state, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.simt.launch(
-            atomic_max_ub_all_dtypes,
-            threads=THREADS,
-            args=(
-                int32_tile,
-                uint32_tile,
-                fp16_tile,
-                bf16_tile,
-                fp32_tile,
-            ),
-        )
+        atomic_max_ub_all_dtypes[THREADS](int32_tile, uint32_tile, fp16_tile, bf16_tile, fp32_tile)
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(int32_state, int32_tile, [0, 0])
@@ -121,7 +111,7 @@ def simt_atomic_max_ub_all_dtypes(
         pl.store(fp32_state, fp32_tile, [0, 0])
 
 
-@pl.simt.function(max_threads=THREADS)
+@pl.vector_function(mode="simt", max_threads=THREADS)
 def atomic_max_gm_all_dtypes(
     int32_state: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
     uint32_state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],
@@ -151,22 +141,12 @@ def simt_atomic_max_gm_all_dtypes(
     uint64_state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT64],
 ):
     with pl.section_vector():
-        pl.simt.launch(
-            atomic_max_gm_all_dtypes,
-            threads=THREADS,
-            args=(
-                int32_state,
-                uint32_state,
-                fp16_state,
-                bf16_state,
-                fp32_state,
-                int64_state,
-                uint64_state,
-            ),
+        atomic_max_gm_all_dtypes[THREADS](
+            int32_state, uint32_state, fp16_state, bf16_state, fp32_state, int64_state, uint64_state
         )
 
 
-@pl.simt.function(max_threads=1)
+@pl.vector_function(mode="simt", max_threads=1)
 def atomic_max_return_value_gm(
     state: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
     old_values: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
@@ -180,7 +160,7 @@ def simt_atomic_max_return_value_gm(
     old_values: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
 ):
     with pl.section_vector():
-        pl.simt.launch(atomic_max_return_value_gm, threads=1, args=(state, old_values))
+        atomic_max_return_value_gm[1](state, old_values)
 
 
 @pytest.mark.soc("950")

@@ -32,13 +32,13 @@ Thread Block具有以下特点：
 
 - 同一Thread Block内的Thread执行相同的SIMT入口函数，并具有相同的Thread Block尺寸；
 - 块内Thread可以访问共享的Tile，并通过同步机制进行数据交换和协作；
-- 定义SIMT入口函数时，可以声明单个Thread Block允许启动的最大Thread数量，实际的Thread数由pypto_pro.language.simt.launch的配置决定。
+- 定义SIMT入口函数时，可以声明单个Thread Block允许启动的最大Thread数量，实际的Thread数由`simt_func[threads](...)`中方括号内的threads决定。
 
 #### Thread（线程）
 
 Thread是SIMT结构中的最小编程单元。每个Thread具有独立的局部变量和执行状态，并通过自身在Thread Block内的三维坐标处理不同数据。
 
-当每个外层Vector逻辑Block都执行同一pypto_pro.language.simt.launch一次时，启动的Thread总数为：
+当每个外层Vector逻辑Block都调用同一`simt_func[threads](...)`一次时，启动的Thread总数为：
 
 $$
 \text{total\_threads} = grid_x \times grid_y \times grid_z
@@ -72,8 +72,8 @@ PyPTO Pro支持SIMT入口函数和SIMT辅助函数。入口函数描述Thread Bl
 
 | 函数类型 | 定义方式 | 作用 | 调用方式 |
 |---|---|---|---|
-| SIMT入口函数 | @pypto_pro.language.simt.function(max_threads=N) | 定义每个Thread执行的完整计算，结果写入传入的Tile或Tensor。 | 由外层JIT Kernel通过pypto_pro.language.simt.launch启动。 |
-| SIMT辅助函数 | @pypto_pro.language.simt.function | 封装可复用的逐Thread计算，可以不返回值或返回一个Scalar。 | 由SIMT入口函数或其他辅助函数调用。 |
+| SIMT入口函数 | @pypto_pro.language.vector_function(mode="simt", max_threads=N) | 定义每个Thread执行的完整计算，结果写入传入的Tile或Tensor。 | 由外层JIT Kernel通过`simt_func[threads](...)`调用。 |
+| SIMT辅助函数 | @pypto_pro.language.vector_function(mode="simt") | 封装可复用的逐Thread计算，可以不返回值或返回一个Scalar。 | 由SIMT入口函数或其他辅助函数调用。 |
 
 Host先启动外层@pypto_pro.language.jit(arch="a5") Kernel，再由外层Kernel在Vector执行域中启动SIMT入口函数；入口函数可以继续调用辅助函数。辅助函数在调用它的线程中执行，不创建新线程。具体定义和调用方式见[SIMT计算](../../development/vector_computation/simt_computation.md)。
 
@@ -81,7 +81,7 @@ Host先启动外层@pypto_pro.language.jit(arch="a5") Kernel，再由外层Kerne
 
 ![Host启动JIT Kernel并由Vector执行域启动SIMT入口函数](../../../../figures/pro/simt_mixed_frontend_launch.png)
 
-图中Thread 0至Thread N-1表示实际启动N个线程的情况。一般情况下，实际线程数由pypto_pro.language.simt.launch的threads决定，可以小于装饰器声明的max_threads。当前不支持Host直接启动SIMT函数或在SIMT函数内嵌套调用pypto_pro.language.simt.launch。
+图中Thread 0至Thread N-1表示实际启动N个线程的情况。一般情况下，实际线程数由`simt_func[threads](...)`中方括号内的threads决定，可以小于装饰器声明的max_threads。当前不支持Host直接启动SIMT函数或在SIMT函数内嵌套调用SIMT入口函数。
 
 ## 内存层级和操作对象
 

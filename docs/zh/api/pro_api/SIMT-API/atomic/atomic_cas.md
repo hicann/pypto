@@ -36,7 +36,7 @@ pypto_pro.language.simt.atomic_cas(
 
 ## 约束说明
 
-只能在由@pypto_pro.language.simt.function定义的SIMT入口函数或辅助函数中调用。
+只能在由@pypto_pro.language.vector_function(mode="simt")定义的SIMT入口函数或辅助函数中调用。
 
 ## 返回值说明
 
@@ -47,7 +47,7 @@ pypto_pro.language.simt.atomic_cas(
 ```python
 import pypto_pro.language as pl
 
-@pl.simt.function(max_threads=32)
+@pl.vector_function(mode="simt", max_threads=32)
 def atomic_cas_winner_gm(
     state: pl.Tensor[[1, 1], pl.DT_INT32],
     old_values: pl.Tensor[[1, 32], pl.DT_INT32],
@@ -62,5 +62,5 @@ def simt_atomic_cas_winner_gm(
     old_values: pl.Tensor[[1, 32], pl.DT_INT32],
 ):
     with pl.section_vector():
-        pl.simt.launch(atomic_cas_winner_gm, threads=32, args=(state, old_values))
+        atomic_cas_winner_gm[32](state, old_values)
 ```

@@ -34,7 +34,7 @@ pypto_pro.language.simt.atomic_or(
 
 ## 约束说明
 
-只能在由@pypto_pro.language.simt.function定义的SIMT入口函数或辅助函数中调用。
+只能在由@pypto_pro.language.vector_function(mode="simt")定义的SIMT入口函数或辅助函数中调用。
 
 ## 返回值说明
 
@@ -45,7 +45,7 @@ pypto_pro.language.simt.atomic_or(
 ```python
 import pypto_pro.language as pl
 
-@pl.simt.function(max_threads=256)
+@pl.vector_function(mode="simt", max_threads=256)
 def merge_observed_flags(
     observed_flags: pl.Tensor[[1, 256], pl.DT_UINT32],
     flags: pl.Tensor[[1, 1], pl.DT_UINT32],
@@ -60,5 +60,5 @@ def atomic_or_kernel(
     flags: pl.Tensor[[1, 1], pl.DT_UINT32],
 ):
     with pl.section_vector():
-        pl.simt.launch(merge_observed_flags, threads=256, args=(observed_flags, flags))
+        merge_observed_flags[256](observed_flags, flags)
 ```

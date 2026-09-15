@@ -24,7 +24,7 @@ it.  Outside a kernel, calling a declaration raises ``RuntimeError``.
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any
 
 from pypto.ir import RoundMode
 
@@ -34,23 +34,8 @@ from ._api import DType, Scalar, _api_decl
 class Simt:
     """SIMT namespace (``pl.simt.*``).
 
-    Provides SIMT context queries (thread_idx, block_dim, ...), launch, and
-    the ``function`` decorator for defining SIMT VF functions.
+    Provides SIMT context queries, synchronization, scalar operations, and atomics.
     """
-
-    @staticmethod
-    def function(fn: Callable | None = None, *, max_threads: int | None = None) -> Callable:
-        """Mark a callable for delayed SIMT parsing at its call site.
-
-        Args:
-            fn: Python function to decorate (when used without parentheses).
-            max_threads: Launch bound for SIMT VF functions. When provided, the
-                function is launchable via ``pl.simt.launch()``. When omitted,
-                the function is a SIMT callee helper.
-        """
-        from .parser.decorator import simt_function
-
-        return simt_function(fn, max_threads=max_threads)
 
     @staticmethod
     @_api_decl
@@ -328,14 +313,3 @@ class Simt:
     @_api_decl
     def atomic_xor(target: Scalar, value: Scalar) -> Scalar:
         """Atomically apply bitwise XOR to one Tile or Tensor element and return its old value."""
-
-    @staticmethod
-    @_api_decl
-    def launch(callee: Any, *, threads: int | tuple[int, ...], args: tuple[Any, ...]) -> None:
-        """Launch a SIMT function from a Vector section.
-
-        Args:
-            callee: Launchable function defined with ``@pl.simt.function(max_threads=...)``.
-            threads: One- to three-dimensional compile-time thread configuration.
-            args: Scalar, Tensor, and Tile arguments passed to ``callee``.
-        """

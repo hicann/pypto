@@ -15,7 +15,7 @@ import torch
 ELEMENTS = 64
 
 
-@pl.simt.function(max_threads=ELEMENTS)
+@pl.vector_function(mode="simt", max_threads=ELEMENTS)
 def bitcast_all_scalar_pairs(
     src_int16: pl.Tensor[[1, ELEMENTS], pl.DT_INT16],
     src_uint16: pl.Tensor[[1, ELEMENTS], pl.DT_UINT16],
@@ -65,25 +65,21 @@ def simt_bitcast_all_scalar_pairs(
     out_uint32: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],
 ):
     with pl.section_vector():
-        pl.simt.launch(
-            bitcast_all_scalar_pairs,
-            threads=ELEMENTS,
-            args=(
-                src_int16,
-                src_uint16,
-                src_fp16,
-                src_bf16,
-                src_int32,
-                src_uint32,
-                src_fp32,
-                out_fp16,
-                out_bf16,
-                out_int16,
-                out_uint16,
-                out_fp32,
-                out_int32,
-                out_uint32,
-            ),
+        bitcast_all_scalar_pairs[ELEMENTS](
+            src_int16,
+            src_uint16,
+            src_fp16,
+            src_bf16,
+            src_int32,
+            src_uint32,
+            src_fp32,
+            out_fp16,
+            out_bf16,
+            out_int16,
+            out_uint16,
+            out_fp32,
+            out_int32,
+            out_uint32,
         )
 
 

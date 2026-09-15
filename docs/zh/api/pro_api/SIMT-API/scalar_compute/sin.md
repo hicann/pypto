@@ -34,7 +34,7 @@ pypto_pro.language.simt.sin(
 
 ## 约束说明
 
-只能在由@pypto_pro.language.simt.function定义的SIMT入口函数或辅助函数中调用。
+只能在由@pypto_pro.language.vector_function(mode="simt")定义的SIMT入口函数或辅助函数中调用。
 
 ## 返回值说明
 
@@ -45,7 +45,7 @@ pypto_pro.language.simt.sin(
 ```python
 import pypto_pro.language as pl
 
-@pl.simt.function(max_threads=256)
+@pl.vector_function(mode="simt", max_threads=256)
 def sine_wave(
     phase: pl.Tensor[[1, 256], pl.DT_FP32],
     output: pl.Tensor[[1, 256], pl.DT_FP32],
@@ -62,5 +62,5 @@ def simt_sin_kernel(
     offset: pl.DT_FP32,
 ):
     with pl.section_vector():
-        pl.simt.launch(sine_wave, threads=256, args=(phase, output, offset))
+        sine_wave[256](phase, output, offset)
 ```

@@ -4,7 +4,6 @@
 :maxdepth: 1
 :titlesonly:
 
-launch
 thread_idx
 block_dim
 block_idx

@@ -32,12 +32,12 @@ def _require_a5():
         pytest.skip(f"Current device is {name}, not A5 (Ascend950). Skip.")
 
 
-@pl.simt.function
+@pl.vector_function(mode="simt")
 def affine(value: pl.DT_FP32, scale: pl.DT_FP32, delta: pl.DT_FP32) -> pl.DT_FP32:
     return value * scale + delta
 
 
-@pl.simt.function
+@pl.vector_function(mode="simt")
 def store_value(
     dst,
     index: pl.DT_UINT32,
@@ -46,7 +46,7 @@ def store_value(
     dst[0, index] = value
 
 
-@pl.simt.function
+@pl.vector_function(mode="simt")
 def transform_one(
     dst,
     src,
@@ -58,7 +58,7 @@ def transform_one(
     store_value(dst, index, value)
 
 
-@pl.simt.function(max_threads=THREADS)
+@pl.vector_function(mode="simt", max_threads=THREADS)
 def transform_tile(
     dst,
     src,
@@ -83,7 +83,7 @@ def simt_callee_kernel(
         pl.load(src, x, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.simt.launch(transform_tile, threads=THREADS, args=(dst, src, scale, delta))
+        transform_tile[THREADS](dst, src, scale, delta)
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, dst, [0, 0])

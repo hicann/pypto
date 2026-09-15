@@ -46,7 +46,7 @@ pypto_pro.language.simt.bitcast(
 
 ## 约束说明
 
-- 只能在由@pypto_pro.language.simt.function定义的SIMT入口函数或辅助函数中调用。
+- 只能在由@pypto_pro.language.vector_function(mode="simt")定义的SIMT入口函数或辅助函数中调用。
 
 - 源数据类型和目的数据类型的位宽必须相同，不支持相同数据类型之间的转换。
 
@@ -62,7 +62,7 @@ pypto_pro.language.simt.bitcast(
 import pypto_pro.language as pl
 
 
-@pl.simt.function(max_threads=256)
+@pl.vector_function(mode="simt", max_threads=256)
 def fp32_bits(
     source: pl.Tensor[[1, 256], pl.DT_FP32],
     output: pl.Tensor[[1, 256], pl.DT_UINT32],
@@ -77,5 +77,5 @@ def simt_fp32_bits_kernel(
     output: pl.Tensor[[1, 256], pl.DT_UINT32],
 ):
     with pl.section_vector():
-        pl.simt.launch(fp32_bits, threads=256, args=(source, output))
+        fp32_bits[256](source, output)
 ```

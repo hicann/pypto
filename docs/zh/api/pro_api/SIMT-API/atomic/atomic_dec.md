@@ -34,7 +34,7 @@ pypto_pro.language.simt.atomic_dec(
 
 ## 约束说明
 
-只能在由@pypto_pro.language.simt.function定义的SIMT入口函数或辅助函数中调用。
+只能在由@pypto_pro.language.vector_function(mode="simt")定义的SIMT入口函数或辅助函数中调用。
 
 ## 返回值说明
 
@@ -45,7 +45,7 @@ pypto_pro.language.simt.atomic_dec(
 ```python
 import pypto_pro.language as pl
 
-@pl.simt.function(max_threads=256)
+@pl.vector_function(mode="simt", max_threads=256)
 def allocate_reverse_ring_slot(
     ticket: pl.Tensor[[1, 1], pl.DT_UINT32],
     slots: pl.Tensor[[1, 256], pl.DT_UINT32],
@@ -60,5 +60,5 @@ def atomic_dec_kernel(
     slots: pl.Tensor[[1, 256], pl.DT_UINT32],
 ):
     with pl.section_vector():
-        pl.simt.launch(allocate_reverse_ring_slot, threads=256, args=(ticket, slots))
+        allocate_reverse_ring_slot[256](ticket, slots)
 ```

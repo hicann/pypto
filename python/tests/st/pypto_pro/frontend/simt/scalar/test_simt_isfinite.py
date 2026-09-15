@@ -15,7 +15,7 @@ import torch
 ELEMENTS = 128
 
 
-@pl.simt.function(max_threads=ELEMENTS)
+@pl.vector_function(mode="simt", max_threads=ELEMENTS)
 def classify(
     src_fp16: pl.Tensor[[1, ELEMENTS], pl.DT_FP16],
     src_fp32: pl.Tensor[[1, ELEMENTS], pl.DT_FP32],
@@ -35,7 +35,7 @@ def simt_isfinite(
     finite_fp32: pl.Tensor[[1, ELEMENTS], pl.DT_BOOL],
 ):
     with pl.section_vector():
-        pl.simt.launch(classify, threads=ELEMENTS, args=(src_fp16, src_fp32, finite_fp16, finite_fp32))
+        classify[ELEMENTS](src_fp16, src_fp32, finite_fp16, finite_fp32)
 
 
 @pytest.mark.soc("950")

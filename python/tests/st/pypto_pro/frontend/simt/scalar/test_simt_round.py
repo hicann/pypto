@@ -21,7 +21,7 @@ def _round_away_from_zero(value):
     return torch.sign(value) * torch.floor(torch.abs(value) + 0.5)
 
 
-@pl.simt.function(max_threads=ELEMENTS)
+@pl.vector_function(mode="simt", max_threads=ELEMENTS)
 def round_all_dtypes(
     src_fp16: pl.Tensor[[1, ELEMENTS], pl.DT_FP16],
     src_bf16: pl.Tensor[[1, ELEMENTS], pl.DT_BF16],
@@ -46,11 +46,7 @@ def simt_round_all_dtypes(
     out_fp32: pl.Tensor[[1, ELEMENTS], pl.DT_FP32],
 ):
     with pl.section_vector():
-        pl.simt.launch(
-            round_all_dtypes,
-            threads=ELEMENTS,
-            args=(src_fp16, src_bf16, src_fp32, out_fp16, out_bf16, out_fp32),
-        )
+        round_all_dtypes[ELEMENTS](src_fp16, src_bf16, src_fp32, out_fp16, out_bf16, out_fp32)
 
 
 @pytest.mark.soc("950")

@@ -31,7 +31,7 @@ def _require_a5():
         pytest.skip(f"Current device is {name}, not A5 (Ascend950). Skip.")
 
 
-@pl.simt.function(max_threads=1)
+@pl.vector_function(mode="simt", max_threads=1)
 def publish_with_threadfence(
     out: pl.Tensor[[1, 1], pl.DT_INT32],
     values: pl.Tensor[[1, GRID_BLOCKS], pl.DT_INT32],
@@ -55,7 +55,7 @@ def simt_threadfence(
     completed: pl.Tensor[[1, 1], pl.DT_INT32],
 ):
     with pl.section_vector():
-        pl.simt.launch(publish_with_threadfence, threads=1, args=(out, values, completed))
+        publish_with_threadfence[1](out, values, completed)
 
 
 @pytest.mark.soc("950")

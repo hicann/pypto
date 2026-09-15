@@ -31,7 +31,7 @@ def _require_a5():
         pytest.skip(f"Current device is {name}, not A5 (Ascend950). Skip.")
 
 
-@pl.simt.function(max_threads=THREADS)
+@pl.vector_function(mode="simt", max_threads=THREADS)
 def exchange_after_syncthreads(out: pl.Tensor[[1, THREADS], pl.DT_UINT32], shared):
     tid = pl.simt.linear_thread_idx()
     shared[0, tid] = tid
@@ -47,7 +47,7 @@ def simt_syncthreads(out: pl.Tensor[[1, THREADS], pl.DT_UINT32]):
         size=THREADS * 4,
     )
     with pl.section_vector():
-        pl.simt.launch(exchange_after_syncthreads, threads=THREADS, args=(out, shared))
+        exchange_after_syncthreads[THREADS](out, shared)
 
 
 @pytest.mark.soc("950")

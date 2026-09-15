@@ -32,7 +32,7 @@ pypto_pro.language.simt.isinf(
 
 ## 约束说明
 
-只能在由@pypto_pro.language.simt.function定义的SIMT入口函数或辅助函数中调用。
+只能在由@pypto_pro.language.vector_function(mode="simt")定义的SIMT入口函数或辅助函数中调用。
 
 ## 返回值说明
 
@@ -43,7 +43,7 @@ pypto_pro.language.simt.isinf(
 ```python
 import pypto_pro.language as pl
 
-@pl.simt.function(max_threads=256)
+@pl.vector_function(mode="simt", max_threads=256)
 def exp_or_fallback(
     source: pl.Tensor[[1, 256], pl.DT_FP32],
     output: pl.Tensor[[1, 256], pl.DT_FP32],
@@ -63,5 +63,5 @@ def simt_isinf_kernel(
     fallback: pl.DT_FP32,
 ):
     with pl.section_vector():
-        pl.simt.launch(exp_or_fallback, threads=256, args=(source, output, fallback))
+        exp_or_fallback[256](source, output, fallback)
 ```

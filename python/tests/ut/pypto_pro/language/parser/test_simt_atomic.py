@@ -12,7 +12,7 @@
 """Parser tests for PyPTO Pro SIMT atomic operations.
 
 Scalar and Tensor operation-level tests use eager SIMT IR parsing. Tile tests use
-delayed ``pl.simt.function`` parsing so their types are inferred from launch
+delayed ``pl.vector_function(mode="simt")`` parsing so their types are inferred from invocation
 arguments.
 """
 
@@ -23,7 +23,7 @@ import pytest
 from pypto.pypto_impl import ir
 
 
-@pl.simt.function(max_threads=32)
+@pl.vector_function(mode="simt", max_threads=32)
 def _atomic_add_tile(
     dst,
     old_values,
@@ -33,7 +33,7 @@ def _atomic_add_tile(
     old_values[0, tid] = pl.simt.atomic_add(dst[0, 0], value)
 
 
-@pl.simt.function(max_threads=32)
+@pl.vector_function(mode="simt", max_threads=32)
 def _atomic_add_tensor(
     dst: pl.Tensor[[1, 32], pl.DT_INT64],
     old_values: pl.Tensor[[1, 32], pl.DT_INT64],
@@ -43,7 +43,7 @@ def _atomic_add_tensor(
     old_values[0, tid] = pl.simt.atomic_add(dst[0, 0], value)
 
 
-@pl.simt.function
+@pl.vector_function(mode="simt")
 def _atomic_rmw_ops(
     numeric,
     bitwise,
@@ -63,7 +63,7 @@ def _atomic_rmw_ops(
     pl.simt.atomic_dec(counter[0, 0], uint_value)
 
 
-@pl.simt.function(max_threads=1)
+@pl.vector_function(mode="simt", max_threads=1)
 def _atomic_rmw_ops_entry(numeric, bitwise, counter, int_value, uint_value):
     _atomic_rmw_ops(numeric, bitwise, counter, int_value, uint_value)
 
@@ -74,7 +74,7 @@ def _atomic_add_tile_kernel(value: pl.DT_INT32):
     dst = pl.make_tile(tile_type, addr=0x0000, size=128)
     old_values = pl.make_tile(tile_type, addr=0x0080, size=128)
     with pl.section_vector():
-        pl.simt.launch(_atomic_add_tile, threads=32, args=(dst, old_values, value))
+        _atomic_add_tile[32](dst, old_values, value)
 
 
 @pl.jit
@@ -84,7 +84,7 @@ def _atomic_add_tensor_kernel(
     value: pl.DT_INT64,
 ):
     with pl.section_vector():
-        pl.simt.launch(_atomic_add_tensor, threads=32, args=(dst, old_values, value))
+        _atomic_add_tensor[32](dst, old_values, value)
 
 
 @pl.jit
@@ -95,15 +95,11 @@ def _atomic_rmw_ops_kernel(int_value: pl.DT_INT32, uint_value: pl.DT_UINT32):
     bitwise = pl.make_tile(uint_type, addr=128, size=128)
     counter = pl.make_tile(uint_type, addr=256, size=128)
     with pl.section_vector():
-        pl.simt.launch(
-            _atomic_rmw_ops_entry,
-            threads=1,
-            args=(numeric, bitwise, counter, int_value, uint_value),
-        )
+        _atomic_rmw_ops_entry[1](numeric, bitwise, counter, int_value, uint_value)
 
 
 def _parse_one_tile_function(function, dtype, shape=(1, 32)):
-    @pl.simt.function(max_threads=1)
+    @pl.vector_function(mode="simt", max_threads=1)
     def entry(tile):
         function(tile)
 
@@ -112,14 +108,14 @@ def _parse_one_tile_function(function, dtype, shape=(1, 32)):
         tile_type = pl.TileType(shape=shape, dtype=dtype, target_memory=pl.MemorySpace.Vec)
         tile = pl.make_tile(tile_type, addr=0, size=4096)
         with pl.section_vector():
-            pl.simt.launch(entry, threads=1, args=(tile,))
+            entry[1](tile)
 
     program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     return program.get_function(function.__name__)
 
 
 def _parse_two_tile_function(function, first_dtype, second_dtype):
-    @pl.simt.function(max_threads=1)
+    @pl.vector_function(mode="simt", max_threads=1)
     def entry(first, second):
         function(first, second)
 
@@ -130,14 +126,14 @@ def _parse_two_tile_function(function, first_dtype, second_dtype):
         first = pl.make_tile(first_type, addr=0, size=4096)
         second = pl.make_tile(second_type, addr=4096, size=4096)
         with pl.section_vector():
-            pl.simt.launch(entry, threads=1, args=(first, second))
+            entry[1](first, second)
 
     program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     return program.get_function(function.__name__)
 
 
 def _parse_tile_scalar_function(function, tile_dtype, scalar_dtype):
-    @pl.simt.function(max_threads=1)
+    @pl.vector_function(mode="simt", max_threads=1)
     def entry(tile, value):
         function(tile, value)
 
@@ -148,7 +144,7 @@ def _parse_tile_scalar_function(function, tile_dtype, scalar_dtype):
             tile_type = pl.TileType(shape=[1, 32], dtype=tile_dtype, target_memory=pl.MemorySpace.Vec)
             tile = pl.make_tile(tile_type, addr=0, size=4096)
             with pl.section_vector():
-                pl.simt.launch(entry, threads=1, args=(tile, value))
+                entry[1](tile, value)
 
     elif scalar_dtype == pl.DT_UINT32:
 
@@ -157,7 +153,7 @@ def _parse_tile_scalar_function(function, tile_dtype, scalar_dtype):
             tile_type = pl.TileType(shape=[1, 32], dtype=tile_dtype, target_memory=pl.MemorySpace.Vec)
             tile = pl.make_tile(tile_type, addr=0, size=4096)
             with pl.section_vector():
-                pl.simt.launch(entry, threads=1, args=(tile, value))
+                entry[1](tile, value)
 
     elif scalar_dtype == pl.DT_FP32:
 
@@ -166,7 +162,7 @@ def _parse_tile_scalar_function(function, tile_dtype, scalar_dtype):
             tile_type = pl.TileType(shape=[1, 32], dtype=tile_dtype, target_memory=pl.MemorySpace.Vec)
             tile = pl.make_tile(tile_type, addr=0, size=4096)
             with pl.section_vector():
-                pl.simt.launch(entry, threads=1, args=(tile, value))
+                entry[1](tile, value)
 
     else:
         raise ValueError(f"Unsupported scalar dtype: {scalar_dtype}")
@@ -176,7 +172,7 @@ def _parse_tile_scalar_function(function, tile_dtype, scalar_dtype):
 
 
 def _parse_tile_compare_function(function, tile_dtype):
-    @pl.simt.function(max_threads=1)
+    @pl.vector_function(mode="simt", max_threads=1)
     def entry(tile, compare, value):
         function(tile, compare, value)
 
@@ -185,7 +181,7 @@ def _parse_tile_compare_function(function, tile_dtype):
         tile_type = pl.TileType(shape=[1, 32], dtype=tile_dtype, target_memory=pl.MemorySpace.Vec)
         tile = pl.make_tile(tile_type, addr=0, size=4096)
         with pl.section_vector():
-            pl.simt.launch(entry, threads=1, args=(tile, compare, value))
+            entry[1](tile, compare, value)
 
     program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     return program.get_function(function.__name__)
@@ -214,7 +210,7 @@ def test_atomic_add_supports_gm_int64_tensor():
 
 
 def test_atomic_add_contextually_types_numeric_literals():
-    @pl.simt.function
+    @pl.vector_function(mode="simt")
     def literal_values(unsigned, signed):
         old = pl.simt.atomic_add(unsigned[0, 0], 1)
         signed[0, 0] = pl.simt.atomic_add(signed[0, 0], -1)
@@ -225,7 +221,7 @@ def test_atomic_add_contextually_types_numeric_literals():
 
 
 def test_atomic_add_requires_direct_subscript_target():
-    @pl.simt.function
+    @pl.vector_function(mode="simt")
     def scalar_alias(dst, value: pl.DT_INT32):
         current = dst[0, 0]
         pl.simt.atomic_add(current, value)
@@ -235,7 +231,7 @@ def test_atomic_add_requires_direct_subscript_target():
 
 
 def test_atomic_add_rejects_slice_target():
-    @pl.simt.function
+    @pl.vector_function(mode="simt")
     def slice_target(dst, value: pl.DT_INT32):
         pl.simt.atomic_add(dst[0:1, 0:1], value)
 
@@ -245,7 +241,7 @@ def test_atomic_add_rejects_slice_target():
 
 @pytest.mark.parametrize("dtype", [pl.DT_FP16, pl.DT_BF16])
 def test_half_precision_atomic_add_max_min_are_void_on_ub_tile(dtype):
-    @pl.simt.function
+    @pl.vector_function(mode="simt")
     def supported_tile(dst):
         pl.simt.atomic_add(dst[0, 0], 1.0)
         pl.simt.atomic_max(dst[0, 1], 2.0)
@@ -266,7 +262,7 @@ def test_half_precision_atomic_add_max_min_are_void_on_ub_tile(dtype):
 
 @pytest.mark.parametrize("dtype", [pl.DT_FP16, pl.DT_BF16])
 def test_half_precision_atomic_add_max_min_are_void_on_gm_tensor(dtype):
-    @pl.simt.function(max_threads=1)
+    @pl.vector_function(mode="simt", max_threads=1)
     def supported_tensor(dst):
         pl.simt.atomic_add(dst[0, 0], 1.0)
         pl.simt.atomic_max(dst[0, 1], 2.0)
@@ -275,7 +271,7 @@ def test_half_precision_atomic_add_max_min_are_void_on_gm_tensor(dtype):
     @pl.jit(auto_mutex=False)
     def kernel(dst: pl.Tensor[[1, 3], dtype]):
         with pl.section_vector():
-            pl.simt.launch(supported_tensor, threads=1, args=(dst,))
+            supported_tensor[1](dst)
 
     program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     supported_tensor = program.get_function(supported_tensor.__name__)
@@ -294,7 +290,7 @@ def test_half_precision_atomic_add_max_min_are_void_on_gm_tensor(dtype):
 
 @pytest.mark.parametrize("dtype", [pl.DT_FP16, pl.DT_BF16])
 def test_half_precision_atomic_result_cannot_be_returned(dtype):
-    @pl.simt.function
+    @pl.vector_function(mode="simt")
     def add_result(dst) -> None:
         return pl.simt.atomic_add(dst[0, 0], 1.0)
 
@@ -303,7 +299,7 @@ def test_half_precision_atomic_result_cannot_be_returned(dtype):
 
 
 def test_atomic_add_requires_exact_value_dtype():
-    @pl.simt.function
+    @pl.vector_function(mode="simt")
     def mismatched_value(dst, value: pl.DT_UINT32):
         pl.simt.atomic_add(dst[0, 0], value)
 
@@ -312,7 +308,7 @@ def test_atomic_add_requires_exact_value_dtype():
 
 
 def test_atomic_add_rejects_float_literal_for_integer_target():
-    @pl.simt.function
+    @pl.vector_function(mode="simt")
     def float_literal(dst):
         pl.simt.atomic_add(dst[0, 0], 1.0)
 
@@ -341,7 +337,7 @@ def test_atomic_rmw_interfaces_preserve_lvalue_and_build_distinct_ir_ops():
 
 
 def test_atomic_cas_contextually_types_compare_and_value_literals():
-    @pl.simt.function
+    @pl.vector_function(mode="simt")
     def literal_operands(dst):
         old = pl.simt.atomic_cas(dst[0, 0], 0, 1)
         dst[0, 0] = old
@@ -350,7 +346,7 @@ def test_atomic_cas_contextually_types_compare_and_value_literals():
 
 
 def test_atomic_cas_requires_exact_compare_dtype():
-    @pl.simt.function
+    @pl.vector_function(mode="simt")
     def mismatched_compare(
         dst,
         compare: pl.DT_UINT32,
@@ -363,7 +359,7 @@ def test_atomic_cas_requires_exact_compare_dtype():
 
 
 def test_atomic_bitwise_rejects_fp32_target():
-    @pl.simt.function
+    @pl.vector_function(mode="simt")
     def float_bitwise(dst, value: pl.DT_FP32):
         pl.simt.atomic_or(dst[0, 0], value)
 
@@ -372,7 +368,7 @@ def test_atomic_bitwise_rejects_fp32_target():
 
 
 def test_atomic_counter_rejects_signed_target():
-    @pl.simt.function
+    @pl.vector_function(mode="simt")
     def signed_counter(dst, limit: pl.DT_INT32):
         pl.simt.atomic_inc(dst[0, 0], limit)
 
@@ -381,14 +377,14 @@ def test_atomic_counter_rejects_signed_target():
 
 
 def test_atomic_counter_supports_gm_uint64():
-    @pl.simt.function(max_threads=1)
+    @pl.vector_function(mode="simt", max_threads=1)
     def uint64_counter(dst: pl.Tensor[[1], pl.DT_UINT64], limit: pl.DT_UINT64):
         pl.simt.atomic_dec(dst[0], limit)
 
     @pl.jit(auto_mutex=False)
     def kernel(dst: pl.Tensor[[1], pl.DT_UINT64], limit: pl.DT_UINT64):
         with pl.section_vector():
-            pl.simt.launch(uint64_counter, threads=1, args=(dst, limit))
+            uint64_counter[1](dst, limit)
 
     program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     uint64_counter = program.get_function(uint64_counter.__name__)

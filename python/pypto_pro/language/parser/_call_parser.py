@@ -979,6 +979,9 @@ class CallParserMixin:
         """
         func = call.func
 
+        if isinstance(func, ast.Subscript):
+            return self._parse_indexed_call(call)
+
         if isinstance(func, ast.Attribute) or self._extract_op_name(func) is not None:
             return self.parse_op_call(call)
 
@@ -1000,6 +1003,29 @@ class CallParserMixin:
             f"Unsupported function call: {ast.unparse(call)}",
             span=self.span_tracker.get_span(call),
             hint="Use pl.* operations or call an inline Python helper by name",
+        )
+
+    def _parse_indexed_call(self, call: ast.Call) -> Any:
+        """Route a call whose callee uses indexed-call syntax."""
+        from pypto_pro.ir.op.simt_ops import _parse_simt_launch
+
+        from .decorator import is_simt_function
+
+        indexed = call.func
+        if isinstance(indexed, ast.Subscript) and isinstance(indexed.value, ast.Name):
+            local_name = indexed.value.id
+            callee_template = self.expr_evaluator.closure_vars.get(local_name)
+            if is_simt_function(callee_template):
+                span = self.span_tracker.get_span(call)
+                self._validate_op_scope("simt.launch", call)
+                if self._auto_mutex:
+                    self._emit_auto_mutex("simt.launch", call, span)
+                return _parse_simt_launch(self, call, local_name, callee_template)
+
+        raise UnsupportedFeatureError(
+            f"Unsupported indexed function call: {ast.unparse(call)}",
+            span=self.span_tracker.get_span(call),
+            hint='Indexed calls require a @pl.vector_function(mode="simt") target',
         )
 
     def parse_op_call(self, call: ast.Call) -> Any:
@@ -1174,11 +1200,11 @@ class CallParserMixin:
         return self._parse_block_default(op_name, call)
 
     def _parse_simt_template_call(self, local_name: str, fn: Callable, call: ast.Call) -> ir.Expr:
-        """Instantiate and call one helper @pl.simt.function template."""
+        """Instantiate and call one helper @pl.vector_function(mode="simt") template."""
         span = self.span_tracker.get_span(call)
         if call.keywords or any(isinstance(arg, ast.Starred) for arg in call.args):
             raise ParserSyntaxError(
-                "Helper @pl.simt.function calls accept positional arguments only",
+                'Helper @pl.vector_function(mode="simt") calls accept positional arguments only',
                 span=span,
             )
         args = [self.parse_expression(arg) for arg in call.args]
@@ -1211,7 +1237,7 @@ class CallParserMixin:
             return cached
         if id(fn) in self.simt_call_stack:
             raise ParserSyntaxError(
-                f"Recursive helper @pl.simt.function call involving '{fn.__name__}' is not supported",
+                f'Recursive helper @pl.vector_function(mode="simt") call involving {fn.__name__!r} is not supported',
                 span=span,
             )
 
@@ -1219,7 +1245,7 @@ class CallParserMixin:
             local_name,
             fn,
             span,
-            "@pl.simt.function",
+            '@pl.vector_function(mode="simt")',
         )
         func_args = func_def.args
         if (
@@ -1255,7 +1281,7 @@ class CallParserMixin:
             tilingkey_consts=self._tilingkey_consts,
             datatype_consts=self._datatype_consts,
             void_return_only=launchable,
-            void_return_context="@pl.simt.function(max_threads=...)",
+            void_return_context='@pl.vector_function(mode="simt", max_threads=...)',
             allow_early_return=True,
         )
         parser.external_funcs = self.external_funcs
@@ -1403,12 +1429,13 @@ class CallParserMixin:
             if self._current_func_type in (ir.FunctionType.SimtVF, ir.FunctionType.SimtCallee):
                 if get_simt_max_threads(fn) is not None:
                     raise ParserTypeError(
-                        f"SIMT helper '{func_name}' must be decorated with @pl.simt.function without max_threads",
+                        f"SIMT helper '{func_name}' must omit max_threads in "
+                        '@pl.vector_function(mode="simt")',
                         span=self.span_tracker.get_span(call),
                     )
                 return self._parse_simt_template_call(func_name, fn, call)
             raise ParserSyntaxError(
-                f"@pl.simt.function '{func_name}' must be invoked through pl.simt.launch()",
+                f"SIMT function '{func_name}' cannot be called directly outside a SIMT function",
                 span=self.span_tracker.get_span(call),
             )
 
@@ -1636,13 +1663,7 @@ class CallParserMixin:
         # 1. Build unique_refs: scan args for slot.tile mutex refs, dedup by slot,
         #    then drop Acc tiles when a phase-aware matmul/store carries the
         #    unit_flag (the hardware handshake replaces the software mutex there).
-        if op_name == "simt.launch":
-            args_node = next((kw.value for kw in call.keywords if kw.arg == "args"), None)
-            if not isinstance(args_node, ast.Tuple):
-                return
-            scan_args = args_node.elts
-        else:
-            scan_args = call.args
+        scan_args = call.args
         tilerefs = [self._try_resolve_tileref(arg) for arg in scan_args]
         unique_refs = []
         seen = set()

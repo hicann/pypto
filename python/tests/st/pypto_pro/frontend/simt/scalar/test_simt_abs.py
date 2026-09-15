@@ -17,7 +17,7 @@ import torch
 ELEMENTS = 64
 
 
-@pl.simt.function(max_threads=ELEMENTS)
+@pl.vector_function(mode="simt", max_threads=ELEMENTS)
 def abs_all_dtypes(
     src_fp16: pl.Tensor[[1, ELEMENTS], pl.DT_FP16],
     src_bf16: pl.Tensor[[1, ELEMENTS], pl.DT_BF16],
@@ -47,20 +47,7 @@ def simt_abs_all_dtypes(
     out_int64: pl.Tensor[[1, ELEMENTS], pl.DT_INT64],
 ):
     with pl.section_vector():
-        pl.simt.launch(
-            abs_all_dtypes,
-            threads=ELEMENTS,
-            args=(
-                src_fp16,
-                src_bf16,
-                src_fp32,
-                src_int64,
-                out_fp16,
-                out_bf16,
-                out_fp32,
-                out_int64,
-            ),
-        )
+        abs_all_dtypes[ELEMENTS](src_fp16, src_bf16, src_fp32, src_int64, out_fp16, out_bf16, out_fp32, out_int64)
 
 
 @pytest.mark.soc("950")

@@ -29,7 +29,7 @@ def _run_integer_case(kernel, dtypes, lhs_values, rhs_values, a5_device, assert_
         assert_simt_close(output, expected.to(dtype))
 
 
-@pl.simt.function(max_threads=ELEMENTS)
+@pl.vector_function(mode="simt", max_threads=ELEMENTS)
 def min_float_dtypes(
     lhs_fp16: pl.Tensor[[1, ELEMENTS], pl.DT_FP16],
     rhs_fp16: pl.Tensor[[1, ELEMENTS], pl.DT_FP16],
@@ -60,24 +60,12 @@ def simt_min_float_dtypes(
     out_fp32: pl.Tensor[[1, ELEMENTS], pl.DT_FP32],
 ):
     with pl.section_vector():
-        pl.simt.launch(
-            min_float_dtypes,
-            threads=ELEMENTS,
-            args=(
-                lhs_fp16,
-                rhs_fp16,
-                lhs_bf16,
-                rhs_bf16,
-                lhs_fp32,
-                rhs_fp32,
-                out_fp16,
-                out_bf16,
-                out_fp32,
-            ),
+        min_float_dtypes[ELEMENTS](
+            lhs_fp16, rhs_fp16, lhs_bf16, rhs_bf16, lhs_fp32, rhs_fp32, out_fp16, out_bf16, out_fp32
         )
 
 
-@pl.simt.function(max_threads=ELEMENTS)
+@pl.vector_function(mode="simt", max_threads=ELEMENTS)
 def min_signed_dtypes(
     lhs_int8: pl.Tensor[[1, ELEMENTS], pl.DT_INT8],
     rhs_int8: pl.Tensor[[1, ELEMENTS], pl.DT_INT8],
@@ -115,27 +103,23 @@ def simt_min_signed_dtypes(
     out_int64: pl.Tensor[[1, ELEMENTS], pl.DT_INT64],
 ):
     with pl.section_vector():
-        pl.simt.launch(
-            min_signed_dtypes,
-            threads=ELEMENTS,
-            args=(
-                lhs_int8,
-                rhs_int8,
-                lhs_int16,
-                rhs_int16,
-                lhs_int32,
-                rhs_int32,
-                lhs_int64,
-                rhs_int64,
-                out_int8,
-                out_int16,
-                out_int32,
-                out_int64,
-            ),
+        min_signed_dtypes[ELEMENTS](
+            lhs_int8,
+            rhs_int8,
+            lhs_int16,
+            rhs_int16,
+            lhs_int32,
+            rhs_int32,
+            lhs_int64,
+            rhs_int64,
+            out_int8,
+            out_int16,
+            out_int32,
+            out_int64,
         )
 
 
-@pl.simt.function(max_threads=ELEMENTS)
+@pl.vector_function(mode="simt", max_threads=ELEMENTS)
 def min_unsigned_dtypes(
     lhs_uint8: pl.Tensor[[1, ELEMENTS], pl.DT_UINT8],
     rhs_uint8: pl.Tensor[[1, ELEMENTS], pl.DT_UINT8],
@@ -173,23 +157,19 @@ def simt_min_unsigned_dtypes(
     out_uint64: pl.Tensor[[1, ELEMENTS], pl.DT_UINT64],
 ):
     with pl.section_vector():
-        pl.simt.launch(
-            min_unsigned_dtypes,
-            threads=ELEMENTS,
-            args=(
-                lhs_uint8,
-                rhs_uint8,
-                lhs_uint16,
-                rhs_uint16,
-                lhs_uint32,
-                rhs_uint32,
-                lhs_uint64,
-                rhs_uint64,
-                out_uint8,
-                out_uint16,
-                out_uint32,
-                out_uint64,
-            ),
+        min_unsigned_dtypes[ELEMENTS](
+            lhs_uint8,
+            rhs_uint8,
+            lhs_uint16,
+            rhs_uint16,
+            lhs_uint32,
+            rhs_uint32,
+            lhs_uint64,
+            rhs_uint64,
+            out_uint8,
+            out_uint16,
+            out_uint32,
+            out_uint64,
         )
 
 

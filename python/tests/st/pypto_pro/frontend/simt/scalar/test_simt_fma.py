@@ -21,7 +21,7 @@ def _fma_golden(lhs, rhs, addend):
     return (lhs.to(torch.float64) * rhs.to(torch.float64) + addend.to(torch.float64)).to(lhs.dtype)
 
 
-@pl.simt.function(max_threads=ELEMENTS)
+@pl.vector_function(mode="simt", max_threads=ELEMENTS)
 def fma_all_dtypes(
     lhs_fp16: pl.Tensor[[1, ELEMENTS], pl.DT_FP16],
     rhs_fp16: pl.Tensor[[1, ELEMENTS], pl.DT_FP16],
@@ -58,23 +58,19 @@ def simt_fma_all_dtypes(
     out_fp32: pl.Tensor[[1, ELEMENTS], pl.DT_FP32],
 ):
     with pl.section_vector():
-        pl.simt.launch(
-            fma_all_dtypes,
-            threads=ELEMENTS,
-            args=(
-                lhs_fp16,
-                rhs_fp16,
-                addend_fp16,
-                lhs_bf16,
-                rhs_bf16,
-                addend_bf16,
-                lhs_fp32,
-                rhs_fp32,
-                addend_fp32,
-                out_fp16,
-                out_bf16,
-                out_fp32,
-            ),
+        fma_all_dtypes[ELEMENTS](
+            lhs_fp16,
+            rhs_fp16,
+            addend_fp16,
+            lhs_bf16,
+            rhs_bf16,
+            addend_bf16,
+            lhs_fp32,
+            rhs_fp32,
+            addend_fp32,
+            out_fp16,
+            out_bf16,
+            out_fp32,
         )
 
 
