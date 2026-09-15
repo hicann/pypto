@@ -121,6 +121,8 @@ target_link_options(tile_fwk_intf_pub_base
         INTERFACE
             # 安全编译选项
             $<$<CONFIG:Release>:-s>
+            # gcov 模式下导出 __gcov_dump 符号, 供 pytest-forked 子进程退出前手动 flush 覆盖率数据
+            $<$<BOOL:${ENABLE_GCOV}>:$<$<CXX_COMPILER_ID:GNU>:-Wl,--export-dynamic,--whole-archive,-lgcov,--no-whole-archive>>
 )
 
 # tile_fwk_intf_pub_base中存在较多的-Wno-*选项，这些选项是位置敏感的，必须排列在-Wall -Wextra之后，

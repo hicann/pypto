@@ -1916,6 +1916,8 @@ class BuildCtrl(CMakeParam):
             act_env_python_path = f"{dist}:{ori_env_python_path}" if ori_env_python_path else f"{dist}"
             update_env.update({self._PYTHONPATH: act_env_python_path})
         update_env.update(self._py_tests_get_xsan_env())
+        if self.build.gcov:
+            update_env["PYPTO_GCOV_FLUSH"] = "1"
         return update_env
 
     def _py_tests_get_xsan_env(self) -> Dict[str, str]:

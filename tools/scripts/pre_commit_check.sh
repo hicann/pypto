@@ -17,12 +17,12 @@
 #   - 只跑 gnu(Release) 增量编译 + 变更模块 UT      (~3min)   对应 make_gnu_*
 #   - Python 变更模块 UT                           (~4-6min)  对应 Py3_ninja
 #   - costmodel 仿真 UT                            (~1min)    对应 Py3_ninja_simulation
-#   - clang/ASan、gcov 覆盖率超出预算, 不跑, 留给 CI (对应 Cpp_make_clang / 覆盖率)
+#   - clang/ASan 超出预算(quick 不跑)、覆盖率本地不统计, 均留给 CI (对应 Cpp_make_clang / 覆盖率)
 #   - 900s 总预算守卫: 剩余时间不足时跳过靠后阶段并明确告警
 #
 # 用法:
 #   bash tools/scripts/pre_commit_check.sh          # 15 分钟针对性预检(默认)
-#   bash tools/scripts/pre_commit_check.sh --full   # 全量: gnu+clang/ASan+Python+覆盖率, 不限时
+#   bash tools/scripts/pre_commit_check.sh --full   # 全量: gnu+clang/ASan+Python, 不限时
 #
 # 环境变量(自动探测失败时手动指定):
 #   ASCEND_HOME_PATH         CANN 安装路径
@@ -38,11 +38,8 @@ WORKSPACE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 mkdir -p /tmp/opencode
 TMP_DIR="$(mktemp -d /tmp/opencode/pre_commit_check.XXXXXX)"
 PR_FILELIST="${TMP_DIR}/pr_filelist.txt"
-COV_LOG_CPP="${TMP_DIR}/cov_cpp.log"
-COV_LOG_PY="${TMP_DIR}/cov_py.log"
 
 PY3="${PY3:-python3}"
-COV_THRESHOLD=80
 JOB_NUM=16
 CASE_TIMEOUT=300  # 单用例超时(秒)
 PY_DEFAULT_MODULES="ds_v32:interface:ir:operation:operator:pypto_pro:simulator"
@@ -117,10 +114,6 @@ check_env() {
     if [[ "${FULL}" == "1" ]]; then
         command -v clang >/dev/null 2>&1 && command -v clang++ >/dev/null 2>&1 \
             || { log_error "clang 未安装 (--full 需要)。"; ok=0; }
-        if command -v lcov >/dev/null 2>&1; then
-            lcov --help 2>/dev/null | grep -q "build-directory" \
-                || log_warn "lcov 版本过旧 (不支持 --build-directory), 覆盖率会失败, 需 lcov 2.x。"
-        fi
     fi
     return $((1 - ok))
 }
@@ -259,26 +252,15 @@ need_cpp_clean() {
     return 1
 }
 
-# 执行命令, 有日志文件时同时 tee 到日志
-run_with_log() {
-    local logfile="$1"; shift
-    if [[ -n "${logfile}" ]]; then
-        "$@" 2>&1 | tee "${logfile}"
-        return "${PIPESTATUS[0]}"
-    fi
-    "$@"
-}
-
 run_gnu() {
-    local clean_flag="" cov_flag="" logfile=""
-    [[ "${FULL}" == "1" ]] && { cov_flag="--gcov --cov_increment"; logfile="${COV_LOG_CPP}"; }
+    local clean_flag=""
     if [[ "${FULL}" == "1" ]] || need_cpp_clean; then
         clean_flag="--clean"
         [[ "${FULL}" == "0" ]] && log_warn "构建缓存不兼容需重编译 (有 ccache 较快), 首次全量编译可能超出 ${TIME_BUDGET}s 预算。"
     fi
     log_info ">>> gnu UT (Release/gcc, 模块: ${UT_MODULES})"
-    run_with_log "${logfile}" "${PY3}" build_ci.py ${clean_flag} --frontend=cpp --build_type=Release --utest \
-        --case_execute_timeout=${CASE_TIMEOUT} --utest_module="${UT_MODULES}" ${cov_flag} \
+    "${PY3}" build_ci.py ${clean_flag} --frontend=cpp --build_type=Release --utest \
+        --case_execute_timeout=${CASE_TIMEOUT} --utest_module="${UT_MODULES}" \
         --changed_files="${PR_FILELIST}" --cann_3rd_lib_path="${THIRD_PARTY_PATH}" \
         --job_num="${JOB_NUM}" --target=tile_fwk_utest
 }
@@ -289,24 +271,30 @@ run_clang() {
     log_info ">>> clang UT (Debug/clang+ASan, 模块: ${UT_MODULES}, 跳过 perf 门禁用例)"
     # 用 gtest 的 GTEST_FILTER 环境变量跳过 perf 门禁计时用例: 执行器列用例(--gtest_list_tests)会遵守该变量,
     # 真正跑用例时的 --gtest_filter 命令行参数优先级更高, 不受影响。
+    local saved_gtest_filter="${GTEST_FILTER:-}"
     export GTEST_FILTER="${CLANG_GTEST_FILTER:-*-*PerfGuard*:*RunTimeLimit*}"
     "${PY3}" build_ci.py --clean --frontend=cpp --build_type=Debug --utest \
         --case_execute_timeout=${CASE_TIMEOUT} --utest_module="${UT_MODULES}" --clang --asan \
         --cann_3rd_lib_path="${THIRD_PARTY_PATH}" \
         --job_num="${JOB_NUM}" --target=tile_fwk_utest
+    local rc=$?
+    if [[ -n "${saved_gtest_filter}" ]]; then
+        export GTEST_FILTER="${saved_gtest_filter}"
+    else
+        unset GTEST_FILTER
+    fi
+    return "${rc}"
 }
 
 run_py() {
     # py3 用 Ninja 生成器, 与 gnu/clang 的 Makefiles 共用 build/ 会冲突, 必须 --clean 重配置
-    local cov_flag="" logfile=""
-    [[ "${FULL}" == "1" ]] && { cov_flag="--py_cov --cov_increment"; logfile="${COV_LOG_PY}"; }
     log_info ">>> Python UT (模块: ${PY_MODULES:-${PY_DEFAULT_MODULES}})"
-    run_with_log "${logfile}" "${PY3}" build_ci.py --clean --generator=Ninja \
+    "${PY3}" build_ci.py --clean --generator=Ninja \
         '--utest=python/tests/ut --ignore=python/tests/ut/kirin' \
         --py_abi=37 --case_execute_timeout=${CASE_TIMEOUT} \
         --changed_files="${PR_FILELIST}" --cann_3rd_lib_path="${THIRD_PARTY_PATH}" \
         --job_num="${JOB_NUM}" --verbose --editable --no_isolation \
-        --utest_module="${PY_MODULES:-${PY_DEFAULT_MODULES}}" ${cov_flag}
+        --utest_module="${PY_MODULES:-${PY_DEFAULT_MODULES}}"
 }
 
 run_sim() {
@@ -325,25 +313,16 @@ run_sim() {
 }
 
 # ---------------------------------------------------------------------------
-# 覆盖率门禁 (仅 --full)
+# 覆盖率说明 (仅 --full)
+# 本地不统计覆盖率: gen_coverage.py --increment 与 CI 的 get_ai_inc_cov.py(addlcov)
+# 是两套独立实现, 增量覆盖率(diff 基线/行级计算/阈值/过滤规则)无法保证与 CI 一致,
+# 覆盖率门禁统一由 CI 兜底。
 # ---------------------------------------------------------------------------
 check_cov() {
     [[ "${FULL}" == "1" ]] || return 0
-    local ok=1 overall pair key name logfile
-    for pair in "cpp:C++" "py:Python"; do
-        key="${pair%%:*}"; name="${pair##*:}"
-        [[ "${key}" == "cpp" ]] && logfile="${COV_LOG_CPP}" || logfile="${COV_LOG_PY}"
-        [[ -f "${logfile}" ]] || { log_warn "未生成 ${name} 覆盖率日志。"; continue; }
-        overall="$(grep -oP 'Overall Coverage:\s*\K[0-9.]+' "${logfile}" | head -1)"
-        if [[ -z "${overall}" ]]; then
-            log_warn "${name} 无增量覆盖率数据 (可能无相关源码变更)。"
-        elif awk "BEGIN{exit !(${overall} < ${COV_THRESHOLD})}"; then
-            log_error "${name} 增量覆盖率 ${overall}% < ${COV_THRESHOLD}%, 未达标。"; ok=0
-        else
-            log_info "${name} 增量覆盖率 ${overall}% 达标。"
-        fi
-    done
-    return $((1 - ok))
+    log_warn "本地预检不统计覆盖率: 本地 gen_coverage.py --increment 与 CI 的 get_ai_inc_cov.py(addlcov)"
+    log_warn "是两套独立实现, 增量覆盖率(diff 基线/行级计算/阈值/过滤规则)无法保证与 CI 一致, 覆盖率门禁由 CI 兜底。"
+    return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -380,7 +359,7 @@ main() {
         exit 0
     fi
 
-    # --full 模式下跑全量模块, 与 CI 的覆盖/ASan 范围对齐, 不依赖文件变更; quick 模式仍只跑变更模块
+    # --full 模式下跑全量模块, 与 CI 的 gnu/clang 模块范围对齐, 不依赖文件变更; quick 模式仍只跑变更模块
     if [[ "${FULL}" == "1" ]]; then
         HAS_CPP=1
         HAS_PY=1
@@ -411,13 +390,17 @@ main() {
         [[ "${rc}" != "0" ]] && { log_error "仿真 UT 失败。"; exit 1; }
     fi
 
-    check_cov || { log_error "覆盖率门禁未通过。"; exit 1; }
+    check_cov
 
     echo ""
     log_info "=============================================="
+    if [[ "${CLANG_FAILED}" == "1" ]]; then
+        log_error "clang/ASan 阶段存在失败(可能为真实 ASan 内存错误), 请查看上方日志修复后重新提交。"
+        log_info "=============================================="
+        exit 1
+    fi
     log_info "全部检查通过 (耗时 $(elapsed)s), 可以提交 PR。"
-    [[ "${FULL}" == "0" ]] && log_info "注: clang/ASan 与覆盖率由 CI 兜底, 合入前可手动 --full。"
-    [[ "${CLANG_FAILED}" == "1" ]] && log_warn "注: clang/ASan 阶段存在失败(可能为真实 ASan 错误), 其余阶段均通过, 请人工确认。"
+    [[ "${FULL}" == "0" ]] && log_info "注: clang/ASan 由 CI 兜底, 合入前可手动 --full; 覆盖率门禁始终由 CI 兜底。"
     log_info "=============================================="
     exit 0
 }
