@@ -78,6 +78,8 @@ packages.find.include = [
     "pypto",
     "pypto_pro",
     "pypto_pro.*",
+    "pypto.extensions",
+    "pypto.extensions.*",
     "pypto.op",
     "pypto.include.tilefwk",
     "pypto.lib",

@@ -19,6 +19,8 @@ from enum import IntEnum
 import inspect
 import itertools
 import os
+from pathlib import Path
+import threading
 from typing import Any, Callable, Optional, Union
 
 import torch
@@ -38,6 +40,10 @@ from pypto.frontend.parser.parser import NestedFunctionMarker, Parser
 from pypto.logging import log_debug
 from pypto.pil.compile_pipeline import compile_new_ir
 from pypto.runtime import _pto_verify_datas, setup_verify_data
+
+# Only one build_kernel() at a time: recording mutates interpreter-wide state (the C++ Program
+# singleton, the jit_scope stack). Reentrant so a nested call hits the parser's error, not a deadlock.
+_GLOBAL_BUILD_STATE_LOCK = threading.RLock()
 
 
 def _default_globals() -> dict[str, Any]:
@@ -704,6 +710,49 @@ class JitCallableWrapper:
                     pypto_impl.DeviceInit()
                     self.compile(pto_tensors)
                     self._run_with_cpu(pto_tensors, [])
+
+    def build_kernel(self, *args: Any, **kwargs: Any) -> Path:
+        """Build this kernel to a device object file and return its path.
+
+        Parses ``*args``/``**kwargs`` the same way ``__call__`` does and compiles under a ``jit_scope``.
+
+        Returns
+        -------
+        Path
+            The single object file the backend emitted under ``LogTopFolder()/kernel_aicore``.
+
+        Raises
+        ------
+        RuntimeError
+            If the emitted-object count is not exactly one.
+        """
+        with _GLOBAL_BUILD_STATE_LOCK:
+            in_tensors, non_tensor_values, input_tensor_defs = self._parse_call_args(
+                args, kwargs
+            )
+            self._get_or_create_kmodule(non_tensor_values)
+
+            pto_tensors = self._convert_tensors_with_metadata(
+                in_tensors, input_tensor_defs
+            )
+            with pypto.options("jit_scope"):
+                self._set_config_option()
+                pypto_impl.DeviceInit()
+                self.compile(pto_tensors)
+
+            # Match on the extension only: the stem is a backend-internal magic name.
+            # The log folder is re-created per recorded function, so this dir only ever holds the
+            # current build's output.
+            output_path = Path(pypto_impl.LogTopFolder()) / "kernel_aicore"
+            matches = list(output_path.glob("*.o"))
+            if len(matches) != 1:
+                raise RuntimeError(
+                    f"Expected exactly 1 kernel object (*.o) under {output_path}, found {len(matches)}: "
+                    f"{sorted(m.name for m in matches)}. This deploy entry supports single-object kernels only - "
+                    f"a partitioned (cloud-soc) or control-flow kernel produces several objects and cannot be "
+                    f"deployed through this path."
+                )
+            return matches[0]
 
     def _check_input_defs_match_tensors(self, in_tensors: list, input_tensor_defs: list[pypto.Tensor]) -> None:
         """Check if the input tensor definitions match the input tensors."""
