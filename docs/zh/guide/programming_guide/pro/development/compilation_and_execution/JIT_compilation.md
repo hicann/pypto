@@ -7,10 +7,9 @@
 首次启动Kernel时依次执行以下步骤：
 
 1. 绑定Kernel实参和启动配置，确定动态参数与编译期特化信息。
-2. 解析Kernel函数体，生成PyPTO IR。
-3. 对IR执行Pass优化和校验。
-4. 生成Device代码和Host侧Launcher。
-5. 编译并加载产物，然后向指定Stream下发Kernel。
+2. 解析Kernel函数体，生成PyPTO IR并进行校验。
+3. 对IR进行必要转换，生成Device代码和Host侧Launcher。
+4. 编译并加载产物，然后向指定Stream下发Kernel。
 
 编译和执行都由一次Kernel调用触发。Kernel启动相对于Host异步，但首次调用会先等待当前编译实例生成完成。
 
@@ -43,34 +42,32 @@ Kernel的定义和启动语法参考[Kernel核函数创建](../kernel_function.m
 
 | 信息 | 对编译实例的影响 |
 | --- | --- |
-| Tensor固定维度 | 声明为固定值的维度必须匹配；不同静态签名使用不同实例。 |
-| `pypto_pro.language.STATIC`维度 | 运行时取值参与特化，值变化时生成新实例。 |
-| `pypto_pro.language.DYNAMIC`维度 | 维度值不参与特化，值变化时复用实例。 |
+| Tensor固定维度 | 声明为固定值的维度在Kernel定义时编入IR，调用时Tensor的对应维度必须匹配。 |
+| pypto_pro.language.STATIC维度 | 运行时取值参与特化，值变化时生成新实例。 |
+| pypto_pro.language.DYNAMIC维度 | 维度值不参与特化，值变化时复用实例。 |
 | TilingKey | 每个合法Key对应一个专用实例。 |
 | datatype | 每组数据类型组合对应一个专用实例。 |
-| 编译目标 | 目标在Kernel对象创建时确定；不同目标使用不同的Kernel对象。 |
+| 编译目标 | 显式指定的目标在Kernel对象创建时确定；未指定时在首次启动时根据运行环境确定。不同目标使用不同的Kernel对象。 |
 
 TilingData字段是运行时数据，字段值变化不会单独产生编译实例。静态与动态shape的声明方式参考[Tensor创建和操作](../tensor_creation_and_operations.md)，TilingData和TilingKey的区别参考[Tiling参数定义与传递](../tiling/tiling_parameter_definition.md)。
 
 `stream`和`block_dim`只影响本次启动，不参与编译签名；调整Stream或逻辑Block数不会因此生成新的编译实例。
 
-`pypto.options(...)`中的编译配置也不参与编译签名。配置只在某个签名首次编译时读取；命中当前Kernel对象的已有编译实例后，改变配置不会触发重新编译。需要让新配置生效时，应创建新的Kernel对象或重新启动Python进程。
-
 JIT复用范围限于当前Python进程。重新启动进程后会重新执行生成和编译流程；`build`目录中的文件用于加载和调试，不作为跨进程持久化缓存。
 
-## jit装饰器配置
+## jit装饰器参数
 
-`@pypto_pro.language.jit()`配置当前Kernel的编译行为：
+`pypto_pro.language.jit`支持以下可配置参数：
 
-| 参数 | 说明 | 默认值 |
-| --- | --- | --- |
-| `auto_mutex` | 是否根据TileGroup的mutex元数据自动处理可识别的数据依赖。 | `True` |
-| `compile_timeout` | 当前Kernel的编译超时时间，单位为秒。 | `None` |
-| `name` | 自定义Kernel名称，用于区分编译产物。 | `None` |
-| `tiling_key` | 绑定TilingKey Schema。 | `None` |
-| `datatype` | 声明参与数据类型特化的Kernel参数。 | `None` |
-| `pipeline` | 配置自动流水变换。 | `None` |
-| `arch` | 指定编译目标；通常省略并由运行环境自动确定。 | `None` |
+| 参数 | 类型 | 说明 | 默认值 |
+| --- | --- | --- | --- |
+| arch | str | 指定编译目标。通常省略，由运行环境自动确定。 | None |
+| auto_mutex | bool | 是否根据TileGroup声明的mutex元数据，为框架能够识别的数据依赖自动插入同步。 | True |
+| name | str | 自定义Kernel名称，用于区分编译产物；未设置时使用被装饰函数的名称。 | None |
+| pipeline | pypto_pro.language.pipeline.PipelineConfig | 配置自动并行流水变换。 | None |
+| tiling_key | TilingKey定义类 | 绑定当前Kernel支持的TilingKey字段及其候选值。 | None |
+| datatype | dict[str, str] | 声明需要进行数据类型特化的Kernel参数，以及Kernel函数体中引用的数据类型变量名。 | None |
+| compile_timeout | int | 设置当前Kernel的编译超时时间，单位为秒。 | None（基础默认值为600秒） |
 
 ```python
 import pypto_pro.language as pl
@@ -81,47 +78,11 @@ def add_kernel(x, y, out):
     ...
 ```
 
-TilingKey和datatype的定义及启动参数位置参考[Kernel核函数创建](../kernel_function.md#使用tilingkey和datatype)。自动流水配置参考[自动并行流水](../../advanced_programming/auto_parallel_pipeline.md)。
+`auto_mutex=True`只处理框架能够通过TileGroup识别的数据依赖，不能替代所有显式同步。未使用TileGroup mutex元数据，或者依赖关系无法由框架识别时，需要根据数据流显式同步。
 
-## 编译配置
+`tiling_key`和`datatype`用于生成编译期特化实例，不会作为Kernel函数的形参传入。启动Kernel时，需要在方括号中提供对应的TilingKey和datatype字典。两者的定义和启动参数位置参考[Kernel核函数创建](../kernel_function.md#使用tilingkey和datatype)，TilingKey字段规则参考[Tiling参数定义与传递](../tiling/tiling_parameter_definition.md#tilingkey)。
 
-Host、Pass、CodeGen、验证和调试等共享配置通过`pypto.options(...)`作用于当前编译作用域：
-
-```python
-import pypto
-
-
-with pypto.options(
-    host_options={"compile_timeout": 1200},
-    pass_options={"enable_slice": False},
-):
-    add_kernel[None, 1](x, y, out)
-```
-
-也可以分别使用`pypto.set_host_options()`、`pypto.set_pass_options()`、`pypto.set_codegen_options()`、`pypto.set_verify_options()`和`pypto.set_debug_options()`。主要配置分类如下：
-
-| 分类 | `pypto.options(...)`参数 | 用途 |
-| --- | --- | --- |
-| Host编译控制 | `host_options` | 编译阶段、编译监控和超时。 |
-| Pass控制 | `pass_options` | 流水、Buffer复用、调度和切分等Pass选项。 |
-| CodeGen控制 | `codegen_options` | 代码生成、PMU和VF相关选项。 |
-| Pass验证 | `verify_options` | Pass结果校验和中间Tensor保存。 |
-| 调试 | `debug_options` | 编译、运行时和Pass图调试。 |
-| 运行时 | `runtime_options` | 调度、Workspace和运行模式。 |
-| 算子行为 | `operation_options` | 算子级行为配置。 |
-| Tile与矩阵规格 | `vec_tile_shapes`、`cube_tile_shapes`等 | 设置当前编译作用域使用的Tile和矩阵规格。 |
-
-配置项的类型和取值范围参考[`pypto.set_host_options`](../../../../../api/tensor_api/config/pypto-set_host_options.md)、[`pypto.set_pass_options`](../../../../../api/tensor_api/config/pypto-set_pass_options.md)、[`pypto.set_codegen_options`](../../../../../api/tensor_api/config/pypto-set_codegen_options.md)、[`pypto.set_verify_options`](../../../../../api/tensor_api/config/pypto-set_verify_options.md)和[`pypto.set_debug_options`](../../../../../api/tensor_api/config/pypto-set_debug_options.md)。这些配置字典传给`pypto.options(...)`，不能作为`pypto_pro.language.jit`的参数。
-
-### 编译超时配置
-
-`compile_timeout`按照以下优先级确定：
-
-1. `@pypto_pro.language.jit(compile_timeout=...)`中显式设置的值。
-2. 当前`pypto.options()`作用域中的`host_options["compile_timeout"]`。
-3. 框架默认值600秒。
-
-编译监控的开关、总耗时阈值和阶段阈值通过`host_options`配置。
+`pipeline`接收`pypto_pro.language.pipeline.PipelineConfig`对象，用于配置自动并行流水变换；未设置时不执行该变换。配置方法和使用约束参考[自动并行流水](../../advanced_programming/auto_parallel_pipeline.md)。
 
 ## Kernel下发与同步
 
@@ -143,13 +104,13 @@ Stream和`block_dim`的完整说明参考[Kernel核函数创建](../kernel_funct
 
 ## 编译产物
 
-未设置`ASCEND_WORK_PATH`时，JIT产物以`./build/`为根目录；设置后，以`${ASCEND_WORK_PATH}/PYPTO_PRO/build/`为根目录。Kernel目录名称以`{kernel_name}__{arch}`开头，并可能包含静态签名、Device和Rank等后缀；datatype和TilingKey实例还会分别使用`dt_{hash}`和`tk_{packed}`（未使用TilingKey时为`tk_none`）子目录。主要文件包括：
+未设置`ASCEND_WORK_PATH`时，JIT产物以`./build/`为根目录；设置后，以`${ASCEND_WORK_PATH}/PYPTO_PRO/build/`为根目录。Kernel目录名称以`{kernel_name}__{arch}`开头，并可能包含STATIC维度哈希、Device和Rank等后缀；datatype和TilingKey实例还会分别使用`dt_{hash}`和`tk_{packed}`（未使用TilingKey时为`tk_none`）子目录。主要文件包括：
 
 | 文件 | 作用 |
 | --- | --- |
-| `kernel.cpp` | CodeGen生成的Device侧源码。 |
-| `call_kernel.cpp` | Host侧Launcher源码，负责参数打包和Kernel下发。 |
-| `call_kernel_{hash}.so` | 编译后的Launcher共享库。 |
-| `*_tiling.h` | 使用TilingData时生成的结构体头文件。 |
+| kernel.cpp | CodeGen生成的Device侧源码。 |
+| call_kernel.cpp | Host侧Launcher源码，负责参数打包和Kernel下发。 |
+| call_kernel_{hash}.so | 编译后的Launcher共享库。 |
+| *_tiling.h | 使用TilingData时生成的结构体头文件。 |
 
 编译失败时，优先结合错误日志和`kernel.cpp`定位解析、代码生成或工具链问题。编译成功后，中间源码默认保留在产物目录中，可用于核对生成代码。

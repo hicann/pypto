@@ -14,13 +14,13 @@
 
 ## 功能说明
 
-SyncAllMode是指定sync_all同步实现模式的枚举。
+SyncAllMode是指定sync_all同步实现模式的枚举，当前仅支持HARD模式。
 
 ## 原型定义
 
 ```python
 PYPTO_DECLARE_ENUM(SyncAllMode,
     HARD,  # 使用FFTS硬件同步，不需要workspace
-    SOFT   # 使用GM共享状态同步，需要workspace
+    SOFT   # 使用GM共享状态同步，当前暂不支持
 )
 ```
