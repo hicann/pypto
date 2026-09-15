@@ -815,6 +815,39 @@ bool MergeViewAssembleUtils::IsFunctionBoundaryTensor(const Function& function, 
            std::any_of(function.GetOutcast().begin(), function.GetOutcast().end(), isSameTensor);
 }
 
+bool MergeViewAssembleUtils::WouldOrphanLiveConsumer(Function& function, const std::vector<Operation*>& toDelete,
+                                                     const std::unordered_set<LogicalTensorPtr>& reProduced) const
+{
+    std::unordered_set<const Operation*> deleteSet;
+    deleteSet.reserve(toDelete.size());
+    for (auto* op : toDelete) {
+        if (op != nullptr) {
+            deleteSet.insert(op);
+        }
+    }
+    for (auto* op : toDelete) {
+        if (op == nullptr) {
+            continue;
+        }
+        for (auto& output : op->GetOOperands()) {
+            if (output == nullptr || reProduced.count(output) != 0) {
+                continue;
+            }
+            for (auto* consumer : output->GetConsumers()) {
+                if (consumer == nullptr || consumer->IsDeleted() || deleteSet.count(consumer) != 0 ||
+                    consumer->BelongTo() != &function) {
+                    continue;
+                }
+                APASS_LOG_WARN_F(Elements::Operation,
+                                 "Skip assemble fusion: deleting op[%d] would orphan consumer op[%d] of tensor[%d].",
+                                 op->GetOpMagic(), consumer->GetOpMagic(), output->GetMagic());
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 bool MergeViewAssembleUtils::HasCompleteStaticCoverage(const LogicalTensorPtr& middle,
                                                        const std::vector<Operation*>& producers)
 {
@@ -1160,6 +1193,24 @@ Status MergeViewAssembleUtils::AppendMergedAssembleOperations(Function& function
 Status MergeViewAssembleUtils::AppendProducerGroupFusions(Function& function)
 {
     for (const auto& fusion : producerGroupFusions_) {
+        // Skip the fusion when deleting the group would orphan a live consumer (e.g. of the
+        // middle tensor or of a replacement input); the group then stays unmerged.
+        std::vector<Operation*> groupToDelete;
+        groupToDelete.reserve(fusion.producers.size() + 1);
+        for (auto* producer : fusion.producers) {
+            if (!GetConsumers(*producer).hasAssembleChainStopper) {
+                groupToDelete.emplace_back(producer);
+            }
+        }
+        groupToDelete.emplace_back(fusion.downstream);
+        std::unordered_set<LogicalTensorPtr> reProduced;
+        if (fusion.downstream != nullptr && !fusion.downstream->GetOOperands().empty() &&
+            fusion.downstream->GetOOperands().front() != nullptr) {
+            reProduced.insert(fusion.downstream->GetOOperands().front());
+        }
+        if (WouldOrphanLiveConsumer(function, groupToDelete, reProduced)) {
+            continue;
+        }
         std::vector<Operation*> replacements;
         replacements.reserve(fusion.replacements.size());
         for (const auto& replacement : fusion.replacements) {
@@ -1564,19 +1615,29 @@ Status MergeViewAssembleUtils::ProcessAssembleChainEnd(Function& function, std::
         return FAILED;
     }
     AtomicSemanticAttrState atomicSemanticAttr = GetChainAtomicSemanticAttr(chain);
+    // Keep intermediate writes needed by side consumers, as in the legacy chain fusion.
+    const bool hasSideConsumer = std::any_of(chain.begin(), chain.end() - 1, [this](const Operation* op) {
+        return GetConsumers(*op).hasAssembleChainStopper;
+    });
+    std::vector<Operation*> toDelete;
+    if (hasSideConsumer) {
+        toDelete.emplace_back(chain.back());
+    } else {
+        toDelete = chain;
+    }
+    // Skip the merge when deleting the chain would orphan a live consumer of an intermediate
+    // tensor (e.g. an assemble consumer that did not join this chain); the chain then stays
+    // unmerged, which keeps the IR consistent for the later passes.
+    if (WouldOrphanLiveConsumer(function, toDelete, {endTensor})) {
+        return SUCCESS;
+    }
     // 4. 记录并清理
     RecordAssembleOperation(startTensor, endTensor, newOffset, newDynOffset, firstSpan, chainScopeInfo,
                             GetRmwModeAttrKey(rmwModeAttr), GetMergedAssembleOpcode(chain), tokenDependency,
                             atomicSemanticAttr.fromReduceAcc, atomicSemanticAttr.fromExplicitRmw);
     ClearLinearTokenDependency(function, chain, tokenDependency);
-    // Keep intermediate writes needed by side consumers, as in the legacy chain fusion.
-    const bool hasSideConsumer = std::any_of(chain.begin(), chain.end() - 1, [this](const Operation* op) {
-        return GetConsumers(*op).hasAssembleChainStopper;
-    });
-    for (auto* op : chain) {
-        if (!hasSideConsumer || op == chain.back()) {
-            op->SetAsDeleted();
-        }
+    for (auto* op : toDelete) {
+        op->SetAsDeleted();
     }
     function.GetTensorMap().Erase(endTensor);
 
