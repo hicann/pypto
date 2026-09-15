@@ -15,7 +15,7 @@
 
 #ifndef TILEOP_TILE_OPERATOR_ATAN__H
 #define TILEOP_TILE_OPERATOR_ATAN__H
-#include "pto_tile.h"
+#include "../pto_tile.h"
 #include "utils/sync.h"
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
