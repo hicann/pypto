@@ -246,8 +246,9 @@ void DevControlFlowCache::DrcoReadyQueueDataRestore(DynDeviceTaskBase* base, uin
         (void)memset_s(stitchNodeMatrix->stitchNodeList, sizeof(stitchNodeMatrix->stitchNodeList), 0,
                        sizeof(stitchNodeMatrix->stitchNodeList));
     }
-    base->drcoRootFuncList->executedTaskCount = 0;
     base->drcoRootFuncList->devTaskFinished = 0;
+    auto* finishFlagList = &base->drcoRootFuncList->devTaskFinishFlagList;
+    (void)memset_s(reinterpret_cast<uint8_t*>(finishFlagList), sizeof(*finishFlagList), 0, sizeof(*finishFlagList));
 }
 
 void DevControlFlowCache::ReadyQueueDataRestore(DynDeviceTaskBase* base, uint32_t nrValidAic)

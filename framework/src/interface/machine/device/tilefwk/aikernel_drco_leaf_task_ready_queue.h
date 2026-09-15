@@ -172,7 +172,9 @@ struct DrcoGlobalReadyQueue {
     uint32_t head;
     uint32_t tail;
     uint32_t size;
-    uint32_t executedCount;
+    uint8_t pad[64 - 3 * sizeof(uint32_t)];
+    uint32_t executedCount; // 独占 cacheline：每任务计数原子加，与 head/tail 的 pop/push CAS 隔离
+    uint8_t pad2[64 - sizeof(uint32_t)];
     LeafTaskId taskList[0];
 #if defined(__TILE_FWK_HOST__)
     DrcoGlobalReadyQueue() : head(0), tail(0), size(0), executedCount(0) {}

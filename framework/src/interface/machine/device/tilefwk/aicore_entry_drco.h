@@ -543,6 +543,27 @@ INLINE __gm__ DrcoGlobalReadyQueue* DrcoRootFuncListGetGlobalReadyQueue(
     return nullptr;
 }
 
+// leaf task 计数并按组广播完成：累加本 coreType 全局队列 executedCount（per-core 阶段批量加
+// perCoreQueueHead、就绪队列阶段按 fetch 批累加，两处统一走此函数），仅加到 size 的最后一次累加线程
+// exch 置 1 本 coreType 活跃区间各组的 devTaskFinishFlag（承载于 DrcoRootFuncList 内的独立标志表，
+// 与 localReadyQueue/Matrix 解耦），组内核只轮询本组 flag，避免全核争抢 executedCount 单字；
+// size == 0 时首个到达的核即广播，保证无该类型任务的核也能立即返回全完成
+INLINE void DrcoNotifyTaskExecutedAdd(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                                      uint32_t addCount)
+{
+    __gm__ DrcoGlobalReadyQueue* execQueue = DrcoRootFuncListGetGlobalReadyQueue(rootFuncList, DRCO_CORE_TYPE);
+    if (execQueue == nullptr) {
+        return;
+    }
+    if (DrcoAtomicAddToU32(&execQueue->executedCount, addCount) + addCount < execQueue->size) {
+        return;
+    }
+    for (uint32_t g = state->ctx.drcoGroupBeg[DRCO_CORE_TYPE]; g < state->ctx.drcoGroupEnd[DRCO_CORE_TYPE]; g++) {
+        // 标志表内同 coreType 各组 flag 物理连续：广播只写相邻 cacheline，且免去逐组加载队列指针
+        DrcoAtomicExchToU32(&rootFuncList->devTaskFinishFlagList.flag[DRCO_CORE_TYPE][g].devTaskFinishFlag, 1);
+    }
+}
+
 INLINE __gm__ DrcoLocalReadyQueue* DrcoRootFuncListGetLocalReadyQueue(
     __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList, uint32_t readyQueueCoreType, uint32_t groupIdx)
 {
@@ -566,6 +587,28 @@ INLINE __gm__ DrcoGlobalStitchNodeMatrix* DrcoRootFuncListGetStitchNodeMatrix(
     __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList)
 {
     return rootFuncList->stitchNodeMatrixArray[stitchMatrixCoreType];
+}
+
+// 类型内本地编号模型（AIC: blockIdx ∈ [0, aicCoreNum)，AIV: blockIdx - aicCoreNum ∈ [0, 2*aicCoreNum)）
+// 下各 coreType 实际使用的 local ready queue/matrix 组区间为 [groupBeg, groupEnd)：两类均自组 0 起
+// （AIC 组数 ceil(aicCoreNum/N)，AIV 组数 ceil(2*aicCoreNum/N)），区间外的组既无 push 亦无 poll，
+// 相关遍历均可直接跳过；MIX 等无固定核区间映射的队列保守遍历全表。
+// 仅在 InitDrcoEntry 调用一次，结果缓存在 ExecuteContext::drcoGroupBeg/End，热路径直接查表
+INLINE void GetDrcoActiveGroupRange(uint32_t coreType, uint32_t aicCoreNum, uint32_t& groupBeg, uint32_t& groupEnd)
+{
+    if (coreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::AIV)) {
+        groupBeg = 0;
+        groupEnd = (aicCoreNum * 2 + npu::tile_fwk::LOCAL_GROUP_SIZE - 1) / npu::tile_fwk::LOCAL_GROUP_SIZE;
+    } else if (coreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::AIC)) {
+        groupBeg = 0;
+        groupEnd = (aicCoreNum + npu::tile_fwk::LOCAL_GROUP_SIZE - 1) / npu::tile_fwk::LOCAL_GROUP_SIZE;
+    } else {
+        groupBeg = 0;
+        groupEnd = npu::tile_fwk::NUM_LOCAL_GROUPS;
+    }
+    if (groupEnd > npu::tile_fwk::NUM_LOCAL_GROUPS) {
+        groupEnd = npu::tile_fwk::NUM_LOCAL_GROUPS;
+    }
 }
 
 INLINE static void DrcoRootFuncListGlobalReadyQueuePush(__gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
@@ -693,9 +736,7 @@ INLINE void DrcoDynFuncDataListPushBatch(DrcoEntryState* state, __gm__ npu::tile
                                          uint32_t* succTaskIdList, uint32_t succTaskIdListSize, uint32_t succCoreType)
 {
     BlockDesc blockDesc = state->blockDesc;
-    uint32_t validCoreNum = BlockDescValidCoreNum(blockDesc,
-                                                  succCoreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::AIV));
-    uint32_t groupCount = (validCoreNum + npu::tile_fwk::LOCAL_GROUP_SIZE - 1) / npu::tile_fwk::LOCAL_GROUP_SIZE;
+    uint32_t groupCount = state->ctx.drcoGroupEnd[succCoreType] - state->ctx.drcoGroupBeg[succCoreType];
     uint32_t typedBlockIdx = BlockDescTypedBlockIdx(blockDesc);
 
     uint32_t pushed = DrcoDynFuncDataListPushBatchLocalMatrix(state, rootFuncList, succTaskIdList, succTaskIdListSize,
@@ -1069,11 +1110,13 @@ INLINE bool DrcoDynFuncDataListFetchTaskLocalReadyMatrix(DrcoEntryState* state,
     return false;
 }
 
-INLINE bool DrcoDynFuncDataListFetchTaskLocalReadyQueue(
-    DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList, uint32_t& resultCoreType,
-    uint32_t resultTaskIdList[LOCAL_GROUP_SIZE], uint32_t& resultTaskIdCount, uint32_t groupIdx, uint32_t validCoreNum)
+INLINE bool DrcoDynFuncDataListFetchTaskLocalReadyQueue(DrcoEntryState* state,
+                                                        __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                                                        uint32_t& resultCoreType,
+                                                        uint32_t resultTaskIdList[LOCAL_GROUP_SIZE],
+                                                        uint32_t& resultTaskIdCount, uint32_t groupIdx)
 {
-    uint32_t queueGroupCount = (validCoreNum + LOCAL_GROUP_SIZE - 1) / LOCAL_GROUP_SIZE;
+    uint32_t queueGroupCount = state->ctx.drcoGroupEnd[DRCO_CORE_TYPE] - state->ctx.drcoGroupBeg[DRCO_CORE_TYPE];
     for (uint32_t i = 0; i < queueGroupCount; i++) {
         uint32_t queueGroupIdx = (groupIdx + i) % queueGroupCount;
         __gm__ DrcoLocalReadyQueue* localReadyQueue = DrcoRootFuncListGetLocalReadyQueue(rootFuncList, DRCO_CORE_TYPE,
@@ -1108,12 +1151,12 @@ INLINE uint32_t DrcoDynFuncDataListFetchTask(DrcoEntryState* state,
     uint32_t blockIdx = BlockDescBlockIdx(blockDesc);
     uint32_t typedBlockIdx = BlockDescTypedBlockIdx(blockDesc);
     uint32_t groupIdx = typedBlockIdx / npu::tile_fwk::LOCAL_GROUP_SIZE;
-    uint32_t validCoreNum = BlockDescValidCoreNum(blockDesc, IS_AIV);
 
     __gm__ DrcoLocalReadyMatrix* localReadyMatrix = DrcoRootFuncListGetLocalReadyMatrix(rootFuncList, DRCO_CORE_TYPE,
                                                                                         groupIdx);
     uint32_t colIdx = DrcoLocalReadyMatrixGetRowIdx(typedBlockIdx);
-    __gm__ DrcoGlobalReadyQueue* globalReadyQueue = DrcoRootFuncListGetGlobalReadyQueue(rootFuncList, DRCO_CORE_TYPE);
+    __gm__ uint32_t* devTaskFinishFlag = &rootFuncList->devTaskFinishFlagList.flag[DRCO_CORE_TYPE][groupIdx]
+                                              .devTaskFinishFlag;
     uint32_t resultTaskIdCount = 0;
 
     uint64_t t0 = get_sys_cnt();
@@ -1137,10 +1180,12 @@ INLINE uint32_t DrcoDynFuncDataListFetchTask(DrcoEntryState* state,
             break;
         }
         if (DrcoDynFuncDataListFetchTaskLocalReadyQueue(state, rootFuncList, resultCoreType, resultTaskIdList,
-                                                        resultTaskIdCount, groupIdx, validCoreNum)) {
+                                                        resultTaskIdCount, groupIdx)) {
             break;
         }
-        if (DrcoAtomicLoad(&globalReadyQueue->executedCount) >= globalReadyQueue->size) {
+        // flag 置 1 蕴含本 coreType 全部 leaf task 已执行完、各就绪队列已空，
+        // 读用 cas(ptr,1,1) 探测，避免 atomicAdd(ptr,0) 的加 0 伪读；
+        if (DrcoAtomicCasToU32(devTaskFinishFlag, 1, 1) != 0) {
             resultTaskIdCount = static_cast<uint32_t>(AICORE_TASK_ALL_FINISH);
             break;
         }
@@ -1170,6 +1215,10 @@ INLINE void InitDrcoEntry(DrcoEntryState* state, int64_t cfgdata)
     state->ctx.aicoreDevTaskMetric.devTaskMetricEnable = devDfxAddr->isOpenPerfTrace != 0;
     state->ctx.profLevel = devDfxAddr->profLevel;
     state->ctx.aicCoreNum = devArgs->nrValidAic;
+    // 各 coreType 活跃组区间是本 kernel 生命周期内的不变量，入口一次算好供全部热路径查表
+    for (uint32_t ct = 0; ct < npu::tile_fwk::DRCO_QUEUE_MAX; ct++) {
+        GetDrcoActiveGroupRange(ct, state->ctx.aicCoreNum, state->ctx.drcoGroupBeg[ct], state->ctx.drcoGroupEnd[ct]);
+    }
 
     uint8_t aicoreLogLevel = static_cast<uint8_t>(AicoreLogLevel::NONE);
 #if ENABLE_AICORE_PRINT
@@ -1286,8 +1335,7 @@ INLINE void ExecDrcoPerCoreTasks(DrcoEntryState* state, __gm__ npu::tile_fwk::Pe
         DrcoResolveDepend(state, rootFuncList, taskId);
         perCoreQueueHead++;
     }
-    __gm__ DrcoGlobalReadyQueue* execQueue = DrcoRootFuncListGetGlobalReadyQueue(rootFuncList, DRCO_CORE_TYPE);
-    DrcoAtomicAddToU32(&execQueue->executedCount, perCoreQueueHead);
+    DrcoNotifyTaskExecutedAdd(state, rootFuncList, perCoreQueueHead);
 }
 
 INLINE bool IsHubTask(DrcoEntryState* state, uint32_t taskId)
@@ -1296,7 +1344,9 @@ INLINE bool IsHubTask(DrcoEntryState* state, uint32_t taskId)
     return npu::tile_fwk::DrcoTaskCoreTypeOf(taskId) == static_cast<uint32_t>(npu::tile_fwk::CoreType::HUB);
 }
 
-INLINE void ExecDrcoReadyQueueTaskOnce(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+// 返回本任务是否执行了 leaf（FIN 标记 / hub 任务只解依赖不计数），
+// 由调用方按批汇总后统一走 DrcoNotifyTaskExecutedAdd，消除逐任务 executedCount 原子加
+INLINE bool ExecDrcoReadyQueueTaskOnce(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
                                        [[maybe_unused]] __gm__ npu::tile_fwk::PerCorePendingQueue* perCoreQueue,
                                        uint32_t taskId, uint32_t outCoreType)
 {
@@ -1309,14 +1359,16 @@ INLINE void ExecDrcoReadyQueueTaskOnce(DrcoEntryState* state, __gm__ npu::tile_f
         }
     }
 #endif
+    if ((taskId & AICORE_FIN_MASK) != 0) {
+        return false;
+    }
     if (IsHubTask(state, taskId)) {
         DrcoResolveDepend(state, rootFuncList, taskId);
-    } else {
-        ExecLeafFunction(state, taskId);
-        DrcoResolveDepend(state, rootFuncList, taskId);
-        __gm__ DrcoGlobalReadyQueue* execQueue = DrcoRootFuncListGetGlobalReadyQueue(rootFuncList, DRCO_CORE_TYPE);
-        DrcoAtomicAddToU32(&execQueue->executedCount, 1);
+        return false;
     }
+    ExecLeafFunction(state, taskId);
+    DrcoResolveDepend(state, rootFuncList, taskId);
+    return true;
 }
 
 INLINE void ExecDrcoReadyQueueTasks(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
@@ -1328,8 +1380,16 @@ INLINE void ExecDrcoReadyQueueTasks(DrcoEntryState* state, __gm__ npu::tile_fwk:
     uint32_t taskCount = DrcoDynFuncDataListFetchTask(state, rootFuncList, outCoreType, taskIdList);
     while (taskCount != static_cast<uint32_t>(AICORE_TASK_ALL_FINISH)) {
         PerfDevTaskFirstLeafTask(state);
+        uint32_t executedCount = 0;
         for (uint32_t i = 0; i < taskCount; i++) {
-            ExecDrcoReadyQueueTaskOnce(state, rootFuncList, perCoreQueue, taskIdList[i], outCoreType);
+            if (ExecDrcoReadyQueueTaskOnce(state, rootFuncList, perCoreQueue, taskIdList[i], outCoreType)) {
+                executedCount++;
+            }
+        }
+        // 只能外提到 fetch 批粒度：finish flag 由加到 size 的那次累加广播，fetch 循环又依赖
+        // flag 退出；若再外提到 while 循环外，持有末批任务的核将死等自己未广播的 flag 直至超时
+        if (executedCount > 0) {
+            DrcoNotifyTaskExecutedAdd(state, rootFuncList, executedCount);
         }
         taskCount = DrcoDynFuncDataListFetchTask(state, rootFuncList, outCoreType, taskIdList);
     }

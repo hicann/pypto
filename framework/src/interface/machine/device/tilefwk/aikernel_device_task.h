@@ -99,6 +99,24 @@ struct DrcoGlobalStitchNodeMatrix {
 #endif
 };
 
+struct DrcoDevTaskFinishFlagList {
+    struct GroupFlag {
+        uint32_t devTaskFinishFlag; // 本 coreType 全部 leaf task 执行完成后置 1，组内核轮询到即返回全完成
+        uint8_t pad[64 - sizeof(uint32_t)]; // 独占 cacheline
+    };
+    GroupFlag flag[DRCO_QUEUE_MAX][NUM_LOCAL_GROUPS];
+#ifdef __TILE_FWK_HOST__
+    DrcoDevTaskFinishFlagList()
+    {
+        for (uint32_t ct = 0; ct < DRCO_QUEUE_MAX; ct++) {
+            for (uint32_t g = 0; g < NUM_LOCAL_GROUPS; g++) {
+                flag[ct][g].devTaskFinishFlag = 0;
+            }
+        }
+    }
+#endif
+};
+
 struct DrcoRootFuncList {
     DrcoGlobalReadyQueuePtr globalReadyQueueList[DRCO_QUEUE_MAX];
     uint32_t globalQueueInitTail[DRCO_QUEUE_MAX];
@@ -111,7 +129,7 @@ struct DrcoRootFuncList {
 
     alignas(64) uint32_t totalTaskCount;
     alignas(64) uint32_t devTaskFinished;
-    alignas(64) uint32_t executedTaskCount;
+    alignas(64) DrcoDevTaskFinishFlagList devTaskFinishFlagList;
     alignas(64) uint8_t pad[64];
 };
 

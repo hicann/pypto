@@ -74,7 +74,6 @@ struct DrcoQueueFixture {
             }
         }
         root.totalTaskCount = coreFunctionCnt;
-        root.executedTaskCount = 0;
         root.devTaskFinished = 0;
     }
 };
@@ -191,7 +190,7 @@ TEST(CtrlFlowCacheDrcoUt, ReadyQueueDataBackupRestore_WithDrco)
         aivRouted += drco.root.perCorePendingQueueArray[i]->size;
     }
     EXPECT_EQ(aivRouted, 2U);
-    EXPECT_EQ(drco.root.executedTaskCount, 0U);
+    EXPECT_EQ(drco.root.devTaskFinished, 0U);
 }
 
 TEST(CtrlFlowCacheDrcoUt, DieReadyQueueDataBackupRestore_WithDrco)

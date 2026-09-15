@@ -47,6 +47,8 @@ struct ExecuteContext {
     uint32_t seqNo{0};
     uint32_t profLevel{0};
     uint32_t aicCoreNum{0};
+    uint32_t drcoGroupBeg[npu::tile_fwk::DRCO_QUEUE_MAX]{};
+    uint32_t drcoGroupEnd[npu::tile_fwk::DRCO_QUEUE_MAX]{};
     struct CachedDevTask {
         uint32_t seqNo{0};
         __gm__ DynFuncHeader* header{nullptr};

@@ -104,8 +104,8 @@ void DeviceTaskContext::InitDrcoRootFuncList(DynDeviceTask* dyntask)
         rootFuncList->stitchNodeMatrixArray[ct] = stitchNodeMatrix;
     }
     rootFuncList->totalTaskCount = dyntask->devTask.coreFunctionCnt;
-    rootFuncList->executedTaskCount = 0;
     rootFuncList->devTaskFinished = 0;
+    new (&rootFuncList->devTaskFinishFlagList) npu::tile_fwk::DrcoDevTaskFinishFlagList();
 }
 
 void DeviceTaskContext::DispatchReadyQueueToCores(DynDeviceTask* dyntask, DevAscendProgram* devProg)
