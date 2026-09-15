@@ -1,0 +1,231 @@
+#!/usr/bin/env python3
+# coding: utf-8
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# -----------------------------------------------------------------------------------------------------------
+"""Frontend validation tests for pl.struct / pl.struct_array field constraints.
+
+Covers the parser-side rejections added in _struct_parser.py:
+  - C++ keyword as struct type name / field name
+  - nested named tuple/struct as a field value
+  - empty array field
+  - mixed-dtype array field
+Plus positive cases confirming valid declarations are not rejected.
+"""
+
+from __future__ import annotations
+
+from pypto_pro import ir
+import pypto_pro.language as pl
+from pypto_pro.language.parser.diagnostics import ParserSyntaxError
+import pytest
+
+
+def _parse(kernel):
+    """Trigger frontend parsing of a @pl.jit kernel."""
+    kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
+# =============================================================================
+# C++ keyword as struct type name / field name
+# =============================================================================
+
+def test_err_struct_field_name_is_cpp_keyword():
+    """A field named after a C++ keyword ('int') must be rejected."""
+
+    with pytest.raises(ParserSyntaxError, match="C\\+\\+ keyword"):
+        @pl.jit(auto_mutex=False)
+        def kernel(_jit_entry: pl.DT_INT64):
+            s = pl.struct("S", int=1, true=2, delete=3)
+            _test_result = s.int
+
+        _parse(kernel)
+
+
+def test_err_struct_type_name_is_cpp_keyword():
+    """A struct type name that is a C++ keyword ('class') must be rejected."""
+
+    with pytest.raises(ParserSyntaxError, match="C\\+\\+ keyword"):
+        @pl.jit(auto_mutex=False)
+        def kernel(_jit_entry: pl.DT_INT64):
+            s = pl.struct("class", v=1)
+            _test_result = s.v
+
+        _parse(kernel)
+
+
+def test_err_struct_array_field_name_is_cpp_keyword():
+    """struct_array field named after a C++ keyword must be rejected."""
+
+    with pytest.raises(ParserSyntaxError, match="C\\+\\+ keyword"):
+        @pl.jit(auto_mutex=False)
+        def kernel(_jit_entry: pl.DT_INT64):
+            arr = pl.struct_array(2, "S", new=0)
+            _test_result = arr[0].new
+
+        _parse(kernel)
+
+
+def test_err_struct_array_type_name_is_cpp_keyword():
+    """struct_array type name that is a C++ keyword must be rejected."""
+
+    with pytest.raises(ParserSyntaxError, match="C\\+\\+ keyword"):
+        @pl.jit(auto_mutex=False)
+        def kernel(_jit_entry: pl.DT_INT64):
+            arr = pl.struct_array(2, "delete", v=0)
+            _test_result = arr[0].v
+
+        _parse(kernel)
+
+
+# =============================================================================
+# Nested named tuple / struct as a field value
+# =============================================================================
+
+def test_err_struct_nested_make_tuple_field():
+    """A field whose value is a make_tuple result must be rejected."""
+
+    with pytest.raises(ParserSyntaxError, match="nested named tuple/struct"):
+        @pl.jit(auto_mutex=False)
+        def kernel(_jit_entry: pl.DT_INT64):
+            t = pl.make_tuple(x=1)
+            s = pl.struct("S", t=t)
+            _test_result = s.t
+
+        _parse(kernel)
+
+
+def test_err_struct_nested_struct_field():
+    """A field whose value is another struct result must be rejected."""
+
+    with pytest.raises(ParserSyntaxError, match="nested named tuple/struct"):
+        @pl.jit(auto_mutex=False)
+        def kernel(_jit_entry: pl.DT_INT64):
+            inner = pl.struct("Inner", a=0)
+            s = pl.struct("Outer", inner=inner)
+            _test_result = s.inner
+
+        _parse(kernel)
+
+
+def test_err_struct_array_nested_make_tuple_field():
+    """struct_array field whose value is a make_tuple result must be rejected."""
+
+    with pytest.raises(ParserSyntaxError, match="nested named tuple/struct"):
+        @pl.jit(auto_mutex=False)
+        def kernel(_jit_entry: pl.DT_INT64):
+            t = pl.make_tuple(x=1)
+            arr = pl.struct_array(2, "S", t=t)
+            _test_result = arr[0].t
+
+        _parse(kernel)
+
+
+# =============================================================================
+# Empty array field
+# =============================================================================
+
+def test_err_struct_empty_array_field():
+    """An empty array field literal must be rejected."""
+
+    with pytest.raises(ParserSyntaxError, match="empty"):
+        @pl.jit(auto_mutex=False)
+        def kernel(_jit_entry: pl.DT_INT64):
+            s = pl.struct("S", arr=[])
+            _test_result = s.arr
+
+        _parse(kernel)
+
+
+def test_err_struct_array_empty_array_field():
+    """An empty array field literal in struct_array must be rejected."""
+
+    with pytest.raises(ParserSyntaxError, match="empty"):
+        @pl.jit(auto_mutex=False)
+        def kernel(_jit_entry: pl.DT_INT64):
+            arr = pl.struct_array(2, "S", data=[])
+            _test_result = arr[0].data
+
+        _parse(kernel)
+
+
+# =============================================================================
+# Mixed-dtype array field
+# =============================================================================
+
+def test_err_struct_mixed_int_float_array_field():
+    """A mixed int/float array field ([1, 2.5, 3]) must be rejected."""
+
+    with pytest.raises(ParserSyntaxError, match="mixed element types"):
+        @pl.jit(auto_mutex=False)
+        def kernel(_jit_entry: pl.DT_INT64):
+            s = pl.struct("S", arr=[1, 2.5, 3])
+            _test_result = s.arr[0]
+
+        _parse(kernel)
+
+
+def test_err_struct_mixed_bool_int_array_field():
+    """A mixed bool/int array field ([True, 2]) must be rejected."""
+
+    with pytest.raises(ParserSyntaxError, match="mixed element types"):
+        @pl.jit(auto_mutex=False)
+        def kernel(_jit_entry: pl.DT_INT64):
+            s = pl.struct("S", arr=[True, 2])
+            _test_result = s.arr[0]
+
+        _parse(kernel)
+
+
+def test_err_struct_array_mixed_dtype_array_field():
+    """A mixed-dtype array field in struct_array must be rejected."""
+
+    with pytest.raises(ParserSyntaxError, match="mixed element types"):
+        @pl.jit(auto_mutex=False)
+        def kernel(_jit_entry: pl.DT_INT64):
+            arr = pl.struct_array(2, "S", data=[1, 2.5])
+            _test_result = arr[0].data[0]
+
+        _parse(kernel)
+
+
+# =============================================================================
+# Positive cases — valid declarations must NOT be rejected
+# =============================================================================
+
+def test_ok_struct_scalar_and_uniform_array_fields():
+    """Scalar fields and a same-dtype array field parse without error."""
+
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64):
+        s = pl.struct("RunInfo", batch_id=0, offsets=[0, 0, 0, 0])
+        _test_result = s.offsets[0] + s.batch_id
+
+    _parse(kernel)
+
+
+def test_ok_struct_float_array_field():
+    """A same-dtype float array field parses without error."""
+
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64):
+        s = pl.struct("S", arr=[1.0, 2.5, 3.0])
+        _test_result = s.arr[0]
+
+    _parse(kernel)
+
+
+def test_ok_struct_array_uniform_fields():
+    """struct_array with scalar and same-dtype array fields parses without error."""
+
+    @pl.jit(auto_mutex=False)
+    def kernel(_jit_entry: pl.DT_INT64):
+        arr = pl.struct_array(2, "S", batch_id=0, data=[0, 0, 0])
+        _test_result = arr[0].data[0] + arr[1].batch_id
+
+    _parse(kernel)

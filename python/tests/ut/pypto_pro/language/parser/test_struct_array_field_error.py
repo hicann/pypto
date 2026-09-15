@@ -95,9 +95,9 @@ def test_err_subscript_scalar_field_write():
 
 
 def test_err_subscript_nested_struct_field_write():
-    """s.inner[0] = 10 where inner is a nested struct must NOT be treated as an array."""
+    """A nested struct field is rejected at creation, before the subscript write."""
 
-    with pytest.raises(ParserTypeError, match="field is not an array"):
+    with pytest.raises(ParserSyntaxError, match="nested named tuple/struct"):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             inner = pl.struct("Inner", a=0, b=0)
