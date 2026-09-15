@@ -15,8 +15,7 @@
 ## 功能说明
 
 创建编译期命名元组，将多个IR变量按字段名聚合。字段访问在编译期解析为对应的原始值，不生成C++结构体，也不产生运行时开销。
-
-pypto_pro.language.struct会生成C++结构体，可用于跨Pipeline传递数据；pypto_pro.language.make_tuple仅在IR中聚合变量，不生成C++结构体。
+[pypto_pro.language.struct](./struct.md)会生成C++结构体，可用于跨Pipeline传递数据，两者有区别。
 
 ## 函数原型
 
