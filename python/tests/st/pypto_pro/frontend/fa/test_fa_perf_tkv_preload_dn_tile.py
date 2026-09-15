@@ -1077,10 +1077,12 @@ def test_fa_perf():
         qk_t = torch.zeros((sq * FIFO_SIZE, skv), device=device, dtype=torch.float32)
         p_t = torch.zeros((sq * FIFO_SIZE, skv), device=device, dtype=torch.float16)
         pv_t = torch.zeros((sq * FIFO_SIZE, d), device=device, dtype=torch.float32)
+        # Inputs are fixed across all 20 launches; reuse the same reference while
+        # still comparing every output to catch repeated-launch state problems.
+        _, _, _, o_ref = flash_attention_ref(q_t, k_t, v_t, d)
         for _ in range(20):
             fa_perf_tkv_preload_dn_kernel[None, num_cores](q_t, k_t, v_t, o_t, qk_t, p_t, pv_t)
             torch.npu.synchronize()
-            qk_ref, x_exp_ref, pv_ref, o_ref = flash_attention_ref(q_t, k_t, v_t, d)
             diff = (o_t - o_ref).abs().max().item()
             logging.info("  max|diff|=%.4f", diff)
             torch.testing.assert_close(o_t, o_ref, rtol=5e-3, atol=5e-3)

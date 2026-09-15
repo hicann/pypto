@@ -556,6 +556,8 @@ WHILE_HIGH_DIM_ADD_KERNELS = [
 @pytest.mark.soc("950")
 @pypto.options(pass_options={"enable_slice": False})
 def test_while_add():
+    # Let kernel discovery reach every variant before validating any output.
+    checks = []
     device = ST_DEVICE
     torch.npu.set_device(device)
     torch.manual_seed(0)
@@ -567,8 +569,11 @@ def test_while_add():
             kernel(x, y, z)
             torch.npu.synchronize()
             z_ref = _ref(tdt, lambda a, b: a + b, x, y)
-            torch.testing.assert_close(z, z_ref, atol=atol, rtol=rtol)
-            logging.info("test_while_add [%s] passed! shape=%s", label, shape)
+            checks.append((z, z_ref, atol, rtol, 'test_while_add [%s] shape=%s' % (label, shape)))
+
+    for actual, expected, atol, rtol, case in checks:
+        torch.testing.assert_close(actual, expected, atol=atol, rtol=rtol, msg=case)
+        logging.info("%s passed!", case)
 
 
 @pytest.mark.soc("950")
@@ -664,6 +669,8 @@ def test_while_tail():
 @pytest.mark.soc("950")
 @pypto.options(pass_options={"enable_slice": False})
 def test_while_4d_add():
+    # Let kernel discovery reach every variant before validating any output.
+    checks = []
     device = ST_DEVICE
     torch.npu.set_device(device)
     torch.manual_seed(0)
@@ -675,15 +682,17 @@ def test_while_4d_add():
             kernel(x, y, z)
             torch.npu.synchronize()
             z_ref = _ref(tdt, lambda a, b: a + b, x, y)
-            torch.testing.assert_close(z, z_ref, atol=atol, rtol=rtol)
-            logging.info("test_while_4d_add [%s] passed! shape=%s", label, shape)
+            checks.append((z, z_ref, atol, rtol, 'test_while_4d_add [%s] shape=%s' % (label, shape)))
     for case_name, kernel, shape in WHILE_4D_LAYOUT_ADD_KERNELS:
         x, y, z = _gen(shape, torch.float16, device)
         kernel(x, y, z)
         torch.npu.synchronize()
         z_ref = (x.float() + y.float()).to(torch.float16)
-        torch.testing.assert_close(z, z_ref, atol=1e-2, rtol=1e-2)
-        logging.info("test_while_4d_add layout [%s] passed! shape=%s", case_name, shape)
+        checks.append((z, z_ref, 0.01, 0.01, 'test_while_4d_add layout [%s] shape=%s' % (case_name, shape)))
+
+    for actual, expected, atol, rtol, case in checks:
+        torch.testing.assert_close(actual, expected, atol=atol, rtol=rtol, msg=case)
+        logging.info("%s passed!", case)
 
 
 @pytest.mark.soc("950")

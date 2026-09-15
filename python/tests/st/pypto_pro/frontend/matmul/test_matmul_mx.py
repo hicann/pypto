@@ -18,8 +18,8 @@ M and N may have tail blocks.  K is deliberately kept a multiple of 64: each
 64-element K tile consumes two complete 32-element MX scale groups.
 
 All GM tensor dimensions are dynamic and M/N/K are read from runtime tensor shapes.
-Test artifact names include M/N/K so parallel pytest workers do not compile different
-cases into the same directory; L1/L0 tile capacities remain compile-time constants
+Factory caches and artifact names include only static dtype/layout/feature options;
+exact and tail shapes reuse the same dynamic kernel. L1/L0 tile capacities remain compile-time constants
 required by the cube instructions.
 """
 
@@ -162,15 +162,14 @@ def _assert_single_dynamic_variant(kernel):
     )
 
 
-def _kernel_name(tag, a_dtype_label, b_dtype_label, m, k, n):
-    return f"{tag}_a_{a_dtype_label}_b_{b_dtype_label}_{m}x{k}x{n}"
+def _kernel_name(tag, a_dtype_label, b_dtype_label):
+    return f"{tag}_a_{a_dtype_label}_b_{b_dtype_label}"
 
 
-@functools.lru_cache(maxsize=None)
-def _make_mx_kernel(a_dtype_label, b_dtype_label, m, k, n, *, use_phase,
+def _make_mx_kernel(a_dtype_label, b_dtype_label, *, use_phase,
                     addressing="offset", transpose_a=False, direct_b_kn=False,
                     transpose_scale_a=False, multicore_atomic=False, scalar_scale=False,
-                    out_dtype_label="fp32", case_tag=None):
+                    out_dtype_label="fp32"):
     """Build one MX specialization; dtype values are fixed when the closure is parsed.
 
     Case parameters:
@@ -186,8 +185,18 @@ def _make_mx_kernel(a_dtype_label, b_dtype_label, m, k, n, *, use_phase,
       - ``multicore_atomic``: split K across AI cores and atomically accumulate in GM.
       - ``scalar_scale``: apply ``_SCALAR_SCALE`` while storing the result.
       - ``out_dtype_label``: select the FP32, FP16, or INT8 output/store path.
-      - ``case_tag``: identify a helper kernel that belongs to a distinct test path.
     """
+    # Normalize defaults before memoization: a boundary case specifying only
+    # use_phase must share the object used by the fully specified general runner.
+    return _build_mx_kernel(
+        a_dtype_label, b_dtype_label, use_phase, addressing, transpose_a, direct_b_kn,
+        transpose_scale_a, multicore_atomic, scalar_scale, out_dtype_label,
+    )
+
+
+@functools.lru_cache(maxsize=None)
+def _build_mx_kernel(a_dtype_label, b_dtype_label, use_phase, addressing, transpose_a,
+                     direct_b_kn, transpose_scale_a, multicore_atomic, scalar_scale, out_dtype_label):
     a_dtype, _, a_is_fp4 = _MX_DTYPES[a_dtype_label]
     b_dtype, _, b_is_fp4 = _MX_DTYPES[b_dtype_label]
     assert a_is_fp4 == b_is_fp4
@@ -206,7 +215,7 @@ def _make_mx_kernel(a_dtype_label, b_dtype_label, m, k, n, *, use_phase,
         f"_{addressing}_sa{scale_a_shape_tag}_{'t' if transpose_a else 'n'}_"
         f"b{b_storage_tag}_{out_dtype_label}_{store_tag}"
     )
-    name = _kernel_name(case_tag or tag, a_dtype_label, b_dtype_label, m, k, n)
+    name = _kernel_name(tag, a_dtype_label, b_dtype_label)
 
     @pl.jit(auto_mutex=True, name=name)
     def matmul_mx_mnk(
@@ -379,13 +388,13 @@ def _make_mx_kernel(a_dtype_label, b_dtype_label, m, k, n, *, use_phase,
 
 
 @functools.lru_cache(maxsize=None)
-def _make_mx_scale_tile_kernel(a_dtype_label, b_dtype_label, out_dtype_label, m, k, n):
+def _make_mx_scale_tile_kernel(a_dtype_label, b_dtype_label, out_dtype_label):
     """Build t07: MX matmul followed by per-column Tile scaling."""
     a_dtype, _, a_is_fp4 = _MX_DTYPES[a_dtype_label]
     b_dtype, _, b_is_fp4 = _MX_DTYPES[b_dtype_label]
     assert a_is_fp4 == b_is_fp4
     out_dtype, _ = _OUT_DTYPES[out_dtype_label]
-    name = _kernel_name(f"mx_scale_tile_{out_dtype_label}", a_dtype_label, b_dtype_label, m, k, n)
+    name = _kernel_name(f"mx_scale_tile_{out_dtype_label}", a_dtype_label, b_dtype_label)
 
     @pl.jit(auto_mutex=True, name=name)
     def matmul_mx_scale_tile(
@@ -395,6 +404,7 @@ def _make_mx_scale_tile_kernel(a_dtype_label, b_dtype_label, out_dtype_label, m,
         scale_b: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC, 2], pl.DT_FP8E8M0],
         scale_params: pl.Tensor[[1, pl.DYNAMIC], pl.DT_INT64],
         out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], out_dtype],
+        raw_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
     ):
         a_l1 = pl.make_tile_group(
             type=pl.TileType(shape=[TILE, TILE], dtype=a_dtype, target_memory=pl.MemorySpace.Mat,
@@ -488,6 +498,9 @@ def _make_mx_scale_tile_kernel(a_dtype_label, b_dtype_label, out_dtype_label, m,
                             pl.matmul_mx(ac, al, br, sal, sbl)
                         else:
                             pl.matmul_mx_acc(ac, ac, al, br, sal, sbl)
+                    # Keep an independently checked FP32 accumulator output, then
+                    # test quantization against that exact accumulator value.
+                    pl.store(raw_out, ac, [mi, ni])
                     cur_scale = scale_mat.current()
                     scale_tile = scale_tiles.current()
                     pl.set_validshape(cur_scale, [1, n_valid])
@@ -500,12 +513,12 @@ def _make_mx_scale_tile_kernel(a_dtype_label, b_dtype_label, out_dtype_label, m,
 
 
 @functools.lru_cache(maxsize=None)
-def _make_mx_batched_kernel(a_dtype_label, b_dtype_label, m, k, n):
+def _make_mx_batched_kernel(a_dtype_label, b_dtype_label):
     """Build t09 with high-dimensional data and scale tensors."""
     a_dtype, _, a_is_fp4 = _MX_DTYPES[a_dtype_label]
     b_dtype, _, b_is_fp4 = _MX_DTYPES[b_dtype_label]
     assert a_is_fp4 == b_is_fp4
-    name = _kernel_name("mx_batched_tile_order", a_dtype_label, b_dtype_label, m, k, n)
+    name = _kernel_name("mx_batched_tile_order", a_dtype_label, b_dtype_label)
 
     @pl.jit(auto_mutex=True, name=name)
     def matmul_mx_batched(
@@ -626,10 +639,10 @@ def _make_mx_batched_kernel(a_dtype_label, b_dtype_label, m, k, n):
 
 
 @functools.lru_cache(maxsize=None)
-def _make_mx_insert_kernel(dtype_label, m, k, n):
+def _make_mx_insert_kernel(dtype_label):
     """Build t10: GM -> L1 -> L0 -> ACC -> UB -> cast -> L1 -> L0 -> ACC -> GM."""
     mx_dtype, _, is_fp4 = _MX_DTYPES[dtype_label]
-    name = _kernel_name("mx_insert", dtype_label, dtype_label, m, k, n)
+    name = _kernel_name("mx_insert", dtype_label, dtype_label)
 
     @pl.jit(auto_mutex=True, name=name)
     def matmul_mx_insert(
@@ -1068,7 +1081,7 @@ def _run_mx(a_dtype_label, b_dtype_label, device, mkn, *, use_phase, addressing=
     m, k, n = mkn
     assert k % TILE == 0
     kernel = _make_mx_kernel(
-        a_dtype_label, b_dtype_label, m, k, n, use_phase=use_phase, addressing=addressing,
+        a_dtype_label, b_dtype_label, use_phase=use_phase, addressing=addressing,
         transpose_a=transpose_a, direct_b_kn=direct_b_kn, transpose_scale_a=transpose_scale_a,
         multicore_atomic=multicore_atomic,
         scalar_scale=scalar_scale, out_dtype_label=out_dtype_label
@@ -1118,11 +1131,7 @@ def _make_scale_params(scales, device, out_dtype_label):
 
 def _run_mx_scale_tile(a_dtype_label, b_dtype_label, device, mkn, out_dtype_label):
     m, k, n = mkn
-    kernel = _make_mx_scale_tile_kernel(a_dtype_label, b_dtype_label, out_dtype_label, m, k, n)
-    raw_kernel = _make_mx_kernel(
-        a_dtype_label, b_dtype_label, m, k, n, use_phase=False, out_dtype_label="fp32",
-        case_tag=f"mx_scale_tile_raw_{out_dtype_label}"
-    )
+    kernel = _make_mx_scale_tile_kernel(a_dtype_label, b_dtype_label, out_dtype_label)
     (a, b, scale_a, scale_b, a_golden, b_golden, _) = _make_mx_operand_pair(
         a_dtype_label, b_dtype_label, m, k, n, device
     )
@@ -1131,10 +1140,8 @@ def _run_mx_scale_tile(a_dtype_label, b_dtype_label, device, mkn, out_dtype_labe
     _, out_torch_dtype = _OUT_DTYPES[out_dtype_label]
     out = torch.zeros((m, n), dtype=out_torch_dtype, device=device)
     raw_out = torch.zeros((m, n), dtype=torch.float32, device=device)
-    raw_kernel(a, b, scale_a, scale_b, raw_out)
-    kernel(a, b, scale_a, scale_b, scale_params, out)
+    kernel(a, b, scale_a, scale_b, scale_params, out, raw_out)
     torch.npu.synchronize()
-    _assert_single_dynamic_variant(raw_kernel)
     _assert_single_dynamic_variant(kernel)
 
     label = f"A={a_dtype_label},B={b_dtype_label}[{m}x{k}x{n},scale_tile,{out_dtype_label}]"
@@ -1204,7 +1211,7 @@ def _make_batched_mx_operands(a_dtype_label, b_dtype_label, m, k, n, device):
 
 def _run_mx_batched(a_dtype_label, b_dtype_label, device, mkn):
     m, k, n = mkn
-    kernel = _make_mx_batched_kernel(a_dtype_label, b_dtype_label, m, k, n)
+    kernel = _make_mx_batched_kernel(a_dtype_label, b_dtype_label)
     a, b, scale_a, scale_b, a_golden, b_golden = _make_batched_mx_operands(
         a_dtype_label, b_dtype_label, m, k, n, device
     )
@@ -1221,7 +1228,7 @@ def _run_mx_insert(dtype_label, device, mkn):
     m, k, n = mkn
     _, element_format, is_fp4 = _MX_DTYPES[dtype_label]
     assert k == n
-    kernel = _make_mx_insert_kernel(dtype_label, m, k, n)
+    kernel = _make_mx_insert_kernel(dtype_label)
 
     # Use an identity RHS and unit E8M0 scales. The first matmul therefore
     # reproduces A exactly, and A already consists of representable MX values.
@@ -1261,7 +1268,7 @@ def _run_e8m0_boundaries(device):
     m = n = TILE
     k = len(_E8M0_BOUNDARY_PAIRS) * GROUP_SIZE
     kernel = _make_mx_kernel(
-        "mxfp8_e4m3", "mxfp8_e5m2", m, k, n, use_phase=True
+        "mxfp8_e4m3", "mxfp8_e5m2", use_phase=True
     )
 
     # Each K group uses an exactly representable E4M3 weight. Distinct weights
@@ -1318,7 +1325,7 @@ def _run_fp8_boundaries(device):
     """Check E4M3/E5M2 zero, subnormal, normal, and maximum finite codes."""
     m = k = n = TILE
     kernel = _make_mx_kernel(
-        "mxfp8_e4m3", "mxfp8_e5m2", m, k, n, use_phase=True
+        "mxfp8_e4m3", "mxfp8_e5m2", use_phase=True
     )
     a_codes = np.zeros((m, k), dtype=np.uint8)
     b_codes = np.zeros((n, k), dtype=np.uint8)

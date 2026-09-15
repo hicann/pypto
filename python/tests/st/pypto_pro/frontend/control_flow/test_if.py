@@ -435,6 +435,8 @@ DEEPLY_NESTED_IF_KERNELS = {
 @pytest.mark.soc("950")
 @pypto.options(pass_options={"enable_slice": False})
 def test_if_else():
+    # Let kernel discovery reach every variant before validating any output.
+    checks = []
     device = ST_DEVICE
     torch.npu.set_device(device)
     torch.manual_seed(0)
@@ -447,8 +449,11 @@ def test_if_else():
         z_ref = torch.zeros(shape, device=device, dtype=tdt)
         z_ref[:64, :] = _ref(tdt, lambda a, b: a + b, x[:64, :], y[:64, :])
         z_ref[64:, :] = _ref(tdt, lambda a, b: a - b, x[64:, :], y[64:, :])
-        torch.testing.assert_close(z, z_ref, atol=atol, rtol=rtol)
-        logging.info("test_if_else [%s] passed! shape=%s", label, shape)
+        checks.append((z, z_ref, atol, rtol, 'test_if_else [%s] shape=%s' % (label, shape)))
+
+    for actual, expected, atol, rtol, case in checks:
+        torch.testing.assert_close(actual, expected, atol=atol, rtol=rtol, msg=case)
+        logging.info("%s passed!", case)
 
 
 

@@ -1620,14 +1620,16 @@ def _run_case(device, seq_q_list, seq_kv_list, n, nkv, mm_prefix_range, num_core
         spans_dev, zero_mask, work_ranges)
     torch.npu.synchronize()
 
-    o_ref = flash_attention_ref_tnd(q, k, v, seq_q_list, seq_kv_list, TD, masks)
     o = o.cpu()
+    # Check the existing all-zero regression guard before the expensive CPU
+    # reference. A stubbed discovery launch stops here, after recording the
+    # dynamic kernel, without calculating goldens for every model shape.
+    assert bool(o.abs().max().item() != 0.0), "kernel output is all-zero"
+    o_ref = flash_attention_ref_tnd(q, k, v, seq_q_list, seq_kv_list, TD, masks)
     # Difference in fp32: a bf16 subtract would round the residual away.
     diff = (o.float() - o_ref.float()).abs().max().item()
     status = "PASS"
     try:
-        # Guard against the all-zero regression (host `o` never written back).
-        assert bool(o.abs().max().item() != 0.0), "kernel output is all-zero"
         torch.testing.assert_close(o, o_ref, rtol=atol, atol=atol)
     except AssertionError:
         status = "FAIL"

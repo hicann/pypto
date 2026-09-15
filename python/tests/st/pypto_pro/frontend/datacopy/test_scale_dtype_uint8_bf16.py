@@ -20,6 +20,7 @@ QS322BF16_PRE/QF322BF16_PRE 支持 BF16 量化，数值与 golden 位级一致�
 - 动态 shape + 完整块/行尾块（N 向部分块 vn<64 为已知框架限制，见测试设计规范）
 """
 
+from functools import lru_cache
 import logging
 import os
 import struct
@@ -36,8 +37,13 @@ ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 SCALE = 2.0
 
 
-def _make_scalar_kernel(src_pl, acc_dtype, dst_dtype):
-    @pl.jit()
+# Retain the JIT object across discovery and execution; only static factory
+# arguments enter this cache, so runtime tensor values still run independently.
+@lru_cache(maxsize=None)
+def _make_scalar_kernel(src_name, acc_name, dst_name):
+    src_pl, acc_dtype, dst_dtype = (getattr(pl, name) for name in (src_name, acc_name, dst_name))
+
+    @pl.jit(name=f"scalar_scale_{src_pl}_{acc_dtype}_{dst_dtype}")
     def kernel(
         q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], src_pl],
         k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], src_pl],
@@ -92,8 +98,11 @@ def _make_scalar_kernel(src_pl, acc_dtype, dst_dtype):
     return kernel
 
 
-def _make_tile_scale_kernel(src_pl, acc_dtype, dst_dtype):
-    @pl.jit()
+@lru_cache(maxsize=None)
+def _make_tile_scale_kernel(src_name, acc_name, dst_name):
+    src_pl, acc_dtype, dst_dtype = (getattr(pl, name) for name in (src_name, acc_name, dst_name))
+
+    @pl.jit(name=f"tile_scale_{src_pl}_{acc_dtype}_{dst_dtype}")
     def kernel(
         q: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], src_pl],
         k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], src_pl],
@@ -170,7 +179,7 @@ def test_fp32_acc_to_uint8_scalar(m, n):
     q = torch.randn(m, n, device=device, dtype=torch.float32)
     k = torch.eye(n, device=device, dtype=torch.float32)
     out = torch.zeros((m, n), device=device, dtype=torch.uint8)
-    _make_scalar_kernel(pl.DT_FP32, pl.DT_FP32, pl.DT_UINT8)(q, k, out, vm, vn)
+    _make_scalar_kernel("DT_FP32", "DT_FP32", "DT_UINT8")(q, k, out, vm, vn)
     torch.npu.synchronize()
     expected = _quant_golden(q, SCALE, torch.uint8)
     torch.testing.assert_close(out[:vm, :vn].to(torch.int32), expected[:vm, :vn].to(torch.int32), rtol=0, atol=0)
@@ -189,7 +198,7 @@ def test_fp32_acc_to_bf16_scalar(m, n):
     q = torch.randn(m, n, device=device, dtype=torch.float32)
     k = torch.eye(n, device=device, dtype=torch.float32)
     out = torch.zeros((m, n), device=device, dtype=torch.bfloat16)
-    _make_scalar_kernel(pl.DT_FP32, pl.DT_FP32, pl.DT_BF16)(q, k, out, vm, vn)
+    _make_scalar_kernel("DT_FP32", "DT_FP32", "DT_BF16")(q, k, out, vm, vn)
     torch.npu.synchronize()
     expected = _quant_golden(q, SCALE, torch.bfloat16)
     torch.testing.assert_close(out[:vm, :vn], expected[:vm, :vn], rtol=0, atol=1e-2)
@@ -208,7 +217,7 @@ def test_int32_acc_to_uint8_scalar(m, n):
     q = torch.randint(-8, 9, (m, n), device=device, dtype=torch.int8)
     k = torch.eye(n, device=device, dtype=torch.int8)
     out = torch.zeros((m, n), device=device, dtype=torch.uint8)
-    _make_scalar_kernel(pl.DT_INT8, pl.DT_INT32, pl.DT_UINT8)(q, k, out, vm, vn)
+    _make_scalar_kernel("DT_INT8", "DT_INT32", "DT_UINT8")(q, k, out, vm, vn)
     torch.npu.synchronize()
     expected = _quant_golden(q, SCALE, torch.uint8)
     torch.testing.assert_close(out[:vm, :vn].to(torch.int32), expected[:vm, :vn].to(torch.int32), rtol=0, atol=0)
@@ -227,7 +236,7 @@ def test_int32_acc_to_bf16_scalar(m, n):
     q = torch.randint(-8, 9, (m, n), device=device, dtype=torch.int8)
     k = torch.eye(n, device=device, dtype=torch.int8)
     out = torch.zeros((m, n), device=device, dtype=torch.bfloat16)
-    _make_scalar_kernel(pl.DT_INT8, pl.DT_INT32, pl.DT_BF16)(q, k, out, vm, vn)
+    _make_scalar_kernel("DT_INT8", "DT_INT32", "DT_BF16")(q, k, out, vm, vn)
     torch.npu.synchronize()
     expected = _quant_golden(q, SCALE, torch.bfloat16)
     torch.testing.assert_close(out[:vm, :vn], expected[:vm, :vn], rtol=0, atol=1e-2)
@@ -252,7 +261,7 @@ def test_int32_acc_to_uint8_per_channel():
     k = torch.eye(n, device=device, dtype=torch.int8)
     out = torch.zeros((m, n), device=device, dtype=torch.uint8)
     scale_param = _make_scale_tensor(device, SCALE, 64)
-    _make_tile_scale_kernel(pl.DT_INT8, pl.DT_INT32, pl.DT_UINT8)(q, k, scale_param, out)
+    _make_tile_scale_kernel("DT_INT8", "DT_INT32", "DT_UINT8")(q, k, scale_param, out)
     torch.npu.synchronize()
     expected = _quant_golden(q, SCALE, torch.uint8)
     torch.testing.assert_close(out[:vm, :vn].to(torch.int32), expected[:vm, :vn].to(torch.int32), rtol=0, atol=0)
@@ -272,7 +281,7 @@ def test_int32_acc_to_bf16_per_channel():
     k = torch.eye(n, device=device, dtype=torch.int8)
     out = torch.zeros((m, n), device=device, dtype=torch.bfloat16)
     scale_param = _make_scale_tensor(device, SCALE, 64)
-    _make_tile_scale_kernel(pl.DT_INT8, pl.DT_INT32, pl.DT_BF16)(q, k, scale_param, out)
+    _make_tile_scale_kernel("DT_INT8", "DT_INT32", "DT_BF16")(q, k, scale_param, out)
     torch.npu.synchronize()
     expected = _quant_golden(q, SCALE, torch.bfloat16)
     torch.testing.assert_close(out[:vm, :vn], expected[:vm, :vn], rtol=0, atol=1e-2)

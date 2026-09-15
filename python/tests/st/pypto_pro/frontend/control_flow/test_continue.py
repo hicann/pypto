@@ -327,6 +327,8 @@ def for_3layer_continue_fp16_kernel(
 @pytest.mark.soc("950")
 @pypto.options(pass_options={"enable_slice": False})
 def test_for_continue():
+    # Let kernel discovery reach every variant before validating any output.
+    checks = []
     device = ST_DEVICE
     torch.npu.set_device(device)
     torch.manual_seed(0)
@@ -349,8 +351,11 @@ def test_for_continue():
             torch.npu.synchronize()
             z_ref = torch.zeros(shape, device=device, dtype=tdt)
             z_ref[:, TILE_N:] = _ref(tdt, lambda a, b: a + b, x[:, TILE_N:], y[:, TILE_N:])
-            torch.testing.assert_close(z, z_ref, atol=atol, rtol=rtol)
-            logging.info("test_for_continue [%s] passed! shape=%s", label, shape)
+            checks.append((z, z_ref, atol, rtol, 'test_for_continue [%s] shape=%s' % (label, shape)))
+
+    for actual, expected, atol, rtol, case in checks:
+        torch.testing.assert_close(actual, expected, atol=atol, rtol=rtol, msg=case)
+        logging.info("%s passed!", case)
 
 
 @pytest.mark.soc("950")

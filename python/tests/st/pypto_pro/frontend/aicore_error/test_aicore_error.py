@@ -55,6 +55,10 @@ import torch
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
+pytestmark = pytest.mark.skip_jit_discovery(
+    reason="Fault-trigger and offline-repro subprocesses cannot populate the parent process JIT cache"
+)
+
 _REPO_ROOT = Path(__file__).resolve().parents[6]
 _REPRO_SCRIPT = _REPO_ROOT / "tools" / "scripts" / "debug_aicore_error_pro_repro.py"
 

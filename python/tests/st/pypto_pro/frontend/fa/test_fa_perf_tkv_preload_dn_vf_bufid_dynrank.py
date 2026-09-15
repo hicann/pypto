@@ -972,10 +972,6 @@ def test_fa_perf(torch_dtype, pl_dtype, rtol, atol):
         tiling,
     )
     torch.npu.synchronize()
-    o_causal_ref = flash_attention_causal_ref_bs(q_t, k_t, v_t, d)
-    torch.testing.assert_close(o_causal, o_causal_ref, rtol=rtol, atol=atol)
-    logging.info("HasAtten=1 (causal+mask) PASS: max|diff|=%.6f", (o_causal - o_causal_ref).abs().max().item())
-
     o_full = torch.zeros((b, sq, n, d), device=device, dtype=torch_dtype)
     tk_full = {**_FA_TILING_KEY_LAUNCH, "HasAtten": 0}
     flash_attention_score[None, actual_num_cores, tk_full, datatype](
@@ -1006,6 +1002,11 @@ def test_fa_perf(torch_dtype, pl_dtype, rtol, atol):
         tiling,
     )
     torch.npu.synchronize()
+    # Reach both tiling keys before output checks stop precompile discovery.
+    o_causal_ref = flash_attention_causal_ref_bs(q_t, k_t, v_t, d)
+    torch.testing.assert_close(o_causal, o_causal_ref, rtol=rtol, atol=atol)
+    logging.info("HasAtten=1 (causal+mask) PASS: max|diff|=%.6f", (o_causal - o_causal_ref).abs().max().item())
+
     o_full_ref = flash_attention_full_ref_bs(q_t, k_t, v_t, d)
     torch.testing.assert_close(o_full, o_full_ref, rtol=rtol, atol=atol)
     logging.info("HasAtten=0 (full) PASS: max|diff|=%.6f", (o_full - o_full_ref).abs().max().item())

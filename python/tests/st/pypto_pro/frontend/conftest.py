@@ -29,6 +29,9 @@ Anything the discovery pass misses (e.g. a kernel reached only after an earlier 
 non-``_TileJitKernel`` path) simply falls back to lazy compilation in phase 3, so behavior is
 always correct — parallel compilation is a pure speed-up.
 
+Mark tests that manage subprocesses or profiling sessions with ``skip_jit_discovery``.
+They run once in the real execution phase, including all fixtures and assertions.
+
 Tunables:
   PARALLEL_COMPILE       — ``1`` to enable the three-phase flow (default: off).
   PARALLEL_COMPILE_JOBS  — thread-pool size (default: min(#combos, os.cpu_count())).
@@ -36,6 +39,14 @@ Tunables:
 
 import logging
 import os
+from time import perf_counter
+
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "skip_jit_discovery(reason): run only in the execution phase; for subprocess/profiler integration tests",
+    )
 
 
 def _parallel_compile_enabled() -> bool:
@@ -76,6 +87,7 @@ def pytest_runtestloop(session):
             logging.info("[PARALLEL_COMPILE] %s", msg)
 
     items = session.items
+    discovery_items = [item for item in items if item.get_closest_marker("skip_jit_discovery") is None]
 
     # ---- Phase 1: discovery -- record every variant that misses the cache, launches stubbed.
     #
@@ -106,7 +118,11 @@ def pytest_runtestloop(session):
     def noop_launch(*_args, **_kwargs):
         return None
 
-    info(f"phase 1/3: discovering kernels across {len(items)} tests...")
+    info(
+        f"phase 1/3: discovering kernels across {len(discovery_items)} tests "
+        f"({len(items) - len(discovery_items)} run only in phase 3)..."
+    )
+    discovery_start = perf_counter()
     # Only the first failure is ever reported, so only the first is looked at, and even then
     # through reprcrash -- the one-line message pytest already built. Stringifying the whole
     # longrepr instead formats the entire traceback with source context, about 90 ms per test,
@@ -119,11 +135,17 @@ def pytest_runtestloop(session):
         longrepr = getattr(report, "longrepr", None)
         crash = getattr(longrepr, "reprcrash", None)
         return getattr(crash, "message", None) or str(longrepr)[-200:]
+
+    # Discovery reports are discarded; formatting source/locals for their
+    # expected accuracy failures can cost more than running the test bodies.
+    # Keep the one-line failure message and restore normal reports for phase 3.
+    original_tbstyle = session.config.option.tbstyle
     try:
+        session.config.option.tbstyle = "no"
         setattr(tile_jit_kernel_cls, "_compile_variant", discover_compile_variant)
         setattr(jit, "_launch", noop_launch)
-        for i, item in enumerate(items):
-            nextitem = items[i + 1] if i + 1 < len(items) else None
+        for i, item in enumerate(discovery_items):
+            nextitem = discovery_items[i + 1] if i + 1 < len(discovery_items) else None
             try:
                 # log=False: run setup/call/teardown for fixture/param handling without emitting
                 # reports, so this phase does not affect the pass/fail tally.
@@ -136,8 +158,10 @@ def pytest_runtestloop(session):
                 failed = next(report for report in reports if report.failed)
                 first_failure = (item.nodeid, _crash_message(failed))
     finally:
+        session.config.option.tbstyle = original_tbstyle
         setattr(tile_jit_kernel_cls, "_compile_variant", orig_compile_variant)
         setattr(jit, "_launch", orig_launch)
+    info(f"phase 1/3: discovered {len(records)} kernel(s) in {perf_counter() - discovery_start:.2f}s")
 
     # Most tests "fail" in this phase by construction: the launch is stubbed, so anything
     # that asserts on kernel output sees an untouched tensor. That makes the per-test result
@@ -147,15 +171,16 @@ def pytest_runtestloop(session):
     # every discovery call raised, every exception was swallowed as a test failure, and the
     # suite quietly fell back to serial lazy compilation for months). Report that case, and
     # carry a failure along so there is something to diagnose from.
-    if not records and items:
+    if not records and discovery_items:
         detail = f" First failure: {first_failure[0]} -> {first_failure[1]}" if first_failure else ""
         info(
-            f"phase 1/3: WARNING -- discovered no kernels across {len(items)} test(s). "
+            f"phase 1/3: WARNING -- discovered no kernels across {len(discovery_items)} test(s). "
             f"Parallel pre-compilation is doing nothing; check that the _compile_variant stub "
             f"still matches the real signature.{detail}"
         )
 
     # ---- Phase 2: compile every recorded kernel in parallel.
+    compile_start = perf_counter()
     if records:
         jobs = int(os.environ.get("PARALLEL_COMPILE_JOBS") or 0)
         if jobs <= 0:
@@ -177,9 +202,11 @@ def pytest_runtestloop(session):
             list(pool.map(build, records))
     else:
         info("phase 2/3: no JIT kernels discovered; nothing to pre-compile.")
+    info(f"phase 2/3: completed in {perf_counter() - compile_start:.2f}s")
 
     # ---- Phase 3: launch tests one by one (default protocol, warm compile cache).
     info(f"phase 3/3: launching {len(items)} tests...")
+    launch_start = perf_counter()
     for i, item in enumerate(items):
         nextitem = items[i + 1] if i + 1 < len(items) else None
         item.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)
@@ -187,4 +214,5 @@ def pytest_runtestloop(session):
             raise session.Failed(session.shouldfail)
         if session.shouldstop:
             raise session.Interrupted(session.shouldstop)
+    info(f"phase 3/3: completed in {perf_counter() - launch_start:.2f}s")
     return True

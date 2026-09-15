@@ -10,6 +10,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # --------------------------------------------------------------------------------
 
+from functools import lru_cache
 import logging
 import os
 import struct
@@ -75,9 +76,8 @@ def _require_a5(device):
 def _kernel_name(tag, in_dtype, acc, out):
     """Unique name per dtype combo.
 
-    The JIT caches compiled kernels by name, so distinct specializations must not share
-    one name -- otherwise a later combo silently reuses an earlier combo's artifact
-    (e.g. FP32 bytes read as HF8).
+    Artifact directories include this name. Distinct specializations need distinct
+    names so parallel compilation cannot overwrite another specialization's source.
     """
     return f"{tag}_in{in_dtype}_acc{acc}_out{out}"
 
@@ -1496,6 +1496,10 @@ _HIF8_FINITE_MASK = ~_HIF8_SPECIAL
 _HIF8_FINITE_VALS = _HIF8_VALUES[_HIF8_FINITE_MASK].astype(np.float64)
 _HIF8_FINITE_CODES = np.nonzero(_HIF8_FINITE_MASK)[0].astype(np.uint8)
 _HIF8_MAX_MAG = float(np.nanmax(np.abs(_HIF8_FINITE_VALS)))
+# Sorted, unique targets for vectorized nearest-neighbor lookup. Keep the first
+# original code for duplicate values, as the scalar reference does.
+_HIF8_SORTED_VALS, _HIF8_FIRST = np.unique(_HIF8_FINITE_VALS, return_index=True)
+_HIF8_SORTED_CODES = _HIF8_FINITE_CODES[_HIF8_FIRST]
 
 
 def encode_hif8_scalar(value: float) -> np.uint8:
@@ -1524,10 +1528,19 @@ def quant_hif8(src) -> np.ndarray:
     HiF8 carries no per-group scale: this is the pure cast path (cast32toH8).
     """
     src_fp32 = np.asarray(src, dtype=np.float32)
-    flat = src_fp32.reshape(-1)
-    out = np.empty(flat.shape, dtype=np.uint8)
-    for i, v in enumerate(flat.tolist()):
-        out[i] = encode_hif8_scalar(v)
+    # Use float64 distances, matching encode_hif8_scalar, including midpoint ties.
+    # Widening a signaling NaN quiets it; all NaNs map to the same code below.
+    with np.errstate(invalid="ignore"):
+        flat = np.clip(src_fp32.reshape(-1).astype(np.float64), -_HIF8_MAX_MAG, _HIF8_MAX_MAG)
+    upper = np.searchsorted(_HIF8_SORTED_VALS, flat).clip(0, len(_HIF8_SORTED_VALS) - 1)
+    lower = (upper - 1).clip(0)
+    low_value, high_value = _HIF8_SORTED_VALS[lower], _HIF8_SORTED_VALS[upper]
+    low_distance, high_distance = np.abs(flat - low_value), np.abs(high_value - flat)
+    take_high = (high_distance < low_distance) | (
+        (high_distance == low_distance) & (np.abs(high_value) > np.abs(low_value))
+    )
+    out = _HIF8_SORTED_CODES[np.where(take_high, upper, lower)]
+    out[np.isnan(flat)] = _HIF8_NAN_CODE if _HIF8_NAN_CODE is not None else 0x80
     return out.reshape(src_fp32.shape)
 
 
@@ -1643,6 +1656,16 @@ def _check_output(out, ref, in_dtype, out_dtype, label):
     torch.testing.assert_close(got, expect, **tol)
 
 
+@lru_cache(maxsize=None)
+def _cached_kernel(factory, in_dtype, out_dtype, factory_args, factory_kwargs):
+    """Reuse the same JIT object during discovery and the real device run.
+
+    Cache dtype labels and scalar shape options; the PyPTO dtype objects themselves
+    are not hashable. Runtime operands and per-column scale values are not cached.
+    """
+    return factory(_IN_DTYPE[in_dtype], _OUT_DTYPE[out_dtype][0], *factory_args, **dict(factory_kwargs))
+
+
 def _run(
     factory,
     in_dtype,
@@ -1689,8 +1712,7 @@ def _run(
         slices are assigned by ``pl.get_block_idx()``, so the core count is what makes the
         partition happen at all.
     """
-    in_pl = _IN_DTYPE[in_dtype]
-    out_pl, out_torch = _OUT_DTYPE[out_dtype]
+    out_torch = _OUT_DTYPE[out_dtype][1]
     m, k, n = mkn or (M_TOTAL, K_TOTAL, N_TOTAL)
     a_shape = a_shape or [m, k]
     b_shape = b_shape or [k, n]
@@ -1701,7 +1723,7 @@ def _run(
         kwargs.setdefault("k_total", k)
         kwargs.setdefault("n_total", n)
 
-    kernel = factory(in_pl, out_pl, *factory_args, **kwargs)
+    kernel = _cached_kernel(factory, in_dtype, out_dtype, tuple(factory_args), tuple(sorted(kwargs.items())))
     a_dev, a_gold = _make_operand(in_dtype, a_shape, seed=42, device=device)
     b_dev, b_gold = _make_operand(in_dtype, b_shape, seed=43, device=device)
     out = torch.zeros(out_shape, device=device, dtype=out_torch)

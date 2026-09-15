@@ -500,6 +500,8 @@ MUL_ADD_KERNELS = {
 @pytest.mark.soc("950")
 @pypto.options(pass_options={"enable_slice": False})
 def test_for_add():
+    # Let kernel discovery reach every variant before validating any output.
+    checks = []
     device = ST_DEVICE
     torch.npu.set_device(device)
     torch.manual_seed(0)
@@ -511,13 +513,18 @@ def test_for_add():
             kernel(x, y, z)
             torch.npu.synchronize()
             z_ref = _ref(tdt, lambda a, b: a + b, x, y)
-            torch.testing.assert_close(z, z_ref, atol=atol, rtol=rtol)
-            logging.info("test_for_add [%s] passed! shape=%s", label, shape)
+            checks.append((z, z_ref, atol, rtol, 'test_for_add [%s] shape=%s' % (label, shape)))
+
+    for actual, expected, atol, rtol, case in checks:
+        torch.testing.assert_close(actual, expected, atol=atol, rtol=rtol, msg=case)
+        logging.info("%s passed!", case)
 
 
 @pytest.mark.soc("950")
 @pypto.options(pass_options={"enable_slice": False})
 def test_for_range_step_ge_span():
+    # Let kernel discovery reach every variant before validating any output.
+    checks = []
     device = ST_DEVICE
     torch.npu.set_device(device)
     torch.manual_seed(0)
@@ -531,13 +538,18 @@ def test_for_range_step_ge_span():
             z_ref[TILE_M:2 * TILE_M, :] = (x[TILE_M:2 * TILE_M, :].float() + y[TILE_M:2 * TILE_M, :].float()).to(
                 torch.float16
             )
-            torch.testing.assert_close(z, z_ref, atol=1e-2, rtol=1e-2)
-            logging.info("test_for_range_step_ge_span [%s] passed! shape=%s", case_name, shape)
+            checks.append((z, z_ref, 0.01, 0.01, 'test_for_range_step_ge_span [%s] shape=%s' % (case_name, shape)))
+
+    for actual, expected, atol, rtol, case in checks:
+        torch.testing.assert_close(actual, expected, atol=atol, rtol=rtol, msg=case)
+        logging.info("%s passed!", case)
 
 
 @pytest.mark.soc("950")
 @pypto.options(pass_options={"enable_slice": False})
 def test_for_4d_add():
+    # Let kernel discovery reach every variant before validating any output.
+    checks = []
     device = ST_DEVICE
     torch.npu.set_device(device)
     torch.manual_seed(0)
@@ -549,15 +561,17 @@ def test_for_4d_add():
             kernel(x, y, z)
             torch.npu.synchronize()
             z_ref = _ref(tdt, lambda a, b: a + b, x, y)
-            torch.testing.assert_close(z, z_ref, atol=atol, rtol=rtol)
-            logging.info("test_for_4d_add [%s] passed! shape=%s", label, shape)
+            checks.append((z, z_ref, atol, rtol, 'test_for_4d_add [%s] shape=%s' % (label, shape)))
     for case_name, kernel, shape in FOR_4D_LAYOUT_ADD_KERNELS:
         x, y, z = _gen(shape, torch.float16, device)
         kernel(x, y, z)
         torch.npu.synchronize()
         z_ref = (x.float() + y.float()).to(torch.float16)
-        torch.testing.assert_close(z, z_ref, atol=1e-2, rtol=1e-2)
-        logging.info("test_for_4d_add layout [%s] passed! shape=%s", case_name, shape)
+        checks.append((z, z_ref, 0.01, 0.01, 'test_for_4d_add layout [%s] shape=%s' % (case_name, shape)))
+
+    for actual, expected, atol, rtol, case in checks:
+        torch.testing.assert_close(actual, expected, atol=atol, rtol=rtol, msg=case)
+        logging.info("%s passed!", case)
 
 
 @pytest.mark.soc("950")
@@ -883,149 +897,152 @@ def test_three_way():
         logging.info("test_three_way [%s] passed! shape=%s", label, shape)
 
 
+# =============================================================================
+# Test 17: for 循环非对齐尾块 - FP16
+#         for-loop unaligned tail block - FP16
+# =============================================================================
+@pl.jit(auto_mutex=True)
+def for_unaligned_fp16_kernel(
+    x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
+    y: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
+    z: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
+):
+    m = x.shape[0]
+    n = x.shape[1]
+    tile_type = pl.TileType(
+        shape=[TILE_M, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
+    )
+    a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
+    b_db = pl.make_tile_group(type=tile_type, addrs=0x4000, mutex_ids=[2, 3])
+    c_db = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[30, 31])
+    with pl.section_vector():
+        for i in pl.range(0, m, TILE_M):
+            for j in pl.range(0, n, TILE_N):
+                tile_a = a_db.next()
+                tile_b = b_db.next()
+                tile_c = c_db.next()
+                valid_r = pl.min(m - i, TILE_M)
+                valid_c = pl.min(n - j, TILE_N)
+                pl.set_validshape(tile_a, [valid_r, valid_c])
+                pl.set_validshape(tile_b, [valid_r, valid_c])
+                pl.set_validshape(tile_c, [valid_r, valid_c])
+                pl.load(tile_a, x, [i, j])
+                pl.load(tile_b, y, [i, j])
+                pl.add(tile_c, tile_a, tile_b)
+                pl.store(z, tile_c, [i, j])
+
+# =============================================================================
+# Test 18: for 循环非对齐尾块 - FP32
+#         for-loop unaligned tail block - FP32
+# =============================================================================
+@pl.jit(auto_mutex=True)
+def for_unaligned_fp32_kernel(
+    x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    y: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+    z: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
+):
+    m = x.shape[0]
+    n = x.shape[1]
+    tile_type = pl.TileType(
+        shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
+    )
+    a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
+    b_db = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[2, 3])
+    c_db = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[30, 31])
+    with pl.section_vector():
+        for i in pl.range(0, m, TILE_M):
+            for j in pl.range(0, n, TILE_N):
+                tile_a = a_db.next()
+                tile_b = b_db.next()
+                tile_c = c_db.next()
+                valid_r = pl.min(m - i, TILE_M)
+                valid_c = pl.min(n - j, TILE_N)
+                pl.set_validshape(tile_a, [valid_r, valid_c])
+                pl.set_validshape(tile_b, [valid_r, valid_c])
+                pl.set_validshape(tile_c, [valid_r, valid_c])
+                pl.load(tile_a, x, [i, j])
+                pl.load(tile_b, y, [i, j])
+                pl.add(tile_c, tile_a, tile_b)
+                pl.store(z, tile_c, [i, j])
+
+# =============================================================================
+# Test 19: for 循环非对齐尾块 - BF16
+#         for-loop unaligned tail block - BF16
+# =============================================================================
+@pl.jit(auto_mutex=True)
+def for_unaligned_bf16_kernel(
+    x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_BF16],
+    y: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_BF16],
+    z: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_BF16],
+):
+    m = x.shape[0]
+    n = x.shape[1]
+    tile_type = pl.TileType(
+        shape=[TILE_M, TILE_N], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
+    )
+    a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
+    b_db = pl.make_tile_group(type=tile_type, addrs=0x4000, mutex_ids=[2, 3])
+    c_db = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[30, 31])
+    with pl.section_vector():
+        for i in pl.range(0, m, TILE_M):
+            for j in pl.range(0, n, TILE_N):
+                tile_a = a_db.next()
+                tile_b = b_db.next()
+                tile_c = c_db.next()
+                valid_r = pl.min(m - i, TILE_M)
+                valid_c = pl.min(n - j, TILE_N)
+                pl.set_validshape(tile_a, [valid_r, valid_c])
+                pl.set_validshape(tile_b, [valid_r, valid_c])
+                pl.set_validshape(tile_c, [valid_r, valid_c])
+                pl.load(tile_a, x, [i, j])
+                pl.load(tile_b, y, [i, j])
+                pl.add(tile_c, tile_a, tile_b)
+                pl.store(z, tile_c, [i, j])
+
+# =============================================================================
+# Test 20: for 循环非对齐尾块 - INT32
+#         for-loop unaligned tail block - INT32
+# =============================================================================
+@pl.jit(auto_mutex=True)
+def for_unaligned_int32_kernel(
+    x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT32],
+    y: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT32],
+    z: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT32],
+):
+    m = x.shape[0]
+    n = x.shape[1]
+    tile_type = pl.TileType(
+        shape=[TILE_M, TILE_N], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
+    )
+    a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
+    b_db = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[2, 3])
+    c_db = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[30, 31])
+    with pl.section_vector():
+        for i in pl.range(0, m, TILE_M):
+            for j in pl.range(0, n, TILE_N):
+                tile_a = a_db.next()
+                tile_b = b_db.next()
+                tile_c = c_db.next()
+                valid_r = pl.min(m - i, TILE_M)
+                valid_c = pl.min(n - j, TILE_N)
+                pl.set_validshape(tile_a, [valid_r, valid_c])
+                pl.set_validshape(tile_b, [valid_r, valid_c])
+                pl.set_validshape(tile_c, [valid_r, valid_c])
+                pl.load(tile_a, x, [i, j])
+                pl.load(tile_b, y, [i, j])
+                pl.add(tile_c, tile_a, tile_b)
+                pl.store(z, tile_c, [i, j])
+
+
 @pytest.mark.soc("950")
 @pypto.options(pass_options={"enable_slice": False})
 def test_unaligned_shape():
+    # Let kernel discovery reach every variant before validating any output.
+    checks = []
     device = ST_DEVICE
     torch.npu.set_device(device)
     torch.manual_seed(0)
     shapes = [[97, 65]]
-
-    # =============================================================================
-    # Test 17: for 循环非对齐尾块 - FP16
-    #         for-loop unaligned tail block - FP16
-    # =============================================================================
-    @pl.jit(auto_mutex=True)
-    def for_unaligned_fp16_kernel(
-        x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
-        y: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
-        z: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
-    ):
-        m = x.shape[0]
-        n = x.shape[1]
-        tile_type = pl.TileType(
-            shape=[TILE_M, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
-        )
-        a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
-        b_db = pl.make_tile_group(type=tile_type, addrs=0x4000, mutex_ids=[2, 3])
-        c_db = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[30, 31])
-        with pl.section_vector():
-            for i in pl.range(0, m, TILE_M):
-                for j in pl.range(0, n, TILE_N):
-                    tile_a = a_db.next()
-                    tile_b = b_db.next()
-                    tile_c = c_db.next()
-                    valid_r = pl.min(m - i, TILE_M)
-                    valid_c = pl.min(n - j, TILE_N)
-                    pl.set_validshape(tile_a, [valid_r, valid_c])
-                    pl.set_validshape(tile_b, [valid_r, valid_c])
-                    pl.set_validshape(tile_c, [valid_r, valid_c])
-                    pl.load(tile_a, x, [i, j])
-                    pl.load(tile_b, y, [i, j])
-                    pl.add(tile_c, tile_a, tile_b)
-                    pl.store(z, tile_c, [i, j])
-
-    # =============================================================================
-    # Test 18: for 循环非对齐尾块 - FP32
-    #         for-loop unaligned tail block - FP32
-    # =============================================================================
-    @pl.jit(auto_mutex=True)
-    def for_unaligned_fp32_kernel(
-        x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
-        y: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
-        z: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
-    ):
-        m = x.shape[0]
-        n = x.shape[1]
-        tile_type = pl.TileType(
-            shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
-        )
-        a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
-        b_db = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[2, 3])
-        c_db = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[30, 31])
-        with pl.section_vector():
-            for i in pl.range(0, m, TILE_M):
-                for j in pl.range(0, n, TILE_N):
-                    tile_a = a_db.next()
-                    tile_b = b_db.next()
-                    tile_c = c_db.next()
-                    valid_r = pl.min(m - i, TILE_M)
-                    valid_c = pl.min(n - j, TILE_N)
-                    pl.set_validshape(tile_a, [valid_r, valid_c])
-                    pl.set_validshape(tile_b, [valid_r, valid_c])
-                    pl.set_validshape(tile_c, [valid_r, valid_c])
-                    pl.load(tile_a, x, [i, j])
-                    pl.load(tile_b, y, [i, j])
-                    pl.add(tile_c, tile_a, tile_b)
-                    pl.store(z, tile_c, [i, j])
-
-    # =============================================================================
-    # Test 19: for 循环非对齐尾块 - BF16
-    #         for-loop unaligned tail block - BF16
-    # =============================================================================
-    @pl.jit(auto_mutex=True)
-    def for_unaligned_bf16_kernel(
-        x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_BF16],
-        y: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_BF16],
-        z: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_BF16],
-    ):
-        m = x.shape[0]
-        n = x.shape[1]
-        tile_type = pl.TileType(
-            shape=[TILE_M, TILE_N], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
-        )
-        a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
-        b_db = pl.make_tile_group(type=tile_type, addrs=0x4000, mutex_ids=[2, 3])
-        c_db = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[30, 31])
-        with pl.section_vector():
-            for i in pl.range(0, m, TILE_M):
-                for j in pl.range(0, n, TILE_N):
-                    tile_a = a_db.next()
-                    tile_b = b_db.next()
-                    tile_c = c_db.next()
-                    valid_r = pl.min(m - i, TILE_M)
-                    valid_c = pl.min(n - j, TILE_N)
-                    pl.set_validshape(tile_a, [valid_r, valid_c])
-                    pl.set_validshape(tile_b, [valid_r, valid_c])
-                    pl.set_validshape(tile_c, [valid_r, valid_c])
-                    pl.load(tile_a, x, [i, j])
-                    pl.load(tile_b, y, [i, j])
-                    pl.add(tile_c, tile_a, tile_b)
-                    pl.store(z, tile_c, [i, j])
-
-    # =============================================================================
-    # Test 20: for 循环非对齐尾块 - INT32
-    #         for-loop unaligned tail block - INT32
-    # =============================================================================
-    @pl.jit(auto_mutex=True)
-    def for_unaligned_int32_kernel(
-        x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT32],
-        y: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT32],
-        z: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT32],
-    ):
-        m = x.shape[0]
-        n = x.shape[1]
-        tile_type = pl.TileType(
-            shape=[TILE_M, TILE_N], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
-        )
-        a_db = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])
-        b_db = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[2, 3])
-        c_db = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[30, 31])
-        with pl.section_vector():
-            for i in pl.range(0, m, TILE_M):
-                for j in pl.range(0, n, TILE_N):
-                    tile_a = a_db.next()
-                    tile_b = b_db.next()
-                    tile_c = c_db.next()
-                    valid_r = pl.min(m - i, TILE_M)
-                    valid_c = pl.min(n - j, TILE_N)
-                    pl.set_validshape(tile_a, [valid_r, valid_c])
-                    pl.set_validshape(tile_b, [valid_r, valid_c])
-                    pl.set_validshape(tile_c, [valid_r, valid_c])
-                    pl.load(tile_a, x, [i, j])
-                    pl.load(tile_b, y, [i, j])
-                    pl.add(tile_c, tile_a, tile_b)
-                    pl.store(z, tile_c, [i, j])
 
     unaligned_kernels = {
         "fp16": (for_unaligned_fp16_kernel, torch.float16, 1e-2, 1e-2),
@@ -1045,8 +1062,11 @@ def test_unaligned_shape():
             kernel(x, y, z)
             torch.npu.synchronize()
             z_ref = _ref(tdt, lambda a, b: a + b, x, y)
-            torch.testing.assert_close(z, z_ref, atol=atol, rtol=rtol)
-            logging.info("test_unaligned_shape [%s] passed! shape=%s", label, shape)
+            checks.append((z, z_ref, atol, rtol, 'test_unaligned_shape [%s] shape=%s' % (label, shape)))
+
+    for actual, expected, atol, rtol, case in checks:
+        torch.testing.assert_close(actual, expected, atol=atol, rtol=rtol, msg=case)
+        logging.info("%s passed!", case)
 
 
 # ===================================================================
