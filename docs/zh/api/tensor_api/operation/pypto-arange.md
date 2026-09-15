@@ -32,7 +32,13 @@ arange(start: Union[int, float] = 0, end: Union[int, float], step: Union[int, fl
 
 ## 返回值说明
 
-返回一维输出Tensor，若输入值存在float数据类型，则输出Tensor数据类型为DT_FP32；若输入值存在DT_INT64数据类型（或超出int32范围，DT_INT64仅Ascend 950PR/Ascend 950DT支持），则输出Tensor数据类型为DT_INT64；否则为DT_INT32。
+返回一维输出Tensor。
+
+- 若输入值存在float数据类型，则输出Tensor数据类型为DT_FP32。
+<!-- npu="950" id7 -->
+- 对于Ascend 950PR/Ascend 950DT，若输入值存在DT_INT64数据类型（或超出int32范围），则输出Tensor数据类型为DT_INT64。
+<!-- end id7 -->
+- 对于其他情况，输出Tensor数据类型为DT_INT32。
 
 ## 约束说明
 
@@ -40,7 +46,11 @@ arange(start: Union[int, float] = 0, end: Union[int, float], step: Union[int, fl
 
 2. \(end-start\)/step需大于0；
 
-3. 如果start，end，step均为int输入且均在int32范围内，则输出数据类型为DT_INT32；若超出int32范围，则输出数据类型为DT_INT64（DT_INT64仅Ascend 950PR/Ascend 950DT支持）
+3. 如果start，end，step均为int输入且均在int32范围内，则输出数据类型为DT_INT32。
+
+   <!-- npu="950" id8 -->
+   对于Ascend 950PR/Ascend 950DT，若超出int32范围，则输出数据类型为DT_INT64。
+   <!-- end id8 -->
 
 4. Tensor数据类型说明：
    <!-- npu="950" id4 -->

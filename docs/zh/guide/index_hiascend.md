@@ -77,7 +77,6 @@
     - [同一个Tensor进行View和Assemble导致图成环报错](appendix/faq/view-assemble-cycle.md)
     - [SymbolicScalar不支持循环内自增](appendix/faq/symbolic-scalar-no-increment.md)
     - [AI Core kernel执行异常](appendix/faq/aicore-exception.md)
-    - [泳道图问题](appendix/faq/swimlane-issue.md)
   - [错误码参考](appendix/trouble_shooting/index.md)
     - [简介](appendix/trouble_shooting/README.md)
     - [F20000-F3FFFF](appendix/trouble_shooting/function.md)

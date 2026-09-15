@@ -2,7 +2,7 @@
 
 SIMT（Single Instruction Multiple Threads，单指令多线程）是一种线程并行模型，以Thread为基本执行单元。同一份程序由多个Thread并行执行，每个Thread根据自身索引处理不同的数据。SIMT允许每个Thread独立寻址，并根据数据进入不同的条件分支或循环。与面向规则数据块、批量执行相同操作的SIMD相比，SIMT更适合表达不规则数据访问和逐Thread控制逻辑。
 
-PyPTO Pro在Ascend 950PR/Ascend 950DT（A5）的AIV上提供SIMD与SIMT混合编程能力。外层Kernel组织规则的Tile计算、数据搬运和SIMT启动，SIMT函数描述逐线程逻辑，具体开发步骤见[SIMT计算](../../development/vector_computation/simt_computation.md)。
+PyPTO Pro在AIV上提供SIMD与SIMT混合编程能力。外层Kernel组织规则的Tile计算、数据搬运和SIMT启动，SIMT函数描述逐线程逻辑，具体开发步骤见[SIMT计算](../../development/vector_computation/simt_computation.md)。
 
 ## 线程架构
 

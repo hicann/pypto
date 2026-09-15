@@ -21,6 +21,7 @@ ErrCode: F1FFFF! Enum: InternalError::COMMON_INNER_ERROR. aicore exception, devi
     - `pypto`和`torch_npu`可正常import（`import pypto; import torch_npu`无报错）。
     - 已安装`llvm-symbolizer`（`apt install llvm`或`yum install llvm`）。
     - 设置CANN包的环境变量。
+
         ```bash
         # 默认路径安装，以root用户为例（非root用户，将/usr/local替换为${HOME}）
         source /usr/local/Ascend/ascend-toolkit/set_env.sh
@@ -30,9 +31,11 @@ ErrCode: F1FFFF! Enum: InternalError::COMMON_INNER_ERROR. aicore exception, devi
         ```
 
 2. 执行debug_aicore_error.py脚本收集故障信息、进行单算子复现。
+
     ```bash
     python {pypto安装目录}/lib/scripts/debug_aicore_error.py -p <report_dir> -out <output_dir> [-d <device_id>] [-t <timeout>]
     ```
+
     | 参数 | 说明 | 约束 |
     |------|------|------|
     | `-p` | 存放故障信息的目录，建议在执行用例前设置`export ASCEND_WORK_PATH=./wk`，则`./wk`即包含所需全部信息。 | 必须包含`log/debug/plog`、`extra-info/data-dump`、`pypto`子目录，否则报错退出；不支持存在多个AIC Error的`.pyptokb`文件。 |
@@ -41,6 +44,7 @@ ErrCode: F1FFFF! Enum: InternalError::COMMON_INNER_ERROR. aicore exception, devi
     | `-t` | 单算子复现脚本执行超时（秒），默认600，用例较大或开启debug日志时可适当调大。 | — |
 
     示例：
+
     ```bash
     python {pypto安装目录}/lib/scripts/debug_aicore_error.py -p ./wk -out ./diagnosis -d 0
     ```
@@ -288,6 +292,7 @@ AiCorePrintL0CTensor(param->ctx, (__cc__ int32_t*)l0cTensor.GetAddr(), 1024, 0, 
 
 AICORE_LOG：
 以下能使用的AICORE_LOGD的地方，也可以使用AICORE_LOGI/AICORE_LOGW/AICORE_LOGE，使用方式和AICORE_LOGD相同。
+
 ```cpp
 AICORE_LOGD(param->ctx, "GM address=%p", ((__gm__ float*)gmTensor.GetAddr()));
 AICORE_LOGD(param->ctx, "Shape=[%ld,%ld]", dim0, dim1);

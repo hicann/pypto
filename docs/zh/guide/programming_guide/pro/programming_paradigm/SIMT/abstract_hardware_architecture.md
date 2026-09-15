@@ -1,6 +1,6 @@
 # 抽象硬件架构
 
-PyPTO Pro的SIMT函数运行在Ascend 950PR/Ascend 950DT（A5）的AIV（Vector Core）上。
+PyPTO Pro的SIMT函数运行在AIV（Vector Core）上。
 
 **图1 SIMT抽象硬件架构**
 

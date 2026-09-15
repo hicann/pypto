@@ -28,8 +28,21 @@ class VFRoundMode(enum.Enum):
      CAST_CEIL = ...  # 向上取整（ceil）
      CAST_TRUNC = ...  # 向零舍入（截断）
      CAST_ODD = ...  # 冯·诺伊曼舍入（最近的奇数）
-     CAST_HYBRID = ...  # 混合舍入（仅Ascend 950PR/DT支持）
+     CAST_HYBRID = ...  # 混合舍入
 ```
+
+## 约束说明
+
+不同型号支持的舍入模式有所差异：
+<!-- npu="950" id6 -->
+- Ascend 950PR/Ascend 950DT：所有舍入模式均支持。
+<!-- end id6 -->
+<!-- npu="A3" id4 -->
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持CAST_HYBRID。
+<!-- end id4 -->
+<!-- npu="910b" id5 -->
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持CAST_HYBRID。
+<!-- end id5 -->
 
 ## 调用示例
 

@@ -36,7 +36,12 @@ div(input: Tensor, other: Union[Tensor, float, int], precision_type: PrecisionTy
 
 ## 返回值说明
 
-返回输出Tensor，Shape为input和other广播后大小。当输入为浮点类型时，输出数据类型与输入相同；当输入为DT_INT16或DT_INT32时，输出数据类型为DT_FP32；当输入为DT_INT64或DT_UINT64时（仅Ascend 950PR/Ascend 950DT支持），输出数据类型与输入相同。
+返回输出Tensor，Shape为input和other广播后大小。
+
+- 当输入为浮点类型时，输出数据类型与输入相同；当输入为DT_INT16或DT_INT32时，输出数据类型为DT_FP32。
+<!-- npu="950" id11 -->
+- 对于Ascend 950PR/Ascend 950DT，当输入为DT_INT64或DT_UINT64时，输出数据类型与输入相同。
+<!-- end id11 -->
 
 ## 约束说明
 
@@ -65,7 +70,12 @@ div(input: Tensor, other: Union[Tensor, float, int], precision_type: PrecisionTy
       <!-- end id6 -->
     - **INTRINSIC（指令模式）**：直接使用芯片指令进行计算。
 5. Tensor类型输入不支持`TileOpFormat.TILEOP_NZ`格式。
-6. 整型输入约束：当输入为DT_INT16或DT_INT32时，内部会将输入转换为DT_FP32进行计算（float32尾数为24位）。在 $[-2^{24},\ 2^{24}]$ 范围内的整数可精确转换，超出范围的整数在转换时可能丢失低位精度。当输入为DT_INT64或DT_UINT64时（仅Ascend 950PR/Ascend 950DT支持），不进行类型转换，直接按整数除法计算。
+6. 整型输入约束：
+
+   - 当输入为DT_INT16或DT_INT32时，内部会将输入转换为DT_FP32进行计算（float32尾数为24位）。在 $[-2^{24},\ 2^{24}]$ 范围内的整数可精确转换，超出范围的整数在转换时可能丢失低位精度。
+   <!-- npu="950" id10 -->
+   - 对于Ascend 950PR/Ascend 950DT，当输入为DT_INT64或DT_UINT64时，不进行类型转换，直接按整数除法计算。
+   <!-- end id10 -->
 
 ## 调用示例
 

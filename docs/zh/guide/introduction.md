@@ -13,12 +13,7 @@ PyPTO（发音：pai p-t-o）是CANN推出的一款面向AI加速器的高效算
 
 PyPTO Tensor采用分层架构，从用户接口到底层硬件执行包括以下层次：
 
-```mermaid
-flowchart LR
-    A["用户接口层<br/>Tensor操作、Function、JIT编译"] --> B["计算图编译层<br/>Tensor Graph → Tile Graph → Block Graph → Execute Graph"]
-    B --> C["代码生成层<br/>PTO虚拟指令、目标平台代码"]
-    C --> D["调度执行层<br/>MPMD调度、控制流执行"]
-```
+![](./figures/tensor/pypto_architecture.png)
 
 - **用户接口层**：提供Python风格的Tensor编程接口，开发者可以直接表达计算逻辑，无需关注底层硬件指令。
 - **计算图编译层**：通过模块化Pass完成多层级计算图的转换与优化。
@@ -48,8 +43,6 @@ PyPTO Tensor以“算法表达与硬件执行解耦”为主要设计理念。�
 - **工具链**：提供编译中间产物和运行时性能数据的可视化能力，支持开发者定位问题并按需控制编译与调度行为。
 
 ### 产品支持情况
-
-PyPTO Tensor当前支持以下产品型号：
 
 <!-- npu="950" id1 -->
 - Ascend 950PR/Ascend 950DT：支持
@@ -99,8 +92,6 @@ PyPTO Pro以“Python易用性与硬件可控性兼顾”为主要设计理念�
 - **编译设计**：以Python DSL承载Kernel表达，通过JIT、IR Pass和代码生成链路将其转换为AI Core可执行代码。
 
 ### 产品支持情况
-
-PyPTO Pro当前支持以下产品型号：
 
 <!-- npu="950" id4 -->
 - Ascend 950PR/Ascend 950DT：支持
