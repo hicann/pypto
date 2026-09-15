@@ -30,6 +30,7 @@
 #include "tilefwk/tilefwk.h"
 #define private public
 #include "computational_graph_builder.h"
+#include "passes/block_graph_pass/schedule_ooo/common/dep_manager.h"
 #include "passes/block_graph_pass/schedule_ooo/common/iso_matcher.h"
 #include "passes/block_graph_pass/schedule_ooo/post_schedule/buffer_rearrange.h"
 #include "passes/block_graph_pass/schedule_ooo/pre_schedule/cluster_list_sort.h"
@@ -264,6 +265,34 @@ TEST_F(ScheduleOoOTest, TestTokenDependency)
     ASSERT_EQ(scheduler.Init(function->Operations().DuplicatedOpList()), SUCCESS);
     EXPECT_EQ(scheduler.state_.depManager.GetPredecessors(consumer).count(producer), 1U);
     EXPECT_EQ(scheduler.state_.depManager.GetSuccessors(producer).count(consumer), 1U);
+}
+
+TEST_F(ScheduleOoOTest, TokenDependencySkipsUnregisteredProducer)
+{
+    ComputationalGraphBuilder graph;
+    ASSERT_TRUE(graph.AddTensors(DataType::DT_FP32, {16, 16}, {"in1", "out1", "in2", "out2"}));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_ADDS, {"in1"}, {"out1"}, "Producer", true));
+    ASSERT_TRUE(graph.AddOp(Opcode::OP_MULS, {"in2"}, {"out2"}, "Consumer", true));
+    auto* function = graph.GetFunction();
+    auto* producer = graph.GetOp("Producer");
+    auto* consumer = graph.GetOp("Consumer");
+    ASSERT_NE(function, nullptr);
+    ASSERT_NE(producer, nullptr);
+    ASSERT_NE(consumer, nullptr);
+
+    auto token = IRBuilder().CreateTokenVar(producer->GetSpan());
+    producer->result_token_ = {token};
+    consumer->tokens_.push_back(token);
+    function->GetVarDependency().AddProducer(token,
+                                             std::static_pointer_cast<const ir::Stmt>(producer->shared_from_this()));
+    function->GetVarDependency().AddConsumer(token,
+                                             std::static_pointer_cast<const ir::Stmt>(consumer->shared_from_this()));
+
+    DependencyManager depManager;
+    ASSERT_EQ(depManager.InitDependencies({consumer}, false), SUCCESS);
+    EXPECT_TRUE(depManager.HasOp(consumer));
+    EXPECT_FALSE(depManager.HasOp(producer));
+    EXPECT_TRUE(depManager.GetPredecessors(consumer).empty());
 }
 
 // 任务切分直读 IR 连边、不查依赖图, 所以 token 边要单独补一趟。

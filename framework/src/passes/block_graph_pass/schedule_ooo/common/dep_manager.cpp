@@ -226,7 +226,7 @@ void DependencyManager::FindDependencies(Operation* op, bool needView)
     }
 
     for (auto* producer : op->ProducerOpsByToken()) {
-        if (producer != op && producer->BelongTo() == op->BelongTo()) {
+        if (producer != op && producer->BelongTo() == op->BelongTo() && HasOp(producer)) {
             AddDependency(producer, op);
         }
     }

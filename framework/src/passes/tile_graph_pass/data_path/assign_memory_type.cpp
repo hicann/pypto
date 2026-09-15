@@ -82,9 +82,22 @@ Status AssignMemoryType::AssignConfirmedMemoryTypes(Function& function)
             RETURN_IF_NOT_SUCCESS(AssignMatmulInputRequirements(op));
         }
         RETURN_IF_NOT_SUCCESS(AssignOpcodeDefinedMemoryTypes(op));
+        // shape 存在 -1（动态维度）的输出 tensor 无法作为本地 buffer 静态分配, 统一绑定 DDR
+        RETURN_IF_NOT_SUCCESS(AssignDynamicShapeOutputMemoryType(op));
     }
     RETURN_IF_NOT_SUCCESS(AssignInOutCastMemoryTypes(function));
     return EnsureAllConsumerRequirementsExist(function);
+}
+
+Status AssignMemoryType::AssignDynamicShapeOutputMemoryType(Operation& operation)
+{
+    for (auto& output : operation.oOperand) {
+        const auto& outShape = output->GetShape();
+        if (std::any_of(outShape.begin(), outShape.end(), [](int64_t dim) { return dim < 0; })) {
+            ForceSetOriginal(output, MemoryType::MEM_DEVICE_DDR, "DynamicShapeTensorAsDdr");
+        }
+    }
+    return SUCCESS;
 }
 
 Status AssignMemoryType::AssignOpcodeDefinedMemoryTypes(Operation& operation)
@@ -2735,6 +2748,12 @@ Status AssignMemoryType::TryUpgradeSliceContractPath(Operation& sliceOp, MemoryT
         !IsSliceOutputTarget(sliceOp, targetType)) {
         return SUCCESS;
     }
+    // 与 TryUpgradeSingleContractSlicePath 一致：middle 的 shape 存在 -1（动态维度）时不参与升级，
+    // 动态 shape 的 tensor 无法作为本地 scratch 静态分配。
+    const auto& middleShape = middle->GetShape();
+    if (std::any_of(middleShape.begin(), middleShape.end(), [](int64_t dim) { return dim < 0; })) {
+        return SUCCESS;
+    }
     for (auto* consumer : middle->GetConsumers()) {
         if (consumer != nullptr && !IsSliceOutputTarget(*consumer, targetType)) {
             return SUCCESS;
@@ -2813,6 +2832,12 @@ Status AssignMemoryType::TryUpgradeSingleContractSlicePath(Operation& contractOp
     if (input == nullptr || middle == nullptr || input->GetMemoryTypeOriginal() != sourceType ||
         !CanUseMiddleTensorForUpgrade(middle, sourceType) || !HasOnlyContractProducers(middle) ||
         !HasOnlySliceConsumers(middle)) {
+        return SUCCESS;
+    }
+    // middle 的 shape 存在 -1（动态维度）时不能参与升级：
+    // 动态 shape 的 tensor 无法作为本地 scratch 静态分配（OoOSchedule requires static rawShape）。
+    const auto& middleShape = middle->GetShape();
+    if (std::any_of(middleShape.begin(), middleShape.end(), [](int64_t dim) { return dim < 0; })) {
         return SUCCESS;
     }
     // Large-to-small must be a single-contract path: the slice/view side already reads with a
