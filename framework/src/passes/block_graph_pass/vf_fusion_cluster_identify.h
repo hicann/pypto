@@ -31,6 +31,7 @@ namespace npu::tile_fwk {
 constexpr size_t VF_CLUSTER_SIZE_LIMIT = 32;
 constexpr size_t VF_CLUSTER_EXTERNAL_UB_MEMORY_RATIO_NUMERATOR = 3;
 constexpr size_t VF_CLUSTER_EXTERNAL_UB_MEMORY_RATIO_DENOMINATOR = 5;
+constexpr size_t PERCENT_SCALE = 100;
 // Ensure VF cluster ID space never overlaps with user atomic_scope encoding.
 static_assert(VF_CLUSTER_ID_START > 10000 * 10000 + 9999,
               "VF_CLUSTER_ID_START must exceed max user atomic_scope encoding");

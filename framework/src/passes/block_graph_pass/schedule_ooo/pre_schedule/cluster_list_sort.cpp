@@ -299,9 +299,11 @@ void ClusterListSort::AssignSecondaryIds()
         }
         return x;
     };
+    // 本地输入数达到该值的 op 视为聚点（inDeg > 1 的分支汇合点）。
+    constexpr size_t MIN_CONVERGENCE_INPUT_COUNT = 2;
     for (auto* j : normals_) {
         auto in = LocalInMemIds(j);
-        if (in.size() < 2) {
+        if (in.size() < MIN_CONVERGENCE_INPUT_COUNT) {
             continue; // 非聚点
         }
         int firstCid = -1;

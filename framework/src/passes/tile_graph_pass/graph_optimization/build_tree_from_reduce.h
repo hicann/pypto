@@ -37,6 +37,7 @@ public:
 private:
     static constexpr uint64_t ADD_TILE_BUFFER_COUNT = 4;
     static constexpr int64_t MIN_SPLITTABLE_DIM = 2;
+    static constexpr int64_t SPLIT_REGION_COUNT = 2;
 
     using OperationRanks = std::unordered_map<const Operation*, size_t>;
 
@@ -78,7 +79,7 @@ private:
                                                               const Shape& sliceShape);
     static bool ValidateSplitRegionSource(const Operation& anchor, const LogicalTensorPtr& input, uint64_t& inputBytes);
     static std::vector<int64_t> DeriveAddVecTile(const Operation& anchor, const LogicalTensorPtr& lhs, uint64_t ubSize);
-    static bool TryBuildSplitRegions(const Operation& anchor, std::array<SplitRegion, 2>& regions);
+    static bool TryBuildSplitRegions(const Operation& anchor, std::array<SplitRegion, SPLIT_REGION_COUNT>& regions);
 
     // Add-tree graph rewrite.
     static LogicalTensorPtr CreateSliceView(Function& function, const LogicalTensorPtr& input,
@@ -90,7 +91,8 @@ private:
                                       const Operation& anchor, size_t index, TreeRewriteInfo& rewriteInfo);
     static void BuildTree(Function& function, std::vector<Operation*>& assembles, TreeRewriteInfo& rewriteInfo);
     static void BuildSplitTrees(Function& function, std::vector<Operation*>& assembles,
-                                const std::array<SplitRegion, 2>& regions, TreeRewriteInfo& rewriteInfo);
+                                const std::array<SplitRegion, SPLIT_REGION_COUNT>& regions,
+                                TreeRewriteInfo& rewriteInfo);
 
     // Memory repair after graph rewrite.
     template <typename ConvertInserterT>

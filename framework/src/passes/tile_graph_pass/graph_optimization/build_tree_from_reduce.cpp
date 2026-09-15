@@ -38,6 +38,10 @@
 #define MODULE_NAME "BuildTreeFromReduce"
 
 namespace npu::tile_fwk {
+namespace {
+constexpr size_t MIN_TREE_GROUP_SIZE = 2;
+constexpr size_t ADD_TREE_FAN_IN = 2;
+} // namespace
 
 bool BuildTreeFromReducePass::IsTreeAssembleOpcode(Opcode opcode)
 {
@@ -257,7 +261,8 @@ std::vector<int64_t> BuildTreeFromReducePass::DeriveAddVecTile(const Operation& 
     return vecTile;
 }
 
-bool BuildTreeFromReducePass::TryBuildSplitRegions(const Operation& anchor, std::array<SplitRegion, 2>& regions)
+bool BuildTreeFromReducePass::TryBuildSplitRegions(const Operation& anchor,
+                                                   std::array<SplitRegion, SPLIT_REGION_COUNT>& regions)
 {
     const auto& input = anchor.GetIOperands().front();
     uint64_t inputBytes = 0;
@@ -278,7 +283,7 @@ bool BuildTreeFromReducePass::TryBuildSplitRegions(const Operation& anchor, std:
 
     auto leftShape = input->GetShape();
     auto rightShape = input->GetShape();
-    leftShape[0] = input->GetShape()[0] / 2;
+    leftShape[0] = input->GetShape()[0] / SPLIT_REGION_COUNT;
     rightShape[0] = input->GetShape()[0] - leftShape[0];
     if (leftShape[0] <= 0 || rightShape[0] <= 0) {
         return false;
@@ -406,8 +411,8 @@ void BuildTreeFromReducePass::BuildTree(Function& function, std::vector<Operatio
     size_t addIndex = 0;
     while (level.size() > 1) {
         std::vector<LogicalTensorPtr> nextLevel;
-        nextLevel.reserve((level.size() + 1) / 2);
-        for (size_t i = 0; i < level.size(); i += 2) {
+        nextLevel.reserve((level.size() + ADD_TREE_FAN_IN - 1) / ADD_TREE_FAN_IN);
+        for (size_t i = 0; i < level.size(); i += ADD_TREE_FAN_IN) {
             if (i + 1 == level.size()) {
                 nextLevel.emplace_back(level[i]);
                 continue;
@@ -427,7 +432,8 @@ void BuildTreeFromReducePass::BuildTree(Function& function, std::vector<Operatio
 }
 
 void BuildTreeFromReducePass::BuildSplitTrees(Function& function, std::vector<Operation*>& assembles,
-                                              const std::array<SplitRegion, 2>& regions, TreeRewriteInfo& rewriteInfo)
+                                              const std::array<SplitRegion, SPLIT_REGION_COUNT>& regions,
+                                              TreeRewriteInfo& rewriteInfo)
 {
     std::vector<Operation*> leftAssembles;
     std::vector<Operation*> rightAssembles;
@@ -462,7 +468,7 @@ Status BuildTreeFromReducePass::FinalizeAddedAddMemory(ConvertInserterT& inserte
                                                        const std::vector<Operation*>& addedAddOps)
 {
     for (auto* addOp : addedAddOps) {
-        if (addOp == nullptr || addOp->IsDeleted() || addOp->GetIOperands().size() != 2 ||
+        if (addOp == nullptr || addOp->IsDeleted() || addOp->GetIOperands().size() != ADD_TREE_FAN_IN ||
             addOp->GetOOperands().size() != 1) {
             APASS_LOG_ERROR_F(Elements::Operation, "BuildTree generated an invalid ADD operation.");
             return FAILED;
@@ -615,7 +621,7 @@ Status BuildTreeFromReducePass::ProcessOutputGroup(Function& function, const Log
     }
 
     for (auto& group : groups) {
-        if (group.size() < 2) {
+        if (group.size() < MIN_TREE_GROUP_SIZE) {
             continue;
         }
         std::stable_sort(group.begin(), group.end(), [&ranks](const auto* lhs, const auto* rhs) {
@@ -626,7 +632,7 @@ Status BuildTreeFromReducePass::ProcessOutputGroup(Function& function, const Log
             }
             return ranks.at(lhs) < ranks.at(rhs);
         });
-        std::array<SplitRegion, 2> regions;
+        std::array<SplitRegion, SPLIT_REGION_COUNT> regions;
         if (TryBuildSplitRegions(*group.front(), regions)) {
             BuildSplitTrees(function, group, regions, rewriteInfo);
         } else {

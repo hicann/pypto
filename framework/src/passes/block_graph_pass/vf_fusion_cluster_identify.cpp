@@ -454,10 +454,11 @@ bool VFFusionClusterIdentify::IsFusionResourceWithinLimits(const GraphContext& g
     const size_t externalMemoryLimit = ubSize * VF_CLUSTER_EXTERNAL_UB_MEMORY_RATIO_NUMERATOR /
                                        VF_CLUSTER_EXTERNAL_UB_MEMORY_RATIO_DENOMINATOR;
     if (externalMemory > externalMemoryLimit) {
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "Cannot fuse VF ops: external memory %zu exceeds %zu%% of UB (%zu).", externalMemory,
-            VF_CLUSTER_EXTERNAL_UB_MEMORY_RATIO_NUMERATOR * 100 / VF_CLUSTER_EXTERNAL_UB_MEMORY_RATIO_DENOMINATOR,
-            externalMemoryLimit);
+        APASS_LOG_DEBUG_F(Elements::Operation, "Cannot fuse VF ops: external memory %zu exceeds %zu%% of UB (%zu).",
+                          externalMemory,
+                          VF_CLUSTER_EXTERNAL_UB_MEMORY_RATIO_NUMERATOR * PERCENT_SCALE /
+                              VF_CLUSTER_EXTERNAL_UB_MEMORY_RATIO_DENOMINATOR,
+                          externalMemoryLimit);
         return false;
     }
     return true;

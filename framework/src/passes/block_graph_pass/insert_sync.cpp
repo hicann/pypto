@@ -2034,8 +2034,10 @@ bool InsertSync::IsImmovableSync(Opcode opcode, const OpSyncQueue& sq)
 
 InsertSync::SyncSignature InsertSync::MakeSyncSignature(int eventId, PipeType setPipe, PipeType waitPipe)
 {
-    return (static_cast<uint64_t>(eventId) << 16) | (static_cast<uint64_t>(setPipe) << 8) |
-           static_cast<uint64_t>(waitPipe);
+    // 位布局：低 8 bit 为 waitPipe，次 8 bit 为 setPipe，其余高位为 eventId。
+    constexpr int PIPE_FIELD_BITS = 8;
+    return (static_cast<uint64_t>(eventId) << (2 * PIPE_FIELD_BITS)) |
+           (static_cast<uint64_t>(setPipe) << PIPE_FIELD_BITS) | static_cast<uint64_t>(waitPipe);
 }
 
 InsertSync::SyncSignature InsertSync::GetSyncSignature(const OpSyncQueue& sq, bool isSet)

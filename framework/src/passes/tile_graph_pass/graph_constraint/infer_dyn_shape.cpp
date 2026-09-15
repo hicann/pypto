@@ -29,6 +29,9 @@ namespace npu {
 namespace tile_fwk {
 using RawPtr = RawSymbolicScalarPtr;
 
+// 二元表达式（加减乘、min/max）节点恰好包含的操作数个数。
+static constexpr size_t BINARY_EXPR_OPERAND_COUNT = 2;
+
 // 从 SymbolicScalar 节点中提取立即数值。
 static std::optional<int64_t> GetImmediate(const RawPtr& raw)
 {
@@ -51,7 +54,7 @@ static bool SplitExtremaWithImmediate(const RawPtr& raw, SymbolicOpcode opcode, 
         return false;
     }
     const auto& operands = raw->GetExpressionOperandList();
-    if (operands.size() != 2) {
+    if (operands.size() != BINARY_EXPR_OPERAND_COUNT) {
         return false;
     }
     if (GetImmediate(operands[0]) == immediate) {
@@ -72,7 +75,7 @@ static bool ExtractMinWithUpper(const RawPtr& raw, RawPtr& value, int64_t& upper
         return false;
     }
     const auto& operands = raw->GetExpressionOperandList();
-    if (operands.size() != 2) {
+    if (operands.size() != BINARY_EXPR_OPERAND_COUNT) {
         return false;
     }
     if (auto immediate = GetImmediate(operands[0]); immediate.has_value()) {
@@ -117,11 +120,12 @@ static bool IsExprDivisible(const Function& function, const SymbolicScalar& expr
     }
     const auto opcode = raw->GetExpressionOpcode();
     const auto& operands = raw->GetExpressionOperandList();
-    if ((opcode == SymbolicOpcode::T_BOP_ADD || opcode == SymbolicOpcode::T_BOP_SUB) && operands.size() == 2) {
+    if ((opcode == SymbolicOpcode::T_BOP_ADD || opcode == SymbolicOpcode::T_BOP_SUB) &&
+        operands.size() == BINARY_EXPR_OPERAND_COUNT) {
         return IsExprDivisible(function, SymbolicScalar(operands[0]), divisor, depth + 1) &&
                IsExprDivisible(function, SymbolicScalar(operands[1]), divisor, depth + 1);
     }
-    if (opcode == SymbolicOpcode::T_BOP_MUL && operands.size() == 2) {
+    if (opcode == SymbolicOpcode::T_BOP_MUL && operands.size() == BINARY_EXPR_OPERAND_COUNT) {
         return IsExprDivisible(function, SymbolicScalar(operands[0]), divisor, depth + 1) ||
                IsExprDivisible(function, SymbolicScalar(operands[1]), divisor, depth + 1);
     }
@@ -147,13 +151,13 @@ static bool IsFullTileAfterOffset(const Function& function, const RawPtr& raw, i
     if (raw->IsExpression()) {
         const auto opcode = raw->GetExpressionOpcode();
         const auto& operands = raw->GetExpressionOperandList();
-        if (operands.size() == 2 && opcode == SymbolicOpcode::T_BOP_SUB) {
+        if (operands.size() == BINARY_EXPR_OPERAND_COUNT && opcode == SymbolicOpcode::T_BOP_SUB) {
             const auto delta = GetImmediate(operands[1]);
             if (delta.has_value() && *delta >= 0) {
                 return IsFullTileAfterOffset(function, operands[0], accumulatedOffset + *delta, tile, depth + 1);
             }
         }
-        if (operands.size() == 2 && opcode == SymbolicOpcode::T_BOP_ADD) {
+        if (operands.size() == BINARY_EXPR_OPERAND_COUNT && opcode == SymbolicOpcode::T_BOP_ADD) {
             for (size_t valueIndex = 0; valueIndex < operands.size(); ++valueIndex) {
                 const auto delta = GetImmediate(operands[1 - valueIndex]);
                 if (delta.has_value() && *delta <= 0) {

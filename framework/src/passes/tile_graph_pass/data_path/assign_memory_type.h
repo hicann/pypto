@@ -92,7 +92,7 @@ private:
     Status InferAssembleMemoryType(Function& function, Operation& operation,
                                    std::unordered_set<LogicalTensorPtr>& inferredAssembleOutputs);
 
-    // TODO: 后续有公共方法后替换为通过 rawTensor 查找所有 logicalTensor 的公共接口
+    // 后续有公共方法后替换为通过 rawTensor 查找所有 logicalTensor 的公共接口
     TensorSet GetLogicalTensorsByRawTensor(Function& function, const LogicalTensorPtr& tensor) const;
 
     void PropagateMemoryTypeToRawTensorSiblings(Function& function, const LogicalTensorPtr& output,
