@@ -19,7 +19,7 @@
 ## 函数原型
 
 ```python
-val = pypto_pro.language.get_block_num()
+pypto_pro.language.get_block_num() -> int
 ```
 
 ## 参数说明
@@ -42,11 +42,14 @@ AIV逻辑核数为`get_block_num() * get_subblock_num()`。
 
 ## 调用示例
 
-下面是一个仅包含Vector段的多核Kernel：用`kernel[None, NUM_CORES](...)`请求最多2个逻辑Block，
-每个AIV按实际Block数跨步处理64行Tile，即使限为1个Block也能覆盖全部128行。
+### 按实际Block数循环切分
+
+用Kernel[None, NUM_CORES]请求最多2个逻辑Block，每个AIV以get_block_num()返回值为步长跨步处理64行Tile。用[pypto_pro.language.printf](../../Utils-API/debugging/printf.md)打印实际启动的Block数：
 
 ```python
+import os
 import pypto_pro.language as pl
+import torch
 
 NUM_CORES = 2
 
@@ -63,7 +66,8 @@ def multicore_add_kernel(
     tile_c = pl.make_tile_group(type=tt, addrs=0x8000, mutex_ids=[2])
     with pl.section_vector():
         vidx = pl.get_block_idx()              # 当前AIV的全局逻辑索引
-        num_blocks = pl.get_block_num()
+        num_blocks = pl.get_block_num()        # 实际启动的Block数
+        pl.printf("block_idx = %d, block_num = %d\n", vidx, num_blocks)
         for tile_idx in pl.range(vidx, 2, num_blocks):
             offset = tile_idx * 64
             cur_a = tile_a.current()
@@ -73,4 +77,48 @@ def multicore_add_kernel(
             pl.load(cur_b, y, [offset, 0])
             pl.add(cur_c, cur_a, cur_b)
             pl.store(z, cur_c, [offset, 0])
+
+
+if __name__ == "__main__":
+    device = f"npu:{int(os.environ.get('TILE_FWK_DEVICE_ID', 0))}"
+    torch.npu.set_device(device)
+    torch.manual_seed(42)
+
+    x = torch.rand([128, 128], device=device, dtype=torch.float16)
+    y = torch.rand([128, 128], device=device, dtype=torch.float16)
+    z = torch.zeros([128, 128], device=device, dtype=torch.float16)
+
+    multicore_add_kernel[None, NUM_CORES](x, y, z)
+    torch.npu.synchronize()
+
+    torch.testing.assert_close(z, x + y, rtol=1e-2, atol=1e-2)
+    print(f"max diff = {(z - (x + y)).abs().max().item()}")
+```
+
+回显（`=> Vec`后为核号，多核间输出顺序不固定）：
+
+```text
+=> Vec 0
+block_idx = 0, block_num = 2
+
+=> Vec 1
+block_idx = 1, block_num = 2
+```
+
+### 限核启动下的返回值
+
+启动Block数是请求的上界，实际启动数可能更小。复用上例Kernel与`__main__`中的x/y，仅把启动Block数改为1：
+
+```python
+    z = torch.zeros([128, 128], device=device, dtype=torch.float16)
+    multicore_add_kernel[None, 1](x, y, z)
+    torch.npu.synchronize()
+    torch.testing.assert_close(z, x + y, rtol=1e-2, atol=1e-2)  # 仍覆盖全部128行
+```
+
+回显：
+
+```text
+=> Vec 0
+block_idx = 0, block_num = 1
 ```

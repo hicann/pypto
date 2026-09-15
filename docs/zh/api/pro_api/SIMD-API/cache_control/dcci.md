@@ -23,7 +23,7 @@ dcci只处理缓存状态，不等价于流水同步、跨核事件或内存屏�
 ```python
 pypto_pro.language.system.dcci(
     target: Union[Tensor, Tile],
-    offset: Optional[Union[int, Sequence[int]]] = None,
+    offset: Optional[Union[int, Sequence[int], Expr]] = None,
     *,
     cache_line: CacheLine = pypto_pro.language.CacheLine.ENTIRE_DATA_CACHE,
     dst: DcciDst = pypto_pro.language.DcciDst.AUTO,
@@ -34,12 +34,10 @@ pypto_pro.language.system.dcci(
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| target | 输入 | GM Tensor变量，或已分配在UB中的Tile。其他Tile内存空间不支持。GM Tensor下标表达式表示单个元素，不能作为Tensor目标；UB Tile可使用完整Tile或其subview，DCCI从该Tile表达式对应的有效地址开始操作。 |
+| target | 输入 | GM Tensor变量，或已分配在UB中的Tile。 |
 | offset | 输入 | 可选，元素偏移，单位为target.dtype元素。GM Tensor支持各维偏移列表/元组，也支持整型常量或运行时整型标量表达式表示的线性偏移；列表/元组长度须与Tensor维数一致，框架按Tensor stride换算线性偏移。UB Tile仅支持整型常量或运行时整型标量表达式表示的线性偏移。缺省时为0，即使用目标起始地址；偏移不得使有效地址越出目标已分配范围。 |
 | cache_line | 输入 | 可选，编译期[pypto_pro.language.CacheLine](../basic_data_structures/CacheLine.md)枚举值，默认pypto_pro.language.CacheLine.ENTIRE_DATA_CACHE。缓存行为64字节；SINGLE_CACHE_LINE的地址无需由用户向下对齐，硬件操作包含该地址的缓存行。若数据跨越多个缓存行，须逐行调用或使用ENTIRE_DATA_CACHE。 |
 | dst | 输入 | 可选，编译期[pypto_pro.language.DcciDst](../basic_data_structures/DcciDst.md)枚举值，默认pypto_pro.language.DcciDst.AUTO。各枚举值的含义和适用目标参见DcciDst。 |
-
-显式指定dst时，其取值必须与target的存储区域和硬件访问路径匹配：GM Tensor使用CACHELINE_OUT或CACHELINE_ALL，UB Tile使用CACHELINE_UB；CACHELINE_ATOMIC仅用于硬件原子缓存路径。普通GM/UB场景建议使用AUTO。
 
 ## 约束说明
 
@@ -47,7 +45,6 @@ pypto_pro.language.system.dcci(
 - SINGLE_CACHE_LINE只覆盖一个64字节缓存行。处理地址区间[addr, addr + bytes)时，调用次数至少为该区间覆盖的缓存行数，不能只对首地址调用一次。
 - ENTIRE_DATA_CACHE作用于整个数据缓存，offset不会缩小其作用范围；该模式开销大于单缓存行操作。
 - DCCI不是同步原语。生产者通过MTE3等流水写出数据后，必须先同步到S流水再执行DCCI或发布标志；消费者也必须先完成相应跨核等待，再执行缓存处理和数据读取。具体事件号和同步模式由上层通信协议决定。
-- target为UB Tile，或dst选择CACHELINE_UB时，调用前必须确保CTRL寄存器的CTRL[49]已置1以开启UB datacache模式；本接口不会自动修改该控制位。
 - 频繁对整个缓存执行DCCI会造成明显性能损失；已知共享数据范围时应优先按64字节缓存行处理。
 
 ## 返回值说明
@@ -56,20 +53,64 @@ pypto_pro.language.system.dcci(
 
 ## 调用示例
 
-### 单缓存行失效
+### 单缓存行失效（GM Tensor）
 
 ```python
-pl.system.dcci(
-    inp,
-    [0, 0],
-    cache_line=pl.CacheLine.SINGLE_CACHE_LINE,
-    dst=pl.DcciDst.AUTO,
-)
+import os
+import pypto_pro.language as pl
+import torch
+
+@pl.jit()
+def dcci_gm_kernel(
+    inp: pl.Tensor[[16, 16], pl.DT_FP32],
+    out: pl.Tensor[[16, 16], pl.DT_FP32],
+):
+    # 对 inp 起始元素所在地址的64字节缓存行执行清理并失效
+    pl.system.dcci(inp, [0, 0], cache_line=pl.CacheLine.SINGLE_CACHE_LINE)
+
+
+if __name__ == "__main__":
+    device = f"npu:{int(os.environ.get('TILE_FWK_DEVICE_ID', 0))}"
+    torch.npu.set_device(device)
+
+    inp = torch.ones([16, 16], device=device, dtype=torch.float32)
+    out = torch.ones([16, 16], device=device, dtype=torch.float32)
+
+    dcci_gm_kernel(inp, out)
+    torch.npu.synchronize()
+
+    # DCCI只处理缓存状态，不修改数据
+    assert torch.allclose(out.cpu(), inp.cpu())
+    print("dcci done")
 ```
 
 ### 全缓存失效
 
 ```python
-# 全缓存失效
+# 对整个数据缓存执行DCCI，开销大于单缓存行操作，offset不会缩小其作用范围
 pl.system.dcci(inp, cache_line=pl.CacheLine.ENTIRE_DATA_CACHE)
+```
+
+### DCCI搭配同步使用
+
+对UB Tile执行DCCI时，须先用sync_src/sync_dst建立流水先后关系（DCCI不是同步原语）：
+
+```python
+@pl.jit(auto_mutex=True)
+def dcci_ub_kernel(
+    inp: pl.Tensor[[16, 16], pl.DT_FP32],
+    out: pl.Tensor[[16, 16], pl.DT_FP32],
+):
+    tt = pl.TileType(shape=[16, 16], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+    t = pl.make_tile(tt, addr=0x0000, size=1024)
+    with pl.section_vector():
+        pl.load(t, inp, [0, 0])
+        # load（MTE2）完成后才能执行 dcci（S）
+        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.S, event_id=0)
+        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.S, event_id=0)
+        pl.system.dcci(t, cache_line=pl.CacheLine.SINGLE_CACHE_LINE)
+        # dcci（S）完成后再 store（MTE3），否则store可能读到失效前的旧数据
+        pl.system.sync_src(set_pipe=pl.PipeType.S, wait_pipe=pl.PipeType.MTE3, event_id=1)
+        pl.system.sync_dst(set_pipe=pl.PipeType.S, wait_pipe=pl.PipeType.MTE3, event_id=1)
+        pl.store(out, t, [0, 0])
 ```
