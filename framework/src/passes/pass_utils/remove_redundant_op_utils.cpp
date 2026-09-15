@@ -1977,13 +1977,10 @@ Status RemoveRedundantOpUtils::ProcessSliceContractSlice(Function& function, std
                                                           [](const Operation* consumer) {
                                                               return consumer != nullptr && SliceRequiresL1(*consumer);
                                                           });
-        // A contract fed by a materialized matmul result normally must remain materialized because the
-        // L0C layout is not a linear tensor view.  Multiple L1 slices are the exception: the preceding
-        // slice already represents the materialized copy-out, and folding it into the surviving L1
-        // slices preserves that boundary.
-        if (IsMatmulBackedContractInput(chain.contractInput) && !keepL1Fanout) {
-            continue;
-        }
+        // A slice-contract prefix is the expansion of a view (or an equal-size assemble): the preceding
+        // slice is always a real copy.  When its source is a materialized matmul result, the L0C copy-out
+        // contract stays outside the chain, and every rewrite below only reads linear-memory tensors
+        // (sourceTensor/contractInput), so folding is safe for single- and mixed-fanout consumers too.
 
         std::vector<SliceContractSliceRewrite> rewrites;
         bool canComposeOffsets = true;

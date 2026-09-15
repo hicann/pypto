@@ -3825,9 +3825,12 @@ TEST_F(TestRemoveRedundantOpPass, SliceContractSliceL1FanoutShouldFoldPrecedingS
 SliceContractSliceWithMaterializedMatmulInput
 inputA/inputB->A_MUL_B->mmOut{8,16}->contract(materialize)->matOut{8,16}->slice(preceding)
     ->contractInput{8,16}->contract->contractOutput{8,16}->slice{4,0}->sliceOut{4,16}->exp
-A contract fed by a materialized matmul result must stay materialized, so the whole chain is kept.
+inputA/inputB->A_MUL_B->mmOut{8,16}->contract(materialize)->matOut{8,16}->slice(preceding)
+    ->contractInput{8,16}->view{4,0}->sliceOut{4,16}->exp
+The L0C copy-out contract stays outside the chain, so the slice-contract prefix (a view expansion)
+is folded into the trailing slice: the chain contract is removed and a composed view is generated.
 */
-TEST_F(TestRemoveRedundantOpPass, SliceContractSliceWithMaterializedMatmulInputShouldNotFold)
+TEST_F(TestRemoveRedundantOpPass, SliceContractSliceWithMaterializedMatmulInputShouldFoldToView)
 {
     auto function = std::make_shared<Function>(Program::GetInstance(), "SliceContractSliceMatmulInput",
                                                "SliceContractSliceMatmulInput", nullptr);
@@ -3869,12 +3872,14 @@ TEST_F(TestRemoveRedundantOpPass, SliceContractSliceWithMaterializedMatmulInputS
     bool operationUpdated = false;
     ASSERT_EQ(RemoveRedundantOpUtils::ProcessContractSlice(*function, newOps, operationUpdated), SUCCESS);
 
-    EXPECT_FALSE(operationUpdated);
-    EXPECT_TRUE(newOps.empty());
-    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumTwo);
-    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumTwo);
-    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumZero);
-    EXPECT_EQ(exp.GetInputOperand(kSizeZero), sliceOutput);
+    EXPECT_TRUE(operationUpdated);
+    ASSERT_EQ(newOps.size(), kNumOne);
+    EXPECT_EQ(newOps.front()->GetOpcode(), Opcode::OP_VIEW);
+    EXPECT_EQ(newOps.front()->GetIOperands().front(), contractInput);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_CONTRACT), kNumOne);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_SLICE), kNumOne);
+    EXPECT_EQ(CountOpcode(function, Opcode::OP_VIEW), kNumOne);
+    EXPECT_EQ(exp.GetInputOperand(kSizeZero), newOps.front()->GetOOperands().front());
 }
 
 /*
