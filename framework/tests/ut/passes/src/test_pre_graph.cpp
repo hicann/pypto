@@ -1213,6 +1213,108 @@ TEST_F(PreGraphTest, TestKeepViewWhenCopyInOffsetRankMismatch)
     CompareOpImmediateVector(copyAttr->GetFromOffset(), {4});
 }
 
+TEST_F(PreGraphTest, TestKeepViewToCopyInWhenInputOffsetNonZero)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP16, {16, 16}, MemoryType::MEM_DEVICE_DDR, "view_input");
+    G.AddTensor(DataType::DT_FP16, {8, 8}, MemoryType::MEM_DEVICE_DDR, "view_output");
+    G.AddTensor(DataType::DT_FP16, {4, 4}, MemoryType::MEM_UB, "copy_output");
+    G.AddOp(Opcode::OP_VIEW, {"view_input"}, {"view_output"}, "VIEW");
+    // 模拟ReplaceTensor(ForUpdateView)处理后的状态: view输入offset非零,
+    // from已吸收输入offset, 即from == view输出offset == 输入offset + 原始from({3,2}+{2,3}={5,5})
+    G.GetTensor("view_input")->UpdateOffset(std::vector<int64_t>{3, 2});
+    G.GetOp("VIEW")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{5, 5}));
+    G.GetTensor("view_output")->UpdateOffset(std::vector<int64_t>{5, 5});
+    G.AddOp(Opcode::OP_COPY_IN, {"view_output"}, {"copy_output"}, "COPYIN");
+    auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(G.GetOp("COPYIN")->GetOpAttribute());
+    copyAttr->SetFromOffset(OpImmediate::Specified({4, 5}));
+
+    RemoveRedundantAssemble pass;
+    EXPECT_EQ(pass.ProcessViewToCopyIn(*G.GetFunction()), SUCCESS);
+
+    // view输入offset非零时禁止折叠, 避免from中已吸收的输入offset与copyIn新输入自身offset重复累加
+    EXPECT_FALSE(G.GetOp("VIEW")->IsDeleted());
+    EXPECT_EQ(G.GetOp("COPYIN")->GetIOperands().front(), G.GetTensor("view_output"));
+    CompareOpImmediateVector(copyAttr->GetFromOffset(), {4, 5});
+}
+
+TEST_F(PreGraphTest, TestKeepViewToCopyInWhenInputDynOffsetNonZero)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP16, {16, 16}, MemoryType::MEM_DEVICE_DDR, "view_input");
+    G.AddTensor(DataType::DT_FP16, {8, 8}, MemoryType::MEM_DEVICE_DDR, "view_output");
+    G.AddTensor(DataType::DT_FP16, {4, 4}, MemoryType::MEM_UB, "copy_output");
+    G.AddOp(Opcode::OP_VIEW, {"view_input"}, {"view_output"}, "VIEW");
+    // 模拟ReplaceTensor处理后的符号偏移场景: view输入携带非零符号offset,
+    // from的dynOffset同样已吸收该符号偏移(sym + 2)
+    auto symOffset = CreateTestScalarVar("view_input_dyn_off");
+    std::vector<int64_t> zeroOffset = {0, 0};
+    std::vector<SymbolicScalar> inputDynOffset = {symOffset, IRBuilder().CreateConstInt(0)};
+    G.GetTensor("view_input")->UpdateOffset(TensorOffset(zeroOffset, inputDynOffset));
+    std::vector<SymbolicScalar> fromDynOffset = {symOffset + IRBuilder().CreateConstInt(2),
+                                                 IRBuilder().CreateConstInt(3)};
+    G.GetOp("VIEW")->SetOpAttribute(
+        std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_UNKNOWN, fromDynOffset));
+    G.AddOp(Opcode::OP_COPY_IN, {"view_output"}, {"copy_output"}, "COPYIN");
+    auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(G.GetOp("COPYIN")->GetOpAttribute());
+    copyAttr->SetFromOffset(OpImmediate::Specified({4, 5}));
+
+    RemoveRedundantAssemble pass;
+    EXPECT_EQ(pass.ProcessViewToCopyIn(*G.GetFunction()), SUCCESS);
+
+    // view输入携带无法证明为零的符号offset时禁止折叠
+    EXPECT_FALSE(G.GetOp("VIEW")->IsDeleted());
+    EXPECT_EQ(G.GetOp("COPYIN")->GetIOperands().front(), G.GetTensor("view_output"));
+    CompareOpImmediateVector(copyAttr->GetFromOffset(), {4, 5});
+}
+
+TEST_F(PreGraphTest, TestMergeViewToCopyInWithExplicitZeroInputOffset)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP16, {16, 16}, MemoryType::MEM_DEVICE_DDR, "view_input");
+    G.AddTensor(DataType::DT_FP16, {8, 8}, MemoryType::MEM_DEVICE_DDR, "view_output");
+    G.AddTensor(DataType::DT_FP16, {4, 4}, MemoryType::MEM_UB, "copy_output");
+    G.AddOp(Opcode::OP_VIEW, {"view_input"}, {"view_output"}, "VIEW");
+    // 显式全零offset(非默认空vector)不应阻止折叠
+    G.GetTensor("view_input")->UpdateOffset(std::vector<int64_t>{0, 0});
+    G.GetOp("VIEW")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{2, 3}));
+    G.AddOp(Opcode::OP_COPY_IN, {"view_output"}, {"copy_output"}, "COPYIN");
+    auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(G.GetOp("COPYIN")->GetOpAttribute());
+    copyAttr->SetFromOffset(OpImmediate::Specified({4, 5}));
+
+    RemoveRedundantAssemble pass;
+    EXPECT_EQ(pass.ProcessViewToCopyIn(*G.GetFunction()), SUCCESS);
+
+    EXPECT_TRUE(G.GetOp("VIEW")->IsDeleted());
+    EXPECT_EQ(G.GetOp("COPYIN")->GetIOperands().front(), G.GetTensor("view_input"));
+    CompareOpImmediateVector(copyAttr->GetFromOffset(), {6, 8});
+}
+
+TEST_F(PreGraphTest, TestKeepViewToCopyInWhenCopyInAbsorbedViewOffset)
+{
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP16, {16, 16}, MemoryType::MEM_DEVICE_DDR, "view_input");
+    G.AddTensor(DataType::DT_FP16, {8, 8}, MemoryType::MEM_DEVICE_DDR, "view_output");
+    G.AddTensor(DataType::DT_FP16, {4, 4}, MemoryType::MEM_UB, "copy_output");
+    G.AddOp(Opcode::OP_VIEW, {"view_input"}, {"view_output"}, "VIEW");
+    // 模拟ReplaceTensor(InsertCopyDDROp)插入的copyIn: view输入offset为零, from已吸收view窗口偏移,
+    // copyIn的fromOffset被烤入同一view偏移(绝对量), 并打了viewOffsetAbsorbed标记
+    G.GetOp("VIEW")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{2, 3}));
+    G.GetTensor("view_output")->UpdateOffset(std::vector<int64_t>{2, 3});
+    G.AddOp(Opcode::OP_COPY_IN, {"view_output"}, {"copy_output"}, "COPYIN");
+    auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(G.GetOp("COPYIN")->GetOpAttribute());
+    copyAttr->SetFromOffset(OpImmediate::Specified({2, 3}));
+    G.GetOp("COPYIN")->SetAttr(COPY_IN_VIEW_OFFSET_ABSORBED, true);
+
+    RemoveRedundantAssemble pass;
+    EXPECT_EQ(pass.ProcessViewToCopyIn(*G.GetFunction()), SUCCESS);
+
+    // fromOffset已含view偏移(绝对量)的copyIn禁止再折叠, 否则{2,3}+{2,3}={4,6}重复累加
+    EXPECT_FALSE(G.GetOp("VIEW")->IsDeleted());
+    EXPECT_EQ(G.GetOp("COPYIN")->GetIOperands().front(), G.GetTensor("view_output"));
+    CompareOpImmediateVector(copyAttr->GetFromOffset(), {2, 3});
+}
+
 TEST_F(PreGraphTest, TestRemoveViewSingleReshapeNormalizesCopyInRawShape)
 {
     ComputationalGraphBuilder G;

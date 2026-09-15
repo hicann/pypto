@@ -30,6 +30,9 @@ namespace npu::tile_fwk {
 static const std::string RMW_MODE_ATTR_ADD = OP_ATTR_PREFIX + "atomic_add";
 static const std::string RMW_MODE_ATTR_MIN = OP_ATTR_PREFIX + "atomic_min";
 static const std::string RMW_MODE_ATTR_MAX = OP_ATTR_PREFIX + "atomic_max";
+// copyIn的fromOffset已吸收view窗口偏移(绝对量, 由ReplaceTensor::InsertCopyDDROp烤入),
+// 消费方不得再叠加view偏移, 否则重复累加
+static const std::string COPY_IN_VIEW_OFFSET_ABSORBED = OP_ATTR_PREFIX + "viewOffsetAbsorbed";
 
 inline std::map<std::string, std::set<int>> BuildLabelToColorsMap(const OperationsViewer& opOriList)
 {
