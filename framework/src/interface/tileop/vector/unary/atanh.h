@@ -16,7 +16,7 @@
 #ifndef TILEOP_TILE_OPERATOR_ATANH__H
 #define TILEOP_TILE_OPERATOR_ATANH__H
 #include "utils/sync.h"
-#include "unary.h"
+#include "basic.h"
 #include <type_traits>
 
 constexpr float ATANH_LIMIT = 1e34f;

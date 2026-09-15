@@ -20,5 +20,9 @@
 #include "unary/transcendental.h"
 #include "unary/erf.h"
 #include "unary/inverse.h"
+#include "unary/tanh.h"
+#include "unary/tan.h"
+#include "unary/atanh.h"
+#include "unary/atan.h"
 
 #endif // TILEOP_TILE_OPERATOR_VEC_UNARY_H

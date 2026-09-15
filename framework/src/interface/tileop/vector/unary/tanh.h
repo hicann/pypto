@@ -15,7 +15,7 @@
 
 #ifndef TILEOP_TILE_OPERATOR_TANH__H
 #define TILEOP_TILE_OPERATOR_TANH__H
-#include "unary.h"
+#include "basic.h"
 #include "utils/sync.h"
 #include <type_traits>
 

@@ -124,6 +124,130 @@ TILEOP void TExpm1(T0 dst, T1 tmp, T2 src)
     }
 }
 
+#ifdef __DAV_V220
+template <typename T0, typename T1, typename T2, typename T3, typename T4, typename T5, typename T6>
+TILEOP void TSinhCompute(T0 dstTile, T1 srcTile, T2 tmp0Tile, T3 tmp1Tile, T4 tmp2Tile, T5 tmp3Tile, T6 tmp1MaskTile)
+{
+    constexpr float SCALAR_ZERO_0199 = 0.0001998459335617813754003f;
+    constexpr float SCALAR_ZERO_0833 = 0.00833308538698833f;
+    constexpr float SCALAR_ZERO_166 = 0.16666668254541f;
+    constexpr float SCALAR_ZERO_48 = 0.48f;
+    constexpr float SCALAR_ONE = 1.0f;
+    constexpr float SCALAR_ZERO_POINT_FIVE = 0.5f;
+    constexpr float SCALAR_NEGATIVE_15 = -1.5f;
+    constexpr float SCALAR_NEGATIVE_ONE = -1.0f;
+    constexpr float SCALAR_ZERO = 0.0f;
+
+    // sinh(x) = x + x^3 / 3! + x^5 / 5! + x^7 / 7! for small x
+    pto::TABS(tmp0Tile, srcTile);
+    SyncV();
+    pto::TMUL(tmp1Tile, tmp0Tile, tmp0Tile);
+    SyncV();
+    pto::TMULS(tmp2Tile, tmp1Tile, SCALAR_ZERO_0199);
+    SyncV();
+    pto::TADDS(tmp2Tile, tmp2Tile, SCALAR_ZERO_0833);
+    SyncV();
+    pto::TMUL(tmp2Tile, tmp2Tile, tmp1Tile);
+    SyncV();
+    pto::TADDS(tmp2Tile, tmp2Tile, SCALAR_ZERO_166);
+    SyncV();
+    pto::TMUL(tmp2Tile, tmp2Tile, tmp1Tile);
+    SyncV();
+    pto::TADDS(tmp2Tile, tmp2Tile, SCALAR_ONE);
+    SyncV();
+    pto::TMUL(tmp2Tile, tmp2Tile, tmp0Tile);
+    SyncV();
+
+    // sinh(x) = 1/2 * (e^{x/2} - e^{-3x/2}) * e^{x/2} for large x
+    pto::TMULS(tmp1Tile, tmp0Tile, SCALAR_ZERO_POINT_FIVE);
+    SyncV();
+    pto::TEXP<pto::ExpAlgorithm::HIGH_PRECISION>(tmp1Tile, tmp1Tile);
+    SyncV();
+    pto::TMULS(tmp3Tile, tmp0Tile, SCALAR_NEGATIVE_15);
+    SyncV();
+    pto::TEXP<pto::ExpAlgorithm::HIGH_PRECISION>(tmp3Tile, tmp3Tile);
+    SyncV();
+    pto::TSUB(tmp3Tile, tmp1Tile, tmp3Tile);
+    SyncV();
+    pto::TMULS(tmp3Tile, tmp3Tile, SCALAR_ZERO_POINT_FIVE);
+    SyncV();
+    pto::TMUL(tmp3Tile, tmp3Tile, tmp1Tile);
+    SyncV();
+
+    pto::TCMPS(tmp1MaskTile, tmp0Tile, SCALAR_ZERO_48, pto::CmpMode::LT);
+    SyncV();
+    pto::TSEL(dstTile, tmp1MaskTile, tmp2Tile, tmp3Tile, tmp0Tile);
+    SyncV();
+
+    pto::TMULS(tmp2Tile, dstTile, SCALAR_NEGATIVE_ONE);
+    SyncV();
+    pto::TCMPS(tmp1MaskTile, srcTile, SCALAR_ZERO, pto::CmpMode::GE);
+    SyncV();
+    pto::TSEL(dstTile, tmp1MaskTile, dstTile, tmp2Tile, tmp0Tile);
+    SyncV();
+}
+#else
+template <typename T0, typename T1, typename T2, typename T3, typename T4, typename T5, typename T6>
+TILEOP void TSinhCompute(T0 dstTile, T1 srcTile, T2 tmp0Tile, T3 tmp1Tile, T4 tmp2Tile, T5 tmp3Tile, T6 tmp3MaskTile)
+{
+    constexpr float kC2 = 0.16666667f;
+    constexpr float kC3 = 0.008333347f;
+    constexpr float kC4 = 0.00019841270f;
+    constexpr float kC5 = 0.0000027557319f;
+    constexpr float kNegLn2Hi = -0.6931471824645996f;
+    constexpr float kLn2Lo = 1.9046542e-9f;
+    constexpr float kOverflow = 89.4159927368164f;
+    constexpr float kInf = std::numeric_limits<float>::infinity();
+
+    // Recover the rounding residual of shifted = |x| - ln2_hi.
+    pto::TABS(tmp0Tile, srcTile);
+    pto::TADDS(tmp1Tile, tmp0Tile, kNegLn2Hi);
+    pto::TSUB(tmp2Tile, tmp1Tile, tmp0Tile); // z = shifted - |x|
+    pto::TSUB(tmp3Tile, tmp1Tile, tmp2Tile);
+    pto::TSUB(tmp3Tile, tmp0Tile, tmp3Tile);
+    pto::TMULS(tmp2Tile, tmp2Tile, -1.0f);
+    pto::TADDS(tmp2Tile, tmp2Tile, kNegLn2Hi);
+    pto::TADD(tmp3Tile, tmp3Tile, tmp2Tile);
+    pto::TADDS(tmp3Tile, tmp3Tile, kLn2Lo);
+    pto::TEXP(tmp1Tile, tmp1Tile);
+    // t = exp(shifted) * (1 + residual), with separate multiply/add rounding.
+    pto::TMUL(tmp2Tile, tmp1Tile, tmp3Tile);
+    pto::TADD(tmp2Tile, tmp1Tile, tmp2Tile);
+    // The residual is dead; its slot now stores the mask. Discard corrections
+    // on overflowing / NaN lanes, as in the reference implementation.
+    pto::TCMPS(tmp3MaskTile, tmp0Tile, kOverflow, pto::CmpMode::LT);
+    pto::TSEL(tmp1Tile, tmp3MaskTile, tmp2Tile, tmp1Tile, dstTile);
+    pto::TEXPANDS(tmp2Tile, 0.25f);
+    pto::TDIV<pto::DivAlgorithm::HIGH_PRECISION>(tmp2Tile, tmp2Tile, tmp1Tile);
+    pto::TSUB(tmp1Tile, tmp1Tile, tmp2Tile);
+
+    // Guard overflow before restoring the sign of the large-argument result.
+    pto::TCMPS(tmp3MaskTile, tmp0Tile, kOverflow, pto::CmpMode::GE);
+    pto::TEXPANDS(tmp2Tile, kInf);
+    pto::TSEL(tmp1Tile, tmp3MaskTile, tmp2Tile, tmp1Tile, dstTile);
+    pto::TCMPS(tmp3MaskTile, srcTile, 0.0f, pto::CmpMode::LT);
+    pto::TMULS(tmp2Tile, tmp1Tile, -1.0f);
+    pto::TSEL(tmp1Tile, tmp3MaskTile, tmp2Tile, tmp1Tile, dstTile);
+
+    // For |x| < 1, use x + x^3 * (((c5*x^2 + c4)*x^2 + c3)*x^2 + c2).
+    // Keep the signed input and the reference operation order, including -0.
+    pto::TMUL(tmp0Tile, srcTile, srcTile);
+    pto::TEXPANDS(dstTile, kC5);
+    pto::TMUL(dstTile, dstTile, tmp0Tile);
+    pto::TADDS(dstTile, dstTile, kC4);
+    pto::TMUL(dstTile, dstTile, tmp0Tile);
+    pto::TADDS(dstTile, dstTile, kC3);
+    pto::TMUL(dstTile, dstTile, tmp0Tile);
+    pto::TADDS(dstTile, dstTile, kC2);
+    pto::TMUL(tmp2Tile, tmp0Tile, srcTile);
+    pto::TMUL(dstTile, dstTile, tmp2Tile);
+    pto::TADD(dstTile, srcTile, dstTile);
+    pto::TABS(tmp0Tile, srcTile);
+    pto::TCMPS(tmp3MaskTile, tmp0Tile, 1.0f, pto::CmpMode::LT);
+    pto::TSEL(dstTile, tmp3MaskTile, dstTile, tmp1Tile, tmp2Tile);
+}
+#endif
+
 #define OP_TILE_OP_SINH TSinh
 template <typename T0, typename T1, typename T2>
 TILEOP void TSinh(T0 dst, T1 src, T2 tmp)
@@ -134,16 +258,6 @@ TILEOP void TSinh(T0 dst, T1 src, T2 tmp)
     auto dstShape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
     auto dstShape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
     auto dstShape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
-
-    constexpr float SCALAR_ZERO_0199 = 0.0001998459335617813754003f;
-    constexpr float SCALAR_ZERO_0833 = 0.00833308538698833f;
-    constexpr float SCALAR_ZERO_166 = 0.16666668254541f;
-    constexpr float SCALAR_ZERO_48 = 0.48f;
-    constexpr float SCALAR_ONE = 1.0f;
-    constexpr float SCALAR_ZERO_POINT_FIVE = 0.5f;
-    constexpr float SCALAR_NEGATIVE_15 = -1.5f;
-    constexpr float SCALAR_NEGATIVE_ONE = -1.0f;
-    constexpr float SCALAR_ZERO = 0.0f;
 
     constexpr auto tileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
     constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
@@ -161,7 +275,11 @@ TILEOP void TSinh(T0 dst, T1 src, T2 tmp)
     DstTileDefine tmp1Tile(dstShape3, dstShape4);
     DstTileDefine tmp2Tile(dstShape3, dstShape4);
     DstTileDefine tmp3Tile(dstShape3, dstShape4);
+#ifdef __DAV_V220
     MaskTileDefine tmp1MaskTile(dstShape3, dstShape4);
+#else
+    MaskTileDefine tmp3MaskTile(dstShape3, dstShape4);
+#endif
     constexpr size_t TMP2_SLOT = 2;
     constexpr size_t TMP3_SLOT = 3;
 
@@ -180,55 +298,15 @@ TILEOP void TSinh(T0 dst, T1 src, T2 tmp)
                              (uint64_t)(tmp.GetAddr() + tmpByteOffset + TMP2_SLOT * tileShapeSize * dstTypeSize));
                 pto::TASSIGN(tmp3Tile,
                              (uint64_t)(tmp.GetAddr() + tmpByteOffset + TMP3_SLOT * tileShapeSize * dstTypeSize));
+#ifdef __DAV_V220
                 pto::TASSIGN(tmp1MaskTile, (uint64_t)(tmp.GetAddr() + tmpByteOffset + tileShapeSize * dstTypeSize));
 
-                // sinh(x) = x + x^3 / 3! + x^5 / 5! + x^7 / 7! for small x
-                pto::TABS(tmp0Tile, srcExecTile);
-                SyncV();
-                pto::TMUL(tmp1Tile, tmp0Tile, tmp0Tile);
-                SyncV();
-                pto::TMULS(tmp2Tile, tmp1Tile, SCALAR_ZERO_0199);
-                SyncV();
-                pto::TADDS(tmp2Tile, tmp2Tile, SCALAR_ZERO_0833);
-                SyncV();
-                pto::TMUL(tmp2Tile, tmp2Tile, tmp1Tile);
-                SyncV();
-                pto::TADDS(tmp2Tile, tmp2Tile, SCALAR_ZERO_166);
-                SyncV();
-                pto::TMUL(tmp2Tile, tmp2Tile, tmp1Tile);
-                SyncV();
-                pto::TADDS(tmp2Tile, tmp2Tile, SCALAR_ONE);
-                SyncV();
-                pto::TMUL(tmp2Tile, tmp2Tile, tmp0Tile);
-                SyncV();
-
-                // sinh(x) = 1/2 * (e^{x/2} - e^{-3x/2}) * e^{x/2} for large x
-                pto::TMULS(tmp1Tile, tmp0Tile, SCALAR_ZERO_POINT_FIVE);
-                SyncV();
-                pto::TEXP<pto::ExpAlgorithm::HIGH_PRECISION>(tmp1Tile, tmp1Tile);
-                SyncV();
-                pto::TMULS(tmp3Tile, tmp0Tile, SCALAR_NEGATIVE_15);
-                SyncV();
-                pto::TEXP<pto::ExpAlgorithm::HIGH_PRECISION>(tmp3Tile, tmp3Tile);
-                SyncV();
-                pto::TSUB(tmp3Tile, tmp1Tile, tmp3Tile);
-                SyncV();
-                pto::TMULS(tmp3Tile, tmp3Tile, SCALAR_ZERO_POINT_FIVE);
-                SyncV();
-                pto::TMUL(tmp3Tile, tmp3Tile, tmp1Tile);
-                SyncV();
-
-                pto::TCMPS(tmp1MaskTile, tmp0Tile, SCALAR_ZERO_48, pto::CmpMode::LT);
-                SyncV();
-                pto::TSEL(dstTile, tmp1MaskTile, tmp2Tile, tmp3Tile, tmp0Tile);
-                SyncV();
-
-                pto::TMULS(tmp2Tile, dstTile, SCALAR_NEGATIVE_ONE);
-                SyncV();
-                pto::TCMPS(tmp1MaskTile, srcExecTile, SCALAR_ZERO, pto::CmpMode::GE);
-                SyncV();
-                pto::TSEL(dstTile, tmp1MaskTile, dstTile, tmp2Tile, tmp0Tile);
-                SyncV();
+                TSinhCompute(dstTile, srcExecTile, tmp0Tile, tmp1Tile, tmp2Tile, tmp3Tile, tmp1MaskTile);
+#else
+                pto::TASSIGN(tmp3MaskTile,
+                             (uint64_t)(tmp.GetAddr() + tmpByteOffset + TMP3_SLOT * tileShapeSize * dstTypeSize));
+                TSinhCompute(dstTile, srcExecTile, tmp0Tile, tmp1Tile, tmp2Tile, tmp3Tile, tmp3MaskTile);
+#endif
             }
         }
     }
