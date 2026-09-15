@@ -40,6 +40,10 @@ namespace npu::tile_fwk {
 // mha_grad 101,220 cycles; 拒绝 mla 巨型组与 sparse 跨拷贝组(>250k)。
 constexpr int kAutoMixMaxMergeLatency = 250000;
 
+// 串行损失阈值: 汇聚 sink 合并的串行化损失(Σbranch − max)超过合入 root 总 latency 的
+// 该倍数时, 为省边界通信付出的代价远超 root 可消化的规模, 拒绝合并(经验调优值)。
+constexpr int64_t kSerialLossRatio = 8;
+
 static bool IsValidMergeGroup(const std::vector<int>& mergeGroup, const std::unordered_set<int>& noMergeSubgraph)
 {
     for (int subidx : mergeGroup) {
@@ -1056,14 +1060,15 @@ bool MixGraphMerger::CheckNoExternalUseOfMergedInnerTensor(const std::vector<int
     return true;
 }
 
-bool MixGraphMerger::CheckMergeBenefitByStructuralPattern(const std::vector<int>& actualGroup)
+bool MixGraphMerger::CheckMergeBenefitByStructuralPattern(const std::vector<int>& actualGroup, bool allowSinkMerge)
 {
     // 两层结构 benefit 判定(不依赖 latency):
     // tensor 层: 分侧统计 prodRoots/consRoots, 仅 prodRoots>1 && consRoots>1 拒绝为 N:M tensor;
     //            1:1/1:N/N:1 均视为简单 tensor edge, 建 root 级方向边。
     // root 图层: 用 rootPreds/rootSuccs 识别整体 N:M 并拒绝; 1:1/N:1/1:N 均通过。
     // sink 保护: actualGroup 内不产出 boundary tensor 的 root,
-    //            统计其当前所有 producer root, >1 才拒绝; 全部归一 root 时放行(不再损失并行分支)。
+    //            统计其当前所有 producer root, >1 且串行损失(Σbranch − max)超过
+    //            kSerialLossRatio × 合入root 才拒绝; 其余(损失可被 root 消化/全部归一 root)放行。
     const int multiBranchThreshold = 2; // 2+ 个 root/branch 视为多分支(fan-in/fan-out)
     std::unordered_set<int> mergedRoot(actualGroup.begin(), actualGroup.end());
     ++mVisitStamp;
@@ -1118,8 +1123,12 @@ bool MixGraphMerger::CheckMergeBenefitByStructuralPattern(const std::vector<int>
     }
     // sink 保护: 不产出 boundary tensor 的 root, 当前 producer root 数 > 1 才拒绝。
     // 若所有 producer 已经归到同一个 root，合入 sink 不再减少并行分支。
+    // 串行损失保护: 分支串行化损失(Σbranch − max)超过 kSerialLossRatio × 合入root 时才拒绝,
+    // 损失可被 root 规模消化时放行。
     // 输出级 consolidate 旁路: 全图 ≥2 个出度0 sink 且本候选含其全部时,
     // 视为合并并行输出级(下游无并行可损失), 跳过 sink 保护。
+    // 推迟门控: 常规合并轮凡涉及 sink 的候选组一律推迟, 防止 sink 提前合入后逐轮吞并大量小子图;
+    // 仅常规合并收敛后的 sink 尝试轮(allowSinkMerge=true)才执行上述检查并尝试合并。
     bool skipSinkProtection = false;
     if (mGlobalOutputSinks.size() >= multiBranchThreshold) {
         skipSinkProtection = true;
@@ -1135,7 +1144,14 @@ bool MixGraphMerger::CheckMergeBenefitByStructuralPattern(const std::vector<int>
                               mGlobalOutputSinks.size());
         }
     }
-    if (!skipSinkProtection) {
+    if (skipSinkProtection) {
+        if (!allowSinkMerge) {
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                              "Structural merge deferred: candidate consolidates all output sinks, "
+                              "wait for sink merge round.");
+            return false;
+        }
+    } else {
         for (int root : actualGroup) {
             if (allProdRoots.count(root) > 0) {
                 continue;
@@ -1152,7 +1168,19 @@ bool MixGraphMerger::CheckMergeBenefitByStructuralPattern(const std::vector<int>
                 }
             }
 
-            if (incomingRoots.size() >= multiBranchThreshold) {
+            if (incomingRoots.size() < multiBranchThreshold) {
+                continue;
+            }
+            if (!allowSinkMerge) {
+                APASS_LOG_DEBUG_F(Elements::Operation,
+                                  "Structural merge deferred: convergence sink at root %d (rootInDeg=%zu), "
+                                  "wait for sink merge round.",
+                                  root, incomingRoots.size());
+                return false;
+            }
+            // sink 收益保护(相对 root 标尺): 分支串行化损失(Σ-max)超过 root 总 latency 的
+            // kSerialLossRatio 倍时拒绝。详见 IsSinkMergeUnbeneficial。
+            if (IsSinkMergeUnbeneficial(root, incomingRoots)) {
                 APASS_LOG_DEBUG_F(Elements::Operation,
                                   "Structural merge skipped: convergence sink at root %d (rootInDeg=%zu).", root,
                                   incomingRoots.size());
@@ -1188,6 +1216,47 @@ bool MixGraphMerger::CheckMergeBenefitByStructuralPattern(const std::vector<int>
     return true;
 }
 
+// 判断汇聚 sink 的合并是否无收益需拒绝(整体收益估算, 相对 root 标尺):
+// 合并 = root 吞并并行分支: 收益(省边界拷贝/调度)与 root 自身规模同量级;
+// 损失 = 分支串行化新增耗时 ΣbranchLatency - max(branchLatency)。
+// 串行损失达到 root 总 latency 的 kSerialLossRatio 倍时, 为省边界通信付出的代价
+// 远超 root 可消化的规模, 拒绝; 损失可被 root 规模消化时放行。
+// 相对判据随算子规模自适应, 无需绝对阈值标定。
+// 调用方需保证入边数 ≥ 2(multiBranchThreshold 门控)。
+bool MixGraphMerger::IsSinkMergeUnbeneficial(int root, const std::set<int>& incomingRoots)
+{
+    int64_t rootLatency = 0;
+    for (size_t i = 0; i < static_cast<size_t>(mInput.numSubgraph); ++i) {
+        if (FindParent(static_cast<int>(i)) == root) {
+            rootLatency += static_cast<int64_t>(mInput.subgraphAICLatency[i]) + mInput.subgraphAIVLatency[i];
+        }
+    }
+    int64_t sumLatency = 0;
+    int64_t maxLatency = 0;
+    for (int incomingRoot : incomingRoots) {
+        int64_t latency = 0;
+        for (size_t i = 0; i < static_cast<size_t>(mInput.numSubgraph); ++i) {
+            if (FindParent(static_cast<int>(i)) == incomingRoot) {
+                latency += static_cast<int64_t>(mInput.subgraphAICLatency[i]) + mInput.subgraphAIVLatency[i];
+            }
+        }
+        sumLatency += latency;
+        maxLatency = std::max(maxLatency, latency);
+    }
+    const int64_t serialLoss = sumLatency - maxLatency;
+    // root 无算子(纯汇合点)时无收益来源, 任何串行损失都无法消化, 直接拒绝
+    if (rootLatency <= 0) {
+        return serialLoss > 0;
+    }
+    APASS_LOG_DEBUG_F(Elements::Operation,
+                      "Sink merge gate: root=%d rootLatency=%lld branches=%zu serialLoss=%lld lossPerRoot=%lld, "
+                      "merge %s.",
+                      root, static_cast<long long>(rootLatency), incomingRoots.size(),
+                      static_cast<long long>(serialLoss), static_cast<long long>(serialLoss / rootLatency),
+                      serialLoss > rootLatency * kSerialLossRatio ? "rejected" : "allowed");
+    return serialLoss > rootLatency * kSerialLossRatio;
+}
+
 bool MixGraphMerger::CheckLoopPathConsistency(const std::vector<int>& actualGroup)
 {
     // 同通路门控(carry 约束原则的语义化实现):
@@ -1217,7 +1286,7 @@ bool MixGraphMerger::CheckLoopPathConsistency(const std::vector<int>& actualGrou
     return true;
 }
 
-bool MixGraphMerger::CanMergeWithConstraints(const std::vector<int>& actualGroup)
+bool MixGraphMerger::CanMergeWithConstraints(const std::vector<int>& actualGroup, bool allowSinkMerge)
 {
     if (actualGroup.size() <= 1) {
         APASS_LOG_DEBUG_F(Elements::Operation, "Merge skipped: already merged.");
@@ -1235,7 +1304,7 @@ bool MixGraphMerger::CanMergeWithConstraints(const std::vector<int>& actualGroup
     if (!CheckLatencyConstraint(actualGroup)) {
         return false;
     }
-    return CheckMergeBenefitByStructuralPattern(actualGroup);
+    return CheckMergeBenefitByStructuralPattern(actualGroup, allowSinkMerge);
 }
 
 void MixGraphMerger::UpdateBoundaryTensorIndex(const std::vector<int>& actualGroup)
@@ -1360,8 +1429,12 @@ MergeOutput MixGraphMerger::Merge(const MergeInput& input)
         APASS_LOG_INFO_F(Elements::Operation, "Auto mix partition is skipped since scoped op exists.");
     }
     const int mergeLoopNum = 5;
-    for (int mergeLoopStep = 0; mergeLoopStep < mergeLoopNum; mergeLoopStep++) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "Enter merge loop %d.", mergeLoopStep);
+    // sink 合并推迟门控: 常规轮(allowSinkMerge=false)不允许合并含汇聚 sink 的候选组(避免提前吞并大量小子图);
+    // 常规轮收敛或常规轮数耗尽后切换为 sink 尝试轮, 且仅执行一轮, 无论该轮是否有更新都结束合并
+    bool allowSinkMerge = false;
+    for (int mergeLoopStep = 0; mergeLoopStep < mergeLoopNum + 1; mergeLoopStep++) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "Enter merge loop %d (sink merge allowed: %s).", mergeLoopStep,
+                          allowSinkMerge ? "True" : "False");
         bool hasUpdated = false;
         for (size_t i = 0; i < input.mergeGroup.size(); ++i) {
             const auto& group = input.mergeGroup[i];
@@ -1386,7 +1459,7 @@ MergeOutput MixGraphMerger::Merge(const MergeInput& input)
                                       IntVecToStr(actualGroup).c_str());
                 }
             } else if (!input.hasScopedOp && enableAutoMix && mergeLoopStep != 0 && input.isValidMergeGroup[i] &&
-                       CanMergeWithConstraints(actualGroup)) {
+                       CanMergeWithConstraints(actualGroup, allowSinkMerge)) {
                 APASS_LOG_DEBUG_F(Elements::Operation, "Merge group %zu succeeded: actualGroup=%s.", i,
                                   IntVecToStr(actualGroup).c_str());
                 PerformMerge(actualGroup);
@@ -1396,8 +1469,13 @@ MergeOutput MixGraphMerger::Merge(const MergeInput& input)
                                   IntVecToStr(actualGroup).c_str());
             }
         }
-        if (mergeLoopStep > 0 && !hasUpdated) {
+        if (allowSinkMerge) {
+            // sink 尝试轮仅一轮, 执行完即结束合并(后续轮不再重试 sink 候选组)
             break;
+        } else if (mergeLoopStep > 0 && (!hasUpdated || mergeLoopStep == mergeLoopNum - 1)) {
+            // 常规合并收敛, 或常规轮数耗尽(保证 sink 尝试轮必被执行): 切换为 sink 尝试轮,
+            // 对被推迟的 sink 候选组做均衡/悬殊检查并尝试合并
+            allowSinkMerge = true;
         }
     }
     UpdateOutput();

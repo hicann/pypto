@@ -101,7 +101,7 @@ private:
     void UnionSets(int x, int y);
     bool CanMergeWithoutCycle(const std::vector<int>& actualGroup);
     void WarnIfEnforceOpNumExceeds(const std::vector<int>& actualGroup);
-    bool CanMergeWithConstraints(const std::vector<int>& actualGroup);
+    bool CanMergeWithConstraints(const std::vector<int>& actualGroup, bool allowSinkMerge);
     void PerformMerge(const std::vector<int>& actualGroup);
     void UpdateBoundaryTensorIndex(const std::vector<int>& actualGroup);
     void ApplyMergeToGraph(const std::vector<int>& actualGroup);
@@ -109,7 +109,10 @@ private:
     void UpdateOutput();
     bool CheckLatencyConstraint(const std::vector<int>& actualGroup);
     bool CheckLoopPathConsistency(const std::vector<int>& actualGroup);
-    bool CheckMergeBenefitByStructuralPattern(const std::vector<int>& actualGroup);
+    bool CheckMergeBenefitByStructuralPattern(const std::vector<int>& actualGroup, bool allowSinkMerge);
+    // 判断汇聚 sink 的合并是否无收益需拒绝(串行损失模型): 串行化损失 Σbranch − max(branch)
+    // 超过 kSerialLossRatio × 合入root 总 latency 时拒绝; 调用方保证入边数 >= 2
+    bool IsSinkMergeUnbeneficial(int root, const std::set<int>& incomingRoots);
     bool CheckNoExternalUseOfMergedInnerTensor(const std::vector<int>& actualGroup, bool checkByCvFuseId = false);
     bool IsInvalidMergedInnerTensor(int tensorId, const std::unordered_set<int>& mergedRoots, std::vector<int>& prodIn,
                                     std::vector<int>& prodOut, std::vector<int>& consIn, std::vector<int>& consOut);

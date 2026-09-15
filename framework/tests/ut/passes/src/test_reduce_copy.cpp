@@ -363,7 +363,8 @@ static void AddVecSinkSG(ComputationalGraphBuilder& G, int sg, const std::vector
     outcasts.push_back(outName);
 }
 
-// glm 场景: 两条 attention 分支 (C1->V1->C2) 汇入单个 sink, 两 C2 root 不归一 -> sink rootInDeg=2 被保护。
+// glm 场景: 两条等价 attention 分支 (C1->V1->C2) 汇入单个 sink, 串行损失 600 > 8×sink15
+// -> sink 被保护, 两 C2 root 不归一, rootInDeg=2。
 TEST_F(ReduceCopyTest, SinkProtectedWhenMultiProducerRoots)
 {
     ComputationalGraphBuilder G;
@@ -376,6 +377,11 @@ TEST_F(ReduceCopyTest, SinkProtectedWhenMultiProducerRoots)
     AddVecSG(G, 4, "tC3", "v1b");
     std::string c2b = AddCubeMatmulFrom(G, 5, "v1b", AddIncast(G, "VA1", incasts));
     AddVecSinkSG(G, 6, {c2a, c2b}, "sinkGlmOut", outcasts);
+    // 降低 sink 延迟使串行损失超阈值: sink 3-op×5=15, 分支各 600, serialLoss=600 > 8×15
+    const int Num5 = 5;
+    for (auto& n : std::vector<std::string>{"vadds6_0", "vadds6_1", "vasm6"}) {
+        G.GetOp(n)->UpdateLatency(Num5);
+    }
     Function* function = G.GetFunction();
     function->SetTotalSubGraphCount(7);
     ASSERT_EQ(G.SetInCast(incasts), true);
@@ -1218,6 +1224,126 @@ TEST_F(ReduceCopyTest, Merge_RootRotationAccumulatesLoopPathsOnRealRoot)
     EXPECT_EQ(merger.FindParent(0), 1); // 根轮转到 sg1, actualGroup[0]=0 已不是集合根
     std::set<int> expected{7, 9};
     EXPECT_EQ(merger.mRootLoopPaths[merger.FindParent(0)], expected);
+}
+
+// glm 场景变体: 分支均衡但未达悬殊 (分支 600 < 35×sink150), sink 放行合并 -> 全图归一。
+TEST_F(ReduceCopyTest, SinkMergesWhenBalancedNotDwarfing)
+{
+    ComputationalGraphBuilder G;
+    std::vector<std::string> incasts;
+    std::vector<std::string> outcasts;
+    AddCubeMatmulFrom(G, 0, AddIncast(G, "QA0", incasts), AddIncast(G, "QB0", incasts));
+    AddVecSG(G, 1, "tC0", "v1a");
+    std::string c2a = AddCubeMatmulFrom(G, 2, "v1a", AddIncast(G, "VA0", incasts));
+    AddCubeMatmulFrom(G, 3, AddIncast(G, "QA1", incasts), AddIncast(G, "QB1", incasts));
+    AddVecSG(G, 4, "tC3", "v1b");
+    std::string c2b = AddCubeMatmulFrom(G, 5, "v1b", AddIncast(G, "VA1", incasts));
+    AddVecSinkSG(G, 6, {c2a, c2b}, "sinkGlmOut", outcasts);
+    Function* function = G.GetFunction();
+    function->SetTotalSubGraphCount(7);
+    ASSERT_EQ(G.SetInCast(incasts), true);
+    ASSERT_EQ(G.SetOutCast(outcasts), true);
+    function->paramConfigs_.autoMixPartition = 1;
+    ReduceCopyMerge merger;
+    EXPECT_EQ(merger.RunOnFunction(*function), SUCCESS);
+    const int Num1 = 1;
+    EXPECT_EQ(function->GetTotalSubGraphCount(), Num1);
+}
+
+// 纯汇合点: sink 延迟清零(rootLatency=0), 无收益来源, 分支 600/600 串行损失 600 > 0 -> 拒绝合并。
+TEST_F(ReduceCopyTest, SinkRejectsPureConvergencePoint)
+{
+    ComputationalGraphBuilder G;
+    std::vector<std::string> incasts;
+    std::vector<std::string> outcasts;
+    AddCubeMatmulFrom(G, 0, AddIncast(G, "QA0", incasts), AddIncast(G, "QB0", incasts));
+    AddVecSG(G, 1, "tC0", "v1a");
+    std::string c2a = AddCubeMatmulFrom(G, 2, "v1a", AddIncast(G, "VA0", incasts));
+    AddCubeMatmulFrom(G, 3, AddIncast(G, "QA1", incasts), AddIncast(G, "QB1", incasts));
+    AddVecSG(G, 4, "tC3", "v1b");
+    std::string c2b = AddCubeMatmulFrom(G, 5, "v1b", AddIncast(G, "VA1", incasts));
+    AddVecSinkSG(G, 6, {c2a, c2b}, "sinkGlmOut", outcasts);
+    Function* function = G.GetFunction();
+    // sink(sg6) 延迟清零成纯汇合点
+    const int Num0 = 0;
+    for (auto& op : function->Operations()) {
+        if (op.GetSubgraphID() == 6) {
+            op.UpdateLatency(Num0);
+        }
+    }
+    function->SetTotalSubGraphCount(7);
+    ASSERT_EQ(G.SetInCast(incasts), true);
+    ASSERT_EQ(G.SetOutCast(outcasts), true);
+    function->paramConfigs_.autoMixPartition = 1;
+    ReduceCopyMerge merger;
+    EXPECT_EQ(merger.RunOnFunction(*function), SUCCESS);
+    const int Num3 = 3;
+    EXPECT_EQ(function->GetTotalSubGraphCount(), Num3);
+}
+
+// 不均衡分支: 分支 A=600/B=60, 串行损失 60 < 8×sink150 可被消化 -> 放行(不再要求均衡)。
+TEST_F(ReduceCopyTest, SinkMergesWhenUnbalancedLossAbsorbable)
+{
+    ComputationalGraphBuilder G;
+    std::vector<std::string> incasts;
+    std::vector<std::string> outcasts;
+    AddCubeMatmulFrom(G, 0, AddIncast(G, "QA0", incasts), AddIncast(G, "QB0", incasts));
+    AddVecSG(G, 1, "tC0", "v1a");
+    std::string c2a = AddCubeMatmulFrom(G, 2, "v1a", AddIncast(G, "VA0", incasts));
+    AddCubeMatmulFrom(G, 3, AddIncast(G, "QA1", incasts), AddIncast(G, "QB1", incasts));
+    AddVecSG(G, 4, "tC3", "v1b");
+    std::string c2b = AddCubeMatmulFrom(G, 5, "v1b", AddIncast(G, "VA1", incasts));
+    AddVecSinkSG(G, 6, {c2a, c2b}, "sinkGlmOut", outcasts);
+    Function* function = G.GetFunction();
+    // 分支 B(sg3-5) 压到 12-op×5=60, 与分支 A(600) 不均衡
+    const int Num5 = 5;
+    for (auto& op : function->Operations()) {
+        if (op.GetSubgraphID() >= 3 && op.GetSubgraphID() <= 5) {
+            op.UpdateLatency(Num5);
+        }
+    }
+    function->SetTotalSubGraphCount(7);
+    ASSERT_EQ(G.SetInCast(incasts), true);
+    ASSERT_EQ(G.SetOutCast(outcasts), true);
+    function->paramConfigs_.autoMixPartition = 1;
+    ReduceCopyMerge merger;
+    EXPECT_EQ(merger.RunOnFunction(*function), SUCCESS);
+    const int Num1 = 1;
+    EXPECT_EQ(function->GetTotalSubGraphCount(), Num1);
+}
+
+// 边界: 分支 120/120, sink 15, serialLoss=120 == 8×15, 严格大于才拒绝 -> 放行。
+TEST_F(ReduceCopyTest, SinkBoundaryLossEqualRatioAllows)
+{
+    ComputationalGraphBuilder G;
+    std::vector<std::string> incasts;
+    std::vector<std::string> outcasts;
+    AddCubeMatmulFrom(G, 0, AddIncast(G, "QA0", incasts), AddIncast(G, "QB0", incasts));
+    AddVecSG(G, 1, "tC0", "v1a");
+    std::string c2a = AddCubeMatmulFrom(G, 2, "v1a", AddIncast(G, "VA0", incasts));
+    AddCubeMatmulFrom(G, 3, AddIncast(G, "QA1", incasts), AddIncast(G, "QB1", incasts));
+    AddVecSG(G, 4, "tC3", "v1b");
+    std::string c2b = AddCubeMatmulFrom(G, 5, "v1b", AddIncast(G, "VA1", incasts));
+    AddVecSinkSG(G, 6, {c2a, c2b}, "sinkGlmOut", outcasts);
+    Function* function = G.GetFunction();
+    // 分支(sg0-5) 压到 12-op×10=120, sink(sg6) 压到 3-op×5=15
+    const int Num10 = 10;
+    const int Num5 = 5;
+    for (auto& op : function->Operations()) {
+        if (op.GetSubgraphID() <= 5) {
+            op.UpdateLatency(Num10);
+        } else if (op.GetSubgraphID() == 6) {
+            op.UpdateLatency(Num5);
+        }
+    }
+    function->SetTotalSubGraphCount(7);
+    ASSERT_EQ(G.SetInCast(incasts), true);
+    ASSERT_EQ(G.SetOutCast(outcasts), true);
+    function->paramConfigs_.autoMixPartition = 1;
+    ReduceCopyMerge merger;
+    EXPECT_EQ(merger.RunOnFunction(*function), SUCCESS);
+    const int Num1 = 1;
+    EXPECT_EQ(function->GetTotalSubGraphCount(), Num1);
 }
 
 // 对照: 同图无 slotScope 时门控不启用, 全部合并到 1 子图 (mla / gqa-PATH0 场景)
