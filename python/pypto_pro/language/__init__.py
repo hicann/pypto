@@ -448,9 +448,10 @@ def make_tuple(**kwargs: Any) -> Any:
 
     Unlike ``pl.struct``, ``pl.make_tuple`` aggregates IR variables under field names
     without forcing a C++ struct to be generated. The parser lowers it to a
-    ``MakeTuple(elements, dbgName=fields)``; subsequent ``t.field`` accesses
-    become ``GetItem(t, index)`` and parser-side constant propagation resolves
-    constant indices to the original elements (no struct definition emitted).
+    ``MakeTuple(elements)`` and records its field names in the parser's tuple type
+    registry; subsequent ``t.field`` accesses become ``GetItem(t, index)`` and
+    parser-side constant propagation resolves constant indices to the original
+    elements (no struct definition emitted).
     """
     return SimpleNamespace(**kwargs)
 

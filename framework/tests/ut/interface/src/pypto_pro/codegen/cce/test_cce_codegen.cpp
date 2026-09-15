@@ -28,12 +28,6 @@ namespace pypto {
 namespace codegen {
 namespace {
 
-class TestableCCECodegen : public CCECodegen {
-public:
-    using CCECodegen::CCECodegen;
-    void SetDebugInfo(const ir::IRDebugInfo* debug_info) { debug_info_ = debug_info; }
-};
-
 ir::ExprPtr MakeConstInt(int64_t value)
 {
     return std::make_shared<const ir::ConstInt>(value, ir::DataType::INT64, ir::Span::Unknown());
@@ -56,6 +50,9 @@ ir::VarPtr MakeTensorVar(const std::string& name, const std::vector<int64_t>& sh
 ir::ProgramPtr MakeProgram(const ir::StmtPtr& body, const std::vector<ir::VarPtr>& params = {},
                            ir::IRDebugInfoPtr debug_info = nullptr)
 {
+    if (debug_info == nullptr) {
+        debug_info = std::make_shared<ir::IRDebugInfo>();
+    }
     auto function = std::make_shared<const ir::Function>("kernel", params, std::vector<ir::TypePtr>{}, body,
                                                          ir::Span::Unknown(), ir::FunctionType::IN_CORE, true);
     return std::make_shared<const ir::Program>(std::vector<ir::FunctionPtr>{function}, "test_program",
@@ -161,8 +158,8 @@ TEST(CCECodegenTest, EmitsTargetSpecificTilingStructCopy)
     auto tuple_type = std::make_shared<const ir::TupleType>(field_types);
     auto tiling = MakeVar("tiling", tuple_type);
     auto debug_info = std::make_shared<ir::IRDebugInfo>();
-    debug_info->RegisterTupleFields(tuple_type, {"rows", "cols"});
-    debug_info->RegisterTupleName(tuple_type, "TestTiling");
+    debug_info->RegisterTupleTypeInfo(tuple_type,
+                                      {ir::TupleTypeKind::STRUCT, std::string("TestTiling"), {"rows", "cols"}});
     auto body = std::make_shared<const ir::ReturnStmt>(ir::Span::Unknown());
     auto program = MakeProgram(body, {tiling}, debug_info);
 
@@ -188,6 +185,19 @@ TEST(CCECodegenTest, RejectsUnprojectedOrWrongTargetSections)
     auto vf_section = std::make_shared<const ir::SectionStmt>(ir::SectionKind::VF, body, ir::Span::Unknown());
     CCECodegen cube_codegen(ir::SectionKind::Cube);
     EXPECT_THROW((void)cube_codegen.GenerateSingle(MakeProgram(vf_section), "a5"), pypto::ir::InternalError);
+}
+
+TEST(CCECodegenTest, RejectsProgramWithoutDebugInfo)
+{
+    auto body = std::make_shared<const ir::ReturnStmt>(ir::Span::Unknown());
+    auto function = std::make_shared<const ir::Function>("kernel", std::vector<ir::VarPtr>{},
+                                                         std::vector<ir::TypePtr>{}, body, ir::Span::Unknown(),
+                                                         ir::FunctionType::IN_CORE, true);
+    auto program = std::make_shared<const ir::Program>(std::vector<ir::FunctionPtr>{function}, "test_program",
+                                                       ir::Span::Unknown());
+
+    CCECodegen codegen(ir::SectionKind::Vector);
+    EXPECT_THROW((void)codegen.GenerateSingle(program, "a5"), pypto::ir::InternalError);
 }
 
 TEST(CCECodegenHeaderTest, CoversPointerAndBasicCodegenHelpers)
@@ -538,21 +548,26 @@ TEST(CCECodegenTest, EmitsArrayAccessForUnmaterializedTupleVar)
     auto tuple_var = MakeVar("values", tuple_type);
     auto item = std::make_shared<const ir::GetItemExpr>(tuple_var, MakeConstInt(1), ir::Span::Unknown());
 
+    auto body = std::make_shared<const ir::ReturnStmt>(ir::Span::Unknown());
+    auto program = MakeProgram(body);
     CCECodegen codegen(ir::SectionKind::Vector);
+    (void)codegen.GenerateSingle(program, "a5");
     EXPECT_EQ(codegen.GetExprAsCode(item), "values[1]");
 }
 
-TEST(CCECodegenTest, EmitsFieldAccessForUnmaterializedNamedTupleVar)
+TEST(CCECodegenTest, EmitsFieldAccessForUnmaterializedStructVar)
 {
     auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
     auto tuple_type = std::make_shared<const ir::TupleType>(std::vector<ir::TypePtr>{scalar_type, scalar_type});
     auto tuple_var = MakeVar("config", tuple_type);
     auto item = std::make_shared<const ir::GetItemExpr>(tuple_var, MakeConstInt(1), ir::Span::Unknown());
-    ir::IRDebugInfo debug_info;
-    debug_info.RegisterTupleFields(tuple_type, {"rows", "cols"});
+    auto debug_info = std::make_shared<ir::IRDebugInfo>();
+    debug_info->RegisterTupleTypeInfo(tuple_type, {ir::TupleTypeKind::STRUCT, std::string("Config"), {"rows", "cols"}});
 
-    TestableCCECodegen codegen(ir::SectionKind::Vector);
-    codegen.SetDebugInfo(&debug_info);
+    auto body = std::make_shared<const ir::ReturnStmt>(ir::Span::Unknown());
+    auto program = MakeProgram(body, {}, debug_info);
+    CCECodegen codegen(ir::SectionKind::Vector);
+    (void)codegen.GenerateSingle(program, "a5");
     EXPECT_EQ(codegen.GetExprAsCode(item), "config.cols");
 }
 
@@ -675,7 +690,8 @@ TEST(CCECodegenTest, FlattensAggregateTuplePhiIntoLeafSlots)
                                  if_stmt, read_selected},
         ir::Span::Unknown());
     auto debug_info = std::make_shared<ir::IRDebugInfo>();
-    debug_info->RegisterTupleFields(aggregate_type, {"first", "second"});
+    debug_info->RegisterTupleTypeInfo(aggregate_type,
+                                      {ir::TupleTypeKind::NAMED_TUPLE, std::nullopt, {"first", "second"}});
 
     CCECodegen codegen(ir::SectionKind::Vector);
     std::string generated = codegen.GenerateSingle(MakeProgram(body, {condition}, debug_info), "a5");

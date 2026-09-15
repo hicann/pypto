@@ -12,9 +12,9 @@
  * @file block_ops/struct_ops.cpp
  * \brief Struct array operations for clean C++ codegen.
  *
- *  - struct.create: Expression op that returns a named TupleType. Lowered by
+ *  - struct.create: Expression op that returns a struct-classified TupleType. Lowered by
  *    the CCE backend to ``Name var = {.f0=v0, ...};``.
- *  - struct.create_array: Expression op that returns TupleType(N × named tuple).
+ *  - struct.create_array: Expression op that returns TupleType(N × struct TupleType).
  *    Lowered to ``Name var[N] = {};`` plus per-slot field-init lines.
  */
 
@@ -36,9 +36,10 @@ namespace ir {
 
 REGISTER_OP("struct.create")
     .set_op_category("StructOp")
-    .set_description("Materialize a named tuple into a C++ struct. args are field values; kwargs `name` "
+    .set_description("Materialize a TupleType into a C++ struct. args are field values; kwargs `name` "
                      "is the C++ struct type name and `fields` is the list of field names. Result type is "
-                     "TupleType(field_types, dbgName=fields). Must be let-bound to a Var by the producer.")
+                     "TupleType(field_types); the parser registers its struct metadata. Must be let-bound to a Var "
+                     "by the producer.")
     .add_argument("...", "Field value expressions in declaration order")
     .set_attr<std::string>("name")
     .set_attr<std::vector<std::string>>("fields")
@@ -87,7 +88,7 @@ REGISTER_OP("struct.set")
                      "name (same naming convention as struct.create's `fields`). Lowered by the CCE backend to "
                      "`base.field = value;` or `base.field[index] = value;`. Must be used inside an EvalStmt, "
                      "not as an RHS value.")
-    .add_argument("base", "Struct instance (named TupleType)")
+    .add_argument("base", "Struct instance (struct-classified TupleType)")
     .add_argument("value", "New field value expression (or index for array field writes)")
     .set_attr<std::string>("field")
     .f_deduce_type([](const std::vector<ExprPtr>& args,

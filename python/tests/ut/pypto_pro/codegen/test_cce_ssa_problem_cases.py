@@ -115,7 +115,7 @@ def test_sibling_if_does_not_reference_a_previous_branch_local():
             } else {
                 live_2 = 0;
             }
-            for (int64_t i_0 = 0; i_0 < live_2; i_0 += 1) {
+            for (int64_t i__iterator_0 = 0; i__iterator_0 < live_2; i__iterator_0 += 1) {
                 pipe_barrier(PIPE_ALL);
                 continue;
             }
@@ -236,7 +236,7 @@ def test_nested_if_yield_is_not_consumed_by_the_outer_loop():
                 __inline_0_carried_3 = __inline_0_carried_2;
                 break;
             }
-            for (int64_t i_0 = 0; i_0 < value_0; i_0 += 1) {
+            for (int64_t i__iterator_0 = 0; i__iterator_0 < value_0; i__iterator_0 += 1) {
                 pipe_barrier(PIPE_ALL);
                 continue;
             }
@@ -258,12 +258,15 @@ def test_loop_induction_variable_does_not_reuse_shadowed_constant():
         {
 
             auto i_0 = 5;
-            for (int64_t i_1 = 0; i_1 < limit_0; i_1 += 1) {
-                auto nested_limit_0 = (i_1 + 1);
-                for (int64_t j_0 = 0; j_0 < nested_limit_0; j_0 += 1) {
+            int64_t i_1 = 5;
+
+            for (int64_t i__iterator_0 = 0; i__iterator_0 < limit_0; i__iterator_0 += 1) {
+                auto nested_limit_0 = (i__iterator_0 + 1);
+                for (int64_t j__iterator_0 = 0; j__iterator_0 < nested_limit_0; j__iterator_0 += 1) {
                     pipe_barrier(PIPE_ALL);
                     continue;
                 }
+                i_1 = i__iterator_0;
                 continue;
             }
             return;

@@ -16,6 +16,7 @@ import ast
 from pypto.pypto_impl import ir
 from pypto.pypto_impl.ir import DataType
 
+from ._tuple_type_registry import TupleTypeKind
 from .diagnostics import ParserSyntaxError, ParserTypeError, UnsupportedFeatureError
 
 
@@ -397,7 +398,7 @@ class AssignmentParserMixin:
             field_name = target.value.attr
             fields = self.named_fields(base)
             if fields:
-                if self.debug_info.get_tuple_name(base.type) is None:
+                if self.classify_tuple_type(base.type).kind != TupleTypeKind.STRUCT:
                     raise ParserSyntaxError(
                         f"Cannot assign to immutable named tuple field '{ast.unparse(target)}'",
                         span=span,
@@ -410,13 +411,11 @@ class AssignmentParserMixin:
                     )
                 field_idx = fields.index(field_name)
                 field_type = base.type.types[field_idx]
-                # An array field is a nested TupleType that carries no struct type
-                # name in IRDebugInfo; a nested struct field is also a TupleType but
-                # registers its C++ name at creation. Only the former is subscript
-                # writable — subscripting the latter would emit a bogus struct.set.
+                # An array field is a plain nested TupleType. A nested named tuple or
+                # struct has a TupleTypeInfo entry and is not subscript-writable.
                 is_array_field = (
                     isinstance(field_type, ir.TupleType)
-                    and self.debug_info.get_tuple_name(field_type) is None
+                    and self.classify_tuple_type(field_type).kind == TupleTypeKind.TUPLE
                 )
                 if not is_array_field:
                     raise ParserTypeError(

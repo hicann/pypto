@@ -11,7 +11,7 @@
 
 from pypto_pro import ir
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError
+from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError, UndefinedVariableError
 import pytest
 
 
@@ -207,7 +207,7 @@ def test_inline_helper_dynamic_loop_preserves_real_return_type_conflict():
             index = index + 1
         return value
 
-    with pytest.raises(ParserTypeError, match="has no valid type on every reachable control-flow path"):
+    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
 
         @pl.jit(auto_mutex=False)
         def caller(value: pl.DT_INT64):
@@ -348,7 +348,7 @@ def test_inline_helper_value_return_fallthrough_merges_conservative_none():
         if value > 0:
             return value
 
-    with pytest.raises(ParserTypeError, match="has no valid type on every reachable control-flow path"):
+    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
 
         @pl.jit(auto_mutex=False)
         def caller(value: pl.DT_INT64):

@@ -5,6 +5,7 @@
 :titlesonly:
 
 const
+astype
 max
 min
 ```

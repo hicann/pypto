@@ -324,6 +324,7 @@ def test_cce_loop_tuple_return_propagates_as_one_value():
     cpp = _compile_to_cce(_loop_tuple_kernel)
 
     assert "TADD(bundle_1__item_2, bundle_1__item_2, bundle_1__item_2);" in cpp
+    assert "bundle_1[" not in cpp
     assert "TADD(bundle_0," not in cpp
 
 

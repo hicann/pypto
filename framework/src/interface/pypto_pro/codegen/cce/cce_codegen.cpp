@@ -623,8 +623,11 @@ std::string CCECodegen::GenerateSingle(const ir::ProgramPtr& program, const std:
     ResetFunctionGenerationState();
     arch_ = arch;
 
-    // Capture the tuple/struct field-name side table from the input program.
+    // Parser-produced Programs always carry the tuple metadata table created at
+    // the top-level parse entry. Codegen relies on absence *within* that table to
+    // distinguish a plain tuple from named tuples and structs.
     debug_info_ = program->GetDebugInfo();
+    INTERNAL_CHECK(debug_info_ != nullptr) << "CCE codegen requires Program IRDebugInfo";
 
     ir::FunctionPtr kernel_func;
     std::vector<ir::FunctionPtr> simt_funcs;
@@ -1341,10 +1344,7 @@ bool CCECodegen::IsArrayTuple(const ir::TupleTypePtr& tt) const
 {
     if (!tt || tt->types_.empty())
         return false;
-    // Named tuples / structs render as `base.field`; see VisitExpr_(GetItemExprPtr) case 1.
-    if (debug_info_ != nullptr && debug_info_->GetTupleFields(tt.get()) != nullptr)
-        return false;
-    return IsHomogeneousTuple(tt);
+    return GetTupleTypeInfo(tt) == nullptr && IsHomogeneousTuple(tt);
 }
 
 void CCECodegen::EmitFullPhiIf(const ir::IfStmtPtr& op)
@@ -1843,23 +1843,21 @@ void CCECodegen::VisitExpr_(const ir::GetItemExprPtr& op)
     current_expr_value_ = "";
     VisitExpr(op->value_);
 
-    // Case 1: the value is already a materialized expression. Named TupleTypes
-    // represent structs and require a constant field ordinal. Other TupleTypes
-    // represent indexable expressions such as an array-valued struct field.
+    // Case 1: the value is already a materialized expression. Struct TupleTypes
+    // require a constant field ordinal. Other TupleTypes represent indexable
+    // expressions such as an array-valued struct field.
     if (current_tuple_ == nullptr) {
         std::string base_code = current_expr_value_;
         auto tuple_type = ir::As<ir::TupleType>(value_type);
-        const std::vector<std::string>* fields = debug_info_ != nullptr ?
-                                                     debug_info_->GetTupleFields(tuple_type.get()) :
-                                                     nullptr;
-        if (fields != nullptr) {
+        const ir::TupleTypeInfo* info = GetTupleTypeInfo(tuple_type);
+        if (info != nullptr && info->kind == ir::TupleTypeKind::STRUCT) {
             auto const_idx = ir::As<ir::ConstInt>(op->slice_);
             CHECK(const_idx != nullptr) << "GetItemExpr struct field requires a constant index at "
                                         << op->span_.ToString();
             int idx = static_cast<int>(const_idx->value_);
-            CHECK(idx >= 0 && idx < static_cast<int>(fields->size()))
+            CHECK(idx >= 0 && idx < static_cast<int>(info->fields.size()))
                 << "GetItemExpr struct field index " << idx << " out of bounds";
-            current_expr_value_ = base_code + "." + (*fields)[idx];
+            current_expr_value_ = base_code + "." + info->fields[idx];
         } else {
             current_expr_value_ = base_code + "[" + index_code + "]";
         }
@@ -2782,7 +2780,7 @@ std::string CppTypeForField(const ir::TypePtr& t)
         // Tile fields are stored as opaque tile references; v1 emits as auto-deduced.
         return "auto";
     }
-    // Nested named tuple ->the field stores another C++ struct; we have to look up its
+    // Nested registered struct -> the field stores another C++ struct; look up its
     // type name. For v1 we fall back to int64_t and rely on CCE flat expansion if the
     // nested tuple type isn't already materialized; full nested support is a follow-up.
     return "int64_t";
@@ -2850,9 +2848,20 @@ void CCECodegen::RegisterStructDefinition(const ir::TupleTypePtr& tuple_type, co
     }
 }
 
+const ir::TupleTypeInfo* CCECodegen::GetTupleTypeInfo(const ir::TupleTypePtr& tuple_type) const
+{
+    INTERNAL_CHECK(debug_info_ != nullptr) << "CCE codegen requires IRDebugInfo";
+    return tuple_type != nullptr ? debug_info_->GetTupleTypeInfo(tuple_type.get()) : nullptr;
+}
+
 const std::string* CCECodegen::GetStructName(const ir::TupleTypePtr& tuple_type) const
 {
-    return debug_info_ != nullptr ? debug_info_->GetTupleName(tuple_type.get()) : nullptr;
+    const ir::TupleTypeInfo* info = GetTupleTypeInfo(tuple_type);
+    if (info == nullptr || info->kind != ir::TupleTypeKind::STRUCT) {
+        return nullptr;
+    }
+    CHECK(info->name.has_value()) << "Struct TupleTypeInfo has no type name";
+    return &info->name.value();
 }
 
 void CCECodegen::MarkStructVolatile(const ir::TypePtr& type)
@@ -2870,16 +2879,13 @@ void CCECodegen::RegisterTilingStructTypes(const ir::FunctionPtr& func)
         auto tuple_type = ir::As<ir::TupleType>(param->GetType());
         if (tuple_type == nullptr)
             continue;
-        const std::vector<std::string>* fields = debug_info_ != nullptr ?
-                                                     debug_info_->GetTupleFields(tuple_type.get()) :
-                                                     nullptr;
-        CHECK(fields != nullptr) << "Tiling struct param '" << param->name_
-                                 << "' has no field names registered in IRDebugInfo";
-        CHECK(fields->size() == tuple_type->types_.size())
+        const ir::TupleTypeInfo* info = GetTupleTypeInfo(tuple_type);
+        CHECK(info != nullptr && info->kind == ir::TupleTypeKind::STRUCT)
+            << "Tiling param '" << param->name_ << "' has no struct TupleTypeInfo in IRDebugInfo";
+        CHECK(info->fields.size() == tuple_type->types_.size())
             << "Tiling struct field count mismatch for param '" << param->name_ << "'";
-        const std::string* registered_name = debug_info_->GetTupleName(tuple_type.get());
-        const std::string struct_name = registered_name != nullptr ? *registered_name : "Tiling";
-        RegisterStructDefinition(tuple_type, struct_name, *fields, true);
+        CHECK(info->name.has_value()) << "Tiling struct param '" << param->name_ << "' has no type name";
+        RegisterStructDefinition(tuple_type, info->name.value(), info->fields, true);
     }
 }
 
@@ -2903,8 +2909,10 @@ void CCECodegen::EmitTilingStructCopy(const ir::FunctionPtr& func)
         if (tuple_type == nullptr)
             continue;
         std::string name = context_.GetVarName(param);
-        const std::string* registered_name = debug_info_->GetTupleName(tuple_type.get());
-        const std::string struct_name = registered_name != nullptr ? *registered_name : "Tiling";
+        const std::string* registered_name = GetStructName(tuple_type);
+        CHECK(registered_name != nullptr)
+            << "Tiling param '" << param->name_ << "' has no struct TupleTypeInfo in IRDebugInfo";
+        const std::string& struct_name = *registered_name;
         emitter_.EmitLine("constexpr uint32_t " + name + "_all_bytes = sizeof(" + struct_name + ");");
         emitter_.EmitLine(struct_name + " " + name + ";");
         auto emit_cube_copy = [&]() {

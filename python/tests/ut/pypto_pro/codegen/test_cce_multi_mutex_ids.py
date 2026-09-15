@@ -38,9 +38,9 @@ def _mixed_multi_mutex_ids_kernel(x: pl.Tensor[[64, 32], pl.DT_FP16]):
 def test_cce_dynamic_mutex_dedup_skips_same_tile_comparisons():
     cpp = _compile_to_cce(_mixed_multi_mutex_ids_kernel)
 
-    source_mutex = "_tg_source_group_mutex_ids_0[index_0]"
-    output_mutex0 = "_tg_output_group_mutex_ids_0[index_0]"
-    output_mutex1 = "_tg_output_group_mutex_ids_1_0[index_0]"
+    source_mutex = "_tg_source_group_mutex_ids_0[index__iterator_0]"
+    output_mutex0 = "_tg_output_group_mutex_ids_0[index__iterator_0]"
+    output_mutex1 = "_tg_output_group_mutex_ids_1_0[index__iterator_0]"
     same_tile_guard = f"({output_mutex1} != {output_mutex0})"
     cross_tile_guard = (
         f"({source_mutex} != {output_mutex0}) && "

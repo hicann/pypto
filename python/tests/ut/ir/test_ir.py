@@ -208,15 +208,17 @@ def test_basic_types():
     span = ir.Span("test", 1, 1)
     struct_type = ir.TupleType([ir.ScalarType(ir.INT64), ir.ScalarType(ir.INT32)])
     debug_info = pypto_impl.ir.IRDebugInfo()
-    debug_info.register_tuple_fields(struct_type, ["cursor", "limit"])
-    debug_info.register_tuple_name(struct_type, "BufferState")
-    assert debug_info.get_tuple_fields(struct_type) == ["cursor", "limit"]
-    assert debug_info.get_tuple_name(struct_type) == "BufferState"
-    assert debug_info.get_tuple_fields(ir.TupleType([ir.ScalarType(ir.INT32)])) is None
+    struct_info = pypto_impl.ir.TupleTypeInfo(
+        pypto_impl.ir.TupleTypeKind.STRUCT,
+        "BufferState",
+        ["cursor", "limit"],
+    )
+    debug_info.register_tuple_type_info(struct_type, struct_info)
+    assert debug_info.get_tuple_type_info(struct_type) == struct_info
+    assert debug_info.get_tuple_type_info(ir.TupleType([ir.ScalarType(ir.INT32)])) is None
 
     prog = ir.Program([], "test_prog", span, debug_info)
-    assert prog.debug_info.get_tuple_fields(struct_type) == ["cursor", "limit"]
-    assert prog.debug_info.get_tuple_name(struct_type) == "BufferState"
+    assert prog.debug_info.get_tuple_type_info(struct_type) == struct_info
     assert ir.Program([], "empty_prog", span).debug_info is None
 
 

@@ -223,7 +223,8 @@ ir::ProgramPtr MakeSimtProgram()
     std::vector<ir::FunctionPtr> functions = {MakeScalarAddCallee(fp32), MakeStoreCallee(tile_type, u32, fp32),
                                               MakeApplyCallee(tile_type, u32, fp32),
                                               MakeSimtEntry(tile_type, tensor_type, u32, i32, fp32), kernel};
-    return std::make_shared<const ir::Program>(std::move(functions), "simt_program", Sp());
+    return std::make_shared<const ir::Program>(std::move(functions), "simt_program", Sp(),
+                                               std::make_shared<ir::IRDebugInfo>());
 }
 
 ir::ProgramPtr MakeSimtCalleeNameCollisionProgram()
@@ -248,7 +249,7 @@ ir::ProgramPtr MakeSimtCalleeNameCollisionProgram()
                                                        kernel_body, Sp(), ir::FunctionType::IN_CORE, true);
 
     return std::make_shared<const ir::Program>(std::vector<ir::FunctionPtr>{callee, simt_entry, kernel},
-                                               "simt_callee_name_collision", Sp());
+                                               "simt_callee_name_collision", Sp(), std::make_shared<ir::IRDebugInfo>());
 }
 
 ir::ProgramPtr MakeSimtScalarOpsProgram()
@@ -351,7 +352,7 @@ ir::ProgramPtr MakeSimtScalarOpsProgram()
                                                        Sp(), ir::FunctionType::IN_CORE, true);
 
     return std::make_shared<const ir::Program>(std::vector<ir::FunctionPtr>{simt_function, kernel}, "simt_scalar_ops",
-                                               Sp());
+                                               Sp(), std::make_shared<ir::IRDebugInfo>());
 }
 
 ir::ProgramPtr MakeSimtAtomicOpsProgram()
@@ -422,7 +423,7 @@ ir::ProgramPtr MakeSimtAtomicOpsProgram()
                                                        Sp(), ir::FunctionType::IN_CORE, true);
 
     return std::make_shared<const ir::Program>(std::vector<ir::FunctionPtr>{simt_function, kernel}, "simt_atomic_ops",
-                                               Sp());
+                                               Sp(), std::make_shared<ir::IRDebugInfo>());
 }
 
 } // namespace

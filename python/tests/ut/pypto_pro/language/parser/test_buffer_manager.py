@@ -23,7 +23,7 @@ consumed by auto_mutex, so the frontend never handles mutex ids or manual lock/u
 import re
 
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import ParserTypeError, UnsupportedFeatureError
+from pypto_pro.language.parser.diagnostics import ParserTypeError, UndefinedVariableError, UnsupportedFeatureError
 import pytest
 
 from pypto.pypto_impl import ir
@@ -890,7 +890,7 @@ def test_undefined_branch_produces_unknown_type_on_use():
             tile = group[0]
         pl.load(tile, gm_q, [0, 0])
 
-    with pytest.raises(ParserTypeError, match="has no valid type on every reachable control-flow path"):
+    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
         _parse_kernel(k)
 
 
