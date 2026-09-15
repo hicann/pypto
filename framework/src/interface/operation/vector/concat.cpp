@@ -66,23 +66,32 @@ Tensor Cat(const std::vector<Tensor>& tensors, int axis)
     }
 
     CheckCat(tensors, axis);
-
-    auto resultShape = tensors[0].GetShape();
-    auto shapeSize = resultShape.size();
     CheckAxisRange(tensors[0], axis);
+
     int axisSize = 0;
+    SymbolicScalar axisDynSize(0);
     for (auto tensor : tensors) {
-        axisSize += tensor.GetShape()[axis];
+        axisSize += tensor.GetShape(axis);
+        axisDynSize = axisDynSize + tensor.GetValidShape(axis);
     }
-    resultShape[axis] = axisSize;
 
     auto format = tensors[0].Format();
+    auto resultShape = tensors[0].GetShape();
+    resultShape[axis] = axisSize;
     Tensor result(tensors[0].GetDataType(), resultShape, "", format);
-    std::vector<SymbolicScalar> offset(shapeSize, 0);
+
+    auto validShape = tensors[0].GetValidShape();
+    if (validShape.empty()) {
+        validShape = SymbolicScalar::FromConcrete(resultShape);
+    }
+    validShape[axis] = axisDynSize.Simplify();
+    result.GetStorage(false)->UpdateDynValidShape(validShape);
+
+    std::vector<SymbolicScalar> offset(resultShape.size(), 0);
     for (auto tensor : tensors) {
         auto materialized = Assign(tensor);
         Assemble(materialized, offset, result);
-        offset[axis] = offset[axis] + tensor.GetShape()[axis];
+        offset[axis] = offset[axis] + tensor.GetShape(axis);
     }
 
     return result;
