@@ -146,12 +146,14 @@ void CodeGenCloudNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ost
     for (const auto& op : operationList) {
         CODEGEN_LOGI("======================== Op CodeGenNPU Start ========================\nGen OP IS: %s",
                      op.Dump().c_str());
+        // Skip ops (VIEW/RESHAPE/ALLOC/...) emit no TileOp, but may carry needAlloc on
+        // in/out tensors; still register symbols before ignoring instruction codegen.
+        GenAllocForLocalBuffer(op, symbolMgr);
         if (SKIP_OPCODE_FOR_CODEGEN.find(op.GetOpcode()) != SKIP_OPCODE_FOR_CODEGEN.end()) {
             CODEGEN_LOGI("ignore this op\n------------------------ Op CodeGenNPU Finish -----------------------");
             continue;
         }
 
-        GenAllocForLocalBuffer(op, symbolMgr);
         floatSpecValMgr.UpdateByOp(op);
 
         CodeGenOpCloudNPU cop({symbolMgr, topFunc, subFunc, op, ctx.isMainBlock, ctx.isDynamicAligned, forBlkMgr});
