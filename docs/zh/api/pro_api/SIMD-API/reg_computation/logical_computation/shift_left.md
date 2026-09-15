@@ -41,18 +41,29 @@ shift_left(src, shift, preg, mode: Optional[MergeMode] = None) -> dst
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| src | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)。源操作数src与目的操作数dst的数据类型保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32。 |
-| shift | 输入 | 左移位数。标量（整型，所有元素统一移位）或[reg_tensor](../reg_tensor.md)（逐元素移位），支持的数据类型和src支持的范围一致。<br>- 对于**reg_tensor模式**下逻辑位移（无符号数据类型），如果位移量大于数据类型位宽，则输出为0。<br>- 对于**reg_tensor模式**下算术位移（有符号数据类型），如果位移量大于数据类型位宽，则输出0。<br>- 两种模式下均不支持设置为负数，负数行为未定义。 |
+| src | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)。源操作数src与目的操作数dst的数据类型保持一致。支持的数据类型参见[约束说明](#约束说明)。 |
+| shift | 输入 | 左移位数。标量（整型，所有元素统一移位）或[reg_tensor](../reg_tensor.md)（逐元素移位），支持的数据类型参见[约束说明](#约束说明)。<br>- 对于**reg_tensor模式**下逻辑位移（无符号数据类型），如果位移量大于数据类型位宽，则输出为0。<br>- 对于**reg_tensor模式**下算术位移（有符号数据类型），如果位移量大于数据类型位宽，则输出0。<br>- 两种模式下均不支持设置为负数，负数行为未定义。 |
 | preg | 输入 | [mask_reg](../mask_reg.md)。 |
 | mode | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- pypto_pro.language.MergeMode.ZEROING（默认），preg未筛选的元素在dst中置0。<br>- pypto_pro.language.MergeMode.MERGING当前不支持。 |
 
 ## 约束说明
 
-无。
+- 数据类型约束：
+
+  | dst | src | shift |
+  | :-- | :-- | :-- |
+  | DT_INT8 | DT_INT8 | 标量模式：整型标量；reg_tensor模式：DT_INT8 |
+  | DT_UINT8 | DT_UINT8 | 标量模式：整型标量；reg_tensor模式：DT_INT8 |
+  | DT_INT16 | DT_INT16 | 标量模式：整型标量；reg_tensor模式：DT_INT16 |
+  | DT_UINT16 | DT_UINT16 | 标量模式：整型标量；reg_tensor模式：DT_INT16 |
+  | DT_INT32 | DT_INT32 | 标量模式：整型标量；reg_tensor模式：DT_INT32 |
+  | DT_UINT32 | DT_UINT32 | 标量模式：整型标量；reg_tensor模式：DT_INT32 |
+  | DT_INT64 | DT_INT64 | 标量模式：整型标量；reg_tensor模式：DT_INT64 |
+  | DT_UINT64 | DT_UINT64 | 标量模式：整型标量；reg_tensor模式：DT_INT64 |
 
 ## 返回值说明
 
-返回dst目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型和src中的说明一致。
+返回dst目的操作数，[reg_tensor](../reg_tensor.md)，支持的数据类型参见[约束说明](#约束说明)。
 
 ## 调用示例
 
