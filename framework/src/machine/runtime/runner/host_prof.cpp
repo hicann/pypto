@@ -21,8 +21,6 @@
 #include "interface/utils/common.h"
 #include "passes/pass_utils/pass_utils.h"
 
-#define CCECPU 25
-
 namespace npu::tile_fwk {
 namespace {
 const std::string kOpType = "PyPTO";
@@ -91,7 +89,7 @@ int32_t HostProf::HostProfInit(uint32_t type, void* data, uint32_t len)
     return 0;
 }
 
-void HostProf::RegHostProf() { MspfRegisterCallback(CCECPU, HostProfInit); }
+void HostProf::RegHostProf() { MspfRegisterCallback(PYPTO, HostProfInit); }
 
 bool HostProf::HostProfReportApi(const uint64_t& startTime, const uint64_t& endTime) const
 {

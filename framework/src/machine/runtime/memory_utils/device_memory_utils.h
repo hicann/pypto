@@ -31,13 +31,13 @@ struct DeviceMemoryUtils {
             if (isUseHugePage_) {
                 DevMemoryPool::Instance().AllocDevAddr(&devPtr, size);
             } else {
-                RuntimeMalloc((void**)&devPtr, size, RT_MEMORY_HBM, 0);
+                RuntimeMalloc((void**)&devPtr, size, RT_MEMORY_HBM, PYPTO);
             }
         } else if (*cachedDevAddrHolder == nullptr) {
             if (isUseHugePage_) {
                 DevMemoryPool::Instance().AllocDevAddr(&devPtr, size);
             } else {
-                RuntimeMalloc((void**)&devPtr, size, RT_MEMORY_HBM, 0);
+                RuntimeMalloc((void**)&devPtr, size, RT_MEMORY_HBM, PYPTO);
             }
             *cachedDevAddrHolder = devPtr;
         } else {

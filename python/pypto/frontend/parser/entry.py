@@ -349,11 +349,6 @@ class JitCallableWrapper:
         return self._handler
 
     @staticmethod
-    def alloc(size):
-        """Allocate NPU int8 memory and return its data pointer"""
-        return torch.empty(size, dtype=torch.int8, device='npu').data_ptr()
-
-    @staticmethod
     def _validate_exact_torch_tensors(tensors: list) -> None:
         dtensor_type = get_dtensor_type()
 
@@ -1128,6 +1123,11 @@ class JitCallableWrapper:
             Output PTO tensors.
         """
         _cost_model_run_once_data_from_host(in_tensors, out_tensors)
+
+    def _alloc(self, size: int) -> int:
+        """Allocate NPU int8 memory and return its data pointer"""
+        with torch.autograd.profiler.record_function(f"PyPTO_{self._original_func.__name__}"):
+            return torch.empty(size, dtype=torch.int8, device='npu').data_ptr()
 
 
 def function(

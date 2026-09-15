@@ -374,7 +374,7 @@ uint8_t* DeviceLauncher::CopyControlFlowCache(DevControlFlowCache* ctrlCache)
     auto cacheSize = ctrlCache->usedCacheSize;
     auto bufNum = DEFAULT_RUNTIME_DATA_RING_BUFFER_COUNT;
 
-    int ret = RuntimeMalloc((void**)&devCache, cacheSize * bufNum, RT_MEMORY_HBM, 0);
+    int ret = RuntimeMalloc((void**)&devCache, cacheSize * bufNum, RT_MEMORY_HBM, PYPTO);
     if (devCache == nullptr) {
         MACHINE_LOGE(RtErr::RT_MALLOC_FAILED, "control flow cache malloc failed");
         return nullptr;

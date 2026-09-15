@@ -37,7 +37,7 @@ int AicorePrintHostManager::Init(const DeviceArgs& args)
     }
     for (uint32_t i = 0; i < numCores_; i++) {
         void* devPtr = nullptr;
-        if (RuntimeMalloc(&devPtr, PRINT_BUFFER_SIZE, RT_MEMORY_HBM, 0) != RT_SUCCESS) {
+        if (RuntimeMalloc(&devPtr, PRINT_BUFFER_SIZE, RT_MEMORY_HBM, PYPTO) != RT_SUCCESS) {
             MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "Failed to alloc aicore print buffer, size=%lu bytes, coreId=%u",
                          PRINT_BUFFER_SIZE, i);
             Release();

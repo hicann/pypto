@@ -694,7 +694,7 @@ private:
         int64_t* wsAddr = nullptr;
         int64_t wsSize = kmodule->GetWorkspaceSize(kbinary, tensors);
         if (wsSize) {
-            auto pyalloc = py::getattr(module, "alloc");
+            auto pyalloc = py::getattr(module, "_alloc");
             wsAddr = (int64_t*)pyalloc(wsSize).cast<int64_t>();
         }
         COMPILER_LOGD("alloc workspace %ld bytes", wsSize);

@@ -71,7 +71,7 @@ struct EslModelMemoryUtils {
             if (isUseHugePage_) {
                 DevMemoryPool::Instance().AllocDevAddr(&devPtr, size);
             } else {
-                RuntimeMalloc((void**)&devPtr, size, RT_MEMORY_HBM, 0);
+                RuntimeMalloc((void**)&devPtr, size, RT_MEMORY_HBM, PYPTO);
             }
             if (cachedDevAddrHolder != nullptr && *cachedDevAddrHolder == nullptr) {
                 *cachedDevAddrHolder = devPtr;
