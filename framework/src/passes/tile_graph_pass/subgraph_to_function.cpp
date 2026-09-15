@@ -192,6 +192,23 @@ bool isFromCast(LogicalTensorPtr& operand)
     return true;
 }
 
+bool ContainsLogicalTensor(const std::vector<LogicalTensorPtr>& tensors, const LogicalTensorPtr& operand)
+{
+    if (operand == nullptr) {
+        return false;
+    }
+    const int magic = operand->GetMagic();
+    return std::any_of(tensors.begin(), tensors.end(),
+                       [magic](const LogicalTensorPtr& tensor) { return tensor && tensor->GetMagic() == magic; });
+}
+
+// Function in/outcast by GetMagic, not other versions on the same RawTensor.
+bool IsExactFuncCast(const Function& function, const LogicalTensorPtr& operand)
+{
+    return ContainsLogicalTensor(function.GetOutcast(), operand) ||
+           ContainsLogicalTensor(function.GetIncast(), operand);
+}
+
 uint32_t GetTensorCoreFlag(const LogicalTensorPtr& tensor)
 {
     constexpr uint32_t aicFlag = 1U;
@@ -348,7 +365,7 @@ void SubgraphToFunction::RecordOutcastInfo(Function& function, RecordInfo record
     Offset offset = recordInfo.offset;
     Shape shape = recordInfo.shape;
     auto& op = *nLIST[i][j];
-    if (!isFromCast(oOperand)) {
+    if (!isFromCast(oOperand) && !IsExactFuncCast(function, oOperand)) {
         APASS_LOG_INFO_F(Elements::Tensor, "Tensor %d has consumer in same subgraph, cannot be outcast.",
                          oOperand->GetMagic());
         return;

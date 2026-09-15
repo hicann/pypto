@@ -22,6 +22,7 @@
 #include <memory>
 #include <stack>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "tilefwk/error.h"
 #include "tilefwk/tilefwk.h"
@@ -681,13 +682,16 @@ public:
     void NormalizeCoaForInCasts(std::vector<OperandAttribute>& iOpAttr,
                                 std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
                                 std::unordered_map<LogicalTensorPtr, int>& processedOperands,
+                                std::unordered_set<Operation*>& normalizedOps,
                                 const std::unordered_map<int, Operation*>& opmagicToOp);
     void NormalizeCoaForOutCasts(std::vector<OperandAttribute>& oOpAttr,
                                  std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
                                  std::unordered_map<LogicalTensorPtr, int>& processedOperands,
+                                 std::unordered_set<Operation*>& normalizedOps,
                                  const std::unordered_map<int, Operation*>& opmagicToOp);
     void NormalizeCoaForNormalOperands(std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
-                                       std::unordered_map<LogicalTensorPtr, int>& processedOperands);
+                                       std::unordered_map<LogicalTensorPtr, int>& processedOperands,
+                                       const std::unordered_set<Operation*>& normalizedOps);
     void NormalizeCoaForSpecialInfo(std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex);
     void GetOutcastSymbolicExpr(std::map<int, SymbolicScalar>& tabel);
 
