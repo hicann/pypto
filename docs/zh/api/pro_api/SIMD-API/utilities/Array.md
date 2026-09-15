@@ -37,9 +37,14 @@ bool[N]    # N 个 BOOL 元素
 
 - 使用int[N]、float[N]或bool[N]标注时，文件开头须包含from __future__ import annotations，使字段标注以字符串形式保留并由PyPTO解析。
 
-- 运行时使用普通Python序列为数组字段赋值，序列长度必须与声明的N一致：
+- 运行时使用普通Python序列为数组字段赋值，序列长度必须与声明的N一致, 如下样例中的offsets：
 
   ```python
+  @dataclass
+  class MyTiling:
+    m: int
+    n: int
+    offsets: int[4]
   tiling = MyTiling(m=64, n=128, offsets=[0, 64, 128, 192])
   ```
 
@@ -47,8 +52,8 @@ bool[N]    # N 个 BOOL 元素
 
   ```python
   first_offset = tiling.offsets[0]
-  offsets = tiling.offsets
-  current_offset = offsets[index]
+  offsets = tiling.offsets          ### 支持先读取整个数组字段再访问
+  current_offset = offsets[index]   ### 支持使用运行时下标 index
   ```
 
 ## 返回值说明
