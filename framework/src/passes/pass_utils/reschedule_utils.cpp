@@ -27,6 +27,7 @@ namespace {
 constexpr uint64_t TOPO_HASH_BASE = 37;
 constexpr uint64_t TOPO_HASH_MOD = 0xFFFFFFFFFFFFF;
 constexpr uint64_t TOPO_HASH_XOR_SEED = 0x12345678;
+constexpr size_t ESTIMATED_TENSORS_PER_OP = 2;
 } // namespace
 
 bool RescheduleUtils::isAllocOp(Operation* op)
@@ -48,7 +49,7 @@ RescheduleUtils::TensorDependencyMap RescheduleUtils::BuildTensorDependencyInfo(
                                                                                 bool collectConsumerColors)
 {
     TensorDependencyMap tensorDeps;
-    tensorDeps.reserve(opList.size() * 2);
+    tensorDeps.reserve(opList.size() * ESTIMATED_TENSORS_PER_OP);
     for (size_t i = 0; i < opList.size(); i++) {
         const auto& op = opList[i];
         int subgraphId = op.GetSubgraphID();

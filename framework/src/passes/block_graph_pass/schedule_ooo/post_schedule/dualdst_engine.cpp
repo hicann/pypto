@@ -128,7 +128,7 @@ Status DualDstEngine::VerifyDualDstSameOffset()
         if (op->GetOpcode() != Opcode::OP_L0C_COPY_UB_DUAL_DST)
             continue;
         const auto& outs = op->GetOOperands();
-        if (outs.size() != 2)
+        if (outs.size() != kDualDstOutputCount)
             continue;
         if (outs[0] == nullptr || outs[1] == nullptr)
             continue;
@@ -470,7 +470,6 @@ void DualDstEngine::IdentifyPairsForOneL0C(LogicalTensorPtr l0cTensor, const std
                      l0cTensor->GetShape().size(), copyUbs.size(), l0cTensor->GetMagic());
     if (l0cTensor->GetShape().size() != kCopyUbGeometryDimCount)
         return;
-    constexpr size_t kDualDstOutputCount = 2;
     if (copyUbs.size() != kDualDstOutputCount) {
         APASS_LOG_INFO_F(Elements::Operation,
                          "DualDst skip L0C tensor[%d]: expected exactly %zu L0C_COPY_UB consumers, but got %zu.",

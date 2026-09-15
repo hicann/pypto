@@ -435,6 +435,8 @@ inline NPUArch DPlatformToNPUArch(DPlatform platform)
 
 enum class SoCAICToAIVCoreRatio { ONE_AIC_TO_ONE_AIV_CORE, ONE_AIC_TO_TWO_AIV_CORE, UNSUPPORTED_AIC_TO_AIV_CORE_RATIO };
 
+inline constexpr size_t ONE_AIC_TO_TWO_AIV_CORE_NUM = 2;
+
 class SoC {
 private:
     Die die_;
@@ -468,7 +470,7 @@ public:
     {
         if (cube_core_cnt_ == vector_core_cnt_) {
             return SoCAICToAIVCoreRatio::ONE_AIC_TO_ONE_AIV_CORE;
-        } else if (2 * cube_core_cnt_ == vector_core_cnt_) {
+        } else if (ONE_AIC_TO_TWO_AIV_CORE_NUM * cube_core_cnt_ == vector_core_cnt_) {
             return SoCAICToAIVCoreRatio::ONE_AIC_TO_TWO_AIV_CORE;
         } else {
             return SoCAICToAIVCoreRatio::UNSUPPORTED_AIC_TO_AIV_CORE_RATIO;

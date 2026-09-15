@@ -664,6 +664,9 @@ bool CoreScheduler::HasAtomicScopeTasks(const TaskGraph& taskGraph)
     return false;
 }
 
+// 二维几何（M/N 两个维度）的维度数。
+static constexpr size_t COPY_GEO_2D_DIM = 2;
+
 // dualdst 亲和候选的 2 维几何。参考 DualDstEngine::ReadGeometry，但只读判定相邻所需的
 // fromOffset(2维) 与 shape(2维)，不做 ubShape/validShape/dtype 校验（那是融合阶段的事）。
 struct CopyGeo2D {
@@ -695,7 +698,7 @@ static CopyGeo2D ReadGeo2D(Operation* op)
     }
     const auto& from = attr->GetFromOffset();
     const auto& shape = attr->GetShape();
-    if (from.size() != 2 || shape.size() != 2) {
+    if (from.size() != COPY_GEO_2D_DIM || shape.size() != COPY_GEO_2D_DIM) {
         return g;
     }
     g.fromM = SpecifiedInt2D(from[0]);
@@ -790,6 +793,9 @@ void CoreScheduler::TrySeedDualDstPair(Operation* copyA, Operation* copyB, TaskG
                      bSmall, bLarge, smallIsA ? tA : tB, smallIsA ? tB : tA);
 }
 
+// dualdst 亲和对恰好由 2 个 L0C_COPY_UB 组成。
+static constexpr size_t DUAL_DST_PAIR_SIZE = 2;
+
 // 亲和 dualdst：task 划分后、调度前（仅 HLF）为 per-branch 计算候选核提示。
 // order 为 HLFSchedule 构建的调度顺序（反向深度排序），遍历它找 AIC task，
 // 使候选归属与实际调度顺序一致。
@@ -832,7 +838,7 @@ void CoreScheduler::AssignDualDstCandidates(TaskGraph& taskGraph, const std::vec
         // 每个"恰好 2 个 L0C_COPY_UB"的 L0C 独立判一次。
         for (auto* l0c : l0cOrder) {
             auto& copyUbs = l0cToCopy[l0c];
-            if (copyUbs.size() == 2) {
+            if (copyUbs.size() == DUAL_DST_PAIR_SIZE) {
                 TrySeedDualDstPair(copyUbs[0], copyUbs[1], taskGraph, opToTask);
             }
         }

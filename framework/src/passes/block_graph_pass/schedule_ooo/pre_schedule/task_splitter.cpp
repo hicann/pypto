@@ -1550,10 +1550,12 @@ Status TaskSplitter::MarkInternalSubgraphID()
         }
         targetTypes.insert(targetMap[task.targetCoreType]);
     }
+    // AIC、AIV0、AIV1 三类核分组全部共存时，AIV1 需要独立的 subgraph ID。
+    constexpr size_t ALL_CORE_GROUP_COUNT = 3;
     if (targetTypes.size() <= 1) {
         APASS_LOG_ERROR_F(Elements::Operation, "task coreType must more than 1");
         return FAILED;
-    } else if (targetTypes.size() == 3) {
+    } else if (targetTypes.size() == ALL_CORE_GROUP_COUNT) {
         subGraphIdMap[TargetCoreType::AIV1]++;
     }
     for (auto& task : taskGraph_.tasks) {

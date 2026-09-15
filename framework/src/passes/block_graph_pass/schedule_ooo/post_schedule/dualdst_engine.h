@@ -65,6 +65,7 @@ private:
     static constexpr int64_t kInvalidCoord = INT64_MIN;
     static constexpr int kCopyUbGeometryDimCount = 2;
     static constexpr int kMinDualDstPairCount = 2;
+    static constexpr size_t kDualDstOutputCount = 2;
     static constexpr int kMaxConsumerSearchDepth = 16;
 
     struct CopyUbGeometry {

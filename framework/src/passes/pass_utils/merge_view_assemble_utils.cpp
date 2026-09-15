@@ -33,6 +33,9 @@
 
 namespace npu::tile_fwk {
 namespace {
+constexpr size_t MIN_DIMENSION_BOUNDARY_COUNT = 2;
+constexpr size_t MAX_COVERAGE_CELL_COUNT = 100000;
+
 ir::StmtPtr ToStmtPtr(Operation& op) { return std::static_pointer_cast<const ir::Stmt>(op.shared_from_this()); }
 
 Operation* ToOperation(const ir::StmtPtr& stmt) { return static_cast<Operation*>(const_cast<ir::Stmt*>(stmt.get())); }
@@ -872,7 +875,8 @@ bool MergeViewAssembleUtils::HasCompleteStaticCoverage(const LogicalTensorPtr& m
         std::sort(dimensionBoundaries.begin(), dimensionBoundaries.end());
         dimensionBoundaries.erase(std::unique(dimensionBoundaries.begin(), dimensionBoundaries.end()),
                                   dimensionBoundaries.end());
-        if (dimensionBoundaries.size() < 2 || cellCount > 100000 / (dimensionBoundaries.size() - 1)) {
+        if (dimensionBoundaries.size() < MIN_DIMENSION_BOUNDARY_COUNT ||
+            cellCount > MAX_COVERAGE_CELL_COUNT / (dimensionBoundaries.size() - 1)) {
             return false;
         }
         cellCount *= dimensionBoundaries.size() - 1;

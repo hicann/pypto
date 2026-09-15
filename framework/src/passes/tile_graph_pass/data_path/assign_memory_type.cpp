@@ -1157,6 +1157,8 @@ Status AssignMemoryType::IsAssembleToOffsetAligned(Operation& operation, const L
     const auto& rawShape = output->GetRawTensor()->rawshape;
     const auto& toOffset = assembleOpAttribute->GetToOffset();
     static constexpr int ASSEMBLE_ALIGN_BYTES = 32;
+    static constexpr int64_t DEGENERATE_AXIS_SIZE = 1;
+    static constexpr size_t MIN_RANK_WITH_SECOND_LAST_AXIS = 2;
     int64_t tensorBytes = static_cast<int64_t>(BytesOf(output->Datatype()));
     if (tensorBytes <= 0 || ASSEMBLE_ALIGN_BYTES % tensorBytes != 0 || rawShape.empty()) {
         aligned = true;
@@ -1189,7 +1191,7 @@ Status AssignMemoryType::IsAssembleToOffsetAligned(Operation& operation, const L
     // second-to-last axis instead (ASSEMBLE is a shapeTransformOp). Since AssignMemoryType
     // cannot determine which padding will apply, both must be aligned to safely avoid DDR
     // fallback.
-    if (rawShape[lastIdx] == 1 && rawShape.size() >= 2) {
+    if (rawShape[lastIdx] == DEGENERATE_AXIS_SIZE && rawShape.size() >= MIN_RANK_WITH_SECOND_LAST_AXIS) {
         bool secondLastPadAligned = false;
         RETURN_IF_NOT_SUCCESS(isAlignedAfterPad(lastIdx - 1, secondLastPadAligned));
         aligned = tailPadAligned && secondLastPadAligned;

@@ -512,8 +512,7 @@ Status CommonOperationEliminateUtils::Process(Function& function)
 {
     function.SortOperations(SortOperationsMode::LIGHTWEIGHT);
     std::vector<LogicalTensorPtr> sequence;
-    std::unordered_map<LogicalTensorPtr, std::vector<Operation*>> tensorProducerMap;
-    tensorProducerMap = GetTensorProducers(function, sequence);
+    auto tensorProducerMap = GetTensorProducers(function, sequence);
     mixSubgraphIds_ = GetMixSubgraphIds(function);
     function_ = &function;
     tensorsByRawMagic_ = GraphUtils::GetTensorsGroupedByRawMagic(function);

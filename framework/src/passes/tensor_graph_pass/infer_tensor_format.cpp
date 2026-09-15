@@ -738,10 +738,14 @@ Status InferTensorFormat::EliminateRedundantFakeTrans(Function& function)
         std::map<Signature, std::vector<std::shared_ptr<LogicalTensor>>> equivalenceClasses;
 
         CollectSignatures(function, rootCache, equivalenceClasses);
-        bool changed = ReplaceRedundantTensors(equivalenceClasses);
-        changed = DeleteDeadFakeTrans(function) || changed;
-
-        if (!changed) {
+        bool needAnotherRound = false;
+        if (ReplaceRedundantTensors(equivalenceClasses)) {
+            needAnotherRound = true;
+        }
+        if (DeleteDeadFakeTrans(function)) {
+            needAnotherRound = true;
+        }
+        if (!needAnotherRound) {
             break;
         }
     } while (true);

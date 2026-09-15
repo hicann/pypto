@@ -495,6 +495,10 @@ Status OoOScheduler::ExecuteAllocIssue(uint64_t& commitCnt, MemoryType memType, 
     return SUCCESS;
 }
 
+// GetSortedAllocatedBufs 返回的元组布局为 (memId, 起始地址, 结束地址)。
+constexpr size_t BUF_START_ADDR_IDX = 1;
+constexpr size_t BUF_END_ADDR_IDX = 2;
+
 Status OoOScheduler::CheckAivUbPoolSlicesEqual()
 {
     auto& pool0 = state_.bufferManagerMap.at(CoreLocationType::AIV0).at(MemoryType::MEM_UB);
@@ -506,7 +510,8 @@ Status OoOScheduler::CheckAivUbPoolSlicesEqual()
     if (slices0.size() != slices1.size())
         return FAILED;
     for (size_t i = 0; i < slices0.size(); ++i) {
-        if (std::get<1>(slices0[i]) != std::get<1>(slices1[i]) || std::get<2>(slices0[i]) != std::get<2>(slices1[i])) {
+        if (std::get<BUF_START_ADDR_IDX>(slices0[i]) != std::get<BUF_START_ADDR_IDX>(slices1[i]) ||
+            std::get<BUF_END_ADDR_IDX>(slices0[i]) != std::get<BUF_END_ADDR_IDX>(slices1[i])) {
             return FAILED;
         }
     }
@@ -1549,32 +1554,26 @@ Status OoOScheduler::GetGroupNextUseTime(std::vector<int> group, Operation* allo
 std::vector<int> OoOScheduler::SelectSpillBuffers(Operation* allocOp)
 {
     LocalBufferPtr allocBuffer = state_.localBufferMap[state_.opReqMemIdsMap[allocOp][0]];
-    std::vector<int> spillGroup;
-    std::vector<std::vector<int>> canSpillGroups;
-
     auto coreType = state_.schedInfoMap[allocOp].coreLocation;
     auto& pool = state_.bufferManagerMap[coreType][allocBuffer->memType];
-    spillGroup = pool.GetAddrSortedBufs();
-    canSpillGroups = GetSpillGroup(pool, allocBuffer->size);
-
+    std::vector<std::vector<int>> canSpillGroups = GetSpillGroup(pool, allocBuffer->size);
     if (canSpillGroups.empty()) {
-        return spillGroup;
+        return pool.GetAddrSortedBufs();
     }
     std::unordered_map<int, size_t> nextUseTimeCache;
     std::vector<int> groupNextUseTime;
     for (auto& group : canSpillGroups) {
         if (GetGroupNextUseTime(group, allocOp, groupNextUseTime, nextUseTimeCache) != SUCCESS) {
             APASS_LOG_WARN_F(Elements::Operation, "Get group next use time failed, begin spill all tensor.");
-            return spillGroup;
+            return pool.GetAddrSortedBufs();
         }
     }
     size_t groupSel = std::max_element(groupNextUseTime.begin(), groupNextUseTime.end()) - groupNextUseTime.begin();
     if (groupNextUseTime[groupSel] == -1) {
         APASS_LOG_WARN_F(Elements::Tensor, "Cannot find tensor to spill, begin spill all tensor.");
-        return spillGroup;
+        return pool.GetAddrSortedBufs();
     }
-    spillGroup = canSpillGroups[groupSel];
-    return spillGroup;
+    return canSpillGroups[groupSel];
 }
 
 Status OoOScheduler::GenBufferSpill(Operation* allocOp, SpillContext& ctx, bool isMainLoop)
