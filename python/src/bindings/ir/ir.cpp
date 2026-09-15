@@ -1454,36 +1454,38 @@ void BindProgram(py::module_& ir)
     function_class.def("get_attr", &Function::GetAttr<int>, py::arg("key"), py::arg("default_value") = 0,
                        "Get an integer function attribute");
 
-    // IRDebugInfo - compilation-session side table for tuple/struct field names.
+    py::enum_<TupleTypeKind>(ir, "TupleTypeKind", "Semantic tuple classification")
+        .value("TUPLE", TupleTypeKind::TUPLE, "Plain positional tuple")
+        .value("NAMED_TUPLE", TupleTypeKind::NAMED_TUPLE, "Named immutable tuple")
+        .value("STRUCT", TupleTypeKind::STRUCT, "Mutable C++ struct");
+
+    py::class_<TupleTypeInfo>(ir, "TupleTypeInfo", "Semantic metadata associated with one TupleType")
+        .def(py::init<TupleTypeKind, std::optional<std::string>, std::vector<std::string>>(), py::arg("kind"),
+             py::arg("name") = py::none(), py::arg("fields") = std::vector<std::string>{})
+        .def_readonly("kind", &TupleTypeInfo::kind)
+        .def_readonly("name", &TupleTypeInfo::name)
+        .def_readonly("fields", &TupleTypeInfo::fields)
+        .def("__eq__", &TupleTypeInfo::operator==, py::arg("other"))
+        .def("__ne__", &TupleTypeInfo::operator!=, py::arg("other"));
+
+    // IRDebugInfo - compilation-session side table for semantic tuple metadata.
     auto debug_info_class = py::class_<IRDebugInfo, std::shared_ptr<IRDebugInfo>>(
         ir, "IRDebugInfo",
-        "Side table mapping a tuple type to its ordered field-name list. "
+        "Side table mapping a tuple type to its semantic TupleTypeInfo. "
         "Populated by the parser, carried on Program, read by codegen.");
     debug_info_class.def(py::init<>());
-    debug_info_class.def("register_tuple_fields", &IRDebugInfo::RegisterTupleFields, py::arg("type"), py::arg("fields"),
-                         "Record the ordered field-name list for a named tuple / struct type.");
+    debug_info_class.def("register_tuple_type_info", &IRDebugInfo::RegisterTupleTypeInfo, py::arg("type"),
+                         py::arg("info"), "Record semantic metadata for a named tuple or struct type.");
     debug_info_class.def(
-        "get_tuple_fields",
+        "get_tuple_type_info",
         [](const IRDebugInfo& self, const TupleTypePtr& type) -> py::object {
-            const auto* fields = self.GetTupleFields(type.get());
-            if (fields == nullptr) {
+            const auto* info = self.GetTupleTypeInfo(type.get());
+            if (info == nullptr) {
                 return py::none();
             }
-            return py::cast(*fields);
+            return py::cast(*info);
         },
-        py::arg("type"), "Look up field names by type, returns None if not registered.");
-    debug_info_class.def("register_tuple_name", &IRDebugInfo::RegisterTupleName, py::arg("type"), py::arg("name"),
-                         "Record the C++ struct type name for a named tuple / struct type.");
-    debug_info_class.def(
-        "get_tuple_name",
-        [](const IRDebugInfo& self, const TupleTypePtr& type) -> py::object {
-            const auto* name = self.GetTupleName(type.get());
-            if (name == nullptr) {
-                return py::none();
-            }
-            return py::cast(*name);
-        },
-        py::arg("type"), "Look up struct type name by type, returns None if not registered.");
+        py::arg("type"), "Look up tuple metadata by type; returns None for a plain tuple.");
 
     // Program - const shared_ptr
     auto program_class = py::class_<Program, IRNode, std::shared_ptr<Program>>(
@@ -1499,7 +1501,7 @@ void BindProgram(py::module_& ir)
                       "Functions are keyed by their names automatically.");
     program_class.def_property_readonly(
         "debug_info", [](const ProgramPtr& self) { return self->debugInfo_; },
-        "Tuple/struct field-name side table; None if the Program was built without one.");
+        "Semantic tuple metadata side table; None if the Program was built without one.");
     program_class.def("get_function", &Program::GetFunction, py::arg("name"),
                       "Get a function by name, returns None if not found");
     program_class.def(

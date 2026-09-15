@@ -29,7 +29,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 import enum
-from typing import Any
+from typing import Any, Callable
 
 from pypto.pypto_impl import ir
 
@@ -83,6 +83,7 @@ class PhiState:
     last_span: ir.Span | None = None
     constant_state: ConstantState = ConstantState.UNSET
     constant_value: ir.Expr | None = None
+    type_equal: Callable[[ir.Type, ir.Type], bool] = field(default=_type_equal, repr=False, compare=False)
 
     def propagate(
         self,
@@ -103,11 +104,12 @@ class PhiState:
                 )
             self.ty = src_ty
         elif not isinstance(self.ty, ir.NoneType):
-            if not _type_equal(self.ty, src_ty):
+            if not self.type_equal(self.ty, src_ty):
                 if fail_eagerly:
                     raise ParserTypeError(
-                        f"Type depends on path taken: {src_ty} vs. {self.ty}",
+                        "Inconsistent types in control flow",
                         span=src.span,
+                        hint="Check that the variable types are compatible. Use astype to ensure consistent types.",
                     )
                 self.ty = ir.NoneType.get()
             self.last_span = src.span

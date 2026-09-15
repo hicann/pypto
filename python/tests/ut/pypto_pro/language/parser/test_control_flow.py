@@ -12,7 +12,7 @@
 
 from pypto_pro import ir
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError
+from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError, UndefinedVariableError
 import pytest
 
 
@@ -80,6 +80,71 @@ def test_loop_carried_constant_is_not_folded_in_body():
     assert isinstance(observed_assignment.value, ir.Var)
 
 
+def test_for_target_is_rebound_each_iteration_and_merged_after_loop():
+    @pl.jit(auto_mutex=False)
+    def func(n: pl.DT_INT64):
+        i = 5
+        for i in pl.range(n):
+            i = i + 10
+        _test_result = i + 1
+
+    program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func_ir = program.get_function(func.__name__)
+    for_stmt = _find_for_stmt(func_ir)
+
+    assert for_stmt.loop_var.name.startswith("i__iterator")
+    assert len(for_stmt.iter_args) == 1
+    assert len(for_stmt.return_vars) == 1
+
+    bind_target = for_stmt.body.stmts[0]
+    assert isinstance(bind_target, ir.AssignStmt)
+    assert ir.structural_equal(bind_target.value, for_stmt.loop_var, enable_auto_mapping=False)
+
+    update_target = next(
+        stmt
+        for stmt in for_stmt.body.stmts
+        if isinstance(stmt, ir.AssignStmt) and isinstance(stmt.value, ir.Add)
+    )
+    assert ir.structural_equal(update_target.value.left, bind_target.var, enable_auto_mapping=False)
+    assert not ir.structural_equal(
+        update_target.value.left,
+        for_stmt.iter_args[0].iterVar,
+        enable_auto_mapping=False,
+    )
+
+    continue_stmt = for_stmt.body.stmts[-1]
+    assert isinstance(continue_stmt, ir.ContinueStmt)
+    assert ir.structural_equal(continue_stmt.value[0], update_target.var, enable_auto_mapping=False)
+
+    result_assignment = next(
+        stmt
+        for stmt in func_ir.body.stmts
+        if isinstance(stmt, ir.AssignStmt) and stmt.var.name.startswith("_test_result")
+    )
+    assert isinstance(result_assignment.value, ir.Add)
+    assert ir.structural_equal(
+        result_assignment.value.left,
+        for_stmt.return_vars[0],
+        enable_auto_mapping=False,
+    )
+
+
+def test_for_target_without_preexisting_binding_is_not_carried():
+    @pl.jit(auto_mutex=False)
+    def func(n: pl.DT_INT64):
+        for i in pl.range(n):
+            _test_result = i + 1  # noqa: F841
+
+    program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    for_stmt = _find_for_stmt(program.get_function(func.__name__))
+
+    assert not for_stmt.iter_args
+    assert not for_stmt.return_vars
+    bind_target = for_stmt.body.stmts[0]
+    assert isinstance(bind_target, ir.AssignStmt)
+    assert ir.structural_equal(bind_target.value, for_stmt.loop_var, enable_auto_mapping=False)
+
+
 def test_static_if_only_emits_selected_branch():
     @pl.jit(auto_mutex=False)
     def func(_jit_entry: pl.DT_INT64):
@@ -108,7 +173,7 @@ def test_dynamic_if_type_mismatch_is_deferred_until_use():
     if_stmt = next(stmt for stmt in unused_mismatch.body.stmts if isinstance(stmt, ir.IfStmt))
     assert isinstance(if_stmt.return_vars[0].type, ir.NoneType)
 
-    with pytest.raises(ParserTypeError, match="has no valid type on every reachable control-flow path"):
+    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
 
         @pl.jit(auto_mutex=False)
         def used_mismatch(flag: pl.DT_BOOL):
@@ -135,7 +200,7 @@ def test_dynamic_if_parser_only_merge_is_deferred_until_use():
     if_stmt = next(stmt for stmt in unused_func.body.stmts if isinstance(stmt, ir.IfStmt))
     assert isinstance(if_stmt.return_vars[0].type, ir.NoneType)
 
-    with pytest.raises(ParserTypeError, match="has no valid type on every reachable control-flow path"):
+    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
 
         @pl.jit(auto_mutex=False)
         def used_parser_value(flag: pl.DT_BOOL):
@@ -165,7 +230,7 @@ def test_dynamic_if_missing_binding_uses_none_type_input():
 
 
 def test_none_type_binding_is_rejected_when_used():
-    with pytest.raises(ParserTypeError, match="has no valid type on every reachable control-flow path"):
+    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
 
         @pl.jit(auto_mutex=False)
         def func(_jit_entry: pl.DT_INT64):
@@ -193,7 +258,7 @@ def test_dynamic_if_nested_tile_group_merge_is_deferred_until_use():
     if_stmt = next(stmt for stmt in func_ir.body.stmts if isinstance(stmt, ir.IfStmt))
     assert isinstance(if_stmt.return_vars[0].type, ir.NoneType)
 
-    with pytest.raises(ParserTypeError, match="has no valid type on every reachable control-flow path"):
+    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
 
         @pl.jit(auto_mutex=False)
         def used_tile_group(flag: pl.DT_BOOL):
@@ -223,7 +288,7 @@ def test_dynamic_loop_parser_only_merge_is_deferred_until_use():
     for_stmt = next(stmt for stmt in unused_func.body.stmts if isinstance(stmt, ir.ForStmt))
     assert isinstance(for_stmt.return_vars[0].type, ir.NoneType)
 
-    with pytest.raises(ParserTypeError, match="has no valid type on every reachable control-flow path"):
+    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
 
         @pl.jit(auto_mutex=False)
         def used_parser_value(_jit_entry: pl.DT_INT64):
@@ -383,7 +448,7 @@ def test_if_both_branches_jump_stops_enclosing_statement_list():
 
 
 def test_break_type_conflict_fails_eagerly():
-    with pytest.raises(ParserTypeError, match="Type depends on path taken"):
+    with pytest.raises(ParserTypeError, match="Inconsistent types in control flow"):
 
         @pl.jit(auto_mutex=False)
         def func(n: pl.DT_INT64):
@@ -398,7 +463,7 @@ def test_break_type_conflict_fails_eagerly():
 
 
 def test_continue_type_conflict_fails_eagerly():
-    with pytest.raises(ParserTypeError, match="Type depends on path taken"):
+    with pytest.raises(ParserTypeError, match="Inconsistent types in control flow"):
 
         @pl.jit(auto_mutex=False)
         def func(n: pl.DT_INT64):
@@ -433,7 +498,7 @@ def test_while_body_and_result_types_are_independent():
 
 
 def test_while_body_type_conflict_fails_eagerly_after_valid_iter_use():
-    with pytest.raises(ParserTypeError, match="Type depends on path taken"):
+    with pytest.raises(ParserTypeError, match="Inconsistent types in control flow"):
 
         @pl.jit(auto_mutex=False)
         def func(flag: pl.DT_BOOL):
@@ -485,8 +550,9 @@ def test_statement_list_stops_after_direct_break():
     func = func_program.get_function(func.__name__)
     for_stmt = _find_for_stmt(func)
 
-    assert len(for_stmt.body.stmts) == 1
-    assert isinstance(for_stmt.body.stmts[0], ir.BreakStmt)
+    assert len(for_stmt.body.stmts) == 2
+    assert isinstance(for_stmt.body.stmts[0], ir.AssignStmt)
+    assert isinstance(for_stmt.body.stmts[1], ir.BreakStmt)
 
 
 def test_phi_state_propagates_equal_branch_constant():
@@ -539,6 +605,133 @@ def test_tuple_is_one_if_merge_value_and_one_constant():
     )
     assert isinstance(first.value, ir.ConstInt)
     assert first.value.value == 1
+
+
+def test_if_merges_named_tuples_with_the_same_fields():
+    @pl.jit(auto_mutex=False)
+    def func(flag: pl.DT_BOOL, value: pl.DT_INT64):
+        if flag:
+            record = pl.make_tuple(item=value)
+        else:
+            record = pl.make_tuple(item=value + 1)
+        observed = record.item
+        _test_result = observed
+
+    program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func_ir = program.get_function(func.__name__)
+    if_stmt = next(stmt for stmt in func_ir.body.stmts if isinstance(stmt, ir.IfStmt))
+
+    assert isinstance(if_stmt.return_vars[0].type, ir.TupleType)
+    assert any(
+        isinstance(stmt, ir.AssignStmt)
+        and stmt.var.name.startswith("observed")
+        and isinstance(stmt.value, ir.GetItemExpr)
+        for stmt in func_ir.body.stmts
+    )
+
+
+def test_if_rejects_plain_and_named_tuple_with_equal_element_types():
+    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
+
+        @pl.jit(auto_mutex=False)
+        def func(flag: pl.DT_BOOL, value: pl.DT_INT64):
+            if flag:
+                record = (value,)
+            else:
+                record = pl.make_tuple(item=value)
+            observed = record[0]
+            _test_result = observed
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
+def test_if_rejects_named_tuples_with_different_fields():
+    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
+
+        @pl.jit(auto_mutex=False)
+        def func(flag: pl.DT_BOOL, value: pl.DT_INT64):
+            if flag:
+                record = pl.make_tuple(left=value)
+            else:
+                record = pl.make_tuple(right=value)
+            observed = record.left
+            _test_result = observed
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
+def test_if_merges_structs_with_the_same_name_and_fields():
+    @pl.jit(auto_mutex=False)
+    def func(flag: pl.DT_BOOL, value: pl.DT_INT64):
+        if flag:
+            record = pl.struct("Record", item=value)
+        else:
+            record = pl.struct("Record", item=value + 1)
+        observed = record.item
+        _test_result = observed
+
+    program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func_ir = program.get_function(func.__name__)
+    if_stmt = next(stmt for stmt in func_ir.body.stmts if isinstance(stmt, ir.IfStmt))
+
+    assert isinstance(if_stmt.return_vars[0].type, ir.TupleType)
+
+
+def test_if_rejects_structs_with_different_names():
+    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
+
+        @pl.jit(auto_mutex=False)
+        def func(flag: pl.DT_BOOL, value: pl.DT_INT64):
+            if flag:
+                record = pl.struct("LeftRecord", item=value)
+            else:
+                record = pl.struct("RightRecord", item=value)
+            observed = record.item
+            _test_result = observed
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
+def test_if_rejects_nested_tuple_with_different_inner_tuple_kinds():
+    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
+
+        @pl.jit(auto_mutex=False)
+        def func(flag: pl.DT_BOOL, value: pl.DT_INT64):
+            if flag:
+                record = ((value,),)
+            else:
+                record = (pl.make_tuple(item=value),)
+            observed = record[0]
+            _test_result = observed
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
+def test_for_rejects_tuple_kind_change_in_loop_carry():
+    with pytest.raises(ParserTypeError, match="Inconsistent types in control flow"):
+
+        @pl.jit(auto_mutex=False)
+        def func(value: pl.DT_INT64):
+            record = pl.make_tuple(item=value)
+            for _ in pl.range(1):
+                record = (value,)
+            _test_result = record
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
+def test_while_rejects_tuple_kind_change_in_loop_carry():
+    with pytest.raises(ParserTypeError, match="Inconsistent types in control flow"):
+
+        @pl.jit(auto_mutex=False)
+        def func(value: pl.DT_INT64):
+            record = pl.make_tuple(item=value)
+            while value > 0:
+                record = (value,)
+                continue
+            _test_result = record
+
+        func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_const_env_uses_latest_physical_ssa_binding():

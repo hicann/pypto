@@ -1128,6 +1128,43 @@ class TupleType(Type):
         """
 
 
+class TupleTypeKind(enum.IntEnum):
+    """Semantic classification for a TupleType."""
+
+    TUPLE = ...
+    NAMED_TUPLE = ...
+    STRUCT = ...
+
+
+class TupleTypeInfo:
+    """Semantic metadata associated with one exact TupleType."""
+
+    kind: Final[TupleTypeKind]
+    name: Final[str | None]
+    fields: Final[list[str]]
+
+    def __init__(
+        self,
+        kind: TupleTypeKind,
+        name: str | None = None,
+        fields: Sequence[str] = (),
+    ) -> None: ...
+
+    def __eq__(self, other: TupleTypeInfo) -> bool: ...
+
+    def __ne__(self, other: TupleTypeInfo) -> bool: ...
+
+
+class IRDebugInfo:
+    """Program-owned side table for semantic tuple metadata."""
+
+    def __init__(self) -> None: ...
+
+    def register_tuple_type_info(self, type: TupleType, info: TupleTypeInfo) -> None: ...
+
+    def get_tuple_type_info(self, type: TupleType) -> TupleTypeInfo | None: ...
+
+
 class MakeTuple(Expr):
     """Tuple construction expression."""
 
@@ -1660,6 +1697,7 @@ class Program(IRNode):
         functions: list[Function],
         name: str,
         span: Span,
+        debug_info: IRDebugInfo | None = None,
     ) -> None:
         """Create a program from a list of functions.
 
@@ -1669,6 +1707,7 @@ class Program(IRNode):
             functions: List of functions
             name: Program name (optional)
             span: Source location
+            debug_info: Semantic tuple metadata side table
         """
 
     def __getitem__(self, name: str) -> Function | None:

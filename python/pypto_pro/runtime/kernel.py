@@ -227,8 +227,8 @@ class KernelDef:
         program_name = self._name if self._name is not None else self._func.__name__
 
         try:
-            # The Program owns one IRDebugInfo; create it here and share it with the parser
-            # so field names land in the table the Program carries.
+            # The Program owns one IRDebugInfo; share it with the parser so all
+            # semantic tuple metadata lands in the table the Program carries.
             debug_info = ir.IRDebugInfo()
             parser = ASTParser(
                 self._source_file,

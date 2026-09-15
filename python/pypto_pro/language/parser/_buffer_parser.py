@@ -38,7 +38,10 @@ from pypto_pro.ir.op.block_ops import make_tile_expr as _make_tile_expr
 from pypto_pro.ir.op.block_ops import tile_slot_size as _tile_slot_size
 from pypto_pro.ir.op.system_ops import MAX_MUTEX_ID
 
+from ._tuple_type_registry import TupleTypeKind
 from .diagnostics import ParserSyntaxError, ParserTypeError, check_in_range
+
+_TILE_GROUP_TYPE_NAME = "tile_group"
 
 
 def _is_int_sequence(value) -> bool:
@@ -106,22 +109,20 @@ class BufferParserMixin:
         except ValueError as exc:
             raise ParserTypeError(f"make_tile_group() {exc}") from exc
 
-    def is_tile_group(self, expr) -> bool:
-        return "tiles" in self.named_fields(expr)
+    def is_tile_group_type(self, value_type: ir.Type) -> bool:
+        if not isinstance(value_type, ir.TupleType):
+            return False
+        info = self.classify_tuple_type(value_type)
+        return info.kind == TupleTypeKind.NAMED_TUPLE and info.name == _TILE_GROUP_TYPE_NAME
 
-    def _mark_tile_group_type(self, expr: ir.Expr) -> None:
-        group_type = expr.type
-        if not isinstance(group_type, ir.TupleType):
-            raise TypeError("tile group must have TupleType")
-        if not any(group_type is known_type for known_type in self._tile_group_types):
-            self._tile_group_types.append(group_type)
+    def is_tile_group(self, expr) -> bool:
+        return isinstance(expr, ir.Expr) and self.is_tile_group_type(expr.type)
 
     def _contains_tile_group_type(self, value_type: ir.Type) -> bool:
-        if any(value_type is group_type for group_type in self._tile_group_types):
+        if self.is_tile_group_type(value_type):
             return True
         return isinstance(value_type, ir.TupleType) and any(
-            self._contains_tile_group_type(element_type)
-            for element_type in value_type.types
+            self._contains_tile_group_type(element_type) for element_type in value_type.types
         )
 
     # --- factory --------------------------------------------------------------
@@ -255,8 +256,12 @@ class BufferParserMixin:
             )
             mut_fields.append(f"mutex_ids{suffix}")
         if depth == 1:
-            result = self.make_named_tuple([tiles_tuple, *mut_tuples], ["tiles", *mut_fields], span)
-            self._mark_tile_group_type(result)
+            result = self.make_named_tuple(
+                [tiles_tuple, *mut_tuples],
+                ["tiles", *mut_fields],
+                span,
+                name=_TILE_GROUP_TYPE_NAME,
+            )
             self.tile_group_meta[result] = (depth, mutex_ids, tile_type.target_memory)
             return result
         cursor_call = ir.create_op_call(
@@ -265,13 +270,14 @@ class BufferParserMixin:
             {"name": "_TileGroupCursor", "fields": ["cursor"]},
             span,
         )
-        self.register_tuple_name(cursor_call, "_TileGroupCursor")
-        self.register_tuple_fields(cursor_call, ["cursor"])
+        self.register_struct_type(cursor_call, "_TileGroupCursor", ["cursor"])
         cursor = self.builder.let(f"_tg_{var_name}_cursor", cursor_call, span=span)
         result = self.make_named_tuple(
-            [tiles_tuple, *mut_tuples, cursor], ["tiles", *mut_fields, "cursor"], span
+            [tiles_tuple, *mut_tuples, cursor],
+            ["tiles", *mut_fields, "cursor"],
+            span,
+            name=_TILE_GROUP_TYPE_NAME,
         )
-        self._mark_tile_group_type(result)
         self.tile_group_meta[result] = (depth, mutex_ids, tile_type.target_memory)
         return result
 
@@ -340,13 +346,21 @@ class BufferParserMixin:
         # ③ cursor: reused from the original handle so the rotation position
         #    (the original group keeps its own independent cursor) is preserved.
         if n_slots == 1:
-            result = self.make_named_tuple([tiles_tuple, *mut_tuples], ["tiles", *mut_fields], span)
-            self._mark_tile_group_type(result)
+            result = self.make_named_tuple(
+                [tiles_tuple, *mut_tuples],
+                ["tiles", *mut_fields],
+                span,
+                name=_TILE_GROUP_TYPE_NAME,
+            )
             self.tile_group_meta[result] = (n_slots, per_tile_mutex_ids, memref.memory_space)
             return result
         cursor = self.lower_attr_access(group, "cursor", span)
-        result = self.make_named_tuple([tiles_tuple, *mut_tuples, cursor], ["tiles", *mut_fields, "cursor"], span)
-        self._mark_tile_group_type(result)
+        result = self.make_named_tuple(
+            [tiles_tuple, *mut_tuples, cursor],
+            ["tiles", *mut_fields, "cursor"],
+            span,
+            name=_TILE_GROUP_TYPE_NAME,
+        )
         self.tile_group_meta[result] = (n_slots, per_tile_mutex_ids, memref.memory_space)
         return result
 

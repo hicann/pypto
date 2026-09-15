@@ -1,0 +1,55 @@
+# pypto_pro.language.astype
+
+## 产品支持情况
+
+<!-- npu="950" id1 -->
+- Ascend 950PR/Ascend 950DT：支持
+<!-- end id1 -->
+<!-- npu="A3" id2 -->
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持
+<!-- end id2 -->
+<!-- npu="910b" id3 -->
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持
+<!-- end id3 -->
+
+## 功能说明
+
+将标量表达式的结果转换为指定数据类型。
+
+## 函数原型
+
+```python
+result = pypto_pro.language.astype(x, dtype)
+```
+
+## 参数说明
+
+| 参数 | 输入/输出 | 说明 |
+|---|---|---|
+| x | 输入 | 源标量表达式，Scalar类型。 |
+| dtype | 输入 | 目标数据类型，DataType类型。 |
+
+## 约束说明
+
+- 仅支持两个位置参数，不支持关键字参数。
+- x必须是标量表达式，不支持Tile、Tensor或Vector Register。
+
+## 返回值说明
+
+返回数据类型为dtype的Scalar。
+
+## 调用示例
+
+```python
+import pypto_pro.language as pl
+
+# 将INT32标量转换为INT64。
+source = pl.const(1, pl.DT_INT32)
+converted = pl.astype(source, pl.DT_INT64)
+
+# 显式统一控制流两个分支的标量类型。
+if flag:
+    value = pl.astype(lhs, pl.DT_INT64)
+else:
+    value = pl.astype(rhs, pl.DT_INT64)
+```

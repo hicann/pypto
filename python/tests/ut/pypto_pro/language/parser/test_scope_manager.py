@@ -275,6 +275,23 @@ def test_phi_state_marks_mismatched_runtime_types_invalid():
     assert isinstance(state.ty, ir.NoneType)
 
 
+def test_phi_state_eager_type_mismatch_has_actionable_diagnostic():
+    span = ir.Span.unknown()
+    state = PhiState()
+    state.propagate(ir.Var("first", ir.ScalarType(ir.DataType.INT32), span))
+
+    with pytest.raises(ParserTypeError) as exc_info:
+        state.propagate(
+            ir.Var("second", ir.ScalarType(ir.DataType.INT64), span),
+            fail_eagerly=True,
+        )
+
+    assert exc_info.value.message == "Inconsistent types in control flow"
+    assert exc_info.value.hint == (
+        "Check that the variable types are compatible. Use astype to ensure consistent types."
+    )
+
+
 def test_phi_state_keeps_none_as_an_invalid_type():
     span = ir.Span.unknown()
     state = PhiState()

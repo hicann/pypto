@@ -12,7 +12,12 @@
 """Parser tests for the Tile-first A5 SIMT frontend."""
 
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError, UnsupportedFeatureError
+from pypto_pro.language.parser.diagnostics import (
+    ParserSyntaxError,
+    ParserTypeError,
+    UndefinedVariableError,
+    UnsupportedFeatureError,
+)
 import pytest
 
 from pypto.pypto_impl import ir
@@ -285,6 +290,52 @@ def test_simt_context_direct_call_uses_named_tuple_field_lowering():
     assert function_ir.count("simt.block_dim") >= 1
     assert function_ir.count("simt.block_idx") >= 1
     assert function_ir.count("simt.grid_dim") >= 1
+
+
+def test_simt_dim3_contexts_can_merge_across_control_flow():
+    @pl.simt.function(max_threads=32)
+    def merge_context(dst):
+        tid = pl.simt.linear_thread_idx()
+        if tid > 0:
+            context = pl.simt.thread_idx()
+        else:
+            context = pl.simt.block_idx()
+        dst[0, 0] = context.x
+
+    @pl.jit
+    def kernel(_jit_entry: pl.DT_INT64):
+        tile_type = pl.TileType(shape=[1, 32], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
+        dst = pl.make_tile(tile_type, addr=0, size=128)
+        with pl.section_vector():
+            pl.simt.launch(merge_context, threads=32, args=(dst,))
+
+    program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    function_ir = str(program.get_function("merge_context"))
+
+    assert "if " in function_ir
+    assert "simt.thread_idx" in function_ir
+    assert "simt.block_idx" in function_ir
+
+
+def test_simt_dim3_context_rejects_plain_tuple_merge():
+    @pl.simt.function(max_threads=32)
+    def merge_context(dst):
+        tid = pl.simt.linear_thread_idx()
+        if tid > 0:
+            context = pl.simt.thread_idx()
+        else:
+            context = (tid, tid, tid)
+        dst[0, 0] = context.x
+
+    @pl.jit
+    def kernel(_jit_entry: pl.DT_INT64):
+        tile_type = pl.TileType(shape=[1, 32], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
+        dst = pl.make_tile(tile_type, addr=0, size=128)
+        with pl.section_vector():
+            pl.simt.launch(merge_context, threads=32, args=(dst,))
+
+    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
+        kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_simt_context_rejects_unknown_named_tuple_field():

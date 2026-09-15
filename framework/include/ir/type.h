@@ -477,9 +477,9 @@ public:
     /**
      * \brief Create a (positional) tuple type
      *
-     * Field names of named tuples / structs are NOT part of the tuple type. They are
-     * carried by the parser-populated IRDebugInfo side table (see ir/debug_info.h),
-     * keyed by the TupleType pointer, so they do not affect structural identity.
+     * Semantic tuple classification is not part of the core type. The parser records
+     * tuple kind/name/fields in IRDebugInfo; an absent entry denotes a plain positional
+     * tuple. This metadata does not affect structural identity.
      *
      * \param types List of types in the tuple
      */

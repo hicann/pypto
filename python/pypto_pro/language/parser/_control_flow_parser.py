@@ -333,7 +333,7 @@ class ControlFlowParserMixin:
         if not info.jumps:
             return []
         output_count = len(info.jumps[0].outputs)
-        states = [PhiState() for _ in range(output_count)]
+        states = [PhiState(type_equal=self.tuple_type_registry.types_equal) for _ in range(output_count)]
         for jump in info.jumps:
             if len(jump.outputs) != output_count:
                 raise TypeError("control-flow jump output counts must match")
@@ -454,8 +454,11 @@ class ControlFlowParserMixin:
         slots: list[_LoopMergeSlot] = []
         for name, init_value in merge_inputs:
             state = LoopVarState(
-                PhiState(constant_state=ConstantState.NONCONSTANT),
-                PhiState(),
+                PhiState(
+                    constant_state=ConstantState.NONCONSTANT,
+                    type_equal=self.tuple_type_registry.types_equal,
+                ),
+                PhiState(type_equal=self.tuple_type_registry.types_equal),
             )
             if self._is_empty_control_flow_value(init_value):
                 iter_var = self.builder.var(name, init_value.type, span)
@@ -624,6 +627,7 @@ class ControlFlowParserMixin:
         """Parse a natural ``for`` directly into an SSA ForStmt."""
         self._validate_loop_orelse(stmt)
         iter_call = self._validate_for_loop_iterator(stmt)
+        stmt = self._lower_for_loop(stmt)
         loop_var_name = self._parse_for_loop_target(stmt)
         range_args = self._parse_range_call(iter_call)
         span = self.span_tracker.get_span(stmt)
@@ -950,6 +954,27 @@ class ControlFlowParserMixin:
                 hint="Use: for i in pl.range(n)",
             )
         return stmt.target.id
+
+    def _lower_for_loop(self, stmt: ast.For) -> ast.For:
+        """Lower the Python-visible target to an assignment from an internal iterator."""
+        loop_var_name = self._parse_for_loop_target(stmt)
+        iterator_name = f"{loop_var_name}__iterator"
+
+        target = ast.copy_location(ast.Name(id=loop_var_name, ctx=ast.Store()), stmt.target)
+        iterator = ast.copy_location(ast.Name(id=iterator_name, ctx=ast.Load()), stmt.target)
+        bind_target = ast.copy_location(ast.Assign(targets=[target], value=iterator), stmt.target)
+        lowered = ast.copy_location(
+            ast.For(
+                target=ast.copy_location(ast.Name(id=iterator_name, ctx=ast.Store()), stmt.target),
+                iter=stmt.iter,
+                body=[bind_target, *stmt.body],
+                orelse=stmt.orelse,
+                type_comment=stmt.type_comment,
+            ),
+            stmt,
+        )
+        ast.fix_missing_locations(lowered)
+        return lowered
 
     def _parse_range_call(self, call: ast.Call) -> dict[str, Any]:
         """Parse pl.range() call arguments.

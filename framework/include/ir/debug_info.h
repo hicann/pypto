@@ -10,6 +10,7 @@
 
 #pragma once
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -20,74 +21,68 @@ namespace ir {
 class TupleType;
 using TupleTypePtr = std::shared_ptr<const TupleType>;
 
+enum class TupleTypeKind {
+    TUPLE,
+    NAMED_TUPLE,
+    STRUCT,
+};
+
+struct TupleTypeInfo {
+    TupleTypeKind kind = TupleTypeKind::TUPLE;
+    std::optional<std::string> name;
+    std::vector<std::string> fields;
+
+    bool operator==(const TupleTypeInfo& other) const
+    {
+        return kind == other.kind && name == other.name && fields == other.fields;
+    }
+    bool operator!=(const TupleTypeInfo& other) const { return !(*this == other); }
+};
+
 /**
- * \brief Compilation-session side table for tuple field names.
+ * \brief Compilation-session side table for semantic tuple metadata.
  *
- * Field names of named tuples / structs are *not* part of the tuple type's core
- * semantics (positional element types and order are). They are only needed by
- * codegen during the struct-compat transition (to emit `a.field`) and for dump /
- * error display. This side table keeps that metadata out of both the IR nodes and
- * the TupleType structural identity.
+ * Tuple kind, name, and fields are *not* part of the tuple type's core semantics
+ * (positional element types and order are). The parser records this metadata for
+ * named tuples and structs. An absent entry denotes a plain positional tuple.
  *
  * The key is the `TupleType` pointer. TupleType is never structurally interned --
- * each `struct.create` / `MakeTuple` allocates a fresh instance (`make_shared`),
+ * each `struct.create` allocates a fresh instance (`make_shared`),
  * so same-shape-different-name structs get distinct keys. IR passes copy `TypePtr`
  * by shared_ptr (types are immutable and never rebuilt via reflection), so the
  * pointer stays valid and identical while IR transformation passes rebuild the
  * surrounding nodes.
  *
- * The parser populates this (via `makeNamedTuple` / struct.create lowering); the
- * instance rides on `Program` so codegen can capture it at its entry point.
+ * The instance rides on `Program` so codegen can capture it at its entry point.
  */
 class IRDebugInfo {
 public:
-    /// Record the ordered field-name list for a named tuple / struct type.
-    void RegisterTupleFields(const TupleTypePtr& type, std::vector<std::string> fields)
+    /// Record semantic metadata for a named tuple or struct type.
+    void RegisterTupleTypeInfo(const TupleTypePtr& type, TupleTypeInfo info)
     {
         if (type == nullptr) {
             return;
         }
-        tupleFields_[type.get()] = std::move(fields);
+        tupleTypeInfos_[type.get()] = std::move(info);
     }
 
-    /// Look up field names by type pointer. Returns nullptr if not registered.
-    [[nodiscard]] const std::vector<std::string>* GetTupleFields(const TupleType* type) const
+    /// Look up semantic tuple metadata by type pointer. Returns nullptr for a plain tuple.
+    [[nodiscard]] const TupleTypeInfo* GetTupleTypeInfo(const TupleType* type) const
     {
-        auto it = tupleFields_.find(type);
-        return it == tupleFields_.end() ? nullptr : &it->second;
-    }
-
-    /// Record the C++ struct type name for a named tuple / struct type (e.g. the tiling
-    /// Python class name), so codegen emits `struct <name>` instead of a fixed default.
-    void RegisterTupleName(const TupleTypePtr& type, std::string name)
-    {
-        if (type == nullptr) {
-            return;
-        }
-        tupleNames_[type.get()] = std::move(name);
-    }
-
-    /// Look up the struct type name by type pointer. Returns nullptr if not registered.
-    [[nodiscard]] const std::string* GetTupleName(const TupleType* type) const
-    {
-        auto it = tupleNames_.find(type);
-        return it == tupleNames_.end() ? nullptr : &it->second;
+        auto it = tupleTypeInfos_.find(type);
+        return it == tupleTypeInfos_.end() ? nullptr : &it->second;
     }
 
     /// Merge another table's entries into this one (later registrations win).
     void Merge(const IRDebugInfo& other)
     {
-        for (const auto& [type, fields] : other.tupleFields_) {
-            tupleFields_[type] = fields;
-        }
-        for (const auto& [type, name] : other.tupleNames_) {
-            tupleNames_[type] = name;
+        for (const auto& [type, info] : other.tupleTypeInfos_) {
+            tupleTypeInfos_[type] = info;
         }
     }
 
 private:
-    std::unordered_map<const TupleType*, std::vector<std::string>> tupleFields_;
-    std::unordered_map<const TupleType*, std::string> tupleNames_;
+    std::unordered_map<const TupleType*, TupleTypeInfo> tupleTypeInfos_;
 };
 
 using IRDebugInfoPtr = std::shared_ptr<IRDebugInfo>;

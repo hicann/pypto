@@ -53,7 +53,7 @@ public:
 
     [[nodiscard]] FunctionPtr GetFunction(const std::string& name) const;
 
-    /// Tuple/struct field-name side table; owned by the Program, supplied by the parser.
+    /// Semantic tuple metadata side table; owned by the Program, supplied by the parser.
     /// May be null when a Program is built without one (e.g. rebuilt by a pass). Excluded
     /// from GetFieldDescriptors -> not part of structural equality / hash / serialization.
     [[nodiscard]] const IRDebugInfo* GetDebugInfo() const { return debugInfo_.get(); }

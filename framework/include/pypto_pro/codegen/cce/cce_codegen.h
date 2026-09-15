@@ -249,7 +249,7 @@ public:
     [[nodiscard]] bool HasTileAddress(const std::string& tile_name) const;
 
     /**
-     * \brief Register a named TupleType definition for deferred class emission.
+     * \brief Register a struct TupleType definition for deferred class emission.
      */
     void RegisterStructDefinition(const ir::TupleTypePtr& tuple_type, const std::string& type_name,
                                   const std::vector<std::string>& fields, bool is_tiling);
@@ -585,7 +585,7 @@ private:
     std::string current_expr_value_;              ///< OUTPUT: Inline C++ value for scalar / tile expressions
     ir::MakeTuplePtr current_tuple_;              ///< OUTPUT: underlying MakeTuple for tuple-typed expressions
     std::vector<ir::ExprPtr> yield_buffer_;       ///< If-branch Yield expressions awaiting phi assignment
-    const ir::IRDebugInfo* debug_info_ = nullptr; ///< Tuple/struct field names, captured at GenerateSingle entry
+    const ir::IRDebugInfo* debug_info_ = nullptr; ///< Program tuple metadata, required at codegen entry
     std::map<std::string, std::string> tiling_headers_;          ///< Tiling struct headers (filename -> content)
     std::map<std::string, StructDefinition> struct_definitions_; ///< Struct type name ->definition
 
@@ -673,6 +673,9 @@ private:
      */
     bool IsHomogeneousTuple(const ir::TupleTypePtr& tt) const;
 
+    /// Semantic metadata registered for one exact tuple type, or null for a plain tuple.
+    const ir::TupleTypeInfo* GetTupleTypeInfo(const ir::TupleTypePtr& tuple_type) const;
+
     /// The C++ struct type name registered for a tuple type, or null if it is not a struct.
     /// Reads the parser's side table, so the answer does not depend on how far codegen has
     /// walked the body.
@@ -685,8 +688,8 @@ private:
      * captured once at GenerateSingle entry, so it does not depend on how far codegen has
      * walked the body.
      *
-     * Named tuples (structs / named tuples) render as `base.field` and are excluded;
-     * every other homogeneous tuple gets an array, which is what dynamic indexing needs.
+     * A tuple gets an array only when it is homogeneous and has no TupleTypeInfo
+     * registration. Named tuples and structs are emitted as aggregate leaf slots.
      */
     bool IsArrayTuple(const ir::TupleTypePtr& tt) const;
 

@@ -178,7 +178,7 @@ def test_dsl_scope_shadows_closure():
 
 def test_undefined_variable_still_raises():
     """Variable not in scope or closure raises UndefinedVariableError."""
-    with pytest.raises(UndefinedVariableError, match="Undefined variable"):
+    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
 
         @pl.jit(auto_mutex=False)
         def func(x: pl.Tensor[[64], pl.DT_FP32]):

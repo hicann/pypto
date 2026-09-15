@@ -157,7 +157,7 @@ def test_cce_static_if_break_terminates_the_enclosing_loop_block():
         __aicore__ inline void _static_if_break_kernel_impl_cube(int64_t n_0)
         {
 
-            for (int64_t i_0 = 0; i_0 < n_0; i_0 += 1) {
+            for (int64_t i__iterator_0 = 0; i__iterator_0 < n_0; i__iterator_0 += 1) {
                 break;
             }
             return;
@@ -379,17 +379,17 @@ def _void_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
         pl.system.bar_all()
 
 
-def test_cce_named_tuple_return_flattens_into_leaf_slots():
+def test_cce_named_tuple_return_uses_aggregate_slots():
     body = _cube_body(_compile_to_cce(_named_tuple_return_kernel))
 
-    # A named tuple carries field names but no C++ struct name, so it is neither an array
-    # nor a single object: it flattens into one leaf slot per field.
+    # Named-tuple fields in IRDebugInfo distinguish this aggregate from a
+    # homogeneous positional tuple, so codegen flattens it into named leaf slots.
     assert re.search(r"^\s*int64_t __inline_0_return_val_4__item_0;$", body, re.MULTILINE)
     assert re.search(r"^\s*int64_t __inline_0_return_val_4__item_1;$", body, re.MULTILINE)
-    assert not re.search(r"__inline_0_return_val_4\[\d+\];", body)
+    assert not re.search(r"__inline_0_return_val_4\[", body)
     assert not re.search(r"^\s*\S+ __inline_0_return_val_4;$", body, re.MULTILINE)
 
-    # Both branches write the leaves, and `.lo` / `.hi` read back through them.
+    # Both branches write the fields, and `.lo` / `.hi` read back through them.
     assert body.count("__inline_0_return_val_4__item_0 = ") == 2
     assert body.count("__inline_0_return_val_4__item_1 = ") == 2
     assert "= __inline_0_return_val_4__item_0;" in body

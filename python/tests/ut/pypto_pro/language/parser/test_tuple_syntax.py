@@ -154,6 +154,18 @@ def test_named_tuple_static_field_is_folded_with_runtime_fields():
     assert all(not isinstance(stmt, ir.IfStmt) for stmt in func.body.stmts)
 
 
+def test_named_tuple_with_tiles_field_is_not_a_tile_group():
+    @pl.jit(auto_mutex=False)
+    def func(value: pl.DT_INT64):
+        info = pl.make_tuple(tiles=(value,))
+        values = info[0]
+        _test_result = values[0]
+
+    program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+    assert isinstance(program.get_function(func.__name__), ir.Function)
+
+
 def test_variable_index_homogeneous_tuple():
     """Variable index on a homogeneous tuple generates valid IR."""
 

@@ -24,6 +24,7 @@ from .._utils import _get_span_or_capture, _normalize_expr
 from ._op_registry import op_impl
 
 _DIM3_FIELDS = ("x", "y", "z")
+_DIM3_CONTEXT_NAME = "dim3_context"
 
 
 def _make_dim3_components(op_name: str, span: Span) -> list[Call]:
@@ -350,7 +351,12 @@ def _parse_dim3_context(parser: Any, call: ast.Call, op_name: str) -> Expr:
     """Parse a SIMT context query as an IR named tuple."""
     _validate_simt_body_op(parser, call, {})
     span = parser.span_tracker.get_span(call)
-    return parser.make_named_tuple(_make_dim3_components(op_name, span), _DIM3_FIELDS, span)
+    return parser.make_named_tuple(
+        _make_dim3_components(op_name, span),
+        _DIM3_FIELDS,
+        span,
+        name=_DIM3_CONTEXT_NAME,
+    )
 
 
 @op_impl("simt.thread_idx")

@@ -21,6 +21,7 @@ from pypto_pro.ir._operators import make_binary as _make_binary
 from pypto_pro.ir._utils import _normalize_expr
 
 from ._expr_evaluator import ExprEvaluator
+from ._tuple_type_registry import TupleTypeInfo
 from ._utils import _const_int_value, _is_const_expr
 from .diagnostics import (
     FinalRejectionError,
@@ -81,12 +82,6 @@ class ExpressionParserMixin:
         value = self.lookup_expr_by_name(name)
         if value is None:
             return None
-        if isinstance(value, ir.Expr) and isinstance(value.type, ir.NoneType):
-            raise ParserTypeError(
-                f"Variable '{name}' has no valid type on every reachable control-flow path",
-                span=self._current_span(),
-                hint="Define the variable with one compatible type on every path before using it.",
-            )
         if _is_const_expr(value):
             return ("const", value)
         return ("runtime", value) if isinstance(value, ir.Expr) else ("parse_time", value)
@@ -287,12 +282,14 @@ class ExpressionParserMixin:
         # cannot silently capture a caller IR variable.
         binding = self.local_binding(var_name)
         if binding is not None:
-            return binding[1]
+            value = binding[1]
+            if not (isinstance(value, ir.Expr) and isinstance(value.type, ir.NoneType)):
+                return value
 
         raise UndefinedVariableError(
-            f"Undefined variable '{var_name}'",
+            f"Use of potentially undefined variable '{var_name}'",
             span=self.span_tracker.get_span(name),
-            hint="Check if the variable is defined before using it or is available in the enclosing scope",
+            hint="Ensure the variable is defined before using it.",
         )
 
     def none_with_mutex_meta(self, span: ir.Span) -> ir.Expr:
@@ -675,58 +672,42 @@ class ExpressionParserMixin:
             self._reject_ternary_branch(result, branch, "runtime", expr.test)
         return result
 
-    def make_named_tuple(self, elements: list, field_names, span: ir.Span) -> ir.Expr:
-        """Build a named ``MakeTuple`` and record its type's field names.
-
-        Single chokepoint for named-tuple construction: the field names are not stored
-        on the expression or the type; they are registered into the Program's
-        ``IRDebugInfo`` keyed by the resulting TupleType pointer, so codegen can recover
-        ``a.field`` even when the read does not fold to the MakeTuple.
-        """
-        field_names = list(field_names)
+    def make_named_tuple(
+        self,
+        elements: list,
+        field_names,
+        span: ir.Span,
+        *,
+        name: str | None = None,
+    ) -> ir.Expr:
+        """Build a named ``MakeTuple`` and register its semantic tuple metadata."""
+        field_names = tuple(field_names)
         mt = ir.MakeTuple(elements, span)
-        return self.register_tuple_fields(mt, field_names)
+        self.tuple_type_registry.register_named_tuple(mt.type, field_names, name=name)
+        return mt
+
+    def classify_tuple_type(self, tuple_type: ir.TupleType) -> TupleTypeInfo:
+        """Classify a tuple type by its parser-session kind, name, and fields."""
+        return self.tuple_type_registry.classify(tuple_type)
 
     def named_fields(self, expr) -> list[str]:
-        """Field names of a named tuple / struct expr, from the IRDebugInfo side table.
-
-        Single source of truth: the TupleType no longer carries field names. One parser
-        builds each Program and registers field names at the construction site.
-        Returns [] for non-tuples or unregistered/positional tuples.
-        """
-        if self.debug_info is None:
-            return []
+        """Return parser-registered field names for a named tuple or struct expression."""
         if not (isinstance(expr, ir.Expr) and isinstance(expr.type, ir.TupleType)):
             return []
-        return list(self.debug_info.get_tuple_fields(expr.type) or [])
+        return list(self.classify_tuple_type(expr.type).fields)
 
-    def register_tuple_fields(self, expr: ir.Expr, field_names) -> ir.Expr:
-        """Record the field names of a named tuple / struct result type.
-
-        Every named tuple registers its fields; a struct additionally registers its C++ type
-        name via :meth:`register_tuple_name`.
-        """
+    def register_struct_type(self, expr: ir.Expr, struct_name: str, field_names) -> ir.Expr:
+        """Register a struct's semantic tuple metadata in IRDebugInfo."""
         expr_type = expr.type
-        if self.debug_info is not None and isinstance(expr_type, ir.TupleType) and field_names:
-            self.debug_info.register_tuple_fields(expr_type, list(field_names))
-        return expr
-
-    def register_tuple_name(self, expr: ir.Expr, struct_name: str) -> ir.Expr:
-        """Record the C++ struct type name of a struct result type.
-
-        Codegen seeds its type -> C++ name map from this at entry, so a struct type resolves
-        without having traversed the statement that produces it.
-        """
-        expr_type = expr.type
-        if self.debug_info is not None and isinstance(expr_type, ir.TupleType) and struct_name:
-            self.debug_info.register_tuple_name(expr_type, struct_name)
+        if not isinstance(expr_type, ir.TupleType):
+            raise TypeError(f"Struct '{struct_name}' must have TupleType")
+        self.tuple_type_registry.register_struct(expr_type, struct_name, field_names)
         return expr
 
     def lower_attr_access(self, base: ir.Expr, field_name: str, span: ir.Span):
         """Lower attribute read ``base.field`` to its named tuple element.
 
-        Resolves the field index from the base's named TupleType and records the
-        type's field names in ``IRDebugInfo``. When *base* is a parse-time
+        Resolves the field index from the parser's tuple type registry. When *base* is a parse-time
         constant ``MakeTuple`` (never for struct_array, whose elements are
         mutable structs with backing-array alias semantics), constant-folds the
         read to the static element instead of emitting a ``GetItemExpr``.

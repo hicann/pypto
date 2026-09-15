@@ -32,6 +32,7 @@ from ._expression_parser import ExpressionParserMixin
 from ._scope_manager import JumpKind, ScopeManager
 from ._span_tracker import SpanTracker
 from ._struct_parser import StructParserMixin
+from ._tuple_type_registry import TupleTypeRegistry
 from ._type_resolver import TypeResolver
 from .diagnostics import (
     ParserSyntaxError,
@@ -109,6 +110,7 @@ class ASTParser(
         Args:
             source_file: Path to source file
             source_lines: Lines of source code (dedented for parsing)
+            debug_info: Program-owned semantic tuple metadata table
             line_offset: Line number offset to add to AST line numbers (for dedented code)
             col_offset: Column offset to add to AST column numbers (for dedented code)
             strict_ssa: If True, enforce SSA (single assignment). If False (default), allow reassignment.
@@ -162,10 +164,12 @@ class ASTParser(
             bound_signature=bound_signature,
         )
         self.builder = IRBuilder()
-        # Tuple/struct field-name side table; owned by the Program being built and passed in
-        # by the caller (kernel / decorator). Not created here; may be None for parses that
-        # do not feed a Program.
+        if debug_info is None:
+            raise ValueError("ASTParser requires a non-null IRDebugInfo")
+        # Tuple metadata is owned by the Program being built. Nested parsers share
+        # this same IRDebugInfo instance.
         self.debug_info = debug_info
+        self.tuple_type_registry = TupleTypeRegistry(self.debug_info)
         self.external_funcs: dict[str, ir.Function] = {}  # Track external functions referenced
 
         # Track active control-flow builders while parsing nested statements.
@@ -192,9 +196,6 @@ class ASTParser(
         self._ifexpr_tmp_counter: int = 0
         # Maps group Expr objects -> (depth, per-tile mutex IDs, memory).
         self.tile_group_meta: dict[ir.Expr, tuple] = {}
-        # Tile-group handles use TupleType in IR. Retain their exact types so
-        # control-flow merging can reject handles nested inside other tuples.
-        self._tile_group_types: list[ir.TupleType] = []
         # Parser-only constant environment. Runtime bindings remain exclusively in
         # ScopeManager as Vars; this map records constants by physical SSA name.
         self.const_env: dict[str, ir.Expr] = {}
@@ -585,14 +586,13 @@ class ASTParser(
         tiling_cls = self.resolve_tiling_class(arg.annotation) if arg.annotation else None
         if tiling_cls is not None:
             fields = get_tiling_fields(tiling_cls)
-            # Single struct parameter: the tiling class is lowered to a named TupleType whose
-            # field names live in the IRDebugInfo side table (codegen emits `struct <ClassName>`).
+            # Single struct parameter: the tiling class is lowered to a TupleType whose
+            # STRUCT TupleTypeInfo is recorded in IRDebugInfo.
             tuple_type = get_tiling_tuple_type(tiling_cls)
             tiling_var = f.param(param_name, tuple_type, param_span)
             # A tiling param is a struct: register its fields and the Python class name, so
             # codegen emits `struct <ClassName>` (matching the host-side struct).
-            self.register_tuple_name(tiling_var, tiling_cls.__name__)
-            self.register_tuple_fields(tiling_var, list(fields.keys()))
+            self.register_struct_type(tiling_var, tiling_cls.__name__, list(fields.keys()))
             self.scope_manager.define_var(param_name, tiling_var, allow_redef=True)
             return
 

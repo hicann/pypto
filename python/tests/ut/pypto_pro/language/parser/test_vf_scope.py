@@ -27,6 +27,7 @@ def _parse_body(body, *, vector_function=False, target=ir.SectionKind.Vector, cl
         source_file=__file__,
         source_lines=source.splitlines(),
         target=target,
+        debug_info=ir.IRDebugInfo(),
         closure_vars={"pl": pl, "vf": vf, **(closure or {})},
     )
     return parser.parse_function(ast.parse(source).body[0], is_vector_function=vector_function)

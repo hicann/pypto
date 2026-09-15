@@ -85,7 +85,7 @@ ir::ProgramPtr MakeProgram(const ir::StmtPtr& body, const std::vector<ir::VarPtr
     auto function = std::make_shared<const ir::Function>("kernel", params, std::vector<ir::TypePtr>{}, body,
                                                          ir::Span::Unknown(), ir::FunctionType::IN_CORE, true);
     return std::make_shared<const ir::Program>(std::vector<ir::FunctionPtr>{function}, "test_program",
-                                               ir::Span::Unknown());
+                                               ir::Span::Unknown(), std::make_shared<ir::IRDebugInfo>());
 }
 
 ir::TileTypePtr MakeTileType(const std::vector<int64_t>& shape, ir::DataType dtype,

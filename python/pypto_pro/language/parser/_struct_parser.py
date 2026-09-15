@@ -141,8 +141,7 @@ class StructParserMixin:
             {"name": struct_name, "fields": field_names},
             span,
         )
-        self.register_tuple_name(call, struct_name)
-        return self.register_tuple_fields(call, field_names)
+        return self.register_struct_type(call, struct_name, field_names)
 
     @op_impl("struct_array")
     def _parse_struct_array_expr(self, call: ast.Call) -> ir.Expr:
@@ -209,8 +208,7 @@ class StructParserMixin:
                 {"name": struct_name, "fields": field_names},
                 span,
             )
-            self.register_tuple_name(slot_call, struct_name)
-            self.register_tuple_fields(slot_call, field_names)
+            self.register_struct_type(slot_call, struct_name, field_names)
             slot_var = self.builder.let(f"{var_name}_{i}", slot_call, span=span)
             slot_vars.append(slot_var)
         result = ir.MakeTuple(slot_vars, span)
