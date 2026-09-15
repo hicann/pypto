@@ -30,7 +30,7 @@ pypto_pro.language.simt.thread_idx() -> Any
 
 ## 约束说明
 
-只能在由@pypto_pro.language.simt.function定义的SIMT入口函数或辅助函数中调用。
+只能在由@pypto_pro.language.vector_function(mode="simt")定义的SIMT入口函数或辅助函数中调用。
 
 ## 返回值说明
 
@@ -41,7 +41,7 @@ pypto_pro.language.simt.thread_idx() -> Any
 ```python
 import pypto_pro.language as pl
 
-@pl.simt.function(max_threads=256)
+@pl.vector_function(mode="simt", max_threads=256)
 def write_thread_idx_x(
     output: pl.Tensor[[1, 256], pl.DT_UINT32],
 ):
@@ -55,5 +55,5 @@ def simt_thread_idx_kernel(
     output: pl.Tensor[[1, 256], pl.DT_UINT32],
 ):
     with pl.section_vector():
-        pl.simt.launch(write_thread_idx_x, threads=256, args=(output,))
+        write_thread_idx_x[256](output)
 ```

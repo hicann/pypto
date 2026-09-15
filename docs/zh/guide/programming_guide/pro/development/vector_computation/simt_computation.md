@@ -8,7 +8,7 @@ SIMT计算以线程为基本执行单元，适合表达运行时索引、逐线�
 
 ### 定义入口函数和辅助函数
 
-入口函数使用@pypto_pro.language.simt.function(max_threads=N)定义，每个线程执行一次函数体，结果通过Tensor或Tile写回。辅助函数使用不带括号的@pypto_pro.language.simt.function定义，在当前线程中执行，可以返回一个Scalar。
+入口函数使用@pypto_pro.language.vector_function(mode="simt", max_threads=N)定义，每个线程执行一次函数体，结果通过Tensor或Tile写回。辅助函数使用@pypto_pro.language.vector_function(mode="simt")定义，在当前线程中执行，可以返回一个Scalar。
 
 以下示例计算1000个FP32元素的output = input_tensor * scale + bias。辅助函数复用逐线程计算，入口函数通过Block和Thread索引定位元素，并检查尾部边界。
 
@@ -20,12 +20,12 @@ ELEMENTS = 1000
 THREADS = 256
 
 
-@pl.simt.function
+@pl.vector_function(mode="simt")
 def affine(value: pl.DT_FP32, scale: pl.DT_FP32, bias: pl.DT_FP32) -> pl.DT_FP32:
     return value * scale + bias
 
 
-@pl.simt.function(max_threads=THREADS)
+@pl.vector_function(mode="simt", max_threads=THREADS)
 def transform(
     output: pl.Tensor[[1, ELEMENTS], pl.DT_FP32],
     input_tensor: pl.Tensor[[1, ELEMENTS], pl.DT_FP32],
@@ -40,9 +40,9 @@ def transform(
 
 参数类型可由实参推导；写出注解便于阅读和类型校验。入口函数返回None，辅助函数可以返回None或一个Scalar，不支持返回Tensor、Tile或Tuple。
 
-### 在外层Vector执行域启动线程块
+### 在外层Vector执行域调用线程块
 
-外层Kernel的vector section中通过pypto_pro.language.simt.launch调用SIMT入口函数。
+外层Kernel的vector section中通过`simt_func[threads](...)`调用SIMT入口函数。
 
 ```python
 @pl.jit(arch="a5")
@@ -54,14 +54,10 @@ def transform_kernel(
     bias: pl.DT_FP32,
 ):
     with pl.section_vector():
-        pl.simt.launch(
-            transform,
-            threads=THREADS,
-            args=(output, input_tensor, count, scale, bias),
-        )
+        transform[THREADS](output, input_tensor, count, scale, bias)
 ```
 
-max_threads声明单个线程块的上限，threads指定本次启动的实际尺寸；args按位置传入实参，单参数元组需要尾部逗号。入口函数不能在SIMT函数中嵌套启动。
+max_threads声明单个线程块的上限，threads指定本次调用的实际尺寸，圆括号内按位置传入实参。入口函数不能在SIMT函数中嵌套调用。
 
 ### 从Host启动外层Kernel
 
@@ -84,18 +80,18 @@ torch.npu.synchronize()
 torch.testing.assert_close(output, input_tensor * scale + bias, rtol=0, atol=0)
 ```
 
-本例请求4个外层Vector逻辑Block。在实际启动4个Block时，每个Block执行一次pypto_pro.language.simt.launch，启动256个线程；最后一个线程块只有232个线程访问数据，其余24个线程被边界判断跳过。
+本例请求4个外层Vector逻辑Block。在实际启动4个Block时，每个Block执行一次`transform[THREADS](...)`，启动256个线程；最后一个线程块只有232个线程访问数据，其余24个线程被边界判断跳过。
 
-Host的kernel[stream, block_dim]中，block_dim表示请求的外层逻辑Block数；SIMT的pypto_pro.language.simt.block_dim()表示块内线程尺寸。None表示使用当前流，更多说明见[多核Tiling切分](../tiling/multi_core_tiling.md)。
+Host的kernel[stream, block_dim]中，block_dim表示请求的外层逻辑Block数；SIMT的pypto_pro.language.simt.block_dim()表示块内线程尺寸。None表示使用当前流，更多说明见[blockDim的含义与设置](../kernel_function.md#blockdim的含义与设置)。
 
 ## 配置线程与映射数据索引
 
-threads参数可以写成整数或一至三维元组，例如256、(16, 16)、(8, 8, 4)；pypto_pro.language.simt.block_dim()返回相应的三维尺寸，未给出的维度补1。各维必须为编译期正整数，乘积不得超过max_threads，且不得超过2048。例如threads=(8, 8, 4)表示每个线程块有256个线程。
+方括号中的threads可以写成一至三个整数表达式，例如`simt_func[256](...)`、`simt_func[16, 16](...)`、`simt_func[8, 8, 4](...)`；pypto_pro.language.simt.block_dim()返回相应的三维尺寸，未给出的维度补1。各维必须为编译期正整数，乘积不得超过max_threads，且不得超过2048。例如`simt_func[8, 8, 4](...)`表示每个线程块有256个线程。
 
 一维线程块可使用上例中的全局索引。二维或三维线程块可以使用X维优先的[pypto_pro.language.simt.linear_thread_idx](../../../../../api/pro_api/SIMT-API/execution/linear_thread_idx.md)展开，再结合线程块编号和每块线程总数计算全局索引：
 
 ```python
-@pl.simt.function(max_threads=256)
+@pl.vector_function(mode="simt", max_threads=256)
 def copy_3d(
     source: pl.Tensor[[1, 1024], pl.DT_FP32],
     output: pl.Tensor[[1, 1024], pl.DT_FP32],
@@ -107,7 +103,7 @@ def copy_3d(
         output[0, index] = source[0, index]
 ```
 
-若外层Kernel以threads=(8, 8, 4)启动该SIMT入口函数，pypto_pro.language.simt.linear_thread_idx()给出块内0至255的编号；pypto_pro.language.simt.block_idx().x乘以256后提供块偏移。例如，当实际有4个线程块时，它们分别处理索引0至255、256至511、512至767和768至1023。完整启动约束见[pypto_pro.language.simt.launch](../../../../../api/pro_api/SIMT-API/execution/launch.md)。
+若外层Kernel通过`copy_3d[8, 8, 4](...)`调用该SIMT入口函数，pypto_pro.language.simt.linear_thread_idx()给出块内0至255的编号；pypto_pro.language.simt.block_idx().x乘以256后提供块偏移。例如，当实际有4个线程块时，它们分别处理索引0至255、256至511、512至767和768至1023。
 
 ## 访问Scalar、GM Tensor与UB Tile
 
@@ -122,10 +118,10 @@ Tensor/Tile须以完整对象传入，不支持元素、Slice或Tile Subview作�
 
 ### 访问Tile的有效区域
 
-以下入口处理形状为[2, 128]的Tile，调用方使用threads=(128, 2)。线程坐标覆盖物理Shape，实际读写范围由valid_shape控制：
+以下入口处理形状为[2, 128]的Tile，调用方使用`add_valid[128, 2](...)`。线程坐标覆盖物理Shape，实际读写范围由valid_shape控制：
 
 ```python
-@pl.simt.function(max_threads=256)
+@pl.vector_function(mode="simt", max_threads=256)
 def add_valid(data: pl.Tile[[2, 128], pl.DT_FP32], delta: pl.DT_FP32):
     row = pl.simt.thread_idx().y
     col = pl.simt.thread_idx().x
@@ -133,7 +129,7 @@ def add_valid(data: pl.Tile[[2, 128], pl.DT_FP32], delta: pl.DT_FP32):
         data[row, col] = data[row, col] + delta
 ```
 
-有效区域由外层Kernel设置并传入。pypto_pro.language.simt.launch不会自动为Tensor/Tile元素读写添加边界判断。SIMT函数也不能创建Tile或调用pypto_pro.language.load、pypto_pro.language.store等块级搬运接口。
+有效区域由外层Kernel设置并传入。SIMT入口函数调用不会自动为Tensor/Tile元素读写添加边界判断。SIMT函数也不能创建Tile或调用pypto_pro.language.load、pypto_pro.language.store等块级搬运接口。
 
 ### 标量计算与类型转换
 
@@ -150,7 +146,7 @@ SIMT函数可以使用公共Scalar表达式，还提供[标量计算与类型转
 
 ### 外层流水同步
 
-pypto_pro.language.simt.launch在V流水异步执行。混合计算中，MTE2搬入的数据需要就绪后才能被SIMT访问；SIMT更新的UB数据需要计算完成后才能被MTE3搬出：
+SIMT入口函数调用在V流水异步执行。混合计算中，MTE2搬入的数据需要就绪后才能被SIMT访问；SIMT更新的UB数据需要计算完成后才能被MTE3搬出：
 
 ```text
 load（MTE2） → MTE2/V同步 → SIMD或SIMT计算（V）→ V/MTE3同步 → store（MTE3）
@@ -158,7 +154,7 @@ load（MTE2） → MTE2/V同步 → SIMD或SIMT计算（V）→ V/MTE3同步 →
 
 普通Tile通过成对的pypto_pro.language.system.sync_src和pypto_pro.language.system.sync_dst表达依赖，完整代码见[Add快速入门](../../../../quick_start/pro/add_simt.md)。
 
-使用带mutex_ids的pypto_pro.language.make_tile_group时，默认启用的Auto Mutex可管理pypto_pro.language.load、pypto_pro.language.simt.launch和pypto_pro.language.store的缓冲区依赖，示例见[pypto_pro.language.simt.launch](../../../../../api/pro_api/SIMT-API/execution/launch.md)。仅开启auto_mutex=True不会为普通pypto_pro.language.make_tile自动补全同步。
+使用带mutex_ids的pypto_pro.language.make_tile_group时，默认启用的Auto Mutex可管理pypto_pro.language.load、SIMT入口函数调用和pypto_pro.language.store的缓冲区依赖。仅开启auto_mutex=True不会为普通pypto_pro.language.make_tile自动补全同步。
 
 ### 线程块内同步与内存顺序
 
@@ -200,7 +196,7 @@ THREADS = 256
 BLOCKS = (OUTPUT_ROWS + THREADS - 1) // THREADS
 
 
-@pl.simt.function(max_threads=THREADS)
+@pl.vector_function(mode="simt", max_threads=THREADS)
 def gather_rows(
     output: pl.Tensor[[OUTPUT_ROWS, WIDTH], pl.DT_FP32],
     input_tensor: pl.Tensor[[INPUT_ROWS, WIDTH], pl.DT_FP32],
@@ -223,11 +219,7 @@ def gather_kernel(
     row_count: pl.DT_UINT32,
 ):
     with pl.section_vector():
-        pl.simt.launch(
-            gather_rows,
-            threads=THREADS,
-            args=(output, input_tensor, indices, row_count),
-        )
+        gather_rows[THREADS](output, input_tensor, indices, row_count)
 ```
 
 调用方须保证0 <= row_count <= OUTPUT_ROWS，且被读取的indices元素均处于[0, INPUT_ROWS)。形状固定，索引值可以在运行时变化。准备好满足注解的NPU Tensor后，从Host启动：
@@ -240,7 +232,7 @@ gather_kernel[None, BLOCKS](input_tensor, indices, output, OUTPUT_ROWS)
 
 ## 当前能力边界
 
-- SIMT入口必须由外层A5 Vector执行域启动，不支持Host直接启动SIMT函数或嵌套调用pypto_pro.language.simt.launch。
+- SIMT入口必须由外层A5 Vector执行域调用，不支持Host直接启动SIMT函数或在SIMT函数中嵌套调用SIMT入口函数。
 - SIMT中不支持Tile创建、SIMD Tile/Reg计算或System流水操作。
 - 不支持动态GM Shape、Tile Subview、L1 Tile、DN/NZ布局和通用指针参数。
 - 未提供Warp shuffle/vote/reduce、线程私有数组和显式Cached GM访问接口。pypto_pro.language.simt.warp_size()仅用于查询。

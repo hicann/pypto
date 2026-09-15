@@ -21,7 +21,7 @@ def _compile_to_cce(kernel) -> str:
     return _add_kernel_header(_assemble_cv_source(cube, vector)).content
 
 
-@pl.simt.function(max_threads=1)
+@pl.vector_function(mode="simt", max_threads=1)
 def _fp32_math_intrinsics(
     out,
     flags,
@@ -57,10 +57,10 @@ def _fp32_math_codegen_kernel(value: pl.DT_FP32):
     out = pl.make_tile(out_type, addr=0x0000, size=128)
     flags = pl.make_tile(flags_type, addr=0x0080, size=32)
     with pl.section_vector():
-        pl.simt.launch(_fp32_math_intrinsics, threads=1, args=(out, flags, value))
+        _fp32_math_intrinsics[1](out, flags, value)
 
 
-@pl.simt.function(max_threads=1)
+@pl.vector_function(mode="simt", max_threads=1)
 def _fp16_math_intrinsics(
     out,
     flags,
@@ -98,10 +98,10 @@ def _fp16_math_codegen_kernel(_jit_entry: pl.DT_INT64):
     flags = pl.make_tile(flags_type, addr=0x0040, size=32)
     source = pl.make_tile(source_type, addr=0x0080, size=64)
     with pl.section_vector():
-        pl.simt.launch(_fp16_math_intrinsics, threads=1, args=(out, flags, source))
+        _fp16_math_intrinsics[1](out, flags, source)
 
 
-@pl.simt.function(max_threads=1)
+@pl.vector_function(mode="simt", max_threads=1)
 def _bf16_math_intrinsics(
     out,
     flags,
@@ -139,10 +139,10 @@ def _bf16_math_codegen_kernel(_jit_entry: pl.DT_INT64):
     flags = pl.make_tile(flags_type, addr=0x0040, size=32)
     source = pl.make_tile(source_type, addr=0x0080, size=64)
     with pl.section_vector():
-        pl.simt.launch(_bf16_math_intrinsics, threads=1, args=(out, flags, source))
+        _bf16_math_intrinsics[1](out, flags, source)
 
 
-@pl.simt.function(max_threads=1)
+@pl.vector_function(mode="simt", max_threads=1)
 def _int64_math_intrinsics(
     out,
     source,
@@ -159,7 +159,7 @@ def _int64_math_codegen_kernel(_jit_entry: pl.DT_INT64):
     out = pl.make_tile(out_type, addr=0x0000, size=256)
     source = pl.make_tile(source_type, addr=0x0040, size=256)
     with pl.section_vector():
-        pl.simt.launch(_int64_math_intrinsics, threads=1, args=(out, source))
+        _int64_math_intrinsics[1](out, source)
 
 
 def test_fp32_scalar_math_codegen_maps_native_cce_intrinsics():

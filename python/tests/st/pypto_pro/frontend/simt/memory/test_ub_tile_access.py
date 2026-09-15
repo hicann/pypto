@@ -36,7 +36,7 @@ def _require_a5():
         pytest.skip(f"Current device is {name}, not A5 (Ascend950). Skip.")
 
 
-@pl.simt.function(max_threads=THREADS)
+@pl.vector_function(mode="simt", max_threads=THREADS)
 def ub_tile_add(
     dst,
     src,
@@ -73,7 +73,7 @@ def simt_ub_tile_access(
         pl.load(src, x, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.simt.launch(ub_tile_add, threads=THREADS, args=(dst, src, delta))
+        ub_tile_add[THREADS](dst, src, delta)
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, dst, [0, 0])

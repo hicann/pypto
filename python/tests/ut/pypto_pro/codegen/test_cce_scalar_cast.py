@@ -23,7 +23,7 @@ def _compile_to_cce(kernel) -> str:
     return _add_kernel_header(_assemble_cv_source(cube, vector)).content
 
 
-@pl.simt.function(max_threads=1)
+@pl.vector_function(mode="simt", max_threads=1)
 def _scalar_cast_intrinsics(
     half_out,
     bfloat_out,
@@ -52,11 +52,7 @@ def _scalar_cast_codegen_kernel(value: pl.DT_FP32, integer: pl.DT_INT64):
     float_out = pl.make_tile(float_type, addr=0x00C0, size=32)
     plain_out = pl.make_tile(int_type, addr=0x0100, size=32)
     with pl.section_vector():
-        pl.simt.launch(
-            _scalar_cast_intrinsics,
-            threads=1,
-            args=(half_out, bfloat_out, integer_out, float_out, plain_out, value, integer),
-        )
+        _scalar_cast_intrinsics[1](half_out, bfloat_out, integer_out, float_out, plain_out, value, integer)
 
 
 def _simt_function_source(cpp: str, name: str) -> str:
@@ -80,7 +76,7 @@ def test_scalar_cast_codegen_maps_round_modes_and_cce_builtins():
     assert "__float2int" not in cpp
 
 
-@pl.simt.function(max_threads=1)
+@pl.vector_function(mode="simt", max_threads=1)
 def _scalar_cast_all_intrinsics(
     half_out,
     bfloat_out,
@@ -148,23 +144,19 @@ def _scalar_cast_all_codegen_kernel(
     uint64_out = pl.make_tile(uint64_type, addr=0x0140, size=32)
     float_out = pl.make_tile(float_type, addr=0x0180, size=32)
     with pl.section_vector():
-        pl.simt.launch(
-            _scalar_cast_all_intrinsics,
-            threads=1,
-            args=(
-                half_out,
-                bfloat_out,
-                int32_out,
-                uint32_out,
-                int64_out,
-                uint64_out,
-                float_out,
-                value,
-                int32_value,
-                uint32_value,
-                int64_value,
-                uint64_value,
-            ),
+        _scalar_cast_all_intrinsics[1](
+            half_out,
+            bfloat_out,
+            int32_out,
+            uint32_out,
+            int64_out,
+            uint64_out,
+            float_out,
+            value,
+            int32_value,
+            uint32_value,
+            int64_value,
+            uint64_value,
         )
 
 

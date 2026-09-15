@@ -30,18 +30,18 @@ pypto_pro.language.simt.block_dim() -> Any
 
 ## 约束说明
 
-只能在由@pypto_pro.language.simt.function定义的SIMT入口函数或辅助函数中调用。
+只能在由@pypto_pro.language.vector_function(mode="simt")定义的SIMT入口函数或辅助函数中调用。
 
 ## 返回值说明
 
-返回三维线程块尺寸对象。线程块尺寸由外层JIT Kernel调用pypto_pro.language.simt.launch(..., threads=...)时通过threads参数设置。通过dimensions.x、dimensions.y和dimensions.z读取各维大小，每个分量均为DT_UINT32类型的Scalar。
+返回三维线程块尺寸对象。线程块尺寸由外层JIT Kernel调用`simt_func[threads](...)`时通过方括号中的`threads`设置。通过dimensions.x、dimensions.y和dimensions.z读取各维大小，每个分量均为DT_UINT32类型的Scalar。
 
 ## 调用示例
 
 ```python
 import pypto_pro.language as pl
 
-@pl.simt.function(max_threads=256)
+@pl.vector_function(mode="simt", max_threads=256)
 def write_block_dim_x(
     output: pl.Tensor[[1, 256], pl.DT_UINT32],
 ):
@@ -55,5 +55,5 @@ def simt_block_dim_kernel(
     output: pl.Tensor[[1, 256], pl.DT_UINT32],
 ):
     with pl.section_vector():
-        pl.simt.launch(write_block_dim_x, threads=256, args=(output,))
+        write_block_dim_x[256](output)
 ```

@@ -853,7 +853,7 @@ class ControlFlowParserMixin:
             return_expr = self.parse_expression(stmt.value)
             if not isinstance(return_expr.type, ir.ScalarType):
                 raise ParserTypeError(
-                    "A helper @pl.simt.function must return None or one scalar value",
+                    'A helper @pl.vector_function(mode="simt") must return None or one scalar value',
                     span=span,
                     hint="Return Tile/Tensor data through an input parameter; return scalar results directly.",
                 )

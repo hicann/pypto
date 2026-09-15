@@ -106,16 +106,23 @@ def slot_accessor(node: ast.expr) -> tuple[str, str] | None:
 
 
 def is_vf_function(func_def: ast.FunctionDef) -> bool:
-    """True if ``func_def`` carries the ``@pl.vector_function`` decorator.
+    """Return whether a function carries a SIMD vector-function decorator.
 
-    Only the decorator counts: a plain function that merely CALLS a vector function is a
-    different thing.
+    Only the decorator counts: a plain function that merely calls a vector function is a
+    different thing. Bare @pl.vector_function and explicit mode="simd" are recognized.
     """
     for dec in func_def.decorator_list:
-        if isinstance(dec, ast.Attribute) and dec.attr == "vector_function":
+        call = dec if isinstance(dec, ast.Call) else None
+        target = call.func if call is not None else dec
+        is_vector_decorator = (
+            isinstance(target, ast.Attribute) and target.attr == "vector_function"
+        ) or (isinstance(target, ast.Name) and target.id == "vector_function")
+        if not is_vector_decorator:
+            continue
+        if call is None:
             return True
-        if isinstance(dec, ast.Name) and dec.id == "vector_function":
-            return True
+        mode = next((keyword.value for keyword in call.keywords if keyword.arg == "mode"), None)
+        return isinstance(mode, ast.Constant) and mode.value == "simd"
     return False
 
 

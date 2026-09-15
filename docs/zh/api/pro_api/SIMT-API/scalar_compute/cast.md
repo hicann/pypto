@@ -178,7 +178,7 @@ pypto_pro.language.simt.cast(
 
 ## 约束说明
 
-- 只能在由@pypto_pro.language.simt.function定义的SIMT入口函数或辅助函数中调用。
+- 只能在由@pypto_pro.language.vector_function(mode="simt")定义的SIMT入口函数或辅助函数中调用。
 
 - DT_FP16或DT_BF16转换为DT_INT8、DT_UINT8、DT_INT16、DT_UINT16时，舍入后的结果会钳位到目的整数类型的取值范围。
 
@@ -191,7 +191,7 @@ pypto_pro.language.simt.cast(
 ```python
 import pypto_pro.language as pl
 
-@pl.simt.function(max_threads=256)
+@pl.vector_function(mode="simt", max_threads=256)
 def cast_floor_fp32_to_int32(
     source: pl.Tensor[[1, 256], pl.DT_FP32],
     output: pl.Tensor[[1, 256], pl.DT_INT32],
@@ -210,5 +210,5 @@ def simt_cast_floor_kernel(
     output: pl.Tensor[[1, 256], pl.DT_INT32],
 ):
     with pl.section_vector():
-        pl.simt.launch(cast_floor_fp32_to_int32, threads=256, args=(source, output))
+        cast_floor_fp32_to_int32[256](source, output)
 ```

@@ -44,27 +44,27 @@ def _require_a5():
         pytest.skip(f"Current device is {name}, not A5 (Ascend950). Skip.")
 
 
-@pl.simt.function(max_threads=THREADS_1D)
+@pl.vector_function(mode="simt", max_threads=THREADS_1D)
 def add_1d(data, delta: pl.DT_FP32):
     tid = pl.simt.thread_idx().x
     data[0, tid] = data[0, tid] + delta
 
 
-@pl.simt.function(max_threads=THREADS_2D)
+@pl.vector_function(mode="simt", max_threads=THREADS_2D)
 def add_2d(data, delta: pl.DT_FP32):
     thread = pl.simt.thread_idx()
     tid = thread.x + thread.y * THREADS_X_2D
     data[0, tid] = data[0, tid] + delta
 
 
-@pl.simt.function(max_threads=THREADS_3D)
+@pl.vector_function(mode="simt", max_threads=THREADS_3D)
 def add_3d(data, delta: pl.DT_FP32):
     thread = pl.simt.thread_idx()
     tid = thread.x + thread.y * THREADS_X_3D + thread.z * THREADS_X_3D * THREADS_Y_3D
     data[0, tid] = data[0, tid] + delta
 
 
-@pl.simt.function(max_threads=MAX_THREADS)
+@pl.vector_function(mode="simt", max_threads=MAX_THREADS)
 def write_linear_thread_id(out: pl.Tensor[[1, MAX_THREADS], pl.DT_UINT32]):
     tid = pl.simt.linear_thread_idx()
     out[0, tid] = tid
@@ -82,7 +82,7 @@ def simt_1d_launch(
         pl.load(data, x, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.simt.launch(add_1d, threads=THREADS_1D, args=(data, delta))
+        add_1d[THREADS_1D](data, delta)
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, data, [0, 0])
@@ -100,7 +100,7 @@ def simt_2d_launch(
         pl.load(data, x, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.simt.launch(add_2d, threads=(THREADS_X_2D, THREADS_Y_2D), args=(data, delta))
+        add_2d[THREADS_X_2D, THREADS_Y_2D](data, delta)
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, data, [0, 0])
@@ -118,7 +118,7 @@ def simt_3d_launch(
         pl.load(data, x, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.simt.launch(add_3d, threads=(THREADS_X_3D, THREADS_Y_3D, THREADS_Z_3D), args=(data, delta))
+        add_3d[THREADS_X_3D, THREADS_Y_3D, THREADS_Z_3D](data, delta)
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, data, [0, 0])
@@ -127,23 +127,19 @@ def simt_3d_launch(
 @pl.jit()
 def simt_launch_non_warp(out: pl.Tensor[[1, MAX_THREADS], pl.DT_UINT32]):
     with pl.section_vector():
-        pl.simt.launch(write_linear_thread_id, threads=NON_WARP_THREADS, args=(out,))
+        write_linear_thread_id[NON_WARP_THREADS](out)
 
 
 @pl.jit()
 def simt_launch_non_power_of_two_3d(out: pl.Tensor[[1, MAX_THREADS], pl.DT_UINT32]):
     with pl.section_vector():
-        pl.simt.launch(
-            write_linear_thread_id,
-            threads=(NON_POWER_THREADS_X, NON_POWER_THREADS_Y, NON_POWER_THREADS_Z),
-            args=(out,),
-        )
+        write_linear_thread_id[NON_POWER_THREADS_X, NON_POWER_THREADS_Y, NON_POWER_THREADS_Z](out)
 
 
 @pl.jit()
 def simt_launch_hardware_limit(out: pl.Tensor[[1, MAX_THREADS], pl.DT_UINT32]):
     with pl.section_vector():
-        pl.simt.launch(write_linear_thread_id, threads=MAX_THREADS, args=(out,))
+        write_linear_thread_id[MAX_THREADS](out)
 
 
 def _run_add_launch(kernel, threads, delta):

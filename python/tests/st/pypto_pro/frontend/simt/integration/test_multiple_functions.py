@@ -32,13 +32,13 @@ def _require_a5():
         pytest.skip(f"Current device is {name}, not A5 (Ascend950). Skip.")
 
 
-@pl.simt.function(max_threads=THREADS)
+@pl.vector_function(mode="simt", max_threads=THREADS)
 def add_inplace(data, delta: pl.DT_FP32):
     tid = pl.simt.linear_thread_idx()
     data[0, tid] = data[0, tid] + delta
 
 
-@pl.simt.function(max_threads=THREADS)
+@pl.vector_function(mode="simt", max_threads=THREADS)
 def mul_inplace(data, scale: pl.DT_FP32):
     tid = pl.simt.linear_thread_idx()
     data[0, tid] = data[0, tid] * scale
@@ -57,8 +57,8 @@ def simt_multiple_functions(
         pl.load(data, x, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.simt.launch(add_inplace, threads=THREADS, args=(data, delta))
-        pl.simt.launch(mul_inplace, threads=THREADS, args=(data, scale))
+        add_inplace[THREADS](data, delta)
+        mul_inplace[THREADS](data, scale)
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, data, [0, 0])

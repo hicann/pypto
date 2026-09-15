@@ -34,7 +34,7 @@ def _require_a5():
         pytest.skip(f"Current device is {name}, not A5 (Ascend950). Skip.")
 
 
-@pl.simt.function(max_threads=THREADS)
+@pl.vector_function(mode="simt", max_threads=THREADS)
 def write_thread_context(dst):
     thread = pl.simt.thread_idx()
     block = pl.simt.block_dim()
@@ -67,11 +67,7 @@ def simt_thread_context(out: pl.Tensor[[2, THREADS], pl.DT_UINT32]):
     tile_type = pl.TileType(shape=[2, THREADS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
     dst = pl.make_tile(tile_type, addr=0x0000, size=2 * THREADS * 4)
     with pl.section_vector():
-        pl.simt.launch(
-            write_thread_context,
-            threads=(THREADS_X, THREADS_Y, THREADS_Z),
-            args=(dst,),
-        )
+        write_thread_context[THREADS_X, THREADS_Y, THREADS_Z](dst)
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=0)
         pl.store(out, dst, [0, 0])

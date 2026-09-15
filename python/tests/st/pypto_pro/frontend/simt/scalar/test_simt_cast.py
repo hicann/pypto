@@ -31,7 +31,7 @@ def _require_a5():
         pytest.skip(f"Current device is {name}, not A5 (Ascend950). Skip.")
 
 
-@pl.simt.function(max_threads=ELEMENTS)
+@pl.vector_function(mode="simt", max_threads=ELEMENTS)
 def cast_from_fp16(
     src_tensor: pl.Tensor[[1, ELEMENTS], pl.DT_FP16],
     src_tile,
@@ -81,26 +81,22 @@ def simt_cast_from_fp16(
         pl.load(source_tile, source, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.simt.launch(
-            cast_from_fp16,
-            threads=ELEMENTS,
-            args=(
-                source,
-                source_tile,
-                out_fp32,
-                out_bf16,
-                out_int8,
-                out_int16_rint,
-                out_int16_floor,
-                out_int16_ceil,
-                out_int16_trunc,
-                out_int32,
-                out_int64,
-            ),
+        cast_from_fp16[ELEMENTS](
+            source,
+            source_tile,
+            out_fp32,
+            out_bf16,
+            out_int8,
+            out_int16_rint,
+            out_int16_floor,
+            out_int16_ceil,
+            out_int16_trunc,
+            out_int32,
+            out_int64,
         )
 
 
-@pl.simt.function(max_threads=ELEMENTS)
+@pl.vector_function(mode="simt", max_threads=ELEMENTS)
 def cast_from_bf16(
     src_tensor: pl.Tensor[[1, ELEMENTS], pl.DT_BF16],
     src_tile,
@@ -141,23 +137,10 @@ def simt_cast_from_bf16(
         pl.load(source_tile, source, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.simt.launch(
-            cast_from_bf16,
-            threads=ELEMENTS,
-            args=(
-                source,
-                source_tile,
-                out_fp32,
-                out_fp16,
-                out_uint8,
-                out_uint16,
-                out_uint32,
-                out_uint64,
-            ),
-        )
+        cast_from_bf16[ELEMENTS](source, source_tile, out_fp32, out_fp16, out_uint8, out_uint16, out_uint32, out_uint64)
 
 
-@pl.simt.function(max_threads=ELEMENTS)
+@pl.vector_function(mode="simt", max_threads=ELEMENTS)
 def cast_from_int8(
     src_tensor: pl.Tensor[[1, ELEMENTS], pl.DT_INT8],
     src_tile,
@@ -184,10 +167,10 @@ def simt_cast_from_int8(
         pl.load(source_tile, source, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.simt.launch(cast_from_int8, threads=ELEMENTS, args=(source, source_tile, out_int32, out_int64))
+        cast_from_int8[ELEMENTS](source, source_tile, out_int32, out_int64)
 
 
-@pl.simt.function(max_threads=ELEMENTS)
+@pl.vector_function(mode="simt", max_threads=ELEMENTS)
 def cast_from_int16(
     src_tensor: pl.Tensor[[1, ELEMENTS], pl.DT_INT16],
     src_tile,
@@ -214,10 +197,10 @@ def simt_cast_from_int16(
         pl.load(source_tile, source, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.simt.launch(cast_from_int16, threads=ELEMENTS, args=(source, source_tile, out_int32, out_fp16))
+        cast_from_int16[ELEMENTS](source, source_tile, out_int32, out_fp16)
 
 
-@pl.simt.function(max_threads=ELEMENTS)
+@pl.vector_function(mode="simt", max_threads=ELEMENTS)
 def cast_from_int32(
     src_tensor: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
     src_tile,
@@ -247,14 +230,10 @@ def simt_cast_from_int32(
         pl.load(source_tile, source, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.simt.launch(
-            cast_from_int32,
-            threads=ELEMENTS,
-            args=(source, source_tile, out_int64, out_fp32, out_fp16),
-        )
+        cast_from_int32[ELEMENTS](source, source_tile, out_int64, out_fp32, out_fp16)
 
 
-@pl.simt.function(max_threads=ELEMENTS)
+@pl.vector_function(mode="simt", max_threads=ELEMENTS)
 def cast_from_int64(
     src_tensor: pl.Tensor[[1, ELEMENTS], pl.DT_INT64],
     src_tile,
@@ -284,14 +263,10 @@ def simt_cast_from_int64(
         pl.load(source_tile, source, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.simt.launch(
-            cast_from_int64,
-            threads=ELEMENTS,
-            args=(source, source_tile, out_int32, out_fp32, out_fp16),
-        )
+        cast_from_int64[ELEMENTS](source, source_tile, out_int32, out_fp32, out_fp16)
 
 
-@pl.simt.function(max_threads=ELEMENTS)
+@pl.vector_function(mode="simt", max_threads=ELEMENTS)
 def cast_from_fp32(
     src_tensor: pl.Tensor[[1, ELEMENTS], pl.DT_FP32],
     src_tile,
@@ -347,28 +322,24 @@ def simt_cast_from_fp32(
         pl.load(source_tile, source, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.simt.launch(
-            cast_from_fp32,
-            threads=ELEMENTS,
-            args=(
-                source,
-                source_tile,
-                out_fp16_rint,
-                out_fp16_odd,
-                out_bf16,
-                out_int32_rint,
-                out_int32_round,
-                out_int32_floor,
-                out_int32_ceil,
-                out_int32_trunc,
-                out_uint32,
-                out_int64,
-                out_uint64,
-            ),
+        cast_from_fp32[ELEMENTS](
+            source,
+            source_tile,
+            out_fp16_rint,
+            out_fp16_odd,
+            out_bf16,
+            out_int32_rint,
+            out_int32_round,
+            out_int32_floor,
+            out_int32_ceil,
+            out_int32_trunc,
+            out_uint32,
+            out_int64,
+            out_uint64,
         )
 
 
-@pl.simt.function(max_threads=ELEMENTS)
+@pl.vector_function(mode="simt", max_threads=ELEMENTS)
 def cast_from_uint8(
     src_tensor: pl.Tensor[[1, ELEMENTS], pl.DT_UINT8],
     src_tile,
@@ -395,10 +366,10 @@ def simt_cast_from_uint8(
         pl.load(source_tile, source, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.simt.launch(cast_from_uint8, threads=ELEMENTS, args=(source, source_tile, out_uint32, out_uint64))
+        cast_from_uint8[ELEMENTS](source, source_tile, out_uint32, out_uint64)
 
 
-@pl.simt.function(max_threads=ELEMENTS)
+@pl.vector_function(mode="simt", max_threads=ELEMENTS)
 def cast_from_uint16(
     src_tensor: pl.Tensor[[1, ELEMENTS], pl.DT_UINT16],
     src_tile,
@@ -425,10 +396,10 @@ def simt_cast_from_uint16(
         pl.load(source_tile, source, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.simt.launch(cast_from_uint16, threads=ELEMENTS, args=(source, source_tile, out_uint32, out_bf16))
+        cast_from_uint16[ELEMENTS](source, source_tile, out_uint32, out_bf16)
 
 
-@pl.simt.function(max_threads=ELEMENTS)
+@pl.vector_function(mode="simt", max_threads=ELEMENTS)
 def cast_from_uint32(
     src_tensor: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],
     src_tile,
@@ -458,14 +429,10 @@ def simt_cast_from_uint32(
         pl.load(source_tile, source, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.simt.launch(
-            cast_from_uint32,
-            threads=ELEMENTS,
-            args=(source, source_tile, out_uint64, out_fp32, out_bf16),
-        )
+        cast_from_uint32[ELEMENTS](source, source_tile, out_uint64, out_fp32, out_bf16)
 
 
-@pl.simt.function(max_threads=ELEMENTS)
+@pl.vector_function(mode="simt", max_threads=ELEMENTS)
 def cast_from_uint64(
     src_tensor: pl.Tensor[[1, ELEMENTS], pl.DT_UINT64],
     src_tile,
@@ -495,11 +462,7 @@ def simt_cast_from_uint64(
         pl.load(source_tile, source, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.simt.launch(
-            cast_from_uint64,
-            threads=ELEMENTS,
-            args=(source, source_tile, out_uint64, out_fp32, out_bf16),
-        )
+        cast_from_uint64[ELEMENTS](source, source_tile, out_uint64, out_fp32, out_bf16)
 
 
 def _repeat(values, dtype):

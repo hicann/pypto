@@ -339,7 +339,7 @@ def _validate_simt_body_op(parser: Any, call: ast.Call, _kwargs: dict[str, Any])
         raise ParserSyntaxError(
             f"pl.{op_name}() can only be used inside a SIMT function",
             span=span,
-            hint="Move SIMT-context-dependent logic into @pl.simt.function.",
+            hint="Move SIMT-context-dependent logic into @pl.vector_function(mode=\"simt\").",
         )
     if call.args:
         raise ParserSyntaxError(f"pl.{op_name}() does not accept positional arguments", span=span)
@@ -414,85 +414,55 @@ def _parse_threadfence(parser: Any, call: ast.Call) -> Expr:
     return threadfence(span)
 
 
-@op_impl("simt.launch")
-def _parse_simt_launch(parser: Any, call: ast.Call) -> Expr:
-    """Parse ``pl.simt.launch(callee, threads=..., args=(...))``."""
+def _parse_simt_launch(parser: Any, call: ast.Call, local_name: str, callee_template: Callable) -> Expr:
+    """Parse ``simt_func[threads](args...)`` and lower it to ``simt.launch`` IR."""
+    from pypto_pro.language.parser.decorator import get_simt_max_threads
     from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError
 
     span = parser.span_tracker.get_span(call)
     if parser._current_func_type in (_ir_core.FunctionType.SimtVF, _ir_core.FunctionType.SimtCallee):
-        raise ParserSyntaxError("Nested pl.simt.launch() is not supported", span=span)
+        raise ParserSyntaxError("Nested SIMT vector-function invocation is not supported", span=span)
     if parser.target != _ir_core.SectionKind.Vector:
         raise ParserSyntaxError(
-            "pl.simt.launch() must appear inside 'with pl.section_vector():'",
+            "SIMT vector functions must be invoked inside 'with pl.section_vector():'",
             span=span,
-            hint="SIMT vector functions execute on AIV and cannot be launched from Cube or shared kernel code.",
+            hint="SIMT vector functions execute on AIV and cannot be invoked from Cube or shared kernel code.",
         )
-    if len(call.args) != 1 or not isinstance(call.args[0], ast.Name):
+
+    if call.keywords or any(isinstance(arg, ast.Starred) for arg in call.args):
         raise ParserSyntaxError(
-            "pl.simt.launch() requires one SIMT function name as its positional argument",
+            "SIMT vector-function invocation accepts positional arguments only",
             span=span,
-            hint="Use: pl.simt.launch(my_simt_func, threads=256, args=(out, n))",
+            hint="Use: simt_func[threads](arg0, arg1, ...)",
         )
 
-    keyword_nodes: dict[str, ast.expr] = {}
-    for keyword in call.keywords:
-        if keyword.arg is None or keyword.arg not in ("threads", "args") or keyword.arg in keyword_nodes:
-            raise ParserSyntaxError(
-                "pl.simt.launch() accepts exactly the 'threads' and 'args' keyword arguments",
-                span=span,
-                hint="Use: pl.simt.launch(my_simt_func, threads=256, args=(out, n))",
-            )
-        keyword_nodes[keyword.arg] = keyword.value
-    if set(keyword_nodes) != {"threads", "args"}:
-        raise ParserSyntaxError(
-            "pl.simt.launch() requires both threads= and args=",
-            span=span,
-            hint="Use: pl.simt.launch(my_simt_func, threads=256, args=(out, n))",
-        )
-
-    from pypto_pro.language.parser.decorator import get_simt_max_threads, is_simt_function
-
-    local_name = call.args[0].id
-    callee_template = parser.expr_evaluator.closure_vars.get(local_name)
-    if (
-        not callable(callee_template)
-        or not is_simt_function(callee_template)
-        or get_simt_max_threads(callee_template) is None
-    ):
+    if get_simt_max_threads(callee_template) is None:
         raise ParserTypeError(
-            f"'{local_name}' is not a launchable @pl.simt.function",
-            span=parser.span_tracker.get_span(call.args[0]),
+            f"'{local_name}' is not a launchable "
+            '@pl.vector_function(mode="simt", max_threads=...)',
+            span=parser.span_tracker.get_span(call.func.value),
         )
 
-    threads_node = keyword_nodes["threads"]
+    threads_node = call.func.slice
     if isinstance(threads_node, ast.Tuple):
         if not 1 <= len(threads_node.elts) <= 3:
             raise ParserSyntaxError(
-                "pl.simt.launch() threads tuple must contain one to three dimensions",
+                "SIMT thread configuration must contain one to three dimensions",
                 span=parser.span_tracker.get_span(threads_node),
-                hint="Use threads=N, threads=(x, y), or threads=(x, y, z).",
+                hint="Use simt_func[N](...), simt_func[x, y](...), or simt_func[x, y, z](...).",
             )
-        thread_dims = list(threads_node.elts)
+        thread_nodes = list(threads_node.elts)
     else:
-        thread_dims = [threads_node]
-    thread_dims = [parser.parse_expression(dim) for dim in thread_dims]
+        thread_nodes = [threads_node]
+    thread_dims = [parser.parse_expression(dim) for dim in thread_nodes]
 
-    args_node = keyword_nodes["args"]
-    if not isinstance(args_node, ast.Tuple):
-        raise ParserSyntaxError(
-            "pl.simt.launch() args must be a tuple",
-            span=parser.span_tracker.get_span(args_node),
-            hint="Use args=(out, n); remember the trailing comma for a one-element tuple.",
-        )
-    launch_args = [parser.parse_expression(arg) for arg in args_node.elts]
-    callee = parser._instantiate_simt_function(local_name, callee_template, launch_args, args_node.elts, span)
-    parser._validate_simt_function_arguments(callee, launch_args, args_node.elts, span)
+    launch_args = [parser.parse_expression(arg) for arg in call.args]
+    callee = parser._instantiate_simt_function(local_name, callee_template, launch_args, call.args, span)
+    parser._validate_simt_function_arguments(callee, launch_args, call.args, span)
     try:
         return launch(callee, threads=tuple(thread_dims), args=launch_args, span=span)
     except RuntimeError as error:
         raise ParserTypeError(str(error), span=span) from error
-
 
 def _numeric_literal_value(node: ast.expr) -> int | float | None:
     if isinstance(node, ast.Constant) and type(node.value) in (int, float):
@@ -546,7 +516,7 @@ def _parse_atomic_call(
         raise ParserSyntaxError(
             f"pl.{op_name}() can only be used inside a SIMT function",
             span=span,
-            hint="Move SIMT-context-dependent logic into @pl.simt.function.",
+            hint="Move SIMT-context-dependent logic into @pl.vector_function(mode=\"simt\").",
         )
 
     short_name = op_name[len("simt."):]
@@ -607,7 +577,7 @@ def _parse_simt_cast(parser: Any, call: ast.Call) -> Expr:
         raise ParserSyntaxError(
             "pl.simt.cast() can only be used inside a SIMT function",
             span=span,
-            hint="Move SIMT-context-dependent logic into @pl.simt.function.",
+            hint="Move SIMT-context-dependent logic into @pl.vector_function(mode=\"simt\").",
         )
 
     if len(call.args) != 2:
@@ -667,7 +637,7 @@ def _parse_simt_bitcast(parser: Any, call: ast.Call) -> Expr:
         raise ParserSyntaxError(
             "pl.simt.bitcast() can only be used inside a SIMT function",
             span=span,
-            hint="Move SIMT-context-dependent logic into @pl.simt.function.",
+            hint="Move SIMT-context-dependent logic into @pl.vector_function(mode=\"simt\").",
         )
 
     if call.keywords:
@@ -715,7 +685,7 @@ def _parse_scalar_math(
         raise ParserSyntaxError(
             f"pl.{op_name}() can only be used inside a SIMT function",
             span=span,
-            hint="Move SIMT-context-dependent logic into @pl.simt.function.",
+            hint="Move SIMT-context-dependent logic into @pl.vector_function(mode=\"simt\").",
         )
     if len(call.args) != expected_args or call.keywords:
         raise ParserSyntaxError(

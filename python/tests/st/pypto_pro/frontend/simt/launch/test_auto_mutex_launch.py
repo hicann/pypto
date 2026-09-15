@@ -36,7 +36,7 @@ def _require_a5():
         pytest.skip(f"Current device is {name}, not A5 (Ascend950). Skip.")
 
 
-@pl.simt.function(max_threads=THREADS)
+@pl.vector_function(mode="simt", max_threads=THREADS)
 def auto_mutex_add(data, delta: pl.DT_FP32):
     tid = pl.simt.linear_thread_idx()
     data[0, tid] = data[0, tid] + delta
@@ -52,7 +52,7 @@ def simt_auto_mutex_kernel(
     data = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0])
     with pl.section_vector():
         pl.load(data.current(), x, [0, 0])
-        pl.simt.launch(auto_mutex_add, threads=THREADS, args=(data.current(), delta))
+        auto_mutex_add[THREADS](data.current(), delta)
         pl.store(out, data.current(), [0, 0])
 
 

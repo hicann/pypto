@@ -24,7 +24,7 @@ from pypto_pro import ir
 from pypto_pro.ir._limits import INT64_MAX, INT64_MIN, UINT64_MAX
 import pypto_pro.language as pl
 from pypto_pro.language import Vf as vf  # noqa: N813
-from pypto_pro.language.parser.diagnostics import FinalRejectionError, ParserSyntaxError, ParserTypeError
+from pypto_pro.language.parser.diagnostics import FinalRejectionError, ParserTypeError
 import pytest
 
 _N, _M = 1, 64
@@ -470,29 +470,12 @@ def test_op_without_a_runtime_operand_accepts_a_value_that_fits():
 
 
 # ---------------------------------------------------------------------------
-# Consolidated hardware/limit ranges (the hand-rolled checks migrated onto check_in_range)
+# Consolidated hardware/limit ranges
 # ---------------------------------------------------------------------------
-@pl.simt.function(max_threads=4096)
-def _too_many_threads(dst: pl.Tensor[[1, 256], pl.DT_FP32], src: pl.Tensor[[1, 256], pl.DT_FP32]):
-    tid = pl.simt.linear_thread_idx()
-    dst[0, tid] = src[0, tid]
-
-
-@pl.jit
-def _launch_too_many_threads(x: pl.Tensor[[1, 256], pl.DT_FP32], out: pl.Tensor[[1, 256], pl.DT_FP32]):
-    with pl.section_vector():
-        pl.simt.launch(_too_many_threads, threads=256, args=(out, x))
-
-
 @pytest.mark.soc("950")
 def test_simt_max_threads_range_is_enforced():
-    """max_threads moved onto check_in_range; nothing else pins the bound.
-
-    The check raises a plain ValueError (it is a builder-level guard, not an expression position), so
-    the parser wraps it: the message survives, the type does not.
-    """
-    with pytest.raises(ParserSyntaxError, match=r"max_threads must be in \[1, 2048\], got 4096"):
-        _launch_too_many_threads.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    with pytest.raises(ValueError, match=r"max_threads must be in \[1, 2048\]"):
+        pl.vector_function(mode="simt", max_threads=4096)
 
 
 # ---------------------------------------------------------------------------

@@ -34,7 +34,7 @@ pypto_pro.language.simt.log1p(
 
 ## 约束说明
 
-只能在由@pypto_pro.language.simt.function定义的SIMT入口函数或辅助函数中调用。
+只能在由@pypto_pro.language.vector_function(mode="simt")定义的SIMT入口函数或辅助函数中调用。
 
 ## 返回值说明
 
@@ -55,7 +55,7 @@ pypto_pro.language.simt.log1p(
 ```python
 import pypto_pro.language as pl
 
-@pl.simt.function(max_threads=64)
+@pl.vector_function(mode="simt", max_threads=64)
 def log1p_fp32(
     source: pl.Tensor[[1, 64], pl.DT_FP32],
     output: pl.Tensor[[1, 64], pl.DT_FP32],
@@ -70,5 +70,5 @@ def simt_log1p_kernel(
     output: pl.Tensor[[1, 64], pl.DT_FP32],
 ):
     with pl.section_vector():
-        pl.simt.launch(log1p_fp32, threads=64, args=(source, output))
+        log1p_fp32[64](source, output)
 ```

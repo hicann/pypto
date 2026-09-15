@@ -23,7 +23,7 @@ def _parse_vector_kernel(kernel) -> None:
 
 
 def test_tile_subscript_rejects_negative_constant_index():
-    @pl.simt.function(max_threads=32)
+    @pl.vector_function(mode="simt", max_threads=32)
     def negative_index(dst):
         dst[-1, 0] = 0
 
@@ -32,21 +32,21 @@ def test_tile_subscript_rejects_negative_constant_index():
         tile_type = pl.TileType(shape=[8, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
         dst = pl.make_tile(tile_type, addr=0, size=2048)
         with pl.section_vector():
-            pl.simt.launch(negative_index, threads=32, args=(dst,))
+            negative_index[32](dst)
 
     with pytest.raises(ParserSyntaxError, match="axis 0 must be non-negative, got -1"):
         _parse_vector_kernel(kernel)
 
 
 def test_tensor_subscript_rejects_constant_index_at_dimension_size():
-    @pl.simt.function(max_threads=32)
+    @pl.vector_function(mode="simt", max_threads=32)
     def out_of_bounds(dst: pl.Tensor[[8, 64], pl.DT_FP32]):
         dst[8, 0] = 0
 
     @pl.jit
     def kernel(dst: pl.Tensor[[8, 64], pl.DT_FP32]):
         with pl.section_vector():
-            pl.simt.launch(out_of_bounds, threads=32, args=(dst,))
+            out_of_bounds[32](dst)
 
     with pytest.raises(ParserTypeError, match="axis 0 is out of range for dimension size 8"):
         _parse_vector_kernel(kernel)

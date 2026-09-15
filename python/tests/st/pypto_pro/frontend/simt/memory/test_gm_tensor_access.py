@@ -34,7 +34,7 @@ def _require_a5():
         pytest.skip(f"Current device is {name}, not A5 (Ascend950). Skip.")
 
 
-@pl.simt.function(max_threads=THREADS)
+@pl.vector_function(mode="simt", max_threads=THREADS)
 def gm_add(
     dst: pl.Tensor[[1, THREADS], pl.DT_FP32],
     src: pl.Tensor[[1, THREADS], pl.DT_FP32],
@@ -54,10 +54,10 @@ def simt_gm_add(
     delta: pl.DT_FP32,
 ):
     with pl.section_vector():
-        pl.simt.launch(gm_add, threads=THREADS, args=(out, x, n, delta))
+        gm_add[THREADS](out, x, n, delta)
 
 
-@pl.simt.function(max_threads=GM_DTYPE_THREADS)
+@pl.vector_function(mode="simt", max_threads=GM_DTYPE_THREADS)
 def gm_copy_dtypes(
     src_int8: pl.Tensor[[GM_ROWS, GM_COLS], pl.DT_INT8],
     src_fp16: pl.Tensor[[GM_ROWS, GM_COLS], pl.DT_FP16],
@@ -84,11 +84,7 @@ def simt_gm_copy_dtypes(
     dst_int64: pl.Tensor[[GM_ROWS, GM_COLS], pl.DT_INT64],
 ):
     with pl.section_vector():
-        pl.simt.launch(
-            gm_copy_dtypes,
-            threads=GM_DTYPE_THREADS,
-            args=(src_int8, src_fp16, src_int64, dst_int8, dst_fp16, dst_int64),
-        )
+        gm_copy_dtypes[GM_DTYPE_THREADS](src_int8, src_fp16, src_int64, dst_int8, dst_fp16, dst_int64)
 
 
 @pytest.mark.soc("950")

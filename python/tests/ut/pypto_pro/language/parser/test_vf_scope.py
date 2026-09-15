@@ -72,7 +72,6 @@ def test_plain_helper_does_not_create_a_vf_scope():
     "pl.add(missing_dst, missing_lhs, missing_rhs)",
     "pl.system.bar_all()",
     "pl.mutex.mutex_lock(missing_tile)",
-    "pl.simt.launch(missing_helper)",
     "tile = pl.make_tile(missing_type)",
     "tile_type = pl.TileType(shape=[1, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)",
     "value = pl.get_block_idx()",
@@ -87,6 +86,20 @@ def test_pl_operations_are_rejected_in_vf_scope(statement):
         _parse_body(statement, vector_function=True)
     assert error.value.span["line"] == 2
     assert "Move other pl.* operations outside" in error.value.hint
+
+
+def test_simt_launch_is_rejected_in_vf_scope():
+    @pl.vector_function(mode="simt", max_threads=32)
+    def entry():
+        return
+
+    with pytest.raises(ParserSyntaxError, match="is not supported inside @pl.vector_function"):
+        _parse_body("entry[32]()", vector_function=True, closure={"entry": entry})
+
+
+def test_unknown_indexed_call_does_not_enter_simt_scope_check():
+    with pytest.raises(UnsupportedFeatureError, match="Unsupported indexed function call"):
+        _parse_body("missing_helper[32]()", vector_function=True)
 
 
 @pytest.mark.parametrize("section", ["section_vector", "section_cube"])

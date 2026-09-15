@@ -37,14 +37,14 @@ def test_simt_cast_rejects_ordinary_function():
 
 
 def test_simt_cast_is_available_inside_simt_helper():
-    @pl.simt.function(max_threads=1)
+    @pl.vector_function(mode="simt", max_threads=1)
     def cast_value(value: pl.DT_FP32):
         _test_result = pl.simt.cast(value, pl.DT_FP16, mode=pl.RoundMode.CAST_RINT)
 
     @pl.jit(auto_mutex=False)
     def kernel(value: pl.DT_FP32):
         with pl.section_vector():
-            pl.simt.launch(cast_value, threads=1, args=(value,))
+            cast_value[1](value)
 
     program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     cast_value = program.get_function(cast_value.__name__)
@@ -56,14 +56,14 @@ def test_simt_cast_is_available_inside_simt_helper():
 def test_simt_cast_rejects_unsupported_dtype_pair():
     with pytest.raises(ParserTypeError, match=r"pl\.simt\.cast\(\) does not support"):
 
-        @pl.simt.function(max_threads=1)
+        @pl.vector_function(mode="simt", max_threads=1)
         def unsupported(value: pl.DT_FP16):
             _test_result = pl.simt.cast(value, pl.DT_INT32)
 
         @pl.jit(auto_mutex=False)
         def kernel(value: pl.DT_FP16):
             with pl.section_vector():
-                pl.simt.launch(unsupported, threads=1, args=(value,))
+                unsupported[1](value)
 
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
@@ -71,24 +71,24 @@ def test_simt_cast_rejects_unsupported_dtype_pair():
 def test_simt_cast_rejects_odd_rounding_for_bfloat16():
     with pytest.raises(ParserTypeError, match=r"pl\.simt\.cast\(\) does not support"):
 
-        @pl.simt.function(max_threads=1)
+        @pl.vector_function(mode="simt", max_threads=1)
         def unsupported_mode(value: pl.DT_FP32):
             _test_result = pl.simt.cast(value, pl.DT_BF16, mode=pl.RoundMode.CAST_ODD)
 
         @pl.jit(auto_mutex=False)
         def kernel(value: pl.DT_FP32):
             with pl.section_vector():
-                pl.simt.launch(unsupported_mode, threads=1, args=(value,))
+                unsupported_mode[1](value)
 
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_simt_cast_rejects_tile_operand():
-    @pl.simt.function
+    @pl.vector_function(mode="simt")
     def tile_operand(value):
         _ = pl.simt.cast(value, pl.DT_FP16)
 
-    @pl.simt.function(max_threads=1)
+    @pl.vector_function(mode="simt", max_threads=1)
     def entry(value):
         tile_operand(value)
 
@@ -97,7 +97,7 @@ def test_simt_cast_rejects_tile_operand():
         tile_type = pl.TileType(shape=[1, 32], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
         value = pl.make_tile(tile_type, addr=0, size=128)
         with pl.section_vector():
-            pl.simt.launch(entry, threads=1, args=(value,))
+            entry[1](value)
 
     with pytest.raises(ParserTypeError, match="value must be a scalar expression"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
@@ -106,14 +106,14 @@ def test_simt_cast_rejects_tile_operand():
 def test_simt_cast_rejects_plain_integer_round_mode():
     with pytest.raises(ParserTypeError, match="expects an enum value"):
 
-        @pl.simt.function(max_threads=1)
+        @pl.vector_function(mode="simt", max_threads=1)
         def integer_mode(value: pl.DT_FP32):
             _test_result = pl.simt.cast(value, pl.DT_FP16, mode=1)
 
         @pl.jit(auto_mutex=False)
         def kernel(value: pl.DT_FP32):
             with pl.section_vector():
-                pl.simt.launch(integer_mode, threads=1, args=(value,))
+                integer_mode[1](value)
 
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
@@ -121,14 +121,14 @@ def test_simt_cast_rejects_plain_integer_round_mode():
 def test_simt_cast_rejects_wrong_positional_arity():
     with pytest.raises(ParserSyntaxError, match="requires exactly 2 positional arguments"):
 
-        @pl.simt.function(max_threads=1)
+        @pl.vector_function(mode="simt", max_threads=1)
         def missing_dtype(value: pl.DT_FP32):
             _test_result = pl.simt.cast(value)
 
         @pl.jit(auto_mutex=False)
         def kernel(value: pl.DT_FP32):
             with pl.section_vector():
-                pl.simt.launch(missing_dtype, threads=1, args=(value,))
+                missing_dtype[1](value)
 
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
@@ -136,14 +136,14 @@ def test_simt_cast_rejects_wrong_positional_arity():
 def test_simt_cast_rejects_non_dtype_target():
     with pytest.raises(ParserTypeError, match=r"dtype must be a pl\.DT_\* value"):
 
-        @pl.simt.function(max_threads=1)
+        @pl.vector_function(mode="simt", max_threads=1)
         def invalid_dtype(value: pl.DT_FP32):
             _test_result = pl.simt.cast(value, 1)
 
         @pl.jit(auto_mutex=False)
         def kernel(value: pl.DT_FP32):
             with pl.section_vector():
-                pl.simt.launch(invalid_dtype, threads=1, args=(value,))
+                invalid_dtype[1](value)
 
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
@@ -151,13 +151,13 @@ def test_simt_cast_rejects_non_dtype_target():
 def test_simt_cast_rejects_unexpected_keyword():
     with pytest.raises(ParserSyntaxError, match="only accepts one optional keyword argument"):
 
-        @pl.simt.function(max_threads=1)
+        @pl.vector_function(mode="simt", max_threads=1)
         def unexpected_keyword(value: pl.DT_FP32):
             _test_result = pl.simt.cast(value, pl.DT_FP16, saturate=True)
 
         @pl.jit(auto_mutex=False)
         def kernel(value: pl.DT_FP32):
             with pl.section_vector():
-                pl.simt.launch(unexpected_keyword, threads=1, args=(value,))
+                unexpected_keyword[1](value)
 
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)

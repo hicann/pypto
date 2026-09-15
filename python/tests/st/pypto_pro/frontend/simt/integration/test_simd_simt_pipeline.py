@@ -32,7 +32,7 @@ def _require_a5():
         pytest.skip(f"Current device is {name}, not A5 (Ascend950). Skip.")
 
 
-@pl.simt.function(max_threads=THREADS)
+@pl.vector_function(mode="simt", max_threads=THREADS)
 def simt_add_inplace(data, delta: pl.DT_FP32):
     tid = pl.simt.linear_thread_idx()
     data[0, tid] = data[0, tid] + delta
@@ -55,7 +55,7 @@ def simd_simt_pipeline(
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.muls(simt_data, src, pre_scale)
-        pl.simt.launch(simt_add_inplace, threads=THREADS, args=(simt_data, delta))
+        simt_add_inplace[THREADS](simt_data, delta)
         pl.muls(result, simt_data, post_scale)
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=3)
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=3)

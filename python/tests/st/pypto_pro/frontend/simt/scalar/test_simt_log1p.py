@@ -17,7 +17,7 @@ import torch
 ELEMENTS = 64
 
 
-@pl.simt.function(max_threads=ELEMENTS)
+@pl.vector_function(mode="simt", max_threads=ELEMENTS)
 def log1p_fp32(
     source: pl.Tensor[[1, ELEMENTS], pl.DT_FP32],
     output: pl.Tensor[[1, ELEMENTS], pl.DT_FP32],
@@ -32,7 +32,7 @@ def simt_log1p_fp32(
     output: pl.Tensor[[1, ELEMENTS], pl.DT_FP32],
 ):
     with pl.section_vector():
-        pl.simt.launch(log1p_fp32, threads=ELEMENTS, args=(source, output))
+        log1p_fp32[ELEMENTS](source, output)
 
 
 @pytest.mark.soc("950")

@@ -27,7 +27,7 @@ def _parse_tile_function(function, tile_specs):
     if len(tile_specs) == 1:
         (shape0, dtype0) = tile_specs[0]
 
-        @pl.simt.function(max_threads=1)
+        @pl.vector_function(mode="simt", max_threads=1)
         def entry(tile0):
             function(tile0)
 
@@ -39,12 +39,12 @@ def _parse_tile_function(function, tile_specs):
                 size=4096,
             )
             with pl.section_vector():
-                pl.simt.launch(entry, threads=1, args=(tile0,))
+                entry[1](tile0)
 
     elif len(tile_specs) == 2:
         (shape0, dtype0), (shape1, dtype1) = tile_specs
 
-        @pl.simt.function(max_threads=1)
+        @pl.vector_function(mode="simt", max_threads=1)
         def entry(tile0, tile1):
             function(tile0, tile1)
 
@@ -61,12 +61,12 @@ def _parse_tile_function(function, tile_specs):
                 size=4096,
             )
             with pl.section_vector():
-                pl.simt.launch(entry, threads=1, args=(tile0, tile1))
+                entry[1](tile0, tile1)
 
     elif len(tile_specs) == 3:
         (shape0, dtype0), (shape1, dtype1), (shape2, dtype2) = tile_specs
 
-        @pl.simt.function(max_threads=1)
+        @pl.vector_function(mode="simt", max_threads=1)
         def entry(tile0, tile1, tile2):
             function(tile0, tile1, tile2)
 
@@ -88,7 +88,7 @@ def _parse_tile_function(function, tile_specs):
                 size=4096,
             )
             with pl.section_vector():
-                pl.simt.launch(entry, threads=1, args=(tile0, tile1, tile2))
+                entry[1](tile0, tile1, tile2)
 
     else:
         raise ValueError("Only one to three Tile parameters are supported")
@@ -98,7 +98,7 @@ def _parse_tile_function(function, tile_specs):
 
 
 def test_scalar_math_is_available_in_simt_functions():
-    @pl.simt.function(max_threads=1)
+    @pl.vector_function(mode="simt", max_threads=1)
     def scalar_math(value: pl.DT_FP32, rhs: pl.DT_FP32, addend: pl.DT_FP32):
         transformed = pl.simt.max(pl.simt.min(value, rhs), pl.simt.abs(addend))
         transformed = pl.simt.rsqrt(pl.simt.sqrt(transformed))
@@ -116,7 +116,7 @@ def test_scalar_math_is_available_in_simt_functions():
     @pl.jit(auto_mutex=False)
     def kernel(value: pl.DT_FP32, rhs: pl.DT_FP32, addend: pl.DT_FP32):
         with pl.section_vector():
-            pl.simt.launch(scalar_math, threads=1, args=(value, rhs, addend))
+            scalar_math[1](value, rhs, addend)
 
     program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     scalar_math = program.get_function(scalar_math.__name__)
@@ -149,7 +149,7 @@ def test_scalar_math_is_available_in_simt_functions():
 
 
 def test_scalar_math_supports_fp16_and_bf16_scalars():
-    @pl.simt.function
+    @pl.vector_function(mode="simt")
     def fp16_math(
         src,
         dst,
@@ -157,7 +157,7 @@ def test_scalar_math_supports_fp16_and_bf16_scalars():
         value = src[0, 0]
         dst[0, 0] = pl.simt.fma(pl.simt.round(pl.simt.sin(value)), value, value)
 
-    @pl.simt.function
+    @pl.vector_function(mode="simt")
     def bf16_math(
         src,
         dst,
@@ -181,7 +181,7 @@ def test_scalar_math_supports_fp16_and_bf16_scalars():
 
 
 def test_scalar_math_supports_int64_abs_and_integer_min_max():
-    @pl.simt.function
+    @pl.vector_function(mode="simt")
     def integer_math(
         src,
         dst,
@@ -208,21 +208,21 @@ def test_scalar_math_rejects_ordinary_function():
 
 
 def test_scalar_math_rejects_unsupported_dtype_and_mixed_operands():
-    @pl.simt.function
+    @pl.vector_function(mode="simt")
     def unsupported_log1p(value):
         value[0, 0] = pl.simt.log1p(value[0, 0])
 
     with pytest.raises(ParserTypeError, match="supports only fp32"):
         _parse_tile_function(unsupported_log1p, [([1, 32], pl.DT_FP16)])
 
-    @pl.simt.function
+    @pl.vector_function(mode="simt")
     def unsupported_exp(value):
         value[0, 0] = pl.simt.exp(value[0, 0])
 
     with pytest.raises(ParserTypeError, match="supports only fp16, bfloat16, fp32"):
         _parse_tile_function(unsupported_exp, [([1, 32], pl.DT_INT32)])
 
-    @pl.simt.function
+    @pl.vector_function(mode="simt")
     def mixed_min(lhs, rhs):
         lhs[0, 0] = pl.simt.min(lhs[0, 0], rhs[0, 0])
 
@@ -231,7 +231,7 @@ def test_scalar_math_rejects_unsupported_dtype_and_mixed_operands():
 
 
 def test_scalar_math_rejects_tile_operand():
-    @pl.simt.function
+    @pl.vector_function(mode="simt")
     def unsupported(value):
         _ = pl.simt.sqrt(value)
 
@@ -242,26 +242,26 @@ def test_scalar_math_rejects_tile_operand():
 def test_scalar_math_rejects_wrong_arity_and_keywords():
     with pytest.raises(ParserSyntaxError, match="requires exactly 3 positional arguments"):
 
-        @pl.simt.function(max_threads=1)
+        @pl.vector_function(mode="simt", max_threads=1)
         def missing_addend(value: pl.DT_FP32):
             _test_result = pl.simt.fma(value, value)
 
         @pl.jit(auto_mutex=False)
         def kernel(value: pl.DT_FP32):
             with pl.section_vector():
-                pl.simt.launch(missing_addend, threads=1, args=(value,))
+                missing_addend[1](value)
 
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
     with pytest.raises(ParserSyntaxError, match="requires exactly 1 positional argument"):
 
-        @pl.simt.function(max_threads=1)
+        @pl.vector_function(mode="simt", max_threads=1)
         def keyword_argument(value: pl.DT_FP32):
             _test_result = pl.simt.exp(value=value)
 
         @pl.jit(auto_mutex=False)
         def kernel(value: pl.DT_FP32):
             with pl.section_vector():
-                pl.simt.launch(keyword_argument, threads=1, args=(value,))
+                keyword_argument[1](value)
 
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)

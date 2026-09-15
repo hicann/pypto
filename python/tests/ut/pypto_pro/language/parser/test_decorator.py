@@ -57,7 +57,64 @@ def test_vector_function_marker():
     def vf_body(in_tile, out_tile):
         pass
 
+    decorator = pl.parser.decorator
     assert vf_body._pypto_vector_function is True
+    assert decorator.is_vector_function(vf_body)
+    assert not decorator.is_simt_function(vf_body)
+
+
+def test_vector_function_supports_all_valid_forms():
+    @pl.vector_function
+    def implicit_simd():
+        pass
+
+    @pl.vector_function(mode="simd")
+    def explicit_simd():
+        pass
+
+    @pl.vector_function(mode="simt", max_threads=256)
+    def simt_vector_function():
+        pass
+
+    @pl.vector_function(mode="simt")
+    def simt_helper():
+        pass
+
+    decorator = pl.parser.decorator
+    assert decorator.is_vector_function(implicit_simd)
+    assert decorator.is_vector_function(explicit_simd)
+    assert decorator.is_simt_function(simt_vector_function)
+    assert decorator.is_simt_function(simt_helper)
+    assert decorator.get_simt_max_threads(simt_vector_function) == 256
+    assert decorator.get_simt_max_threads(simt_helper) is None
+
+
+def test_vector_function_empty_call_is_not_supported():
+    with pytest.raises(TypeError, match=r"@pl\.vector_function\(\) is not supported"):
+        pl.vector_function()
+
+
+@pytest.mark.parametrize("mode", ["scalar", "SIMT", 1])
+def test_vector_function_rejects_invalid_mode(mode):
+    with pytest.raises(ValueError, match="mode must be 'simd' or 'simt'"):
+        pl.vector_function(mode=mode)
+
+
+def test_vector_function_rejects_max_threads_in_simd_mode():
+    with pytest.raises(TypeError, match="only supported when mode='simt'"):
+        pl.vector_function(mode="simd", max_threads=32)
+
+
+@pytest.mark.parametrize("max_threads", [True, 1.5, "32"])
+def test_vector_function_rejects_non_integer_max_threads(max_threads):
+    with pytest.raises(TypeError, match="max_threads must be an integer"):
+        pl.vector_function(mode="simt", max_threads=max_threads)
+
+
+@pytest.mark.parametrize("max_threads", [0, 2049])
+def test_vector_function_rejects_out_of_range_max_threads(max_threads):
+    with pytest.raises(ValueError, match=r"max_threads must be in \[1, 2048\]"):
+        pl.vector_function(mode="simt", max_threads=max_threads)
 
 
 def test_is_vector_function():

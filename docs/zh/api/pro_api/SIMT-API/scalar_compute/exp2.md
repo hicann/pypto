@@ -34,7 +34,7 @@ pypto_pro.language.simt.exp2(
 
 ## 约束说明
 
-只能在由@pypto_pro.language.simt.function定义的SIMT入口函数或辅助函数中调用。
+只能在由@pypto_pro.language.vector_function(mode="simt")定义的SIMT入口函数或辅助函数中调用。
 
 ## 返回值说明
 
@@ -45,7 +45,7 @@ pypto_pro.language.simt.exp2(
 ```python
 import pypto_pro.language as pl
 
-@pl.simt.function(max_threads=256)
+@pl.vector_function(mode="simt", max_threads=256)
 def binary_scale(
     exponent: pl.Tensor[[1, 256], pl.DT_FP32],
     output: pl.Tensor[[1, 256], pl.DT_FP32],
@@ -60,5 +60,5 @@ def simt_exp2_kernel(
     output: pl.Tensor[[1, 256], pl.DT_FP32],
 ):
     with pl.section_vector():
-        pl.simt.launch(binary_scale, threads=256, args=(exponent, output))
+        binary_scale[256](exponent, output)
 ```

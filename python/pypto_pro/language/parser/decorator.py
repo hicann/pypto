@@ -20,29 +20,6 @@ _SIMT_FUNCTION_MARKER = "_pypto_simt_function"
 _SIMT_MAX_THREADS_ATTR = "_pypto_simt_max_threads"
 
 
-def simt_function(fn: Callable | None = None, *, max_threads: int | None = None) -> Callable:
-    """Mark a callable for delayed SIMT parsing at its call site."""
-    if fn is None and max_threads is None:
-        raise TypeError("@pl.simt.function requires max_threads or a directly decorated function")
-
-    def decorate(func: Callable) -> Callable:
-        setattr(func, _SIMT_FUNCTION_MARKER, True)
-        setattr(func, _SIMT_MAX_THREADS_ATTR, max_threads)
-        return func
-
-    return decorate(fn) if fn is not None else decorate
-
-
-def is_simt_function(fn: Callable) -> bool:
-    """Return whether *fn* is marked as a SIMT function template."""
-    return bool(getattr(fn, _SIMT_FUNCTION_MARKER, False))
-
-
-def get_simt_max_threads(fn: Callable) -> int | None:
-    """Return the launch bound recorded by @pl.simt.function."""
-    return getattr(fn, _SIMT_MAX_THREADS_ATTR, None)
-
-
 def inline(fn: Callable) -> Callable:
     """Deprecated compatibility marker for inline callables."""
     import warnings
@@ -56,24 +33,68 @@ def inline(fn: Callable) -> Callable:
     return fn
 
 
-def vector_function(fn: Callable) -> Callable:
-    """Mark a callable as a vector-function body expanded at its call site.
+def vector_function(
+    fn: Callable | None = None,
+    *,
+    mode: str | None = None,
+    max_threads: int | None = None,
+) -> Callable:
+    """Mark a callable as a SIMD or SIMT vector function.
 
-    VF register operations must be used inside these functions. The body may
-    call other vector functions and use scalar expressions, ``pl.range``,
-    ``pl.min``, ``pl.max``, and ``pl.const``. Other ``pl.*`` calls belong outside
-    the vector function; pass their results as arguments instead. Execution
-    domain violations are reported by the parser at the offending call.
+    ``@pl.vector_function`` and ``@pl.vector_function(mode="simd")`` declare
+    SIMD vector functions expanded at their call sites. ``mode="simt"`` marks
+    a delayed SIMT template; providing ``max_threads`` makes it launchable via
+    ``fn[threads](...)``, while omitting it declares a SIMT helper.
     """
-    _mark_vector_function(fn)
-    return fn
+    if fn is None and mode is None and max_threads is None:
+        raise TypeError("@pl.vector_function() is not supported; use @pl.vector_function")
+
+    actual_mode = "simd" if mode is None else mode
+    if actual_mode == "simd":
+        if max_threads is not None:
+            raise TypeError("max_threads is only supported when mode='simt'")
+    elif actual_mode == "simt":
+        if max_threads is not None:
+            if isinstance(max_threads, bool) or not isinstance(max_threads, int):
+                raise TypeError("max_threads must be an integer")
+            if not 1 <= max_threads <= 2048:
+                raise ValueError("max_threads must be in [1, 2048]")
+    else:
+        raise ValueError("mode must be 'simd' or 'simt'")
+
+    def decorate(func: Callable) -> Callable:
+        if not callable(func):
+            raise TypeError("@pl.vector_function can only decorate a callable")
+        if actual_mode == "simd":
+            _mark_vector_function(func)
+        else:
+            _mark_simt_function(func, max_threads)
+        return func
+
+    return decorate(fn) if fn is not None else decorate
 
 
 def _mark_vector_function(fn: Callable) -> None:
-    """Set the internal marker used for vector-function call-site expansion."""
+    """Set the internal marker used for SIMD vector-function expansion."""
     setattr(fn, "_pypto_vector_function", True)
 
 
+def _mark_simt_function(fn: Callable, max_threads: int | None) -> None:
+    """Set the existing internal markers used for delayed SIMT parsing."""
+    setattr(fn, _SIMT_FUNCTION_MARKER, True)
+    setattr(fn, _SIMT_MAX_THREADS_ATTR, max_threads)
+
+
 def is_vector_function(fn: Callable) -> bool:
-    """Return whether *fn* is marked as a vector-function body."""
+    """Return whether *fn* is a SIMD vector-function body."""
     return bool(getattr(fn, "_pypto_vector_function", False))
+
+
+def is_simt_function(fn: Callable) -> bool:
+    """Return whether *fn* is marked as a delayed SIMT function template."""
+    return bool(getattr(fn, _SIMT_FUNCTION_MARKER, False))
+
+
+def get_simt_max_threads(fn: Callable) -> int | None:
+    """Return the launch bound recorded for a delayed SIMT function."""
+    return getattr(fn, _SIMT_MAX_THREADS_ATTR, None)

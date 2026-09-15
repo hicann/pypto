@@ -45,7 +45,7 @@ def _assert_target(state, expected):
     torch.testing.assert_close(state[0, 0], expected, rtol=0, atol=0)
 
 
-@pl.simt.function(max_threads=THREADS)
+@pl.vector_function(mode="simt", max_threads=THREADS)
 def atomic_dec_ub(uint32_tile):
     pl.simt.atomic_dec(uint32_tile[0, 0], 255)
 
@@ -61,13 +61,13 @@ def simt_atomic_dec_ub(uint32_state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32]):
         pl.load(uint32_tile, uint32_state, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.simt.launch(atomic_dec_ub, threads=THREADS, args=(uint32_tile,))
+        atomic_dec_ub[THREADS](uint32_tile)
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(uint32_state, uint32_tile, [0, 0])
 
 
-@pl.simt.function(max_threads=THREADS)
+@pl.vector_function(mode="simt", max_threads=THREADS)
 def atomic_dec_gm_all_dtypes(
     uint32_state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],
     uint64_state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT64],
@@ -82,10 +82,10 @@ def simt_atomic_dec_gm_all_dtypes(
     uint64_state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT64],
 ):
     with pl.section_vector():
-        pl.simt.launch(atomic_dec_gm_all_dtypes, threads=THREADS, args=(uint32_state, uint64_state))
+        atomic_dec_gm_all_dtypes[THREADS](uint32_state, uint64_state)
 
 
-@pl.simt.function(max_threads=1)
+@pl.vector_function(mode="simt", max_threads=1)
 def atomic_dec_return_value_gm(
     state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],
     old_values: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],
@@ -99,7 +99,7 @@ def simt_atomic_dec_return_value_gm(
     old_values: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],
 ):
     with pl.section_vector():
-        pl.simt.launch(atomic_dec_return_value_gm, threads=1, args=(state, old_values))
+        atomic_dec_return_value_gm[1](state, old_values)
 
 
 @pytest.mark.soc("950")

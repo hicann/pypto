@@ -33,7 +33,7 @@ def _require_a5():
         pytest.skip(f"Current device is {name}, not A5 (Ascend950). Skip.")
 
 
-@pl.simt.function(max_threads=THREADS)
+@pl.vector_function(mode="simt", max_threads=THREADS)
 def write_multicore_result(dst):
     tid = pl.simt.linear_thread_idx()
     core_id = pl.simt.block_idx().x
@@ -46,7 +46,7 @@ def simt_multicore(out: pl.Tensor[[GRID_BLOCKS, THREADS], pl.DT_UINT32]):
     dst = pl.make_tile(tile_type, addr=0x0000, size=TILE_BYTES)
     with pl.section_vector():
         core_id = pl.get_block_idx()
-        pl.simt.launch(write_multicore_result, threads=THREADS, args=(dst,))
+        write_multicore_result[THREADS](dst)
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=0)
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=0)
         pl.store(out, dst, [core_id, 0])

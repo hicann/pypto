@@ -15,7 +15,7 @@ import torch
 ELEMENTS = 128
 
 
-@pl.simt.function(max_threads=ELEMENTS)
+@pl.vector_function(mode="simt", max_threads=ELEMENTS)
 def fmod_values(
     lhs: pl.Tensor[[1, ELEMENTS], pl.DT_FP32],
     rhs: pl.Tensor[[1, ELEMENTS], pl.DT_FP32],
@@ -32,7 +32,7 @@ def simt_fmod_values(
     out: pl.Tensor[[1, ELEMENTS], pl.DT_FP32],
 ):
     with pl.section_vector():
-        pl.simt.launch(fmod_values, threads=ELEMENTS, args=(lhs, rhs, out))
+        fmod_values[ELEMENTS](lhs, rhs, out)
 
 
 @pytest.mark.soc("950")
