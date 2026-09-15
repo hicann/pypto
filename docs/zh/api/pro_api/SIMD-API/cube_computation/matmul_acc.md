@@ -53,8 +53,6 @@ pypto_pro.language.matmul_acc(
 
 ## 调用示例
 
-### K维分块累加
-
 ```python
 import pypto_pro.language as pl
 

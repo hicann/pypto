@@ -1,6 +1,6 @@
 # Tile创建和操作
 
-Tile表示AI Core片上Buffer中的一个二维数据块，记录该数据块的shape、数据类型、内存空间、排布和绑定地址等信息。数据搬运和计算接口通过Tile访问对应的Buffer区域。开发者使用pypto_pro.language.TileType描述Tile规格，再通过pypto_pro.language.make_tile或pypto_pro.language.make_tile_group为其绑定片上地址。TileGroup支持多块Tile轮转，set_validshape用于设置有效形状，reinterpret用于重声明Tile视图。
+Tile表示AI Core片上Buffer中的二维数据块，记录其shape、数据类型、内存空间、排布和绑定地址等信息，是数据搬运和计算接口的基本操作对象。
 
 ## Tile创建流程
 
