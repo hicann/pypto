@@ -26,13 +26,12 @@ result = pypto_pro.language.astype(x, dtype)
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| x | 输入 | 源标量表达式，Scalar类型。 |
-| dtype | 输入 | 目标数据类型，DataType类型。 |
+| x | 输入 | 源标量表达式，Scalar类型，按位置传递。 |
+| dtype | 输入 | 目标数据类型，DataType类型，按位置传递。 |
 
 ## 约束说明
 
-- 仅支持两个位置参数，不支持关键字参数。
-- x必须是标量表达式，不支持Tile、Tensor或Vector Register。
+无。
 
 ## 返回值说明
 
@@ -43,11 +42,11 @@ result = pypto_pro.language.astype(x, dtype)
 ```python
 import pypto_pro.language as pl
 
-# 将INT32标量转换为INT64。
+# 将INT32标量转换为INT64
 source = pl.const(1, pl.DT_INT32)
 converted = pl.astype(source, pl.DT_INT64)
 
-# 显式统一控制流两个分支的标量类型。
+# 显式统一控制流两个分支的标量类型
 if flag:
     value = pl.astype(lhs, pl.DT_INT64)
 else:

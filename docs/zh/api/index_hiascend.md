@@ -553,6 +553,7 @@
       - [pypto_pro.language.simt.atomic_xor](pro_api/SIMT-API/atomic/atomic_xor.md)
   - [Utils API](pro_api/Utils-API/index.md)
     - [Python语法糖](pro_api/Utils-API/python_syntax_sugar/index.md)
+      - [pypto_pro.language.astype](pro_api/Utils-API/python_syntax_sugar/astype.md)
       - [pypto_pro.language.const](pro_api/Utils-API/python_syntax_sugar/const.md)
       - [pypto_pro.language.max](pro_api/Utils-API/python_syntax_sugar/max.md)
       - [pypto_pro.language.min](pro_api/Utils-API/python_syntax_sugar/min.md)
