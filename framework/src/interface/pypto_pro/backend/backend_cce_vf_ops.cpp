@@ -3655,11 +3655,18 @@ static std::string EmitVFShift(const ir::CallPtr& op, codegen::CodegenBase& code
         EmitB64Interleave(codegen, dst, lo_dst, hi_dst, p + "_ilv");
         EmitB64Zeroing(codegen, dst, dst, mask, p + "_zero");
     } else if (ShiftAmountIsRegister(op, codegen)) {
-        // AscendC ShiftLeft/Right (vector): shift reg must be signed int (int8/int16/int32/int64)
         DataType shift_dt = GetExprDtype(op->args_[2]);
-        CHECK(shift_dt == DataType::INT8 || shift_dt == DataType::INT16 || shift_dt == DataType::INT32 ||
-              shift_dt == DataType::INT64)
-            << op_name << " (vector) shift register only supports INT8/INT16/INT32/INT64, got " << DTypeStr(shift_dt);
+        DataType shift_need = DataType::INT8;
+        if (src_dt.GetBit() == 16) {
+            shift_need = DataType::INT16;
+        } else if (src_dt.GetBit() == 32) {
+            shift_need = DataType::INT32;
+        } else if (src_dt.GetBit() == 64) {
+            shift_need = DataType::INT64;
+        }
+        CHECK(shift_dt == shift_need) << op_name << " (vector) shift register must be the signed type matching the "
+                                      << DTypeStr(src_dt) << " data width, expected " << DTypeStr(shift_need)
+                                      << ", got " << DTypeStr(shift_dt);
         codegen.Emit(vector_instruction + "(" + dst + ", " + src + ", " + shift + ", " + mask + ", " + mode + ");");
     } else {
         codegen.Emit(scalar_instruction + "(" + dst + ", " + src + ", (int16_t)(" + shift + "), " + mask + ", " + mode +
