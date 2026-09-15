@@ -458,7 +458,7 @@ def test_layout_and_fractal_are_spread_from_the_tile_type():
             dtype=pl.DT_FP16,
             target_memory=pl.MemorySpace.Vec,
             layout=pl.ND,
-            fractal=256,
+            fractal=512,
         )
         t = pl.make_tile(tt, addr=0)
         pl.load(t, x, [0, 0])
@@ -467,7 +467,7 @@ def test_layout_and_fractal_are_spread_from_the_tile_type():
     # ND is (blayout, slayout) = (1, 0).
     assert "blayout=1" in ir_str
     assert "slayout=0" in ir_str
-    assert "fractal=256" in ir_str
+    assert "fractal=512" in ir_str
 
 
 def test_an_explicit_kwarg_wins_over_the_tile_type_field():

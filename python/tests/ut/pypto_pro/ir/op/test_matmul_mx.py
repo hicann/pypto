@@ -268,37 +268,37 @@ def test_matmul_mx_acc_rejects_invalid_phase():
 
 
 @pytest.mark.parametrize(
-    "target_memory,layout",
+    "target_memory,layout,shape",
     [
-        (ir.MemorySpace.Mat, ir.TensorLayout.ZZ),
-        (ir.MemorySpace.Mat, ir.TensorLayout.NN),
-        (ir.MemorySpace.ScaleLeft, ir.TensorLayout.ZZ),
-        (ir.MemorySpace.ScaleRight, ir.TensorLayout.NN),
+        (ir.MemorySpace.Mat, ir.TensorLayout.ZZ, [64, 2]),
+        (ir.MemorySpace.Mat, ir.TensorLayout.NN, [2, 64]),
+        (ir.MemorySpace.ScaleLeft, ir.TensorLayout.ZZ, [64, 2]),
+        (ir.MemorySpace.ScaleRight, ir.TensorLayout.NN, [2, 64]),
     ],
 )
-def test_mx_scale_tile_defaults_to_fractal_32(target_memory, layout, monkeypatch):
+def test_mx_scale_tile_defaults_to_fractal_32(target_memory, layout, shape, monkeypatch):
     if target_memory in (ir.MemorySpace.ScaleLeft, ir.MemorySpace.ScaleRight):
         monkeypatch.setenv("PYPTOPRO_JIT_ARCH", "a5")
     tile_type = TileType(
-        shape=[64, 2], dtype=DataType.FP8E8M0, target_memory=target_memory, layout=layout
+        shape=shape, dtype=DataType.FP8E8M0, target_memory=target_memory, layout=layout
     )
     assert tile_type.fractal == 32
 
 
 @pytest.mark.parametrize(
-    "target_memory,layout",
+    "target_memory,layout,shape",
     [
-        (ir.MemorySpace.Mat, ir.TensorLayout.ZZ),
-        (ir.MemorySpace.Mat, ir.TensorLayout.NN),
-        (ir.MemorySpace.ScaleLeft, ir.TensorLayout.ZZ),
-        (ir.MemorySpace.ScaleRight, ir.TensorLayout.NN),
+        (ir.MemorySpace.Mat, ir.TensorLayout.ZZ, [64, 2]),
+        (ir.MemorySpace.Mat, ir.TensorLayout.NN, [2, 64]),
+        (ir.MemorySpace.ScaleLeft, ir.TensorLayout.ZZ, [64, 2]),
+        (ir.MemorySpace.ScaleRight, ir.TensorLayout.NN, [2, 64]),
     ],
 )
-def test_mx_scale_tile_rejects_non_32_fractal(target_memory, layout, monkeypatch):
+def test_mx_scale_tile_rejects_non_32_fractal(target_memory, layout, shape, monkeypatch):
     monkeypatch.setenv("PYPTOPRO_JIT_ARCH", "a5")
     with pytest.raises(ValueError, match="require fractal=32"):
         TileType(
-            shape=[64, 2],
+            shape=shape,
             dtype=DataType.FP8E8M0,
             target_memory=target_memory,
             layout=layout,

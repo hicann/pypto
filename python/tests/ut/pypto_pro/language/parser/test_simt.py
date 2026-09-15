@@ -315,7 +315,7 @@ def test_simt_context_rejects_unknown_named_tuple_field():
             id="memory",
         ),
         pytest.param(
-            [1, 256],
+            [8, 256],
             pl.DT_FP32,
             pl.MemorySpace.Vec,
             pl.DN,

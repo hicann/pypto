@@ -214,18 +214,18 @@ def test_tile_type_bad_fractal_rejected():
 
 
 def test_tile_type_fractal_arbitrary_int_allowed():
-    # Any integer fractal (e.g. 256) is legal and must spread into make_tile
+    # Any valid integer fractal (512/1024/32) is legal and must spread into make_tile
     # unchanged; see test_make_tile.py::test_layout_and_fractal_are_spread_from_the_tile_type.
     @pl.jit
     def k(x: pl.Tensor[[128, 128], pl.DT_FP16]):
         tt = pl.TileType(
-            shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, fractal=256
+            shape=[128, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, fractal=512
         )
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0])
         pl.load(g.next(), x, [0, 0])
 
     ir_str = str(_parse(k))
-    assert "fractal=256" in ir_str
+    assert "fractal=512" in ir_str
 
 
 def test_tile_type_compact_out_of_range_rejected():

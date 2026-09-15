@@ -42,15 +42,15 @@ def _scalar_cast_intrinsics(
 
 @pl.jit
 def _scalar_cast_codegen_kernel(value: pl.DT_FP32, integer: pl.DT_INT64):
-    half_type = pl.TileType(shape=[1, 1], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    bfloat_type = pl.TileType(shape=[1, 1], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec)
-    int_type = pl.TileType(shape=[1, 1], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    float_type = pl.TileType(shape=[1, 1], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    half_out = pl.make_tile(half_type, addr=0x0000, size=2)
-    bfloat_out = pl.make_tile(bfloat_type, addr=0x0040, size=2)
-    integer_out = pl.make_tile(int_type, addr=0x0080, size=4)
-    float_out = pl.make_tile(float_type, addr=0x00C0, size=4)
-    plain_out = pl.make_tile(int_type, addr=0x0100, size=4)
+    half_type = pl.TileType(shape=[1, 16], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    bfloat_type = pl.TileType(shape=[1, 16], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec)
+    int_type = pl.TileType(shape=[1, 8], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
+    float_type = pl.TileType(shape=[1, 8], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+    half_out = pl.make_tile(half_type, addr=0x0000, size=32)
+    bfloat_out = pl.make_tile(bfloat_type, addr=0x0040, size=32)
+    integer_out = pl.make_tile(int_type, addr=0x0080, size=32)
+    float_out = pl.make_tile(float_type, addr=0x00C0, size=32)
+    plain_out = pl.make_tile(int_type, addr=0x0100, size=32)
     with pl.section_vector():
         pl.simt.launch(
             _scalar_cast_intrinsics,
@@ -133,20 +133,20 @@ def _scalar_cast_all_codegen_kernel(
     int64_value: pl.DT_INT64,
     uint64_value: pl.DT_UINT64,
 ):
-    half_type = pl.TileType(shape=[1, 1], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    bfloat_type = pl.TileType(shape=[1, 1], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec)
-    int32_type = pl.TileType(shape=[1, 1], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    uint32_type = pl.TileType(shape=[1, 1], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
-    int64_type = pl.TileType(shape=[1, 1], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Vec)
-    uint64_type = pl.TileType(shape=[1, 1], dtype=pl.DT_UINT64, target_memory=pl.MemorySpace.Vec)
-    float_type = pl.TileType(shape=[1, 1], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    half_out = pl.make_tile(half_type, addr=0x0000, size=2)
-    bfloat_out = pl.make_tile(bfloat_type, addr=0x0040, size=2)
-    int32_out = pl.make_tile(int32_type, addr=0x0080, size=4)
-    uint32_out = pl.make_tile(uint32_type, addr=0x00C0, size=4)
-    int64_out = pl.make_tile(int64_type, addr=0x0100, size=8)
-    uint64_out = pl.make_tile(uint64_type, addr=0x0140, size=8)
-    float_out = pl.make_tile(float_type, addr=0x0180, size=4)
+    half_type = pl.TileType(shape=[1, 16], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    bfloat_type = pl.TileType(shape=[1, 16], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec)
+    int32_type = pl.TileType(shape=[1, 8], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
+    uint32_type = pl.TileType(shape=[1, 8], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
+    int64_type = pl.TileType(shape=[1, 4], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Vec)
+    uint64_type = pl.TileType(shape=[1, 4], dtype=pl.DT_UINT64, target_memory=pl.MemorySpace.Vec)
+    float_type = pl.TileType(shape=[1, 8], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+    half_out = pl.make_tile(half_type, addr=0x0000, size=32)
+    bfloat_out = pl.make_tile(bfloat_type, addr=0x0040, size=32)
+    int32_out = pl.make_tile(int32_type, addr=0x0080, size=32)
+    uint32_out = pl.make_tile(uint32_type, addr=0x00C0, size=32)
+    int64_out = pl.make_tile(int64_type, addr=0x0100, size=32)
+    uint64_out = pl.make_tile(uint64_type, addr=0x0140, size=32)
+    float_out = pl.make_tile(float_type, addr=0x0180, size=32)
     with pl.section_vector():
         pl.simt.launch(
             _scalar_cast_all_intrinsics,

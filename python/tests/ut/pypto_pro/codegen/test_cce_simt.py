@@ -272,15 +272,15 @@ def _atomic_add_gm_codegen_kernel(
 
 @pl.jit
 def _atomic_add_discard_codegen_kernel(value: pl.DT_INT32):
-    tile_type = pl.TileType(shape=[1, 1], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    dst = pl.make_tile(tile_type, addr=0x0000, size=4)
+    tile_type = pl.TileType(shape=[1, 8], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
+    dst = pl.make_tile(tile_type, addr=0x0000, size=32)
     with pl.section_vector():
         pl.simt.launch(_atomic_add_discard, threads=1, args=(dst, value))
 
 
 @pl.jit
 def _atomic_half_discard_codegen_kernel(gm: pl.Tensor[[1, 3], pl.DT_BF16]):
-    tile_type = pl.TileType(shape=[1, 3], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    tile_type = pl.TileType(shape=[1, 16], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
     ub = pl.make_tile(tile_type, addr=0x0000, size=32)
     with pl.section_vector():
         pl.simt.launch(_atomic_half_discard, threads=1, args=(ub, gm))
@@ -293,11 +293,11 @@ def _atomic_rmw_discard_codegen_kernel(
     mask: pl.DT_UINT32,
     limit: pl.DT_UINT32,
 ):
-    numeric_type = pl.TileType(shape=[1, 1], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    unsigned_type = pl.TileType(shape=[1, 1], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
-    numeric = pl.make_tile(numeric_type, addr=0x0000, size=4)
-    bitwise = pl.make_tile(unsigned_type, addr=0x0040, size=4)
-    counter = pl.make_tile(unsigned_type, addr=0x0080, size=4)
+    numeric_type = pl.TileType(shape=[1, 8], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
+    unsigned_type = pl.TileType(shape=[1, 8], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
+    numeric = pl.make_tile(numeric_type, addr=0x0000, size=32)
+    bitwise = pl.make_tile(unsigned_type, addr=0x0040, size=32)
+    counter = pl.make_tile(unsigned_type, addr=0x0080, size=32)
     with pl.section_vector():
         pl.simt.launch(
             _atomic_rmw_discard,

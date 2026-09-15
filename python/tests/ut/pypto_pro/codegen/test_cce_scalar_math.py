@@ -52,10 +52,10 @@ def _fp32_math_intrinsics(
 
 @pl.jit
 def _fp32_math_codegen_kernel(value: pl.DT_FP32):
-    out_type = pl.TileType(shape=[1, 19], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    flags_type = pl.TileType(shape=[1, 2], dtype=pl.DT_BOOL, target_memory=pl.MemorySpace.Vec)
-    out = pl.make_tile(out_type, addr=0x0000, size=76)
-    flags = pl.make_tile(flags_type, addr=0x0080, size=2)
+    out_type = pl.TileType(shape=[1, 32], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+    flags_type = pl.TileType(shape=[1, 32], dtype=pl.DT_BOOL, target_memory=pl.MemorySpace.Vec)
+    out = pl.make_tile(out_type, addr=0x0000, size=128)
+    flags = pl.make_tile(flags_type, addr=0x0080, size=32)
     with pl.section_vector():
         pl.simt.launch(_fp32_math_intrinsics, threads=1, args=(out, flags, value))
 
@@ -91,12 +91,12 @@ def _fp16_math_intrinsics(
 
 @pl.jit
 def _fp16_math_codegen_kernel(_jit_entry: pl.DT_INT64):
-    out_type = pl.TileType(shape=[1, 18], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    flags_type = pl.TileType(shape=[1, 2], dtype=pl.DT_BOOL, target_memory=pl.MemorySpace.Vec)
-    source_type = pl.TileType(shape=[1, 1], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    out = pl.make_tile(out_type, addr=0x0000, size=36)
-    flags = pl.make_tile(flags_type, addr=0x0040, size=2)
-    source = pl.make_tile(source_type, addr=0x0080, size=2)
+    out_type = pl.TileType(shape=[1, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    flags_type = pl.TileType(shape=[1, 32], dtype=pl.DT_BOOL, target_memory=pl.MemorySpace.Vec)
+    source_type = pl.TileType(shape=[1, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    out = pl.make_tile(out_type, addr=0x0000, size=64)
+    flags = pl.make_tile(flags_type, addr=0x0040, size=32)
+    source = pl.make_tile(source_type, addr=0x0080, size=64)
     with pl.section_vector():
         pl.simt.launch(_fp16_math_intrinsics, threads=1, args=(out, flags, source))
 
@@ -132,12 +132,12 @@ def _bf16_math_intrinsics(
 
 @pl.jit
 def _bf16_math_codegen_kernel(_jit_entry: pl.DT_INT64):
-    out_type = pl.TileType(shape=[1, 18], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec)
-    flags_type = pl.TileType(shape=[1, 2], dtype=pl.DT_BOOL, target_memory=pl.MemorySpace.Vec)
-    source_type = pl.TileType(shape=[1, 1], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec)
-    out = pl.make_tile(out_type, addr=0x0000, size=36)
-    flags = pl.make_tile(flags_type, addr=0x0040, size=2)
-    source = pl.make_tile(source_type, addr=0x0080, size=2)
+    out_type = pl.TileType(shape=[1, 32], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec)
+    flags_type = pl.TileType(shape=[1, 32], dtype=pl.DT_BOOL, target_memory=pl.MemorySpace.Vec)
+    source_type = pl.TileType(shape=[1, 32], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec)
+    out = pl.make_tile(out_type, addr=0x0000, size=64)
+    flags = pl.make_tile(flags_type, addr=0x0040, size=32)
+    source = pl.make_tile(source_type, addr=0x0080, size=64)
     with pl.section_vector():
         pl.simt.launch(_bf16_math_intrinsics, threads=1, args=(out, flags, source))
 
@@ -154,10 +154,10 @@ def _int64_math_intrinsics(
 
 @pl.jit
 def _int64_math_codegen_kernel(_jit_entry: pl.DT_INT64):
-    out_type = pl.TileType(shape=[1, 3], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Vec)
-    source_type = pl.TileType(shape=[1, 2], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Vec)
-    out = pl.make_tile(out_type, addr=0x0000, size=24)
-    source = pl.make_tile(source_type, addr=0x0040, size=16)
+    out_type = pl.TileType(shape=[1, 32], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Vec)
+    source_type = pl.TileType(shape=[1, 32], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Vec)
+    out = pl.make_tile(out_type, addr=0x0000, size=256)
+    source = pl.make_tile(source_type, addr=0x0040, size=256)
     with pl.section_vector():
         pl.simt.launch(_int64_math_intrinsics, threads=1, args=(out, source))
 

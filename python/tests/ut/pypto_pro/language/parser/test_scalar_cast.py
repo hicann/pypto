@@ -94,8 +94,8 @@ def test_simt_cast_rejects_tile_operand():
 
     @pl.jit
     def kernel(_jit_entry: pl.DT_INT64):
-        tile_type = pl.TileType(shape=[1, 1], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        value = pl.make_tile(tile_type, addr=0, size=4)
+        tile_type = pl.TileType(shape=[1, 32], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+        value = pl.make_tile(tile_type, addr=0, size=128)
         with pl.section_vector():
             pl.simt.launch(entry, threads=1, args=(value,))
 

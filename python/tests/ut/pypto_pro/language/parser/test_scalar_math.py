@@ -167,11 +167,11 @@ def test_scalar_math_supports_fp16_and_bf16_scalars():
         dst[0, 0] = pl.simt.tanh(pl.simt.exp2(value))
         flags[0, 0] = pl.simt.isinf(value)
 
-    fp16_ir = str(_parse_tile_function(fp16_math, [([1, 1], pl.DT_FP16), ([1, 1], pl.DT_FP16)]))
+    fp16_ir = str(_parse_tile_function(fp16_math, [([1, 32], pl.DT_FP16), ([1, 32], pl.DT_FP16)]))
     bf16_ir = str(
         _parse_tile_function(
             bf16_math,
-            [([1, 1], pl.DT_BF16), ([1, 1], pl.DT_BF16), ([1, 1], pl.DT_BOOL)],
+            [([1, 32], pl.DT_BF16), ([1, 32], pl.DT_BF16), ([1, 32], pl.DT_BOOL)],
         )
     )
     assert "simt.fma(" in fp16_ir
@@ -190,7 +190,7 @@ def test_scalar_math_supports_int64_abs_and_integer_min_max():
         dst[0, 1] = pl.simt.max(pl.simt.min(src[0, 0], src[0, 1]), src[0, 0])
 
     function_ir = str(
-        _parse_tile_function(integer_math, [([1, 2], pl.DT_INT64), ([1, 2], pl.DT_INT64)])
+        _parse_tile_function(integer_math, [([1, 32], pl.DT_INT64), ([1, 32], pl.DT_INT64)])
     )
     assert "simt.abs(" in function_ir
     assert "simt.min(" in function_ir
@@ -213,21 +213,21 @@ def test_scalar_math_rejects_unsupported_dtype_and_mixed_operands():
         value[0, 0] = pl.simt.log1p(value[0, 0])
 
     with pytest.raises(ParserTypeError, match="supports only fp32"):
-        _parse_tile_function(unsupported_log1p, [([1, 1], pl.DT_FP16)])
+        _parse_tile_function(unsupported_log1p, [([1, 32], pl.DT_FP16)])
 
     @pl.simt.function
     def unsupported_exp(value):
         value[0, 0] = pl.simt.exp(value[0, 0])
 
     with pytest.raises(ParserTypeError, match="supports only fp16, bfloat16, fp32"):
-        _parse_tile_function(unsupported_exp, [([1, 1], pl.DT_INT32)])
+        _parse_tile_function(unsupported_exp, [([1, 32], pl.DT_INT32)])
 
     @pl.simt.function
     def mixed_min(lhs, rhs):
         lhs[0, 0] = pl.simt.min(lhs[0, 0], rhs[0, 0])
 
     with pytest.raises(ParserTypeError, match="same dtype"):
-        _parse_tile_function(mixed_min, [([1, 1], pl.DT_FP16), ([1, 1], pl.DT_FP32)])
+        _parse_tile_function(mixed_min, [([1, 32], pl.DT_FP16), ([1, 32], pl.DT_FP32)])
 
 
 def test_scalar_math_rejects_tile_operand():
@@ -236,7 +236,7 @@ def test_scalar_math_rejects_tile_operand():
         _ = pl.simt.sqrt(value)
 
     with pytest.raises(ParserTypeError, match="must be a scalar expression"):
-        _parse_tile_function(unsupported, [([1, 1], pl.DT_FP32)])
+        _parse_tile_function(unsupported, [([1, 32], pl.DT_FP32)])
 
 
 def test_scalar_math_rejects_wrong_arity_and_keywords():

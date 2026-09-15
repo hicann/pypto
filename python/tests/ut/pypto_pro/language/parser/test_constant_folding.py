@@ -256,14 +256,14 @@ def test_float_divmod_constants_fold_with_promoted_dtype(dtype, lhs, rhs):
 def test_float_divmod_constants_can_define_static_tile_shape():
     @pl.jit(auto_mutex=False)
     def static_float_shape(_jit_entry: pl.DT_INT64):
-        cols = 8.0 // 2.0
+        cols = 16.0 // 2.0
         rows = 7.0 % 2.0
         tile_type = pl.TileType(shape=[int(rows), int(cols)], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
         tile = pl.make_tile(tile_type, addr=0, size=32)
 
     program, _ = static_float_shape.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     values = _assignments(program.get_function(static_float_shape.__name__))
-    assert list(values["tile"].type.shape) == [1, 4]
+    assert list(values["tile"].type.shape) == [1, 8]
 
 
 def test_nonconstant_operands_keep_runtime_ir():
