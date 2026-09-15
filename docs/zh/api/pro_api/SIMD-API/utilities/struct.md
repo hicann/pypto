@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-创建字段布局在编译期确定的具名结构体变量。字段声明顺序与关键字参数顺序一致。典型用途是通过[ssbuf_store](../memory_data_movement/ssbuf_store.md)/[ssbuf_load](../memory_data_movement/ssbuf_load.md)传递批次号、块号、地址偏移等少量元数据。
+创建字段布局在编译期确定的具名结构体变量。字段声明顺序与关键字参数顺序一致，可用于组织批次号、块号、地址偏移等少量元数据。
 
 ## 函数原型
 
@@ -40,53 +40,11 @@ pypto_pro.language.struct(
 - 字段类型由创建时的初始表达式确定，后续赋值必须与该字段类型兼容，且不会改变字段布局。
 - 数组长度必须为正的编译期常量。运行时只能修改数组元素，不能改变数组长度。
 
-### 与SSBUF配合使用
-
-- 发送端和接收端必须使用完全相同的type_name和字段定义。
-- 用于SSBUF传输时，结构体占用空间必须为4字节的整数倍，并确保offset与结构体占用空间之和不超过可用SSBUF范围。
-- pypto_pro.language.struct本身不提供跨流水或跨核同步；发布和接收顺序参见ssbuf_store/ssbuf_load文档。
-
 ## 返回值说明
 
 返回一个具名struct变量，字段可通过点号访问。若只需要编译期聚合，请使用[pypto_pro.language.make_tuple](make_tuple.md)。
 
 ## 调用示例
-
-### 跨核传递struct
-
-```python
-import pypto_pro.language as pl
-
-
-@pl.jit()
-def struct_kernel(x: pl.Tensor[[1], pl.DT_INT32]):
-    # 创建结构体：标量字段 + 数组字段
-    message = pl.struct("Message", batch=0, block=0, offsets=[0, 0, 0, 0])
-
-    # 修改标量字段
-    message.batch = 8
-    message.block = 1
-
-    # 修改数组字段元素
-    message.offsets[0] = 32768
-    message.offsets[2] = 65536
-
-    # Vector 侧写入 SSBUF，Cube 侧读取
-    with pl.section_vector():
-        if pl.get_subblock_idx() == 0:
-            pl.ssbuf_store(message, 0)
-            pl.system.set_cross_core(
-                pipe=pl.PipeType.S,
-                event_id=15,
-                sync_mode=pl.CrossCoreSyncMode.UNICAST_BLOCK,
-            )
-
-    with pl.section_cube():
-        pl.system.wait_cross_core(pipe=pl.PipeType.S, event_id=15, sync_mode=pl.CrossCoreSyncMode.UNICAST_BLOCK)
-        pl.ssbuf_load(message, 0)
-        pl.printf("batch=%d, block=%d, offset0=%d",
-                  message.batch, message.block, message.offsets[0])
-```
 
 ### 循环读写数组字段
 

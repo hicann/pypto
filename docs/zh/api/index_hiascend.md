@@ -310,8 +310,6 @@
       - [pypto_pro.language.load](pro_api/SIMD-API/memory_data_movement/load.md)
       - [pypto_pro.language.load_tile](pro_api/SIMD-API/memory_data_movement/load_tile.md)
       - [pypto_pro.language.move](pro_api/SIMD-API/memory_data_movement/move.md)
-      - [pypto_pro.language.ssbuf_load](pro_api/SIMD-API/memory_data_movement/ssbuf_load.md)
-      - [pypto_pro.language.ssbuf_store](pro_api/SIMD-API/memory_data_movement/ssbuf_store.md)
       - [pypto_pro.language.store](pro_api/SIMD-API/memory_data_movement/store.md)
       - [pypto_pro.language.store_tile](pro_api/SIMD-API/memory_data_movement/store_tile.md)
     - [Tile计算](pro_api/SIMD-API/tile_computation/index.md)

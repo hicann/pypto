@@ -1,165 +1,96 @@
 # 功能调试
 
-PyPTO Pro采用SPMD执行模型，同一份Kernel代码由多个逻辑AI Core并行执行，各工作单元通过[`pypto_pro.language.get_block_idx()`](../../../../api/pro_api/SIMD-API/system_variables/get_block_idx.md)的全局逻辑索引确定数据分片。`block_dim`配置逻辑Block数；混合Kernel中AIC/AIV的实际逻辑核数还取决于两者比例。功能调试应围绕Kernel的编译、下发、多核切分、片上计算和结果写回逐层开展。
+PyPTO Pro Kernel出现功能问题时，先判断问题发生在编译阶段还是执行阶段，再选择对应的定位手段。对于设备侧AIC Error，可采集异常现场并使用离线复现工具定位到源码行。
 
-PyPTO Pro提供[`pypto_pro.language.printf`](../../../../api/pro_api/Utils-API/debugging/printf.md)、[`pypto_pro.language.dump_data`](../../../../api/pro_api/Utils-API/debugging/dump_data.md)、[`pypto_pro.language.pto_assert`](../../../../api/pro_api/Utils-API/debugging/pto_assert.md)和[`pypto_pro.language.trap`](../../../../api/pro_api/Utils-API/debugging/trap.md)等Kernel级调试接口。当Kernel包含`pypto_pro.language.printf`或`pypto_pro.language.dump_data`时，JIT自动启用设备侧调试打印。
+## 编译与执行流程
 
-## 调试流程
+被`@pypto_pro.language.jit()`装饰的Kernel在首次调用时依次完成参数绑定、前端解析与校验、代码生成、编译和Kernel下发。定位问题时，应先根据报错位置和调用栈判断失败环节：
 
-建议按以下顺序定位问题：
-
-1. 构造可稳定复现问题的最小用例，固定输入Shape、数据类型、TilingKey、`block_dim`和随机种子。
-2. 判断问题发生在编译阶段、Kernel下发阶段还是执行阶段。
-3. 先使用单核和小Shape验证单个数据块的计算逻辑，再恢复多核验证数据切分。
-4. 对照可信的CPU或NPU参考实现检查最终结果，并逐步比较中间结果。
-5. 修复后恢复完整Shape、全部TilingKey、全部数据类型和生产核数进行回归。
-6. 发布前移除调试打印、数据转储、调试断言和主动中止逻辑。
-
-## 定位编译问题
-
-被`@pypto_pro.language.jit()`装饰的Kernel在首次调用时触发编译。首次调用失败时，应首先检查Python异常中的源码位置和错误信息，重点确认以下内容：
-
-- Kernel参数的类型标注、Shape和数据类型是否与实际输入一致。
-- Tile的Shape、数据类型和目标内存空间是否满足所调用API的约束。
-- `pypto_pro.language.load`、`pypto_pro.language.move`和`pypto_pro.language.store`的源、目的及偏移是否合法。
-- TilingData字段的名称、类型和使用方式是否一致。
-- TilingKey是否已通过`@pypto_pro.language.jit(tiling_key=...)`绑定，启动时传入的字段是否完整且通过有效性校验。
-- `pypto_pro.language.section_vector()`和`pypto_pro.language.section_cube()`中的操作是否属于对应的执行域。
-- Tile地址范围、内存占用和mutex编号是否存在冲突。
-
-JIT编译产物的基础目录默认为当前工作目录下的`./build/<kernel_name>__<arch>/`。每个编译实例均使用独立的TilingKey子目录：使用TilingKey时为`tk_<packed>/`，其中`<packed>`是Key的十六进制打包值；未使用TilingKey时为`tk_none/`。使用datatype特化时，TilingKey子目录位于`dt_<hash>/`下；使用静态签名特化时，基础目录名称还会包含对应的签名后缀。
-
-可检查以下生成文件辅助定位：
-
-| 位置 | 文件 | 用途 |
-|---|---|---|
-| 当前编译实例的`tk_<packed>/`或`tk_none/`目录 | `kernel.cpp` | 检查生成的Device侧Kernel、参数类型、控制流和数据搬运。 |
-| 当前编译实例的`tk_<packed>/`或`tk_none/`目录 | `call_kernel.cpp` | 检查Host侧参数打包和Kernel启动代码。 |
-| 当前编译实例的`tk_<packed>/`或`tk_none/`目录 | `call_kernel_<hash>.so` | JIT调用的Host侧共享库；文件名包含12位内容哈希。 |
-| 当前编译实例的`tk_<packed>/`或`tk_none/`目录 | `*_tiling.h` | 检查生成的TilingData C结构体布局。 |
-| 基础目录 | `pipeline_generated.py` | 启用自动流水变换时，检查变换后的Kernel实现。 |
-
-这些文件是编译器生成的诊断产物，不应直接修改。需要修复问题时，应修改Python Kernel或其调用代码后重新编译。
-
-## 定位运行问题
-
-Kernel启动是异步操作。Host侧调用完成表示任务已下发，Kernel执行状态通过同步接口确认。调试时在Kernel启动后调用同步接口，使设备侧错误在当前调用点暴露：
+- **前端解析与编译阶段**：参数绑定、Python前端解析或IR校验失败时，优先查看异常中的用户源码位置和错误描述，检查接口参数、Shape、数据类型、内存空间和编译期约束；代码生成或工具链编译失败时，还需结合编译日志和生成代码定位。
+- **下发与执行阶段**：Kernel下发是异步操作，应在启动后同步Stream，使设备侧异常在当前调用点暴露，并保留完整的报错信息和运行日志。
 
 ```python
 kernel[None, block_dim](*args)
 torch.npu.synchronize()
 ```
 
-出现运行异常时，可按以下方式缩小范围：
+出现异常时，可结合报错信息中的错误码快速判断问题所属阶段和组件，并选择相应的定位手段。错误码的分类、含义和处理建议将在后续版本补充。
 
-- 将`block_dim`临时设为`1`，以最小启动规模判断异常是否与多执行组的数据切分、重复写或范围覆盖有关。混合Kernel中该值表示一个CV执行组，组内仍可能包含多个AIC/AIV工作单元；完整语义参见[Kernel函数](../development/kernel_function.md#blockdim的含义与设置)。
-- 将输入缩小到一个或少量Tile，减少循环次数和尾块分支。
-- 固定TilingKey和数据类型，只保留发生问题的编译期分支。
-- 将复杂Kernel按“GM加载、片上计算、GM写回”拆分检查。
-- 对动态偏移、循环边界、有效Shape和尾块长度增加标量打印。
-- 对关键Tensor或Tile增加小窗口数据转储。
+## 常用定位手段
 
-最小启动规模验证通过后必须恢复生产使用的`block_dim`，并检查所有数据是否恰好被一个工作单元处理。`block_dim=1`正确不能证明多执行组切分正确。
+### 使用`pl.printf`打印信息
 
-## Kernel调试接口
+[`pypto_pro.language.printf`](../../../../api/pro_api/Utils-API/debugging/printf.md)用于在Kernel中打印Core编号、循环变量、偏移、Shape和分支标志等标量信息，可辅助确认多核切分、循环边界和运行时参数是否符合预期。多核场景建议通过`pypto_pro.language.get_block_idx()`限制打印的Core，避免日志大量交错。该接口会引入运行时开销，仅用于功能调试，不应用于性能测试。
 
-### 打印标量信息
+### 检测内存问题
 
-使用`pypto_pro.language.printf`打印Core编号、循环变量、偏移、Shape和分支标志等标量信息。当Kernel包含`pypto_pro.language.printf`或`pypto_pro.language.dump_data`时，框架自动开启设备侧调试打印，无需手动设置：
+PyPTO Pro提供Kernel内存检测功能，可通过`@pl.jit(sanitizer=True)`开启。该功能可检测GM访问越界、Tile访问越界、Tile内存区间重叠以及mutex未正确配对等问题，并在Kernel执行结束后输出检测结果。当前仅Ascend 950PR/Ascend 950DT支持该功能。内存检测会产生额外的运行时开销，仅用于功能调试，具体使用方法将在后续版本补充。
 
-```python
-import pypto_pro.language as pl
+### 定位精度问题
 
+当Kernel能够正常执行但结果与参考实现不一致时，可使用[pypto-pro-precision-debug Skill](https://gitcode.com/cann/pypto-gym/blob/master/cannbot-skills/ops/pypto-pro-precision-debug/SKILL.md)进行定位。该Skill提供较为详细的精度定位流程，并汇总了精度调试中的常见问题及处理方法，建议优先参考。
 
-@pl.jit()
-def debug_kernel(out: pl.Tensor[[16], pl.DT_INT32]):
-    core_id = pl.get_block_idx()
-    block_num = pl.get_block_num()
-    if core_id == 0:
-        pl.printf("core_id=%d, block_num=%d\n", core_id, block_num, loc=True)
+### 查看build产物
+
+JIT编译产物默认位于当前工作目录下的`build`目录；设置`ASCEND_WORK_PATH`后，位于`${ASCEND_WORK_PATH}/PYPTO_PRO/build`目录。可重点查看以下文件：
+
+| 文件 | 用途 |
+| --- | --- |
+| `kernel.cpp` | 编译器生成的设备侧Kernel源码，可用于检查参数类型、控制流、地址计算和数据搬运。 |
+| `pipeline_generated.py` | 启用[自动CV并行流水](../advanced_programming/auto_parallel_pipeline.md)后生成的自动核间流水排布代码，可用于检查stage排布、preload和核间同步。 |
+
+以上文件均为编译器生成的诊断产物。定位到问题后，应修改原始Python Kernel并重新编译，不要直接修改生成文件。
+
+## AIC Error信息采集
+
+Kernel在设备上触发越界读写、死锁超时等AIC Error后，可通过异常dump和离线复现工具还原现场，并将Error PC定位到Kernel源码行。
+
+### 采集前配置
+
+执行用例前设置一个可写的工作目录：
+
+```bash
+export ASCEND_WORK_PATH=./wk
 ```
 
-`pypto_pro.language.printf`的格式串必须是编译时常量，仅支持受限的C `printf`格式。其中`%d`和`%i`用于有符号整数，`%u`用于无符号整数，`%x`用于十六进制，`%p`用于指针，`%f`仅支持FP32。打印内容通过设备侧打印机制输出，具体查看位置由运行环境的日志配置决定。
+采集前请确保未设置`NPU_COLLECT_PATH`；如果已经设置，可执行`unset NPU_COLLECT_PATH`将其取消，否则无法生成离线复现所需的数据文件。建议在独立子进程中运行问题用例，以确保异常数据完整生成。
 
-多核Kernel中的打印会由每个Core分别执行，容易产生大量交错日志。通常应暂时使用单核，或通过`pypto_pro.language.get_block_idx()`仅打印指定Core的信息。`pypto_pro.language.printf`有显著运行时开销，不得用于性能测量。
+异常发生后，相关文件保存在以下目录：
 
-### 转储Tensor或Tile
-
-使用`pypto_pro.language.dump_data`打印GM Tensor或片上Tile的数据。优先指定`offsets`和`shapes`转储小窗口，避免输出量过大：
-
-```python
-# 打印二维Tensor左上角的8 × 8窗口
-pl.dump_data(out, offsets=[0, 0], shapes=[8, 8], loc=True)
-
-# 打印当前Vector Tile
-pl.dump_data(tile_out)
+```text
+${ASCEND_WORK_PATH}/extra-info/data-dump/<device_id>/
 ```
 
-使用时需满足以下约束：
+主要包括：
 
-- `offsets`和`shapes`必须同时提供或同时省略，列表长度必须等于数据维数。
-- Tensor窗口的最内维stride必须在编译期确定为`1`。
-- Vec、Left和Right Tile转储时无需用户提供`workspace`。
-- Acc（L0C）Tile必须通过`workspace`传入GM Tensor作为中转空间，`workspace`的数据类型应与Tile相同，Shape不得小于待转储区域。
-- 多核场景应限制转储Core和转储窗口，避免不同Core的输出相互干扰。
+| 产物 | 用途 |
+| --- | --- |
+| dump数据文件 | 保存输入、输出和workspace Tensor的Shape、数据类型及原始数据。 |
+| `<kernel>_launch_args.json` | 保存Kernel名称、`block_dim`以及完整的指针和标量启动参数。 |
+| `<kernel>_call_kernel.so` | 带调试信息的Kernel执行体，用于离线复现和源码行定位。 |
+| `call_kernel_<digest>.so` | 原始JIT产物副本，用于比对和高保真复现。 |
+| `kernel.cpp`、`call_kernel.cpp`和相关头文件 | 异常Kernel对应的源码副本。 |
 
-`pypto_pro.language.dump_data`的内容通过设备侧打印机制输出，具体查看位置由运行环境的日志配置决定。该接口会改变Kernel的执行开销，仅用于功能定位。
+### 离线复现与定位
 
-### 检查运行条件
+使用以下命令解析dump并复现异常：
 
-使用`pypto_pro.language.pto_assert`检查动态偏移、循环边界和运行时标志。条件必须是BOOL标量：
-
-```python
-pl.pto_assert(offset < total_length, "offset=%d, total=%d", offset, total_length, loc=True)
+```bash
+python tools/scripts/debug_aicore_error_pro_repro.py \
+    -p <dump_dir> \
+    [-d <device_id>] \
+    [-out <output_dir>] \
+    [-t <seconds>]
 ```
 
-`pypto_pro.language.pto_assert`在条件不满足时通过设备侧打印机制记录信息，不会中止Kernel，也不会在Host侧抛出异常。因此，不能依赖`pypto_pro.language.pto_assert`阻止越界访问或保证后续代码安全。需要无条件停止执行时可使用`pypto_pro.language.trap()`，但该接口会直接中止Kernel，仅应在明确的调试分支中临时使用。
+其中，`-p`指向`extra-info/data-dump/<device_id>`目录；`-d`用于覆盖从目录名解析出的Device ID；`-out`用于指定报告输出目录；`-t`用于设置单次复现的超时时间，默认值为600秒。
 
-## 精度问题定位
+工具会恢复Tensor数据和Kernel启动参数，生成并执行单算子复现脚本，再从本次运行的plog中提取Error PC。主要输出包括：
 
-### 建立可复现的精度基线
+- `test_single_op.py`：可独立执行的单算子复现脚本。
+- `reproduction_report.txt`：复现结果、出错Core、Error PC、符号、源码行、inline调用链和源码上下文。
+- `reproduction_report--singlecommit.txt`：超时类故障的singlecommit诊断结果。仅超时类故障生成。
 
-精度比对应保证测试输入、Shape、数据类型和布局一致。随机输入应固定随机种子，并保留问题输入。可使用`torch.testing.assert_close`比较实际结果和参考结果：
+对于超时类故障，工具会自动在singlecommit模式下重跑：若singlecommit下执行成功，说明问题与核间并发或同步时序有关；若仍然失败，则应结合报告中的卡死Core和源码位置继续排查。
 
-```python
-kernel[None, block_dim](*args)
-torch.npu.synchronize()
-
-torch.testing.assert_close(
-    actual.cpu(),
-    expected.cpu(),
-    rtol=rtol,
-    atol=atol,
-)
-```
-
-`rtol`和`atol`应根据输入数据类型、累加数据类型、计算规模和算法误差确定，不应为了使失败用例通过而任意放宽阈值。比较前还应分别检查NaN、Inf、最大绝对误差、最大相对误差及首个错误位置。
-
-### 逐层比较中间结果
-
-最终结果不一致时，可沿数据流逐层定位：
-
-1. 检查每个Core计算的首个和末个GM偏移，确认多核覆盖范围。
-2. 转储GM加载后的Tile，确认Shape、stride、offset和尾块填充值。
-3. 转储关键计算步骤后的Tile，确定首次产生误差的位置。
-4. 检查写回前的有效Shape和写回偏移，排除尾块越界或结果覆盖。
-5. 对Cube计算检查左右矩阵的布局、转置方式、L0A/L0B格式和累加数据类型。
-
-应优先转储一个Core、一个Tile和少量元素。确认当前层正确后再向下一层移动，避免一次加入大量调试代码而改变问题表现。
-
-## 常见问题检查
-
-| 现象 | 重点检查项 |
-|---|---|
-| 单核正确，多核错误 | 数据分片是否遗漏或重叠，是否按`pypto_pro.language.get_block_num()`返回的实际Block数切分，尾块是否分配均衡。 |
-| 仅部分Shape错误 | Tile数量的向上取整、尾块有效Shape、补齐值、动态stride和边界条件。 |
-| 仅某个TilingKey错误 | 启动时Key字段、Key有效性约束、编译期分支以及对应产物目录。 |
-| 结果整体错位 | `make_tensor`的Shape和stride、load/store偏移、布局解释和转置设置。 |
-| 误差随归约长度增大 | 累加数据类型、计算顺序、类型转换和舍入方式。 |
-| 偶发错误或结果不稳定 | Tile复用时的同步、mutex配置、流水间依赖以及跨核写冲突。 |
-| Kernel无Host异常但日志有断言失败 | `pypto_pro.language.pto_assert`只记录日志，不会中止Kernel。 |
-| 加入打印后性能显著下降 | `printf`和`dump_data`包含设备侧调试开销，属于预期现象。 |
-
-## 调试完成后的检查
-
-问题修复后，应移除或关闭所有`pypto_pro.language.printf`、`pypto_pro.language.dump_data`、`pypto_pro.language.pto_assert`和`pypto_pro.language.trap`调用，并关闭不再需要的设备打印编译选项。随后使用生产配置重新编译，覆盖全部目标Shape、数据类型、TilingKey和`block_dim`进行精度与稳定性回归。
+若报告提示`Error PC not found in plog`，应检查CANN是否生成了symbol locator日志及日志目录配置。若报告提示源码行无法解析，应检查`ASCEND_HOME_PATH`和BiSheng工具链是否可用。旧dump缺少`<kernel>_launch_args.json`时，工具会将`block_dim`回退为`1`，依赖多核并发的问题可能无法按原现场复现。

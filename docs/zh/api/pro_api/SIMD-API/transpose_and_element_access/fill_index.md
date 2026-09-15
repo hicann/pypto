@@ -14,9 +14,9 @@
 
 ## 功能说明
 
-向目标Tile填充从start开始的连续整数序列：out[j] = start + j。
+以start为起始值，产生连续整数序列填入目标Tile：out[j] = start + j。
 
-典型场景：生成位置编码、初始化索引Tile用于排序或gather操作。
+典型场景：生成位置编码所需的递增索引，或初始化用于排序、gather的索引。
 
 ## 函数原型
 
@@ -58,17 +58,15 @@ START = 0
 def fill_index_kernel(
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT32],
 ):
-    tt = pl.TileType(shape=[1, 64], valid_shape=[-1, -1],
+    tt = pl.TileType(shape=[1, 128], valid_shape=[-1, -1],
                      dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
     tile_out = pl.make_tile_group(type=tt, addrs=0x0000, mutex_ids=[0])
     with pl.section_vector():
         m_dim = out.shape[0]
         n_dim = out.shape[1]
         for i in pl.range(0, m_dim, 1):
-            for j in pl.range(0, n_dim, 64):
-                cur_out = tile_out.current()
-                valid_n = pl.min(64, n_dim - j)
-                pl.set_validshape(cur_out, [1, valid_n])
-                pl.fill_index(cur_out, START + j)
-                pl.store(out, cur_out, [i, j])
+            cur_out = tile_out.current()
+            pl.set_validshape(cur_out, [1, n_dim])
+            pl.fill_index(cur_out, START)
+            pl.store(out, cur_out, [i, 0])
 ```

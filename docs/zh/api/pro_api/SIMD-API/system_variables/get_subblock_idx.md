@@ -41,7 +41,7 @@ pypto_pro.language.get_subblock_idx()主要用于以下两种模式：
 
 1. **insert + Cube模式**：每个子核计算部分结果，用pypto_pro.language.insert拼入L1 Buffer中的NZTile，Cube侧读取合并后的完整数据。详见[insert](../memory_data_movement/insert.md)文档示例。
 
-2. **条件执行**：根据子核号决定是否执行某段代码，例如只让sub-core 0发起pypto_pro.language.ssbuf_store。
+2. **条件执行**：根据子核号决定是否执行某段代码，例如只让sub-core 0执行指定操作。
 
 > [!CAUTION]注意
 > 纯Vector Kernel中的两个子核共享MTE搬运管道，不能由每个子核分别使用pypto_pro.language.store向GM的不同区域写入数据。按子核切分数据搬运时，使用insert + Cube模式。

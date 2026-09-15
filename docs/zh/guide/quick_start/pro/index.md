@@ -7,6 +7,5 @@
 helloworld_simd
 add_simd
 matmul_simd
-cv_fused_simd
 add_simt
 ```
