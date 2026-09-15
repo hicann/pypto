@@ -1418,7 +1418,9 @@ _DEFAULT_LAYOUTS_A5: dict[MemorySpace, TensorLayout] = {
     MemorySpace.ScaleRight: TensorLayout.NN,
 }
 
-_MX_SCALE_FRACTAL = 32
+_DEFAULT_FRACTAL = 512  # fractalABSize
+_ACC_FRACTAL = 1024  # fractalCSize
+_MX_SCALE_FRACTAL = 32  # fractalMxSize
 
 mem_id: int = 0
 
@@ -1494,23 +1496,6 @@ def _apply_default_layout(tt: "TileType") -> None:
         if default_layout is None:
             raise ValueError(f"{tt.target_memory.name} is only supported on A5, got architecture '{arch}'")
 
-    # A tile whose last axis is 1 has only its rows left to align, so the ISA accepts it in one
-    # encoding only: BLayout::RowMajor needs Cols * sizeof(dtype) % 32 == 0, which a 1-wide tile
-    # cannot satisfy, and codegen therefore emits ColMajor (DN). A fractal layout would have its
-    # block layout silently rewritten to something the user did not ask for -- ZN on a [N, 1] Mat
-    # tile would come out NN. Checked before the early return below, because the memory space
-    # where column tiles actually live (Vec) has no default layout and would skip it otherwise.
-    if tt.layout is not None and _has_unit_last_axis(tt.shape) and tt.layout not in (
-        TensorLayout.ND,
-        TensorLayout.DN,
-    ):
-        raise ValueError(
-            f"a tile whose last axis is 1 requires layout ND or DN, got {tt.layout.name}: a "
-            f"1-wide tile cannot meet the 32-byte column alignment a fractal layout needs, so "
-            f"it is always emitted column-major. Drop the layout argument (DN is inferred), or "
-            f"widen the tile if you need {tt.layout.name}."
-        )
-
     if default_layout is None:
         return
 
@@ -1559,7 +1544,7 @@ def _apply_default_layout(tt: "TileType") -> None:
 
     if tt.target_memory == MemorySpace.Acc and tt.fractal is None:
         if tt.dtype in (DataType.FP32, DataType.INT32):
-            tt.fractal = 1024
+            tt.fractal = _ACC_FRACTAL
 
 
 
@@ -2963,6 +2948,7 @@ class TileType:
         self.pad = _normalize_tile_pad(self.pad)
         _validate_subbyte_tile_shape(self)
         _apply_default_layout(self)
+        _validate_tile_layout_alignments(self)
 
 
 # Memory-space address alignment requirements (in bytes).
@@ -3142,6 +3128,117 @@ def _const_shape_ints(shape) -> "list[int] | None":
     ):
         return list(shape)
     return None
+
+
+# Tile config constants, mirrored from pto_tile.hpp TileConfig.
+_ALIGNED_SIZE = 32  # alignedSize
+_FIXED_ROW_SIZE = 16  # fixedRowSize
+_FIXED_COL_SIZE = 16  # fixedColSize
+_FIXED_MX_ROW_SIZE = 16  # fixedMxRowSize
+_FIXED_MX_COL_SIZE = 2  # fixedMxColSize
+
+
+def _validate_tile_layout_alignments(tt: "TileType") -> None:
+    """Reject tile shapes the pto::Tile static_asserts would reject in kernel C++.
+
+    Must run after ``_apply_default_layout`` so the effective layout and fractal
+    defaults (Acc FP32/INT32 -> 1024, MX scale -> 32) are already in place;
+    otherwise a boxed layout would be checked against the wrong inner box.
+    """
+    shape = _const_shape_ints(tt.shape)
+    if shape is None or len(shape) < 2:
+        return  # runtime dims or rank<2: no compile-time alignment to validate
+    rows, cols = shape[0], shape[1]
+    if rows <= 0 or cols <= 0:
+        return
+    dtype_size = max(1, (tt.dtype.get_bit() + 7) // 8)
+
+    # A 1-wide tile has only its rows left to align, so the ISA accepts it in one
+    # encoding only: BLayout::RowMajor needs Cols * sizeof(dtype) % 32 == 0, which
+    # a 1-wide tile cannot satisfy, and codegen therefore emits ColMajor (DN). A
+    # fractal layout would be silently rewritten (e.g. ZN on a [N, 1] tile -> NN).
+    if tt.layout is not None and cols == 1 and tt.layout not in (
+        TensorLayout.ND,
+        TensorLayout.DN,
+    ):
+        raise ValueError(
+            f"a tile whose last axis is 1 requires layout ND or DN, got {tt.layout.name}: a "
+            f"1-wide tile cannot meet the 32-byte column alignment a fractal layout needs, so "
+            f"it is always emitted column-major. Drop the layout argument (DN is inferred), or "
+            f"widen the tile if you need {tt.layout.name}."
+        )
+
+    # Bias tiles are emitted NoneBox with Rows == 1: only the column stride matters.
+    if tt.target_memory == MemorySpace.Bias:
+        stride = cols * dtype_size
+        if stride % _ALIGNED_SIZE != 0:
+            raise ValueError(
+                f"TileType Bias tile shape {tt.shape!r} {cols} * {dtype_size}B = "
+                f"{stride}B must be {_ALIGNED_SIZE}-byte aligned (minimum "
+                f"shape [1, {_ALIGNED_SIZE // dtype_size}] for "
+                f"dtype {tt.dtype.to_string()})."
+            )
+        return
+
+    slayout = _LAYOUT_TO_BS[tt.layout][1] if tt.layout is not None else 0
+
+    # NoneBox (ND/DN, or Vec without a layout): the leading stride must be
+    # 32-byte aligned; the stride axis is Cols for RowMajor and Rows for ColMajor.
+    if slayout == 0:
+        blayout = _LAYOUT_TO_BS[tt.layout][0] if tt.layout is not None else 1
+        if cols == 1:
+            blayout = 2  # codegen forces ColMajor on 1-wide tiles
+        dim = cols if blayout == 1 else rows
+        dim_name = "Cols" if blayout == 1 else "Rows"
+        stride = dim * dtype_size
+        if stride % _ALIGNED_SIZE != 0:
+            raise ValueError(
+                f"Tile with {tt.layout.name if tt.layout is not None else 'default'} layout "
+                f"(no inner box) requires {dim_name} * sizeof(dtype) = {dim} * {dtype_size} "
+                f"= {stride} to be {_ALIGNED_SIZE}-byte aligned, got remainder "
+                f"{stride % _ALIGNED_SIZE}. Pad {dim_name} so that "
+                f"{dim_name} * sizeof(dtype) is a multiple of {_ALIGNED_SIZE}."
+            )
+        return
+
+    # Boxed layout (NZ/ZN/ZZ/NN): inner box mirrors pto_tile.hpp Tile::getInnerRow/
+    # getInnerCol — fractalCSize (_ACC_FRACTAL=1024) is fixed 16x16; fractalMxSize
+    # (_MX_SCALE_FRACTAL=32) and fractalABSize (_DEFAULT_FRACTAL=512) follow slayout:
+    # inner RowMajor → 16 x other, inner ColMajor → other x 16, where
+    # other = alignedSize / sizeof(dtype) for 512 and fixedMxColSize(2) /
+    # fixedMxRowSize(16) for 32.
+    fractal = tt.fractal if tt.fractal is not None else _DEFAULT_FRACTAL
+    if fractal == _ACC_FRACTAL:
+        inner_rows, inner_cols = _FIXED_ROW_SIZE, _FIXED_COL_SIZE
+    elif fractal == _MX_SCALE_FRACTAL:
+        if slayout == 1:  # isInnerRowMajor → fixedMxRowSize=16, fixedMxColSize=2
+            inner_rows, inner_cols = _FIXED_MX_ROW_SIZE, _FIXED_MX_COL_SIZE
+        else:  # inner ColMajor → fixedMxColSize=2, fixedMxRowSize=16
+            inner_rows, inner_cols = _FIXED_MX_COL_SIZE, _FIXED_MX_ROW_SIZE
+    else:  # fractal == _DEFAULT_FRACTAL
+        other_side = _ALIGNED_SIZE // dtype_size
+        if slayout == 1:  # inner RowMajor (NZ, ZZ)
+            inner_rows, inner_cols = _FIXED_ROW_SIZE, other_side
+        else:  # inner ColMajor (ZN, NN)
+            inner_rows, inner_cols = other_side, _FIXED_COL_SIZE
+
+    layout_name = tt.layout.name if tt.layout is not None else "default"
+    _pfx = f"Tile with {layout_name} layout (fractal={fractal})"
+    if not (
+        tt.target_memory == MemorySpace.Vec or fractal == _MX_SCALE_FRACTAL or rows == 1 or rows % inner_rows == 0
+    ):
+        raise ValueError(
+            f"{_pfx} requires Rows ({rows}) to be a multiple of inner box rows "
+            f"({inner_rows}), got remainder {rows % inner_rows}. "
+            f"Pad Rows to a multiple of {inner_rows}, "
+            f"or use Vec memory space, or set Rows=1."
+        )
+    if cols % inner_cols != 0:
+        raise ValueError(
+            f"{_pfx} requires Cols ({cols}) to be a multiple of inner box cols "
+            f"({inner_cols}), got remainder {cols % inner_cols}. "
+            f"Pad Cols to a multiple of {inner_cols}."
+        )
 
 
 def _validate_tile_type_params(tt: "TileType") -> None:

@@ -306,10 +306,10 @@ def test_manual_transpose():
         a: pl.Tensor[[128, 128], pl.DT_FP16],
         output: pl.Tensor[[128, 128], pl.DT_FP16],
     ):
-        src_type = pl.TileType(shape=[8, 16], dtype=pl.DT_FP16)
-        dst_type = pl.TileType(shape=[16, 8], dtype=pl.DT_FP16)
-        src = pl.make_tile(src_type, addr=0x30000, size=256)
-        dst = pl.make_tile(dst_type, addr=0x30100, size=256)
+        src_type = pl.TileType(shape=[16, 32], dtype=pl.DT_FP16)
+        dst_type = pl.TileType(shape=[32, 16], dtype=pl.DT_FP16)
+        src = pl.make_tile(src_type, addr=0x30000, size=1024)
+        dst = pl.make_tile(dst_type, addr=0x30100, size=1024)
         pl.load(src, a, [0, 0])
         pl.transpose(dst, src)
         _test_result = pl.store(output, dst, [0, 0])

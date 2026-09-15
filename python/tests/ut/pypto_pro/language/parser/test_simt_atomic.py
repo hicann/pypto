@@ -89,11 +89,11 @@ def _atomic_add_tensor_kernel(
 
 @pl.jit
 def _atomic_rmw_ops_kernel(int_value: pl.DT_INT32, uint_value: pl.DT_UINT32):
-    int_type = pl.TileType(shape=[1, 1], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    uint_type = pl.TileType(shape=[1, 1], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
-    numeric = pl.make_tile(int_type, addr=0, size=4)
-    bitwise = pl.make_tile(uint_type, addr=32, size=4)
-    counter = pl.make_tile(uint_type, addr=64, size=4)
+    int_type = pl.TileType(shape=[1, 32], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
+    uint_type = pl.TileType(shape=[1, 32], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
+    numeric = pl.make_tile(int_type, addr=0, size=128)
+    bitwise = pl.make_tile(uint_type, addr=128, size=128)
+    counter = pl.make_tile(uint_type, addr=256, size=128)
     with pl.section_vector():
         pl.simt.launch(
             _atomic_rmw_ops_entry,
@@ -102,7 +102,7 @@ def _atomic_rmw_ops_kernel(int_value: pl.DT_INT32, uint_value: pl.DT_UINT32):
         )
 
 
-def _parse_one_tile_function(function, dtype, shape=(1, 1)):
+def _parse_one_tile_function(function, dtype, shape=(1, 32)):
     @pl.simt.function(max_threads=1)
     def entry(tile):
         function(tile)
@@ -125,8 +125,8 @@ def _parse_two_tile_function(function, first_dtype, second_dtype):
 
     @pl.jit
     def kernel(_jit_entry: pl.DT_INT64):
-        first_type = pl.TileType(shape=[1, 1], dtype=first_dtype, target_memory=pl.MemorySpace.Vec)
-        second_type = pl.TileType(shape=[1, 1], dtype=second_dtype, target_memory=pl.MemorySpace.Vec)
+        first_type = pl.TileType(shape=[1, 32], dtype=first_dtype, target_memory=pl.MemorySpace.Vec)
+        second_type = pl.TileType(shape=[1, 32], dtype=second_dtype, target_memory=pl.MemorySpace.Vec)
         first = pl.make_tile(first_type, addr=0, size=4096)
         second = pl.make_tile(second_type, addr=4096, size=4096)
         with pl.section_vector():
@@ -145,7 +145,7 @@ def _parse_tile_scalar_function(function, tile_dtype, scalar_dtype):
 
         @pl.jit
         def kernel(value: pl.DT_INT32):
-            tile_type = pl.TileType(shape=[1, 1], dtype=tile_dtype, target_memory=pl.MemorySpace.Vec)
+            tile_type = pl.TileType(shape=[1, 32], dtype=tile_dtype, target_memory=pl.MemorySpace.Vec)
             tile = pl.make_tile(tile_type, addr=0, size=4096)
             with pl.section_vector():
                 pl.simt.launch(entry, threads=1, args=(tile, value))
@@ -154,7 +154,7 @@ def _parse_tile_scalar_function(function, tile_dtype, scalar_dtype):
 
         @pl.jit
         def kernel(value: pl.DT_UINT32):
-            tile_type = pl.TileType(shape=[1, 1], dtype=tile_dtype, target_memory=pl.MemorySpace.Vec)
+            tile_type = pl.TileType(shape=[1, 32], dtype=tile_dtype, target_memory=pl.MemorySpace.Vec)
             tile = pl.make_tile(tile_type, addr=0, size=4096)
             with pl.section_vector():
                 pl.simt.launch(entry, threads=1, args=(tile, value))
@@ -163,7 +163,7 @@ def _parse_tile_scalar_function(function, tile_dtype, scalar_dtype):
 
         @pl.jit
         def kernel(value: pl.DT_FP32):
-            tile_type = pl.TileType(shape=[1, 1], dtype=tile_dtype, target_memory=pl.MemorySpace.Vec)
+            tile_type = pl.TileType(shape=[1, 32], dtype=tile_dtype, target_memory=pl.MemorySpace.Vec)
             tile = pl.make_tile(tile_type, addr=0, size=4096)
             with pl.section_vector():
                 pl.simt.launch(entry, threads=1, args=(tile, value))
@@ -182,7 +182,7 @@ def _parse_tile_compare_function(function, tile_dtype):
 
     @pl.jit
     def kernel(compare: pl.DT_UINT32, value: pl.DT_INT32):
-        tile_type = pl.TileType(shape=[1, 1], dtype=tile_dtype, target_memory=pl.MemorySpace.Vec)
+        tile_type = pl.TileType(shape=[1, 32], dtype=tile_dtype, target_memory=pl.MemorySpace.Vec)
         tile = pl.make_tile(tile_type, addr=0, size=4096)
         with pl.section_vector():
             pl.simt.launch(entry, threads=1, args=(tile, compare, value))
@@ -251,7 +251,7 @@ def test_half_precision_atomic_add_max_min_are_void_on_ub_tile(dtype):
         pl.simt.atomic_max(dst[0, 1], 2.0)
         pl.simt.atomic_min(dst[0, 2], 3.0)
 
-    function = _parse_one_tile_function(supported_tile, dtype, shape=(1, 3))
+    function = _parse_one_tile_function(supported_tile, dtype, shape=(1, 32))
     function_ir = str(function)
     for op_name in ("atomic_add", "atomic_max", "atomic_min"):
         assert function_ir.count(f"simt.{op_name}") == 1
