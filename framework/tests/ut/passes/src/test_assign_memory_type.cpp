@@ -2492,6 +2492,67 @@ TEST_F(AssignMemoryTypeTest, TestConvertOpsHaveDynValidShape)
         }
     }
 }
+
+TEST_F(AssignMemoryTypeTest, DynamicShapeOutputFallsBackToDdr)
+{
+    PrepareA5Platform();
+    config::SetPassOption(ENABLE_SLICE, true);
+    auto function = std::make_shared<Function>(Program::GetInstance(), "DynamicShapeOutputFallsBackToDdr",
+                                               "DynamicShapeOutputFallsBackToDdr", nullptr);
+    ASSERT_NE(function, nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("DynamicShapeOutputFallsBackToDdr", function);
+
+    const Shape dynamicShape{-1, NUM_64};
+    const Shape staticShape{NUM_64, NUM_64};
+    const auto dynamicValidShape = CreateTestConstIntVector(dynamicShape);
+    const auto staticValidShape = CreateTestConstIntVector(staticShape);
+    const Offset zeroOffset{0, 0};
+    IRBuilder builder;
+    // Keep ordinary logical tensors independent, following the dynamic-shape graph construction used above.
+    auto incast_0 = builder.CreateTensorVar(DataType::DT_BF16, dynamicShape, dynamicValidShape);
+    auto incast_1 = builder.CreateTensorVar(DataType::DT_BF16, dynamicShape, dynamicValidShape);
+    auto sliceOut_0 = builder.CreateTensorVar(DataType::DT_BF16, staticShape, staticValidShape);
+    auto addOut = builder.CreateTensorVar(DataType::DT_BF16, staticShape, staticValidShape);
+    auto outcast = builder.CreateTensorVar(DataType::DT_BF16, dynamicShape, dynamicValidShape);
+    // Only the first contract output aliases the outcast raw tensor.
+    auto tensor = builder.CreateTensorVar(*function, outcast->GetRawTensor(), zeroOffset, dynamicShape,
+                                          dynamicValidShape);
+    auto sliceOut_1 = builder.CreateTensorVar(DataType::DT_BF16, staticShape, staticValidShape);
+    auto sliceOut_2 = builder.CreateTensorVar(DataType::DT_BF16, staticShape, staticValidShape);
+    auto inputA = builder.CreateTensorVar(DataType::DT_BF16, staticShape, staticValidShape);
+    auto inputB = builder.CreateTensorVar(DataType::DT_BF16, staticShape, staticValidShape);
+    auto amulbOut = builder.CreateTensorVar(DataType::DT_BF16, staticShape, staticValidShape);
+
+    auto& sliceOp_0 = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_SLICE, {incast_0}, {sliceOut_0});
+    sliceOp_0.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_ADD, {sliceOut_0, sliceOut_0}, {addOut});
+    auto& contractOp_0 = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_CONTRACT, {addOut}, {tensor});
+    contractOp_0.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto& sliceOp_1 = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_SLICE, {tensor}, {sliceOut_1});
+    sliceOp_1.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_L1));
+    auto& sliceOp_A = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_SLICE, {sliceOut_1}, {inputA});
+    sliceOp_A.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_L0A));
+    auto& sliceOp_2 = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_SLICE, {incast_1}, {sliceOut_2});
+    sliceOp_2.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_L1));
+    auto& sliceOp_B = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_SLICE, {sliceOut_2}, {inputB});
+    sliceOp_B.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}, MemoryType::MEM_L0B));
+    IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_A_MUL_B, {inputA, inputB}, {amulbOut});
+    auto& contractOp_1 = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_CONTRACT, {amulbOut}, {outcast});
+    contractOp_1.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+
+    function->inCasts_.push_back(incast_0);
+    function->inCasts_.push_back(incast_1);
+    function->outCasts_.push_back(outcast);
+    EXPECT_EQ(tensor->GetRawTensor(), outcast->GetRawTensor());
+
+    AssignMemoryType assignMemoryType;
+    ASSERT_EQ(assignMemoryType.RunOnFunction(*function), SUCCESS);
+    ASSERT_EQ(assignMemoryType.PostCheck(*function), SUCCESS);
+
+    EXPECT_EQ(tensor->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(outcast->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+}
+
 } // namespace tile_fwk
 
 TEST_F(AssignMemoryTypeTest, ReshapeOutputUsesUbWithMixedViewConsumers)

@@ -42,6 +42,8 @@ private:
 
     Status AssignConfirmedMemoryTypes(Function& function);
 
+    Status AssignDynamicShapeOutputMemoryType(Operation& operation);
+
     Status AssignOpcodeDefinedMemoryTypes(Operation& operation);
 
     Status AssignMatmulInputRequirements(Operation& operation);
