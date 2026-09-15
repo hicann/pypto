@@ -57,6 +57,7 @@ Status AssignMemoryType::RunOnFunction(Function& function)
     RETURN_IF_NOT_SUCCESS(ResolveInconsistentRawTensorMemoryTypes(function));
     RETURN_IF_NOT_SUCCESS(SyncViewAssembleMemoryAttrs(function));
     RETURN_IF_NOT_SUCCESS(FixViewAssembleSemanticMismatch(function));
+    RETURN_IF_NOT_SUCCESS(ResolveUnalignedUbSlices(function));
     RETURN_IF_NOT_SUCCESS(InsertConvertOpsAndInferShape(function));
     RETURN_IF_NOT_SUCCESS(FallbackSameMemoryMoveOps(function));
     RETURN_IF_NOT_SUCCESS(SyncTensorToBe(function));
@@ -2193,6 +2194,29 @@ MemoryType AssignMemoryType::InferOriginalFromRequirements(const LogicalTensorPt
         return *knownRequirements.begin();
     }
     return MemoryType::MEM_DEVICE_DDR;
+}
+
+Status AssignMemoryType::ResolveUnalignedUbSlices(Function& function)
+{
+    for (auto& op : function.Operations()) {
+        if (op.GetOpcode() != Opcode::OP_SLICE || op.iOperand.empty() || op.oOperand.empty()) {
+            continue;
+        }
+        auto input = op.iOperand.front();
+        auto output = op.oOperand.front();
+        if (input == nullptr || output == nullptr || input->GetMemoryTypeOriginal() != MemoryType::MEM_UB ||
+            output->GetMemoryTypeOriginal() != MemoryType::MEM_UB) {
+            continue;
+        }
+        bool aligned = false;
+        RETURN_IF_NOT_SUCCESS(IsSliceFromOffsetAligned(op, input, aligned));
+        if (!aligned) {
+            // A same-memory SLICE becomes a shared-buffer VIEW below. Keep unaligned UB slices
+            // materialized through DDR so vector consumers receive an independently aligned buffer.
+            ForceSetRequirement(input, op, MemoryType::MEM_DEVICE_DDR, "ResolveUnalignedUbSlice");
+        }
+    }
+    return SUCCESS;
 }
 
 Status AssignMemoryType::FallbackSameMemoryMoveOps(Function& function)
