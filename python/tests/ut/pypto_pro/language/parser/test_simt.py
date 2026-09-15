@@ -222,6 +222,7 @@ def test_simt_index_rejects_more_than_three_dimensions():
         source_file=__file__,
         source_lines=source.splitlines(),
         target=ir.SectionKind.Vector,
+        debug_info=ir.IRDebugInfo(),
         closure_vars={"pl": pl, "entry": entry},
     )
     with pytest.raises(ParserSyntaxError, match="one to three dimensions"):
@@ -350,7 +351,7 @@ def test_simt_context_direct_call_uses_named_tuple_field_lowering():
 
 
 def test_simt_dim3_contexts_can_merge_across_control_flow():
-    @pl.simt.function(max_threads=32)
+    @pl.vector_function(mode="simt", max_threads=32)
     def merge_context(dst):
         tid = pl.simt.linear_thread_idx()
         if tid > 0:
@@ -364,7 +365,7 @@ def test_simt_dim3_contexts_can_merge_across_control_flow():
         tile_type = pl.TileType(shape=[1, 32], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
         dst = pl.make_tile(tile_type, addr=0, size=128)
         with pl.section_vector():
-            pl.simt.launch(merge_context, threads=32, args=(dst,))
+            merge_context[32](dst)
 
     program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     function_ir = str(program.get_function("merge_context"))
@@ -375,7 +376,7 @@ def test_simt_dim3_contexts_can_merge_across_control_flow():
 
 
 def test_simt_dim3_context_rejects_plain_tuple_merge():
-    @pl.simt.function(max_threads=32)
+    @pl.vector_function(mode="simt", max_threads=32)
     def merge_context(dst):
         tid = pl.simt.linear_thread_idx()
         if tid > 0:
@@ -389,7 +390,7 @@ def test_simt_dim3_context_rejects_plain_tuple_merge():
         tile_type = pl.TileType(shape=[1, 32], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
         dst = pl.make_tile(tile_type, addr=0, size=128)
         with pl.section_vector():
-            pl.simt.launch(merge_context, threads=32, args=(dst,))
+            merge_context[32](dst)
 
     with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
