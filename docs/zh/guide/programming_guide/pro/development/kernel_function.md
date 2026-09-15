@@ -4,7 +4,7 @@ Kernel是在AI Core上执行的函数，在函数签名中定义输入、输出�
 
 ## 定义Kernel
 
-### 使用jit装饰器
+### 使用JIT装饰器
 
 Kernel函数必须使用`@pypto_pro.language.jit()`装饰：
 

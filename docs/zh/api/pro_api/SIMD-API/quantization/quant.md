@@ -44,9 +44,9 @@ pypto_pro.language.quant(
 |---|---|---|
 | out | 输出 | 目的操作数，Tile类型，存储空间为UB，layout必须为ND。mode=SYM时数据类型为DT_INT8，mode=ASYM时为DT_UINT8；shape和valid_shape须与src一致。 |
 | src | 输入 | 源操作数，Tile类型，存储空间为UB，数据类型为DT_FP32，layout必须为ND；shape和valid_shape须与out一致。 |
-| scale | 输入 | 量化系数，Tile类型，存储空间为UB，数据类型为DT_FP32，layout为ND或DN，取值须为有限正数。若src.valid_shape=[M,N]，则scale.valid_shape须为[M,1]，shape的行数不得小于M且列数必须为1；第i行的scale[i,0]广播到src第i行全部有效列。该值直接与src相乘，因此若使用常见公式$q=round(x/s)$，此处应传入$1/s$。 |
+| scale | 输入 | 量化系数，Tile类型，存储空间为UB，数据类型为DT_FP32，layout为ND或DN，取值须为有限正数。若src.valid_shape=[M,N]，则scale.valid_shape须为[M,1]，shape的行数不得小于M且列数必须为1；有效行数须与输出有效行数一致，物理行数须满足32字节对齐，DT_FP32场景即为8的倍数。第i行的scale[i,0]广播到src第i行全部有效列。该值直接与src相乘，因此若使用常见公式$q=round(x/s)$，此处应传入$1/s$。 |
 | mode | 输入 | 可选，编译期[pypto_pro.language.QuantMode](../basic_data_structures/QuantMode.md)枚举值，不能使用运行时Scalar或Tensor动态指定；可取SYM（默认）或ASYM。模式同时决定输出dtype和是否需要offset。 |
-| offset | 输入 | 量化零点，Tile类型。mode=ASYM时必填，mode=SYM时建议省略；存储空间为UB，数据类型为DT_FP32，layout为ND或DN，shape和valid_shape均须与scale一致；第i行的offset[i,0]广播到对应数据行。 |
+| offset | 输入 | 量化零点，Tile类型。mode=ASYM时必填，mode=SYM时建议省略；存储空间为UB，数据类型为DT_FP32，layout为ND或DN，shape和valid_shape均须与scale一致；有效行数须与输出有效行数一致，物理行数须满足32字节对齐，DT_FP32场景即为8的倍数。第i行的offset[i,0]广播到对应数据行。 |
 
 ## 约束说明
 

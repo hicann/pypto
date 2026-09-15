@@ -45,6 +45,8 @@ def transform(
 外层Kernel的vector section中通过`simt_func[threads](...)`调用SIMT入口函数。
 
 ```python
+import pypto_pro.language as pl
+
 @pl.jit(arch="a5")
 def transform_kernel(
     input_tensor: pl.Tensor[[1, ELEMENTS], pl.DT_FP32],
@@ -80,9 +82,9 @@ torch.npu.synchronize()
 torch.testing.assert_close(output, input_tensor * scale + bias, rtol=0, atol=0)
 ```
 
-本例请求4个外层Vector逻辑Block。在实际启动4个Block时，每个Block执行一次`transform[THREADS](...)`，启动256个线程；最后一个线程块只有232个线程访问数据，其余24个线程被边界判断跳过。
+本例在Host侧将`block_dim`设置为4，表示实际使用4个Vector核。每个Vector核调用一次`transform[THREADS](...)`，各启动一个包含256个线程的Thread Block；最后一个Thread Block只有232个线程访问数据，其余24个线程被边界判断跳过。
 
-Host的kernel[stream, block_dim]中，block_dim表示请求的外层逻辑Block数；SIMT的pypto_pro.language.simt.block_dim()表示块内线程尺寸。None表示使用当前流，更多说明见[blockDim的含义与设置](../kernel_function.md#blockdim的含义与设置)。
+Host启动参数`block_dim`用于配置核数；SIMT函数内的`pypto_pro.language.simt.block_dim()`表示Thread Block在各维度上的线程数，两者含义不同。Host启动参数的调用形式和默认值参见[Kernel核函数](../kernel_function.md#blockdim的含义与设置)。
 
 ## 配置线程与映射数据索引
 
@@ -91,6 +93,8 @@ Host的kernel[stream, block_dim]中，block_dim表示请求的外层逻辑Block�
 一维线程块可使用上例中的全局索引。二维或三维线程块可以使用X维优先的[pypto_pro.language.simt.linear_thread_idx](../../../../../api/pro_api/SIMT-API/execution/linear_thread_idx.md)展开，再结合线程块编号和每块线程总数计算全局索引：
 
 ```python
+import pypto_pro.language as pl
+
 @pl.vector_function(mode="simt", max_threads=256)
 def copy_3d(
     source: pl.Tensor[[1, 1024], pl.DT_FP32],
@@ -111,7 +115,7 @@ def copy_3d(
 |---|---|---|
 | Scalar | 局部变量、算术、比较、布尔表达式及pypto_pro.language.simt标量接口 | 每个线程独立计算；数学函数的多个操作数需具有相同dtype。 |
 | GM Tensor | tensor[i, j]等完整标量下标 | 非零Rank、静态Shape、ND布局；索引可在运行时计算，程序须保证索引有效。 |
-| UB Tile | tile[row, col] | 静态二维Shape、Vec内存、ND布局；由外层Kernel创建和管理。 |
+| UB Tile | tile[row, col] | 静态二维Shape、UB、ND布局；由外层Kernel创建和管理。 |
 | Tile有效区域 | tile.valid_shape[0]、tile.valid_shape[1] | 读取运行期有效行列数，访问尾块时按有效范围保护下标。 |
 
 Tensor/Tile须以完整对象传入，不支持元素、Slice或Tile Subview作为函数参数。元素位宽不得小于8 bit；具体Scalar计算和原子操作仍须满足各自的dtype矩阵。运行期索引不等于动态Tensor Shape，后者当前不支持。
@@ -121,6 +125,8 @@ Tensor/Tile须以完整对象传入，不支持元素、Slice或Tile Subview作�
 以下入口处理形状为[2, 128]的Tile，调用方使用`add_valid[128, 2](...)`。线程坐标覆盖物理Shape，实际读写范围由valid_shape控制：
 
 ```python
+import pypto_pro.language as pl
+
 @pl.vector_function(mode="simt", max_threads=256)
 def add_valid(data: pl.Tile[[2, 128], pl.DT_FP32], delta: pl.DT_FP32):
     row = pl.simt.thread_idx().y
@@ -228,11 +234,11 @@ def gather_kernel(
 gather_kernel[None, BLOCKS](input_tensor, indices, output, OUTPUT_ROWS)
 ```
 
-本例请求BLOCKS=48，每块256个线程。实际启动48个Block时，每个线程复制一行；如果限核导致实际Block数更少，线程会按pypto_pro.language.simt.grid_dim().x * pypto_pro.language.simt.block_dim().x跨步继续处理后续行，仍覆盖全部12288行。各线程写入不同输出行，行间没有数据依赖，不需要线程块屏障。
+本例在Host侧将`block_dim`设置为`BLOCKS=48`，表示实际使用48个Vector核；每个Vector核启动一个包含256个线程的Thread Block。线程按`pypto_pro.language.simt.grid_dim().x * pypto_pro.language.simt.block_dim().x`跨步处理后续行，覆盖全部12288行。各线程写入不同输出行，行间没有数据依赖，不需要线程块屏障。
 
 ## 当前能力边界
 
 - SIMT入口必须由外层A5 Vector执行域调用，不支持Host直接启动SIMT函数或在SIMT函数中嵌套调用SIMT入口函数。
-- SIMT中不支持Tile创建、SIMD Tile/Reg计算或System流水操作。
-- 不支持动态GM Shape、Tile Subview、L1 Tile、DN/NZ布局和通用指针参数。
+- SIMT中不支持Tile创建、SIMD Tile计算、Reg计算或System流水操作。
+- 不支持动态GM Shape、Tile Subview、L1 Buffer Tile、DN/NZ布局和通用指针参数。
 - 未提供Warp shuffle/vote/reduce、线程私有数组和显式Cached GM访问接口。pypto_pro.language.simt.warp_size()仅用于查询。

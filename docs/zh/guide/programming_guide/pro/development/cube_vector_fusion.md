@@ -1,75 +1,45 @@
-# Cube与Vector融合计算
+# CV融合计算
 
-PyPTO Pro支持在同一个Kernel中组合Cube矩阵计算与Vector矢量计算。AIC和AIV使用不同的片上存储，跨核传递中间结果时，需要同时处理数据搬运、任务切分、核间同步和Buffer复用。本章介绍这些机制，并以Matmul+Softmax说明完整写法。
+PyPTO Pro支持在同一个Kernel中组合Cube矩阵计算与Vector矢量计算。本文介绍混合Kernel的执行模型、跨核数据传递和同步方式，并提供Matmul+Softmax示例。
 
 ## 执行模型
 
-Kernel同时包含`pypto_pro.language.section_cube()`和`pypto_pro.language.section_vector()`时，PyPTO Pro将其作为混合Kernel执行。一个逻辑Block对应一个AIC和两个AIV，AIC执行Cube域，两个AIV执行相同的Vector域代码，并通过`pypto_pro.language.get_subblock_idx()`区分各自负责的数据。
+Kernel同时包含[`pypto_pro.language.section_cube()`](../../../../api/pro_api/SIMD-API/controlflow/section_cube.md)和[`pypto_pro.language.section_vector()`](../../../../api/pro_api/SIMD-API/controlflow/section_vector.md)时，PyPTO Pro将其作为混合Kernel执行。一个逻辑Block对应一个AIC和两个AIV，AIC执行Cube域，两个AIV执行相同的Vector域代码，并通过[`pypto_pro.language.get_subblock_idx()`](../../../../api/pro_api/SIMD-API/system_variables/get_subblock_idx.md)区分各自负责的数据。
 
 | 执行单元 | 主要计算 | 片上存储 | 任务索引 |
 |:---|:---|:---|:---|
-| AIC | 矩阵乘加 | L1 Buffer、L0A Buffer、L0B Buffer、L0C Buffer | `pypto_pro.language.get_block_idx()` |
-| AIV0/AIV1 | 逐元素、归约、数据重排及Reg计算 | Unified Buffer、Vector Register | `pypto_pro.language.get_block_idx()`与`pypto_pro.language.get_subblock_idx()` |
+| AIC | 矩阵乘加 | L1 Buffer、L0A Buffer、L0B Buffer、L0C Buffer | [`pypto_pro.language.get_block_idx()`](../../../../api/pro_api/SIMD-API/system_variables/get_block_idx.md) |
+| AIV0/AIV1 | 逐元素、归约、数据重排及Reg计算 | UB、Vector Register | `pypto_pro.language.get_block_idx()`与`pypto_pro.language.get_subblock_idx()` |
 
-`block_dim`表示混合Kernel的AIC/AIV执行组数。AIC数量为实际`block_num`，AIV数量为`block_num * get_subblock_num()`。多执行组场景下，Cube侧和Vector侧必须使用一致的逻辑任务映射，避免不同执行组读写同一中间结果。详细的硬件映射和核数计算参见[抽象硬件架构](../programming_paradigm/SIMD/abstract_hardware_architecture.md#aic与aiv的并行关系)和[多核Tiling切分](tiling/multi_core_tiling.md)。
+混合Kernel中，`block_dim`用于配置AIC/AIV执行组数；AIC数量为[`pypto_pro.language.get_block_num()`](../../../../api/pro_api/SIMD-API/system_variables/get_block_num.md)返回的实际值，AIV数量还需要乘以[`pypto_pro.language.get_subblock_num()`](../../../../api/pro_api/SIMD-API/system_variables/get_subblock_num.md)。多执行组场景下，Cube侧和Vector侧必须使用一致的任务映射，避免不同执行组读写同一中间结果。`block_dim`的详细含义参见[Kernel核函数](kernel_function.md#blockdim的含义与设置)，硬件映射和核数计算参见[抽象硬件架构](../programming_paradigm/SIMD/abstract_hardware_architecture.md#aic与aiv的并行关系)和[多核Tiling切分](tiling/multi_core_tiling.md)。
 
-## 划分计算阶段
+## 跨核中间数据传递
 
-先确定每个中间结果由哪一侧产生、由哪一侧使用，再据此划分Cube和Vector计算段。常见的依赖形式如下：
-
-| 依赖形式 | 典型场景 | 中间数据处理 |
-|:---|:---|:---|
-| Cube → Vector | Matmul后接激活、归一化、量化或逐元素计算 | 规划L0C到UB的数据布局，以及一个AIC结果如何分配给两个AIV。 |
-| Vector → Cube | Vector预处理结果作为后续Matmul输入 | 将UB结果转换为Cube需要的布局并写入L1，保证两个AIV完成后AIC才开始消费。 |
-| Cube → Vector → Cube | 两次Matmul之间包含激活、归一化或数据重排 | 为正向数据依赖和Buffer复用分别建立同步，控制中间Buffer数量。 |
-| Cube与Vector无数据依赖 | 两侧处理互不依赖的数据 | 分别完成任务切分；只有共享输出或复用Buffer时才建立同步。 |
-
-计算段的边界一般放在中间Tile已经就绪、另一侧可以开始处理的位置。边界过多会增加同步事件和轮转Buffer，边界过少则会把本来可以重叠的计算串行化。实际划分取决于中间Tile的生成时机和AIC/AIV两侧的耗时。
-
-### 确定融合边界
-
-相邻计算段能在同一逻辑Block内按Tile衔接时，跨核数据和同步关系最简单。以下情况往往需要调整融合范围：
-
-- 下游阶段必须等所有逻辑Block完成全局归约或重排，无法只依赖当前执行组的局部结果。
-- Cube和Vector需要完全不同的任务切分，建立一一对应的中间数据区域反而引入大量搬运或空闲。
-- 中间结果必须完整写回GM，融合后没有减少数据搬运，且单独Kernel的调度开销不是主要瓶颈。
-- 融合后的片上Buffer或寄存器占用过高，限制并发或使Buffer轮转难以安排。
-
-全局依赖可以留在独立Kernel中，只把能够按Block衔接的部分放进混合Kernel。若中间结果仍需完整写回GM，则应结合实测的GM带宽和Kernel下发开销判断是否保留融合。
-
-## 选择跨核数据通路
+AIC和AIV可以通过片上Buffer或GM中的workspace传递中间数据。两种方式的数据路径和同步要求不同，应根据中间数据的shape、dtype、layout、容量和使用方式选择。
 
 ### 通过片上Buffer传递
 
-上游每产生一个Tile，下游便能消费时，中间结果可以直接走片上通路，不必写回GM：
+片上通路不需要将中间结果写回GM，支持以下传递方向：
 
 - Cube → Vector：通过[`pypto_pro.language.move`](../../../../api/pro_api/SIMD-API/memory_data_movement/move.md)将L0C Buffer中的结果搬到UB。一个AIC向两个AIV分发数据时，可以使用[`pypto_pro.language.AccToVecMode`](../../../../api/pro_api/SIMD-API/basic_data_structures/AccToVecMode.md)按M轴或N轴拆分。
 - Vector → Cube：先在UB中得到Cube需要的ND/NZ布局，再通过[`pypto_pro.language.move`](../../../../api/pro_api/SIMD-API/memory_data_movement/move.md)或[`pypto_pro.language.insert`](../../../../api/pro_api/SIMD-API/memory_data_movement/insert.md)写入L1 Buffer。
 
-这条通路要求两侧事先约定中间Tile的shape、dtype和layout。一个AIC对应两个AIV，还要确定结果沿M轴还是N轴拆分，并让生产端和消费端按相同顺序轮转Buffer。
+生产端和消费端需要使用一致的中间Tile shape、dtype和layout。一个AIC向两个AIV分发数据时，还需要确定沿M轴或N轴拆分，并按相同顺序使用轮转Buffer。
 
 ### 通过GM传递
 
-中间结果放不进片上Buffer、会被多次读取，或者两侧的分块无法直接衔接时，可先写入GM中的workspace，再由下游搬入：
+中间结果也可以先写入GM中的workspace，再由消费端搬入：
 
 ```text
 Cube：L0C Buffer ──► workspace（GM）──► UB：Vector
 Vector：UB  ──► workspace（GM）──► L1 Buffer：Cube
 ```
 
-workspace保存的是完整或分块的中间Tensor，下游可按自己的顺序重复读取，但会增加GM读写。并发的逻辑Block、流水迭代或AIV子块应使用互不重叠的区域；若复用同一区域，生产端必须等上一轮读取结束后再覆写。
-
-数据通路取决于中间结果的消费方式：
-
-| 条件 | 推荐通路 |
-|:---|:---|
-| 上游产生一个Tile后，下游即可立即消费 | L0C Buffer↔UB↔L1 Buffer片上通路 |
-| 下游需要多次读取同一中间结果 | 根据容量选择多Buffer片上驻留或workspace |
-| 下游需要完整归约轴，而上游只能分块产生 | workspace或重新设计可在线合并的归约状态 |
+workspace可以保存完整或分块的中间Tensor，允许生产端和消费端使用不同的分块顺序，也支持重复读取，但会增加GM读写。并发的逻辑Block、流水迭代或AIV子块应使用互不重叠的区域；若复用同一区域，生产端必须等上一轮读取结束后再覆写。
 
 ## 建立跨核同步
 
-同步信号只表达执行依赖，不负责搬运数据。无论中间结果位于片上Buffer还是workspace，只要一个核生产、另一个核消费，就必须保证消费者在数据就绪后读取；Buffer将被循环复用时，还必须保证生产者在消费者使用完毕后才能覆写。`pypto_pro.language.section_cube()`与`pypto_pro.language.section_vector()`在源码中的先后顺序本身不能替代核间同步，`pypto_pro.language.jit(auto_mutex=True)`也只负责Tile相关的核内流水同步；未启用自动CV流水时，核间依赖仍需显式描述。
+同步信号只表达执行依赖，不负责搬运数据。无论中间结果位于片上Buffer还是workspace，只要一个核生产、另一个核消费，就必须保证消费者在数据就绪后读取；Buffer将被循环复用时，还必须保证生产者在消费者使用完毕后才能覆写。`pypto_pro.language.section_cube()`与`pypto_pro.language.section_vector()`在源码中的先后顺序本身不能替代核间同步，[`pypto_pro.language.jit(auto_mutex=True)`](compilation_and_execution/JIT_compilation.md#jit装饰器参数)也只负责Tile相关的核内流水同步；未启用自动CV流水时，核间依赖仍需显式描述。
 
 ### 显式同步
 
@@ -101,22 +71,9 @@ with pl.section_vector():
 
 ### 自动同步与并行流水
 
-多阶段、循环执行的融合Kernel可以使用[自动CV并行流水](../advanced_programming/auto_parallel_pipeline.md)。各Cube/Vector计算函数通过`@pypto_pro.language.pipeline.stage`声明为stage；使用`pypto_pro.language.make_tile_group`创建跨核Tile Group时，`fwd_ids`描述生产者到消费者的数据就绪依赖，`bwd_ids`描述消费者到生产者的Buffer复用依赖。编译器根据stage顺序插入核间同步，并根据`pypto_pro.language.pipeline.PipelineConfig`中的`preload`错开不同迭代。自动流水的跨核Tile Group仅支持UB和L1 Buffer，L0C Buffer中的结果需要先搬到UB，Vector结果需要先搬到L1 Buffer，再交给下一阶段消费。
+多阶段、循环执行的融合Kernel可以使用[自动CV并行流水](../advanced_programming/auto_parallel_pipeline.md)。各Cube/Vector计算函数通过`@pypto_pro.language.pipeline.stage`声明为stage；使用[`pypto_pro.language.make_tile_group`](../../../../api/pro_api/SIMD-API/resource_management/make_tile_group.md)创建跨核Tile Group时，`fwd_ids`描述生产者到消费者的数据就绪依赖，`bwd_ids`描述消费者到生产者的Buffer复用依赖。编译器根据stage顺序插入核间同步，并根据`pypto_pro.language.pipeline.PipelineConfig`中的`preload`错开不同迭代。自动流水的跨核Tile Group仅支持UB和L1 Buffer，L0C Buffer中的结果需要先搬到UB，Vector结果需要先搬到L1 Buffer，再交给下一阶段消费。
 
 `pypto_pro.language.pipeline.PipelineConfig(preload=0)`保留各stage的串行执行顺序，用于检查精度和Buffer轮转。增大`preload`后，上游stage会提前处理后续迭代；此时Buffer槽位数和事件ID数量需要覆盖预取距离。流水的稳态周期取决于较慢的一侧，因此stage边界还要结合AIC和AIV的实际耗时确定。
-
-## 设计迭代、分块与Buffer
-
-Cube和Vector两侧应围绕同一块逻辑输出确定迭代范围和中间数据：
-
-1. **确定公共迭代粒度**：明确一次迭代处理的输出区域，以及每个阶段产生和消费的中间区域。
-2. **确定AIV切分方式**：根据后续计算方向，选择两个AIV沿M轴或N轴切分；该选择应与L0C Buffer→UB搬运模式和GM输出偏移一致。
-3. **统一中间布局**：明确每个阶段需要ND、DN、NZ还是ZN布局，把必要的转置或分形转换放入数据通路设计。
-4. **规划Buffer生命周期**：为正在生产、正在消费和尚未允许覆写的数据分配不同槽位；地址复用时必须使用一致的mutex并建立反向依赖。
-5. **处理动态shape和尾块**：生产端和消费端应对同一逻辑区域设置相容的`valid_shape`，并分别满足L0C Buffer、UB和L1 Buffer搬运的对齐要求。
-6. **划分多执行组任务**：所有GM和workspace偏移都应包含`pypto_pro.language.get_block_idx()`；Vector侧还需要结合`pypto_pro.language.get_subblock_idx()`确定每个AIV的子区域。
-
-若性能数据中GM读写占比较高，可把workspace改为片上通路；同步等待较长时，应检查两侧负载和stage边界；Buffer复用造成等待时，可增加轮转槽位。
 
 ## 示例：Matmul+Softmax
 
@@ -157,7 +114,7 @@ def matmul_softmax_kernel(a: pl.Tensor[[pl.DYNAMIC, K_SIZE], pl.DT_FP16],
     N_TILES = (N + TILE_N - 1) // TILE_N
     valid_m = pl.min(TILE_M, M)
 
-    # ---- Cube Tile：直接计算 QK = A @ B ----
+    # ---- Cube Tile：计算 S = A @ B ----
     tt_a_mat = pl.TileType(shape=[TILE_M, K_SIZE], dtype=pl.DT_FP16,
                            target_memory=pl.MemorySpace.Mat,
                            valid_shape=[-1, -1])
@@ -200,7 +157,7 @@ def matmul_softmax_kernel(a: pl.Tensor[[pl.DYNAMIC, K_SIZE], pl.DT_FP16],
     global_sum = pl.make_tile_group(type=tt_red, addrs=0x6200, mutex_ids=[12])
     global_sum_rm = pl.make_tile_group(type=tt_red_rm, addrs=0x6200, mutex_ids=[13])
 
-    # ==== Cube: workspace = QK，N 轴分块 ====
+    # ==== Cube：workspace = S，N轴分块 ====
     with pl.section_cube():
         cur_a_l1 = a_l1.current()
         cur_b_l1 = b_l1.current()
@@ -223,7 +180,7 @@ def matmul_softmax_kernel(a: pl.Tensor[[pl.DYNAMIC, K_SIZE], pl.DT_FP16],
             pl.store(workspace, cur_qk_l0c, [0, n_off])
         pl.system.set_cross_core(pipe=pl.PipeType.FIX, event_id=0)
 
-    # ==== Vector: 在 QK 上沿 N 方向分块计算 Softmax ====
+    # ==== Vector：在S上沿N方向分块计算Softmax ====
     with pl.section_vector():
         sub_id = pl.get_subblock_idx()
         pl.system.wait_cross_core(pipe=pl.PipeType.MTE2, event_id=0)
@@ -311,16 +268,16 @@ print("Matmul-Softmax kernel passed!")
 
 #### 实现说明
 
-- Left、Right和Acc Tile设置`compact=1`，使M/N尾块在L1 Buffer→L0 Buffer和L0C Buffer→GM路径上按当前有效尺寸使用紧凑步长；两侧通过`pypto_pro.language.set_validshape`传递实际M/N范围。
+- L0A Buffer、L0B Buffer和L0C Buffer中的Tile设置`compact=1`，使M/N尾块在L1 Buffer→L0 Buffer和L0C Buffer→GM路径上按当前有效尺寸使用紧凑步长；两侧通过`pypto_pro.language.set_validshape`传递实际M/N范围。
 - Vector归约产生`[M半块,1]`的DN结果，用于`pypto_pro.language.expand_sub`和`pypto_pro.language.expand_div`按行广播；同一UB地址同时建立`[1,M半块]`行主序视图，用于跨N块合并最大值和指数和。
 - `pypto_pro.language.jit(auto_mutex=True)`管理各Tile的核内mutex，但Cube与Vector之间的数据就绪关系仍由`pypto_pro.language.system.set_cross_core`和`pypto_pro.language.system.wait_cross_core`建立。
 - Host测试将随机输入缩小到0.1倍，以避免Softmax高度饱和放大浮点舍入差异。该缩放仅用于测试，不属于Kernel计算。
 
-更多Kernel启动和`block_dim`说明参见[Kernel函数](kernel_function.md#blockdim的含义与设置)，SIMD编程模型参见[SIMD编程范式](../programming_paradigm/SIMD/programming_paradigm.md)。
+SIMD编程模型参见[SIMD编程范式](../programming_paradigm/SIMD/programming_paradigm.md)。
 
 ### VF API实现
 
-VF（Vector Function，向量函数）使用`@pypto_pro.language.vector_function`定义，并通过[`vf.*`接口](../../../../api/index.md)在UB与向量寄存器之间读写数据。下面的版本沿用前面的Cube计算、workspace布局和核间同步，Vector侧改用VF计算Softmax。`[M半块,N块]`先在UB中转置为`[N块,64]`，使每个N位置对应一个FP32向量寄存器，寄存器中的lane对应不同的M行。
+VF（Vector Function，矢量函数）使用[`@pypto_pro.language.vector_function`](vector_computation/reg_computation.md#vf函数与执行域)定义，并通过[`vf.*`接口](../../../../api/pro_api/SIMD-API/reg_computation/index.md)在UB与矢量寄存器之间读写数据。下面的版本沿用前面的Cube计算、workspace布局和核间同步，Vector侧改用VF计算Softmax。`[M半块,N块]`先在UB中转置为`[N块,64]`，使每个N位置对应一个FP32矢量寄存器，寄存器中的lane对应不同的M行。
 
 VF相关的基础概念和接口说明参见[Reg计算](vector_computation/reg_computation.md)。
 
@@ -329,7 +286,7 @@ Vector侧的数据组织如下：
 - `qk_nd`从workspace载入`[M半块,N块]`，再转置为`qk_dn[N块,64]`，使每个N位置对应一个64-lane FP32寄存器。
 - `global_max`和`global_sum`在UB中保存跨N块的逐行状态，三遍计算分别更新最大值、指数和与归一化结果。
 - M尾块通过`vf.update_mask(valid_rows)`限制有效lane，N尾块通过VF循环上界`valid_n`限制实际处理位置。
-- VF写入的状态被后续VF或Vector操作读取前，使用`vf.mem_bar(mode=pypto_pro.language.MemBarMode.VST_VLD)`保证局部存储顺序；MTE与Vector之间的Tile依赖仍由mutex管理。
+- VF写入的状态被后续VF或Vector操作读取前，使用[`vf.mem_bar`](../../../../api/pro_api/SIMD-API/reg_computation/data_movement/mem_bar.md)并设置`mode=pypto_pro.language.MemBarMode.VST_VLD`保证局部存储顺序；MTE与Vector之间的Tile依赖仍由mutex管理。
 
 ```python
 import os
@@ -409,7 +366,7 @@ def matmul_softmax_vf_kernel(a: pl.Tensor[[pl.DYNAMIC, K_SIZE], pl.DT_FP16],
     N_TILES = (N + TILE_N - 1) // TILE_N
     valid_m = pl.min(TILE_M, M)
 
-    # ---- Cube Tile：直接计算 QK = A @ B ----
+    # ---- Cube Tile：计算 S = A @ B ----
     tt_a_mat = pl.TileType(shape=[TILE_M, K_SIZE], dtype=pl.DT_FP16,
                            target_memory=pl.MemorySpace.Mat,
                            valid_shape=[-1, -1])
@@ -447,7 +404,7 @@ def matmul_softmax_vf_kernel(a: pl.Tensor[[pl.DYNAMIC, K_SIZE], pl.DT_FP16],
     global_max = pl.make_tile_group(type=tt_vf_state, addrs=0x10000, mutex_ids=[9])
     global_sum = pl.make_tile_group(type=tt_vf_state, addrs=0x10100, mutex_ids=[10])
 
-    # ==== Cube: workspace = QK，N 轴分块 ====
+    # ==== Cube：workspace = S，N轴分块 ====
     with pl.section_cube():
         cur_a_l1 = a_l1.current()
         cur_b_l1 = b_l1.current()
@@ -548,5 +505,5 @@ print("Matmul-Softmax VF kernel passed!")
 #### 实现说明
 
 - FP32 VF寄存器包含64个lane。每个AIV最多处理32个M行，`vf.update_mask(valid_rows)`只使能对应lane；64列物理宽度使每个N位置的起始地址按一个完整寄存器对齐。
-- 转置前后的Vec Tile均声明为64×64。`TTRANS`的实际转置范围来自源Tile的`valid_shape`：源、目标的有效区域分别为`[valid_rows, valid_n]`和`[valid_n, valid_rows]`，VF循环上界和predicate再分别处理N/M尾块。
+- 转置前后的UB Tile均声明为64×64。`TTRANS`的实际转置范围来自源Tile的`valid_shape`：源、目标的有效区域分别为`[valid_rows, valid_n]`和`[valid_n, valid_rows]`，VF循环上界和predicate再分别处理N/M尾块。
 - `vf.mem_bar(mode=pypto_pro.language.MemBarMode.VST_VLD)`处理VF/Vector store到后续Vector load之间的局部内存依赖，包括跨N块读取`global_max`/`global_sum`，以及`transpose`读取归一化结果。MTE2、MTE3与VF之间的Tile流水依赖仍由`auto_mutex=True`管理。

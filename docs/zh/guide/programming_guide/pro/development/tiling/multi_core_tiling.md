@@ -32,7 +32,7 @@ for task_idx in pl.range(start, end, 1):
     ...
 ```
 
-[`pypto_pro.language.get_block_num()`](../../../../../api/pro_api/SIMD-API/system_variables/get_block_num.md)返回本次实际启动的核数。计算每个核的任务范围必须使用它的返回值：`block_dim`只是启动时申请的核数，运行时可能因限核而减少，用它会遗漏任务。
+[`pypto_pro.language.get_block_num()`](../../../../../api/pro_api/SIMD-API/system_variables/get_block_num.md)返回本次实际生效的核数，计算每个核的任务范围时应使用它的返回值。`block_dim`的默认值、调用形式和核数限制参见[Kernel核函数](../kernel_function.md#blockdim的含义与设置)。
 
 `core_id`由[`pypto_pro.language.get_block_idx()`](../../../../../api/pro_api/SIMD-API/system_variables/get_block_idx.md)除以[`pypto_pro.language.get_subblock_num()`](../../../../../api/pro_api/SIMD-API/system_variables/get_subblock_num.md)得到。纯Vector和纯Cube Kernel中`get_subblock_num()`返回1，该除法不改变结果；MIX Kernel中Vector侧的`get_block_idx()`是Vector核的全局索引，除以每个AI Core内的Vector核数后，与Cube侧得到同一个AI Core编号，两侧才能按同一套切分处理同一批数据。
 
@@ -76,6 +76,8 @@ for task_idx in pl.range(start, end, 1):
 在1:2的芯片上，一个AI Core内有2个Vector核，两者要分摊同一个任务里Cube产出的这份数据，因此每个Vector核处理的数据量是Cube的一半。这一步用[`pypto_pro.language.get_subblock_idx()`](../../../../../api/pro_api/SIMD-API/system_variables/get_subblock_idx.md)在某一维上把数据切成两半，属于核内切分，不参与核间任务的分配：
 
 ```python
+import pypto_pro.language as pl
+
 sub_id = pl.get_subblock_idx()
 
 first_half = (rows + 1) // 2

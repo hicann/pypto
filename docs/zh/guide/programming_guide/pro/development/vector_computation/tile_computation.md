@@ -15,14 +15,18 @@ Tile及TileGroup的创建、片上地址和数据搬运等内容由[Tile创建�
 Tile计算在Vector执行域中执行，Tile API采用预先准备输出Tile的方式表达计算，接口不会创建或返回新的Tile：
 
 ```python
+import pypto_pro.language as pl
+
 with pl.section_vector():
     pl.add(out_tile, lhs_tile, rhs_tile)
 ```
 
 上例对lhs_tile和rhs_tile的有效区域逐元素相加，并将结果写入out_tile。Tile计算接口通常遵循以下形式：
 
-```text
-pl.operation(out, input_0, input_1, ..., optional_parameters)
+```python
+import pypto_pro.language as pl
+
+pl.operation(out, input_0, input_1, *other_inputs, **optional_parameters)
 ```
 
 - out是保存计算结果的目的Tile，需要在调用接口前准备完成。
@@ -54,6 +58,8 @@ PyPTO Pro当前公开的Tile矢量计算操作如下：
 两个输入Tile的对应元素参与计算，结果写入目的Tile：
 
 ```python
+import pypto_pro.language as pl
+
 pl.add(out_tile, lhs_tile, rhs_tile)
 pl.mul(out_tile, lhs_tile, rhs_tile)
 pl.maximum(out_tile, lhs_tile, rhs_tile)
@@ -66,6 +72,8 @@ pl.maximum(out_tile, lhs_tile, rhs_tile)
 部分接口支持Tile与Scalar计算，同一个Scalar会参与Tile有效区域中每个元素的运算。例如：
 
 ```python
+import pypto_pro.language as pl
+
 pl.add(out_tile, src_tile, 1.0)
 ```
 
@@ -76,6 +84,8 @@ Tile-Scalar并不是所有逐元素接口的通用能力，Scalar类型也需要
 接口明确支持原地计算时，可以复用输入Tile保存结果。例如，以下代码依次完成加法和ReLU：
 
 ```python
+import pypto_pro.language as pl
+
 pl.add(out_tile, lhs_tile, rhs_tile)
 pl.relu(out_tile, out_tile)
 ```
@@ -87,6 +97,8 @@ pl.relu(out_tile, out_tile)
 比较接口生成按位压缩的掩码，选择接口根据掩码选择结果：
 
 ```python
+import pypto_pro.language as pl
+
 pl.eq(mask_tile, lhs_tile, rhs_tile)
 pl.select(out_tile, mask_tile, lhs_tile, fallback_tile, tmp_tile)
 ```
@@ -98,6 +110,8 @@ pl.select(out_tile, mask_tile, lhs_tile, fallback_tile, tmp_tile)
 归约接口可以沿指定维度对二维Tile求和：
 
 ```python
+import pypto_pro.language as pl
+
 pl.sum(out_tile, src_tile, tmp_tile, dim=0)
 pl.sum(out_tile, src_tile, tmp_tile, dim=1)
 ```
@@ -109,6 +123,8 @@ pl.sum(out_tile, src_tile, tmp_tile, dim=1)
 类型转换接口将Tile转换为目的Tile的数据类型，目标类型由out_tile.dtype决定；转置接口交换二维Tile的两个轴：
 
 ```python
+import pypto_pro.language as pl
+
 pl.cast(out_tile, src_tile, mode=pl.RoundMode.CAST_ROUND)
 pl.transpose(transposed_tile, src_tile)
 ```
@@ -128,6 +144,8 @@ pl.transpose(transposed_tile, src_tile)
 以下片段先对两个输入Tile逐元素相加，再对结果执行ReLU激活。代码假设输入、输出Tile已经创建，输入数据已经搬入，并且计算前后的跨流水依赖由外层Kernel处理：
 
 ```python
+import pypto_pro.language as pl
+
 with pl.section_vector():
     pl.add(out_tile, lhs_tile, rhs_tile)
     pl.relu(out_tile, out_tile)
@@ -138,6 +156,8 @@ with pl.section_vector():
 如果选择融合接口，可以写为：
 
 ```python
+import pypto_pro.language as pl
+
 pl.add_relu(out_tile, lhs_tile, rhs_tile)
 ```
 
@@ -163,6 +183,8 @@ n_tiles = (N + TILE_N - 1) // TILE_N
 对于第i行、第j列Tile，当前有效行列数可按下式计算：
 
 ```python
+import pypto_pro.language as pl
+
 valid_rows = pl.min(M - i * TILE_M, TILE_M)
 valid_cols = pl.min(N - j * TILE_N, TILE_N)
 ```
@@ -181,6 +203,8 @@ TileType.shape和TileType.valid_shape描述的对象不同：
 对于每次运行时有效尺寸可能不同的尾块，建议在[TileType](../../../../../api/pro_api/SIMD-API/basic_data_structures/TileType.md)中显式声明动态有效形状：
 
 ```python
+import pypto_pro.language as pl
+
 tile_type = pl.TileType(
     shape=[64, 128],
     dtype=pl.DT_FP16,
@@ -198,6 +222,8 @@ valid_shape=[-1, -1]表示两个维度都由运行时决定。如果只有一个
 ![尾块的计算、有效形状设置、搬入、计算和搬出流程](../../../../figures/pro/pro_tail_processing_flow.png)
 
 ```python
+import pypto_pro.language as pl
+
 tile_a = a_group.next()
 tile_b = b_group.next()
 tile_c = c_group.next()
@@ -219,7 +245,7 @@ pl.store_tile(c, tile_c, [i, j])
 pypto_pro.language.set_validshape会更新Tile或TileGroup的当前有效范围。在上述顺序中：
 
 - 数据搬入操作只从GM搬入有效区域，避免尾块越界读。
-- 向量计算使用当前有效区域。
+- 矢量计算使用当前有效区域。
 - 数据写回操作只写回有效区域，避免越界写。
 
 > 应在数据搬入前设置valid_shape，用于约束GM搬入；在数据搬入后设置仅影响后续操作。
@@ -229,6 +255,8 @@ pypto_pro.language.set_validshape会更新Tile或TileGroup的当前有效范围�
 每个缓冲区的有效形状不同时，应分别为TileGroup获取的Tile设置valid_shape：
 
 ```python
+import pypto_pro.language as pl
+
 tile = tile_group.next()
 pl.set_validshape(tile, [valid_rows, valid_cols])
 ```
@@ -236,6 +264,8 @@ pl.set_validshape(tile, [valid_rows, valid_cols])
 如果TileGroup中的所有缓冲区在整个Kernel期间都使用同一有效形状，可以对TileGroup统一设置：
 
 ```python
+import pypto_pro.language as pl
+
 pl.set_validshape(tile_group, [valid_rows, valid_cols])
 ```
 
@@ -248,10 +278,10 @@ compact描述搬运、重排或矩阵计算路径对Tile片上物理排布的解
 | 值 | 含义 | 典型用途 |
 | --- | --- | --- |
 | None或0 | 不启用紧凑模式 | 满块或对应API不需要紧凑布局的路径 |
-| 1 | normal紧凑模式 | Mat→Left/Right、Acc搬出等需要按有效尺寸紧凑排列的分形或Cube路径 |
+| 1 | normal紧凑模式 | L1 Buffer→L0A Buffer/L0B Buffer、L0C Buffer搬出等需要按有效尺寸紧凑排列的分形或Cube路径 |
 | 2 | RowPlusOne模式 | 明确要求额外一行物理空间的特定NZ路径 |
 
-当前A5的Vec ND搬入和写回操作使用valid_shape控制实际搬运行列，使用物理shape作为UB跨度，因此本节的逐元素Vec尾块不需要配置compact。当数据路径涉及Mat→Left/Right、Acc搬出等分形转换，需要按动态M/N调整片上排布时，配置compact=1。
+当前A5的UB ND搬入和写回操作使用valid_shape控制实际搬运行列，使用物理shape作为UB跨度，因此本节的逐元素矢量尾块不需要配置compact。当数据路径涉及L1 Buffer→L0A Buffer/L0B Buffer、L0C Buffer搬出等分形转换，需要按动态M/N调整片上排布时，配置compact=1。
 
 compact=2适用于明确要求RowPlusOne布局的特定路径。
 
@@ -269,6 +299,8 @@ valid_shape只标记哪些元素有效，不会自动给无效区域写入数值
 下面示例将src的无效区域填为0：
 
 ```python
+import pypto_pro.language as pl
+
 src_type = pl.TileType(
     shape=[64, 128],
     dtype=pl.DT_FP16,
@@ -289,7 +321,7 @@ pl.load(src, x, [row_offset, col_offset])
 pl.fillpad(dst, src)
 ```
 
-pad指定填充语义，pypto_pro.language.fillpad才会执行填充。矩阵计算尾块通常使用valid_shape和compact=1将有效尺寸传递给L1/L0及后续矩阵计算，不应笼统地将所有矩阵尾块都归类为需要填充；是否填充取决于具体数据路径和后续算子语义。
+pad指定填充语义，pypto_pro.language.fillpad才会执行填充。矩阵计算尾块通常使用valid_shape和compact=1将有效尺寸传递给L1 Buffer和L0 Buffer及后续矩阵计算，不应笼统地将所有矩阵尾块都归类为需要填充；是否填充取决于具体数据路径和后续算子语义。
 
 ### 完整示例：二维加法的四类尾块
 
@@ -361,6 +393,8 @@ torch.testing.assert_close(z, x + y, rtol=1e-3, atol=1e-3)
 #### 在数据搬入后设置valid_shape
 
 ```python
+import pypto_pro.language as pl
+
 # 错误：本次 load 已经发生，无法再用 valid_shape 限制它。
 pl.load(tile, x, offsets)
 pl.set_validshape(tile, [valid_rows, valid_cols])
@@ -369,6 +403,8 @@ pl.set_validshape(tile, [valid_rows, valid_cols])
 应调整为：
 
 ```python
+import pypto_pro.language as pl
+
 pl.set_validshape(tile, [valid_rows, valid_cols])
 pl.load(tile, x, offsets)
 ```
@@ -394,10 +430,10 @@ pad只声明填充值，不会单独产生填充操作。需要对无效区域�
 | 场景 | valid_shape | compact | 填充方式 |
 | --- | --- | --- | --- |
 | 固定shape且全部为满块 | 默认或与shape一致 | 按对应API要求 | 不需要 |
-| 向量逐元素ND动态尾块 | [-1, -1]，逐块设置 | 不需要 | 通常不需要 |
+| 矢量逐元素ND动态尾块 | [-1, -1]，逐块设置 | 不需要 | 通常不需要 |
 | 尾块后执行求和 | [-1, -1] | 按对应API要求 | 使用zero填充 |
 | 尾块后执行最大值归约 | [-1, -1] | 按对应API要求 | 使用min填充 |
-| Cube动态尾块 | 为Mat/Left/Right/Acc设置对应有效尺寸 | 1 | 由具体数据路径和算子语义决定 |
+| Cube动态尾块 | 为L1 Buffer、L0A Buffer、L0B Buffer和L0C Buffer中的Tile设置对应有效尺寸 | 1 | 由具体数据路径和算子语义决定 |
 
 ## 计算约束与建议
 

@@ -39,8 +39,12 @@ pypto_pro.language.dequant(
 |---|---|---|
 | out | 输出 | 目的操作数，Tile类型，存储空间为UB，数据类型为DT_FP32，layout必须为ND；shape和valid_shape须与src一致。 |
 | src | 输入 | 源操作数，Tile类型，存储空间为UB，数据类型为DT_INT8或DT_INT16，layout必须为ND；shape和valid_shape须与out一致。 |
-| scale | 输入 | 反量化系数，Tile类型，存储空间为UB，数据类型为DT_FP32，layout为ND或DN。若out.valid_shape=[M,N]，则scale.valid_shape须为[M,1]，shape的行数不得小于M且列数必须为1；第i行的scale[i,0]广播到输出第i行全部有效列。 |
-| offset | 输入 | 量化零点，Tile类型，存储空间为UB，数据类型为DT_FP32，layout为ND或DN，shape和valid_shape均须与scale一致；第i行的offset[i,0]广播到对应数据行。本参数不能省略；对称量化时传入全零Tile。 |
+| scale | 输入 | 反量化系数，Tile类型，存储空间为UB，数据类型为DT_FP32，layout为ND或DN。若out.valid_shape=[M,N]，则scale.valid_shape须为[M,1]，shape的行数不得小于M且列数必须为1；有效行数须与输出有效行数一致，物理行数须满足32字节对齐，DT_FP32场景即为8的倍数。第i行的scale[i,0]广播到输出第i行全部有效列。 |
+| offset | 输入 | 量化零点，Tile类型，存储空间为UB，数据类型为DT_FP32，layout为ND或DN，shape和valid_shape均须与scale一致；有效行数须与输出有效行数一致，物理行数须满足32字节对齐，DT_FP32场景即为8的倍数。第i行的offset[i,0]广播到对应数据行。本参数不能省略；对称量化时传入全零Tile。 |
+
+## 约束说明
+
+无。
 
 ## 返回值说明
 

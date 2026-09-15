@@ -6,8 +6,8 @@ SIMD计算分别使用AIV上的Vector计算资源和AIC上的Cube计算资源，
 
 AI Core中的SIMD硬件分为AIC和AIV：
 
-- **AIV**主要承担Tile矢量计算和Reg矢量计算。其SIMD相关资源包括Scalar、Unified Buffer（UB）、Vector Register File、Vector计算单元以及MTE2/MTE3搬运流水。
-- **AIC**主要承担Cube矩阵计算。其资源包括Scalar、L1 Buffer、L0A/L0B/L0C Buffer、Cube计算单元以及MTE2/MTE1/M/FIX等流水。
+- **AIV**主要承担Tile矢量计算和Reg计算。其SIMD相关资源包括Scalar、UB、Vector Register File、Vector计算单元以及MTE2/MTE3搬运流水。
+- **AIC**主要承担Cube矩阵计算。其资源包括Scalar、L1 Buffer、L0A Buffer、L0B Buffer、L0C Buffer、Cube计算单元以及MTE2/MTE1/M/FIX等流水。
 - **GM和L2 Cache**位于AI Core之外，为多个AIC和AIV提供全局数据。
 
 **图1 AI Core硬件架构**
@@ -20,9 +20,9 @@ PyPTO Pro提供三种SIMD计算方式：
 
 | 计算方式 | 执行位置 | 主要数据载体 | 主要执行单元 |
 |:---|:---|:---|:---|
-| Tile矢量计算（Membase） | AIV | UB中的Vec Tile | Vector计算单元 |
-| Reg矢量计算（Regbase） | AIV | UB Tile和Vector Register中的RegTensor | Reg向量执行单元、Aux Scalar和DMA单元 |
-| Cube矩阵计算 | AIC | L1、L0A、L0B和L0C中的矩阵Tile | Cube计算单元 |
+| Tile矢量计算（Membase） | AIV | UB Tile | Vector计算单元 |
+| Reg计算（Regbase） | AIV | UB Tile和Vector Register中的RegTensor | Reg矢量执行单元、Aux Scalar和DMA单元 |
+| Cube矩阵计算 | AIC | L1 Buffer、L0A Buffer、L0B Buffer和L0C Buffer中的矩阵Tile | Cube计算单元 |
 
 ## AIV矢量计算架构
 
@@ -30,7 +30,7 @@ AIV负责SIMD矢量指令的控制、数据搬运和执行。Kernel中的Python�
 
 ### Tile矢量计算
 
-Tile矢量计算以UB中的Vec Tile作为输入、输出和中间数据。其基本硬件数据路径为：
+Tile矢量计算以UB Tile作为输入、输出和中间数据。其基本硬件数据路径为：
 
 ```text
 GM ──MTE2──> UB
@@ -49,70 +49,70 @@ PyPTO Pro中的接口与硬件路径对应如下：
 | UB上的批量矢量计算 | V | `pypto_pro.language.add`、`sub`、`sum`等Tile API |
 | UB数据写回GM | MTE3 | `pypto_pro.language.store`、`store_tile` |
 
-Tile使用`pypto_pro.language.MemorySpace.Vec`映射到UB。`TileType`描述Tile的shape、dtype和layout，`make_tile`或`make_tile_group`将Tile绑定到UB中的具体地址。详细创建方式请参考[Tile创建和操作](../../development/tile_creation_and_operations.md)。
+Tile绑定到UB。`TileType`描述Tile的shape、dtype和layout，`make_tile`或`make_tile_group`将Tile绑定到UB中的具体地址。详细创建方式请参考[Tile创建和操作](../../development/tile_creation_and_operations.md)。
 
-### Reg矢量计算
+### Reg计算
 
-Reg矢量计算在Tile矢量数据路径上增加Vector Register File。GM中的数据必须先搬入UB，再由VF搬运接口加载到Vector Register；计算完成后按相反方向写回：
+Reg计算在Tile矢量数据路径上增加Vector Register File。GM中的数据必须先搬入UB，再由VF搬运接口加载到Vector Register；计算完成后按相反方向写回：
 
 ```text
 GM → UB → Vector Register File
               ↓
-          Reg矢量计算
+          Reg计算
               ↓
 GM ← UB ← Vector Register File
 ```
 
-**图2 Reg矢量计算内存层级**
+**图2 Reg计算内存层级**
 
 ![GM、UB和Vector Register File的层级关系](../../../../figures/pro/register_memory_hierarchy.jpg)
 
-Vector侧参与Reg矢量计算的主要硬件资源如下：
+Vector侧参与Reg计算的主要硬件资源如下：
 
 - **Vector Register File**：保存VF加载的数据、计算中间结果和待写回结果。
-- **Reg向量执行单元**：从Vector Register File读取操作数，执行`vf.*`矢量指令并写回寄存器。
+- **Reg矢量执行单元**：从Vector Register File读取操作数，执行`vf.*`矢量指令并写回寄存器。
 - **Aux Scalar**：处理VF函数中的地址、循环等辅助标量计算。
 - **DMA单元**：在UB与Vector Register File之间搬运数据。
 
 **图3 Reg矢量执行单元**
 
-![Aux Scalar、Reg向量执行单元、DMA、Register File和UB的关系](../../../../figures/pro/register_execution_unit.jpg)
+![Aux Scalar、Reg矢量执行单元、DMA、Register File和UB的关系](../../../../figures/pro/register_execution_unit.jpg)
 
 PyPTO Pro使用`@pypto_pro.language.vector_function`定义VF函数，使用RegTensor和MaskReg保存寄存器数据，并通过`vf.load*`、`vf.store*`在UB与Vector Register之间搬运。RegTensor的数据类型和寄存器限制请参考[vf.reg_tensor](../../../../../api/pro_api/SIMD-API/reg_computation/reg_tensor.md)，完整编程方法请参考[Reg计算](../../development/vector_computation/reg_computation.md)。
 
 ## AIC矩阵计算架构
 
-AIC使用Cube单元执行矩阵乘加。矩阵数据从GM进入AIC后，依次经过L1和L0级片上存储；Cube从L0A和L0B读取矩阵块，将累加结果写入L0C。
+AIC使用Cube单元执行矩阵乘加。矩阵数据从GM进入AIC后，依次经过L1 Buffer和L0 Buffer；Cube从L0A Buffer和L0B Buffer读取矩阵块，将累加结果写入L0C Buffer。
 
 ```text
-                            ┌──MTE1──> L0A──┐
-GM ──MTE2──> L1 ┤                   ├──M──> L0C──FIX──> GM
-                            └──MTE1──> L0B──┘
+                            ┌──MTE1──> L0A Buffer──┐
+GM ──MTE2──> L1 Buffer ┤                          ├──M──> L0C Buffer──FIX──> GM
+                            └──MTE1──> L0B Buffer──┘
 ```
 
 主要存储空间和对应数据如下：
 
-| `pypto_pro.language.MemorySpace` | 物理存储 | 典型作用 |
-|:---|:---|:---|
-| `Mat` | L1 Buffer | GM与L0A/L0B之间的矩阵暂存 |
-| `Left` | L0A Buffer | Cube左矩阵操作数 |
-| `Right` | L0B Buffer | Cube右矩阵操作数 |
-| `Acc` | L0C Buffer | 矩阵累加值和计算结果 |
-| `Bias` | Bias Buffer | 矩阵计算的融合偏置 |
-| `Scaling` | Fixpipe Buffer | 量化或反量化参数 |
-| `ScaleLeft` | L0A_MX Buffer | MX矩阵计算的左量化系数矩阵 |
-| `ScaleRight` | L0B_MX Buffer | MX矩阵计算的右量化系数矩阵 |
+| 物理Buffer | 典型作用 |
+|:---|:---|
+| L1 Buffer | GM与L0A Buffer/L0B Buffer之间的矩阵暂存 |
+| L0A Buffer | Cube左矩阵操作数 |
+| L0B Buffer | Cube右矩阵操作数 |
+| L0C Buffer | 矩阵累加值和计算结果 |
+| Bias Buffer | 矩阵计算的融合偏置 |
+| Fixpipe Buffer | 量化或反量化参数 |
+| L0A_MX Buffer | MX矩阵计算的左量化系数矩阵 |
+| L0B_MX Buffer | MX矩阵计算的右量化系数矩阵 |
 
 AIC各Pipe及其典型接口如下：
 
 | Pipe | 硬件行为 | PyPTO Pro表达 |
 |:---|:---|:---|
-| MTE2 | GM搬入L1 | `load`、`load_tile` |
-| MTE1 | L1搬入L0A/L0B及MX Buffer | `move` |
+| MTE2 | GM搬入L1 Buffer | `load`、`load_tile` |
+| MTE1 | L1 Buffer搬入L0A Buffer、L0B Buffer及MX Buffer | `move` |
 | M | Cube矩阵计算 | `matmul`、`matmul_acc`、`matmul_mx`、`matmul_mx_acc` |
-| FIX | L0C结果搬出 | `store`、`store_tile` |
+| FIX | L0C Buffer结果搬出 | `store`、`store_tile` |
 
-矩阵Tile通常使用NZ、ZN等分形布局。不同MemorySpace具有相应的默认layout和fractal约束，数据搬运接口可以在支持的路径上完成格式转换。矩阵存储布局、L1地址规划和Cube计算流程请参考[Cube计算](../../development/cube_computation.md)。
+矩阵Tile通常使用NZ、ZN等分形布局。不同`pypto_pro.language.MemorySpace`具有相应的默认layout和fractal约束，数据搬运接口可以在支持的路径上完成格式转换。矩阵存储布局、L1 Buffer地址规划和Cube计算流程请参考[Cube计算](../../development/cube_computation.md)。
 
 ## 存储层级与数据对象
 
@@ -121,11 +121,11 @@ SIMD编程涉及GM、片上Buffer和Vector Register三个层级：
 | 存储层级 | 可见范围 | PyPTO Pro数据对象 | 特点 |
 |:---|:---|:---|:---|
 | GM | Device上的多个AI Core | Tensor、Ptr | 容量大，是Kernel输入、输出和Workspace所在位置 |
-| AIV片上存储 | 当前AIV | `MemorySpace.Vec`中的Tile | 延迟和带宽优于GM，容量有限，需要显式规划地址和复用 |
-| AIC片上存储 | 当前AIC | Mat、Left、Right、Acc等Tile | 按矩阵数据通路分层，layout和分形约束更强 |
-| Vector Register File | 当前VF函数 | RegTensor、MaskReg | 用于Reg矢量计算，生命周期局限于VF函数 |
+| AIV片上存储 | 当前AIV | UB中的Tile | 延迟和带宽优于GM，容量有限，需要显式规划地址和复用 |
+| AIC片上存储 | 当前AIC | L1 Buffer、L0A Buffer、L0B Buffer和L0C Buffer中的Tile | 按矩阵数据通路分层，layout和分形约束更强 |
+| Vector Register File | 当前VF函数 | RegTensor、MaskReg | 用于Reg计算，生命周期局限于VF函数 |
 
-Tensor不能直接作为片上计算单元的操作数。数据需要通过搬运接口进入对应Tile；Reg矢量计算还需要继续将UB Tile加载到Vector Register。各层数据对象只描述所在存储和数据视图，不隐式申请其他层级的内存，也不会自动完成数据搬运。
+Tensor不能直接作为片上计算单元的操作数。数据需要通过搬运接口进入对应Tile；Reg计算还需要继续将UB Tile加载到Vector Register。各层数据对象只描述所在存储和数据视图，不隐式申请其他层级的内存，也不会自动完成数据搬运。
 
 ## 指令流、数据流与同步流
 
