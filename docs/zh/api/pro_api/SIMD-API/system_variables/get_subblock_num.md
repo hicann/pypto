@@ -19,7 +19,7 @@
 ## 函数原型
 
 ```python
-val = pypto_pro.language.get_subblock_num()
+pypto_pro.language.get_subblock_num() -> int
 ```
 
 ## 参数说明
@@ -56,10 +56,17 @@ def matmul_example(
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
 ):
     num_cores = pl.get_block_num()
+    # AIC/AIV两侧得到相同的物理核号，详见下方NOTE
     core_id = pl.get_block_idx() // pl.get_subblock_num()
     with pl.section_cube():
         for i in pl.range(core_id, a.shape[0] // 128, num_cores):
-            ...
+            ...  # Cube侧按行块i执行load/matmul/store
+    with pl.section_vector():
+        for i in pl.range(core_id, a.shape[0] // 128, num_cores):
+            ...  # Vector侧用同一core_id切分，与Cube侧对齐
+
+
+matmul_example[None, NUM_CORES](a, b, out)
 ```
 
 > [!NOTE]说明
