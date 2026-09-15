@@ -16,34 +16,8 @@
 #ifndef AICORE_ENTRY_DRCO_H
 #define AICORE_ENTRY_DRCO_H
 
-#ifndef __ASCENDC_INCLUDE_INTERNAL_HEADERS__
-#define __ASCENDC_INCLUDE_INTERNAL_HEADERS__
-#define __AICORE_ASC_PRINTF_DEFINED_INTERNAL__
-#endif
-// Skip CANN print_common_head(): ASC_DEVKIT_TIMESTAMP is a devkit build id, not runtime time.
-#ifndef __NPU_DEVICE__
-#define __NPU_DEVICE__
-#define __AICORE_ASC_PRINTF_DEFINED_NPU_DEVICE__
-#endif
-#include "impl/utils/debug/asc_aicore_printf_impl.h"
-#ifdef __AICORE_ASC_PRINTF_DEFINED_NPU_DEVICE__
-#undef __NPU_DEVICE__
-#undef __AICORE_ASC_PRINTF_DEFINED_NPU_DEVICE__
-#endif
-#ifdef __AICORE_ASC_PRINTF_DEFINED_INTERNAL__
-#undef __ASCENDC_INCLUDE_INTERNAL_HEADERS__
-#undef __AICORE_ASC_PRINTF_DEFINED_INTERNAL__
-#endif
-
-#if defined(__AIV__) && defined(__MIX__)
-#define AICORE_ASC_PRINTF_CORE_ID() (get_block_idx() * get_subblockdim() + get_subblockid() + get_block_num())
-#else
-#define AICORE_ASC_PRINTF_CORE_ID() (get_block_idx())
-#endif
-
-#define AICORE_ASC_PRINTF_WITH_CORE(core_id, fmt, ...) \
-    __asc_aicore::printf("[core=%u][t=%lu] " fmt, static_cast<uint32_t>(core_id), get_sys_cnt(), ##__VA_ARGS__)
-#define AICORE_PRINTF(fmt, ...) AICORE_ASC_PRINTF_WITH_CORE(AICORE_ASC_PRINTF_CORE_ID(), fmt, ##__VA_ARGS__)
+// ASC printf 走上游 gating 头（opt-in：PYPTO_ENABLE_AICORE_PRINT=true)
+#include "tilefwk/aicore_asc_printf.h"
 
 #ifdef __DAV_C310__
 
@@ -303,12 +277,12 @@ INLINE static void _TraceEvent(DrcoEntryState* state, uint32_t taskId, uint32_t 
 INLINE static void _TracePrint(DrcoEntryState* state)
 {
     auto traceEventStatistic = &state->traceEventStatistic;
-    AICORE_PRINTF("total=%d\n", traceEventStatistic->taskIndex);
+    PYPTO_AICORE_PRINTF("total=%d", traceEventStatistic->taskIndex);
     for (uint32_t i = 0; i < traceEventStatistic->taskIndex; i++) {
         auto event = &traceEventStatistic->traceEventList[i];
-        AICORE_PRINTF("timestamp=%llu, code=%x taskId=%d:%d duration=%llu\n", (unsigned long long)event->timestamp,
-                      event->eventCode, FUNCID_TASKID(event->taskId),
-                      i == 0 ? 0 : (event->timestamp - traceEventStatistic->traceEventList[i - 1].timestamp));
+        PYPTO_AICORE_PRINTF("timestamp=%llu, code=%x taskId=%d:%d duration=%llu", (unsigned long long)event->timestamp,
+                            event->eventCode, FUNCID_TASKID(event->taskId),
+                            i == 0 ? 0 : (event->timestamp - traceEventStatistic->traceEventList[i - 1].timestamp));
     }
 }
 #define TraceInit(state) _TraceInit(state)
