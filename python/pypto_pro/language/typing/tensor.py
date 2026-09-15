@@ -57,6 +57,7 @@ class Tensor:
         layout: TensorLayout | None = None,
         memref: MemRef | None = None,
         _annotation_only: bool = False,
+        direction: str | None = None,
     ):
         """Initialize Tensor.
 
@@ -67,7 +68,9 @@ class Tensor:
             layout: Optional tensor layout (ND, DN, NZ)
             memref: Optional memory reference
             _annotation_only: Whether this is annotation-only mode
+            direction: Optional direction marker ("in"/"out") from pl.Input/pl.Output
         """
+        self.direction = direction
         if expr is not None:
             if _annotation_only or shape is not None or dtype is not None:
                 raise ValueError("Runtime Tensor wrapping cannot include annotation arguments")
@@ -90,22 +93,35 @@ class Tensor:
     @classmethod
     def __class_getitem__(cls, item: tuple) -> "Tensor":
         """Enable Tensor[[shape], dtype] and extended subscript syntax."""
-        if not isinstance(item, tuple) or len(item) not in (2, 3, 4):
+        if not isinstance(item, tuple) or len(item) not in (2, 3, 4, 5):
             raise TypeError(
                 "Tensor requires [shape, dtype], [shape, dtype, layout_or_memref_or_view], "
-                "or [shape, dtype, layout, memref] notation"
+                "[shape, dtype, layout, memref], or those plus a direction marker "
+                "(pl.Input / pl.Output) notation"
             )
+
+        # Direction marker may appear in any position after dtype; extract it so the
+        # remaining elements follow the legacy layout/memref shapes.
+        from pypto_pro.language import _DirectionMarker
+
+        direction = None
+        elts = list(item)
+        for idx in range(len(elts) - 1, 1, -1):
+            if isinstance(elts[idx], _DirectionMarker):
+                direction = elts[idx].name.lower()
+                elts.pop(idx)
+        item = tuple(elts)
 
         if len(item) == 4:
             shape, dtype, layout, memref = item
-            return cls(shape, dtype, layout=layout, memref=memref, _annotation_only=True)
+            return cls(shape, dtype, layout=layout, memref=memref, _annotation_only=True, direction=direction)
         if len(item) == 3:
             shape, dtype, third = item
             if isinstance(third, MemRef):
-                return cls(shape, dtype, memref=third, _annotation_only=True)
-            return cls(shape, dtype, layout=third, _annotation_only=True)
+                return cls(shape, dtype, memref=third, _annotation_only=True, direction=direction)
+            return cls(shape, dtype, layout=third, _annotation_only=True, direction=direction)
         shape, dtype = item
-        return cls(shape, dtype, _annotation_only=True)
+        return cls(shape, dtype, _annotation_only=True, direction=direction)
 
     def __repr__(self) -> str:
         """String representation."""
