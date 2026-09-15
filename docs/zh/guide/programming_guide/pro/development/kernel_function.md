@@ -1,6 +1,6 @@
 # Kernel核函数
 
-Kernel是在AI Core上执行的函数。使用`pypto_pro.language.jit`声明Kernel，在函数签名中定义输入、输出和运行时参数，在函数体中组织数据搬运与计算。
+Kernel是在AI Core上执行的函数，在函数签名中定义输入、输出和运行时参数，在函数体中组织数据搬运与计算。
 
 ## 定义Kernel
 
@@ -21,7 +21,7 @@ def add_kernel(
     ...
 ```
 
-`jit`在首次启动Kernel时解析函数体并触发编译。JIT流程、编译签名和编译选项参考[JIT编译](compilation_and_execution/JIT_compilation.md)。
+jit在首次启动Kernel时解析函数体并触发编译。JIT流程、编译签名和编译选项参考[JIT编译](compilation_and_execution/JIT_compilation.md)。
 
 ### 声明Kernel参数
 
@@ -29,10 +29,10 @@ Kernel参数需要通过类型标注明确数据类型和传递方式：
 
 | 参数类型 | 用途 |
 | --- | --- |
-| [`pypto_pro.language.Tensor`](../../../../api/pro_api/SIMD-API/basic_data_structures/Tensor.md) | 接收GM中的多维数据；在类型中声明shape、dtype和可选layout。 |
-| [`pypto_pro.language.Ptr`](../../../../api/pro_api/SIMD-API/basic_data_structures/Ptr.md) | 接收裸指针；通常使用`pypto_pro.language.make_tensor`构造Tensor视图。 |
-| `pypto_pro.language.DT_*` | 接收整型、浮点型等运行时标量。 |
-| TilingData类 | 接收shape、stride、循环边界等结构化运行时参数。 |
+| [pypto_pro.language.Tensor](../../../../api/pro_api/SIMD-API/basic_data_structures/Tensor.md) | 接收GM中的多维数据；在类型中声明shape、dtype和可选layout。 |
+| [pypto_pro.language.Ptr](../../../../api/pro_api/SIMD-API/basic_data_structures/Ptr.md) | 接收裸指针；通常使用[pypto_pro.language.make_tensor](../../../../api/pro_api/SIMD-API/resource_management/make_tensor.md)构造Tensor视图。 |
+| [pypto_pro.language.DT_*](../../../../api/pro_api/SIMD-API/basic_data_structures/DataType.md) | 接收整型、浮点型等运行时标量。 |
+| [TilingData类](tiling/tiling_parameter_definition.md#tilingdata) | 接收shape、stride、循环边界等结构化运行时参数。 |
 
 Tensor参数适合直接使用调用侧Tensor的shape；Ptr参数适合由TilingData提供shape和stride：
 
@@ -66,7 +66,7 @@ Kernel不返回Python值。计算结果通过Tensor或Ptr对应的GM区域写回
 
 ### 定义执行域
 
-使用`pypto_pro.language.section_vector()`和`pypto_pro.language.section_cube()`定义计算代码所在的执行域：
+使用[pypto_pro.language.section_vector()](../../../../api/pro_api/SIMD-API/controlflow/section_vector.md)和[pypto_pro.language.section_cube()](../../../../api/pro_api/SIMD-API/controlflow/section_cube.md)定义计算代码所在的执行域：
 
 | Kernel组成 | 执行方式 |
 | --- | --- |
@@ -92,7 +92,7 @@ def mixed_kernel(
         ...
 ```
 
-执行域决定可使用的指令、片上Buffer以及`block_dim`的含义。Vector计算参考[Tile计算](vector_computation/tile_computation.md)和[Reg计算](vector_computation/reg_computation.md)，矩阵计算参考[Cube计算](cube_computation.md)。
+执行域决定可使用的指令、片上Buffer以及block_dim的含义。Vector计算参考[Tile计算](vector_computation/tile_computation.md)和[Reg计算](vector_computation/reg_computation.md)，矩阵计算参考[Cube计算](cube_computation.md)。
 
 ### 组织Kernel函数体
 
@@ -136,7 +136,7 @@ def add_kernel(
         pl.store(out, cur_out, [0, 0])
 ```
 
-Tile声明、地址和TileGroup操作参考[Tile创建和操作](tile_creation_and_operations.md)。`auto_mutex=True`只负责框架能够识别的Tile数据依赖；需要显式同步的场景参考[同步API](../../../../api/pro_api/SIMD-API/synchronization/index.md)。
+Tile声明、地址和TileGroup操作参考[Tile创建和操作](tile_creation_and_operations.md)。`auto_mutex=True`会将通过[pypto_pro.language.make_tile_group](../../../../api/pro_api/SIMD-API/resource_management/make_tile_group.md)创建的Tile对象自动插入mutex同步，确保核内Tile的读写时序；需要显式同步的场景参考[同步API](../../../../api/pro_api/SIMD-API/synchronization/index.md)。
 
 ## 调用Kernel
 
@@ -144,11 +144,11 @@ Kernel使用方括号指定启动配置，使用圆括号传入函数实参：
 
 | 调用形式 | 含义 |
 | --- | --- |
-| `kernel(args...)` | 使用当前Stream，`block_dim=1`。 |
-| `kernel[block_dim](args...)` | 使用当前Stream，并指定逻辑Block数。 |
-| `kernel[stream, block_dim](args...)` | 指定Stream和逻辑Block数。 |
-| `kernel[stream, block_dim, tiling_key](args...)` | 选择TilingKey对应的编译实例。 |
-| `kernel[stream, block_dim, tiling_key, datatype](args...)` | 同时选择TilingKey和datatype特化实例。 |
+| kernel(args...) | 使用当前Stream，block_dim=1。 |
+| kernel\[block_dim\](args...) | 使用当前Stream，并指定实际核数。 |
+| kernel\[stream, block_dim\](args...) | 指定Stream和实际核数。 |
+| kernel\[stream, block_dim, tiling_key\](args...) | 选择TilingKey对应的编译实例。 |
+| kernel\[stream, block_dim, tiling_key, datatype\](args...) | 同时选择TilingKey和datatype特化实例。 |
 
 使用TilingKey或datatype特化时，必须通过方括号传入相应字典。
 仅使用datatype特化时，datatype字典位于第三项；同时使用TilingKey和datatype时，两者分别位于第三项和第四项。
@@ -176,7 +176,7 @@ Kernel启动相对于Host异步执行。在Host读取结果、检查精度或统
 
 ### stream的含义与设置
 
-`stream`指定Kernel下发的NPU执行流。传入`None`时使用当前Stream；显式传入Stream时，可以只等待该Stream上的任务：
+stream指定Kernel下发的NPU执行流，用于维护一些异步操作的执行顺序，确保按照应用程序中的代码调用顺序在device上执行。传入None时使用当前Stream；显式传入Stream时，可以只等待该Stream上的任务：
 
 ```python
 import torch
@@ -192,15 +192,13 @@ stream.synchronize()
 
 ### blockDim的含义与设置
 
-block_dim是Host请求的逻辑Block数上限，必须是正整数，且不得超过当前平台对应执行域的物理核容量。Kernel通过pypto_pro.language.get_block_num()读取实际生效的Block数。
+block_dim表示实际可用核数，取值必须是正整数，且不得超过最大可用核数。Kernel可通过[pypto_pro.language.get_block_num()](../../../../api/pro_api/SIMD-API/system_variables/get_block_num.md)读取实际生效的核数。
 
-| Kernel类型 | block_dim的含义 | 实际工作单元数 |
-| --- | --- | --- |
-| Vector Kernel | AIV逻辑Block数 | AIV为block_num。 |
-| Cube Kernel | AIC逻辑Block数 | AIC为block_num。 |
-| Cube与Vector混合Kernel | AIC与AIV执行组数 | AIC为block_num；AIV为block_num * pypto_pro.language.get_block_num()。 |
-
-实际`block_num`可能因Stream限核而小于`block_dim`。多核任务切分必须使用`pypto_pro.language.get_block_num()`计算循环步长；混合Kernel的Vector侧还需要乘以`pypto_pro.language.get_subblock_num()`。按核数划分任务和计算核索引的方法参考[多核Tiling切分](tiling/multi_core_tiling.md#多核切分的基本写法)。
+| Kernel类型 | block_dim的含义 |
+| --- | --- |
+| Vector Kernel | 用于设置启动多少个Vector（AIV）实例执行，比如某款AI处理器上有40个Vector核，建议设置为40。 |
+| Cube Kernel | 用于设置启动多少个Cube（AIC）实例执行，比如某款AI处理器上有20个Cube核，建议设置为20。 |
+| Cube与Vector混合Kernel | 按照AIV和AIC组合启动，用于设置启动多少个组合执行，比如某款AI处理器上有40个Vector核和20个Cube核，一个组合是2个Vector核和1个Cube核，建议设置为20，此时会启动20个组合，即40个Vector核和20个Cube核。此时Vector核数的统计还需要乘以[pypto_pro.language.get_subblock_num()](../../../../api/pro_api/SIMD-API/system_variables/get_subblock_num.md)。 |
 
 ## 使用TilingKey和datatype
 
