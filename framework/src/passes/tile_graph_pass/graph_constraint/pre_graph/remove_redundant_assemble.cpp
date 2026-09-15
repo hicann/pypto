@@ -53,6 +53,23 @@ void AddMissingCopyInConsumers(Function& function, const LogicalTensorPtr& tenso
         }
     }
 }
+
+// 静态offset全零, 且符号offset为空或全部可化简为常量0; 无法证明为零的符号偏移视为非零
+bool IsZeroTensorOffset(const LogicalTensorPtr& tensor)
+{
+    if (tensor == nullptr) {
+        return false;
+    }
+    const auto& offset = tensor->GetOffset();
+    if (std::any_of(offset.begin(), offset.end(), [](int64_t value) { return value != 0; })) {
+        return false;
+    }
+    const auto& dynOffset = tensor->GetDynOffset();
+    return std::all_of(dynOffset.begin(), dynOffset.end(), [](const SymbolicScalar& value) {
+        auto simplified = value.Simplify();
+        return simplified.ConcreteValid() && simplified.Concrete() == 0;
+    });
+}
 } // namespace
 
 std::string OpImmediateVecToStr(const std::vector<OpImmediate>& values)
@@ -192,6 +209,13 @@ bool CanMergeViewToCopyIn(const Operation& viewOp, std::vector<Operation*>& copy
         viewInput->GetShape().size() != viewOutput->GetShape().size() || viewOutput->GetConsumers().empty()) {
         return false;
     }
+    // ReplaceTensor(ForUpdateView)可能已把view输入的offset吸收进view的from并同步刷新view输出的offset,
+    // 此时from不再是相对view输入的纯窗口偏移; 继续折叠会使copyIn新输入(view输入)自身的offset与from中
+    // 已吸收的输入offset重复累加, 导致搬运地址错误。仅当view输入的offset(静态+符号)全为零时,
+    // from无论是否被吸收过取值都一致, 折叠才是安全的。
+    if (!IsZeroTensorOffset(viewInput)) {
+        return false;
+    }
     auto viewAttr = std::dynamic_pointer_cast<ViewOpAttribute>(viewOp.GetOpAttribute());
     std::vector<OpImmediate> viewOffset;
     if (viewAttr == nullptr || !GetViewOffset(*viewAttr, viewOffset) ||
@@ -201,6 +225,11 @@ bool CanMergeViewToCopyIn(const Operation& viewOp, std::vector<Operation*>& copy
     for (auto* consumer : viewOutput->GetConsumers()) {
         if (consumer == nullptr || consumer->GetOpcode() != Opcode::OP_COPY_IN ||
             consumer->GetIOperands().size() != 1 || consumer->GetOOperands().size() != 1) {
+            return false;
+        }
+        // ReplaceTensor::InsertCopyDDROp插入的copyIn, 其fromOffset已吸收view窗口偏移(绝对量),
+        // codegen对DDR copyIn只使用fromOffset; 再将view偏移折叠进fromOffset会重复累加, 跳过折叠
+        if (consumer->HasAttr(COPY_IN_VIEW_OFFSET_ABSORBED)) {
             return false;
         }
         auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(consumer->GetOpAttribute());

@@ -1141,9 +1141,13 @@ Status ReplaceTensor::InsertCopyDDROp(Function& function, Operation* needInsertC
     Offset offset(copyShape.size(), 0);
     Offset inOffset = input->GetOffset();
     auto& inOp = *(input)->GetProducers().begin();
+    bool viewOffsetAbsorbed = false;
     if (needInsertCopyAssOp->GetOpcode() == Opcode::OP_RESHAPE && inOp->GetOpcode() == Opcode::OP_VIEW) {
         auto viewOpAttr = std::dynamic_pointer_cast<ViewOpAttribute>(inOp->GetOpAttribute());
         inOffset = viewOpAttr->GetFrom();
+        // codegen对DDR copyIn只使用fromOffset(绝对量), 烤入view窗口偏移是必需的;
+        // 打标记防止后续pass(如PreGraph的view-copyin折叠)再次叠加view偏移
+        viewOffsetAbsorbed = true;
     }
     auto copyInOutputPtr = irBuilder_.CreateTensorVar(input->Datatype(), copyShape, std::vector<SymbolicScalar>{});
     copyInOutputPtr->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
@@ -1165,6 +1169,9 @@ Status ReplaceTensor::InsertCopyDDROp(Function& function, Operation* needInsertC
                 OpImmediate::Specified(inOffset), MemoryType::MEM_UB, OpImmediate::Specified(copyShape),
                 OpImmediate::Specified(copyRawShape), OpImmediate::Specified(copyDynShape)));
         });
+    if (viewOffsetAbsorbed) {
+        copyInOp.SetAttr(COPY_IN_VIEW_OFFSET_ABSORBED, true);
+    }
     copyInOp.UpdateSubgraphID(needInsertCopyAssOp->GetSubgraphID());
 
     auto copyOutOutputPtr = irBuilder_.CreateTensorVar(input->Datatype(), copyShape, std::vector<SymbolicScalar>{});
