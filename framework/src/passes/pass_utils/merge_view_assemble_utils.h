@@ -198,6 +198,22 @@ public:
                                      const std::vector<Operation*>& currentProducers) const;
     static bool HasCompleteStaticCoverage(const LogicalTensorPtr& middle, const std::vector<Operation*>& producers);
     static bool IsFunctionBoundaryTensor(const Function& function, const LogicalTensorPtr& tensor);
+
+    /**
+     * @brief Check whether deleting the given operations would orphan a live consumer.
+     *
+     * A consumer is orphaned when an output tensor of a deleted operation (excluding tensors
+     * re-produced by the merge) still has a non-deleted consumer outside the deletion set.
+     * Function::EraseRelatedTensors would then drop that consumer's input operand via
+     * EraseInput, producing operations with empty operands in later passes.
+     *
+     * @param function the function the operations belong to.
+     * @param toDelete the operations that the caller is about to mark as deleted.
+     * @param reProduced output tensors that the pending merged/replacement operations re-produce.
+     * @return true when the deletion must be skipped to keep the IR consistent.
+     */
+    bool WouldOrphanLiveConsumer(Function& function, const std::vector<Operation*>& toDelete,
+                                 const std::unordered_set<LogicalTensorPtr>& reProduced) const;
     const ConsumerCacheEntry& BuildTensorConsumerCache(Function& function, const LogicalTensorPtr& tensor);
     const ConsumerCacheEntry& GetConsumers(const Operation& operation) const;
     static ir::Span GetFirstSpan(const std::vector<Operation*>& chain);

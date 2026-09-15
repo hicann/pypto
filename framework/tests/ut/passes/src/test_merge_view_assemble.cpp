@@ -2448,5 +2448,69 @@ TEST_F(MergeViewAssembleTest, FanoutViewChainResultTokenPropagatesToEveryMergedS
     EXPECT_EQ(std::find(contract->tokens_.begin(), contract->tokens_.end(), warToken), contract->tokens_.end());
     EXPECT_FALSE(dependency.HasDependency(warToken));
 }
+
+TEST_F(MergeViewAssembleTest, AssembleChainMergeSkippedWhenIntermediateHasExternalAssembleConsumer)
+{
+    // Regression: a mergeable assemble chain whose intermediate tensor is also consumed by an
+    // out-of-chain assemble (different scope, cannot join the chain) must NOT be merged.
+    // Merging would delete the intermediate tensor's only producer while the external assemble
+    // stays alive; Function::EraseRelatedTensors then drops its input operand, producing an
+    // OP_ASSEMBLE with empty iOperand that fails AssignMemoryType in later passes.
+    ComputationalGraphBuilder G;
+
+    std::vector<std::string> tensorNames = {"input", "mid", "chain_out", "ext_out"};
+    EXPECT_TRUE(G.AddTensors(DataType::DT_FP32, {10, 10}, tensorNames));
+
+    std::vector<Opcode> opCodes = {Opcode::OP_ASSEMBLE, Opcode::OP_ASSEMBLE, Opcode::OP_ASSEMBLE};
+    std::vector<std::vector<std::string>> ioperands = {{"input"}, {"mid"}, {"mid"}};
+    std::vector<std::vector<std::string>> ooperands = {{"mid"}, {"chain_out"}, {"ext_out"}};
+    std::vector<std::string> opNames = {"assemble1", "assemble2", "external_assemble"};
+
+    EXPECT_TRUE(G.AddOps(opCodes, ioperands, ooperands, opNames, true));
+    EXPECT_TRUE(G.SetInCast({"input"}));
+    EXPECT_TRUE(G.SetOutCast({"chain_out", "ext_out"}));
+
+    Function* function = G.GetFunction();
+    ASSERT_NE(function, nullptr);
+
+    auto* assemble1 = G.GetOp("assemble1");
+    assemble1->SetOpAttribute(
+        std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{1, 0}, std::vector<SymbolicScalar>{}));
+    assemble1->SetScopeId(1);
+
+    auto* assemble2 = G.GetOp("assemble2");
+    assemble2->SetOpAttribute(
+        std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 2}, std::vector<SymbolicScalar>{}));
+    assemble2->SetScopeId(1);
+
+    auto* externalAssemble = G.GetOp("external_assemble");
+    externalAssemble->SetOpAttribute(
+        std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{5, 5}, std::vector<SymbolicScalar>{}));
+    externalAssemble->SetScopeId(2);
+
+    MergeViewAssemble mergePass;
+    ASSERT_EQ(mergePass.RunOnFunction(*function), SUCCESS);
+
+    // The chain [assemble1, assemble2] must stay unmerged: both ops survive.
+    const auto& operations = function->Operations();
+    EXPECT_TRUE(operations.Contains(*assemble1)) << "assemble1 must survive when the merge is skipped";
+    EXPECT_TRUE(operations.Contains(*assemble2)) << "assemble2 must survive when the merge is skipped";
+    EXPECT_TRUE(operations.Contains(*externalAssemble));
+
+    // No operation may end up with an empty input operand list.
+    for (auto& op : operations) {
+        EXPECT_FALSE(op.IsDeleted() && op.GetOpcode() == Opcode::OP_ASSEMBLE && op.GetIOperands().empty())
+            << "deleted assemble with empty iOperand detected";
+        if (!op.IsDeleted()) {
+            EXPECT_FALSE(op.GetOpcode() == Opcode::OP_ASSEMBLE && op.GetIOperands().empty())
+                << "live assemble op[" << op.GetOpMagic() << "] has empty iOperand";
+        }
+    }
+
+    // The external assemble keeps consuming the intermediate tensor.
+    ASSERT_EQ(externalAssemble->GetIOperands().size(), 1);
+    EXPECT_EQ(externalAssemble->GetIOperands().front()->GetMagic(),
+              G.GetOp("assemble1")->GetOOperands().front()->GetMagic());
+}
 } // namespace tile_fwk
 } // namespace npu
