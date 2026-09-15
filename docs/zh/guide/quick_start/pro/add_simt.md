@@ -1,25 +1,39 @@
 # Add算子快速入门（SIMT）
 
+## 任务与目标
+
 本示例是一个入门实践，基于PyPTO Pro SIMT实现Add算子，帮助您快速上手。它完整呈现了Kernel函数定义、SIMT函数定义、Tile配置、数据搬运、计算及运行的全流程，助您建立整体认知。开始前，请先参考[环境准备](../../../install/prepare_environment.md)完成基础环境搭建。
 
-## Add算子
+## 算子设计规格
 
-**功能介绍**：Add算子的数学表达式为$dst_i = src_i + delta$，计算逻辑为每个SIMT线程根据线程编号处理一个元素。
+**表1** Add算子设计规格
 
-## 算子设计
+| name | shape | data type | format |
+| :---: | :---: | :-------: | :----: |
+| input_src | [1,256] | float32 | ND |
+| delta | - | float32 | Scalar |
+| output | [1,256] | float32 | ND |
 
-| 模块 | 说明 |
-|:---|:---|
-| Kernel函数定义 | 通过@pl.jit声明JIT编译目标 |
-| SIMT函数定义 | 通过@pl.vector_function(mode="simt", max_threads=N)定义SIMT入口函数，并通过max_threads设置单个线程块的最大线程数 |
-| Tile定义 | 使用[pl.TileType](../../../api/pro_api/SIMD-API/basic_data_structures/TileType.md)定义片上Tile的形状、数据类型和目标内存空间 |
-| Tile分配 | 使用[pl.make_tile](../../../api/pro_api/SIMD-API/resource_management/make_tile.md)分配片上内存 |
-| 数据搬入 | 通过[pl.load](../../../api/pro_api/SIMD-API/memory_data_movement/load.md)将GM数据搬入UB Tile |
-| 数据计算 | 通过[SIMT索引调用](../../programming_guide/pro/development/vector_computation/simt_computation.md)启动一维线程块，每个线程通过[pl.simt.thread_idx](../../../api/pro_api/SIMT-API/execution/thread_idx.md)获取线程编号并更新一个Tile元素 |
-| 流水同步 | 通过pl.system.sync_src和pl.system.sync_dst描述MTE2、SIMT Vector流水和MTE3之间的数据依赖 |
-| 数据搬出 | 通过[pl.store](../../../api/pro_api/SIMD-API/memory_data_movement/store.md)将UB Tile结果写回GM |
+- 数学表达式
 
-## 算子代码实现
+  给定输入张量***Src***和标量***delta***，逐元素相加得到输出张量***Dst***：
+  $$
+  Dst_i = Src_i + delta
+  \qquad \text{for } 0 \le i < 256
+  $$
+
+- 使用的主要接口
+
+  基础搬运接口：[pypto_pro.language.load](../../../api/pro_api/SIMD-API/memory_data_movement/load.md)、[pypto_pro.language.store](../../../api/pro_api/SIMD-API/memory_data_movement/store.md)
+
+  SIMT执行接口：[SIMT索引调用](../../programming_guide/pro/development/vector_computation/simt_computation.md)、[pypto_pro.language.simt.thread_idx](../../../api/pro_api/SIMT-API/execution/thread_idx.md)
+
+  资源管理接口：[pypto_pro.language.TileType](../../../api/pro_api/SIMD-API/basic_data_structures/TileType.md)、[pypto_pro.language.make_tile](../../../api/pro_api/SIMD-API/resource_management/make_tile.md)
+
+
+## 导入PyPTO Pro模块
+
+在开始实现Add算子之前，需要导入PyPTO Pro、PyTorch和torch_npu模块，并配置待使用的NPU设备以及线程数。
 
 ```python
 import os
@@ -28,13 +42,18 @@ import pypto_pro.language as pl
 import torch
 import torch_npu
 
+ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
 THREADS = 256
 TILE_BYTES = THREADS * 4
+```
 
+## 核心代码逻辑
 
+```python
 @pl.vector_function(mode="simt", max_threads=THREADS)
-def add_delta(data: pl.Tile[[1, THREADS], pl.DT_FP32], delta: pl.DT_FP32) -> None:
+def add_delta(data, delta: pl.DT_FP32):
     tid = pl.simt.thread_idx().x
     data[0, tid] = data[0, tid] + delta
 
@@ -62,22 +81,6 @@ def simt_add_kernel(
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(dst, data, [0, 0])
-
-
-# Host端调用
-device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
-device = f"npu:{device_id}"
-torch.npu.set_device(device)
-
-delta = 2.5
-src = torch.arange(THREADS, dtype=torch.float32, device=device).reshape(1, THREADS)
-dst = torch.empty_like(src)
-
-simt_add_kernel(src, dst, delta)
-torch.npu.synchronize()
-
-torch.testing.assert_close(dst, src + delta, rtol=0, atol=0)
-print("SIMT kernel passed!")
 ```
 
 > [!NOTE]说明
@@ -89,3 +92,36 @@ print("SIMT kernel passed!")
 > - pl.load通过MTE2流水将输入搬入UB，`add_delta[THREADS](data, delta)`在SIMT Vector流水上更新Tile，pl.store通过MTE3流水将结果搬回GM。
 > - 不同流水之间存在数据依赖，因此需要成对调用pl.system.sync_src和pl.system.sync_dst显式同步。
 > - 如需进一步了解PyPTO Pro的SIMT编程模型，请参阅[SIMT编程范式](../../programming_guide/pro/programming_paradigm/SIMT/programming_paradigm.md)。
+
+## 测试用例
+
+测试用例使用PyTorch Tensor准备输入，通过PyPTO Pro Kernel完成计算，并与PyTorch逐元素加法的结果进行比较。
+
+```python
+def test_simt_add_kernel():
+    torch.npu.set_device(ST_DEVICE)
+
+    delta = 2.5
+    src = torch.arange(
+        THREADS,
+        dtype=torch.float32,
+        device=ST_DEVICE,
+    ).reshape(1, THREADS)
+    dst = torch.empty_like(src)
+
+    simt_add_kernel(src, dst, delta)
+    torch.npu.synchronize()
+
+    torch.testing.assert_close(dst, src + delta, rtol=0, atol=0)
+```
+
+## 编译与执行
+
+将上述代码按顺序保存为`simt_add_example.py`，在已安装PyPTO Pro的环境中运行：
+
+```bash
+source /usr/local/Ascend/ascend-toolkit/set_env.sh
+pytest -q simt_add_example.py::test_simt_add_kernel
+```
+
+用例执行成功后，pytest显示`1 passed`。
