@@ -97,7 +97,7 @@ def add_example(
 
 `datatype`字典的key是Kernel参数名，value是Kernel中使用的dtype变量名。多个参数映射到同一变量时，实际数据类型必须一致。只声明Kernel内部需要读取数据类型的参数。
 
-TilingData和TilingKey的字段规则参考[Tiling结果传输](../tiling/tiling_result_transfer.md)。Kernel参数和执行域的定义参考[Kernel核函数创建](../kernel_function.md)。
+TilingData和TilingKey的字段规则参考[Tiling参数定义与传递](../tiling/tiling_parameter_definition.md)。Kernel参数和执行域的定义参考[Kernel核函数创建](../kernel_function.md)。
 
 ## 配置CMakeLists.txt
 
@@ -159,7 +159,7 @@ Host侧Tiling需要保证：
 
 `GET_TPL_TILING_KEY(...)`接收各字段的实际候选值，并根据字段顺序和候选下标生成64-bit Key。`context->SetTilingKey()`接收打包后的Key，不能直接传入某个字段未经编码的值。
 
-BlockDim的含义和计算方式参考[多核Tiling切分](../tiling/multi_core_tiling.md#在启动时设置逻辑block数block_dim)。需要系统Workspace时，通过相应平台接口查询所需大小后与用户Workspace相加，不要写死固定值。
+BlockDim的含义和计算方式参考[blockDim的含义与设置](../kernel_function.md#blockdim的含义与设置)。需要系统Workspace时，通过相应平台接口查询所需大小后与用户Workspace相加，不要写死固定值。
 
 ## 编译算子二进制
 

@@ -1,229 +1,122 @@
 # 多核Tiling切分
 
-多核Tiling将一个Tensor的计算任务划分为多个Tile任务，并把这些任务分配给多个逻辑AI Core。Kernel的每个逻辑Block执行同一份程序，通过Block索引处理不同的数据区域。
+本文介绍核间切分：如何把算子的任务分配到多个AI Core并行处理。Tiling的概念、层次和参数来源参见[Tiling概述](tiling_overview.md)。
 
-**图1 多核SPMD任务映射**
+## 多核切分的基本写法
 
-![多核SPMD任务映射](../../../../figures/pro/pro_multicore_spmd_mapping.png "多核SPMD任务映射")
-
-## 逻辑Block与执行域
-
-启动Kernel时通过`block_dim`指定逻辑Block数。Kernel内使用以下接口获取实际执行域：
-
-| 接口 | 含义 |
-| --- | --- |
-| `pypto_pro.language.get_block_idx()` | 当前逻辑Block的索引。 |
-| `pypto_pro.language.get_block_num()` | 当前Kernel实际使用的逻辑Block数。 |
-| `pypto_pro.language.get_subblock_idx()` | 混合Kernel中，当前Vector子Block的索引。 |
-| `pypto_pro.language.get_subblock_num()` | 每个Cube Block对应的Vector子Block数。 |
-
-`block_dim`是启动时申请的逻辑Block数，`pypto_pro.language.get_block_num()`返回运行时实际生效的值。多核循环必须使用该接口计算步长，避免限核后遗漏任务。
-
-不同Kernel类型的执行域如下：
-
-| Kernel类型 | `get_block_idx()` | 工作单元数 |
-| --- | --- | --- |
-| Vector | AIV的逻辑Block索引 | `get_block_num()` |
-| Cube | AIC的逻辑Block索引 | `get_block_num()` |
-| Cube与Vector混合 | Cube侧为AIC索引；Vector侧已展平为AIV索引 | Cube侧为`get_block_num()`；Vector侧为`get_block_num() * get_subblock_num()` |
-
-混合Kernel中，可以根据当前执行单元分别组织Cube和Vector代码：
+以矩阵乘为例，输出被划分为`m_tiles * n_tiles`个Tile，每个Tile的计算相互独立。Tile数按向上取整计算，保证最后不足一个Tile的数据也被覆盖：
 
 ```python
-import pypto_pro.language as pl
-
-
-with pl.section_cube():
-    cube_idx = pl.get_block_idx()
-    cube_num = pl.get_block_num()
-    # 分配Cube任务
-
-with pl.section_vector():
-    vector_idx = pl.get_block_idx()
-    vector_num = pl.get_block_num() * pl.get_subblock_num()
-    # 分配Vector任务
-```
-
-Vector侧的`pypto_pro.language.get_block_idx()`已经包含子Block偏移，无需再次使用`pypto_pro.language.get_subblock_idx()`展平索引。
-
-## 使用跨步循环进行多核切分
-
-设Tile任务总数为`total_tiles`，逻辑Block `core_id`从`core_id`开始，每次跨过全部工作单元数：
-
-```python
-import pypto_pro.language as pl
-
-
-core_id = pl.get_block_idx()
-core_num = pl.get_block_num()
-
-for tile_idx in pl.range(core_id, total_tiles, core_num):
-    # 处理第 tile_idx 个Tile任务
-    ...
-```
-
-这种跨步切分不要求任务数能够被核数整除。当`total_tiles < core_num`时，索引超出任务范围的逻辑Block不会进入循环。
-
-**图2 跨步多核切分**
-
-![跨步多核切分](../../../../figures/pro/pro_multicore_strided_partition.png "跨步多核切分")
-
-### 二维任务的切分
-
-二维Tile网格可以先展平，再按一维索引分配：
-
-```python
-import pypto_pro.language as pl
-
-
 m_tiles = (m + tile_m - 1) // tile_m
 n_tiles = (n + tile_n - 1) // tile_n
 total_tiles = m_tiles * n_tiles
-
-core_id = pl.get_block_idx()
-core_num = pl.get_block_num()
-
-for tile_idx in pl.range(core_id, total_tiles, core_num):
-    tile_m_idx = tile_idx // n_tiles
-    tile_n_idx = tile_idx % n_tiles
-    ...
 ```
 
-也可以先将外层维度分配给不同逻辑Block，再在每个Block内遍历内层维度：
+把这些Tile按行优先统一编号成`total_tiles`个任务，每个核负责其中连续的一段，再由任务号换算回二维下标：
 
 ```python
 import pypto_pro.language as pl
 
 
-for tile_m_idx in pl.range(core_id, m_tiles, core_num):
-    for tile_n_idx in pl.range(0, n_tiles, 1):
+core_id = pl.get_block_idx() // pl.get_subblock_num()
+core_num = pl.get_block_num()
+
+tiles_per_core = (total_tiles + core_num - 1) // core_num
+start = core_id * tiles_per_core
+end = pl.min(start + tiles_per_core, total_tiles)
+
+for task_idx in pl.range(start, end, 1):
+    tile_m_idx = task_idx // n_tiles
+    tile_n_idx = task_idx % n_tiles
+    # 计算第 (tile_m_idx, tile_n_idx) 个输出Tile
+    ...
+```
+
+[`pypto_pro.language.get_block_num()`](../../../../../api/pro_api/SIMD-API/system_variables/get_block_num.md)返回本次实际启动的核数。计算每个核的任务范围必须使用它的返回值：`block_dim`只是启动时申请的核数，运行时可能因限核而减少，用它会遗漏任务。
+
+`core_id`由[`pypto_pro.language.get_block_idx()`](../../../../../api/pro_api/SIMD-API/system_variables/get_block_idx.md)除以[`pypto_pro.language.get_subblock_num()`](../../../../../api/pro_api/SIMD-API/system_variables/get_subblock_num.md)得到。纯Vector和纯Cube Kernel中`get_subblock_num()`返回1，该除法不改变结果；MIX Kernel中Vector侧的`get_block_idx()`是Vector核的全局索引，除以每个AI Core内的Vector核数后，与Cube侧得到同一个AI Core编号，两侧才能按同一套切分处理同一批数据。
+
+**图1 任务编号与连续分配**
+
+![任务编号与连续分配](../../../../figures/pro/pro_multicore_contiguous_grid.png "任务编号与连续分配")
+
+这种分配不要求任务数被核数整除：`tiles_per_core`向上取整，末尾的核用[`pypto_pro.language.min()`](../../../../../api/pro_api/Utils-API/python_syntax_sugar/min.md)把上界限制在`total_tiles`，剩余任务自然落在最后一个进入循环的核上，不需要为“除不尽”单独编写分支。任务总数少于核数时，编号超出范围的核得到空区间，不会进入循环。
+
+算子的执行时间取决于任务最多的那个核，为`ceil(total_tiles / core_num)`个任务的耗时。
+
+上面的编号方式是一种通用选择。算子完全可以按自身的数据复用和依赖关系定义别的切分方式，例如输出Tile之间存在跨迭代累加时，被累加的那一维必须完整留在同一个核内。
+
+## MIX Kernel的切分
+
+Device上有多个AI Core，每个AI Core内含Cube核（AIC）和Vector核（AIV）；在AIC与AIV为1:2的芯片上，一个AI Core内有1个Cube核和2个Vector核。同时包含Cube和Vector[执行域](../kernel_function.md#定义执行域)的Kernel称为MIX Kernel。
+
+MIX Kernel以AI Core为启动单位，核间切分也只在AI Core这一层做一次：`get_block_num()`在两侧都返回AI Core数，`core_id`在两侧都取`get_block_idx() // get_subblock_num()`（AIC上`get_subblock_num()`返回1，AIV上返回2，两侧因此得到同一个AI Core编号）。上一节的任务划分直接沿用，Cube和Vector在同一个任务循环里按同一个`task_idx`推进：
+
+```python
+import pypto_pro.language as pl
+
+
+core_id = pl.get_block_idx() // pl.get_subblock_num()
+core_num = pl.get_block_num()
+
+tiles_per_core = (total_tiles + core_num - 1) // core_num
+start = core_id * tiles_per_core
+end = pl.min(start + tiles_per_core, total_tiles)
+
+for task_idx in pl.range(start, end, 1):
+    with pl.section_cube():
+        # 计算本任务的整块输出
+        ...
+
+    with pl.section_vector():
+        # 处理Cube刚算出的这块数据
         ...
 ```
 
-**图3 展平切分与二维切分**
-
-![展平切分与二维切分](../../../../figures/pro/pro_multicore_flat_vs_2d.png "展平切分与二维切分")
-
-两种方式的选择取决于任务形状和数据访问方式：
-
-- 展平切分的任务粒度更细，通常更容易均衡各核负载。
-- 按外层维度切分便于同一逻辑Block复用一行或一列数据，但外层Tile数较少时并行度会受到限制。
-
-## 在启动时设置逻辑Block数（block_dim）
-
-Kernel启动格式为：
+在1:2的芯片上，一个AI Core内有2个Vector核，两者要分摊同一个任务里Cube产出的这份数据，因此每个Vector核处理的数据量是Cube的一半。这一步用[`pypto_pro.language.get_subblock_idx()`](../../../../../api/pro_api/SIMD-API/system_variables/get_subblock_idx.md)在某一维上把数据切成两半，属于核内切分，不参与核间任务的分配：
 
 ```python
-kernel[stream, block_dim](...)
+sub_id = pl.get_subblock_idx()
+
+first_half = (rows + 1) // 2
+half_rows = first_half
+if sub_id == 1:
+    half_rows = rows - first_half
+
+for task_idx in pl.range(start, end, 1):
+    with pl.section_cube():
+        # 计算本任务的rows行输出
+        ...
+
+    with pl.section_vector():
+        if half_rows > 0:
+            # 起始行 sub_id * first_half
+            # 行数 half_rows
+            ...
 ```
 
-`stream`为执行流，使用当前流时可传入`None`；`block_dim`为正整数。设置`block_dim`时应同时考虑可用核数和有效任务数：
+切分的维度由算子自身决定，行、列或batch方向都可以，前提是两个Vector核的工作互不重叠且合起来覆盖Cube的全部输出。
 
-```python
-from pypto_pro.runtime.platform import get_platform_info
+## 负载均衡与切分粒度
 
-platform_info = get_platform_info()
+上面的分配方式保证了各核**任务数**接近，但没有保证各核**计算量**接近。每个Tile任务的计算量相近时，两者等价；计算量差异较大时（例如因果掩码下不同行块的有效长度不同），需要额外调整：
 
-# Vector Kernel
-block_dim = min(platform_info.vector_core_num, total_tiles)
+- 调整任务的编号顺序，使重任务分散到不同的核，而不是集中在少数核上。
+- 拆分粒度过大的任务，减少单个长任务造成的尾部等待。
 
-# Cube Kernel
-block_dim = min(platform_info.cube_core_num, total_tiles)
-```
+切分粒度的选择需要同时考虑两端：
 
-混合Kernel以Cube Block为启动单位，并同时受Cube核数和对应Vector核数约束：
-
-```python
-block_dim = min(
-    platform_info.cube_core_num,
-    platform_info.vector_core_num // 2,
-    total_cube_tasks,
-)
-```
-
-不要仅为了占满所有核而增大`block_dim`。当任务数较少或单核工作量过小时，更多逻辑Block不会增加有效并行度，还会增加调度开销。
-
-### Device、Stream与作用域限核
-
-运行时可以在Device、Stream或代码作用域上限制可用核数。更具体的限制覆盖更宽泛的限制：
-
-```python
-import torch
-import torch_npu
-
-device = torch.npu.current_device()
-torch.npu.set_device_limit(device, cube_num=8, vector_num=16)
-
-stream = torch.npu.Stream()
-torch.npu.set_stream_limit(stream, cube_num=4, vector_num=6)
-
-kernel[stream, 32](...)
-
-with torch.npu.npugraph_ex.scope.limit_core_num(2, 4, stream=stream):
-    kernel[stream, 32](...)
-
-torch.npu.reset_stream_limit(stream)
-```
-
-限核可能使实际逻辑Block数小于启动时传入的`block_dim`。Kernel内始终以`pypto_pro.language.get_block_num()`返回的值作为跨步循环的步长。使用限核接口时还需要注意：
-
-- Stream限核配置覆盖Device限核配置；Stream未配置时继承Device限制。
-- `set_device_limit`用于设置Device默认值，需要反复调整时使用Stream限核接口。
-- `limit_core_num`作用域退出后恢复该Stream原来的限制。
-- 图捕获按照捕获时的Stream限制确定Block数；修改限制后需要重新捕获，已有图的`replay()`不会重新查询核数。
-
-## 多核Tiling设计
-
-### 负载均衡
-
-每个Tile任务的计算量接近时，跨步切分通常可以获得较均衡的负载。任务计算量差异较大时，可以调整展平顺序，使重任务分散到不同逻辑Block；也可以拆分粒度过大的任务，减少单个长任务造成的尾部等待。
+- **任务总数要够核数**。任务数少于核数时部分核不会进入循环；任务数接近核数时，零头会明显放大为负载差异。
+- **单个任务不宜过小**。任务越小，循环控制、数据搬运启动和同步的开销占比越高。
 
 设计切分方式时重点检查：
 
-- Tile任务总数是否足以覆盖计划使用的逻辑Block。
-- 每个逻辑Block分到的任务数和计算量是否接近。
-- 相邻任务是否复用数据，以及展平顺序是否破坏这种复用。
+- Tile任务总数是否足以覆盖计划使用的核。
+- 各核分到的任务数和计算量是否接近。
 - 切分后的Tile形状是否满足数据搬运和计算接口的约束。
 
-Tile大小、Buffer分配和Tile计算分别参考[Tile创建和操作](../tile_creation_and_operations.md)和[Tile计算](../vector_computation/tile_computation.md)。Host侧生成的运行时Tiling参数参考[Tiling结果传输](tiling_result_transfer.md)。
-
-### 矩阵乘任务映射示例
-
-矩阵乘可将输出矩阵划分为`m_tiles * n_tiles`个任务，每个任务计算一个输出Tile：
-
-```python
-import pypto_pro.language as pl
-
-
-m_tiles = (m + tile_m - 1) // tile_m
-n_tiles = (n + tile_n - 1) // tile_n
-total_tiles = m_tiles * n_tiles
-
-core_id = pl.get_block_idx()
-core_num = pl.get_block_num()
-
-for task_idx in pl.range(core_id, total_tiles, core_num):
-    m_idx = task_idx // n_tiles
-    n_idx = task_idx % n_tiles
-
-    # 沿K方向累加输出Tile
-    for k_idx in pl.range(0, k_tiles, 1):
-        ...
-```
-
-该映射把输出Tile作为独立任务，避免多个逻辑Block同时写同一输出区域。若算法需要跨核归约，应另外设计中间结果和归约阶段，不能假定不同逻辑Block之间存在隐式同步。
-
-<a id="常见问题"></a>
+Tile大小、Buffer分配和Tile计算分别参考[Tile创建和操作](../tile_creation_and_operations.md)和[Tile计算](../vector_computation/tile_computation.md)。Host侧生成的运行时Tiling参数参考[Tiling参数定义与传递](tiling_parameter_definition.md)。
 
 ## 尾块处理
 
 尾块场景需要向上取整计算Tile数以覆盖全部任务，并根据数据搬运和计算接口的对齐要求选择Tile尺寸；有效形状、填充和计算方法参考[Tile计算中的尾块处理](../vector_computation/tile_computation.md#尾块处理)。
-
-## 使用限制与建议
-
-- Host侧启动Kernel时，传入的block_dim不得超过当前平台对应执行域的物理核容量。
-- block_dim表示请求的逻辑Block数，实际运行的核数为block_dim、物理核数、控核核数三者的最小值；未配置控核时，控核核数按物理核数计算，Kernel内使用pypto_pro.language.get_block_num()获取实际核数。
-- 混合Kernel的Vector工作单元数需要乘以pypto_pro.language.get_subblock_num()；纯Vector Kernel不需要。
-- block_dim不能替代Tiling设计。任务粒度过大时负载不均，粒度过小时调度和重复搬运开销会增大。
-- 多核切分只负责分配任务，不提供逻辑Block之间的隐式同步。
-- 运行时shape、循环边界等参数通过TilingData传递；有限的编译期模式通过TilingKey选择，参考[Tiling结果传输](tiling_result_transfer.md)。

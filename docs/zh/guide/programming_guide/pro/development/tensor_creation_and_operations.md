@@ -99,7 +99,7 @@ def dynamic_kernel(
     ...
 ```
 
-TilingData的声明和传入方式请参考[Tiling结果传输](tiling/tiling_result_transfer.md#tilingdata)。
+TilingData的声明和传入方式请参考[Tiling参数定义与传递](tiling/tiling_parameter_definition.md#tilingdata)。
 
 ### 创建带显式stride的Tensor视图
 
