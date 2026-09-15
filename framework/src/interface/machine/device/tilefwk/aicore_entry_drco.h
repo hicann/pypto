@@ -234,6 +234,7 @@ struct DrcoEntryState {
 
     uint32_t readyMatrixPushGroupIndex;
     uint32_t readyMatrixPopRowIndex;
+    bool isExectedLeafTask{false};
 
 #if ENABLE_AICORE_TRACE
     struct TraceEventStatistic {
@@ -1264,6 +1265,15 @@ INLINE void ExecLeafFunction(DrcoEntryState* state, uint32_t taskId)
     TraceEvent(state, taskId, EVENT_LEAF_END());
 }
 
+INLINE void PerfDevTaskFirstLeafTask(DrcoEntryState* state)
+{
+    if (!state->isExectedLeafTask) {
+        PerfTraceRecord(state->ctx.SeqNo(), state->ctx.aicoreDevTaskMetric.devTaskMetric,
+                        PERF_TRACE_CORE_DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK);
+        state->isExectedLeafTask = true;
+    }
+}
+
 INLINE void ExecDrcoPerCoreTasks(DrcoEntryState* state, __gm__ npu::tile_fwk::PerCorePendingQueue* perCoreQueue,
                                  __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList)
 {
@@ -1271,6 +1281,7 @@ INLINE void ExecDrcoPerCoreTasks(DrcoEntryState* state, __gm__ npu::tile_fwk::Pe
     uint32_t perCoreQueueHead = DrcoGmLoad(&perCoreQueue->head);
     while (perCoreQueueSize > perCoreQueueHead) {
         uint32_t taskId = DrcoGmLoadArray(perCoreQueue->taskList, perCoreQueueHead);
+        PerfDevTaskFirstLeafTask(state);
         ExecLeafFunction(state, taskId);
         DrcoResolveDepend(state, rootFuncList, taskId);
         perCoreQueueHead++;
@@ -1316,6 +1327,7 @@ INLINE void ExecDrcoReadyQueueTasks(DrcoEntryState* state, __gm__ npu::tile_fwk:
     uint32_t outCoreType = 0;
     uint32_t taskCount = DrcoDynFuncDataListFetchTask(state, rootFuncList, outCoreType, taskIdList);
     while (taskCount != static_cast<uint32_t>(AICORE_TASK_ALL_FINISH)) {
+        PerfDevTaskFirstLeafTask(state);
         for (uint32_t i = 0; i < taskCount; i++) {
             ExecDrcoReadyQueueTaskOnce(state, rootFuncList, perCoreQueue, taskIdList[i], outCoreType);
         }
@@ -1347,6 +1359,7 @@ INLINE void KernelEntryDrco(int64_t ffts_addr, int64_t inputs, int64_t outputs, 
         UpdateCacheDevTask(&state.ctx, state.ctx.curLeafTaskParallelIdx, (int64_t)deviceTask->dynFuncDataList);
         __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList = deviceTask->drcoRootFuncList;
         state.ctx.lastTaskFinishCycle = 0;
+        state.isExectedLeafTask = false;
 
         __gm__ npu::tile_fwk::PerCorePendingQueue* perCoreQueue = DrcoGmLoad(
             &rootFuncList->perCorePendingQueueArray[BlockDescBlockIdx(state.blockDesc)]);
@@ -1372,8 +1385,7 @@ INLINE void KernelEntryDrco(int64_t ffts_addr, int64_t inputs, int64_t outputs, 
 
         state.readyMatrixPopRowIndex = 0;
         state.readyMatrixPushGroupIndex = BlockDescTypedBlockIdx(state.blockDesc) / npu::tile_fwk::LOCAL_GROUP_SIZE;
-        PerfTraceRecord(state.ctx.SeqNo(), state.ctx.aicoreDevTaskMetric.devTaskMetric,
-                        PERF_TRACE_CORE_DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK);
+
         ExecDrcoPerCoreTasks(&state, perCoreQueue, rootFuncList);
         ExecDrcoReadyQueueTasks(&state, rootFuncList, perCoreQueue);
 
@@ -1381,7 +1393,7 @@ INLINE void KernelEntryDrco(int64_t ffts_addr, int64_t inputs, int64_t outputs, 
         if (BlockDescBlockIdx(state.blockDesc) == 0) {
             DrcoGmStore(&rootFuncList->devTaskFinished, (uint32_t)1);
         }
-        DfxProcWhenDevTaskStop(&state.ctx, state.args, state.metric, true);
+        DfxProcWhenDevTaskStop(&state.ctx, state.args, state.metric, state.isExectedLeafTask);
     }
     if (BlockDescBlockIdx(state.blockDesc) == 0) {
         state.deviceTaskReadyQueue->head = 0;
