@@ -6,6 +6,7 @@ sphinx-tabs == 3.4.1
 sphinx-toolbox == 3.4.0
 sphinxcontrib-napoleon==0.7
 sphinxcontrib_httpdomain==1.8.1
+sphinxcontrib-mermaid==0.9.2
 furo
 uvicorn
-myst-parser
+myst-parser==0.19.2

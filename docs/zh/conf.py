@@ -26,12 +26,16 @@ copyright = "2025-2026 Huawei Technologies Co., Ltd. All Rights Reserved."
 master_doc = 'index'
 
 # 启用的扩展列表
+# 注意：sphinxcontrib.mermaid 必须位于 sphinx_tabs 之前。
+# sphinx-tabs 会在无 tabs 的页面上复制 context["script_files"] 列表，
+# 导致在其之后运行的 sphinxcontrib-mermaid 按页注入的 JS 无法进入页面。
 extensions = [
     "sphinx.ext.mathjax",  # 数学公式
     "myst_parser",  # Markdown 解析
     "sphinx.ext.viewcode",  # 显示代码源文件链接
     "sphinx.ext.intersphinx",  # 跨文档链接
     "sphinx_reredirects",  # 页面重定向
+    "sphinxcontrib.mermaid",  # Mermaid 图表
     "sphinx_tabs.tabs",  # 标签页
     "sphinx_toolbox.collapse",  # 折叠块
     "sphinx.ext.napoleon",  # Docstring 解析
@@ -50,6 +54,9 @@ myst_enable_extensions = [
     "deflist",  # 支持定义列表
     "dollarmath",  # 支持美元数学公式
 ]
+
+# 将 ```mermaid 代码块作为 mermaid 指令解析（需 myst-parser>=0.19）
+myst_fence_as_directive = ["mermaid"]
 
 # 语言改为中文
 language = "zh_CN"
