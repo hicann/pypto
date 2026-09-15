@@ -40,7 +40,7 @@ bool IsMxScaleTensor(const LogicalTensorDataPtr& tensor)
         return false;
     }
     const auto& shape = tensor->GetShape();
-    return shape.size() == 0x3 && shape[0x3 - 1] == 0x2;
+    return shape.size() >= 0x3 && shape.size() <= 0x5 && shape.back() == 0x2;
 }
 
 bool HasMxScaleByInputs(const ExecuteOperationContext* ctx, bool isAccOp)

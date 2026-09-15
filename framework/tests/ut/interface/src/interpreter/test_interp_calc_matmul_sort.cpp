@@ -107,6 +107,42 @@ TEST_F(TorchAdaptorTest, MatMul)
     }
 }
 
+TEST_F(TorchAdaptorTest, MatMulMxScale2D)
+{
+    auto self = makeTensorData(DT_FP32, {1, 64}, 1.0f);
+    auto other = makeTensorData(DT_FP32, {64, 1}, 1.0f);
+    auto scaleA = makeTensorData(DT_FP8E8M0, {1, 1, 2}, static_cast<uint8_t>(0x7F));
+    auto scaleB = makeTensorData(DT_FP8E8M0, {1, 1, 2}, static_cast<uint8_t>(0x7F));
+    auto out = makeTensorData(DT_FP32, {1, 1}, 0.0f);
+    auto golden = makeTensorData(DT_FP32, {1, 1}, 64.0f);
+
+    auto scaleAData = calc::Trans(scaleA);
+    auto scaleBData = calc::Trans(scaleB);
+    MatMulParam param{};
+    param.aScalePtr = &scaleAData;
+    param.bScalePtr = &scaleBData;
+    calc::MatMul(out, self, other, param);
+    ASSERT_ALLCLOSE(out, golden);
+}
+
+TEST_F(TorchAdaptorTest, MatMulMxScale3DBatchBroadcastUnalignedK)
+{
+    auto self = makeTensorData(DT_FP32, {2, 1, 33}, 1.0f);
+    auto other = makeTensorData(DT_FP32, {1, 33, 1}, 1.0f);
+    auto scaleA = makeTensorData(DT_FP8E8M0, {2, 1, 1, 2}, std::vector<uint8_t>{0x7F, 0x7F, 0x80, 0x80});
+    auto scaleB = makeTensorData(DT_FP8E8M0, {1, 1, 1, 2}, std::vector<uint8_t>{0x7F, 0x7F});
+    auto out = makeTensorData(DT_FP32, {2, 1, 1}, 0.0f);
+    auto golden = makeTensorData(DT_FP32, {2, 1, 1}, std::vector<float>{33.0f, 66.0f});
+
+    auto scaleAData = calc::Trans(scaleA);
+    auto scaleBData = calc::Trans(scaleB);
+    MatMulParam param{};
+    param.aScalePtr = &scaleAData;
+    param.bScalePtr = &scaleBData;
+    calc::MatMul(out, self, other, param);
+    ASSERT_ALLCLOSE(out, golden);
+}
+
 TEST_F(TorchAdaptorTest, MatMulBt)
 {
     RunMatMulBt(16.0f, 0);

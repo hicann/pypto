@@ -414,11 +414,17 @@ static inline uint8_t EncodeFloatToFp8E5M2(float v)
         return static_cast<uint8_t>((sign << 0x7) | mant);
     }
     float log2v = std::log2(absv);
-    int exp = static_cast<int>(std::round(log2v + 15.0f));
+    int exp = static_cast<int>(std::floor(log2v + 15.0f));
     exp = std::clamp(exp, 1, 0x1e);
     float scale = std::exp2(static_cast<float>(exp - 15));
     float scale_safe = (scale > 0.0f) ? scale : 1.0f;
-    int mant = static_cast<int>(std::round((absv / scale_safe - 1.0f) * 4.0f));
+    int mant = RoundToNearestEvenFloatPos((absv / scale_safe - 1.0f) * 4.0f);
+    if (mant > 0x3) {
+        // Rounding carried beyond the top mantissa: bump exponent instead of clamping the mantissa,
+        // otherwise 1.5/1.75 would collapse onto the next power of two with mantissa forced to 0.
+        mant = 0;
+        exp = std::min(exp + 1, 0x1e);
+    }
     mant = std::clamp(mant, 0, 0x3);
     return static_cast<uint8_t>((sign << 0x7) | (exp << 0x2) | mant);
 }
