@@ -136,6 +136,8 @@ class ASTParser(
         # Keep the Expr itself as the key. A bare id(expr) does not retain the
         # Python IR wrapper and can be reused by an unrelated expression.
         self._tile_mutex_meta: dict[ir.Expr, tuple] = {}
+        # Param name -> "in"/"out" from pl.Input/pl.Output annotation markers.
+        self.param_directions: dict[str, str] = {}
         self.scope_manager = ScopeManager(strict_ssa=strict_ssa)
         self._tilingkey_consts = tilingkey_consts
         self._datatype_consts = datatype_consts
@@ -621,6 +623,28 @@ class ASTParser(
         param_type = self._attach_ptr_to_tensor_type(param_name, param_type, param_span)
         param_var = f.param(param_name, param_type, param_span)
         self.scope_manager.define_var(param_name, param_var, allow_redef=True)
+
+        # pl.Input / pl.Output annotation marker: record the declared direction so
+        # the JIT caller can use it for profiling tensor type.
+        direction = self._extract_declared_direction(arg.annotation)
+        if direction is not None:
+            self.param_directions[param_name] = direction
+
+    def _extract_declared_direction(self, annotation: ast.expr | None) -> str | None:
+        """Direction declared via ``pl.Tensor[..., pl.Output]`` in a param annotation.
+
+        Evaluates the annotation expression and reads ``Tensor.direction`` —
+        only annotation-only Tensor objects carry the attribute.
+        """
+        if annotation is None or not isinstance(annotation, ast.Subscript):
+            return None
+        try:
+            success, value = self.expr_evaluator.try_eval_expr(annotation)
+        except Exception:
+            return None
+        if success and hasattr(value, "direction") and value.direction is not None:
+            return value.direction
+        return None
 
     def _hoist_closure_tuples(self) -> None:
         """Anchor convertible closure tuple/list values at function entry.

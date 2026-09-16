@@ -769,6 +769,42 @@ class TypeResolver:
         n_elts = len(slice_value.elts)
 
         # 2 args: [shape, dtype]
+        # Filter out pl.Input / pl.Output direction markers from the subscript
+        # elements; they were already captured by the annotation-level evaluation
+        # (see _extract_declared_direction) and carry no IR type meaning here.
+        from pypto_pro.language import _DirectionMarker
+
+        def _is_direction_marker(node: ast.expr) -> bool:
+            # Match ``pl.Input`` / ``pl.Output`` (Attribute on ``pl``) or a bare
+            # Name bound to a _DirectionMarker; the expr_evaluator fallback covers
+            # aliased imports (``from pypto_pro.language import Output``).
+            if isinstance(node, ast.Attribute):
+                if node.attr not in ("Input", "Output"):
+                    return False
+                base = node.value
+                return isinstance(base, ast.Name) and base.id == "pl"
+            if isinstance(node, ast.Name):
+                if node.id not in ("Input", "Output"):
+                    return False
+            else:
+                return False
+            try:
+                ok, v = self.expr_evaluator.try_eval_expr(node)
+                return ok and isinstance(v, _DirectionMarker)
+            except Exception:
+                return False
+
+        elts = [e for e in slice_value.elts if not _is_direction_marker(e)]
+        slice_value = ast.Tuple(
+            elts=elts,
+            ctx=slice_value.ctx,
+            lineno=slice_value.lineno,
+            col_offset=slice_value.col_offset,
+            end_lineno=getattr(slice_value, "end_lineno", None),
+            end_col_offset=getattr(slice_value, "end_col_offset", None),
+        )
+        n_elts = len(elts)
+
         if n_elts == 2:
             return ir.TensorType(shape, dtype)
 

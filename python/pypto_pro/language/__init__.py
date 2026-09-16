@@ -41,6 +41,8 @@ __all__ = [
     "ZN",
     "NN",
     "ZZ",
+    "Input",
+    "Output",
     "ReluPreMode",
     "AtomicType",
     "STPhase",
@@ -462,3 +464,34 @@ NZ = TensorLayout.NZ
 ZN = TensorLayout.ZN
 NN = TensorLayout.NN
 ZZ = TensorLayout.ZZ
+
+
+class _DirectionMarker:
+    """Marker for tensor direction in ``pl.Tensor[...]`` annotations.
+
+    ``pl.Input`` (default when omitted) marks a read-only parameter;
+    ``pl.Output`` marks a parameter the kernel stores into. Used purely for
+    profiling metadata (aclprof tensor type) — computation semantics unchanged.
+    """
+
+    __slots__ = ("name",)
+
+    def __init__(self, name: str):
+        self.name = name
+
+    def __repr__(self) -> str:
+        return f"pl.{self.name}"
+
+    def __reduce__(self):
+        # Pickle by module attribute so the round-tripped object stays the same
+        # singleton (identity matters: markers are compared with ``is``).
+        return _DirectionMarker._from_module_attr, (self.name,)
+
+    @staticmethod
+    def _from_module_attr(name: str) -> "_DirectionMarker":
+        import pypto_pro.language as _pl
+        return getattr(_pl, name)
+
+
+Input = _DirectionMarker("Input")
+Output = _DirectionMarker("Output")

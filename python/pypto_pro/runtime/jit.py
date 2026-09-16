@@ -457,41 +457,30 @@ def _get_kernel_ir_function(prog):
     )
 
 
-def _infer_store_targets_ast(program_source_ast) -> set:
-    """Names of tensor params passed to ``pl.store`` in the kernel source AST.
+def _extract_param_specs(
+    prog,
+    declared_directions: dict[str, str] | None = None,
+) -> list[ParamSpec]:
+    """Extract parameter descriptions from the kernel function in an ir.Program.
 
-    Walks the parsed Python AST of the kernel body; the first positional argument
-    of every ``<name>.store(...)`` call whose base name matches a ``pl``-style
-    attribute (``pl.store(dst, src, offset)``) is a store target.
+    Tensor direction comes exclusively from ``pl.Input``/``pl.Output`` annotation
+    markers (``declared_directions``, keyed by source-level param name); params
+    without a marker default to ``"in"``.
     """
-    import ast as _ast
-
-    targets: set = set()
-    for node in _ast.walk(program_source_ast):
-        if (
-            isinstance(node, _ast.Call)
-            and isinstance(node.func, _ast.Attribute)
-            and node.func.attr == "store"
-            and node.args
-            and isinstance(node.args[0], _ast.Name)
-        ):
-            targets.add(node.args[0].id)
-    return targets
-
-
-def _extract_param_specs(prog, store_targets: set | None = None) -> list[ParamSpec]:
-    """Extract parameter descriptions from the kernel function in an ir.Program."""
     func = _get_kernel_ir_function(prog)
-    store_targets = store_targets or set()
+    declared_directions = declared_directions or {}
     specs: list[ParamSpec] = []
     for var in func.params:
         t = var.type
         if isinstance(t, TensorType):
             shape = [s.value if isinstance(s, ConstInt) else (s.name if isinstance(s, Var) else -1) for s in t.shape]
-            # IR names may carry a binding suffix (source ``out`` -> ``out_0``);
-            # match store targets by the source-level basename.
-            base_name = var.name.rsplit("_", 1)[0] if var.name.rsplit("_", 1)[-1].isdigit() else var.name
-            direction = "out" if base_name in store_targets or var.name in store_targets else "in"
+            declared = declared_directions.get(var.name)
+            if declared is None:
+                # Declared keys use source-level names; IR names may carry a binding
+                # suffix (``out`` -> ``out_0``) — strip numeric suffix and retry.
+                base_name = var.name.rsplit("_", 1)[0] if var.name.rsplit("_", 1)[-1].isdigit() else var.name
+                declared = declared_directions.get(base_name)
+            direction = "out" if declared in ("out", "output") else "in"
             specs.append(ParamSpec(var.name, ParamKind.TENSOR, t.dtype, shape, direction))
         elif isinstance(t, PtrType):
             specs.append(ParamSpec(var.name, ParamKind.PTR, t.dtype, None))
@@ -901,6 +890,8 @@ def _generate_prof_range_snippet(
     kernel_name: str,
     param_specs: list[ParamSpec],
     dims_in_scope: set,
+    *,
+    launch_stmt: str,
 ) -> tuple[str, str, str]:
     """Generate the aclprof tensor-info range (push/pop) wrapped around the launch.
 
@@ -913,6 +904,9 @@ def _generate_prof_range_snippet(
     :func:`_compile_shared_library`); the ``ProfStr2Id`` alias in libprofapi
     crashes with std::bad_alloc and must not be used. Failures are ignored:
     profiling metadata must never break the launch.
+
+    Captured launches also report node tensor information: some CANN analyzers
+    select the compiler's kernel node without merging its cached graph tensors.
     """
     tensors = [s for s in param_specs if s.kind == ParamKind.TENSOR]
     if not tensors:
@@ -932,31 +926,32 @@ def _generate_prof_range_snippet(
         )
 
     op_name = f"PYPTO_{kernel_name}"
-    # The block opens before the tensor descriptions and closes AFTER the pop:
-    # aclprofRangePushEx hands msprof a pointer to the stack tensors/info, and the
-    # Tx plugin may read them until the matching pop -- the locals must stay in
-    # scope across the kernel launch (official sample keeps push/launch/pop in
+    # The guard wraps the struct definitions too, so a non-profiling launch skips
+    # the tensor table fill entirely; the else branch launches uninstrumented.
+    # Everything from the definitions through the pop stays in ONE block:
+    # aclprofRangePushEx hands msprof a pointer to the stack tensors/info, and
+    # the Tx plugin may read them until the matching pop -- the locals must stay
+    # in scope across the kernel launch (official sample keeps push/launch/pop in
     # one scope for the same reason). ``MsprofGetPath`` (weak, libprofapi) gates
     # the ~1.5us push/pop pair on an active collection session: a non-empty
     # profiler result path means a profiler is running; a toolkit without the
     # symbol links it to null and we report unconditionally, as before.
     return (
         "#include \"acl/acl_prof.h\"\n"
+        "#include \"pypto_profiler.h\"\n"
         "// Weak: a toolkit without it links to null and we report unconditionally, as before.\n"
         "extern \"C\" __attribute__((weak)) char *MsprofGetPath();\n",
         "    {\n"
-        "        // Skip the push/pop pair unless a profiler is collecting; empty path means off.\n"
+        "        // Skip the whole report unless a profiler is collecting; empty path means off.\n"
         "        const char *pyptoProfPath = (MsprofGetPath != nullptr) ? MsprofGetPath() : nullptr;\n"
         "        const bool pyptoProfOn =\n"
         "            (MsprofGetPath == nullptr) || (pyptoProfPath != nullptr && pyptoProfPath[0] != '\\0');\n"
-        "        // Outside the guard on purpose: libmsprofiler dereferences these pointers when the\n"
-        "        // launch below is reported, so the storage has to outlive the <<<>>> line.\n"
+        "        if (pyptoProfOn) {\n"
         "        aclprofTensor pyptoProfTensors[] = {\n"
         + "\n".join(tensor_inits)
         + "\n        };\n"
-        "        aclprofTensorInfo pyptoProfInfo;\n"
+        "        aclprofTensorInfo pyptoProfInfo{};\n"
         "        aclprofEventAttributes pyptoProfAttrs;\n"
-        "        if (pyptoProfOn) {\n"
         "        pyptoProfInfo.opNameId = aclprofStr2Id(\"" + op_name + "\");\n"
         "        pyptoProfInfo.opTypeId = aclprofStr2Id(\"PyPTO\");\n"
         "        pyptoProfInfo.resv = 0;\n"
@@ -970,10 +965,12 @@ def _generate_prof_range_snippet(
         "        pyptoProfAttrs.messageType = 0;\n"
         "        pyptoProfAttrs.message.tensorInfo = &pyptoProfInfo;\n"
         "        (void)aclprofRangePushEx(&pyptoProfAttrs);\n"
-        "        }\n",
-        "        if (pyptoProfOn) {\n"
-        "            (void)aclprofRangePop();\n"
-        "        }\n"
+        "        const uint64_t pyptoProfBegin = pypto::BeginCaptureTensorReport(pyptoProfOn, stream);\n",
+        "        pypto::ReportCaptureTensorInfo(pyptoProfInfo, pyptoProfBegin);\n"
+        "        (void)aclprofRangePop();\n"
+        "        } else {\n"
+        + "    " + launch_stmt
+        + "        }\n"
         "    }\n",
     )
 
@@ -1031,11 +1028,13 @@ def _generate_caller_cpp(
             "    rtGetC2cCtrlAddr(&ffts, &fftsLen);\n"
         )
 
+    launch_stmt = f"    {kernel_name}<<<blockDim, nullptr, stream>>>({call_args});\n"
+
     prof_include, prof_push, prof_pop = ("", "", "")
     if prof_param_specs:
         dims_in_scope = {name for _, name, _is_ptr in kernel_params}
         prof_include, prof_push, prof_pop = _generate_prof_range_snippet(
-            kernel_name, prof_param_specs, dims_in_scope
+            kernel_name, prof_param_specs, dims_in_scope, launch_stmt=launch_stmt
         )
 
     return (
@@ -1054,7 +1053,7 @@ def _generate_caller_cpp(
         "    blockDim = static_cast<uint32_t>(launchDim);\n"
         f"{sync_setup}"
         f"{prof_push}"
-        f"    {kernel_name}<<<blockDim, nullptr, stream>>>({call_args});\n"
+        f"{launch_stmt}"
         f"{prof_pop}"
         "    return launchDim;\n"
         "}\n"
@@ -1204,7 +1203,7 @@ def _codegen_target_cce(
     arch: str,
     build_dir: str,
     target: ir.SectionKind,
-    store_targets: set | None = None,
+    declared_directions: dict[str, str] | None = None,
 ) -> CodegenResult:
     """CCE codegen for one target-specific Program.
 
@@ -1226,7 +1225,7 @@ def _codegen_target_cce(
     # change without breaking JIT launch parameter discovery.
     kernel_func = _get_kernel_ir_function(prog)
     kernel_name = kernel_func.name
-    param_specs = _extract_param_specs(prog, store_targets)
+    param_specs = _extract_param_specs(prog, declared_directions)
     entry_params = _entry_params_from_param_specs(param_specs)
     has_ffts = "set_ffts_base_addr" in cpp_code
     has_cross_sync = has_ffts or "set_intra_block" in cpp_code
@@ -1350,6 +1349,9 @@ def _parse_and_codegen_targets(
             target=target,
             bound_signature=bound_signature,
         )
+    # pl.Input/pl.Output annotation markers (param name -> "in"/"out"); these are
+    # the sole source of tensor direction — params without a marker default to "in".
+    declared_directions = dict(kernel_def.last_param_directions)
 
     if not any(matched.values()):
         matched = {
@@ -1366,11 +1368,11 @@ def _parse_and_codegen_targets(
         for target in target_list:
             programs[target] = sanitizer_pass(programs[target])
 
-    store_targets = _infer_store_targets_ast(kernel_def.func_def)
     results = {
         target: (
             _codegen_target_cce(
-                programs.get(target), arch, build_dir, target=target, store_targets=store_targets
+                programs.get(target), arch, build_dir, target=target,
+                declared_directions=declared_directions
             )
             if matched.get(target)
             else None
@@ -1777,7 +1779,7 @@ def jit(
 
     Args:
         arch: Target architecture ("a5", or None for auto-detect).
-        auto_mutex: If True, enable automatic mutex lock/unlock insertion.
+        auto_mutex: Boolean flag to enable automatic mutex lock/unlock insertion.
         name: Custom kernel name for build artifact path isolation.
         pipeline: PipelineConfig for automatic preload pipeline transformation.
         compile_timeout: Compilation timeout in seconds (default 600).
@@ -1794,6 +1796,9 @@ def jit(
 
         add_kernel[stream, block_dim](x, y, z)
     """
+
+    if not isinstance(auto_mutex, bool):
+        raise TypeError(f"auto_mutex must be a bool, got {type(auto_mutex).__name__}")
 
     # Build the tilingkey schema eagerly so malformed schemas fail at decoration time.
     tilingkey_schema = None

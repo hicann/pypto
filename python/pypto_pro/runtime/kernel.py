@@ -205,6 +205,9 @@ class KernelDef:
         self._meta_data = meta_data
         self._tilingkey_consts = tilingkey_consts
         self._datatype_consts = datatype_consts
+        # Populated by parse_target_program: param name -> "in"/"out" from
+        # pl.Input/pl.Output annotation markers.
+        self._last_param_directions: dict[str, str] = {}
 
     @property
     def func_def(self) -> ast.FunctionDef:
@@ -217,6 +220,11 @@ class KernelDef:
     @property
     def func_name(self) -> str:
         return self._func.__name__
+
+    @property
+    def last_param_directions(self) -> dict[str, str]:
+        """Direction markers from the most recent parse_target_program call."""
+        return dict(self._last_param_directions)
 
     def parse_target_program(
         self,
@@ -278,6 +286,9 @@ class KernelDef:
             program = ir.Program(
                 external_funcs + [ir_func], program_name, program_span, parser.debug_info
             )
+            # Direction markers (pl.Input/pl.Output) parsed off the annotations;
+            # consumed by the JIT caller for profiling tensor type.
+            self._last_param_directions = dict(parser.param_directions)
             return program, parser.matched_target
 
         except ParserError as e:

@@ -25,41 +25,60 @@ name, the push/pop placement around the launch line and both tensor directions
 on the generated caller source.
 """
 
-import ast
-
 import pypto_pro.language as pl
 from pypto_pro.runtime.jit import (
     ParamKind,
     ParamSpec,
     _generate_caller_cpp,
     _generate_prof_range_snippet,
-    _infer_store_targets_ast,
     _parse_and_codegen_targets,
 )
 
 
 def _snippet(kernel_name, specs, dims):
-    return _generate_prof_range_snippet(kernel_name, specs, dims)
+    return _generate_prof_range_snippet(
+        kernel_name, specs, dims, launch_stmt="    k<<<blockDim, nullptr, stream>>>(a, out);\n"
+    )
 
 
 def _spec(name, shape, dtype_str, direction):
     return ParamSpec(name, ParamKind.TENSOR, dtype_str, shape, direction)
 
 
-def test_store_targets_from_ast():
-    node = ast.parse(
-        "def k(a, b, out):\n"
-        "    pl.store(out, t, [0, 0])\n"
-        "    y = other.store2(out)\n"
-        "    pl.store(out2, t, [0, 0])\n"
-    ).body[0]
-    targets = _infer_store_targets_ast(node)
-    assert targets == {"out", "out2"}
+def test_annotation_marker_sets_direction():
+    """pl.Output in the annotation flows to ParamSpec.direction; omitted defaults to in."""
+    @pl.jit()
+    def marked_kernel(
+        a: pl.Tensor[[64, 64], pl.DT_FP32],
+        out: pl.Tensor[[64, 64], pl.DT_FP32, pl.Output],
+    ):
+        tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+        ta = pl.make_tile(tt, addr=0x0000, size=16384)
+        with pl.section_vector():
+            pl.load(ta, a, [0, 0])
+            pl.store(out, ta, [0, 0])
+
+    cube, vector = _parse_and_codegen_targets(marked_kernel.to_kernel_def(), "a5", "")
+    cg = cube or vector
+    assert cg.param_specs[0].direction == "in"
+    assert cg.param_specs[1].direction == "out"
 
 
-def test_no_store_yields_no_targets():
-    node = ast.parse("def k(a, out):\n    x = pl.load(t, a, [0, 0])\n").body[0]
-    assert _infer_store_targets_ast(node) == set()
+def test_no_marker_defaults_to_in():
+    """Without pl.Output, a tensor param is input even if the kernel stores into it."""
+
+    @pl.jit()
+    def unmarked_kernel(
+        out: pl.Tensor[[64, 64], pl.DT_FP32],
+    ):
+        tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+        ta = pl.make_tile(tt, addr=0x0000, size=16384)
+        with pl.section_vector():
+            pl.store(out, ta, [0, 0])
+
+    cube, vector = _parse_and_codegen_targets(unmarked_kernel.to_kernel_def(), "a5", "")
+    cg = cube or vector
+    assert cg.param_specs[0].direction == "in"
 
 
 def test_static_shapes_are_literals():
@@ -110,11 +129,11 @@ def test_no_tensor_params_disables_snippet():
 
 
 def test_caller_embeds_range_around_launch_static():
-    """End-to-end caller generation: direction flows from the kernel AST into the snippet."""
+    """End-to-end caller generation: pl.Output marker flows into the snippet."""
     @pl.jit()
     def static_kernel(
         a: pl.Tensor[[64, 64], pl.DT_FP32],
-        out: pl.Tensor[[64, 64], pl.DT_FP32],
+        out: pl.Tensor[[64, 64], pl.DT_FP32, pl.Output],
     ):
         tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
         ta = pl.make_tile(tt, addr=0x0000, size=16384)
@@ -145,3 +164,44 @@ def test_caller_embeds_range_around_launch_static():
     assert push_idx < launch_idx < pop_idx
     assert "{0, 2, 0, 2, {64, 64" in content   # a: in
     assert "{1, 2, 0, 2, {64, 64" in content   # out: out
+
+
+def test_guard_wraps_struct_definitions():
+    """The MsprofGetPath switch wraps the struct definitions; else branch launches bare."""
+    @pl.jit()
+    def bare_kernel(
+        a: pl.Tensor[[64, 64], pl.DT_FP32],
+        out: pl.Tensor[[64, 64], pl.DT_FP32, pl.Output],
+    ):
+        tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+        ta = pl.make_tile(tt, addr=0x0000, size=16384)
+        tc = pl.make_tile(tt, addr=0x8000, size=16384)
+        with pl.section_vector():
+            pl.load(ta, a, [0, 0])
+            pl.add(tc, ta, ta)
+            pl.store(out, tc, [0, 0])
+
+    cube, vector = _parse_and_codegen_targets(bare_kernel.to_kernel_def(), "a5", "")
+    from pypto_pro.runtime.compile_config import get_jit_compile_config
+
+    target = get_jit_compile_config().resolve_kernel_target("a5", has_cube=cube is not None,
+                                                            has_vector=vector is not None)
+    cg = cube or vector
+    content = _generate_caller_cpp(
+        kernel_params=cg.kernel_params,
+        kernel_cpp_name="kernel.cpp",
+        kernel_name=cg.kernel_name,
+        target=target,
+        prof_param_specs=cg.param_specs,
+    )
+    on_idx = content.index("if (pyptoProfOn) {")
+    tensors_idx = content.index("aclprofTensor pyptoProfTensors[]")
+    push_idx = content.index("aclprofRangePushEx")
+    report_idx = content.index("pypto::ReportCaptureTensorInfo")
+    pop_idx = content.index("aclprofRangePop")
+    else_idx = content.index("} else {")
+    assert on_idx < tensors_idx < push_idx  # definitions inside the guard
+    assert push_idx < report_idx < pop_idx  # report lands between launch and pop
+    assert pop_idx < else_idx               # pop stays in the same guarded block
+    assert content.count("<<<blockDim") == 2  # instrumented branch + bare else branch
+    assert "ReportCaptureTensorInfo" not in content[else_idx:]  # else launches uninstrumented
