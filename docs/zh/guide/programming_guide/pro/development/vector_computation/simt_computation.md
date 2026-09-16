@@ -38,7 +38,7 @@ def transform(
         output[0, index] = affine(input_tensor[0, index], scale, bias)
 ```
 
-参数类型可由实参推导；写出注解便于阅读和类型校验。入口函数返回None，辅助函数可以返回None或一个Scalar，不支持返回Tensor、Tile或Tuple。
+参数类型可由实参推导；Tensor和Scalar参数可以写出注解，以便阅读和类型校验，Tile参数不支持使用注解。
 
 ### 在外层Vector执行域调用线程块
 
@@ -128,7 +128,7 @@ Tensor/Tile须以完整对象传入，不支持元素、Slice或Tile Subview作�
 import pypto_pro.language as pl
 
 @pl.vector_function(mode="simt", max_threads=256)
-def add_valid(data: pl.Tile[[2, 128], pl.DT_FP32], delta: pl.DT_FP32):
+def add_valid(data, delta: pl.DT_FP32):
     row = pl.simt.thread_idx().y
     col = pl.simt.thread_idx().x
     if row < data.valid_shape[0] and col < data.valid_shape[1]:
@@ -142,11 +142,10 @@ def add_valid(data: pl.Tile[[2, 128], pl.DT_FP32], delta: pl.DT_FP32):
 SIMT函数可以使用公共Scalar表达式，还提供[标量计算与类型转换API](../../../../../api/pro_api/SIMT-API/scalar_compute/index.md)，支持以下功能：
 
 - 类型转换：pypto_pro.language.simt.cast用于数值转换，pypto_pro.language.simt.bitcast用于重新解释二进制位模式。
-- 基础数学运算：pypto_pro.language.simt.abs、pypto_pro.language.simt.min、pypto_pro.language.simt.max、pypto_pro.language.simt.sqrt、pypto_pro.language.simt.rsqrt、pypto_pro.language.simt.fmod和pypto_pro.language.simt.fma分别提供绝对值、最值、平方根、平方根倒数、浮点余数和融合乘加。
+- 基础数学运算：pypto_pro.language.simt.abs、pypto_pro.language.simt.min、pypto_pro.language.simt.max、pypto_pro.language.simt.sqrt、pypto_pro.language.simt.rsqrt和pypto_pro.language.simt.fma分别提供绝对值、最值、平方根、平方根倒数和融合乘加。
 - 指数、对数和三角函数：包括pypto_pro.language.simt.exp、pypto_pro.language.simt.exp2、pypto_pro.language.simt.log、pypto_pro.language.simt.log2、pypto_pro.language.simt.log1p、pypto_pro.language.simt.sin、pypto_pro.language.simt.cos和pypto_pro.language.simt.tanh。
 - 取整运算：pypto_pro.language.simt.rint、pypto_pro.language.simt.round、pypto_pro.language.simt.floor、pypto_pro.language.simt.ceil和pypto_pro.language.simt.trunc支持按不同规则取整。
-- 浮点数值判断：pypto_pro.language.simt.isnan、pypto_pro.language.simt.isinf和pypto_pro.language.simt.isfinite分别判断数值是否为NaN、无穷或有限值。
-- 整数运算：pypto_pro.language.simt.popcount统计无符号整数的置位数，pypto_pro.language.simt.mul_hi取得完整整数乘积的高半部分。
+- 浮点数值判断：pypto_pro.language.simt.isnan和pypto_pro.language.simt.isinf分别判断数值是否为NaN或无穷。
 
 ## 处理数据依赖
 
@@ -161,21 +160,6 @@ load（MTE2） → MTE2/V同步 → SIMD或SIMT计算（V）→ V/MTE3同步 →
 普通Tile通过成对的pypto_pro.language.system.sync_src和pypto_pro.language.system.sync_dst表达依赖，完整代码见[Add快速入门](../../../../quick_start/pro/add_simt.md)。
 
 使用带mutex_ids的pypto_pro.language.make_tile_group时，默认启用的Auto Mutex可管理pypto_pro.language.load、SIMT入口函数调用和pypto_pro.language.store的缓冲区依赖。仅开启auto_mutex=True不会为普通pypto_pro.language.make_tile自动补全同步。
-
-### 线程块内同步与内存顺序
-
-当某线程需要读取其他线程写入的共享Tile时，在写入阶段和读取阶段之间使用pypto_pro.language.simt.syncthreads()。该接口用于同步当前线程块内的所有线程；只有所有线程到达同步点后，线程才会继续执行后续代码，从而保证读取阶段在块内写入阶段完成后开始。
-
-pypto_pro.language.simt.threadfence_block()和pypto_pro.language.simt.threadfence()分别约束块内、Device范围内的内存访问顺序，不等待其他线程完成计算。
-
-| 数据依赖 | 使用机制 |
-|---|---|
-| MTE2、V、MTE3之间的数据搬运与计算依赖 | 外层pypto_pro.language.system.sync_src和pypto_pro.language.system.sync_dst或Auto Mutex |
-| 线程块内先写共享数据、后读取其他线程结果 | pypto_pro.language.simt.syncthreads |
-| 调用线程的内存操作先后顺序 | pypto_pro.language.simt.threadfence_block或pypto_pro.language.simt.threadfence |
-| 多线程并发更新同一元素 | 原子操作 |
-
-这些机制处理不同的依赖，不能相互替代。
 
 ### 原子更新
 
@@ -241,4 +225,4 @@ gather_kernel[None, BLOCKS](input_tensor, indices, output, OUTPUT_ROWS)
 - SIMT入口必须由外层A5 Vector执行域调用，不支持Host直接启动SIMT函数或在SIMT函数中嵌套调用SIMT入口函数。
 - SIMT中不支持Tile创建、SIMD Tile计算、Reg计算或System流水操作。
 - 不支持动态GM Shape、Tile Subview、L1 Buffer Tile、DN/NZ布局和通用指针参数。
-- 未提供Warp shuffle/vote/reduce、线程私有数组和显式Cached GM访问接口。pypto_pro.language.simt.warp_size()仅用于查询。
+- 未提供Warp shuffle/vote/reduce、线程私有数组和显式Cached GM访问接口。
