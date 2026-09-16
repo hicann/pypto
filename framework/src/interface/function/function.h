@@ -1072,7 +1072,9 @@ private:
     // 将 operationCountBefore 之后新插入的 op 移到 operations_ 最前面。
     // MakeIncasts 中 CreateFromIncast 会在尾部追加 VIEW op，提前到程序开头后前端无需再排序。
     void MoveNewlyInsertedOpsToFront(size_t operationCountBefore);
-    std::shared_ptr<LogicalTensor> CreateOutcastTensor(const std::shared_ptr<LogicalTensor>& outArgument);
+    std::shared_ptr<LogicalTensor> CreateOutcastTensor(const std::shared_ptr<LogicalTensor>& outArgument,
+                                                       const std::shared_ptr<RawTensor>& shareRaw = nullptr,
+                                                       const std::string& name = "");
     void CreateFromOutcast(const LogicalTensorPtr& symbol, const LogicalTensorPtr& newOutcast,
                            const LogicalTensorPtr& originOutcast);
     void RebindAssembleVersionsToOutcast(const LogicalTensorPtr& originOutcast, const LogicalTensorPtr& newOutcast);

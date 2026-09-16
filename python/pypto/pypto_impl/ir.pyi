@@ -1689,9 +1689,6 @@ class Program(IRNode):
     name: Final[str]
     """Program name."""
 
-    functions: Final[list[Function]]
-    """List of functions, sorted by GlobalVar name."""
-
     def __init__(
         self,
         functions: list[Function],
@@ -1722,6 +1719,10 @@ class Program(IRNode):
         Returns:
             Function if found, None otherwise
         """
+
+    @property
+    def functions(self) -> dict[str, Function]:
+        """List of functions, sorted by GlobalVar name."""
 
 
 # ========== IR Builder ==========

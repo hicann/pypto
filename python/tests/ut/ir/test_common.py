@@ -62,27 +62,65 @@ def ssa_verify(func, desc: str = ""):
     _ssa_verify(verifier, prog, desc)
 
 
+def _run_pass_pipeline(func, *args, passes, verify_skip=(), create_new_logical_tensor=True):
+    ir_func = pil.compile(func, *args, create_new_logical_tensor=create_new_logical_tensor)
+    prog = ir.IRBuilder().create_program([ir_func], "main", ir.Span.unknown())
+    verifier = ir.IRVerifier.create_default()
+    _ssa_verify(verifier, prog, "original")
+    for name, transform in passes:
+        prog = transform(prog)
+        if name not in verify_skip:
+            _ssa_verify(verifier, prog, name)
+    return prog.functions[ir_func.name], prog
+
+
 def run_merge_pass(func, *args, create_new_logical_tensor=True):
-    """Compile a kernel and run canonicalize + dce + merge_stmts_into_if + symbolic_scalar_simplify_pass, stopping
-    before lowering so the resulting if-tree (func.body) is inspectable. Mirrors compile_new_ir's first half.
-    """
-    b = ir.IRBuilder()
-    func = pil.compile(func, *args, create_new_logical_tensor=create_new_logical_tensor)
-    prog = b.create_program([func], "main", ir.Span.unknown())
     dce = ir.Pass.aggressive_dce()
     canonical = ir.Pass.canonicalize()
     merge = ir.Pass.merge_stmts_into_if()
-    simplify_symbolic_scalar = ir.Pass.simplify_symbolic_scalar()
-    verifier = ir.IRVerifier.create_default()
-    _ssa_verify(verifier, prog, "original")
-    prog = canonical(prog)
-    _ssa_verify(verifier, prog, "canonical")
-    prog = dce(prog)
-    _ssa_verify(verifier, prog, "dce")
-    prog = canonical(merge(prog))
-    _ssa_verify(verifier, prog, "merged")
-    # only symbolic scalar are simplified, skip ssa_verify
-    prog = simplify_symbolic_scalar(prog)
-    func = prog.functions[func.name]
+    passes = [
+        ("canonicalize_dce", lambda p:dce(canonical(p))),
+        ("canonicalize(merge_stmts)", lambda p:canonical(merge(p))),
+        # only symbolic scalar are simplified, skip ssa_verify
+        ("simplify_symbolic_scalar", ir.Pass.simplify_symbolic_scalar()),
+    ]
+    func, _ = _run_pass_pipeline(
+        func,
+        *args,
+        passes=passes,
+        verify_skip={"simplify_symbolic_scalar"},
+        create_new_logical_tensor=create_new_logical_tensor,
+    )
     logging.info("\nmerged:\n%s" % func.body)
     return func
+
+
+def run_root_function(func, *args, create_new_logical_tensor=True):
+    """Compile a kernel and run the compile_new_ir pass sequence up to and including
+    create_root_functions, stopping before finalize so the root functions are inspectable.
+    Returns the final program.
+    """
+    infer_token = ir.Pass.infer_token_pass()
+    dce = ir.Pass.aggressive_dce()
+    canonicalize = ir.Pass.canonicalize()
+    merge_stmts = ir.Pass.merge_stmts_into_if()
+    remove_redundant_tokens = ir.Pass.remove_redundant_token_pass()
+    passes = [
+        ("infer_token_pass", infer_token),
+        ("canonicalize_dce", lambda p:dce(canonicalize(p))),
+        ("canonicalize_dce2", lambda p:dce(canonicalize(p))),
+        ("canonicalize(merge_stmts)", lambda p:canonicalize(merge_stmts(p))),
+        # only symbolic scalar are simplified, skip ssa_verify
+        ("simplify_symbolic_scalar", ir.Pass.simplify_symbolic_scalar()),
+        ("remove_redundant_token_pass", remove_redundant_tokens),
+        # create_root_functions does not support ssa_verify yet, skip it
+        ("create_root_functions", ir.Pass.create_root_functions()),
+    ]
+    _, prog = _run_pass_pipeline(
+        func,
+        *args,
+        passes=passes,
+        verify_skip={"simplify_symbolic_scalar", "create_root_functions"},
+        create_new_logical_tensor=create_new_logical_tensor,
+    )
+    return prog

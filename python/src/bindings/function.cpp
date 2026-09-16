@@ -102,6 +102,19 @@ void BindFunction(py::module_& m)
     m.def(
         "GetCurrentFunction", []() -> Function* { return Program::GetInstance().GetCurrentFunction(); },
         py::return_value_policy::reference, "Get the current function being built in the Program");
+
+    // All slot info (logical tensor -> slot id)
+    m.def(
+        "GetSlotInfo",
+        []() -> py::dict {
+            py::dict slots;
+            auto slotManager = Program::GetInstance().GetTensorSlotManager();
+            for (auto& [lt, tensor] : slotManager->slotTensorDict) {
+                slots[lt->name_.c_str()] = tensor->Id();
+            }
+            return slots;
+        },
+        "Every slot entry as {tensor name: slot id}; tensors sharing a slot id share one runtime buffer");
 }
 
 } // namespace pypto

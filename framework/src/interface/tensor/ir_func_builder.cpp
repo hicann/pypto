@@ -369,27 +369,26 @@ void RootFunctionBuilder::ComputeIncast(Function& pathFunc,
 
 void RootFunctionBuilder::ComputeOutcast(Function& pathFunc)
 {
-    LogicalTensors outcasts;
-    std::unordered_map<int, size_t> rawMagicToOutcastIndex;
+    auto isQualified = [this](const LogicalTensorPtr& tensor) {
+        return consumedTensors_.count(tensor) > 0 || paramTensors_.count(tensor) > 0 ||
+               tensor->IsGetTensorDataOutcast();
+    };
+
+    std::unordered_set<int> rawMagics;
     for (auto& op : pathFunc.Operations(false)) {
         for (auto& oOperand : op.GetOOperands()) {
-            bool neededByConsumer = consumedTensors_.count(oOperand) > 0;
-            bool isFuncOutput = paramTensors_.count(oOperand) > 0;
-            if (!neededByConsumer && !isFuncOutput && !oOperand->IsGetTensorDataOutcast()) {
-                continue;
-            }
-
-            int rawMagic = oOperand->GetRawMagic();
-            auto [iter, inserted] = rawMagicToOutcastIndex.emplace(rawMagic, outcasts.size());
-            if (inserted) {
-                outcasts.push_back(oOperand);
-            } else {
-                outcasts[iter->second] = oOperand;
+            if (isQualified(oOperand)) {
+                rawMagics.insert(oOperand->GetRawMagic());
             }
         }
     }
-    for (const auto& outcast : outcasts) {
-        pathFunc.AddOriginOutcast(outcast);
+
+    for (auto& op : pathFunc.Operations(false)) {
+        for (auto& oOperand : op.GetOOperands()) {
+            if (rawMagics.count(oOperand->GetRawMagic()) > 0) {
+                pathFunc.AddOriginOutcast(oOperand);
+            }
+        }
     }
 }
 
@@ -652,12 +651,22 @@ ir::StmtPtr RootFunctionBuilder::FinalizePathFunc(const ir::StmtPtr& placeholder
     // 3. hiddenFunc 处理（MakeIncasts 的 Parent() = pathFunc）
 
     ComputeOutcast(*hiddenFunc);
+
+    /* if two outcasts share the same raw tensor, link them onto one slot. */
+    auto slotManager = program_.GetTensorSlotManager();
+    std::unordered_map<int, LogicalTensorPtr> outcastByRaw;
+    for (auto& outcast : hiddenFunc->GetOriginOutcast()) {
+        auto [iter, inserted] = outcastByRaw.emplace(outcast->GetRawMagic(), outcast);
+        if (!inserted) {
+            slotManager->SetSameSlot(iter->second, outcast);
+        }
+    }
+
     auto originalIncasts = hiddenFunc->GetOriginIncast();
     auto originalOutcasts = hiddenFunc->GetOriginOutcast();
     auto hiddenFuncArgs = FinalizeHiddenFunc(hiddenFunc, placeholder);
 
     // 4. pathFunc 处理（独立函数）
-    auto slotManager = program_.GetTensorSlotManager();
     for (size_t i = 0; i < originalIncasts.size(); i++) {
         slotManager->SetSameSlot(originalIncasts[i], hiddenFuncArgs.first[i]);
     }
