@@ -1492,6 +1492,54 @@ TEST_F(ScheduleOoOTest, TestSpillMultiProducerBufferNotReady)
     EXPECT_TRUE(Platform::Instance().GetDie().HasDirectPath(MemoryType::MEM_L1, MemoryType::MEM_DEVICE_DDR));
 }
 
+// Spill L1 across a reshape/view/viewType skip chain: the copyout must read the real UB
+// source, and the skip chain must land in newOperations, in order, before the copyout --
+// otherwise ScheduleBy's op-count invariant breaks.
+TEST_F(ScheduleOoOTest, TestSpillWalkUpThroughSkipOps)
+{
+    ComputationalGraphBuilder graph;
+    graph.AddTensors(DT_FP32, {16, 32}, {MEM_DEVICE_DDR, MEM_UB}, {"ddr", "source"});
+    graph.AddTensors(DT_FP32, {8, 64}, {MEM_UB, MEM_UB, MEM_UB, MEM_UB, MEM_L1},
+                     {"reshape", "view", "viewType", "nz", "l1"});
+    for (const auto& name : {"reshape", "view", "viewType"}) {
+        graph.GetTensor(name)->tensor = graph.GetTensor("source")->tensor;
+        graph.GetTensor(name)->memoryrange = graph.GetTensor("source")->memoryrange;
+    }
+    graph.AddOp(Opcode::OP_UB_ALLOC, {}, {"source"}, "allocSource");
+    graph.AddOp(Opcode::OP_COPY_IN, {"ddr"}, {"source"}, "write");
+    graph.AddOp(Opcode::OP_RESHAPE, {"source"}, {"reshape"}, "reshape");
+    graph.AddOp(Opcode::OP_VIEW, {"reshape"}, {"view"}, "view");
+    graph.AddOp(Opcode::OP_VIEW_TYPE, {"view"}, {"viewType"}, "viewType");
+    graph.AddOp(Opcode::OP_UB_ALLOC, {}, {"nz"}, "allocNz");
+    graph.AddOp(Opcode::OP_UB_COPY_ND2NZ, {"viewType"}, {"nz"}, "nd2nz");
+    graph.AddOp(Opcode::OP_L1_ALLOC, {}, {"l1"}, "allocL1");
+    graph.AddOp(Opcode::OP_UB_COPY_L1, {"nz"}, {"l1"}, "copyL1");
+
+    OoOScheduler scheduler(*graph.GetFunction());
+    ASSERT_EQ(scheduler.Init(graph.GetFunction()->Operations().DuplicatedOpList()), SUCCESS);
+    scheduler.state_.schedInfoMap[graph.GetOp("write")].isRetired = true;
+
+    SpillPlan plan;
+    ASSERT_EQ(scheduler.spillEngine_.CollectWalkUpSources(graph.GetTensor("l1"), plan), SUCCESS);
+    graph.AddTensor(DT_FP32, {8, 64}, MEM_DEVICE_DDR, "mirror");
+    SpillContext ctx;
+    SingleSpillCreatedOps created;
+    ASSERT_EQ(scheduler.spillEngine_.SaveSourcesToDDR(plan.sources, graph.GetTensor("mirror"), ctx, created), SUCCESS);
+    auto* copyout = *graph.GetTensor("mirror")->GetProducers().begin();
+    EXPECT_EQ(copyout->GetInputOperand(0), graph.GetTensor("viewType"));
+
+    // ND2NZ is absent from newOperations, so no HandleSkipOp ran for the chain.
+    scheduler.state_.newOperations = {graph.GetOp("allocSource"), graph.GetOp("write"), graph.GetOp("allocNz"),
+                                      graph.GetOp("allocL1"), graph.GetOp("copyL1")};
+    ASSERT_EQ(scheduler.ApplySpillContext(ctx, graph.GetOp("allocL1")), SUCCESS);
+
+    auto& ops = scheduler.state_.newOperations;
+    auto at = [&](Operation* op) { return std::find(ops.begin(), ops.end(), op) - ops.begin(); };
+    EXPECT_LT(at(graph.GetOp("reshape")), at(graph.GetOp("view")));
+    EXPECT_LT(at(graph.GetOp("view")), at(graph.GetOp("viewType")));
+    EXPECT_LT(at(graph.GetOp("viewType")), at(copyout));
+}
+
 TEST_F(ScheduleOoOTest, TestSpillL0CMultiConsumer)
 {
     ComputationalGraphBuilder subGraph;

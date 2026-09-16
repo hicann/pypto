@@ -1750,6 +1750,23 @@ Status OoOScheduler::FinalizeSingleSideSpill(Operation* allocOp, MemoryType reqM
     return SUCCESS;
 }
 
+// Inserts the copyout's skip chain (reshape/view/viewType producers, if not already
+// present) starting at copyoutPos, in order. Returns the position right after the last
+// inserted skip op -- where the copyout itself must go so it lands after its producers.
+size_t OoOScheduler::InsertSkipOpsBeforeCopyout(Operation* copyoutOp, size_t copyoutPos)
+{
+    auto& skipOps = state_.schedInfoMap[copyoutOp].skipOps;
+    size_t insertPos = copyoutPos;
+    for (auto* skipOp : skipOps) {
+        auto existing = std::find(state_.newOperations.begin(), state_.newOperations.end(), skipOp);
+        if (existing == state_.newOperations.end()) {
+            state_.newOperations.insert(state_.newOperations.begin() + static_cast<long>(insertPos), skipOp);
+            insertPos++;
+        }
+    }
+    return insertPos;
+}
+
 Status OoOScheduler::InsertSpillCopyoutOp(Operation* copyoutOp)
 {
     int spillMemid = copyoutOp->GetInputOperand(0)->memoryrange.memId;
@@ -1787,12 +1804,16 @@ Status OoOScheduler::InsertSpillCopyoutOp(Operation* copyoutOp)
             return FAILED;
         }
         auto lastIt = find(state_.newOperations.begin(), state_.newOperations.end(), scopeLastOp);
-        state_.newOperations.insert(lastIt + 1, copyoutOp);
+        size_t copyoutPos = static_cast<size_t>(std::distance(state_.newOperations.begin(), lastIt)) + 1;
+        size_t insertPos = InsertSkipOpsBeforeCopyout(copyoutOp, copyoutPos);
+        state_.newOperations.insert(state_.newOperations.begin() + static_cast<long>(insertPos), copyoutOp);
         return SUCCESS;
     }
     auto it = find(state_.newOperations.begin(), state_.newOperations.end(), insertOp);
     if (it != state_.newOperations.end()) {
-        state_.newOperations.insert(it + 1, copyoutOp);
+        size_t copyoutPos = static_cast<size_t>(std::distance(state_.newOperations.begin(), it)) + 1;
+        size_t insertPos = InsertSkipOpsBeforeCopyout(copyoutOp, copyoutPos);
+        state_.newOperations.insert(state_.newOperations.begin() + static_cast<long>(insertPos), copyoutOp);
     }
     return SUCCESS;
 }
