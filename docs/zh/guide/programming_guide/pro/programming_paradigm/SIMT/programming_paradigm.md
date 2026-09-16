@@ -31,7 +31,7 @@ Thread Block是Grid的组成单元，由若干Thread组成。block_dim = (block_
 Thread Block具有以下特点：
 
 - 同一Thread Block内的Thread执行相同的SIMT入口函数，并具有相同的Thread Block尺寸；
-- 块内Thread可以访问共享的Tile，并通过同步机制进行数据交换和协作；
+- 块内Thread可以访问传入的共享Tile；
 - 定义SIMT入口函数时，可以声明单个Thread Block允许启动的最大Thread数量，实际的Thread数由`simt_func[threads](...)`中方括号内的threads决定。
 
 #### Thread（线程）
@@ -49,7 +49,7 @@ $$
 
 Warp是硬件在线程块内组织执行的单位，当前A5的Warp Size为32，线程按块内线性编号划分到Warp；线程总数不是32的整数倍时，最后一个Warp只有部分线程有效。
 
-同一Warp中的线程可以根据数据进入不同分支，但分支发散会降低执行效率，线程数取32的整数倍是可考虑的性能选择。线程协作需要使用明确的同步机制。
+同一Warp中的线程可以根据数据进入不同分支，但分支发散会降低执行效率，线程数取32的整数倍是可考虑的性能选择。
 
 ### 线程索引
 
@@ -62,7 +62,6 @@ Warp是硬件在线程块内组织执行的单位，当前A5的Warp Size为32，
 | pypto_pro.language.simt.block_idx() | 当前Thread Block在Grid中的三维坐标。 | dim3形式的三维对象，各分量为DT_UINT32 Scalar。 | X坐标范围由Grid的X维大小决定，当前Y、Z坐标均为0。 |
 | pypto_pro.language.simt.thread_idx() | 当前Thread在Thread Block内的三维坐标。 | dim3形式的三维对象，各分量为DT_UINT32 Scalar。 | 各维坐标范围由Thread Block对应维度的大小决定。 |
 | pypto_pro.language.simt.linear_thread_idx() | 当前Thread在块内按X维优先展开的编号。 | DT_UINT32 Scalar。 | 范围为[0, 块内线程总数)，不含Block偏移。 |
-| pypto_pro.language.simt.warp_size() | 完整Warp包含的线程数。 | DT_INT32 Scalar。 | 当前A5为32。 |
 
 块内线性索引和线程索引的具体使用方法参见[SIMT计算](../../development/vector_computation/simt_computation.md)。
 
