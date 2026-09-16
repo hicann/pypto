@@ -258,10 +258,10 @@ void TiledRemainderSOperation(Function& function, const TileShape& tileShape, si
         auto inputTile1 = input1.tensor->View(function, input1.tileInfo.shape, input1.tileInfo.offset);
         auto resultTile = result->View(function, resultTileInfo.shape, resultTileInfo.offset);
         int64_t shapeSize = resultTileInfo.shape.size();
-        int64_t alignSize = static_cast<int64_t>(BLOCK_SIZE / BytesOf(result->Datatype()));
+        int64_t alignSize = static_cast<int64_t>(NUM_VALUE_256 / BytesOf(result->Datatype()));
         int64_t alignedLast = AlignUp(resultTileInfo.shape[shapeSize - 1], alignSize);
         int64_t maskBytes = (alignedLast + NUM_VALUE_8 - 1) / NUM_VALUE_8;
-        int64_t maskFloats = AlignUp(maskBytes, BLOCK_SIZE) / static_cast<int64_t>(BytesOf(result->Datatype()));
+        int64_t maskFloats = AlignUp(maskBytes, NUM_VALUE_256) / static_cast<int64_t>(BytesOf(result->Datatype()));
         int64_t tmpCols = alignedLast + maskFloats + alignSize;
         std::vector<int64_t> tmpShape{1, tmpCols};
         if (opNameCode == Opcode::OP_REMRS) {

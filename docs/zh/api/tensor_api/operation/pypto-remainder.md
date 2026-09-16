@@ -68,6 +68,9 @@ remainder(
    <!-- npu="910b" id9 -->
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_FP32，DT_FP16，DT_BF16，DT_INT32，DT_INT16。
    <!-- end id9 -->
+7. 由于存在临时内存使用，设置TileShape时需保证输入Tile、输出Tile及临时空间的总占用小于可用UB。记TileShape的最后两维为H和W（一维TileShape取H为1），记align为256/sizeof\(output\)，W对齐到align记为WAlign：
+   - 若input和other均为Tensor，则使用临时空间大小为`(WAlign + CeilAlign(WAlign / 8, 256) / sizeof(output) + 256) * sizeof(output)`字节
+   - 若input和other之一不为Tensor，则使用临时空间大小为`(H + 1) * (WAlign + CeilAlign(WAlign / 8, 256) / sizeof(output) + 256) * sizeof(output)`字节
 
 ## 调用示例
 
