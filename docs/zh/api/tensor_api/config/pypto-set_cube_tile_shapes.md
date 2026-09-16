@@ -110,6 +110,7 @@ void
     - `pypto.scaled_mm`仅支持2维矩阵多核切K，3维/4维矩阵不支持。
     - 多核切K场景只支持out\_dtype数据类型为DT\_FP32或DT\_INT32。
     - Bias/FixPipe(包含ReLU)场景不支持叠加多核切K功能。
+    - 仅支持通过`pypto.view()`接口创建tensor的场景，且要求K轴的valid_shape与K轴shape完全相同，接口使用详见[pypto.view](../operation/pypto-view.md)。
 
 ## 调用示例
 
@@ -118,5 +119,18 @@ void
 pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128])
 
 # 启用多核切K（便捷开关，不保证性能最优；性能调优见Matmul高性能编程）
+m = 1024
+n = 1024
+k = 1024
+a_tensor = pypto.tensor((m, k), pypto.DT_FP16, "a_tensor")
+b_tensor = pypto.tensor((k, n), pypto.DT_FP16, "b_tensor")
+m_view = 256
+m_loop = m // m_view
 pypto.set_cube_tile_shapes([128, 128], [64, 256], [128, 128], enable_split_k=True)
+for m_idx in pypto.loop(0, m_loop, 1, name="LOOP_LO_mIdx", idx_name="m_idx"):
+    m_offset = m_idx * m_view
+    a_view = pypto.view(a_tensor, [m_view, k],
+                                              [m_idx * m_view, 0],
+                                              valid_shape=[(m - m_offset).min(m_view), k])
+    pypto.matmul(a_view, b_tensor, pypto.DT_FP32)
 ```

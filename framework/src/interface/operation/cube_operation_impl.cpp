@@ -1436,6 +1436,40 @@ static Tensor ConstructGmAccumulationTensorGraph(DataType outType, const Tensor&
     return gmAccumulationTensor;
 }
 
+// GM累加路径(splitK)仅在validK为concrete、大于0且不小于kSize时生效, validK非concrete、为0或小于kSize时回退普通构图;
+// valid shape维度(2~4)已由CheckGmAccumulationParam在enableSplitK或viewK(validK非concrete)时校验
+static bool IsGmAccumulationEnabled(const CubeTile& cubeTile, const Tensor& aMatrix, const MatmulAttrParam& attrParam)
+{
+    if (!cubeTile.enableSplitK) {
+        return false;
+    }
+    const auto& aValidShape = aMatrix.GetStorage()->GetDynValidShape();
+    // 无动态K信息(valid shape维度不足2)时按非GM累加路径处理
+    if (aValidShape.size() < SHAPE_DIM2) {
+        return false;
+    }
+    SymbolicScalar validK = attrParam.transA ? aValidShape[aValidShape.size() - SHAPE_DIM2] :
+                                               aValidShape[aValidShape.size() - 1];
+    if (!validK.ConcreteValid()) {
+        MATMUL_LOGI("enableSplitK is enabled but validK is not concrete (validK: %s), "
+                    "falling back to normal matmul graph.",
+                    validK.Dump().c_str());
+        return false;
+    }
+    const auto& aShape = aMatrix.GetShape();
+    // 静态shape维度不足2时按非GM累加路径处理, 避免K维索引越界
+    if (aShape.size() < SHAPE_DIM2) {
+        return false;
+    }
+    int64_t kSize = attrParam.transA ? aShape[aShape.size() - SHAPE_DIM2] : aShape[aShape.size() - 1];
+    if (validK.Concrete() < kSize) {
+        MATMUL_LOGI("enableSplitK is enabled but validK is %lld (< kSize %lld), falling back to normal matmul graph.",
+                    static_cast<long long>(validK.Concrete()), static_cast<long long>(kSize));
+        return false;
+    }
+    return true;
+}
+
 Tensor Matmul(DataType outType, const Tensor& aMatrix, const Tensor& bMatrix, bool isATrans, bool isBTrans,
               bool isCMatrixNZ)
 {
@@ -1445,7 +1479,7 @@ Tensor Matmul(DataType outType, const Tensor& aMatrix, const Tensor& bMatrix, bo
     CHECK(MatmulErrorCode::ERR_RUNTIME_LOGIC, checkStatus == SUCCESS) << "Matmul operands check failed";
     MatmulGraphNodes tensorGraphNodes(aMatrix.GetStorage(), bMatrix.GetStorage());
     auto& cubeTile = TileShape::Current().GetCubeTile();
-    if (cubeTile.enableSplitK) {
+    if (IsGmAccumulationEnabled(cubeTile, aMatrix, attrParam)) {
         MATMUL_LOGD("Matmul: Using GM accumulation mode.");
         return ConstructGmAccumulationTensorGraph(outType, aMatrix, bMatrix, attrParam);
     }
@@ -1461,7 +1495,7 @@ Tensor Matmul(DataType outType, const Tensor& aMatrix, const Tensor& bMatrix, co
     CHECK(MatmulErrorCode::ERR_RUNTIME_LOGIC, checkStatus == SUCCESS) << "Matmul operands check failed";
     MatmulGraphNodes tensorGraphNodes(aMatrix.GetStorage(), bMatrix.GetStorage());
     auto& cubeTile = TileShape::Current().GetCubeTile();
-    if (cubeTile.enableSplitK) {
+    if (IsGmAccumulationEnabled(cubeTile, aMatrix, attrParam)) {
         MATMUL_LOGD("Matmul: Using GM accumulation mode.");
         return ConstructGmAccumulationTensorGraph(outType, aMatrix, bMatrix, attrParam, param);
     }
@@ -1546,7 +1580,7 @@ Tensor MatmulMX(DataType outType, const Tensor& aMatrix, const Tensor& aScale, c
     MatmulGraphNodes tensorGraphNodes(aMatrix.GetStorage(), aScale.GetStorage(), bMatrix.GetStorage(),
                                       bScale.GetStorage());
     auto& cubeTile = TileShape::Current().GetCubeTile();
-    if (cubeTile.enableSplitK) {
+    if (IsGmAccumulationEnabled(cubeTile, aMatrix, attrParam)) {
         MATMUL_LOGD("Matmul[Basic]: Using GM accumulation mode.");
         return ConstructMXGmAccumulationTensorGraph(outType, aMatrix, aScale, bMatrix, bScale, attrParam);
     }
@@ -1564,7 +1598,7 @@ Tensor MatmulMX(DataType outType, const Tensor& aMatrix, const Tensor& aScale, c
     MatmulGraphNodes tensorGraphNodes(aMatrix.GetStorage(), aScale.GetStorage(), bMatrix.GetStorage(),
                                       bScale.GetStorage());
     auto& cubeTile = TileShape::Current().GetCubeTile();
-    if (cubeTile.enableSplitK) {
+    if (IsGmAccumulationEnabled(cubeTile, aMatrix, attrParam)) {
         MATMUL_LOGD("Matmul[Extend]: Using GM accumulation mode.");
         return ConstructMXGmAccumulationTensorGraph(outType, aMatrix, aScale, bMatrix, bScale, attrParam);
     }
@@ -2012,7 +2046,7 @@ Tensor BatchMatmul(DataType dataType, const Tensor& aMatrix, const Tensor& bMatr
     CheckMatmulOperands(dataType, aMatrix, bMatrix, attrParam);
     CheckABatchMulB(aMatrix, bMatrix);
     auto& cubeTile = TileShape::Current().GetCubeTile();
-    if (cubeTile.enableSplitK) {
+    if (IsGmAccumulationEnabled(cubeTile, aMatrix, attrParam)) {
         MATMUL_LOGD("BatchMatmul: Using GM accumulation mode.");
         if (aMatrix.GetShape().size() == SHAPE_DIM4) {
             return ConstructBatchGmAccumulationTensorGraph4D(dataType, aMatrix, bMatrix, attrParam);
@@ -2034,7 +2068,7 @@ Tensor BatchMatmul(DataType dataType, const Tensor& aMatrix, const Tensor& bMatr
     CheckMatmulOperands(dataType, aMatrix, bMatrix, attrParam, param);
     CheckABatchMulB(aMatrix, bMatrix, param);
     auto& cubeTile = TileShape::Current().GetCubeTile();
-    if (cubeTile.enableSplitK) {
+    if (IsGmAccumulationEnabled(cubeTile, aMatrix, attrParam)) {
         MATMUL_LOGD("BatchMatmul: Using GM accumulation mode.");
         if (aMatrix.GetShape().size() == SHAPE_DIM4) {
             return ConstructBatchGmAccumulationTensorGraph4D(dataType, aMatrix, bMatrix, attrParam, param);
