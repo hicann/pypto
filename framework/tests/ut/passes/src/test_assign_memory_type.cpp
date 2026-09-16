@@ -46,9 +46,11 @@ const int NUM_1024 = 1024;
 constexpr float F_1 = 1.0;
 constexpr float F_3 = 3.0;
 
+static NPUArch g_originNPUArch = NPUArch::DAV_UNKNOWN;
+
 class AssignMemoryTypeTest : public testing::Test {
 public:
-    static void SetUpTestCase() {}
+    static void SetUpTestCase() { g_originNPUArch = Platform::Instance().GetSoc().GetNPUArch(); }
 
     static void TearDownTestCase() {}
 
@@ -60,7 +62,7 @@ public:
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
         config::SetPlatformConfig(KEY_TEST_IS_TIG, true);
     }
-    void TearDown() override { Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN); }
+    void TearDown() override { Platform::Instance().GetSoc().SetNPUArch(g_originNPUArch); }
 
     void SetHalfwayStrategy()
     {
@@ -2593,6 +2595,69 @@ TEST_F(AssignMemoryTypeTest, ReshapeOutputUsesUbWithMixedViewConsumers)
     auto viewOpAttr = std::dynamic_pointer_cast<ViewOpAttribute>(G.GetOp("view_l1")->GetOpAttribute());
     ASSERT_NE(viewOpAttr, nullptr);
     EXPECT_EQ(viewOpAttr->GetTo(), MemoryType::MEM_L1);
+}
+
+TEST_F(AssignMemoryTypeTest, ReshapeL1SlicePathIsNotKeptInUb)
+{
+    // Main path: incast -> SLICE -> EXP -> CONTRACT -> RESHAPE ->
+    // (UB->L1) SLICE -> (L1->L0A) SLICE -> A_MUL_B -> CONTRACT -> outcast.
+    // The other A_MUL_B input is incast1 -> (DDR->L1) SLICE ->
+    // (L1->L0B) SLICE.
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    auto function = std::make_shared<Function>(Program::GetInstance(), "ReshapeL1SlicePathIsNotKeptInUb",
+                                               "ReshapeL1SlicePathIsNotKeptInUb", nullptr);
+    ASSERT_NE(function, nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("ReshapeL1SlicePathIsNotKeptInUb", function);
+
+    const Shape aShape{2, NUM_32};
+    const Shape bShape{NUM_32, NUM_32};
+    const auto aDynShape = CreateTestConstIntVector(aShape);
+    const auto bDynShape = CreateTestConstIntVector(bShape);
+    IRBuilder builder;
+    auto incast = builder.CreateTensorVar(DT_FP16, aShape, aDynShape);
+    auto sliceOutput = builder.CreateTensorVar(DT_FP16, aShape, aDynShape);
+    auto contractInput = builder.CreateTensorVar(DT_FP16, aShape, aDynShape);
+    auto reshapeInput = builder.CreateTensorVar(DT_FP16, aShape, aDynShape);
+    auto reshapeOutput = builder.CreateTensorVar(DT_FP16, aShape, aDynShape);
+    auto l1Output = builder.CreateTensorVar(DT_FP16, aShape, aDynShape);
+    auto l0aOutput = builder.CreateTensorVar(DT_FP16, aShape, aDynShape);
+    auto incast1 = builder.CreateTensorVar(DT_FP16, bShape, bDynShape);
+    auto l1bOutput = builder.CreateTensorVar(DT_FP16, bShape, bDynShape);
+    auto l0bOutput = builder.CreateTensorVar(DT_FP16, bShape, bDynShape);
+    auto matmulOutput = builder.CreateTensorVar(DT_FP16, aShape, aDynShape);
+    auto output = builder.CreateTensorVar(DT_FP16, aShape, aDynShape);
+
+    incast->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    incast1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    auto& inputSlice = builder.CreateTensorOpStmt(*function, Opcode::OP_SLICE, {incast}, {sliceOutput});
+    inputSlice.SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}));
+    builder.CreateTensorOpStmt(*function, Opcode::OP_EXP, {sliceOutput}, {contractInput});
+    auto& contract = builder.CreateTensorOpStmt(*function, Opcode::OP_CONTRACT, {contractInput}, {reshapeInput});
+    contract.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, Offset{0, 0}));
+    builder.CreateTensorOpStmt(*function, Opcode::OP_RESHAPE, {reshapeInput}, {reshapeOutput});
+    auto& toL1 = builder.CreateTensorOpStmt(*function, Opcode::OP_SLICE, {reshapeOutput}, {l1Output});
+    toL1.SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L1));
+    auto& toL0A = builder.CreateTensorOpStmt(*function, Opcode::OP_SLICE, {l1Output}, {l0aOutput});
+    toL0A.SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L0A));
+    auto& toL1B = builder.CreateTensorOpStmt(*function, Opcode::OP_SLICE, {incast1}, {l1bOutput});
+    toL1B.SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L1));
+    auto& toL0B = builder.CreateTensorOpStmt(*function, Opcode::OP_SLICE, {l1bOutput}, {l0bOutput});
+    toL0B.SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L0B));
+    builder.CreateTensorOpStmt(*function, Opcode::OP_A_MUL_B, {l0aOutput, l0bOutput}, {matmulOutput});
+    auto& outputContract = builder.CreateTensorOpStmt(*function, Opcode::OP_CONTRACT, {matmulOutput}, {output});
+    outputContract.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_DEVICE_DDR, Offset{0, 0}));
+
+    function->inCasts_ = {incast, incast1};
+    function->outCasts_ = {output};
+
+    AssignMemoryType assignMemoryType;
+    ASSERT_EQ(assignMemoryType.RunOnFunction(*function), SUCCESS);
+    ASSERT_EQ(assignMemoryType.PostCheck(*function), SUCCESS);
+
+    // The L1 slice is a real copy-in boundary
+    // And must prevent the reshape output from being forced to UB by KeepSplitReshapeUb.
+    EXPECT_NE(reshapeOutput->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
 }
 
 TEST_F(AssignMemoryTypeTest, ExplicitUnknownGatherElementSliceFromIncastFallsBackToDdr)
