@@ -232,49 +232,15 @@ TEST_F(TestCodegenDynSort, TestDynExtractSingle)
     EXPECT_EQ(res, expect);
 }
 
-TEST_F(TestCodegenDynSort, TestRadixSelectFP32)
-{
-    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-
-    std::vector<int64_t> srcShape = {64, 64};
-    std::vector<int64_t> dstShape = {64, 16};
-    std::vector<int64_t> tmpShape = {64, 1024};
-    std::vector<SymbolicScalar> srcDynValidShape = {64, 64};
-    std::vector<SymbolicScalar> dstDynValidShape = {64, 16};
-    std::vector<SymbolicScalar> tmpDynValidShape = {64, 1024};
-    TileShape::Current().SetVecTile({64, 64});
-    auto function = GenMockFuncDyn("TestRadixSelectFP32");
-    auto localTensorInput = CreateLogicalTensor(
-        {*function, DataType::DT_FP32, MemoryType::MEM_UB, srcShape, srcDynValidShape});
-    auto localTensorValue = CreateLogicalTensor(
-        {*function, DataType::DT_FP32, MemoryType::MEM_UB, dstShape, dstDynValidShape});
-    auto localTensorIndex = CreateLogicalTensor(
-        {*function, DataType::DT_INT32, MemoryType::MEM_UB, dstShape, dstDynValidShape});
-    auto localTensorTmp = CreateLogicalTensor(
-        {*function, DataType::DT_UINT8, MemoryType::MEM_UB, tmpShape, tmpDynValidShape});
-    auto& op = function->AddOperation(Opcode::OP_RADIX_SELECT, {localTensorInput},
-                                      {localTensorValue, localTensorIndex, localTensorTmp});
-    op.SetAttribute(OP_ATTR_PREFIX + "kvalue", 16);
-    op.SetAttribute(OP_ATTR_PREFIX + "order", 1);
-
-    std::string res = GenOpCodeFromOp(*function, op);
-    std::string expect =
-        R"!!!(TRadixSelect<16, 1>(ubTensor_0, ubTensor_1, ubTensor_2, ubTensor_3);
-)!!!";
-    CheckStringExist(expect, res);
-}
-
-TEST_F(TestCodegenDynSort, TestRadixSelectInt64)
+void TestRadixSelect(DataType inputDataType, std::string const& funcName, std::string const& expect)
 {
     config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
     auto npuArch = Platform::Instance().GetSoc().GetNPUArch();
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
     std::vector<int64_t> shape = {16, 16};
     TileShape::Current().SetVecTile({16, 16});
-    Tensor input_a(DataType::DT_INT64, shape, "input");
-    auto output = std::make_tuple(Tensor(DataType::DT_INT64, shape, "value"),
-                                  Tensor(DataType::DT_INT32, shape, "index"));
-    std::string funcName = "RadixSelectInt64";
+    Tensor input_a(inputDataType, shape, "input");
+    auto output = std::make_tuple(Tensor(inputDataType, shape, "value"), Tensor(DataType::DT_INT32, shape, "index"));
     FUNCTION(funcName, {input_a, std::get<0>(output), std::get<1>(output)})
     {
         LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
@@ -286,8 +252,26 @@ TEST_F(TestCodegenDynSort, TestRadixSelectInt64)
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX +
                                                                 HIDDEN_FUNC_SUFFIX);
     std::string res = GenCodeByFunction(*function);
-    std::string expect = R"(TRadixSelect<16, 1>(ubTensor_2, ubTensor_3, ubTensor_4, ubTensor_0);)";
     CheckStringExist(expect, res);
     Platform::Instance().GetSoc().SetNPUArch(npuArch);
 }
+
+TEST_F(TestCodegenDynSort, TestRadixSelectInt16)
+{
+    const std::string expect = R"(TRadixSelect<16, 1>(ubTensor_2, ubTensor_3, ubTensor_4, ubTensor_0);)";
+    TestRadixSelect(DataType::DT_INT16, "RadixSelectINT16", expect);
+}
+
+TEST_F(TestCodegenDynSort, TestRadixSelectFP32)
+{
+    const std::string expect = R"(TRadixSelect<16, 1>(ubTensor_2, ubTensor_3, ubTensor_4, ubTensor_0);)";
+    TestRadixSelect(DataType::DT_FP32, "RadixSelectFP32", expect);
+}
+
+TEST_F(TestCodegenDynSort, TestRadixSelectInt64)
+{
+    const std::string expect = R"(TRadixSelect<16, 1>(ubTensor_2, ubTensor_3, ubTensor_4, ubTensor_0);)";
+    TestRadixSelect(DataType::DT_INT64, "RadixSelectINT64", expect);
+}
+
 } // namespace npu::tile_fwk

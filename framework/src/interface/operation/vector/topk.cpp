@@ -466,6 +466,36 @@ void TiledTopK(Function& function, const TileShape& tileShape, size_t cur, Input
     }
 }
 
+int64_t RadixSelectGetSortTempBlockCount(int64_t bytesOfInput)
+{
+    switch (bytesOfInput) {
+        case NUM_VALUE_1:
+        case NUM_VALUE_2:
+            return NUM_VALUE_22;
+        case NUM_VALUE_4:
+            return NUM_VALUE_26;
+        case NUM_VALUE_8:
+            return NUM_VALUE_34;
+        default:
+            return 0;
+    }
+}
+
+int64_t RadixSelectGetCalcTopKTempBlockCount(int64_t bytesOfInput)
+{
+    switch (bytesOfInput) {
+        case NUM_VALUE_1:
+        case NUM_VALUE_2:
+            return NUM_VALUE_6;
+        case NUM_VALUE_4:
+            return NUM_VALUE_12;
+        case NUM_VALUE_8:
+            return NUM_VALUE_22;
+        default:
+            return 0;
+    }
+}
+
 void TiledTopKRadixSelect(Function& function, const TileShape& tileShape, size_t cur, Input& input,
                           const LogicalTensorPtr& valueResult, const LogicalTensorPtr& indexResult, int axis, int k,
                           int isLargest, int64_t ubSize)
@@ -477,11 +507,15 @@ void TiledTopKRadixSelect(Function& function, const TileShape& tileShape, size_t
         input.tileInfo.shape[cur] = valueResult->shape[cur];
         auto valueTile = valueResult->View(function, input.tileInfo.shape, input.tileInfo.offset);
         auto indexTile = indexResult->View(function, input.tileInfo.shape, input.tileInfo.offset);
-        int64_t blockNum = NUM_VALUE_26;
-        if (BytesOf(input.tensor.GetDataType()) == BytesOf(DT_INT64)) {
-            blockNum = NUM_VALUE_46;
-        }
-        std::vector<int64_t> tmpShape = {static_cast<int64_t>(AlignUp(lastDim, NUM_VALUE_128) * blockNum)};
+        int64_t tileAlign = AlignUp(tileShape.GetVecTile()[cur], NUM_VALUE_128);
+        int64_t bytesOfInput = BytesOf(input.tensor.GetDataType());
+        int64_t calcTopKWorkspace1 = tileAlign * RadixSelectGetCalcTopKTempBlockCount(bytesOfInput);
+        int64_t calcTopKBranch1Workspace = NUM_VALUE_256 * BytesOf(DT_INT32) * NUM_VALUE_3;
+        int64_t calcTopKBranch2Workspace = tileAlign * BytesOf(DT_INT32) * NUM_VALUE_2;
+        int64_t calcTopKWorkspace2 = std::max(calcTopKBranch1Workspace, calcTopKBranch2Workspace);
+        int64_t calcTopKWorkspace = calcTopKWorkspace1 + calcTopKWorkspace2;
+        int64_t sortWorkspace = tileAlign * RadixSelectGetSortTempBlockCount(bytesOfInput);
+        std::vector<int64_t> tmpShape = {std::max(calcTopKWorkspace, sortWorkspace)};
         if (cur > 0) {
             tmpShape[0] *= input.tileInfo.shape[cur - 1];
         }

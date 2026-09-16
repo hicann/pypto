@@ -48,13 +48,16 @@ constexpr int32_t NUM_VALUE_7 = 7;
 constexpr int32_t NUM_VALUE_8 = 8;
 constexpr int32_t NUM_VALUE_9 = 9;
 constexpr int32_t NUM_VALUE_10 = 10;
+constexpr int32_t NUM_VALUE_12 = 12;
 constexpr int32_t NUM_VALUE_16 = 16;
+constexpr int32_t NUM_VALUE_22 = 22;
 constexpr int32_t NUM_VALUE_26 = 26;
 constexpr int32_t NUM_VALUE_31 = 31;
 constexpr int32_t NUM_VALUE_32 = 32;
-constexpr int32_t NUM_VALUE_46 = 46;
+constexpr int32_t NUM_VALUE_34 = 34;
 constexpr int32_t NUM_VALUE_64 = 64;
 constexpr int32_t NUM_VALUE_128 = 128;
+constexpr int32_t NUM_VALUE_256 = 256;
 constexpr double NUM_VALUE_0_5 = 0.5;
 constexpr double NUM_VALUE_EPS = 1e-9;
 

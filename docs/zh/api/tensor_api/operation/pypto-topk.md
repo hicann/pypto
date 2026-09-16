@@ -44,7 +44,15 @@ topk(input: Tensor, k: int, dim: Optional[int] = None, largest: bool = True, alg
 
 1. 只支持对尾轴进行topk操作；
 2. 选用MERGE_SORT算法时，TileShape尾轴需要小于22KB\(TileShape\[-1\]\*4 < 22KB\)；
-3. 选用RADIX_SELECT算法时，记TileShape的次尾轴为tileH（若不存在则为1），尾轴为tileW，tileW对齐到128记为tileAlign，则需要临时空间：blockNum\*tileH\*tileAlign（当输入数据类型为UINT64/INT64时blockNum为46，其余情况为26），临时空间加上输入输出的tile块不能超过UB大小；
+3. 选用RADIX_SELECT算法时，由于存在临时内存使用，设置TileShape时需保证输入Tile、输出Tile及临时空间的总占用小于可用UB。记TileShape的次尾轴为tileH（若不存在则为1），尾轴为tileW，tileW对齐到128记为tileWAlign，各数据类型对应的临时空间如下：
+
+   | 输入数据类型 | 临时空间大小（字节） |
+   |--------------|----------------------|
+   | DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16 | `tileH * max(6 * tileWAlign + max(3072, 8 * tileWAlign), 22 * tileWAlign)` |
+   | DT_FP32、DT_INT32、DT_UINT32 | `tileH * max(12 * tileWAlign + max(3072, 8 * tileWAlign), 26 * tileWAlign)` |
+   | DT_INT64、DT_UINT64 | `tileH * max(22 * tileWAlign + max(3072, 8 * tileWAlign), 34 * tileWAlign)` |
+
+   表格中的max\(a,b\)表示取a和b中的最大值。
 4. 选用RADIX_SELECT算法时，尾轴不可切分，TileShape\[-1\]必须大于等于input.shape\[-1\]；
 5. k <= TileShape\[-1\] && k <= input.shape\[-1\]；
 6. RADIX_SELECT算法在不同型号的支持度：
