@@ -80,12 +80,43 @@ void DevControlFlowCache::PredCountDataBackup(DynDeviceTaskBase* base)
         }
         dynDataBackup->predCountBackup = predCountBackup;
         DevMemcpyS(dynDataBackup->predCountBackup, backupSize, &duppedData->GetOperationCurrPredCount(0), backupSize);
+        DevMemcpyS(duppedData->GetOperationPredCountPingPong(PRED_COUNT_PONG), backupSize,
+                   dynDataBackup->predCountBackup, backupSize);
 
         BitmapDataBackup(dynDataCache, dynDataBackup);
     }
 }
 
-void DevControlFlowCache::PredCountDataRestore(DynDeviceTaskBase* base)
+void DevControlFlowCache::PredCountPingPongSwap(DynDeviceTaskBase* base)
+{
+    DynFuncHeader* dynFuncDataList = base->GetDynFuncDataList();
+    DynFuncDataCache* dynFuncDataCacheList = base->dynFuncDataCacheList;
+    for (size_t dupIndex = 0; dupIndex < dynFuncDataList->Size(); ++dupIndex) {
+        DynFuncDataCache& dynDataCache = dynFuncDataCacheList->At(dupIndex);
+        std::swap(dynDataCache.predCountPing, dynDataCache.predCountPong);
+        dynDataCache.predCount = dynDataCache.predCountPing;
+    }
+}
+
+void DevControlFlowCache::DrcoPredCountDataRestore(DynDeviceTaskBase* base)
+{
+    DynFuncHeader* dynFuncDataList = base->GetDynFuncDataList();
+    DynFuncDataBackup* dynFuncDataBackupList = base->dynFuncDataBackupList;
+    for (size_t dupIndex = 0; dupIndex < dynFuncDataList->Size(); ++dupIndex) {
+        DynFuncData* dynData = &dynFuncDataList->At(dupIndex);
+        if (dynData->drcoRootFuncData.predCount == nullptr) {
+            continue;
+        }
+        int32_t* drcoPredCount = dynData->drcoRootFuncData.predCount;
+        predcount_t* predCountBackup = dynFuncDataBackupList->At(dupIndex).predCountBackup;
+        uint32_t opSize = base->dynFuncDataCacheList->At(dupIndex).duppedData->GetOperationSize();
+        for (uint32_t i = 0; i < opSize; ++i) {
+            drcoPredCount[i] = static_cast<int32_t>(predCountBackup[i]);
+        }
+    }
+}
+
+void DevControlFlowCache::PredCountPingPongRestore(DynDeviceTaskBase* base)
 {
     DynFuncHeader* dynFuncDataList = base->GetDynFuncDataList();
     DynFuncDataCache* dynFuncDataCacheList = base->dynFuncDataCacheList;
@@ -94,20 +125,18 @@ void DevControlFlowCache::PredCountDataRestore(DynDeviceTaskBase* base)
         DynFuncDataCache* dynDataCache = &dynFuncDataCacheList->At(dupIndex);
         DynFuncDataBackup* dynDataBackup = &dynFuncDataBackupList->At(dupIndex);
         DevAscendFunctionDuppedData* duppedData = dynDataCache->duppedData;
-        uint32_t opSize = duppedData->GetOperationSize();
-        size_t backupSize = sizeof(predcount_t) * opSize;
-        DevMemcpyS(&duppedData->GetOperationCurrPredCount(0), backupSize, dynDataBackup->predCountBackup, backupSize);
+        size_t backupSize = sizeof(predcount_t) * duppedData->GetOperationSize();
+        DevMemcpyS(dynDataCache->predCountPong, backupSize, dynDataBackup->predCountBackup, backupSize);
+    }
+}
 
-        DynFuncData* dynData = &dynFuncDataList->At(dupIndex);
-        if (dynData->drcoRootFuncData.predCount != nullptr) {
-            // drco predCount is int32_t on aicore side, while cache backup is uint16_t(predcount_t)
-            int32_t* drcoPredCount = dynData->drcoRootFuncData.predCount;
-            for (uint32_t i = 0; i < opSize; ++i) {
-                drcoPredCount[i] = static_cast<int32_t>(dynDataBackup->predCountBackup[i]);
-            }
-        }
-
-        BitmapDataRestore(dynDataCache, dynDataBackup);
+void DevControlFlowCache::BitmapDataRestoreTask(DynDeviceTaskBase* base)
+{
+    DynFuncHeader* dynFuncDataList = base->GetDynFuncDataList();
+    DynFuncDataCache* dynFuncDataCacheList = base->dynFuncDataCacheList;
+    DynFuncDataBackup* dynFuncDataBackupList = base->dynFuncDataBackupList;
+    for (size_t dupIndex = 0; dupIndex < dynFuncDataList->Size(); ++dupIndex) {
+        BitmapDataRestore(&dynFuncDataCacheList->At(dupIndex), &dynFuncDataBackupList->At(dupIndex));
     }
 }
 
@@ -125,11 +154,20 @@ void DevControlFlowCache::ReadyQueueDataBackup(DynDeviceTaskBase* base)
         if (readyQueueBackupElem == nullptr) {
             return;
         }
+        uint32_t* readyQueueShadowElem = reinterpret_cast<uint32_t*>(AllocateCache(backupSize));
+        if (readyQueueShadowElem == nullptr) {
+            return;
+        }
 
         new (&readyQueueBackup->queueList[i])
             ReadyCoreFunctionQueueUnsafe(base->readyQueue[i]->Capacity(), readyQueueBackupElem);
         readyQueueBackup->queueList[i] = *base->readyQueue[i];
         readyTaskNum += base->readyQueue[i]->UnsafeSize();
+
+        readyQueueBackup->pingElem[i] = base->readyQueue[i]->Data();
+        readyQueueBackup->pongElem[i] = readyQueueShadowElem;
+        DevMemcpyS(readyQueueShadowElem, backupSize, readyQueueBackup->queueList[i].Data(),
+                   sizeof(uint32_t) * readyQueueBackup->queueList[i].Size());
     }
     readyQueueBackup->readyTaskNum = readyTaskNum;
 
@@ -251,12 +289,29 @@ void DevControlFlowCache::DrcoReadyQueueDataRestore(DynDeviceTaskBase* base, uin
     (void)memset_s(reinterpret_cast<uint8_t*>(finishFlagList), sizeof(*finishFlagList), 0, sizeof(*finishFlagList));
 }
 
-void DevControlFlowCache::ReadyQueueDataRestore(DynDeviceTaskBase* base, uint32_t nrValidAic)
+void DevControlFlowCache::ReadyQueueDataPingPongRestore(DynDeviceTaskBase* base)
+{
+    ReadyQueueCache* readyQueueBackup = base->readyQueueBackup;
+    for (size_t i = 0; i < READY_QUEUE_SIZE; i++) {
+        /* elem_ targets the buffer this launch just dirtied; refresh the other one. */
+        uint32_t* inactiveElem = (base->readyQueue[i]->Data() == readyQueueBackup->pingElem[i]) ?
+                                     readyQueueBackup->pongElem[i] :
+                                     readyQueueBackup->pingElem[i];
+        size_t capBytes = sizeof(uint32_t) * readyQueueBackup->queueList[i].Capacity();
+        size_t copyBytes = sizeof(uint32_t) * readyQueueBackup->queueList[i].Size();
+        DevMemcpyS(inactiveElem, capBytes, readyQueueBackup->queueList[i].Data(), copyBytes);
+    }
+}
+
+void DevControlFlowCache::ReadyQueueDataPingPongSwap(DynDeviceTaskBase* base, uint32_t nrValidAic)
 {
     ReadyQueueCache* readyQueueBackup = base->readyQueueBackup;
     base->devTask.coreFunctionCnt = readyQueueBackup->coreFunctionCnt;
     for (size_t i = 0; i < READY_QUEUE_SIZE; i++) {
-        *base->readyQueue[i] = readyQueueBackup->queueList[i];
+        uint32_t* inactiveElem = (base->readyQueue[i]->Data() == readyQueueBackup->pingElem[i]) ?
+                                     readyQueueBackup->pongElem[i] :
+                                     readyQueueBackup->pingElem[i];
+        base->readyQueue[i]->FillFrom(readyQueueBackup->queueList[i], inactiveElem);
     }
 
     // for aicore-resolve
@@ -280,6 +335,8 @@ void DevControlFlowCache::DieReadyQueueDataBackup(DynDeviceTaskBase* base)
                             base->devTask.dieReadyFunctionQue.readyDieAicCoreFunctionQue[i - DIE_NUM]);
         if (dieReadyQueue == nullptr) {
             new (&dieReadyQueueBackup->queueList[i]) ReadyCoreFunctionQueueUnsafe(0, nullptr);
+            dieReadyQueueBackup->pingElem[i] = nullptr;
+            dieReadyQueueBackup->pongElem[i] = nullptr;
             continue;
         }
         size_t backupSize = sizeof(uint32_t) * dieReadyQueue->Capacity();
@@ -287,17 +344,50 @@ void DevControlFlowCache::DieReadyQueueDataBackup(DynDeviceTaskBase* base)
         if (dieReadyQueueBackupElem == nullptr) {
             return;
         }
+        uint32_t* dieReadyQueueShadowElem = reinterpret_cast<uint32_t*>(AllocateCache(backupSize));
+        if (dieReadyQueueShadowElem == nullptr) {
+            return;
+        }
 
         new (&dieReadyQueueBackup->queueList[i])
             ReadyCoreFunctionQueueUnsafe(dieReadyQueue->Capacity(), dieReadyQueueBackupElem);
         dieReadyQueueBackup->queueList[i] = *dieReadyQueue;
         readyTaskNum += dieReadyQueue->UnsafeSize();
+
+        /* Ping-pong, same protocol as ReadyQueueDataBackup. */
+        dieReadyQueueBackup->pingElem[i] = dieReadyQueue->Data();
+        dieReadyQueueBackup->pongElem[i] = dieReadyQueueShadowElem;
+        DevMemcpyS(dieReadyQueueShadowElem, backupSize, dieReadyQueueBackup->queueList[i].Data(),
+                   sizeof(uint32_t) * dieReadyQueueBackup->queueList[i].Size());
     }
     dieReadyQueueBackup->readyTaskNum = readyTaskNum;
     base->dieReadyQueueBackup = dieReadyQueueBackup;
 }
 
-void DevControlFlowCache::DieReadyQueueDataRestore(DynDeviceTaskBase* base, uint32_t nrValidAic)
+void DevControlFlowCache::DieReadyQueuePingPongRestore(DynDeviceTaskBase* base)
+{
+    DieReadyQueueCache* dieReadyQueueBackup = base->dieReadyQueueBackup;
+    if (dieReadyQueueBackup == nullptr) {
+        return;
+    }
+    for (size_t i = 0; i < DIE_READY_QUEUE_SIZE * DIE_NUM; i++) {
+        ReadyCoreFunctionQueue* dieReadyQueue = reinterpret_cast<ReadyCoreFunctionQueue*>(
+            (i < DIE_NUM) ? base->devTask.dieReadyFunctionQue.readyDieAivCoreFunctionQue[i] :
+                            base->devTask.dieReadyFunctionQue.readyDieAicCoreFunctionQue[i - DIE_NUM]);
+        if (dieReadyQueue == nullptr) {
+            continue;
+        }
+        /* elem_ targets the buffer this launch just dirtied; refresh the other one. */
+        uint32_t* inactiveElem = (dieReadyQueue->Data() == dieReadyQueueBackup->pingElem[i]) ?
+                                     dieReadyQueueBackup->pongElem[i] :
+                                     dieReadyQueueBackup->pingElem[i];
+        size_t capBytes = sizeof(uint32_t) * dieReadyQueueBackup->queueList[i].Capacity();
+        size_t copyBytes = sizeof(uint32_t) * dieReadyQueueBackup->queueList[i].Size();
+        DevMemcpyS(inactiveElem, capBytes, dieReadyQueueBackup->queueList[i].Data(), copyBytes);
+    }
+}
+
+void DevControlFlowCache::DieReadyQueuePingPongSwap(DynDeviceTaskBase* base, uint32_t nrValidAic)
 {
     DieReadyQueueCache* dieReadyQueueBackup = base->dieReadyQueueBackup;
     if (dieReadyQueueBackup == nullptr) {
@@ -311,7 +401,11 @@ void DevControlFlowCache::DieReadyQueueDataRestore(DynDeviceTaskBase* base, uint
         if (dieReadyQueue == nullptr) {
             continue;
         }
-        *dieReadyQueue = dieReadyQueueBackup->queueList[i];
+        /* Ping-pong: rebind to the buffer the previous launch's shadow restore refreshed. */
+        uint32_t* inactiveElem = (dieReadyQueue->Data() == dieReadyQueueBackup->pingElem[i]) ?
+                                     dieReadyQueueBackup->pongElem[i] :
+                                     dieReadyQueueBackup->pingElem[i];
+        dieReadyQueue->FillFrom(dieReadyQueueBackup->queueList[i], inactiveElem);
     }
 
     if (base->drcoRootFuncList == nullptr) {
@@ -906,6 +1000,10 @@ void DevControlFlowCache::DieReadyQueueReloc(RelocRange& relocCtrlCache, DynDevi
         for (size_t i = 0; i < DIE_READY_QUEUE_SIZE * DIE_NUM; i++) {
             dieReadyQueueBackup->queueList[i].Reloc(relocCtrlCache);
         }
+        for (size_t i = 0; i < DIE_READY_QUEUE_SIZE * DIE_NUM; i++) {
+            relocCtrlCache.RelocNullable(dieReadyQueueBackup->pingElem[i]);
+            relocCtrlCache.RelocNullable(dieReadyQueueBackup->pongElem[i]);
+        }
     }
 }
 
@@ -930,6 +1028,8 @@ void DevControlFlowCache::RelocDuppedDataAndDynFuncData(RelocRange& relocProgram
     relocProgram.RelocNullable(dynData->cceBinaryIndexList);
 
     relocCtrlCache.Reloc(dynDataCache->predCount);
+    relocCtrlCache.RelocNullable(dynDataCache->predCountPing);
+    relocCtrlCache.RelocNullable(dynDataCache->predCountPong);
     relocCtrlCache.RelocNullable(dynDataBackup->predCountBackup);
     relocCtrlCache.RelocNullable(dynDataBackup->rawTensorAddrBackup);
     relocCtrlCache.RelocNullable(dynDataBackup->deadEndHubBitmapBackup);
@@ -971,6 +1071,10 @@ void DevControlFlowCache::TaskAddrRelocProgramAndCtrlCache(uint64_t srcProgram, 
         ReadyQueueCache* readyQueueBackup = RelocControlFlowCachePointer(readyQueueBackupRef, relocCtrlCache);
         for (size_t i = 0; i < READY_QUEUE_SIZE; i++) {
             readyQueueBackup->queueList[i].Reloc(relocCtrlCache);
+        }
+        for (size_t i = 0; i < READY_QUEUE_SIZE; i++) {
+            relocCtrlCache.RelocNullable(readyQueueBackup->pingElem[i]);
+            relocCtrlCache.RelocNullable(readyQueueBackup->pongElem[i]);
         }
 
         for (size_t i = 0; i < npu::tile_fwk::DRCO_QUEUE_MAX; i++) {

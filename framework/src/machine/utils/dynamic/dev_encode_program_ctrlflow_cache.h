@@ -42,6 +42,9 @@ struct ReadyQueueCache {
     ReadyCoreFunctionQueueUnsafe queueList[READY_QUEUE_SIZE];
     uint32_t readyTaskNum;
 
+    uint32_t* pingElem[READY_QUEUE_SIZE];
+    uint32_t* pongElem[READY_QUEUE_SIZE];
+
     npu::tile_fwk::DrcoGlobalReadyQueuePtr globalReadyQueueList[npu::tile_fwk::DRCO_QUEUE_MAX];
     npu::tile_fwk::PerCorePendingQueue* perCorePendingQueueList[npu::tile_fwk::MAX_AICORE_NUM_FOR_QUEUE]{};
 };
@@ -50,6 +53,10 @@ struct DieReadyQueueCache {
     uint32_t coreFunctionCnt;
     ReadyCoreFunctionQueueUnsafe queueList[DIE_READY_QUEUE_SIZE * DIE_NUM];
     uint32_t readyTaskNum;
+
+    /* Ping-pong element buffers, same protocol as ReadyQueueCache. */
+    uint32_t* pingElem[DIE_READY_QUEUE_SIZE * DIE_NUM];
+    uint32_t* pongElem[DIE_READY_QUEUE_SIZE * DIE_NUM];
 };
 
 struct MixTaskDataCache {
@@ -61,6 +68,8 @@ struct MixTaskDataCache {
 struct DynFuncDataCache {
     DevAscendFunction* devFunc;
     predcount_t* predCount;
+    predcount_t* predCountPing;
+    predcount_t* predCountPong;
     int* calleeList;
     DevAscendFunctionDuppedData* duppedData;
 
@@ -242,10 +251,13 @@ struct DevControlFlowCache {
     uint64_t contextWorkspaceAddr;
     /* Filled in caching */
     DevRelocVector<DeviceTaskCache> deviceTaskCacheList;
+
+    bool bitmapRestoreDone{false};
     /* Filled in caching */
     DevRelocVector<uint8_t> cacheData;
 
     uint64_t workspaceAddr;
+
 #define ctrlFlowLastField cacheData
     uint64_t dataSize;
     uint8_t data[0];
@@ -354,7 +366,7 @@ struct DevControlFlowCache {
         return true;
     }
 
-    inline bool IsActivatedPartialCache(DevStartArgsBase* startArgs) const
+    inline bool IsActivatedCache(DevStartArgsBase* startArgs) const
     {
         if (!isActivated) {
             return false;
@@ -405,17 +417,27 @@ struct DevControlFlowCache {
 
     void PredCountDataBackup(DynDeviceTaskBase* base);
 
-    void PredCountDataRestore(DynDeviceTaskBase* base);
+    void PredCountPingPongSwap(DynDeviceTaskBase* base);
+
+    void DrcoPredCountDataRestore(DynDeviceTaskBase* base);
+
+    void PredCountPingPongRestore(DynDeviceTaskBase* base);
+
+    void BitmapDataRestoreTask(DynDeviceTaskBase* base);
 
     void ReadyQueueDataBackup(DynDeviceTaskBase* base);
 
-    void ReadyQueueDataRestore(DynDeviceTaskBase* base, uint32_t nrValidAic);
+    void ReadyQueueDataPingPongSwap(DynDeviceTaskBase* base, uint32_t nrValidAic);
+
+    void ReadyQueueDataPingPongRestore(DynDeviceTaskBase* base);
 
     void DrcoReadyQueueDataRestore(DynDeviceTaskBase* base, uint32_t nrValidAic);
 
     void DieReadyQueueDataBackup(DynDeviceTaskBase* base);
 
-    void DieReadyQueueDataRestore(DynDeviceTaskBase* base, uint32_t nrValidAic);
+    void DieReadyQueuePingPongSwap(DynDeviceTaskBase* base, uint32_t nrValidAic);
+
+    void DieReadyQueuePingPongRestore(DynDeviceTaskBase* base);
 
     void MixTaskDataBackup(DynDeviceTaskBase* base);
 

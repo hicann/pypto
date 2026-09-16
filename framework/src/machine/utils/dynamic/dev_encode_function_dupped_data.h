@@ -25,6 +25,10 @@ constexpr int ARG_ATTR_TYPE = 4;
 const uint32_t RAW_TENSOR_OFFSET_SIZE = 63;
 const uint32_t RAW_TENSOR_DESC_PRE_SIZE = 8;
 
+inline constexpr uint32_t PRED_COUNT_PING = 0;
+inline constexpr uint32_t PRED_COUNT_PONG = 1;
+inline constexpr uint32_t PRED_COUNT_PINGPONG_NUM = 2;
+
 struct DevAscendFunctionDuppedData {
     DevAscendFunction* source_;
     DevAscendFunctionDuppedOperation operationList_;
@@ -54,6 +58,21 @@ struct DevAscendFunctionDuppedData {
     predcount_t& GetOperationCurrPredCount(int index)
     {
         return GET_DATA(predcount_t, data_, operationList_.predCountBase, index);
+    }
+
+    /* Ctrl-flow-cache ping-pong layout: two back-to-back predcount slices. Stride is one
+     * slice's span in elements, including the 8-byte alignment padding the encode inserts. */
+    uint32_t GetPredCountPingPongStride() const
+    {
+        uint64_t sliceBytes = operationList_.size * sizeof(predcount_t);
+        sliceBytes = (sliceBytes + sizeof(uint64_t) - 1) / sizeof(uint64_t) * sizeof(uint64_t);
+        return static_cast<uint32_t>(sliceBytes / sizeof(predcount_t));
+    }
+    predcount_t* GetOperationPredCountPingPong(uint32_t pos)
+    {
+        uint64_t byteOffset = operationList_.predCountBase +
+                              static_cast<uint64_t>(pos) * GetPredCountPingPongStride() * sizeof(predcount_t);
+        return &GET_DATA(predcount_t, data_, byteOffset, 0);
     }
 
     uint32_t GetStitchSize() const { return operationList_.stitchCount; }
@@ -244,6 +263,10 @@ struct DevAscendFunctionDupped {
         return DupData()->GetOperationCurrPredCount(arg);
     };
     inline predcount_t& GetOperationCurrPredCount(int arg) { return DupData()->GetOperationCurrPredCount(arg); };
+    inline predcount_t* GetOperationPredCountPingPong(uint32_t pos)
+    {
+        return DupData()->GetOperationPredCountPingPong(pos);
+    };
     inline const auto& GetOperationStitch(int arg, bool maybeNull = true) const
     {
         return DupData()->GetOperationStitch(arg, maybeNull);

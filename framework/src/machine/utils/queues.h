@@ -48,6 +48,16 @@ struct QueueGeneric {
 
     __attribute__((always_inline)) uint32_t Size() const { return tail_ - head_; }
 
+    __attribute__((always_inline)) T* Data() const { return elem_; }
+
+    void FillFrom(const QueueGeneric& rhs, T* elem)
+    {
+        ASSERT(SchedErr::READY_QUEUE_OVERFLOW, rhs.Size() <= Capacity());
+        head_ = rhs.head_;
+        tail_ = rhs.tail_;
+        elem_ = elem;
+    }
+
     std::string Str() const
     {
         std::stringstream ss;

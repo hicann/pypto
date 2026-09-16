@@ -109,6 +109,10 @@ struct DeviceExecuteContext {
 
     void GELaunchRunCached(DevStartArgs* startArgs, PushTaskEntry tPushTask);
 
+    /* Post-launch ping-pong refresh of the inactive buffers (predCount + ready/die queues),
+     * deferred to the callers so the partial-cache flow can run it after RunControlFlow. */
+    void PingPongRestoreAll(DevStartArgs* startArgs);
+
     int RunControlFlow(DevStartArgs* startArgs);
 
     int GELaunchFullCacheRunControlFlow(DevStartArgs* startArgs, PushTaskEntry tPushTask);

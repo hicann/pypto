@@ -332,7 +332,11 @@ int DeviceStitchContext::MoveTo(DynDeviceTask* dynTask)
     for (int i = 0; i < size; ++i) {
         auto& funcDup = dynTask->stitchedList[i];
         auto* src = funcDup.GetSource();
-        dynTask->dynFuncDataCacheList[i] = {src, &funcDup.GetOperationCurrPredCount(0), src->GetCalleeIndexAddr(),
+        dynTask->dynFuncDataCacheList[i] = {src,
+                                            &funcDup.GetOperationCurrPredCount(0),
+                                            funcDup.GetOperationPredCountPingPong(PRED_COUNT_PING),
+                                            funcDup.GetOperationPredCountPingPong(PRED_COUNT_PONG),
+                                            src->GetCalleeIndexAddr(),
                                             funcDup.DupDataForDynFuncData()};
         dynTask->devTask.mixTaskData.opWrapList[i] = PtrToValue(src->GetOpWrapListAddr());
     }
