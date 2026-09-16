@@ -177,11 +177,6 @@ INLINE uint32_t DrcoAtomicExchToU32(__gm__ uint32_t* ptr, uint32_t value)
     return static_cast<uint32_t>(atomicExch(ptr, value));
 }
 
-INLINE uint64_t DrcoAtomicCasToU64(__gm__ uint64_t* ptr, uint64_t compare, uint64_t value)
-{
-    return static_cast<uint64_t>(atomicCAS(ptr, compare, value));
-}
-
 using DrcoDeviceTask = npu::tile_fwk::DrcoDeviceTask;
 using DrcoDeviceTaskReadyQueue = npu::tile_fwk::DrcoDeviceTaskReadyQueue;
 using DrcoGlobalReadyQueue = npu::tile_fwk::DrcoGlobalReadyQueue;
@@ -881,15 +876,16 @@ INLINE void DrcoResolveDepend(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoR
             uint32_t colIdx = BlockDescBlockIdx(blockDesc) % npu::tile_fwk::DrcoGlobalStitchNodeMatrix::COL_SIZE;
             if (firstNode != nullptr) {
                 uint32_t start = 0;
+                uint64_t stitchNodeBase = rootFuncList->stitchNodeBase;
 
                 for (__gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode* node = firstNode->nodeNext;
                      node != nullptr && fallbackNode == nullptr; node = node->nodeNext) {
                     bool filled = false;
                     for (uint32_t i = 0; i < rowCnt; i++) {
                         uint32_t rowIdx = (coreTypeIdx + start + i) % rowCnt;
-                        __gm__ uint64_t* slot = reinterpret_cast<__gm__ uint64_t*>(
-                            &matrix->stitchNodeList[rowIdx][colIdx]);
-                        uint64_t prev = DrcoAtomicCasToU64(slot, 0, reinterpret_cast<uint64_t>(node));
+                        __gm__ uint32_t* slot = &matrix->stitchNodeList[rowIdx].slot[colIdx];
+                        uint32_t prev = DrcoAtomicCasToU32(
+                            slot, 0, static_cast<uint32_t>(reinterpret_cast<uint64_t>(node) - stitchNodeBase));
                         if (prev == 0) {
                             start = start + i + 1;
                             filled = true;
@@ -1006,24 +1002,26 @@ INLINE __gm__ DrcoLocalReadyMatrix* TryGetOtherLocalMatrix(__gm__ npu::tile_fwk:
 }
 
 // 消费本核行上的 defer stitch 节点：与 PopColTasks 相同的两阶段 CAS 抢占
-// （CAS(0,0) 原子读 → CAS(node,nullptr) 独占），节点内任务就地解依赖后 batch push；
-// 节点内容 host 侧构建后不可变，指针 CAS 发布即可；只 pop 自己类型内编号对应的行
+// （CAS(0,0) 原子读 → CAS(offset,0) 独占），节点内任务就地解依赖后 batch push；
+// 节点内容 host 侧构建后不可变，slot 存相对 stitch pool 基址的 u32 偏移，CAS 发布偏移即可，
+// 经 DrcoRootFuncList::stitchNodeBase 还原节点地址；只 pop 自己类型内编号对应的行
 INLINE void DrcoStitchNodeMatrixPopResolve(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
                                            __gm__ DrcoGlobalStitchNodeMatrix* matrix, uint32_t rowIdx)
 {
     uint32_t succTaskIdListCoreList[npu::tile_fwk::NUM_CORE_TYPES][BATCH_PUSH_BUF_SIZE];
     uint32_t succTaskIdListSizeCoreList[npu::tile_fwk::NUM_CORE_TYPES] = {0};
     for (uint32_t col = 0; col < DrcoGlobalStitchNodeMatrix::COL_SIZE; col++) {
-        __gm__ uint64_t* slot = reinterpret_cast<__gm__ uint64_t*>(&matrix->stitchNodeList[rowIdx][col]);
-        uint64_t nodeAddr = DrcoAtomicCasToU64(slot, 0, 0);
-        if (nodeAddr == 0) {
+        __gm__ uint32_t* slot = &matrix->stitchNodeList[rowIdx].slot[col];
+        uint32_t nodeOffset = DrcoAtomicCasToU32(slot, 0, 0);
+        if (nodeOffset == 0) {
             continue;
         }
-        if (DrcoAtomicCasToU64(slot, nodeAddr, 0) != nodeAddr) {
+        if (DrcoAtomicCasToU32(slot, nodeOffset, 0) != nodeOffset) {
             continue;
         }
         __gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode*
-            node = (__gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode*)nodeAddr;
+            node = (__gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode*)(rootFuncList->stitchNodeBase +
+                                                                              nodeOffset);
         for (uint32_t i = 0; i < node->nodeSize; i++) {
             uint32_t succTaskId = node->nodeTaskList[i]; // already coreType-encoded at build time
             uint32_t succFuncId = npu::tile_fwk::FuncID(succTaskId);

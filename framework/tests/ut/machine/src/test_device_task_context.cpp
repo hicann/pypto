@@ -994,7 +994,7 @@ TEST_F(TestDeviceTaskContext, InitReadyQueues_EnableAicoreResolve_CreatesDrcoRoo
         ASSERT_NE(stitchNodeMatrix, nullptr);
         for (uint32_t r = 0; r < npu::tile_fwk::MAX_AICORE_NUM_FOR_QUEUE; ++r) {
             for (uint32_t c = 0; c < npu::tile_fwk::LOCAL_GROUP_SIZE; ++c) {
-                EXPECT_EQ(stitchNodeMatrix->stitchNodeList[r][c], nullptr);
+                EXPECT_EQ(stitchNodeMatrix->stitchNodeList[r].slot[c], 0U);
             }
         }
     }

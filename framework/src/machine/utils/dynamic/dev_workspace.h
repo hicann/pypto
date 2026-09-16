@@ -459,6 +459,10 @@ private:
 public:
     TensorAllocator* GetTensorAllocator() { return tensorAllocators_; }
 
+    // stitch pool 对齐后基址（设备地址）：由 DrcoRootFuncList::stitchNodeBase 透传给 aicore 侧，
+    // 以 base + u32 偏移还原 stitch 节点地址（偏移 < 4GB 由池 u32 总大小保证）
+    uint64_t GetStitchPoolBase() const { return metadataAllocators_.stitchSlab.GetMemBase(); }
+
 private:
     bool DeviceTaskMemTryRecycle();
 

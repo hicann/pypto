@@ -128,6 +128,10 @@ public:
                   slabAlignSize_);
     }
 
+    // 对齐后的池基址：池内对象相对此地址的偏移恒 < 4GB（totalMemSize_ 为 u32），
+    // 供 u32 偏移方案（如 DrcoGlobalStitchNodeMatrix 槽位）换算节点地址
+    uint64_t GetMemBase() const { return reinterpret_cast<uint64_t>(memBaseaddr_); }
+
     bool RegistCache(uint32_t type, uint32_t objSize)
     {
         if (type >= SLAB_ALLOCATOR_MAX_CACHES || objSize == 0) {

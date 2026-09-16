@@ -82,17 +82,25 @@ constexpr uint32_t DRCO_QUEUE_MAX = 3;
 // （× group）矩阵为单一二维数组，行按核类型内本地编号索引（AIC = blockIdx，
 // AIV = blockIdx - nrValidAic，行数上限 MAX_AICORE_NUM_FOR_QUEUE），列 = LOCAL_GROUP_SIZE；
 // push 只写本类型核的行，pop 只读自己类型内编号对应的行
+// slot 语义为节点相对 stitch pool 基址的 u32 偏移（0 = 空闲；首对象不在偏移 0，
+// 由 SlabWsAllocator::FirstObjBaseOffset 保证），基址见 DrcoRootFuncList::stitchNodeBase
 struct DrcoGlobalStitchNodeMatrix {
     enum {
         COL_SIZE = 1,
     };
-    __gm__ DevAscendFunctionDuppedStitchNode* stitchNodeList[MAX_AICORE_NUM_FOR_QUEUE][COL_SIZE];
+    // 每行独占一个 64B cache line：消除跨行 false sharing（push 写相邻行不再 invalidate
+    // 本行 probe）。代价：108 行 × 64B = 6.75 KB/矩阵（×3 ≈ 20 KB），可接受
+    struct alignas(64) Row {
+        uint32_t slot[COL_SIZE];
+        uint8_t pad[64 - sizeof(uint32_t) * COL_SIZE];
+    };
+    Row stitchNodeList[MAX_AICORE_NUM_FOR_QUEUE];
 #ifdef __TILE_FWK_HOST__
     DrcoGlobalStitchNodeMatrix()
     {
         for (uint32_t i = 0; i < MAX_AICORE_NUM_FOR_QUEUE; i++) {
             for (uint32_t j = 0; j < COL_SIZE; j++) {
-                stitchNodeList[i][j] = nullptr;
+                stitchNodeList[i].slot[j] = 0;
             }
         }
     }
@@ -126,6 +134,9 @@ struct DrcoRootFuncList {
     __gm__ DrcoLocalReadyQueue* localReadyQueueArray[DRCO_QUEUE_MAX][NUM_LOCAL_GROUPS];
     __gm__ DrcoLocalReadyMatrix* localReadyMatrixArray[DRCO_QUEUE_MAX][NUM_LOCAL_GROUPS];
     __gm__ DrcoGlobalStitchNodeMatrix* stitchNodeMatrixArray[DRCO_QUEUE_MAX];
+    // stitch pool 基址（设备地址）：stitchNodeList 槽位偏移以此为原点还原节点地址，
+    // 写入于 InitDrcoRootFuncList，cache 激活时随矩阵指针一同 reloc（偏移本身平移不变）
+    uint64_t stitchNodeBase;
 
     alignas(64) uint32_t totalTaskCount;
     alignas(64) uint32_t devTaskFinished;

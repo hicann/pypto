@@ -883,6 +883,10 @@ void DeviceWorkspaceAllocator::InitMetadataAllocators(DevAscendProgram* devProg,
         none(), WorkspaceMetadataGeneral(Range(generalAddr, generalAddr + devProg->memBudget.metadata.general))));
 
     uint64_t stitchPoolAddr = devStartArgs->deviceRuntimeDataDesc.stitchPoolAddr;
+    // stitch 池预算必须 < 4GB：池内对象以 u32 偏移被引用（DrcoGlobalStitchNodeMatrix 槽位），
+    // 且下方传参存在 u64 -> u32 隐式截断
+    DEV_ASSERT_MSG(WsErr::WORKSPACE_INIT_PARAM_INVALID, devProg->memBudget.metadata.stitchPool <= UINT32_MAX,
+                   "Stitch pool size %lu exceeds u32 limit", devProg->memBudget.metadata.stitchPool);
     InitAicpuStitchSlabAllocator(reinterpret_cast<void*>(stitchPoolAddr), devProg->memBudget.metadata.stitchPool);
     DEV_TRACE_DEBUG(CtrlEvent(none(), WorkspaceMetadataStitch(Range(
                                           stitchPoolAddr, stitchPoolAddr + devProg->memBudget.metadata.stitchPool))));

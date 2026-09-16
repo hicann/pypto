@@ -1152,6 +1152,8 @@ void DevControlFlowCache::RelocDrcoRootFuncList(RelocRange& relocCtrlCache, DynD
         for (uint32_t ct = 0; ct < npu::tile_fwk::DRCO_QUEUE_MAX; ct++) {
             relocCtrlCache.Reloc(drcoRootFuncList->stitchNodeMatrixArray[ct]);
         }
+        // 基址与 stitch 节点指针同域，走同一平移；slot 内偏移相对基址，平移不变
+        relocCtrlCache.Reloc(drcoRootFuncList->stitchNodeBase);
     }
 }
 
