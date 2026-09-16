@@ -23,7 +23,6 @@ from pypto.pypto_impl.ir import Call, ConstBool, ConstInt, DataType, Expr, Scala
 from .._utils import _get_span_or_capture, _normalize_expr, _to_make_tuple
 from ._op_registry import OpSpec, op_impl, register_table
 
-_PRINTF_FLAGS = set("-+ #0")
 _INTEGER_CONVERSIONS = {"d", "i", "u", "x"}
 _FLOAT_CONVERSIONS = {"f"}
 _POINTER_CONVERSIONS = {"p"}
@@ -85,21 +84,13 @@ def _scan_printf_format(format_str: str) -> list[str]:
             raise ValueError("printf does not support literal '%%'")
 
         j = i + 1
-        while j < len(format_str) and format_str[j] in _PRINTF_FLAGS:
-            j += 1
-        while j < len(format_str) and format_str[j].isdigit():
-            j += 1
-        if j < len(format_str) and format_str[j] == ".":
-            j += 1
-            if j >= len(format_str) or not format_str[j].isdigit():
-                raise ValueError("printf precision must be followed by digits")
-            while j < len(format_str) and format_str[j].isdigit():
-                j += 1
         if j >= len(format_str):
             raise ValueError("printf format string ends with an incomplete conversion")
 
         conversion = format_str[j]
         if conversion not in _SUPPORTED_CONVERSIONS:
+            if conversion in "-+ #0." or conversion.isdigit():
+                raise ValueError("printf does not support flags, width, or precision")
             raise ValueError(f"printf does not support conversion '%{conversion}'")
 
         specs.append(format_str[i:j + 1])

@@ -125,7 +125,9 @@ def test_shared_library_and_caller_use_the_same_resolved_target(monkeypatch, tmp
     assert build_arch == arch
     assert f"--cce-aicore-arch={target.npu_arch}" in flags
     assert "--cce-fatobj-link" in flags
-    assert "--cce-enable-print" in flags
+    assert "--cce-enable-print" not in flags
+    assert "/toolkit/asc/include" in flags
+    assert "/toolkit/asc" in flags
     assert f"ResolveLaunchBlockDim<{cores[0]}, {cores[1]}>" in caller
 
 

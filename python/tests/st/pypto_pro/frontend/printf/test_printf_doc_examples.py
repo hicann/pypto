@@ -57,11 +57,11 @@ def printf_doc_examples_kernel(
         # Example 1: %d integer
         pl.printf("flag=%d, offset=%d\n", flag, offset)
 
-        # Example 2: %+08.3f float
-        pl.printf("value=%+08.3f\n", value_f32)
+        # Example 2: %f float
+        pl.printf("value=%f\n", value_f32)
 
-        # Example 3: %#08x hex
-        pl.printf("addr=%#08x\n", addr_u32)
+        # Example 3: %x hex
+        pl.printf("addr=0x%x\n", addr_u32)
 
         # Example 4: plain text
         pl.printf("reached checkpoint A\n")
@@ -102,8 +102,8 @@ def test_printf_doc_examples():
     Inputs: flag=True, offset=32, value_f32=3.14, addr_u32=0x1234, i=5
     Expected device log:
         flag=1, offset=32
-        value=+003.140
-        addr=0x001234
+        value=3.140000
+        addr=0x1234
         reached checkpoint A
         <source_location> debug: i=5
     """
