@@ -1055,6 +1055,7 @@ TEST_F(ReduceCopyTest, MixGraphMerger_LoopPathConsistency_MixedMembershipRejecte
     merger.mInput = input;
     merger.mRootLoopPaths = input.subgraphLoopPaths;
     merger.mParent = {0, 1, 2, 3};
+    merger.mRootToBoundaryTensorIds.assign(input.numSubgraph, {});
     EXPECT_FALSE(merger.CheckLoopPathConsistency({0, 1, 2}));
     EXPECT_FALSE(merger.CheckLoopPathConsistency({0, 2}));
     EXPECT_TRUE(merger.CheckLoopPathConsistency({0, 1}));
@@ -1071,6 +1072,103 @@ TEST_F(ReduceCopyTest, MixGraphMerger_LoopPathConsistencyDisabledWithoutSlotInfo
     merger.mRootLoopPaths = input.subgraphLoopPaths;
     merger.mParent = {0, 1, 2};
     EXPECT_TRUE(merger.CheckLoopPathConsistency({0, 1, 2}));
+}
+
+// 数据耦合豁免: 环外成员(空集)挂在环上成员的直接边界 tensor 数据边上放行;
+// 环上成员与无数据边的环外成员混合仍拒绝
+TEST_F(ReduceCopyTest, MixGraphMerger_LoopPathConsistencyDataEdgeExempted)
+{
+    MergeInput input = BuildSimpleMergeInput(4, {{1}, {2}, {}, {}}, {});
+    input.subgraphLoopPaths = {{7}, {7}, {}, {}}; // sg0/sg1 在 carry 环 7 上, sg2/sg3 环外
+    // sg0 -> sg2 直接数据边 (boundary tensor 100: producer sg0, consumer sg2)
+    input.boundaryTensors = {{100, {0}, {2}, true, {}, {}}};
+    input.subgraphToBoundaryTensorIds = {{0}, {}, {0}, {}};
+    MixGraphMerger merger;
+    merger.mInput = input;
+    merger.mRootLoopPaths = input.subgraphLoopPaths;
+    merger.mParent = {0, 1, 2, 3};
+    merger.mRootToBoundaryTensorIds = input.subgraphToBoundaryTensorIds;
+    EXPECT_TRUE(merger.CheckLoopPathConsistency({0, 2}));  // 环外成员挂在环上成员数据边, 豁免放行
+    EXPECT_FALSE(merger.CheckLoopPathConsistency({1, 2})); // sg1 与 sg2 既不共环也无数据边, 仍拒绝
+    EXPECT_TRUE(merger.CheckLoopPathConsistency({0, 1}));  // 同环, 放行不变
+}
+
+// 共环豁免: loop 集合不同但有交集(共享子图的多 slot 链场景)的成员放行;
+// 与完全不相交的空集成员混合仍拒绝
+TEST_F(ReduceCopyTest, MixGraphMerger_LoopPathConsistencySharedLoopExempted)
+{
+    MergeInput input = BuildSimpleMergeInput(3, {{1}, {2}, {}}, {});
+    // sg0 在环 {7}, sg1 在环 {7,8}(多条 slot 链共享子图): 集合不同但共环 7
+    input.subgraphLoopPaths = {{7}, {7, 8}, {}};
+    MixGraphMerger merger;
+    merger.mInput = input;
+    merger.mRootLoopPaths = input.subgraphLoopPaths;
+    merger.mParent = {0, 1, 2};
+    merger.mRootToBoundaryTensorIds.assign(input.numSubgraph, {});
+    EXPECT_TRUE(merger.CheckLoopPathConsistency({0, 1}));  // 共环豁免放行
+    EXPECT_FALSE(merger.CheckLoopPathConsistency({0, 2})); // sg2 空集, 不共环无数据边, 拒绝
+}
+
+// 跨环拒绝: 非空不相交(两个独立 loop)的成员即使存在直接数据边也拒绝,
+// 防止两个独立 loop body 被融合进同一 slot-scope 子图(两环 trip count 可不同)
+TEST_F(ReduceCopyTest, MixGraphMerger_LoopPathConsistencyCrossRingDataEdgeRejected)
+{
+    MergeInput input = BuildSimpleMergeInput(2, {{1}, {}}, {});
+    input.subgraphLoopPaths = {{7}, {8}};                    // sg0 环7, sg1 环8, 互不相交
+    input.boundaryTensors = {{100, {0}, {1}, true, {}, {}}}; // sg0 -> sg1 直接数据边
+    input.subgraphToBoundaryTensorIds = {{0}, {0}};
+    MixGraphMerger merger;
+    merger.mInput = input;
+    merger.mRootLoopPaths = input.subgraphLoopPaths;
+    merger.mParent = {0, 1};
+    merger.mRootToBoundaryTensorIds = input.subgraphToBoundaryTensorIds;
+    EXPECT_FALSE(merger.CheckLoopPathConsistency({0, 1}));
+}
+
+// hinge guard(扇出): 扇出源 sg0 喂 3 个互不可达的组内分支(>= kHingeBranchThreshold),
+// 串行化独立并行分支拒绝; 组内含简单 tensor edge(0->1/0->2/0->3), 无 hinge guard 时本组合并归 1
+TEST_F(ReduceCopyTest, MixGraphMerger_HingeGuardRejectsParallelFanout)
+{
+    std::vector<std::set<int>> outGraph{{1, 2, 3}, {}, {}, {}};
+    MergeInput input = BuildSimpleMergeInput(4, outGraph, {{0, 1, 2, 3}});
+    input.isEnforceMergeGroup = {false};
+    input.boundaryTensors = {
+        {100, {0}, {1}, true, {}, {}}, {101, {0}, {2}, true, {}, {}}, {102, {0}, {3}, true, {}, {}}};
+    input.subgraphToBoundaryTensorIds = {{0, 1, 2}, {0}, {1}, {2}};
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+    EXPECT_EQ(output.numSubgraphUpdated, 4); // 分支互不可达, 保持独立
+}
+
+// hinge guard(链式): 扇出源 sg0 -> sg1 -> sg2 -> sg3 链式依赖(组内可达),
+// 不属串行化独立并行分支, 放行归 1
+TEST_F(ReduceCopyTest, MixGraphMerger_HingeGuardAllowsChainedBranches)
+{
+    std::vector<std::set<int>> outGraph{{1}, {2}, {3}, {}};
+    MergeInput input = BuildSimpleMergeInput(4, outGraph, {{0, 1, 2, 3}});
+    input.isEnforceMergeGroup = {false};
+    input.boundaryTensors = {
+        {100, {0}, {1}, true, {}, {}}, {101, {1}, {2}, true, {}, {}}, {102, {2}, {3}, true, {}, {}}};
+    input.subgraphToBoundaryTensorIds = {{0}, {0, 1}, {1, 2}, {2}};
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+    EXPECT_EQ(output.numSubgraphUpdated, 1);
+}
+
+// hinge guard(同环豁免): 同环({7})三链扇出(online softmax 共享读端的多写链抽象),
+// 分支被环迭代耦合, 非独立并行分支不拦; 无豁免时 3 分支互不可达会被误拒
+TEST_F(ReduceCopyTest, MixGraphMerger_HingeGuardExemptsSameRingBranches)
+{
+    std::vector<std::set<int>> outGraph{{1, 2, 3}, {}, {}, {}};
+    MergeInput input = BuildSimpleMergeInput(4, outGraph, {{0, 1, 2, 3}});
+    input.isEnforceMergeGroup = {false};
+    input.subgraphLoopPaths = {{7}, {7}, {7}, {7}};
+    input.boundaryTensors = {
+        {100, {0}, {1}, true, {}, {}}, {101, {0}, {2}, true, {}, {}}, {102, {0}, {3}, true, {}, {}}};
+    input.subgraphToBoundaryTensorIds = {{0, 1, 2}, {0}, {1}, {2}};
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+    EXPECT_EQ(output.numSubgraphUpdated, 1);
 }
 
 // 全 Merge 集成: carry 环上(sg0/sg1)与环外支路(sg2)混合的候选组被门控拦截, 保持 3 子图
@@ -1114,9 +1212,10 @@ TEST_F(ReduceCopyTest, Merge_NoSlotInfoGateDisabledMergesAll)
     EXPECT_EQ(output.numSubgraphUpdated, 1);
 }
 
-// 端到端(RunOnFunction): feedback slot 7 标记 carry 链 sg0(读 incast)->sg1(写 outcast),
-// 下游环外支路 sg2 被门控拦住不并入 carry 链; sg2/sg3(全环外)自行合并 -> 2 子图
-TEST_F(ReduceCopyTest, RunOnFunction_CarrySlotGateKeepsBranchSeparate)
+// 端到端(RunOnFunction): feedback slot 7 标记 carry 链 sg0(读 incast)->sg1(写 outcast);
+// 环外 sg2 挂在 carryOut 数据边上(生产者-消费者耦合), 数据耦合豁免允许并入 carry 链,
+// sg2->sg3 为链式下游(组内可达) -> 全图归 1
+TEST_F(ReduceCopyTest, RunOnFunction_CarrySlotGateAbsorbsDataCoupledBranch)
 {
     ComputationalGraphBuilder G;
     std::vector<std::string> incasts;
@@ -1141,9 +1240,9 @@ TEST_F(ReduceCopyTest, RunOnFunction_CarrySlotGateKeepsBranchSeparate)
     function->paramConfigs_.autoMixPartition = 1;
     ReduceCopyMerge merger;
     EXPECT_EQ(merger.RunOnFunction(*function), SUCCESS);
-    // sg0+sg1(同环, carryOut 1:1 链)合并; carryOut 边连接的环外 sg2 被门控拦住 -> 2 子图
-    const int Num2 = 2;
-    EXPECT_EQ(function->GetTotalSubGraphCount(), Num2);
+    // sg0/sg1(同环)与环外 sg2(carryOut 数据边挂靠)/sg3(链式下游)依次并入 -> 1 子图
+    const int Num1 = 1;
+    EXPECT_EQ(function->GetTotalSubGraphCount(), Num1);
 }
 
 // 双 feedback slot(7/8) 共享读端子图 sg0 —— online softmax 的 out/sum/max 同环抽象:
@@ -1344,6 +1443,121 @@ TEST_F(ReduceCopyTest, SinkBoundaryLossEqualRatioAllows)
     EXPECT_EQ(merger.RunOnFunction(*function), SUCCESS);
     const int Num1 = 1;
     EXPECT_EQ(function->GetTotalSubGraphCount(), Num1);
+}
+
+// ============================================================================
+// 本次修改 UT: hinge guard 纯 V 轻量分支规模豁免
+// 对应 reduce_copy.cpp CheckMergeBenefitByStructuralPattern 的豁免分支:
+// 独立分支全纯 V(无 AIC op) 且串行损失(Σbranch − max) <= kSerialLossRatio(8) × hinge
+// 端点 root 总 latency 时放行; 含 C 分支或损失超限仍拒绝
+// ============================================================================
+
+// 豁免放行(扇出): hinge 端点 sg0(含 C, 900) 扇出 3 个互不可达纯 V 轻量分支(各 50),
+// 串行损失 150-50=100 <= 8x900 -> 豁免放行归 1
+// (同构型无豁免时被拒保持 4, 见 MixGraphMerger_HingeGuardRejectsParallelFanout)
+TEST_F(ReduceCopyTest, MixGraphMerger_HingeGuardExemptsPureVecLightFanout)
+{
+    std::vector<std::set<int>> outGraph{{1, 2, 3}, {}, {}, {}};
+    MergeInput input = BuildSimpleMergeInput(4, outGraph, {{0, 1, 2, 3}});
+    input.isEnforceMergeGroup = {false};
+    input.boundaryTensors = {
+        {100, {0}, {1}, true, {}, {}}, {101, {0}, {2}, true, {}, {}}, {102, {0}, {3}, true, {}, {}}};
+    input.subgraphToBoundaryTensorIds = {{0, 1, 2}, {0}, {1}, {2}};
+    input.subgraphAICOpNum = {2, 0, 0, 0}; // 仅 hinge 端点含 AIC op, 分支全纯 V
+    input.subgraphAICLatency = {800, 0, 0, 0};
+    input.subgraphAIVLatency = {100, 50, 50, 50};
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+    EXPECT_EQ(output.numSubgraphUpdated, 1);
+}
+
+// 含 C 分支不豁免(扇出): 分支 sg1 含 AIC op, 串行损失同上 100 <= 8x900 本可达标,
+// 但豁免限纯 V 分支 -> 拒绝保持 4 (钉住豁免判据的纯 V 子句)
+TEST_F(ReduceCopyTest, MixGraphMerger_HingeGuardKeepsCubeBranchFanoutRejected)
+{
+    std::vector<std::set<int>> outGraph{{1, 2, 3}, {}, {}, {}};
+    MergeInput input = BuildSimpleMergeInput(4, outGraph, {{0, 1, 2, 3}});
+    input.isEnforceMergeGroup = {false};
+    input.boundaryTensors = {
+        {100, {0}, {1}, true, {}, {}}, {101, {0}, {2}, true, {}, {}}, {102, {0}, {3}, true, {}, {}}};
+    input.subgraphToBoundaryTensorIds = {{0, 1, 2}, {0}, {1}, {2}};
+    input.subgraphAICOpNum = {2, 1, 0, 0}; // 分支 sg1 含 AIC op, 破坏全纯 V
+    input.subgraphAICLatency = {800, 50, 0, 0};
+    input.subgraphAIVLatency = {100, 50, 50, 50};
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+    EXPECT_EQ(output.numSubgraphUpdated, 4);
+}
+
+// 纯 V 但串行损失超限(扇出): hinge 40, 分支 500/400/300, 损失 1200-500=700 > 8x40=320
+// -> 不豁免拒绝保持 4 (钉住豁免判据的损失子句)
+TEST_F(ReduceCopyTest, MixGraphMerger_HingeGuardRejectsHeavyPureVecFanout)
+{
+    std::vector<std::set<int>> outGraph{{1, 2, 3}, {}, {}, {}};
+    MergeInput input = BuildSimpleMergeInput(4, outGraph, {{0, 1, 2, 3}});
+    input.isEnforceMergeGroup = {false};
+    input.boundaryTensors = {
+        {100, {0}, {1}, true, {}, {}}, {101, {0}, {2}, true, {}, {}}, {102, {0}, {3}, true, {}, {}}};
+    input.subgraphToBoundaryTensorIds = {{0, 1, 2}, {0}, {1}, {2}};
+    input.subgraphAICOpNum = {2, 0, 0, 0};
+    input.subgraphAICLatency = {20, 0, 0, 0};
+    input.subgraphAIVLatency = {20, 500, 400, 300};
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+    EXPECT_EQ(output.numSubgraphUpdated, 4);
+}
+
+// 边界(扇出): hinge 25, 分支 500/100/100, 损失 700-500=200 == 8x25, 等号放行归 1
+TEST_F(ReduceCopyTest, MixGraphMerger_HingeGuardPureVecBoundaryEqualRatioAllows)
+{
+    std::vector<std::set<int>> outGraph{{1, 2, 3}, {}, {}, {}};
+    MergeInput input = BuildSimpleMergeInput(4, outGraph, {{0, 1, 2, 3}});
+    input.isEnforceMergeGroup = {false};
+    input.boundaryTensors = {
+        {100, {0}, {1}, true, {}, {}}, {101, {0}, {2}, true, {}, {}}, {102, {0}, {3}, true, {}, {}}};
+    input.subgraphToBoundaryTensorIds = {{0, 1, 2}, {0}, {1}, {2}};
+    input.subgraphAICOpNum = {2, 0, 0, 0};
+    input.subgraphAICLatency = {25, 0, 0, 0};
+    input.subgraphAIVLatency = {0, 500, 100, 100};
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+    EXPECT_EQ(output.numSubgraphUpdated, 1);
+}
+
+// 扇入(sparse_attention_antiquant 型): 3 个分支产 tensor 汇入 hinge 端点 sg0(含 C, 900)。
+// 分支 sg1 含 AIC: sink 串行损失门放行(100 <= 8x900)后 hinge 豁免因非纯 V 拒绝 -> 保持 4
+TEST_F(ReduceCopyTest, MixGraphMerger_HingeGuardKeepsCubeBranchFaninRejected)
+{
+    std::vector<std::set<int>> outGraph{{}, {0}, {0}, {0}};
+    MergeInput input = BuildSimpleMergeInput(4, outGraph, {{0, 1, 2, 3}});
+    input.isEnforceMergeGroup = {false};
+    input.boundaryTensors = {
+        {100, {1}, {0}, true, {}, {}}, {101, {2}, {0}, true, {}, {}}, {102, {3}, {0}, true, {}, {}}};
+    input.subgraphToBoundaryTensorIds = {{0, 1, 2}, {0}, {1}, {2}};
+    input.subgraphAICOpNum = {2, 1, 0, 0};
+    input.subgraphAICLatency = {800, 50, 0, 0};
+    input.subgraphAIVLatency = {100, 50, 50, 50};
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+    EXPECT_EQ(output.numSubgraphUpdated, 4);
+}
+
+// 扇入豁免放行: 同上拓扑但分支全纯 V 轻量(各 50), 损失 100 <= 8x900, sink 门与 hinge
+// 豁免同标尺均放行 -> 归 1 (无 hinge 豁免时该形态被拒保持 4)
+TEST_F(ReduceCopyTest, MixGraphMerger_HingeGuardExemptsPureVecLightFanin)
+{
+    std::vector<std::set<int>> outGraph{{}, {0}, {0}, {0}};
+    MergeInput input = BuildSimpleMergeInput(4, outGraph, {{0, 1, 2, 3}});
+    input.isEnforceMergeGroup = {false};
+    input.boundaryTensors = {
+        {100, {1}, {0}, true, {}, {}}, {101, {2}, {0}, true, {}, {}}, {102, {3}, {0}, true, {}, {}}};
+    input.subgraphToBoundaryTensorIds = {{0, 1, 2}, {0}, {1}, {2}};
+    input.subgraphAICOpNum = {2, 0, 0, 0};
+    input.subgraphAICLatency = {800, 0, 0, 0};
+    input.subgraphAIVLatency = {100, 50, 50, 50};
+    MixGraphMerger merger;
+    MergeOutput output = merger.Merge(input);
+    EXPECT_EQ(output.numSubgraphUpdated, 1);
 }
 
 // 对照: 同图无 slotScope 时门控不启用, 全部合并到 1 子图 (mla / gqa-PATH0 场景)

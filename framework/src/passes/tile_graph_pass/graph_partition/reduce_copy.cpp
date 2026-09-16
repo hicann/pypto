@@ -365,8 +365,10 @@ Status ReduceCopyMerge::MarkNoMergeSubgraph(Function& function, MergeInput& merg
     MarkCrossSubgraph(function, noMergeSubgraph);
     for (int i = 0; i < subgraphNum; i++) {
         if (subgraphOpNum[i] == 1 && subgraphHasReshape[i] == true) {
-            noMergeSubgraph.insert(i);
-            APASS_LOG_DEBUG_F(Elements::Operation, "Subgraph %d is not mergeable because it only has Reshape.", i);
+            // reshape-only 子图不再一刀切 noMerge: 该类子图为前端 broadcast lower 自动生成的纯形状
+            // 适配(asis==tobe 无 memtype 变迁), 真正危险的跨子图 inner-tensor 形态已由 MarkCrossSubgraph
+            // 单独标记. 通用规则导致 automix 路径 ~60% 的候选组被静默拒绝(gqa 全融合 69->1 的根因).
+            APASS_LOG_DEBUG_F(Elements::Operation, "Subgraph %d is reshape-only, treated as mergeable.", i);
         } else if (subgraphHasInnerDDR[i]) {
             APASS_LOG_DEBUG_F(Elements::Operation, "Subgraph %d has inner DDR tensor.", i);
         }
@@ -1060,6 +1062,45 @@ bool MixGraphMerger::CheckNoExternalUseOfMergedInnerTensor(const std::vector<int
     return true;
 }
 
+// hinge 护栏分支数门槛: 2 路扇出为最常见良性拓扑(gqa cube->2 vec / mha 输出级 2:2 /
+// softmax 共享读端双写链), 已由 sink 定量门控与同通路门控把关; >=3 路互不可达扇出
+// 才构成 Unroll 型(mla_prolog_quant 8~16 路)并行度损失的主体。
+static constexpr int kHingeBranchThreshold = 3;
+
+// 两个 loop-carry 通路集合是否存在共享环
+static bool HasSharedLoopPath(const std::set<int>& a, const std::set<int>& b)
+{
+    for (int path : a) {
+        if (b.count(path) > 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// 组内 root 图可达性: 从 from 沿 succGraph 有向边 DFS, 判断是否能到达 targets 中除自身外的节点
+static bool HasReachableRoot(const std::unordered_map<int, std::set<int>>& succGraph, int from,
+                             const std::set<int>& targets, std::set<int>& visited)
+{
+    if (visited.count(from) > 0) {
+        return false;
+    }
+    visited.insert(from);
+    auto it = succGraph.find(from);
+    if (it == succGraph.end()) {
+        return false;
+    }
+    for (int next : it->second) {
+        if (next != from && targets.count(next) > 0) {
+            return true;
+        }
+        if (HasReachableRoot(succGraph, next, targets, visited)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool MixGraphMerger::CheckMergeBenefitByStructuralPattern(const std::vector<int>& actualGroup, bool allowSinkMerge)
 {
     // 两层结构 benefit 判定(不依赖 latency):
@@ -1207,6 +1248,104 @@ bool MixGraphMerger::CheckMergeBenefitByStructuralPattern(const std::vector<int>
         APASS_LOG_DEBUG_F(Elements::Operation, "Structural merge skipped: N:M root pattern.");
         return false;
     }
+    // 并行分支串行化防护(实测依据: mla_prolog_quant automix, Unroll 展开后的扇出/扇入组把
+    // 8~16 路可跨核并行的分支串进单 kernel, e2e +6.6%): 同一 hinge 端点(组内或组外的生产者/
+    // 消费者)聚合挂着 >= kHingeBranchThreshold 个组内 root, 且这些 root 在组内 root 图上两两
+    // 互不可达(无依赖路径)、亦非同环耦合时, 判定为并行分支被串行化, 拒绝; 分支间存在组内
+    // 依赖路径的链式合并(可打通 L0C2UB 的 cube+glue 链)与同环多链不受影响。
+    ++mVisitStamp;
+    std::unordered_map<int, std::set<int>> hingeToBranchRoots;
+    for (int root : actualGroup) {
+        for (int tensorId : mRootToBoundaryTensorIds[root]) {
+            if (mTensorVisitStamp[tensorId] == mVisitStamp) {
+                continue;
+            }
+            mTensorVisitStamp[tensorId] = mVisitStamp;
+            const auto& info = mInput.boundaryTensors[tensorId];
+            for (int s : info.producerSubgraphs) {
+                int prodRoot = FindParent(s);
+                for (int c : info.consumerSubgraphs) {
+                    int consRoot = FindParent(c);
+                    if (consRoot == prodRoot) {
+                        continue;
+                    }
+                    if (mergedRoot.count(consRoot) > 0) {
+                        hingeToBranchRoots[prodRoot].insert(consRoot);
+                    }
+                    if (mergedRoot.count(prodRoot) > 0) {
+                        hingeToBranchRoots[consRoot].insert(prodRoot);
+                    }
+                }
+            }
+        }
+    }
+    for (const auto& kv : hingeToBranchRoots) {
+        if (kv.second.size() < kHingeBranchThreshold) {
+            continue;
+        }
+        // 同环豁免: 分支两两共享 loop-carry 通路(同一 ring 的多链, 如 online softmax
+        // 共享读端的多条写链)时, 执行序已被环迭代约束, 非独立并行分支, 不属本护栏
+        if (!mRootLoopPaths.empty()) {
+            bool ringCoupled = true;
+            for (int branch : kv.second) {
+                for (int other : kv.second) {
+                    if (branch != other && !HasSharedLoopPath(mRootLoopPaths[branch], mRootLoopPaths[other])) {
+                        ringCoupled = false;
+                        break;
+                    }
+                }
+                if (!ringCoupled) {
+                    break;
+                }
+            }
+            if (ringCoupled) {
+                continue;
+            }
+        }
+        bool hasDependentPair = false;
+        for (int branch : kv.second) {
+            std::set<int> others = kv.second;
+            others.erase(branch);
+            std::set<int> visited;
+            if (HasReachableRoot(rootSuccs, branch, others, visited)) {
+                hasDependentPair = true;
+                break;
+            }
+        }
+        if (!hasDependentPair) {
+            // 规模豁免(限纯 V 分支): 独立分支全部为纯 vector(无 AIC op)且串行化损失(Σbranch − max)
+            // 不超过 hinge 端点 root 总 latency 的 kSerialLossRatio 倍时, 属轻量准备段扇入
+            // (gather/索引/反量化碎片, ~20op 级, sparse_attention_antiquant: 64 碎片致 65 kernel
+            // vs 基线 5), 边界与调度收益远大于微小串行损失, 放行; 含 cube 的实质并行分支
+            // (mla 型 8~16 路 Unroll 体)不豁免, 保持完整护栏。判据与 sink 串行损失门同标尺。
+            bool allBranchPureVec = true;
+            int64_t hingeLatency = 0;
+            int64_t sumBranchLatency = 0;
+            int64_t maxBranchLatency = 0;
+            for (size_t i = 0; i < static_cast<size_t>(mInput.numSubgraph); ++i) {
+                int root = FindParent(static_cast<int>(i));
+                if (mInput.subgraphAICOpNum[i] > 0 && kv.second.count(root) > 0 && root != kv.first) {
+                    allBranchPureVec = false;
+                    break;
+                }
+                int64_t lat = static_cast<int64_t>(mInput.subgraphAICLatency[i]) + mInput.subgraphAIVLatency[i];
+                if (root == kv.first) {
+                    hingeLatency += lat;
+                } else if (kv.second.count(root) > 0) {
+                    sumBranchLatency += lat;
+                    maxBranchLatency = std::max(maxBranchLatency, lat);
+                }
+            }
+            if (allBranchPureVec && sumBranchLatency - maxBranchLatency <= kSerialLossRatio * hingeLatency) {
+                continue;
+            }
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                              "Structural merge skipped: hinge root %d fans to %zu independent parallel branches [%s].",
+                              kv.first, kv.second.size(),
+                              IntVecToStr(std::vector<int>(kv.second.begin(), kv.second.end())).c_str());
+            return false;
+        }
+    }
     // 通过条件: 至少存在一个简单 tensor edge
     if (!hasSimpleTensorEdge) {
         APASS_LOG_DEBUG_F(Elements::Operation, "Structural merge skipped: no simple tensor edge benefit.");
@@ -1260,15 +1399,22 @@ bool MixGraphMerger::IsSinkMergeUnbeneficial(int root, const std::set<int>& inco
 bool MixGraphMerger::CheckLoopPathConsistency(const std::vector<int>& actualGroup)
 {
     // 同通路门控(carry 约束原则的语义化实现):
-    // 候选组内所有成员的 loop-carry 通路归属必须完全相同 ——
-    //   同一环路(集合相同且非空): 链内合并, 串行性原本就存在, 放行;
-    //   全部空集: 与 carry 无关的普通合并, 按既有规则处理, 放行;
-    //   混杂(路径成员 + 空集/异环成员): 并行分支被吞进 carry 链, 串行链拖住并行体, 拒绝。
+    // 候选组内 loop-carry 通路归属混杂时, 逐对校验"集合不同的成员对"的耦合性 ——
+    //   全体集合相同(含全空): 链内/普通合并, 串行性原本就存在, 放行;
+    //   混杂 + 成员对共环(集合相交): 同环多链, 链内合并, 放行;
+    //   混杂 + 空集(环外)成员挂在环上成员的直接边界 tensor 数据边:
+    //     生产者-消费者耦合, 执行次序已被依赖链约束(如 reshape-only 形状适配挂靠), 放行;
+    //   混杂 + 非空不相交(跨环)成员对: 即使存在数据边也拒绝 —— 融合两个独立 loop body
+    //     破坏 slot-scope 循环体完整性(两环 trip count 可不同), 正确性护栏;
+    //   混杂 + 空集成员无数据边挂靠: 真并行分支被吞进 carry 链,
+    //     串行链拖住并行体, 拒绝(护栏: mla 独立分支与脊柱融合 e2e +244%)。
+    // 贪心合并按邻接展开, 非邻接的独立分支不会进入候选组, 该判据与合并动态自洽。
     // subgraphLoopPaths 为空向量表示前端无 slot scope/feedback slot, 门控不启用。
     if (mRootLoopPaths.empty()) {
         return true;
     }
     const std::set<int>* ref = nullptr;
+    bool mixed = false;
     for (int root : actualGroup) {
         const auto& paths = mRootLoopPaths[root];
         if (ref == nullptr) {
@@ -1276,9 +1422,46 @@ bool MixGraphMerger::CheckLoopPathConsistency(const std::vector<int>& actualGrou
             continue;
         }
         if (*ref != paths) {
+            mixed = true;
+            break;
+        }
+    }
+    if (!mixed) {
+        return true;
+    }
+    auto hasDirectDataEdge = [this](int rootA, int rootB) {
+        for (int tensorId : mRootToBoundaryTensorIds[rootA]) {
+            const auto& tensorInfo = mInput.boundaryTensors[tensorId];
+            for (int sg : tensorInfo.producerSubgraphs) {
+                if (FindParent(sg) == rootB) {
+                    return true;
+                }
+            }
+            for (int sg : tensorInfo.consumerSubgraphs) {
+                if (FindParent(sg) == rootB) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+    for (size_t i = 0; i < actualGroup.size(); ++i) {
+        for (size_t j = i + 1; j < actualGroup.size(); ++j) {
+            const auto& pathsA = mRootLoopPaths[actualGroup[i]];
+            const auto& pathsB = mRootLoopPaths[actualGroup[j]];
+            if (pathsA == pathsB) {
+                continue;
+            }
+            // 数据边豁免仅限环外(空集)成员挂靠; 非空不相交(跨环)即使有数据边也拒绝:
+            // 融合两个独立 loop body 破坏 slot-scope 循环体完整性(两环 trip count 可不同)
+            bool offRingCoupled = (pathsA.empty() || pathsB.empty()) &&
+                                  hasDirectDataEdge(actualGroup[i], actualGroup[j]);
+            if (HasSharedLoopPath(pathsA, pathsB) || offRingCoupled) {
+                continue;
+            }
             APASS_LOG_DEBUG_F(Elements::Operation,
                               "Merge skipped: loop-carry path mismatch inside group [%s] "
-                              "(merging carry chain with outside branch).",
+                              "(mismatched pair is cross-ring or uncoupled).",
                               IntVecToStr(actualGroup).c_str());
             return false;
         }
