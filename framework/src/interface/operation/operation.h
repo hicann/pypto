@@ -156,6 +156,7 @@ public:
     static const std::string rmwMode;
     static const std::string transDataOffset;
     static const std::string isConv;
+    static const std::string groupReshapeNoSplit;
     static const std::string hwk;
     static const std::string kL0Size;
     static const std::string nL0Size;

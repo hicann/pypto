@@ -139,6 +139,7 @@ const std::string OpAttributeKey::l0cValidMN = "L0C_VALID_MN";
 const std::string OpAttributeKey::rmwMode = "op_attr_rmw_mode";
 const std::string OpAttributeKey::transDataOffset = "TRANSDATA_OFFSET";
 const std::string OpAttributeKey::isConv = "isConv";
+const std::string OpAttributeKey::groupReshapeNoSplit = "group_reshape_no_split";
 const std::string OpAttributeKey::hwk = "ConvBP_HWK";
 const std::string OpAttributeKey::kL0Size = "ConvBP_kL0Size";
 const std::string OpAttributeKey::nL0Size = "ConvBP_nL0Size";

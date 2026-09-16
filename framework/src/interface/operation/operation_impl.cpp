@@ -1802,10 +1802,11 @@ static int64_t CalculateCapacity(const std::vector<int64_t>& shape)
 }
 
 void TiledInnerReshape(Function& function, const LogicalTensorPtr& operand, const LogicalTensorPtr& result,
-                       const bool isInplace = false)
+                       const bool isInplace = false, const bool groupReshapeNoSplit = false)
 {
     auto& op = function.AddOperation("TILE_RESHAPE", {operand}, {result});
     op.SetAttribute(OP_ATTR_PREFIX + "isInplace", isInplace);
+    op.SetAttribute(OpAttributeKey::groupReshapeNoSplit, groupReshapeNoSplit);
     op.SetAttribute(OP_ATTR_PREFIX + "validShape", result->GetDynValidShape());
     op.oOperand.front()->SetIsDummy();
 }
@@ -2209,7 +2210,9 @@ void ExpandOperationInto(Function& function, const TileShape& tileShape, Opcode 
         case Opcode::OP_RESHAPE: {
             bool isInplace = false;
             op.GetAttr(OP_ATTR_PREFIX + "isInplace", isInplace);
-            TiledInnerReshape(function, iOperand[0], oOperand[0], isInplace);
+            bool groupReshapeNoSplit = false;
+            op.GetAttr(OpAttributeKey::groupReshapeNoSplit, groupReshapeNoSplit);
+            TiledInnerReshape(function, iOperand[0], oOperand[0], isInplace, groupReshapeNoSplit);
             break;
         }
         case Opcode::OP_MAX_POOL: {

@@ -212,6 +212,7 @@ private:
     std::unordered_map<std::pair<int, int>, std::vector<int64_t>, PairHash> mapOffset_;
     std::unordered_map<std::pair<int, int>, int, PairHash> mapAssembleOpMagic_;
     std::unordered_map<int, LogicalTensorPtr> reshapeSources_;
+    std::unordered_set<int> groupReshapeNoSplitRawMagics_;
     std::unordered_map<int, std::vector<SymbolicScalar>> reshapeDynOutput_;
     std::vector<AssembleOp> assembles_;
     std::unordered_map<unsigned long, std::shared_ptr<ReshapeOp>> reshapes_;

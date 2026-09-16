@@ -173,6 +173,7 @@ Status SplitReshape::Init()
 {
     assembleOutToInput_.clear();
     reshapeSources_.clear();
+    groupReshapeNoSplitRawMagics_.clear();
     mapOffset_.clear();
     mapAssembleOpMagic_.clear();
     reshapeDynOutput_.clear();
@@ -455,6 +456,9 @@ Status SplitReshape::CollectReshapeInfo(const Operation& op)
     std::vector<SymbolicScalar> dynOutput;
     if (op.GetAttr(OP_ATTR_VALID_SHAPE, dynOutput)) {
         reshapeDynOutput_[output->GetRawTensor()->GetRawMagic()] = dynOutput;
+    }
+    if (op.HasAttr(OpAttributeKey::groupReshapeNoSplit) && op.GetBoolAttribute(OpAttributeKey::groupReshapeNoSplit)) {
+        groupReshapeNoSplitRawMagics_.insert(output->GetRawTensor()->GetRawMagic());
     }
     reshapeSources_[output->GetRawTensor()->GetRawMagic()] = input;
     reshapeOpPtrs_[output->GetMagic()] = &op;
@@ -1276,6 +1280,11 @@ Status SplitReshape::CheckReshapeSkip(const LogicalTensorPtr& input, const Logic
     auto reshapeSourceIter = reshapeSources_.find(inputRawMagic);
     if (reshapeSourceIter == reshapeSources_.end()) {
         APASS_LOG_DEBUG_F(Elements::Tensor, "View op has no preceding reshape op.");
+        return WARNING;
+    }
+    if (groupReshapeNoSplitRawMagics_.count(inputRawMagic) > 0) {
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Skip splitreshape because reshape op has %s flag.",
+                          OpAttributeKey::groupReshapeNoSplit.c_str());
         return WARNING;
     }
     checkOutputParam.reshapeSource = reshapeSourceIter->second;

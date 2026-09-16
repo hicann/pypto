@@ -198,6 +198,9 @@ Tensor ConstructTensorGraphNZ2NZ(Function* functionPtr, std::vector<LogicalTenso
                                                        {finalRes3DimTensor.GetStorage()});
         TileShape::Current().SetVecTile(savedVecTile);
         reshapeResOp.SetAttribute(OpAttributeKey::isConv, true);
+        if (convAttrParam.groups > 1) {
+            reshapeResOp.SetAttribute(OpAttributeKey::groupReshapeNoSplit, true);
+        }
         return finalRes3DimTensor;
     }
     return finalResTensor;
@@ -239,6 +242,10 @@ Tensor ConstructTensorGraph(const Tensor& inputTensor, const Tensor& weightTenso
 
         reshapeFmapOp.SetAttribute(OpAttributeKey::isConv, true);
         reshapeWeightOp.SetAttribute(OpAttributeKey::isConv, true);
+        if (convAttrParam.groups > 1) {
+            reshapeFmapOp.SetAttribute(OpAttributeKey::groupReshapeNoSplit, true);
+            reshapeWeightOp.SetAttribute(OpAttributeKey::groupReshapeNoSplit, true);
+        }
         operandVecIn = {fmap4DimTensor.GetStorage(), weigth4DimTensor.GetStorage()};
         // conv1d case, squeeze output to NCL
         std::vector<int64_t> res4DimShape{inputTensor.GetShape()[NCHW_N_IDX], weightTensor.GetShape()[NCHW_N_IDX], 1,
@@ -272,6 +279,9 @@ Tensor ConstructTensorGraph(const Tensor& inputTensor, const Tensor& weightTenso
         auto& reshapeResOp = functionPtr->AddOperation(Opcode::OP_RESHAPE, operandVecOut, {resTensor.GetStorage()});
         TileShape::Current().SetVecTile(savedVecTile);
         reshapeResOp.SetAttribute(OpAttributeKey::isConv, true);
+        if (convAttrParam.groups > 1) {
+            reshapeResOp.SetAttribute(OpAttributeKey::groupReshapeNoSplit, true);
+        }
     }
     return resTensor;
 }
