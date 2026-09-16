@@ -1422,12 +1422,22 @@ Status SpillEngine::UpdateCopyoutScheduleInfo(Operation* op, const SpillSource& 
 
 // copyout 排在数据齐之后: 取各生产者里最晚的那个。
 // 同一块 buffer 上已有的 retired copyout 也要让开, 否则两个 copyout 抢同一格。
+// 生产 anchor 属于 vf scope 时重定位到该 scope 的静态末 op 之后: SeqSchedule 顺序趟没有发射流可扫,
+// 插在 scope 中间会影响 vf 连续流, 后续 UpdateIssueExecOrder 重编号会把错位固化。
 int SpillEngine::ComputeCopyoutExecOrder(const SpillSource& source, Operation* copyoutOp)
 {
     const std::vector<Operation*>& anchors = source.producerOps;
     int execOrder = state_.schedInfoMap[anchors.front()].execOrder;
+    int vfScopeLastOrder = -1;
     for (auto* anchor : anchors) {
         execOrder = std::max(execOrder, state_.schedInfoMap[anchor].execOrder);
+        int scopeId = anchor->GetAtomicScopeId();
+        if (scopeId >= VF_CLUSTER_ID_START) {
+            auto scopeIt = state_.vfScopeOpsByScope.find(scopeId);
+            if (scopeIt != state_.vfScopeOpsByScope.end() && !scopeIt->second.empty()) {
+                vfScopeLastOrder = std::max(vfScopeLastOrder, state_.schedInfoMap[scopeIt->second.back()].execOrder);
+            }
+        }
         for (auto* succOp : state_.depManager.GetSuccessors(anchor)) {
             if (!state_.schedInfoMap[succOp].isRetired || succOp == copyoutOp) {
                 continue;
@@ -1437,7 +1447,7 @@ int SpillEngine::ComputeCopyoutExecOrder(const SpillSource& source, Operation* c
             }
         }
     }
-    return execOrder;
+    return std::max(execOrder, vfScopeLastOrder);
 }
 
 void SpillEngine::UpdateOpScheduleInfo(Operation* op, std::vector<int> memIds, Operation* AllocOp)

@@ -91,7 +91,9 @@ public:
                      const std::vector<std::tuple<int, size_t, size_t>>& allocatedBufs);
     // 单池 spill 选组: 返回所有可能的 spill 组合 (空即"没有可 spill 候选")。
     // 与主线签名一致, 调用方按"空即失败"处理。
-    std::vector<std::vector<int>> GetSpillGroup(size_t sizeNeedSpill);
+    // avoidRanges: vf 受限分配的规避区间, 选组只统计 avoid 之外 (可用段) 腾出的空间。
+    std::vector<std::vector<int>> GetSpillGroup(size_t sizeNeedSpill,
+                                                const std::vector<std::pair<uint64_t, uint64_t>>& avoidRanges = {});
     // 提取已分配 buf 列表 (按 startOffset 升序): 双池 spill 选组与单池 GetSpillGroup
     // 共用的"排序后已分配 buf"基本块, 拆出以便 OoOScheduler 层的双池 helper 直接复用。
     std::vector<std::tuple<int, size_t, size_t>> GetSortedAllocatedBufs();

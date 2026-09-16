@@ -356,14 +356,19 @@ Status VfAffinitySort::SortMultiScope(std::vector<Operation*>& result)
         if (IsVfOp(op)) {
             continue;
         }
-        int scopeId = GetBackScope(op);
+        int scopeId = GetFrontScope(op);
+        int frontScopeId = scopeId < VF_CLUSTER_ID_START ? GetBackScope(op) : -1;
         if (scopeId < VF_CLUSTER_ID_START) {
-            scopeId = GetFrontScope(op);
+            scopeId = frontScopeId;
         }
-        opToSuperNode[op] = scopeId >= VF_CLUSTER_ID_START ? scopeId : nextSingletonId--;
+        if (scopeId >= VF_CLUSTER_ID_START) {
+            opToSuperNode[op] = scopeId;
+        } else {
+            opToSuperNode[op] = nextSingletonId--;
+        }
     }
-    for (auto& [op, sn] : opToSuperNode) {
-        superNodeToOps[sn].push_back(op);
+    for (auto* op : operations) {
+        superNodeToOps[opToSuperNode[op]].push_back(op);
     }
 
     // 2. 构建超节点粗粒度图
@@ -378,9 +383,14 @@ Status VfAffinitySort::SortMultiScope(std::vector<Operation*>& result)
     std::vector<std::set<int>> inGraph(n);
     std::vector<std::set<int>> outGraph(n);
     for (auto* op : operations) {
+        // alloc 是 buffer 占位而非数据流节点, alloc→写者边不参与超节点投影,
+        // 否则跨 scope 共享 tensor 的 alloc 会制造方向相反的超节点边 (成环)。
+        if (IsAllocOpCode(op->GetOpcode())) {
+            continue;
+        }
         int srcIdx = snToIdx[opToSuperNode[op]];
         for (auto* succ : state_.depManager.GetSuccessors(op)) {
-            if (opSet_.count(succ) == 0) {
+            if (opSet_.count(succ) == 0 || IsAllocOpCode(succ->GetOpcode())) {
                 continue;
             }
             int dstIdx = snToIdx[opToSuperNode[succ]];

@@ -119,6 +119,7 @@ private:
     void InitVfScopeGate();
     bool IsScopeInputsReady(int scopeId);
     bool GateAllowsIssue(CoreLocationType coreLocation, PipeType pipeType, Operation* op);
+    bool ShouldDelayScopeGate(CoreLocationType coreLocation, Operation* scopeFirstOp);
     void UpdateVfScopeGate(CoreLocationType coreLocation, PipeType pipeType, Operation* op);
     void RecordScopeTensorRange(int scopeId, int memId);
     void ClearScopeTensorRanges(int scopeId);
@@ -169,7 +170,8 @@ private:
     std::vector<int> SelectSpillBuffers(Operation* allocOp);
     Status ApplySpillContext(SpillContext& ctx, Operation* allocOp);
     Status PrintSpillFailedInfo(Operation* allocOp);
-    std::vector<std::vector<int>> GetSpillGroup(BufferPool& pool, size_t sizeNeedSpill);
+    std::vector<std::vector<int>> GetSpillGroup(BufferPool& pool, size_t sizeNeedSpill,
+                                                const std::vector<std::pair<uint64_t, uint64_t>>& avoidRanges = {});
     std::vector<DualSpillGroup> GetDualSpillGroup(BufferPool& poolA, BufferPool& poolB, size_t sizeNeedSpill);
     Status GetGroupNextUseTime(std::vector<int> group, Operation* allocOp, std::vector<int>& groupNextUseTime,
                                std::unordered_map<int, size_t>& nextUseTimeCache);
