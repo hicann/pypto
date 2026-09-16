@@ -551,7 +551,7 @@ Status SpillEngine::CollectWalkUpSources(LogicalTensorPtr spillTensor, SpillPlan
         if (source == nullptr) {
             return FAILED;
         }
-        std::vector<Operation*> anchors = CollectDataWrites(source);
+        std::vector<Operation*> anchors = CollectSourceProducers(source);
         if (anchors.empty()) {
             APASS_LOG_DEBUG_F(Elements::Tensor, "Spill: tensor[%d] has no data producer.", source->memoryrange.memId);
             return FAILED;
@@ -596,6 +596,26 @@ LogicalTensorPtr SpillEngine::WalkUpOneHop(Operation* writeOp, SpillPlan& plan)
         return nullptr;
     }
     return source;
+}
+
+// Anchor the copyout to real writes, not to skip ops (aliases have no schedule state).
+// A non-skip write is itself the producer; a skip write reduces through SkipChain to the
+// writes feeding its chain tail.
+std::vector<Operation*> SpillEngine::CollectSourceProducers(LogicalTensorPtr source)
+{
+    std::set<Operation*, Operation::OperationComparator> seen;
+    std::vector<Operation*> producers;
+    for (auto* writeOp : CollectDataWrites(source)) {
+        Operation* chainTail = SkipChain(writeOp);
+        std::vector<Operation*> realProducers = chainTail == nullptr ? std::vector<Operation*>{writeOp} :
+                                                                       CollectDataWrites(chainTail->GetInputOperand(0));
+        for (auto* producer : realProducers) {
+            if (seen.insert(producer).second) {
+                producers.push_back(producer);
+            }
+        }
+    }
+    return producers;
 }
 
 std::vector<Operation*> SpillEngine::CollectDataWrites(LogicalTensorPtr tensor)
@@ -1405,6 +1425,17 @@ Status SpillEngine::UpdateCopyoutScheduleInfo(Operation* op, const SpillSource& 
     state_.schedInfoMap[op].isRetired = source.producedInPast;
     state_.schedInfoMap[op].isAlloc = false;
     state_.schedInfoMap[op].pipeType = RescheduleUtils::GetOpPipeType(op);
+    // The original move may be removed by spill. Its new copyout must carry the
+    // source alias chain into the final schedule, even when it is the only reader.
+    auto& skipOps = state_.schedInfoMap[op].skipOps;
+    for (auto* producer : spillTensor->GetProducers()) {
+        auto path = SkipChainPath(producer);
+        for (auto it = path.rbegin(); it != path.rend(); ++it) {
+            if (std::find(skipOps.begin(), skipOps.end(), *it) == skipOps.end()) {
+                skipOps.push_back(*it);
+            }
+        }
+    }
     state_.depManager.RegisterOp(op);
     // 落位跟 buffer 的归属者 (alloc) 而非生产者: 跨核写同一块 buffer 是允许的, 拿生产者会把核定错。
     auto allocIt = state_.tensorAllocMap.find(spillTensor->memoryrange.memId);

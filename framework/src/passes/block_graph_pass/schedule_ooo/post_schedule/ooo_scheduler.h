@@ -124,6 +124,7 @@ private:
     void RecordScopeTensorRange(int scopeId, int memId);
     void ClearScopeTensorRanges(int scopeId);
     Status InsertSpillCopyoutOp(Operation* copyoutOp);
+    size_t InsertSkipOpsBeforeCopyout(Operation* copyoutOp, size_t copyoutPos);
     Status QueryAllocPlacement(Operation* op, bool& hasMatchedOffset, uint64_t& matchedOffset,
                                std::vector<std::pair<uint64_t, uint64_t>>& avoidRanges);
 
