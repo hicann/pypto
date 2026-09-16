@@ -1455,6 +1455,67 @@ TEST_F(TestExpandFunctionPass, AssembleWriteGoesToContractAndConsumedOnNextAssem
     EXPECT_EQ(contractConsumingFirstWrite, 1);
 }
 
+TEST_F(TestExpandFunctionPass, AtomicRmwConvertsSemanticTokensToNormal)
+{
+    TileShape::Current().SetVecTile(kNumExpSix, kNumExpSix);
+    auto func = std::make_shared<Function>(Program::GetInstance(), "AtomicRmwTokenAttach", "AtomicRmwTokenAttach",
+                                           nullptr);
+    ASSERT_NE(func, nullptr);
+
+    std::vector<int64_t> shape = {kNumExpSix, kNumExpSix};
+    auto src1 = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto src2 = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto dst = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+
+    auto& atomicOp = PassOperationUtils::AddOperation(*func, Opcode::OP_ATOMIC_RMW, {src1}, {dst});
+    atomicOp.SetOpAttribute(CreateAssembleOpAttr());
+    atomicOp.tileShape_.SetVecTile(kNumExpSix, kNumExpSix);
+
+    auto& assembleOp = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {src2}, {dst});
+    assembleOp.SetOpAttribute(CreateAssembleOpAttr());
+    assembleOp.tileShape_.SetVecTile(kNumExpSix, kNumExpSix);
+
+    auto readSemantic = IRContext::Get().MakeSemanticToken("src1_r", ir::TokenKind::READ, ir::Span::Unknown());
+    auto atomicWrite = IRContext::Get().MakeSemanticToken("dst_w1", ir::TokenKind::WRITE, ir::Span::Unknown());
+    auto depSemantic = IRContext::Get().MakeSemanticToken("dep_w", ir::TokenKind::WRITE, ir::Span::Unknown());
+    auto assembleWrite = IRContext::Get().MakeSemanticToken("dst_w2", ir::TokenKind::WRITE, ir::Span::Unknown());
+    src1->SetReadToken(readSemantic);
+    atomicOp.result_token_ = {readSemantic, atomicWrite};
+    atomicOp.tokens_ = {depSemantic};
+    assembleOp.result_token_ = {assembleWrite};
+    assembleOp.tokens_ = {atomicWrite};
+
+    func->inCasts_.push_back(src1);
+    func->inCasts_.push_back(src2);
+    func->outCasts_.push_back(dst);
+    func->SetGraphType(GraphType::TENSOR_GRAPH);
+
+    ExpandFunction expandPass;
+    ASSERT_EQ(expandPass.RunOnFunction(*func), SUCCESS);
+
+    uint32_t atomicNum = kNumZero;
+    bool atomicHasRead = false;
+    bool atomicHasWrite = false;
+    bool atomicHasDep = false;
+    bool assembleContractConsumesAtomicWrite = false;
+    for (auto& op : func->Operations(false)) {
+        if (op.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
+            ++atomicNum;
+            atomicHasRead = atomicHasRead || HasNormalTokenNamed(op.result_token_, "src1_r");
+            atomicHasWrite = atomicHasWrite || HasNormalTokenNamed(op.result_token_, "dst_w1");
+            atomicHasDep = atomicHasDep || HasNormalTokenNamed(op.tokens_, "dep_w");
+        }
+        if (op.GetOpcode() == Opcode::OP_CONTRACT && HasNormalTokenNamed(op.tokens_, "dst_w1")) {
+            assembleContractConsumesAtomicWrite = true;
+        }
+    }
+    EXPECT_EQ(atomicNum, kNumOne);
+    EXPECT_TRUE(atomicHasRead);
+    EXPECT_TRUE(atomicHasWrite);
+    EXPECT_TRUE(atomicHasDep);
+    EXPECT_TRUE(assembleContractConsumesAtomicWrite);
+}
+
 // VIEW toDynValidShape is tighter than input-clip. Expanded SLICEs must inherit
 // the per-tile clip of that VIEW attr, not GetViewValidShape(input, fromOffset).
 TEST_F(TestExpandFunctionPass, ViewExpandSlicesToDynValidShape)

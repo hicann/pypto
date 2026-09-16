@@ -584,6 +584,39 @@ void ExpandFunction::RefreshViewAssembleTileShapes(const std::vector<OperationPt
     }
 }
 
+namespace {
+
+void ConvertTokensToNormal(Operation& dst, const Operation& src)
+{
+    auto convert = [](const ir::VarPtr& token) -> ir::VarPtr {
+        if (token == nullptr) {
+            return nullptr;
+        }
+        auto tokenType = std::dynamic_pointer_cast<const ir::TokenType>(token->GetType());
+        if (tokenType != nullptr && tokenType->kind_ == ir::TokenKind::NORMAL) {
+            return token;
+        }
+        return ExpandFunction::GetNormalToken(token);
+    };
+
+    dst.result_token_.clear();
+    dst.tokens_.clear();
+    for (const auto& token : src.result_token_) {
+        auto normal = convert(token);
+        if (normal != nullptr) {
+            dst.result_token_.push_back(normal);
+        }
+    }
+    for (const auto& token : src.tokens_) {
+        auto normal = convert(token);
+        if (normal != nullptr) {
+            dst.tokens_.push_back(normal);
+        }
+    }
+}
+
+} // namespace
+
 void ExpandFunction::ProcessForNotExpandOp(Function& function, Operation& op) const
 {
     auto& newOp = PassOperationUtils::AddOperation(function, op.GetOpcode(), op.GetIOperands(), op.GetOOperands(),
@@ -600,6 +633,12 @@ void ExpandFunction::ProcessForNotExpandOp(Function& function, Operation& op) co
     }
     if (op.HasAttribute(OpAttributeKey::rmwMode)) {
         newOp.SetAttribute(OpAttributeKey::rmwMode, op.GetIntAttribute(OpAttributeKey::rmwMode));
+    }
+    // ATOMIC_RMW is kept as-is (not sliced into SLICE/CONTRACT). Semantic READ/WRITE
+    // tokens must still become the paired NORMAL tokens so later expanded ops share
+    // the same tile-graph dependency.
+    if (op.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
+        ConvertTokensToNormal(newOp, op);
     }
 }
 
