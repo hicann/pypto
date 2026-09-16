@@ -1521,7 +1521,12 @@ Status AssignMemoryType::KeepSplitReshapeUb(Operation& operation, const LogicalT
         return producer != nullptr && producer->GetOpcode() == Opcode::OP_CONTRACT;
     });
     bool allConsumersSlice = std::all_of(consumers.begin(), consumers.end(), [](const auto& consumer) {
-        return consumer != nullptr && consumer->GetOpcode() == Opcode::OP_SLICE;
+        if (consumer == nullptr || consumer->GetOpcode() != Opcode::OP_SLICE) {
+            return false;
+        }
+        // 后续放开在DAV_3510直接走UB2L1，暂走DDR2L1
+        auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(consumer->GetOpAttribute());
+        return viewOpAttribute == nullptr || viewOpAttribute->GetTo() != MemoryType::MEM_L1;
     });
     const size_t ubThreshold = static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) *
                                                    UB_THRESHOLD_ASSEMBLE);
