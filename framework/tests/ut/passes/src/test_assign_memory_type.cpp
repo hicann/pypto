@@ -14,6 +14,7 @@
  */
 
 #include <fstream>
+#include <tuple>
 #include <vector>
 #include <gtest/gtest.h>
 #include "interface/function/function.h"
@@ -2896,6 +2897,84 @@ TEST_F(AssignMemoryTypeTest, SameMemorySliceContractDowngradeToLayoutOps)
     EXPECT_EQ(sliceOp.GetOpcode(), Opcode::OP_VIEW);
     EXPECT_EQ(contractOp.GetOpcode(), Opcode::OP_ASSEMBLE);
 }
+
+class AssignMemoryTypeUbSliceTest : public AssignMemoryTypeTest,
+                                    public testing::WithParamInterface<std::tuple<DataType, int64_t>> {};
+
+TEST_P(AssignMemoryTypeUbSliceTest, MaterializeUnalignedSliceBeforeVectorConsumer)
+{
+    config::SetPassOption(ENABLE_SLICE, true);
+    const auto [dtype, offset] = GetParam();
+    const bool aligned = (offset * BytesOf(dtype)) % 32 == 0;
+    auto function = std::make_shared<Function>(Program::GetInstance(), "UbSliceAlignment", "UbSliceAlignment", nullptr);
+    // FP32 offset 2 reproduces issue3316: a {5,10} slice of a {5,16} UB tensor.
+    std::vector<int64_t> inputShape = {5, dtype == DT_FP32 && offset == 2 ? 16 : 32};
+    std::vector<int64_t> sourceShape = {5, 1, inputShape.back()};
+    std::vector<int64_t> sliceShape = {5, 10};
+    std::vector<int64_t> zero = {0, 0};
+    std::vector<int64_t> fromOffset = {0, offset};
+    auto inputValid = CreateTestConstIntVector(inputShape);
+    auto sourceValid = CreateTestConstIntVector(sourceShape);
+    auto sliceValid = CreateTestConstIntVector(sliceShape);
+    auto source = IRBuilder().CreateTensorVar(dtype, sourceShape, sourceValid);
+    auto loaded = IRBuilder().CreateTensorVar(dtype, sourceShape, sourceValid);
+    auto reshapeInput = IRBuilder().CreateTensorVar(dtype, sourceShape, sourceValid);
+    auto ubInput = IRBuilder().CreateTensorVar(dtype, inputShape, inputValid);
+    auto sliced = IRBuilder().CreateTensorVar(dtype, sliceShape, sliceValid);
+    auto added = IRBuilder().CreateTensorVar(dtype, sliceShape, sliceValid);
+    auto output = IRBuilder().CreateTensorVar(dtype, sliceShape, sliceValid);
+    source->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    output->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    for (auto tensor : {loaded, reshapeInput, ubInput, sliced, added}) {
+        tensor->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    }
+    std::vector<int64_t> sourceZero = {0, 0, 0};
+    auto& load = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_SLICE, {source}, {loaded});
+    load.SetOpAttribute(std::make_shared<ViewOpAttribute>(sourceZero, MemoryType::MEM_UB,
+                                                          CreateTestConstIntVector(sourceZero), sourceValid));
+    // SplitReshape keeps CONTRACT -> RESHAPE -> SLICE in UB, including the slice's input requirement.
+    auto& contract = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_CONTRACT, {loaded}, {reshapeInput});
+    contract.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, sourceZero));
+    IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_RESHAPE, {reshapeInput}, {ubInput});
+    auto& slice = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_SLICE, {ubInput}, {sliced});
+    slice.SetOpAttribute(std::make_shared<ViewOpAttribute>(fromOffset, MemoryType::MEM_UB,
+                                                           CreateTestConstIntVector(fromOffset), sliceValid));
+    auto& add = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_ADD, {sliced, sliced}, {added});
+    auto& store = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_CONTRACT, {added}, {output});
+    store.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, zero));
+    function->inCasts_.push_back(source);
+    function->outCasts_.push_back(output);
+
+    AssignMemoryType pass;
+    ASSERT_EQ(pass.PreCheck(*function), SUCCESS);
+    ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
+    ASSERT_EQ(pass.PostCheck(*function), SUCCESS);
+
+    EXPECT_EQ(slice.GetOpcode(), aligned ? Opcode::OP_VIEW : Opcode::OP_SLICE);
+    auto sliceInput = slice.GetIOperands().front();
+    if (aligned) {
+        EXPECT_EQ(sliceInput, ubInput);
+    } else {
+        EXPECT_EQ(sliceInput->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+        ASSERT_EQ(sliceInput->GetProducers().size(), 1);
+        auto* copyOut = *sliceInput->GetProducers().begin();
+        EXPECT_EQ(copyOut->GetOpcode(), Opcode::OP_CONTRACT);
+        EXPECT_EQ(copyOut->GetIOperands().front(), ubInput);
+        EXPECT_NE(sliced->GetRawTensor(), ubInput->GetRawTensor());
+    }
+    EXPECT_EQ(sliced->GetOffset(), zero);
+    EXPECT_EQ(add.GetIOperands().front(), sliced);
+    auto attr = std::dynamic_pointer_cast<ViewOpAttribute>(slice.GetOpAttribute());
+    ASSERT_NE(attr, nullptr);
+    EXPECT_EQ(attr->GetFromOffset(), fromOffset);
+    EXPECT_EQ(attr->GetFromDynOffset(), CreateTestConstIntVector(fromOffset));
+    EXPECT_EQ(attr->GetToDynValidShape(), sliceValid);
+}
+
+INSTANTIATE_TEST_SUITE_P(Issue3316, AssignMemoryTypeUbSliceTest,
+                         testing::Values(std::make_tuple(DT_FP32, 2), std::make_tuple(DT_FP32, 8),
+                                         std::make_tuple(DT_FP16, 2), std::make_tuple(DT_FP16, 16),
+                                         std::make_tuple(DT_BF16, 2), std::make_tuple(DT_BF16, 16)));
 
 TEST_F(AssignMemoryTypeTest, L1DdrL1ContractSliceDowngradeToLayoutOps)
 {

@@ -222,6 +222,8 @@ private:
 
     Status FallbackSameMemoryMoveOps(Function& function);
 
+    Status ResolveUnalignedUbSlices(Function& function);
+
     Status SetOriginalChecked(const LogicalTensorPtr& tensor, MemoryType memoryType,
                               const std::string& reason = "unknown", bool allowOverride = false);
 
