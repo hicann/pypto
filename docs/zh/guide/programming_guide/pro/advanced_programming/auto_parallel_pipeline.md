@@ -11,6 +11,8 @@ CV融合算子中，cube和vector的计算相互依赖，若按串行流水执�
 
 下图对比了同一个算子（4个stage，cube/vector交替）在串行流水与并行流水（cube提前2次执行）下的执行图：
 
+**图1 串行流水与并行流水的执行节奏对比**
+
 ![串行流水与并行流水的执行节奏对比](../../../figures/pro/pro_parallel_pipeline_serial_vs_parallel.png "串行流水与并行流水的执行节奏对比")
 
 图中`sN·iM`表示第N个stage正在处理第M次迭代的数据，格子宽度代表该stage的耗时（各stage耗时不同，图中为示意值）。

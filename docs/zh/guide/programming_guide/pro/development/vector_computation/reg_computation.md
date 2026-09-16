@@ -11,7 +11,7 @@ Tile矢量计算以UB Tile为数据载体。多个矢量操作串联时，中间
 
 Reg计算将一段连续计算保留在寄存器中，仅在计算链入口和出口与UB交互：
 
-| 维度 | Tile/Membase矢量计算 | Regbase矢量计算 |
+| 维度 | Tile矢量计算 | Regbase矢量计算 |
 |:---|:---|:---|
 | 数据载体 | UB中的Tile | Register File中的RegTensor / MaskReg |
 | 中间结果 | 通常写回UB | 可由后续vf.*操作直接消费 |
@@ -54,7 +54,7 @@ PyPTO Pro中各阶段的接口对应关系如下：
 
 ## 编程模型
 
-Regbase在Tile/Membase的“数据搬入 → 计算 → 数据搬出”基础上，将矢量计算阶段细分为“Load → Compute → Store”。
+Regbase在Tile计算的“数据搬入 → 计算 → 数据搬出”基础上，将矢量计算阶段细分为“Load → Compute → Store”。
 
 **图3 Regbase编程模型总体结构**
 
@@ -156,4 +156,4 @@ with pl.section_vector():
 Reg计算和[Tile计算](tile_computation.md)分别侧重性能与易用性，可根据算子的开发需求进行选择：
 
 - **Reg计算（VF计算）**：中间结果可以保留在Vector Register File中，减少UB读写，性能更优；使用前需要确认目标设备和所需VF API均受支持，并遵守寄存器、数据类型和接口约束。
-- **Tile计算（Vec Tile/Membase计算）**：接口和数据流更直观，开发、调试及维护更方便；中间结果通常需要通过UB读写，性能相对较低。
+- **Tile计算**：接口和数据流更直观，开发、调试及维护更方便；中间结果通常需要通过UB读写，性能相对较低。

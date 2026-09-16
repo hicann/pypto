@@ -20,7 +20,7 @@ PyPTO Pro提供三种SIMD计算方式：
 
 | 计算方式 | 执行位置 | 主要数据载体 | 主要执行单元 |
 |:---|:---|:---|:---|
-| Tile矢量计算（Membase） | AIV | UB Tile | Vector计算单元 |
+| Tile矢量计算 | AIV | UB Tile | Vector计算单元 |
 | Reg计算（Regbase） | AIV | UB Tile和Vector Register中的RegTensor | Reg矢量执行单元、Aux Scalar和DMA单元 |
 | Cube矩阵计算 | AIC | L1 Buffer、L0A Buffer、L0B Buffer和L0C Buffer中的矩阵Tile | Cube计算单元 |
 

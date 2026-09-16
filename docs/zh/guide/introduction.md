@@ -58,38 +58,37 @@ PyPTO Tensor以“算法表达与硬件执行解耦”为主要设计理念。�
 
 ### 核心架构
 
-PyPTO Pro提供Tile API、Reg API、SIMT API和Utils API，并通过JIT编译与执行链将Python Kernel编译为可在AI Core上运行的二进制文件。
+PyPTO Pro是面向AI Core Kernel开发的Python DSL，接口分为[SIMD API](../api/pro_api/SIMD-API/index.md)、[SIMT API](../api/pro_api/SIMT-API/index.md)和[Utils API](../api/pro_api/Utils-API/index.md)。SIMD API覆盖Tile计算、Reg计算、Cube计算以及数据搬运、资源管理和同步控制；SIMT API用于逐线程计算；Utils API提供Python语法辅助与调试能力。
 
 **图1 PyPTO Pro总体架构**
 
 ![PyPTO Pro总体架构](figures/pro/architecture_pypto_pro.png)
 
-PyPTO Pro应用由Host代码和Device代码组成。Host侧使用Python和PyTorch准备输入、输出Tensor并下发任务；Device侧使用PyPTO Pro编写[核函数Kernel](programming_guide/pro/development/kernel_function.md)，在AI Core上完成数据搬运和计算。两部分代码可以写在同一个`.py`文件中，并通过`@pypto_pro.language.jit()`标记Kernel函数。
+开发者在[Kernel核函数](programming_guide/pro/development/kernel_function.md)中声明参数和执行域，组织GM与片上Buffer之间的数据搬运，并选择Tile、Reg、Cube或SIMT计算方式。使用`@pypto_pro.language.jit()`声明的Kernel在首次启动时触发编译，之后可在相同编译签名下复用编译结果。
 
 编译与执行过程包括以下阶段：
 
-1. **前端解析与优化**：解析JIT标记的Python Kernel，构建PyPTO IR，并通过IR Pass完成优化。
-2. **代码生成**：CCE CodeGen根据优化后的IR生成Device侧代码和Tiling相关头文件。
-3. **编译与链接**：通过毕昇编译器编译、链接Device侧代码和Host封装代码，生成JIT共享库。
-4. **加载与执行**：运行时加载共享库并下发Kernel任务，由AI Core执行。
+1. **前端解析**：绑定Kernel参数和启动配置，解析函数体并生成PyPTO IR。
+2. **IR优化与代码生成**：对PyPTO IR进行校验和转换，由CCE CodeGen生成目标代码及Host侧Launcher。
+3. **编译与加载**：编译并加载当前Kernel的JIT产物；相同编译签名可在当前进程中复用。
+4. **任务下发**：Launcher将Kernel提交到指定Stream，由AI Core执行。
 
 ### 核心特性
 
-- **SPMD执行模型**：参与执行的逻辑AI Core运行同一份Kernel代码，并通过核索引处理不同的数据分片。
-- **多层次编程接口**：提供面向二维Tile计算的Tile API、面向寄存器级编程的Reg API、面向逐线程编程的SIMT API，以及辅助开发的Utils API。
-- **显式硬件控制**：开发者可以控制逻辑Block数量、多核数据分配、数据搬运、计算过程和同步行为。
-- **核内流水表达**：通过TileGroup及其`next()`、`current()`等接口表达多缓冲流水；开启自动同步后，框架可根据Tile绑定的`mutex_id`插入核内同步。
-- **核间流水编排**：在支持的Cube、Vector融合场景中，通过stage机制和相应标签表达计算阶段，框架可自动插入核间同步并进行Preload流水编排。
-- **JIT编译**：Python Kernel经PyPTO IR优化和CCE CodeGen生成Device侧代码，再编译为可在NPU上运行的二进制文件；后续调用可以复用编译产物。
+- **SPMD并行执行**：一次Kernel启动可使用多个AI Core，各核通过核索引确定自身负责的数据分片。启动参数`block_dim`配置实际参与执行的Vector核、Cube核或CV执行组数量，具体含义由Kernel执行域决定。
+- **分层计算能力**：SIMD API同时提供Tile、Reg和Cube三类计算方式，分别面向片上数据块、矢量寄存器和矩阵计算；SIMT API用于表达逐线程索引、分支和原子更新。
+- **显式数据组织**：Tensor表示GM中的多维数据，Tile和TileGroup描述片上数据及多Buffer轮转，RegTensor和MaskReg用于Reg计算。数据搬运、布局和有效区域均由Kernel明确表达。
+- **同步与流水**：开发者可显式设置不同Pipe及不同核之间的依赖，也可基于TileGroup的mutex元数据使用自动同步；CV融合场景还支持按`stage`编排跨核流水。
+- **编译期特化**：STATIC维度、TilingKey和数据类型可形成专用编译实例；DYNAMIC维度和TilingData保留为运行时信息，用于在复用与特化之间进行选择。
 
 ### 设计理念
 
-PyPTO Pro以“Python易用性与硬件可控性兼顾”为主要设计理念。框架使用Tile等抽象简化坐标偏移和指令参数配置，同时将多核分工、数据搬运、计算与流水编排能力开放给开发者，使开发者能够根据算子特点进行针对性优化。
+PyPTO Pro不以隐藏硬件细节为目标。它在Python DSL中保留AI Core的执行域、存储层级和流水语义，使分块方式、核间分工、数据通路与同步关系能够由开发者确定；编译器负责语义校验、IR转换、代码生成和编译。该模式适用于硬件映射已经明确，或需要围绕访存、计算和并行度进行精细优化的算子。
 
-- **并行设计**：采用外层SPMD与核内SIMD相结合的方式。多个逻辑AI Core执行同一份Kernel，并根据索引处理不同数据分片；AI Core内部使用向量或矩阵指令并行处理数据。
-- **数据设计**：以Tensor表示Device Memory中的数据，以Tile表示片上数据块，并通过RegTensor和MaskReg支持更细粒度的寄存器级操作。
-- **流水设计**：开发者显式组织数据搬入、计算和搬出过程，并通过TileGroup、自动同步及stage机制实现核内和核间流水。
-- **编译设计**：以Python DSL承载Kernel表达，通过JIT、IR Pass和代码生成链路将其转换为AI Core可执行代码。
+- **抽象边界**：接口以Tensor、Tile和RegTensor等对象承载数据语义，但不替开发者决定分块、片上Buffer使用方式或计算路径。
+- **执行映射**：Kernel通过Vector和Cube执行域描述计算落点，通过实际核数和核索引完成多核任务划分；SIMT计算在Vector执行域内启动Thread Block。
+- **依赖表达**：搬入、计算、搬出以及跨核数据交换具有明确的Pipe和同步关系。自动同步与自动CV流水用于处理可识别的依赖，不改变Kernel的数据流语义。
+- **编译职责**：JIT链路将Python DSL转换为PyPTO IR和目标代码，并根据Shape、TilingKey和数据类型等编译期信息生成相应实例。
 
 ### 产品支持情况
 

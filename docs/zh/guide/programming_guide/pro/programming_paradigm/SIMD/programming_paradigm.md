@@ -62,7 +62,7 @@ Tensor表示全局数据，Tile表示当前AI Core处理的局部数据块。开
 
 ### Tile矢量计算
 
-Tile矢量计算也称Membase矢量计算，以UB中的二维Tile作为计算对象，在`pypto_pro.language.section_vector()`执行域中完成批量运算。Tile API适合逐元素、归约、数据类型转换和数据重排等通用矢量场景。
+Tile矢量计算以UB中的二维Tile作为计算对象，在`pypto_pro.language.section_vector()`执行域中完成批量运算。Tile API适合逐元素、归约、数据类型转换和数据重排等通用矢量场景。
 
 Tile分配、数据搬运、计算接口、缓冲区轮转和尾块处理请参考[Tile计算](../../development/vector_computation/tile_computation.md)；完整可执行示例请参考[Add算子快速入门](../../../../quick_start/pro/add_simd.md)。
 

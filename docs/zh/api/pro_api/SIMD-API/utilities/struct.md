@@ -40,7 +40,7 @@ pypto_pro.language.struct(
 
 ## 返回值说明
 
-返回一个具名struct变量，字段可通过点号访问。若只需要编译期聚合，请使用[pypto_pro.language.make_tuple](make_tuple.md)。
+返回一个具名struct变量。
 
 ## 调用示例
 
