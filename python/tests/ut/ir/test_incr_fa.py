@@ -592,7 +592,7 @@ def test_incr_fa():
     assert isinstance(s2_stmt, ir.ForStmt)
     assert len(s2_stmt.iter_args) == 4
     var_name = [v.iterVar.name for v in s2_stmt.iter_args]
-    assert "ctx.loop_tensors.attention_output_3" in var_name
-    assert "ctx.temp_update_tensors.max_update" in var_name
-    assert "ctx.temp_update_tensors.out_update" in var_name
-    assert "ctx.temp_update_tensors.sum_update" in var_name
+    assert "attention_output_19" in var_name
+    assert "max_update_1" in var_name
+    assert "out_update_12" in var_name
+    assert "sum_update_1" in var_name
