@@ -25,6 +25,8 @@
 #include "interface/tensor/logical_tensor.h"
 
 namespace npu::tile_fwk {
+using SymbolicShape = std::vector<SymbolicScalar>;
+using SymbolicOffset = std::vector<SymbolicScalar>;
 class ViewReshapeAssembleReorderUtils {
 public:
     ViewReshapeAssembleReorderUtils() = default;
@@ -32,12 +34,12 @@ public:
 
     static Status ReorderViewReshapeAssemble(Function& function);
 
-    static bool RemapOffsetBackwardThroughReshape(
-        const LogicalTensorPtr& reshapeInput, const LogicalTensorPtr& reshapeOutput,
-        const std::vector<int64_t>& outputBaseShape, const std::vector<SymbolicScalar>& outputBaseDynShape,
-        const std::vector<int64_t>& outputOffset, const std::vector<SymbolicScalar>& outputDynOffset,
-        std::vector<int64_t>& inputBaseShape, std::vector<SymbolicScalar>& inputBaseDynShape,
-        std::vector<int64_t>& inputOffset, std::vector<SymbolicScalar>& inputDynOffset);
+    static bool RemapOffsetBackwardThroughReshape(const LogicalTensorPtr& reshapeInput,
+                                                  const LogicalTensorPtr& reshapeOutput, const Shape& outputBaseShape,
+                                                  const SymbolicShape& outputBaseDynShape, const Offset& outputOffset,
+                                                  const SymbolicOffset& outputDynOffset, Shape& inputBaseShape,
+                                                  SymbolicShape& inputBaseDynShape, Offset& inputOffset,
+                                                  SymbolicOffset& inputDynOffset);
 
     Status Process(Function& function);
 
@@ -49,9 +51,11 @@ private:
         size_t dstEnd = 0;
     };
 
+    using AxisPlan = std::vector<AxisGroup>;
+
     struct RemapResult {
-        std::vector<int64_t> staticOffset;
-        std::vector<SymbolicScalar> dynOffset;
+        Offset staticOffset;
+        SymbolicOffset dynOffset;
     };
 
     struct ChainMatch {
@@ -67,9 +71,9 @@ private:
         LogicalTensorPtr input;
         LogicalTensorPtr output;
         LogicalTensorPtr reshapeOutput;
-        std::vector<int64_t> viewOffset;
-        std::vector<SymbolicScalar> viewDynOffset;
-        std::vector<SymbolicScalar> reshapeDynShape;
+        Offset viewOffset;
+        SymbolicOffset viewDynOffset;
+        SymbolicShape reshapeDynShape;
         MemoryType toType = MemoryType::MEM_UNKNOWN;
         bool hasCopyInMode = false;
         std::any copyInModeValue;
@@ -80,9 +84,9 @@ private:
     struct FanoutViewRecord {
         Operation* viewOp = nullptr;
         LogicalTensorPtr output;
-        std::vector<int64_t> viewOffset;
-        std::vector<SymbolicScalar> viewDynOffset;
-        std::vector<SymbolicScalar> outputDynShape;
+        Offset viewOffset;
+        SymbolicOffset viewDynOffset;
+        SymbolicShape outputDynShape;
         MemoryType toType = MemoryType::MEM_UNKNOWN;
         bool hasCopyInMode = false;
         std::any copyInModeValue;
@@ -95,7 +99,7 @@ private:
         Operation* reshapeOp = nullptr;
         LogicalTensorPtr input;
         LogicalTensorPtr reshapeOutput;
-        std::vector<SymbolicScalar> reshapeDynShape;
+        SymbolicShape reshapeDynShape;
         ir::Span span;
         Operation::ScopeInfo scopeInfo;
         std::vector<FanoutViewRecord> fanoutViews;
@@ -107,10 +111,10 @@ private:
         LogicalTensorPtr input;
         LogicalTensorPtr output;
         LogicalTensorPtr assembleOutput;
-        std::vector<int64_t> assembleOffset;
-        std::vector<SymbolicScalar> assembleDynOffset;
-        std::vector<SymbolicScalar> reshapeDynShape;
-        std::vector<SymbolicScalar> outputDynShape;
+        Offset assembleOffset;
+        SymbolicOffset assembleDynOffset;
+        SymbolicShape reshapeDynShape;
+        SymbolicShape outputDynShape;
         MemoryType fromType = MemoryType::MEM_UNKNOWN;
         ir::Span span;
         Operation::ScopeInfo scopeInfo;
@@ -119,9 +123,9 @@ private:
     struct FaninAssembleRecord {
         Operation* assembleOp = nullptr;
         LogicalTensorPtr input;
-        std::vector<int64_t> assembleOffset;
-        std::vector<SymbolicScalar> assembleDynOffset;
-        std::vector<SymbolicScalar> inputDynShape;
+        Offset assembleOffset;
+        SymbolicOffset assembleDynOffset;
+        SymbolicShape inputDynShape;
         MemoryType fromType = MemoryType::MEM_UNKNOWN;
         ir::Span span;
         Operation::ScopeInfo scopeInfo;
@@ -132,8 +136,8 @@ private:
         Operation* assembleOp = nullptr;
         LogicalTensorPtr output;
         LogicalTensorPtr reshapeInput;
-        std::vector<SymbolicScalar> reshapeDynShape;
-        std::vector<SymbolicScalar> outputDynShape;
+        SymbolicShape reshapeDynShape;
+        SymbolicShape outputDynShape;
         ir::Span span;
         Operation::ScopeInfo scopeInfo;
         std::vector<FaninAssembleRecord> faninAssembles;
@@ -147,31 +151,26 @@ private:
     Status TryRecordReshapeAssemble(Function& function, Operation& reshapeOp);
     Status TryRecordViewReshapeFanout(Function& function, Operation& viewOp, Operation& reshapeOp,
                                       const ChainMatch& match, const ViewOpAttribute& viewAttr,
-                                      const std::vector<int64_t>& reshapeOutputShape,
-                                      const std::vector<SymbolicScalar>& reshapeDynShape,
-                                      const std::vector<SymbolicScalar>& inputDynShape);
-    Status TryCollectFanoutViewRecord(
-        Operation& reshapeOp, Operation& consumer, const ChainMatch& match, const ViewOpAttribute& viewAttr,
-        const std::vector<SymbolicScalar>& compactDynShape, const std::vector<SymbolicScalar>& middleDynShape,
-        const std::vector<SymbolicScalar>& inputDynShape, const std::vector<int64_t>& reshapeOutputShape,
-        const std::vector<SymbolicScalar>& reshapeDynShape, FanoutViewRecord& fanoutRecord, bool& canReorder);
+                                      const Shape& reshapeOutputShape, const SymbolicShape& reshapeDynShape,
+                                      const SymbolicShape& inputDynShape);
+    Status TryCollectFanoutViewRecord(Operation& reshapeOp, Operation& consumer, const ChainMatch& match,
+                                      const ViewOpAttribute& viewAttr, const SymbolicShape& compactDynShape,
+                                      const SymbolicShape& middleDynShape, const SymbolicShape& inputDynShape,
+                                      const Shape& reshapeOutputShape, const SymbolicShape& reshapeDynShape,
+                                      FanoutViewRecord& fanoutRecord, bool& canReorder);
     Status TryRecordDirectReshapeAssemble(Function& function, Operation& reshapeOp, Operation& assembleOp,
                                           const ChainMatch& match, const AssembleOpAttribute& assembleAttr,
-                                          const std::vector<int64_t>& assembleOutputShape,
-                                          const std::vector<SymbolicScalar>& assembleDynShape,
-                                          const std::vector<SymbolicScalar>& middleDynShape,
-                                          const std::vector<SymbolicScalar>& outputDynShape);
+                                          const Shape& assembleOutputShape, const SymbolicShape& assembleDynShape,
+                                          const SymbolicShape& middleDynShape, const SymbolicShape& outputDynShape);
     Status TryRecordReshapeAssembleFanin(Function& function, Operation& reshapeOp, Operation& assembleOp,
                                          const ChainMatch& match, const AssembleOpAttribute& assembleAttr,
-                                         const std::vector<AxisGroup>& axisPlan);
+                                         const AxisPlan& axisPlan);
     Status TryCollectFaninAssembleRecord(Operation& reshapeOp, Operation& assembleOp, Operation& producer,
                                          const ChainMatch& match, const AssembleOpAttribute& assembleAttr,
-                                         const std::vector<SymbolicScalar>& inputDynShape,
-                                         const std::vector<SymbolicScalar>& middleDynShape,
-                                         const std::vector<SymbolicScalar>& outputDynShape,
-                                         const std::vector<int64_t>& reshapeInputShape,
-                                         const std::vector<SymbolicScalar>& reshapeDynShape,
-                                         FaninAssembleRecord& faninRecord, bool& canReorder);
+                                         const SymbolicShape& inputDynShape, const SymbolicShape& middleDynShape,
+                                         const SymbolicShape& outputDynShape, const Shape& reshapeInputShape,
+                                         const SymbolicShape& reshapeDynShape, FaninAssembleRecord& faninRecord,
+                                         bool& canReorder);
     void AppendViewReshapeRecords(Function& function);
     void AppendViewReshapeFanoutRecords(Function& function);
     void AppendReshapeAssembleRecords(Function& function);
@@ -181,74 +180,59 @@ private:
     void MarkReshapeAssembleFaninVisited(Operation& reshapeOp, Operation& assembleOp,
                                          const ReshapeAssembleFaninRecord& record);
     Operation& CreateMetadataReshape(Function& function, const LogicalTensorPtr& input, const LogicalTensorPtr& output,
-                                     const std::vector<SymbolicScalar>& dynShape, const ir::Span& span,
+                                     const SymbolicShape& dynShape, const ir::Span& span,
                                      const Operation::ScopeInfo& scopeInfo, Operation& srcOp);
     static bool InferInputDynRawShapeFromOutput(const LogicalTensorPtr& input, const LogicalTensorPtr& output,
-                                                std::vector<SymbolicScalar>& inferredInputDynRawShape);
-    static bool BuildAxisPlanAllowFirstUnknown(const std::vector<int64_t>& srcShape,
-                                               const std::vector<int64_t>& dstShape, std::vector<AxisGroup>& axisPlan);
+                                                SymbolicShape& inferredInputDynRawShape);
+    static bool BuildAxisPlanAllowFirstUnknown(const Shape& srcShape, const Shape& dstShape, AxisPlan& axisPlan);
     Operation& CreateView(Function& function, const LogicalTensorPtr& input, const LogicalTensorPtr& output,
-                          const std::vector<int64_t>& offset, const std::vector<SymbolicScalar>& dynOffset,
-                          const std::vector<SymbolicScalar>& outputDynShape, MemoryType toType, bool hasCopyInMode,
-                          const std::any& copyInModeValue, const ir::Span& span, const Operation::ScopeInfo& scopeInfo);
+                          const Offset& offset, const SymbolicOffset& dynOffset, const SymbolicShape& outputDynShape,
+                          MemoryType toType, bool hasCopyInMode, const std::any& copyInModeValue, const ir::Span& span,
+                          const Operation::ScopeInfo& scopeInfo);
     void CreateAssemble(Function& function, const LogicalTensorPtr& input, const LogicalTensorPtr& output,
-                        const std::vector<int64_t>& offset, const std::vector<SymbolicScalar>& dynOffset,
-                        const std::vector<SymbolicScalar>& inputDynShape, MemoryType fromType, const ir::Span& span,
-                        const Operation::ScopeInfo& scopeInfo, Operation& srcOp);
+                        const Offset& offset, const SymbolicOffset& dynOffset, const SymbolicShape& inputDynShape,
+                        MemoryType fromType, const ir::Span& span, const Operation::ScopeInfo& scopeInfo,
+                        Operation& srcOp);
 
     static bool GetChainMatch(Operation& firstOp, Opcode secondOpcode, ChainMatch& match);
     static Operation* GetPrecedingViewOp(Operation& reshapeOp);
     static Operation* GetFollowingAssembleOp(Operation& reshapeOp);
     static bool ValidateChainShapes(const ChainMatch& match);
-    static bool BuildAxisPlan(const std::vector<int64_t>& srcShape, const std::vector<int64_t>& dstShape,
-                              std::vector<AxisGroup>& axisPlan);
-    static bool ApplyForwardShape(const std::vector<int64_t>& baseShape,
-                                  const std::vector<SymbolicScalar>& baseDynShape,
-                                  const std::vector<AxisGroup>& axisPlan, std::vector<int64_t>& newShape,
-                                  std::vector<SymbolicScalar>& newDynShape);
-    static bool ApplyBackwardShape(const std::vector<int64_t>& baseShape,
-                                   const std::vector<SymbolicScalar>& baseDynShape,
-                                   const std::vector<AxisGroup>& axisPlan, std::vector<int64_t>& newShape,
-                                   std::vector<SymbolicScalar>& newDynShape);
-    static bool RemapOffset(const std::vector<int64_t>& oldOffset, const std::vector<SymbolicScalar>& oldDynOffset,
-                            const std::vector<int64_t>& oldShape, const std::vector<SymbolicScalar>& oldDynShape,
-                            const std::vector<int64_t>& newShape, const std::vector<SymbolicScalar>& newDynShape,
+    static bool BuildAxisPlan(const Shape& srcShape, const Shape& dstShape, AxisPlan& axisPlan);
+    static bool ApplyForwardShape(const Shape& baseShape, const SymbolicShape& baseDynShape, const AxisPlan& axisPlan,
+                                  Shape& newShape, SymbolicShape& newDynShape);
+    static bool ApplyBackwardShape(const Shape& baseShape, const SymbolicShape& baseDynShape, const AxisPlan& axisPlan,
+                                   Shape& newShape, SymbolicShape& newDynShape);
+    static bool RemapOffset(const Offset& oldOffset, const SymbolicOffset& oldDynOffset, const Shape& oldShape,
+                            const SymbolicShape& oldDynShape, const Shape& newShape, const SymbolicShape& newDynShape,
                             RemapResult& result);
-    static bool RemapFanoutViewOffset(
-        const std::vector<int64_t>& baseViewOffset, const std::vector<SymbolicScalar>& baseViewDynOffset,
-        const std::vector<int64_t>& fanoutOffset, const std::vector<SymbolicScalar>& fanoutDynOffset,
-        const std::vector<int64_t>& compactShape, const std::vector<SymbolicScalar>& compactDynShape,
-        const std::vector<int64_t>& middleShape, const std::vector<SymbolicScalar>& middleDynShape,
-        const std::vector<int64_t>& inputShape, const std::vector<SymbolicScalar>& inputDynShape,
-        const std::vector<int64_t>& newShape, const std::vector<SymbolicScalar>& newDynShape, RemapResult& result);
-    static bool RemapFaninAssembleOffset(
-        const std::vector<int64_t>& inputAssembleOffset, const std::vector<SymbolicScalar>& inputAssembleDynOffset,
-        const std::vector<int64_t>& outputAssembleOffset, const std::vector<SymbolicScalar>& outputAssembleDynOffset,
-        const std::vector<int64_t>& compactShape, const std::vector<SymbolicScalar>& compactDynShape,
-        const std::vector<int64_t>& middleShape, const std::vector<SymbolicScalar>& middleDynShape,
-        const std::vector<int64_t>& outputShape, const std::vector<SymbolicScalar>& outputDynShape,
-        const std::vector<int64_t>& newShape, const std::vector<SymbolicScalar>& newDynShape, RemapResult& result);
-    static bool IsContiguousRegion(const std::vector<int64_t>& offset, const std::vector<int64_t>& regionShape,
-                                   const std::vector<int64_t>& baseShape);
-    static bool IsLinearizedContiguousRegion(const std::vector<int64_t>& offset,
-                                             const std::vector<int64_t>& regionShape,
-                                             const std::vector<int64_t>& baseShape);
-    static bool AreCollapsedGroupsContiguous(const std::vector<int64_t>& offset,
-                                             const std::vector<int64_t>& regionShape,
-                                             const std::vector<int64_t>& baseShape,
-                                             const std::vector<AxisGroup>& axisPlan, bool useSrcGroup);
-    static bool GetSymbolicShape(const LogicalTensorPtr& tensor, std::vector<SymbolicScalar>& dynShape);
-    static bool GetChainSymbolicShapes(const ChainMatch& match, std::vector<SymbolicScalar>& inputDynShape,
-                                       std::vector<SymbolicScalar>& middleDynShape,
-                                       std::vector<SymbolicScalar>& outputDynShape);
-    static std::vector<SymbolicScalar> GetSymbolicShapeOrStatic(const LogicalTensorPtr& tensor);
-    static std::vector<SymbolicScalar> NormalizeDynOffset(const std::vector<int64_t>& offset,
-                                                          const std::vector<SymbolicScalar>& dynOffset);
-    static bool BuildAssembledValidShape(const std::vector<int64_t>& offset,
-                                         const std::vector<SymbolicScalar>& dynOffset,
-                                         const std::vector<SymbolicScalar>& inputDynShape, size_t outputRank,
-                                         std::vector<SymbolicScalar>& outputDynShape);
-    static bool MergeValidShape(const std::vector<SymbolicScalar>& candidate, std::vector<SymbolicScalar>& merged);
+    static bool RemapFanoutViewOffset(const Offset& baseViewOffset, const SymbolicOffset& baseViewDynOffset,
+                                      const Offset& fanoutOffset, const SymbolicOffset& fanoutDynOffset,
+                                      const Shape& compactShape, const SymbolicShape& compactDynShape,
+                                      const Shape& middleShape, const SymbolicShape& middleDynShape,
+                                      const Shape& inputShape, const SymbolicShape& inputDynShape,
+                                      const Shape& newShape, const SymbolicShape& newDynShape, RemapResult& result);
+    static bool RemapFaninAssembleOffset(const Offset& inputAssembleOffset,
+                                         const SymbolicOffset& inputAssembleDynOffset,
+                                         const Offset& outputAssembleOffset,
+                                         const SymbolicOffset& outputAssembleDynOffset, const Shape& compactShape,
+                                         const SymbolicShape& compactDynShape, const Shape& middleShape,
+                                         const SymbolicShape& middleDynShape, const Shape& outputShape,
+                                         const SymbolicShape& outputDynShape, const Shape& newShape,
+                                         const SymbolicShape& newDynShape, RemapResult& result);
+    static bool IsContiguousRegion(const Offset& offset, const Shape& regionShape, const Shape& baseShape);
+    static bool IsLinearizedContiguousRegion(const Offset& offset, const Shape& regionShape, const Shape& baseShape);
+    static bool AreCollapsedGroupsContiguous(const Offset& offset, const Shape& regionShape, const Shape& baseShape,
+                                             const AxisPlan& axisPlan, bool useSrcGroup);
+    static bool GetSymbolicShape(const LogicalTensorPtr& tensor, SymbolicShape& dynShape);
+    static bool GetChainSymbolicShapes(const ChainMatch& match, SymbolicShape& inputDynShape,
+                                       SymbolicShape& middleDynShape, SymbolicShape& outputDynShape);
+    static SymbolicShape GetSymbolicShapeOrStatic(const LogicalTensorPtr& tensor);
+    static SymbolicOffset NormalizeDynOffset(const Offset& offset, const SymbolicOffset& dynOffset);
+    static bool BuildAssembledValidShape(const Offset& offset, const SymbolicOffset& dynOffset,
+                                         const SymbolicShape& inputDynShape, size_t outputRank,
+                                         SymbolicShape& outputDynShape);
+    static bool MergeValidShape(const SymbolicShape& candidate, SymbolicShape& merged);
     static ir::Span GetFirstSpan(Operation& first, Operation& second);
     static Operation::ScopeInfo GetChainScopeInfo(Operation& first, Operation& second);
     static bool IsScopeCompatible(Operation& first, Operation& second);

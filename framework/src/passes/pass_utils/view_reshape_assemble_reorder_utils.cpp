@@ -32,7 +32,7 @@ constexpr int64_t UNKNOWN_DIM = -1;
 
 bool IsSameDim(int64_t lhs, int64_t rhs) { return lhs == rhs || (lhs == UNKNOWN_DIM && rhs == UNKNOWN_DIM); }
 
-bool ProductShape(const std::vector<int64_t>& shape, size_t begin, size_t end, int64_t& product)
+bool ProductShape(const Shape& shape, size_t begin, size_t end, int64_t& product)
 {
     product = 1;
     for (size_t i = begin; i < end; ++i) {
@@ -48,7 +48,7 @@ bool ProductShape(const std::vector<int64_t>& shape, size_t begin, size_t end, i
     return true;
 }
 
-SymbolicScalar ProductDynShape(const std::vector<SymbolicScalar>& shape, size_t begin, size_t end)
+SymbolicScalar ProductDynShape(const SymbolicShape& shape, size_t begin, size_t end)
 {
     SymbolicScalar product(1);
     for (size_t i = begin; i < end; ++i) {
@@ -57,7 +57,7 @@ SymbolicScalar ProductDynShape(const std::vector<SymbolicScalar>& shape, size_t 
     return product;
 }
 
-bool HasOnlyFirstUnknownDim(const std::vector<int64_t>& shape)
+bool HasOnlyFirstUnknownDim(const Shape& shape)
 {
     for (size_t i = 0; i < shape.size(); ++i) {
         if (shape[i] == UNKNOWN_DIM && i != 0) {
@@ -70,69 +70,85 @@ bool HasOnlyFirstUnknownDim(const std::vector<int64_t>& shape)
     return true;
 }
 
-bool HasConcreteShape(const std::vector<int64_t>& shape)
+bool HasConcreteShape(const Shape& shape)
 {
     return std::all_of(shape.begin(), shape.end(), [](int64_t dim) { return dim > 0; });
 }
 
-bool HasNegativeDynDim(const std::vector<SymbolicScalar>& dynShape)
+bool HasAtMostFirstUnknownDim(const Shape& shape) { return HasConcreteShape(shape) || HasOnlyFirstUnknownDim(shape); }
+
+bool HasNegativeDynDim(const SymbolicShape& dynShape)
 {
     return std::any_of(dynShape.begin(), dynShape.end(),
                        [](const SymbolicScalar& dim) { return dim.ConcreteValid() && dim.Concrete() < 0; });
 }
 
+bool HasNegativeDynRawShape(const LogicalTensorPtr& tensor, const SymbolicShape& dynShape)
+{
+    if (tensor == nullptr) {
+        return false;
+    }
+    const auto& rawTensor = tensor->GetRawTensor();
+    return rawTensor != nullptr && rawTensor->GetDynRawShape().size() == dynShape.size() &&
+           HasNegativeDynDim(rawTensor->GetDynRawShape());
+}
+
 bool HasTargetMatmulOp(Function& function)
 {
-    for (const auto& op : function.Operations()) {
-        if (op.GetOpcode() == Opcode::OP_A_MULACC_B || op.GetOpcode() == Opcode::OP_A_MUL_B) {
-            return true;
-        }
-    }
-    return false;
+    auto opList = function.Operations().DuplicatedOpList();
+    return std::any_of(opList.begin(), opList.end(), [](Operation* op) {
+        return op->GetOpcode() == Opcode::OP_A_MULACC_B || op->GetOpcode() == Opcode::OP_A_MUL_B;
+    });
 }
 
 bool CanReorderFunction(Function& function)
 {
     for (const auto& incast : function.GetIncast()) {
-        const auto& shape = incast->GetShape();
-        if (!HasConcreteShape(shape) && !HasOnlyFirstUnknownDim(shape)) {
+        if (!HasAtMostFirstUnknownDim(incast->GetShape())) {
             return false;
         }
     }
     for (const auto& outcast : function.GetOutcast()) {
-        const auto& shape = outcast->GetShape();
-        if (!HasConcreteShape(shape) && !HasOnlyFirstUnknownDim(shape)) {
+        if (!HasAtMostFirstUnknownDim(outcast->GetShape())) {
             return false;
         }
     }
     return true;
 }
 
+bool HasSingleInput(const Operation& op) { return op.GetIOperands().size() == 1; }
+
+bool HasSingleOutput(const Operation& op) { return op.GetOOperands().size() == 1; }
+
+Operation* GetSingleProducer(const LogicalTensorPtr& tensor)
+{
+    if (tensor == nullptr || tensor->GetProducers().size() != 1) {
+        return nullptr;
+    }
+    return *tensor->GetProducers().begin();
+}
+
+Operation* GetSingleConsumer(const LogicalTensorPtr& tensor)
+{
+    if (tensor == nullptr || tensor->GetConsumers().size() != 1) {
+        return nullptr;
+    }
+    return *tensor->GetConsumers().begin();
+}
+
 bool HasCascadedViewsBeforeReshape(Function& function)
 {
     for (const auto& op : function.Operations()) {
-        if (op.GetOpcode() != Opcode::OP_RESHAPE) {
-            continue;
-        }
-        if (op.GetIOperands().size() != 1) {
+        if (op.GetOpcode() != Opcode::OP_RESHAPE || !HasSingleInput(op)) {
             continue;
         }
         auto input = op.GetIOperands().front();
-        if (input == nullptr || input->GetProducers().size() != 1) {
-            continue;
-        }
-        Operation* firstView = *input->GetProducers().begin();
-        if (firstView == nullptr || firstView->GetOpcode() != Opcode::OP_VIEW) {
-            continue;
-        }
-        if (firstView->GetIOperands().size() != 1) {
+        Operation* firstView = GetSingleProducer(input);
+        if (firstView == nullptr || firstView->GetOpcode() != Opcode::OP_VIEW || !HasSingleInput(*firstView)) {
             continue;
         }
         auto firstViewInput = firstView->GetIOperands().front();
-        if (firstViewInput == nullptr || firstViewInput->GetProducers().size() != 1) {
-            continue;
-        }
-        Operation* secondView = *firstViewInput->GetProducers().begin();
+        Operation* secondView = GetSingleProducer(firstViewInput);
         if (secondView != nullptr && secondView->GetOpcode() == Opcode::OP_VIEW) {
             return true;
         }
@@ -146,7 +162,7 @@ bool HasCascadedAssemblesAfterReshape(Function& function)
         if (op.GetOpcode() != Opcode::OP_RESHAPE) {
             continue;
         }
-        if (op.GetOOperands().size() != 1) {
+        if (!HasSingleOutput(op)) {
             continue;
         }
         auto output = op.GetOOperands().front();
@@ -157,7 +173,7 @@ bool HasCascadedAssemblesAfterReshape(Function& function)
             if (consumer == nullptr || consumer->GetOpcode() != Opcode::OP_ASSEMBLE) {
                 continue;
             }
-            if (consumer->GetOOperands().size() != 1) {
+            if (!HasSingleOutput(*consumer)) {
                 continue;
             }
             auto assembleOutput = consumer->GetOOperands().front();
@@ -174,8 +190,7 @@ bool HasCascadedAssemblesAfterReshape(Function& function)
     return false;
 }
 
-bool IsRegionWithinShape(const std::vector<int64_t>& offset, const std::vector<int64_t>& regionShape,
-                         const std::vector<int64_t>& baseShape)
+bool IsRegionWithinShape(const Offset& offset, const Shape& regionShape, const Shape& baseShape)
 {
     if (offset.size() != regionShape.size() || regionShape.size() != baseShape.size() ||
         !HasConcreteShape(regionShape) || !HasConcreteShape(baseShape)) {
@@ -189,14 +204,11 @@ bool IsRegionWithinShape(const std::vector<int64_t>& offset, const std::vector<i
     return true;
 }
 
-std::vector<SymbolicScalar> ShapeToSymbolic(const std::vector<int64_t>& shape)
-{
-    return SymbolicScalar::FromConcrete(shape);
-}
+SymbolicShape ShapeToSymbolic(const Shape& shape) { return SymbolicScalar::FromConcrete(shape); }
 
-std::vector<int64_t> SymbolicToStaticOffset(const std::vector<SymbolicScalar>& dynOffset)
+Offset SymbolicToStaticOffset(const SymbolicOffset& dynOffset)
 {
-    std::vector<int64_t> staticOffset;
+    Offset staticOffset;
     staticOffset.reserve(dynOffset.size());
     for (const auto& item : dynOffset) {
         staticOffset.emplace_back(item.ConcreteValid() ? item.Concrete() : 0);
@@ -204,19 +216,18 @@ std::vector<int64_t> SymbolicToStaticOffset(const std::vector<SymbolicScalar>& d
     return staticOffset;
 }
 
-std::vector<SymbolicScalar> BuildStrides(const std::vector<SymbolicScalar>& dynShape)
+std::vector<SymbolicScalar> BuildStrides(const SymbolicShape& dynShape)
 {
     std::vector<SymbolicScalar> strides(dynShape.size());
     SymbolicScalar curStride(1);
-    for (int64_t i = static_cast<int64_t>(dynShape.size()) - 1; i >= 0; --i) {
-        strides[i] = curStride;
-        curStride = (curStride * dynShape[i]).Simplify();
+    for (size_t i = dynShape.size(); i > 0; --i) {
+        strides[i - 1] = curStride;
+        curStride = (curStride * dynShape[i - 1]).Simplify();
     }
     return strides;
 }
 
-SymbolicScalar LinearizeOffset(const std::vector<SymbolicScalar>& dynOffset,
-                               const std::vector<SymbolicScalar>& dynShape)
+SymbolicScalar LinearizeOffset(const SymbolicOffset& dynOffset, const SymbolicShape& dynShape)
 {
     auto strides = BuildStrides(dynShape);
     SymbolicScalar linearIndex(0);
@@ -226,10 +237,10 @@ SymbolicScalar LinearizeOffset(const std::vector<SymbolicScalar>& dynOffset,
     return linearIndex;
 }
 
-std::vector<SymbolicScalar> DelinearizeOffset(SymbolicScalar linearIndex, const std::vector<SymbolicScalar>& dynShape)
+SymbolicOffset DelinearizeOffset(SymbolicScalar linearIndex, const SymbolicShape& dynShape)
 {
     auto strides = BuildStrides(dynShape);
-    std::vector<SymbolicScalar> dynOffset(dynShape.size());
+    SymbolicOffset dynOffset(dynShape.size());
     for (size_t i = 0; i < dynShape.size(); ++i) {
         dynOffset[i] = (linearIndex / strides[i]).Simplify();
         linearIndex = (linearIndex % strides[i]).Simplify();
@@ -237,9 +248,9 @@ std::vector<SymbolicScalar> DelinearizeOffset(SymbolicScalar linearIndex, const 
     return dynOffset;
 }
 
-std::vector<SymbolicScalar> AddOffsets(const std::vector<SymbolicScalar>& lhs, const std::vector<SymbolicScalar>& rhs)
+SymbolicOffset AddOffsets(const SymbolicOffset& lhs, const SymbolicOffset& rhs)
 {
-    std::vector<SymbolicScalar> result;
+    SymbolicOffset result;
     result.reserve(lhs.size());
     for (size_t i = 0; i < lhs.size(); ++i) {
         result.emplace_back((lhs[i] + rhs[i]).Simplify());
@@ -247,8 +258,7 @@ std::vector<SymbolicScalar> AddOffsets(const std::vector<SymbolicScalar>& lhs, c
     return result;
 }
 
-void SetMetadataReshapeAttrs(Operation& reshapeOp, const LogicalTensorPtr& output,
-                             const std::vector<SymbolicScalar>& dynShape)
+void SetMetadataReshapeAttrs(Operation& reshapeOp, const LogicalTensorPtr& output, const SymbolicShape& dynShape)
 {
     reshapeOp.SetAttribute("reshape", output->GetShape());
     reshapeOp.SetAttribute(OP_ATTR_PREFIX + "isInplace", true);
@@ -272,16 +282,14 @@ Status ViewReshapeAssembleReorderUtils::ReorderViewReshapeAssemble(Function& fun
 }
 
 bool ViewReshapeAssembleReorderUtils::RemapOffsetBackwardThroughReshape(
-    const LogicalTensorPtr& reshapeInput, const LogicalTensorPtr& reshapeOutput,
-    const std::vector<int64_t>& outputBaseShape, const std::vector<SymbolicScalar>& outputBaseDynShape,
-    const std::vector<int64_t>& outputOffset, const std::vector<SymbolicScalar>& outputDynOffset,
-    std::vector<int64_t>& inputBaseShape, std::vector<SymbolicScalar>& inputBaseDynShape,
-    std::vector<int64_t>& inputOffset, std::vector<SymbolicScalar>& inputDynOffset)
+    const LogicalTensorPtr& reshapeInput, const LogicalTensorPtr& reshapeOutput, const Shape& outputBaseShape,
+    const SymbolicShape& outputBaseDynShape, const Offset& outputOffset, const SymbolicOffset& outputDynOffset,
+    Shape& inputBaseShape, SymbolicShape& inputBaseDynShape, Offset& inputOffset, SymbolicOffset& inputDynOffset)
 {
     if (reshapeInput == nullptr || reshapeOutput == nullptr || outputBaseShape.size() != outputBaseDynShape.size()) {
         return false;
     }
-    std::vector<AxisGroup> axisPlan;
+    AxisPlan axisPlan;
     if (!BuildAxisPlan(reshapeInput->GetShape(), reshapeOutput->GetShape(), axisPlan) ||
         !ApplyBackwardShape(outputBaseShape, outputBaseDynShape, axisPlan, inputBaseShape, inputBaseDynShape)) {
         return false;
@@ -385,18 +393,18 @@ Status ViewReshapeAssembleReorderUtils::ProcessOperations(Function& function)
 
 bool ViewReshapeAssembleReorderUtils::GetChainMatch(Operation& firstOp, Opcode secondOpcode, ChainMatch& match)
 {
-    if (firstOp.GetIOperands().size() != 1 || firstOp.GetOOperands().size() != 1) {
+    if (!HasSingleInput(firstOp) || !HasSingleOutput(firstOp)) {
         return false;
     }
     match.input = firstOp.GetIOperands().front();
     match.middle = firstOp.GetOOperands().front();
-    if (match.input == nullptr || match.middle == nullptr || match.middle->GetConsumers().size() != 1 ||
-        match.middle->GetProducers().size() != 1) {
+    if (match.input == nullptr || match.middle == nullptr || GetSingleProducer(match.middle) == nullptr ||
+        GetSingleConsumer(match.middle) == nullptr) {
         return false;
     }
-    match.secondOp = *match.middle->GetConsumers().begin();
-    if (match.secondOp == nullptr || match.secondOp->GetOpcode() != secondOpcode ||
-        match.secondOp->GetIOperands().size() != 1 || match.secondOp->GetOOperands().size() != 1) {
+    match.secondOp = GetSingleConsumer(match.middle);
+    if (match.secondOp->GetOpcode() != secondOpcode || !HasSingleInput(*match.secondOp) ||
+        !HasSingleOutput(*match.secondOp)) {
         return false;
     }
     match.output = match.secondOp->GetOOperands().front();
@@ -405,14 +413,11 @@ bool ViewReshapeAssembleReorderUtils::GetChainMatch(Operation& firstOp, Opcode s
 
 Operation* ViewReshapeAssembleReorderUtils::GetPrecedingViewOp(Operation& reshapeOp)
 {
-    if (reshapeOp.GetIOperands().size() != 1) {
+    if (!HasSingleInput(reshapeOp)) {
         return nullptr;
     }
     auto input = reshapeOp.GetIOperands().front();
-    if (input == nullptr || input->GetProducers().size() != 1) {
-        return nullptr;
-    }
-    Operation* producer = *input->GetProducers().begin();
+    Operation* producer = GetSingleProducer(input);
     if (producer == nullptr || producer->GetOpcode() != Opcode::OP_VIEW) {
         return nullptr;
     }
@@ -421,14 +426,11 @@ Operation* ViewReshapeAssembleReorderUtils::GetPrecedingViewOp(Operation& reshap
 
 Operation* ViewReshapeAssembleReorderUtils::GetFollowingAssembleOp(Operation& reshapeOp)
 {
-    if (reshapeOp.GetOOperands().size() != 1) {
+    if (!HasSingleOutput(reshapeOp)) {
         return nullptr;
     }
     auto output = reshapeOp.GetOOperands().front();
-    if (output == nullptr || output->GetConsumers().size() != 1) {
-        return nullptr;
-    }
-    Operation* consumer = *output->GetConsumers().begin();
+    Operation* consumer = GetSingleConsumer(output);
     if (consumer == nullptr || consumer->GetOpcode() != Opcode::OP_ASSEMBLE) {
         return nullptr;
     }
@@ -456,16 +458,16 @@ Status ViewReshapeAssembleReorderUtils::TryRecordViewReshape(Function& function,
     if (!ValidateChainShapes(match)) {
         return SUCCESS;
     }
-    std::vector<AxisGroup> axisPlan;
+    AxisPlan axisPlan;
     if (!BuildAxisPlan(match.middle->GetShape(), match.output->GetShape(), axisPlan)) {
         return SUCCESS;
     }
-    std::vector<SymbolicScalar> inputDynShape;
+    SymbolicShape inputDynShape;
     if (!GetSymbolicShape(match.input, inputDynShape)) {
         return SUCCESS;
     }
-    std::vector<int64_t> reshapeOutputShape;
-    std::vector<SymbolicScalar> reshapeDynShape;
+    Shape reshapeOutputShape;
+    SymbolicShape reshapeDynShape;
     if (!ApplyForwardShape(match.input->GetShape(), inputDynShape, axisPlan, reshapeOutputShape, reshapeDynShape)) {
         return SUCCESS;
     }
@@ -495,19 +497,19 @@ Status ViewReshapeAssembleReorderUtils::TryRecordViewReshape(Function& function,
 Status ViewReshapeAssembleReorderUtils::TryRecordViewReshapeFanout(Function& function, Operation& viewOp,
                                                                    Operation& reshapeOp, const ChainMatch& match,
                                                                    const ViewOpAttribute& viewAttr,
-                                                                   const std::vector<int64_t>& reshapeOutputShape,
-                                                                   const std::vector<SymbolicScalar>& reshapeDynShape,
-                                                                   const std::vector<SymbolicScalar>& inputDynShape)
+                                                                   const Shape& reshapeOutputShape,
+                                                                   const SymbolicShape& reshapeDynShape,
+                                                                   const SymbolicShape& inputDynShape)
 {
     auto consumers = match.output->GetConsumers();
     if (consumers.size() <= 1) {
         return SUCCESS;
     }
-    std::vector<SymbolicScalar> middleDynShape;
+    SymbolicShape middleDynShape;
     if (!GetSymbolicShape(match.middle, middleDynShape)) {
         return SUCCESS;
     }
-    std::vector<SymbolicScalar> compactDynShape;
+    SymbolicShape compactDynShape;
     if (!GetSymbolicShape(match.output, compactDynShape)) {
         return SUCCESS;
     }
@@ -546,14 +548,13 @@ Status ViewReshapeAssembleReorderUtils::TryRecordViewReshapeFanout(Function& fun
 
 Status ViewReshapeAssembleReorderUtils::TryCollectFanoutViewRecord(
     Operation& reshapeOp, Operation& consumer, const ChainMatch& match, const ViewOpAttribute& viewAttr,
-    const std::vector<SymbolicScalar>& compactDynShape, const std::vector<SymbolicScalar>& middleDynShape,
-    const std::vector<SymbolicScalar>& inputDynShape, const std::vector<int64_t>& reshapeOutputShape,
-    const std::vector<SymbolicScalar>& reshapeDynShape, FanoutViewRecord& fanoutRecord, bool& canReorder)
+    const SymbolicShape& compactDynShape, const SymbolicShape& middleDynShape, const SymbolicShape& inputDynShape,
+    const Shape& reshapeOutputShape, const SymbolicShape& reshapeDynShape, FanoutViewRecord& fanoutRecord,
+    bool& canReorder)
 {
     canReorder = false;
     if (visitedOp_.count(consumer.GetOpMagic()) != 0 || consumer.GetOpcode() != Opcode::OP_VIEW ||
-        !IsScopeCompatible(reshapeOp, consumer) || consumer.GetIOperands().size() != 1 ||
-        consumer.GetOOperands().size() != 1) {
+        !IsScopeCompatible(reshapeOp, consumer) || !HasSingleInput(consumer) || !HasSingleOutput(consumer)) {
         return SUCCESS;
     }
     auto fanoutAttr = std::dynamic_pointer_cast<ViewOpAttribute>(consumer.GetOpAttribute());
@@ -606,24 +607,22 @@ Status ViewReshapeAssembleReorderUtils::TryRecordReshapeAssemble(Function& funct
     }
     // Skip reorder when reshape input is produced by SUB op (sub->reshape->assemble),
     // reordering such chains breaks the read-modify-write dependency on state tensors.
-    if (match.input != nullptr && match.input->GetProducers().size() == 1) {
-        Operation* producer = *match.input->GetProducers().begin();
-        if (producer != nullptr && producer->GetOpcode() == Opcode::OP_SUB) {
-            return SUCCESS;
-        }
+    Operation* producer = GetSingleProducer(match.input);
+    if (producer != nullptr && producer->GetOpcode() == Opcode::OP_SUB) {
+        return SUCCESS;
     }
-    std::vector<SymbolicScalar> inputDynShape;
-    std::vector<SymbolicScalar> middleDynShape;
-    std::vector<AxisGroup> axisPlan;
+    SymbolicShape inputDynShape;
+    SymbolicShape middleDynShape;
+    AxisPlan axisPlan;
     if (!BuildAxisPlan(match.input->GetShape(), match.middle->GetShape(), axisPlan)) {
         return SUCCESS;
     }
-    std::vector<SymbolicScalar> outputDynShape;
+    SymbolicShape outputDynShape;
     if (!GetChainSymbolicShapes(match, inputDynShape, middleDynShape, outputDynShape)) {
         return SUCCESS;
     }
-    std::vector<int64_t> assembleOutputShape;
-    std::vector<SymbolicScalar> assembleDynShape;
+    Shape assembleOutputShape;
+    SymbolicShape assembleDynShape;
     if (!ApplyBackwardShape(match.output->GetShape(), outputDynShape, axisPlan, assembleOutputShape,
                             assembleDynShape)) {
         return SUCCESS;
@@ -638,9 +637,8 @@ Status ViewReshapeAssembleReorderUtils::TryRecordReshapeAssemble(Function& funct
 
 Status ViewReshapeAssembleReorderUtils::TryRecordDirectReshapeAssemble(
     Function& function, Operation& reshapeOp, Operation& assembleOp, const ChainMatch& match,
-    const AssembleOpAttribute& assembleAttr, const std::vector<int64_t>& assembleOutputShape,
-    const std::vector<SymbolicScalar>& assembleDynShape, const std::vector<SymbolicScalar>& middleDynShape,
-    const std::vector<SymbolicScalar>& outputDynShape)
+    const AssembleOpAttribute& assembleAttr, const Shape& assembleOutputShape, const SymbolicShape& assembleDynShape,
+    const SymbolicShape& middleDynShape, const SymbolicShape& outputDynShape)
 {
     RemapResult remap;
     if (!RemapOffset(assembleAttr.GetToOffset(), assembleAttr.GetToDynOffset(), match.output->GetShape(),
@@ -652,7 +650,7 @@ Status ViewReshapeAssembleReorderUtils::TryRecordDirectReshapeAssemble(
             return SUCCESS;
         }
     }
-    std::vector<SymbolicScalar> finalOutputDynShape;
+    SymbolicShape finalOutputDynShape;
     if (!BuildAssembledValidShape(assembleAttr.GetToOffset(), assembleAttr.GetToDynOffset(), middleDynShape,
                                   match.output->GetShape().size(), finalOutputDynShape)) {
         return SUCCESS;
@@ -676,24 +674,24 @@ Status ViewReshapeAssembleReorderUtils::TryRecordDirectReshapeAssemble(
 Status ViewReshapeAssembleReorderUtils::TryRecordReshapeAssembleFanin(Function& function, Operation& reshapeOp,
                                                                       Operation& assembleOp, const ChainMatch& match,
                                                                       const AssembleOpAttribute& assembleAttr,
-                                                                      const std::vector<AxisGroup>& axisPlan)
+                                                                      const AxisPlan& axisPlan)
 {
     auto producers = match.input->GetProducers();
-    if (producers.size() <= 1 || match.input->GetConsumers().size() != 1) {
+    if (producers.size() <= 1 || GetSingleConsumer(match.input) == nullptr) {
         return SUCCESS;
     }
-    std::vector<SymbolicScalar> inputDynShape;
-    std::vector<SymbolicScalar> middleDynShape;
-    std::vector<SymbolicScalar> outputDynShape;
+    SymbolicShape inputDynShape;
+    SymbolicShape middleDynShape;
+    SymbolicShape outputDynShape;
     if (!GetChainSymbolicShapes(match, inputDynShape, middleDynShape, outputDynShape)) {
         return SUCCESS;
     }
-    std::vector<int64_t> reshapeInputShape;
-    std::vector<SymbolicScalar> reshapeDynShape;
+    Shape reshapeInputShape;
+    SymbolicShape reshapeDynShape;
     if (!ApplyBackwardShape(match.output->GetShape(), outputDynShape, axisPlan, reshapeInputShape, reshapeDynShape)) {
         return SUCCESS;
     }
-    std::vector<SymbolicScalar> finalOutputDynShape;
+    SymbolicShape finalOutputDynShape;
     if (!BuildAssembledValidShape(assembleAttr.GetToOffset(), assembleAttr.GetToDynOffset(), middleDynShape,
                                   match.output->GetShape().size(), finalOutputDynShape)) {
         return SUCCESS;
@@ -755,16 +753,14 @@ void ViewReshapeAssembleReorderUtils::MarkReshapeAssembleFaninVisited(Operation&
 
 Status ViewReshapeAssembleReorderUtils::TryCollectFaninAssembleRecord(
     Operation& reshapeOp, Operation& assembleOp, Operation& producer, const ChainMatch& match,
-    const AssembleOpAttribute& assembleAttr, const std::vector<SymbolicScalar>& inputDynShape,
-    const std::vector<SymbolicScalar>& middleDynShape, const std::vector<SymbolicScalar>& outputDynShape,
-    const std::vector<int64_t>& reshapeInputShape, const std::vector<SymbolicScalar>& reshapeDynShape,
+    const AssembleOpAttribute& assembleAttr, const SymbolicShape& inputDynShape, const SymbolicShape& middleDynShape,
+    const SymbolicShape& outputDynShape, const Shape& reshapeInputShape, const SymbolicShape& reshapeDynShape,
     FaninAssembleRecord& faninRecord, bool& canReorder)
 {
     canReorder = false;
     if (visitedOp_.count(producer.GetOpMagic()) != 0 || producer.GetOpcode() != Opcode::OP_ASSEMBLE ||
         !IsScopeCompatible(producer, reshapeOp) || !IsScopeCompatible(producer, assembleOp) ||
-        producer.GetIOperands().size() != 1 || producer.GetOOperands().size() != 1 ||
-        producer.GetOOperands().front() != match.input) {
+        !HasSingleInput(producer) || !HasSingleOutput(producer) || producer.GetOOperands().front() != match.input) {
         return SUCCESS;
     }
     auto producerAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(producer.GetOpAttribute());
@@ -800,9 +796,8 @@ Status ViewReshapeAssembleReorderUtils::TryCollectFaninAssembleRecord(
     return SUCCESS;
 }
 
-bool ViewReshapeAssembleReorderUtils::BuildAxisPlanAllowFirstUnknown(const std::vector<int64_t>& srcShape,
-                                                                     const std::vector<int64_t>& dstShape,
-                                                                     std::vector<AxisGroup>& axisPlan)
+bool ViewReshapeAssembleReorderUtils::BuildAxisPlanAllowFirstUnknown(const Shape& srcShape, const Shape& dstShape,
+                                                                     AxisPlan& axisPlan)
 {
     if (!HasOnlyFirstUnknownDim(srcShape) || !HasOnlyFirstUnknownDim(dstShape)) {
         return false;
@@ -837,9 +832,9 @@ bool ViewReshapeAssembleReorderUtils::BuildAxisPlanAllowFirstUnknown(const std::
     return srcIdx == srcShape.size() && dstIdx == dstShape.size();
 }
 
-bool ViewReshapeAssembleReorderUtils::InferInputDynRawShapeFromOutput(
-    const LogicalTensorPtr& input, const LogicalTensorPtr& output,
-    std::vector<SymbolicScalar>& inferredInputDynRawShape)
+bool ViewReshapeAssembleReorderUtils::InferInputDynRawShapeFromOutput(const LogicalTensorPtr& input,
+                                                                      const LogicalTensorPtr& output,
+                                                                      SymbolicShape& inferredInputDynRawShape)
 {
     if (input == nullptr || output == nullptr || input->GetRawTensor() == nullptr ||
         output->GetRawTensor() == nullptr) {
@@ -849,11 +844,11 @@ bool ViewReshapeAssembleReorderUtils::InferInputDynRawShapeFromOutput(
     if (outputDynRawShape.size() != output->GetShape().size()) {
         return false;
     }
-    std::vector<AxisGroup> axisPlan;
+    AxisPlan axisPlan;
     if (!BuildAxisPlanAllowFirstUnknown(input->GetShape(), output->GetShape(), axisPlan)) {
         return false;
     }
-    std::vector<int64_t> inferredStaticShape;
+    Shape inferredStaticShape;
     if (!ApplyBackwardShape(output->GetShape(), outputDynRawShape, axisPlan, inferredStaticShape,
                             inferredInputDynRawShape)) {
         return false;
@@ -863,25 +858,24 @@ bool ViewReshapeAssembleReorderUtils::InferInputDynRawShapeFromOutput(
 
 Operation& ViewReshapeAssembleReorderUtils::CreateMetadataReshape(Function& function, const LogicalTensorPtr& input,
                                                                   const LogicalTensorPtr& output,
-                                                                  const std::vector<SymbolicScalar>& dynShape,
-                                                                  const ir::Span& span,
+                                                                  const SymbolicShape& dynShape, const ir::Span& span,
                                                                   const Operation::ScopeInfo& scopeInfo,
                                                                   Operation& srcOp)
 {
-    if (output != nullptr && output->GetRawTensor() != nullptr &&
-        output->GetRawTensor()->GetDynRawShape().size() == dynShape.size() &&
-        HasNegativeDynDim(output->GetRawTensor()->GetDynRawShape())) {
+    if (HasNegativeDynRawShape(output, dynShape)) {
         output->GetRawTensor()->UpdateDynRawShape(dynShape);
     }
-    if (input != nullptr && input->GetRawTensor() != nullptr &&
-        HasNegativeDynDim(input->GetRawTensor()->GetDynRawShape())) {
-        std::vector<SymbolicScalar> inferredInputDynRawShape;
-        if (InferInputDynRawShapeFromOutput(input, output, inferredInputDynRawShape)) {
-            input->GetRawTensor()->UpdateDynRawShape(inferredInputDynRawShape);
-        } else {
-            APASS_LOG_WARN_F(
-                Elements::Operation,
-                "Failed to infer input DynRawShape from output for metadata reshape; keep original DynRawShape.");
+    if (input != nullptr) {
+        const auto& inputRaw = input->GetRawTensor();
+        if (inputRaw != nullptr && HasNegativeDynDim(inputRaw->GetDynRawShape())) {
+            SymbolicShape inferredInputDynRawShape;
+            if (InferInputDynRawShapeFromOutput(input, output, inferredInputDynRawShape)) {
+                inputRaw->UpdateDynRawShape(inferredInputDynRawShape);
+            } else {
+                APASS_LOG_WARN_F(
+                    Elements::Operation,
+                    "Failed to infer input DynRawShape from output for metadata reshape; keep original DynRawShape.");
+            }
         }
     }
     auto& newReshape = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_RESHAPE, {input}, {output}, span);
@@ -891,11 +885,12 @@ Operation& ViewReshapeAssembleReorderUtils::CreateMetadataReshape(Function& func
     return newReshape;
 }
 
-Operation& ViewReshapeAssembleReorderUtils::CreateView(
-    Function& function, const LogicalTensorPtr& input, const LogicalTensorPtr& output,
-    const std::vector<int64_t>& offset, const std::vector<SymbolicScalar>& dynOffset,
-    const std::vector<SymbolicScalar>& outputDynShape, MemoryType toType, bool hasCopyInMode,
-    const std::any& copyInModeValue, const ir::Span& span, const Operation::ScopeInfo& scopeInfo)
+Operation& ViewReshapeAssembleReorderUtils::CreateView(Function& function, const LogicalTensorPtr& input,
+                                                       const LogicalTensorPtr& output, const Offset& offset,
+                                                       const SymbolicOffset& dynOffset,
+                                                       const SymbolicShape& outputDynShape, MemoryType toType,
+                                                       bool hasCopyInMode, const std::any& copyInModeValue,
+                                                       const ir::Span& span, const Operation::ScopeInfo& scopeInfo)
 {
     auto viewAttr = std::make_shared<ViewOpAttribute>(offset, toType, dynOffset, outputDynShape);
     auto& newView = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_VIEW, {input}, {output}, span);
@@ -909,11 +904,11 @@ Operation& ViewReshapeAssembleReorderUtils::CreateView(
 }
 
 void ViewReshapeAssembleReorderUtils::CreateAssemble(Function& function, const LogicalTensorPtr& input,
-                                                     const LogicalTensorPtr& output, const std::vector<int64_t>& offset,
-                                                     const std::vector<SymbolicScalar>& dynOffset,
-                                                     const std::vector<SymbolicScalar>& inputDynShape,
-                                                     MemoryType fromType, const ir::Span& span,
-                                                     const Operation::ScopeInfo& scopeInfo, Operation& srcOp)
+                                                     const LogicalTensorPtr& output, const Offset& offset,
+                                                     const SymbolicOffset& dynOffset,
+                                                     const SymbolicShape& inputDynShape, MemoryType fromType,
+                                                     const ir::Span& span, const Operation::ScopeInfo& scopeInfo,
+                                                     Operation& srcOp)
 {
     auto assembleAttr = std::make_shared<AssembleOpAttribute>(fromType, offset, dynOffset, inputDynShape);
     auto& newAssemble = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_ASSEMBLE, {input}, {output}, span);
@@ -958,9 +953,9 @@ void ViewReshapeAssembleReorderUtils::AppendViewReshapeFanoutRecords(Function& f
 
 void ViewReshapeAssembleReorderUtils::AppendReshapeAssembleRecords(Function& function)
 {
-    std::vector<const ReshapeAssembleRecord*> processedRecords;
+    std::unordered_set<const ReshapeAssembleRecord*> processedRecords;
     for (const auto& record : reshapeAssembleRecords_) {
-        if (std::find(processedRecords.begin(), processedRecords.end(), &record) != processedRecords.end()) {
+        if (processedRecords.count(&record) != 0) {
             continue;
         }
 
@@ -972,8 +967,8 @@ void ViewReshapeAssembleReorderUtils::AppendReshapeAssembleRecords(Function& fun
             }
         }
 
-        std::vector<SymbolicScalar> assembleOutputDynShape;
-        std::vector<SymbolicScalar> finalOutputDynShape;
+        SymbolicShape assembleOutputDynShape;
+        SymbolicShape finalOutputDynShape;
         for (const auto* groupRecord : group) {
             CreateAssemble(function, groupRecord->input, record.assembleOutput, groupRecord->assembleOffset,
                            groupRecord->assembleDynOffset, groupRecord->input->GetDynValidShape(),
@@ -982,13 +977,11 @@ void ViewReshapeAssembleReorderUtils::AppendReshapeAssembleRecords(Function& fun
             MergeValidShape(groupRecord->outputDynShape, finalOutputDynShape);
             groupRecord->reshapeOp->SetAsDeleted();
             groupRecord->assembleOp->SetAsDeleted();
-            processedRecords.emplace_back(groupRecord);
+            processedRecords.insert(groupRecord);
         }
         if (!assembleOutputDynShape.empty()) {
             record.assembleOutput->UpdateDynValidShape(assembleOutputDynShape);
-            if (record.assembleOutput->GetRawTensor() != nullptr &&
-                record.assembleOutput->GetRawTensor()->GetDynRawShape().size() == assembleOutputDynShape.size() &&
-                HasNegativeDynDim(record.assembleOutput->GetRawTensor()->GetDynRawShape())) {
+            if (HasNegativeDynRawShape(record.assembleOutput, assembleOutputDynShape)) {
                 record.assembleOutput->GetRawTensor()->UpdateDynRawShape(assembleOutputDynShape);
             }
         }
@@ -1009,9 +1002,9 @@ void ViewReshapeAssembleReorderUtils::AppendReshapeAssembleFaninRecords(Function
                            faninAssemble.span, faninAssemble.scopeInfo, *record.assembleOp);
             faninAssemble.assembleOp->SetAsDeleted();
         }
-        std::vector<SymbolicScalar> reshapeInputDynShape;
+        SymbolicShape reshapeInputDynShape;
         for (const auto& faninAssemble : record.faninAssembles) {
-            std::vector<SymbolicScalar> candidate;
+            SymbolicShape candidate;
             if (BuildAssembledValidShape(faninAssemble.assembleOffset, faninAssemble.assembleDynOffset,
                                          faninAssemble.inputDynShape, record.reshapeInput->GetShape().size(),
                                          candidate)) {
@@ -1035,9 +1028,7 @@ void ViewReshapeAssembleReorderUtils::CleanUp(Function& function)
     function.SortOperations(SortOperationsMode::LIGHTWEIGHT);
 }
 
-bool ViewReshapeAssembleReorderUtils::BuildAxisPlan(const std::vector<int64_t>& srcShape,
-                                                    const std::vector<int64_t>& dstShape,
-                                                    std::vector<AxisGroup>& axisPlan)
+bool ViewReshapeAssembleReorderUtils::BuildAxisPlan(const Shape& srcShape, const Shape& dstShape, AxisPlan& axisPlan)
 {
     if (!HasConcreteShape(srcShape) || !HasConcreteShape(dstShape)) {
         return false;
@@ -1045,11 +1036,9 @@ bool ViewReshapeAssembleReorderUtils::BuildAxisPlan(const std::vector<int64_t>& 
     return BuildAxisPlanAllowFirstUnknown(srcShape, dstShape, axisPlan);
 }
 
-bool ViewReshapeAssembleReorderUtils::ApplyForwardShape(const std::vector<int64_t>& baseShape,
-                                                        const std::vector<SymbolicScalar>& baseDynShape,
-                                                        const std::vector<AxisGroup>& axisPlan,
-                                                        std::vector<int64_t>& newShape,
-                                                        std::vector<SymbolicScalar>& newDynShape)
+bool ViewReshapeAssembleReorderUtils::ApplyForwardShape(const Shape& baseShape, const SymbolicShape& baseDynShape,
+                                                        const AxisPlan& axisPlan, Shape& newShape,
+                                                        SymbolicShape& newDynShape)
 {
     newShape.clear();
     newDynShape.clear();
@@ -1079,11 +1068,9 @@ bool ViewReshapeAssembleReorderUtils::ApplyForwardShape(const std::vector<int64_
     return HasOnlyFirstUnknownDim(newShape);
 }
 
-bool ViewReshapeAssembleReorderUtils::ApplyBackwardShape(const std::vector<int64_t>& baseShape,
-                                                         const std::vector<SymbolicScalar>& baseDynShape,
-                                                         const std::vector<AxisGroup>& axisPlan,
-                                                         std::vector<int64_t>& newShape,
-                                                         std::vector<SymbolicScalar>& newDynShape)
+bool ViewReshapeAssembleReorderUtils::ApplyBackwardShape(const Shape& baseShape, const SymbolicShape& baseDynShape,
+                                                         const AxisPlan& axisPlan, Shape& newShape,
+                                                         SymbolicShape& newDynShape)
 {
     newShape.clear();
     newDynShape.clear();
@@ -1113,12 +1100,10 @@ bool ViewReshapeAssembleReorderUtils::ApplyBackwardShape(const std::vector<int64
     return HasOnlyFirstUnknownDim(newShape);
 }
 
-bool ViewReshapeAssembleReorderUtils::RemapOffset(const std::vector<int64_t>& oldOffset,
-                                                  const std::vector<SymbolicScalar>& oldDynOffset,
-                                                  const std::vector<int64_t>& oldShape,
-                                                  const std::vector<SymbolicScalar>& oldDynShape,
-                                                  const std::vector<int64_t>& newShape,
-                                                  const std::vector<SymbolicScalar>& newDynShape, RemapResult& result)
+bool ViewReshapeAssembleReorderUtils::RemapOffset(const Offset& oldOffset, const SymbolicOffset& oldDynOffset,
+                                                  const Shape& oldShape, const SymbolicShape& oldDynShape,
+                                                  const Shape& newShape, const SymbolicShape& newDynShape,
+                                                  RemapResult& result)
 {
     if (oldOffset.size() != oldShape.size() || oldShape.size() != oldDynShape.size() ||
         newShape.size() != newDynShape.size()) {
@@ -1132,12 +1117,10 @@ bool ViewReshapeAssembleReorderUtils::RemapOffset(const std::vector<int64_t>& ol
 }
 
 bool ViewReshapeAssembleReorderUtils::RemapFanoutViewOffset(
-    const std::vector<int64_t>& baseViewOffset, const std::vector<SymbolicScalar>& baseViewDynOffset,
-    const std::vector<int64_t>& fanoutOffset, const std::vector<SymbolicScalar>& fanoutDynOffset,
-    const std::vector<int64_t>& compactShape, const std::vector<SymbolicScalar>& compactDynShape,
-    const std::vector<int64_t>& middleShape, const std::vector<SymbolicScalar>& middleDynShape,
-    const std::vector<int64_t>& inputShape, const std::vector<SymbolicScalar>& inputDynShape,
-    const std::vector<int64_t>& newShape, const std::vector<SymbolicScalar>& newDynShape, RemapResult& result)
+    const Offset& baseViewOffset, const SymbolicOffset& baseViewDynOffset, const Offset& fanoutOffset,
+    const SymbolicOffset& fanoutDynOffset, const Shape& compactShape, const SymbolicShape& compactDynShape,
+    const Shape& middleShape, const SymbolicShape& middleDynShape, const Shape& inputShape,
+    const SymbolicShape& inputDynShape, const Shape& newShape, const SymbolicShape& newDynShape, RemapResult& result)
 {
     if (fanoutOffset.size() != compactShape.size() || compactShape.size() != compactDynShape.size() ||
         baseViewOffset.size() != middleShape.size() || middleShape.size() != middleDynShape.size() ||
@@ -1164,12 +1147,10 @@ bool ViewReshapeAssembleReorderUtils::RemapFanoutViewOffset(
 }
 
 bool ViewReshapeAssembleReorderUtils::RemapFaninAssembleOffset(
-    const std::vector<int64_t>& inputAssembleOffset, const std::vector<SymbolicScalar>& inputAssembleDynOffset,
-    const std::vector<int64_t>& outputAssembleOffset, const std::vector<SymbolicScalar>& outputAssembleDynOffset,
-    const std::vector<int64_t>& compactShape, const std::vector<SymbolicScalar>& compactDynShape,
-    const std::vector<int64_t>& middleShape, const std::vector<SymbolicScalar>& middleDynShape,
-    const std::vector<int64_t>& outputShape, const std::vector<SymbolicScalar>& outputDynShape,
-    const std::vector<int64_t>& newShape, const std::vector<SymbolicScalar>& newDynShape, RemapResult& result)
+    const Offset& inputAssembleOffset, const SymbolicOffset& inputAssembleDynOffset, const Offset& outputAssembleOffset,
+    const SymbolicOffset& outputAssembleDynOffset, const Shape& compactShape, const SymbolicShape& compactDynShape,
+    const Shape& middleShape, const SymbolicShape& middleDynShape, const Shape& outputShape,
+    const SymbolicShape& outputDynShape, const Shape& newShape, const SymbolicShape& newDynShape, RemapResult& result)
 {
     if (inputAssembleOffset.size() != compactShape.size() || compactShape.size() != compactDynShape.size() ||
         outputAssembleOffset.size() != middleShape.size() || middleShape.size() != middleDynShape.size() ||
@@ -1195,9 +1176,8 @@ bool ViewReshapeAssembleReorderUtils::RemapFaninAssembleOffset(
     return true;
 }
 
-bool ViewReshapeAssembleReorderUtils::IsContiguousRegion(const std::vector<int64_t>& offset,
-                                                         const std::vector<int64_t>& regionShape,
-                                                         const std::vector<int64_t>& baseShape)
+bool ViewReshapeAssembleReorderUtils::IsContiguousRegion(const Offset& offset, const Shape& regionShape,
+                                                         const Shape& baseShape)
 {
     if (offset.size() != regionShape.size() || regionShape.size() != baseShape.size()) {
         return false;
@@ -1226,9 +1206,8 @@ bool ViewReshapeAssembleReorderUtils::IsContiguousRegion(const std::vector<int64
     return baseShape.empty();
 }
 
-bool ViewReshapeAssembleReorderUtils::IsLinearizedContiguousRegion(const std::vector<int64_t>& offset,
-                                                                   const std::vector<int64_t>& regionShape,
-                                                                   const std::vector<int64_t>& baseShape)
+bool ViewReshapeAssembleReorderUtils::IsLinearizedContiguousRegion(const Offset& offset, const Shape& regionShape,
+                                                                   const Shape& baseShape)
 {
     if (offset.size() != regionShape.size() || regionShape.size() != baseShape.size() ||
         !HasConcreteShape(regionShape) || !HasConcreteShape(baseShape)) {
@@ -1253,10 +1232,8 @@ bool ViewReshapeAssembleReorderUtils::IsLinearizedContiguousRegion(const std::ve
     return crossesBaseDim && linearOffset + regionElements <= baseElements;
 }
 
-bool ViewReshapeAssembleReorderUtils::AreCollapsedGroupsContiguous(const std::vector<int64_t>& offset,
-                                                                   const std::vector<int64_t>& regionShape,
-                                                                   const std::vector<int64_t>& baseShape,
-                                                                   const std::vector<AxisGroup>& axisPlan,
+bool ViewReshapeAssembleReorderUtils::AreCollapsedGroupsContiguous(const Offset& offset, const Shape& regionShape,
+                                                                   const Shape& baseShape, const AxisPlan& axisPlan,
                                                                    bool useSrcGroup)
 {
     if (offset.size() != regionShape.size() || regionShape.size() != baseShape.size()) {
@@ -1276,9 +1253,9 @@ bool ViewReshapeAssembleReorderUtils::AreCollapsedGroupsContiguous(const std::ve
         if (begin > end || end > offset.size()) {
             return false;
         }
-        std::vector<int64_t> groupOffset(offset.begin() + begin, offset.begin() + end);
-        std::vector<int64_t> groupRegionShape(regionShape.begin() + begin, regionShape.begin() + end);
-        std::vector<int64_t> groupBaseShape(baseShape.begin() + begin, baseShape.begin() + end);
+        Offset groupOffset(offset.begin() + begin, offset.begin() + end);
+        Shape groupRegionShape(regionShape.begin() + begin, regionShape.begin() + end);
+        Shape groupBaseShape(baseShape.begin() + begin, baseShape.begin() + end);
         if (!IsContiguousRegion(groupOffset, groupRegionShape, groupBaseShape)) {
             return false;
         }
@@ -1286,8 +1263,7 @@ bool ViewReshapeAssembleReorderUtils::AreCollapsedGroupsContiguous(const std::ve
     return true;
 }
 
-bool ViewReshapeAssembleReorderUtils::GetSymbolicShape(const LogicalTensorPtr& tensor,
-                                                       std::vector<SymbolicScalar>& dynShape)
+bool ViewReshapeAssembleReorderUtils::GetSymbolicShape(const LogicalTensorPtr& tensor, SymbolicShape& dynShape)
 {
     if (tensor == nullptr) {
         return false;
@@ -1311,26 +1287,25 @@ bool ViewReshapeAssembleReorderUtils::GetSymbolicShape(const LogicalTensorPtr& t
     return false;
 }
 
-bool ViewReshapeAssembleReorderUtils::GetChainSymbolicShapes(const ChainMatch& match,
-                                                             std::vector<SymbolicScalar>& inputDynShape,
-                                                             std::vector<SymbolicScalar>& middleDynShape,
-                                                             std::vector<SymbolicScalar>& outputDynShape)
+bool ViewReshapeAssembleReorderUtils::GetChainSymbolicShapes(const ChainMatch& match, SymbolicShape& inputDynShape,
+                                                             SymbolicShape& middleDynShape,
+                                                             SymbolicShape& outputDynShape)
 {
     return GetSymbolicShape(match.input, inputDynShape) && GetSymbolicShape(match.middle, middleDynShape) &&
            GetSymbolicShape(match.output, outputDynShape);
 }
 
-std::vector<SymbolicScalar> ViewReshapeAssembleReorderUtils::GetSymbolicShapeOrStatic(const LogicalTensorPtr& tensor)
+SymbolicShape ViewReshapeAssembleReorderUtils::GetSymbolicShapeOrStatic(const LogicalTensorPtr& tensor)
 {
-    std::vector<SymbolicScalar> dynShape;
+    SymbolicShape dynShape;
     if (GetSymbolicShape(tensor, dynShape)) {
         return dynShape;
     }
-    return tensor == nullptr ? std::vector<SymbolicScalar>() : ShapeToSymbolic(tensor->GetShape());
+    return tensor == nullptr ? SymbolicShape() : ShapeToSymbolic(tensor->GetShape());
 }
 
-std::vector<SymbolicScalar> ViewReshapeAssembleReorderUtils::NormalizeDynOffset(
-    const std::vector<int64_t>& offset, const std::vector<SymbolicScalar>& dynOffset)
+SymbolicOffset ViewReshapeAssembleReorderUtils::NormalizeDynOffset(const Offset& offset,
+                                                                   const SymbolicOffset& dynOffset)
 {
     if (dynOffset.size() == offset.size()) {
         return dynOffset;
@@ -1338,11 +1313,9 @@ std::vector<SymbolicScalar> ViewReshapeAssembleReorderUtils::NormalizeDynOffset(
     return ShapeToSymbolic(offset);
 }
 
-bool ViewReshapeAssembleReorderUtils::BuildAssembledValidShape(const std::vector<int64_t>& offset,
-                                                               const std::vector<SymbolicScalar>& dynOffset,
-                                                               const std::vector<SymbolicScalar>& inputDynShape,
-                                                               size_t outputRank,
-                                                               std::vector<SymbolicScalar>& outputDynShape)
+bool ViewReshapeAssembleReorderUtils::BuildAssembledValidShape(const Offset& offset, const SymbolicOffset& dynOffset,
+                                                               const SymbolicShape& inputDynShape, size_t outputRank,
+                                                               SymbolicShape& outputDynShape)
 {
     if (offset.size() != outputRank || inputDynShape.size() != outputRank) {
         return false;
@@ -1359,8 +1332,7 @@ bool ViewReshapeAssembleReorderUtils::BuildAssembledValidShape(const std::vector
     return true;
 }
 
-bool ViewReshapeAssembleReorderUtils::MergeValidShape(const std::vector<SymbolicScalar>& candidate,
-                                                      std::vector<SymbolicScalar>& merged)
+bool ViewReshapeAssembleReorderUtils::MergeValidShape(const SymbolicShape& candidate, SymbolicShape& merged)
 {
     if (merged.empty()) {
         merged = candidate;
