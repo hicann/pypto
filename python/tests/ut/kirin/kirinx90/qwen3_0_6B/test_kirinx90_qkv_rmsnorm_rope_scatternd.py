@@ -20,43 +20,46 @@ from kirin.common_qkv_rmsnorm_rope_scatternd import (
 )
 import pytest
 
+KERNELS = create_fused_qkv_kernels("KirinX90")
 
-def create_test_module(soc_version):
-    kernels = {"fused_qkv_kernel_fp16": create_fused_qkv_kernels(soc_version)}
 
-    @pytest.mark.parametrize(
-        "dtype,q_input_shape,k_input_shape,v_input_shape,cos_shape,"
-        "sin_shape,past_key_shape,past_value_shape,indices_shape",
-        TEST_CASES,
-    )
-    def _test_qkv_fused(
+@pytest.mark.parametrize(
+    "kernel_name,dtype,q_input_shape,k_input_shape,v_input_shape,q_gamma_shape,k_gamma_shape,"
+    "cos_shape,sin_shape,past_key_shape,past_value_shape,indices_shape,tiles,rope_tiles,index_len",
+    TEST_CASES,
+)
+def test_qkv_fused(
+    kernel_name,
+    dtype,
+    q_input_shape,
+    k_input_shape,
+    v_input_shape,
+    q_gamma_shape,
+    k_gamma_shape,
+    cos_shape,
+    sin_shape,
+    past_key_shape,
+    past_value_shape,
+    indices_shape,
+    tiles,
+    rope_tiles,
+    index_len,
+):
+    run_qkv_fused_test(
+        KERNELS,
+        kernel_name,
         dtype,
         q_input_shape,
         k_input_shape,
         v_input_shape,
+        q_gamma_shape,
+        k_gamma_shape,
         cos_shape,
         sin_shape,
         past_key_shape,
         past_value_shape,
         indices_shape,
-    ):
-        run_qkv_fused_test(
-            kernels,
-            dtype,
-            q_input_shape,
-            k_input_shape,
-            v_input_shape,
-            cos_shape,
-            sin_shape,
-            past_key_shape,
-            past_value_shape,
-            indices_shape,
-        )
-
-    return _test_qkv_fused
-
-
-test_qkv_fused = create_test_module("KirinX90")
+    )
 
 
 if __name__ == "__main__":

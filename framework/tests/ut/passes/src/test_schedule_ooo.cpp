@@ -29,6 +29,7 @@
 #include "tilefwk/platform.h"
 #include "tilefwk/tilefwk.h"
 #define private public
+#define protected public
 #include "computational_graph_builder.h"
 #include "passes/block_graph_pass/schedule_ooo/common/dep_manager.h"
 #include "passes/block_graph_pass/schedule_ooo/common/iso_matcher.h"
@@ -2196,8 +2197,8 @@ TEST_F(ScheduleOoOTest, TestBufferPollRearrange)
     oooSchedule.state_.tensorOccupyMap[1] = alloc1;
     oooSchedule.state_.tensorOccupyMap[2] = alloc2;
 
-    oooSchedule.state_.localBufferMap[1] = std::make_shared<LocalBuffer>(1, 65536, MemoryType::MEM_UB);
-    oooSchedule.state_.localBufferMap[2] = std::make_shared<LocalBuffer>(2, 98304, MemoryType::MEM_UB);
+    oooSchedule.state_.localBufferMap[1] = std::make_shared<LocalBuffer>(1, 65536, 0, MemoryType::MEM_UB);
+    oooSchedule.state_.localBufferMap[2] = std::make_shared<LocalBuffer>(2, 98304, 0, MemoryType::MEM_UB);
     EXPECT_EQ(oooSchedule.RearrangeBuffer(alloc3, MemoryType::MEM_UB), SUCCESS);
     auto& ubPool = oooSchedule.state_.bufferManagerMap[corePair][MemoryType::MEM_UB];
     EXPECT_EQ(ubPool.GetBufferSize(1), 65536);
@@ -2209,7 +2210,7 @@ TEST_F(ScheduleOoOTest, TestBufferPollRearrange)
 TEST_F(ScheduleOoOTest, TestBufferPoolMakeBufferSliceAlreadyAlloc)
 {
     BufferPool pool(MemoryType::MEM_UB, 1024);
-    auto tensor = std::make_shared<LocalBuffer>(1, 64, MemoryType::MEM_UB);
+    auto tensor = std::make_shared<LocalBuffer>(1, 64, 0, MemoryType::MEM_UB);
     BufferSlice slice1(0, 64);
     EXPECT_EQ(pool.MakeBufferSlice(tensor, slice1), SUCCESS);
     BufferSlice slice2(128, 64);
@@ -2219,16 +2220,16 @@ TEST_F(ScheduleOoOTest, TestBufferPoolMakeBufferSliceAlreadyAlloc)
 TEST_F(ScheduleOoOTest, TestBufferPoolAllocateNoFreeSpace)
 {
     BufferPool pool(MemoryType::MEM_UB, 256);
-    auto tensor1 = std::make_shared<LocalBuffer>(1, 256, MemoryType::MEM_UB);
+    auto tensor1 = std::make_shared<LocalBuffer>(1, 256, 0, MemoryType::MEM_UB);
     EXPECT_EQ(pool.Allocate(tensor1), SUCCESS);
-    auto tensor2 = std::make_shared<LocalBuffer>(2, 64, MemoryType::MEM_UB);
+    auto tensor2 = std::make_shared<LocalBuffer>(2, 64, 0, MemoryType::MEM_UB);
     EXPECT_EQ(pool.Allocate(tensor2), FAILED);
 }
 
 TEST_F(ScheduleOoOTest, TestBufferRearrangeSingleBubble)
 {
     BufferPool pool(MemoryType::MEM_UB, 100);
-    auto tensor = std::make_shared<LocalBuffer>(1, 50, MemoryType::MEM_UB);
+    auto tensor = std::make_shared<LocalBuffer>(1, 50, 0, MemoryType::MEM_UB);
     BufferSlice s1(0, 50);
     EXPECT_EQ(pool.MakeBufferSlice(tensor, s1), SUCCESS);
     RearrangeScheme scheme = GetRearrangeScheme(pool, 50);
@@ -2275,10 +2276,10 @@ TEST_F(ScheduleOoOTest, TestSpillOnBlockFailedAtL0)
     oooSchedule.state_.allocIssueQueue[corePair][MemoryType::MEM_L0B].Insert(AllocL0B);
     oooSchedule.state_.tensorOccupyMap.emplace(1, L1toL0A);
     oooSchedule.state_.tensorOccupyMap.emplace(2, L1toL0B);
-    oooSchedule.state_.localBufferMap[1] = std::make_shared<LocalBuffer>(1, 32768, MemoryType::MEM_L0A);
-    oooSchedule.state_.localBufferMap[2] = std::make_shared<LocalBuffer>(2, 32768, MemoryType::MEM_L0B);
-    oooSchedule.state_.localBufferMap[3] = std::make_shared<LocalBuffer>(3, 32768, MemoryType::MEM_L0A);
-    oooSchedule.state_.localBufferMap[4] = std::make_shared<LocalBuffer>(4, 32768, MemoryType::MEM_L0B);
+    oooSchedule.state_.localBufferMap[1] = std::make_shared<LocalBuffer>(1, 32768, 0, MemoryType::MEM_L0A);
+    oooSchedule.state_.localBufferMap[2] = std::make_shared<LocalBuffer>(2, 32768, 0, MemoryType::MEM_L0B);
+    oooSchedule.state_.localBufferMap[3] = std::make_shared<LocalBuffer>(3, 32768, 0, MemoryType::MEM_L0A);
+    oooSchedule.state_.localBufferMap[4] = std::make_shared<LocalBuffer>(4, 32768, 0, MemoryType::MEM_L0B);
     oooSchedule.state_.localBufferMap[1]->start = 512;
     oooSchedule.state_.localBufferMap[1]->end = 33280;
     oooSchedule.state_.localBufferMap[2]->start = 512;
@@ -2714,7 +2715,7 @@ Operation* AddAivUbAlloc(Function& function, OoOScheduler& scheduler, CoreLocati
     info.isRetired = false;
     info.coreLocation = core;
     scheduler.state_.SetOpMemIds(alloc, {memId});
-    scheduler.state_.localBufferMap[memId] = std::make_shared<LocalBuffer>(memId, allocSize, MemoryType::MEM_UB);
+    scheduler.state_.localBufferMap[memId] = std::make_shared<LocalBuffer>(memId, allocSize, 0, MemoryType::MEM_UB);
     scheduler.state_.bufRefCount[memId] = 2;
     return alloc;
 }
@@ -2855,8 +2856,8 @@ Status FillAivPoolsWithPlaceholderBuffers(OoOScheduler& s, const DualDstGraph& g
     auto& poolB = s.state_.bufferManagerMap[CoreLocationType::AIV1][MemoryType::MEM_UB];
     if (poolA.GetMemSize() < needSize || poolB.GetMemSize() < needSize)
         return FAILED;
-    auto bufHolderA = std::make_shared<LocalBuffer>(memIdA, needSize, MemoryType::MEM_UB);
-    auto bufHolderB = std::make_shared<LocalBuffer>(memIdB, needSize, MemoryType::MEM_UB);
+    auto bufHolderA = std::make_shared<LocalBuffer>(memIdA, needSize, 0, MemoryType::MEM_UB);
+    auto bufHolderB = std::make_shared<LocalBuffer>(memIdB, needSize, 0, MemoryType::MEM_UB);
     if (poolA.AllocateAtOffset(bufHolderA, 0) != SUCCESS || poolB.AllocateAtOffset(bufHolderB, 0) != SUCCESS)
         return FAILED;
     s.state_.tensorOccupyMap[memIdA] = g.add0;
@@ -3694,7 +3695,7 @@ TEST_F(ScheduleOoOTest, DualDst_AivUbAllocUsesMatchedPeerOffset)
     s.state_.bufferManagerMap[CoreLocationType::AIV1][MemoryType::MEM_UB] = BufferPool(MemoryType::MEM_UB, kPoolSize);
     auto& aiv0Pool = s.state_.bufferManagerMap[CoreLocationType::AIV0][MemoryType::MEM_UB];
     auto& aiv1Pool = s.state_.bufferManagerMap[CoreLocationType::AIV1][MemoryType::MEM_UB];
-    auto placeholder = std::make_shared<LocalBuffer>(kPlaceholderMemId, kPlaceholderSize, MemoryType::MEM_UB);
+    auto placeholder = std::make_shared<LocalBuffer>(kPlaceholderMemId, kPlaceholderSize, 0, MemoryType::MEM_UB);
     ASSERT_EQ(aiv0Pool.AllocateAtOffset(placeholder, 0), SUCCESS);
 
     Operation* aiv0Alloc = dualdst_ut::AddAivUbAlloc(*g.func, s, CoreLocationType::AIV0, kAllocSize);
@@ -4234,8 +4235,8 @@ TEST_F(ScheduleOoOTest, DualDst_GetDualSpillGroup_FindsSharedStartAddrCandidate)
     ASSERT_GE(poolA.GetMemSize(), kBufSize);
     ASSERT_GE(poolB.GetMemSize(), kBufSize);
 
-    auto bufA = std::make_shared<LocalBuffer>(kBufMemIdA, kBufSize, MemoryType::MEM_UB);
-    auto bufB = std::make_shared<LocalBuffer>(kBufMemIdB, kBufSize, MemoryType::MEM_UB);
+    auto bufA = std::make_shared<LocalBuffer>(kBufMemIdA, kBufSize, 0, MemoryType::MEM_UB);
+    auto bufB = std::make_shared<LocalBuffer>(kBufMemIdB, kBufSize, 0, MemoryType::MEM_UB);
     ASSERT_EQ(poolA.AllocateAtOffset(bufA, 0), SUCCESS);
     ASSERT_EQ(poolB.AllocateAtOffset(bufB, 0), SUCCESS);
 
@@ -4258,8 +4259,8 @@ TEST_F(ScheduleOoOTest, DualDst_GetDualSpillGroup_NeedSizeExceedsPoolReturnsEmpt
 
     constexpr int kBufMemIdA = 80003;
     constexpr int kBufMemIdB = 80004;
-    auto bufA = std::make_shared<LocalBuffer>(kBufMemIdA, 1024, MemoryType::MEM_UB);
-    auto bufB = std::make_shared<LocalBuffer>(kBufMemIdB, 1024, MemoryType::MEM_UB);
+    auto bufA = std::make_shared<LocalBuffer>(kBufMemIdA, 1024, 0, MemoryType::MEM_UB);
+    auto bufB = std::make_shared<LocalBuffer>(kBufMemIdB, 1024, 0, MemoryType::MEM_UB);
     ASSERT_EQ(poolA.AllocateAtOffset(bufA, 0), SUCCESS);
     ASSERT_EQ(poolB.AllocateAtOffset(bufB, 0), SUCCESS);
 

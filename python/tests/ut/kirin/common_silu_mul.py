@@ -25,53 +25,71 @@ def silu_mul_golden(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     return x * torch.sigmoid(x) * y
 
 
-def create_silu_mul_kernels(soc_version):
-    """Factory function to create silu_mul kernels with specified soc_version."""
-
+def make_silu_mul_kernel(soc_version, name, dtype, tile_shapes):
     @pypto.frontend.jit(codegen_options={"soc_version": soc_version}, runtime_options={"run_mode": pypto.RunMode.SIM})
-    def silu_mul_fp16(
-        x: pypto.Tensor([64, 3072], pypto.DT_FP16),
-        y: pypto.Tensor([64, 3072], pypto.DT_FP16),
-        output: pypto.Tensor([64, 3072], pypto.DT_FP16),
+    def kernel(
+        x: pypto.Tensor([...], dtype),
+        y: pypto.Tensor([...], dtype),
+        output: pypto.Tensor([...], dtype),
     ):
-        pypto.set_vec_tile_shapes(32, 256)
+        pypto.set_vec_tile_shapes(*tile_shapes)
         sigmoid_x = pypto.sigmoid(x)
         silu_x = pypto.mul(x, sigmoid_x)
         output[:] = pypto.mul(silu_x, y)
 
-    kernels = {"silu_mul_fp16": silu_mul_fp16}
-    return kernels
+    kernel.__name__ = name
+    return kernel
 
 
 TEST_CASES = [
-    # shape: input tensor shape (x and y have same shape)
+    # kernel_name: name of the kernel
     # torch_dtype: torch data type (float16)
+    # pypto_dtype: pypto data type
+    # tile_shapes: tile shape for pypto kernel
+    # shape: input tensor shape (x and y have same shape)
     # marks: pytest marks
-    # - shape: input tensor shape
-    # - torch_dtype: torch data type (float16)
-    # - marks: pytest marks (e.g., pytest.mark.skip())
     pytest.param(
-        (64, 3072),
+        "silu_mul_prefill",
         torch.float16,
-        marks=[],
+        pypto.DT_FP16,
+        (1, 3072),
+        (64, 3072),
+        marks=[pytest.mark.skip()],
         id="001",
+    ),
+    pytest.param(
+        "silu_mul_decoder",
+        torch.float16,
+        pypto.DT_FP16,
+        (1, 768),
+        (1, 3072),
+        marks=[pytest.mark.skip()],
+        id="002",
     ),
 ]
 
 
-def run_silu_mul_test(kernels, shape, dtype):
-    x = torch.rand(shape, dtype=dtype, device="cpu")
-    y = torch.rand(shape, dtype=dtype, device="cpu")
-    output = torch.rand(shape, dtype=dtype, device="cpu")
+def run_silu_mul_test(kernels, kernel_name, dtype, shape):
+    device = "cpu"
+    x = torch.rand(shape, dtype=dtype, device=device)
+    y = torch.rand(shape, dtype=dtype, device=device)
+    output = torch.rand(shape, dtype=dtype, device=device)
 
     golden = silu_mul_golden(x, y)
 
-    kernels["silu_mul_fp16"](x, y, output)
+    kernels[kernel_name](x, y, output)
 
-    check_nan(output)
+    check_nan(output, name=kernel_name)
     cos_value = abs(compare_cos(np.array(output.cpu()), np.array(golden.cpu())))
     if cos_value < 0.9999:
-        raise AssertionError(f"cos_value {cos_value} < 0.9999")
+        raise AssertionError(f"{kernel_name}: cos_value {cos_value} < 0.9999")
+
+
+def create_silu_mul_kernels(soc_version):
+    return {
+        p.values[0]: make_silu_mul_kernel(soc_version, p.values[0], p.values[2], p.values[3])
+        for p in TEST_CASES
+    }
 
 
 if __name__ == "__main__":

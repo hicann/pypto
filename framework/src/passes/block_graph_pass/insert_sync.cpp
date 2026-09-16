@@ -549,6 +549,14 @@ Status PipeSync::PipeDispatch(const std::vector<Operation*>& opLogPtr, std::vect
             APASS_LOG_ERROR_F(Elements::Operation, "PipeDispatch failed at function AdjustOpCfg.");
             return FAILED;
         }
+        // for cv mix architecture, normalize all non PIPE_V instructions to AIC, to maintain consistency in a singular
+        // core since they share a singular eventid
+        PipeCoreRealEx normalizedAICOpCore(opcfg.pipeIdStart_, opcfg.coreType_, opcfg.aivCore_);
+        if (Platform::Instance().GetSoc().GetCoreWrap().IsCVMix()) {
+            normalizedAICOpCore = NormalizeToAICCoreForCVMixSync(normalizedAICOpCore);
+            opcfg.coreType_ = normalizedAICOpCore.core;
+            opcfg.aivCore_ = normalizedAICOpCore.aivCore;
+        }
         DepOp op(i, {opcfg.pipeIdStart_, opcfg.pipeIdEnd_, opcfg.coreType_, opcfg.aivCore_});
         DepOp& opRef = depOps_.emplace_back(op);
         FindDep(opRef, opLogPtr, i, dataDependencySearcher);
@@ -795,6 +803,15 @@ Status PipeSync::PopFromQueue(IssueQueue& issueQ, std::vector<size_t>& poped, bo
         issueQ.currOp++;
     }
     return SUCCESS;
+}
+
+PipeSync::PipeCoreRealEx PipeSync::NormalizeToAICCoreForCVMixSync(PipeCoreRealEx p) const
+{
+    if (p.core == CoreType::AIV && p.pipe != PipeType::PIPE_V) {
+        p.core = CoreType::AIC;
+        p.aivCore = AIVCore::UNSPECIFIED;
+    }
+    return p;
 }
 
 // check if platform architecture is mix cv core, and coreOne and coreTwo are AIV/AIC or vice versa
@@ -1139,12 +1156,7 @@ std::vector<PipeSync::PipePair> PipeSync::dataDepPair = {
 // mix aic/aiv core dependency pairs
 std::vector<PipeSync::PipePair> PipeSync::mixCVDataDepPair = {
     // PIPE_FIX->PIPE_V
-    {{PIPE_FIX, CoreType::AIC}, {PIPE_V, CoreType::AIV}},
-    // PIPE_MTE3->PIPE_MTE1
-    {{PIPE_MTE3, CoreType::AIV}, {PIPE_MTE1, CoreType::AIC}},
-    // PIPE_MTE3->PIPE_MTE2
-    {{PIPE_MTE3, CoreType::AIV}, {PIPE_MTE2, CoreType::AIC}},
-};
+    {{PIPE_FIX, CoreType::AIC}, {PIPE_V, CoreType::AIV}}};
 
 bool PipeSync::ConstructDepInfo(DataDepInfo& depInfo, std::vector<IndexOp>& syncedOpLog, int i)
 {
@@ -1355,6 +1367,20 @@ Status PipeSync::RelaxFakeDataDep(std::vector<IndexOp>& syncedOpLog)
                 dataDepPairEx.emplace_back(ppEx);
             }
         }
+    }
+
+    // for cv mix architecture, normalize all non PIPE_V instructions to AIC, to maintain consistency in a singular
+    // core since they share a singular eventid
+    if (Platform::Instance().GetSoc().GetCoreWrap().IsCVMix()) {
+        std::unordered_set<PipePairEx, PipePairExHash> seen;
+        std::vector<PipePairEx> normalized;
+        for (const auto& pe : dataDepPairEx) {
+            PipePairEx npe = {NormalizeToAICCoreForCVMixSync(pe.first), NormalizeToAICCoreForCVMixSync(pe.second)};
+            if (seen.insert(npe).second) {
+                normalized.emplace_back(npe);
+            }
+        }
+        dataDepPairEx = std::move(normalized);
     }
 
     for (const auto& pipePairEx : dataDepPairEx) {

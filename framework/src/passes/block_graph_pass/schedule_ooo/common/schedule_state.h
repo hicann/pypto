@@ -267,6 +267,7 @@ public:
     void ClearAllOpMemIds() { opReqMemIdsMap.clear(); }
     bool ReplaceOpMemId(Operation* op, int oldMemId, int newMemId);
 
+    size_t CalcTensorMemoryPaddingSize(LogicalTensorPtr tensor);
     Status InitLocalBuffer(LogicalTensorPtr oOperand, int memId);
     std::string GetOpInfo(Operation* op) const;
     Status DelBufRefCount(const int memId);

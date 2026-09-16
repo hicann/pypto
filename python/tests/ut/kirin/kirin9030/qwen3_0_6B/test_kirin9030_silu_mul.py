@@ -20,18 +20,15 @@ from kirin.common_silu_mul import (
 )
 import pytest
 
-
-def create_test_module(soc_version):
-    kernels = create_silu_mul_kernels(soc_version)
-
-    @pytest.mark.parametrize("shape,dtype", TEST_CASES)
-    def _test_silu_mul(shape, dtype):
-        run_silu_mul_test(kernels, shape, dtype)
-
-    return _test_silu_mul
+KERNELS = create_silu_mul_kernels("Kirin9030")
 
 
-test_silu_mul = create_test_module("Kirin9030")
+@pytest.mark.parametrize(
+    "kernel_name,torch_dtype,pypto_dtype,tile_shapes,shape",
+    TEST_CASES,
+)
+def test_silu_mul(kernel_name, torch_dtype, pypto_dtype, tile_shapes, shape):
+    run_silu_mul_test(KERNELS, kernel_name, torch_dtype, shape)
 
 
 if __name__ == "__main__":

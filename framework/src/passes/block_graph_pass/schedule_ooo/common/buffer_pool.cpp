@@ -223,7 +223,7 @@ void BufferPool::SelectHeadAndTail(LocalBufferPtr tensor, bool& head, bool& tail
             if (freeSpace.first == 0) {
                 head = true;
             }
-            if (freeSpace.second == memSize_) {
+            if (freeSpace.second == memSize_ && (freeSpace.first + tensor->size + tensor->paddingSize <= memSize_)) {
                 tail = true;
             }
         }
@@ -288,7 +288,7 @@ Status BufferPool::Allocate(LocalBufferPtr tensor, const std::vector<std::pair<u
 {
     // 1. 优先在 avoidRanges 中找 exact-reuse 落点（地址完全匹配某 avoid 区间，且该区间当前空闲）
     for (auto& [as, ae] : avoidRanges) {
-        if (tensor->size == ae - as && IsRangeFree(as, ae)) {
+        if (tensor->size == ae - as && as + tensor->size + tensor->paddingSize <= memSize_ && IsRangeFree(as, ae)) {
             BufferSlice newSlice(as, tensor->size);
             return MakeBufferSlice(tensor, newSlice);
         }
@@ -310,7 +310,7 @@ Status BufferPool::Allocate(LocalBufferPtr tensor, const std::vector<std::pair<u
                 return SUCCESS;
             }
         } else if (tailFree) {
-            newSlice.offset = memSize_ - tensor->size;
+            newSlice.offset = memSize_ - tensor->size - tensor->paddingSize;
             if (MakeBufferSlice(tensor, newSlice) != SUCCESS) {
                 return FAILED;
             } else {
@@ -323,6 +323,13 @@ Status BufferPool::Allocate(LocalBufferPtr tensor, const std::vector<std::pair<u
             continue;
         }
         for (auto& freeSpace : interval.second) {
+            if (freeSpace.first + tensor->size + tensor->paddingSize > memSize_) {
+                APASS_LOG_WARN_F(Elements::Tensor,
+                                 "Allocate: Tensor[%d] (offset %lu, size %lu, padding size: %lu) exceeds pool size "
+                                 "%lu. Trying next interval",
+                                 tensor->id, freeSpace.first, tensor->size, tensor->paddingSize, memSize_);
+                continue;
+            }
             BufferSlice newSlice;
             newSlice.offset = freeSpace.first;
             if (MakeBufferSlice(tensor, newSlice) != SUCCESS) {
@@ -375,7 +382,7 @@ bool BufferPool::IsFull(const LocalBufferPtr tensor, bool isMainLoop,
 {
     // avoidRanges 非空时先查 exact-reuse（该区间必须当前空闲）
     for (auto& [as, ae] : avoidRanges) {
-        if (tensor->size == ae - as && IsRangeFree(as, ae)) {
+        if (tensor->size == ae - as && as + tensor->size + tensor->paddingSize <= memSize_ && IsRangeFree(as, ae)) {
             return false;
         }
     }
@@ -392,8 +399,13 @@ bool BufferPool::IsFull(const LocalBufferPtr tensor, bool isMainLoop,
         return !(headFree || tailFree);
     }
     for (auto inter : freeSpace) {
-        if (inter.first >= tensor->size) {
-            return false;
+        if (inter.first < tensor->size) {
+            continue;
+        }
+        for (auto freeInterval : inter.second) {
+            if (freeInterval.first + tensor->size + tensor->paddingSize <= memSize_) {
+                return false;
+            }
         }
     }
     return true;
@@ -491,7 +503,12 @@ Status BufferPool::CompactBufferSlices(std::unordered_map<int, LocalBufferPtr>& 
     // 紧凑重排
     uint64_t cursor = 0;
     for (auto& it : items) {
-        if (cursor + it.second.size > memSize_) {
+        size_t padding = 0;
+        auto bufIt = localBufferMap.find(it.first);
+        if (bufIt != localBufferMap.end() && bufIt->second) {
+            padding = bufIt->second->paddingSize;
+        }
+        if (cursor + it.second.size + padding > memSize_) {
             return FAILED;
         }
         it.second.offset = cursor;
@@ -579,10 +596,11 @@ Status BufferPool::AllocateAtOffset(LocalBufferPtr tensor, uint64_t offset)
         APASS_LOG_ERROR_F(Elements::Tensor, "AllocateAtOffset: null tensor");
         return FAILED;
     }
-    if (offset + tensor->size > memSize_) {
-        APASS_LOG_ERROR_F(Elements::Tensor,
-                          "AllocateAtOffset: Tensor[%d] (offset %lu, size %lu) exceeds pool size %lu.", tensor->id,
-                          offset, tensor->size, memSize_);
+    if (offset + tensor->size + tensor->paddingSize > memSize_) {
+        APASS_LOG_WARN_F(Elements::Tensor,
+                         "AllocateAtOffset: Tensor[%d] (offset %lu, size %lu, padding size: %lu) exceeds pool size "
+                         "%lu. Handle in SpillOnBlock.",
+                         tensor->id, offset, tensor->size, tensor->paddingSize, memSize_);
         return FAILED;
     }
     if (bufferSlices.find(tensor->id) != bufferSlices.end()) {

@@ -126,42 +126,30 @@ TEST_CASES_ATTENTION = [
     # v_shape: value tensor shape
     # attn_mask_shape: attention mask shape
     # output_shape: output tensor shape
-    # vec_tile_shape: vector tile shape
+    # vec_tile_shapes: vector tile shape 1 for concat, 2 for mul/add/softmax, 3 for transpose
     # cube_tile_shapes: cube tile shapes for matmul
     # marks: pytest marks
     pytest.param(
-        "attention_mini",
-        (1, 16, 16, 16),
-        (1, 16, 16, 16),
-        (1, 16, 16, 16),
-        (1, 1, 16, 16),
-        (1, 16, 16, 16),
-        (1, 1, 16, 16),
-        ([16, 16], [16, 16], [16, 16]),
-        marks=[pytest.mark.skip()],
-        id="attention_mini",
-    ),
-    pytest.param(
         "attention_prefill",
         (1, 16, 64, 128),
-        (1, 16, 2048, 128),
-        (1, 16, 2048, 128),
+        (1, 8, 2048, 128),
+        (1, 8, 2048, 128),
         (1, 1, 64, 2048),
-        (1, 16, 64, 128),
-        (1, 1, 64, 64),
-        ([64, 64], [64, 64], [64, 64]),
+        (1, 64, 16, 128),
+        ((1, 1, 128, 128), (1, 1, 64, 128), (1, 1, 64, 128), (1, 1, 128, 128), (1, 1, 64, 128)),
+        (([64, 64], [64, 128], [128, 128]), ([64, 64], [64, 128], [128, 128])),
         marks=[pytest.mark.skip()],
         id="attention_prefill",
     ),
     pytest.param(
         "attention_decoder",
         (1, 16, 1, 128),
-        (1, 16, 2048, 128),
-        (1, 16, 2048, 128),
+        (1, 8, 2048, 128),
+        (1, 8, 2048, 128),
         (1, 1, 1, 2048),
-        (1, 16, 1, 128),
-        (1, 1, 1, 64),
-        ([16, 16], [64, 64], [64, 64]),
+        (1, 1, 16, 128),
+        ((1, 1, 128, 128), (1, 1, 1, 128), (1, 1, 1, 128), (1, 1, 128, 128), (1, 1, 1, 128)),
+        (([16, 16], [64, 128], [128, 128]), ([16, 16], [64, 128], [128, 128])),
         marks=[pytest.mark.skip()],
         id="attention_decoder",
     ),
@@ -200,7 +188,11 @@ def _make_attention_kernel(
     vec_tile = vec_tile_shape if vec_tile_shape is not None else (1, 1, 16, 16)
     cube_tile = cube_tile_shape if cube_tile_shape is not None else ([16, 16], [16, 16], [16, 16])
 
-    @pypto.frontend.jit(codegen_options={"soc_version": soc_version}, runtime_options={"run_mode": pypto.RunMode.SIM})
+    @pypto.frontend.jit(
+        codegen_options={"soc_version": soc_version},
+        runtime_options={"run_mode": pypto.RunMode.SIM},
+        pass_options={"enable_slice": False},
+    )
     def kernel(
         q: pypto.Tensor(q_shape, pypto.DT_FP16),
         k: pypto.Tensor(k_shape, pypto.DT_FP16),
@@ -208,14 +200,28 @@ def _make_attention_kernel(
         attn_mask: pypto.Tensor(attn_mask_shape, pypto.DT_FP16),
         output: pypto.Tensor(output_shape, pypto.DT_FP16),
     ):
-        pypto.set_cube_tile_shapes(*cube_tile)
-        q_k_t = pypto.matmul(q, k, pypto.DT_FP16, a_trans=False, b_trans=True)
-        pypto.set_vec_tile_shapes(*vec_tile)
+        pypto.set_vec_tile_shapes(*vec_tile[0])
+        k_reshape = pypto.reshape(k, [8, 1, 2048, 128])
+        k_concat = pypto.concat([k_reshape, k_reshape], dim=1)
+        k_concat_reshape = pypto.reshape(k_concat, [1, 16, 2048, 128])
+        pypto.set_cube_tile_shapes(*cube_tile[0])
+        q_k_t = pypto.matmul(q, k_concat_reshape, pypto.DT_FP16, a_trans=False, b_trans=True)
+        pypto.set_vec_tile_shapes(*vec_tile[1])
         q_k_t_mul = pypto.mul(q_k_t, 0.0883883461356163)
+        pypto.set_vec_tile_shapes(*vec_tile[2])
         q_k_t_mul_add = pypto.add(q_k_t_mul, attn_mask)
         softmax_q_k_t = pypto.softmax(q_k_t_mul_add, dim=-1)
-        pypto.set_cube_tile_shapes(*cube_tile)
-        output[:] = pypto.matmul(softmax_q_k_t, v, pypto.DT_FP16, a_trans=False, b_trans=False)
+        pypto.set_vec_tile_shapes(*vec_tile[3])
+        v_reshape = pypto.reshape(v, [8, 1, 2048, 128])
+        v_concat = pypto.concat([v_reshape, v_reshape], dim=1)
+        v_concat_reshape = pypto.reshape(v_concat, [1, 16, 2048, 128])
+        pypto.set_cube_tile_shapes(*cube_tile[1])
+        if q_shape[2] != 1:
+            attention_res = pypto.matmul(softmax_q_k_t, v_concat_reshape, pypto.DT_FP16, a_trans=False, b_trans=False)
+            pypto.set_vec_tile_shapes(*vec_tile[4])
+            output[:] = pypto.transpose(attention_res, 1, 2)
+        else:
+            output[:] = pypto.matmul(softmax_q_k_t, v_concat_reshape, pypto.DT_FP16, a_trans=False, b_trans=False)
 
     kernel.__name__ = name
     return kernel
@@ -257,12 +263,19 @@ def _compute_golden_4input(op_type, a, b, c):
 
 
 def _compute_golden_attention(op_type, q, k, v, attn_mask):
-    k_t = torch.transpose(k, 2, 3)
+    k_reshape = k.reshape(8, 1, 2048, 128)
+    k_concat = torch.concat([k_reshape, k_reshape], dim=1)
+    k_concat_reshape = k_concat.reshape(1, 16, 2048, 128)
+    k_t = torch.transpose(k_concat_reshape, 2, 3)
     q_k_t = torch.matmul(q, k_t)
     q_k_t_mul = torch.mul(q_k_t, 0.0883883461356163)
     q_k_t_mul_add = torch.add(q_k_t_mul, attn_mask)
     softmax = torch.softmax(q_k_t_mul_add, -1)
-    return torch.matmul(softmax, v)
+    v_reshape = v.reshape(8, 1, 2048, 128)
+    v_concat = torch.concat([v_reshape, v_reshape], dim=1)
+    v_concat_reshape = v_concat.reshape(1, 16, 2048, 128)
+    attention_res = torch.matmul(softmax, v_concat_reshape)
+    return torch.transpose(attention_res, 1, 2)
 
 
 def run_4input_test(kernels, op_type, shapes):
@@ -285,10 +298,10 @@ def run_attention_test(kernels, op_type, shapes):
     k = torch.rand(shapes[1], dtype=torch.float16, device="cpu")
     v = torch.rand(shapes[2], dtype=torch.float16, device="cpu")
     attn_mask = torch.rand(shapes[3], dtype=torch.float16, device="cpu")
-    output = torch.rand_like(q)
+    output = torch.rand(shapes[4], dtype=torch.float16, device="cpu")
 
-    kernels[op_type](q, k, v, attn_mask, output)
     golden = _compute_golden_attention(op_type, q, k, v, attn_mask)
+    kernels[op_type](q, k, v, attn_mask, output)
 
     check_nan(output, name=op_type)
     cos_value = abs(compare_cos(np.array(output.cpu()), np.array(golden.cpu())))

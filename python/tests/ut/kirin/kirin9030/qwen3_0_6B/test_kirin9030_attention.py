@@ -35,7 +35,7 @@ def test_attention_4input(op_type, a_shape, b_shape, c_shape, out_shape, vec_til
     "op_type,q_shape,k_shape,v_shape,attn_mask_shape,output_shape,vec_tile,cube_tile", TEST_CASES_ATTENTION
 )
 def test_attention_5input(op_type, q_shape, k_shape, v_shape, attn_mask_shape, output_shape, vec_tile, cube_tile):
-    shapes = (q_shape, k_shape, v_shape, attn_mask_shape)
+    shapes = (q_shape, k_shape, v_shape, attn_mask_shape, output_shape)
     run_attention_test(KERNELS, op_type, shapes)
 
 

@@ -435,6 +435,9 @@ private:
     std::string DumpLatestPipeDepMap();
     void BuildTensorRangeMap(Operation* op);
     bool IsMixCvCore(CoreType coreOne, CoreType coreTwo);
+    // Kirin9030/KirinX90 (CVMix lite NPU): AIC (cube) 与 AIV (vector) 为同一个物理核，仅 PIPE_V 相对独立。
+    // 对非 PIPE_V 的 AIV 流水归一化为 AIC，使其与 AIC 共用同一套 eventid，避免 AIC/AIV 各自独立分配 1~7 造成冲突。
+    PipeCoreRealEx NormalizeToAICCoreForCVMixSync(PipeCoreRealEx p) const;
 
     std::vector<DepOp> depOps_;
     // Cube: MTE2, MTE1, M, FIX, Vector: MTE2, V, MTE3

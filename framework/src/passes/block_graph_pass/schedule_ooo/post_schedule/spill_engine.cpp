@@ -198,6 +198,7 @@ void SpillEngine::RegisterLocalBuffer(const LogicalTensorPtr& localTensor)
 {
     int memId = localTensor->memoryrange.memId;
     state_.localBufferMap[memId] = std::make_shared<LocalBuffer>(memId, localTensor->tensor->GetRawDataSize(),
+                                                                 state_.CalcTensorMemoryPaddingSize(localTensor),
                                                                  localTensor->GetMemoryTypeOriginal());
 }
 

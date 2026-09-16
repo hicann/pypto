@@ -44,11 +44,47 @@ bool ScheduleState::ReplaceOpMemId(Operation* op, int oldMemId, int newMemId)
     return replaced;
 }
 
+size_t ScheduleState::CalcTensorMemoryPaddingSize(LogicalTensorPtr tensor)
+{
+    if (!IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch())) {
+        return 0;
+    }
+
+    auto shape = tensor->GetShape();
+    auto dtype = tensor->Datatype();
+    int magic = tensor->GetMagic();
+    MemoryType memType = tensor->GetMemoryTypeToBe();
+
+    ASSERT(TensorErr::TENSOR_SHAPE_MISMATCH, shape.size() > 0) << "padding tensor: " << magic << " shape is empty";
+
+    const std::map<NPUArch, int> platformToVLBytesMap{
+        {NPUArch::DAV_3113, 256}, // kirin9030
+        {NPUArch::DAV_3003, 256}, // kirinx90
+    };
+
+    size_t platformVLBytes = 128; // default 128 bytes
+    auto it = platformToVLBytesMap.find(Platform::Instance().GetSoc().GetNPUArch());
+    if (it != platformToVLBytesMap.end()) {
+        platformVLBytes = it->second;
+    }
+
+    if (memType == MemoryType::MEM_UB) {
+        size_t lastDimBytes = BytesOf(dtype) * shape[shape.size() - 1];
+        size_t lastDimBytesBlockAligned = (lastDimBytes + UB_BLOCK_SIZE - 1) / UB_BLOCK_SIZE * UB_BLOCK_SIZE;
+        size_t lastDimBytesVLAligned = (lastDimBytesBlockAligned + platformVLBytes - 1) / platformVLBytes *
+                                       platformVLBytes;
+        return lastDimBytesVLAligned - lastDimBytes;
+    }
+
+    return 0;
+}
+
 Status ScheduleState::InitLocalBuffer(LogicalTensorPtr oOperand, int memId)
 {
     if (oOperand->GetMemoryTypeOriginal() >= MemoryType::MEM_DEVICE_DDR) {
         return SUCCESS;
     }
+    size_t paddingSize = CalcTensorMemoryPaddingSize(oOperand);
     if (static_cast<uint64_t>(oOperand->tensor->GetRawDataSize()) !=
         ShapeCeilAlign(oOperand->tensor->rawshape, oOperand->tensor->datatype)) {
         APASS_LOG_WARN_F(Elements::Tensor,
@@ -57,12 +93,13 @@ Status ScheduleState::InitLocalBuffer(LogicalTensorPtr oOperand, int memId)
                          oOperand->GetRawMagic());
     }
     if (localBufferMap.find(memId) == localBufferMap.end()) {
-        localBufferMap[memId] = std::make_shared<LocalBuffer>(memId, oOperand->tensor->GetRawDataSize(),
+        localBufferMap[memId] = std::make_shared<LocalBuffer>(memId, oOperand->tensor->GetRawDataSize(), paddingSize,
                                                               oOperand->GetMemoryTypeOriginal());
     } else {
         localBufferMap[memId]->size = std::max(localBufferMap[memId]->size,
                                                static_cast<uint64_t>(oOperand->tensor->GetRawDataSize()));
     }
+    localBufferMap[memId]->paddingSize = std::max(localBufferMap[memId]->paddingSize, paddingSize);
     return SUCCESS;
 }
 

@@ -39,6 +39,8 @@ struct LocalBuffer {
     size_t start{0};
     size_t end{0};
     size_t size{0};
+    size_t paddingSize{
+        0}; // used for space between end of buffer and end of hardware memory size to prevent memory address overflow
     MemoryType memType{MemoryType::MEM_UNKNOWN};
     bool operator<(const LocalBuffer& other) const
     {
@@ -51,10 +53,11 @@ struct LocalBuffer {
         return false;
     }
 
-    LocalBuffer(int tensorId, uint64_t shapeSize, MemoryType type)
+    LocalBuffer(int tensorId, uint64_t shapeSize, uint64_t shapePaddingSize, MemoryType type)
     {
         id = tensorId;
         size = shapeSize;
+        paddingSize = shapePaddingSize;
         memType = type;
     }
 };
