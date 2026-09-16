@@ -1779,7 +1779,7 @@ def jit(
 
     Args:
         arch: Target architecture ("a5", or None for auto-detect).
-        auto_mutex: If True, enable automatic mutex lock/unlock insertion.
+        auto_mutex: Boolean flag to enable automatic mutex lock/unlock insertion.
         name: Custom kernel name for build artifact path isolation.
         pipeline: PipelineConfig for automatic preload pipeline transformation.
         compile_timeout: Compilation timeout in seconds (default 600).
@@ -1796,6 +1796,9 @@ def jit(
 
         add_kernel[stream, block_dim](x, y, z)
     """
+
+    if not isinstance(auto_mutex, bool):
+        raise TypeError(f"auto_mutex must be a bool, got {type(auto_mutex).__name__}")
 
     # Build the tilingkey schema eagerly so malformed schemas fail at decoration time.
     tilingkey_schema = None
