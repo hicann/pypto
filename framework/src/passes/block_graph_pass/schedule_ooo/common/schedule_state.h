@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <climits>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <set>
 #include <sstream>
@@ -175,6 +176,23 @@ struct OpQueue {
         Operation* op = queue.front();
         queue.erase(queue.begin());
         return op;
+    }
+
+    // 弹窗降级扫描：队首被闸门拒绝时不跳过整条 queue，
+    // 向后找第一个通过 allow 判定的 op 弹出；被拒成员保持在场。
+    Operation* PopAllowing(const std::function<bool(Operation*)>& allow)
+    {
+        for (auto it = queue.begin(); it != queue.end(); ++it) {
+            if (allow(*it)) {
+                Operation* op = *it;
+                queue.erase(it);
+                if (compareFunc) {
+                    std::make_heap(queue.begin(), queue.end(), compareFunc);
+                }
+                return op;
+            }
+        }
+        return nullptr;
     }
 
     void DeleteOp(Operation* op)

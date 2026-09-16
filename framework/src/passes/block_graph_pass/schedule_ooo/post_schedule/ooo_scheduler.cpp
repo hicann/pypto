@@ -329,6 +329,21 @@ bool OoOScheduler::GateAllowsIssue(CoreLocationType coreLocation, PipeType pipeT
     return true;
 }
 
+// 关闸前置 flush 判定: 首 scope op 即将关闸时, 略等更该先发射的搬运 op。
+// drain 期间 V pipe 被 hold, 本 core 不再产生 compute retire, MTE3 新唤醒随之停止, 排空有界。
+bool OoOScheduler::ShouldDelayScopeGate(CoreLocationType coreLocation, Operation* scopeFirstOp)
+{
+    if (!issueQueues[coreLocation][PipeType::PIPE_MTE3].Empty()) {
+        return true;
+    }
+    auto& mte2Queue = issueQueues[coreLocation][PipeType::PIPE_MTE2];
+    if (!mte2Queue.Empty() &&
+        state_.schedInfoMap[mte2Queue.Front()].execOrder < state_.schedInfoMap[scopeFirstOp].execOrder) {
+        return true;
+    }
+    return false;
+}
+
 // 发射后维护闸门状态：发射 scope op 即占闸并计数，全部 scope op 已发射（发射位序已固化）则开闸。
 void OoOScheduler::UpdateVfScopeGate(CoreLocationType coreLocation, PipeType pipeType, Operation* op)
 {
@@ -353,10 +368,23 @@ Status OoOScheduler::LaunchIssueStage(int& nextCycle)
                 continue;
             }
             Operation* op = pipe.Front();
-            if (!GateAllowsIssue(coreLocation, pipeEntry.first, op)) {
+            bool allows = GateAllowsIssue(coreLocation, pipeEntry.first, op);
+            if (allows && pipeEntry.first == PipeType::PIPE_V && gateActiveScope_[coreLocation] < VF_CLUSTER_ID_START &&
+                op->GetAtomicScopeId() >= VF_CLUSTER_ID_START && ShouldDelayScopeGate(coreLocation, op)) {
+                APASS_LOG_DEBUG_F(Elements::Operation, "Delay vf scope %d gate close: drain MTE on %s.",
+                                  op->GetAtomicScopeId(), coreTypeToString(coreLocation).c_str());
                 continue;
             }
-            pipe.PopFront();
+            if (!allows) {
+                op = pipe.PopAllowing([this, coreLocation, &pipeEntry](Operation* cand) {
+                    return GateAllowsIssue(coreLocation, pipeEntry.first, cand);
+                });
+                if (op == nullptr) {
+                    continue;
+                }
+            } else {
+                pipe.PopFront();
+            }
             // 标注op的生命周期
             op->cycleStart = state_.clock;
             op->cycleEnd = state_.clock + op->GetLatency();
@@ -1467,9 +1495,10 @@ Status OoOScheduler::RearrangeBuffer(Operation* allocOp, MemoryType memType)
     return status;
 }
 
-std::vector<std::vector<int>> OoOScheduler::GetSpillGroup(BufferPool& pool, size_t sizeNeedSpill)
+std::vector<std::vector<int>> OoOScheduler::GetSpillGroup(BufferPool& pool, size_t sizeNeedSpill,
+                                                          const std::vector<std::pair<uint64_t, uint64_t>>& avoidRanges)
 {
-    return pool.GetSpillGroup(sizeNeedSpill);
+    return pool.GetSpillGroup(sizeNeedSpill, avoidRanges);
 }
 
 std::vector<OoOScheduler::DualSpillGroup> OoOScheduler::GetDualSpillGroup(BufferPool& poolA, BufferPool& poolB,
@@ -1556,7 +1585,16 @@ std::vector<int> OoOScheduler::SelectSpillBuffers(Operation* allocOp)
     LocalBufferPtr allocBuffer = state_.localBufferMap[state_.opReqMemIdsMap[allocOp][0]];
     auto coreType = state_.schedInfoMap[allocOp].coreLocation;
     auto& pool = state_.bufferManagerMap[coreType][allocBuffer->memType];
-    std::vector<std::vector<int>> canSpillGroups = GetSpillGroup(pool, allocBuffer->size);
+    // vf 受限分配的 avoidRanges: SeqSchedule 阶段登记表尚未登记, 天然为空。
+    std::vector<std::pair<uint64_t, uint64_t>> avoidRanges;
+    if (allocOp->GetAtomicScopeId() >= VF_CLUSTER_ID_START) {
+        auto it = scopeTensorRanges_.find(allocOp->GetAtomicScopeId());
+        if (it != scopeTensorRanges_.end()) {
+            avoidRanges = it->second;
+        }
+    }
+    std::vector<std::vector<int>> canSpillGroups = GetSpillGroup(pool, allocBuffer->size, avoidRanges);
+
     if (canSpillGroups.empty()) {
         return pool.GetAddrSortedBufs();
     }

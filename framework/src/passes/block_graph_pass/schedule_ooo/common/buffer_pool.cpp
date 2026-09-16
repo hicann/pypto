@@ -22,6 +22,56 @@ namespace npu::tile_fwk {
 constexpr size_t START_ADDR_IDX = 2;
 constexpr double ONE_THIRD = 1.0 / 3.0;
 
+namespace {
+// 在单个可用段内选组: 先把与段相交的 slice 裁剪进段 (spill 仍按整 tensor 粒度,
+// 裁剪只影响"腾出的可用窗口"计算), 再跑原有稠密滑窗, 锚点用段边界替代 0 / memSize_,
+// 结果追加进 canSpillGroups。
+void GetSpillGroupInRange(size_t sizeNeedSpill, const std::vector<std::tuple<int, size_t, size_t>>& allocatedBufs,
+                          size_t rangeStart, size_t rangeEnd, std::vector<std::vector<int>>& canSpillGroups)
+{
+    std::vector<std::tuple<int, size_t, size_t>> bufs;
+    for (auto& buf : allocatedBufs) {
+        size_t start = std::get<1>(buf);
+        size_t end = std::get<2>(buf);
+        if (start >= rangeEnd || end <= rangeStart) {
+            continue;
+        }
+        bufs.push_back(std::make_tuple(std::get<0>(buf), std::max(start, rangeStart), std::min(end, rangeEnd)));
+    }
+    size_t i = 0;
+    while (i < bufs.size()) {
+        size_t startAddr = (i == 0) ? rangeStart : std::get<START_ADDR_IDX>(bufs[i - 1]);
+        if ((rangeEnd - startAddr) < sizeNeedSpill) {
+            break;
+        }
+        size_t j = i;
+        while (j < bufs.size() && (std::get<1>(bufs[j]) - startAddr) < sizeNeedSpill) {
+            j += 1;
+        }
+        size_t endAddr = rangeEnd;
+        if (j < bufs.size()) {
+            endAddr = std::get<1>(bufs[j]);
+        }
+        while (i + 1 < j && (endAddr - std::get<START_ADDR_IDX>(bufs[i])) >= sizeNeedSpill) {
+            i += 1;
+        }
+        if (i == j) {
+            // 窗口内无真实 slice (可用段内空洞): 跳过, 不再硬报错。
+            APASS_LOG_DEBUG_F(Elements::Tensor, "GetSpillGroup: empty window [%lu, %lu) in [%lu, %lu), skip.",
+                              startAddr, startAddr + sizeNeedSpill, rangeStart, rangeEnd);
+            i += 1;
+            continue;
+        }
+        std::vector<int> group;
+        for (size_t k = i; k < j; k++) {
+            group.push_back(std::get<0>(bufs[k]));
+        }
+        canSpillGroups.push_back(group);
+        i += 1;
+    }
+}
+} // namespace
+
 std::map<uint64_t, uint64_t> BufferPool::GenFreeIntervals(const std::map<uint64_t, uint64_t>& occupiedSpace)
 {
     std::map<uint64_t, uint64_t> freeIntervals;
@@ -107,27 +157,33 @@ std::vector<std::tuple<int, size_t, size_t>> BufferPool::GetSortedAllocatedBufs(
     return allocatedBufs;
 }
 
-std::vector<std::vector<int>> BufferPool::GetSpillGroup(size_t sizeNeedSpill)
+std::vector<std::vector<int>> BufferPool::GetSpillGroup(size_t sizeNeedSpill,
+                                                        const std::vector<std::pair<uint64_t, uint64_t>>& avoidRanges)
 {
+    // avoid 区间对受限分配不可用, 视作池中空洞: 求其合并后的补集 (可用段),
+    // avoid 为空即单段 [0, memSize_)。
+    std::vector<std::pair<size_t, size_t>> usableSegments;
+    if (avoidRanges.empty()) {
+        usableSegments.push_back({0, memSize_});
+    } else {
+        std::vector<std::pair<uint64_t, uint64_t>> merged = avoidRanges;
+        std::sort(merged.begin(), merged.end());
+        size_t cursor = 0;
+        for (auto& [as, ae] : merged) {
+            if (as > cursor) {
+                usableSegments.push_back({cursor, static_cast<size_t>(as)});
+            }
+            cursor = std::max(cursor, static_cast<size_t>(ae));
+        }
+        if (cursor < memSize_) {
+            usableSegments.push_back({cursor, static_cast<size_t>(memSize_)});
+        }
+    }
+    // 每个可用段内裁剪后跑原有稠密滑窗。
     std::vector<std::vector<int>> canSpillGroups;
     auto allocatedBufs = GetSortedAllocatedBufs();
-    size_t i = 0;
-    while (i < allocatedBufs.size()) {
-        size_t startAddr = ObtainStartAddr(i, allocatedBufs);
-        if ((memSize_ - startAddr) < sizeNeedSpill) {
-            break;
-        }
-        size_t j = UpdateIdx(i, sizeNeedSpill, startAddr, allocatedBufs);
-        if (i == j) {
-            APASS_LOG_ERROR_F(Elements::Tensor, "Incorrect idx for allocatedBufs.");
-            return canSpillGroups;
-        }
-        std::vector<int> group;
-        for (size_t k = i; k < j; k++) {
-            group.push_back(std::get<0>(allocatedBufs[k]));
-        }
-        canSpillGroups.push_back(group);
-        i += 1;
+    for (auto& [rangeStart, rangeEnd] : usableSegments) {
+        GetSpillGroupInRange(sizeNeedSpill, allocatedBufs, rangeStart, rangeEnd, canSpillGroups);
     }
     return canSpillGroups;
 }
