@@ -2823,5 +2823,83 @@ TEST_F(TestSplitReshapePass, TestSplitReshapeLargeScaleRunTimeLimit)
     EXPECT_LT(elapsed.count(), maxElapsedMs);
 }
 
+TEST_F(TestSplitReshapePass, TestSkipSplitReshapeWithGroupReshapeNoSplitFlag)
+{
+    std::vector<int64_t> origShape = {kNumOne, kExpSix};
+    std::vector<int64_t> reshapeShape = {kNumOne, kNumOne, kExpSix};
+    std::vector<int64_t> tiledShape1 = {kNumOne, kExpFour};
+    std::vector<int64_t> tiledShape2 = {kNumTwo, kNumOne, kNumTen};
+
+    Tensor input(DT_FP32, origShape, "input");
+    Tensor output(DT_FP32, reshapeShape, "output");
+
+    FUNCTION("TestSkipSplitReshapeWithGroupNoSplitFlag")
+    {
+        TileShape::Current().SetVecTile(tiledShape1);
+        Tensor exp = Exp(input);
+        Tensor reshape = Reshape(exp, reshapeShape);
+        TileShape::Current().SetVecTile(tiledShape2);
+        output = Exp(reshape);
+    }
+
+    Function* func = Program::GetInstance().GetFunctionByRawName("TENSOR_TestSkipSplitReshapeWithGroupNoSplitFlag");
+
+    RunPassStra(*func, PassName::EXPAND_FUNCTION);
+    for (auto& op : func->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_RESHAPE) {
+            op.SetAttribute(OpAttributeKey::groupReshapeNoSplit, true);
+        }
+    }
+    int reshapeCountBefore = CountReshapeOps(func);
+    RunPassStra(*func, PassName::SPLIT_RESHAPE);
+    EXPECT_EQ(CountReshapeOps(func), reshapeCountBefore);
+}
+
+// 标志位在 tensor 图（ExpandFunction 之前）设置，验证展开后标志位不丢失且 SplitReshape 跳过拆分。
+TEST_F(TestSplitReshapePass, TestGroupReshapeNoSplitFlagSurviveExpandFunction)
+{
+    std::vector<int64_t> origShape = {kNumOne, kExpSix};
+    std::vector<int64_t> reshapeShape = {kNumOne, kNumOne, kExpSix};
+    std::vector<int64_t> tiledShape1 = {kNumOne, kExpFour};
+    std::vector<int64_t> tiledShape2 = {kNumTwo, kNumOne, kNumTen};
+
+    Tensor input(DT_FP32, origShape, "input");
+    Tensor output(DT_FP32, reshapeShape, "output");
+
+    FUNCTION("TestGroupNoSplitFlagBeforeExpand")
+    {
+        TileShape::Current().SetVecTile(tiledShape1);
+        Tensor exp = Exp(input);
+        Tensor reshape = Reshape(exp, reshapeShape);
+        TileShape::Current().SetVecTile(tiledShape2);
+        output = Exp(reshape);
+    }
+
+    Function* func = Program::GetInstance().GetFunctionByRawName("TENSOR_TestGroupNoSplitFlagBeforeExpand");
+
+    for (auto& op : func->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_RESHAPE) {
+            op.SetAttribute(OpAttributeKey::groupReshapeNoSplit, true);
+        }
+    }
+    int reshapeCountBeforeExpand = CountReshapeOps(func);
+
+    RunPassStra(*func, PassName::EXPAND_FUNCTION);
+
+    int flagCount = 0;
+    for (auto& op : func->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_RESHAPE) {
+            EXPECT_TRUE(op.HasAttr(OpAttributeKey::groupReshapeNoSplit));
+            EXPECT_TRUE(op.GetBoolAttribute(OpAttributeKey::groupReshapeNoSplit));
+            flagCount++;
+        }
+    }
+    EXPECT_EQ(flagCount, reshapeCountBeforeExpand);
+
+    int reshapeCountBefore = CountReshapeOps(func);
+    RunPassStra(*func, PassName::SPLIT_RESHAPE);
+    EXPECT_EQ(CountReshapeOps(func), reshapeCountBefore);
+}
+
 } // namespace tile_fwk
 } // namespace npu

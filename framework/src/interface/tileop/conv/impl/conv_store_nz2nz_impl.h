@@ -54,6 +54,9 @@ INLINE void TStoreConv2DNZ2NZ(T& dst, U& src, const OffsetInfo& offsetInfo, cons
     using strideDim = pto::Stride<-1, -1, -1, -1, -1>;
     using globalData = pto::GlobalTensor<typename T::Type, shapeDim, strideDim, pto::Layout::NC1HWC0>;
     // 分块搬出，每次搬出cutW大小的数据
+    if (realCutW <= 0) {
+        return;
+    }
     for (int64_t loopH = 0; loopH < (realM / realCutW); loopH++) {
         globalData dstGlobal((__gm__ typename T::Type*)(dst.GetAddr() + gmOffset),
                              shapeDim(dstShapeC1, dstShapeH, dstShapeW),
