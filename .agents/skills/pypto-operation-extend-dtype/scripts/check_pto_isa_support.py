@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+
 """Check if a dtype is supported by pto-isa for a given operation.
 
 Searches pto-isa NPU header files for static_assert type lists and

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+
 """Check if a dtype is already supported in pypto operation config.
 
 支持 dtype 的来源已由 operation 的 .cpp 源码迁移到 JSON 配置文件：
