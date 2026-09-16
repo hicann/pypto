@@ -1472,20 +1472,20 @@ TEST(BackendCceOpsTest, DebugDumpAccTileUsesWorkspace)
     EXPECT_NE(generated.find("__pypto_print_val"), std::string::npos);
 }
 
-TEST(BackendCceOpsTest, DebugPrintfExpandsUnsigned64BitValues)
+TEST(BackendCceOpsTest, DebugPrintfRewritesUnsigned64BitValues)
 {
     auto u64_type = std::make_shared<const ir::ScalarType>(ir::DataType::UINT64);
     auto decimal = MakeVar("decimal", u64_type);
     auto hexadecimal = MakeVar("hexadecimal", u64_type);
-    Kwargs kwargs = {{"format", std::string("decimal=%u hex=%#x\n")}};
+    Kwargs kwargs = {{"format", std::string("decimal=%u hex=%x\n")}};
     auto call = std::make_shared<const ir::Call>("debug.printf", std::vector<ir::ExprPtr>{decimal, hexadecimal}, kwargs,
                                                  ir::Span::Unknown());
 
     auto generated = RunCodegen("debug.printf", call);
-    EXPECT_NE(generated.find("__pypto_printf_u64_rest_"), std::string::npos);
-    EXPECT_NE(generated.find("%u%09u%09u"), std::string::npos);
-    EXPECT_NE(generated.find(">> 32"), std::string::npos);
-    EXPECT_NE(generated.find("0x%x%08x"), std::string::npos);
+    EXPECT_NE(generated.find("decimal=%llu hex=%llx"), std::string::npos);
+    EXPECT_NE(generated.find("static_cast<unsigned long long>(decimal)"), std::string::npos);
+    EXPECT_NE(generated.find("static_cast<unsigned long long>(hexadecimal)"), std::string::npos);
+    EXPECT_EQ(generated.find("pypto_printf_u64_"), std::string::npos);
 }
 
 TEST(BackendCceOpsTest, DebugPrintfRewritesPromotedScalarTypes)
@@ -1502,12 +1502,12 @@ TEST(BackendCceOpsTest, DebugPrintfRewritesPromotedScalarTypes)
         ir::Span::Unknown());
 
     auto generated = RunCodegen("debug.printf", call);
-    EXPECT_NE(generated.find("signed=%lld small=%d unsigned=%u flag=%u ptr=%lld float=%f"), std::string::npos);
+    EXPECT_NE(generated.find("signed=%lld small=%d unsigned=%u flag=%u ptr=%p float=%f"), std::string::npos);
     EXPECT_NE(generated.find("static_cast<long long>(signed_value)"), std::string::npos);
     EXPECT_NE(generated.find("static_cast<int>(small)"), std::string::npos);
     EXPECT_NE(generated.find("static_cast<unsigned int>(unsigned_value)"), std::string::npos);
     EXPECT_NE(generated.find("static_cast<unsigned int>(flag)"), std::string::npos);
-    EXPECT_NE(generated.find("static_cast<long long>((uint64_t)ptr)"), std::string::npos);
+    EXPECT_EQ(generated.find("static_cast<long long>((uint64_t)ptr)"), std::string::npos);
 }
 
 TEST(BackendCceOpsTest, DebugPrintf)
@@ -1519,7 +1519,7 @@ TEST(BackendCceOpsTest, DebugPrintf)
 
     codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
-    EXPECT_NE(generated.find("cce::printf"), std::string::npos);
+    EXPECT_NE(generated.find("pypto_printf"), std::string::npos);
 }
 
 TEST(BackendCceOpsTest, DebugAssert)
@@ -1546,7 +1546,19 @@ TEST(BackendCceOpsTest, DebugAssertWithFormatAndArgs)
     codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
     EXPECT_NE(generated.find("if (!("), std::string::npos);
-    EXPECT_NE(generated.find("cce::printf"), std::string::npos);
+    EXPECT_NE(generated.find("pypto_printf"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, DebugAssertWithTextOnlyFormat)
+{
+    Kwargs kwargs = {{"condition_text", std::string("flag")}, {"format", std::string("flag is false\n")}};
+    auto call = std::make_shared<const ir::Call>("debug.assert", std::vector<ir::ExprPtr>{MakeConstInt(1)}, kwargs,
+                                                 ir::Span::Unknown());
+    auto body = std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown());
+
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
+    auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
+    EXPECT_NE(generated.find("pypto_printf(\"flag is false\\n\")"), std::string::npos);
 }
 
 // ============================================================================

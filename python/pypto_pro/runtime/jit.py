@@ -196,7 +196,7 @@ CPP_LITERAL_PATTERN = re.compile(
     r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'',
 )
 TPRINT_CALL_PATTERN = re.compile(r"\bTPRINT\s*\(")
-CCE_PRINTF_CALL_PATTERN = re.compile(r"\bcce::printf\s*\(")
+PYPTO_PRINTF_CALL_PATTERN = re.compile(r"\bpypto_printf\s*\(")
 
 
 def _sanitize_artifact_component(value: str) -> str:
@@ -1064,7 +1064,7 @@ def _generate_caller_cpp(
 def _detect_print_debug_from_cpp(content: str) -> bool:
     """Best-effort detection for device-side debug print usage in generated C++."""
     scrubbed = CPP_LITERAL_PATTERN.sub(" ", content)
-    return bool(TPRINT_CALL_PATTERN.search(scrubbed) or CCE_PRINTF_CALL_PATTERN.search(scrubbed))
+    return bool(TPRINT_CALL_PATTERN.search(scrubbed) or PYPTO_PRINTF_CALL_PATTERN.search(scrubbed))
 
 
 def _build_bisheng_flags(
@@ -1393,9 +1393,12 @@ def _write_codegen_artifacts(result: CodegenResult) -> None:
 
 def _add_kernel_header(result: CodegenResult) -> CodegenResult:
     """Add the translation-unit header after all target sources are assembled."""
+    header = KERNEL_HEADER_SINGLE
+    if result.needs_print_debug:
+        header += "\n#define __ENABLE_ASC_PRINTF__ 1\n"
     return dataclasses.replace(
         result,
-        content=f"{KERNEL_HEADER_SINGLE}\n{result.content.lstrip()}",
+        content=f"{header}\n{result.content.lstrip()}",
     )
 
 

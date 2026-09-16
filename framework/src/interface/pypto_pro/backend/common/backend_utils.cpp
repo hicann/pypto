@@ -258,43 +258,17 @@ size_t FindPrintfConversionIndex(const std::string& format_segment)
             << "debug.printf does not support literal '%%'";
 
         size_t j = i + 1;
-        while (j < format_segment.size()) {
-            char c = format_segment[j];
-            if (c == '-' || c == '+' || c == ' ' || c == '#' || c == '0') {
-                ++j;
-            } else {
-                break;
-            }
-        }
-        while (j < format_segment.size() && std::isdigit(static_cast<unsigned char>(format_segment[j]))) {
-            ++j;
-        }
-        if (j < format_segment.size() && format_segment[j] == '.') {
-            ++j;
-            CHECK(j < format_segment.size() && std::isdigit(static_cast<unsigned char>(format_segment[j])))
-                << "debug.printf precision must be followed by digits";
-            while (j < format_segment.size() && std::isdigit(static_cast<unsigned char>(format_segment[j]))) {
-                ++j;
-            }
-        }
-
         CHECK(j < format_segment.size()) << "debug.printf format ends with an incomplete conversion";
+        CHECK(format_segment[j] != '-' && format_segment[j] != '+' && format_segment[j] != ' ' &&
+              format_segment[j] != '#' && format_segment[j] != '0' && format_segment[j] != '.' &&
+              !std::isdigit(static_cast<unsigned char>(format_segment[j])))
+            << "debug.printf does not support flags, width, or precision";
         CHECK(IsSupportedPrintfConversion(format_segment[j]))
             << "debug.printf does not support conversion '%" << format_segment[j] << "'";
         return j;
     }
     CHECK(false) << "debug.printf format segment must contain a supported conversion";
     return std::string::npos;
-}
-
-PrintfFormatParts SplitPrintfSegment(const std::string& format_segment)
-{
-    size_t conv_idx = FindPrintfConversionIndex(format_segment);
-    size_t percent_idx = format_segment.rfind('%', conv_idx);
-    INTERNAL_CHECK(percent_idx != std::string::npos)
-        << "debug.printf failed to locate '%' while splitting format segment";
-    return {format_segment.substr(0, percent_idx), format_segment.substr(percent_idx, conv_idx - percent_idx + 1),
-            format_segment.substr(conv_idx + 1)};
 }
 
 std::vector<PrintfSegment> ParsePrintfSegments(const std::string& format)

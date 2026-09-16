@@ -84,19 +84,12 @@ struct PrintfSegment {
     char conversion;
 };
 
-struct PrintfFormatParts {
-    std::string prefix;
-    std::string conversion_spec;
-    std::string suffix;
-};
-
 std::string EscapeStringLiteral(const std::string& text);
 std::string QuoteMlirStringLiteral(const std::string& text);
 std::string FormatDebugLocation(const ir::Span& span);
 std::string FormatDebugLocationHeader(const ir::Span& span, const std::string& op_name);
 bool IsSupportedPrintfConversion(char conversion);
 size_t FindPrintfConversionIndex(const std::string& format_segment);
-PrintfFormatParts SplitPrintfSegment(const std::string& format_segment);
 std::vector<PrintfSegment> ParsePrintfSegments(const std::string& format);
 
 } // namespace debug_printf

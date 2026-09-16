@@ -163,10 +163,10 @@ _DEFAULT_CCE_JIT_COMPILE_CONFIG = JitCompileConfig(
         "-I{toolkit_home}/include",
     ),
     print_debug_flags=(
-        "--cce-enable-print",
-        "-D_DEBUG",
-        "-DCCEBlockMaxSize=1048576",
-        "-DPTOAS_ENABLE_CCE_PRINT=1",
+        "-isystem",
+        "{toolkit_home}/asc/include",
+        "-isystem",
+        "{toolkit_home}/asc",
     ),
     llvm_common_args=(
         "-mllvm",

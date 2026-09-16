@@ -63,16 +63,10 @@ def printf_di_kernel(
 @pytest.mark.soc("950")
 @pypto.options(pass_options={"enable_slice": False})
 def test_printf_di():
-    """测试 pl.printf 的 %d/%i 格式说明符，验证有符号整数（bool、INT8、INT16、INT32、INT64）标量参数的打印功能。
-
-    输入：out=全零 INT32 张量[1]，flag=True，v_i8=-42，v_i16=-1234，v_i32=-56789，v_i64=-1234567890。
-    预期：kernel 内通过 %d 和 %i 各打印一行含上述参数的格式化字符串，
-    最后将 out[0] 置为 1；host 侧通过 assert out[0]==1 验证 kernel 正常执行完毕。
-    """
     _check_npu()
     logging.info("------------test_printf_di--------------")
     out = torch.zeros(1, device=ST_DEVICE, dtype=torch.int32)
-    printf_di_kernel(out, True, -42, -1234, -56789, -1234567890)
+    printf_di_kernel(out, True, -42, -1234, -56789, -1099511627776)
     torch.npu.synchronize()
     assert out.tolist()[0] == 1, f"got {out.tolist()}"
     logging.info("printf_di passed!")
@@ -95,6 +89,16 @@ def printf_u_kernel(
         out[0] = 2
 
 
+@pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
+def test_printf_u():
+    _check_npu()
+    out = torch.zeros(1, device=ST_DEVICE, dtype=torch.int32)
+    printf_u_kernel(out, True, 250, 60000, 4000000000, 1099511627899)
+    torch.npu.synchronize()
+    assert out.tolist()[0] == 2, f"got {out.tolist()}"
+
+
 # =============================================================================
 # Test 3: %f 浮点数 + 精度控制
 # =============================================================================
@@ -104,9 +108,18 @@ def printf_f_kernel(
     value_f: pl.DT_FP32,
 ):
     with pl.section_vector():
-        pl.printf("printf_f default: val=%f\n", value_f)
-        pl.printf("printf_f signed: val=%+08.3f\n", value_f)
+        pl.printf("printf_f: val=%f\n", value_f)
         out[0] = 3
+
+
+@pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
+def test_printf_f():
+    _check_npu()
+    out = torch.zeros(1, device=ST_DEVICE, dtype=torch.int32)
+    printf_f_kernel(out, 3.25)
+    torch.npu.synchronize()
+    assert out.tolist()[0] == 3, f"got {out.tolist()}"
 
 
 # =============================================================================
@@ -121,8 +134,18 @@ def printf_x_kernel(
     v_u64: pl.DT_UINT64,
 ):
     with pl.section_vector():
-        pl.printf("printf_x: u8=%#04x u16=%#06x u32=%#08x u64=%#010x\n", v_u8, v_u16, v_u32, v_u64)
+        pl.printf("printf_x: u8=%x u16=%x u32=%x u64=%x\n", v_u8, v_u16, v_u32, v_u64)
         out[0] = 4
+
+
+@pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
+def test_printf_x():
+    _check_npu()
+    out = torch.zeros(1, device=ST_DEVICE, dtype=torch.int32)
+    printf_x_kernel(out, 0xAB, 0xCDEF, 0x89ABCDEF, 0x123456789ABCDEF0)
+    torch.npu.synchronize()
+    assert out.tolist()[0] == 4, f"got {out.tolist()}"
 
 
 # =============================================================================
@@ -141,12 +164,6 @@ def printf_ptr_kernel(
 @pytest.mark.soc("950")
 @pypto.options(pass_options={"enable_slice": False})
 def test_printf_ptr():
-    """测试 pl.printf 的 %p 格式说明符，验证指针地址的打印功能。
-
-    输入：out=全零 INT32 张量[1]，data=FP16 张量的指针。
-    预期：kernel 内通过 %p 打印 data 指针的十六进制地址值，
-    最后将 out[0] 置为 6；host 侧通过 assert out[0]==6 验证 kernel 正常执行完毕。
-    """
     _check_npu()
     logging.info("------------test_printf_ptr--------------")
     out = torch.zeros(1, device=ST_DEVICE, dtype=torch.int32)
@@ -169,6 +186,16 @@ def printf_text_loc_kernel(
         out[0] = 5
 
 
+@pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
+def test_printf_text_loc():
+    _check_npu()
+    out = torch.zeros(1, device=ST_DEVICE, dtype=torch.int32)
+    printf_text_loc_kernel(out)
+    torch.npu.synchronize()
+    assert out.tolist()[0] == 5, f"got {out.tolist()}"
+
+
 # =============================================================================
 # Test 7: for 循环内使用 printf
 # =============================================================================
@@ -187,12 +214,6 @@ def printf_for_loop_kernel(
 @pytest.mark.soc("950")
 @pypto.options(pass_options={"enable_slice": False})
 def test_printf_for_loop():
-    """测试 pl.printf 在 for 循环内的使用，验证 printf 在循环控制流中每轮迭代能正确打印格式字符串。
-
-    输入：out=全零 INT32 张量[1]，无其他参数。kernel 内 for i in range(0,5) 累加 sum_val += i。
-    预期：循环 5 次，每次打印 "for_loop: i=%d sum=%d"，最终 sum_val = 0+1+2+3+4 = 10，
-    out[0] 置为 sum_val；host 侧通过 torch.equal(out, [10]) 验证结果正确。
-    """
     _check_npu()
     logging.info("------------test_printf_for_loop--------------")
     out = torch.zeros(1, device=ST_DEVICE, dtype=torch.int32)
@@ -220,6 +241,20 @@ def printf_if_else_kernel(
             out[0] = -100
 
 
+@pytest.mark.parametrize(
+    "flag,expected_value",
+    [(True, 100), (False, -100)],
+)
+@pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
+def test_printf_if_else(flag, expected_value):
+    _check_npu()
+    out = torch.zeros(1, device=ST_DEVICE, dtype=torch.int32)
+    printf_if_else_kernel(out, flag)
+    torch.npu.synchronize()
+    assert out.tolist()[0] == expected_value, f"got {out.tolist()}"
+
+
 # =============================================================================
 # Test 9: while 循环内使用 printf
 # =============================================================================
@@ -233,6 +268,16 @@ def printf_while_kernel(
             pl.printf("while_loop: x=%d\n", x)
             x = x + 1
         out[0] = x
+
+
+@pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
+def test_printf_while():
+    _check_npu()
+    out = torch.zeros(1, device=ST_DEVICE, dtype=torch.int32)
+    printf_while_kernel(out)
+    torch.npu.synchronize()
+    assert out.tolist()[0] == 4, f"got {out.tolist()}"
 
 
 # =============================================================================
@@ -250,14 +295,15 @@ def printf_loc_combo_kernel(
         pl.printf("loc_combo: post setval out[0]=%d\n", v_i32, loc=True)
 
 
+@pytest.mark.soc("950")
+@pypto.options(pass_options={"enable_slice": False})
+def test_printf_loc_combo():
+    _check_npu()
+    out = torch.zeros(1, device=ST_DEVICE, dtype=torch.int32)
+    printf_loc_combo_kernel(out, 7, 1.5)
+    torch.npu.synchronize()
+    assert out.tolist()[0] == 7, f"got {out.tolist()}"
+
+
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-    tests = [
-        test_printf_di,
-        test_printf_ptr,
-        test_printf_for_loop,
-    ]
-    for t in tests:
-        t()
-        logging.info(f"{t.__name__} passed!")
-    logging.info("\nAll pl.printf NPU tests passed!")
+    raise SystemExit(pytest.main([__file__, "-v"]))

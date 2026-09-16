@@ -69,43 +69,53 @@ static void EmitDebugLocationHeaderCCE(codegen::CCECodegen& codegen, const ir::S
 {
     std::string header = debug_printf::FormatDebugLocationHeader(span, op_name);
     if (!header.empty()) {
-        codegen.Emit("cce::printf(\"" + debug_printf::EscapeStringLiteral(header + "\n") + "\");");
+        codegen.Emit("pypto_printf(\"" + debug_printf::EscapeStringLiteral(header + "\n") + "\");");
     }
 }
 
-static bool NeedsCcePrintfSignedLongLong(const DataType& dtype, char conversion)
+static bool NeedsAscPrintfSignedLongLong(const DataType& dtype, char conversion)
 {
     return (conversion == 'd' || conversion == 'i') && (dtype == DataType::INT64 || dtype == DataType::INDEX);
 }
 
-static bool NeedsCcePrintfUnsignedU64Helper(const DataType& dtype, char conversion)
+static bool NeedsAscPrintfUnsignedLongLong(const DataType& dtype, char conversion)
 {
     return (conversion == 'u' || conversion == 'x') && (dtype == DataType::UINT64 || dtype == DataType::INDEX);
 }
 
-static std::string RewriteCcePrintfFormatForScalarType(const std::string& format_segment, char conversion,
+static std::string RewriteAscPrintfFormatForScalarType(const std::string& format_segment, char conversion,
                                                        const DataType& dtype)
 {
-    if (!NeedsCcePrintfSignedLongLong(dtype, conversion) && conversion != 'p') {
+    const bool signed_long_long = NeedsAscPrintfSignedLongLong(dtype, conversion);
+    const bool unsigned_long_long = NeedsAscPrintfUnsignedLongLong(dtype, conversion);
+    if (!signed_long_long && !unsigned_long_long) {
         return format_segment;
     }
 
     size_t conv_idx = debug_printf::FindPrintfConversionIndex(format_segment);
     std::string rewritten = format_segment;
-    rewritten.replace(conv_idx, 1, (conversion == 'd' || conversion == 'p') ? "lld" : "lli");
+    if (conversion == 'd') {
+        rewritten.replace(conv_idx, 1, "lld");
+    } else if (conversion == 'i') {
+        rewritten.replace(conv_idx, 1, "lli");
+    } else if (conversion == 'u') {
+        rewritten.replace(conv_idx, 1, "llu");
+    } else {
+        rewritten.replace(conv_idx, 1, "llx");
+    }
     return rewritten;
 }
 
-static std::string CastCcePrintfArgIfNeeded(const std::string& arg, const DataType& dtype, char conversion)
+static std::string CastAscPrintfArgIfNeeded(const std::string& arg, const DataType& dtype, char conversion)
 {
     if (conversion == 'f') {
         return arg;
     }
-    if (conversion == 'p') {
-        return "static_cast<long long>((uint64_t)" + arg + ")";
-    }
-    if (NeedsCcePrintfSignedLongLong(dtype, conversion)) {
+    if (NeedsAscPrintfSignedLongLong(dtype, conversion)) {
         return "static_cast<long long>(" + arg + ")";
+    }
+    if (NeedsAscPrintfUnsignedLongLong(dtype, conversion)) {
+        return "static_cast<unsigned long long>(" + arg + ")";
     }
     if (dtype == DataType::BOOL) {
         return conversion == 'u' ? "static_cast<unsigned int>(" + arg + ")" : "static_cast<int>(" + arg + ")";
@@ -119,128 +129,32 @@ static std::string CastCcePrintfArgIfNeeded(const std::string& arg, const DataTy
     return arg;
 }
 
-static void AppendCcePrintfCall(std::vector<std::string>* statements, const std::string& format,
-                                const std::vector<std::string>& args = {})
+static std::string BuildAscPrintfCall(const std::string& format, const std::vector<std::string>& args,
+                                      const std::vector<DataType>& arg_dtypes)
 {
-    if (format.empty()) {
-        return;
-    }
-    std::string statement = "cce::printf(\"" + debug_printf::EscapeStringLiteral(format) + "\"";
-    for (const auto& arg : args) {
-        statement += ", " + arg;
-    }
-    statement += ");";
-    statements->push_back(statement);
-}
-
-static bool CcePrintfSpecHasFlag(const std::string& conversion_spec, char flag)
-{
-    return conversion_spec.find(flag) != std::string::npos;
-}
-
-static void AppendCcePrintfUnsignedDecimalU64(std::vector<std::string>* statements, const std::string& arg,
-                                              int* temp_id)
-{
-    const std::string suffix = std::to_string((*temp_id)++);
-    const std::string value = "__pypto_printf_u64_value_" + suffix;
-    const std::string low = "__pypto_printf_u64_low_" + suffix;
-    const std::string mid = "__pypto_printf_u64_mid_" + suffix;
-    const std::string high = "__pypto_printf_u64_high_" + suffix;
-    const std::string rest = "__pypto_printf_u64_rest_" + suffix;
-
-    statements->push_back("{");
-    statements->push_back("  uint64_t " + value + " = static_cast<uint64_t>(" + arg + ");");
-    statements->push_back("  unsigned int " + low + " = static_cast<unsigned int>(" + value + " % 1000000000ULL);");
-    statements->push_back("  uint64_t " + rest + " = " + value + " / 1000000000ULL;");
-    statements->push_back("  unsigned int " + mid + " = static_cast<unsigned int>(" + rest + " % 1000000000ULL);");
-    statements->push_back("  unsigned int " + high + " = static_cast<unsigned int>(" + rest + " / 1000000000ULL);");
-    statements->push_back("  if (" + high + " != 0U) {");
-    statements->push_back("    cce::printf(\"%u%09u%09u\", " + high + ", " + mid + ", " + low + ");");
-    statements->push_back("  } else if (" + mid + " != 0U) {");
-    statements->push_back("    cce::printf(\"%u%09u\", " + mid + ", " + low + ");");
-    statements->push_back("  } else {");
-    statements->push_back("    cce::printf(\"%u\", " + low + ");");
-    statements->push_back("  }");
-    statements->push_back("}");
-}
-
-static void AppendCcePrintfUnsignedHexU64(std::vector<std::string>* statements, const std::string& arg,
-                                          const std::string& conversion_spec, int* temp_id)
-{
-    const std::string suffix = std::to_string((*temp_id)++);
-    const std::string value = "__pypto_printf_u64_value_" + suffix;
-    const std::string high = "__pypto_printf_u64_high_" + suffix;
-    const std::string low = "__pypto_printf_u64_low_" + suffix;
-    const bool alternate = CcePrintfSpecHasFlag(conversion_spec, '#');
-
-    statements->push_back("{");
-    statements->push_back("  uint64_t " + value + " = static_cast<uint64_t>(" + arg + ");");
-    statements->push_back("  unsigned int " + high + " = static_cast<unsigned int>(" + value + " >> 32);");
-    statements->push_back("  unsigned int " + low + " = static_cast<unsigned int>(" + value + " & 0xffffffffULL);");
-    statements->push_back("  if (" + high + " != 0U) {");
-    if (alternate) {
-        statements->push_back("    cce::printf(\"0x%x%08x\", " + high + ", " + low + ");");
-    } else {
-        statements->push_back("    cce::printf(\"%x%08x\", " + high + ", " + low + ");");
-    }
-    statements->push_back("  } else {");
-    statements->push_back("    cce::printf(\"" + debug_printf::EscapeStringLiteral(conversion_spec) + "\", " + low +
-                          ");");
-    statements->push_back("  }");
-    statements->push_back("}");
-}
-
-static std::vector<std::string> MakeCcePrintfStatements(const std::string& format, const std::vector<std::string>& args,
-                                                        const std::vector<DataType>& arg_dtypes)
-{
-    CHECK(args.size() == arg_dtypes.size()) << "debug.printf CCE argument/type count mismatch";
+    CHECK(args.size() == arg_dtypes.size()) << "debug.printf ASC argument/type count mismatch";
 
     auto segments = debug_printf::ParsePrintfSegments(format);
     CHECK(segments.size() == args.size())
         << "debug.printf format expects " << segments.size() << " scalar arguments, but got " << args.size();
 
-    std::vector<std::string> statements;
-    int temp_id = 0;
-    if (segments.empty()) {
-        AppendCcePrintfCall(&statements, format);
-        return statements;
+    if (format.empty()) {
+        return "";
     }
 
-    // Merge consecutive non-U64 segments into a single printf call.
-    // Flush the batch when hitting a U64 segment (which needs multi-statement expansion).
-    std::string batch_format;
-    std::vector<std::string> batch_args;
-
-    auto flush_batch = [&]() {
-        if (!batch_format.empty()) {
-            AppendCcePrintfCall(&statements, batch_format, batch_args);
-            batch_format.clear();
-            batch_args.clear();
-        }
-    };
-
+    std::string rewritten_format = segments.empty() ? format : "";
+    std::vector<std::string> rewritten_args;
     for (size_t i = 0; i < segments.size(); ++i) {
-        if (NeedsCcePrintfUnsignedU64Helper(arg_dtypes[i], segments[i].conversion)) {
-            flush_batch();
-            debug_printf::PrintfFormatParts parts = debug_printf::SplitPrintfSegment(segments[i].format_segment);
-            AppendCcePrintfCall(&statements, parts.prefix);
-            if (segments[i].conversion == 'u') {
-                AppendCcePrintfUnsignedDecimalU64(&statements, args[i], &temp_id);
-            } else {
-                AppendCcePrintfUnsignedHexU64(&statements, args[i], parts.conversion_spec, &temp_id);
-            }
-            AppendCcePrintfCall(&statements, parts.suffix);
-        } else {
-            std::string rewritten_format = RewriteCcePrintfFormatForScalarType(segments[i].format_segment,
-                                                                               segments[i].conversion, arg_dtypes[i]);
-            std::string rewritten_arg = CastCcePrintfArgIfNeeded(args[i], arg_dtypes[i], segments[i].conversion);
-            batch_format += rewritten_format;
-            batch_args.push_back(rewritten_arg);
-        }
+        rewritten_format += RewriteAscPrintfFormatForScalarType(segments[i].format_segment, segments[i].conversion,
+                                                                arg_dtypes[i]);
+        rewritten_args.push_back(CastAscPrintfArgIfNeeded(args[i], arg_dtypes[i], segments[i].conversion));
     }
-    flush_batch();
 
-    return statements;
+    std::string call = "pypto_printf(\"" + debug_printf::EscapeStringLiteral(rewritten_format) + "\"";
+    for (const auto& arg : rewritten_args) {
+        call += ", " + arg;
+    }
+    return call + ");";
 }
 
 static bool HasDynamicTensorShape(const ir::TensorTypePtr& tensor_type)
@@ -500,7 +414,7 @@ static std::string MakeDebugDumpTensorNZCodegenCCE(codegen::CCECodegen& codegen,
         view_offset = "(" + offset + " + " + delta + ")";
 
         std::ostringstream batch_header;
-        batch_header << "cce::printf(\"=== [dump_tensor] Batch [";
+        batch_header << "pypto_printf(\"=== [dump_tensor] Batch [";
         for (size_t axis = 0; axis < row_axis; ++axis) {
             if (axis != 0) {
                 batch_header << ", ";
@@ -531,7 +445,7 @@ static void EmitDumpFlagHeaderCCE(codegen::CCECodegen& codegen, const ir::CallPt
     if (dump_flag.empty()) {
         return;
     }
-    codegen.Emit("cce::printf(\"=== [flag] %s ===\\n\", \"" + debug_printf::EscapeStringLiteral(dump_flag) + "\");");
+    codegen.Emit("pypto_printf(\"=== [flag] %s ===\\n\", \"" + debug_printf::EscapeStringLiteral(dump_flag) + "\");");
 }
 
 static std::string MakeDebugDumpTensorCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
@@ -630,12 +544,10 @@ static std::string MakeDebugPrintfCodegenCCE(const ir::CallPtr& op, codegen::Cod
     args.reserve(op->args_.size());
     arg_dtypes.reserve(op->args_.size());
 
-    // Parse format to know which args are %p (pointer) vs scalar
-    auto segments = debug_printf::ParsePrintfSegments(format);
     for (size_t i = 0; i < op->args_.size(); ++i) {
         args.emplace_back(codegen.GetExprAsCode(op->args_[i]));
-        if (i < segments.size() && segments[i].conversion == 'p') {
-            // Pointer argument: use INDEX as a dummy dtype; CastCcePrintfArgIfNeeded handles %p specially
+        if (ir::As<ir::PtrType>(op->args_[i]->GetType())) {
+            // Pointer arguments are passed directly to ASC printf.
             arg_dtypes.emplace_back(DataType::INDEX);
         } else {
             auto scalar_type = ir::As<ir::ScalarType>(op->args_[i]->GetType());
@@ -644,8 +556,9 @@ static std::string MakeDebugPrintfCodegenCCE(const ir::CallPtr& op, codegen::Cod
         }
     }
 
-    for (const auto& statement : MakeCcePrintfStatements(format, args, arg_dtypes)) {
-        codegen.Emit(statement);
+    std::string call = BuildAscPrintfCall(format, args, arg_dtypes);
+    if (!call.empty()) {
+        codegen.Emit(call);
     }
     return "";
 }
@@ -732,10 +645,12 @@ static std::string MakeDebugDumpTileCodegenCCE(const ir::CallPtr& op, codegen::C
                      valid_col + " = " + std::to_string(tile_cols->value_) + " - (" + col_off + ");");
         codegen.Emit("if (" + valid_col + " < 0) " + valid_col + " = 0;");
 
-        codegen.Emit("cce::printf(\"=== [TPRINT Acc Tile Window] Data Type: %s, Layout: NZ, TileType: Acc ===\\n\", "
+        codegen.Emit("pypto_printf(\"=== [TPRINT Acc Tile Window] Data Type: %s, Layout: NZ, TileType: Acc "
+                     "===\\n\", "
                      "__pypto_dtype_name<" +
                      dtype_str + ">());");
-        codegen.Emit("cce::printf(\"  Source Shape: [%d, %d], Window Offsets: [%d, %d], Requested Shape: [%d, %d], "
+        codegen.Emit("pypto_printf(\"  Source Shape: [%d, %d], Window Offsets: [%d, %d], Requested Shape: "
+                     "[%d, %d], "
                      "Valid Shape: [%d, %d]\\n\", " +
                      std::to_string(tile_rows->value_) + ", " + std::to_string(tile_cols->value_) +
                      ", static_cast<int>(" + row_off + "), static_cast<int>(" + col_off + "), " + requested_row + ", " +
@@ -750,7 +665,7 @@ static std::string MakeDebugDumpTileCodegenCCE(const ir::CallPtr& op, codegen::C
                      std::to_string(tile_cols->value_) + " + (" + col_idx + " + (" + col_off + ")));");
         codegen.Emit("      __pypto_print_val(" + debug_val + ");");
         codegen.Emit("    }");
-        codegen.Emit("    cce::printf(\"\\n\");");
+        codegen.Emit("    pypto_printf(\"\\n\");");
         codegen.Emit("  }");
         codegen.Emit("}");
         return "";
@@ -807,12 +722,13 @@ static std::string MakeDebugDumpTileCodegenCCE(const ir::CallPtr& op, codegen::C
     codegen.Emit("if (" + valid_col + " < 0) " + valid_col + " = 0;");
     codegen.Emit("if (" + valid_col + " > " + std::to_string(tile_cols->value_) + ") " + valid_col + " = " +
                  std::to_string(tile_cols->value_) + ";");
-    codegen.Emit("cce::printf(\"=== [TPRINT Tile Window] Data Type: %s, Layout: %s, TileType: %s ===\\n\", "
+    codegen.Emit("pypto_printf(\"=== [TPRINT Tile Window] Data Type: %s, Layout: %s, TileType: %s ===\\n\", "
                  "__pypto_dtype_name<" +
                  codegen.GetTypeString(tile_type->dtype_) +
                  ">(), pto::GetLayoutName(std::remove_reference_t<decltype(" + src +
                  ")>::BFractal, std::remove_reference_t<decltype(" + src + ")>::SFractal), \"Vec\");");
-    codegen.Emit("cce::printf(\"  Source Shape: [%d, %d], Window Offsets: [%d, %d], Requested Shape: [%d, %d], "
+    codegen.Emit("pypto_printf(\"  Source Shape: [%d, %d], Window Offsets: [%d, %d], Requested Shape: "
+                 "[%d, %d], "
                  "Valid Shape: [%d, %d]\\n\", " +
                  std::to_string(tile_rows->value_) + ", " + std::to_string(tile_cols->value_) + ", static_cast<int>(" +
                  row_off + "), static_cast<int>(" + col_off + "), " + requested_row + ", " + requested_col + ", " +
@@ -824,7 +740,7 @@ static std::string MakeDebugDumpTileCodegenCCE(const ir::CallPtr& op, codegen::C
     codegen.Emit("    auto " + debug_val + " = " + src + ".data()[__debug_src_offset];");
     codegen.Emit("    __pypto_print_val(" + debug_val + ");");
     codegen.Emit("  }");
-    codegen.Emit("  cce::printf(\"\\n\");");
+    codegen.Emit("  pypto_printf(\"\\n\");");
     codegen.Emit("}");
     return "";
 }
@@ -1609,19 +1525,19 @@ static std::string MakeDebugAssertCodegenCCE(const ir::CallPtr& op, codegen::Cod
     if (op->GetKwarg<bool>("show_location", false)) {
         std::string location = debug_printf::FormatDebugLocation(op->span_);
         if (!location.empty()) {
-            codegen.Emit("  cce::printf(\"" +
+            codegen.Emit("  pypto_printf(\"" +
                          debug_printf::EscapeStringLiteral(location + " Assertion failed: " + condition_text + "\n") +
                          "\");");
         } else {
-            codegen.Emit("  cce::printf(\"" +
+            codegen.Emit("  pypto_printf(\"" +
                          debug_printf::EscapeStringLiteral("Assertion failed: " + condition_text + "\n") + "\");");
         }
     } else {
-        codegen.Emit("  cce::printf(\"" +
+        codegen.Emit("  pypto_printf(\"" +
                      debug_printf::EscapeStringLiteral("Assertion failed: " + condition_text + "\n") + "\");");
     }
 
-    if (!format.empty() && op->args_.size() > 1) {
+    if (!format.empty()) {
         std::vector<std::string> args;
         std::vector<DataType> arg_dtypes;
         for (size_t i = 1; i < op->args_.size(); ++i) {
@@ -1630,9 +1546,7 @@ static std::string MakeDebugAssertCodegenCCE(const ir::CallPtr& op, codegen::Cod
             CHECK(scalar_type) << "debug.assert argument must be ScalarType";
             arg_dtypes.emplace_back(scalar_type->dtype_);
         }
-        for (const auto& statement : MakeCcePrintfStatements(format, args, arg_dtypes)) {
-            codegen.Emit("  " + statement);
-        }
+        codegen.Emit("  " + BuildAscPrintfCall(format, args, arg_dtypes));
     }
 
     codegen.Emit("}");
