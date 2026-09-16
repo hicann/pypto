@@ -2439,17 +2439,27 @@ LogicalTensors Function::MakeIncasts(const std::shared_ptr<TensorSlotScope>& sco
     return inArgumentList;
 }
 
-std::shared_ptr<LogicalTensor> Function::CreateOutcastTensor(const std::shared_ptr<LogicalTensor>& outArgument)
+std::shared_ptr<LogicalTensor> Function::CreateOutcastTensor(const std::shared_ptr<LogicalTensor>& outArgument,
+                                                             const std::shared_ptr<RawTensor>& shareRaw,
+                                                             const std::string& name)
 {
     auto idx = outCasts_.size();
-    auto newSymbol = outArgument->tensor->GetSymbol();
+    auto newSymbol = name.empty() ? outArgument->tensor->GetSymbol() : name;
     if (newSymbol == "") {
         newSymbol = "OUTCAST_SYMBOL" + std::to_string(idx);
     }
     auto outSymbol = std::make_shared<LogicalTensor>(*this, outArgument->tensor->datatype, outArgument->shape,
                                                      outArgument->tensor->GetDynRawShape(), outArgument->Format(),
                                                      newSymbol);
-    outSymbol->tensor->UpdateDynRawShape(outArgument->tensor->GetDynRawShape());
+    if (!name.empty()) {
+        outSymbol->name_ = name;
+    }
+    if (shareRaw != nullptr) {
+        /* Later versions of one raw tensor reuse the first version's outcast buffer. */
+        outSymbol->tensor = shareRaw;
+    } else {
+        outSymbol->tensor->UpdateDynRawShape(outArgument->tensor->GetDynRawShape());
+    }
 
     outCasts_.push_back(outSymbol);
 
@@ -2536,17 +2546,46 @@ LogicalTensors Function::MakeOutcasts(const std::shared_ptr<TensorSlotScope>& sc
 {
     LogicalTensors outArgumentList;
 
+    /* Multiple assemble versions of one raw tensor all write the same slot.
+     * Snapshot the raw tensors first (the assemble-outcast rewrite below
+     * rebinds them), so the versions can be grouped: every version of a group
+     * shares the first version's outcast buffer and keeps its own version
+     * name, i.e. one runtime slot with one outcast entry per assemble write. */
+    std::vector<std::shared_ptr<RawTensor>> originRaws;
+    std::unordered_map<int, std::vector<size_t>> rawMagicToIndices;
+    originRaws.reserve(originOutCasts_.size());
+    for (size_t idx = 0; idx < originOutCasts_.size(); idx++) {
+        originRaws.push_back(originOutCasts_[idx]->tensor);
+        rawMagicToIndices[originRaws[idx]->rawmagic].push_back(idx);
+    }
+    std::unordered_map<int, std::shared_ptr<RawTensor>> rawMagicToOutSymbolRaw;
+
     for (size_t idx = 0; idx < originOutCasts_.size(); idx++) {
         auto origin = originOutCasts_[idx];
         int rank = origin->shape.size();
         std::vector<int64_t> zeroOffset(rank, 0);
-        auto outArgument = std::make_shared<LogicalTensor>(Parent(), origin->tensor, zeroOffset, origin->shape,
-                                                           origin->tensor->GetDynRawShape());
+        auto outArgument = std::make_shared<LogicalTensor>(Parent(), originRaws[idx], zeroOffset, origin->shape,
+                                                           originRaws[idx]->GetDynRawShape());
+        bool versionedGroup = rawMagicToIndices[originRaws[idx]->rawmagic].size() > 1;
+        if (versionedGroup) {
+            outArgument->name_ = origin->name_;
+        }
         Parent().tensorMap_.Insert(outArgument);
         outArgumentList.push_back(outArgument);
 
         bool isLinkedInplaceOutcast = outIncastLinkMap.count(origin->GetRawTensor()) != 0;
-        auto outSymbol = CreateOutcastTensor(outArgument);
+        std::shared_ptr<RawTensor> shareRaw;
+        auto [groupIter, firstInGroup] = rawMagicToOutSymbolRaw.emplace(originRaws[idx]->rawmagic, nullptr);
+        if (!firstInGroup) {
+            shareRaw = groupIter->second;
+        }
+        auto outSymbol = CreateOutcastTensor(outArgument, shareRaw, versionedGroup ? origin->name_ : "");
+        if (firstInGroup) {
+            groupIter->second = outSymbol->tensor;
+        }
+        /* The outcast param is the same runtime buffer as the version it
+         * exports: share the slot so it resolves to the version's slot id. */
+        Program::GetInstance().GetTensorSlotManager()->SetSameSlot(origin, outSymbol);
         if (scope) {
             scope->outcastToOutArgumentDict[outSymbol] = outArgument;
         }

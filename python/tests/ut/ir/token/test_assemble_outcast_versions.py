@@ -18,7 +18,7 @@ from ..test_common import _ssa_verify, check_snapshot
 _GOLDEN_DIR = Path(__file__).parent
 
 IR = _GOLDEN_DIR / "test_assemble_outcast_versions.pypto"
-LATEST_OUTCAST_IR = _GOLDEN_DIR / "test_assemble_latest_outcast.pypto"
+LATEST_OUTCAST_IR = _GOLDEN_DIR / "test_assemble_all_versions.pypto"
 
 
 def _run_root_builder(func, *args):
@@ -37,7 +37,8 @@ def _run_root_builder(func, *args):
 
 
 def test_assemble_outcast_versions_share_raw_tensor():
-    """MakeOutcasts preserves distinct Assemble versions on one RawTensor."""
+    """MakeOutcasts keeps every assemble version of one RawTensor as its own
+    outcast entry (aux_1, aux_3), and the entries share one slot."""
 
     def foo(a, aux, out):
         pypto.set_vec_tile_shapes(16, 16)
@@ -53,8 +54,9 @@ def test_assemble_outcast_versions_share_raw_tensor():
     check_snapshot(program, IR)
 
 
-def test_repeated_assemble_uses_single_latest_outcast():
-    """ComputeOutcast deduplicates versions by RawTensor and keeps the latest one."""
+def test_repeated_assemble_keeps_all_versions_on_slot():
+    """Every assemble version of an outcast slot becomes an outcast entry
+    (out_1, out_3, out_5 on one slot); only the latest version is returned."""
 
     def foo(src, out):
         pypto.assemble(src + 1.0, [0, 0], out)

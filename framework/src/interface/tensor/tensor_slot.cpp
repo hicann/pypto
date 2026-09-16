@@ -467,8 +467,12 @@ void TensorSlotManager::SetSameSlot(const LogicalTensorPtr& src, const LogicalTe
         return;
     }
 
-    // Migrate all tensors pointing to dst's old slot to src's slot, so no prior
-    // links are lost regardless of link order or direction.
+    // The older slot survives, so the merge outcome is order-independent: the
+    // slot tensor created first (params are slotted first in InitDynFunc) stays
+    // canonical, and ids already captured into ioslot lists remain valid.
+    if (srcTensor->Id() > dstTensor->Id()) {
+        std::swap(srcTensor, dstTensor);
+    }
     for (auto& [lt, tensor] : slotTensorDict) {
         (void)lt;
         if (tensor->Id() == dstTensor->Id()) {
@@ -630,37 +634,41 @@ void TensorSlotManager::Restore()
 
 std::string TensorSlotManager::Dump() const
 {
-    std::vector<TensorSlot> slotList(slotIndexDict.size());
+    // Slot indices are tensor ids (see InsertLiveSlot) and may exceed slotIndexDict.size(),
+    // so sort (index, slot) pairs instead of writing into a vector sized by the entry count.
+    std::vector<std::pair<int, TensorSlot>> slotList;
+    slotList.reserve(slotIndexDict.size());
     for (auto& [slot, index] : slotIndexDict) {
-        slotList[index] = slot;
+        slotList.emplace_back(index, slot);
     }
+    std::sort(slotList.begin(), slotList.end(), [](auto& lhs, auto& rhs) { return lhs.first < rhs.first; });
     constexpr int width2 = 2;
     constexpr int width6 = 6;
     constexpr int width7 = 7;
 
     std::ostringstream oss;
-    for (size_t i = 0; i < slotList.size(); i++) {
-        bool live = liveSlotSet.count(slotList[i]);
-        bool assemble = assembleSlotSet.count(slotList[i]);
-        bool shmemTensor = shmemTensorSlotSet.count(slotList[i]);
-        bool input = inputSlotDict.count(slotList[i]);
-        bool output = outputSlotDict.count(slotList[i]);
-        bool named = slotNameDict.count(slotList[i]);
-        bool parial = partialUpdateSlotIndexSet.count(i);
+    for (auto& [index, slot] : slotList) {
+        bool live = liveSlotSet.count(slot);
+        bool assemble = assembleSlotSet.count(slot);
+        bool shmemTensor = shmemTensorSlotSet.count(slot);
+        bool input = inputSlotDict.count(slot);
+        bool output = outputSlotDict.count(slot);
+        bool named = slotNameDict.count(slot);
+        bool parial = partialUpdateSlotIndexSet.count(index);
         if (live || input || output || named) {
-            oss << "slot[" << std::setw(width2) << i << "]: ";
+            oss << "slot[" << std::setw(width2) << index << "]: ";
             oss << std::setw(width2) << (live ? 'L' : ' ');
             oss << std::setw(width2) << (assemble ? 'A' : ' ');
             oss << std::setw(width2) << (shmemTensor ? 'S' : ' ');
             oss << std::setw(width2) << (parial ? 'P' : ' ');
             oss << std::setw(width6)
-                << (input ? "in:" + std::to_string(inputSlotDict.find(slotList[i])->second) : std::string(" "));
+                << (input ? "in:" + std::to_string(inputSlotDict.find(slot)->second) : std::string(" "));
             oss << std::setw(width7)
-                << (output ? "out:" + std::to_string(outputSlotDict.find(slotList[i])->second) : std::string(" "));
+                << (output ? "out:" + std::to_string(outputSlotDict.find(slot)->second) : std::string(" "));
             if (live) {
-                oss << " " << slotList[i].Dump() << "\n";
+                oss << " " << slot.Dump() << "\n";
             } else {
-                oss << " " << slotList[i].DumpHead(slotNameDict.find(slotList[i])->second) << "\n";
+                oss << " " << slot.DumpHead(slotNameDict.find(slot)->second) << "\n";
             }
         }
     }
