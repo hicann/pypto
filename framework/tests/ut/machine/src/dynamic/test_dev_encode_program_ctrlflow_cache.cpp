@@ -132,6 +132,8 @@ TEST(CtrlFlowCacheDrcoUt, PredCountDataRestore_CoversDrcoPredCount)
     std::array<uint8_t, 1024> dupBuf{};
     DynFuncDataCache& cache = dyntask->dynFuncDataCacheList[0];
     cache.duppedData = SetupDuppedData(dupBuf, 1);
+    cache.predCountPing = nullptr;
+    cache.predCountPong = nullptr;
     cache.predCount = nullptr;
     cache.calleeList = nullptr;
     cache.devFunc = nullptr;
@@ -147,8 +149,189 @@ TEST(CtrlFlowCacheDrcoUt, PredCountDataRestore_CoversDrcoPredCount)
     DevControlFlowCache ctrl;
     SetupCtrlCache(ctrl, cacheBuf);
 
-    ctrl.PredCountDataRestore(dyntask.get());
+    ctrl.PredCountPingPongSwap(dyntask.get());
+    ctrl.DrcoPredCountDataRestore(dyntask.get());
+    ctrl.BitmapDataRestoreTask(dyntask.get());
     SUCCEED();
+}
+
+TEST(CtrlFlowCacheDrcoUt, PredCountPingPongRoundTrip)
+{
+    DeviceWorkspaceAllocator workspace;
+    auto dyntask = std::make_unique<DynDeviceTask>(workspace);
+
+    std::array<uint8_t, sizeof(DynFuncHeader) + 8 * sizeof(DynFuncData)> hdrBuf{};
+    SetupDynFuncHeader(dyntask.get(), hdrBuf, 2);
+
+    std::array<std::array<uint8_t, 1024>, 2> dupBuf{};
+    std::array<DevAscendFunctionDuppedData*, 2> dupped{};
+    /* 16KB on the stack exceeds the -Wframe-larger-than budget; scratch does not need stack storage. */
+    static std::array<std::array<uint8_t, 8192>, 2> devFuncBuf{};
+    const uint32_t opCounts[2] = {3, 4};
+    const predcount_t initVals[2][4] = {{3, 1, 4, 0}, {5, 9, 2, 6}};
+    for (int i = 0; i < 2; ++i) {
+        dupped[i] = SetupDuppedData(dupBuf[i], opCounts[i]);
+        DynFuncDataCache& cache = dyntask->dynFuncDataCacheList[i];
+        cache.duppedData = dupped[i];
+        cache.predCountPing = dupped[i]->GetOperationPredCountPingPong(PRED_COUNT_PING);
+        cache.predCountPong = dupped[i]->GetOperationPredCountPingPong(PRED_COUNT_PONG);
+        cache.predCount = cache.predCountPing;
+        cache.devFunc = reinterpret_cast<DevAscendFunction*>(devFuncBuf[i].data());
+        cache.calleeList = nullptr;
+        dyntask->dynFuncDataBackupList[i] = DynFuncDataBackup{};
+        for (uint32_t j = 0; j < opCounts[i]; ++j) {
+            dupped[i]->GetOperationCurrPredCount(j) = initVals[i][j];
+        }
+    }
+
+    std::vector<uint8_t> cacheBuf;
+    DevControlFlowCache ctrl;
+    SetupCtrlCache(ctrl, cacheBuf);
+
+    ctrl.PredCountDataBackup(dyntask.get());
+
+    // Record: both slices carry the initial snapshot; predCount aliases slice 0.
+    for (int i = 0; i < 2; ++i) {
+        for (uint32_t j = 0; j < opCounts[i]; ++j) {
+            EXPECT_EQ(dyntask->dynFuncDataCacheList[i].predCountPing[j], initVals[i][j]);
+            EXPECT_EQ(dyntask->dynFuncDataCacheList[i].predCountPong[j], initVals[i][j]);
+        }
+    }
+
+    // Simulate back-to-back launches with the shadow-restore protocol: pre-push only swaps the
+    // slice pointers onto the clean copy (no memcpy - it was refreshed by the previous launch's
+    // shadow), sche dirties it during execution, and the post-push shadow refreshes the OTHER
+    // slice for the next launch. Every launch must consume initial values.
+    auto runLaunch = [&]() {
+        ctrl.PredCountPingPongSwap(dyntask.get());
+        for (int i = 0; i < 2; ++i) {
+            EXPECT_EQ(dyntask->dynFuncDataCacheList[i].predCount, dyntask->dynFuncDataCacheList[i].predCountPing);
+            for (uint32_t j = 0; j < opCounts[i]; ++j) {
+                EXPECT_EQ(dyntask->dynFuncDataCacheList[i].predCount[j], initVals[i][j]);
+            }
+        }
+        for (int i = 0; i < 2; ++i) {
+            for (uint32_t j = 0; j < opCounts[i]; ++j) {
+                dyntask->dynFuncDataCacheList[i].predCount[j] -= 1;
+            }
+        }
+        ctrl.PredCountPingPongRestore(dyntask.get());
+        for (int i = 0; i < 2; ++i) {
+            for (uint32_t j = 0; j < opCounts[i]; ++j) {
+                EXPECT_EQ(dyntask->dynFuncDataCacheList[i].predCountPong[j], initVals[i][j]);
+            }
+        }
+    };
+
+    runLaunch(); // consumes slice 1
+    runLaunch(); // consumes slice 0 (cleans record-time dirt)
+    runLaunch(); // consumes slice 1 again (previous dirt cleaned)
+    runLaunch(); // consumes slice 0 again
+
+    // The live pointers must never fall back to scattered state: they always alias slice[0].
+    for (int i = 0; i < 2; ++i) {
+        EXPECT_EQ(dyntask->dynFuncDataCacheList[i].predCount, dyntask->dynFuncDataCacheList[i].predCountPing);
+    }
+}
+
+TEST(CtrlFlowCacheDrcoUt, ReadyQueuePingPongRoundTrip)
+{
+    DeviceWorkspaceAllocator workspace;
+    auto dyntask = std::make_unique<DynDeviceTask>(workspace);
+    dyntask->devTask.coreFunctionCnt = 8;
+
+    std::array<std::array<uint32_t, 16>, READY_QUEUE_SIZE> elemBuf{};
+    std::array<std::unique_ptr<ReadyCoreFunctionQueue>, READY_QUEUE_SIZE> queue{};
+    SetupReadyQueues(dyntask.get(), elemBuf, queue);
+
+    const int aivIdx = DynDeviceTask::GetReadyQueueIndexByCoreType(CoreType::AIV);
+    const int aicIdx = DynDeviceTask::GetReadyQueueIndexByCoreType(CoreType::AIC);
+    std::array<std::array<uint32_t, 16>, READY_QUEUE_SIZE> initial{};
+    std::array<uint32_t, READY_QUEUE_SIZE> initSize{};
+    initSize[aivIdx] = 2;
+    initSize[aicIdx] = 1;
+    initial[aivIdx][0] = MakeTaskID(0, 1);
+    initial[aivIdx][1] = MakeTaskID(0, 2);
+    initial[aicIdx][0] = MakeTaskID(1, 1);
+    for (size_t i = 0; i < READY_QUEUE_SIZE; ++i) {
+        for (uint32_t j = 0; j < initSize[i]; ++j) {
+            queue[i]->UnsafeEnqueue(initial[i][j]);
+        }
+    }
+
+    std::vector<uint8_t> cacheBuf;
+    DevControlFlowCache ctrl;
+    SetupCtrlCache(ctrl, cacheBuf);
+
+    ctrl.ReadyQueueDataBackup(dyntask.get());
+    ASSERT_NE(dyntask->readyQueueBackup, nullptr);
+
+    // Record state: pingElem = the buffers the record launch will dirty; pongElem = clean
+    // copies initialized from the snapshot for the first cached launch.
+    std::array<uint32_t*, READY_QUEUE_SIZE> snapData{};
+    for (size_t i = 0; i < READY_QUEUE_SIZE; ++i) {
+        EXPECT_EQ(dyntask->readyQueueBackup->pingElem[i], elemBuf[i].data());
+        EXPECT_NE(dyntask->readyQueueBackup->pongElem[i], elemBuf[i].data());
+        snapData[i] = dyntask->readyQueueBackup->queueList[i].Data();
+        for (uint32_t j = 0; j < initSize[i]; ++j) {
+            EXPECT_EQ(dyntask->readyQueueBackup->pongElem[i][j], initial[i][j]);
+        }
+    }
+
+    // Simulate back-to-back launches with the shadow-restore protocol: restore rebinds elem_ to
+    // the clean buffer (no memcpy), sche consumes from the head and LIFO-tail re-appends
+    // (dirtying the buffer), the post-push shadow refreshes the OTHER buffer. Every launch must
+    // consume the initial snapshot; the AICPU queue stays empty (Size 0) to cover that path.
+    std::array<uint32_t*, READY_QUEUE_SIZE> lastData{};
+    for (size_t i = 0; i < READY_QUEUE_SIZE; ++i) {
+        lastData[i] = queue[i]->Data();
+    }
+    auto runLaunch = [&]() {
+        ctrl.ReadyQueueDataPingPongSwap(dyntask.get(), 4);
+        for (size_t i = 0; i < READY_QUEUE_SIZE; ++i) {
+            EXPECT_NE(queue[i]->Data(), lastData[i]);
+            lastData[i] = queue[i]->Data();
+
+            ASSERT_EQ(queue[i]->Size(), initSize[i]);
+            uint32_t k = 0;
+            for (const uint32_t* it = queue[i]->begin(); it != queue[i]->end(); ++it, ++k) {
+                EXPECT_EQ(*it, initial[i][k]);
+            }
+        }
+        // sche-side dirtying: head dequeue plus LIFO tail pull and re-append.
+        for (size_t i = 0; i < READY_QUEUE_SIZE; ++i) {
+            if (initSize[i] == 0) {
+                continue;
+            }
+            uint32_t out[4];
+            (void)queue[i]->Dequeue(1);
+            (void)queue[i]->DequeueTail(1, out);
+            queue[i]->UnsafeEnqueue(MakeTaskID(7, 7));
+        }
+        ctrl.ReadyQueueDataPingPongRestore(dyntask.get());
+        // The buffer the NEXT launch consumes must be clean again.
+        for (size_t i = 0; i < READY_QUEUE_SIZE; ++i) {
+            const uint32_t* inactive = (queue[i]->Data() == dyntask->readyQueueBackup->pingElem[i]) ?
+                                           dyntask->readyQueueBackup->pongElem[i] :
+                                           dyntask->readyQueueBackup->pingElem[i];
+            for (uint32_t j = 0; j < initSize[i]; ++j) {
+                EXPECT_EQ(inactive[j], initial[i][j]);
+            }
+        }
+    };
+
+    runLaunch(); // consumes pongElem (initialized at backup)
+    runLaunch(); // consumes pingElem (cleaned by launch 1's shadow)
+    runLaunch(); // consumes pongElem again (previous dirt cleaned)
+    runLaunch(); // consumes pingElem again
+
+    // The snapshot buffers stay immutable across all rounds.
+    for (size_t i = 0; i < READY_QUEUE_SIZE; ++i) {
+        EXPECT_EQ(dyntask->readyQueueBackup->queueList[i].Data(), snapData[i]);
+        for (uint32_t j = 0; j < initSize[i]; ++j) {
+            EXPECT_EQ(snapData[i][j], initial[i][j]);
+        }
+    }
 }
 
 TEST(CtrlFlowCacheDrcoUt, ReadyQueueDataBackupRestore_WithDrco)
@@ -181,7 +364,7 @@ TEST(CtrlFlowCacheDrcoUt, ReadyQueueDataBackupRestore_WithDrco)
     ctrl.ReadyQueueDataBackup(dyntask.get());
     ASSERT_NE(dyntask->readyQueueBackup, nullptr);
 
-    ctrl.ReadyQueueDataRestore(dyntask.get(), 4);
+    ctrl.ReadyQueueDataPingPongSwap(dyntask.get(), 4);
     SUCCEED();
 
     EXPECT_EQ(dyntask->devTask.coreFunctionCnt, 8U);
@@ -224,7 +407,7 @@ TEST(CtrlFlowCacheDrcoUt, DieReadyQueueDataBackupRestore_WithDrco)
     ctrl.DieReadyQueueDataBackup(dyntask.get());
     ASSERT_NE(dyntask->dieReadyQueueBackup, nullptr);
 
-    ctrl.DieReadyQueueDataRestore(dyntask.get(), 4);
+    ctrl.DieReadyQueuePingPongSwap(dyntask.get(), 4);
     SUCCEED();
 
     EXPECT_EQ(drco.root.perCorePendingQueueArray[0]->size, 1U);

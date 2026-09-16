@@ -209,7 +209,7 @@ public:
             return;
         }
 
-        if (devCtrlFlowCache->IsActivatedPartialCache(devStartArgs)) {
+        if (devCtrlFlowCache->IsActivatedCache(devStartArgs)) {
             DEV_INFO("ControlFlowCache: activated");
             // Actual run
             if (!devCtrlFlowCache->isRelocDataDev) {
@@ -218,7 +218,6 @@ public:
                                                                    reinterpret_cast<uint64_t>(devCtrlFlowCache));
                 devCtrlFlowCache->RuntimeAddrRelocProgram(0, reinterpret_cast<uint64_t>(devProg));
             }
-
             devCtrlFlowCache->IncastOutcastAddrRestore();
             devCtrlFlowCache->IncastOutcastAddrReloc(0, devStartArgs->contextWorkspaceAddr, devStartArgs);
             if (devCtrlFlowCache->workspaceAddr != devStartArgs->contextWorkspaceAddr) {
@@ -226,7 +225,9 @@ public:
                 devCtrlFlowCache->TaskAddrRestoreWorkspace();
                 devCtrlFlowCache->TaskAddrRelocWorkspace(0, devStartArgs->contextWorkspaceAddr, devStartArgs);
             }
-            devProg->ResetRerun();
+            if (!devCtrlFlowCache->IsActivatedFullCache(devStartArgs)) {
+                devProg->ResetRerun();
+            }
         }
     }
 

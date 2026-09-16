@@ -165,7 +165,8 @@ void DevAscendFunction::InitOperationDynamicField(
     uint64_t outcastSize = outcastTensorList.size();
     uint64_t expressionSize = expressionTable->GetPrimaryExpressionSize();
 
-    uint64_t predCountListDataSize = AlignUp(operationSize * sizeof(predcount_t), sizeof(uint64_t));
+    uint64_t predCountListDataSize = PRED_COUNT_PINGPONG_NUM *
+                                     AlignUp(operationSize * sizeof(predcount_t), sizeof(uint64_t));
     uint64_t incastDataSize = AlignUp(incastSize * sizeof(void*), sizeof(uint64_t));
     uint64_t outcastDataSize = AlignUp(outcastSize * sizeof(void*), sizeof(uint64_t));
     uint64_t expressionDataSize = AlignUp(expressionSize * sizeof(uint64_t), sizeof(uint64_t));

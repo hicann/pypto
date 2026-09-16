@@ -125,12 +125,21 @@ void DeviceExecuteContext::GELaunchRunCached(DevStartArgs* startArgs, PushTaskEn
     this->devProg = startArgs->devProg;
     PerfEnd(PERF_EVT_CONTROL_FLOW_INIT);
     PerfBegin(PERF_EVT_CONTROL_FLOW);
+    const bool fullCache = devProg->ctrlFlowCacheAnchor->IsActivatedFullCache(startArgs);
     for (size_t index = 0; index < devProg->ctrlFlowCacheAnchor->deviceTaskCount; index++) {
         DynDeviceTask* dynTask = reinterpret_cast<DynDeviceTask*>(
             devProg->ctrlFlowCacheAnchor->deviceTaskCacheList[index].dynTaskBase);
-        devProg->ctrlFlowCacheAnchor->PredCountDataRestore(dynTask);
-        devProg->ctrlFlowCacheAnchor->ReadyQueueDataRestore(dynTask, startArgs->nrValidAic);
-        devProg->ctrlFlowCacheAnchor->DieReadyQueueDataRestore(dynTask, startArgs->nrValidAic);
+        devProg->ctrlFlowCacheAnchor->PredCountPingPongSwap(dynTask);
+        if (startArgs->devProg->devArgs.enableAicoreResolve) {
+            devProg->ctrlFlowCacheAnchor->DrcoPredCountDataRestore(dynTask);
+        }
+        // The Bitmap remains unchanged in the sche.
+        // For the full cache scenario, BitmapDataRestoreTask only needs to be executed once.
+        if (!fullCache || !devProg->ctrlFlowCacheAnchor->bitmapRestoreDone) {
+            devProg->ctrlFlowCacheAnchor->BitmapDataRestoreTask(dynTask);
+        }
+        devProg->ctrlFlowCacheAnchor->ReadyQueueDataPingPongSwap(dynTask, startArgs->nrValidAic);
+        devProg->ctrlFlowCacheAnchor->DieReadyQueuePingPongSwap(dynTask, startArgs->nrValidAic);
         devProg->ctrlFlowCacheAnchor->MixTaskDataRestore(dynTask);
         taskContext.UpdateReadyTaskNum(dynTask->readyQueueBackup->readyTaskNum);
 
@@ -147,6 +156,21 @@ void DeviceExecuteContext::GELaunchRunCached(DevStartArgs* startArgs, PushTaskEn
         PROF_STAGE_END(PERF_EVT_STAGE_PUSH_TASK, "push.after\n");
     }
     PerfEnd(PERF_EVT_CONTROL_FLOW);
+}
+
+void DeviceExecuteContext::PingPongRestoreAll(DevStartArgs* startArgs)
+{
+    const bool isFullCache = devProg->ctrlFlowCacheAnchor->IsActivatedFullCache(startArgs);
+    for (size_t index = 0; index < devProg->ctrlFlowCacheAnchor->deviceTaskCount; index++) {
+        DynDeviceTask* dynTask = reinterpret_cast<DynDeviceTask*>(
+            devProg->ctrlFlowCacheAnchor->deviceTaskCacheList[index].dynTaskBase);
+        devProg->ctrlFlowCacheAnchor->PredCountPingPongRestore(dynTask);
+        devProg->ctrlFlowCacheAnchor->ReadyQueueDataPingPongRestore(dynTask);
+        devProg->ctrlFlowCacheAnchor->DieReadyQueuePingPongRestore(dynTask);
+    }
+    if (isFullCache) {
+        devProg->ctrlFlowCacheAnchor->bitmapRestoreDone = true;
+    }
 }
 
 int DeviceExecuteContext::RunControlFlow(DevStartArgs* startArgs)
@@ -214,11 +238,12 @@ int DeviceExecuteContext::GELaunch(DevStartArgs* startArgs, PushTaskEntry tPushT
 int DeviceExecuteContext::GELaunchPartialCache(DevStartArgs* startArgs, PushTaskEntry tPushTask)
 {
     int ret = DEVICE_MACHINE_OK;
+    const bool isActivatedCache = devProg->ctrlFlowCacheAnchor->IsActivatedCache(startArgs);
     DEV_TRACE_DEBUG(
         CtrlEvent(none(), Workspace(Range(startArgs->contextWorkspaceAddr,
                                           startArgs->contextWorkspaceAddr + startArgs->contextWorkspaceSize))));
 
-    if (devProg->ctrlFlowCacheAnchor->IsActivatedPartialCache(startArgs)) {
+    if (isActivatedCache) {
         controlFlowCacheActivated = true;
         DEV_TRACE_DEBUG(CtrlEvent(none(), ControlFlowCachePartRunCache(devProg->ctrlFlowCacheAnchor->deviceTaskCount,
                                                                        devProg->ctrlFlowCacheAnchor->rootTaskCount)));
@@ -235,6 +260,9 @@ int DeviceExecuteContext::GELaunchPartialCache(DevStartArgs* startArgs, PushTask
             return DEVICE_MACHINE_ERROR;
         }
         DEV_IF_INFO { workspace.LogTuningSummary(); }
+    }
+    if (isActivatedCache) {
+        PingPongRestoreAll(startArgs);
     }
     return ret;
 }
