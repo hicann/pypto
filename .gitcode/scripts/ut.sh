@@ -97,8 +97,6 @@ case "${GE_ST_RT2}" in
         rm -rf python/pypto/pypto_impl*.so
         python3 -c "import pypto"
         check_ret "import pypto failed"
-        echo "ut_process=ut_cov" >> "${ATOMGIT_OUTPUT}"
-        exit 0
         ;;
     Cpp_make_clang)
         python3 build_ci.py --clean --frontend=cpp --build_type=Debug --utest --case_execute_timeout=120 --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --clang --asan --job_num=32 --target=tile_fwk_utest
@@ -154,7 +152,7 @@ esac
 coverage_info=$(find ${WORKSPACE} -name "coverage_filtered.info" 2>/dev/null | head -n1)
 if [ -n "${coverage_info}" ]; then
     lcov --list ${coverage_info} 2>/dev/null || true
-    if [[ "${GE_ST_RT2}" =~ make_gnu.* ]] || [[ "${GE_ST_RT2}" = "Py3_ninja" ]]; then
+    if [[ "${GE_ST_RT2}" =~ make_gnu.* ]] || [[ "${GE_ST_RT2}" = "Py3_ninja" ]] || [[ "${GE_ST_RT2}" = "ninja_interpreter" ]]; then
         mv "${coverage_info}" "${WORKSPACE}/coverage_${GE_ST_RT2}.info"
         echo "ut_process=coverage" >> "${ATOMGIT_OUTPUT}"
     fi

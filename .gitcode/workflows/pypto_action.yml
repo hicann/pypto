@@ -137,8 +137,7 @@ stages:
         uses: .gitcode/workflows/llt_action.yml
         with:
           ut_type: 'Py3_ninja'
-          language: 'python'
-          ut_package: 'ut_cov_python_Py3_ninja*.tar.gz'
+          ut_package: 'coverage_*.info'
           image_version: ${{ jobs.JOB_image.outputs.UT_Test_Py3_ninja }}
           runner_spec: 'xlarge'
       JOB_UT_Test_Py3_ninja_interpreter:
@@ -146,8 +145,7 @@ stages:
         uses: .gitcode/workflows/llt_action.yml
         with:
           ut_type: 'ninja_interpreter'
-          language: 'python'
-          ut_package: 'ut_cov_python_ninja_interpreter*.tar.gz'
+          ut_package: 'coverage_*.info'
           image_version: ${{ jobs.JOB_image.outputs.UT_Test_Py3_ninja }}
           runner_spec: 'xlarge'
       JOB_UT_Test_Py3_ninja_simulation:
@@ -234,7 +232,7 @@ stages:
               workspace: ${{ steps.process_checkout.outputs.path }}
               cov_mode: "report"
               ut_field: "pypto"
-              modules: "make_gnu_1 make_gnu_2 make_gnu_3 Py3_ninja"
+              modules: "make_gnu_1 make_gnu_2 make_gnu_3 Py3_ninja ninja_interpreter"
               source_branch: ${{ env.SOURCE_BRANCH }}
               target_branch: ${{ env.TARGET_BRANCH }}
               obs_path: ${{ env.obs_path }}
