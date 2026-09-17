@@ -195,6 +195,62 @@ def test_err_struct_array_mixed_dtype_array_field():
 
 
 # =============================================================================
+# Multi-dimensional / non-scalar array field
+# =============================================================================
+
+def test_err_struct_multidim_array_field():
+    """A 2D array field ([[1, 2], [3, 4]]) must be rejected."""
+
+    with pytest.raises(ParserSyntaxError, match="non-scalar elements"):
+        @pl.jit(auto_mutex=False)
+        def kernel(_jit_entry: pl.DT_INT64):
+            s = pl.struct("S", m=[[1, 2], [3, 4]])
+            _test_result = s.m
+
+        _parse(kernel)
+
+
+def test_err_struct_array_multidim_array_field():
+    """A 2D array field in struct_array must be rejected."""
+
+    with pytest.raises(ParserSyntaxError, match="non-scalar elements"):
+        @pl.jit(auto_mutex=False)
+        def kernel(_jit_entry: pl.DT_INT64):
+            arr = pl.struct_array(2, "S", m=[[1, 2], [3, 4]])
+            _test_result = arr[0].m
+
+        _parse(kernel)
+
+
+# =============================================================================
+# Non-scalar field value (tensor / tile)
+# =============================================================================
+
+def test_err_struct_tensor_field():
+    """A whole tensor as a field value must be rejected."""
+
+    with pytest.raises(ParserSyntaxError, match="must be a scalar or a fixed-size array"):
+        @pl.jit(auto_mutex=False)
+        def kernel(a_t: pl.Tensor[[16], pl.DT_FP16]):
+            s = pl.struct("S", data=a_t)
+            _test_result = s.data
+
+        _parse(kernel)
+
+
+def test_err_struct_array_tensor_field():
+    """A whole tensor as a struct_array field value must be rejected."""
+
+    with pytest.raises(ParserSyntaxError, match="must be a scalar or a fixed-size array"):
+        @pl.jit(auto_mutex=False)
+        def kernel(a_t: pl.Tensor[[16], pl.DT_FP16]):
+            arr = pl.struct_array(2, "S", data=a_t)
+            _test_result = arr[0].data
+
+        _parse(kernel)
+
+
+# =============================================================================
 # Positive cases — valid declarations must NOT be rejected
 # =============================================================================
 
