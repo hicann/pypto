@@ -24,7 +24,7 @@ torch.npu.synchronize()
 
 ### 检测内存问题
 
-PyPTO Pro提供Kernel内存检测功能，可通过`@pypto_pro.language.jit(sanitizer=True)`开启。该功能可检测GM访问越界、Tile访问越界、Tile内存区间重叠以及mutex未正确配对等问题，并在Kernel执行结束后输出检测结果。当前仅Ascend 950PR/Ascend 950DT支持该功能。内存检测会产生额外的运行时开销，仅用于功能调试，具体使用方法将在后续版本补充。
+Kernel的内存访问错误（如GM访问越界、Tile访问越界、Tile内存区间重叠、mutex未正确配对）通常不直接报错，而是表现为结果错乱或执行挂起。可使用[内存检测工具](sanitizer.md)进行定位：在核函数装饰器上设置`@pl.jit(sanitizer=True)`即可自动覆盖Kernel内的全部访问点，检测结果写入报告文件。内存检测会产生额外的运行时开销，仅用于功能调试。
 
 ### 定位精度问题
 
