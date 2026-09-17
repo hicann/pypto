@@ -484,8 +484,13 @@ class Scope:
             return
         obj, key = self._resolve_slot(name.split("."))
         if obj is not None and key is not None:
-            Journal.record(obj, key)  # dotted slot: journal for branch isolation
-            setattr(obj, key, value)
+            current = getattr(obj, key, None)
+            if isinstance(current, pypto.Tensor) and isinstance(value, pypto.Tensor):
+                Journal.record(current)
+                current.set_logical_tensor(value.logical_tensor())
+            else:
+                Journal.record(obj, key)
+                setattr(obj, key, value)
 
 
 class _Missing:
