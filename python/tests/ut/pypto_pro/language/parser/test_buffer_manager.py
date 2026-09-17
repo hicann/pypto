@@ -165,16 +165,26 @@ def test_slot_stride_matches_a_standalone_tile_of_the_same_type():
     assert f"memref_addr={slot_size}" in ir_str, ir_str
 
 
-def test_slot_stride_rounds_a_sub_byte_dtype_up_to_one_byte_per_element():
-    """A 4-bit element cannot reserve half a byte, so each slot over-reserves."""
-
+def test_slot_stride_packs_sub_byte_elements():
     @pl.jit(auto_mutex=True)
     def k(a: pl.Tensor[[64, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[64, 64], dtype=pl.DT_INT4, target_memory=pl.MemorySpace.Mat)
         db = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])  # noqa: F841
 
     ir_str = _ir_to_str(_parse_kernel(k))
-    assert ir_str.count(f"memref_size={64 * 64}") == 2, ir_str
+    assert ir_str.count(f"memref_size={64 * 64 // 2}") == 2, ir_str
+    assert f"memref_addr={64 * 64 // 2}" in ir_str, ir_str
+
+
+def test_fp4_right_tile_group_fits_two_slots_in_64k():
+    @pl.jit(auto_mutex=True)
+    def k(a: pl.Tensor[[1, 1], pl.DT_FP16]):
+        tt = pl.TileType(shape=[256, 256], dtype=pl.DT_FP4E2M1, target_memory=pl.MemorySpace.Right)
+        db = pl.make_tile_group(type=tt, addrs=[0, 0x8000], mutex_ids=[0, 1])  # noqa: F841
+
+    ir_str = _ir_to_str(_parse_kernel(k))
+    assert ir_str.count("memref_size=32768") == 2, ir_str
+    assert "memref_addr=32768" in ir_str, ir_str
 
 
 def test_tile_type_with_a_runtime_shape_rejected():
