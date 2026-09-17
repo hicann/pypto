@@ -59,6 +59,7 @@
       - [自动CV并行流水](programming_guide/pro/advanced_programming/auto_parallel_pipeline.md)
     - [调试调优](programming_guide/pro/debug/index.md)
       - [功能调试](programming_guide/pro/debug/functional_debugging.md)
+      - [内存检测](programming_guide/pro/debug/sanitizer.md)
       - [性能调优](programming_guide/pro/debug/performance_optimization.md)
 - [附录](appendix/index.md)
   - [术语表](appendix/glossary.md)
