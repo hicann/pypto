@@ -252,7 +252,7 @@ StmtPtr SanitizerInstrumenter::MakeLogStmt(uint32_t det_id, std::vector<ExprPtr>
 // tile-count record.
 StmtPtr SanitizerInstrumenter::RecordScalarAccess(const CallPtr& call)
 {
-    CHECK(call->args_.size() >= 2) << "sanitizer: " << call->name_ << " requires (container, offset)";
+    CHECK(call->args_.size() >= 0x2) << "sanitizer: " << call->name_ << " requires (container, offset)";
     const auto& container = call->args_[0];
     auto [tile_dim0, tile_dim1] = TileDims(container);
     if (tile_dim0 >= 0) {
@@ -286,7 +286,7 @@ StmtPtr SanitizerInstrumenter::RecordScalarAccess(const CallPtr& call)
 // included -- everything is judged by the replay).
 StmtPtr SanitizerInstrumenter::RecordValidShape(const CallPtr& call)
 {
-    if (call->args_.size() != 3)
+    if (call->args_.size() != 0x3)
         return nullptr;
     auto [dim0, dim1] = TileDims(call->args_[0]);
     CHECK(dim0 >= 0) << "sanitizer: set_validshape target must be a Tile";
@@ -345,9 +345,9 @@ StmtPtr SanitizerInstrumenter::RecordGmAccess(const CallPtr& call)
     ExprPtr acc_col = TileDim(tile, 1);
     if (call->HasKwarg("tile_dims")) {
         auto tile_dims = call->GetKwarg<std::vector<int>>("tile_dims");
-        if (tile_dims.size() == 2) {
+        if (tile_dims.size() == 0x2) {
             auto off_rank = static_cast<int>(off_tuple->elements_.size());
-            if (tile_dims[0] == off_rank - 2 && tile_dims[1] == off_rank - 1) {
+            if (tile_dims[0] == off_rank - 0x2 && tile_dims[1] == off_rank - 1) {
                 if (call->GetKwarg<bool>("is_transpose", false)) {
                     std::swap(acc_row, acc_col);
                 }
@@ -414,7 +414,8 @@ StmtPtr SanitizerInstrumenter::CollectMakeTile(const CallPtr& call)
     // copies share the span, distinct same-range tiles keep both records and
     // are exactly what the scan must report.
     auto tile_type = As<TileType>(target_type_);
-    CHECK(tile_type != nullptr && tile_type->shape_.size() >= 2) << "sanitizer: make_tile value must be a 2-D TileType";
+    CHECK(tile_type != nullptr && tile_type->shape_.size() >= 0x2)
+        << "sanitizer: make_tile value must be a 2-D TileType";
     CHECK(tile_type->memref_.has_value() && *tile_type->memref_ != nullptr)
         << "sanitizer: make_tile requires a resolved MemRef (frontend enforces addr)";
     int64_t dtype_bytes = std::max<int64_t>(1, tile_type->dtype_.GetBit() / 8);
@@ -456,7 +457,7 @@ StmtPtr SanitizerInstrumenter::CollectMakeTensor(const CallPtr& call)
     // the source's byte capacity (a raw-pointer source records -1: no known
     // bound). Nothing is registered -- the replay needs no host-side view
     // table.
-    CHECK(call->args_.size() >= 2) << "sanitizer: ptr.make_tensor requires (ptr, shape)";
+    CHECK(call->args_.size() >= 0x2) << "sanitizer: ptr.make_tensor requires (ptr, shape)";
     auto shape_tuple = As<MakeTuple>(call->args_[1]);
     CHECK(shape_tuple != nullptr) << "sanitizer: ptr.make_tensor shape must be a MakeTuple";
     auto stride_tuple = As<MakeTuple>(call->args_[2]);

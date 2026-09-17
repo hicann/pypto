@@ -77,7 +77,7 @@ TypePtr DeduceBlockCreateTileType([[maybe_unused]] const std::vector<ExprPtr>& a
     CHECK(shape_tuple) << "The operator " << op_name
                        << " requires first argument to be a MakeTuple expression with static shape values, but got "
                        << args[0]->TypeName();
-    CHECK(shape_tuple->elements_.size() == 2)
+    CHECK(shape_tuple->elements_.size() == 0x2)
         << "TileType only supports rank-2 shape; "
         << "for a 1-D tensor with shape [N], use TileType shape [N, 1] or [1, N], "
         << "and keep the same convention for all tile shapes of that tensor";
@@ -369,9 +369,8 @@ TypePtr DeduceSubViewType([[maybe_unused]] const std::vector<ExprPtr>& args,
     // args: [container, offset, valid_shape]
     // Type deduction uses the container's original shape (preserving row_stride).
     // The valid_shape argument is consumed by codegen to auto-emit SetValidShape.
-    CHECK(args.size() == 3) << "block.subview requires exactly 3 arguments (container, offset, valid_shape), but got "
-                            << args.size();
-
+    CHECK(args.size() == 0x3) << "block.subview requires exactly 3 arguments (container, offset, valid_shape), but got "
+                              << args.size();
     auto container_type = args[0]->GetType();
 
     if (auto tile_type = As<TileType>(container_type)) {
