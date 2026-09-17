@@ -28,6 +28,10 @@
 
 namespace npu::tile_fwk {
 namespace {
+// pto-isa仅支持不超过5维的tensor copyout；6维assemble=>view大tensor一旦拆分，会拆出一个tensor对应多个
+// assemble的结构，后续必然产生多个copyout而不被支持，因此维度超过该值的场景直接跳过拆分。
+constexpr size_t MAX_SPLIT_LARGE_FANOUT_TENSOR_DIM = 5;
+
 Operation* FindAssembleFamilyProducer(const LogicalTensorPtr& input, const LogicalTensorPtr& output)
 {
     Operation* result = nullptr;
@@ -934,6 +938,15 @@ void SplitLargeFanoutTensor::CollectLargeTensor(Function& function)
                 }
             }
             if (!allProducersAssemble || !hasAnyViewConsumer) {
+                continue;
+            }
+            // 6维及以上大tensor不支持copyout，拆分后必然产生多个copyout，跳过拆分
+            if (logicalTensor->GetShape().size() > MAX_SPLIT_LARGE_FANOUT_TENSOR_DIM) {
+                APASS_LOG_INFO_F(Elements::Tensor,
+                                 "Skip SplitLargeTensor for magic[%d] since dim[%zu] exceeds the max copyout "
+                                 "supported dim[%zu].",
+                                 logicalTensor->GetMagic(), logicalTensor->GetShape().size(),
+                                 MAX_SPLIT_LARGE_FANOUT_TENSOR_DIM);
                 continue;
             }
             if (logicalTensor->GetProducers().size() == 1 &&

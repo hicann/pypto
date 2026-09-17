@@ -1882,6 +1882,81 @@ TEST_F(SplitLargeFanoutTensorTest, OneDimNotSplit)
         << " OP_ASSEMBLE after pass, should equal.";
 }
 
+/*
+    构造6维MtoM拓扑: 两个{2, 4, 4, 4, 4, 4}输入assemble到{4, 4, 4, 4, 4, 4}大tensor,
+    大tensor再被两个view分别读取前半和后半部分。
+*/
+void BuildSixDimMtoMGraph(ComputationalGraphBuilder& G)
+{
+    constexpr size_t sixDim = 6;
+    std::vector<int64_t> tileShape(sixDim, 4);
+    tileShape[0] = 2;
+    std::vector<int64_t> largeShape(sixDim, 4);
+    std::vector<int64_t> offsetZero(sixDim, 0);
+    std::vector<int64_t> offsetTile(sixDim, 0);
+    offsetTile[0] = 2;
+
+    std::map<std::string, std::vector<int64_t>> tensors = {
+        {"in1", tileShape}, {"in2", tileShape}, {"out1", tileShape}, {"out2", tileShape}, {"largeTensor", largeShape}};
+    for (const auto& [name, shape] : tensors) {
+        G.AddTensor(DataType::DT_FP32, shape, name);
+        auto tensor = G.GetTensor(name);
+        tensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    }
+
+    // in1/in2 --assemble--> largeTensor
+    std::vector<std::tuple<std::string, std::string, std::vector<int64_t>>> assembleOps = {
+        {"in1", "Assemble_A", offsetZero}, {"in2", "Assemble_B", offsetTile}};
+    for (const auto& [input, opName, offset] : assembleOps) {
+        G.AddOp(Opcode::OP_ASSEMBLE, {input}, {"largeTensor"}, opName);
+        auto assembleOp = G.GetOp(opName);
+        assembleOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_DEVICE_DDR, offset));
+    }
+
+    // largeTensor --view--> out1/out2
+    std::vector<std::tuple<std::string, std::vector<int64_t>>> viewOps = {{"out1", offsetZero}, {"out2", offsetTile}};
+    for (const auto& [output, offset] : viewOps) {
+        std::string opName = "View_" + output.substr(3);
+        G.AddOp(Opcode::OP_VIEW, {"largeTensor"}, {output}, opName);
+        auto viewOp = G.GetOp(opName);
+        viewOp->SetOpAttribute(std::make_shared<ViewOpAttribute>(offset, MemoryType::MEM_DEVICE_DDR));
+    }
+
+    G.SetInCast({"in1", "in2"});
+    G.SetOutCast({"out1", "out2"});
+}
+
+// pto-isa不支持6维tensor的copyout, 6维大tensor拆分后必然产生一个tensor对应多个assemble的场景,
+// 进而在后续产生多个copyout, 因此6维场景应跳过拆分
+TEST_F(SplitLargeFanoutTensorTest, SixDimLargeTensorSkipSplit)
+{
+    ComputationalGraphBuilder G;
+    BuildSixDimMtoMGraph(G);
+    Function* function = G.GetFunction();
+    auto largeTensor = G.GetTensor("largeTensor");
+
+    std::cout << "Build Graph Done." << std::endl;
+    npu::tile_fwk::SplitLargeFanoutTensor splitLargeFanoutTensor;
+    splitLargeFanoutTensor.PreCheck(*function);
+    splitLargeFanoutTensor.RunOnFunction(*function);
+    splitLargeFanoutTensor.PostCheck(*function);
+    std::cout << "Run Pass Done." << std::endl;
+
+    // 验证：跳过拆分后，view仍然从largeTensor读取，assemble仍然写入largeTensor，不产生新的拆分tensor
+    std::unordered_map<int, int> recordAssemble;
+    std::unordered_map<int, int> recordView;
+    for (auto& op : function->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            recordAssemble[op.oOperand.front()->GetMagic()]++;
+        }
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            recordView[op.iOperand.front()->GetMagic()]++;
+        }
+    }
+    EXPECT_EQ(recordView[largeTensor->GetMagic()], 2) << "views should still read the 6-dim large tensor";
+    EXPECT_EQ(recordAssemble[largeTensor->GetMagic()], 2) << "assembles should still write the 6-dim large tensor";
+}
+
 // {1} + {2} + {1} + {1} --assemble--> {5} --view--> {3} + {1}
 void BuildDiffLcmShape(ComputationalGraphBuilder& G)
 {
