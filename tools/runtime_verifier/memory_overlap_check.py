@@ -8,11 +8,7 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the LICENSE.
 # -----------------------------------------------------------------------------------------------------------
-"""基于 controlflow 内存 dump 和 dyn_topo 的离线内存重叠检查。
-
-只需要传入一次运行的 output 目录。脚本不依赖 profiling/swimlane 时间：
-同一 DeviceTask 内，dyn_topo 上互相不可达的两个 Op 视为可能并发，然后检查
-Read-Write 和 Write-Write Operand 的物理地址及各维访问范围。
+"""基于 controlflow 内存 dump 和 dyn_topo 的离线 GM 写出重叠检查。
 """
 
 import argparse
@@ -28,6 +24,8 @@ DYN_TOPO_NAME = "dyn_topo.txt"
 ACCESS_CSV_NAME = "mem_rawtensor_access.csv"
 TASK_OP_BITS = 16
 SEPARATOR = "=" * 100
+GM_OUTCAST_LOCATION = "OUTCAST"
+REPORT_LOG_NAME = "memory_overlap_check.log"
 
 
 @dataclass(frozen=True, order=True)
@@ -377,6 +375,10 @@ def _access_overlap_kind(src: Access, dst: Access) -> Optional[str]:
     return "ALL_DIMENSIONS_OVERLAP"
 
 
+def _is_gm_outcast_write(access: Access) -> bool:
+    return access.is_write and access.location == GM_OUTCAST_LOCATION and access.raw_magic is not None
+
+
 def check_overlaps(
     topo_tasks: Dict[TaskKey, TopoTask],
     accesses: Dict[TaskKey, List[Access]],
@@ -386,12 +388,13 @@ def check_overlaps(
     by_seq: Dict[int, List[Access]] = defaultdict(list)
     for task_accesses in accesses.values():
         for access in task_accesses:
-            by_seq[access.seq_no].append(access)
+            if _is_gm_outcast_write(access):
+                by_seq[access.seq_no].append(access)
 
     conflicts: List[Conflict] = []
     counters: Counter = Counter()
     for seq_no, seq_accesses in sorted(by_seq.items()):
-        seq_accesses.sort(key=lambda access: (access.base, access.end, access.row_number))
+        seq_accesses.sort(key=lambda access: (access.base, access.end, access.raw_magic, access.row_number))
         counters["deviceTasks"] += 1
         counters["sweepAccesses"] += len(seq_accesses)
         active: List[Access] = []
@@ -403,32 +406,24 @@ def check_overlaps(
                 if candidate.key == current.key:
                     counters["skippedSameTaskPairs"] += 1
                     continue
+                if candidate.raw_magic != current.raw_magic:
+                    counters["skippedDifferentTensor"] += 1
+                    continue
                 src, dst = (
                     (candidate, current)
                     if candidate.key < current.key
                     else (current, candidate)
                 )
-                if not src.is_write and not dst.is_write:
-                    counters["skippedReadReadPairs"] += 1
-                    continue
-                counters["spatialRuleChecks"] += 1
                 overlap_kind = _access_overlap_kind(src, dst)
-                if overlap_kind is None:
-                    counters["dimensionDisjointPairs"] += 1
+                if overlap_kind != "ALL_DIMENSIONS_OVERLAP":
+                    counters["skippedNotSameWindow"] += 1
                     continue
-                counters["spatialConflictCandidates"] += 1
                 if reachability.is_ordered(src.key, dst.key):
                     counters["orderedSpatialCandidates"] += 1
                     continue
-                counters["possiblyConcurrentCandidates"] += 1
-                race_kind = (
-                    "RACE_WRITE_WRITE"
-                    if src.is_write and dst.is_write
-                    else "RACE_READ_WRITE"
-                )
                 conflicts.append(
                     Conflict(
-                        race_kind=race_kind,
+                        race_kind="RACE_WRITE_WRITE",
                         overlap_kind=overlap_kind,
                         src=src,
                         dst=dst,
@@ -436,7 +431,7 @@ def check_overlaps(
                         dst_topo=topo_tasks[dst.key],
                     )
                 )
-                counters[race_kind] += 1
+                counters["RACE_WRITE_WRITE"] += 1
                 counters[overlap_kind] += 1
             active.append(current)
     counters["topologyTaskPairQueries"] = reachability.queried_pair_count
@@ -445,175 +440,86 @@ def check_overlaps(
     return conflicts, counters
 
 
-def _format_interval(begin: int, end: int) -> str:
-    return f"[{begin}, {end})"
-
-
 def _format_hex_interval(begin: int, end: int) -> str:
     return f"[0x{begin:x}, 0x{end:x})"
 
 
-def _print_task(role: str, access: Access, topo: TopoTask):
-    print(f"{role}:")
-    print(
-        f"  DeviceTask: seqNo={access.seq_no}; "
-        f"RootFunction: funcIdx={access.func_idx}, rootIndex={access.root_index}, "
-        f"topoRootIndex={topo.root_index}, rootHash={topo.root_hash}"
-    )
-    print(
-        f"  Op: taskId={access.task_id}, opIdx={access.op_idx}, opmagic={topo.opmagic}, "
-        f"leafIndex={topo.leaf_index}, leafHash={topo.leaf_hash}, "
-        f"coreType={topo.core_type}, psgId={topo.psg_id}, wrapId={topo.wrap_id}"
-    )
+def _leaf_pair_key(conflict: Conflict) -> Tuple[str, str]:
+    lhs = conflict.src_topo.leaf_hash
+    rhs = conflict.dst_topo.leaf_hash
+    return (lhs, rhs) if lhs <= rhs else (rhs, lhs)
 
 
-def _print_operand(role: str, access: Access):
-    access_mode = "WRITE" if access.is_write else "READ"
-    print(
-        f"  {role}: {access.operand_name}, access={access_mode}, csvRow={access.row_number}, "
-        f"location={access.location}, rawMagic={access.raw_magic}"
+def _format_op_line(role: str, access: Access, topo: TopoTask) -> str:
+    return (
+        f"{role}: leafHash={topo.leaf_hash} funcIdx={access.func_idx} rootHash={topo.root_hash} "
+        f"coreType={topo.core_type} opIdx={access.op_idx} opmagic={topo.opmagic} taskId={access.task_id}"
     )
-    print(
-        f"  RawTensor: address={_format_hex_interval(access.base, access.end)}, "
-        f"size={access.end - access.base} bytes"
-    )
-    print(f"  Shape: offset={access.offset}, shape={access.shape}, rawShape={access.raw_shape}")
-
-
-def _print_overlap_detail(conflict: Conflict):
-    src, dst = conflict.src, conflict.dst
-    address_begin = max(src.base, dst.base)
-    address_end = min(src.end, dst.end)
-    print("Overlap:")
-    print(
-        f"  Physical intersection: {_format_hex_interval(address_begin, address_end)}, "
-        f"size={address_end - address_begin} bytes"
-    )
-    if conflict.overlap_kind != "ALL_DIMENSIONS_OVERLAP":
-        print("  Dimension intersection: unavailable because allocation ranges/dimensions are inconsistent")
-        return
-    for dim in range(len(src.offset)):
-        src_begin = src.offset[dim]
-        src_end = src_begin + src.shape[dim]
-        dst_begin = dst.offset[dim]
-        dst_end = dst_begin + dst.shape[dim]
-        overlap_begin = max(src_begin, dst_begin)
-        overlap_end = min(src_end, dst_end)
-        print(
-            f"  dim[{dim}]: src={_format_interval(src_begin, src_end)}, "
-            f"dst={_format_interval(dst_begin, dst_end)}, "
-            f"intersection={_format_interval(overlap_begin, overlap_end)}"
-        )
-
-
-def _print_conflict_kind_guide():
-    print()
-    print("Overlap Kind descriptions:")
-    print(
-        "  ALL_DIMENSIONS_OVERLAP: Two possibly concurrent tasks access the same full physical allocation,"
-        "and all dimension access ranges overlap."
-    )
-    print(
-        "  INVALID_PARTIAL_ADDRESS_OVERLAP: Two RawTensor physical ranges partially overlap,"
-        "but not the same full allocation; check address, size and allocation logic."
-    )
-    print(
-        "  INVALID_RAW_SHAPE_MISMATCH: Two RawTensors use the same full physical range,"
-        "but rawShape differs, cannot reliably compare in the same coordinate system."
-    )
-    print(
-        "  INVALID_DIMENSION_MISMATCH: Two RawTensors use the same full physical range,"
-        "but offset/shape dimension count differs, cannot reliably compare per-dimension intersection."
-    )
-    print("Race Kind descriptions:")
-    print("  RACE_READ_WRITE: One task reads, another writes to conflicting memory.")
-    print("  RACE_WRITE_WRITE: Both tasks write to conflicting memory.")
 
 
 def print_report(
     conflicts: List[Conflict],
     unchecked_access_count: int,
+    check_counters: Optional[Counter] = None,
 ):
+    unique_pairs: Dict[Tuple[str, str], Conflict] = {}
+    tensors_by_pair: Dict[Tuple[str, str], List[Conflict]] = defaultdict(list)
+    for conflict in conflicts:
+        key = _leaf_pair_key(conflict)
+        if key not in unique_pairs:
+            unique_pairs[key] = conflict
+        if conflict.src.raw_magic not in {item.src.raw_magic for item in tensors_by_pair[key]}:
+            tensors_by_pair[key].append(conflict)
+
     print(SEPARATOR)
-    print("PyPTO Memory Overlap Check (dyn_topo based)")
+    print("PyPTO Memory Overlap Check (GM outcast write-write, dyn_topo based)")
     print(SEPARATOR)
-    if conflicts:
-        print(f"RESULT: FAIL - Found {len(conflicts)} memory overlap(s).")
+    if check_counters:
+        print(
+            f"Checked GM outcast writes={check_counters.get('sweepAccesses', 0)}, "
+            f"same-tensor address pairs={check_counters.get('addressCandidatePairs', 0)}, "
+            f"ordered skipped={check_counters.get('orderedSpatialCandidates', 0)}"
+        )
+    unique_count = len(unique_pairs)
+    if unique_count:
+        print(f"RESULT: FAIL - Found {unique_count} unique leafHash pair(s) with concurrent GM write-write overlap.")
         if unchecked_access_count:
             print(f"WARNING: {unchecked_access_count} access record(s) are invalid and were not checked.")
     elif unchecked_access_count:
         print(f"RESULT: FAIL - {unchecked_access_count} access record(s) are invalid, cannot complete full check.")
     else:
-        print("RESULT: PASS - No Read-Write/Write-Write memory overlap found between topology-independent tasks.")
+        print("RESULT: PASS - No unordered GM write-write overlap on the same tensor.")
 
-    if not conflicts:
+    if not unique_pairs:
         return
 
-    _print_conflict_kind_guide()
-    indexed_conflicts = list(enumerate(conflicts, start=1))
-    compact_conflicts = [
-        (index, conflict)
-        for index, conflict in indexed_conflicts
-        if conflict.overlap_kind != "ALL_DIMENSIONS_OVERLAP"
-    ]
-    if compact_conflicts:
+    print()
+    print("Rule: two WRITEs to the same GM outcast (same rawMagic and address range), overlapping offset/shape,")
+    print("and neither task can reach the other in dyn_topo.")
+    print()
+    print(SEPARATOR)
+    print("Unique leafHash pairs")
+    print(SEPARATOR)
+    for pair_index, key in enumerate(sorted(unique_pairs), start=1):
+        representative = unique_pairs[key]
+        src, dst = representative.src, representative.dst
+        src_topo, dst_topo = representative.src_topo, representative.dst_topo
+        if src_topo.leaf_hash > dst_topo.leaf_hash:
+            src, dst = dst, src
+            src_topo, dst_topo = dst_topo, src_topo
         print()
-        print(SEPARATOR)
-        print("Non-full-dimension overlap anomalies (compact list)")
-        print(SEPARATOR)
-        for conflict_index, conflict in compact_conflicts:
+        print(f"[Pair #{pair_index}]")
+        print(f"  {_format_op_line('src', src, src_topo)}")
+        print(f"  {_format_op_line('dst', dst, dst_topo)}")
+        for tensor_conflict in tensors_by_pair[key]:
             print(
-                f"[Conflict #{conflict_index}] overlapKind={conflict.overlap_kind}, "
-                f"raceKind={conflict.race_kind}, "
-                f"src=(funcIdx={conflict.src.func_idx}, opIdx={conflict.src.op_idx}), "
-                f"dst=(funcIdx={conflict.dst.func_idx}, opIdx={conflict.dst.op_idx})"
+                f"  tensor rawMagic={tensor_conflict.src.raw_magic} "
+                f"address={_format_hex_interval(tensor_conflict.src.base, tensor_conflict.src.end)} "
+                f"offset={tensor_conflict.src.offset} shape={tensor_conflict.src.shape}"
             )
 
-    all_dimension_conflicts: Dict[
-        Tuple[TaskKey, TaskKey], List[Tuple[int, Conflict]]
-    ] = defaultdict(list)
-    for conflict_index, conflict in indexed_conflicts:
-        if conflict.overlap_kind == "ALL_DIMENSIONS_OVERLAP":
-            all_dimension_conflicts[(conflict.src.key, conflict.dst.key)].append(
-                (conflict_index, conflict)
-            )
 
-    if all_dimension_conflicts:
-        print()
-        print(SEPARATOR)
-        print("ALL_DIMENSIONS_OVERLAP details")
-        print(SEPARATOR)
-        for group_index, (task_pair, indexed_group) in enumerate(
-            sorted(all_dimension_conflicts.items(), key=lambda item: item[0]),
-            start=1,
-        ):
-            group = [conflict for _, conflict in indexed_group]
-            representative = group[0]
-            print()
-            print(SEPARATOR)
-            print(
-                f"[Task Pair #{group_index}] seqNo={task_pair[0].seq_no}, "
-                f"srcTaskId={task_pair[0].task_id}, dstTaskId={task_pair[1].task_id}, "
-                f"operandConflicts={len(group)}"
-            )
-            print(
-                "Dependency: Two Ops are in the same DeviceTask and mutually unreachable "
-                "in dyn_topo transitive closure, thus may execute concurrently."
-            )
-            _print_task("Source Task", representative.src, representative.src_topo)
-            _print_task("Destination Task", representative.dst, representative.dst_topo)
-            for conflict_index, conflict in indexed_group:
-                print()
-                print(
-                    f"  [Operand Conflict #{conflict_index}] raceKind={conflict.race_kind}, "
-                    f"overlapKind={conflict.overlap_kind}"
-                )
-                _print_operand("Source Operand", conflict.src)
-                _print_operand("Destination Operand", conflict.dst)
-                _print_overlap_detail(conflict)
-
-
-def run(output_dir: str) -> int:
+def run(output_dir: str, log_path: Optional[str] = None) -> int:
     dyn_topo_path, access_csv_path = resolve_inputs(output_dir)
     logging.info("dyn_topo: %s", dyn_topo_path)
     logging.info("memory access dump: %s", access_csv_path)
@@ -624,23 +530,51 @@ def run(output_dir: str) -> int:
     validate_task_sets(topo_tasks, accesses)
     logging.info("loaded topo tasks=%d, access tasks=%d", len(topo_tasks), len(accesses))
 
-    conflicts, _ = check_overlaps(topo_tasks, accesses)
+    conflicts, check_counters = check_overlaps(topo_tasks, accesses)
     unchecked_access_count = sum(
         access_stats[name]
         for name in ("skippedNonConcrete", "skippedInvalidRange", "skippedInvalidShape")
     )
-    print_report(conflicts, unchecked_access_count)
+    if log_path is None:
+        log_path = os.path.join(output_dir, REPORT_LOG_NAME)
+    os.makedirs(os.path.dirname(os.path.abspath(log_path)) or ".", exist_ok=True)
+    with open(log_path, "w", encoding="utf-8") as log_file:
+        original_stdout = sys.stdout
+        sys.stdout = _TeeWriter(original_stdout, log_file)
+        try:
+            print_report(conflicts, unchecked_access_count, check_counters)
+        finally:
+            sys.stdout = original_stdout
+    logging.info("report log: %s", log_path)
     return 1 if conflicts or unchecked_access_count else 0
+
+
+class _TeeWriter:
+    def __init__(self, *streams):
+        self._streams = streams
+
+    def write(self, data):
+        for stream in self._streams:
+            stream.write(data)
+
+    def flush(self):
+        for stream in self._streams:
+            stream.flush()
 
 
 def main():
     parser = argparse.ArgumentParser(
         description=(
-            "Check memory overlap between topology-independent Ops based on dyn_topo.txt and mem_rawtensor_access.csv "
-            "in the output directory."
+            "Check unordered GM outcast write-write overlap (same tensor, overlapping offset/shape) "
+            "using dyn_topo.txt and mem_rawtensor_access.csv."
         )
     )
     parser.add_argument("output_dir", help="Output directory of a single run")
+    parser.add_argument(
+        "--log-file",
+        default=None,
+        help=f"Report path (default: <output_dir>/{REPORT_LOG_NAME})",
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
@@ -648,7 +582,7 @@ def main():
         print(f"RESULT: FAIL - output directory does not exist: {args.output_dir}")
         return 1
     try:
-        return run(os.path.abspath(args.output_dir))
+        return run(os.path.abspath(args.output_dir), args.log_file)
     except (OSError, ValueError) as error:
         print(f"RESULT: FAIL - memory overlap check failed: {error}")
         return 1
