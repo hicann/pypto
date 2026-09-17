@@ -25,6 +25,7 @@
 #include "machine/utils/dynamic/device_task.h"
 #include "machine/utils/dynamic/dev_encode_program_ctrlflow_cache.h"
 #include "machine/utils/dynamic/dev_encode_function_dupped_data.h"
+#include "machine/utils/dynamic/dev_start_args.h"
 #include "machine/utils/queues.h"
 #include "interface/machine/device/tilefwk/aikernel_device_task.h"
 #include "interface/configs/config_manager.h"
@@ -118,6 +119,93 @@ void SetupCtrlCache(DevControlFlowCache& ctrl, std::vector<uint8_t>& cacheBuf, s
     ctrl.cacheData = DevRelocVector<uint8_t>(static_cast<int>(cacheSize), cacheBuf.data());
     ctrl.cacheDataOffset = 0;
 }
+
+// Packs {kind, value} into the 64-bit cache-form word stored in rawTensorAddrBackup arrays.
+uint64_t CacheFormWord(AddressCacheKind kind, uint64_t value)
+{
+    AddressDescriptor desc = AddressDescriptor::MakeCache(kind, value);
+    uint64_t word = 0;
+    std::memcpy(&word, &desc, sizeof(word));
+    return word;
+}
+
+// Builds a DevAscendFunctionDuppedData whose incast/outcast AddressDescriptor arrays
+// live at data_[0..]: incast at base 0, outcast right behind the incast entries.
+DevAscendFunctionDuppedData* SetupIncastOutcastDup(std::array<uint8_t, 1024>& dupBuf, uint32_t incastNum,
+                                                   uint32_t outcastNum)
+{
+    auto* duppedData = reinterpret_cast<DevAscendFunctionDuppedData*>(dupBuf.data());
+    duppedData->source_ = nullptr;
+    duppedData->incastList_.size = incastNum;
+    duppedData->incastList_.base = 0;
+    duppedData->outcastList_.size = outcastNum;
+    duppedData->outcastList_.base = incastNum * static_cast<uint32_t>(sizeof(AddressDescriptor));
+    return duppedData;
+}
+
+// Single-task/single-dup fixture for the incast/outcast reloc table: dup0 carries
+// 2 incast (Input#1, Workspace@kWsOffset) and 2 outcast (Output#0, Comm) descriptors,
+// so the built table holds 4 batches in kind order Workspace/Input/Output/Comm.
+// DevControlFlowCache is placement-new'ed at the blob start because the reloc table
+// stores every pointer as an offset from `this` (same layout as production).
+struct RelocTableFixture {
+    static constexpr uint64_t kDstWorkspace = 0x100000;
+    static constexpr uint64_t kWsOffset = 0x2000;
+    static constexpr uint64_t kCommAddr = (1ULL << 58) | 0x1234;
+    static constexpr uint64_t kInputAddr = 0xAAA1000;
+    static constexpr uint64_t kOutputAddr = 0xAAA2000;
+
+    DeviceWorkspaceAllocator workspace;
+    std::unique_ptr<DynDeviceTask> dyntask{std::make_unique<DynDeviceTask>(workspace)};
+    DevAscendFunctionDuppedData* duppedData{nullptr};
+    DynFuncHeader* header{nullptr};
+    uint64_t* live{nullptr};
+    uint64_t* backup{nullptr};
+    DevControlFlowCache* ctrl{nullptr};
+    DeviceTaskCache entry{};
+    std::array<DevTensorData, 3> tensors{};
+    DevStartArgs args{};
+
+    RelocTableFixture()
+    {
+        blob.assign(512 * 1024, 0);
+        ctrl = new (blob.data()) DevControlFlowCache();
+        ctrl->cacheData = DevRelocVector<uint8_t>(static_cast<int>(blob.size()), blob.data());
+        ctrl->cacheDataOffset = (sizeof(DevControlFlowCache) + CFGCACHE_ALIGN - 1) / CFGCACHE_ALIGN * CFGCACHE_ALIGN;
+
+        header = static_cast<DynFuncHeader*>(ctrl->AllocateCache(sizeof(DynFuncHeader) + sizeof(DynFuncData)));
+        header->seqNo = 0;
+        header->funcNum = 1;
+        header->funcSize = static_cast<uint32_t>(sizeof(DynFuncHeader) + sizeof(DynFuncData));
+        live = static_cast<uint64_t*>(ctrl->AllocateCache(4 * sizeof(uint64_t)));
+        backup = static_cast<uint64_t*>(ctrl->AllocateCache(4 * sizeof(uint64_t)));
+        header->At(0).rawTensorAddr = live;
+
+        duppedData = SetupIncastOutcastDup(dupBuf, 2, 2);
+        dyntask->dynFuncDataList = header;
+        dyntask->dynFuncDataCacheList[0].duppedData = duppedData;
+        dyntask->dynFuncDataBackupList[0].rawTensorAddrBackup = backup;
+        backup[0] = CacheFormWord(AddressCacheKind::Input, 1);
+        backup[1] = CacheFormWord(AddressCacheKind::Workspace, kWsOffset);
+        backup[2] = CacheFormWord(AddressCacheKind::Output, 0);
+        backup[3] = CacheFormWord(AddressCacheKind::Communication, kCommAddr);
+
+        entry.dynTaskBase = dyntask.get();
+        ctrl->deviceTaskCacheList = DevRelocVector<DeviceTaskCache>(1, &entry);
+        ctrl->deviceTaskCount = 1;
+
+        tensors[1].address = kInputAddr;
+        tensors[2].address = kOutputAddr;
+        args.devTensorList = tensors.data();
+        args.inputTensorSize = 2;
+        args.outputTensorSize = 1;
+        args.contextWorkspaceAddr = kDstWorkspace;
+    }
+
+private:
+    std::vector<uint8_t> blob;
+    std::array<uint8_t, 1024> dupBuf{};
+};
 
 } // namespace
 
@@ -543,4 +631,96 @@ TEST(CtrlFlowCacheDrcoUt, DrcoReadyQueueDataRestore_WithMixWraps)
         EXPECT_EQ(gq->head, 0U);
         EXPECT_EQ(gq->tail, 0U);
     }
+}
+
+TEST(CtrlFlowCacheRelocUt, BuildIncastOutcastRelocTable_EmitsKindOrderedBatches)
+{
+    RelocTableFixture f;
+    f.ctrl->BuildIncastOutcastRelocTable();
+
+    ASSERT_EQ(f.ctrl->taskRelocTableCount, 1U);
+    ASSERT_NE(f.ctrl->taskRelocTableOffset, 0U);
+
+    const uint8_t* base = f.blob.data();
+    auto* table = reinterpret_cast<const DevControlFlowCache::TaskRelocEntry*>(base + f.ctrl->taskRelocTableOffset);
+    EXPECT_EQ(table[0].batchCount, 4U);
+    EXPECT_EQ(table[0].dynFuncHeaderOffset, static_cast<uint64_t>(reinterpret_cast<const uint8_t*>(f.header) - base));
+
+    // Batches must be dup-major and kind-ascending, each carrying the base offsets of
+    // the dup's backup (src) and live (dst) arrays and a compact index segment.
+    auto* batches = reinterpret_cast<const DevControlFlowCache::IncastOutcastRelocBatch*>(base +
+                                                                                          table[0].batchListOffset);
+    const AddressCacheKind kExpectedKinds[4] = {AddressCacheKind::Workspace, AddressCacheKind::Input,
+                                                AddressCacheKind::Output, AddressCacheKind::Communication};
+    const uint16_t kExpectedIdx[4] = {1, 0, 2, 3};
+    for (uint32_t j = 0; j < table[0].batchCount; ++j) {
+        EXPECT_EQ(batches[j].kind, kExpectedKinds[j]);
+        EXPECT_EQ(batches[j].descCount, 1U);
+        EXPECT_EQ(batches[j].srcBaseOffset, static_cast<uint64_t>(reinterpret_cast<const uint8_t*>(f.backup) - base));
+        EXPECT_EQ(batches[j].dstBaseOffset, static_cast<uint64_t>(reinterpret_cast<const uint8_t*>(f.live) - base));
+        auto* idx = reinterpret_cast<const uint16_t*>(base + batches[j].idxListOffset);
+        EXPECT_EQ(idx[0], kExpectedIdx[j]);
+    }
+}
+
+TEST(CtrlFlowCacheRelocUt, RelocIncastOutcastTask_TablePath_ResolvesAllKinds)
+{
+    RelocTableFixture f;
+    f.ctrl->BuildIncastOutcastRelocTable();
+
+    f.ctrl->RelocIncastOutcastTask(0, 0, RelocTableFixture::kDstWorkspace, &f.args);
+
+    // live layout: [0]=Input#1, [1]=Workspace offset, [2]=Output#0, [3]=Comm.
+    EXPECT_EQ(f.live[0], RelocTableFixture::kInputAddr);
+    EXPECT_EQ(f.live[1], RelocTableFixture::kDstWorkspace + RelocTableFixture::kWsOffset);
+    EXPECT_EQ(f.live[2], RelocTableFixture::kOutputAddr);
+    EXPECT_EQ(f.live[3], RelocTableFixture::kCommAddr);
+    EXPECT_EQ(f.dyntask->dynFuncDataList->startArgs, &f.args);
+}
+
+TEST(CtrlFlowCacheRelocUt, RelocIncastOutcastTask_NoTable_FallsBackToStructural)
+{
+    DeviceWorkspaceAllocator workspace;
+    auto dyntask = std::make_unique<DynDeviceTask>(workspace);
+
+    std::array<uint8_t, sizeof(DynFuncHeader) + 8 * sizeof(DynFuncData)> hdrBuf{};
+    SetupDynFuncHeader(dyntask.get(), hdrBuf, 1);
+
+    std::array<uint8_t, 1024> dupBuf{};
+    auto* duppedData = SetupIncastOutcastDup(dupBuf, 2, 2);
+    dyntask->dynFuncDataCacheList[0].duppedData = duppedData;
+
+    std::array<uint64_t, 4> backup{};
+    backup[0] = CacheFormWord(AddressCacheKind::Input, 1);
+    backup[1] = CacheFormWord(AddressCacheKind::Workspace, RelocTableFixture::kWsOffset);
+    backup[2] = CacheFormWord(AddressCacheKind::Output, 0);
+    backup[3] = CacheFormWord(AddressCacheKind::Communication, RelocTableFixture::kCommAddr);
+    dyntask->dynFuncDataBackupList[0].rawTensorAddrBackup = backup.data();
+
+    // No BuildIncastOutcastRelocTable: taskRelocTableCount(0) != deviceTaskCount(1)
+    // must route the call into RelocIncastOutcastTaskStructural, which resolves the
+    // descriptors into the dupped data's own incast/outcast arrays.
+    DevControlFlowCache ctrl;
+    DeviceTaskCache entry;
+    entry.dynTaskBase = dyntask.get();
+    ctrl.deviceTaskCacheList = DevRelocVector<DeviceTaskCache>(1, &entry);
+    ctrl.deviceTaskCount = 1;
+
+    std::array<DevTensorData, 3> tensors{};
+    tensors[1].address = RelocTableFixture::kInputAddr;
+    tensors[2].address = RelocTableFixture::kOutputAddr;
+    DevStartArgs args{};
+    args.devTensorList = tensors.data();
+    args.inputTensorSize = 2;
+    args.outputTensorSize = 1;
+    args.contextWorkspaceAddr = RelocTableFixture::kDstWorkspace;
+
+    ctrl.RelocIncastOutcastTask(0, 0, RelocTableFixture::kDstWorkspace, &args);
+
+    EXPECT_EQ(duppedData->GetIncastAddress(0).GetAddressValue(), RelocTableFixture::kInputAddr);
+    EXPECT_EQ(duppedData->GetIncastAddress(1).GetAddressValue(),
+              RelocTableFixture::kDstWorkspace + RelocTableFixture::kWsOffset);
+    EXPECT_EQ(duppedData->GetOutcastAddress(0).GetAddressValue(), RelocTableFixture::kOutputAddr);
+    EXPECT_EQ(duppedData->GetOutcastAddress(1).GetAddressValue(), RelocTableFixture::kCommAddr);
+    EXPECT_EQ(dyntask->dynFuncDataList->startArgs, &args);
 }

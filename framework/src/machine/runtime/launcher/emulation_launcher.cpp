@@ -247,9 +247,10 @@ int EmulationLauncher::BuildControlFlowCacheWithEmulationTensorData(
     hostCtrlFlowCache->isRecording = false;
     hostCtrlFlowCache->isActivated = true;
     TryResetBlockDimForPreLaunch(hostCtrlFlowCache, devProg, config);
-    hostCtrlFlowCache->CalcUsedCacheSize();
     uint64_t contextWorkspaceAddr = hostCtrlFlowCache->contextWorkspaceAddr;
     hostCtrlFlowCache->IncastOutcastAddrReloc(contextWorkspaceAddr, 0, nullptr);
+    hostCtrlFlowCache->BuildIncastOutcastRelocTable();
+    hostCtrlFlowCache->CalcUsedCacheSize();
     hostCtrlFlowCache->RuntimeAddrRelocWorkspace(contextWorkspaceAddr, 0, nullptr, nullptr, nullptr,
                                                  devProg->GetParallelism());
     hostCtrlFlowCache->RuntimeAddrRelocProgram(reinterpret_cast<uint64_t>(devProg), 0);

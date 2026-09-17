@@ -305,6 +305,8 @@ static inline std::string DumpShape(const DevShape& shape)
     return oss.str();
 }
 
+enum class AddressCacheKind : uint32_t { Workspace = 0, Input, Output, Communication, MaxKind };
+
 struct AddressDescriptor {
     union {
         struct {
@@ -339,13 +341,18 @@ struct AddressDescriptor {
         return desc;
     }
 
-    static AddressDescriptor MakeCache(uint64_t kind, uint64_t value)
+    /* Mask of the low-60-bit cacheValue field of the cache-form encoding. */
+    static constexpr uint64_t kCacheValueMask = (1ULL << 60) - 1;
+
+    static AddressDescriptor MakeCache(AddressCacheKind kind, uint64_t value)
     {
         AddressDescriptor desc;
         desc.cacheValue = value;
-        desc.cacheKind = kind;
+        desc.cacheKind = static_cast<uint64_t>(kind);
         return desc;
     }
+
+    AddressCacheKind GetCacheKind() const { return static_cast<AddressCacheKind>(cacheKind); }
 
     bool IsAddress() const { return !isRtOutcast; }
     uint64_t GetAddress() const

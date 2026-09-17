@@ -38,6 +38,31 @@ bool ForEachIncastOutcastAddr(DynDeviceTaskBase* base, Func func)
     }
     return true;
 }
+
+template <AddressCacheKind Kind>
+void RelocLoop(uint32_t descCount, const uint16_t* idxList, uint64_t* dst, const uint64_t* src, uint64_t wsShift,
+               DevStartArgsBase* devStartArgs)
+{
+    for (uint32_t k = 0; k < descCount; k++) {
+        uint32_t i = idxList[k];
+        uint64_t srcVal = src[i];
+        if constexpr (Kind == AddressCacheKind::Workspace) {
+            dst[i] = srcVal + wsShift;
+        } else if constexpr (Kind == AddressCacheKind::Input) {
+            dst[i] = devStartArgs->GetInputTensor(static_cast<int>(srcVal & AddressDescriptor::kCacheValueMask))
+                         .address;
+        } else if constexpr (Kind == AddressCacheKind::Output) {
+            dst[i] = devStartArgs->GetOutputTensor(static_cast<int>(srcVal & AddressDescriptor::kCacheValueMask))
+                         .address;
+        } else if constexpr (Kind == AddressCacheKind::Communication) {
+            dst[i] = srcVal & AddressDescriptor::kCacheValueMask;
+        } else {
+            DEV_ERROR(ProgEncodeErr::CACHE_RELOC_KIND_INVALID,
+                      "#ctrl.task.pre.cache.reloc: [RelocDescFromCache] Invalid kind: %u\n",
+                      static_cast<uint32_t>(Kind));
+        }
+    }
+}
 } // namespace
 
 void DevControlFlowCache::MatchInputOutputDump(DevStartArgsBase* startArgs) const
@@ -479,11 +504,11 @@ void DevControlFlowCache::RelocBuildInputOutputDesc(
 {
     for (uint64_t i = 0; i < devStartArgs->inputTensorSize; i++) {
         uint64_t addr = devStartArgs->GetInputTensor(i).address;
-        cacheInputOutputDict[addr] = AddressDescriptor::MakeCache(ADDRESS_CACHE_KIND_INPUT, i);
+        cacheInputOutputDict[addr] = AddressDescriptor::MakeCache(AddressCacheKind::Input, i);
     }
     for (uint64_t i = 0; i < devStartArgs->outputTensorSize; i++) {
         uint64_t addr = devStartArgs->GetOutputTensor(i).address;
-        cacheInputOutputDict[addr] = AddressDescriptor::MakeCache(ADDRESS_CACHE_KIND_OUTPUT, i);
+        cacheInputOutputDict[addr] = AddressDescriptor::MakeCache(AddressCacheKind::Output, i);
     }
 }
 
@@ -493,11 +518,11 @@ void DevControlFlowCache::RelocBuildInputOutputDesc(
 {
     for (uint64_t i = 0; i < inputTensorDataList.size(); i++) {
         uint64_t addr = inputTensorDataList[i].address;
-        cacheInputOutputDict[addr] = AddressDescriptor::MakeCache(ADDRESS_CACHE_KIND_INPUT, i);
+        cacheInputOutputDict[addr] = AddressDescriptor::MakeCache(AddressCacheKind::Input, i);
     }
     for (uint64_t i = 0; i < outputTensorDataList.size(); i++) {
         uint64_t addr = outputTensorDataList[i].address;
-        cacheInputOutputDict[addr] = AddressDescriptor::MakeCache(ADDRESS_CACHE_KIND_OUTPUT, i);
+        cacheInputOutputDict[addr] = AddressDescriptor::MakeCache(AddressCacheKind::Output, i);
     }
 }
 
@@ -509,30 +534,30 @@ void DevControlFlowCache::RelocDescToCache(AddressDescriptor& desc, const RelocR
     if (cacheInputOutputDict.count(addr)) {
         resultDesc = cacheInputOutputDict[addr];
     } else if (addr & (1UL << 58)) {
-        resultDesc = AddressDescriptor::MakeCache(ADDRESS_CACHE_KIND_COMM, addr);
+        resultDesc = AddressDescriptor::MakeCache(AddressCacheKind::Communication, addr);
     } else {
         relocWorkspace.Reloc(addr);
-        resultDesc = AddressDescriptor::MakeCache(ADDRESS_CACHE_KIND_WORKSPACE, addr);
+        resultDesc = AddressDescriptor::MakeCache(AddressCacheKind::Workspace, addr);
     }
     desc = resultDesc;
 }
 
-void DevControlFlowCache::RelocDescFromCache(AddressDescriptor& desc, const RelocRange& relocWorkspace,
-                                             DevStartArgsBase* devStartArgs)
+void DevControlFlowCache::RelocDescFromCache(const AddressDescriptor& desc, AddressDescriptor& result,
+                                             const RelocRange& relocWorkspace, DevStartArgsBase* devStartArgs)
 {
     uint64_t resultAddr = 0;
-    switch (desc.cacheKind) {
-        case ADDRESS_CACHE_KIND_WORKSPACE:
+    switch (desc.GetCacheKind()) {
+        case AddressCacheKind::Workspace:
             resultAddr = desc.cacheValue;
             relocWorkspace.Reloc(resultAddr);
             break;
-        case ADDRESS_CACHE_KIND_INPUT:
+        case AddressCacheKind::Input:
             resultAddr = devStartArgs->GetInputTensor(desc.cacheValue).address;
             break;
-        case ADDRESS_CACHE_KIND_OUTPUT:
+        case AddressCacheKind::Output:
             resultAddr = devStartArgs->GetOutputTensor(desc.cacheValue).address;
             break;
-        case ADDRESS_CACHE_KIND_COMM:
+        case AddressCacheKind::Communication:
             resultAddr = desc.cacheValue;
             break;
         default:
@@ -541,8 +566,7 @@ void DevControlFlowCache::RelocDescFromCache(AddressDescriptor& desc, const Relo
                       (unsigned long)desc.cacheKind);
             break;
     }
-    AddressDescriptor resultDesc = AddressDescriptor::MakeFromAddress(resultAddr);
-    desc = resultDesc;
+    result = AddressDescriptor::MakeFromAddress(resultAddr);
 }
 
 void DevControlFlowCache::IncastOutcastAddrBackup(DynDeviceTaskBase* base)
@@ -556,22 +580,6 @@ void DevControlFlowCache::IncastOutcastAddrBackup(DynDeviceTaskBase* base)
         DevMemcpyS(dynDataBackup->rawTensorAddrBackup, backupSize, dynData->rawTensorAddr, backupSize);
         return true;
     });
-}
-
-void DevControlFlowCache::IncastOutcastAddrRestore(DynDeviceTaskBase* base)
-{
-    ForEachIncastOutcastAddr(base, [](DynFuncData* dynData, DynFuncDataBackup* dynDataBackup, size_t backupSize) {
-        DevMemcpyS(dynData->rawTensorAddr, backupSize, dynDataBackup->rawTensorAddrBackup, backupSize);
-        return true;
-    });
-}
-
-void DevControlFlowCache::IncastOutcastAddrRestore()
-{
-    for (size_t i = 0; i < deviceTaskCount; i++) {
-        DynDeviceTaskBase* dynTaskBase = deviceTaskCacheList[i].dynTaskBase;
-        IncastOutcastAddrRestore(dynTaskBase);
-    }
 }
 
 void DevControlFlowCache::TaskAddrBackupWorkspace(DynDeviceTaskBase* base)
@@ -696,19 +704,222 @@ void DevControlFlowCache::IncastOutcastAddrReloc(uint64_t srcWorkspace, uint64_t
                                                                                    duppedData->GetIncastSize() + i);
                     RelocDescToCache(*addr, relocWorkspace, cacheInputOutputDict);
                 }
-            } else {
-                // Device: addr uses actual
-                for (uint64_t i = 0; i < duppedData->GetIncastSize(); i++) {
-                    AddressDescriptor* addr = &duppedData->GetIncastAddress(i);
-                    RelocDescFromCache(*addr, relocWorkspace, devStartArgs);
-                }
-                for (uint64_t i = 0; i < duppedData->GetOutcastSize(); i++) {
-                    AddressDescriptor* addr = &duppedData->GetOutcastAddress(i);
-                    RelocDescFromCache(*addr, relocWorkspace, devStartArgs);
-                }
             }
         }
         dynFuncDataList->startArgs = devStartArgs;
+    }
+}
+
+namespace {
+
+uint32_t RelocTableCountDupKinds(const AddressDescriptor* backup, uint32_t descNum, uint32_t* present,
+                                 std::vector<uint8_t>& kinds)
+{
+    for (size_t k = 0; k < static_cast<size_t>(AddressCacheKind::MaxKind); k++) {
+        present[k] = 0;
+    }
+    for (uint32_t i = 0; i < descNum; i++) {
+        uint32_t rawKind = backup[i].cacheKind;
+        DEV_ASSERT(ProgEncodeErr::CTRL_CACHE_RELOC_BUILD_FAILED,
+                   rawKind < static_cast<uint32_t>(AddressCacheKind::MaxKind));
+        present[rawKind]++;
+        kinds.push_back(static_cast<uint8_t>(rawKind));
+    }
+    uint32_t kindsPresent = 0;
+    for (size_t k = 0; k < static_cast<size_t>(AddressCacheKind::MaxKind); k++) {
+        kindsPresent += (present[k] > 0) ? 1U : 0U;
+    }
+    return kindsPresent;
+}
+
+/* Sizes of the per-task reloc block: one batch per (dup, kind) with at least one
+ * descriptor, plus one uint16 index per descriptor. */
+struct RelocTableTaskBatchSizes {
+    uint32_t batchCount;
+    uint32_t totalIdx;
+};
+
+/* Per-dup data captured by the scan pass, so the fill pass never re-reads
+ * backup descriptors. */
+struct RelocTableDupRelocInfo {
+    uint32_t descNum;
+    uint32_t present[static_cast<size_t>(AddressCacheKind::MaxKind)];
+    uint64_t srcBase;
+    uint64_t dstBase;
+};
+
+/* Pass 1 of the reloc-table build: measure the per-task batch block, capturing
+ * the per-dup census and base offsets along the way. */
+RelocTableTaskBatchSizes RelocTableScanTaskBatches(const DevControlFlowCache& cache, DynDeviceTaskBase* dynTaskBase,
+                                                   std::vector<RelocTableDupRelocInfo>& infos,
+                                                   std::vector<uint8_t>& kinds)
+{
+    const uint8_t* cacheBase = reinterpret_cast<const uint8_t*>(&cache);
+    DynFuncHeader* dynFuncDataList = dynTaskBase->dynFuncDataList;
+    DynFuncDataCache* dynFuncDataCacheList = dynTaskBase->dynFuncDataCacheList;
+    DynFuncDataBackup* dynFuncDataBackupList = dynTaskBase->dynFuncDataBackupList;
+    infos.clear();
+    kinds.clear();
+    RelocTableTaskBatchSizes sizes{0, 0};
+    for (uint32_t dupIndex = 0; dupIndex < dynFuncDataList->funcNum; dupIndex++) {
+        DevAscendFunctionDuppedData* duppedData = dynFuncDataCacheList->At(dupIndex).duppedData;
+        uint32_t descNum = duppedData->GetIncastSize() + duppedData->GetOutcastSize();
+        DEV_ASSERT(ProgEncodeErr::CTRL_CACHE_RELOC_BUILD_FAILED, descNum <= UINT16_MAX);
+        uint64_t* rawTensorAddrBackup = dynFuncDataBackupList->At(dupIndex).rawTensorAddrBackup;
+        const AddressDescriptor* backup = reinterpret_cast<const AddressDescriptor*>(rawTensorAddrBackup);
+        RelocTableDupRelocInfo info{};
+        info.descNum = descNum;
+        sizes.batchCount += RelocTableCountDupKinds(backup, descNum, info.present, kinds);
+        info.srcBase = reinterpret_cast<uint8_t*>(rawTensorAddrBackup) - cacheBase;
+        info.dstBase = reinterpret_cast<uint8_t*>(dynFuncDataList->At(dupIndex).rawTensorAddr) - cacheBase;
+        infos.push_back(info);
+        sizes.totalIdx += descNum;
+    }
+    return sizes;
+}
+
+/* Pass 2 of the reloc-table build: fill the allocated per-task block with
+ * batch records and their descriptor-index segments, reading only the captured per-dup info. */
+void RelocTableEmitTaskRelocBatches(const DevControlFlowCache& cache, const std::vector<RelocTableDupRelocInfo>& infos,
+                                    const std::vector<uint8_t>& kinds,
+                                    DevControlFlowCache::IncastOutcastRelocBatch* batches, uint16_t* idxList)
+{
+    const uint8_t* cacheBase = reinterpret_cast<const uint8_t*>(&cache);
+    uint32_t batchWritePos = 0;
+    uint32_t idxWritePos = 0;
+    uint32_t kindReadPos = 0;
+    for (const RelocTableDupRelocInfo& info : infos) {
+        for (uint32_t kind = 0; kind < static_cast<uint32_t>(AddressCacheKind::MaxKind); kind++) {
+            if (info.present[kind] == 0) {
+                continue;
+            }
+            batches[batchWritePos] = {
+                info.srcBase, info.dstBase,
+                static_cast<uint64_t>(reinterpret_cast<uint8_t*>(idxList + idxWritePos) - cacheBase),
+                info.present[kind], static_cast<AddressCacheKind>(kind)};
+            batchWritePos++;
+            for (uint32_t i = 0; i < info.descNum; i++) {
+                if (kinds[kindReadPos + i] == kind) {
+                    idxList[idxWritePos++] = static_cast<uint16_t>(i);
+                }
+            }
+        }
+        kindReadPos += info.descNum;
+    }
+}
+
+} // namespace
+
+/* Reloc table memory layout
+ * [TaskRelocEntry x deviceTaskCount]
+ * [IncastOutcastRelocBatch x batchCount | uint16 x totalIdx]
+ *  batch (dup-major kind-ascending, only (dup, kind) with descriptors):
+ *  +---------------+---------------+---------------+-----------+------+
+ *  | srcBaseOffset | dstBaseOffset | idxListOffset | descCount | kind |
+ *  +---------------+---------------+---------------+-----------+------+
+ *  uint16 idx (ascending within each batch, appended in batch order):
+ *  +---------------------------+---------------------------+-----+
+ *  | batch0: i0 i1 .. iN-1     | batch1: i0 i1 .. iM-1     | ... |
+ *  +---------------------------+---------------------------+-----+
+ */
+void DevControlFlowCache::BuildIncastOutcastRelocTable()
+{
+    taskRelocTableOffset = 0;
+    taskRelocTableCount = 0;
+    if (deviceTaskCount == 0) {
+        return;
+    }
+    void* indexBlock = AllocateCache(deviceTaskCount * sizeof(TaskRelocEntry));
+    if (indexBlock == nullptr) {
+        return;
+    }
+    taskRelocTableOffset = reinterpret_cast<uint8_t*>(indexBlock) - reinterpret_cast<uint8_t*>(this);
+    TaskRelocEntry* taskEntries = static_cast<TaskRelocEntry*>(indexBlock);
+    std::vector<RelocTableDupRelocInfo> infos;
+    std::vector<uint8_t> kinds;
+    for (size_t index = 0; index < deviceTaskCount; index++) {
+        DynDeviceTaskBase* dynTaskBase = deviceTaskCacheList[index].dynTaskBase;
+        const RelocTableTaskBatchSizes sizes = RelocTableScanTaskBatches(*this, dynTaskBase, infos, kinds);
+        void* block = AllocateCache(sizes.batchCount * sizeof(IncastOutcastRelocBatch) +
+                                    sizes.totalIdx * sizeof(uint16_t));
+        if (block == nullptr) {
+            taskRelocTableOffset = 0;
+            taskRelocTableCount = 0;
+            return;
+        }
+        taskEntries[index] = {
+            static_cast<uint64_t>(reinterpret_cast<uint8_t*>(block) - reinterpret_cast<uint8_t*>(this)),
+            static_cast<uint64_t>(reinterpret_cast<uint8_t*>(dynTaskBase->dynFuncDataList) -
+                                  reinterpret_cast<uint8_t*>(this)),
+            sizes.batchCount};
+        RelocTableEmitTaskRelocBatches(
+            *this, infos, kinds, static_cast<IncastOutcastRelocBatch*>(block),
+            reinterpret_cast<uint16_t*>(static_cast<IncastOutcastRelocBatch*>(block) + sizes.batchCount));
+    }
+    taskRelocTableCount = static_cast<uint32_t>(deviceTaskCount);
+}
+
+void DevControlFlowCache::RelocIncastOutcastTaskStructural(uint32_t taskIndex, uint64_t srcWorkspace,
+                                                           uint64_t dstWorkspace, DevStartArgsBase* devStartArgs)
+{
+    RelocRange relocWorkspace(srcWorkspace, dstWorkspace);
+    DynDeviceTaskBase* dynTaskBase = deviceTaskCacheList[taskIndex].dynTaskBase;
+    DynFuncHeader* dynFuncDataList = dynTaskBase->dynFuncDataList;
+    DynFuncDataCache* dynFuncDataCacheList = dynTaskBase->dynFuncDataCacheList;
+    DynFuncDataBackup* dynFuncDataBackupList = dynTaskBase->dynFuncDataBackupList;
+    for (uint32_t dupIndex = 0; dupIndex < dynFuncDataList->funcNum; dupIndex++) {
+        DevAscendFunctionDuppedData* duppedData = dynFuncDataCacheList->At(dupIndex).duppedData;
+        const AddressDescriptor* backupAddr = reinterpret_cast<const AddressDescriptor*>(
+            dynFuncDataBackupList->At(dupIndex).rawTensorAddrBackup);
+        for (uint64_t i = 0; i < duppedData->GetIncastSize(); i++) {
+            RelocDescFromCache(backupAddr[i], duppedData->GetIncastAddress(i), relocWorkspace, devStartArgs);
+        }
+        for (uint64_t i = 0; i < duppedData->GetOutcastSize(); i++) {
+            RelocDescFromCache(backupAddr[duppedData->GetIncastSize() + i], duppedData->GetOutcastAddress(i),
+                               relocWorkspace, devStartArgs);
+        }
+    }
+    dynFuncDataList->startArgs = devStartArgs;
+}
+
+void DevControlFlowCache::RelocIncastOutcastTask(uint32_t taskIndex, uint64_t srcWorkspace, uint64_t dstWorkspace,
+                                                 DevStartArgsBase* devStartArgs)
+{
+    // Cache memory insufficient, taskRelocTabl construction failed
+    if (taskRelocTableCount != deviceTaskCount) {
+        RelocIncastOutcastTaskStructural(taskIndex, srcWorkspace, dstWorkspace, devStartArgs);
+        return;
+    }
+    uint8_t* cacheBase = reinterpret_cast<uint8_t*>(this);
+    TaskRelocEntry& entry = reinterpret_cast<TaskRelocEntry*>(cacheBase + taskRelocTableOffset)[taskIndex];
+    reinterpret_cast<DynFuncHeader*>(cacheBase + entry.dynFuncHeaderOffset)->startArgs = devStartArgs;
+    const IncastOutcastRelocBatch* batches = reinterpret_cast<const IncastOutcastRelocBatch*>(cacheBase +
+                                                                                              entry.batchListOffset);
+    const uint64_t wsShift = dstWorkspace - srcWorkspace;
+    for (uint32_t j = 0; j < entry.batchCount; j++) {
+        const IncastOutcastRelocBatch& batch = batches[j];
+        const uint16_t* idxList = reinterpret_cast<const uint16_t*>(cacheBase + batch.idxListOffset);
+        const uint64_t* src = reinterpret_cast<const uint64_t*>(cacheBase + batch.srcBaseOffset);
+        uint64_t* dst = reinterpret_cast<uint64_t*>(cacheBase + batch.dstBaseOffset);
+        switch (batch.kind) {
+            case AddressCacheKind::Workspace:
+                RelocLoop<AddressCacheKind::Workspace>(batch.descCount, idxList, dst, src, wsShift, devStartArgs);
+                break;
+            case AddressCacheKind::Input:
+                RelocLoop<AddressCacheKind::Input>(batch.descCount, idxList, dst, src, wsShift, devStartArgs);
+                break;
+            case AddressCacheKind::Output:
+                RelocLoop<AddressCacheKind::Output>(batch.descCount, idxList, dst, src, wsShift, devStartArgs);
+                break;
+            case AddressCacheKind::Communication:
+                RelocLoop<AddressCacheKind::Communication>(batch.descCount, idxList, dst, src, wsShift, devStartArgs);
+                break;
+            default:
+                DEV_ERROR(ProgEncodeErr::CACHE_RELOC_KIND_INVALID,
+                          "#ctrl.task.pre.cache.reloc: [RelocDescFromCache] Invalid kind: %u\n",
+                          static_cast<uint32_t>(batch.kind));
+                break;
+        }
     }
 }
 
@@ -921,7 +1132,7 @@ void DevControlFlowCache::RuntimeAddrRelocWorkspace(uint64_t srcWorkspace, uint6
                 rtOutcast.isCache = false;
 
                 AddressDescriptor* desc = reinterpret_cast<AddressDescriptor*>(&rtOutcast.allocation.ptr);
-                RelocDescFromCache(*desc, relocWorkspace, devStartArgs);
+                RelocDescFromCache(*desc, *desc, relocWorkspace, devStartArgs);
                 rtOutcast.Addr() = desc->GetAddressValue();
             }
         }
