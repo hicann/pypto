@@ -1190,6 +1190,85 @@ Status ReplaceTensor::InsertCopyDDROp(Function& function, Operation* needInsertC
 }
 
 /**
+ * @brief 判断 ASSEMBLE 是否为就地修改 GM 入参的同址自写回（no-op，可跳过防御拷贝）
+ */
+bool ReplaceTensor::IsAssembleSameGmWriteBack(Function& function, Operation* assembleOp) const
+{
+    // step0: 仅处理单输入单输出 ASSEMBLE
+    if (assembleOp == nullptr || assembleOp->GetIOperands().size() != 1 || assembleOp->GetOOperands().size() != 1) {
+        return false;
+    }
+
+    auto assembleIn = assembleOp->GetIOperands()[0];
+    auto assembleOut = assembleOp->GetOOperands()[0];
+    auto inRaw = assembleIn->GetRawTensor();
+    auto outRaw = assembleOut->GetRawTensor();
+
+    APASS_LOG_INFO_F(Elements::Tensor,
+                     "[ReplaceTensor] IsAssembleSameGmWriteBack ENTRY: ASSEMBLE[%d] numInput=%zu numOutput=%zu "
+                     "numIncastLink=%zu",
+                     assembleOp->GetOpMagic(), assembleOp->GetIOperands().size(), assembleOp->GetOOperands().size(),
+                     function.outIncastLinkMap.size());
+
+    bool inIsDdr = assembleIn->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR;
+
+    // step1: 输出必须是 linked-inplace outcast
+    auto itOut = function.outIncastLinkMap.find(outRaw);
+    if (itOut == function.outIncastLinkMap.end()) {
+        return false;
+    }
+    auto incastRaw = itOut->second;
+
+    // step2: 校验所有带 inplaceIdx 的 producer 的 self 都与 incastRaw 同源
+    bool sameSource = false;
+    std::shared_ptr<RawTensor> srcRaw = nullptr;
+    std::string producerOpcode = "NONE";
+    int producerInplaceIdx = -1;
+    for (const auto& producerOp : assembleIn->GetProducers()) {
+        if (!producerOp->HasAttribute(OpAttributeKey::inplaceIdx)) {
+            continue;
+        }
+        const int idx = producerOp->GetIntAttribute(OpAttributeKey::inplaceIdx);
+        if (idx < 0 || idx >= static_cast<int>(producerOp->GetIOperands().size())) {
+            return false;
+        }
+        auto candRaw = producerOp->GetIOperands()[idx]->GetRawTensor();
+        const bool rawShapeMatch = (candRaw->rawshape == incastRaw->rawshape);
+        bool curMatch = (candRaw == incastRaw);
+        if (!curMatch && rawShapeMatch && candRaw->memoryId != -1 && incastRaw->memoryId != -1) {
+            curMatch = (candRaw->memoryId == incastRaw->memoryId);
+        }
+        if (!curMatch && rawShapeMatch && candRaw->actualRawmagic != -1 && incastRaw->actualRawmagic != -1) {
+            curMatch = (candRaw->actualRawmagic == incastRaw->actualRawmagic);
+        }
+        if (!curMatch) {
+            return false;
+        }
+        if (srcRaw == nullptr) {
+            producerOpcode = producerOp->GetOpcodeStr();
+            producerInplaceIdx = idx;
+            srcRaw = candRaw;
+        }
+    }
+    sameSource = (srcRaw != nullptr);
+
+    APASS_LOG_INFO_F(
+        Elements::Tensor,
+        "[ReplaceTensor] IsAssembleSameGmWriteBack: ASSEMBLE[%d] "
+        "in[magic=%d raw=%d memId=%d memType=%s size=%ld] "
+        "out[magic=%d raw=%d memId=%d memType=%s size=%ld] "
+        "inIsDdr=%d incastRaw=%d producer=%s producerInplaceIdx=%d srcRaw=%d sameSource=%d outIncastLinkMapSize=%zu",
+        assembleOp->GetOpMagic(), assembleIn->GetMagic(), inRaw->rawmagic, inRaw->memoryId,
+        MemoryTypeToString(assembleIn->GetMemoryTypeOriginal()).c_str(), assembleIn->GetDataSize(),
+        assembleOut->GetMagic(), outRaw->rawmagic, outRaw->memoryId,
+        MemoryTypeToString(assembleOut->GetMemoryTypeOriginal()).c_str(), assembleOut->GetDataSize(), inIsDdr,
+        incastRaw->rawmagic, producerOpcode.c_str(), producerInplaceIdx, srcRaw ? srcRaw->rawmagic : -1, sameSource,
+        function.outIncastLinkMap.size());
+
+    return inIsDdr && sameSource;
+}
+
+/**
  * @brief 递归查找需要插入拷贝的 ASSEMBLE 操作
  */
 Status ReplaceTensor::FindNeedToCopyAssemble(std::unordered_set<Operation*>& needInsertCopyAssOps,
@@ -1228,7 +1307,15 @@ Status ReplaceTensor::FindNeedToCopyAssemble(std::unordered_set<Operation*>& nee
     }
     if (!sameAssembleOut) {
         for (const auto& con : consumers) {
-            if (con->GetOpcode() == Opcode::OP_ASSEMBLE && con->GetIOperands()[0]->GetDataSize() <= UB_SIZE_THRESHOLD) {
+            if (con->GetOpcode() != Opcode::OP_ASSEMBLE) {
+                continue;
+            }
+            // 同址自写回为 no-op，无需防御拷贝
+            if (IsAssembleSameGmWriteBack(function, con)) {
+                visitedAssOps.insert(con->GetOpMagic());
+                continue;
+            }
+            if (con->GetIOperands()[0]->GetDataSize() <= UB_SIZE_THRESHOLD) {
                 visitedAssOps.insert(con->GetOpMagic());
                 needInsertCopyAssOps.insert(con);
             }
