@@ -305,82 +305,14 @@ public:
     inline int GetNoSuccOpIdx(size_t idx) const { return At(noSuccOpList_, idx); }
 
     inline size_t GetOperationSize() const { return operationList_.size(); }
-    inline bool IsDeadEndHub(uint32_t opIndex) const
-    {
-        if (deadEndHubBitmap_.size() == 0)
-            return false;
-        uint32_t wordIdx = opIndex / 64;
-        return (At(deadEndHubBitmap_, wordIdx) & (1ULL << (opIndex % 64))) != 0;
-    }
-    inline bool IsTailTask(uint32_t opIndex) const
-    {
-        if (tailTaskBitmap_.size() == 0) {
-            return false;
-        }
-        uint32_t wordIdx = opIndex / 64;
-        return (At(tailTaskBitmap_, wordIdx) & (1ULL << (opIndex % 64))) != 0;
-    }
-    inline void ClearTailTask(uint32_t opIndex)
-    {
-        if (tailTaskBitmap_.size() == 0) {
-            return;
-        }
-        uint32_t wordIdx = opIndex / 64;
-        At(tailTaskBitmap_, wordIdx) &= ~(1ULL << (opIndex % 64));
-    }
-    inline bool ClearDeadEndHub(uint32_t opIndex)
-    {
-        if (deadEndHubBitmap_.size() == 0)
-            return false;
-        uint32_t wordIdx = opIndex / 64;
-        uint64_t bit = 1ULL << (opIndex % 64);
-        auto& word = At(deadEndHubBitmap_, wordIdx);
-        bool wasSet = (word & bit) != 0;
-        word &= ~bit;
-        return wasSet;
-    }
-    inline void PropagateDeadHubClear(uint32_t clearedOpIdx)
-    {
-        constexpr size_t kMaxStack = 128;
-        uint32_t stack[kMaxStack];
-        size_t stackSize = 0;
-        stack[stackSize++] = clearedOpIdx;
-
-        size_t opCount = GetOperationSize();
-        while (stackSize > 0) {
-            uint32_t target = stack[--stackSize];
-            for (size_t op = 0; op < opCount; op++) {
-                size_t succSize;
-                const uint32_t* succList = GetOperationDepGraphSuccAddr(static_cast<int>(op), succSize);
-                for (size_t j = 0; j < succSize; j++) {
-                    if (static_cast<uint32_t>(succList[j]) != target)
-                        continue;
-                    ClearTailTask(static_cast<uint32_t>(op));
-                    if (ClearDeadEndHub(static_cast<uint32_t>(op)) && stackSize < kMaxStack) {
-                        stack[stackSize++] = static_cast<uint32_t>(op);
-                    }
-                    break;
-                }
-            }
-        }
-    }
-    inline size_t GetBitmapByteSize() const { return deadEndHubBitmap_.size() * sizeof(uint64_t); }
-    inline void BackupBitmapTo(uint64_t* deadEndBuf, uint64_t* tailBuf, size_t byteSize) const
-    {
-        if (byteSize == 0) {
-            return;
-        }
-        DevMemcpyS(deadEndBuf, byteSize, &At(deadEndHubBitmap_, 0), byteSize);
-        DevMemcpyS(tailBuf, byteSize, &At(tailTaskBitmap_, 0), byteSize);
-    }
-    inline void RestoreBitmapFrom(const uint64_t* deadEndBuf, const uint64_t* tailBuf, size_t byteSize)
-    {
-        if (byteSize == 0) {
-            return;
-        }
-        DevMemcpyS(&At(deadEndHubBitmap_, 0), byteSize, deadEndBuf, byteSize);
-        DevMemcpyS(&At(tailTaskBitmap_, 0), byteSize, tailBuf, byteSize);
-    }
+    inline bool IsDeadEndHub(uint32_t opIndex) const;
+    inline bool IsTailTask(uint32_t opIndex) const;
+    inline void ClearTailTask(uint32_t opIndex);
+    inline bool ClearDeadEndHub(uint32_t opIndex);
+    inline void PropagateDeadHubClear(uint32_t clearedOpIdx);
+    inline size_t GetBitmapByteSize() const;
+    inline void BackupBitmapTo(uint64_t* deadEndBuf, uint64_t* tailBuf, size_t byteSize) const;
+    inline void RestoreBitmapFrom(const uint64_t* deadEndBuf, const uint64_t* tailBuf, size_t byteSize);
     inline uint32_t GetOperationStitchIndex(int operationIndex) const
     {
         return At(operationList_, operationIndex).stitchIndex;
@@ -672,3 +604,5 @@ private:
                                             bool fillContent);
 };
 } // namespace npu::tile_fwk::dynamic
+
+#include "dev_encode_function_bitmap.h"

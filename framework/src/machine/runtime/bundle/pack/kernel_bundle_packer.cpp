@@ -16,10 +16,10 @@
 #include "machine/runtime/bundle/pack/kernel_bundle_packer.h"
 
 #include <array>
-#include <cstring>
 
 #include "machine/runtime/bundle/kernel_bundle_crc32.h"
 #include "machine/runtime/bundle/kernel_bundle_format.h"
+#include "machine/runtime/runner/runtime_utils.h"
 #include "utils/file_utils.h"
 #include "tilefwk/error_code.h"
 #include "tilefwk/pypto_fwk_log.h"
@@ -75,12 +75,13 @@ std::vector<uint8_t> KernelBundlePacker::Build() const
     hdr.totalSize = totalSize;
     hdr.headerCrc32 = Crc32(&hdr, sizeof(BundleHeader) - sizeof(uint32_t));
 
-    std::memcpy(buf.data(), &hdr, sizeof(BundleHeader));
-    std::memcpy(buf.data() + sizeof(BundleHeader), tlvs.data(), tlvCount * sizeof(TlvHeader));
+    MemcpyS(buf.data(), buf.size(), &hdr, sizeof(BundleHeader));
+    MemcpyS(buf.data() + sizeof(BundleHeader), buf.size() - sizeof(BundleHeader), tlvs.data(),
+            tlvCount * sizeof(TlvHeader));
     for (uint32_t i = 0; i < tlvCount; ++i) {
         const auto& d = *segs[i].data;
         if (!d.empty()) {
-            std::memcpy(buf.data() + tlvs[i].valueOffset, d.data(), d.size());
+            MemcpyS(buf.data() + tlvs[i].valueOffset, buf.size() - tlvs[i].valueOffset, d.data(), d.size());
         }
     }
     return buf;

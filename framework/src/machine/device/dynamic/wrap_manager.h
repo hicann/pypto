@@ -19,54 +19,13 @@
 #include "machine/utils/machine_ws_intf.h"
 #include "machine/device/tilefwk/core_func_data.h"
 #include "core_status_manager.h"
+#include "wrap_task_utils.h"
 
 namespace npu::tile_fwk::dynamic {
 
 struct SchDeviceTaskContext;
 using SendTaskToAiCoreFunc = std::function<void(struct SchDeviceTaskContext* devCtx, CoreType type, int coreIdx,
                                                 uint64_t newTask)>;
-
-enum class MixResourceType { MIX_UNKNOWN = 0, MIX_1C1V = 1, MIX_1C2V = 2 };
-enum class DieId { DIE_0 = 0, DIE_1 = 1, DIE_MIX = 2, DIE_UNKNOWN };
-
-inline void WrapInfoQueueLock(WrapInfoQueue* rq)
-{
-    while (!__sync_bool_compare_and_swap(&rq->lock, 0, 1)) {
-    }
-}
-
-inline void WrapInfoQueueUnLock(WrapInfoQueue* rq)
-{
-    while (!__sync_bool_compare_and_swap(&rq->lock, 1, 0)) {
-    }
-}
-
-inline uint32_t GetTaskNumByMixResType(uint8_t mixType)
-{
-    switch (mixType) {
-        case static_cast<uint8_t>(MixResourceType::MIX_1C1V):
-            return 2;
-        case static_cast<uint8_t>(MixResourceType::MIX_1C2V):
-            return 3;
-        default:
-            return 0;
-    }
-}
-
-inline bool IsWrapTaskReady(const WrapInfo* wrapInfo)
-{
-    switch (wrapInfo->mixResourceType) {
-        case static_cast<uint8_t>(MixResourceType::MIX_1C1V):
-            return wrapInfo->tasklist[WRAP_IDX_AIC] != AICORE_TASK_INIT &&
-                   wrapInfo->tasklist[WRAP_IDX_AIV0] != AICORE_TASK_INIT;
-        case static_cast<uint8_t>(MixResourceType::MIX_1C2V):
-            return wrapInfo->tasklist[WRAP_IDX_AIC] != AICORE_TASK_INIT &&
-                   wrapInfo->tasklist[WRAP_IDX_AIV0] != AICORE_TASK_INIT &&
-                   wrapInfo->tasklist[WRAP_IDX_AIV1] != AICORE_TASK_INIT;
-        default:
-            return false;
-    }
-}
 
 #define RETURN_NULL_IF_NOT(val) \
     do {                        \

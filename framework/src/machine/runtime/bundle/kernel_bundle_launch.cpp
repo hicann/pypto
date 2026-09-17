@@ -98,7 +98,9 @@ std::string MakeAicpuOpName(const std::string& displayName, uint64_t bundleKey)
         return displayName;
     }
     char keySuffix[18] = {};
-    (void)std::snprintf(keySuffix, sizeof(keySuffix), "_%016llx", static_cast<unsigned long long>(bundleKey));
+    const int ret = snprintf_s(keySuffix, sizeof(keySuffix), sizeof(keySuffix) - 1, "_%016llx",
+                               static_cast<unsigned long long>(bundleKey));
+    MACHINE_ASSERT(ret >= 0) << "[kernel-bundle] failed to format AICPU op name suffix";
     const size_t prefixSize = maxNameSize - std::strlen(keySuffix);
     return displayName.substr(0, prefixSize) + keySuffix;
 }

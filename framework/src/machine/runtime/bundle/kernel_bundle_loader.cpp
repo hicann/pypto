@@ -15,12 +15,12 @@
 
 #include "machine/runtime/bundle/kernel_bundle_loader.h"
 
-#include <cstring>
 #include <iomanip>
 #include <sstream>
 
 #include "machine/runtime/bundle/kernel_bundle_crc32.h"
 #include "machine/runtime/bundle/kernel_bundle_format.h"
+#include "machine/runtime/runner/runtime_utils.h"
 #include "utils/file_utils.h"
 #include "tilefwk/error_code.h"
 #include "tilefwk/pypto_fwk_log.h"
@@ -39,7 +39,7 @@ std::vector<uint8_t> CopySegment(const uint8_t* src, size_t len)
 {
     std::vector<uint8_t> v(len);
     if (len != 0) {
-        std::memcpy(v.data(), src, len);
+        MemcpyS(v.data(), v.size(), src, len);
     }
     return v;
 }
@@ -122,7 +122,7 @@ std::shared_ptr<LoadedBundle> KernelBundleLoader::LoadFromMemory(const uint8_t* 
         return nullptr;
     }
     BundleHeader hdr{};
-    std::memcpy(&hdr, p, sizeof(BundleHeader));
+    MemcpyS(&hdr, sizeof(hdr), p, sizeof(BundleHeader));
     if (hdr.magic != kBundleMagic) {
         MACHINE_LOGE(DevCommonErr::FILE_ERROR, "[kernel-bundle] bad magic %#lx", hdr.magic);
         return nullptr;
@@ -151,7 +151,8 @@ std::shared_ptr<LoadedBundle> KernelBundleLoader::LoadFromMemory(const uint8_t* 
     uint64_t bundleKey = 0xCBF29CE484222325ULL; // FNV-1a offset basis
     for (uint32_t i = 0; i < hdr.tlvCount; ++i) {
         TlvHeader t{};
-        std::memcpy(&t, p + sizeof(BundleHeader) + static_cast<size_t>(i) * sizeof(TlvHeader), sizeof(TlvHeader));
+        MemcpyS(&t, sizeof(t), p + sizeof(BundleHeader) + static_cast<size_t>(i) * sizeof(TlvHeader),
+                sizeof(TlvHeader));
         if (t.valueOffset > n || t.valueLength > n - t.valueOffset) {
             MACHINE_LOGE(DevCommonErr::FILE_ERROR, "[kernel-bundle] TLV[%u] value out of range", i);
             return nullptr;
