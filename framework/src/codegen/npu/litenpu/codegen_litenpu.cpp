@@ -201,6 +201,11 @@ void CodeGenLiteNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ostr
     oss << symbolMgr->GenTileTensorDefList() << tileOpSourceRegion;
 }
 
+void CodeGenLiteNPU::BuildBaseOptions(std::ostringstream& oss, [[maybe_unused]] const CompileInfo& compileInfo) const
+{
+    oss << "bisheng -c -O2 -x cce -std=c++17 ";
+}
+
 void CodeGenLiteNPU::BuildArchOptions(std::ostringstream& oss, const CompileInfo& compileInfo) const
 {
     std::vector<std::string> compileOpts;
@@ -210,6 +215,11 @@ void CodeGenLiteNPU::BuildArchOptions(std::ostringstream& oss, const CompileInfo
 
     compileOpts.emplace_back("-D__LITE_NPU"); // kirin macro for tileop
     compileOpts.emplace_back("--cce-aicore-only");
+    // standard-version alignment options (position-matched: after
+    // --cce-aicore-only, before --cce-aicore-arch). --cce-linker-relax
+    // excluded: relaxed binary fails on dav-l300 (sim + real device).
+    compileOpts.emplace_back("--cce-long-call=true");
+    compileOpts.emplace_back("-fno-jump-tables");
     std::string coreArch = GetCoreArch(compileInfo);
     compileOpts.emplace_back("--cce-aicore-arch=" + coreArch);
 

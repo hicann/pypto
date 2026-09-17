@@ -353,7 +353,7 @@ int CheckInjectStr(const char cmdStr[], size_t strLen)
 std::string CodeGenNPU::PrepareCmd(const CompileInfo& compileInfo, const std::string& compileOptions) const
 {
     std::ostringstream oss;
-    oss << "bisheng -c -O3 -g -x cce -std=c++17 ";
+    BuildBaseOptions(oss, compileInfo);
     BuildArchOptions(oss, compileInfo);
     BuildIncludes(oss);
     BuildExtraOptions(oss, compileInfo, compileOptions);
@@ -560,6 +560,16 @@ std::string CodeGenNPU::GetPtoTileLibPathByEnv() const
 
     ASSERT(CmpCodeErr::PTO_ISA_NOT_FOUND, false) << "Pto-isa path not found. please install pto-isa properly.";
     return "";
+}
+
+// Base CCEC invocation: default = the original pypto command (-O3 with -g),
+// byte-for-byte untouched. Every option segment is a virtual hook so the
+// version-aligned subclass overrides only what it needs; other paths
+// (simulation/cloud-test via CodeGenCloudNPU, CodeGenLiteNPU) keep the
+// original command.
+void CodeGenNPU::BuildBaseOptions(std::ostringstream& oss, [[maybe_unused]] const CompileInfo& compileInfo) const
+{
+    oss << "bisheng -c -O3 -g -x cce -std=c++17 ";
 }
 
 void CodeGenNPU::BuildArchOptions(std::ostringstream& oss, const CompileInfo& compileInfo) const

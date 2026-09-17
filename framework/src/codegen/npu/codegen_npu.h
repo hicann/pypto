@@ -181,6 +181,7 @@ protected:
     void DumpCode(const std::string& name, std::ostringstream& code) const;
     int DoCompileCmd(const std::string& compileCmd) const;
 
+    virtual void BuildBaseOptions(std::ostringstream& oss, const CompileInfo& compileInfo) const;
     virtual void BuildArchOptions(std::ostringstream& oss, const CompileInfo& compileInfo) const;
     void Prepare(const Function& topFunc);
 
