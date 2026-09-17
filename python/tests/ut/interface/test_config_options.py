@@ -25,6 +25,15 @@ def test_print_options():
     pypto.set_print_options(edgeitems=1, precision=2, threshold=3, linewidth=4)
 
 
+def test_version():
+    assert isinstance(pypto.__version__, str)
+    assert pypto.__version__
+    parts = pypto.__version__.split(".")
+    assert len(parts) >= 2
+    for part in parts:
+        assert part.isdigit() or (part and part[0].isdigit())
+
+
 def test_pass_option():
     # 校验 get_pass_options 返回的 key 集合与 set_pass_options 参数集合一致
     pypto.reset_options()
