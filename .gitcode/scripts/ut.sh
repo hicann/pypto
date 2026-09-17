@@ -92,11 +92,13 @@ case "${GE_ST_RT2}" in
         check_ret "PyPTO(Py3-Simulation) build with uncann and run with uncann UTest failed"
         ;;
     Py3_ninja)
-        python3 build_ci.py --clean --generator=Ninja '--utest=python/tests/ut --ignore=python/tests/ut/kirin' --py_abi=37 --case_execute_timeout=120 --changed_files=${WORKSPACE}/pr_filelist.txt --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16 --verbose --editable --no_isolation --gcov --utest_module=ds_v32:interface:ir:kirin:operation:operator:pypto_pro:simulator
+        python3 build_ci.py --py_cov --clean --generator=Ninja --utest --py_abi=37 --case_execute_timeout=120 --changed_files=${WORKSPACE}/pr_filelist.txt --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16 --verbose --editable --no_isolation --gcov --utest_module=ds_v32:interface:ir:operation:operator:pypto_pro:simulator
         check_ret "PyPTO(Py3) UTest failed"
         rm -rf python/pypto/pypto_impl*.so
         python3 -c "import pypto"
         check_ret "import pypto failed"
+        echo "ut_process=ut_cov" >> "${ATOMGIT_OUTPUT}"
+        exit 0
         ;;
     Cpp_make_clang)
         python3 build_ci.py --clean --frontend=cpp --build_type=Debug --utest --case_execute_timeout=120 --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --clang --asan --job_num=32 --target=tile_fwk_utest
@@ -137,6 +139,11 @@ case "${GE_ST_RT2}" in
         export LD_LIBRARY_PATH=/home/jenkins/Ascend/ascend-toolkit/latest/x86_64-linux/simulator/Kirin9030/lib:$LD_LIBRARY_PATH
         python3 build_ci.py --utest=python/tests/ut/kirin/kirin9030 --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} --job_num=16
         check_ret "kirin9030 UTest failed"
+        ;;
+    ninja_interpreter)
+        python3 build_ci.py --py_cov --clean --generator=Ninja --utest --py_abi=37 --case_execute_timeout=90 --changed_files=${WORKSPACE}/pr_filelist.txt --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH}  --job_num=16 --verbose --editable --no_isolation --gcov --utest_module=interpreter
+        check_ret "interpreter UTest failed"
+        echo "ut_process=ut_cov" >> "${ATOMGIT_OUTPUT}"
         ;;
     *)
         echo "Unknown ut_type: ${GE_ST_RT2}"

@@ -28,6 +28,7 @@ jobs:
         uses: checkout
         with:
           ref: ${{ atomgit.event.pull_request.merge_commit_sha }}
+          allow-unsafe-pr-checkout: true
       -
         name: download
         uses: obs-download
@@ -59,7 +60,9 @@ jobs:
           ut_process: ${{ steps.ut.outputs.ut_process }}
           workspace: ${{ steps.process_checkout.outputs.path }}
           ut_type: ${{ inputs.ut_type }}
+          language: ${{ inputs.language }}
           target_branch: ${{ env.TARGET_BRANCH }}
+          git_token: ${{secrets.GIT_TOKEN}}
       -
         name: upload
         uses: obs-upload
