@@ -5,5 +5,7 @@
 :titlesonly:
 
 expands
+max
+min
 sum
 ```

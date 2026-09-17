@@ -4,7 +4,6 @@
 :maxdepth: 1
 :titlesonly:
 
-Array
 make_tuple
 struct
 struct_array

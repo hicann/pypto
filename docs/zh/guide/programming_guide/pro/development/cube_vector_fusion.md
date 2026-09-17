@@ -11,7 +11,7 @@ Kernel同时包含[`pypto_pro.language.section_cube()`](../../../../api/pro_api/
 | AIC | 矩阵乘加 | L1 Buffer、L0A Buffer、L0B Buffer、L0C Buffer | [`pypto_pro.language.get_block_idx()`](../../../../api/pro_api/SIMD-API/system_variables/get_block_idx.md) |
 | AIV0/AIV1 | 逐元素、归约、数据重排及Reg计算 | UB、Vector Register | `pypto_pro.language.get_block_idx()`与`pypto_pro.language.get_subblock_idx()` |
 
-混合Kernel中，`block_dim`用于配置AIC/AIV执行组数；AIC数量为[`pypto_pro.language.get_block_num()`](../../../../api/pro_api/SIMD-API/system_variables/get_block_num.md)返回的实际值，AIV数量还需要乘以[`pypto_pro.language.get_subblock_num()`](../../../../api/pro_api/SIMD-API/system_variables/get_subblock_num.md)。多执行组场景下，Cube侧和Vector侧必须使用一致的任务映射，避免不同执行组读写同一中间结果。`block_dim`的详细含义参见[Kernel核函数](kernel_function.md#blockdim的含义与设置)，硬件映射和核数计算参见[抽象硬件架构](../programming_paradigm/SIMD/abstract_hardware_architecture.md#aic与aiv的并行关系)和[多核Tiling切分](tiling/multi_core_tiling.md)。
+混合Kernel中，`block_dim`用于配置AIC/AIV执行组数；AIC数量为[`pypto_pro.language.get_block_num()`](../../../../api/pro_api/SIMD-API/system_variables/get_block_num.md)返回的实际值，AIV数量还需要乘以[`pypto_pro.language.get_subblock_num()`](../../../../api/pro_api/SIMD-API/system_variables/get_subblock_num.md)。多执行组场景下，Cube侧和Vector侧必须使用一致的任务映射，避免不同执行组读写同一中间结果。`block_dim`的详细含义参见[Kernel核函数](kernel_function.md#blockdim的含义与设置)，执行组映射参见[SIMD编程范式](../programming_paradigm/SIMD/programming_paradigm.md#纯vector纯cube与混合kernel)，核间切分参见[多核Tiling切分](tiling/multi_core_tiling.md)。
 
 ## 跨核中间数据传递
 

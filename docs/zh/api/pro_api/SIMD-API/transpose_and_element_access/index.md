@@ -5,4 +5,7 @@
 :titlesonly:
 
 fill_index
+getval
+set_validshape
+setval
 ```
