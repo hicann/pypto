@@ -19,6 +19,7 @@ except ImportError:
     pass
 
 import pydoc as _pydoc
+from importlib.metadata import version as _version
 
 # shared lib should be loaded first
 from . import _loader
@@ -49,6 +50,7 @@ jit = frontend.jit
 tensor = Tensor
 element = Element
 symbolic_scalar = SymbolicScalar
+__version__ = _version("pypto")
 
 
 def _patch_getowndoc(obj):
