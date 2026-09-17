@@ -118,8 +118,8 @@ void DevControlFlowCache::PredCountPingPongSwap(DynDeviceTaskBase* base)
     DynFuncDataCache* dynFuncDataCacheList = base->dynFuncDataCacheList;
     for (size_t dupIndex = 0; dupIndex < dynFuncDataList->Size(); ++dupIndex) {
         DynFuncDataCache& dynDataCache = dynFuncDataCacheList->At(dupIndex);
-        std::swap(dynDataCache.predCountPing, dynDataCache.predCountPong);
-        dynDataCache.predCount = dynDataCache.predCountPing;
+        std::swap(dynDataCache.predCountPingPong[PRED_COUNT_PING], dynDataCache.predCountPingPong[PRED_COUNT_PONG]);
+        dynDataCache.predCount = dynDataCache.predCountPingPong[PRED_COUNT_PING];
     }
 }
 
@@ -151,7 +151,8 @@ void DevControlFlowCache::PredCountPingPongRestore(DynDeviceTaskBase* base)
         DynFuncDataBackup* dynDataBackup = &dynFuncDataBackupList->At(dupIndex);
         DevAscendFunctionDuppedData* duppedData = dynDataCache->duppedData;
         size_t backupSize = sizeof(predcount_t) * duppedData->GetOperationSize();
-        DevMemcpyS(dynDataCache->predCountPong, backupSize, dynDataBackup->predCountBackup, backupSize);
+        DevMemcpyS(dynDataCache->predCountPingPong[PRED_COUNT_PONG], backupSize, dynDataBackup->predCountBackup,
+                   backupSize);
     }
 }
 
@@ -1239,8 +1240,8 @@ void DevControlFlowCache::RelocDuppedDataAndDynFuncData(RelocRange& relocProgram
     relocProgram.RelocNullable(dynData->cceBinaryIndexList);
 
     relocCtrlCache.Reloc(dynDataCache->predCount);
-    relocCtrlCache.RelocNullable(dynDataCache->predCountPing);
-    relocCtrlCache.RelocNullable(dynDataCache->predCountPong);
+    relocCtrlCache.RelocNullable(dynDataCache->predCountPingPong[PRED_COUNT_PING]);
+    relocCtrlCache.RelocNullable(dynDataCache->predCountPingPong[PRED_COUNT_PONG]);
     relocCtrlCache.RelocNullable(dynDataBackup->predCountBackup);
     relocCtrlCache.RelocNullable(dynDataBackup->rawTensorAddrBackup);
     relocCtrlCache.RelocNullable(dynDataBackup->deadEndHubBitmapBackup);
