@@ -1830,6 +1830,79 @@ TEST_F(InsertSyncTest, EndToEndAdjacentClustersSyncMovedIndependently)
     VerifyHasSyncAfter(ops, &cast, Opcode::OP_SYNC_SRC);
 }
 
+// 3510: AIV 同流水(PIPE_MTE3, assemble/COPY_OUT 场景)数据依赖必须生成 OP_BAR_M, 不能丢弃
+TEST_F(InsertSyncTest, TestGenSyncOpAivSameMte3PipeOn3510GeneratesBarM)
+{
+    ScopedNPUArchForInsertSyncTest scopedArch(NPUArch::DAV_3510);
+    auto [root, leaf] = SetupDebugFunc("TestGenSyncAivMte3");
+    auto ts = MakeTensors(IS_NUM2, {IS_NUM8, IS_NUM16});
+    Operation& op = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_ADD, {ts[0]}, {ts[1]});
+    PipeSync ps;
+    PipeSync::PipeCoreRealEx set(PipeType::PIPE_MTE3, CoreType::AIV, AIVCore::AIV0);
+    PipeSync::PipeCoreRealEx wait(PipeType::PIPE_MTE3, CoreType::AIV, AIVCore::AIV0);
+    EXPECT_TRUE(ps.GenSyncOp(set, wait, IS_NUM1, false, op));
+    EXPECT_EQ(op.GetOpcode(), Opcode::OP_BAR_M);
+    EXPECT_EQ(op.syncQueue_.pipeId_, PipeType::PIPE_MTE3);
+    EXPECT_EQ(op.syncQueue_.trigPipeId_, PipeType::PIPE_MTE3);
+    EXPECT_EQ(op.syncQueue_.coreType_, CoreType::AIV);
+    EXPECT_EQ(op.syncQueue_.trigCoreType_, CoreType::AIV);
+    EXPECT_EQ(op.syncQueue_.eventId_, IS_NUM1);
+}
+
+// lite(3113): AIV 同流水(PIPE_MTE3)数据依赖同样必须生成 OP_BAR_M, 不能丢弃
+TEST_F(InsertSyncTest, TestGenSyncOpAivSameMte3PipeOnLiteGeneratesBarM)
+{
+    ScopedNPUArchForInsertSyncTest scopedArch(NPUArch::DAV_3113);
+    auto [root, leaf] = SetupDebugFunc("TestGenSyncAivMte3Lite");
+    auto ts = MakeTensors(IS_NUM2, {IS_NUM8, IS_NUM16});
+    Operation& op = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_ADD, {ts[0]}, {ts[1]});
+    PipeSync ps;
+    PipeSync::PipeCoreRealEx set(PipeType::PIPE_MTE3, CoreType::AIV, AIVCore::AIV0);
+    PipeSync::PipeCoreRealEx wait(PipeType::PIPE_MTE3, CoreType::AIV, AIVCore::AIV0);
+    EXPECT_TRUE(ps.GenSyncOp(set, wait, IS_NUM1, false, op));
+    EXPECT_EQ(op.GetOpcode(), Opcode::OP_BAR_M);
+}
+
+// 3510: AIV V->V 同步维持原行为, 不生成同步 op
+TEST_F(InsertSyncTest, TestGenSyncOpAivVVPipeOn3510KeepsSkip)
+{
+    ScopedNPUArchForInsertSyncTest scopedArch(NPUArch::DAV_3510);
+    auto [root, leaf] = SetupDebugFunc("TestGenSyncAivV3510");
+    auto ts = MakeTensors(IS_NUM2, {IS_NUM8, IS_NUM16});
+    Operation& op = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_ADD, {ts[0]}, {ts[1]});
+    PipeSync ps;
+    PipeSync::PipeCoreRealEx set(PipeType::PIPE_V, CoreType::AIV, AIVCore::AIV0);
+    PipeSync::PipeCoreRealEx wait(PipeType::PIPE_V, CoreType::AIV, AIVCore::AIV0);
+    EXPECT_FALSE(ps.GenSyncOp(set, wait, IS_NUM1, false, op));
+}
+
+// 非 3510 非 lite(2201): AIV V->V 仍生成 OP_BAR_V(原有行为)
+TEST_F(InsertSyncTest, TestGenSyncOpAivVVPipeOn2201GeneratesBarV)
+{
+    ScopedNPUArchForInsertSyncTest scopedArch(NPUArch::DAV_2201);
+    auto [root, leaf] = SetupDebugFunc("TestGenSyncAivV2201");
+    auto ts = MakeTensors(IS_NUM2, {IS_NUM8, IS_NUM16});
+    Operation& op = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_ADD, {ts[0]}, {ts[1]});
+    PipeSync ps;
+    PipeSync::PipeCoreRealEx set(PipeType::PIPE_V, CoreType::AIV, AIVCore::AIV0);
+    PipeSync::PipeCoreRealEx wait(PipeType::PIPE_V, CoreType::AIV, AIVCore::AIV0);
+    EXPECT_TRUE(ps.GenSyncOp(set, wait, IS_NUM1, false, op));
+    EXPECT_EQ(op.GetOpcode(), Opcode::OP_BAR_V);
+}
+
+// isSet=true: 源头侧不生成同步 op(原有行为)
+TEST_F(InsertSyncTest, TestGenSyncOpAivSamePipeSetSideNoop)
+{
+    ScopedNPUArchForInsertSyncTest scopedArch(NPUArch::DAV_3510);
+    auto [root, leaf] = SetupDebugFunc("TestGenSyncAivSetSide");
+    auto ts = MakeTensors(IS_NUM2, {IS_NUM8, IS_NUM16});
+    Operation& op = IRBuilder().CreateTensorOpStmt(*leaf, Opcode::OP_ADD, {ts[0]}, {ts[1]});
+    PipeSync ps;
+    PipeSync::PipeCoreRealEx set(PipeType::PIPE_MTE3, CoreType::AIV, AIVCore::AIV0);
+    PipeSync::PipeCoreRealEx wait(PipeType::PIPE_MTE3, CoreType::AIV, AIVCore::AIV0);
+    EXPECT_FALSE(ps.GenSyncOp(set, wait, IS_NUM1, true, op));
+}
+
 } // namespace tile_fwk
 } // namespace npu
 
