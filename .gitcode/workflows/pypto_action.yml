@@ -292,6 +292,7 @@ stages:
               export obs_path=${{ env.obs_path }}
               export AK=${{secrets.AK}}
               export SK=${{secrets.SK}}
+              export GIT_TARGET_BRANCH=${{ env.TARGET_BRANCH }}
               export WORKSPACE=${{ steps.process_checkout.outputs.path }}
               bash ${{ steps.process_checkout.outputs.path }}/pre_smoke.sh
           - name: upload

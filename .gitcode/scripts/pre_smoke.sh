@@ -50,6 +50,31 @@ cd "$BASE_DIR"
 
 set +e
 
+# ===== 安装 pto-isa =====
+case "${GIT_TARGET_BRANCH}" in
+    br_0.1.1_20260313_beta)
+        PTO_ISA_URL="https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/pypto/cann/br_0313/package/cann-pto-isa_9.0.0_linux-aarch64.run"
+        ;;
+    0.2.0)
+        PTO_ISA_URL="https://ascend-ci.obs.cn-north-4.myhuaweicloud.com/package/pto/9.0.0/20260330/aarch64/cann-pto-isa_9.0.0_linux-aarch64.run"
+        ;;
+    9.1.0)
+        PTO_ISA_URL="https://opencann-obs.obs.cn-north-4.myhuaweicloud.com/pto-isa/9.1.0/cann-pto-isa_linux-aarch64.run"
+        ;;
+    *)
+        PTO_ISA_URL="https://ascend-ci.obs.cn-north-4.myhuaweicloud.com/pto-isa/daily/cann-pto-isa_linux-aarch64.run"
+        ;;
+esac
+PTO_ISA_PACKAGE_NAME=$(basename "${PTO_ISA_URL}")
+if ! wget -q -O "${PTO_ISA_PACKAGE_NAME}" "${PTO_ISA_URL}"; then
+    echo "[ERROR] pto-isa package download failed!URL:${PTO_ISA_URL}"
+    exit 1
+fi
+echo "pto-isa package downloaded successfully: ./${PTO_ISA_PACKAGE_NAME}"
+echo "Adding execute permission: chmod +x ${PTO_ISA_PACKAGE_NAME}"
+chmod +x "${PTO_ISA_PACKAGE_NAME}" || echo "Failed to add execute permission to the package"
+bash "${PTO_ISA_PACKAGE_NAME}" --full --quiet --install-path=/usr/local/Ascend
+
 RUN_PACKAGE_NAME="cann-pypto_linux-aarch64_ubuntu24.run"
 RUN_PACKAGE_URL="https://ascend-ci.obs.cn-north-4.myhuaweicloud.com/${obs_path}/${RUN_PACKAGE_NAME}"
 if ! wget -q -O "${RUN_PACKAGE_NAME}" "${RUN_PACKAGE_URL}"; then
