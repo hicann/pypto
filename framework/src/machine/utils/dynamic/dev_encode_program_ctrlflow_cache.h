@@ -64,8 +64,7 @@ struct MixTaskDataCache {
 struct DynFuncDataCache {
     DevAscendFunction* devFunc;
     predcount_t* predCount;
-    predcount_t* predCountPing;
-    predcount_t* predCountPong;
+    predcount_t* predCountPingPong[PRED_COUNT_PINGPONG_NUM];
     int* calleeList;
     DevAscendFunctionDuppedData* duppedData;
 

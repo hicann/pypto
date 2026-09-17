@@ -220,8 +220,8 @@ TEST(CtrlFlowCacheDrcoUt, PredCountDataRestore_CoversDrcoPredCount)
     std::array<uint8_t, 1024> dupBuf{};
     DynFuncDataCache& cache = dyntask->dynFuncDataCacheList[0];
     cache.duppedData = SetupDuppedData(dupBuf, 1);
-    cache.predCountPing = nullptr;
-    cache.predCountPong = nullptr;
+    cache.predCountPingPong[PRED_COUNT_PING] = nullptr;
+    cache.predCountPingPong[PRED_COUNT_PONG] = nullptr;
     cache.predCount = nullptr;
     cache.calleeList = nullptr;
     cache.devFunc = nullptr;
@@ -261,9 +261,9 @@ TEST(CtrlFlowCacheDrcoUt, PredCountPingPongRoundTrip)
         dupped[i] = SetupDuppedData(dupBuf[i], opCounts[i]);
         DynFuncDataCache& cache = dyntask->dynFuncDataCacheList[i];
         cache.duppedData = dupped[i];
-        cache.predCountPing = dupped[i]->GetOperationPredCountPingPong(PRED_COUNT_PING);
-        cache.predCountPong = dupped[i]->GetOperationPredCountPingPong(PRED_COUNT_PONG);
-        cache.predCount = cache.predCountPing;
+        cache.predCountPingPong[PRED_COUNT_PING] = dupped[i]->GetOperationPredCountPingPong(PRED_COUNT_PING);
+        cache.predCountPingPong[PRED_COUNT_PONG] = dupped[i]->GetOperationPredCountPingPong(PRED_COUNT_PONG);
+        cache.predCount = cache.predCountPingPong[PRED_COUNT_PING];
         cache.devFunc = reinterpret_cast<DevAscendFunction*>(devFuncBuf[i].data());
         cache.calleeList = nullptr;
         dyntask->dynFuncDataBackupList[i] = DynFuncDataBackup{};
@@ -281,8 +281,8 @@ TEST(CtrlFlowCacheDrcoUt, PredCountPingPongRoundTrip)
     // Record: both slices carry the initial snapshot; predCount aliases slice 0.
     for (int i = 0; i < 2; ++i) {
         for (uint32_t j = 0; j < opCounts[i]; ++j) {
-            EXPECT_EQ(dyntask->dynFuncDataCacheList[i].predCountPing[j], initVals[i][j]);
-            EXPECT_EQ(dyntask->dynFuncDataCacheList[i].predCountPong[j], initVals[i][j]);
+            EXPECT_EQ(dyntask->dynFuncDataCacheList[i].predCountPingPong[PRED_COUNT_PING][j], initVals[i][j]);
+            EXPECT_EQ(dyntask->dynFuncDataCacheList[i].predCountPingPong[PRED_COUNT_PONG][j], initVals[i][j]);
         }
     }
 
@@ -293,7 +293,8 @@ TEST(CtrlFlowCacheDrcoUt, PredCountPingPongRoundTrip)
     auto runLaunch = [&]() {
         ctrl.PredCountPingPongSwap(dyntask.get());
         for (int i = 0; i < 2; ++i) {
-            EXPECT_EQ(dyntask->dynFuncDataCacheList[i].predCount, dyntask->dynFuncDataCacheList[i].predCountPing);
+            EXPECT_EQ(dyntask->dynFuncDataCacheList[i].predCount,
+                      dyntask->dynFuncDataCacheList[i].predCountPingPong[PRED_COUNT_PING]);
             for (uint32_t j = 0; j < opCounts[i]; ++j) {
                 EXPECT_EQ(dyntask->dynFuncDataCacheList[i].predCount[j], initVals[i][j]);
             }
@@ -306,7 +307,7 @@ TEST(CtrlFlowCacheDrcoUt, PredCountPingPongRoundTrip)
         ctrl.PredCountPingPongRestore(dyntask.get());
         for (int i = 0; i < 2; ++i) {
             for (uint32_t j = 0; j < opCounts[i]; ++j) {
-                EXPECT_EQ(dyntask->dynFuncDataCacheList[i].predCountPong[j], initVals[i][j]);
+                EXPECT_EQ(dyntask->dynFuncDataCacheList[i].predCountPingPong[PRED_COUNT_PONG][j], initVals[i][j]);
             }
         }
     };
@@ -318,7 +319,8 @@ TEST(CtrlFlowCacheDrcoUt, PredCountPingPongRoundTrip)
 
     // The live pointers must never fall back to scattered state: they always alias slice[0].
     for (int i = 0; i < 2; ++i) {
-        EXPECT_EQ(dyntask->dynFuncDataCacheList[i].predCount, dyntask->dynFuncDataCacheList[i].predCountPing);
+        EXPECT_EQ(dyntask->dynFuncDataCacheList[i].predCount,
+                  dyntask->dynFuncDataCacheList[i].predCountPingPong[PRED_COUNT_PING]);
     }
 }
 
