@@ -246,7 +246,7 @@ class ExprEvaluator:
         if isinstance(value, bool):
             return ir.ConstBool(value, span)
         if isinstance(value, int):
-            return make_const_int(value, DataType.INDEX, span=span)
+            return make_const_int(value, span=span)
         if isinstance(value, float):
             return ir.ConstFloat(value, DataType.DEFAULT_CONST_FLOAT, span)
         if isinstance(value, ir.Expr):

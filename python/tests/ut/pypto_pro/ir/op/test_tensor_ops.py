@@ -97,6 +97,13 @@ def test_tensor_shape_transform_helpers_create_calls(factory, expected_name):
     assert isinstance(call.type, ir.TensorType)
 
 
+def test_tensor_transpose_integer_axes_use_int64():
+    call = ir.op.tensor.transpose(_tensor_var("x", shape=[4, 8]), 0, 1)
+
+    assert call.args[1].type.dtype == DataType.INT64
+    assert call.args[2].type.dtype == DataType.INT64
+
+
 def test_tensor_matmul_helper_accepts_kwargs():
     lhs = _tensor_var("lhs", [4, 8], DataType.FP16)
     rhs = _tensor_var("rhs", [8, 16], DataType.FP16)

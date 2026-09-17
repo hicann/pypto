@@ -78,7 +78,7 @@ public:
 
 ## 约束说明
 
-- 裸整数常量（如42）默认为pypto_pro.language.DT_INT64，裸浮点常量（如3.14）默认为pypto_pro.language.DT_FP32。
+- 裸整数常量（如42）使用DT_INT64。只有数值超过DT_INT64的上限时，才使用DT_UINT64。裸浮点常量（如3.14）使用DT_FP32。
 
 - MXFP8的数据元素使用DT_FP8E4M3FN或DT_FP8E5M2，MXFP4的数据元素使用DT_FP4E2M1或DT_FP4E1M2；两者均使用DT_FP8E8M0保存分组缩放因子。详见[matmul_mx](../cube_computation/matmul_mx.md)和[matmul_mx_acc](../cube_computation/matmul_mx_acc.md)。
 

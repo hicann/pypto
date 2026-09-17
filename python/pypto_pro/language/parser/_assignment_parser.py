@@ -301,7 +301,7 @@ class AssignmentParserMixin:
                 continue
             item_expr = ir.GetItemExpr(
                 tuple_var,
-                ir.ConstInt(i, DataType.INDEX, ir.Span.unknown()),
+                ir.ConstInt(i, DataType.INT64, ir.Span.unknown()),
                 span,
             )
             var = self.builder.let(elt.id, item_expr, span=span)
@@ -374,7 +374,7 @@ class AssignmentParserMixin:
                     span=span,
                 )
             for j in range(val_len):
-                idx_const = ir.ConstInt(j, DataType.INDEX, span)
+                idx_const = ir.ConstInt(j, DataType.INT64, span)
                 call = ir.create_op_call(
                     "struct.set", [base, idx_const, value_expr.elements[j]],
                     {"field": field_name}, span,

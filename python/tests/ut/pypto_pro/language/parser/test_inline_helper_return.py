@@ -198,7 +198,7 @@ def test_inline_helper_nested_if_returns_preserve_fallthrough_retval_state():
     assert all(not isinstance(var.type, ir.UnknownType) for var in retval_results)
 
 
-def test_inline_helper_dynamic_loop_preserves_real_return_type_conflict():
+def test_inline_helper_dynamic_loop_uses_one_int64_return_type():
     def choose(value):
         index = 0
         while index < value:
@@ -207,14 +207,20 @@ def test_inline_helper_dynamic_loop_preserves_real_return_type_conflict():
             index = index + 1
         return value
 
-    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
+    @pl.jit(auto_mutex=False)
+    def caller(value: pl.DT_INT64):
+        selected = choose(value)
+        _test_result = selected + 1
 
-        @pl.jit(auto_mutex=False)
-        def caller(value: pl.DT_INT64):
-            selected = choose(value)
-            _test_result = selected + 1
-
-        caller.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    caller_program, _ = caller.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    caller_ir = caller_program.get_function(caller.__name__)
+    selected = next(
+        stmt.var
+        for stmt in _walk_statements(caller_ir.body)
+        if isinstance(stmt, ir.AssignStmt) and stmt.var.name.startswith("selected")
+    )
+    assert isinstance(selected.type, ir.ScalarType)
+    assert selected.type.dtype == ir.DataType.INT64
 
 
 def test_inline_helper_loop_guard_folds_constant_false():

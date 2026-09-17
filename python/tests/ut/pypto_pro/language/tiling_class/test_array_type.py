@@ -33,7 +33,7 @@ def test_array_type_creation():
     assert is_tiling_class(TilingData) is True
     fields = get_tiling_fields(TilingData)
     assert isinstance(fields["offsets"], ArrayFieldInfo)
-    assert fields["offsets"].dtype == DataType.INDEX
+    assert fields["offsets"].dtype == DataType.INT64
     assert fields["offsets"].size == 4
 
 
@@ -126,7 +126,7 @@ def test_get_tiling_fields_returns_array_field_info():
     assert "offsets" in fields
     info = fields["offsets"]
     assert isinstance(info, ArrayFieldInfo)
-    assert info.dtype == DataType.INDEX
+    assert info.dtype == DataType.INT64
     assert info.size == 3
 
 
@@ -138,7 +138,7 @@ def test_get_tiling_fields_mixed():
 
     fields = get_tiling_fields(TilingData)
     assert isinstance(fields["n"], ScalarFieldInfo)
-    assert fields["n"].dtype == DataType.INDEX
+    assert fields["n"].dtype == DataType.INT64
     assert isinstance(fields["offsets"], ArrayFieldInfo)
     assert fields["offsets"].dtype == DataType.FP32
     assert fields["offsets"].size == 2

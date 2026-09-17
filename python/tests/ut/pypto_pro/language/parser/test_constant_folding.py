@@ -81,7 +81,7 @@ def test_all_binary_and_comparison_operators_fold():
         "shift_right": 3,
     }
     for name, expected in int_expected.items():
-        _assert_constant(values[name], expected, ir.DataType.INDEX)
+        _assert_constant(values[name], expected, ir.DataType.INT64)
     _assert_constant(values["truediv"], 3.5, ir.DataType.FP32)
     for name in ("eq", "ne", "lt", "le", "gt", "ge"):
         _assert_constant(values[name], True, ir.DataType.BOOL)
@@ -149,7 +149,7 @@ def test_bool_numeric_and_unary_result_dtypes():
     _assert_constant(values["float_plus"], 1.5, ir.DataType.FP32)
     _assert_constant(values["float_minus"], -1.5, ir.DataType.FP32)
     _assert_constant(values["int_not"], False, ir.DataType.BOOL)
-    _assert_constant(values["int_invert"], -4, ir.DataType.INDEX)
+    _assert_constant(values["int_invert"], -4, ir.DataType.INT64)
     _assert_constant(values["compare"], True, ir.DataType.BOOL)
 
 
@@ -187,7 +187,7 @@ def test_pl_and_builtin_min_max_fold_with_numeric_promotion():
     folded_min_max = folded_min_max_program.get_function(folded_min_max.__name__)
 
     values = _assignments(folded_min_max)
-    _assert_constant(values["pl_min"], 2, ir.DataType.INDEX)
+    _assert_constant(values["pl_min"], 2, ir.DataType.INT64)
     _assert_constant(values["pl_max"], 2.0, ir.DataType.FP32)
     _assert_constant(values["builtin_min"], 1, ir.DataType.INT64)
     _assert_constant(values["builtin_max"], 2.5, ir.DataType.FP32)
@@ -321,7 +321,7 @@ def test_inline_helper_constant_conditions_fold_independently_at_multiple_call_s
         "fallback_is_constant",
     ):
         _assert_constant(values[name], True, ir.DataType.BOOL)
-    _assert_constant(values["combined"], 110, ir.DataType.INDEX)
+    _assert_constant(values["combined"], 110, ir.DataType.INT64)
 
 
 def test_unary_plus_is_identity_for_non_scalar_operand():

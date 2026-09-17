@@ -158,7 +158,7 @@ class TypeResolver:
             return shape
 
         # Convert all to Expr
-        return [ir.ConstInt(d, DataType.INDEX, ir.Span.unknown()) if isinstance(d, int) else d for d in shape]
+        return [ir.ConstInt(d, DataType.INT64, ir.Span.unknown()) if isinstance(d, int) else d for d in shape]
 
     @classmethod
     def dtype_from_value(cls, value: int) -> DataType | None:

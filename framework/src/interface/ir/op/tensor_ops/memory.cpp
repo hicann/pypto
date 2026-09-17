@@ -81,7 +81,7 @@ TypePtr DeduceTensorCreateType([[maybe_unused]] const std::vector<ExprPtr>& args
     } else {
         // Runtime tuple: use GetItemExpr with ConstInt slice
         for (size_t i = 0; i < shape_tuple_type->types_.size(); ++i) {
-            auto idx_const = std::make_shared<ConstInt>(static_cast<int64_t>(i), DataType::INDEX, args[0]->span_);
+            auto idx_const = std::make_shared<ConstInt>(static_cast<int64_t>(i), DataType::INT64, args[0]->span_);
             shape.emplace_back(std::make_shared<GetItemExpr>(args[0], idx_const, args[0]->span_));
         }
     }
@@ -140,7 +140,7 @@ TypePtr DeduceTensorViewType([[maybe_unused]] const std::vector<ExprPtr>& args,
     } else {
         // Runtime tuple: use GetItemExpr with ConstInt slice
         for (size_t i = 0; i < shape_tuple_type->types_.size(); ++i) {
-            auto idx_const = std::make_shared<ConstInt>(static_cast<int64_t>(i), DataType::INDEX, args[1]->span_);
+            auto idx_const = std::make_shared<ConstInt>(static_cast<int64_t>(i), DataType::INT64, args[1]->span_);
             new_shape.emplace_back(std::make_shared<GetItemExpr>(args[1], idx_const, args[1]->span_));
         }
     }

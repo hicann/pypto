@@ -29,7 +29,7 @@ class AddTiling:
 
 ### 字段类型
 
-TilingData的字段支持标量`int`、`float`、`bool`，以及对应的定长数组`int[N]`、`float[N]`、`bool[N]`。
+TilingData的字段支持标量`int`、`float`、`bool`，以及对应的定长数组`int[N]`、`float[N]`、`bool[N]`。其中，`int`对应DT_INT64，`float`对应DT_FP32，`bool`对应DT_BOOL。
 
 字段声明需满足以下要求：
 

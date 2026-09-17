@@ -371,7 +371,7 @@ def test_iter_arg_with_inferred_type():
 
             assert sum_iter.name == "sum"
             assert isinstance(sum_iter.iterVar.type, ir.ScalarType)
-            assert sum_iter.iterVar.type.dtype == DataType.INDEX
+            assert sum_iter.iterVar.type.dtype == DataType.INT64
 
     func = f.get_result()
     assert func is not None
@@ -388,14 +388,14 @@ def test_iter_arg_with_type_validation():
 
         with ib.for_loop(i, 0, 10, 1) as loop:
             # Provide matching type for validation
-            explicit_type = ir.ScalarType(DataType.INDEX)
+            explicit_type = ir.ScalarType(DataType.INT64)
             sum_iter = loop.iter_arg("sum", 0, iter_type=explicit_type)
             # Must have matching return_var
             _ = loop.return_var("sum_final")
 
             assert sum_iter.name == "sum"
             assert isinstance(sum_iter.iterVar.type, ir.ScalarType)
-            assert sum_iter.iterVar.type.dtype == DataType.INDEX
+            assert sum_iter.iterVar.type.dtype == DataType.INT64
 
     func = f.get_result()
     assert func is not None
@@ -433,7 +433,7 @@ def test_return_var_with_inferred_type():
 
             assert sum_final.name == "sum_final"
             assert isinstance(sum_final.type, ir.ScalarType)
-            assert sum_final.type.dtype == DataType.INDEX
+            assert sum_final.type.dtype == DataType.INT64
 
     func = f.get_result()
     assert func is not None
@@ -459,8 +459,8 @@ def test_return_var_with_multiple_iter_args():
 
             assert isinstance(sum_final.type, ir.ScalarType)
             assert isinstance(count_final.type, ir.ScalarType)
-            assert sum_final.type.dtype == DataType.INDEX
-            assert count_final.type.dtype == DataType.INDEX
+            assert sum_final.type.dtype == DataType.INT64
+            assert count_final.type.dtype == DataType.INT64
 
     func = f.get_result()
     assert func is not None
@@ -478,11 +478,11 @@ def test_return_var_explicit_type_validation():
         with ib.for_loop(i, 0, 10, 1) as loop:
             _ = loop.iter_arg("sum", 0)
             # Provide explicit type that matches iter_arg type
-            explicit_type = ir.ScalarType(DataType.INDEX)
+            explicit_type = ir.ScalarType(DataType.INT64)
             sum_final = loop.return_var("sum_final", var_type=explicit_type)
 
             assert isinstance(sum_final.type, ir.ScalarType)
-            assert sum_final.type.dtype == DataType.INDEX
+            assert sum_final.type.dtype == DataType.INT64
 
     func = f.get_result()
     assert func is not None

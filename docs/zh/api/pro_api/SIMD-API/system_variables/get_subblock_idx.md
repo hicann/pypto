@@ -32,7 +32,7 @@ pypto_pro.language.get_subblock_idx() -> int
 
 ## 返回值说明
 
-返回设备运行时产生的整型标量值，可用于Kernel内整数运算和索引。取值范围为
+返回DT_INT64类型的subblock索引，可用于Kernel内的整数计算和数据索引。取值范围为
 [0, get_subblock_num())；在AIC与AIV比例为1:2的混合Kernel中，同一逻辑Block对应的两个AIV分别返回0和1。
 
 ## 典型使用场景

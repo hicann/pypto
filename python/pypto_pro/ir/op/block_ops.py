@@ -1172,7 +1172,7 @@ def _ir_getval(container: Expr, offset: int | Expr, *, span: Span | None = None)
             "field, use attribute access (e.g. tiling.axis1) instead.",
         )
     _check_scalar_access_supported("getval", container, actual_span)
-    offset_expr = offset if isinstance(offset, Expr) else _normalize_expr(offset, actual_span, int_dtype=DataType.INDEX)
+    offset_expr = offset if isinstance(offset, Expr) else _normalize_expr(offset, actual_span, int_dtype=DataType.INT64)
     return _ir_core.create_op_call(block_ir_op("getval"), [container, offset_expr], {}, actual_span)
 
 
@@ -1189,7 +1189,7 @@ def _ir_setval(container: Expr, offset: int | Expr, value: int | float | Expr, *
             "field, use attribute assignment (e.g. tiling.axis1 = ...) instead.",
         )
     _check_scalar_access_supported("setval", container, actual_span)
-    offset_expr = offset if isinstance(offset, Expr) else _normalize_expr(offset, actual_span, int_dtype=DataType.INDEX)
+    offset_expr = offset if isinstance(offset, Expr) else _normalize_expr(offset, actual_span, int_dtype=DataType.INT64)
     if not isinstance(value, Expr):
         container_dtype = container.type.dtype
         value_expr = _normalize_expr(value, actual_span, int_dtype=container_dtype, float_dtype=container_dtype)
@@ -3978,11 +3978,11 @@ def _parse_set_validshape(self, call: ast.Call) -> Expr:
         tiles = self.lower_attr_access(group_var, "tiles", span)
 
         for i in range(n_tiles):
-            tile_ir = _ir_core.GetItemExpr(tiles, ConstInt(i, DataType.INDEX, span), span)
+            tile_ir = _ir_core.GetItemExpr(tiles, ConstInt(i, DataType.INT64, span), span)
             vs_call = _ir_set_validshape(tile_ir, shape, span=span)
             self.builder.emit(_ir_core.EvalStmt(vs_call, span))
 
-        return ConstInt(0, DataType.INDEX, span)
+        return ConstInt(0, DataType.INT64, span)
 
     result = _ir_set_validshape(*args, **kwargs, span=span)
 

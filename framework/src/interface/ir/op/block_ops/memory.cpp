@@ -40,13 +40,25 @@
 namespace pypto {
 namespace ir {
 
+namespace {
+
+DataType GetValResultDtype(const DataType& element_dtype)
+{
+    if (!element_dtype.IsInt()) {
+        return element_dtype;
+    }
+    return element_dtype == DataType::UINT64 ? DataType::UINT64 : DataType::INT64;
+}
+
+} // namespace
+
 TypePtr DeduceBlockGetBlockIdxType([[maybe_unused]] const std::vector<ExprPtr>& args,
                                    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs,
                                    const std::string& op_name)
 {
     CHECK(args.size() == 0) << "The operator " << op_name << " requires no arguments, but got " << args.size();
 
-    return std::make_shared<ScalarType>(DataType::INDEX);
+    return std::make_shared<ScalarType>(DataType::INT64);
 }
 
 TypePtr DeduceBlockCreateTileType([[maybe_unused]] const std::vector<ExprPtr>& args,
@@ -133,7 +145,7 @@ TypePtr DeduceBlockCreateTileType([[maybe_unused]] const std::vector<ExprPtr>& a
         int64_t addr_val = GetOpKwarg<int>(kwargs, "memref_addr");
         int64_t size_val = GetOpKwarg<int>(kwargs, "memref_size");
         uint64_t id_val = static_cast<uint64_t>(GetOpKwarg<int>(kwargs, "memref_id"));
-        auto addr_expr = std::make_shared<ConstInt>(addr_val, DataType::INDEX, Span::Unknown());
+        auto addr_expr = std::make_shared<ConstInt>(addr_val, DataType::INT64, Span::Unknown());
         MemRefPtr memref = std::make_shared<MemRef>(target_memory, addr_expr, static_cast<uint64_t>(size_val), id_val);
         return std::make_shared<TileType>(tile_shape, dtype, std::optional<MemRefPtr>(memref), tile_view, hw_info);
     }
@@ -153,12 +165,12 @@ TypePtr DeduceGetValType([[maybe_unused]] const std::vector<ExprPtr>& args,
                                        << offset_type->dtype_.ToString();
 
     if (auto tile_type = As<TileType>(first_type)) {
-        return std::make_shared<ScalarType>(tile_type->dtype_);
+        return std::make_shared<ScalarType>(GetValResultDtype(tile_type->dtype_));
     }
     auto tensor_type = As<TensorType>(first_type);
     CHECK(tensor_type) << "getval requires first argument to be TileType or TensorType, but got "
                        << first_type->TypeName();
-    return std::make_shared<ScalarType>(tensor_type->dtype_);
+    return std::make_shared<ScalarType>(GetValResultDtype(tensor_type->dtype_));
 }
 
 TypePtr DeduceTileValidShapeType(const std::vector<ExprPtr>& args,
@@ -167,7 +179,7 @@ TypePtr DeduceTileValidShapeType(const std::vector<ExprPtr>& args,
     CHECK(args.size() == 1 && As<TileType>(args[0]->GetType())) << "block.tile_valid_shape requires one Tile argument";
     int axis = GetOpKwarg<int>(kwargs, "axis", 0);
     CHECK(axis >= 0 && axis <= 1) << "block.tile_valid_shape axis must be in [0, 1], got axis=" << axis;
-    return std::make_shared<ScalarType>(DataType(DataType::UINT32));
+    return std::make_shared<ScalarType>(DataType::INT64);
 }
 
 TypePtr DeduceSetValType([[maybe_unused]] const std::vector<ExprPtr>& args,

@@ -159,7 +159,7 @@ def test_dynamic_shape_subscript_uses_parameter_shape_var():
 
     assert isinstance(dynamic_dim, ir.Var)
     assert dynamic_dim.name == "__pypto_dyn_a_0"
-    assert dynamic_dim.type.dtype == DataType.INDEX
+    assert dynamic_dim.type.dtype == DataType.INT64
     assert dynamic_dim.name in ir.python_print(add_kernel_shape_subscript)
 
 

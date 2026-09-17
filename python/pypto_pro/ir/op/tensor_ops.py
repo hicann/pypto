@@ -438,8 +438,8 @@ def transpose(tensor: Expr, axis1: int, axis2: int, span: Span | None = None) ->
         Call expression for tensor transpose
     """
     actual_span = _get_span_or_capture(span)
-    axis1_expr = ConstInt(axis1, DataType.INDEX, actual_span)
-    axis2_expr = ConstInt(axis2, DataType.INDEX, actual_span)
+    axis1_expr = ConstInt(axis1, DataType.INT64, actual_span)
+    axis2_expr = ConstInt(axis2, DataType.INT64, actual_span)
 
     args = [tensor, axis1_expr, axis2_expr]
 

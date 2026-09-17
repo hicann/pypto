@@ -137,7 +137,7 @@ def addptr(ptr: Expr, offset: int | Expr, span: Span | None = None) -> Call:
     _check_addptr_dtype(ptr)
     actual_span = _get_span_or_capture(span)
     if isinstance(offset, int):
-        offset_expr = _normalize_expr(offset, actual_span, int_dtype=DataType.INDEX)
+        offset_expr = _normalize_expr(offset, actual_span, int_dtype=DataType.INT64)
     else:
         offset_expr = offset
     return _ir_core.create_op_call("ptr.addptr", [ptr, offset_expr], {}, actual_span)

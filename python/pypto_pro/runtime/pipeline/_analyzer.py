@@ -612,7 +612,7 @@ def _collect_outer_slots(info: PipelineInfo) -> dict:
     """{name: (group, kind, slot count)} for slots picked outside the pipeline loop.
 
     Such a slot advances once per outer iteration while every beat reads it, so a delayed stage
-    would see whatever the variable was last rebound to. Carrying the INDEX in ctx fixes that:
+    would see whatever the variable was last rebound to. Carrying the slot index in ctx fixes that:
     each beat snapshots the index it used, and every stage re-selects the slot with its own.
 
     Renames are followed to a fixed point and every name on the chain keeps its entry, because
@@ -837,7 +837,7 @@ def _derive_ctx_fields(info: PipelineInfo):
                     arg_map.append(PL_STRUCT_ARG)
                     continue
                 if arg.id in info.outer_slots:
-                    # Slot chosen outside the loop: ctx carries the INDEX, and the stage
+                    # Slot chosen outside the loop: ctx carries the slot index, and the stage
                     # re-selects the slot with its own beat's index (see _build_stage_args).
                     arg_map.append(register_slot_index(arg.id))
                     continue

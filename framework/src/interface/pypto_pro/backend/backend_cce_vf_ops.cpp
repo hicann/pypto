@@ -887,9 +887,9 @@ static std::string EmitVFDuplicate(const ir::CallPtr& op, codegen::CodegenBase& 
     // MERGING is not supported by the underlying vdup/vbr instructions on current device.
     VFZeroingOnly(op, "vf.full");
     // The fill width follows the DST tile. The Scalar-mode ``dtype`` kwarg is
-    // what the frontend uses to declare dst (a bare int literal is an
-    // INDEX-typed 64-bit placeholder, so it must not be compared against dst
-    // nor route a b16/b32 fill into the b64 split path).
+    // what the frontend uses to declare dst (a bare int literal is INT64, so it
+    // must not be compared against dst nor route a b16/b32 fill into the b64
+    // split path).
     DataType dst_dt = GetExprDtype(op->args_[0]);
     std::string dst = codegen.GetExprAsCode(op->args_[0]);
     std::string src_str = codegen.GetExprAsCode(op->args_[1]);
@@ -939,8 +939,8 @@ static std::string EmitVFDuplicate(const ir::CallPtr& op, codegen::CodegenBase& 
         // Scalar broadcast with mask: vdup(dst, scalar, preg, MODE_ZEROING/MERGING)
         std::string mask = codegen.GetExprAsCode(op->args_[2]);
         std::string mode = VFZeroingOnly(op, "vf.full");
-        // The fill width follows DST: an int literal is INDEX-typed (64-bit)
-        // and must not route a b16/b32 fill into the b64 split path.
+        // The fill width follows DST: an int literal is INT64 and must not route
+        // a b16/b32 fill into the b64 split path.
         if (dst_dt.GetBit() == 64) {
             // B64 has no vdup single-register overload; create two b32 halves,
             // vdup each with packed b32 mask, then vintlv into b64 dst
@@ -2302,7 +2302,7 @@ static std::string EmitVFMuls(const ir::CallPtr& op, codegen::CodegenBase& codeg
            src_dt == DataType::FP16 || src_dt == DataType::FP32))
         << "vf.muls src only supports INT16/UINT16/INT32/UINT32/INT64/UINT64/FP16/FP32, got " << DTypeStr(src_dt);
     DataType scalar_dt = GetExprDtype(op->args_[2]);
-    if (scalar_dt == DataType::INDEX) {
+    if (scalar_dt == DataType::INDEX || scalar_dt == DataType::INT64) {
         scalar_dt = src_dt;
     }
     CHECK((scalar_dt == DataType::INT16 || scalar_dt == DataType::UINT16 || scalar_dt == DataType::INT32 ||

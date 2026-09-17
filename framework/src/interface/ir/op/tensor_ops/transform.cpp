@@ -101,7 +101,7 @@ TypePtr DeduceTensorReshapeType([[maybe_unused]] const std::vector<ExprPtr>& arg
     } else {
         // Runtime tuple: use GetItemExpr with ConstInt slice
         for (size_t i = 0; i < shape_tuple_type->types_.size(); ++i) {
-            auto idx_const = std::make_shared<ConstInt>(static_cast<int64_t>(i), DataType::INDEX, args[1]->span_);
+            auto idx_const = std::make_shared<ConstInt>(static_cast<int64_t>(i), DataType::INT64, args[1]->span_);
             new_shape.emplace_back(std::make_shared<GetItemExpr>(args[1], idx_const, args[1]->span_));
         }
     }

@@ -453,7 +453,7 @@ def test_loop_output_single_return_var():
 
         assert result.name == "sum_final"
         assert isinstance(result.type, ir.ScalarType)
-        assert result.type.dtype == DataType.INDEX
+        assert result.type.dtype == DataType.INT64
 
         ib.return_stmt(result)
 

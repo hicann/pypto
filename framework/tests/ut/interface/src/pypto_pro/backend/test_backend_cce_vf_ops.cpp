@@ -1881,7 +1881,7 @@ TEST(BackendCCEVFOpsTest, DoesNotCoerceForFloatSrc)
     EXPECT_NE(emitted.find("3.5"), std::string::npos) << emitted;
 }
 
-TEST(BackendCCEVFOpsTest, MulsAcceptsIndexScalarConvertedToSrcType)
+TEST(BackendCCEVFOpsTest, MulsAcceptsIndexOrInt64ScalarConvertedToSrcType)
 {
     CapturingCCECodegen codegen(ir::SectionKind::Vector);
     auto i32_dst = MakeVar("i32_dst", ir::DataType::INT32);
@@ -1891,8 +1891,9 @@ TEST(BackendCCEVFOpsTest, MulsAcceptsIndexScalarConvertedToSrcType)
     codegen.RegisterRegTensorVar("i32_src");
     const Kwargs zeroing = {{"mode", EnumValue(ir::MergeMode::ZEROING)}};
 
-    // Python int 3 → ConstInt(INDEX) → converted to src_dt (INT32) → emits "3"
+    // Keep accepting the legacy INDEX scalar and the new INT64 default integer.
     ExpectInvoke(codegen, "vf.muls", {"vmuls("}, {i32_dst, i32_src, IndexVal(3), mask}, zeroing);
+    ExpectInvoke(codegen, "vf.muls", {"vmuls("}, {i32_dst, i32_src, Int(3), mask}, zeroing);
 }
 
 TEST(BackendCCEVFOpsTest, MulsRejectsUnlistedIntTypes)
@@ -1941,7 +1942,7 @@ TEST(BackendCCEVFOpsTest, StoreAlignAcceptsCompatibleIntDtypes)
     ExpectInvoke(codegen, "vf.store_align", {"vsts("}, {tile_i32, u32_reg, mask});
 }
 
-TEST(BackendCCEVFOpsTest, AxpyAcceptsIndexScalar)
+TEST(BackendCCEVFOpsTest, AxpyAcceptsInt64Scalar)
 {
     CapturingCCECodegen codegen(ir::SectionKind::Vector);
     auto i64_dst = MakeVar("i64_dst", ir::DataType::INT64);
@@ -1951,7 +1952,7 @@ TEST(BackendCCEVFOpsTest, AxpyAcceptsIndexScalar)
     codegen.RegisterRegTensorVar("i64_src");
     const Kwargs zeroing = {{"mode", EnumValue(ir::MergeMode::ZEROING)}};
 
-    // Python int 2 → ConstInt(INDEX) → allowed for axpy. B64 axpy lowers to
+    // Python int 2 → ConstInt(INT64) → allowed for axpy. B64 axpy lowers to
     // the Muls+Add emulation (no native b64 vaxpy): scalar broadcast +
     // MulB64 + AddB64 carry chain + interleave.
     ExpectInvoke(codegen, "vf.axpy",

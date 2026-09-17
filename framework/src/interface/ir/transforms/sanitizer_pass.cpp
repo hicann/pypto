@@ -47,7 +47,7 @@ ExprPtr TileDim(const ExprPtr& tile, int axis)
                                   std::make_shared<ScalarType>(DataType(DataType::UINT32)), Span::Unknown());
 }
 
-ExprPtr IndexConst(int64_t v) { return std::make_shared<ConstInt>(v, DataType::INDEX, Span::Unknown()); }
+ExprPtr Int64Const(int64_t v) { return std::make_shared<ConstInt>(v, DataType::INT64, Span::Unknown()); }
 
 // ---------------------------------------------------------------------------
 // SanitizerInstrumenter injects the log records (an IRMutator).
@@ -74,8 +74,8 @@ public:
         auto tile_transfer_bounds = [this](const CallPtr& c) {
             // move/move_fp (TEXTRACT): the offset is the SOURCE extraction
             // start, the window the DESTINATION's valid shape.
-            ExprPtr src_off_row = IndexConst(0);
-            ExprPtr src_off_col = IndexConst(0);
+            ExprPtr src_off_row = Int64Const(0);
+            ExprPtr src_off_col = Int64Const(0);
             if (auto off_tuple = As<MakeTuple>(c->args_.back())) {
                 if (!off_tuple->elements_.empty())
                     src_off_row = off_tuple->elements_[0];
@@ -85,7 +85,7 @@ public:
             ExprPtr win_row = TileDim(c->args_[0], 0);
             ExprPtr win_col = TileDim(c->args_[0], 1);
             auto src = RecordTileAccess(c, 1, src_off_row, src_off_col, win_row, win_col);
-            auto dst = RecordTileAccess(c, 0, IndexConst(0), IndexConst(0), win_row, win_col);
+            auto dst = RecordTileAccess(c, 0, Int64Const(0), Int64Const(0), win_row, win_col);
             return SeqStmts::Flatten({src, dst}, c->span_);
         };
         auto tile_insert_bounds = [this](const CallPtr& c) {
@@ -93,7 +93,7 @@ public:
             // the window the SOURCE's valid shape.
             ExprPtr win_row = TileDim(c->args_[1], 0);
             ExprPtr win_col = TileDim(c->args_[1], 1);
-            auto src = RecordTileAccess(c, 1, IndexConst(0), IndexConst(0), win_row, win_col);
+            auto src = RecordTileAccess(c, 1, Int64Const(0), Int64Const(0), win_row, win_col);
             auto dst = RecordTileAccess(c, 0, c->args_[2], c->args_[3], win_row, win_col);
             return SeqStmts::Flatten({src, dst}, c->span_);
         };
@@ -225,7 +225,7 @@ std::pair<int64_t, int64_t> SanitizerInstrumenter::TileDims(const ExprPtr& tile)
 
 ExprPtr SanitizerInstrumenter::ShapeProduct(const ShapedTypePtr& type, const Span& span)
 {
-    ExprPtr numel = IndexConst(1);
+    ExprPtr numel = Int64Const(1);
     for (const auto& d : type->shape_)
         numel = MakeMul(numel, d, span);
     return numel;
@@ -236,13 +236,13 @@ ExprPtr SanitizerInstrumenter::ShapeProduct(const ShapedTypePtr& type, const Spa
 StmtPtr SanitizerInstrumenter::MakeLogStmt(uint32_t det_id, std::vector<ExprPtr> fields, const Span& span)
 {
     std::vector<ExprPtr> args;
-    args.push_back(IndexConst(det_id)); // codegen / decoder dispatch on it
+    args.push_back(Int64Const(det_id)); // codegen / decoder dispatch on it
     args.insert(args.end(), std::make_move_iterator(fields.begin()), std::make_move_iterator(fields.end()));
     args.push_back(log_param_);
     args.push_back(capacity_param_);
     // Source line for the replay report; the file comes from the Python
     // side, which knows the kernel's source path.
-    args.push_back(IndexConst(static_cast<int64_t>(span.BeginLine())));
+    args.push_back(Int64Const(static_cast<int64_t>(span.BeginLine())));
     auto call = std::make_shared<Call>("block.sanitizer_log", std::move(args), Span::Unknown());
     return std::make_shared<EvalStmt>(call, Span::Unknown());
 }
@@ -257,8 +257,8 @@ StmtPtr SanitizerInstrumenter::RecordScalarAccess(const CallPtr& call)
     auto [tile_dim0, tile_dim1] = TileDims(container);
     if (tile_dim0 >= 0) {
         std::vector<ExprPtr> fields;
-        fields.push_back(IndexConst(tile_dim0));
-        fields.push_back(IndexConst(tile_dim1));
+        fields.push_back(Int64Const(tile_dim0));
+        fields.push_back(Int64Const(tile_dim1));
         fields.push_back(call->args_[1]);
         return MakeLogStmt(static_cast<uint32_t>(SanitizerDetection::TileScalar), std::move(fields), call->span_);
     }
@@ -271,14 +271,14 @@ StmtPtr SanitizerInstrumenter::RecordScalarAccess(const CallPtr& call)
     // acc_row carries the count.
     ExprPtr numel = ShapeProduct(tensor_type, call->span_);
     std::vector<ExprPtr> fields;
-    fields.push_back(IndexConst(0)); // ndim = 0: linear-offset access
+    fields.push_back(Int64Const(0)); // ndim = 0: linear-offset access
     fields.push_back(call->args_[1]);
     for (uint32_t i = 0; i < kSanitizerMaxTensorDims - 1; ++i)
-        fields.push_back(IndexConst(0));
+        fields.push_back(Int64Const(0));
     for (uint32_t i = 0; i < kSanitizerMaxTensorDims; ++i)
-        fields.push_back(IndexConst(0)); // shape slots (length only)
+        fields.push_back(Int64Const(0)); // shape slots (length only)
     fields.push_back(numel);
-    fields.push_back(IndexConst(1));
+    fields.push_back(Int64Const(1));
     return MakeLogStmt(static_cast<uint32_t>(SanitizerDetection::GmAccess), std::move(fields), call->span_);
 }
 
@@ -291,10 +291,10 @@ StmtPtr SanitizerInstrumenter::RecordValidShape(const CallPtr& call)
     auto [dim0, dim1] = TileDims(call->args_[0]);
     CHECK(dim0 >= 0) << "sanitizer: set_validshape target must be a Tile";
     std::vector<ExprPtr> fields;
-    fields.push_back(IndexConst(dim0));
-    fields.push_back(IndexConst(dim1));
-    fields.push_back(IndexConst(0));
-    fields.push_back(IndexConst(0));
+    fields.push_back(Int64Const(dim0));
+    fields.push_back(Int64Const(dim1));
+    fields.push_back(Int64Const(0));
+    fields.push_back(Int64Const(0));
     fields.push_back(call->args_[1]);
     fields.push_back(call->args_[2]);
     return MakeLogStmt(static_cast<uint32_t>(SanitizerDetection::TileAccess), std::move(fields), call->span_);
@@ -321,13 +321,13 @@ StmtPtr SanitizerInstrumenter::RecordGmAccess(const CallPtr& call)
     CHECK(tensor_type != nullptr) << "sanitizer: " << call->name_ << " tensor operand must be a Tensor";
     uint32_t ndim = std::min<uint32_t>(static_cast<uint32_t>(off_tuple->elements_.size()), kSanitizerMaxTensorDims);
     std::vector<ExprPtr> fields;
-    fields.push_back(IndexConst(ndim));
+    fields.push_back(Int64Const(ndim));
     // Offsets (up to 5, pad with 0).
     for (uint32_t i = 0; i < kSanitizerMaxTensorDims; ++i) {
         if (i < off_tuple->elements_.size()) {
             fields.push_back(off_tuple->elements_[i]);
         } else {
-            fields.push_back(IndexConst(0));
+            fields.push_back(Int64Const(0));
         }
     }
     // Shape dims aligned with the offsets (same alignment as the replay's
@@ -335,7 +335,7 @@ StmtPtr SanitizerInstrumenter::RecordGmAccess(const CallPtr& call)
     uint32_t rank = std::min<uint32_t>(static_cast<uint32_t>(tensor_type->shape_.size()), kSanitizerMaxTensorDims);
     for (uint32_t i = 0; i < kSanitizerMaxTensorDims; ++i) {
         uint32_t dim = (rank <= ndim) ? i : (ndim - rank) + i; // leading dims dropped
-        fields.push_back(dim < rank ? tensor_type->shape_[dim] : IndexConst(0));
+        fields.push_back(dim < rank ? tensor_type->shape_[dim] : Int64Const(0));
     }
     // The order kwarg decomposes into ascending tile_dims + is_transpose;
     // a transposed trailing-axes load swaps the recorded windows. Orders
@@ -372,8 +372,8 @@ StmtPtr SanitizerInstrumenter::RecordTileAccess(const CallPtr& call, uint32_t ti
     auto [dim0, dim1] = TileDims(call->args_[tile_arg_idx]);
     CHECK(dim0 >= 0) << "sanitizer: tile operand must be a Tile";
     std::vector<ExprPtr> fields;
-    fields.push_back(IndexConst(dim0));
-    fields.push_back(IndexConst(dim1));
+    fields.push_back(Int64Const(dim0));
+    fields.push_back(Int64Const(dim1));
     fields.push_back(off_row);
     fields.push_back(off_col);
     fields.push_back(win_row);
@@ -391,8 +391,8 @@ StmtPtr SanitizerInstrumenter::RecordMutex(const CallPtr& call)
     for (const auto& mutex_id : call->args_) {
         std::vector<ExprPtr> fields;
         fields.push_back(mutex_id);
-        fields.push_back(IndexConst(pipe));
-        fields.push_back(IndexConst(is_lock ? 1 : 0));
+        fields.push_back(Int64Const(pipe));
+        fields.push_back(Int64Const(is_lock ? 1 : 0));
         logs.push_back(
             MakeLogStmt(static_cast<uint32_t>(SanitizerDetection::MutexAccess), std::move(fields), call->span_));
     }
@@ -438,10 +438,10 @@ StmtPtr SanitizerInstrumenter::CollectMakeTile(const CallPtr& call)
         }
     }
     std::vector<ExprPtr> fields;
-    fields.push_back(IndexConst(addr));
-    fields.push_back(IndexConst(sz * dtype_bytes));
-    fields.push_back(IndexConst(static_cast<int64_t>((*tile_type->memref_)->memorySpace_)));
-    fields.push_back(IndexConst(sz)); // element count (report display)
+    fields.push_back(Int64Const(addr));
+    fields.push_back(Int64Const(sz * dtype_bytes));
+    fields.push_back(Int64Const(static_cast<int64_t>((*tile_type->memref_)->memorySpace_)));
+    fields.push_back(Int64Const(sz)); // element count (report display)
     return MakeLogStmt(static_cast<uint32_t>(SanitizerDetection::TileDecl), std::move(fields), call->span_);
 }
 
@@ -480,31 +480,31 @@ StmtPtr SanitizerInstrumenter::CollectMakeTensor(const CallPtr& call)
     auto stride_of = [&](size_t i) -> ExprPtr {
         if (i < stride_tuple->elements_.size())
             return stride_tuple->elements_[i];
-        ExprPtr product = IndexConst(1);
+        ExprPtr product = Int64Const(1);
         for (size_t j = i + 1; j < shape_tuple->elements_.size(); ++j)
             product = MakeMul(product, shape_tuple->elements_[j], call->span_);
         return product;
     };
-    ExprPtr fp_elems = IndexConst(1);
+    ExprPtr fp_elems = Int64Const(1);
     for (size_t i = 0; i < shape_tuple->elements_.size(); ++i) {
-        ExprPtr term = MakeMul(MakeSub(shape_tuple->elements_[i], IndexConst(1), call->span_), stride_of(i),
+        ExprPtr term = MakeMul(MakeSub(shape_tuple->elements_[i], Int64Const(1), call->span_), stride_of(i),
                                call->span_);
         fp_elems = MakeAdd(fp_elems, term, call->span_);
     }
-    ExprPtr fp_bytes = MakeMul(fp_elems, IndexConst(elem_bytes), call->span_);
+    ExprPtr fp_bytes = MakeMul(fp_elems, Int64Const(elem_bytes), call->span_);
 
     // Source capacity in bytes: the element-count product of the source
     // tensor's shape scaled by its element width. A raw pointer has no
     // known bound (-1); the record skips the check then.
-    ExprPtr src_bytes = IndexConst(-1);
+    ExprPtr src_bytes = Int64Const(-1);
     if (auto src_tensor = As<TensorType>(call->args_[0]->GetType())) {
         int64_t src_elem = std::max<int64_t>(1, static_cast<int64_t>(src_tensor->dtype_.GetBit()) / 8);
-        src_bytes = MakeMul(ShapeProduct(src_tensor, call->span_), IndexConst(src_elem), call->span_);
+        src_bytes = MakeMul(ShapeProduct(src_tensor, call->span_), Int64Const(src_elem), call->span_);
     }
 
     std::vector<ExprPtr> fields;
     for (uint32_t i = 0; i < kSanitizerMaxTensorDims; ++i) {
-        fields.push_back(i < shape_tuple->elements_.size() ? shape_tuple->elements_[i] : IndexConst(0));
+        fields.push_back(i < shape_tuple->elements_.size() ? shape_tuple->elements_[i] : Int64Const(0));
     }
     fields.push_back(std::move(fp_bytes));
     fields.push_back(std::move(src_bytes));
@@ -533,8 +533,8 @@ ProgramPtr SanitizerInstrumenter::Instrument(ProgramPtr program)
         }
         auto log_var = std::make_shared<Var>("sanitizer_log", std::make_shared<PtrType>(DataType(DataType::INT8)),
                                              Span::Unknown());
-        auto capacity_var = std::make_shared<Var>(
-            "sanitizer_log_capacity", std::make_shared<ScalarType>(DataType(DataType::INDEX)), Span::Unknown());
+        auto capacity_var = std::make_shared<Var>("sanitizer_log_capacity",
+                                                  std::make_shared<ScalarType>(DataType::INT64), Span::Unknown());
         log_param_ = log_var;
         capacity_param_ = capacity_var;
 

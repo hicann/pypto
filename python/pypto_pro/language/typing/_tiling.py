@@ -40,7 +40,7 @@ from pypto_pro.language.parser.diagnostics import check_in_range
 _MAX_ARRAY_SIZE = 2048
 
 _PYTHON_TYPE_TO_DTYPE: dict[type, DataType] = {
-    int: DataType.INDEX,
+    int: DataType.INT64,
     float: DataType.FP32,
     bool: DataType.BOOL,
 }
@@ -199,7 +199,7 @@ def get_tiling_tuple_type(cls: type) -> ir.TupleType:
 def _field_ctype(dtype: DataType) -> type:
     # Reuse the single DataType→ctype map maintained in the runtime (lazy import to avoid a
     # module-level cycle; jit imports this module inside functions). Must stay in sync with
-    # the C struct member types emitted by CCE codegen's CppTypeForField (e.g. INDEX → int64_t).
+    # the C struct member types emitted by CCE codegen's CppTypeForField (e.g. INT64 → int64_t).
     from pypto_pro.runtime.jit import _PL_DTYPE_TO_CTYPE
 
     ctype = _PL_DTYPE_TO_CTYPE.get(str(dtype))
