@@ -25,10 +25,6 @@
 #include "machine/utils/dynamic/runtime_outcast_tensor.h"
 
 namespace npu::tile_fwk::dynamic {
-#define ADDRESS_CACHE_KIND_WORKSPACE 0
-#define ADDRESS_CACHE_KIND_INPUT 1
-#define ADDRESS_CACHE_KIND_OUTPUT 2
-#define ADDRESS_CACHE_KIND_COMM 3
 #define INVALID_STITCH_IDX (static_cast<uint32_t>(-1))
 
 constexpr size_t READY_QUEUE_SIZE = 3UL;
@@ -258,6 +254,8 @@ struct DevControlFlowCache {
 
     uint64_t workspaceAddr;
 
+    uint64_t taskRelocTableOffset{0};
+    uint32_t taskRelocTableCount{0};
 #define ctrlFlowLastField cacheData
     uint64_t dataSize;
     uint8_t data[0];
@@ -453,14 +451,25 @@ struct DevControlFlowCache {
     static void RelocDescToCache(AddressDescriptor& desc, const RelocRange& relocWorkspace,
                                  std::unordered_map<uint64_t, AddressDescriptor>& cacheInputOutputDict);
 
-    static void RelocDescFromCache(AddressDescriptor& desc, const RelocRange& relocWorkspace,
-                                   DevStartArgsBase* devStartArgs);
+    static void RelocDescFromCache(const AddressDescriptor& desc, AddressDescriptor& result,
+                                   const RelocRange& relocWorkspace, DevStartArgsBase* devStartArgs);
 
+    struct IncastOutcastRelocBatch {
+        uint64_t srcBaseOffset; /* rawTensorAddrBackup (cache-form descriptors, read-only) */
+        uint64_t dstBaseOffset; /* rawTensorAddr (live addresses, rewritten per launch) */
+        uint64_t idxListOffset; /* uint16 descriptor indices covered by this batch */
+        uint32_t descCount;     /* number of descriptors in this batch */
+        AddressCacheKind kind;
+    };
+
+    struct TaskRelocEntry {
+        uint64_t batchListOffset;
+        uint64_t dynFuncHeaderOffset;
+        uint32_t batchCount;
+    };
+
+    void BuildIncastOutcastRelocTable();
     void IncastOutcastAddrBackup(DynDeviceTaskBase* base);
-
-    void IncastOutcastAddrRestore(DynDeviceTaskBase* base);
-
-    void IncastOutcastAddrRestore();
 
     void TaskAddrBackupWorkspace(DynDeviceTaskBase* base);
 
@@ -471,6 +480,12 @@ struct DevControlFlowCache {
     void TaskAddrRelocWorkspace(uint64_t srcWorkspace, uint64_t dstWorkspace, DevStartArgsBase* devStartArgs);
 
     void IncastOutcastAddrReloc(uint64_t srcWorkspace, uint64_t dstWorkspace, DevStartArgsBase* devStartArgs);
+
+    void RelocIncastOutcastTask(uint32_t taskIndex, uint64_t srcWorkspace, uint64_t dstWorkspace,
+                                DevStartArgsBase* devStartArgs);
+
+    void RelocIncastOutcastTaskStructural(uint32_t taskIndex, uint64_t srcWorkspace, uint64_t dstWorkspace,
+                                          DevStartArgsBase* devStartArgs);
 
     void RuntimeAddrBackup(DeviceExecuteSlot* runtimeSlotList, ItemPool<RuntimeOutcastTensor>* runtimeOutcastTensorPool,
                            uint64_t slotSize, uint64_t runtimeOutcastTensorSize, TensorAllocator* allocator,

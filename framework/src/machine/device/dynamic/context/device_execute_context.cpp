@@ -129,6 +129,8 @@ void DeviceExecuteContext::GELaunchRunCached(DevStartArgs* startArgs, PushTaskEn
     for (size_t index = 0; index < devProg->ctrlFlowCacheAnchor->deviceTaskCount; index++) {
         DynDeviceTask* dynTask = reinterpret_cast<DynDeviceTask*>(
             devProg->ctrlFlowCacheAnchor->deviceTaskCacheList[index].dynTaskBase);
+        devProg->ctrlFlowCacheAnchor->RelocIncastOutcastTask(static_cast<uint32_t>(index), 0,
+                                                             startArgs->contextWorkspaceAddr, startArgs);
         devProg->ctrlFlowCacheAnchor->PredCountPingPongSwap(dynTask);
         if (startArgs->devProg->devArgs.enableAicoreResolve) {
             devProg->ctrlFlowCacheAnchor->DrcoPredCountDataRestore(dynTask);

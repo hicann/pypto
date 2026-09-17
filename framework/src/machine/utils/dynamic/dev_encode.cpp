@@ -3376,6 +3376,8 @@ void DevControlFlowCache::Init(void* dyndevAttrPtr, uint64_t cacheSize, uint64_t
     deviceTaskSkippedCount = 0;
     cacheDataOffset = 0;
     workspaceAddr = 0;
+    taskRelocTableOffset = 0;
+    taskRelocTableCount = 0;
     dataSize = initOffset - reinterpret_cast<uintdevptr_t>(data);
 }
 

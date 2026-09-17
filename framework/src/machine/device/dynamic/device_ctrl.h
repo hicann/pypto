@@ -218,8 +218,6 @@ public:
                                                                    reinterpret_cast<uint64_t>(devCtrlFlowCache));
                 devCtrlFlowCache->RuntimeAddrRelocProgram(0, reinterpret_cast<uint64_t>(devProg));
             }
-            devCtrlFlowCache->IncastOutcastAddrRestore();
-            devCtrlFlowCache->IncastOutcastAddrReloc(0, devStartArgs->contextWorkspaceAddr, devStartArgs);
             if (devCtrlFlowCache->workspaceAddr != devStartArgs->contextWorkspaceAddr) {
                 devCtrlFlowCache->workspaceAddr = devStartArgs->contextWorkspaceAddr;
                 devCtrlFlowCache->TaskAddrRestoreWorkspace();
