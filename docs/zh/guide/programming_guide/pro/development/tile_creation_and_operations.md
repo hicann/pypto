@@ -109,7 +109,7 @@ tile_out = pl.make_tile(tt, addr=0x8000)
 
 除基本地址对齐外，Tile实际占用空间还会受到dtype、layout、fractal和shape对齐方式的影响。对于NZ、ZN等分形排布，不能只按逻辑元素数量估算地址范围。
 
-ScaleLeft和ScaleRight的Tile地址还必须分别等于配套Left和Right的Tile地址右移4位。
+L0A_MX Buffer和L0B_MX Buffer中的量化系数Tile地址还必须分别等于配套L0A Buffer和L0B Buffer Tile地址右移4位。
 
 ## 使用make_tile_group创建轮转Tile
 

@@ -100,7 +100,7 @@ msprof op python3 test_example.py
 4. 使用`trace.json`检查关键流水是否连续，以及搬运、Vector和Cube能否有效重叠。
 5. 根据分析结果选择优化方向，例如多核切分、Tile Shape、片上复用或多缓冲。每轮只调整一类关键因素，完成精度回归后，再按相同口径复测。
 
-流水优化的目标，是让决定Kernel性能的主流水在稳态阶段连续执行，并尽可能将其他流水的开销隐藏在主流水中。当总耗时主要受某条计算或搬运流水限制时，Kernel即达到该流水的bound状态。矩阵计算类Kernel通常以Cube bound为目标；向量计算或搬运密集型Kernel则可能分别达到Vector bound或MTE bound。判断bound不能只看累计占比，还要确认主流水在主要执行区间内是否连续，以及其他流水是否与其充分重叠。
+流水优化的目标，是让决定Kernel性能的主流水在稳态阶段连续执行，并尽可能将其他流水的开销隐藏在主流水中。当总耗时主要受某条计算或搬运流水限制时，Kernel即达到该流水的bound状态。矩阵计算类Kernel通常以Cube bound为目标；矢量计算或搬运密集型Kernel则可能分别达到Vector bound或MTE bound。判断bound不能只看累计占比，还要确认主流水在主要执行区间内是否连续，以及其他流水是否与其充分重叠。
 
 图1中的Cube和Vector流水均存在明显间隙，计算任务未能连续执行。此时Kernel尚未达到稳定的计算bound，应重点检查Tile粒度、数据依赖、同步等待，以及搬运与计算的重叠方式。
 
@@ -118,7 +118,7 @@ msprof op python3 test_example.py
 
 PyPTO Pro使用[`pypto_pro.language.get_block_idx()`](../../../../api/pro_api/SIMD-API/system_variables/get_block_idx.md)和[`pypto_pro.language.get_block_num()`](../../../../api/pro_api/SIMD-API/system_variables/get_block_num.md)划分多核任务。切分方案既要完整覆盖计算范围、避免多个Core重复写入同一输出区域，也要保证各Core负载均衡。
 
-- `block_dim`不能超过对应Kernel模式的平台上限，也不宜超过可并行执行的任务数，否则会产生空闲工作单元。模式相关上限参见[Kernel函数](../development/kernel_function.md#blockdim的含义与设置)。
+- `block_dim`不能超过对应Kernel模式的平台上限，也不宜超过可并行执行的任务数，否则会产生空闲工作单元。模式相关上限参见[Kernel核函数](../development/kernel_function.md#blockdim的含义与设置)。
 - 各Core的工作量应尽量接近，避免将尾块或高开销分支集中到少数Core。
 - 规则二维Tile可先线性编号，再按Core编号进行跨步分配，以减小尾部负载差异。
 - 输出区域应由唯一Core写入；需要跨Core归约时，应使用明确且受支持的同步与归约方案。
@@ -158,10 +158,10 @@ GM访问应保持连续和对齐，并尽量合并为大粒度搬运。需要重
 
 ## Cube与Vector协同优化
 
-矩阵计算通过[`pypto_pro.language.section_cube()`](../../../../api/pro_api/SIMD-API/controlflow/section_cube.md)描述Cube任务，向量计算通过[`pypto_pro.language.section_vector()`](../../../../api/pro_api/SIMD-API/controlflow/section_vector.md)描述Vector任务。对于混合Kernel，应尽量重叠Cube计算、Vector前后处理和DMA搬运，并减少不必要的数据格式转换和跨存储层搬运。
+矩阵计算通过[`pypto_pro.language.section_cube()`](../../../../api/pro_api/SIMD-API/controlflow/section_cube.md)描述Cube任务，矢量计算通过[`pypto_pro.language.section_vector()`](../../../../api/pro_api/SIMD-API/controlflow/section_vector.md)描述Vector任务。对于混合Kernel，应尽量重叠Cube计算、Vector前后处理和DMA搬运，并减少不必要的数据格式转换和跨存储层搬运。
 
-- Cube计算应检查M、N、K方向的Tile Shape、左右矩阵布局、转置方式以及L0A/L0B装载格式。
-- 归约长度较大时，应在Acc/L0C中完成分块累加，再按需要转换并写回。
+- Cube计算应检查M、N、K方向的Tile Shape、左右矩阵布局、转置方式以及L0A Buffer/L0B Buffer装载格式。
+- 归约长度较大时，应在L0C Buffer中完成分块累加，再按需要转换并写回。
 - Vector前后处理应尽量与Cube流水重叠，避免形成全局串行阶段。
 - 连续执行多个细粒度Vector操作且额外开销明显时，可在确认瓶颈后使用Vector Function表达寄存器级计算，减少中间Tile读写。
 - 调整Cube与Vector的并行关系后，必须重新检查mutex和实际数据依赖，不能以破坏正确性为代价消除同步。

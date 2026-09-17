@@ -468,7 +468,7 @@ if __name__ == "__main__":
     print("PASSED")
 ```
 
-## FP8 数据存储示例
+### FP8数据存储示例
 
 ```python
 import os

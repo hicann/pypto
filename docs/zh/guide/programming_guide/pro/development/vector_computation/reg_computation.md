@@ -1,34 +1,34 @@
 # Reg计算
 
-Reg矢量计算直接使用SIMD Register File保存向量数据和中间结果。PyPTO Pro通过@pypto_pro.language.vector_function定义VF函数，并在函数内使用[vf.* API](../../../../../api/index.md)表达寄存器加载、计算和存储。
+Reg计算直接使用SIMD Register File保存矢量数据和中间结果。PyPTO Pro通过@pypto_pro.language.vector_function定义VF函数，并在函数内使用[vf.* API](../../../../../api/pro_api/SIMD-API/reg_computation/index.md)表达寄存器加载、计算和存储。
 
 > [!NOTE]说明
-> Reg矢量计算依赖VF Register File，使用前请确认对应VF API的支持范围。
+> Reg计算依赖VF Register File，使用前请确认对应VF API的支持范围。
 
-## Reg矢量计算的适用场景
+## Reg计算的适用场景
 
-Tile向量计算以UB Tile为数据载体。多个向量操作串联时，中间结果通常需要写回UB，再由下一条指令读取。计算链较长时，反复访问UB会增加读写带宽压力和Bank冲突概率。
+Tile矢量计算以UB Tile为数据载体。多个矢量操作串联时，中间结果通常需要写回UB，再由下一条指令读取。计算链较长时，反复访问UB会增加读写带宽压力和Bank冲突概率。
 
-Reg矢量计算将一段连续计算保留在寄存器中，仅在计算链入口和出口与UB交互：
+Reg计算将一段连续计算保留在寄存器中，仅在计算链入口和出口与UB交互：
 
-| 维度 | Tile/Membase向量计算 | Regbase向量计算 |
+| 维度 | Tile矢量计算 | Regbase矢量计算 |
 |:---|:---|:---|
 | 数据载体 | UB中的Tile | Register File中的RegTensor / MaskReg |
 | 中间结果 | 通常写回UB | 可由后续vf.*操作直接消费 |
 | PyPTO Pro接口 | pypto_pro.language.add、pypto_pro.language.sub、pypto_pro.language.sum等 | vf.add、vf.sub、vf.reduce_*等 |
-| 适用场景 | 通用向量计算、快速实现 | 连续计算链、需要降低UB往返开销的高性能场景 |
+| 适用场景 | 通用矢量计算、快速实现 | 连续计算链、需要降低UB往返开销的高性能场景 |
 
 ## 硬件组成
 
-Vector侧参与Reg矢量计算的硬件单元包括：
+Vector侧参与Reg计算的硬件单元包括：
 
-- **Reg向量执行单元**：从Register File读取操作数并将计算结果写回寄存器。
+- **Reg矢量执行单元**：从Register File读取操作数并将计算结果写回寄存器。
 - **DMA单元**：在UB与Register File之间搬运数据。
 - **Aux Scalar**：完成VF域内的地址、循环等标量计算。
 
-**图1 SIMD Reg向量执行关系**
+**图1 SIMD Reg矢量执行关系**
 
-![SIMD Reg向量执行单元与Register File、UB的关系](../../../../figures/pro/register_execution_unit.jpg)
+![SIMD Reg矢量执行单元与Register File、UB的关系](../../../../figures/pro/register_execution_unit.jpg)
 
 ## 内存层级
 
@@ -38,9 +38,9 @@ Register File位于UB之上，不能直接从GM加载或直接写回GM。完整�
 GM → UB → Register File → UB → GM
 ```
 
-**图2 Reg矢量计算内存层级**
+**图2 Reg计算内存层级**
 
-![Register File、Unified Buffer和Global Memory的层级关系](../../../../figures/pro/register_memory_hierarchy.jpg)
+![Register File、UB和GM的层级关系](../../../../figures/pro/register_memory_hierarchy.jpg)
 
 PyPTO Pro中各阶段的接口对应关系如下：
 
@@ -54,7 +54,7 @@ PyPTO Pro中各阶段的接口对应关系如下：
 
 ## 编程模型
 
-Regbase在Tile/Membase的“数据搬入 → 计算 → 数据搬出”基础上，将向量计算阶段细分为“Load → Compute → Store”。
+Regbase在Tile计算的“数据搬入 → 计算 → 数据搬出”基础上，将矢量计算阶段细分为“Load → Compute → Store”。
 
 **图3 Regbase编程模型总体结构**
 
@@ -88,6 +88,8 @@ def add_vf(src_a, src_b, dst):
 外层@pypto_pro.language.jit Kernel负责GM与UB之间的搬运以及跨Pipe同步，并在pypto_pro.language.section_vector()中调用VF函数：
 
 ```python
+import pypto_pro.language as pl
+
 @pl.jit(auto_mutex=True)
 def add_kernel(
     a: pl.Tensor[[1, 64], pl.DT_FP32],
@@ -117,6 +119,9 @@ def add_kernel(
 VF函数接收的Tile参数可以使用tile + offset进行线性元素偏移，偏移后的表达式可传给vf.load_align、vf.store_align等访存接口。例如，下面的VF函数按行读取源Tile，并将结果连续写入目标Tile：
 
 ```python
+import pypto_pro.language as pl
+from pypto_pro.language import Vf as vf
+
 @pl.vector_function
 def copy_rows(dst_tile, src_tile, row_count, col_count, src_stride):
     preg = vf.update_mask(col_count, dtype=pl.DT_FP16)
@@ -130,6 +135,8 @@ offset的单位是元素，可以是整型常量或运行时整型Scalar。tile 
 VF函数内不支持tile[row_start:row_stop, col_start:col_stop]切片。如果需要先选取二维区域，应在pypto_pro.language.section_vector()中创建子Tile，再将其传给VF函数：
 
 ```python
+import pypto_pro.language as pl
+
 with pl.section_vector():
     src_tile = src_group.next()
     dst_tile = dst_group.next()
@@ -146,11 +153,7 @@ with pl.section_vector():
 
 ## 使用建议
 
-满足以下条件时优先考虑Reg矢量计算：
+Reg计算和[Tile计算](tile_computation.md)分别侧重性能与易用性，可根据算子的开发需求进行选择：
 
-1. 目标设备和所需VF API均受支持。
-2. 性能热点由较长的连续向量计算链构成。
-3. Tile/Membase实现中存在明显的中间结果UB往返。
-4. 经过性能分析确认寄存器方案能带来收益。
-
-普通向量计算仍建议先使用[Tile计算](tile_computation.md)完成正确实现，再针对热点替换为VF计算。
+- **Reg计算（VF计算）**：中间结果可以保留在Vector Register File中，减少UB读写，性能更优；使用前需要确认目标设备和所需VF API均受支持，并遵守寄存器、数据类型和接口约束。
+- **Tile计算**：接口和数据流更直观，开发、调试及维护更方便；中间结果通常需要通过UB读写，性能相对较低。

@@ -34,7 +34,7 @@ torch.npu.synchronize()
 add_kernel[None, 1](x, y, out)
 ```
 
-Kernel的定义和启动语法参考[Kernel核函数创建](../kernel_function.md)。
+Kernel的定义和启动语法参考[Kernel核函数](../kernel_function.md)。
 
 ## 编译签名与复用
 
@@ -51,11 +51,11 @@ Kernel的定义和启动语法参考[Kernel核函数创建](../kernel_function.m
 
 TilingData字段是运行时数据，字段值变化不会单独产生编译实例。静态与动态shape的声明方式参考[Tensor创建和操作](../tensor_creation_and_operations.md)，TilingData和TilingKey的区别参考[Tiling参数定义与传递](../tiling/tiling_parameter_definition.md)。
 
-`stream`和`block_dim`只影响本次启动，不参与编译签名；调整Stream或逻辑Block数不会因此生成新的编译实例。
+`stream`和`block_dim`只影响本次启动，不参与编译签名；调整两者不会因此生成新的编译实例。
 
 JIT复用范围限于当前Python进程。重新启动进程后会重新执行生成和编译流程；`build`目录中的文件用于加载和调试，不作为跨进程持久化缓存。
 
-## jit装饰器参数
+## JIT装饰器参数
 
 `pypto_pro.language.jit`支持以下可配置参数：
 
@@ -64,7 +64,7 @@ JIT复用范围限于当前Python进程。重新启动进程后会重新执行�
 | arch | str | 指定编译目标。通常省略，由运行环境自动确定。 | None |
 | auto_mutex | bool | 是否根据TileGroup声明的mutex元数据，为框架能够识别的数据依赖自动插入同步。 | True |
 | name | str | 自定义Kernel名称，用于区分编译产物；未设置时使用被装饰函数的名称。 | None |
-| pipeline | pypto_pro.language.pipeline.PipelineConfig | 配置自动并行流水变换。 | None |
+| pipeline | pypto_pro.language.pipeline.PipelineConfig | 配置自动CV并行流水变换。 | None |
 | tiling_key | TilingKey定义类 | 绑定当前Kernel支持的TilingKey字段及其候选值。 | None |
 | datatype | dict[str, str] | 声明需要进行数据类型特化的Kernel参数，以及Kernel函数体中引用的数据类型变量名。 | None |
 | compile_timeout | int | 设置当前Kernel的编译超时时间，单位为秒。 | None（基础默认值为600秒） |
@@ -80,9 +80,9 @@ def add_kernel(x, y, out):
 
 `auto_mutex=True`只处理框架能够通过TileGroup识别的数据依赖，不能替代所有显式同步。未使用TileGroup mutex元数据，或者依赖关系无法由框架识别时，需要根据数据流显式同步。
 
-`tiling_key`和`datatype`用于生成编译期特化实例，不会作为Kernel函数的形参传入。启动Kernel时，需要在方括号中提供对应的TilingKey和datatype字典。两者的定义和启动参数位置参考[Kernel核函数创建](../kernel_function.md#使用tilingkey和datatype)，TilingKey字段规则参考[Tiling参数定义与传递](../tiling/tiling_parameter_definition.md#tilingkey)。
+`tiling_key`和`datatype`用于生成编译期特化实例，不会作为Kernel函数的形参传入。启动Kernel时，需要在方括号中提供对应的TilingKey和datatype字典。两者的定义和启动参数位置参考[Kernel核函数](../kernel_function.md#使用tilingkey和datatype)，TilingKey字段规则参考[Tiling参数定义与传递](../tiling/tiling_parameter_definition.md#tilingkey)。
 
-`pipeline`接收`pypto_pro.language.pipeline.PipelineConfig`对象，用于配置自动并行流水变换；未设置时不执行该变换。配置方法和使用约束参考[自动并行流水](../../advanced_programming/auto_parallel_pipeline.md)。
+`pipeline`接收`pypto_pro.language.pipeline.PipelineConfig`对象，用于配置自动CV并行流水变换；未设置时不执行该变换。配置方法和使用约束参考[自动CV并行流水](../../advanced_programming/auto_parallel_pipeline.md)。
 
 ## Kernel下发与同步
 
@@ -100,7 +100,7 @@ add_kernel[stream, num_cores](x, y, out)
 stream.synchronize()
 ```
 
-Stream和`block_dim`的完整说明参考[Kernel核函数创建](../kernel_function.md#调用kernel)。
+Stream和`block_dim`的完整说明参考[Kernel核函数](../kernel_function.md#调用kernel)。
 
 ## 编译产物
 

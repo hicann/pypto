@@ -20,7 +20,7 @@ Grid是SIMT线程层次结构的最顶层，由多个Thread Block组成。grid_d
 
 在PyPTO Pro中，Grid具有以下特点：
 
-- 每个执行到SIMT启动点的Vector逻辑Block启动一个Thread Block；pypto_pro.language.simt.grid_dim()描述外层Vector执行域，规模由外层Kernel的启动配置决定；
+- 每个执行到SIMT启动点的Vector核启动一个Thread Block；pypto_pro.language.simt.grid_dim()描述外层Vector执行域，规模由Host启动Kernel时实际生效的Vector核数决定；
 - 不同Thread Block彼此独立，不能依赖固定的执行顺序；
 - 当前Grid仅使用X维，即grid_dim = (grid_x, 1, 1)，对应的Thread Block坐标中Y、Z均为0。
 
@@ -38,7 +38,7 @@ Thread Block具有以下特点：
 
 Thread是SIMT结构中的最小编程单元。每个Thread具有独立的局部变量和执行状态，并通过自身在Thread Block内的三维坐标处理不同数据。
 
-当每个外层Vector逻辑Block都调用同一`simt_func[threads](...)`一次时，启动的Thread总数为：
+当每个外层Vector核都调用同一`simt_func[threads](...)`一次时，启动的Thread总数为：
 
 $$
 \text{total\_threads} = grid_x \times grid_y \times grid_z
@@ -57,7 +57,7 @@ Warp是硬件在线程块内组织执行的单位，当前A5的Warp Size为32，
 
 | PyPTO Pro接口 | 说明 | 返回形式 | 约束 |
 |---|---|---|---|
-| pypto_pro.language.simt.grid_dim() | Grid在各维度上的Thread Block数量。 | dim3形式的三维对象，各分量为DT_UINT32 Scalar。 | 当前仅使用X维，Y、Z维均为1；X维由外层Kernel实际启动的Vector逻辑Block数量决定。 |
+| pypto_pro.language.simt.grid_dim() | Grid在各维度上的Thread Block数量。 | dim3形式的三维对象，各分量为DT_UINT32 Scalar。 | 当前仅使用X维，Y、Z维均为1；X维由外层Kernel实际使用的Vector核数决定。 |
 | pypto_pro.language.simt.block_dim() | Thread Block在各维度上的Thread数量。 | dim3形式的三维对象，各分量为DT_UINT32 Scalar。 | 三个分量的乘积不能超过入口函数的max_threads，且不能超过2048。 |
 | pypto_pro.language.simt.block_idx() | 当前Thread Block在Grid中的三维坐标。 | dim3形式的三维对象，各分量为DT_UINT32 Scalar。 | X坐标范围由Grid的X维大小决定，当前Y、Z坐标均为0。 |
 | pypto_pro.language.simt.thread_idx() | 当前Thread在Thread Block内的三维坐标。 | dim3形式的三维对象，各分量为DT_UINT32 Scalar。 | 各维坐标范围由Thread Block对应维度的大小决定。 |
@@ -89,5 +89,5 @@ SIMT函数可以操作Scalar、Tile和Tensor。三类对象对应不同的内存
 | 操作对象 | 内存层级 | 作用范围 | 主要用途 |
 |---|---|---|---|
 | Scalar | 通常映射到寄存器 | Thread私有 | 保存参数、索引、局部变量和标量计算的中间结果。 |
-| Tile | Unified Buffer（UB） | Thread Block内共享 | 保存块内数据，并在Thread之间交换中间结果。 |
-| Tensor | Global Memory | Grid范围内可访问 | 保存输入、输出和跨Thread Block访问的数据，支持基于运行时索引进行不规则访存。 |
+| Tile | UB | Thread Block内共享 | 保存块内数据，并在Thread之间交换中间结果。 |
+| Tensor | GM | Grid范围内可访问 | 保存输入、输出和跨Thread Block访问的数据，支持基于运行时索引进行不规则访存。 |

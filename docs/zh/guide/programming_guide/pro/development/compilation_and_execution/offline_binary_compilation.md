@@ -97,7 +97,7 @@ def add_example(
 
 `datatype`字典的key是Kernel参数名，value是Kernel中使用的dtype变量名。多个参数映射到同一变量时，实际数据类型必须一致。只声明Kernel内部需要读取数据类型的参数。
 
-TilingData和TilingKey的字段规则参考[Tiling参数定义与传递](../tiling/tiling_parameter_definition.md)。Kernel参数和执行域的定义参考[Kernel核函数创建](../kernel_function.md)。
+TilingData和TilingKey的字段规则参考[Tiling参数定义与传递](../tiling/tiling_parameter_definition.md)。Kernel参数和执行域的定义参考[Kernel核函数](../kernel_function.md)。
 
 ## 配置CMakeLists.txt
 

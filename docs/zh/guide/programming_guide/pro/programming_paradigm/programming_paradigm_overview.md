@@ -8,8 +8,8 @@ PyPTO Pro采用Host与Device协同的异构编程方式。其中，Host代码运
 
 PyPTO Pro的并行执行流程：
 
-1. Host启动一个JIT Kernel，并指定本次执行使用的逻辑Block数量。
-2. 多个逻辑Block以SPMD（Single Program Multiple Data，单程序多数据）方式执行同一份Kernel程序，并根据各自的逻辑索引处理不同的数据分片。
+1. 用户在Host侧启动JIT Kernel，并通过`block_dim`配置核数。
+2. 多个核以SPMD（Single Program Multiple Data，单程序多数据）方式执行同一份Kernel程序，并根据各自的核索引处理不同的数据分片。
 3. 在每个逻辑执行域内，AIC主要执行Cube侧SIMD矩阵计算，AIV主要执行Vector侧SIMD或SIMT计算。
 4. SIMD与SIMT可以在同一个外层Kernel中组合，并与数据搬运流水共同完成一个算子的计算。
 
@@ -19,7 +19,7 @@ SPMD负责组织多个逻辑AI Core之间的任务并行，SIMD和SIMT负责描�
 
 SIMD（Single Instruction Multiple Data，单指令多数据）是一种数据并行模型。核心逻辑是：一条指令在同一个时钟周期内，对多个数据元素执行完全相同的操作，实现数据的批量并行处理。
 
-PyPTO Pro使用Tensor描述Global Memory中的数据，使用Tile描述片上存储中的数据块。开发者以Tile或Vector Register为主要编程对象，不需要逐个描述每个数据元素的相同计算。
+PyPTO Pro使用Tensor描述GM中的数据，使用Tile描述片上存储中的数据块。开发者以Tile或Vector Register为主要编程对象，不需要逐个描述每个数据元素的相同计算。
 
 ### 核心特征
 
@@ -71,7 +71,7 @@ SIMT适合需要逐线程控制或难以使用规整Tile计算表达的场景，
 | Vector单元 | 矢量计算和SIMT线程计算 | Vector执行域中的Tile API、VF函数和SIMT函数 |
 | Cube单元 | 矩阵乘加等矩阵计算 | Cube执行域中的矩阵计算接口 |
 | 片上存储 | 保存计算输入、输出和中间数据 | 不同内存空间中的Tile |
-| 数据搬运单元 | 在Global Memory与片上存储、不同片上存储之间搬运数据 | 数据搬入、片上搬运和结果写回操作 |
+| 数据搬运单元 | 在GM与片上存储、不同片上存储之间搬运数据 | 数据搬入、片上搬运和结果写回操作 |
 
 计算与搬运任务在不同流水上执行，存在数据依赖时需要通过同步机制约束执行顺序。
 
@@ -85,7 +85,7 @@ PyPTO Pro算子的典型开发与运行流程如下：
 2. 使用JIT装饰器定义Kernel，并声明Tensor、Scalar或TilingData等参数。
 3. 根据数据规模设计多核切分和Tiling，规划Tile及片上存储。
 4. 根据数据访问模式和控制流特点选择SIMD、SIMT，或在同一个Kernel中组合两种计算方式。
-5. 在Host侧启动Kernel，并配置Stream和逻辑Block数量；首次调用触发JIT编译。
+5. 在Host侧启动Kernel，并按需配置Stream和`block_dim`；首次调用触发JIT编译。
 6. Kernel异步下发后，在Host读取结果前等待Device任务完成。
 
 建议继续阅读以下内容：
@@ -93,5 +93,5 @@ PyPTO Pro算子的典型开发与运行流程如下：
 - [PyPTO Pro快速入门](../../../quick_start/pro/index.md)：通过完整算子示例了解Kernel定义、编译和运行流程。
 - [SIMD编程](SIMD/index.md)：了解SPMD多核并行、Tile编程、SIMD矢量计算和矩阵计算。
 - [SIMT编程](SIMT/index.md)：了解线程架构、内存层级、SIMT函数、同步和原子操作。
-- [Kernel核函数创建](../development/kernel_function.md)：了解Kernel参数、逻辑Block和启动方式。
+- [Kernel核函数](../development/kernel_function.md)：了解Kernel参数、实际核数和启动方式。
 - [编译与执行](../development/compilation_and_execution/index.md)：了解JIT编译和离线二进制编译。

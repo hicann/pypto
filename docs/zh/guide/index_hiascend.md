@@ -47,7 +47,7 @@
         - [Reg计算](programming_guide/pro/development/vector_computation/reg_computation.md)
         - [SIMT计算](programming_guide/pro/development/vector_computation/simt_computation.md)
       - [Cube计算](programming_guide/pro/development/cube_computation.md)
-      - [Cube与Vector融合计算](programming_guide/pro/development/cube_vector_fusion.md)
+      - [CV融合计算](programming_guide/pro/development/cube_vector_fusion.md)
       - [Tiling实现](programming_guide/pro/development/tiling/index.md)
         - [Tiling概述](programming_guide/pro/development/tiling/tiling_overview.md)
         - [多核Tiling切分](programming_guide/pro/development/tiling/multi_core_tiling.md)

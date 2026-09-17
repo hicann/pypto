@@ -18,19 +18,19 @@ torch.npu.synchronize()
 
 ## 常用定位手段
 
-### 使用`pl.printf`打印信息
+### 使用pypto_pro.language.printf打印信息
 
 [`pypto_pro.language.printf`](../../../../api/pro_api/Utils-API/debugging/printf.md)用于在Kernel中打印Core编号、循环变量、偏移、Shape和分支标志等标量信息，可辅助确认多核切分、循环边界和运行时参数是否符合预期。多核场景建议通过`pypto_pro.language.get_block_idx()`限制打印的Core，避免日志大量交错。该接口会引入运行时开销，仅用于功能调试，不应用于性能测试。
 
 ### 检测内存问题
 
-PyPTO Pro提供Kernel内存检测功能，可通过`@pl.jit(sanitizer=True)`开启。该功能可检测GM访问越界、Tile访问越界、Tile内存区间重叠以及mutex未正确配对等问题，并在Kernel执行结束后输出检测结果。当前仅Ascend 950PR/Ascend 950DT支持该功能。内存检测会产生额外的运行时开销，仅用于功能调试，具体使用方法将在后续版本补充。
+PyPTO Pro提供Kernel内存检测功能，可通过`@pypto_pro.language.jit(sanitizer=True)`开启。该功能可检测GM访问越界、Tile访问越界、Tile内存区间重叠以及mutex未正确配对等问题，并在Kernel执行结束后输出检测结果。当前仅Ascend 950PR/Ascend 950DT支持该功能。内存检测会产生额外的运行时开销，仅用于功能调试，具体使用方法将在后续版本补充。
 
 ### 定位精度问题
 
 当Kernel能够正常执行但结果与参考实现不一致时，可使用[pypto-pro-precision-debug Skill](https://gitcode.com/cann/pypto-gym/blob/master/cannbot-skills/ops/pypto-pro-precision-debug/SKILL.md)进行定位。该Skill提供较为详细的精度定位流程，并汇总了精度调试中的常见问题及处理方法，建议优先参考。
 
-### 查看build产物
+### 查看编译产物
 
 JIT编译产物默认位于当前工作目录下的`build`目录；设置`ASCEND_WORK_PATH`后，位于`${ASCEND_WORK_PATH}/PYPTO_PRO/build`目录。可重点查看以下文件：
 
