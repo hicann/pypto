@@ -55,8 +55,8 @@ def _vector_pipeline_kernel(
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
 ):
     tile_type = pl.TileType(shape=[1, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    tile_x = pl.make_tile(tile_type, addr=0x0000, size=256)
-    tile_out = pl.make_tile(tile_type, addr=0x0100, size=256)
+    tile_x = pl.make_tile(tile_type, addr=0x0000)
+    tile_out = pl.make_tile(tile_type, addr=0x0100)
     with pl.section_vector():
         for row in pl.range(0, x.shape[0]):
             pl.load(tile_x, x, [row, 0])
@@ -84,11 +84,11 @@ def _cube_pipeline_kernel(
     left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left)
     right_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right)
     acc_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc)
-    a_l1 = pl.make_tile(mat_type, addr=0x0000, size=8192)
-    b_l1 = pl.make_tile(mat_type, addr=0x2000, size=8192)
-    a_l0 = pl.make_tile(left_type, addr=0x0000, size=8192)
-    b_l0 = pl.make_tile(right_type, addr=0x0000, size=8192)
-    acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+    a_l1 = pl.make_tile(mat_type, addr=0x0000)
+    b_l1 = pl.make_tile(mat_type, addr=0x2000)
+    a_l0 = pl.make_tile(left_type, addr=0x0000)
+    b_l0 = pl.make_tile(right_type, addr=0x0000)
+    acc = pl.make_tile(acc_type, addr=0x0000)
     with pl.section_cube():
         for row in pl.range(0, a.shape[0], 64):
             pl.load(a_l1, a, [row, 0])
@@ -119,7 +119,7 @@ def _scalar_pipeline_kernel(
     out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT32],
 ):
     tile_type = pl.TileType(shape=[1, 64], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    tile = pl.make_tile(tile_type, addr=0x0000, size=256)
+    tile = pl.make_tile(tile_type, addr=0x0000)
     with pl.section_vector():
         pl.load(tile, x, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.S, event_id=6)
@@ -278,7 +278,7 @@ def _mutex_kernel(
     condition: pl.DT_BOOL,
 ):
     tile_type = pl.TileType(shape=[1, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    tile = pl.make_tile(tile_type, addr=0x0000, size=256)
+    tile = pl.make_tile(tile_type, addr=0x0000)
     local_mutex = 5
     selected_mutex = 8 if condition else 9
     with pl.section_vector():

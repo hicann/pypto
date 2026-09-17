@@ -42,7 +42,7 @@ PyPTO Pro通过[TileType](../../../../api/pro_api/SIMD-API/basic_data_structures
 
 #### 使用make_tile创建单个Tile
 
-pypto_pro.language.make_tile将Tile绑定到一段固定的片上缓冲区地址。addr必须指定；size可以省略，此时根据TileType占用空间推导。使用make_tile时，跨Pipe依赖通过显式的[pypto_pro.language.system.sync_src](../../../../api/pro_api/SIMD-API/synchronization/sync_src.md)/[pypto_pro.language.system.sync_dst](../../../../api/pro_api/SIMD-API/synchronization/sync_dst.md)对进行同步。
+pypto_pro.language.make_tile将Tile绑定到一段固定的片上缓冲区地址。addr必须指定；地址范围的字节数根据TileType的shape和dtype自动推导。使用make_tile时，跨Pipe依赖通过显式的[pypto_pro.language.system.sync_src](../../../../api/pro_api/SIMD-API/synchronization/sync_src.md)/[pypto_pro.language.system.sync_dst](../../../../api/pro_api/SIMD-API/synchronization/sync_dst.md)对进行同步。
 
 ```python
 import pypto_pro.language as pl
@@ -63,11 +63,11 @@ b_right_type = pl.TileType(
 acc_type = pl.TileType(
     shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc)
 
-a_l1 = pl.make_tile(a_l1_type, addr=0x00000, size=32768)
-b_l1 = pl.make_tile(b_l1_type, addr=0x08000, size=32768)
-a_left = pl.make_tile(a_left_type, addr=0x0000, size=32768)
-b_right = pl.make_tile(b_right_type, addr=0x0000, size=32768)
-acc = pl.make_tile(acc_type, addr=0x0000, size=65536)
+a_l1 = pl.make_tile(a_l1_type, addr=0x00000)
+b_l1 = pl.make_tile(b_l1_type, addr=0x08000)
+a_left = pl.make_tile(a_left_type, addr=0x0000)
+b_right = pl.make_tile(b_right_type, addr=0x0000)
+acc = pl.make_tile(acc_type, addr=0x0000)
 ```
 
 #### 使用make_tile_group创建轮转Tile

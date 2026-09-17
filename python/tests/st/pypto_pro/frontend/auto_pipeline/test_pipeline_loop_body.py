@@ -157,6 +157,7 @@ def loop_body_shapes(
 @pytest.mark.soc("950")
 def test_loop_body_shapes_on_device():
     """Iteration ki must see the scale zone 1 computed for it, not another beat's."""
+    torch.npu.set_device(ST_DEVICE)
     torch.manual_seed(7)
     src = torch.rand((FULL_M, TN), device=ST_DEVICE, dtype=torch.float16) * 2.0 - 1.0
     out = torch.zeros((FULL_M, TN), device=ST_DEVICE, dtype=torch.float16)

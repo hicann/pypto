@@ -71,9 +71,9 @@ def kernel_add_fp32(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    tc = pl.make_tile(tf, addr=TILE_SIZE * 2)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.load(tb, b, [0, 0])
@@ -91,8 +91,8 @@ def kernel_add_fp32_scalar(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tc = pl.make_tile(tf, addr=TILE_SIZE)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -110,9 +110,9 @@ def kernel_add_int32(
     out: pl.Tensor[[DYN, DYN], pl.DT_INT32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    tc = pl.make_tile(tf, addr=TILE_SIZE * 2)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.load(tb, b, [0, 0])
@@ -131,9 +131,9 @@ def kernel_add_fp32_unaligned(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    tc = pl.make_tile(tf, addr=TILE_SIZE * 2)
     pl.set_validshape(ta, [TILE_M, UNALIGN_N])
     pl.set_validshape(tb, [TILE_M, UNALIGN_N])
     pl.set_validshape(tc, [TILE_M, UNALIGN_N])
@@ -206,9 +206,9 @@ def kernel_sub_fp32(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    tc = pl.make_tile(tf, addr=TILE_SIZE * 2)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.load(tb, b, [0, 0])
@@ -226,8 +226,8 @@ def kernel_sub_fp32_scalar(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tc = pl.make_tile(tf, addr=TILE_SIZE)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -245,9 +245,9 @@ def kernel_sub_int32(
     out: pl.Tensor[[DYN, DYN], pl.DT_INT32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    tc = pl.make_tile(tf, addr=TILE_SIZE * 2)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.load(tb, b, [0, 0])
@@ -266,9 +266,9 @@ def kernel_sub_fp32_unaligned(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    tc = pl.make_tile(tf, addr=TILE_SIZE * 2)
     pl.set_validshape(ta, [TILE_M, UNALIGN_N])
     pl.set_validshape(tb, [TILE_M, UNALIGN_N])
     pl.set_validshape(tc, [TILE_M, UNALIGN_N])
@@ -341,9 +341,9 @@ def kernel_mul_fp32(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    tc = pl.make_tile(tf, addr=TILE_SIZE * 2)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.load(tb, b, [0, 0])
@@ -361,8 +361,8 @@ def kernel_mul_fp32_scalar(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tc = pl.make_tile(tf, addr=TILE_SIZE)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -380,9 +380,9 @@ def kernel_mul_int32(
     out: pl.Tensor[[DYN, DYN], pl.DT_INT32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    tc = pl.make_tile(tf, addr=TILE_SIZE * 2)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.load(tb, b, [0, 0])
@@ -401,9 +401,9 @@ def kernel_mul_fp32_unaligned(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    tc = pl.make_tile(tf, addr=TILE_SIZE * 2)
     pl.set_validshape(ta, [TILE_M, UNALIGN_N])
     pl.set_validshape(tb, [TILE_M, UNALIGN_N])
     pl.set_validshape(tc, [TILE_M, UNALIGN_N])
@@ -476,9 +476,9 @@ def kernel_and_int32(
     out: pl.Tensor[[DYN, DYN], pl.DT_INT32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    tc = pl.make_tile(tf, addr=TILE_SIZE * 2)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.load(tb, b, [0, 0])
@@ -497,9 +497,9 @@ def kernel_and_int16(
     out: pl.Tensor[[DYN, DYN], pl.DT_INT16],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_INT16, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    tc = pl.make_tile(tf, addr=TILE_SIZE * 2)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.load(tb, b, [0, 0])
@@ -518,9 +518,9 @@ def kernel_and_int32_unaligned(
     out: pl.Tensor[[DYN, DYN], pl.DT_INT32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    tc = pl.make_tile(tf, addr=TILE_SIZE * 2)
     pl.set_validshape(ta, [TILE_M, UNALIGN_N])
     pl.set_validshape(tb, [TILE_M, UNALIGN_N])
     pl.set_validshape(tc, [TILE_M, UNALIGN_N])
@@ -582,9 +582,9 @@ def kernel_maximum_fp32(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    tc = pl.make_tile(tf, addr=TILE_SIZE * 2)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.load(tb, b, [0, 0])
@@ -603,9 +603,9 @@ def kernel_maximum_int32(
     out: pl.Tensor[[DYN, DYN], pl.DT_INT32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    tc = pl.make_tile(tf, addr=TILE_SIZE * 2)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.load(tb, b, [0, 0])
@@ -624,9 +624,9 @@ def kernel_maximum_fp32_unaligned(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    tc = pl.make_tile(tf, addr=TILE_SIZE * 2)
     pl.set_validshape(ta, [TILE_M, UNALIGN_N])
     pl.set_validshape(tb, [TILE_M, UNALIGN_N])
     pl.set_validshape(tc, [TILE_M, UNALIGN_N])
@@ -687,8 +687,8 @@ def kernel_neg_fp32(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tc = pl.make_tile(tf, addr=TILE_SIZE)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -705,8 +705,8 @@ def kernel_neg_int32(
     out: pl.Tensor[[DYN, DYN], pl.DT_INT32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tc = pl.make_tile(tf, addr=TILE_SIZE)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -723,8 +723,8 @@ def kernel_neg_fp32_unaligned(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tc = pl.make_tile(tf, addr=TILE_SIZE)
     pl.set_validshape(ta, [TILE_M, UNALIGN_N])
     pl.set_validshape(tc, [TILE_M, UNALIGN_N])
     with pl.section_vector():
@@ -780,8 +780,8 @@ def kernel_abs_fp32(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tc = pl.make_tile(tf, addr=TILE_SIZE)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -798,8 +798,8 @@ def kernel_abs_int32(
     out: pl.Tensor[[DYN, DYN], pl.DT_INT32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tc = pl.make_tile(tf, addr=TILE_SIZE)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -816,8 +816,8 @@ def kernel_abs_fp32_unaligned(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tc = pl.make_tile(tf, addr=TILE_SIZE)
     pl.set_validshape(ta, [TILE_M, UNALIGN_N])
     pl.set_validshape(tc, [TILE_M, UNALIGN_N])
     with pl.section_vector():
@@ -873,8 +873,8 @@ def kernel_axpy_fp32(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tc = pl.make_tile(tf, addr=TILE_SIZE)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.load(tc, out, [0, 0])
@@ -892,8 +892,8 @@ def kernel_axpy_fp32_unaligned(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tc = pl.make_tile(tf, addr=TILE_SIZE)
     pl.set_validshape(ta, [TILE_M, UNALIGN_N])
     pl.set_validshape(tc, [TILE_M, UNALIGN_N])
     with pl.section_vector():
@@ -941,8 +941,8 @@ def kernel_relu_fp32(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tc = pl.make_tile(tf, addr=TILE_SIZE)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -959,8 +959,8 @@ def kernel_relu_int32(
     out: pl.Tensor[[DYN, DYN], pl.DT_INT32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tc = pl.make_tile(tf, addr=TILE_SIZE)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -977,8 +977,8 @@ def kernel_relu_fp32_unaligned(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tc = pl.make_tile(tf, addr=TILE_SIZE)
     pl.set_validshape(ta, [TILE_M, UNALIGN_N])
     pl.set_validshape(tc, [TILE_M, UNALIGN_N])
     with pl.section_vector():
@@ -1035,10 +1035,10 @@ def kernel_xor_int32(
     out: pl.Tensor[[DYN, DYN], pl.DT_INT32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
-    ttmp = pl.make_tile(tf, addr=TILE_SIZE * 3, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    tc = pl.make_tile(tf, addr=TILE_SIZE * 2)
+    ttmp = pl.make_tile(tf, addr=TILE_SIZE * 3)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.load(tb, b, [0, 0])
@@ -1057,10 +1057,10 @@ def kernel_xor_int16(
     out: pl.Tensor[[DYN, DYN], pl.DT_INT16],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_INT16, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
-    ttmp = pl.make_tile(tf, addr=TILE_SIZE * 3, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    tc = pl.make_tile(tf, addr=TILE_SIZE * 2)
+    ttmp = pl.make_tile(tf, addr=TILE_SIZE * 3)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.load(tb, b, [0, 0])
@@ -1079,10 +1079,10 @@ def kernel_xor_int32_unaligned(
     out: pl.Tensor[[DYN, DYN], pl.DT_INT32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
-    ttmp = pl.make_tile(tf, addr=TILE_SIZE * 3, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    tc = pl.make_tile(tf, addr=TILE_SIZE * 2)
+    ttmp = pl.make_tile(tf, addr=TILE_SIZE * 3)
     pl.set_validshape(ta, [TILE_M, UNALIGN_N])
     pl.set_validshape(tb, [TILE_M, UNALIGN_N])
     pl.set_validshape(tc, [TILE_M, UNALIGN_N])
@@ -1144,8 +1144,8 @@ def kernel_cast_fp32_to_int32(
 ):
     tf_f = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tf_i = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf_f, addr=0, size=TILE_SIZE)
-    tc = pl.make_tile(tf_i, addr=TILE_SIZE, size=TILE_SIZE)
+    ta = pl.make_tile(tf_f, addr=0)
+    tc = pl.make_tile(tf_i, addr=TILE_SIZE)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -1163,8 +1163,8 @@ def kernel_cast_int32_to_fp32(
 ):
     tf_i = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
     tf_f = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf_i, addr=0, size=TILE_SIZE)
-    tc = pl.make_tile(tf_f, addr=TILE_SIZE, size=TILE_SIZE)
+    ta = pl.make_tile(tf_i, addr=0)
+    tc = pl.make_tile(tf_f, addr=TILE_SIZE)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -1182,8 +1182,8 @@ def kernel_cast_fp32_to_int32_unaligned(
 ):
     tf_f = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tf_i = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf_f, addr=0, size=TILE_SIZE)
-    tc = pl.make_tile(tf_i, addr=TILE_SIZE, size=TILE_SIZE)
+    ta = pl.make_tile(tf_f, addr=0)
+    tc = pl.make_tile(tf_i, addr=TILE_SIZE)
     pl.set_validshape(ta, [TILE_M, UNALIGN_N])
     pl.set_validshape(tc, [TILE_M, UNALIGN_N])
     with pl.section_vector():
@@ -1241,12 +1241,12 @@ def kernel_eq_fp32(
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tm = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    t_mask = pl.make_tile(tm, addr=TILE_SIZE * 2, size=TILE_SIZE)
-    t_one = pl.make_tile(tf, addr=TILE_SIZE * 3, size=TILE_SIZE)
-    t_out = pl.make_tile(tf, addr=TILE_SIZE * 4, size=TILE_SIZE)
-    tmp = pl.make_tile(tf, addr=TILE_SIZE * 5, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    t_mask = pl.make_tile(tm, addr=TILE_SIZE * 2)
+    t_one = pl.make_tile(tf, addr=TILE_SIZE * 3)
+    t_out = pl.make_tile(tf, addr=TILE_SIZE * 4)
+    tmp = pl.make_tile(tf, addr=TILE_SIZE * 5)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.load(tb, b, [0, 0])
@@ -1268,12 +1268,12 @@ def kernel_eq_int32(
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
     tm = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    t_mask = pl.make_tile(tm, addr=TILE_SIZE * 2, size=TILE_SIZE)
-    t_one = pl.make_tile(tf, addr=TILE_SIZE * 3, size=TILE_SIZE)
-    t_out = pl.make_tile(tf, addr=TILE_SIZE * 4, size=TILE_SIZE)
-    tmp = pl.make_tile(tf, addr=TILE_SIZE * 5, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    t_mask = pl.make_tile(tm, addr=TILE_SIZE * 2)
+    t_one = pl.make_tile(tf, addr=TILE_SIZE * 3)
+    t_out = pl.make_tile(tf, addr=TILE_SIZE * 4)
+    tmp = pl.make_tile(tf, addr=TILE_SIZE * 5)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.load(tb, b, [0, 0])
@@ -1295,12 +1295,12 @@ def kernel_eq_fp32_unaligned(
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tm = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    t_mask = pl.make_tile(tm, addr=TILE_SIZE * 2, size=TILE_SIZE)
-    t_one = pl.make_tile(tf, addr=TILE_SIZE * 3, size=TILE_SIZE)
-    t_out = pl.make_tile(tf, addr=TILE_SIZE * 4, size=TILE_SIZE)
-    tmp = pl.make_tile(tf, addr=TILE_SIZE * 5, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    t_mask = pl.make_tile(tm, addr=TILE_SIZE * 2)
+    t_one = pl.make_tile(tf, addr=TILE_SIZE * 3)
+    t_out = pl.make_tile(tf, addr=TILE_SIZE * 4)
+    tmp = pl.make_tile(tf, addr=TILE_SIZE * 5)
     pl.set_validshape(ta, [TILE_M, UNALIGN_N])
     pl.set_validshape(tb, [TILE_M, UNALIGN_N])
     pl.set_validshape(t_mask, [TILE_M, UNALIGN_N])
@@ -1371,11 +1371,11 @@ def kernel_select_fp32(
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tm = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    t_mask = pl.make_tile(tm, addr=TILE_SIZE * 2, size=TILE_SIZE)
-    t_out = pl.make_tile(tf, addr=TILE_SIZE * 3, size=TILE_SIZE)
-    tmp = pl.make_tile(tf, addr=TILE_SIZE * 4, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    t_mask = pl.make_tile(tm, addr=TILE_SIZE * 2)
+    t_out = pl.make_tile(tf, addr=TILE_SIZE * 3)
+    tmp = pl.make_tile(tf, addr=TILE_SIZE * 4)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.load(tb, b, [0, 0])
@@ -1396,11 +1396,11 @@ def kernel_select_fp32_unaligned(
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     tm = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    t_mask = pl.make_tile(tm, addr=TILE_SIZE * 2, size=TILE_SIZE)
-    t_out = pl.make_tile(tf, addr=TILE_SIZE * 3, size=TILE_SIZE)
-    tmp = pl.make_tile(tf, addr=TILE_SIZE * 4, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    t_mask = pl.make_tile(tm, addr=TILE_SIZE * 2)
+    t_out = pl.make_tile(tf, addr=TILE_SIZE * 3)
+    tmp = pl.make_tile(tf, addr=TILE_SIZE * 4)
     pl.set_validshape(ta, [TILE_M, UNALIGN_N])
     pl.set_validshape(tb, [TILE_M, UNALIGN_N])
     pl.set_validshape(t_mask, [TILE_M, UNALIGN_N])
@@ -1455,9 +1455,9 @@ def kernel_div_fp32(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    tc = pl.make_tile(tf, addr=TILE_SIZE * 2)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.load(tb, b, [0, 0])
@@ -1475,8 +1475,8 @@ def kernel_div_fp32_scalar(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tc = pl.make_tile(tf, addr=TILE_SIZE)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -1494,9 +1494,9 @@ def kernel_div_int32(
     out: pl.Tensor[[DYN, DYN], pl.DT_INT32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    tc = pl.make_tile(tf, addr=TILE_SIZE * 2)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.load(tb, b, [0, 0])
@@ -1515,9 +1515,9 @@ def kernel_div_fp32_unaligned(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    tc = pl.make_tile(tf, addr=TILE_SIZE * 2)
     pl.set_validshape(ta, [TILE_M, UNALIGN_N])
     pl.set_validshape(tb, [TILE_M, UNALIGN_N])
     pl.set_validshape(tc, [TILE_M, UNALIGN_N])
@@ -1589,9 +1589,9 @@ def kernel_sum_fp32_row(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    tmp = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tc = pl.make_tile(tf, addr=TILE_SIZE)
+    tmp = pl.make_tile(tf, addr=TILE_SIZE * 2)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -1608,9 +1608,9 @@ def kernel_sum_fp32_row_unaligned(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    tmp = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tc = pl.make_tile(tf, addr=TILE_SIZE)
+    tmp = pl.make_tile(tf, addr=TILE_SIZE * 2)
     pl.set_validshape(ta, [TILE_M, UNALIGN_N])
     pl.set_validshape(tc, [TILE_M, UNALIGN_N])
     pl.set_validshape(tmp, [TILE_M, UNALIGN_N])
@@ -1656,7 +1656,7 @@ def kernel_load_store_fp32(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE3, event_id=0)
@@ -1670,7 +1670,7 @@ def kernel_load_store_int32(
     out: pl.Tensor[[DYN, DYN], pl.DT_INT32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE3, event_id=0)
@@ -1684,7 +1684,7 @@ def kernel_load_store_fp32_unaligned(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
     pl.set_validshape(ta, [TILE_M, UNALIGN_N])
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
@@ -1735,7 +1735,7 @@ def kernel_expands_fp32(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    tc = pl.make_tile(tf, addr=0, size=TILE_SIZE)
+    tc = pl.make_tile(tf, addr=0)
     with pl.section_vector():
         pl.expands(tc, SCALAR_VAL)
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
@@ -1748,7 +1748,7 @@ def kernel_expands_int32(
     out: pl.Tensor[[DYN, DYN], pl.DT_INT32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    tc = pl.make_tile(tf, addr=0, size=TILE_SIZE)
+    tc = pl.make_tile(tf, addr=0)
     with pl.section_vector():
         pl.expands(tc, 42)
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
@@ -1792,8 +1792,8 @@ def kernel_transpose_fp32(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[T_M, T_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=T_M * T_N * 4)
-    tc = pl.make_tile(tf, addr=T_M * T_N * 4, size=T_M * T_N * 4)
+    ta = pl.make_tile(tf, addr=0)
+    tc = pl.make_tile(tf, addr=T_M * T_N * 4)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -1810,8 +1810,8 @@ def kernel_transpose_int16(
     out: pl.Tensor[[DYN, DYN], pl.DT_INT16],
 ):
     tf = pl.TileType(shape=[T_M_INT16, T_N_INT16], dtype=pl.DT_INT16, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=T_M_INT16 * T_N_INT16 * 4)
-    tc = pl.make_tile(tf, addr=T_M_INT16 * T_N_INT16 * 4, size=T_M_INT16 * T_N_INT16 * 4)
+    ta = pl.make_tile(tf, addr=0)
+    tc = pl.make_tile(tf, addr=T_M_INT16 * T_N_INT16 * 4)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -1855,9 +1855,9 @@ def kernel_add_relu_fp32(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    tc = pl.make_tile(tf, addr=TILE_SIZE * 2)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.load(tb, b, [0, 0])
@@ -1876,9 +1876,9 @@ def kernel_add_relu_fp32_unaligned(
     out: pl.Tensor[[DYN, DYN], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=TILE_SIZE)
-    tb = pl.make_tile(tf, addr=TILE_SIZE, size=TILE_SIZE)
-    tc = pl.make_tile(tf, addr=TILE_SIZE * 2, size=TILE_SIZE)
+    ta = pl.make_tile(tf, addr=0)
+    tb = pl.make_tile(tf, addr=TILE_SIZE)
+    tc = pl.make_tile(tf, addr=TILE_SIZE * 2)
     pl.set_validshape(ta, [TILE_M, UNALIGN_N])
     pl.set_validshape(tb, [TILE_M, UNALIGN_N])
     pl.set_validshape(tc, [TILE_M, UNALIGN_N])

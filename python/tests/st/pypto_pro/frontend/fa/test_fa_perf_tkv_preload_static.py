@@ -131,43 +131,37 @@ PV_CORE_STRIDE = 2 * FIFO_SIZE * TS
 # ================================================================
 def alloc_cube_tiles(p_mat_buf):
     q_mat_type = pl.TileType(shape=[TS, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
-    q_mat_0 = pl.make_tile(q_mat_type, addr=MA0, size=Q_F16)
-    q_mat_1 = pl.make_tile(q_mat_type, addr=MA0_PONG, size=Q_F16)
+    q_mat_0 = pl.make_tile(q_mat_type, addr=MA0)
+    q_mat_1 = pl.make_tile(q_mat_type, addr=MA0_PONG)
     k_mat_type = pl.TileType(shape=[TD, TKV], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN)
-    k_mat_0 = pl.make_tile(k_mat_type, addr=MA1, size=KT_F16)
-    k_mat_1 = pl.make_tile(k_mat_type, addr=MA1_PONG, size=KT_F16)
+    k_mat_0 = pl.make_tile(k_mat_type, addr=MA1)
+    k_mat_1 = pl.make_tile(k_mat_type, addr=MA1_PONG)
     v_mat_type = pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
-    v_mat_0 = pl.make_tile(v_mat_type, addr=MA3, size=V_F16)
-    v_mat_1 = pl.make_tile(v_mat_type, addr=MA3_PONG, size=V_F16)
+    v_mat_0 = pl.make_tile(v_mat_type, addr=MA3)
+    v_mat_1 = pl.make_tile(v_mat_type, addr=MA3_PONG)
     left_0 = pl.make_tile(
         pl.TileType(shape=[TS, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
         addr=LA0,
-        size=Q_F16,
     )
     left_1 = pl.make_tile(
         pl.TileType(shape=[TS, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
         addr=LA1,
-        size=Q_F16,
     )
     right_0 = pl.make_tile(
         pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
         addr=RA0,
-        size=KT_F16,
     )
     right_1 = pl.make_tile(
         pl.TileType(shape=[TKV, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
         addr=RA1,
-        size=KT_F16,
     )
     acc_0 = pl.make_tile(
         pl.TileType(shape=[TS, TKV], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024),
         addr=CA0,
-        size=QK_HALF_F32,
     )
     acc_1 = pl.make_tile(
         pl.TileType(shape=[TS, TKV], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024),
         addr=CA1,
-        size=PV_HALF_F32,
     )
     return pl.make_tuple(
         q_mat_buf=(q_mat_0, q_mat_1),
@@ -426,18 +420,18 @@ def fa_perf_tkv_preload_kernel(
 
     # Shared between cube and vector sections: p_mat double buffers
     p_mat_type = pl.TileType(shape=[TS, TKV], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
-    p_mat_0 = pl.make_tile(p_mat_type, addr=MA2, size=P_F16)
-    p_mat_1 = pl.make_tile(p_mat_type, addr=MA2_PONG, size=P_F16)
+    p_mat_0 = pl.make_tile(p_mat_type, addr=MA2)
+    p_mat_1 = pl.make_tile(p_mat_type, addr=MA2_PONG)
     p_mat_buf = (p_mat_0, p_mat_1)
 
     # Cross-section VEC tiles: written by Cube (acc→vec TMOV), read by Vector
     vec_type_kv = pl.TileType(shape=[TS_HALF, TKV], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     vec_type_d = pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    qk_vec = pl.make_tile(vec_type_kv, addr=VA0, size=VB4_KV)
-    qk_vec1 = pl.make_tile(vec_type_kv, addr=VA11, size=VB4_KV)
+    qk_vec = pl.make_tile(vec_type_kv, addr=VA0)
+    qk_vec1 = pl.make_tile(vec_type_kv, addr=VA11)
     qk_vec_buf = (qk_vec, qk_vec1)
-    pv_vec = pl.make_tile(vec_type_d, addr=VA8, size=VB4)
-    pv_vec1 = pl.make_tile(vec_type_d, addr=VA12, size=VB4)
+    pv_vec = pl.make_tile(vec_type_d, addr=VA8)
+    pv_vec1 = pl.make_tile(vec_type_d, addr=VA12)
     pv_vec_buf = (pv_vec, pv_vec1)
 
     # =================== CUBE SECTION ===================
@@ -533,58 +527,52 @@ def fa_perf_tkv_preload_kernel(
         running_o = pl.make_tile(
             pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
             addr=VA7,
-            size=VB4,
         )
         tmp_vec = pl.make_tile(
             pl.TileType(shape=[TS_HALF, TKV], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
             addr=VA1,
-            size=VB4_KV,
         )
         p_f16 = pl.make_tile(
             pl.TileType(shape=[TS_HALF, TKV], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
             addr=VA2,
-            size=VB2_KV,
         )
         reduce_dst = pl.make_tile(
             pl.TileType(shape=[TS_HALF, 1], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, layout=pl.DN),
             addr=VA3,
-            size=VB_RED,
         )
         reduce_dst_rm = pl.make_tile(
             pl.TileType(shape=[1, TS_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
             addr=VA3,
-            size=VB_RED,
         )
 
         red_type = pl.TileType(shape=[TS_HALF, 1], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, layout=pl.DN)
         red_rm_type = pl.TileType(shape=[1, TS_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
 
         # Double-buffered global_max / global_sum (by q_count % 2)
-        gmax_rm_0 = pl.make_tile(red_rm_type, addr=VA_GMAX0, size=VB_RED)
-        gmax_rm_1 = pl.make_tile(red_rm_type, addr=VA_GMAX1, size=VB_RED)
+        gmax_rm_0 = pl.make_tile(red_rm_type, addr=VA_GMAX0)
+        gmax_rm_1 = pl.make_tile(red_rm_type, addr=VA_GMAX1)
 
-        gsum_0 = pl.make_tile(red_type, addr=VA_GSUM0, size=VB_RED)
-        gsum_1 = pl.make_tile(red_type, addr=VA_GSUM1, size=VB_RED)
-        gsum_rm_0 = pl.make_tile(red_rm_type, addr=VA_GSUM0, size=VB_RED)
-        gsum_rm_1 = pl.make_tile(red_rm_type, addr=VA_GSUM1, size=VB_RED)
+        gsum_0 = pl.make_tile(red_type, addr=VA_GSUM0)
+        gsum_1 = pl.make_tile(red_type, addr=VA_GSUM1)
+        gsum_rm_0 = pl.make_tile(red_rm_type, addr=VA_GSUM0)
+        gsum_rm_1 = pl.make_tile(red_rm_type, addr=VA_GSUM1)
 
         # FIFO exp_corr (by task_id % FIFO_SIZE)
         exp_corr_type = pl.TileType(
             shape=[TS_HALF, 1], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, layout=pl.DN
         )
         exp_corr_rm_type = pl.TileType(shape=[1, TS_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        exp_corr_0 = pl.make_tile(exp_corr_type, addr=VA_EXP0, size=VB_RED)
-        exp_corr_rm_0 = pl.make_tile(exp_corr_rm_type, addr=VA_EXP0, size=VB_RED)
-        exp_corr_1 = pl.make_tile(exp_corr_type, addr=VA_EXP1, size=VB_RED)
-        exp_corr_rm_1 = pl.make_tile(exp_corr_rm_type, addr=VA_EXP1, size=VB_RED)
+        exp_corr_0 = pl.make_tile(exp_corr_type, addr=VA_EXP0)
+        exp_corr_rm_0 = pl.make_tile(exp_corr_rm_type, addr=VA_EXP0)
+        exp_corr_1 = pl.make_tile(exp_corr_type, addr=VA_EXP1)
+        exp_corr_rm_1 = pl.make_tile(exp_corr_rm_type, addr=VA_EXP1)
 
         o_f16 = pl.make_tile(
             pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
             addr=VA9,
-            size=VB2,
         )
         tile_type_nz = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, layout=pl.NZ)
-        tile_nz = pl.make_tile(tile_type_nz, addr=VA10, size=VB6)
+        tile_nz = pl.make_tile(tile_type_nz, addr=VA10)
 
         task_id = 0
         q_count = 0

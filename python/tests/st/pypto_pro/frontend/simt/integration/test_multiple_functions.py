@@ -52,7 +52,7 @@ def simt_multiple_functions(
     scale: pl.DT_FP32,
 ):
     tile_type = pl.TileType(shape=[1, THREADS], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    data = pl.make_tile(tile_type, addr=0x0000, size=TILE_BYTES)
+    data = pl.make_tile(tile_type, addr=0x0000)
     with pl.section_vector():
         pl.load(data, x, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)

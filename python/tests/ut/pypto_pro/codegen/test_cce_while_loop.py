@@ -62,11 +62,11 @@ def _while_basic_kernel(
     b: pl.Tensor[[64, 128], pl.DT_FP16],
 ):
     tile_type_a = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tile_type_a, addr=0x0000, size=16384)
+    tile_a = pl.make_tile(tile_type_a, addr=0x0000)
     tile_type_b = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_b = pl.make_tile(tile_type_b, addr=0x4000, size=16384)
+    tile_b = pl.make_tile(tile_type_b, addr=0x4000)
     tile_type_c = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_c = pl.make_tile(tile_type_c, addr=0x8000, size=16384)
+    tile_c = pl.make_tile(tile_type_c, addr=0x8000)
     pl.load(tile_a, a, [0, 0])
     pl.load(tile_b, b, [0, 0])
     i = 0
@@ -81,11 +81,11 @@ def _while_continue_kernel(
     b: pl.Tensor[[64, 128], pl.DT_FP16],
 ):
     tile_type_a = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tile_type_a, addr=0x0000, size=16384)
+    tile_a = pl.make_tile(tile_type_a, addr=0x0000)
     tile_type_b = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_b = pl.make_tile(tile_type_b, addr=0x4000, size=16384)
+    tile_b = pl.make_tile(tile_type_b, addr=0x4000)
     tile_type_c = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_c = pl.make_tile(tile_type_c, addr=0x8000, size=16384)
+    tile_c = pl.make_tile(tile_type_c, addr=0x8000)
     pl.load(tile_a, a, [0, 0])
     pl.load(tile_b, b, [0, 0])
     i = 0
@@ -103,11 +103,11 @@ def _while_break_kernel(
     b: pl.Tensor[[64, 128], pl.DT_FP16],
 ):
     tile_type_a = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tile_type_a, addr=0x0000, size=16384)
+    tile_a = pl.make_tile(tile_type_a, addr=0x0000)
     tile_type_b = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_b = pl.make_tile(tile_type_b, addr=0x4000, size=16384)
+    tile_b = pl.make_tile(tile_type_b, addr=0x4000)
     tile_type_c = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_c = pl.make_tile(tile_type_c, addr=0x8000, size=16384)
+    tile_c = pl.make_tile(tile_type_c, addr=0x8000)
     pl.load(tile_a, a, [0, 0])
     pl.load(tile_b, b, [0, 0])
     i = 0
@@ -124,9 +124,9 @@ def _while_break_carry_kernel(
     b: pl.Tensor[[64, 128], pl.DT_FP16],
 ):
     tile_type_a = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tile_type_a, addr=0x0000, size=16384)
+    tile_a = pl.make_tile(tile_type_a, addr=0x0000)
     tile_type_b = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_b = pl.make_tile(tile_type_b, addr=0x4000, size=16384)
+    tile_b = pl.make_tile(tile_type_b, addr=0x4000)
     pl.load(tile_a, a, [0, 0])
     pl.load(tile_b, b, [0, 0])
     i = 0
@@ -144,11 +144,11 @@ def _while_accumulate_kernel(
     b: pl.Tensor[[64, 128], pl.DT_FP16],
 ):
     tile_type_a = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tile_type_a, addr=0x0000, size=16384)
+    tile_a = pl.make_tile(tile_type_a, addr=0x0000)
     tile_type_b = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_b = pl.make_tile(tile_type_b, addr=0x4000, size=16384)
+    tile_b = pl.make_tile(tile_type_b, addr=0x4000)
     tile_type_c = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_c = pl.make_tile(tile_type_c, addr=0x8000, size=16384)
+    tile_c = pl.make_tile(tile_type_c, addr=0x8000)
     pl.load(tile_a, a, [0, 0])
     pl.load(tile_b, b, [0, 0])
     i = 0
@@ -206,9 +206,9 @@ def _loop_tuple_kernel(
     a: pl.Tensor[[64, 128], pl.DT_FP16],
 ):
     tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tile_type, addr=0x0000, size=16384)
-    tile_b = pl.make_tile(tile_type, addr=0x4000, size=16384)
-    tile_c = pl.make_tile(tile_type, addr=0x8000, size=16384)
+    tile_a = pl.make_tile(tile_type, addr=0x0000)
+    tile_b = pl.make_tile(tile_type, addr=0x4000)
+    tile_c = pl.make_tile(tile_type, addr=0x8000)
     bundle = pl.make_tuple(a=tile_a, b=tile_b, c=tile_c)
     for _i in pl.range(1):
         bundle = pl.make_tuple(a=tile_a, b=tile_b, c=tile_c)

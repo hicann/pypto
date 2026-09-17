@@ -70,19 +70,19 @@ def store_tile_basic_kernel(
 ):
     with pl.section_cube():
         mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
-        q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
-        k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
+        q_mat = pl.make_tile(mat_type, addr=0x0000)
+        k_mat = pl.make_tile(mat_type, addr=0x4000)
 
         left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ)
-        q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
+        q_left = pl.make_tile(left_type, addr=0x0000)
 
         right_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right, layout=pl.ZN)
-        k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
+        k_right = pl.make_tile(right_type, addr=0x0000)
 
         acc_type = pl.TileType(
             shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
         )
-        acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+        acc = pl.make_tile(acc_type, addr=0x0000)
 
         pl.load(q_mat, q, [0, 0])
         pl.load(k_mat, k, [0, 0])
@@ -147,19 +147,19 @@ def store_tile_offset_kernel(
 ):
     with pl.section_cube():
         mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
-        q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
-        k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
+        q_mat = pl.make_tile(mat_type, addr=0x0000)
+        k_mat = pl.make_tile(mat_type, addr=0x4000)
 
         left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ)
-        q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
+        q_left = pl.make_tile(left_type, addr=0x0000)
 
         right_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right, layout=pl.ZN)
-        k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
+        k_right = pl.make_tile(right_type, addr=0x0000)
 
         acc_type = pl.TileType(
             shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
         )
-        acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+        acc = pl.make_tile(acc_type, addr=0x0000)
 
         # Load specific tile
         pl.load(q_mat, q, [tile_row * 64, 0])
@@ -225,19 +225,19 @@ def store_tile_relu_kernel(
 ):
     with pl.section_cube():
         mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
-        q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
-        k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
+        q_mat = pl.make_tile(mat_type, addr=0x0000)
+        k_mat = pl.make_tile(mat_type, addr=0x4000)
 
         left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ)
-        q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
+        q_left = pl.make_tile(left_type, addr=0x0000)
 
         right_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right, layout=pl.ZN)
-        k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
+        k_right = pl.make_tile(right_type, addr=0x0000)
 
         acc_type = pl.TileType(
             shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
         )
-        acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+        acc = pl.make_tile(acc_type, addr=0x0000)
 
         pl.load(q_mat, q, [0, 0])
         pl.load(k_mat, k, [0, 0])
@@ -301,25 +301,25 @@ def per_channel_store_kernel(
 ):
     with pl.section_cube():
         mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
-        q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
-        k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
+        q_mat = pl.make_tile(mat_type, addr=0x0000)
+        k_mat = pl.make_tile(mat_type, addr=0x4000)
 
         fp_mat_type = pl.TileType(shape=[1, 64], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Mat, layout=pl.ND)
-        fp_mat = pl.make_tile(fp_mat_type, addr=0x8000, size=512)
+        fp_mat = pl.make_tile(fp_mat_type, addr=0x8000)
 
         left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ)
-        q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
+        q_left = pl.make_tile(left_type, addr=0x0000)
 
         right_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right, layout=pl.ZN)
-        k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
+        k_right = pl.make_tile(right_type, addr=0x0000)
 
         acc_type = pl.TileType(
             shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
         )
-        acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+        acc = pl.make_tile(acc_type, addr=0x0000)
 
         fp_type = pl.TileType(shape=[1, 64], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Scaling)
-        fp_tile = pl.make_tile(fp_type, addr=0x0000, size=512)
+        fp_tile = pl.make_tile(fp_type, addr=0x0000)
 
         pl.load(q_mat, q, [0, 0])
         pl.load(k_mat, k, [0, 0])
@@ -401,29 +401,29 @@ def per_channel_move_kernel(
     move_out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
 ):
     vec_type = pl.TileType(shape=[64, 64], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec)
-    vec_tile = pl.make_tile(vec_type, addr=0x0000, size=4096)
+    vec_tile = pl.make_tile(vec_type, addr=0x0000)
 
     with pl.section_cube():
         mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
-        q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
-        k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
+        q_mat = pl.make_tile(mat_type, addr=0x0000)
+        k_mat = pl.make_tile(mat_type, addr=0x4000)
 
         fp_mat_type = pl.TileType(shape=[1, 64], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Mat, layout=pl.ND)
-        fp_mat = pl.make_tile(fp_mat_type, addr=0x8000, size=512)
+        fp_mat = pl.make_tile(fp_mat_type, addr=0x8000)
 
         left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ)
-        q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
+        q_left = pl.make_tile(left_type, addr=0x0000)
 
         right_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right, layout=pl.ZN)
-        k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
+        k_right = pl.make_tile(right_type, addr=0x0000)
 
         acc_type = pl.TileType(
             shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
         )
-        acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+        acc = pl.make_tile(acc_type, addr=0x0000)
 
         fp_type = pl.TileType(shape=[1, 64], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Scaling)
-        fp_tile = pl.make_tile(fp_type, addr=0x0000, size=512)
+        fp_tile = pl.make_tile(fp_type, addr=0x0000)
 
         pl.load(q_mat, q, [0, 0])
         pl.load(k_mat, k, [0, 0])
@@ -503,25 +503,25 @@ def per_channel_store_tile_kernel(
 ):
     with pl.section_cube():
         mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
-        q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
-        k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
+        q_mat = pl.make_tile(mat_type, addr=0x0000)
+        k_mat = pl.make_tile(mat_type, addr=0x4000)
 
         fp_mat_type = pl.TileType(shape=[1, 64], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Mat, layout=pl.ND)
-        fp_mat = pl.make_tile(fp_mat_type, addr=0x8000, size=512)
+        fp_mat = pl.make_tile(fp_mat_type, addr=0x8000)
 
         left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ)
-        q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
+        q_left = pl.make_tile(left_type, addr=0x0000)
 
         right_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right, layout=pl.ZN)
-        k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
+        k_right = pl.make_tile(right_type, addr=0x0000)
 
         acc_type = pl.TileType(
             shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
         )
-        acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+        acc = pl.make_tile(acc_type, addr=0x0000)
 
         fp_type = pl.TileType(shape=[1, 64], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Scaling)
-        fp_tile = pl.make_tile(fp_type, addr=0x0000, size=512)
+        fp_tile = pl.make_tile(fp_type, addr=0x0000)
 
         pl.load(q_mat, q, [0, 0])
         pl.load(k_mat, k, [0, 0])

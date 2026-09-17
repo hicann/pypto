@@ -79,8 +79,8 @@ def fillpad_dynamic_cce_kernel(
         target_memory=pl.MemorySpace.Vec,
         pad=pl.TilePad.zero,
     )
-    src = pl.make_tile(src_type, addr=0x0000, size=256)
-    dst = pl.make_tile(dst_type, addr=0x0100, size=256)
+    src = pl.make_tile(src_type, addr=0x0000)
+    dst = pl.make_tile(dst_type, addr=0x0100)
 
     with pl.section_vector():
         pl.load(src, x, [0, 0])
@@ -118,8 +118,8 @@ def fillpad_inplace_dynamic_cce_kernel(
         target_memory=pl.MemorySpace.Vec,
         pad=pl.TilePad.zero,
     )
-    src = pl.make_tile(src_type, addr=0x0000, size=256)
-    dst = pl.make_tile(dst_type, addr=0x0000, size=256)
+    src = pl.make_tile(src_type, addr=0x0000)
+    dst = pl.make_tile(dst_type, addr=0x0000)
 
     with pl.section_vector():
         pl.load(src, x, [0, 0])
@@ -156,8 +156,8 @@ def fillpad_expand_dynamic_cce_kernel(
         target_memory=pl.MemorySpace.Vec,
         pad=pl.TilePad.zero,
     )
-    src = pl.make_tile(src_type, addr=0x0000, size=256)
-    dst = pl.make_tile(dst_type, addr=0x0100, size=512)
+    src = pl.make_tile(src_type, addr=0x0000)
+    dst = pl.make_tile(dst_type, addr=0x0100)
 
     with pl.section_vector():
         pl.load(src, x, [0, 0])

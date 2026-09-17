@@ -409,7 +409,6 @@ def init_output_matmul_add_atomic(
     tile_acc = pl.make_tile(
         pl.TileType(shape=[TILE_M, N_IO], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
         addr=0x0000,
-        size=TILE_M * N_IO * 4,
     )
     vec_group = pl.make_tile_group(
         type=pl.TileType(shape=[TILE_M // 2, N_IO], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),

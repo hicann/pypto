@@ -93,9 +93,9 @@ def test_tile_min_still_works():
     ):
         tile_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32)
         reduced_type = pl.TileType(shape=[32, 1], dtype=pl.DT_FP32)
-        tile_a = pl.make_tile(tile_type, addr=0, size=4096)
-        tmp = pl.make_tile(tile_type, addr=4096, size=4096)
-        tile_c = pl.make_tile(reduced_type, addr=8192, size=128)
+        tile_a = pl.make_tile(tile_type, addr=0)
+        tmp = pl.make_tile(tile_type, addr=4096)
+        tile_c = pl.make_tile(reduced_type, addr=8192)
         pl.load(tile_a, x, [0, 0])
         pl.minimum(tile_a, tmp, tile_c, dim=0)
         out: pl.Tensor[[32, 32], pl.DT_FP32] = pl.store(x, tile_c, [0, 0])

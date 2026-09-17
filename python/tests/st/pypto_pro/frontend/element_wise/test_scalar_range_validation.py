@@ -81,8 +81,8 @@ def kernel_and_int8_above_max(
     out: pl.Tensor[[DYN, DYN], pl.DT_INT8],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=BYTES_1)
-    tc = pl.make_tile(tf, addr=BYTES_1, size=BYTES_1)
+    ta = pl.make_tile(tf, addr=0)
+    tc = pl.make_tile(tf, addr=BYTES_1)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -99,8 +99,8 @@ def kernel_and_int8_below_min(
     out: pl.Tensor[[DYN, DYN], pl.DT_INT8],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=BYTES_1)
-    tc = pl.make_tile(tf, addr=BYTES_1, size=BYTES_1)
+    ta = pl.make_tile(tf, addr=0)
+    tc = pl.make_tile(tf, addr=BYTES_1)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -117,8 +117,8 @@ def kernel_and_int8_boundary(
     out: pl.Tensor[[DYN, DYN], pl.DT_INT8],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=BYTES_1)
-    tc = pl.make_tile(tf, addr=BYTES_1, size=BYTES_1)
+    ta = pl.make_tile(tf, addr=0)
+    tc = pl.make_tile(tf, addr=BYTES_1)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -172,8 +172,8 @@ def kernel_and_uint8_above_max(
     out: pl.Tensor[[DYN, DYN], pl.DT_UINT8],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=BYTES_1)
-    tc = pl.make_tile(tf, addr=BYTES_1, size=BYTES_1)
+    ta = pl.make_tile(tf, addr=0)
+    tc = pl.make_tile(tf, addr=BYTES_1)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -190,8 +190,8 @@ def kernel_and_uint8_negative(
     out: pl.Tensor[[DYN, DYN], pl.DT_UINT8],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=BYTES_1)
-    tc = pl.make_tile(tf, addr=BYTES_1, size=BYTES_1)
+    ta = pl.make_tile(tf, addr=0)
+    tc = pl.make_tile(tf, addr=BYTES_1)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -208,8 +208,8 @@ def kernel_and_uint8_boundary(
     out: pl.Tensor[[DYN, DYN], pl.DT_UINT8],
 ):
     tf = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tf, addr=0, size=BYTES_1)
-    tc = pl.make_tile(tf, addr=BYTES_1, size=BYTES_1)
+    ta = pl.make_tile(tf, addr=0)
+    tc = pl.make_tile(tf, addr=BYTES_1)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)

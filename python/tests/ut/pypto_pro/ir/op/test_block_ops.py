@@ -37,9 +37,9 @@ def test_manual_add():
         output: pl.Tensor[[128, 128], pl.DT_FP32],
     ):
         tile_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32)
-        tile_a = pl.make_tile(tile_type, addr=0x0000, size=4096)
-        tile_b = pl.make_tile(tile_type, addr=0x1000, size=4096)
-        tile_out = pl.make_tile(tile_type, addr=0x2000, size=4096)
+        tile_a = pl.make_tile(tile_type, addr=0x0000)
+        tile_b = pl.make_tile(tile_type, addr=0x1000)
+        tile_out = pl.make_tile(tile_type, addr=0x2000)
         pl.load(tile_a, a, [0, 0])
         pl.load(tile_b, b, [0, 0])
         pl.add(tile_out, tile_a, tile_b)
@@ -58,8 +58,8 @@ def test_manual_mul_scalar():
         output: pl.Tensor[[128, 128], pl.DT_FP32],
     ):
         tile_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32)
-        tile_a = pl.make_tile(tile_type, addr=0x3000, size=4096)
-        tile_out = pl.make_tile(tile_type, addr=0x4000, size=4096)
+        tile_a = pl.make_tile(tile_type, addr=0x3000)
+        tile_out = pl.make_tile(tile_type, addr=0x4000)
         pl.load(tile_a, a, [0, 0])
         pl.mul(tile_out, tile_a, 2.0)
         _test_result = pl.store(output, tile_out, [0, 0])
@@ -77,8 +77,8 @@ def test_manual_add_scalar():
         output: pl.Tensor[[128, 128], pl.DT_FP32],
     ):
         tile_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32)
-        tile_a = pl.make_tile(tile_type, addr=0x3000, size=4096)
-        tile_out = pl.make_tile(tile_type, addr=0x4000, size=4096)
+        tile_a = pl.make_tile(tile_type, addr=0x3000)
+        tile_out = pl.make_tile(tile_type, addr=0x4000)
         pl.load(tile_a, a, [0, 0])
         pl.add(tile_out, tile_a, 1.0)
         _test_result = pl.store(output, tile_out, [0, 0])
@@ -96,8 +96,8 @@ def test_manual_maximum_scalar():
         output: pl.Tensor[[128, 128], pl.DT_FP32],
     ):
         tile_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32)
-        tile_a = pl.make_tile(tile_type, addr=0x3000, size=4096)
-        tile_out = pl.make_tile(tile_type, addr=0x4000, size=4096)
+        tile_a = pl.make_tile(tile_type, addr=0x3000)
+        tile_out = pl.make_tile(tile_type, addr=0x4000)
         pl.load(tile_a, a, [0, 0])
         pl.maximum(tile_out, tile_a, 0.0)
         _test_result = pl.store(output, tile_out, [0, 0])
@@ -115,8 +115,8 @@ def test_manual_relu():
         output: pl.Tensor[[128, 128], pl.DT_FP32],
     ):
         tile_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32)
-        tile_a = pl.make_tile(tile_type, addr=0x5000, size=4096)
-        tile_out = pl.make_tile(tile_type, addr=0x6000, size=4096)
+        tile_a = pl.make_tile(tile_type, addr=0x5000)
+        tile_out = pl.make_tile(tile_type, addr=0x6000)
         pl.load(tile_a, a, [0, 0])
         pl.relu(tile_out, tile_a)
         _test_result = pl.store(output, tile_out, [0, 0])
@@ -135,10 +135,10 @@ def test_manual_cmp():
         output: pl.Tensor[[128, 128], pl.DT_UINT8],
     ):
         tile_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32)
-        tile_a = pl.make_tile(tile_type, addr=0x7000, size=4096)
-        tile_b = pl.make_tile(tile_type, addr=0x8000, size=4096)
+        tile_a = pl.make_tile(tile_type, addr=0x7000)
+        tile_b = pl.make_tile(tile_type, addr=0x8000)
         mask_type = pl.TileType(shape=[32, 32], dtype=pl.DT_UINT8)
-        tile_out = pl.make_tile(mask_type, addr=0x9000, size=1024)
+        tile_out = pl.make_tile(mask_type, addr=0x9000)
         pl.load(tile_a, a, [0, 0])
         pl.load(tile_b, b, [0, 0])
         pl.eq(tile_out, tile_a, tile_b)
@@ -158,9 +158,9 @@ def test_manual_row_max():
     ):
         in_type = pl.TileType(shape=[32, 128], dtype=pl.DT_FP32)
         out_type = pl.TileType(shape=[32, 1], dtype=pl.DT_FP32)
-        tile_in = pl.make_tile(in_type, addr=0xA000, size=16384)
-        tmp = pl.make_tile(out_type, addr=0xE000, size=128)
-        tile_out = pl.make_tile(out_type, addr=0x12000, size=128)
+        tile_in = pl.make_tile(in_type, addr=0xA000)
+        tmp = pl.make_tile(out_type, addr=0xE000)
+        tile_out = pl.make_tile(out_type, addr=0x12000)
         pl.load(tile_in, inp, [0, 0])
         pl.maximum(tile_out, tile_in, tmp, dim=0)
         _test_result = pl.store(output, tile_out, [0, 0])
@@ -180,9 +180,9 @@ def test_manual_col_expand_mul():
     ):
         tile_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32)
         col_type = pl.TileType(shape=[1, 32], dtype=pl.DT_FP32)
-        tile_a = pl.make_tile(tile_type, addr=0x13000, size=4096)
-        tile_col = pl.make_tile(col_type, addr=0x14000, size=128)
-        tile_out = pl.make_tile(tile_type, addr=0x15000, size=4096)
+        tile_a = pl.make_tile(tile_type, addr=0x13000)
+        tile_col = pl.make_tile(col_type, addr=0x14000)
+        tile_out = pl.make_tile(tile_type, addr=0x15000)
         pl.load(tile_a, tile, [0, 0])
         pl.load(tile_col, col, [0, 0])
         pl.expand_mul(tile_out, tile_a, tile_col, dim=1)
@@ -203,9 +203,9 @@ def test_manual_col_expand_div():
     ):
         tile_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32)
         col_type = pl.TileType(shape=[1, 32], dtype=pl.DT_FP32)
-        tile_a = pl.make_tile(tile_type, addr=0x13000, size=4096)
-        tile_col = pl.make_tile(col_type, addr=0x14000, size=128)
-        tile_out = pl.make_tile(tile_type, addr=0x15000, size=4096)
+        tile_a = pl.make_tile(tile_type, addr=0x13000)
+        tile_col = pl.make_tile(col_type, addr=0x14000)
+        tile_out = pl.make_tile(tile_type, addr=0x15000)
         pl.load(tile_a, tile, [0, 0])
         pl.load(tile_col, col, [0, 0])
         pl.expand_div(tile_out, tile_a, tile_col, dim=1)
@@ -224,8 +224,8 @@ def test_manual_and_scalar():
         output: pl.Tensor[[128, 128], pl.DT_INT32],
     ):
         tile_type = pl.TileType(shape=[32, 32], dtype=pl.DT_INT32)
-        tile_a = pl.make_tile(tile_type, addr=0x16000, size=4096)
-        tile_out = pl.make_tile(tile_type, addr=0x17000, size=4096)
+        tile_a = pl.make_tile(tile_type, addr=0x16000)
+        tile_out = pl.make_tile(tile_type, addr=0x17000)
         pl.load(tile_a, a, [0, 0])
         pl.and_(tile_out, tile_a, 7)
         _test_result = pl.store(output, tile_out, [0, 0])
@@ -244,10 +244,10 @@ def test_manual_xor():
         output: pl.Tensor[[128, 128], pl.DT_INT32],
     ):
         tile_type = pl.TileType(shape=[32, 32], dtype=pl.DT_INT32)
-        tile_a = pl.make_tile(tile_type, addr=0x18000, size=4096)
-        tile_b = pl.make_tile(tile_type, addr=0x19000, size=4096)
-        tmp = pl.make_tile(tile_type, addr=0x1A000, size=4096)
-        tile_out = pl.make_tile(tile_type, addr=0x1B000, size=4096)
+        tile_a = pl.make_tile(tile_type, addr=0x18000)
+        tile_b = pl.make_tile(tile_type, addr=0x19000)
+        tmp = pl.make_tile(tile_type, addr=0x1A000)
+        tile_out = pl.make_tile(tile_type, addr=0x1B000)
         pl.load(tile_a, a, [0, 0])
         pl.load(tile_b, b, [0, 0])
         pl.xor(tile_out, tile_a, tile_b, tmp)
@@ -268,7 +268,7 @@ def test_load_with_dynamic_valid_shape():
         output: pl.Tensor[[128, 128], pl.DT_FP32],
     ):
         tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP32, valid_shape=[-1, -1])
-        tile = pl.make_tile(tile_type, addr=0x20000, size=65536)
+        tile = pl.make_tile(tile_type, addr=0x20000)
         pl.load(tile, a, [0, 0])
         pl.set_validshape(tile, [rows, cols])
         _test_result = pl.store(output, tile, [0, 0])
@@ -288,8 +288,8 @@ def test_insert_with_offset_sequence():
     ):
         dst_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32)
         src_type = pl.TileType(shape=[16, 16], dtype=pl.DT_FP32)
-        dst = pl.make_tile(dst_type, addr=0x30200, size=4096)
-        src = pl.make_tile(src_type, addr=0x31200, size=1024)
+        dst = pl.make_tile(dst_type, addr=0x30200)
+        src = pl.make_tile(src_type, addr=0x31200)
         pl.insert(dst, src, [8, 16])
         _test_result = pl.store(output, dst, [0, 0])
 
@@ -308,8 +308,8 @@ def test_manual_transpose():
     ):
         src_type = pl.TileType(shape=[16, 32], dtype=pl.DT_FP16)
         dst_type = pl.TileType(shape=[32, 16], dtype=pl.DT_FP16)
-        src = pl.make_tile(src_type, addr=0x30000, size=1024)
-        dst = pl.make_tile(dst_type, addr=0x30100, size=1024)
+        src = pl.make_tile(src_type, addr=0x30000)
+        dst = pl.make_tile(dst_type, addr=0x30100)
         pl.load(src, a, [0, 0])
         pl.transpose(dst, src)
         _test_result = pl.store(output, dst, [0, 0])
@@ -390,8 +390,8 @@ def test_move_to_insert_subblock():
     ):
         dst_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32)
         src_type = pl.TileType(shape=[16, 16], dtype=pl.DT_FP32)
-        dst = pl.make_tile(dst_type, addr=0x30200, size=4096)
-        src = pl.make_tile(src_type, addr=0x31200, size=1024)
+        dst = pl.make_tile(dst_type, addr=0x30200)
+        src = pl.make_tile(src_type, addr=0x31200)
         pl.move(dst, src, [8, 8])
         _test_result = pl.store(output, dst, [0, 0])
 
@@ -410,8 +410,8 @@ def test_move_equal_shape_stays_move():
     ):
         dst_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32)
         src_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32)
-        dst = pl.make_tile(dst_type, addr=0x30200, size=4096)
-        src = pl.make_tile(src_type, addr=0x31200, size=4096)
+        dst = pl.make_tile(dst_type, addr=0x30200)
+        src = pl.make_tile(src_type, addr=0x31200)
         pl.move(dst, src, [0, 0])
         _test_result = pl.store(output, dst, [0, 0])
 
@@ -429,8 +429,8 @@ def test_move_src_larger_stays_move():
     ):
         dst_type = pl.TileType(shape=[16, 16], dtype=pl.DT_FP32)
         src_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32)
-        dst = pl.make_tile(dst_type, addr=0x30200, size=1024)
-        src = pl.make_tile(src_type, addr=0x31200, size=4096)
+        dst = pl.make_tile(dst_type, addr=0x30200)
+        src = pl.make_tile(src_type, addr=0x31200)
         pl.move(dst, src, [0, 0])
         _test_result = pl.store(output, dst, [0, 0])
 
@@ -450,14 +450,14 @@ def test_make_tile_missing_addr_rejected():
             output: pl.Tensor[[128, 128], pl.DT_FP16],
         ):
             tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16)
-            tile_a = pl.make_tile(tile_type, size=32768)
+            tile_a = pl.make_tile(tile_type)
             pl.load(tile_a, a, [0, 0])
             _test_result = pl.store(output, tile_a, [0, 0])
 
         main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
-def test_make_tile_size_defaults_to_tile_footprint():
+def test_make_tile_size_is_derived_from_tile_type():
     @pl.jit(auto_mutex=False)
     def main(
         a: pl.Tensor[[128, 128], pl.DT_FP16],
@@ -475,45 +475,6 @@ def test_make_tile_size_defaults_to_tile_footprint():
     assert 'memref_size=32768' in _program_ir(main)
 
 
-def test_make_tile_explicit_size_overrides_derived():
-    """An NZ tile rounded up to whole fractals reserves more than shape * dtype."""
-
-    @pl.jit(auto_mutex=False)
-    def main(
-        a: pl.Tensor[[128, 128], pl.DT_FP16],
-        output: pl.Tensor[[128, 128], pl.DT_FP16],
-    ):
-        tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16)
-        tile_a = pl.make_tile(tile_type, addr=0x0000, size=40960)
-        pl.load(tile_a, a, [0, 0])
-        _test_result = pl.store(output, tile_a, [0, 0])
-
-    main_program, _ = main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
-    main = main_program.get_function(main.__name__)
-
-    ir_str = _program_ir(main)
-    assert 'memref_size=40960' in ir_str
-    assert 'memref_size=32768' not in ir_str
-
-
-def test_make_tile_runtime_size_rejected_with_compile_time_hint():
-    with pytest.raises(ParserTypeError) as excinfo:
-
-        @pl.jit(auto_mutex=False)
-        def main(
-            a: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP16],
-            output: pl.Tensor[[128, 128], pl.DT_FP16],
-        ):
-            tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16)
-            tile_a = pl.make_tile(tile_type, addr=0x0000, size=a.shape[0] * 32)
-            pl.load(tile_a, a, [0, 0])
-            _test_result = pl.store(output, tile_a, [0, 0])
-
-        main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
-
-    assert "compile-time integer" in str(excinfo.value)
-
-
 def test_make_tile_runtime_addr_rejected_with_compile_time_hint():
     with pytest.raises(ParserTypeError) as excinfo:
 
@@ -523,7 +484,7 @@ def test_make_tile_runtime_addr_rejected_with_compile_time_hint():
             output: pl.Tensor[[128, 128], pl.DT_FP16],
         ):
             tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16)
-            tile_a = pl.make_tile(tile_type, addr=a.shape[0] * 32, size=32768)
+            tile_a = pl.make_tile(tile_type, addr=a.shape[0] * 32)
             pl.load(tile_a, a, [0, 0])
             _test_result = pl.store(output, tile_a, [0, 0])
 
@@ -533,24 +494,8 @@ def test_make_tile_runtime_addr_rejected_with_compile_time_hint():
     assert "runtime value" in str(excinfo.value)
 
 
-def test_make_tile_non_positive_size_rejected():
-    with pytest.raises(ParserTypeError, match="positive byte count"):
-
-        @pl.jit(auto_mutex=False)
-        def main(
-            a: pl.Tensor[[128, 128], pl.DT_FP16],
-            output: pl.Tensor[[128, 128], pl.DT_FP16],
-        ):
-            tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16)
-            tile_a = pl.make_tile(tile_type, addr=0x0000, size=0)
-            pl.load(tile_a, a, [0, 0])
-            _test_result = pl.store(output, tile_a, [0, 0])
-
-        main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
-
-
 def test_make_tile_addr_after_tile_type():
-    """The documented prototype: pl.make_tile(tile_type, *, addr, size=None)."""
+    """The documented prototype: pl.make_tile(tile_type, *, addr)."""
 
     @pl.jit(auto_mutex=False)
     def main(
@@ -568,25 +513,6 @@ def test_make_tile_addr_after_tile_type():
     ir_str = _program_ir(main)
     assert 'memref_addr=4096' in ir_str
     assert 'memref_size=32768' in ir_str
-
-
-def test_make_tile_addr_and_size_after_tile_type():
-    @pl.jit(auto_mutex=False)
-    def main(
-        a: pl.Tensor[[128, 128], pl.DT_FP16],
-        output: pl.Tensor[[128, 128], pl.DT_FP16],
-    ):
-        tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP16)
-        tile_a = pl.make_tile(tile_type, addr=0x1000, size=40960)
-        pl.load(tile_a, a, [0, 0])
-        _test_result = pl.store(output, tile_a, [0, 0])
-
-    main_program, _ = main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
-    main = main_program.get_function(main.__name__)
-
-    ir_str = _program_ir(main)
-    assert 'memref_addr=4096' in ir_str
-    assert 'memref_size=40960' in ir_str
 
 
 def test_make_tile_builder_form_rejected():
@@ -645,7 +571,7 @@ def test_make_tile_runtime_addr_rejected_quoting_source():
 
 
 def test_make_tile_positional_addr_rejected():
-    """The tile type is the only positional argument; addr/size are keywords."""
+    """The tile type is the only positional argument; addr is keyword-only."""
 
     with pytest.raises(ParserTypeError, match="takes 1 positional argument .* but 2 were given"):
 
@@ -662,7 +588,7 @@ def test_make_tile_positional_addr_rejected():
         main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
-def test_make_tile_positional_addr_and_size_rejected_with_keyword_hint():
+def test_make_tile_extra_positional_args_rejected_with_addr_keyword_hint():
     """The rejection carries the fix, so the call site does not have to guess."""
 
     with pytest.raises(ParserTypeError) as excinfo:
@@ -721,7 +647,7 @@ def test_a5_rejects_zz_nn_for_cube_buffers(monkeypatch, memory, layout):
                 target_memory=memory,
                 layout=layout,
             )
-            tile = pl.make_tile(tt, addr=0x00000, size=32768)  # noqa: F841
+            tile = pl.make_tile(tt, addr=0x00000)  # noqa: F841
 
         create_tile.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
@@ -737,7 +663,7 @@ def test_a5_allows_regular_cube_buffer_layouts(monkeypatch):
             target_memory=pl.MemorySpace.Left,
             layout=pl.NZ,
         )
-        tile = pl.make_tile(tt, addr=0x00000, size=32768)  # noqa: F841
+        tile = pl.make_tile(tt, addr=0x00000)  # noqa: F841
 
     create_tile_program, _ = create_tile.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     create_tile = create_tile_program.get_function(create_tile.__name__)
@@ -755,7 +681,7 @@ def test_high_dimensional_nz_load_store_use_last_two_axes_by_default():
         tile_type = pl.TileType(
             shape=[16, 16], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, layout=pl.NZ
         )
-        tile = pl.make_tile(tile_type, addr=0x1000, size=512)
+        tile = pl.make_tile(tile_type, addr=0x1000)
         pl.load(tile, inp, [1, 2, 16, 16])
         pl.store(out, tile, [1, 2, 16, 16])
 
@@ -775,8 +701,8 @@ def test_store_and_store_tile_with_scaling_tile_use_store_op(monkeypatch):
             shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
         )
         scale_type = pl.TileType(shape=[1, 64], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Scaling)
-        acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
-        scale = pl.make_tile(scale_type, addr=0x0000, size=512)
+        acc = pl.make_tile(acc_type, addr=0x0000)
+        scale = pl.make_tile(scale_type, addr=0x0000)
         pl.store(out, acc, [0, 0], scale=scale)
         pl.store_tile(out, acc, [0, 0], scale=scale)
 
@@ -796,7 +722,7 @@ def test_high_dimensional_nz_load_rejects_non_final_transfer_axes():
             tile_type = pl.TileType(
                 shape=[16, 16], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, layout=pl.NZ
             )
-            tile = pl.make_tile(tile_type, addr=0x1000, size=512)
+            tile = pl.make_tile(tile_type, addr=0x1000)
             pl.load(tile, inp, [0, 0, 0, 0], order=[1, 3])
 
         main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
@@ -812,7 +738,7 @@ def test_high_dimensional_nz_store_rejects_non_final_transfer_axes():
             tile_type = pl.TileType(
                 shape=[16, 16], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, layout=pl.NZ
             )
-            tile = pl.make_tile(tile_type, addr=0x1000, size=512)
+            tile = pl.make_tile(tile_type, addr=0x1000)
             pl.store(out, tile, [0, 0, 0, 0], order=[1, 3])
 
         main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)

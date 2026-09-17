@@ -63,7 +63,7 @@ def scalar_float_static_shape_kernel(src: pl.Tensor[[1, 8], pl.DT_FP32], out: pl
     rows = 7.0 % 2.0
     cols = 16.0 // 2.0
     tile_type = pl.TileType(shape=[int(rows), int(cols)], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    tile = pl.make_tile(tile_type, addr=0, size=32)
+    tile = pl.make_tile(tile_type, addr=0)
     with pl.section_vector():
         pl.load(tile, src, [0, 0])
         pl.store(out, tile, [0, 0])

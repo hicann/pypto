@@ -46,7 +46,6 @@ ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
 THREADS = 256
-TILE_BYTES = THREADS * 4
 ```
 
 ## 核心代码逻辑
@@ -69,7 +68,7 @@ def simt_add_kernel(
         dtype=pl.DT_FP32,
         target_memory=pl.MemorySpace.Vec,
     )
-    data = pl.make_tile(tile_type, addr=0x0000, size=TILE_BYTES)
+    data = pl.make_tile(tile_type, addr=0x0000)
 
     with pl.section_vector():
         pl.load(data, src, [0, 0])

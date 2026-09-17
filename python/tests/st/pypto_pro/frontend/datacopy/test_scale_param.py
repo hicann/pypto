@@ -66,8 +66,8 @@ def scale_store_kernel(
             valid_shape=[-1, -1],
             compact=1,
         )
-        q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
-        k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
+        q_mat = pl.make_tile(mat_type, addr=0x0000)
+        k_mat = pl.make_tile(mat_type, addr=0x4000)
 
         left_type = pl.TileType(
             shape=[64, 64],
@@ -77,7 +77,7 @@ def scale_store_kernel(
             valid_shape=[-1, -1],
             compact=1,
         )
-        q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
+        q_left = pl.make_tile(left_type, addr=0x0000)
 
         right_type = pl.TileType(
             shape=[64, 64],
@@ -87,7 +87,7 @@ def scale_store_kernel(
             valid_shape=[-1, -1],
             compact=1,
         )
-        k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
+        k_right = pl.make_tile(right_type, addr=0x0000)
 
         acc_type = pl.TileType(
             shape=[64, 64],
@@ -98,7 +98,7 @@ def scale_store_kernel(
             valid_shape=[-1, -1],
             compact=1,
         )
-        acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+        acc = pl.make_tile(acc_type, addr=0x0000)
 
         pl.set_validshape(q_mat, [vm, 64])
         pl.set_validshape(q_left, [vm, 64])
@@ -134,7 +134,7 @@ def scale_move_kernel(
     vn: pl.DT_INT32,
 ):
     vec_type = pl.TileType(shape=[64, 64], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec)
-    vec_tile = pl.make_tile(vec_type, addr=0x0000, size=4096)
+    vec_tile = pl.make_tile(vec_type, addr=0x0000)
 
     with pl.section_cube():
         mat_type = pl.TileType(
@@ -145,8 +145,8 @@ def scale_move_kernel(
             valid_shape=[-1, -1],
             compact=1,
         )
-        q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
-        k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
+        q_mat = pl.make_tile(mat_type, addr=0x0000)
+        k_mat = pl.make_tile(mat_type, addr=0x4000)
 
         left_type = pl.TileType(
             shape=[64, 64],
@@ -156,7 +156,7 @@ def scale_move_kernel(
             valid_shape=[-1, -1],
             compact=1,
         )
-        q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
+        q_left = pl.make_tile(left_type, addr=0x0000)
 
         right_type = pl.TileType(
             shape=[64, 64],
@@ -166,7 +166,7 @@ def scale_move_kernel(
             valid_shape=[-1, -1],
             compact=1,
         )
-        k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
+        k_right = pl.make_tile(right_type, addr=0x0000)
 
         acc_type = pl.TileType(
             shape=[64, 64],
@@ -177,7 +177,7 @@ def scale_move_kernel(
             valid_shape=[-1, -1],
             compact=1,
         )
-        acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+        acc = pl.make_tile(acc_type, addr=0x0000)
 
         pl.set_validshape(q_mat, [vm, 64])
         pl.set_validshape(q_left, [vm, 64])
@@ -228,8 +228,8 @@ def scale_dynamic_kernel(
             valid_shape=[-1, -1],
             compact=1,
         )
-        q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
-        k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
+        q_mat = pl.make_tile(mat_type, addr=0x0000)
+        k_mat = pl.make_tile(mat_type, addr=0x4000)
 
         left_type = pl.TileType(
             shape=[64, 64],
@@ -239,7 +239,7 @@ def scale_dynamic_kernel(
             valid_shape=[-1, -1],
             compact=1,
         )
-        q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
+        q_left = pl.make_tile(left_type, addr=0x0000)
 
         right_type = pl.TileType(
             shape=[64, 64],
@@ -249,7 +249,7 @@ def scale_dynamic_kernel(
             valid_shape=[-1, -1],
             compact=1,
         )
-        k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
+        k_right = pl.make_tile(right_type, addr=0x0000)
 
         acc_type = pl.TileType(
             shape=[64, 64],
@@ -260,7 +260,7 @@ def scale_dynamic_kernel(
             valid_shape=[-1, -1],
             compact=1,
         )
-        acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+        acc = pl.make_tile(acc_type, addr=0x0000)
 
         pl.set_validshape(q_mat, [vm, 64])
         pl.set_validshape(q_left, [vm, 64])

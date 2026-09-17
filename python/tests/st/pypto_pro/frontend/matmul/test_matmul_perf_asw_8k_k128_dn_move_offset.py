@@ -51,8 +51,6 @@ MAIN_ROW = M_TILES // MAIN_WINDOW - 1  # 7
 TAIL_WINDOW = M_TILES - MAIN_ROW * MAIN_WINDOW
 assert TAIL_WINDOW == MAIN_WINDOW
 
-ROUND = (TOTAL_CNT + NUM_CORES - 1) // NUM_CORES  # 32
-
 L0A_BASE = 0x0000
 L0B_BASE = 0x0000
 L0C_BASE = 0x0000
@@ -69,6 +67,7 @@ def matmul_perf_asw_8k_k128_dn_move_offset_kernel(
 
     num_cores = pl.get_block_num()
     core_id = pl.get_block_idx() // pl.get_subblock_num()
+    rounds = (TOTAL_CNT + num_cores - 1) // num_cores
 
     with pl.section_cube():
         a_l1_wide = pl.make_tile_group(
@@ -103,7 +102,7 @@ def matmul_perf_asw_8k_k128_dn_move_offset_kernel(
 
         pl.system.set_mm_layout_transform(enabled=True)
 
-        for r in pl.range(0, ROUND):
+        for r in pl.range(0, rounds):
             index = core_id + r * num_cores
 
             if index < TOTAL_CNT:
@@ -170,7 +169,7 @@ def run_perf_test(num_iters: int = 20, warmup: int = 3):
     logging.info("Tile:  TILE_M=%d, TILE_N=%d, KL0=%d, KL1=%d", TILE_M, TILE_N, KL0, KL1)
     logging.info("K loop: %d outer x %d inner = %d total mmad", K_OUTER, K_INNER, K_TOTAL)
     logging.info("Tiles: %d x %d = %d", M_TILES, N_TILES, TOTAL_CNT)
-    logging.info("Cores: %d, rounds: %d", NUM_CORES, ROUND)
+    logging.info("Requested cores: %d", NUM_CORES)
     logging.info("Iters: warmup=%d, measure=%d", warmup, num_iters)
     logging.info("-" * 60)
 

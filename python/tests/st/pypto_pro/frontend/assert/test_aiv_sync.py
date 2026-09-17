@@ -57,7 +57,6 @@ def aiv_sync_kernel(
     tile_buf = pl.make_tile(
         pl.TileType(shape=[8, 8], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec),
         addr=0x0000,
-        size=256,
     )
     with pl.section_cube():
         pass

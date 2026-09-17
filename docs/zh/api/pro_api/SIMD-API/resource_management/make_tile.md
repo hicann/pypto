@@ -18,7 +18,7 @@
 
 如果需要多块同规格Tile构成ping-pong双缓冲并自动管理互斥，使用[pypto_pro.language.make_tile_group](make_tile_group.md)。
 
-下图展示了TileType、addr和size如何共同确定Tile绑定的片上地址范围。
+下图以UB为例，展示了make_tile如何将Tile绑定到片上地址：addr指定起始地址，地址范围大小由TileType的shape和dtype推导。
 
 ![make_tile创建Tile并绑定片上地址](../../figures/make_tile_allocation.jpg "make_tile创建Tile并绑定片上地址")
 
@@ -29,7 +29,6 @@ pypto_pro.language.make_tile(
     tile_type: TileType,
     *,
     addr: int,
-    size: Optional[int] = None,
 ) -> Tile
 ```
 
@@ -39,9 +38,10 @@ pypto_pro.language.make_tile(
 |---|---|---|
 | tile_type | 输入 | Tile类型描述，[TileType](../basic_data_structures/TileType.md)类型，是唯一允许的位置参数。其shape、dtype、target_memory和layout共同决定Tile的存储大小和可用接口。 |
 | addr | 输入 | Tile地址，int类型，表示Tile在tile_type所指定Buffer内的字节偏移，必须以关键字形式传入并在编译期确定。UB和L1 Buffer要求32字节对齐，L0A和L0B Buffer要求512字节对齐，L0C Buffer要求64字节对齐。 |
-| size | 输入 | 地址范围大小，int类型，可选，单位为字节。必须为编译期正整数并能覆盖Tile实际占用的存储范围；省略时根据TileType的shape和dtype推导，NZ或ZN排布向上对齐后实际占用更大时，应显式指定足够的空间。 |
 
 ## 约束说明
+
+地址范围的字节数自动由TileType的shape元素数乘以dtype字节数推导，不接受size参数。shape各维必须为编译期正整数；valid_shape不改变分配范围。小于8位的数据类型按每个元素至少1字节保留空间。
 
 多个Tile的地址范围不得发生非预期重叠；需要有意复用同一块Buffer时，调用方必须自行保证访存时序正确。
 
@@ -64,7 +64,7 @@ def make_tile_add_kernel(
     out: pl.Tensor[[64, 128], pl.DT_FP16],
 ):
     tt = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    # size缺省，由tt推导为64 * 128 * 2 = 16384字节
+    # 地址范围大小由tt推导为64 * 128 * 2 = 16384字节
     tile_a = pl.make_tile(tt, addr=0x0000)
     tile_b = pl.make_tile(tt, addr=0x4000)
     tile_out = pl.make_tile(tt, addr=0x8000)

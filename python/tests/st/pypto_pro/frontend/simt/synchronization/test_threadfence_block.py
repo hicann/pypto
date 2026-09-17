@@ -58,12 +58,10 @@ def simt_threadfence_block(out: pl.Tensor[[1, 1], pl.DT_INT32]):
     values = pl.make_tile(
         pl.TileType(shape=[1, THREADS], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec),
         addr=0,
-        size=THREADS * 4,
     )
     completed = pl.make_tile(
         pl.TileType(shape=[1, 8], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec),
         addr=THREADS * 4,
-        size=32,
     )
     with pl.section_vector():
         publish_with_threadfence_block[THREADS](out, values, completed)

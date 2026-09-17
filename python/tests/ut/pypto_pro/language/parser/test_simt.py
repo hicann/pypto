@@ -126,8 +126,8 @@ def _tile_valid_shape_access(
 @pl.jit
 def _simt_tile_kernel(n: pl.DT_UINT32, delta: pl.DT_FP32):
     tile_type = pl.TileType(shape=[1, 256], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    src = pl.make_tile(tile_type, addr=0x0000, size=1024)
-    dst = pl.make_tile(tile_type, addr=0x0400, size=1024)
+    src = pl.make_tile(tile_type, addr=0x0000)
+    dst = pl.make_tile(tile_type, addr=0x0400)
     with pl.section_vector():
         _tile_add[256](dst, src, n, delta)
 
@@ -146,7 +146,7 @@ def _simt_gm_kernel(
 @pl.jit
 def _simt_context_kernel(_jit_entry: pl.DT_INT64):
     tile_type = pl.TileType(shape=[1, 256], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
-    dst = pl.make_tile(tile_type, addr=0x0000, size=1024)
+    dst = pl.make_tile(tile_type, addr=0x0000)
     with pl.section_vector():
         _context_probe[8, 4, 8](dst)
 
@@ -154,8 +154,8 @@ def _simt_context_kernel(_jit_entry: pl.DT_INT64):
 @pl.jit
 def _simt_callee_kernel(delta: pl.DT_INT32):
     tile_type = pl.TileType(shape=[1, 32], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    dst = pl.make_tile(tile_type, addr=0x0000, size=128)
-    src = pl.make_tile(tile_type, addr=0x0080, size=128)
+    dst = pl.make_tile(tile_type, addr=0x0000)
+    src = pl.make_tile(tile_type, addr=0x0080)
     with pl.section_vector():
         _callee_entry[32](dst, src, delta)
 
@@ -169,8 +169,8 @@ def _make_tile_launch_kernel(shape, dtype, target_memory, layout):
             target_memory=target_memory,
             layout=layout,
         )
-        src = pl.make_tile(tile_type, addr=0x0000, size=1024)
-        dst = pl.make_tile(tile_type, addr=0x0400, size=1024)
+        src = pl.make_tile(tile_type, addr=0x0000)
+        dst = pl.make_tile(tile_type, addr=0x0400)
         with pl.section_vector():
             _tile_add[256](dst, src, n, delta)
 
@@ -337,7 +337,7 @@ def test_simt_context_direct_call_uses_named_tuple_field_lowering():
     @pl.jit
     def kernel(_jit_entry: pl.DT_INT64):
         tile_type = pl.TileType(shape=[1, 32], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
-        dst = pl.make_tile(tile_type, addr=0, size=128)
+        dst = pl.make_tile(tile_type, addr=0)
         with pl.section_vector():
             direct_context[32](dst)
 
@@ -363,7 +363,7 @@ def test_simt_dim3_contexts_can_merge_across_control_flow():
     @pl.jit
     def kernel(_jit_entry: pl.DT_INT64):
         tile_type = pl.TileType(shape=[1, 32], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
-        dst = pl.make_tile(tile_type, addr=0, size=128)
+        dst = pl.make_tile(tile_type, addr=0)
         with pl.section_vector():
             merge_context[32](dst)
 
@@ -388,7 +388,7 @@ def test_simt_dim3_context_rejects_plain_tuple_merge():
     @pl.jit
     def kernel(_jit_entry: pl.DT_INT64):
         tile_type = pl.TileType(shape=[1, 32], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
-        dst = pl.make_tile(tile_type, addr=0, size=128)
+        dst = pl.make_tile(tile_type, addr=0)
         with pl.section_vector():
             merge_context[32](dst)
 
@@ -404,7 +404,7 @@ def test_simt_context_rejects_unknown_named_tuple_field():
     @pl.jit
     def kernel(_jit_entry: pl.DT_INT64):
         tile_type = pl.TileType(shape=[1, 32], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
-        dst = pl.make_tile(tile_type, addr=0, size=128)
+        dst = pl.make_tile(tile_type, addr=0)
         with pl.section_vector():
             invalid_context_field[32](dst)
 
@@ -452,9 +452,9 @@ def test_simt_function_rejects_block_operation_before_default_dispatch():
     @pl.jit
     def kernel(_jit_entry: pl.DT_INT64):
         tile_type = pl.TileType(shape=[1, 32], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        dst = pl.make_tile(tile_type, addr=0, size=128)
-        lhs = pl.make_tile(tile_type, addr=128, size=128)
-        rhs = pl.make_tile(tile_type, addr=256, size=128)
+        dst = pl.make_tile(tile_type, addr=0)
+        lhs = pl.make_tile(tile_type, addr=128)
+        rhs = pl.make_tile(tile_type, addr=256)
         with pl.section_vector():
             block_add[32](dst, lhs, rhs)
 
@@ -470,7 +470,7 @@ def test_simt_function_rejects_tile_subview():
     @pl.jit
     def kernel(_jit_entry: pl.DT_INT64):
         tile_type = pl.TileType(shape=[8, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        src = pl.make_tile(tile_type, addr=0, size=2048)
+        src = pl.make_tile(tile_type, addr=0)
         with pl.section_vector():
             tile_subview[32](src)
 
@@ -482,8 +482,8 @@ def test_simt_tile_parameter_exposes_runtime_valid_shape():
     @pl.jit
     def kernel(_jit_entry: pl.DT_INT64):
         tile_type = pl.TileType(shape=[8, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        dst = pl.make_tile(tile_type, addr=0, size=2048)
-        src = pl.make_tile(tile_type, addr=2048, size=2048)
+        dst = pl.make_tile(tile_type, addr=0)
+        src = pl.make_tile(tile_type, addr=2048)
         with pl.section_vector():
             _tile_valid_shape_access[32](dst, src)
 
@@ -507,8 +507,8 @@ def test_simt_launch_rejects_threads_above_bound():
     @pl.jit
     def too_many_threads(n: pl.DT_UINT32, delta: pl.DT_FP32):
         tile_type = pl.TileType(shape=[1, 256], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        src = pl.make_tile(tile_type, addr=0x0000, size=1024)
-        dst = pl.make_tile(tile_type, addr=0x0400, size=1024)
+        src = pl.make_tile(tile_type, addr=0x0000)
+        dst = pl.make_tile(tile_type, addr=0x0400)
         with pl.section_vector():
             _tile_add[288](dst, src, n, delta)
 
@@ -520,8 +520,8 @@ def test_simt_launch_rejects_runtime_tuple_component():
     @pl.jit
     def runtime_dimension(n: pl.DT_UINT32, delta: pl.DT_FP32):
         tile_type = pl.TileType(shape=[1, 256], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        src = pl.make_tile(tile_type, addr=0x0000, size=1024)
-        dst = pl.make_tile(tile_type, addr=0x0400, size=1024)
+        src = pl.make_tile(tile_type, addr=0x0000)
+        dst = pl.make_tile(tile_type, addr=0x0400)
         with pl.section_vector():
             _tile_add[8, 4, n](dst, src, n, delta)
 
@@ -561,7 +561,7 @@ def test_simt_function_infers_parameter_and_callee_return_types_at_call_site():
     @pl.jit
     def kernel(value: pl.DT_INT32):
         tile_type = pl.TileType(shape=[1, 32], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-        dst = pl.make_tile(tile_type, addr=0, size=128)
+        dst = pl.make_tile(tile_type, addr=0)
         with pl.section_vector():
             inferred_entry[32](dst, value)
 

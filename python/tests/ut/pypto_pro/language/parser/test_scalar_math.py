@@ -36,7 +36,6 @@ def _parse_tile_function(function, tile_specs):
             tile0 = pl.make_tile(
                 pl.TileType(shape=shape0, dtype=dtype0, target_memory=pl.MemorySpace.Vec),
                 addr=0,
-                size=4096,
             )
             with pl.section_vector():
                 entry[1](tile0)
@@ -53,12 +52,10 @@ def _parse_tile_function(function, tile_specs):
             tile0 = pl.make_tile(
                 pl.TileType(shape=shape0, dtype=dtype0, target_memory=pl.MemorySpace.Vec),
                 addr=0,
-                size=4096,
             )
             tile1 = pl.make_tile(
                 pl.TileType(shape=shape1, dtype=dtype1, target_memory=pl.MemorySpace.Vec),
                 addr=4096,
-                size=4096,
             )
             with pl.section_vector():
                 entry[1](tile0, tile1)
@@ -75,17 +72,14 @@ def _parse_tile_function(function, tile_specs):
             tile0 = pl.make_tile(
                 pl.TileType(shape=shape0, dtype=dtype0, target_memory=pl.MemorySpace.Vec),
                 addr=0,
-                size=4096,
             )
             tile1 = pl.make_tile(
                 pl.TileType(shape=shape1, dtype=dtype1, target_memory=pl.MemorySpace.Vec),
                 addr=4096,
-                size=4096,
             )
             tile2 = pl.make_tile(
                 pl.TileType(shape=shape2, dtype=dtype2, target_memory=pl.MemorySpace.Vec),
                 addr=8192,
-                size=4096,
             )
             with pl.section_vector():
                 entry[1](tile0, tile1, tile2)

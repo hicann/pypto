@@ -54,8 +54,8 @@ def _fp32_math_intrinsics(
 def _fp32_math_codegen_kernel(value: pl.DT_FP32):
     out_type = pl.TileType(shape=[1, 32], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
     flags_type = pl.TileType(shape=[1, 32], dtype=pl.DT_BOOL, target_memory=pl.MemorySpace.Vec)
-    out = pl.make_tile(out_type, addr=0x0000, size=128)
-    flags = pl.make_tile(flags_type, addr=0x0080, size=32)
+    out = pl.make_tile(out_type, addr=0x0000)
+    flags = pl.make_tile(flags_type, addr=0x0080)
     with pl.section_vector():
         _fp32_math_intrinsics[1](out, flags, value)
 
@@ -94,9 +94,9 @@ def _fp16_math_codegen_kernel(_jit_entry: pl.DT_INT64):
     out_type = pl.TileType(shape=[1, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
     flags_type = pl.TileType(shape=[1, 32], dtype=pl.DT_BOOL, target_memory=pl.MemorySpace.Vec)
     source_type = pl.TileType(shape=[1, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    out = pl.make_tile(out_type, addr=0x0000, size=64)
-    flags = pl.make_tile(flags_type, addr=0x0040, size=32)
-    source = pl.make_tile(source_type, addr=0x0080, size=64)
+    out = pl.make_tile(out_type, addr=0x0000)
+    flags = pl.make_tile(flags_type, addr=0x0040)
+    source = pl.make_tile(source_type, addr=0x0080)
     with pl.section_vector():
         _fp16_math_intrinsics[1](out, flags, source)
 
@@ -135,9 +135,9 @@ def _bf16_math_codegen_kernel(_jit_entry: pl.DT_INT64):
     out_type = pl.TileType(shape=[1, 32], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec)
     flags_type = pl.TileType(shape=[1, 32], dtype=pl.DT_BOOL, target_memory=pl.MemorySpace.Vec)
     source_type = pl.TileType(shape=[1, 32], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec)
-    out = pl.make_tile(out_type, addr=0x0000, size=64)
-    flags = pl.make_tile(flags_type, addr=0x0040, size=32)
-    source = pl.make_tile(source_type, addr=0x0080, size=64)
+    out = pl.make_tile(out_type, addr=0x0000)
+    flags = pl.make_tile(flags_type, addr=0x0040)
+    source = pl.make_tile(source_type, addr=0x0080)
     with pl.section_vector():
         _bf16_math_intrinsics[1](out, flags, source)
 
@@ -156,8 +156,8 @@ def _int64_math_intrinsics(
 def _int64_math_codegen_kernel(_jit_entry: pl.DT_INT64):
     out_type = pl.TileType(shape=[1, 32], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Vec)
     source_type = pl.TileType(shape=[1, 32], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Vec)
-    out = pl.make_tile(out_type, addr=0x0000, size=256)
-    source = pl.make_tile(source_type, addr=0x0040, size=256)
+    out = pl.make_tile(out_type, addr=0x0000)
+    source = pl.make_tile(source_type, addr=0x0040)
     with pl.section_vector():
         _int64_math_intrinsics[1](out, source)
 

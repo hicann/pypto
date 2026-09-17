@@ -101,7 +101,7 @@ class BufferParserMixin:
     def _tile_type_slot_size(tile_type: _TileType) -> int:
         """Per-tile byte size derived from the TileType static shape and dtype.
 
-        Same helper make_tile() uses for its default ``size``, so a group slot is
+        Same helper make_tile() uses for its byte span, so a group slot is
         exactly as wide as a standalone tile of the same TileType.
         """
         try:

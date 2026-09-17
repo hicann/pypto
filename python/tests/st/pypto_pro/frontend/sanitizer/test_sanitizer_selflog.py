@@ -62,7 +62,7 @@ def oob_kernel(
     z: pl.Tensor[[TILE_M, TILE_N], pl.DT_FP16],
 ):
     tt = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    a = pl.make_tile(tt, addr=0x0000, size=TILE_M * TILE_N * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         # ===== 错误注入点：行偏移 32 越界（32+64=96 > 逻辑 shape 64）→ GM_OUT_OF_BOUNDS =====
         pl.load(a, x, [32, 0])
@@ -75,7 +75,7 @@ def clean_kernel(
     z: pl.Tensor[[TILE_M, TILE_N], pl.DT_FP16],
 ):
     tt = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    a = pl.make_tile(tt, addr=0x0000, size=TILE_M * TILE_N * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         pl.load(a, x, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -121,9 +121,9 @@ def overlap_kernel(
     z: pl.Tensor[[TILE_M, TILE_N], pl.DT_FP16],
 ):
     tt = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    b = pl.make_tile(tt, addr=0x0000, size=TILE_M * TILE_N * 2)
+    b = pl.make_tile(tt, addr=0x0000)
     # ===== 错误注入点：c 的 addr=0x1000 落在 b 区间 [0x0, 0x2000) 内 → TILE_OVERLAP =====
-    c = pl.make_tile(tt, addr=0x1000, size=TILE_M * TILE_N * 2)
+    c = pl.make_tile(tt, addr=0x1000)
     with pl.section_vector():
         pl.load(b, x, [0, 0])
         pl.load(c, x, [0, 0])
@@ -154,7 +154,7 @@ def tile_ok_kernel(
     z: pl.Tensor[[TILE_M, TILE_N], pl.DT_FP16],
 ):
     tt = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    a = pl.make_tile(tt, addr=0x0000, size=TILE_M * TILE_N * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         pl.load(a, x, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -183,7 +183,7 @@ def tile_dim_oob_kernel(
 ):
     tt = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16,
                      target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
-    a = pl.make_tile(tt, addr=0x0000, size=TILE_M * TILE_N * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         # ===== 错误注入点：valid_shape 行数 80 > 声明行数 64 →
         # 编译期静态检查（set_validshape 处）直接报错 =====
@@ -216,8 +216,8 @@ def tile_move_offset_oob_kernel(
 ):
     tt = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16,
                      target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
-    a = pl.make_tile(tt, addr=0x0000, size=TILE_M * TILE_N * 2)
-    b = pl.make_tile(tt, addr=0x2000, size=TILE_M * TILE_N * 2)
+    a = pl.make_tile(tt, addr=0x0000)
+    b = pl.make_tile(tt, addr=0x2000)
     with pl.section_vector():
         pl.load(a, x, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -294,7 +294,7 @@ def gm_5d_clean_kernel(
     z: pl.Tensor[[D5[0], D5[1], D5[2], D5[3], D5[4]], pl.DT_FP16],
 ):
     tt = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    a = pl.make_tile(tt, addr=0x0000, size=TILE_M * TILE_N * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         for i0 in pl.range(0, D5[0]):
             for i1 in pl.range(0, D5[1]):
@@ -313,7 +313,7 @@ def gm_5d_oob_kernel(
     z: pl.Tensor[[D5[0], D5[1], D5[2], D5[3], D5[4]], pl.DT_FP16],
 ):
     tt = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    a = pl.make_tile(tt, addr=0x0000, size=TILE_M * TILE_N * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         for i0 in pl.range(0, D5[0]):
             for i1 in pl.range(0, D5[1]):
@@ -351,7 +351,7 @@ def no_sanitizer_kernel(
     z: pl.Tensor[[TILE_M, TILE_N], pl.DT_FP16],
 ):
     tt = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    a = pl.make_tile(tt, addr=0x0000, size=TILE_M * TILE_N * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         pl.load(a, x, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -385,7 +385,7 @@ def loop_mid_oob_kernel(
 ):
     tt = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16,
                      target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
-    a = pl.make_tile(tt, addr=0x0000, size=TILE_M * TILE_N * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         for i in pl.range(0, 2, 1):
             # ===== 错误注入点：i=1 时行偏移 64+64=128 > 逻辑 shape 96 → GM_OUT_OF_BOUNDS
@@ -401,7 +401,7 @@ def loop_ok_kernel(
 ):
     tt = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16,
                      target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
-    a = pl.make_tile(tt, addr=0x0000, size=TILE_M * TILE_N * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         for i in pl.range(0, 2, 1):
             pl.load(a, x, [i * TILE_M, 0])
@@ -683,7 +683,7 @@ def mutex_ok_kernel(
     z: pl.Tensor[[TILE_M, TILE_N], pl.DT_FP16],
 ):
     tt = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    a = pl.make_tile(tt, addr=0x0000, size=TILE_M * TILE_N * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         pl.system.mutex_lock(pipe=pl.PipeType.MTE2, mutex_id=0)
         pl.load(a, x, [0, 0])
@@ -699,7 +699,7 @@ def mutex_unlock_before_lock_kernel(
     z: pl.Tensor[[TILE_M, TILE_N], pl.DT_FP16],
 ):
     tt = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    a = pl.make_tile(tt, addr=0x0000, size=TILE_M * TILE_N * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         # ===== 错误注入点：unlock 无前置 lock =====
         pl.system.mutex_unlock(pipe=pl.PipeType.MTE2, mutex_id=7)
@@ -713,7 +713,7 @@ def mutex_unpaired_lock_kernel(
     z: pl.Tensor[[TILE_M, TILE_N], pl.DT_FP16],
 ):
     tt = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    a = pl.make_tile(tt, addr=0x0000, size=TILE_M * TILE_N * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         # ===== 错误注入点：lock 后无 unlock =====
         pl.system.mutex_lock(pipe=pl.PipeType.MTE2, mutex_id=6)
@@ -803,7 +803,6 @@ def cv_top_tiles_clean_kernel(
     tile_acc = pl.make_tile(
         pl.TileType(shape=[CV_M, CV_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
         addr=0x0000,
-        size=CV_M * CV_N * 4,
     )
     vec_group = pl.make_tile_group(
         type=pl.TileType(shape=[CV_VEC_ROWS, CV_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
@@ -882,7 +881,6 @@ def cv_cube_oob_kernel(
     tile_acc = pl.make_tile(
         pl.TileType(shape=[CV_M, CV_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
         addr=0x0000,
-        size=CV_M * CV_N * 4,
     )
     vec_group = pl.make_tile_group(
         type=pl.TileType(shape=[CV_VEC_ROWS, CV_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
@@ -942,7 +940,7 @@ def transpose_load_clean_kernel(
     """
     tt = pl.TileType(shape=[128, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec,
                      layout=pl.DN)
-    a = pl.make_tile(tt, addr=0x0000, size=128 * 64 * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         pl.load(a, x, [0, 0], order=[1, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -971,7 +969,7 @@ def dynamic_validshape_oob_kernel(
     """
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16,
                      target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1])
-    a = pl.make_tile(tt, addr=0x0000, size=64 * 64 * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         valid_m = x.shape[0] // 2 + 1  # 运行时 65，忘写 min 封顶
         # ===== 错误注入点：动态窗口 65 超出 tile 声明行数 64 =====
@@ -1111,8 +1109,8 @@ def move_asymmetric_clean_kernel(
     """
     tt_src = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
     tt_dst = pl.TileType(shape=[32, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    src = pl.make_tile(tt_src, addr=0x0000, size=64 * 64 * 2)
-    dst = pl.make_tile(tt_dst, addr=0x4000, size=32 * 64 * 2)
+    src = pl.make_tile(tt_src, addr=0x0000)
+    dst = pl.make_tile(tt_dst, addr=0x4000)
     with pl.section_vector():
         pl.load(src, x, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -1151,7 +1149,7 @@ def make_tensor_oob_kernel(
     记录被跳过漏检；修复后视图 shape [64,64] 进入 shapes 表，检出。
     """
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    a = pl.make_tile(tt, addr=0x0000, size=64 * 64 * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         t2 = pl.make_tensor(x, [64, 64])
         # ===== 错误注入点：行偏移 = x.shape[0]（运行时 64）+ 窗口 64 > 视图声明 64 =====
@@ -1184,7 +1182,7 @@ def tensor_alias_oob_kernel(
     修复前 t3 查不到 tensor_id（非形参名）→ 漏检；修复后别名链解析回 x。
     """
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    a = pl.make_tile(tt, addr=0x0000, size=64 * 64 * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         t3 = x
         # ===== 错误注入点：经别名访问，行偏移 = x.shape[0]（运行时 64）+ 窗口 64 > 64 =====
@@ -1214,7 +1212,7 @@ def make_tensor_clean_kernel(
 ):
     """正样本：make_tensor 视图 + 别名的合法访问不误报。"""
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    a = pl.make_tile(tt, addr=0x0000, size=64 * 64 * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         t2 = pl.make_tensor(x, [64, 64])
         t3 = t2
@@ -1250,7 +1248,7 @@ def view_over_source_kernel(
     漏检；修复后声明即报（不需要越界访问发生）。
     """
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    a = pl.make_tile(tt, addr=0x0000, size=64 * 64 * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         t2 = pl.make_tensor(x, [200, 200])   # ===== 错误注入点：声明超源 =====
         pl.load(a, t2, [130, 0])             # 视图内"合法"（130+64=194 ≤ 200）
@@ -1285,7 +1283,7 @@ def chained_view_clean_kernel(
     t4 = make_tensor(p, [64,64])：指针源 → 跳过校验（无已知边界）。
     """
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    a = pl.make_tile(tt, addr=0x0000, size=64 * 64 * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         t2 = pl.make_tensor(x, [64, 256])
         t3 = pl.make_tensor(t2, [128, 128])
@@ -1324,7 +1322,7 @@ def wide_stride_view_kernel(
     元素 → 物理越源。按 op 契约（元素地址 = Σ i*stride）以 footprint 判定。
     """
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    a = pl.make_tile(tt, addr=0x0000, size=64 * 64 * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         # ===== 错误注入点：stride 跨度使 footprint 超出 x 的 16384 元素 =====
         t = pl.make_tensor(x, [2, 2], [16384, 1])
@@ -1359,7 +1357,7 @@ def dtype_reinterpret_view_kernel(
     若按纯 numel 判据，跨 dtype 的边界场景会误判；字节级正确。
     """
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    a = pl.make_tile(tt, addr=0x0000, size=64 * 64 * 4)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         t = pl.make_tensor(x, [64, 128], dtype=pl.DT_FP32)   # 字节级恰好等宽
         pl.load(a, t, [0, 0])
@@ -1394,7 +1392,7 @@ def dynamic_view_oob_kernel(
     (64,128)，回放按真值判：off 64 + 窗口 64 = 128 > 64 → 检出。
     """
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    a = pl.make_tile(tt, addr=0x0000, size=64 * 64 * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         t2 = pl.make_tensor(x, [x.shape[0] // 2, x.shape[1]])   # 运行时 (64,128)
         # ===== 错误注入点：行偏移 64 + 窗口 64 > 视图行数 64 =====
@@ -1428,7 +1426,7 @@ def dynamic_view_over_source_kernel(
     > 源 x 的 4096 元素 → 运行时 footprint 校验检出。
     """
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    a = pl.make_tile(tt, addr=0x0000, size=64 * 64 * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         t2 = pl.make_tensor(x, [x.shape[0], x.shape[1] * 4])   # ===== 超源 =====
         pl.load(a, t2, [0, 0])
@@ -1461,7 +1459,7 @@ def tile_getval_oob_kernel(
     修复前 Tile 容器无记录漏检；修复后 TileScalar 记录检出。
     """
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    a = pl.make_tile(tt, addr=0x0000, size=64 * 64 * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         pl.load(a, x, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -1491,7 +1489,7 @@ def tile_getval_clean_kernel(
 ):
     """正样本：Tile 容器 getval 合法偏移不误报。"""
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    a = pl.make_tile(tt, addr=0x0000, size=64 * 64 * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         pl.load(a, x, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -1531,7 +1529,7 @@ def alias_rebind_clean_kernel(
     [64,64] 判 128 > 64 → 误报）。前端亦按 [128,128] 校验（行为一致）。
     """
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    a = pl.make_tile(tt, addr=0x0000, size=64 * 64 * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         t2 = pl.make_tensor(x, [128, 128])  # 与 x 等宽（16384 元素）
         t3 = t2                             # t3 固定指向 [128,128]
@@ -1572,7 +1570,7 @@ def alias_rebind_oob_kernel(
     t3 固定指向 [128,128]；动态偏移 64*4=256：256+64=320 > 128 → 检出。
     """
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    a = pl.make_tile(tt, addr=0x0000, size=64 * 64 * 2)
+    a = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         t2 = pl.make_tensor(x, [128, 128])
         t3 = t2

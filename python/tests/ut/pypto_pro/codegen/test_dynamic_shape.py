@@ -24,9 +24,9 @@ def add_kernel_dynamic(
 ):
     """Adds two tensors element-wise with dynamic shapes: result = a + b"""
     tile_type = pl.TileType(shape=[128, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    a_tile = pl.make_tile(tile_type, addr=0x0000, size=65536)
-    b_tile = pl.make_tile(tile_type, addr=0x10000, size=65536)
-    result = pl.make_tile(tile_type, addr=0x20000, size=65536)
+    a_tile = pl.make_tile(tile_type, addr=0x0000)
+    b_tile = pl.make_tile(tile_type, addr=0x10000)
+    result = pl.make_tile(tile_type, addr=0x20000)
     pl.load(a_tile, a, [0, 0])
     pl.load(b_tile, b, [0, 0])
     pl.add(result, a_tile, b_tile)
@@ -53,9 +53,9 @@ def add_kernel_valid_shape(
         target_memory=pl.MemorySpace.Vec,
         valid_shape=[-1, -1],
     )
-    a_tile = pl.make_tile(tile_type, addr=0x0000, size=65536)
-    b_tile = pl.make_tile(tile_type, addr=0x10000, size=65536)
-    result = pl.make_tile(tile_type, addr=0x20000, size=65536)
+    a_tile = pl.make_tile(tile_type, addr=0x0000)
+    b_tile = pl.make_tile(tile_type, addr=0x10000)
+    result = pl.make_tile(tile_type, addr=0x20000)
     pl.set_validshape(a_tile, [m_var, n_var])
     pl.set_validshape(b_tile, [m_var, n_var])
     pl.set_validshape(result, [m_var, n_var])
@@ -82,9 +82,9 @@ def add_kernel_shape_subscript(
     """Uses the canonical dynamic dimension stored in a TensorType."""
     m_var = a.shape[0]
     tile_type = pl.TileType(shape=[2, 128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    a_tile = pl.make_tile(tile_type, addr=0x0000, size=1024)
-    b_tile = pl.make_tile(tile_type, addr=0x0400, size=1024)
-    result = pl.make_tile(tile_type, addr=0x0800, size=1024)
+    a_tile = pl.make_tile(tile_type, addr=0x0000)
+    b_tile = pl.make_tile(tile_type, addr=0x0400)
+    result = pl.make_tile(tile_type, addr=0x0800)
     out = output
     for i in pl.range(0, m_var, 2):
         offset_1 = i * 2

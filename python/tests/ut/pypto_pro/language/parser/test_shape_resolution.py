@@ -502,7 +502,7 @@ def test_tile_shape_and_dtype_from_closure():
         t: pl.Tensor[tensor_shape, dtype], out: pl.Tensor[tensor_shape, dtype]
     ):
         tile_type = pl.TileType(shape=tile_shape, dtype=dtype)
-        a = pl.make_tile(tile_type, addr=0, size=16384)
+        a = pl.make_tile(tile_type, addr=0)
         pl.load(a, t, [0, 0])
         result: pl.Tensor[tensor_shape, dtype] = pl.store(out, a, [0, 0])
         _test_result = result
@@ -522,7 +522,7 @@ def test_shapes_kwarg_from_variable():
         t: pl.Tensor[[128, 128], pl.DT_FP32], out: pl.Tensor[[128, 128], pl.DT_FP32]
     ):
         tile_type = pl.TileType(shape=tile_shape, dtype=pl.DT_FP32)
-        a = pl.make_tile(tile_type, addr=0, size=4096)
+        a = pl.make_tile(tile_type, addr=0)
         pl.load(a, t, [0, 0])
         result: pl.Tensor[[128, 128], pl.DT_FP32] = pl.store(out, a, [0, 0])
         _test_result = result
@@ -575,8 +575,8 @@ def test_full_parametrized_kernel():
     @pl.jit(auto_mutex=False)
     def kernel_add(t: pl.Tensor[[x, y], dtype], out: pl.Tensor[shape, dtype]):
         tile_type = pl.TileType(shape=tile_shape, dtype=dtype)
-        a = pl.make_tile(tile_type, addr=0, size=16384)
-        b = pl.make_tile(tile_type, addr=16384, size=16384)
+        a = pl.make_tile(tile_type, addr=0)
+        b = pl.make_tile(tile_type, addr=16384)
         pl.load(a, t, [0, 0])
         pl.add(b, a, 5)
         result: pl.Tensor[shape, dtype] = pl.store(out, b, [0, 0])
@@ -603,7 +603,7 @@ def test_function_with_closure_shapes_in_body():
         t: pl.Tensor[shape, dtype], out: pl.Tensor[shape, dtype]
     ):
         tile_type = pl.TileType(shape=tile_shape, dtype=dtype)
-        a = pl.make_tile(tile_type, addr=0, size=16384)
+        a = pl.make_tile(tile_type, addr=0)
         pl.load(a, t, [0, 0])
         result: pl.Tensor[shape, dtype] = pl.store(out, a, [0, 0])
         _test_result = result
@@ -707,7 +707,7 @@ def test_tile_type_with_variable_shape():
         t: pl.Tensor[[128, 128], pl.DT_FP32], out: pl.Tensor[[128, 128], pl.DT_FP32]
     ):
         tile_type = pl.TileType(shape=tile_shape, dtype=pl.DT_FP32)
-        a = pl.make_tile(tile_type, addr=0, size=4096)
+        a = pl.make_tile(tile_type, addr=0)
         pl.load(a, t, [0, 0])
         result: pl.Tensor[[128, 128], pl.DT_FP32] = pl.store(out, a, [0, 0])
         _test_result = result

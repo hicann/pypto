@@ -65,7 +65,7 @@ def write_thread_context(dst):
 @pl.jit()
 def simt_thread_context(out: pl.Tensor[[2, THREADS], pl.DT_UINT32]):
     tile_type = pl.TileType(shape=[2, THREADS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
-    dst = pl.make_tile(tile_type, addr=0x0000, size=2 * THREADS * 4)
+    dst = pl.make_tile(tile_type, addr=0x0000)
     with pl.section_vector():
         write_thread_context[THREADS_X, THREADS_Y, THREADS_Z](dst)
         pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=0)

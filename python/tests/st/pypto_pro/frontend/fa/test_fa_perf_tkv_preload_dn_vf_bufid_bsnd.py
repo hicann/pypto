@@ -14,11 +14,10 @@
 This mirrors ``test_fa_perf_tkv_preload_dn_vf_bufid.py`` exactly — same NBuffer
 abstractions, VF softmax, cross-core forward/backward events and QK_PRELOAD
 pipeline — but extends the inputs from 2D ``[Sq, D]`` to 4D BSND
-``[B, Sq, N, D]``. To keep core load balanced, the total work is flattened to
-``total_tiles = B * N * sq_tiles`` and distributed across cores via
-``pl.range(core_id, total_tiles, num_cores)``; each flat index decodes back to
-``(b_idx, n_idx, qi)``. The QK_PRELOAD pipeline runs continuously across the
-whole flattened space (drained once at the very end), so the lagging
+``[B, Sq, N, D]``. The ``B * N`` batch/head pairs are divided into contiguous
+ranges using the actual launched block count. Each core runs all query tiles
+for its pairs. The QK_PRELOAD pipeline runs continuously across that work
+(drained once at the very end), so the lagging
 compute_pv / compute_gu read their ``(b_idx, n_idx, qi)`` from the carried ctx.
 Only the tensor load/store indexing differs (4D index + ``order=[1, 3]``).
 
@@ -461,17 +460,20 @@ def fa_perf_tkv_preload_dn_bsnd_kernel(
     k: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC, pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
     v: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC, pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
     o: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC, pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16],
-    work_ranges: pl.Tensor[[pl.DYNAMIC, 2], pl.DT_INT32],
     attn_mask: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_UINT8],
 ):
 
-    b_dim = q.shape[0]  # noqa: F841
+    b_dim = q.shape[0]
     n_dim = q.shape[2]
     sq_dim = q.shape[1]
     skv_dim = k.shape[1]
     sq_tiles = (sq_dim + (TS - 1)) // TS
     skv_tiles = (skv_dim + (TKV - 1)) // TKV  # noqa: F841
     core_id = pl.get_block_idx() // pl.get_subblock_num()
+    total_work = b_dim * n_dim
+    num_cores = pl.get_block_num()
+    work_start = total_work * core_id // num_cores
+    work_end = total_work * (core_id + 1) // num_cores
 
     # ===== Cross-core shared buffers =====
     qk_vec_db = pl.make_tile_group(
@@ -523,8 +525,6 @@ def fa_perf_tkv_preload_dn_bsnd_kernel(
             mutex_ids=[10, 11, 12, 13],
         )
 
-        work_start = work_ranges[core_id, 0]
-        work_end = work_ranges[core_id, 1]
         task_id = 0
         ctx_arr = pl.struct_array(4, "CubeCtx", b_idx=0, n_idx=0, ki=0, task_id_mod2=0, task_id_mod3=0)
         # Distribute by (b, n): each core owns a contiguous range of bn indices and
@@ -603,17 +603,17 @@ def fa_perf_tkv_preload_dn_bsnd_kernel(
             mutex_ids=[0, 1],
         )
         red_rm_type = pl.TileType(shape=[1, TS_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        gmax_rm_0 = pl.make_tile(red_rm_type, addr=VA_GMAX0, size=VB_RED)
-        gmax_rm_1 = pl.make_tile(red_rm_type, addr=VA_GMAX1, size=VB_RED)
-        gmax_rm_2 = pl.make_tile(red_rm_type, addr=VA_GMAX2, size=VB_RED)
+        gmax_rm_0 = pl.make_tile(red_rm_type, addr=VA_GMAX0)
+        gmax_rm_1 = pl.make_tile(red_rm_type, addr=VA_GMAX1)
+        gmax_rm_2 = pl.make_tile(red_rm_type, addr=VA_GMAX2)
         global_max_rm_buf = (gmax_rm_0, gmax_rm_1, gmax_rm_2)
-        gsum_rm_0 = pl.make_tile(red_rm_type, addr=VA_GSUM0, size=VB_RED)
-        gsum_rm_1 = pl.make_tile(red_rm_type, addr=VA_GSUM1, size=VB_RED)
-        gsum_rm_2 = pl.make_tile(red_rm_type, addr=VA_GSUM2, size=VB_RED)
+        gsum_rm_0 = pl.make_tile(red_rm_type, addr=VA_GSUM0)
+        gsum_rm_1 = pl.make_tile(red_rm_type, addr=VA_GSUM1)
+        gsum_rm_2 = pl.make_tile(red_rm_type, addr=VA_GSUM2)
         global_sum_rm_buf = (gsum_rm_0, gsum_rm_1, gsum_rm_2)
-        ec_rm_0 = pl.make_tile(red_rm_type, addr=VA_EC0, size=VB_RED)
-        ec_rm_1 = pl.make_tile(red_rm_type, addr=VA_EC1, size=VB_RED)
-        ec_rm_2 = pl.make_tile(red_rm_type, addr=VA_EC2, size=VB_RED)
+        ec_rm_0 = pl.make_tile(red_rm_type, addr=VA_EC0)
+        ec_rm_1 = pl.make_tile(red_rm_type, addr=VA_EC1)
+        ec_rm_2 = pl.make_tile(red_rm_type, addr=VA_EC2)
         exp_corr_rm_fifo = (ec_rm_0, ec_rm_1, ec_rm_2)
         o_f16_g = pl.make_tile_group(
             type=pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
@@ -638,8 +638,6 @@ def fa_perf_tkv_preload_dn_bsnd_kernel(
         pl.system.set_cross_core(pipe=pl.PipeType.V, event_id=PV_READY_BARKWARD_IDS[0])
         pl.system.set_cross_core(pipe=pl.PipeType.V, event_id=PV_READY_BARKWARD_IDS[1])
 
-        work_start = work_ranges[core_id, 0]
-        work_end = work_ranges[core_id, 1]
         sub_id = pl.get_subblock_idx()
         task_id = 0
         q_count = 0
@@ -752,18 +750,13 @@ def test_fa_perf():
         v_t = torch.rand((b, skv, n, d), device=device, dtype=torch.float16)
         o_t = torch.zeros((b, sq, n, d), device=device, dtype=torch.float16)
         o_ref = flash_attention_causal_ref_bs(q_t, k_t, v_t, d)
-        # Distribute work by (b, n) across cores (precomputed on host).
-        total_work = b * n
-        work_ranges = torch.zeros((num_cores, 2), device=device, dtype=torch.int32)
-        work_per_core = (total_work + num_cores - 1) // num_cores
-        for core in range(num_cores):
-            work_ranges[core, 0] = core * work_per_core
-            work_ranges[core, 1] = min((core + 1) * work_per_core, total_work)
-        actual_num_cores = min(num_cores, total_work)
+        # The launcher may reduce this request to the available core count;
+        # the kernel partitions all batch/head pairs using that actual count.
+        requested_num_cores = min(num_cores, b * n)
         prev_diff = None
         for i in range(20):
             o_t.zero_()
-            fa_perf_tkv_preload_dn_bsnd_kernel[None, actual_num_cores](q_t, k_t, v_t, o_t, work_ranges, attn_mask)
+            fa_perf_tkv_preload_dn_bsnd_kernel[None, requested_num_cores](q_t, k_t, v_t, o_t, attn_mask)
             torch.npu.synchronize()
             diff = (o_t - o_ref).abs().max().item()
             logging.info("  run %s: max|diff|=%.6f", i, diff)

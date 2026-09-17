@@ -52,8 +52,8 @@ def mutex_kernel(
     out: pl.Tensor[[64, 64], pl.DT_FP32],
 ):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    tile_x = pl.make_tile(tt, addr=0x0000, size=16384)
-    tile_out = pl.make_tile(tt, addr=0x4000, size=16384)
+    tile_x = pl.make_tile(tt, addr=0x0000)
+    tile_out = pl.make_tile(tt, addr=0x4000)
     with pl.section_vector():
         pl.system.mutex_lock(pipe=pl.PipeType.MTE2, mutex_id=0)
         pl.load(tile_x, x, [0, 0])

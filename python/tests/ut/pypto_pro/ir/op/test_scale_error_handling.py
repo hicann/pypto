@@ -39,7 +39,7 @@ def _mkl() -> "pl.TileType":
 
 
 def _make_acc():
-    return pl.make_tile(_mkl(), addr=0x0000, size=16384)
+    return pl.make_tile(_mkl(), addr=0x0000)
 
 
 def _make_qk() -> tuple[torch.Tensor, torch.Tensor]:
@@ -69,7 +69,7 @@ def test_err_per_channel_with_phase():
         with pl.section_cube():
             acc = _make_acc()
             fp_type = pl.TileType(shape=[1, 64], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Scaling)
-            fp_tile = pl.make_tile(fp_type, addr=0x0000, size=512)
+            fp_tile = pl.make_tile(fp_type, addr=0x0000)
             pl.store(out, acc, [0, 0], scale=fp_tile, phase=pl.STPhase.Partial)
 
     q, k = _make_qk()
@@ -111,7 +111,7 @@ def test_err_scale_tile_not_scaling():
         with pl.section_cube():
             acc = _make_acc()
             mat_type = pl.TileType(shape=[1, 64], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Mat, layout=pl.ND)
-            mat_tile = pl.make_tile(mat_type, addr=0x8000, size=512)
+            mat_tile = pl.make_tile(mat_type, addr=0x8000)
             pl.store(out, acc, [0, 0], scale=mat_tile)
 
     q, k = _make_qk()
@@ -130,11 +130,11 @@ def test_err_per_channel_move_dual_mode():
         out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     ):
         vec_type = pl.TileType(shape=[64, 64], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec)
-        vec_tile = pl.make_tile(vec_type, addr=0x0000, size=4096)
+        vec_tile = pl.make_tile(vec_type, addr=0x0000)
         with pl.section_cube():
             acc = _make_acc()
             fp_type = pl.TileType(shape=[1, 64], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Scaling)
-            fp_tile = pl.make_tile(fp_type, addr=0x0000, size=512)
+            fp_tile = pl.make_tile(fp_type, addr=0x0000)
             pl.move(vec_tile, acc, scale=fp_tile, acc_to_vec_mode=pl.AccToVecMode.DualModeSplitM)
 
     q, k = _make_qk()
@@ -153,7 +153,7 @@ def test_err_scalar_scale_move_dual_mode():
         out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     ):
         vec_type = pl.TileType(shape=[64, 64], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec)
-        vec_tile = pl.make_tile(vec_type, addr=0x0000, size=4096)
+        vec_tile = pl.make_tile(vec_type, addr=0x0000)
         with pl.section_cube():
             acc = _make_acc()
             pl.move(
@@ -285,7 +285,7 @@ def test_err_per_channel_1d_tile():
         with pl.section_cube():
             acc = _make_acc()
             fp_type = pl.TileType(shape=[64], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Scaling)
-            fp_tile = pl.make_tile(fp_type, addr=0x0000, size=512)
+            fp_tile = pl.make_tile(fp_type, addr=0x0000)
             pl.store(out, acc, [0, 0], scale=fp_tile)
 
     q, k = _make_qk()
@@ -306,7 +306,7 @@ def test_err_per_channel_3d_tile():
         with pl.section_cube():
             acc = _make_acc()
             fp_type = pl.TileType(shape=[1, 64, 1], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Scaling)
-            fp_tile = pl.make_tile(fp_type, addr=0x0000, size=512)
+            fp_tile = pl.make_tile(fp_type, addr=0x0000)
             pl.store(out, acc, [0, 0], scale=fp_tile)
 
     q, k = _make_qk()
@@ -327,7 +327,7 @@ def test_err_per_channel_0d_tile():
         with pl.section_cube():
             acc = _make_acc()
             fp_type = pl.TileType(shape=[], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Scaling)
-            fp_tile = pl.make_tile(fp_type, addr=0x0000, size=512)
+            fp_tile = pl.make_tile(fp_type, addr=0x0000)
             pl.store(out, acc, [0, 0], scale=fp_tile)
 
     q, k = _make_qk()
@@ -348,7 +348,7 @@ def test_err_per_channel_n1_tile():
         with pl.section_cube():
             acc = _make_acc()
             fp_type = pl.TileType(shape=[64, 1], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Scaling)
-            fp_tile = pl.make_tile(fp_type, addr=0x0000, size=512)
+            fp_tile = pl.make_tile(fp_type, addr=0x0000)
             pl.store(out, acc, [0, 0], scale=fp_tile)
 
     q, k = _make_qk()
@@ -369,7 +369,7 @@ def test_err_per_channel_col_not_aligned():
         with pl.section_cube():
             acc = _make_acc()
             fp_type = pl.TileType(shape=[1, 8], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Scaling)
-            fp_tile = pl.make_tile(fp_type, addr=0x0000, size=512)
+            fp_tile = pl.make_tile(fp_type, addr=0x0000)
             pl.store(out, acc, [0, 0], scale=fp_tile)
 
     q, k = _make_qk()
@@ -436,11 +436,11 @@ def test_err_move_offset_with_per_channel_scale():
         out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     ):
         vec_type = pl.TileType(shape=[64, 64], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec)
-        vec_tile = pl.make_tile(vec_type, addr=0x0000, size=4096)
+        vec_tile = pl.make_tile(vec_type, addr=0x0000)
         with pl.section_cube():
             acc = _make_acc()
             fp_type = pl.TileType(shape=[1, 64], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Scaling)
-            fp_tile = pl.make_tile(fp_type, addr=0x0000, size=512)
+            fp_tile = pl.make_tile(fp_type, addr=0x0000)
             pl.move(vec_tile, acc, offset=[0, 0], scale=fp_tile)
 
     q, k = _make_qk()
@@ -459,7 +459,7 @@ def test_err_move_offset_with_scalar_scale():
         out: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_INT8],
     ):
         vec_type = pl.TileType(shape=[64, 64], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec)
-        vec_tile = pl.make_tile(vec_type, addr=0x0000, size=4096)
+        vec_tile = pl.make_tile(vec_type, addr=0x0000)
         with pl.section_cube():
             acc = _make_acc()
             pl.move(vec_tile, acc, offset=[0, 0], scale=2.0)
@@ -482,7 +482,7 @@ def test_err_store_per_channel_with_atomic():
         with pl.section_cube():
             acc = _make_acc()
             fp_type = pl.TileType(shape=[1, 64], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Scaling)
-            fp_tile = pl.make_tile(fp_type, addr=0x0000, size=512)
+            fp_tile = pl.make_tile(fp_type, addr=0x0000)
             pl.store(out, acc, [0, 0], scale=fp_tile, atomic=pl.AtomicType.AtomicAdd)
 
     q, k = _make_qk()
@@ -503,7 +503,7 @@ def test_err_store_tile_per_channel_with_atomic():
         with pl.section_cube():
             acc = _make_acc()
             fp_type = pl.TileType(shape=[1, 64], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Scaling)
-            fp_tile = pl.make_tile(fp_type, addr=0x0000, size=512)
+            fp_tile = pl.make_tile(fp_type, addr=0x0000)
             pl.store_tile(out, acc, [0, 0], scale=fp_tile, atomic=pl.AtomicType.AtomicAdd)
 
     q, k = _make_qk()

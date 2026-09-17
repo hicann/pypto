@@ -65,9 +65,9 @@ def prof_add_kernel(
     out: pl.Tensor[[64, 64], pl.DT_FP32],
 ):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    ta = pl.make_tile(tt, addr=0x0000, size=16384)
-    tb = pl.make_tile(tt, addr=0x4000, size=16384)
-    tc = pl.make_tile(tt, addr=0x8000, size=16384)
+    ta = pl.make_tile(tt, addr=0x0000)
+    tb = pl.make_tile(tt, addr=0x4000)
+    tc = pl.make_tile(tt, addr=0x8000)
     with pl.section_vector():
         pl.load(ta, a, [0, 0])
         pl.load(tb, b, [0, 0])

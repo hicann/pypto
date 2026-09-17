@@ -365,8 +365,8 @@ def _struct_array_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP1
 @pl.jit
 def _tile_return_kernel(a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
     tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tile_type, addr=0x0000, size=16384)
-    tile_b = pl.make_tile(tile_type, addr=0x4000, size=16384)
+    tile_a = pl.make_tile(tile_type, addr=0x0000)
+    tile_b = pl.make_tile(tile_type, addr=0x4000)
     picked = _ret_tile(a.shape[0], tile_a, tile_b)
     pl.load(picked, a, [0, 0])
     pl.store(a, picked, [0, 0])

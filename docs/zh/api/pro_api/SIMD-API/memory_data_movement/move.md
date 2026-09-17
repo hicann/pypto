@@ -161,7 +161,6 @@ vector_result = pl.make_tile(
         target_memory=pl.MemorySpace.Vec, layout=pl.ND,
     ),
     addr=0x0000,
-    size=K * M * 2,
 )
 
 # ND转换为NZ时使用的UB Tile
@@ -171,7 +170,6 @@ vector_nz = pl.make_tile(
         target_memory=pl.MemorySpace.Vec, layout=pl.NZ,
     ),
     addr=0x4000,
-    size=K * M * 2,
 )
 
 # 转置后的数据写入L1 Buffer，逻辑shape为[M, K]
@@ -181,7 +179,6 @@ lhs_l1 = pl.make_tile(
         target_memory=pl.MemorySpace.Mat, layout=pl.ZN,
     ),
     addr=0x20000,
-    size=M * K * 2,
 )
 
 with pl.section_vector():

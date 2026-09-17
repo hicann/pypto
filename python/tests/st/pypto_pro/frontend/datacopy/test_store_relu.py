@@ -41,11 +41,11 @@ def store_relu_cce_kernel(
 ):
     with pl.section_cube():
         mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
-        q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
-        k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
+        q_mat = pl.make_tile(mat_type, addr=0x0000)
+        k_mat = pl.make_tile(mat_type, addr=0x4000)
 
         left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ)
-        q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
+        q_left = pl.make_tile(left_type, addr=0x0000)
 
         right_type = pl.TileType(
             shape=[64, 64],
@@ -53,7 +53,7 @@ def store_relu_cce_kernel(
             target_memory=pl.MemorySpace.Right,
             layout=pl.ZN,
         )
-        k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
+        k_right = pl.make_tile(right_type, addr=0x0000)
 
         acc_type = pl.TileType(
             shape=[64, 64],
@@ -62,7 +62,7 @@ def store_relu_cce_kernel(
             layout=pl.NZ,
             fractal=1024,
         )
-        acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+        acc = pl.make_tile(acc_type, addr=0x0000)
 
         pl.load(q_mat, q, [0, 0])
         pl.load(k_mat, k, [0, 0])

@@ -73,9 +73,9 @@ def kernel_int_only(
     m = x.shape[0]
     n = x.shape[1]
     tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tile_type, addr=0x0000, size=16384)
-    tile_b = pl.make_tile(tile_type, addr=0x4000, size=16384)
-    tile_c = pl.make_tile(tile_type, addr=0x8000, size=16384)
+    tile_a = pl.make_tile(tile_type, addr=0x0000)
+    tile_b = pl.make_tile(tile_type, addr=0x4000)
+    tile_c = pl.make_tile(tile_type, addr=0x8000)
 
     with pl.section_vector():
         for i in pl.range(0, m, 64):
@@ -104,9 +104,9 @@ def kernel_float_only(
     m = x.shape[0]
     n = x.shape[1]
     tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tile_type, addr=0x0000, size=16384)
-    tile_b = pl.make_tile(tile_type, addr=0x4000, size=16384)
-    tile_c = pl.make_tile(tile_type, addr=0x8000, size=16384)
+    tile_a = pl.make_tile(tile_type, addr=0x0000)
+    tile_b = pl.make_tile(tile_type, addr=0x4000)
+    tile_c = pl.make_tile(tile_type, addr=0x8000)
 
     with pl.section_vector():
         for i in pl.range(0, m, 64):
@@ -135,9 +135,9 @@ def kernel_bool_only(
     m = x.shape[0]
     n = x.shape[1]
     tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tile_type, addr=0x0000, size=16384)
-    tile_b = pl.make_tile(tile_type, addr=0x4000, size=16384)
-    tile_c = pl.make_tile(tile_type, addr=0x8000, size=16384)
+    tile_a = pl.make_tile(tile_type, addr=0x0000)
+    tile_b = pl.make_tile(tile_type, addr=0x4000)
+    tile_c = pl.make_tile(tile_type, addr=0x8000)
 
     with pl.section_vector():
         for i in pl.range(0, m, 64):
@@ -166,9 +166,9 @@ def kernel_int_float(
     m = x.shape[0]
     n = x.shape[1]
     tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tile_type, addr=0x0000, size=16384)
-    tile_b = pl.make_tile(tile_type, addr=0x4000, size=16384)
-    tile_c = pl.make_tile(tile_type, addr=0x8000, size=16384)
+    tile_a = pl.make_tile(tile_type, addr=0x0000)
+    tile_b = pl.make_tile(tile_type, addr=0x4000)
+    tile_c = pl.make_tile(tile_type, addr=0x8000)
 
     with pl.section_vector():
         for i in pl.range(0, m, 64):
@@ -197,9 +197,9 @@ def kernel_all_scalars(
     m = x.shape[0]
     n = x.shape[1]
     tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tile_type, addr=0x0000, size=16384)
-    tile_b = pl.make_tile(tile_type, addr=0x4000, size=16384)
-    tile_c = pl.make_tile(tile_type, addr=0x8000, size=16384)
+    tile_a = pl.make_tile(tile_type, addr=0x0000)
+    tile_b = pl.make_tile(tile_type, addr=0x4000)
+    tile_c = pl.make_tile(tile_type, addr=0x8000)
 
     with pl.section_vector():
         for i in pl.range(0, m, 64):
@@ -236,9 +236,9 @@ def kernel_float_multi_user(
     m = x.shape[0]
     n = x.shape[1]
     tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tile_type, addr=0x0000, size=16384)
-    tile_b = pl.make_tile(tile_type, addr=0x4000, size=16384)
-    tile_c = pl.make_tile(tile_type, addr=0x8000, size=16384)
+    tile_a = pl.make_tile(tile_type, addr=0x0000)
+    tile_b = pl.make_tile(tile_type, addr=0x4000)
+    tile_c = pl.make_tile(tile_type, addr=0x8000)
 
     with pl.section_vector():
         for i in pl.range(0, m, 64):

@@ -55,7 +55,6 @@ def simt_atomic_dec_ub(uint32_state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32]):
     uint32_tile = pl.make_tile(
         pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
         addr=0x0000,
-        size=ELEMENTS * 4,
     )
     with pl.section_vector():
         pl.load(uint32_tile, uint32_state, [0, 0])

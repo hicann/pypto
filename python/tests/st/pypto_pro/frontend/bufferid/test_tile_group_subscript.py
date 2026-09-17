@@ -619,7 +619,6 @@ def cube_vector_four_mutex_kernel(
     tile_acc = pl.make_tile(
         pl.TileType(shape=[CV_M, CV_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
         addr=0x0000,
-        size=CV_M * CV_N * 4,
     )
     vec_group = pl.make_tile_group(
         type=pl.TileType(shape=[CV_VEC_ROWS, CV_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),

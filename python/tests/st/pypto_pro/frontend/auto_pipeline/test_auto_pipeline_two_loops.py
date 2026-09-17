@@ -277,6 +277,7 @@ def _golden(src, hi_stages: bool):
     ],
 )
 def test_two_pipeline_loops(kernel, hi_stages, label):
+    torch.npu.set_device(ST_DEVICE)
     torch.manual_seed(7)
     src = torch.rand((FULL_M, TN), device=ST_DEVICE, dtype=torch.float16) * 2.0 - 1.0
     out = torch.zeros((FULL_M, TN), device=ST_DEVICE, dtype=torch.float16)

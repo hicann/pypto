@@ -69,12 +69,11 @@ pypto_pro.language.make_tile在TileType指定的内存空间中绑定一段固�
 tile = pypto_pro.language.make_tile(
     tile_type,
     addr=0x0000,
-    size=16384,
 )
 ```
 
 - addr是目标Buffer内的字节偏移，必须在编译期确定。
-- size是绑定地址范围的字节数。省略时由TileType推导；显式传入时由开发者保证能够覆盖Tile实际占用空间。
+- 地址范围的字节数由TileType的shape和dtype自动推导，不接受size参数；valid_shape不改变分配范围。
 - 多个Tile的地址范围不能发生非预期重叠。有意复用同一地址时，开发者必须保证访问时序正确。
 
 下面的示例仅创建三块UB Tile，不包含数据搬运和计算：

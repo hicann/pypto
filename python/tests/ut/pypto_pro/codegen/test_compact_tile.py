@@ -86,7 +86,7 @@ def test_compact_propagated_by_parser(compact, expected):
                 target_memory=pl.MemorySpace.Left,
                 layout=pl.NZ,
             )
-            tile_a = pl.make_tile(tile_type, addr=0x00000, size=32768)  # noqa: F841
+            tile_a = pl.make_tile(tile_type, addr=0x00000)  # noqa: F841
 
         func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
         func = func_program.get_function(func.__name__)
@@ -100,7 +100,7 @@ def test_compact_propagated_by_parser(compact, expected):
                 layout=pl.NZ,
                 compact=compact,
             )
-            tile_a = pl.make_tile(tile_type, addr=0x00000, size=32768)  # noqa: F841
+            tile_a = pl.make_tile(tile_type, addr=0x00000)  # noqa: F841
 
         func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
         func = func_program.get_function(func.__name__)

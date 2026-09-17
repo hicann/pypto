@@ -63,21 +63,20 @@ def load_left(dst, src, order):
 
 def _make_tiles():
     a_mat = pl.make_tile(
-        pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN), addr=MA0, size=SZ
+        pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN), addr=MA0
     )
     b_mat = pl.make_tile(
-        pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ), addr=MA1, size=SZ
+        pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ), addr=MA1
     )
     a_left = pl.make_tile(
-        pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ), addr=0x0, size=SZ
+        pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ), addr=0x0
     )
     b_right = pl.make_tile(
-        pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN), addr=0x0, size=SZ
+        pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN), addr=0x0
     )
     c = pl.make_tile(
         pl.TileType(shape=[M, N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024),
         addr=0x0,
-        size=SZ,
     )
     return a_mat, b_mat, a_left, b_right, c
 

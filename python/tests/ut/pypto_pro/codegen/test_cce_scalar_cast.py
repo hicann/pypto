@@ -46,11 +46,11 @@ def _scalar_cast_codegen_kernel(value: pl.DT_FP32, integer: pl.DT_INT64):
     bfloat_type = pl.TileType(shape=[1, 16], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec)
     int_type = pl.TileType(shape=[1, 8], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
     float_type = pl.TileType(shape=[1, 8], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    half_out = pl.make_tile(half_type, addr=0x0000, size=32)
-    bfloat_out = pl.make_tile(bfloat_type, addr=0x0040, size=32)
-    integer_out = pl.make_tile(int_type, addr=0x0080, size=32)
-    float_out = pl.make_tile(float_type, addr=0x00C0, size=32)
-    plain_out = pl.make_tile(int_type, addr=0x0100, size=32)
+    half_out = pl.make_tile(half_type, addr=0x0000)
+    bfloat_out = pl.make_tile(bfloat_type, addr=0x0040)
+    integer_out = pl.make_tile(int_type, addr=0x0080)
+    float_out = pl.make_tile(float_type, addr=0x00C0)
+    plain_out = pl.make_tile(int_type, addr=0x0100)
     with pl.section_vector():
         _scalar_cast_intrinsics[1](half_out, bfloat_out, integer_out, float_out, plain_out, value, integer)
 
@@ -136,13 +136,13 @@ def _scalar_cast_all_codegen_kernel(
     int64_type = pl.TileType(shape=[1, 4], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Vec)
     uint64_type = pl.TileType(shape=[1, 4], dtype=pl.DT_UINT64, target_memory=pl.MemorySpace.Vec)
     float_type = pl.TileType(shape=[1, 8], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    half_out = pl.make_tile(half_type, addr=0x0000, size=32)
-    bfloat_out = pl.make_tile(bfloat_type, addr=0x0040, size=32)
-    int32_out = pl.make_tile(int32_type, addr=0x0080, size=32)
-    uint32_out = pl.make_tile(uint32_type, addr=0x00C0, size=32)
-    int64_out = pl.make_tile(int64_type, addr=0x0100, size=32)
-    uint64_out = pl.make_tile(uint64_type, addr=0x0140, size=32)
-    float_out = pl.make_tile(float_type, addr=0x0180, size=32)
+    half_out = pl.make_tile(half_type, addr=0x0000)
+    bfloat_out = pl.make_tile(bfloat_type, addr=0x0040)
+    int32_out = pl.make_tile(int32_type, addr=0x0080)
+    uint32_out = pl.make_tile(uint32_type, addr=0x00C0)
+    int64_out = pl.make_tile(int64_type, addr=0x0100)
+    uint64_out = pl.make_tile(uint64_type, addr=0x0140)
+    float_out = pl.make_tile(float_type, addr=0x0180)
     with pl.section_vector():
         _scalar_cast_all_intrinsics[1](
             half_out,

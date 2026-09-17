@@ -44,7 +44,6 @@ def simt_syncthreads(out: pl.Tensor[[1, THREADS], pl.DT_UINT32]):
     shared = pl.make_tile(
         pl.TileType(shape=[1, THREADS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
         addr=0,
-        size=THREADS * 4,
     )
     with pl.section_vector():
         exchange_after_syncthreads[THREADS](out, shared)

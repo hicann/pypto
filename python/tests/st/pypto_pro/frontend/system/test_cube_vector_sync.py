@@ -200,7 +200,6 @@ def cross_core_kernel(
     v1_mat = pl.make_tile(
         pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
         addr=0x10000,
-        size=16384,
     )
 
     with pl.section_vector():
@@ -208,18 +207,17 @@ def cross_core_kernel(
         off = sub_index * 32
 
         tile_x = pl.make_tile(
-            pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec), addr=0x0000, size=8192
+            pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec), addr=0x0000
         )
         tile_y = pl.make_tile(
-            pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec), addr=0x2000, size=8192
+            pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec), addr=0x2000
         )
         tile_sum = pl.make_tile(
-            pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec), addr=0x4000, size=8192
+            pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec), addr=0x4000
         )
         tile_nz = pl.make_tile(
             pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, layout=pl.NZ),
             addr=0x6000,
-            size=8448,
         )
 
         pl.load(tile_x, x, [off, 0])
@@ -237,22 +235,18 @@ def cross_core_kernel(
         rhs_mat = pl.make_tile(
             pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
             addr=0x0000,
-            size=16384,
         )
         v1_left = pl.make_tile(
             pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
             addr=0x0000,
-            size=16384,
         )
         rhs_right = pl.make_tile(
             pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
             addr=0x0000,
-            size=16384,
         )
         c_l0c = pl.make_tile(
             pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024),
             addr=0x0000,
-            size=16384,
         )
 
         pl.load(rhs_mat, rhs, [0, 0])

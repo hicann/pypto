@@ -124,8 +124,8 @@ def _parse_with_body(dtype, vf_body):
     @pl.jit()
     def kernel(a: pl.Tensor[[_N, _M], dtype], out: pl.Tensor[[_N, _M], dtype]):
         tf = pl.TileType(shape=[_N, _M], dtype=dtype, target_memory=pl.MemorySpace.Vec)
-        in_a = pl.make_tile(tf, addr=0, size=_TILE_SIZE)
-        t_out = pl.make_tile(tf, addr=_TILE_SIZE, size=_TILE_SIZE)
+        in_a = pl.make_tile(tf, addr=0)
+        t_out = pl.make_tile(tf, addr=_TILE_SIZE)
         with pl.section_vector():
             pl.load(in_a, a, [0, 0])
             vf_body(in_a, t_out)
@@ -363,8 +363,8 @@ def _parse_tile_scalar_kernel(dtype, scalar):
     @pl.jit(auto_mutex=False)
     def kernel(a: pl.Tensor[[8, 64], dtype], out: pl.Tensor[[8, 64], dtype]):
         tf = pl.TileType(shape=[8, 64], dtype=dtype, target_memory=pl.MemorySpace.Vec)
-        t_in = pl.make_tile(tf, addr=0, size=8 * 64 * 4)
-        t_out = pl.make_tile(tf, addr=8 * 64 * 4, size=8 * 64 * 4)
+        t_in = pl.make_tile(tf, addr=0)
+        t_out = pl.make_tile(tf, addr=8 * 64 * 4)
         with pl.section_vector():
             pl.load(t_in, a, [0, 0])
             pl.add(t_out, t_in, scalar)
@@ -489,13 +489,11 @@ def test_simt_max_threads_range_is_enforced():
 # ---------------------------------------------------------------------------
 # pl.expands: the splat value must fit the out tile's dtype
 # ---------------------------------------------------------------------------
-def _parse_expands_kernel(dtype, scalar, elem_bytes):
-    size = 64 * 32 * elem_bytes
-
+def _parse_expands_kernel(dtype, scalar):
     @pl.jit(auto_mutex=False)
     def kernel(out: pl.Tensor[[64, 32], dtype]):
         tf = pl.TileType(shape=[64, 32], dtype=dtype, target_memory=pl.MemorySpace.Vec)
-        t_out = pl.make_tile(tf, addr=0, size=size)
+        t_out = pl.make_tile(tf, addr=0)
         with pl.section_vector():
             pl.expands(t_out, scalar)
             pl.store(out, t_out, [0, 0])
@@ -505,42 +503,42 @@ def _parse_expands_kernel(dtype, scalar, elem_bytes):
 
 @pytest.mark.soc("950")
 @pytest.mark.parametrize(
-    ("dtype", "elem_bytes", "scalar", "expected"),
+    ("dtype", "scalar", "expected"),
     [
-        (pl.DT_INT8, 1, 300, r"representable in int8, i\.e\. in \[-128, 127\], got 300"),
-        (pl.DT_INT8, 1, -129, r"representable in int8"),
-        (pl.DT_UINT8, 1, 256, r"representable in uint8"),
+        (pl.DT_INT8, 300, r"representable in int8, i\.e\. in \[-128, 127\], got 300"),
+        (pl.DT_INT8, -129, r"representable in int8"),
+        (pl.DT_UINT8, 256, r"representable in uint8"),
         # Inside the IR storage band -- carried as a uint64 constant -- but outside the tile dtype,
         # so only the per-dtype check can reject these two.
-        (pl.DT_INT64, 8, 2**63, r"representable in int64, i\.e\. in \[-9223372036854775808, 9223372036854775807\]"),
-        (pl.DT_UINT64, 8, -1, r"representable in uint64, i\.e\. in \[0, 18446744073709551615\], got -1"),
+        (pl.DT_INT64, 2**63, r"representable in int64, i\.e\. in \[-9223372036854775808, 9223372036854775807\]"),
+        (pl.DT_UINT64, -1, r"representable in uint64, i\.e\. in \[0, 18446744073709551615\], got -1"),
     ],
 )
-def test_expands_rejects_scalar_outside_the_out_dtype(dtype, elem_bytes, scalar, expected):
+def test_expands_rejects_scalar_outside_the_out_dtype(dtype, scalar, expected):
     with pytest.raises(FinalRejectionError, match=rf"pl\.expands: scalar operand must be {expected}"):
-        _parse_expands_kernel(dtype, scalar, elem_bytes)
+        _parse_expands_kernel(dtype, scalar)
 
 
 @pytest.mark.soc("950")
 @pytest.mark.parametrize(
-    ("dtype", "elem_bytes", "scalar"),
+    ("dtype", "scalar"),
     [
-        (pl.DT_INT8, 1, 127),
-        (pl.DT_INT8, 1, -128),
-        (pl.DT_UINT8, 1, 255),
-        (pl.DT_INT64, 8, 2**63 - 1),
-        (pl.DT_UINT64, 8, 2**64 - 1),
+        (pl.DT_INT8, 127),
+        (pl.DT_INT8, -128),
+        (pl.DT_UINT8, 255),
+        (pl.DT_INT64, 2**63 - 1),
+        (pl.DT_UINT64, 2**64 - 1),
     ],
 )
-def test_expands_accepts_a_boundary_scalar(dtype, elem_bytes, scalar):
-    _parse_expands_kernel(dtype, scalar, elem_bytes)
+def test_expands_accepts_a_boundary_scalar(dtype, scalar):
+    _parse_expands_kernel(dtype, scalar)
 
 
 @pytest.mark.soc("950")
 def test_expands_still_rejects_a_scalar_outside_the_storage_band():
     """Above UINT64_MAX the band check fires first, before any dtype is consulted."""
     with pytest.raises(FinalRejectionError, match=r"must be in \[-9223372036854775808, 18446744073709551615\]"):
-        _parse_expands_kernel(pl.DT_UINT64, UINT64_MAX + 1, 8)
+        _parse_expands_kernel(pl.DT_UINT64, UINT64_MAX + 1)
 
 
 # ---------------------------------------------------------------------------

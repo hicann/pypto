@@ -63,12 +63,11 @@ def insert_group_transpose_left(
         sub_id = pl.get_subblock_idx()
         off = sub_id * SUB
         tile_d = pl.make_tile(
-            pl.TileType(shape=[K, M // 2], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec), addr=0x0000, size=16384
+            pl.TileType(shape=[K, M // 2], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec), addr=0x0000
         )
         tile_nz = pl.make_tile(
             pl.TileType(shape=[K, M // 2], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, layout=pl.NZ),
             addr=0x6000,
-            size=16384,
         )
         p_mat = p_mat_db.current()
         pl.load(tile_d, d, [0, off])
@@ -84,22 +83,18 @@ def insert_group_transpose_left(
         v_mat = pl.make_tile(
             pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
             addr=0x0000,
-            size=16384,
         )
         p_left = pl.make_tile(
             pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
             addr=0x0000,
-            size=32768,
         )
         v_right = pl.make_tile(
             pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
             addr=0x0000,
-            size=16384,
         )
         c_l0c = pl.make_tile(
             pl.TileType(shape=[M, N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024),
             addr=0x0000,
-            size=32768,
         )
         p_mat = p_mat_db.current()
         pl.load(v_mat, v, [0, 0])
@@ -131,12 +126,11 @@ def insert_group_transpose_right(
         sub_id = pl.get_subblock_idx()
         off = sub_id * SUB_N
         tile_d = pl.make_tile(
-            pl.TileType(shape=[SUB_N, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec), addr=0x0000, size=16384
+            pl.TileType(shape=[SUB_N, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec), addr=0x0000
         )
         tile_nz = pl.make_tile(
             pl.TileType(shape=[SUB_N, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, layout=pl.NZ),
             addr=0x6000,
-            size=16896,
         )
         rhs_mat = rhs_mat_db.current()
         pl.load(tile_d, d, [off, 0])
@@ -152,22 +146,18 @@ def insert_group_transpose_right(
         lhs_mat = pl.make_tile(
             pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
             addr=0x0000,
-            size=32768,
         )
         lhs_left = pl.make_tile(
             pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
             addr=0x0000,
-            size=32768,
         )
         rhs_right = pl.make_tile(
             pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
             addr=0x0000,
-            size=32768,
         )
         c_l0c = pl.make_tile(
             pl.TileType(shape=[M, N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024),
             addr=0x0000,
-            size=32768,
         )
         rhs_mat = rhs_mat_db.current()
         pl.load(lhs_mat, lhs, [0, 0])
@@ -200,12 +190,11 @@ def insert_group_left(
         sub_id = pl.get_subblock_idx()
         off = sub_id * SUB
         tile_d = pl.make_tile(
-            pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec), addr=0x0000, size=16384
+            pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec), addr=0x0000
         )
         tile_nz = pl.make_tile(
             pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, layout=pl.NZ),
             addr=0x6000,
-            size=16896,
         )
         p_mat = p_mat_db.current()
         pl.load(tile_d, d, [0, off])
@@ -221,22 +210,18 @@ def insert_group_left(
         v_mat = pl.make_tile(
             pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
             addr=0x0000,
-            size=16384,
         )
         p_left = pl.make_tile(
             pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
             addr=0x0000,
-            size=32768,
         )
         v_right = pl.make_tile(
             pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
             addr=0x0000,
-            size=16384,
         )
         c_l0c = pl.make_tile(
             pl.TileType(shape=[M, N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024),
             addr=0x0000,
-            size=32768,
         )
         p_mat = p_mat_db.current()
         pl.load(v_mat, v, [0, 0])
@@ -269,12 +254,11 @@ def insert_group_right(
         sub_id = pl.get_subblock_idx()
         off = sub_id * SUB_N
         tile_d = pl.make_tile(
-            pl.TileType(shape=[K, SUB_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec), addr=0x0000, size=16384
+            pl.TileType(shape=[K, SUB_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec), addr=0x0000
         )
         tile_nz = pl.make_tile(
             pl.TileType(shape=[K, SUB_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, layout=pl.NZ),
             addr=0x6000,
-            size=16896,
         )
         rhs_mat = rhs_mat_db.current()
         pl.load(tile_d, d, [0, off])
@@ -290,22 +274,18 @@ def insert_group_right(
         lhs_mat = pl.make_tile(
             pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
             addr=0x0000,
-            size=32768,
         )
         lhs_left = pl.make_tile(
             pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
             addr=0x0000,
-            size=32768,
         )
         rhs_right = pl.make_tile(
             pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
             addr=0x0000,
-            size=32768,
         )
         c_l0c = pl.make_tile(
             pl.TileType(shape=[M, N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024),
             addr=0x0000,
-            size=32768,
         )
         rhs_mat = rhs_mat_db.current()
         pl.load(lhs_mat, lhs, [0, 0])

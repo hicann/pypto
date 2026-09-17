@@ -112,7 +112,6 @@ def histogram_uint16_msb_kernel_cce(
     tile_src = pl.make_tile(
         pl.TileType(shape=[ROWS, COLS], dtype=pl.DT_UINT16, target_memory=pl.MemorySpace.Vec, layout=pl.ND),
         addr=0x0000,
-        size=SRC_SIZE,
     )
 
     # idx: DN format (col_major + none_box)
@@ -125,14 +124,12 @@ def histogram_uint16_msb_kernel_cce(
             layout=pl.DN,
         ),
         addr=0x2000,  # After tile_src (0x0000 + 8192 = 0x2000)
-        size=IDX_SIZE,
     )
 
     # dst: ND format (row_major + none_box)
     tile_dst = pl.make_tile(
         pl.TileType(shape=[ROWS, 256], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec, layout=pl.ND),
         addr=0x2020,  # After tile_idx (0x2000 + 32 = 0x2020)
-        size=DST_SIZE,
     )
 
     with pl.section_vector():
@@ -224,7 +221,6 @@ def histogram_uint16_lsb_kernel_cce(
     tile_src = pl.make_tile(
         pl.TileType(shape=[ROWS, COLS], dtype=pl.DT_UINT16, target_memory=pl.MemorySpace.Vec, layout=pl.ND),
         addr=0x0000,
-        size=SRC_SIZE,
     )
 
     # idx: col_major + none_box (DN layout)
@@ -237,13 +233,11 @@ def histogram_uint16_lsb_kernel_cce(
             layout=pl.DN,
         ),
         addr=0x2000,  # After tile_src (0x0000 + 8192 = 0x2000)
-        size=IDX_SIZE,
     )
 
     tile_dst = pl.make_tile(
         pl.TileType(shape=[ROWS, 256], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec, layout=pl.ND),
         addr=0x2020,  # After tile_idx (0x2000 + 32 = 0x2020)
-        size=DST_SIZE,
     )
 
     with pl.section_vector():
@@ -382,20 +376,17 @@ def histogram_uint32_byte3_kernel_cce(
     tile_src = pl.make_tile(
         pl.TileType(shape=[ROWS_U32, COLS_U32], dtype=pl.DT_UINT16, target_memory=pl.MemorySpace.Vec, layout=pl.ND),
         addr=0x0000,
-        size=SRC_SIZE_U32,
     )
 
     # idx: col_major + none_box (DN layout) — required by THISTOGRAM regardless of mode
     tile_idx = pl.make_tile(
         pl.TileType(shape=[ROWS_U32, 1], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec, layout=pl.DN),
         addr=0x2000,  # After tile_src (0x0000 + 8192 = 0x2000)
-        size=IDX_SIZE_U32,
     )
 
     tile_dst = pl.make_tile(
         pl.TileType(shape=[ROWS_U32, 256], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec, layout=pl.ND),
         addr=0x2020,  # After tile_idx (0x2000 + 32 = 0x2020)
-        size=DST_SIZE_U32,
     )
 
     with pl.section_vector():

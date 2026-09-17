@@ -1032,7 +1032,7 @@ def flex_attention_bf16(
 
         running_o = pl.make_tile(
             pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-            addr=VA7, size=VB4)
+            addr=VA7)
 
         o_bf16_g = pl.make_tile_group(
             type=pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec),
@@ -1059,23 +1059,23 @@ def flex_attention_bf16(
         # Double-buffered global state (per Q tile) -use tile tuples for dynamic
         # indexing by q_count % 2, since StructArray ctx references need runtime index.
         red_type = pl.TileType(shape=[TS_HALF, 1], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, layout=pl.DN)
-        gmax_0 = pl.make_tile(red_type, addr=VA_GMAX0, size=VB_RED)
-        gmax_1 = pl.make_tile(red_type, addr=VA_GMAX1, size=VB_RED)
-        gmax_2 = pl.make_tile(red_type, addr=VA_GMAX2, size=VB_RED)
+        gmax_0 = pl.make_tile(red_type, addr=VA_GMAX0)
+        gmax_1 = pl.make_tile(red_type, addr=VA_GMAX1)
+        gmax_2 = pl.make_tile(red_type, addr=VA_GMAX2)
         global_max = (gmax_0, gmax_1, gmax_2)
 
-        gsum_0 = pl.make_tile(red_type, addr=VA_GSUM0, size=VB_RED)
-        gsum_1 = pl.make_tile(red_type, addr=VA_GSUM1, size=VB_RED)
-        gsum_2 = pl.make_tile(red_type, addr=VA_GSUM2, size=VB_RED)
+        gsum_0 = pl.make_tile(red_type, addr=VA_GSUM0)
+        gsum_1 = pl.make_tile(red_type, addr=VA_GSUM1)
+        gsum_2 = pl.make_tile(red_type, addr=VA_GSUM2)
         global_sum = (gsum_0, gsum_1, gsum_2)
 
-        tmp_max = pl.make_tile(red_type, addr=VA11, size=VB_RED)
-        tmp_sum = pl.make_tile(red_type, addr=VA12, size=VB_RED)
+        tmp_max = pl.make_tile(red_type, addr=VA11)
+        tmp_sum = pl.make_tile(red_type, addr=VA12)
 
         # FIFO exp_corr -use NBuffer with current() auto-rotate
-        exp_max0 = pl.make_tile(red_type, addr=VA_EXPMAX0, size=VB_RED)
-        exp_max1 = pl.make_tile(red_type, addr=VA_EXPMAX1, size=VB_RED)
-        exp_max2 = pl.make_tile(red_type, addr=VA_EXPMAX2, size=VB_RED)
+        exp_max0 = pl.make_tile(red_type, addr=VA_EXPMAX0)
+        exp_max1 = pl.make_tile(red_type, addr=VA_EXPMAX1)
+        exp_max2 = pl.make_tile(red_type, addr=VA_EXPMAX2)
         exp_corr_db = (exp_max0, exp_max1, exp_max2)
 
         pl.system.set_cross_core(pipe=pl.PipeType.V, event_id=QK_READY_BARKWARD_IDS[0])

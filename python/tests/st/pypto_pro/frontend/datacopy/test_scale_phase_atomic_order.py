@@ -55,19 +55,19 @@ def scale_phase_partial_kernel(
 ):
     with pl.section_cube():
         mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
-        q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
-        k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
+        q_mat = pl.make_tile(mat_type, addr=0x0000)
+        k_mat = pl.make_tile(mat_type, addr=0x4000)
 
         left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ)
-        q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
+        q_left = pl.make_tile(left_type, addr=0x0000)
 
         right_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right, layout=pl.ZN)
-        k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
+        k_right = pl.make_tile(right_type, addr=0x0000)
 
         acc_type = pl.TileType(
             shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
         )
-        acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+        acc = pl.make_tile(acc_type, addr=0x0000)
 
         pl.load(q_mat, q, [0, 0])
         pl.load(k_mat, k, [0, 0])
@@ -104,19 +104,19 @@ def scale_phase_final_kernel(
 ):
     with pl.section_cube():
         mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
-        q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
-        k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
+        q_mat = pl.make_tile(mat_type, addr=0x0000)
+        k_mat = pl.make_tile(mat_type, addr=0x4000)
 
         left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ)
-        q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
+        q_left = pl.make_tile(left_type, addr=0x0000)
 
         right_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right, layout=pl.ZN)
-        k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
+        k_right = pl.make_tile(right_type, addr=0x0000)
 
         acc_type = pl.TileType(
             shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
         )
-        acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+        acc = pl.make_tile(acc_type, addr=0x0000)
 
         pl.load(q_mat, q, [0, 0])
         pl.load(k_mat, k, [0, 0])
@@ -214,19 +214,19 @@ def scale_atomic_add_kernel(
 ):
     with pl.section_cube():
         mat_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
-        q_mat = pl.make_tile(mat_type, addr=0x0000, size=16384)
-        k_mat = pl.make_tile(mat_type, addr=0x4000, size=16384)
+        q_mat = pl.make_tile(mat_type, addr=0x0000)
+        k_mat = pl.make_tile(mat_type, addr=0x4000)
 
         left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left, layout=pl.NZ)
-        q_left = pl.make_tile(left_type, addr=0x0000, size=16384)
+        q_left = pl.make_tile(left_type, addr=0x0000)
 
         right_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right, layout=pl.ZN)
-        k_right = pl.make_tile(right_type, addr=0x0000, size=16384)
+        k_right = pl.make_tile(right_type, addr=0x0000)
 
         acc_type = pl.TileType(
             shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
         )
-        acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+        acc = pl.make_tile(acc_type, addr=0x0000)
 
         pl.load(q_mat, q, [0, 0])
         pl.load(k_mat, k, [0, 0])
@@ -312,7 +312,7 @@ def test_order_descending_rejected():
             acc_type = pl.TileType(
                 shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024
             )
-            acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+            acc = pl.make_tile(acc_type, addr=0x0000)
             pl.store(quant_out, acc, [0, 0], scale=scale_value, order=[1, 0])
 
     q = _make_q("cpu")

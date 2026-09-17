@@ -32,21 +32,21 @@ def matmul_add_matmul_add_cce(
     workspace: pl.Tensor[[64, 64], pl.DT_FP32],
 ):
     tile_p_vec = pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    mm1_res = pl.make_tile(tile_p_vec, addr=0x0000, size=8192)
+    mm1_res = pl.make_tile(tile_p_vec, addr=0x0000)
 
     tile_p_vec = pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    mm2_res = pl.make_tile(tile_p_vec, addr=0x2000, size=8192)
+    mm2_res = pl.make_tile(tile_p_vec, addr=0x2000)
 
     tile_v1_mat = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
-    v1_mat = pl.make_tile(tile_v1_mat, addr=0x10000, size=16384)
+    v1_mat = pl.make_tile(tile_v1_mat, addr=0x10000)
 
     with pl.section_cube():
         tile_q_mat = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
-        q_mat = pl.make_tile(tile_q_mat, addr=0x0000, size=16384)
+        q_mat = pl.make_tile(tile_q_mat, addr=0x0000)
 
         tile_k_mat = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat, layout=pl.NZ)
-        k_mat = pl.make_tile(tile_k_mat, addr=0x4000, size=16384)
-        v_mat = pl.make_tile(tile_k_mat, addr=0x8000, size=16384)
+        k_mat = pl.make_tile(tile_k_mat, addr=0x4000)
+        v_mat = pl.make_tile(tile_k_mat, addr=0x8000)
 
         tile_q_left = pl.TileType(
             shape=[64, 64],
@@ -54,7 +54,7 @@ def matmul_add_matmul_add_cce(
             target_memory=pl.MemorySpace.Left,
             layout=pl.NZ,
         )
-        q_left = pl.make_tile(tile_q_left, addr=0x0000, size=16384)
+        q_left = pl.make_tile(tile_q_left, addr=0x0000)
 
         tile_k_right = pl.TileType(
             shape=[64, 64],
@@ -62,8 +62,8 @@ def matmul_add_matmul_add_cce(
             target_memory=pl.MemorySpace.Right,
             layout=pl.ZN,
         )
-        k_right = pl.make_tile(tile_k_right, addr=0x0000, size=16384)
-        v_right = pl.make_tile(tile_k_right, addr=0x4000, size=16384)  # kv addr not conflict, no need sync
+        k_right = pl.make_tile(tile_k_right, addr=0x0000)
+        v_right = pl.make_tile(tile_k_right, addr=0x4000)  # kv addr not conflict, no need sync
 
         tile_c1_type = pl.TileType(
             shape=[64, 64],
@@ -72,8 +72,8 @@ def matmul_add_matmul_add_cce(
             layout=pl.NZ,
             fractal=1024,
         )
-        tile_c1 = pl.make_tile(tile_c1_type, addr=0x0000, size=16384)
-        tile_c2 = pl.make_tile(tile_c1_type, addr=0x8000, size=16384)
+        tile_c1 = pl.make_tile(tile_c1_type, addr=0x0000)
+        tile_c2 = pl.make_tile(tile_c1_type, addr=0x8000)
 
         pl.load(q_mat, q, [0, 0])
         pl.load(k_mat, k, [0, 0])
@@ -114,11 +114,11 @@ def matmul_add_matmul_add_cce(
     with pl.section_vector():
         sub_index = pl.get_subblock_idx()
         tile_type_x1 = pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        tile_x1 = pl.make_tile(tile_type_x1, addr=0x4000, size=8192)
-        tile_x2 = pl.make_tile(tile_type_x1, addr=0x6000, size=8192)
+        tile_x1 = pl.make_tile(tile_type_x1, addr=0x4000)
+        tile_x2 = pl.make_tile(tile_type_x1, addr=0x6000)
 
         tile_type_out = pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        tile_out = pl.make_tile(tile_type_out, addr=0x8000, size=8192)
+        tile_out = pl.make_tile(tile_type_out, addr=0x8000)
 
         tile_type_nz = pl.TileType(
             shape=[32, 64],
@@ -126,7 +126,7 @@ def matmul_add_matmul_add_cce(
             target_memory=pl.MemorySpace.Vec,
             layout=pl.NZ,
         )
-        tile_nz = pl.make_tile(tile_type_nz, addr=0xA000, size=8448)  # NZ no bank conflict
+        tile_nz = pl.make_tile(tile_type_nz, addr=0xA000)  # NZ no bank conflict
 
         off = sub_index * 32
         pl.load(tile_x1, x1, [off, 0])
