@@ -270,6 +270,8 @@ def set_cross_core(
         Call expression for system.set_cross_core
     """
     actual_span = _get_span_or_capture(span)
+    _validate_concrete_pipe(pipe, "pipe")
+
     if isinstance(event_id, Expr):
         return _ir_core.create_op_call(
             "system.set_cross_core_dyn", [event_id], {"pipe": pipe, "sync_mode": sync_mode}, actual_span
@@ -301,6 +303,7 @@ def wait_cross_core(
         Call expression for system.wait_cross_core
     """
     actual_span = _get_span_or_capture(span)
+    _validate_concrete_pipe(pipe, "pipe")
 
     if isinstance(event_id, Expr):
         return _ir_core.create_op_call(

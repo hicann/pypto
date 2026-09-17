@@ -2406,8 +2406,6 @@ _A5_LOAD_COMBOS = (
     ("GM", "Mat", TensorLayout.DN, TensorLayout.NZ, DataType.UINT32, DataType.UINT32),
     # ND → ND（仅 INT64 / UINT64）
     ("GM", "Mat", TensorLayout.ND, TensorLayout.ND, DataType.INT64, DataType.INT64),
-    ("GM", "Mat", TensorLayout.ND, TensorLayout.ND, DataType.INT64, DataType.UINT64),
-    ("GM", "Mat", TensorLayout.ND, TensorLayout.ND, DataType.UINT64, DataType.INT64),
     ("GM", "Mat", TensorLayout.ND, TensorLayout.ND, DataType.UINT64, DataType.UINT64),
     # ND → ZZ（仅 FP8E8M0；MX_A ND→ZZ 通路）
     ("GM", "Mat", TensorLayout.ND, TensorLayout.ZZ, DataType.FP8E8M0, DataType.FP8E8M0),
