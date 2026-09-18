@@ -187,6 +187,11 @@ def cast(
     y = pypto.cast(x, pypto.DT_INT8, satmode=pypto.SaturationMode.ON)
     # Values will be clamped to [-128, 127] range
 
+    On A5, BF16 converts to/from DT_FP4_E1M2 and DT_FP4_E2M1. FP4 tensors
+    keep the logical shape (one 4-bit value per element), as in scaled_mm.
+    At the Torch boundary, annotate the tensor with the logical FP4 dtype
+    and pass packed uint8 storage with half as many columns.
+
     Input  x: [2.0, 3.0] x.dtype: pypto.DT_FP32
     Output y: [2.0, 3.0] y.dtype: pypto.DT_FP16
     """
