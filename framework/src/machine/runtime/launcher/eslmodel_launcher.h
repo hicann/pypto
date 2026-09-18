@@ -39,6 +39,6 @@ public:
 private:
     static void LiteAllocDeviceMemory(const std::vector<DeviceTensorData>& tensors, std::vector<uint8_t*>& deviceAddrs,
                                       uint8_t*& workspaceAddr, Function* function);
-    static void LiteRegisterKernel(Function* function, void*& hdl, int& stubFunc);
+    static void LiteRegisterKernel(Function* function, void*& hdl, void*& stubFunc);
 };
 } // namespace npu::tile_fwk::dynamic

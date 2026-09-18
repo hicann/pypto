@@ -9,6 +9,8 @@
  */
 
 #include "machine/runtime/launcher/eslmodel_launcher.h"
+#include <atomic>
+#include <cstdint>
 #include <thread>
 #include "tilefwk/pypto_fwk_log.h"
 #include "adapter/api/acl_api.h"
@@ -24,6 +26,14 @@
 
 extern "C" int DynTileFwkBackendKernelServer(void* targ);
 namespace npu::tile_fwk::dynamic {
+
+namespace {
+void* AllocLiteStubKey()
+{
+    static std::atomic<uintptr_t> liteStubKeySeq{1};
+    return reinterpret_cast<void*>(liteStubKeySeq.fetch_add(1, std::memory_order_relaxed));
+}
+} // namespace
 
 int EslModelLauncher::EslModelLaunchAicore(AclRtStream aicoreStream, void* kernel, DeviceKernelArgs* kernelArgs)
 {
@@ -201,7 +211,7 @@ void EslModelLauncher::LiteAllocDeviceMemory(const std::vector<DeviceTensorData>
     }
 }
 
-void EslModelLauncher::LiteRegisterKernel(Function* function, void*& hdl, int& stubFunc)
+void EslModelLauncher::LiteRegisterKernel(Function* function, void*& hdl, void*& stubFunc)
 {
     auto dynAttr = function->GetDyndevAttribute();
     std::vector<uint8_t>& kernelBinary = dynAttr->kernelBinary;
@@ -214,12 +224,12 @@ void EslModelLauncher::LiteRegisterKernel(Function* function, void*& hdl, int& s
     int ret = RuntimeDevBinaryRegister(&binary, &hdl);
     ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, ret == RT_SUCCESS) << "register kernel failed: " << ret;
 
-    stubFunc = 1;
+    stubFunc = AllocLiteStubKey();
     std::string kernelName = "";
     for (auto& devRoot : dynAttr->funcGroup.devRootList) {
         kernelName = dynAttr->rootTileDict[devRoot]->GetMagicNameWithHash() + "_main";
     }
-    RuntimeFunctionRegister(hdl, &stubFunc, kernelName.c_str(), kernelName.c_str(), 0);
+    RuntimeFunctionRegister(hdl, stubFunc, kernelName.c_str(), kernelName.c_str(), 0);
 }
 
 int EslModelLauncher::EslModelLiteRunOnce(Function* function, std::vector<DeviceTensorData>& tensors)
@@ -240,12 +250,12 @@ int EslModelLauncher::EslModelLiteRunOnce(Function* function, std::vector<Device
 
     // Register and launch kernel
     void* hdl = nullptr;
-    int stubFunc = 1;
+    void* stubFunc = nullptr;
     LiteRegisterKernel(function, hdl, stubFunc);
     RtArgsEx rtArgs = {};
     rtArgs.args = deviceAddrs.data();
     rtArgs.argsSize = deviceAddrs.size() * sizeof(void*);
-    int ret = RuntimeKernelLaunch(&stubFunc, 1, rtArgs.args, rtArgs.argsSize, nullptr, stream);
+    int ret = RuntimeKernelLaunch(stubFunc, 1, rtArgs.args, rtArgs.argsSize, nullptr, stream);
     ASSERT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, ret == RT_SUCCESS) << "LiteKernelLaunch failed: " << ret;
 
     // Synchronize and copy back
