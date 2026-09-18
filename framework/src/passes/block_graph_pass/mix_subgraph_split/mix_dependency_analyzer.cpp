@@ -207,6 +207,13 @@ void MixDependencyAnalyzer::PropagateIncastDependencies(const std::set<int>& tar
 
 void MixDependencyAnalyzer::PropagateOutcastDependencies(int targetComp, int sourceComp)
 {
+    // source已有incast时依赖已建立，无需再反向传播outcast；仅无incast的source才需要outcast建立依赖
+    auto incastIt = allIncasts.find(sourceComp);
+    if (incastIt != allIncasts.end() && !incastIt->second.empty()) {
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Skip propagating outcast to component %d: incast already exists",
+                          sourceComp);
+        return;
+    }
     auto outcastIt = allOutcasts.find(targetComp);
     if (outcastIt != allOutcasts.end()) {
         for (const auto& outcastParam : outcastIt->second) {
@@ -220,14 +227,15 @@ void MixDependencyAnalyzer::PropagateOutcastDependencies(int targetComp, int sou
 void MixDependencyAnalyzer::PropagateExternalDependenciesWithClosure(
     const std::unordered_map<int, std::set<int>>& dependencyClosure)
 {
-    // 基于传递闭包传播依赖
+    // 先完成incast正向传播，建立拆分后leaf间的依赖
     for (const auto& [sourceComp, targets] : dependencyClosure) {
-        // 传播incast：source的incast传播给所有依赖它的target
         auto incastIt = allIncasts.find(sourceComp);
         if (incastIt != allIncasts.end()) {
             PropagateIncastDependencies(targets, incastIt->second);
         }
-        // 传播outcast：target的outcast反向传播给所有source
+    }
+    // 再反向传播outcast：source已有incast（依赖已建立）时跳过，仅无incast的source才传播
+    for (const auto& [sourceComp, targets] : dependencyClosure) {
         for (int targetComp : targets) {
             PropagateOutcastDependencies(targetComp, sourceComp);
         }

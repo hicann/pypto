@@ -1152,6 +1152,104 @@ TEST_F(MixDependencyAnalyzerTest, TestCollectGetTensorDataIncastsNullFunction)
     EXPECT_TRUE(analyzer->allIncasts.empty()) << "Null originalMixFunc should be skipped";
 }
 
+// 拆分后依赖传播语义：incast正向传播保留（V leaf持有C传播来的incast）；
+// C已有incast，依赖已建立，不再反向传播outcast给它
+TEST_F(MixSubgraphSplitTest, TestPerLeafIncastOutcastAfterSplit)
+{
+    // 复用基础拆分场景：C读incast1/incast2，V读incast3并写出outcast1
+    auto rootFuncPtr = CreateTestRootFunction();
+
+    FunctionHash mixFuncHash;
+    auto mixFuncPtr = CreateMixSubgraph(rootFuncPtr, mixFuncHash);
+
+    const uint64_t mixProgramId = 100;
+    auto& callOp = CreateCallOp(rootFuncPtr, mixProgramId, mixFuncHash);
+    (void)callOp;
+
+    MixSubgraphSplit splitter;
+    Status status = splitter.RunOnFunction(*rootFuncPtr);
+    ASSERT_EQ(status, SUCCESS) << "MixSubgraphSplit should succeed";
+
+    // 按aivCore区分C leaf与V leaf
+    Function* cubeLeaf = nullptr;
+    Function* vectorLeaf = nullptr;
+    for (const auto& [progId, func] : rootFuncPtr->programs_) {
+        (void)progId;
+        auto leafAttr = func->GetLeafFuncAttribute();
+        ASSERT_NE(leafAttr, nullptr);
+        if (leafAttr->aivCore == AIVCore::UNSPECIFIED) {
+            cubeLeaf = func;
+        } else {
+            vectorLeaf = func;
+        }
+    }
+    ASSERT_NE(cubeLeaf, nullptr) << "Cube leaf should exist";
+    ASSERT_NE(vectorLeaf, nullptr) << "Vector leaf should exist";
+
+    // 原Mix子图的边界tensor
+    const auto& originalIncasts = mixFuncPtr->GetIncast();
+    const auto& originalOutcasts = mixFuncPtr->GetOutcast();
+    ASSERT_EQ(originalIncasts.size(), 3);
+    ASSERT_EQ(originalOutcasts.size(), 1);
+
+    auto leafContains = [](const std::vector<std::shared_ptr<LogicalTensor>>& tensors,
+                           const std::shared_ptr<LogicalTensor>& target) {
+        return std::find(tensors.begin(), tensors.end(), target) != tensors.end();
+    };
+
+    // C leaf：持有自己读取的incast1/incast2，不持有incast3；
+    // C已有incast（依赖已建立），outcast不反向传播给它
+    const auto& cubeIncasts = cubeLeaf->GetIncast();
+    const auto& cubeOutcasts = cubeLeaf->GetOutcast();
+    EXPECT_TRUE(leafContains(cubeIncasts, originalIncasts[0])) << "Cube leaf should own incast1";
+    EXPECT_TRUE(leafContains(cubeIncasts, originalIncasts[1])) << "Cube leaf should own incast2";
+    EXPECT_FALSE(leafContains(cubeIncasts, originalIncasts[2])) << "Cube leaf should not own incast3";
+    EXPECT_FALSE(leafContains(cubeOutcasts, originalOutcasts[0])) << "Cube leaf should not own outcast1";
+
+    // V leaf：持有incast3和outcast1；incast正向传播保留，同时持有C传播来的incast1/incast2
+    const auto& vectorIncasts = vectorLeaf->GetIncast();
+    const auto& vectorOutcasts = vectorLeaf->GetOutcast();
+    EXPECT_TRUE(leafContains(vectorIncasts, originalIncasts[0])) << "Vector leaf should hold propagated incast1";
+    EXPECT_TRUE(leafContains(vectorIncasts, originalIncasts[1])) << "Vector leaf should hold propagated incast2";
+    EXPECT_TRUE(leafContains(vectorIncasts, originalIncasts[2])) << "Vector leaf should own incast3";
+    EXPECT_TRUE(leafContains(vectorOutcasts, originalOutcasts[0])) << "Vector leaf should own outcast1";
+}
+
+// outcast反向传播条件：source已有incast（依赖已建立）时不再传播；
+// 仅无incast的source才接收反向传播，incast正向传播保留
+TEST_F(MixDependencyAnalyzerTest, TestPropagateOutcastSkippedWhenIncastExists)
+{
+    const std::vector<int64_t> shape = {16, 16};
+    auto incast = CreateAndRegisterIncast(shape);
+    auto outcastA = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcastB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+
+    // component 0持有incast；component 1无incast；component 2的outcast待反向传播
+    analyzer->allIncasts[0].emplace_back(incast, -1, 0);
+    analyzer->allOutcasts[2].emplace_back(outcastA, -1, 0);
+    analyzer->allOutcasts[2].emplace_back(outcastB, -1, 0);
+
+    // 依赖闭包：0 -> {2}，1 -> {2}
+    std::unordered_map<int, std::set<int>> closure;
+    closure[0] = {2};
+    closure[1] = {2};
+
+    analyzer->PropagateExternalDependenciesWithClosure(closure);
+
+    auto contains = [](const std::vector<SimpleTensorParam>& params, const LogicalTensorPtr& tensor) {
+        return std::any_of(params.begin(), params.end(),
+                           [&tensor](const SimpleTensorParam& param) { return param.tensor == tensor; });
+    };
+    // 已有incast的component 0：不接收反向传播的outcast
+    EXPECT_FALSE(contains(analyzer->allOutcasts[0], outcastA));
+    EXPECT_FALSE(contains(analyzer->allOutcasts[0], outcastB));
+    // 无incast的component 1：正常接收反向传播的outcast
+    EXPECT_TRUE(contains(analyzer->allOutcasts[1], outcastA));
+    EXPECT_TRUE(contains(analyzer->allOutcasts[1], outcastB));
+    // incast正向传播保留：component 2获得component 0的incast
+    EXPECT_TRUE(contains(analyzer->allIncasts[2], incast));
+}
+
 // OUTCAST类型引用不补回（当前仅处理INCAST）
 TEST_F(MixDependencyAnalyzerTest, TestCollectGetTensorDataIncastsSkipsOutcast)
 {
