@@ -38,8 +38,7 @@ TILEOP void IntFloorDiv(T0 dst, T1 src0, T2 src1, T3 tmp0, T4 tmp1, T5 tmp2, T6 
     pto::TCMPS(tmp3, src0, 0, pto::CmpMode::GE);
     pto::TSELS(tmp2, tmp3, tmp2, tmp2, neg);
     pto::TCMPS(tmp3, src1, 0, pto::CmpMode::NE);
-    pto::TMOV(tmp0, src0);
-    pto::TSEL(tmp0, tmp3, tmp0, tmp2, tmp2);
+    pto::TPARTSEL(tmp0, tmp3, src0, tmp2, tmp2);
     pto::TSELS(tmp1, tmp3, src1, tmp2, 1);
 
     /*
@@ -61,7 +60,7 @@ TILEOP void IntFloorDiv(T0 dst, T1 src0, T2 src1, T3 tmp0, T4 tmp1, T5 tmp2, T6 
     pto::TCMPS(tmp4, tmp0, 0, pto::CmpMode::NE);
     pto::TAND(tmp3, tmp3, tmp4);
     pto::TADDS(tmp0, dst, -1);
-    pto::TSEL(dst, tmp3, tmp0, dst, tmp2);
+    pto::TPARTSEL(dst, tmp3, tmp0, dst, tmp2);
 }
 
 template <typename TmpTensor>

@@ -148,7 +148,7 @@ TILEOP void TPowFloatTile(DstTile dstTile, Src0Tile src0Tile, Src1Tile src1Tile,
     SyncV();
     pto::TMULS(tmp0Tile, dstTile, scalarNegOne);
     SyncV();
-    pto::TSEL(dstTile, mask0Tile, tmp0Tile, dstTile, selTmpTile);
+    pto::TPARTSEL(dstTile, mask0Tile, tmp0Tile, dstTile, selTmpTile);
     SyncV();
 
     // floor(y) -> tmp1; non-integer exponent = (y != floor(y)) -> mask0 (reused)
@@ -167,7 +167,7 @@ TILEOP void TPowFloatTile(DstTile dstTile, Src0Tile src0Tile, Src1Tile src1Tile,
     SyncV();
     pto::TEXPANDS(tmp0Tile, nanValue);
     SyncV();
-    pto::TSEL(dstTile, mask1Tile, tmp0Tile, dstTile, selTmpTile);
+    pto::TPARTSEL(dstTile, mask1Tile, tmp0Tile, dstTile, selTmpTile);
     SyncV();
 
     // y == 0: dst = 1
@@ -175,13 +175,13 @@ TILEOP void TPowFloatTile(DstTile dstTile, Src0Tile src0Tile, Src1Tile src1Tile,
     SyncV();
     pto::TEXPANDS(tmp0Tile, scalarOne);
     SyncV();
-    pto::TSEL(dstTile, mask0Tile, tmp0Tile, dstTile, selTmpTile);
+    pto::TPARTSEL(dstTile, mask0Tile, tmp0Tile, dstTile, selTmpTile);
     SyncV();
 
     // x == 1: dst = 1 (tmp0 still holds 1)
     pto::TCMPS(mask0Tile, src0Tile, scalarOne, pto::CmpMode::EQ);
     SyncV();
-    pto::TSEL(dstTile, mask0Tile, tmp0Tile, dstTile, selTmpTile);
+    pto::TPARTSEL(dstTile, mask0Tile, tmp0Tile, dstTile, selTmpTile);
     SyncV();
 
     // x == -1 and y is +/-inf: dst = 1 (mag is NaN because log(1) == 0)
@@ -193,7 +193,7 @@ TILEOP void TPowFloatTile(DstTile dstTile, Src0Tile src0Tile, Src1Tile src1Tile,
     SyncV();
     pto::TAND(mask1Tile, mask0Tile, mask1Tile); // mask1 = x==-1 AND |y|==inf
     SyncV();
-    pto::TSEL(dstTile, mask1Tile, tmp0Tile, dstTile, selTmpTile);
+    pto::TPARTSEL(dstTile, mask1Tile, tmp0Tile, dstTile, selTmpTile);
     SyncV();
 }
 #endif
@@ -213,24 +213,34 @@ TILEOP void TPow(T0 dst, T1 src0, T2 src1, T3 tmp)
         if (dstShape0 == 0 || dstShape1 == 0 || dstShape2 == 0) {
             return;
         }
-        constexpr auto tileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
-        constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
+        constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
+        constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
+        constexpr auto src0TileH = TileOp::GetTensorTileShapeDim<T1, DIM_4TH, MAX_DIMS>();
+        constexpr auto src0TileW = TileOp::GetTensorTileShapeDim<T1, DIM_5TH, MAX_DIMS>();
+        constexpr auto src1TileH = TileOp::GetTensorTileShapeDim<T2, DIM_4TH, MAX_DIMS>();
+        constexpr auto src1TileW = TileOp::GetTensorTileShapeDim<T2, DIM_5TH, MAX_DIMS>();
+        constexpr auto computeTileH = src0TileH;
+        constexpr auto computeTileW = src0TileW;
         constexpr auto dataTypeSize = sizeof(typename T0::Type);
-        constexpr auto floatSlot = tileH * tileW * dataTypeSize; // bytes, 32B-aligned
+        constexpr auto floatSlot = computeTileH * computeTileW * dataTypeSize; // bytes, 32B-aligned
         constexpr auto BITS_PER_BYTE = TileOp::BITS_PER_BYTE;
         constexpr auto MASK_ALIGNMENT = TileOp::BLOCK_SIZE;
         constexpr auto MASK_COUNT = 2;
-        constexpr auto maskCols = ((tileW + BITS_PER_BYTE - 1) / BITS_PER_BYTE + MASK_ALIGNMENT - 1) / MASK_ALIGNMENT *
-                                  MASK_ALIGNMENT;
-        constexpr auto maskSlot = tileH * maskCols; // bytes
+        constexpr auto maskCols = ((computeTileW + BITS_PER_BYTE - 1) / BITS_PER_BYTE + MASK_ALIGNMENT - 1) /
+                                  MASK_ALIGNMENT * MASK_ALIGNMENT;
+        constexpr auto maskSlot = computeTileH * maskCols; // bytes
         constexpr auto maskBase = MASK_COUNT * floatSlot;
-        using DataTile = pto::Tile<pto::TileType::Vec, float, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
-        using MaskTile = pto::Tile<pto::TileType::Vec, uint8_t, tileH, maskCols, pto::BLayout::RowMajor, -1, -1>;
-        DataTile dstTile(dstShape3, dstShape4);
-        DataTile src0Tile(dstShape3, dstShape4);
-        DataTile src1Tile(dstShape3, dstShape4);
-        DataTile tmp0Tile(dstShape3, dstShape4);
-        DataTile tmp1Tile(dstShape3, dstShape4);
+        using DstDataTile = pto::Tile<pto::TileType::Vec, float, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
+        using Src0DataTile = pto::Tile<pto::TileType::Vec, float, src0TileH, src0TileW, pto::BLayout::RowMajor, -1, -1>;
+        using Src1DataTile = pto::Tile<pto::TileType::Vec, float, src1TileH, src1TileW, pto::BLayout::RowMajor, -1, -1>;
+        using TmpDataTile = pto::Tile<pto::TileType::Vec, float, computeTileH, computeTileW, pto::BLayout::RowMajor, -1,
+                                      -1>;
+        using MaskTile = pto::Tile<pto::TileType::Vec, uint8_t, computeTileH, maskCols, pto::BLayout::RowMajor, -1, -1>;
+        DstDataTile dstTile(dstShape3, dstShape4);
+        Src0DataTile src0Tile(dstShape3, dstShape4);
+        Src1DataTile src1Tile(dstShape3, dstShape4);
+        TmpDataTile tmp0Tile(dstShape3, dstShape4);
+        TmpDataTile tmp1Tile(dstShape3, dstShape4);
         const auto validMaskCols = (dstShape4 + BITS_PER_BYTE - 1) / BITS_PER_BYTE;
         MaskTile mask0Tile(dstShape3, validMaskCols);
         MaskTile mask1Tile(dstShape3, validMaskCols);
