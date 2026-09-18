@@ -372,7 +372,6 @@ TILEOP void TACosh(T0 dst, T1 src, T2 tmp)
                 pto::TADDS(tmp0Tile, srcExecTile, CONST_NEG_ONE); // t
                 SyncV();
                 pto::TADD(tmp1Tile, tmp0Tile, tmp0Tile); // 2t
-                SyncV();
                 pto::TMUL(tmp2Tile, tmp0Tile, tmp0Tile); // t^2
                 SyncV();
                 pto::TADD(tmp1Tile, tmp1Tile, tmp2Tile); // t^2 + 2t
@@ -383,26 +382,19 @@ TILEOP void TACosh(T0 dst, T1 src, T2 tmp)
                 SyncV();
                 pto::TADDS(tmp2Tile, tmp1Tile, CONST_ONE); // r + 1
                 SyncV();
-
                 pto::TADDS(tmp0Tile, tmp2Tile, CONST_NEG_ONE); // clamp(r, s_min, s_max)
+                pto::TLOG(dstTile, tmp2Tile);                  // log(r + 1)
                 SyncV();
                 pto::TMAXS(tmp0Tile, tmp0Tile, CONST_COMPARE_VALUE_MIN);
-                SyncV();
-                pto::TMINS(tmp0Tile, tmp0Tile, CONST_COMPARE_VALUE_MAX);
-                SyncV();
-
-                pto::TLOG(dstTile, tmp2Tile); // log(r + 1)
-                SyncV();
                 pto::TMUL(dstTile, dstTile, tmp1Tile); // r * log(r + 1)
                 SyncV();
-                pto::TDIV(dstTile, dstTile, tmp0Tile); // r * log(r + 1) / clamp(r, s_min, s_max)
+                pto::TMINS(tmp0Tile, tmp0Tile, CONST_COMPARE_VALUE_MAX);
+                pto::TLOG<pto::LogAlgorithm::HIGH_PRECISION>(tmp1Tile, srcExecTile); // log(x)
                 SyncV();
-
-                pto::TLOG<pto::LogAlgorithm::HIGH_PRECISION>(tmp0Tile, srcExecTile); // log(x)
+                pto::TDIV(dstTile, dstTile, tmp0Tile);               // r * log(r + 1) / clamp(r, s_min, s_max)
+                pto::TADDS(tmp1Tile, tmp1Tile, CONST_LOG_TWO_VALUE); // log(x) + log(2)
                 SyncV();
-                pto::TADDS(tmp0Tile, tmp0Tile, CONST_LOG_TWO_VALUE); // log(x) + log(2)
-                SyncV();
-                pto::TMIN(dstTile, dstTile, tmp0Tile);
+                pto::TMIN(dstTile, dstTile, tmp1Tile);
                 SyncV();
             }
         }
