@@ -33,9 +33,6 @@
 
 namespace npu::tile_fwk {
 namespace {
-constexpr size_t MIN_DIMENSION_BOUNDARY_COUNT = 2;
-constexpr size_t MAX_COVERAGE_CELL_COUNT = 100000;
-
 ir::StmtPtr ToStmtPtr(Operation& op) { return std::static_pointer_cast<const ir::Stmt>(op.shared_from_this()); }
 
 Operation* ToOperation(const ir::StmtPtr& stmt) { return static_cast<Operation*>(const_cast<ir::Stmt*>(stmt.get())); }
@@ -69,7 +66,9 @@ struct TokenSnapshot {
     std::vector<Operation*> consumers;
 };
 
-std::vector<TokenSnapshot> CollectTokenSnapshots(Function& function, const std::unordered_set<Operation*>& affected)
+// Collects every token touching the affected ops: from the ops' own result/input token
+// lists plus the var dependency registry entries whose producer or consumer is affected.
+std::vector<ir::VarPtr> CollectAffectedTokens(Function& function, const std::unordered_set<Operation*>& affected)
 {
     std::vector<ir::VarPtr> tokens;
     for (auto* op : affected) {
@@ -103,33 +102,43 @@ std::vector<TokenSnapshot> CollectTokenSnapshots(Function& function, const std::
             AddUnique(tokens, token);
         }
     }
+    return tokens;
+}
 
-    std::vector<TokenSnapshot> snapshots;
-    snapshots.reserve(tokens.size());
-    for (const auto& token : tokens) {
-        TokenSnapshot snapshot;
-        snapshot.token = token;
-        const auto& producers = function.GetVarDependency().GetProducers(token);
-        if (!producers.empty()) {
-            snapshot.producer = ToOperation(*producers.begin());
-        } else {
-            for (auto* op : affected) {
-                if (op != nullptr &&
-                    std::find(op->result_token_.begin(), op->result_token_.end(), token) != op->result_token_.end()) {
-                    snapshot.producer = op;
-                    break;
-                }
-            }
-        }
-        for (const auto& consumer : function.GetVarDependency().GetConsumers(token)) {
-            AddUnique(snapshot.consumers, ToOperation(consumer));
-        }
+// Builds the producer/consumers snapshot of one token relative to the affected ops.
+TokenSnapshot BuildTokenSnapshot(Function& function, const ir::VarPtr& token,
+                                 const std::unordered_set<Operation*>& affected)
+{
+    TokenSnapshot snapshot;
+    snapshot.token = token;
+    const auto& producers = function.GetVarDependency().GetProducers(token);
+    if (!producers.empty()) {
+        snapshot.producer = ToOperation(*producers.begin());
+    } else {
         for (auto* op : affected) {
-            if (op != nullptr && std::find(op->tokens_.begin(), op->tokens_.end(), token) != op->tokens_.end()) {
-                AddUnique(snapshot.consumers, op);
+            if (op != nullptr &&
+                std::find(op->result_token_.begin(), op->result_token_.end(), token) != op->result_token_.end()) {
+                snapshot.producer = op;
+                break;
             }
         }
-        snapshots.emplace_back(std::move(snapshot));
+    }
+    for (const auto& consumer : function.GetVarDependency().GetConsumers(token)) {
+        AddUnique(snapshot.consumers, ToOperation(consumer));
+    }
+    for (auto* op : affected) {
+        if (op != nullptr && std::find(op->tokens_.begin(), op->tokens_.end(), token) != op->tokens_.end()) {
+            AddUnique(snapshot.consumers, op);
+        }
+    }
+    return snapshot;
+}
+
+std::vector<TokenSnapshot> CollectTokenSnapshots(Function& function, const std::unordered_set<Operation*>& affected)
+{
+    std::vector<TokenSnapshot> snapshots;
+    for (const auto& token : CollectAffectedTokens(function, affected)) {
+        snapshots.emplace_back(BuildTokenSnapshot(function, token, affected));
     }
     return snapshots;
 }
@@ -193,8 +202,13 @@ bool HasDependencyCycle(const std::unordered_map<Operation*, std::unordered_set<
     return visited != indegree.size();
 }
 
-bool WouldCreateCycleAfterContraction(Function& function, const std::unordered_map<Operation*, Operation*>& mapping)
+bool WouldCreateCycleAfterContraction(Function& function, const std::unordered_map<Operation*, Operation*>& mapping,
+                                      bool dagVerified)
 {
+    // See VerifyFunctionIsDag: an acyclic graph stays acyclic under edge-removing merges.
+    if (dagVerified) {
+        return false;
+    }
     auto mapOp = [&mapping](Operation* op) {
         auto iter = mapping.find(op);
         return iter == mapping.end() ? op : iter->second;
@@ -215,6 +229,54 @@ bool WouldCreateCycleAfterContraction(Function& function, const std::unordered_m
         for (const auto& producerStmt : entry.producers) {
             for (const auto& consumerStmt : entry.consumers) {
                 AddDependencyEdge(adjacency, mapOp(ToOperation(producerStmt)), mapOp(ToOperation(consumerStmt)));
+            }
+        }
+    }
+    return HasDependencyCycle(adjacency);
+}
+
+// Cycle check for assemble chain merges. The merged op reads the chain head's input and
+// writes the chain tail's output, bypassing the intermediates: the tail's input edges
+// (reading the middle) disappear, so they must not be attributed to the representative.
+// Keeping them would fabricate cycles through sibling producers of the middle.
+bool WouldCreateAssembleChainCycle(Function& function, const std::vector<Operation*>& chain, bool dagVerified)
+{
+    // See VerifyFunctionIsDag: an acyclic graph stays acyclic under edge-removing merges.
+    if (dagVerified) {
+        return false;
+    }
+    if (chain.empty()) {
+        return false;
+    }
+    std::unordered_set<Operation*> chainSet(chain.begin(), chain.end());
+    Operation* representative = chain.front();
+    std::unordered_map<Operation*, std::unordered_set<Operation*>> adjacency;
+    for (auto& op : function.Operations(false)) {
+        bool inChain = chainSet.count(&op) != 0;
+        if (inChain && &op != representative) {
+            // The tail's read of the middle is bypassed; intermediate ops keep their edges
+            // only when side consumers keep them alive, and mapping them onto the
+            // representative stays conservative.
+            continue;
+        }
+        adjacency.try_emplace(inChain ? representative : &op);
+        for (const auto& input : op.GetIOperands()) {
+            for (auto* producer : input->GetProducers()) {
+                if (producer->BelongTo() == &function && !producer->IsDeleted()) {
+                    AddDependencyEdge(adjacency, chainSet.count(producer) != 0 ? representative : producer,
+                                      inChain ? representative : &op);
+                }
+            }
+        }
+    }
+    for (const auto& [token, entry] : function.GetVarDependency().GetAllDependencies()) {
+        (void)token;
+        for (const auto& producerStmt : entry.producers) {
+            auto* producer = ToOperation(producerStmt);
+            for (const auto& consumerStmt : entry.consumers) {
+                auto* consumer = ToOperation(consumerStmt);
+                AddDependencyEdge(adjacency, chainSet.count(producer) != 0 ? representative : producer,
+                                  chainSet.count(consumer) != 0 ? representative : consumer);
             }
         }
     }
@@ -247,8 +309,9 @@ void CollectLinearTokenDependency(Function& function, const std::vector<Operatio
             continue;
         }
         AddUnique(tokenDependency.resultTokens, snapshot.token);
+        tokenDependency.resultTokenConsumers.emplace_back();
         for (auto* consumer : externalConsumers) {
-            AddUnique(tokenDependency.resultTokenConsumers, ToStmtPtr(*consumer));
+            AddUnique(tokenDependency.resultTokenConsumers.back(), ToStmtPtr(*consumer));
         }
     }
 }
@@ -275,15 +338,18 @@ void ClearLinearTokenDependency(Function& function, const std::vector<Operation*
         }
         for (auto* consumer : snapshot.consumers) {
             if (chainSet.count(consumer) != 0 || producerInChain) {
-                dependency.RemoveConsumer(snapshot.token, ToStmtPtr(*consumer));
+                // Keep the varDependency consumer entry: sibling chains passing through
+                // the same chain op must still be able to collect this token, and every
+                // such chain's merged op waits it independently. The op-level list is
+                // cleared below; the stale entry of the deleted op is inert and gets
+                // cleaned up with the op itself.
                 RemoveToken(*consumer, snapshot.token);
             }
         }
         if (producerInChain && snapshot.producer != nullptr) {
             dependency.RemoveProducer(snapshot.token, ToStmtPtr(*snapshot.producer));
         }
-        if (producerInChain ||
-            (dependency.GetProducers(snapshot.token).empty() && dependency.GetConsumers(snapshot.token).empty())) {
+        if (producerInChain) {
             dependency.RemoveVar(snapshot.token);
         }
     }
@@ -299,18 +365,21 @@ void ApplyLinearTokenDependency(Function& function, Operation& mergedOp,
     for (const auto& token : tokenDependency.inputTokens) {
         AddTokenConsumer(function, token, mergedOp);
     }
-    for (const auto& resultToken : tokenDependency.resultTokens) {
+    for (size_t index = 0; index < tokenDependency.resultTokens.size(); ++index) {
+        const auto& resultToken = tokenDependency.resultTokens[index];
         if (resultToken == nullptr) {
             continue;
         }
-        // token 只允许单生产者：merged op 产出新 token 接管旧 token 的全部外部消费者。
+        // token 只允许单生产者：merged op 产出新 token 接管该旧 token 的全部外部消费者。
         // 扇出场景下同一旧 token 被多条链共享时，每条链的 merged op 各产一个新 token，
         // 消费者等待全部新 token，与原语义（等旧 token 的唯一生产者）保持一致。
         auto newToken = IRBuilder().CreateTokenVar(mergedOp.GetSpan());
         AddUnique(mergedOp.result_token_, newToken);
         function.GetVarDependency().AddProducer(newToken, ToStmtPtr(mergedOp));
-        for (const auto& consumerStmt : tokenDependency.resultTokenConsumers) {
-            AddTokenConsumer(function, newToken, *ToOperation(consumerStmt));
+        if (index < tokenDependency.resultTokenConsumers.size()) {
+            for (const auto& consumerStmt : tokenDependency.resultTokenConsumers[index]) {
+                AddTokenConsumer(function, newToken, *ToOperation(consumerStmt));
+            }
         }
     }
 }
@@ -427,82 +496,17 @@ Opcode GetMergedAssembleOpcode(const std::vector<Operation*>& chain)
     return ChainHasOpcode(chain, Opcode::OP_CONTRACT) ? Opcode::OP_CONTRACT : Opcode::OP_ASSEMBLE;
 }
 
-bool WouldCreateProducerGroupCycle(Function& function, const MergeViewAssembleUtils::ProducerGroupFusion& fusion)
+AtomicSemanticAttrState GetChainAtomicSemanticAttr(const std::vector<Operation*>& chain)
 {
-    if (fusion.downstream == nullptr) {
-        return true;
-    }
-    std::unordered_set<Operation*> groupSet(fusion.producers.begin(), fusion.producers.end());
-    std::unordered_map<Operation*, std::unordered_set<Operation*>> adjacency;
-    for (auto& op : function.Operations(false)) {
-        if (&op == fusion.downstream) {
+    AtomicSemanticAttrState attr;
+    for (const auto* op : chain) {
+        if (op == nullptr) {
             continue;
         }
-        adjacency.try_emplace(&op);
-        for (const auto& input : op.GetIOperands()) {
-            for (auto* producer : input->GetProducers()) {
-                if (producer == fusion.downstream) {
-                    for (auto* groupProducer : fusion.producers) {
-                        AddDependencyEdge(adjacency, groupProducer, &op);
-                    }
-                } else if (producer->BelongTo() == &function && !producer->IsDeleted()) {
-                    AddDependencyEdge(adjacency, producer, &op);
-                }
-            }
-        }
+        attr.fromReduceAcc = attr.fromReduceAcc || op->HasAttr(ATOMIC_FROM_REDUCE_ACC_ATTR);
+        attr.fromExplicitRmw = attr.fromExplicitRmw || op->HasAttr(ATOMIC_FROM_EXPLICIT_RMW_ATTR);
     }
-    for (const auto& [token, entry] : function.GetVarDependency().GetAllDependencies()) {
-        (void)token;
-        for (const auto& producerStmt : entry.producers) {
-            auto* producer = ToOperation(producerStmt);
-            for (const auto& consumerStmt : entry.consumers) {
-                auto* consumer = ToOperation(consumerStmt);
-                if (producer == fusion.downstream) {
-                    if (groupSet.count(consumer) != 0) {
-                        return true;
-                    }
-                    for (auto* groupProducer : fusion.producers) {
-                        AddDependencyEdge(adjacency, groupProducer, consumer);
-                    }
-                } else if (consumer == fusion.downstream) {
-                    if (groupSet.count(producer) == 0) {
-                        for (auto* groupProducer : fusion.producers) {
-                            AddDependencyEdge(adjacency, producer, groupProducer);
-                        }
-                    }
-                } else {
-                    AddDependencyEdge(adjacency, producer, consumer);
-                }
-            }
-        }
-    }
-    return HasDependencyCycle(adjacency);
-}
-
-void ResetTokenDependency(Function& function, const ir::VarPtr& token, Operation* producer,
-                          const std::vector<Operation*>& consumers)
-{
-    auto& dependency = function.GetVarDependency();
-    dependency.RemoveVar(token);
-    if (producer != nullptr) {
-        AddUnique(producer->result_token_, token);
-        dependency.AddProducer(token, ToStmtPtr(*producer));
-    }
-    for (auto* consumer : consumers) {
-        if (consumer != producer) {
-            AddTokenConsumer(function, token, *consumer);
-        }
-    }
-}
-
-ir::VarPtr EnsureResultToken(Function& function, Operation& producer)
-{
-    if (producer.result_token_.empty()) {
-        producer.result_token_.push_back(IRBuilder().CreateTokenVar(producer.GetSpan()));
-    }
-    auto token = producer.result_token_.front();
-    function.GetVarDependency().AddProducer(token, ToStmtPtr(producer));
-    return token;
+    return attr;
 }
 
 bool HasDataPath(Operation* producer, Operation* consumer)
@@ -531,6 +535,32 @@ bool HasDataPath(Operation* producer, Operation* consumer)
     return false;
 }
 
+void ResetTokenDependency(Function& function, const ir::VarPtr& token, Operation* producer,
+                          const std::vector<Operation*>& consumers)
+{
+    auto& dependency = function.GetVarDependency();
+    dependency.RemoveVar(token);
+    if (producer != nullptr) {
+        AddUnique(producer->result_token_, token);
+        dependency.AddProducer(token, ToStmtPtr(*producer));
+    }
+    for (auto* consumer : consumers) {
+        if (consumer != producer) {
+            AddTokenConsumer(function, token, *consumer);
+        }
+    }
+}
+
+ir::VarPtr EnsureResultToken(Function& function, Operation& producer)
+{
+    if (producer.result_token_.empty()) {
+        producer.result_token_.push_back(IRBuilder().CreateTokenVar(producer.GetSpan()));
+    }
+    auto token = producer.result_token_.front();
+    function.GetVarDependency().AddProducer(token, ToStmtPtr(producer));
+    return token;
+}
+
 bool AddDataCoveredTokenConsumers(const MergeViewAssembleUtils::ProducerGroupFusion& fusion,
                                   const std::vector<Operation*>& replacements, Operation* tokenProducer,
                                   std::vector<Operation*>& tokenConsumers)
@@ -552,17 +582,9 @@ bool AddDataCoveredTokenConsumers(const MergeViewAssembleUtils::ProducerGroupFus
     return covered;
 }
 
-void RewriteProducerGroupTokens(Function& function, const MergeViewAssembleUtils::ProducerGroupFusion& fusion,
-                                const std::vector<Operation*>& replacements)
+void ClearGroupTokenSnapshots(Function& function, const std::vector<TokenSnapshot>& snapshots,
+                              const std::unordered_set<Operation*>& affected)
 {
-    std::unordered_set<Operation*> affected(fusion.producers.begin(), fusion.producers.end());
-    affected.insert(fusion.downstream);
-    auto snapshots = CollectTokenSnapshots(function, affected);
-    std::unordered_map<Operation*, Operation*> replacementMap;
-    for (size_t index = 0; index < fusion.producers.size(); ++index) {
-        replacementMap.emplace(fusion.producers[index], replacements[index]);
-    }
-
     auto& dependency = function.GetVarDependency();
     for (const auto& snapshot : snapshots) {
         for (auto* consumer : snapshot.consumers) {
@@ -581,11 +603,14 @@ void RewriteProducerGroupTokens(Function& function, const MergeViewAssembleUtils
         op->tokens_.clear();
         op->result_token_.clear();
     }
+}
 
-    std::vector<const TokenSnapshot*> downstreamResultTokens;
+void RewireGroupTokenSnapshots(Function& function, const MergeViewAssembleUtils::ProducerGroupFusion& fusion,
+                               const std::vector<Operation*>& replacements, const std::vector<TokenSnapshot>& snapshots,
+                               const std::unordered_map<Operation*, Operation*>& replacementMap)
+{
     for (const auto& snapshot : snapshots) {
         if (snapshot.producer == fusion.downstream) {
-            downstreamResultTokens.emplace_back(&snapshot);
             continue;
         }
         Operation* newProducer = snapshot.producer;
@@ -609,20 +634,36 @@ void RewriteProducerGroupTokens(Function& function, const MergeViewAssembleUtils
         }
         ResetTokenDependency(function, snapshot.token, newProducer, newConsumers);
     }
+}
 
-    for (const auto* snapshot : downstreamResultTokens) {
+void RewriteProducerGroupTokens(Function& function, const MergeViewAssembleUtils::ProducerGroupFusion& fusion,
+                                const std::vector<Operation*>& replacements)
+{
+    std::unordered_set<Operation*> affected(fusion.producers.begin(), fusion.producers.end());
+    affected.insert(fusion.downstream);
+    auto snapshots = CollectTokenSnapshots(function, affected);
+    std::unordered_map<Operation*, Operation*> replacementMap;
+    for (size_t index = 0; index < fusion.producers.size(); ++index) {
+        replacementMap.emplace(fusion.producers[index], replacements[index]);
+    }
+    ClearGroupTokenSnapshots(function, snapshots, affected);
+    RewireGroupTokenSnapshots(function, fusion, replacements, snapshots, replacementMap);
+    auto& dependency = function.GetVarDependency();
+    for (const auto& snapshot : snapshots) {
+        if (snapshot.producer != fusion.downstream) {
+            continue;
+        }
         for (auto* replacement : replacements) {
             auto resultToken = EnsureResultToken(function, *replacement);
-            for (auto* consumer : snapshot->consumers) {
+            for (auto* consumer : snapshot.consumers) {
                 AddTokenConsumer(function, resultToken, *consumer);
             }
         }
     }
-
     for (auto* replacement : replacements) {
         auto resultTokens = replacement->result_token_;
         for (const auto& token : resultTokens) {
-            if (!function.GetVarDependency().GetConsumers(token).empty()) {
+            if (!dependency.GetConsumers(token).empty()) {
                 continue;
             }
             dependency.RemoveProducer(token, ToStmtPtr(*replacement));
@@ -634,17 +675,73 @@ void RewriteProducerGroupTokens(Function& function, const MergeViewAssembleUtils
     }
 }
 
-AtomicSemanticAttrState GetChainAtomicSemanticAttr(const std::vector<Operation*>& chain)
+bool BuildProducerGroupAdjacency(Function& function, const MergeViewAssembleUtils::ProducerGroupFusion& fusion,
+                                 std::unordered_map<Operation*, std::unordered_set<Operation*>>& adjacency)
 {
-    AtomicSemanticAttrState attr;
-    for (const auto* op : chain) {
-        if (op == nullptr) {
+    if (fusion.downstream == nullptr) {
+        return true;
+    }
+    std::unordered_set<Operation*> groupSet(fusion.producers.begin(), fusion.producers.end());
+    for (auto& op : function.Operations(false)) {
+        if (&op == fusion.downstream) {
             continue;
         }
-        attr.fromReduceAcc = attr.fromReduceAcc || op->HasAttr(ATOMIC_FROM_REDUCE_ACC_ATTR);
-        attr.fromExplicitRmw = attr.fromExplicitRmw || op->HasAttr(ATOMIC_FROM_EXPLICIT_RMW_ATTR);
+        adjacency.try_emplace(&op);
+        for (const auto& input : op.GetIOperands()) {
+            for (auto* producer : input->GetProducers()) {
+                if (producer == fusion.downstream) {
+                    for (auto* groupProducer : fusion.producers) {
+                        AddDependencyEdge(adjacency, groupProducer, &op);
+                    }
+                } else if (producer->BelongTo() == &function && !producer->IsDeleted()) {
+                    AddDependencyEdge(adjacency, producer, &op);
+                }
+            }
+        }
     }
-    return attr;
+    return false;
+}
+
+bool HasProducerGroupTokenCycle(Function& function, const MergeViewAssembleUtils::ProducerGroupFusion& fusion,
+                                std::unordered_map<Operation*, std::unordered_set<Operation*>>& adjacency)
+{
+    std::unordered_set<Operation*> groupSet(fusion.producers.begin(), fusion.producers.end());
+    for (const auto& [token, entry] : function.GetVarDependency().GetAllDependencies()) {
+        (void)token;
+        for (const auto& producerStmt : entry.producers) {
+            auto* producer = ToOperation(producerStmt);
+            for (const auto& consumerStmt : entry.consumers) {
+                auto* consumer = ToOperation(consumerStmt);
+                if (producer == fusion.downstream) {
+                    if (groupSet.count(consumer) != 0) {
+                        return true;
+                    }
+                    for (auto* groupProducer : fusion.producers) {
+                        AddDependencyEdge(adjacency, groupProducer, consumer);
+                    }
+                } else if (consumer == fusion.downstream) {
+                    if (groupSet.count(producer) == 0) {
+                        for (auto* groupProducer : fusion.producers) {
+                            AddDependencyEdge(adjacency, producer, groupProducer);
+                        }
+                    }
+                } else {
+                    AddDependencyEdge(adjacency, producer, consumer);
+                }
+            }
+        }
+    }
+    return false;
+}
+
+bool WouldCreateProducerGroupCycle(Function& function, const MergeViewAssembleUtils::ProducerGroupFusion& fusion)
+{
+    std::unordered_map<Operation*, std::unordered_set<Operation*>> adjacency;
+    if (BuildProducerGroupAdjacency(function, fusion, adjacency) ||
+        HasProducerGroupTokenCycle(function, fusion, adjacency)) {
+        return true;
+    }
+    return HasDependencyCycle(adjacency);
 }
 } // namespace
 
@@ -662,6 +759,8 @@ Status MergeViewAssembleUtils::Process(Function& function)
         APASS_LOG_ERROR_F(Elements::Function, "MergeViewAssembleUtils initialization failed.");
         return status;
     }
+    // Frontend flag: create_new_logical_tensor selects token-era vs original merging.
+    tokenMode_ = IRContext::Get().AssembleNewLogicalTensor();
     DeadOperationEliminator eliminator;
     eliminator.EliminateOperation(function, false, false);
     status = ProcessOperations(function);
@@ -688,6 +787,10 @@ Status MergeViewAssembleUtils::Initialize()
     processedGroupTensor_.clear();
     candidateOps_.clear();
     producerGroupFusions_.clear();
+    groupFusionClaimedOps_.clear();
+    recordedMergeInputMagics_.clear();
+    coverageCache_.clear();
+    dagVerified_ = false;
     return SUCCESS;
 }
 
@@ -775,24 +878,11 @@ Status MergeViewAssembleUtils::BuildConsumerCache(Function& function)
         }
         consumerCache_[operation.GetOpMagic()] = &BuildTensorConsumerCache(function, operation.oOperand.front());
     }
-    return SUCCESS;
-}
-
-Status MergeViewAssembleUtils::DiscoverProducerGroupFusions(Function& function)
-{
-    for (auto* op : candidateOps_) {
-        if (op == nullptr || !IsAssembleLikeOpcode(op->GetOpcode()) || op->oOperand.empty()) {
-            continue;
-        }
-        const auto& middle = op->oOperand.front();
-        if (middle == nullptr || middle->GetProducers().size() <= 1 ||
-            processedGroupTensor_.count(middle->GetMagic()) != 0) {
-            continue;
-        }
-        processedGroupTensor_.insert(middle->GetMagic());
-        const auto& consumers = BuildTensorConsumerCache(function, middle);
-        BuildProducerGroupFusion(function, middle, consumers);
-    }
+    // The LIGHTWEIGHT sort at the head of ProcessOperations is itself a full DAG
+    // verification over data and token edges (it aborts on cycles), so the graph is
+    // acyclic here. Chain merging only removes edges from this point on, letting every
+    // per-chain cycle check short-circuit for the rest of this pass run.
+    dagVerified_ = true;
     return SUCCESS;
 }
 
@@ -806,67 +896,17 @@ const MergeViewAssembleUtils::ConsumerCacheEntry& MergeViewAssembleUtils::GetCon
     return *iter->second;
 }
 
-bool MergeViewAssembleUtils::IsFunctionBoundaryTensor(const Function& function, const LogicalTensorPtr& tensor)
-{
-    auto isSameTensor = [&tensor](const LogicalTensorPtr& boundary) {
-        return tensor != nullptr && boundary != nullptr && tensor->GetMagic() == boundary->GetMagic();
-    };
-    return std::any_of(function.GetIncast().begin(), function.GetIncast().end(), isSameTensor) ||
-           std::any_of(function.GetOutcast().begin(), function.GetOutcast().end(), isSameTensor);
-}
+namespace {
+struct CoverageRegion {
+    std::vector<int64_t> begin;
+    std::vector<int64_t> end;
+};
 
-bool MergeViewAssembleUtils::WouldOrphanLiveConsumer(Function& function, const std::vector<Operation*>& toDelete,
-                                                     const std::unordered_set<LogicalTensorPtr>& reProduced) const
+// Builds the write regions of the producers on the middle tensor. Returns false when a
+// producer is not a statically placed single-in single-out assemble (regions unresolvable).
+bool BuildCoverageRegions(const std::vector<int64_t>& targetShape, const std::vector<Operation*>& producers,
+                          std::vector<CoverageRegion>& regions)
 {
-    std::unordered_set<const Operation*> deleteSet;
-    deleteSet.reserve(toDelete.size());
-    for (auto* op : toDelete) {
-        if (op != nullptr) {
-            deleteSet.insert(op);
-        }
-    }
-    for (auto* op : toDelete) {
-        if (op == nullptr) {
-            continue;
-        }
-        for (auto& output : op->GetOOperands()) {
-            if (output == nullptr || reProduced.count(output) != 0) {
-                continue;
-            }
-            for (auto* consumer : output->GetConsumers()) {
-                if (consumer == nullptr || consumer->IsDeleted() || deleteSet.count(consumer) != 0 ||
-                    consumer->BelongTo() != &function) {
-                    continue;
-                }
-                APASS_LOG_WARN_F(Elements::Operation,
-                                 "Skip assemble fusion: deleting op[%d] would orphan consumer op[%d] of tensor[%d].",
-                                 op->GetOpMagic(), consumer->GetOpMagic(), output->GetMagic());
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-bool MergeViewAssembleUtils::HasCompleteStaticCoverage(const LogicalTensorPtr& middle,
-                                                       const std::vector<Operation*>& producers)
-{
-    if (middle == nullptr || middle->GetShape().empty() || producers.empty()) {
-        return false;
-    }
-    const auto& targetShape = middle->GetShape();
-    struct Region {
-        std::vector<int64_t> begin;
-        std::vector<int64_t> end;
-    };
-    std::vector<Region> regions;
-    std::vector<std::vector<int64_t>> boundaries(targetShape.size());
-    for (size_t dim = 0; dim < targetShape.size(); ++dim) {
-        if (targetShape[dim] <= 0) {
-            return false;
-        }
-        boundaries[dim] = {0, targetShape[dim]};
-    }
     for (auto* producer : producers) {
         if (producer == nullptr || !IsAssembleLikeOpcode(producer->GetOpcode()) || producer->iOperand.size() != 1 ||
             producer->oOperand.size() != 1) {
@@ -892,32 +932,26 @@ bool MergeViewAssembleUtils::HasCompleteStaticCoverage(const LogicalTensorPtr& m
         if (offset.size() != targetShape.size() || shape.size() != targetShape.size()) {
             return false;
         }
-        Region region{offset, offset};
+        CoverageRegion region{offset, offset};
         for (size_t dim = 0; dim < targetShape.size(); ++dim) {
             if (offset[dim] < 0 || shape[dim] <= 0 || offset[dim] > targetShape[dim] - shape[dim]) {
                 return false;
             }
             region.end[dim] += shape[dim];
-            boundaries[dim].push_back(region.begin[dim]);
-            boundaries[dim].push_back(region.end[dim]);
         }
         regions.emplace_back(std::move(region));
     }
-    size_t cellCount = 1;
-    for (auto& dimensionBoundaries : boundaries) {
-        std::sort(dimensionBoundaries.begin(), dimensionBoundaries.end());
-        dimensionBoundaries.erase(std::unique(dimensionBoundaries.begin(), dimensionBoundaries.end()),
-                                  dimensionBoundaries.end());
-        if (dimensionBoundaries.size() < MIN_DIMENSION_BOUNDARY_COUNT ||
-            cellCount > MAX_COVERAGE_CELL_COUNT / (dimensionBoundaries.size() - 1)) {
-            return false;
-        }
-        cellCount *= dimensionBoundaries.size() - 1;
-    }
-    std::vector<int64_t> point(targetShape.size(), 0);
+    return true;
+}
+
+// Grid-cell check: every cell of the boundary grid must fall inside at least one region.
+bool CheckRegionsCoverCells(const std::vector<std::vector<int64_t>>& boundaries,
+                            const std::vector<CoverageRegion>& regions)
+{
+    std::vector<int64_t> point(boundaries.size(), 0);
     std::function<bool(size_t)> checkCells = [&](size_t dim) {
         if (dim == boundaries.size()) {
-            return std::any_of(regions.begin(), regions.end(), [&point](const Region& region) {
+            return std::any_of(regions.begin(), regions.end(), [&point](const CoverageRegion& region) {
                 for (size_t index = 0; index < point.size(); ++index) {
                     if (point[index] < region.begin[index] || point[index] >= region.end[index]) {
                         return false;
@@ -935,6 +969,82 @@ bool MergeViewAssembleUtils::HasCompleteStaticCoverage(const LogicalTensorPtr& m
         return true;
     };
     return checkCells(0);
+}
+} // namespace
+
+bool MergeViewAssembleUtils::HasChainOutSurvivor(const std::vector<Operation*>& chain) const
+{
+    for (auto it = chain.begin(); it != chain.end() - 1; ++it) {
+        for (const auto& output : (*it)->GetOOperands()) {
+            for (auto* consumer : output->GetConsumers()) {
+                if (consumer == nullptr || consumer->IsDeleted() ||
+                    std::find(chain.begin(), chain.end(), consumer) != chain.end()) {
+                    continue;
+                }
+                return true;
+            }
+            // A merge recorded for an earlier chain still reads this output: the merged
+            // op is only created in the append phase, after all chain processing.
+            if (recordedMergeInputMagics_.count(output->GetMagic()) != 0) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool MergeViewAssembleUtils::HasCompleteStaticCoverage(const LogicalTensorPtr& middle,
+                                                       const std::vector<Operation*>& producers) const
+{
+    if (middle == nullptr) {
+        return false;
+    }
+    auto cached = coverageCache_.find(middle->GetMagic());
+    if (cached != coverageCache_.end()) {
+        return cached->second;
+    }
+    bool result = ComputeCompleteStaticCoverage(middle, producers);
+    coverageCache_.emplace(middle->GetMagic(), result);
+    return result;
+}
+
+bool MergeViewAssembleUtils::ComputeCompleteStaticCoverage(const LogicalTensorPtr& middle,
+                                                           const std::vector<Operation*>& producers) const
+{
+    if (middle == nullptr || middle->GetShape().empty() || producers.empty()) {
+        return false;
+    }
+    const auto& targetShape = middle->GetShape();
+    std::vector<CoverageRegion> regions;
+    if (!BuildCoverageRegions(targetShape, producers, regions)) {
+        return false;
+    }
+    // Collect per-dimension boundary points (region edges plus tensor bounds) to form a
+    // grid; cap the total cell count to keep the check bounded.
+    std::vector<std::vector<int64_t>> boundaries(targetShape.size());
+    for (size_t dim = 0; dim < targetShape.size(); ++dim) {
+        if (targetShape[dim] <= 0) {
+            return false;
+        }
+        boundaries[dim] = {0, targetShape[dim]};
+    }
+    for (const auto& region : regions) {
+        for (size_t dim = 0; dim < targetShape.size(); ++dim) {
+            boundaries[dim].push_back(region.begin[dim]);
+            boundaries[dim].push_back(region.end[dim]);
+        }
+    }
+    size_t cellCount = 1;
+    for (auto& dimensionBoundaries : boundaries) {
+        std::sort(dimensionBoundaries.begin(), dimensionBoundaries.end());
+        dimensionBoundaries.erase(std::unique(dimensionBoundaries.begin(), dimensionBoundaries.end()),
+                                  dimensionBoundaries.end());
+        if (dimensionBoundaries.size() < 2 || cellCount > 100000 / (dimensionBoundaries.size() - 1)) {
+            return false;
+        }
+        cellCount *= dimensionBoundaries.size() - 1;
+    }
+    return CheckRegionsCoverCells(boundaries, regions);
 }
 
 bool MergeViewAssembleUtils::HasSplitVersionContribution(const LogicalTensorPtr& middle,
@@ -963,20 +1073,36 @@ bool MergeViewAssembleUtils::HasSplitVersionContribution(const LogicalTensorPtr&
     return false;
 }
 
-bool MergeViewAssembleUtils::BuildProducerGroupFusion(Function& function, const LogicalTensorPtr& middle,
-                                                      const ConsumerCacheEntry& consumers)
+bool MergeViewAssembleUtils::IsFunctionBoundaryTensor(const Function& function, const LogicalTensorPtr& tensor)
 {
-    if (middle == nullptr || (hasTokenDependencies_ && consumers.hasAssembleChainStopper) ||
-        consumers.assembleConsumers.size() != 1 || !consumers.allProducersAreAssembleLike ||
-        IsFunctionBoundaryTensor(function, middle)) {
-        return false;
+    auto isSameTensor = [&tensor](const LogicalTensorPtr& boundary) {
+        return tensor != nullptr && boundary != nullptr && tensor->GetMagic() == boundary->GetMagic();
+    };
+    return std::any_of(function.GetIncast().begin(), function.GetIncast().end(), isSameTensor) ||
+           std::any_of(function.GetOutcast().begin(), function.GetOutcast().end(), isSameTensor);
+}
+
+Status MergeViewAssembleUtils::DiscoverProducerGroupFusions(Function& function)
+{
+    for (auto* op : candidateOps_) {
+        if (op == nullptr || !IsAssembleLikeOpcode(op->GetOpcode()) || op->oOperand.empty()) {
+            continue;
+        }
+        const auto& middle = op->oOperand.front();
+        if (middle == nullptr || middle->GetProducers().size() <= 1 ||
+            processedGroupTensor_.count(middle->GetMagic()) != 0) {
+            continue;
+        }
+        processedGroupTensor_.insert(middle->GetMagic());
+        const auto& consumers = BuildTensorConsumerCache(function, middle);
+        BuildProducerGroupFusion(function, middle, consumers);
     }
-    auto* downstream = consumers.assembleConsumers.front();
-    if (downstream == nullptr || visitedOp_.count(downstream->GetOpMagic()) != 0 || downstream->iOperand.size() != 1 ||
-        downstream->oOperand.size() != 1 || downstream->iOperand.front()->GetMagic() != middle->GetMagic()) {
-        return false;
-    }
-    std::vector<Operation*> producers;
+    return SUCCESS;
+}
+
+bool MergeViewAssembleUtils::CollectFusableGroupProducers(Function& function, const LogicalTensorPtr& middle,
+                                                          Operation* downstream, std::vector<Operation*>& producers)
+{
     for (auto* producer : middle->GetProducers()) {
         if (producer == nullptr || producer->BelongTo() != &function || producer->IsDeleted() ||
             visitedOp_.count(producer->GetOpMagic()) != 0 || !IsAssembleLikeOpcode(producer->GetOpcode()) ||
@@ -989,12 +1115,18 @@ bool MergeViewAssembleUtils::BuildProducerGroupFusion(Function& function, const 
         }
         producers.emplace_back(producer);
     }
+    return true;
+}
+
+bool MergeViewAssembleUtils::CheckGroupFusionGates(const LogicalTensorPtr& middle,
+                                                   const std::vector<Operation*>& producers,
+                                                   const Operation& downstream)
+{
     if (producers.size() <= 1 || HasSplitVersionContribution(middle, producers) ||
         !HasCompleteStaticCoverage(middle, producers)) {
         return false;
     }
-
-    int effectiveScopeId = downstream->GetScopeId();
+    int effectiveScopeId = downstream.GetScopeId();
     for (auto* producer : producers) {
         int scopeId = producer->GetScopeId();
         if (effectiveScopeId == -1) {
@@ -1002,17 +1134,17 @@ bool MergeViewAssembleUtils::BuildProducerGroupFusion(Function& function, const 
         } else if (scopeId != -1 && scopeId != effectiveScopeId) {
             return false;
         }
-        if (!IsRmwModeAttrCompatible({producer}, *downstream)) {
+        if (!IsRmwModeAttrCompatible({producer}, downstream)) {
             return false;
         }
     }
+    return true;
+}
 
-    ProducerGroupFusion fusion;
-    fusion.middle = middle;
-    fusion.downstream = downstream;
-    fusion.producers = producers;
-    for (auto* producer : producers) {
-        std::vector<Operation*> pair{producer, downstream};
+bool MergeViewAssembleUtils::BuildGroupFusionReplacements(ProducerGroupFusion& fusion)
+{
+    for (auto* producer : fusion.producers) {
+        std::vector<Operation*> pair{producer, fusion.downstream};
         auto [offset, dynOffset] = CalculateAssembleOffsets(pair, producer->iOperand.front()->offset.size());
         if (offset.empty() && !producer->iOperand.front()->offset.empty()) {
             return false;
@@ -1023,7 +1155,7 @@ bool MergeViewAssembleUtils::BuildProducerGroupFusion(Function& function, const 
         }
         auto atomicSemanticAttr = GetChainAtomicSemanticAttr(pair);
         fusion.replacements.emplace_back(AssembleOp{producer->iOperand.front(),
-                                                    downstream->oOperand.front(),
+                                                    fusion.downstream->oOperand.front(),
                                                     offset,
                                                     dynOffset,
                                                     GetFirstSpan(pair),
@@ -1032,19 +1164,83 @@ bool MergeViewAssembleUtils::BuildProducerGroupFusion(Function& function, const 
                                                     GetMergedAssembleOpcode(pair),
                                                     {},
                                                     atomicSemanticAttr.fromReduceAcc,
-                                                    atomicSemanticAttr.fromExplicitRmw});
+                                                    atomicSemanticAttr.fromExplicitRmw,
+                                                    -1});
     }
+    return true;
+}
+
+bool MergeViewAssembleUtils::BuildProducerGroupFusion(Function& function, const LogicalTensorPtr& middle,
+                                                      const ConsumerCacheEntry& consumers)
+{
+    if (middle == nullptr ||
+        (tokenMode_ ? (hasTokenDependencies_ && consumers.hasAssembleChainStopper) :
+                      consumers.hasAssembleChainStopper) ||
+        consumers.assembleConsumers.size() != 1 || !consumers.allProducersAreAssembleLike ||
+        IsFunctionBoundaryTensor(function, middle)) {
+        return false;
+    }
+    auto* downstream = consumers.assembleConsumers.front();
+    if (downstream == nullptr || visitedOp_.count(downstream->GetOpMagic()) != 0 || downstream->iOperand.size() != 1 ||
+        downstream->oOperand.size() != 1 || downstream->iOperand.front()->GetMagic() != middle->GetMagic()) {
+        return false;
+    }
+    std::vector<Operation*> producers;
+    if (!CollectFusableGroupProducers(function, middle, downstream, producers) ||
+        !CheckGroupFusionGates(middle, producers, *downstream)) {
+        return false;
+    }
+    ProducerGroupFusion fusion;
+    fusion.middle = middle;
+    fusion.downstream = downstream;
+    fusion.producers = producers;
     std::vector<Operation*> tokenOps = producers;
     tokenOps.emplace_back(downstream);
-    if (HasTokenDependency(tokenOps) && WouldCreateProducerGroupCycle(function, fusion)) {
+    if (!BuildGroupFusionReplacements(fusion) ||
+        (HasTokenDependency(tokenOps) && WouldCreateProducerGroupCycle(function, fusion))) {
         return false;
     }
     producerGroupFusions_.emplace_back(std::move(fusion));
     for (auto* producer : producers) {
         visitedOp_.insert(producer->GetOpMagic());
+        groupFusionClaimedOps_.insert(producer->GetOpMagic());
     }
     visitedOp_.insert(downstream->GetOpMagic());
+    groupFusionClaimedOps_.insert(downstream->GetOpMagic());
     return true;
+}
+
+Status MergeViewAssembleUtils::AppendProducerGroupFusions(Function& function)
+{
+    for (const auto& fusion : producerGroupFusions_) {
+        std::vector<Operation*> replacements;
+        replacements.reserve(fusion.replacements.size());
+        for (const auto& replacement : fusion.replacements) {
+            auto attr = std::make_shared<AssembleOpAttribute>(replacement.offset, replacement.dynOffset);
+            auto& mergedOp = irBuilder_.CreateTensorOpStmt(function, replacement.opcode, {replacement.input},
+                                                           {replacement.output}, replacement.span);
+            mergedOp.SetScopeInfo(replacement.scopeInfo);
+            mergedOp.SetOpAttribute(attr);
+            if (!replacement.rmwModeAttr.empty()) {
+                mergedOp.SetAttribute(replacement.rmwModeAttr, 1L);
+            }
+            if (replacement.atomicFromReduceAcc) {
+                mergedOp.SetAttribute(ATOMIC_FROM_REDUCE_ACC_ATTR, true);
+            }
+            if (replacement.atomicFromExplicitRmw) {
+                mergedOp.SetAttribute(ATOMIC_FROM_EXPLICIT_RMW_ATTR, true);
+            }
+            replacements.emplace_back(&mergedOp);
+        }
+        RewriteProducerGroupTokens(function, fusion, replacements);
+        for (auto* producer : fusion.producers) {
+            if (!GetConsumers(*producer).hasAssembleChainStopper) {
+                producer->SetAsDeleted();
+            }
+        }
+        fusion.downstream->SetAsDeleted();
+    }
+    return SUCCESS;
 }
 
 Status MergeViewAssembleUtils::ProcessOperations(Function& function)
@@ -1055,11 +1251,15 @@ Status MergeViewAssembleUtils::ProcessOperations(Function& function)
         APASS_LOG_ERROR_F(Elements::Function, "BuildConsumerCache failed.");
         return status;
     }
-    status = DiscoverProducerGroupFusions(function);
+    status = ProcessCandidateChains(function);
     if (status != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Function, "DiscoverProducerGroupFusions failed.");
         return status;
     }
+    return AppendMergedOperations(function);
+}
+
+Status MergeViewAssembleUtils::ProcessCandidateChains(Function& function)
+{
     for (auto* op : candidateOps_) {
         if (op == nullptr || op->IsDeleted()) {
             continue;
@@ -1079,7 +1279,12 @@ Status MergeViewAssembleUtils::ProcessOperations(Function& function)
             return processStatus;
         }
     }
-    status = AppendMergedViewOperations(function);
+    return SUCCESS;
+}
+
+Status MergeViewAssembleUtils::AppendMergedOperations(Function& function)
+{
+    Status status = AppendMergedViewOperations(function);
     if (status != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "AppendMergedViewOperations phase failed.");
         return status;
@@ -1089,11 +1294,8 @@ Status MergeViewAssembleUtils::ProcessOperations(Function& function)
         APASS_LOG_ERROR_F(Elements::Function, "AppendMergedAssembleOperations phase failed.");
         return FAILED;
     }
-    CleanupLegacyResultTokens(function);
-    status = AppendProducerGroupFusions(function);
-    if (status != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Function, "AppendProducerGroupFusions phase failed.");
-        return status;
+    if (tokenMode_) {
+        CleanupLegacyResultTokens(function);
     }
     return status;
 }
@@ -1176,6 +1378,9 @@ Status MergeViewAssembleUtils::AppendMergedAssembleOperations(Function& function
                                                                {assembleOp.output}, assembleOp.span);
         mergedAssembleOp.SetScopeInfo(assembleOp.scopeInfo);
         mergedAssembleOp.SetOpAttribute(attr);
+        if (tokenMode_ && assembleOp.subgraphId != -1) {
+            mergedAssembleOp.UpdateSubgraphID(assembleOp.subgraphId);
+        }
         if (!assembleOp.rmwModeAttr.empty()) {
             mergedAssembleOp.SetAttribute(assembleOp.rmwModeAttr, 1L);
         }
@@ -1190,63 +1395,47 @@ Status MergeViewAssembleUtils::AppendMergedAssembleOperations(Function& function
     return SUCCESS;
 }
 
-Status MergeViewAssembleUtils::AppendProducerGroupFusions(Function& function)
-{
-    for (const auto& fusion : producerGroupFusions_) {
-        // Skip the fusion when deleting the group would orphan a live consumer (e.g. of the
-        // middle tensor or of a replacement input); the group then stays unmerged.
-        std::vector<Operation*> groupToDelete;
-        groupToDelete.reserve(fusion.producers.size() + 1);
-        for (auto* producer : fusion.producers) {
-            if (!GetConsumers(*producer).hasAssembleChainStopper) {
-                groupToDelete.emplace_back(producer);
-            }
-        }
-        groupToDelete.emplace_back(fusion.downstream);
-        std::unordered_set<LogicalTensorPtr> reProduced;
-        if (fusion.downstream != nullptr && !fusion.downstream->GetOOperands().empty() &&
-            fusion.downstream->GetOOperands().front() != nullptr) {
-            reProduced.insert(fusion.downstream->GetOOperands().front());
-        }
-        if (WouldOrphanLiveConsumer(function, groupToDelete, reProduced)) {
-            continue;
-        }
-        std::vector<Operation*> replacements;
-        replacements.reserve(fusion.replacements.size());
-        for (const auto& replacement : fusion.replacements) {
-            auto attr = std::make_shared<AssembleOpAttribute>(replacement.offset, replacement.dynOffset);
-            auto& mergedOp = irBuilder_.CreateTensorOpStmt(function, replacement.opcode, {replacement.input},
-                                                           {replacement.output}, replacement.span);
-            mergedOp.SetScopeInfo(replacement.scopeInfo);
-            mergedOp.SetOpAttribute(attr);
-            if (!replacement.rmwModeAttr.empty()) {
-                mergedOp.SetAttribute(replacement.rmwModeAttr, 1L);
-            }
-            if (replacement.atomicFromReduceAcc) {
-                mergedOp.SetAttribute(ATOMIC_FROM_REDUCE_ACC_ATTR, true);
-            }
-            if (replacement.atomicFromExplicitRmw) {
-                mergedOp.SetAttribute(ATOMIC_FROM_EXPLICIT_RMW_ATTR, true);
-            }
-            replacements.emplace_back(&mergedOp);
-        }
-        RewriteProducerGroupTokens(function, fusion, replacements);
-        for (auto* producer : fusion.producers) {
-            if (!GetConsumers(*producer).hasAssembleChainStopper) {
-                producer->SetAsDeleted();
-            }
-        }
-        fusion.downstream->SetAsDeleted();
-    }
-    return SUCCESS;
-}
-
 Status MergeViewAssembleUtils::CleanUp(Function& function)
 {
-    function.EraseOperations(true, false);
+    if (!tokenMode_) {
+        // Legal semantics: clean up assembles whose input lost all producers (orphans
+        // left behind by chain merging), then dead-code elimination.
+        Status status = EraseRedundantAssemble(function);
+        if (status != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Function, "EraseRedundantAssemble failed.");
+            return status;
+        }
+    } else {
+        function.EraseOperations(true, false);
+    }
     DeadOperationEliminator eliminator;
     eliminator.EliminateOperation(function, false, false);
     function.SortOperations(SortOperationsMode::LIGHTWEIGHT);
+    return SUCCESS;
+}
+
+Status MergeViewAssembleUtils::EraseRedundantAssemble(Function& function) const
+{
+    std::unordered_set<Operation*> redundantAssembles;
+    for (auto& op : function.Operations(false)) {
+        if (op.GetOpcode() != Opcode::OP_ASSEMBLE) {
+            continue;
+        }
+        if (op.iOperand.empty()) {
+            APASS_LOG_ERROR_F(Elements::Function, "Assemble operation with no input operands.");
+            return FAILED;
+        }
+        if (op.iOperand.front()->GetProducers().empty()) {
+            redundantAssembles.emplace(&op);
+        }
+    }
+    for (auto* ele : redundantAssembles) {
+        if (!ele) {
+            continue;
+        }
+        ele->SetAsDeleted();
+    }
+    function.EraseOperations(true, false);
     return SUCCESS;
 }
 
@@ -1314,7 +1503,8 @@ Status MergeViewAssembleUtils::ProcessConsumerChain(Function& function, const Co
     bool hasActiveAssembleConsumer = std::any_of(
         consumers.assembleConsumers.begin(), consumers.assembleConsumers.end(),
         [this](Operation* op) { return op != nullptr && visitedOp_.count(op->GetOpMagic()) == 0; });
-    if (consumers.hasViewChainStopper || hasActiveAssembleConsumer || consumers.viewConsumers.empty()) {
+    if (consumers.viewConsumers.empty() ||
+        (tokenMode_ && (consumers.hasViewChainStopper || hasActiveAssembleConsumer))) {
         return SUCCESS;
     }
     Operation* currentOp = chain.back();
@@ -1328,36 +1518,33 @@ Status MergeViewAssembleUtils::ProcessConsumerChain(Function& function, const Co
         if (!op) {
             return FAILED;
         }
-        if (IsViewLikeOpcode(op->GetOpcode())) {
-            auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(op->GetOpAttribute());
-            if (viewOpAttribute == nullptr) {
-                APASS_LOG_ERROR_F(Elements::Function, "View operation has null viewOpAttribute.");
-                return FAILED;
-            }
-            auto memoryTo = viewOpAttribute->GetTo();
-            // 根据新的合并原则判断是否可以合并
-            bool canMerge = false;
-            if (currentMemType == MemoryType::MEM_UNKNOWN || currentMemType == memoryTo) {
-                // 1.unknown memType 可以向它之后的view合并 2.相同memType的view可以合并
-                canMerge = true;
-            }
-            canMerge = canMerge && CanMergeViewLikeChain(chain, op->GetOpcode());
-            if (canMerge) {
-                int consumerScopeId = op->GetScopeId();
-                if (effectiveScopeId != -1 && consumerScopeId != -1 && effectiveScopeId != consumerScopeId) {
-                    chainEnd = true;
-                    continue;
-                }
-                chainEnd = false;
-                Status status = MergeViewChain(function, *op, chain, effectiveScopeId);
-                if (status != SUCCESS) {
-                    return status;
-                }
-                chain.pop_back();
-            } else {
-                chainEnd = true;
-            }
+        if (!IsViewLikeOpcode(op->GetOpcode())) {
+            chainEnd = true;
+            continue;
         }
+        auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(op->GetOpAttribute());
+        if (viewOpAttribute == nullptr) {
+            APASS_LOG_ERROR_F(Elements::Function, "View operation has null viewOpAttribute.");
+            return FAILED;
+        }
+        // 1.unknown memType 可以向它之后的view合并 2.相同memType的view可以合并
+        bool canMerge = CanMergeViewLikeChain(chain, op->GetOpcode()) &&
+                        (currentMemType == MemoryType::MEM_UNKNOWN || currentMemType == viewOpAttribute->GetTo());
+        if (!canMerge) {
+            chainEnd = true;
+            continue;
+        }
+        int consumerScopeId = op->GetScopeId();
+        if (effectiveScopeId != -1 && consumerScopeId != -1 && effectiveScopeId != consumerScopeId) {
+            chainEnd = true;
+            continue;
+        }
+        chainEnd = false;
+        Status status = MergeViewChain(function, *op, chain, effectiveScopeId);
+        if (status != SUCCESS) {
+            return status;
+        }
+        chain.pop_back();
     }
     return SUCCESS;
 }
@@ -1377,25 +1564,23 @@ Status MergeViewAssembleUtils::ProcessChainEnd(Function& function, std::vector<O
     }
     auto& startTensor = startOp->iOperand.front();
     auto& endTensor = endOp->oOperand.front();
-    if (!startTensor) {
-        APASS_LOG_ERROR_F(Elements::Function, "Null input tensor found for first operation in chain.");
+    if (!startTensor || !endTensor) {
+        APASS_LOG_ERROR_F(Elements::Function, "Null tensor found in chain.");
         return FAILED;
     }
-    if (!endTensor) {
-        APASS_LOG_ERROR_F(Elements::Function, "Null output tensor found for last operation in chain.");
-        return FAILED;
-    }
-    if (HasTokenDependency(chain)) {
+    if (tokenMode_ && HasTokenDependency(chain)) {
         std::unordered_map<Operation*, Operation*> contraction;
         for (auto* op : chain) {
             contraction.emplace(op, chain.front());
         }
-        if (WouldCreateCycleAfterContraction(function, contraction)) {
+        if (WouldCreateCycleAfterContraction(function, contraction, dagVerified_)) {
             return SUCCESS;
         }
     }
     TokenDependency tokenDependency;
-    CollectLinearTokenDependency(function, chain, tokenDependency);
+    if (tokenMode_) {
+        CollectLinearTokenDependency(function, chain, tokenDependency);
+    }
     std::vector<int64_t> newOffset;
     std::vector<SymbolicScalar> newDynOffset;
     std::vector<SymbolicScalar> newDynValidShape;
@@ -1486,6 +1671,9 @@ void MergeViewAssembleUtils::RecordMergedViewOperation(
                                         lastViewAttr->GetTo(), hasCopyInMode, std::move(copyInModeValue),
                                         hasL1PaddingMode, std::move(l1PaddingMode), hasKIndex, kIndex, hasIsGemv,
                                         std::move(isGemv), span, scopeInfo, opcode, tokenDependency});
+    if (startTensor != nullptr) {
+        recordedMergeInputMagics_.insert(startTensor->GetMagic());
+    }
 }
 
 Status MergeViewAssembleUtils::MergeAssembleChain(Function& function, Operation& operation,
@@ -1499,9 +1687,11 @@ Status MergeViewAssembleUtils::MergeAssembleChain(Function& function, Operation&
         effectiveScopeId = newScopeId;
     }
 
-    // 2. 处理消费者
+    // 2. 处理消费者；token 模式下 stopper 仅在图内含 token 时停链（放宽语义），
     const auto& consumers = GetConsumers(operation);
-    bool chainEnd = consumers.assembleConsumers.empty() || (hasTokenDependencies_ && consumers.hasAssembleChainStopper);
+    bool chainEnd = consumers.assembleConsumers.empty() ||
+                    (tokenMode_ ? (hasTokenDependencies_ && consumers.hasAssembleChainStopper) :
+                                  consumers.hasAssembleChainStopper);
     Status status = ProcessAssembleConsumers(function, consumers, chain, chainEnd, effectiveScopeId);
     if (status != SUCCESS) {
         return status;
@@ -1525,21 +1715,51 @@ void MergeViewAssembleUtils::InitAssembleChain(Operation& operation, std::vector
     chain.emplace_back(&operation);
 }
 
+bool MergeViewAssembleUtils::CanExtendThroughMiddle(Function& function, Operation& currentOp)
+{
+    if (currentOp.oOperand.empty()) {
+        return false;
+    }
+    const auto& middle = currentOp.oOperand.front();
+    std::vector<Operation*> currentProducers(middle->GetProducers().begin(), middle->GetProducers().end());
+    if (HasSplitVersionContribution(middle, currentProducers)) {
+        return false;
+    }
+    if (currentProducers.size() <= 1) {
+        return true;
+    }
+    bool allProducersAreAssembleLike = true;
+    for (auto* producer : currentProducers) {
+        if (producer == nullptr || producer->BelongTo() != &function || !IsAssembleLikeOpcode(producer->GetOpcode())) {
+            allProducersAreAssembleLike = false;
+            break;
+        }
+    }
+    return allProducersAreAssembleLike && HasCompleteStaticCoverage(middle, currentProducers);
+}
+
+bool MergeViewAssembleUtils::StopsAtMiddle(Function& function, const ConsumerCacheEntry& consumers,
+                                           Operation* currentOp)
+{
+    (void)consumers;
+    if (currentOp == nullptr || currentOp->oOperand.empty()) {
+        return true;
+    }
+    return !CanExtendThroughMiddle(function, *currentOp);
+}
+
 Status MergeViewAssembleUtils::ProcessAssembleConsumers(Function& function, const ConsumerCacheEntry& consumers,
                                                         std::vector<Operation*>& chain, bool& chainEnd,
                                                         int effectiveScopeId)
 {
-    if ((hasTokenDependencies_ && consumers.hasAssembleChainStopper) || consumers.assembleConsumers.empty()) {
+    if (consumers.assembleConsumers.empty()) {
         return SUCCESS;
     }
-    Operation* currentOp = chain.back();
-    if (currentOp == nullptr || currentOp->oOperand.empty() || consumers.producerCount != 1) {
-        chainEnd = true;
+    if ((tokenMode_ ? (hasTokenDependencies_ && consumers.hasAssembleChainStopper) :
+                      consumers.hasAssembleChainStopper)) {
         return SUCCESS;
     }
-    std::vector<Operation*> currentProducers(currentOp->oOperand.front()->GetProducers().begin(),
-                                             currentOp->oOperand.front()->GetProducers().end());
-    if (HasSplitVersionContribution(currentOp->oOperand.front(), currentProducers)) {
+    if (tokenMode_ && StopsAtMiddle(function, consumers, chain.back())) {
         chainEnd = true;
         return SUCCESS;
     }
@@ -1548,8 +1768,7 @@ Status MergeViewAssembleUtils::ProcessAssembleConsumers(Function& function, cons
             APASS_LOG_ERROR_F(Elements::Function, "Null consumer operation found.");
             return FAILED;
         }
-        if (visitedOp_.count(op->GetOpMagic()) != 0 && op->GetIOperands().size() == 1) {
-            chainEnd = true;
+        if (groupFusionClaimedOps_.count(op->GetOpMagic()) != 0) {
             continue;
         }
         if (IsAssembleLikeOpcode(op->GetOpcode())) {
@@ -1578,6 +1797,99 @@ Status MergeViewAssembleUtils::ProcessAssembleConsumers(Function& function, cons
     return SUCCESS;
 }
 
+bool MergeViewAssembleUtils::HasBlockingChainCycle(Function& function, const std::vector<Operation*>& chain)
+{
+    if (!HasTokenDependency(chain)) {
+        return false;
+    }
+    return WouldCreateAssembleChainCycle(function, chain, dagVerified_);
+}
+
+bool MergeViewAssembleUtils::HasIncompatibleSiblingProducer(Function& function, const std::vector<Operation*>& chain)
+{
+    Operation* tailOp = chain.back();
+    for (size_t index = 0; index + 1 < chain.size(); ++index) {
+        Operation* current = chain[index];
+        if (current->oOperand.empty()) {
+            continue;
+        }
+        for (auto* sibling : current->oOperand.front()->GetProducers()) {
+            if (sibling == nullptr || sibling == current || sibling->IsDeleted() || sibling->BelongTo() != &function ||
+                std::find(chain.begin(), chain.end(), sibling) != chain.end()) {
+                continue;
+            }
+            int siblingScopeId = sibling->GetScopeId();
+            int tailScopeId = tailOp->GetScopeId();
+            if (!CanMergeAssembleLikeChain({sibling}, tailOp->GetOpcode()) ||
+                !IsRmwModeAttrCompatible({sibling}, *tailOp) ||
+                (siblingScopeId != -1 && tailScopeId != -1 && siblingScopeId != tailScopeId)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+void MergeViewAssembleUtils::FilterOwnedInputTokens(Function& function, TokenDependency& tokenDependency,
+                                                    const std::vector<Operation*>& chain)
+{
+    std::vector<ir::VarPtr> preciseInputTokens;
+    for (const auto& token : tokenDependency.inputTokens) {
+        Operation* tokenProducer = nullptr;
+        for (const auto& producerStmt : function.GetVarDependency().GetProducers(token)) {
+            tokenProducer = ToOperation(producerStmt);
+            break;
+        }
+        if (tokenProducer != nullptr && HasDataPath(tokenProducer, chain.front())) {
+            preciseInputTokens.emplace_back(token);
+            continue;
+        }
+        bool coveredBySibling = false;
+        if (tokenProducer != nullptr) {
+            for (size_t index = 0; index + 1 < chain.size() && !coveredBySibling; ++index) {
+                Operation* current = chain[index];
+                if (current->oOperand.empty()) {
+                    continue;
+                }
+                for (auto* sibling : current->oOperand.front()->GetProducers()) {
+                    if (sibling == nullptr || sibling == current ||
+                        std::find(chain.begin(), chain.end(), sibling) != chain.end()) {
+                        continue;
+                    }
+                    if (HasDataPath(tokenProducer, sibling)) {
+                        coveredBySibling = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if (!coveredBySibling) {
+            preciseInputTokens.emplace_back(token);
+        }
+    }
+    tokenDependency.inputTokens = std::move(preciseInputTokens);
+}
+
+void MergeViewAssembleUtils::DeleteMergedChainOps(const std::vector<Operation*>& chain,
+                                                  const std::shared_ptr<LogicalTensor>& endTensor)
+{
+    (void)endTensor;
+    if (!tokenMode_) {
+        chain.back()->SetAsDeleted();
+        return;
+    }
+    // Keep intermediate writes needed by side consumers, as in the legacy chain fusion.
+    const bool hasSideConsumer = std::any_of(chain.begin(), chain.end() - 1, [this](const Operation* op) {
+        return GetConsumers(*op).hasAssembleChainStopper;
+    });
+    const bool hasChainOutSurvivor = HasChainOutSurvivor(chain);
+    for (auto* op : chain) {
+        if ((!hasSideConsumer && !hasChainOutSurvivor) || op == chain.back()) {
+            op->SetAsDeleted();
+        }
+    }
+}
+
 Status MergeViewAssembleUtils::ProcessAssembleChainEnd(Function& function, std::vector<Operation*>& chain,
                                                        Operation& operation)
 {
@@ -1593,17 +1905,17 @@ Status MergeViewAssembleUtils::ProcessAssembleChainEnd(Function& function, std::
         APASS_LOG_ERROR_F(Elements::Function, "Null tensor found in chain.");
         return FAILED;
     }
-    if (HasTokenDependency(chain)) {
-        std::unordered_map<Operation*, Operation*> contraction;
-        for (auto* op : chain) {
-            contraction.emplace(op, chain.front());
-        }
-        if (WouldCreateCycleAfterContraction(function, contraction)) {
+    // Token-mode safety gates: cycle avoidance and sibling all-or-nothing.
+    if (tokenMode_) {
+        if (HasBlockingChainCycle(function, chain) || HasIncompatibleSiblingProducer(function, chain)) {
             return SUCCESS;
         }
     }
     TokenDependency tokenDependency;
     CollectLinearTokenDependency(function, chain, tokenDependency);
+    if (tokenMode_) {
+        FilterOwnedInputTokens(function, tokenDependency, chain);
+    }
     // 计算合并offset
     auto [newOffset, newDynOffset] = CalculateAssembleOffsets(chain, startTensor->offset.size());
     // 获取链路上第一个非空的span
@@ -1615,30 +1927,15 @@ Status MergeViewAssembleUtils::ProcessAssembleChainEnd(Function& function, std::
         return FAILED;
     }
     AtomicSemanticAttrState atomicSemanticAttr = GetChainAtomicSemanticAttr(chain);
-    // Keep intermediate writes needed by side consumers, as in the legacy chain fusion.
-    const bool hasSideConsumer = std::any_of(chain.begin(), chain.end() - 1, [this](const Operation* op) {
-        return GetConsumers(*op).hasAssembleChainStopper;
-    });
-    std::vector<Operation*> toDelete;
-    if (hasSideConsumer) {
-        toDelete.emplace_back(chain.back());
-    } else {
-        toDelete = chain;
-    }
-    // Skip the merge when deleting the chain would orphan a live consumer of an intermediate
-    // tensor (e.g. an assemble consumer that did not join this chain); the chain then stays
-    // unmerged, which keeps the IR consistent for the later passes.
-    if (WouldOrphanLiveConsumer(function, toDelete, {endTensor})) {
-        return SUCCESS;
-    }
     // 4. 记录并清理
     RecordAssembleOperation(startTensor, endTensor, newOffset, newDynOffset, firstSpan, chainScopeInfo,
                             GetRmwModeAttrKey(rmwModeAttr), GetMergedAssembleOpcode(chain), tokenDependency,
-                            atomicSemanticAttr.fromReduceAcc, atomicSemanticAttr.fromExplicitRmw);
-    ClearLinearTokenDependency(function, chain, tokenDependency);
-    for (auto* op : toDelete) {
-        op->SetAsDeleted();
+                            atomicSemanticAttr.fromReduceAcc, atomicSemanticAttr.fromExplicitRmw,
+                            tokenMode_ ? chain.back()->GetSubgraphID() : -1);
+    if (tokenMode_) {
+        ClearLinearTokenDependency(function, chain, tokenDependency);
     }
+    DeleteMergedChainOps(chain, endTensor);
     function.GetTensorMap().Erase(endTensor);
 
     return SUCCESS;
@@ -1677,10 +1974,24 @@ void MergeViewAssembleUtils::RecordAssembleOperation(
     const std::shared_ptr<LogicalTensor>& input, const std::shared_ptr<LogicalTensor>& output,
     const std::vector<int64_t>& offset, const std::vector<SymbolicScalar>& dynOffset, const ir::Span& span,
     const Operation::ScopeInfo& scopeInfo, const std::string& rmwModeAttr, Opcode opcode,
-    const TokenDependency& tokenDependency, bool atomicFromReduceAcc, bool atomicFromExplicitRmw)
+    const TokenDependency& tokenDependency, bool atomicFromReduceAcc, bool atomicFromExplicitRmw, int subgraphId)
 {
-    assembleOpToAppend_.emplace_back(AssembleOp{input, output, offset, dynOffset, span, scopeInfo, rmwModeAttr, opcode,
-                                                tokenDependency, atomicFromReduceAcc, atomicFromExplicitRmw});
+    AssembleOp assembleOp{input,
+                          output,
+                          offset,
+                          dynOffset,
+                          span,
+                          scopeInfo,
+                          rmwModeAttr,
+                          opcode,
+                          tokenDependency,
+                          atomicFromReduceAcc,
+                          atomicFromExplicitRmw};
+    assembleOp.subgraphId = subgraphId;
+    if (input != nullptr) {
+        recordedMergeInputMagics_.insert(input->GetMagic());
+    }
+    assembleOpToAppend_.emplace_back(std::move(assembleOp));
 }
 
 } // namespace npu::tile_fwk

@@ -33,7 +33,8 @@ public:
     struct TokenDependency {
         std::vector<ir::VarPtr> inputTokens;
         std::vector<ir::VarPtr> resultTokens;
-        std::vector<ir::StmtPtr> resultTokenConsumers;
+        // Per resultTokens entry: the external consumers of that token.
+        std::vector<std::vector<ir::StmtPtr>> resultTokenConsumers;
         std::vector<ir::VarPtr> touchedTokens;
     };
 
@@ -69,6 +70,7 @@ public:
         TokenDependency tokenDependency;
         bool atomicFromReduceAcc = false;
         bool atomicFromExplicitRmw = false;
+        int subgraphId = -1;
     };
     struct ProducerGroupFusion {
         std::shared_ptr<LogicalTensor> middle;
@@ -176,7 +178,41 @@ public:
     Status ProcessAssembleConsumers(Function& function, const ConsumerCacheEntry& consumers,
                                     std::vector<Operation*>& chain, bool& chainEnd, int effectiveScopeId);
 
+    // Token-mode middle extension gate: split-version contribution plus fan-in
+    // producer coverage. Returns false when the chain must stop at this middle.
+    bool CanExtendThroughMiddle(Function& function, Operation& currentOp);
+    // Mode-dependent middle gate for chain extension (see the cpp for semantics).
+    bool StopsAtMiddle(Function& function, const ConsumerCacheEntry& consumers, Operation* currentOp);
+
+    // Legacy-mode producer-group fusion (multi-producer middles): discover fusable
+    // groups before chain processing and append the fused replacements afterwards.
+    Status DiscoverProducerGroupFusions(Function& function);
+    bool BuildProducerGroupFusion(Function& function, const LogicalTensorPtr& middle,
+                                  const ConsumerCacheEntry& consumers);
+    bool CollectFusableGroupProducers(Function& function, const LogicalTensorPtr& middle, Operation* downstream,
+                                      std::vector<Operation*>& producers);
+    bool CheckGroupFusionGates(const LogicalTensorPtr& middle, const std::vector<Operation*>& producers,
+                               const Operation& downstream);
+    bool BuildGroupFusionReplacements(ProducerGroupFusion& fusion);
+    Status AppendProducerGroupFusions(Function& function);
+
     Status ProcessAssembleChainEnd(Function& function, std::vector<Operation*>& chain, Operation& operation);
+
+    // Token-mode safety gates applied before merging an assemble chain.
+    bool HasBlockingChainCycle(Function& function, const std::vector<Operation*>& chain);
+    bool HasIncompatibleSiblingProducer(Function& function, const std::vector<Operation*>& chain);
+    // Rewrites inputTokens in-place: keeps tokens owned by this chain, drops the ones
+    // owned by sibling-producer chains (data-coverage precision).
+    void FilterOwnedInputTokens(Function& function, TokenDependency& tokenDependency,
+                                const std::vector<Operation*>& chain);
+    // True when an intermediate output still has readers outside the chain: a live op,
+    // or a merge recorded for an earlier chain whose merged op (created in the append
+    // phase) reads it.
+    bool HasChainOutSurvivor(const std::vector<Operation*>& chain) const;
+    // Deletes merged chain ops; intermediates with side consumers survive. Intermediates
+    // whose output still has live readers outside the chain also survive (the reader's
+    // own chain merge may have been rejected, leaving it dependent on the intermediate).
+    void DeleteMergedChainOps(const std::vector<Operation*>& chain, const std::shared_ptr<LogicalTensor>& endTensor);
 
     std::pair<std::vector<int64_t>, std::vector<SymbolicScalar>> CalculateAssembleOffsets(
         const std::vector<Operation*>& chain, size_t offsetSize);
@@ -186,34 +222,19 @@ public:
                                  const std::vector<SymbolicScalar>& dynOffset, const ir::Span& span,
                                  const Operation::ScopeInfo& scopeInfo, const std::string& rmwModeAttr, Opcode opcode,
                                  const TokenDependency& tokenDependency, bool atomicFromReduceAcc,
-                                 bool atomicFromExplicitRmw);
+                                 bool atomicFromExplicitRmw, int subgraphId);
 
     // Common methods
     Status Initialize();
     Status BuildConsumerCache(Function& function);
-    Status DiscoverProducerGroupFusions(Function& function);
-    bool BuildProducerGroupFusion(Function& function, const LogicalTensorPtr& middle,
-                                  const ConsumerCacheEntry& consumers);
     bool HasSplitVersionContribution(const LogicalTensorPtr& middle,
                                      const std::vector<Operation*>& currentProducers) const;
-    static bool HasCompleteStaticCoverage(const LogicalTensorPtr& middle, const std::vector<Operation*>& producers);
     static bool IsFunctionBoundaryTensor(const Function& function, const LogicalTensorPtr& tensor);
-
-    /**
-     * @brief Check whether deleting the given operations would orphan a live consumer.
-     *
-     * A consumer is orphaned when an output tensor of a deleted operation (excluding tensors
-     * re-produced by the merge) still has a non-deleted consumer outside the deletion set.
-     * Function::EraseRelatedTensors would then drop that consumer's input operand via
-     * EraseInput, producing operations with empty operands in later passes.
-     *
-     * @param function the function the operations belong to.
-     * @param toDelete the operations that the caller is about to mark as deleted.
-     * @param reProduced output tensors that the pending merged/replacement operations re-produce.
-     * @return true when the deletion must be skipped to keep the IR consistent.
-     */
-    bool WouldOrphanLiveConsumer(Function& function, const std::vector<Operation*>& toDelete,
-                                 const std::unordered_set<LogicalTensorPtr>& reProduced) const;
+    // Static coverage check with per-middle memoization: producers and their attributes
+    // are stable during chain processing, so a middle's result is computed once per
+    // invocation (guards the cell x region blow-up on large fan-in middles).
+    bool HasCompleteStaticCoverage(const LogicalTensorPtr& middle, const std::vector<Operation*>& producers) const;
+    bool ComputeCompleteStaticCoverage(const LogicalTensorPtr& middle, const std::vector<Operation*>& producers) const;
     const ConsumerCacheEntry& BuildTensorConsumerCache(Function& function, const LogicalTensorPtr& tensor);
     const ConsumerCacheEntry& GetConsumers(const Operation& operation) const;
     static ir::Span GetFirstSpan(const std::vector<Operation*>& chain);
@@ -221,18 +242,32 @@ public:
 
     // Processing methods
     Status ProcessOperations(Function& function);
+    Status ProcessCandidateChains(Function& function);
+    Status AppendMergedOperations(Function& function);
 
     // Operation appending methods
     Status AppendMergedViewOperations(Function& function);
     Status AppendMergedAssembleOperations(Function& function);
-    Status AppendProducerGroupFusions(Function& function);
 
     // Remove legacy result tokens replaced by per-merged-op new tokens.
     void CleanupLegacyResultTokens(Function& function);
 
     // Cleanup methods
     Status CleanUp(Function& function);
+    // Legal-mode cleanup: deletes assembles whose input tensor lost all producers.
+    Status EraseRedundantAssemble(Function& function) const;
     bool hasTokenDependencies_ = false;
+    // Mirrors IRContext::Get().AssembleNewLogicalTensor() (the create_new_logical_tensor
+    // frontend flag). Token mode runs the full chain-share logic with the safety gates
+    // (cycle check, sibling gate, coverage gate, survivor retention, token migration).
+    // Legacy mode (flag off) runs the pre-token semantics: chains stop at multi-producer
+    // middles, intermediates with side consumers survive, and multi-producer middles are
+    // handled by the producer-group fusion instead.
+    bool tokenMode_ = false;
+    // Set once per run by BuildConsumerCache after a one-shot DAG verification of the
+    // untouched graph; lets the per-chain cycle checks short-circuit (merges only
+    // remove edges from an acyclic graph, so no merge can introduce a cycle).
+    bool dagVerified_ = false;
     std::unordered_set<int> visitedOp_;
     std::unordered_map<int, const ConsumerCacheEntry*> consumerCache_;
     std::unordered_map<int, ConsumerCacheEntry> tensorConsumerCache_;
@@ -242,6 +277,15 @@ public:
     std::vector<ViewOp> viewOpToAppend_;
     std::vector<AssembleOp> assembleOpToAppend_;
     std::vector<ProducerGroupFusion> producerGroupFusions_;
+    // Ops claimed by a recorded producer-group fusion (producers + downstream); chain
+    // processing must not pull them into a chain and delete them, because the fusion
+    // replacements (created in the append phase) still read their inputs.
+    std::unordered_set<int> groupFusionClaimedOps_;
+    // Input tensor magics of all merges recorded so far (view + assemble); lets the
+    // chain-out survivor check see readers that only materialize in the append phase.
+    std::unordered_set<int> recordedMergeInputMagics_;
+    // Per-middle coverage results for the current invocation (see HasCompleteStaticCoverage).
+    mutable std::unordered_map<int, bool> coverageCache_;
     IRBuilder irBuilder_;
 };
 } // namespace npu::tile_fwk
