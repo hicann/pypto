@@ -250,7 +250,7 @@ class BufferParserMixin:
             mut_tuples.append(
                 self.builder.let(
                     f"_tg_{var_name}_mutex_ids{suffix}",
-                    ir.MakeTuple([ir.ConstInt(m, DataType.INDEX, span) for m in values], span),
+                    ir.MakeTuple([ir.ConstInt(m, DataType.INT64, span) for m in values], span),
                     span=span,
                 )
             )
@@ -266,7 +266,7 @@ class BufferParserMixin:
             return result
         cursor_call = ir.create_op_call(
             "struct.create",
-            [ir.ConstInt(depth - 1, DataType.INDEX, span)],
+            [ir.ConstInt(depth - 1, DataType.INT64, span)],
             {"name": "_TileGroupCursor", "fields": ["cursor"]},
             span,
         )
@@ -308,7 +308,7 @@ class BufferParserMixin:
         n_slots, per_tile_mutex_ids, _memory = meta
         tiles = self.lower_attr_access(group, "tiles", span)
 
-        slot0 = ir.GetItemExpr(tiles, ir.ConstInt(0, DataType.INDEX, span), span)
+        slot0 = ir.GetItemExpr(tiles, ir.ConstInt(0, DataType.INT64, span), span)
         t = getattr(slot0, "type", None)
         memref = getattr(t, "memref", None)
         try:
@@ -327,7 +327,7 @@ class BufferParserMixin:
         var_name = self.current_target_name
         tile_vars = []
         for i in range(n_slots):
-            slot = ir.GetItemExpr(tiles, ir.ConstInt(i, DataType.INDEX, span), span)
+            slot = ir.GetItemExpr(tiles, ir.ConstInt(i, DataType.INT64, span), span)
             slot_tile = _ir_reinterpret(slot, shape=new_shape if kwargs.get("shape") is not None else None,
                                         dtype=kwargs.get("dtype"), layout=kwargs.get("layout"), span=span)
             tile_vars.append(self.builder.let(f"_tg_{var_name}_tiles_{i}", slot_tile, span=span))
@@ -395,10 +395,10 @@ class BufferParserMixin:
         When mutex metadata exists, attach the slot's static id; it needs no
         ``% n`` and no dynamic lock at lock time.
         """
-        tile_ir = ir.GetItemExpr(tiles, ir.ConstInt(slot, DataType.INDEX, span), span)
+        tile_ir = ir.GetItemExpr(tiles, ir.ConstInt(slot, DataType.INT64, span), span)
         if per_tile_mutex_ids is not None:
             mutex_id_irs = tuple(
-                ir.ConstInt(value, DataType.INDEX, span) for value in per_tile_mutex_ids[slot]
+                ir.ConstInt(value, DataType.INT64, span) for value in per_tile_mutex_ids[slot]
             )
             self._tile_mutex_meta[tile_ir] = (mutex_id_irs, candidate_ids)
         return tile_ir
@@ -449,14 +449,14 @@ class BufferParserMixin:
         cursor_struct = self.lower_attr_access(group_var, "cursor", span)
         cur_read = self.lower_attr_access(cursor_struct, "cursor", span)
         if method_name == "next":
-            new_val = cur_read + ir.ConstInt(1, DataType.INDEX, span)
+            new_val = cur_read + ir.ConstInt(1, DataType.INT64, span)
             self._emit_cursor_advance(cursor_struct, new_val, span)
             raw = self.lower_attr_access(cursor_struct, "cursor", span)
         elif method_name == "current":
             raw = cur_read
         else:  # previous
-            raw = cur_read + ir.ConstInt(n_slots - 1, DataType.INDEX, span)
-        wrapped = raw % ir.ConstInt(n_slots, DataType.INDEX, span)
+            raw = cur_read + ir.ConstInt(n_slots - 1, DataType.INT64, span)
+        wrapped = raw % ir.ConstInt(n_slots, DataType.INT64, span)
         return self._select_dynamic_slot(
             group_var,
             tiles,

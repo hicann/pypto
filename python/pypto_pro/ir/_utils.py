@@ -60,7 +60,7 @@ def _is_int(value: object) -> bool:
 def _normalize_expr(
     value: int | float | _ir.Expr,
     span: _ir.Span | None = None,
-    int_dtype: DataType = DataType.INDEX,
+    int_dtype: DataType | None = None,
     float_dtype: DataType = DataType.FP32,
 ) -> _ir.Expr:
     """Convert Python values to IR expressions.
@@ -68,7 +68,8 @@ def _normalize_expr(
     Args:
         value: Python int/float or existing Expr
         span: Optional span for created constants
-        int_dtype: Data type to use for integer constants (default: INDEX)
+        int_dtype: Explicit data type for integer constants. By default, use
+            INT64 unless the value requires UINT64.
         float_dtype: Data type to use for float constants (default: FP32)
 
     Returns:
@@ -109,7 +110,7 @@ def _normalize_shape(
     Raises:
         TypeError: If shape contains non-int, non-Expr values
     """
-    return [_normalize_expr(dim, span, int_dtype=DataType.INDEX) for dim in shape]
+    return [_normalize_expr(dim, span, int_dtype=DataType.INT64) for dim in shape]
 
 
 def _to_make_tuple(
@@ -137,7 +138,7 @@ def _to_make_tuple(
         value_type = getattr(value, "type", None)
         if isinstance(value_type, _ir.TupleType):
             elements = [
-                _ir.GetItemExpr(value, _ir.ConstInt(i, DataType.INDEX, actual_span), actual_span)
+                _ir.GetItemExpr(value, _ir.ConstInt(i, DataType.INT64, actual_span), actual_span)
                 for i in range(len(value_type.types))
             ]
             return _ir.MakeTuple(elements, actual_span)

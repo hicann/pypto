@@ -168,13 +168,12 @@ def make_const_int(
 ) -> ir.Expr:
     """Materialise an integer literal as ``ir.ConstInt``, range-checked and folded.
 
-    ``INDEX`` (and no dtype at all) means "width not committed yet", so a value above ``INT64_MAX``
-    settles on ``UINT64`` instead of being rejected. A dtype the caller named explicitly is taken at its
-    word: the value has to fit it.
+    With no dtype, values use ``INT64`` unless they require ``UINT64``. A dtype the caller named explicitly
+    is taken at its word: the value has to fit it.
     """
-    if dtype is None or dtype == ir.DataType.INDEX:
+    if dtype is None:
         storage = check_ir_int(value, subject=subject, span=span)
-        settled = ir.DataType.UINT64 if value > INT64_MAX else (dtype or ir.DataType.INDEX)
+        settled = ir.DataType.UINT64 if value > INT64_MAX else ir.DataType.INT64
         return ir.ConstInt(storage, settled, span)
     check_fits_dtype(value, dtype, subject=subject, span=span, api=api)
     return ir.ConstInt(to_storage_int(value), dtype, span)

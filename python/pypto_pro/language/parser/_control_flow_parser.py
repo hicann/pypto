@@ -244,7 +244,7 @@ class ControlFlowParserMixin:
         return tuple(
             self.builder.var(
                 f"{name}__mutexid" if index == 0 else f"{name}__mutexid_{index}",
-                ir.ScalarType(DataType.INDEX),
+                ir.ScalarType(DataType.INT64),
                 span,
             )
             for index in range(count)
@@ -433,7 +433,7 @@ class ControlFlowParserMixin:
 
     @staticmethod
     def _as_index_expr(value: int | ir.Expr, span: ir.Span) -> ir.Expr:
-        return value if isinstance(value, ir.Expr) else ir.ConstInt(value, DataType.INDEX, span)
+        return value if isinstance(value, ir.Expr) else ir.ConstInt(value, DataType.INT64, span)
 
     def _select_loop_merge_inputs(
         self, writes: set[str], span: ir.Span
@@ -640,7 +640,7 @@ class ControlFlowParserMixin:
                 slot.state.result_phi.propagate(slot.init_value)
         info = ControlFlowInfo(merge_names)
         self._prepare_loop_mutex_iter_vars(slots, span)
-        loop_var = self.builder.var(loop_var_name, ir.ScalarType(DataType.INDEX), span)
+        loop_var = self.builder.var(loop_var_name, ir.ScalarType(DataType.INT64), span)
         with self.scope_manager.change_loop_info(info):
             body = self._parse_loop_region(
                 stmt.body, "for", span, slots, (loop_var_name, loop_var)

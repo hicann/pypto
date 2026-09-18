@@ -548,7 +548,7 @@ static std::string MakeDebugPrintfCodegenCCE(const ir::CallPtr& op, codegen::Cod
         args.emplace_back(codegen.GetExprAsCode(op->args_[i]));
         if (ir::As<ir::PtrType>(op->args_[i]->GetType())) {
             // Pointer arguments are passed directly to ASC printf.
-            arg_dtypes.emplace_back(DataType::INDEX);
+            arg_dtypes.emplace_back(DataType::INT64);
         } else {
             auto scalar_type = ir::As<ir::ScalarType>(op->args_[i]->GetType());
             CHECK(scalar_type) << "debug.printf argument must be ScalarType in CCE lowering";
@@ -753,9 +753,9 @@ static std::string MakeBlockGetBlockIdxCodegenCCE(const ir::CallPtr& op, codegen
     auto& cg = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     const auto target = cg.GetTarget();
     if (target == ir::SectionKind::Vector) {
-        return "(int32_t)(get_block_idx() * get_subblockdim() + get_subblockid())";
+        return "(int64_t)(get_block_idx() * get_subblockdim() + get_subblockid())";
     }
-    return "(int32_t)(get_block_idx())";
+    return "(int64_t)(get_block_idx())";
 }
 
 // Helper function for block.make_tile (no-op: allocation handled elsewhere)
@@ -1671,14 +1671,14 @@ REGISTER_BACKEND_OP(BackendCCE, "get_block_num")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& /*codegen_base*/) {
         CHECK(op->args_.size() == 0) << "get_block_num requires no arguments";
-        return std::string("(int32_t)(get_block_num())");
+        return std::string("(int64_t)(get_block_num())");
     });
 
 REGISTER_BACKEND_OP(BackendCCE, "get_subblock_idx")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& /*codegen_base*/) {
         CHECK(op->args_.size() == 0) << "get_subblock_idx requires no arguments";
-        return std::string("(int32_t)(get_subblockid())");
+        return std::string("(int64_t)(get_subblockid())");
     });
 
 REGISTER_BACKEND_OP(BackendCCE, "get_subblock_num")
@@ -1689,9 +1689,9 @@ REGISTER_BACKEND_OP(BackendCCE, "get_subblock_num")
         auto& cg = dynamic_cast<codegen::CCECodegen&>(codegen_base);
         const auto target = cg.GetTarget();
         if (target == ir::SectionKind::Vector) {
-            return std::string("(int32_t)(get_subblockdim())");
+            return std::string("(int64_t)(get_subblockdim())");
         }
-        return std::string("(int32_t)(1)");
+        return std::string("(int64_t)(1)");
     });
 
 // ============================================================================
@@ -1703,14 +1703,24 @@ static std::string MakeGetValCodegenCCE(const ir::CallPtr& op, codegen::CodegenB
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     CHECK(op->args_.size() == 2) << "getval requires 2 arguments, but got " << op->args_.size();
 
+    auto result_type = ir::As<ir::ScalarType>(op->GetType());
+    INTERNAL_CHECK(result_type) << "getval result must be ScalarType";
+    auto cast_result_if_dtype_changed = [](std::string result, const ir::DataType& result_dtype,
+                                           const ir::DataType& input_dtype) {
+        if (result_dtype != input_dtype) {
+            return "(" + result_dtype.ToCTypeString() + ")(" + result + ")";
+        }
+        return result;
+    };
+
     auto first_type = op->args_[0]->GetType();
-    if (ir::As<ir::TileType>(first_type)) {
+    if (auto tile_type = ir::As<ir::TileType>(first_type)) {
         std::string tile = codegen.GetExprAsCode(op->args_[0]);
         std::string offset = codegen.GetExprAsCode(op->args_[1]);
         if (codegen.IsInSimtContext()) {
-            return tile + "[" + offset + "]";
+            return cast_result_if_dtype_changed(tile + "[" + offset + "]", result_type->dtype_, tile_type->dtype_);
         }
-        return tile + ".GetValue(" + offset + ")";
+        return cast_result_if_dtype_changed(tile + ".GetValue(" + offset + ")", result_type->dtype_, tile_type->dtype_);
     }
 
     auto tensor_var = ir::As<ir::Var>(op->args_[0]);
@@ -1723,7 +1733,8 @@ static std::string MakeGetValCodegenCCE(const ir::CallPtr& op, codegen::CodegenB
 
     std::string tensor_ptr = codegen.GetPointer(tensor_name);
 
-    return "*((__gm__ " + dtype_str + "*)" + tensor_ptr + " + " + offset + ")";
+    return cast_result_if_dtype_changed("*((__gm__ " + dtype_str + "*)" + tensor_ptr + " + " + offset + ")",
+                                        result_type->dtype_, tensor_type->dtype_);
 }
 
 static std::string MakeSetValCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
@@ -1768,9 +1779,9 @@ static std::string MakeTileValidShapeCodegenCCE(const ir::CallPtr& op, codegen::
     CHECK(axis >= 0 && axis <= 1) << "block.tile_valid_shape axis must be in [0, 1]";
 
     if (codegen.IsInSimtContext()) {
-        return codegen.GetExprAsCode(op->args_[0]) + (axis == 0 ? "__valid_row" : "__valid_col");
+        return "(int64_t)(" + codegen.GetExprAsCode(op->args_[0]) + (axis == 0 ? "__valid_row)" : "__valid_col)");
     }
-    return codegen.GetExprAsCode(op->args_[0]) + (axis == 0 ? ".GetValidRow()" : ".GetValidCol()");
+    return "(int64_t)(" + codegen.GetExprAsCode(op->args_[0]) + (axis == 0 ? ".GetValidRow())" : ".GetValidCol())");
 }
 
 // getval/setval use the "block." IR namespace like every other explicit-output

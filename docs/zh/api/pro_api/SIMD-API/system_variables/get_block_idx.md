@@ -32,7 +32,7 @@ pypto_pro.language.get_block_idx() -> int
 
 ## 返回值说明
 
-返回设备运行时产生的整型标量值，可用于Kernel内整数运算和索引。取值范围与Kernel的执行域有关：
+返回DT_INT64类型的当前逻辑核索引，可用于Kernel内的整数计算和数据索引。取值范围与Kernel的执行域有关：
 
 - 仅启动Cube（AIC）或仅启动Vector（AIV）时，范围为[0, get_block_num())。
 - 同时启动AIC与AIV时，AIC侧范围为[0, get_block_num())；AIV侧范围为[0, get_subblock_num() × get_block_num())。当前1:2配置下，AIV侧范围为[0, 2 × get_block_num())。

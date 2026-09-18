@@ -55,8 +55,8 @@ Span MakeCombinedSpan(const Span& begin_span, const Span& end_span)
  *
  * A ternary expression ``a if cond else b`` lowers to an if statement whose then/else
  * branches each yield their value into a phi return var. When the two branches produce
- * differing but same-category scalar dtypes (e.g. ``INT32`` from a tensor read vs
- * ``INDEX`` from a shape access), promote both yielded values to the wider dtype and
+ * differing but same-category scalar dtypes (e.g. ``INT64`` vs ``UINT64``), promote
+ * both yielded values according to the scalar promotion rules and
  * retype the phi return var to match, mirroring the promotion binary operators already
  * perform. Non-scalar or cross-category (int vs float) mismatches are left untouched so
  * the type verifier still reports them.
@@ -350,8 +350,8 @@ StmtPtr IRBuilder::EndIf(const Span& end_span)
     std::vector<StmtPtr> else_stmts = if_ctx->GetElseStmts();
     std::vector<VarPtr> return_vars = if_ctx->GetReturnVars();
 
-    // Promote differing but same-category scalar branch types (e.g. ``a if c else b``
-    // yielding INT32 vs INDEX) to a common dtype before building the phi.
+    // Promote differing but same-category scalar branch types to a common dtype
+    // before building the phi.
     if (if_ctx->InElseBranch()) {
         ReconcileIfReturnVarTypes(then_stmts, else_stmts, return_vars);
     }

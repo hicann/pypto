@@ -64,14 +64,12 @@ TypePtr DeduceAddPtrType([[maybe_unused]] const std::vector<ExprPtr>& args,
         new_base_ptr = *ptr_type->base_ptr;
         if (auto c1 = As<ConstInt>(*ptr_type->offset)) {
             if (auto c2 = As<ConstInt>(args[1])) {
-                new_offset = std::make_shared<ConstInt>(c1->value_ + c2->value_, DataType(DataType::INDEX),
-                                                        args[1]->span_);
+                new_offset = std::make_shared<ConstInt>(c1->value_ + c2->value_, DataType::INT64, args[1]->span_);
             } else {
-                new_offset = std::make_shared<Add>(*ptr_type->offset, args[1], DataType(DataType::INDEX),
-                                                   args[1]->span_);
+                new_offset = std::make_shared<Add>(*ptr_type->offset, args[1], DataType::INT64, args[1]->span_);
             }
         } else {
-            new_offset = std::make_shared<Add>(*ptr_type->offset, args[1], DataType(DataType::INDEX), args[1]->span_);
+            new_offset = std::make_shared<Add>(*ptr_type->offset, args[1], DataType::INT64, args[1]->span_);
         }
     } else {
         // Direct addptr on a function parameter — record base and offset directly.

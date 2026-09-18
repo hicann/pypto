@@ -252,7 +252,7 @@ def test_struct_mixed_dtype_array_fields():
     assignments = [stmt for stmt in kernel.body.stmts if isinstance(stmt, ir.AssignStmt)]
     struct_assign = next(stmt for stmt in assignments if stmt.var.name == "s_0")
     types = struct_assign.var.type.types
-    assert all(t.dtype == DataType.INDEX for t in types[0].types)
+    assert all(t.dtype == DataType.INT64 for t in types[0].types)
     assert all(t.dtype == DataType.FP32 for t in types[1].types)
     assert all(t.dtype == DataType.BOOL for t in types[2].types)
 

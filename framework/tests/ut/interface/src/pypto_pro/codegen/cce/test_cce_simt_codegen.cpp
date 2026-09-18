@@ -511,7 +511,7 @@ TEST(CCESimtCodegenTest, DoesNotInterceptOrdinaryKernelCallsWithMatchingCalleeNa
     auto entry_function = generated.substr(entry_pos, kernel_pos - entry_pos);
     auto kernel_function = generated.substr(kernel_pos);
     EXPECT_EQ(CountOccurrences(entry_function, "get_subblock_idx();"), 1u);
-    EXPECT_EQ(CountOccurrences(kernel_function, "(int32_t)(get_subblockid())"), 1u);
+    EXPECT_EQ(CountOccurrences(kernel_function, "(int64_t)(get_subblockid())"), 1u);
 }
 
 TEST(CCESimtCodegenTest, GeneratesRegisteredSynchronizationScalarCastAndMathOperations)

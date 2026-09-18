@@ -113,3 +113,20 @@ def test_tile_slice_rejects_non_unit_step():
 
     with pytest.raises(ParserSyntaxError, match="slice step for axis 0 must be the compile-time integer 1"):
         _parse_vector_kernel(kernel)
+
+
+def test_tile_slice_with_dynamic_valid_shape():
+    @pl.jit(auto_mutex=False)
+    def kernel(rows: pl.DT_INT64, cols: pl.DT_INT64):
+        tile_type = pl.TileType(
+            shape=[8, 64],
+            dtype=pl.DT_FP32,
+            target_memory=pl.MemorySpace.Vec,
+            valid_shape=[-1, -1],
+        )
+        tile = pl.make_tile(tile_type, addr=0, size=2048)
+        with pl.section_vector():
+            pl.set_validshape(tile, [rows, cols])
+            _sub = tile[1:, :]
+
+    _parse_vector_kernel(kernel)

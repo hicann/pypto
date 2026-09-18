@@ -89,7 +89,7 @@ def test_tiling_scalar_dtypes_are_correct():
     assert isinstance(tuple_type, ir.TupleType)
     elem_types = tuple_type.types
     # Scalar fields become scalar tuple elements in declaration order.
-    assert elem_types[0].dtype == DataType.INDEX
+    assert elem_types[0].dtype == DataType.INT64
     assert elem_types[1].dtype == DataType.FP32
     assert elem_types[2].dtype == DataType.BOOL
 
@@ -302,7 +302,7 @@ def test_array_field_dtypes():
     assert isinstance(kernel, ir.Function)
     assert len(kernel.params) == 2
     elem_types = kernel.params[1].type.types
-    assert all(t.dtype == DataType.INDEX for t in elem_types[0].types)
+    assert all(t.dtype == DataType.INT64 for t in elem_types[0].types)
     assert all(t.dtype == DataType.FP32 for t in elem_types[1].types)
     assert all(t.dtype == DataType.BOOL for t in elem_types[2].types)
 

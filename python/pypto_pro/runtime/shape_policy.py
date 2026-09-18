@@ -138,11 +138,11 @@ class BoundTensorShape:
         result = []
         for dim in self.dimensions:
             if dim.dynamic_name is not None:
-                result.append(ir.Var(dim.dynamic_name, ir.ScalarType(DataType.INDEX), span))
+                result.append(ir.Var(dim.dynamic_name, ir.ScalarType(DataType.INT64), span))
             else:
                 if dim.value is None:  # Guard the BoundDimension invariant for type checkers.
                     raise ValueError("A constant bound dimension must contain a value")
-                result.append(ir.ConstInt(dim.value, DataType.INDEX, span))
+                result.append(ir.ConstInt(dim.value, DataType.INT64, span))
         return result
 
 

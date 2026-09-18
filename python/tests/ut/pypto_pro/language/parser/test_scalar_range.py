@@ -241,20 +241,28 @@ def test_integer_outside_the_storage_band_is_rejected(value):
 @pytest.mark.parametrize(
     ("value", "dtype", "stored"),
     [
-        (INT64_MAX, ir.DataType.INDEX, INT64_MAX),
-        (INT64_MIN, ir.DataType.INDEX, INT64_MIN),
+        (INT64_MAX, ir.DataType.INT64, INT64_MAX),
+        (INT64_MIN, ir.DataType.INT64, INT64_MIN),
         (INT64_MAX + 1, ir.DataType.UINT64, INT64_MIN),
         (UINT64_MAX, ir.DataType.UINT64, -1),
     ],
 )
-def test_uint64_band_settles_on_uint64_and_folds(value, dtype, stored):
-    """A value above INT64_MAX commits the uncommitted INDEX placeholder to UINT64 and folds."""
+def test_default_integer_literal_uses_int64_or_uint64(value, dtype, stored):
+    from pypto_pro.language.parser.diagnostics import make_const_int
+
+    const = make_const_int(value, span=ir.Span.unknown())
+
+    assert const.type.dtype == dtype
+    assert const.value == stored
+
+
+@pytest.mark.parametrize("value", [INT64_MIN, INT64_MAX])
+def test_explicit_legacy_index_dtype_is_preserved(value):
     from pypto_pro.language.parser.diagnostics import make_const_int
 
     const = make_const_int(value, ir.DataType.INDEX, span=ir.Span.unknown())
 
-    assert const.type.dtype == dtype
-    assert const.value == stored
+    assert const.type.dtype == ir.DataType.INDEX
 
 
 def test_named_dtype_is_taken_at_its_word():

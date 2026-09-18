@@ -79,12 +79,12 @@ def test_resolve_dynamic_policy_and_int_variable_mixed():
     assert tensor_type.shape[1].value == 64
 
 
-def test_dynamic_policy_has_index_scalar_type():
+def test_dynamic_policy_has_int64_scalar_type():
     resolver = _make_resolver(closure_vars={"pl": pl})
     node = ast.parse("pl.Tensor[[pl.DYNAMIC], pl.DT_FP32]", mode="eval").body
     tensor_type = resolver.resolve_param_type(node, parameter_name="x")
     assert isinstance(tensor_type.shape[0].type, ir.ScalarType)
-    assert tensor_type.shape[0].type.dtype == DataType.INDEX
+    assert tensor_type.shape[0].type.dtype == DataType.INT64
 
 
 def test_parse_shape_with_scope_variable():

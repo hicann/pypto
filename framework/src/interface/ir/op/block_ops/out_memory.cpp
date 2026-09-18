@@ -236,7 +236,7 @@ REGISTER_OP("block.ssbuf_store")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         CHECK(args.size() == 2) << "The operator block.ssbuf_store requires 2 arguments (struct_var, offset)";
-        return std::make_shared<ScalarType>(DataType::INDEX);
+        return GetNoneType();
     });
 
 // block.ssbuf_load: (struct_var, offset) -> void
@@ -249,7 +249,7 @@ REGISTER_OP("block.ssbuf_load")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         CHECK(args.size() == 2) << "The operator block.ssbuf_load requires 2 arguments (struct_var, offset)";
-        return std::make_shared<ScalarType>(DataType::INDEX);
+        return GetNoneType();
     });
 
 // block.full: (out, scalar) -> TileType (out's type)

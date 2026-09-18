@@ -35,7 +35,7 @@ pypto_pro.language.getval(container: Tile | Tensor, offset: int) -> Scalar
 
 ## 返回值说明
 
-返回与container元素类型一致的标量。
+container元素类型为除DT_UINT64以外的整数类型时，统一返回DT_INT64类型的标量，其它场景返回与container元素类型一致的标量。
 
 ## 调用示例
 

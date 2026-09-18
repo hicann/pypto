@@ -1552,7 +1552,7 @@ static std::string EmitVFMuls(const ir::CallPtr& op, codegen::CodegenBase& codeg
            src_dt == DataType::UINT32 || src_dt == DataType::FP16 || src_dt == DataType::FP32))
         << "vf.muls src only supports INT16/UINT16/INT32/UINT32/FP16/FP32, got " << DTypeStr(src_dt);
     DataType scalar_dt = GetExprDtype(op->args_[2]);
-    if (scalar_dt == DataType::INDEX) {
+    if (scalar_dt == DataType::INDEX || scalar_dt == DataType::INT64) {
         scalar_dt = src_dt;
     }
     CHECK((scalar_dt == DataType::INT16 || scalar_dt == DataType::UINT16 || scalar_dt == DataType::INT32 ||

@@ -32,7 +32,7 @@ pypto_pro.language.get_subblock_num() -> int
 
 ## 返回值说明
 
-返回当前block的subblock总数，类型为整型Expr。返回值与核类型及编译模式有关：
+返回DT_INT64类型的subblock总数。返回值与核类型及编译模式有关：
 
 - **AIC核**：始终返回1（AIC为block，无AIC从核）。
 - **AIV核**：

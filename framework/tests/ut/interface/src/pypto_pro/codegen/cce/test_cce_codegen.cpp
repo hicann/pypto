@@ -852,26 +852,26 @@ TEST(CCECodegenTest, EmitsKernelTileValidShapeGetters)
     auto tile_type = std::make_shared<const ir::TileType>(std::vector<int64_t>{16, 32}, ir::DataType::FP16,
                                                           std::optional<ir::MemRefPtr>(std::nullopt),
                                                           std::optional<ir::TileView>(std::nullopt));
-    auto u32 = std::make_shared<const ir::ScalarType>(ir::DataType::UINT32);
+    auto int64_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
     auto tile = MakeVar("tile", tile_type);
     auto make_tile = std::make_shared<const ir::Call>("block.make_tile", std::vector<ir::ExprPtr>{}, tile_type,
                                                       ir::Span::Unknown());
     auto valid_shape = [&](int axis) {
         return std::make_shared<const ir::Call>("block.tile_valid_shape", std::vector<ir::ExprPtr>{tile},
-                                                std::vector<std::pair<std::string, std::any>>{{"axis", axis}}, u32,
-                                                ir::Span::Unknown());
+                                                std::vector<std::pair<std::string, std::any>>{{"axis", axis}},
+                                                int64_type, ir::Span::Unknown());
     };
     auto body = std::make_shared<const ir::SeqStmts>(
         std::vector<ir::StmtPtr>{
             std::make_shared<const ir::AssignStmt>(tile, make_tile, ir::Span::Unknown()),
-            std::make_shared<const ir::AssignStmt>(MakeVar("rows", u32), valid_shape(0), ir::Span::Unknown()),
-            std::make_shared<const ir::AssignStmt>(MakeVar("cols", u32), valid_shape(1), ir::Span::Unknown()),
+            std::make_shared<const ir::AssignStmt>(MakeVar("rows", int64_type), valid_shape(0), ir::Span::Unknown()),
+            std::make_shared<const ir::AssignStmt>(MakeVar("cols", int64_type), valid_shape(1), ir::Span::Unknown()),
         },
         ir::Span::Unknown());
     CCECodegen codegen(ir::SectionKind::Vector);
     std::string generated = codegen.GenerateSingle(MakeProgram(body), "a5");
-    EXPECT_NE(generated.find(".GetValidRow()"), std::string::npos);
-    EXPECT_NE(generated.find(".GetValidCol()"), std::string::npos);
+    EXPECT_NE(generated.find("(int64_t)(tile.GetValidRow())"), std::string::npos);
+    EXPECT_NE(generated.find("(int64_t)(tile.GetValidCol())"), std::string::npos);
 }
 
 TEST(CCECodegenTest, ComputesTensorOffsetAndRejectsRankMismatch)

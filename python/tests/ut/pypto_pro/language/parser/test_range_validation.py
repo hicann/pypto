@@ -51,16 +51,15 @@ def test_non_vf_accepts_negative_start(start):
     kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
-def test_non_vf_rejects_stop_beyond_int64():
-    """A value in (INT64_MAX, UINT64_MAX] parses as a folded uint64 constant; the range check
-    must recover its logical value and reject it against the int64 loop-variable bound."""
+def test_non_vf_rejects_folded_stop_beyond_int64():
+    """An INT64 constant expression rejects overflow before range lowering."""
 
     @pl.jit(auto_mutex=False)
     def kernel(x: pl.Tensor[[64], pl.DT_FP32]):
         for _ in pl.range(INT64_MAX + 1):
             _y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
 
-    with pytest.raises(FinalRejectionError, match=r"pl\.range\(\) stop must be in"):
+    with pytest.raises(FinalRejectionError, match=r"integer constant must be representable in int64"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -84,7 +83,7 @@ def test_non_vf_rejects_start_below_storage_band():
         for _ in pl.range(INT64_MIN - 1, 10):
             _y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
 
-    with pytest.raises(FinalRejectionError, match=r"integer constant must be in"):
+    with pytest.raises(FinalRejectionError, match=r"integer constant must be representable in int64"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 

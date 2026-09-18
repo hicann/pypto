@@ -130,7 +130,7 @@ std::string RunCodegen(const std::string& op_name, const ir::CallPtr& call)
 
 TEST(BackendCceOpsTest, GetBlockIdx)
 {
-    auto int_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT32);
+    auto int_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
     auto result = MakeVar("idx", int_type);
     auto call = std::make_shared<const ir::Call>("get_block_idx", std::vector<ir::ExprPtr>{}, int_type,
                                                  ir::Span::Unknown());
@@ -138,24 +138,24 @@ TEST(BackendCceOpsTest, GetBlockIdx)
 
     codegen::CCECodegen codegen(ir::SectionKind::Cube);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
-    EXPECT_NE(generated.find("(int32_t)(get_block_idx())"), std::string::npos);
+    EXPECT_NE(generated.find("(int64_t)(get_block_idx())"), std::string::npos);
 }
 
 TEST(BackendCceOpsTest, GetBlockIdxVectorUsesGlobalAivIndex)
 {
-    auto int_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT32);
+    auto int_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
     auto call = std::make_shared<const ir::Call>("get_block_idx", std::vector<ir::ExprPtr>{}, int_type,
                                                  ir::Span::Unknown());
     const auto* info = BackendCCE::Instance().GetOpInfo("get_block_idx");
     ASSERT_NE(info, nullptr);
 
     codegen::CCECodegen codegen(ir::SectionKind::Vector);
-    EXPECT_EQ(info->codegen_func(call, codegen), "(int32_t)(get_block_idx() * get_subblockdim() + get_subblockid())");
+    EXPECT_EQ(info->codegen_func(call, codegen), "(int64_t)(get_block_idx() * get_subblockdim() + get_subblockid())");
 }
 
 TEST(BackendCceOpsTest, GetBlockNum)
 {
-    auto int_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT32);
+    auto int_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
     auto result = MakeVar("num", int_type);
     auto call = std::make_shared<const ir::Call>("get_block_num", std::vector<ir::ExprPtr>{}, int_type,
                                                  ir::Span::Unknown());
@@ -163,7 +163,7 @@ TEST(BackendCceOpsTest, GetBlockNum)
 
     codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
-    EXPECT_NE(generated.find("(int32_t)(get_block_num())"), std::string::npos);
+    EXPECT_NE(generated.find("(int64_t)(get_block_num())"), std::string::npos);
 }
 
 TEST(BackendCceOpsTest, GetSpr)
@@ -180,7 +180,7 @@ TEST(BackendCceOpsTest, GetSpr)
 
 TEST(BackendCceOpsTest, GetSubBlockIdx)
 {
-    auto int_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT32);
+    auto int_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
     auto result = MakeVar("sub", int_type);
     auto call = std::make_shared<const ir::Call>("get_subblock_idx", std::vector<ir::ExprPtr>{}, int_type,
                                                  ir::Span::Unknown());
@@ -188,12 +188,12 @@ TEST(BackendCceOpsTest, GetSubBlockIdx)
 
     codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
-    EXPECT_NE(generated.find("(int32_t)(get_subblockid())"), std::string::npos);
+    EXPECT_NE(generated.find("(int64_t)(get_subblockid())"), std::string::npos);
 }
 
 TEST(BackendCceOpsTest, GetSubBlockNumIsTargetSpecific)
 {
-    auto int_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT32);
+    auto int_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
     auto call = std::make_shared<const ir::Call>("get_subblock_num", std::vector<ir::ExprPtr>{}, int_type,
                                                  ir::Span::Unknown());
     const auto* info = BackendCCE::Instance().GetOpInfo("get_subblock_num");
@@ -201,10 +201,10 @@ TEST(BackendCceOpsTest, GetSubBlockNumIsTargetSpecific)
     EXPECT_EQ(info->pipe, ir::PipeType::V);
 
     codegen::CCECodegen cube_codegen(ir::SectionKind::Cube);
-    EXPECT_EQ(info->codegen_func(call, cube_codegen), "(int32_t)(1)");
+    EXPECT_EQ(info->codegen_func(call, cube_codegen), "(int64_t)(1)");
 
     codegen::CCECodegen vector_codegen(ir::SectionKind::Vector);
-    EXPECT_EQ(info->codegen_func(call, vector_codegen), "(int32_t)(get_subblockdim())");
+    EXPECT_EQ(info->codegen_func(call, vector_codegen), "(int64_t)(get_subblockdim())");
 }
 
 TEST(BackendCceOpsTest, DebugTrap)
@@ -923,13 +923,13 @@ TEST(BackendCceOpsTest, BlockMakeTileAndSetValTile)
 
 TEST(BackendCceOpsTest, BlockGetValTile)
 {
-    auto tile_type = MakeTileType({16, 16}, ir::DataType::FP16);
+    auto tile_type = MakeTileType({16, 16}, ir::DataType::INT32);
     auto tile = MakeVar("tile", tile_type);
     auto make_tile = std::make_shared<const ir::Call>("block.make_tile", std::vector<ir::ExprPtr>{}, tile_type,
                                                       ir::Span::Unknown());
     auto tile_assign = std::make_shared<const ir::AssignStmt>(tile, make_tile, ir::Span::Unknown());
 
-    auto int_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT32);
+    auto int_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
     auto result = MakeVar("val", int_type);
     auto getval = std::make_shared<const ir::Call>("block.getval", std::vector<ir::ExprPtr>{tile, MakeConstInt(3)},
                                                    int_type, ir::Span::Unknown());
@@ -940,7 +940,7 @@ TEST(BackendCceOpsTest, BlockGetValTile)
 
     codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body), "a3");
-    EXPECT_NE(generated.find(".GetValue(3)"), std::string::npos);
+    EXPECT_NE(generated.find("(int64_t)(tile.GetValue(3))"), std::string::npos);
 }
 
 // ============================================================================
@@ -950,16 +950,45 @@ TEST(BackendCceOpsTest, BlockGetValTile)
 TEST(BackendCceOpsTest, BlockGetValTensor)
 {
     auto tensor = MakeTensorVar("data", {64}, ir::DataType::FP32);
-    auto int_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT32);
-    auto result = MakeVar("val", int_type);
+    auto scalar_type = std::make_shared<const ir::ScalarType>(ir::DataType::FP32);
+    auto result = MakeVar("val", scalar_type);
     auto call = std::make_shared<const ir::Call>("block.getval", std::vector<ir::ExprPtr>{tensor, MakeConstInt(5)},
-                                                 int_type, ir::Span::Unknown());
+                                                 scalar_type, ir::Span::Unknown());
     auto body = std::make_shared<const ir::AssignStmt>(result, call, ir::Span::Unknown());
 
     codegen::CCECodegen codegen(ir::SectionKind::Vector);
     auto generated = codegen.GenerateSingle(MakeProgram(body, {tensor}), "a3");
     EXPECT_NE(generated.find("*((__gm__ float*)"), std::string::npos);
     EXPECT_NE(generated.find("+ 5)"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, BlockGetValTensorInt32CastsResult)
+{
+    auto tensor = MakeTensorVar("data", {64}, ir::DataType::INT32);
+    auto int64_type = std::make_shared<const ir::ScalarType>(ir::DataType::INT64);
+    auto result = MakeVar("val", int64_type);
+    auto call = std::make_shared<const ir::Call>("block.getval", std::vector<ir::ExprPtr>{tensor, MakeConstInt(5)},
+                                                 int64_type, ir::Span::Unknown());
+    auto body = std::make_shared<const ir::AssignStmt>(result, call, ir::Span::Unknown());
+
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
+    auto generated = codegen.GenerateSingle(MakeProgram(body, {tensor}), "a3");
+    EXPECT_NE(generated.find("(int64_t)(*((__gm__ int32_t*)"), std::string::npos);
+}
+
+TEST(BackendCceOpsTest, BlockGetValTensorUint64DoesNotCastResult)
+{
+    auto tensor = MakeTensorVar("data", {64}, ir::DataType::UINT64);
+    auto uint64_type = std::make_shared<const ir::ScalarType>(ir::DataType::UINT64);
+    auto result = MakeVar("val", uint64_type);
+    auto call = std::make_shared<const ir::Call>("block.getval", std::vector<ir::ExprPtr>{tensor, MakeConstInt(5)},
+                                                 uint64_type, ir::Span::Unknown());
+    auto body = std::make_shared<const ir::AssignStmt>(result, call, ir::Span::Unknown());
+
+    codegen::CCECodegen codegen(ir::SectionKind::Vector);
+    auto generated = codegen.GenerateSingle(MakeProgram(body, {tensor}), "a3");
+    EXPECT_NE(generated.find("*((__gm__ uint64_t*)"), std::string::npos);
+    EXPECT_EQ(generated.find("(uint64_t)(*((__gm__ uint64_t*)"), std::string::npos);
 }
 
 TEST(BackendCceOpsTest, BlockSetValTensor)

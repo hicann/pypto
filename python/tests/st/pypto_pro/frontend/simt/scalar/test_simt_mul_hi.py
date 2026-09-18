@@ -31,8 +31,12 @@ def multiply_high(
     out_u64: pl.Tensor[[1, ELEMENTS], pl.DT_UINT64],
 ):
     tid = pl.simt.linear_thread_idx()
-    out_i32[0, tid] = pl.simt.mul_hi(lhs_i32[0, tid], rhs_i32[0, tid])
-    out_u32[0, tid] = pl.simt.mul_hi(lhs_u32[0, tid], rhs_u32[0, tid])
+    lhs_i32_value = pl.simt.cast(lhs_i32[0, tid], pl.DT_INT32)
+    rhs_i32_value = pl.simt.cast(rhs_i32[0, tid], pl.DT_INT32)
+    lhs_u32_value = pl.simt.cast(lhs_u32[0, tid], pl.DT_UINT32)
+    rhs_u32_value = pl.simt.cast(rhs_u32[0, tid], pl.DT_UINT32)
+    out_i32[0, tid] = pl.simt.mul_hi(lhs_i32_value, rhs_i32_value)
+    out_u32[0, tid] = pl.simt.mul_hi(lhs_u32_value, rhs_u32_value)
     out_i64[0, tid] = pl.simt.mul_hi(lhs_i64[0, tid], rhs_i64[0, tid])
     out_u64[0, tid] = pl.simt.mul_hi(lhs_u64[0, tid], rhs_u64[0, tid])
 

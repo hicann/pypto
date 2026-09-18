@@ -44,41 +44,41 @@ using namespace test_helpers;
 
 class BlockOpsMemoryTest : public testing::Test {};
 
-TEST_F(BlockOpsMemoryTest, GetBlockIdx_NoArgs_ReturnsIndexScalar)
+TEST_F(BlockOpsMemoryTest, GetBlockIdx_NoArgs_ReturnsInt64Scalar)
 {
     auto& reg = OpRegistry::GetInstance();
     auto call = reg.Create("get_block_idx", {}, Sp());
     ASSERT_NE(call, nullptr);
     auto rt = As<ScalarType>(call->GetType());
     ASSERT_NE(rt, nullptr);
-    EXPECT_EQ(rt->dtype_, DataType::INDEX);
+    EXPECT_EQ(rt->dtype_, DataType::INT64);
 }
 
-TEST_F(BlockOpsMemoryTest, GetBlockNum_NoArgs_ReturnsIndexScalar)
+TEST_F(BlockOpsMemoryTest, GetBlockNum_NoArgs_ReturnsInt64Scalar)
 {
     auto& reg = OpRegistry::GetInstance();
     auto call = reg.Create("get_block_num", {}, Sp());
     auto rt = As<ScalarType>(call->GetType());
     ASSERT_NE(rt, nullptr);
-    EXPECT_EQ(rt->dtype_, DataType::INDEX);
+    EXPECT_EQ(rt->dtype_, DataType::INT64);
 }
 
-TEST_F(BlockOpsMemoryTest, GetSubblockIdx_NoArgs_ReturnsIndexScalar)
+TEST_F(BlockOpsMemoryTest, GetSubblockIdx_NoArgs_ReturnsInt64Scalar)
 {
     auto& reg = OpRegistry::GetInstance();
     auto call = reg.Create("get_subblock_idx", {}, Sp());
     auto rt = As<ScalarType>(call->GetType());
     ASSERT_NE(rt, nullptr);
-    EXPECT_EQ(rt->dtype_, DataType::INDEX);
+    EXPECT_EQ(rt->dtype_, DataType::INT64);
 }
 
-TEST_F(BlockOpsMemoryTest, GetSubblockNum_NoArgs_ReturnsIndexScalar)
+TEST_F(BlockOpsMemoryTest, GetSubblockNum_NoArgs_ReturnsInt64Scalar)
 {
     auto& reg = OpRegistry::GetInstance();
     auto call = reg.Create("get_subblock_num", {}, Sp());
     auto rt = As<ScalarType>(call->GetType());
     ASSERT_NE(rt, nullptr);
-    EXPECT_EQ(rt->dtype_, DataType::INDEX);
+    EXPECT_EQ(rt->dtype_, DataType::INT64);
 }
 
 TEST_F(BlockOpsMemoryTest, GetBlockIdx_WithArgs_Throws)
@@ -203,7 +203,7 @@ TEST_F(BlockOpsMemoryTest, MakeTile_WithLayoutKwargs_ReturnsTileType)
 // ============================================================================
 // memory.cpp: block.tile_valid_shape
 // ============================================================================
-TEST_F(BlockOpsMemoryTest, TileValidShape_ReturnsUint32)
+TEST_F(BlockOpsMemoryTest, TileValidShape_ReturnsInt64)
 {
     auto& reg = OpRegistry::GetInstance();
     auto tile = MakeTileVar("tile", {16, 32}, DataType::FP16);
@@ -211,7 +211,7 @@ TEST_F(BlockOpsMemoryTest, TileValidShape_ReturnsUint32)
                            Sp());
     auto rt = As<ScalarType>(call->GetType());
     ASSERT_NE(rt, nullptr);
-    EXPECT_EQ(rt->dtype_, DataType::UINT32);
+    EXPECT_EQ(rt->dtype_, DataType::INT64);
 }
 
 TEST_F(BlockOpsMemoryTest, TileValidShape_RejectsInvalidAxis)
@@ -242,6 +242,25 @@ TEST_F(BlockOpsMemoryTest, GetVal_TileAndIndex_ReturnsScalarOfTileDtype)
     auto rt = As<ScalarType>(call->GetType());
     ASSERT_NE(rt, nullptr);
     EXPECT_EQ(rt->dtype_, DataType::FP16);
+}
+
+TEST_F(BlockOpsMemoryTest, GetVal_IntegerContainer_ReturnsInt64UnlessUint64)
+{
+    auto& reg = OpRegistry::GetInstance();
+    const std::vector<std::pair<DataType, DataType>> cases = {
+        {DataType::INT8, DataType::INT64},   {DataType::INT16, DataType::INT64},   {DataType::INT32, DataType::INT64},
+        {DataType::INT64, DataType::INT64},  {DataType::UINT8, DataType::INT64},   {DataType::UINT16, DataType::INT64},
+        {DataType::UINT32, DataType::INT64}, {DataType::UINT64, DataType::UINT64},
+    };
+    for (const auto& [source_dtype, expected_dtype] : cases) {
+        SCOPED_TRACE(source_dtype.ToString());
+        auto offset = MakeScalarVar("i", DataType::INT64);
+        auto tile_call = reg.Create("block.getval", {MakeTileVar("tile", {64}, source_dtype), offset}, Sp());
+        auto tensor_call = reg.Create("block.getval", {MakeTensorVar("tensor", {64}, source_dtype), offset}, Sp());
+
+        EXPECT_EQ(As<ScalarType>(tile_call->GetType())->dtype_, expected_dtype);
+        EXPECT_EQ(As<ScalarType>(tensor_call->GetType())->dtype_, expected_dtype);
+    }
 }
 
 TEST_F(BlockOpsMemoryTest, GetVal_WrongArgCount_Throws)
@@ -1219,26 +1238,22 @@ TEST_F(BlockOpsOutMemoryTest, BlockFull_OutScalar_ReturnsOutType)
     EXPECT_NE(As<TileType>(call->GetType()), nullptr);
 }
 
-TEST_F(BlockOpsOutMemoryTest, BlockSsbufStore_ReturnsIndexScalar)
+TEST_F(BlockOpsOutMemoryTest, BlockSsbufStore_ReturnsNone)
 {
     auto& reg = OpRegistry::GetInstance();
     auto struct_type = std::make_shared<TupleType>(std::vector<TypePtr>{std::make_shared<ScalarType>(DataType::INT64)});
     auto struct_var = std::make_shared<Var>("state", struct_type, Sp());
     auto call = reg.Create("block.ssbuf_store", {struct_var, MakeScalarVar("off", DataType::INT32)}, Sp());
-    auto rt = As<ScalarType>(call->GetType());
-    ASSERT_NE(rt, nullptr);
-    EXPECT_EQ(rt->dtype_, DataType::INDEX);
+    EXPECT_NE(As<NoneType>(call->GetType()), nullptr);
 }
 
-TEST_F(BlockOpsOutMemoryTest, BlockSsbufLoad_ReturnsIndexScalar)
+TEST_F(BlockOpsOutMemoryTest, BlockSsbufLoad_ReturnsNone)
 {
     auto& reg = OpRegistry::GetInstance();
     auto struct_type = std::make_shared<TupleType>(std::vector<TypePtr>{std::make_shared<ScalarType>(DataType::INT64)});
     auto struct_var = std::make_shared<Var>("state", struct_type, Sp());
     auto call = reg.Create("block.ssbuf_load", {struct_var, MakeScalarVar("off", DataType::INT32)}, Sp());
-    auto rt = As<ScalarType>(call->GetType());
-    ASSERT_NE(rt, nullptr);
-    EXPECT_EQ(rt->dtype_, DataType::INDEX);
+    EXPECT_NE(As<NoneType>(call->GetType()), nullptr);
 }
 
 // ============================================================================

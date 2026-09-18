@@ -1516,7 +1516,7 @@ class CallParserMixin:
                     )
                     if self._auto_mutex:
                         self._tile_mutex_meta[undefined_return] = (
-                            (ir.ConstInt(-1, ir.DataType.INDEX, span),),
+                            (ir.ConstInt(-1, ir.DataType.INT64, span),),
                             [],
                         )
 

@@ -304,7 +304,7 @@ class ExpressionParserMixin:
         """
         none_expr = self.builder.builder.none()
         if self._auto_mutex and none_expr not in self._tile_mutex_meta:
-            self._tile_mutex_meta[none_expr] = ((ir.ConstInt(-1, DataType.INDEX, span),), [])
+            self._tile_mutex_meta[none_expr] = ((ir.ConstInt(-1, DataType.INT64, span),), [])
         return none_expr
 
     def tile_mutex_lock_meta(self, expr):
@@ -331,7 +331,7 @@ class ExpressionParserMixin:
         if isinstance(value, bool):
             return ir.ConstBool(value, span)
         elif isinstance(value, int):
-            return make_const_int(value, DataType.INDEX, span=span)
+            return make_const_int(value, span=span)
         elif isinstance(value, float):
             return ir.ConstFloat(value, DataType.DEFAULT_CONST_FLOAT, span)
         elif isinstance(value, str):
@@ -720,7 +720,7 @@ class ExpressionParserMixin:
         idx = fields.index(field_name)
         if isinstance(base, ir.MakeTuple) and not self._is_struct_array_tuple(base):
             return base.elements[idx]
-        return ir.GetItemExpr(base, ir.ConstInt(idx, DataType.INDEX, span), span)
+        return ir.GetItemExpr(base, ir.ConstInt(idx, DataType.INT64, span), span)
 
     def parse_attribute(self, attr: ast.Attribute) -> ir.Expr:
         """Parse attribute access.
@@ -990,7 +990,7 @@ class ExpressionParserMixin:
         if not step_is_one:
             diff = _make_binary("sub", left, start, span)
             mod_val = _make_binary("mod", diff, step, span)
-            zero = ir.ConstInt(0, DataType.INDEX, span)
+            zero = ir.ConstInt(0, DataType.INT64, span)
             result = ir.And(result, _make_binary("eq", mod_val, zero, span), DataType.BOOL, span)
         return ir.not_(result, span) if is_not_in else result
 
@@ -1183,7 +1183,7 @@ class ExpressionParserMixin:
                 next_shape_val = _const_int_value(shape[dim])
                 cur_stride_val = _const_int_value(stride)
                 if next_shape_val is not None and cur_stride_val is not None:
-                    stride = ir.ConstInt(next_shape_val * cur_stride_val, DataType.INDEX, span)
+                    stride = ir.ConstInt(next_shape_val * cur_stride_val, DataType.INT64, span)
                 else:
                     stride = shape[dim] * stride
         return offset
@@ -1296,7 +1296,7 @@ class ExpressionParserMixin:
                         span=span,
                         hint="Omit the step or use a contiguous slice with step 1",
                     )
-            start = ir.ConstInt(0, DataType.INDEX, span) if s.lower is None else self.parse_expression(s.lower)
+            start = ir.ConstInt(0, DataType.INT64, span) if s.lower is None else self.parse_expression(s.lower)
             dim_starts.append(start)
             start_val = self._validate_subscript_value(start, "Tile slice start", i, span)
 
@@ -1312,7 +1312,7 @@ class ExpressionParserMixin:
                     shape_val if effective_upper_val is None else min(effective_upper_val, shape_val)
                 )
             if shape_val is not None and upper_val is not None and upper_val > shape_val:
-                upper = ir.ConstInt(shape_val, DataType.INDEX, span)
+                upper = ir.ConstInt(shape_val, DataType.INT64, span)
                 upper_val = shape_val
             if (
                 start_val is not None
@@ -1345,14 +1345,14 @@ class ExpressionParserMixin:
                         )
                     if size_val is not None:
                         if size_val > remaining:
-                            size = ir.ConstInt(remaining, DataType.INDEX, span)
+                            size = ir.ConstInt(remaining, DataType.INT64, span)
                             size_val = remaining
                     else:
-                        size = ir.Min(size, ir.ConstInt(remaining, DataType.INDEX, span), DataType.INDEX, span)
+                        size = _make_binary("min_", size, ir.ConstInt(remaining, DataType.INT64, span), span)
                 elif vs_val is None and start_val is not None:
                     # Dynamic valid_shape: emit runtime clamp min(size, vs - start)
                     remaining_expr = vs - start
-                    size = ir.Min(size, remaining_expr, DataType.INDEX, span)
+                    size = _make_binary("min_", size, remaining_expr, span)
 
             new_shape_exprs.append(size)
 

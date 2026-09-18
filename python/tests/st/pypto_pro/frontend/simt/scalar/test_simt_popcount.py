@@ -23,7 +23,8 @@ def count_bits(
     count64: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
 ):
     tid = pl.simt.linear_thread_idx()
-    count32[0, tid] = pl.simt.popcount(src32[0, tid])
+    value32 = pl.simt.cast(src32[0, tid], pl.DT_UINT32)
+    count32[0, tid] = pl.simt.popcount(value32)
     count64[0, tid] = pl.simt.popcount(src64[0, tid])
 
 

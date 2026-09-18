@@ -70,7 +70,7 @@ def test_get_tiling_fields_maps_scalar_fields_and_preserves_order():
 
     assert list(fields.keys()) == ["n", "scale", "enabled"]
     assert fields == {
-        "n": ScalarFieldInfo(DataType.INDEX),
+        "n": ScalarFieldInfo(DataType.INT64),
         "scale": ScalarFieldInfo(DataType.FP32),
         "enabled": ScalarFieldInfo(DataType.BOOL),
     }
@@ -79,8 +79,8 @@ def test_get_tiling_fields_maps_scalar_fields_and_preserves_order():
 def test_get_tiling_fields_maps_array_fields():
     fields = get_tiling_fields(MixedTiling)
 
-    assert fields["n"] == ScalarFieldInfo(DataType.INDEX)
-    assert fields["offsets"] == ArrayFieldInfo(DataType.INDEX, 4)
+    assert fields["n"] == ScalarFieldInfo(DataType.INT64)
+    assert fields["offsets"] == ArrayFieldInfo(DataType.INT64, 4)
     assert fields["scales"] == ArrayFieldInfo(DataType.FP32, 2)
 
 
