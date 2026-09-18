@@ -1594,7 +1594,6 @@ std::vector<int> OoOScheduler::SelectSpillBuffers(Operation* allocOp)
         }
     }
     std::vector<std::vector<int>> canSpillGroups = GetSpillGroup(pool, allocBuffer->size, avoidRanges);
-
     if (canSpillGroups.empty()) {
         return pool.GetAddrSortedBufs();
     }

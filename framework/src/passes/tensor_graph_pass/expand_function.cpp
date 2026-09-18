@@ -77,6 +77,43 @@ bool OperandShapesHaveDynamicDim(const LogicalTensors& operands)
     return false;
 }
 
+// 从 currentLevel 层出发逐层 BFS（方向由 traverseConsumers 决定）。
+// 若某一层（跳过 VIEW/ASSEMBLE 穿透层后）的非穿透节点全部为 RESHAPE 则返回 true；
+// 否则返回 false，遍历耗尽也返回 false。
+bool TraversePathContainsOnlyReshape(std::vector<Operation*> currentLevel, bool traverseConsumers)
+{
+    std::unordered_set<Operation*> visited;
+    while (!currentLevel.empty()) {
+        bool levelHasReshape = false;
+        bool levelHasNonReshapeCompute = false;
+        std::vector<Operation*> nextLevel;
+        for (auto* curOp : currentLevel) {
+            if (curOp == nullptr || !visited.insert(curOp).second) {
+                continue;
+            }
+            const auto opcode = curOp->GetOpcode();
+            if (IsViewAssembleHopTransparent(opcode)) {
+                AppendTraverseNeighbors(traverseConsumers, curOp, nextLevel);
+            } else if (opcode == Opcode::OP_RESHAPE) {
+                levelHasReshape = true;
+            } else {
+                levelHasNonReshapeCompute = true;
+            }
+        }
+        if (levelHasNonReshapeCompute) {
+            return false;
+        }
+        if (levelHasReshape) {
+            return true;
+        }
+        if (nextLevel.empty()) {
+            break;
+        }
+        currentLevel = std::move(nextLevel);
+    }
+    return false;
+}
+
 // VIEW/ASSEMBLE 不参与 tile 展开的条件：
 // 1) 参与展开循环的 shape 含动态维 -1（VIEW 看输出，ASSEMBLE 看输入；TiledView/TiledAssemble
 //    对 -1 的 for 循环次数为 0，会断图）；
@@ -109,36 +146,7 @@ bool ShouldSkipViewAssembleExpand(const Operation& op)
         }
     }
 
-    std::unordered_set<Operation*> visited;
-    while (!currentLevel.empty()) {
-        bool levelHasReshape = false;
-        bool levelHasNonReshapeCompute = false;
-        std::vector<Operation*> nextLevel;
-        for (auto* curOp : currentLevel) {
-            if (curOp == nullptr || !visited.insert(curOp).second) {
-                continue;
-            }
-            const auto opcode = curOp->GetOpcode();
-            if (IsViewAssembleHopTransparent(opcode)) {
-                AppendTraverseNeighbors(traverseConsumers, curOp, nextLevel);
-            } else if (opcode == Opcode::OP_RESHAPE) {
-                levelHasReshape = true;
-            } else {
-                levelHasNonReshapeCompute = true;
-            }
-        }
-        if (levelHasNonReshapeCompute) {
-            return false;
-        }
-        if (levelHasReshape) {
-            return true;
-        }
-        if (nextLevel.empty()) {
-            break;
-        }
-        currentLevel = std::move(nextLevel);
-    }
-    return false;
+    return TraversePathContainsOnlyReshape(std::move(currentLevel), traverseConsumers);
 }
 
 std::unordered_set<Operation*> CollectViewAssembleSkipExpandOps(const std::vector<OperationPtr>& tensorOperations)
@@ -615,6 +623,43 @@ void ConvertTokensToNormal(Operation& dst, const Operation& src)
     }
 }
 
+void CopyEmuOpAttrsForAdds(const OperationsViewer& opListPost, const OperationPtr& op, size_t opListPreSize)
+{
+    if (op->GetOpcode() == Opcode::OP_ADDS) {
+        for (size_t i = opListPreSize; i < opListPost.size(); i++) {
+            auto& newOp = opListPost[i];
+            newOp.CopyAttrFrom(*op, OP_EMUOP_PREFIX);
+        }
+    }
+}
+
+void InheritTokenContract(const OperationsViewer& opListPost, const OperationPtr& op, size_t opListPreSize)
+{
+    if (!op->result_token_.empty() || !op->tokens_.empty()) {
+        // VIEW/ASSEMBLE operations inserted by expansion are implementation
+        // details. Only tile operations representing the original operation
+        // inherit its token contract.
+        for (size_t i = opListPreSize; i < opListPost.size(); i++) {
+            auto& newOp = opListPost[i];
+            if (newOp.GetOpcode() == op->GetOpcode()) {
+                newOp.result_token_ = op->result_token_;
+                newOp.tokens_ = op->tokens_;
+            }
+        }
+    }
+}
+
+Status FinalizeExpansion(Function& function)
+{
+    function.BuildTensorMap();
+    function.expandFunctionAccelerate = false;
+    if (TokenUtils::SplitMultiProducerTokens(function) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "SplitMultiProducerTokens failed.");
+        return FAILED;
+    }
+    return SUCCESS;
+}
+
 } // namespace
 
 void ExpandFunction::ProcessForNotExpandOp(Function& function, Operation& op) const
@@ -726,24 +771,9 @@ Status ExpandFunction::RunOnFunction(Function& function)
     return SUCCESS;
 }
 
-Status ExpandFunction::Expandfunction(Function& function) const
+std::unordered_set<Operation*> ExpandFunction::CollectSkipExpandOps(
+    Function& function, const std::vector<OperationPtr>& tensorOperations) const
 {
-    if (!function.IsGraphType(GraphType::TENSOR_GRAPH)) {
-        APASS_LOG_INFO_F(Elements::Function, "Function %s is not static tensor graph, skip expanding.",
-                         function.GetRawName().c_str());
-        return SUCCESS;
-    }
-    function.expandFunctionAccelerate = true;
-    SemanticToNormalGuard semanticToNormalGuard;
-    function.SetGraphType(GraphType::TILE_GRAPH);
-
-    std::vector<OperationPtr> tensorOperations;
-    auto operationViewer = function.Operations();
-    for (size_t i = 0; i < operationViewer.size(); i++) {
-        tensorOperations.emplace_back(operationViewer.operations_[i]);
-    }
-
-    function.ResetOperations();
     auto skipExpandOps = CollectViewAssembleSkipExpandOps(tensorOperations);
     auto ssaDstViewSkipOps = CollectAssembleSsaDstViewSkipExpandOps(tensorOperations);
     skipExpandOps.insert(ssaDstViewSkipOps.begin(), ssaDstViewSkipOps.end());
@@ -765,6 +795,40 @@ Status ExpandFunction::Expandfunction(Function& function) const
         skipExpandOps.insert(gatherParamSkipOps.begin(), gatherParamSkipOps.end());
         RefreshViewAssembleTileShapes(tensorOperations, skipExpandOps);
     }
+    return skipExpandOps;
+}
+
+bool ExpandFunction::ShouldKeepOpUnexpanded(const OperationPtr& op, const std::unordered_set<Operation*>& skipExpandOps)
+{
+    if (config::EnableSlice() && op->GetOpcode() == Opcode::OP_VIEW &&
+        op->HasAttribute(OpAttributeKey::isGlobalInput)) {
+        return true;
+    }
+    if (kNotNeedExpandOps.count(op->GetOpcode())) {
+        return true;
+    }
+    return skipExpandOps.count(op.get()) > 0;
+}
+
+Status ExpandFunction::Expandfunction(Function& function) const
+{
+    if (!function.IsGraphType(GraphType::TENSOR_GRAPH)) {
+        APASS_LOG_INFO_F(Elements::Function, "Function %s is not static tensor graph, skip expanding.",
+                         function.GetRawName().c_str());
+        return SUCCESS;
+    }
+    function.expandFunctionAccelerate = true;
+    SemanticToNormalGuard semanticToNormalGuard;
+    function.SetGraphType(GraphType::TILE_GRAPH);
+
+    std::vector<OperationPtr> tensorOperations;
+    auto operationViewer = function.Operations();
+    for (size_t i = 0; i < operationViewer.size(); i++) {
+        tensorOperations.emplace_back(operationViewer.operations_[i]);
+    }
+
+    function.ResetOperations();
+    auto skipExpandOps = CollectSkipExpandOps(function, tensorOperations);
     if (ClearIOOperand(tensorOperations) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "ClearIOOperand failed.");
         return FAILED;
@@ -778,16 +842,7 @@ Status ExpandFunction::Expandfunction(Function& function) const
         if (op->GetOpcode() == Opcode::OP_PRINT) {
             continue;
         }
-        if (config::EnableSlice() && op->GetOpcode() == Opcode::OP_VIEW &&
-            op->HasAttribute(OpAttributeKey::isGlobalInput)) {
-            ProcessForNotExpandOp(function, *op);
-            continue;
-        }
-        if (kNotNeedExpandOps.count(op->GetOpcode())) {
-            ProcessForNotExpandOp(function, *op);
-            continue;
-        }
-        if (skipExpandOps.count(op.get()) > 0) {
+        if (ShouldKeepOpUnexpanded(op, skipExpandOps)) {
             ProcessForNotExpandOp(function, *op);
             continue;
         }
@@ -800,33 +855,11 @@ Status ExpandFunction::Expandfunction(Function& function) const
             return FAILED;
         }
         auto opListPost = function.Operations(false);
-        if (op->GetOpcode() == Opcode::OP_ADDS) {
-            for (size_t i = opListPreSize; i < opListPost.size(); i++) {
-                auto& newOp = opListPost[i];
-                newOp.CopyAttrFrom(*op, OP_EMUOP_PREFIX);
-            }
-        }
-        if (!op->result_token_.empty() || !op->tokens_.empty()) {
-            // VIEW/ASSEMBLE operations inserted by expansion are implementation
-            // details. Only tile operations representing the original operation
-            // inherit its token contract.
-            for (size_t i = opListPreSize; i < opListPost.size(); i++) {
-                auto& newOp = opListPost[i];
-                if (newOp.GetOpcode() == op->GetOpcode()) {
-                    newOp.result_token_ = op->result_token_;
-                    newOp.tokens_ = op->tokens_;
-                }
-            }
-        }
+        CopyEmuOpAttrsForAdds(opListPost, op, opListPreSize);
+        InheritTokenContract(opListPost, op, opListPreSize);
         ir::Span::ClearCurrent();
     }
-    function.BuildTensorMap();
-    function.expandFunctionAccelerate = false;
-    if (TokenUtils::SplitMultiProducerTokens(function) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "SplitMultiProducerTokens failed.");
-        return FAILED;
-    }
-    return SUCCESS;
+    return FinalizeExpansion(function);
 }
 
 Status ExpandFunction::ExpandOperation(Function& function, Operation& op) const

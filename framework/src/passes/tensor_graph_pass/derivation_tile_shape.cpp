@@ -604,20 +604,10 @@ static bool ValidShape(const std::vector<int64_t>& shape)
     return true;
 }
 
-Status DerivationTileShape::DerivationReshapeTileShape(Operation* op, const Shape& inShape, const Shape& outShape,
-                                                       const std::vector<int64_t>& inTileShape,
-                                                       std::vector<int64_t>& outTileShape)
+static Status DeriveAndCheckReshapeTileShape(Operation* op, const Shape& inShape, const Shape& outShape,
+                                             const std::vector<int64_t>& inTileShape,
+                                             std::vector<int64_t>& newTileShape)
 {
-    if (op->GetOpcode() != Opcode::OP_RESHAPE) {
-        return WARNING;
-    }
-    if (!ValidShape(inShape) || !ValidShape(outShape) || !ValidShape(inTileShape) ||
-        (inShape.size() != inTileShape.size()) || (GetShapeSize(inShape) != GetShapeSize(outShape))) {
-        APASS_LOG_WARN_F(Elements::Operation, "Op: %d has invalid shape, inShape%s, outShape%s, inTile%s",
-                         op->GetOpMagic(), GetStr(inShape).c_str(), GetStr(outShape).c_str(),
-                         GetStr(inTileShape).c_str());
-        return WARNING;
-    }
     /*
      * 示例1： inShape = [8,2,3], tileShape = [2, 1, 3], outShape = [2, 8, 3, 1]
      * alignShape = [2, 4, 2, 3, 1], newTileShape = [1, 2, 3, 1]
@@ -648,7 +638,7 @@ Status DerivationTileShape::DerivationReshapeTileShape(Operation* op, const Shap
     }
 
     /* 推导输出Tensor的tile shape */
-    std::vector<int64_t> newTileShape(outShape.size(), 1);
+    newTileShape.assign(outShape.size(), 1);
     if (DerivationOutShapeTileWithAlign(alignedStatus, outShape, newTileShape) != SUCCESS) {
         APASS_LOG_WARN_F(
             Elements::Operation,
@@ -669,6 +659,27 @@ Status DerivationTileShape::DerivationReshapeTileShape(Operation* op, const Shap
             "Op: %d check tileshape failed, inShape%s, alignShape%s, outShape%s, inTile%s, alignTile%s, outTile%s",
             op->GetOpMagic(), GetStr(inShape).c_str(), GetStr(alignedShape).c_str(), GetStr(outShape).c_str(),
             GetTileStr(inStatus).c_str(), GetTileStr(alignedStatus).c_str(), GetStr(newTileShape).c_str());
+        return WARNING;
+    }
+    return SUCCESS;
+}
+
+Status DerivationTileShape::DerivationReshapeTileShape(Operation* op, const Shape& inShape, const Shape& outShape,
+                                                       const std::vector<int64_t>& inTileShape,
+                                                       std::vector<int64_t>& outTileShape)
+{
+    if (op->GetOpcode() != Opcode::OP_RESHAPE) {
+        return WARNING;
+    }
+    if (!ValidShape(inShape) || !ValidShape(outShape) || !ValidShape(inTileShape) ||
+        (inShape.size() != inTileShape.size()) || (GetShapeSize(inShape) != GetShapeSize(outShape))) {
+        APASS_LOG_WARN_F(Elements::Operation, "Op: %d has invalid shape, inShape%s, outShape%s, inTile%s",
+                         op->GetOpMagic(), GetStr(inShape).c_str(), GetStr(outShape).c_str(),
+                         GetStr(inTileShape).c_str());
+        return WARNING;
+    }
+    std::vector<int64_t> newTileShape;
+    if (DeriveAndCheckReshapeTileShape(op, inShape, outShape, inTileShape, newTileShape) != SUCCESS) {
         return WARNING;
     }
 

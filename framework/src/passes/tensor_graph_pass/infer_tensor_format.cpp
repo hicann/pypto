@@ -193,44 +193,36 @@ void InferTensorFormat::ApplyTransDataVecTile(const std::shared_ptr<LogicalTenso
         opTileShape.SetVecTile(oriVectile);
         relatedOp->UpdateTileShape(opTileShape);
     }
+    VecTile tmpVectile = relatedOp->GetTileShape().GetVecTile();
     if (srcFormat == TileOpFormat::TILEOP_NC1HWC0 && targetFormat == TileOpFormat::TILEOP_ND) {
-        VecTile tmpVectile = relatedOp->GetTileShape().GetVecTile();
         tmpVectile.tile[1] = tmpVectile.tile[1] / c0;
         tmpVectile.tile.emplace_back(c0);
-        TileShape::Current().SetVecTile(tmpVectile);
     } else if (srcFormat == TileOpFormat::TILEOP_NDC1HWC0 && targetFormat == TileOpFormat::TILEOP_ND) {
-        VecTile tmpVectile = relatedOp->GetTileShape().GetVecTile();
         tmpVectile.tile[0] = 1;
         std::swap(tmpVectile.tile[1], tmpVectile.tile[2]);
         tmpVectile.tile[2] = tmpVectile.tile[2] / c0;
         tmpVectile.tile.emplace_back(c0);
         tmpVectile.tile[1] *= NUM4;
         tmpVectile.tile[3] *= NUM4;
-        TileShape::Current().SetVecTile(tmpVectile);
     } else if (srcFormat == TileOpFormat::TILEOP_ND && targetFormat == TileOpFormat::TILEOP_FRACTAL_Z) {
-        VecTile tmpVectile = relatedOp->GetTileShape().GetVecTile();
         tmpVectile.tile[0] = NUM16;
         tmpVectile.tile[1] = c0;
         tmpVectile.tile[3] *= tmpVectile.tile[2];
         tmpVectile.tile[2] = 1;
-        TileShape::Current().SetVecTile(tmpVectile);
     } else if (srcFormat == TileOpFormat::TILEOP_ND && targetFormat == TileOpFormat::TILEOP_FRACTAL_Z_3D) {
-        VecTile tmpVectile = relatedOp->GetTileShape().GetVecTile();
         tmpVectile.tile[0] = NUM16;
         tmpVectile.tile[1] = c0;
         tmpVectile.tile[4] *= tmpVectile.tile[3];
         tmpVectile.tile[3] = 1;
-        TileShape::Current().SetVecTile(tmpVectile);
     } else if (srcFormat == TileOpFormat::TILEOP_ND && targetFormat == TileOpFormat::TILEOP_NDC1HWC0) {
-        VecTile tmpVectile = relatedOp->GetTileShape().GetVecTile();
         tmpVectile.tile[0] = 1;
         tmpVectile.tile[1] *= NUM4;
         tmpVectile.tile[2] *= NUM2;
         tmpVectile.tile[3] *= NUM2;
-        TileShape::Current().SetVecTile(tmpVectile);
     } else {
-        TileShape::Current().SetVecTile(oriVectile);
+        tmpVectile = oriVectile;
     }
+    TileShape::Current().SetVecTile(tmpVectile);
 }
 
 std::shared_ptr<LogicalTensor> InferTensorFormat::InsertTransDataOp(Function& function,
