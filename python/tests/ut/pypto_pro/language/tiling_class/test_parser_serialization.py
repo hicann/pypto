@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from pypto_pro._errors import InvalidType
 import pytest
 
 
@@ -56,5 +57,5 @@ def test_serialize_raises_value_error_for_wrong_size():
 
     # The list length is checked while serializing the tiling value.
     t = TilingData(arr=[0, 1])  # type: ignore[arg-type]
-    with pytest.raises(ValueError, match="expected 3 elements, got 2"):
+    with pytest.raises(InvalidType, match="expected 3 elements, got 2"):
         tiling_instance_to_bytes(t)

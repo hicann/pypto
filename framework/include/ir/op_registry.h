@@ -36,10 +36,12 @@
 #include "ir/pipe.h"
 #include "ir/span.h"
 #include "ir/type.h"
+#include "pypto_pro/error.h"
 #include "tilefwk/error.h"
 
 namespace pypto {
 namespace ir {
+using npu::tile_fwk::ExternalError;
 
 // Forward declaration
 class Call;
@@ -87,24 +89,25 @@ public:
     [[nodiscard]] inline const OpPtr& GetOp() const
     {
         // Check operator instance
-        CHECK(op_) << "Operator '" + name_ + "' has no operator instance";
+        PRO_IR_CHECK(npu::tile_fwk::InternalError::COMMON_INNER_ERROR, op_)
+            << "Operator '" + name_ + "' has no operator instance";
 
         // Check description is set
-        CHECK(description_.has_value()) << "Operator '" + name_ +
-                                               "' has no description. Use .set_description() to provide one.";
+        PRO_IR_CHECK(npu::tile_fwk::InternalError::COMMON_INNER_ERROR, description_.has_value())
+            << "Operator '" + name_ + "' has no description. Use .set_description() to provide one.";
 
         // Check op_category is set
-        CHECK(op_category_.has_value()) << "Operator '" + name_ +
-                                               "' has no category. Use .set_op_category() to provide one.";
+        PRO_IR_CHECK(npu::tile_fwk::InternalError::COMMON_INNER_ERROR, op_category_.has_value())
+            << "Operator '" + name_ + "' has no category. Use .set_op_category() to provide one.";
 
         // Check arguments are defined (either with arguments or marked as no_argument)
-        CHECK(arguments_.has_value())
+        PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, arguments_.has_value())
             << "Operator '" + name_ +
                    "' has no argument definition. Use .add_argument() or .no_argument() to define arguments.";
 
         // Check deduce_type is set
-        CHECK(deduce_type_.has_value()) << "Operator '" + name_ +
-                                               "' has no type deduction function. Use .f_deduce_type() to provide one.";
+        PRO_IR_CHECK(npu::tile_fwk::InternalError::COMMON_INNER_ERROR, deduce_type_.has_value())
+            << "Operator '" + name_ + "' has no type deduction function. Use .f_deduce_type() to provide one.";
 
         return op_;
     }
@@ -124,7 +127,8 @@ public:
      */
     [[nodiscard]] inline const std::string& GetDescription() const
     {
-        CHECK(description_.has_value()) << "Operator '" + name_ + "' has no description";
+        PRO_IR_CHECK(npu::tile_fwk::InternalError::COMMON_INNER_ERROR, description_.has_value())
+            << "Operator '" + name_ + "' has no description";
         return *description_;
     }
 
@@ -136,7 +140,8 @@ public:
      */
     [[nodiscard]] inline const std::string& GetOpCategory() const
     {
-        CHECK(op_category_.has_value()) << "Operator '" + name_ + "' has no category";
+        PRO_IR_CHECK(npu::tile_fwk::InternalError::COMMON_INNER_ERROR, op_category_.has_value())
+            << "Operator '" + name_ + "' has no category";
         return *op_category_;
     }
 
@@ -152,7 +157,8 @@ public:
                                                      const std::vector<std::pair<std::string, std::any>>&)>&
     GetDeduceType() const
     {
-        CHECK(deduce_type_.has_value()) << "Operator '" + name_ + "' has no type deduction function";
+        PRO_IR_CHECK(npu::tile_fwk::InternalError::COMMON_INNER_ERROR, deduce_type_.has_value())
+            << "Operator '" + name_ + "' has no type deduction function";
         return *deduce_type_;
     }
 
@@ -167,7 +173,8 @@ public:
      */
     inline OpRegistryEntry& set_description(std::string description)
     {
-        CHECK(!description_.has_value()) << "Operator '" + name_ + "' description is already set";
+        PRO_IR_CHECK(ExternalError::INVALID_OPERATION, !description_.has_value())
+            << "Operator '" + name_ + "' description is already set";
         description_ = std::move(description);
         return *this;
     }
@@ -183,7 +190,8 @@ public:
      */
     inline OpRegistryEntry& set_op_category(std::string category)
     {
-        CHECK(!op_category_.has_value()) << "Operator '" + name_ + "' category is already set";
+        PRO_IR_CHECK(ExternalError::INVALID_OPERATION, !op_category_.has_value())
+            << "Operator '" + name_ + "' category is already set";
         op_category_ = std::move(category);
         return *this;
     }
@@ -220,9 +228,10 @@ public:
      */
     inline OpRegistryEntry& no_argument()
     {
-        CHECK(!arguments_.has_value()) << "Operator '" + name_ +
-                                              "' already has arguments defined. Cannot call no_argument() after "
-                                              "add_argument().";
+        PRO_IR_CHECK(ExternalError::INVALID_OPERATION, !arguments_.has_value())
+            << "Operator '" + name_ +
+                   "' already has arguments defined. Cannot call no_argument() after "
+                   "add_argument().";
         arguments_ = std::vector<std::pair<std::string, std::string>>();
         return *this;
     }
@@ -246,7 +255,8 @@ public:
     inline OpRegistryEntry& f_deduce_type(
         std::function<TypePtr(const std::vector<ExprPtr>&, const std::vector<std::pair<std::string, std::any>>&)> dt)
     {
-        CHECK(!deduce_type_.has_value()) << "Operator '" + name_ + "' type deduction function is already set";
+        PRO_IR_CHECK(ExternalError::INVALID_OPERATION, !deduce_type_.has_value())
+            << "Operator '" + name_ + "' type deduction function is already set";
         deduce_type_ = std::move(dt);
         return *this;
     }
@@ -284,7 +294,8 @@ public:
     template <typename T>
     inline OpRegistryEntry& set_attr(const std::string& key)
     {
-        CHECK(op_) << "Operator '" + name_ + "' has no operator instance";
+        PRO_IR_CHECK(npu::tile_fwk::InternalError::COMMON_INNER_ERROR, op_)
+            << "Operator '" + name_ + "' has no operator instance";
         op_->SetAttrType<T>(key); // Delegate to Op::SetAttrType (compile-time check happens there)
         return *this;
     }
@@ -297,7 +308,8 @@ public:
      */
     inline OpRegistryEntry& set_pipe(PipeType pipe)
     {
-        CHECK(op_) << "Operator '" + name_ + "' has no operator instance";
+        PRO_IR_CHECK(npu::tile_fwk::InternalError::COMMON_INNER_ERROR, op_)
+            << "Operator '" + name_ + "' has no operator instance";
         op_->SetPipe(pipe);
         return *this;
     }

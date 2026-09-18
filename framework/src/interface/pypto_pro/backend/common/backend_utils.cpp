@@ -20,10 +20,12 @@
 #include "ir/memref.h"
 #include "ir/scalar_expr.h"
 #include "ir/type_inference.h"
+#include "pypto_pro/error.h"
 #include "tilefwk/error.h"
 
 namespace pypto {
 namespace backend {
+using npu::tile_fwk::ExternalError;
 namespace round_mode {
 
 int FindIndex(const std::string& mode, const std::string& op_name)
@@ -35,7 +37,7 @@ int FindIndex(const std::string& mode, const std::string& op_name)
             return static_cast<int>(i);
         }
     }
-    CHECK(false) << op_name << ": unknown round mode '" << mode << "'";
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, false) << op_name << ": unknown round mode '" << mode << "'";
     return -1;
 }
 
@@ -111,14 +113,14 @@ std::vector<int> MXLoadTileDims(const ir::CallPtr& op, const ir::TensorTypePtr& 
 {
     const int rank = static_cast<int>(tensor_type->shape_.size());
     // MX scale tensors carry a trailing physical phase axis of size 2.
-    IRCHECK(rank >= 3) << "MX scale load requires at least two matrix axes and one physical phase axis at "
-                       << op->span_.ToString();
+    PRO_CODEGEN_IRCHECK(ExternalError::INVALID_SHAPE, rank >= 3)
+        << "MX scale load requires at least two matrix axes and one physical phase axis at " << op->span_.ToString();
     const auto phase_dim = ir::As<ir::ConstInt>(tensor_type->shape_.back());
-    IRCHECK(phase_dim != nullptr && phase_dim->value_ == 2)
+    PRO_CODEGEN_IRCHECK(ExternalError::INVALID_SHAPE, phase_dim != nullptr && phase_dim->value_ == 2)
         << "MX scale load trailing physical phase axis must be statically equal to 2 at " << op->span_.ToString();
     const std::vector<int> tile_dims = op->HasKwarg("tile_dims") ? op->GetKwarg<std::vector<int>>("tile_dims") :
                                                                    std::vector<int>{rank - 3, rank - 2};
-    IRCHECK(tile_dims[0] != rank - 1 && tile_dims[1] != rank - 1)
+    PRO_CODEGEN_IRCHECK(ExternalError::INVALID_SHAPE, tile_dims[0] != rank - 1 && tile_dims[1] != rank - 1)
         << "MX scale load order cannot select the trailing physical phase axis at " << op->span_.ToString();
     return tile_dims;
 }
@@ -151,22 +153,26 @@ void ValidateNZTransfer(const std::string& op_name, const ir::CallPtr& op, const
     auto tile_type = ir::As<ir::TileType>(tile_expr->GetType());
     const auto& hw = tile_type->hardwareInfo_.value();
     const bool is_nz_tile = hw.blayout == ir::TileLayout::col_major && hw.slayout == ir::TileLayout::row_major;
-    CHECK(is_nz_tile) << op_name << ": GM NZ transfer requires an NZ Tile layout";
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_FORMAT, is_nz_tile)
+        << op_name << ": GM NZ transfer requires an NZ Tile layout";
 
     const size_t ndim = tensor_type->shape_.size();
-    CHECK(offsets->elements_.size() == ndim) << op_name << ": offset rank must match GM NZ tensor rank";
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_SHAPE, offsets->elements_.size() == ndim)
+        << op_name << ": offset rank must match GM NZ tensor rank";
     const bool is_transpose = op->HasKwarg("is_transpose") && op->GetKwarg<bool>("is_transpose");
-    CHECK(!is_transpose) << op_name << ": CCE NZ transfer does not support order transpose";
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_FORMAT, !is_transpose)
+        << op_name << ": CCE NZ transfer does not support order transpose";
 
     const int64_t c0 = GetNZInnerCols(tensor_type->dtype_);
     const auto tile_rows = ir::GetConstantDimension(tile_type->shape_[0]);
     const auto tile_cols = ir::GetConstantDimension(tile_type->shape_[1]);
     const auto col_offset = ir::GetConstantDimension(offsets->elements_[ndim - 1]);
 
-    CHECK(!tile_rows.has_value() || tile_rows.value() % 16 == 0) << op_name << ": NZ tile rows must be divisible by 16";
-    CHECK(!tile_cols.has_value() || tile_cols.value() % c0 == 0)
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_FORMAT, !tile_rows.has_value() || tile_rows.value() % 16 == 0)
+        << op_name << ": NZ tile rows must be divisible by 16";
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_FORMAT, !tile_cols.has_value() || tile_cols.value() % c0 == 0)
         << op_name << ": NZ tile columns must be divisible by C0";
-    CHECK(!col_offset.has_value() || col_offset.value() % c0 == 0)
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_FORMAT, !col_offset.has_value() || col_offset.value() % c0 == 0)
         << op_name << ": NZ column offset must be divisible by C0";
 
     // In a GM transfer, an Acc tile can only appear as the source of store.
@@ -178,8 +184,9 @@ void ValidateNZTransfer(const std::string& op_name, const ir::CallPtr& op, const
     const auto full_rows = ir::GetConstantDimension(tensor_type->shape_[ndim - 2]);
     const auto padded_full_rows = full_rows.has_value() ? std::optional<int64_t>((full_rows.value() + 15) / 16 * 16) :
                                                           std::nullopt;
-    CHECK(!padded_full_rows.has_value() || !tile_rows.has_value() || !tile_cols.has_value() ||
-          tile_rows.value() == padded_full_rows.value() || tile_cols.value() <= c0)
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_FORMAT,
+                      !padded_full_rows.has_value() || !tile_rows.has_value() || !tile_cols.has_value() ||
+                          tile_rows.value() == padded_full_rows.value() || tile_cols.value() <= c0)
         << op_name << ": Acc NZ partial-M store spanning multiple N fractals is not supported by direct TSTORE";
 }
 
@@ -254,20 +261,24 @@ size_t FindPrintfConversionIndex(const std::string& format_segment)
             ++i;
             continue;
         }
-        CHECK(!(i + 1 < format_segment.size() && format_segment[i + 1] == '%'))
+        PRO_CODEGEN_CHECK(ExternalError::NOT_IMPLEMENTED_ERROR,
+                          !(i + 1 < format_segment.size() && format_segment[i + 1] == '%'))
             << "debug.printf does not support literal '%%'";
 
         size_t j = i + 1;
-        CHECK(j < format_segment.size()) << "debug.printf format ends with an incomplete conversion";
-        CHECK(format_segment[j] != '-' && format_segment[j] != '+' && format_segment[j] != ' ' &&
-              format_segment[j] != '#' && format_segment[j] != '0' && format_segment[j] != '.' &&
-              !std::isdigit(static_cast<unsigned char>(format_segment[j])))
+        PRO_CODEGEN_CHECK(ExternalError::INVALID_VAL, j < format_segment.size())
+            << "debug.printf format ends with an incomplete conversion";
+        PRO_CODEGEN_CHECK(ExternalError::NOT_IMPLEMENTED_ERROR,
+                          format_segment[j] != '-' && format_segment[j] != '+' && format_segment[j] != ' ' &&
+                              format_segment[j] != '#' && format_segment[j] != '0' && format_segment[j] != '.' &&
+                              !std::isdigit(static_cast<unsigned char>(format_segment[j])))
             << "debug.printf does not support flags, width, or precision";
-        CHECK(IsSupportedPrintfConversion(format_segment[j]))
+        PRO_CODEGEN_CHECK(ExternalError::NOT_IMPLEMENTED_ERROR, IsSupportedPrintfConversion(format_segment[j]))
             << "debug.printf does not support conversion '%" << format_segment[j] << "'";
         return j;
     }
-    CHECK(false) << "debug.printf format segment must contain a supported conversion";
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_VAL, false)
+        << "debug.printf format segment must contain a supported conversion";
     return std::string::npos;
 }
 
@@ -283,7 +294,8 @@ std::vector<PrintfSegment> ParsePrintfSegments(const std::string& format)
             continue;
         }
         if (i + 1 < format.size() && format[i + 1] == '%') {
-            CHECK(false) << "debug.printf does not support literal '%%'";
+            PRO_CODEGEN_CHECK(ExternalError::NOT_IMPLEMENTED_ERROR, false)
+                << "debug.printf does not support literal '%%'";
         }
 
         size_t j = FindPrintfConversionIndex(format.substr(i)) + i;

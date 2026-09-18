@@ -16,18 +16,18 @@ import ast
 from pypto.pypto_impl import ir as _ir_core
 from pypto.pypto_impl.ir import Expr, Span
 
+from ..._errors import InvalidArgument, InvalidType, InvalidVal
 from ._op_registry import OpSpec, op_impl, register_table
 
 
 @op_impl("min")
 def _parse_min(self, call: ast.Call):
-    from pypto_pro.language.parser.diagnostics import InvalidOperationError
 
     call_span = self.span_tracker.get_span(call)
     if call.keywords:
-        raise InvalidOperationError("Scalar operation 'min' does not accept keyword arguments", span=call_span)
+        raise InvalidArgument("Scalar operation 'min' does not accept keyword arguments", span=call_span)
     if len(call.args) != 2:
-        raise InvalidOperationError(
+        raise InvalidArgument(
             f"Scalar binary operation 'min' requires exactly 2 arguments, got {len(call.args)}",
             span=call_span,
         )
@@ -40,13 +40,12 @@ def _parse_min(self, call: ast.Call):
 
 @op_impl("max")
 def _parse_max(self, call: ast.Call):
-    from pypto_pro.language.parser.diagnostics import InvalidOperationError
 
     call_span = self.span_tracker.get_span(call)
     if call.keywords:
-        raise InvalidOperationError("Scalar operation 'max' does not accept keyword arguments", span=call_span)
+        raise InvalidArgument("Scalar operation 'max' does not accept keyword arguments", span=call_span)
     if len(call.args) != 2:
-        raise InvalidOperationError(
+        raise InvalidArgument(
             f"Scalar binary operation 'max' requires exactly 2 arguments, got {len(call.args)}",
             span=call_span,
         )
@@ -194,12 +193,12 @@ register_table(
 
 @op_impl("const")
 def _parse_typed_constant(self, call: ast.Call):
-    from pypto_pro.language.parser.diagnostics import ParserSyntaxError, check_fits_dtype, make_const_int
+    from pypto_pro.language.parser.diagnostics import check_fits_dtype, make_const_int
 
     span = self.span_tracker.get_span(call)
 
     if len(call.args) != 2:
-        raise ParserSyntaxError(
+        raise InvalidArgument(
             "pl.const() requires exactly 2 arguments: value and dtype",
             span=span,
             hint="Use pl.const(42, pl.DT_INT32) or pl.const(1.0, pl.DT_FP16)",
@@ -212,9 +211,9 @@ def _parse_typed_constant(self, call: ast.Call):
         value_node = value_node.operand
 
     if not isinstance(value_node, ast.Constant) or not isinstance(value_node.value, (int, float)):
-        raise ParserSyntaxError(
+        raise InvalidType(
             "pl.const() first argument must be a numeric literal",
-            span=span,
+            span=self.span_tracker.call_argument_span(call, 0, span),
             hint="Use an int or float literal: pl.const(42, pl.DT_INT32)",
         )
 
@@ -224,10 +223,10 @@ def _parse_typed_constant(self, call: ast.Call):
 
     dtype = self.parse_expression(call.args[1])
     if not isinstance(dtype, _ir_core.DataType):
-        raise ParserSyntaxError(
+        raise InvalidType(
             f"pl.const() second argument must be a dtype (pl.DT_*), "
             f"got {type(dtype).__name__}",
-            span=span,
+            span=self.span_tracker.call_argument_span(call, 1, span),
             hint="Use a dtype: pl.DT_FP32, pl.DT_INT32, etc.",
         )
 
@@ -242,11 +241,10 @@ def _parse_typed_constant(self, call: ast.Call):
 
 @op_impl("astype")
 def _parse_scalar_astype(self, call: ast.Call):
-    from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError
 
     span = self.span_tracker.get_span(call)
     if call.keywords or len(call.args) != 2:
-        raise ParserSyntaxError(
+        raise InvalidType(
             "pl.astype() requires exactly 2 positional arguments: value and dtype",
             span=span,
             hint="Use pl.astype(value, pl.DT_INT32)",
@@ -255,15 +253,17 @@ def _parse_scalar_astype(self, call: ast.Call):
     value = self.parse_expression(call.args[0])
     if not isinstance(value, _ir_core.Expr) or not isinstance(value.type, _ir_core.ScalarType):
         value_type = getattr(value, "type", type(value).__name__)
-        raise ParserTypeError(
+        raise InvalidVal(
             f"pl.astype() first argument must be a Scalar, got {value_type}",
-            span=span,
+            span=self.span_tracker.call_argument_span(call, 0, span),
+            parser_retry=True,
         )
 
     dtype = self.parse_expression(call.args[1])
     if not isinstance(dtype, _ir_core.DataType):
-        raise ParserTypeError(
+        raise InvalidType(
             f"pl.astype() second argument must be a dtype (pl.DT_*), got {type(dtype).__name__}",
-            span=span,
+            span=self.span_tracker.call_argument_span(call, 1, span),
+            parser_retry=True,
         )
     return _ir_core.cast(value, dtype, span)

@@ -48,6 +48,8 @@ import torch
 
 from pypto_pro import DataType
 
+from .._errors import BadFd, PyptoProError
+
 if TYPE_CHECKING:
     from pypto_pro.runtime.jit import CompiledKernel
 
@@ -84,7 +86,7 @@ def _ensure_lib() -> ctypes.CDLL:
     lib_dir = Path(pypto.__file__).parent.resolve() / "lib"
     so_path = lib_dir / "libtile_fwk_interface.so"
     if not so_path.exists():
-        raise RuntimeError(f"libtile_fwk_interface.so not found at {so_path}")
+        raise BadFd(f"libtile_fwk_interface.so not found at {so_path}")
 
     _lib = ctypes.CDLL(str(so_path))
 
@@ -122,7 +124,7 @@ def register_callback() -> bool:
         return True
     try:
         lib = _ensure_lib()
-    except RuntimeError as exc:
+    except PyptoProError as exc:
         logging.warning("Exception dump callback unavailable: %s", exc)
         return False
     ret = lib.pro_register_exception_dump_callback()

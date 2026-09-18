@@ -11,6 +11,7 @@
 """Unit tests for IR Builder."""
 
 from pypto_pro import DataType, ir
+from pypto_pro._errors import InvalidType
 from pypto_pro.ir import IRBuilder
 import pytest
 
@@ -405,7 +406,7 @@ def test_iter_arg_with_type_mismatch():
     """Test that iter_arg raises error when explicit type doesn't match inferred type."""
     ib = IRBuilder()
 
-    with pytest.raises(ValueError, match="Type mismatch"):
+    with pytest.raises(InvalidType, match="Type mismatch"):
         with ib.function("iter_mismatch_test") as f:
             f.return_type(ir.ScalarType(DataType.INT64))
 

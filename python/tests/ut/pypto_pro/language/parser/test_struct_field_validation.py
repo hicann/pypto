@@ -21,8 +21,8 @@ Plus positive cases confirming valid declarations are not rejected.
 from __future__ import annotations
 
 from pypto_pro import ir
+from pypto_pro._errors import InvalidOperation, InvalidType, InvalidVal, NotSupported
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import ParserSyntaxError
 import pytest
 
 
@@ -38,7 +38,7 @@ def _parse(kernel):
 def test_err_struct_field_name_is_cpp_keyword():
     """A field named after a C++ keyword ('int') must be rejected."""
 
-    with pytest.raises(ParserSyntaxError, match="C\\+\\+ keyword"):
+    with pytest.raises(InvalidOperation, match="C\\+\\+ keyword"):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             s = pl.struct("S", int=1, true=2, delete=3)
@@ -50,7 +50,7 @@ def test_err_struct_field_name_is_cpp_keyword():
 def test_err_struct_type_name_is_cpp_keyword():
     """A struct type name that is a C++ keyword ('class') must be rejected."""
 
-    with pytest.raises(ParserSyntaxError, match="C\\+\\+ keyword"):
+    with pytest.raises(InvalidOperation, match="C\\+\\+ keyword"):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             s = pl.struct("class", v=1)
@@ -62,7 +62,7 @@ def test_err_struct_type_name_is_cpp_keyword():
 def test_err_struct_array_field_name_is_cpp_keyword():
     """struct_array field named after a C++ keyword must be rejected."""
 
-    with pytest.raises(ParserSyntaxError, match="C\\+\\+ keyword"):
+    with pytest.raises(InvalidOperation, match="C\\+\\+ keyword"):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             arr = pl.struct_array(2, "S", new=0)
@@ -74,7 +74,7 @@ def test_err_struct_array_field_name_is_cpp_keyword():
 def test_err_struct_array_type_name_is_cpp_keyword():
     """struct_array type name that is a C++ keyword must be rejected."""
 
-    with pytest.raises(ParserSyntaxError, match="C\\+\\+ keyword"):
+    with pytest.raises(InvalidOperation, match="C\\+\\+ keyword"):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             arr = pl.struct_array(2, "delete", v=0)
@@ -90,7 +90,7 @@ def test_err_struct_array_type_name_is_cpp_keyword():
 def test_err_struct_nested_make_tuple_field():
     """A field whose value is a make_tuple result must be rejected."""
 
-    with pytest.raises(ParserSyntaxError, match="nested named tuple/struct"):
+    with pytest.raises(NotSupported, match="nested named tuple/struct"):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             t = pl.make_tuple(x=1)
@@ -103,7 +103,7 @@ def test_err_struct_nested_make_tuple_field():
 def test_err_struct_nested_struct_field():
     """A field whose value is another struct result must be rejected."""
 
-    with pytest.raises(ParserSyntaxError, match="nested named tuple/struct"):
+    with pytest.raises(NotSupported, match="nested named tuple/struct"):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             inner = pl.struct("Inner", a=0)
@@ -116,7 +116,7 @@ def test_err_struct_nested_struct_field():
 def test_err_struct_array_nested_make_tuple_field():
     """struct_array field whose value is a make_tuple result must be rejected."""
 
-    with pytest.raises(ParserSyntaxError, match="nested named tuple/struct"):
+    with pytest.raises(NotSupported, match="nested named tuple/struct"):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             t = pl.make_tuple(x=1)
@@ -133,7 +133,7 @@ def test_err_struct_array_nested_make_tuple_field():
 def test_err_struct_empty_array_field():
     """An empty array field literal must be rejected."""
 
-    with pytest.raises(ParserSyntaxError, match="empty"):
+    with pytest.raises(InvalidVal, match="empty"):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             s = pl.struct("S", arr=[])
@@ -145,7 +145,7 @@ def test_err_struct_empty_array_field():
 def test_err_struct_array_empty_array_field():
     """An empty array field literal in struct_array must be rejected."""
 
-    with pytest.raises(ParserSyntaxError, match="empty"):
+    with pytest.raises(InvalidVal, match="empty"):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             arr = pl.struct_array(2, "S", data=[])
@@ -161,7 +161,7 @@ def test_err_struct_array_empty_array_field():
 def test_err_struct_mixed_int_float_array_field():
     """A mixed int/float array field ([1, 2.5, 3]) must be rejected."""
 
-    with pytest.raises(ParserSyntaxError, match="mixed element types"):
+    with pytest.raises(InvalidVal, match="mixed element types"):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             s = pl.struct("S", arr=[1, 2.5, 3])
@@ -173,7 +173,7 @@ def test_err_struct_mixed_int_float_array_field():
 def test_err_struct_mixed_bool_int_array_field():
     """A mixed bool/int array field ([True, 2]) must be rejected."""
 
-    with pytest.raises(ParserSyntaxError, match="mixed element types"):
+    with pytest.raises(InvalidVal, match="mixed element types"):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             s = pl.struct("S", arr=[True, 2])
@@ -185,7 +185,7 @@ def test_err_struct_mixed_bool_int_array_field():
 def test_err_struct_array_mixed_dtype_array_field():
     """A mixed-dtype array field in struct_array must be rejected."""
 
-    with pytest.raises(ParserSyntaxError, match="mixed element types"):
+    with pytest.raises(InvalidVal, match="mixed element types"):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             arr = pl.struct_array(2, "S", data=[1, 2.5])
@@ -201,7 +201,7 @@ def test_err_struct_array_mixed_dtype_array_field():
 def test_err_struct_multidim_array_field():
     """A 2D array field ([[1, 2], [3, 4]]) must be rejected."""
 
-    with pytest.raises(ParserSyntaxError, match="non-scalar elements"):
+    with pytest.raises(InvalidType, match="non-scalar elements"):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             s = pl.struct("S", m=[[1, 2], [3, 4]])
@@ -213,7 +213,7 @@ def test_err_struct_multidim_array_field():
 def test_err_struct_array_multidim_array_field():
     """A 2D array field in struct_array must be rejected."""
 
-    with pytest.raises(ParserSyntaxError, match="non-scalar elements"):
+    with pytest.raises(InvalidType, match="non-scalar elements"):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             arr = pl.struct_array(2, "S", m=[[1, 2], [3, 4]])
@@ -229,7 +229,7 @@ def test_err_struct_array_multidim_array_field():
 def test_err_struct_tensor_field():
     """A whole tensor as a field value must be rejected."""
 
-    with pytest.raises(ParserSyntaxError, match="must be a scalar or a fixed-size array"):
+    with pytest.raises(InvalidType, match="must be a scalar or a fixed-size array"):
         @pl.jit(auto_mutex=False)
         def kernel(a_t: pl.Tensor[[16], pl.DT_FP16]):
             s = pl.struct("S", data=a_t)
@@ -241,7 +241,7 @@ def test_err_struct_tensor_field():
 def test_err_struct_array_tensor_field():
     """A whole tensor as a struct_array field value must be rejected."""
 
-    with pytest.raises(ParserSyntaxError, match="must be a scalar or a fixed-size array"):
+    with pytest.raises(InvalidType, match="must be a scalar or a fixed-size array"):
         @pl.jit(auto_mutex=False)
         def kernel(a_t: pl.Tensor[[16], pl.DT_FP16]):
             arr = pl.struct_array(2, "S", data=a_t)

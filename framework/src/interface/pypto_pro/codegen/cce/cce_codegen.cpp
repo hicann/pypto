@@ -40,11 +40,13 @@
 #include "ir/transforms/base/mutator.h"
 #include "ir/transforms/structural_comparison.h"
 #include "ir/type.h"
+#include "pypto_pro/error.h"
 #include "tilefwk/error.h"
 
 namespace pypto {
 namespace codegen {
 using ir::DataType;
+using npu::tile_fwk::ExternalError;
 
 namespace {
 
@@ -97,7 +99,8 @@ std::string BuildFP32FmodExpression(const std::string& lhs, const std::string& r
 
 CCECodegen::CCECodegen(ir::SectionKind target) : backend_(backend::GetBackend()), target_(target)
 {
-    CHECK(target_ == ir::SectionKind::Cube || target_ == ir::SectionKind::Vector)
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT,
+                      target_ == ir::SectionKind::Cube || target_ == ir::SectionKind::Vector)
         << "CCE target must be Cube or Vector";
 }
 
@@ -310,7 +313,7 @@ public:
             // Void call — replace return with empty SeqStmts
             return std::make_shared<const ir::SeqStmts>(std::vector<ir::StmtPtr>{}, op->span_);
         }
-        CHECK(op->value_.size() == 1)
+        PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, op->value_.size() == 1)
             << "helper return must carry a single value (tuple returns are a single MakeTuple)";
         return std::make_shared<const ir::AssignStmt>(target_, op->value_[0], op->span_);
     }
@@ -506,15 +509,18 @@ std::string CCECodegen::BuildSimtFunctionSignature(const ir::FunctionPtr& func)
 {
     std::ostringstream sig;
     if (func->funcType_ == ir::FunctionType::SIMT_VF) {
-        CHECK(func->HasAttr(ir::kMaxThreadsAttr)) << "SIMT function '" << func->name_ << "' has no max_threads";
+        PRO_CODEGEN_CHECK(ExternalError::INVALID_VAL, func->HasAttr(ir::kMaxThreadsAttr))
+            << "SIMT function '" << func->name_ << "' has no max_threads";
         sig << "__simt_vf__ __launch_bounds__(" << func->GetAttr<int>(ir::kMaxThreadsAttr) << ") inline void ";
     } else {
-        CHECK(func->returnTypes_.size() <= 1) << "SIMT callee '" << func->name_ << "' has multiple return values";
+        PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, func->returnTypes_.size() <= 1)
+            << "SIMT callee '" << func->name_ << "' has multiple return values";
         if (func->returnTypes_.empty()) {
             sig << "__simt_callee__ inline void ";
         } else {
             auto return_type = ir::As<ir::ScalarType>(func->returnTypes_[0]);
-            CHECK(return_type != nullptr) << "SIMT callee '" << func->name_ << "' must return a scalar or void";
+            PRO_CODEGEN_CHECK(ExternalError::INVALID_TYPE, return_type != nullptr)
+                << "SIMT callee '" << func->name_ << "' must return a scalar or void";
             sig << "__simt_callee__ inline " << return_type->dtype_.ToCTypeString() << " ";
         }
     }
@@ -536,8 +542,9 @@ std::string CCECodegen::BuildSimtFunctionSignature(const ir::FunctionPtr& func)
             sig << ", uint32_t " << param_name << "__valid_row";
             sig << ", uint32_t " << param_name << "__valid_col";
         } else {
-            CHECK(false) << "SIMT function '" << func->name_
-                         << "' supports only TensorType, TileType, and ScalarType parameters";
+            PRO_CODEGEN_CHECK(ExternalError::NOT_IMPLEMENTED_ERROR, false)
+                << "SIMT function '" << func->name_
+                << "' supports only TensorType, TileType, and ScalarType parameters";
         }
         context_.RegisterVar(param, param_name);
     }
@@ -547,8 +554,9 @@ std::string CCECodegen::BuildSimtFunctionSignature(const ir::FunctionPtr& func)
 
 void CCECodegen::GenerateSimtFunction(const ir::FunctionPtr& func)
 {
-    CHECK(func != nullptr &&
-          (func->funcType_ == ir::FunctionType::SIMT_VF || func->funcType_ == ir::FunctionType::SIMT_CALLEE))
+    PRO_CODEGEN_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR,
+                      func != nullptr && (func->funcType_ == ir::FunctionType::SIMT_VF ||
+                                          func->funcType_ == ir::FunctionType::SIMT_CALLEE))
         << "GenerateSimtFunction expects a SIMT_VF or SIMT_CALLEE function";
 
     ResetFunctionGenerationState();
@@ -594,7 +602,7 @@ std::vector<ir::FunctionPtr> OrderSimtCallees(const std::map<std::string, ir::Fu
         if (ordered_names.find(func->name_) != ordered_names.end()) {
             return;
         }
-        CHECK(active.insert(func->name_).second)
+        PRO_CODEGEN_CHECK(ExternalError::NOT_IMPLEMENTED_ERROR, active.insert(func->name_).second)
             << "Recursive SIMT callee call involving '" << func->name_ << "' is not supported";
         SimtCalleeCallCollector collector;
         collector.VisitStmt(func->body_);
@@ -619,7 +627,8 @@ std::vector<ir::FunctionPtr> OrderSimtCallees(const std::map<std::string, ir::Fu
 
 std::string CCECodegen::GenerateSingle(const ir::ProgramPtr& program, const std::string& arch)
 {
-    CHECK(program != nullptr) << "Cannot generate code for null program";
+    PRO_CODEGEN_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, program != nullptr)
+        << "Cannot generate code for null program";
 
     ResetFunctionGenerationState();
     arch_ = arch;
@@ -628,7 +637,8 @@ std::string CCECodegen::GenerateSingle(const ir::ProgramPtr& program, const std:
     // the top-level parse entry. Codegen relies on absence *within* that table to
     // distinguish a plain tuple from named tuples and structs.
     debug_info_ = program->GetDebugInfo();
-    INTERNAL_CHECK(debug_info_ != nullptr) << "CCE codegen requires Program IRDebugInfo";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, debug_info_ != nullptr)
+        << "CCE codegen requires Program IRDebugInfo";
 
     ir::FunctionPtr kernel_func;
     std::vector<ir::FunctionPtr> simt_funcs;
@@ -650,10 +660,13 @@ std::string CCECodegen::GenerateSingle(const ir::ProgramPtr& program, const std:
             kernel_func = func;
         }
     }
-    CHECK(kernel_func != nullptr) << "No kernel function found in program";
+    PRO_CODEGEN_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, kernel_func != nullptr)
+        << "No kernel function found in program";
     if (!simt_funcs.empty() || !simt_callees_.empty()) {
-        CHECK(target_ == ir::SectionKind::Vector) << "SIMT functions can only be generated for the Vector target";
-        CHECK(arch_ == "a5") << "SIMT direct CCE generation currently requires arch='a5'";
+        PRO_CODEGEN_CHECK(ExternalError::NOT_IMPLEMENTED_ERROR, target_ == ir::SectionKind::Vector)
+            << "SIMT functions can only be generated for the Vector target";
+        PRO_CODEGEN_CHECK(ExternalError::NOT_IMPLEMENTED_ERROR, arch_ == "a5")
+            << "SIMT direct CCE generation currently requires arch='a5'";
     }
 
     emitter_.Clear();
@@ -675,16 +688,7 @@ std::string CCECodegen::GenerateSingle(const ir::ProgramPtr& program, const std:
     PreScanKernel(kernel_func);
     RegisterTilingStructTypes(kernel_func);
     GenerateSinglePrologue(kernel_func, needs_ffts);
-    try {
-        GenerateBody(kernel_func);
-    } catch (const npu::tile_fwk::Error& e) {
-        const ir::Span& best_span = current_expr_span_.IsUnknown() ? current_stmt_span_ : current_expr_span_;
-        if (!best_span.IsUnknown()) {
-            std::string enriched = std::string(e.what()) + "\n  --> " + best_span.ToString();
-            throw npu::tile_fwk::Error("GenerateBody", __FILE__, __LINE__, enriched, nullptr);
-        }
-        throw;
-    }
+    GenerateBody(kernel_func);
 
     std::string function_code = emitter_.GetCode();
     emitter_.Clear();
@@ -862,7 +866,7 @@ void CCECodegen::EmitSingleFunctionSignature(const ir::FunctionPtr& func, bool h
             // `<name>_ptr`, so a view-less tensor param is emitted the same way.
             if (tensor_type->tensor_view_.has_value() && tensor_type->tensor_view_->ptr.has_value()) {
                 auto ptr_var = std::const_pointer_cast<ir::Var>(ir::As<ir::Var>(*tensor_type->tensor_view_->ptr));
-                CHECK(ptr_var != nullptr)
+                PRO_CODEGEN_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, ptr_var != nullptr)
                     << "Tensor parameter '" << param->name_ << "' has a tensor_view ptr that is not a Var";
                 context_.RegisterVar(ptr_var, ptr_name);
             }
@@ -1017,21 +1021,25 @@ void CCECodegen::GenerateSinglePrologue(const ir::FunctionPtr& func, bool has_cr
 
 void CCECodegen::VisitStmt_(const ir::SectionStmtPtr& op)
 {
-    INTERNAL_CHECK(op != nullptr) << "Internal error: null SectionStmt";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr)
+        << "Internal error: null SectionStmt";
 
     // VF section: emit a __VEC_SCOPE__ { ... } block with all tile->ptr base declarations
     // hoisted to just before the scope (section_hoist), so they never sit after a mem_bar.
     if (op->sectionKind_ == ir::SectionKind::VF) {
-        INTERNAL_CHECK(target_ == ir::SectionKind::Vector) << "VF section is only valid in a Vector target Program";
+        PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR,
+                                   target_ == ir::SectionKind::Vector)
+            << "VF section is only valid in a Vector target Program";
         // VF sections do not nest, so the hoist buffer must be empty on entry.
-        INTERNAL_CHECK(section_hoisted_decls_.empty());
+        PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, section_hoisted_decls_.empty());
 
         int saved_indent = emitter_.GetIndentLevel();
         std::string pre_scope = emitter_.GetCode();
         emitter_.Clear();
         emitter_.SetIndentLevel(saved_indent);
 
-        INTERNAL_CHECK(!in_vf_section_) << "Nested VF sections are not supported";
+        PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, !in_vf_section_)
+            << "Nested VF sections are not supported";
         in_vf_section_ = true;
         vf_reg_hoisted_decls_.clear();
 
@@ -1081,7 +1089,8 @@ void CCECodegen::VisitStmt_(const ir::SectionStmtPtr& op)
         return;
     }
 
-    INTERNAL_CHECK(false) << "Cube/Vector SectionStmt must be projected before CCE CodeGen";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, false)
+        << "Cube/Vector SectionStmt must be projected before CCE CodeGen";
 }
 
 bool CCECodegen::DetectCrossCoreSyncOps(const ir::StmtPtr& stmt)
@@ -1111,11 +1120,15 @@ bool CCECodegen::DetectCrossCoreSyncOps(const ir::StmtPtr& stmt)
     return detector.found;
 }
 
+// The two generic dispatch entries are the only gate the codegen walk passes, so
+// publishing the DSL location here reaches every emitter below without adding a
+// span parameter to each. SpanScope ignores an invalid span.
 void CCECodegen::VisitStmt(const ir::StmtPtr& stmt)
 {
     if (stmt) {
         current_stmt_span_ = stmt->span_;
     }
+    const pypto::pro::SpanScope spanScope(stmt ? stmt->span_ : ir::Span::Unknown());
     ir::IRVisitor::VisitStmt(stmt);
 }
 
@@ -1124,6 +1137,7 @@ void CCECodegen::VisitExpr(const ir::ExprPtr& expr)
     if (expr) {
         current_expr_span_ = expr->span_;
     }
+    const pypto::pro::SpanScope spanScope(expr ? expr->span_ : ir::Span::Unknown());
     ir::IRVisitor::VisitExpr(expr);
 }
 
@@ -1139,9 +1153,12 @@ void CCECodegen::GenerateBody(const ir::FunctionPtr& func)
 
 void CCECodegen::VisitStmt_(const ir::AssignStmtPtr& op)
 {
-    INTERNAL_CHECK(op != nullptr) << "Internal error: null AssignStmt";
-    INTERNAL_CHECK(op->var_ != nullptr) << "Internal error: AssignStmt has null var";
-    INTERNAL_CHECK(op->value_ != nullptr) << "Internal error: AssignStmt has null value";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr)
+        << "Internal error: null AssignStmt";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op->var_ != nullptr)
+        << "Internal error: AssignStmt has null var";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op->value_ != nullptr)
+        << "Internal error: AssignStmt has null value";
 
     auto target_var = op->var_;
     std::string var_name = context_.SanitizeName(target_var);
@@ -1183,8 +1200,9 @@ void CCECodegen::VisitStmt_(const ir::AssignStmtPtr& op)
         auto tt = ir::As<ir::TupleType>(target_var->GetType());
         if (IsArrayTuple(tt) && tuple_backing_arr_.count(make_tuple.get()) == 0) {
             auto elem_names = CollectTupleElemNames(op->var_);
-            CHECK(!elem_names.empty()) << "Array tuple assignment to '" << var_name
-                                       << "' has elements without a C++ name at " << op->span_.ToString();
+            PRO_CODEGEN_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, !elem_names.empty())
+                << "Array tuple assignment to '" << var_name << "' has elements without a C++ name at "
+                << op->span_.ToString();
             emitter_.EmitLine(BuildDynamicTupleArrayDecl(tt->types_[0], elem_names, var_name));
             tuple_backing_arr_.emplace(make_tuple.get(), var_name);
         }
@@ -1200,8 +1218,10 @@ void CCECodegen::VisitStmt_(const ir::AssignStmtPtr& op)
 
 void CCECodegen::VisitStmt_(const ir::EvalStmtPtr& op)
 {
-    INTERNAL_CHECK(op != nullptr) << "Internal error: null EvalStmt";
-    INTERNAL_CHECK(op->expr_ != nullptr) << "Internal error: EvalStmt has null expression";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr)
+        << "Internal error: null EvalStmt";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op->expr_ != nullptr)
+        << "Internal error: EvalStmt has null expression";
 
     // Backend side-effect ops emit their statements while visiting the expression. A direct
     // SimtCallee call instead returns its call text, which must be emitted here. Results from
@@ -1219,12 +1239,15 @@ void CCECodegen::VisitStmt_(const ir::EvalStmtPtr& op)
 
 void CCECodegen::VisitStmt_(const ir::ReturnStmtPtr& op)
 {
-    INTERNAL_CHECK(op != nullptr) << "Internal error: null ReturnStmt";
-    CHECK(op->value_.size() <= 1) << "ReturnStmt must contain at most one value";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr)
+        << "Internal error: null ReturnStmt";
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, op->value_.size() <= 1)
+        << "ReturnStmt must contain at most one value";
     if (op->value_.empty()) {
         emitter_.EmitLine("return;");
     } else {
-        CHECK(ir::As<ir::ScalarType>(op->value_[0]->GetType()) != nullptr) << "ReturnStmt value must be a scalar";
+        PRO_CODEGEN_CHECK(ExternalError::INVALID_TYPE, ir::As<ir::ScalarType>(op->value_[0]->GetType()) != nullptr)
+            << "ReturnStmt value must be a scalar";
         emitter_.EmitLine("return " + GetExprAsCode(op->value_[0]) + ";");
     }
     current_expr_value_.clear();
@@ -1232,7 +1255,8 @@ void CCECodegen::VisitStmt_(const ir::ReturnStmtPtr& op)
 
 void CCECodegen::VisitStmt_(const ir::YieldStmtPtr& op)
 {
-    INTERNAL_CHECK(op != nullptr) << "Internal error: null YieldStmt";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr)
+        << "Internal error: null YieldStmt";
 
     if (op->value_.empty()) {
         yield_buffer_.clear();
@@ -1249,7 +1273,8 @@ void CCECodegen::EmitYieldAssignments(const std::vector<ir::VarPtr>& return_vars
         yield_buffer_.clear();
         return;
     }
-    CHECK(return_vars.size() == yield_buffer_.size()) << "IfStmt yield values must match its return variables";
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, return_vars.size() == yield_buffer_.size())
+        << "IfStmt yield values must match its return variables";
     for (size_t i = 0; i < return_vars.size(); ++i) {
         EmitVariable(return_vars[i], yield_buffer_[i], false);
     }
@@ -1304,7 +1329,7 @@ std::string CCECodegen::GetGeneratedType(const ir::TypePtr& type) const
     }
     // Single-element basic types only. Aggregate tuples and arrays are flattened to their
     // elements before reaching here, so an unregistered composite type is a codegen bug.
-    CHECK(false) << "Unsupported type for CCE codegen: " << type->TypeName();
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_TYPE, false) << "Unsupported type for CCE codegen: " << type->TypeName();
     return "";
 }
 
@@ -1312,7 +1337,8 @@ std::string CCECodegen::BuildDynamicTupleArrayDecl(const ir::TypePtr& elem_type,
                                                    const std::vector<std::string>& elem_names,
                                                    const std::string& arr_name) const
 {
-    CHECK(!elem_names.empty()) << "Array tuple '" << arr_name << "' has no elements";
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, !elem_names.empty())
+        << "Array tuple '" << arr_name << "' has no elements";
 
     std::string elem_cpp_type = GetGeneratedType(elem_type);
 
@@ -1382,9 +1408,12 @@ void CCECodegen::EmitFullPhiIf(const ir::IfStmtPtr& op)
 
 void CCECodegen::VisitStmt_(const ir::IfStmtPtr& op)
 {
-    INTERNAL_CHECK(op != nullptr) << "Internal error: null IfStmt";
-    INTERNAL_CHECK(op->condition_ != nullptr) << "Internal error: IfStmt has null condition";
-    INTERNAL_CHECK(op->thenBody_ != nullptr) << "Internal error: IfStmt has null then_body";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr)
+        << "Internal error: null IfStmt";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op->condition_ != nullptr)
+        << "Internal error: IfStmt has null condition";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op->thenBody_ != nullptr)
+        << "Internal error: IfStmt has null then_body";
 
     EmitFullPhiIf(op);
 }
@@ -1423,7 +1452,8 @@ void CCECodegen::EmitVariable(const ir::VarPtr& target, ir::ExprPtr value, bool 
     const auto& type = target->GetType();
     std::string name = context_.SanitizeName(target);
     if (ir::As<ir::TensorType>(type)) {
-        throw ir::RuntimeError("Tensor variable code generation is not supported");
+        PRO_CODEGEN_THROW(::pypto::ir::RuntimeError, ExternalError::NOT_IMPLEMENTED_ERROR)
+            << "Tensor variable code generation is not supported";
     }
     // A struct is a single C++ object with a type name of its own, so it is emitted like any
     // other scalar. Only a tuple without one needs splitting into an array or leaf slots.
@@ -1454,7 +1484,8 @@ void CCECodegen::EmitTupleVariable(const std::string& name, const ir::TupleTypeP
     ir::Span span = value ? value->span_ : ir::Span::Unknown();
     if (value) {
         source = GetExprAsMakeTuple(value);
-        INTERNAL_CHECK_SPAN(source, span) << "Tuple assignment source does not resolve to MakeTuple";
+        PRO_CODEGEN_INTERNAL_CHECK_WITH_SPAN(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, source, span)
+            << "Tuple assignment source does not resolve to MakeTuple";
     }
 
     // The representation follows the type, not the source value, so a merge variable can be
@@ -1465,7 +1496,7 @@ void CCECodegen::EmitTupleVariable(const std::string& name, const ir::TupleTypeP
         // A C++ array needs a single element spelling. Elements are basic types or registered
         // structs; a plain nested tuple would need a second dimension, which is not supported.
         auto elem_tuple = ir::As<ir::TupleType>(elem_type);
-        CHECK(!elem_tuple || GetStructName(elem_tuple) != nullptr)
+        PRO_CODEGEN_CHECK(ExternalError::INVALID_SHAPE, !elem_tuple || GetStructName(elem_tuple) != nullptr)
             << "Only one-dimensional array tuples are supported, but '" << name << "' has tuple elements at "
             << span.ToString();
 
@@ -1480,7 +1511,8 @@ void CCECodegen::EmitTupleVariable(const std::string& name, const ir::TupleTypeP
         }
         if (source) {
             auto source_array = tuple_backing_arr_.find(source.get());
-            INTERNAL_CHECK_SPAN(source_array != tuple_backing_arr_.end(), span)
+            PRO_CODEGEN_INTERNAL_CHECK_WITH_SPAN(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR,
+                                                 source_array != tuple_backing_arr_.end(), span)
                 << "Array tuple assignment to '" << name << "' requires an array source";
             if (name != source_array->second) {
                 for (size_t i = 0; i < type->types_.size(); ++i) {
@@ -1518,7 +1550,8 @@ void CCECodegen::EmitTupleVariable(const std::string& name, const ir::TupleTypeP
 
     // Reuse the leaf slots recorded when this aggregate was defined.
     auto target = tuple_var_to_make_tuple_.find(name);
-    INTERNAL_CHECK_SPAN(target != tuple_var_to_make_tuple_.end(), span)
+    PRO_CODEGEN_INTERNAL_CHECK_WITH_SPAN(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR,
+                                         target != tuple_var_to_make_tuple_.end(), span)
         << "Assignment to undefined aggregate tuple '" << name << "'";
     for (size_t i = 0; i < type->types_.size(); ++i) {
         ir::ExprPtr element_value = source ? source->elements_[i] : nullptr;
@@ -1528,7 +1561,8 @@ void CCECodegen::EmitTupleVariable(const std::string& name, const ir::TupleTypeP
             continue;
         }
         auto element = ir::As<ir::Var>(target->second->elements_[i]);
-        INTERNAL_CHECK_SPAN(element, span) << "Aggregate tuple '" << name << "' has no leaf slot at " << i;
+        PRO_CODEGEN_INTERNAL_CHECK_WITH_SPAN(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, element, span)
+            << "Aggregate tuple '" << name << "' has no leaf slot at " << i;
         EmitVariable(element, element_value, false);
     }
 }
@@ -1552,7 +1586,7 @@ std::vector<std::string> CCECodegen::RegisterLoopIterArgs(const std::vector<ir::
 
 void CCECodegen::EmitCarriedAssignments(const std::vector<ir::VarPtr>& targets, const std::vector<ir::ExprPtr>& sources)
 {
-    CHECK(targets.size() == sources.size())
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, targets.size() == sources.size())
         << "Loop-carried write-back expects " << targets.size() << " values but got " << sources.size();
 
     for (size_t i = 0; i < targets.size(); ++i) {
@@ -1580,22 +1614,29 @@ void CCECodegen::RegisterLoopReturnVars(const std::vector<ir::VarPtr>& returnVar
                 }
             }
         } else {
-            throw ir::RuntimeError("Loop return_var has no corresponding iter_arg");
+            PRO_CODEGEN_THROW(::pypto::ir::RuntimeError, ExternalError::INVALID_VAL)
+                << "Loop return_var has no corresponding iter_arg";
         }
     }
 }
 
 void CCECodegen::VisitStmt_(const ir::ForStmtPtr& op)
 {
-    INTERNAL_CHECK(op != nullptr) << "Internal error: null ForStmt";
-    INTERNAL_CHECK(op->loopVar_ != nullptr) << "Internal error: ForStmt has null loop_var";
-    INTERNAL_CHECK(op->start_ != nullptr) << "Internal error: ForStmt has null start";
-    INTERNAL_CHECK(op->stop_ != nullptr) << "Internal error: ForStmt has null stop";
-    INTERNAL_CHECK(op->step_ != nullptr) << "Internal error: ForStmt has null step";
-    INTERNAL_CHECK(op->body_ != nullptr) << "Internal error: ForStmt has null body";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr)
+        << "Internal error: null ForStmt";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op->loopVar_ != nullptr)
+        << "Internal error: ForStmt has null loop_var";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op->start_ != nullptr)
+        << "Internal error: ForStmt has null start";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op->stop_ != nullptr)
+        << "Internal error: ForStmt has null stop";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op->step_ != nullptr)
+        << "Internal error: ForStmt has null step";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op->body_ != nullptr)
+        << "Internal error: ForStmt has null body";
 
     // Check consistency: iter_args and return_vars must have same size
-    CHECK(op->iterArgs_.size() == op->returnVars_.size())
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, op->iterArgs_.size() == op->returnVars_.size())
         << "ForStmt iter_args size (" << op->iterArgs_.size() << ") must equal return_vars size ("
         << op->returnVars_.size() << ")";
 
@@ -1683,12 +1724,15 @@ void CCECodegen::EmitLoop(const std::string& header, const ir::StmtPtr& body,
 
 void CCECodegen::VisitStmt_(const ir::WhileStmtPtr& op)
 {
-    INTERNAL_CHECK(op != nullptr) << "Internal error: null WhileStmt";
-    INTERNAL_CHECK(op->condition_ != nullptr) << "Internal error: WhileStmt has null condition";
-    INTERNAL_CHECK(op->body_ != nullptr) << "Internal error: WhileStmt has null body";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr)
+        << "Internal error: null WhileStmt";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op->condition_ != nullptr)
+        << "Internal error: WhileStmt has null condition";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op->body_ != nullptr)
+        << "Internal error: WhileStmt has null body";
 
     // iter_args and return_vars must agree in size (each loop-carried value has a phi).
-    CHECK(op->iterArgs_.size() == op->returnVars_.size())
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, op->iterArgs_.size() == op->returnVars_.size())
         << "WhileStmt iter_args size (" << op->iterArgs_.size() << ") must equal return_vars size ("
         << op->returnVars_.size() << ")";
 
@@ -1722,21 +1766,24 @@ void CCECodegen::EmitJumpCarriedWriteback(const std::vector<ir::ExprPtr>& values
 
 void CCECodegen::VisitStmt_(const ir::BreakStmtPtr& op)
 {
-    INTERNAL_CHECK(op != nullptr) << "Internal error: null BreakStmt";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr)
+        << "Internal error: null BreakStmt";
     EmitJumpCarriedWriteback(op->value_, true);
     emitter_.EmitLine("break;");
 }
 
 void CCECodegen::VisitStmt_(const ir::ContinueStmtPtr& op)
 {
-    INTERNAL_CHECK(op != nullptr) << "Internal error: null ContinueStmt";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr)
+        << "Internal error: null ContinueStmt";
     EmitJumpCarriedWriteback(op->value_, false);
     emitter_.EmitLine("continue;");
 }
 
 void CCECodegen::VisitStmt_(const ir::SeqStmtsPtr& op)
 {
-    INTERNAL_CHECK(op != nullptr) << "Internal error: null SeqStmts";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr)
+        << "Internal error: null SeqStmts";
     for (const auto& stmt : op->stmts_) {
         VisitStmt(stmt);
         // A native break/continue/return ends this straight-line sequence; statements after it are
@@ -1756,7 +1803,8 @@ void CCECodegen::VisitStmt_(const ir::SeqStmtsPtr& op)
 // ---- Leaf Nodes ----
 void CCECodegen::VisitExpr_(const ir::VarPtr& op)
 {
-    INTERNAL_CHECK(op != nullptr) << "Internal error: null Var";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr)
+        << "Internal error: null Var";
     std::string name = context_.SanitizeName(op);
     auto it = tuple_var_to_make_tuple_.find(name);
     if (it == tuple_var_to_make_tuple_.end()) {
@@ -1770,20 +1818,23 @@ void CCECodegen::VisitExpr_(const ir::VarPtr& op)
 
 void CCECodegen::VisitExpr_(const ir::MakeTuplePtr& op)
 {
-    INTERNAL_CHECK(op != nullptr) << "Internal error: null MakeTuple";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr)
+        << "Internal error: null MakeTuple";
     current_tuple_ = op;
     current_expr_value_ = "";
 }
 
 void CCECodegen::VisitExpr_(const ir::ConstIntPtr& op)
 {
-    INTERNAL_CHECK(op != nullptr) << "Internal error: null ConstInt";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr)
+        << "Internal error: null ConstInt";
     current_expr_value_ = FormatIntCLiteral(op->value_, op->dtype());
 }
 
 void CCECodegen::VisitExpr_(const ir::ConstFloatPtr& op)
 {
-    INTERNAL_CHECK(op != nullptr) << "Internal error: null ConstFloat";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr)
+        << "Internal error: null ConstFloat";
     double val = op->value_;
     if (std::isnan(val)) {
         current_expr_value_ = "__builtin_nanf(\"\")";
@@ -1796,7 +1847,8 @@ void CCECodegen::VisitExpr_(const ir::ConstFloatPtr& op)
 
 void CCECodegen::VisitExpr_(const ir::ConstBoolPtr& op)
 {
-    INTERNAL_CHECK(op != nullptr) << "Internal error: null ConstBool";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr)
+        << "Internal error: null ConstBool";
     current_expr_value_ = op->value_ ? "true" : "false";
 }
 
@@ -1812,7 +1864,8 @@ std::string CCECodegen::GetOrCreateVFTilePtr(const ir::ExprPtr& expr, bool is_po
         return it->second;
 
     auto tile_type = ir::As<ir::TileType>(expr->GetType());
-    INTERNAL_CHECK(tile_type != nullptr) << "GetOrCreateVFTilePtr expects a tile expr, got " << expr->TypeName();
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, tile_type != nullptr)
+        << "GetOrCreateVFTilePtr expects a tile expr, got " << expr->TypeName();
     std::string elem_ctype = tile_type->dtype_.ToCTypeString();
 
     // tile[offset] is the rvalue `(vf_tile_ptr_N + off)`; a load uses it as-is, no new variable.
@@ -1831,10 +1884,11 @@ std::string CCECodegen::GetOrCreateVFTilePtr(const ir::ExprPtr& expr, bool is_po
 
 void CCECodegen::VisitExpr_(const ir::GetItemExprPtr& op)
 {
-    INTERNAL_CHECK(op != nullptr) << "Internal error: null GetItemExpr";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr)
+        << "Internal error: null GetItemExpr";
 
     auto value_type = op->value_->GetType();
-    CHECK(ir::As<ir::TupleType>(value_type))
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_TYPE, ir::As<ir::TupleType>(value_type))
         << "GetItemExpr requires value to have TupleType, got " << value_type->TypeName();
 
     std::string index_code = GetExprAsCode(op->slice_);
@@ -1853,10 +1907,10 @@ void CCECodegen::VisitExpr_(const ir::GetItemExprPtr& op)
         const ir::TupleTypeInfo* info = GetTupleTypeInfo(tuple_type);
         if (info != nullptr && info->kind == ir::TupleTypeKind::STRUCT) {
             auto const_idx = ir::As<ir::ConstInt>(op->slice_);
-            CHECK(const_idx != nullptr) << "GetItemExpr struct field requires a constant index at "
-                                        << op->span_.ToString();
+            PRO_CODEGEN_CHECK(ExternalError::INVALID_VAL, const_idx != nullptr)
+                << "GetItemExpr struct field requires a constant index at " << op->span_.ToString();
             int idx = static_cast<int>(const_idx->value_);
-            CHECK(idx >= 0 && idx < static_cast<int>(info->fields.size()))
+            PRO_CODEGEN_CHECK(ExternalError::OUT_OF_RANGE, idx >= 0 && idx < static_cast<int>(info->fields.size()))
                 << "GetItemExpr struct field index " << idx << " out of bounds";
             current_expr_value_ = base_code + "." + info->fields[idx];
         } else {
@@ -1879,9 +1933,10 @@ void CCECodegen::VisitExpr_(const ir::GetItemExprPtr& op)
     // statically. Dynamic indexing is valid only for homogeneous tuples, which
     // must have been materialized as a backing array above.
     auto const_idx = ir::As<ir::ConstInt>(op->slice_);
-    CHECK(const_idx != nullptr) << "Dynamic GetItemExpr requires a backing array at " << op->span_.ToString();
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_OPERATION, const_idx != nullptr)
+        << "Dynamic GetItemExpr requires a backing array at " << op->span_.ToString();
     int idx = static_cast<int>(const_idx->value_);
-    CHECK(idx >= 0 && idx < static_cast<int>(current_tuple_->elements_.size()))
+    PRO_CODEGEN_CHECK(ExternalError::OUT_OF_RANGE, idx >= 0 && idx < static_cast<int>(current_tuple_->elements_.size()))
         << "GetItemExpr index " << idx << " out of bounds";
     ir::ExprPtr elem = current_tuple_->elements_[idx];
     current_tuple_ = nullptr;
@@ -1936,8 +1991,10 @@ std::string CCECodegen::GetVarName(const ir::VarPtr& var) { return context_.GetV
 
 void CCECodegen::RegisterPointer(const std::string& tensor_var_name, const std::string& ptr_name)
 {
-    CHECK(!tensor_var_name.empty()) << "Cannot register pointer with empty tensor var name";
-    CHECK(!ptr_name.empty()) << "Cannot register pointer with empty pointer name";
+    PRO_CODEGEN_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, !tensor_var_name.empty())
+        << "Cannot register pointer with empty tensor var name";
+    PRO_CODEGEN_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, !ptr_name.empty())
+        << "Cannot register pointer with empty pointer name";
 
     auto it = tensor_to_pointer_.find(tensor_var_name);
     if (it != tensor_to_pointer_.end() && it->second != ptr_name) {
@@ -1950,7 +2007,8 @@ void CCECodegen::RegisterPointer(const std::string& tensor_var_name, const std::
 std::string CCECodegen::GetPointer(const std::string& var_name)
 {
     auto it = tensor_to_pointer_.find(var_name);
-    CHECK(it != tensor_to_pointer_.end()) << "Pointer for tensor " << var_name << " not found";
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_VAL, it != tensor_to_pointer_.end())
+        << "Pointer for tensor " << var_name << " not found";
     return it->second;
 }
 
@@ -1977,7 +2035,7 @@ std::vector<const TensorDef*> CCECodegen::GetTensorDefs(const std::string& name)
 std::string CCECodegen::ComputeTensorOffset(const ir::TensorTypePtr& tensor_type, const ir::MakeTuplePtr& offsets)
 {
     const size_t ndim = tensor_type->shape_.size();
-    CHECK(offsets->elements_.size() == ndim)
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_SHAPE, offsets->elements_.size() == ndim)
         << "Offset dimensions (" << offsets->elements_.size() << ") != tensor dimensions (" << ndim << ")";
 
     if (backend::cce::IsNZTensorType(tensor_type)) {
@@ -1988,7 +2046,8 @@ std::string CCECodegen::ComputeTensorOffset(const ir::TensorTypePtr& tensor_type
 
 std::string CCECodegen::ComputeAlignedShapeDimension(const ir::ExprPtr& dimension, int64_t alignment)
 {
-    INTERNAL_CHECK(alignment > 0) << "Shape alignment must be positive";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, alignment > 0)
+        << "Shape alignment must be positive";
     if (const auto value = ir::As<ir::ConstInt>(dimension)) {
         return std::to_string((value->value_ + alignment - 1) / alignment * alignment);
     }
@@ -2034,7 +2093,8 @@ std::string CCECodegen::ComputeStrideOffset(const ir::TensorTypePtr& tensor_type
 std::string CCECodegen::ComputeNZStrideOffset(const ir::TensorTypePtr& tensor_type, const ir::MakeTuplePtr& offsets)
 {
     const size_t ndim = tensor_type->shape_.size();
-    CHECK(ndim >= 2) << "CCE NZ tensor lowering requires a tensor rank of at least 2";
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_SHAPE, ndim >= 2)
+        << "CCE NZ tensor lowering requires a tensor rank of at least 2";
 
     const size_t row_axis = ndim - 2;
     const size_t col_axis = ndim - 1;
@@ -2073,7 +2133,7 @@ std::string CCECodegen::ComputeNZStrideOffset(const ir::TensorTypePtr& tensor_ty
 
 std::string CCECodegen::GenerateSimtCalleeCall(const ir::CallPtr& op, const ir::FunctionPtr& callee)
 {
-    CHECK(op->args_.size() == callee->params_.size())
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, op->args_.size() == callee->params_.size())
         << "SIMT callee '" << callee->name_ << "' expects " << callee->params_.size() << " arguments, got "
         << op->args_.size();
 
@@ -2093,7 +2153,8 @@ std::string CCECodegen::GenerateSimtCalleeCall(const ir::CallPtr& op, const ir::
         append(GetExprAsCode(actual));
         if (ir::As<ir::TileType>(callee->params_[i]->GetType())) {
             auto actual_var = ir::As<ir::Var>(actual);
-            CHECK(actual_var != nullptr) << "SIMT Tile callee arguments must be named Tile variables";
+            PRO_CODEGEN_CHECK(ExternalError::INVALID_TYPE, actual_var != nullptr)
+                << "SIMT Tile callee arguments must be named Tile variables";
             std::string actual_name = context_.SanitizeName(actual_var);
             append(actual_name + "__valid_row");
             append(actual_name + "__valid_col");
@@ -2105,7 +2166,8 @@ std::string CCECodegen::GenerateSimtCalleeCall(const ir::CallPtr& op, const ir::
 
 void CCECodegen::VisitExpr_(const ir::CallPtr& op)
 {
-    INTERNAL_CHECK(op != nullptr) << "Internal error: null Call";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr)
+        << "Internal error: null Call";
 
     if (IsInSimtContext()) {
         auto simt_callee = simt_callees_.find(op->name_);
@@ -2115,9 +2177,11 @@ void CCECodegen::VisitExpr_(const ir::CallPtr& op)
         }
     }
 
-    CHECK(backend_ != nullptr) << "CCE backend must not be null";
+    PRO_CODEGEN_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, backend_ != nullptr)
+        << "CCE backend must not be null";
     const auto* op_info = backend_->GetOpInfo(op->name_);
-    CHECK(op_info != nullptr) << "Unknown call '" << op->name_ << "' reached CCE codegen; helper calls must be inlined";
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, op_info != nullptr)
+        << "Unknown call '" << op->name_ << "' reached CCE codegen; helper calls must be inlined";
 
     // Auto-declare RegTensor for VF compute ops whose dst variable hasn't been
     // declared yet. This handles the VF assignment form (dst = vf.xxx(...))
@@ -2205,7 +2269,8 @@ namespace {
 std::string BuildPythonIntegerDivModExpression(const std::string& left, const std::string& right, const DataType& dtype,
                                                bool return_remainder)
 {
-    INTERNAL_CHECK(dtype.IsInt()) << "Internal error: integer FloorDiv/FloorMod requires an integer dtype";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, dtype.IsInt())
+        << "Internal error: integer FloorDiv/FloorMod requires an integer dtype";
     const std::string cpp_type = dtype.ToCTypeString();
     if (dtype.IsSignedInt()) {
         std::ostringstream code;
@@ -2251,7 +2316,8 @@ std::string BuildFP32FloorExpression(const std::string& value)
 std::string BuildPythonFloatDivModExpression(const std::string& left, const std::string& right, const DataType& dtype,
                                              bool return_remainder)
 {
-    INTERNAL_CHECK(dtype.IsFloat()) << "Internal error: floating-point FloorDiv/FloorMod requires a float dtype";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, dtype.IsFloat())
+        << "Internal error: floating-point FloorDiv/FloorMod requires a float dtype";
     const std::string cpp_type = dtype.ToCTypeString();
     std::ostringstream code;
     code << "({float __pypto_lhs = (float)(" << left << "), __pypto_rhs = (float)(" << right << ");"
@@ -2294,15 +2360,16 @@ std::string BuildPythonDivModExpression(const std::string& left, const std::stri
 
 } // namespace
 
-#define IMPLEMENT_BINARY_OP(OpType, OpName, CppOp)                            \
-    void CCECodegen::VisitExpr_(const ir::OpType##Ptr& op)                    \
-    {                                                                         \
-        INTERNAL_CHECK(op != nullptr) << "Internal error: null " << (OpName); \
-        VisitExpr(op->left_);                                                 \
-        std::string left = current_expr_value_;                               \
-        VisitExpr(op->right_);                                                \
-        std::string right = current_expr_value_;                              \
-        current_expr_value_ = "(" + left + " " + (CppOp) + " " + right + ")"; \
+#define IMPLEMENT_BINARY_OP(OpType, OpName, CppOp)                                                   \
+    void CCECodegen::VisitExpr_(const ir::OpType##Ptr& op)                                           \
+    {                                                                                                \
+        PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr) \
+            << "Internal error: null " << (OpName);                                                  \
+        VisitExpr(op->left_);                                                                        \
+        std::string left = current_expr_value_;                                                      \
+        VisitExpr(op->right_);                                                                       \
+        std::string right = current_expr_value_;                                                     \
+        current_expr_value_ = "(" + left + " " + (CppOp) + " " + right + ")";                        \
     }
 
 // Arithmetic operators
@@ -2337,9 +2404,11 @@ IMPLEMENT_BINARY_OP(BitShiftRight, "BitShiftRight", ">>")
 // Lower both integer and floating-point FloorDiv/FloorMod explicitly to match Python semantics.
 void CCECodegen::VisitExpr_(const ir::FloorDivPtr& op)
 {
-    INTERNAL_CHECK(op != nullptr) << "Internal error: null FloorDiv";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr)
+        << "Internal error: null FloorDiv";
     auto scalar_type = ir::As<ir::ScalarType>(op->GetType());
-    INTERNAL_CHECK(scalar_type != nullptr) << "Internal error: FloorDiv result must be a scalar";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, scalar_type != nullptr)
+        << "Internal error: FloorDiv result must be a scalar";
     VisitExpr(op->left_);
     const std::string left = current_expr_value_;
     VisitExpr(op->right_);
@@ -2350,9 +2419,11 @@ void CCECodegen::VisitExpr_(const ir::FloorDivPtr& op)
 
 void CCECodegen::VisitExpr_(const ir::FloorModPtr& op)
 {
-    INTERNAL_CHECK(op != nullptr) << "Internal error: null FloorMod";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr)
+        << "Internal error: null FloorMod";
     auto scalar_type = ir::As<ir::ScalarType>(op->GetType());
-    INTERNAL_CHECK(scalar_type != nullptr) << "Internal error: FloorMod result must be a scalar";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, scalar_type != nullptr)
+        << "Internal error: FloorMod result must be a scalar";
     VisitExpr(op->left_);
     const std::string left = current_expr_value_;
     VisitExpr(op->right_);
@@ -2364,7 +2435,8 @@ void CCECodegen::VisitExpr_(const ir::FloorModPtr& op)
 // Special binary operators (function calls)
 void CCECodegen::VisitExpr_(const ir::MinPtr& op)
 {
-    INTERNAL_CHECK(op != nullptr) << "Internal error: null Min";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr)
+        << "Internal error: null Min";
     auto scalar_type = std::dynamic_pointer_cast<const ir::ScalarType>(op->GetType());
     std::string cpp_type = scalar_type ? scalar_type->dtype_.ToCTypeString() : "int64_t";
     VisitExpr(op->left_);
@@ -2376,7 +2448,8 @@ void CCECodegen::VisitExpr_(const ir::MinPtr& op)
 
 void CCECodegen::VisitExpr_(const ir::MaxPtr& op)
 {
-    INTERNAL_CHECK(op != nullptr) << "Internal error: null Max";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr)
+        << "Internal error: null Max";
     auto scalar_type = std::dynamic_pointer_cast<const ir::ScalarType>(op->GetType());
     std::string cpp_type = scalar_type ? scalar_type->dtype_.ToCTypeString() : "int64_t";
     VisitExpr(op->left_);
@@ -2388,7 +2461,8 @@ void CCECodegen::VisitExpr_(const ir::MaxPtr& op)
 
 void CCECodegen::VisitExpr_(const ir::PowPtr& op)
 {
-    INTERNAL_CHECK(op != nullptr) << "Internal error: null Pow";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr)
+        << "Internal error: null Pow";
     VisitExpr(op->left_);
     std::string left = current_expr_value_;
     VisitExpr(op->right_);
@@ -2398,12 +2472,13 @@ void CCECodegen::VisitExpr_(const ir::PowPtr& op)
 
 // ---- Unary Operators ----
 
-#define IMPLEMENT_UNARY_OP(OpType, OpName, CppOp)                                     \
-    void CCECodegen::VisitExpr_(const ir::OpType##Ptr& op)                            \
-    {                                                                                 \
-        INTERNAL_CHECK(op != nullptr) << "Internal error: null " << (OpName);         \
-        VisitExpr(op->operand_);                                                      \
-        current_expr_value_ = std::string("(") + (CppOp) + current_expr_value_ + ")"; \
+#define IMPLEMENT_UNARY_OP(OpType, OpName, CppOp)                                                    \
+    void CCECodegen::VisitExpr_(const ir::OpType##Ptr& op)                                           \
+    {                                                                                                \
+        PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr) \
+            << "Internal error: null " << (OpName);                                                  \
+        VisitExpr(op->operand_);                                                                     \
+        current_expr_value_ = std::string("(") + (CppOp) + current_expr_value_ + ")";                \
     }
 
 IMPLEMENT_UNARY_OP(Neg, "Neg", "-")
@@ -2415,7 +2490,8 @@ IMPLEMENT_UNARY_OP(BitNot, "BitNot", "~")
 // Special unary operators
 void CCECodegen::VisitExpr_(const ir::AbsPtr& op)
 {
-    INTERNAL_CHECK(op != nullptr) << "Internal error: null Abs";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr)
+        << "Internal error: null Abs";
     VisitExpr(op->operand_);
     std::string operand = current_expr_value_;
     current_expr_value_ = "abs(" + operand + ")";
@@ -2423,12 +2499,13 @@ void CCECodegen::VisitExpr_(const ir::AbsPtr& op)
 
 void CCECodegen::VisitExpr_(const ir::CastPtr& op)
 {
-    INTERNAL_CHECK(op != nullptr) << "Internal error: null Cast";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, op != nullptr)
+        << "Internal error: null Cast";
     VisitExpr(op->operand_);
     std::string operand = current_expr_value_;
 
     auto scalar_type = std::dynamic_pointer_cast<const ir::ScalarType>(op->GetType());
-    CHECK(scalar_type != nullptr) << "Cast target must be ScalarType";
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_TYPE, scalar_type != nullptr) << "Cast target must be ScalarType";
 
     std::string cpp_type = scalar_type->dtype_.ToCTypeString();
     current_expr_value_ = "((" + cpp_type + ")" + operand + ")";
@@ -2441,7 +2518,7 @@ void CCECodegen::VisitExpr_(const ir::CastPtr& op)
 int64_t CCECodegen::ExtractConstInt(const ir::ExprPtr& expr) const
 {
     auto const_int = std::dynamic_pointer_cast<const ir::ConstInt>(expr);
-    CHECK(const_int != nullptr) << "Expected constant integer expression";
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_VAL, const_int != nullptr) << "Expected constant integer expression";
     return const_int->value_;
 }
 
@@ -2774,7 +2851,8 @@ std::string CppTypeForField(const ir::TypePtr& t)
 {
     if (auto scalar = ir::As<ir::ScalarType>(t)) {
         std::string ctype = scalar->dtype_.ToCTypeString();
-        CHECK(ctype != "unknown") << "Struct field uses unsupported scalar dtype: " << scalar->dtype_.ToString();
+        PRO_CODEGEN_CHECK(ExternalError::INVALID_TYPE, ctype != "unknown")
+            << "Struct field uses unsupported scalar dtype: " << scalar->dtype_.ToString();
         return ctype;
     }
     if (ir::As<ir::TileType>(t)) {
@@ -2811,7 +2889,8 @@ std::string BuildStructTypeDef(const std::string& name, const std::vector<std::s
 std::string StructFieldTypeSignature(const ir::TypePtr& type)
 {
     if (auto array_type = ir::As<ir::TupleType>(type)) {
-        CHECK(!array_type->types_.empty()) << "Struct array field type must not be empty";
+        PRO_CODEGEN_CHECK(ExternalError::INVALID_VAL, !array_type->types_.empty())
+            << "Struct array field type must not be empty";
         return CppTypeForField(array_type->types_[0]) + "[" + std::to_string(array_type->types_.size()) + "]";
     }
     return CppTypeForField(type);
@@ -2824,26 +2903,31 @@ std::string CCECodegen::GetStructFieldTypeString(const ir::TypePtr& type) const 
 std::string CCECodegen::GenerateTilingHeader(const std::string& type_name, const std::vector<std::string>& fields,
                                              const std::vector<ir::TypePtr>& types, bool requires_volatile)
 {
-    CHECK(fields.size() == types.size()) << "Tiling struct field count mismatch for type '" << type_name << "'";
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, fields.size() == types.size())
+        << "Tiling struct field count mismatch for type '" << type_name << "'";
     return "#pragma once\n" + BuildStructTypeDef(type_name, fields, types, requires_volatile) + "\n";
 }
 
 void CCECodegen::RegisterStructDefinition(const ir::TupleTypePtr& tuple_type, const std::string& type_name,
                                           const std::vector<std::string>& fields, bool is_tiling)
 {
-    CHECK(tuple_type != nullptr) << "Cannot register a null TupleType for struct '" << type_name << "'";
-    CHECK(fields.size() == tuple_type->types_.size()) << "Struct field count mismatch for type '" << type_name << "'";
+    PRO_CODEGEN_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, tuple_type != nullptr)
+        << "Cannot register a null TupleType for struct '" << type_name << "'";
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, fields.size() == tuple_type->types_.size())
+        << "Struct field count mismatch for type '" << type_name << "'";
 
     auto [it, inserted] = struct_definitions_.try_emplace(
         type_name, StructDefinition{type_name, fields, tuple_type->types_, is_tiling, false});
     if (!inserted) {
         const auto& existing = it->second;
-        CHECK(existing.is_tiling == is_tiling)
+        PRO_CODEGEN_CHECK(ExternalError::INVALID_OPERATION, existing.is_tiling == is_tiling)
             << "Struct type '" << type_name << "' cannot be both tiling and non-tiling";
-        CHECK(existing.fields == fields && existing.types.size() == tuple_type->types_.size())
+        PRO_CODEGEN_CHECK(ExternalError::INVALID_OPERATION,
+                          existing.fields == fields && existing.types.size() == tuple_type->types_.size())
             << "Conflicting definitions for struct type '" << type_name << "'";
         for (size_t i = 0; i < existing.types.size(); ++i) {
-            CHECK(StructFieldTypeSignature(existing.types[i]) == StructFieldTypeSignature(tuple_type->types_[i]))
+            PRO_CODEGEN_CHECK(ExternalError::INVALID_OPERATION, StructFieldTypeSignature(existing.types[i]) ==
+                                                                    StructFieldTypeSignature(tuple_type->types_[i]))
                 << "Conflicting type for field '" << fields[i] << "' in struct '" << type_name << "'";
         }
     }
@@ -2851,7 +2935,8 @@ void CCECodegen::RegisterStructDefinition(const ir::TupleTypePtr& tuple_type, co
 
 const ir::TupleTypeInfo* CCECodegen::GetTupleTypeInfo(const ir::TupleTypePtr& tuple_type) const
 {
-    INTERNAL_CHECK(debug_info_ != nullptr) << "CCE codegen requires IRDebugInfo";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, debug_info_ != nullptr)
+        << "CCE codegen requires IRDebugInfo";
     return tuple_type != nullptr ? debug_info_->GetTupleTypeInfo(tuple_type.get()) : nullptr;
 }
 
@@ -2861,16 +2946,19 @@ const std::string* CCECodegen::GetStructName(const ir::TupleTypePtr& tuple_type)
     if (info == nullptr || info->kind != ir::TupleTypeKind::STRUCT) {
         return nullptr;
     }
-    CHECK(info->name.has_value()) << "Struct TupleTypeInfo has no type name";
+    PRO_CODEGEN_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, info->name.has_value())
+        << "Struct TupleTypeInfo has no type name";
     return &info->name.value();
 }
 
 void CCECodegen::MarkStructVolatile(const ir::TypePtr& type)
 {
     auto tuple_type = ir::As<ir::TupleType>(type);
-    CHECK(tuple_type != nullptr) << "ssbuf_load/store requires a struct TupleType argument";
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_TYPE, tuple_type != nullptr)
+        << "ssbuf_load/store requires a struct TupleType argument";
     const std::string* struct_name = GetStructName(tuple_type);
-    CHECK(struct_name != nullptr) << "ssbuf_load/store struct type is not registered for CCE codegen";
+    PRO_CODEGEN_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, struct_name != nullptr)
+        << "ssbuf_load/store struct type is not registered for CCE codegen";
     struct_definitions_.at(*struct_name).requires_volatile = true;
 }
 
@@ -2881,11 +2969,13 @@ void CCECodegen::RegisterTilingStructTypes(const ir::FunctionPtr& func)
         if (tuple_type == nullptr)
             continue;
         const ir::TupleTypeInfo* info = GetTupleTypeInfo(tuple_type);
-        CHECK(info != nullptr && info->kind == ir::TupleTypeKind::STRUCT)
+        PRO_CODEGEN_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR,
+                          info != nullptr && info->kind == ir::TupleTypeKind::STRUCT)
             << "Tiling param '" << param->name_ << "' has no struct TupleTypeInfo in IRDebugInfo";
-        CHECK(info->fields.size() == tuple_type->types_.size())
+        PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, info->fields.size() == tuple_type->types_.size())
             << "Tiling struct field count mismatch for param '" << param->name_ << "'";
-        CHECK(info->name.has_value()) << "Tiling struct param '" << param->name_ << "' has no type name";
+        PRO_CODEGEN_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, info->name.has_value())
+            << "Tiling struct param '" << param->name_ << "' has no type name";
         RegisterStructDefinition(tuple_type, info->name.value(), info->fields, true);
     }
 }
@@ -2911,7 +3001,7 @@ void CCECodegen::EmitTilingStructCopy(const ir::FunctionPtr& func)
             continue;
         std::string name = context_.GetVarName(param);
         const std::string* registered_name = GetStructName(tuple_type);
-        CHECK(registered_name != nullptr)
+        PRO_CODEGEN_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, registered_name != nullptr)
             << "Tiling param '" << param->name_ << "' has no struct TupleTypeInfo in IRDebugInfo";
         const std::string& struct_name = *registered_name;
         emitter_.EmitLine("constexpr uint32_t " + name + "_all_bytes = sizeof(" + struct_name + ");");
@@ -2941,16 +3031,18 @@ void CCECodegen::EmitTilingStructCopy(const ir::FunctionPtr& func)
 
 void CCECodegen::GenerateTileTypeDeclaration(const std::string& var_name, const ir::TileTypePtr& tile_type)
 {
-    INTERNAL_CHECK(!var_name.empty()) << "Internal error: var_name cannot be empty";
-    INTERNAL_CHECK(tile_type != nullptr) << "Internal error: tile_type is null";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, !var_name.empty())
+        << "Internal error: var_name cannot be empty";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, tile_type != nullptr)
+        << "Internal error: tile_type is null";
 
     // Extract tile shape dimensions
     std::vector<int64_t> shape_dims = ExtractShapeDimensions(tile_type->shape_);
 
     // CCE codegen only supports 1D and 2D tiles
-    CHECK(shape_dims.size() <= 2) << "CCE codegen only supports 1D and 2D TileType, but got " << shape_dims.size()
-                                  << " dimensions. Multi-dimensional tiles (>2D) are supported at IR level "
-                                  << "but not yet in code generation.";
+    PRO_CODEGEN_CHECK(ExternalError::NOT_IMPLEMENTED_ERROR, shape_dims.size() <= 2)
+        << "CCE codegen only supports 1D and 2D TileType, but got " << shape_dims.size()
+        << " dimensions. Multi-dimensional tiles (>2D) are supported at IR level " << "but not yet in code generation.";
 
     // Determine tile dimensions (default to 1 if not specified)
     int64_t rows = shape_dims.size() >= 1 ? shape_dims[0] : 1;
@@ -3003,12 +3095,13 @@ void CCECodegen::GenerateTileTypeDeclaration(const std::string& var_name, const 
 
 std::vector<std::string> CCECodegen::BuildTensorStrideExpressions(const ir::TensorTypePtr& tensor_type)
 {
-    CHECK(tensor_type != nullptr) << "Cannot build stride expressions for a null tensor type";
+    PRO_CODEGEN_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, tensor_type != nullptr)
+        << "Cannot build stride expressions for a null tensor type";
     const size_t ndim = tensor_type->shape_.size();
 
     if (tensor_type->tensor_view_.has_value() && !tensor_type->tensor_view_->stride.empty()) {
         const auto& view_stride = tensor_type->tensor_view_->stride;
-        CHECK(view_stride.size() == ndim)
+        PRO_CODEGEN_CHECK(ExternalError::INVALID_SHAPE, view_stride.size() == ndim)
             << "TensorView stride rank (" << view_stride.size() << ") != tensor rank (" << ndim << ")";
 
         std::vector<std::string> stride_exprs;
@@ -3074,7 +3167,8 @@ std::string CCECodegen::BindGlobalTensor(const ir::VarPtr& tensor_var, const ir:
     const std::string decl_name = it != tensor_defs_.end() ? it->second.cce_name : GetVarName(tensor_var);
     if (!valid_rows.empty() && !valid_cols.empty()) {
         const auto tensor_type = ir::As<ir::TensorType>(tensor_var->GetType());
-        INTERNAL_CHECK(tensor_type != nullptr) << "Internal error: GlobalTensor binding requires a TensorType";
+        PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, tensor_type != nullptr)
+            << "Internal error: GlobalTensor binding requires a TensorType";
         const bool is_nz = backend::cce::IsNZTensorType(tensor_type);
         const bool is_mx = it != tensor_defs_.end() && !it->second.layout.empty();
         const std::string outer = is_nz ? "pto::GlobalTensorDim::DIM_1" :
@@ -3119,15 +3213,18 @@ bool CCECodegen::IsDNAccessLayout(const std::vector<int64_t>& shape_dims, bool i
 
 void CCECodegen::GenerateGlobalTensorTypeDeclaration(const TensorDef& def)
 {
-    INTERNAL_CHECK(def.var != nullptr) << "Internal error: TensorDef.var is null";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, def.var != nullptr)
+        << "Internal error: TensorDef.var is null";
     const std::string& var_name = def.cce_name;
     // The base name owns the pointer, which every layout variant of the tensor shares;
     // var_name carries this variant's declaration, so one tensor read both row-major and
     // transposed gets one declaration of each.
     const std::string base_name = context_.SanitizeName(def.var);
     auto tensor_type = ir::As<ir::TensorType>(def.var->GetType());
-    INTERNAL_CHECK(tensor_type != nullptr) << "Internal error: TensorDef.var is not a tensor";
-    INTERNAL_CHECK(HasPointer(base_name)) << "Internal error: tensor '" << base_name << "' has no base pointer";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, tensor_type != nullptr)
+        << "Internal error: TensorDef.var is not a tensor";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, HasPointer(base_name))
+        << "Internal error: tensor '" << base_name << "' has no base pointer";
 
     const std::string base_pointer = GetPointer(base_name);
     std::string element_type = tensor_type->dtype_.ToCTypeString();
@@ -3151,7 +3248,8 @@ void CCECodegen::GenerateGlobalTensorTypeDeclaration(const TensorDef& def)
     } else {
         // Every non-NZ declaration is an access variant whose shape and order determine
         // its ND/DN or MX layout and the two tensor strides it walks.
-        INTERNAL_CHECK(!def.access_shape.empty()) << "Internal error: tensor '" << var_name << "' has no access_shape";
+        PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, !def.access_shape.empty())
+            << "Internal error: tensor '" << var_name << "' has no access_shape";
         const bool is_transpose = def.is_transpose;
         const bool is_mx = !def.layout.empty();
         const std::vector<int64_t> shape_dims = ExtractShapeDimensions(def.access_shape);
@@ -3180,8 +3278,10 @@ std::string CCECodegen::DeclareFlatGlobalTensor(const ir::VarPtr& tensor_var, co
     // every dim is static.
     const std::string var_name = base_name + "__io" + std::to_string(flat_tensor_decl_count_++);
     auto tensor_type = ir::As<ir::TensorType>(tensor_var->GetType());
-    INTERNAL_CHECK(tensor_type != nullptr) << "Internal error: DeclareFlatGlobalTensor requires a TensorType";
-    INTERNAL_CHECK(HasPointer(base_name)) << "Internal error: tensor '" << base_name << "' has no base pointer";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, tensor_type != nullptr)
+        << "Internal error: DeclareFlatGlobalTensor requires a TensorType";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, HasPointer(base_name))
+        << "Internal error: tensor '" << base_name << "' has no base pointer";
     const std::string element_type = tensor_type->dtype_.ToCTypeString();
     const std::string shape_type = var_name + "ShapeDim5";
     const std::string stride_type = var_name + "StrideDim5";

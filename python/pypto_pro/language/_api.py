@@ -43,6 +43,7 @@ from pypto.ir import (
 )
 from pypto_pro.ir.op.block_ops import FillPadMode
 
+from .._errors import InvalidOperation
 from . import TensorLayout
 
 # ---------------------------------------------------------------------------
@@ -68,7 +69,7 @@ def _api_decl(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         sig.bind(*args, **kwargs)
-        raise RuntimeError(_API_MSG)
+        raise InvalidOperation(_API_MSG)
 
     wrapper.__wrapped__ = func
     return wrapper

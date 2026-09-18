@@ -8,6 +8,7 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
+from pypto_pro._errors import InvalidType
 import pypto_pro.language as pl
 from pypto_pro.runtime.jit import _validate_datatype_key
 from pypto_pro.runtime.tilingkey import TilingKeyField
@@ -72,7 +73,7 @@ def test_datatype_shared_variable_requires_matching_dtypes():
             tmp: pl.DT_INT64 = 2  # noqa: F841
         return
 
-    with pytest.raises(ValueError, match="disagree"):
+    with pytest.raises(InvalidType, match="disagree"):
         _validate_datatype_key(
             kernel.datatype_schema,
             {"x": pl.DT_FP16, "y": pl.DT_BF16},

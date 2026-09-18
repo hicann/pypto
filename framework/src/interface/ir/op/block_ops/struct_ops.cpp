@@ -29,10 +29,12 @@
 #include "ir/identifier.h"
 #include "ir/op_registry.h"
 #include "ir/type.h"
+#include "pypto_pro/error.h"
 #include "tilefwk/error.h"
 
 namespace pypto {
 namespace ir {
+using npu::tile_fwk::ExternalError;
 
 REGISTER_OP("struct.create")
     .set_op_category("StructOp")
@@ -58,21 +60,26 @@ REGISTER_OP("struct.create")
                 has_fields = true;
             }
         }
-        CHECK(has_name) << "struct.create requires kwarg 'name' (C++ struct type name)";
-        CHECK(has_fields) << "struct.create requires kwarg 'fields' (list of field names)";
-        CHECK(IsValidIdentifier(struct_name))
+        PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, has_name)
+            << "struct.create requires kwarg 'name' (C++ struct type name)";
+        PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, has_fields)
+            << "struct.create requires kwarg 'fields' (list of field names)";
+        PRO_IR_CHECK(ExternalError::INVALID_TYPE, IsValidIdentifier(struct_name))
             << "struct.create 'name' must be a valid C identifier, got '" << struct_name << "'";
-        CHECK(fields.size() == args.size())
+        PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, fields.size() == args.size())
             << "struct.create: fields count (" << fields.size() << ") must match args count (" << args.size() << ")";
         std::set<std::string> seen;
         for (const auto& f : fields) {
-            CHECK(IsValidIdentifier(f)) << "struct.create field name '" << f << "' is not a valid identifier";
-            CHECK(seen.insert(f).second) << "struct.create field name '" << f << "' is duplicated";
+            PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, IsValidIdentifier(f))
+                << "struct.create field name '" << f << "' is not a valid identifier";
+            PRO_IR_CHECK(ExternalError::INVALID_OPERATION, seen.insert(f).second)
+                << "struct.create field name '" << f << "' is duplicated";
         }
         std::vector<TypePtr> field_types;
         field_types.reserve(args.size());
         for (size_t i = 0; i < args.size(); ++i) {
-            CHECK(args[i]) << "struct.create arg #" << i << " is null";
+            PRO_IR_CHECK(npu::tile_fwk::InternalError::COMMON_INNER_ERROR, args[i])
+                << "struct.create arg #" << i << " is null";
             field_types.push_back(args[i]->GetType());
         }
         // Positional TupleType: field names live in IRDebugInfo (registered by the
@@ -93,23 +100,25 @@ REGISTER_OP("struct.set")
     .set_attr<std::string>("field")
     .f_deduce_type([](const std::vector<ExprPtr>& args,
                       const std::vector<std::pair<std::string, std::any>>& kwargs) -> TypePtr {
-        CHECK(args.size() == 2 || args.size() == 3)
+        PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 2 || args.size() == 3)
             << "struct.set requires 2 args (base, value) or 3 args (base, index, value), got " << args.size();
-        CHECK(args[0]) << "struct.set: base arg is null";
+        PRO_IR_CHECK(npu::tile_fwk::InternalError::COMMON_INNER_ERROR, args[0]) << "struct.set: base arg is null";
         if (args.size() == 3) {
-            CHECK(args[1]) << "struct.set: index arg is null";
+            PRO_IR_CHECK(npu::tile_fwk::InternalError::COMMON_INNER_ERROR, args[1]) << "struct.set: index arg is null";
         }
-        CHECK(args.back()) << "struct.set: value arg is null";
+        PRO_IR_CHECK(npu::tile_fwk::InternalError::COMMON_INNER_ERROR, args.back()) << "struct.set: value arg is null";
         bool has_field = false;
         for (const auto& [key, value] : kwargs) {
             if (key == "field") {
-                CHECK(IsValidIdentifier(std::any_cast<std::string>(value)))
+                PRO_IR_CHECK(ExternalError::INVALID_TYPE, IsValidIdentifier(std::any_cast<std::string>(value)))
                     << "struct.set 'field' must be a valid identifier";
                 has_field = true;
             }
         }
-        CHECK(has_field) << "struct.set requires kwarg 'field' (the C++ field name to write)";
-        CHECK(args[0]->GetType()->GetKind() == ObjectKind::TupleType) << "struct.set: base must have TupleType";
+        PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, has_field)
+            << "struct.set requires kwarg 'field' (the C++ field name to write)";
+        PRO_IR_CHECK(ExternalError::INVALID_TYPE, args[0]->GetType()->GetKind() == ObjectKind::TupleType)
+            << "struct.set: base must have TupleType";
         // Statement side effect; the discarded result type mirrors the struct being written.
         return args[0]->GetType();
     });

@@ -14,6 +14,7 @@ The former @pl.function / @pl.program decorators have been removed.
 Use @pl.jit to define kernels.
 """
 
+from pypto_pro._errors import InvalidVal, NotSupported
 import pypto_pro.language as pl
 import pytest
 
@@ -90,7 +91,7 @@ def test_vector_function_supports_all_valid_forms():
 
 
 def test_vector_function_empty_call_is_not_supported():
-    with pytest.raises(TypeError, match=r"@pl\.vector_function\(\) is not supported"):
+    with pytest.raises(NotSupported, match=r"@pl\.vector_function\(\) is not supported"):
         pl.vector_function()
 
 
@@ -101,13 +102,13 @@ def test_vector_function_rejects_invalid_mode(mode):
 
 
 def test_vector_function_rejects_max_threads_in_simd_mode():
-    with pytest.raises(TypeError, match="only supported when mode='simt'"):
+    with pytest.raises(InvalidVal, match="only supported when mode='simt'"):
         pl.vector_function(mode="simd", max_threads=32)
 
 
 @pytest.mark.parametrize("max_threads", [True, 1.5, "32"])
 def test_vector_function_rejects_non_integer_max_threads(max_threads):
-    with pytest.raises(TypeError, match="max_threads must be an integer"):
+    with pytest.raises(InvalidVal, match="max_threads must be an integer"):
         pl.vector_function(mode="simt", max_threads=max_threads)
 
 

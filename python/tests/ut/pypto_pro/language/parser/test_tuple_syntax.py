@@ -11,8 +11,8 @@
 """Tests for tuple literal and subscript syntax in parser."""
 
 from pypto_pro import ir
+from pypto_pro._errors import InvalidType
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import ParserTypeError
 import pytest
 
 
@@ -371,7 +371,7 @@ def test_tile_factories_accept_propagated_constant_kwargs():
 
 def test_tile_type_shape_rejects_runtime_value():
     """A runtime tensor dimension is not a usable TileType shape."""
-    with pytest.raises(ParserTypeError, match="must be a compile-time integer"):
+    with pytest.raises(InvalidType, match="must be a compile-time integer"):
 
         @pl.jit(auto_mutex=False)
         def func(x: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP16]):
@@ -385,7 +385,7 @@ def test_tile_type_shape_rejects_runtime_value():
 
 def test_tile_type_valid_shape_rejects_runtime_value():
     """Same for valid_shape — pl.set_validshape() is the runtime form."""
-    with pytest.raises(ParserTypeError, match="must be a compile-time integer"):
+    with pytest.raises(InvalidType, match="must be a compile-time integer"):
 
         @pl.jit(auto_mutex=False)
         def func(x: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP16]):
@@ -452,7 +452,7 @@ def test_order_kwarg_rejects_bool_axes():
         group = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[0, 1])
         pl.load(group.next(), a, [0, 0, 0], order=[True, 2])
 
-    with pytest.raises(ParserTypeError, match="'order' must be a compile-time integer list"):
+    with pytest.raises(InvalidType, match="'order' must be a compile-time integer list"):
         _parse_order_kernel(k)
 
 
@@ -465,7 +465,7 @@ def test_order_kwarg_rejects_runtime_axis():
         group = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[0, 1])
         pl.load(group.next(), a, [0, 0, 0], order=[axis, 2])
 
-    with pytest.raises(ParserTypeError, match="'order' must be a compile-time integer list"):
+    with pytest.raises(InvalidType, match="'order' must be a compile-time integer list"):
         _parse_order_kernel(k)
 
 
@@ -478,5 +478,5 @@ def test_order_kwarg_rejects_float_axes():
         group = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[0, 1])
         pl.load(group.next(), a, [0, 0, 0], order=[1.5, 2])
 
-    with pytest.raises(ParserTypeError, match="'order' must be a compile-time integer list"):
+    with pytest.raises(InvalidType, match="'order' must be a compile-time integer list"):
         _parse_order_kernel(k)

@@ -42,7 +42,7 @@ __all__ = ["TilingKeyField", "TilingKeySchema"]
 
 import itertools
 
-from pypto.pypto_impl import ValueError as PyptoValueError
+from .._errors import InvalidArgument, InvalidType, InvalidVal, OutOfRange
 
 _MAX_TOTAL_BITS = 64
 
@@ -76,17 +76,17 @@ class TilingKeySchema:
 
     def __init__(self, cls: type) -> None:
         if not isinstance(cls, type):
-            raise PyptoValueError(f"tiling_key must be a class, got {type(cls).__name__}")
+            raise InvalidType(f"tiling_key must be a class, got {type(cls).__name__}")
         self._cls = cls
         self._fields: list[TilingKeyField] = self._collect_fields(cls)
         self._valid_combos: list[tuple] | None = None
         if not self._fields:
-            raise PyptoValueError(f"tiling_key class '{cls.__name__}' has no TilingKeyField members")
+            raise InvalidVal(f"tiling_key class '{cls.__name__}' has no TilingKeyField members")
         self.is_valid = None
         is_valid = getattr(cls, "is_valid", None)
         if is_valid is not None:
             if not callable(is_valid):
-                raise PyptoValueError(f"tiling_key class '{cls.__name__}' has a non-callable 'is_valid' member")
+                raise InvalidVal(f"tiling_key class '{cls.__name__}' has a non-callable 'is_valid' member")
             inst = object.__new__(cls)
             self.is_valid = is_valid.__get__(inst, cls)
         self._validate_and_assign_offsets()
@@ -138,42 +138,42 @@ class TilingKeySchema:
     def validate_concrete(self, key: dict) -> None:
         """Validate a concrete key dict against the schema."""
         if not isinstance(key, dict):
-            raise PyptoValueError(f"tilingkey must be specified as a dict, got {type(key).__name__}")
+            raise InvalidType(f"tilingkey must be specified as a dict, got {type(key).__name__}")
         if sorted(key) != sorted(self.field_names()):
-            raise PyptoValueError(
+            raise InvalidArgument(
                 f"tilingkey keys {sorted(key)} do not match schema fields {sorted(self.field_names())}"
             )
         for field in self._fields:
             v = key[field.name]
             if v not in field.values:
-                raise PyptoValueError(
+                raise InvalidArgument(
                     f"tilingkey field '{field.name}' value {v!r} is not a candidate; allowed: {list(field.values)}"
                 )
         key_tuple = tuple(key[f.name] for f in self._fields)
         if self.is_valid and not self.is_valid(key_tuple):
-            raise PyptoValueError(f"tilingkey {key} did not pass {self.cls_name}.is_valid")
+            raise InvalidVal(f"tilingkey {key} did not pass {self.cls_name}.is_valid")
 
     def _validate_and_assign_offsets(self) -> None:
         offset = 0
         for field in self._fields:
             if field.bits <= 0:
-                raise PyptoValueError(f"tilingkey field '{field.name}' must have bits > 0, got {field.bits}")
+                raise InvalidVal(f"tilingkey field '{field.name}' must have bits > 0, got {field.bits}")
             if not field.values:
-                raise PyptoValueError(f"tilingkey field '{field.name}' must have a non-empty 'values' list")
+                raise InvalidVal(f"tilingkey field '{field.name}' must have a non-empty 'values' list")
             for v in field.values:
                 if not isinstance(v, int) or isinstance(v, bool):
-                    raise PyptoValueError(f"tilingkey field '{field.name}' values must be ints, got {v!r}")
+                    raise InvalidType(f"tilingkey field '{field.name}' values must be ints, got {v!r}")
             if len(set(field.values)) != len(field.values):
-                raise PyptoValueError(f"tilingkey field '{field.name}' values must be unique")
+                raise InvalidVal(f"tilingkey field '{field.name}' values must be unique")
             max_candidates = 1 << field.bits
             if len(field.values) > max_candidates:
-                raise PyptoValueError(
+                raise OutOfRange(
                     f"tilingkey field '{field.name}' has {len(field.values)} candidates, "
                     f"exceeding the {max_candidates} representable by {field.bits} bits"
                 )
             field.offset = offset
             offset += field.bits
         if offset > _MAX_TOTAL_BITS:
-            raise PyptoValueError(
+            raise OutOfRange(
                 f"tiling_key class '{self._cls.__name__}' uses {offset} bits, exceeding the {_MAX_TOTAL_BITS}-bit limit"
             )

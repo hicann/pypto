@@ -21,8 +21,8 @@ import logging
 import os
 import struct
 
+from pypto_pro._errors import InvalidVal
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics._exceptions import ParserSyntaxError
 import pytest
 import torch
 
@@ -318,7 +318,7 @@ def test_order_descending_rejected():
     q = _make_q("cpu")
     k = _make_k("cpu")
     quant_out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserSyntaxError, match="order must be ascending"):
+    with pytest.raises(InvalidVal, match="order must be ascending"):
         kernel(q, k, quant_out, 0)
     logging.info("test_order_descending_rejected passed.")
 

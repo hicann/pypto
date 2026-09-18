@@ -17,8 +17,8 @@ same parser entry as production kernels.
 """
 
 from pypto_pro import ir
+from pypto_pro._errors import CommonExternal, InvalidArgument, InvalidOperation, InvalidType, InvalidVal
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError
 import pytest
 
 
@@ -27,7 +27,7 @@ def test_simt_cast_is_not_exported_as_shared_language_api():
 
 
 def test_simt_cast_rejects_ordinary_function():
-    with pytest.raises(ParserSyntaxError, match="can only be used inside a SIMT function"):
+    with pytest.raises(InvalidOperation, match="can only be used inside a SIMT function"):
 
         @pl.jit(auto_mutex=False)
         def unsupported_context(value: pl.DT_INT64):
@@ -54,7 +54,7 @@ def test_simt_cast_is_available_inside_simt_helper():
 
 
 def test_simt_cast_rejects_unsupported_dtype_pair():
-    with pytest.raises(ParserTypeError, match=r"pl\.simt\.cast\(\) does not support"):
+    with pytest.raises(CommonExternal, match=r"pl\.simt\.cast\(\) does not support"):
 
         @pl.vector_function(mode="simt", max_threads=1)
         def unsupported(value: pl.DT_FP16):
@@ -69,7 +69,7 @@ def test_simt_cast_rejects_unsupported_dtype_pair():
 
 
 def test_simt_cast_rejects_odd_rounding_for_bfloat16():
-    with pytest.raises(ParserTypeError, match=r"pl\.simt\.cast\(\) does not support"):
+    with pytest.raises(CommonExternal, match=r"pl\.simt\.cast\(\) does not support"):
 
         @pl.vector_function(mode="simt", max_threads=1)
         def unsupported_mode(value: pl.DT_FP32):
@@ -99,12 +99,12 @@ def test_simt_cast_rejects_tile_operand():
         with pl.section_vector():
             entry[1](value)
 
-    with pytest.raises(ParserTypeError, match="value must be a scalar expression"):
+    with pytest.raises(InvalidType, match="value must be a scalar expression"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_simt_cast_rejects_plain_integer_round_mode():
-    with pytest.raises(ParserTypeError, match="expects an enum value"):
+    with pytest.raises(InvalidVal, match="expects an enum value"):
 
         @pl.vector_function(mode="simt", max_threads=1)
         def integer_mode(value: pl.DT_FP32):
@@ -119,7 +119,7 @@ def test_simt_cast_rejects_plain_integer_round_mode():
 
 
 def test_simt_cast_rejects_wrong_positional_arity():
-    with pytest.raises(ParserSyntaxError, match="requires exactly 2 positional arguments"):
+    with pytest.raises(InvalidArgument, match="requires exactly 2 positional arguments"):
 
         @pl.vector_function(mode="simt", max_threads=1)
         def missing_dtype(value: pl.DT_FP32):
@@ -134,7 +134,7 @@ def test_simt_cast_rejects_wrong_positional_arity():
 
 
 def test_simt_cast_rejects_non_dtype_target():
-    with pytest.raises(ParserTypeError, match=r"dtype must be a pl\.DT_\* value"):
+    with pytest.raises(InvalidType, match=r"dtype must be a pl\.DT_\* value"):
 
         @pl.vector_function(mode="simt", max_threads=1)
         def invalid_dtype(value: pl.DT_FP32):
@@ -149,7 +149,7 @@ def test_simt_cast_rejects_non_dtype_target():
 
 
 def test_simt_cast_rejects_unexpected_keyword():
-    with pytest.raises(ParserSyntaxError, match="only accepts one optional keyword argument"):
+    with pytest.raises(InvalidArgument, match="only accepts one optional keyword argument"):
 
         @pl.vector_function(mode="simt", max_threads=1)
         def unexpected_keyword(value: pl.DT_FP32):

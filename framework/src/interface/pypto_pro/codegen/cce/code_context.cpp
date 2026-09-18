@@ -17,6 +17,7 @@
 #include "core/logging.h"
 #include "tilefwk/error.h"
 #include "ir/expr.h"
+#include "pypto_pro/error.h"
 
 namespace pypto {
 
@@ -24,7 +25,8 @@ namespace codegen {
 
 std::string CodeContext::GetVarName(const ir::VarPtr& var)
 {
-    CHECK(var != nullptr) << "Cannot get name for null variable";
+    PRO_CODEGEN_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, var != nullptr)
+        << "Cannot get name for null variable";
     auto it = name_to_cpp_.find(var->name_);
     if (it != name_to_cpp_.end()) {
         return it->second;
@@ -77,8 +79,10 @@ bool CodeContext::IsAutoRegistered(const std::string& cpp_name) const { return a
 
 void CodeContext::RegisterVar(const ir::VarPtr& var, const std::string& cpp_name)
 {
-    CHECK(var != nullptr) << "Cannot register null variable";
-    CHECK(!cpp_name.empty()) << "Cannot register variable with empty name";
+    PRO_CODEGEN_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, var != nullptr)
+        << "Cannot register null variable";
+    PRO_CODEGEN_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, !cpp_name.empty())
+        << "Cannot register variable with empty name";
 
     // Check if this name is already registered (suppress for array access and alias optimizations)
     auto it = name_to_cpp_.find(var->name_);
@@ -95,7 +99,8 @@ void CodeContext::Clear() { name_to_cpp_.clear(); }
 
 std::string CodeContext::SanitizeName(const ir::VarPtr& var) const
 {
-    CHECK(var != nullptr) << "Cannot sanitize null variable";
+    PRO_CODEGEN_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, var != nullptr)
+        << "Cannot sanitize null variable";
     auto ir_name = var->name_;
     if (ir_name.empty()) {
         return "var";

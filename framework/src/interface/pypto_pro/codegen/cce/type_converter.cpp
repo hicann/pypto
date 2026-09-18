@@ -26,11 +26,13 @@
 #include "ir/scalar_expr.h"
 #include "ir/scalar_expr_ops.h"
 #include "ir/type.h"
+#include "pypto_pro/error.h"
 #include "tilefwk/error.h"
 
 namespace pypto {
 
 namespace codegen {
+using npu::tile_fwk::ExternalError; // Short enum names in the Enum field (log spec 4.4)
 
 namespace {
 
@@ -61,7 +63,7 @@ std::string ConvertTilePadToPTOValue(ir::TilePad pad)
         case ir::TilePad::min:
             return "PadValue::Min";
         default:
-            throw pypto::ir::ValueError("Invalid TilePad value");
+            PRO_CODEGEN_THROW(::pypto::ir::ValueError, ExternalError::INVALID_ARGUMENT) << "Invalid TilePad value";
     }
 }
 
@@ -75,7 +77,7 @@ std::string ConvertCompactModeToPTOValue(ir::CompactMode compact)
         case ir::CompactMode::row_plus_one:
             return "CompactMode::RowPlusOne";
         default:
-            throw pypto::ir::ValueError("Invalid CompactMode value");
+            PRO_CODEGEN_THROW(::pypto::ir::ValueError, ExternalError::INVALID_ARGUMENT) << "Invalid CompactMode value";
     }
 }
 
@@ -213,9 +215,10 @@ std::string TypeConverter::ConvertMemorySpaceToTileType(ir::MemorySpace space) c
             return "TileType::ScaleRight";
         case ir::MemorySpace::DDR:
             // DDR is for GlobalTensor, not Tile - should not reach here
-            throw pypto::ir::ValueError("DDR is for GlobalTensor, not Tile");
+            PRO_CODEGEN_THROW(::pypto::ir::ValueError, ExternalError::INVALID_VAL)
+                << "DDR is for GlobalTensor, not Tile";
         default:
-            throw pypto::ir::ValueError("Invalid MemorySpace value");
+            PRO_CODEGEN_THROW(::pypto::ir::ValueError, ExternalError::INVALID_ARGUMENT) << "Invalid MemorySpace value";
     }
 }
 
@@ -245,12 +248,13 @@ std::string TypeConverter::ConvertPipeType(ir::PipeType pipe) const
     if (pipe == ir::PipeType::ALL) {
         return "PIPE_ALL";
     }
-    throw pypto::ir::ValueError("Invalid PipeType value");
+    PRO_CODEGEN_THROW(::pypto::ir::ValueError, ExternalError::INVALID_ARGUMENT) << "Invalid PipeType value";
 }
 
 std::string TypeConverter::ConvertEventId(int event_id) const
 {
-    CHECK(event_id >= 0 && event_id <= 7) << "Event ID must be in range [0, 7], got " << event_id;
+    PRO_CODEGEN_CHECK(ExternalError::OUT_OF_RANGE, event_id >= 0 && event_id <= 7)
+        << "Event ID must be in range [0, 7], got " << event_id;
     return "EVENT_ID" + std::to_string(event_id);
 }
 
@@ -270,21 +274,21 @@ std::string TypeConverter::ConvertTileLayout(ir::TileLayout layout) const
         case ir::TileLayout::col_major:
             return "ColMajor";
         default:
-            throw pypto::ir::ValueError("Invalid TileLayout value");
+            PRO_CODEGEN_THROW(::pypto::ir::ValueError, ExternalError::INVALID_FORMAT) << "Invalid TileLayout value";
     }
 }
 
 std::string TypeConverter::GenerateShapeType(const std::vector<int64_t>& dims) const
 {
-    CHECK(!dims.empty()) << "Cannot generate Shape type for empty dimensions";
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_SHAPE, !dims.empty()) << "Cannot generate Shape type for empty dimensions";
 
     std::ostringstream oss;
     oss << "pto::Shape<";
 
     // Pad to 5 dimensions with leading 1s
     const size_t target_dims = 5;
-    CHECK(dims.size() <= target_dims) << "Cannot generate Shape with more than " << target_dims << " dimensions, got "
-                                      << dims.size();
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_SHAPE, dims.size() <= target_dims)
+        << "Cannot generate Shape with more than " << target_dims << " dimensions, got " << dims.size();
 
     // Add leading 1s for padding
     for (size_t i = 0; i < target_dims - dims.size(); ++i) {
@@ -305,15 +309,15 @@ std::string TypeConverter::GenerateShapeType(const std::vector<int64_t>& dims) c
 
 std::string TypeConverter::GenerateStrideType(const std::vector<int64_t>& shape) const
 {
-    CHECK(!shape.empty()) << "Cannot generate Stride type for empty shape";
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_SHAPE, !shape.empty()) << "Cannot generate Stride type for empty shape";
 
     std::ostringstream oss;
     oss << "pto::Stride<";
 
     // Pad to 5 dimensions with leading 1s
     const size_t target_dims = 5;
-    CHECK(shape.size() <= target_dims) << "Cannot generate Stride with more than " << target_dims << " dimensions, got "
-                                       << shape.size();
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_SHAPE, shape.size() <= target_dims)
+        << "Cannot generate Stride with more than " << target_dims << " dimensions, got " << shape.size();
 
     // Add leading 1s for padding
     for (size_t i = 0; i < target_dims - shape.size(); ++i) {

@@ -14,6 +14,8 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from ..._errors import InvalidArgument, OutOfRange
+
 
 @dataclass(frozen=True)
 class PipelineConfig:
@@ -44,7 +46,7 @@ class PipelineConfig:
             # hashable, so a sequence is stored as a tuple whatever the user wrote.
             object.__setattr__(self, "preload", tuple(self.preload))
             if not self.preload:
-                raise ValueError(
+                raise InvalidArgument(
                     "pipeline: preload is an empty sequence. Give one value per pipeline "
                     "loop, or a single value to use for all of them."
                 )
@@ -57,7 +59,7 @@ class PipelineConfig:
                     f"has no meaning here; write it as a plain int."
                 )
             if value < 0:
-                raise ValueError(
+                raise OutOfRange(
                     f"pipeline: preload must be >= 0, got {value}. It is how many "
                     f"iterations ahead a stage runs, so a negative value has no meaning; use "
                     f"preload=0 to keep the serial loop and only insert cross-core sync."

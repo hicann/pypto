@@ -52,6 +52,7 @@ import ast
 from dataclasses import dataclass, field
 import logging
 
+from ..._errors import InvalidOperation, InvalidVal, OutOfRange
 from ._cross_core_scanner import MAX_EVENT_ID
 from ._validate import validate_sync
 
@@ -144,7 +145,7 @@ def _slot_count(info, buffer: str) -> int:
     ranges = info.sync.addr_ranges.get(buffer)
     if ranges:
         return len(ranges[1])
-    raise ValueError(
+    raise InvalidOperation(
         f"pipeline: cannot determine the slot count of buffer '{buffer}'. Its "
         f"make_tile_group needs a statically resolvable mutex_ids list."
     )
@@ -478,7 +479,7 @@ def _allocate_event_id_groups(edges: list, used: set) -> list:
         degraded += 1
 
     if sum(wants) > len(free):
-        raise ValueError(
+        raise OutOfRange(
             f"pipeline: not enough free event ids (0-{MAX_EVENT_ID}) for address-reuse "
             f"sync. Need {sum(wants)}, have {len(free)} free (used: {sorted(used)}). "
             f"Reduce cross-core buffer id usage or overlaps."
@@ -635,7 +636,7 @@ def plan_sync_sites(graph: SyncGraph, event_ids: dict) -> list:
             and edge.src.buffer != edge.dst.buffer
             and edge.src.stage_idx > edge.dst.stage_idx
         ):
-            raise ValueError(
+            raise InvalidOperation(
                 f"pipeline: address reuse requires {edge.src} to finish before {edge.dst}, "
                 f"but within one task the stage order runs them the other way round. "
                 f"Reorder the stages, or stop sharing the address."
@@ -646,7 +647,7 @@ def plan_sync_sites(graph: SyncGraph, event_ids: dict) -> list:
         # properly needs this core's total task count, a runtime value — so the shape is rejected
         # rather than synchronised approximately.
         if skew < 0:
-            raise ValueError(
+            raise InvalidOperation(
                 f"pipeline: sync edge {edge.src} -> {edge.dst} runs inverse-time at this "
                 f"schedule — the consumer waits on task {-skew} step(s) ahead of it, which "
                 f"has not executed yet (dist={edge.dist}, task_off={edge.task_off}).\n"
@@ -660,7 +661,7 @@ def plan_sync_sites(graph: SyncGraph, event_ids: dict) -> list:
         # Both ends share a lane, keyed by task % slot_count, so the skew must be a whole
         # number of rotations — guards and `% slot_count` id indexing both rely on it.
         if skew % slot_count:
-            raise ValueError(
+            raise InvalidVal(
                 f"pipeline: sync edge {edge.src} -> {edge.dst} has task offset {skew}, "
                 f"which is not a multiple of its {slot_count} slots. Guards and event-id "
                 f"pairing assume whole-rotation skew."

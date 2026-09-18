@@ -15,8 +15,8 @@ in function calls inside kernel bodies are resolved correctly.
 """
 
 from pypto_pro import ir
+from pypto_pro._errors import InvalidType, NameNotFound
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import ParserTypeError, UndefinedVariableError
 import pytest
 
 
@@ -177,8 +177,8 @@ def test_dsl_scope_shadows_closure():
 
 
 def test_undefined_variable_still_raises():
-    """Variable not in scope or closure raises UndefinedVariableError."""
-    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
+    """Variable not in scope or closure raises PyptoProError."""
+    with pytest.raises(NameNotFound, match="Use of potentially undefined variable"):
 
         @pl.jit(auto_mutex=False)
         def func(x: pl.Tensor[[64], pl.DT_FP32]):
@@ -189,10 +189,10 @@ def test_undefined_variable_still_raises():
 
 
 def test_unsupported_closure_type_raises():
-    """Unsupported closure variable type raises ParserTypeError."""
+    """Unsupported closure variable type raises PyptoProError."""
     bad_value = "not_a_number"
 
-    with pytest.raises(ParserTypeError, match="Unsupported closure variable type: str"):
+    with pytest.raises(InvalidType, match="Unsupported closure variable type: str"):
 
         @pl.jit(auto_mutex=False)
         def func(x: pl.Tensor[[64], pl.DT_FP32]):

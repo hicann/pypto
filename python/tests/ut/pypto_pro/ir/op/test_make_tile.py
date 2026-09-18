@@ -24,9 +24,15 @@ its memory space. Three layers are covered here:
 Complements test_block_ops.py, which covers block ops in general.
 """
 
+from pypto_pro._errors import (
+    DynamicShapeUnsupported,
+    InvalidArgument,
+    InvalidOperation,
+    InvalidTile,
+    InvalidType,
+)
 from pypto_pro.ir.op.block_ops import make_tile_expr, tile_slot_size
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError
 import pytest
 
 from pypto.pypto_impl import ir
@@ -57,12 +63,6 @@ def _parse_kernel(kernel_def) -> ir.Program:
 
 def _kernel_ir(kernel_def) -> str:
     return str(_parse_kernel(kernel_def))
-
-
-# ``@pl.jit`` re-raises a builder ValueError (alignment, underivable size) as a
-# ParserSyntaxError that carries the original message, so those cases are matched
-# on the message rather than on ValueError itself.
-_WRAPPED = ParserSyntaxError
 
 
 # ---------------------------------------------------------------------------
@@ -102,7 +102,7 @@ def test_slot_size_packs_sub_byte_elements_before_rounding_to_bytes():
 
 
 def test_slot_size_rejects_a_runtime_dimension():
-    with pytest.raises(ValueError, match="compile-time integers"):
+    with pytest.raises(DynamicShapeUnsupported, match="compile-time integers"):
         tile_slot_size(_dynamic_tuple(), pl.DT_FP16)
 
 
@@ -118,7 +118,7 @@ def test_slot_size_rejects_a_negative_dimension():
 
 def test_slot_size_rejects_a_bool_dimension():
     """bool subclasses int, but ``True`` is not a shape."""
-    with pytest.raises(ValueError, match="compile-time integers"):
+    with pytest.raises(DynamicShapeUnsupported, match="compile-time integers"):
         tile_slot_size([True, 64], pl.DT_FP16)
 
 
@@ -153,7 +153,7 @@ def test_builder_keeps_an_explicit_size():
 
 
 def test_builder_reports_when_size_cannot_be_derived():
-    with pytest.raises(ValueError, match="cannot derive its byte span"):
+    with pytest.raises(InvalidOperation, match="cannot derive its byte span"):
         make_tile_expr(_dynamic_tuple(), pl.DT_FP16, pl.MemorySpace.Vec, addr=0)
 
 
@@ -208,7 +208,7 @@ def test_addr_none_is_rejected():
         t = pl.make_tile(tt, addr=None)
         pl.load(t, x, [0, 0])
 
-    with pytest.raises(ParserTypeError, match="'addr' must be a compile-time integer"):
+    with pytest.raises(InvalidType, match="'addr' must be a compile-time integer"):
         _parse_kernel(k)
 
 
@@ -221,7 +221,7 @@ def test_bool_addr_is_rejected():
         t = pl.make_tile(tt, addr=False)
         pl.load(t, x, [0, 0])
 
-    with pytest.raises(ParserTypeError, match="'addr' must be a compile-time integer"):
+    with pytest.raises(InvalidType, match="'addr' must be a compile-time integer"):
         _parse_kernel(k)
 
 
@@ -232,7 +232,7 @@ def test_float_addr_is_rejected():
         t = pl.make_tile(tt, addr=0.0)
         pl.load(t, x, [0, 0])
 
-    with pytest.raises(ParserTypeError, match="'addr' must be a compile-time integer"):
+    with pytest.raises(InvalidType, match="'addr' must be a compile-time integer"):
         _parse_kernel(k)
 
 
@@ -246,7 +246,7 @@ def test_loop_index_addr_is_rejected():
             t = pl.make_tile(tt, addr=i * 128)
             pl.load(t, x, [0, 0])
 
-    with pytest.raises(ParserTypeError) as excinfo:
+    with pytest.raises(InvalidType) as excinfo:
         _parse_kernel(k)
     assert "'addr' must be a compile-time integer" in str(excinfo.value)
     assert "loop index" in str(excinfo.value)
@@ -288,7 +288,7 @@ def test_size_keyword_is_rejected(size):
         t = pl.make_tile(tt, addr=0, size=size)
         pl.load(t, x, [0, 0])
 
-    with pytest.raises(ParserTypeError, match="unexpected keyword argument") as excinfo:
+    with pytest.raises(InvalidArgument, match="unexpected keyword argument") as excinfo:
         _parse_kernel(k)
     assert "['size']" in str(excinfo.value)
     assert "only 'addr' is supported" in str(excinfo.value)
@@ -301,7 +301,7 @@ def test_runtime_size_is_rejected_before_evaluating_it():
         t = pl.make_tile(tt, addr=0, size=x.shape[0] * 2)
         pl.load(t, x, [0, 0])
 
-    with pytest.raises(ParserTypeError, match="unexpected keyword argument"):
+    with pytest.raises(InvalidArgument, match="unexpected keyword argument"):
         _parse_kernel(k)
 
 
@@ -318,7 +318,7 @@ def test_a_shape_in_place_of_a_tile_type_is_rejected():
         t = pl.make_tile([64], pl.DT_FP16, pl.MemorySpace.Vec, 0, 128)
         pl.load(t, x, [0])
 
-    with pytest.raises(ParserTypeError) as excinfo:
+    with pytest.raises(InvalidType) as excinfo:
         _parse_kernel(k)
     assert "takes a pl.TileType as its first argument" in str(excinfo.value)
     # the offending expression, quoted from the source
@@ -348,7 +348,7 @@ def test_a_tile_type_is_required_even_when_addr_is_given():
         t = pl.make_tile([64], pl.DT_FP16, pl.MemorySpace.Vec, 0x40)
         pl.load(t, x, [0])
 
-    with pytest.raises(ParserTypeError, match="takes a pl.TileType as its first argument"):
+    with pytest.raises(InvalidType, match="takes a pl.TileType as its first argument"):
         _parse_kernel(k)
 
 
@@ -358,7 +358,7 @@ def test_a_call_with_no_positional_argument_is_rejected():
         t = pl.make_tile(addr=0x40)
         pl.load(t, x, [0])
 
-    with pytest.raises(ParserTypeError, match="got no positional argument"):
+    with pytest.raises(InvalidType, match="got no positional argument"):
         _parse_kernel(k)
 
 
@@ -371,7 +371,7 @@ def test_addr_and_size_given_positionally_are_rejected():
         t = pl.make_tile(tt, 0, 128)
         pl.load(t, x, [0, 0])
 
-    with pytest.raises(ParserTypeError) as excinfo:
+    with pytest.raises(InvalidArgument) as excinfo:
         _parse_kernel(k)
     assert "takes 1 positional argument (the tile type) but 3 were given" in str(excinfo.value)
     assert "addr=" in str(excinfo.value)
@@ -387,7 +387,7 @@ def test_a_positional_addr_is_not_silently_shadowed_by_a_keyword_one():
         pl.load(t, x, [0, 0])
 
     # the keyword does not count toward the arity, exactly as Python reports it
-    with pytest.raises(ParserTypeError, match=r"takes 1 positional argument .* but 2 were given"):
+    with pytest.raises(InvalidArgument, match=r"takes 1 positional argument .* but 2 were given"):
         _parse_kernel(k)
 
 
@@ -399,7 +399,7 @@ def test_a_non_tile_type_first_argument_is_rejected():
         t = pl.make_tile(0x40)
         pl.load(t, x, [0])
 
-    with pytest.raises(ParserTypeError, match="takes a pl.TileType as its first argument"):
+    with pytest.raises(InvalidType, match="takes a pl.TileType as its first argument"):
         _parse_kernel(k)
 
 
@@ -460,7 +460,7 @@ def test_tile_type_field_cannot_be_overridden_at_make_tile_call():
         t = pl.make_tile(tt, addr=0, valid_shape=[16, 16])
         pl.load(t, x, [0, 0])
 
-    with pytest.raises(ParserTypeError, match="unexpected keyword argument") as excinfo:
+    with pytest.raises(InvalidArgument, match="unexpected keyword argument") as excinfo:
         _parse_kernel(k)
     assert "['valid_shape']" in str(excinfo.value)
 
@@ -472,7 +472,7 @@ def test_unknown_make_tile_keyword_is_rejected():
         t = pl.make_tile(tt, addr=0, unknown=1)
         pl.load(t, x, [0, 0])
 
-    with pytest.raises(ParserTypeError, match="unexpected keyword argument") as excinfo:
+    with pytest.raises(InvalidArgument, match="unexpected keyword argument") as excinfo:
         _parse_kernel(k)
     assert "['unknown']" in str(excinfo.value)
 
@@ -514,7 +514,7 @@ def test_a_tile_type_with_a_runtime_shape_cannot_derive_its_size():
         t = pl.make_tile(tt, addr=0)
         pl.load(t, x, [0, 0])
 
-    with pytest.raises(_WRAPPED, match="cannot derive its byte span"):
+    with pytest.raises(InvalidOperation, match="cannot derive its byte span"):
         _parse_kernel(k)
 
 
@@ -530,7 +530,7 @@ def test_misaligned_acc_addr_is_rejected():
         t = pl.make_tile(tt, addr=0x20)
         pl.load(t, x, [0, 0])
 
-    with pytest.raises(_WRAPPED, match="not 64-byte aligned"):
+    with pytest.raises(InvalidTile, match="not 64-byte aligned"):
         _parse_kernel(k)
 
 
@@ -541,7 +541,7 @@ def test_misaligned_left_addr_is_rejected():
         t = pl.make_tile(tt, addr=0x100)
         pl.load(t, x, [0, 0])
 
-    with pytest.raises(_WRAPPED, match="not 512-byte aligned"):
+    with pytest.raises(InvalidTile, match="not 512-byte aligned"):
         _parse_kernel(k)
 
 
@@ -555,7 +555,7 @@ def test_a_folded_addr_is_checked_for_alignment():
         t = pl.make_tile(tt, addr=base + 1)
         pl.load(t, x, [0, 0])
 
-    with pytest.raises(_WRAPPED, match="not 32-byte aligned"):
+    with pytest.raises(InvalidTile, match="not 32-byte aligned"):
         _parse_kernel(k)
 
 
@@ -582,7 +582,7 @@ def test_tile_type_shape_rejects_a_bool_element():
         t = pl.make_tile(tt, addr=0)
         pl.load(t, x, [0])
 
-    with pytest.raises(ParserTypeError, match="must be a compile-time integer"):
+    with pytest.raises(InvalidType, match="must be a compile-time integer"):
         _parse_kernel(k)
 
 
@@ -598,7 +598,7 @@ def test_pad_need_compile_time_value():
         t = pl.make_tile(tt, addr=0)
         pl.load(t, x, [0])
 
-    with pytest.raises(ParserTypeError, match="ErrCode: F00001, 'pl.TilePad.zero' has no runtime value"):
+    with pytest.raises(InvalidOperation, match="'pl.TilePad.zero' has no runtime value"):
         _parse_kernel(k)
 
 def test_tile_type_valid_shape_rejects_a_runtime_element():
@@ -615,7 +615,7 @@ def test_tile_type_valid_shape_rejects_a_runtime_element():
         t = pl.make_tile(tt, addr=0)
         pl.load(t, x, [0, 0])
 
-    with pytest.raises(ParserTypeError) as excinfo:
+    with pytest.raises(InvalidType) as excinfo:
         _parse_kernel(k)
     assert "must be a compile-time integer" in str(excinfo.value)
     assert "pl.set_validshape()" in str(excinfo.value)

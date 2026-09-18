@@ -91,6 +91,16 @@ from asc_op_compile_base.common.utils import log as logger
 
 from pypto_pro import DataType
 
+from ..._errors import (
+    InvalidArgument,
+    InvalidOperation,
+    InvalidType,
+    InvalidVal,
+    OutOfRange,
+    RuntimeFailure,
+    message_of,
+)
+
 # (AscendC core channel, kernel symbol/meta suffix, compile-make suffix)
 _MIX_CORE_COMPILE_TARGETS = (
     (CORE_TYPE_CUBE, "mix_aic", "aic"),
@@ -129,14 +139,14 @@ def _load_kernel(op_path: str):
 
     spec = importlib.util.spec_from_file_location("_pypto_opc_kernel_mod", op_path)
     if spec is None or spec.loader is None:
-        raise RuntimeError(f"cannot load kernel module from {op_path}")
+        raise RuntimeFailure(f"cannot load kernel module from {op_path}")
     mod = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)
 
     kernels = [v for v in vars(mod).values() if isinstance(v, _TileJitKernel)]
     if len(kernels) != 1:
-        raise RuntimeError(f"kernel module '{op_path}' must define exactly one @pl.jit kernel, found {len(kernels)}")
+        raise InvalidArgument(f"kernel module '{op_path}' must define exactly one @pl.jit kernel, found {len(kernels)}")
     return kernels[0]
 
 
@@ -200,18 +210,20 @@ def _write_tilingdata_header(kernel, output_dir: str) -> None:
     try:
         annotations = _get_annotations(func, namespace)
     except (NameError, TypeError, ValueError) as exc:
-        raise TypeError(f"Failed to evaluate annotations for kernel '{kernel.__name__}': {exc}") from exc
+        raise RuntimeFailure(
+            f"Failed to evaluate annotations for kernel '{kernel.__name__}': {message_of(exc)}"
+        ) from exc
     parameter_names = list(inspect.signature(func).parameters)
     tiling_params = [
         (name, annotations[name]) for name in parameter_names if is_tiling_class(annotations.get(name))
     ]
     if len(tiling_params) != 1:
-        raise RuntimeError(
+        raise InvalidArgument(
             f"kernel '{kernel.__name__}' must have exactly one tiling-class parameter, found {len(tiling_params)}"
         )
     tiling_param_name, tiling_cls = tiling_params[0]
     if not parameter_names or parameter_names[-1] != tiling_param_name:
-        raise RuntimeError(f"tiling parameter '{tiling_param_name}' must be the last kernel parameter")
+        raise InvalidOperation(f"tiling parameter '{tiling_param_name}' must be the last kernel parameter")
 
     fields = get_tiling_fields(tiling_cls)
     tiling_type = get_tiling_tuple_type(tiling_cls)
@@ -265,7 +277,7 @@ def _prepare_infer_cpp(
 
     valid_combos = schema.enumerate_valid()
     if not valid_combos:
-        raise RuntimeError(f"tiling_key schema '{schema.cls_name}' has no valid tilingkey combination")
+        raise InvalidVal(f"tiling_key schema '{schema.cls_name}' has no valid tilingkey combination")
     concrete_key = dict(zip(schema.field_names(), valid_combos[0]))
     default_tiling_key = schema.pack(concrete_key)
     infer_cg = _codegen(
@@ -276,7 +288,7 @@ def _prepare_infer_cpp(
         out_dir=os.path.join(kernel_meta_dir, "_cg_infer"),
     )
     if infer_cg is None:
-        raise RuntimeError(f"pypto codegen failed for default tilingkey {default_tiling_key}")
+        raise RuntimeFailure(f"pypto codegen failed for default tilingkey {default_tiling_key}")
     for header in (name for name in os.listdir(infer_cg.build_dir) if name.endswith(".h")):
         shutil.copyfile(os.path.join(infer_cg.build_dir, header), os.path.join(kernel_meta_dir, header))
     tilingkey_header = f"{schema.cls_name}_tilingkey.h"
@@ -300,9 +312,9 @@ def generate_binary_headers(kernel, arch="a5") -> str:
     )
 
     if not isinstance(kernel, _TileJitKernel):
-        raise TypeError("generate_binary_headers() expects a @pl.jit kernel")
+        raise InvalidType("generate_binary_headers() expects a @pl.jit kernel")
     if kernel.tilingkey_schema is None:
-        raise ValueError(
+        raise InvalidVal(
             f"generate_binary_headers() requires a tiling_key schema, but kernel "
             f"'{kernel.__name__}' has none; binary delivery needs a tilingkey header"
         )
@@ -311,7 +323,7 @@ def generate_binary_headers(kernel, arch="a5") -> str:
     schema = kernel.tilingkey_schema
     valid_combos = schema.enumerate_valid()
     if not valid_combos:
-        raise ValueError(f"tiling_key schema '{schema.cls_name}' has no valid tilingkey combination")
+        raise InvalidVal(f"tiling_key schema '{schema.cls_name}' has no valid tilingkey combination")
 
     kernel_def = kernel.to_kernel_def()
     build_dir = _make_artifact_build_dir(
@@ -340,11 +352,11 @@ def _op_info_get(op_info, name, default=None):
 
 def _orig_dtype_to_pypto(dtype_name: str, param_name: str) -> DataType:
     if not isinstance(dtype_name, str):
-        raise RuntimeError(f"param '{param_name}' dtype must be a string, got {type(dtype_name).__name__}")
+        raise InvalidType(f"param '{param_name}' dtype must be a string, got {type(dtype_name).__name__}")
     key = dtype_name.lower()
     dtype = _ORIG_DTYPE_TO_PYPTO.get(key)
     if dtype is None:
-        raise RuntimeError(f"param '{param_name}' dtype '{dtype_name}' is not supported by PyPTO datatype")
+        raise InvalidType(f"param '{param_name}' dtype '{dtype_name}' is not supported by PyPTO datatype")
     return dtype
 
 
@@ -366,7 +378,7 @@ def _extract_datatype_key_from_compile_options(compile_options, datatype_schema)
             by_name[param_name] = _orig_dtype_to_pypto(dtype_name, param_name)
     missing = sorted(wanted - set(by_name))
     if missing:
-        raise RuntimeError(f"compile_options is missing ORIG_DTYPE macros for datatype params: {missing}")
+        raise InvalidVal(f"compile_options is missing ORIG_DTYPE macros for datatype params: {missing}")
     return by_name
 
 
@@ -538,7 +550,7 @@ def _decode_tiling_key(schema, packed: int):
     for field in schema._fields:
         value_index = (packed >> field.offset) & ((1 << field.bits) - 1)
         if value_index >= len(field.values):
-            raise RuntimeError(
+            raise OutOfRange(
                 f"tilingkey field '{field.name}' index {value_index} is out of range for values {list(field.values)}"
             )
         concrete[field.name] = field.values[value_index]
@@ -555,7 +567,7 @@ def _filter_tiling_keys(tiling_key_list, extend_options, ctx, kernel_name):
     wanted = {str(int(k)) for k in context_tiling_key}
     filtered = [tiling_key for tiling_key in tiling_key_list if str(int(tiling_key)) in wanted]
     if not filtered:
-        raise RuntimeError(f"None of the given tiling keys are supported by {kernel_name}: {context_tiling_key}")
+        raise InvalidArgument(f"None of the given tiling keys are supported by {kernel_name}: {context_tiling_key}")
     return filtered
 
 
@@ -587,13 +599,13 @@ def pypto_compile_op(
 
     kernel = _load_kernel(cce_file)
     if origin_func_name != kernel.__name__:
-        raise RuntimeError(
+        raise InvalidVal(
             f"origin_func_name '{origin_func_name}' does not match the sole @pl.jit kernel "
             f"'{kernel.__name__}' in {cce_file}"
         )
     schema = getattr(kernel, "_tilingkey_schema", None)
     if schema is None:
-        raise RuntimeError(f"binary delivery requires a tiling_key schema on kernel '{kernel.__name__}'")
+        raise InvalidVal(f"binary delivery requires a tiling_key schema on kernel '{kernel.__name__}'")
     datatype_schema = getattr(kernel, "_datatype_schema", None)
     dtype_key = _extract_datatype_key_from_compile_options(compile_options, datatype_schema)
     dtype_consts = _validate_datatype_key(datatype_schema, dtype_key)
@@ -671,7 +683,7 @@ def pypto_compile_op(
             out_dir=cg_dir,
         )
         if cg is None:
-            raise RuntimeError(f"pypto codegen failed for tilingkey {packed}")
+            raise RuntimeFailure(f"pypto codegen failed for tilingkey {packed}")
         origin_func = cg.kernel_name
         impl_name = f"{origin_func}_impl"
         if not compile_options_ready:
@@ -717,7 +729,7 @@ def pypto_compile_op(
     # compile_multi_tilingkey swallows make failures unless build-log is enabled; verify every obj landed.
     missing = [o for o in obj_files if not os.path.exists(o)]
     if missing:
-        raise RuntimeError(f"pypto compile failed (make); missing {len(missing)} objs e.g. {missing[:3]}")
+        raise RuntimeFailure(f"pypto compile failed (make); missing {len(missing)} objs e.g. {missing[:3]}")
 
     dst_o = os.path.join(kernel_meta_dir, f"{kernel_name}.o")
     fatbin_objs(obj_files, dst_o, compile_info.is_debug, compile_log_path)

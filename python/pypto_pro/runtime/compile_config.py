@@ -17,6 +17,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 import os
 
+from .._errors import InvalidArgument, InvalidVal, NotSupported, RuntimeFailure
+
 CCE_BACKEND = "cce"
 
 
@@ -57,7 +59,7 @@ class JitCompileConfig:
         try:
             return [value.format(**variables) for value in values]
         except KeyError as exc:
-            raise RuntimeError(f"JIT compile config references unknown variable '{exc.args[0]}'") from exc
+            raise InvalidArgument(f"JIT compile config references unknown variable '{exc.args[0]}'") from exc
 
     def build_bisheng_flags(
         self,
@@ -86,7 +88,7 @@ class JitCompileConfig:
         arch_key = self._resolve_arch_key(arch)
         arch_args = self.llvm_arch_args.get(arch_key)
         if arch_args is None:
-            raise RuntimeError(f"JIT compile config does not define llvm_arch_args.{arch_key}")
+            raise InvalidVal(f"JIT compile config does not define llvm_arch_args.{arch_key}")
         return [*self.llvm_common_args, *arch_args]
 
     def runtime_include_flags(self, ascend_home_path: str) -> list[str]:
@@ -110,22 +112,22 @@ class JitCompileConfig:
     def resolve_kernel_target(self, arch: str, *, has_cube: bool, has_vector: bool) -> KernelTarget:
         """Resolve once so compiler flags and launch geometry consume the same ABI."""
         if not (has_cube or has_vector):
-            raise ValueError("Cannot compile a kernel without cube or vector code; add a target section")
+            raise RuntimeFailure("Cannot compile a kernel without cube or vector code; add a target section")
         arch_key = self._resolve_arch_key(arch.strip().lower())
         arch_config = self.kernel_targets.get(arch_key)
         if arch_config is None:
-            raise RuntimeError(f"JIT compile config does not define kernel_targets for arch '{arch}'")
+            raise InvalidVal(f"JIT compile config does not define kernel_targets for arch '{arch}'")
         variant = "cube_vec" if has_cube and has_vector else "cube" if has_cube else "vec"
         target = arch_config.get(variant)
         if target is None:
-            raise RuntimeError(f"JIT compile config does not define kernel_targets.{arch_key}.{variant}")
+            raise InvalidVal(f"JIT compile config does not define kernel_targets.{arch_key}.{variant}")
         return target
 
     def _resolve_memory_arch_flag(self, arch: str) -> str:
         arch_key = self._resolve_arch_key(arch)
         mem_arch = self.memory_arch_flags.get(arch_key)
         if mem_arch is None:
-            raise RuntimeError(f"JIT compile config does not define memory_arch_flags for arch '{arch}'")
+            raise InvalidVal(f"JIT compile config does not define memory_arch_flags for arch '{arch}'")
         return mem_arch
 
     @staticmethod
@@ -223,5 +225,5 @@ _DEFAULT_CCE_JIT_COMPILE_CONFIG = JitCompileConfig(
 def get_jit_compile_config(backend: str = CCE_BACKEND) -> JitCompileConfig:
     backend = backend.strip().lower()
     if backend != CCE_BACKEND:
-        raise NotImplementedError(f"PyPTO Pro JIT currently only supports the CCE backend, got {backend!r}")
+        raise NotSupported(f"PyPTO Pro JIT currently only supports the CCE backend, got {backend!r}")
     return _DEFAULT_CCE_JIT_COMPILE_CONFIG

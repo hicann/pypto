@@ -13,8 +13,8 @@
 
 import math
 
+from pypto_pro._errors import InvalidVal, RuntimeFailure
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import ParserSyntaxError
 import pytest
 
 from pypto.pypto_impl import ir
@@ -219,7 +219,7 @@ def test_compile_time_zero_divisor_is_rejected():
         result = value % -0.0
 
     for kernel, operator in ((truediv_zero, "/"), (floordiv_zero, "//"), (modulo_zero, "%")):
-        with pytest.raises(ParserSyntaxError, match=rf"Operator '{operator}' does not allow a zero divisor"):
+        with pytest.raises(InvalidVal, match=rf"Operator '{operator}' does not allow a zero divisor"):
             kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -338,7 +338,7 @@ def test_unary_plus_is_identity_for_non_scalar_operand():
 
 
 def test_invalid_constant_operand_types_raise_from_ir_builders():
-    with pytest.raises(pl.parser.ParserError, match="bit_not.*integer dtype"):
+    with pytest.raises(RuntimeFailure, match="bit_not.*integer dtype"):
 
         @pl.jit(auto_mutex=False)
         def invalid_invert(_jit_entry: pl.DT_INT64):
@@ -346,7 +346,7 @@ def test_invalid_constant_operand_types_raise_from_ir_builders():
 
         invalid_invert.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
-    with pytest.raises(pl.parser.ParserError, match="bit_and.*integer dtype"):
+    with pytest.raises(RuntimeFailure, match="bit_and.*integer dtype"):
 
         @pl.jit(auto_mutex=False)
         def invalid_bit_and(_jit_entry: pl.DT_INT64):

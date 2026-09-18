@@ -22,9 +22,11 @@
 #include "ir/kind_traits.h"
 #include "ir/op_registry.h"
 #include "ir/type.h"
+#include "pypto_pro/error.h"
 
 namespace pypto {
 namespace ir {
+using npu::tile_fwk::ExternalError;
 
 // ---------------------------------------------------------------------------
 // sort32
@@ -40,10 +42,11 @@ REGISTER_OP("block.sort32")
     .add_argument("tmp", "Optional scratch tile (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        CHECK(args.size() == 3 || args.size() == 4)
+        PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 3 || args.size() == 4)
             << "block.sort32 requires 3 or 4 arguments (dst, src, idx[, tmp]), but got " << args.size();
         auto dst_type = As<TileType>(args[0]->GetType());
-        CHECK(dst_type) << "block.sort32: dst must be TileType, but got " << args[0]->GetType()->TypeName();
+        PRO_IR_CHECK(ExternalError::INVALID_TYPE, dst_type)
+            << "block.sort32: dst must be TileType, but got " << args[0]->GetType()->TypeName();
         return dst_type;
     });
 
@@ -60,9 +63,11 @@ REGISTER_OP("block.mrgsort")
     .set_attr<int>("block_len")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        CHECK(args.size() == 2) << "block.mrgsort requires 2 arguments (dst, src) for format1, but got " << args.size();
+        PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 2)
+            << "block.mrgsort requires 2 arguments (dst, src) for format1, but got " << args.size();
         auto dst_type = As<TileType>(args[0]->GetType());
-        CHECK(dst_type) << "block.mrgsort: dst must be TileType, but got " << args[0]->GetType()->TypeName();
+        PRO_IR_CHECK(ExternalError::INVALID_TYPE, dst_type)
+            << "block.mrgsort: dst must be TileType, but got " << args[0]->GetType()->TypeName();
         return dst_type;
     });
 
@@ -81,10 +86,11 @@ REGISTER_OP("block.mrgsort2")
     .set_attr<bool>("exhausted")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        CHECK(args.size() >= 4 && args.size() <= 6)
+        PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() >= 4 && args.size() <= 6)
             << "block.mrgsort2 requires 4-6 arguments (dst, src0, tmp, src1, [src2, src3]), but got " << args.size();
         auto dst_type = As<TileType>(args[0]->GetType());
-        CHECK(dst_type) << "block.mrgsort2: dst must be TileType, but got " << args[0]->GetType()->TypeName();
+        PRO_IR_CHECK(ExternalError::INVALID_TYPE, dst_type)
+            << "block.mrgsort2: dst must be TileType, but got " << args[0]->GetType()->TypeName();
         return dst_type;
     });
 
@@ -98,9 +104,11 @@ REGISTER_OP("block.histogram")
     .set_attr<bool>("is_msb")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        CHECK(args.size() == 3) << "block.histogram requires 3 arguments (dst, src, idx), but got " << args.size();
+        PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 3)
+            << "block.histogram requires 3 arguments (dst, src, idx), but got " << args.size();
         auto dst_type = As<TileType>(args[0]->GetType());
-        CHECK(dst_type) << "block.histogram: dst must be TileType, but got " << args[0]->GetType()->TypeName();
+        PRO_IR_CHECK(ExternalError::INVALID_TYPE, dst_type)
+            << "block.histogram: dst must be TileType, but got " << args[0]->GetType()->TypeName();
         return dst_type;
     });
 

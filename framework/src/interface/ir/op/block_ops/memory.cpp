@@ -36,9 +36,11 @@
 #include "ir/span.h"
 #include "ir/type.h"
 #include "ir/type_inference.h"
+#include "pypto_pro/error.h"
 
 namespace pypto {
 namespace ir {
+using npu::tile_fwk::ExternalError;
 
 namespace {
 
@@ -56,7 +58,8 @@ TypePtr DeduceBlockGetBlockIdxType([[maybe_unused]] const std::vector<ExprPtr>& 
                                    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs,
                                    const std::string& op_name)
 {
-    CHECK(args.size() == 0) << "The operator " << op_name << " requires no arguments, but got " << args.size();
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 0)
+        << "The operator " << op_name << " requires no arguments, but got " << args.size();
 
     return std::make_shared<ScalarType>(DataType::INT64);
 }
@@ -67,17 +70,19 @@ TypePtr DeduceBlockCreateTileType([[maybe_unused]] const std::vector<ExprPtr>& a
 {
     // make_tile signature: (shape)
     // TileType requires static compile-time constant shapes
-    CHECK(args.size() == 0x2) << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 0x2)
+        << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
 
     // Extract dtype attribute
     DataType dtype = GetOpKwarg<DataType>(kwargs, "dtype");
 
     // First argument must be MakeTuple with static ConstInt elements
     auto shape_tuple = As<MakeTuple>(args[0]);
-    CHECK(shape_tuple) << "The operator " << op_name
-                       << " requires first argument to be a MakeTuple expression with static shape values, but got "
-                       << args[0]->TypeName();
-    CHECK(shape_tuple->elements_.size() == 0x2)
+    PRO_IR_CHECK(ExternalError::DYNAMIC_SHAPE_COMPUTE_UNSUPPORTED, shape_tuple)
+        << "The operator " << op_name
+        << " requires first argument to be a MakeTuple expression with static shape values, but got "
+        << args[0]->TypeName();
+    PRO_IR_CHECK(ExternalError::NOT_IMPLEMENTED_ERROR, shape_tuple->elements_.size() == 0x2)
         << "TileType only supports rank-2 shape; "
         << "for a 1-D tensor with shape [N], use TileType shape [N, 1] or [1, N], "
         << "and keep the same convention for all tile shapes of that tensor";
@@ -88,11 +93,11 @@ TypePtr DeduceBlockCreateTileType([[maybe_unused]] const std::vector<ExprPtr>& a
 
     for (size_t i = 0; i < shape_tuple->elements_.size(); ++i) {
         auto const_int = As<ConstInt>(shape_tuple->elements_[i]);
-        CHECK(const_int) << "The operator " << op_name << " shape element " << i
-                         << " must be a compile-time constant (ConstInt), but got "
-                         << shape_tuple->elements_[i]->TypeName();
-        CHECK(const_int->value_ > 0) << "The operator " << op_name << " shape element " << i
-                                     << " must be positive, got " << const_int->value_;
+        PRO_IR_CHECK(ExternalError::DYNAMIC_SHAPE_COMPUTE_UNSUPPORTED, const_int)
+            << "The operator " << op_name << " shape element " << i
+            << " must be a compile-time constant (ConstInt), but got " << shape_tuple->elements_[i]->TypeName();
+        PRO_IR_CHECK(ExternalError::INVALID_SHAPE, const_int->value_ > 0)
+            << "The operator " << op_name << " shape element " << i << " must be positive, got " << const_int->value_;
         tile_shape.push_back(shape_tuple->elements_[i]);
     }
 
@@ -156,51 +161,58 @@ TypePtr DeduceBlockCreateTileType([[maybe_unused]] const std::vector<ExprPtr>& a
 TypePtr DeduceGetValType([[maybe_unused]] const std::vector<ExprPtr>& args,
                          [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
-    CHECK(args.size() == 0x2) << "getval requires exactly 2 arguments, but got " << args.size();
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 0x2)
+        << "getval requires exactly 2 arguments, but got " << args.size();
 
     auto first_type = args[0]->GetType();
     auto offset_type = As<ScalarType>(args[1]->GetType());
-    CHECK(offset_type) << "getval requires offset to be ScalarType, but got " << args[1]->GetType()->TypeName();
-    CHECK(offset_type->dtype_.IsInt()) << "getval offset must have integer dtype, but got "
-                                       << offset_type->dtype_.ToString();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, offset_type)
+        << "getval requires offset to be ScalarType, but got " << args[1]->GetType()->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, offset_type->dtype_.IsInt())
+        << "getval offset must have integer dtype, but got " << offset_type->dtype_.ToString();
 
     if (auto tile_type = As<TileType>(first_type)) {
         return std::make_shared<ScalarType>(GetValResultDtype(tile_type->dtype_));
     }
     auto tensor_type = As<TensorType>(first_type);
-    CHECK(tensor_type) << "getval requires first argument to be TileType or TensorType, but got "
-                       << first_type->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, tensor_type)
+        << "getval requires first argument to be TileType or TensorType, but got " << first_type->TypeName();
     return std::make_shared<ScalarType>(GetValResultDtype(tensor_type->dtype_));
 }
 
 TypePtr DeduceTileValidShapeType(const std::vector<ExprPtr>& args,
                                  const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
-    CHECK(args.size() == 1 && As<TileType>(args[0]->GetType())) << "block.tile_valid_shape requires one Tile argument";
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 1 && As<TileType>(args[0]->GetType()))
+        << "block.tile_valid_shape requires one Tile argument";
     int axis = GetOpKwarg<int>(kwargs, "axis", 0);
-    CHECK(axis >= 0 && axis <= 1) << "block.tile_valid_shape axis must be in [0, 1], got axis=" << axis;
+    PRO_IR_CHECK(ExternalError::INVALID_SHAPE, axis >= 0 && axis <= 1)
+        << "block.tile_valid_shape axis must be in [0, 1], got axis=" << axis;
     return std::make_shared<ScalarType>(DataType::INT64);
 }
 
 TypePtr DeduceSetValType([[maybe_unused]] const std::vector<ExprPtr>& args,
                          [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
-    CHECK(args.size() == 0x3) << "setval requires exactly 3 arguments, but got " << args.size();
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 0x3)
+        << "setval requires exactly 3 arguments, but got " << args.size();
 
     auto first_type = args[0]->GetType();
     auto offset_type = As<ScalarType>(args[1]->GetType());
-    CHECK(offset_type) << "setval requires offset to be ScalarType, but got " << args[1]->GetType()->TypeName();
-    CHECK(offset_type->dtype_.IsInt()) << "setval offset must have integer dtype, but got "
-                                       << offset_type->dtype_.ToString();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, offset_type)
+        << "setval requires offset to be ScalarType, but got " << args[1]->GetType()->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, offset_type->dtype_.IsInt())
+        << "setval offset must have integer dtype, but got " << offset_type->dtype_.ToString();
     auto value_type = As<ScalarType>(args[2]->GetType());
-    CHECK(value_type) << "setval requires value to be ScalarType, but got " << args[2]->GetType()->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, value_type)
+        << "setval requires value to be ScalarType, but got " << args[2]->GetType()->TypeName();
 
     if (auto tile_type = As<TileType>(first_type)) {
         return std::make_shared<TileType>(tile_type->shape_, tile_type->dtype_, tile_type->memref_);
     }
     auto tensor_type = As<TensorType>(first_type);
-    CHECK(tensor_type) << "setval requires first argument to be TileType or TensorType, but got "
-                       << first_type->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, tensor_type)
+        << "setval requires first argument to be TileType or TensorType, but got " << first_type->TypeName();
     return std::make_shared<TensorType>(tensor_type->shape_, tensor_type->dtype_);
 }
 
@@ -251,7 +263,7 @@ REGISTER_OP("get_spr")
     .no_argument()
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        CHECK(args.size() == 0) << "get_spr requires no arguments";
+        PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 0) << "get_spr requires no arguments";
         return std::make_shared<ScalarType>(DataType::INT64);
     });
 
@@ -284,8 +296,8 @@ REGISTER_OP("set_ctrl_spr")
     .add_argument("value", "Value to write into the bit range")
     .f_deduce_type([](const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        CHECK(args.size() == 3) << "set_ctrl_spr requires 3 arguments (start_bit, end_bit, value), but got "
-                                << args.size();
+        PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 3)
+            << "set_ctrl_spr requires 3 arguments (start_bit, end_bit, value), but got " << args.size();
         return GetUnknownType();
     });
 
@@ -296,7 +308,8 @@ REGISTER_OP("get_ctrl_spr")
     .add_argument("end_bit", "End bit index (0-63)")
     .f_deduce_type([](const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        CHECK(args.size() == 2) << "get_ctrl_spr requires 2 arguments (start_bit, end_bit), but got " << args.size();
+        PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 2)
+            << "get_ctrl_spr requires 2 arguments (start_bit, end_bit), but got " << args.size();
         return std::make_shared<ScalarType>(DataType::INT64);
     });
 
@@ -307,7 +320,8 @@ REGISTER_OP("reset_ctrl_spr")
     .add_argument("end_bit", "End bit index (0-63)")
     .f_deduce_type([](const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        CHECK(args.size() == 2) << "reset_ctrl_spr requires 2 arguments (start_bit, end_bit), but got " << args.size();
+        PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 2)
+            << "reset_ctrl_spr requires 2 arguments (start_bit, end_bit), but got " << args.size();
         return GetUnknownType();
     });
 
@@ -369,15 +383,16 @@ TypePtr DeduceSubViewType([[maybe_unused]] const std::vector<ExprPtr>& args,
     // args: [container, offset, valid_shape]
     // Type deduction uses the container's original shape (preserving row_stride).
     // The valid_shape argument is consumed by codegen to auto-emit SetValidShape.
-    CHECK(args.size() == 0x3) << "block.subview requires exactly 3 arguments (container, offset, valid_shape), but got "
-                              << args.size();
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 0x3)
+        << "block.subview requires exactly 3 arguments (container, offset, valid_shape), but got " << args.size();
     auto container_type = args[0]->GetType();
 
     if (auto tile_type = As<TileType>(container_type)) {
         return tile_type;
     }
 
-    CHECK(false) << "block.subview requires first argument to be TileType, but got " << container_type->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, false)
+        << "block.subview requires first argument to be TileType, but got " << container_type->TypeName();
     return nullptr;
 }
 

@@ -10,6 +10,7 @@
 # -----------------------------------------------------------------------------------------------------------
 """TilingKey launch-time validation tests."""
 
+from pypto_pro._errors import InvalidArgument, InvalidType, InvalidVal
 import pypto_pro.language as pl
 from pypto_pro.runtime.tilingkey import TilingKeyField
 import pytest
@@ -93,7 +94,7 @@ def test_valid_key_accepted(kernel, key):
     ],
 )
 def test_invalid_key_rejected(kernel, key):
-    with pytest.raises(ValueError):
+    with pytest.raises((InvalidArgument, InvalidType, InvalidVal)):
         kernel[None, 1, key]
 
 
@@ -141,6 +142,6 @@ def test_memo_follows_dict_contents_not_identity():
 def test_invalid_key_is_never_memoized():
     kernel = _make_kernel(TkSingle)
     for bad in ({}, {"OpType": 99}, [0]):
-        with pytest.raises(ValueError):
+        with pytest.raises((InvalidArgument, InvalidType)):
             kernel[None, 1, bad]
     assert _memo(kernel) == {}

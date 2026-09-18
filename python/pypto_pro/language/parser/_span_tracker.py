@@ -52,10 +52,60 @@ class SpanTracker:
         return ir.Span(
             self.source_file,
             getattr(ast_node, "lineno", 0) + self.line_offset,
-            getattr(ast_node, "col_offset", 0) + self.col_offset,
+            # ir.Span columns are 1-based and inclusive; the AST gives a 0-based
+            # start, so it moves over by one. ``end_col_offset`` is 0-based and
+            # exclusive, which is already the 1-based inclusive end.
+            getattr(ast_node, "col_offset", 0) + self.col_offset + 1,
             getattr(ast_node, "end_lineno", 0) + self.line_offset,
             getattr(ast_node, "end_col_offset", 0) + self.col_offset,
         )
+
+    def keyword_span(self, keywords: dict, name: str, fallback: ir.Span) -> ir.Span:
+        """Span of the value written for keyword *name* in a parsed call.
+
+        An error that says which argument is wrong should point at that argument
+        rather than at the whole call. *fallback* covers the case where the
+        keyword was not written at all -- there is nothing to point at then, and
+        the call itself is the location.
+
+        Args:
+            keywords: ``{name: ast.keyword}``, as the op parsers build it
+            name: keyword whose value the error is about
+            fallback: span to use when *name* was not written
+
+        Returns:
+            Span of the keyword's value, or *fallback*
+        """
+        written = keywords.get(name)
+        return self.get_span(written.value) if written is not None else fallback
+
+    def call_argument_span(self, call: "ast.Call", name: "str | int", fallback: ir.Span) -> ir.Span:
+        """Span of the argument *name* as written in *call*, or *fallback*.
+
+        *name* is a keyword name, or an int index for a positional argument. The
+        fallback covers an argument that was not written at all -- there is
+        nothing to point at then, and the call itself is the location.
+        """
+        if isinstance(name, int):
+            return self.get_span(call.args[name]) if name < len(call.args) else fallback
+        written = next((kw.value for kw in call.keywords if kw.arg == name), None)
+        return self.get_span(written) if written is not None else fallback
+
+    def argument_spans(self, call: "ast.Call") -> dict:
+        """Where each argument of *call* was written, keyed for ``argument_span``.
+
+        Keywords are keyed by name and positional arguments by their index, which
+        is what a builder knows about the value it is rejecting. Published by the
+        op dispatcher so builders -- which see values, not syntax -- can still
+        point at the argument rather than at the whole call.
+        """
+        spans: dict = {}
+        for index, node in enumerate(call.args):
+            spans[index] = self.get_span(node)
+        for keyword in call.keywords:
+            if keyword.arg is not None:
+                spans[keyword.arg] = self.get_span(keyword.value)
+        return spans
 
     def get_multiline_span(self, start_node: ast.AST, end_node: ast.AST) -> ir.Span:
         """Get span covering multiple lines.
@@ -73,7 +123,10 @@ class SpanTracker:
         return ir.Span(
             self.source_file,
             getattr(start_node, "lineno", 0) + self.line_offset,
-            getattr(start_node, "col_offset", 0) + self.col_offset,
+            # ir.Span columns are 1-based and inclusive; the AST gives a 0-based
+            # start, so it moves over by one. ``end_col_offset`` is 0-based and
+            # exclusive, which is already the 1-based inclusive end.
+            getattr(start_node, "col_offset", 0) + self.col_offset + 1,
             getattr(end_node, "end_lineno", 0) + self.line_offset,
             getattr(end_node, "end_col_offset", 0) + self.col_offset,
         )

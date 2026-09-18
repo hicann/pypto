@@ -23,8 +23,18 @@ from typing import TYPE_CHECKING, Any
 from pypto.pypto_impl import ir
 from pypto.pypto_impl.ir import DataType
 
+from ..._errors import (
+    InvalidArgument,
+    InvalidFormat,
+    InvalidShape,
+    InvalidType,
+    InvalidVal,
+    NotSupported,
+    OutOfRange,
+    PyptoProError,
+    message_of,
+)
 from ._expr_evaluator import ExprEvaluator
-from .diagnostics import ParserTypeError
 
 if TYPE_CHECKING:
     from pypto_pro.runtime.shape_policy import BoundKernelSignature, TensorShapeSpec
@@ -132,7 +142,11 @@ class TypeResolver:
         try:
             shape_spec = TensorShapeSpec.from_annotation(name, index, shape_annotation)
         except (TypeError, ValueError) as exc:
-            raise ParserTypeError(str(exc), span=span) from exc
+            raise InvalidShape(
+                message_of(exc),
+                span=span,
+                parser_retry=True,
+            ) from exc
 
         explicit_rank = len(shape_spec.dimensions) - (1 if shape_spec.has_ellipsis else 0)
         rank_matches = (
@@ -199,18 +213,20 @@ class TypeResolver:
             List of shape dimensions
         """
         if not isinstance(value, (list, tuple)):
-            raise ParserTypeError(
+            raise InvalidType(
                 f"Shape '{source_name}' must be a list or tuple, got {type(value).__name__}",
                 span=span,
                 hint="Use a list like [64, 128] or a variable holding a list",
+                parser_retry=True,
             )
 
         dims: list[int | ir.Expr] = []
         for i, elem in enumerate(value):
             if type(elem) is not int or elem <= 0:
-                raise ParserTypeError(
+                raise InvalidType(
                     f"Shape '{source_name}' element {i} must be a positive integer, got {elem!r}",
                     span=span,
+                    parser_retry=True,
                 )
             dims.append(elem)
         return dims
@@ -229,9 +245,10 @@ class TypeResolver:
         """
         if type(value) is int and value > 0:
             return value
-        raise ParserTypeError(
+        raise InvalidType(
             f"Shape variable '{source_name}' must be a positive integer, got {value!r}",
             span=span,
+            parser_retry=True,
         )
 
     @classmethod
@@ -254,7 +271,7 @@ class TypeResolver:
             Resolved IR type
 
         Raises:
-            ParserTypeError: If type annotation cannot be resolved
+            NotSupported: If the annotation is a tuple, which a parameter cannot be
         """
         previous_parameter = self._parameter_name
         self._parameter_name = parameter_name
@@ -263,9 +280,10 @@ class TypeResolver:
         finally:
             self._parameter_name = previous_parameter
         if isinstance(resolved, ir.TupleType):
-            raise ParserTypeError(
+            raise NotSupported(
                 "Parameter type cannot be a tuple",
                 hint="Tuple types are only supported as return types",
+                parser_retry=True,
             )
 
         return resolved
@@ -303,22 +321,25 @@ class TypeResolver:
         """Validate a policy-bearing helper annotation against its call-site type."""
         success, annotation = self.expr_evaluator.try_eval_expr(type_node)
         if not success:
-            raise ParserTypeError(
+            raise InvalidVal(
                 f"Cannot evaluate annotation for helper parameter '{parameter_name}'",
                 span=self._get_span(type_node),
+                parser_retry=True,
             )
         from pypto_pro.language.typing.tensor import Tensor
         from pypto_pro.runtime.shape_policy import FixedDim, StaticDim, StaticTail
 
         if not isinstance(annotation, Tensor) or not isinstance(actual, ir.TensorType):
-            raise ParserTypeError(
+            raise InvalidArgument(
                 f"Helper parameter '{parameter_name}' policy annotation requires a Tensor argument",
                 span=self._get_span(type_node),
+                parser_retry=True,
             )
         if annotation.dtype != actual.dtype:
-            raise ParserTypeError(
+            raise InvalidType(
                 f"Helper parameter '{parameter_name}' dtype mismatch: expected {annotation.dtype}, got {actual.dtype}",
                 span=self._get_span(type_node),
+                parser_retry=True,
             )
         shape_spec, rank_matches, explicit_rank = self._resolve_shape_spec_and_rank(
             parameter_name,
@@ -328,33 +349,37 @@ class TypeResolver:
             self._get_span(type_node),
         )
         if not rank_matches:
-            raise ParserTypeError(
+            raise InvalidShape(
                 f"Helper parameter '{parameter_name}' rank does not match {annotation.shape}",
                 span=self._get_span(type_node),
+                parser_retry=True,
             )
         explicit_rank = len(shape_spec.dimensions) - (1 if shape_spec.has_ellipsis else 0)
         for axis, dimension in enumerate(shape_spec.dimensions[:explicit_rank]):
             actual_dim = actual.shape[axis]
             if isinstance(dimension, FixedDim):
                 if not isinstance(actual_dim, ir.ConstInt) or actual_dim.value != dimension.value:
-                    raise ParserTypeError(
+                    raise InvalidShape(
                         f"Helper parameter '{parameter_name}' axis {axis} must equal {dimension.value}",
                         span=self._get_span(type_node),
+                        parser_retry=True,
                     )
             elif isinstance(dimension, StaticDim) and not isinstance(actual_dim, ir.ConstInt):
-                raise ParserTypeError(
+                raise InvalidShape(
                     f"Helper parameter '{parameter_name}' STATIC axis {axis} requires a constant caller dimension",
                     span=self._get_span(type_node),
+                    parser_retry=True,
                 )
         if shape_spec.has_ellipsis:
             tail = shape_spec.dimensions[-1]
             if isinstance(tail, StaticTail):
                 for axis in range(tail.start_axis, len(actual.shape)):
                     if not isinstance(actual.shape[axis], ir.ConstInt):
-                        raise ParserTypeError(
+                        raise InvalidShape(
                             f"Helper parameter '{parameter_name}' ellipsis axis {axis} "
                             "requires a constant caller dimension",
                             span=self._get_span(type_node),
+                            parser_retry=True,
                         )
 
     def parse_shape(self, shape_node: ast.expr) -> list[int | ir.Expr]:
@@ -372,7 +397,8 @@ class TypeResolver:
             List of shape dimensions (int for static, ir.Expr for dynamic)
 
         Raises:
-            ParserTypeError: If shape cannot be parsed
+            InvalidType: If the shape node is not a list, tuple, or variable
+            InvalidArgument: If a shape variable does not resolve
         """
         if isinstance(shape_node, (ast.Tuple, ast.List)):
             return self._parse_dim_elements(shape_node.elts)
@@ -383,10 +409,11 @@ class TypeResolver:
             success, value = self.expr_evaluator.try_eval_expr(shape_node)
             if success:
                 return self._validate_shape_value(value, shape_node.id, self._get_span(shape_node))
-            raise ParserTypeError(
+            raise InvalidArgument(
                 f"Unknown shape variable: {shape_node.id}",
                 span=self._get_span(shape_node),
                 hint="Use a list like [64, 128] or a variable holding a list",
+                parser_retry=True,
             )
 
         # Try evaluating arbitrary expressions (e.g., get_shape(), dims[0:2])
@@ -394,9 +421,10 @@ class TypeResolver:
         if success:
             return self._validate_shape_value(value, ast.unparse(shape_node), self._get_span(shape_node))
 
-        raise ParserTypeError(
+        raise InvalidType(
             f"Shape must be a list, tuple, or variable: {ast.unparse(shape_node)}",
             hint="Use a list like [64, 128] or a variable holding a list",
+            parser_retry=True,
         )
 
     def resolve_type(self, type_node: ast.expr) -> "ir.Type":
@@ -431,7 +459,7 @@ class TypeResolver:
             if dtype_name.startswith("DT_") and dtype_name in self._DTYPE_MAP:
                 dtype = self._DTYPE_MAP[dtype_name]
                 if dtype_name in self._SCALAR_UNSUPPORTED_DTYPE_NAMES:
-                    raise ParserTypeError(
+                    raise NotSupported(
                         f"Scalar type does not support dtype {dtype_name}; "
                         "low-precision types (FP4/FP4E2M1/FP4E1M2/FP8/FP8E4M3FN/FP8E5M2/"
                         "FP8E8M0/INT4/UINT4/HF4/HF8) are storage-only "
@@ -439,16 +467,20 @@ class TypeResolver:
                         span=self._get_span(type_node),
                         hint="Use a supported scalar dtype: DT_BOOL, DT_INT8, DT_INT16, DT_INT32, "
                         "DT_INT64, DT_UINT8, DT_UINT16, DT_UINT32, DT_UINT64, DT_FP16, DT_BF16, DT_FP32",
+                        parser_retry=True,
                     )
                 return ir.ScalarType(dtype)
-            raise ParserTypeError(
+            raise InvalidType(
                 f"Incomplete type annotation: {ast.unparse(type_node)}",
+                span=self._get_span(type_node),
                 hint="Use pl.Tensor[[shape], dtype], pl.Ptr[dtype], or a dtype like pl.DT_INT64 for scalars",
+                parser_retry=True,
             )
 
-        raise ParserTypeError(
+        raise InvalidType(
             f"Unsupported type annotation: {ast.unparse(type_node)}",
             hint="Use pl.Tensor[[shape], dtype], pl.Ptr[dtype], or a dtype like pl.DT_INT64 for scalars",
+            parser_retry=True,
         )
 
     def resolve_dtype(self, dtype_node: ast.expr) -> DataType:
@@ -473,18 +505,20 @@ class TypeResolver:
 
             # Distinguish DataType.UNKNOWN from pl.UNKNOWN for error message quality
             if isinstance(dtype_node.value, ast.Name) and dtype_node.value.id == "DataType":
-                raise ParserTypeError(
+                raise InvalidType(
                     f"Unknown DataType: {dtype_name}",
                     span=span,
                     hint="Use a valid dtype like pl.DT_FP32, pl.DT_INT32, etc. Available: "
                     f"{', '.join(self._DTYPE_MAP.keys())}",
+                    parser_retry=True,
                 )
 
-            raise ParserTypeError(
+            raise InvalidType(
                 f"Unknown dtype: {dtype_name}",
                 span=span,
                 hint="Use a valid dtype like pl.DT_FP32, pl.DT_INT32, etc. Available: "
                 f"{', '.join(self._DTYPE_MAP.keys())}",
+                parser_retry=True,
             )
 
         # Handle simple name like FP16 (if imported directly) or variable from closure
@@ -498,23 +532,26 @@ class TypeResolver:
             if success:
                 if isinstance(value, DataType):
                     return value
-                raise ParserTypeError(
+                raise InvalidType(
                     f"Dtype variable '{dtype_name}' must be a DataType, got {type(value).__name__}",
                     span=span,
                     hint="Use a valid dtype like pl.DT_FP32, pl.DT_INT32, etc.",
+                    parser_retry=True,
                 )
 
-            raise ParserTypeError(
+            raise InvalidType(
                 f"Unknown dtype: {dtype_name}",
                 span=span,
                 hint="Use a valid dtype like pl.DT_FP32, pl.DT_INT32, etc. Available: "
                 f"{', '.join(self._DTYPE_MAP.keys())}",
+                parser_retry=True,
             )
 
-        raise ParserTypeError(
+        raise InvalidType(
             f"Cannot resolve dtype: {ast.unparse(dtype_node)}",
             span=span,
             hint="Use pl.DT_FP32, pl.DT_INT32, or other supported dtype constants",
+            parser_retry=True,
         )
 
     def resolve_layout(self, layout_node: ast.expr) -> "ir.TensorLayout":
@@ -527,7 +564,9 @@ class TypeResolver:
             TensorLayout enum value
 
         Raises:
-            ParserTypeError: If layout cannot be resolved
+            InvalidArgument: If the layout name is not a known layout
+            InvalidType: If a layout variable holds something other than a TensorLayout
+            InvalidFormat: If the layout node cannot be resolved at all
         """
         span = self._get_span(layout_node)
 
@@ -535,10 +574,11 @@ class TypeResolver:
             layout_name = layout_node.attr
             if layout_name in self._LAYOUT_MAP:
                 return self._LAYOUT_MAP[layout_name]
-            raise ParserTypeError(
+            raise InvalidArgument(
                 f"Unknown layout: {layout_name}",
                 span=span,
                 hint=f"Use a valid layout: {', '.join(self._LAYOUT_MAP.keys())}",
+                parser_retry=True,
             )
 
         if isinstance(layout_node, ast.Name):
@@ -550,22 +590,25 @@ class TypeResolver:
             if success:
                 if isinstance(value, ir.TensorLayout):
                     return value
-                raise ParserTypeError(
+                raise InvalidType(
                     f"Layout variable '{layout_name}' must be a TensorLayout, got {type(value).__name__}",
                     span=span,
                     hint=f"Use a valid layout: {', '.join(self._LAYOUT_MAP.keys())}",
+                    parser_retry=True,
                 )
 
-            raise ParserTypeError(
+            raise InvalidArgument(
                 f"Unknown layout: {layout_name}",
                 span=span,
                 hint=f"Use a valid layout: {', '.join(self._LAYOUT_MAP.keys())}",
+                parser_retry=True,
             )
 
-        raise ParserTypeError(
+        raise InvalidFormat(
             f"Cannot resolve layout: {ast.unparse(layout_node)}",
             span=span,
             hint="Use pl.ND, pl.DN, or pl.NZ",
+            parser_retry=True,
         )
 
     def resolve_type_if_memref(self, annotation: ast.expr | None) -> "ir.Type | None":
@@ -602,21 +645,24 @@ class TypeResolver:
             ir.MemRef instance
 
         Raises:
-            ParserTypeError: If the MemRef call is malformed
+            InvalidType: If the node is not a pl.MemRef(...) call
+            InvalidArgument: If the call does not have 3 or 4 arguments
         """
         if not isinstance(node, ast.Call):
-            raise ParserTypeError(
+            raise InvalidType(
                 f"Expected pl.MemRef(...) call, got: {ast.unparse(node)}",
                 hint="Use pl.MemRef(pl.MemorySpace.DDR, addr, size)",
+                parser_retry=True,
             )
 
         span = self._get_span(node)
 
         if len(node.args) not in (3, 4):
-            raise ParserTypeError(
+            raise InvalidArgument(
                 f"pl.MemRef requires 3 or 4 arguments (memory_space, addr, size[, id]), got {len(node.args)}",
                 span=span,
                 hint="Use pl.MemRef(pl.MemorySpace.DDR, 0, 1024)",
+                parser_retry=True,
             )
 
         memory_space = self.resolve_memory_space(node.args[0])
@@ -637,10 +683,11 @@ class TypeResolver:
             name = node.attr
             if name in self._MEMORY_SPACE_MAP:
                 return self._MEMORY_SPACE_MAP[name]
-            raise ParserTypeError(
+            raise InvalidArgument(
                 f"Unknown memory space: {name}",
                 span=span,
                 hint=f"Use one of: {', '.join(self._MEMORY_SPACE_MAP.keys())}",
+                parser_retry=True,
             )
 
         if isinstance(node, ast.Name):
@@ -648,10 +695,11 @@ class TypeResolver:
             if name in self._MEMORY_SPACE_MAP:
                 return self._MEMORY_SPACE_MAP[name]
 
-        raise ParserTypeError(
+        raise InvalidVal(
             f"Cannot resolve memory space: {ast.unparse(node)}",
             span=span,
             hint="Use pl.MemorySpace.DDR, pl.MemorySpace.Vec, etc.",
+            parser_retry=True,
         )
 
     def _resolve_annotation_shape(self, shape_node: ast.expr, type_name: str) -> list[int] | list[ir.Expr]:
@@ -668,10 +716,11 @@ class TypeResolver:
 
         success, raw_shape = self.expr_evaluator.try_eval_expr(shape_node)
         if not success:
-            raise ParserTypeError(
+            raise InvalidShape(
                 f"Cannot resolve shape policy for tensor parameter '{parameter_name}'",
                 span=span,
                 hint="Use DYNAMIC, STATIC, positive integers, or a final ellipsis",
+                parser_retry=True,
             )
 
         from pypto_pro.runtime.shape_policy import TensorShapeSpec
@@ -679,17 +728,18 @@ class TypeResolver:
         try:
             shape_spec = TensorShapeSpec.from_annotation(parameter_name, 0, raw_shape)
             if shape_spec.requires_binding:
-                raise ParserTypeError(
+                raise InvalidShape(
                     f"Tensor parameter '{parameter_name}' uses STATIC or ellipsis without a concrete shape binding",
                     span=span,
                     hint="Use @pl.jit with runtime arguments, or provide static_shapes for STATIC/ellipsis dimensions",
+                    parser_retry=True,
                 )
             return shape_spec.bind(None).to_ir_shape(span)
-        except ParserTypeError:
-            logger.debug("Re-raising ParserTypeError in _resolve_annotation_shape", exc_info=True)
+        except PyptoProError:
+            logger.debug("Re-raising parse error in _resolve_annotation_shape", exc_info=True)
             raise
         except (TypeError, ValueError) as exc:
-            raise ParserTypeError(str(exc), span=span) from exc
+            raise InvalidShape(message_of(exc), span=span, parser_retry=True) from exc
 
     def _validate_tensor_layout(
         self,
@@ -703,7 +753,11 @@ class TypeResolver:
 
         span = self._get_span(node)
         if len(shape) < 2:
-            raise ParserTypeError("NZ Tensor requires rank >= 2", span=span)
+            raise InvalidShape(
+                "NZ Tensor requires rank >= 2",
+                span=span,
+                parser_retry=True,
+            )
 
     def _resolve_subscript_type(self, subscript_node: ast.Subscript) -> ir.Type:
         """Resolve subscript type annotation.
@@ -721,15 +775,17 @@ class TypeResolver:
             IR type
 
         Raises:
-            ParserTypeError: If subscript cannot be resolved to a type
+            InvalidArgument: If the subscript names an unknown type
+            InvalidType: If the Tensor 4th argument is not pl.MemRef(...)
         """
         value = subscript_node.value
         type_name = self._get_type_name(value)
 
         if type_name is None:
-            raise ParserTypeError(
+            raise InvalidArgument(
                 f"Unknown type in subscript: {ast.unparse(value)}",
                 hint="Use pl.Tensor for tensor types or pl.Ptr for pointer types",
+                parser_retry=True,
             )
 
         slice_value = subscript_node.slice
@@ -758,7 +814,9 @@ class TypeResolver:
                     f"got: {ast.unparse(slice_value)}"
                 )
                 hint = f"Use pl.{type_name}[[shape], dtype] or pl.{type_name}[[shape], dtype, pl.MemRef(...)]"
-            raise ParserTypeError(message, hint=hint)
+            raise InvalidArgument(
+                message, span=self._get_span(slice_value), hint=hint, parser_retry=True,
+            )
 
         shape_node = slice_value.elts[0]
         dtype_node = slice_value.elts[1]
@@ -826,9 +884,10 @@ class TypeResolver:
         tensor_view = ir.TensorView([], layout)
         memref_node = slice_value.elts[3]
         if not self._is_memref_node(memref_node):
-            raise ParserTypeError(
+            raise InvalidType(
                 "Tensor 4th argument must be pl.MemRef(...)",
                 hint="Use pl.Tensor[[shape], dtype, layout, pl.MemRef(...)]",
+                parser_retry=True,
             )
         memref = self.resolve_memref(memref_node)
         return ir.TensorType(shape, dtype, memref, tensor_view)
@@ -852,9 +911,11 @@ class TypeResolver:
         for elt in elts:
             resolved = self.resolve_type(elt)
             if isinstance(resolved, ir.TupleType):
-                raise ParserTypeError(
+                raise NotSupported(
                     "Nested tuple types are not supported",
+                    span=self._get_span(elt),
                     hint="Use a flat tuple like tuple[pl.Tensor[...], pl.Tensor[...]]",
+                    parser_retry=True,
                 )
             types.append(resolved)
         return ir.TupleType(types)
@@ -879,16 +940,17 @@ class TypeResolver:
         if resolver is not None:
             return resolver(call_node)
 
-        raise ParserTypeError(
+        raise InvalidType(
             f"Unknown type constructor: {ast.unparse(func)}",
             hint="Use pl.Tensor[[shape], dtype] or a dtype like pl.DT_INT64 for scalars",
+            parser_retry=True,
         )
 
     def _resolve_tensor_type(self, call_node: ast.Call) -> ir.TensorType:
         """Resolve pl.Tensor((shape), dtype) annotation (legacy)."""
         result = self._resolve_shaped_type(call_node, "Tensor", ir.TensorType)
         if not isinstance(result, ir.TensorType):
-            raise TypeError("Expected TensorType result")
+            raise InvalidType("Expected TensorType result")
         return result
 
     def _resolve_shaped_type(
@@ -908,12 +970,13 @@ class TypeResolver:
             Constructed IR type
 
         Raises:
-            ParserTypeError: If type annotation is malformed
+            InvalidType: If the call does not carry both shape and dtype
         """
         if len(call_node.args) < 2:
-            raise ParserTypeError(
+            raise InvalidType(
                 f"{type_name} type requires shape and dtype arguments, got {len(call_node.args)}",
                 hint=f"Use pl.{type_name}[[shape], dtype] format",
+                parser_retry=True,
             )
 
         shape = self.to_ir_shape(self.parse_shape(call_node.args[0]))
@@ -943,9 +1006,10 @@ class TypeResolver:
                 if success:
                     dims.append(self._validate_dim_value(value, ast.unparse(elt), self._get_span(elt)))
                 else:
-                    raise ParserTypeError(
+                    raise InvalidType(
                         f"Dimension must be int literal, variable, or evaluable expression: {ast.unparse(elt)}",
                         hint="Use integer literals, variables, or expressions for dimensions",
+                        parser_retry=True,
                     )
         return dims
 
@@ -981,10 +1045,11 @@ class TypeResolver:
             if var is not None:
                 return var
 
-        raise ParserTypeError(
+        raise InvalidArgument(
             f"Unknown shape variable: {name}",
             span=span,
             hint="Use a positive integer or a Scalar variable defined earlier",
+            parser_retry=True,
         )
 
     def _resolve_memref_addr(self, node: ast.expr) -> "ir.Expr":
@@ -993,10 +1058,11 @@ class TypeResolver:
         if value is not None:
             return ir.ConstInt(value, DataType.INT64, self._get_span(node))
 
-        raise ParserTypeError(
+        raise InvalidType(
             f"MemRef address must be an integer, got: {ast.unparse(node)}",
             span=self._get_span(node),
             hint="Use an integer value for the address, e.g., 0 or 1024",
+            parser_retry=True,
         )
 
     def _resolve_int_literal(self, node: ast.expr, name: str, *, non_negative: bool = False) -> int:
@@ -1004,17 +1070,19 @@ class TypeResolver:
         value = self._try_resolve_int(node)
         if value is not None:
             if non_negative and value < 0:
-                raise ParserTypeError(
+                raise OutOfRange(
                     f"MemRef {name} must be >= 0, got: {value}",
                     span=self._get_span(node),
                     hint=f"Use a non-negative integer value for {name}",
+                    parser_retry=True,
                 )
             return value
 
-        raise ParserTypeError(
+        raise InvalidType(
             f"MemRef {name} must be an integer, got: {ast.unparse(node)}",
             span=self._get_span(node),
             hint=f"Use an integer value for {name}",
+            parser_retry=True,
         )
 
     def _try_resolve_int(self, node: ast.expr) -> int | None:

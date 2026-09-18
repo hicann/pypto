@@ -13,6 +13,7 @@
 from itertools import count
 
 from pypto_pro import DataType, ir
+from pypto_pro._errors import InvalidType
 from pypto_pro.ir.op.block_ops import (
     TileType,
     _ir_load,
@@ -110,7 +111,7 @@ def test_matmul_mx_rejects_unaligned_k():
 
 def test_matmul_mx_checks_dtype_before_shape():
     t = _mx_tiles(k=32, lhs_dtype=DataType.FP16)
-    with pytest.raises(ValueError, match="must be FP8/FP4 combo and dst FP32"):
+    with pytest.raises(InvalidType, match="must be FP8/FP4 combo and dst FP32"):
         _ir_matmul_mx(t["dst"], t["lhs"], t["rhs"], t["scale_a"], t["scale_b"])
 
 
@@ -125,7 +126,7 @@ def test_matmul_mx_rejects_mismatched_output_shape():
     t = _mx_tiles()
     t["dst"] = _tile("dst", [32, 64], DataType.FP32, ir.MemorySpace.Acc)
 
-    with pytest.raises(ValueError, match=r"dst_tile shape must be \[lhs M, rhs N\]"):
+    with pytest.raises(InvalidType, match=r"dst_tile shape must be \[lhs M, rhs N\]"):
         _ir_matmul_mx(t["dst"], t["lhs"], t["rhs"], t["scale_a"], t["scale_b"])
 
 
@@ -141,7 +142,7 @@ def test_matmul_mx_acc_rejects_non_fp32_acc():
     t = _mx_tiles()
     t["acc"] = _tile("acc", [64, 64], DataType.FP16, ir.MemorySpace.Acc)
 
-    with pytest.raises(ValueError, match=r"acc_tile must use FP32 dtype"):
+    with pytest.raises(InvalidType, match=r"acc_tile must use FP32 dtype"):
         _ir_matmul_mx_acc(t["dst"], t["acc"], t["lhs"], t["rhs"], t["scale_a"], t["scale_b"])
 
 
@@ -154,7 +155,7 @@ def test_matmul_mx_acc_rejects_non_fp32_acc():
 )
 def test_matmul_mx_rejects_invalid_dtype_combinations(lhs_dtype, rhs_dtype, dst_dtype):
     t = _mx_tiles(lhs_dtype=lhs_dtype, rhs_dtype=rhs_dtype, dst_dtype=dst_dtype)
-    with pytest.raises(ValueError, match="must be FP8/FP4 combo and dst FP32"):
+    with pytest.raises(InvalidType, match="must be FP8/FP4 combo and dst FP32"):
         _ir_matmul_mx(t["dst"], t["lhs"], t["rhs"], t["scale_a"], t["scale_b"])
 
 
@@ -166,7 +167,7 @@ def test_matmul_mx_rejects_scale_in_wrong_memory_space():
 
 def test_matmul_mx_rejects_scale_with_wrong_dtype():
     t = _mx_tiles(scale_a_dtype=DataType.FP16)
-    with pytest.raises(ValueError, match="scale_a must use FP8E8M0 dtype"):
+    with pytest.raises(InvalidType, match="scale_a must use FP8E8M0 dtype"):
         _ir_matmul_mx(t["dst"], t["lhs"], t["rhs"], t["scale_a"], t["scale_b"])
 
 
@@ -184,7 +185,7 @@ def test_matmul_mx_rejects_mismatched_scale_shape(scale_key, shape, error_patter
     space = ir.MemorySpace.ScaleLeft if scale_key == "scale_a" else ir.MemorySpace.ScaleRight
     t[scale_key] = _tile(scale_key, shape, DataType.FP8E8M0, space)
 
-    with pytest.raises(ValueError, match=error_pattern):
+    with pytest.raises(InvalidType, match=error_pattern):
         _ir_matmul_mx(t["dst"], t["lhs"], t["rhs"], t["scale_a"], t["scale_b"])
 
 

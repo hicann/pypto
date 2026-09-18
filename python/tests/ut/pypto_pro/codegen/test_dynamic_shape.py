@@ -11,8 +11,8 @@
 """Unit tests for codegen with dynamic shape tensor parameters."""
 
 from pypto_pro import DataType, ir
+from pypto_pro._errors import InvalidShape, InvalidType
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError, UnsupportedFeatureError
 import pytest
 
 
@@ -174,7 +174,7 @@ def test_shape_tuple_unpack_uses_canonical_tensor_dimensions():
 
 
 def test_shape_tuple_unpack_rejects_arity_mismatch():
-    with pytest.raises(ParserTypeError, match="unpack"):
+    with pytest.raises(InvalidShape, match="unpack"):
 
         @pl.jit(auto_mutex=False)
         def shape_unpack(x: pl.Tensor[[2, 128], pl.DT_FP32]):
@@ -186,7 +186,7 @@ def test_shape_tuple_unpack_rejects_arity_mismatch():
 
 @pytest.mark.parametrize("index", [True, 0.0, 2, -3])
 def test_shape_subscript_rejects_invalid_constant_index(index):
-    with pytest.raises((ParserSyntaxError, ParserTypeError)):
+    with pytest.raises((InvalidShape, InvalidType)):
 
         @pl.jit(auto_mutex=False)
         def shape_index(x: pl.Tensor[[2, 128], pl.DT_FP32]):
@@ -197,7 +197,7 @@ def test_shape_subscript_rejects_invalid_constant_index(index):
 
 
 def test_shape_subscript_rejects_non_tensor_base():
-    with pytest.raises((ParserSyntaxError, ParserTypeError, UnsupportedFeatureError)):
+    with pytest.raises(InvalidShape):
 
         @pl.jit(auto_mutex=False)
         def shape_index(x: pl.DT_INT64):
@@ -207,7 +207,7 @@ def test_shape_subscript_rejects_non_tensor_base():
 
 
 def test_shape_subscript_rejects_runtime_axis():
-    with pytest.raises(ParserSyntaxError, match="tensor.shape index must be a compile-time integer"):
+    with pytest.raises(InvalidType, match="tensor.shape index must be a compile-time integer"):
 
         @pl.jit(auto_mutex=False)
         def shape_index(

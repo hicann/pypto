@@ -19,6 +19,7 @@ from pypto.pypto_impl import ir
 from pypto.pypto_impl.ir import DataType
 from pypto_pro.ir._limits import INT64_MAX, INT64_MIN, from_storage_int
 
+from ..._errors import InvalidArgument, InvalidOperation, InvalidType, InvalidVal, NotSupported, OutOfRange
 from ._expr_evaluator import ExprEvaluator
 from ._scope_manager import (
     ConstantState,
@@ -30,10 +31,6 @@ from ._scope_manager import (
     PhiState,
 )
 from .diagnostics import (
-    FinalRejectionError,
-    ParserSyntaxError,
-    ParserTypeError,
-    UnsupportedFeatureError,
     check_in_range,
 )
 
@@ -174,10 +171,11 @@ class ControlFlowParserMixin:
             present_meta = first_meta if first_meta is not None else second_meta
             if not present_meta[1]:
                 return None
-            raise ParserTypeError(
+            raise InvalidOperation(
                 "Cannot merge Tile values when only one input carries mutex metadata",
                 span=span,
                 hint="Ensure all values come from the same auto-mutex tile-group flow",
+                parser_retry=True,
             )
         first_mutex_ids, first_candidates = first_meta
         second_mutex_ids, second_candidates = second_meta
@@ -187,10 +185,11 @@ class ControlFlowParserMixin:
             elif not second_candidates and len(second_mutex_ids) == 1:
                 second_mutex_ids = tuple(second_mutex_ids) * len(first_mutex_ids)
             else:
-                raise ParserTypeError(
+                raise InvalidOperation(
                     "cannot merge tile mutex metadata with different ID counts: "
                     f"{len(first_mutex_ids)} and {len(second_mutex_ids)}",
                     span=span,
+                    parser_retry=True,
                 )
         candidates = list(
             dict.fromkeys(list(first_candidates or ()) + list(second_candidates or ()))
@@ -232,7 +231,7 @@ class ControlFlowParserMixin:
         for value in values:
             merged = self._merge_tile_mutex_meta_pair(value, exemplar, span)
             if merged is None:
-                raise ParserTypeError("Cannot merge Tile values without mutex metadata", span=span)
+                raise InvalidOperation("Cannot merge Tile values without mutex metadata", span=span, parser_retry=True)
             value_mutex_ids, _, value_candidates = merged
             tile_mutex_id_outputs.append(tuple(value_mutex_ids))
             candidates.extend(value_candidates)
@@ -268,7 +267,7 @@ class ControlFlowParserMixin:
         if jump_kind is None:
             jump_kind = self._default_jump_kind(scope_type)
             if jump_kind is None:
-                raise ValueError(f"Unsupported control-flow scope type: {scope_type}")
+                raise NotSupported(f"Unsupported control-flow scope type: {scope_type}")
             local_scope.set_jump(jump_kind)
 
         loop_info = self.scope_manager.loop_info
@@ -306,7 +305,7 @@ class ControlFlowParserMixin:
 
         info = self.scope_manager.if_info if jump_kind is JumpKind.YIELD else self.scope_manager.loop_info
         if info is None:
-            raise RuntimeError(f"{jump_kind.value} is missing its control-flow owner")
+            raise InvalidVal(f"{jump_kind.value} is missing its control-flow owner")
 
         span = self._current_span()
         outputs = [
@@ -323,7 +322,7 @@ class ControlFlowParserMixin:
         elif jump_kind is JumpKind.CONTINUE:
             jump_op = ir.ContinueStmt([], span)
         else:
-            raise ValueError(f"Unsupported jump kind: {jump_kind}")
+            raise NotSupported(f"Unsupported jump kind: {jump_kind}")
         self.builder.emit(jump_op)
         jump_info = JumpInfo(jump_op, tuple(outputs))
         info.jumps.append(jump_info)
@@ -336,7 +335,7 @@ class ControlFlowParserMixin:
         states = [PhiState(type_equal=self.tuple_type_registry.types_equal) for _ in range(output_count)]
         for jump in info.jumps:
             if len(jump.outputs) != output_count:
-                raise TypeError("control-flow jump output counts must match")
+                raise InvalidVal("control-flow jump output counts must match")
             for state, value in zip(states, jump.outputs, strict=True):
                 if self._is_empty_control_flow_value(value):
                     continue
@@ -405,7 +404,7 @@ class ControlFlowParserMixin:
     def _validate_loop_orelse(self, stmt: ast.For | ast.While) -> None:
         if stmt.orelse:
             kind = "for" if isinstance(stmt, ast.For) else "while"
-            raise ParserSyntaxError(
+            raise NotSupported(
                 f"'{kind}-else' is not supported",
                 span=self.span_tracker.get_span(stmt.orelse[0]),
             )
@@ -467,7 +466,7 @@ class ControlFlowParserMixin:
             else:
                 state.body_phi.propagate(init_value)
                 if state.body_phi.ty is None:
-                    raise TypeError(f"Loop phi state for '{name}' has no IR type")
+                    raise InvalidVal(f"Loop phi state for '{name}' has no IR type")
                 iter_var = self.builder.var(name, state.body_phi.ty, span)
             slots.append(
                 _LoopMergeSlot(
@@ -543,11 +542,11 @@ class ControlFlowParserMixin:
         finalized: list[tuple[_LoopMergeSlot, ir.Var, ir.Var]] = []
         for jump in info.jumps:
             if len(jump.outputs) != len(slots):
-                raise TypeError("loop jump output count must match the collected merge slots")
+                raise InvalidVal("loop jump output count must match the collected merge slots")
             is_continue = isinstance(jump.jump_op, ir.ContinueStmt)
             is_break = isinstance(jump.jump_op, ir.BreakStmt)
             if not is_continue and not is_break:
-                raise TypeError("loop ControlFlowInfo can only contain break or continue jumps")
+                raise InvalidVal("loop ControlFlowInfo can only contain break or continue jumps")
             for slot, value in zip(slots, jump.outputs, strict=True):
                 if self._is_empty_control_flow_value(value):
                     continue
@@ -618,7 +617,7 @@ class ControlFlowParserMixin:
 
         for jump, jump_mutex_ids in zip(info.jumps, mutex_outputs_by_jump, strict=True):
             if jump.jump_op is None:
-                raise RuntimeError("loop jump is missing its terminator")
+                raise InvalidVal("loop jump is missing its terminator")
             self.builder.builder.update_jump_values(jump.jump_op, [*jump.outputs, *jump_mutex_ids])
 
         return iter_args, return_vars, merged_bindings
@@ -738,7 +737,7 @@ class ControlFlowParserMixin:
 
         phi_states = self._infer_phi_states(info)
         if len(phi_states) != len(writes):
-            raise TypeError("If jump output count must match the collected merge names")
+            raise InvalidVal("If jump output count must match the collected merge names")
 
         merged_bindings: list[tuple[str, ir.Var, PhiState]] = []
         return_vars: list[ir.Var] = []
@@ -774,7 +773,7 @@ class ControlFlowParserMixin:
 
         for jump, jump_mutex_ids in zip(info.jumps, jump_mutex_id_outputs, strict=True):
             if jump.jump_op is None:
-                raise RuntimeError("materialized If yield is missing its terminator")
+                raise InvalidVal("materialized If yield is missing its terminator")
             self.builder.builder.update_jump_values(jump.jump_op, [*jump.outputs, *jump_mutex_ids])
 
         self.builder.emit(
@@ -794,7 +793,7 @@ class ControlFlowParserMixin:
         """
         # Check that we have exactly one context manager
         if len(stmt.items) != 1:
-            raise ParserSyntaxError(
+            raise InvalidArgument(
                 f"Only a single context manager is supported in a 'with' statement, "
                 f"but got {len(stmt.items)}: 'with {self._describe_with_context(stmt)}:'",
                 span=self.span_tracker.get_span(stmt),
@@ -805,7 +804,7 @@ class ControlFlowParserMixin:
         span = self.span_tracker.get_span(stmt)
 
         if attr in ("section_vector", "section_cube") and self.inline_vf_depth:
-            raise ParserSyntaxError(
+            raise InvalidOperation(
                 f"Section 'pl.{attr}' cannot be nested inside @pl.vector_function",
                 span=span,
                 hint="Place Cube/Vector sections in the calling kernel and invoke the vector function from there.",
@@ -820,7 +819,7 @@ class ControlFlowParserMixin:
             return
 
         # Unsupported context manager
-        raise UnsupportedFeatureError(
+        raise NotSupported(
             f"Unsupported context manager 'with {self._describe_with_context(stmt)}:'"
             + (f" (pl.{attr}() is not a valid section here)" if attr else ""),
             span=self.span_tracker.get_span(stmt),
@@ -829,6 +828,7 @@ class ControlFlowParserMixin:
                 "are currently supported. VF code must be placed in a @pl.vector_function "
                 "decorated function."
             ),
+            parser_retry=True,
         )
 
     def parse_return(self, stmt: ast.Return) -> None:
@@ -839,7 +839,7 @@ class ControlFlowParserMixin:
         """
         span = self.span_tracker.get_span(stmt)
         if self.inline_vf_depth != 0:
-            raise ParserSyntaxError(
+            raise InvalidOperation(
                 "Vector function cannot contain return",
                 span=span,
             )
@@ -852,14 +852,15 @@ class ControlFlowParserMixin:
         if self._current_func_type == ir.FunctionType.SimtCallee:
             return_expr = self.parse_expression(stmt.value)
             if not isinstance(return_expr.type, ir.ScalarType):
-                raise ParserTypeError(
+                raise InvalidVal(
                     'A helper @pl.vector_function(mode="simt") must return None or one scalar value',
                     span=span,
                     hint="Return Tile/Tensor data through an input parameter; return scalar results directly.",
+                    parser_retry=True,
                 )
         else:
             if self._void_return_only:
-                raise ParserSyntaxError(
+                raise NotSupported(
                     f"{self._void_return_context} only supports bare return or return None; "
                     "returning values is not supported.",
                     span=span,
@@ -879,7 +880,7 @@ class ControlFlowParserMixin:
             stmt: Break AST node
         """
         if not self.in_for_loop and not self.in_while_loop:
-            raise ParserSyntaxError(
+            raise InvalidOperation(
                 "'break' statement outside of a loop",
                 span=self.span_tracker.get_span(stmt),
                 hint="break can only be used inside a for or while loop",
@@ -893,7 +894,7 @@ class ControlFlowParserMixin:
             stmt: Continue AST node
         """
         if not self.in_for_loop and not self.in_while_loop:
-            raise ParserSyntaxError(
+            raise InvalidOperation(
                 "'continue' statement outside of a loop",
                 span=self.span_tracker.get_span(stmt),
                 hint="continue can only be used inside a for or while loop",
@@ -920,7 +921,7 @@ class ControlFlowParserMixin:
             The call node for pl.range()
         """
         if not isinstance(stmt.iter, ast.Call):
-            raise ParserSyntaxError(
+            raise NotSupported(
                 self._ITERATOR_ERROR,
                 span=self.span_tracker.get_span(stmt.iter),
                 hint=self._ITERATOR_HINT,
@@ -931,7 +932,7 @@ class ControlFlowParserMixin:
         if isinstance(func, ast.Attribute) and func.attr in self._VALID_ITERATORS:
             return iter_call
 
-        raise ParserSyntaxError(
+        raise NotSupported(
             self._ITERATOR_ERROR,
             span=self.span_tracker.get_span(stmt.iter),
             hint=self._ITERATOR_HINT,
@@ -940,7 +941,7 @@ class ControlFlowParserMixin:
     def _validate_loop_orelse(self, stmt: ast.For | ast.While) -> None:
         if stmt.orelse:
             kind = "for" if isinstance(stmt, ast.For) else "while"
-            raise ParserSyntaxError(
+            raise NotSupported(
                 f"'{kind}-else' is not supported",
                 span=self.span_tracker.get_span(stmt.orelse[0]),
             )
@@ -948,7 +949,7 @@ class ControlFlowParserMixin:
     def _parse_for_loop_target(self, stmt: ast.For) -> str:
         """Parse for loop target, returning the loop variable name."""
         if not isinstance(stmt.target, ast.Name):
-            raise ParserSyntaxError(
+            raise InvalidType(
                 "For loop target must be a simple name",
                 span=self.span_tracker.get_span(stmt.target),
                 hint="Use: for i in pl.range(n)",
@@ -986,14 +987,14 @@ class ControlFlowParserMixin:
             Dictionary with start, stop, step
         """
         if call.keywords:
-            raise ParserSyntaxError(
+            raise InvalidArgument(
                 "pl.range() does not support keyword arguments",
                 span=self.span_tracker.get_span(call),
                 hint="Use: pl.range(stop), pl.range(start, stop), or pl.range(start, stop, step)",
             )
 
         if len(call.args) < 1:
-            raise ParserSyntaxError(
+            raise InvalidArgument(
                 "pl.range() requires at least 1 argument (stop)",
                 span=self.span_tracker.get_span(call),
                 hint="Provide at least the stop value: pl.range(10) or pl.range(0, 10)",
@@ -1026,7 +1027,7 @@ class ControlFlowParserMixin:
         """Reject a pl.range() bound that is not an integer scalar."""
         scalar_type = getattr(expr, "type", None) if isinstance(expr, ir.Expr) else None
         if not isinstance(scalar_type, ir.ScalarType):
-            raise FinalRejectionError(
+            raise InvalidVal(
                 f"pl.range(): {subject} must be an integer scalar, got '{ast.unparse(node)}'",
                 span=self.span_tracker.get_span(node),
                 hint=(
@@ -1042,7 +1043,7 @@ class ControlFlowParserMixin:
             bad = "float"
         else:
             return
-        raise FinalRejectionError(
+        raise InvalidVal(
             f"pl.range(): {subject} must be an integer, got {bad}",
             span=self.span_tracker.get_span(node),
             hint="pl.range() bounds must be integer-typed (no float or bool).",
@@ -1089,7 +1090,7 @@ class ControlFlowParserMixin:
         peak = s + ((t - s - 1) // p) * p + p
         hi = _UINT16_MAX if self.inline_vf_depth > 0 else INT64_MAX
         if peak > hi:
-            raise FinalRejectionError(
+            raise OutOfRange(
                 f"pl.range(): loop variable reaches {peak} on the final step, exceeding {hi}",
                 span=self.span_tracker.get_span(call),
                 hint="Reduce stop/step so that the last increment stays within the loop variable's range.",

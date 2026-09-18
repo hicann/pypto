@@ -15,10 +15,10 @@ import ast
 from typing import TYPE_CHECKING, Any
 
 from pypto_pro import DataType, ir
+from pypto_pro._errors import InvalidArgument, InvalidType
 import pypto_pro.language as pl
 from pypto_pro.language.parser._expr_evaluator import ExprEvaluator
 from pypto_pro.language.parser._type_resolver import TypeResolver
-from pypto_pro.language.parser.diagnostics import ParserTypeError
 import pytest
 
 if TYPE_CHECKING:
@@ -153,7 +153,7 @@ def test_parse_shape_rejects_invalid_exprs(expr, closure_vars, error):
     """parse_shape rejects unsupported shape variables and invalid dimensions."""
     resolver = _make_resolver(closure_vars=closure_vars)
     node = ast.parse(expr, mode="eval").body
-    with pytest.raises(ParserTypeError, match=error):
+    with pytest.raises((InvalidArgument, InvalidType), match=error):
         resolver.parse_shape(node)
 
 
@@ -182,7 +182,7 @@ def test_resolve_dtype_from_closure():
 
     resolver = _make_resolver(closure_vars={"dtype": "FP32"})
     node = ast.parse("dtype", mode="eval").body
-    with pytest.raises(ParserTypeError, match="must be a DataType"):
+    with pytest.raises(InvalidType, match="must be a DataType"):
         resolver.resolve_dtype(node)
 
 

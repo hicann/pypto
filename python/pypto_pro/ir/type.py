@@ -20,6 +20,7 @@ from collections.abc import Sequence
 
 from pypto.pypto_impl.ir import DataType, Expr, HardwareInfo, MemRef, TensorType, TensorView, TileType, TileView
 
+from .._errors import InvalidArgument
 from ._utils import _normalize_shape
 
 # Store the original native __init__
@@ -68,7 +69,7 @@ def _tile_type_init_wrapper(
     """
     shape_exprs = _normalize_shape(shape)
     if tile_view is not None and memref is None:
-        raise ValueError("tile_view requires memref to be specified")
+        raise InvalidArgument("tile_view requires memref to be specified")
     _native_tile_type_init(self, shape_exprs, dtype, memref, tile_view, hardware_info)
 
 

@@ -18,10 +18,12 @@
 #include "backend/common/soc.h"
 #include "core/error.h"
 #include "core/logging.h"
+#include "pypto_pro/error.h"
 #include "tilefwk/error.h"
 
 namespace pypto {
 namespace backend {
+using npu::tile_fwk::ExternalError;
 
 BackendRegistry& BackendRegistry::Instance()
 {
@@ -31,7 +33,8 @@ BackendRegistry& BackendRegistry::Instance()
 
 void BackendRegistry::Register(const std::string& type_name, CreateFunc func)
 {
-    CHECK(registry_.find(type_name) == registry_.end()) << "Backend type already registered: " << type_name;
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_OPERATION, registry_.find(type_name) == registry_.end())
+        << "Backend type already registered: " << type_name;
     registry_[type_name] = std::move(func);
 }
 
@@ -39,8 +42,9 @@ std::unique_ptr<Backend> BackendRegistry::Create(const std::string& type_name, c
 {
     (void)type_name;
     (void)soc;
-    throw ir::ValueError("Cannot create backend instances via registry - backends are singletons. "
-                         "Use BackendCCE::Instance() instead.");
+    PRO_CODEGEN_THROW(::pypto::ir::ValueError, npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR)
+        << "Cannot create backend instances via registry - backends are singletons. "
+        << "Use BackendCCE::Instance() instead.";
 }
 
 bool BackendRegistry::IsRegistered(const std::string& type_name) const
@@ -52,15 +56,17 @@ std::unique_ptr<Backend> CreateBackendFromRegistry(const std::string& type_name,
 {
     (void)type_name;
     (void)soc;
-    throw ir::ValueError("Cannot create backend instances via registry - backends are singletons. "
-                         "Use BackendCCE::Instance() instead.");
+    PRO_CODEGEN_THROW(::pypto::ir::ValueError, npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR)
+        << "Cannot create backend instances via registry - backends are singletons. "
+        << "Use BackendCCE::Instance() instead.";
 }
 
 namespace {
 bool RegisterBackendCCE()
 {
     BackendRegistry::Instance().Register("CCE", [](const std::shared_ptr<const SoC>& /*unused*/) {
-        throw ir::ValueError("Cannot create BackendCCE via registry - use BackendCCE::Instance()");
+        PRO_CODEGEN_THROW(::pypto::ir::ValueError, npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR)
+            << "Cannot create BackendCCE via registry - use BackendCCE::Instance()";
         return std::unique_ptr<Backend>(nullptr);
     });
     return true;

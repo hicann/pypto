@@ -16,6 +16,8 @@ __all__ = ["inline", "vector_function"]
 
 from collections.abc import Callable
 
+from ..._errors import InvalidVal, NotSupported, OutOfRange
+
 _SIMT_FUNCTION_MARKER = "_pypto_simt_function"
 _SIMT_MAX_THREADS_ATTR = "_pypto_simt_max_threads"
 
@@ -47,24 +49,24 @@ def vector_function(
     ``fn[threads](...)``, while omitting it declares a SIMT helper.
     """
     if fn is None and mode is None and max_threads is None:
-        raise TypeError("@pl.vector_function() is not supported; use @pl.vector_function")
+        raise NotSupported("@pl.vector_function() is not supported; use @pl.vector_function")
 
     actual_mode = "simd" if mode is None else mode
     if actual_mode == "simd":
         if max_threads is not None:
-            raise TypeError("max_threads is only supported when mode='simt'")
+            raise InvalidVal("max_threads is only supported when mode='simt'")
     elif actual_mode == "simt":
         if max_threads is not None:
             if isinstance(max_threads, bool) or not isinstance(max_threads, int):
-                raise TypeError("max_threads must be an integer")
+                raise InvalidVal("max_threads must be an integer")
             if not 1 <= max_threads <= 2048:
-                raise ValueError("max_threads must be in [1, 2048]")
+                raise OutOfRange("max_threads must be in [1, 2048]")
     else:
-        raise ValueError("mode must be 'simd' or 'simt'")
+        raise InvalidVal("mode must be 'simd' or 'simt'")
 
     def decorate(func: Callable) -> Callable:
         if not callable(func):
-            raise TypeError("@pl.vector_function can only decorate a callable")
+            raise InvalidVal("@pl.vector_function can only decorate a callable")
         if actual_mode == "simd":
             _mark_vector_function(func)
         else:

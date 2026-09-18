@@ -30,9 +30,11 @@
 #include "ir/scalar_expr.h"
 #include "ir/type.h"
 #include "ir/type_inference.h"
+#include "pypto_pro/error.h"
 
 namespace pypto {
 namespace ir {
+using npu::tile_fwk::ExternalError;
 
 TypePtr DeduceAddPtrType([[maybe_unused]] const std::vector<ExprPtr>& args,
                          [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
@@ -40,18 +42,22 @@ TypePtr DeduceAddPtrType([[maybe_unused]] const std::vector<ExprPtr>& args,
     // ptr.addptr: Advance a pointer by an integer offset
     // Args: (ptr, offset)
     // Returns: same PtrType as input (pointer bumped but same element dtype)
-    CHECK(args.size() == 0x2) << "ptr.addptr requires exactly 2 arguments (ptr, offset), but got " << args.size();
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 0x2)
+        << "ptr.addptr requires exactly 2 arguments (ptr, offset), but got " << args.size();
 
     // First argument must be PtrType
     auto ptr_type = As<PtrType>(args[0]->GetType());
-    CHECK(ptr_type) << "ptr.addptr requires first argument to be a PtrType, but got " << args[0]->GetType()->TypeName()
-                    << ". Use pl.Ptr[dtype] to annotate pointer parameters.";
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, ptr_type)
+        << "ptr.addptr requires first argument to be a PtrType, but got " << args[0]->GetType()->TypeName()
+        << ". Use pl.Ptr[dtype] to annotate pointer parameters.";
 
     // Second argument must be ScalarType with integer or index dtype
     auto offset_type = As<ScalarType>(args[1]->GetType());
-    CHECK(offset_type) << "ptr.addptr requires second argument (offset) to be a ScalarType, but got "
-                       << args[1]->GetType()->TypeName();
-    CHECK(offset_type->dtype_.IsInt() || offset_type->dtype_ == DataType(DataType::INDEX))
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, offset_type)
+        << "ptr.addptr requires second argument (offset) to be a ScalarType, but got "
+        << args[1]->GetType()->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE,
+                 offset_type->dtype_.IsInt() || offset_type->dtype_ == DataType(DataType::INDEX))
         << "ptr.addptr offset must have integer or index dtype, but got " << offset_type->dtype_.ToString();
 
     // Return the same PtrType (pointer is advanced but still points to same element type),
@@ -96,11 +102,12 @@ TypePtr DeduceMakePtrType([[maybe_unused]] const std::vector<ExprPtr>& args,
     // ptr.make_ptr: Reinterpret a pointer as a (usually different) element dtype, or extract
     // a raw pointer from a tensor. Args: (ptr_or_tensor); kwarg: dtype.
     // Returns: a PtrType with the new element dtype, reusing the same underlying address.
-    CHECK(args.size() == 1) << "ptr.make_ptr requires exactly 1 argument (ptr), but got " << args.size();
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 1)
+        << "ptr.make_ptr requires exactly 1 argument (ptr), but got " << args.size();
 
     auto ptr_type = As<PtrType>(args[0]->GetType());
     auto tensor_type = As<TensorType>(args[0]->GetType());
-    CHECK(ptr_type || tensor_type)
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, ptr_type || tensor_type)
         << "ptr.make_ptr requires first argument to be a PtrType or TensorType, but got "
         << args[0]->GetType()->TypeName()
         << ". Use pl.Ptr[dtype] for pointer params or pl.Tensor[[shape], dtype] for tensor params.";
@@ -134,8 +141,8 @@ TypePtr DeduceMakeTensorType([[maybe_unused]] const std::vector<ExprPtr>& args,
     // ptr.make_tensor: Create a tensor view from a pointer (or an existing tensor) with
     // shape and optional strides. An empty stride tuple means an implicit contiguous
     // row-major layout. Args: (ptr_or_tensor, shape_tuple, stride_tuple)
-    CHECK(args.size() == 0x3) << "ptr.make_tensor requires exactly 3 arguments (ptr, shape, stride), but got "
-                              << args.size();
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 0x3)
+        << "ptr.make_tensor requires exactly 3 arguments (ptr, shape, stride), but got " << args.size();
 
     // First argument is either:
     //   - a PtrType: a raw pointer to typed global memory, or
@@ -148,22 +155,23 @@ TypePtr DeduceMakeTensorType([[maybe_unused]] const std::vector<ExprPtr>& args,
     } else if (auto src_tensor_type = As<TensorType>(args[0]->GetType())) {
         source_dtype = src_tensor_type->dtype_;
     } else {
-        CHECK(false) << "ptr.make_tensor requires first argument to be a PtrType or TensorType, but got "
-                     << args[0]->GetType()->TypeName()
-                     << ". Use pl.Ptr[dtype] to annotate pointer parameters, or pass an existing pl.Tensor.";
+        PRO_IR_CHECK(ExternalError::INVALID_TYPE, false)
+            << "ptr.make_tensor requires first argument to be a PtrType or TensorType, but got "
+            << args[0]->GetType()->TypeName()
+            << ". Use pl.Ptr[dtype] to annotate pointer parameters, or pass an existing pl.Tensor.";
     }
 
     // Second argument must be MakeTuple (shape)
     auto shape_tuple = As<MakeTuple>(args[1]);
-    CHECK(shape_tuple) << "ptr.make_tensor requires shape to be a MakeTuple";
+    PRO_IR_CHECK(ExternalError::INVALID_SHAPE, shape_tuple) << "ptr.make_tensor requires shape to be a MakeTuple";
 
     // Third argument must be MakeTuple (stride); an empty tuple means implicit contiguous stride.
     auto stride_tuple = As<MakeTuple>(args[2]);
-    CHECK(stride_tuple) << "ptr.make_tensor requires stride to be a MakeTuple";
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, stride_tuple) << "ptr.make_tensor requires stride to be a MakeTuple";
 
     const auto& stride = stride_tuple->elements_;
     if (!stride.empty()) {
-        CHECK(shape_tuple->elements_.size() == stride.size())
+        PRO_IR_CHECK(ExternalError::INVALID_SHAPE, shape_tuple->elements_.size() == stride.size())
             << "ptr.make_tensor shape rank (" << shape_tuple->elements_.size() << ") must match stride rank ("
             << stride.size() << ")";
     }
@@ -181,7 +189,7 @@ TypePtr DeduceMakeTensorType([[maybe_unused]] const std::vector<ExprPtr>& args,
     constexpr size_t kBitsPerByte = 8;
     if (!stride.empty() && result_dtype.GetBit() < kBitsPerByte) {
         auto innermost = As<ConstInt>(stride.back());
-        CHECK(innermost != nullptr && innermost->value_ == 1)
+        PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, innermost != nullptr && innermost->value_ == 1)
             << "ptr.make_tensor: a " << result_dtype.ToString()
             << " view must be contiguous along its innermost axis (stride 1), because two elements "
             << "share a byte there and a half-byte cannot be addressed; got "

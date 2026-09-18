@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from pypto_pro._errors import InvalidArgument
 from pypto_pro.language.typing._tiling import get_tiling_fields
 import pytest
 
@@ -26,5 +27,5 @@ def test_array_size_above_2048_raises(size):
 
     TilingData.__annotations__["arr"] = f"int[{size}]"
 
-    with pytest.raises(ValueError, match="2048"):
+    with pytest.raises(InvalidArgument, match="2048"):
         get_tiling_fields(TilingData)

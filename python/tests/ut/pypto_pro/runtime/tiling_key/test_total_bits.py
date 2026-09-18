@@ -10,6 +10,7 @@
 # -----------------------------------------------------------------------------------------------------------
 """TilingKey total bit-width limit tests."""
 
+from pypto_pro._errors import OutOfRange
 from pypto_pro.runtime.tilingkey import TilingKeyField, TilingKeySchema
 import pytest
 
@@ -20,7 +21,7 @@ def test_total_66_bits_raises():
         B = TilingKeyField(bits=32, values=[0])
         C = TilingKeyField(bits=2, values=[0])
 
-    with pytest.raises(ValueError, match="64-bit limit"):
+    with pytest.raises(OutOfRange, match="64-bit limit"):
         TilingKeySchema(Tk)
 
 

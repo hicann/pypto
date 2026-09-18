@@ -17,6 +17,7 @@
 #include "core/dtype.h"
 #include "core/error.h"
 #include "ir/expr.h"
+#include "pypto_pro/error.h"
 #include "ir/transforms/base/visitor.h"
 #include "ir/type.h"
 
@@ -103,7 +104,9 @@ protected:
      */
     [[noreturn]] void ThrowNoCodegenForCall(const std::string& op_name) const
     {
-        throw ir::ValueError("No codegen registered for operation: " + op_name);
+        using npu::tile_fwk::ExternalError;
+        PRO_CODEGEN_THROW(::pypto::ir::ValueError, ExternalError::KEY_ERROR)
+            << "No codegen registered for operation: " << op_name;
     }
 
     /**

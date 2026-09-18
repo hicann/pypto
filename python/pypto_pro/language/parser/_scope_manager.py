@@ -20,8 +20,6 @@ __all__ = [
     "LoopVarState",
     "PhiState",
     "ScopeManager",
-    "SSAViolationError",
-    "ScopeIsolationError",
 ]
 
 
@@ -33,8 +31,8 @@ from typing import Any, Callable
 
 from pypto.pypto_impl import ir
 
+from ..._errors import InvalidOperation, InvalidVal
 from ._utils import _is_const_expr
-from .diagnostics import ParserTypeError, ScopeIsolationError, SSAViolationError
 
 
 class JumpKind(enum.Enum):
@@ -98,18 +96,20 @@ class PhiState:
             self.last_span = src.span
         elif isinstance(src_ty, ir.NoneType):
             if fail_eagerly and not isinstance(self.ty, ir.NoneType):
-                raise ParserTypeError(
+                raise InvalidVal(
                     "Loop-carried variable has an invalid type on a jump path",
                     span=src.span,
+                    parser_retry=True,
                 )
             self.ty = src_ty
         elif not isinstance(self.ty, ir.NoneType):
             if not self.type_equal(self.ty, src_ty):
                 if fail_eagerly:
-                    raise ParserTypeError(
+                    raise InvalidVal(
                         "Inconsistent types in control flow",
                         span=src.span,
                         hint="Check that the variable types are compatible. Use astype to ensure consistent types.",
+                        parser_retry=True,
                     )
                 self.ty = ir.NoneType.get()
             self.last_span = src.span
@@ -188,7 +188,7 @@ class ScopeManager:
 
     def exit_scope(self, leak_vars: bool = False) -> dict[str, Any]:
         if len(self.scopes) <= 1:
-            raise RuntimeError("Cannot exit global scope")
+            raise InvalidOperation("Cannot exit global scope")
 
         local_scope = self.scopes.pop()
         if leak_vars:
@@ -224,7 +224,7 @@ class ScopeManager:
         if name in local_scope and not allow_redef and self.strict_ssa:
             old_value = local_scope[name]
             previous_span = old_value.span if isinstance(old_value, ir.IRNode) else None
-            raise SSAViolationError(
+            raise InvalidOperation(
                 f"Variable '{name}' is already defined",
                 span=span,
                 previous_span=previous_span,

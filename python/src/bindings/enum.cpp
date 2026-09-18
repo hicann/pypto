@@ -49,7 +49,22 @@ void BindEnum(py::module_& m)
         .value("OUT_OF_RANGE", ExternalError::OUT_OF_RANGE)
         .value("BAD_FD", ExternalError::BAD_FD)
         .value("DYNAMIC_SHAPE_COMPUTE_UNSUPPORTED", ExternalError::DYNAMIC_SHAPE_COMPUTE_UNSUPPORTED)
+        .value("INVALID_SHAPE", ExternalError::INVALID_SHAPE)
+        .value("INVALID_TILE", ExternalError::INVALID_TILE)
+        .value("INVALID_FORMAT", ExternalError::INVALID_FORMAT)
+        .value("INVALID_ARGUMENT", ExternalError::INVALID_ARGUMENT)
         .value("UNKNOWN", ExternalError::UNKNOWN)
+        .export_values();
+
+    // pypto_pro reports internal errors through three stage sentinels; the
+    // remaining InternalError values belong to modules it does not have.
+    //
+    // Exposed as "InternalErrorCode": the name "InternalError" is already the
+    // pypto_pro exception class registered in bindings/ir/logging.cpp.
+    py::enum_<InternalError>(m, "InternalErrorCode")
+        .value("COMMON_INNER_ERROR", InternalError::COMMON_INNER_ERROR)
+        .value("PASS_INNER_ERROR", InternalError::PASS_INNER_ERROR)
+        .value("CODEGEN_INNER_ERROR", InternalError::CODEGEN_INNER_ERROR)
         .export_values();
 
     py::enum_<TileOpFormat>(m, "TileOpFormat")

@@ -18,9 +18,11 @@
 #include "ir/memref.h"
 #include "ir/op_registry.h"
 #include "ir/type.h"
+#include "pypto_pro/error.h"
 
 namespace pypto {
 namespace ir {
+using npu::tile_fwk::ExternalError;
 
 namespace {
 
@@ -71,61 +73,75 @@ TypePtr DeduceSyncAllType(const std::vector<ExprPtr>& args, const std::vector<st
         // args[0] is an empty MakeTuple for hard mode
         if (!args.empty()) {
             auto tuple = As<MakeTuple>(args[0]);
-            CHECK(!tuple || tuple->elements_.empty())
+            PRO_IR_CHECK(ExternalError::NOT_IMPLEMENTED_ERROR, !tuple || tuple->elements_.empty())
                 << "system.sync_all hard mode does not accept workspace arguments";
         }
     } else if (mode == 1) { // SOFT
-        CHECK(core_type == 0 || core_type == 1 || core_type == 2)
+        PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, core_type == 0 || core_type == 1 || core_type == 2)
             << "system.sync_all soft mode core_type must be AIV_ONLY(0), AIC_ONLY(1), or MIX(2), got " << core_type;
-        CHECK(args.size() == 1) << "system.sync_all soft mode requires exactly 1 argument (workspaces list), got "
-                                << args.size();
+        PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 1)
+            << "system.sync_all soft mode requires exactly 1 argument (workspaces list), got " << args.size();
 
         // Unpack MakeTuple elements and classify by type
         auto tuple = As<MakeTuple>(args[0]);
-        CHECK(tuple) << "system.sync_all soft mode: workspaces argument must be a list/tuple";
+        PRO_IR_CHECK(ExternalError::INVALID_TYPE, tuple)
+            << "system.sync_all soft mode: workspaces argument must be a list/tuple";
 
         bool has_gm = false, has_ub = false, has_l1 = false, has_used_cores = false;
         for (const auto& elem : tuple->elements_) {
             auto elem_type = elem->GetType();
             if (As<TensorType>(elem_type)) {
-                CHECK(!has_gm) << "system.sync_all: duplicate gm_workspace (TensorType) in workspaces list";
+                PRO_IR_CHECK(ExternalError::INVALID_OPERATION, !has_gm)
+                    << "system.sync_all: duplicate gm_workspace (TensorType) in workspaces list";
                 has_gm = true;
             } else if (auto tile_type = As<TileType>(elem_type)) {
-                CHECK(tile_type->memref_.has_value()) << "system.sync_all: workspace tile must have memref";
+                PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, tile_type->memref_.has_value())
+                    << "system.sync_all: workspace tile must have memref";
                 auto space = tile_type->memref_.value()->memorySpace_;
                 if (space == MemorySpace::Vec) {
-                    CHECK(!has_ub) << "system.sync_all: duplicate ub_workspace (Vec TileType) in workspaces list";
+                    PRO_IR_CHECK(ExternalError::INVALID_OPERATION, !has_ub)
+                        << "system.sync_all: duplicate ub_workspace (Vec TileType) in workspaces list";
                     has_ub = true;
                 } else if (space == MemorySpace::Mat) {
-                    CHECK(!has_l1) << "system.sync_all: duplicate l1_workspace (Mat TileType) in workspaces list";
+                    PRO_IR_CHECK(ExternalError::INVALID_OPERATION, !has_l1)
+                        << "system.sync_all: duplicate l1_workspace (Mat TileType) in workspaces list";
                     has_l1 = true;
                 } else {
-                    CHECK(false) << "system.sync_all: workspace tile must be Vec or Mat, got "
-                                 << static_cast<int>(space);
+                    PRO_IR_CHECK(ExternalError::INVALID_OPERATION, false)
+                        << "system.sync_all: workspace tile must be Vec or Mat, got " << static_cast<int>(space);
                 }
             } else if (IsIntScalar(elem)) {
-                CHECK(!has_used_cores) << "system.sync_all: duplicate used_cores (int scalar) in workspaces list";
+                PRO_IR_CHECK(ExternalError::INVALID_OPERATION, !has_used_cores)
+                    << "system.sync_all: duplicate used_cores (int scalar) in workspaces list";
                 has_used_cores = true;
             } else {
-                CHECK(false) << "system.sync_all: unrecognized element type in workspaces list: "
-                             << elem_type->TypeName();
+                PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, false)
+                    << "system.sync_all: unrecognized element type in workspaces list: " << elem_type->TypeName();
             }
         }
 
         // Validate required workspaces per core_type
-        CHECK(has_gm) << "system.sync_all soft mode: workspaces list must contain a gm_workspace (TensorType)";
+        PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, has_gm)
+            << "system.sync_all soft mode: workspaces list must contain a gm_workspace (TensorType)";
         if (core_type == 0) { // AIV_ONLY
-            CHECK(has_ub) << "system.sync_all soft aiv_only: workspaces list must contain ub_workspace (Vec TileType)";
-            CHECK(!has_l1) << "system.sync_all soft aiv_only: l1_workspace (Mat TileType) is not allowed";
+            PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, has_ub)
+                << "system.sync_all soft aiv_only: workspaces list must contain ub_workspace (Vec TileType)";
+            PRO_IR_CHECK(ExternalError::NOT_IMPLEMENTED_ERROR, !has_l1)
+                << "system.sync_all soft aiv_only: l1_workspace (Mat TileType) is not allowed";
         } else if (core_type == 1) { // AIC_ONLY
-            CHECK(has_l1) << "system.sync_all soft aic_only: workspaces list must contain l1_workspace (Mat TileType)";
-            CHECK(!has_ub) << "system.sync_all soft aic_only: ub_workspace (Vec TileType) is not allowed";
+            PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, has_l1)
+                << "system.sync_all soft aic_only: workspaces list must contain l1_workspace (Mat TileType)";
+            PRO_IR_CHECK(ExternalError::NOT_IMPLEMENTED_ERROR, !has_ub)
+                << "system.sync_all soft aic_only: ub_workspace (Vec TileType) is not allowed";
         } else { // MIX
-            CHECK(has_ub) << "system.sync_all soft mix: workspaces list must contain ub_workspace (Vec TileType)";
-            CHECK(has_l1) << "system.sync_all soft mix: workspaces list must contain l1_workspace (Mat TileType)";
+            PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, has_ub)
+                << "system.sync_all soft mix: workspaces list must contain ub_workspace (Vec TileType)";
+            PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, has_l1)
+                << "system.sync_all soft mix: workspaces list must contain l1_workspace (Mat TileType)";
         }
     } else {
-        CHECK(false) << "system.sync_all: mode must be HARD(0) or SOFT(1), got " << mode;
+        PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, false)
+            << "system.sync_all: mode must be HARD(0) or SOFT(1), got " << mode;
     }
 
     return GetUnknownType();
@@ -273,20 +289,21 @@ REGISTER_OP("system.dcci")
     .set_attr<int>("dst")
     .f_deduce_type([](const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs) {
         (void)kwargs;
-        CHECK(args.size() == 1 || args.size() == 2) << "system.dcci requires 1 or 2 arguments, got " << args.size();
+        PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 1 || args.size() == 2)
+            << "system.dcci requires 1 or 2 arguments, got " << args.size();
         auto target_type = args[0]->GetType();
-        CHECK(As<TensorType>(target_type) || As<TileType>(target_type))
+        PRO_IR_CHECK(ExternalError::INVALID_TYPE, As<TensorType>(target_type) || As<TileType>(target_type))
             << "system.dcci: target must be TensorType or TileType, but got " << target_type->TypeName();
         if (As<TensorType>(target_type) && args.size() == 2) {
-            CHECK(IsDcciTensorOffset(args[1]))
+            PRO_IR_CHECK(ExternalError::INVALID_TYPE, IsDcciTensorOffset(args[1]))
                 << "system.dcci: tensor target offset must be a per-dimension list/tuple "
                 << "or a scalar integer element offset";
         }
         if (As<TileType>(target_type) && args.size() == 2) {
-            CHECK(IsIntScalar(args[1]))
+            PRO_IR_CHECK(ExternalError::INVALID_TYPE, IsIntScalar(args[1]))
                 << "system.dcci: tile target offset must be a scalar integer element offset (int or index Expr).\n"
-                << "  Example: dcci(tile, 0) - cache invalidation starting at element offset 0\n"
-                << "  Note: Use list/tuple offset only for tensor targets";
+                << " Example: dcci(tile, 0) - cache invalidation starting at element offset 0\n"
+                << " Note: Use list/tuple offset only for tensor targets";
         }
         return GetUnknownType();
     });

@@ -33,42 +33,49 @@
 #include "ir/scalar_expr.h"
 #include "ir/type.h"
 #include "ir/type_inference.h"
+#include "pypto_pro/error.h"
 
 namespace pypto {
 namespace ir {
+using npu::tile_fwk::ExternalError;
 
 namespace {
 
 TypePtr DeduceSimtContextComponentType(const std::vector<ExprPtr>& args,
                                        const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
-    CHECK(args.empty()) << "SIMT context operations do not accept positional arguments";
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.empty())
+        << "SIMT context operations do not accept positional arguments";
     int axis = GetOpKwarg<int>(kwargs, "axis", 0);
-    CHECK(axis >= 0 && axis <= 2) << "SIMT context axis must be in [0, 2], got axis=" << axis;
+    PRO_IR_CHECK(ExternalError::INVALID_SHAPE, axis >= 0 && axis <= 2)
+        << "SIMT context axis must be in [0, 2], got axis=" << axis;
     return std::make_shared<ScalarType>(DataType(DataType::UINT32));
 }
 
 TypePtr DeduceSimtLinearThreadIdxType(const std::vector<ExprPtr>& args,
                                       const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
-    CHECK(args.empty()) << "SIMT builtin scalar operations do not accept positional arguments";
-    CHECK(kwargs.empty()) << "SIMT builtin scalar operations do not accept keyword arguments";
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.empty())
+        << "SIMT builtin scalar operations do not accept positional arguments";
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, kwargs.empty())
+        << "SIMT builtin scalar operations do not accept keyword arguments";
     return std::make_shared<ScalarType>(DataType(DataType::UINT32));
 }
 
 TypePtr DeduceSimtWarpSizeType(const std::vector<ExprPtr>& args,
                                const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
-    CHECK(args.empty()) << "simt.warp_size does not accept positional arguments";
-    CHECK(kwargs.empty()) << "simt.warp_size does not accept keyword arguments";
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.empty())
+        << "simt.warp_size does not accept positional arguments";
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, kwargs.empty()) << "simt.warp_size does not accept keyword arguments";
     return std::make_shared<ScalarType>(DataType(DataType::INT32));
 }
 
 TypePtr DeduceSimtSyncType(const std::string& op_name, const std::vector<ExprPtr>& args,
                            const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
-    CHECK(args.empty()) << op_name << " does not accept positional arguments";
-    CHECK(kwargs.empty()) << op_name << " does not accept keyword arguments";
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.empty()) << op_name << " does not accept positional arguments";
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, kwargs.empty()) << op_name << " does not accept keyword arguments";
     return GetNoneType();
 }
 
@@ -190,13 +197,13 @@ bool IsSimtCastSupported(DataType source_dtype, DataType target_dtype, RoundMode
 TypePtr DeduceSimtCastType(const std::vector<ExprPtr>& args,
                            const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
-    CHECK(args.size() == 1) << "simt.cast requires one scalar argument";
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 1) << "simt.cast requires one scalar argument";
     auto source_type = As<ScalarType>(args[0]->GetType());
-    CHECK(source_type) << "simt.cast value must be a scalar";
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, source_type) << "simt.cast value must be a scalar";
 
     DataType target_dtype = GetOpKwarg<DataType>(kwargs, "target_type");
     auto mode = static_cast<RoundMode>(GetOpKwarg<int>(kwargs, "mode"));
-    CHECK(IsSimtCastSupported(source_type->dtype_, target_dtype, mode))
+    PRO_IR_CHECK(ExternalError::NOT_IMPLEMENTED_ERROR, IsSimtCastSupported(source_type->dtype_, target_dtype, mode))
         << "simt.cast does not support " << source_type->dtype_.ToString() << " -> " << target_dtype.ToString()
         << " with mode " << EnumToString(mode);
     return std::make_shared<ScalarType>(target_dtype);
@@ -222,16 +229,16 @@ bool IsSimtBitcastSupported(DataType source_dtype, DataType target_dtype)
 TypePtr DeduceSimtBitcastType(const std::vector<ExprPtr>& args,
                               const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
-    CHECK(args.size() == 1) << "simt.bitcast requires one scalar argument";
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 1) << "simt.bitcast requires one scalar argument";
     auto source_type = As<ScalarType>(args[0]->GetType());
-    CHECK(source_type) << "simt.bitcast value must be a scalar";
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, source_type) << "simt.bitcast value must be a scalar";
 
     DataType target_dtype = GetOpKwarg<DataType>(kwargs, "target_type");
-    CHECK(source_type->dtype_.GetBit() == target_dtype.GetBit())
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, source_type->dtype_.GetBit() == target_dtype.GetBit())
         << "simt.bitcast requires source and target dtypes to have the same bit width, got "
         << source_type->dtype_.ToString() << " (" << source_type->dtype_.GetBit() << " bits) -> "
         << target_dtype.ToString() << " (" << target_dtype.GetBit() << " bits)";
-    CHECK(IsSimtBitcastSupported(source_type->dtype_, target_dtype))
+    PRO_IR_CHECK(ExternalError::NOT_IMPLEMENTED_ERROR, IsSimtBitcastSupported(source_type->dtype_, target_dtype))
         << "simt.bitcast does not support " << source_type->dtype_.ToString() << " -> " << target_dtype.ToString();
     return std::make_shared<ScalarType>(target_dtype);
 }
@@ -252,27 +259,30 @@ TypePtr DeduceSimtAtomicType(const std::string& op_name, size_t operand_count,
                              const std::vector<std::pair<std::string, std::any>>& kwargs,
                              std::initializer_list<DataType> no_result_dtypes = {})
 {
-    CHECK(args.size() == operand_count + 2)
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == operand_count + 2)
         << op_name << " requires container, offset, and " << operand_count << " scalar operand(s)";
-    CHECK(kwargs.empty()) << op_name << " does not accept keyword arguments";
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, kwargs.empty()) << op_name << " does not accept keyword arguments";
 
     auto tile_type = As<TileType>(args[0]->GetType());
     auto tensor_type = As<TensorType>(args[0]->GetType());
-    CHECK(tile_type || tensor_type) << op_name << " container must be a Tile or Tensor";
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, tile_type || tensor_type)
+        << op_name << " container must be a Tile or Tensor";
     DataType dtype = tile_type ? tile_type->dtype_ : tensor_type->dtype_;
-    CHECK(IsSimtAtomicDtype(dtype, tile_type ? ub_dtypes : gm_dtypes))
+    PRO_IR_CHECK(ExternalError::NOT_IMPLEMENTED_ERROR, IsSimtAtomicDtype(dtype, tile_type ? ub_dtypes : gm_dtypes))
         << op_name << " does not support dtype " << dtype.ToString() << " on " << (tile_type ? "UB Tile" : "GM Tensor");
 
     auto offset_type = As<ScalarType>(args[1]->GetType());
-    CHECK(offset_type && offset_type->dtype_ != DataType::BOOL &&
-          (offset_type->dtype_.IsInt() || offset_type->dtype_ == DataType::INDEX))
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE,
+                 offset_type && offset_type->dtype_ != DataType::BOOL &&
+                     (offset_type->dtype_.IsInt() || offset_type->dtype_ == DataType::INDEX))
         << op_name << " offset must be a non-bool integer scalar";
 
     for (size_t i = 0; i < operand_count; ++i) {
         auto operand_type = As<ScalarType>(args[i + 2]->GetType());
-        CHECK(operand_type) << op_name << " operand " << i << " must be a scalar";
-        CHECK(operand_type->dtype_ == dtype) << op_name << " operand " << i << " dtype must match target dtype "
-                                             << dtype.ToString() << ", but got " << operand_type->dtype_.ToString();
+        PRO_IR_CHECK(ExternalError::INVALID_TYPE, operand_type) << op_name << " operand " << i << " must be a scalar";
+        PRO_IR_CHECK(ExternalError::INVALID_TYPE, operand_type->dtype_ == dtype)
+            << op_name << " operand " << i << " dtype must match target dtype " << dtype.ToString() << ", but got "
+            << operand_type->dtype_.ToString();
     }
     if (IsSimtAtomicDtype(dtype, no_result_dtypes)) {
         return GetNoneType();
@@ -297,21 +307,23 @@ TypePtr DeduceSimtMathType(const std::string& op_name, size_t operand_count,
                            const std::vector<std::pair<std::string, std::any>>& kwargs,
                            std::optional<DataType> result_dtype = std::nullopt)
 {
-    CHECK(args.size() == operand_count) << op_name << " requires exactly " << operand_count << " scalar operand(s)";
-    CHECK(kwargs.empty()) << op_name << " does not accept keyword arguments";
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == operand_count)
+        << op_name << " requires exactly " << operand_count << " scalar operand(s)";
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, kwargs.empty()) << op_name << " does not accept keyword arguments";
 
     DataType dtype = DataType::BOOL;
     for (size_t i = 0; i < args.size(); ++i) {
         auto scalar_type = As<ScalarType>(args[i]->GetType());
-        CHECK(scalar_type) << op_name << " operand " << i << " must be a scalar";
+        PRO_IR_CHECK(ExternalError::INVALID_TYPE, scalar_type) << op_name << " operand " << i << " must be a scalar";
         if (i == 0) {
             dtype = scalar_type->dtype_;
-            CHECK(IsSimtAtomicDtype(dtype, supported_dtypes))
+            PRO_IR_CHECK(ExternalError::NOT_IMPLEMENTED_ERROR, IsSimtAtomicDtype(dtype, supported_dtypes))
                 << op_name << " supports only " << FormatSupportedDtypes(supported_dtypes) << ", got "
                 << dtype.ToString();
         } else {
-            CHECK(scalar_type->dtype_ == dtype) << op_name << " requires operands with the same dtype, got "
-                                                << dtype.ToString() << " and " << scalar_type->dtype_.ToString();
+            PRO_IR_CHECK(ExternalError::INVALID_TYPE, scalar_type->dtype_ == dtype)
+                << op_name << " requires operands with the same dtype, got " << dtype.ToString() << " and "
+                << scalar_type->dtype_.ToString();
         }
     }
     return std::make_shared<ScalarType>(result_dtype.value_or(dtype));
@@ -320,50 +332,65 @@ TypePtr DeduceSimtMathType(const std::string& op_name, size_t operand_count,
 TypePtr DeduceSimtLaunchType(const std::vector<ExprPtr>& args,
                              const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
-    CHECK(args.size() >= 3) << "simt.launch requires three launch dimensions";
+    PRO_IR_CHECK(ExternalError::INVALID_SHAPE, args.size() >= 3) << "simt.launch requires three launch dimensions";
     int64_t total_threads = 1;
     for (std::size_t i = 0; i < 3; ++i) {
         auto dim_type = As<ScalarType>(args[i]->GetType());
-        CHECK(dim_type && dim_type->dtype_.IsInt() && dim_type->dtype_ != DataType(DataType::BOOL))
+        PRO_IR_CHECK(ExternalError::INVALID_SHAPE,
+                     dim_type && dim_type->dtype_.IsInt() && dim_type->dtype_ != DataType(DataType::BOOL))
             << "simt.launch dimensions must be non-bool integer scalars";
         auto dim = As<ConstInt>(args[i]);
-        CHECK(dim && dim->value_ > 0 && dim->value_ <= 2048)
+        PRO_IR_CHECK(ExternalError::INVALID_SHAPE, dim && dim->value_ > 0 && dim->value_ <= 2048)
             << "simt.launch dimensions must be compile-time integers in [1, 2048], got dim[" << i
             << "]=" << (dim ? dim->value_ : -1);
         total_threads *= dim->value_;
     }
-    CHECK(total_threads <= 2048) << "simt.launch total thread count must not exceed 2048, got total_threads="
-                                 << total_threads;
+    PRO_IR_CHECK(ExternalError::OUT_OF_RANGE, total_threads <= 2048)
+        << "simt.launch total thread count must not exceed 2048, got total_threads=" << total_threads;
     int max_threads = GetOpKwarg<int>(kwargs, "max_threads");
-    CHECK(max_threads >= 1 && max_threads <= 2048) << "simt.launch max_threads must be in [1, 2048]";
-    CHECK(total_threads <= max_threads) << "simt.launch threads " << total_threads << " exceed callee max_threads "
-                                        << max_threads;
+    PRO_IR_CHECK(ExternalError::OUT_OF_RANGE, max_threads >= 1 && max_threads <= 2048)
+        << "simt.launch max_threads must be in [1, 2048]";
+    PRO_IR_CHECK(ExternalError::OUT_OF_RANGE, total_threads <= max_threads)
+        << "simt.launch threads " << total_threads << " exceed callee max_threads " << max_threads;
     for (std::size_t i = 3; i < args.size(); ++i) {
         auto arg_type = args[i]->GetType();
         if (auto tile_type = As<TileType>(arg_type)) {
-            CHECK(tile_type->shape_.size() == 2) << "simt.launch Tile argument must have a two-dimensional shape";
-            CHECK(As<Var>(args[i]) != nullptr) << "simt.launch Tile argument must be a Var";
+            PRO_IR_CHECK(ExternalError::INVALID_SHAPE, tile_type->shape_.size() == 2)
+                << "simt.launch Tile argument must have a two-dimensional shape";
+            PRO_IR_CHECK(ExternalError::INVALID_TYPE, As<Var>(args[i]) != nullptr)
+                << "simt.launch Tile argument must be a Var";
             for (const auto& dim : tile_type->shape_) {
-                CHECK(As<ConstInt>(dim) != nullptr) << "simt.launch Tile argument must have a static shape";
+                PRO_IR_CHECK(ExternalError::DYNAMIC_SHAPE_COMPUTE_UNSUPPORTED, As<ConstInt>(dim) != nullptr)
+                    << "simt.launch Tile argument must have a static shape";
             }
-            CHECK(tile_type->dtype_.GetBit() >= 8) << "simt.launch Tile argument has a sub-byte element dtype";
-            CHECK(tile_type->memref_.has_value()) << "simt.launch Tile argument has no memory reference";
-            CHECK((*tile_type->memref_)->memorySpace_ == MemorySpace::Vec)
+            PRO_IR_CHECK(ExternalError::INVALID_TYPE, tile_type->dtype_.GetBit() >= 8)
+                << "simt.launch Tile argument has a sub-byte element dtype";
+            PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, tile_type->memref_.has_value())
+                << "simt.launch Tile argument has no memory reference";
+            PRO_IR_CHECK(ExternalError::INVALID_TYPE, (*tile_type->memref_)->memorySpace_ == MemorySpace::Vec)
                 << "simt.launch Tile argument must be a Vec-memory Tile";
-            CHECK(tile_type->hardwareInfo_.has_value() && tile_type->hardwareInfo_->blayout == TileLayout::row_major &&
-                  tile_type->hardwareInfo_->slayout == TileLayout::none_box)
+            PRO_IR_CHECK(ExternalError::INVALID_FORMAT,
+                         tile_type->hardwareInfo_.has_value() &&
+                             tile_type->hardwareInfo_->blayout == TileLayout::row_major &&
+                             tile_type->hardwareInfo_->slayout == TileLayout::none_box)
                 << "simt.launch Tile argument must be an ND Vec Tile";
         } else if (auto tensor_type = As<TensorType>(arg_type)) {
-            CHECK(!tensor_type->shape_.empty()) << "simt.launch Tensor argument must have a non-empty shape";
+            PRO_IR_CHECK(ExternalError::INVALID_SHAPE, !tensor_type->shape_.empty())
+                << "simt.launch Tensor argument must have a non-empty shape";
             for (const auto& dim : tensor_type->shape_) {
-                CHECK(As<ConstInt>(dim) != nullptr) << "simt.launch Tensor argument must have a static shape";
+                PRO_IR_CHECK(ExternalError::DYNAMIC_SHAPE_COMPUTE_UNSUPPORTED, As<ConstInt>(dim) != nullptr)
+                    << "simt.launch Tensor argument must have a static shape";
             }
-            CHECK(tensor_type->dtype_.GetBit() >= 8) << "simt.launch Tensor argument has a sub-byte element dtype";
-            CHECK(tensor_type->tensor_view_.has_value() && tensor_type->tensor_view_->layout == TensorLayout::ND)
+            PRO_IR_CHECK(ExternalError::INVALID_TYPE, tensor_type->dtype_.GetBit() >= 8)
+                << "simt.launch Tensor argument has a sub-byte element dtype";
+            PRO_IR_CHECK(ExternalError::INVALID_FORMAT,
+                         tensor_type->tensor_view_.has_value() && tensor_type->tensor_view_->layout == TensorLayout::ND)
                 << "simt.launch Tensor argument must use ND layout";
-            CHECK(As<Var>(args[i]) != nullptr) << "simt.launch Tensor argument must be a Var";
+            PRO_IR_CHECK(ExternalError::INVALID_TYPE, As<Var>(args[i]) != nullptr)
+                << "simt.launch Tensor argument must be a Var";
         } else {
-            CHECK(As<ScalarType>(arg_type)) << "simt.launch supports only Tile, Tensor, and scalar arguments";
+            PRO_IR_CHECK(ExternalError::NOT_IMPLEMENTED_ERROR, As<ScalarType>(arg_type))
+                << "simt.launch supports only Tile, Tensor, and scalar arguments";
         }
     }
     return GetUnknownType();

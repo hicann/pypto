@@ -18,12 +18,12 @@ Covers the "support const enum" / "expects an enum value" changes:
     and kernel-factory ``dtype`` parameters used for dtype generalization.
   * The same enum kwarg rejects a plain int, whether written directly
     (``target_type=1``) or captured from an int closure variable — raising
-    ParserTypeError ("expects an enum value").
+    InvalidArgument ("expects an enum value").
 """
 from pypto_pro import ir
+from pypto_pro._errors import InvalidOperation, InvalidType, InvalidVal, NotSupported
 import pypto_pro.language as pl
 from pypto_pro.language import Vf as vf  # noqa: N813
-from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError, UnsupportedFeatureError
 import pytest
 
 # Tile geometry for the VF-op tests below.
@@ -150,8 +150,8 @@ def test_kernel_factory_closure_dtype():
 # ---------------------------------------------------------------------------
 @pytest.mark.soc("950")
 def test_dtype_kwarg_int_literal_rejected():
-    """A dtype kwarg given a raw int literal raises ParserTypeError."""
-    with pytest.raises(ParserTypeError, match="expects an enum value"):
+    """A dtype kwarg given a raw int literal raises InvalidArgument."""
+    with pytest.raises(InvalidVal, match="expects an enum value"):
 
         @pl.jit(auto_mutex=False)
         def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
@@ -163,8 +163,8 @@ def test_dtype_kwarg_int_literal_rejected():
 
 @pytest.mark.soc("950")
 def test_mode_kwarg_int_literal_rejected():
-    """A RoundMode kwarg given a raw int literal raises ParserTypeError."""
-    with pytest.raises(ParserTypeError, match="expects an enum value"):
+    """A RoundMode kwarg given a raw int literal raises InvalidArgument."""
+    with pytest.raises(InvalidVal, match="expects an enum value"):
 
         @pl.jit(auto_mutex=False)
         def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
@@ -181,13 +181,13 @@ def test_mode_kwarg_int_literal_rejected():
 # ---------------------------------------------------------------------------
 @pytest.mark.soc("950")
 def test_dtype_kwarg_int_closure_var_rejected():
-    """A dtype kwarg given an int closure variable raises ParserTypeError.
+    """A dtype kwarg given an int closure variable raises InvalidArgument.
 
     ``target_type=iv`` and ``target_type=1`` reach the resolver as the same int,
     so the int closure variable is rejected exactly like the literal.
     """
     iv = 1
-    with pytest.raises(ParserTypeError, match="expects an enum value"):
+    with pytest.raises(InvalidVal, match="expects an enum value"):
 
         @pl.jit(auto_mutex=False)
         def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
@@ -219,8 +219,8 @@ def test_target_memory_enum_literal():
 
 @pytest.mark.soc("950")
 def test_target_memory_int_rejected():
-    """A MemorySpace kwarg given a raw int raises ParserTypeError."""
-    with pytest.raises(ParserTypeError, match="expects an enum value"):
+    """A MemorySpace kwarg given a raw int raises InvalidArgument."""
+    with pytest.raises(InvalidVal, match="expects an enum value"):
 
         @pl.jit(auto_mutex=False)
         def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
@@ -365,8 +365,8 @@ def test_vf_register_writes_are_not_loop_carried_ssa_values():
 
 @pytest.mark.soc("950")
 def test_vf_enum_kwarg_int_rejected():
-    """A VF-op enum kwarg given a raw int raises ParserTypeError."""
-    with pytest.raises(ParserTypeError, match="expects an enum value"):
+    """A VF-op enum kwarg given a raw int raises InvalidArgument."""
+    with pytest.raises(InvalidVal, match="expects an enum value"):
         _parse_vf_mask_kernel(1)
 
 
@@ -406,8 +406,8 @@ def test_const_valid_dtype_closure_var():
 
 @pytest.mark.soc("950")
 def test_const_dtype_int_literal_rejected():
-    """pl.const() with an int instead of a dtype raises ParserSyntaxError."""
-    with pytest.raises(ParserSyntaxError, match="must be a dtype"):
+    """pl.const() with an int instead of a dtype raises InvalidType."""
+    with pytest.raises(InvalidType, match="must be a dtype"):
 
         @pl.jit(auto_mutex=False)
         def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
@@ -419,10 +419,10 @@ def test_const_dtype_int_literal_rejected():
 
 @pytest.mark.soc("950")
 def test_const_dtype_int_closure_var_rejected():
-    """pl.const() with an int closure variable as dtype raises ParserSyntaxError."""
+    """pl.const() with an int closure variable as dtype raises InvalidType."""
     bad_dtype = 1
 
-    with pytest.raises(ParserSyntaxError, match="must be a dtype"):
+    with pytest.raises(InvalidType, match="must be a dtype"):
 
         @pl.jit(auto_mutex=False)
         def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
@@ -434,8 +434,8 @@ def test_const_dtype_int_closure_var_rejected():
 
 @pytest.mark.soc("950")
 def test_const_dtype_string_rejected():
-    """pl.const() with a string instead of a dtype raises ParserSyntaxError."""
-    with pytest.raises(ParserSyntaxError, match="must be a dtype"):
+    """pl.const() with a string instead of a dtype raises InvalidType."""
+    with pytest.raises(InvalidType, match="must be a dtype"):
 
         @pl.jit(auto_mutex=False)
         def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
@@ -498,8 +498,8 @@ def test_enum_compare_ne():
 
 @pytest.mark.soc("950")
 def test_enum_compare_lt_rejected():
-    """Enum < enum raises UnsupportedFeatureError (only == and != allowed)."""
-    with pytest.raises(UnsupportedFeatureError, match="Only == and != are supported"):
+    """Enum < enum raises NotSupported (only == and != allowed)."""
+    with pytest.raises(NotSupported, match="Only == and != are supported"):
 
         @pl.jit(auto_mutex=False)
         def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
@@ -512,8 +512,8 @@ def test_enum_compare_lt_rejected():
 
 @pytest.mark.soc("950")
 def test_enum_compare_gt_rejected():
-    """Enum > enum raises UnsupportedFeatureError."""
-    with pytest.raises(UnsupportedFeatureError, match="Only == and != are supported"):
+    """Enum > enum raises NotSupported."""
+    with pytest.raises(NotSupported, match="Only == and != are supported"):
 
         @pl.jit(auto_mutex=False)
         def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
@@ -526,8 +526,8 @@ def test_enum_compare_gt_rejected():
 
 @pytest.mark.soc("950")
 def test_enum_compare_le_rejected():
-    """Enum <= enum raises UnsupportedFeatureError."""
-    with pytest.raises(UnsupportedFeatureError, match="Only == and != are supported"):
+    """Enum <= enum raises NotSupported."""
+    with pytest.raises(NotSupported, match="Only == and != are supported"):
 
         @pl.jit(auto_mutex=False)
         def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
@@ -540,8 +540,8 @@ def test_enum_compare_le_rejected():
 
 @pytest.mark.soc("950")
 def test_enum_compare_ge_rejected():
-    """Enum >= enum raises UnsupportedFeatureError."""
-    with pytest.raises(UnsupportedFeatureError, match="Only == and != are supported"):
+    """Enum >= enum raises NotSupported."""
+    with pytest.raises(NotSupported, match="Only == and != are supported"):
 
         @pl.jit(auto_mutex=False)
         def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
@@ -625,8 +625,6 @@ def test_dtype_kwarg_enum_ternary_inline():
     assert isinstance(func, ir.Function)
 
 
-
-
 @pytest.mark.soc("950")
 def test_enum_ternary_condition_is_an_enum_comparison():
     """The condition may itself be an enum comparison (dtype generalization).
@@ -705,7 +703,7 @@ def test_enum_ternary_runtime_condition_is_rejected():
     the message has to name the condition rather than the branch -- otherwise the rule
     reads as "enums do not work in ternaries", which the tests above disprove.
     """
-    with pytest.raises(ParserTypeError) as excinfo:
+    with pytest.raises(InvalidOperation) as excinfo:
 
         @pl.jit(auto_mutex=False)
         def func(x: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP16]):
@@ -734,7 +732,7 @@ def test_enum_ternary_runtime_condition_rejected_in_the_else_branch():
     Worth its own case: the then and else rejections are separate call sites, and only a
     shared one keeps them from drifting apart again.
     """
-    with pytest.raises(ParserTypeError, match="'pl.MemorySpace.Acc' has no runtime value"):
+    with pytest.raises(InvalidOperation, match="'pl.MemorySpace.Acc' has no runtime value"):
 
         @pl.jit(auto_mutex=False)
         def func(x: pl.Tensor[[pl.DYNAMIC, 128], pl.DT_FP16]):
@@ -752,7 +750,7 @@ def test_int_via_ternary_still_rejected_by_enum_kwarg_guard():
     for ``target_type=1`` written directly -- the pass-through widens what a ternary may
     *carry*, not what a kwarg may *accept*.
     """
-    with pytest.raises(ParserTypeError, match="expects an enum value"):
+    with pytest.raises(InvalidVal, match="expects an enum value"):
 
         @pl.jit(auto_mutex=False)
         def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
@@ -783,7 +781,7 @@ def test_mixed_enum_int_branches_follow_the_selected_branch():
 
     assert isinstance(picks_enum, ir.Function)
 
-    with pytest.raises(ParserTypeError, match="expects an enum value"):
+    with pytest.raises(InvalidVal, match="expects an enum value"):
 
         @pl.jit(auto_mutex=False)
         def picks_int(x: pl.Tensor[[64, 128], pl.DT_FP16]):
@@ -852,7 +850,7 @@ def test_helper_returning_int_still_rejected_for_enum_kwarg():
     def _pick_int(_wide):
         return 1
 
-    with pytest.raises(ParserTypeError, match="expects an enum value"):
+    with pytest.raises(InvalidVal, match="expects an enum value"):
 
         @pl.jit(auto_mutex=False)
         def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):

@@ -11,15 +11,14 @@
 """Unit tests for ScopeManager."""
 
 from pypto_pro import ir
+from pypto_pro._errors import InvalidOperation, InvalidVal
 from pypto_pro.language.parser._scope_manager import (
     ConstantState,
     ControlFlowInfo,
     JumpKind,
     PhiState,
     ScopeManager,
-    SSAViolationError,
 )
-from pypto_pro.language.parser.diagnostics import ParserTypeError
 import pytest
 
 
@@ -80,8 +79,8 @@ def test_ssa_violation():
     sm.enter_scope("function")
     sm.define_var("x", "value1")
 
-    # Trying to redefine should raise SSAViolationError
-    with pytest.raises(SSAViolationError, match="already defined"):
+    # Trying to redefine should raise PyptoProError
+    with pytest.raises(InvalidOperation, match="already defined"):
         sm.define_var("x", "value2")
 
 
@@ -142,7 +141,7 @@ def test_exit_global_scope_error():
     """Test that exiting global scope raises error."""
     sm = ScopeManager()
 
-    with pytest.raises(RuntimeError, match="Cannot exit global scope"):
+    with pytest.raises(InvalidOperation, match="Cannot exit global scope"):
         sm.exit_scope()
 
 
@@ -280,7 +279,7 @@ def test_phi_state_eager_type_mismatch_has_actionable_diagnostic():
     state = PhiState()
     state.propagate(ir.Var("first", ir.ScalarType(ir.DataType.INT32), span))
 
-    with pytest.raises(ParserTypeError) as exc_info:
+    with pytest.raises(InvalidVal) as exc_info:
         state.propagate(
             ir.Var("second", ir.ScalarType(ir.DataType.INT64), span),
             fail_eagerly=True,
@@ -316,7 +315,7 @@ def test_phi_state_eager_invalid_fails_only_after_a_concrete_type():
 
     concrete_first = PhiState()
     concrete_first.propagate(concrete)
-    with pytest.raises(ParserTypeError, match="invalid type"):
+    with pytest.raises(InvalidVal, match="invalid type"):
         concrete_first.propagate(invalid, fail_eagerly=True)
 
 

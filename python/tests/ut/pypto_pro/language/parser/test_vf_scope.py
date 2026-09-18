@@ -14,10 +14,10 @@ import inspect
 import textwrap
 
 from pypto_pro import ir
+from pypto_pro._errors import InvalidOperation, NotSupported, PyptoProError
 import pypto_pro.language as pl
 from pypto_pro.language import Vf as vf  # noqa: N813
 from pypto_pro.language.parser._ast_parser import ASTParser
-from pypto_pro.language.parser.diagnostics import ParserSyntaxError, UnsupportedFeatureError
 import pytest
 
 
@@ -47,7 +47,7 @@ def test_vf_operations_require_vector_function(namespace, statement, section):
     target = ir.SectionKind.Cube if section == "section_cube" else ir.SectionKind.Vector
     if section:
         body = f"with pl.{section}():\n" + textwrap.indent(body, "    ")
-    with pytest.raises(ParserSyntaxError, match="can only be used inside @pl.vector_function") as error:
+    with pytest.raises(InvalidOperation, match="can only be used inside @pl.vector_function") as error:
         _parse_body(body, target=target, closure={"vectors": vf})
     assert error.value.span["filename"] == __file__
     assert error.value.span["line"] == (3 if section else 2)
@@ -62,7 +62,7 @@ def test_plain_helper_does_not_create_a_vf_scope():
     def kernel(n: pl.DT_INT64):
         helper()
 
-    with pytest.raises(ParserSyntaxError, match="vf.create_mask") as error:
+    with pytest.raises(InvalidOperation, match="vf.create_mask") as error:
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     assert error.value.span["line"] == inspect.getsourcelines(helper)[1] + 1
 
@@ -82,7 +82,7 @@ def test_plain_helper_does_not_create_a_vf_scope():
     "for i in pl.range(pl.get_block_num()):\n    value = i",
 ])
 def test_pl_operations_are_rejected_in_vf_scope(statement):
-    with pytest.raises(ParserSyntaxError, match="is not supported inside @pl.vector_function") as error:
+    with pytest.raises(NotSupported, match="is not supported inside @pl.vector_function") as error:
         _parse_body(statement, vector_function=True)
     assert error.value.span["line"] == 2
     assert "Move other pl.* operations outside" in error.value.hint
@@ -93,12 +93,12 @@ def test_simt_launch_is_rejected_in_vf_scope():
     def entry():
         return
 
-    with pytest.raises(ParserSyntaxError, match="is not supported inside @pl.vector_function"):
+    with pytest.raises(NotSupported, match="is not supported inside @pl.vector_function"):
         _parse_body("entry[32]()", vector_function=True, closure={"entry": entry})
 
 
 def test_unknown_indexed_call_does_not_enter_simt_scope_check():
-    with pytest.raises(UnsupportedFeatureError, match="Unsupported indexed function call"):
+    with pytest.raises(NotSupported, match="Unsupported indexed function call"):
         _parse_body("missing_helper[32]()", vector_function=True)
 
 
@@ -106,7 +106,7 @@ def test_unknown_indexed_call_does_not_enter_simt_scope_check():
 @pytest.mark.parametrize("target", [ir.SectionKind.Vector, ir.SectionKind.Cube])
 def test_sections_cannot_be_nested_in_vector_function(section, target):
     body = f"with pl.{section}():\n    value = 1"
-    with pytest.raises(ParserSyntaxError, match="cannot be nested inside @pl.vector_function") as error:
+    with pytest.raises(InvalidOperation, match="cannot be nested inside @pl.vector_function") as error:
         _parse_body(body, vector_function=True, target=target)
     assert f"pl.{section}" in error.value.message
     assert error.value.span["line"] == 2
@@ -116,7 +116,7 @@ def test_sections_cannot_be_nested_in_vector_function(section, target):
 @pytest.mark.parametrize("context", ["pl.section_vector", "scope", "pl.unsupported()"])
 @pytest.mark.parametrize("vector_function", [False, True])
 def test_unsupported_context_retains_context_diagnostic(context, vector_function):
-    with pytest.raises(UnsupportedFeatureError, match="Unsupported context manager") as error:
+    with pytest.raises(NotSupported, match="Unsupported context manager") as error:
         _parse_body(f"with {context}:\n    value = 1", vector_function=vector_function)
     assert context in error.value.message
 
@@ -134,7 +134,7 @@ def test_pl_error_reports_the_decorated_helper_source():
     def kernel(n: pl.DT_INT64):
         outer()
 
-    with pytest.raises(ParserSyntaxError, match="pl.system.bar_all") as error:
+    with pytest.raises(NotSupported, match="pl.system.bar_all") as error:
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     assert error.value.span["line"] == inspect.getsourcelines(inner)[1] + 2
 
@@ -145,7 +145,7 @@ def test_pl_error_reports_the_decorated_helper_source():
     ("block = get_block()", {"get_block": pl.get_block_idx}, True),
 ])
 def test_operation_aliases_cannot_bypass_scope_checks(body, closure, vector_function):
-    with pytest.raises(ParserSyntaxError, match="@pl.vector_function"):
+    with pytest.raises(PyptoProError, match="@pl.vector_function"):
         _parse_body(body, vector_function=vector_function, closure=closure)
 
 
@@ -207,7 +207,7 @@ def test_nested_vector_helpers_restore_caller_scope(after):
             block = pl.get_block_idx()  # noqa: F841
 
     if after:
-        with pytest.raises(ParserSyntaxError, match="vf.create_mask"):
+        with pytest.raises(InvalidOperation, match="vf.create_mask"):
             kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     else:
         program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
@@ -265,7 +265,7 @@ def test_tile_group_accessor_is_rejected_inside_vector_function(advance, accesso
     kernel parses without a diagnostic, so nothing but this test separates the two orderings.
     """
     kernel = _tile_group_kernel(advance)
-    with pytest.raises(ParserSyntaxError, match=rf"Tile-group accessor '\.{accessor}\(\)'") as error:
+    with pytest.raises(InvalidOperation, match=rf"Tile-group accessor '\.{accessor}\(\)'") as error:
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     assert error.value.span["line"] == inspect.getsourcelines(advance)[1] + 2
     assert "pass it to the vector function" in error.value.hint

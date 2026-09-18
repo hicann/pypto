@@ -25,10 +25,12 @@
 #include "tilefwk/error.h"
 #include "ir/memref.h"
 #include "ir/pipe.h"
+#include "pypto_pro/error.h"
 #include "tilefwk/error.h"
 
 namespace pypto {
 namespace backend {
+using npu::tile_fwk::ExternalError;
 
 namespace {
 
@@ -110,7 +112,8 @@ std::vector<ir::MemorySpace> Backend::FindMemPath(ir::MemorySpace from, ir::Memo
         }
     }
 
-    CHECK(found) << "No path found from " << static_cast<int>(from) << " to " << static_cast<int>(to);
+    PRO_CODEGEN_CHECK(ExternalError::NOT_IMPLEMENTED_ERROR, found)
+        << "No path found from " << static_cast<int>(from) << " to " << static_cast<int>(to);
 
     // Reconstruct path
     std::vector<ir::MemorySpace> path;
@@ -160,14 +163,16 @@ const Backend::BackendOpInfo* Backend::GetOpInfo(const std::string& op_name) con
 
 BackendOpRegistryEntry& BackendOpRegistryEntry::set_pipe(ir::PipeType pipe)
 {
-    CHECK(!pipe_.has_value()) << "Pipe type already set for op '" << op_name_ << "'";
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_OPERATION, !pipe_.has_value())
+        << "Pipe type already set for op '" << op_name_ << "'";
     pipe_ = pipe;
     return *this;
 }
 
 BackendOpRegistryEntry& BackendOpRegistryEntry::f_codegen(BackendCodegenFunc func)
 {
-    CHECK(!codegen_func_.has_value()) << "Codegen function already set for op '" << op_name_ << "'";
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_OPERATION, !codegen_func_.has_value())
+        << "Codegen function already set for op '" << op_name_ << "'";
     codegen_func_ = std::move(func);
     return *this;
 }

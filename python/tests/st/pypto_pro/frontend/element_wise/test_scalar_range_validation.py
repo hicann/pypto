@@ -31,8 +31,8 @@ Requires an Ascend 950 (A5) device; skips otherwise.
 
 import os
 
+from pypto_pro._errors import OutOfRange
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import FinalRejectionError
 import pytest
 import torch
 import torch_npu  # noqa: F401 — registers npu backend
@@ -142,7 +142,7 @@ def test_and_int8_rejects_scalar_outside_dtype_range(kernel, scalar):
     out = torch.zeros(TILE_M, TILE_N, device=ST_DEVICE, dtype=torch.int8)
 
     with pytest.raises(
-        FinalRejectionError,
+        OutOfRange,
         match=rf"pl\.and: scalar operand must be representable in int8, i\.e\. in \[-128, 127\], got {scalar}",
     ):
         _run(kernel, a, out)
@@ -233,7 +233,7 @@ def test_and_uint8_rejects_scalar_outside_dtype_range(kernel, scalar):
     out = torch.zeros(TILE_M, TILE_N, device=ST_DEVICE, dtype=torch.uint8)
 
     with pytest.raises(
-        FinalRejectionError,
+        OutOfRange,
         match=rf"pl\.and: scalar operand must be representable in uint8, i\.e\. in \[0, 255\], got {scalar}",
     ):
         _run(kernel, a, out)
@@ -247,7 +247,7 @@ def test_and_uint8_negative_scalar_names_the_signedness():
     a = torch.zeros(TILE_M, TILE_N, device=ST_DEVICE, dtype=torch.uint8)
     out = torch.zeros(TILE_M, TILE_N, device=ST_DEVICE, dtype=torch.uint8)
 
-    with pytest.raises(FinalRejectionError, match=r"got -1"):
+    with pytest.raises(OutOfRange, match=r"got -1"):
         _run(kernel_and_uint8_negative, a, out)
 
 
@@ -305,7 +305,7 @@ def _compile_to_cce(kernel) -> str:
 def test_expands_uint64_rejects_scalar_above_the_storage_band():
     """UINT64_MAX + 1 cannot be carried by ir.ConstInt at all, whatever the tile dtype."""
     with pytest.raises(
-        FinalRejectionError,
+        OutOfRange,
         match=r"must be in \[-9223372036854775808, 18446744073709551615\], got 18446744073709551616",
     ):
         _compile_to_cce(kernel_expands_uint64_above_band)
@@ -320,7 +320,7 @@ def test_expands_uint64_boundary_scalar_is_emitted_as_an_unsigned_literal():
     (it is absent from aclnn's dtype support list), so a host round-trip is not possible.
     """
     with pytest.raises(
-            FinalRejectionError,
+            OutOfRange,
             match=r"must be in \[-9223372036854775808, 18446744073709551615\], got 18446744073709551616",
         ):
         _compile_to_cce(kernel_expands_uint64_boundary)
@@ -363,7 +363,7 @@ def kernel_expands_int64_boundary(
 def test_expands_int64_rejects_scalar_above_the_dtype_max():
     """INT64_MAX + 1 fits the storage band as a uint64 constant; only the dtype check rejects it."""
     with pytest.raises(
-        FinalRejectionError,
+        OutOfRange,
         match=(
             r"pl\.expands: scalar operand must be representable in int64, "
             r"i\.e\. in \[-9223372036854775808, 9223372036854775807\], got 9223372036854775808"

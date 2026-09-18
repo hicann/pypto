@@ -10,6 +10,7 @@
 # -----------------------------------------------------------------------------------------------------------
 """Unit tests for normalized PyPTO Pro tensor shape policies."""
 
+from pypto_pro._errors import InvalidShape, InvalidType
 from pypto_pro.language.typing import DYNAMIC, STATIC
 from pypto_pro.language.typing.shape import _ShapePolicy
 from pypto_pro.runtime.shape_policy import KernelSignatureSpec, TensorShapeSpec
@@ -53,7 +54,7 @@ def test_empty_shape_is_exact_rank_zero():
     signature = KernelSignatureSpec((_spec("x", 0, []),))
 
     assert signature.bind_static_shapes({"x": []}).tensor("x").dimensions == ()
-    with pytest.raises(ValueError, match=r"parameter 'x'.*rank"):
+    with pytest.raises(InvalidType, match=r"parameter 'x'.*rank"):
         signature.bind_static_shapes({"x": [1]})
 
 
@@ -104,27 +105,27 @@ def test_static_signature_uses_parameter_then_axis_order():
 
 @pytest.mark.parametrize("bad_dim", [True, False, 0, -1, 1.5, "32", object()])
 def test_invalid_fixed_dimension_is_rejected(bad_dim):
-    with pytest.raises(TypeError, match=r"parameter 'x'.*axis 0"):
+    with pytest.raises(InvalidShape, match=r"parameter 'x'.*axis 0"):
         _spec("x", 0, [bad_dim])
 
 
 @pytest.mark.parametrize("shape", [[..., STATIC], [DYNAMIC, ..., ...]])
 def test_invalid_ellipsis_placement_is_rejected(shape):
-    with pytest.raises(TypeError, match="ellipsis"):
+    with pytest.raises(InvalidShape, match="ellipsis"):
         _spec("x", 0, shape)
 
 
 def test_fixed_dimension_mismatch_is_rejected():
     signature = KernelSignatureSpec((_spec("x", 0, [16, DYNAMIC]),))
 
-    with pytest.raises(ValueError, match=r"parameter 'x'.*axis 0.*expected 16.*got 8"):
+    with pytest.raises(InvalidType, match=r"parameter 'x'.*axis 0.*expected 16.*got 8"):
         signature.bind_static_shapes({"x": [8, 4]})
 
 
 def test_rank_mismatch_is_rejected():
     signature = KernelSignatureSpec((_spec("x", 0, [DYNAMIC, STATIC]),))
 
-    with pytest.raises(ValueError, match=r"parameter 'x'.*rank"):
+    with pytest.raises(InvalidType, match=r"parameter 'x'.*rank"):
         signature.bind_static_shapes({"x": [8]})
 
 

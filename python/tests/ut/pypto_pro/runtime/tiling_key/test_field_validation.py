@@ -10,6 +10,7 @@
 # -----------------------------------------------------------------------------------------------------------
 """TilingKeyField construction validation tests."""
 
+from pypto_pro._errors import InvalidType
 from pypto_pro.runtime.tilingkey import TilingKeyField, TilingKeySchema
 import pytest
 
@@ -34,7 +35,7 @@ def test_values_non_int_raises():
     class TkNonInt:
         OpType = TilingKeyField(bits=2, values=["a"])
 
-    with pytest.raises(ValueError, match="values must be ints"):
+    with pytest.raises(InvalidType, match="values must be ints"):
         TilingKeySchema(TkNonInt)
 
 

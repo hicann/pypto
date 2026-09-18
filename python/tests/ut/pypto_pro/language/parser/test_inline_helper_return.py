@@ -10,8 +10,8 @@
 # -----------------------------------------------------------------------------------------------------------
 
 from pypto_pro import ir
+from pypto_pro._errors import InvalidOperation, NameNotFound, PyptoProError
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError, UndefinedVariableError
 import pytest
 
 
@@ -354,7 +354,7 @@ def test_inline_helper_value_return_fallthrough_merges_conservative_none():
         if value > 0:
             return value
 
-    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
+    with pytest.raises(NameNotFound, match="Use of potentially undefined variable"):
 
         @pl.jit(auto_mutex=False)
         def caller(value: pl.DT_INT64):
@@ -381,7 +381,7 @@ def test_kernel_uses_runtime_tile_valid_shape_ir():
 
 @pytest.mark.parametrize("index", [True, 0.0, 2, -3])
 def test_tile_valid_shape_rejects_invalid_index(index):
-    with pytest.raises((ParserSyntaxError, ParserTypeError)):
+    with pytest.raises((PyptoProError, PyptoProError)):
         @pl.jit(auto_mutex=False)
         def invalid_valid_shape(_jit_entry: pl.DT_INT64):
             tile_type = pl.TileType(shape=[16, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
@@ -396,7 +396,7 @@ def test_vector_function_rejects_explicit_return():
     def invalid_vf():
         return
 
-    with pytest.raises(ParserSyntaxError, match="cannot contain return"):
+    with pytest.raises(InvalidOperation, match="cannot contain return"):
 
         @pl.jit(auto_mutex=False)
         def caller(value: pl.DT_INT64):
@@ -414,7 +414,7 @@ def test_vector_function_rejects_non_vector_helper_call():
     def invalid_vf(value):
         helper(value)
 
-    with pytest.raises(ParserSyntaxError, match="cannot call non-vector inline function 'helper'"):
+    with pytest.raises(InvalidOperation, match="cannot call non-vector inline function 'helper'"):
 
         @pl.jit(auto_mutex=False)
         def caller(value: pl.DT_INT64):

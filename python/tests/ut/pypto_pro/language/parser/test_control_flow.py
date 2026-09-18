@@ -11,8 +11,8 @@
 """Unit tests for control flow parsing (for loops, if statements)."""
 
 from pypto_pro import ir
+from pypto_pro._errors import InvalidVal, NameNotFound, NotSupported
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError, UndefinedVariableError
 import pytest
 
 
@@ -173,7 +173,7 @@ def test_dynamic_if_type_mismatch_is_deferred_until_use():
     if_stmt = next(stmt for stmt in unused_mismatch.body.stmts if isinstance(stmt, ir.IfStmt))
     assert isinstance(if_stmt.return_vars[0].type, ir.NoneType)
 
-    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
+    with pytest.raises(NameNotFound, match="Use of potentially undefined variable"):
 
         @pl.jit(auto_mutex=False)
         def used_mismatch(flag: pl.DT_BOOL):
@@ -200,7 +200,7 @@ def test_dynamic_if_parser_only_merge_is_deferred_until_use():
     if_stmt = next(stmt for stmt in unused_func.body.stmts if isinstance(stmt, ir.IfStmt))
     assert isinstance(if_stmt.return_vars[0].type, ir.NoneType)
 
-    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
+    with pytest.raises(NameNotFound, match="Use of potentially undefined variable"):
 
         @pl.jit(auto_mutex=False)
         def used_parser_value(flag: pl.DT_BOOL):
@@ -230,7 +230,7 @@ def test_dynamic_if_missing_binding_uses_none_type_input():
 
 
 def test_none_type_binding_is_rejected_when_used():
-    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
+    with pytest.raises(NameNotFound, match="Use of potentially undefined variable"):
 
         @pl.jit(auto_mutex=False)
         def func(_jit_entry: pl.DT_INT64):
@@ -258,7 +258,7 @@ def test_dynamic_if_nested_tile_group_merge_is_deferred_until_use():
     if_stmt = next(stmt for stmt in func_ir.body.stmts if isinstance(stmt, ir.IfStmt))
     assert isinstance(if_stmt.return_vars[0].type, ir.NoneType)
 
-    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
+    with pytest.raises(NameNotFound, match="Use of potentially undefined variable"):
 
         @pl.jit(auto_mutex=False)
         def used_tile_group(flag: pl.DT_BOOL):
@@ -288,7 +288,7 @@ def test_dynamic_loop_parser_only_merge_is_deferred_until_use():
     for_stmt = next(stmt for stmt in unused_func.body.stmts if isinstance(stmt, ir.ForStmt))
     assert isinstance(for_stmt.return_vars[0].type, ir.NoneType)
 
-    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
+    with pytest.raises(NameNotFound, match="Use of potentially undefined variable"):
 
         @pl.jit(auto_mutex=False)
         def used_parser_value(_jit_entry: pl.DT_INT64):
@@ -448,7 +448,7 @@ def test_if_both_branches_jump_stops_enclosing_statement_list():
 
 
 def test_break_type_conflict_fails_eagerly():
-    with pytest.raises(ParserTypeError, match="Inconsistent types in control flow"):
+    with pytest.raises(InvalidVal, match="Inconsistent types in control flow"):
 
         @pl.jit(auto_mutex=False)
         def func(n: pl.DT_INT64):
@@ -463,7 +463,7 @@ def test_break_type_conflict_fails_eagerly():
 
 
 def test_continue_type_conflict_fails_eagerly():
-    with pytest.raises(ParserTypeError, match="Inconsistent types in control flow"):
+    with pytest.raises(InvalidVal, match="Inconsistent types in control flow"):
 
         @pl.jit(auto_mutex=False)
         def func(n: pl.DT_INT64):
@@ -498,7 +498,7 @@ def test_while_body_and_result_types_are_independent():
 
 
 def test_while_body_type_conflict_fails_eagerly_after_valid_iter_use():
-    with pytest.raises(ParserTypeError, match="Inconsistent types in control flow"):
+    with pytest.raises(InvalidVal, match="Inconsistent types in control flow"):
 
         @pl.jit(auto_mutex=False)
         def func(flag: pl.DT_BOOL):
@@ -631,7 +631,7 @@ def test_if_merges_named_tuples_with_the_same_fields():
 
 
 def test_if_rejects_plain_and_named_tuple_with_equal_element_types():
-    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
+    with pytest.raises(NameNotFound, match="Use of potentially undefined variable"):
 
         @pl.jit(auto_mutex=False)
         def func(flag: pl.DT_BOOL, value: pl.DT_INT64):
@@ -646,7 +646,7 @@ def test_if_rejects_plain_and_named_tuple_with_equal_element_types():
 
 
 def test_if_rejects_named_tuples_with_different_fields():
-    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
+    with pytest.raises(NameNotFound, match="Use of potentially undefined variable"):
 
         @pl.jit(auto_mutex=False)
         def func(flag: pl.DT_BOOL, value: pl.DT_INT64):
@@ -678,7 +678,7 @@ def test_if_merges_structs_with_the_same_name_and_fields():
 
 
 def test_if_rejects_structs_with_different_names():
-    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
+    with pytest.raises(NameNotFound, match="Use of potentially undefined variable"):
 
         @pl.jit(auto_mutex=False)
         def func(flag: pl.DT_BOOL, value: pl.DT_INT64):
@@ -693,7 +693,7 @@ def test_if_rejects_structs_with_different_names():
 
 
 def test_if_rejects_nested_tuple_with_different_inner_tuple_kinds():
-    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
+    with pytest.raises(NameNotFound, match="Use of potentially undefined variable"):
 
         @pl.jit(auto_mutex=False)
         def func(flag: pl.DT_BOOL, value: pl.DT_INT64):
@@ -708,7 +708,7 @@ def test_if_rejects_nested_tuple_with_different_inner_tuple_kinds():
 
 
 def test_for_rejects_tuple_kind_change_in_loop_carry():
-    with pytest.raises(ParserTypeError, match="Inconsistent types in control flow"):
+    with pytest.raises(InvalidVal, match="Inconsistent types in control flow"):
 
         @pl.jit(auto_mutex=False)
         def func(value: pl.DT_INT64):
@@ -721,7 +721,7 @@ def test_for_rejects_tuple_kind_change_in_loop_carry():
 
 
 def test_while_rejects_tuple_kind_change_in_loop_carry():
-    with pytest.raises(ParserTypeError, match="Inconsistent types in control flow"):
+    with pytest.raises(InvalidVal, match="Inconsistent types in control flow"):
 
         @pl.jit(auto_mutex=False)
         def func(value: pl.DT_INT64):
@@ -1105,7 +1105,7 @@ def test_for_else_is_rejected_before_loop_parsing():
         else:
             pass
 
-    with pytest.raises(ParserSyntaxError, match="'for-else' is not supported"):
+    with pytest.raises(NotSupported, match="'for-else' is not supported"):
         invalid_for_else.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -1117,7 +1117,7 @@ def test_while_else_is_rejected_before_loop_parsing():
         else:
             pass
 
-    with pytest.raises(ParserSyntaxError, match="'while-else' is not supported"):
+    with pytest.raises(NotSupported, match="'while-else' is not supported"):
         invalid_while_else.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 

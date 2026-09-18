@@ -18,6 +18,8 @@ __all__ = ["Ptr"]
 
 from pypto.pypto_impl.ir import DataType, Expr
 
+from ..._errors import CommonInner, InvalidOperation, InvalidType
+
 
 class Ptr:
     """Pointer type for PyPTO Language DSL.
@@ -57,7 +59,7 @@ class Ptr:
         """
         if _annotation_only:
             if dtype is None:
-                raise ValueError("dtype is required for annotation mode")
+                raise InvalidType("dtype is required for annotation mode")
             self.dtype = dtype
             self.expr = None
             self._annotation_only = True
@@ -66,7 +68,7 @@ class Ptr:
             self.dtype = None
             self._annotation_only = False
         else:
-            raise ValueError("Either dtype (for annotation) or expr (for runtime) must be provided")
+            raise InvalidType("Either dtype (for annotation) or expr (for runtime) must be provided")
 
     def __repr__(self) -> str:
         """Return string representation."""
@@ -89,7 +91,7 @@ class Ptr:
             RuntimeError: If this is an annotation-only instance
         """
         if self._annotation_only:
-            raise RuntimeError("Cannot unwrap annotation-only Ptr")
+            raise InvalidOperation("Cannot unwrap annotation-only Ptr")
         if self.expr is None:
-            raise RuntimeError("No expression to unwrap")
+            raise CommonInner("No expression to unwrap")
         return self.expr

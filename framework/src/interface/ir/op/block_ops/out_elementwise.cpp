@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "core/logging.h"
+#include "pypto_pro/error.h"
 #include "ir/kind_traits.h"
 #include "ir/op_registry.h"
 #include "ir/type.h"
@@ -38,6 +39,7 @@
 
 namespace pypto {
 namespace ir {
+using npu::tile_fwk::ExternalError;
 
 // ---------------------------------------------------------------------------
 // Shared type deduction helpers
@@ -46,15 +48,17 @@ namespace ir {
 // Validate that args[idx] is TileType.
 static void CheckTileArg([[maybe_unused]] const std::vector<ExprPtr>& args, size_t idx, const std::string& op_name)
 {
-    CHECK(As<TileType>(args[idx]->GetType())) << "The operator " << op_name << " requires argument " << idx
-                                              << " to be TileType, but got " << args[idx]->GetType()->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, As<TileType>(args[idx]->GetType()))
+        << "The operator " << op_name << " requires argument " << idx << " to be TileType, but got "
+        << args[idx]->GetType()->TypeName();
 }
 
 // Validate that args[idx] is ScalarType.
 static void CheckScalarArg([[maybe_unused]] const std::vector<ExprPtr>& args, size_t idx, const std::string& op_name)
 {
-    CHECK(As<ScalarType>(args[idx]->GetType())) << "The operator " << op_name << " requires argument " << idx
-                                                << " to be ScalarType, but got " << args[idx]->GetType()->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, As<ScalarType>(args[idx]->GetType()))
+        << "The operator " << op_name << " requires argument " << idx << " to be ScalarType, but got "
+        << args[idx]->GetType()->TypeName();
 }
 
 // Type deduction for (out:TileType, TileType, TileType) -> out.
@@ -62,7 +66,8 @@ static TypePtr DeduceBlockOutBinaryTile([[maybe_unused]] const std::vector<ExprP
                                         [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs,
                                         const std::string& op_name)
 {
-    CHECK(args.size() == 0x3) << op_name << " requires 3 arguments (out, lhs, rhs)";
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 0x3)
+        << op_name << " requires 3 arguments (out, lhs, rhs)";
     CheckTileArg(args, 1, op_name); // NOLINT: lhs index
     CheckTileArg(args, 2, op_name); // NOLINT: rhs index
     return DeduceBlockOutTileType(args, kwargs, op_name, 0x3);
@@ -73,7 +78,8 @@ static TypePtr DeduceBlockOutBinaryScalar([[maybe_unused]] const std::vector<Exp
                                           [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs,
                                           const std::string& op_name)
 {
-    CHECK(args.size() == 0x3) << op_name << " requires 3 arguments (out, tile, scalar)";
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 0x3)
+        << op_name << " requires 3 arguments (out, tile, scalar)";
     CheckTileArg(args, 1, op_name);   // NOLINT: lhs index
     CheckScalarArg(args, 2, op_name); // NOLINT: rhs index
     return DeduceBlockOutTileType(args, kwargs, op_name, 0x3);
@@ -84,7 +90,7 @@ static TypePtr DeduceBlockOutUnary([[maybe_unused]] const std::vector<ExprPtr>& 
                                    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs,
                                    const std::string& op_name)
 {
-    CHECK(args.size() == 0x2) << op_name << " requires 2 arguments (out, src)";
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 0x2) << op_name << " requires 2 arguments (out, src)";
     CheckTileArg(args, 1, op_name);
     return DeduceBlockOutTileType(args, kwargs, op_name, 0x2);
 }
@@ -236,7 +242,8 @@ REGISTER_OP("block.gather")
         if (args.size() == 5) {
             return DeduceBlockOutTileType(args, kwargs, "block.gather", 5);
         }
-        throw std::runtime_error("block.gather: expected index form (3-4 args) or compare form (5 args + cmp_mode)");
+        PRO_IR_THROW(std::runtime_error, ExternalError::INVALID_ARGUMENT)
+            << "block.gather: expected index form (3-4 args) or compare form (5 args + cmp_mode)";
     });
 
 // block.gatherb: (out, src_tile, offsets_tile) -> out's type
@@ -473,10 +480,10 @@ REGISTER_OP("block.quant")
     .set_attr<int>("mode")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        CHECK(args.size() == 3 || args.size() == 4)
+        PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 3 || args.size() == 4)
             << "block.quant requires 3 args (sym) or 4 args (asym), got " << args.size();
         auto out_type = As<TileType>(args.front()->GetType());
-        CHECK(out_type) << "block.quant: first argument (out) must be TileType";
+        PRO_IR_CHECK(ExternalError::INVALID_TYPE, out_type) << "block.quant: first argument (out) must be TileType";
         return out_type;
     });
 

@@ -36,6 +36,8 @@ from pypto.pypto_impl import ir
 from pypto.pypto_impl.ir import DataType
 from pypto_pro.language.parser.diagnostics import check_in_range
 
+from ..._errors import InvalidArgument, InvalidOperation, InvalidType, message_of
+
 # Largest fixed-size array a tiling class field may declare.
 _MAX_ARRAY_SIZE = 2048
 
@@ -71,31 +73,31 @@ def _parse_field_annotation(annotation: object) -> FieldInfo:
     if isinstance(annotation, type) and annotation in _PYTHON_TYPE_TO_DTYPE:
         return ScalarFieldInfo(dtype=_PYTHON_TYPE_TO_DTYPE[annotation])
     if not isinstance(annotation, str):
-        raise TypeError("expected int, float, bool, or T[N]")
+        raise InvalidType("expected int, float, bool, or T[N]")
 
     try:
         expression = ast.parse(annotation, mode="eval").body
     except SyntaxError as exc:
-        raise ValueError(f"invalid annotation syntax {annotation!r}") from exc
+        raise InvalidArgument(f"invalid annotation syntax {annotation!r}") from exc
 
     if isinstance(expression, ast.Name):
         dtype = _PYTHON_TYPE_NAME_TO_TYPE.get(expression.id)
         if dtype is None:
-            raise TypeError(f"unsupported scalar type {expression.id!r}")
+            raise InvalidType(f"unsupported scalar type {expression.id!r}")
         return ScalarFieldInfo(dtype=_PYTHON_TYPE_TO_DTYPE[dtype])
 
     if not isinstance(expression, ast.Subscript) or not isinstance(expression.value, ast.Name):
-        raise TypeError("expected a scalar type or fixed-array annotation T[N]")
+        raise InvalidType("expected a scalar type or fixed-array annotation T[N]")
     dtype = _PYTHON_TYPE_NAME_TO_TYPE.get(expression.value.id)
     if dtype is None:
-        raise TypeError(f"array element type must be int, float, or bool, got {expression.value.id!r}")
+        raise InvalidType(f"array element type must be int, float, or bool, got {expression.value.id!r}")
     size_node = expression.slice
     if not isinstance(size_node, ast.Constant):
-        raise ValueError("array size must be a positive integer literal")
+        raise InvalidType("array size must be a positive integer literal")
     if not isinstance(size_node.value, int) or isinstance(size_node.value, bool) or size_node.value <= 0:
-        raise ValueError("array size must be a positive integer literal")
+        raise InvalidType("array size must be a positive integer literal")
     size = size_node.value
-    check_in_range(size, 1, _MAX_ARRAY_SIZE, subject="array size", error=ValueError)
+    check_in_range(size, 1, _MAX_ARRAY_SIZE, subject="array size")
     return ArrayFieldInfo(dtype=_PYTHON_TYPE_TO_DTYPE[dtype], size=size)
 
 
@@ -150,7 +152,7 @@ def _check_duplicate_annotations(cls: type) -> None:
                 seen: set[str] = set()
                 for name in ann_names:
                     if name in seen:
-                        raise ValueError(
+                        raise InvalidOperation(
                             f"Tiling class '{cls.__name__}' has duplicate field '{name}'. "
                             f"All field names must be unique."
                         )
@@ -171,16 +173,18 @@ def get_tiling_fields(cls: type) -> dict[str, FieldInfo]:
         ValueError: If cls is not a valid tiling class
     """
     if not isinstance(cls, type) or not is_dataclass(cls):
-        raise ValueError(f"Not a valid tiling class: {cls!r}. Expected a dataclass.")
+        raise InvalidArgument(f"Not a valid tiling class: {cls!r}. Expected a dataclass.")
     annotations = getattr(cls, "__annotations__", {})
     if not annotations:
-        raise ValueError(f"Not a valid tiling class: {cls!r}. At least one field is required.")
+        raise InvalidArgument(f"Not a valid tiling class: {cls!r}. At least one field is required.")
     result: dict[str, FieldInfo] = {}
     for name, annotation in annotations.items():
         try:
             result[name] = _parse_field_annotation(annotation)
         except (TypeError, ValueError) as exc:
-            raise ValueError(f"Invalid tiling field {name!r} annotation {annotation!r}: {exc}") from exc
+            raise InvalidArgument(
+                f"Invalid tiling field {name!r} annotation {annotation!r}: {message_of(exc)}"
+            ) from exc
     return result
 
 
@@ -204,7 +208,7 @@ def _field_ctype(dtype: DataType) -> type:
 
     ctype = _PL_DTYPE_TO_CTYPE.get(str(dtype))
     if ctype is None:
-        raise TypeError(f"No ctypes mapping for tiling field dtype {dtype}")
+        raise InvalidType(f"No ctypes mapping for tiling field dtype {dtype}")
     return ctype
 
 
@@ -247,12 +251,12 @@ def tiling_instance_to_bytes(instance: object) -> bytes:
                 or not hasattr(val, "__getitem__")
                 or not hasattr(val, "__len__")
             ):
-                raise TypeError(
+                raise InvalidType(
                     f"Tiling field '{name}' is T[{info.size}]: expected an indexable "
                     f"sequence, got {type(val).__name__!r}"
                 )
             if len(val) != info.size:
-                raise ValueError(f"Tiling field '{name}' expected {info.size} elements, got {len(val)}")
+                raise InvalidType(f"Tiling field '{name}' expected {info.size} elements, got {len(val)}")
             base = _field_ctype(info.dtype)
             values.append((base * info.size)(*[val[i] for i in range(info.size)]))
         else:
