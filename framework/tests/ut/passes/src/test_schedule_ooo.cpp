@@ -1524,8 +1524,7 @@ TEST_F(ScheduleOoOTest, TestSpillWalkUpThroughSkipOps)
     ASSERT_EQ(scheduler.spillEngine_.CollectWalkUpSources(graph.GetTensor("l1"), plan), SUCCESS);
     graph.AddTensor(DT_FP32, {8, 64}, MEM_DEVICE_DDR, "mirror");
     SpillContext ctx;
-    SingleSpillCreatedOps created;
-    ASSERT_EQ(scheduler.spillEngine_.SaveSourcesToDDR(plan.sources, graph.GetTensor("mirror"), ctx, created), SUCCESS);
+    ASSERT_EQ(scheduler.spillEngine_.SaveSourcesToDDR(graph.GetTensor("mirror"), ctx, plan), SUCCESS);
     auto* copyout = *graph.GetTensor("mirror")->GetProducers().begin();
     EXPECT_EQ(copyout->GetInputOperand(0), graph.GetTensor("viewType"));
 
