@@ -33,32 +33,28 @@ int64_t AlignmentUtils::GetLastDimAlignBase(const LogicalTensorPtr& tensor)
     if (tensor == nullptr || tensor->tensor == nullptr) {
         return 0;
     }
-    auto bytes = static_cast<int64_t>(BytesOf(tensor->Datatype()));
-    if (bytes <= 0) {
+    constexpr int64_t blockBits = 32 * 8;
+    auto bits = BitsOf(tensor->Datatype());
+    if (blockBits % bits != 0) {
         return 0;
     }
-    auto iter = BLOCK_PADDING_DIM.find(static_cast<size_t>(bytes));
-    if (iter == BLOCK_PADDING_DIM.end()) {
-        return 1;
-    }
-    return iter->second;
+    return blockBits / bits;
 }
 
 bool AlignmentUtils::IsLastDim32BAligned(const LogicalTensorPtr& tensor)
 {
-    constexpr int64_t k32BAlignmentBytes = 32; // 32B 对齐粒度
     if (!IsValidForLastDimCheck(tensor)) {
         return false;
     }
-    auto bytes = static_cast<int64_t>(BytesOf(tensor->Datatype()));
-    if (bytes <= 0) {
+    auto alignBase = GetLastDimAlignBase(tensor);
+    if (alignBase <= 0) {
         return false;
     }
     auto lastDim = tensor->shape.back();
     if (lastDim <= 0) {
         return false;
     }
-    return ((lastDim * bytes) % k32BAlignmentBytes) == 0;
+    return lastDim % alignBase == 0;
 }
 
 int64_t AlignmentUtils::Pad(int64_t dim, int64_t padValue)
@@ -97,7 +93,9 @@ size_t AlignmentUtils::GetLastDimBytes(const LogicalTensorPtr& tensor)
     if (rawshape.empty()) {
         return 0;
     }
-    return rawshape.back() * BytesOf(tensor->GetRawTensor()->GetDataType());
+    constexpr int64_t byteBits = 8;
+    auto bits = BitsOf(tensor->GetRawTensor()->GetDataType());
+    return static_cast<size_t>((rawshape.back() * bits + byteBits - 1) / byteBits);
 }
 
 int64_t AlignmentUtils::PadRowDim(int64_t dim, int64_t padValue) { return dim + padValue - 1; }

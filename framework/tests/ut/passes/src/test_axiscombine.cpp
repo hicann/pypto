@@ -302,3 +302,45 @@ TEST_F(TestAxisCombine, MoveAssembleConsumerTokenToInsertedOp)
     runCase(false, Opcode::OP_BRCB);
     runCase(true, Opcode::OP_EXPAND);
 }
+
+// 看护：广播输入 pad 基数随 dtype 变化（GetPaddingValue 委托 AlignmentUtils::GetLastDimAlignBase）
+TEST_F(TestAxisCombine, BroadcastPadBaseFollowsDtype)
+{
+    auto runCase = [](DataType dtype, int64_t expectBase) {
+        Program::GetInstance().Reset();
+        config::Reset();
+        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
+
+        ComputationalGraphBuilder graph;
+        EXPECT_EQ(graph.AddTensor(dtype, {4, 127}, "t1"), true);
+        EXPECT_EQ(graph.AddTensor(dtype, {4, 1}, "t2"), true);
+        EXPECT_EQ(graph.AddTensor(dtype, {4, 127}, "t3"), true);
+        std::vector<Opcode> opCodes{Opcode::OP_ADD};
+        std::vector<std::vector<std::string>> ioperands{{"t1", "t2"}};
+        std::vector<std::vector<std::string>> ooperands{{"t3"}};
+        std::vector<std::string> opNames{"add"};
+        EXPECT_EQ(graph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+
+        auto* rootFuncPtr = graph.GetFunction();
+        rootFuncPtr->paramConfigs_.combineAxis = true;
+        AxisCombine pass;
+        EXPECT_EQ(pass.RunOnFunction(*rootFuncPtr), SUCCESS);
+
+        int64_t brcbCnt = 0;
+        for (const auto& op : rootFuncPtr->Operations()) {
+            if (op.GetOpcode() == Opcode::OP_BRCB) {
+                ++brcbCnt;
+            }
+            if (op.HasAttr(OpAttributeKey::brcbIdx)) {
+                auto idx = op.GetIntAttribute(OpAttributeKey::brcbIdx) - 1;
+                auto tensor = op.GetIOperands()[idx];
+                EXPECT_TRUE(tensor != nullptr);
+                EXPECT_EQ(tensor->shape[0], K_4);
+                EXPECT_EQ(tensor->shape[1], expectBase);
+            }
+        }
+        EXPECT_EQ(brcbCnt, K_1);
+    };
+    runCase(DataType::DT_BF16, K_16);
+    runCase(DataType::DT_INT8, K_32);
+}
