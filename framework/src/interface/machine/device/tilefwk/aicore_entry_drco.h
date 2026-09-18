@@ -303,17 +303,13 @@ INLINE __gm__ DrcoDeviceTask* GetCurrentDeviceTask(__gm__ DrcoDeviceTaskReadyQue
     return nullptr;
 }
 
-INLINE uint32_t DrcoAtomicResolveDependOnce(__gm__ int32_t* ptr)
+template <typename T, T SENTINEL, T DEC>
+INLINE T DrcoAtomicResolveDependOnce(__gm__ T* ptr)
 {
-    uint32_t ptrValue = static_cast<uint32_t>(atomicAdd(ptr, -1));
-    if (ptrValue == 1 || atomicCAS(ptr, 0, 0) == 0) {
-        uint32_t result = static_cast<uint32_t>(atomicCAS(ptr, 0, 0xffff));
-        if (result == 0) {
-            return 1;
-        }
-        return 0;
+    if (*ptr == SENTINEL) {
+        return SENTINEL;
     }
-    return ptrValue;
+    return static_cast<T>(atomicAdd(ptr, DEC));
 }
 
 // ==================== LocalReadyMatrix 原语：push 遍历一行 / pop 遍历一列 ====================
@@ -814,12 +810,26 @@ INLINE void DrcoResolveStitchNodeTasks(DrcoEntryState* state, __gm__ npu::tile_f
         uint32_t succOpIdx = npu::tile_fwk::TaskID(succTaskId);
         auto* succFuncData = &state->ctx.cachedDevTaskCurr->funcDataList[succFuncId];
         __gm__ npu::tile_fwk::DrcoRootFuncData* succRootFuncData = &succFuncData->drcoRootFuncData;
-        int32_t old = DrcoAtomicResolveDependOnce(&succRootFuncData->predCount[succOpIdx]);
+        int32_t old = DrcoAtomicResolveDependOnce<int32_t, 1, -1>(&succRootFuncData->predCount[succOpIdx]);
         if (old == 1) {
             DrcoResolveDependOnce(state, rootFuncList, succTaskId, hubStack, hubStackTop, succTaskIdListCoreList,
                                   succTaskIdListSizeCoreList);
         }
     }
+}
+
+// Fire a claimed successor: decode the drco-encoded entry into a taskId and route it
+// through the full DrcoResolveDependOnce path (incl. hub handling).
+INLINE void DrcoFireEncodedSucc(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                                uint32_t funcIdx, uint32_t succEncoded, uint32_t hubStack[], int32_t& hubStackTop,
+                                uint32_t succTaskIdListCoreList[][BATCH_PUSH_BUF_SIZE],
+                                uint32_t succTaskIdListSizeCoreList[])
+{
+    uint32_t succOpIdx = succEncoded & TASKID_TASK_MASK;
+    uint32_t succCoreType = (succEncoded >> npu::tile_fwk::TASKID_DRCO_CT_SHIFT) & npu::tile_fwk::TASKID_DRCO_CT_MASK;
+    uint32_t succTaskId = npu::tile_fwk::MakeDrcoTaskId(funcIdx, succOpIdx, succCoreType);
+    DrcoResolveDependOnce(state, rootFuncList, succTaskId, hubStack, hubStackTop, succTaskIdListCoreList,
+                          succTaskIdListSizeCoreList);
 }
 
 INLINE void DrcoResolveDepend(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
@@ -846,16 +856,36 @@ INLINE void DrcoResolveDepend(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoR
         uint16_t staticIndex = succInfo->staticIndex;
         uint16_t staticSize = succInfo->staticSize;
         TraceEvent(state, curTaskId, EVENT_SUCC_STATIC(staticSize));
-        for (uint16_t i = staticIndex; i < staticIndex + staticSize; i++) {
+        uint16_t i = staticIndex;
+        const uint16_t staticEnd = staticIndex + staticSize;
+        while (i < staticEnd) {
             uint32_t succEncoded = succStaticList[i];
             uint32_t succOpIdx = succEncoded & TASKID_TASK_MASK;
-            int32_t old = DrcoAtomicResolveDependOnce(&predCount[succOpIdx]);
-            if (old == 1) {
-                uint32_t succCoreType = (succEncoded >> npu::tile_fwk::TASKID_DRCO_CT_SHIFT) &
-                                        npu::tile_fwk::TASKID_DRCO_CT_MASK;
-                uint32_t succTaskId = npu::tile_fwk::MakeDrcoTaskId(funcIdx, succOpIdx, succCoreType);
-                DrcoResolveDependOnce(state, rootFuncList, succTaskId, hubStack, hubStackTop, succTaskIdListCoreList,
-                                      succTaskIdListSizeCoreList);
+            if ((succEncoded & npu::tile_fwk::DRCO_SUCC_PAIR_BIT) != 0) {
+                // Pair entry: even-aligned (2k, 2k+1) successors share one u64 predCount slot,
+                // decremented together by one atomicAdd. Exactly-once edge resolution keeps each half
+                // >= 1 until its final decrement, so the packed subtract never borrows across halves;
+                // fire each half whose old count was 1 (the unique zero-crossing resolver).
+                uint32_t nextEncoded = succStaticList[i + 1];
+                __gm__ uint64_t* slot = reinterpret_cast<__gm__ uint64_t*>(&predCount[succOpIdx]);
+                uint64_t old = DrcoAtomicResolveDependOnce<uint64_t, npu::tile_fwk::DRCO_SUCC_PAIR_BOTH_ONE,
+                                                           npu::tile_fwk::DRCO_SUCC_PAIR_DEC>(slot);
+                if (static_cast<uint32_t>(old) == 1u) {
+                    DrcoFireEncodedSucc(state, rootFuncList, funcIdx, succEncoded, hubStack, hubStackTop,
+                                        succTaskIdListCoreList, succTaskIdListSizeCoreList);
+                }
+                if (static_cast<uint32_t>(old >> 32) == 1u) {
+                    DrcoFireEncodedSucc(state, rootFuncList, funcIdx, nextEncoded, hubStack, hubStackTop,
+                                        succTaskIdListCoreList, succTaskIdListSizeCoreList);
+                }
+                i += 2;
+            } else {
+                int32_t old = DrcoAtomicResolveDependOnce<int32_t, 1, -1>(&predCount[succOpIdx]);
+                if (old == 1) {
+                    DrcoFireEncodedSucc(state, rootFuncList, funcIdx, succEncoded, hubStack, hubStackTop,
+                                        succTaskIdListCoreList, succTaskIdListSizeCoreList);
+                }
+                i += 1;
             }
         }
 
@@ -1028,7 +1058,7 @@ INLINE void DrcoStitchNodeMatrixPopResolve(DrcoEntryState* state, __gm__ npu::ti
             uint32_t succOpIdx = npu::tile_fwk::TaskID(succTaskId);
             auto* succFuncData = &state->ctx.cachedDevTaskCurr->funcDataList[succFuncId];
             __gm__ npu::tile_fwk::DrcoRootFuncData* succRootFuncData = &succFuncData->drcoRootFuncData;
-            int32_t old = DrcoAtomicResolveDependOnce(&succRootFuncData->predCount[succOpIdx]);
+            int32_t old = DrcoAtomicResolveDependOnce<int32_t, 1, -1>(&succRootFuncData->predCount[succOpIdx]);
             if (old == 1) {
                 DrcoResolveDependOnceCore(state, rootFuncList, succTaskId, succTaskIdListCoreList,
                                           succTaskIdListSizeCoreList);

@@ -653,12 +653,20 @@ void DevAscendFunction::PopulateOperationEncodedContent(
     int staticAttributeSize = 0;
     int sucSize = 0;
     int copyOutResolveSuccIdxSize = 0;
+    std::vector<uint32_t> drcoSuccScratch;
+    uint64_t drcoPairCnt = 0;
+    uint64_t drcoSuccCnt = 0;
     for (size_t index = 0; index < callList.size(); index++) {
         PopulateOneEncodedOpOperandsAndAttrs(index, operanSize, staticAttributeSize, expressionTable, callList, tlist,
                                              rawList, calleeHashIndexDict, stitchIndexList);
         PopulateOneEncodedOpGraphEdges(index, sucSize, copyOutResolveSuccIdxSize, callList, callOpSuccDict,
                                        copyOutResolveSuccIndexListDict, stitchIndexList, calleeHashIndexDict,
-                                       cceCodeInfoList, dupData);
+                                       cceCodeInfoList, dupData, drcoSuccScratch, drcoPairCnt, drcoSuccCnt);
+    }
+    if (drcoSuccCnt > 0) {
+        MACHINE_LOGI("DrcoSuccPair: staticEdges=%llu, pairedEdges=%llu, atomicSaved=%llu (%.1f%%)",
+                     static_cast<unsigned long long>(drcoSuccCnt), static_cast<unsigned long long>(drcoPairCnt * 2),
+                     static_cast<unsigned long long>(drcoPairCnt), drcoPairCnt * 200.0 / drcoSuccCnt);
     }
 }
 
@@ -738,7 +746,8 @@ void DevAscendFunction::PopulateOneEncodedOpGraphEdges(
     const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
     const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict,
     const std::vector<int32_t>& stitchIndexList, const std::unordered_map<uint64_t, int>& calleeHashIndexDict,
-    const std::vector<CceCodeInfo>& cceCodeInfoList, DevAscendFunctionDuppedData* dupData)
+    const std::vector<CceCodeInfo>& cceCodeInfoList, DevAscendFunctionDuppedData* dupData,
+    std::vector<uint32_t>& drcoSuccScratch, uint64_t& drcoPairCnt, uint64_t& drcoSuccCnt)
 {
     Operation* op = callList[index];
     DevAscendOperation& staticField = At(operationList_, index);
@@ -751,6 +760,12 @@ void DevAscendFunction::PopulateOneEncodedOpGraphEdges(
     succInfo.stitchIndex = stitchIndexList[index];
 
     staticField.depGraphSuccList.AssignRangeOffsetSize(operationSuccList_, sucSize, opSuccSize);
+    // The DRCO succ segment is sorted by succ opIdx (depGraphSuccList keeps dict order: it feeds the
+    // AICPU/DRCU resolve and the dyn_topo dump). Sorting groups (2k, 2k+1) successors adjacently so
+    // the device resolve can decrement both packed predCount halves with one u64 atomicAdd; the
+    // first entry of each pair carries DRCO_SUCC_PAIR_BIT (aikernel_data.h: entry bits 16-28 are free).
+    drcoSuccScratch.clear();
+    drcoSuccScratch.reserve(static_cast<size_t>(opSuccSize));
     for (int k = 0; k < opSuccSize; k++) {
         uint32_t succ = callList.GetIndex(callOpSuccDict.find(op)->second[k]);
         At(staticField.depGraphSuccList, k) = succ;
@@ -766,11 +781,28 @@ void DevAscendFunction::PopulateOneEncodedOpGraphEdges(
             ASSERT(DevCommonErr::PARAM_INVALID, npu::tile_fwk::IsValidDrcoCoreType(succCoreType))
                 << "DRCO successor coreType " << succCoreType << " (succ op " << succ << ") is not consumable";
         }
-        At(drcoEncodedSuccList_, sucSize + k) = static_cast<int32_t>(
-            npu::tile_fwk::EncodeDrcoCoreType(static_cast<uint32_t>(succ), succCoreType));
+        drcoSuccScratch.push_back(npu::tile_fwk::EncodeDrcoCoreType(succ, succCoreType));
         At(operationList_, succ).depGraphPredCount++;
         dupData->GetOperationCurrPredCount(succ)++;
     }
+    // Sort by opIdx only: coreType lives in the high bits and would break opIdx adjacency.
+    std::sort(drcoSuccScratch.begin(), drcoSuccScratch.end(),
+              [](uint32_t lhs, uint32_t rhs) { return (lhs & TASKID_TASK_MASK) < (rhs & TASKID_TASK_MASK); });
+    for (size_t k = 0; k < drcoSuccScratch.size();) {
+        uint32_t curOpIdx = drcoSuccScratch[k] & TASKID_TASK_MASK;
+        if (k + 1 < drcoSuccScratch.size() && (curOpIdx & 1u) == 0u &&
+            (drcoSuccScratch[k + 1] & TASKID_TASK_MASK) == curOpIdx + 1u) {
+            At(drcoEncodedSuccList_, sucSize + static_cast<int>(k)) = static_cast<int32_t>(
+                drcoSuccScratch[k] | npu::tile_fwk::DRCO_SUCC_PAIR_BIT);
+            At(drcoEncodedSuccList_, sucSize + static_cast<int>(k) + 1) = static_cast<int32_t>(drcoSuccScratch[k + 1]);
+            drcoPairCnt++;
+            k += 2;
+        } else {
+            At(drcoEncodedSuccList_, sucSize + static_cast<int>(k)) = static_cast<int32_t>(drcoSuccScratch[k]);
+            k += 1;
+        }
+    }
+    drcoSuccCnt += static_cast<uint64_t>(opSuccSize);
     sucSize += opSuccSize;
 
     const std::vector<int>& copyOutResolveSuccIndexList = copyOutResolveSuccIndexListDict.find(op)->second;

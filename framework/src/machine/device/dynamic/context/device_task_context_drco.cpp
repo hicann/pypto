@@ -204,6 +204,12 @@ void DeviceTaskContext::BuildDrcoRootFuncData(DynFuncData* dyndata, DevAscendFun
     WsAllocation predAlloc = ControlFlowAllocateSlab(
         devProg_, drcoPredCountSize, workspace_->SlabAlloc(drcoPredCountSize, WsAicpuSlabMemType::PRED_COUNT));
     int32_t* aicorePredCount = predAlloc.As<int32_t>();
+    // DRCO pair resolve does u64 atomicAdd on &predCount[even opIdx] (aikernel_data.h). The slab
+    // allocator's 64B granularity keeps the base 64B aligned so even slots stay 8B aligned; an
+    // unaligned base would fault the hardware atomic, so guard the implicit contract here.
+    DEV_ASSERT_MSG(ProgEncodeErr::DYNFUNC_DATA_ALIGNMENT_ERROR, (predAlloc.ptr % 8ULL) == 0,
+                   "#drco.predcount.align: base=%llu is not 8B aligned",
+                   static_cast<unsigned long long>(predAlloc.ptr));
     for (uint32_t i = 0; i < opSize; ++i) {
         aicorePredCount[i] = static_cast<int32_t>(stitchedFunc.GetOperationCurrPredCount(i));
     }

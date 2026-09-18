@@ -74,6 +74,21 @@ INLINE uint32_t EncodeDrcoCoreType(uint32_t taskId, uint32_t coreType)
     return taskId | (coreType << TASKID_DRCO_CT_SHIFT);
 }
 
+/* DRCO-only: successor-table pairing. Entry bits 16-28 are free in the drco-encoded succ table
+ * (entries are per-func opIdx, not full taskIds). Bit16 on an entry marks "this entry and the next
+ * one are an even-aligned (2k, 2k+1) opIdx pair" (set at encode after a per-segment sort), so the
+ * device resolve can decrement both packed predCount halves with one u64 atomicAdd. The even
+ * alignment keeps the u64 slot naturally aligned: an odd start would both fault the hardware
+ * atomic and overlap neighbouring pair domains without atomicity. Runtime pairing degrades
+ * gracefully: entries without the bit take the original 32-bit path. */
+constexpr uint32_t DRCO_SUCC_PAIR_BIT = 1u << 16;
+/* u64 addend = -(1 | 1<<32): subtracts 1 from each 32-bit half of a packed predCount pair slot.
+ * Valid only while neither half underflows (each pred edge resolves exactly once). */
+constexpr uint64_t DRCO_SUCC_PAIR_DEC = 0xFFFFFFFEFFFFFFFFull;
+/* Packed slot value (low | high << 32) where both halves are 1: each op's last unresolved edge is
+ * the pair's own half-edge, so the resolver can fire both without the atomic. */
+constexpr uint64_t DRCO_SUCC_PAIR_BOTH_ONE = 0x0000000100000001ull;
+
 #define TASKID_SHIFT32 32
 #define TASKID_FROM_CTRL_TOPO_MASK ((1 << (TASKID_TASK_BITS + TASKID_FUNC_BITS)) - 1)
 

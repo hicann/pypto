@@ -572,7 +572,8 @@ private:
         const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
         const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict,
         const std::vector<int32_t>& stitchIndexList, const std::unordered_map<uint64_t, int>& calleeHashIndexDict,
-        const std::vector<CceCodeInfo>& cceCodeInfoList, DevAscendFunctionDuppedData* dupData);
+        const std::vector<CceCodeInfo>& cceCodeInfoList, DevAscendFunctionDuppedData* dupData,
+        std::vector<uint32_t>& drcoSuccScratch, uint64_t& drcoPairCnt, uint64_t& drcoSuccCnt);
     void VerifyOperationEncodedContent(const OrderedSet<Operation*>& callList,
                                        const std::unordered_map<Operation*, uint64_t>& callOpPredDict,
                                        DevAscendFunctionDuppedData* dupData);
