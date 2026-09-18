@@ -804,8 +804,9 @@ void SpillEngine::ReplaceSkipOpChainMemId(LogicalTensorPtr startTensor, int oldM
     }
 }
 
-void SpillEngine::RemapOpReqMemId(Operation* op, int oldMemId, int newMemId)
+bool SpillEngine::RemapOpReqMemId(Operation* op, int oldMemId, int newMemId)
 {
+    bool changed = false;
     auto& reqMemIds = state_.opReqMemIdsMap[op];
     for (auto memId : reqMemIds) {
         if (memId == oldMemId || memId == newMemId) {
@@ -813,18 +814,23 @@ void SpillEngine::RemapOpReqMemId(Operation* op, int oldMemId, int newMemId)
         }
         if (memId == oldMemId) {
             std::replace(reqMemIds.begin(), reqMemIds.end(), oldMemId, newMemId);
+            changed = true;
         }
     }
+    return changed;
 }
 
-void SpillEngine::ReplaceTensorMemId(Operation* op, int oldMemId, int newMemId)
+bool SpillEngine::ReplaceTensorMemId(Operation* op, int oldMemId, int newMemId)
 {
+    bool changed = false;
     for (auto& outTensor : op->GetOOperands()) {
         if (outTensor->memoryrange.memId == oldMemId) {
             outTensor->memoryrange.memId = newMemId;
             ReplaceSkipOpChainMemId(outTensor, oldMemId, newMemId);
+            changed = true;
         }
     }
+    return changed;
 }
 
 void SpillEngine::UpdateOpInternalSubgraphID(Operation& op, Operation* srcOp)
@@ -835,15 +841,18 @@ void SpillEngine::UpdateOpInternalSubgraphID(Operation& op, Operation* srcOp)
     }
 }
 
-Status SpillEngine::UpdateSpillOpDepend(Operation* spillOp, LogicalTensorPtr newTensor, int spillMemId)
+Status SpillEngine::UpdateSpillOpDepend(Operation* spillOp, LogicalTensorPtr newTensor, int spillMemId,
+                                        std::vector<Operation*>& rewired)
 {
-    auto& successors = state_.depManager.GetSuccessors(spillOp);
+    const auto successors = state_.depManager.GetSuccessors(spillOp);
     for (auto succOp : successors) {
         if (!state_.schedInfoMap[succOp].isRetired) {
             auto& reqMemIds = state_.opReqMemIdsMap[succOp];
-            if (std::count(reqMemIds.begin(), reqMemIds.end(), spillMemId) > 0 &&
-                UpdateOperationInput(succOp, spillOp, newTensor, spillMemId) != SUCCESS) {
-                return FAILED;
+            if (std::count(reqMemIds.begin(), reqMemIds.end(), spillMemId) > 0) {
+                if (UpdateOperationInput(succOp, spillOp, newTensor, spillMemId) != SUCCESS) {
+                    return FAILED;
+                }
+                rewired.push_back(succOp);
             }
         }
     }
@@ -987,7 +996,7 @@ Status SpillEngine::SaveToDDR(int memId, LogicalTensorPtr spillTensor, SpillPlan
     }
     for (auto& mirror : plan.mirrors) {
         if (PrepareSpillMirror(memId, plan, spillTensor, mirror) != SUCCESS ||
-            SaveSourcesToDDR(plan.sources, mirror.gmTensor, ctx, plan.created) != SUCCESS) {
+            SaveSourcesToDDR(mirror.gmTensor, ctx, plan) != SUCCESS) {
             return FAILED;
         }
     }
@@ -1001,13 +1010,16 @@ Status SpillEngine::ReloadFromDDR(int memId, LogicalTensorPtr spillTensor, Opera
     if (plan.replaceInput) {
         return ReloadIntoNewBuffer(memId, spillTensor, spillOp, spillAllocOp, plan, ctx);
     }
+    std::vector<Operation*> seeds = plan.saveCopyoutOps;
     for (const auto& mirror : plan.mirrors) {
-        if (ReplaceConsumersWithCopyin(mirror, spillAllocOp, plan.created) != SUCCESS) {
+        if (ReplaceConsumersWithCopyin(mirror, spillAllocOp, plan.created, seeds) != SUCCESS) {
             return FAILED;
         }
     }
-    // 顶替掉的消费者已标删, 依赖按新图重建, 老 buffer 的引用随之归零。
-    state_.depManager.InitDependencies(state_.orderedOps, false);
+    if (state_.depManager.RefreshDependencies(seeds, state_.tensorAllocMap) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "RefreshDependencies failed.");
+        return FAILED;
+    }
     state_.bufRefCount[memId] = 0;
     return SUCCESS;
 }
@@ -1029,15 +1041,22 @@ Status SpillEngine::FinalizeSpill(int memId, LogicalTensorPtr spillTensor, Opera
 
 // ③ 的顶替消费者版: 消费者本是纯搬运, 由 copyin 从 DDR 直写它的输出即等价, 整个换掉。
 Status SpillEngine::ReplaceConsumersWithCopyin(const SpillMirror& mirror, Operation* spillAllocOp,
-                                               SingleSpillCreatedOps& created)
+                                               SingleSpillCreatedOps& created, std::vector<Operation*>& seeds)
 {
     for (auto* consumer : mirror.consumers) {
         auto oOperand = consumer->GetOutputOperand(0);
         Operation* copyinOp = CreateCopyinOp(mirror.gmTensor, oOperand,
                                              OpImmediate::Specified(mirror.gmTensor->GetOffset()), true);
         UpdateOpScheduleInfo(copyinOp, {oOperand->memoryrange.memId}, spillAllocOp);
+        for (auto* pred : state_.depManager.GetPredecessors(consumer)) {
+            seeds.push_back(pred);
+        }
+        for (auto* succ : state_.depManager.GetSuccessors(consumer)) {
+            seeds.push_back(succ);
+        }
         TakeOverScheduleSlot(consumer, copyinOp);
         consumer->SetAsDeleted();
+        seeds.push_back(copyinOp);
     }
     created.Record(nullptr, nullptr, nullptr, mirror.gmTensor);
     return SUCCESS;
@@ -1054,11 +1073,9 @@ Status SpillEngine::PrepareSpillMirror(int spillMemId, const SpillPlan& plan, Lo
     return SUCCESS;
 }
 
-// 一个源一条 copyout, 与回载 copyin 的先后由 InitDependencies 从生产/消费关系自己推出, 不用手工排。
-Status SpillEngine::SaveSourcesToDDR(const std::vector<SpillSource>& sources, LogicalTensorPtr gmTensor,
-                                     SpillContext& ctx, SingleSpillCreatedOps& created)
+Status SpillEngine::SaveSourcesToDDR(LogicalTensorPtr gmTensor, SpillContext& ctx, SpillPlan& plan)
 {
-    for (const auto& source : sources) {
+    for (const auto& source : plan.sources) {
         int sourceMemId = source.tensor->memoryrange.memId;
         Operation* copyoutOp = CreateCopyoutOp(GetScaleDonor(source), source.tensor, gmTensor,
                                                MirrorOffset(source.saveOffset, gmTensor));
@@ -1066,7 +1083,8 @@ Status SpillEngine::SaveSourcesToDDR(const std::vector<SpillSource>& sources, Lo
             APASS_LOG_ERROR_F(Elements::Operation, "Spill: update copyout schedule info failed.");
             return FAILED;
         }
-        created.Record(copyoutOp);
+        plan.created.Record(copyoutOp);
+        plan.saveCopyoutOps.push_back(copyoutOp);
         if (source.producedInPast) {
             ctx.newCopyoutOps.push_back(copyoutOp);
         } else {
@@ -1097,7 +1115,7 @@ Status SpillEngine::ReloadIntoNewBuffer(int spillMemId, LogicalTensorPtr spillTe
         wholeCopyin = CreateWholeReload(gmTensor, localTensor, plan);
         opMemIdMap.push_back({wholeCopyin, {localTensor->memoryrange.memId}});
     }
-    if (UpdateScheduleStatus(opMemIdMap, spillMemId, spillAllocOp, localTensor, spillOp) != SUCCESS) {
+    if (UpdateScheduleStatus(opMemIdMap, spillMemId, spillAllocOp, localTensor, spillOp, plan) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "Spill: update schedule status failed.");
         return FAILED;
     }
@@ -1277,7 +1295,6 @@ bool SpillEngine::DeleteOneOp(Operation* op, const std::set<int>& orphanedMemIds
     bool wasRetired = EraseFromExecOrder(op);
     ReleaseOpBufRefs(op, orphanedMemIds);
     EraseSchedulerSideMaps(op);
-    UnregisterOpDependencies(op);
 
     auto newOpsIt = std::find(state_.newOperations.begin(), state_.newOperations.end(), op);
     if (newOpsIt != state_.newOperations.end()) {
@@ -1323,19 +1340,6 @@ void SpillEngine::ReleaseOpBufRefs(Operation* op, const std::set<int>& orphanedM
     }
 }
 
-void SpillEngine::UnregisterOpDependencies(Operation* op)
-{
-    // 必须拷贝: RemoveSuccessor/RemovePredecessor 会改动正在遍历的那两个 set。
-    auto predecessors = state_.depManager.GetPredecessors(op);
-    auto successors = state_.depManager.GetSuccessors(op);
-    for (auto* pred : predecessors) {
-        state_.depManager.RemoveSuccessor(pred, op);
-    }
-    for (auto* succ : successors) {
-        state_.depManager.RemovePredecessor(succ, op);
-    }
-}
-
 // 已删的写还挂在各级 tensor 的生产/消费表里, 不摘掉重建依赖时会走到已删对象。
 void SpillEngine::DetachOrphanedProducers(const OrphanedOps& orphaned)
 {
@@ -1376,8 +1380,7 @@ void SpillEngine::EraseSchedulerSideMaps(Operation* op)
     state_.schedInfoMap.erase(op);
     state_.opReqMemIdsMap.erase(op);
     state_.inOutOperandsCache.erase(op);
-    state_.depManager.RemoveSuccessorOp(op);
-    state_.depManager.RemovePredecessorOp(op);
+    state_.depManager.RemoveOp(op);
 }
 
 int SpillEngine::GetBufNextUseTime(int curMemId)
@@ -1516,29 +1519,37 @@ Status SpillEngine::InsertOps(OpMemIdMap opMemidMap, Operation* spillAllocOp, in
 }
 
 Status SpillEngine::UpdateScheduleStatus(OpMemIdMap opMemidMap, int memId, Operation* spillAllocOp,
-                                         LogicalTensorPtr localTensor, Operation* spillOp)
+                                         LogicalTensorPtr localTensor, Operation* spillOp, const SpillPlan& plan)
 {
+    std::vector<Operation*> seeds;
     for (auto& [op, memid] : opMemidMap) {
         UpdateOpScheduleInfo(op, memid, spillAllocOp);
+        seeds.push_back(op);
     }
+    seeds.push_back(spillOp);
+    seeds.push_back(spillAllocOp);
+    seeds.insert(seeds.end(), plan.saveCopyoutOps.begin(), plan.saveCopyoutOps.end());
 
     if (InsertOps(opMemidMap, spillAllocOp, memId) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "InsertOps failed.");
         return FAILED;
     }
-    if (UpdateSpillOpDepend(spillOp, localTensor, memId) != SUCCESS) {
+    if (UpdateSpillOpDepend(spillOp, localTensor, memId, seeds) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "UpdateSpillOpDepend failed.");
         return FAILED;
     }
-    if (UpdateRemainMemid(memId, localTensor->memoryrange.memId) != SUCCESS) {
+    if (UpdateRemainMemid(memId, localTensor->memoryrange.memId, seeds) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "UpdateRemainMemid failed.");
         return FAILED;
     }
-    state_.depManager.InitDependencies(state_.orderedOps, false);
+    if (state_.depManager.RefreshDependencies(seeds, state_.tensorAllocMap) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "RefreshDependencies failed.");
+        return FAILED;
+    }
     return SUCCESS;
 }
 
-Status SpillEngine::UpdateRemainMemid(int oldMemId, int newMemId)
+Status SpillEngine::UpdateRemainMemid(int oldMemId, int newMemId, std::vector<Operation*>& remapped)
 {
     if (state_.bufRefCount.find(oldMemId) == state_.bufRefCount.end()) {
         APASS_LOG_ERROR_F(Elements::Tensor, "bufRefCount cannot find Tensor[%d]. ", oldMemId);
@@ -1550,8 +1561,11 @@ Status SpillEngine::UpdateRemainMemid(int oldMemId, int newMemId)
         if (state_.schedInfoMap[op].isRetired) {
             continue;
         }
-        RemapOpReqMemId(op, oldMemId, newMemId);
-        ReplaceTensorMemId(op, oldMemId, newMemId);
+        bool reqChanged = RemapOpReqMemId(op, oldMemId, newMemId);
+        bool tensorChanged = ReplaceTensorMemId(op, oldMemId, newMemId);
+        if (reqChanged || tensorChanged) {
+            remapped.push_back(op);
+        }
     }
     return SUCCESS;
 }

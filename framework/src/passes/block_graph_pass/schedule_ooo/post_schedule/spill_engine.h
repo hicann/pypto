@@ -74,6 +74,7 @@ struct SpillPlan {
     bool replaceInput{false}; // 回载能从 DDR 直搬回这一级 -> 换输入; 否则 (L0C) 顶替消费者
     SingleSpillCreatedOps created;
     std::vector<Operation*> reloadCopyinOps; // 本轮回载的 copyin, 分片时多条; 补 token 用
+    std::vector<Operation*> saveCopyoutOps;  // 本轮存盘的 copyout; seed 用
 };
 
 // 插进调度序列的一批 op, 每个带自己占的 memId 列表。
@@ -157,10 +158,9 @@ private:
     static bool IsStaticOffset(const std::vector<OpImmediate>& offset);
 
     Status ReplaceConsumersWithCopyin(const SpillMirror& mirror, Operation* spillAllocOp,
-                                      SingleSpillCreatedOps& created);
+                                      SingleSpillCreatedOps& created, std::vector<Operation*>& seeds);
     Status PrepareSpillMirror(int spillMemId, const SpillPlan& plan, LogicalTensorPtr spillTensor, SpillMirror& mirror);
-    Status SaveSourcesToDDR(const std::vector<SpillSource>& sources, LogicalTensorPtr gmTensor, SpillContext& ctx,
-                            SingleSpillCreatedOps& created);
+    Status SaveSourcesToDDR(LogicalTensorPtr gmTensor, SpillContext& ctx, SpillPlan& plan);
     Status ReloadIntoNewBuffer(int spillMemId, LogicalTensorPtr spillTensor, Operation* spillOp,
                                Operation* spillAllocOp, SpillPlan& plan, SpillContext& ctx);
     Operation* CreateWholeReload(LogicalTensorPtr gmTensor, LogicalTensorPtr localTensor, const SpillPlan& plan);
@@ -179,11 +179,11 @@ private:
     bool DeleteOneOp(Operation* op, const std::set<int>& orphanedMemIds);
     bool EraseFromExecOrder(Operation* op);
     void ReleaseOpBufRefs(Operation* op, const std::set<int>& orphanedMemIds);
-    void UnregisterOpDependencies(Operation* op);
     void DetachOrphanedProducers(const OrphanedOps& orphaned);
     Status FreeSpilledBuffer(int memId, CoreLocationType freeCore);
 
-    Status UpdateSpillOpDepend(Operation* spillOp, LogicalTensorPtr newTensor, int spillMemId);
+    Status UpdateSpillOpDepend(Operation* spillOp, LogicalTensorPtr newTensor, int spillMemId,
+                               std::vector<Operation*>& rewired);
 
     Status UpdateOperationInput(Operation* targetOp, Operation* spillOp, LogicalTensorPtr reloadTensor, int spillMemId);
     Status UpdateSkipOpInput(Operation* chainTail, Operation* spillOp, Operation* targetOp,
@@ -193,16 +193,16 @@ private:
     void UnregisterSkipOp(Operation* targetOp, Operation* skipOp);
     void DetachOrphanedSkipChain(const std::vector<Operation*>& chain, Operation* targetOp);
     void ReplaceSkipOpChainMemId(LogicalTensorPtr startTensor, int oldMemId, int newMemId);
-    void RemapOpReqMemId(Operation* op, int oldMemId, int newMemId);
-    void ReplaceTensorMemId(Operation* op, int oldMemId, int newMemId);
-    Status UpdateRemainMemid(int oldMemId, int newMemId);
+    bool RemapOpReqMemId(Operation* op, int oldMemId, int newMemId);
+    bool ReplaceTensorMemId(Operation* op, int oldMemId, int newMemId);
+    Status UpdateRemainMemid(int oldMemId, int newMemId, std::vector<Operation*>& remapped);
     void UpdateOpInternalSubgraphID(Operation& op, Operation* srcOp);
 
     Status UpdateCopyoutScheduleInfo(Operation* op, const SpillSource& source, int sourceMemId);
     void UpdateOpScheduleInfo(Operation* op, std::vector<int> memIds, Operation* AllocOp);
     Status InsertOps(OpMemIdMap opMemidMap, Operation* spillAllocOp, int memId);
     Status UpdateScheduleStatus(OpMemIdMap opMemidMap, int memId, Operation* spillAllocOp, LogicalTensorPtr localTensor,
-                                Operation* spillOp);
+                                Operation* spillOp, const SpillPlan& plan);
 };
 
 } // namespace npu::tile_fwk

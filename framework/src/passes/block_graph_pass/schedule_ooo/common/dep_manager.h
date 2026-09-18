@@ -77,10 +77,10 @@ public:
 
     int InsertSuccessor(Operation* op, Operation* succ);
     int RemoveSuccessor(Operation* op, Operation* succ);
-    void RemoveSuccessorOp(Operation* op);
     int InsertPredecessor(Operation* op, Operation* pred);
     int RemovePredecessor(Operation* op, Operation* pred);
-    void RemovePredecessorOp(Operation* op);
+
+    void RemoveOp(Operation* op);
 
     std::set<Operation*, Operation::OperationComparator>& GetSuccessors(Operation* op);
     std::set<Operation*, Operation::OperationComparator>& GetPredecessors(Operation* op);
@@ -89,9 +89,12 @@ public:
     std::string PrintOp(Operation* op);
 
     void FindDependencies(Operation* op, bool needView);
-    void InitOpConsumerAndProducer(const std::vector<Operation*>& ops);
+    void InitOpConsumerAndProducer(const std::vector<Operation*>& ops, bool needView);
 
     Status InitDependencies(const std::vector<Operation*>& ops, bool needView);
+
+    Status RefreshDependencies(const std::vector<Operation*>& seeds,
+                               const std::unordered_map<int, Operation*>& allocMap);
 
     void PrintDependencies(const std::vector<Operation*>& ops);
 
@@ -100,6 +103,9 @@ private:
 
     void HandleScaleOpDependency(Operation* op, MemoryType memType);
     void AddProducerDependencies(Operation* op);
+
+    std::vector<Operation*> ExpandDirtySet(const std::vector<Operation*>& seeds) const;
+    void ClearInEdges(Operation* op);
 
     std::unordered_map<Operation*, std::set<Operation*, Operation::OperationComparator>> opConsumers;
     std::unordered_map<Operation*, std::set<Operation*, Operation::OperationComparator>> opProducers;

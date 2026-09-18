@@ -14,6 +14,7 @@
  */
 
 #include "passes/block_graph_pass/schedule_ooo/common/dep_manager.h"
+#include <unordered_set>
 #include "passes/pass_log/pass_log.h"
 
 #ifndef MODULE_NAME
@@ -116,7 +117,34 @@ int DependencyManager::RemoveSuccessor(Operation* op, Operation* succ)
     return outGraph_[op].erase(succ);
 }
 
-void DependencyManager::RemoveSuccessorOp(Operation* op) { opConsumers.erase(op); }
+void DependencyManager::RemoveOp(Operation* op)
+{
+    if (op == nullptr) {
+        return;
+    }
+    auto inIt = inGraph_.find(op);
+    if (inIt != inGraph_.end()) {
+        for (auto* pred : inIt->second) {
+            auto predIt = outGraph_.find(pred);
+            if (predIt != outGraph_.end()) {
+                predIt->second.erase(op);
+            }
+        }
+    }
+    auto outIt = outGraph_.find(op);
+    if (outIt != outGraph_.end()) {
+        for (auto* succ : outIt->second) {
+            auto succIt = inGraph_.find(succ);
+            if (succIt != inGraph_.end()) {
+                succIt->second.erase(op);
+            }
+        }
+    }
+    inGraph_.erase(op);
+    outGraph_.erase(op);
+    opConsumers.erase(op);
+    opProducers.erase(op);
+}
 
 int DependencyManager::InsertPredecessor(Operation* op, Operation* pred)
 {
@@ -134,8 +162,6 @@ int DependencyManager::RemovePredecessor(Operation* op, Operation* pred)
     }
     return inGraph_[op].erase(pred);
 }
-
-void DependencyManager::RemovePredecessorOp(Operation* op) { opProducers.erase(op); }
 
 std::set<Operation*, Operation::OperationComparator>& DependencyManager::GetSuccessors(Operation* op)
 {
@@ -178,12 +204,13 @@ Status DependencyManager::InitAllocDependencies(Operation* op, std::unordered_ma
     for (auto& tensor : op->GetOOperands()) {
         int memId = tensor->memoryrange.memId;
         if (tensor->GetMemoryTypeOriginal() < MemoryType::MEM_DEVICE_DDR) {
-            if (tensor2AllocOpMap.find(memId) == tensor2AllocOpMap.end()) {
+            auto it = tensor2AllocOpMap.find(memId);
+            if (it == tensor2AllocOpMap.end()) {
                 APASS_LOG_ERROR_F(Elements::Operation, "Tensor[%d] must have alloc. magic: %d, op: %s", memId,
                                   tensor->GetMagic(), PrintOp(op).c_str());
                 return FAILED;
             }
-            AddAllocDependency(tensor2AllocOpMap[memId], op);
+            AddAllocDependency(it->second, op);
         }
     }
     return SUCCESS;
@@ -204,7 +231,7 @@ void DependencyManager::HandleScaleOpDependency(Operation* op, MemoryType memTyp
 
 void DependencyManager::AddProducerDependencies(Operation* op)
 {
-    for (auto& producer : op->ProducerOps()) {
+    for (auto* producer : op->ProducerOps()) {
         Operation* farthestSkip = SkipChain(producer);
         if (farthestSkip == nullptr) {
             AddDependency(producer, op);
@@ -244,21 +271,24 @@ void DependencyManager::FindDependencies(Operation* op, bool needView)
     AddProducerDependencies(op);
 }
 
-void DependencyManager::InitOpConsumerAndProducer(const std::vector<Operation*>& ops)
+void DependencyManager::InitOpConsumerAndProducer(const std::vector<Operation*>& ops, bool needView)
 {
     opConsumers.clear();
     opProducers.clear();
+    if (!needView) {
+        return;
+    }
     std::unordered_set<Operation*> opSet;
     for (auto op : ops) {
         opSet.insert(op);
     }
     for (auto op : ops) {
-        for (auto consumer : op->ConsumerOps()) {
+        for (auto* consumer : op->ConsumerOps()) {
             if (opSet.find(consumer) != opSet.end()) {
                 opConsumers[op].insert(consumer);
             }
         }
-        for (auto producer : op->ProducerOps()) {
+        for (auto* producer : op->ProducerOps()) {
             if (opSet.find(producer) != opSet.end()) {
                 opProducers[op].insert(producer);
             }
@@ -266,10 +296,97 @@ void DependencyManager::InitOpConsumerAndProducer(const std::vector<Operation*>&
     }
 }
 
+std::vector<Operation*> DependencyManager::ExpandDirtySet(const std::vector<Operation*>& seeds) const
+{
+    std::unordered_set<Operation*> dirty;
+    for (auto* seed : seeds) {
+        if (seed == nullptr || seed->IsDeleted()) {
+            continue;
+        }
+        dirty.insert(seed);
+        auto inIt = inGraph_.find(seed);
+        if (inIt != inGraph_.end()) {
+            dirty.insert(inIt->second.begin(), inIt->second.end());
+        }
+        auto outIt = outGraph_.find(seed);
+        if (outIt != outGraph_.end()) {
+            dirty.insert(outIt->second.begin(), outIt->second.end());
+        }
+        for (auto* succ : seed->ConsumerOpsByToken()) {
+            if (succ != seed && succ->BelongTo() == seed->BelongTo()) {
+                dirty.insert(succ);
+            }
+        }
+        std::vector<Operation*> pending{seed};
+        std::unordered_set<Operation*> walked{seed};
+        while (!pending.empty()) {
+            Operation* cur = pending.back();
+            pending.pop_back();
+            for (auto* consumer : cur->ConsumerOps()) {
+                dirty.insert(consumer);
+                if (IsSkipOp(*consumer) && walked.insert(consumer).second) {
+                    pending.push_back(consumer);
+                }
+            }
+        }
+    }
+    std::vector<Operation*> result;
+    result.reserve(dirty.size());
+    for (auto* op : dirty) {
+        if (op != nullptr && !op->IsDeleted() && inGraph_.find(op) != inGraph_.end()) {
+            result.push_back(op);
+        }
+    }
+    return result;
+}
+
+void DependencyManager::ClearInEdges(Operation* op)
+{
+    auto inIt = inGraph_.find(op);
+    if (inIt == inGraph_.end()) {
+        return;
+    }
+    for (auto* pred : inIt->second) {
+        auto predIt = outGraph_.find(pred);
+        if (predIt != outGraph_.end()) {
+            predIt->second.erase(op);
+        }
+    }
+    inIt->second.clear();
+}
+
+Status DependencyManager::RefreshDependencies(const std::vector<Operation*>& seeds,
+                                              const std::unordered_map<int, Operation*>& allocMap)
+{
+    const auto dirty = ExpandDirtySet(seeds);
+    for (auto* op : dirty) {
+        ClearInEdges(op);
+    }
+    for (auto* op : dirty) {
+        if (IsOpAlloc(op)) {
+            continue;
+        }
+        FindDependencies(op, false);
+        for (auto& tensor : op->GetOOperands()) {
+            if (tensor->GetMemoryTypeOriginal() >= MemoryType::MEM_DEVICE_DDR) {
+                continue;
+            }
+            auto it = allocMap.find(tensor->memoryrange.memId);
+            if (it == allocMap.end()) {
+                APASS_LOG_ERROR_F(Elements::Operation, "Tensor[%d] must have alloc. magic: %d, op: %s",
+                                  tensor->memoryrange.memId, tensor->GetMagic(), PrintOp(op).c_str());
+                return FAILED;
+            }
+            AddAllocDependency(it->second, op);
+        }
+    }
+    return SUCCESS;
+}
+
 Status DependencyManager::InitDependencies(const std::vector<Operation*>& ops, bool needView)
 {
     std::unordered_map<int, Operation*> tensor2AllocOpMap;
-    InitOpConsumerAndProducer(ops);
+    InitOpConsumerAndProducer(ops, needView);
     for (const auto& op : ops) {
         if (IsOpAlloc(op)) {
             if (op->GetOOperands().size() != 1) {
