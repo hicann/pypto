@@ -95,9 +95,10 @@ def test_slot_size_scales_with_the_dtype_width(dtype, width):
     assert tile_slot_size([32, 32], dtype) == 32 * 32 * width
 
 
-def test_slot_size_rounds_a_sub_byte_dtype_up_to_one_byte_per_element():
-    """A 4-bit element cannot reserve half a byte, so the slot over-reserves."""
-    assert tile_slot_size([64, 64], pl.DT_INT4) == 64 * 64
+def test_slot_size_packs_sub_byte_elements_before_rounding_to_bytes():
+    assert tile_slot_size([64, 64], pl.DT_INT4) == 64 * 64 // 2
+    assert tile_slot_size([256, 256], pl.DT_FP4E2M1) == 256 * 256 // 2
+    assert tile_slot_size([1], pl.DT_INT4) == 1
 
 
 def test_slot_size_rejects_a_runtime_dimension():
@@ -504,7 +505,7 @@ def test_size_is_derived_from_the_shape_not_the_valid_shape():
     assert f"memref_size={128 * 128 * 2}" in _kernel_ir(k)
 
 
-def test_sub_byte_tile_reserves_one_byte_per_element():
+def test_sub_byte_tile_reserves_packed_bytes():
     """INT4 has no Vec op to consume it, so only the reservation is checked."""
 
     @pl.jit
@@ -512,7 +513,7 @@ def test_sub_byte_tile_reserves_one_byte_per_element():
         tt = pl.TileType(shape=[64, 64], dtype=pl.DT_INT4, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=0)  # noqa: F841
 
-    assert f"memref_size={64 * 64}" in _kernel_ir(k)
+    assert f"memref_size={64 * 64 // 2}" in _kernel_ir(k)
 
 
 def test_a_tile_type_with_a_runtime_shape_cannot_derive_its_size():

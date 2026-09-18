@@ -3058,6 +3058,7 @@ def tile_slot_size(shape: "Sequence[int] | _ir_core.MakeTuple", dtype: DataType)
 
     Shared by pl.make_tile()'s default ``size`` and make_tile_group()'s slot stride,
     so a group slot is exactly as wide as a standalone tile of the same TileType.
+    Sub-byte elements are packed before the total is rounded up to whole bytes.
 
     Raises ValueError when the shape is not a tuple of compile-time positive
     integers, which is when the caller has to state ``size`` itself.
@@ -3071,7 +3072,7 @@ def tile_slot_size(shape: "Sequence[int] | _ir_core.MakeTuple", dtype: DataType)
     elems = 1
     for dim in static_dims:
         elems *= dim
-    return elems * max(1, (int(dtype.get_bit()) + 7) // 8)
+    return (elems * int(dtype.get_bit()) + 7) // 8
 
 
 def _const_shape_ints(shape) -> "list[int] | None":

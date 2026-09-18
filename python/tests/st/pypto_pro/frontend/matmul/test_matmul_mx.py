@@ -200,6 +200,7 @@ def _build_mx_kernel(a_dtype_label, b_dtype_label, use_phase, addressing, transp
     a_dtype, _, a_is_fp4 = _MX_DTYPES[a_dtype_label]
     b_dtype, _, b_is_fp4 = _MX_DTYPES[b_dtype_label]
     assert a_is_fp4 == b_is_fp4
+    scale_slot_addr = 0x80 if a_is_fp4 else 0x100
     out_dtype, _ = _OUT_DTYPES[out_dtype_label]
     use_offset_addressing = addressing == "offset"
     use_tile_addressing = addressing == "tile"
@@ -256,12 +257,12 @@ def _build_mx_kernel(a_dtype_label, b_dtype_label, use_phase, addressing, transp
                              target_memory=pl.MemorySpace.ScaleLeft, layout=pl.ZZ,
                              valid_shape=[-1, -1], compact=1),
             # MX scale address must match the paired data address >> 4.
-            addrs=[0x0, 0x100], mutex_ids=[12, 13])
+            addrs=[0x0, scale_slot_addr], mutex_ids=[12, 13])
         sb_l0b = pl.make_tile_group(
             type=pl.TileType(shape=[SCALE_K, TILE], dtype=pl.DT_FP8E8M0,
                              target_memory=pl.MemorySpace.ScaleRight, layout=pl.NN,
                              valid_shape=[-1, -1], compact=1),
-            addrs=[0x0, 0x100], mutex_ids=[14, 15])
+            addrs=[0x0, scale_slot_addr], mutex_ids=[14, 15])
         c_l0c = pl.make_tile_group(
             type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
                              layout=pl.NZ, fractal=1024, valid_shape=[-1, -1], compact=1),
@@ -393,6 +394,7 @@ def _make_mx_scale_tile_kernel(a_dtype_label, b_dtype_label, out_dtype_label):
     a_dtype, _, a_is_fp4 = _MX_DTYPES[a_dtype_label]
     b_dtype, _, b_is_fp4 = _MX_DTYPES[b_dtype_label]
     assert a_is_fp4 == b_is_fp4
+    scale_slot_addr = 0x80 if a_is_fp4 else 0x100
     out_dtype, _ = _OUT_DTYPES[out_dtype_label]
     name = _kernel_name(f"mx_scale_tile_{out_dtype_label}", a_dtype_label, b_dtype_label)
 
@@ -441,12 +443,12 @@ def _make_mx_scale_tile_kernel(a_dtype_label, b_dtype_label, out_dtype_label):
                              target_memory=pl.MemorySpace.ScaleLeft, layout=pl.ZZ,
                              valid_shape=[-1, -1], compact=1),
             # MX scale address must match the paired data address >> 4.
-            addrs=[0x0, 0x100], mutex_ids=[12, 13])
+            addrs=[0x0, scale_slot_addr], mutex_ids=[12, 13])
         sb_l0b = pl.make_tile_group(
             type=pl.TileType(shape=[SCALE_K, TILE], dtype=pl.DT_FP8E8M0,
                              target_memory=pl.MemorySpace.ScaleRight, layout=pl.NN,
                              valid_shape=[-1, -1], compact=1),
-            addrs=[0x0, 0x100], mutex_ids=[14, 15])
+            addrs=[0x0, scale_slot_addr], mutex_ids=[14, 15])
         scale_tiles = pl.make_tile_group(
             type=pl.TileType(shape=[1, TILE], dtype=pl.DT_INT64,
                              target_memory=pl.MemorySpace.Scaling,
@@ -518,6 +520,7 @@ def _make_mx_batched_kernel(a_dtype_label, b_dtype_label):
     a_dtype, _, a_is_fp4 = _MX_DTYPES[a_dtype_label]
     b_dtype, _, b_is_fp4 = _MX_DTYPES[b_dtype_label]
     assert a_is_fp4 == b_is_fp4
+    scale_slot_addr = 0x80 if a_is_fp4 else 0x100
     name = _kernel_name("mx_batched_tile_order", a_dtype_label, b_dtype_label)
 
     @pl.jit(auto_mutex=True, name=name)
@@ -559,12 +562,12 @@ def _make_mx_batched_kernel(a_dtype_label, b_dtype_label):
                              target_memory=pl.MemorySpace.ScaleLeft, layout=pl.ZZ,
                              valid_shape=[-1, -1], compact=1),
             # MX scale address must match the paired data address >> 4.
-            addrs=[0x0, 0x100], mutex_ids=[12, 13])
+            addrs=[0x0, scale_slot_addr], mutex_ids=[12, 13])
         sb_l0b = pl.make_tile_group(
             type=pl.TileType(shape=[SCALE_K, TILE], dtype=pl.DT_FP8E8M0,
                              target_memory=pl.MemorySpace.ScaleRight, layout=pl.NN,
                              valid_shape=[-1, -1], compact=1),
-            addrs=[0x0, 0x100], mutex_ids=[14, 15])
+            addrs=[0x0, scale_slot_addr], mutex_ids=[14, 15])
         c_l0c = pl.make_tile_group(
             type=pl.TileType(shape=[TILE, TILE], dtype=pl.DT_FP32,
                              target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024,
