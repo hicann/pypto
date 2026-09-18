@@ -262,7 +262,7 @@ const char* TensorLayoutToPythonName(TensorLayout layout)
 {
     const char* full = EnumToString(layout);
     const char* sep = std::strstr(full, "::");
-    return sep ? sep + 2 : full;
+    return sep ? sep + 2 : full; // NOLINT: length of "::" separator
 }
 
 static void PrintKwargValue(std::ostream& stream, const std::string& prefix, const std::string& key,
@@ -292,7 +292,7 @@ static void PrintKwargValue(std::ostream& stream, const std::string& prefix, con
     } else if (value.type() == typeid(MemorySpace)) {
         stream << prefix << ".MemorySpace." << MemorySpaceToString(AnyCast<MemorySpace>(value, key));
     } else if (value.type() == typeid(SymbolicScalar)) {
-        stream << AnyCast<SymbolicScalar>(value, key).Dump();
+        stream << (AnyCast<SymbolicScalar>(value, key).Dump());
     } else if (value.type() == typeid(std::vector<int>)) {
         const auto& values = AnyCast<std::vector<int>>(value, key);
         stream << "[";

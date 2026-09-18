@@ -91,9 +91,9 @@ void IRTextDumper::PrintAttrValue(const std::string& key, const std::any& value)
     if (value.type() == typeid(int)) {
         stream_ << AnyCast<int>(value, key);
     } else if (value.type() == typeid(uint64_t)) {
-        stream_ << AnyCast<uint64_t>(value);
+        stream_ << (AnyCast<uint64_t>(value));
     } else if (value.type() == typeid(int64_t)) {
-        stream_ << AnyCast<int64_t>(value);
+        stream_ << (AnyCast<int64_t>(value));
     } else if (value.type() == typeid(double)) {
         stream_ << AnyCast<double>(value, key);
     } else if (value.type() == typeid(float)) {
@@ -101,9 +101,9 @@ void IRTextDumper::PrintAttrValue(const std::string& key, const std::any& value)
     } else if (value.type() == typeid(bool)) {
         stream_ << (AnyCast<bool>(value, key) ? IR_KW_TRUE : IR_KW_FALSE);
     } else if (value.type() == typeid(std::string)) {
-        stream_ << AnyCast<std::string>(value);
+        stream_ << (AnyCast<std::string>(value));
     } else if (value.type() == typeid(DataType)) {
-        stream_ << AnyCast<DataType>(value, key).ToCTypeString();
+        stream_ << (AnyCast<DataType>(value, key).ToCTypeString());
     } else if (value.type() == typeid(MemorySpace)) {
         stream_ << MemorySpaceToString(AnyCast<MemorySpace>(value, key));
     } else if (value.type() == typeid(std::vector<int>)) {

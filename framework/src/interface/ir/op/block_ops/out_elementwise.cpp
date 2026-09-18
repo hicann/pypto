@@ -63,8 +63,8 @@ static TypePtr DeduceBlockOutBinaryTile([[maybe_unused]] const std::vector<ExprP
                                         const std::string& op_name)
 {
     CHECK(args.size() == 0x3) << op_name << " requires 3 arguments (out, lhs, rhs)";
-    CheckTileArg(args, 1, op_name);
-    CheckTileArg(args, 2, op_name);
+    CheckTileArg(args, 1, op_name); // NOLINT: lhs index
+    CheckTileArg(args, 2, op_name); // NOLINT: rhs index
     return DeduceBlockOutTileType(args, kwargs, op_name, 0x3);
 }
 
@@ -74,8 +74,8 @@ static TypePtr DeduceBlockOutBinaryScalar([[maybe_unused]] const std::vector<Exp
                                           const std::string& op_name)
 {
     CHECK(args.size() == 0x3) << op_name << " requires 3 arguments (out, tile, scalar)";
-    CheckTileArg(args, 1, op_name);
-    CheckScalarArg(args, 2, op_name);
+    CheckTileArg(args, 1, op_name);   // NOLINT: lhs index
+    CheckScalarArg(args, 2, op_name); // NOLINT: rhs index
     return DeduceBlockOutTileType(args, kwargs, op_name, 0x3);
 }
 

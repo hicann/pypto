@@ -52,7 +52,7 @@ std::vector<StmtPtr> EliminateDeadCode(const std::vector<StmtPtr>& stmts);
 /// scalar assignments remain eligible for removal.
 ///
 /// Like `EliminateDeadCode`, iterates to a fixed point so chains of scalar
-/// bindings (`a = 5; b = a + 1; c = b + 1` with `c` unused) collapse fully.
+/// bindings where only the last value is consumed collapse fully.
 std::vector<StmtPtr> EliminateDeadScalarAssignments(const std::vector<StmtPtr>& stmts);
 
 } // namespace dce
