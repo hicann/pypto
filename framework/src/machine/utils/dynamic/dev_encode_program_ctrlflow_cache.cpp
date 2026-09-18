@@ -1079,18 +1079,20 @@ void DevControlFlowCache::RuntimeAddrRelocWorkspace(uint64_t srcWorkspace, uint6
                 }
             } else {
                 // Device: Restore has copied backup offsets into the live freelist; reloc live only
-                // so backup stays in offset form for subsequent cache hits.
+                // so backup stays in offset form for subsequent cache hits. Use Reloc (not
+                // RelocNullable): in the offset domain 0 is a valid address (workspace start),
+                // skipping it leaves a null slot that Allocate hands out verbatim.
                 WsSlotAllocator::BlockHeader* liveBoundaryBase = allocator[i]
                                                                      .devTaskBoundaryOutcasts.GetBlockHeaderBase();
                 uint64_t liveBoundaryReady = allocator[i].devTaskBoundaryOutcasts.initReadyCount_;
                 for (uint64_t k = 0; k < liveBoundaryReady; k++) {
-                    relocWorkspace.RelocNullable(liveBoundaryBase[k].ptr);
+                    relocWorkspace.Reloc(liveBoundaryBase[k].ptr);
                 }
                 WsSlotAllocator::BlockHeader* liveInnerBase = allocator[i]
                                                                   .devTaskInnerTemporalOutcasts.GetBlockHeaderBase();
                 uint64_t liveInnerReady = allocator[i].devTaskInnerTemporalOutcasts.initReadyCount_;
                 for (uint64_t k = 0; k < liveInnerReady; k++) {
-                    relocWorkspace.RelocNullable(liveInnerBase[k].ptr);
+                    relocWorkspace.Reloc(liveInnerBase[k].ptr);
                 }
             }
         }
