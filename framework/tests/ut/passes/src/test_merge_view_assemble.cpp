@@ -57,8 +57,11 @@ public:
         config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
         config::SetHostConfig(KEY_STRATEGY, "ViewAssembleTestStrategy");
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
+        // UTs exercise the token-era merging (chain share + safety gates); legacy-mode
+        // tests opt out explicitly.
+        IRContext::Get().SetAssembleNewLogicalTensor(true);
     }
-    void TearDown() override {}
+    void TearDown() override { IRContext::Get().SetAssembleNewLogicalTensor(false); }
 };
 
 namespace {
@@ -1513,14 +1516,18 @@ TEST_F(MergeViewAssembleTest, CompleteProducerGroupFusesAndPreservesTokens)
     }
     ASSERT_EQ(replacements.size(), 2);
     ASSERT_EQ(output->GetProducers().size(), 2);
-    ASSERT_EQ(function->GetVarDependency().GetProducers(wawToken).size(), 1);
-    // P1 的 WAW token 同时保留 group 内 P1' -> P2'，并复用于 downstream outgoing fan-in。
-    ASSERT_EQ(function->GetVarDependency().GetConsumers(wawToken).size(), 2);
+    // 旧 wawToken 被清理：两条合并链写入 output 的不相交区域（coverage 保证），
+    // WAW 顺序随之消解；downstream 的结果 token 扇出为两条链各自的新 token。
+    EXPECT_EQ(function->GetVarDependency().GetProducers(wawToken).size(), 0);
     EXPECT_EQ(finalConsumer.tokens_.size(), 2);
     for (auto* replacement : replacements) {
         ASSERT_FALSE(replacement->result_token_.empty());
-        EXPECT_TRUE(
-            function->GetVarDependency().HasConsumer(replacement->result_token_.front(), ToStmtPtr(finalConsumer)));
+        bool waitedByFinalConsumer = false;
+        for (const auto& token : replacement->result_token_) {
+            waitedByFinalConsumer = waitedByFinalConsumer ||
+                                    function->GetVarDependency().HasConsumer(token, ToStmtPtr(finalConsumer));
+        }
+        EXPECT_TRUE(waitedByFinalConsumer);
     }
     EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(middle->GetMagic()), nullptr);
 }
@@ -1624,7 +1631,7 @@ TEST_F(MergeViewAssembleTest, CompleteProducerGroupWithConcreteDynOffsetsFuses)
     EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(middle->GetMagic()), nullptr);
 }
 
-TEST_F(MergeViewAssembleTest, NestedCompleteProducerGroupFusionsDoNotOverlap)
+TEST_F(MergeViewAssembleTest, NestedCompleteProducerGroupFusionsCollapseThroughAbsorption)
 {
     Program program;
     auto function = std::make_unique<Function>(program, "nested_producer_groups", "nested_producer_groups", nullptr);
@@ -1671,10 +1678,15 @@ TEST_F(MergeViewAssembleTest, NestedCompleteProducerGroupFusionsDoNotOverlap)
         ++assembleCount;
         ASSERT_EQ(op.GetIOperands().size(), 1);
         ASSERT_EQ(op.GetOOperands().size(), 1);
+        EXPECT_EQ(op.GetOOperands().front(), output);
     }
-    EXPECT_EQ(assembleCount, 5);
-    EXPECT_EQ(output->GetProducers().size(), 1);
-    EXPECT_NE(function->GetTensorMap().GetTensorByMagic(concatMiddle->GetMagic()), nullptr);
+    // The outer group absorbs both inner fusions: every leaf writes the final output
+    // directly at the composed offset and all intermediate middles are eliminated.
+    EXPECT_EQ(assembleCount, 4);
+    EXPECT_EQ(output->GetProducers().size(), 4);
+    EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(firstMiddle->GetMagic()), nullptr);
+    EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(secondMiddle->GetMagic()), nullptr);
+    EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(concatMiddle->GetMagic()), nullptr);
 }
 
 TEST_F(MergeViewAssembleTest, ProducerGroupWithIntermediateViewConsumerKeepsDataEdge)
@@ -2449,68 +2461,87 @@ TEST_F(MergeViewAssembleTest, FanoutViewChainResultTokenPropagatesToEveryMergedS
     EXPECT_FALSE(dependency.HasDependency(warToken));
 }
 
-TEST_F(MergeViewAssembleTest, AssembleChainMergeSkippedWhenIntermediateHasExternalAssembleConsumer)
+// Legacy mode (create_new_logical_tensor off): basic assemble chain merge still works.
+TEST_F(MergeViewAssembleTest, LegacyModeMergesLinearAssembleChain)
 {
-    // Regression: a mergeable assemble chain whose intermediate tensor is also consumed by an
-    // out-of-chain assemble (different scope, cannot join the chain) must NOT be merged.
-    // Merging would delete the intermediate tensor's only producer while the external assemble
-    // stays alive; Function::EraseRelatedTensors then drops its input operand, producing an
-    // OP_ASSEMBLE with empty iOperand that fails AssignMemoryType in later passes.
-    ComputationalGraphBuilder G;
+    IRContext::Get().SetAssembleNewLogicalTensor(false);
+    Program program;
+    auto function = std::make_unique<Function>(program, "legacy_linear", "legacy_linear", nullptr);
+    IRBuilder builder;
+    auto input = builder.CreateTensorVar(*function, DataType::DT_FP32, {2, 4});
+    auto viewOut = builder.CreateTensorVar(*function, DataType::DT_FP32, {2, 4});
+    auto midTensor = builder.CreateTensorVar(*function, DataType::DT_FP32, {2, 8});
+    auto output = builder.CreateTensorVar(*function, DataType::DT_FP32, {2, 16});
+    function->inCasts_ = {input};
+    function->outCasts_ = {output};
+    // The producer view keeps the assemble input alive so EraseRedundantAssemble
+    // (legal-mode cleanup for producer-less inputs) does not remove the chain head.
+    auto& view = builder.CreateTensorOpStmt(*function, Opcode::OP_VIEW, {input}, {viewOut});
+    view.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto& first = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {viewOut}, {midTensor});
+    first.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto& second = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {midTensor}, {output});
+    second.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 4}));
+    function->BuildTensorMap();
 
-    std::vector<std::string> tensorNames = {"input", "mid", "chain_out", "ext_out"};
-    EXPECT_TRUE(G.AddTensors(DataType::DT_FP32, {10, 10}, tensorNames));
+    MergeViewAssemble pass;
+    ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
 
-    std::vector<Opcode> opCodes = {Opcode::OP_ASSEMBLE, Opcode::OP_ASSEMBLE, Opcode::OP_ASSEMBLE};
-    std::vector<std::vector<std::string>> ioperands = {{"input"}, {"mid"}, {"mid"}};
-    std::vector<std::vector<std::string>> ooperands = {{"mid"}, {"chain_out"}, {"ext_out"}};
-    std::vector<std::string> opNames = {"assemble1", "assemble2", "external_assemble"};
-
-    EXPECT_TRUE(G.AddOps(opCodes, ioperands, ooperands, opNames, true));
-    EXPECT_TRUE(G.SetInCast({"input"}));
-    EXPECT_TRUE(G.SetOutCast({"chain_out", "ext_out"}));
-
-    Function* function = G.GetFunction();
-    ASSERT_NE(function, nullptr);
-
-    auto* assemble1 = G.GetOp("assemble1");
-    assemble1->SetOpAttribute(
-        std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{1, 0}, std::vector<SymbolicScalar>{}));
-    assemble1->SetScopeId(1);
-
-    auto* assemble2 = G.GetOp("assemble2");
-    assemble2->SetOpAttribute(
-        std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 2}, std::vector<SymbolicScalar>{}));
-    assemble2->SetScopeId(1);
-
-    auto* externalAssemble = G.GetOp("external_assemble");
-    externalAssemble->SetOpAttribute(
-        std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{5, 5}, std::vector<SymbolicScalar>{}));
-    externalAssemble->SetScopeId(2);
-
-    MergeViewAssemble mergePass;
-    ASSERT_EQ(mergePass.RunOnFunction(*function), SUCCESS);
-
-    // The chain [assemble1, assemble2] must stay unmerged: both ops survive.
-    const auto& operations = function->Operations();
-    EXPECT_TRUE(operations.Contains(*assemble1)) << "assemble1 must survive when the merge is skipped";
-    EXPECT_TRUE(operations.Contains(*assemble2)) << "assemble2 must survive when the merge is skipped";
-    EXPECT_TRUE(operations.Contains(*externalAssemble));
-
-    // No operation may end up with an empty input operand list.
-    for (auto& op : operations) {
-        EXPECT_FALSE(op.IsDeleted() && op.GetOpcode() == Opcode::OP_ASSEMBLE && op.GetIOperands().empty())
-            << "deleted assemble with empty iOperand detected";
-        if (!op.IsDeleted()) {
-            EXPECT_FALSE(op.GetOpcode() == Opcode::OP_ASSEMBLE && op.GetIOperands().empty())
-                << "live assemble op[" << op.GetOpMagic() << "] has empty iOperand";
+    // Legal mode deletes only the chain tail; the head dies later via dead-code
+    // elimination, leaving exactly one live assemble (the merged op).
+    Operation* merged = nullptr;
+    for (auto& op : function->Operations(false)) {
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE && !op.IsDeleted()) {
+            ASSERT_EQ(merged, nullptr);
+            merged = &op;
         }
     }
+    ASSERT_NE(merged, nullptr);
+    EXPECT_EQ(merged->GetIOperands().front(), viewOut);
+    EXPECT_EQ(merged->GetOOperands().front(), output);
+    auto attr = std::dynamic_pointer_cast<AssembleOpAttribute>(merged->GetOpAttribute());
+    ASSERT_NE(attr, nullptr);
+    EXPECT_EQ(attr->GetToOffset(), (std::vector<int64_t>{0, 4}));
+}
 
-    // The external assemble keeps consuming the intermediate tensor.
-    ASSERT_EQ(externalAssemble->GetIOperands().size(), 1);
-    EXPECT_EQ(externalAssemble->GetIOperands().front()->GetMagic(),
-              G.GetOp("assemble1")->GetOOperands().front()->GetMagic());
+// Legal mode deletes only the chain tail: intermediates survive for out-of-chain
+// readers, so the ABS reader of middle keeps a live producer.
+TEST_F(MergeViewAssembleTest, LegacyModeKeepsIntermediateForSiblingConsumer)
+{
+    IRContext::Get().SetAssembleNewLogicalTensor(false);
+    Program program;
+    auto function = std::make_unique<Function>(program, "legacy_sibling", "legacy_sibling", nullptr);
+    IRBuilder builder;
+    auto firstInput = builder.CreateTensorVar(*function, DataType::DT_FP32, {2, 4});
+    auto secondInput = builder.CreateTensorVar(*function, DataType::DT_FP32, {2, 4});
+    auto firstView = builder.CreateTensorVar(*function, DataType::DT_FP32, {2, 4});
+    auto secondView = builder.CreateTensorVar(*function, DataType::DT_FP32, {2, 4});
+    auto middle = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+    auto output = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+    auto otherOut = builder.CreateTensorVar(*function, DataType::DT_FP32, {4, 4});
+    function->inCasts_ = {firstInput, secondInput};
+    function->outCasts_ = {output, otherOut};
+    // Producer views keep the assemble inputs alive for EraseRedundantAssemble.
+    auto& view1 = builder.CreateTensorOpStmt(*function, Opcode::OP_VIEW, {firstInput}, {firstView});
+    view1.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto& view2 = builder.CreateTensorOpStmt(*function, Opcode::OP_VIEW, {secondInput}, {secondView});
+    view2.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto& first = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {firstView}, {middle});
+    first.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto& second = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {secondView}, {middle});
+    second.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{2, 0}));
+    // Sibling consumer of middle: an ABS op. Legal mode merges the chain through the
+    // middle but deletes only the tail, so the sibling keeps live producers.
+    auto& downstream = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {middle}, {output});
+    downstream.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    builder.CreateTensorOpStmt(*function, Opcode::OP_ABS, {middle}, {otherOut});
+    function->BuildTensorMap();
+
+    MergeViewAssemble pass;
+    ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
+
+    EXPECT_FALSE(first.IsDeleted()) << "legal mode must keep the intermediate producer alive";
+    EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(middle->GetMagic()) != nullptr, true);
 }
 } // namespace tile_fwk
 } // namespace npu
