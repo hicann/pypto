@@ -15,10 +15,10 @@ import ast
 from typing import TYPE_CHECKING, Any
 
 from pypto_pro import DataType, ir
+from pypto_pro._errors import InvalidArgument, InvalidShape, InvalidType
 import pypto_pro.language as pl
 from pypto_pro.language.parser._expr_evaluator import ExprEvaluator
 from pypto_pro.language.parser._type_resolver import TypeResolver
-from pypto_pro.language.parser.diagnostics import ParserTypeError
 import pytest
 
 if TYPE_CHECKING:
@@ -31,7 +31,6 @@ def _make_resolver(
     """Create a TypeResolver with ExprEvaluator from closure_vars."""
     ev = ExprEvaluator(closure_vars=closure_vars or {})
     return TypeResolver(expr_evaluator=ev, scope_lookup=scope_lookup)
-
 
 
 @pytest.mark.parametrize(
@@ -65,11 +64,11 @@ def test_resolve_tensor_without_layout_has_no_view():
 
 
 def test_resolve_tensor_layout_invalid():
-    """Invalid layout raises ParserTypeError."""
+    """Invalid layout raises InvalidArgument."""
     resolver = _make_resolver()
     node = ast.parse("pl.Tensor[[64, 128], pl.DT_FP16, pl.INVALID]", mode="eval").body
 
-    with pytest.raises(ParserTypeError, match="Unknown layout"):
+    with pytest.raises(InvalidArgument, match="Unknown layout"):
         resolver.resolve_type(node)
 
 
@@ -77,7 +76,7 @@ def test_resolve_nz_tensor_rejects_rank_less_than_two():
     resolver = _make_resolver()
     node = ast.parse("pl.Tensor[[64], pl.DT_FP16, pl.NZ]", mode="eval").body
 
-    with pytest.raises(ParserTypeError, match="NZ Tensor requires rank >= 2"):
+    with pytest.raises(InvalidShape, match="NZ Tensor requires rank >= 2"):
         resolver.resolve_type(node)
 
 
@@ -108,7 +107,7 @@ def test_resolve_layout_closure_invalid_type():
     resolver = _make_resolver(closure_vars={"my_layout": "NZ"})
     node = ast.parse("pl.Tensor[[64, 128], pl.DT_FP16, my_layout]", mode="eval").body
 
-    with pytest.raises(ParserTypeError, match="must be a TensorLayout"):
+    with pytest.raises(InvalidType, match="must be a TensorLayout"):
         resolver.resolve_type(node)
 
 

@@ -31,6 +31,7 @@ from pypto.pypto_impl.ir import (
     SyncCoreType,
 )
 
+from ..._errors import InvalidArgument, InvalidOperation, InvalidShape, InvalidType, InvalidVal, NotSupported
 from .._utils import _get_span_or_capture, _is_int, _normalize_expr, _to_make_tuple
 from ._op_registry import OpSpec, op_impl, register_table
 
@@ -79,54 +80,55 @@ def _is_integer_scalar_expr(value: Expr) -> bool:
 def _normalize_integer_id_expr(value: int | Expr, span: Span, *, name: str, max_id: int) -> Expr:
     """Normalize an integer ID to an IR operand and validate statically known values."""
     if not isinstance(value, Expr) and not _is_int(value):
-        raise TypeError(f"{name} must be a Python int or an integer scalar expression")
+        raise InvalidType(f"{name} must be a Python int or an integer scalar expression", span=span)
     expr = _normalize_expr(value, span)
     if not _is_integer_scalar_expr(expr):
-        raise TypeError(f"{name} must be an integer scalar expression")
+        raise InvalidType(f"{name} must be an integer scalar expression", span=span)
     if isinstance(expr, _ir_core.ConstInt):
-        _check_id_range(expr.value, max_id, name)
+        _check_id_range(expr.value, max_id, name, span=span)
     return expr
 
 
-def _normalize_mutex_ids(mutex_ids: tuple | list | None) -> list[int] | None:
+def _normalize_mutex_ids(mutex_ids: tuple | list | None, span: Span | None = None) -> list[int] | None:
     """Validate candidate IDs before they are converted to vector<int>."""
     if mutex_ids is None:
         return None
     if not isinstance(mutex_ids, (list, tuple)):
-        raise TypeError("mutex_ids must be a list, tuple, or None")
+        raise InvalidType("mutex_ids must be a list, tuple, or None", span=span)
     normalized_mutex_ids = list(mutex_ids)
     if not normalized_mutex_ids:
-        raise ValueError("mutex_ids must not be empty")
+        raise InvalidVal("mutex_ids must not be empty", span=span)
     for index, mutex_id in enumerate(normalized_mutex_ids):
         if not _is_int(mutex_id):
-            raise TypeError(f"mutex_ids[{index}] must be a Python int")
-        _check_id_range(mutex_id, MAX_MUTEX_ID, "mutex_ids element")
+            raise InvalidType(f"mutex_ids[{index}] must be a Python int", span=span)
+        _check_id_range(mutex_id, MAX_MUTEX_ID, "mutex_ids element", span=span)
     return normalized_mutex_ids
 
 
-def _validate_concrete_pipe(pipe: PipeType, name: str) -> None:
+def _validate_concrete_pipe(pipe: PipeType, name: str, span: Span | None = None) -> None:
     if not isinstance(pipe, PipeType):
-        raise TypeError(f"{name} must be a PipeType, got {type(pipe).__name__}")
+        raise InvalidType(f"{name} must be a PipeType, got {type(pipe).__name__}", span=span)
     if pipe == PipeType.ALL:
-        raise ValueError(f"{name} must identify one concrete pipe, got PipeType.ALL")
+        raise InvalidArgument(f"{name} must identify one concrete pipe, got PipeType.ALL", span=span)
 
 
-def _check_id_range(value: int, max_id: int, name: str, *, min_id: int = 0) -> None:
+def _check_id_range(value: int, max_id: int, name: str, *, min_id: int = 0, span: Span | None = None) -> None:
     """Reject a hardware resource id outside its inclusive range."""
     from pypto_pro.language.parser.diagnostics import check_in_range
 
-    check_in_range(value, min_id, max_id, subject=name, error=ValueError)
+    check_in_range(value, min_id, max_id, subject=name, span=span)
 
 
 def _validate_sync_pipes(
     set_pipe: PipeType,
     wait_pipe: PipeType,
     target: _ir_core.SectionKind,
+    span: Span | None = None,
 ) -> None:
-    _validate_concrete_pipe(set_pipe, "set_pipe")
-    _validate_concrete_pipe(wait_pipe, "wait_pipe")
+    _validate_concrete_pipe(set_pipe, "set_pipe", span)
+    _validate_concrete_pipe(wait_pipe, "wait_pipe", span)
     if set_pipe == wait_pipe:
-        raise ValueError(f"set_pipe and wait_pipe must differ, got {set_pipe}")
+        raise InvalidOperation(f"set_pipe and wait_pipe must differ, got {set_pipe}")
 
     is_cube = target == _ir_core.SectionKind.Cube
     sync_wait_pipes = _A5_AIC_SYNC_WAIT_PIPES if is_cube else _A5_AIV_SYNC_WAIT_PIPES
@@ -135,7 +137,7 @@ def _validate_sync_pipes(
 
     if wait_pipe not in supported_wait_pipes:
         supported = ", ".join(str(pipe) for pipe in supported_wait_pipes)
-        raise ValueError(
+        raise NotSupported(
             f"unsupported A5 synchronization path{side}: {set_pipe} -> {wait_pipe}; "
             f"supported wait_pipe values for {set_pipe}: {supported}"
         )
@@ -349,18 +351,21 @@ def sync_all(
         workspaces = []
 
     kwargs: dict[str, object] = {"mode": mode, "core_type": core_type}
+    # Resolved before the checks below so their errors can report a location.
+    actual_span = _get_span_or_capture(span)
 
     if mode == SyncAllMode.HARD:
         if workspaces:
-            raise ValueError("Hard mode sync_all does not accept workspace arguments")
+            raise NotSupported("Hard mode sync_all does not accept workspace arguments", span=actual_span)
     elif mode == SyncAllMode.SOFT:
         if not workspaces:
-            raise ValueError("Soft mode sync_all requires workspaces list (e.g. [gm, ub])")
+            raise InvalidArgument(
+                "Soft mode sync_all requires workspaces list (e.g. [gm, ub])", span=actual_span
+            )
 
     # Build args[0]: always a MakeTuple (empty for hard, populated for soft)
     ws_tuple = _to_make_tuple(workspaces)
 
-    actual_span = _get_span_or_capture(span)
     return _ir_core.create_op_call("system.sync_all", [ws_tuple], kwargs, actual_span)
 
 
@@ -395,7 +400,7 @@ def dcci(
         elif isinstance(offset, (int, Expr)):
             args.append(_normalize_expr(offset, actual_span))
         else:
-            raise TypeError("dcci offset must be an int, Expr, list, tuple, or None")
+            raise InvalidType("dcci offset must be an int, Expr, list, tuple, or None")
     kwargs = {"cache_line": cache_line, "dst": dst}
     return _ir_core.create_op_call("system.dcci", args, kwargs, actual_span)
 
@@ -417,7 +422,7 @@ def _create_mutex_op(
     actual_span: Span,
 ) -> Call:
     """Create one user-requested manual mutex operation."""
-    _validate_concrete_pipe(pipe, "pipe")
+    _validate_concrete_pipe(pipe, "pipe", actual_span)
     mutex_id_expr = _normalize_integer_id_expr(
         mutex_id, actual_span, name="mutex_id", max_id=MAX_MUTEX_ID
     )
@@ -453,9 +458,9 @@ def _create_mutex_dedup_op(
         span: Source span.
     """
     actual_span = span if span is not None else _get_span_or_capture(span, frame_offset=3)
-    _validate_concrete_pipe(pipe, "pipe")
+    _validate_concrete_pipe(pipe, "pipe", actual_span)
     if not mutex_id_exprs:
-        raise ValueError("mutex_id requires at least one expression")
+        raise InvalidArgument("mutex_id requires at least one expression")
     normalized_mutex_id_exprs = [
         _normalize_integer_id_expr(mutex_id, actual_span, name="mutex_id", max_id=MAX_MUTEX_ID)
         for mutex_id in mutex_id_exprs
@@ -463,9 +468,9 @@ def _create_mutex_dedup_op(
     kwargs: dict = {"pipe": pipe}
     if mutex_id_owner_indices is not None:
         if len(mutex_id_owner_indices) != len(mutex_id_exprs):
-            raise ValueError("mutex_id_owner_indices length must match mutex_id_exprs length")
+            raise InvalidShape("mutex_id_owner_indices length must match mutex_id_exprs length")
         kwargs["mutex_id_owner_indices"] = list(mutex_id_owner_indices)
-    normalized_mutex_ids = _normalize_mutex_ids(mutex_ids_union)
+    normalized_mutex_ids = _normalize_mutex_ids(mutex_ids_union, actual_span)
     if normalized_mutex_ids is not None:
         kwargs["mutex_ids"] = normalized_mutex_ids
     return _ir_core.create_op_call(f"{op_name}_dyn", normalized_mutex_id_exprs, kwargs, actual_span)
@@ -594,7 +599,7 @@ register_table(
 def _parse_system_sync(self, call: ast.Call, op_name: str):
     span = self.span_tracker.get_span(call)
     kwargs = self.parse_op_kwargs(call)
-    _validate_sync_pipes(kwargs["set_pipe"], kwargs["wait_pipe"], self.target)
+    _validate_sync_pipes(kwargs["set_pipe"], kwargs["wait_pipe"], self.target, span)
     return _create_sync_op(op_name, **kwargs, span=span)
 
 
@@ -621,9 +626,8 @@ def _parse_system_set_mm_layout_transform(self, call: ast.Call):
     call_span = self.span_tracker.get_span(call)
     kwargs = self.parse_op_kwargs(call)
     if "enabled" not in kwargs:
-        from pypto_pro.language.parser.diagnostics import ParserSyntaxError
 
-        raise ParserSyntaxError(
+        raise InvalidArgument(
             "set_mm_layout_transform requires keyword argument 'enabled'",
             span=call_span,
         )

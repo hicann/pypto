@@ -32,9 +32,11 @@
 #include "ir/scalar_expr.h"
 #include "ir/type.h"
 #include "ir/type_inference.h"
+#include "pypto_pro/error.h"
 
 namespace pypto {
 namespace ir {
+using npu::tile_fwk::ExternalError;
 
 namespace {
 // ============================================================================
@@ -53,7 +55,7 @@ int NormalizeAxis(int axis, size_t ndim)
     if (axis < 0) {
         axis += static_cast<int>(ndim);
     }
-    CHECK(axis >= 0 && axis < static_cast<int>(ndim))
+    PRO_IR_CHECK(ExternalError::INVALID_SHAPE, axis >= 0 && axis < static_cast<int>(ndim))
         << "Axis " << axis << " is out of range for " << ndim << "D tensor";
     return axis;
 }
@@ -68,25 +70,28 @@ TypePtr DeduceTensorReshapeType([[maybe_unused]] const std::vector<ExprPtr>& arg
                                 [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     // tensor.reshape requires exactly 2 arguments: input tensor and shape tuple
-    CHECK(args.size() == 2) << "tensor.reshape requires exactly 2 arguments (input, shape), but got " << args.size();
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 2)
+        << "tensor.reshape requires exactly 2 arguments (input, shape), but got " << args.size();
 
     // First argument must be TensorType
     auto tensor_type = As<TensorType>(args[0]->GetType());
-    CHECK(tensor_type) << "tensor.reshape requires first argument to be a TensorType, but got "
-                       << args[0]->GetType()->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, tensor_type)
+        << "tensor.reshape requires first argument to be a TensorType, but got " << args[0]->GetType()->TypeName();
 
     // Second argument must be TupleType (shape)
     auto shape_tuple_type = As<TupleType>(args[1]->GetType());
-    CHECK(shape_tuple_type) << "tensor.reshape requires shape to be TupleType, but got "
-                            << args[1]->GetType()->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, shape_tuple_type)
+        << "tensor.reshape requires shape to be TupleType, but got " << args[1]->GetType()->TypeName();
 
     // Validate all shape elements are ScalarType with integer dtype
     for (size_t i = 0; i < shape_tuple_type->types_.size(); ++i) {
         auto scalar_type = As<ScalarType>(shape_tuple_type->types_[i]);
-        CHECK(scalar_type) << "tensor.reshape shape tuple element " << i << " must be ScalarType, but got "
-                           << shape_tuple_type->types_[i]->TypeName();
-        CHECK(scalar_type->dtype_.IsInt()) << "tensor.reshape shape tuple element " << i
-                                           << " must have integer dtype, but got " << scalar_type->dtype_.ToString();
+        PRO_IR_CHECK(ExternalError::INVALID_TYPE, scalar_type)
+            << "tensor.reshape shape tuple element " << i << " must be ScalarType, but got "
+            << shape_tuple_type->types_[i]->TypeName();
+        PRO_IR_CHECK(ExternalError::INVALID_TYPE, scalar_type->dtype_.IsInt())
+            << "tensor.reshape shape tuple element " << i << " must have integer dtype, but got "
+            << scalar_type->dtype_.ToString();
     }
 
     // Extract new shape dimensions
@@ -110,8 +115,9 @@ TypePtr DeduceTensorReshapeType([[maybe_unused]] const std::vector<ExprPtr>& arg
     int64_t old_product = ComputeStaticShapeProduct(tensor_type->shape_);
     int64_t new_product = ComputeStaticShapeProduct(new_shape);
     if (old_product > 0 && new_product > 0) {
-        CHECK(old_product == new_product) << "tensor.reshape: cannot reshape tensor of size " << old_product
-                                          << " into shape with size " << new_product;
+        PRO_IR_CHECK(ExternalError::INVALID_SHAPE, old_product == new_product)
+            << "tensor.reshape: cannot reshape tensor of size " << old_product << " into shape with size "
+            << new_product;
     }
 
     // Return new TensorType with reshaped dimensions and same dtype
@@ -122,32 +128,35 @@ TypePtr DeduceTensorTransposeType([[maybe_unused]] const std::vector<ExprPtr>& a
                                   [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     // tensor.transpose requires exactly 3 arguments: input tensor, axis1, axis2
-    CHECK(args.size() == 0x3) << "tensor.transpose requires exactly 3 arguments (input, axis1, axis2), but got "
-                              << args.size();
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 0x3)
+        << "tensor.transpose requires exactly 3 arguments (input, axis1, axis2), but got " << args.size();
 
     // First argument must be TensorType
     auto tensor_type = As<TensorType>(args[0]->GetType());
-    CHECK(tensor_type) << "tensor.transpose requires first argument to be a TensorType, but got "
-                       << args[0]->GetType()->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, tensor_type)
+        << "tensor.transpose requires first argument to be a TensorType, but got " << args[0]->GetType()->TypeName();
 
     const auto& input_shape = tensor_type->shape_;
     size_t ndim = input_shape.size();
-    CHECK(ndim >= 0x2) << "tensor.transpose requires at least 2 dimensions, but got " << ndim;
+    PRO_IR_CHECK(ExternalError::INVALID_SHAPE, ndim >= 0x2)
+        << "tensor.transpose requires at least 2 dimensions, but got " << ndim;
 
     // Second argument is axis1 (ConstInt)
     auto axis1_const = As<ConstInt>(args[1]);
-    CHECK(axis1_const) << "tensor.transpose requires second argument (axis1) to be a ConstInt";
+    PRO_IR_CHECK(ExternalError::INVALID_SHAPE, axis1_const)
+        << "tensor.transpose requires second argument (axis1) to be a ConstInt";
 
     // Third argument is axis2 (ConstInt)
     auto axis2_const = As<ConstInt>(args[2]);
-    CHECK(axis2_const) << "tensor.transpose requires third argument (axis2) to be a ConstInt";
+    PRO_IR_CHECK(ExternalError::INVALID_SHAPE, axis2_const)
+        << "tensor.transpose requires third argument (axis2) to be a ConstInt";
 
     // Normalize axes (handle negative indexing)
     int axis1 = NormalizeAxis(static_cast<int>(axis1_const->value_), ndim);
     int axis2 = NormalizeAxis(static_cast<int>(axis2_const->value_), ndim);
 
-    CHECK(axis1 != axis2) << "tensor.transpose: axis1 and axis2 must be different, but got axis1=" << axis1
-                          << ", axis2=" << axis2;
+    PRO_IR_CHECK(ExternalError::INVALID_SHAPE, axis1 != axis2)
+        << "tensor.transpose: axis1 and axis2 must be different, but got axis1=" << axis1 << ", axis2=" << axis2;
 
     // Create new shape by swapping the specified dimensions
     std::vector<ExprPtr> new_shape = input_shape;

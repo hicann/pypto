@@ -20,6 +20,16 @@ from typing import Any
 from pypto.pypto_impl import ir as _ir_core
 from pypto.pypto_impl.ir import Call, Expr, Function, Span
 
+from ..._errors import (
+    CommonExternal,
+    InvalidArgument,
+    InvalidOperation,
+    InvalidShape,
+    InvalidType,
+    InvalidVal,
+    NotSupported,
+    message_of,
+)
 from .._utils import _get_span_or_capture, _normalize_expr
 from ._op_registry import op_impl
 
@@ -318,7 +328,7 @@ def launch(
     actual_span = _get_span_or_capture(span)
     thread_dims = list(threads) if isinstance(threads, tuple) else [threads]
     if not 1 <= len(thread_dims) <= 3:
-        raise ValueError("SIMT launch threads must contain one to three dimensions")
+        raise InvalidShape("SIMT launch threads must contain one to three dimensions")
     thread_dims.extend([1] * (3 - len(thread_dims)))
     normalized_dims = [_normalize_expr(dim, actual_span) for dim in thread_dims]
     return _ir_core.create_op_call(
@@ -331,20 +341,19 @@ def launch(
 
 def _validate_simt_body_op(parser: Any, call: ast.Call, _kwargs: dict[str, Any]) -> None:
     """Validate the common source constraints of a SIMT body operation."""
-    from pypto_pro.language.parser.diagnostics import ParserSyntaxError
 
     span = parser.span_tracker.get_span(call)
     op_name = parser._extract_op_name(call.func)
     if parser._current_func_type not in (_ir_core.FunctionType.SimtVF, _ir_core.FunctionType.SimtCallee):
-        raise ParserSyntaxError(
+        raise InvalidOperation(
             f"pl.{op_name}() can only be used inside a SIMT function",
             span=span,
             hint="Move SIMT-context-dependent logic into @pl.vector_function(mode=\"simt\").",
         )
     if call.args:
-        raise ParserSyntaxError(f"pl.{op_name}() does not accept positional arguments", span=span)
+        raise InvalidArgument(f"pl.{op_name}() does not accept positional arguments", span=span)
     if call.keywords:
-        raise ParserSyntaxError(f"pl.{op_name}() does not accept keyword arguments", span=span)
+        raise InvalidArgument(f"pl.{op_name}() does not accept keyword arguments", span=span)
 
 
 def _parse_dim3_context(parser: Any, call: ast.Call, op_name: str) -> Expr:
@@ -417,36 +426,36 @@ def _parse_threadfence(parser: Any, call: ast.Call) -> Expr:
 def _parse_simt_launch(parser: Any, call: ast.Call, local_name: str, callee_template: Callable) -> Expr:
     """Parse ``simt_func[threads](args...)`` and lower it to ``simt.launch`` IR."""
     from pypto_pro.language.parser.decorator import get_simt_max_threads
-    from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError
 
     span = parser.span_tracker.get_span(call)
     if parser._current_func_type in (_ir_core.FunctionType.SimtVF, _ir_core.FunctionType.SimtCallee):
-        raise ParserSyntaxError("Nested SIMT vector-function invocation is not supported", span=span)
+        raise NotSupported("Nested SIMT vector-function invocation is not supported", span=span)
     if parser.target != _ir_core.SectionKind.Vector:
-        raise ParserSyntaxError(
+        raise InvalidOperation(
             "SIMT vector functions must be invoked inside 'with pl.section_vector():'",
             span=span,
             hint="SIMT vector functions execute on AIV and cannot be invoked from Cube or shared kernel code.",
         )
 
     if call.keywords or any(isinstance(arg, ast.Starred) for arg in call.args):
-        raise ParserSyntaxError(
+        raise InvalidArgument(
             "SIMT vector-function invocation accepts positional arguments only",
             span=span,
             hint="Use: simt_func[threads](arg0, arg1, ...)",
         )
 
     if get_simt_max_threads(callee_template) is None:
-        raise ParserTypeError(
+        raise InvalidVal(
             f"'{local_name}' is not a launchable "
             '@pl.vector_function(mode="simt", max_threads=...)',
             span=parser.span_tracker.get_span(call.func.value),
+            parser_retry=True,
         )
 
     threads_node = call.func.slice
     if isinstance(threads_node, ast.Tuple):
         if not 1 <= len(threads_node.elts) <= 3:
-            raise ParserSyntaxError(
+            raise InvalidShape(
                 "SIMT thread configuration must contain one to three dimensions",
                 span=parser.span_tracker.get_span(threads_node),
                 hint="Use simt_func[N](...), simt_func[x, y](...), or simt_func[x, y, z](...).",
@@ -462,7 +471,7 @@ def _parse_simt_launch(parser: Any, call: ast.Call, local_name: str, callee_temp
     try:
         return launch(callee, threads=tuple(thread_dims), args=launch_args, span=span)
     except RuntimeError as error:
-        raise ParserTypeError(str(error), span=span) from error
+        raise CommonExternal(message_of(error), span=span, parser_retry=True) from error
 
 def _numeric_literal_value(node: ast.expr) -> int | float | None:
     if isinstance(node, ast.Constant) and type(node.value) in (int, float):
@@ -485,16 +494,16 @@ def _parse_atomic_operand(
     dtype: _ir_core.DataType,
 ) -> Expr:
     """Parse one atomic operand, contextually typing numeric literals."""
-    from pypto_pro.language.parser.diagnostics import ParserTypeError
 
     operand_span = parser.span_tracker.get_span(operand_node)
     literal_value = _numeric_literal_value(operand_node)
     if literal_value is not None:
         if dtype.is_int() and type(literal_value) is not int:
-            raise ParserTypeError(
+            raise InvalidType(
                 f"pl.{op_name}() requires an integer {operand_name} for target dtype {dtype}",
                 span=operand_span,
                 hint=f"Use an integer literal or a Scalar with dtype {dtype}.",
+                parser_retry=True,
             )
         return parser._make_scalar_constant(literal_value, dtype, operand_span)
 
@@ -509,11 +518,10 @@ def _parse_atomic_call(
     call: ast.Call,
 ) -> Expr:
     """Parse one ``pl.simt.atomic_*`` call without loading its target."""
-    from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError
 
     span = parser.span_tracker.get_span(call)
     if parser._current_func_type not in (_ir_core.FunctionType.SimtVF, _ir_core.FunctionType.SimtCallee):
-        raise ParserSyntaxError(
+        raise InvalidOperation(
             f"pl.{op_name}() can only be used inside a SIMT function",
             span=span,
             hint="Move SIMT-context-dependent logic into @pl.vector_function(mode=\"simt\").",
@@ -523,7 +531,7 @@ def _parse_atomic_call(
     expected_args = 1 + len(operand_names)
     if len(call.args) != expected_args or call.keywords:
         signature = ", ".join(("target", *operand_names))
-        raise ParserSyntaxError(
+        raise InvalidArgument(
             f"pl.simt.{short_name}() requires exactly {expected_args} positional arguments",
             span=span,
             hint=f"Use pl.simt.{short_name}({signature}).",
@@ -531,7 +539,7 @@ def _parse_atomic_call(
 
     target_node = call.args[0]
     if not isinstance(target_node, ast.Subscript):
-        raise ParserSyntaxError(
+        raise InvalidVal(
             f"pl.simt.{short_name}() target must be a direct Tile or Tensor subscript",
             span=parser.span_tracker.get_span(target_node),
             hint=f"Use pl.simt.{short_name}(tile[row, col], ...), not a previously loaded Scalar.",
@@ -540,7 +548,7 @@ def _parse_atomic_call(
         isinstance(target_node.slice, ast.Tuple)
         and any(isinstance(index, ast.Slice) for index in target_node.slice.elts)
     ):
-        raise ParserSyntaxError(
+        raise NotSupported(
             f"pl.simt.{short_name}() target does not support slices",
             span=parser.span_tracker.get_span(target_node),
             hint="Select exactly one element with integer indices.",
@@ -549,9 +557,10 @@ def _parse_atomic_call(
     container = parser.parse_expression(target_node.value)
     container_type = container.type if isinstance(container, Expr) else None
     if not isinstance(container_type, (_ir_core.TileType, _ir_core.TensorType)):
-        raise ParserTypeError(
+        raise InvalidType(
             f"pl.simt.{short_name}() target container must be a Tile or Tensor",
             span=parser.span_tracker.get_span(target_node.value),
+            parser_retry=True,
         )
 
     dtype = container_type.dtype
@@ -564,24 +573,23 @@ def _parse_atomic_call(
     try:
         return builder(container, offset, *operands, span=span)
     except RuntimeError as exc:
-        raise ParserTypeError(str(exc), span=span) from exc
+        raise CommonExternal(message_of(exc), span=span, parser_retry=True) from exc
 
 
 @op_impl("simt.cast")
 def _parse_simt_cast(parser: Any, call: ast.Call) -> Expr:
     """Parse ``pl.simt.cast`` while preserving its scalar-specific diagnostics."""
-    from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError
 
     span = parser.span_tracker.get_span(call)
     if parser._current_func_type not in (_ir_core.FunctionType.SimtVF, _ir_core.FunctionType.SimtCallee):
-        raise ParserSyntaxError(
+        raise InvalidOperation(
             "pl.simt.cast() can only be used inside a SIMT function",
             span=span,
             hint="Move SIMT-context-dependent logic into @pl.vector_function(mode=\"simt\").",
         )
 
     if len(call.args) != 2:
-        raise ParserSyntaxError(
+        raise InvalidArgument(
             f"pl.simt.cast() requires exactly 2 positional arguments, got {len(call.args)}",
             span=span,
             hint="Use pl.simt.cast(value, pl.DT_FP32, mode=pl.RoundMode.CAST_RINT).",
@@ -589,61 +597,63 @@ def _parse_simt_cast(parser: Any, call: ast.Call) -> Expr:
 
     mode_keywords = [kw for kw in call.keywords if kw.arg == "mode"]
     if len(mode_keywords) != len(call.keywords) or len(mode_keywords) > 1:
-        raise ParserSyntaxError(
+        raise InvalidArgument(
             "pl.simt.cast() only accepts one optional keyword argument: mode",
             span=span,
         )
 
     value = parser.parse_expression(call.args[0])
     if not isinstance(value, Expr) or not isinstance(value.type, _ir_core.ScalarType):
-        raise ParserTypeError(
+        raise InvalidType(
             "pl.simt.cast() value must be a scalar expression",
             span=parser.span_tracker.get_span(call.args[0]),
+            parser_retry=True,
         )
 
     dtype = parser.parse_expression(call.args[1])
     if not isinstance(dtype, _ir_core.DataType):
-        raise ParserTypeError(
+        raise InvalidType(
             "pl.simt.cast() dtype must be a pl.DT_* value",
             span=parser.span_tracker.get_span(call.args[1]),
+            parser_retry=True,
         )
 
     mode = _ir_core.RoundMode.CAST_NONE
     if mode_keywords:
         mode = parser.resolve_single_kwarg("mode", mode_keywords[0].value)
         if not isinstance(mode, _ir_core.RoundMode):
-            raise ParserTypeError(
+            raise InvalidType(
                 "pl.simt.cast() mode must be a pl.RoundMode value",
                 span=parser.span_tracker.get_span(mode_keywords[0].value),
+                parser_retry=True,
             )
 
     try:
         return cast(value, dtype, mode, span)
     except (ValueError, RuntimeError) as err:
         message = str(err).replace("simt.cast", "pl.simt.cast()")
-        raise ParserTypeError(message, span=span) from err
+        raise CommonExternal(message, span=span, parser_retry=True) from err
 
 
 @op_impl("simt.bitcast")
 def _parse_simt_bitcast(parser: Any, call: ast.Call) -> Expr:
     """Parse ``pl.simt.bitcast`` with scalar and dtype validation."""
-    from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError
 
     span = parser.span_tracker.get_span(call)
     if parser._current_func_type not in (
         _ir_core.FunctionType.SimtVF,
         _ir_core.FunctionType.SimtCallee,
     ):
-        raise ParserSyntaxError(
+        raise InvalidOperation(
             "pl.simt.bitcast() can only be used inside a SIMT function",
             span=span,
             hint="Move SIMT-context-dependent logic into @pl.vector_function(mode=\"simt\").",
         )
 
     if call.keywords:
-        raise ParserSyntaxError("pl.simt.bitcast() does not accept keyword arguments", span=span)
+        raise InvalidArgument("pl.simt.bitcast() does not accept keyword arguments", span=span)
     if len(call.args) != 2:
-        raise ParserSyntaxError(
+        raise InvalidArgument(
             f"pl.simt.bitcast() requires exactly 2 positional arguments, got {len(call.args)}",
             span=span,
             hint="Use pl.simt.bitcast(value, pl.DT_UINT32).",
@@ -651,23 +661,25 @@ def _parse_simt_bitcast(parser: Any, call: ast.Call) -> Expr:
 
     value = parser.parse_expression(call.args[0])
     if not isinstance(value, Expr) or not isinstance(value.type, _ir_core.ScalarType):
-        raise ParserTypeError(
+        raise InvalidType(
             "pl.simt.bitcast() value must be a scalar expression",
             span=parser.span_tracker.get_span(call.args[0]),
+            parser_retry=True,
         )
 
     dtype = parser.parse_expression(call.args[1])
     if not isinstance(dtype, _ir_core.DataType):
-        raise ParserTypeError(
+        raise InvalidType(
             "pl.simt.bitcast() dtype must be a pl.DT_* value",
             span=parser.span_tracker.get_span(call.args[1]),
+            parser_retry=True,
         )
 
     try:
         return bitcast(value, dtype, span)
     except (ValueError, RuntimeError) as err:
         message = str(err).replace("simt.bitcast", "pl.simt.bitcast()")
-        raise ParserTypeError(message, span=span) from err
+        raise CommonExternal(message, span=span, parser_retry=True) from err
 
 
 def _parse_scalar_math(
@@ -677,18 +689,17 @@ def _parse_scalar_math(
     expected_args: int,
     builder: Callable[..., Call],
 ) -> Expr:
-    from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError
 
     short_name = op_name[len("simt."):]
     span = parser.span_tracker.get_span(call)
     if parser._current_func_type not in (_ir_core.FunctionType.SimtVF, _ir_core.FunctionType.SimtCallee):
-        raise ParserSyntaxError(
+        raise InvalidOperation(
             f"pl.{op_name}() can only be used inside a SIMT function",
             span=span,
             hint="Move SIMT-context-dependent logic into @pl.vector_function(mode=\"simt\").",
         )
     if len(call.args) != expected_args or call.keywords:
-        raise ParserSyntaxError(
+        raise InvalidArgument(
             f"pl.simt.{short_name}() requires exactly {expected_args} positional argument"
             f"{'s' if expected_args != 1 else ''}",
             span=span,
@@ -696,15 +707,16 @@ def _parse_scalar_math(
     args = [parser.parse_expression(arg) for arg in call.args]
     for index, (arg, arg_node) in enumerate(zip(args, call.args)):
         if not isinstance(arg, Expr) or not isinstance(arg.type, _ir_core.ScalarType):
-            raise ParserTypeError(
+            raise InvalidVal(
                 f"pl.simt.{short_name}() argument {index + 1} must be a scalar expression",
                 span=parser.span_tracker.get_span(arg_node),
                 hint="Subscript a Tile or Tensor first to obtain one scalar element.",
+                parser_retry=True,
             )
     try:
         return builder(*args, span=span)
     except (ValueError, RuntimeError) as err:
-        raise ParserTypeError(str(err), span=span) from err
+        raise CommonExternal(message_of(err), span=span, parser_retry=True) from err
 
 
 def _register_scalar_math_parser(op_name: str, expected_args: int, builder: Callable[..., Call]) -> None:

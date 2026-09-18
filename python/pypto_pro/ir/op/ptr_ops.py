@@ -22,6 +22,7 @@ from typing import Any
 from pypto.pypto_impl import ir as _ir_core
 from pypto.pypto_impl.ir import Call, DataType, Expr, Span
 
+from ..._errors import InvalidType
 from .._utils import _get_span_or_capture, _normalize_expr, _to_make_tuple
 from ._op_registry import OpSpec, register_table
 
@@ -113,7 +114,7 @@ def _check_addptr_dtype(ptr: Expr) -> None:
     """
     ptr_type = ptr.type
     if isinstance(ptr_type, _ir_core.PtrType) and ptr_type.dtype.get_bit() < 8:
-        raise ValueError(
+        raise InvalidType(
             f"pl.addptr / pointer arithmetic is not supported on sub-byte element type "
             f"'{ptr_type.dtype.to_string()}': offsetting by elements cannot address a "
             f"half-byte. Reinterpret the pointer as a byte-addressable dtype via "

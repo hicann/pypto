@@ -13,8 +13,8 @@
 import ast
 
 from pypto_pro import DataType
+from pypto_pro._errors import InvalidVal, RuntimeFailure
 from pypto_pro.language.parser._expr_evaluator import ExprEvaluator
-from pypto_pro.language.parser.diagnostics import ParserTypeError
 import pytest
 
 from pypto.enum import DYNAMIC
@@ -76,10 +76,10 @@ def test_eval_expr_resolves_dynamic_policy_by_identity():
 def test_eval_expr_rejects_unsupported_cases(closure_vars, expr, match):
     ev = ExprEvaluator(closure_vars=closure_vars)
     if match is None:
-        with pytest.raises(ParserTypeError):
+        with pytest.raises(InvalidVal):
             ev.eval_expr(_parse_expr(expr))
     else:
-        with pytest.raises(ParserTypeError, match=match):
+        with pytest.raises((InvalidVal, RuntimeFailure), match=match):
             ev.eval_expr(_parse_expr(expr))
 
 

@@ -18,12 +18,20 @@
 6. offset/atomic/bool/dual-mode 守卫（静默丢参与硬件互斥防护）
 
 错误在 kernel 首次调用（lazy 编译、AST 解析）时触发。hook/builder 抛出的
-ValueError/TypeError 会被 parse_target_program 包装为 ParserSyntaxError，
-因此这里统一断言 ParserSyntaxError 并匹配其 message 原文。
+ValueError/TypeError 会被 parse_target_program 包装为 NotSupported，
+因此这里统一断言 NotSupported 并匹配其 message 原文。
 """
 
+from pypto_pro._errors import (
+    InvalidOperation,
+    InvalidShape,
+    InvalidTile,
+    InvalidType,
+    InvalidVal,
+    NotSupported,
+    RuntimeFailure,
+)
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics._exceptions import ParserSyntaxError, ParserTypeError
 from pypto_pro.runtime.platform import get_platform_info
 import pytest
 import torch
@@ -74,7 +82,7 @@ def test_err_per_channel_with_phase():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserSyntaxError, match="cannot be combined with phase"):
+    with pytest.raises(InvalidOperation, match="cannot be combined with phase"):
         kernel(q, k, out)
 
 
@@ -95,7 +103,7 @@ def test_err_scale_tensor_rejected():
     q, k = _make_qk()
     scale_tensor = torch.zeros(1, 64, dtype=torch.int64)
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserSyntaxError, match="scale Tensor is not supported for per-channel quantization"):
+    with pytest.raises(InvalidVal, match="scale Tensor is not supported for per-channel quantization"):
         kernel(q, k, scale_tensor, out)
 
 
@@ -116,7 +124,7 @@ def test_err_scale_tile_not_scaling():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserSyntaxError, match="MemorySpace.Scaling"):
+    with pytest.raises(InvalidOperation, match="MemorySpace.Scaling"):
         kernel(q, k, out)
 
 
@@ -139,7 +147,7 @@ def test_err_per_channel_move_dual_mode():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserSyntaxError, match="scale cannot be combined with dual-mode acc_to_vec_mode"):
+    with pytest.raises(NotSupported, match="scale cannot be combined with dual-mode acc_to_vec_mode"):
         kernel(q, k, out)
 
 
@@ -165,7 +173,7 @@ def test_err_scalar_scale_move_dual_mode():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserSyntaxError, match="scale cannot be combined with dual-mode acc_to_vec_mode"):
+    with pytest.raises(NotSupported, match="scale cannot be combined with dual-mode acc_to_vec_mode"):
         kernel(q, k, out)
 
 
@@ -189,7 +197,7 @@ def test_err_scale_string():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserSyntaxError, match="scale must be"):
+    with pytest.raises(InvalidType, match="scale must be"):
         kernel(q, k, out)
 
 
@@ -208,14 +216,14 @@ def test_err_scale_list():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserSyntaxError, match="scale must be"):
+    with pytest.raises(InvalidType, match="scale must be"):
         kernel(q, k, out)
 
 
 def test_err_scale_dict():
     """scale 不能是字典"""
-    # 注意：dict 字面量在 AST 解析阶段就抛 ParserTypeError早于
-    # _resolve_scale_param 的类型检查），故此处断言 UnsupportedFeatureError。
+    # 注意：dict 字面量在 AST 解析阶段就抛 InvalidType早于
+    # _resolve_scale_param 的类型检查），故此处断言 InvalidType。
 
     @pl.jit()
     def kernel(
@@ -229,7 +237,7 @@ def test_err_scale_dict():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserTypeError, match="Unsupported closure variable type: dict"):
+    with pytest.raises(InvalidType, match="Unsupported closure variable type: dict"):
         kernel(q, k, out)
 
 
@@ -264,7 +272,7 @@ def test_err_scale_unsupported_scalar_dtype():
     q, k = _make_qk()
     scale_val = torch.tensor(2.0, dtype=torch.float16)
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserSyntaxError, match="scale runtime scalar dtype fp16 is not supported"):
+    with pytest.raises(InvalidType, match="scale runtime scalar dtype fp16 is not supported"):
         kernel(q, k, scale_val, out)
 
 
@@ -290,7 +298,7 @@ def test_err_per_channel_1d_tile():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserSyntaxError, match="TileType only supports rank-2 shape"):
+    with pytest.raises(NotSupported, match="TileType only supports rank-2 shape"):
         kernel(q, k, out)
 
 
@@ -311,7 +319,7 @@ def test_err_per_channel_3d_tile():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserSyntaxError, match="TileType only supports rank-2 shape"):
+    with pytest.raises(NotSupported, match="TileType only supports rank-2 shape"):
         kernel(q, k, out)
 
 
@@ -332,7 +340,7 @@ def test_err_per_channel_0d_tile():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserSyntaxError, match="shape must not be empty"):
+    with pytest.raises(InvalidShape, match="shape must not be empty"):
         kernel(q, k, out)
 
 
@@ -353,7 +361,7 @@ def test_err_per_channel_n1_tile():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserSyntaxError, match=r"shape \[1, N\].*row == 1"):
+    with pytest.raises(NotSupported, match=r"shape \[1, N\].*row == 1"):
         kernel(q, k, out)
 
 
@@ -374,7 +382,7 @@ def test_err_per_channel_col_not_aligned():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserSyntaxError, match="multiple of 16"):
+    with pytest.raises(InvalidTile, match="multiple of 16"):
         kernel(q, k, out)
 
 
@@ -398,7 +406,7 @@ def test_err_legacy_pre_quant_scalar():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserSyntaxError, match="unexpected keyword argument.*pre_quant_scalar"):
+    with pytest.raises(RuntimeFailure, match="unexpected keyword argument.*pre_quant_scalar"):
         kernel(q, k, out)
 
 
@@ -417,7 +425,7 @@ def test_err_legacy_fp_tile():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserSyntaxError, match="unexpected keyword argument.*fp_tile"):
+    with pytest.raises(RuntimeFailure, match="unexpected keyword argument.*fp_tile"):
         kernel(q, k, out)
 
 
@@ -445,7 +453,7 @@ def test_err_move_offset_with_per_channel_scale():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserSyntaxError, match="offset cannot be combined with scale"):
+    with pytest.raises(NotSupported, match="offset cannot be combined with scale"):
         kernel(q, k, out)
 
 
@@ -466,7 +474,7 @@ def test_err_move_offset_with_scalar_scale():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserSyntaxError, match="offset cannot be combined with scale"):
+    with pytest.raises(NotSupported, match="offset cannot be combined with scale"):
         kernel(q, k, out)
 
 
@@ -487,7 +495,7 @@ def test_err_store_per_channel_with_atomic():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserSyntaxError, match="cannot be combined with atomic"):
+    with pytest.raises(InvalidOperation, match="cannot be combined with atomic"):
         kernel(q, k, out)
 
 
@@ -508,7 +516,7 @@ def test_err_store_tile_per_channel_with_atomic():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserSyntaxError, match="cannot be combined with atomic"):
+    with pytest.raises(InvalidOperation, match="cannot be combined with atomic"):
         kernel(q, k, out)
 
 
@@ -527,5 +535,5 @@ def test_err_scale_bool():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(ParserSyntaxError, match="got bool"):
+    with pytest.raises(InvalidType, match="got bool"):
         kernel(q, k, out)

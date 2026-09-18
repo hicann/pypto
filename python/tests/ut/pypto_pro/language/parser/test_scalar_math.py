@@ -16,8 +16,8 @@ Operation-level pl.simt scalar math tests parse a captured kernel through
 same parser entry as production kernels.
 """
 
+from pypto_pro._errors import CommonExternal, InvalidArgument, InvalidOperation, InvalidVal
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError
 import pytest
 
 from pypto.pypto_impl import ir
@@ -192,7 +192,7 @@ def test_scalar_math_supports_int64_abs_and_integer_min_max():
 
 
 def test_scalar_math_rejects_ordinary_function():
-    with pytest.raises(ParserSyntaxError, match="can only be used inside a SIMT function"):
+    with pytest.raises(InvalidOperation, match="can only be used inside a SIMT function"):
 
         @pl.jit(auto_mutex=False)
         def unsupported(value: pl.DT_FP32):
@@ -206,21 +206,21 @@ def test_scalar_math_rejects_unsupported_dtype_and_mixed_operands():
     def unsupported_log1p(value):
         value[0, 0] = pl.simt.log1p(value[0, 0])
 
-    with pytest.raises(ParserTypeError, match="supports only fp32"):
+    with pytest.raises(CommonExternal, match="supports only fp32"):
         _parse_tile_function(unsupported_log1p, [([1, 32], pl.DT_FP16)])
 
     @pl.vector_function(mode="simt")
     def unsupported_exp(value):
         value[0, 0] = pl.simt.exp(value[0, 0])
 
-    with pytest.raises(ParserTypeError, match="supports only fp16, bfloat16, fp32"):
+    with pytest.raises(CommonExternal, match="supports only fp16, bfloat16, fp32"):
         _parse_tile_function(unsupported_exp, [([1, 32], pl.DT_INT32)])
 
     @pl.vector_function(mode="simt")
     def mixed_min(lhs, rhs):
         lhs[0, 0] = pl.simt.min(lhs[0, 0], rhs[0, 0])
 
-    with pytest.raises(ParserTypeError, match="same dtype"):
+    with pytest.raises(CommonExternal, match="same dtype"):
         _parse_tile_function(mixed_min, [([1, 32], pl.DT_FP16), ([1, 32], pl.DT_FP32)])
 
 
@@ -229,12 +229,12 @@ def test_scalar_math_rejects_tile_operand():
     def unsupported(value):
         _ = pl.simt.sqrt(value)
 
-    with pytest.raises(ParserTypeError, match="must be a scalar expression"):
+    with pytest.raises(InvalidVal, match="must be a scalar expression"):
         _parse_tile_function(unsupported, [([1, 32], pl.DT_FP32)])
 
 
 def test_scalar_math_rejects_wrong_arity_and_keywords():
-    with pytest.raises(ParserSyntaxError, match="requires exactly 3 positional arguments"):
+    with pytest.raises(InvalidArgument, match="requires exactly 3 positional arguments"):
 
         @pl.vector_function(mode="simt", max_threads=1)
         def missing_addend(value: pl.DT_FP32):
@@ -247,7 +247,7 @@ def test_scalar_math_rejects_wrong_arity_and_keywords():
 
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
-    with pytest.raises(ParserSyntaxError, match="requires exactly 1 positional argument"):
+    with pytest.raises(InvalidArgument, match="requires exactly 1 positional argument"):
 
         @pl.vector_function(mode="simt", max_threads=1)
         def keyword_argument(value: pl.DT_FP32):

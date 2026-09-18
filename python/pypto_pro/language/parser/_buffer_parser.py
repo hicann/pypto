@@ -38,8 +38,9 @@ from pypto_pro.ir.op.block_ops import make_tile_expr as _make_tile_expr
 from pypto_pro.ir.op.block_ops import tile_slot_size as _tile_slot_size
 from pypto_pro.ir.op.system_ops import MAX_MUTEX_ID
 
+from ..._errors import InvalidArgument, InvalidShape, InvalidType, InvalidVal, OutOfRange, PyptoProError, message_of
 from ._tuple_type_registry import TupleTypeKind
-from .diagnostics import ParserSyntaxError, ParserTypeError, check_in_range
+from .diagnostics import check_in_range
 
 _TILE_GROUP_TYPE_NAME = "tile_group"
 
@@ -62,39 +63,43 @@ class BufferParserMixin:
             if isinstance(mutex_id, (list, tuple)):
                 tile_mutex_ids = tuple(mutex_id)
                 if not tile_mutex_ids:
-                    raise ParserTypeError(
-                        "make_tile_group() mutex ID sequence for a tile must not be empty", span=span
+                    raise InvalidVal(
+                        "make_tile_group() mutex ID sequence for a tile must not be empty", span=span,
+                        parser_retry=True,
                     )
             else:
                 tile_mutex_ids = (mutex_id,)
 
             for value in tile_mutex_ids:
                 if not _is_int(value):
-                    raise ParserTypeError(f"mutex_ids must be ints, got {value!r}", span=span)
+                    raise InvalidType(f"mutex_ids must be ints, got {value!r}", span=span, parser_retry=True)
                 check_in_range(value, 0, MAX_MUTEX_ID, subject="mutex_ids element", span=span)
             if len(set(tile_mutex_ids)) != len(tile_mutex_ids):
-                raise ParserTypeError(
+                raise InvalidVal(
                     f"make_tile_group() mutex IDs for one tile must not contain duplicates: {tile_mutex_ids}",
                     span=span,
+                    parser_retry=True,
                 )
             per_tile_mutex_ids.append(tile_mutex_ids)
 
         expected_mutex_id_count = len(per_tile_mutex_ids[0])
         for tile_mutex_ids in per_tile_mutex_ids[1:]:
             if len(tile_mutex_ids) != expected_mutex_id_count:
-                raise ParserTypeError(
+                raise InvalidArgument(
                     f"all tiles in a tile group must have the same mutex ID count: "
                     f"{expected_mutex_id_count} and {len(tile_mutex_ids)}",
                     span=span,
+                    parser_retry=True,
                 )
         return tuple(per_tile_mutex_ids)
 
     @staticmethod
     def _validate_depth(depth, span: ir.Span) -> None:
         if isinstance(depth, bool) or not isinstance(depth, int) or depth <= 0:
-            raise ParserTypeError(
+            raise InvalidType(
                 f"make_tile_group() depth must be a positive compile-time integer, got {depth!r}",
                 span=span,
+                parser_retry=True,
             )
 
     @staticmethod
@@ -106,8 +111,8 @@ class BufferParserMixin:
         """
         try:
             return _tile_slot_size(tile_type.shape, tile_type.dtype)
-        except ValueError as exc:
-            raise ParserTypeError(f"make_tile_group() {exc}") from exc
+        except PyptoProError as exc:
+            raise InvalidVal(f"make_tile_group() {message_of(exc)}", parser_retry=True) from exc
 
     def is_tile_group_type(self, value_type: ir.Type) -> bool:
         if not isinstance(value_type, ir.TupleType):
@@ -130,7 +135,7 @@ class BufferParserMixin:
     def _parse_make_tile_group(self, call: ast.Call) -> ir.Expr:
         span = self.span_tracker.get_span(call)
         if call.args:
-            raise ParserSyntaxError(
+            raise InvalidArgument(
                 "pl.make_tile_group() takes keyword args only "
                 "(type=, addrs=, mutex_ids=, depth=)",
                 span=span,
@@ -140,42 +145,56 @@ class BufferParserMixin:
         # operator repositories and ignored, as in the legacy parser behavior.
         unknown = sorted(set(kw) - {"type", "addrs", "mutex_ids", "depth", "bwd_ids", "fwd_ids"})
         if unknown:
-            raise ParserTypeError(
+            raise InvalidArgument(
                 f"pl.make_tile_group() got unexpected keyword argument(s) {unknown}; "
-                f"supported keywords are type, addrs, mutex_ids, depth, bwd_ids, fwd_ids", span=span
+                f"supported keywords are type, addrs, mutex_ids, depth, bwd_ids, fwd_ids",
+                span=self.span_tracker.keyword_span(kw, unknown[0], span),
+                parser_retry=True,
             )
         for required in ("type", "addrs"):
             if required not in kw:
-                raise ParserTypeError(f"pl.make_tile_group() missing required keyword '{required}'", span=span)
+                raise InvalidArgument(
+                    f"pl.make_tile_group() missing required keyword '{required}'",
+                    span=span,
+                    parser_retry=True,
+                )
 
         tile_type = self.parse_expression(kw["type"].value)
         if not isinstance(tile_type, _TileType):
-            raise ParserTypeError("pl.make_tile_group() 'type' must be a pl.TileType", span=span)
+            raise InvalidType(
+                "pl.make_tile_group() 'type' must be a pl.TileType",
+                span=self.span_tracker.keyword_span(kw, "type", span),
+                parser_retry=True,
+            )
 
+        mutex_ids_span = self.span_tracker.keyword_span(kw, "mutex_ids", span)
         raw_mutex_ids = self.expr_evaluator.eval_expr(kw["mutex_ids"].value) if "mutex_ids" in kw else None
         if raw_mutex_ids is not None and not isinstance(raw_mutex_ids, (list, tuple)):
-            raise ParserTypeError(
+            raise InvalidType(
                 "make_tile_group() mutex_ids must be a list, tuple, or None",
-                span=span,
+                span=mutex_ids_span,
+                parser_retry=True,
             )
-        mutex_ids = self._normalize_mutex_ids(raw_mutex_ids, span) if raw_mutex_ids else None
+        mutex_ids = self._normalize_mutex_ids(raw_mutex_ids, mutex_ids_span) if raw_mutex_ids else None
 
         depth = self.expr_evaluator.eval_expr(kw["depth"].value) if "depth" in kw else None
         if depth is not None:
-            self._validate_depth(depth, span)
+            self._validate_depth(depth, self.span_tracker.keyword_span(kw, "depth", span))
 
         if mutex_ids is None:
             if depth is None:
-                raise ParserTypeError(
+                raise InvalidArgument(
                     "make_tile_group() depth is required when mutex_ids is None or empty",
-                    span=span,
+                    span=mutex_ids_span,
+                    parser_retry=True,
                 )
         elif depth is None:
             depth = len(mutex_ids)
         elif len(mutex_ids) != depth:
-            raise ParserTypeError(
+            raise InvalidShape(
                 f"make_tile_group() mutex_ids length {len(mutex_ids)} must equal depth {depth}",
-                span=span,
+                span=mutex_ids_span,
+                parser_retry=True,
             )
 
         slot_size = self._tile_type_slot_size(tile_type)
@@ -193,16 +212,19 @@ class BufferParserMixin:
         )
         for addr in (list(addrs) if isinstance(addrs, (list, tuple)) else [addrs]):
             if addr < 0:
-                raise ParserTypeError(
-                    f"make_tile_group() addrs must be non-negative integers, got {addr!r}", span=span
+                raise InvalidArgument(
+                    f"make_tile_group() addrs must be non-negative integers, got {addr!r}",
+                    span=self.span_tracker.keyword_span(kw, "addrs", span),
+                    parser_retry=True,
                 )
         if isinstance(addrs, (list, tuple)):
             tile_addrs = list(addrs)
             if len(tile_addrs) != depth:
-                raise ParserTypeError(
+                raise InvalidShape(
                     f"make_tile_group() addrs length {len(tile_addrs)} must equal "
                     f"depth/len(mutex_ids) {depth}",
-                    span=span,
+                    span=self.span_tracker.keyword_span(kw, "addrs", span),
+                    parser_retry=True,
                 )
         else:
             tile_addrs = [addrs + i * slot_size for i in range(depth)]
@@ -296,14 +318,14 @@ class BufferParserMixin:
         optional cursor), keeping ``next()/current()/previous()`` and
         ``tile_group_meta`` fully functional.
         """
-        from pypto_pro.language.parser.diagnostics import ParserTypeError
 
         meta = self.tile_group_meta.get(group)
         if meta is None:
-            raise ParserTypeError(
+            raise InvalidType(
                 "tile group handle has no group metadata; it must come directly from pl.make_tile_group()",
                 span=span,
                 hint="Pass the handle itself rather than a copy stored in a struct or container",
+                parser_retry=True,
             )
         n_slots, per_tile_mutex_ids, _memory = meta
         tiles = self.lower_attr_access(group, "tiles", span)
@@ -313,8 +335,8 @@ class BufferParserMixin:
         memref = getattr(t, "memref", None)
         try:
             old_shape = _static_shape_ints(t.shape, "reinterpret: source")
-        except ValueError as exc:
-            raise ParserTypeError(str(exc), span=span) from exc
+        except PyptoProError as exc:
+            raise InvalidType(message_of(exc), span=span, parser_retry=True) from exc
 
         # Override args are validated ONCE at the DSL entry (_parse_reinterpret);
         # the group dispatch never re-validates them. Per-slot validation
@@ -375,11 +397,12 @@ class BufferParserMixin:
         """Return the slot count, per-tile mutex IDs, and candidate IDs."""
         meta = self.tile_group_meta.get(group_var)
         if meta is None:
-            raise ParserTypeError(
+            raise InvalidType(
                 "tile group handle has no group metadata; it must come directly from "
                 "pl.make_tile_group()",
                 span=span,
                 hint="Pass the handle itself rather than a copy stored in a struct or container",
+                parser_retry=True,
             )
         per_tile_mutex_ids = meta[1]
         candidate_ids = tuple(
@@ -485,11 +508,12 @@ class BufferParserMixin:
         if isinstance(index_expr, ir.ConstInt):
             slot = int(index_expr.value)
             if not 0 <= slot < n_slots:
-                raise ParserTypeError(
+                raise OutOfRange(
                     f"tile group index {index_expr.value} is out of range for a "
                     f"{n_slots}-tile group",
                     span=span,
                     hint=f"Valid indices are in [0, {n_slots})",
+                    parser_retry=True,
                 )
             return self._select_static_slot(tiles, slot, per_tile_mutex_ids, candidate_ids, span)
 
@@ -508,9 +532,10 @@ class BufferParserMixin:
         index_type = getattr(index_expr, "type", None)
         if not (isinstance(index_type, ir.ScalarType) and index_type.dtype.is_int()):
             actual_type = index_type if index_type is not None else type(index_expr).__name__
-            raise ParserTypeError(
+            raise InvalidType(
                 f"tile group index must be an integer scalar, but got {actual_type}",
                 span=span,
                 hint="Use an integer scalar expression, for example g[0] or g[i]",
+                parser_retry=True,
             )
         return index_expr

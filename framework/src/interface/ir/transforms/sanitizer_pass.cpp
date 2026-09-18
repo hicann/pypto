@@ -19,6 +19,7 @@
 #include "ir/transforms/base/mutator.h"
 #include "ir/transforms/base/visitor.h"
 #include "ir/transforms/passes.h"
+#include "pypto_pro/error.h"
 
 namespace pypto {
 namespace ir {
@@ -219,7 +220,8 @@ std::pair<int64_t, int64_t> SanitizerInstrumenter::TileDims(const ExprPtr& tile)
         return {-1, -1};
     auto dim0 = As<ConstInt>(tile_type->shape_[0]);
     auto dim1 = As<ConstInt>(tile_type->shape_[1]);
-    CHECK(dim0 != nullptr && dim1 != nullptr) << "sanitizer: tile shape dims must be static";
+    PRO_PASS_INTERNAL_CHECK(npu::tile_fwk::InternalError::PASS_INNER_ERROR, dim0 != nullptr && dim1 != nullptr)
+        << "sanitizer: tile shape dims must be static";
     return {dim0->value_, dim1->value_};
 }
 
@@ -252,7 +254,8 @@ StmtPtr SanitizerInstrumenter::MakeLogStmt(uint32_t det_id, std::vector<ExprPtr>
 // tile-count record.
 StmtPtr SanitizerInstrumenter::RecordScalarAccess(const CallPtr& call)
 {
-    CHECK(call->args_.size() >= 0x2) << "sanitizer: " << call->name_ << " requires (container, offset)";
+    PRO_PASS_INTERNAL_CHECK(npu::tile_fwk::InternalError::PASS_INNER_ERROR, call->args_.size() >= 0x2)
+        << "sanitizer: " << call->name_ << " requires (container, offset)";
     const auto& container = call->args_[0];
     auto [tile_dim0, tile_dim1] = TileDims(container);
     if (tile_dim0 >= 0) {
@@ -289,7 +292,8 @@ StmtPtr SanitizerInstrumenter::RecordValidShape(const CallPtr& call)
     if (call->args_.size() != 0x3)
         return nullptr;
     auto [dim0, dim1] = TileDims(call->args_[0]);
-    CHECK(dim0 >= 0) << "sanitizer: set_validshape target must be a Tile";
+    PRO_PASS_INTERNAL_CHECK(npu::tile_fwk::InternalError::PASS_INNER_ERROR, dim0 >= 0)
+        << "sanitizer: set_validshape target must be a Tile";
     std::vector<ExprPtr> fields;
     fields.push_back(Int64Const(dim0));
     fields.push_back(Int64Const(dim1));
@@ -305,12 +309,14 @@ StmtPtr SanitizerInstrumenter::RecordGmAccess(const CallPtr& call)
     // Operand positions follow the shared access-op contract; the offsets are
     // always a MakeTuple (frontend normalizes, CCE codegen CHECKs the same).
     auto indices = backend::cce::ResolveAccessArgIndices(call->name_);
-    CHECK(indices.tensor_arg_idx >= 0 && indices.tile_arg_idx >= 0 && indices.offsets_arg_idx >= 0)
+    PRO_PASS_INTERNAL_CHECK(npu::tile_fwk::InternalError::PASS_INNER_ERROR,
+                            indices.tensor_arg_idx >= 0 && indices.tile_arg_idx >= 0 && indices.offsets_arg_idx >= 0)
         << "sanitizer: no access-arg contract for op " << call->name_;
     ExprPtr tensor = call->args_[indices.tensor_arg_idx];
     ExprPtr tile = call->args_[indices.tile_arg_idx];
     auto off_tuple = As<MakeTuple>(call->args_[indices.offsets_arg_idx]);
-    CHECK(off_tuple != nullptr) << "sanitizer: " << call->name_ << " offsets must be a MakeTuple";
+    PRO_PASS_INTERNAL_CHECK(npu::tile_fwk::InternalError::PASS_INNER_ERROR, off_tuple != nullptr)
+        << "sanitizer: " << call->name_ << " offsets must be a MakeTuple";
 
     // Fields: ndim, off[5] (padded), shape[5] (padded), acc_row/acc_col.
     // The tensor shape comes from the access-site TensorType -- static dims
@@ -318,7 +324,8 @@ StmtPtr SanitizerInstrumenter::RecordGmAccess(const CallPtr& call)
     // the ABI scalars, so the record carries the runtime truth with no host
     // id<->shape mapping (aliases and dynamic dims included).
     auto tensor_type = As<TensorType>(tensor->GetType());
-    CHECK(tensor_type != nullptr) << "sanitizer: " << call->name_ << " tensor operand must be a Tensor";
+    PRO_PASS_INTERNAL_CHECK(npu::tile_fwk::InternalError::PASS_INNER_ERROR, tensor_type != nullptr)
+        << "sanitizer: " << call->name_ << " tensor operand must be a Tensor";
     uint32_t ndim = std::min<uint32_t>(static_cast<uint32_t>(off_tuple->elements_.size()), kSanitizerMaxTensorDims);
     std::vector<ExprPtr> fields;
     fields.push_back(Int64Const(ndim));
@@ -364,13 +371,15 @@ StmtPtr SanitizerInstrumenter::RecordGmAccess(const CallPtr& call)
 StmtPtr SanitizerInstrumenter::RecordTileAccess(const CallPtr& call, uint32_t tile_arg_idx, const ExprPtr& off_row,
                                                 const ExprPtr& off_col, const ExprPtr& win_row, const ExprPtr& win_col)
 {
-    CHECK(tile_arg_idx < call->args_.size()) << "sanitizer: missing tile operand at " << tile_arg_idx;
+    PRO_PASS_INTERNAL_CHECK(npu::tile_fwk::InternalError::PASS_INNER_ERROR, tile_arg_idx < call->args_.size())
+        << "sanitizer: missing tile operand at " << tile_arg_idx;
     // Dims come from the access-site tile type -- what the codegen
     // instantiates the transfer with, i.e. the runtime truth of the access.
     // This keeps the bound check independent of the tile table (overlap-scan
     // only) and lets group cursors record: unresolvable name, known type.
     auto [dim0, dim1] = TileDims(call->args_[tile_arg_idx]);
-    CHECK(dim0 >= 0) << "sanitizer: tile operand must be a Tile";
+    PRO_PASS_INTERNAL_CHECK(npu::tile_fwk::InternalError::PASS_INNER_ERROR, dim0 >= 0)
+        << "sanitizer: tile operand must be a Tile";
     std::vector<ExprPtr> fields;
     fields.push_back(Int64Const(dim0));
     fields.push_back(Int64Const(dim1));
@@ -414,15 +423,18 @@ StmtPtr SanitizerInstrumenter::CollectMakeTile(const CallPtr& call)
     // copies share the span, distinct same-range tiles keep both records and
     // are exactly what the scan must report.
     auto tile_type = As<TileType>(target_type_);
-    CHECK(tile_type != nullptr && tile_type->shape_.size() >= 0x2)
+    PRO_PASS_INTERNAL_CHECK(npu::tile_fwk::InternalError::PASS_INNER_ERROR,
+                            tile_type != nullptr && tile_type->shape_.size() >= 0x2)
         << "sanitizer: make_tile value must be a 2-D TileType";
-    CHECK(tile_type->memref_.has_value() && *tile_type->memref_ != nullptr)
+    PRO_PASS_INTERNAL_CHECK(npu::tile_fwk::InternalError::PASS_INNER_ERROR,
+                            tile_type->memref_.has_value() && *tile_type->memref_ != nullptr)
         << "sanitizer: make_tile requires a resolved MemRef (frontend enforces addr)";
     int64_t dtype_bytes = std::max<int64_t>(1, tile_type->dtype_.GetBit() / 8);
     int64_t sz = 1;
     for (const auto& d : tile_type->shape_) {
         auto c = As<ConstInt>(d);
-        CHECK(c != nullptr) << "sanitizer: tile shape dims must be static";
+        PRO_PASS_INTERNAL_CHECK(npu::tile_fwk::InternalError::PASS_INNER_ERROR, c != nullptr)
+            << "sanitizer: tile shape dims must be static";
         sz *= c->value_;
     }
     int64_t addr = -1;
@@ -457,12 +469,17 @@ StmtPtr SanitizerInstrumenter::CollectMakeTensor(const CallPtr& call)
     // the source's byte capacity (a raw-pointer source records -1: no known
     // bound). Nothing is registered -- the replay needs no host-side view
     // table.
-    CHECK(call->args_.size() >= 0x2) << "sanitizer: ptr.make_tensor requires (ptr, shape)";
+    PRO_PASS_INTERNAL_CHECK(npu::tile_fwk::InternalError::PASS_INNER_ERROR, call->args_.size() >= 0x2)
+        << "sanitizer: ptr.make_tensor requires (ptr, shape)";
     auto shape_tuple = As<MakeTuple>(call->args_[1]);
-    CHECK(shape_tuple != nullptr) << "sanitizer: ptr.make_tensor shape must be a MakeTuple";
+    PRO_PASS_INTERNAL_CHECK(npu::tile_fwk::InternalError::PASS_INNER_ERROR, shape_tuple != nullptr)
+        << "sanitizer: ptr.make_tensor shape must be a MakeTuple";
     auto stride_tuple = As<MakeTuple>(call->args_[2]);
-    CHECK(stride_tuple != nullptr) << "sanitizer: ptr.make_tensor stride must be a MakeTuple";
-    CHECK(stride_tuple->elements_.empty() || stride_tuple->elements_.size() == shape_tuple->elements_.size())
+    PRO_PASS_INTERNAL_CHECK(npu::tile_fwk::InternalError::PASS_INNER_ERROR, stride_tuple != nullptr)
+        << "sanitizer: ptr.make_tensor stride must be a MakeTuple";
+    PRO_PASS_INTERNAL_CHECK(
+        npu::tile_fwk::InternalError::PASS_INNER_ERROR,
+        stride_tuple->elements_.empty() || stride_tuple->elements_.size() == shape_tuple->elements_.size())
         << "sanitizer: ptr.make_tensor stride rank must match the shape";
 
     // Byte footprint expression: (sum((dim-1)*stride) + 1) * elem_bytes, with
@@ -474,7 +491,8 @@ StmtPtr SanitizerInstrumenter::CollectMakeTensor(const CallPtr& call)
         view_dtype = src_shaped->dtype_;
     } else {
         auto src_ptr = As<PtrType>(call->args_[0]->GetType());
-        CHECK(src_ptr != nullptr) << "sanitizer: ptr.make_tensor source must be a Ptr or Tensor";
+        PRO_PASS_INTERNAL_CHECK(npu::tile_fwk::InternalError::PASS_INNER_ERROR, src_ptr != nullptr)
+            << "sanitizer: ptr.make_tensor source must be a Ptr or Tensor";
         view_dtype = src_ptr->dtype_;
     }
     int64_t elem_bytes = std::max<int64_t>(1, static_cast<int64_t>(view_dtype.GetBit()) / 8);
@@ -557,7 +575,8 @@ Pass pass::Sanitizer()
 {
     return CreateProgramPass(
         [](const ProgramPtr& program) -> ProgramPtr {
-            INTERNAL_CHECK(program) << "Sanitizer pass cannot run on a null program";
+            PRO_PASS_INTERNAL_CHECK(npu::tile_fwk::InternalError::PASS_INNER_ERROR, program)
+                << "Sanitizer pass cannot run on a null program";
             SanitizerInstrumenter instrumenter;
             return instrumenter.Instrument(program);
         },

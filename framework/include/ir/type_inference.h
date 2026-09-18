@@ -33,6 +33,7 @@
 #include "core/error.h"
 #include "ir/expr.h"
 #include "ir/type.h"
+#include "pypto_pro/error.h"
 
 namespace pypto {
 namespace ir {
@@ -173,7 +174,8 @@ T GetOpKwarg(const std::vector<std::pair<std::string, std::any>>& kwargs, const 
     if (default_value) {
         return *default_value;
     }
-    throw ValueError("Missing kwarg: " + key);
+    using npu::tile_fwk::ExternalError; // Block-scoped: short enum names without leaking to includers
+    PRO_IR_THROW(::pypto::ir::ValueError, ExternalError::INVALID_ARGUMENT) << "Missing kwarg: " << key;
 }
 
 /**

@@ -17,6 +17,7 @@ import importlib
 import os
 from pathlib import Path
 
+from pypto_pro._errors import InvalidArgument
 import pypto_pro.language as pl
 from pypto_pro.runtime.opc.pypto_compile import (
     _load_kernel,
@@ -139,5 +140,5 @@ def test_load_kernel_requires_exactly_one_jit_kernel(tmp_path, kernel_count):
     kernel_file = tmp_path / "kernels.py"
     kernel_file.write_text(f"import pypto_pro.language as pl\n{definitions}", encoding="utf-8")
 
-    with pytest.raises(RuntimeError, match=rf"exactly one @pl.jit kernel, found {kernel_count}"):
+    with pytest.raises(InvalidArgument, match=rf"exactly one @pl.jit kernel, found {kernel_count}"):
         _load_kernel(str(kernel_file))

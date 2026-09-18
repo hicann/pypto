@@ -236,7 +236,10 @@ TEST_F(WrapManagerTest, ResolveDepForOneMix_CoreAvailable_SendsTasks)
     int sendCount = 0;
     wm_.SendTaskToAiCore = [&sendCount](SchDeviceTaskContext*, CoreType, int, uint64_t) { sendCount++; };
 
-    uint32_t taskIds[MAX_WRAP_TASK_NUM] = {0x100, 0x200, 0x300};
+    // ResolveDepForOneMix decodes taskIds into (funcId, opIndex) to look up
+    // opWrapList, so they have to be built with MakeTaskID: a raw 0x100 carries
+    // opIndex 256 and would index past the four-element list below.
+    uint32_t taskIds[MAX_WRAP_TASK_NUM] = {MakeTaskID(0, 0), MakeTaskID(0, 1), MakeTaskID(0, 2)};
     wm_.ResolveDepForOneMix(taskIds, static_cast<uint8_t>(MixResourceType::MIX_1C2V), 0);
 
     EXPECT_EQ(sendCount, 3);
@@ -257,7 +260,10 @@ TEST_F(WrapManagerTest, ResolveDepForOneMix_CoreNotAvailable_PushesToQueue)
     pendingIds_[aivIdx0] = 0x999;
     pendingIds_[aivIdx1] = 0x999;
 
-    uint32_t taskIds[MAX_WRAP_TASK_NUM] = {0x100, 0x200, 0x300};
+    // ResolveDepForOneMix decodes taskIds into (funcId, opIndex) to look up
+    // opWrapList, so they have to be built with MakeTaskID: a raw 0x100 carries
+    // opIndex 256 and would index past the four-element list below.
+    uint32_t taskIds[MAX_WRAP_TASK_NUM] = {MakeTaskID(0, 0), MakeTaskID(0, 1), MakeTaskID(0, 2)};
     wm_.ResolveDepForOneMix(taskIds, static_cast<uint8_t>(MixResourceType::MIX_1C2V), 0);
 
     EXPECT_EQ(sendCount, 0);

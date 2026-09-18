@@ -34,6 +34,7 @@ import logging
 import math
 import os
 
+from pypto_pro._errors import NotSupported
 import pypto_pro.language as pl
 from pypto_pro.language import Vf as vf  # noqa: N813
 from pypto_pro.runtime.tilingkey import TilingKeyField
@@ -774,7 +775,7 @@ def test_fa_tilingkey_errors():
     torch.npu.set_device(device_id)
     device = f"npu:{device_id}"
     dummy = torch.zeros((1, 1), device=device, dtype=torch.float16)
-    with pytest.raises(ValueError):
+    with pytest.raises(NotSupported):
         fa_tilingkey_attn_mask_kernel(dummy)  # direct call not allowed
     with pytest.raises(ValueError):
         fa_tilingkey_attn_mask_kernel[None, 1, {}]  # missing field

@@ -28,17 +28,20 @@
 #include "ir/kind_traits.h"
 #include "ir/op_registry.h"
 #include "ir/type.h"
+#include "pypto_pro/error.h"
 namespace pypto {
 namespace ir {
+using npu::tile_fwk::ExternalError;
 
 TypePtr DeduceTensorExpType([[maybe_unused]] const std::vector<ExprPtr>& args,
                             [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
-    CHECK(args.size() == 1) << "tensor.exp requires exactly 1 argument, but got " << args.size();
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 1)
+        << "tensor.exp requires exactly 1 argument, but got " << args.size();
 
     auto tensor_type = As<TensorType>(args[0]->GetType());
-    CHECK(tensor_type) << "tensor.exp requires first argument to be a TensorType, but got "
-                       << args[0]->GetType()->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, tensor_type)
+        << "tensor.exp requires first argument to be a TensorType, but got " << args[0]->GetType()->TypeName();
 
     // exp should promote to float type if input is integer
     // Exponential always produces floating-point output (e.g., exp(1) = 2.718...)
@@ -54,11 +57,12 @@ TypePtr DeduceTensorExpType([[maybe_unused]] const std::vector<ExprPtr>& args,
 TypePtr DeduceTensorCastType([[maybe_unused]] const std::vector<ExprPtr>& args,
                              [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
-    CHECK(args.size() == 1) << "tensor.cast requires exactly 1 argument (input), but got " << args.size();
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 1)
+        << "tensor.cast requires exactly 1 argument (input), but got " << args.size();
 
     auto tensor_type = As<TensorType>(args[0]->GetType());
-    CHECK(tensor_type) << "tensor.cast requires first argument to be a TensorType, but got "
-                       << args[0]->GetType()->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, tensor_type)
+        << "tensor.cast requires first argument to be a TensorType, but got " << args[0]->GetType()->TypeName();
 
     // Read target_type from kwargs
     bool found_target_type = false;
@@ -71,13 +75,14 @@ TypePtr DeduceTensorCastType([[maybe_unused]] const std::vector<ExprPtr>& args,
             } else if (value.type() == typeid(int)) {
                 target_dtype = static_cast<DataType>(AnyCast<int>(value, "kwarg key: target_type"));
             } else {
-                CHECK(false) << "target_type must be a DataType or int, but got " << value.type().name();
+                PRO_IR_CHECK(ExternalError::INVALID_TYPE, false)
+                    << "target_type must be a DataType or int, but got " << value.type().name();
             }
             found_target_type = true;
             break;
         }
     }
-    CHECK(found_target_type) << "tensor.cast requires 'target_type' kwarg";
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, found_target_type) << "tensor.cast requires 'target_type' kwarg";
 
     // mode kwarg is optional, not used in type deduction
 

@@ -11,6 +11,7 @@
 """Unit tests for IR Builder."""
 
 from pypto_pro import DataType, ir
+from pypto_pro._errors import OutOfRange
 from pypto_pro.ir import IRBuilder
 import pytest
 
@@ -554,7 +555,7 @@ def test_loop_output_index_out_of_range():
             ib.emit(ir.YieldStmt([add_expr], ir.Span.unknown()))
 
         # Try to access index out of range
-        with pytest.raises(IndexError, match="Return variable index 1 out of range"):
+        with pytest.raises(OutOfRange, match="Return variable index 1 out of range"):
             loop.output(1)
 
     func = f.get_result()

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from pypto_pro._errors import InvalidType
 from pypto_pro.language.typing._tiling import tiling_instance_to_bytes
 import pytest
 
@@ -41,5 +42,5 @@ class TilingSize8:
 )
 def test_array_size_mismatch_raises(tiling_cls, values, expected_size, actual_size):
     tiling = tiling_cls(arr=values)
-    with pytest.raises(ValueError, match=f"expected {expected_size} elements, got {actual_size}"):
+    with pytest.raises(InvalidType, match=f"expected {expected_size} elements, got {actual_size}"):
         tiling_instance_to_bytes(tiling)

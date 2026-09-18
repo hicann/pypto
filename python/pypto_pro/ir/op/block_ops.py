@@ -44,6 +44,21 @@ from pypto.pypto_impl.ir import (
 from pypto.pypto_impl.ir import TileType as _IRTileType  # IR-level TileType (C++ binding);
 from pypto_pro.ir._utils import _is_int, _normalize_expr, _to_make_tuple
 
+from ..._errors import (
+    DynamicShapeUnsupported,
+    InvalidArgument,
+    InvalidFormat,
+    InvalidOperation,
+    InvalidShape,
+    InvalidTile,
+    InvalidType,
+    InvalidVal,
+    NotSupported,
+    OutOfRange,
+    PyptoProError,
+    message_of,
+)
+
 # NOTE: a DSL-descriptor dataclass named ``TileType`` is defined later in this
 # module and shadows this import, so use ``_IRTileType`` for isinstance checks.
 from ._op_registry import OpSpec, op_impl, register_table
@@ -102,7 +117,7 @@ def _const_int_attr(value: int | Expr, name: str) -> int:
     const_value = getattr(value, "value", None)
     if isinstance(const_value, int):
         return const_value
-    raise TypeError(f"block op requires constant integer {name}")
+    raise InvalidVal(f"block op requires constant integer {name}")
 
 
 def _validate_offset_bounds(
@@ -120,7 +135,7 @@ def _validate_offset_bounds(
         src_val = getattr(src, "value", None)
         if isinstance(off_val, int) and isinstance(src_val, int):
             if off_val >= src_val:
-                raise ValueError(f"{op_name}: offset[{i}] ({off_val}) exceeds source shape[{i}] ({src_val})")
+                raise InvalidShape(f"{op_name}: offset[{i}] ({off_val}) exceeds source shape[{i}] ({src_val})")
 
 
 def _validate_nz_transfer_axes(
@@ -136,7 +151,7 @@ def _validate_nz_transfer_axes(
     tensor_ndim = len(tensor_type.shape)
     expected_dims = list(range(tensor_ndim - 2, tensor_ndim))
     if tile_dims != expected_dims:
-        raise ValueError(f"{op_name}: NZ transfer only supports the last two tensor axes")
+        raise InvalidFormat(f"{op_name}: NZ transfer only supports the last two tensor axes")
 
 
 def _ir_binary_cast(
@@ -253,7 +268,7 @@ def _resolve_scale_param(
     if scale is None:
         return None, None
     if isinstance(scale, bool):
-        raise TypeError("scale must be float, int, Expr, or Tile, got bool")
+        raise InvalidType("scale must be float, int, Expr, or Tile, got bool")
     if isinstance(scale, (int, float)):
         encoded = _encode_deq_scalar(float(scale))
         return encoded, None
@@ -265,7 +280,7 @@ def _resolve_scale_param(
             # here to the store/move Scaling Tile operand.
             return None, scale
         if not isinstance(scale_type, _ir_core.ScalarType):
-            raise TypeError(
+            raise InvalidType(
                 f"scale Expr must be a runtime scalar, got {type(scale_type).__name__}; "
                 f"per-channel quantization requires a user-prepared Scaling Tile"
             )
@@ -275,14 +290,14 @@ def _resolve_scale_param(
         # fp_to_uint crashes the bisheng backend), and narrower/unsigned ints
         # risk sign-extension or truncation of the bit pattern.
         if scale_type.dtype not in (DataType.FP32, DataType.INT32, DataType.INT64):
-            raise TypeError(
+            raise InvalidType(
                 f"scale runtime scalar dtype {scale_type.dtype} is not supported — pass "
                 f"an FP32 scalar (auto-reinterpreted as its IEEE-754 bit pattern) or an "
                 f"INT32/INT64 scalar carrying the pre-encoded float32 bit pattern "
                 f"(struct.pack(\"!f\", scale))"
             )
         return scale, None
-    raise TypeError(
+    raise InvalidType(
         f"scale must be float, int, Expr, or Tile, got {type(scale).__name__}"
     )
 
@@ -304,25 +319,25 @@ def _ir_store(
     offsets_tuple = _to_make_tuple(offsets, actual_span)
 
     if not isinstance(out.type, _ir_core.TensorType):
-        raise ValueError(f"{op_name}: dst must be a Tensor, got {type(out.type).__name__}")
+        raise InvalidType(f"{op_name}: dst must be a Tensor, got {type(out.type).__name__}")
 
     if not isinstance(tile.type, _ir_core.TileType):
-        raise ValueError(f"{op_name}: src must be a Tile, got {type(tile.type).__name__}")
+        raise InvalidType(f"{op_name}: src must be a Tile, got {type(tile.type).__name__}")
     _src_mem = getattr(getattr(tile.type, "memref", None), "memory_space", None)
     if _src_mem is not None and _src_mem not in (_ir_core.MemorySpace.Vec, _ir_core.MemorySpace.Acc):
-        raise ValueError(f"{op_name}: src tile must be in Vec (UB) or Acc (L0C) memory, got {_src_mem.name}")
+        raise InvalidOperation(f"{op_name}: src tile must be in Vec (UB) or Acc (L0C) memory, got {_src_mem.name}")
 
     if phase is not None and not isinstance(phase, STPhase):
-        raise ValueError(f"{op_name}: invalid phase value {phase!r}, expected STPhase")
+        raise InvalidArgument(f"{op_name}: invalid phase value {phase!r}, expected STPhase")
     if not isinstance(atomic, AtomicType):
-        raise ValueError(f"{op_name}: invalid atomic value {atomic!r}, expected AtomicType")
+        raise InvalidType(f"{op_name}: invalid atomic value {atomic!r}, expected AtomicType")
 
     tensor_ndim = len(out.type.shape)
     tile_shape = list(tile.type.shape)
     tile_dims, access_size = _validate_tile_dims(order, tensor_ndim, tile_shape, op_name)
     tile_ndim = len(tile_shape)
     if order is not None and order != sorted(order):
-        raise ValueError(f"{op_name}: order must be ascending, got {order}")
+        raise InvalidVal(f"{op_name}: order must be ascending, got {order}")
     _validate_nz_transfer_axes(out.type, tile_dims, op_name)
     _validate_offsets(
         offsets_tuple,
@@ -339,9 +354,9 @@ def _ir_store(
     is_quant = pre_quant_scalar is not None or fp_tile is not None
     _check_layout_dtype(op_name, tile, out, quant=is_quant)
     if fp_tile is not None and phase is not None:
-        raise ValueError("scale (per-channel) cannot be combined with phase")
+        raise InvalidOperation("scale (per-channel) cannot be combined with phase")
     if fp_tile is not None and atomic != AtomicType.AtomicNone:
-        raise ValueError(
+        raise InvalidOperation(
             "scale (per-channel) cannot be combined with atomic — the fixpipe quantization "
             "path does not emit atomic instructions; per-tensor scalar scale + atomic is supported"
         )
@@ -383,20 +398,20 @@ def _ir_store_tile(
     offsets_tuple = _to_make_tuple(tile_offsets, actual_span)
 
     if not isinstance(out.type, _ir_core.TensorType):
-        raise ValueError(f"{op_name}: dst must be a Tensor, got {type(out.type).__name__}")
+        raise InvalidType(f"{op_name}: dst must be a Tensor, got {type(out.type).__name__}")
 
     if not isinstance(tile.type, _ir_core.TileType):
-        raise ValueError(f"{op_name}: src must be a Tile, got {type(tile.type).__name__}")
+        raise InvalidType(f"{op_name}: src must be a Tile, got {type(tile.type).__name__}")
     _src_mem = getattr(getattr(tile.type, "memref", None), "memory_space", None)
     if _src_mem is not None and _src_mem not in (_ir_core.MemorySpace.Vec, _ir_core.MemorySpace.Acc):
-        raise ValueError(f"{op_name}: src tile must be in Vec (UB) or Acc (L0C) memory, got {_src_mem.name}")
+        raise InvalidOperation(f"{op_name}: src tile must be in Vec (UB) or Acc (L0C) memory, got {_src_mem.name}")
 
     tensor_ndim = len(out.type.shape)
     tile_shape = list(tile.type.shape)
     tile_dims, access_size = _validate_tile_dims(order, tensor_ndim, tile_shape, op_name)
     tile_ndim = len(tile_shape)
     if order is not None and order != sorted(order):
-        raise ValueError(f"{op_name}: order must be ascending, got {order}")
+        raise InvalidVal(f"{op_name}: order must be ascending, got {order}")
     _validate_nz_transfer_axes(out.type, tile_dims, op_name)
     _validate_offsets(
         offsets_tuple,
@@ -421,9 +436,9 @@ def _ir_store_tile(
     is_quant = pre_quant_scalar is not None or fp_tile is not None
     _check_layout_dtype(op_name, tile, out, quant=is_quant)
     if fp_tile is not None and phase is not None:
-        raise ValueError("scale (per-channel) cannot be combined with phase")
+        raise InvalidOperation("scale (per-channel) cannot be combined with phase")
     if fp_tile is not None and atomic != AtomicType.AtomicNone:
-        raise ValueError(
+        raise InvalidOperation(
             "scale (per-channel) cannot be combined with atomic — the fixpipe quantization "
             "path does not emit atomic instructions; per-tensor scalar scale + atomic is supported"
         )
@@ -492,7 +507,7 @@ def _check_move_shape_compat(
     out_type = out.type
     src_type = src.type
     if not isinstance(out_type, _IRTileType) or not isinstance(src_type, _IRTileType):
-        raise TypeError(
+        raise InvalidType(
             f"pl.move: both dst and src must be Tiles, got dst={type(out_type).__name__}, src={type(src_type).__name__}"
         )
     dst_shape = _tile_shape_ints(out_type)
@@ -500,7 +515,7 @@ def _check_move_shape_compat(
     if dst_shape is None or src_shape is None:
         return  # symbolic shape — cannot verify statically
     if len(dst_shape) != len(src_shape):
-        raise ValueError(
+        raise InvalidShape(
             f"pl.move: dst tile rank {len(dst_shape)} != src tile rank {len(src_shape)} "
             f"(dst shape={dst_shape}, src shape={src_shape})."
         )
@@ -509,7 +524,7 @@ def _check_move_shape_compat(
     if offset is not None:
         for axis, (d, s) in enumerate(zip(dst_shape, src_shape)):
             if d > s:
-                raise ValueError(
+                raise InvalidType(
                     f"pl.move: with offset, dst dim {axis} ({d}) exceeds src dim ({s}) "
                     f"— dst must be a sub-rectangle of src "
                     f"(dst shape={dst_shape}, src shape={src_shape})."
@@ -522,7 +537,7 @@ def _check_move_shape_compat(
         if dst_shape != src_shape:
             is_2d_transpose = len(dst_shape) == 2 and dst_shape == src_shape[::-1]
             if not is_2d_transpose:
-                raise ValueError(
+                raise InvalidShape(
                     f"pl.move: dst tile shape {dst_shape} != src tile shape {src_shape} "
                     f"— without offset, move requires equal shapes "
                     f"or a 2D transpose [M,N]->[N,M] "
@@ -605,9 +620,9 @@ def _ir_move(
         return _ir_insert(out, src, actual_offset, span=actual_span)
 
     if not isinstance(out.type, _ir_core.TileType):
-        raise ValueError(f"move: dst must be a Tile, got {type(out.type).__name__}")
+        raise InvalidType(f"move: dst must be a Tile, got {type(out.type).__name__}")
     if not isinstance(src.type, _ir_core.TileType):
-        raise ValueError(f"move: src must be a Tile, got {type(src.type).__name__}")
+        raise InvalidType(f"move: src must be a Tile, got {type(src.type).__name__}")
     _dst_mem = getattr(getattr(out.type, "memref", None), "memory_space_", None)
     _src_mem = getattr(getattr(src.type, "memref", None), "memory_space_", None)
     _supported_move_paths = {
@@ -622,15 +637,15 @@ def _ir_move(
         (MemorySpace.Mat, MemorySpace.ScaleRight),
     }
     if _src_mem is not None and _dst_mem is not None and (_src_mem, _dst_mem) not in _supported_move_paths:
-        raise ValueError(
+        raise NotSupported(
             f"move: unsupported data path src({_src_mem.name})->dst({_dst_mem.name}), "
             f"supported paths: Mat->Left, Mat->Right, Mat->Scaling, Mat->Bias, Mat->ScaleLeft, "
             f"Mat->ScaleRight, Acc->Vec, Vec->Vec, Vec->Mat"
         )
     if phase is not None and not isinstance(phase, STPhase):
-        raise ValueError(f"move: invalid phase value {phase!r}, expected STPhase")
+        raise InvalidArgument(f"move: invalid phase value {phase!r}, expected STPhase")
     if phase is not None and (_src_mem, _dst_mem) != (MemorySpace.Acc, MemorySpace.Vec):
-        raise ValueError("move: phase is only supported for Acc->Vec path")
+        raise NotSupported("move: phase is only supported for Acc->Vec path")
     # Validate src/dst tile shape compatibility (issue #99: transpose-style mismatch)
     _check_move_shape_compat(out, src, offset, acc_to_vec_mode, actual_span)
     if offset is not None:
@@ -645,7 +660,7 @@ def _ir_move(
     _check_layout_dtype("move", src, out, quant=is_quant)
 
     if offset is not None and (fp_tile is not None or pre_quant_scalar is not None):
-        raise ValueError(
+        raise NotSupported(
             "move: offset cannot be combined with scale — the fixpipe quantization "
             "paths (per-channel Tile or per-tensor scalar) do not support sub-block "
             "extraction offsets"
@@ -653,13 +668,13 @@ def _ir_move(
 
     _dual_modes = {AccToVecMode.DualModeSplitM, AccToVecMode.DualModeSplitN}
     if (fp_tile is not None or pre_quant_scalar is not None) and acc_to_vec_mode in _dual_modes:
-        raise ValueError(
+        raise NotSupported(
             "scale cannot be combined with dual-mode acc_to_vec_mode — the fixpipe dual-destination "
             "control word does not support quantization (hardware limit); use a single-vec mode "
             "(SingleModeVec0/SingleModeVec1) or drop the scale"
         )
     if phase is not None and offset is not None:
-        raise ValueError("move: phase cannot be combined with offset (TEXTRACT path does not support unit_flag)")
+        raise NotSupported("move: phase cannot be combined with offset (TEXTRACT path does not support unit_flag)")
     kwargs: dict[str, Any] = {}
     if acc_to_vec_mode is not None:
         kwargs["acc_to_vec_mode"] = acc_to_vec_mode
@@ -685,7 +700,7 @@ def _ir_move(
 def _normalize_2d_sequence(value: Any, parameter: str, span: Span) -> tuple[Expr, Expr]:
     sequence = _to_make_tuple(value, span)
     if len(sequence.elements) != 2:
-        raise ValueError(f"{parameter} must contain exactly 2 elements")
+        raise InvalidArgument(f"{parameter} must contain exactly 2 elements")
     return sequence.elements[0], sequence.elements[1]
 
 
@@ -753,7 +768,7 @@ def _ir_axpy(out: Expr, src: Expr, scalar: Expr, *, span: Span | None = None) ->
     _check_dtype("axpy", src_dt, _AXPY_DTYPES)
     if dt != src_dt:
         if not (dt == DataType.FP32 and src_dt == DataType.FP16):
-            raise ValueError(
+            raise InvalidType(
                 f"axpy: dtype mismatch between out ({dt}) and src ({src_dt}). "
                 f"Supported: same type, or src=FP16 + out=FP32."
             )
@@ -834,7 +849,7 @@ def _validate_validshape_bounds(
         if isinstance(vs, int):
             # Rule 1: valid_shape dimensions must be positive
             if vs <= 0:
-                raise ValueError(
+                raise InvalidShape(
                     f"set_validshape {dim_name}={vs} must be positive "
                     f"(got {vs}){span_info}. "
                     f"Valid shape dimensions must be >= 1."
@@ -844,7 +859,7 @@ def _validate_validshape_bounds(
             if tile_shape is not None and i < len(tile_shape):
                 ts_val = tile_shape[i]
                 if vs > ts_val:
-                    raise ValueError(
+                    raise OutOfRange(
                         f"set_validshape {dim_name}={vs} exceeds tile {dim_name}={ts_val}"
                         f"{span_info}. "
                         f"Valid shape must be <= tile shape."
@@ -884,16 +899,16 @@ def _check_scalar_access_supported(op_name: str, container: Expr, span: Span) ->
         memref = getattr(tile_type, "memref", None)
         memory_space = getattr(memref, "memory_space_", None)
         if memory_space is not None and memory_space != MemorySpace.Vec:
-            from pypto_pro.language.parser.diagnostics import ParserTypeError
 
-            raise ParserTypeError(
+            raise InvalidOperation(
                 f"{op_name}: Tile element access requires a Vec-memory Tile (UB), got {memory_space.name}",
                 span=span,
+                parser_retry=True,
             )
 
     dtype = container.type.dtype
     if any(dtype == d for d in _SCALAR_UNSUPPORTED_DTYPES):
-        raise TypeError(
+        raise NotSupported(
             f"{op_name} does not support container dtype {dtype}; "
             "low-precision types (FP4/FP8/INT4/UINT4/HF4/HF8) are storage-only "
             "and cannot be used in scalar expressions"
@@ -919,13 +934,13 @@ def _validate_load_operands(
     use_tile_absolute: bool = False,
 ) -> tuple[int, list[Any], list[int] | None, Any | None]:
     if not isinstance(out.type, _ir_core.TileType):
-        raise ValueError(f"{op_name}: dst must be a Tile, got {type(out.type).__name__}")
+        raise InvalidType(f"{op_name}: dst must be a Tile, got {type(out.type).__name__}")
     dst_mem = getattr(getattr(out.type, "memref", None), "memory_space", None)
     if dst_mem is not None and dst_mem not in (_ir_core.MemorySpace.Vec, _ir_core.MemorySpace.Mat):
-        raise ValueError(f"{op_name}: dst tile must be in Vec (UB) or Mat (L1) memory, got {dst_mem.name}")
+        raise InvalidOperation(f"{op_name}: dst tile must be in Vec (UB) or Mat (L1) memory, got {dst_mem.name}")
 
     if not isinstance(tensor.type, _ir_core.TensorType):
-        raise ValueError(f"{op_name}: src must be a Tensor, got {type(tensor.type).__name__}")
+        raise InvalidType(f"{op_name}: src must be a Tensor, got {type(tensor.type).__name__}")
 
     tensor_ndim = len(tensor.type.shape)
     tile_shape = list(out.type.shape)
@@ -968,7 +983,7 @@ def _build_store_kwargs(
 def _check_dtype(op_name: str, dtype: DataType | None, allowed: tuple[DataType, ...]) -> None:
     if dtype is not None and dtype not in allowed:
         allowed_names = ", ".join(str(d) for d in allowed)
-        raise ValueError(
+        raise InvalidType(
             f"{op_name}: unsupported dtype {dtype}, supported: {allowed_names}"
         )
 
@@ -976,7 +991,7 @@ def _check_dtype(op_name: str, dtype: DataType | None, allowed: tuple[DataType, 
 def _check_dtype_match(op_name: str, dt: DataType | None, *others: DataType | None) -> None:
     for i, other in enumerate(others):
         if other is not None and other != dt:
-            raise ValueError(f"{op_name}: dtype mismatch between arg0 ({dt}) and arg{i + 1} ({other})")
+            raise InvalidType(f"{op_name}: dtype mismatch between arg0 ({dt}) and arg{i + 1} ({other})")
 
 
 def _check_cmp_out(op_name: str, out: Expr) -> None:
@@ -993,7 +1008,7 @@ def _check_cmp_out(op_name: str, out: Expr) -> None:
         return
     if out_dtype in (DataType.INT8, DataType.UINT8, DataType.BOOL):
         return
-    raise ValueError(
+    raise NotSupported(
         f"{op_name}: unsupported out dtype {out_dtype}, expected an 8-bit mask tile "
         f"(int8/uint8/bool, mirrors AscendC Compare's uint8_t destination)"
     )
@@ -1060,7 +1075,7 @@ def _validate_rank1_tensor_tile_shape(tile_shape: list[Any], op_name: str) -> An
         for dim in tile_shape
     ]
     if 1 not in shape_values:
-        raise ValueError(
+        raise InvalidShape(
             f"{op_name}: rank-1 Tensor requires a rank-2 Tile with one dimension equal to 1, "
             f"got Tile shape {shape_values}"
         )
@@ -1083,10 +1098,10 @@ def _validate_tile_dims(
     if tile_dims is None:
         tile_dims = list(range(tensor_ndim - tile_ndim, tensor_ndim))
     if len(set(tile_dims)) != len(tile_dims):
-        raise ValueError(f"{op_name}: order axes must be unique, got {tile_dims}")
+        raise InvalidShape(f"{op_name}: order axes must be unique, got {tile_dims}")
     for dim in tile_dims:
         if dim < 0 or dim >= tensor_ndim:
-            raise ValueError(f"{op_name}: order axis {dim} is out of range for Tensor rank {tensor_ndim}")
+            raise InvalidShape(f"{op_name}: order axis {dim} is out of range for Tensor rank {tensor_ndim}")
     return tile_dims, None
 
 
@@ -1101,14 +1116,14 @@ def _validate_offsets(
     access_size: Any | None = None,
 ) -> None:
     if len(tensor_shape) != len(offsets_tuple.elements):
-        raise ValueError(
+        raise InvalidShape(
             f"{op_name}: Tensor rank {len(tensor_shape)} requires exactly {len(tensor_shape)} offsets, "
             f"got {len(offsets_tuple.elements)}"
         )
     for i, off in enumerate(offsets_tuple.elements):
         off_val = _try_get_const_offset(off)
         if off_val is not None and off_val < 0:
-            raise ValueError(f"{op_name}: offsets[{i}] is {off_val}, negative offset is not allowed")
+            raise NotSupported(f"{op_name}: offsets[{i}] is {off_val}, negative offset is not allowed")
         if off_val is None:
             continue
         if access_size is not None:
@@ -1122,20 +1137,20 @@ def _validate_offsets(
         check_val = off_val * t_size.value if use_tile_absolute else off_val
         label = f" (absolute offset {check_val})" if use_tile_absolute else ""
         if isinstance(t_size, ConstInt) and isinstance(t_dim, ConstInt) and check_val >= t_dim.value:
-            raise ValueError(f"{op_name}: offsets[{i}]={off_val}{label} exceeds tensor dim {i} size {t_dim.value}")
+            raise InvalidShape(f"{op_name}: offsets[{i}]={off_val}{label} exceeds tensor dim {i} size {t_dim.value}")
 
 
 def _ir_getval(container: Expr, offset: int | Expr, *, span: Span | None = None) -> Expr:
     actual_span = span or _span()
     _ctype = container.type
     if not isinstance(_ctype, (_ir_core.TileType, _ir_core.TensorType)):
-        from pypto_pro.language.parser.diagnostics import ParserTypeError
 
-        raise ParserTypeError(
+        raise InvalidVal(
             f"getval: 'container' must be a Tile or Tensor, got {type(_ctype).__name__}",
             span=actual_span,
             hint="getval reads a scalar from a Tile/Tensor slot; to access a struct/tiling "
             "field, use attribute access (e.g. tiling.axis1) instead.",
+            parser_retry=True,
         )
     _check_scalar_access_supported("getval", container, actual_span)
     offset_expr = offset if isinstance(offset, Expr) else _normalize_expr(offset, actual_span, int_dtype=DataType.INT64)
@@ -1146,13 +1161,13 @@ def _ir_setval(container: Expr, offset: int | Expr, value: int | float | Expr, *
     actual_span = span or _span()
     _ctype = container.type
     if not isinstance(_ctype, (_ir_core.TileType, _ir_core.TensorType)):
-        from pypto_pro.language.parser.diagnostics import ParserTypeError
 
-        raise ParserTypeError(
+        raise InvalidVal(
             f"setval: 'container' must be a Tile or Tensor, got {type(_ctype).__name__}",
             span=actual_span,
             hint="setval writes a scalar into a Tile/Tensor slot; to write a struct/tiling "
             "field, use attribute assignment (e.g. tiling.axis1 = ...) instead.",
+            parser_retry=True,
         )
     _check_scalar_access_supported("setval", container, actual_span)
     offset_expr = offset if isinstance(offset, Expr) else _normalize_expr(offset, actual_span, int_dtype=DataType.INT64)
@@ -1169,10 +1184,10 @@ def _ir_transpose(
 ) -> Expr:
     dt = getattr(out.type, "dtype", None)
     if dt is not None and dt.get_bit() not in (8, 16, 32):
-        raise ValueError(f"transpose: unsupported dtype {dt}, supported: b8/b16/b32")
+        raise InvalidType(f"transpose: unsupported dtype {dt}, supported: b8/b16/b32")
     src_dt = getattr(src.type, "dtype", None)
     if src_dt is not None and dt is not None and src_dt.get_bit() != dt.get_bit():
-        raise ValueError(f"transpose: dtype size mismatch between dst ({dt}) and src ({src_dt})")
+        raise InvalidType(f"transpose: dtype size mismatch between dst ({dt}) and src ({src_dt})")
     return _ir_core.create_op_call(
         block_ir_op("transpose"),
         [out, src],
@@ -1309,7 +1324,7 @@ def _ir_quant(
     ins = [out, src, scale]
     if mode == QuantMode.ASYM:
         if offset is None:
-            raise ValueError("quant in 'asym' mode requires an offset argument")
+            raise InvalidVal("quant in 'asym' mode requires an offset argument")
         ins.append(offset)
     return _ir_core.create_op_call(block_ir_op("quant"), ins, {"mode": mode}, span or _span())
 
@@ -1405,9 +1420,9 @@ def _normalize_tile_pad(pad: "int | TilePad | None") -> "int | None":
         return _PAD_VALUES[pad]
     if isinstance(pad, int):
         if pad not in _PAD_VALUES.values():
-            raise ValueError("TileType.pad must be one of TilePad.null/zero/max/min")
+            raise InvalidArgument("TileType.pad must be one of TilePad.null/zero/max/min")
         return pad
-    raise TypeError("TileType.pad must be a enum TilePad or compile-time integer 0/1/2/3")
+    raise InvalidType("TileType.pad must be a enum TilePad or compile-time integer 0/1/2/3")
 
 
 def _static_last_axis(shape: "Sequence[int] | _ir_core.MakeTuple") -> "int | None":
@@ -1433,7 +1448,7 @@ def _validate_subbyte_tile_shape(tt: "TileType") -> None:
         return
     last = _static_last_axis(tt.shape)
     if last is not None and last % pack != 0:
-        raise ValueError(
+        raise InvalidShape(
             f"a {tt.dtype.to_string()} tile's last dimension must be a multiple of {pack} "
             f"({pack} elements share a storage unit), got {last}. Pad the tile to the next "
             f"multiple of {pack}."
@@ -1460,7 +1475,7 @@ def _apply_default_layout(tt: "TileType") -> None:
 
     if tt.target_memory in (MemorySpace.ScaleLeft, MemorySpace.ScaleRight):
         if default_layout is None:
-            raise ValueError(f"{tt.target_memory.name} is only supported on A5, got architecture '{arch}'")
+            raise InvalidVal(f"{tt.target_memory.name} is only supported on A5, got architecture '{arch}'")
 
     if default_layout is None:
         return
@@ -1474,7 +1489,7 @@ def _apply_default_layout(tt: "TileType") -> None:
     )
     if is_mx_scale_tile:
         if tt.fractal not in (None, _MX_SCALE_FRACTAL):
-            raise ValueError(
+            raise InvalidFormat(
                 f"{tt.target_memory.name} MX scale tiles require fractal={_MX_SCALE_FRACTAL}, got {tt.fractal}"
             )
         tt.fractal = _MX_SCALE_FRACTAL
@@ -1494,7 +1509,7 @@ def _apply_default_layout(tt: "TileType") -> None:
         and tt.target_memory in (MemorySpace.Left, MemorySpace.Right, MemorySpace.Acc)
         and tt.layout in _REJECTED_LAYOUTS_ON_A5
     ):
-        raise ValueError(
+        raise InvalidVal(
             f"{tt.target_memory.name} tiles do not support {tt.layout.name} layout on '{arch}'; "
             f"use the default {default_layout.name} layout instead."
         )
@@ -1502,7 +1517,7 @@ def _apply_default_layout(tt: "TileType") -> None:
     if tt.layout not in allowed_layouts:
         space_name = tt.target_memory.name
         allowed_text = ", ".join(f.name for f in sorted(allowed_layouts, key=lambda x: x.name))
-        raise ValueError(
+        raise InvalidVal(
             f"{space_name} tiles require layout in {{{allowed_text}}}, "
             f"got {tt.layout.name}. "
             f"Default for '{arch}' is {default_layout.name}."
@@ -1961,7 +1976,7 @@ def _check_matmul_dtype(
     )
 
     if combo not in combos:
-        raise ValueError(
+        raise InvalidType(
             f"{op_name}: unsupported dtype combination "
             f"A={_frontend_dtype_name(lhs_dtype)}, "
             f"B={_frontend_dtype_name(rhs_dtype)}, "
@@ -1972,7 +1987,7 @@ def _check_matmul_dtype(
     if acc is not None:
         acc_dtype = getattr(acc.type, "dtype", None)
         if acc_dtype is not None and acc_dtype != dst_dtype:
-            raise ValueError(
+            raise InvalidType(
                 f"{op_name}: Acc dtype must match C dtype, "
                 f"got Acc={_frontend_dtype_name(acc_dtype)}, "
                 f"C={_frontend_dtype_name(dst_dtype)}."
@@ -1981,7 +1996,7 @@ def _check_matmul_dtype(
     if bias is not None:
         bias_dtype = getattr(bias.type, "dtype", None)
         if bias_dtype is not None and bias_dtype != dst_dtype:
-            raise ValueError(
+            raise InvalidType(
                 f"{op_name}: Bias dtype must match C dtype, "
                 f"got Bias={_frontend_dtype_name(bias_dtype)}, "
                 f"C={_frontend_dtype_name(dst_dtype)}."
@@ -2886,7 +2901,7 @@ def _check_layout_dtype(
         if op in ("store", "store_tile")
         else ""
     )
-    raise ValueError(
+    raise InvalidType(
         f"{op}: unsupported {kind}layout/dtype combination "
         f"src={src_loc}({src_layout_name},{_frontend_dtype_name(src_dtype)}) "
         f"-> dst={dst_loc}({dst_layout_name},{_frontend_dtype_name(dst_dtype)}); "
@@ -2949,7 +2964,7 @@ def _validate_tile_addr_alignment(
     if addr % required != 0:
         mem_name = str(target_memory).replace("MemorySpace.", "")
         span_info = f" at {span}" if span else ""
-        raise ValueError(
+        raise InvalidTile(
             f"Tile address 0x{addr:05X} ({addr}) is not {required}-byte aligned "
             f"for memory space {mem_name}{span_info}. "
             f"Address must be a multiple of {required}."
@@ -3008,12 +3023,12 @@ def _validate_tile_addr_capacity(
     mem_name = str(target_memory).replace("MemorySpace.", "")
     span_info = f" at {span}" if span else ""
     if addr < 0:
-        raise ValueError(
+        raise InvalidTile(
             f"Tile addr {addr} is negative for memory space {mem_name}{span_info}. "
             f"Address must be a non-negative integer."
         )
     if size <= 0:
-        raise ValueError(
+        raise InvalidTile(
             f"Tile size {size} must be positive for memory space {mem_name}{span_info}."
         )
     capacity = _get_memory_capacity(target_memory)
@@ -3021,7 +3036,7 @@ def _validate_tile_addr_capacity(
         return
     end_addr = addr + size
     if end_addr > capacity:
-        raise ValueError(
+        raise OutOfRange(
             f"Tile addr 0x{addr:X} + size {size} (0x{end_addr:X}) exceeds "
             f"{mem_name} capacity 0x{capacity:X} ({capacity} bytes){span_info}. "
             f"Use a smaller address so that addr + tile_size <= {capacity}."
@@ -3066,9 +3081,9 @@ def tile_slot_size(shape: "Sequence[int] | _ir_core.MakeTuple", dtype: DataType)
     dims = list(shape.elements) if isinstance(shape, _ir_core.MakeTuple) else list(shape)
     static_dims = [_static_dim(dim) for dim in dims]
     if any(dim is None for dim in static_dims):
-        raise ValueError(f"tile shape must contain compile-time integers, got {dims}")
+        raise DynamicShapeUnsupported(f"tile shape must contain compile-time integers, got {dims}")
     if any(dim <= 0 for dim in static_dims):
-        raise ValueError(f"tile shape dimensions must be positive, got {static_dims}")
+        raise InvalidShape(f"tile shape dimensions must be positive, got {static_dims}")
     elems = 1
     for dim in static_dims:
         elems *= dim
@@ -3126,7 +3141,7 @@ def _validate_tile_layout_alignments(tt: "TileType") -> None:
         TensorLayout.ND,
         TensorLayout.DN,
     ):
-        raise ValueError(
+        raise InvalidFormat(
             f"a tile whose last axis is 1 requires layout ND or DN, got {tt.layout.name}: a "
             f"1-wide tile cannot meet the 32-byte column alignment a fractal layout needs, so "
             f"it is always emitted column-major. Drop the layout argument (DN is inferred), or "
@@ -3137,7 +3152,7 @@ def _validate_tile_layout_alignments(tt: "TileType") -> None:
     if tt.target_memory == MemorySpace.Bias:
         stride = cols * dtype_size
         if stride % _ALIGNED_SIZE != 0:
-            raise ValueError(
+            raise InvalidShape(
                 f"TileType Bias tile shape {tt.shape!r} {cols} * {dtype_size}B = "
                 f"{stride}B must be {_ALIGNED_SIZE}-byte aligned (minimum "
                 f"shape [1, {_ALIGNED_SIZE // dtype_size}] for "
@@ -3157,7 +3172,7 @@ def _validate_tile_layout_alignments(tt: "TileType") -> None:
         dim_name = "Cols" if blayout == 1 else "Rows"
         stride = dim * dtype_size
         if stride % _ALIGNED_SIZE != 0:
-            raise ValueError(
+            raise InvalidType(
                 f"Tile with {tt.layout.name if tt.layout is not None else 'default'} layout "
                 f"(no inner box) requires {dim_name} * sizeof(dtype) = {dim} * {dtype_size} "
                 f"= {stride} to be {_ALIGNED_SIZE}-byte aligned, got remainder "
@@ -3192,14 +3207,14 @@ def _validate_tile_layout_alignments(tt: "TileType") -> None:
     if not (
         tt.target_memory == MemorySpace.Vec or fractal == _MX_SCALE_FRACTAL or rows == 1 or rows % inner_rows == 0
     ):
-        raise ValueError(
+        raise InvalidVal(
             f"{_pfx} requires Rows ({rows}) to be a multiple of inner box rows "
             f"({inner_rows}), got remainder {rows % inner_rows}. "
             f"Pad Rows to a multiple of {inner_rows}, "
             f"or use Vec memory space, or set Rows=1."
         )
     if cols % inner_cols != 0:
-        raise ValueError(
+        raise InvalidVal(
             f"{_pfx} requires Cols ({cols}) to be a multiple of inner box cols "
             f"({inner_cols}), got remainder {cols % inner_cols}. "
             f"Pad Cols to a multiple of {inner_cols}."
@@ -3215,12 +3230,12 @@ def _validate_tile_type_params(tt: "TileType") -> None:
     (e.g. zero/negative tile sizes, misaligned derived addresses).
     """
     if not isinstance(tt.dtype, DataType):
-        raise TypeError(
+        raise InvalidType(
             f"TileType dtype must be a pl.DT_* / DataType value, got {tt.dtype!r} "
             f"({type(tt.dtype).__name__})."
         )
     if not isinstance(tt.target_memory, MemorySpace):
-        raise TypeError(
+        raise InvalidType(
             f"TileType target_memory must be a pl.MemorySpace value, got {tt.target_memory!r} "
             f"({type(tt.target_memory).__name__})."
         )
@@ -3233,15 +3248,15 @@ def _validate_tile_type_params(tt: "TileType") -> None:
         pass
     else:
         if not shape:
-            raise ValueError(f"TileType shape must not be empty, got {tt.shape!r}.")
+            raise InvalidShape(f"TileType shape must not be empty, got {tt.shape!r}.")
         if any(s <= 0 for s in shape):
-            raise ValueError(
+            raise InvalidArgument(
                 f"TileType shape dimensions must be positive, got {tt.shape!r}. "
                 f"Zero or negative tile dimensions produce invalid tile allocations."
             )
 
         if tt.target_memory == MemorySpace.Bias and shape[0] != 1:
-            raise ValueError(
+            raise InvalidShape(
                 f"TileType Bias tiles must have exactly 1 row (hardware Rows==1 constraint, "
                 f"see TMatmul.hpp/TMov.hpp), got shape {tt.shape!r} with {shape[0]} rows. "
                 f"Use shape=[1, N] for the Bias (L0B) tile."
@@ -3250,7 +3265,7 @@ def _validate_tile_type_params(tt: "TileType") -> None:
     valid_shape = _const_shape_ints(tt.valid_shape)
     if valid_shape is not None and shape is not None:
         if len(valid_shape) != len(shape):
-            raise ValueError(
+            raise InvalidShape(
                 f"TileType valid_shape {tt.valid_shape!r} has rank {len(valid_shape)}, "
                 f"which must match shape rank {len(shape)}."
             )
@@ -3258,21 +3273,21 @@ def _validate_tile_type_params(tt: "TileType") -> None:
             if vs == -1:
                 continue  # -1: dynamic valid dimension, set at runtime
             if vs <= 0:
-                raise ValueError(
+                raise InvalidShape(
                     f"TileType valid_shape dimensions must be positive or -1 (dynamic), "
                     f"got {tt.valid_shape!r}."
                 )
             if vs > s:
-                raise ValueError(
+                raise InvalidShape(
                     f"TileType valid_shape dimension {vs} exceeds tile shape dimension {s}."
                 )
 
     if tt.fractal is not None and not _is_int(tt.fractal):
-        raise ValueError(f"TileType fractal must be an integer, got {tt.fractal!r}.")
+        raise InvalidType(f"TileType fractal must be an integer, got {tt.fractal!r}.")
 
     if tt.compact is not None:
         if isinstance(tt.compact, bool) or not isinstance(tt.compact, int) or tt.compact not in _COMPACT_VALUES:
-            raise ValueError(
+            raise InvalidArgument(
                 f"TileType compact must be one of {sorted(_COMPACT_VALUES)} "
                 f"(CompactMode: null=0/normal=1/row_plus_one=2/row_aligned_padding=3), "
                 f"got {tt.compact!r}."
@@ -3328,13 +3343,13 @@ def make_tile_expr(
     }
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
     if addr is None:
-        raise ValueError(f"make_tile_expr() requires 'addr', but it is missing. {_MAKE_TILE_HINT}")
+        raise InvalidVal(f"make_tile_expr() requires 'addr', but it is missing. {_MAKE_TILE_HINT}")
     if size is None:
         try:
             size = tile_slot_size(shape_tuple, dtype)
-        except ValueError as exc:
-            raise ValueError(
-                f"pl.make_tile() cannot derive its byte span from the tile type: {exc}. "
+        except PyptoProError as exc:
+            raise InvalidOperation(
+                f"pl.make_tile() cannot derive its byte span from the tile type: {message_of(exc)}. "
                 "Use a static positive shape in pl.TileType."
             ) from exc
     if isinstance(addr, int):
@@ -3382,7 +3397,6 @@ def _parse_tile_type_call(self, call: ast.Call):
 
 @op_impl("make_tile")
 def _parse_make_tile(self, call: ast.Call) -> Expr:
-    from pypto_pro.language.parser.diagnostics import FinalRejectionError
 
     span = self.span_tracker.get_span(call)
     # Parse only the TileType; report extra arguments without evaluating them.
@@ -3390,25 +3404,25 @@ def _parse_make_tile(self, call: ast.Call) -> Expr:
 
     if not isinstance(tile_type, TileType):
         got = ast.unparse(call.args[0]) if call.args else "no positional argument"
-        raise FinalRejectionError(
+        raise InvalidType(
             f"pl.make_tile() takes a pl.TileType as its first argument, got {got}",
-            span=span,
+            span=self.span_tracker.call_argument_span(call, 0, span),
             hint=_MAKE_TILE_TYPE_HINT,
         )
     if len(call.args) > 1:
-        raise FinalRejectionError(
+        raise InvalidArgument(
             f"pl.make_tile() takes 1 positional argument (the tile type) but {len(call.args)} were given",
             span=span,
             hint="pass addr as a keyword, e.g. pl.make_tile(tile_type, addr=0x0)",
         )
 
     if not call.keywords:
-        raise FinalRejectionError("pl.make_tile() missing required keyword 'addr'", span=span, hint=_MAKE_TILE_HINT)
+        raise InvalidVal("pl.make_tile() missing required keyword 'addr'", span=span, hint=_MAKE_TILE_HINT)
     if len(call.keywords) != 1 or call.keywords[0].arg != "addr":
         unsupported = [kw.arg or "**kwargs" for kw in call.keywords if kw.arg != "addr"]
-        raise FinalRejectionError(
+        raise InvalidArgument(
             f"pl.make_tile() got unexpected keyword argument(s) {unsupported}; only 'addr' is supported",
-            span=span,
+            span=self.span_tracker.call_argument_span(call, unsupported[0], span),
             hint="Set shape, dtype, layout, and other tile attributes in pl.TileType.",
         )
     addr_node = call.keywords[0].value
@@ -3450,10 +3464,10 @@ def _reinterpret_footprint_check(shape: list[int], dtype: DataType, size: int, s
     """The new footprint must not exceed the original buffer span (hard constraint)."""
     try:
         footprint = tile_slot_size(shape, dtype)
-    except ValueError:
+    except PyptoProError:
         return
     if footprint > size:
-        raise ValueError(
+        raise OutOfRange(
             f"reinterpret: new footprint {footprint} bytes exceeds the original buffer size {size} bytes; "
             f"a reinterpretation may only reuse the buffer at the same size or smaller{_span_msg(span)}"
         )
@@ -3463,7 +3477,7 @@ def _reinterpret_align_check(addr: int, dtype: DataType, span: "Span | None") ->
     """The new element width must divide the base address (element-boundary view)."""
     elem_bytes = max(1, (int(dtype.get_bit()) + 7) // 8)
     if addr % elem_bytes != 0:
-        raise ValueError(
+        raise InvalidTile(
             f"reinterpret: address 0x{addr:X} is not aligned to the new element size {elem_bytes} bytes"
             f"{_span_msg(span)}"
         )
@@ -3498,11 +3512,11 @@ def _ir_reinterpret(
     """
     actual_span = span or _span()
     if not isinstance(src.type, _IRTileType):
-        raise TypeError(f"reinterpret: expected a Tile, got {type(src.type).__name__}")
+        raise InvalidType(f"reinterpret: expected a Tile, got {type(src.type).__name__}")
     t = src.type
     memref = getattr(t, "memref", None)
     if memref is None:
-        raise ValueError(
+        raise InvalidArgument(
             f"reinterpret: source tile has no MemRef (bind it with pl.make_tile first){_span_msg(actual_span)}"
         )
 
@@ -3516,7 +3530,7 @@ def _ir_reinterpret(
 
     addr = _memref_const_addr(memref, actual_span)
     if addr is None:
-        raise ValueError(f"reinterpret: source tile address must be a compile-time constant{_span_msg(actual_span)}")
+        raise InvalidType(f"reinterpret: source tile address must be a compile-time constant{_span_msg(actual_span)}")
     _reinterpret_align_check(addr, new_dtype, actual_span)
     _reinterpret_footprint_check(new_shape, new_dtype, int(memref.size), actual_span)
 
@@ -3539,11 +3553,10 @@ def _ir_reinterpret(
 
 @op_impl("reinterpret")
 def _parse_reinterpret(self, call: ast.Call) -> Expr:
-    from pypto_pro.language.parser.diagnostics import FinalRejectionError
 
     span = self.span_tracker.get_span(call)
     if len(call.args) != 1:
-        raise FinalRejectionError(
+        raise InvalidArgument(
             f"pl.reinterpret() takes exactly 1 positional argument (a Tile or TileGroup), got {len(call.args)}",
             span=span,
             hint="Usage: t2 = pl.reinterpret(tile, dtype=..., shape=..., layout=...)",
@@ -3552,16 +3565,16 @@ def _parse_reinterpret(self, call: ast.Call) -> Expr:
     kwargs = self.parse_op_kwargs(call)
 
     if kwargs.get("dtype") is None and kwargs.get("shape") is None and kwargs.get("layout") is None:
-        raise FinalRejectionError(
+        raise InvalidType(
             "pl.reinterpret() requires at least one of dtype/shape/layout to override",
             span=span,
             hint="e.g. pl.reinterpret(tile, shape=[64, 64], dtype=pl.DT_BF16)",
         )
 
     if kwargs.get("dtype") is not None and kwargs.get("shape") is None:
-        raise FinalRejectionError(
+        raise InvalidShape(
             "pl.reinterpret() 'shape' is required when 'dtype' changes",
-            span=span,
+            span=self.span_tracker.call_argument_span(call, "dtype", span),
             hint="state the new element count explicitly: pl.reinterpret(tile, dtype=..., shape=[rows, cols])",
         )
 
@@ -3569,9 +3582,9 @@ def _parse_reinterpret(self, call: ast.Call) -> Expr:
     if new_shape is not None and not (
         isinstance(new_shape, (list, tuple)) and len(new_shape) > 0 and all(_is_int(d) for d in new_shape)
     ):
-        raise FinalRejectionError(
+        raise InvalidShape(
             "pl.reinterpret() 'shape' must be a non-empty list of compile-time integers",
-            span=span,
+            span=self.span_tracker.call_argument_span(call, "shape", span),
             hint="e.g. shape=[32, 128]; runtime shapes are not supported — use pl.set_validshape() for runtime windows",
         )
 
@@ -3627,7 +3640,7 @@ def _static_shape_ints(shape, what: str) -> list[int]:
         elif isinstance(dim, int):
             ints.append(dim)
         else:
-            raise ValueError(f"{what} shape must contain static integer dimensions, got {type(dim)}")
+            raise InvalidType(f"{what} shape must contain static integer dimensions, got {type(dim)}")
     return ints
 
 
@@ -3640,32 +3653,32 @@ def _validate_fp_shape_dtype(fp_shape_ints: list[int], scale_dtype: DataType, wh
     "TMov: When TileType is Scaling, row must be 1."
     """
     if len(fp_shape_ints) != 2:
-        raise ValueError(f"{what} must be 2D, got shape {fp_shape_ints}")
+        raise InvalidShape(f"{what} must be 2D, got shape {fp_shape_ints}")
     if fp_shape_ints[0] != 1:
-        raise ValueError(
+        raise NotSupported(
             f"{what} must have shape [1, N] (row == 1), got [{fp_shape_ints[0]}, {fp_shape_ints[1]}]. "
             f"Hardware FixPipe deqTensor only supports per-column scaling ([1, N]); "
             f"[N, 1] per-row scaling is not supported. "
             f"Per-token (row-wise) quantization must be done in the Vector (UB) domain."
         )
     if fp_shape_ints[1] % 16 != 0:
-        raise ValueError(
+        raise InvalidTile(
             f"{what} [1, N]: N must be a multiple of 16 (128B alignment for INT64), "
             f"got [{fp_shape_ints[0]}, {fp_shape_ints[1]}]"
         )
     if fp_shape_ints[1] > 512:
-        raise ValueError(
+        raise OutOfRange(
             f"{what} [1, N]: N must be <= 512 (4KB fixpipe buffer limit for INT64), "
             f"got [{fp_shape_ints[0]}, {fp_shape_ints[1]}]"
         )
     if scale_dtype == DataType.FP32:
-        raise ValueError(
+        raise InvalidType(
             f"{what} dtype FP32 is not supported. "
             f"Please convert FP32 scale to INT64 using torch_npu.npu_trans_quant_param() before passing to kernel. "
             f"Example: scale_int64 = torch_npu.npu_trans_quant_param(scale_fp32.npu())"
         )
     if scale_dtype != DataType.INT64:
-        raise ValueError(
+        raise InvalidType(
             f"{what} dtype must be INT64, got {scale_dtype}. "
             f"For FP32 scale, use torch_npu.npu_trans_quant_param() to convert to INT64."
         )
@@ -3707,7 +3720,7 @@ def _auto_alloc_scaling_tile_hook(self, call: ast.Call, kwargs: dict) -> None:
     if isinstance(scale_type, _ir_core.TileType):
         mem = getattr(getattr(scale_type, "memref", None), "memory_space", None)
         if mem != MemorySpace.Scaling:
-            raise ValueError(
+            raise InvalidOperation(
                 f"scale Tile must be allocated in MemorySpace.Scaling for per-channel quantization, got {mem}"
             )
         fp_shape_ints = _static_shape_ints(scale_type.shape, "scale tile")
@@ -3715,7 +3728,7 @@ def _auto_alloc_scaling_tile_hook(self, call: ast.Call, kwargs: dict) -> None:
         return
 
     if isinstance(scale_type, _ir_core.TensorType):
-        raise ValueError(
+        raise InvalidVal(
             "scale Tensor is not supported for per-channel quantization — pass a "
             "user-prepared Scaling Tile (MemorySpace.Scaling, shape [1, N], INT64) "
             "instead, and ensure it is ready (load -> move -> sync MTE1->FIX) before "
@@ -3752,7 +3765,7 @@ def _create_dim_op(args: list[Expr], *, row_op: str, col_op: str, dim: int = 0, 
     # through to the column variant.
     if dim not in (0, 1):
         op_name = col_op.removeprefix("col_")
-        raise ValueError(f"{op_name}: dim must be 0 (row) or 1 (column), got {dim}")
+        raise InvalidShape(f"{op_name}: dim must be 0 (row) or 1 (column), got {dim}")
     ir_name = row_op if dim == 0 else col_op
     return _ir_core.create_op_call(block_ir_op(ir_name), args, {}, span)
 
@@ -3923,12 +3936,12 @@ def _check_tile_memory_space(
 ) -> None:
     mem = getattr(getattr(getattr(expr, "type", None), "memref", None), "memory_space_", None)
     if mem is not None and mem != expected:
-        raise ValueError(f"{op_name}: {operand_name} must be in {expected_desc}, got {mem.name}")
+        raise InvalidOperation(f"{op_name}: {operand_name} must be in {expected_desc}, got {mem.name}")
 
 
 def _validate_acc_phase(op_name: str, phase: AccPhase | None) -> None:
     if phase is not None and not isinstance(phase, AccPhase):
-        raise ValueError(f"{op_name}: invalid phase value {phase!r}, expected AccPhase")
+        raise InvalidArgument(f"{op_name}: invalid phase value {phase!r}, expected AccPhase")
 
 
 def _ir_matmul(dst: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, phase: AccPhase | None = None) -> Expr:
@@ -4016,12 +4029,12 @@ def _check_mx_scale_tile(
         expected_space, expected_desc = MemorySpace.ScaleRight, "L0B (ScaleRight)"
 
     if scale is None:
-        raise ValueError(f"{op_name}: {scale_name} is required")
+        raise InvalidArgument(f"{op_name}: {scale_name} is required")
     scale_type = getattr(scale, "type", None)
     if not isinstance(scale_type, _IRTileType):
-        raise ValueError(f"{op_name}: {scale_name} must be a Tile")
+        raise InvalidType(f"{op_name}: {scale_name} must be a Tile")
     if scale_type.dtype != DataType.FP8E8M0:
-        raise ValueError(f"{op_name}: {scale_name} must use FP8E8M0 dtype, got {scale_type.dtype}")
+        raise InvalidType(f"{op_name}: {scale_name} must use FP8E8M0 dtype, got {scale_type.dtype}")
     _check_tile_memory_space(op_name, scale_name, scale, expected_space, expected_desc)
 
     data_type = data.type
@@ -4031,7 +4044,7 @@ def _check_mx_scale_tile(
         expected_shape = data_shape.copy()
         expected_shape[group_axis] //= _MX_GROUP_SIZE
         if scale_shape != expected_shape:
-            raise ValueError(
+            raise InvalidType(
                 f"{op_name}: {scale_name} shape must match {data_name} MX groups, "
                 f"expected {expected_shape} for {data_name} shape {data_shape}, got {scale_shape}."
             )
@@ -4051,7 +4064,7 @@ def _check_mx_scale_tile(
 
     expected_scale_addr = data_addr.value >> _MX_SCALE_ADDR_SHIFT
     if scale_addr.value != expected_scale_addr:
-        raise ValueError(
+        raise InvalidVal(
             f"{op_name}: {scale_name} address must equal {data_name} address >> {_MX_SCALE_ADDR_SHIFT}, "
             f"got {data_name}=0x{data_addr.value:X}, expected {scale_name}=0x{expected_scale_addr:X}, "
             f"actual {scale_name}=0x{scale_addr.value:X}."
@@ -4079,7 +4092,7 @@ def _check_mx_operands(
         a_dtype in _MX_FP4_DTYPES and b_dtype in _MX_FP4_DTYPES
     )
     if not valid_input_dtypes or dst_dtype != DataType.FP32:
-        raise ValueError(
+        raise InvalidType(
             f"{op_name}: (lhs,rhs) must be FP8/FP4 combo and dst FP32, "
             f"got ({a_dtype},{b_dtype},{dst_dtype})."
         )
@@ -4091,29 +4104,29 @@ def _check_mx_operands(
     rhs_k = rhs_shape[0] if rhs_shape is not None else None
 
     if lhs_k is not None and rhs_k is not None and lhs_k != rhs_k:
-        raise ValueError(f"{op_name}: lhs and rhs K dimensions must match, got lhs K={lhs_k}, rhs K={rhs_k}.")
+        raise InvalidShape(f"{op_name}: lhs and rhs K dimensions must match, got lhs K={lhs_k}, rhs K={rhs_k}.")
     for name, k_value in (("lhs", lhs_k), ("rhs", rhs_k)):
         if k_value is not None and k_value % 64 != 0:
-            raise ValueError(
+            raise InvalidShape(
                 f"{op_name}: K dimension must be a multiple of 64 for MX matmul, got {name} K={k_value}."
             )
 
     if dst_shape is not None and lhs_shape is not None and rhs_shape is not None:
         expected_shape = [lhs_shape[0], rhs_shape[1]]
         if dst_shape != expected_shape:
-            raise ValueError(
+            raise InvalidType(
                 f"{op_name}: dst_tile shape must be [lhs M, rhs N], "
                 f"expected {expected_shape}, got {dst_shape}."
             )
     if acc is not None:
         acc_shape = _tile_shape_ints(acc.type)
         if dst_shape is not None and acc_shape is not None and acc_shape != dst_shape:
-            raise ValueError(
+            raise InvalidShape(
                 f"{op_name}: acc_tile shape must match dst_tile shape, "
                 f"got acc_tile={acc_shape}, dst_tile={dst_shape}."
             )
         if acc.type.dtype != DataType.FP32:
-            raise ValueError(f"{op_name}: acc_tile must use FP32 dtype, got {acc.type.dtype}.")
+            raise InvalidType(f"{op_name}: acc_tile must use FP32 dtype, got {acc.type.dtype}.")
 
     _check_mx_scale_tile(op_name, scale_a, lhs, is_left=True)
     _check_mx_scale_tile(op_name, scale_b, rhs, is_left=False)

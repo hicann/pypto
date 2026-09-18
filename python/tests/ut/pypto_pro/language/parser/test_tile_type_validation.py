@@ -15,8 +15,8 @@ of surfacing as opaque device/runtime failures (bad addresses, zero/negative
 tile sizes, misaligned base-address expansion, ...).
 """
 
+from pypto_pro._errors import InvalidArgument, InvalidShape, InvalidType, InvalidVal, RuntimeFailure
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import ParserError
 import pytest
 
 from pypto.pypto_impl import ir
@@ -38,7 +38,7 @@ def test_tile_type_shape_zero_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0])
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(ParserError, match="shape dimensions must be positive"):
+    with pytest.raises(InvalidArgument, match="shape dimensions must be positive"):
         _parse(k)
 
 
@@ -49,7 +49,7 @@ def test_tile_type_shape_negative_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0])
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(ParserError, match="shape dimensions must be positive"):
+    with pytest.raises(InvalidArgument, match="shape dimensions must be positive"):
         _parse(k)
 
 
@@ -60,7 +60,7 @@ def test_tile_type_shape_empty_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0])
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(ParserError, match="shape must not be empty"):
+    with pytest.raises(InvalidShape, match="shape must not be empty"):
         _parse(k)
 
 
@@ -73,7 +73,7 @@ def test_tile_type_bias_multi_row_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0])
         _ = g.next()
 
-    with pytest.raises(ParserError, match="Bias tiles must have exactly 1 row"):
+    with pytest.raises(InvalidShape, match="Bias tiles must have exactly 1 row"):
         _parse(k)
 
 
@@ -97,7 +97,7 @@ def test_tile_type_bias_non_nd_layout_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0])
         _ = g.next()
 
-    with pytest.raises(ParserError, match="Bias tiles require layout in \\{ND\\}"):
+    with pytest.raises(InvalidVal, match="Bias tiles require layout in \\{ND\\}"):
         _parse(k)
 
 
@@ -126,7 +126,7 @@ def test_tile_type_shape_non_int_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0])
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(ParserError, match="must be a compile-time integer"):
+    with pytest.raises(InvalidType, match="must be a compile-time integer"):
         _parse(k)
 
 
@@ -137,7 +137,7 @@ def test_tile_type_shape_bool_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0])
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(ParserError, match="must be a compile-time integer"):
+    with pytest.raises(InvalidType, match="must be a compile-time integer"):
         _parse(k)
 
 
@@ -155,7 +155,7 @@ def test_tile_type_bad_target_memory_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0])
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(ParserError, match="target_memory must be a pl.MemorySpace"):
+    with pytest.raises(InvalidType, match="target_memory must be a pl.MemorySpace"):
         _parse(k)
 
 
@@ -168,7 +168,7 @@ def test_tile_type_valid_shape_exceeds_shape_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0])
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(ParserError, match="exceeds tile shape dimension"):
+    with pytest.raises(InvalidShape, match="exceeds tile shape dimension"):
         _parse(k)
 
 
@@ -181,7 +181,7 @@ def test_tile_type_valid_shape_rank_mismatch_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0])
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(ParserError, match="must match shape rank"):
+    with pytest.raises(InvalidShape, match="must match shape rank"):
         _parse(k)
 
 
@@ -194,7 +194,7 @@ def test_tile_type_valid_shape_bad_value_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0])
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(ParserError, match="positive or -1 \\(dynamic\\)"):
+    with pytest.raises(InvalidShape, match="positive or -1 \\(dynamic\\)"):
         _parse(k)
 
 
@@ -209,7 +209,7 @@ def test_tile_type_bad_fractal_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0])
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(ParserError, match="fractal must be an integer"):
+    with pytest.raises(InvalidType, match="fractal must be an integer"):
         _parse(k)
 
 
@@ -237,7 +237,7 @@ def test_tile_type_compact_out_of_range_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0])
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(ParserError, match="compact must be one of \\[0, 1, 2, 3\\]"):
+    with pytest.raises(InvalidArgument, match="compact must be one of \\[0, 1, 2, 3\\]"):
         _parse(k)
 
 
@@ -253,7 +253,7 @@ def test_make_tile_group_negative_addrs_rejected():
         g = pl.make_tile_group(type=tt, addrs=-0x100, mutex_ids=[0])
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(ParserError, match="addrs must be non-negative integers"):
+    with pytest.raises(InvalidArgument, match="addrs must be non-negative integers"):
         _parse(k)
 
 
@@ -264,7 +264,7 @@ def test_make_tile_group_float_addrs_rejected():
         g = pl.make_tile_group(type=tt, addrs=0.5, mutex_ids=[0])
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(ParserError, match="addrs.*must be a compile-time integer, or list of integers"):
+    with pytest.raises(InvalidType, match="addrs.*must be a compile-time integer, or list of integers"):
         _parse(k)
 
 
@@ -275,7 +275,7 @@ def test_make_tile_group_float_in_addrs_list_rejected():
         g = pl.make_tile_group(type=tt, addrs=[0, 0.5], mutex_ids=[0, 1])
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(ParserError, match="addrs.*must be a compile-time integer, or list of integers"):
+    with pytest.raises(InvalidType, match="addrs.*must be a compile-time integer, or list of integers"):
         _parse(k)
 
 
@@ -286,7 +286,7 @@ def test_make_tile_group_bool_addrs_rejected():
         g = pl.make_tile_group(type=tt, addrs=True, mutex_ids=[0])
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(ParserError, match="addrs.*must be a compile-time integer, or list of integers"):
+    with pytest.raises(InvalidType, match="addrs.*must be a compile-time integer, or list of integers"):
         _parse(k)
 
 
@@ -297,7 +297,7 @@ def test_make_tile_group_none_addrs_rejected():
         g = pl.make_tile_group(type=tt, addrs=None, mutex_ids=[0])
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(ParserError, match="addrs.*must be a compile-time integer, or list of integers"):
+    with pytest.raises(InvalidType, match="addrs.*must be a compile-time integer, or list of integers"):
         _parse(k)
 
 
@@ -308,7 +308,7 @@ def test_make_tile_group_str_in_addrs_list_rejected():
         g = pl.make_tile_group(type=tt, addrs=["x"], mutex_ids=[0])
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(ParserError, match="Failed to parse kernel function"):
+    with pytest.raises(RuntimeFailure, match="Failed to parse kernel function"):
         _parse(k)
 
 
@@ -319,7 +319,7 @@ def test_make_tile_group_bool_mutex_id_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[True])
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(ParserError, match="mutex_ids must be ints, got True"):
+    with pytest.raises(InvalidType, match="mutex_ids must be ints, got True"):
         _parse(k)
 
 
@@ -330,7 +330,7 @@ def test_make_tile_group_scalar_mutex_id_int_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=5)
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(ParserError, match="mutex_ids must be a list, tuple, or None"):
+    with pytest.raises(InvalidType, match="mutex_ids must be a list, tuple, or None"):
         _parse(k)
 
 
@@ -341,7 +341,7 @@ def test_make_tile_group_scalar_mutex_id_float_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=0.0)
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(ParserError, match="mutex_ids must be a list, tuple, or None"):
+    with pytest.raises(InvalidType, match="mutex_ids must be a list, tuple, or None"):
         _parse(k)
 
 
@@ -352,7 +352,7 @@ def test_make_tile_group_unknown_kwarg_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0], foo=1)
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(ParserError, match="unexpected keyword argument\\(s\\) \\['foo'\\]"):
+    with pytest.raises(InvalidArgument, match="unexpected keyword argument\\(s\\) \\['foo'\\]"):
         _parse(k)
 
 
@@ -365,7 +365,7 @@ def test_make_tile_group_typo_kwarg_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_id=[0])
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(ParserError, match="unexpected keyword argument\\(s\\) \\['mutex_id'\\]"):
+    with pytest.raises(InvalidArgument, match="unexpected keyword argument\\(s\\) \\['mutex_id'\\]"):
         _parse(k)
 
 

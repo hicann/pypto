@@ -17,10 +17,10 @@ import ast
 from typing import TYPE_CHECKING, Any
 
 from pypto_pro import DataType, ir
+from pypto_pro._errors import InvalidArgument, InvalidType, NotSupported
 import pypto_pro.language as pl
 from pypto_pro.language.parser._expr_evaluator import ExprEvaluator
 from pypto_pro.language.parser._type_resolver import TypeResolver
-from pypto_pro.language.parser.diagnostics import ParserTypeError
 import pytest
 
 if TYPE_CHECKING:
@@ -103,7 +103,7 @@ def test_removed_scalar_annotation_syntax_raises(code):
     """Legacy scalar annotation spellings are no longer accepted."""
     resolver = _make_resolver()
 
-    with pytest.raises(ParserTypeError):
+    with pytest.raises(InvalidType):
         resolver.resolve_type(ast.parse(code, mode="eval").body)
 
 
@@ -113,7 +113,7 @@ def test_scalar_unsupported_low_precision_dtypes(dtype_name):
     resolver = _make_resolver()
     node = ast.parse(f"pl.{dtype_name}", mode="eval").body
 
-    with pytest.raises(ParserTypeError, match="Scalar type does not support dtype"):
+    with pytest.raises(NotSupported, match="Scalar type does not support dtype"):
         resolver.resolve_type(node)
 
 
@@ -142,7 +142,7 @@ def test_resolve_invalid_dtype():
     code = "pl.INVALID_TYPE"
     node = ast.parse(code, mode="eval").body
 
-    with pytest.raises(ParserTypeError, match="Unknown dtype"):
+    with pytest.raises(InvalidType, match="Unknown dtype"):
         resolver.resolve_dtype(node)
 
 
@@ -154,7 +154,7 @@ def test_resolve_invalid_tensor_syntax():
     code = "pl.Tensor[[64, 128]]"
     node = ast.parse(code, mode="eval").body
 
-    with pytest.raises(ParserTypeError, match="requires"):
+    with pytest.raises(InvalidArgument, match="requires"):
         resolver.resolve_type(node)
 
 
@@ -190,7 +190,7 @@ def test_parse_shape_invalid():
     code = "x"
     node = ast.parse(code, mode="eval").body
 
-    with pytest.raises(ParserTypeError, match="Unknown shape variable"):
+    with pytest.raises(InvalidArgument, match="Unknown shape variable"):
         resolver.parse_shape(node)
 
 
@@ -245,5 +245,5 @@ def test_resolve_nested_tuple_error():
     code = "tuple[tuple[pl.Tensor[[64], pl.DT_FP32]], pl.Tensor[[128], pl.DT_FP16]]"
     node = ast.parse(code, mode="eval").body
 
-    with pytest.raises(ParserTypeError, match="Nested tuple types"):
+    with pytest.raises(NotSupported, match="Nested tuple types"):
         resolver.resolve_type(node)

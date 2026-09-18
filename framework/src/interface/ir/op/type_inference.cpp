@@ -23,9 +23,11 @@
 #include "ir/kind_traits.h"
 #include "ir/scalar_expr.h"
 #include "ir/type.h"
+#include "pypto_pro/error.h"
 
 namespace pypto {
 namespace ir {
+using npu::tile_fwk::ExternalError;
 
 BroadcastResult BroadcastShapes(const std::vector<ExprPtr>& shape1, const std::vector<ExprPtr>& shape2)
 {
@@ -199,16 +201,18 @@ std::vector<ExprPtr> ExtractShape(const TypePtr& type)
 TileScalarTypes RequireTileScalarArgs(const std::vector<ExprPtr>& args, const std::string& op_name,
                                       size_t expected_args)
 {
-    CHECK(args.size() == expected_args) << "The operator " << op_name << " requires exactly " << expected_args
-                                        << " arguments, but got " << args.size();
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == expected_args)
+        << "The operator " << op_name << " requires exactly " << expected_args << " arguments, but got " << args.size();
 
     auto tile_type = As<TileType>(args[0]->GetType());
-    CHECK(tile_type) << "The operator " << op_name << " requires first argument to be a TileType, but got "
-                     << args[0]->GetType()->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, tile_type)
+        << "The operator " << op_name << " requires first argument to be a TileType, but got "
+        << args[0]->GetType()->TypeName();
 
     auto scalar_type = As<ScalarType>(args[1]->GetType());
-    CHECK(scalar_type) << "The operator " << op_name << " requires second argument to be a ScalarType, but got "
-                       << args[1]->GetType()->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, scalar_type)
+        << "The operator " << op_name << " requires second argument to be a ScalarType, but got "
+        << args[1]->GetType()->TypeName();
 
     return {tile_type, scalar_type};
 }
@@ -217,11 +221,12 @@ TypePtr DeduceBlockOutTileType(const std::vector<ExprPtr>& args,
                                [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs,
                                const std::string& op_name, size_t expected_args)
 {
-    CHECK(args.size() == expected_args) << "The operator " << op_name << " requires exactly " << expected_args
-                                        << " arguments, but got " << args.size();
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == expected_args)
+        << "The operator " << op_name << " requires exactly " << expected_args << " arguments, but got " << args.size();
     auto out_type = As<TileType>(args.front()->GetType());
-    CHECK(out_type) << "The operator " << op_name << " requires first argument (out) to be TileType, but got "
-                    << args.front()->GetType()->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, out_type)
+        << "The operator " << op_name << " requires first argument (out) to be TileType, but got "
+        << args.front()->GetType()->TypeName();
     return out_type;
 }
 

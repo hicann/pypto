@@ -10,8 +10,8 @@
 """UT for make_tuple chain attribute access: t.a.b and t.field.method()."""
 
 from pypto_pro import ir
+from pypto_pro._errors import InvalidOperation, InvalidShape, InvalidType, KeyNotFound
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import ParserSyntaxError, UnsupportedFeatureError
 import pytest
 
 
@@ -398,8 +398,8 @@ def test_chain_tile_group_acc_multi_slot():
 
 
 def test_chain_tile_group_unknown_method():
-    """Unknown method on a chained tile_group raises a ParserSyntaxError."""
-    with pytest.raises(ParserSyntaxError):
+    """Unknown method on a chained tile_group raises a RuntimeFailure."""
+    with pytest.raises(KeyNotFound):
 
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
@@ -416,8 +416,8 @@ def test_chain_tile_group_unknown_method():
 # =============================================================================
 
 def test_err_chain_nonexistent_field():
-    """Chained read of a nonexistent field raises UnsupportedFeatureError."""
-    with pytest.raises(UnsupportedFeatureError):
+    """Chained read of a nonexistent field raises InvalidShape."""
+    with pytest.raises(InvalidShape):
 
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
@@ -430,8 +430,8 @@ def test_err_chain_nonexistent_field():
 
 
 def test_err_chain_on_scalar_element():
-    """Chaining onto a scalar element raises UnsupportedFeatureError."""
-    with pytest.raises(UnsupportedFeatureError):
+    """Chaining onto a scalar element raises InvalidShape."""
+    with pytest.raises(InvalidShape):
 
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
@@ -444,8 +444,8 @@ def test_err_chain_on_scalar_element():
 
 
 def test_err_chain_write():
-    """make_tuple is immutable; chained write raises ParserSyntaxError."""
-    with pytest.raises(ParserSyntaxError, match="immutable named tuple field"):
+    """make_tuple is immutable; chained write raises InvalidOperation."""
+    with pytest.raises(InvalidOperation, match="immutable named tuple field"):
 
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
@@ -459,8 +459,8 @@ def test_err_chain_write():
 
 
 def test_err_named_tuple_array_field_element_write():
-    """make_tuple is immutable; array field element write raises ParserSyntaxError."""
-    with pytest.raises(ParserSyntaxError, match="immutable named tuple field"):
+    """make_tuple is immutable; array field element write raises InvalidOperation."""
+    with pytest.raises(InvalidOperation, match="immutable named tuple field"):
 
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
@@ -473,8 +473,8 @@ def test_err_named_tuple_array_field_element_write():
 
 
 def test_err_chain_string_subscript():
-    """String subscript on a make_tuple raises ParserSyntaxError."""
-    with pytest.raises(ParserSyntaxError, match="integer"):
+    """String subscript on a make_tuple raises InvalidType."""
+    with pytest.raises(InvalidType, match="integer"):
 
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
@@ -488,7 +488,7 @@ def test_err_chain_string_subscript():
 
 def test_err_struct_field_holding_make_tuple():
     """Chained read through a struct field holding a make_tuple is unsupported."""
-    with pytest.raises(UnsupportedFeatureError):
+    with pytest.raises(InvalidShape):
 
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):

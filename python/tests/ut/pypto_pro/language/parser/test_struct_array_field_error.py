@@ -13,12 +13,17 @@
 from __future__ import annotations
 
 from pypto_pro import ir
-import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import (
-    ParserSyntaxError,
-    ParserTypeError,
-    UnsupportedFeatureError,
+from pypto_pro._errors import (
+    CommonExternal,
+    InvalidOperation,
+    InvalidShape,
+    InvalidType,
+    InvalidVal,
+    NotSupported,
+    OutOfRange,
+    PyptoProError,
 )
+import pypto_pro.language as pl
 import pytest
 
 # =============================================================================
@@ -28,7 +33,7 @@ import pytest
 def test_err_arr_field_index_out_of_bounds():
     """s.arr[4] on a 4-element array field should fail at compile time."""
 
-    with pytest.raises(ParserSyntaxError):
+    with pytest.raises(CommonExternal):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             s = pl.struct("S", arr=[0, 0, 0, 0])
@@ -41,7 +46,7 @@ def test_err_arr_field_index_out_of_bounds():
 def test_err_arr_field_negative_index():
     """s.arr[-1] should fail — negative indices are not supported."""
 
-    with pytest.raises(ParserSyntaxError):
+    with pytest.raises(CommonExternal):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             s = pl.struct("S", arr=[0, 0, 0, 0])
@@ -54,7 +59,7 @@ def test_err_arr_field_negative_index():
 def test_err_struct_array_arr_field_oob():
     """arr[5].data[0] on a size=3 struct_array should fail at compile time."""
 
-    with pytest.raises(ParserSyntaxError):
+    with pytest.raises(CommonExternal):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             arr = pl.struct_array(3, "S", x=0, data=[0, 0, 0])
@@ -69,9 +74,9 @@ def test_err_struct_array_arr_field_oob():
 # =============================================================================
 
 def test_err_subscript_scalar_field_read():
-    """s.x[0] where x is a scalar field should raise ParserTypeError."""
+    """s.x[0] where x is a scalar field should raise PyptoProError."""
 
-    with pytest.raises(ParserTypeError, match="Subscript requires tuple"):
+    with pytest.raises(InvalidType, match="Subscript requires tuple"):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             s = pl.struct("S", x=0)
@@ -82,9 +87,9 @@ def test_err_subscript_scalar_field_read():
 
 
 def test_err_subscript_scalar_field_write():
-    """s.x[0] = 10 where x is a scalar field should raise ParserTypeError."""
+    """s.x[0] = 10 where x is a scalar field should raise PyptoProError."""
 
-    with pytest.raises(ParserTypeError, match="field is not an array"):
+    with pytest.raises(InvalidOperation, match="field is not an array"):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             s = pl.struct("S", x=0)
@@ -97,7 +102,7 @@ def test_err_subscript_scalar_field_write():
 def test_err_subscript_nested_struct_field_write():
     """A nested struct field is rejected at creation, before the subscript write."""
 
-    with pytest.raises(ParserSyntaxError, match="nested named tuple/struct"):
+    with pytest.raises(NotSupported, match="nested named tuple/struct"):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             inner = pl.struct("Inner", a=0, b=0)
@@ -111,7 +116,7 @@ def test_err_subscript_nested_struct_field_write():
 def test_err_subscript_array_field_oob_write():
     """s.arr[4] = 10 on a 4-element array field should fail at compile time."""
 
-    with pytest.raises(ParserSyntaxError, match="out of bounds"):
+    with pytest.raises(OutOfRange, match="out of bounds"):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             s = pl.struct("S", arr=[0, 0, 0, 0])
@@ -124,7 +129,7 @@ def test_err_subscript_array_field_oob_write():
 def test_err_subscript_array_field_multi_index_write():
     """s.arr[0, 1] = 10 (multi-dimensional) should fail at compile time."""
 
-    with pytest.raises(ParserSyntaxError, match="Multi-dimensional subscript"):
+    with pytest.raises(InvalidShape, match="Multi-dimensional subscript"):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             s = pl.struct("S", arr=[0, 0, 0, 0])
@@ -141,7 +146,7 @@ def test_err_subscript_array_field_multi_index_write():
 def test_err_nonexistent_field_read():
     """s.nonexistent[0] should raise an error for a missing field."""
 
-    with pytest.raises((UnsupportedFeatureError, ParserTypeError)):
+    with pytest.raises((PyptoProError, PyptoProError)):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             s = pl.struct("S", x=0)
@@ -152,9 +157,9 @@ def test_err_nonexistent_field_read():
 
 
 def test_err_nonexistent_field_write():
-    """s.nonexistent[0] = 1 should raise ParserTypeError for a missing field."""
+    """s.nonexistent[0] = 1 should raise PyptoProError for a missing field."""
 
-    with pytest.raises(ParserTypeError, match="Struct has no field"):
+    with pytest.raises(InvalidVal, match="Struct has no field"):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             s = pl.struct("S", x=0)
@@ -189,9 +194,9 @@ def test_arr_field_whole_assign_expands():
 
 
 def test_arr_field_whole_assign_length_mismatch():
-    """s.arr = [1, 2] on a 4-element array field should raise ParserSyntaxError."""
+    """s.arr = [1, 2] on a 4-element array field should raise PyptoProError."""
 
-    with pytest.raises(ParserSyntaxError, match="expects 4 elements, got 2"):
+    with pytest.raises(InvalidVal, match="expects 4 elements, got 2"):
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64):
             s = pl.struct("S", arr=[0, 0, 0, 0])

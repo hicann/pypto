@@ -33,6 +33,17 @@ from typing import Any, Union
 
 from pypto_pro.language.typing.shape import DYNAMIC, STATIC, _ShapePolicy
 
+from .._errors import (
+    CommonInner,
+    InvalidArgument,
+    InvalidShape,
+    InvalidType,
+    KeyNotFound,
+    PyptoProError,
+    RuntimeFailure,
+    message_of,
+)
+
 
 def _get_annotations(func, namespace):
     get_annotations = getattr(inspect, "get_annotations", None)
@@ -53,12 +64,12 @@ def _dynamic_name(parameter_name: str, axis: int) -> str:
 
 def _validate_positive_int(value: Any, parameter_name: str, axis: int, *, source: str) -> int:
     if type(value) is not int:
-        raise TypeError(
+        raise InvalidType(
             f"Tensor parameter '{parameter_name}' axis {axis} {source} must be a positive integer, "
             f"got {type(value).__name__}"
         )
     if value <= 0:
-        raise ValueError(f"Tensor parameter '{parameter_name}' axis {axis} {source} must be positive, got {value}")
+        raise InvalidShape(f"Tensor parameter '{parameter_name}' axis {axis} {source} must be positive, got {value}")
     return value
 
 
@@ -111,7 +122,7 @@ class BoundDimension:
 
     def __post_init__(self) -> None:
         if (self.value is None) == (self.dynamic_name is None):
-            raise ValueError("A bound dimension must contain exactly one of value or dynamic_name")
+            raise InvalidArgument("A bound dimension must contain exactly one of value or dynamic_name")
 
 
 @dataclass(frozen=True)
@@ -141,7 +152,7 @@ class BoundTensorShape:
                 result.append(ir.Var(dim.dynamic_name, ir.ScalarType(DataType.INT64), span))
             else:
                 if dim.value is None:  # Guard the BoundDimension invariant for type checkers.
-                    raise ValueError("A constant bound dimension must contain a value")
+                    raise InvalidShape("A constant bound dimension must contain a value")
                 result.append(ir.ConstInt(dim.value, DataType.INT64, span))
         return result
 
@@ -173,7 +184,7 @@ class TensorShapeSpec:
         dtype: Any = None,
     ) -> "TensorShapeSpec":
         if not isinstance(shape, (list, tuple)):
-            raise TypeError(
+            raise InvalidType(
                 f"Tensor parameter '{parameter_name}' shape must be a list or tuple, got {type(shape).__name__}"
             )
 
@@ -182,7 +193,7 @@ class TensorShapeSpec:
         for axis, raw_dim in enumerate(shape):
             if raw_dim is Ellipsis:
                 if ellipsis_seen or axis != len(shape) - 1:
-                    raise TypeError(
+                    raise InvalidShape(
                         f"Tensor parameter '{parameter_name}' ellipsis must appear once "
                         "and only as the final shape item"
                     )
@@ -192,8 +203,8 @@ class TensorShapeSpec:
             if type(raw_dim) is int:
                 try:
                     value = _validate_positive_int(raw_dim, parameter_name, axis, source="annotation")
-                except ValueError as exc:
-                    raise TypeError(str(exc)) from exc
+                except PyptoProError as exc:
+                    raise InvalidShape(message_of(exc)) from exc
                 dimensions.append(FixedDim(value))
                 continue
             if raw_dim is DYNAMIC:
@@ -203,7 +214,7 @@ class TensorShapeSpec:
                 dimensions.append(StaticDim(parameter_name, axis))
                 continue
             policy_name = raw_dim.name if isinstance(raw_dim, _ShapePolicy) else type(raw_dim).__name__
-            raise TypeError(
+            raise InvalidShape(
                 f"Tensor parameter '{parameter_name}' axis {axis} annotation must be DYNAMIC, STATIC, "
                 f"a positive integer, or final ellipsis; got {policy_name}"
             )
@@ -212,14 +223,14 @@ class TensorShapeSpec:
     def bind(self, actual_shape: Sequence[int] | None) -> BoundTensorShape:
         if actual_shape is None:
             if self.requires_binding:
-                raise ValueError(
+                raise InvalidShape(
                     f"static_shapes must provide tensor parameter '{self.parameter_name}' because it contains "
                     "STATIC or ellipsis dimensions"
                 )
             actual: tuple[int, ...] | None = None
         else:
             if not isinstance(actual_shape, Sequence) or isinstance(actual_shape, (str, bytes)):
-                raise TypeError(
+                raise InvalidType(
                     f"Shape for tensor parameter '{self.parameter_name}' must be a sequence of positive integers"
                 )
             actual = tuple(
@@ -232,7 +243,7 @@ class TensorShapeSpec:
             rank_matches = len(actual) >= explicit_rank if self.has_ellipsis else len(actual) == explicit_rank
             if not rank_matches:
                 expected = f"at least {explicit_rank}" if self.has_ellipsis else str(explicit_rank)
-                raise ValueError(
+                raise InvalidType(
                     f"Tensor parameter '{self.parameter_name}' rank mismatch: expected {expected}, got {len(actual)}"
                 )
 
@@ -240,7 +251,7 @@ class TensorShapeSpec:
         for axis, spec in enumerate(self.dimensions):
             if isinstance(spec, StaticTail):
                 if actual is None:
-                    raise ValueError(
+                    raise InvalidArgument(
                         f"static_shapes must provide tensor parameter '{self.parameter_name}' to expand ellipsis"
                     )
                 for tail_axis in range(axis, len(actual)):
@@ -248,7 +259,7 @@ class TensorShapeSpec:
                 break
             if isinstance(spec, FixedDim):
                 if actual is not None and actual[axis] != spec.value:
-                    raise ValueError(
+                    raise InvalidType(
                         f"Tensor parameter '{self.parameter_name}' axis {axis} mismatch: "
                         f"expected {spec.value}, got {actual[axis]}"
                     )
@@ -258,7 +269,7 @@ class TensorShapeSpec:
                 bound.append(BoundDimension(axis, dynamic_name=spec.name))
                 continue
             if actual is None:
-                raise ValueError(f"static_shapes must provide tensor parameter '{self.parameter_name}' axis {axis}")
+                raise InvalidShape(f"static_shapes must provide tensor parameter '{self.parameter_name}' axis {axis}")
             bound.append(BoundDimension(axis, value=actual[axis], is_static=True))
         return BoundTensorShape(self.parameter_name, self.parameter_index, tuple(bound))
 
@@ -277,7 +288,7 @@ class BoundKernelSignature:
         for tensor in self.tensors:
             if tensor.parameter_name == parameter_name:
                 return tensor
-        raise KeyError(parameter_name)
+        raise KeyNotFound(parameter_name)
 
     def get_tensor(self, parameter_name: str) -> BoundTensorShape | None:
         try:
@@ -306,7 +317,9 @@ class KernelSignatureSpec:
         try:
             annotations = _get_annotations(func, namespace)
         except (NameError, TypeError, ValueError) as exc:
-            raise TypeError(f"Failed to evaluate annotations for kernel '{func.__name__}': {exc}") from exc
+            raise RuntimeFailure(
+                f"Failed to evaluate annotations for kernel '{func.__name__}': {message_of(exc)}"
+            ) from exc
 
         signature = inspect.signature(func)
         tensor_specs: list[TensorShapeSpec] = []
@@ -325,7 +338,7 @@ class KernelSignatureSpec:
 
     def bind_runtime_args(self, args: tuple, kwargs: Mapping[str, Any] | None = None) -> BoundKernelSignature:
         if self.python_signature is None:
-            raise TypeError("bind_runtime_args requires a signature created with from_callable()")
+            raise CommonInner("bind_runtime_args requires a signature created with from_callable()")
         bound_args = self.python_signature.bind(*args, **dict(kwargs or {}))
         bound_args.apply_defaults()
         shapes: dict[str, Sequence[int]] = {}
@@ -335,7 +348,7 @@ class KernelSignatureSpec:
                 continue
             shape = getattr(value, "shape", None)
             if shape is None:
-                raise TypeError(
+                raise InvalidType(
                     f"Tensor parameter '{tensor.parameter_name}' must provide a shape, got {type(value).__name__}"
                 )
             shapes[tensor.parameter_name] = shape
@@ -346,14 +359,14 @@ class KernelSignatureSpec:
         static_shapes: Mapping[str, Sequence[int]] | None,
     ) -> BoundKernelSignature:
         if static_shapes is not None and not isinstance(static_shapes, Mapping):
-            raise TypeError(
+            raise InvalidType(
                 f"static_shapes must be a mapping from parameter name to shape, got {type(static_shapes).__name__}"
             )
         provided = dict(static_shapes or {})
         known_names = {tensor.parameter_name for tensor in self.tensors}
         unknown = sorted(set(provided) - known_names)
         if unknown:
-            raise ValueError(f"static_shapes contains unknown tensor parameters: {', '.join(unknown)}")
+            raise InvalidArgument(f"static_shapes contains unknown tensor parameters: {', '.join(unknown)}")
 
         bound_tensors: list[BoundTensorShape] = []
         for tensor in self.tensors:

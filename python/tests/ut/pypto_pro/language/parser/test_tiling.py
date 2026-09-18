@@ -16,12 +16,8 @@ from dataclasses import dataclass
 import logging
 
 from pypto_pro import ir
+from pypto_pro._errors import CommonExternal, InvalidArgument, InvalidOperation, InvalidShape, InvalidType
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import (
-    ParserSyntaxError,
-    ParserTypeError,
-    UnsupportedFeatureError,
-)
 import pytest
 
 from pypto.pypto_impl.ir import DataType
@@ -197,13 +193,13 @@ def test_tiling_registry_reset_between_functions():
 
 
 def test_tiling_not_last_raises_parser_syntax_error():
-    """Tiling parameter that is not the last param raises ParserSyntaxError."""
+    """Tiling parameter that is not the last param raises InvalidOperation."""
 
     @dataclass
     class Tiling:
         x: int
 
-    with pytest.raises(ParserSyntaxError, match="must be the last parameter"):
+    with pytest.raises(InvalidOperation, match="must be the last parameter"):
 
         @pl.jit(auto_mutex=False)
         def kernel(
@@ -216,7 +212,7 @@ def test_tiling_not_last_raises_parser_syntax_error():
 
 
 def test_multiple_tiling_params_raises_parser_syntax_error():
-    """More than one tiling parameter raises ParserSyntaxError."""
+    """More than one tiling parameter raises InvalidArgument."""
 
     @dataclass
     class TilingA:
@@ -226,7 +222,7 @@ def test_multiple_tiling_params_raises_parser_syntax_error():
     class TilingB:
         y: float
 
-    with pytest.raises(ParserSyntaxError, match="at most 1"):
+    with pytest.raises(InvalidArgument, match="at most 1"):
 
         @pl.jit(auto_mutex=False)
         def kernel(
@@ -243,14 +239,14 @@ def test_nonexistent_tiling_field_raises_error():
     """Accessing a field that doesn't exist on the tiling struct raises an error.
 
     A missing field is not in the struct's named-tuple field table, so the attribute
-    access fails to lower and surfaces as UnsupportedFeatureError.
+    access fails to lower and surfaces as InvalidShape.
     """
 
     @dataclass
     class Tiling:
         x: int
 
-    with pytest.raises(UnsupportedFeatureError, match="Standalone attribute access not supported"):
+    with pytest.raises(InvalidShape, match="Standalone attribute access not supported"):
 
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64, tiling: Tiling):
@@ -423,7 +419,7 @@ def test_array_out_of_bounds_raises_error():
     class Tiling:
         offsets: int[3]
 
-    with pytest.raises(ParserSyntaxError, match="out of bounds"):
+    with pytest.raises(CommonExternal, match="out of bounds"):
 
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64, tiling: Tiling):
@@ -458,7 +454,7 @@ def test_scalar_subscript_raises_type_error():
     class Tiling:
         n: int
 
-    with pytest.raises(ParserTypeError, match="Subscript requires tuple, tile, or tensor type"):
+    with pytest.raises(InvalidType, match="Subscript requires tuple, tile, or tensor type"):
 
         @pl.jit(auto_mutex=False)
         def kernel(_jit_entry: pl.DT_INT64, tiling: Tiling):

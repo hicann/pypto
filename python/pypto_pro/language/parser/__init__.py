@@ -33,4 +33,4 @@ __all__ = [
 
 from ..typing import Scalar, Tensor
 from .decorator import inline
-from .diagnostics import ParserError  # noqa: F401
+from .diagnostics import PyptoProError  # noqa: F401

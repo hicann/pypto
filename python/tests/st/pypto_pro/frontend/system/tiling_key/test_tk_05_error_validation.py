@@ -15,6 +15,7 @@
 
 import os
 
+from pypto_pro._errors import NotSupported
 import pypto_pro.language as pl
 from pypto_pro.runtime.tilingkey import TilingKeyField
 import pytest
@@ -85,7 +86,7 @@ kernel_single = _make_kernel(TkSingle)
 @pytest.mark.soc("950")
 @pypto.options(pass_options={"enable_slice": False})
 def test_direct_call_no_brackets():
-    with pytest.raises(ValueError):
+    with pytest.raises(NotSupported):
         import torch
 
         device = ST_DEVICE

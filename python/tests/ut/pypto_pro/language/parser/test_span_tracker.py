@@ -44,7 +44,10 @@ def test_get_span_from_node():
     assert isinstance(span, ir.Span)
     assert span.filename == source_file
     assert span.begin_line == 1
-    assert span.begin_column == 0
+    # ir.Span columns are 1-based and inclusive, so "x = 42" spans columns 1..6.
+    # The AST counts its start from 0 and its end one past the last character.
+    assert span.begin_column == 1
+    assert span.end_column == 6
 
 
 def test_get_span_none_node():

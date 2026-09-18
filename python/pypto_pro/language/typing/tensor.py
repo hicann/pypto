@@ -19,6 +19,8 @@ from collections.abc import Sequence
 from pypto.pypto_impl.ir import DataType, Expr, MemRef, TensorLayout
 from pypto_pro.language.typing.shape import _ShapePolicy
 
+from ..._errors import InvalidOperation, InvalidType
+
 EllipsisType = type(Ellipsis)
 
 
@@ -73,7 +75,7 @@ class Tensor:
         self.direction = direction
         if expr is not None:
             if _annotation_only or shape is not None or dtype is not None:
-                raise ValueError("Runtime Tensor wrapping cannot include annotation arguments")
+                raise InvalidOperation("Runtime Tensor wrapping cannot include annotation arguments")
             self.expr = expr
             self.shape = None
             self.dtype = None
@@ -86,7 +88,7 @@ class Tensor:
             self.memref = memref
             self.expr = None
         else:
-            raise ValueError(
+            raise InvalidType(
                 "Tensor must be initialized with either (shape, dtype) for annotations or expr for runtime wrapping"
             )
 
@@ -94,7 +96,7 @@ class Tensor:
     def __class_getitem__(cls, item: tuple) -> "Tensor":
         """Enable Tensor[[shape], dtype] and extended subscript syntax."""
         if not isinstance(item, tuple) or len(item) not in (2, 3, 4, 5):
-            raise TypeError(
+            raise InvalidType(
                 "Tensor requires [shape, dtype], [shape, dtype, layout_or_memref_or_view], "
                 "[shape, dtype, layout, memref], or those plus a direction marker "
                 "(pl.Input / pl.Output) notation"
@@ -141,5 +143,5 @@ class Tensor:
             ValueError: If called on an annotation-only Tensor
         """
         if self.expr is None:
-            raise ValueError("Cannot unwrap annotation-only Tensor (used in type hints)")
+            raise InvalidOperation("Cannot unwrap annotation-only Tensor (used in type hints)")
         return self.expr

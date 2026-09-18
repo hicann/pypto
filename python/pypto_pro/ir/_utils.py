@@ -22,6 +22,8 @@ import inspect
 from pypto.pypto_impl import ir as _ir
 from pypto.pypto_impl.ir import DataType
 
+from .._errors import InvalidType
+
 
 def _get_span_or_capture(span: _ir.Span | None = None, frame_offset: int = 1) -> _ir.Span:
     """Get explicit span or capture from caller.
@@ -76,8 +78,8 @@ def _normalize_expr(
         IR expression node
 
     Raises:
-        TypeError: If value is not int, float, or ir.Expr
-        FinalRejectionError: If an integer is outside the range the IR can carry
+        InvalidType: If value is not int, float, or ir.Expr
+        OutOfRange: If an integer is outside the range the IR can carry
     """
     if isinstance(value, _ir.Expr):
         return value
@@ -91,7 +93,7 @@ def _normalize_expr(
     elif isinstance(value, float):
         return _ir.ConstFloat(value, float_dtype, actual_span)
     else:
-        raise TypeError(f"Cannot convert {type(value)} to IR expression")
+        raise InvalidType(f"Cannot convert {type(value)} to IR expression")
 
 
 def _normalize_shape(
@@ -142,7 +144,7 @@ def _to_make_tuple(
                 for i in range(len(value_type.types))
             ]
             return _ir.MakeTuple(elements, actual_span)
-        raise TypeError(
+        raise InvalidType(
             f"Cannot convert Expr of type {value_type} to an offset tuple; expected a MakeTuple or a tuple-typed value"
         )
     elements = [_normalize_expr(v, actual_span) for v in value]

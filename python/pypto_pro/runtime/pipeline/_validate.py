@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import ast
 
+from ..._errors import InvalidArgument, InvalidOperation, InvalidType, NotSupported, span_of
 from ._astutil import call_name, get_funcdef, slot_accessor
 
 
@@ -63,7 +64,7 @@ def validate_kernel_buffers(sync, used: set) -> None:
         if buf.fwd_ids_node is None and buf.bwd_ids_node is None:
             continue  # not a cross-core buffer
         if buf_name not in used:
-            raise ValueError(
+            raise InvalidOperation(
                 f"pipeline: cross-core buffer '{buf_name}' declares fwd_ids/bwd_ids but no "
                 f"stage in any pipeline loop touches it, so there is no cross-core handover "
                 f"to synchronise. Either drop those keywords or pass this buffer to the "
@@ -104,7 +105,7 @@ def _check_stable_distances(graph) -> None:
         f"(dist={edge.dist:+d}, task_off={edge.task_off:+d}, {edge.slot_count} slots)"
         for edge in unstable
     )
-    raise ValueError(
+    raise InvalidOperation(
         "pipeline: these cross-core dependencies never reach a steady state — the distance "
         "between their two ends changes from task to task, so no single wait/set placement "
         "covers them:\n"
@@ -129,7 +130,7 @@ def _check_no_deadlock_cycle(cycles) -> None:
     if not deadlocks:
         return
     routes = "\n".join(f"  {_format_cycle(path, total)}" for path, total in sorted(deadlocks, key=lambda c: c[1]))
-    raise ValueError(
+    raise InvalidOperation(
         "pipeline: the stage/buffer dependencies form a cycle that no cross-core sync can "
         "satisfy (its distances sum to <= 0, i.e. each side would wait for the other):\n"
         f"{routes}\n"
@@ -170,7 +171,7 @@ def _check_cross_core_users(info, users: dict) -> None:
         if not entries:
             continue  # used by another pipeline loop; validate_kernel_buffers catches unused
         if len(entries) == 1:
-            raise ValueError(
+            raise InvalidOperation(
                 f"pipeline: cross-core buffer '{buf_name}' is used by only one stage "
                 f"{names} in this pipeline loop, so the handover has no other side here. "
                 f"Each pipeline loop must hold a complete producer/consumer pair — its sync "
@@ -178,7 +179,7 @@ def _check_cross_core_users(info, users: dict) -> None:
                 f"supported."
             )
         if len(entries) > 2:
-            raise ValueError(
+            raise InvalidOperation(
                 f"pipeline: cross-core buffer '{buf_name}' is used by {len(entries)} stages "
                 f"{names}. One buffer variable carries one producer/consumer pair, since its "
                 f"event ids are resolved per buffer. Declare one tile_group per pair — they "
@@ -186,7 +187,7 @@ def _check_cross_core_users(info, users: dict) -> None:
             )
         sections = {e[2] for e in entries}
         if len(sections) == 1:
-            raise ValueError(
+            raise InvalidOperation(
                 f"pipeline: cross-core buffer '{buf_name}' is used only by "
                 f"'{sections.pop()}' stages {names}. Cross-core sync orders work across the "
                 f"cube/vector boundary; same-core ordering comes from auto_mutex instead."
@@ -217,7 +218,7 @@ def _check_event_id_counts(graph, info) -> None:
         slots = graph.slots[region]
         for label, id_count in (("fwd_ids", buf.fwd_id_count), ("bwd_ids", buf.bwd_id_count)):
             if id_count and id_count not in (1, slots):
-                raise ValueError(
+                raise InvalidArgument(
                     f"pipeline: cross-core buffer '{buf_name}' declares {id_count} {label} "
                     f"but rotates through {slots} slots. Give it one id per slot "
                     f"({slots} of them), or a single id shared by all slots — any other "
@@ -243,7 +244,7 @@ def _check_reuse_mutex_ids(graph, info) -> None:
         distinct = {tuple(v) for v in ids_by_buf.values() if v is not None}
         if len(distinct) > 1:
             detail = ", ".join(f"{n}={v}" for n, v in ids_by_buf.items())
-            raise ValueError(
+            raise InvalidOperation(
                 f"pipeline: buffers sharing addresses must share mutex_ids, but region "
                 f"{region} has {detail}. A mutex locks the address, so different ids over "
                 f"one region give no mutual exclusion."
@@ -267,10 +268,11 @@ def _check_name_collisions(func_def, framework_names: set) -> None:
     user_names = {n.id for n in ast.walk(func_def) if isinstance(n, ast.Name)}
     clash = sorted(framework_names & user_names)
     if clash:
-        raise ValueError(
+        raise InvalidOperation(
             f"pipeline transform: framework variable name(s) {clash} collide with "
             f"user-defined names in the kernel. The '_pl_' prefix is reserved for "
-            f"the pipeline transform — please rename the conflicting user variable(s)."
+            f"the pipeline transform — please rename the conflicting user variable(s).",
+            span=span_of(func_def),
         )
 
 
@@ -295,7 +297,7 @@ def _check_preload_count(preload, loop_count: int) -> None:
     """
     if not isinstance(preload, tuple) or len(preload) == loop_count:
         return
-    raise ValueError(
+    raise InvalidArgument(
         f"pipeline: preload has {len(preload)} values {list(preload)} but the kernel holds "
         f"{loop_count} pipeline loop(s). Give one value per loop, in source order, or a "
         f"single value to use for all of them."
@@ -319,7 +321,7 @@ def _check_distinct_outer_loops(infos: list) -> None:
             continue
         first = seen.setdefault(id(outer), info)
         if first is not info:
-            raise ValueError(
+            raise InvalidOperation(
                 f"pipeline: the pipeline loops at line {first.pipeline_loop.lineno} and line "
                 f"{info.pipeline_loop.lineno} are both inside the loop at line "
                 f"{outer.lineno}, but each pipeline places its declarations before that loop "
@@ -387,13 +389,14 @@ def _check_no_nested_stage(func_def, info, stage_func_names: set) -> None:
             if callee in stage_func_names:
                 chain = " -> ".join(path + (callee,))
                 where = f" via {' -> '.join(path[1:])}," if len(path) > 1 else ""
-                raise ValueError(
+                raise InvalidOperation(
                     f"pipeline: stage '{path[0]}' reaches stage '{callee}'{where} at line "
                     f"{node.lineno} ({chain}). A stage may not contain another stage — the "
                     f"inner one's buffer accesses would be attributed to the caller and its "
                     f"handovers left unsynchronised.\n"
                     f"Inline '{callee}' into '{path[0]}', or make it a plain helper function "
-                    f"(drop @pl.pipeline.stage) if it needs no sync of its own."
+                    f"(drop @pl.pipeline.stage) if it needs no sync of its own.",
+                    span=span_of(node),
                 )
             helper_def = _try_get_funcdef_for(info, callee)
             if helper_def is not None:
@@ -417,7 +420,7 @@ def _check_stage_returns(info) -> None:
             continue
         for node in ast.walk(func_def):
             if isinstance(node, ast.Return) and node.value is not None:
-                raise ValueError(
+                raise InvalidOperation(
                     f"pipeline: stage '{stage.func_name}' returns a value. Stages are "
                     f"called for their effect on buffers; use an output buffer instead."
                 )
@@ -427,7 +430,7 @@ def _check_stage_sections(info) -> None:
     """Every stage call must sit inside a section block, since that says which core runs it."""
     for stage in info.stages:
         if stage.section_kind == "":
-            raise ValueError(
+            raise InvalidOperation(
                 f"pipeline: stage call '{stage.func_name}' appears directly in the pipeline "
                 f"loop body, not inside a `with pl.section_cube()/section_vector()` block. "
                 f"Each stage call must be wrapped in a section block."
@@ -443,7 +446,7 @@ def _check_unique_stage_names(info) -> None:
     seen = set()
     for stage in info.stages:
         if stage.func_name in seen:
-            raise ValueError(
+            raise InvalidOperation(
                 f"pipeline: stage '{stage.func_name}' is called more than once in this "
                 f"pipeline loop. A stage is identified by its function name — its sync "
                 f"belongs to that name — so each stage of the chain needs its own function.\n"
@@ -473,13 +476,14 @@ def _check_nothing_between_stages(info) -> None:
     for stmt in info.pipeline_loop.body[positions[0]:positions[-1]]:
         if id(stmt) in holders:
             continue
-        raise ValueError(
+        raise InvalidOperation(
             f"pipeline: the statement at line {stmt.lineno} "
             f"(`{ast.unparse(stmt).splitlines()[0]}`) sits between two stage calls. Only "
             f"stage calls belong there — a stage runs once per task, every other statement "
             f"runs once per beat, and between two stages there is no saying which it "
             f"follows.\n"
-            f"Move it to the start or the end of the pipeline loop body, or into a stage."
+            f"Move it to the start or the end of the pipeline loop body, or into a stage.",
+            span=span_of(stmt),
         )
 
 
@@ -493,7 +497,7 @@ def _check_alternating_sections(info) -> None:
     for i in range(len(stages) - 1):
         cur, nxt = stages[i], stages[i + 1]
         if cur.section_kind == nxt.section_kind:
-            raise ValueError(
+            raise InvalidOperation(
                 f"pipeline: stages '{cur.func_name}' and '{nxt.func_name}' are both "
                 f"on the '{cur.section_kind}' core (consecutive same-core stages). The "
                 f"delay model requires the stage chain to strictly alternate "
@@ -539,14 +543,15 @@ def _reject_slot_picks(tree, groups: set, helper_defs: dict, seen: frozenset, wh
         if pick is not None and pick[0] in groups:
             group, kind = pick
             accessor = "[...]" if kind == "index" else f".{kind}()"
-            raise ValueError(
+            raise InvalidOperation(
                 f"pipeline: line {node.lineno}{where} takes a slot from tile group '{group}' "
                 f"(`{group}{accessor}`) inside the pipeline loop but outside any stage. A slot "
                 f"belongs to one task, and in the loop body only a stage runs once per task — "
                 f"the rest runs once per beat, including the fill and drain beats where there "
                 f"is no task at all.\n"
                 f"Take the slot inside the stage function, or outside the pipeline loop, where "
-                f"its index is carried through ctx."
+                f"its index is carried through ctx.",
+                span=span_of(node),
             )
         if not isinstance(node, ast.Call):
             continue
@@ -576,12 +581,12 @@ def _check_loop_step(info) -> None:
     if step is None:
         return  # implicit 1
     if isinstance(step, ast.UnaryOp) and isinstance(step.op, ast.USub):
-        raise ValueError(
+        raise NotSupported(
             f"pipeline: pipeline loop `for {info.pipeline_loop_var} in ...` steps backwards "
             f"({ast.unparse(step)}). Only forward iteration is supported."
         )
     if isinstance(step, ast.Constant) and isinstance(step.value, int) and step.value <= 0:
-        raise ValueError(
+        raise InvalidType(
             f"pipeline: pipeline loop `for {info.pipeline_loop_var} in ...` has step "
             f"{step.value}. The step must be a positive value."
         )

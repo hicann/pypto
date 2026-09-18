@@ -25,9 +25,11 @@
 #include "ir/memref.h"
 #include "ir/span.h"
 #include "ir/type.h"
+#include "pypto_pro/error.h"
 
 namespace pypto {
 namespace ir {
+using npu::tile_fwk::ExternalError;
 
 void ValidateKwargs(const std::vector<std::pair<std::string, std::any>>& kwargs,
                     const std::unordered_map<std::string, std::type_index>& allowed_kwargs, const std::string& op_name)
@@ -35,35 +37,42 @@ void ValidateKwargs(const std::vector<std::pair<std::string, std::any>>& kwargs,
     for (const auto& [key, value] : kwargs) {
         auto it = allowed_kwargs.find(key);
         if (it == allowed_kwargs.end()) {
-            throw ValueError("Unknown kwarg '" + key + "' for operator '" + op_name + "'");
+            PRO_IR_THROW(::pypto::ir::ValueError, ExternalError::INVALID_ARGUMENT)
+                << "Unknown kwarg '" << key << "' for operator '" << op_name << "'";
         }
 
         // For DataType, accept both DataType and int (since Python may pass as int for backward compatibility)
         if (it->second == std::type_index(typeid(DataType))) {
             std::type_index value_type(value.type());
-            CHECK(value_type == std::type_index(typeid(DataType)) || value_type == std::type_index(typeid(int)))
+            PRO_IR_CHECK(ExternalError::INVALID_TYPE,
+                         value_type == std::type_index(typeid(DataType)) || value_type == std::type_index(typeid(int)))
                 << "Kwarg '" << key << "' for operator '" << op_name
                 << "' expects DataType or int, but got incompatible type";
         } else if (it->second == std::type_index(typeid(int))) {
             std::type_index value_type(value.type());
-            CHECK(value_type == std::type_index(typeid(int)) || value_type == std::type_index(typeid(int64_t)) ||
-                  value_type == std::type_index(typeid(TilePad)))
+            PRO_IR_CHECK(ExternalError::INVALID_TYPE, value_type == std::type_index(typeid(int)) ||
+                                                          value_type == std::type_index(typeid(int64_t)) ||
+                                                          value_type == std::type_index(typeid(TilePad)))
                 << "Kwarg '" << key << "' for operator '" << op_name
                 << "' expects int/int64/TilePad, but got incompatible type";
         } else if (it->second == std::type_index(typeid(MemorySpace))) {
-            CHECK(std::type_index(value.type()) == std::type_index(typeid(MemorySpace)))
+            PRO_IR_CHECK(ExternalError::INVALID_VAL,
+                         std::type_index(value.type()) == std::type_index(typeid(MemorySpace)))
                 << "Kwarg '" << key << "' for operator '" << op_name
                 << "' expects MemorySpace, but got incompatible type" << value.type().name();
         } else if (it->second == std::type_index(typeid(std::vector<int>))) {
-            CHECK(std::type_index(value.type()) == std::type_index(typeid(std::vector<int>)))
+            PRO_IR_CHECK(ExternalError::INVALID_TYPE,
+                         std::type_index(value.type()) == std::type_index(typeid(std::vector<int>)))
                 << "Kwarg '" << key << "' for operator '" << op_name
                 << "' expects std::vector<int>, but got incompatible type";
         } else if (it->second == std::type_index(typeid(std::vector<std::string>))) {
-            CHECK(std::type_index(value.type()) == std::type_index(typeid(std::vector<std::string>)))
+            PRO_IR_CHECK(ExternalError::INVALID_TYPE,
+                         std::type_index(value.type()) == std::type_index(typeid(std::vector<std::string>)))
                 << "Kwarg '" << key << "' for operator '" << op_name
                 << "' expects std::vector<std::string>, but got incompatible type";
         } else if (std::type_index(value.type()) != it->second) {
-            CHECK(false) << "Kwarg '" << key << "' for operator '" << op_name << "' has incompatible type";
+            PRO_IR_CHECK(ExternalError::INVALID_TYPE, false)
+                << "Kwarg '" << key << "' for operator '" << op_name << "' has incompatible type";
         }
     }
 }
@@ -77,7 +86,8 @@ OpRegistry& OpRegistry::GetInstance()
 OpRegistryEntry& OpRegistry::Register(const std::string& op_name)
 {
     // Check if operator is already registered
-    CHECK(registry_.find(op_name) == registry_.end()) << "Operator '" + op_name + "' is already registered";
+    PRO_IR_CHECK(ExternalError::INVALID_OPERATION, registry_.find(op_name) == registry_.end())
+        << "Operator '" + op_name + "' is already registered";
 
     // Create and insert the entry into the registry
     auto result = registry_.emplace(op_name, OpRegistryEntry());
@@ -103,9 +113,13 @@ CallPtr OpRegistry::Create(const std::string& op_name, const std::vector<ExprPtr
 CallPtr OpRegistry::Create(const std::string& op_name, const std::vector<ExprPtr>& args,
                            const std::vector<std::pair<std::string, std::any>>& kwargs, Span span) const
 {
+    // Publish the DSL location for the whole of Create(): ValidateKwargs and the
+    // deduce callbacks take no span, so their errors rely on the ambient one.
+    const pro::SpanScope spanScope(span);
+
     // Look up operator in registry
     auto it = registry_.find(op_name);
-    CHECK(it != registry_.end()) << "Operator '" + op_name + "' not found in registry";
+    PRO_IR_CHECK(ExternalError::KEY_ERROR, it != registry_.end()) << "Operator '" + op_name + "' not found in registry";
 
     const auto& entry = it->second;
 
@@ -122,7 +136,8 @@ CallPtr OpRegistry::Create(const std::string& op_name, const std::vector<ExprPtr
 
     // Deduce result type (pass args and kwargs separately)
     TypePtr result_type = deduce_type_fn(args, kwargs);
-    INTERNAL_CHECK(result_type) << "Type deduction failed for '" + op_name + "'";
+    PRO_IR_INTERNAL_CHECK(npu::tile_fwk::InternalError::COMMON_INNER_ERROR, result_type)
+        << "Type deduction failed for '" + op_name + "'";
 
     // Create Call with deduced type
     return std::make_shared<Call>(op_name, args, kwargs, result_type, std::move(span));
@@ -131,14 +146,14 @@ CallPtr OpRegistry::Create(const std::string& op_name, const std::vector<ExprPtr
 const OpRegistryEntry& OpRegistry::GetEntry(const std::string& op_name) const
 {
     auto it = registry_.find(op_name);
-    CHECK(it != registry_.end()) << "Operator '" + op_name + "' not found in registry";
+    PRO_IR_CHECK(ExternalError::KEY_ERROR, it != registry_.end()) << "Operator '" + op_name + "' not found in registry";
     return it->second;
 }
 
 OpPtr OpRegistry::GetOp(const std::string& op_name) const
 {
     auto it = registry_.find(op_name);
-    CHECK(it != registry_.end()) << "Operator '" + op_name + "' not found in registry";
+    PRO_IR_CHECK(ExternalError::KEY_ERROR, it != registry_.end()) << "Operator '" + op_name + "' not found in registry";
     return it->second.GetOp();
 }
 

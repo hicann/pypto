@@ -21,6 +21,7 @@ from typing import Any
 from pypto.pypto_impl import ir
 from pypto_pro.ir import IRBuilder
 
+from ..._errors import InvalidArgument, InvalidOperation, InvalidType, NotSupported, PyptoProError
 from ..typing._tiling import get_tiling_fields, get_tiling_tuple_type, is_tiling_class
 from ..typing.shape import _ShapePolicy
 from ._assignment_parser import AssignmentParserMixin
@@ -34,11 +35,6 @@ from ._span_tracker import SpanTracker
 from ._struct_parser import StructParserMixin
 from ._tuple_type_registry import TupleTypeRegistry
 from ._type_resolver import TypeResolver
-from .diagnostics import (
-    ParserSyntaxError,
-    ParserTypeError,
-    UnsupportedFeatureError,
-)
 
 
 def _snake_visit_name(node: ast.AST) -> str:
@@ -126,7 +122,7 @@ class ASTParser(
             target: Required Cube/Vector target for target-specific parsing.
         """
         if target not in (ir.SectionKind.Cube, ir.SectionKind.Vector):
-            raise ValueError(f"Unsupported parser target: {target}")
+            raise NotSupported(f"Unsupported parser target: {target}")
         self._target = target
         self.matched_target = False
         self.span_tracker = SpanTracker(source_file, source_lines, line_offset, col_offset)
@@ -336,7 +332,7 @@ class ASTParser(
             ir.FunctionType.SimtVF,
             ir.FunctionType.SimtCallee,
         ):
-            raise ValueError("callsite_param_types is only supported for SIMT functions")
+            raise NotSupported("callsite_param_types is only supported for SIMT functions")
 
         func_name = func_def.name
         func_span = self.span_tracker.get_span(func_def)
@@ -346,7 +342,7 @@ class ASTParser(
             and func_def.returns is not None
             and not (isinstance(func_def.returns, ast.Constant) and func_def.returns.value is None)
         ):
-            raise ParserSyntaxError(
+            raise NotSupported(
                 f"{self._void_return_context} only supports a None return annotation; "
                 "returning values is not supported.",
                 span=func_span,
@@ -362,7 +358,7 @@ class ASTParser(
             return_error = validate_single_tail_return(func_def, context)
             if return_error is not None:
                 return_node, message, hint = return_error
-                raise ParserSyntaxError(
+                raise InvalidOperation(
                     message,
                     span=self.span_tracker.get_span(return_node),
                     hint=hint,
@@ -421,10 +417,11 @@ class ASTParser(
 
             return_span = self.span_tracker.get_span(func_def.returns)
             if len(annotated_return_types) != len(inferred):
-                raise ParserTypeError(
+                raise InvalidArgument(
                     f"Return annotation for '{func_name}' expects "
                     f"{len(annotated_return_types)} value(s), got {len(inferred)}",
                     span=return_span,
+                    parser_retry=True,
                 )
             for annotated, actual in zip(annotated_return_types, inferred):
                 _check_type_compatible(
@@ -458,11 +455,12 @@ class ASTParser(
 
     @singledispatchmethod
     def _dispatch_statement(self, stmt: ast.stmt) -> None:
-        raise UnsupportedFeatureError(
+        raise InvalidType(
             f"Unsupported statement type: {type(stmt).__name__}",
             span=self.span_tracker.get_span(stmt),
             hint="Only assignments, for loops, while loops, if statements, "
             "with statements, returns, break, and continue are supported in DSL functions",
+            parser_retry=True,
         )
 
     @_dispatch_statement.register
@@ -563,7 +561,7 @@ class ASTParser(
             if arg.annotation is not None and self.resolve_tiling_class(arg.annotation) is not None
         ]
         if len(tiling_param_names) > 1:
-            raise ParserSyntaxError(
+            raise InvalidArgument(
                 f"Function '{func_def.name}' has {len(tiling_param_names)} tiling parameters "
                 f"({', '.join(tiling_param_names)}), but at most 1 is allowed",
                 span=self.span_tracker.get_span(func_def),
@@ -572,7 +570,7 @@ class ASTParser(
         if len(tiling_param_names) == 1:
             if not args_to_process or args_to_process[-1].arg != tiling_param_names[0]:
                 tiling_arg = next(a for a in args_to_process if a.arg == tiling_param_names[0])
-                raise ParserSyntaxError(
+                raise InvalidOperation(
                     f"Tiling parameter '{tiling_param_names[0]}' must be the last parameter",
                     span=self.span_tracker.get_span(tiling_arg),
                     hint="Move the tiling parameter to the last position",
@@ -614,10 +612,11 @@ class ASTParser(
 
         # 3) Annotation-only path for eagerly parsed functions.
         if arg.annotation is None:
-            raise ParserTypeError(
+            raise InvalidType(
                 f"Parameter '{param_name}' missing type annotation",
                 span=param_span,
                 hint="Add a type annotation like: x: pl.Tensor[[64], pl.DT_FP32]",
+                parser_retry=True,
             )
         param_type = self.type_resolver.resolve_param_type(arg.annotation, parameter_name=param_name)
         param_type = self._attach_ptr_to_tensor_type(param_name, param_type, param_span)
@@ -672,7 +671,7 @@ class ASTParser(
             if entry is None:
                 try:
                     tuple_expr = self.expr_evaluator.python_value_to_ir(value, span)
-                except (ParserTypeError, TypeError, ValueError):
+                except (PyptoProError, TypeError, ValueError):
                     continue
                 if not isinstance(tuple_expr, ir.MakeTuple):
                     continue

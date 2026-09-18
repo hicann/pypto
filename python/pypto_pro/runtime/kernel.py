@@ -29,7 +29,17 @@ from typing import Any, Callable, TypeVar
 
 from pypto.pypto_impl import ir
 from pypto_pro.language.parser._ast_parser import ASTParser
-from pypto_pro.language.parser.diagnostics import ParserError, ParserSyntaxError
+
+from .._errors import (
+    NameNotFound,
+    PyptoProError,
+    RuntimeFailure,
+    error_class_of_spec_message,
+    message_of,
+    remembered_span,
+    span_of_spec_message,
+    spec_head_of,
+)
 
 
 def _calculate_col_offset(source_lines: list[str]) -> int:
@@ -61,12 +71,12 @@ def _parse_ast_tree(source_code: str, entity_type: str) -> ast.AST:
         Parsed AST tree
 
     Raises:
-        ParserSyntaxError: If the source code has syntax errors
+        NotSupported: If the source code cannot be parsed
     """
     try:
         return ast.parse(source_code)
     except SyntaxError as e:
-        raise ParserSyntaxError(
+        raise RuntimeFailure(
             f"Failed to parse {entity_type} source: {e.msg}",
             hint=f"Check for Python syntax errors in your {entity_type}",
         ) from e
@@ -88,23 +98,23 @@ def _find_ast_node(tree: ast.AST, node_type: type[TypeASTNode], name: str, entit
         Found AST node
 
     Raises:
-        ParserSyntaxError: If the node cannot be found
+        NotSupported: If the node cannot be found
     """
     for node in ast.walk(tree):
         if isinstance(node, node_type) and node.name == name:
             return node
 
-    raise ParserSyntaxError(
+    raise NameNotFound(
         f"Could not find {entity_type} definition for {name}",
         hint=f"Ensure the {entity_type} is properly defined",
     )
 
 
-def _attach_source_lines_to_error(error: ParserError, source_file: str, source_lines_raw: list[str]) -> None:
-    """Attach source lines to a ParserError if not already present.
+def _attach_source_lines_to_error(error: PyptoProError, source_file: str, source_lines_raw: list[str]) -> None:
+    """Attach source lines to a pypto_pro error if not already present.
 
     Args:
-        error: ParserError to attach source lines to
+        error: Error to attach source lines to
         source_file: Path to the source file
         source_lines_raw: Raw source lines as fallback
     """
@@ -141,7 +151,7 @@ def extract_func_source_info(f: Callable):
     try:
         tree = _parse_ast_tree(source_code, "function")
         func_def = _find_ast_node(tree, ast.FunctionDef, f.__name__, "function")
-    except ParserError as e:
+    except PyptoProError as e:
         _attach_source_lines_to_error(e, source_file, source_lines_raw)
         raise
 
@@ -259,13 +269,23 @@ class KernelDef:
 
             try:
                 ir_func = parser.parse_function(self._func_def, func_type=self._func_type)
-            except ParserError:
+            except PyptoProError:
                 raise
             except Exception as e:
-                span = None
-                node = getattr(parser, '_current_node', None)
-                if node is not None:
-                    span = parser.span_tracker.get_span(node)
+                # An exception that passed through the op dispatcher carries the
+                # span of the call it was parsing -- including one the interpreter
+                # raised, such as a keyword the builder's signature does not
+                # accept. ``_current_node`` only tracks the last expression
+                # parsed, which lags behind inside a larger statement and would
+                # point somewhere else entirely.
+                # A C++ error states in its first line exactly which call failed --
+                # it was handed that span at the dispatch gate. Prefer it: the two
+                # fallbacks below only reach statement granularity.
+                span = span_of_spec_message(str(e)) or remembered_span(e)
+                if span is None:
+                    node = getattr(parser, '_current_node', None)
+                    if node is not None:
+                        span = parser.span_tracker.get_span(node)
                 if isinstance(e, (AttributeError, TypeError)):
                     hint = (
                         "an internal type check failed while parsing; an argument may "
@@ -274,11 +294,25 @@ class KernelDef:
                     )
                 else:
                     hint = "Check your function definition for errors"
-                raise ParserSyntaxError(
-                    f"Failed to parse kernel function '{self._func.__name__}': {type(e).__name__}: {e}",
-                    span=span,
-                    hint=hint,
-                ) from e
+                # An error that already carries the mandatory first line states the code
+                # its own check assigned; quoting only its reason would replace that code
+                # with this wrapper's generic one. Keep the inner line whole -- it already
+                # ends with the reason -- and append just the context this frame adds.
+                context = f"while parsing kernel function '{self._func.__name__}'"
+                inner_head = spec_head_of(str(e))
+                if inner_head:
+                    message = f"{inner_head} ({context})"
+                else:
+                    message = (f"Failed to parse kernel function '{self._func.__name__}': "
+                               f"{type(e).__name__}: {message_of(e)}")
+                # The class name is what Python prints in the traceback, so it has to agree
+                # with the code in the message. An inner error that carries a spec first
+                # line already decided its code -- both sides key off the same enum, so
+                # that code names exactly one class. Anything without a first line (an
+                # interpreter-raised AttributeError, say) has no code of its own and keeps
+                # the RuntimeFailure fallback this handler was written around.
+                wrapper = error_class_of_spec_message(str(e)) or RuntimeFailure
+                raise wrapper(message, span=span, hint=hint) from e
 
             external_funcs = list(parser.external_funcs.values())
             starting_line = self._line_offset + 1
@@ -291,6 +325,6 @@ class KernelDef:
             self._last_param_directions = dict(parser.param_directions)
             return program, parser.matched_target
 
-        except ParserError as e:
+        except PyptoProError as e:
             _attach_source_lines_to_error(e, self._source_file, self._source_lines_raw)
             raise

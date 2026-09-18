@@ -8,9 +8,9 @@ Two layers:
   and auto_mutex behavior of reinterpreted handles.
 """
 
+from pypto_pro._errors import InvalidArgument, InvalidShape, InvalidTile, InvalidType, OutOfRange
 from pypto_pro.ir.op.block_ops import _ir_reinterpret, make_tile_expr
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError
 import pytest
 
 from pypto.pypto_impl import ir
@@ -149,7 +149,7 @@ def test_valid_shape_is_not_inherited():
 
 def test_new_footprint_exceeding_buffer_raises():
     src = _src_tile([64, 64], pl.DT_FP16, addr=0x2000, size=8192)
-    with pytest.raises(ValueError, match="exceeds the original buffer size"):
+    with pytest.raises(OutOfRange, match="exceeds the original buffer size"):
         _ir_reinterpret(src, shape=[128, 64], dtype=pl.DT_FP32, span=_span())
 
 
@@ -223,7 +223,7 @@ def test_no_override_argument_raises():
         t = pl.make_tile(tt, addr=0)
         pl.load(pl.reinterpret(t), x, [0, 0])
 
-    with pytest.raises(ParserTypeError, match="at least one of dtype/shape/layout"):
+    with pytest.raises(InvalidType, match="at least one of dtype/shape/layout"):
         _parse_kernel(k)
 
 
@@ -234,7 +234,7 @@ def test_wrong_positional_count_raises():
         t = pl.make_tile(tt, addr=0)
         pl.load(pl.reinterpret(t, t, shape=[64, 64], dtype=pl.DT_BF16), x, [0, 0])
 
-    with pytest.raises(ParserTypeError, match="exactly 1 positional argument"):
+    with pytest.raises(InvalidArgument, match="exactly 1 positional argument"):
         _parse_kernel(k)
 
 
@@ -247,7 +247,7 @@ def test_dtype_without_shape_rejected_in_kernel():
         t = pl.make_tile(tt, addr=0)
         pl.load(pl.reinterpret(t, dtype=pl.DT_BF16), x, [0, 0])
 
-    with pytest.raises(ParserTypeError, match="'shape' is required when 'dtype' changes"):
+    with pytest.raises(InvalidShape, match="'shape' is required when 'dtype' changes"):
         _parse_kernel(k)
 
 
@@ -256,7 +256,7 @@ def test_non_tile_argument_raises():
     def k(x: pl.Tensor[[64], pl.DT_FP16]):
         pl.load(pl.reinterpret(x, dtype=pl.DT_BF16, shape=[64]), x, [0])
 
-    with pytest.raises(ParserSyntaxError, match="expected a Tile"):
+    with pytest.raises(InvalidType, match="expected a Tile"):
         _parse_kernel(k)
 
 
@@ -360,7 +360,7 @@ def test_reinterpret_shape_with_loop_var_rejected_in_loop():
             pl.load_tile(t2, a, [i, 0])
             pl.store_tile(out, t2, [i, 0])
 
-    with pytest.raises(ParserTypeError, match="compile-time integers"):
+    with pytest.raises(InvalidShape, match="compile-time integers"):
         _parse_kernel(k)
 
 
@@ -371,7 +371,7 @@ def test_runtime_shape_is_rejected():
         t = pl.make_tile(tt, addr=0)
         pl.load(pl.reinterpret(t, shape=[x.shape[0], 16]), x, [0, 0])
 
-    with pytest.raises(ParserTypeError, match="compile-time integers"):
+    with pytest.raises(InvalidShape, match="compile-time integers"):
         _parse_kernel(k)
 
 
@@ -433,7 +433,7 @@ def test_group_multi_column_mutex_inherited():
 
 def test_group_unaligned_slot_address_rejected():
     """Review finding (P2): every explicit slot address must pass the element-boundary check."""
-    with pytest.raises((ParserTypeError, ParserSyntaxError), match="not aligned to the new element size"):
+    with pytest.raises(InvalidTile, match="not aligned to the new element size"):
 
         @pl.jit(auto_mutex=True)
         def k(a: pl.Tensor[[64, 64], pl.DT_FP16]):
@@ -457,7 +457,7 @@ def test_group_runtime_shape_rejected():
         c0 = g2.next()
         pl.load(c0, a, [0, 0])
 
-    with pytest.raises(ParserTypeError, match="compile-time integers"):
+    with pytest.raises(InvalidShape, match="compile-time integers"):
         _parse_kernel(k)
 
 

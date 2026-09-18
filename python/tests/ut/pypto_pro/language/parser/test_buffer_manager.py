@@ -22,8 +22,8 @@ consumed by auto_mutex, so the frontend never handles mutex ids or manual lock/u
 
 import re
 
+from pypto_pro._errors import InvalidShape, InvalidType, InvalidVal, NameNotFound, OutOfRange, PyptoProError
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import ParserTypeError, UndefinedVariableError, UnsupportedFeatureError
 import pytest
 
 from pypto.pypto_impl import ir
@@ -141,7 +141,7 @@ def test_runtime_addr_rejected_with_compile_time_hint():
         cur0 = db.next()
         pl.load(cur0, a, [0, 0])
 
-    with pytest.raises(ParserTypeError) as excinfo:
+    with pytest.raises(InvalidType) as excinfo:
         _parse_kernel(k)
     assert "runtime value" in str(excinfo.value)
 
@@ -198,7 +198,7 @@ def test_tile_type_with_a_runtime_shape_rejected():
         db = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])
         pl.load(db.next(), a, [0, 0])
 
-    with pytest.raises(ParserTypeError, match="make_tile_group.. tile shape must contain compile-time integers"):
+    with pytest.raises(InvalidVal, match="make_tile_group.. tile shape must contain compile-time integers"):
         _parse_kernel(k)
 
 
@@ -332,7 +332,7 @@ def test_depth_must_equal_mutex_ids_length():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1], depth=3)
         pl.load(g[0], gm_q, [0, 0])
 
-    with pytest.raises(ParserTypeError, match="mutex_ids length 2 must equal depth 3"):
+    with pytest.raises(InvalidShape, match="mutex_ids length 2 must equal depth 3"):
         _parse_kernel(k)
 
 
@@ -367,7 +367,7 @@ def test_subscript_negative_index_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[6, 7, 8])
         pl.load(g[-1], gm_q, [0, 0])
 
-    with pytest.raises(ParserTypeError, match="out of range"):
+    with pytest.raises(OutOfRange, match="out of range"):
         _parse_kernel(k)
 
 
@@ -486,7 +486,7 @@ def test_subscript_const_index_out_of_range():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])
         pl.load(g[2], gm_q, [0, 0])
 
-    with pytest.raises(ParserTypeError, match="out of range"):
+    with pytest.raises(OutOfRange, match="out of range"):
         _parse_kernel(k)
 
 
@@ -497,7 +497,7 @@ def test_subscript_slice_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])
         pl.load(g[0:2], gm_q, [0, 0])
 
-    with pytest.raises(UnsupportedFeatureError, match="Unsupported expression type: Slice"):
+    with pytest.raises(InvalidType, match="Unsupported expression type: Slice"):
         _parse_kernel(k)
 
 
@@ -508,7 +508,7 @@ def test_subscript_multi_dim_index_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, 1])
         pl.load(g[0, 1], gm_q, [0, 0])
 
-    with pytest.raises(ParserTypeError, match="integer scalar"):
+    with pytest.raises(InvalidType, match="integer scalar"):
         _parse_kernel(k)
 
 
@@ -728,7 +728,7 @@ def test_same_name_control_flow_rejects_different_mutex_id_counts():
         pl.load(tile, gm_q, [0, 0])
 
     with pytest.raises(
-        ParserTypeError,
+        PyptoProError,
         match="cannot merge tile mutex metadata with different ID counts: 2 and 1",
     ):
         _parse_kernel(k)
@@ -846,7 +846,7 @@ def test_loop_rejects_different_mutex_id_counts_for_one_slot():
         pl.load(tile, gm_q, [0, 0])
 
     with pytest.raises(
-        ParserTypeError,
+        PyptoProError,
         match="cannot merge tile mutex metadata with different ID counts: 2 and 1",
     ):
         _parse_kernel(k)
@@ -865,7 +865,7 @@ def test_loop_rejects_mutex_tile_result_with_non_tile_body():
         pl.load(tile, gm_q, [0, 0])
 
     with pytest.raises(
-        ParserTypeError,
+        PyptoProError,
         match="Cannot merge Tile values when only one input carries mutex metadata",
     ):
         _parse_kernel(k)
@@ -900,7 +900,7 @@ def test_undefined_branch_produces_unknown_type_on_use():
             tile = group[0]
         pl.load(tile, gm_q, [0, 0])
 
-    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
+    with pytest.raises(NameNotFound, match="Use of potentially undefined variable"):
         _parse_kernel(k)
 
 
@@ -914,7 +914,7 @@ def test_ternary_rejects_different_mutex_id_counts():
         pl.load(tile, gm_q, [0, 0])
 
     with pytest.raises(
-        ParserTypeError,
+        PyptoProError,
         match="cannot merge tile mutex metadata with different ID counts: 1 and 2",
     ):
         _parse_kernel(k)
@@ -927,7 +927,7 @@ def test_make_tile_group_rejects_different_mutex_id_counts():
         pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0, [1, 2]])
 
     with pytest.raises(
-        ParserTypeError,
+        PyptoProError,
         match="all tiles in a tile group must have the same mutex ID count: 1 and 2",
     ):
         _parse_kernel(k)
@@ -939,7 +939,7 @@ def test_make_tile_group_rejects_duplicate_id_for_one_tile():
         tt = pl.TileType(shape=[1, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         pl.make_tile_group(type=tt, addrs=0, mutex_ids=[[2, 2]])
 
-    with pytest.raises(ParserTypeError, match="must not contain duplicates"):
+    with pytest.raises(InvalidVal, match="must not contain duplicates"):
         _parse_kernel(k)
 
 
@@ -950,7 +950,7 @@ def test_make_tile_group_rejects_bool_mutex_id(mutex_ids):
         tt = pl.TileType(shape=[32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         pl.make_tile_group(type=tt, addrs=0, mutex_ids=mutex_ids)
 
-    with pytest.raises(ParserTypeError, match=r"mutex_ids must be ints, got"):
+    with pytest.raises(InvalidType, match=r"mutex_ids must be ints, got"):
         _parse_kernel(k)
 
 
@@ -965,7 +965,7 @@ def test_make_tile_group_rejects_out_of_range_mutex_id(mutex_ids):
         tt = pl.TileType(shape=[32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         pl.make_tile_group(type=tt, addrs=0, mutex_ids=mutex_ids)
 
-    with pytest.raises(ParserTypeError, match=r"ErrCode: F00001, mutex_ids element must be in \[0, 31\]"):
+    with pytest.raises(OutOfRange, match=r"mutex_ids element must be in \[0, 31\]"):
         _parse_kernel(k)
 
 
@@ -976,5 +976,5 @@ def test_make_tile_group_rejects_wrong_mutex_ids_container_type(mutex_ids):
         tt = pl.TileType(shape=[32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         pl.make_tile_group(type=tt, addrs=0, mutex_ids=mutex_ids)
 
-    with pytest.raises(ParserTypeError, match="mutex_ids must be a list, tuple, or None"):
+    with pytest.raises(InvalidType, match="mutex_ids must be a list, tuple, or None"):
         _parse_kernel(k)

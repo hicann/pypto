@@ -43,6 +43,7 @@ enum class ExternalError : uint32_t {
     INVALID_SHAPE = 0x0000BU,
     INVALID_TILE = 0x0000CU,
     INVALID_FORMAT = 0x0000DU,
+    INVALID_ARGUMENT = 0x0000EU,
     UNKNOWN = 0x0FFFFU
 };
 

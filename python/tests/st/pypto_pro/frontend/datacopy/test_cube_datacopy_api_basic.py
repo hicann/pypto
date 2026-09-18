@@ -15,8 +15,8 @@ test_store_tile_api.py, test_move_api.py. Only normal (non-abnormal) test cases.
 import logging
 import os
 
+from pypto_pro._errors import InvalidVal
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics._exceptions import ParserSyntaxError
 import pytest
 import torch
 
@@ -1784,7 +1784,7 @@ def test_store_order_descending():
     _require_a5(device)
     a = _inputs(device, [2, 4, TILE, TILE])
     out = torch.zeros([2, 4, TILE, TILE], device=device, dtype=torch.float32)
-    with pytest.raises(ParserSyntaxError, match="order must be ascending"):
+    with pytest.raises(InvalidVal, match="order must be ascending"):
         call_kernel_store_descending_order(a, out)
 
 
@@ -1795,7 +1795,7 @@ def test_store_tile_order_descending():
     _require_a5(device)
     a = _inputs(device, [2, 4, TILE, TILE])
     out = torch.zeros([2, 4, TILE, TILE], device=device, dtype=torch.float32)
-    with pytest.raises(ParserSyntaxError, match="order must be ascending"):
+    with pytest.raises(InvalidVal, match="order must be ascending"):
         call_kernel_store_tile_descending_order(a, out)
 
 

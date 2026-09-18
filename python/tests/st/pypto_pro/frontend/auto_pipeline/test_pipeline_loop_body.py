@@ -28,6 +28,7 @@ costs nothing and catches what numbers cannot.
 import ast
 import os
 
+from pypto_pro._errors import PyptoProError
 import pypto_pro.language as pl
 from pypto_pro.runtime.pipeline import transform_pipeline
 from pypto_pro.runtime.pipeline._analyzer import probe_kernel_facts
@@ -480,5 +481,7 @@ def one_stage_called_twice(
     ],
 )
 def test_refused_shapes(kernel, message):
-    with pytest.raises(ValueError, match=message):
+    # 8 of the parametrised shapes raise InvalidOperation and one raises
+    # NotSupported, whose builtin bases differ, so the shared base is what fits.
+    with pytest.raises(PyptoProError, match=message):
         _generated(kernel)

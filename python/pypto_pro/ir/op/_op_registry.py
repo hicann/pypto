@@ -25,6 +25,8 @@ from dataclasses import dataclass, field
 
 from pypto.pypto_impl import ir as _ir_core
 
+from ..._errors import InvalidOperation, current_span
+
 _OP_REGISTRY: dict[str, Callable] = {}
 
 
@@ -37,7 +39,7 @@ def op_impl(name: str) -> Callable:
 
     def decorator(func: Callable) -> Callable:
         if name in _OP_REGISTRY:
-            raise ValueError(f"Duplicate op_impl registration: '{name}'")
+            raise InvalidOperation(f"Duplicate op_impl registration: '{name}'")
         _OP_REGISTRY[name] = func
         return func
 
@@ -74,9 +76,13 @@ def _make_handler(spec: OpSpec) -> Callable:
         kwargs = self.parse_op_kwargs(call) if spec.parse_kwargs else {}
         for hook in spec.pre_hooks:
             hook(self, call, kwargs)
-        if spec.builder is not None:
-            return spec.builder(*args, **kwargs, span=span)
-        return _ir_core.create_op_call(spec.ir_name, args, kwargs, span)
+        # Publish where the caller wrote each argument, so a builder that rejects
+        # one can point at that argument rather than at the whole call. Every
+        # @op_impl operator is dispatched here, so this one site covers them all.
+        with current_span(span, self.span_tracker.argument_spans(call)):
+            if spec.builder is not None:
+                return spec.builder(*args, **kwargs, span=span)
+            return _ir_core.create_op_call(spec.ir_name, args, kwargs, span)
 
     return handler
 
@@ -85,5 +91,5 @@ def register_table(specs: dict[str, OpSpec]) -> None:
     """Batch-register declarative op specs into _OP_REGISTRY."""
     for op_name, spec in specs.items():
         if op_name in _OP_REGISTRY:
-            raise ValueError(f"Duplicate op_impl registration: '{op_name}'")
+            raise InvalidOperation(f"Duplicate op_impl registration: '{op_name}'")
         _OP_REGISTRY[op_name] = _make_handler(spec)

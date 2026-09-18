@@ -28,6 +28,7 @@
 #include "core/dtype.h"
 #include "core/error.h"
 #include "core/logging.h"
+#include "pypto_pro/error.h"
 #include "ir/kind_traits.h"
 #include "ir/op_registry.h"
 #include "ir/type.h"
@@ -35,6 +36,7 @@
 
 namespace pypto {
 namespace ir {
+using npu::tile_fwk::ExternalError;
 
 // Helper to get kwargs value with default (uses vector to preserve order)
 template <typename T>
@@ -49,30 +51,33 @@ T GetKwarg([[maybe_unused]] const std::vector<std::pair<std::string, std::any>>&
     if (default_value) {
         return *default_value;
     }
-    throw ValueError("Missing kwarg: " + key);
+    PRO_IR_THROW(::pypto::ir::ValueError, ExternalError::INVALID_ARGUMENT) << "Missing kwarg: " << key;
 }
 
 TypePtr DeduceTensorMatMulType([[maybe_unused]] const std::vector<ExprPtr>& args,
                                [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     // tensor.matmul requires exactly 2 Expr arguments (lhs, rhs)
-    CHECK(args.size() == 0x2) << "tensor.matmul requires exactly 2 arguments (lhs, rhs), but got " << args.size();
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 0x2)
+        << "tensor.matmul requires exactly 2 arguments (lhs, rhs), but got " << args.size();
 
     // First two arguments must be TensorType
     auto lhs_type = As<TensorType>(args[0]->GetType());
     auto rhs_type = As<TensorType>(args[1]->GetType());
 
-    CHECK(lhs_type) << "tensor.matmul requires first argument to be a TensorType, but got "
-                    << args[0]->GetType()->TypeName();
-    CHECK(rhs_type) << "tensor.matmul requires second argument to be a TensorType, but got "
-                    << args[1]->GetType()->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, lhs_type)
+        << "tensor.matmul requires first argument to be a TensorType, but got " << args[0]->GetType()->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, rhs_type)
+        << "tensor.matmul requires second argument to be a TensorType, but got " << args[1]->GetType()->TypeName();
 
     // Extract shapes
     const auto& lhs_shape = lhs_type->shape_;
     const auto& rhs_shape = rhs_type->shape_;
 
-    CHECK(lhs_shape.size() >= 1) << "tensor.matmul requires lhs to have at least 1 dimension";
-    CHECK(rhs_shape.size() >= 1) << "tensor.matmul requires rhs to have at least 1 dimension";
+    PRO_IR_CHECK(ExternalError::INVALID_SHAPE, lhs_shape.size() >= 1)
+        << "tensor.matmul requires lhs to have at least 1 dimension";
+    PRO_IR_CHECK(ExternalError::INVALID_SHAPE, rhs_shape.size() >= 1)
+        << "tensor.matmul requires rhs to have at least 1 dimension";
 
     // Read kwargs (with defaults)
     DataType out_dtype;
@@ -80,10 +85,10 @@ TypePtr DeduceTensorMatMulType([[maybe_unused]] const std::vector<ExprPtr>& args
         out_dtype = GetKwarg<DataType>(kwargs, "out_dtype");
     } catch (const ValueError& e) {
         auto promoted = PromoteDataTypes(lhs_type->dtype_, rhs_type->dtype_);
-        CHECK(promoted) << "Cannot promote data types for tensor.matmul";
+        PRO_IR_CHECK(ExternalError::INVALID_TYPE, promoted) << "Cannot promote data types for tensor.matmul";
         out_dtype = *promoted;
     } catch (const TypeError& e) {
-        CHECK(false) << "Invalid kwarg type for out_dtype: " << e.what();
+        PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, false) << "Invalid kwarg type for out_dtype: " << e.what();
         out_dtype = lhs_type->dtype_;
     }
 
@@ -117,7 +122,7 @@ TypePtr DeduceTensorMatMulType([[maybe_unused]] const std::vector<ExprPtr>& args
         size_t rhs_ndim = rhs_shape.size();
 
         // Ensure both tensors have at least 2 dimensions for batched matmul
-        CHECK(lhs_ndim >= 0x2 && rhs_ndim >= 0x2)
+        PRO_IR_CHECK(ExternalError::INVALID_SHAPE, lhs_ndim >= 0x2 && rhs_ndim >= 0x2)
             << "tensor.matmul requires both tensors to have at least 2 dimensions "
             << "for batched matmul, but got lhs shape size " << lhs_ndim << " and rhs shape size " << rhs_ndim;
 
@@ -127,7 +132,8 @@ TypePtr DeduceTensorMatMulType([[maybe_unused]] const std::vector<ExprPtr>& args
 
         // Broadcast batch dimensions
         auto broadcast_result = BroadcastShapes(lhs_batch, rhs_batch);
-        CHECK(broadcast_result.success) << "Cannot broadcast batch dimensions for tensor.matmul";
+        PRO_IR_CHECK(ExternalError::INVALID_SHAPE, broadcast_result.success)
+            << "Cannot broadcast batch dimensions for tensor.matmul";
 
         output_shape = broadcast_result.shape;
 

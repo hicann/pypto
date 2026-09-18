@@ -14,6 +14,7 @@
 #include <string>
 
 #include "core/logging.h"
+#include "pypto_pro/error.h"
 
 namespace pypto {
 
@@ -31,7 +32,8 @@ void CodeEmitter::IncreaseIndent() { indent_level_++; }
 
 void CodeEmitter::DecreaseIndent()
 {
-    INTERNAL_CHECK(indent_level_ > 0) << "Internal error: cannot decrease indent level below 0";
+    PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, indent_level_ > 0)
+        << "Internal error: cannot decrease indent level below 0";
     indent_level_--;
 }
 

@@ -16,8 +16,16 @@ import ast
 from pypto.pypto_impl import ir
 from pypto.pypto_impl.ir import DataType
 
+from ..._errors import (
+    InvalidArgument,
+    InvalidOperation,
+    InvalidShape,
+    InvalidType,
+    InvalidVal,
+    NotSupported,
+    OutOfRange,
+)
 from ._tuple_type_registry import TupleTypeKind
-from .diagnostics import ParserSyntaxError, ParserTypeError, UnsupportedFeatureError
 
 
 class AssignmentParserMixin:
@@ -30,7 +38,7 @@ class AssignmentParserMixin:
             stmt: AnnAssign AST node
         """
         if not isinstance(stmt.target, ast.Name):
-            raise ParserSyntaxError(
+            raise NotSupported(
                 "Only simple variable assignments supported",
                 span=self.span_tracker.get_span(stmt.target),
                 hint="Use a simple variable name for assignment targets",
@@ -41,10 +49,11 @@ class AssignmentParserMixin:
 
         # Parse value expression
         if stmt.value is None:
-            raise UnsupportedFeatureError(
+            raise InvalidArgument(
                 "Annotated assignment with no value is not supported",
                 span=self.span_tracker.get_span(stmt),
                 hint="Provide a value for the assignment",
+                parser_retry=True,
             )
         value_expr = self.parse_expression(stmt.value, nested=False)
 
@@ -65,7 +74,7 @@ class AssignmentParserMixin:
             stmt: Assign AST node
         """
         if len(stmt.targets) != 1:
-            raise ParserSyntaxError(
+            raise NotSupported(
                 f"Unsupported assignment: {ast.unparse(stmt)}",
                 span=self.span_tracker.get_span(stmt),
                 hint="Use simple variable assignments or tuple unpacking",
@@ -102,7 +111,7 @@ class AssignmentParserMixin:
             self._parse_subscript_assignment(target, stmt, span)
             return
 
-        raise ParserSyntaxError(
+        raise NotSupported(
             f"Unsupported assignment target: {ast.unparse(stmt)}",
             span=span,
             hint="Only `var = ...`, `a.field = ...` (struct), `tensor[i] = ...`, "
@@ -159,7 +168,7 @@ class AssignmentParserMixin:
 
         if actual_dst_count == 1:
             if not isinstance(target, ast.Name):
-                raise ParserSyntaxError(
+                raise InvalidType(
                     f"vf.{vf_op_name} assignment target must be a variable name, got {ast.unparse(target)}",
                     span=span,
                 )
@@ -167,13 +176,13 @@ class AssignmentParserMixin:
             dst_targets = [target]
         elif actual_dst_count == 2:
             if not isinstance(target, ast.Tuple) or len(target.elts) != 2:
-                raise ParserSyntaxError(
+                raise NotSupported(
                     f"vf.{vf_op_name} produces 2 outputs, use tuple unpacking: reg0, reg1 = vf.{vf_op_name}(...)",
                     span=span,
                 )
             for elt in target.elts:
                 if not isinstance(elt, ast.Name):
-                    raise ParserSyntaxError(
+                    raise NotSupported(
                         f"Tuple unpacking target must be variable names, got {ast.unparse(elt)}",
                         span=span,
                     )
@@ -202,10 +211,11 @@ class AssignmentParserMixin:
         # change type for the RegTensor variant; the MaskReg variant preserves
         # the source type, so dtype= is not required when sources are MaskReg.
         if dtype_val is None and vf_op_name in self._TYPE_CHANGING_OPS and not is_mask_src:
-            raise ParserTypeError(
+            raise InvalidType(
                 f"vf.{vf_op_name} requires explicit dtype kwarg because dst type differs from src. "
                 f"Example: vf.{vf_op_name}(src, mask, dtype=pl.DT_FP16)",
                 span=span,
+                parser_retry=True,
             )
 
         # Step 1: Parse source args FIRST, before any dst manipulation.
@@ -220,10 +230,11 @@ class AssignmentParserMixin:
             dtype_val = src_dtype
 
         if dtype_val is None:
-            raise ParserTypeError(
+            raise InvalidType(
                 f"Cannot infer dtype for vf.{vf_op_name} assignment. "
                 f"Pass dtype=pl.DT_FP32 (or appropriate type) as a kwarg.",
                 span=span,
+                parser_retry=True,
             )
 
         # A scalar operand is checked against the dtype it is actually encoded in. That is dtype_val
@@ -276,23 +287,25 @@ class AssignmentParserMixin:
         span = self.span_tracker.get_span(stmt)
         value_expr = self.parse_expression(stmt.value, nested=False)
         if not isinstance(value_expr, ir.Expr) or not isinstance(value_expr.type, ir.TupleType):
-            raise ParserTypeError(
+            raise InvalidType(
                 f"Cannot unpack non-tuple value: {ast.unparse(stmt.value)}",
                 span=span,
+                parser_retry=True,
             )
         expected = len(value_expr.type.types)
         actual = len(target.elts)
         if actual != expected:
-            raise ParserTypeError(
+            raise InvalidShape(
                 f"Cannot unpack tuple with {expected} items into {actual} targets",
                 span=span,
+                parser_retry=True,
             )
         tuple_var = self.builder.let(f"_tuple_tmp_{self._tuple_idx_counter}", value_expr, span=span)
         self._mark_make_tuple_anchor(value_expr)
         self._tuple_idx_counter += 1
         for i, elt in enumerate(target.elts):
             if not isinstance(elt, ast.Name):
-                raise ParserSyntaxError(
+                raise InvalidType(
                     f"Tuple unpacking target must be a variable name, got {ast.unparse(elt)}",
                     span=self.span_tracker.get_span(elt),
                     hint="Use simple variable names in tuple unpacking: a, b, c = func()",
@@ -315,10 +328,11 @@ class AssignmentParserMixin:
         self.current_target_name = var_name
         value_expr = self.parse_expression(stmt.value, nested=False)
         if value_expr is None:
-            raise ParserTypeError(
+            raise InvalidOperation(
                 f"Cannot assign void function result to '{var_name}'",
                 span=span,
                 hint="Functions used as expressions must return a value",
+                parser_retry=True,
             )
         if isinstance(value_expr, ir.Expr):
             var = self.builder.let(var_name, value_expr, span=span)
@@ -346,22 +360,24 @@ class AssignmentParserMixin:
         base = self.parse_expression(target.value)
         field_name = target.attr
         if isinstance(base, ir.MakeTuple) and not self._is_struct_array_tuple(base) and self.named_fields(base):
-            raise ParserSyntaxError(
+            raise InvalidOperation(
                 f"Cannot assign to immutable named tuple field '{ast.unparse(target)}'",
                 span=span,
                 hint="Use pl.struct() or pl.struct_array() for mutable fields.",
             )
         fields = self.named_fields(base)
         if not fields or field_name not in fields:
-            raise ParserTypeError(
+            raise InvalidOperation(
                 f"Cannot assign to '{ast.unparse(target)}': base is not a named struct/tuple with field '{field_name}'",
                 span=span,
+                parser_retry=True,
             )
         value_expr = self.parse_expression(stmt.value, nested=False)
         if not isinstance(value_expr, ir.Expr):
-            raise ParserTypeError(
+            raise InvalidVal(
                 f"Right-hand side of '{ast.unparse(target)}' must be an IR expression",
                 span=span,
+                parser_retry=True,
             )
         field_idx = fields.index(field_name)
         field_type = base.type.types[field_idx]
@@ -369,7 +385,7 @@ class AssignmentParserMixin:
             arr_len = len(field_type.types)
             val_len = len(value_expr.elements)
             if val_len != arr_len:
-                raise ParserSyntaxError(
+                raise InvalidVal(
                     f"Array field '{field_name}' expects {arr_len} elements, got {val_len}",
                     span=span,
                 )
@@ -387,9 +403,10 @@ class AssignmentParserMixin:
     def _parse_subscript_assignment(self, target: ast.Subscript, stmt: ast.Assign, span: ir.Span) -> None:
         value_expr = self.parse_expression(stmt.value, nested=False)
         if not isinstance(value_expr, ir.Expr):
-            raise ParserTypeError(
+            raise InvalidType(
                 "Right-hand side of subscript assignment must be an IR expression",
                 span=span,
+                parser_retry=True,
             )
         # Struct (or struct_array element) array-field element write:
         # base.field[idx] = val, e.g. s.arr[i] = v or a[i].b[j] = v.
@@ -399,15 +416,16 @@ class AssignmentParserMixin:
             fields = self.named_fields(base)
             if fields:
                 if self.classify_tuple_type(base.type).kind != TupleTypeKind.STRUCT:
-                    raise ParserSyntaxError(
+                    raise InvalidOperation(
                         f"Cannot assign to immutable named tuple field '{ast.unparse(target)}'",
                         span=span,
                         hint="Use pl.struct() or pl.struct_array() for mutable fields.",
                     )
                 if field_name not in fields:
-                    raise ParserTypeError(
+                    raise InvalidVal(
                         f"Struct has no field '{field_name}'",
                         span=span,
+                        parser_retry=True,
                     )
                 field_idx = fields.index(field_name)
                 field_type = base.type.types[field_idx]
@@ -418,14 +436,15 @@ class AssignmentParserMixin:
                     and self.classify_tuple_type(field_type).kind == TupleTypeKind.TUPLE
                 )
                 if not is_array_field:
-                    raise ParserTypeError(
+                    raise InvalidOperation(
                         f"Cannot subscript struct field '{field_name}': field is not an array",
                         span=span,
                         hint="Only array fields (e.g. field=[0, 0, 0, 0]) support element assignment",
+                        parser_retry=True,
                     )
                 # Single scalar index only; mirror the read path's tuple-subscript rules.
                 if isinstance(target.slice, ast.Tuple):
-                    raise ParserSyntaxError(
+                    raise InvalidShape(
                         "Multi-dimensional subscript is not supported for struct array fields",
                         span=span,
                         hint="Use a scalar index like s.arr[0]",
@@ -434,7 +453,7 @@ class AssignmentParserMixin:
                 if isinstance(index_expr, ir.ConstInt) and not (
                     0 <= index_expr.value < len(field_type.types)
                 ):
-                    raise ParserSyntaxError(
+                    raise OutOfRange(
                         f"Array field '{field_name}' index {index_expr.value} out of bounds "
                         f"for {len(field_type.types)} elements",
                         span=span,
@@ -448,10 +467,11 @@ class AssignmentParserMixin:
         container_expr = self.parse_expression(target.value)
         container_type = container_expr.type
         if not isinstance(container_type, (ir.TileType, ir.TensorType)):
-            raise ParserTypeError(
+            raise InvalidType(
                 f"Subscript assignment requires Tile or Tensor, got {type(container_type).__name__}",
                 span=span,
                 hint="Only Tile and Tensor support element assignment via A[i] = v",
+                parser_retry=True,
             )
         index_expr = self._parse_scalar_subscript_index(container_expr, target.slice, span)
         from pypto_pro.ir.op.block_ops import _ir_setval

@@ -33,6 +33,7 @@ from pypto_pro.language.parser._op_pipeline import (
     op_accesses_buffer,
 )
 
+from ..._errors import InvalidArgument, InvalidOperation, InvalidType, InvalidVal, NotSupported, OutOfRange, span_of
 from ._astutil import call_name, slot_accessor
 
 # Highest usable cross-core event id: a hardware limit. Shared with _sync_graph, which
@@ -415,7 +416,7 @@ def detect_addr_overlaps(addr_ranges: dict, cross_core_names: set) -> list:
                 # Slot count must be the same for overlapping buffers (precise
                 # per-slot overlap tracking is not yet supported).
                 if len(ranges_a) != len(ranges_b):
-                    raise ValueError(
+                    raise InvalidArgument(
                         f"pipeline: address-overlapping buffers '{a}' and '{b}' have "
                         f"different slot counts ({len(ranges_a)} vs {len(ranges_b)}). "
                         f"Overlapping buffers must have the same number of slots."
@@ -426,7 +427,7 @@ def detect_addr_overlaps(addr_ranges: dict, cross_core_names: set) -> list:
 
     for buf, partners in overlap_partners.items():
         if len(partners) > 1:
-            raise ValueError(
+            raise NotSupported(
                 f"pipeline: buffer '{buf}' has overlapping addresses with multiple "
                 f"buffers {sorted(partners)}. Only pairwise address overlap is "
                 f"supported (at most 2 buffers may share a region)."
@@ -477,7 +478,7 @@ def scan_cross_core_buffers(
 def _validate_buffer_memory(decl: TileGroupDecl, bufname: str) -> None:
     """L8: Validate that a make_tile_group call declares a resolvable memory space."""
     if decl.memory is None:
-        raise ValueError(
+        raise InvalidVal(
             f"pipeline: cross-core buffer '{bufname}' has no resolvable memory space. "
             f"Its make_tile_group(type=pl.TileType(..., target_memory=pl.MemorySpace.X)) "
             f"must set target_memory to a literal pl.MemorySpace.<X>."
@@ -497,7 +498,7 @@ def _validate_ids(fwd_node, bwd_node, bufname: str, closure_vars: dict) -> tuple
             continue
         ids = _resolve_event_ids(node, bufname, label, closure_vars)
         if not ids:
-            raise ValueError(
+            raise InvalidVal(
                 f"pipeline: cross-core buffer '{bufname}' {label} is empty. Drop the "
                 f"keyword if this buffer needs no sync in that direction."
             )
@@ -505,7 +506,7 @@ def _validate_ids(fwd_node, bwd_node, bufname: str, closure_vars: dict) -> tuple
         # fails once the kernel runs on device, so reject it where the source is known.
         bad = [v for v in ids if not 0 <= v <= MAX_EVENT_ID]
         if bad:
-            raise ValueError(
+            raise OutOfRange(
                 f"pipeline: cross-core buffer '{bufname}' {label} contains out-of-range "
                 f"event id(s) {bad}; cross-core event ids must be in 0..{MAX_EVENT_ID}."
             )
@@ -752,13 +753,14 @@ def _reject_tile_returning_function(func_def: ast.FunctionDef, bindings: dict, s
                 if kind != "index" or (entry is not None and entry[1]):
                     held = group
         if held is not None:
-            raise ValueError(
+            raise NotSupported(
                 f"pipeline: '{func_def.name}' returns `{ast.unparse(value)}` (line "
                 f"{node.lineno}), a tile or tile group. The scan follows a buffer by the "
                 f"name it is bound to — a parameter, or a slot taken from one — and a "
                 f"returned value arrives under a name of the caller's own that resolves to "
                 f"nothing, so the ops the caller runs on it get no synchronisation.\n"
-                f"Pass the buffer in as an argument instead."
+                f"Pass the buffer in as an argument instead.",
+                span=span_of(node),
             )
 
 
@@ -822,13 +824,14 @@ def reject_buffer_access_outside_stages(loop_body: list, tables: AccessScanTable
         if not touched:
             continue
         buffers = sorted({access[0] for access in touched})
-        raise ValueError(
+        raise InvalidOperation(
             f"pipeline: the statement at line {stmt.lineno} touches buffer(s) {buffers} that "
             f"cross-core sync tracks, but it is not inside a stage. Only a stage's accesses "
             f"are scanned, and the wait/set the transform emits sit around the stage call, "
             f"so this access would get no synchronisation at all.\n"
             f"Move it into a stage. Work on a buffer that no cross-core handover involves "
-            f"may stay here."
+            f"may stay here.",
+            span=span_of(stmt),
         )
 
 
@@ -860,12 +863,13 @@ def _reject_tile_group_decl(func_def: ast.FunctionDef, name: str) -> None:
     """
     for node in ast.walk(func_def):
         if isinstance(node, ast.Call) and _is_make_tile_group(node):
-            raise ValueError(
+            raise InvalidOperation(
                 f"pipeline: '{name}' declares a tile group with pl.make_tile_group(), but it "
                 f"is a function called from a stage. Tile groups must be declared in the "
                 f"kernel body — the transform identifies every buffer by the name its "
                 f"declaration binds there, so one declared here is invisible to the sync it "
-                f"needs.\nMove the declaration into the kernel and pass the group in."
+                f"needs.\nMove the declaration into the kernel and pass the group in.",
+                span=span_of(func_def),
             )
 
 
@@ -902,7 +906,7 @@ def _reject_untabled_op(node: ast.Call, op_name: str, stage_slot_to_buffer: dict
     if not touched:
         return
     likely = ["W"] + ["R"] * (len(node.args) - 1)
-    raise ValueError(
+    raise InvalidArgument(
         f"pipeline: `pl.{op_name}` at line {node.lineno} touches buffer(s) "
         f"{sorted(set(touched))} that cross-core sync tracks, but _BLOCK_OP_TILE_ROLES has "
         f"no entry for it, so the scan cannot tell which arguments it reads and which it "
@@ -910,7 +914,8 @@ def _reject_untabled_op(node: ast.Call, op_name: str, stage_slot_to_buffer: dict
         f"Add an entry in pypto_pro/language/parser/_op_pipeline.py. With the "
         f"{len(node.args)} positional argument(s) here the roles are probably {likely}, but "
         f"check the two things a signature cannot show: an argument the op accumulates into "
-        f"is 'RW', and a position that is not a tile is None."
+        f"is 'RW', and a position that is not a tile is None.",
+        span=span_of(node),
     )
 
 
@@ -1078,11 +1083,12 @@ def _validate_slot_accessors(stage_func_def: ast.FunctionDef, group_param_names:
         if id(node) in accessor_rhs_ids:
             continue
         accessor = "[...]" if isinstance(node, ast.Subscript) else f".{node.func.attr}()"
-        raise ValueError(
+        raise NotSupported(
             f"pipeline: cross-core buffer group '{group_name}' slot accessor "
             f"`{accessor}` must be assigned to a simple variable "
             f"(`slot = {group_name}{accessor}`); inline/chained/"
-            f"tuple-unpack forms are not supported."
+            f"tuple-unpack forms are not supported.",
+            span=span_of(stage_func_def),
         )
 
 
@@ -1155,9 +1161,10 @@ def _resolve_event_ids(node: ast.expr, bufname: str, label: str, closure_vars: d
         for element in node.elts:
             value = _const_int(element)
             if value is None:
-                raise ValueError(
+                raise InvalidVal(
                     f"pipeline: cross-core buffer '{bufname}' {label} contains "
-                    f"`{ast.unparse(element)}`, which is not a compile-time integer. {hint}"
+                    f"`{ast.unparse(element)}`, which is not a compile-time integer. {hint}",
+                    span=span_of(element),
                 )
             ids.append(value)
         return ids
@@ -1165,21 +1172,24 @@ def _resolve_event_ids(node: ast.expr, bufname: str, label: str, closure_vars: d
     if isinstance(node, ast.Name):
         value = closure_vars.get(node.id)
         if not isinstance(value, (list, tuple)):
-            raise ValueError(
+            raise InvalidOperation(
                 f"pipeline: cross-core buffer '{bufname}' {label} is `{node.id}`, which is "
-                f"not bound to a list or tuple of integers outside the kernel. {hint}"
+                f"not bound to a list or tuple of integers outside the kernel. {hint}",
+                span=span_of(node),
             )
         bad = [v for v in value if not isinstance(v, int) or isinstance(v, bool)]
         if bad:
-            raise ValueError(
+            raise InvalidType(
                 f"pipeline: cross-core buffer '{bufname}' {label} is `{node.id}` = {value!r}, "
-                f"which holds non-integer element(s) {bad}. {hint}"
+                f"which holds non-integer element(s) {bad}. {hint}",
+                span=span_of(node),
             )
         return list(value)
 
-    raise ValueError(
+    raise NotSupported(
         f"pipeline: cross-core buffer '{bufname}' {label} is `{ast.unparse(node)}`, which is "
-        f"not a supported spelling. {hint}"
+        f"not a supported spelling. {hint}",
+        span=span_of(node),
     )
 
 
@@ -1208,31 +1218,34 @@ def _block_op_pipe(
         src_mem = _arg_memory(call.args[1] if len(call.args) > 1 else None, stage_slot_to_buffer, all_buffer_memory)
         if src_mem is None or dst_mem is None:
             unresolved = "destination" if dst_mem is None else "source"
-            raise ValueError(
+            raise InvalidOperation(
                 f"pipeline: cannot determine the pipe of `pl.move` at line {call.lineno}, "
                 f"because its {unresolved} tile does not resolve to a declared tile group. "
                 f"The move touches a cross-core buffer, so its pipe decides where the sync "
                 f"goes. A tile reached through an aggregate (e.g. `tile_groups.x.next()`) is "
-                f"not yet traced; pass the tile group to the stage as its own argument."
+                f"not yet traced; pass the tile group to the stage as its own argument.",
+                span=span_of(call),
             )
         return _pipe_name(get_move_pipe(src_mem, dst_mem))
     if op_name in ("store", "store_tile"):
         src_mem = _arg_memory(call.args[1] if len(call.args) > 1 else None, stage_slot_to_buffer, all_buffer_memory)
         if src_mem is None:
-            raise ValueError(
+            raise InvalidOperation(
                 f"pipeline: cannot determine the pipe of `pl.{op_name}` at line {call.lineno}, "
                 f"because its source tile does not resolve to a declared tile group. The store "
                 f"touches a cross-core buffer, so its pipe decides where the sync goes. A tile "
                 f"reached through an aggregate (e.g. `tile_groups.x.next()`) is not yet traced; "
-                f"pass the tile group to the stage as its own argument."
+                f"pass the tile group to the stage as its own argument.",
+                span=span_of(call),
             )
         return _pipe_name(get_store_pipe(src_mem))
     pipe = get_op_pipe(op_name)
     if pipe is None:
-        raise ValueError(
+        raise InvalidOperation(
             f"pipeline: `pl.{op_name}` at line {call.lineno} touches a cross-core buffer, but "
             f"no pipe is registered for it, so the sync has nowhere to go. Register the op's "
-            f"pipe (see get_op_pipe) or keep the cross-core buffer out of this op."
+            f"pipe (see get_op_pipe) or keep the cross-core buffer out of this op.",
+            span=span_of(call),
         )
     return _pipe_name(pipe)
 
@@ -1410,7 +1423,7 @@ def _record_vf_call_role(
         if param is None or param not in tile_params:
             continue
         if roles is None:
-            raise ValueError(
+            raise NotSupported(
                 f"pipeline: `vf.{op}` at line {call.lineno}, in vector function "
                 f"'{vf_name}', is handed buffer '{tile_params[param]}' (as '{param}'), but "
                 f"_VF_OP_TILE_ROLES has no entry for it, so the scan cannot tell whether it "
@@ -1418,7 +1431,8 @@ def _record_vf_call_role(
                 f"depends on that.\n"
                 f"If the op touches a UB tile, add it to _VF_OP_TILE_ROLES in "
                 f"pypto_pro/language/parser/_op_pipeline.py, giving each argument position "
-                f"'R', 'W', 'RW', or None for the positions that are not tiles."
+                f"'R', 'W', 'RW', or None for the positions that are not tiles.",
+                span=span_of(call),
             )
         if argpos < len(roles) and roles[argpos] is not None:
             _merge_role(result, param, roles[argpos])

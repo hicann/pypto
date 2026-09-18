@@ -21,8 +21,8 @@ test_scale_error_handling::test_err_scale_tensor_rejected.
 import logging
 import os
 
+from pypto_pro._errors import InvalidType
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics._exceptions import ParserSyntaxError
 import pytest
 import torch
 import torch_npu
@@ -111,7 +111,7 @@ def test_err_scale_tile_fp32():
     k = _make_k(device)
     out = torch.zeros((64, 64), device=device, dtype=torch.int8)
 
-    with pytest.raises(ParserSyntaxError, match=r"scale tile dtype FP32 is not supported.*npu_trans_quant_param"):
+    with pytest.raises(InvalidType, match=r"scale tile dtype FP32 is not supported.*npu_trans_quant_param"):
         fp32_scale_kernel(q, k, out)
 
     logging.info("test_err_scale_tile_fp32 passed: FP32 Scaling tile raises clear error.")
@@ -182,7 +182,7 @@ def test_err_scale_tile_fp16():
     k = _make_k(device)
     out = torch.zeros((64, 64), device=device, dtype=torch.int8)
 
-    with pytest.raises(ParserSyntaxError, match=r"scale tile dtype must be INT64"):
+    with pytest.raises(InvalidType, match=r"scale tile dtype must be INT64"):
         fp16_scale_kernel(q, k, out)
 
     logging.info("test_err_scale_tile_fp16 passed: FP16 Scaling tile raises error.")
@@ -253,7 +253,7 @@ def test_err_scale_tile_int32():
     k = _make_k(device)
     out = torch.zeros((64, 64), device=device, dtype=torch.int8)
 
-    with pytest.raises(ParserSyntaxError, match=r"scale tile dtype must be INT64"):
+    with pytest.raises(InvalidType, match=r"scale tile dtype must be INT64"):
         int32_scale_kernel(q, k, out)
 
     logging.info("test_err_scale_tile_int32 passed: INT32 Scaling tile raises error.")

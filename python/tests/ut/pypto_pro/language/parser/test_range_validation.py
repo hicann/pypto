@@ -20,9 +20,9 @@ Three rules are enforced at parse time, matching what codegen can lower:
 step is assumed to be a positive integer and is not validated here.
 """
 from pypto_pro import ir
+from pypto_pro._errors import InvalidArgument, InvalidVal, OutOfRange
 from pypto_pro.ir._limits import INT64_MAX, INT64_MIN
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import FinalRejectionError, ParserSyntaxError, ParserTypeError
 import pytest
 
 _UINT16_MAX = 65535
@@ -59,7 +59,7 @@ def test_non_vf_rejects_folded_stop_beyond_int64():
         for _ in pl.range(INT64_MAX + 1):
             _y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
 
-    with pytest.raises(FinalRejectionError, match=r"integer constant must be representable in int64"):
+    with pytest.raises(OutOfRange, match=r"integer constant must be representable in int64"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -73,7 +73,7 @@ def test_non_vf_rejects_stop_beyond_storage_band(stop):
         for _ in pl.range(stop):
             _y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
 
-    with pytest.raises(FinalRejectionError, match=r"integer constant must be in"):
+    with pytest.raises(OutOfRange, match=r"integer constant must be in"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -83,7 +83,7 @@ def test_non_vf_rejects_start_below_storage_band():
         for _ in pl.range(INT64_MIN - 1, 10):
             _y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
 
-    with pytest.raises(FinalRejectionError, match=r"integer constant must be representable in int64"):
+    with pytest.raises(OutOfRange, match=r"integer constant must be representable in int64"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -114,7 +114,7 @@ def test_vf_rejects_stop_above_uint16():
     def kernel(x: pl.Tensor[[64], pl.DT_FP32]):
         vf_body()
 
-    with pytest.raises(FinalRejectionError, match=r"pl\.range\(\) stop must be in \[0, 65535\]"):
+    with pytest.raises(OutOfRange, match=r"pl\.range\(\) stop must be in \[0, 65535\]"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -128,7 +128,7 @@ def test_vf_rejects_negative_start():
     def kernel(x: pl.Tensor[[64], pl.DT_FP32]):
         vf_body()
 
-    with pytest.raises(FinalRejectionError, match=r"pl\.range\(\) start must be in \[0, 65535\]"):
+    with pytest.raises(OutOfRange, match=r"pl\.range\(\) start must be in \[0, 65535\]"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -142,7 +142,7 @@ def test_rejects_float_literal_stop(stop):
         for _ in pl.range(stop):
             _y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
 
-    with pytest.raises(FinalRejectionError, match=r"pl\.range\(\): stop must be an integer, got float"):
+    with pytest.raises(InvalidVal, match=r"pl\.range\(\): stop must be an integer, got float"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -153,7 +153,7 @@ def test_rejects_bool_literal_stop(stop):
         for _ in pl.range(stop):
             _y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
 
-    with pytest.raises(FinalRejectionError, match=r"pl\.range\(\): stop must be an integer, got bool"):
+    with pytest.raises(InvalidVal, match=r"pl\.range\(\): stop must be an integer, got bool"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -163,7 +163,7 @@ def test_rejects_float_start():
         for _ in pl.range(0.0, 10):
             _y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
 
-    with pytest.raises(FinalRejectionError, match=r"pl\.range\(\): start must be an integer, got float"):
+    with pytest.raises(InvalidVal, match=r"pl\.range\(\): start must be an integer, got float"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -173,7 +173,7 @@ def test_rejects_float_scalar_param_stop():
         for _ in pl.range(n):
             _y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
 
-    with pytest.raises(FinalRejectionError, match=r"pl\.range\(\): stop must be an integer, got float"):
+    with pytest.raises(InvalidVal, match=r"pl\.range\(\): stop must be an integer, got float"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -183,7 +183,7 @@ def test_rejects_bool_scalar_param_stop():
         for _ in pl.range(flag):
             _y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
 
-    with pytest.raises(FinalRejectionError, match=r"pl\.range\(\): stop must be an integer, got bool"):
+    with pytest.raises(InvalidVal, match=r"pl\.range\(\): stop must be an integer, got bool"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -196,7 +196,7 @@ def test_rejects_tuple_stop():
         for _ in pl.range((0, 10)):
             _y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
 
-    with pytest.raises(FinalRejectionError, match=r"pl\.range\(\): stop must be an integer scalar"):
+    with pytest.raises(InvalidVal, match=r"pl\.range\(\): stop must be an integer scalar"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -206,7 +206,7 @@ def test_rejects_list_stop():
         for _ in pl.range([0, 10]):
             _y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
 
-    with pytest.raises(FinalRejectionError, match=r"pl\.range\(\): stop must be an integer scalar"):
+    with pytest.raises(InvalidVal, match=r"pl\.range\(\): stop must be an integer scalar"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -216,7 +216,7 @@ def test_rejects_string_stop():
         for _ in pl.range("10"):
             _y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
 
-    with pytest.raises(FinalRejectionError, match=r"pl\.range\(\): stop must be an integer scalar"):
+    with pytest.raises(InvalidVal, match=r"pl\.range\(\): stop must be an integer scalar"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -226,7 +226,7 @@ def test_rejects_dtype_stop():
         for _ in pl.range(pl.DT_INT32):
             _y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
 
-    with pytest.raises(FinalRejectionError, match=r"pl\.range\(\): stop must be an integer scalar"):
+    with pytest.raises(InvalidVal, match=r"pl\.range\(\): stop must be an integer scalar"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -250,7 +250,7 @@ def test_rejects_non_positive_step(step):
         for _ in pl.range(0, 10, step):
             _y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
 
-    with pytest.raises(FinalRejectionError, match=r"pl\.range\(\) step must be in \[1,"):
+    with pytest.raises(OutOfRange, match=r"pl\.range\(\) step must be in \[1,"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -261,7 +261,7 @@ def test_rejects_non_integer_step(step):
         for _ in pl.range(0, 10, step):
             _y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
 
-    with pytest.raises(FinalRejectionError, match=r"pl\.range\(\): step must be an integer"):
+    with pytest.raises(InvalidVal, match=r"pl\.range\(\): step must be an integer"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -287,7 +287,7 @@ def test_vf_rejects_final_step_overflow():
     def kernel(x: pl.Tensor[[64], pl.DT_FP32]):
         vf_body()
 
-    with pytest.raises(FinalRejectionError, match=r"loop variable reaches 65540 on the final step"):
+    with pytest.raises(OutOfRange, match=r"loop variable reaches 65540 on the final step"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -310,7 +310,7 @@ def test_non_vf_rejects_final_step_overflow():
         for _ in pl.range(0, INT64_MAX, INT64_MAX - 5):
             _y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
 
-    with pytest.raises(FinalRejectionError, match=r"loop variable reaches .* on the final step"):
+    with pytest.raises(OutOfRange, match=r"loop variable reaches .* on the final step"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -366,12 +366,12 @@ def test_rejection_is_final():
         for _ in pl.range(1.5):
             _y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
 
-    with pytest.raises(ParserTypeError):
+    with pytest.raises(InvalidVal):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 # ---------------------------------------------------------------------------
-# Arity / kwargs errors keep their existing ParserSyntaxError behaviour
+# Arity / kwargs errors keep their existing InvalidType behaviour
 # ---------------------------------------------------------------------------
 def test_no_args_still_rejected():
     @pl.jit(auto_mutex=False)
@@ -379,7 +379,7 @@ def test_no_args_still_rejected():
         for _ in pl.range():  # type: ignore[call-arg]
             _y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
 
-    with pytest.raises(ParserSyntaxError, match=r"requires at least 1 argument"):
+    with pytest.raises(InvalidArgument, match=r"requires at least 1 argument"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -389,5 +389,5 @@ def test_keyword_args_still_rejected():
         for _ in pl.range(stop=10):  # type: ignore[call-arg]
             _y: pl.Tensor[[64], pl.DT_FP32] = pl.tensor.add(x, 1.0)
 
-    with pytest.raises(ParserSyntaxError, match=r"does not support keyword arguments"):
+    with pytest.raises(InvalidArgument, match=r"does not support keyword arguments"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)

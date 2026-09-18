@@ -20,15 +20,21 @@ from pypto_pro.ir import op as ir_op
 from pypto_pro.ir._operators import make_binary as _make_binary
 from pypto_pro.ir._utils import _normalize_expr
 
+from ..._errors import (
+    InvalidFormat,
+    InvalidOperation,
+    InvalidShape,
+    InvalidType,
+    InvalidVal,
+    NameNotFound,
+    NotSupported,
+    OutOfRange,
+    PyptoProError,
+)
 from ._expr_evaluator import ExprEvaluator
 from ._tuple_type_registry import TupleTypeInfo
 from ._utils import _const_int_value, _is_const_expr
 from .diagnostics import (
-    FinalRejectionError,
-    ParserSyntaxError,
-    ParserTypeError,
-    UndefinedVariableError,
-    UnsupportedFeatureError,
     check_fits_dtype,
     make_const_int,
 )
@@ -113,15 +119,16 @@ class ExpressionParserMixin:
         """Validate that all elements of a tuple share the same type (required for variable indexing)."""
         elem_types = list(value_type.types)
         if not elem_types:
-            raise ParserTypeError("Cannot index into empty tuple", span=span)
+            raise OutOfRange("Cannot index into empty tuple", span=span, parser_retry=True)
         first_type = elem_types[0]
         for i, t in enumerate(elem_types[1:], 1):
             if not ir.structural_equal(t, first_type, enable_auto_mapping=False):
-                raise ParserTypeError(
+                raise InvalidType(
                     f"Variable tuple index requires all elements to have the same type, "
                     f"but element 0 has type {first_type} and element {i} has type {t}",
                     span=span,
                     hint="Use a constant index to access elements of different types",
+                    parser_retry=True,
                 )
 
     @staticmethod
@@ -196,12 +203,13 @@ class ExpressionParserMixin:
         self._current_node = expr
         try:
             result = self._parse_expression_node(expr)
-        except FinalRejectionError:
-            # A position that deliberately rejected this value; retrying it in
-            # Python would accept it and lose the rejection. See
-            # ``FinalRejectionError``.
-            raise
-        except (ParserTypeError, UndefinedVariableError, UnsupportedFeatureError):
+        except PyptoProError as rejection:
+            # Retry is opt-in: only a rejection raised with ``parser_retry=True``
+            # may be re-evaluated as Python. Everything else — including a
+            # position that deliberately rejected this value — propagates, so a
+            # retry can never accept what the IR path refused.
+            if not rejection.parser_retry:
+                raise
             # Some compile-time expressions have no IR form to build at all: a
             # plain Python helper call, a dict lookup, a test against a DataType.
             # Evaluate those as Python and keep the constant; kernel-local names
@@ -256,10 +264,11 @@ class ExpressionParserMixin:
         elif isinstance(expr, ast.IfExp):
             result = self.parse_ifexp(expr)
         else:
-            raise UnsupportedFeatureError(
+            raise InvalidType(
                 f"Unsupported expression type: {type(expr).__name__}",
                 span=self.span_tracker.get_span(expr),
                 hint="Use supported expressions like variables, constants, operations, or function calls",
+                parser_retry=True,
             )
         return result
 
@@ -286,10 +295,11 @@ class ExpressionParserMixin:
             if not (isinstance(value, ir.Expr) and isinstance(value.type, ir.NoneType)):
                 return value
 
-        raise UndefinedVariableError(
+        raise NameNotFound(
             f"Use of potentially undefined variable '{var_name}'",
             span=self.span_tracker.get_span(name),
             hint="Ensure the variable is defined before using it.",
+            parser_retry=True,
         )
 
     def none_with_mutex_meta(self, span: ir.Span) -> ir.Expr:
@@ -339,10 +349,11 @@ class ExpressionParserMixin:
         elif value is None:
             return self.none_with_mutex_meta(span)
         else:
-            raise ParserTypeError(
+            raise InvalidType(
                 f"Unsupported constant type: {type(value)}",
                 span=self.span_tracker.get_span(const),
                 hint="Use int, float, or bool constants",
+                parser_retry=True,
             )
 
     def parse_binop(self, binop: ast.BinOp) -> ir.Expr:
@@ -362,7 +373,7 @@ class ExpressionParserMixin:
         # Non-VF sections require slice syntax (tile[r:r+h, c:c+w]) for sub-views.
         if isinstance(binop.op, ast.Add) and isinstance(left.type, ir.TileType):
             if self.inline_vf_depth == 0:
-                raise ParserSyntaxError(
+                raise NotSupported(
                     "Tile + offset is not supported outside VF section; "
                     "use tile[i:i+h, j:j+w] slice syntax for sub-view",
                     span=span,
@@ -388,19 +399,21 @@ class ExpressionParserMixin:
                 # byte, so an element offset cannot address a half-byte and there is
                 # no valid C element type to lower to. Forbid `ptr + offset` on them.
                 if left.type.dtype.get_bit() < 8:
-                    raise ParserTypeError(
+                    raise NotSupported(
                         f"Pointer arithmetic ('ptr + offset') is not supported on the "
                         f"sub-byte element type '{left.type.dtype.to_string()}'",
                         span=span,
                         hint="Offsetting by elements cannot address a half-byte. "
                         "Reinterpret the pointer as a byte-addressable dtype via "
                         "pl.make_ptr (e.g. pl.DT_UINT8) before pointer arithmetic.",
+                        parser_retry=True,
                     )
                 return ir_op.ptr.addptr(left, right, span=span)
-            raise UnsupportedFeatureError(
+            raise NotSupported(
                 f"Unsupported operator '{type(binop.op).__name__}' on a pointer (pl.Ptr)",
                 span=span,
                 hint="Only 'ptr + offset' is supported for pointer arithmetic (equivalent to pl.addptr(ptr, offset)).",
+                parser_retry=True,
             )
 
         # Map AST operators to IR builder names. Everything is routed through
@@ -422,10 +435,11 @@ class ExpressionParserMixin:
 
         op_type = type(binop.op)
         if op_type not in op_map:
-            raise UnsupportedFeatureError(
+            raise NotSupported(
                 f"Unsupported binary operator: {op_type.__name__}",
                 span=self.span_tracker.get_span(binop),
                 hint="Use supported operators: +, -, *, /, //, %, &, |, ^, <<, >>",
+                parser_retry=True,
             )
 
         op_name = op_map[op_type]
@@ -443,7 +457,7 @@ class ExpressionParserMixin:
             IR comparison expression
         """
         if len(compare.ops) != 1 or len(compare.comparators) != 1:
-            raise ParserSyntaxError(
+            raise NotSupported(
                 "Only simple comparisons supported",
                 span=self.span_tracker.get_span(compare),
                 hint="Use single comparison operators like: a < b, not chained comparisons",
@@ -466,7 +480,7 @@ class ExpressionParserMixin:
             if isinstance(comparator, ast.Constant) and comparator.value is None:
                 # Left side must be a simple variable name (typically a pl.Ptr or pl.Tensor parameter)
                 if not isinstance(compare.left, ast.Name):
-                    raise ParserSyntaxError(
+                    raise InvalidVal(
                         "'is None' only supported on simple variable names",
                         span=span,
                         hint="Use 'param_name is None' for null checks on pl.Ptr parameters",
@@ -480,11 +494,12 @@ class ExpressionParserMixin:
                 # should be declared as pl.Ptr since pl.Tensor requires a shape even
                 # when the argument is None, making the shape meaningless).
                 if not isinstance(left.type, ir.PtrType):
-                    raise ParserTypeError(
+                    raise InvalidVal(
                         "'is None' / 'is not None' is only supported on pl.Ptr parameters",
                         span=span,
                         hint="Use pl.Ptr[dtype] for optional pointer inputs; "
                         "pl.Tensor requires a shape even when the argument is None",
+                        parser_retry=True,
                     )
                 # Cast pointer to UINT64 for comparison (IR requires ScalarType for eq/ne)
                 left_as_int = ir.cast(left, ir.DataType.UINT64, span)
@@ -493,10 +508,11 @@ class ExpressionParserMixin:
                 op = "eq" if op_type is ast.Is else "ne"
                 return _make_binary(op, left_as_int, zero, span)
             else:
-                raise ParserTypeError(
+                raise InvalidVal(
                     "'is' / 'is not' only supported with None",
                     span=span,
                     hint="Use '==' for value comparison, or 'param is None' for pointer null checks",
+                    parser_retry=True,
                 )
 
         # ── Standard comparison operators (==, !=, <, <=, >, >=) ──
@@ -512,10 +528,11 @@ class ExpressionParserMixin:
                 return ir.ConstBool(left == right, span)
             if op_type is ast.NotEq:
                 return ir.ConstBool(left != right, span)
-            raise UnsupportedFeatureError(
+            raise NotSupported(
                 f"Unsupported comparison {op_type.__name__} between enum values",
                 span=span,
                 hint="Only == and != are supported for enum comparisons",
+                parser_retry=True,
             )
 
         # Comparisons also promote mixed int/float operands to float via make_binary.
@@ -529,10 +546,11 @@ class ExpressionParserMixin:
         }
 
         if op_type not in op_map:
-            raise UnsupportedFeatureError(
+            raise NotSupported(
                 f"Unsupported comparison: {op_type.__name__}",
                 span=span,
                 hint="Use supported comparisons: ==, !=, <, <=, >, >=",
+                parser_retry=True,
             )
 
         op_name = op_map[op_type]
@@ -560,10 +578,11 @@ class ExpressionParserMixin:
         }
         op_type = type(unary.op)
         if op_type not in op_map:
-            raise UnsupportedFeatureError(
+            raise NotSupported(
                 f"Unsupported unary operator: {op_type.__name__}",
                 span=self.span_tracker.get_span(unary),
                 hint="Use supported unary operators: +, -, not, ~",
+                parser_retry=True,
             )
 
         op_name, make_operation = op_map[op_type]
@@ -579,9 +598,10 @@ class ExpressionParserMixin:
         elif isinstance(expr.op, ast.Or):
             fold_fn = ir.Or
         else:
-            raise UnsupportedFeatureError(
+            raise InvalidType(
                 f"Unsupported boolean operator: {type(expr.op).__name__}",
                 span=span,
+                parser_retry=True,
             )
 
         result = self.parse_expression(expr.values[0])
@@ -615,7 +635,7 @@ class ExpressionParserMixin:
         """
         written = ast.unparse(node)
         if test_node is not None and _is_enum_value(value):
-            raise ParserTypeError(
+            raise InvalidOperation(
                 f"'{written}' has no runtime value, so a runtime condition cannot select it",
                 span=self.span_tracker.get_span(node),
                 hint=f"'{ast.unparse(test_node)}' is a runtime value, which makes this ternary a "
@@ -623,13 +643,15 @@ class ExpressionParserMixin:
                 "condition — a Python constant, or a tiling_key field, which "
                 "@pl.jit(tiling_key=...) bakes to one constant per specialization — or write a "
                 "branch that has a runtime value.",
+                parser_retry=True,
             )
-        raise ParserTypeError(
+        raise InvalidVal(
             f"the {branch} branch of this ternary has no value to select, got '{written}'",
             span=self.span_tracker.get_span(node),
             hint="Each branch must be a scalar, tile or tensor expression. A call that performs "
             "an action rather than producing a value (pl.load(...), pl.store(...)) and a type "
             "descriptor (pl.TileType(...)) have nothing to select.",
+            parser_retry=True,
         )
 
     def parse_ifexp(self, expr: ast.IfExp) -> ir.Expr:
@@ -700,7 +722,7 @@ class ExpressionParserMixin:
         """Register a struct's semantic tuple metadata in IRDebugInfo."""
         expr_type = expr.type
         if not isinstance(expr_type, ir.TupleType):
-            raise TypeError(f"Struct '{struct_name}' must have TupleType")
+            raise InvalidVal(f"Struct '{struct_name}' must have TupleType")
         self.tuple_type_registry.register_struct(expr_type, struct_name, field_names)
         return expr
 
@@ -756,11 +778,12 @@ class ExpressionParserMixin:
             if lowered is not None:
                 return lowered
 
-        raise UnsupportedFeatureError(
+        raise InvalidShape(
             f"Standalone attribute access not supported: {ast.unparse(attr)}",
             span=span,
             hint="Attribute access is supported on named tuples, structs, Tensor values (tensor.shape), "
             "tiling parameters, or enum constants",
+            parser_retry=True,
         )
 
     def parse_list(self, list_node: ast.List) -> ir.MakeTuple:
@@ -837,23 +860,24 @@ class ExpressionParserMixin:
             return result
 
         if not isinstance(value_type, ir.TupleType):
-            raise ParserTypeError(
+            raise InvalidType(
                 f"Subscript requires tuple, tile, or tensor type, got {type(value_type).__name__}",
                 span=span,
                 hint="Subscript access is supported on Tuple, Tile, and Tensor types",
+                parser_retry=True,
             )
 
         # TupleType subscript: tuple[i] element access
         if isinstance(subscript.slice, ast.Constant):
             if not isinstance(subscript.slice.value, int):
-                raise ParserSyntaxError(
+                raise InvalidType(
                     "Tuple index must be an integer",
                     span=span,
                     hint="Use integer index like tuple[0]",
                 )
         else:
             if isinstance(subscript.slice, ast.Tuple):
-                raise ParserSyntaxError(
+                raise InvalidShape(
                     "Multi-dimensional subscript is not supported for tuples",
                     span=span,
                     hint="Use a scalar index like tuple[0]",
@@ -901,7 +925,7 @@ class ExpressionParserMixin:
         right_value = self._const_scalar_value(operation.right)
         if op_name in ("truediv", "floordiv", "mod") and right_value == 0:
             operator = {"truediv": "/", "floordiv": "//", "mod": "%"}[op_name]
-            raise ParserSyntaxError(
+            raise InvalidVal(
                 f"Operator '{operator}' does not allow a zero divisor",
                 span=span,
                 hint="Use a nonzero divisor",
@@ -940,7 +964,7 @@ class ExpressionParserMixin:
         }
         if op_name in comparisons:
             return ir.ConstBool(comparisons[op_name](), span)
-        raise KeyError(f"Unsupported constant-folding binary operator: {op_name}")
+        raise NotSupported(f"Unsupported constant-folding binary operator: {op_name}")
 
     def _fold_const_unaryop(self, op_name: str, operation: ir.Expr, span: ir.Span) -> ir.Expr | None:
         """Fold a validated unary scalar operation using its operand and result dtype."""
@@ -1014,7 +1038,7 @@ class ExpressionParserMixin:
         if isinstance(parsed, ir.MakeTuple):
             return self._desugar_in_literal(left, list(parsed.elements), is_not_in, span)
 
-        raise ParserSyntaxError(
+        raise NotSupported(
             f"'{'not in' if is_not_in else 'in'}' only supports tuple/list literals, "
             f"pl.range(), or compile-time list/tuple variables, "
             f"got {ast.unparse(container)}",
@@ -1035,15 +1059,16 @@ class ExpressionParserMixin:
         No runtime tensor operation is emitted.
         """
         if not isinstance(base_expr.type, ir.TensorType):
-            raise ParserTypeError(
+            raise InvalidType(
                 "tensor.shape requires TensorType input",
                 span=span,
                 hint="Use tensor.shape[index] only on Tensor values",
+                parser_retry=True,
             )
 
         success, axis = self.expr_evaluator.try_eval_expr(index_node)
         if not success or type(axis) is not int:
-            raise ParserSyntaxError(
+            raise InvalidType(
                 "tensor.shape index must be a compile-time integer",
                 span=span,
                 hint="Use tensor.shape[0], tensor.shape[-1], or a compile-time integer expression",
@@ -1055,9 +1080,10 @@ class ExpressionParserMixin:
         if axis < 0:
             axis += rank
         if axis < 0 or axis >= rank:
-            raise ParserTypeError(
+            raise InvalidShape(
                 f"shape index {original_axis} out of range for tensor of rank {rank}",
                 span=span,
+                parser_retry=True,
             )
         return tensor_type.shape[axis]
 
@@ -1070,7 +1096,7 @@ class ExpressionParserMixin:
         """Parse a runtime ``tile.valid_shape[axis]`` query."""
         success, axis = self.expr_evaluator.try_eval_expr(index_node)
         if not success or type(axis) is not int:
-            raise ParserSyntaxError(
+            raise InvalidType(
                 "tile.valid_shape index must be a compile-time integer",
                 span=span,
                 hint="Use tile.valid_shape[0] or tile.valid_shape[1].",
@@ -1081,9 +1107,10 @@ class ExpressionParserMixin:
         if axis < 0:
             axis += rank
         if axis < 0 or axis >= rank:
-            raise ParserTypeError(
+            raise InvalidShape(
                 f"valid_shape index {original_axis} out of range for Tile rank {rank}",
                 span=span,
+                parser_retry=True,
             )
 
         return ir.create_op_call("block.tile_valid_shape", [base_expr], {"axis": axis}, span)
@@ -1099,14 +1126,15 @@ class ExpressionParserMixin:
         """Validate an index or slice bound and return its static value when available."""
         value_type = getattr(value, "type", None)
         if not (isinstance(value_type, ir.ScalarType) and value_type.dtype.is_int()):
-            raise ParserTypeError(
+            raise InvalidType(
                 f"{kind} for axis {axis} must be an integer scalar, got {value_type}",
                 span=span,
+                parser_retry=True,
             )
 
         value_int = _const_int_value(value)
         if value_int is not None and value_int < 0:
-            raise ParserSyntaxError(
+            raise InvalidVal(
                 f"{kind} for axis {axis} must be non-negative, got {value_int}",
                 span=span,
                 hint="Use an index greater than or equal to 0; Tile and Tensor subscripts do not "
@@ -1115,10 +1143,11 @@ class ExpressionParserMixin:
 
         upper_value = _const_int_value(upper_bound) if upper_bound is not None else None
         if value_int is not None and upper_value is not None and value_int >= upper_value:
-            raise ParserTypeError(
+            raise OutOfRange(
                 f"{kind} {value_int} for axis {axis} is out of range for dimension size {upper_value}",
                 span=span,
                 hint=f"Use an index in [0, {upper_value})",
+                parser_retry=True,
             )
         return value_int
 
@@ -1140,12 +1169,12 @@ class ExpressionParserMixin:
         if not isinstance(slice_node, ast.Tuple):
             if len(shape) != 1:
                 if self.inline_vf_depth > 0:
-                    raise ParserSyntaxError(
+                    raise NotSupported(
                         "Tile[x] in VF section is not supported; use `tile + x` for pointer offset",
                         span=span,
                         hint="Replace `tile[x]` with `tile + x`",
                     )
-                raise ParserSyntaxError(
+                raise InvalidShape(
                     f"Subscript A[x] requires 1D container, but got rank {len(shape)}; "
                     f"use {len(shape)} indices or add ':' for sub-view (Tile)",
                     span=span,
@@ -1159,10 +1188,11 @@ class ExpressionParserMixin:
         elts = slice_node.elts
 
         if len(elts) != len(shape):
-            raise ParserTypeError(
+            raise InvalidShape(
                 f"Subscript has {len(elts)} indices but container has rank {len(shape)}",
                 span=span,
                 hint=f"Use {len(shape)} indices to match the container shape",
+                parser_retry=True,
             )
         indices = [self.parse_expression(e) for e in elts]
 
@@ -1206,23 +1236,24 @@ class ExpressionParserMixin:
         shape = container_type.shape
 
         if isinstance(container_type, ir.TensorType):
-            raise ParserSyntaxError(
+            raise NotSupported(
                 "Tensor slice sub-view is not supported",
                 span=span,
                 hint="Use pl.load/pl.store with offset lists for tensor access",
             )
 
         if self._current_func_type in (ir.FunctionType.SimtVF, ir.FunctionType.SimtCallee):
-            raise UnsupportedFeatureError(
+            raise InvalidOperation(
                 "Tile subview is not supported inside a SIMT function",
                 span=span,
                 hint="Access the Tile directly with tile[row, col].",
+                parser_retry=True,
             )
 
         # VF section: tile slice 'tile[a:b, c:d]' is not supported.
         # Use load_align(tile, [row, col]) / store_align(tile, ..., [row, col]) instead.
         if self.inline_vf_depth > 0:
-            raise ParserSyntaxError(
+            raise NotSupported(
                 "Tile slice 'tile[a:b, c:d]' is not supported in VF section; "
                 "use load_align(tile, [row, col]) or store_align(tile, reg, mask, [row, col]) instead",
                 span=span,
@@ -1248,14 +1279,14 @@ class ExpressionParserMixin:
                 and slayout.name == 'none_box'
             )
             if mem_space is None or mem_space.name != 'Vec' or not (is_nd or is_dn):
-                raise ParserSyntaxError(
+                raise InvalidFormat(
                     "Tile slice is only supported on UB (Vec) tiles with ND/DN layout",
                     span=span,
                     hint="Use pl.load with offset or pl.move with offset for unsupported tiles",
                 )
 
         if not isinstance(slice_node, ast.Tuple):
-            raise ParserSyntaxError(
+            raise NotSupported(
                 "1D tile slice is not supported; use 2D slice like tile[i:i+h, j:j+w]",
                 span=span,
                 hint="Use tile[i:i+h, j:j+w] for sub-view access",
@@ -1263,10 +1294,11 @@ class ExpressionParserMixin:
 
         slices = slice_node.elts
         if len(slices) != len(shape):
-            raise ParserTypeError(
+            raise InvalidShape(
                 f"Slice subscript has {len(slices)} dimensions but tile has rank {len(shape)}",
                 span=span,
                 hint=f"Use {len(shape)} indices to match the tile shape",
+                parser_retry=True,
             )
 
         # valid_shape for clamping: compile-time (TileType.tile_view) or runtime
@@ -1283,7 +1315,7 @@ class ExpressionParserMixin:
 
         for i, s in enumerate(slices):
             if not isinstance(s, ast.Slice):
-                raise ParserSyntaxError(
+                raise NotSupported(
                     f"Tile slice does not support integer index in dimension {i}",
                     span=span,
                     hint="Tile slices must use ':' for all dimensions",
@@ -1291,7 +1323,7 @@ class ExpressionParserMixin:
             if s.step is not None:
                 step = self.parse_expression(s.step)
                 if _const_int_value(step) != 1:
-                    raise ParserSyntaxError(
+                    raise InvalidShape(
                         f"Tile slice step for axis {i} must be the compile-time integer 1",
                         span=span,
                         hint="Omit the step or use a contiguous slice with step 1",
@@ -1319,7 +1351,7 @@ class ExpressionParserMixin:
                 and effective_upper_val is not None
                 and start_val >= effective_upper_val
             ):
-                raise ParserSyntaxError(
+                raise InvalidOperation(
                     f"Tile slice for axis {i} must satisfy start < min(end, shape), "
                     f"got start={start_val}, end={upper_val}, shape={shape_val}",
                     span=span,
@@ -1338,7 +1370,7 @@ class ExpressionParserMixin:
                 if vs_val is not None and vs_val >= 0 and start_val is not None:
                     remaining = vs_val - start_val
                     if remaining <= 0:
-                        raise ParserSyntaxError(
+                        raise InvalidShape(
                             f"Tile slice start ({start_val}) must be less than valid_shape dim {i} ({vs_val})",
                             span=span,
                             hint=f"Use a slice start in [0, valid_shape[{i}])",

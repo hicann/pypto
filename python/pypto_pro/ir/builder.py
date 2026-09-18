@@ -37,6 +37,7 @@ from pypto.pypto_impl import ir
 from pypto.pypto_impl.ir import DataType
 from pypto.pypto_impl.ir import IRBuilder as CppIRBuilder
 
+from .._errors import CommonInner, InvalidOperation, InvalidShape, InvalidType, OutOfRange
 from ._utils import _normalize_expr
 
 
@@ -437,7 +438,7 @@ class IRBuilder:
                     # Recreate the Call with the correct return type
                     value_expr = ir.Call(value_expr.name, value_expr.args, return_types[0], actual_span)
                 elif len(return_types) > 1:
-                    raise ValueError(
+                    raise InvalidShape(
                         f"Function '{value_expr.name}' returns {len(return_types)} values, "
                         f"but let() can only assign single return values. "
                         f"Use explicit tuple unpacking or multiple let() statements."
@@ -455,7 +456,7 @@ class IRBuilder:
             if not isinstance(inferred_type, ir.UnknownType) and builtins.type(var_type) is not builtins.type(
                 inferred_type
             ):
-                raise TypeError(
+                raise InvalidType(
                     f"Type override for '{name}' is incompatible: "
                     f"inferred {builtins.type(inferred_type).__name__} "
                     f"but override is {builtins.type(var_type).__name__}"
@@ -792,7 +793,7 @@ class FunctionBuilder:
             Function: The completed function IR node (or None if not yet finalized)
         """
         if self.result is None:
-            raise RuntimeError("Builder result is not available")
+            raise CommonInner("Builder result is not available")
         return self.result
 
 
@@ -844,7 +845,7 @@ class _LoopBuilderBase:
         inferred_type = init_expr.type
 
         if iter_type is not None and iter_type != inferred_type:
-            raise ValueError(
+            raise InvalidType(
                 f"Type mismatch in iter_arg for '{name}':\n"
                 f"  Inferred type: {inferred_type}\n"
                 f"  Provided type: {iter_type}"
@@ -887,14 +888,14 @@ class _LoopBuilderBase:
 
         if var_type is None:
             if inferred_type is None:
-                raise ValueError(
+                raise CommonInner(
                     f"Cannot infer type for return_var '{name}': "
                     f"no corresponding iter_arg found. Please provide explicit type."
                 )
             final_type = inferred_type
         else:
             if inferred_type is not None and var_type != inferred_type:
-                raise ValueError(
+                raise InvalidType(
                     f"Type mismatch in return_var '{name}':\n"
                     f"  Inferred type (from iter_arg): {inferred_type}\n"
                     f"  Provided type: {var_type}"
@@ -947,9 +948,9 @@ class ForLoopBuilder(_LoopBuilderBase):
             >>> result2 = loop.output(1)
         """
         if self.result is None:
-            raise RuntimeError("For loop not yet complete")
+            raise InvalidOperation("For loop not yet complete")
         if index >= len(self.result.return_vars):
-            raise IndexError(
+            raise OutOfRange(
                 f"Return variable index {index} out of range (for loop has {len(self.result.return_vars)} return vars)"
             )
         return self.result.return_vars[index]
@@ -976,7 +977,7 @@ class ForLoopBuilder(_LoopBuilderBase):
             >>> sum_result, prod_result = loop.outputs()  # Get all return variables
         """
         if self.result is None:
-            raise RuntimeError("For loop not yet complete")
+            raise InvalidOperation("For loop not yet complete")
         return list(self.result.return_vars)
 
     def get_result(self) -> ir.ForStmt:
@@ -986,7 +987,7 @@ class ForLoopBuilder(_LoopBuilderBase):
             ForStmt: The completed for loop IR node
         """
         if self.result is None:
-            raise RuntimeError("Builder result is not available")
+            raise CommonInner("Builder result is not available")
         return self.result
 
     def _add_iter_arg(self, iter_arg: ir.IterArg) -> None:
@@ -1045,9 +1046,9 @@ class WhileLoopBuilder(_LoopBuilderBase):
             >>> result = loop.output()  # Get the first return variable
         """
         if self.result is None:
-            raise RuntimeError("While loop not yet complete")
+            raise InvalidOperation("While loop not yet complete")
         if index >= len(self.result.return_vars):
-            raise IndexError(
+            raise OutOfRange(
                 f"Return variable index {index} out of range "
                 f"(while loop has {len(self.result.return_vars)} return vars)"
             )
@@ -1075,7 +1076,7 @@ class WhileLoopBuilder(_LoopBuilderBase):
             >>> x_result, y_result = loop.outputs()  # Get all return variables
         """
         if self.result is None:
-            raise RuntimeError("While loop not yet complete")
+            raise InvalidOperation("While loop not yet complete")
         return list(self.result.return_vars)
 
     def get_result(self) -> ir.WhileStmt:
@@ -1085,7 +1086,7 @@ class WhileLoopBuilder(_LoopBuilderBase):
             WhileStmt: The completed while loop IR node
         """
         if self.result is None:
-            raise RuntimeError("Builder result is not available")
+            raise CommonInner("Builder result is not available")
         return self.result
 
     def _add_iter_arg(self, iter_arg: ir.IterArg) -> None:
@@ -1114,7 +1115,7 @@ class SectionBuilder:
             SectionStmt: The completed section statement IR node
         """
         if self.result is None:
-            raise RuntimeError("Builder result is not available")
+            raise CommonInner("Builder result is not available")
         return self.result
 
 
@@ -1190,9 +1191,9 @@ class IfStmtBuilder:
             >>> result2 = if_builder.output(1)
         """
         if self.result is None:
-            raise RuntimeError("If statement not yet complete")
+            raise CommonInner("If statement not yet complete")
         if index >= len(self.result.return_vars):
-            raise IndexError(
+            raise OutOfRange(
                 f"Return variable index {index} out of range "
                 f"(if statement has {len(self.result.return_vars)} return vars)"
             )
@@ -1218,7 +1219,7 @@ class IfStmtBuilder:
             >>> x, y = if_builder.outputs()  # Get all return variables
         """
         if self.result is None:
-            raise RuntimeError("If statement not yet complete")
+            raise CommonInner("If statement not yet complete")
         return list(self.result.return_vars)
 
     def get_result(self) -> ir.IfStmt:
@@ -1228,7 +1229,7 @@ class IfStmtBuilder:
             IfStmt: The completed if statement IR node
         """
         if self.result is None:
-            raise RuntimeError("Builder result is not available")
+            raise CommonInner("Builder result is not available")
         return self.result
 
 
@@ -1262,5 +1263,5 @@ class ProgramBuilder:
             AssertionError: If called before program is complete
         """
         if self.result is None:
-            raise RuntimeError("Program not yet complete")
+            raise CommonInner("Program not yet complete")
         return self.result

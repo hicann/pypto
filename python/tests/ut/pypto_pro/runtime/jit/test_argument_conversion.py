@@ -21,6 +21,7 @@ import logging
 import sys
 from unittest.mock import MagicMock
 
+from pypto_pro._errors import InvalidShape
 import pytest
 
 # ---------------------------------------------------------------------------
@@ -442,7 +443,7 @@ def test_validate_args_dyn_inconsistent(launch):
         _MockTensor([64, 128], torch.float32),
         _MockTensor([128, 64], torch.float32),
     )
-    with pytest.raises(TypeError, match="M"):
+    with pytest.raises(InvalidShape, match="M"):
         launch(specs, args)
 
 
@@ -581,7 +582,7 @@ def test_packed_dyn_dim_mismatch_with_unpacked_param(launch):
         _MockTensor([4, 32], torch.uint8),   # logical [4, 64]
         _MockTensor([32, 8], torch.float32),
     )
-    with pytest.raises(TypeError, match="K"):
+    with pytest.raises(InvalidShape, match="K"):
         launch(specs, args)
 
 
@@ -642,7 +643,7 @@ def test_launch_propagates_native_errors(monkeypatch, kind, detail):
     config_lookup = MagicMock(side_effect=AssertionError("Reporting a native error must not need core usage"))
     monkeypatch.setattr(_jit, "get_jit_compile_config", config_lookup)
     compiled = CompiledKernel(lib_path="<fake>", param_specs=[], has_cube=True, has_vector=True)
-    with pytest.raises(RuntimeError, match=f"^Kernel launch failed with error code {lib.call_kernel.result}$"):
+    with pytest.raises(RuntimeError, match=f"Kernel launch failed with error code {lib.call_kernel.result}$"):
         _jit._launch(compiled, (), 8, _FAKE_STREAM)
     assert lib.call_kernel.restype is ctypes.c_int64
     _torch_mock.npu.get_stream_limit.assert_not_called()

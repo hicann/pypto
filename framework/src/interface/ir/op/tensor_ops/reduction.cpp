@@ -31,21 +31,25 @@
 #include "ir/span.h"
 #include "ir/type.h"
 #include "ir/type_inference.h"
+#include "pypto_pro/error.h"
 
 namespace pypto {
 namespace ir {
+using npu::tile_fwk::ExternalError;
 
 TypePtr DeduceTensorReductionType([[maybe_unused]] const std::vector<ExprPtr>& args,
                                   [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs,
                                   const std::string& op_name)
 {
     // Reduction operations require exactly 1 argument (input tensor)
-    CHECK(args.size() == 1) << "The operator " << op_name << " requires exactly 1 argument, but got " << args.size();
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 1)
+        << "The operator " << op_name << " requires exactly 1 argument, but got " << args.size();
 
     // First argument must be TensorType
     auto tensor_type = As<TensorType>(args[0]->GetType());
-    CHECK(tensor_type) << "The operator " << op_name << " requires first argument to be a TensorType, but got "
-                       << args[0]->GetType()->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, tensor_type)
+        << "The operator " << op_name << " requires first argument to be a TensorType, but got "
+        << args[0]->GetType()->TypeName();
 
     const auto& input_shape = tensor_type->shape_;
     int64_t input_ndim = static_cast<int64_t>(input_shape.size());
@@ -56,7 +60,7 @@ TypePtr DeduceTensorReductionType([[maybe_unused]] const std::vector<ExprPtr>& a
     if (axis < 0) {
         axis = static_cast<int>(input_ndim) + axis;
     }
-    CHECK(axis >= 0 && static_cast<int64_t>(axis) < input_ndim)
+    PRO_IR_CHECK(ExternalError::INVALID_SHAPE, axis >= 0 && static_cast<int64_t>(axis) < input_ndim)
         << "The operator " << op_name << " axis " << axis << " is out of range for shape with " << input_ndim
         << " dimensions";
 

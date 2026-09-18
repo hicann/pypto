@@ -21,10 +21,10 @@ Two bounds are enforced, and they are deliberately different:
     carries the uncommitted INDEX / FP32 placeholder.
 """
 from pypto_pro import ir
+from pypto_pro._errors import OutOfRange
 from pypto_pro.ir._limits import INT64_MAX, INT64_MIN, UINT64_MAX
 import pypto_pro.language as pl
 from pypto_pro.language import Vf as vf  # noqa: N813
-from pypto_pro.language.parser.diagnostics import FinalRejectionError, ParserTypeError
 import pytest
 
 _N, _M = 1, 64
@@ -156,7 +156,7 @@ def _parse_vf_scalar_kernel(dtype, op_name, scalar):
     ],
 )
 def test_out_of_range_scalar_operand_is_rejected(op_name, dtype, scalar, expected):
-    with pytest.raises(FinalRejectionError, match=expected):
+    with pytest.raises(OutOfRange, match=expected):
         _parse_vf_scalar_kernel(dtype, op_name, scalar)
 
 
@@ -182,39 +182,39 @@ def test_boundary_scalar_operand_still_parses(dtype, scalar):
 
 @pytest.mark.soc("950")
 def test_rejection_names_the_api():
-    with pytest.raises(FinalRejectionError, match=r"vf\.muls: scalar operand"):
+    with pytest.raises(OutOfRange, match=r"vf\.muls: scalar operand"):
         _parse_vf_scalar_kernel(pl.DT_INT8, "muls", 300)
 
 
 @pytest.mark.soc("950")
 def test_negative_into_unsigned_explains_the_signedness():
-    with pytest.raises(FinalRejectionError, match=r"hint: -1 is out of range of current dtype uint8"):
+    with pytest.raises(OutOfRange, match=r"hint: -1 is out of range of current dtype uint8"):
         _parse_vf_scalar_kernel(pl.DT_UINT8, "adds", -1)
 
 
 @pytest.mark.soc("950")
 def test_float_inf_to_int32():
-    with pytest.raises(FinalRejectionError,
-            match=r"ErrCode: F00001, vf.adds: scalar operand must be representable in int8"):
+    with pytest.raises(OutOfRange,
+            match=r"vf.adds: scalar operand must be representable in int8"):
         _parse_vf_scalar_kernel(pl.DT_INT8, "adds", float("inf"))
 
 
 @pytest.mark.soc("950")
 def test_arange_check_ut_1():
-    with pytest.raises(FinalRejectionError, match=r"scalar operand must be representable in int32"):
+    with pytest.raises(OutOfRange, match=r"scalar operand must be representable in int32"):
         _parse_vf_scalar_kernel(pl.DT_INT32, "arange", float("inf"))
 
 
 @pytest.mark.soc("950")
 def test_arange_check_ut_2():
-    with pytest.raises(FinalRejectionError, match=r"hint: 100000000000000000 is out of range of current dtype int32"):
+    with pytest.raises(OutOfRange, match=r"hint: 100000000000000000 is out of range of current dtype int32"):
         _parse_vf_scalar_kernel(pl.DT_INT32, "arange", 100000000000000000)
 
 
 @pytest.mark.soc("950")
 def test_rejection_is_final_and_not_retried_as_python():
-    """FinalRejectionError subclasses ParserTypeError, which parse_expression would otherwise retry."""
-    with pytest.raises(ParserTypeError):
+    """PyptoProError subclasses PyptoProError, which parse_expression would otherwise retry."""
+    with pytest.raises(OutOfRange):
         _parse_vf_scalar_kernel(pl.DT_INT8, "adds", 300)
 
 
@@ -234,7 +234,7 @@ def test_shift_amount_outside_the_dtype_range_still_parses(op_name, shift):
 @pytest.mark.soc("950")
 @pytest.mark.parametrize("value", [UINT64_MAX + 1, INT64_MIN - 1, 2**200])
 def test_integer_outside_the_storage_band_is_rejected(value):
-    with pytest.raises(FinalRejectionError, match=r"must be in \[-9223372036854775808, 18446744073709551615\]"):
+    with pytest.raises(OutOfRange, match=r"must be in \[-9223372036854775808, 18446744073709551615\]"):
         _parse_vf_scalar_kernel(pl.DT_FP32, "adds", value)
 
 
@@ -269,7 +269,7 @@ def test_named_dtype_is_taken_at_its_word():
     """An explicitly named dtype is not promoted: the value has to fit it."""
     from pypto_pro.language.parser.diagnostics import make_const_int
 
-    with pytest.raises(FinalRejectionError, match=r"representable in int64"):
+    with pytest.raises(OutOfRange, match=r"representable in int64"):
         make_const_int(UINT64_MAX, ir.DataType.INT64, span=ir.Span.unknown())
 
 
@@ -299,7 +299,7 @@ def test_pl_const_rejects_a_value_its_dtype_cannot_hold():
     def kernel(x: pl.Tensor[[_N, _M], pl.DT_FP16]):
         _unused = pl.const(300, pl.DT_INT8)
 
-    with pytest.raises(FinalRejectionError, match=r"pl\.const: value must be representable in int8"):
+    with pytest.raises(OutOfRange, match=r"pl\.const: value must be representable in int8"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -326,7 +326,7 @@ def test_infinity_is_accepted_for_a_float_dtype(value):
 @pytest.mark.parametrize("value", [float("inf"), float("-inf"), float("nan")])
 def test_non_finite_is_rejected_for_an_integer_dtype(value):
     """The backend lowers a float scalar via static_cast<int64_t>, undefined for inf / nan."""
-    with pytest.raises(FinalRejectionError, match=r"representable in int32"):
+    with pytest.raises(OutOfRange, match=r"representable in int32"):
         _parse_vf_scalar_kernel(pl.DT_INT32, "adds", value)
 
 
@@ -347,7 +347,7 @@ def _source_literal_body(dtype):
 @pytest.mark.soc("950")
 def test_literal_written_in_the_kernel_source_is_checked():
     """Every other test here captures the scalar; this one exercises parse_constant itself."""
-    with pytest.raises(FinalRejectionError, match=r"vf\.adds: scalar operand must be representable in int8"):
+    with pytest.raises(OutOfRange, match=r"vf\.adds: scalar operand must be representable in int8"):
         _parse_with_body(pl.DT_INT8, _source_literal_body(pl.DT_INT8))
 
 
@@ -375,7 +375,7 @@ def _parse_tile_scalar_kernel(dtype, scalar):
 
 @pytest.mark.soc("950")
 def test_tile_scalar_op_checks_the_scalar_against_the_out_dtype():
-    with pytest.raises(FinalRejectionError, match=r"pl\.add: scalar operand must be representable in int8"):
+    with pytest.raises(OutOfRange, match=r"pl\.add: scalar operand must be representable in int8"):
         _parse_tile_scalar_kernel(pl.DT_INT8, 300)
 
 
@@ -390,7 +390,7 @@ def test_tile_scalar_op_accepts_a_scalar_that_fits():
 def test_normalize_expr_rejects_an_integer_outside_the_storage_band():
     from pypto_pro.ir._utils import _normalize_expr
 
-    with pytest.raises(FinalRejectionError, match=r"must be in \[-9223372036854775808, 18446744073709551615\]"):
+    with pytest.raises(OutOfRange, match=r"must be in \[-9223372036854775808, 18446744073709551615\]"):
         _normalize_expr(UINT64_MAX + 1)
 
 
@@ -414,7 +414,7 @@ def test_make_scalar_constant_checks_both_branches(value, dtype, expected):
     """Folding must not silently turn an out-of-range result into inf or a wrapped integer."""
     from pypto_pro.language.parser._expression_parser import ExpressionParserMixin
 
-    with pytest.raises(FinalRejectionError, match=expected):
+    with pytest.raises(OutOfRange, match=expected):
         ExpressionParserMixin._make_scalar_constant(value, dtype, ir.Span.unknown())
 
 
@@ -450,7 +450,7 @@ def test_type_changing_op_checks_the_scalar_against_the_source_dtype():
 
 @pytest.mark.soc("950")
 def test_type_changing_op_still_rejects_a_value_the_source_dtype_cannot_hold():
-    with pytest.raises(FinalRejectionError, match=r"vf\.muls_cast: scalar operand must be representable in fp32"):
+    with pytest.raises(OutOfRange, match=r"vf\.muls_cast: scalar operand must be representable in fp32"):
         _parse_with_body(pl.DT_FP32, _muls_cast_body(1e300))
 
 
@@ -468,7 +468,7 @@ def _full_body(dtype, scalar):
 
 @pytest.mark.soc("950")
 def test_op_without_a_runtime_operand_falls_back_to_the_dtype_kwarg():
-    with pytest.raises(FinalRejectionError, match=r"vf\.full: scalar operand must be representable in fp16"):
+    with pytest.raises(OutOfRange, match=r"vf\.full: scalar operand must be representable in fp16"):
         _parse_with_body(pl.DT_FP16, _full_body(pl.DT_FP16, 70000.0))
 
 
@@ -515,7 +515,7 @@ def _parse_expands_kernel(dtype, scalar):
     ],
 )
 def test_expands_rejects_scalar_outside_the_out_dtype(dtype, scalar, expected):
-    with pytest.raises(FinalRejectionError, match=rf"pl\.expands: scalar operand must be {expected}"):
+    with pytest.raises(OutOfRange, match=rf"pl\.expands: scalar operand must be {expected}"):
         _parse_expands_kernel(dtype, scalar)
 
 
@@ -537,7 +537,7 @@ def test_expands_accepts_a_boundary_scalar(dtype, scalar):
 @pytest.mark.soc("950")
 def test_expands_still_rejects_a_scalar_outside_the_storage_band():
     """Above UINT64_MAX the band check fires first, before any dtype is consulted."""
-    with pytest.raises(FinalRejectionError, match=r"must be in \[-9223372036854775808, 18446744073709551615\]"):
+    with pytest.raises(OutOfRange, match=r"must be in \[-9223372036854775808, 18446744073709551615\]"):
         _parse_expands_kernel(pl.DT_UINT64, UINT64_MAX + 1)
 
 

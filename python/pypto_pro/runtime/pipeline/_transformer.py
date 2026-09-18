@@ -15,6 +15,7 @@ import ast
 import copy
 from dataclasses import dataclass
 
+from ..._errors import CommonInner, KeyNotFound, NotSupported, span_of
 from ._analyzer import PipelineInfo, analyze_pipeline, buffers_touched
 from ._astutil import (
     PL_IS_VALID_FIELD,
@@ -429,11 +430,12 @@ def _prune_if(if_stmt: ast.If, stage_func_names: set, if_const_map: dict) -> lis
         # Runtime conditional: keep it, but a stage call directly inside a runtime
         # branch is unsupported (dynamic dispatch of stages).
         if _branch_contains_stage(if_stmt, stage_func_names):
-            raise ValueError(
+            raise NotSupported(
                 f"pipeline (CB3): branch condition '{ast.unparse(if_stmt.test)}' at line "
                 f"{if_stmt.test.lineno} wraps a stage call but is not a compile-time "
                 "constant. Dynamic branch stages are unsupported; use a compile-time "
-                "constant condition (e.g. a tiling-key field) or insert sync manually."
+                "constant condition (e.g. a tiling-key field) or insert sync manually.",
+                span=span_of(if_stmt.test),
             )
         if_stmt.body = _prune_stmts(if_stmt.body, stage_func_names, if_const_map)
         if_stmt.orelse = _prune_stmts(if_stmt.orelse, stage_func_names, if_const_map)
@@ -519,7 +521,7 @@ def _place_around_pipeline_loop(
         # analyze_pipeline found this very node in this very tree, so failing to find it again
         # means the two searches have drifted apart. Refuse rather than emit the serial kernel
         # with neither ctx nor sync.
-        raise ValueError(
+        raise CommonInner(
             "pipeline (internal): the pipeline loop the analyzer found is no longer "
             "reachable in the kernel body — please report."
         )
@@ -612,7 +614,7 @@ def _compute_delays(info, preload: int):
         stage_count = core_stage_count.get(core)
         last_delay = core_last_delay.get(core)
         if stage_count is None or last_delay is None:
-            raise KeyError(f"Unsupported pipeline section kind: {core}")
+            raise NotSupported(f"Unsupported pipeline section kind: {core}")
 
         if stage_count == 0:
             # First stage of this core
@@ -984,7 +986,7 @@ def _build_ctx_field_fills(info: PipelineInfo) -> list[ast.stmt]:
         elif field_name in info.ctx_sources:
             source, sections = info.ctx_sources[field_name]
         else:
-            raise ValueError(
+            raise KeyNotFound(
                 f"pipeline (internal): ctx field '{field_name}' has no source — fields are "
                 f"registered together with their fill (_derive_ctx_fields.register), so the "
                 f"two have drifted apart. Please report."

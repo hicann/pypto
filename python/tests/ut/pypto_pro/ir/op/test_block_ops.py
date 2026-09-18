@@ -13,8 +13,8 @@
 import inspect
 
 from pypto_pro import ir
+from pypto_pro._errors import InvalidArgument, InvalidFormat, InvalidTile, InvalidType, InvalidVal
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError
 import pytest
 
 from pypto.pypto_impl import ir as _ir
@@ -442,7 +442,7 @@ def test_move_src_larger_stays_move():
 
 
 def test_make_tile_missing_addr_rejected():
-    with pytest.raises(ParserTypeError, match="missing required keyword 'addr'"):
+    with pytest.raises(InvalidVal, match="missing required keyword 'addr'"):
 
         @pl.jit(auto_mutex=False)
         def main(
@@ -476,7 +476,7 @@ def test_make_tile_size_is_derived_from_tile_type():
 
 
 def test_make_tile_runtime_addr_rejected_with_compile_time_hint():
-    with pytest.raises(ParserTypeError) as excinfo:
+    with pytest.raises(InvalidType) as excinfo:
 
         @pl.jit(auto_mutex=False)
         def main(
@@ -518,7 +518,7 @@ def test_make_tile_addr_after_tile_type():
 def test_make_tile_builder_form_rejected():
     """make_tile(shape, dtype, target_memory, ...) is the IR builder, not the DSL op."""
 
-    with pytest.raises(ParserTypeError, match="takes a pl.TileType as its first argument"):
+    with pytest.raises(InvalidType, match="takes a pl.TileType as its first argument"):
 
         @pl.jit(auto_mutex=False)
         def main(
@@ -535,7 +535,7 @@ def test_make_tile_builder_form_rejected():
 def test_make_tile_misaligned_addr_rejected():
     """addr reaches the alignment check as a plain int, whatever expression wrote it."""
 
-    with pytest.raises(ParserSyntaxError, match="32-byte aligned"):
+    with pytest.raises(InvalidTile, match="32-byte aligned"):
 
         @pl.jit(auto_mutex=False)
         def main(
@@ -551,7 +551,7 @@ def test_make_tile_misaligned_addr_rejected():
 
 
 def test_make_tile_runtime_addr_rejected_quoting_source():
-    with pytest.raises(ParserTypeError) as excinfo:
+    with pytest.raises(InvalidType) as excinfo:
 
         @pl.jit(auto_mutex=False)
         def main(
@@ -573,7 +573,7 @@ def test_make_tile_runtime_addr_rejected_quoting_source():
 def test_make_tile_positional_addr_rejected():
     """The tile type is the only positional argument; addr is keyword-only."""
 
-    with pytest.raises(ParserTypeError, match="takes 1 positional argument .* but 2 were given"):
+    with pytest.raises(InvalidArgument, match="takes 1 positional argument .* but 2 were given"):
 
         @pl.jit(auto_mutex=False)
         def main(
@@ -591,7 +591,7 @@ def test_make_tile_positional_addr_rejected():
 def test_make_tile_extra_positional_args_rejected_with_addr_keyword_hint():
     """The rejection carries the fix, so the call site does not have to guess."""
 
-    with pytest.raises(ParserTypeError) as excinfo:
+    with pytest.raises(InvalidArgument) as excinfo:
 
         @pl.jit(auto_mutex=False)
         def main(
@@ -637,7 +637,7 @@ def test_make_tile_addr_from_constant_expression():
 def test_a5_rejects_zz_nn_for_cube_buffers(monkeypatch, memory, layout):
     monkeypatch.setenv("PYPTOPRO_JIT_ARCH", "a5")
 
-    with pytest.raises(pl.parser.ParserError, match="do not support"):
+    with pytest.raises(InvalidVal, match="do not support"):
 
         @pl.jit(auto_mutex=False)
         def create_tile(_jit_entry: pl.DT_INT64):
@@ -713,7 +713,7 @@ def test_store_and_store_tile_with_scaling_tile_use_store_op(monkeypatch):
 
 
 def test_high_dimensional_nz_load_rejects_non_final_transfer_axes():
-    with pytest.raises(ParserSyntaxError, match="NZ transfer only supports the last two tensor axes"):
+    with pytest.raises(InvalidFormat, match="NZ transfer only supports the last two tensor axes"):
 
         @pl.jit(auto_mutex=False)
         def main(
@@ -729,7 +729,7 @@ def test_high_dimensional_nz_load_rejects_non_final_transfer_axes():
 
 
 def test_high_dimensional_nz_store_rejects_non_final_transfer_axes():
-    with pytest.raises(ParserSyntaxError, match="NZ transfer only supports the last two tensor axes"):
+    with pytest.raises(InvalidFormat, match="NZ transfer only supports the last two tensor axes"):
 
         @pl.jit(auto_mutex=False)
         def main(

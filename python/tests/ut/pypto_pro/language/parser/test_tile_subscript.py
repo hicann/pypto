@@ -11,8 +11,8 @@
 
 """Parser validation tests for Tile subscript access."""
 
+from pypto_pro._errors import InvalidOperation, InvalidShape, InvalidType, InvalidVal, OutOfRange
 import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import ParserSyntaxError, ParserTypeError
 import pytest
 
 from pypto.pypto_impl import ir
@@ -34,7 +34,7 @@ def test_tile_subscript_rejects_negative_constant_index():
         with pl.section_vector():
             negative_index[32](dst)
 
-    with pytest.raises(ParserSyntaxError, match="axis 0 must be non-negative, got -1"):
+    with pytest.raises(InvalidVal, match="axis 0 must be non-negative, got -1"):
         _parse_vector_kernel(kernel)
 
 
@@ -48,7 +48,7 @@ def test_tensor_subscript_rejects_constant_index_at_dimension_size():
         with pl.section_vector():
             out_of_bounds[32](dst)
 
-    with pytest.raises(ParserTypeError, match="axis 0 is out of range for dimension size 8"):
+    with pytest.raises(OutOfRange, match="axis 0 is out of range for dimension size 8"):
         _parse_vector_kernel(kernel)
 
 
@@ -61,7 +61,7 @@ def test_tile_subscript_read_requires_ub_memory():
             _value = tile[0, 0]
 
     with pytest.raises(
-        ParserTypeError,
+        InvalidOperation,
         match=r"getval: Tile element access requires a Vec-memory Tile \(UB\), got Mat",
     ):
         _parse_vector_kernel(kernel)
@@ -75,7 +75,7 @@ def test_tile_slice_rejects_negative_static_bound():
         with pl.section_vector():
             _sub = tile[-1:4, 0:32]
 
-    with pytest.raises(ParserSyntaxError, match="slice start for axis 0 must be non-negative"):
+    with pytest.raises(InvalidVal, match="slice start for axis 0 must be non-negative"):
         _parse_vector_kernel(kernel)
 
 
@@ -87,7 +87,7 @@ def test_tile_slice_rejects_non_integer_static_bound():
         with pl.section_vector():
             _sub = tile[1.5:4, 0:32]
 
-    with pytest.raises(ParserTypeError, match="slice start for axis 0 must be an integer scalar"):
+    with pytest.raises(InvalidType, match="slice start for axis 0 must be an integer scalar"):
         _parse_vector_kernel(kernel)
 
 
@@ -99,7 +99,7 @@ def test_tile_slice_rejects_empty_static_range():
         with pl.section_vector():
             _sub = tile[4:4, 0:32]
 
-    with pytest.raises(ParserSyntaxError, match=r"axis 0 must satisfy start < min\(end, shape\)"):
+    with pytest.raises(InvalidOperation, match=r"axis 0 must satisfy start < min\(end, shape\)"):
         _parse_vector_kernel(kernel)
 
 
@@ -111,7 +111,7 @@ def test_tile_slice_rejects_non_unit_step():
         with pl.section_vector():
             _sub = tile[0:8:2, 0:32]
 
-    with pytest.raises(ParserSyntaxError, match="slice step for axis 0 must be the compile-time integer 1"):
+    with pytest.raises(InvalidShape, match="slice step for axis 0 must be the compile-time integer 1"):
         _parse_vector_kernel(kernel)
 
 

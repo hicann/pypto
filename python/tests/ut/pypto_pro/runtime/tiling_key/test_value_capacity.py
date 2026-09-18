@@ -10,6 +10,7 @@
 # -----------------------------------------------------------------------------------------------------------
 """TilingKeyField value-count capacity tests."""
 
+from pypto_pro._errors import OutOfRange
 from pypto_pro.runtime.tilingkey import TilingKeyField, TilingKeySchema
 import pytest
 
@@ -25,7 +26,7 @@ def test_values_exceed_bit_capacity(bits, values):
     class Tk:
         OpType = TilingKeyField(bits=bits, values=values)
 
-    with pytest.raises(ValueError, match="candidates"):
+    with pytest.raises(OutOfRange, match="candidates"):
         TilingKeySchema(Tk)
 
 

@@ -16,7 +16,7 @@ import ast
 from pypto.pypto_impl import ir
 from pypto_pro.ir.op._op_registry import op_impl
 
-from .diagnostics import ParserSyntaxError
+from ..._errors import InvalidArgument, InvalidOperation, InvalidType, InvalidVal, NotSupported
 
 # C++ keywords. A struct type name or field name is emitted verbatim into the
 # generated C++ (``class Name { int64_t field; }``, ``s.field``), so a name that
@@ -50,7 +50,7 @@ class StructParserMixin:
         would produce uncompilable code. Reject it here with a clear diagnostic.
         """
         if name in _CPP_KEYWORDS:
-            raise ParserSyntaxError(
+            raise InvalidOperation(
                 f"{what} '{name}' is a C++ keyword and cannot be used as a struct "
                 f"type name or field name",
                 span=span,
@@ -69,7 +69,7 @@ class StructParserMixin:
         if not isinstance(elem, ir.MakeTuple):
             # Non-array field value: must be a scalar.
             if not isinstance(elem.type, ir.ScalarType):
-                raise ParserSyntaxError(
+                raise InvalidType(
                     f"struct field '{field_name}' must be a scalar or a fixed-size array; "
                     f"got a non-scalar value (e.g. tensor/tile)",
                     span=span,
@@ -79,7 +79,7 @@ class StructParserMixin:
         # Array field literal: must be non-empty, one-dimensional, uniform scalar dtype.
         elems = elem.elements
         if not elems:
-            raise ParserSyntaxError(
+            raise InvalidVal(
                 f"array field '{field_name}' is empty; a fixed-size array field "
                 f"must have at least one element",
                 span=span,
@@ -87,7 +87,7 @@ class StructParserMixin:
             )
         for e in elems:
             if not isinstance(e.type, ir.ScalarType):
-                raise ParserSyntaxError(
+                raise InvalidType(
                     f"array field '{field_name}' has non-scalar elements; "
                     f"struct array fields must be one-dimensional with scalar elements",
                     span=span,
@@ -96,7 +96,7 @@ class StructParserMixin:
         first_dtype = elems[0].type.dtype
         for e in elems[1:]:
             if e.type.dtype != first_dtype:
-                raise ParserSyntaxError(
+                raise InvalidVal(
                     f"array field '{field_name}' has mixed element types; "
                     f"all elements must be the same scalar type",
                     span=span,
@@ -115,15 +115,15 @@ class StructParserMixin:
         elements: list[ir.Expr] = []
         for kw in keywords:
             if kw.arg is None:
-                raise ParserSyntaxError(f"{ctx} does not support **kwargs", span=span)
+                raise NotSupported(f"{ctx} does not support **kwargs", span=span)
             self._check_cpp_identifier(kw.arg, "struct field name", span)
             elem = self.parse_expression(kw.value, nested=True)
             if self.named_fields(elem):
-                raise ParserSyntaxError(
+                raise NotSupported(
                     f"{ctx} field '{kw.arg}' is a nested named tuple/struct, which is not "
                     f"supported; struct fields must be scalars or fixed-size arrays "
                     f"(list literals like [0, 0, 0, 0])",
-                    span=span,
+                    span=self.span_tracker.get_span(kw.value),
                     hint="Use a scalar or a 1-D array of scalars.",
                 )
             self._check_scalar_or_array_field(kw.arg, elem, span)
@@ -147,12 +147,12 @@ class StructParserMixin:
     def _parse_pl_make_tuple_expr(self, call: ast.Call) -> ir.Expr:
         span = self.span_tracker.get_span(call)
         if call.args:
-            raise ParserSyntaxError(
+            raise InvalidArgument(
                 "pl.make_tuple() does not accept positional arguments; use keyword args",
                 span=span,
             )
         if not call.keywords:
-            raise ParserSyntaxError(
+            raise InvalidArgument(
                 "pl.make_tuple() requires at least one keyword argument (field=value)",
                 span=span,
             )
@@ -160,7 +160,7 @@ class StructParserMixin:
         elements: list[ir.Expr] = []
         for kw in call.keywords:
             if kw.arg is None:
-                raise ParserSyntaxError("pl.make_tuple() does not support **kwargs", span=span)
+                raise NotSupported("pl.make_tuple() does not support **kwargs", span=span)
             field_names.append(kw.arg)
             elements.append(self.parse_expression(kw.value, nested=True))
         return self.make_named_tuple(elements, field_names, span)
@@ -169,15 +169,15 @@ class StructParserMixin:
     def _parse_pl_struct_expr(self, call: ast.Call) -> ir.Expr:
         span = self.span_tracker.get_span(call)
         if len(call.args) != 1 or not isinstance(call.args[0], ast.Constant) or not isinstance(call.args[0].value, str):
-            raise ParserSyntaxError(
+            raise InvalidVal(
                 'pl.struct("Name", ...) requires exactly one string struct name as first argument',
-                span=span,
+                span=self.span_tracker.call_argument_span(call, 0, span),
                 hint='Use pl.struct("Name", field1=val1, ...)',
             )
         struct_name = call.args[0].value
         self._check_cpp_identifier(struct_name, "struct type name", span)
         if not call.keywords:
-            raise ParserSyntaxError(
+            raise InvalidVal(
                 'pl.struct("Name", ...) requires at least one keyword field',
                 span=span,
             )
@@ -193,32 +193,32 @@ class StructParserMixin:
         """
         span = self.span_tracker.get_span(call)
         if not call.args or not isinstance(call.args[0], ast.Constant):
-            raise ParserSyntaxError(
+            raise InvalidType(
                 "pl.struct_array() requires an integer size as first argument",
-                span=span,
+                span=self.span_tracker.call_argument_span(call, 0, span),
                 hint='Use pl.struct_array(N, "Name", field1=0, field2=0, ...)',
             )
         arr_size = call.args[0].value
         if not isinstance(arr_size, int) or arr_size < 1:
-            raise ParserSyntaxError(
+            raise InvalidType(
                 f"pl.struct_array() size must be a positive integer, got {arr_size}",
-                span=span,
+                span=self.span_tracker.call_argument_span(call, 0, span),
             )
         if not (len(call.args) >= 2 and isinstance(call.args[1], ast.Constant) and isinstance(call.args[1].value, str)):
-            raise ParserSyntaxError(
+            raise InvalidVal(
                 'pl.struct_array(N, "Name", ...) requires a string struct name as second arg',
-                span=span,
+                span=self.span_tracker.call_argument_span(call, 1, span),
             )
         struct_name = call.args[1].value
         self._check_cpp_identifier(struct_name, "struct type name", span)
         if len(call.args) > 2:
-            raise ParserSyntaxError(
+            raise InvalidArgument(
                 f"pl.struct_array() accepts exactly two positional arguments "
                 f"(size and name), got {len(call.args)}",
                 span=span,
             )
         if not call.keywords:
-            raise ParserSyntaxError(
+            raise InvalidVal(
                 'pl.struct_array(N, "Name", ...) requires at least one keyword field',
                 span=span,
             )

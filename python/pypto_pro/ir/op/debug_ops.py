@@ -20,6 +20,7 @@ from typing import Any
 from pypto.pypto_impl import ir as _ir_core
 from pypto.pypto_impl.ir import Call, ConstBool, ConstInt, DataType, Expr, ScalarType, Span, TensorType, TileType
 
+from ..._errors import InvalidArgument, InvalidShape, InvalidType, InvalidVal, NotSupported
 from .._utils import _get_span_or_capture, _normalize_expr, _to_make_tuple
 from ._op_registry import OpSpec, op_impl, register_table
 
@@ -69,7 +70,7 @@ def _is_bool_dtype(dtype: DataType) -> bool:
 
 def _normalize_location_flag(loc: bool, op_name: str) -> bool:
     if not isinstance(loc, bool):
-        raise TypeError(f"debug.{op_name} requires bool loc flag, but got {type(loc).__name__}")
+        raise InvalidType(f"debug.{op_name} requires bool loc flag, but got {type(loc).__name__}")
     return loc
 
 
@@ -81,17 +82,17 @@ def _scan_printf_format(format_str: str) -> list[str]:
             i += 1
             continue
         if i + 1 < len(format_str) and format_str[i + 1] == "%":
-            raise ValueError("printf does not support literal '%%'")
+            raise NotSupported("printf does not support literal '%%'")
 
         j = i + 1
         if j >= len(format_str):
-            raise ValueError("printf format string ends with an incomplete conversion")
+            raise InvalidVal("printf format string ends with an incomplete conversion")
 
         conversion = format_str[j]
         if conversion not in _SUPPORTED_CONVERSIONS:
             if conversion in "-+ #0." or conversion.isdigit():
-                raise ValueError("printf does not support flags, width, or precision")
-            raise ValueError(f"printf does not support conversion '%{conversion}'")
+                raise NotSupported("printf does not support flags, width, or precision")
+            raise NotSupported(f"printf does not support conversion '%{conversion}'")
 
         specs.append(format_str[i:j + 1])
         i = j + 1
@@ -125,7 +126,7 @@ def _validate_printf_arguments(
 ) -> None:
     specs = _scan_printf_format(format_str)
     if len(specs) != len(normalized_args):
-        raise ValueError(f"{op_name} format expects {len(specs)} scalar arguments, but got {len(normalized_args)}")
+        raise InvalidArgument(f"{op_name} format expects {len(specs)} scalar arguments, but got {len(normalized_args)}")
 
     for idx, (spec, arg, is_raw_bool) in enumerate(zip(specs, normalized_args, raw_bool_args)):
         arg_type = arg.type
@@ -134,13 +135,13 @@ def _validate_printf_arguments(
         # %p accepts pointer types (PtrType)
         if conversion == "p":
             if not isinstance(arg_type, _ir_core.PtrType):
-                raise TypeError(
+                raise InvalidVal(
                     f"debug.{op_name} conversion '{spec}' requires pointer, but got {type(arg_type).__name__}"
                 )
             continue
 
         if not isinstance(arg_type, ScalarType):
-            raise TypeError(
+            raise InvalidType(
                 f"debug.{op_name} argument {idx} requires ScalarType input, but got {type(arg_type).__name__}"
             )
         scalar_type = arg_type
@@ -150,7 +151,7 @@ def _validate_printf_arguments(
             or _is_bool_dtype(scalar_type.dtype)
             or _is_index_dtype(scalar_type.dtype)
         ):
-            raise TypeError(
+            raise InvalidVal(
                 f"debug.{op_name} conversion '{spec}' requires signed integer, bool, or index scalar, "
                 f"but got {scalar_type.dtype}"
             )
@@ -160,21 +161,21 @@ def _validate_printf_arguments(
             or _is_index_dtype(scalar_type.dtype)
             or is_raw_bool
         ):
-            raise TypeError(
+            raise InvalidVal(
                 f"debug.{op_name} conversion '{spec}' requires unsigned integer, bool, or index scalar, "
                 f"but got {scalar_type.dtype}"
             )
         if conversion == "x" and not (
             _is_unsigned_integer_dtype(scalar_type.dtype) or _is_index_dtype(scalar_type.dtype)
         ):
-            raise TypeError(
+            raise InvalidVal(
                 f"debug.{op_name} conversion '{spec}' requires unsigned integer or index scalar, "
                 f"but got {scalar_type.dtype}"
             )
         if conversion == "x" and is_raw_bool:
-            raise TypeError(f"debug.{op_name} conversion '{spec}' does not support bool scalars")
+            raise NotSupported(f"debug.{op_name} conversion '{spec}' does not support bool scalars")
         if conversion in _FLOAT_CONVERSIONS and scalar_type.dtype != DataType.FP32:
-            raise TypeError(f"debug.{op_name} conversion '{spec}' requires FP32 scalar, but got {scalar_type.dtype}")
+            raise InvalidVal(f"debug.{op_name} conversion '{spec}' requires FP32 scalar, but got {scalar_type.dtype}")
 
 
 def dump_tensor(
@@ -206,15 +207,15 @@ def dump_tensor(
     actual_span = _get_span_or_capture(span)
     show_location = _normalize_location_flag(loc, "dump_tensor")
     if flag is not None and not isinstance(flag, str):
-        raise TypeError(f"debug.dump_tensor requires str flag, but got {type(flag).__name__}")
+        raise InvalidType(f"debug.dump_tensor requires str flag, but got {type(flag).__name__}")
     tensor_type = tensor.type
     if not isinstance(tensor_type, TensorType):
-        raise TypeError(f"debug.dump_tensor requires TensorType input, but got {type(tensor_type).__name__}")
+        raise InvalidType(f"debug.dump_tensor requires TensorType input, but got {type(tensor_type).__name__}")
     if tensor_type.dtype in (DataType.FP4, DataType.FP4E2M1, DataType.FP4E1M2):
-        raise ValueError(f"debug.dump_tensor does not support FP4 dtype {tensor_type.dtype}")
+        raise NotSupported(f"debug.dump_tensor does not support FP4 dtype {tensor_type.dtype}")
 
     if (offsets is None) != (shapes is None):
-        raise ValueError("debug.dump_tensor offsets and shapes must be provided together")
+        raise InvalidArgument("debug.dump_tensor offsets and shapes must be provided together")
 
     rank = len(tensor_type.shape)
     if offsets is None and shapes is None:
@@ -224,25 +225,25 @@ def dump_tensor(
         if tensor_type.tensor_view is not None and tensor_type.tensor_view.stride:
             last_stride = tensor_type.tensor_view.stride[-1]
             if not isinstance(last_stride, ConstInt):
-                raise NotImplementedError(
+                raise InvalidShape(
                     "debug.dump_tensor windowed mode requires the innermost stride to be statically 1"
                 )
             if last_stride.value != 1:
-                raise ValueError(
+                raise InvalidShape(
                     f"debug.dump_tensor windowed mode requires innermost stride == 1, got {last_stride.value}"
                 )
         offsets_tuple = _to_make_tuple(offsets, actual_span)
         shapes_tuple = _to_make_tuple(shapes, actual_span)
 
     if len(offsets_tuple.elements) != rank or len(shapes_tuple.elements) != rank:
-        raise ValueError(
+        raise InvalidShape(
             f"debug.dump_tensor offsets/shapes must match tensor rank {rank}, got "
             f"{len(offsets_tuple.elements)} offsets and {len(shapes_tuple.elements)} shapes"
         )
 
     for idx, shape_expr in enumerate(shapes_tuple.elements):
         if isinstance(shape_expr, ConstInt) and shape_expr.value <= 0:
-            raise ValueError(f"debug.dump_tensor shape at axis {idx} must be positive, got {shape_expr.value}")
+            raise InvalidShape(f"debug.dump_tensor shape at axis {idx} must be positive, got {shape_expr.value}")
 
     dump_kwargs: dict[str, Any] = {"show_location": show_location}
     if flag:
@@ -262,13 +263,13 @@ def _validate_dump_offsets_shapes(
     op_name: str,
 ) -> None:
     if len(offsets_tuple.elements) != rank or len(shapes_tuple.elements) != rank:
-        raise ValueError(
+        raise InvalidShape(
             f"debug.{op_name} offsets/shapes must match tile rank {rank}, got "
             f"{len(offsets_tuple.elements)} offsets and {len(shapes_tuple.elements)} shapes"
         )
     for idx, shape_expr in enumerate(shapes_tuple.elements):
         if isinstance(shape_expr, ConstInt) and shape_expr.value <= 0:
-            raise ValueError(f"debug.{op_name} shape at axis {idx} must be positive, got {shape_expr.value}")
+            raise InvalidShape(f"debug.{op_name} shape at axis {idx} must be positive, got {shape_expr.value}")
 
 
 def dump_tile(
@@ -303,19 +304,19 @@ def dump_tile(
     actual_span = _get_span_or_capture(span)
     show_location = _normalize_location_flag(loc, "dump_tile")
     if flag is not None and not isinstance(flag, str):
-        raise TypeError(f"debug.dump_tile requires str flag, but got {type(flag).__name__}")
+        raise InvalidType(f"debug.dump_tile requires str flag, but got {type(flag).__name__}")
     tile_type = tile.type
     if not isinstance(tile_type, TileType):
-        raise TypeError(f"debug.dump_tile requires TileType input, but got {type(tile_type).__name__}")
+        raise InvalidType(f"debug.dump_tile requires TileType input, but got {type(tile_type).__name__}")
     if section is not None:
         _validate_dump_memory_section(tile_type, section, actual_span)
     if (offsets is None) != (shapes is None):
-        raise ValueError("debug.dump_tile offsets and shapes must be provided together")
+        raise InvalidArgument("debug.dump_tile offsets and shapes must be provided together")
 
     if workspace is not None:
         ws_type = workspace.type
         if not isinstance(ws_type, TensorType):
-            raise TypeError(f"debug.dump_tile workspace must be TensorType, but got {type(ws_type).__name__}")
+            raise InvalidType(f"debug.dump_tile workspace must be TensorType, but got {type(ws_type).__name__}")
 
     rank = len(tile_type.shape)
     dump_kwargs: dict[str, Any] = {"show_location": show_location}
@@ -369,9 +370,8 @@ def _validate_dump_memory_section(data_type, section, span: Span | None = None) 
     if section == _ir_core.SectionKind.Vector:
         if mem == _ir_core.MemorySpace.Vec:
             return
-        from pypto_pro.language.parser.diagnostics import ParserSyntaxError
 
-        raise ParserSyntaxError(
+        raise NotSupported(
             f"pl.dump_data of a {mem.name} tile is not allowed in a Vector section; "
             "only Vec (UB) tiles (and GM tensors) can be dumped there",
             span=span,
@@ -380,9 +380,8 @@ def _validate_dump_memory_section(data_type, section, span: Span | None = None) 
     if section == _ir_core.SectionKind.Cube:
         if mem == _ir_core.MemorySpace.Acc:
             return
-        from pypto_pro.language.parser.diagnostics import ParserSyntaxError
 
-        raise ParserSyntaxError(
+        raise NotSupported(
             f"pl.dump_data of a {mem.name} tile is not allowed in a Cube section; "
             "only Acc (L0C) tiles (and GM tensors) can be dumped there",
             span=span,
@@ -409,15 +408,15 @@ def dump_data(
     """
     data_type = data.type
     if flag is not None and not isinstance(flag, str):
-        raise TypeError(f"debug.dump_data requires str flag, but got {type(flag).__name__}")
+        raise InvalidType(f"debug.dump_data requires str flag, but got {type(flag).__name__}")
     if isinstance(data_type, TensorType):
         if workspace is not None:
-            raise ValueError("debug.dump_data: workspace is only valid for Tile inputs, not Tensor")
+            raise NotSupported("debug.dump_data: workspace is only valid for Tile inputs, not Tensor")
         return dump_tensor(data, offsets, shapes, loc=loc, span=span, flag=flag)
     elif isinstance(data_type, TileType):
         return dump_tile(data, offsets, shapes, workspace=workspace, loc=loc, span=span, section=section, flag=flag)
     else:
-        raise TypeError(f"debug.dump_data requires Tensor or Tile input, but got {type(data_type).__name__}")
+        raise InvalidType(f"debug.dump_data requires Tensor or Tile input, but got {type(data_type).__name__}")
 
 
 def printf(format_str: str, *args: int | float | Expr, loc: bool = False, span: Span | None = None) -> Call:
@@ -425,7 +424,7 @@ def printf(format_str: str, *args: int | float | Expr, loc: bool = False, span: 
     actual_span = _get_span_or_capture(span)
     show_location = _normalize_location_flag(loc, "printf")
     if not isinstance(format_str, str):
-        raise TypeError(f"debug.printf requires string format literal, but got {type(format_str).__name__}")
+        raise InvalidType(f"debug.printf requires string format literal, but got {type(format_str).__name__}")
 
     normalized_args, raw_bool_args = _normalize_printf_args(args, actual_span)
     _validate_printf_arguments(format_str, normalized_args, raw_bool_args, op_name="printf")
@@ -450,11 +449,11 @@ def pto_assert(
     elif isinstance(condition, bool):
         condition_expr = ConstBool(condition, actual_span)
     else:
-        raise TypeError(f"debug.pto_assert requires a scalar bool condition, but got {type(condition).__name__}")
+        raise InvalidType(f"debug.pto_assert requires a scalar bool condition, but got {type(condition).__name__}")
 
     condition_type = condition_expr.type
     if not isinstance(condition_type, ScalarType) or condition_type.dtype != DataType.BOOL:
-        raise TypeError(
+        raise InvalidType(
             "debug.pto_assert requires a scalar bool condition, "
             f"but got {type(condition_type).__name__}({getattr(condition_type, 'dtype', condition_type)})"
         )
@@ -462,7 +461,7 @@ def pto_assert(
     if condition_text is None:
         condition_text = "condition"
     if not isinstance(condition_text, str):
-        raise TypeError(
+        raise InvalidType(
             f"debug.pto_assert requires string condition_text metadata, but got {type(condition_text).__name__}"
         )
 
@@ -471,7 +470,7 @@ def pto_assert(
         format_value = ""
     else:
         if not isinstance(format_str, str):
-            raise TypeError(f"debug.pto_assert requires string literal format, but got {type(format_str).__name__}")
+            raise InvalidType(f"debug.pto_assert requires string literal format, but got {type(format_str).__name__}")
         normalized_args, raw_bool_args = _normalize_printf_args(args, actual_span)
         _validate_printf_arguments(format_str, normalized_args, raw_bool_args, op_name="pto_assert")
         format_value = format_str

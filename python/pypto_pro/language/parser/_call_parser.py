@@ -26,16 +26,13 @@ from pypto_pro.ir._utils import _is_int
 from pypto_pro.ir.op._op_registry import _OP_REGISTRY
 from pypto_pro.ir.op.block_ops import block_ir_op
 
+from ..._errors import BadFd, InvalidArgument, InvalidOperation, InvalidShape, InvalidType, InvalidVal, NotSupported
 from .. import _api as _language_api
 from .._vf_api import Vf
 from ._control_flow_parser import _is_bare_return
 from ._expr_evaluator import ExprEvaluator
 from ._span_tracker import SpanTracker
 from .diagnostics import (
-    FinalRejectionError,
-    ParserSyntaxError,
-    ParserTypeError,
-    UnsupportedFeatureError,
     check_const_expr_fits_dtype,
     check_in_range,
 )
@@ -191,7 +188,7 @@ def _get_source_info(entity: Callable | type, entity_type: str) -> tuple[str, li
         Tuple of (source_file, source_lines_raw, starting_line)
 
     Raises:
-        ParserSyntaxError: If source cannot be retrieved by any strategy
+        InvalidOperation: If source cannot be retrieved by any strategy
     """
     name = entity.__name__ if hasattr(entity, "__name__") else str(entity)
 
@@ -219,7 +216,7 @@ def _get_source_info(entity: Callable | type, entity_type: str) -> tuple[str, li
         return python_c_result
 
     # Strategy 4: Clear error
-    raise ParserSyntaxError(
+    raise BadFd(
         f"Cannot retrieve source code for {entity_type} '{name}'",
         hint="Define the callable in a Python source file so its AST can be inspected",
     )
@@ -360,12 +357,13 @@ def _types_compatible(annotated: ir.Type, actual: ir.Type) -> bool:
 
 
 def _check_type_compatible(annotated: ir.Type, actual: ir.Type, *, what: str, name: str, span) -> None:
-    """Raise ParserTypeError if ``annotated`` is not compatible with ``actual``."""
+    """Raise InvalidType if ``annotated`` is not compatible with ``actual``."""
     if not _types_compatible(annotated, actual):
-        raise ParserTypeError(
+        raise InvalidVal(
             f"{what} '{name}' annotated as {annotated} but called/returned with {actual}",
             span=span,
             hint="Make the annotation match the actual argument/return type, or remove it.",
+            parser_retry=True,
         )
 
 
@@ -373,37 +371,42 @@ def _validate_simt_parameters(func: ir.Function, role: str) -> None:
     """Validate the common native CCE ABI accepted by SIMT functions."""
     for param in func.params:
         if not isinstance(param.type, (ir.ScalarType, ir.TensorType, ir.TileType)):
-            raise ParserTypeError(
+            raise InvalidVal(
                 f"{role} parameter '{param.name}' must resolve to a scalar, Tensor, or Tile value, got {param.type}",
                 span=param.span,
                 hint="Ptr, Tuple, and tiling parameters are not supported.",
+                parser_retry=True,
             )
         if isinstance(param.type, ir.TensorType):
             if param.type.dtype.get_bit() < 8:
-                raise ParserTypeError(
+                raise NotSupported(
                     f"{role} Tensor parameter '{param.name}' uses an unsupported sub-byte dtype",
                     span=param.span,
                     hint="Use a byte-addressable Tensor element type such as pl.DT_UINT8 or wider.",
+                    parser_retry=True,
                 )
             tensor_view = param.type.tensor_view
             if tensor_view is None or tensor_view.layout != ir.TensorLayout.ND:
-                raise ParserTypeError(
+                raise InvalidVal(
                     f"{role} Tensor parameter '{param.name}' requires ND layout",
                     span=param.span,
                     hint="Use pl.Tensor[[shape], dtype] or specify pl.ND explicitly.",
+                    parser_retry=True,
                 )
         if isinstance(param.type, ir.TileType):
             if len(param.type.shape) != 2 or not all(isinstance(dim, ir.ConstInt) for dim in param.type.shape):
-                raise ParserTypeError(
+                raise InvalidShape(
                     f"{role} Tile parameter '{param.name}' must have a static two-dimensional shape",
                     span=param.span,
                     hint="Pass a static two-dimensional Tile created with pl.make_tile().",
+                    parser_retry=True,
                 )
             if param.type.dtype.get_bit() < 8:
-                raise ParserTypeError(
+                raise NotSupported(
                     f"{role} Tile parameter '{param.name}' uses an unsupported sub-byte dtype",
                     span=param.span,
                     hint="Use a byte-addressable Tile element type such as pl.DT_UINT8 or wider.",
+                    parser_retry=True,
                 )
 
 class CallParserMixin:
@@ -810,10 +813,11 @@ class CallParserMixin:
         try:
             source_file, source_lines_raw, starting_line = _get_source_info(fn, "function")
         except Exception as e:
-            raise UnsupportedFeatureError(
+            raise InvalidOperation(
                 f"Cannot compile '{func_name}': unable to retrieve source -{e}",
                 span=span,
                 hint=f"Define '{func_name}' in a .py file, or use {decorator_hint}",
+                parser_retry=True,
             ) from e
 
         source_code = _tw.dedent("".join(source_lines_raw))
@@ -824,10 +828,11 @@ class CallParserMixin:
         try:
             tree = ast.parse(source_code)
         except SyntaxError as e:
-            raise UnsupportedFeatureError(
+            raise InvalidOperation(
                 f"Cannot parse '{func_name}': {e}",
                 span=span,
                 hint=f"Use {decorator_hint} to explicitly mark '{func_name}'",
+                parser_retry=True,
             ) from e
 
         func_def = next(
@@ -835,10 +840,11 @@ class CallParserMixin:
             None,
         )
         if func_def is None:
-            raise UnsupportedFeatureError(
+            raise InvalidOperation(
                 f"Cannot find function definition for '{func_name}' in source",
                 span=span,
                 hint=f"Use {decorator_hint} to explicitly mark '{func_name}'",
+                parser_retry=True,
             )
 
         return source_file, source_lines, line_offset, col_offset, func_def
@@ -999,10 +1005,11 @@ class CallParserMixin:
             if callable(resolved) and not isinstance(resolved, type):
                 return self._implicit_func_call(func_name, resolved, call)
 
-        raise UnsupportedFeatureError(
+        raise NotSupported(
             f"Unsupported function call: {ast.unparse(call)}",
             span=self.span_tracker.get_span(call),
             hint="Use pl.* operations or call an inline Python helper by name",
+            parser_retry=True,
         )
 
     def _parse_indexed_call(self, call: ast.Call) -> Any:
@@ -1022,10 +1029,11 @@ class CallParserMixin:
                     self._emit_auto_mutex("simt.launch", call, span)
                 return _parse_simt_launch(self, call, local_name, callee_template)
 
-        raise UnsupportedFeatureError(
+        raise NotSupported(
             f"Unsupported indexed function call: {ast.unparse(call)}",
             span=self.span_tracker.get_span(call),
             hint='Indexed calls require a @pl.vector_function(mode="simt") target',
+            parser_retry=True,
         )
 
     def parse_op_call(self, call: ast.Call) -> Any:
@@ -1051,22 +1059,24 @@ class CallParserMixin:
 
         span = self.span_tracker.get_span(call)
         if op_name is None:
-            raise UnsupportedFeatureError(
+            raise NotSupported(
                 f"Unsupported operation call: {ast.unparse(call)}",
                 span=span,
                 hint="Use pl.*, pl.tensor.*, or pl.system.* operations",
+                parser_retry=True,
             )
 
         if self._current_func_type in (ir.FunctionType.SimtVF, ir.FunctionType.SimtCallee) and not op_name.startswith(
             "simt."
         ):
-            raise UnsupportedFeatureError(
+            raise NotSupported(
                 f"Operation '{op_name}' is not supported inside a SIMT function",
                 span=span,
                 hint=(
                     "The current SIMT slice supports SIMT context queries, scalar expressions, restricted "
                     "loops, and scalar Tensor/Tile accesses."
                 ),
+                parser_retry=True,
             )
         if self._auto_mutex and not op_name.startswith("vf."):
             self._emit_auto_mutex(op_name, call, span)
@@ -1092,7 +1102,7 @@ class CallParserMixin:
         span = self.span_tracker.get_span(call)
         if op_name.startswith("vf."):
             if self.inline_vf_depth == 0:
-                raise ParserSyntaxError(
+                raise InvalidOperation(
                     f"Operation '{op_name}' can only be used inside @pl.vector_function",
                     span=span,
                     hint="Move VF register operations into a @pl.vector_function helper and call it from the kernel.",
@@ -1101,13 +1111,13 @@ class CallParserMixin:
         if self.inline_vf_depth == 0:
             return
         if op_name in self._TILE_GROUP_ACCESSORS:
-            raise ParserSyntaxError(
+            raise InvalidOperation(
                 f"Tile-group accessor '.{op_name}()' cannot be used inside @pl.vector_function",
                 span=span,
                 hint="Select the tile in the calling kernel and pass it to the vector function as an argument.",
             )
         if op_name not in self._VF_SCALAR_PL_OPS:
-            raise ParserSyntaxError(
+            raise NotSupported(
                 f"Operation 'pl.{op_name}' is not supported inside @pl.vector_function",
                 span=span,
                 hint="VF bodies support vf.* operations, pl.range, and scalar pl.min/pl.max/pl.const. "
@@ -1149,7 +1159,7 @@ class CallParserMixin:
         if key in self._ENUM_KWARGS and isinstance(parsed, (ir.ConstBool, ir.ConstInt, ir.ConstFloat)):
             # Final: the int is a perfectly good Python value, so a retry would
             # accept it and lose the rejection.
-            raise FinalRejectionError(
+            raise InvalidVal(
                 f"'{key}' expects an enum value, not {parsed.value!r}",
                 span=self.span_tracker.get_span(value),
                 hint=f"Use the enum, e.g. {key}=pl.RoundMode.X / dtype=pl.DT_FP16, "
@@ -1187,7 +1197,7 @@ class CallParserMixin:
             detail = f", got '{ast.unparse(node)}'" if key else ""
             # Final for the same reason: *check* rejects values Python evaluation
             # would happily produce.
-            raise FinalRejectionError(
+            raise InvalidType(
                 f"{subject} must be a compile-time {expects}{detail}",
                 span=self.span_tracker.get_span(node),
                 hint=hint,
@@ -1203,7 +1213,7 @@ class CallParserMixin:
         """Instantiate and call one helper @pl.vector_function(mode="simt") template."""
         span = self.span_tracker.get_span(call)
         if call.keywords or any(isinstance(arg, ast.Starred) for arg in call.args):
-            raise ParserSyntaxError(
+            raise InvalidArgument(
                 'Helper @pl.vector_function(mode="simt") calls accept positional arguments only',
                 span=span,
             )
@@ -1228,7 +1238,7 @@ class CallParserMixin:
         launchable = max_threads is not None
         if launchable:
             if not _is_int(max_threads):
-                raise TypeError("max_threads must be an integer")
+                raise InvalidType("max_threads must be an integer")
             check_in_range(max_threads, 1, _MAX_SIMT_THREADS, subject="max_threads", error=ValueError)
 
         cached = self.simt_func_cache.get(id(fn))
@@ -1236,7 +1246,7 @@ class CallParserMixin:
             self._register_simt_external(cached, span)
             return cached
         if id(fn) in self.simt_call_stack:
-            raise ParserSyntaxError(
+            raise NotSupported(
                 f'Recursive helper @pl.vector_function(mode="simt") call involving {fn.__name__!r} is not supported',
                 span=span,
             )
@@ -1256,16 +1266,17 @@ class CallParserMixin:
             or func_args.defaults
             or func_args.kw_defaults
         ):
-            raise ParserSyntaxError(
+            raise NotSupported(
                 f"SIMT function '{fn.__name__}' only supports required positional parameters",
                 span=span,
             )
         params = list(func_args.args)
         if len(args) != len(params):
             role = "SIMT function" if launchable else "SIMT callee"
-            raise ParserTypeError(
+            raise InvalidVal(
                 f"{role} '{fn.__name__}' expects {len(params)} argument(s), got {len(args)}",
                 span=span,
+                parser_retry=True,
             )
 
         func_type = ir.FunctionType.SimtVF if launchable else ir.FunctionType.SimtCallee
@@ -1326,9 +1337,10 @@ class CallParserMixin:
     ) -> None:
         """Validate call-site arguments against an instantiated SIMT signature."""
         if len(args) != len(callee.params):
-            raise ParserTypeError(
+            raise InvalidVal(
                 f"SIMT function '{callee.name}' expects {len(callee.params)} argument(s), got {len(args)}",
                 span=span,
+                parser_retry=True,
             )
         for param, actual, actual_node in zip(callee.params, args, arg_nodes):
             _check_type_compatible(
@@ -1342,7 +1354,7 @@ class CallParserMixin:
     def _register_simt_external(self, func: ir.Function, span) -> None:
         """Register one instantiated SIMT function in the enclosing Program."""
         if func.name in self.external_funcs and self.external_funcs[func.name] is not func:
-            raise ParserSyntaxError(
+            raise InvalidOperation(
                 f"Conflicting external functions with name '{func.name}'",
                 span=span,
             )
@@ -1380,12 +1392,12 @@ class CallParserMixin:
         """Bind one positional argument to each helper parameter."""
         args = func_def.args
         if self._has_unsupported_inline_params(args):
-            raise ParserSyntaxError(
+            raise NotSupported(
                 f"Inline function '{func_name}' only supports positional parameters with optional defaults",
                 span=span,
             )
         if call.keywords or any(isinstance(arg, ast.Starred) for arg in call.args):
-            raise ParserSyntaxError(
+            raise NotSupported(
                 f"Call to inline function '{func_name}' only supports plain positional arguments",
                 span=span,
             )
@@ -1393,10 +1405,11 @@ class CallParserMixin:
         params = self._inline_param_list(func_def)
         required_count = len(params) - len(args.defaults)
         if not required_count <= len(call.args) <= len(params):
-            raise ParserTypeError(
+            raise InvalidArgument(
                 f"Function '{func_name}' expects {required_count} to {len(params)} positional argument(s), "
                 f"got {len(call.args)}",
                 span=span,
+                parser_retry=True,
             )
         argument_nodes = [*call.args, *args.defaults[len(call.args) - required_count:]]
         bound = {param.arg: (self.parse_expression(arg), arg) for param, arg in zip(params, argument_nodes)}
@@ -1428,13 +1441,14 @@ class CallParserMixin:
         if is_simt_function(fn):
             if self._current_func_type in (ir.FunctionType.SimtVF, ir.FunctionType.SimtCallee):
                 if get_simt_max_threads(fn) is not None:
-                    raise ParserTypeError(
+                    raise InvalidVal(
                         f"SIMT helper '{func_name}' must omit max_threads in "
                         '@pl.vector_function(mode="simt")',
                         span=self.span_tracker.get_span(call),
+                        parser_retry=True,
                     )
                 return self._parse_simt_template_call(func_name, fn, call)
-            raise ParserSyntaxError(
+            raise InvalidOperation(
                 f"SIMT function '{func_name}' cannot be called directly outside a SIMT function",
                 span=self.span_tracker.get_span(call),
             )
@@ -1442,12 +1456,12 @@ class CallParserMixin:
         span = self.span_tracker.get_span(call)
         template = self._inline_template(func_name, fn, span)
         if self.inline_vf_depth != 0 and not template.is_vector_function:
-            raise ParserSyntaxError(
+            raise InvalidOperation(
                 f"Vector function cannot call non-vector inline function '{func_name}'",
                 span=span,
             )
         if id(fn) in self.inline_call_stack:
-            raise ParserSyntaxError(
+            raise InvalidOperation(
                 f"Recursive inline function call detected for '{func_name}'",
                 span=span,
             )
@@ -1580,7 +1594,7 @@ class CallParserMixin:
             else:
                 dst_list = ", ".join(f"dst{i}" for i in range(dst_count))
                 correct = f"{dst_list} = vf.{op_name}(...)"
-            raise ParserSyntaxError(
+            raise InvalidVal(
                 f"vf.{op_name} produces a result and must use the assignment form. "
                 f"The statement form vf.{op_name}(dst, ...) is no longer supported.",
                 span=span,
@@ -1591,7 +1605,7 @@ class CallParserMixin:
         # declared implicitly by the assignment form (dst = vf.xxx(...)); users
         # cannot call them directly.
         if op_name in ("reg_tensor", "mask_reg"):
-            raise ParserSyntaxError(
+            raise InvalidOperation(
                 f"vf.{op_name} cannot be called directly. VF registers are declared "
                 "automatically by the assignment form.",
                 span=span,

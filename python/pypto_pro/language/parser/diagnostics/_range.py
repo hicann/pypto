@@ -15,9 +15,9 @@ One message grammar -- ``<subject> must be in [lo, hi], got <value>`` -- for the
 the front end enforces: the storage band of ``ir.ConstInt``, the representable range of a dtype, and
 plain explicit intervals such as an event id.
 
-All checks raise :class:`FinalRejectionError`. ``ExpressionParserMixin.parse_expression`` recovers from
-a failed IR build by re-evaluating the expression in Python, so a plain ``ParserTypeError`` raised from
-an expression position would be swallowed and the rejected value would come back.
+All checks raise :class:`OutOfRange`. ``ExpressionParserMixin.parse_expression`` recovers from a
+failed IR build by re-evaluating the expression in Python, but only for a rejection whose site opted
+in with ``parser_retry``; these checks do not, so a value they refuse stays refused.
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ from pypto_pro.ir._limits import (
     to_storage_int,
 )
 
-from ._exceptions import FinalRejectionError
+from ...._errors import OutOfRange
 
 
 def _format(value: int | float) -> str:
@@ -91,7 +91,7 @@ def check_in_range(
     message = range_message(value, lo, hi, subject=subject, api=api)
     if error is not None:
         raise error(message)
-    raise FinalRejectionError(message, span=span, hint=hint)
+    raise OutOfRange(message, span=span, hint=hint)
 
 
 def check_fits_dtype(
@@ -111,7 +111,7 @@ def check_fits_dtype(
     result, hint, limits = fits(value, dtype)
     if result:
         return
-    raise FinalRejectionError(
+    raise OutOfRange(
         range_message(value, limits.lo, limits.hi, subject=subject, api=api, dtype=dtype),
         span=span,
         hint=hint,
@@ -126,7 +126,7 @@ def check_ir_int(value: int, *, subject: str = "integer constant", span: ir.Span
     point: the parser evaluates intermediates in Python, and only materialising a constant is bounded.
     """
     if not fits_storage_int(value):
-        raise FinalRejectionError(
+        raise OutOfRange(
             range_message(value, INT64_MIN, UINT64_MAX, subject=subject),
             span=span,
             hint="a constant must be representable as either int64 or uint64",

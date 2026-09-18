@@ -13,13 +13,17 @@
 
 import ast
 
-import pypto_pro.language as pl
-from pypto_pro.language.parser.diagnostics import (
-    ParserSyntaxError,
-    ParserTypeError,
-    UndefinedVariableError,
-    UnsupportedFeatureError,
+from pypto_pro._errors import (
+    CommonExternal,
+    InvalidArgument,
+    InvalidOperation,
+    InvalidShape,
+    InvalidVal,
+    NameNotFound,
+    NotSupported,
+    PyptoProError,
 )
+import pypto_pro.language as pl
 import pytest
 
 from pypto.pypto_impl import ir
@@ -178,7 +182,7 @@ def _make_tile_launch_kernel(shape, dtype, target_memory, layout):
 
 
 def test_vector_function_empty_call_is_rejected():
-    with pytest.raises(TypeError, match=r"@pl\.vector_function\(\) is not supported"):
+    with pytest.raises(NotSupported, match=r"@pl\.vector_function\(\) is not supported"):
         pl.vector_function()
 
 
@@ -192,7 +196,7 @@ def test_launchable_simt_vector_function_requires_indexed_invocation():
         with pl.section_vector():
             entry()
 
-    with pytest.raises(ParserSyntaxError, match="cannot be called directly outside a SIMT function"):
+    with pytest.raises(InvalidOperation, match="cannot be called directly outside a SIMT function"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -206,7 +210,7 @@ def test_simt_helper_can_only_be_called_from_simt_function():
         with pl.section_vector():
             helper()
 
-    with pytest.raises(ParserSyntaxError, match="cannot be called directly outside a SIMT function"):
+    with pytest.raises(InvalidOperation, match="cannot be called directly outside a SIMT function"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -225,7 +229,7 @@ def test_simt_index_rejects_more_than_three_dimensions():
         debug_info=ir.IRDebugInfo(),
         closure_vars={"pl": pl, "entry": entry},
     )
-    with pytest.raises(ParserSyntaxError, match="one to three dimensions"):
+    with pytest.raises(InvalidShape, match="one to three dimensions"):
         parser.parse_function(ast.parse(source).body[0])
 
 
@@ -239,7 +243,7 @@ def test_simt_indexed_invocation_rejects_keyword_arguments():
         with pl.section_vector():
             entry[32](value=value)
 
-    with pytest.raises(ParserSyntaxError, match="accepts positional arguments only"):
+    with pytest.raises(InvalidArgument, match="accepts positional arguments only"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -305,7 +309,7 @@ def test_simt_function_rejects_nested_launch():
         with pl.section_vector():
             nested_launch[32]()
 
-    with pytest.raises(ParserSyntaxError, match="Nested SIMT vector-function invocation"):
+    with pytest.raises(NotSupported, match="Nested SIMT vector-function invocation"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -392,7 +396,7 @@ def test_simt_dim3_context_rejects_plain_tuple_merge():
         with pl.section_vector():
             merge_context[32](dst)
 
-    with pytest.raises(UndefinedVariableError, match="Use of potentially undefined variable"):
+    with pytest.raises(NameNotFound, match="Use of potentially undefined variable"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -408,7 +412,7 @@ def test_simt_context_rejects_unknown_named_tuple_field():
         with pl.section_vector():
             invalid_context_field[32](dst)
 
-    with pytest.raises(UnsupportedFeatureError, match="Standalone attribute access not supported"):
+    with pytest.raises(InvalidShape, match="Standalone attribute access not supported"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -436,7 +440,7 @@ def test_simt_context_rejects_unknown_named_tuple_field():
 def test_simt_launch_requires_compatible_tile(shape, dtype, target_memory, layout, message):
     kernel = _make_tile_launch_kernel(shape, dtype, target_memory, layout)
 
-    with pytest.raises(ParserTypeError, match=message):
+    with pytest.raises(PyptoProError, match=message):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -458,7 +462,7 @@ def test_simt_function_rejects_block_operation_before_default_dispatch():
         with pl.section_vector():
             block_add[32](dst, lhs, rhs)
 
-    with pytest.raises(UnsupportedFeatureError, match="not supported inside a SIMT function"):
+    with pytest.raises(NotSupported, match="not supported inside a SIMT function"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -474,7 +478,7 @@ def test_simt_function_rejects_tile_subview():
         with pl.section_vector():
             tile_subview[32](src)
 
-    with pytest.raises(UnsupportedFeatureError, match="Tile subview"):
+    with pytest.raises(InvalidOperation, match="Tile subview"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -494,7 +498,7 @@ def test_simt_tile_parameter_exposes_runtime_valid_shape():
 
 
 def test_thread_idx_rejected_outside_simt_function():
-    with pytest.raises(ParserSyntaxError, match="only be used inside"):
+    with pytest.raises(InvalidOperation, match="only be used inside"):
 
         @pl.jit(auto_mutex=False)
         def bad_thread_idx(_jit_entry: pl.DT_INT64):
@@ -512,7 +516,7 @@ def test_simt_launch_rejects_threads_above_bound():
         with pl.section_vector():
             _tile_add[288](dst, src, n, delta)
 
-    with pytest.raises(ParserTypeError, match="exceed"):
+    with pytest.raises(CommonExternal, match="exceed"):
         too_many_threads.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -525,7 +529,7 @@ def test_simt_launch_rejects_runtime_tuple_component():
         with pl.section_vector():
             _tile_add[8, 4, n](dst, src, n, delta)
 
-    with pytest.raises(ParserTypeError, match=r"compile-time integers.*\[1, 2048\]"):
+    with pytest.raises(CommonExternal, match=r"compile-time integers.*\[1, 2048\]"):
         runtime_dimension.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -545,7 +549,7 @@ def test_simt_launch_rejects_thread_count_above_hardware_limit():
         with pl.section_vector():
             wide_function[2048, 2]()
 
-    with pytest.raises(ParserTypeError, match="must not exceed 2048"):
+    with pytest.raises(CommonExternal, match="must not exceed 2048"):
         too_wide.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -614,7 +618,7 @@ def test_simt_callee_rejects_return_incompatible_with_annotation():
         with pl.section_vector():
             entry[32](value)
 
-    with pytest.raises(ParserTypeError, match="Return 'bad_return' annotated as"):
+    with pytest.raises(InvalidVal, match="Return 'bad_return' annotated as"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -628,7 +632,7 @@ def test_simt_function_rejects_argument_incompatible_with_annotation():
         with pl.section_vector():
             entry[32](value)
 
-    with pytest.raises(ParserTypeError, match="SIMT parameter 'value' annotated as"):
+    with pytest.raises(InvalidVal, match="SIMT parameter 'value' annotated as"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -643,7 +647,7 @@ def test_cached_simt_function_rejects_incompatible_argument_type():
             entry[32](integer)
             entry[32](floating)
 
-    with pytest.raises(ParserTypeError, match="SIMT parameter 'value_0' annotated as"):
+    with pytest.raises(InvalidVal, match="SIMT parameter 'value_0' annotated as"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -657,7 +661,7 @@ def test_simt_entry_rejects_value_return():
         with pl.section_vector():
             entry[32](value)
 
-    with pytest.raises(ParserSyntaxError, match="only supports bare return or return None"):
+    with pytest.raises(NotSupported, match="only supports bare return or return None"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -689,7 +693,7 @@ def test_simt_callee_cannot_be_launched_directly():
         with pl.section_vector():
             _callee_add[32](value, value)
 
-    with pytest.raises(ParserTypeError, match="not a launchable"):
+    with pytest.raises(InvalidVal, match="not a launchable"):
         invalid_launch.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
@@ -707,7 +711,7 @@ def test_recursive_simt_callee_is_rejected_during_instantiation():
         with pl.section_vector():
             entry[32](value)
 
-    with pytest.raises(ParserSyntaxError, match="Recursive helper"):
+    with pytest.raises(NotSupported, match="Recursive helper"):
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 

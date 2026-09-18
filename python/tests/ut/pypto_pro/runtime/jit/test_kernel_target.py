@@ -13,6 +13,7 @@ import importlib
 from pathlib import Path
 from unittest.mock import MagicMock
 
+from pypto_pro._errors import InvalidVal, RuntimeFailure
 from pypto_pro.runtime.compile_config import JitCompileConfig, KernelTarget, get_jit_compile_config
 import pytest
 
@@ -70,19 +71,19 @@ def test_architecture_specific_mixed_geometry_is_independent(future_config):
 
 def test_missing_architecture_is_not_assumed_to_use_a5_geometry():
     """Adding an extensible target table must not advertise unsupported A6 compilation."""
-    with pytest.raises(RuntimeError, match="kernel_targets.*a6"):
+    with pytest.raises(InvalidVal, match="kernel_targets.*a6"):
         get_jit_compile_config().resolve_kernel_target("a6", has_cube=True, has_vector=True)
 
 
 def test_missing_kernel_mode_is_not_replaced_with_mixed_target(future_config):
     """A missing single-engine compiler target cannot safely use a mixed binary's launch ABI."""
-    with pytest.raises(RuntimeError, match=r"kernel_targets.future.cube"):
+    with pytest.raises(InvalidVal, match=r"kernel_targets.future.cube"):
         future_config.resolve_kernel_target("future", has_cube=True, has_vector=False)
 
 
 def test_empty_kernel_is_rejected_before_selecting_flags():
     """The old default arch variant could hide a kernel with neither execution engine."""
-    with pytest.raises(ValueError, match="add a target section"):
+    with pytest.raises(RuntimeFailure, match="add a target section"):
         get_jit_compile_config().resolve_kernel_target("a5", has_cube=False, has_vector=False)
 
 

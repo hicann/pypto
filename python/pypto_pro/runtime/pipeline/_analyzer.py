@@ -14,6 +14,7 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass, field
 
+from ..._errors import InvalidArgument, InvalidOperation, InvalidType, NotSupported, span_of
 from ._astutil import (
     PL_IS_VALID_FIELD,
     PL_STRUCT_ARG,
@@ -170,14 +171,16 @@ def analyze_pipeline(
     # L3/L5: pipeline enabled but no usable stages found.
     if not pipeline_loops:
         if not stage_func_names:
-            raise ValueError(
+            raise InvalidOperation(
                 "pipeline: no @pl.pipeline.stage functions found, but pipeline=... was "
-                "set on the kernel. Decorate your stage functions with @pl.pipeline.stage."
+                "set on the kernel. Decorate your stage functions with @pl.pipeline.stage.",
+                span=span_of(func_def),
             )
-        raise ValueError(
+        raise InvalidOperation(
             "pipeline: no pipeline loop found — @pl.pipeline.stage functions exist but "
             "none are called inside a for-loop's `with pl.section_*()` blocks. The "
-            "pipeline loop must contain stage calls wrapped in section blocks."
+            "pipeline loop must contain stage calls wrapped in section blocks.",
+            span=span_of(func_def),
         )
 
     # Which section each name belongs to, so its ctx fill lands in the same one. A kernel
@@ -373,9 +376,10 @@ def _record_pipeline_loop_info(stmt: ast.For, info: PipelineInfo) -> None:
     """Record loop metadata after the pipeline loop has been found."""
     # L7: loop variable must be a simple Name
     if not isinstance(stmt.target, ast.Name):
-        raise ValueError(
+        raise InvalidType(
             "pipeline: the pipeline loop variable must be a simple name "
-            "(e.g. `for ki in pl.range(...)`); tuple unpacking is not supported."
+            "(e.g. `for ki in pl.range(...)`); tuple unpacking is not supported.",
+            span=span_of(stmt.target),
         )
     info.pipeline_loop = stmt
     info.pipeline_loop_var = stmt.target.id
@@ -391,10 +395,11 @@ def _record_pipeline_loop_info(stmt: ast.For, info: PipelineInfo) -> None:
         if len(args) >= 3:
             info.pipeline_loop_step = args[2]
     if info.pipeline_loop_end is None:
-        raise ValueError(
+        raise NotSupported(
             f"pipeline: pipeline loop `for {info.pipeline_loop_var} in ...` must iterate "
             f"over pl.range(start, end[, step]) so the end bound can be extracted "
-            f"for the is_valid guard; got an unsupported loop iterable."
+            f"for the is_valid guard; got an unsupported loop iterable.",
+            span=span_of(stmt.iter),
         )
 
 
@@ -451,19 +456,21 @@ def _stage_call_in_section(body: list[ast.stmt], stage_func_names: set):
     if not calls:
         return None, None
     if len(calls) > 1:
-        raise ValueError(
+        raise InvalidArgument(
             f"pipeline: section block contains multiple stage calls ('{calls[0][0]}' and "
             f"'{calls[1][0]}'). Each `with pl.section_*()` block must contain exactly one "
-            f"stage call."
+            f"stage call.",
+            span=span_of(calls[1][1]),
         )
     if len(body) > 1:
         extra = next(s for s in body if not (isinstance(s, ast.Expr) and s.value is calls[0][1]))
-        raise ValueError(
+        raise InvalidOperation(
             f"pipeline: the section holding stage '{calls[0][0]}' also contains the statement "
             f"at line {extra.lineno} (`{ast.unparse(extra).splitlines()[0]}`). A section that "
             f"holds a stage may hold nothing else.\n"
             f"Move it to the start or the end of the pipeline loop body, where it runs once "
-            f"per beat, or into the stage function itself."
+            f"per beat, or into the stage function itself.",
+            span=span_of(extra),
         )
     return calls[0]
 
@@ -512,11 +519,12 @@ def _check_unsupported_section(stmt: ast.With, stage_func_names: set):
             and isinstance(body_stmt.value, ast.Call)
             and call_name(body_stmt.value) in stage_func_names
         ):
-            raise ValueError(
+            raise InvalidOperation(
                 f"pipeline: stage call "
                 f"'{call_name(body_stmt.value)}' is inside an "
                 f"unsupported `with` block. Stage calls must be wrapped in "
-                f"`with pl.section_cube()` or `with pl.section_vector()`."
+                f"`with pl.section_cube()` or `with pl.section_vector()`.",
+                span=span_of(stmt),
             )
 
 
@@ -650,15 +658,16 @@ def _collect_outer_slots(info: PipelineInfo) -> dict:
         if not isinstance(target, ast.Name):
             continue
         if target.id in picked:
-            raise ValueError(
+            raise InvalidOperation(
                 f"pipeline: '{target.id}' is assigned a slot more than once outside the "
                 f"pipeline loop (line {node.lineno}). Its stages would each have to know "
                 f"which of those picks is the current one, and the index ctx carries is one "
-                f"per name. Use a separate variable per pick."
+                f"per name. Use a separate variable per pick.",
+                span=span_of(node),
             )
         group, kind = pick
         if group not in slot_counts:
-            raise ValueError(
+            raise InvalidOperation(
                 f"pipeline: slot '{target.id}' is taken from tile group '{group}' outside "
                 f"the pipeline loop, but '{group}'s mutex_ids could not be resolved "
                 f"statically, so the number of slots is unknown. The transform needs it to "
@@ -705,12 +714,13 @@ def _reject_buried_slot_pick(node: ast.Assign, groups: set) -> None:
     for sub_node in ast.walk(node.value):
         buried = slot_accessor(sub_node)
         if buried is not None and buried[0] in groups:
-            raise ValueError(
+            raise InvalidOperation(
                 f"pipeline: line {node.lineno} takes a slot from tile group "
                 f"'{buried[0]}' inside a larger expression "
                 f"(`{ast.unparse(node.value)}`). A slot picked outside the pipeline loop "
                 f"must be assigned on its own (`slot = {buried[0]}.next()`), because the "
-                f"transform replaces that statement with an explicit index for ctx to carry."
+                f"transform replaces that statement with an explicit index for ctx to carry.",
+                span=span_of(node),
             )
 
 
@@ -752,19 +762,21 @@ def _collect_struct_args(func_def: ast.FunctionDef, info: PipelineInfo) -> dict:
         if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)):
             continue
         if call.func.attr == "struct_array":
-            raise ValueError(
+            raise NotSupported(
                 f"pipeline: '{target.id}' comes from pl.struct_array() and is passed to a "
                 f"stage. Use pl.struct() instead: the pipeline already gives every stage "
                 f"the values from its own iteration, so a hand-rolled array of contexts is "
-                f"both unnecessary and impossible to keep in step with it."
+                f"both unnecessary and impossible to keep in step with it.",
+                span=span_of(call),
             )
         if call.func.attr != "struct":
             continue
         if target.id in loop_bound:
-            raise ValueError(
+            raise InvalidOperation(
                 f"pipeline: struct '{target.id}' is bound inside the pipeline loop. Declare "
                 f"it outside the loop and update its fields inside — the pipeline snapshots "
-                f"the fields each iteration."
+                f"the fields each iteration.",
+                span=span_of(call),
             )
         result[target.id] = [kw.arg for kw in call.keywords if kw.arg]
     return result

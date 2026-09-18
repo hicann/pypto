@@ -12,16 +12,27 @@
 """Parser diagnostics and error reporting."""
 
 __all__ = [
-    # Exceptions
-    "ParserError",
-    "ParserSyntaxError",
-    "ParserTypeError",
-    "FinalRejectionError",
-    "UndefinedVariableError",
-    "SSAViolationError",
-    "UnsupportedFeatureError",
-    "InvalidOperationError",
-    "ScopeIsolationError",
+    # Exceptions: one class per error code, re-exported from the package root
+    # so parser modules keep their existing ``from .diagnostics import ...`` form.
+    "PyptoProError",
+    "InvalidType",
+    "InvalidVal",
+    "RuntimeFailure",
+    "NameNotFound",
+    "NotSupported",
+    "KeyNotFound",
+    "InvalidOperation",
+    "OutOfRange",
+    "BadFd",
+    "DynamicShapeUnsupported",
+    "InvalidShape",
+    "InvalidTile",
+    "InvalidFormat",
+    "InvalidArgument",
+    "CommonExternal",
+    "CommonInner",
+    "PassInner",
+    "CodegenInner",
     # Error codes
     "ErrorCode",
     "get_error_code",
@@ -35,17 +46,27 @@ __all__ = [
 ]
 
 
-from ._error_codes import ErrorCode, get_error_code
-from ._exceptions import (
-    FinalRejectionError,
-    InvalidOperationError,
-    ParserError,
-    ParserSyntaxError,
-    ParserTypeError,
-    ScopeIsolationError,
-    SSAViolationError,
-    UndefinedVariableError,
-    UnsupportedFeatureError,
+from ...._error_codes import ErrorCode, get_error_code
+from ...._errors import (
+    BadFd,
+    CodegenInner,
+    CommonExternal,
+    CommonInner,
+    DynamicShapeUnsupported,
+    InvalidArgument,
+    InvalidFormat,
+    InvalidOperation,
+    InvalidShape,
+    InvalidTile,
+    InvalidType,
+    InvalidVal,
+    KeyNotFound,
+    NameNotFound,
+    NotSupported,
+    OutOfRange,
+    PassInner,
+    PyptoProError,
+    RuntimeFailure,
 )
 from ._range import (
     check_const_expr_fits_dtype,

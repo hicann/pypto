@@ -44,8 +44,7 @@ file(GLOB _Interface_Srcs
 )
 # pypto_pro 含嵌套子目录, 需 GLOB_RECURSE 递归收集
 file(GLOB_RECURSE _PyptoPro_Srcs
-        pypto_pro/backend/*.cpp
-        pypto_pro/codegen/*.cpp
+        pypto_pro/*.cpp
 )
 list(APPEND _Interface_Srcs ${_PyptoPro_Srcs})
 #PTO_Fwk_Debug_Source_List(NAME "_Interface_Srcs" LIST ${_Interface_Srcs} DETAIL OFF)

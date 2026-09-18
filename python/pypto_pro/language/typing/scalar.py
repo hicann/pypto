@@ -16,6 +16,8 @@ __all__ = ["Scalar"]
 
 from pypto.pypto_impl.ir import Expr
 
+from ..._errors import CommonInner, InvalidArgument
+
 
 class Scalar:
     """Scalar type for PyPTO Language DSL.
@@ -60,7 +62,7 @@ class Scalar:
             self.expr = expr
             self.dtype = None
         else:
-            raise ValueError("expr is required")
+            raise InvalidArgument("expr is required")
 
     def __repr__(self) -> str:
         """Return string representation."""
@@ -76,5 +78,5 @@ class Scalar:
             RuntimeError: If no expression is wrapped
         """
         if self.expr is None:
-            raise RuntimeError("No expression to unwrap")
+            raise CommonInner("No expression to unwrap")
         return self.expr

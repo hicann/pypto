@@ -27,33 +27,39 @@
 #include "ir/op_registry.h"
 #include "ir/type.h"
 #include "ir/type_inference.h"
+#include "pypto_pro/error.h"
 
 namespace pypto {
 namespace ir {
+using npu::tile_fwk::ExternalError;
 
 TypePtr DeduceTensorOpElementwiseBinaryType(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
 {
-    CHECK(args.size() == 0x2) << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 0x2)
+        << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
 
     // Try TensorType first
     auto tensor_type1 = As<TensorType>(args[0]->GetType());
     auto tensor_type2 = As<TensorType>(args[1]->GetType());
 
-    CHECK(tensor_type1) << "The operator " << op_name << " requires first argument to be a TensorType, but got "
-                        << args[0]->GetType()->TypeName();
-    CHECK(tensor_type2) << "The operator " << op_name << " requires second argument to be a TensorType, but got "
-                        << args[1]->GetType()->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, tensor_type1)
+        << "The operator " << op_name << " requires first argument to be a TensorType, but got "
+        << args[0]->GetType()->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, tensor_type2)
+        << "The operator " << op_name << " requires second argument to be a TensorType, but got "
+        << args[1]->GetType()->TypeName();
 
     auto result_dtype = PromoteDataTypes(tensor_type1->dtype_, tensor_type2->dtype_);
-    CHECK(result_dtype) << "The operator " << op_name << " requires compatible data types, but got "
-                        << args[0]->GetType()->TypeName() << " and " << args[1]->GetType()->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, result_dtype)
+        << "The operator " << op_name << " requires compatible data types, but got " << args[0]->GetType()->TypeName()
+        << " and " << args[1]->GetType()->TypeName();
 
     auto broadcast_result = BroadcastShapes(tensor_type1->shape_, tensor_type2->shape_);
-    CHECK(broadcast_result.success) << "The operator " << op_name << " requires compatible shapes, but got "
-                                    << FormatShape(tensor_type1->shape_) << " and "
-                                    << FormatShape(tensor_type2->shape_);
+    PRO_IR_CHECK(ExternalError::INVALID_SHAPE, broadcast_result.success)
+        << "The operator " << op_name << " requires compatible shapes, but got " << FormatShape(tensor_type1->shape_)
+        << " and " << FormatShape(tensor_type2->shape_);
 
     return std::make_shared<TensorType>(broadcast_result.shape, *result_dtype);
 }
@@ -62,20 +68,24 @@ TypePtr DeduceTensorOpElementwiseScalarType(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
 {
-    CHECK(args.size() == 0x2) << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 0x2)
+        << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
 
     auto tensor_type1 = As<TensorType>(args[0]->GetType());
     auto scalar_type2 = As<ScalarType>(args[1]->GetType());
 
-    CHECK(tensor_type1) << "The operator " << op_name << " requires first argument to be a TensorType, but got "
-                        << args[0]->GetType()->TypeName();
-    CHECK(scalar_type2) << "The operator " << op_name << " requires second argument to be a ScalarType, but got "
-                        << args[1]->GetType()->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, tensor_type1)
+        << "The operator " << op_name << " requires first argument to be a TensorType, but got "
+        << args[0]->GetType()->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, scalar_type2)
+        << "The operator " << op_name << " requires second argument to be a ScalarType, but got "
+        << args[1]->GetType()->TypeName();
 
     // TensorType + ScalarType - result is TensorType with same shape as first argument
     auto result_dtype = PromoteDataTypes(tensor_type1->dtype_, scalar_type2->dtype_);
-    CHECK(result_dtype) << "The operator " << op_name << " requires compatible data types, but got "
-                        << args[0]->GetType()->TypeName() << " and " << args[1]->GetType()->TypeName();
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, result_dtype)
+        << "The operator " << op_name << " requires compatible data types, but got " << args[0]->GetType()->TypeName()
+        << " and " << args[1]->GetType()->TypeName();
 
     return std::make_shared<TensorType>(tensor_type1->shape_, *result_dtype);
 }

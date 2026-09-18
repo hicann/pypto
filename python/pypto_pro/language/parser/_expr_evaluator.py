@@ -20,7 +20,8 @@ from typing import TYPE_CHECKING, Any, Callable
 from pypto.pypto_impl import ir
 from pypto.pypto_impl.ir import DataType
 
-from .diagnostics import ParserTypeError, make_const_int
+from ..._errors import InvalidOperation, InvalidType, InvalidVal, PyptoProError, RuntimeFailure, message_of
+from .diagnostics import make_const_int
 
 if TYPE_CHECKING:
     from ._span_tracker import SpanTracker
@@ -89,7 +90,8 @@ class ExprEvaluator:
             The Python value resulting from evaluation
 
         Raises:
-            ParserTypeError: If expression cannot be evaluated
+            InvalidVal: If the expression cannot be resolved
+            RuntimeFailure: If evaluating the expression fails
         """
         span = self._get_span(node)
         expr_str = ast.unparse(node)
@@ -104,15 +106,17 @@ class ExprEvaluator:
             env = {**self.closure_vars, **self._local_const_values(node)}
             return eval(code, {"__builtins__": _SAFE_BUILTINS}, env)
         except NameError as e:
-            raise ParserTypeError(
+            raise InvalidVal(
                 f"Cannot resolve expression '{expr_str}': {e}",
                 span=span,
                 hint=self._unresolved_hint(node),
+                parser_retry=True,
             ) from e
         except Exception as e:
-            raise ParserTypeError(
-                f"Failed to evaluate expression '{expr_str}': {e}",
+            raise RuntimeFailure(
+                f"Failed to evaluate expression '{expr_str}': {message_of(e)}",
                 span=span,
+                parser_retry=True,
             ) from e
 
     def try_eval_expr(self, node: ast.expr) -> tuple[bool, Any]:
@@ -129,7 +133,7 @@ class ExprEvaluator:
         """
         try:
             return (True, self.eval_expr(node))
-        except ParserTypeError:
+        except PyptoProError:
             return (False, None)
 
     def _local_const_values(self, node: ast.expr) -> dict[str, Any]:
@@ -152,9 +156,10 @@ class ExprEvaluator:
                 continue
             kind, value = binding
             if kind == "runtime":
-                raise ParserTypeError(
+                raise InvalidOperation(
                     f"'{sub.id}' is a runtime value, not known while parsing",
                     span=self._get_span(node),
+                    parser_retry=True,
                 )
             found, value = (True, value) if kind == "parse_time" else self.ir_to_python_value(value)
             if found:
@@ -258,10 +263,11 @@ class ExprEvaluator:
                 return inner
         if isinstance(value, (list, tuple)):
             return ir.MakeTuple([self.python_value_to_ir(elt, span) for elt in value], span)
-        raise ParserTypeError(
+        raise InvalidType(
             f"Unsupported closure variable type: {type(value).__name__}",
             span=span,
             hint="Closure variables must be int, float, bool, list, tuple, or IR expressions",
+            parser_retry=True,
         )
 
     def _get_span(self, node: ast.AST) -> "ir.Span":
