@@ -1045,6 +1045,65 @@ TEST_F(GraphPartitionTest, TestScopeCase6)
     }
 }
 
+// 用例：view 类op的isCube按操作数内存域设置（修复验证）
+// 场景：CV-mix 混合SuperNode（scope强制合并）内同时存在：
+//   - UB域 RESHAPE（vec侧 view）：修复前跟随节点结论标isCube=true，
+//     导致其作为producer的ALLOC池归属锚点断裂，消费者被分裂到AIV0/AIV1
+//   - L1/L0B/L0A域 VIEW（cube侧 view）：应保持isCube=true
+TEST_F(GraphPartitionTest, TestViewIsCubeByOperandMemDomain)
+{
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+
+    ComputationalGraphBuilder G;
+
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, {128, 128}, {"in_ddr", "out_ddr"}), true);
+    std::vector<MemoryType> memUB(2, MemoryType::MEM_UB);
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, {128, 128}, memUB, {"ub_a", "ub_b"}), true);
+    std::vector<MemoryType> memL1(1, MemoryType::MEM_L1);
+    EXPECT_EQ(G.AddTensors(DataType::DT_BF16, {128, 128}, memL1, {"v_l1_0"}), true);
+    std::vector<MemoryType> memL0B(1, MemoryType::MEM_L0B);
+    EXPECT_EQ(G.AddTensors(DataType::DT_BF16, {128, 128}, memL0B, {"v_l0b_0"}), true);
+    std::vector<MemoryType> memL0A(1, MemoryType::MEM_L0A);
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, {128, 128}, memL0A, {"a_l0a_0"}), true);
+    std::vector<MemoryType> memL0C(1, MemoryType::MEM_L0C);
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, {128, 128}, memL0C, {"mmul_c"}), true);
+
+    EXPECT_EQ(G.AddOp(Opcode::OP_COPY_IN, {"in_ddr"}, {"ub_a"}, "COPY_IN_ub", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_RESHAPE, {"ub_a"}, {"ub_b"}, "RESHAPE_ub", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_COPY_OUT, {"ub_b"}, {"out_ddr"}, "COPY_OUT_ub", true), true);
+
+    EXPECT_EQ(G.AddOp(Opcode::OP_VIEW, {"in_ddr"}, {"v_l1_0"}, "VIEW_ddr_l1", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_VIEW, {"v_l1_0"}, {"v_l0b_0"}, "VIEW_l1_l0b", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_VIEW, {"in_ddr"}, {"a_l0a_0"}, "VIEW_ddr_l0a", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_A_MUL_B, {"a_l0a_0", "v_l0b_0"}, {"mmul_c"}, "A_MUL_B_0", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_ASSEMBLE, {"mmul_c"}, {"out_ddr"}, "ASSEMBLE_out", true), true);
+
+    Operation::ScopeInfo scope1;
+    scope1.scopeId = 1;
+    std::vector<std::string> allOps = {"COPY_IN_ub",  "RESHAPE_ub",   "COPY_OUT_ub", "VIEW_ddr_l1",
+                                       "VIEW_l1_l0b", "VIEW_ddr_l0a", "A_MUL_B_0",   "ASSEMBLE_out"};
+    SetScopeInfoForOps(G, allOps, scope1);
+
+    Function* function = G.GetFunction();
+    IsoPartitioner partitioner;
+    EXPECT_EQ(partitioner.SetParameter(100000, 20, 0), SUCCESS);
+    EXPECT_EQ(partitioner.PartitionGraph(*function), SUCCESS);
+
+    auto checkIsCube = [&G](const std::string& name, bool expected) {
+        const auto& op = G.GetOp(name);
+        EXPECT_EQ(op->HasAttr(OpAttributeKey::isCube), true) << name << " missing isCube attr";
+        EXPECT_EQ(op->GetBoolAttribute(OpAttributeKey::isCube), expected) << name << " wrong isCube value";
+    };
+    checkIsCube("RESHAPE_ub", false);
+    checkIsCube("VIEW_ddr_l1", true);
+    checkIsCube("VIEW_l1_l0b", true);
+    checkIsCube("VIEW_ddr_l0a", true);
+    checkIsCube("A_MUL_B_0", true);
+    checkIsCube("COPY_IN_ub", false);
+    checkIsCube("COPY_OUT_ub", false);
+    checkIsCube("ASSEMBLE_out", true);
+}
+
 void GetViewAssembleOnlySuperNodeGraph(ComputationalGraphBuilder& G)
 {
     std::vector<int64_t> tileShape{16, 16};

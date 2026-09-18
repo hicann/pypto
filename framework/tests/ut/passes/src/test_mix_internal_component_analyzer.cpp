@@ -395,6 +395,51 @@ TEST_F(MixInternalComponentsAnalyzerTest, TestException_InconsistentIsCube)
     ASSERT_EQ(status, FAILED) << "Should return FAILED when isCube inconsistent";
 }
 
+// 用例8b：组件内无isCube属性的op按opcode核类型推导（不再误判为vec导致inconsistent）
+// 场景：同ID=0组件内，op1带isCube=true(AIC)，op2为L1_TO_L0B(分图后merge pass新建的
+//       搬运op, AIC by opcode, 无isCube属性——模拟真实场景)
+TEST_F(MixInternalComponentsAnalyzerTest, TestMissingIsCubeDerivedByOpcode)
+{
+    auto t1 = test_utils::CreateBasicTensor();
+    auto t2 = test_utils::CreateBasicTensor();
+    auto t3 = test_utils::CreateBasicTensor();
+    auto t4 = test_utils::CreateBasicTensor();
+    test_utils::CreateCubeOp(*mixFuncPtr_, t1, t2, MS_NUM0);
+
+    auto& l1ToL0bOp = IRBuilder().CreateTensorOpStmt(*mixFuncPtr_, Opcode::OP_L1_TO_L0B, {t2}, {t3});
+    l1ToL0bOp.UpdateInternalSubgraphID(MS_NUM0);
+    // 不设置isCube属性——模拟分图后merge pass新建的op
+
+    test_utils::CreateCubeOp(*mixFuncPtr_, t3, t4, MS_NUM0);
+
+    std::vector<InternalComponentInfo> components;
+    Status status = analyzer_->AnalyzeInternalComponents(*mixFuncPtr_, components);
+
+    // 修复后: 无属性op按opcode推导(AIC) → 与isCube=true一致 → 不再误报inconsistent
+    ASSERT_EQ(status, SUCCESS) << "Missing isCube should be derived by opcode, not treated as vec";
+    ASSERT_EQ(components.size(), 1u);
+    EXPECT_EQ(components[0].componentType, ComponentType::C_SCOPE);
+}
+
+// 用例8c：无isCube属性的向量型op(ADD, AIV by opcode)与isCube=true同组件 → 仍不一致
+// (推导逻辑必须保持严格: 缺失属性按opcode推导而非武断放过)
+TEST_F(MixInternalComponentsAnalyzerTest, TestMissingIsCubeDerivedByOpcode_VecStillInconsistent)
+{
+    auto t1 = test_utils::CreateBasicTensor();
+    auto t2 = test_utils::CreateBasicTensor();
+    auto t3 = test_utils::CreateBasicTensor();
+    test_utils::CreateCubeOp(*mixFuncPtr_, t1, t2, MS_NUM0);
+
+    auto& addOp = IRBuilder().CreateTensorOpStmt(*mixFuncPtr_, Opcode::OP_ADD, {t2}, {t3});
+    addOp.UpdateInternalSubgraphID(MS_NUM0);
+    // 不设置isCube属性——ADD注册为AIV by opcode → 推导false → 与true不一致
+
+    std::vector<InternalComponentInfo> components;
+    Status status = analyzer_->AnalyzeInternalComponents(*mixFuncPtr_, components);
+
+    ASSERT_EQ(status, FAILED) << "Vec-type op without isCube should still trip inconsistency";
+}
+
 // 用例9：V_SCOPE内AIVCore属性不一致（校验失败，返回FAILED）
 TEST_F(MixInternalComponentsAnalyzerTest, TestException_InconsistentAIVCore)
 {

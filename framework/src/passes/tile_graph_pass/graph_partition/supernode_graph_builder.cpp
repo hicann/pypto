@@ -508,6 +508,87 @@ Status NodeGraphInfo::BuildInOutGraph(const std::shared_ptr<OperationGraphInfo> 
     return SUCCESS;
 }
 
+// view 类透明 op(VIEW/RESHAPE/ASSEMBLE等)不发射指令, 其 isCube 应按操作数所在内存域
+// 设置: L1/L0A/L0B/L0C(含经 DDR 落盘的 assemble 链)为 cube 侧, UB 为 vec 侧, 无明确
+// 内存信息时跟随节点级结论。若按节点级结论统一设置, 会使 UB 域 view 误入 AIC 任务,
+// 其 AIVCore 被抹成 UNSPECIFIED, 断裂其作为 producer 的 ALLOC 池归属锚点, 使共享该
+// tensor 的消费者被调度器分裂到不同 AIV; 若一律不设置, L1/L0 域 view 会退化为 AIV
+// 默认推导, 使 L1_ALLOC 找不到同核邻居(锚点匹配失败)。
+enum class ViewMemDomain { CUBE, VEC, UNKNOWN };
+
+// view 类透明 op 集合: 对共享存储做格式重述, 不发射指令。
+inline bool IsViewLikeOp(const Operation* op)
+{
+    Opcode opcode = op->GetOpcode();
+    return opcode == Opcode::OP_VIEW || opcode == Opcode::OP_VIEW_TYPE || opcode == Opcode::OP_ASSEMBLE ||
+           opcode == Opcode::OP_NOP || opcode == Opcode::OP_HUB || opcode == Opcode::OP_RESHAPE;
+}
+
+// 单个 tensor 的内存域: GetMemoryTypeToBe(AssignMemoryType 之后的最终域)优先, GetMemoryTypeOriginal 兜底
+inline ViewMemDomain GetTensorMemDomain(const LogicalTensor& tensor)
+{
+    auto isCubeSideMem = [](MemoryType type) {
+        return type == MemoryType::MEM_L1 || type == MemoryType::MEM_L0A || type == MemoryType::MEM_L0B ||
+               type == MemoryType::MEM_L0C;
+    };
+    MemoryType toBe = tensor.GetMemoryTypeToBe();
+    if (toBe == MemoryType::MEM_UB) {
+        return ViewMemDomain::VEC;
+    }
+    if (isCubeSideMem(toBe)) {
+        return ViewMemDomain::CUBE;
+    }
+    MemoryType original = tensor.GetMemoryTypeOriginal();
+    if (original == MemoryType::MEM_UB) {
+        return ViewMemDomain::VEC;
+    }
+    if (isCubeSideMem(original)) {
+        return ViewMemDomain::CUBE;
+    }
+    return ViewMemDomain::UNKNOWN;
+}
+
+// view 类 op 的整体内存域: 收集全部操作数(输入+输出)的域证据后一致判定。
+// 出现 cube 与 vec 混合证据(跨域 view)时返回 UNKNOWN 并告警——正常管线中跨域
+// 访问应已被 AssignMemoryType 插入搬运拆解, 残留即异常, 回退节点级结论兜底,
+// 避免任一侧证据被提前返回所掩盖。
+inline ViewMemDomain GetViewLikeOpMemDomain(const Operation* op)
+{
+    bool hasCube = false;
+    bool hasVec = false;
+    auto collect = [&hasCube, &hasVec](const LogicalTensor& tensor) {
+        switch (GetTensorMemDomain(tensor)) {
+            case ViewMemDomain::CUBE:
+                hasCube = true;
+                break;
+            case ViewMemDomain::VEC:
+                hasVec = true;
+                break;
+            default:
+                break;
+        }
+    };
+    for (const auto& tensor : op->GetIOperands()) {
+        collect(*tensor);
+    }
+    for (const auto& tensor : op->GetOOperands()) {
+        collect(*tensor);
+    }
+    if (hasCube && hasVec) {
+        APASS_LOG_WARN_F(Elements::Operation,
+                         "View-like op %s[%d] has mixed cube/vec memory operands, fallback to node conclusion.",
+                         op->GetOpcodeStr().c_str(), op->GetOpMagic());
+        return ViewMemDomain::UNKNOWN;
+    }
+    if (hasCube) {
+        return ViewMemDomain::CUBE;
+    }
+    if (hasVec) {
+        return ViewMemDomain::VEC;
+    }
+    return ViewMemDomain::UNKNOWN;
+}
+
 void NodeGraphInfo::SetNodeCoreTypeAndMergeable(const std::shared_ptr<OperationGraphInfo> operationGraphInfo,
                                                 bool markIsCube)
 {
@@ -525,15 +606,30 @@ void NodeGraphInfo::SetNodeCoreTypeAndMergeable(const std::shared_ptr<OperationG
         if (!markIsCube) {
             continue;
         }
-        bool isCube = false;
+        bool nodeIsCube = false;
         for (auto j : node2Op_[i]) {
             if (operationGraphInfo->opCoreType_[j] == OpCoreType::AIC) {
-                isCube = true;
+                nodeIsCube = true;
                 break;
             }
         }
         for (auto j : node2Op_[i]) {
-            operationGraphInfo->opList_[j]->SetAttribute(OpAttributeKey::isCube, isCube);
+            auto coreType = operationGraphInfo->opCoreType_[j];
+            Operation* op = operationGraphInfo->opList_[j];
+            // ANY 型 view 类透明 op 按操作数内存域设置(见 GetViewLikeOpMemDomain 注释),
+            // 其余 ANY 型 op 跟随节点级结论。
+            bool isCube;
+            if (coreType == OpCoreType::AIC) {
+                isCube = true;
+            } else if (coreType == OpCoreType::AIV) {
+                isCube = false;
+            } else if (IsViewLikeOp(op)) {
+                ViewMemDomain domain = GetViewLikeOpMemDomain(op);
+                isCube = (domain == ViewMemDomain::CUBE) ? true : (domain == ViewMemDomain::VEC) ? false : nodeIsCube;
+            } else {
+                isCube = nodeIsCube;
+            }
+            op->SetAttribute(OpAttributeKey::isCube, isCube);
         }
     }
 }
