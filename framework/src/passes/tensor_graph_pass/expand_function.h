@@ -43,6 +43,9 @@ private:
     Status ClearIOOperand(const std::vector<OperationPtr>& tensorOperations) const;
     void RefreshViewAssembleTileShapes(const std::vector<OperationPtr>& tensorOperations,
                                        const std::unordered_set<Operation*>& skipExpandOps) const;
+    std::unordered_set<Operation*> CollectSkipExpandOps(Function& function,
+                                                        const std::vector<OperationPtr>& tensorOperations) const;
+    static bool ShouldKeepOpUnexpanded(const OperationPtr& op, const std::unordered_set<Operation*>& skipExpandOps);
     void ProcessForNotExpandOp(Function& function, Operation& op) const;
     void DoHealthCheckBefore(Function& function, const std::string& folderPath) override;
 

@@ -54,6 +54,69 @@ Status CheckIOOperands(const Operation& op, LogicalTensorPtr& in, LogicalTensorP
     }
     return SUCCESS;
 }
+
+Status TryCollectRedundantReshape(Function& function, Operation& op, std::unordered_set<Operation*>& redundantResapes)
+{
+    if (op.GetOpcode() != Opcode::OP_RESHAPE) {
+        return SUCCESS;
+    }
+    LogicalTensorPtr in;
+    LogicalTensorPtr out;
+    if (CheckIOOperands(op, in, out) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "Op [%d] has invalid input or output operands; Check if op has valid input and output. %s",
+                          op.GetOpMagic(), GetFormatBacktrace(op).c_str());
+        return FAILED;
+    }
+    if (CommonUtils::ContainsNegativeOne(in->GetShape()) || CommonUtils::ContainsNegativeOne(out->GetShape())) {
+        return SUCCESS;
+    }
+    auto consumers = out->GetConsumers();
+    bool allConsumersIsReshape = true;
+    for (auto& consumerOp : consumers) {
+        if (consumerOp == nullptr) {
+            APASS_LOG_ERROR_F(Elements::Operation, "Consumer of op [%d] is null; Check if consumer is valid. %s",
+                              op.GetOpMagic(), GetFormatBacktrace(op).c_str());
+            return FAILED;
+        }
+        if (in->shape != out->shape && consumerOp->GetOpcode() != Opcode::OP_RESHAPE) {
+            allConsumersIsReshape = false;
+        }
+    }
+    bool removeReshape = allConsumersIsReshape && !function.IsFromOutCast(out);
+    if (removeReshape) {
+        PassTokenUtils::MoveTokenDependencyBeforeRemoveOp(function, op);
+    }
+    for (auto& consumerOp : consumers) {
+        if (in->shape != out->shape && consumerOp->GetOpcode() != Opcode::OP_RESHAPE) {
+            continue;
+        }
+        consumerOp->ReplaceInput(in, out);
+    }
+    if (removeReshape) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "All consumers of op [%d] are reshape and the shapes are not -1.",
+                          op.GetOpMagic());
+        redundantResapes.insert(&op);
+    }
+    return SUCCESS;
+}
+
+Status DeleteRedundantReshapeOps(Function& function, const std::unordered_set<Operation*>& redundantResapes)
+{
+    if (!redundantResapes.empty()) {
+        for (auto& ele : redundantResapes) {
+            APASS_LOG_DEBUG_F(Elements::Operation, "Delete OP_RESHAPE, magic [%d].", ele->GetOpMagic());
+            if (ele->IsDeleted()) {
+                APASS_LOG_ERROR_F(Elements::Operation, "Op [%d] is already marked as deleted. %s", ele->GetOpMagic(),
+                                  GetFormatBacktrace(*ele).c_str());
+                return FAILED;
+            }
+            ele->SetAsDeleted();
+        }
+        function.EraseOperations(false);
+    }
+    return SUCCESS;
+}
 } // namespace
 
 Status RemoveRedundantReshape::RunOnFunction(Function& function)
@@ -78,63 +141,12 @@ Status RemoveRedundantReshape::RunOnFunction(Function& function)
 Status RemoveRedundantReshape::RemoveReshape(Function& function) const
 {
     std::unordered_set<Operation*> redundantResapes;
-    LogicalTensorPtr in;
-    LogicalTensorPtr out;
     for (auto& op : function.Operations()) {
-        if (op.GetOpcode() != Opcode::OP_RESHAPE) {
-            continue;
-        }
-        if (CheckIOOperands(op, in, out) != SUCCESS) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation,
-                "Op [%d] has invalid input or output operands; Check if op has valid input and output. %s",
-                op.GetOpMagic(), GetFormatBacktrace(op).c_str());
+        if (TryCollectRedundantReshape(function, op, redundantResapes) != SUCCESS) {
             return FAILED;
         }
-        if (CommonUtils::ContainsNegativeOne(in->GetShape()) || CommonUtils::ContainsNegativeOne(out->GetShape())) {
-            continue;
-        }
-        auto consumers = out->GetConsumers();
-        bool allConsumersIsReshape = true;
-        for (auto& consumerOp : consumers) {
-            if (consumerOp == nullptr) {
-                APASS_LOG_ERROR_F(Elements::Operation, "Consumer of op [%d] is null; Check if consumer is valid. %s",
-                                  op.GetOpMagic(), GetFormatBacktrace(op).c_str());
-                return FAILED;
-            }
-            if (in->shape != out->shape && consumerOp->GetOpcode() != Opcode::OP_RESHAPE) {
-                allConsumersIsReshape = false;
-            }
-        }
-        bool removeReshape = allConsumersIsReshape && !function.IsFromOutCast(out);
-        if (removeReshape) {
-            PassTokenUtils::MoveTokenDependencyBeforeRemoveOp(function, op);
-        }
-        for (auto& consumerOp : consumers) {
-            if (in->shape != out->shape && consumerOp->GetOpcode() != Opcode::OP_RESHAPE) {
-                continue;
-            }
-            consumerOp->ReplaceInput(in, out);
-        }
-        if (removeReshape) {
-            APASS_LOG_DEBUG_F(Elements::Operation, "All consumers of op [%d] are reshape and the shapes are not -1.",
-                              op.GetOpMagic());
-            redundantResapes.insert(&op);
-        }
     }
-    if (!redundantResapes.empty()) {
-        for (auto& ele : redundantResapes) {
-            APASS_LOG_DEBUG_F(Elements::Operation, "Delete OP_RESHAPE, magic [%d].", ele->GetOpMagic());
-            if (ele->IsDeleted()) {
-                APASS_LOG_ERROR_F(Elements::Operation, "Op [%d] is already marked as deleted. %s", ele->GetOpMagic(),
-                                  GetFormatBacktrace(*ele).c_str());
-                return FAILED;
-            }
-            ele->SetAsDeleted();
-        }
-        function.EraseOperations(false);
-    }
-    return SUCCESS;
+    return DeleteRedundantReshapeOps(function, redundantResapes);
 }
 
 Status RemoveRedundantReshape::DefaultEnabledPreCheck(Function& function)
