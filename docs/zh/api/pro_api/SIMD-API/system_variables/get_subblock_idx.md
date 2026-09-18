@@ -35,19 +35,6 @@ pypto_pro.language.get_subblock_idx() -> int
 返回DT_INT64类型的subblock索引，可用于Kernel内的整数计算和数据索引。取值范围为
 [0, get_subblock_num())；在AIC与AIV比例为1:2的混合Kernel中，同一逻辑Block对应的两个AIV分别返回0和1。
 
-## 典型使用场景
-
-pypto_pro.language.get_subblock_idx()主要用于以下两种模式：
-
-1. **insert + Cube模式**：每个子核计算部分结果，用pypto_pro.language.insert拼入L1 Buffer中的NZTile，Cube侧读取合并后的完整数据。详见[insert](../memory_data_movement/insert.md)文档示例。
-
-2. **条件执行**：根据子核号决定是否执行某段代码，例如只让sub-core 0执行指定操作。
-
-> [!CAUTION]注意
-> 纯Vector Kernel中的两个子核共享MTE搬运管道，不能由每个子核分别使用pypto_pro.language.store向GM的不同区域写入数据。按子核切分数据搬运时，使用insert + Cube模式。
-
-get_block_idx()用于Vector段的全局AIV数据分片，get_subblock_idx()用于区分同一逻辑Block内的不同AIV。
-
 ## 调用示例
 
 ### 纯Vector Kernel中读取子核号

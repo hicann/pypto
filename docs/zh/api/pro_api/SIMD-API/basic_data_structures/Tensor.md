@@ -40,11 +40,13 @@ pypto_pro.language.Tensor.__init__(
 |---|---|---|
 | shape | 输入 | 各维大小列表。<br>- 表现形式如下：<br>&nbsp;&nbsp;- 固定维度：正整数表示，如[64, 128]，调用时对应维度须等于该整数。<br>&nbsp;&nbsp;- 动态维度：pypto_pro.language.DYNAMIC表示，调用时读取实际维度，维度值不参与编译缓存键，不同取值复用同一编译变体。<br>&nbsp;&nbsp;- 编译期特化维度：pypto_pro.language.STATIC表示，调用时读取实际维度，维度值固化到当前编译变体，取值变化时生成新的编译变体。<br>&nbsp;&nbsp;- 末尾`...`：展开剩余维度，各维均按pypto_pro.language.STATIC处理。<br>&nbsp;&nbsp;- 不同策略可混用，如[64, pl.DYNAMIC, pl.STATIC]。<br>- Kernel内可通过`tensor.shape[i]`读取对应维度，返回值类型为DT_INT64。 |
 | dtype | 输入 | 元素数据类型，[pypto_pro.language.DataType](DataType.md)枚举值。 |
+| direction | 输入 | 仅用于类型标注。可选，Tensor参数在Profiling元数据中的方向，取值为pypto_pro.language.Input或pypto_pro.language.Output，省略时默认为pypto_pro.language.Input。方括号形式中可放在dtype后的任一可选位置；调用式中仅支持作为第三个位置参数传入。 |
 | layout | 输入 | 可选，内存布局，[pypto_pro.language.TensorLayout](TensorLayout.md)枚举值。<br>- 支持ND和NZ，不指定时按ND处理。<br>- 配置为NZ时只声明布局，不执行ND→NZ转换。 |
 | memref | 输入 | 可选，显式内存引用，pypto_pro.language.MemRef实例。三参数形式中第三项为MemRef实例时按memref解析；需要同时指定layout和memref时使用四参数形式。 |
 
 ## 约束说明
 
+- 每个Tensor类型标注最多声明一个direction，取值只能为`pl.Input`或`pl.Output`。
 - 搬运约束详见[pypto_pro.language.load](../memory_data_movement/load.md)和[pypto_pro.language.store](../memory_data_movement/store.md)。
 
 ## 返回值说明
@@ -73,6 +75,26 @@ scale_a: pl.Tensor[[64, 2, 2], pl.DT_FP8E8M0]
 # 动态维度声明（仅用于类型标注）
 dynamic_tensor: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32]
 ```
+
+### Tensor参数方向标注
+
+Kernel形参的Tensor类型标注支持使用`pypto_pro.language.Input`和`pypto_pro.language.Output`两个枚举值声明该参数在Profiling元数据中的方向：
+
+```python
+import pypto_pro.language as pl
+
+# 方括号形式。
+input_tensor: pl.Tensor[[64, 128], pl.DT_FP16, pl.Input]
+output_tensor: pl.Tensor[[64, 128], pl.DT_FP16, pl.Output]
+
+# direction可与layout组合，推荐放在标注末尾。
+nz_output: pl.Tensor[[64, 128], pl.DT_FP16, pl.NZ, pl.Output]
+
+# 调用式的第三个参数为direction。
+call_style_output: pl.Tensor([64, 128], pl.DT_FP16, pl.Output)
+```
+
+`pl.Input`表示输入，`pl.Output`表示输出。direction可省略，未标注时默认使用`pl.Input`。该标注用于设置Profiling结果中的Tensor输入、输出信息，不改变Kernel的读写语义。
 
 ### Tensor别名
 

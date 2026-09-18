@@ -32,7 +32,7 @@ pypto_pro.language.get_block_num() -> int
 
 ## 返回值说明
 
-返回DT_INT64类型的实际逻辑Block数，可用于Kernel内的整数计算和数据索引。
+返回DT_INT64类型的标量值，表示限核后实际启动的Block数，可用于Kernel内的整数计算和数据索引。
 JIT每次启动通过C++启动器查询实际Stream的有效资源限制，按Kernel执行域和配对比例限制Host请求的`block_dim`。
 因此返回值可能小于Host请求值；数据切分应使用本接口返回值作为循环步长，避免遗漏任务。
 
