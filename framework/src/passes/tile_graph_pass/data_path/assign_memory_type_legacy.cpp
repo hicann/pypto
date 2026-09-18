@@ -355,8 +355,9 @@ Status AssignMemoryType::InferReshapeL0C2UBAndUB2L1PatternLiteNPU(Operation& op)
     // ub2l1 pattern:
     // 1. vector op -> view(s)/assemble(s) -> reshape op -> view(s) from l1 -> view(s) from l0a -> cube
     // 2. vector op -> assemble(s) -> view(s) -> reshape op -> view(s) from l1 -> view(s) from l0a -> cube
+    // MXMatmul场景K轴非64对齐不支持UB2L1直连（MX补齐仅由DDR路径支持），回退DDR
     if (IsReshapeVecToCubeUB2L1Pattern(op) && MemoryPathUtils::FitsTensorInUb(output) &&
-        inserter.IsUb2L1SupportedDtype(output)) {
+        inserter.IsUb2L1SupportedDtype(output) && !MemoryPathUtils::HasMxPaddingModeConsumer(output)) {
         for (auto& producer : producers) {
             auto& producerInput = producer->iOperand.front();
             auto& producerOutput = producer->oOperand.front();
@@ -557,6 +558,15 @@ bool AssignMemoryType::TryHandleSpecialDirectMemoryPath(Operation& operation, Me
         return true;
     }
     if (isA5 && from == MemoryType::MEM_UB && to == MemoryType::MEM_L1) {
+        if (MemoryPathUtils::IsMxPaddingMode(operation)) {
+            directPath = false;
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                              "Disable direct %s -> %s path for %s[%d] because MX matmul with K not 64-aligned "
+                              "does not support UB2L1.",
+                              BriefMemoryTypeToString(from).c_str(), BriefMemoryTypeToString(to).c_str(),
+                              operation.GetOpcodeStr().c_str(), operation.GetOpMagic());
+            return true;
+        }
         directPath = inserter.FitUB2L1(operation.iOperand.front());
         return true;
     }
@@ -1676,6 +1686,10 @@ bool AssignMemoryType::ShouldSkipUB2L1SmallToLarge(const LogicalTensorPtr& iOper
             if (consumerOp->GetAttr<int64_t>("op_attr_copy_in_mode", copyInModeValue) && copyInModeValue == 0) {
                 return true;
             }
+            // MXMatmul场景K轴非64对齐不支持UB2L1直连（MX补齐仅由DDR路径支持），回退DDR
+            if (MemoryPathUtils::IsMxPaddingMode(*consumerOp)) {
+                return true;
+            }
         }
     }
     return !MemoryPathUtils::CheckInnerAxisC0Size(iOperand, oOperand);
@@ -1731,6 +1745,15 @@ void AssignMemoryType::ProcessUB2L1LargeToSmall(Function& function)
             APASS_LOG_DEBUG_F(Elements::Operation,
                               "UB2L1 large to small skip: bias/scale tensor (copy_in_mode=%ld), View Op[%d]",
                               static_cast<long>(copyInModeValue), op.GetOpMagic());
+            inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
+            continue;
+        }
+        // MXMatmul场景K轴非64对齐不支持UB2L1直连（MX补齐仅由DDR路径支持），回退DDR
+        if (MemoryPathUtils::IsMxPaddingMode(op)) {
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                              "UB2L1 large to small skip: MX matmul K not 64-aligned (copy_in_l1_padding_mode), "
+                              "View Op[%d]",
+                              op.GetOpMagic());
             inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
             continue;
         }
