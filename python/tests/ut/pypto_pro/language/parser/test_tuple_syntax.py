@@ -329,7 +329,7 @@ def test_tile_factories_accept_propagated_constant_kwargs():
         else:
             valid_shape = [64, 64]
         tile_type = pl.TileType(shape=shape, valid_shape=valid_shape, dtype=dtype)
-        tile = pl.make_tile(tile_type, addr=0, size=8192)  # noqa: F841
+        tile = pl.make_tile(tile_type, addr=0)  # noqa: F841
         group = pl.make_tile_group(type=tile_type, addrs=0x2000, mutex_ids=[0, 1])  # noqa: F841
 
     func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)

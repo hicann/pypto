@@ -33,12 +33,12 @@ def _compile_to_cce(kernel) -> str:
 @pl.jit
 def _sel_kernel(x: pl.Tensor[[64, 128], pl.DT_FP16]):
     tt = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    lhs = pl.make_tile(tt, addr=0x0000, size=16384)
-    rhs = pl.make_tile(tt, addr=0x4000, size=16384)
-    tmp = pl.make_tile(tt, addr=0x8000, size=16384)
-    out = pl.make_tile(tt, addr=0xC000, size=16384)
+    lhs = pl.make_tile(tt, addr=0x0000)
+    rhs = pl.make_tile(tt, addr=0x4000)
+    tmp = pl.make_tile(tt, addr=0x8000)
+    out = pl.make_tile(tt, addr=0xC000)
     mask_t = pl.TileType(shape=[64, 32], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec)
-    mask = pl.make_tile(mask_t, addr=0x10000, size=4096)
+    mask = pl.make_tile(mask_t, addr=0x10000)
     pl.load(lhs, x, [0, 0])
     pl.select(out, mask, lhs, rhs, tmp)
 
@@ -46,11 +46,11 @@ def _sel_kernel(x: pl.Tensor[[64, 128], pl.DT_FP16]):
 @pl.jit
 def _sels_kernel(x: pl.Tensor[[64, 128], pl.DT_FP16]):
     tt = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    src = pl.make_tile(tt, addr=0x0000, size=16384)
-    tmp = pl.make_tile(tt, addr=0x4000, size=16384)
-    out = pl.make_tile(tt, addr=0x8000, size=16384)
+    src = pl.make_tile(tt, addr=0x0000)
+    tmp = pl.make_tile(tt, addr=0x4000)
+    out = pl.make_tile(tt, addr=0x8000)
     mask_t = pl.TileType(shape=[64, 32], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec)
-    mask = pl.make_tile(mask_t, addr=0xC000, size=4096)
+    mask = pl.make_tile(mask_t, addr=0xC000)
     pl.load(src, x, [0, 0])
     pl.select(out, mask, src, 0.0, tmp)
 

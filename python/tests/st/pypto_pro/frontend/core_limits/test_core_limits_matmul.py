@@ -62,7 +62,6 @@ def limited_matmul(
         pl.TileType(
             shape=[CV_VEC_M, CV_TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
         addr=0x0000,
-        size=CV_VEC_M * CV_TILE_N * 4,
     )
 
     with pl.section_cube():

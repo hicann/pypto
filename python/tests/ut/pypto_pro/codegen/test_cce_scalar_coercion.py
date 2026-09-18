@@ -43,8 +43,8 @@ def _adds_kernel(dtype, scalar, elem_bytes):
     @pl.jit()
     def kernel(a: pl.Tensor[[_N, _M], dtype], out: pl.Tensor[[_N, _M], dtype]):
         tf = pl.TileType(shape=[_N, _M], dtype=dtype, target_memory=pl.MemorySpace.Vec)
-        in_a = pl.make_tile(tf, addr=0, size=size)
-        t_out = pl.make_tile(tf, addr=size, size=size)
+        in_a = pl.make_tile(tf, addr=0)
+        t_out = pl.make_tile(tf, addr=size)
         with pl.section_vector():
             pl.load(in_a, a, [0, 0])
             vf_body(in_a, t_out)

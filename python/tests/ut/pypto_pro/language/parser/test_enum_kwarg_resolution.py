@@ -207,7 +207,7 @@ def test_target_memory_enum_literal():
     @pl.jit(auto_mutex=False)
     def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-        a = pl.make_tile(tile_type, addr=0, size=16384)  # noqa: F841
+        a = pl.make_tile(tile_type, addr=0)  # noqa: F841
         result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=pl.DT_FP32)
         _test_result = result
 
@@ -288,12 +288,12 @@ def test_cmp_mode_is_not_an_enum_kwarg():
 
 @pytest.mark.soc("950")
 def test_fractal_int_kwarg_still_allowed():
-    """A numeric kwarg (fractal) still accepts a raw int (not an enum kwarg)."""
+    """TileType's numeric fractal kwarg accepts a raw int, not an enum value."""
 
     @pl.jit(auto_mutex=False)
     def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
-        tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Acc)
-        a = pl.make_tile(tile_type, addr=0, size=16384, fractal=1024)  # noqa: F841
+        tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Acc, fractal=1024)
+        a = pl.make_tile(tile_type, addr=0)  # noqa: F841
         result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=pl.DT_FP32)
         _test_result = result
 
@@ -320,8 +320,8 @@ def _parse_vf_mask_kernel(pattern):
     @pl.jit()
     def kernel(a: pl.Tensor[[_VF_N, _VF_M], pl.DT_FP32], out: pl.Tensor[[_VF_N, _VF_M], pl.DT_FP32]):
         tf = pl.TileType(shape=[_VF_N, _VF_M], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        in_a = pl.make_tile(tf, addr=0, size=_VF_TILE_SIZE)
-        t_out = pl.make_tile(tf, addr=_VF_TILE_SIZE, size=_VF_TILE_SIZE)
+        in_a = pl.make_tile(tf, addr=0)
+        t_out = pl.make_tile(tf, addr=_VF_TILE_SIZE)
         with pl.section_vector():
             pl.load(in_a, a, [0, 0])
             vf_body(in_a, t_out)
@@ -355,7 +355,7 @@ def test_vf_register_writes_are_not_loop_carried_ssa_values():
     @pl.jit()
     def kernel(a: pl.Tensor[[_VF_N, _VF_M], pl.DT_FP32]):
         tf = pl.TileType(shape=[_VF_N, _VF_M], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        in_a = pl.make_tile(tf, addr=0, size=_VF_TILE_SIZE)
+        in_a = pl.make_tile(tf, addr=0)
         with pl.section_vector():
             pl.load(in_a, a, [0, 0])
             vf_body(in_a)
@@ -665,7 +665,7 @@ def test_non_dtype_enum_ternary():
     def func(x: pl.Tensor[[64, 128], pl.DT_FP16]):
         space = pl.MemorySpace.Vec if use_vec else pl.MemorySpace.Acc
         tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=space)
-        a = pl.make_tile(tile_type, addr=0, size=16384)  # noqa: F841
+        a = pl.make_tile(tile_type, addr=0)  # noqa: F841
         result: pl.Tensor[[64, 128], pl.DT_FP32] = pl.tensor.cast(x, target_type=pl.DT_FP32)
         _test_result = result
 
@@ -715,7 +715,7 @@ def test_enum_ternary_runtime_condition_is_rejected():
                 target_memory=pl.MemorySpace.Vec,
                 pad=pl.TilePad.zero if x.shape[0] else 0,
             )
-            tile = pl.make_tile(tile_type, addr=0, size=16384)  # noqa: F841
+            tile = pl.make_tile(tile_type, addr=0)  # noqa: F841
 
         func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 

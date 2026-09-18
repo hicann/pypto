@@ -65,8 +65,8 @@ def simt_ub_tile_access(
         target_memory=pl.MemorySpace.Vec,
         valid_shape=[-1, -1],
     )
-    src = pl.make_tile(tile_type, addr=0x0000, size=TILE_BYTES)
-    dst = pl.make_tile(tile_type, addr=0x0800, size=TILE_BYTES)
+    src = pl.make_tile(tile_type, addr=0x0000)
+    dst = pl.make_tile(tile_type, addr=0x0800)
     with pl.section_vector():
         pl.set_validshape(src, [valid_rows, valid_cols])
         pl.set_validshape(dst, [valid_rows, valid_cols])

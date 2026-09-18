@@ -43,7 +43,7 @@ def write_multicore_result(dst):
 @pl.jit()
 def simt_multicore(out: pl.Tensor[[GRID_BLOCKS, THREADS], pl.DT_UINT32]):
     tile_type = pl.TileType(shape=[1, THREADS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
-    dst = pl.make_tile(tile_type, addr=0x0000, size=TILE_BYTES)
+    dst = pl.make_tile(tile_type, addr=0x0000)
     with pl.section_vector():
         core_id = pl.get_block_idx()
         write_multicore_result[THREADS](dst)

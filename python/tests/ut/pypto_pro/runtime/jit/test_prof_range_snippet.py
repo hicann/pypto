@@ -53,7 +53,7 @@ def test_annotation_marker_sets_direction():
         out: pl.Tensor[[64, 64], pl.DT_FP32, pl.Output],
     ):
         tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        ta = pl.make_tile(tt, addr=0x0000, size=16384)
+        ta = pl.make_tile(tt, addr=0x0000)
         with pl.section_vector():
             pl.load(ta, a, [0, 0])
             pl.store(out, ta, [0, 0])
@@ -72,7 +72,7 @@ def test_no_marker_defaults_to_in():
         out: pl.Tensor[[64, 64], pl.DT_FP32],
     ):
         tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        ta = pl.make_tile(tt, addr=0x0000, size=16384)
+        ta = pl.make_tile(tt, addr=0x0000)
         with pl.section_vector():
             pl.store(out, ta, [0, 0])
 
@@ -136,8 +136,8 @@ def test_caller_embeds_range_around_launch_static():
         out: pl.Tensor[[64, 64], pl.DT_FP32, pl.Output],
     ):
         tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        ta = pl.make_tile(tt, addr=0x0000, size=16384)
-        tc = pl.make_tile(tt, addr=0x8000, size=16384)
+        ta = pl.make_tile(tt, addr=0x0000)
+        tc = pl.make_tile(tt, addr=0x8000)
         with pl.section_vector():
             pl.load(ta, a, [0, 0])
             pl.add(tc, ta, ta)
@@ -174,8 +174,8 @@ def test_guard_wraps_struct_definitions():
         out: pl.Tensor[[64, 64], pl.DT_FP32, pl.Output],
     ):
         tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        ta = pl.make_tile(tt, addr=0x0000, size=16384)
-        tc = pl.make_tile(tt, addr=0x8000, size=16384)
+        ta = pl.make_tile(tt, addr=0x0000)
+        tc = pl.make_tile(tt, addr=0x8000)
         with pl.section_vector():
             pl.load(ta, a, [0, 0])
             pl.add(tc, ta, ta)

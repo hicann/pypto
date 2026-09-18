@@ -71,27 +71,22 @@ def simt_atomic_min_ub_all_dtypes(
     int32_tile = pl.make_tile(
         pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec),
         addr=0x0000,
-        size=ELEMENTS * 4,
     )
     uint32_tile = pl.make_tile(
         pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
         addr=0x0400,
-        size=ELEMENTS * 4,
     )
     fp16_tile = pl.make_tile(
         pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
         addr=0x0800,
-        size=ELEMENTS * 2,
     )
     bf16_tile = pl.make_tile(
         pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec),
         addr=0x0C00,
-        size=ELEMENTS * 2,
     )
     fp32_tile = pl.make_tile(
         pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
         addr=0x1000,
-        size=ELEMENTS * 4,
     )
     with pl.section_vector():
         pl.load(int32_tile, int32_state, [0, 0])

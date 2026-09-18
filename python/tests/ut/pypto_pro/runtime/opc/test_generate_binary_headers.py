@@ -49,9 +49,9 @@ def header_generation_kernel(
     tile_type = pl.TileType(
         shape=[16, 16], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec
     )
-    tile_x = pl.make_tile(tile_type, addr=0x0000, size=512)
-    tile_y = pl.make_tile(tile_type, addr=0x0200, size=512)
-    tile_z = pl.make_tile(tile_type, addr=0x0400, size=512)
+    tile_x = pl.make_tile(tile_type, addr=0x0000)
+    tile_y = pl.make_tile(tile_type, addr=0x0200)
+    tile_z = pl.make_tile(tile_type, addr=0x0400)
 
     with pl.section_vector():
         for row in pl.range(0, tiling.rows, 16):

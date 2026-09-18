@@ -73,27 +73,22 @@ def k_nn(a: pl.Tensor[[M, K], pl.DT_FP16], b: pl.Tensor[[K, N], pl.DT_FP16], out
         a_mat = pl.make_tile(
             pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
             addr=MA0,
-            size=SZ,
         )
         b_mat = pl.make_tile(
             pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
             addr=MA1,
-            size=SZ,
         )
         a_left = pl.make_tile(
             pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
             addr=0x0,
-            size=SZ,
         )
         b_right = pl.make_tile(
             pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
             addr=0x0,
-            size=SZ,
         )
         c = pl.make_tile(
             pl.TileType(shape=[M, N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024),
             addr=0x0,
-            size=SZ,
         )
         pl.load(a_mat, a, [0, 0])
         pl.load(b_mat, b, [0, 0])
@@ -115,27 +110,22 @@ def k_nt(a: pl.Tensor[[M, K], pl.DT_FP16], b_t: pl.Tensor[[N, K], pl.DT_FP16], o
         a_mat = pl.make_tile(
             pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
             addr=MA0,
-            size=SZ,
         )
         b_mat = pl.make_tile(
             pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
             addr=MA1,
-            size=SZ,
         )  # transpose-load -> ZN [K,N]
         a_left = pl.make_tile(
             pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
             addr=0x0,
-            size=SZ,
         )
         b_right = pl.make_tile(
             pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
             addr=0x0,
-            size=SZ,
         )
         c = pl.make_tile(
             pl.TileType(shape=[M, N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024),
             addr=0x0,
-            size=SZ,
         )
         pl.load(a_mat, a, [0, 0])
         pl.load(b_mat, b_t, [0, 0], order=[1, 0])
@@ -157,27 +147,22 @@ def k_tn(a_t: pl.Tensor[[K, M], pl.DT_FP16], b: pl.Tensor[[K, N], pl.DT_FP16], o
         a_mat = pl.make_tile(
             pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
             addr=MA0,
-            size=SZ,
         )  # transpose-load -> ZN [M,K]
         b_mat = pl.make_tile(
             pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
             addr=MA1,
-            size=SZ,
         )
         a_left = pl.make_tile(
             pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
             addr=0x0,
-            size=SZ,
         )
         b_right = pl.make_tile(
             pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
             addr=0x0,
-            size=SZ,
         )
         c = pl.make_tile(
             pl.TileType(shape=[M, N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024),
             addr=0x0,
-            size=SZ,
         )
         pl.load(a_mat, a_t, [0, 0], order=[1, 0])
         pl.load(b_mat, b, [0, 0])
@@ -199,27 +184,22 @@ def k_tt(a_t: pl.Tensor[[K, M], pl.DT_FP16], b_t: pl.Tensor[[N, K], pl.DT_FP16],
         a_mat = pl.make_tile(
             pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
             addr=MA0,
-            size=SZ,
         )  # transpose-load -> ZN [M,K]
         b_mat = pl.make_tile(
             pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
             addr=MA1,
-            size=SZ,
         )  # transpose-load -> ZN [K,N]
         a_left = pl.make_tile(
             pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
             addr=0x0,
-            size=SZ,
         )
         b_right = pl.make_tile(
             pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
             addr=0x0,
-            size=SZ,
         )
         c = pl.make_tile(
             pl.TileType(shape=[M, N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024),
             addr=0x0,
-            size=SZ,
         )
         pl.load(a_mat, a_t, [0, 0], order=[1, 0])
         pl.load(b_mat, b_t, [0, 0], order=[1, 0])

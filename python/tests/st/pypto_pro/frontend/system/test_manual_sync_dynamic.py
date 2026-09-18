@@ -135,9 +135,9 @@ def t01_vector_event_mutex_reuse(
         target_memory=pl.MemorySpace.Vec,
         valid_shape=[-1, -1],
     )
-    tile_x = pl.make_tile(tile_type, addr=0x0000, size=256)
-    tile_y = pl.make_tile(tile_type, addr=0x0100, size=256)
-    tile_out = pl.make_tile(tile_type, addr=0x0200, size=256)
+    tile_x = pl.make_tile(tile_type, addr=0x0000)
+    tile_y = pl.make_tile(tile_type, addr=0x0100)
+    tile_out = pl.make_tile(tile_type, addr=0x0200)
     with pl.section_vector():
         m = x.shape[0]
         n = x.shape[1]
@@ -210,9 +210,9 @@ def t02_runtime_if_else_event(
         target_memory=pl.MemorySpace.Vec,
         valid_shape=[-1, -1],
     )
-    tile_x = pl.make_tile(tile_type, addr=0x0000, size=256)
-    tile_y = pl.make_tile(tile_type, addr=0x0100, size=256)
-    tile_out = pl.make_tile(tile_type, addr=0x0200, size=256)
+    tile_x = pl.make_tile(tile_type, addr=0x0000)
+    tile_y = pl.make_tile(tile_type, addr=0x0100)
+    tile_out = pl.make_tile(tile_type, addr=0x0200)
     with pl.section_vector():
         m = x.shape[0]
         n = x.shape[1]
@@ -264,8 +264,8 @@ def t03a_mte2_skipped_consumer(
         target_memory=pl.MemorySpace.Vec,
         valid_shape=[-1, -1],
     )
-    tile_x = pl.make_tile(tile_type, addr=0x0000, size=256)
-    tile_out = pl.make_tile(tile_type, addr=0x0100, size=256)
+    tile_x = pl.make_tile(tile_type, addr=0x0000)
+    tile_out = pl.make_tile(tile_type, addr=0x0100)
     with pl.section_vector():
         n = x.shape[1]
         for row in pl.range(0, x.shape[0]):
@@ -308,9 +308,9 @@ def t03b_mte3_overlapping_stores(
         target_memory=pl.MemorySpace.Vec,
         valid_shape=[-1, -1],
     )
-    tile_first = pl.make_tile(tile_type, addr=0x0000, size=256)
-    tile_second = pl.make_tile(tile_type, addr=0x0100, size=256)
-    tile_last = pl.make_tile(tile_type, addr=0x0200, size=256)
+    tile_first = pl.make_tile(tile_type, addr=0x0000)
+    tile_second = pl.make_tile(tile_type, addr=0x0100)
+    tile_last = pl.make_tile(tile_type, addr=0x0200)
     with pl.section_vector():
         n = x.shape[1]
         for col in pl.range(0, n, TILE_N):
@@ -353,9 +353,9 @@ def t03c_barrier_control_flow(
         target_memory=pl.MemorySpace.Vec,
         valid_shape=[-1, -1],
     )
-    tile_x = pl.make_tile(tile_type, addr=0x0000, size=256)
-    tile_y = pl.make_tile(tile_type, addr=0x0100, size=256)
-    tile_out = pl.make_tile(tile_type, addr=0x0200, size=256)
+    tile_x = pl.make_tile(tile_type, addr=0x0000)
+    tile_y = pl.make_tile(tile_type, addr=0x0100)
+    tile_out = pl.make_tile(tile_type, addr=0x0200)
     with pl.section_vector():
         n = x.shape[1]
         for row in pl.range(0, x.shape[0]):
@@ -403,14 +403,14 @@ def t03d_mte1_skipped_consumer(
     wide_left_type = pl.TileType(shape=[64, 256], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left)
     right_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right)
     acc_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc)
-    a_l1_wide_0 = pl.make_tile(wide_mat_type, addr=0x0000, size=32768)
-    a_l1_wide_1 = pl.make_tile(wide_mat_type, addr=0x8000, size=32768)
-    a_l1_last = pl.make_tile(mat_type, addr=0x10000, size=8192)
-    b_l1 = pl.make_tile(mat_type, addr=0x12000, size=8192)
-    wide_a_l0 = pl.make_tile(wide_left_type, addr=0x0000, size=32768)
-    a_l0 = pl.make_tile(left_type, addr=0x0000, size=8192)
-    b_l0 = pl.make_tile(right_type, addr=0x0000, size=8192)
-    acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+    a_l1_wide_0 = pl.make_tile(wide_mat_type, addr=0x0000)
+    a_l1_wide_1 = pl.make_tile(wide_mat_type, addr=0x8000)
+    a_l1_last = pl.make_tile(mat_type, addr=0x10000)
+    b_l1 = pl.make_tile(mat_type, addr=0x12000)
+    wide_a_l0 = pl.make_tile(wide_left_type, addr=0x0000)
+    a_l0 = pl.make_tile(left_type, addr=0x0000)
+    b_l0 = pl.make_tile(right_type, addr=0x0000)
+    acc = pl.make_tile(acc_type, addr=0x0000)
     with pl.section_cube():
         last_row = a.shape[0] - 64
         pl.load(a_l1_wide_0, a, [0, 0])
@@ -447,13 +447,13 @@ def t03e_m_overlapping_matmuls(
     left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left)
     right_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right)
     acc_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc)
-    a_l1_0 = pl.make_tile(mat_type, addr=0x0000, size=8192)
-    a_l1_1 = pl.make_tile(mat_type, addr=0x2000, size=8192)
-    b_l1 = pl.make_tile(mat_type, addr=0x4000, size=8192)
-    a_l0_0 = pl.make_tile(left_type, addr=0x0000, size=8192)
-    a_l0_1 = pl.make_tile(left_type, addr=0x2000, size=8192)
-    b_l0 = pl.make_tile(right_type, addr=0x0000, size=8192)
-    acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+    a_l1_0 = pl.make_tile(mat_type, addr=0x0000)
+    a_l1_1 = pl.make_tile(mat_type, addr=0x2000)
+    b_l1 = pl.make_tile(mat_type, addr=0x4000)
+    a_l0_0 = pl.make_tile(left_type, addr=0x0000)
+    a_l0_1 = pl.make_tile(left_type, addr=0x2000)
+    b_l0 = pl.make_tile(right_type, addr=0x0000)
+    acc = pl.make_tile(acc_type, addr=0x0000)
     with pl.section_cube():
         last_row = a.shape[0] - 64
         pl.load(a_l1_0, a, [0, 0])
@@ -488,14 +488,14 @@ def t03f_fix_overlapping_stores(
     left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left)
     right_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right)
     acc_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc)
-    a_l1_0 = pl.make_tile(mat_type, addr=0x0000, size=8192)
-    a_l1_1 = pl.make_tile(mat_type, addr=0x2000, size=8192)
-    b_l1 = pl.make_tile(mat_type, addr=0x4000, size=8192)
-    a_l0_0 = pl.make_tile(left_type, addr=0x0000, size=8192)
-    a_l0_1 = pl.make_tile(left_type, addr=0x2000, size=8192)
-    b_l0 = pl.make_tile(right_type, addr=0x0000, size=8192)
-    acc_first = pl.make_tile(acc_type, addr=0x0000, size=16384)
-    acc_last = pl.make_tile(acc_type, addr=0x4000, size=16384)
+    a_l1_0 = pl.make_tile(mat_type, addr=0x0000)
+    a_l1_1 = pl.make_tile(mat_type, addr=0x2000)
+    b_l1 = pl.make_tile(mat_type, addr=0x4000)
+    a_l0_0 = pl.make_tile(left_type, addr=0x0000)
+    a_l0_1 = pl.make_tile(left_type, addr=0x2000)
+    b_l0 = pl.make_tile(right_type, addr=0x0000)
+    acc_first = pl.make_tile(acc_type, addr=0x0000)
+    acc_last = pl.make_tile(acc_type, addr=0x4000)
     with pl.section_cube():
         last_row = a.shape[0] - 64
         pl.load(a_l1_0, a, [0, 0])
@@ -536,9 +536,9 @@ def t04_hard_aiv_sync_all(
         target_memory=pl.MemorySpace.Vec,
         valid_shape=[-1, -1],
     )
-    tile_x = pl.make_tile(tile_type, addr=0x0000, size=256)
-    tile_y = pl.make_tile(tile_type, addr=0x0100, size=256)
-    tile_out = pl.make_tile(tile_type, addr=0x0200, size=256)
+    tile_x = pl.make_tile(tile_type, addr=0x0000)
+    tile_y = pl.make_tile(tile_type, addr=0x0100)
+    tile_out = pl.make_tile(tile_type, addr=0x0200)
     with pl.section_vector():
         pl.system.sync_all(core_type=pl.SyncCoreType.AIV_ONLY)
         for row in pl.range(pl.get_block_idx(), x.shape[0], pl.get_block_num()):
@@ -639,11 +639,11 @@ def t06_cube_pipeline_reuse(
     left_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left)
     right_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right)
     acc_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc)
-    a_l1 = pl.make_tile(mat_type, addr=0x0000, size=8192)
-    b_l1 = pl.make_tile(mat_type, addr=0x2000, size=8192)
-    a_l0 = pl.make_tile(left_type, addr=0x0000, size=8192)
-    b_l0 = pl.make_tile(right_type, addr=0x0000, size=8192)
-    acc = pl.make_tile(acc_type, addr=0x0000, size=16384)
+    a_l1 = pl.make_tile(mat_type, addr=0x0000)
+    b_l1 = pl.make_tile(mat_type, addr=0x2000)
+    a_l0 = pl.make_tile(left_type, addr=0x0000)
+    b_l0 = pl.make_tile(right_type, addr=0x0000)
+    acc = pl.make_tile(acc_type, addr=0x0000)
     with pl.section_cube():
         for row in pl.range(0, a.shape[0], 64):
             pl.load(a_l1, a, [row, 0])
@@ -688,7 +688,7 @@ def t07_scalar_pipeline(
         target_memory=pl.MemorySpace.Vec,
         valid_shape=[-1, -1],
     )
-    tile = pl.make_tile(tile_type, addr=0x0000, size=256)
+    tile = pl.make_tile(tile_type, addr=0x0000)
     with pl.section_vector():
         for row in pl.range(0, x.shape[0]):
             for col in pl.range(0, x.shape[1], TILE_N):
@@ -726,9 +726,9 @@ def t08_static_event_forms(
     tile_type = pl.TileType(
         shape=[1, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
     )
-    tile_x = pl.make_tile(tile_type, addr=0x0000, size=256)
-    tile_y = pl.make_tile(tile_type, addr=0x0100, size=256)
-    tile_out = pl.make_tile(tile_type, addr=0x0200, size=256)
+    tile_x = pl.make_tile(tile_type, addr=0x0000)
+    tile_y = pl.make_tile(tile_type, addr=0x0100)
+    tile_out = pl.make_tile(tile_type, addr=0x0200)
     with pl.section_vector():
         for row in pl.range(0, x.shape[0]):
             for col in pl.range(0, x.shape[1], TILE_N):
@@ -778,12 +778,12 @@ def t09_dynamic_control_flow(
     tile_type = pl.TileType(
         shape=[1, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
     )
-    tile_x = pl.make_tile(tile_type, addr=0x0000, size=256)
-    tile_y = pl.make_tile(tile_type, addr=0x0100, size=256)
-    tile_out = pl.make_tile(tile_type, addr=0x0200, size=256)
-    scratch_tile_x = pl.make_tile(tile_type, addr=0x0300, size=256)
-    scratch_tile_y = pl.make_tile(tile_type, addr=0x0400, size=256)
-    scratch_tile_out = pl.make_tile(tile_type, addr=0x0500, size=256)
+    tile_x = pl.make_tile(tile_type, addr=0x0000)
+    tile_y = pl.make_tile(tile_type, addr=0x0100)
+    tile_out = pl.make_tile(tile_type, addr=0x0200)
+    scratch_tile_x = pl.make_tile(tile_type, addr=0x0300)
+    scratch_tile_y = pl.make_tile(tile_type, addr=0x0400)
+    scratch_tile_out = pl.make_tile(tile_type, addr=0x0500)
     with pl.section_vector():
         # C05: MTE3 stores the first result to scratch, sets event 5 before
         # the loop, and MTE2 waits on event 5 only after the loop before
@@ -870,9 +870,9 @@ def t10_mutex_id_forms(
     tile_type = pl.TileType(
         shape=[1, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
     )
-    tile_x = pl.make_tile(tile_type, addr=0x0000, size=256)
-    tile_y = pl.make_tile(tile_type, addr=0x0100, size=256)
-    tile_out = pl.make_tile(tile_type, addr=0x0200, size=256)
+    tile_x = pl.make_tile(tile_type, addr=0x0000)
+    tile_y = pl.make_tile(tile_type, addr=0x0100)
+    tile_out = pl.make_tile(tile_type, addr=0x0200)
     with pl.section_vector():
         for row in pl.range(0, x.shape[0]):
             for col in pl.range(0, x.shape[1], TILE_N):

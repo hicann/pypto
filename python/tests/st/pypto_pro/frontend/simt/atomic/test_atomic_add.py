@@ -74,27 +74,22 @@ def simt_atomic_add_ub_all_dtypes(
     int32_tile = pl.make_tile(
         pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec),
         addr=0x0000,
-        size=ELEMENTS * 4,
     )
     uint32_tile = pl.make_tile(
         pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
         addr=0x0400,
-        size=ELEMENTS * 4,
     )
     fp16_tile = pl.make_tile(
         pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
         addr=0x0800,
-        size=ELEMENTS * 2,
     )
     bf16_tile = pl.make_tile(
         pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec),
         addr=0x0C00,
-        size=ELEMENTS * 2,
     )
     fp32_tile = pl.make_tile(
         pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
         addr=0x1000,
-        size=ELEMENTS * 4,
     )
     with pl.section_vector():
         pl.load(int32_tile, int32_state, [0, 0])
@@ -187,7 +182,7 @@ def simt_atomic_add_histogram_gm(histogram: pl.Tensor[[1, ATOMIC_BUCKETS], pl.DT
 @pl.jit()
 def simt_atomic_add_histogram_ub(histogram_tensor: pl.Tensor[[1, ATOMIC_BUCKETS], pl.DT_INT32]):
     tile_type = pl.TileType(shape=[1, ATOMIC_BUCKETS], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    histogram = pl.make_tile(tile_type, addr=0x0000, size=ATOMIC_BUCKETS * 4)
+    histogram = pl.make_tile(tile_type, addr=0x0000)
     with pl.section_vector():
         pl.load(histogram, histogram_tensor, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)

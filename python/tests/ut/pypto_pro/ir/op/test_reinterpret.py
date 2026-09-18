@@ -220,7 +220,7 @@ def test_no_override_argument_raises():
     @pl.jit
     def k(x: pl.Tensor[[64, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-        t = pl.make_tile(tt, addr=0, size=8192)
+        t = pl.make_tile(tt, addr=0)
         pl.load(pl.reinterpret(t), x, [0, 0])
 
     with pytest.raises(ParserTypeError, match="at least one of dtype/shape/layout"):
@@ -231,7 +231,7 @@ def test_wrong_positional_count_raises():
     @pl.jit
     def k(x: pl.Tensor[[64, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-        t = pl.make_tile(tt, addr=0, size=8192)
+        t = pl.make_tile(tt, addr=0)
         pl.load(pl.reinterpret(t, t, shape=[64, 64], dtype=pl.DT_BF16), x, [0, 0])
 
     with pytest.raises(ParserTypeError, match="exactly 1 positional argument"):
@@ -244,7 +244,7 @@ def test_dtype_without_shape_rejected_in_kernel():
     @pl.jit
     def k(x: pl.Tensor[[64, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-        t = pl.make_tile(tt, addr=0, size=8192)
+        t = pl.make_tile(tt, addr=0)
         pl.load(pl.reinterpret(t, dtype=pl.DT_BF16), x, [0, 0])
 
     with pytest.raises(ParserTypeError, match="'shape' is required when 'dtype' changes"):
@@ -268,7 +268,7 @@ def test_shape_accepts_folded_constant_expression():
     @pl.jit
     def k(x: pl.Tensor[[64, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-        t = pl.make_tile(tt, addr=0, size=8192)
+        t = pl.make_tile(tt, addr=0)
         pl.load(pl.reinterpret(t, shape=[shape_base * 2, shape_base // 2]), x, [0, 0])
 
     assert _kernel_ir(k)  # parses fine: shape folds to [128, 32]
@@ -280,7 +280,7 @@ def test_dtype_via_binding():
     @pl.jit
     def k(x: pl.Tensor[[64, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-        t = pl.make_tile(tt, addr=0, size=8192)
+        t = pl.make_tile(tt, addr=0)
         dt = pl.DT_BF16
         pl.load(pl.reinterpret(t, shape=[64, 64], dtype=dt), x, [0, 0])
 
@@ -293,7 +293,7 @@ def test_layout_via_binding():
     @pl.jit
     def k(a: pl.Tensor[[64, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.ZN)
-        t = pl.make_tile(tt, addr=0, size=8192)
+        t = pl.make_tile(tt, addr=0)
         ly = pl.TensorLayout.NZ
         pl.load(pl.reinterpret(t, shape=[64, 64], layout=ly), a, [0, 0])
 
@@ -368,7 +368,7 @@ def test_runtime_shape_is_rejected():
     @pl.jit
     def k(x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP16]):
         tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-        t = pl.make_tile(tt, addr=0, size=8192)
+        t = pl.make_tile(tt, addr=0)
         pl.load(pl.reinterpret(t, shape=[x.shape[0], 16]), x, [0, 0])
 
     with pytest.raises(ParserTypeError, match="compile-time integers"):

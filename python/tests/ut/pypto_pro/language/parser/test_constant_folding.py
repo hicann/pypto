@@ -259,7 +259,7 @@ def test_float_divmod_constants_can_define_static_tile_shape():
         cols = 16.0 // 2.0
         rows = 7.0 % 2.0
         tile_type = pl.TileType(shape=[int(rows), int(cols)], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        tile = pl.make_tile(tile_type, addr=0, size=32)
+        tile = pl.make_tile(tile_type, addr=0)
 
     program, _ = static_float_shape.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
     values = _assignments(program.get_function(static_float_shape.__name__))

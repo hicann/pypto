@@ -308,7 +308,7 @@ def fa_perf_tkv_preload_nbuf_kernel(
         # Vector-only buffers (independent buf_id space: 0-11). Scratch tiles with
         # no mutex are plain make_tile; mutex'd buffers are single-tile groups.
         tmp_vec = pl.make_tile(
-            pl.TileType(shape=[TS_HALF, TKV], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec), addr=VA1, size=VB4_KV
+            pl.TileType(shape=[TS_HALF, TKV], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec), addr=VA1
         )
         p_f16_g = pl.make_tile_group(
             type=pl.TileType(shape=[TS_HALF, TKV], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
@@ -319,14 +319,13 @@ def fa_perf_tkv_preload_nbuf_kernel(
         reduce_dst = pl.make_tile(
             pl.TileType(shape=[TS_HALF, 1], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, layout=pl.DN),
             addr=VA3,
-            size=VB_RED,
         )
         reduce_dst_rm = pl.make_tile(
-            pl.TileType(shape=[1, TS_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec), addr=VA3, size=VB_RED
+            pl.TileType(shape=[1, TS_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec), addr=VA3
         )
 
         running_o = pl.make_tile(
-            pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec), addr=VA7, size=VB4
+            pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec), addr=VA7
         )
         o_f16_g = pl.make_tile_group(
             type=pl.TileType(shape=[TS_HALF, TD], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
@@ -344,16 +343,16 @@ def fa_perf_tkv_preload_nbuf_kernel(
         # Double-buffered global state (per Q tile) -use tile tuples for dynamic
         # indexing by q_count % 2, since StructArray ctx references need runtime index.
         gmax_rm_type = pl.TileType(shape=[1, TS_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        gmax_rm_0 = pl.make_tile(gmax_rm_type, addr=VA_GMAX0, size=VB_RED)
-        gmax_rm_1 = pl.make_tile(gmax_rm_type, addr=VA_GMAX1, size=VB_RED)
+        gmax_rm_0 = pl.make_tile(gmax_rm_type, addr=VA_GMAX0)
+        gmax_rm_1 = pl.make_tile(gmax_rm_type, addr=VA_GMAX1)
         global_max_rm_buf = (gmax_rm_0, gmax_rm_1)
 
         gsum_type = pl.TileType(shape=[TS_HALF, 1], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, layout=pl.DN)
         gsum_rm_type = pl.TileType(shape=[1, TS_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        gsum_0 = pl.make_tile(gsum_type, addr=VA_GSUM0, size=VB_RED)
-        gsum_1 = pl.make_tile(gsum_type, addr=VA_GSUM1, size=VB_RED)
-        gsum_rm_0 = pl.make_tile(gsum_rm_type, addr=VA_GSUM0, size=VB_RED)
-        gsum_rm_1 = pl.make_tile(gsum_rm_type, addr=VA_GSUM1, size=VB_RED)
+        gsum_0 = pl.make_tile(gsum_type, addr=VA_GSUM0)
+        gsum_1 = pl.make_tile(gsum_type, addr=VA_GSUM1)
+        gsum_rm_0 = pl.make_tile(gsum_rm_type, addr=VA_GSUM0)
+        gsum_rm_1 = pl.make_tile(gsum_rm_type, addr=VA_GSUM1)
         global_sum_buf = (gsum_0, gsum_1)
         global_sum_rm_buf = (gsum_rm_0, gsum_rm_1)
 

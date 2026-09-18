@@ -48,8 +48,8 @@ def bar_all_kernel(
     out: pl.Tensor[[128, 64], pl.DT_FP16],
 ):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_x = pl.make_tile(tt, addr=0x0000, size=8192)
-    tile_out = pl.make_tile(tt, addr=0x2000, size=8192)
+    tile_x = pl.make_tile(tt, addr=0x0000)
+    tile_out = pl.make_tile(tt, addr=0x2000)
     with pl.section_vector():
         for i in pl.range(0, 128, 64):
             pl.system.bar_all()

@@ -71,8 +71,8 @@ def _atomic_rmw_ops_entry(numeric, bitwise, counter, int_value, uint_value):
 @pl.jit
 def _atomic_add_tile_kernel(value: pl.DT_INT32):
     tile_type = pl.TileType(shape=[1, 32], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    dst = pl.make_tile(tile_type, addr=0x0000, size=128)
-    old_values = pl.make_tile(tile_type, addr=0x0080, size=128)
+    dst = pl.make_tile(tile_type, addr=0x0000)
+    old_values = pl.make_tile(tile_type, addr=0x0080)
     with pl.section_vector():
         _atomic_add_tile[32](dst, old_values, value)
 
@@ -91,9 +91,9 @@ def _atomic_add_tensor_kernel(
 def _atomic_rmw_ops_kernel(int_value: pl.DT_INT32, uint_value: pl.DT_UINT32):
     int_type = pl.TileType(shape=[1, 32], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
     uint_type = pl.TileType(shape=[1, 32], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
-    numeric = pl.make_tile(int_type, addr=0, size=128)
-    bitwise = pl.make_tile(uint_type, addr=128, size=128)
-    counter = pl.make_tile(uint_type, addr=256, size=128)
+    numeric = pl.make_tile(int_type, addr=0)
+    bitwise = pl.make_tile(uint_type, addr=128)
+    counter = pl.make_tile(uint_type, addr=256)
     with pl.section_vector():
         _atomic_rmw_ops_entry[1](numeric, bitwise, counter, int_value, uint_value)
 
@@ -106,7 +106,7 @@ def _parse_one_tile_function(function, dtype, shape=(1, 32)):
     @pl.jit
     def kernel(_jit_entry: pl.DT_INT64):
         tile_type = pl.TileType(shape=shape, dtype=dtype, target_memory=pl.MemorySpace.Vec)
-        tile = pl.make_tile(tile_type, addr=0, size=4096)
+        tile = pl.make_tile(tile_type, addr=0)
         with pl.section_vector():
             entry[1](tile)
 
@@ -123,8 +123,8 @@ def _parse_two_tile_function(function, first_dtype, second_dtype):
     def kernel(_jit_entry: pl.DT_INT64):
         first_type = pl.TileType(shape=[1, 32], dtype=first_dtype, target_memory=pl.MemorySpace.Vec)
         second_type = pl.TileType(shape=[1, 32], dtype=second_dtype, target_memory=pl.MemorySpace.Vec)
-        first = pl.make_tile(first_type, addr=0, size=4096)
-        second = pl.make_tile(second_type, addr=4096, size=4096)
+        first = pl.make_tile(first_type, addr=0)
+        second = pl.make_tile(second_type, addr=4096)
         with pl.section_vector():
             entry[1](first, second)
 
@@ -142,7 +142,7 @@ def _parse_tile_scalar_function(function, tile_dtype, scalar_dtype):
         @pl.jit
         def kernel(value: pl.DT_INT32):
             tile_type = pl.TileType(shape=[1, 32], dtype=tile_dtype, target_memory=pl.MemorySpace.Vec)
-            tile = pl.make_tile(tile_type, addr=0, size=4096)
+            tile = pl.make_tile(tile_type, addr=0)
             with pl.section_vector():
                 entry[1](tile, value)
 
@@ -151,7 +151,7 @@ def _parse_tile_scalar_function(function, tile_dtype, scalar_dtype):
         @pl.jit
         def kernel(value: pl.DT_UINT32):
             tile_type = pl.TileType(shape=[1, 32], dtype=tile_dtype, target_memory=pl.MemorySpace.Vec)
-            tile = pl.make_tile(tile_type, addr=0, size=4096)
+            tile = pl.make_tile(tile_type, addr=0)
             with pl.section_vector():
                 entry[1](tile, value)
 
@@ -160,7 +160,7 @@ def _parse_tile_scalar_function(function, tile_dtype, scalar_dtype):
         @pl.jit
         def kernel(value: pl.DT_FP32):
             tile_type = pl.TileType(shape=[1, 32], dtype=tile_dtype, target_memory=pl.MemorySpace.Vec)
-            tile = pl.make_tile(tile_type, addr=0, size=4096)
+            tile = pl.make_tile(tile_type, addr=0)
             with pl.section_vector():
                 entry[1](tile, value)
 
@@ -179,7 +179,7 @@ def _parse_tile_compare_function(function, tile_dtype):
     @pl.jit
     def kernel(compare: pl.DT_UINT32, value: pl.DT_INT32):
         tile_type = pl.TileType(shape=[1, 32], dtype=tile_dtype, target_memory=pl.MemorySpace.Vec)
-        tile = pl.make_tile(tile_type, addr=0, size=4096)
+        tile = pl.make_tile(tile_type, addr=0)
         with pl.section_vector():
             entry[1](tile, compare, value)
 

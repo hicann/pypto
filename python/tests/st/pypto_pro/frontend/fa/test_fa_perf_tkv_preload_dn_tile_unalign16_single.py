@@ -142,8 +142,8 @@ def alloc_cube_tiles():
         valid_shape=[-1, -1],
         compact=1,
     )
-    q_mat_0 = pl.make_tile(q_mat_type, addr=MA0, size=Q_F16)
-    q_mat_1 = pl.make_tile(q_mat_type, addr=MA0_PONG, size=Q_F16)
+    q_mat_0 = pl.make_tile(q_mat_type, addr=MA0)
+    q_mat_1 = pl.make_tile(q_mat_type, addr=MA0_PONG)
 
     k_mat_type = pl.TileType(
         shape=[TKV, TD],
@@ -153,8 +153,8 @@ def alloc_cube_tiles():
         valid_shape=[-1, -1],
         compact=1,
     )
-    k_mat_0 = pl.make_tile(k_mat_type, addr=MA1, size=KT_F16)
-    k_mat_1 = pl.make_tile(k_mat_type, addr=MA1_PONG, size=KT_F16)
+    k_mat_0 = pl.make_tile(k_mat_type, addr=MA1)
+    k_mat_1 = pl.make_tile(k_mat_type, addr=MA1_PONG)
 
     v_mat_type = pl.TileType(
         shape=[TKV, TD],
@@ -164,8 +164,8 @@ def alloc_cube_tiles():
         valid_shape=[-1, -1],
         compact=1,
     )
-    v_mat_0 = pl.make_tile(v_mat_type, addr=MA3, size=V_F16)
-    v_mat_1 = pl.make_tile(v_mat_type, addr=MA3_PONG, size=V_F16)
+    v_mat_0 = pl.make_tile(v_mat_type, addr=MA3)
+    v_mat_1 = pl.make_tile(v_mat_type, addr=MA3_PONG)
 
     left_0 = pl.make_tile(
         pl.TileType(
@@ -177,7 +177,6 @@ def alloc_cube_tiles():
             compact=1,
         ),
         addr=LA0,
-        size=KT_F16,
     )
     left_1 = pl.make_tile(
         pl.TileType(
@@ -189,7 +188,6 @@ def alloc_cube_tiles():
             compact=1,
         ),
         addr=LA1,
-        size=KT_F16,
     )
 
     right_0 = pl.make_tile(
@@ -201,7 +199,6 @@ def alloc_cube_tiles():
             compact=1,
         ),
         addr=RA0,
-        size=Q_F16,
     )
     right_1 = pl.make_tile(
         pl.TileType(
@@ -212,7 +209,6 @@ def alloc_cube_tiles():
             compact=1,
         ),
         addr=RA1,
-        size=Q_F16,
     )
 
     acc_0 = pl.make_tile(
@@ -224,7 +220,6 @@ def alloc_cube_tiles():
             compact=1,
         ),
         addr=CA0,
-        size=QK_HALF_F32,
     )
     acc_1 = pl.make_tile(
         pl.TileType(
@@ -235,7 +230,6 @@ def alloc_cube_tiles():
             compact=1,
         ),
         addr=CA1,
-        size=PV_HALF_F32,
     )
 
     return pl.make_tuple(
@@ -261,10 +255,10 @@ def alloc_exp_corr_fifo():
     exp_corr_rm_type = pl.TileType(
         shape=[1, TS_HALF], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1], compact=1
     )
-    ec0 = pl.make_tile(exp_corr_type, addr=VA_EXP0, size=VB_RED)
-    ec0_rm = pl.make_tile(exp_corr_rm_type, addr=VA_EXP0, size=VB_RED)
-    ec1 = pl.make_tile(exp_corr_type, addr=VA_EXP1, size=VB_RED)
-    ec1_rm = pl.make_tile(exp_corr_rm_type, addr=VA_EXP1, size=VB_RED)
+    ec0 = pl.make_tile(exp_corr_type, addr=VA_EXP0)
+    ec0_rm = pl.make_tile(exp_corr_rm_type, addr=VA_EXP0)
+    ec1 = pl.make_tile(exp_corr_type, addr=VA_EXP1)
+    ec1_rm = pl.make_tile(exp_corr_rm_type, addr=VA_EXP1)
     return (ec0, ec1), (ec0_rm, ec1_rm)
 
 
@@ -818,7 +812,6 @@ def fa_perf_tkv_preload_dn_kernel(
             pad=pl.TilePad.min,
         ),
         addr=VA0,
-        size=VB4_KV,
     )
     qk_vec1 = pl.make_tile(
         pl.TileType(
@@ -830,7 +823,6 @@ def fa_perf_tkv_preload_dn_kernel(
             pad=pl.TilePad.min,
         ),
         addr=VA11,
-        size=VB4_KV,
     )
     pv_vec = pl.make_tile(
         pl.TileType(
@@ -841,7 +833,6 @@ def fa_perf_tkv_preload_dn_kernel(
             compact=1,
         ),
         addr=VA8,
-        size=VB4,
     )
     pv_vec1 = pl.make_tile(
         pl.TileType(
@@ -852,7 +843,6 @@ def fa_perf_tkv_preload_dn_kernel(
             compact=1,
         ),
         addr=VA12,
-        size=VB4,
     )
     running_o = pl.make_tile(
         pl.TileType(
@@ -863,7 +853,6 @@ def fa_perf_tkv_preload_dn_kernel(
             compact=1,
         ),
         addr=VA7,
-        size=VB4,
     )
 
     # DN: p_mat with layout=pl.ZN -- Left format for P x V matmul
@@ -875,8 +864,8 @@ def fa_perf_tkv_preload_dn_kernel(
         valid_shape=[-1, -1],
         compact=1,
     )
-    p_mat_buf1 = pl.make_tile(p_mat_type, addr=MA2, size=P_F16)
-    p_mat_buf2 = pl.make_tile(p_mat_type, addr=MA2_PONG, size=P_F16)
+    p_mat_buf1 = pl.make_tile(p_mat_type, addr=MA2)
+    p_mat_buf2 = pl.make_tile(p_mat_type, addr=MA2_PONG)
 
     # =================== CUBE SECTION ===================
     with pl.section_cube():
@@ -1034,7 +1023,6 @@ def fa_perf_tkv_preload_dn_kernel(
                 compact=1,
             ),
             addr=VA1,
-            size=VB4_KV,
         )
         # DN: p_f16 [TKV, TS_HALF] FP16 -- cast output before TINSERT
         p_f16 = pl.make_tile(
@@ -1046,7 +1034,6 @@ def fa_perf_tkv_preload_dn_kernel(
                 compact=1,
             ),
             addr=VA2,
-            size=VB2_KV,
         )
         # DN: col ops produce [1, TS_HALF] RM result -> use reduce_dst_rm directly
         reduce_dst_rm = pl.make_tile(
@@ -1058,7 +1045,6 @@ def fa_perf_tkv_preload_dn_kernel(
                 compact=1,
             ),
             addr=VA3,
-            size=VB_RED,
         )
 
         red_type = pl.TileType(
@@ -1074,14 +1060,14 @@ def fa_perf_tkv_preload_dn_kernel(
         )
 
         # Double-buffered global_max / global_sum (by q_count % 2)
-        gmax_rm_0 = pl.make_tile(red_rm_type, addr=VA_GMAX0, size=VB_RED)
-        gmax_rm_1 = pl.make_tile(red_rm_type, addr=VA_GMAX1, size=VB_RED)
+        gmax_rm_0 = pl.make_tile(red_rm_type, addr=VA_GMAX0)
+        gmax_rm_1 = pl.make_tile(red_rm_type, addr=VA_GMAX1)
         global_max_rm_buf = (gmax_rm_0, gmax_rm_1)
 
-        gsum_0 = pl.make_tile(red_type, addr=VA_GSUM0, size=VB_RED)
-        gsum_1 = pl.make_tile(red_type, addr=VA_GSUM1, size=VB_RED)
-        gsum_rm_0 = pl.make_tile(red_rm_type, addr=VA_GSUM0, size=VB_RED)
-        gsum_rm_1 = pl.make_tile(red_rm_type, addr=VA_GSUM1, size=VB_RED)
+        gsum_0 = pl.make_tile(red_type, addr=VA_GSUM0)
+        gsum_1 = pl.make_tile(red_type, addr=VA_GSUM1)
+        gsum_rm_0 = pl.make_tile(red_rm_type, addr=VA_GSUM0)
+        gsum_rm_1 = pl.make_tile(red_rm_type, addr=VA_GSUM1)
         global_sum_buf = (gsum_0, gsum_1)
         global_sum_rm_buf = (gsum_rm_0, gsum_rm_1)
 
@@ -1097,7 +1083,6 @@ def fa_perf_tkv_preload_dn_kernel(
                 compact=1,
             ),
             addr=VA9,
-            size=VB2,
         )
 
         tile_type_nz = pl.TileType(
@@ -1108,7 +1093,7 @@ def fa_perf_tkv_preload_dn_kernel(
             layout=pl.NZ,
             compact=1,
         )
-        tile_nz = pl.make_tile(tile_type_nz, addr=VA10, size=VB6_DN)
+        tile_nz = pl.make_tile(tile_type_nz, addr=VA10)
 
         softmax_tiles = pl.make_tuple(
             qk_vec=qk_vec,

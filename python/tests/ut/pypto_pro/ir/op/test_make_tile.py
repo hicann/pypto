@@ -8,9 +8,9 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""Unit tests for the ``make_tile`` address/size contract.
+"""Unit tests for the ``make_tile`` address and footprint contract.
 
-``pl.make_tile(tile_type, *, addr, size=None)`` places a tile at a fixed address in
+``pl.make_tile(tile_type, *, addr)`` places a tile at a fixed address in
 its memory space. Three layers are covered here:
 
 * ``tile_slot_size()`` — the byte footprint derived from a static shape/dtype,
@@ -18,8 +18,8 @@ its memory space. Three layers are covered here:
 * ``make_tile_expr()`` — the IR builder behind it, which takes the tile's fields
   spread out, requires ``addr`` and derives ``size``;
 * ``pl.make_tile(...)`` as parsed inside a kernel, where a ``pl.TileType`` is the
-  only accepted positional argument and ``addr``/``size`` are keyword-only and
-  must be compile-time ints.
+  only accepted positional argument and ``addr`` is a keyword-only
+  compile-time integer. The byte span is always derived from the TileType.
 
 Complements test_block_ops.py, which covers block ops in general.
 """
@@ -148,12 +148,12 @@ def test_builder_derives_size_from_shape_and_dtype():
 
 
 def test_builder_keeps_an_explicit_size():
-    """An NZ/ZN tile rounded up to whole fractals reserves more than shape * dtype."""
+    """Internal reinterpretation can preserve a span larger than the new shape."""
     assert make_tile_expr([64, 128], pl.DT_FP16, pl.MemorySpace.Vec, addr=0, size=40960).kwargs["memref_size"] == 40960
 
 
 def test_builder_reports_when_size_cannot_be_derived():
-    with pytest.raises(ValueError, match="cannot derive 'size'"):
+    with pytest.raises(ValueError, match="cannot derive its byte span"):
         make_tile_expr(_dynamic_tuple(), pl.DT_FP16, pl.MemorySpace.Vec, addr=0)
 
 
@@ -266,11 +266,11 @@ def test_addr_from_a_kernel_local_constant_is_folded():
 
 
 # ---------------------------------------------------------------------------
-# pl.make_tile(...) inside a kernel — size binding
+# pl.make_tile(...) inside a kernel — derived footprint and removed size argument
 # ---------------------------------------------------------------------------
 
 
-def test_size_is_derived_when_omitted():
+def test_size_is_derived_from_tile_type():
     @pl.jit
     def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
@@ -280,51 +280,28 @@ def test_size_is_derived_when_omitted():
     assert "memref_size=128" in _kernel_ir(k)
 
 
-def test_size_none_is_rejected_rather_than_derived():
-    """``size=None`` is a value that is not an integer, not an omitted argument."""
-
+@pytest.mark.parametrize("size", [None, -32, 0, 128, 256])
+def test_size_keyword_is_rejected(size):
     @pl.jit
     def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-        t = pl.make_tile(tt, addr=0, size=None)
+        t = pl.make_tile(tt, addr=0, size=size)
         pl.load(t, x, [0, 0])
 
-    with pytest.raises(ParserTypeError, match="'size' must be a compile-time integer"):
+    with pytest.raises(ParserTypeError, match="unexpected keyword argument") as excinfo:
         _parse_kernel(k)
+    assert "['size']" in str(excinfo.value)
+    assert "only 'addr' is supported" in str(excinfo.value)
 
 
-def test_negative_size_is_rejected():
-    @pl.jit
-    def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
-        tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-        t = pl.make_tile(tt, addr=0, size=-32)
-        pl.load(t, x, [0, 0])
-
-    with pytest.raises(ParserTypeError, match="positive byte count"):
-        _parse_kernel(k)
-
-
-def test_zero_size_is_rejected():
-    """Zero is held to the same contract as a negative byte count."""
-
-    @pl.jit
-    def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
-        tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-        t = pl.make_tile(tt, addr=0, size=0)
-        pl.load(t, x, [0, 0])
-
-    with pytest.raises(ParserTypeError, match="positive byte count"):
-        _parse_kernel(k)
-
-
-def test_runtime_size_is_rejected():
+def test_runtime_size_is_rejected_before_evaluating_it():
     @pl.jit
     def k(x: pl.Tensor[[pl.DYNAMIC, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         t = pl.make_tile(tt, addr=0, size=x.shape[0] * 2)
         pl.load(t, x, [0, 0])
 
-    with pytest.raises(ParserTypeError, match="'size' must be a compile-time integer"):
+    with pytest.raises(ParserTypeError, match="unexpected keyword argument"):
         _parse_kernel(k)
 
 
@@ -471,7 +448,7 @@ def test_layout_and_fractal_are_spread_from_the_tile_type():
     assert "fractal=512" in ir_str
 
 
-def test_an_explicit_kwarg_wins_over_the_tile_type_field():
+def test_tile_type_field_cannot_be_overridden_at_make_tile_call():
     @pl.jit
     def k(x: pl.Tensor[[128, 128], pl.DT_FP16]):
         tt = pl.TileType(
@@ -483,9 +460,21 @@ def test_an_explicit_kwarg_wins_over_the_tile_type_field():
         t = pl.make_tile(tt, addr=0, valid_shape=[16, 16])
         pl.load(t, x, [0, 0])
 
-    ir_str = _kernel_ir(k)
-    assert "block.make_tile(tuple(128, 128), tuple(16, 16)" in ir_str
-    assert "tuple(8, 8), dtype" not in ir_str
+    with pytest.raises(ParserTypeError, match="unexpected keyword argument") as excinfo:
+        _parse_kernel(k)
+    assert "['valid_shape']" in str(excinfo.value)
+
+
+def test_unknown_make_tile_keyword_is_rejected():
+    @pl.jit
+    def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
+        tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+        t = pl.make_tile(tt, addr=0, unknown=1)
+        pl.load(t, x, [0, 0])
+
+    with pytest.raises(ParserTypeError, match="unexpected keyword argument") as excinfo:
+        _parse_kernel(k)
+    assert "['unknown']" in str(excinfo.value)
 
 
 def test_size_is_derived_from_the_shape_not_the_valid_shape():
@@ -525,7 +514,7 @@ def test_a_tile_type_with_a_runtime_shape_cannot_derive_its_size():
         t = pl.make_tile(tt, addr=0)
         pl.load(t, x, [0, 0])
 
-    with pytest.raises(_WRAPPED, match="cannot derive 'size'"):
+    with pytest.raises(_WRAPPED, match="cannot derive its byte span"):
         _parse_kernel(k)
 
 
@@ -606,7 +595,7 @@ def test_pad_need_compile_time_value():
             target_memory=pl.MemorySpace.Vec,
             pad=pl.TilePad.zero if pad_mode else 0,
         )
-        t = pl.make_tile(tt, addr=0, size=None)
+        t = pl.make_tile(tt, addr=0)
         pl.load(t, x, [0])
 
     with pytest.raises(ParserTypeError, match="ErrCode: F00001, 'pl.TilePad.zero' has no runtime value"):

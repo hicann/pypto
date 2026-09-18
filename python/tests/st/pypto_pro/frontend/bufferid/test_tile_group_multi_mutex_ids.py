@@ -177,7 +177,6 @@ def cube_vector_multi_id_kernel(
     tile_acc = pl.make_tile(
         pl.TileType(shape=[CUBE_M, CUBE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc),
         addr=0x0000,
-        size=CUBE_M * CUBE_N * 4,
     )
     vec_group = pl.make_tile_group(
         type=pl.TileType(shape=[CUBE_VEC_ROWS, CUBE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),

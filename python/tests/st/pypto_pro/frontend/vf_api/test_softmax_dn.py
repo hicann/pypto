@@ -196,10 +196,10 @@ def softmax_dn_vf_kernel(
         target_memory=pl.MemorySpace.Vec,
     )
 
-    input_tile = pl.make_tile(input_tile_type, addr=VA_INPUT, size=INPUT_SIZE)
-    x_exp_tile = pl.make_tile(xexp_tile_type, addr=VA_XEXP, size=XEXP_SIZE)
-    max_tile = pl.make_tile(max_tile_type, addr=VA_MAX, size=MAX_SIZE)
-    sum_tile = pl.make_tile(sum_tile_type, addr=VA_SUM, size=SUM_SIZE)
+    input_tile = pl.make_tile(input_tile_type, addr=VA_INPUT)
+    x_exp_tile = pl.make_tile(xexp_tile_type, addr=VA_XEXP)
+    max_tile = pl.make_tile(max_tile_type, addr=VA_MAX)
+    sum_tile = pl.make_tile(sum_tile_type, addr=VA_SUM)
 
     with pl.section_vector():
         pl.load(input_tile, x, [0, 0])

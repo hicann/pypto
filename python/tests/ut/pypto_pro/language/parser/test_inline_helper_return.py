@@ -368,7 +368,7 @@ def test_kernel_uses_runtime_tile_valid_shape_ir():
     @pl.jit(auto_mutex=False)
     def caller(_jit_entry: pl.DT_INT64):
         tile_type = pl.TileType(shape=[16, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-        tile = pl.make_tile(tile_type, addr=0, size=1024)
+        tile = pl.make_tile(tile_type, addr=0)
         _kernel_rows = tile.valid_shape[0]
         _kernel_cols = tile.valid_shape[1]
 
@@ -385,7 +385,7 @@ def test_tile_valid_shape_rejects_invalid_index(index):
         @pl.jit(auto_mutex=False)
         def invalid_valid_shape(_jit_entry: pl.DT_INT64):
             tile_type = pl.TileType(shape=[16, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-            tile = pl.make_tile(tile_type, addr=0, size=1024)
+            tile = pl.make_tile(tile_type, addr=0)
             value = tile.valid_shape[index]  # noqa: F841
 
         invalid_valid_shape.to_kernel_def().parse_target_program(ir.SectionKind.Vector)

@@ -61,9 +61,9 @@ def t11_hard_aic_mix(
     tile_type = pl.TileType(
         shape=[1, TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec, valid_shape=[-1, -1]
     )
-    tile_x = pl.make_tile(tile_type, addr=0x0000, size=256)
-    tile_y = pl.make_tile(tile_type, addr=0x0100, size=256)
-    tile_out = pl.make_tile(tile_type, addr=0x0200, size=256)
+    tile_x = pl.make_tile(tile_type, addr=0x0000)
+    tile_y = pl.make_tile(tile_type, addr=0x0100)
+    tile_out = pl.make_tile(tile_type, addr=0x0200)
 
     with pl.section_cube():
         pl.system.sync_all(core_type=pl.SyncCoreType.AIC_ONLY)

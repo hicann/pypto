@@ -51,17 +51,17 @@ def move_insert_left_kernel(
 ):
     p_mat = pl.make_tile(
         pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-        addr=0x20000, size=32768)
+        addr=0x20000)
 
     with pl.section_vector():
         sub_id = pl.get_subblock_idx()
         off = sub_id * SUB
 
         tile_d = pl.make_tile(pl.TileType(shape=[M, K // 2], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
-                              addr=0x0000, size=16384)
+                              addr=0x0000)
         tile_nz = pl.make_tile(
             pl.TileType(shape=[M, K // 2], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec, layout=pl.NZ),
-            addr=0x6000, size=16384)
+            addr=0x6000)
 
         pl.load(tile_d, d, [0, off])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -75,16 +75,16 @@ def move_insert_left_kernel(
     with pl.section_cube():
         v_mat = pl.make_tile(
             pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
-            addr=0x0000, size=16384)
+            addr=0x0000)
         p_left = pl.make_tile(
             pl.TileType(shape=[M, K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
-            addr=0x0000, size=32768)
+            addr=0x0000)
         v_right = pl.make_tile(
             pl.TileType(shape=[K, N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
-            addr=0x0000, size=16384)
+            addr=0x0000)
         c_l0c = pl.make_tile(
             pl.TileType(shape=[M, N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ, fractal=1024),
-            addr=0x0000, size=32768)
+            addr=0x0000)
 
         pl.load(v_mat, v, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE1, event_id=0)

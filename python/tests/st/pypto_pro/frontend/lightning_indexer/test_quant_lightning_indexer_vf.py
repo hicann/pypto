@@ -669,7 +669,6 @@ def make_quant_lightning_indexer_vf_kernel(
             weight_tile = pl.make_tile(
                 pl.TileType(shape=[sq_rows_per_sub, wq_col_pad], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
                 addr=va_weight,
-                size=vb_weight_sk,
             )
             qscale_f16_group = pl.make_tile_group(
                 type=pl.TileType(
@@ -681,7 +680,6 @@ def make_quant_lightning_indexer_vf_kernel(
             qscale_tile = pl.make_tile(
                 pl.TileType(shape=[sq_rows_per_sub, wq_col_pad], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
                 addr=va_qscale,
-                size=vb_weight_sk,
             )
             # kscale: full-size tile (same shape as original for codegen compatibility).
             # DT_FP16 load buffer is a make_tile_group so auto_mutex inserts the
@@ -694,7 +692,6 @@ def make_quant_lightning_indexer_vf_kernel(
             kscale_f32_tile = pl.make_tile(
                 pl.TileType(shape=[1, sk_align128], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
                 addr=va_kscale_f32,
-                size=vb_kscale_all_f32,
             )
             # score_u16_sk: make_tile_group (auto_mutex handles V↔MTE3 sync)
             score_u16_sk_group = pl.make_tile_group(
@@ -712,32 +709,26 @@ def make_quant_lightning_indexer_vf_kernel(
             hist_high_tile = pl.make_tile(
                 pl.TileType(shape=[1, 256], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
                 addr=tk_hist_high,
-                size=1024,
             )
             hist_low_tile = pl.make_tile(
                 pl.TileType(shape=[1, 256], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
                 addr=tk_hist_low,
-                size=1024,
             )
             sqz_idx_buf = pl.make_tile(
                 pl.TileType(shape=[1, 256], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
                 addr=tk_sqz_idx,
-                size=1024,
             )
             idx_high_tile = pl.make_tile(
                 pl.TileType(shape=[1, 64], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
                 addr=tk_idx_high,
-                size=256,
             )
             nk_value_tile = pl.make_tile(
                 pl.TileType(shape=[1, 64], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
                 addr=tk_nk_value,
-                size=256,
             )
             kth_value_tile = pl.make_tile(
                 pl.TileType(shape=[1, 64], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
                 addr=tk_kth_value,
-                size=256,
             )
             # DT_UINT16 collect buffer (VF Squeeze writes DT_UINT16, matching reference tmpIdxLocal).
             # make_tile_group so auto_mutex inserts the V(vf)→MTE3(store) handshake and the

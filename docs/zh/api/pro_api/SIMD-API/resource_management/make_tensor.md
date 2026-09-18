@@ -159,7 +159,7 @@ q_merged = pl.make_tensor(q, [B * S, D], [D, 1])   # 复用 q 的指针，不搬
 
 # 现在 q_merged 是二维 [B*S, D]，直接按 Tile 索引 load
 tile = pl.make_tile(pl.TileType(shape=[TS, D], dtype=pl.DT_FP16,
-                                target_memory=pl.MemorySpace.Vec), addr=0x0, size=TS*D*2)
+                                target_memory=pl.MemorySpace.Vec), addr=0x0)
 pl.load_tile(tile, q_merged, [t, 0])   # 第 t 块 = 合并轴上的第 [t*TS : (t+1)*TS] 行
 ```
 

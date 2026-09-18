@@ -77,7 +77,7 @@ def simt_1d_launch(
     delta: pl.DT_FP32,
 ):
     tile_type = pl.TileType(shape=[1, THREADS_1D], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    data = pl.make_tile(tile_type, addr=0x0000, size=THREADS_1D * 4)
+    data = pl.make_tile(tile_type, addr=0x0000)
     with pl.section_vector():
         pl.load(data, x, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -95,7 +95,7 @@ def simt_2d_launch(
     delta: pl.DT_FP32,
 ):
     tile_type = pl.TileType(shape=[1, THREADS_2D], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    data = pl.make_tile(tile_type, addr=0x0000, size=THREADS_2D * 4)
+    data = pl.make_tile(tile_type, addr=0x0000)
     with pl.section_vector():
         pl.load(data, x, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
@@ -113,7 +113,7 @@ def simt_3d_launch(
     delta: pl.DT_FP32,
 ):
     tile_type = pl.TileType(shape=[1, THREADS_3D], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    data = pl.make_tile(tile_type, addr=0x0000, size=THREADS_3D * 4)
+    data = pl.make_tile(tile_type, addr=0x0000)
     with pl.section_vector():
         pl.load(data, x, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)

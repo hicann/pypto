@@ -90,9 +90,9 @@ def sync_dst_kernel(
     out: pl.Tensor[[64, 64], pl.DT_FP32],
 ):
     tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tt, addr=0x0000, size=16384)
-    tile_b = pl.make_tile(tt, addr=0x4000, size=16384)
-    tile_out = pl.make_tile(tt, addr=0x8000, size=16384)
+    tile_a = pl.make_tile(tt, addr=0x0000)
+    tile_b = pl.make_tile(tt, addr=0x4000)
+    tile_out = pl.make_tile(tt, addr=0x8000)
     with pl.section_vector():
         pl.load(tile_a, a, [0, 0])
         pl.load(tile_b, b, [0, 0])

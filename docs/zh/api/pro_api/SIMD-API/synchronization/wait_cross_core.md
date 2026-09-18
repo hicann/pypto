@@ -110,7 +110,7 @@ def cross_core_kernel(
     v1_mat = pl.make_tile(
         pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat,
                     layout=pl.NZ),
-        addr=0x10000, size=16384)
+        addr=0x10000)
 
     with pl.section_vector():
         sub_index = pl.get_subblock_idx()
@@ -118,17 +118,17 @@ def cross_core_kernel(
 
         tile_x = pl.make_tile(
             pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-            addr=0x0000, size=8192)
+            addr=0x0000)
         tile_y = pl.make_tile(
             pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-            addr=0x2000, size=8192)
+            addr=0x2000)
         tile_sum = pl.make_tile(
             pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-            addr=0x4000, size=8192)
+            addr=0x4000)
         tile_nz = pl.make_tile(
             pl.TileType(shape=[32, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec,
                         layout=pl.NZ),
-            addr=0x6000, size=8448)
+            addr=0x6000)
 
         pl.load(tile_x, x, [off, 0])
         pl.load(tile_y, y, [off, 0])
@@ -149,19 +149,19 @@ def cross_core_kernel(
         rhs_mat = pl.make_tile(
             pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat,
                         layout=pl.NZ),
-            addr=0x0000, size=16384)
+            addr=0x0000)
         v1_left = pl.make_tile(
             pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Left,
                         layout=pl.NZ),
-            addr=0x0000, size=16384)
+            addr=0x0000)
         rhs_right = pl.make_tile(
             pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Right,
                         layout=pl.ZN),
-            addr=0x0000, size=16384)
+            addr=0x0000)
         c_l0c = pl.make_tile(
             pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc,
                         layout=pl.NZ, fractal=1024),
-            addr=0x0000, size=16384)
+            addr=0x0000)
 
         pl.load(rhs_mat, rhs, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.MTE1, event_id=0)

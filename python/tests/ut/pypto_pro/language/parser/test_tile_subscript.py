@@ -30,7 +30,7 @@ def test_tile_subscript_rejects_negative_constant_index():
     @pl.jit
     def kernel(_jit_entry: pl.DT_INT64):
         tile_type = pl.TileType(shape=[8, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        dst = pl.make_tile(tile_type, addr=0, size=2048)
+        dst = pl.make_tile(tile_type, addr=0)
         with pl.section_vector():
             negative_index[32](dst)
 
@@ -56,7 +56,7 @@ def test_tile_subscript_read_requires_ub_memory():
     @pl.jit(auto_mutex=False)
     def kernel(_jit_entry: pl.DT_INT64):
         tile_type = pl.TileType(shape=[16, 16], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Mat)
-        tile = pl.make_tile(tile_type, addr=0, size=1024)
+        tile = pl.make_tile(tile_type, addr=0)
         with pl.section_vector():
             _value = tile[0, 0]
 
@@ -71,7 +71,7 @@ def test_tile_slice_rejects_negative_static_bound():
     @pl.jit(auto_mutex=False)
     def kernel(_jit_entry: pl.DT_INT64):
         tile_type = pl.TileType(shape=[8, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        tile = pl.make_tile(tile_type, addr=0, size=2048)
+        tile = pl.make_tile(tile_type, addr=0)
         with pl.section_vector():
             _sub = tile[-1:4, 0:32]
 
@@ -83,7 +83,7 @@ def test_tile_slice_rejects_non_integer_static_bound():
     @pl.jit(auto_mutex=False)
     def kernel(_jit_entry: pl.DT_INT64):
         tile_type = pl.TileType(shape=[8, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        tile = pl.make_tile(tile_type, addr=0, size=2048)
+        tile = pl.make_tile(tile_type, addr=0)
         with pl.section_vector():
             _sub = tile[1.5:4, 0:32]
 
@@ -95,7 +95,7 @@ def test_tile_slice_rejects_empty_static_range():
     @pl.jit(auto_mutex=False)
     def kernel(_jit_entry: pl.DT_INT64):
         tile_type = pl.TileType(shape=[8, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        tile = pl.make_tile(tile_type, addr=0, size=2048)
+        tile = pl.make_tile(tile_type, addr=0)
         with pl.section_vector():
             _sub = tile[4:4, 0:32]
 
@@ -107,7 +107,7 @@ def test_tile_slice_rejects_non_unit_step():
     @pl.jit(auto_mutex=False)
     def kernel(_jit_entry: pl.DT_INT64):
         tile_type = pl.TileType(shape=[8, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-        tile = pl.make_tile(tile_type, addr=0, size=2048)
+        tile = pl.make_tile(tile_type, addr=0)
         with pl.section_vector():
             _sub = tile[0:8:2, 0:32]
 
@@ -124,7 +124,7 @@ def test_tile_slice_with_dynamic_valid_shape():
             target_memory=pl.MemorySpace.Vec,
             valid_shape=[-1, -1],
         )
-        tile = pl.make_tile(tile_type, addr=0, size=2048)
+        tile = pl.make_tile(tile_type, addr=0)
         with pl.section_vector():
             pl.set_validshape(tile, [rows, cols])
             _sub = tile[1:, :]

@@ -75,7 +75,6 @@ def simt_cast_from_fp16(
     source_tile = pl.make_tile(
         pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
         addr=0x0000,
-        size=ELEMENTS * 2,
     )
     with pl.section_vector():
         pl.load(source_tile, source, [0, 0])
@@ -131,7 +130,6 @@ def simt_cast_from_bf16(
     source_tile = pl.make_tile(
         pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec),
         addr=0x0000,
-        size=ELEMENTS * 2,
     )
     with pl.section_vector():
         pl.load(source_tile, source, [0, 0])
@@ -161,7 +159,6 @@ def simt_cast_from_int8(
     source_tile = pl.make_tile(
         pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_INT8, target_memory=pl.MemorySpace.Vec),
         addr=0x0000,
-        size=ELEMENTS,
     )
     with pl.section_vector():
         pl.load(source_tile, source, [0, 0])
@@ -191,7 +188,6 @@ def simt_cast_from_int16(
     source_tile = pl.make_tile(
         pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_INT16, target_memory=pl.MemorySpace.Vec),
         addr=0x0000,
-        size=ELEMENTS * 2,
     )
     with pl.section_vector():
         pl.load(source_tile, source, [0, 0])
@@ -224,7 +220,6 @@ def simt_cast_from_int32(
     source_tile = pl.make_tile(
         pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec),
         addr=0x0000,
-        size=ELEMENTS * 4,
     )
     with pl.section_vector():
         pl.load(source_tile, source, [0, 0])
@@ -257,7 +252,6 @@ def simt_cast_from_int64(
     source_tile = pl.make_tile(
         pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Vec),
         addr=0x0000,
-        size=ELEMENTS * 8,
     )
     with pl.section_vector():
         pl.load(source_tile, source, [0, 0])
@@ -316,7 +310,6 @@ def simt_cast_from_fp32(
     source_tile = pl.make_tile(
         pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
         addr=0x0000,
-        size=ELEMENTS * 4,
     )
     with pl.section_vector():
         pl.load(source_tile, source, [0, 0])
@@ -360,7 +353,6 @@ def simt_cast_from_uint8(
     source_tile = pl.make_tile(
         pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec),
         addr=0x0000,
-        size=ELEMENTS,
     )
     with pl.section_vector():
         pl.load(source_tile, source, [0, 0])
@@ -390,7 +382,6 @@ def simt_cast_from_uint16(
     source_tile = pl.make_tile(
         pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_UINT16, target_memory=pl.MemorySpace.Vec),
         addr=0x0000,
-        size=ELEMENTS * 2,
     )
     with pl.section_vector():
         pl.load(source_tile, source, [0, 0])
@@ -423,7 +414,6 @@ def simt_cast_from_uint32(
     source_tile = pl.make_tile(
         pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
         addr=0x0000,
-        size=ELEMENTS * 4,
     )
     with pl.section_vector():
         pl.load(source_tile, source, [0, 0])
@@ -456,7 +446,6 @@ def simt_cast_from_uint64(
     source_tile = pl.make_tile(
         pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_UINT64, target_memory=pl.MemorySpace.Vec),
         addr=0x0000,
-        size=ELEMENTS * 8,
     )
     with pl.section_vector():
         pl.load(source_tile, source, [0, 0])

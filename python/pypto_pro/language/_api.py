@@ -1374,32 +1374,25 @@ def make_tile(
     tile_type: Any,
     *,
     addr: int,
-    size: Optional[int] = None,
 ) -> Tile:
     """Place one Tile at a fixed address in the memory space its type names.
 
     The Tile's shape, dtype, memory space and layout all come from ``tile_type``;
-    this call only binds it to an address range. For several Tiles of one type
+    this call binds it to an address range whose byte span is derived from the
+    shape and dtype. For several Tiles of one type
     rotating through a ping-pong buffer, use ``pl.make_tile_group``.
 
-    ``tile_type`` is the only positional argument; everything else is a keyword.
-    ``addr`` and ``size`` describe where the Tile sits rather than what it holds,
-    and two bare integers in a row read the same whichever order they are in — so
-    they are named at the call site, as ``pl.make_tile_group(type=, addrs=)`` is.
+    ``tile_type`` is the only positional argument; ``addr`` is keyword-only.
 
     Args:
         tile_type: ``pl.TileType`` descriptor — the only accepted spelling of the
             Tile's shape/dtype/memory space/layout
         addr: Required byte offset within the memory space. Fixed at parse time,
             and aligned to that space (32B Vec/Mat, 512B Left/Right, 64B Acc)
-        size: Optional byte span to reserve; defaults to the ``tile_type``
-            footprint (elements x dtype bytes). Pass it only to reserve more, as
-            an NZ/ZN tile rounded up to whole fractals needs
     Example::
 
         tt = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
         tile_a = pl.make_tile(tt, addr=0x0000)           # size derived: 64 * 128 * 2
-        tile_b = pl.make_tile(tt, addr=0x4000, size=16384)
     """
 
 

@@ -64,29 +64,27 @@ def gather_cmp_kernel(
     out: pl.Tensor[[ROWS, OUT_COLS], pl.DT_UINT32],
 ):
     src_tile = pl.make_tile(
-        pl.TileType(shape=[ROWS, COLS], dtype=pl.DT_INT16, target_memory=pl.MemorySpace.Vec), addr=0x0000, size=SRC_SIZE
+        pl.TileType(shape=[ROWS, COLS], dtype=pl.DT_INT16, target_memory=pl.MemorySpace.Vec), addr=0x0000
     )
     k_value_tile = pl.make_tile(
-        pl.TileType(shape=[1, 16], dtype=pl.DT_UINT16, target_memory=pl.MemorySpace.Vec), addr=0x1000, size=K_VALUE_SIZE
+        pl.TileType(shape=[1, 16], dtype=pl.DT_UINT16, target_memory=pl.MemorySpace.Vec), addr=0x1000
     )
     tmp_tile = pl.make_tile(
-        pl.TileType(shape=[1, 256], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec), addr=0x2000, size=TMP_SIZE
+        pl.TileType(shape=[1, 256], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec), addr=0x2000
     )
     indices_gt_tile = pl.make_tile(
         pl.TileType(shape=[ROWS, COLS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
         addr=0x3000,
-        size=DST_SIZE,
     )
     indices_eq_tile = pl.make_tile(
         pl.TileType(shape=[ROWS, COLS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
         addr=0x3200,
-        size=DST_SIZE,
     )
     cdst_gt_tile = pl.make_tile(
-        pl.TileType(shape=[1, 16], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec), addr=0x4000, size=CDST_SIZE
+        pl.TileType(shape=[1, 16], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec), addr=0x4000
     )
     cdst_eq_tile = pl.make_tile(
-        pl.TileType(shape=[1, 16], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec), addr=0x4040, size=CDST_SIZE
+        pl.TileType(shape=[1, 16], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec), addr=0x4040
     )
 
     with pl.section_vector():

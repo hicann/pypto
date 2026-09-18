@@ -27,7 +27,6 @@ def _make_ptr_cce_kernel(p: pl.Ptr[pl.DT_UINT8], out: pl.Tensor[[64, 128], pl.DT
     tile = pl.make_tile(
         pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
         addr=0x0,
-        size=16384,
     )
     with pl.section_vector():
         pl.load(tile, ws, [0, 0])
@@ -40,7 +39,6 @@ def _retensor_cce_kernel(src: pl.Tensor[[64, 128], pl.DT_FP16], out: pl.Tensor[[
     tile = pl.make_tile(
         pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
         addr=0x0,
-        size=16384,
     )
     with pl.section_vector():
         pl.load(tile, reshaped, [0, 0])
@@ -53,7 +51,6 @@ def _retensor_cce_dtype_kernel(src: pl.Tensor[[64, 128], pl.DT_FP16], out: pl.Te
     tile = pl.make_tile(
         pl.TileType(shape=[64, 256], dtype=pl.DT_UINT8, target_memory=pl.MemorySpace.Vec),
         addr=0x0,
-        size=16384,
     )
     with pl.section_vector():
         pl.load(tile, as_u8, [0, 0])

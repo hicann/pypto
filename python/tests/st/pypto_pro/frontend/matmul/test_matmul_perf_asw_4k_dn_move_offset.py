@@ -83,8 +83,6 @@ MAIN_ROW = M_TILES // MAIN_WINDOW - 1  # 3
 TAIL_WINDOW = M_TILES - MAIN_ROW * MAIN_WINDOW
 assert TAIL_WINDOW == MAIN_WINDOW
 
-ROUND = (TOTAL_CNT + NUM_CORES - 1) // NUM_CORES  # 8
-
 # ================================================================
 #  Buffer addresses
 #  L0A / L0B / L0C / L1 are FOUR separate SRAMs; each starts at 0x0.
@@ -106,6 +104,7 @@ def matmul_perf_asw_4k_dn_move_offset_kernel(
 
     num_cores = pl.get_block_num()
     core_id = pl.get_block_idx() // pl.get_subblock_num()
+    rounds = (TOTAL_CNT + num_cores - 1) // num_cores
 
     with pl.section_cube():
         # --- A_L1: 4-buffer, wide shape=(256, 128) ---
@@ -147,7 +146,7 @@ def matmul_perf_asw_4k_dn_move_offset_kernel(
         # Enable N-direction fixpipe drain
         pl.system.set_mm_layout_transform(enabled=True)
 
-        for r in pl.range(0, ROUND):
+        for r in pl.range(0, rounds):
             index = core_id + r * num_cores
 
             if index < TOTAL_CNT:
@@ -223,7 +222,7 @@ def run_perf_test(num_iters: int = 20, warmup: int = 3):
     logging.info("L1 depth: 4 (one wide tile, no chunk views)")
     logging.info("L0 DB: enabled (offset move -> TEXTRACT, narrow dst)")
     logging.info("ASW: mainWindow=%d, MAIN_ROW=%d", MAIN_WINDOW, MAIN_ROW)
-    logging.info("Cores: %d, rounds: %d", NUM_CORES, ROUND)
+    logging.info("Requested cores: %d", NUM_CORES)
     logging.info("Iters: warmup=%d, measure=%d", warmup, num_iters)
     logging.info("-" * 60)
 

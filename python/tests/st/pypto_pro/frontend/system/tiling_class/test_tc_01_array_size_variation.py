@@ -58,9 +58,9 @@ def kernel_size32(
     m = x.shape[0]
     n = x.shape[1]
     tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tile_type, addr=0x0000, size=16384)
-    tile_b = pl.make_tile(tile_type, addr=0x4000, size=16384)
-    tile_c = pl.make_tile(tile_type, addr=0x8000, size=16384)
+    tile_a = pl.make_tile(tile_type, addr=0x0000)
+    tile_b = pl.make_tile(tile_type, addr=0x4000)
+    tile_c = pl.make_tile(tile_type, addr=0x8000)
 
     with pl.section_vector():
         for i in pl.range(0, m, 64):
@@ -89,9 +89,9 @@ def kernel_size64(
     m = x.shape[0]
     n = x.shape[1]
     tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tile_type, addr=0x0000, size=16384)
-    tile_b = pl.make_tile(tile_type, addr=0x4000, size=16384)
-    tile_c = pl.make_tile(tile_type, addr=0x8000, size=16384)
+    tile_a = pl.make_tile(tile_type, addr=0x0000)
+    tile_b = pl.make_tile(tile_type, addr=0x4000)
+    tile_c = pl.make_tile(tile_type, addr=0x8000)
 
     with pl.section_vector():
         for i in pl.range(0, m, 64):
@@ -120,9 +120,9 @@ def kernel_size128(
     m = x.shape[0]
     n = x.shape[1]
     tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tile_type, addr=0x0000, size=16384)
-    tile_b = pl.make_tile(tile_type, addr=0x4000, size=16384)
-    tile_c = pl.make_tile(tile_type, addr=0x8000, size=16384)
+    tile_a = pl.make_tile(tile_type, addr=0x0000)
+    tile_b = pl.make_tile(tile_type, addr=0x4000)
+    tile_c = pl.make_tile(tile_type, addr=0x8000)
 
     with pl.section_vector():
         for i in pl.range(0, m, 64):
@@ -151,9 +151,9 @@ def kernel_size256(
     m = x.shape[0]
     n = x.shape[1]
     tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tile_type, addr=0x0000, size=16384)
-    tile_b = pl.make_tile(tile_type, addr=0x4000, size=16384)
-    tile_c = pl.make_tile(tile_type, addr=0x8000, size=16384)
+    tile_a = pl.make_tile(tile_type, addr=0x0000)
+    tile_b = pl.make_tile(tile_type, addr=0x4000)
+    tile_c = pl.make_tile(tile_type, addr=0x8000)
 
     with pl.section_vector():
         for i in pl.range(0, m, 64):

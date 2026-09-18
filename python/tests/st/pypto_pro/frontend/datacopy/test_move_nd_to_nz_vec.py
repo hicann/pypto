@@ -88,7 +88,7 @@ def _make_kernel(rows, cols, torch_dtype, compact, src_rows, flat_rows, c0, nz_b
         # Same UB address as the destination, read row-major: this is the physical NZ image.
         flat_view = pl.make_tile(
             pl.TileType(shape=[flat_rows, c0], dtype=dtype, target_memory=pl.MemorySpace.Vec),
-            addr=0x20000, size=nz_bytes,
+            addr=0x20000,
         )
         with pl.section_vector():
             src = src_group.next()

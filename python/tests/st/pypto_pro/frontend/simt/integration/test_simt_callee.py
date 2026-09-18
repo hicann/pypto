@@ -77,8 +77,8 @@ def simt_callee_kernel(
     delta: pl.DT_FP32,
 ):
     tile_type = pl.TileType(shape=[1, THREADS], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    src = pl.make_tile(tile_type, addr=0x0000, size=TILE_BYTES)
-    dst = pl.make_tile(tile_type, addr=0x0080, size=TILE_BYTES)
+    src = pl.make_tile(tile_type, addr=0x0000)
+    dst = pl.make_tile(tile_type, addr=0x0080)
     with pl.section_vector():
         pl.load(src, x, [0, 0])
         pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)

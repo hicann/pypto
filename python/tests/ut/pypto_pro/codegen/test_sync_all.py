@@ -38,7 +38,7 @@ def _sync_all_mix_kernel(
     a: pl.Tensor[[64, 128], pl.DT_FP16],
 ):
     tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tile_type, addr=0x0000, size=16384)
+    tile_a = pl.make_tile(tile_type, addr=0x0000)
     pl.load(tile_a, a, [0, 0])
     pl.system.sync_all()
 
@@ -48,7 +48,7 @@ def _sync_all_aiv_only_kernel(
     a: pl.Tensor[[64, 128], pl.DT_FP16],
 ):
     tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tile_type, addr=0x0000, size=16384)
+    tile_a = pl.make_tile(tile_type, addr=0x0000)
     pl.load(tile_a, a, [0, 0])
     pl.system.sync_all(core_type=pl.SyncCoreType.AIV_ONLY)
 
@@ -64,10 +64,10 @@ def _sync_all_soft_aiv_only_kernel(
     sync_gm: pl.Tensor[[384], pl.DT_INT32],
 ):
     tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tile_type, addr=0x0000, size=16384)
+    tile_a = pl.make_tile(tile_type, addr=0x0000)
     pl.load(tile_a, a, [0, 0])
     sync_ub_type = pl.TileType(shape=[1, 64], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    sync_ub = pl.make_tile(sync_ub_type, addr=0x3000, size=256)
+    sync_ub = pl.make_tile(sync_ub_type, addr=0x3000)
     pl.system.sync_all([sync_gm, sync_ub], mode=pl.SyncAllMode.SOFT, core_type=pl.SyncCoreType.AIV_ONLY)
 
 
@@ -77,12 +77,12 @@ def _sync_all_soft_mix_kernel(
     sync_gm: pl.Tensor[[384], pl.DT_INT32],
 ):
     tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tile_type, addr=0x0000, size=16384)
+    tile_a = pl.make_tile(tile_type, addr=0x0000)
     pl.load(tile_a, a, [0, 0])
     sync_ub_type = pl.TileType(shape=[1, 64], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec)
-    sync_ub = pl.make_tile(sync_ub_type, addr=0x3000, size=256)
+    sync_ub = pl.make_tile(sync_ub_type, addr=0x3000)
     sync_l1_type = pl.TileType(shape=[1, 64], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Mat)
-    sync_l1 = pl.make_tile(sync_l1_type, addr=0x4000, size=256)
+    sync_l1 = pl.make_tile(sync_l1_type, addr=0x4000)
     pl.system.sync_all([sync_gm, sync_ub, sync_l1], mode=pl.SyncAllMode.SOFT, core_type=pl.SyncCoreType.MIX)
 
 

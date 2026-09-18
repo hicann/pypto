@@ -391,10 +391,10 @@ def with_section_vf_min_exp_kernel(
     out_exp: pl.Tensor[[1, 64], pl.DT_FP32],
 ):
     tf = pl.TileType(shape=[VF_N, VF_M], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    in_a = pl.make_tile(tf, addr=VF_VA_A, size=VF_TILE_SIZE)
-    in_b = pl.make_tile(tf, addr=VF_VA_B, size=VF_TILE_SIZE)
-    t_out0 = pl.make_tile(tf, addr=VF_VA_OUT0, size=VF_TILE_SIZE)
-    t_out1 = pl.make_tile(tf, addr=VF_VA_OUT1, size=VF_TILE_SIZE)
+    in_a = pl.make_tile(tf, addr=VF_VA_A)
+    in_b = pl.make_tile(tf, addr=VF_VA_B)
+    t_out0 = pl.make_tile(tf, addr=VF_VA_OUT0)
+    t_out1 = pl.make_tile(tf, addr=VF_VA_OUT1)
     with pl.section_vector():
         pl.load(in_a, a, [0, 0])
         pl.load(in_b, b, [0, 0])

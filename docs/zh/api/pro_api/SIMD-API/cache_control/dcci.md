@@ -102,7 +102,7 @@ def dcci_ub_kernel(
     out: pl.Tensor[[16, 16], pl.DT_FP32],
 ):
     tt = pl.TileType(shape=[16, 16], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    t = pl.make_tile(tt, addr=0x0000, size=1024)
+    t = pl.make_tile(tt, addr=0x0000)
     with pl.section_vector():
         pl.load(t, inp, [0, 0])
         # load（MTE2）完成后才能执行 dcci（S）

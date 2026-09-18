@@ -92,7 +92,6 @@ def cube_move_tile_group_to_tile_kernel(
         pl.TileType(
             shape=[CUBE_TILE, CUBE_K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left),
         addr=0x0000,
-        size=CUBE_TILE * CUBE_K * 2,
     )
     b_l1_group = pl.make_tile_group(
         type=pl.TileType(
@@ -149,7 +148,6 @@ def cube_move_tile_to_tile_group_kernel(
         pl.TileType(
             shape=[CUBE_TILE, CUBE_K], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
         addr=0x0000,
-        size=CUBE_TILE * CUBE_K * 2,
     )
     a_l0a_group = pl.make_tile_group(
         type=pl.TileType(
@@ -161,13 +159,11 @@ def cube_move_tile_to_tile_group_kernel(
         pl.TileType(
             shape=[CUBE_K, CUBE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Mat),
         addr=0x4000,
-        size=CUBE_K * CUBE_N * 2,
     )
     b_l0b_tile = pl.make_tile(
         pl.TileType(
             shape=[CUBE_K, CUBE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right),
         addr=0x0000,
-        size=CUBE_K * CUBE_N * 2,
     )
     acc_group = pl.make_tile_group(
         type=pl.TileType(
@@ -217,7 +213,6 @@ def vector_mixed_move_both_directions_kernel(
     middle_tile = pl.make_tile(
         tile_type,
         addr=0x8000,
-        size=VEC_TILE_M * VEC_TILE_N * 2,
     )
     out_group = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[1])
 
@@ -284,7 +279,6 @@ def cv_move_acc_group_to_vec_tile_kernel(
         pl.TileType(
             shape=[CV_VEC_M, CV_TILE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
         addr=0x0000,
-        size=CV_VEC_M * CV_TILE_N * 4,
     )
 
     with pl.section_cube():

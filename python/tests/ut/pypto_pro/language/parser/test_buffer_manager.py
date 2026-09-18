@@ -41,7 +41,7 @@ def test_constant_mutex_lock_unlock_uses_dynamic_ir():
     @pl.jit
     def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-        t = pl.make_tile(tt, addr=0, size=128)
+        t = pl.make_tile(tt, addr=0)
         pl.system.mutex_lock(pipe=pl.PipeType.MTE2, mutex_id=0)
         pl.load(t, x, [0, 0])
         pl.system.mutex_unlock(pipe=pl.PipeType.MTE2, mutex_id=0)
@@ -55,7 +55,7 @@ def test_keyword_form():
     @pl.jit
     def k(x: pl.Tensor[[1, 64], pl.DT_FP16]):
         tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-        t = pl.make_tile(tt, addr=0, size=128)
+        t = pl.make_tile(tt, addr=0)
         pl.system.mutex_lock(pipe=pl.PipeType.MTE2, mutex_id=1)
         pl.load(t, x, [0, 0])
         pl.system.mutex_unlock(pipe=pl.PipeType.MTE2, mutex_id=1)

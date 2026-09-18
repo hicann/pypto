@@ -30,7 +30,7 @@ def test_list_closure_var_as_positional_arg():
         t: pl.Tensor[[128, 128], pl.DT_FP32], out: pl.Tensor[[128, 128], pl.DT_FP32]
     ):
         tile_type = pl.TileType(shape=tile_shape, dtype=pl.DT_FP32)
-        a = pl.make_tile(tile_type, addr=0, size=16384)
+        a = pl.make_tile(tile_type, addr=0)
         pl.load(a, t, offset_value)
         result: pl.Tensor[[128, 128], pl.DT_FP32] = pl.store(out, a, offset_value)
         _test_result = result
@@ -96,7 +96,7 @@ def test_tuple_closure_var_as_positional_arg():
         t: pl.Tensor[[128, 128], pl.DT_FP32], out: pl.Tensor[[128, 128], pl.DT_FP32]
     ):
         tile_type = pl.TileType(shape=tile_shape, dtype=pl.DT_FP32)
-        a = pl.make_tile(tile_type, addr=0, size=16384)
+        a = pl.make_tile(tile_type, addr=0)
         pl.load(a, t, offset_value)
         result: pl.Tensor[[128, 128], pl.DT_FP32] = pl.store(out, a, offset_value)
         _test_result = result
@@ -134,7 +134,7 @@ def test_nested_list_closure_var():
         t: pl.Tensor[[128, 128], pl.DT_FP32], out: pl.Tensor[[128, 128], pl.DT_FP32]
     ):
         tile_type = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32)
-        a = pl.make_tile(tile_type, addr=0, size=16384)
+        a = pl.make_tile(tile_type, addr=0)
         pl.load(a, t, offsets_value)  # type: ignore[arg-type]
         result: pl.Tensor[[128, 128], pl.DT_FP32] = pl.store(out, a, [0, 0])
         _test_result = result

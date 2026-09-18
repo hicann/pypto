@@ -50,16 +50,14 @@ def tiling_op_kernel(
     tiling: OpTiling,
 ):
     tile_type = pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    tile_a = pl.make_tile(tile_type, addr=0x0000, size=16384)
+    tile_a = pl.make_tile(tile_type, addr=0x0000)
     tile_b = pl.make_tile(
         pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
         addr=0x4000,
-        size=16384,
     )
     tile_c = pl.make_tile(
         pl.TileType(shape=[64, 128], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
         addr=0x8000,
-        size=16384,
     )
 
     with pl.section_vector():
