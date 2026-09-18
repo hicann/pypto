@@ -34,7 +34,7 @@ reduce_min(src, preg, datablock: bool = False, merge_mode: Optional[MergeMode] =
 |---|---|---|
 | src | 输入 | 源操作数，[reg_tensor](../reg_tensor.md)，源操作数src与目的操作数dst的数据类型保持一致。支持的数据类型为：DT_INT16、DT_UINT16、DT_FP16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64。 |
 | preg | 输入 | [mask_reg](../mask_reg.md)。当所有元素均不参与计算时（mask为空），将该数据类型的最大值写入dst[0]。 |
-| datablock | 输入 | 可选，决定接口工作模式，True时按datablock粒度归约（对应vcgmin指令），默认False。当datablock=True时，启用datablock粒度归约，每个datablock独立归约：32位宽（DT_INT32、DT_UINT32、DT_FP32）类型每16个元素为一个datablock，16位宽（DT_INT16、DT_UINT16、DT_FP16）类型每32个元素为一个datablock，各datablock分别求最小值并将结果写入各自datablock的第一个元素。 |
+| datablock | 输入 | 可选，决定接口工作模式，True时按datablock粒度归约（对应vcgmin指令），默认False。当datablock=True时，启用datablock粒度归约，每个datablock独立归约：32位宽（DT_INT32、DT_UINT32、DT_FP32）类型每16个元素为一个datablock，16位宽（DT_INT16、DT_UINT16、DT_FP16）类型每32个元素为一个datablock，各datablock分别求最小值并将结果依次写入dst的最低位。 |
 | merge_mode | 输入 | 可选，对应[MergeMode](../types/MergeMode.md)类型。<br>- pypto_pro.language.MergeMode.ZEROING（默认），preg未筛选的元素在dst中置0。<br>- pypto_pro.language.MergeMode.MERGING当前不支持。 |
 
 ## 约束说明

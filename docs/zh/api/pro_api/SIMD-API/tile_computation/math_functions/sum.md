@@ -32,7 +32,7 @@ pypto_pro.language.sum(
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| out | 输入 | 目的操作数，Tile类型，存放归约结果，支持的数据类型详见[约束说明](#约束说明)。<br>如果src的shape为[M, N]。dim=0时shape为[M, 1]；dim=1时shape为[1, N]。 |
+| out | 输出 | 目的操作数，Tile类型，存放归约结果，支持的数据类型详见[约束说明](#约束说明)。<br>如果src的shape为[M, N]。dim=0时shape为[M, 1]；dim=1时shape为[1, N]。 |
 | src | 输入 | 源操作数，Tile类型，支持的数据类型详见[约束说明](#约束说明)。 |
 | tmp | 输入 | 临时存储，Tile类型，兼容性参数。<br>dim=0降低到TROWSUM时不读写该参数；dim=1降低到TCOLSUM，默认非binary路径不使用该参数。 |
 | dim | 输入 | 归约维度，0表示沿行方向做归约，1表示沿列方向做归约。 |

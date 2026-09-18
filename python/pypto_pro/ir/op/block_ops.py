@@ -491,9 +491,16 @@ def _ir_init_output(
 
 def _tile_shape_ints(tile_type: "_IRTileType") -> list[int] | None:
     """Return the compile-time integer shape of a TileType, or None if any
-    dimension is not a static constant (skip check — never over-rejects)."""
+    dimension is not a static constant (skip check — never over-rejects).
+
+    bool is excluded (same convention as _static_dim): without this, a
+    True/False dim would slip through ``isinstance(dim, int)`` as 1/0 and be
+    compared as a real static dim.
+    """
     shape: list[int] = []
     for dim in tile_type.shape:
+        if isinstance(dim, bool):
+            return None
         if isinstance(dim, ConstInt):
             shape.append(int(dim.value))
         elif isinstance(dim, int):
@@ -3777,6 +3784,56 @@ def _auto_alloc_scaling_tile_hook(self, call: ast.Call, kwargs: dict) -> None:
 # ---------------------------------------------------------------------------
 
 
+# Reduce input-dtype support per dim on Ascend 950PR/950DT, from the ISA
+# instruction dtype lists (pto-isa docs/isa/TROWMAX_zh.md etc.). Row and col
+# instructions differ: e.g. TROWMAX/TROWMIN have no bf16 while TCOLMAX/TCOLMIN
+# do, and TROWSUM/TCOLSUM have no int8/uint8. Checked against the reduce input
+# (src) dtype; argmax/argmin have no ISA dtype list and are not gated here.
+_ROW_SUM_DTYPES = (
+    DataType.FP16,
+    DataType.FP32,
+    DataType.INT32,
+    DataType.INT64,
+    DataType.UINT64,
+    DataType.INT16
+)
+_ROW_MAX_MIN_DTYPES = (
+    DataType.FP16,
+    DataType.FP32,
+    DataType.INT32,
+    DataType.INT64,
+    DataType.UINT64,
+    DataType.INT16,
+    DataType.INT8,
+    DataType.UINT8
+)
+_COL_MAX_MIN_DTYPES = (
+    DataType.FP16,
+    DataType.FP32,
+    DataType.INT8,
+    DataType.UINT8,
+    DataType.INT16,
+    DataType.UINT16,
+    DataType.INT32,
+    DataType.UINT32,
+    DataType.INT64,
+    DataType.UINT64,
+    DataType.BF16,
+)
+_COL_SUM_DTYPES = (
+    DataType.FP16,
+    DataType.FP32,
+    DataType.INT16,
+    DataType.INT32,
+    DataType.INT64,
+    DataType.UINT64
+)
+_DIM_REDUCE_DTYPES: dict[str, tuple[tuple[DataType, ...], tuple[DataType, ...]]] = {
+    "max": (_ROW_MAX_MIN_DTYPES, _COL_MAX_MIN_DTYPES),
+    "min": (_ROW_MAX_MIN_DTYPES, _COL_MAX_MIN_DTYPES),
+    "sum": (_ROW_SUM_DTYPES, _COL_SUM_DTYPES),
+}
+
 def _create_tile_scalar_op(
     out: Expr, lhs: Expr, rhs: Expr, *, tile_op: str, scalar_op: str, span: Span | None = None, **kwargs
 ) -> Expr:
@@ -3800,6 +3857,19 @@ def _create_dim_op(args: list[Expr], *, row_op: str, col_op: str, dim: int = 0, 
     if dim not in (0, 1):
         op_name = col_op.removeprefix("col_")
         raise InvalidShape(f"{op_name}: dim must be 0 (row) or 1 (column), got {dim}")
+    op_name = col_op.removeprefix("col_")
+    src_dtype = getattr(getattr(args[1], "type", None), "dtype", None)
+    dtype_sets = _DIM_REDUCE_DTYPES.get(op_name)
+    if dtype_sets is not None and src_dtype is not None:
+        # Row/col ISA instructions have different dtype ranges (e.g. TROWMAX
+        # lacks bf16 while TCOLMAX supports it); validate the reduce input
+        # dtype against the per-dim ISA support on Ascend 950.
+        allowed = dtype_sets[dim]
+        if src_dtype not in allowed:
+            allowed_names = ", ".join(str(d) for d in allowed)
+            raise NotSupported(
+                f"{op_name}: dim={dim} reduce does not support src dtype {src_dtype}, supported: {allowed_names}"
+            )
     ir_name = row_op if dim == 0 else col_op
     return _ir_core.create_op_call(block_ir_op(ir_name), args, {}, span)
 

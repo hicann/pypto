@@ -636,11 +636,12 @@ static std::string MakeBlockOutInsertCodegenCCE(const ir::CallPtr& op, codegen::
 // ============================================================================
 // block.move  - args = [dst, src] or [dst, src, offset]
 // ============================================================================
-static std::string MakeBlockOutMoveCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
+static std::string MakeBlockOutMoveCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base,
+                                              const std::string& op_name)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, op->args_.size() >= 2 && op->args_.size() <= 4)
-        << "block.move: expected 2 to 4 args, got " << op->args_.size();
+        << op_name << ": expected 2 to 4 args, got " << op->args_.size();
 
     std::string dst = codegen.GetExprAsCode(op->args_[0]);
     std::string src = codegen.GetExprAsCode(op->args_[1]);
@@ -687,9 +688,9 @@ static std::string MakeBlockOutMoveCodegenCCE(const ir::CallPtr& op, codegen::Co
     if (offset_operand != nullptr) {
         auto make_tuple = ir::As<ir::MakeTuple>(offset_operand);
         PRO_CODEGEN_CHECK(ExternalError::INVALID_TYPE, make_tuple)
-            << "block.move: offset must be a tuple [offset_m, offset_k]";
+            << op_name << ": offset must be a tuple [offset_m, offset_k]";
         PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, make_tuple->elements_.size() == 2)
-            << "block.move: offset must have 2 elements";
+            << op_name << ": offset must have 2 elements";
         auto m_offset_expr = codegen.GetExprAsCode(make_tuple->elements_[0]);
         auto k_offset_expr = codegen.GetExprAsCode(make_tuple->elements_[1]);
 
@@ -1128,7 +1129,7 @@ static std::string MakeBlockOutCmpsCodegenCCE(const ir::CallPtr& op, codegen::Co
 // block.ub_copy  - args = [src, dst] (Vec-to-Vec copy)
 static std::string MakeBlockOutUbCopyCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
-    return MakeBlockOutMoveCodegenCCE(op, codegen_base);
+    return MakeBlockOutMoveCodegenCCE(op, codegen_base, "block.ub_copy");
 }
 
 static std::string MakeBlockOutSsbufStoreCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
@@ -1467,7 +1468,7 @@ REGISTER_BACKEND_OP(BackendCCE, "block.set_validshape")
 REGISTER_BACKEND_OP(BackendCCE, "block.move")
     .set_pipe(ir::PipeType::MTE1)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-        return MakeBlockOutMoveCodegenCCE(op, codegen);
+        return MakeBlockOutMoveCodegenCCE(op, codegen, "block.move");
     });
 
 REGISTER_BACKEND_OP(BackendCCE, "block.move_fp")

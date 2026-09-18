@@ -870,6 +870,12 @@ class CallParserMixin:
             if src_mem is not None and dst_mem is not None:
                 return get_move_pipe(src_mem, dst_mem)
             return None
+        if op_name == "expands":
+            dst_mem = tilerefs[0].memory if tilerefs[0] else None
+            if dst_mem == ir.MemorySpace.Mat:
+                return ir.PipeType.MTE2
+            elif dst_mem == ir.MemorySpace.Vec:
+                return ir.PipeType.V
         if op_name in ("store", "store_tile"):
             src_mem = tilerefs[1].memory if len(tilerefs) > 1 and tilerefs[1] else None
             if src_mem is not None:
