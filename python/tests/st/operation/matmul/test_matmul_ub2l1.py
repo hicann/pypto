@@ -10,7 +10,7 @@
 # -----------------------------------------------------------------------------------------------------------
 """
 Cast+Matmul 融合算子 ST 测试脚本。
-场景：先 Cast 输入到目标 dtype，再执行 Matmul。
+场景：先 Cast 输入到目标 dtype，再执行 Matmul；另含 Cast+ScaledMM(MX) 的 UB2L1 场景。
 支持 pytest 参数化执行和直接执行两种模式。
 """
 
@@ -21,11 +21,17 @@ from testcase.matmul_ub2l1_test_case import (
     CAST_BOTH_MATMUL_TESTS,
     CAST_LEFT_MATMUL_TESTS,
     CAST_RIGHT_MATMUL_TESTS,
+    SCALED_MM_UB2L1_TESTS,
     CastMatmulConfig,
+    ScaledMmUb2L1Config,
 )
 import torch
+import torch.nn.functional as functional
 
 import pypto
+
+K_BLOCK_SIZE_64 = 64
+SCALE_INNER_DIM = 2
 
 
 @pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
@@ -136,6 +142,121 @@ def run_cast_matmul_test(case: dict):
 
 
 ALL_CAST_MATMUL_TESTS = CAST_RIGHT_MATMUL_TESTS + CAST_LEFT_MATMUL_TESTS + CAST_BOTH_MATMUL_TESTS
+
+
+@pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+def cast_scaled_mm_ub2l1_kernel(
+    a_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC]),
+    b_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC]),
+    out_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC]),
+    scale_a_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], dtype=pypto.DT_FP8E8M0),
+    scale_b_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], dtype=pypto.DT_FP8E8M0),
+    config: ScaledMmUb2L1Config,
+):
+    m, n = config.m, config.n
+    k = config.k
+    vm, vn = config.view_shape
+    m_loop = (m + vm - 1) // vm
+    n_loop = (n + vn - 1) // vn
+    scale_k = (k + K_BLOCK_SIZE_64 - 1) // K_BLOCK_SIZE_64
+
+    # 当设置scope大于5000，即5001以上时，开启mix场景，走入UB2L1
+    pypto.set_pass_options(sg_set_scope=10000)
+    for m_idx in pypto.loop(0, m_loop, 1, name="LOOP_L0_mIdx", idx_name="m_idx"):
+        for n_idx in pypto.loop(0, n_loop, 1, name="LOOP_L0_nIdx", idx_name="n_idx"):
+            m_offset = m_idx * vm
+            n_offset = n_idx * vn
+
+            a_view = pypto.view(a_tensor, [vm, k], [m_offset, 0], valid_shape=[min(vm, m - m_offset), k])
+
+            # B 矩阵（转置布局 [n, k]）FP32 输入 Cast 为 FP8E4M3，cast 产出 UB 数据后
+            # 作为 ScaledMM(MX) 右矩阵拷入 L1，触发 MX_PADDING_MODE 的 UB2L1 约束
+            b_tile = pypto.view(b_tensor, [vn, k], [n_offset, 0], valid_shape=[min(vn, n - n_offset), k])
+            pypto.set_vec_tile_shapes(*config.b_vec_tile_shape)
+            b_compute = pypto.cast(b_tile, pypto.DT_FP8E4M3, pypto.CastMode.CAST_NONE)
+
+            scale_a_view = pypto.view(
+                scale_a_tensor, [vm, scale_k, SCALE_INNER_DIM], [m_offset, 0, 0],
+                valid_shape=[min(vm, m - m_offset), scale_k, SCALE_INNER_DIM]
+            )
+            scale_b_view = pypto.view(
+                scale_b_tensor, [scale_k, vn, SCALE_INNER_DIM], [0, n_offset, 0],
+                valid_shape=[scale_k, min(vn, n - n_offset), SCALE_INNER_DIM]
+            )
+
+            pypto.set_cube_tile_shapes(*config.cube_tile_shape)
+            out_view = pypto.scaled_mm(
+                a_view,
+                b_compute,
+                config.out_pto_dtype,
+                scale_a_view,
+                scale_b_view,
+                a_trans=False,
+                b_trans=True,
+                scale_a_trans=False,
+                scale_b_trans=False,
+                c_matrix_nz=False,
+            )
+            pypto.assemble(out_view, [m_offset, n_offset], out_tensor)
+    # 运行完后设置回-1，关闭mix
+    pypto.set_pass_options(sg_set_scope=-1)
+
+
+def run_cast_scaled_mm_ub2l1_test(case: dict):
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    torch.npu.set_device(device_id)
+
+    config = ScaledMmUb2L1Config.from_test_case(case)
+
+    m, k, n = config.m, config.k, config.n
+    scale_k = (k + K_BLOCK_SIZE_64 - 1) // K_BLOCK_SIZE_64
+    padding_k = scale_k * K_BLOCK_SIZE_64 - k
+
+    # A 直接 FP8E4M3 输入；B 为 FP32 输入，kernel 内 Cast 为 FP8E4M3
+    a_cpu = torch.rand([m, k], dtype=torch.float32).uniform_(-3, 3).to(torch.float8_e4m3fn)
+    b_src_cpu = torch.rand([n, k], dtype=torch.float32).uniform_(-3, 3)
+    b_cpu = b_src_cpu.to(torch.float8_e4m3fn)
+    scale_a_cpu = torch.rand([m, scale_k, SCALE_INNER_DIM], dtype=torch.float32).uniform_(0, 1).to(torch.float8_e8m0fnu)
+    scale_b_cpu = torch.rand([scale_k, n, SCALE_INNER_DIM], dtype=torch.float32).uniform_(0, 1).to(torch.float8_e8m0fnu)
+
+    # golden 与 scaled_mm 语义对齐：scale 按 32 元素粒度展开到 K 维（K 向 pad 到 scale_k*64）
+    scale_a_tmp = scale_a_cpu.view(m, scale_k * SCALE_INNER_DIM).to(torch.float32).repeat_interleave(32, dim=1)
+    scale_b_tmp = (
+        torch.transpose(scale_b_cpu, -2, -1)
+        .reshape(scale_k * SCALE_INNER_DIM, n)
+        .to(torch.float32)
+        .repeat_interleave(32, dim=0)
+    )
+
+    mat_a_tmp = functional.pad(a_cpu.to(torch.float32), ((0, padding_k, 0, 0)), "constant")
+    mat_a_tmp = mat_a_tmp * scale_a_tmp
+    mat_b_tmp = functional.pad(b_cpu.to(torch.float32).T, ((0, 0, 0, padding_k)), "constant")
+    mat_b_tmp = scale_b_tmp * mat_b_tmp
+
+    out_torch_dtype = ScaledMmUb2L1Config.get_torch_dtype(config.out_dtype)
+    golden = torch.matmul(mat_a_tmp, mat_b_tmp).to(out_torch_dtype)
+
+    device = f"npu:{device_id}"
+    a_npu = a_cpu.to(device)
+    b_npu = b_src_cpu.to(device)
+    scale_a_npu = scale_a_cpu.to(device)
+    scale_b_npu = scale_b_cpu.to(device)
+    out_npu = torch.zeros([m, n], dtype=out_torch_dtype, device=device)
+
+    cast_scaled_mm_ub2l1_kernel(a_npu, b_npu, out_npu, scale_a_npu, scale_b_npu, config)
+
+    atol, rtol = ScaledMmUb2L1Config.get_tolerance(config.out_dtype)
+    assert torch.allclose(out_npu.cpu(), golden, atol=atol, rtol=rtol), (
+        f"Test case {case['id']} ({case['name']}) failed"
+    )
+
+
+@pytest.mark.parametrize(
+    "case", [pytest.param(case, marks=pytest.mark.soc(*case["products"])) for case in SCALED_MM_UB2L1_TESTS]
+)
+@pypto.options(pass_options={"enable_slice": False})
+def test_cast_scaled_mm_ub2l1(case: dict):
+    run_cast_scaled_mm_ub2l1_test(case)
 
 
 @pytest.mark.parametrize(

@@ -62,6 +62,16 @@ public:
 
     static bool ShouldUseDdrForSpecialPath(bool hasParallelDifferentRequirement, MemoryType from, MemoryType to);
 
+    // UB2L1约束：当前op的copy_in_l1_padding_mode为MX_PADDING_MODE时，取拷入源tensor（view输入）
+    // 的dynValidShape（validK，K维由copy_in_l1_k_index指示位于第0/1维）：validK非concrete直接
+    // 回退经DDR搬运（MX补齐语义仅由DDR路径TLoad支持）；validK为concrete且按64（MX scale块
+    // 大小）对齐时无需K向补齐，允许UB->L1直连，否则同样回退DDR。
+    static bool IsMxPaddingMode(const Operation& operation);
+
+    // 判断tensor的消费者中是否存在需回退DDR的MX_PADDING_MODE拷入op（validK非concrete或
+    // 未按64对齐），用于UB2L1路径回退DDR。
+    static bool HasMxPaddingModeConsumer(const LogicalTensorPtr& tensor);
+
     // 在判断直接搬运路径冲突前，解析 view/assemble 语义 op 背后的有效消费者需求。
     // OP_VIEW/OP_SLICE: 通过 ViewOpAttribute.GetTo() 获取目的地类型。
     // OP_ASSEMBLE/OP_CONTRACT: 若处于特殊直连路径且 output 有下游消费者，推断 targetType；

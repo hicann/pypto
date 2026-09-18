@@ -34,6 +34,7 @@ using namespace npu::tile_fwk;
 namespace npu {
 namespace tile_fwk {
 const int NUM_1 = 1;
+const int NUM_2 = 2;
 const int NUM_8 = 8;
 const int NUM_16 = 16;
 const int NUM_32 = 32;
@@ -2433,6 +2434,88 @@ TEST_F(AssignMemoryTypeTest, TestHf8CastRightMatmulUB2L1)
             }
         }
         EXPECT_TRUE(hasUb2L1) << "Cast result should use UB->L1 before feeding right matrix into matmul.";
+    }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+    Platform::Instance().ReloadMemoryPaths("2201");
+}
+
+// 负向约束用例（A5 + slice 新路径）：MX matmul 的 L1 拷入带 MX_PADDING_MODE 属性且 K 轴（k=1）
+// 未按 64 对齐，UB->L1 直连不执行 MX K 向补齐，cast 产生的 UB 输入应回退经 DDR 搬运
+TEST_F(AssignMemoryTypeTest, TestMXMatmulUB2L1DdrFallback)
+{
+    // FP32 -> FP8E4M3 cast 后作为 MX matmul 右矩阵（B 转置，n=64, k=1），MX 要求 kL0 按 64 对齐
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Platform::Instance().ReloadMemoryPaths("3510");
+    config::SetHostConfig(KEY_STRATEGY, "AssignMemoryTypeTestStrategy");
+    std::vector<int64_t> castInputShape = {NUM_64, NUM_1};
+    std::vector<int64_t> leftMatrixShape = {NUM_8, NUM_1};
+    std::vector<int64_t> leftScaleShape = {NUM_8, NUM_1, NUM_2};
+    std::vector<int64_t> rightScaleShape = {NUM_1, NUM_64, NUM_2};
+    std::vector<int64_t> outputShape = {NUM_8, NUM_64};
+    PROGRAM("AssignMemoryTest")
+    {
+        Tensor castInput(DataType::DT_FP32, castInputShape, "castInput");
+        Tensor leftMatrix(DataType::DT_FP8E4M3, leftMatrixShape, "leftMatrix");
+        Tensor leftScale(DataType::DT_FP8E8M0, leftScaleShape, "leftScale");
+        Tensor rightScale(DataType::DT_FP8E8M0, rightScaleShape, "rightScale");
+        Tensor out(DataType::DT_FP32, outputShape, "output");
+        SetFullTestStrategy();
+        Function* originFunction = nullptr;
+        config::SetBuildStatic(true);
+        FUNCTION("TestMXMatmulUB2L1DdrFallback", {castInput, leftMatrix, leftScale, rightScale, out})
+        {
+            TileShape::Current().SetVecTile(NUM_16, NUM_1);
+            Tensor castRightMatrix = Cast(castInput, DataType::DT_FP8E4M3);
+            TileShape::Current().SetCubeTile({NUM_8, NUM_64}, {NUM_64, NUM_64}, {NUM_64, NUM_64});
+            out = Matrix::MatmulMX(out.GetDataType(), leftMatrix, leftScale, castRightMatrix, rightScale, false, false,
+                                   true, false, false);
+        }
+        originFunction = Program::GetInstance().GetFunctionByRawName("TENSOR_TestMXMatmulUB2L1DdrFallback");
+        ASSERT_NE(originFunction, nullptr) << "Function pointer is null";
+        EXPECT_EQ(CountMemoryPath(originFunction, MemoryType::MEM_UB, MemoryType::MEM_L1), 0)
+            << "MX_PADDING_MODE copy-in with K not 64-aligned must not use UB->L1 direct path";
+        EXPECT_GE(CountMemoryPath(originFunction, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1), 1)
+            << "MX_PADDING_MODE copy-in with K not 64-aligned should fall back to DDR transit path";
+    }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+    Platform::Instance().ReloadMemoryPaths("2201");
+}
+
+// 正向用例（A5 + slice 新路径）：MX matmul 的 K 轴（k=64）concrete 且按 64 对齐时无需 K 向补齐，
+// cast 产生的 UB 输入允许保持 UB->L1 直连
+TEST_F(AssignMemoryTypeTest, TestMXMatmulUB2L1KAlignedDirectPath)
+{
+    // FP32 -> FP8E4M3 cast 后作为 MX matmul 右矩阵（B 转置，n=64, k=64）
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Platform::Instance().ReloadMemoryPaths("3510");
+    config::SetHostConfig(KEY_STRATEGY, "AssignMemoryTypeTestStrategy");
+    std::vector<int64_t> castInputShape = {NUM_64, NUM_64};
+    std::vector<int64_t> leftMatrixShape = {NUM_8, NUM_64};
+    std::vector<int64_t> leftScaleShape = {NUM_8, NUM_1, NUM_2};
+    std::vector<int64_t> rightScaleShape = {NUM_1, NUM_64, NUM_2};
+    std::vector<int64_t> outputShape = {NUM_8, NUM_64};
+    PROGRAM("AssignMemoryTest")
+    {
+        Tensor castInput(DataType::DT_FP32, castInputShape, "castInput");
+        Tensor leftMatrix(DataType::DT_FP8E4M3, leftMatrixShape, "leftMatrix");
+        Tensor leftScale(DataType::DT_FP8E8M0, leftScaleShape, "leftScale");
+        Tensor rightScale(DataType::DT_FP8E8M0, rightScaleShape, "rightScale");
+        Tensor out(DataType::DT_FP32, outputShape, "output");
+        SetFullTestStrategy();
+        Function* originFunction = nullptr;
+        config::SetBuildStatic(true);
+        FUNCTION("TestMXMatmulUB2L1KAlignedDirectPath", {castInput, leftMatrix, leftScale, rightScale, out})
+        {
+            TileShape::Current().SetVecTile(NUM_16, NUM_64);
+            Tensor castRightMatrix = Cast(castInput, DataType::DT_FP8E4M3);
+            TileShape::Current().SetCubeTile({NUM_8, NUM_64}, {NUM_64, NUM_64}, {NUM_64, NUM_64});
+            out = Matrix::MatmulMX(out.GetDataType(), leftMatrix, leftScale, castRightMatrix, rightScale, false, false,
+                                   true, false, false);
+        }
+        originFunction = Program::GetInstance().GetFunctionByRawName("TENSOR_TestMXMatmulUB2L1KAlignedDirectPath");
+        ASSERT_NE(originFunction, nullptr) << "Function pointer is null";
+        EXPECT_GE(CountMemoryPath(originFunction, MemoryType::MEM_UB, MemoryType::MEM_L1), 1)
+            << "MX_PADDING_MODE copy-in with 64-aligned K should keep UB->L1 direct path";
     }
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
     Platform::Instance().ReloadMemoryPaths("2201");

@@ -15,12 +15,50 @@
 
 #include "memory_path_utils.h"
 
+#include <algorithm>
 #include <set>
 
 #include "interface/operation/attribute.h"
+#include "interface/utils/common.h"
 #include "tilefwk/platform.h"
 
 namespace npu::tile_fwk {
+
+bool MemoryPathUtils::IsMxPaddingMode(const Operation& operation)
+{
+    int64_t paddingMode = static_cast<int64_t>(Matrix::PaddingMode::NORMAL_PADDING_MODE);
+    if (!operation.GetAttr<int64_t>("op_attr_copy_in_l1_padding_mode", paddingMode) ||
+        paddingMode != static_cast<int64_t>(Matrix::PaddingMode::MX_PADDING_MODE)) {
+        return false;
+    }
+    // K维索引由copy_in_l1_k_index指示（transA时K在shape第0维，transB时K在第1维），
+    // 缺失或非法时无法判定K轴，保守回退DDR
+    int64_t kIndex = -1;
+    if (!operation.GetAttr<int64_t>("op_attr_copy_in_l1_k_index", kIndex) || kIndex < 0) {
+        return true;
+    }
+    if (operation.iOperand.empty() || operation.iOperand.front() == nullptr) {
+        return true;
+    }
+    // K轴取拷入源tensor（view输入）的dynValidShape（validK）：validK非concrete（如viewK动态K）
+    // 时无法确定MX K向补齐量，直接回退DDR
+    const auto& dynValidShape = operation.iOperand.front()->GetDynValidShape();
+    if (dynValidShape.size() <= static_cast<size_t>(kIndex) || !dynValidShape[kIndex].ConcreteValid()) {
+        return true;
+    }
+    // validK为concrete且按64（MX scale块大小）对齐时无需K向补齐，允许UB->L1直连
+    return dynValidShape[kIndex].Concrete() % ALIGN_SIZE_64 != 0;
+}
+
+bool MemoryPathUtils::HasMxPaddingModeConsumer(const LogicalTensorPtr& tensor)
+{
+    if (tensor == nullptr) {
+        return false;
+    }
+    const auto& consumers = tensor->GetConsumers();
+    return std::any_of(consumers.begin(), consumers.end(),
+                       [](const Operation* consumer) { return consumer != nullptr && IsMxPaddingMode(*consumer); });
+}
 
 bool MemoryPathUtils::IsSpecialDirectMemoryPath(MemoryType from, MemoryType to)
 {

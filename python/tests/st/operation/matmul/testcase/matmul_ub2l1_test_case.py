@@ -11,7 +11,8 @@
 """
 pypto cast+matmul ST测试用例配置
 用于System Test自动化测试框架
-测试场景：先将输入进行类型转换（cast），再执行矩阵乘法（matmul）
+测试场景：先将输入进行类型转换（cast），再执行矩阵乘法（matmul）；
+另含 Cast+ScaledMM(MX) 的 UB2L1 场景（validK 对齐走直通、未对齐回退 DDR）
 """
 
 from dataclasses import dataclass
@@ -160,6 +161,77 @@ CAST_BOTH_MATMUL_TESTS = [
         "a_vectileshape": [64, 32],
         "b_vectileshape": [32, 64],
         "extend_params": {},
+        "products": ["950"],
+    },
+]
+
+
+@dataclass
+class ScaledMmUb2L1Config:
+    m: int
+    k: int
+    n: int
+    view_shape: tuple[int, int]
+    cube_tile_shape: tuple[list, list, list]
+    b_vec_tile_shape: list
+    out_dtype: str
+
+    DTYPE_CONFIG = {
+        "DT_FP32": {"pto": pypto.DT_FP32, "torch": torch.float32, "atol": 1e-3, "rtol": 1e-3},
+        "DT_FP16": {"pto": pypto.DT_FP16, "torch": torch.float16, "atol": 1e-3, "rtol": 1e-3},
+    }
+
+    @property
+    def out_pto_dtype(self):
+        return self.DTYPE_CONFIG[self.out_dtype]["pto"]
+
+    @classmethod
+    def from_test_case(cls, case: dict) -> "ScaledMmUb2L1Config":
+        return cls(
+            m=case["m"],
+            k=case["k"],
+            n=case["n"],
+            view_shape=tuple(case["viewshape"]),
+            cube_tile_shape=tuple(case["cubetileshape"]),
+            b_vec_tile_shape=case["b_vectileshape"],
+            out_dtype=case["out_dtype"],
+        )
+
+    @classmethod
+    def get_torch_dtype(cls, dtype_str: str) -> torch.dtype:
+        return cls.DTYPE_CONFIG[dtype_str]["torch"]
+
+    @classmethod
+    def get_tolerance(cls, dtype_str: str) -> tuple[float, float]:
+        info = cls.DTYPE_CONFIG[dtype_str]
+        return info["atol"], info["rtol"]
+
+
+SCALED_MM_UB2L1_TESTS = [
+    {
+        "id": "SMU01",
+        "name": "cast_fp32_to_fp8e4m3_scaledmm_k_aligned_ub2l1",
+        "desc": "B矩阵FP32输入Cast为FP8E4M3后ScaledMM,K=128按64对齐,走UB2L1直通",
+        "m": 128,
+        "k": 128,
+        "n": 128,
+        "viewshape": [64, 64],
+        "cubetileshape": [[64, 128], [64, 128], [64, 64]],
+        "b_vectileshape": [16, 128],
+        "out_dtype": "DT_FP32",
+        "products": ["950"],
+    },
+    {
+        "id": "SMU02",
+        "name": "cast_fp32_to_fp8e4m3_scaledmm_k_not_aligned_ddr_fallback",
+        "desc": "B矩阵FP32输入Cast为FP8E4M3后ScaledMM,K=96未按64对齐,UB2L1回退DDR搬运",
+        "m": 128,
+        "k": 96,
+        "n": 128,
+        "viewshape": [64, 64],
+        "cubetileshape": [[64, 128], [64, 128], [64, 64]],
+        "b_vectileshape": [16, 96],
+        "out_dtype": "DT_FP32",
         "products": ["950"],
     },
 ]

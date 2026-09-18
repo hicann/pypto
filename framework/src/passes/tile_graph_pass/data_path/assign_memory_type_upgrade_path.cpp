@@ -377,6 +377,10 @@ bool AssignMemoryType::ShouldSkipUB2L1SmallToLarge(const LogicalTensorPtr& iOper
             if (consumerOp->GetAttr<int64_t>("op_attr_copy_in_mode", copyInModeValue) && copyInModeValue == 0) {
                 return true;
             }
+            // MXMatmul场景K轴非64对齐不支持UB2L1直连（MX补齐仅由DDR路径支持），回退DDR
+            if (MemoryPathUtils::IsMxPaddingMode(*consumerOp)) {
+                return true;
+            }
         }
     }
     return !MemoryPathUtils::CheckInnerAxisC0Size(iOperand, oOperand);
@@ -738,8 +742,10 @@ Status AssignMemoryType::TryUpgradeSingleContractSlicePath(Operation& contractOp
             const size_t ubLimit = static_cast<size_t>(
                 Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * UB_THRESHOLD_NORMAL);
             int64_t copyInModeValue = 0;
+            // MXMatmul场景K轴非64对齐不支持UB2L1直连（MX补齐仅由DDR路径支持），回退DDR
             if (CalcNZTensorSize(input) > ubLimit ||
-                (consumer->GetAttr<int64_t>("op_attr_copy_in_mode", copyInModeValue) && copyInModeValue == 0)) {
+                (consumer->GetAttr<int64_t>("op_attr_copy_in_mode", copyInModeValue) && copyInModeValue == 0) ||
+                MemoryPathUtils::IsMxPaddingMode(*consumer)) {
                 return SUCCESS;
             }
         }

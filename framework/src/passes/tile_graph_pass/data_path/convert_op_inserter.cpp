@@ -446,13 +446,13 @@ Status ConvertInserter::ProcessConvertPath(const Operation& op, const std::share
             paths = {currTensorMemOri, MemoryType::MEM_L1};
         }
     } else if (currTensorMemOri == MemoryType::MEM_UB && requiredMemoryType == MemoryType::MEM_L1) {
-        // 特殊处理UB2L1：平台无直连边或数据类型不支持时路径中插入DDR
+        // 特殊处理UB2L1：平台无直连边、数据类型不支持或消费侧为MXMatmul K轴非64对齐时路径中插入DDR
         bool needDDRTrans = !Platform::Instance().GetDie().HasDirectPath(currTensorMemOri, requiredMemoryType) ||
-                            !IsUb2L1SupportedDtype(oOperand);
+                            !IsUb2L1SupportedDtype(oOperand) || MemoryPathUtils::HasMxPaddingModeConsumer(oOperand);
         if (needDDRTrans) {
             APASS_LOG_DEBUG_F(Elements::Tensor,
-                              "Use DDR transit path for tensor %d because platform has no direct %s -> %s edge or "
-                              "dtype %s is not supported by UB2L1.",
+                              "Use DDR transit path for tensor %d because platform has no direct %s -> %s edge, "
+                              "dtype %s is not supported by UB2L1, or MX matmul consumer with K not 64-aligned.",
                               oOperand->magic, BriefMemoryTypeToString(currTensorMemOri).c_str(),
                               BriefMemoryTypeToString(requiredMemoryType).c_str(),
                               DataType2String(oOperand->Datatype()));
