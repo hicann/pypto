@@ -114,6 +114,10 @@ def _generate_golden_input_tensor(op: str, input_tensor: dict, config: dict, ind
     dtype = get_dtype_by_name(input_tensor["dtype"])
     if op == "QuantMX":
         return _generate_quantmx_input(input_tensor, config)
+    if op == "Cast" and input_tensor["dtype"] in ("fp4_e2m1", "fp4_e1m2"):
+        values = gen_uniform_data(input_tensor["shape"], min_value, max_value, np.float32)
+        encode = _encode_e2m1_vectorized if input_tensor["dtype"] == "fp4_e2m1" else _encode_e1m2_cast
+        return _pack_fp4_e2m1x2_low_first(encode(values))
     if min_value != max_value:
         assert not isinstance(min_value, str) and not isinstance(max_value, str), (
             "Data range must be number when the min and max are not same."
@@ -505,14 +509,14 @@ def gen_cast_op_golden(case_name: str, output: Path, case_index: int = None) -> 
         dst_dtype = params.get("dst_dtype", output_dtype)
         src_dtype = config.get("input_tensors")[0].get("dtype")
 
-        if dst_dtype == "fp4_e2m1x2":
+        if dst_dtype == "fp4_e2m1":
             return [_cast_fp4_e2m1x2_encode(inputs[0])]
-        if dst_dtype == "fp4_e1m2x2":
+        if dst_dtype == "fp4_e1m2":
             return [_cast_fp4_e1m2x2_encode(inputs[0])]
-        if src_dtype == "fp4_e2m1x2":
+        if src_dtype == "fp4_e2m1":
             x = _decode_fp4_e2m1x2(inputs[0])
             return [x.astype(get_dtype_by_name(dst_dtype))]
-        if src_dtype == "fp4_e1m2x2":
+        if src_dtype == "fp4_e1m2":
             x = _decode_fp4_e1m2x2(inputs[0])
             return [x.astype(get_dtype_by_name(dst_dtype))]
 

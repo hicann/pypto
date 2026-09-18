@@ -33,8 +33,8 @@ cast(input: Tensor, dtype: DataType, mode: CastMode = CastMode.CAST_NONE,
 
 | 参数名     | 输入/输出 | 说明                                                                 |
 |------------|-----------|----------------------------------------------------------------------|
-| input      | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT8，DT_UINT8，DT_INT16，DT_INT32，DT_INT64，DT_INT4，DT_FP8E4M3，DT_FP8E5M2，DT_HF8，DT_FP4_E2M1X2，DT_FP4_E1M2X2。<br>不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
-| dtype      | 输入      | 精度转换后的数据类型。<br>支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT8，DT_UINT8，DT_INT16，DT_INT32，DT_INT64，DT_INT4，DT_FP8E4M3，DT_FP8E5M2，DT_HF8，DT_FP4_E2M1X2，DT_FP4_E1M2X2。 |
+| input      | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT8，DT_UINT8，DT_INT16，DT_INT32，DT_INT64，DT_INT4，DT_FP8E4M3，DT_FP8E5M2，DT_HF8，DT_FP4_E2M1，DT_FP4_E1M2。<br>不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| dtype      | 输入      | 精度转换后的数据类型。<br>支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT8，DT_UINT8，DT_INT16，DT_INT32，DT_INT64，DT_INT4，DT_FP8E4M3，DT_FP8E5M2，DT_HF8，DT_FP4_E2M1，DT_FP4_E1M2。 |
 | CastMode   | 输入      | 源操作数枚举类型，用以控制精度转换处理模式，具体定义为：[CastMode](../datatype/CastMode.md)。<br>默认为CAST_NONE，常见类型之间的转换，框架会自动转换，与torch对齐，详见约束说明。 |
 | SaturationMode    | 输入      | 饱和模式枚举类型，用以控制浮点数转整数时的溢出处理方式，具体定义为：[SaturationMode](../datatype/SaturationMode.md)。<br>默认为OFF（截断模式），当设置为ON时，超出目标类型范围的数值会被截断到最大值或最小值（饱和截断），详见约束说明。 |
 
@@ -131,10 +131,10 @@ Ascend 950PR/Ascend 950DT使用不同的CastMode体系，内部实现基于 `Rou
 | DT_FP8E4M3 | DT_FP32 | 不支持舍入模式 | - | 类型扩展 |
 | DT_FP8E5M2 | DT_FP32 | 不支持舍入模式 | - | 类型扩展 |
 | DT_HF8 | DT_FP32 | 不支持舍入模式 | - | 类型扩展 |
-| DT_BF16 | DT_FP4_E2M1X2 | 不支持舍入模式 | - | - |
-| DT_BF16 | DT_FP4_E1M2X2 | 不支持舍入模式 | - | - |
-| DT_FP4_E2M1X2 | DT_BF16 | 不支持舍入模式 | - | - |
-| DT_FP4_E1M2X2 | DT_BF16 | 不支持舍入模式 | - | - |
+| DT_BF16 | DT_FP4_E2M1 | 不支持舍入模式 | - | - |
+| DT_BF16 | DT_FP4_E1M2 | 不支持舍入模式 | - | - |
+| DT_FP4_E2M1 | DT_BF16 | 不支持舍入模式 | - | - |
+| DT_FP4_E1M2 | DT_BF16 | 不支持舍入模式 | - | - |
 <!-- end id5 -->
 
 ### 饱和模式设置说明
@@ -154,7 +154,7 @@ Ascend 950PR/Ascend 950DT使用不同的CastMode体系，内部实现基于 `Rou
 
 2. **DT_INT4（S4）特殊说明**：打包类型，每字节包含2个元素，仅支持与DT_FP16的相互转换。
 
-3. **DT_FP4_E2M1X2/DT_FP4_E1M2X2特殊说明**：
+3. **DT_FP4_E2M1/DT_FP4_E1M2特殊说明**：
     <!-- npu="950" id6 -->
     - Ascend 950PR/Ascend 950DT：支持
     <!-- end id6 -->
@@ -164,7 +164,9 @@ Ascend 950PR/Ascend 950DT使用不同的CastMode体系，内部实现基于 `Rou
     <!-- npu="910b" id8 -->
     - Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持
     <!-- end id8 -->
-    - 打包类型，每字节包含2个FP4元素（4-bit nibble）
+    - 使用逻辑4-bit类型，与scaled_mm一致；输入参数标注和cast目标类型均使用不带X2的枚举。
+    - 转换前后逻辑Shape保持不变；每字节存储2个FP4元素，逻辑末轴长度必须为偶数。
+    - 与Torch交互时，用torch.uint8承载打包数据，存储Shape为[m, n/2]；参数标注为`pypto.Tensor([], pypto.DT_FP4_E1M2)`或`pypto.Tensor([], pypto.DT_FP4_E2M1)`后，kernel内看到的逻辑Shape为[m, n]。
     - 仅支持与DT_BF16的相互转换
 
 4. **DT_HF8 (hifloat8)特殊说明**：

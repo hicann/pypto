@@ -89,7 +89,8 @@ private:
 
     static bool IsFp4PackedDtype(DataType dtype)
     {
-        return dtype == DataType::DT_FP4_E2M1X2 || dtype == DataType::DT_FP4_E1M2X2;
+        return dtype == DataType::DT_FP4_E2M1 || dtype == DataType::DT_FP4_E1M2 || dtype == DataType::DT_FP4_E2M1X2 ||
+               dtype == DataType::DT_FP4_E1M2X2;
     }
 
     static size_t GetTensorStorageElementCount(const Tensor& tensor)
@@ -245,6 +246,8 @@ private:
             case DataType::DT_FP8E8M0:
             case DataType::DT_FP4_E2M1X2:
             case DataType::DT_FP4_E1M2X2:
+            case DataType::DT_FP4_E2M1:
+            case DataType::DT_FP4_E1M2:
                 readGoldenCmp<uint8_t>(tensor, testCase.goldenPaths[i], i, 0);
                 return true;
             default:

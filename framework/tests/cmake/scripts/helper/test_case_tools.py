@@ -86,6 +86,8 @@ def get_dtype_by_name(name: str, is_torch: bool = False, check: bool = True):
         "complex64": [np.complex64, torch.complex64],
         "complex128": [np.complex128, torch.complex64],
         "bf16": [None, torch.bfloat16],
+        "fp4_e2m1": [np.uint8, torch.uint8],
+        "fp4_e1m2": [np.uint8, torch.uint8],
         "fp4_e2m1x2": [np.uint8, torch.uint8],
         "fp4_e1m2x2": [np.uint8, torch.uint8],
         "fp8e4m3": [
