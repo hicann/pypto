@@ -1108,35 +1108,26 @@ INLINE bool DrcoDynFuncDataListFetchTaskLocalReadyMatrix(DrcoEntryState* state,
     return false;
 }
 
-INLINE bool DrcoDynFuncDataListFetchTaskLocalReadyQueue(DrcoEntryState* state,
+INLINE bool DrcoDynFuncDataListFetchTaskLocalReadyQueue([[maybe_unused]] DrcoEntryState* state,
                                                         __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
                                                         uint32_t& resultCoreType,
                                                         uint32_t resultTaskIdList[LOCAL_GROUP_SIZE],
                                                         uint32_t& resultTaskIdCount, uint32_t groupIdx)
 {
-    uint32_t queueGroupCount = state->ctx.drcoGroupEnd[DRCO_CORE_TYPE] - state->ctx.drcoGroupBeg[DRCO_CORE_TYPE];
-    for (uint32_t i = 0; i < queueGroupCount; i++) {
-        uint32_t queueGroupIdx = (groupIdx + i) % queueGroupCount;
-        __gm__ DrcoLocalReadyQueue* localReadyQueue = DrcoRootFuncListGetLocalReadyQueue(rootFuncList, DRCO_CORE_TYPE,
-                                                                                         queueGroupIdx);
-        if (localReadyQueue == nullptr) {
-            continue;
-        }
-        DRCO_DCCI_SINGLE_CACHE_LINE(localReadyQueue);
-        uint32_t taskId = static_cast<uint32_t>(AICORE_TASK_FETCH_CONFLICT);
-        while (taskId == static_cast<uint32_t>(AICORE_TASK_FETCH_CONFLICT)) {
-            taskId = DrcoLocalReadyQueueGetFirstTask(localReadyQueue);
-        }
-        if (taskId != static_cast<uint32_t>(AICORE_TASK_NO_INCOME)) {
-            resultTaskIdList[0] = taskId;
-            resultTaskIdCount = 1;
-            resultCoreType = DRCO_CORE_TYPE;
-            break;
-        }
+    __gm__ DrcoLocalReadyQueue* localReadyQueue = DrcoRootFuncListGetLocalReadyQueue(rootFuncList, DRCO_CORE_TYPE,
+                                                                                     groupIdx);
+    DRCO_DCCI_SINGLE_CACHE_LINE(localReadyQueue);
+    uint32_t taskId = static_cast<uint32_t>(AICORE_TASK_FETCH_CONFLICT);
+    while (taskId == static_cast<uint32_t>(AICORE_TASK_FETCH_CONFLICT)) {
+        taskId = DrcoLocalReadyQueueGetFirstTask(localReadyQueue);
     }
-    if (resultTaskIdCount > 0) {
+    if (taskId != static_cast<uint32_t>(AICORE_TASK_NO_INCOME)) {
+        resultTaskIdList[0] = taskId;
+        resultTaskIdCount = 1;
+        resultCoreType = DRCO_CORE_TYPE;
         return true;
     }
+
     return false;
 }
 
