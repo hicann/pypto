@@ -12,6 +12,28 @@
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 <!-- end id3 -->
 
+## 功能说明
+
+将src的值写入input中。写入位置由index指定。3维计算公式如下，其他维度以此类推：
+
+src为固定标量时：
+$$
+\begin{cases}
+input\left[ index\left[i\right]\left[j\right]\left[k\right] \right]\left[j\right]\left[k\right] = src & \text{if } dim = 0 \\
+input\left[i\right]\left[ index\left[i\right]\left[j\right]\left[k\right] \right]\left[k\right] = src & \text{if } dim = 1 \\
+input\left[i\right]\left[j\right]\left[ index\left[i\right]\left[j\right]\left[k\right] \right] = src & \text{if } dim = 2
+\end{cases}
+$$
+
+src为Tensor时：
+$$
+\begin{cases}
+input\left[ index\left[i\right]\left[j\right]\left[k\right] \right]\left[j\right]\left[k\right] = src\left[i\right]\left[j\right]\left[k\right] & \text{if } dim = 0 \\
+input\left[i\right]\left[ index\left[i\right]\left[j\right]\left[k\right] \right]\left[k\right] = src\left[i\right]\left[j\right]\left[k\right] & \text{if } dim = 1 \\
+input\left[i\right]\left[j\right]\left[ index\left[i\right]\left[j\right]\left[k\right] \right] = src\left[i\right]\left[j\right]\left[k\right] & \text{if } dim = 2
+\end{cases}
+$$
+
 ## 函数原型
 
 ```python
