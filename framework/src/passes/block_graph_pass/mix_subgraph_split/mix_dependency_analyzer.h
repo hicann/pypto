@@ -107,6 +107,7 @@ private:
     bool ContainsTensor(const std::vector<SimpleTensorParam>& tensors, const LogicalTensorPtr& tensor) const;
     // 构建可达阵的转置（即反向的可达阵）
     void PropagateIncastDependencies(const std::set<int>& targets, const std::vector<SimpleTensorParam>& tensorParams);
+    // 反向传播outcast：source已有incast时跳过，仅无incast的source才传播
     void PropagateOutcastDependencies(int targetComp, int sourceComp);
 
     void Reset();
