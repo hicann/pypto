@@ -60,7 +60,7 @@ public:
      * @brief Get the byte size of the last raw-shape dimension.
      *
      * @param tensor input logical tensor.
-     * @return last-dim element count multiplied by element size; 0 when rawshape is empty.
+     * @return last-dim storage size in bytes, rounded up from per-element bits; 0 when rawshape is empty.
      */
     static size_t GetLastDimBytes(const LogicalTensorPtr& tensor);
 

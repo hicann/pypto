@@ -19,6 +19,7 @@
 #include "symbolic_scalar_test_utils.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
+#include "passes/pass_utils/alignment_utils.h"
 #include "passes/tile_graph_pass/graph_constraint/pad_local_buffer.h"
 #include "passes/tile_graph_pass/graph_constraint/axis_combine.h"
 #include "computational_graph_builder.h"
@@ -1419,4 +1420,143 @@ TEST_F(TestPadLocalBuffer, GemvMatmulKAlign)
     auto rawShapeL0A = t3a->tensor->GetRawShape();
     EXPECT_EQ(rawShapeL0A[0], 1);
     EXPECT_EQ(rawShapeL0A[1], 256);
+}
+
+namespace {
+constexpr size_t K_BYTES_0 = 0;
+constexpr size_t K_BYTES_20 = 20;
+constexpr size_t K_BYTES_40 = 40;
+constexpr size_t K_BYTES_64 = 64;
+constexpr size_t K_BYTES_65 = 65;
+constexpr size_t K_BYTES_100 = 100;
+constexpr size_t K_BYTES_260 = 260;
+constexpr size_t K_BYTES_400 = 400;
+constexpr size_t K_BYTES_800 = 800;
+
+LogicalTensorPtr MakeAlignmentTensor(DataType dtype, const std::vector<int64_t>& shape)
+{
+    return IRBuilder().CreateTensorVar(dtype, shape);
+}
+} // namespace
+
+// 看护：对齐基按"每 shape 元素存储位数"推导，整字节类型与历史行为一致
+TEST_F(TestPadLocalBuffer, GetLastDimAlignBaseForWholeByteDtypes)
+{
+    EXPECT_EQ(AlignmentUtils::GetLastDimAlignBase(MakeAlignmentTensor(DT_INT8, {4, 33})), 32);
+    EXPECT_EQ(AlignmentUtils::GetLastDimAlignBase(MakeAlignmentTensor(DT_UINT8, {4, 33})), 32);
+    EXPECT_EQ(AlignmentUtils::GetLastDimAlignBase(MakeAlignmentTensor(DT_BOOL, {4, 33})), 32);
+    EXPECT_EQ(AlignmentUtils::GetLastDimAlignBase(MakeAlignmentTensor(DT_FP8E4M3, {4, 33})), 32);
+    EXPECT_EQ(AlignmentUtils::GetLastDimAlignBase(MakeAlignmentTensor(DT_HF8, {4, 33})), 32);
+    EXPECT_EQ(AlignmentUtils::GetLastDimAlignBase(MakeAlignmentTensor(DT_FP16, {4, 33})), 16);
+    EXPECT_EQ(AlignmentUtils::GetLastDimAlignBase(MakeAlignmentTensor(DT_BF16, {4, 33})), 16);
+    EXPECT_EQ(AlignmentUtils::GetLastDimAlignBase(MakeAlignmentTensor(DT_INT16, {4, 33})), 16);
+    EXPECT_EQ(AlignmentUtils::GetLastDimAlignBase(MakeAlignmentTensor(DT_FP32, {4, 33})), 8);
+    EXPECT_EQ(AlignmentUtils::GetLastDimAlignBase(MakeAlignmentTensor(DT_INT32, {4, 33})), 8);
+    EXPECT_EQ(AlignmentUtils::GetLastDimAlignBase(MakeAlignmentTensor(DT_INT64, {4, 33})), 4);
+    EXPECT_EQ(AlignmentUtils::GetLastDimAlignBase(MakeAlignmentTensor(DT_DOUBLE, {4, 33})), 4);
+}
+
+// 看护：逻辑 FP4（shape 按 4-bit 值计数）对齐基为 64 个元素（32B）
+TEST_F(TestPadLocalBuffer, GetLastDimAlignBaseForLogicalFp4Dtypes)
+{
+    EXPECT_EQ(AlignmentUtils::GetLastDimAlignBase(MakeAlignmentTensor(DT_FP4_E2M1, {4, 66})), 64);
+    EXPECT_EQ(AlignmentUtils::GetLastDimAlignBase(MakeAlignmentTensor(DT_FP4_E1M2, {4, 66})), 64);
+}
+
+// 看护：INT4/HF4 与逻辑 FP4 同为 nibble 计数（对齐基 64），X2 按打包字节计数（对齐基 32）
+TEST_F(TestPadLocalBuffer, GetLastDimAlignBaseForSubByteDtypes)
+{
+    EXPECT_EQ(AlignmentUtils::GetLastDimAlignBase(MakeAlignmentTensor(DT_INT4, {4, 33})), 64);
+    EXPECT_EQ(AlignmentUtils::GetLastDimAlignBase(MakeAlignmentTensor(DT_HF4, {4, 33})), 64);
+    EXPECT_EQ(AlignmentUtils::GetLastDimAlignBase(MakeAlignmentTensor(DT_FP4_E2M1X2, {4, 66})), 32);
+    EXPECT_EQ(AlignmentUtils::GetLastDimAlignBase(MakeAlignmentTensor(DT_FP4_E1M2X2, {4, 66})), 32);
+}
+
+TEST_F(TestPadLocalBuffer, GetLastDimAlignBaseForInvalidTensor)
+{
+    EXPECT_EQ(AlignmentUtils::GetLastDimAlignBase(nullptr), 0);
+}
+
+// 看护：逻辑 FP4 末维 32 个元素（仅 16B）不得判为已对齐
+TEST_F(TestPadLocalBuffer, IsLastDim32BAlignedForLogicalFp4Dtypes)
+{
+    EXPECT_TRUE(AlignmentUtils::IsLastDim32BAligned(MakeAlignmentTensor(DT_FP4_E2M1, {17, 64})));
+    EXPECT_FALSE(AlignmentUtils::IsLastDim32BAligned(MakeAlignmentTensor(DT_FP4_E2M1, {17, 32})));
+    EXPECT_FALSE(AlignmentUtils::IsLastDim32BAligned(MakeAlignmentTensor(DT_FP4_E1M2, {17, 96})));
+    EXPECT_TRUE(AlignmentUtils::IsLastDim32BAligned(MakeAlignmentTensor(DT_FP4_E1M2, {17, 128})));
+}
+
+TEST_F(TestPadLocalBuffer, IsLastDim32BAlignedForSubByteAndWholeByteDtypes)
+{
+    EXPECT_FALSE(AlignmentUtils::IsLastDim32BAligned(MakeAlignmentTensor(DT_INT4, {4, 32})));
+    EXPECT_FALSE(AlignmentUtils::IsLastDim32BAligned(MakeAlignmentTensor(DT_INT4, {4, 33})));
+    EXPECT_TRUE(AlignmentUtils::IsLastDim32BAligned(MakeAlignmentTensor(DT_INT4, {4, 64})));
+    EXPECT_TRUE(AlignmentUtils::IsLastDim32BAligned(MakeAlignmentTensor(DT_FP4_E2M1X2, {4, 64})));
+    EXPECT_FALSE(AlignmentUtils::IsLastDim32BAligned(MakeAlignmentTensor(DT_FP4_E2M1X2, {4, 66})));
+    EXPECT_TRUE(AlignmentUtils::IsLastDim32BAligned(MakeAlignmentTensor(DT_FP32, {4, 8})));
+    EXPECT_FALSE(AlignmentUtils::IsLastDim32BAligned(MakeAlignmentTensor(DT_FP32, {4, 100})));
+    EXPECT_TRUE(AlignmentUtils::IsLastDim32BAligned(MakeAlignmentTensor(DT_FP16, {4, 144})));
+    EXPECT_FALSE(AlignmentUtils::IsLastDim32BAligned(MakeAlignmentTensor(DT_FP16, {4, 130})));
+}
+
+TEST_F(TestPadLocalBuffer, IsLastDim32BAlignedForInvalidTensor)
+{
+    EXPECT_FALSE(AlignmentUtils::IsLastDim32BAligned(nullptr));
+}
+
+// 看护：末维存储字节数按位宽换算，4-bit 类型（含 INT4/HF4）精确到 nibble/2，X2 按打包字节
+TEST_F(TestPadLocalBuffer, GetLastDimBytesByDtype)
+{
+    EXPECT_EQ(AlignmentUtils::GetLastDimBytes(MakeAlignmentTensor(DT_FP4_E2M1, {17, 130})), K_BYTES_65);
+    EXPECT_EQ(AlignmentUtils::GetLastDimBytes(MakeAlignmentTensor(DT_FP4_E2M1, {17, 128})), K_BYTES_64);
+    EXPECT_EQ(AlignmentUtils::GetLastDimBytes(MakeAlignmentTensor(DT_FP4_E1M2, {17, 130})), K_BYTES_65);
+    EXPECT_EQ(AlignmentUtils::GetLastDimBytes(MakeAlignmentTensor(DT_INT4, {4, 40})), K_BYTES_20);
+    EXPECT_EQ(AlignmentUtils::GetLastDimBytes(MakeAlignmentTensor(DT_HF4, {4, 40})), K_BYTES_20);
+    EXPECT_EQ(AlignmentUtils::GetLastDimBytes(MakeAlignmentTensor(DT_FP4_E2M1X2, {4, 100})), K_BYTES_100);
+    EXPECT_EQ(AlignmentUtils::GetLastDimBytes(MakeAlignmentTensor(DT_FP8E4M3, {4, 100})), K_BYTES_100);
+    EXPECT_EQ(AlignmentUtils::GetLastDimBytes(MakeAlignmentTensor(DT_FP16, {4, 130})), K_BYTES_260);
+    EXPECT_EQ(AlignmentUtils::GetLastDimBytes(MakeAlignmentTensor(DT_FP32, {4, 100})), K_BYTES_400);
+    EXPECT_EQ(AlignmentUtils::GetLastDimBytes(MakeAlignmentTensor(DT_INT64, {4, 100})), K_BYTES_800);
+}
+
+TEST_F(TestPadLocalBuffer, GetLastDimBytesForInvalidTensor)
+{
+    EXPECT_EQ(AlignmentUtils::GetLastDimBytes(nullptr), K_BYTES_0);
+}
+
+// 看护：UB 上逻辑 FP4 末维 pad 到 64 的倍数（130 → 192 个元素 = 96B = 3x32B）
+TEST_F(TestPadLocalBuffer, PadLastDimOnUBForLogicalFp4Dtypes)
+{
+    auto tensor = MakeAlignmentTensor(DT_FP4_E2M1, {17, 130});
+    tensor->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    AlignmentUtils::ProcessLastDim32BAlignedOnUB(tensor);
+    EXPECT_EQ(tensor->tensor->rawshape.back(), 192);
+}
+
+// 看护：已 32B 对齐的 sub-byte 类型不得额外 pad——INT4（nibble 计数）64 个元素、X2（打包字节计数）
+// 32 个元素均已对齐保持不变；未对齐的 INT4 正常 pad 到 64 的倍数
+TEST_F(TestPadLocalBuffer, PadLastDimOnUBKeepsAlignedSubByteDtype)
+{
+    auto int4Aligned = MakeAlignmentTensor(DT_INT4, {4, 64});
+    int4Aligned->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    AlignmentUtils::ProcessLastDim32BAlignedOnUB(int4Aligned);
+    EXPECT_EQ(int4Aligned->tensor->rawshape.back(), 64);
+
+    auto x2Aligned = MakeAlignmentTensor(DT_FP4_E2M1X2, {4, 32});
+    x2Aligned->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    AlignmentUtils::ProcessLastDim32BAlignedOnUB(x2Aligned);
+    EXPECT_EQ(x2Aligned->tensor->rawshape.back(), 32);
+
+    auto unaligned = MakeAlignmentTensor(DT_INT4, {4, 40});
+    unaligned->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    AlignmentUtils::ProcessLastDim32BAlignedOnUB(unaligned);
+    EXPECT_EQ(unaligned->tensor->rawshape.back(), 64);
+}
+
+TEST_F(TestPadLocalBuffer, PadLastDimOnUBForWholeByteDtypes)
+{
+    auto tensor = MakeAlignmentTensor(DT_FP32, {17, 100});
+    tensor->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    AlignmentUtils::ProcessLastDim32BAlignedOnUB(tensor);
+    EXPECT_EQ(tensor->tensor->rawshape.back(), 104);
 }

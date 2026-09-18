@@ -15,6 +15,7 @@
 
 #include "axis_combine.h"
 #include "interface/tensor/irbuilder.h"
+#include "passes/pass_utils/alignment_utils.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/pass_utils.h"
@@ -42,13 +43,11 @@ Status AlignedIfNeed(int64_t& currentDim, int64_t padValue)
 
 Status GetPaddingValue(const LogicalTensorPtr& tensor, int64_t& padValue)
 {
-    auto bytes = BytesOf(tensor->Datatype());
-    auto paddingIter = BLOCK_PADDING_DIM.find(bytes);
-    if (paddingIter == BLOCK_PADDING_DIM.end()) {
+    padValue = AlignmentUtils::GetLastDimAlignBase(tensor);
+    if (padValue <= 0) {
         APASS_LOG_ERROR_F(Elements::Tensor, "tensor %d's datatype is not supported.", tensor->GetMagic());
         return FAILED;
     }
-    padValue = paddingIter->second;
     return SUCCESS;
 }
 
