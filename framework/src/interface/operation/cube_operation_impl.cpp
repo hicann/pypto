@@ -1890,15 +1890,16 @@ static Tensor ComputeGmAccumulationKernel(DataType outType, const Tensor& aTenso
     const int64_t kLoop = (kSize2D + kL1TileShape - 1) / kL1TileShape;
     const int64_t kL1Size = std::min(kSize2D, kL1TileShape);
     for (int64_t kIdx = 0; kIdx < kLoop; ++kIdx) {
+        int64_t kViewShape = std::min(kSize2D - kL1Size * kIdx, kL1Size);
         SymbolicScalar
-            partialKValidShape = (kValidShape - kL1Size * kIdx).Max(SymbolicScalar(0)).Min(SymbolicScalar(kL1Size));
-        Tensor tensorA = attrParam.transA ? View(aTensor2D, {kL1Size, mSize2D}, {partialKValidShape, mValidShape},
+            partialKValidShape = (kValidShape - kL1Size * kIdx).Max(SymbolicScalar(0)).Min(SymbolicScalar(kViewShape));
+        Tensor tensorA = attrParam.transA ? View(aTensor2D, {kViewShape, mSize2D}, {partialKValidShape, mValidShape},
                                                  {kL1Size * kIdx, 0}) :
-                                            View(aTensor2D, {mSize2D, kL1Size}, {mValidShape, partialKValidShape},
+                                            View(aTensor2D, {mSize2D, kViewShape}, {mValidShape, partialKValidShape},
                                                  {0, kL1Size * kIdx});
-        Tensor tensorB = attrParam.transB ? View(bTensor2D, {nSize2D, kL1Size}, {nValidShape, partialKValidShape},
+        Tensor tensorB = attrParam.transB ? View(bTensor2D, {nSize2D, kViewShape}, {nValidShape, partialKValidShape},
                                                  {0, kL1Size * kIdx}) :
-                                            View(bTensor2D, {kL1Size, nSize2D}, {partialKValidShape, nValidShape},
+                                            View(bTensor2D, {kViewShape, nSize2D}, {partialKValidShape, nValidShape},
                                                  {kL1Size * kIdx, 0});
         MatmulGraphNodes tensorGraphNodes(tensorA.GetStorage(), tensorB.GetStorage(),
                                           gmAccumulationTensor.GetStorage());
