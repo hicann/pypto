@@ -9,7 +9,6 @@ memory_data_movement/index
 tile_computation/index
 reg_computation/index
 cube_computation/index
-quantization/index
 controlflow/index
 resource_management/index
 synchronization/index

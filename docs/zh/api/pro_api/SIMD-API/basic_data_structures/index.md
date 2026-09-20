@@ -15,7 +15,6 @@ FillPadMode
 MemorySpace
 PipeType
 Ptr
-QuantMode
 ReluPreMode
 RoundMode
 STPhase

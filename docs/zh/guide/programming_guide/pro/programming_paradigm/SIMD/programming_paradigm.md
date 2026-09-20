@@ -90,7 +90,3 @@ Cube计算使用L1 Buffer、L0A Buffer、L0B Buffer和L0C Buffer中的矩阵Tile
 6. **编译和启动**：使用`@pypto_pro.language.jit`编译Kernel，在Host侧通过`kernel[stream, block_dim](...)`启动。
 
 SIMD适合对连续或规则分块数据执行相同操作。若算法更适合逐线程索引、不规则访存、复杂分支或原子更新，应考虑[SIMT编程范式](../SIMT/programming_paradigm.md)。
-
-## 小结
-
-PyPTO Pro SIMD编程以多核SPMD完成全局数据切分，以Tile或寄存器上的SIMD指令完成核内批量计算。Tensor表示GM数据，Tile表示片上Buffer数据，RegTensor表示Vector Register数据；执行域决定代码使用Vector还是Cube资源。具体的数据搬运、计算接口和性能流水由对应的算子开发专题展开。
