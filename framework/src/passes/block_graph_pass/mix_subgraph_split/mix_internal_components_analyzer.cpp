@@ -475,21 +475,22 @@ Status MixInternalComponentsAnalyzer::DetermineComponentType(const InternalCompo
             continue;
         }
         isAllSyncOp = false;
-        // 检查isCube属性
-        if (op->HasAttribute(OpAttributeKey::isCube)) {
-            bool isCube = op->GetBoolAttribute(OpAttributeKey::isCube);
-            if (isCube) {
-                APASS_LOG_DEBUG_F(Elements::Operation,
-                                  "Component %s determined as C_SCOPE (non-sync op %d has isCube=true)",
-                                  component.suffix.c_str(), op->GetOpMagic());
-                componentType = ComponentType::C_SCOPE;
-                return SUCCESS;
-            }
+        // 无 isCube 属性的 op(如分图后 merge pass 新建的搬运 op)按 opcode 注册的
+        // 核类型推导, 而非武断视为 vec 侧
+        bool isCube = op->HasAttribute(OpAttributeKey::isCube) ?
+                          op->GetBoolAttribute(OpAttributeKey::isCube) :
+                          OpcodeManager::Inst().GetCoreType(op->GetOpcode()) == OpCoreType::AIC;
+        if (isCube) {
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                              "Component %s determined as C_SCOPE (non-sync op %d has isCube=true)",
+                              component.suffix.c_str(), op->GetOpMagic());
+            componentType = ComponentType::C_SCOPE;
+        } else {
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                              "Component %s determined as V_SCOPE (non-sync op %d has isCube=false)",
+                              component.suffix.c_str(), op->GetOpMagic());
+            componentType = ComponentType::V_SCOPE;
         }
-        APASS_LOG_DEBUG_F(Elements::Operation,
-                          "Component %s determined as V_SCOPE (non-sync op %d has isCube=false or no isCube attr)",
-                          component.suffix.c_str(), op->GetOpMagic());
-        componentType = ComponentType::V_SCOPE;
         return SUCCESS;
     }
     if (isAllSyncOp) {
@@ -522,8 +523,10 @@ bool MixInternalComponentsAnalyzer::CheckAllCubeAttrConsistent(const InternalCom
         if (IsSyncOperation(op)) {
             continue;
         }
-        bool curHasCube = op->HasAttribute(OpAttributeKey::isCube);
-        bool curIsCube = curHasCube ? op->GetBoolAttribute(OpAttributeKey::isCube) : false;
+        // 无 isCube 属性的 op 按 opcode 注册的核类型推导, 与 TaskSplitter 的推导口径一致
+        bool curIsCube = op->HasAttribute(OpAttributeKey::isCube) ?
+                             op->GetBoolAttribute(OpAttributeKey::isCube) :
+                             OpcodeManager::Inst().GetCoreType(op->GetOpcode()) == OpCoreType::AIC;
 
         if (!firstNonSyncOpFound) {
             // 获取第一个非同步op的isCube属性作为基准
