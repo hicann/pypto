@@ -13,12 +13,7 @@ PyPTO（发音：pai p-t-o）是CANN推出的一款面向AI加速器的高效算
 
 PyPTO Tensor采用分层架构，从用户接口到底层硬件执行包括以下层次：
 
-```mermaid
-flowchart LR
-    A["用户接口层<br/>Tensor操作、Function、JIT编译"] --> B["计算图编译层<br/>Tensor Graph → Tile Graph → Block Graph → Execute Graph"]
-    B --> C["代码生成层<br/>PTO虚拟指令、目标平台代码"]
-    C --> D["调度执行层<br/>MPMD调度、控制流执行"]
-```
+![](./figures/tensor/pypto_architecture.png)
 
 - **用户接口层**：提供Python风格的Tensor编程接口，开发者可以直接表达计算逻辑，无需关注底层硬件指令。
 - **计算图编译层**：通过模块化Pass完成多层级计算图的转换与优化。
@@ -49,16 +44,14 @@ PyPTO Tensor以“算法表达与硬件执行解耦”为主要设计理念。�
 
 ### 产品支持情况
 
-PyPTO Tensor当前支持以下产品型号：
-
 <!-- npu="950" id1 -->
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR&950DT系列产品：支持
 <!-- end id1 -->
 <!-- npu="A3" id2 -->
-- Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
+- Atlas A3系列产品：支持
 <!-- end id2 -->
 <!-- npu="910b" id3 -->
-- Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
+- Atlas A2系列产品：支持
 <!-- end id3 -->
 
 ## PyPTO Pro
@@ -99,14 +92,12 @@ PyPTO Pro让开发者用Python编写Kernel，同时保留对硬件执行方式�
 
 ### 产品支持情况
 
-PyPTO Pro当前支持以下产品型号：
-
 <!-- npu="950" id4 -->
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR&950DT系列产品：支持
 <!-- end id4 -->
 <!-- npu="A3" id5 -->
-- Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持
+- Atlas A3系列产品：不支持
 <!-- end id5 -->
 <!-- npu="910b" id6 -->
-- Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持
+- Atlas A2系列产品：不支持
 <!-- end id6 -->

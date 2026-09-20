@@ -1,5 +1,7 @@
 # PyPTO Sample Code (Examples)
 
+English | [简体中文](./README.md)
+
 This directory contains a series of PyPTO development sample codes designed to guide developers on how to use this AI programming framework. The sample codes progressively demonstrate the framework's features based on the developer's learning path.
 
 ## Directory Structure

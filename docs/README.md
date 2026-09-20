@@ -1,5 +1,7 @@
 # 项目文档
 
+简体中文 | [English](./README_en.md)
+
 ## 简介
 
 此目录提供[PyPTO文档中心](https://pypto.gitcode.com)的源文件信息，包括环境部署、算子开发、API参考等。
