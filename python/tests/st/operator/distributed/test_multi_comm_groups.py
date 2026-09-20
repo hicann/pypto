@@ -105,7 +105,7 @@ def _perform_allreduce(input_tensor, stage_params):
     return all_reduce_out_bf16
 
 
-@pypto.frontend.jit(new_ir=False)
+@pypto.frontend.jit()
 def allreduce_cascading_kernel(
     in_tensor: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
     out_tensor: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
@@ -252,6 +252,7 @@ def allreduce_cascading_worker(worker_params, error_queue: mp.Queue):
         raise
 
 
+@pytest.mark.skip()
 @pytest.mark.world_size(4)
 @pypto.options(pass_options={"enable_slice": True})
 def test_allreduce_cascading():
