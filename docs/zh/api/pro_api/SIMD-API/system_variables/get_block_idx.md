@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-获取当前执行域中逻辑AI Core的全局索引，用于多核控制和数据偏移计算。
+获取当前实际执行核在所属执行域中的全局索引，用于多核控制和数据偏移计算。
 
 ## 函数原型
 
@@ -43,7 +43,7 @@ pypto_pro.language.get_block_idx() -> int
 
 ### 多核数据分片（纯Vector Kernel）
 
-通过Kernel[None, NUM_CORES]形式启动2个逻辑Block，每个AIV用get_block_idx()获取全局逻辑索引并处理64行逐元素加法，用[pypto_pro.language.printf](../../Utils-API/debugging/printf.md)打印获取到的索引值：
+通过Kernel[None, NUM_CORES]形式实际启动2个AIV，每个AIV用get_block_idx()获取全局逻辑索引并处理64行逐元素加法，用[pypto_pro.language.printf](../../Utils-API/debugging/printf.md)打印获取到的索引值：
 
 ```python
 import os
@@ -134,7 +134,7 @@ if __name__ == "__main__":
     torch.npu.synchronize()
 ```
 
-回显（启动2个逻辑Block：AIC侧返回0/1，AIV侧返回0~3）：
+回显（实际启动2个AIC和4个AIV：AIC侧返回0/1，AIV侧返回0~3）：
 
 ```text
 => Cube 0
