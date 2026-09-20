@@ -941,7 +941,7 @@ REGISTER_BACKEND_OP(BackendCCE, "get_spr")
 // Saturation flag (CTRL register bit manipulation)
 // ============================================================================
 
-static int8_t GetSaturationModeBit(ir::SaturationFlagMode mode)
+static int8_t GetSaturationModeBit(ir::SaturationFlagMode mode, const std::string& op_name)
 {
     switch (mode) {
         case ir::SaturationFlagMode::FLOAT:
@@ -953,7 +953,7 @@ static int8_t GetSaturationModeBit(ir::SaturationFlagMode mode)
         case ir::SaturationFlagMode::CAST:
             return 59;
         default:
-            PRO_CODEGEN_CHECK(ExternalError::NOT_IMPLEMENTED_ERROR, false) << "set_saturation_flag: unsupported mode";
+            PRO_CODEGEN_CHECK(ExternalError::NOT_IMPLEMENTED_ERROR, false) << op_name << ": unsupported mode";
             return -1;
     }
 }
@@ -974,7 +974,7 @@ static std::string MakeSetSaturationFlagCodegenCCE(const ir::CallPtr& op, codege
     PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, op->HasKwarg("enable"))
         << "set_saturation_flag requires 'enable' kwarg";
     auto mode = static_cast<ir::SaturationFlagMode>(op->GetKwarg<int>("mode"));
-    int8_t bit = GetSaturationModeBit(mode);
+    int8_t bit = GetSaturationModeBit(mode, "set_saturation_flag");
     bool inverted = IsInvertedPolarity(mode);
 
     bool enable = op->GetKwarg<bool>("enable");
@@ -1003,7 +1003,7 @@ static std::string MakeGetSaturationFlagCodegenCCE(const ir::CallPtr& op, codege
     PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, op->HasKwarg("mode"))
         << "get_saturation_flag requires 'mode' kwarg";
     auto mode = static_cast<ir::SaturationFlagMode>(op->GetKwarg<int>("mode"));
-    int8_t bit = GetSaturationModeBit(mode);
+    int8_t bit = GetSaturationModeBit(mode, "get_saturation_flag");
     bool inverted = IsInvertedPolarity(mode);
 
     // Read CTRL bit, invert for FLOAT/FLOAT8/CAST modes
@@ -1025,16 +1025,16 @@ REGISTER_BACKEND_OP(BackendCCE, "get_saturation_flag")
 // ============================================================================
 
 // A5 writable CTRL bits: 6-10 (range), 45, 48, 50, 53, 59, 60 (single bits)
-static void CheckCtrlBitRange(int8_t startBit, int8_t endBit)
+static void CheckCtrlBitRange(int8_t startBit, int8_t endBit, const std::string& op_name)
 {
     PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, startBit >= 0 && endBit < 64 && startBit <= endBit)
-        << "set_ctrl_spr: invalid bit range [" << static_cast<int>(startBit) << ", " << static_cast<int>(endBit)
+        << op_name << ": invalid bit range [" << static_cast<int>(startBit) << ", " << static_cast<int>(endBit)
         << "], must be 0 <= startBit <= endBit < 64";
     bool valid = (6 <= startBit && startBit <= 10 && 6 <= endBit && endBit <= 10) ||
                  (startBit == endBit && (startBit == 45 || startBit == 48 || startBit == 50 || startBit == 53 ||
                                          startBit == 59 || startBit == 60));
     PRO_CODEGEN_CHECK(ExternalError::NOT_IMPLEMENTED_ERROR, valid)
-        << "set_ctrl_spr: bits [" << static_cast<int>(startBit) << ", " << static_cast<int>(endBit)
+        << op_name << ": bits [" << static_cast<int>(startBit) << ", " << static_cast<int>(endBit)
         << "] are not writable on current device. Writable: bits 6-10, 45, 48, 50, 53, 59, 60";
 }
 
@@ -1049,7 +1049,7 @@ static std::string MakeSetCtrlSprCodegenCCE(const ir::CallPtr& op, codegen::Code
         << "set_ctrl_spr: start_bit and end_bit must be compile-time constants";
     int8_t startBit = static_cast<int8_t>(start_val->value_);
     int8_t endBit = static_cast<int8_t>(end_val->value_);
-    CheckCtrlBitRange(startBit, endBit);
+    CheckCtrlBitRange(startBit, endBit, "set_ctrl_spr");
     auto value_const = ir::As<ir::ConstInt>(op->args_[2]);
     if (value_const != nullptr && startBit >= 6 && endBit <= 10) {
         // CTRL[8:6]=3'b111 (atomic operand dtype) and CTRL[10:9]=2'b11 (atomic op
@@ -1121,7 +1121,7 @@ static std::string MakeResetCtrlSprCodegenCCE(const ir::CallPtr& op, codegen::Co
         << "reset_ctrl_spr: start_bit and end_bit must be compile-time constants";
     int8_t startBit = static_cast<int8_t>(start_val->value_);
     int8_t endBit = static_cast<int8_t>(end_val->value_);
-    CheckCtrlBitRange(startBit, endBit);
+    CheckCtrlBitRange(startBit, endBit, "reset_ctrl_spr");
     constexpr int64_t defaultCtrl = 0x1000000000000008LL;
     if (endBit - startBit == 63) {
         codegen.Emit("set_ctrl(" + std::to_string(defaultCtrl) + "LL);");
