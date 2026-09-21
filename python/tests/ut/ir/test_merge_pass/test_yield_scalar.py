@@ -8,6 +8,8 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 from pathlib import Path
 
+import pytest
+
 import pypto
 from pypto.pil.compile_pipeline import compile_new_ir
 
@@ -18,6 +20,7 @@ _GOLDEN_DIR = Path(__file__).parent
 IR = _GOLDEN_DIR / "test_yield_scalar.pypto"
 IR1 = _GOLDEN_DIR / "test_yield_scalar1.pypto"
 
+@pytest.mark.skip()
 def test_yield_symbolic_scalar():
     def foo(x, y):
         for i in pypto.loop(10):

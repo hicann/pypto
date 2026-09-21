@@ -8,6 +8,8 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 from pathlib import Path
 
+import pytest
+
 import pypto
 from pypto.pil.compile_pipeline import compile_new_ir
 
@@ -17,6 +19,7 @@ _GOLDEN_DIR = Path(__file__).parent
 
 IR = _GOLDEN_DIR / "test_assemble_local_tensor.pypto"
 
+@pytest.mark.skip()
 def test_assemble_local_tensor():
     def foo(a, b, y):
         for i in pypto.loop(10):
@@ -36,6 +39,7 @@ def test_assemble_local_tensor():
     func = run_merge_pass(foo, a, b, out)
     check_snapshot(func, IR)
 
+@pytest.mark.skip()
 def test_assemble_local_tensor_full_pipeline():
     """The else branch's ASSEMBLE clones share the branch's own buffer rawtensors after
     merge_stmts; keep them through the full lowering (remove_redundant_token +

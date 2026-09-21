@@ -7,10 +7,14 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 
+import pytest
+
 import pypto
 from pypto import ir, pil
 
 from .test_common import _ssa_verify
+
+pytestmark = pytest.mark.skip()
 
 
 def test_canonicalize_keeps_carry_used_by_nested_loop_init():

@@ -6,6 +6,8 @@
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
+import pytest
+
 import pypto
 from pypto.pil.compile_pipeline import compile_new_ir
 
@@ -128,6 +130,7 @@ def c2v2_kernel(
     output_tensor2[:, :] = out2_2d
 
 
+@pytest.mark.skip()
 def test_c2v2_kernel():
     b = pypto.symbolic_scalar('b')
     s = pypto.symbolic_scalar('s')

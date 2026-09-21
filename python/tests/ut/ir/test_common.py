@@ -62,8 +62,8 @@ def ssa_verify(func, desc: str = ""):
     _ssa_verify(verifier, prog, desc)
 
 
-def _run_pass_pipeline(func, *args, passes, verify_skip=(), create_new_logical_tensor=True):
-    ir_func = pil.compile(func, *args, create_new_logical_tensor=create_new_logical_tensor)
+def _run_pass_pipeline(func, *args, passes, verify_skip=()):
+    ir_func = pil.compile(func, *args)
     prog = ir.IRBuilder().create_program([ir_func], "main", ir.Span.unknown())
     verifier = ir.IRVerifier.create_default()
     _ssa_verify(verifier, prog, "original")
@@ -74,7 +74,7 @@ def _run_pass_pipeline(func, *args, passes, verify_skip=(), create_new_logical_t
     return prog.functions[ir_func.name], prog
 
 
-def run_merge_pass(func, *args, create_new_logical_tensor=True):
+def run_merge_pass(func, *args):
     dce = ir.Pass.aggressive_dce()
     canonical = ir.Pass.canonicalize()
     merge = ir.Pass.merge_stmts_into_if()
@@ -89,13 +89,12 @@ def run_merge_pass(func, *args, create_new_logical_tensor=True):
         *args,
         passes=passes,
         verify_skip={"simplify_symbolic_scalar"},
-        create_new_logical_tensor=create_new_logical_tensor,
     )
     logging.info("\nmerged:\n%s" % func.body)
     return func
 
 
-def run_root_function(func, *args, create_new_logical_tensor=True):
+def run_root_function(func, *args):
     """Compile a kernel and run the compile_new_ir pass sequence up to and including
     create_root_functions, stopping before finalize so the root functions are inspectable.
     Returns the final program.
@@ -121,6 +120,5 @@ def run_root_function(func, *args, create_new_logical_tensor=True):
         *args,
         passes=passes,
         verify_skip={"simplify_symbolic_scalar", "create_root_functions"},
-        create_new_logical_tensor=create_new_logical_tensor,
     )
     return prog

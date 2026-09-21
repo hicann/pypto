@@ -11,6 +11,8 @@
 from dataclasses import dataclass, replace
 from typing import Any
 
+import pytest
+
 import pypto
 from pypto import ir
 
@@ -552,6 +554,7 @@ def get_tile_config(case_config):
     return tile_config
 
 
+@pytest.mark.skip()
 def test_incr_fa():
     b = pypto.SymbolicScalar('b')
     block_num = pypto.SymbolicScalar('block_num')

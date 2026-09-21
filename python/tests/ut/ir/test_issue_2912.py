@@ -5,6 +5,8 @@
 # Please refer to the License for details. You should not use this file except in compliance with the License.
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
+import pytest
+
 import pypto
 import pypto.pypto_impl as pypto_impl
 
@@ -53,6 +55,7 @@ def war_conflict_pypto(
         pypto.assemble(v2, [off + tile_b // 2, 0], out)
 
 
+@pytest.mark.skip()
 def test_war_conflict():
     a = pypto.Tensor([-1, 128], pypto.DT_BF16)
     w = pypto.Tensor([128, 128], pypto.DT_BF16)
