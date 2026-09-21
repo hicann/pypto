@@ -486,6 +486,9 @@ private:
 
     void LoadConf(const nlohmann::json& jData, const std::string& prefix)
     {
+        if (prefix == "pass.enable_slice") {
+            return;
+        }
         if (jData.is_string()) {
             root->AddValue(prefix, jData.get<std::string>());
         } else if (jData.is_number()) {

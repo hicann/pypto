@@ -478,7 +478,12 @@ inline T GetPassOption(const std::string& key)
     return ConfigManagerNg::CurrentScope()->GetConfigAllType<T>("pass." + key);
 }
 
-inline bool EnableSlice() { return GetPassOption<bool>(ENABLE_SLICE); }
+inline bool EnableSlice()
+{
+    const std::string key = "pass." + std::string(ENABLE_SLICE);
+    auto scope = ConfigManagerNg::CurrentScope();
+    return scope->HasConfig(key) ? scope->GetConfigAllType<bool>(key) : false;
+}
 
 /**
  * @brief Get the atomic scope id from pass config.

@@ -24,8 +24,6 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
-import pypto
-
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -202,10 +200,6 @@ IF_ELSE_KERNELS = {
 }
 
 
-
-
-
-
 # ===================================================================
 # if_elif_else: if/elif/else with add/sub/mul  (FP16)
 # ===================================================================
@@ -334,10 +328,6 @@ IF_RELU_KERNELS = {
 }
 
 
-
-
-
-
 # ===================================================================
 # if_always_false: if(i<0) never true with add/sub  (FP16)
 # ===================================================================
@@ -433,7 +423,6 @@ DEEPLY_NESTED_IF_KERNELS = {
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_if_else():
     # Let kernel discovery reach every variant before validating any output.
     checks = []
@@ -456,10 +445,7 @@ def test_if_else():
         logging.info("%s passed!", case)
 
 
-
-
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_if_elif_else():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -479,7 +465,6 @@ def test_if_elif_else():
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_nested_if():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -499,7 +484,6 @@ def test_nested_if():
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_if_relu():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -515,8 +499,6 @@ def test_if_relu():
         z_ref[64:, :] = _ref(tdt, lambda a, b: a + b, x[64:, :], y[64:, :])
         torch.testing.assert_close(z, z_ref, atol=atol, rtol=rtol)
         logging.info("test_if_relu [%s] passed! shape=%s", label, shape)
-
-
 
 
 # ===================================================================
@@ -727,7 +709,6 @@ IF_ELIF_CONST_KERNELS = {
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_if_always_false():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -744,7 +725,6 @@ def test_if_always_false():
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_deeply_nested_if():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -765,7 +745,6 @@ def test_deeply_nested_if():
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_if_lt_const():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -784,7 +763,6 @@ def test_if_lt_const():
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_if_ge_const_mul():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -803,7 +781,6 @@ def test_if_ge_const_mul():
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_if_jt_const():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -822,7 +799,6 @@ def test_if_jt_const():
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_if_ij_cmp():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -847,7 +823,6 @@ def test_if_ij_cmp():
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_if_elif_const():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -905,7 +880,6 @@ def if_and_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_if_and():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -959,7 +933,6 @@ def ternary_expr_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_ternary_expr():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -1047,7 +1020,6 @@ def _compound_bool_ref(x_f, y_f, i_tiles, j_tiles):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_if_compound_12():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -1158,7 +1130,6 @@ def _ternary_deep_ref(x_f, y_f, i_tiles, j_tiles):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_ternary_12():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -1209,7 +1180,6 @@ def if_while_compound_mixed_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_if_while_compound_mixed():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -1272,7 +1242,6 @@ def if_truthiness_int_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_if_truthiness_int():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -1335,7 +1304,6 @@ def if_in_operator_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_if_in_operator():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -1404,7 +1372,6 @@ def if_not_in_operator_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_if_not_in_operator():
     device = ST_DEVICE
     torch.npu.set_device(device)

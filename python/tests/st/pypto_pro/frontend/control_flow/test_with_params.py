@@ -26,8 +26,6 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
-import pypto
-
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -293,8 +291,6 @@ def make_for_if_break_scalar_kernel(dtype_label, name_suffix=""):
 # ===================================================================
 
 
-
-
 # ===================================================================
 # func_range_bound: pl.range bound computed by plain python functions
 #   div(m, n) -> m // n;  sub(m, n) -> m - n;  mul(m, n) -> m * n
@@ -394,7 +390,6 @@ def make_if_func_bool_expr_kernel(dtype_label, name_suffix=""):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 @pytest.mark.parametrize("pl_dt,tdt,label,atol,rtol", DTYPES_ALL, ids=[entry[2] for entry in DTYPES_ALL])
 def test_for_scalar_stop(pl_dt, tdt, label, atol, rtol):
     device = ST_DEVICE
@@ -413,7 +408,6 @@ def test_for_scalar_stop(pl_dt, tdt, label, atol, rtol):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_for_scalar_step():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -430,7 +424,6 @@ def test_for_scalar_step():
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_if_scalar_flag():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -452,7 +445,6 @@ def test_if_scalar_flag():
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_while_scalar_cond():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -469,7 +461,6 @@ def test_while_scalar_cond():
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_for_if_break_scalar():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -486,10 +477,7 @@ def test_for_if_break_scalar():
         logging.info("test_for_if_break_scalar [%s] passed! shape=%s", label, shape)
 
 
-
-
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_func_range_bound():
     device = ST_DEVICE
     torch.npu.set_device(device)
@@ -506,7 +494,6 @@ def test_func_range_bound():
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_if_func_bool_expr():
     device = ST_DEVICE
     torch.npu.set_device(device)

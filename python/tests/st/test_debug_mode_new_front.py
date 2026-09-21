@@ -66,7 +66,6 @@ def device_run(device_id):
     check_output()
 
 
-@pypto.options(pass_options={"enable_slice": True})
 def test_debug_mode():
     device_id = os.environ.get('TILE_FWK_DEVICE_ID', 0)
     output_name = "temp"

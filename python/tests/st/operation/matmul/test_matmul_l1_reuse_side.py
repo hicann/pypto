@@ -111,8 +111,7 @@ def test_matmul_l1_reuse_side(side):
     if side != "left":
         _run_side_matmul(side, _side_tiling_case(side))
         return
-    with pypto.options(pass_options={"enable_slice": False}):
-        _run_side_matmul(side, _side_tiling_case(side))
+    _run_side_matmul(side, _side_tiling_case(side))
 
 
 @pytest.mark.soc("950", "910")
@@ -121,8 +120,7 @@ def test_matmul_l1_reuse_side_grid(side):
     if side != "right":
         _run_side_matmul(side, _GRID_CASE)
         return
-    with pypto.options(pass_options={"enable_slice": False}):
-        _run_side_matmul(side, _GRID_CASE)
+    _run_side_matmul(side, _GRID_CASE)
 
 
 if __name__ == "__main__":

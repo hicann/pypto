@@ -41,8 +41,6 @@ from pypto_pro.runtime.tilingkey import TilingKeyField
 import pytest
 import torch
 
-import pypto
-
 logging.basicConfig(level=logging.INFO)
 
 QK_PRELOAD = 2
@@ -729,7 +727,6 @@ def _build_work_ranges(total_work, num_cores, device):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_fa_tilingkey_attn_mask():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     torch.npu.set_device(device_id)
@@ -768,7 +765,6 @@ def test_fa_tilingkey_attn_mask():
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_fa_tilingkey_errors():
     """Error paths: direct call, missing/unknown field, bad value."""
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))

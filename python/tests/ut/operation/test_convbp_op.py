@@ -20,6 +20,11 @@ import pytest
 import pypto
 from pypto.error import PyptoError
 
+# ============================================================================
+# 输出 tensor 通过 pypto.function 参数传入并在块内写入，使其被识别为 outcast 以确保计算图符合预期；
+# 整个用例的校验目的是确保 pass 阶段编译正常通过。
+# ============================================================================
+
 
 def test_convbp_2d_fp16_op():
     """Conv2D backward dx: FP16, stride=1, pad=1, dilation=1, 3x3 kernel"""
@@ -30,8 +35,9 @@ def test_convbp_2d_fp16_op():
     grad_output = pypto.tensor((1, 16, 16, 16), dtype, "grad_output")
     weight = pypto.tensor((16, 16, 3, 3), dtype, "weight")
     input_size = [1, 16, 16, 16]
+    out = pypto.tensor((1, 16, 16, 16), dtype, "out")
 
-    with pypto.function("CONV_BP", grad_output, weight):
+    with pypto.function("CONV_BP", grad_output, weight, out):
         pypto.set_convbp_input_tile_shapes(
             pypto.pypto_impl.ConvBpTileL1Info(tileML1=16, tileNL1=16, tileKL1=144),
             pypto.pypto_impl.ConvBpTileL0Info(tileML0=16, tileNL0=16, tileKL0=16),
@@ -41,9 +47,10 @@ def test_convbp_2d_fp16_op():
             grad_output, input_size, weight, dtype,
             [1, 1], [1, 1, 1, 1], [1, 1], groups=1
         )
+        out[:] = result
 
-    assert isinstance(result, pypto.tensor)
-    assert result.shape == [1, 16, 16, 16]
+    assert isinstance(out, pypto.tensor)
+    assert out.shape == [1, 16, 16, 16]
 
 
 def test_convbp_2d_bf16_op():
@@ -52,8 +59,9 @@ def test_convbp_2d_bf16_op():
     grad_output = pypto.tensor((1, 16, 16, 16), dtype, "grad_output")
     weight = pypto.tensor((16, 16, 3, 3), dtype, "weight")
     input_size = [1, 16, 16, 16]
+    out = pypto.tensor((1, 16, 16, 16), dtype, "out")
 
-    with pypto.function("CONV_BP", grad_output, weight):
+    with pypto.function("CONV_BP", grad_output, weight, out):
         pypto.set_convbp_input_tile_shapes(
             pypto.pypto_impl.ConvBpTileL1Info(tileML1=16, tileNL1=16, tileKL1=144),
             pypto.pypto_impl.ConvBpTileL0Info(tileML0=16, tileNL0=16, tileKL0=16),
@@ -63,9 +71,10 @@ def test_convbp_2d_bf16_op():
             grad_output, input_size, weight, dtype,
             [1, 1], [1, 1, 1, 1], [1, 1], groups=1
         )
+        out[:] = result
 
-    assert isinstance(result, pypto.tensor)
-    assert result.shape == [1, 16, 16, 16]
+    assert isinstance(out, pypto.tensor)
+    assert out.shape == [1, 16, 16, 16]
 
 
 def test_convbp_2d_dilation_op():
@@ -76,8 +85,9 @@ def test_convbp_2d_dilation_op():
     grad_output = pypto.tensor((1, 16, 16, 16), dtype, "grad_output")
     weight = pypto.tensor((16, 16, 3, 3), dtype, "weight")
     input_size = [1, 16, 18, 18]
+    out = pypto.tensor((1, 16, 18, 18), dtype, "out")
 
-    with pypto.function("CONV_BP", grad_output, weight):
+    with pypto.function("CONV_BP", grad_output, weight, out):
         pypto.set_convbp_input_tile_shapes(
             pypto.pypto_impl.ConvBpTileL1Info(tileML1=16, tileNL1=16, tileKL1=144),
             pypto.pypto_impl.ConvBpTileL0Info(tileML0=16, tileNL0=16, tileKL0=16),
@@ -87,9 +97,10 @@ def test_convbp_2d_dilation_op():
             grad_output, input_size, weight, dtype,
             [1, 1], [1, 1, 1, 1], [2, 2], groups=1
         )
+        out[:] = result
 
-    assert isinstance(result, pypto.tensor)
-    assert result.shape == [1, 16, 18, 18]
+    assert isinstance(out, pypto.tensor)
+    assert out.shape == [1, 16, 18, 18]
 
 
 def test_convbp_2d_no_pad_op():
@@ -100,8 +111,9 @@ def test_convbp_2d_no_pad_op():
     grad_output = pypto.tensor((1, 16, 14, 14), dtype, "grad_output")
     weight = pypto.tensor((16, 16, 3, 3), dtype, "weight")
     input_size = [1, 16, 16, 16]
+    out = pypto.tensor((1, 16, 16, 16), dtype, "out")
 
-    with pypto.function("CONV_BP", grad_output, weight):
+    with pypto.function("CONV_BP", grad_output, weight, out):
         pypto.set_convbp_input_tile_shapes(
             pypto.pypto_impl.ConvBpTileL1Info(tileML1=16, tileNL1=16, tileKL1=144),
             pypto.pypto_impl.ConvBpTileL0Info(tileML0=16, tileNL0=16, tileKL0=16),
@@ -111,9 +123,10 @@ def test_convbp_2d_no_pad_op():
             grad_output, input_size, weight, dtype,
             [1, 1], [0, 0, 0, 0], [1, 1], groups=1
         )
+        out[:] = result
 
-    assert isinstance(result, pypto.tensor)
-    assert result.shape == [1, 16, 16, 16]
+    assert isinstance(out, pypto.tensor)
+    assert out.shape == [1, 16, 16, 16]
 
 
 def test_convbp_2d_fp16_batch_op():
@@ -122,8 +135,9 @@ def test_convbp_2d_fp16_batch_op():
     grad_output = pypto.tensor((2, 16, 16, 16), dtype, "grad_output")
     weight = pypto.tensor((16, 16, 3, 3), dtype, "weight")
     input_size = [2, 16, 16, 16]
+    out = pypto.tensor((2, 16, 16, 16), dtype, "out")
 
-    with pypto.function("CONV_BP", grad_output, weight):
+    with pypto.function("CONV_BP", grad_output, weight, out):
         pypto.set_convbp_input_tile_shapes(
             pypto.pypto_impl.ConvBpTileL1Info(tileML1=16, tileNL1=16, tileKL1=144),
             pypto.pypto_impl.ConvBpTileL0Info(tileML0=16, tileNL0=16, tileKL0=16),
@@ -133,9 +147,10 @@ def test_convbp_2d_fp16_batch_op():
             grad_output, input_size, weight, dtype,
             [1, 1], [1, 1, 1, 1], [1, 1], groups=1
         )
+        out[:] = result
 
-    assert isinstance(result, pypto.tensor)
-    assert result.shape == [2, 16, 16, 16]
+    assert isinstance(out, pypto.tensor)
+    assert out.shape == [2, 16, 16, 16]
 
 
 def test_convbp_grad_output_unsupported_dtype():

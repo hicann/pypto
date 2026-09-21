@@ -318,7 +318,6 @@ def _mean(values: List[float]) -> float:
     return statistics.mean(values) if values else 0.0
 
 
-@pypto.options(pass_options={"enable_slice": True})
 def test_ctrl_cpu_perf():
     """看护 AICPU-CTRL EXEC_DYN 与首个 DEV_TASK_BUILD（30 轮去头 2）。"""
     mp.set_start_method("spawn", force=True)

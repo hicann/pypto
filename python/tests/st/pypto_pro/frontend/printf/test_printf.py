@@ -24,8 +24,6 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
-import pypto
-
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -61,7 +59,6 @@ def printf_di_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_printf_di():
     _check_npu()
     logging.info("------------test_printf_di--------------")
@@ -90,7 +87,6 @@ def printf_u_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_printf_u():
     _check_npu()
     out = torch.zeros(1, device=ST_DEVICE, dtype=torch.int32)
@@ -113,7 +109,6 @@ def printf_f_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_printf_f():
     _check_npu()
     out = torch.zeros(1, device=ST_DEVICE, dtype=torch.int32)
@@ -139,7 +134,6 @@ def printf_x_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_printf_x():
     _check_npu()
     out = torch.zeros(1, device=ST_DEVICE, dtype=torch.int32)
@@ -162,7 +156,6 @@ def printf_ptr_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_printf_ptr():
     _check_npu()
     logging.info("------------test_printf_ptr--------------")
@@ -187,7 +180,6 @@ def printf_text_loc_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_printf_text_loc():
     _check_npu()
     out = torch.zeros(1, device=ST_DEVICE, dtype=torch.int32)
@@ -212,7 +204,6 @@ def printf_for_loop_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_printf_for_loop():
     _check_npu()
     logging.info("------------test_printf_for_loop--------------")
@@ -246,7 +237,6 @@ def printf_if_else_kernel(
     [(True, 100), (False, -100)],
 )
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_printf_if_else(flag, expected_value):
     _check_npu()
     out = torch.zeros(1, device=ST_DEVICE, dtype=torch.int32)
@@ -271,7 +261,6 @@ def printf_while_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_printf_while():
     _check_npu()
     out = torch.zeros(1, device=ST_DEVICE, dtype=torch.int32)
@@ -296,7 +285,6 @@ def printf_loc_combo_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_printf_loc_combo():
     _check_npu()
     out = torch.zeros(1, device=ST_DEVICE, dtype=torch.int32)

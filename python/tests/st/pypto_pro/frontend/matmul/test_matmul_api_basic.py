@@ -45,8 +45,6 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
-import pypto
-
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -1418,7 +1416,6 @@ def _device():
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_t01(_device):
     a = _inputs(_device, [M_NSQ, K_NSQ])
     b = _inputs(_device, [K_NSQ, N_NSQ])
@@ -1426,7 +1423,6 @@ def test_t01(_device):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_t02(_device):
     a = _inputs(_device, [M_NSQ, 256])
     b = _inputs(_device, [256, N_NSQ])
@@ -1434,7 +1430,6 @@ def test_t02(_device):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_t03(_device):
     a = _inputs(_device, [M_NSQ, K_NSQ])
     b = _inputs(_device, [K_NSQ, N_NSQ])
@@ -1442,7 +1437,6 @@ def test_t03(_device):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_t05(_device):
     a = _inputs(_device, [M_NSQ, 256])
     b = _inputs(_device, [256, N_NSQ])
@@ -1450,7 +1444,6 @@ def test_t05(_device):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_t06(_device):
     a = _inputs(_device, [M_NSQ, 200])
     b = _inputs(_device, [200, N_NSQ])
@@ -1458,7 +1451,6 @@ def test_t06(_device):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_t07(_device):
     a = _inputs(_device, [M_NSQ, K_NSQ])
     b = _inputs(_device, [K_NSQ, N_NSQ])
@@ -1466,7 +1458,6 @@ def test_t07(_device):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_t09(_device):
     a = _inputs(_device, [M_NSQ, K_NSQ])
     b = _inputs(_device, [K_NSQ, N_NSQ])
@@ -1474,7 +1465,6 @@ def test_t09(_device):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_t10(_device):
     a = _inputs(_device, [M_NSQ, K_NSQ])
     b = _inputs(_device, [K_NSQ, N_NSQ])
@@ -1482,7 +1472,6 @@ def test_t10(_device):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_t11(_device):
     a = _inputs(_device, [M_NSQ, K_NSQ])
     b = _inputs(_device, [K_NSQ, N_NSQ])
@@ -1490,7 +1479,6 @@ def test_t11(_device):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_t12(_device):
     a = _inputs(_device, [M_NSQ, 256])
     b = _inputs(_device, [256, N_NSQ])
@@ -1498,7 +1486,6 @@ def test_t12(_device):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_t13(_device):
     a = _inputs(_device, [M_NSQ, K_NSQ])
     b = _inputs(_device, [K_NSQ, N_NSQ])
@@ -1509,7 +1496,6 @@ def test_t13(_device):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_t14(_device):
     a = _inputs(_device, [M_SQ, K_SQ])
     b = _inputs(_device, [K_SQ, N_SQ])
@@ -1517,7 +1503,6 @@ def test_t14(_device):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_t15(_device):
     a = _inputs(_device, [M_SQ, 256])
     b = _inputs(_device, [256, N_SQ])
@@ -1525,7 +1510,6 @@ def test_t15(_device):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_t16(_device):
     a = _inputs(_device, [128, 384])
     b = _inputs(_device, [384, 128])
@@ -1533,7 +1517,6 @@ def test_t16(_device):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_t17(_device):
     a = _inputs(_device, [256, 64])
     b = _inputs(_device, [64, 64])
@@ -1541,7 +1524,6 @@ def test_t17(_device):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_t18(_device):
     a = _inputs(_device, [200, 128])
     b = _inputs(_device, [128, 128])
@@ -1555,7 +1537,6 @@ def test_t18(_device):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_t19(_device):
     a = _inputs(_device, [64, 64], dtype=torch.float32)
     b = _inputs(_device, [64, 64], dtype=torch.float32)
@@ -1569,7 +1550,6 @@ def test_t19(_device):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_t20(_device):
     a = _inputs(_device, [M_SQ, K_SQ])
     b = _inputs(_device, [K_SQ, N_SQ])
@@ -1577,7 +1557,6 @@ def test_t20(_device):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_t21(_device):
     a = _inputs(_device, [M_SQ, K_SQ])
     b = _inputs(_device, [K_SQ, N_SQ])
@@ -1585,7 +1564,6 @@ def test_t21(_device):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_t22(_device):
     a = _inputs(_device, [M_SQ, K_SQ])
     b = _inputs(_device, [K_SQ, N_SQ])
@@ -1593,7 +1571,6 @@ def test_t22(_device):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_t23(_device):
     a = _inputs(_device, [M_SQ, K_SQ])
     b = _inputs(_device, [K_SQ, N_SQ])
@@ -1601,7 +1578,6 @@ def test_t23(_device):
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_t24(_device):
     a = _inputs(_device, [M_SQ, 200])
     b = _inputs(_device, [200, N_SQ])

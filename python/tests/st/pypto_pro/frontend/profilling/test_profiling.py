@@ -24,8 +24,6 @@ import pytest
 import torch
 import torch_npu
 
-import pypto
-
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -80,7 +78,6 @@ def prof_add_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_profiler_api_outputs(tmp_path):
     """One real collection supplies kernel_details.csv and a nonempty JSON trace.
 

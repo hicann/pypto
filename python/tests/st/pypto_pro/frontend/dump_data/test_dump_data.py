@@ -24,8 +24,6 @@ import pypto_pro.language as pl
 import pytest
 import torch
 
-import pypto
-
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
@@ -58,7 +56,6 @@ def dump_data_tensor_full_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tensor_full():
     _check_npu()
     logging.info("------------test_dump_data_tensor_full--------------")
@@ -81,7 +78,6 @@ def dump_data_tensor_window_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tensor_window():
     _check_npu()
     logging.info("------------test_dump_data_tensor_window--------------")
@@ -104,7 +100,6 @@ def dump_data_tensor_loc_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tensor_loc():
     _check_npu()
     logging.info("------------test_dump_data_tensor_loc--------------")
@@ -143,7 +138,6 @@ def dump_data_tile_full_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_full():
     _check_npu()
     logging.info("------------test_dump_data_tile_full--------------")
@@ -178,7 +172,6 @@ def dump_data_tile_window_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_window():
     _check_npu()
     logging.info("------------test_dump_data_tile_window--------------")
@@ -214,7 +207,6 @@ def dump_data_tile_dynamic_offset_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_dynamic_offset():
     _check_npu()
     logging.info("------------test_dump_data_tile_dynamic_offset--------------")
@@ -250,7 +242,6 @@ def dump_data_tile_for_loop_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_for_loop():
     _check_npu()
     logging.info("------------test_dump_data_tile_for_loop--------------")
@@ -289,7 +280,6 @@ def dump_data_tile_if_else_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_if_else():
     _check_npu()
     logging.info("------------test_dump_data_tile_if_else--------------")
@@ -328,7 +318,6 @@ def dump_data_tile_while_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_while():
     _check_npu()
     logging.info("------------test_dump_data_tile_while--------------")
@@ -364,7 +353,6 @@ def dump_data_tile_loc_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_loc():
     _check_npu()
     logging.info("------------test_dump_data_tile_loc--------------")
@@ -471,7 +459,6 @@ def dump_data_tile_acc_fp16_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_acc_fp16():
     _check_npu()
     logging.info("------------test_dump_data_tile_acc_fp16--------------")
@@ -537,7 +524,6 @@ def dump_data_tile_acc_large_offset_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_acc_large_offset():
     _check_npu()
     logging.info("------------test_dump_data_tile_acc_large_offset--------------")
@@ -601,7 +587,6 @@ def dump_data_tile_acc_bf16_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_acc_bf16():
     _check_npu()
     logging.info("------------test_dump_data_tile_acc_bf16--------------")
@@ -665,7 +650,6 @@ def dump_data_tile_acc_256x256_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_acc_256x256():
     _check_npu()
     logging.info("------------test_dump_data_tile_acc_256x256--------------")
@@ -739,7 +723,6 @@ def dump_data_tile_acc_control_flow_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_acc_control_flow():
     _check_npu()
     logging.info("------------test_dump_data_tile_acc_control_flow--------------")
@@ -806,7 +789,6 @@ def dump_data_tile_acc_ptr_workspace_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_dump_data_tile_acc_ptr_workspace():
     _check_npu()
     logging.info("------------test_dump_data_tile_acc_ptr_workspace--------------")

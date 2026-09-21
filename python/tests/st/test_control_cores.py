@@ -19,7 +19,6 @@ import pytest
 import torch
 import torch_npu
 
-import pypto
 from st.test_swim_line import matmul_add
 
 _OUTPUT_BASE = Path("./output")
@@ -130,7 +129,6 @@ def test_not_control_cores():
 
 
 @pytest.mark.soc("910")
-@pypto.options(pass_options={"enable_slice": False})
 def test_rts_stream_control_cores():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -143,7 +141,6 @@ def test_rts_stream_control_cores():
 
 
 @pytest.mark.soc("910")
-@pypto.options(pass_options={"enable_slice": False})
 def test_rts_device_control_cores():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -155,7 +152,6 @@ def test_rts_device_control_cores():
 
 
 @pytest.mark.soc("910")
-@pypto.options(pass_options={"enable_slice": False})
 def test_rts_device_stream_control_cores():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)

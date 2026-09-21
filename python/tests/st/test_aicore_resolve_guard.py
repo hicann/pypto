@@ -29,8 +29,6 @@ import textwrap
 
 import pytest
 
-import pypto
-
 _SUBPROCESS_SCRIPT = textwrap.dedent(
     """\
     import os
@@ -43,7 +41,6 @@ _SUBPROCESS_SCRIPT = textwrap.dedent(
     import pypto
 
 
-    @pypto.options(pass_options={"enable_slice": True})
     def run_aicore_resolve_sigmoid_fp32():
         device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
         torch.npu.set_device(device_id)
@@ -76,7 +73,6 @@ _SUBPROCESS_SCRIPT = textwrap.dedent(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": True})
 def test_aicore_resolve_sigmoid_fp32():
     """Guard: sigmoid produces correct result under DRCO scheduling path"""
     env = os.environ.copy()

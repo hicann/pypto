@@ -44,7 +44,6 @@ def test_pass_option():
     assert set(pass_option.keys()) == set_params, (
         f"get_pass_options keys {set(pass_option.keys())} != set_pass_options params {set_params}"
     )
-    assert pass_option["enable_slice"] is True
     # tuple
     pypto.set_pass_options(sg_set_scope=48)
     pass_option = pypto.get_pass_options()
@@ -53,13 +52,6 @@ def test_pass_option():
     pypto.set_pass_options(cube_nbuffer_setting={3: 4})
     pass_option = pypto.get_pass_options()
     assert pass_option["cube_nbuffer_setting"] == {3: 4}
-    # bool
-    pypto.set_pass_options(enable_slice=True)
-    pass_option = pypto.get_pass_options()
-    assert pass_option["enable_slice"] is True
-    pypto.set_pass_options(enable_slice=False)
-    pass_option = pypto.get_pass_options()
-    assert pass_option["enable_slice"] is False
 
 
 def test_host_option():

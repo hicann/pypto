@@ -28,7 +28,6 @@ DTYPE = pypto.DT_FP32
 
 
 @pytest.mark.skip(reason="temporarily skipped")
-@pypto.options(pass_options={"enable_slice": True})
 def test_stitch_all_dependencies():
     """
     Unified test covering WAW, RAW, and WAR in a single kernel.

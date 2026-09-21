@@ -313,7 +313,6 @@ def pipeline_demo_kernel(
 
 
 @pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
 def test_pipeline_demo_kernel():
     device = ST_DEVICE
     torch.npu.set_device(device)
