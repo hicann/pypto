@@ -162,12 +162,10 @@ Tensor Div(const Tensor& self, const Tensor& other, PrecisionType precisionType)
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "DIV");
 
     static const std::unordered_set<DataType> DIV_A2A3_TYPES = {DT_FP16, DT_FP32, DT_BF16, DT_INT16, DT_INT32};
-    static const std::unordered_set<DataType> DIV_A5_TYPES = {DT_FP16,  DT_FP32,  DT_BF16,  DT_INT16,
-                                                              DT_INT32, DT_INT64, DT_UINT64};
+    static const std::unordered_set<DataType> DIV_A5_TYPES = {DT_FP16, DT_FP32, DT_BF16, DT_INT16, DT_INT32, DT_INT64};
     const auto& supportedTypes = GetSupportedDataTypesByArch(DIV_A2A3_TYPES, DIV_A5_TYPES);
-    auto isDivSupportedInt = [](DataType dt) { return dt == DT_INT16 || dt == DT_INT32; };
+    auto isDivSupportedInt = [](DataType dt) { return dt == DT_INT16 || dt == DT_INT32 || dt == DT_INT64; };
     CheckTensorDataType(self.GetStorage(), supportedTypes, "DIV");
-    CheckInt64Broadcast(self.GetStorage(), other.GetStorage(), "DIV");
 
     if (isDivSupportedInt(self.GetDataType())) {
         Tensor castSelf = Cast(self, DT_FP32, CastMode::CAST_NONE, SaturationMode::ON);
