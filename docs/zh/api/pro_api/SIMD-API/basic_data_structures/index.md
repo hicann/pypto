@@ -18,7 +18,6 @@ Ptr
 ReluPreMode
 RoundMode
 STPhase
-SyncAllMode
 SyncCoreType
 Tensor
 TensorLayout
