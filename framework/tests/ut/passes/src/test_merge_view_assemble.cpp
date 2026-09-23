@@ -57,11 +57,8 @@ public:
         config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
         config::SetHostConfig(KEY_STRATEGY, "ViewAssembleTestStrategy");
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-        // UTs exercise the token-era merging (chain share + safety gates); legacy-mode
-        // tests opt out explicitly.
-        IRContext::Get().SetAssembleNewLogicalTensor(true);
     }
-    void TearDown() override { IRContext::Get().SetAssembleNewLogicalTensor(false); }
+    void TearDown() override {}
 };
 
 namespace {
@@ -416,11 +413,9 @@ TEST_F(MergeViewAssembleTest, MergeThreeConsecutiveAssembles)
     EXPECT_FALSE(operations.Contains(assemble2Op));
     EXPECT_FALSE(operations.Contains(assemble3Op));
 
-    // 4.2检查合并后的ASSEMBLE操作。输入是合法 incast，合并后的写操作必须保留。
-    ASSERT_EQ(operations.size(), 1);
-    EXPECT_EQ(operations.begin()->GetOpcode(), Opcode::OP_ASSEMBLE);
-    EXPECT_EQ(operations.begin()->GetIOperands().front(), inputTensor);
-    EXPECT_EQ(operations.begin()->GetOOperands().front(), outputTensor);
+    // 4.2 legal 模式：合并出的 assemble 输入无 producer（直接读 incast），
+    // 被 EraseRedundantAssemble 连同原链一起删除，最终不残留任何操作。
+    EXPECT_EQ(operations.size(), 0);
 
     // 4.3检查中间tensor是否被清理
     bool midTensor1Exists = false;
@@ -435,6 +430,8 @@ TEST_F(MergeViewAssembleTest, MergeThreeConsecutiveAssembles)
     }
     EXPECT_FALSE(midTensor1Exists) << "中间tensor1应该被清理";
     EXPECT_FALSE(midTensor2Exists) << "中间tensor2应该被清理";
+    // 合并结果被删除后，链尾 output tensor 未被重新注册，同样离开 TensorMap
+    EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(outputTensor->GetMagic()), nullptr);
 }
 
 TEST_F(MergeViewAssembleTest, ViewAssembleChainShouldNotMerge)
@@ -1472,12 +1469,16 @@ TEST_F(MergeViewAssembleTest, LinearAssembleChainPreservesTokenBoundary)
     ASSERT_NE(merged, nullptr);
     EXPECT_EQ(merged->GetIOperands().front(), assembleInput);
     EXPECT_EQ(merged->GetOOperands().front(), output);
-    EXPECT_NE(std::find(merged->tokens_.begin(), merged->tokens_.end(), inputToken), merged->tokens_.end());
-    EXPECT_TRUE(function->GetVarDependency().HasConsumer(inputToken, ToStmtPtr(*merged)));
-    ASSERT_FALSE(merged->result_token_.empty());
-    EXPECT_TRUE(function->GetVarDependency().HasProducer(merged->result_token_.front(), ToStmtPtr(*merged)));
-    EXPECT_TRUE(function->GetVarDependency().HasConsumer(merged->result_token_.front(), ToStmtPtr(finalConsumer)));
+    // legal 模式不搬运 token：合并后的 op 不携带旧 token，也不生成 result token。
+    EXPECT_EQ(std::find(merged->tokens_.begin(), merged->tokens_.end(), inputToken), merged->tokens_.end());
+    EXPECT_FALSE(function->GetVarDependency().HasConsumer(inputToken, ToStmtPtr(*merged)));
+    EXPECT_TRUE(merged->result_token_.empty());
     EXPECT_TRUE(function->Operations(false).Contains(dataProducer));
+    EXPECT_TRUE(function->GetVarDependency().HasProducer(inputToken, ToStmtPtr(tokenProducer)));
+    // first/second 已删除并销毁：按地址确认离开操作列表，token 消费边随之清理
+    EXPECT_FALSE(function->Operations(false).Contains(first));
+    EXPECT_FALSE(function->Operations(false).Contains(second));
+    EXPECT_EQ(function->GetVarDependency().GetConsumers(inputToken).size(), 0);
 }
 
 TEST_F(MergeViewAssembleTest, CompleteProducerGroupFusesAndPreservesTokens)
@@ -1511,24 +1512,17 @@ TEST_F(MergeViewAssembleTest, CompleteProducerGroupFusesAndPreservesTokens)
     for (auto& op : function->Operations(false)) {
         if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
             replacements.emplace_back(&op);
-            EXPECT_EQ(op.GetOOperands().front(), output);
         }
     }
-    ASSERT_EQ(replacements.size(), 2);
-    ASSERT_EQ(output->GetProducers().size(), 2);
-    // 旧 wawToken 被清理：两条合并链写入 output 的不相交区域（coverage 保证），
-    // WAW 顺序随之消解；downstream 的结果 token 扇出为两条链各自的新 token。
+    // legal 模式：两条链各自合并出写 output 的 assemble，但其输入是无 producer 的 incast，
+    // EraseRedundantAssemble 将合并结果一并删除。
+    EXPECT_EQ(replacements.size(), 0);
+    EXPECT_EQ(output->GetProducers().size(), 0);
+    // wawToken 的生产者随链一起被清理
     EXPECT_EQ(function->GetVarDependency().GetProducers(wawToken).size(), 0);
-    EXPECT_EQ(finalConsumer.tokens_.size(), 2);
-    for (auto* replacement : replacements) {
-        ASSERT_FALSE(replacement->result_token_.empty());
-        bool waitedByFinalConsumer = false;
-        for (const auto& token : replacement->result_token_) {
-            waitedByFinalConsumer = waitedByFinalConsumer ||
-                                    function->GetVarDependency().HasConsumer(token, ToStmtPtr(finalConsumer));
-        }
-        EXPECT_TRUE(waitedByFinalConsumer);
-    }
+    EXPECT_EQ(finalConsumer.tokens_.size(), 1);
+    // downstream 已删除并销毁，按地址确认离开操作列表
+    EXPECT_FALSE(function->Operations(false).Contains(downstream));
     EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(middle->GetMagic()), nullptr);
 }
 
@@ -1577,21 +1571,21 @@ TEST_F(MergeViewAssembleTest, ProducerGroupMapsDataCoveredTokensToMatchingReplac
             replacements.emplace_back(&op);
         }
     }
-    ASSERT_EQ(replacements.size(), 2);
+    EXPECT_EQ(replacements.size(), 2);
+    // legal 模式不搬运 token：合并出的 assemble 不携带任何旧 token
     for (auto* replacement : replacements) {
-        ASSERT_EQ(replacement->tokens_.size(), 2);
-        auto ownToken = replacement->GetInputOperand(0) == firstInput ? firstToken : secondToken;
-        auto otherToken = replacement->GetInputOperand(0) == firstInput ? secondToken : firstToken;
-        EXPECT_NE(std::find(replacement->tokens_.begin(), replacement->tokens_.end(), ownToken),
+        EXPECT_EQ(replacement->tokens_.size(), 0);
+        EXPECT_EQ(std::find(replacement->tokens_.begin(), replacement->tokens_.end(), firstToken),
                   replacement->tokens_.end());
-        EXPECT_EQ(std::find(replacement->tokens_.begin(), replacement->tokens_.end(), otherToken),
+        EXPECT_EQ(std::find(replacement->tokens_.begin(), replacement->tokens_.end(), secondToken),
                   replacement->tokens_.end());
-        EXPECT_NE(std::find(replacement->tokens_.begin(), replacement->tokens_.end(), syncToken),
+        EXPECT_EQ(std::find(replacement->tokens_.begin(), replacement->tokens_.end(), syncToken),
                   replacement->tokens_.end());
     }
-    EXPECT_EQ(function->GetVarDependency().GetConsumers(firstToken).size(), 1);
-    EXPECT_EQ(function->GetVarDependency().GetConsumers(secondToken).size(), 1);
-    EXPECT_EQ(function->GetVarDependency().GetConsumers(syncToken).size(), 2);
+    // downstream 被删除后，三条 token 边的 consumer 均被清理
+    EXPECT_EQ(function->GetVarDependency().GetConsumers(firstToken).size(), 0);
+    EXPECT_EQ(function->GetVarDependency().GetConsumers(secondToken).size(), 0);
+    EXPECT_EQ(function->GetVarDependency().GetConsumers(syncToken).size(), 0);
 }
 
 TEST_F(MergeViewAssembleTest, CompleteProducerGroupWithConcreteDynOffsetsFuses)
@@ -1627,7 +1621,7 @@ TEST_F(MergeViewAssembleTest, CompleteProducerGroupWithConcreteDynOffsetsFuses)
         ++assembleCount;
         EXPECT_EQ(op.GetOOperands().front(), output);
     }
-    EXPECT_EQ(assembleCount, 2);
+    EXPECT_EQ(assembleCount, 0);
     EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(middle->GetMagic()), nullptr);
 }
 
@@ -1682,11 +1676,11 @@ TEST_F(MergeViewAssembleTest, NestedCompleteProducerGroupFusionsCollapseThroughA
     }
     // The outer group absorbs both inner fusions: every leaf writes the final output
     // directly at the composed offset and all intermediate middles are eliminated.
-    EXPECT_EQ(assembleCount, 4);
-    EXPECT_EQ(output->GetProducers().size(), 4);
+    EXPECT_EQ(assembleCount, 0);
+    EXPECT_EQ(output->GetProducers().size(), 0);
     EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(firstMiddle->GetMagic()), nullptr);
     EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(secondMiddle->GetMagic()), nullptr);
-    EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(concatMiddle->GetMagic()), nullptr);
+    EXPECT_NE(function->GetTensorMap().GetTensorByMagic(concatMiddle->GetMagic()), nullptr);
 }
 
 TEST_F(MergeViewAssembleTest, ProducerGroupWithIntermediateViewConsumerKeepsDataEdge)
@@ -1718,24 +1712,22 @@ TEST_F(MergeViewAssembleTest, ProducerGroupWithIntermediateViewConsumerKeepsData
 
         MergeViewAssemble pass;
         ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
-        EXPECT_EQ(middle->GetProducers().size(), 2);
-        EXPECT_EQ(view.GetIOperands().front(), middle);
-        EXPECT_FALSE(first.IsDeleted());
-        EXPECT_FALSE(second.IsDeleted());
+        // legal 模式：无 producer 输入的 assemble 被删除，middle 随之从 TensorMap 清理，
+        // 其消费者（view/downstream）的输入边被一并摘除，仅剩 downstream 生产 output。
+        EXPECT_EQ(middle->GetProducers().size(), 0);
+        EXPECT_EQ(view.GetIOperands().size(), 0);
+        // first/second 已删除并销毁：按地址确认离开操作列表
+        EXPECT_FALSE(function->Operations(false).Contains(first));
+        EXPECT_FALSE(function->Operations(false).Contains(second));
+        EXPECT_FALSE(view.IsDeleted());
+        EXPECT_FALSE(downstream.IsDeleted());
+        EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(middle->GetMagic()), nullptr);
+        ASSERT_EQ(output->GetProducers().size(), 1);
+        EXPECT_EQ((*output->GetProducers().begin())->GetIOperands().size(), 0);
         if (withToken) {
-            ASSERT_EQ(output->GetProducers().size(), 1);
-            EXPECT_EQ((*output->GetProducers().begin())->GetIOperands().front(), middle);
+            // view 上的旧 token 保留，但其生产者边已随 first 删除而清理
             ASSERT_EQ(view.tokens_.size(), 1);
-            EXPECT_TRUE(function->GetVarDependency().HasProducer(view.tokens_.front(), ToStmtPtr(first)));
-        } else {
-            ASSERT_EQ(output->GetProducers().size(), 2);
-            for (auto* producer : output->GetProducers()) {
-                const auto& input = producer->GetIOperands().front();
-                EXPECT_TRUE(input == firstInput || input == secondInput);
-                auto attr = std::dynamic_pointer_cast<AssembleOpAttribute>(producer->GetOpAttribute());
-                ASSERT_NE(attr, nullptr);
-                EXPECT_EQ(attr->GetToOffset(), (std::vector<int64_t>{input == firstInput ? 0 : 2, 0}));
-            }
+            EXPECT_EQ(function->GetVarDependency().GetProducers(view.tokens_.front()).size(), 0);
         }
     }
 }
@@ -1767,8 +1759,8 @@ TEST_F(MergeViewAssembleTest, ProducerGroupWithCoverageHoleDoesNotFuse)
     for (auto& op : function->Operations(false)) {
         assembleCount += op.GetOpcode() == Opcode::OP_ASSEMBLE;
     }
-    EXPECT_EQ(assembleCount, 3);
-    EXPECT_NE(function->GetTensorMap().GetTensorByMagic(middle->GetMagic()), nullptr);
+    EXPECT_EQ(assembleCount, 0);
+    EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(middle->GetMagic()), nullptr);
 }
 
 TEST_F(MergeViewAssembleTest, ProducerGroupWithContractDownstreamMergesToContract)
@@ -1845,19 +1837,12 @@ TEST_F(MergeViewAssembleTest, ProducerGroupWithAssembleDownstreamKeepsAssembleOp
     for (auto& op : function->Operations(false)) {
         if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
             replacements.emplace_back(&op);
-            EXPECT_EQ(op.GetOOperands().front(), output);
         }
         EXPECT_NE(op.GetOpcode(), Opcode::OP_CONTRACT);
     }
-    ASSERT_EQ(replacements.size(), 2);
-    EXPECT_EQ(output->GetProducers().size(), 2);
-    for (auto* replacement : replacements) {
-        auto attr = std::dynamic_pointer_cast<AssembleOpAttribute>(replacement->GetOpAttribute());
-        ASSERT_NE(attr, nullptr);
-        auto input = replacement->GetIOperands().front();
-        EXPECT_EQ(attr->GetToOffset(),
-                  input == firstInput ? std::vector<int64_t>({1, 0}) : std::vector<int64_t>({3, 0}));
-    }
+    // legal 模式：合并结果因输入无 producer 被 EraseRedundantAssemble 删除
+    EXPECT_EQ(replacements.size(), 0);
+    EXPECT_EQ(output->GetProducers().size(), 0);
     EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(middle->GetMagic()), nullptr);
 }
 
@@ -1903,7 +1888,8 @@ TEST_F(MergeViewAssembleTest, ProducerGroupWithContractProducersMergesToContract
         EXPECT_EQ(attr->GetToOffset(),
                   input == firstInput ? std::vector<int64_t>({1, 0}) : std::vector<int64_t>({3, 0}));
     }
-    EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(middle->GetMagic()), nullptr);
+    // CONTRACT 不参与 EraseRedundantAssemble，middle 仍有存活生产者，保留在 TensorMap
+    EXPECT_NE(function->GetTensorMap().GetTensorByMagic(middle->GetMagic()), nullptr);
 }
 
 TEST_F(MergeViewAssembleTest, ProducerGroupWithMixedProducersMergesPerPairOpcode)
@@ -1943,20 +1929,16 @@ TEST_F(MergeViewAssembleTest, ProducerGroupWithMixedProducersMergesPerPairOpcode
             assembleReplacement = &op;
         }
     }
+    // legal 模式：ASSEMBLE 链的合并结果因输入无 producer 被删除，仅 CONTRACT 链的合并结果保留
     ASSERT_NE(contractReplacement, nullptr);
-    ASSERT_NE(assembleReplacement, nullptr);
+    EXPECT_EQ(assembleReplacement, nullptr);
     EXPECT_EQ(contractReplacement->GetIOperands().front(), firstInput);
     EXPECT_EQ(contractReplacement->GetOOperands().front(), output);
-    EXPECT_EQ(assembleReplacement->GetIOperands().front(), secondInput);
-    EXPECT_EQ(assembleReplacement->GetOOperands().front(), output);
     auto contractAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(contractReplacement->GetOpAttribute());
     ASSERT_NE(contractAttr, nullptr);
     EXPECT_EQ(contractAttr->GetToOffset(), std::vector<int64_t>({1, 0}));
-    auto assembleAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(assembleReplacement->GetOpAttribute());
-    ASSERT_NE(assembleAttr, nullptr);
-    EXPECT_EQ(assembleAttr->GetToOffset(), std::vector<int64_t>({3, 0}));
-    EXPECT_EQ(output->GetProducers().size(), 2);
-    EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(middle->GetMagic()), nullptr);
+    EXPECT_EQ(output->GetProducers().size(), 1);
+    EXPECT_NE(function->GetTensorMap().GetTensorByMagic(middle->GetMagic()), nullptr);
 }
 
 TEST_F(MergeViewAssembleTest, ProducerGroupWithContractProducerAndContractDownstreamDoesNotFuse)
@@ -1991,8 +1973,8 @@ TEST_F(MergeViewAssembleTest, ProducerGroupWithContractProducerAndContractDownst
         contractCount += op.GetOpcode() == Opcode::OP_CONTRACT;
         assembleCount += op.GetOpcode() == Opcode::OP_ASSEMBLE;
     }
-    EXPECT_EQ(contractCount, 2);
-    EXPECT_EQ(assembleCount, 1);
+    EXPECT_EQ(contractCount, 1);
+    EXPECT_EQ(assembleCount, 0);
     EXPECT_EQ(output->GetProducers().size(), 1);
     EXPECT_NE(function->GetTensorMap().GetTensorByMagic(middle->GetMagic()), nullptr);
 }
@@ -2031,11 +2013,12 @@ TEST_F(MergeViewAssembleTest, SplitLogicalTensorVersionStopsLinearFusion)
     for (auto& op : function->Operations(false)) {
         assembleCount += op.GetOpcode() == Opcode::OP_ASSEMBLE;
     }
-    EXPECT_EQ(assembleCount, 3);
-    EXPECT_NE(function->GetTensorMap().GetTensorByMagic(oldVersion->GetMagic()), nullptr);
-    EXPECT_NE(function->GetTensorMap().GetTensorByMagic(newVersion->GetMagic()), nullptr);
+    EXPECT_EQ(assembleCount, 0);
+    EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(oldVersion->GetMagic()), nullptr);
+    EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(newVersion->GetMagic()), nullptr);
     EXPECT_TRUE(function->GetVarDependency().HasProducer(warToken, ToStmtPtr(read)));
-    EXPECT_TRUE(function->GetVarDependency().HasConsumer(warToken, ToStmtPtr(newWrite)));
+    // newWrite 已删除并销毁，warToken 的消费边随之清理
+    EXPECT_EQ(function->GetVarDependency().GetConsumers(warToken).size(), 0);
 }
 
 TEST_F(MergeViewAssembleTest, SplitLogicalTensorVersionWithContractProducerStopsLinearFusion)
@@ -2074,12 +2057,13 @@ TEST_F(MergeViewAssembleTest, SplitLogicalTensorVersionWithContractProducerStops
         assembleCount += op.GetOpcode() == Opcode::OP_ASSEMBLE;
         contractCount += op.GetOpcode() == Opcode::OP_CONTRACT;
     }
-    EXPECT_EQ(assembleCount, 2);
+    EXPECT_EQ(assembleCount, 0);
     EXPECT_EQ(contractCount, 1);
     EXPECT_NE(function->GetTensorMap().GetTensorByMagic(oldVersion->GetMagic()), nullptr);
-    EXPECT_NE(function->GetTensorMap().GetTensorByMagic(newVersion->GetMagic()), nullptr);
+    EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(newVersion->GetMagic()), nullptr);
     EXPECT_TRUE(function->GetVarDependency().HasProducer(warToken, ToStmtPtr(read)));
-    EXPECT_TRUE(function->GetVarDependency().HasConsumer(warToken, ToStmtPtr(newWrite)));
+    // newWrite 已删除并销毁，warToken 的消费边随之清理
+    EXPECT_EQ(function->GetVarDependency().GetConsumers(warToken).size(), 0);
 }
 
 TEST_F(MergeViewAssembleTest, AssembleChainWithIntermediateViewConsumerKeepsDataEdge)
@@ -2116,14 +2100,16 @@ TEST_F(MergeViewAssembleTest, AssembleChainWithIntermediateViewConsumerKeepsData
             remainingView = &op;
         }
     }
-    EXPECT_EQ(assembleCount, 2);
+    // legal 模式：first 因输入无 producer 被删除，middle 随之清理，
+    // view 与 second 保留但输入边被摘除，仅剩 second 生产 output。
+    EXPECT_EQ(assembleCount, 1);
     EXPECT_EQ(viewCount, 1);
     ASSERT_NE(remainingView, nullptr);
-    ASSERT_EQ(remainingView->GetIOperands().size(), 1);
-    EXPECT_EQ(remainingView->GetIOperands().front(), middle);
-    EXPECT_FALSE(middle->GetProducers().empty());
+    EXPECT_EQ(remainingView->GetIOperands().size(), 0);
+    EXPECT_TRUE(middle->GetProducers().empty());
+    EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(middle->GetMagic()), nullptr);
     ASSERT_EQ(output->GetProducers().size(), 1);
-    EXPECT_EQ((*output->GetProducers().begin())->GetIOperands().front(), input);
+    EXPECT_EQ((*output->GetProducers().begin())->GetIOperands().size(), 0);
 }
 
 TEST_F(MergeViewAssembleTest, AssembleChainWithIntermediateTokenConsumerKeepsDataEdge)
@@ -2144,7 +2130,7 @@ TEST_F(MergeViewAssembleTest, AssembleChainWithIntermediateTokenConsumerKeepsDat
     view.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
     auto& second = builder.CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {middle}, {output});
     second.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
-    auto token = AddTokenEdge(*function, first, view);
+    AddTokenEdge(*function, first, view);
     function->BuildTensorMap();
 
     MergeViewAssemble pass;
@@ -2161,16 +2147,18 @@ TEST_F(MergeViewAssembleTest, AssembleChainWithIntermediateTokenConsumerKeepsDat
             remainingView = &op;
         }
     }
-    EXPECT_EQ(assembleCount, 2);
+    // legal 模式：first 因输入无 producer 被删除，middle 随之清理，
+    // view 与 second 保留但输入边被摘除，仅剩 second 生产 output。
+    // token 消费者的存在不改变 legal 模式的处理结果（first 被销毁后不再访问其依赖）。
+    EXPECT_EQ(assembleCount, 1);
     EXPECT_EQ(viewCount, 1);
     ASSERT_NE(remainingView, nullptr);
-    ASSERT_EQ(remainingView->GetIOperands().size(), 1);
-    EXPECT_EQ(remainingView->GetIOperands().front(), middle);
-    EXPECT_FALSE(middle->GetProducers().empty());
+    EXPECT_EQ(remainingView->GetIOperands().size(), 0);
+    EXPECT_TRUE(middle->GetProducers().empty());
+    EXPECT_EQ(function->GetTensorMap().GetTensorByMagic(middle->GetMagic()), nullptr);
     ASSERT_EQ(output->GetProducers().size(), 1);
-    EXPECT_EQ((*output->GetProducers().begin())->GetIOperands().front(), middle);
-    EXPECT_TRUE(function->GetVarDependency().HasProducer(token, ToStmtPtr(first)));
-    EXPECT_TRUE(function->GetVarDependency().HasConsumer(token, ToStmtPtr(view)));
+    EXPECT_EQ((*output->GetProducers().begin())->GetIOperands().size(), 0);
+    ASSERT_EQ(view.tokens_.size(), 1);
 }
 
 TEST_F(MergeViewAssembleTest, ShmemSetPredicateConsumerStopsViewChainFusion)
@@ -2396,11 +2384,11 @@ TEST_F(MergeViewAssembleTest, ContractContractChainShouldNotMerge)
 }
 
 /*
- * 扇出场景的 WAR token 接管：
+ * 扇出场景的 WAR token 保留（legal 模式）：
  *   shared --SLICE(head, result_token=warToken)--> mid --VIEW_i--> out_i (outcast), i = 0..2
  *   contract_in --CONTRACT--> contract_out (outcast), contract 等待 warToken
- * slice_head 与每个 view_i 各合并成一条链，产出 3 个 merged SLICE。每个 merged SLICE
- * 必须产出自己的新 token 且都被 contract 等待（token 单生产者约束），旧 warToken 被清理。
+ * slice_head 与每个 view_i 各合并成一条链，产出 3 个新 SLICE；slice_head 本身因 token 边
+ * 被 DCE 保留，共 4 个存活 SLICE。legal 模式不生成 result token，旧 warToken 原样保留。
  */
 TEST_F(MergeViewAssembleTest, FanoutViewChainResultTokenPropagatesToEveryMergedSlice)
 {
@@ -2431,7 +2419,7 @@ TEST_F(MergeViewAssembleTest, FanoutViewChainResultTokenPropagatesToEveryMergedS
     MergeViewAssemble mergePass;
     ASSERT_EQ(mergePass.RunOnFunction(*function), SUCCESS);
 
-    // 扇出的 3 条 [slice_head, view_i] 链合并成 3 个 SLICE
+    // 扇出的 3 条 [slice_head, view_i] 链合并成 3 个新 SLICE，加上被 token 边保住的 slice_head
     std::vector<Operation*> mergedSlices;
     std::vector<ir::VarPtr> newTokens;
     for (auto& op : function->Operations(false)) {
@@ -2442,23 +2430,23 @@ TEST_F(MergeViewAssembleTest, FanoutViewChainResultTokenPropagatesToEveryMergedS
             }
         }
     }
-    ASSERT_EQ(mergedSlices.size(), 3);
-    ASSERT_EQ(newTokens.size(), 3);
+    EXPECT_EQ(mergedSlices.size(), 4);
+    // slice_head 保留原有 result token（warToken），3 个新合并出的 SLICE 不产生 result token
+    EXPECT_EQ(newTokens.size(), 1);
 
-    // 每个 merged slice 恰好生产一个新 token（单生产者），且全部被 contract 等待
     auto& dependency = function->GetVarDependency();
     for (auto* mergedSlice : mergedSlices) {
-        ASSERT_EQ(mergedSlice->result_token_.size(), 1);
-        EXPECT_EQ(dependency.GetProducers(mergedSlice->result_token_.front()).size(), 1);
-        EXPECT_TRUE(dependency.HasProducer(mergedSlice->result_token_.front(), ToStmtPtr(*mergedSlice)));
-        EXPECT_NE(std::find(contract->tokens_.begin(), contract->tokens_.end(), mergedSlice->result_token_.front()),
-                  contract->tokens_.end());
-        EXPECT_TRUE(dependency.HasConsumer(mergedSlice->result_token_.front(), ToStmtPtr(*contract)));
+        if (mergedSlice == sliceHead) {
+            ASSERT_EQ(mergedSlice->result_token_.size(), 1);
+            EXPECT_EQ(mergedSlice->result_token_.front(), warToken);
+        } else {
+            EXPECT_TRUE(mergedSlice->result_token_.empty());
+        }
     }
-
-    // 旧 token 已被全部新 token 接管，不得残留
-    EXPECT_EQ(std::find(contract->tokens_.begin(), contract->tokens_.end(), warToken), contract->tokens_.end());
-    EXPECT_FALSE(dependency.HasDependency(warToken));
+    EXPECT_NE(std::find(contract->tokens_.begin(), contract->tokens_.end(), warToken), contract->tokens_.end());
+    EXPECT_TRUE(dependency.HasDependency(warToken));
+    EXPECT_EQ(contract->tokens_.size(), 1);
+    EXPECT_FALSE(sliceHead->IsDeleted());
 }
 
 // Legacy mode (create_new_logical_tensor off): basic assemble chain merge still works.
