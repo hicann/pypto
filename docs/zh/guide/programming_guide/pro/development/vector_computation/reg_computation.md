@@ -112,7 +112,7 @@ def add_kernel(
         pl.store(out, tile_out, [0, 0])
 ```
 
-完整寄存器生命周期说明参见[vf.reg_tensor](../../../../../api/pro_api/SIMD-API/reg_computation/reg_tensor.md)。
+完整寄存器生命周期说明参见[vf.reg_tensor](../../../../../api/pro_api/SIMD-API/reg_computation/basic_data_structures/reg_tensor.md)。
 
 ### VF函数中的Tile指针偏移
 

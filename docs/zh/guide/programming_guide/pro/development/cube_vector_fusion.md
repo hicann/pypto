@@ -71,9 +71,7 @@ with pl.section_vector():
 
 ### 自动同步与并行流水
 
-多阶段、循环执行的融合Kernel可以使用[自动CV并行流水](../advanced_programming/auto_parallel_pipeline.md)。各Cube/Vector计算函数通过`@pypto_pro.language.pipeline.stage`声明为stage；使用[`pypto_pro.language.make_tile_group`](../../../../api/pro_api/SIMD-API/resource_management/make_tile_group.md)创建跨核Tile Group时，`fwd_ids`描述生产者到消费者的数据就绪依赖，`bwd_ids`描述消费者到生产者的Buffer复用依赖。编译器根据stage顺序插入核间同步，并根据`pypto_pro.language.pipeline.PipelineConfig`中的`preload`错开不同迭代。自动流水的跨核Tile Group仅支持UB和L1 Buffer，L0C Buffer中的结果需要先搬到UB，Vector结果需要先搬到L1 Buffer，再交给下一阶段消费。
-
-`pypto_pro.language.pipeline.PipelineConfig(preload=0)`保留各stage的串行执行顺序，用于检查精度和Buffer轮转。增大`preload`后，上游stage会提前处理后续迭代；此时Buffer槽位数和事件ID数量需要覆盖预取距离。流水的稳态周期取决于较慢的一侧，因此stage边界还要结合AIC和AIV的实际耗时确定。
+自动同步与并行流水的配置和使用方法参见[自动CV并行流水](../advanced_programming/auto_parallel_pipeline.md)。使用自动流水需要满足该文档中的使用约束；不满足时，应手动编排流水，并使用上述`set_cross_core`和`wait_cross_core`显式配置核间同步。
 
 ## 示例：Matmul+Softmax
 

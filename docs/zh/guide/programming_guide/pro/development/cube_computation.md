@@ -411,7 +411,7 @@ def matmul_acc_kernel(
 ```
 
 > [!NOTE]说明
-> phase参数控制Cube（M流水）与Fixpipe（FIX流水）之间的硬件unit_flag握手。`phase`配对使用时，框架不自动插入M与FIX之间的软件同步，由硬件unit_flag保证顺序。使用不当会导致精度问题或设备卡死。详见[`phase`使用约束](../../../../api/pro_api/SIMD-API/cube_computation/phase.md)。
+> phase参数控制Cube（M流水）与Fixpipe（FIX流水）之间的硬件unit_flag握手。`phase`配对使用时，框架不自动插入M与FIX之间的软件同步，由硬件unit_flag保证顺序。使用不当会导致精度问题或设备卡死。详见[Cube计算进阶](../advanced_programming/cube_computation_advanced_usage.md)。
 
 ## 尾块处理
 

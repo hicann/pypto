@@ -1,4 +1,4 @@
-# vf.mask_reg
+# mask_reg
 
 ## 产品支持情况
 

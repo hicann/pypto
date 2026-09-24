@@ -64,7 +64,7 @@ Tensor表示全局数据，Tile表示当前AI Core处理的局部数据块。开
 
 Tile矢量计算以UB中的二维Tile作为计算对象，在`pypto_pro.language.section_vector()`执行域中完成批量运算。Tile API适合逐元素、归约、数据类型转换和数据重排等通用矢量场景。
 
-Tile分配、数据搬运、计算接口、缓冲区轮转和尾块处理请参考[Tile计算](../../development/vector_computation/tile_computation.md)；完整可执行示例请参考[Add算子快速入门](../../../../quick_start/pro/add_simd.md)。
+Tile分配、数据搬运、计算接口、缓冲区轮转和尾块处理请参考[Tile计算](../../development/vector_computation/tile_computation.md)；完整可执行示例请参考[Softmax算子快速入门（SIMD）](../../../../quick_start/pro/softmax_simd.md)。
 
 ### Reg计算
 
@@ -76,7 +76,7 @@ VF函数不能独立启动，需要由外层JIT Kernel在Vector执行域中调�
 
 Cube计算使用L1 Buffer、L0A Buffer、L0B Buffer和L0C Buffer中的矩阵Tile，通过一条矩阵指令并行完成一个矩阵分块的乘加运算。Kernel使用`pypto_pro.language.section_cube()`标识Cube执行域。
 
-开发者根据矩阵分块选择Tile shape并组织矩阵计算。矩阵分形、片上地址、数据搬运和计算接口请参考[Cube计算](../../development/cube_computation.md)；完整示例请参考[Matmul算子快速入门](../../../../quick_start/pro/matmul_simd.md)。
+开发者根据矩阵分块选择Tile shape并组织矩阵计算。矩阵分形、片上地址、数据搬运、计算接口和完整示例请参考[Cube计算](../../development/cube_computation.md)。
 
 ## SIMD Kernel开发流程
 
