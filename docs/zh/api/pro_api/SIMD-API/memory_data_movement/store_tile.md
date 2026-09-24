@@ -42,28 +42,32 @@ pypto_pro.language.store_tile(
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| dst_tensor | 输出 | 目的操作数，Tensor类型，存储空间为GM。支持的数据类型和分形组合详见[约束说明](#约束说明)。写入范围不得越过Tensor边界。 |
-| src_tile | 输入 | 源操作数，Tile类型，存储空间为UB或L0C Buffer。位于UB时通过MTE3流水写回，首地址按32字节对齐；位于L0C Buffer时通过Fixpipe写回，首地址按64字节对齐。 |
-| tile_offsets | 输入 | 目标Tensor的Tile块偏移，List[int或Scalar]类型。由order指定的维度按块索引乘以Tile对应维度大小换算，其余维度按绝对偏移使用；不支持负数索引，换算后的绝对偏移不得超过对应维度的形状。 |
-| relu_pre_mode | 输入 | 预处理模式，pypto_pro.language.ReluPreMode类型，可选。支持ReluPreMode.NormalRelu。 |
-| scale | 输入 | 量化比例，float、Scalar或Tile类型，可选。float或运行时Scalar表示整块Tile使用同一比例；运行时DT_FP32 Scalar直接传比例值，运行时DT_INT32或DT_INT64 Scalar须传入预编码的float32位模式。Tile表示逐列量化，须位于Fixpipe Buffer，数据类型为DT_INT64，形状为[1, N]，其中N为16的倍数且不大于512。 |
-| order | 输入 | 维度映射，List[int]类型，可选。指定源Tile的两个维度分别对应目标Tensor的哪两个维度，仅支持包含两个升序维度索引的列表，例如[0, 2]；维度索引必须在目标Tensor的维度范围内。省略时使用目标Tensor的最后两个维度。<br>- 当Tensor为1维时，不支持传入order参数。 |
-| atomic | 输入 | 原子写模式，pypto_pro.language.AtomicType类型，可选。支持AtomicType.AtomicNone（覆盖写）和AtomicType.AtomicAdd（原子累加）。 |
-| phase | 输入 | 分块写回阶段，[pypto_pro.language.STPhase](../basic_data_structures/STPhase.md)类型，可选。支持STPhase.Partial和STPhase.Final；scale为逐列量化Tile时不能同时设置该参数。 |
+| dst_tensor | 输出 | 目的操作数，Tensor类型，存储空间为GM。支持的数据类型和分形组合详见[约束说明](#约束说明)。 |
+| src_tile | 输入 | 源操作数，Tile类型，存储空间为UB或L0C Buffer。<br>- UB Tile的首地址须按32字节对齐；<br>- L0C Buffer Tile的首地址须按64字节对齐。 |
+| tile_offsets | 输入 | 可选，表示目的Tensor各维度的绝对元素坐标，List[int或Scalar]类型，长度须与目的Tensor的维数相同。<br>- 不支持负数。<br>- 对于高维NZ Tensor，最后两项对应M、N方向。 |
+| relu_pre_mode | 输入 | 可选，L0C Buffer→GM搬运时是否开启随路ReLU操作，[pypto_pro.language.ReluPreMode](../basic_data_structures/ReluPreMode.md)类型。 |
+| scale | 输入 | 可选，是否使能量化功能及设置量化模式下的量化参数，数据在搬出L0C时由Fixpipe乘以该比例并转换到目的数据类型。不同的传入形式会影响量化粒度，支持如下类型：<br>- **float类型**：直接传入固定值（如scale = 2.0），适用于整块tile使用同一比例。<br>- **Scalar类型**：量化比例在运行时确定，需按数据类型传值。<br>&nbsp;&nbsp;- DT_FP32：直接传原始比例值（如0.5）。<br>&nbsp;&nbsp;- DT_INT32、DT_INT64：传预编码的float32位模式转成的整数（如`struct.pack("!f", 0.5)`）。<br>- **Tile类型**：每列使用独立比例，需满足以下要求：<br>&nbsp;&nbsp;- target_memory必须为pl.MemorySpace.Scaling。<br>&nbsp;&nbsp;- shape为[1, N]（列量化），N必须是16的倍数且N ≤ 512。<br>&nbsp;&nbsp;- dtype为DT_INT64。<br>&nbsp;&nbsp;- 目的操作数的Tile数据类型为DT_INT8时，Scaling tile每个DT_INT64元素的bit46需置1，用于选择有符号量化；未置位时L0C Buffer中的负值会被按无符号解读。<br>&nbsp;&nbsp;- 用户需要先把比例数据从GM搬到L1 Buffer，再搬到Scaling，并完成MTE1→FIX同步。<br>&nbsp;&nbsp;- 不支持与atomic同时使用。 |
+| order | 输入 | 可选，维度映射，List[int]类型，指定源Tile各维度对应的目标Tensor维度。<br>- 各维度编号必须在目标Tensor的维度范围内、不能重复。<br>- 仅支持按升序排列。<br>- 省略时对应目标Tensor的最后两个维度。GM分型为NZ时，只能指定为目标Tensor的最后两个维度。<br>- 当Tensor为1维时，不支持传入order参数。 |
+| atomic | 输入 | 可选，原子写模式，[pypto_pro.language.AtomicType](../basic_data_structures/AtomicType.md)类型。 |
+| phase | 输入 |  可选，unitFlag机制，[pypto_pro.language.STPhase](../basic_data_structures/STPhase.md)类型。 |
 
 ## 约束说明
 
-### 数据类型和分形要求（与[store](store.md#约束说明)一致）
+- 数据类型和分形要求
 
-| 源 → 目的 | 分形要求 | 数据类型要求 |
-|---|---|---|
-| UB → GM | 源与目的分形必须相同，支持ND、DN、NZ。 | 源与目的数据类型位宽必须相同，支持DT_INT8、DT_UINT8、DT_FP16、DT_BF16、DT_INT16、DT_UINT16、DT_FP32、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP8E8M0、DT_FP8E4M3FN、DT_FP8E5M2、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
-| L0C Buffer → GM（不配置scale） | NZ → ND，NZ → NZ。 | 支持DT_FP32 → DT_FP32/DT_FP16/DT_BF16，以及DT_INT32 → DT_INT32/DT_FP16/DT_BF16。 |
-| L0C Buffer → GM（配置scale） | NZ → ND，NZ → NZ。 | 支持DT_FP32 → DT_INT8/DT_UINT8/DT_HF8/DT_FP8E4M3FN/DT_FP16/DT_BF16/DT_FP32，以及DT_INT32 → DT_INT8/DT_UINT8/DT_FP16/DT_BF16。 |
+  | 源 → 目的 | 分形要求 | 数据类型要求 |
+  |---|---|---|
+  | UB → GM | 源与目的分形必须相同，支持ND、DN、NZ。 | 源与目的数据类型位宽必须相同，支持DT_INT8、DT_UINT8、DT_FP16、DT_BF16、DT_INT16、DT_UINT16、DT_FP32、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP8E8M0、DT_FP8E4M3FN、DT_FP8E5M2、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
+  | L0C Buffer → GM（不配置scale） | NZ → ND，NZ → NZ。 | 支持DT_FP32 → DT_FP32/DT_FP16/DT_BF16，以及DT_INT32 → DT_INT32/DT_FP16/DT_BF16。 |
+  | L0C Buffer → GM（配置scale） | NZ → ND，NZ → NZ。 | 支持DT_FP32 → DT_INT8/DT_UINT8/DT_HF8/DT_FP8E4M3FN/DT_FP16/DT_BF16/DT_FP32，以及DT_INT32 → DT_INT8/DT_UINT8/DT_FP16/DT_BF16。 |
 
-当dst_tensor声明为NZ时，其物理排布和完整Tensor shape约束见[TensorLayout](../basic_data_structures/TensorLayout.md)，同布局搬运、源Tile、order和L0C Buffer直接写回约束与[store](store.md#约束说明)一致。store_tile还需满足以下NZ搬运约束：
+- GM NZ布局：其物理排布、分形轴和完整Tensor的shape约束见[TensorLayout](../basic_data_structures/TensorLayout.md)。store_tile还需满足以下NZ搬运约束：
+    - Tile shape和valid M/N须满足M按16、N按目标Tensor dtype对应的C0对齐，tile_offsets换算成绝对元素偏移后，N方向也须按C0对齐。
+    - L0C Buffer中的Tile直接写回GM时，若一次写入多个N分形（valid N大于C0），写回范围须覆盖目标Tensor完整的NZ物理M轴。若部分M跨多个N分形时，需先搬到UB，再从UB写回GM。
 
-- tile_offsets按Tile块索引寻址：最后两项分别乘以Tile的M、N shape，前导项选择batch；换算后的M、N offset需分别按16和目标Tensor dtype对应的C0对齐。
+- 接口不会自动清零目标Tensor。首次累加前，调用方必须将目标区域初始化为零或预期的累加初值。
+
+- 多核同时累加同一目标地址时，每次更新具有原子性。由于浮点加法不满足结合律，更新顺序不同时结果可能存在微小差异。
 
 ## 返回值说明
 
