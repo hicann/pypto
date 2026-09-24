@@ -13,7 +13,7 @@
 import inspect
 
 from pypto_pro import ir
-from pypto_pro._errors import InvalidArgument, InvalidFormat, InvalidTile, InvalidType, InvalidVal
+from pypto_pro._errors import InvalidArgument, InvalidFormat, InvalidTile, InvalidType, InvalidVal, NotSupported
 import pypto_pro.language as pl
 import pytest
 
@@ -23,6 +23,8 @@ from pypto.pypto_impl import ir as _ir
 def _program_ir(func: ir.Function) -> str:
     return str(func)
 
+def _find_call(func: ir.Function, name: str):
+    return next(stmt.expr for stmt in func.body.stmts if isinstance(stmt, ir.EvalStmt) and stmt.expr.name == name)
 
 def test_coordinate_apis_use_sequence_parameters():
     assert list(inspect.signature(pl.insert).parameters) == ["dst_tile", "src_tile", "offset"]
@@ -298,6 +300,90 @@ def test_insert_with_offset_sequence():
 
     ir_str = _program_ir(main)
     assert "block.insert" in ir_str
+
+
+def test_vec_to_vec_move_rejects_acc_to_vec_mode():
+    with pytest.raises(NotSupported, match="acc_to_vec_mode is only supported for Acc-to-Vec"):
+
+        @pl.jit(auto_mutex=False)
+        def main(_jit_entry: pl.DT_INT64):
+            tile_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+            src = pl.make_tile(tile_type, addr=0x0000)
+            dst = pl.make_tile(tile_type, addr=0x2000)
+            pl.move(dst, src, acc_to_vec_mode=pl.AccToVecMode.SingleModeVec0)
+
+        main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
+def test_vec_to_vec_move_rejects_relu_pre_mode():
+    with pytest.raises(NotSupported, match="relu_pre_mode is only supported for Acc-to-Vec"):
+
+        @pl.jit(auto_mutex=False)
+        def main(_jit_entry: pl.DT_INT64):
+            tile_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+            src = pl.make_tile(tile_type, addr=0x0000)
+            dst = pl.make_tile(tile_type, addr=0x2000)
+            pl.move(dst, src, relu_pre_mode=pl.ReluPreMode.NormalRelu)
+
+        main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
+def test_acc_to_vec_move_accepts_acc_to_vec_mode_and_relu_pre_mode():
+    @pl.jit(auto_mutex=False)
+    def main(_jit_entry: pl.DT_INT64):
+        src_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ)
+        dst_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+        src = pl.make_tile(src_type, addr=0x0000)
+        dst = pl.make_tile(dst_type, addr=0x4000)
+        pl.move(
+            dst,
+            src,
+            acc_to_vec_mode=pl.AccToVecMode.SingleModeVec0,
+            relu_pre_mode=pl.ReluPreMode.NormalRelu,
+        )
+
+    program, _ = main.to_kernel_def().parse_target_program(ir.SectionKind.Cube)
+    call = _find_call(program.get_function(main.__name__), "block.move")
+
+    assert "acc_to_vec_mode" in call.kwargs
+    assert "relu_pre_mode" in call.kwargs
+
+
+def test_acc_store_accepts_relu_pre_mode():
+    @pl.jit(auto_mutex=False)
+    def main(output: pl.Tensor[[128, 128], pl.DT_FP32]):
+        tile_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Acc, layout=pl.NZ)
+        tile = pl.make_tile(tile_type, addr=0x0000)
+        pl.store(output, tile, [0, 0], relu_pre_mode=pl.ReluPreMode.NormalRelu)
+
+    program, _ = main.to_kernel_def().parse_target_program(ir.SectionKind.Cube)
+    call = _find_call(program.get_function(main.__name__), "block.store")
+
+    assert "relu_pre_mode" in call.kwargs
+
+
+def test_vec_store_rejects_relu_pre_mode():
+    with pytest.raises(NotSupported, match="relu_pre_mode is only supported for Acc"):
+
+        @pl.jit(auto_mutex=False)
+        def main(output: pl.Tensor[[128, 128], pl.DT_FP32]):
+            tile_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+            tile = pl.make_tile(tile_type, addr=0x0000)
+            pl.store(output, tile, [0, 0], relu_pre_mode=pl.ReluPreMode.NormalRelu)
+
+        main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
+def test_vec_store_tile_rejects_relu_pre_mode():
+    with pytest.raises(NotSupported, match="relu_pre_mode is only supported for Acc"):
+
+        @pl.jit(auto_mutex=False)
+        def main(output: pl.Tensor[[128, 128], pl.DT_FP32]):
+            tile_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+            tile = pl.make_tile(tile_type, addr=0x0000)
+            pl.store_tile(output, tile, [0, 0], relu_pre_mode=pl.ReluPreMode.NormalRelu)
+
+        main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
 def test_manual_transpose():
