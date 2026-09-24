@@ -108,7 +108,7 @@ def conv(
         Length matches the convolution dimension (1D/2D/3D).
     extend_params : dict, optional
         A dictionary specifying extended computation features for fixpipe (quantization/dequantization pipeline):
-        - 'bias': Tensor
+        - 'bias_tensor': Tensor
             Optional bias tensor to add to the convolution output, shape must be [Cout] (number of output channels).
         - 'scale': float
             Per-tensor scale value for dequantization, quantization, or requantization operations.
@@ -173,7 +173,9 @@ def conv(
     )
     __validate_inputs(params)
 
-    if extend_params is not None:
+    if extend_params is None:
+        extend_params = pypto_impl.ConvExtendParam()
+    else:
         extend_params = pypto_impl.ConvExtendParam(**__convert_conv_extend_params(extend_params))
 
     if not transposed:
