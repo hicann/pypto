@@ -10,11 +10,19 @@
 
 #pragma once
 
+#include <cstdint>
+#include <ctime>
 #include <string>
 
 namespace npu::tile_fwk {
 // Startup only: call before installing handlers that can log. Never call from a log callback.
 void InitializeLogTime();
+
+namespace detail {
+// Pure calendar conversion; tm_year is the full year and tm_mon is in [1, 12].
+void CalLocalTime(std::tm* timeInfo, time_t sec, time_t tzone, int32_t dst);
+} // namespace detail
+
 std::string GetCurrentTime();
 std::string GetCurrentTimeStr();
 } // namespace npu::tile_fwk

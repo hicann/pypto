@@ -83,4 +83,72 @@ TEST(LogTimeTest, ConcurrentTimestampGeneration)
     }
     EXPECT_TRUE(valid.load());
 }
+namespace {
+time_t UtcYearStart(const int year)
+{
+    std::tm date{};
+    date.tm_year = year - 1900;
+    date.tm_mon = 0;
+    date.tm_mday = 1;
+    return timegm(&date);
+}
+
+void ExpectCalendarMatchesLibc(const time_t seconds, const time_t timeZone, const int32_t dst)
+{
+    // gmtime_r is only the test oracle. Use an explicit offset rather than the
+    // host timezone or historical DST rules; production caches these at startup.
+    const time_t adjusted = seconds - timeZone + 3600 * dst;
+    std::tm expected{};
+    ASSERT_NE(gmtime_r(&adjusted, &expected), nullptr);
+    std::tm actual{};
+    detail::CalLocalTime(&actual, seconds, timeZone, dst);
+    SCOPED_TRACE(::testing::Message() << "seconds=" << seconds << " timezone=" << timeZone << " dst=" << dst);
+    EXPECT_EQ(actual.tm_year, expected.tm_year + 1900);
+    EXPECT_EQ(actual.tm_mon, expected.tm_mon + 1);
+    EXPECT_EQ(actual.tm_mday, expected.tm_mday);
+    EXPECT_EQ(actual.tm_hour, expected.tm_hour);
+    EXPECT_EQ(actual.tm_min, expected.tm_min);
+    EXPECT_EQ(actual.tm_sec, expected.tm_sec);
+    EXPECT_EQ(actual.tm_wday, expected.tm_wday);
+    EXPECT_EQ(actual.tm_yday, expected.tm_yday);
+    EXPECT_EQ(actual.tm_isdst, dst);
+}
+} // namespace
+
+TEST(LogTimeTest, MatchesLibcEveryDayFrom1976Through2076)
+{
+    // Fixed coverage: 50 years before/after 2026, including both endpoint years.
+    const time_t begin = UtcYearStart(1976);
+    const time_t end = UtcYearStart(2077);
+    ASSERT_NE(begin, static_cast<time_t>(-1));
+    ASSERT_NE(end, static_cast<time_t>(-1));
+    // timezone is seconds west of UTC; include whole, half and quarter hours.
+    const time_t zones[] = {0, -8 * 3600, 5 * 3600, -19800, -20700, 12600, -14 * 3600, 12 * 3600};
+    const time_t times[] = {0, 1, 12 * 3600 + 34 * 60 + 56, 86399};
+    for (time_t day = begin; day < end; day += 86400) {
+        for (const time_t zone : zones) {
+            for (const time_t time : times) {
+                ExpectCalendarMatchesLibc(day + time, zone, 0);
+            }
+        }
+        // Exercise the implementation's fixed one-hour DST adjustment too.
+        ExpectCalendarMatchesLibc(day, 5 * 3600, 1);
+        ExpectCalendarMatchesLibc(day + 86399, -8 * 3600, 1);
+    }
+}
+
+TEST(LogTimeTest, MatchesLibcAcrossCenturyLeapYearBoundaries)
+{
+    // 2000 is a leap year; 2100 is not. Check both sides of each day boundary
+    // throughout February and March, beyond the main range for the latter.
+    for (const int year : {2000, 2100}) {
+        const time_t begin = UtcYearStart(year) + 31 * 86400;
+        ASSERT_NE(UtcYearStart(year), static_cast<time_t>(-1));
+        for (time_t day = begin; day < begin + 61 * 86400; day += 86400) {
+            ExpectCalendarMatchesLibc(day - 1, 0, 0);
+            ExpectCalendarMatchesLibc(day, 0, 0);
+            ExpectCalendarMatchesLibc(day + 1, 0, 0);
+        }
+    }
+}
 } // namespace npu::tile_fwk

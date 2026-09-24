@@ -30,6 +30,9 @@ int32_t IsLeapYear(const int32_t year)
     return ((((year % 4) == 0) && ((year % 100) != 0)) || ((year % 400) == 0)) ? 1 : 0;
 }
 
+} // namespace
+
+namespace detail {
 /**
  * @brief CalLocalTime: calculate local time
  * @param [in/out]timeInfo: local time struct
@@ -84,6 +87,9 @@ void CalLocalTime(struct tm* timeInfo, const time_t sec, const time_t tzone, con
     timeInfo->tm_mday = (int32_t)days + 1; // Add 1 since our 'days' is zero-based
 }
 
+} // namespace detail
+
+namespace {
 void InitializeTimeZone()
 {
     tzset();
@@ -122,7 +128,7 @@ std::string GetCurrentTime()
         return {};
     }
     std::tm localTime{};
-    CalLocalTime(&localTime, now.tv_sec, g_timeZone, g_timeDst);
+    detail::CalLocalTime(&localTime, now.tv_sec, g_timeZone, g_timeDst);
     char timeStr[24]{};
     const int ret = snprintf_s(timeStr, sizeof(timeStr), sizeof(timeStr) - 1, "%04d-%02d-%02d %02d:%02d:%02d.%03ld",
                                localTime.tm_year, localTime.tm_mon, localTime.tm_mday, localTime.tm_hour,
