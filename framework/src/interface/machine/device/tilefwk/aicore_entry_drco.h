@@ -235,6 +235,9 @@ struct DrcoEntryState {
     uint32_t readyMatrixPopRowIndex;
     uint32_t selfReadyQueueSize;
     uint32_t selfReadyQueue[SELF_QUEUE_SIZE];
+    // SSBuf 段（__ssbuf__ 专用地址空间，段基址 0 合法）上的 MIX C2V 通信状态
+    npu::tile_fwk::DrcoSsbufState* ssbuf;
+    npu::tile_fwk::DrcoMixHubC2VReadyQueue* mixHubC2VReadyQueue;
     bool isExectedLeafTask{false};
 
 #if ENABLE_AICORE_TRACE
@@ -1004,13 +1007,13 @@ INLINE void DrcoResolveDepend(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoR
 }
 
 __aicore__ INLINE static bool MixTaskPush(DrcoEntryState* state, uint32_t succTaskId,
-                                          npu::tile_fwk::MixHubC2VReadyQueue* buf)
+                                          npu::tile_fwk::DrcoMixHubC2VReadyQueue* buf)
 {
 #if defined(__AIV__)
     (void)state;
     return false;
 #else
-    if (npu::tile_fwk::MixHubC2VReadyQueue::Push(buf, succTaskId)) {
+    if (npu::tile_fwk::DrcoMixHubC2VReadyQueue::Push(buf, succTaskId)) {
         DRCO_LOG(&state->ctx, "MIX C2V push task=%d", (int)succTaskId);
         return true;
     }
@@ -1019,7 +1022,7 @@ __aicore__ INLINE static bool MixTaskPush(DrcoEntryState* state, uint32_t succTa
 }
 
 __aicore__ INLINE static uint32_t ResolveHubMixTask(DrcoEntryState* state, uint32_t hubMixTaskId,
-                                                    npu::tile_fwk::MixHubC2VReadyQueue* body)
+                                                    npu::tile_fwk::DrcoMixHubC2VReadyQueue* body)
 {
     uint32_t funcIdx = npu::tile_fwk::FuncID(hubMixTaskId);
     uint32_t opIdx = npu::tile_fwk::TaskID(hubMixTaskId);
@@ -1044,10 +1047,11 @@ __aicore__ INLINE static uint32_t ResolveHubMixTask(DrcoEntryState* state, uint3
             // 正常路径下环不会满（每次派发每环至多压 1 个、配对 AIV 在 fetch 循环持续 Pop）；
             // 万一暂满则自旋等待：环内有未执行任务时 AIV finish flag 必未置位、配对 AIV 不会退出
             // fetch 循环，等待必有进展；超时 Trap 兜底，杜绝静默丢任务导致的挂死
-            npu::tile_fwk::MixHubC2VReadyQueue* dstAddr = body +
-                                                          state->ctx.cachedDevTasks[state->ctx.curLeafTaskParallelIdx]
-                                                              .cceBinary[mixCceBinaryIndexList[mixSuccOpIdx]]
-                                                              .wrapVecId;
+            npu::tile_fwk::DrcoMixHubC2VReadyQueue* dstAddr = body +
+                                                              state->ctx
+                                                                  .cachedDevTasks[state->ctx.curLeafTaskParallelIdx]
+                                                                  .cceBinary[mixCceBinaryIndexList[mixSuccOpIdx]]
+                                                                  .wrapVecId;
             uint64_t pushStart = get_sys_cnt();
             while (!MixTaskPush(state, mixSuccTaskId, dstAddr)) {
                 if (get_sys_cnt() - pushStart > AICORE_LEAF_TASK_RUN_TIMEOUT) {
@@ -1163,9 +1167,8 @@ INLINE bool DrcoDynFuncDataListFetchTaskMixHubC2VReadyQueue(DrcoEntryState* stat
                                                             uint32_t& resultTaskIdCount, uint32_t blockIdx)
 {
     if (IS_AIV) {
-        __gm__ npu::tile_fwk::PerCorePendingQueue* perCoreQueue = rootFuncList->perCorePendingQueueArray[blockIdx];
         uint32_t bodyTaskId = 0;
-        if (npu::tile_fwk::MixHubC2VReadyQueue::Pop(perCoreQueue->mixHubC2VReadyQueue, bodyTaskId)) {
+        if (npu::tile_fwk::DrcoMixHubC2VReadyQueue::Pop(state->mixHubC2VReadyQueue, bodyTaskId)) {
             resultTaskIdList[0] = bodyTaskId;
             resultTaskIdCount = 1;
             resultCoreType = npu::tile_fwk::DRCO_QUEUE_AIV;
@@ -1498,9 +1501,13 @@ INLINE void ExecDrcoReadyQueueTaskOnce(DrcoEntryState* state, __gm__ npu::tile_f
 {
 #if defined(__MIX__) && defined(__AIC__)
     if (outCoreType == npu::tile_fwk::DRCO_QUEUE_MIX) {
-        // mixhub 任务（来自 MIX 行 matrix/queue）不执行 leaf，仅解依赖派发：AIC 后继就地执行、
-        // AIV 后继 C2V 投递配对 AIV
-        uint32_t aicTaskId = ResolveHubMixTask(state, taskId, perCoreQueue->mixHubC2VReadyQueue);
+        // mixhub 任务（来自 MIX 行 matrix/queue）不执行 leaf，仅解依赖派发
+        uint32_t aicTaskId = ResolveHubMixTask(state, taskId, state->ssbuf->mixHubC2VReadyQueue);
+        if (aicTaskId == static_cast<uint32_t>(AICORE_TASK_INIT)) {
+            // 无 AIC 后继：V 后继已在 ResolveHubMixTask 内经 C2V 派发完毕，hub_mix 节点
+            // 自身非可执行 leaf（不计入 executedCount），无事可做
+            return;
+        }
         DRCO_LOG(&state->ctx, "MIX exec=%u", aicTaskId);
         taskId = aicTaskId;
     }
@@ -1559,15 +1566,17 @@ INLINE void KernelEntryDrco(int64_t ffts_addr, int64_t inputs, int64_t outputs, 
         __gm__ npu::tile_fwk::PerCorePendingQueue* perCoreQueue = DrcoGmLoad(
             &rootFuncList->perCorePendingQueueArray[BlockDescBlockIdx(state.blockDesc)]);
         DRCO_DCCI_SINGLE_CACHE_LINE(perCoreQueue);
+
+        // ssbuf 段基址（__ssbuf__ 专用地址空间，0 即段起点）：MIX C2V 通信区域，
+        // AIC 初始化 [0]/[1] 两个 SPSC 队列，AIV 按 subblockid 选中消费端
+        state.ssbuf = reinterpret_cast<npu::tile_fwk::DrcoSsbufState*>(0);
 #if defined(__MIX__)
 #if defined(__AIV__)
-        perCoreQueue->mixHubC2VReadyQueue = reinterpret_cast<npu::tile_fwk::MixHubC2VReadyQueue*>(
-            get_subblockid() == 1 ? sizeof(npu::tile_fwk::MixHubC2VReadyQueue) : 0);
+        state.mixHubC2VReadyQueue = &state.ssbuf->mixHubC2VReadyQueue[get_subblockid() == 1];
         wait_intra_block(PIPE_S, EVENT_ID14);
 #else
-        perCoreQueue->mixHubC2VReadyQueue = reinterpret_cast<npu::tile_fwk::MixHubC2VReadyQueue*>(0);
-        npu::tile_fwk::MixHubC2VReadyQueue::Init(perCoreQueue->mixHubC2VReadyQueue);
-        npu::tile_fwk::MixHubC2VReadyQueue::Init(perCoreQueue->mixHubC2VReadyQueue + 1);
+        npu::tile_fwk::DrcoMixHubC2VReadyQueue::Init(&state.ssbuf->mixHubC2VReadyQueue[0]);
+        npu::tile_fwk::DrcoMixHubC2VReadyQueue::Init(&state.ssbuf->mixHubC2VReadyQueue[1]);
         set_intra_block(PIPE_S, EVENT_ID14);                      // 作用于Vec0
         set_intra_block(PIPE_S, EVENT_ID14 + EVENT_NUMS_PER_AIV); // 作用与Vec1
 #endif

@@ -32,14 +32,18 @@ struct PerCoreReadyList {
     LeafTaskId taskList[0];
 };
 
-struct MixHubC2VReadyQueue {
-    static constexpr uint32_t RING_BUF_SIZE = 6;
-    uint32_t head; // 只有C能写
-    uint32_t tail;
-    uint32_t elems[RING_BUF_SIZE];
+// SPSC = Single Producer Single Consumer
+template <uint64_t bufSize = 6>
+struct DrcoSsbufSPSCQueue {
+    static constexpr uint32_t RING_BUF_SIZE = bufSize;
+    static constexpr uint32_t ELEM_OFFSET = 2;
+    /* [0] = head, 只有 producer 写
+     * [1] = tail, 只有 consumer 读
+     */
+    uint32_t elems[2 + RING_BUF_SIZE];
 
 #ifndef __TILE_FWK_HOST__
-    static inline void Init(MixHubC2VReadyQueue* addr)
+    static inline void Init(DrcoSsbufSPSCQueue* addr)
     {
 #if defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3510)
         __ssbuf__ uint32_t* ptr = (__ssbuf__ uint32_t*)addr;
@@ -52,18 +56,18 @@ struct MixHubC2VReadyQueue {
     }
 
     // C(AIC)调用：写入一个元素，满则返回false
-    static inline bool Push(MixHubC2VReadyQueue* addr, uint32_t elem)
+    static inline bool Push(DrcoSsbufSPSCQueue* addr, uint32_t elem)
     {
 #if defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3510)
         __ssbuf__ uint32_t* ptr = (__ssbuf__ uint32_t*)addr;
         uint32_t curHead = ptr[0];
         uint32_t curTail = ptr[1];
-        uint32_t next = (curHead + 1) % RING_BUF_SIZE;
-        if (next == curTail) {
+        if (curTail + RING_BUF_SIZE <= curHead) {
             return false; // 满
         }
-        ptr[2 + curHead] = elem; // elems[head]
-        ptr[0] = next;           // 更新head
+        ptr[ELEM_OFFSET + (curHead % RING_BUF_SIZE)] = elem;
+        __asm__ volatile("DSB #0");
+        ptr[0] = curHead + 1;
         __asm__ volatile("DSB #0");
         return true;
 #else
@@ -74,7 +78,7 @@ struct MixHubC2VReadyQueue {
     }
 
     // V(AIV)调用：读出一个元素，空则返回false
-    static inline bool Pop(MixHubC2VReadyQueue* addr, uint32_t& elem)
+    static inline bool Pop(DrcoSsbufSPSCQueue* addr, uint32_t& elem)
     {
 #if defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3510)
         __ssbuf__ uint32_t* ptr = (__ssbuf__ uint32_t*)addr;
@@ -83,8 +87,8 @@ struct MixHubC2VReadyQueue {
         if (curTail == curHead) {
             return false; // 空
         }
-        elem = ptr[2 + curTail];                // elems[tail]
-        ptr[1] = (curTail + 1) % RING_BUF_SIZE; // 更新tail
+        elem = ptr[ELEM_OFFSET + (curTail % RING_BUF_SIZE)];
+        ptr[1] = curTail + 1;
         __asm__ volatile("DSB #0");
         return true;
 #else
@@ -94,7 +98,7 @@ struct MixHubC2VReadyQueue {
 #endif
     }
 
-    static inline uint32_t Size(MixHubC2VReadyQueue* addr)
+    static inline uint32_t Size(DrcoSsbufSPSCQueue* addr)
     {
 #if defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3510)
         __ssbuf__ uint32_t* ptr = (__ssbuf__ uint32_t*)addr;
@@ -110,11 +114,19 @@ struct MixHubC2VReadyQueue {
 };
 
 /* per core pending queue mechanism can be used in both codr and cudr */
+using DrcoMixHubC2VReadyQueue = DrcoSsbufSPSCQueue<6>;
+
+// ssbuf 段（__ssbuf__ 专用地址空间，段基址 0 合法）上的 C2V 通信状态：
+// 每个 AIC 块两个 SPSC 队列（配对 V0/V1 各消费一个）
+struct DrcoSsbufState {
+    DrcoMixHubC2VReadyQueue mixHubC2VReadyQueue[2];
+};
+
+/* per core pending queue mechanism can be used in both codr and cudr */
 struct PerCorePendingQueue {
     uint32_t head;
     uint32_t tail;
     uint32_t size;
-    MixHubC2VReadyQueue* mixHubC2VReadyQueue; // 指向CV消息通信区域，位于SSBuf区域
     LeafTaskId taskList[0];
 #ifdef __TILE_FWK_HOST__
     PerCorePendingQueue() : head(0), tail(0), size(0) {}
