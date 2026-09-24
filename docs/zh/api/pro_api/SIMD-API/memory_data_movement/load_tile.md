@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-将GM Tensor中的数据搬入L1 Buffer或UB中的Tile。与[pypto_pro.language.load](load.md)不同，tile_offsets使用Tile块编号指定搬运位置：由order选中的Tensor维度按Tile块编号寻址，接口将对应编号乘以dst_tile的shape中对应维度的大小，换算为绝对元素坐标；未被order选中的维度仍按绝对元素坐标寻址。
+将GM Tensor中的数据搬入L1 Buffer或UB中的Tile。与[pypto_pro.language.load](load.md)不同，tile_offsets使用Tile块编号指定搬运位置：由order选中源操作数的Tensor维度按Tile块编号寻址，接口将对应编号乘以目的操作数的Tile中对应维度的大小，换算为绝对元素坐标；未被order选中的维度仍按绝对元素坐标寻址。
 
 例如，对于shape=[64, 128]的二维Tile，不设置order时，tile_offsets=[2, 2]对应的绝对元素坐标为[128, 256]，等价于调用pypto_pro.language.load时传入offsets=[128, 256]。
 
@@ -36,36 +36,37 @@ pypto_pro.language.load_tile(
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| dst_tile | 输出 | 目的操作数，Tile类型，存储空间为L1 Buffer或UB，首地址必须按32字节对齐。接口按照该Tile的valid_shape搬运数据；Tile块大小由shape决定，不受valid_shape影响。支持的数据类型和分形组合详见[约束说明](#约束说明)。 |
+| dst_tile | 输出 | 目的操作数，Tile类型，存储空间为L1 Buffer或UB，首地址必须按32字节对齐。接口按照该Tile的valid_shape搬运数据；支持的数据类型和分形组合详见[约束说明](#约束说明)。 |
 | src_tensor | 输入 | 源操作数，Tensor类型，存储空间为GM。支持的数据类型和分形组合详见[约束说明](#约束说明)。 |
-| tile_offsets | 输入 | 表示源Tensor各维度的Tile块编号或绝对元素坐标，List[int或Scalar]类型，长度须与源Tensor的维数相同。<br>- 不支持负数。<br>- order选中的维度按Tile块编号寻址，对应编号乘以dst_tile的shape中对应维度的大小后得到绝对元素坐标。<br>- order未选中的维度按绝对元素坐标寻址，用于固定高维Tensor的其他维度。<br>- 换算后的绝对元素坐标必须位于源Tensor的shape范围内；边界Tile可通过pypto_pro.language.set_validshape设置有效形状，保证有效搬运范围不越过源Tensor边界。 |
-| order | 输入 | 可选，维度映射，List[int]类型。列表中的第i项表示dst_tile第i维对应src_tensor的维度。<br>- 升序表示不转置，例如order=[0, 1]。<br>- 降序表示转置，例如order=[1, 0]。<br>- 不设置时，dst_tile默认对应src_tensor的最后两个维度，且不转置。<br>- 当Tensor为1维时，不支持传入order参数。 |
+| tile_offsets | 输入 | 表示源Tensor各维度的Tile块编号，List[int或Scalar]类型，长度须与源Tensor的维数相同。<br>- 不支持负数。<br>- order选中的维度按Tile块编号寻址，对应编号乘以目的操作数的Tile中对应维度的大小后得到绝对元素坐标。<br>- order未选中的维度按绝对元素坐标寻址。<br>- 换算后的绝对元素坐标必须位于源操作数的shape范围内；可通过pypto_pro.language.set_validshape设置有效形状，保证有效搬运范围不超过源操作数的shape范围。 |
+| order | 输入 | 可选，维度映射，长度为2的编译期整数列表，指定目的操作数的Tile各维度对应的源操作数的Tensor维度索引。<br>- 两个维度索引必须互不重复且位于源操作数的Tensor维度范围内。<br>- 升序表示不转置，例如order=[0, 1]。<br>- 降序表示转置，例如order=[1, 0]，源操作数的Tensor分形描述由ND转为DN。<br>- 不配置时，指定源操作数的Tensor最后两维，且不转置。<br>- 搬运MX矩阵乘量化系数时，order中不能选择源操作数的Tensor最后一维；不设置order时，默认为除源操作数的Tensor最后一维外的最后两个维度。<br>- 当Tensor为1维时，不支持传入order参数。 |
 
 ## 约束说明
 
 - 数据类型及分形约束：
 
-  pypto_pro.language.load_tile与pypto_pro.language.load支持的数据类型和分形组合相同，详见[pypto_pro.language.load](load.md#约束说明)。
-
-- 偏移及维度映射约束：
-
-  - tile_offsets的长度必须与src_tensor的维数相同，各项必须为非负整数或运行时整数表达式。
-  - order必须是长度为2的编译期整数列表，两个维度索引必须互不重复，且位于src_tensor的维度范围内。未被order选中的维度由tile_offsets中的对应值固定为一个下标。
-  - 换算后的绝对元素坐标必须位于src_tensor的shape范围内。边界Tile的有效搬运范围不得越过src_tensor边界，可通过pypto_pro.language.set_validshape设置dst_tile的有效形状。
+  | 源 → 目的 | 分形要求 | 数据类型要求 |
+  |---|---|---|
+  | GM → UB | 源与目的分形必须相同，支持ND、DN、NZ。 | 源与目的数据类型位宽必须相同，支持DT_INT8、DT_UINT8、DT_FP16、DT_BF16、DT_INT16、DT_UINT16、DT_FP32、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP8E8M0、DT_FP8E4M3FN、DT_FP8E5M2、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
+  | GM → L1 Buffer | ND → NZ。 | 源与目的数据类型位宽必须相同，支持DT_INT8、DT_UINT8、DT_FP16、DT_BF16、DT_INT16、DT_UINT16、DT_FP32、DT_INT32、DT_UINT32、DT_FP8E8M0、DT_FP8E4M3FN、DT_FP8E5M2、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
+  | GM → L1 Buffer | DN → NZ。 | 源与目的数据类型位宽必须相同，支持DT_INT8、DT_UINT8、DT_FP16、DT_BF16、DT_INT16、DT_UINT16、DT_FP32、DT_INT32、DT_UINT32、DT_FP8E8M0、DT_FP8E4M3FN、DT_FP8E5M2、DT_HF8。 |
+  | GM → L1 Buffer | DN → ZN、NZ → NZ。 | 源与目的数据类型位宽必须相同，支持DT_INT8、DT_UINT8、DT_FP16、DT_BF16、DT_INT16、DT_UINT16、DT_FP32、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP8E8M0、DT_FP8E4M3FN、DT_FP8E5M2、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
+  | GM → L1 Buffer | ND → ND。 | 源与目的数据类型必须相同，仅支持DT_INT64、DT_UINT64。 |
+  | GM → L1 Buffer | ND/DN → ZZ/NN，仅用于pypto_pro.language.matmul_mx或pypto_pro.language.matmul_mx_acc的量化系数搬运。 | 源与目的数据类型必须为DT_FP8E8M0。 |
 
 - NZ搬运约束：
 
   - src_tensor声明为NZ时，dst_tile必须为NZ，且只支持从src_tensor的最后两个维度正序搬运，不支持通过降序order转置。NZ的物理排布和Tensor shape约束详见[TensorLayout](../basic_data_structures/TensorLayout.md)。
-  - tile_offsets换算后的M方向偏移必须按16对齐，N方向偏移必须按src_tensor数据类型对应的C0对齐；dst_tile的shape和valid_shape需要满足相同的对齐要求。
+  - dst_tile的shape和valid_shape中，M必须按16对齐，N必须按src_tensor数据类型对应的C0对齐；tile_offsets换算成绝对元素偏移后，N方向的offset也必须按C0对齐。
 
 - MX矩阵乘量化系数搬运约束：
 
   - 仅支持将DT_FP8E8M0的src_tensor搬入fractal为32、布局为ZZ或NN的L1 Buffer Tile，并作为pypto_pro.language.matmul_mx或pypto_pro.language.matmul_mx_acc的量化系数使用。
-  - src_tensor的维数必须大于等于3，最后一维为长度等于2的物理phase轴。order必须显式选择量化系数矩阵对应的两个维度，不能选择phase轴；tile_offsets中phase轴对应的偏移必须为0。
+  - src_tensor的维数必须大于等于3，最后一维为长度等于2的物理phase轴，offsets中phase轴对应的偏移必须为0。显式设置order时，不能选择phase轴。
 
 - Tile地址复用约束：
 
-  pypto_pro.language.load_tile与pypto_pro.language.load的地址复用规则相同。连续两次搬运写入同一片上地址时，按照[pypto_pro.language.load](load.md#约束说明)中的Tile地址复用约束进行同步。
+  开启auto_mutex时，如果连续两次pypto_pro.language.load_tile写入同一个UB或L1 Buffer地址，且两次搬运之间没有操作读取前一次搬入的数据，需要在两次搬运之间调用[pypto_pro.language.system.bar_mte2](../synchronization/bar_mte2.md)。pypto_pro.language.system.bar_mte2仅保证两次写操作的先后顺序；如果后续仍需使用前一次搬入的数据，应在复用地址前先读取或复制该数据。
 
 ## 返回值说明
 
