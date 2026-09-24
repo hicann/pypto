@@ -51,7 +51,6 @@ struct MgrTestEnv {
         mgr->enableFairSch_ = false;
         mgr->enableL2CacheSch_ = false;
         mgr->validGetPgMask_ = false;
-        mgr->releaseCoreByRegValFn_ = &AiCoreManager::ReleaseCoreByRegValByAsyncMode;
         mgr->pendingIds_.fill(AICORE_STATUS_INIT);
         mgr->runningIds_.fill(AICORE_STATUS_INIT);
         mgr->runningResolveIndexList_.fill(0);
@@ -277,9 +276,9 @@ TEST(AicoreManagerTest, SetSchedSyncMode)
 {
     MgrTestEnv env;
     env.mgr->SetSchedSyncMode(1);
-    EXPECT_EQ(env.mgr->releaseCoreByRegValFn_, &AiCoreManager::ReleaseCoreByRegValBySyncMode);
+    EXPECT_EQ(env.mgr->schedSyncMode_, 1);
     env.mgr->SetSchedSyncMode(0);
-    EXPECT_EQ(env.mgr->releaseCoreByRegValFn_, &AiCoreManager::ReleaseCoreByRegValByAsyncMode);
+    EXPECT_EQ(env.mgr->schedSyncMode_, 0);
 }
 
 TEST(AicoreManagerTest, CheckAndResetReg_InvalidPgMask)

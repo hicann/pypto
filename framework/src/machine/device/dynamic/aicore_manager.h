@@ -128,8 +128,7 @@ public:
 
     inline void SetSchedSyncMode(uint8_t usingSynModel)
     {
-        releaseCoreByRegValFn_ = usingSynModel == 1 ? &AiCoreManager::ReleaseCoreByRegValBySyncMode : // 串行执行模式
-                                     &AiCoreManager::ReleaseCoreByRegValByAsyncMode; // 并行执行模式[默认执行模式]
+        schedSyncMode_ = usingSynModel == 1 ? 1U : 0U; // 1: 串行执行模式 0: 并行执行模式[默认执行模式]
     }
 
     inline bool CheckAndResetReg()
@@ -1353,9 +1352,12 @@ private:
         uint32_t finTaskState = REG_LOW_TASK_STATE(finTaskRegVal);
         DEV_VERBOSE_DEBUG("resolve task core index: %d, finishtaskid:%x, finishstate: %u.", coreIdx, finTaskId,
                           finTaskState);
-
-        return (this->*releaseCoreByRegValFn_)(type, coreIdx, ctx, finishCnt, resloveParallelIdx, finTaskRegVal,
-                                               aicpuCallCode, finTaskId, finTaskState);
+        if (unlikely(schedSyncMode_)) {
+            return ReleaseCoreByRegValBySyncMode(type, coreIdx, ctx, finishCnt, resloveParallelIdx, finTaskRegVal,
+                                                 aicpuCallCode, finTaskId, finTaskState);
+        }
+        return ReleaseCoreByRegValByAsyncMode(type, coreIdx, ctx, finishCnt, resloveParallelIdx, finTaskRegVal,
+                                              aicpuCallCode, finTaskId, finTaskState);
     }
 
     inline int32_t ReleaseCoreByRegValByAsyncMode(CoreType type, int coreIdx, ResolveTaskContext* ctx,
@@ -2643,10 +2645,6 @@ private:
     bool disableControlCore_{false};
     bool hasAicpuTask_{false};
 
-    using ReleaseCoreByRegValFn = int32_t (AiCoreManager::*)(CoreType type, int coreIdx, ResolveTaskContext* ctx,
-                                                             uint32_t& finishCnt, uint32_t& resloveParallelIdx,
-                                                             uint64_t finTaskRegVal, uint32_t aicpuCallCode,
-                                                             uint32_t finTaskId, uint32_t finTaskState);
-    ReleaseCoreByRegValFn releaseCoreByRegValFn_{nullptr};
+    bool schedSyncMode_{0}; // 0: AsyncMode[默认执行模式] 1: SyncMode[串行执行模式]
 };
 } // namespace npu::tile_fwk::dynamic
