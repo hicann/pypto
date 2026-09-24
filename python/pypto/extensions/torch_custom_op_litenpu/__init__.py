@@ -24,3 +24,4 @@ source it packs.
 """
 # Load order matters: common.compile carries no subpackage dependency, so it loads fully first.
 from .common.compile import *  # noqa: F403, I001 - keep the load order described above
+from .common.attr_spec import AttrSpec  # noqa: F401 - re-export
