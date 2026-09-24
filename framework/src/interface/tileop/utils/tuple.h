@@ -21,7 +21,7 @@ namespace Std {
 constexpr uint32_t TILEOP_STD_TUPLE_STACK_DEEP = 64;
 
 template <size_t N = 0, typename... Tps>
-[host, aicore] inline void tuple_static_assert()
+[host, aicore] inline constexpr void tuple_static_assert()
 {
     static_assert(N < TILEOP_STD_TUPLE_STACK_DEEP, "Index overflow, the index must be smaller than 64!");
     static_assert(sizeof...(Tps) <= TILEOP_STD_TUPLE_STACK_DEEP,
@@ -47,14 +47,14 @@ public:
 
     template <typename Constraints = tuple_constraints<Tp, Tps...>,
               enable_if_t<Constraints::variadic_copy_constructible, int> = 0>
-    [host, aicore] inline tuple(const Tp& val, const Tps&... params) : tuple<Tps...>(params...), value_(val)
+    [host, aicore] inline constexpr tuple(const Tp& val, const Tps&... params) : tuple<Tps...>(params...), value_(val)
     {
         tuple_static_assert<0, Tp, Tps...>();
     }
 
-    [ host, aicore ] inline Tp& GetValue() noexcept { return value_; }
+    [ host, aicore ] inline constexpr Tp& GetValue() noexcept { return value_; }
 
-    [ host, aicore ] inline const Tp& GetValue() const noexcept { return value_; }
+    [ host, aicore ] inline constexpr const Tp& GetValue() const noexcept { return value_; }
 
     template <typename Head, typename... Args>
     [host, aicore] inline tuple<Tp, Tps...>& operator=(const tuple<Head, Args...>& t)
@@ -199,7 +199,7 @@ template <typename... Tps>
 
 // get
 template <size_t N, typename... Tps>
-[host, aicore] inline typename tuple_element<N, tuple<Tps...>>::type& get(tuple<Tps...>& t) noexcept
+[host, aicore] inline constexpr typename tuple_element<N, tuple<Tps...>>::type& get(tuple<Tps...>& t) noexcept
 {
     tuple_static_assert<N, Tps...>();
     using type = typename tuple_element<N, tuple<Tps...>>::type;
@@ -208,7 +208,8 @@ template <size_t N, typename... Tps>
 }
 
 template <size_t N, typename... Tps>
-[host, aicore] inline const typename tuple_element<N, tuple<Tps...>>::type& get(const tuple<Tps...>& t) noexcept
+[host, aicore] inline constexpr const typename tuple_element<N, tuple<Tps...>>::type& get(
+    const tuple<Tps...>& t) noexcept
 {
     tuple_static_assert<N, Tps...>();
     using type = const typename tuple_element<N, tuple<Tps...>>::type;
@@ -217,14 +218,15 @@ template <size_t N, typename... Tps>
 }
 
 template <size_t N, typename... Tps>
-[host, aicore] inline typename tuple_element<N, tuple<Tps...>>::type&& get(tuple<Tps...>&& t) noexcept
+[host, aicore] inline constexpr typename tuple_element<N, tuple<Tps...>>::type&& get(tuple<Tps...>&& t) noexcept
 {
     using type = typename tuple_element<N, tuple<Tps...>>::type;
     return static_cast<type&&>(get<N, Tps...>(static_cast<tuple<Tps...>&>(t)));
 }
 
 template <size_t N, typename... Tps>
-[host, aicore] inline const typename tuple_element<N, tuple<Tps...>>::type&& get(const tuple<Tps...>&& t) noexcept
+[host, aicore] inline constexpr const typename tuple_element<N, tuple<Tps...>>::type&& get(
+    const tuple<Tps...>&& t) noexcept
 {
     using type = const typename tuple_element<N, tuple<Tps...>>::type;
     return static_cast<type&&>(get<N, Tps...>(static_cast<const tuple<Tps...>&>(t)));
