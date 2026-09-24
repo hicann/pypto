@@ -513,8 +513,10 @@ struct FunctionControlFlowExecution {
 
 constexpr int EXEC_DUMP_LEVEL_OPERATION = 1;
 constexpr int EXEC_DUMP_LEVEL_TENSOR = 2;
-const std::unordered_set<Opcode> MIX_PATH_OPS = {Opcode::OP_UB_COPY_L1, Opcode::OP_L0C_COPY_UB, Opcode::OP_COPY_OUT,
-                                                 Opcode::OP_RESHAPE};
+const std::unordered_set<Opcode> MIX_PATH_OPS = {
+    Opcode::OP_UB_COPY_L1,        Opcode::OP_L0C_COPY_UB,          Opcode::OP_COPY_OUT,
+    Opcode::OP_RESHAPE,           Opcode::OP_L0C_RESHAPE_COPY_OUT, Opcode::OP_L0C_COPY_OUT,
+    Opcode::OP_TRANSPOSE_MOVEOUT, Opcode::OP_RESHAPE_COPY_OUT,     Opcode::OP_L0C_COPY_OUT_CONV};
 
 enum class OpInfoCsvHeader {
     num = 0,
