@@ -934,10 +934,9 @@ TEST_F(BlockOpsOutElemwiseTest, BlockReshape_ReturnsOutType)
 TEST_F(BlockOpsOutElemwiseTest, BlockTranspose_ReturnsOutType)
 {
     auto& reg = OpRegistry::GetInstance();
-    std::vector<std::pair<std::string, std::any>> kwargs = {{"axis1", int(0)}, {"axis2", int(1)}};
     auto call = reg.Create("block.transpose",
-                           {MakeTileVar("o", {32, 16}, DataType::FP16), MakeTileVar("s", {16, 32}, DataType::FP16)},
-                           kwargs, Sp());
+                           {MakeTileVar("o", {32, 16}, DataType::FP16), MakeTileVar("s", {16, 32}, DataType::FP16)}, {},
+                           Sp());
     EXPECT_NE(As<TileType>(call->GetType()), nullptr);
 }
 

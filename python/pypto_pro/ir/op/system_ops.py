@@ -569,6 +569,7 @@ register_table(
 def _parse_system_sync(self, call: ast.Call, op_name: str):
     span = self.span_tracker.get_span(call)
     kwargs = self.parse_op_kwargs(call)
+    self._check_declared_types(op_name, call, [], kwargs, span)
     _validate_sync_pipes(kwargs["set_pipe"], kwargs["wait_pipe"], self.target, span)
     return _create_sync_op(op_name, **kwargs, span=span)
 
@@ -589,6 +590,7 @@ def _parse_system_sync_all(self, call: ast.Call):
     if call.args:
         raise InvalidArgument("sync_all does not accept positional arguments", span=span)
     kwargs = self.parse_op_kwargs(call)
+    self._check_declared_types("system.sync_all", call, [], kwargs, span)
     return sync_all(**kwargs, span=span)
 
 
@@ -602,5 +604,6 @@ def _parse_system_set_mm_layout_transform(self, call: ast.Call):
             "set_mm_layout_transform requires keyword argument 'enabled'",
             span=call_span,
         )
+    self._check_declared_types("system.set_mm_layout_transform", call, [], kwargs, call_span)
     enabled = bool(kwargs["enabled"])
     return set_mm_layout_transform(enabled=enabled, span=call_span)

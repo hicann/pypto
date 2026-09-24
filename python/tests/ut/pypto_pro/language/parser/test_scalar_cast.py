@@ -119,7 +119,7 @@ def test_simt_cast_rejects_plain_integer_round_mode():
 
 
 def test_simt_cast_rejects_wrong_positional_arity():
-    with pytest.raises(InvalidArgument, match="requires exactly 2 positional arguments"):
+    with pytest.raises(InvalidArgument, match="missing a required argument: 'dtype'"):
 
         @pl.vector_function(mode="simt", max_threads=1)
         def missing_dtype(value: pl.DT_FP32):
@@ -149,7 +149,7 @@ def test_simt_cast_rejects_non_dtype_target():
 
 
 def test_simt_cast_rejects_unexpected_keyword():
-    with pytest.raises(InvalidArgument, match="only accepts one optional keyword argument"):
+    with pytest.raises(InvalidArgument, match="unexpected keyword argument 'saturate'"):
 
         @pl.vector_function(mode="simt", max_threads=1)
         def unexpected_keyword(value: pl.DT_FP32):

@@ -30,6 +30,7 @@ __all__ = [
     "PyptoProError",
     "argument_span",
     "remembered_span",
+    "source_lines_of",
     "span_of",
     "span_source",
     "current_span",
@@ -212,6 +213,21 @@ def span_of(node) -> ir.Span | None:
 def remembered_span(error: BaseException) -> ir.Span | None:
     """Where *error* passed through a :func:`current_span` block, if it did."""
     return getattr(error, _SPAN_ATTR, None)
+
+
+def source_lines_of(filename: str) -> list[str] | None:
+    """Every line of *filename*, to render the caret preview, or None if unreadable.
+
+    The whole file, not just the declaration being reported: a span carries absolute
+    line numbers and the preview is indexed by them, so a slice starting at some
+    ``def`` or ``class`` would quote the wrong lines. Without it the ``-->`` header
+    still renders and only the quoted source goes missing.
+    """
+    try:
+        with open(filename, encoding="utf-8") as handle:
+            return handle.read().split("\n")
+    except OSError:
+        return None
 
 
 def _normalize_span(span: ir.Span | None) -> dict[str, str | int | None] | None:

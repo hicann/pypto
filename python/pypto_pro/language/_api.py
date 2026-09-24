@@ -44,7 +44,8 @@ from pypto.ir import (
 from pypto_pro.ir.op.block_ops import FillPadMode
 
 from .._errors import InvalidOperation
-from . import TensorLayout
+from . import MemorySpace, TensorLayout, TilePad
+from .typing import Ptr
 
 # ---------------------------------------------------------------------------
 # User-facing type aliases (NOT IR types)
@@ -54,7 +55,11 @@ TileGroup = Any
 Tensor = Any
 Scalar = Any
 DType = Any
+# An offset may name one axis or all of them, so a bare int is a valid spelling.
+# A shape or a stride always names every axis, so it is always a sequence.
 Offset = Union[List[int], int]
+Shape = List[int]
+Struct = Any  # a variable built by pl.struct(...)
 
 # ---------------------------------------------------------------------------
 # API declaration decorator
@@ -72,6 +77,9 @@ def _api_decl(func):
         raise InvalidOperation(_API_MSG)
 
     wrapper.__wrapped__ = func
+    # The parser gates DSL calls against this same binding, which is why it is
+    # reachable without calling the declaration.
+    wrapper.bind_declared = sig.bind
     return wrapper
 
 
@@ -126,7 +134,7 @@ def store(
     offsets: Offset,
     *,
     relu_pre_mode: Optional[ReluPreMode] = None,
-    scale: Optional[Union[float, Scalar, Tile]] = None,
+    scale: Optional[Union[int, float, Tile]] = None,
     order: Optional[List[int]] = None,
     atomic: AtomicType = AtomicType.AtomicNone,
     phase: Optional[STPhase] = None,
@@ -174,7 +182,7 @@ def store_tile(
     tile_offsets: Offset,
     *,
     relu_pre_mode: Optional[ReluPreMode] = None,
-    scale: Optional[Union[float, Scalar, Tile]] = None,
+    scale: Optional[Union[int, float, Tile]] = None,
     order: Optional[List[int]] = None,
     atomic: AtomicType = AtomicType.AtomicNone,
     phase: Optional[STPhase] = None,
@@ -217,7 +225,7 @@ def init_output(
     *,
     offset: int = 0,
     size: int,
-    value: Union[int, float, Scalar] = 0,
+    value: Union[int, float] = 0,
 ) -> None:
     """Initialize a region of a GM Tensor with a scalar value.
 
@@ -252,7 +260,7 @@ def move(
     *,
     acc_to_vec_mode: Optional[AccToVecMode] = None,
     relu_pre_mode: Optional[ReluPreMode] = None,
-    scale: Optional[Union[float, Scalar, Tile]] = None,
+    scale: Optional[Union[int, float, Tile]] = None,
     phase: Optional[STPhase] = None,
 ) -> None:
     """Move data between on-chip Tiles (tile↔tile, no GM access).
@@ -334,7 +342,7 @@ def insert(
 
 
 @_api_decl
-def ssbuf_load(struct_var: Any, offset: int, /) -> None:
+def ssbuf_load(struct_var: Struct, offset: int, /) -> None:
     """Load data from SuperScalar Buffer (SSBUF) into a struct variable.
 
     Args:
@@ -344,7 +352,7 @@ def ssbuf_load(struct_var: Any, offset: int, /) -> None:
 
 
 @_api_decl
-def ssbuf_store(struct_var: Any, offset: int, /) -> None:
+def ssbuf_store(struct_var: Struct, offset: int, /) -> None:
     """Write a struct variable to SuperScalar Buffer (SSBUF).
 
     Args:
@@ -367,7 +375,7 @@ def ssbuf_store(struct_var: Any, offset: int, /) -> None:
 
 
 @_api_decl
-def add(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
+def add(out: Tile, lhs: Tile, rhs: Union[Tile, int, float]) -> None:
     """Element-wise addition: ``out = lhs + rhs``
 
     Supports both tile-tile and tile-scalar operations:
@@ -377,7 +385,7 @@ def add(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
 
 
 @_api_decl
-def sub(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
+def sub(out: Tile, lhs: Tile, rhs: Union[Tile, int, float]) -> None:
     """Element-wise subtraction: ``out = lhs - rhs``
 
     Supports both tile-tile and tile-scalar operations:
@@ -387,7 +395,7 @@ def sub(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
 
 
 @_api_decl
-def mul(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
+def mul(out: Tile, lhs: Tile, rhs: Union[Tile, int, float]) -> None:
     """Element-wise multiplication: ``out = lhs * rhs``
 
     Supports both tile-tile and tile-scalar operations:
@@ -397,7 +405,7 @@ def mul(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
 
 
 @_api_decl
-def div(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
+def div(out: Tile, lhs: Tile, rhs: Union[Tile, int, float]) -> None:
     """Element-wise division: ``out = lhs / rhs``
 
     Supports both tile-tile and tile-scalar operations:
@@ -410,7 +418,7 @@ def div(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
 
 
 @_api_decl
-def and_(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
+def and_(out: Tile, lhs: Tile, rhs: Union[Tile, int]) -> None:
     """Element-wise bitwise AND: ``out = lhs & rhs``
 
     Supports both tile-tile and tile-scalar operations:
@@ -442,7 +450,7 @@ def xor(out: Tile, lhs: Tile, rhs: Tile, tmp: Tile) -> None:
 
 
 @_api_decl
-def expands(out: Tile, scalar: Scalar) -> None:
+def expands(out: Tile, scalar: Union[int, float]) -> None:
     """Fill Tile with a scalar (splat): ``out[i] = scalar``"""
 
 
@@ -543,7 +551,7 @@ def mul_cast(out: Tile, lhs: Tile, rhs: Tile, *, target_type: DType, mode: Round
 
 
 @_api_decl
-def eq(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
+def eq(out: Tile, lhs: Tile, rhs: Union[Tile, int, float]) -> None:
     """Element-wise equal: ``out = (lhs == rhs)``
 
     Supports both tile-tile and tile-scalar operations:
@@ -553,7 +561,7 @@ def eq(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
 
 
 @_api_decl
-def ne(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
+def ne(out: Tile, lhs: Tile, rhs: Union[Tile, int, float]) -> None:
     """Element-wise not equal: ``out = (lhs != rhs)``
 
     Supports both tile-tile and tile-scalar operations:
@@ -563,7 +571,7 @@ def ne(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
 
 
 @_api_decl
-def lt(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
+def lt(out: Tile, lhs: Tile, rhs: Union[Tile, int, float]) -> None:
     """Element-wise less than: ``out = (lhs < rhs)``
 
     Supports both tile-tile and tile-scalar operations:
@@ -573,7 +581,7 @@ def lt(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
 
 
 @_api_decl
-def le(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
+def le(out: Tile, lhs: Tile, rhs: Union[Tile, int, float]) -> None:
     """Element-wise less or equal: ``out = (lhs <= rhs)``
 
     Supports both tile-tile and tile-scalar operations:
@@ -583,7 +591,7 @@ def le(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
 
 
 @_api_decl
-def gt(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
+def gt(out: Tile, lhs: Tile, rhs: Union[Tile, int, float]) -> None:
     """Element-wise greater than: ``out = (lhs > rhs)``
 
     Supports both tile-tile and tile-scalar operations:
@@ -593,7 +601,7 @@ def gt(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
 
 
 @_api_decl
-def ge(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
+def ge(out: Tile, lhs: Tile, rhs: Union[Tile, int, float]) -> None:
     """Element-wise greater or equal: ``out = (lhs >= rhs)``
 
     Supports both tile-tile and tile-scalar operations:
@@ -603,7 +611,7 @@ def ge(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
 
 
 @_api_decl
-def select(out: Tile, mask: Tile, lhs: Tile, rhs: Union[Tile, Scalar], tmp: Tile) -> None:
+def select(out: Tile, mask: Tile, lhs: Tile, rhs: Union[Tile, int, float], tmp: Tile) -> None:
     """Select by mask: ``out[i] = lhs[i] if mask[i] else rhs[i]``
 
     Supports both tile-tile and tile-scalar operations:
@@ -648,7 +656,7 @@ def fused_mul_add_relu(out: Tile, a: Tile, b: Tile) -> None:
 
 
 @_api_decl
-def axpy(out: Tile, src: Tile, alpha: Scalar, /) -> None:
+def axpy(out: Tile, src: Tile, alpha: Union[int, float], /) -> None:
     """AXPY: ``out[i] = alpha * src[i] + out[i]``
 
     Args:
@@ -881,14 +889,31 @@ def expand_div(out: Tile, src: Tile, scalar: Tile, *, dim: int = 0) -> None:
 
 
 @_api_decl
-def gather(out: Tile, src: Tile, idx: Tile, tmp: Tile, *, cmp_mode: int = 0, offset: int = 0) -> None:
-    """Gather elements by index.
+def gather(
+    out: Tile,
+    src: Tile,
+    indices_or_k_value: Tile,
+    tmp_or_cdst: Optional[Tile] = None,
+    tmp: Optional[Tile] = None,
+    *,
+    cmp_mode: int = 0,
+    offset: int = 0,
+) -> None:
+    """Gather elements by index, or by comparison against a k-value.
+
+    Two forms share this signature; the trailing positional parameters mean
+    different things in each:
+
+    - index form ``gather(out, src, indices[, tmp])``: ``out[i] = src[indices[i]]``
+    - compare form ``gather(out, src, k_value, cdst, tmp, cmp_mode=...)``: indices
+      where ``src`` compares against the k-value per ``cmp_mode``
 
     Args:
         out: Destination Tile
         src: Source Tile
-        idx: Index Tile
-        tmp: Workspace Tile
+        indices_or_k_value: Index Tile (index form) or k-value Tile (compare form)
+        tmp_or_cdst: Workspace Tile (index form) or cdst Tile (compare form)
+        tmp: Workspace Tile, compare form only
         cmp_mode: Comparison mode (default 0)
         offset: Index offset
     """
@@ -1017,19 +1042,19 @@ def getval(container: "Tile | Tensor", offset: int) -> Scalar:
 
 
 @_api_decl
-def setval(container: "Tile | Tensor", offset: int, value: Scalar) -> None:
+def setval(container: "Tile | Tensor", offset: int, value: Union[int, float]) -> None:
     """Write a scalar value into a Tile or Tensor at the given linear offset."""
 
 
 @_api_decl
-def set_validshape(tile: "Tile | TileGroup", /, shape: List[int]) -> None:
+def set_validshape(tile: "Tile | TileGroup", /, shape: Shape) -> None:
     """Set the valid shape of a Tile or tile_group (for partial-tile / tail-block operations).
 
     When a tile_group is passed, valid_shape is set on all tiles in the group.
     """
 
 @_api_decl
-def reinterpret(tile: "Tile | TileGroup", /, *, dtype: DType = None, shape: List[int] = None,
+def reinterpret(tile: "Tile | TileGroup", /, *, dtype: DType = None, shape: Shape = None,
                 layout: Optional[TensorLayout] = None) -> "Tile | TileGroup":
     """Reinterpret a Tile or tile_group's dtype/shape/layout metadata without data movement.
 
@@ -1083,7 +1108,7 @@ def reset_mask() -> None:
 
 
 @_api_decl
-def fill_index(out: Tile, start: Scalar) -> None:
+def fill_index(out: Tile, start: Union[int, float]) -> None:
     """Fill target tile with sequential indices starting from *start*."""
 
 
@@ -1122,7 +1147,7 @@ def printf(format_str: str, *args, loc: bool = False) -> None:
 def dump_data(
     data: Union[Tensor, Tile],
     offsets: Optional[List[int]] = None,
-    shapes: Optional[List[int]] = None,
+    shapes: Optional[Shape] = None,
     *,
     workspace: Optional[Tensor] = None,
     loc: bool = False,
@@ -1157,7 +1182,7 @@ def trap() -> None:
 
 
 @_api_decl
-def min(lhs: Scalar, rhs: Scalar, /) -> Scalar:
+def min(lhs: Union[int, float], rhs: Union[int, float], /) -> Scalar:
     """Return the minimum of two scalars.
 
     Scalar-only operation for loop-bound calculations etc.
@@ -1173,7 +1198,7 @@ def min(lhs: Scalar, rhs: Scalar, /) -> Scalar:
 
 
 @_api_decl
-def max(lhs: Scalar, rhs: Scalar, /) -> Scalar:
+def max(lhs: Union[int, float], rhs: Union[int, float], /) -> Scalar:
     """Return the maximum of two scalars.
 
     Scalar-only operation for loop-bound calculations etc.
@@ -1202,7 +1227,7 @@ def max(lhs: Scalar, rhs: Scalar, /) -> Scalar:
 
 
 @_api_decl
-def minimum(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar], *, dim: Optional[int] = None) -> None:
+def minimum(out: Tile, lhs: Tile, rhs: Union[Tile, int, float], *, dim: Optional[int] = None) -> None:
     """Element-wise minimum or dimension-wise min reduction.
 
     Without ``dim`` (element-wise): ``out = min(lhs, rhs)``
@@ -1223,7 +1248,7 @@ def minimum(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar], *, dim: Optional[int
 
 
 @_api_decl
-def maximum(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar], *, dim: Optional[int] = None) -> None:
+def maximum(out: Tile, lhs: Tile, rhs: Union[Tile, int, float], *, dim: Optional[int] = None) -> None:
     """Element-wise maximum or dimension-wise max reduction.
 
     Without ``dim`` (element-wise): ``out = max(lhs, rhs)``
@@ -1254,7 +1279,7 @@ def const(value: Union[int, float], dtype: DType, /) -> Scalar:
 
 
 @_api_decl
-def astype(x: Scalar, dtype: DType, /) -> Scalar:
+def astype(x: Union[int, float], dtype: DType, /) -> Scalar:
     """Convert a runtime scalar expression to ``dtype``.
 
     Args:
@@ -1433,7 +1458,7 @@ def reset_ctrl_spr(start_bit: int, end_bit: int, /) -> None:
 
 @_api_decl
 def make_tile(
-    tile_type: Any,
+    tile_type: TileType,
     /,
     *,
     addr: int,
@@ -1460,7 +1485,7 @@ def make_tile(
 
 
 @_api_decl
-def make_tile_group(*, type: Any, addrs: int | list,
+def make_tile_group(*, type: TileType, addrs: int | list,
     mutex_ids: list[int | list[int] | tuple[int, ...]] | tuple | None = None,
     depth: int | None = None,
     fwd_ids: list[int] | tuple[int, ...] | None = None,
@@ -1485,4 +1510,82 @@ def make_tile_group(*, type: Any, addrs: int | list,
             per Tile; the transform picks ``fwd_ids[i % N]`` per iteration
         bwd_ids: Optional cross-core event IDs for the consumer->producer
             direction (buffer released). Same shape as ``fwd_ids``
+    """
+
+
+# ===================================================================
+# Section I: Type and pointer constructors
+#
+# These declarations describe calls the parser intercepts by name. The runtime
+# objects they describe stay where they are -- ``pl.TileType`` is still the class
+# from ``ir/op/block_ops.py`` and ``pl.addptr`` still the builder -- so they are
+# deliberately absent from the re-exports in ``__init__.py``. What they add is a
+# user-facing signature for the argument gate to bind against, with the
+# framework-internal ``span`` parameter left out.
+# ===================================================================
+
+
+@_api_decl
+def TileType(  # noqa: N802 -- the user writes pl.TileType(...), a class constructor
+    *,
+    shape: Shape,
+    dtype: DType,
+    target_memory: MemorySpace = MemorySpace.Vec,
+    valid_shape: Optional[Shape] = None,
+    layout: Optional[TensorLayout] = None,
+    fractal: Optional[int] = None,
+    pad: Optional[Union[TilePad, int]] = None,
+    compact: Optional[int] = None,
+) -> Any:
+    """Describe a tile: its shape, dtype, memory space and layout.
+
+    A TileType carries everything about a tile except where it lives, which
+    ``pl.make_tile(tile_type, addr=...)`` supplies.
+
+    Args:
+        shape: Tile shape per axis
+        dtype: Element data type, e.g. ``pl.DT_FP16``
+        target_memory: On-chip memory space the tile occupies
+        valid_shape: Optional smaller shape actually holding data
+        layout: Optional tensor layout (NZ/ZN/NN/ZZ)
+        fractal: Optional fractal size
+        pad: Optional padding mode, a ``pl.TilePad`` or the integer 0/1/2/3 standing for one
+        compact: Optional compact flag
+    """
+
+
+@_api_decl
+def addptr(ptr: Ptr, offset: int) -> Ptr:
+    """Advance a raw pointer by an integer offset.
+
+    Args:
+        ptr: Raw pointer expression (``pl.Ptr[dtype]``)
+        offset: Element offset, an int or an integer scalar expression
+    """
+
+
+@_api_decl
+def make_ptr(ptr: Union[Ptr, Tensor], dtype: Optional[DType] = None) -> Ptr:
+    """Extract a raw pointer from a Tensor, or reinterpret a pointer's element dtype.
+
+    Args:
+        ptr: A ``pl.Tensor`` to take the data pointer of, or a ``pl.Ptr[dtype]`` to recast
+        dtype: Optional element type for the result
+    """
+
+
+@_api_decl
+def make_tensor(
+    ptr: Union[Ptr, Tensor],
+    shape: Shape,
+    stride: Optional[Shape] = None,
+    dtype: Optional[DType] = None,
+) -> Tensor:
+    """Create a Tensor view over a raw pointer or an existing Tensor.
+
+    Args:
+        ptr: A ``pl.Ptr[dtype]`` or an existing ``pl.Tensor``
+        shape: Shape of the view per axis
+        stride: Optional stride per axis; contiguous when omitted
+        dtype: Optional element type for the view
     """

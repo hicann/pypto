@@ -23,13 +23,13 @@ ValueError/TypeError 会被 parse_target_program 包装为 NotSupported，
 """
 
 from pypto_pro._errors import (
+    InvalidArgument,
     InvalidOperation,
     InvalidShape,
     InvalidTile,
     InvalidType,
     InvalidVal,
     NotSupported,
-    RuntimeFailure,
 )
 import pypto_pro.language as pl
 from pypto_pro.runtime.platform import get_platform_info
@@ -176,7 +176,7 @@ def test_err_scale_string():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(InvalidType, match="scale must be"):
+    with pytest.raises(InvalidType, match="scale expects"):
         kernel(q, k, out)
 
 
@@ -195,7 +195,7 @@ def test_err_scale_list():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(InvalidType, match="scale must be"):
+    with pytest.raises(InvalidType, match="scale expects"):
         kernel(q, k, out)
 
 
@@ -385,7 +385,7 @@ def test_err_legacy_pre_quant_scalar():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(RuntimeFailure, match="unexpected keyword argument.*pre_quant_scalar"):
+    with pytest.raises(InvalidArgument, match="unexpected keyword argument 'pre_quant_scalar'"):
         kernel(q, k, out)
 
 
@@ -404,7 +404,7 @@ def test_err_legacy_fp_tile():
 
     q, k = _make_qk()
     out = torch.zeros(64, 64, dtype=torch.int8)
-    with pytest.raises(RuntimeFailure, match="unexpected keyword argument.*fp_tile"):
+    with pytest.raises(InvalidArgument, match="unexpected keyword argument 'fp_tile'"):
         kernel(q, k, out)
 
 

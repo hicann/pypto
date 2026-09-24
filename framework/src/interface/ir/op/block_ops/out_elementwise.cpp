@@ -493,14 +493,12 @@ REGISTER_OP("block.reshape")
         return DeduceBlockOutTileType(args, kwargs, "block.reshape", 3);
     });
 
-// block.transpose: (out, src_tile) -> out's type; axis attrs.
+// block.transpose: (out, src_tile) -> out's type; swaps the last two dimensions.
 REGISTER_OP("block.transpose")
     .set_op_category("BlockOp")
-    .set_description("Block explicit-output transpose: swap two axes of src tile into out")
+    .set_description("Block explicit-output transpose: swap the last two dimensions of src tile into out")
     .add_argument("out", "Pre-allocated output tile with transposed shape (TileType)")
     .add_argument("src", "Source tile (TileType)")
-    .set_attr<int>("axis1")
-    .set_attr<int>("axis2")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutUnary(args, kwargs, "block.transpose");

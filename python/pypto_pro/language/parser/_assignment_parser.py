@@ -153,6 +153,14 @@ class AssignmentParserMixin:
             reg = vf.add(a, b, preg)              → RegTensor reg; vf.add(reg, a, b, preg)
             reg_lo, reg_hi = vf.mull(a, b, preg)  → RegTensor reg_lo, reg_hi; vf.mull(reg_lo, reg_hi, a, b, pred)
         """
+        # This form never reaches parse_op_call, so it carries the declaration gate
+        # itself. It runs on the call as written, before the dst args are inserted
+        # and before any argument is parsed. The call is the location, not the whole
+        # statement: the assignment target is not what the gate is rejecting.
+        self._check_declared_params(
+            f"vf.{vf_op_name}", stmt.value, self.span_tracker.get_span(stmt.value)
+        )
+
         dst_count = self._get_vf_op_dst_count(vf_op_name)
 
         call = stmt.value  # ast.Call

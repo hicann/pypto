@@ -91,6 +91,26 @@ class SpanTracker:
         written = next((kw.value for kw in call.keywords if kw.arg == name), None)
         return self.get_span(written) if written is not None else fallback
 
+    def call_keyword_name_span(self, call: "ast.Call", name: str, fallback: ir.Span) -> ir.Span:
+        """Span of the keyword *name* itself in *call*, not of the value it was given.
+
+        A keyword the callee never declared, or one that repeats a positional
+        argument, is wrong in its name; the value beside it may be perfectly good.
+        Pointing at the value would mark the one part of the argument that is not
+        at fault.
+        """
+        written = next((kw for kw in call.keywords if kw.arg == name), None)
+        if written is None or not hasattr(written, "col_offset"):
+            return fallback
+        start = written.col_offset + self.col_offset + 1
+        return ir.Span(
+            self.source_file,
+            written.lineno + self.line_offset,
+            start,
+            written.lineno + self.line_offset,
+            start + len(name) - 1,
+        )
+
     def argument_spans(self, call: "ast.Call") -> dict:
         """Where each argument of *call* was written, keyed for ``argument_span``.
 

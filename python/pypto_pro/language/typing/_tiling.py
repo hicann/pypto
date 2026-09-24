@@ -36,7 +36,7 @@ from pypto.pypto_impl import ir
 from pypto.pypto_impl.ir import DataType
 from pypto_pro.language.parser.diagnostics import check_in_range
 
-from ..._errors import InvalidArgument, InvalidOperation, InvalidType, message_of
+from ..._errors import InvalidArgument, InvalidOperation, InvalidType, message_of, source_lines_of
 
 # Largest fixed-size array a tiling class field may declare.
 _MAX_ARRAY_SIZE = 2048
@@ -131,6 +131,25 @@ def is_tiling_class(cls: object) -> bool:
     return True
 
 
+def _span_of_class_node(node: ast.AST, source_file: str, source_lines_raw: list[str], starting_line: int):
+    """Span of *node*, parsed out of a dedented class body, back in file coordinates.
+
+    ``ast.parse`` needs code at column zero, so the class source was dedented and
+    re-numbered from one; both offsets have to go back on for the span to name a
+    place in the file. None when the tracker cannot be built.
+    """
+    try:
+        from pypto_pro.language.parser._span_tracker import SpanTracker
+        from pypto_pro.runtime.kernel import _calculate_col_offset
+
+        tracker = SpanTracker(
+            source_file, source_lines_raw, starting_line - 1, _calculate_col_offset(source_lines_raw)
+        )
+        return tracker.get_span(node)
+    except Exception:  # noqa: BLE001 - a location is a nicety; never mask the real error
+        return None
+
+
 def _check_duplicate_annotations(cls: type) -> None:
     """Parse class source AST to detect duplicate annotated field names.
 
@@ -138,25 +157,34 @@ def _check_duplicate_annotations(cls: type) -> None:
     introspection cannot see duplicates. Use AST parsing as a best-effort check.
     """
     try:
-        src = textwrap.dedent(inspect.getsource(cls))
+        source_lines_raw, starting_line = inspect.getsourcelines(cls)
+        source_file = inspect.getfile(cls)
     except (TypeError, OSError):
         return
+    src = textwrap.dedent("".join(source_lines_raw))
     tree = ast.parse(src)
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef) and node.name == cls.__name__:
-            ann_names = []
+            declared: dict[str, ast.AnnAssign] = {}
             for stmt in node.body:
-                if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
-                    ann_names.append(stmt.target.id)
-            if len(ann_names) != len(set(ann_names)):
-                seen: set[str] = set()
-                for name in ann_names:
-                    if name in seen:
-                        raise InvalidOperation(
-                            f"Tiling class '{cls.__name__}' has duplicate field '{name}'. "
-                            f"All field names must be unique."
-                        )
-                    seen.add(name)
+                if not (isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)):
+                    continue
+                name = stmt.target.id
+                if name in declared:
+                    # The class body is already parsed here, so the repeated field is
+                    # a node in hand: point at it rather than leaving the reader to
+                    # find it. The dedent above shifted the columns and the source
+                    # starts at the class, so both offsets go back on.
+                    raise InvalidOperation(
+                        f"Tiling class '{cls.__name__}' has duplicate field '{name}'. "
+                        f"All field names must be unique.",
+                        span=_span_of_class_node(stmt, source_file, source_lines_raw, starting_line),
+                        source_lines=source_lines_of(source_file),
+                        previous_span=_span_of_class_node(
+                            declared[name], source_file, source_lines_raw, starting_line
+                        ),
+                    )
+                declared[name] = stmt
             return
 
 

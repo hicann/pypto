@@ -33,6 +33,7 @@ def _parse_min(self, call: ast.Call):
         )
     lhs = self.parse_expression(call.args[0])
     rhs = self.parse_expression(call.args[1])
+    self._check_declared_types("min", call, [lhs, rhs], {}, call_span)
     operation = _ir_core.min_(lhs, rhs, call_span)
     folded = self._fold_const_binop("min", operation, call_span)
     return folded if folded is not None else operation
@@ -51,6 +52,7 @@ def _parse_max(self, call: ast.Call):
         )
     lhs = self.parse_expression(call.args[0])
     rhs = self.parse_expression(call.args[1])
+    self._check_declared_types("max", call, [lhs, rhs], {}, call_span)
     operation = _ir_core.max_(lhs, rhs, call_span)
     folded = self._fold_const_binop("max", operation, call_span)
     return folded if folded is not None else operation

@@ -873,7 +873,7 @@ def test_move_src_larger_stays_move():
 
 
 def test_make_tile_missing_addr_rejected():
-    with pytest.raises(InvalidVal, match="missing required keyword 'addr'"):
+    with pytest.raises(InvalidArgument, match="missing a required argument: 'addr'"):
 
         @pl.jit(auto_mutex=False)
         def main(
@@ -947,9 +947,13 @@ def test_make_tile_addr_after_tile_type():
 
 
 def test_make_tile_builder_form_rejected():
-    """make_tile(shape, dtype, target_memory, ...) is the IR builder, not the DSL op."""
+    """make_tile(shape, dtype, target_memory, ...) is the IR builder, not the DSL op.
 
-    with pytest.raises(InvalidType, match="takes a pl.TileType as its first argument"):
+    The declaration takes one positional argument, so the builder's form is turned
+    away on its shape before the first argument is ever looked at.
+    """
+
+    with pytest.raises(InvalidArgument, match="too many positional arguments"):
 
         @pl.jit(auto_mutex=False)
         def main(
@@ -1004,7 +1008,7 @@ def test_make_tile_runtime_addr_rejected_quoting_source():
 def test_make_tile_positional_addr_rejected():
     """The tile type is the only positional argument; addr is keyword-only."""
 
-    with pytest.raises(InvalidArgument, match="takes 1 positional argument .* but 2 were given"):
+    with pytest.raises(InvalidArgument, match="too many positional arguments"):
 
         @pl.jit(auto_mutex=False)
         def main(
@@ -1036,9 +1040,9 @@ def test_make_tile_extra_positional_args_rejected_with_addr_keyword_hint():
 
         main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
-    assert "takes 1 positional argument (the tile type) but 3 were given" in str(excinfo.value)
+    assert "too many positional arguments" in str(excinfo.value)
     # the hint spells out the accepted spelling
-    assert "addr=" in str(excinfo.value)
+    assert "pl.make_tile(tile_type, addr=...)" in str(excinfo.value)
 
 
 VEC_BASE = 0x1000

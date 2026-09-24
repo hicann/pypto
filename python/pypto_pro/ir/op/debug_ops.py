@@ -506,6 +506,7 @@ def _parse_dump_data(self, call: ast.Call):
     span = self.span_tracker.get_span(call)
     args = [self.parse_expression(a) for a in call.args]
     kwargs = self.parse_op_kwargs(call)
+    self._check_declared_types("dump_data", call, args, kwargs, span)
     return dump_data(*args, section=self.target, **kwargs, span=span)
 
 
@@ -514,5 +515,6 @@ def _parse_pto_assert(self, call: ast.Call):
     span = self.span_tracker.get_span(call)
     args = [self.parse_expression(a) for a in call.args]
     kwargs = self.parse_op_kwargs(call)
+    self._check_declared_types("pto_assert", call, args, kwargs, span)
     condition_text = self.span_tracker.get_source_text(call.args[0])
     return pto_assert(*args, condition_text=condition_text, **kwargs, span=span)

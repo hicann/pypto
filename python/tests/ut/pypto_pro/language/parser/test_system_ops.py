@@ -13,6 +13,7 @@
 import pypto_pro
 from pypto_pro import ir
 from pypto_pro._errors import InvalidArgument, InvalidOperation, InvalidType, InvalidVal, NotSupported, OutOfRange
+from pypto_pro.ir.op import system_ops
 import pypto_pro.language as pl
 import pytest
 
@@ -117,7 +118,7 @@ def test_sync_dst_pipe_kwarg_rejects_plain_integer():
 
 
 def test_sync_pipe_kwarg_rejects_other_enum_type():
-    with pytest.raises(InvalidType, match="set_pipe must be a PipeType"):
+    with pytest.raises(InvalidType, match="set_pipe expects PipeType, got SyncCoreType"):
 
         @pl.jit(auto_mutex=False)
         def func(_jit_entry: pl.DT_INT64):
@@ -141,7 +142,7 @@ def test_mutex_lock_pipe_kwarg_rejects_plain_integer():
         func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
-@pytest.mark.parametrize("builder", [pl.system.mutex_lock, pl.system.mutex_unlock])
+@pytest.mark.parametrize("builder", [system_ops.mutex_lock, system_ops.mutex_unlock])
 @pytest.mark.parametrize("pipe", [1, pl.SyncCoreType.AIV_ONLY])
 def test_mutex_ir_builder_requires_pipe_type(builder, pipe):
     with pytest.raises(TypeError, match="pipe must be a PipeType"):
@@ -197,14 +198,14 @@ def test_sync_parser_normalizes_python_int_id():
         assert sync_call.args[0].value == 3
 
 
-@pytest.mark.parametrize("builder", [pl.system.mutex_lock, pl.system.mutex_unlock])
+@pytest.mark.parametrize("builder", [system_ops.mutex_lock, system_ops.mutex_unlock])
 @pytest.mark.parametrize("mutex_id", [True, False])
 def test_mutex_id_rejects_bool(builder, mutex_id):
     with pytest.raises(TypeError, match="mutex_id must be a Python int or an integer scalar expression"):
         builder(pipe=pl.PipeType.MTE2, mutex_id=mutex_id)
 
 
-@pytest.mark.parametrize("builder", [pl.system.mutex_lock, pl.system.mutex_unlock])
+@pytest.mark.parametrize("builder", [system_ops.mutex_lock, system_ops.mutex_unlock])
 def test_mutex_ir_builder_normalizes_python_int_id(builder):
     call = builder(pipe=pl.PipeType.MTE2, mutex_id=0)
 
@@ -307,20 +308,20 @@ def test_sync_rejects_unsupported_aic_pipe_path():
         func.to_kernel_def().parse_target_program(ir.SectionKind.Cube)
 
 
-@pytest.mark.parametrize("builder", [pl.system.mutex_lock, pl.system.mutex_unlock])
+@pytest.mark.parametrize("builder", [system_ops.mutex_lock, system_ops.mutex_unlock])
 @pytest.mark.parametrize("mutex_id", [-1, 32])
 def test_mutex_static_id_range_is_validated_by_frontend(builder, mutex_id):
     with pytest.raises(OutOfRange, match=r"mutex_id must be in \[0, 31\]"):
         builder(pipe=pl.PipeType.MTE2, mutex_id=_const_int(mutex_id))
 
 
-@pytest.mark.parametrize("builder", [pl.system.mutex_lock, pl.system.mutex_unlock])
+@pytest.mark.parametrize("builder", [system_ops.mutex_lock, system_ops.mutex_unlock])
 def test_mutex_rejects_all_pipe_in_frontend(builder):
     with pytest.raises(ValueError, match="pipe must identify one concrete pipe"):
         builder(pipe=pl.PipeType.ALL, mutex_id=_const_int(0))
 
 
-@pytest.mark.parametrize("builder", [pl.system.mutex_lock, pl.system.mutex_unlock])
+@pytest.mark.parametrize("builder", [system_ops.mutex_lock, system_ops.mutex_unlock])
 def test_manual_mutex_has_no_auto_candidate_metadata(builder):
     call = builder(pipe=pl.PipeType.MTE2, mutex_id=_const_int(8))
 
@@ -446,7 +447,8 @@ def test_bool_mutex_id_expression_is_rejected_by_parser():
 
 
 def test_complex_float_event_id_expression_is_rejected_by_parser():
-    with pytest.raises(InvalidType, match="event_id must be an integer scalar expression"):
+    # the type gate reaches it first now, and marks the expression rather than the call
+    with pytest.raises(InvalidType, match=r"event_id expects int, got a fp32 scalar"):
 
         @pl.jit(auto_mutex=False)
         def func(base: pl.DT_INT64):
@@ -462,7 +464,7 @@ def test_complex_float_event_id_expression_is_rejected_by_parser():
 
 
 def test_complex_float_mutex_id_expression_is_rejected_by_parser():
-    with pytest.raises(InvalidType, match="mutex_id must be an integer scalar expression"):
+    with pytest.raises(InvalidType, match=r"mutex_id expects int, got a fp32 scalar"):
 
         @pl.jit(auto_mutex=False)
         def func(base: pl.DT_INT64):
@@ -499,7 +501,7 @@ def test_control_flow_integer_event_id_expression_is_accepted():
 
 
 def test_control_flow_float_event_id_expression_is_rejected_by_parser():
-    with pytest.raises(InvalidType, match="event_id must be an integer scalar expression"):
+    with pytest.raises(InvalidType, match=r"event_id expects int, got a fp32 scalar"):
 
         @pl.jit(auto_mutex=False)
         def func(base: pl.DT_INT64):
@@ -518,7 +520,7 @@ def test_control_flow_float_event_id_expression_is_rejected_by_parser():
         func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
-@pytest.mark.parametrize("builder", [pl.system.mutex_lock, pl.system.mutex_unlock])
+@pytest.mark.parametrize("builder", [system_ops.mutex_lock, system_ops.mutex_unlock])
 @pytest.mark.parametrize(
     ("kwarg", "value"),
     [("mode", 0), ("max_mutex_id", 2), ("mutex_ids", [0, 1])],
@@ -548,7 +550,7 @@ def test_dcci_gm_tensor_with_offset_print_style():
 def test_dcci_gm_tensor_rejects_float_scalar_offset():
     """Test pl.system.dcci rejects float scalar offset for GM tensor."""
 
-    with pytest.raises(InvalidType, match="scalar integer element offset"):
+    with pytest.raises(InvalidType, match=r"offset expects .*, got a fp32 scalar"):
 
         @pl.jit(auto_mutex=False)
         def main(x: pl.Tensor[[16, 16], pl.DT_FP32]):
