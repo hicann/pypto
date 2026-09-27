@@ -290,8 +290,9 @@ def test_size_keyword_is_rejected(size):
 
     with pytest.raises(InvalidArgument, match="unexpected keyword argument") as excinfo:
         _parse_kernel(k)
-    assert "['size']" in str(excinfo.value)
-    assert "only 'addr' is supported" in str(excinfo.value)
+    assert "'size'" in str(excinfo.value)
+    # tile_type is positional-only, so only addr can be named
+    assert "takes addr" in str(excinfo.value)
 
 
 def test_runtime_size_is_rejected_before_evaluating_it():
@@ -315,7 +316,7 @@ def test_a_shape_in_place_of_a_tile_type_is_rejected():
 
     @pl.jit
     def k(x: pl.Tensor[[64], pl.DT_FP16]):
-        t = pl.make_tile([64], pl.DT_FP16, pl.MemorySpace.Vec, 0, 128)
+        t = pl.make_tile([64], addr=0)
         pl.load(t, x, [0])
 
     with pytest.raises(InvalidType) as excinfo:
@@ -341,15 +342,20 @@ def test_tile_type_may_be_built_inline():
 
 
 def test_a_tile_type_is_required_even_when_addr_is_given():
-    """The builder's spread-out form is not a DSL spelling of make_tile."""
+    """The builder's spread-out form is not a DSL spelling of make_tile.
+
+    The declaration takes one positional argument, so the spread-out form is turned
+    away on its shape before the first argument is ever looked at.
+    """
 
     @pl.jit
     def k(x: pl.Tensor[[64], pl.DT_FP16]):
         t = pl.make_tile([64], pl.DT_FP16, pl.MemorySpace.Vec, 0x40)
         pl.load(t, x, [0])
 
-    with pytest.raises(InvalidType, match="takes a pl.TileType as its first argument"):
+    with pytest.raises(InvalidArgument, match="too many positional arguments") as excinfo:
         _parse_kernel(k)
+    assert "pl.make_tile(tile_type, addr=...)" in str(excinfo.value)
 
 
 def test_a_call_with_no_positional_argument_is_rejected():
@@ -358,7 +364,7 @@ def test_a_call_with_no_positional_argument_is_rejected():
         t = pl.make_tile(addr=0x40)
         pl.load(t, x, [0])
 
-    with pytest.raises(InvalidType, match="got no positional argument"):
+    with pytest.raises(InvalidArgument, match="missing a required argument: 'tile_type'"):
         _parse_kernel(k)
 
 
@@ -371,10 +377,9 @@ def test_addr_and_size_given_positionally_are_rejected():
         t = pl.make_tile(tt, 0, 128)
         pl.load(t, x, [0, 0])
 
-    with pytest.raises(InvalidArgument) as excinfo:
+    with pytest.raises(InvalidArgument, match="too many positional arguments") as excinfo:
         _parse_kernel(k)
-    assert "takes 1 positional argument (the tile type) but 3 were given" in str(excinfo.value)
-    assert "addr=" in str(excinfo.value)
+    assert "pl.make_tile(tile_type, addr=...)" in str(excinfo.value)
 
 
 def test_a_positional_addr_is_not_silently_shadowed_by_a_keyword_one():
@@ -387,7 +392,7 @@ def test_a_positional_addr_is_not_silently_shadowed_by_a_keyword_one():
         pl.load(t, x, [0, 0])
 
     # the keyword does not count toward the arity, exactly as Python reports it
-    with pytest.raises(InvalidArgument, match=r"takes 1 positional argument .* but 2 were given"):
+    with pytest.raises(InvalidArgument, match="too many positional arguments"):
         _parse_kernel(k)
 
 
@@ -396,7 +401,7 @@ def test_a_non_tile_type_first_argument_is_rejected():
 
     @pl.jit
     def k(x: pl.Tensor[[64], pl.DT_FP16]):
-        t = pl.make_tile(0x40)
+        t = pl.make_tile(0x40, addr=0)
         pl.load(t, x, [0])
 
     with pytest.raises(InvalidType, match="takes a pl.TileType as its first argument"):
@@ -462,7 +467,7 @@ def test_tile_type_field_cannot_be_overridden_at_make_tile_call():
 
     with pytest.raises(InvalidArgument, match="unexpected keyword argument") as excinfo:
         _parse_kernel(k)
-    assert "['valid_shape']" in str(excinfo.value)
+    assert "'valid_shape'" in str(excinfo.value)
 
 
 def test_unknown_make_tile_keyword_is_rejected():
@@ -474,7 +479,7 @@ def test_unknown_make_tile_keyword_is_rejected():
 
     with pytest.raises(InvalidArgument, match="unexpected keyword argument") as excinfo:
         _parse_kernel(k)
-    assert "['unknown']" in str(excinfo.value)
+    assert "'unknown'" in str(excinfo.value)
 
 
 def test_size_is_derived_from_the_shape_not_the_valid_shape():

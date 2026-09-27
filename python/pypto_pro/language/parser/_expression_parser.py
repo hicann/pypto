@@ -30,6 +30,7 @@ from ..._errors import (
     NotSupported,
     OutOfRange,
     PyptoProError,
+    current_span,
 )
 from ._expr_evaluator import ExprEvaluator
 from ._tuple_type_registry import TupleTypeInfo
@@ -202,7 +203,15 @@ class ExpressionParserMixin:
             return self._parsed_expr_cache[expr]
         self._current_node = expr
         try:
-            result = self._parse_expression_node(expr)
+            # Publish where this expression was written, so anything raised while
+            # parsing it reports that location even when it never passed a span of
+            # its own. The op dispatcher publishes a finer one (per argument) for
+            # the ops it handles, and an inner expression publishes over an outer
+            # one, so the innermost location still wins; this only fills the gaps
+            # the dispatcher does not reach -- hand-written ``@op_impl`` handlers,
+            # method calls, builtin min/max, subscripts.
+            with current_span(self.span_tracker.get_span(expr)):
+                result = self._parse_expression_node(expr)
         except PyptoProError as rejection:
             # Retry is opt-in: only a rejection raised with ``parser_retry=True``
             # may be re-evaluated as Python. Everything else — including a

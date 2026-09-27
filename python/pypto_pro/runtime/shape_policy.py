@@ -27,6 +27,7 @@ __all__ = [
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from functools import partial
 import inspect
 import re
 from typing import Any, Union
@@ -42,6 +43,7 @@ from .._errors import (
     PyptoProError,
     RuntimeFailure,
     message_of,
+    source_lines_of,
 )
 
 
@@ -55,6 +57,43 @@ def _get_annotations(func, namespace):
         if isinstance(annotation, str):
             annotations[name] = eval(annotation, namespace, namespace)
     return annotations
+
+
+def _written_at(locate) -> dict:
+    """Keyword arguments pointing an error at the source *locate* resolves to.
+
+    Empty when there is nothing to resolve, so a check reads the same whether or
+    not its caller can say where the annotation was written. *locate* runs only
+    from a raise, which is what keeps the source lookup off the happy path.
+    """
+    if locate is None:
+        return {}
+    span, source_lines = locate()
+    if span is None:
+        return {}
+    return {"span": span, "source_lines": source_lines}
+
+
+def _annotation_location(func, parameter_name: str):
+    """Where *parameter_name*'s annotation is written, as ``(span, source_lines)``.
+
+    ``(None, None)`` when the source cannot be read -- a kernel defined in a REPL or
+    an exec'd string, say. The caller then reports without a location rather than
+    turning a shape complaint into a source-lookup failure.
+    """
+    try:
+        from pypto_pro.language.parser._span_tracker import SpanTracker
+        from pypto_pro.runtime.kernel import extract_func_source_info
+
+        source_file, source_lines, _raw, line_offset, col_offset, func_def = extract_func_source_info(func)
+        arguments = func_def.args
+        for argument in (*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs):
+            if argument.arg == parameter_name and argument.annotation is not None:
+                tracker = SpanTracker(source_file, source_lines, line_offset, col_offset)
+                return tracker.get_span(argument.annotation), source_lines_of(source_file)
+    except Exception:  # noqa: BLE001 - a location is a nicety; never mask the real error
+        return None, None
+    return None, None
 
 
 def _dynamic_name(parameter_name: str, axis: int) -> str:
@@ -182,10 +221,21 @@ class TensorShapeSpec:
         shape: Sequence[Any],
         *,
         dtype: Any = None,
+        locate=None,
     ) -> "TensorShapeSpec":
+        """Validate one parameter's shape annotation.
+
+        Args:
+            locate: Optional callable returning ``(span, source_lines)`` for the
+                annotation being checked, consulted only when a check fails. The
+                caller that knows where the annotation was written passes it, so a
+                complaint can point at it -- these checks run before the kernel is
+                parsed, so there is no ambient location for them to pick up.
+        """
         if not isinstance(shape, (list, tuple)):
             raise InvalidType(
-                f"Tensor parameter '{parameter_name}' shape must be a list or tuple, got {type(shape).__name__}"
+                f"Tensor parameter '{parameter_name}' shape must be a list or tuple, got {type(shape).__name__}",
+                **_written_at(locate),
             )
 
         dimensions: list[DimensionSpec] = []
@@ -195,7 +245,8 @@ class TensorShapeSpec:
                 if ellipsis_seen or axis != len(shape) - 1:
                     raise InvalidShape(
                         f"Tensor parameter '{parameter_name}' ellipsis must appear once "
-                        "and only as the final shape item"
+                        "and only as the final shape item",
+                        **_written_at(locate),
                     )
                 dimensions.append(StaticTail(parameter_name, axis))
                 ellipsis_seen = True
@@ -204,7 +255,7 @@ class TensorShapeSpec:
                 try:
                     value = _validate_positive_int(raw_dim, parameter_name, axis, source="annotation")
                 except PyptoProError as exc:
-                    raise InvalidShape(message_of(exc)) from exc
+                    raise InvalidShape(message_of(exc), **_written_at(locate)) from exc
                 dimensions.append(FixedDim(value))
                 continue
             if raw_dim is DYNAMIC:
@@ -216,7 +267,8 @@ class TensorShapeSpec:
             policy_name = raw_dim.name if isinstance(raw_dim, _ShapePolicy) else type(raw_dim).__name__
             raise InvalidShape(
                 f"Tensor parameter '{parameter_name}' axis {axis} annotation must be DYNAMIC, STATIC, "
-                f"a positive integer, or final ellipsis; got {policy_name}"
+                f"a positive integer, or final ellipsis; got {policy_name}",
+                **_written_at(locate),
             )
         return cls(parameter_name, parameter_index, tuple(dimensions), dtype=dtype)
 
@@ -332,6 +384,7 @@ class KernelSignatureSpec:
                         parameter_index,
                         annotation.shape,
                         dtype=annotation.dtype,
+                        locate=partial(_annotation_location, func, name),
                     )
                 )
         return cls(tuple(tensor_specs), python_signature=signature)

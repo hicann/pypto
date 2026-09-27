@@ -267,11 +267,8 @@ from pypto.pypto_impl.ir import (
     TensorLayout,
     TilePad,
 )
-from pypto_pro.ir.op import system_ops as system
 from pypto_pro.ir.op.block_ops import FillPadMode, TileType
 from pypto_pro.ir.op.ptr_ops import addptr, make_ptr, make_tensor
-from pypto_pro.ir.op.system_ops import mutex_lock as _mutex_lock
-from pypto_pro.ir.op.system_ops import mutex_unlock as _mutex_unlock
 from pypto_pro.runtime import jit, pipeline
 
 from . import parser
@@ -382,11 +379,14 @@ from ._api import (
     xor,
 )
 from ._simt_api import Simt as simt  # noqa: N813
+from ._system_api import System as system  # noqa: N813
 from ._vf_api import Vf
 from .parser.decorator import inline, vector_function
 from .typing import DYNAMIC, STATIC, Input, Output, Ptr, Scalar, Tensor
 
-mutex = SimpleNamespace(mutex_lock=_mutex_lock, mutex_unlock=_mutex_unlock)
+# Legacy spelling of the two system mutex ops; the declarations are the same ones,
+# so neither spelling exposes the framework-internal span parameter.
+mutex = SimpleNamespace(mutex_lock=system.mutex_lock, mutex_unlock=system.mutex_unlock)
 
 # Public frontend dtype constants follow the python/pypto DT_* spelling.
 DT_FP4 = DataType.FP4

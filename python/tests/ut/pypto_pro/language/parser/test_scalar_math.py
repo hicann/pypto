@@ -234,7 +234,7 @@ def test_scalar_math_rejects_tile_operand():
 
 
 def test_scalar_math_rejects_wrong_arity_and_keywords():
-    with pytest.raises(InvalidArgument, match="requires exactly 3 positional arguments"):
+    with pytest.raises(InvalidArgument, match="missing a required argument: 'addend'"):
 
         @pl.vector_function(mode="simt", max_threads=1)
         def missing_addend(value: pl.DT_FP32):

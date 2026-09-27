@@ -21,7 +21,15 @@ from typing import Any
 from pypto.pypto_impl import ir
 from pypto_pro.ir import IRBuilder
 
-from ..._errors import CommonInner, InvalidArgument, InvalidOperation, InvalidType, NotSupported, PyptoProError
+from ..._errors import (
+    CommonInner,
+    InvalidArgument,
+    InvalidOperation,
+    InvalidType,
+    NotSupported,
+    PyptoProError,
+    current_span,
+)
 from ..typing._tiling import get_tiling_fields, get_tiling_tuple_type, is_tiling_class
 from ..typing.shape import _ShapePolicy
 from ._assignment_parser import AssignmentParserMixin
@@ -35,6 +43,10 @@ from ._span_tracker import SpanTracker
 from ._struct_parser import StructParserMixin
 from ._tuple_type_registry import TupleTypeRegistry
 from ._type_resolver import TypeResolver
+
+# Statements whose span covers a whole indented suite rather than one line, so
+# publishing it as the ambient location would underline the entire block.
+_COMPOUND_STATEMENTS = (ast.For, ast.While, ast.If, ast.With, ast.Try, ast.FunctionDef)
 
 
 def _snake_visit_name(node: ast.AST) -> str:
@@ -466,7 +478,16 @@ class ASTParser(
             stmt: AST statement node
         """
         self._current_node = stmt
-        self._dispatch_statement(stmt)
+        # Publish where this statement was written, for anything raised below that
+        # passed no span of its own. A compound statement is excluded: its span
+        # covers the whole suite, so an error from deep inside the body would
+        # underline screenfuls of unrelated code. Their headers already build an
+        # explicit span, and the statements in their bodies come back through here.
+        if isinstance(stmt, _COMPOUND_STATEMENTS):
+            self._dispatch_statement(stmt)
+            return
+        with current_span(self.span_tracker.get_span(stmt)):
+            self._dispatch_statement(stmt)
 
     @singledispatchmethod
     def _dispatch_statement(self, stmt: ast.stmt) -> None:

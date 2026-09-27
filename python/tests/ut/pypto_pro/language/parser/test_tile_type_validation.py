@@ -155,7 +155,7 @@ def test_tile_type_bad_target_memory_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0])
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(InvalidType, match="target_memory must be a pl.MemorySpace"):
+    with pytest.raises(InvalidType, match="target_memory expects MemorySpace"):
         _parse(k)
 
 
@@ -209,6 +209,7 @@ def test_tile_type_bad_fractal_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0])
         pl.load(g.next(), x, [0])
 
+    # Python counts True as an int, so the gate lets it by and the builder judges it
     with pytest.raises(InvalidType, match="fractal must be an integer"):
         _parse(k)
 
@@ -352,7 +353,7 @@ def test_make_tile_group_unknown_kwarg_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[0], foo=1)
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(InvalidArgument, match="unexpected keyword argument\\(s\\) \\['foo'\\]"):
+    with pytest.raises(InvalidArgument, match="unexpected keyword argument 'foo'"):
         _parse(k)
 
 
@@ -365,8 +366,10 @@ def test_make_tile_group_typo_kwarg_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_id=[0])
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(InvalidArgument, match="unexpected keyword argument\\(s\\) \\['mutex_id'\\]"):
+    with pytest.raises(InvalidArgument, match="unexpected keyword argument 'mutex_id'") as excinfo:
         _parse(k)
+    # a near miss is named, so the fix does not have to be looked up
+    assert "did you mean 'mutex_ids'?" in str(excinfo.value)
 
 
 def test_make_tile_group_bwd_fwd_ids_ignored_for_compat():

@@ -29,6 +29,7 @@ from pypto_pro.ir.op.block_ops import block_ir_op
 from ..._errors import BadFd, InvalidArgument, InvalidOperation, InvalidShape, InvalidType, InvalidVal, NotSupported
 from .. import _api as _language_api
 from .._vf_api import Vf
+from . import _argument_checker
 from ._control_flow_parser import _is_bare_return
 from ._expr_evaluator import ExprEvaluator
 from ._span_tracker import SpanTracker
@@ -1087,11 +1088,23 @@ class CallParserMixin:
         if self._auto_mutex and not op_name.startswith("vf."):
             self._emit_auto_mutex(op_name, call, span)
 
+        self._check_declared_params(op_name, call, span)
+
         op_func = _OP_REGISTRY.get(op_name)
         if op_func is not None:
             return op_func(self, call)
 
         return self._default_op_func(op_name, call)
+
+    def _check_declared_params(self, op_name: str, call: ast.Call, span: ir.Span) -> None:
+        """Check which parameters the call names and how many it passes, before evaluation."""
+        _argument_checker.check_declared_params(op_name, call, span, self.span_tracker)
+
+    def _check_declared_types(
+        self, op_name: str, call: ast.Call, args: list, kwargs: dict, span: ir.Span
+    ) -> None:
+        """Check the parsed arguments against the roles their declaration names."""
+        _argument_checker.check_declared_types(op_name, call, args, kwargs, span, self.span_tracker)
 
     def _validate_op_scope(self, op_name: str, call: ast.Call) -> None:
         """Check the execution domain before parsing operands or emitting IR.
@@ -1874,6 +1887,7 @@ class CallParserMixin:
 
         args = [self.parse_expression(arg) for arg in call.args]
         kwargs = self.parse_op_kwargs(call)
+        self._check_declared_types(op_name, call, args, kwargs, span)
 
         # first arg is out; keep out as first arg to match pto-isa convention
         return ir.create_op_call(block_ir_op(op_name), args, kwargs, span)

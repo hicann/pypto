@@ -76,6 +76,11 @@ def _make_handler(spec: OpSpec) -> Callable:
         kwargs = self.parse_op_kwargs(call) if spec.parse_kwargs else {}
         for hook in spec.pre_hooks:
             hook(self, call, kwargs)
+        # The arguments are values now, which is what the type gate needs and the
+        # name-and-count gate at the dispatch point could not have.
+        op_name = self._extract_op_name(call.func)
+        if op_name is not None:
+            self._check_declared_types(op_name, call, args, kwargs, span)
         # Publish where the caller wrote each argument, so a builder that rejects
         # one can point at that argument rather than at the whole call. Every
         # @op_impl operator is dispatched here, so this one site covers them all.

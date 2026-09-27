@@ -298,6 +298,7 @@ class TypeResolver:
         if isinstance(resolved, ir.TupleType):
             raise NotSupported(
                 "Parameter type cannot be a tuple",
+                span=self._get_span(type_node),
                 hint="Tuple types are only supported as return types",
                 parser_retry=True,
             )
@@ -439,6 +440,7 @@ class TypeResolver:
 
         raise InvalidType(
             f"Shape must be a list, tuple, or variable: {ast.unparse(shape_node)}",
+            span=self._get_span(shape_node),
             hint="Use a list like [64, 128] or a variable holding a list",
             parser_retry=True,
         )
@@ -495,6 +497,7 @@ class TypeResolver:
 
         raise InvalidType(
             f"Unsupported type annotation: {ast.unparse(type_node)}",
+            span=self._get_span(type_node),
             hint="Use pl.Tensor[[shape], dtype], pl.Ptr[dtype], or a dtype like pl.DT_INT64 for scalars",
             parser_retry=True,
         )
@@ -667,6 +670,7 @@ class TypeResolver:
         if not isinstance(node, ast.Call):
             raise InvalidType(
                 f"Expected pl.MemRef(...) call, got: {ast.unparse(node)}",
+                span=self._get_span(node),
                 hint="Use pl.MemRef(pl.MemorySpace.DDR, addr, size)",
                 parser_retry=True,
             )
@@ -811,6 +815,7 @@ class TypeResolver:
         if type_name is None:
             raise InvalidArgument(
                 f"Unknown type in subscript: {ast.unparse(value)}",
+                span=self._get_span(value),
                 hint="Use pl.Tensor for tensor types or pl.Ptr for pointer types",
                 parser_retry=True,
             )
@@ -911,6 +916,7 @@ class TypeResolver:
         if not self._is_memref_node(memref_node):
             raise InvalidType(
                 "Tensor 4th argument must be pl.MemRef(...)",
+                span=self._get_span(memref_node),
                 hint="Use pl.Tensor[[shape], dtype, layout, pl.MemRef(...)]",
                 parser_retry=True,
             )
@@ -967,6 +973,7 @@ class TypeResolver:
 
         raise InvalidType(
             f"Unknown type constructor: {ast.unparse(func)}",
+            span=self._get_span(func),
             hint="Use pl.Tensor[[shape], dtype] or a dtype like pl.DT_INT64 for scalars",
             parser_retry=True,
         )
@@ -1001,6 +1008,7 @@ class TypeResolver:
             raise InvalidType(
                 f"{type_name} type requires shape, dtype, and optional direction arguments, "
                 f"got {len(call_node.args)}",
+                span=self._get_span(call_node),
                 hint=f"Use pl.{type_name}([shape], dtype) or pl.{type_name}([shape], dtype, pl.Input/pl.Output)",
                 parser_retry=True,
             )
@@ -1047,6 +1055,7 @@ class TypeResolver:
                 else:
                     raise InvalidType(
                         f"Dimension must be int literal, variable, or evaluable expression: {ast.unparse(elt)}",
+                        span=self._get_span(elt),
                         hint="Use integer literals, variables, or expressions for dimensions",
                         parser_retry=True,
                     )
