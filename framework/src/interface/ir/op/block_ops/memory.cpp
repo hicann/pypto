@@ -389,7 +389,6 @@ TypePtr DeduceSubViewType([[maybe_unused]] const std::vector<ExprPtr>& args,
     PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 0x3)
         << "block.subview requires exactly 3 arguments (container, offset, valid_shape), but got " << args.size();
     auto container_type = args[0]->GetType();
-
     if (auto tile_type = As<TileType>(container_type)) {
         return tile_type;
     }
