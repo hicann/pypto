@@ -2408,7 +2408,7 @@ def _vf_kernel_61_load_unalign_post_update_0(in_a, t_f0):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     ureg_load = vf.load_unalign_init()
     vf.load_unalign_pre(ureg_load, in_a)
-    reg_dst = vf.load_unalign(ureg_load, in_a, TILE_SIZE)
+    reg_dst = vf.load_unalign(ureg_load, in_a, TILE_SIZE, post_update=True)
     vf.store_align(t_f0, reg_dst, preg)
 
 

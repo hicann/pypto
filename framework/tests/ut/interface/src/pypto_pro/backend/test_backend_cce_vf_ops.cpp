@@ -855,7 +855,8 @@ TEST(BackendCCEVFOpsTest, EmitsGatherAndUnalignedDataMovement)
     ExpectInvoke(codegen, "vf.load_unalign_init", {"UnalignReg load_ureg;"}, {}, {}, "load_ureg");
     ExpectInvoke(codegen, "vf.load_unalign_pre", {"vldas("}, {ureg, tile});
     ExpectInvoke(codegen, "vf.load_unalign", {"vldus("}, {fp16, ureg, tile});
-    ExpectInvoke(codegen, "vf.load_unalign", {"vldus(", "(4) * 2", "POST_UPDATE"}, {i64, ureg, tile64, Int(4)});
+    ExpectInvoke(codegen, "vf.load_unalign", {"vldus(", "(4) * 2", "POST_UPDATE"}, {i64, ureg, tile64, Int(4)},
+                 {{"post_update", true}});
     ExpectInvoke(codegen, "vf.squeeze_store_unalign", {"vstur("}, {tile8, u8, ureg});
     ExpectInvoke(codegen, "vf.store_unalign", {"vstus(", "POST_UPDATE"}, {tile8, u8, ureg, Int(2)},
                  {{"post_update", true}});
@@ -1689,7 +1690,7 @@ TEST(BackendCCEVFOpsTest, LoadUnalignB64SimAndSqueezeDstWhitelist)
 
     // load_unalign b64 with stride: simulated as uint32_t with stride*2
     // (mirrors AscendC DataCopyUnAlignImpl)
-    auto emitted = Invoke(codegen, "vf.load_unalign", {i64, ureg, tile64, Int(4)});
+    auto emitted = Invoke(codegen, "vf.load_unalign", {i64, ureg, tile64, Int(4)}, {{"post_update", true}});
     ExpectContains(emitted, {"(RegTensor<uint32_t>&)i64", "(__ubuf__ uint32_t", "(4) * 2"});
     // squeeze: dst must be in the doc type list (same as src)
     EXPECT_ANY_THROW(Invoke(codegen, "vf.squeeze", {bf16, fp16, mask}));

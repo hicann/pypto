@@ -21,7 +21,7 @@
 | 接口类型 | 触发条件 | 说明 |
 |---|---|---|
 | 普通搬运接口 | 不传stride，post_update=False（默认） | 完成一次搬运后，Tile地址不会自动更新，每次迭代需要手动更新地址。 |
-| PostUpdate扩展搬运接口 | post_update=True或传入stride | 完成一次搬运后，Tile地址会自动更新，每次迭代不需要手动更新地址。 |
+| PostUpdate扩展搬运接口 | 传入stride且post_update=True | 完成一次搬运后，Tile地址会自动更新，每次迭代不需要手动更新地址。 |
 | AddrReg存储偏移量接口 | offset为vf.create_addr_reg创建的AddrReg | 在每次迭代中，需要先调用vf.create_addr_reg手动设定地址偏移量，再调用搬运指令。 |
 
 在读非对齐地址前，应该先通过vf.load_unalign_pre进行初始化，保存非32字节对齐的数据，然后再调用vf.load_unalign进行数据搬入。
@@ -96,7 +96,7 @@ import torch_npu
 def example_vf(src_tile, dst_tile):
     ureg = vf.load_unalign_init()
     vf.load_unalign_pre(ureg, src_tile)
-    src_reg = vf.load_unalign(ureg, src_tile, post_update=True)
+    src_reg = vf.load_unalign(ureg, src_tile, 64, post_update=True)
     store_ureg = vf.unalign_reg_for_store()
     vf.store_unalign(dst_tile, src_reg, store_ureg, 64, post_update=True)
     vf.store_unalign_post(dst_tile, store_ureg, 0, post_update=True)
