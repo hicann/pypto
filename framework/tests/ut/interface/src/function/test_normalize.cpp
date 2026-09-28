@@ -26,6 +26,24 @@ public:
     void SetUp() override { Program::GetInstance().Reset(); }
 
     void TearDown() override { Program::GetInstance().Reset(); }
+
+    std::shared_ptr<CopyOpAttribute> MakeCopyIn(Function& leaf, int64_t validRows, bool inplaceView)
+    {
+        const std::vector<int64_t> shape{5, 16};
+        auto input = IRBuilder().CreateTensorVar(DT_FP32, shape);
+        auto output = IRBuilder().CreateTensorVar(DT_FP32, shape);
+        input->SetMemoryTypeBoth(MEM_DEVICE_DDR);
+        output->SetMemoryTypeBoth(MEM_UB);
+        auto& op = IRBuilder().CreateTensorOpStmt(leaf, Opcode::OP_COPY_IN, {input}, {output});
+        auto attr = std::make_shared<CopyOpAttribute>(OpImmediate::Specified({validRows, 0}), MEM_UB,
+                                                      OpImmediate::Specified(shape), OpImmediate::Specified(shape),
+                                                      OpImmediate::Specified({validRows, 16}));
+        op.SetOpAttribute(attr);
+        if (inplaceView) {
+            op.SetAttribute(OpAttributeKey::inplaceIdx, 0);
+        }
+        return attr;
+    }
 };
 
 TEST_F(NormalizeTest, ReshapeCopyOutWritesValidShapeBack)
@@ -62,5 +80,63 @@ TEST_F(NormalizeTest, ReshapeCopyOutWritesValidShapeBack)
     ASSERT_EQ(validShape.size(), 2U);
     for (const auto& dim : validShape) {
         EXPECT_NE(dim.GetSpecifiedValue().Dump().find("RUNTIME_COA_GET_PARAM"), std::string::npos);
+    }
+}
+
+TEST_F(NormalizeTest, InplaceViewCopyInNormalizesLiteralValidShape)
+{
+    auto parent = std::make_shared<Function>(Program::GetInstance(), "copy_in_parent", "copy_in_parent", nullptr);
+    parent->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
+    auto leaf = std::make_shared<Function>(Program::GetInstance(), "copy_in_leaf", "copy_in_leaf", parent.get());
+
+    auto zeroView = MakeCopyIn(*leaf, 0, true);
+    auto tailView = MakeCopyIn(*leaf, 1, true);
+
+    std::vector<std::vector<SymbolicScalar>> coaLists;
+    int coaIndex = COA_INDEX_BASE;
+    std::unordered_map<LogicalTensorPtr, int> normTensors;
+    leaf->NormalizeCoaForNormalOperands(coaLists, coaIndex, normTensors);
+
+    ASSERT_EQ(coaLists.size(), 2U);
+    const size_t validShapeIndex = COA_INDEX_DIM_BASE + 2 * 3;
+    EXPECT_EQ(coaLists[0].at(validShapeIndex).Dump(), "0");
+    EXPECT_EQ(coaLists[1].at(validShapeIndex).Dump(), "1");
+    for (const auto& attr : {zeroView, tailView}) {
+        for (const auto& dim : OpImmediate::ToSpecified(attr->GetToDynValidShape())) {
+            EXPECT_NE(dim.Dump().find("RUNTIME_COA_GET_PARAM_VALID_SHAPE"), std::string::npos);
+        }
+        EXPECT_NE(OpImmediate::ToSpecified(attr->GetFromOffset())[0].Dump().find("RUNTIME_COA_GET_PARAM_OFFSET"),
+                  std::string::npos);
+    }
+}
+
+TEST_F(NormalizeTest, InplaceViewCopyInNormalizesDynamicShape)
+{
+    auto parent = std::make_shared<Function>(Program::GetInstance(), "copy_in_parent", "copy_in_parent", nullptr);
+    parent->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
+    auto leaf = std::make_shared<Function>(Program::GetInstance(), "copy_in_leaf", "copy_in_leaf", parent.get());
+
+    auto dynamicViewA = MakeCopyIn(*leaf, 2, true);
+    dynamicViewA->SetToDynValidShape(
+        OpImmediate::Specified(std::vector<SymbolicScalar>{IRBuilder().CreateScalarVar("tile_valid_rows_a"), 16}));
+    auto dynamicViewB = MakeCopyIn(*leaf, 4, true);
+    dynamicViewB->SetToDynValidShape(
+        OpImmediate::Specified(std::vector<SymbolicScalar>{IRBuilder().CreateScalarVar("tile_valid_rows_b"), 16}));
+    auto innerCopy = MakeCopyIn(*leaf, 3, false);
+
+    std::vector<std::vector<SymbolicScalar>> coaLists;
+    int coaIndex = COA_INDEX_BASE;
+    std::unordered_map<LogicalTensorPtr, int> normTensors;
+    leaf->NormalizeCoaForNormalOperands(coaLists, coaIndex, normTensors);
+
+    ASSERT_EQ(coaLists.size(), 3U);
+    const size_t validShapeIndex = COA_INDEX_DIM_BASE + 2 * 3;
+    EXPECT_EQ(coaLists[0].at(validShapeIndex).Dump(), "tile_valid_rows_a");
+    EXPECT_EQ(coaLists[1].at(validShapeIndex).Dump(), "tile_valid_rows_b");
+    EXPECT_EQ(coaLists[2].at(validShapeIndex).Dump(), "3");
+    for (const auto& attr : {dynamicViewA, dynamicViewB, innerCopy}) {
+        for (const auto& dim : OpImmediate::ToSpecified(attr->GetToDynValidShape())) {
+            EXPECT_NE(dim.Dump().find("RUNTIME_COA_GET_PARAM_VALID_SHAPE"), std::string::npos);
+        }
     }
 }

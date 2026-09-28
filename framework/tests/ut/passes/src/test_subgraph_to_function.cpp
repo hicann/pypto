@@ -502,6 +502,63 @@ TEST_F(SubgraphToFunctionTest, TestBasicSubgraphConversion)
     EXPECT_EQ(leafFunc->Operations().size(), 4);
 }
 
+TEST_F(SubgraphToFunctionTest, RestoredInplaceViewUsesNormalizedCopyInValidShape)
+{
+    ComputationalGraphBuilder graph;
+    InitGraphBuilder(graph, {16, 16});
+    auto function = graph.GetFunction();
+    ASSERT_NE(function, nullptr);
+    function->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
+    function->SetTotalSubGraphCount(1);
+
+    for (const auto& [name, validRows] : {std::pair{"view1", 1}, std::pair{"view2", 0}}) {
+        auto view = graph.GetOp(name);
+        ASSERT_NE(view, nullptr);
+        view->SetAttribute(OpAttributeKey::inplaceIdx, 0);
+        view->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MEM_UB, std::vector<SymbolicScalar>{},
+                                                               std::vector<SymbolicScalar>{validRows, 16}));
+    }
+
+    SubgraphToFunction pass;
+    ASSERT_EQ(pass.RunOnFunction(*function), SUCCESS);
+    ASSERT_NE(function->rootFunc_, nullptr);
+
+    bool passesZeroValidShape = false;
+    bool passesOneValidShape = false;
+    for (auto& op : function->rootFunc_->Operations(false)) {
+        auto callAttr = std::dynamic_pointer_cast<CallOpAttribute>(op.GetOpAttribute());
+        if (callAttr == nullptr) {
+            continue;
+        }
+        for (const auto& args : callAttr->GetArgList()) {
+            const size_t validShapeIndex = COA_INDEX_DIM_BASE + 2 * 3;
+            if (args.size() <= validShapeIndex + 1 || args[validShapeIndex + 1].Dump() != "16") {
+                continue;
+            }
+            passesZeroValidShape |= args[validShapeIndex].Dump() == "0";
+            passesOneValidShape |= args[validShapeIndex].Dump() == "1";
+        }
+    }
+    EXPECT_TRUE(passesZeroValidShape);
+    EXPECT_TRUE(passesOneValidShape);
+
+    int foundViews = 0;
+    for (const auto& [id, leaf] : function->rootFunc_->programs_) {
+        (void)id;
+        for (auto& op : leaf->Operations(false)) {
+            if (op.GetOpcode() != Opcode::OP_VIEW || !op.HasAttribute(OpAttributeKey::inplaceIdx)) {
+                continue;
+            }
+            auto attr = std::static_pointer_cast<ViewOpAttribute>(op.GetOpAttribute());
+            ASSERT_EQ(attr->GetToDynValidShape().size(), 2U);
+            EXPECT_NE(attr->GetToDynValidShape()[0].Dump().find("RUNTIME_COA_GET_PARAM_VALID_SHAPE"),
+                      std::string::npos);
+            foundViews++;
+        }
+    }
+    EXPECT_EQ(foundViews, 2);
+}
+
 TEST_F(SubgraphToFunctionTest, IgnoresRemovedTrailingSubgraph)
 {
     ComputationalGraphBuilder G;
