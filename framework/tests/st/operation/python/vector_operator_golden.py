@@ -995,6 +995,26 @@ def gen_erf_op_golden(case_name: str, output: Path, case_index: int = None) -> b
 
 @GoldenRegister.reg_golden_func(
     case_names=[
+        "TestDigamma/DigammaOperationTest.TestDigamma",
+    ]
+)
+def gen_digamma_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    # golden开发者需要根据具体golden逻辑修改，不同注册函数内的generate_golden_files可重名
+    def generate_wrapper(
+        inputs: List[np.ndarray],
+        config: Dict[str, Any],
+    ) -> List[np.ndarray]:
+        tensor0 = from_numpy(inputs[0])
+        result = torch.digamma(tensor0)
+        result = result.cpu()
+        return [to_numpy(result)]
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("Digamma", generate_wrapper, output, case_index)
+
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
         "TestSin/SinOperationTest.TestSin",
     ]
 )

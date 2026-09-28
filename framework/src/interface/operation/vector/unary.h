@@ -54,6 +54,7 @@ enum class UnaryOpType {
     ASIN,
     ACOS,
     ERF,
+    DIGAMMA,
     ASINH,
     ACOSH,
 };
@@ -126,6 +127,8 @@ std::string GetUnaryOpName()
             return "ACOS";
         case UnaryOpType::ERF:
             return "ERF";
+        case UnaryOpType::DIGAMMA:
+            return "DIGAMMA";
         default:
             CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown unary op type";
             return "";
@@ -158,6 +161,7 @@ Opcode GetUnaryOpNameCode()
         CASE(SIGN);
         CASE(SIGNBIT);
         CASE(ERF);
+        CASE(DIGAMMA);
         CASE(SINH);
         CASE(COSH);
         CASE(ATANH);

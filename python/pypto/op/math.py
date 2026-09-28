@@ -1010,6 +1010,35 @@ def erf(self: Tensor) -> Tensor:
 
 
 @op_wrapper
+def digamma(input: Tensor) -> Tensor:
+    """Computes the element-wise digamma function of `input`.
+
+    The digamma function is the logarithmic derivative of the gamma function:
+    `out = psi(input) = d/dinput ln(Gamma(input)) = Gamma'(input) / Gamma(input)`.
+
+    Parameters
+    ----------
+    input : Tensor
+        The input tensor.
+
+    Returns
+    -------
+    Tensor
+        A new tensor containing the element-wise digamma function values. Its shape
+        and data type are the same as those of `input`.
+
+    Examples
+    --------
+    x = pypto.tensor([1.0, 2.0, 3.0], pypto.DT_FP32)
+    y = pypto.digamma(x)
+
+    Input x: [1.0000 2.0000 3.0000]
+    Output y: [-0.5772 0.4228 0.9228]
+    """
+    return pypto_impl.Digamma(input)
+
+
+@op_wrapper
 def sinh(input: Tensor) -> Tensor:
     """Computes the element-wise hyperbolic sine of `input`.
 

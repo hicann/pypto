@@ -113,6 +113,7 @@
     - [pypto.cumsum](tensor_api/operation/pypto-cumsum.md)
     - [pypto.deinterleave](tensor_api/operation/pypto-deinterleave.md)
     - [pypto.dequantize](tensor_api/operation/pypto-dequantize.md)
+    - [pypto.digamma](tensor_api/operation/pypto-digamma.md)
     - [pypto.div](tensor_api/operation/pypto-div.md)
     - [pypto.eq](tensor_api/operation/pypto-eq.md)
     - [pypto.erf](tensor_api/operation/pypto-erf.md)

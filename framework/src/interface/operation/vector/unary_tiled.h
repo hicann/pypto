@@ -38,7 +38,8 @@ void TiledUnaryOperation(Function& function, const TileShape& tileShape, size_t 
             op->SetAttribute(OpAttributeKey::precisionType, precisionType);
         }
         if (T == UnaryOpType::ASIN || T == UnaryOpType::ACOS || T == UnaryOpType::SINH || T == UnaryOpType::ERF ||
-            T == UnaryOpType::ASINH || T == UnaryOpType::ATANH || T == UnaryOpType::ISNAN) {
+            T == UnaryOpType::ASINH || T == UnaryOpType::ATANH || T == UnaryOpType::ISNAN ||
+            T == UnaryOpType::DIGAMMA) {
             std::vector<bool> dimMap({true});
             op->SetAttr(OpAttributeKey::rowPad, dimMap);
         }

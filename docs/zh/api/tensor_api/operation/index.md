@@ -42,6 +42,7 @@ pypto-cumprod
 pypto-cumsum
 pypto-deinterleave
 pypto-dequantize
+pypto-digamma
 pypto-div
 pypto-eq
 pypto-erf

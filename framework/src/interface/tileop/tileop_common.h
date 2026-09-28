@@ -94,6 +94,28 @@ enum class BroadcastOperand : int64_t {
     RIGHT_OPERAND = 2,
 };
 
+constexpr int32_t NUM_VALUE_0 = 0;
+constexpr int32_t NUM_VALUE_1 = 1;
+constexpr int32_t NUM_VALUE_2 = 2;
+constexpr int32_t NUM_VALUE_3 = 3;
+constexpr int32_t NUM_VALUE_4 = 4;
+constexpr int32_t NUM_VALUE_5 = 5;
+constexpr int32_t NUM_VALUE_6 = 6;
+constexpr int32_t NUM_VALUE_7 = 7;
+constexpr int32_t NUM_VALUE_8 = 8;
+constexpr int32_t NUM_VALUE_9 = 9;
+constexpr int32_t NUM_VALUE_10 = 10;
+constexpr int32_t NUM_VALUE_11 = 11;
+constexpr int32_t NUM_VALUE_12 = 12;
+constexpr int32_t NUM_VALUE_13 = 13;
+constexpr int32_t NUM_VALUE_14 = 14;
+constexpr int32_t NUM_VALUE_15 = 15;
+constexpr int32_t NUM_VALUE_16 = 16;
+constexpr int32_t NUM_VALUE_17 = 17;
+constexpr int32_t NUM_VALUE_18 = 18;
+constexpr int32_t NUM_VALUE_19 = 19;
+constexpr int32_t NUM_VALUE_20 = 20;
+
 constexpr uint64_t MASK_LEN = 64;
 constexpr uint64_t BITS_PER_BYTE = 8;
 constexpr uint64_t BLOCK_NELEM_B16 = 16;

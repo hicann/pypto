@@ -507,6 +507,14 @@ static void Erf(const TensorData& out, const TensorData& self)
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
+static void Digamma(const TensorData& out, const TensorData& self)
+{
+    auto tout = From(out);
+    auto tself = From(self);
+    torch::digamma_out(tout.second, tself.second);
+    ToOperand(tout.second, tout.first, out.dtype);
+}
+
 static void Sinh(const TensorData& out, const TensorData& self)
 {
     auto tout = From(out);
@@ -3428,6 +3436,7 @@ static struct CalcOps calcOps = {
     .Sin = Sin,
     .Cos = Cos,
     .Erf = Erf,
+    .Digamma = Digamma,
     .Sinh = Sinh,
     .Cosh = Cosh,
     .Erfc = Erfc,

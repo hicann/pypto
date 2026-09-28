@@ -111,6 +111,7 @@ enum class Opcode {
     OP_COPYSIGN,
     OP_ATAN,
     OP_ERF,
+    OP_DIGAMMA,
     OP_SIN,
     OP_COS,
     OP_SINH,
@@ -688,7 +689,7 @@ const std::unordered_set<Opcode> UNARY_OPS{
     Opcode::OP_ROUND,  Opcode::OP_ROWSUMLINE, Opcode::OP_ABS,       Opcode::OP_LN,          Opcode::OP_ISFINITE,
     Opcode::OP_HUB,    Opcode::OP_BITWISENOT, Opcode::OP_SIGN,      Opcode::OP_ROWPRODLINE, Opcode::OP_SIGNBIT,
     Opcode::OP_SIN,    Opcode::OP_COS,        Opcode::OP_ERFC,      Opcode::OP_ASIN,        Opcode::OP_ACOS,
-    Opcode::OP_ERF,    Opcode::OP_LOG1P};
+    Opcode::OP_ERF,    Opcode::OP_LOG1P,      Opcode::OP_DIGAMMA};
 
 const std::unordered_set<Opcode> UNARY_OPS_WITH_TMP{
     Opcode::OP_COMPACT,
@@ -702,6 +703,7 @@ const std::unordered_set<Opcode> UNARY_OPS_WITH_TMP{
     Opcode::OP_ROWARGMINWITHVALUE_LINE,
     Opcode::OP_ROWPROD_SINGLE,
     Opcode::OP_ERF,
+    Opcode::OP_DIGAMMA,
     Opcode::OP_TAN,
     Opcode::OP_SIN,
     Opcode::OP_COS,
@@ -866,6 +868,7 @@ const std::unordered_set<Opcode> SUPPORT_DYNAMIC_UNALIGNED_OPS{Opcode::OP_RANGE,
                                                                Opcode::OP_COS,
                                                                Opcode::OP_ERFC,
                                                                Opcode::OP_ERF,
+                                                               Opcode::OP_DIGAMMA,
                                                                Opcode::OP_TILEDMRGSORT,
                                                                Opcode::OP_ROWMAXLINE,
                                                                Opcode::OP_PAIRMIN,
@@ -874,7 +877,6 @@ const std::unordered_set<Opcode> SUPPORT_DYNAMIC_UNALIGNED_OPS{Opcode::OP_RANGE,
                                                                Opcode::OP_QUANTIZE_SYM,
                                                                Opcode::OP_QUANTIZE_ASYM,
                                                                Opcode::OP_DEQUANTIZE,
-
                                                                Opcode::OP_TOPK_SORT,
                                                                Opcode::OP_TOPK_MERGE,
                                                                Opcode::OP_TOPK_EXTRACT,

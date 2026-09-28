@@ -385,6 +385,11 @@ void OpcodeManager::RegisterVectorUnary()
         {"TileOp::TErf", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
         {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse},
         TileShapeVerifier::Verify);
+    RegisterInfo(
+        Opcode::OP_DIGAMMA, OpCoreType::AIV, "DIGAMMA", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
+        {"TileOp::TDigamma", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse},
+        TileShapeVerifier::Verify);
     RegisterInfo(Opcode::OP_PACK, OpCoreType::AIV, "PACK", {MemoryType::MEM_UB}, {MemoryType::MEM_UB},
                  {"TileOp::TPack", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
                  {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis}, TileShapeVerifier::Verify);
@@ -1240,6 +1245,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {Opcode::OP_INDEX_PUT, "TIndexPut"},
     {Opcode::OP_GCD, "TGcd"},
     {Opcode::OP_ERF, "TErf"},
+    {Opcode::OP_DIGAMMA, "TDigamma"},
     {Opcode::OP_SIN, "TSin"},
     {Opcode::OP_COS, "TCos"},
     {Opcode::OP_ERFC, "TErfc"},

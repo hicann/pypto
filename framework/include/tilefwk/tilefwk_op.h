@@ -172,6 +172,7 @@ Tensor Atan(const Tensor& self);
 Tensor Sin(const Tensor& self);
 Tensor Cos(const Tensor& self);
 Tensor Erf(const Tensor& self);
+Tensor Digamma(const Tensor& self);
 Tensor Neg(const Tensor& self);
 Tensor Round(const Tensor& self, const int& decimals = 0);
 Tensor Rsqrt(const Tensor& self, PrecisionType precisionType = PrecisionType::INTRINSIC);

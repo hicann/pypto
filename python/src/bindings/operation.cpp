@@ -117,6 +117,7 @@ void BindOperation(py::module_& m)
         py::arg("self"), py::arg("precision_type") = PrecisionType::INTRINSIC, "Tensor exp.");
     m.def("Expm1", [](const Tensor& self) { return npu::tile_fwk::Expm1(self); }, "Tensor expm1.");
     m.def("Erf", [](const Tensor& self) { return npu::tile_fwk::Erf(self); }, "Tensor erf.");
+    m.def("Digamma", [](const Tensor& self) { return npu::tile_fwk::Digamma(self); }, "Tensor digamma.");
     m.def("Sin", [](const Tensor& self) { return npu::tile_fwk::Sin(self); }, "Tensor sin.");
     m.def("Cos", [](const Tensor& self) { return npu::tile_fwk::Cos(self); }, "Tensor cos.");
     m.def("Exp2", [](const Tensor& self) { return npu::tile_fwk::Exp2(self); }, "Tensor exp2.");

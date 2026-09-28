@@ -19,6 +19,7 @@
 #include "unary/basic.h"
 #include "unary/transcendental.h"
 #include "unary/erf.h"
+#include "unary/digamma.h"
 #include "unary/inverse.h"
 #include "unary/tanh.h"
 #include "unary/tan.h"
