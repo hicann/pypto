@@ -258,7 +258,9 @@ def test_a_cpp_check_keeps_its_own_first_line_code_and_location():
 
     rendered = _render(kernel)
     assert rendered.head, rendered.lines[0]
-    assert rendered.head["origin"].endswith(".cpp:" + rendered.head["origin"].split(":")[-1])
+    # The origin names the file the check macro expands in: a .cpp call site,
+    # or a shared op header such as op_common.h.
+    assert rendered.head["origin"].split(":")[0].endswith((".cpp", ".h")), rendered.head["origin"]
     assert rendered.head["module"] == "PRO_IR"
     assert rendered.head["enum"] == "ExternalError::INVALID_TYPE"
     assert isinstance(rendered.error, InvalidType)
@@ -482,7 +484,9 @@ def test_more_cpp_checks_carry_their_own_source_and_the_qualified_enum():
     for kernel in (adds_from_a_tensor, adds_into_a_tensor, rank_one_tile):
         rendered = _render(kernel)
         origin = rendered.head["origin"]
-        assert origin.split(":")[0].endswith(".cpp"), f"{kernel.__name__}: {origin}"
+        # A check may expand in a .cpp or in a shared op header (the
+        # tile-argument checks live in op_common.h); both carry their own head.
+        assert origin.split(":")[0].endswith((".cpp", ".h")), f"{kernel.__name__}: {origin}"
         enum_field = rendered.head["enum"]
         # One level of qualification, on both sides: error.cpp keeps only the
         # member name and puts the class back from the code, so a call site
@@ -927,7 +931,7 @@ def test_an_op_without_a_declaration_is_not_type_checked_either():
     rendered = _render(kernel)
     # the C++ deduction is the one that refuses it, and says so in its own words
     assert rendered.head["module"] == "PRO_IR"
-    assert rendered.head["origin"].split(":")[0].endswith(".cpp")
+    assert rendered.head["origin"].split(":")[0].endswith((".cpp", ".h")), rendered.head["origin"]
 
 
 # ---------------------------------------------------------------------------

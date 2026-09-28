@@ -69,8 +69,9 @@ private:
 /**
  * \brief The first-line prefix: [file:line][MODULE]:ErrCode: FXXXXX! Enum: NAME.
  *
- * \a file is passed \c __FILE__ directly; the build already redefines it to the
- * translation unit's basename.
+ * \a file is passed \c __FILE__ directly and trimmed to its basename here: a
+ * Makefile build already redefines \c __FILE__ to the translation unit's basename,
+ * a Ninja build does not.
  */
 std::string ErrHead(const char* file, int line, const char* module, unsigned code, const char* codeName);
 
