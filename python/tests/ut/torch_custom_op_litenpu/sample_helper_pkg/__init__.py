@@ -6,9 +6,8 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""Framework-agnostic kernel-source machinery.
+"""Multi-module helper package for the external-helpers tracer tests.
 
-Holds the self-contained kernel compile-snippet packing (``kernel_snippet``), authoring constants
-(``authoring``), source-manipulation utils (``source_utils``), and the runtime compile contract
-(``compile``). Nothing here depends on a specific export framework.
+Split across ``compute`` (the helpers) and ``constants`` (a shared constant referenced transitively),
+so packing a kernel that calls into ``compute`` requires walking across files.
 """

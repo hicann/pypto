@@ -14,8 +14,9 @@ The constraint lives in pypto core, where ``frontend/parser/entry.py`` requires 
 kernel object, and LiteNPU is the soc family structurally guaranteed to produce one; a partitioned
 (cloud-soc) kernel emits several and cannot deploy through this path.
 
-This package holds ONLY what concerns the pypto kernel SOURCE: authoring constants (common.authoring),
-source-manipulation utils (common.source_utils), and the runtime compile contract (common.compile).
+This package holds ONLY what concerns the pypto kernel SOURCE: the self-contained kernel compile-snippet
+packing (common.kernel_snippet), authoring constants (common.authoring), source-manipulation utils
+(common.source_utils), and the runtime compile contract (common.compile).
 
 Everything downstream of the kernel source — whole-graph orchestration and the build tooling that turns
 an exported artifact into a deployable op library — lives with the consuming application, which

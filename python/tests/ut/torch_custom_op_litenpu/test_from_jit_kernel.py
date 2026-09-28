@@ -16,7 +16,6 @@ import pytest
 
 
 def test_from_jit_kernel_real_build_produces_kernel():
-    pytest.importorskip("pypto")
     import pypto
     from pypto.extensions.torch_custom_op_litenpu.common.compile import CompileEntry
 
@@ -45,7 +44,9 @@ def test_from_jit_kernel_real_build_produces_kernel():
     try:
         # soc_version passed only as the 4th positional arg, so the entry threads it to the global setter.
         path = entry(((1, 8, 1, 64), (1, 8, 1, 64)), ("float16", "float16"), {}, "Kirin9030")
-    except Exception as e:  # noqa: BLE001 - a missing backend has no single statically known raise type
+    except (ImportError, OSError, pypto.error.PyptoError) as e:
+        # Only an absent or broken backend skips: CompileEntry raises builtin ValueError/TypeError for its
+        # own contract failures -- the pinned-dtype mismatch included -- so those propagate as failures.
         pytest.skip(f"DIRECT build unavailable on this host (backend): {type(e).__name__}: {str(e)[:160]}")
 
     assert path and str(path).endswith(".o"), path

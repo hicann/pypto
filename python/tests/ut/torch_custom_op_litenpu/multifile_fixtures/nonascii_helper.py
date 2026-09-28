@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+# coding: utf-8
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
@@ -6,9 +8,9 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""Framework-agnostic kernel-source machinery.
+"""A helper with a NON-ASCII identifier, in its OWN module so a reference to it is canonicalized —
+exercising the span editor's UTF-8 byte->char ``col_offset`` conversion on a multi-byte name."""
 
-Holds the self-contained kernel compile-snippet packing (``kernel_snippet``), authoring constants
-(``authoring``), source-manipulation utils (``source_utils``), and the runtime compile contract
-(``compile``). Nothing here depends on a specific export framework.
-"""
+
+def λ_helper():  # noqa: PLC2401 - non-ASCII identifier
+    return 42

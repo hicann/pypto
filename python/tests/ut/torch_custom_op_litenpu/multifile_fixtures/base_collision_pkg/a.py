@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+# coding: utf-8
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
@@ -6,9 +8,12 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""Framework-agnostic kernel-source machinery.
+"""Module ``base_collision_pkg.a`` with a helper ``b__f`` (a ``__`` INSIDE the qualname).
 
-Holds the self-contained kernel compile-snippet packing (``kernel_snippet``), authoring constants
-(``authoring``), source-manipulation utils (``source_utils``), and the runtime compile contract
-(``compile``). Nothing here depends on a specific export framework.
+``_sanitize("base_collision_pkg.a") + "__" + _sanitize("b__f")`` -> ``base_collision_pkg__a__b__f`` — the SAME base as
+``base_collision_pkg.a__b.f`` (a DIFFERENT object), so the canonical counter must append ``__2``.
 """
+
+
+def b__f():
+    return "a.b__f"
