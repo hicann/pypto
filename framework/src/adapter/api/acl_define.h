@@ -95,7 +95,7 @@ typedef union {
     uint32_t userCustomTag;
     uint32_t cacheOpInfoSwitch;
     uint32_t streamPriority;
-    uint8_t launchBlockingMode;
+    uint32_t launchBlockingMode;
     uint32_t rsv[4];
 } AclRtStreamAttrValue;
 
