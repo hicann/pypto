@@ -97,7 +97,6 @@ INLINE void DrcoBusyBackOff()
 constexpr uint16_t SYNC_MODE_SHIFT_VALUE = 4;
 constexpr uint16_t SYNC_FLAG_SHIFT_VALUE = 8;
 constexpr uint32_t BATCH_PUSH_BUF_SIZE = 6;
-constexpr uint32_t HUB_STACK_SIZE = 2;
 
 __aicore__ inline uint16_t GetffstMsg(uint16_t mode, uint16_t flagId)
 {
@@ -221,6 +220,17 @@ INLINE uint32_t BlockDescValidCoreNum(BlockDesc desc, bool isAiv)
 // 直通 selfReadyQueue 容量：同类型就绪后继截留直通上限（resolve 收尾直写本核槽位，
 // fetch 循环每轮开头直取，省 push/pop 矩阵探测往返；波内实测容量 1 即饱和）
 constexpr uint32_t SELF_QUEUE_SIZE = 1;
+
+// fetch 批取大小（与 LOCAL_GROUP_SIZE/矩阵维度解耦）：批量 pop 上限。实测波内单列
+// 多数时刻可取任务数 < 矩阵维度，批上限过大只是放宽并发上限并不加速命中——取小值
+// 减小批内串行执行尾长，让任务更快回到调度（取到即走），也缩短 deferred 批尾 resolve 链
+constexpr uint32_t DRCO_FETCH_BATCH_SIZE = 4;
+
+// hub 级联栈容量：必须 ≥ 初始批填入上限（DrcoResolveDepend 把整批 fetched 任务压栈，
+// 上限即 DRCO_FETCH_BATCH_SIZE）——LGS8 后按 4 取批而栈仍为 2 会越界写栈帧（507015 实证）；
+// hub 链级联超深走 hub matrix 改投（DrcoResolveDependOnce 溢出分支），容量只影响矩阵
+// 流量不影响正确性，取 fetch batch + 级联余量
+constexpr uint32_t HUB_STACK_SIZE = DRCO_FETCH_BATCH_SIZE + 4;
 
 struct DrcoEntryState {
     BlockDesc blockDesc;
@@ -1276,7 +1286,7 @@ INLINE bool DrcoDynFuncDataListFetchTaskLocalReadyMatrix(DrcoEntryState* state,
                                                          __gm__ DrcoLocalReadyMatrix* localReadyMatrix, uint32_t colIdx)
 {
     uint32_t count = DrcoLocalReadyMatrixPopColTasks(state, localReadyMatrix, colIdx, resultTaskIdList,
-                                                     npu::tile_fwk::LOCAL_GROUP_SIZE);
+                                                     DRCO_FETCH_BATCH_SIZE);
     if (count > 0) {
         resultTaskIdCount = count;
         resultCoreType = DRCO_CORE_TYPE;
@@ -1324,7 +1334,7 @@ INLINE bool DrcoDynFuncDataListFetchTaskMixHub(DrcoEntryState* state,
             rootFuncList, npu::tile_fwk::DRCO_QUEUE_MIX, groupIdx);
         if (mixMatrix != nullptr) {
             uint32_t count = DrcoLocalReadyMatrixPopColTasks(state, mixMatrix, colIdx, resultTaskIdList,
-                                                             npu::tile_fwk::LOCAL_GROUP_SIZE);
+                                                             DRCO_FETCH_BATCH_SIZE);
             if (count > 0) {
                 resultTaskIdCount = count;
                 resultCoreType = npu::tile_fwk::DRCO_QUEUE_MIX;
