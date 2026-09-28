@@ -97,7 +97,8 @@ void SetupDynFuncHeader(DynDeviceTask* dyntask,
     auto* header = reinterpret_cast<DynFuncHeader*>(hdrBuf.data());
     header->seqNo = 0;
     header->funcNum = funcNum;
-    header->funcSize = static_cast<uint32_t>(sizeof(DynFuncHeader) + funcNum * sizeof(DynFuncData));
+    header->funcSize = static_cast<uint32_t>(sizeof(DynFuncHeader) +
+                                             funcNum * (sizeof(DynFuncData) + sizeof(DrcoRootFuncData)));
     dyntask->dynFuncDataList = header;
 }
 
@@ -229,8 +230,12 @@ TEST(CtrlFlowCacheDrcoUt, PredCountDataRestore_CoversDrcoPredCount)
     std::array<uint8_t, 64> predCountBackup{};
     dyntask->dynFuncDataBackupList[0].predCountBackup = reinterpret_cast<predcount_t*>(predCountBackup.data());
 
-    std::array<uint8_t, 64> predCountDest{};
-    dyntask->dynFuncDataList->At(0).drcoRootFuncData.predCount = reinterpret_cast<int32_t*>(predCountDest.data());
+    std::array<uint8_t, 128> metaBuf{};
+    DrcoRootFuncList rootFuncList{};
+    rootFuncList.metadataBase = reinterpret_cast<void*>(metaBuf.data());
+    dyntask->drcoRootFuncList = &rootFuncList;
+    // bit31=1 表示 predCountOffset 相对 metadataBase（本用例只准备了 metadata 区）。
+    dyntask->dynFuncDataList->GetDrcoRootFuncData(0).funcDynamicDataOffset = 64 | 0x80000000ULL;
 
     std::vector<uint8_t> cacheBuf;
     DevControlFlowCache ctrl;

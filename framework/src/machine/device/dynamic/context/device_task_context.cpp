@@ -45,7 +45,6 @@ inline void FillOneDynFuncData(DynFuncData* dyndata, DevAscendFunctionDupped& du
     dyndata->rawTensorAddr = reinterpret_cast<uint64_t*>(&dupFunc.GetIncastAddress(0));
     dyndata->rawTensorDesc = source->GetRawTensorDesc(0);
     dyndata->workspaceAddr = dupFunc.RuntimeWorkspace();
-    dyndata->drcoRootFuncData = {};
     DEV_IF_NONDEVICE
     {
         dyndata->exprNum = source->expressionList.size();
@@ -309,8 +308,8 @@ void DeviceTaskContext::BuildReadyQueueForFunc(DynDeviceTask* dyntask, size_t fu
 int DeviceTaskContext::BuildDynFuncData(DynDeviceTask* dyntask, uint32_t taskId, DevAscendFunctionDupped* stitchedList,
                                         uint64_t stitchedSize)
 {
-    size_t headerSize = sizeof(DynFuncHeader) + stitchedSize * sizeof(DynFuncData);
-    auto funcHeader = workspace_->AllocateDynFuncData(headerSize);
+    size_t headerSize = sizeof(DynFuncHeader) + stitchedSize * (sizeof(DynFuncData) + sizeof(DrcoRootFuncData));
+    DynFuncHeader* funcHeader = workspace_->AllocateDynFuncData(headerSize);
     dyntask->dynFuncDataList = funcHeader;
     auto dyndata = &funcHeader->At(0);
 
@@ -332,10 +331,9 @@ int DeviceTaskContext::BuildDynFuncData(DynDeviceTask* dyntask, uint32_t taskId,
         dyndata++;
     }
     if (enableAicoreResolve_) {
-        auto* drcoDyndata = &funcHeader->At(0);
         for (size_t funcIdx = 0; funcIdx < stitchedSize; ++funcIdx) {
-            BuildDrcoRootFuncData(drcoDyndata, stitchedList[funcIdx]);
-            drcoDyndata++;
+            BuildDrcoRootFuncData(&funcHeader->At(funcIdx), &funcHeader->GetDrcoRootFuncData(funcIdx),
+                                  stitchedList[funcIdx]);
         }
     }
     dynFuncDataSize += headerSize * sizeof(int64_t);
@@ -571,6 +569,7 @@ int DeviceTaskContext::BuildDeviceTaskDataAndReadyQueue(DynDeviceTask* dyntask, 
     DEV_DEBUG("Finish build a new device task");
 
     if (enableAicoreResolve_) {
+        DrcoRefreshSpecialTaskId(dyntask);
         DispatchReadyQueueToCores(dyntask, devProg);
         DispatchDieReadyQueueToCores(dyntask, devProg);
         npu::tile_fwk::DrcoRootFuncListPrecountPerCoreTasks(dyntask->drcoRootFuncList, devProg->devArgs.nrValidAic,

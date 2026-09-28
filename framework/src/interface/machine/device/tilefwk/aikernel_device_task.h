@@ -25,11 +25,23 @@ namespace npu::tile_fwk {
 
 struct DevStartArgsBase;
 
+constexpr uint64_t DRCO_ROOT_FUNC_MEMORY_REUSE_STITCHED_BIT = ((uint64_t)1) << (uint64_t)60;
+
 struct DrcoRootFuncData {
-    __gm__ int32_t* predCount;
-    __gm__ int32_t* succStaticList;
-    __gm__ DevAscendFunctionDuppedStitchNode** succStitchList;
-    __gm__ DevAscendFunctionOperationSuccInfo* succInfoList;
+    // funcDynamicDataOffset 打包一个 u64（偏移本身平移不变）：
+    /*
+        |-------------------32bit------------------|-------------------32bit------------------|
+        |----------succStitchListOffset------------|------------predCountOffset---------------|
+        |--bit63=base标记--|------bit62-32=偏移-----|--bit31=base标记--|------bit30-0=偏移------|
+        base 标记：0 = 相对 controlFlowCacheBase；1 = 相对 metadataBase
+    */
+    uint64_t funcDynamicDataOffset;
+    // 相对 DevAscendProgram 基址的字节偏移，打包为一个 u64（偏移本身平移不变）：
+    /*
+        |----3bit----|-----1bit----------|------------------30bit------------------|------------------30bit------------------|
+        |----free----|--dummyEndingUsed--|-----------succStaticListOffset----------|------------succInfoListOffset-----------|
+    */
+    uint64_t funcInfoAndStaticDataOffset;
 };
 
 struct DynFuncData {
@@ -44,7 +56,6 @@ struct DynFuncData {
     uint64_t rawTensorAddrSize;
     uint64_t workspaceAddr;
     __gm__ int* cceBinaryIndexList;
-    DrcoRootFuncData drcoRootFuncData;
 };
 
 struct DynFuncBin {
@@ -71,6 +82,12 @@ struct DynFuncHeader {
     INLINE uint64_t GetIndex() { return seqNo; }
     INLINE uint32_t Size() { return funcNum; }
     INLINE DynFuncData& At(int index) { return (reinterpret_cast<DynFuncData*>(this + 1))[index]; }
+    // 所有 DrcoRootFuncData 紧密排布在全部 DynFuncData 之后，作为只读热数据提升 cache locality
+    INLINE DrcoRootFuncData* GetDrcoRootFuncDataList()
+    {
+        return reinterpret_cast<DrcoRootFuncData*>(reinterpret_cast<DynFuncData*>(this + 1) + funcNum);
+    }
+    INLINE DrcoRootFuncData& GetDrcoRootFuncData(int index) { return GetDrcoRootFuncDataList()[index]; }
 };
 
 // 取值与 CoreType::AIV/AIC/HUB_MIX 数值对齐（aikernel_data.h 中有 static_assert 强校验）：
@@ -188,6 +205,18 @@ struct DrcoRootFuncList {
     // 全核共享 hub 任务矩阵：hubStack 溢出/stitch 类型越界兜底任务的改投目的地，
     // fetch 循环无条件扫（帮忙模式含），slot 存 DRCO_ENCODE_TASK 的 taskId（0 = 空闲）
     __gm__ DrcoGlobalHubTaskMatrix* hubTaskMatrix;
+    // control flow cache 基址（设备地址）：recording 阶段 predCount/succStitchList 落在 cache 数据区，
+    // DrcoRootFuncData 的 funcDynamicDataOffset（base 标记 = 0）以此为原点还原指针
+    __gm__ void* controlFlowCacheBase;
+    // 元数据区基址（设备地址）：general 区起点（general + stitchPool 连续），
+    // DrcoRootFuncData 的
+    // funcDynamicDataOffset（base 标记 = 1）以此为原点还原指针
+    __gm__ void* metadataBase;
+    // DevAscendProgram 基址（设备地址）：
+    // DrcoRootFuncData 的
+    // funcInfoAndStaticDataOffset（bit60=dummyEndingUsed，bit59-30=succStaticListOffset，bit29-0=succInfoListOffset，
+    // bit63-61 空闲）以此为原点还原指针
+    __gm__ void* programBase;
 
     alignas(64) uint32_t totalTaskCount;
     alignas(64) uint32_t devTaskFinished;

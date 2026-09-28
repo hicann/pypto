@@ -62,6 +62,8 @@ struct DevAscendFunction {
     uint32_t getTensorDataCount;
     uint64_t hubOpCount_{0};
 
+    uint32_t dummyEndingOpIdx_;
+
     DevLocalVector<AddressDescriptor> incastAddressList;
     DevLocalVector<AddressDescriptor> outcastAddressList;
 
@@ -380,10 +382,7 @@ public:
     inline uint32_t GetOperationSucc(size_t idx) const { return At(operationSuccList_, idx); }
     inline uint32_t& GetOperationSucc(size_t idx) { return At(operationSuccList_, idx); }
 
-    inline int32_t* GetDrcoEncodedSuccAddr()
-    {
-        return drcoEncodedSuccList_.size() > 0 ? &At(drcoEncodedSuccList_, 0) : nullptr;
-    }
+    inline int32_t* GetDrcoEncodedSuccAddr() { return &At(drcoEncodedSuccList_, 0); }
 
     inline npu::tile_fwk::DevAscendFunctionOperationSuccInfo GetOperationSuccInfo(size_t operationIndex) const
     {
@@ -535,12 +534,12 @@ private:
                        const std::vector<int32_t>& stitchIndexList, const std::vector<int>& noPredOpList,
                        const std::vector<int>& noSuccOpList,
                        const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict,
-                       const std::vector<CceCodeInfo>& cceCodeInfoList, bool fillContent);
+                       const std::vector<CceCodeInfo>& cceCodeInfoList, Operation* dummyEnding, bool fillContent);
     void InitOperationNoPredNoSuccIndices(uintdevptr_t& initOffset, const OrderedSet<Operation*>& callList,
                                           const std::unordered_map<Operation*, uint64_t>& callOpPredDict,
                                           const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
                                           const std::vector<int>& noPredOpList, const std::vector<int>& noSuccOpList,
-                                          bool fillContent);
+                                          Operation* dummyEnding, bool fillContent);
     void InitOperationBufferLayouts(
         uintdevptr_t& initOffset, const OrderedSet<Operation*>& callList,
         const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,

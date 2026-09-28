@@ -30,9 +30,12 @@ constexpr uint32_t DUPPED_STITCH_NODE_REMAIN_COUNT_MASK = 0x3F;
 constexpr uint64_t DUPPED_STITCH_NODE_ALIGN = DUPPED_STITCH_NODE_REMAIN_COUNT_MASK + 1;
 
 struct DevAscendFunctionOperationSuccInfo {
-    uint16_t staticIndex;
-    uint16_t staticSize;
-    uint32_t stitchIndex;
+    // 单个 op 的后继描述信息，打包为一个 u64（静态编码，只读）：
+    /*
+        |-------------------32bit------------------|-----16bit-----|-----16bit-----|
+        |-----------------stitchIndex--------------|--staticSize---|--staticIndex--|
+    */
+    uint64_t staticIndexSizeAndStitchIndex;
 };
 
 struct DevAscendFunctionDuppedStitchNode {

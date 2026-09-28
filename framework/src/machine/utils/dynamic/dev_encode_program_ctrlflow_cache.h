@@ -506,7 +506,7 @@ struct DevControlFlowCache {
                           DynFuncHeader* dynFuncDataList);
 
     void DieReadyQueueReloc(RelocRange& relocCtrlCache, DynDeviceTaskBase* dynTaskBase);
-    void RelocDrcoRootFuncList(RelocRange& relocCtrlCache, DynDeviceTaskBase* dynTaskBase);
+    void RelocDrcoRootFuncList(RelocRange& relocCtrlCache, RelocRange& relocProgram, DynDeviceTaskBase* dynTaskBase);
     void RelocDuppedDataAndDynFuncData(RelocRange& relocProgram, RelocRange& relocCtrlCache,
                                        DevAscendFunctionDuppedData* duppedData, DynFuncData* dynData,
                                        DynFuncDataCache* dynDataCache, DynFuncDataBackup* dynDataBackup);

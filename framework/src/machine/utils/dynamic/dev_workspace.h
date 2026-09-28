@@ -463,6 +463,11 @@ public:
     // 以 base + u32 偏移还原 stitch 节点地址（偏移 < 4GB 由池 u32 总大小保证）
     uint64_t GetStitchPoolBase() const { return metadataAllocators_.stitchSlab.GetMemBase(); }
 
+    // 元数据区（general + stitchPool 连续段）基址（设备地址）：由 DrcoRootFuncList::metadataBase
+    // 透传，DrcoRootFuncData 的
+    // funcDynamicDataOffset（高32bit=succStitchListOffset，低32bit=predCountOffset）以此为原点还原指针
+    uint64_t GetMetadataBase() const { return metadataAllocators_.general.MemBaseAddr(); }
+
 private:
     bool DeviceTaskMemTryRecycle();
 

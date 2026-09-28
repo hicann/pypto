@@ -183,6 +183,8 @@ using DrcoDeviceTaskReadyQueue = npu::tile_fwk::DrcoDeviceTaskReadyQueue;
 using DrcoLocalReadyQueue = npu::tile_fwk::DrcoLocalReadyQueue;
 using DrcoLocalReadyMatrix = npu::tile_fwk::DrcoLocalReadyMatrix;
 using DrcoGlobalStitchNodeMatrix = npu::tile_fwk::DrcoGlobalStitchNodeMatrix;
+using DevAscendFunctionOperationSuccInfo = npu::tile_fwk::DevAscendFunctionOperationSuccInfo;
+using DevAscendFunctionDuppedStitchNode = npu::tile_fwk::DevAscendFunctionDuppedStitchNode;
 
 // 不确定bisheng在处理小于 64bit 的结构体的时候，是否能够完全保存在寄存器中，先用 uint64_t + bit 计算的方式处理
 typedef uint64_t BlockDesc;
@@ -240,6 +242,18 @@ struct DrcoEntryState {
     npu::tile_fwk::DrcoMixHubC2VReadyQueue* mixHubC2VReadyQueue;
     bool isExectedLeafTask{false};
 
+    // control flow cache 基址（设备地址）：recording 阶段 predCount/succStitchList 落在 cache 数据区，
+    // funcDynamicDataOffset（base 标记 = 0）以此为原点还原指针
+    __gm__ void* controlFlowCacheBase;
+    // 元数据区基址（设备地址）：general 区起点（general + stitchPool 连续），
+    // funcDynamicDataOffset（base 标记 = 1）以此为原点还原指针
+    __gm__ void* metadataBase;
+    // DevAscendProgram 基址（设备地址）：
+    // DrcoRootFuncData 的
+    // funcInfoAndStaticDataOffset（bit60=dummyEndingUsed，bit59-30=succStaticListOffset，bit29-0=succInfoListOffset，
+    // bit63-61 空闲）以此为原点还原指针
+    __gm__ void* programBase;
+
 #if ENABLE_AICORE_TRACE
     struct TraceEventStatistic {
         uint32_t taskIndex;
@@ -287,8 +301,10 @@ INLINE static void _TracePrint(DrcoEntryState* state)
     PYPTO_AICORE_PRINTF("total=%d", traceEventStatistic->taskIndex);
     for (uint32_t i = 0; i < traceEventStatistic->taskIndex; i++) {
         auto event = &traceEventStatistic->traceEventList[i];
-        PYPTO_AICORE_PRINTF("timestamp=%llu, code=%x taskId=%d:%d duration=%llu", (unsigned long long)event->timestamp,
-                            event->eventCode, FUNCID_TASKID(event->taskId),
+        (void)event;
+        PYPTO_AICORE_PRINTF("timestamp=%llu, code=%x taskId=%d:%d-%x duration=%llu",
+                            (unsigned long long)event->timestamp, event->eventCode, FUNCID_TASKID(event->taskId),
+                            event->taskId >> npu::tile_fwk::TASKID_DRCO_SUCC_SPECIAL_SHIFT,
                             i == 0 ? 0 : (event->timestamp - traceEventStatistic->traceEventList[i - 1].timestamp));
     }
 }
@@ -300,6 +316,39 @@ INLINE static void _TracePrint(DrcoEntryState* state)
 #define TraceEvent(state, taskId, eventCode)
 #define TracePrint(state)
 #endif
+
+// predCountOffset / succStitchListOffset 最高位（bit31）为 base 标记：
+// 0 = 相对 controlFlowCacheBase；1 = 相对 metadataBase。低 31 位为实际字节偏移。
+INLINE __gm__ int32_t* DrcoGetCurrentRootFuncPredCount(__gm__ void* controlFlowCacheBase, __gm__ void* metadataBase,
+                                                       uint32_t predCountOffset)
+{
+    __gm__ void* base = (predCountOffset & 0x80000000u) ? metadataBase : controlFlowCacheBase;
+    return reinterpret_cast<__gm__ int32_t*>(reinterpret_cast<uint64_t>(base) + (predCountOffset & 0x7fffffffu));
+}
+
+INLINE __gm__ DevAscendFunctionDuppedStitchNode** DrcoGetCurrentRootFuncSuccStitchList(
+    __gm__ void* controlFlowCacheBase, __gm__ void* metadataBase, uint32_t succStitchListOffset)
+{
+    __gm__ void* base = (succStitchListOffset & 0x80000000u) ? metadataBase : controlFlowCacheBase;
+    return reinterpret_cast<__gm__ DevAscendFunctionDuppedStitchNode**>(reinterpret_cast<uint64_t>(base) +
+                                                                        (succStitchListOffset & 0x7fffffffu));
+}
+
+INLINE __gm__ int32_t* DrcoGetCurrentRootFuncSuccStaticList(__gm__ void* programBase, uint32_t succStaticListOffset)
+{
+    return reinterpret_cast<__gm__ int32_t*>(((uint64_t)programBase) + succStaticListOffset);
+}
+
+INLINE __gm__ DevAscendFunctionOperationSuccInfo* DrcoGetCurrentRootFuncSuccInfoList(__gm__ void* programBase,
+                                                                                     uint32_t succInfoListOffset)
+{
+    return reinterpret_cast<__gm__ DevAscendFunctionOperationSuccInfo*>(((uint64_t)programBase) + succInfoListOffset);
+}
+
+INLINE __gm__ npu::tile_fwk::DrcoRootFuncData* DrcoGetCurrentRootFuncData(DrcoEntryState* state, uint32_t funcIdx)
+{
+    return &state->ctx.cachedDevTaskCurr->drcoRootFuncDataList[funcIdx];
+}
 
 INLINE __gm__ DrcoDeviceTask* GetCurrentDeviceTask(__gm__ DrcoDeviceTaskReadyQueue* queue)
 {
@@ -795,13 +844,17 @@ INLINE void DrcoResolveStitchNodeTasks(DrcoEntryState* state, __gm__ npu::tile_f
                                        uint32_t succTaskIdListSizeCoreList[])
 {
     TraceEvent(state, curTaskId, EVENT_SUCC_DYNAMIC(node->nodeSize));
+    __gm__ void* controlFlowCacheBase = state->controlFlowCacheBase;
+    __gm__ void* metadataBase = state->metadataBase;
     for (uint32_t i = 0; i < node->nodeSize; i++) {
         uint32_t succTaskId = node->nodeTaskList[i]; // already coreType-encoded at build time
         uint32_t succFuncId = npu::tile_fwk::FuncID(succTaskId);
         uint32_t succOpIdx = npu::tile_fwk::TaskID(succTaskId);
-        auto* succFuncData = &state->ctx.cachedDevTaskCurr->funcDataList[succFuncId];
-        __gm__ npu::tile_fwk::DrcoRootFuncData* succRootFuncData = &succFuncData->drcoRootFuncData;
-        int32_t old = DrcoAtomicResolveDependOnce<int32_t, 1, -1>(&succRootFuncData->predCount[succOpIdx]);
+        __gm__ npu::tile_fwk::DrcoRootFuncData* succRootFuncData = DrcoGetCurrentRootFuncData(state, succFuncId);
+        uint64_t funcDynamicDataOffset = succRootFuncData->funcDynamicDataOffset;
+        __gm__ int32_t* succPredCount = DrcoGetCurrentRootFuncPredCount(controlFlowCacheBase, metadataBase,
+                                                                        static_cast<uint32_t>(funcDynamicDataOffset));
+        int32_t old = DrcoAtomicResolveDependOnce<int32_t, 1, -1>(&succPredCount[succOpIdx]);
         if (old == 1) {
             DrcoResolveDependOnce(state, rootFuncList, succTaskId, hubStack, hubStackTop, succTaskIdListCoreList,
                                   succTaskIdListSizeCoreList);
@@ -854,19 +907,23 @@ INLINE static bool DrcoStitchNodeMatrixTryPush(DrcoEntryState* state,
 }
 
 // 就地解单个 stitch 节点依赖：走 DrcoResolveDependOnceCore 路由（无 hub 级联，batch push），
-// 任务数从 nodeSize 字段直读；消费核 pop 与生产核 push 失败兜底共用
+// 任务数从编码后的 nodeSize 解码；量化指针经 metadataBase 还原；消费核 pop 与生产核 push 失败兜底共用
 INLINE void DrcoStitchNodeTasksResolveCore(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
                                            __gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode* node,
                                            uint32_t succTaskIdListCoreList[][BATCH_PUSH_BUF_SIZE],
                                            uint32_t succTaskIdListSizeCoreList[])
 {
+    __gm__ void* controlFlowCacheBase = state->controlFlowCacheBase;
+    __gm__ void* metadataBase = state->metadataBase;
     for (uint32_t i = 0; i < node->nodeSize; i++) {
         uint32_t succTaskId = node->nodeTaskList[i]; // already coreType-encoded at build time
         uint32_t succFuncId = npu::tile_fwk::FuncID(succTaskId);
         uint32_t succOpIdx = npu::tile_fwk::TaskID(succTaskId);
-        auto* succFuncData = &state->ctx.cachedDevTaskCurr->funcDataList[succFuncId];
-        __gm__ npu::tile_fwk::DrcoRootFuncData* succRootFuncData = &succFuncData->drcoRootFuncData;
-        int32_t old = DrcoAtomicResolveDependOnce<int32_t, 1, -1>(&succRootFuncData->predCount[succOpIdx]);
+        __gm__ npu::tile_fwk::DrcoRootFuncData* succRootFuncData = DrcoGetCurrentRootFuncData(state, succFuncId);
+        uint64_t funcDynamicDataOffset = succRootFuncData->funcDynamicDataOffset;
+        __gm__ int32_t* succPredCount = DrcoGetCurrentRootFuncPredCount(controlFlowCacheBase, metadataBase,
+                                                                        static_cast<uint32_t>(funcDynamicDataOffset));
+        int32_t old = DrcoAtomicResolveDependOnce<int32_t, 1, -1>(&succPredCount[succOpIdx]);
         if (old == 1) {
             DrcoResolveDependOnceCore(state, rootFuncList, succTaskId, succTaskIdListCoreList,
                                       succTaskIdListSizeCoreList);
@@ -924,6 +981,16 @@ INLINE void DrcoStitchNodePushSubChainHeads(DrcoEntryState* state, __gm__ npu::t
 // 生产核整链幂分解：先按 2 的幂序列（1,2,4,8,16,32 / 每 64 一轮）把子链头 push 入矩阵
 // （由消费核 pop 接力），push 完成后再解链头（chainHead）依赖（先 push 后解依赖）；
 // push 失败则就地解对应子链整段兜底（矩阵写不进则保证前向推进）。
+INLINE bool DrcoResolveDependDummyEnding(uint32_t succEncoded)
+{
+    return succEncoded & npu::tile_fwk::DRCO_SUCC_DUMMY_ENDING_BIT;
+}
+
+INLINE bool DrcoResolveDependMemoryReuseStitched(uint64_t funcInfoAndStaticDataOffset)
+{
+    return funcInfoAndStaticDataOffset & npu::tile_fwk::DRCO_ROOT_FUNC_MEMORY_REUSE_STITCHED_BIT;
+}
+
 INLINE void DrcoResolveDepend(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
                               uint32_t* taskIdList, uint32_t taskCount = 1)
 {
@@ -935,20 +1002,32 @@ INLINE void DrcoResolveDepend(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoR
     for (uint32_t i = 0; i < taskCount; i++) {
         hubStack[++hubStackTop] = taskIdList[i];
     }
+    __gm__ void* controlFlowCacheBase = state->controlFlowCacheBase;
+    __gm__ void* metadataBase = state->metadataBase;
+    __gm__ void* programBase = state->programBase;
     while (hubStackTop >= 0) {
         uint32_t curTaskId = hubStack[hubStackTop--];
         uint32_t funcIdx = npu::tile_fwk::FuncID(curTaskId);
         uint32_t operIdx = npu::tile_fwk::TaskID(curTaskId);
 
-        auto funcData = &state->ctx.cachedDevTaskCurr->funcDataList[funcIdx];
-        __gm__ npu::tile_fwk::DrcoRootFuncData* rootFuncData = &funcData->drcoRootFuncData;
-        __gm__ npu::tile_fwk::DevAscendFunctionOperationSuccInfo* succInfoList = rootFuncData->succInfoList;
-        __gm__ int32_t* succStaticList = rootFuncData->succStaticList;
-        __gm__ int32_t* predCount = rootFuncData->predCount;
-        volatile __gm__ npu::tile_fwk::DevAscendFunctionOperationSuccInfo* succInfo = &succInfoList[operIdx];
+        __gm__ npu::tile_fwk::DrcoRootFuncData* rootFuncData = DrcoGetCurrentRootFuncData(state, funcIdx);
+        uint64_t funcInfoAndStaticDataOffset = rootFuncData->funcInfoAndStaticDataOffset;
+        uint64_t funcDynamicDataOffset = rootFuncData->funcDynamicDataOffset;
 
-        uint16_t staticIndex = succInfo->staticIndex;
-        uint16_t staticSize = succInfo->staticSize;
+        __gm__ npu::tile_fwk::DevAscendFunctionOperationSuccInfo* succInfoList = DrcoGetCurrentRootFuncSuccInfoList(
+            programBase, static_cast<uint32_t>(funcInfoAndStaticDataOffset & 0x3FFFFFFFULL));
+        __gm__ int32_t* succStaticList = DrcoGetCurrentRootFuncSuccStaticList(
+            programBase, static_cast<uint32_t>((funcInfoAndStaticDataOffset >> 30) & 0x3FFFFFFFULL));
+        __gm__ int32_t* predCount = DrcoGetCurrentRootFuncPredCount(controlFlowCacheBase, metadataBase,
+                                                                    static_cast<uint32_t>(funcDynamicDataOffset));
+        __gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode** succStitchList = DrcoGetCurrentRootFuncSuccStitchList(
+            controlFlowCacheBase, metadataBase, static_cast<uint32_t>(funcDynamicDataOffset >> 32));
+
+        volatile __gm__ npu::tile_fwk::DevAscendFunctionOperationSuccInfo* succInfo = &succInfoList[operIdx];
+        uint64_t succInfoBits = succInfo->staticIndexSizeAndStitchIndex;
+
+        uint16_t staticIndex = static_cast<uint16_t>(succInfoBits);
+        uint16_t staticSize = static_cast<uint16_t>(succInfoBits >> 16);
         TraceEvent(state, curTaskId, EVENT_SUCC_STATIC(staticSize));
         uint16_t i = staticIndex;
         const uint16_t staticEnd = staticIndex + staticSize;
@@ -974,18 +1053,23 @@ INLINE void DrcoResolveDepend(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoR
                 }
                 i += 2;
             } else {
-                int32_t old = DrcoAtomicResolveDependOnce<int32_t, 1, -1>(&predCount[succOpIdx]);
-                if (old == 1) {
-                    DrcoFireEncodedSucc(state, rootFuncList, funcIdx, succEncoded, hubStack, hubStackTop,
-                                        succTaskIdListCoreList, succTaskIdListSizeCoreList);
+                if (DrcoResolveDependDummyEnding(succEncoded) &&
+                    !DrcoResolveDependMemoryReuseStitched(funcInfoAndStaticDataOffset)) {
+                    // Successor is dummy ending, and current is never memory reuse stitched to following root
+                    // functions.
+                } else {
+                    int32_t old = DrcoAtomicResolveDependOnce<int32_t, 1, -1>(&predCount[succOpIdx]);
+                    if (old == 1) {
+                        DrcoFireEncodedSucc(state, rootFuncList, funcIdx, succEncoded, hubStack, hubStackTop,
+                                            succTaskIdListCoreList, succTaskIdListSizeCoreList);
+                    }
                 }
                 i += 1;
             }
         }
 
-        uint32_t stitchIndex = succInfo->stitchIndex;
+        uint32_t stitchIndex = static_cast<uint32_t>(succInfoBits >> 32);
         if (stitchIndex != 0) {
-            __gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode** succStitchList = rootFuncData->succStitchList;
             // 整链幂分解：先按 2 的幂 + 每 64 一轮 push 子链头入矩阵，
             // 消费核 pop 后按 2 的幂序列（1,2,4,8,16,32）继续接力（每个节点只被解一次）；
             // push 完成后解链头依赖；push 失败则就地解对应子链整段兜底（矩阵写不进则保证前向推进）。
@@ -1026,14 +1110,20 @@ __aicore__ INLINE static uint32_t ResolveHubMixTask(DrcoEntryState* state, uint3
 {
     uint32_t funcIdx = npu::tile_fwk::FuncID(hubMixTaskId);
     uint32_t opIdx = npu::tile_fwk::TaskID(hubMixTaskId);
-    auto funcData = &state->ctx.cachedDevTasks[state->ctx.curLeafTaskParallelIdx].funcDataList[funcIdx];
-    __gm__ npu::tile_fwk::DevAscendFunctionOperationSuccInfo* mixSuccInfoList = funcData->drcoRootFuncData.succInfoList;
-    __gm__ int32_t* mixSuccStaticList = funcData->drcoRootFuncData.succStaticList;
+    __gm__ npu::tile_fwk::DrcoRootFuncData* rootFuncData = DrcoGetCurrentRootFuncData(state, funcIdx);
+    __gm__ void* programBase = state->programBase;
+    uint64_t funcInfoAndStaticDataOffset = rootFuncData->funcInfoAndStaticDataOffset;
+    __gm__ npu::tile_fwk::DevAscendFunctionOperationSuccInfo* mixSuccInfoList = DrcoGetCurrentRootFuncSuccInfoList(
+        programBase, static_cast<uint32_t>(funcInfoAndStaticDataOffset & 0x3FFFFFFFULL));
+    __gm__ int32_t* mixSuccStaticList = DrcoGetCurrentRootFuncSuccStaticList(
+        programBase, static_cast<uint32_t>((funcInfoAndStaticDataOffset >> 30) & 0x3FFFFFFFULL));
+    __gm__ DynFuncData* funcData = &state->ctx.cachedDevTasks[state->ctx.curLeafTaskParallelIdx].funcDataList[funcIdx];
     __gm__ int* mixCceBinaryIndexList = funcData->cceBinaryIndexList;
     uint32_t aicTaskId = static_cast<uint32_t>(AICORE_TASK_INIT);
 
-    uint16_t mixStaticIndex = mixSuccInfoList[opIdx].staticIndex;
-    uint16_t mixStaticSize = mixSuccInfoList[opIdx].staticSize;
+    uint64_t mixSuccInfoBits = mixSuccInfoList[opIdx].staticIndexSizeAndStitchIndex;
+    uint16_t mixStaticIndex = static_cast<uint16_t>(mixSuccInfoBits);
+    uint16_t mixStaticSize = static_cast<uint16_t>(mixSuccInfoBits >> 16);
     for (uint16_t j = mixStaticIndex; j < mixStaticIndex + mixStaticSize; j++) {
         uint32_t mixSuccEncoded = mixSuccStaticList[j];
         uint32_t mixSuccOpIdx = mixSuccEncoded & TASKID_TASK_MASK;
@@ -1473,6 +1563,13 @@ INLINE void PerfDevTaskFirstLeafTask(DrcoEntryState* state)
     }
 }
 
+// per-core queue 任务是否带「唯一后继为 dummyEnding 可跳过 resolve」标记（special 字段命中 SKIP_RESOLVE）
+INLINE bool DrcoPerCoreTaskSkipResolve(uint32_t taskId)
+{
+    return ((taskId >> npu::tile_fwk::TASKID_DRCO_SUCC_SPECIAL_SHIFT) & npu::tile_fwk::TASKID_DRCO_SUCC_SPECIAL_MASK) ==
+           npu::tile_fwk::DRCO_SUCC_SPECIAL_PERCORE_SKIP_RESOLVE;
+}
+
 INLINE void ExecDrcoPerCoreTasks(DrcoEntryState* state, __gm__ npu::tile_fwk::PerCorePendingQueue* perCoreQueue,
                                  __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList)
 {
@@ -1482,8 +1579,10 @@ INLINE void ExecDrcoPerCoreTasks(DrcoEntryState* state, __gm__ npu::tile_fwk::Pe
         uint32_t taskId = DrcoGmLoadArray(perCoreQueue->taskList, perCoreQueueHead);
         PerfDevTaskFirstLeafTask(state);
         ExecLeafFunction(state, taskId);
-        DrcoResolveDepend(state, rootFuncList, &taskId);
-        perCoreQueueHead++;
+        if (!DrcoPerCoreTaskSkipResolve(taskId)) {
+            DrcoResolveDepend(state, rootFuncList, &taskId);
+        }
+        perCoreQueueHead += 1;
     }
 }
 
@@ -1595,7 +1694,9 @@ INLINE void KernelEntryDrco(int64_t ffts_addr, int64_t inputs, int64_t outputs, 
         state.readyMatrixPushColIdx = (BlockDescTypedBlockIdx(state.blockDesc) + 1) % npu::tile_fwk::LOCAL_GROUP_SIZE;
 
         state.selfReadyQueueSize = 0;
-
+        state.controlFlowCacheBase = rootFuncList->controlFlowCacheBase;
+        state.metadataBase = rootFuncList->metadataBase;
+        state.programBase = rootFuncList->programBase;
         ExecDrcoPerCoreTasks(&state, perCoreQueue, rootFuncList);
         ExecDrcoReadyQueueTasks(&state, rootFuncList, perCoreQueue);
 

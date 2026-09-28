@@ -24,6 +24,8 @@ INLINE void UpdateCacheDevTask(ExecuteContext* ctx, uint32_t parallelIdx, int64_
     ctx->cachedDevTasks[parallelIdx].header = header;
     ctx->cachedDevTasks[parallelIdx].seqNo = header->seqNo;
     ctx->cachedDevTasks[parallelIdx].funcDataList = (__gm__ DynFuncData*)(header + 1);
+    ctx->cachedDevTasks[parallelIdx].drcoRootFuncDataList = reinterpret_cast<__gm__ DrcoRootFuncData*>(
+        ctx->cachedDevTasks[parallelIdx].funcDataList + header->funcNum);
     ctx->cachedDevTasks[parallelIdx].cceBinary = (__gm__ npu::tile_fwk::DynFuncBin*)(header->cceBinary);
     ctx->cachedDevTaskCurr = &ctx->cachedDevTasks[parallelIdx];
 }

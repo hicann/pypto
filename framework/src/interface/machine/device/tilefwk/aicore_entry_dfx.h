@@ -53,6 +53,7 @@ struct ExecuteContext {
         uint32_t seqNo{0};
         __gm__ DynFuncHeader* header{nullptr};
         __gm__ DynFuncData* funcDataList{nullptr};
+        __gm__ DrcoRootFuncData* drcoRootFuncDataList{nullptr};
         __gm__ DynFuncBin* cceBinary{nullptr};
     } cachedDevTasks[npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM];
     CachedDevTask* cachedDevTaskCurr;

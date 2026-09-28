@@ -101,6 +101,7 @@ INLINE void Trap()
 
 using npu::tile_fwk::CoreFunctionData;
 using npu::tile_fwk::DevRawTensorDesc;
+using npu::tile_fwk::DrcoRootFuncData;
 using npu::tile_fwk::DynFuncBin;
 using npu::tile_fwk::DynFuncData;
 using npu::tile_fwk::DynFuncHeader;

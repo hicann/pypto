@@ -881,6 +881,13 @@ void DeviceWorkspaceAllocator::SlabStageAllocMemSubmmit(DynDeviceTask* devTask)
 void DeviceWorkspaceAllocator::InitMetadataAllocators(DevAscendProgram* devProg, DevStartArgs* devStartArgs)
 {
     // Initialize aicpu memory
+    // metadata 区（general + stitchPool 连续段）总占用必须 < 4GB：DrcoRootFuncData 的
+    // funcDynamicDataOffset 以 generalAddr 为原点，predCount 落在 stitchPool 尾部，
+    // 其偏移需覆盖 general + stitchPool 整段，必须可表示于 u32
+    DEV_ASSERT_MSG(WsErr::WORKSPACE_INIT_PARAM_INVALID,
+                   devProg->memBudget.metadata.general + devProg->memBudget.metadata.stitchPool <= UINT32_MAX,
+                   "Metadata region (general=%lu + stitchPool=%lu) exceeds u32 (4G) limit",
+                   devProg->memBudget.metadata.general, devProg->memBudget.metadata.stitchPool);
     uint64_t generalAddr = devStartArgs->deviceRuntimeDataDesc.generalAddr;
     metadataAllocators_.general.InitMetadataAllocator(generalAddr, devProg->memBudget.metadata.general);
     DEV_TRACE_DEBUG(CtrlEvent(
@@ -1030,7 +1037,7 @@ uint64_t DeviceWorkspaceAllocator::CalculateVectorCapacity(uint64_t size)
 /* 按照devicetask最大支持stitch阈值分配对象 */
 uint32_t DeviceWorkspaceAllocator::DynFuncDataSlabMemObjSize()
 {
-    return (sizeof(DynFuncHeader) + MAX_STITCH_FUNC_NUM * sizeof(DynFuncData));
+    return sizeof(DynFuncHeader) + MAX_STITCH_FUNC_NUM * (sizeof(DynFuncData) + sizeof(DrcoRootFuncData));
 }
 
 /* 按照devicetask最大支持stitch阈值分配对象 */

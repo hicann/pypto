@@ -38,7 +38,8 @@ struct DevAscendFunctionDuppedData {
     uintdevptr_t runtimeWorkspace_;
     RuntimeReuseInfo runtimeWsReuseInfo_;
     uintdevptr_t runtimeOutcastWorkspace_;
-    intdevptr_t loopDieId_{-1};
+    int32_t loopDieId_{-1};
+    int32_t dummyEndingUsed;
     uint8_t data_[0];
     /*
      *  Duplicated:
@@ -122,6 +123,9 @@ struct DevAscendFunctionDuppedData {
 
     DevAscendFunction* GetSource() const { return source_; }
     DevAscendFunction*& GetSource() { return source_; }
+
+    int32_t GetDummyEndingUsed() const { return dummyEndingUsed; }
+    int32_t& GetDummyEndingUsed() { return dummyEndingUsed; }
 
     const DevAscendFunctionDuppedStitchList& GetOperationStitch(int operationIndex, bool maybeNull = true) const
     {
@@ -248,6 +252,9 @@ struct DevAscendFunctionDupped {
 
     uintdevptr_t RuntimeOutcastBase() const { return DupData()->GetRuntimeOutcastWorkspace(); }
     uintdevptr_t& RuntimeOutcastBase() { return DupData()->GetRuntimeOutcastWorkspace(); }
+
+    int32_t GetDummyEndingUsed() const { return DupData()->GetDummyEndingUsed(); }
+    int32_t& GetDummyEndingUsed() { return DupData()->GetDummyEndingUsed(); }
 
     const DevAscendFunction* GetSource() const { return DupData()->GetSource(); }
     DevAscendFunction* GetSource() { return DupData()->GetSource(); }

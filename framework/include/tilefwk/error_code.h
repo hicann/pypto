@@ -322,6 +322,7 @@ enum class ProgEncodeErr : uint32_t {
     LEAF_CALLEE_ATTR_NULL,
     CELL_MATCH_LAUNCH_PREPARE_FAILED,
     CTRL_CACHE_RELOC_BUILD_FAILED,
+    METADATA_SIZE_OVERFLOW_4G,
 };
 
 enum class TensorMetaErr : uint32_t {

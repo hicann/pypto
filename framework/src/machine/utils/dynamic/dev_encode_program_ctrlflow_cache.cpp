@@ -127,12 +127,13 @@ void DevControlFlowCache::DrcoPredCountDataRestore(DynDeviceTaskBase* base)
 {
     DynFuncHeader* dynFuncDataList = base->GetDynFuncDataList();
     DynFuncDataBackup* dynFuncDataBackupList = base->dynFuncDataBackupList;
+    uint64_t metadataBase = reinterpret_cast<uint64_t>(base->drcoRootFuncList->metadataBase);
+    uint64_t controlFlowCacheBase = reinterpret_cast<uint64_t>(base->drcoRootFuncList->controlFlowCacheBase);
     for (size_t dupIndex = 0; dupIndex < dynFuncDataList->Size(); ++dupIndex) {
-        DynFuncData* dynData = &dynFuncDataList->At(dupIndex);
-        if (dynData->drcoRootFuncData.predCount == nullptr) {
-            continue;
-        }
-        int32_t* drcoPredCount = dynData->drcoRootFuncData.predCount;
+        uint64_t funcDynamicDataOffset = dynFuncDataList->GetDrcoRootFuncData(dupIndex).funcDynamicDataOffset;
+        uint32_t predCountOffset = static_cast<uint32_t>(funcDynamicDataOffset);
+        uint64_t predCountBase = (predCountOffset & 0x80000000u) ? metadataBase : controlFlowCacheBase;
+        int32_t* drcoPredCount = reinterpret_cast<int32_t*>(predCountBase + (predCountOffset & 0x7fffffffu));
         predcount_t* predCountBackup = dynFuncDataBackupList->At(dupIndex).predCountBackup;
         uint32_t opSize = base->dynFuncDataCacheList->At(dupIndex).duppedData->GetOperationSize();
         for (uint32_t i = 0; i < opSize; ++i) {
@@ -1245,15 +1246,6 @@ void DevControlFlowCache::RelocDuppedDataAndDynFuncData(RelocRange& relocProgram
     relocCtrlCache.RelocNullable(dynDataBackup->rawTensorAddrBackup);
     relocCtrlCache.RelocNullable(dynDataBackup->deadEndHubBitmapBackup);
     relocCtrlCache.RelocNullable(dynDataBackup->tailTaskBitmapBackup);
-
-    if (dynData->drcoRootFuncData.predCount != nullptr) {
-        relocCtrlCache.Reloc(dynData->drcoRootFuncData.predCount);
-        // succStaticList points at the encode-time program-resident table (DrcoEncodedSuccList),
-        // nullable when the function has no static successors.
-        relocProgram.RelocNullable(dynData->drcoRootFuncData.succStaticList);
-        relocCtrlCache.Reloc(dynData->drcoRootFuncData.succStitchList);
-        relocProgram.Reloc(dynData->drcoRootFuncData.succInfoList);
-    }
 }
 
 /* Host-to-cache: devStartArgs should be nullptr. Cache-to-Device: devStartArgs should be filled */
@@ -1298,7 +1290,7 @@ void DevControlFlowCache::TaskAddrRelocProgramAndCtrlCache(uint64_t srcProgram, 
         DynFuncHeader* dynFuncDataList = RelocControlFlowCachePointer(dynFuncDataListRef, relocCtrlCache);
         relocProgram.Reloc(dynFuncDataList->cceBinary);
 
-        RelocDrcoRootFuncList(relocCtrlCache, dynTaskBase);
+        RelocDrcoRootFuncList(relocCtrlCache, relocProgram, dynTaskBase);
 
         DynFuncDataCache* dynFuncDataCacheList = dynTaskBase->dynFuncDataCacheList;
         DynFuncDataBackup* dynFuncDataBackupList = dynTaskBase->dynFuncDataBackupList;
@@ -1332,7 +1324,8 @@ void DevControlFlowCache::TaskAddrRelocProgramAndCtrlCache(uint64_t srcProgram, 
     }
 }
 
-void DevControlFlowCache::RelocDrcoRootFuncList(RelocRange& relocCtrlCache, DynDeviceTaskBase* dynTaskBase)
+void DevControlFlowCache::RelocDrcoRootFuncList(RelocRange& relocCtrlCache, RelocRange& relocProgram,
+                                                DynDeviceTaskBase* dynTaskBase)
 {
     npu::tile_fwk::DrcoRootFuncList*& drcoRootFuncListRef = dynTaskBase->drcoRootFuncList;
     npu::tile_fwk::DrcoRootFuncList* drcoRootFuncList = nullptr;
@@ -1358,6 +1351,9 @@ void DevControlFlowCache::RelocDrcoRootFuncList(RelocRange& relocCtrlCache, DynD
         // 基址与 stitch 节点指针同域，走同一平移；slot 内偏移相对基址，平移不变
         relocCtrlCache.Reloc(drcoRootFuncList->stitchNodeBase);
         relocCtrlCache.Reloc(drcoRootFuncList->hubTaskMatrix);
+        relocCtrlCache.Reloc(drcoRootFuncList->metadataBase);
+        relocCtrlCache.Reloc(drcoRootFuncList->controlFlowCacheBase);
+        relocProgram.Reloc(drcoRootFuncList->programBase);
     }
 }
 

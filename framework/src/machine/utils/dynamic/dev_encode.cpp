@@ -559,10 +559,10 @@ void DevAscendFunction::InitOperation(
     const std::unordered_map<uint64_t, int>& calleeHashIndexDict, const std::vector<int32_t>& stitchIndexList,
     const std::vector<int>& noPredOpList, const std::vector<int>& noSuccOpList,
     const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict,
-    const std::vector<CceCodeInfo>& cceCodeInfoList, bool fillContent)
+    const std::vector<CceCodeInfo>& cceCodeInfoList, Operation* dummyEnding, bool fillContent)
 {
     InitOperationNoPredNoSuccIndices(initOffset, callList, callOpPredDict, callOpSuccDict, noPredOpList, noSuccOpList,
-                                     fillContent);
+                                     dummyEnding, fillContent);
     InitOperationBufferLayouts(initOffset, callList, callOpSuccDict, copyOutResolveSuccIndexListDict);
     FillOperationEncodedContent(expressionTable, callList, tlist, rawList, callOpPredDict, callOpSuccDict,
                                 calleeHashIndexDict, stitchIndexList, copyOutResolveSuccIndexListDict, cceCodeInfoList,
@@ -573,8 +573,13 @@ void DevAscendFunction::InitOperationNoPredNoSuccIndices(
     uintdevptr_t& initOffset, const OrderedSet<Operation*>& callList,
     const std::unordered_map<Operation*, uint64_t>& callOpPredDict,
     const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict, const std::vector<int>& noPredOpList,
-    const std::vector<int>& noSuccOpList, bool fillContent)
+    const std::vector<int>& noSuccOpList, Operation* dummyEnding, bool fillContent)
 {
+    if (dummyEnding) {
+        dummyEndingOpIdx_ = callList.GetIndex(dummyEnding);
+    } else {
+        dummyEndingOpIdx_ = 0xffffffff;
+    }
     noPredOpList_.HostInitDataSizeOffset(initOffset, noPredOpList.size());
     noSuccOpList_.HostInitDataSizeOffset(initOffset, noSuccOpList.size());
 
@@ -776,9 +781,9 @@ void DevAscendFunction::PopulateOneEncodedOpGraphEdges(
     int opSuccSize = callOpSuccDict.find(op)->second.size();
 
     npu::tile_fwk::DevAscendFunctionOperationSuccInfo& succInfo = At(operationSuccInfoList_, index);
-    succInfo.staticIndex = static_cast<uint16_t>(sucSize);
-    succInfo.staticSize = static_cast<uint16_t>(opSuccSize);
-    succInfo.stitchIndex = stitchIndexList[index];
+    succInfo.staticIndexSizeAndStitchIndex = (static_cast<uint64_t>(stitchIndexList[index]) << 32) |
+                                             (static_cast<uint64_t>(static_cast<uint16_t>(opSuccSize)) << 16) |
+                                             static_cast<uint64_t>(static_cast<uint16_t>(sucSize));
 
     staticField.depGraphSuccList.AssignRangeOffsetSize(operationSuccList_, sucSize, opSuccSize);
     // The DRCO succ segment is sorted by succ opIdx (depGraphSuccList keeps dict order: it feeds the
@@ -802,7 +807,11 @@ void DevAscendFunction::PopulateOneEncodedOpGraphEdges(
             ASSERT(DevCommonErr::PARAM_INVALID, npu::tile_fwk::IsValidDrcoCoreType(succCoreType))
                 << "DRCO successor coreType " << succCoreType << " (succ op " << succ << ") is not consumable";
         }
-        drcoSuccScratch.push_back(npu::tile_fwk::EncodeDrcoCoreType(succ, succCoreType));
+        uint32_t succEncoded = npu::tile_fwk::EncodeDrcoCoreType(succ, succCoreType);
+        if (succ == dummyEndingOpIdx_) {
+            succEncoded |= npu::tile_fwk::DRCO_SUCC_DUMMY_ENDING_BIT;
+        }
+        drcoSuccScratch.push_back(succEncoded);
         At(operationList_, succ).depGraphPredCount++;
         dupData->GetOperationCurrPredCount(succ)++;
     }
@@ -1279,6 +1288,8 @@ struct EncodeDevAscendFunctionInfo {
     std::unordered_map<Operation*, OrderedSet<Operation*>> callOpSuccDict;
     std::unordered_map<int, std::vector<int>> colorOutGraph;
     std::vector<std::shared_ptr<Operation>> dummyOpList;
+    Operation* dummyBeginning{nullptr};
+    Operation* dummyEnding{nullptr};
 
     std::vector<int> noSuccOpList;
     std::vector<int> noPredOpList;
@@ -2025,6 +2036,7 @@ struct EncodeDevAscendFunctionInfo {
             ASSERT(DevCommonErr::PARAM_CHECK_FAILED, callOpSuccDict[dummyOp].size() == zeroPreds.size())
                 << "callOpSuccDict[dummyOp] size mismatch: expected: " << zeroPreds.size()
                 << ", got: " << callOpSuccDict[dummyOp].size();
+            dummyBeginning = dummyOp;
         }
 
         // Zero successors
@@ -2038,6 +2050,7 @@ struct EncodeDevAscendFunctionInfo {
                     << "callOpSuccDict[op] is not empty, expect empty";
                 callOpSuccDict[op].Insert(dummyOp);
             }
+            dummyEnding = dummyOp;
         }
     }
 
@@ -2488,7 +2501,7 @@ struct EncodeDevAscendFunctionInfo {
         devFunc->InitTensor(initOffset, tensorList, rawTensorList, fillContent);
         devFunc->InitOperation(initOffset, expressionTable, callList, tensorList, rawTensorList, callOpPredDict,
                                callOpSuccDict, calleeHashIndexDict, stitchIndexList, noPredOpList, noSuccOpList,
-                               copyOutResolveSuccIndexListDict, cceCodeInfoList, fillContent);
+                               copyOutResolveSuccIndexListDict, cceCodeInfoList, dummyEnding, fillContent);
         devFunc->InitWrapInfo(initOffset, callList, fillContent, calleeHashIndexDict, cceCodeInfoList);
 
         MarkResolveBitmaps(devFunc, initOffset, fillContent);

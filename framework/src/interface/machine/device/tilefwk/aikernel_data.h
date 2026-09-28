@@ -61,6 +61,14 @@ struct CoreFuncParam {
 #define TASKID_DEVTASK_DCCI_BITS 1
 #define TASKID_DEVTASK_DCCI_MASK ((1 << TASKID_DEVTASK_DCCI_BITS) - 1)
 
+/* DRCO successor-list entry 的 encode 方式（32bit；entry = succOpIdx | (CoreType << 29)，非完整 taskId）：
+    |-----3bit-----|-----11bit-----|-----1bit------------|-----1bit-----|------16bit--------|
+    |---core type--|--unused/rsv---|--dummy ending bit---|--pair  bit---|--operation index---|
+    bit31-29：core type（TASKID_DRCO_CT_SHIFT=29，TASKID_DRCO_CT_MASK=0x7）
+    bit28-18：unused/reserved（drco succ 表中 bit16-28 原本空闲）
+    bit17   ：DRCO_SUCC_DUMMY_ENDING_BIT（succ 为 dummyEnding 时置位）
+    bit16   ：DRCO_SUCC_PAIR_BIT（偶数对齐 (2k,2k+1) 配对标记）
+    bit15-0 ：operation index（succ opIdx） */
 /* DRCO-only: CoreType enum encoded into taskId bit31-29 (rspflag/pingpong/dcci flags, all consumed
  * only by the AICPU-dispatch path, which never runs under DRCO). Host encodes at DRCO successor-table
  * / stitch; device decodes to skip cceBinaryIndexList + cceBinary GM dereference. Per-core dispatch
@@ -80,6 +88,11 @@ INLINE uint32_t EncodeDrcoCoreType(uint32_t taskId, uint32_t coreType)
     return taskId | (coreType << TASKID_DRCO_CT_SHIFT);
 }
 
+const uint32_t TASKID_DRCO_SUCC_SPECIAL_SHIFT = TASKID_TASK_BITS + TASKID_FUNC_BITS;
+const uint32_t TASKID_DRCO_SUCC_SPECIAL_MASK = 0x3f;
+
+constexpr uint32_t DRCO_SUCC_SPECIAL_PERCORE_SKIP_RESOLVE = 0x3f;
+
 /* DRCO-only: successor-table pairing. Entry bits 16-28 are free in the drco-encoded succ table
  * (entries are per-func opIdx, not full taskIds). Bit16 on an entry marks "this entry and the next
  * one are an even-aligned (2k, 2k+1) opIdx pair" (set at encode after a per-segment sort), so the
@@ -88,6 +101,8 @@ INLINE uint32_t EncodeDrcoCoreType(uint32_t taskId, uint32_t coreType)
  * atomic and overlap neighbouring pair domains without atomicity. Runtime pairing degrades
  * gracefully: entries without the bit take the original 32-bit path. */
 constexpr uint32_t DRCO_SUCC_PAIR_BIT = 1u << 16;
+
+constexpr uint32_t DRCO_SUCC_DUMMY_ENDING_BIT = 1u << 17;
 /* u64 addend = -(1 | 1<<32): subtracts 1 from each 32-bit half of a packed predCount pair slot.
  * Valid only while neither half underflows (each pred edge resolves exactly once). */
 constexpr uint64_t DRCO_SUCC_PAIR_DEC = 0xFFFFFFFEFFFFFFFFull;

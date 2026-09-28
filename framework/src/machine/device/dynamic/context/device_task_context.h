@@ -68,7 +68,9 @@ private:
                                    WrapInfoQueue* wrapQueue);
     int BuildDynFuncData(DynDeviceTask* dyntask, uint32_t taskId, DevAscendFunctionDupped* stitchedList,
                          uint64_t stitchedSize);
-    void BuildDrcoRootFuncData(DynFuncData* dyndata, DevAscendFunctionDupped& stitchedFunc);
+    void DrcoRefreshSpecialTaskId(DynDeviceTask* dyntask);
+    void BuildDrcoRootFuncData(DynFuncData* dyndata, DrcoRootFuncData* rootFuncData,
+                               DevAscendFunctionDupped& stitchedFunc);
 
     // mix subgraph schedule
     WrapInfoQueue* AllocWrapQueue(DynDeviceTask* dyntask);

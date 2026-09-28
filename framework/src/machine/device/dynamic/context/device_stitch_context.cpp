@@ -806,6 +806,7 @@ void DeviceStitchContext::StitchForWorkspaceReuse(DevAscendFunctionDupped* stitc
             DeviceStitchContext::HandleOneStitch(prevDup, currDup, stitch, preFuncIndex, prevNoSucc, devCurrIdx,
                                                  currNoPred, workspace, DeviceStitchContext::StitchKind::StitchReuse,
                                                  -1, devTaskId);
+            prevDup.GetDummyEndingUsed() = 1;
             DEV_IF_NONDEVICE { DeviceStitchContext::CheckStitch(stitchingList, stitchingSize, &currDup); }
         }
     }

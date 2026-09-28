@@ -97,12 +97,14 @@ void DeviceTaskContext::InitDrcoRootFuncList(DynDeviceTask* dyntask)
     rootFuncList->stitchNodeBase = (ctrlCache != nullptr && ctrlCache->IsRecording()) ?
                                        reinterpret_cast<uint64_t>(ctrlCache) :
                                        workspace_->GetStitchPoolBase();
-
     // 全核共享 hub 任务矩阵（单实例）：承接 hubStack 溢出与 stitch 类型越界的兜底改投，
     // 行 = 全局 blockIdx，任何核可 push 任意行、每核只 pop 自己行，fetch 循环无条件扫
     auto* hubTaskMatrix = workspace_->AllocateDrcoHubTaskMatrix(sizeof(npu::tile_fwk::DrcoGlobalHubTaskMatrix));
     new (hubTaskMatrix) npu::tile_fwk::DrcoGlobalHubTaskMatrix();
     rootFuncList->hubTaskMatrix = hubTaskMatrix;
+    rootFuncList->controlFlowCacheBase = reinterpret_cast<void*>(ctrlCache);
+    rootFuncList->metadataBase = reinterpret_cast<void*>(workspace_->GetMetadataBase());
+    rootFuncList->programBase = reinterpret_cast<void*>(devProg_);
     rootFuncList->totalTaskCount = dyntask->devTask.coreFunctionCnt;
     rootFuncList->devTaskFinished = 0;
     new (&rootFuncList->devTaskFinishFlagList) npu::tile_fwk::DrcoDevTaskFinishFlagList();
@@ -192,7 +194,47 @@ void DeviceTaskContext::DispatchDieReadyQueueToCores(DynDeviceTask* dyntask, Dev
     }
 }
 
-void DeviceTaskContext::BuildDrcoRootFuncData(DynFuncData* dyndata, DevAscendFunctionDupped& stitchedFunc)
+void DeviceTaskContext::DrcoRefreshSpecialTaskId(DynDeviceTask* dyntask)
+{
+    auto encodeTaskId = [&](uint32_t taskId) -> uint32_t {
+        uint32_t funcIdx = npu::tile_fwk::FuncID(taskId);
+        uint64_t funcInfoAndStaticDataOffset = dyntask->dynFuncDataList->GetDrcoRootFuncData(funcIdx)
+                                                   .funcInfoAndStaticDataOffset;
+        DevAscendFunction* devFunc = dyntask->dynFuncDataCacheList[funcIdx].devFunc;
+        int opIdx = static_cast<int>(npu::tile_fwk::TaskID(taskId));
+        size_t succSize = 0;
+        const uint32_t* succList = devFunc->GetOperationDepGraphSuccAddr(opIdx, succSize);
+        if (succSize == 1 && npu::tile_fwk::TaskID(succList[0]) == devFunc->dummyEndingOpIdx_ &&
+            (funcInfoAndStaticDataOffset & npu::tile_fwk::DRCO_ROOT_FUNC_MEMORY_REUSE_STITCHED_BIT) == 0) {
+            return taskId | ((npu::tile_fwk::DRCO_SUCC_SPECIAL_PERCORE_SKIP_RESOLVE &
+                              npu::tile_fwk::TASKID_DRCO_SUCC_SPECIAL_MASK)
+                             << npu::tile_fwk::TASKID_DRCO_SUCC_SPECIAL_SHIFT);
+        }
+        return taskId;
+    };
+
+    auto refreshReadyQueue = [&](ReadyCoreFunctionQueue* queue) {
+        for (uint32_t i = 0; i < queue->UnsafeSize(); ++i) {
+            queue->Data()[i] = encodeTaskId(queue->Data()[i]);
+        }
+    };
+    refreshReadyQueue(dyntask->readyQueue[DynDeviceTask::GetReadyQueueIndexByCoreType(CoreType::AIC)]);
+    refreshReadyQueue(dyntask->readyQueue[DynDeviceTask::GetReadyQueueIndexByCoreType(CoreType::AIV)]);
+
+    WrapInfoQueue* wrapQueue = reinterpret_cast<WrapInfoQueue*>(dyntask->devTask.mixTaskData.readyWrapCoreFunctionQue);
+    if (wrapQueue != nullptr) {
+        for (uint32_t idx = wrapQueue->head; idx < wrapQueue->tail; ++idx) {
+            for (uint32_t j = 0; j < MAX_WRAP_TASK_NUM; ++j) {
+                if (wrapQueue->elem[idx].tasklist[j] != AICORE_TASK_INIT) {
+                    wrapQueue->elem[idx].tasklist[j] = encodeTaskId(wrapQueue->elem[idx].tasklist[j]);
+                }
+            }
+        }
+    }
+}
+
+void DeviceTaskContext::BuildDrcoRootFuncData(DynFuncData* dyndata, DrcoRootFuncData* rootFuncData,
+                                              DevAscendFunctionDupped& stitchedFunc)
 {
     DevAscendFunction* source = stitchedFunc.GetSource();
     uint32_t opSize = stitchedFunc.GetOperationSize();
@@ -211,15 +253,54 @@ void DeviceTaskContext::BuildDrcoRootFuncData(DynFuncData* dyndata, DevAscendFun
     for (uint32_t i = 0; i < opSize; ++i) {
         aicorePredCount[i] = static_cast<int32_t>(stitchedFunc.GetOperationCurrPredCount(i));
     }
-    auto* rootFuncData = &dyndata->drcoRootFuncData;
-    rootFuncData->predCount = aicorePredCount;
+    DevAscendFunctionDuppedStitch** succStitchList = &stitchedFunc.DupDataForDynFuncData()->GetStitch(0).Head();
+
+    uint64_t programBase = reinterpret_cast<uint64_t>(devProg_);
+    uint64_t metadataBase = workspace_->GetMetadataBase();
+
+    auto* ctrlFlowCache = devProg_->GetControlFlowCache();
+    uint64_t controlFlowCacheBase = reinterpret_cast<uint64_t>(ctrlFlowCache);
+    uint64_t controlFlowCacheSize = (ctrlFlowCache != nullptr) ? ctrlFlowCache->GetSize() : 0;
+
     // DRCO consumes the encode-time coreType-encoded successor table (program memory, zero copy).
     // The source operationSuccList_ stays untouched (shared with DRCU/aicpu resolve).
-    rootFuncData->succStaticList = source->GetDrcoEncodedSuccAddr();
+    int32_t* succStaticList = source->GetDrcoEncodedSuccAddr();
+    uint64_t succStaticListOffset = reinterpret_cast<uint64_t>(succStaticList) - programBase;
+    auto* succInfoList = &source->GetOperationSuccInfo(0);
+    uint64_t succInfoListOffset = reinterpret_cast<uint64_t>(succInfoList) - programBase;
+    DEV_ASSERT_MSG(ProgEncodeErr::METADATA_SIZE_OVERFLOW_4G, succStaticListOffset < (1ULL << 30),
+                   "#drco.succStaticList.offset: offset=%lu is over 30bit", succStaticListOffset);
+    DEV_ASSERT_MSG(ProgEncodeErr::METADATA_SIZE_OVERFLOW_4G, succInfoListOffset < (1ULL << 30),
+                   "#drco.succInfoList.offset: offset=%lu is over 30bit", succInfoListOffset);
+    rootFuncData->funcInfoAndStaticDataOffset = succInfoListOffset |
+                                                (static_cast<uint64_t>(succStaticListOffset) << 30) |
+                                                (stitchedFunc.GetDummyEndingUsed() ?
+                                                     DRCO_ROOT_FUNC_MEMORY_REUSE_STITCHED_BIT :
+                                                     0ULL);
+
+    // predCount/succStitchList 可能落在 control flow cache（recording）或 metadata（非 recording），
+    // offset 最高位（bit31）作为 base 标记：0 = controlFlowCacheBase，1 = metadataBase，低 31 位为字节偏移。
+    uint64_t predCountAddr = reinterpret_cast<uint64_t>(aicorePredCount);
+    uint64_t succStitchListAddr = reinterpret_cast<uint64_t>(succStitchList);
+    bool predCountInCache = (ctrlFlowCache != nullptr) && predCountAddr >= controlFlowCacheBase &&
+                            predCountAddr < controlFlowCacheBase + controlFlowCacheSize;
+    bool succStitchListInCache = (ctrlFlowCache != nullptr) && succStitchListAddr >= controlFlowCacheBase &&
+                                 succStitchListAddr < controlFlowCacheBase + controlFlowCacheSize;
+    uint64_t predCountRawOffset = predCountAddr - (predCountInCache ? controlFlowCacheBase : metadataBase);
+    uint64_t succStitchListRawOffset = succStitchListAddr -
+                                       (succStitchListInCache ? controlFlowCacheBase : metadataBase);
+    // bit31 保留为 base 标记，偏移须 < 2^31，否则与标记位冲突。
+    DEV_ASSERT_MSG(ProgEncodeErr::METADATA_SIZE_OVERFLOW_4G, predCountRawOffset < (1ULL << 31),
+                   "#drco.predcount.offset: offset=%lu is over 2G", predCountRawOffset);
     // Stitch successors are encoded at build time (MakeDrcoStitchTaskId in device_stitch_context),
     // the shared linked nodes are consumed directly, no flattened copy here.
-    rootFuncData->succStitchList = &stitchedFunc.DupDataForDynFuncData()->GetStitch(0).Head();
-    rootFuncData->succInfoList = &source->GetOperationSuccInfo(0);
+    DEV_ASSERT_MSG(ProgEncodeErr::METADATA_SIZE_OVERFLOW_4G, succStitchListRawOffset < (1ULL << 31),
+                   "#drco.succStitchList.offset: offset=%lu is over 2G", succStitchListRawOffset);
+    uint32_t predCountOffset = static_cast<uint32_t>(predCountRawOffset) | (predCountInCache ? 0u : 0x80000000u);
+    uint32_t succStitchListOffset = static_cast<uint32_t>(succStitchListRawOffset) |
+                                    (succStitchListInCache ? 0u : 0x80000000u);
+    rootFuncData->funcDynamicDataOffset = (static_cast<uint64_t>(succStitchListOffset) << 32) | predCountOffset;
+
     dyndata->cceBinaryIndexList = source->GetCalleeIndexAddr();
     // 子链长度编码（nodeNext 低 6 位）：录制/非录制路径统一编码；录制路径下
     // TaskAddrRelocProgramAndCtrlCache 遍历已按解码地址取 NextRaw，编码值可安全参与重定位。
