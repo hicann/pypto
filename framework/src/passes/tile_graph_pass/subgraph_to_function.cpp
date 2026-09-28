@@ -1325,8 +1325,12 @@ Status SubgraphToFunction::RecoverCopyInToViewAfterGenSubgraph(Function& functio
                         op.GetOpMagic(), GetFormatBacktrace(op).c_str());
                     return FAILED;
                 }
+                auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
+                auto viewAttr = std::static_pointer_cast<ViewOpAttribute>(viewToCopyInMapping_.at(&op));
+                // Keep the restored VIEW aligned with the COPY_IN validshape used for COA and function hashing.
+                viewAttr->SetToDynValidShape(OpImmediate::ToSpecified(copyAttr->GetToDynValidShape()));
                 op.SetOpCode(Opcode::OP_VIEW);
-                op.SetOpAttribute(viewToCopyInMapping_.at(&op));
+                op.SetOpAttribute(viewAttr);
             }
         }
     }
