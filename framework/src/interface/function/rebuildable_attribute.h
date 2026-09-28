@@ -136,8 +136,12 @@ struct RebuildableMultiIterNoOverlap : RebuildableAttribute<std::unordered_set<i
     const char* Name() const override { return "MultiIterNoOverlap"; }
     void Mark(int rawMagic) { data.insert(rawMagic); }
     bool Has(int rawMagic) const { return data.count(rawMagic) != 0; }
+    void ClearMarks() { data.clear(); }
     std::string DumpValue() const override
     {
+        if (data.empty()) {
+            return "";
+        }
         std::vector<int> magics(data.begin(), data.end());
         std::sort(magics.begin(), magics.end());
         std::ostringstream oss;

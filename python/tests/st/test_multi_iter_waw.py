@@ -8,10 +8,7 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""ST: precision checks for InferMultiIterOverlap assemble scenes.
-
-Numerical results only. Mark / encode WAW are guarded by C++ UTs.
-"""
+"""ST: precision checks for InferMultiIterOverlap assemble scenes."""
 
 import os
 
@@ -152,6 +149,70 @@ def _kernel_nested_inner_immediate_offset(
             pypto.assemble(pypto.mul(v, 4.0), [i * TILE, 0], out_t)
 
 
+@pypto.frontend.jit()
+def _kernel_nested_outer_overlap_inner_disjoint(
+    in_t: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP32),
+    out_t: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP32),
+):
+    """Nested multi-induction: outer i half-window overlap, inner j tile-abut disjoint."""
+    stride_r = TILE // 2
+    n_row = (BS - TILE) // stride_r + 1
+    n_col = (HIDDEN + TILE_N - 1) // TILE_N
+    for i in pypto.loop(n_row, name="ST_OOV_I", idx_name="i"):
+        for j in pypto.loop(n_col, name="ST_OOV_J", idx_name="j"):
+            pypto.set_vec_tile_shapes(TILE, TILE)
+            v = in_t.view([TILE, TILE_N], [i * stride_r, j * TILE_N])
+            pypto.assemble(pypto.mul(v, 4.0), [i * stride_r, j * TILE_N], out_t)
+
+
+@pypto.frontend.jit()
+def _kernel_tensor_create_outer_inner_overlap(
+    in_t: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP32),
+    out_t: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP32),
+):
+    """Outer creates local buf; inner j half-window overlap into buf; then buf→out at i*TILE."""
+    stride_c = TILE // 2
+    n_row = (BS + TILE - 1) // TILE
+    n_col = (HIDDEN - TILE) // stride_c + 1
+    for i in pypto.loop(n_row, name="ST_TCO_I", idx_name="i"):
+        buf = pypto.tensor([TILE, HIDDEN], pypto.DT_FP32, "buf")
+        for j in pypto.loop(n_col, name="ST_TCO_J", idx_name="j"):
+            pypto.set_vec_tile_shapes(TILE, TILE)
+            v = in_t.view([TILE, TILE], [i * TILE, j * stride_c])
+            pypto.assemble(pypto.mul(v, 4.0), [0, j * stride_c], buf)
+        pypto.assemble(buf, [i * TILE, 0], out_t)
+
+
+@pypto.frontend.jit()
+def _kernel_full_create_disjoint(
+    in_t: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP32),
+    out_t: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP32),
+):
+    """full→VEC_DUP create each iter; assemble at i*TILE (disjoint). in_t unused."""
+    n = (BS + TILE - 1) // TILE
+    for i in pypto.loop(n, name="ST_FULL_I", idx_name="i"):
+        pypto.set_vec_tile_shapes(TILE, TILE)
+        f = pypto.full([TILE, HIDDEN], 1.0, pypto.DT_FP32)
+        pypto.assemble(f, [i * TILE, 0], out_t)
+
+
+@pypto.frontend.jit()
+def _kernel_tensor_create_outer_inner_disjoint(
+    in_t: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP32),
+    out_t: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP32),
+):
+    """Outer tensor(buf) create; inner j*TILE abut into buf; buf→out at i*TILE."""
+    n_row = (BS + TILE - 1) // TILE
+    n_col = (HIDDEN + TILE - 1) // TILE
+    for i in pypto.loop(n_row, name="ST_TCD_I", idx_name="i"):
+        buf = pypto.tensor([TILE, HIDDEN], pypto.DT_FP32, "buf")
+        for j in pypto.loop(n_col, name="ST_TCD_J", idx_name="j"):
+            pypto.set_vec_tile_shapes(TILE, TILE)
+            v = in_t.view([TILE, TILE], [i * TILE, j * TILE])
+            pypto.assemble(pypto.mul(v, 4.0), [0, j * TILE], buf)
+        pypto.assemble(buf, [i * TILE, 0], out_t)
+
+
 # ---------- goldens ----------
 
 
@@ -251,6 +312,62 @@ def _golden_nested_inner_immediate_offset(x):
     return out
 
 
+def _golden_nested_outer_overlap_inner_disjoint(x):
+    out = torch.zeros_like(x)
+    stride_r = TILE // 2
+    n_row = (BS - TILE) // stride_r + 1
+    n_col = (HIDDEN + TILE_N - 1) // TILE_N
+    for i in range(n_row):
+        for j in range(n_col):
+            r0, c0 = i * stride_r, j * TILE_N
+            rows = min(TILE, BS - r0)
+            cols = min(TILE_N, HIDDEN - c0)
+            out[r0:r0 + rows, c0:c0 + cols] = 4.0 * x[r0:r0 + rows, c0:c0 + cols]
+    return out
+
+
+def _golden_tensor_create_outer_inner_overlap(x):
+    out = torch.zeros_like(x)
+    stride_c = TILE // 2
+    n_row = (BS + TILE - 1) // TILE
+    n_col = (HIDDEN - TILE) // stride_c + 1
+    for i in range(n_row):
+        buf = torch.zeros(TILE, HIDDEN, dtype=x.dtype)
+        r0 = i * TILE
+        rows = min(TILE, BS - r0)
+        for j in range(n_col):
+            c0 = j * stride_c
+            cols = min(TILE, HIDDEN - c0)
+            buf[:, c0:c0 + cols] = 4.0 * x[r0:r0 + rows, c0:c0 + cols]
+        out[r0:r0 + rows, :] = buf[:rows, :]
+    return out
+
+
+def _golden_full_create_disjoint(x):
+    out = torch.zeros_like(x)
+    for i in range((BS + TILE - 1) // TILE):
+        r0 = i * TILE
+        rows = min(TILE, BS - r0)
+        out[r0:r0 + rows, :] = 1.0
+    return out
+
+
+def _golden_tensor_create_outer_inner_disjoint(x):
+    out = torch.zeros_like(x)
+    n_row = (BS + TILE - 1) // TILE
+    n_col = (HIDDEN + TILE - 1) // TILE
+    for i in range(n_row):
+        buf = torch.zeros(TILE, HIDDEN, dtype=x.dtype)
+        r0 = i * TILE
+        rows = min(TILE, BS - r0)
+        for j in range(n_col):
+            c0 = j * TILE
+            cols = min(TILE, HIDDEN - c0)
+            buf[:, c0:c0 + cols] = 4.0 * x[r0:r0 + rows, c0:c0 + cols]
+        out[r0:r0 + rows, :] = buf[:rows, :]
+    return out
+
+
 # ---------- tests ----------
 
 
@@ -295,4 +412,35 @@ def test_multi_iter_waw_nested_inner_immediate_offset():
         _golden_nested_inner_immediate_offset,
         tag="nested_inner_immediate_offset",
         seed=6,
+    )
+
+
+def test_multi_iter_waw_nested_outer_overlap_inner_disjoint():
+    _run_case(
+        _kernel_nested_outer_overlap_inner_disjoint,
+        _golden_nested_outer_overlap_inner_disjoint,
+        tag="nested_outer_overlap_inner_disjoint",
+        seed=7,
+    )
+
+
+def test_multi_iter_waw_tensor_create_outer_inner_overlap():
+    _run_case(
+        _kernel_tensor_create_outer_inner_overlap,
+        _golden_tensor_create_outer_inner_overlap,
+        tag="tensor_create_outer_inner_overlap",
+        seed=8,
+    )
+
+
+def test_multi_iter_waw_full_create_disjoint():
+    _run_case(_kernel_full_create_disjoint, _golden_full_create_disjoint, tag="full_create_disjoint", seed=9)
+
+
+def test_multi_iter_waw_tensor_create_outer_inner_disjoint():
+    _run_case(
+        _kernel_tensor_create_outer_inner_disjoint,
+        _golden_tensor_create_outer_inner_disjoint,
+        tag="tensor_create_outer_inner_disjoint",
+        seed=10,
     )

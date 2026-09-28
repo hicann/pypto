@@ -265,7 +265,7 @@ class Function:
 
         Returns:
             A dict mapping attribute names to their dumped values, e.g.
-            {"IterNoOverlapRaw": "[3, 5]"}.
+            {"MultiIterNoOverlap": "[3, 5]"}.
             Empty dict if no attribute has been recorded for this function.
         """
         return self.base.DumpAttrs()
