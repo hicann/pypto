@@ -704,11 +704,11 @@ void OpcodeManager::RegisterVector()
                  {OpAttributeKey::transDataOffset, OP_ATTR_PREFIX + "group", OpAttributeKey::excludeBufferReuse});
     RegisterInfo(Opcode::OP_FractalZ2NCHW, OpCoreType::AIV, "FractalZ2NCHW", {MemoryType::MEM_UB},
                  {MemoryType::MEM_UB, MemoryType::MEM_UB},
-                 {"TileOp::TtransData_fractalz2nchw", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::OTHER,
+                 {"TileOp::TtransData_fractalz2nchw", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
                  {OpAttributeKey::transDataOffset, OP_ATTR_PREFIX + "group", OpAttributeKey::excludeBufferReuse});
     RegisterInfo(Opcode::OP_FractalZ3D2NCDHW, OpCoreType::AIV, "FractalZ3D2NCDHW", {MemoryType::MEM_UB},
                  {MemoryType::MEM_UB, MemoryType::MEM_UB},
-                 {"TileOp::TtransData_fractalz3d2ncdhw", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::OTHER,
+                 {"TileOp::TtransData_fractalz3d2ncdhw", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
                  {OpAttributeKey::transDataOffset, OP_ATTR_PREFIX + "group", OpAttributeKey::excludeBufferReuse});
     RegisterInfo(Opcode::OP_PERMUTE, OpCoreType::AIV, "PERMUTE", {MemoryType::MEM_DEVICE_DDR}, {MemoryType::MEM_UB},
                  {"TileOp::TPermute", PIPE_S, PIPE_MTE2, CoreType::AIV}, OpCalcType::OTHER, {OpAttributeKey::perm},

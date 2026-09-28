@@ -201,53 +201,59 @@ __aicore__ inline void TTransDataFractalZ2NCHW(DST dst, TMP tmpTensor, INPUT inp
     constexpr auto inputTypeSize = sizeof(typename INPUT::Type);
     constexpr auto C0 = TileOp::BLOCK_SIZE / inputTypeSize;
     constexpr auto N0 = 16;
+    constexpr auto TileC1HW = Std::tuple_element<DIM_1ST, typename INPUT::TileShape>::type::value;
+    constexpr auto TileN1 = Std::tuple_element<DIM_2ND, typename INPUT::TileShape>::type::value;
     constexpr auto dstTileH = Std::tuple_element<DIM_3RD, typename DST::TileShape>::type::value;
     constexpr auto dstTileW = Std::tuple_element<DIM_4TH, typename DST::TileShape>::type::value;
+    constexpr auto TileC1 = TileC1HW / dstTileH / dstTileW;
+    constexpr int elementSize = TileC1HW * TileN1 * N0 * C0;
+    constexpr int bufferSize = elementSize * inputTypeSize;
+    constexpr int TileN = N0 * TileN1;
 
     const auto inputLayout = input.GetLayout();
     auto inputC1HW = inputLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
     auto inputN1 = inputLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
     auto inputN0 = inputLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
     auto inputC0 = inputLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
-    auto inputStride0 = inputLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>(); // 注意验证
-    auto inputStride1 = inputLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
-    auto inputStride2 = inputLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
-    auto inputStride3 = inputLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
 
-    const auto dstLayout = dst.GetLayout();
-    auto dstStride0 = dstLayout.template GetStrideDim<DIM_1ST>();
-    auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND>();
-    auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD>();
-    auto dstStride3 = dstLayout.template GetStrideDim<DIM_4TH>();
-    auto dstN = dstLayout.template GetShapeDim<DIM_1ST>();
-    auto dstC = dstLayout.template GetShapeDim<DIM_2ND>();
+    using Tdst = typename INPUT::Type;
+    using Tsrc = typename INPUT::Type;
+    using Ttmp = typename INPUT::Type;
 
-    auto inputAddr = (__ubuf__ typename INPUT::Type*)((uint64_t)(input.GetAddr()));
-    auto dstAddr = (__ubuf__ typename INPUT::Type*)((uint64_t)(dst.GetAddr()));
+    __ubuf__ Tsrc* inputAddr = (__ubuf__ Tsrc*)((uint64_t)(input.GetAddr()));
+    __ubuf__ Tdst* dstAddr = (__ubuf__ Tdst*)((uint64_t)(dst.GetAddr()));
+    __ubuf__ Ttmp* tmpAddr = (__ubuf__ Ttmp*)((uint64_t)(tmpTensor.GetAddr()));
 
     if (inputC1HW == 0 || inputN1 == 0 || inputN0 == 0 || inputC0 == 0) {
         return;
     }
 
-    for (LoopVar i = 0; i < inputC1HW; i++) {
-        for (LoopVar j = 0; j < inputN1; j++) {
-            for (LoopVar k = 0; k < inputN0; k++) {
-                for (LoopVar m = 0; m < inputC0; m++) {
-                    int inputOffset = i * inputStride1 + j * inputStride2 + k * inputStride3 + m;
-                    int n = j * N0 + k;
-                    int c1 = i / (dstTileH * dstTileW);
-                    int hw = i % (dstTileH * dstTileW);
-                    int c = c1 * C0 + m;
-                    int h = hw / dstTileW;
-                    int w = hw % dstTileW;
-                    if (n < dstN && c < dstC) {
-                        int dstOffset = n * dstStride0 + c * dstStride1 + h * dstStride2 + w * dstStride3;
-                        dstAddr[dstOffset] = inputAddr[inputOffset];
-                    }
-                }
-            }
-        }
+    uint32_t burstNum = TileN;
+    uint32_t lenBurst = (C0 * inputTypeSize + TileOp::BLOCK_SIZE - 1) / TileOp::BLOCK_SIZE;
+    uint32_t srcGap = 0;
+    uint32_t dstGap = (TileC1HW * C0 * inputTypeSize + TileOp::BLOCK_SIZE - 1) / TileOp::BLOCK_SIZE - lenBurst;
+    for (int i = 0; i < TileC1HW; i++) {
+        __ubuf__ Tsrc* srcPtr = inputAddr + i * TileN * C0;
+        __ubuf__ Tdst* tmpPtr = tmpAddr + i * C0;
+        pto::pto_copy_ubuf_to_ubuf(tmpPtr, srcPtr, burstNum, lenBurst, srcGap, dstGap);
     }
+    pipe_barrier(PIPE_V);
+
+    __ubuf__ Ttmp* tmpAreaTileAddr = tmpAddr + elementSize;
+    using inputTileData = pto::ConvTile<pto::TileType::Vec, typename INPUT::Type, bufferSize, pto::Layout::NC1HWC0,
+                                        pto::ConvTileShape<TileN, TileC1, dstTileH, dstTileW, C0>>;
+    using tmpDstTileData = pto::ConvTile<pto::TileType::Vec, typename INPUT::Type, bufferSize, pto::Layout::NCHW,
+                                         pto::ConvTileShape<TileN, TileC1 * C0, dstTileH, dstTileW>>;
+    using tmpTileData = pto::Tile<pto::TileType::Vec, typename INPUT::Type, dstTileH * dstTileW, C0,
+                                  pto::BLayout::RowMajor, dstTileH * dstTileW, C0>;
+    inputTileData convInput;
+    tmpDstTileData convTmpDst;
+    tmpTileData tmpAreaTile;
+
+    pto::TASSIGN(convInput, (uint64_t)(tmpAddr));
+    pto::TASSIGN(convTmpDst, (uint64_t)(dstAddr));
+    pto::TASSIGN(tmpAreaTile, (uint64_t)(tmpAreaTileAddr));
+    pto::TTRANS(convTmpDst, convInput, tmpAreaTile);
 }
 
 #endif

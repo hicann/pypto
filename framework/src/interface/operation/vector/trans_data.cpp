@@ -841,10 +841,20 @@ void HandleFractalZ2NCHW(Function& function, const LogicalTensorPtr& dstTensor, 
                          [[maybe_unused]] int64_t dstW, const TransDataPara& transDataPara)
 {
     int64_t C0 = BLOCK_SIZE / BytesOf(inputTile->Datatype());
-    int shape2 = 1;
-    std::vector<int64_t> tmpShape = {shape2};
+    int64_t N0 = 16;
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, inputTile->GetShape()[2] == N0 && inputTile->GetShape()[3] == C0)
+        << "The transdata NZ input shape must be [C1HW, N1, 16, C0]!";
+    int64_t N1 = inputTile->GetShape()[1];
+    int64_t C1HW = inputTile->GetShape()[0];
+    int64_t H = 1;
+    int64_t C1 = 1;
+    int64_t WPad = CeilDiv(C1HW, C0) * C0;
+
+    int64_t yTileSizeElem = BytesOf(inputTile->Datatype()) == 1 ? 32 : 16;
+    int64_t shape1 = WPad * N1 * N0 * C0;
+    int64_t shape2 = C0 * ((WPad + yTileSizeElem - 1) / yTileSizeElem * yTileSizeElem);
+    std::vector<int64_t> tmpShape = {shape1 + shape2};
     auto tmpTile = std::make_shared<LogicalTensor>(function, inputTile->Datatype(), tmpShape);
-    auto dstTensorTile = GetFzNCHWDstTile(function, dstTensor, inputTile, transDataTileInfoPara, transDataPara, C0);
 
     for (int i = 0; i < SHAPE_DIM4; i++) {
         tileParams[i] = SymbolicScalar(transDataTileInfoPara.inputTileInfo.offset[i]);
@@ -852,8 +862,27 @@ void HandleFractalZ2NCHW(Function& function, const LogicalTensorPtr& dstTensor, 
     tileParams[4] = transDataPara.groupIdx;
     tileParams[5] = transDataPara.group;
 
-    auto& op = function.AddOperation(Opcode::OP_FractalZ2NCHW, {inputTile}, {dstTensorTile, tmpTile});
+    auto dstTensorTile = GetFzNCHWDstTile(function, dstTensor, inputTile, transDataTileInfoPara, transDataPara, C0);
+    auto tmpDstTile = std::make_shared<LogicalTensor>(function, inputTile->Datatype(),
+                                                      Shape{N1 * N0, C1 * C0, H, WPad});
+    tmpDstTile->UpdateDynValidShape(dstTensorTile->GetDynValidShape());
+    auto realInput = std::make_shared<LogicalTensor>(function, inputTile->Datatype(), Shape{WPad, N1, N0, C0});
+    realInput->UpdateDynValidShape(inputTile->GetDynValidShape());
+    auto realInputTile = realInput->View(function, inputTile->GetShape(), Offset{0, 0, 0, 0});
+
+    [[maybe_unused]] auto& copyOp1 = function.AddOperation(Opcode::OP_REGISTER_COPY, {inputTile}, {realInputTile});
+    auto& op = function.AddOperation(Opcode::OP_FractalZ2NCHW, {realInput}, {tmpDstTile, tmpTile});
     op.SetAttribute(OpAttributeKey::transDataOffset, tileParams);
+    auto tmpDstValidTile = tmpDstTile->View(function, dstTensorTile->GetShape(), Offset{0, 0, 0, 0});
+    [[maybe_unused]] auto& copyOp2 = function.AddOperation(Opcode::OP_REGISTER_COPY, {tmpDstValidTile},
+                                                           {dstTensorTile});
+
+    if (!tmpDstValidTile->GetProducers().empty()) {
+        auto* producer = *tmpDstValidTile->GetProducers().begin();
+        if (producer->GetOpcode() == Opcode::OP_VIEW) {
+            producer->SetAttribute(OpAttributeKey::dontTouch, true);
+        }
+    }
 }
 
 void HandleFractalZ3D2NCDHW(Function& function, const LogicalTensorPtr& dstTensor, const LogicalTensorPtr& inputTile,
@@ -861,10 +890,32 @@ void HandleFractalZ3D2NCDHW(Function& function, const LogicalTensorPtr& dstTenso
                             [[maybe_unused]] int64_t dstW, const TransDataPara& transDataPara)
 {
     int64_t C0 = BLOCK_SIZE / BytesOf(inputTile->Datatype());
-    int shape2 = 1;
-    std::vector<int64_t> tmpShape = {shape2};
+    int64_t N0 = 16;
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, inputTile->GetShape()[2] == N0 && inputTile->GetShape()[3] == C0)
+        << "The transdata NZ input shape must be [DC1HW, N1, 16, C0]!";
+
+    auto inputShape = inputTile->GetShape();
+    int64_t N1 = inputShape[1];
+    int64_t N = N1 * N0;
+    int64_t D = 1;
+    int64_t H = 1;
+    int64_t DC1HW = inputShape[0];
+    int64_t WPad = CeilDiv(DC1HW, C0) * C0;
+    int64_t yTileSizeElem = BytesOf(inputTile->Datatype()) == 1 ? 32 : 16;
+    int64_t ncplaneSize = N * D * H * WPad * ((C0 + yTileSizeElem - 1) / yTileSizeElem * yTileSizeElem);
+    int64_t tmpAreaSize = C0 * ((H * WPad + yTileSizeElem - 1) / yTileSizeElem * yTileSizeElem);
+    int64_t scratchSize = 2 * ncplaneSize + tmpAreaSize;
+    std::vector<int64_t> tmpShape = {scratchSize};
     auto tmpTile = std::make_shared<LogicalTensor>(function, inputTile->Datatype(), tmpShape);
+
+    auto realInputTile = std::make_shared<LogicalTensor>(function, inputTile->Datatype(), Shape{WPad, N1, N0, C0});
+    realInputTile->UpdateDynValidShape(inputTile->GetDynValidShape());
+    auto realInput = realInputTile->View(function, inputTile->GetShape(), Offset{0, 0, 0, 0});
+
     auto dstTensorTile = GetFz3DNCDHWDstTile(function, dstTensor, inputTile, transDataTileInfoPara, transDataPara, C0);
+
+    auto tmpDstTile = std::make_shared<LogicalTensor>(function, inputTile->Datatype(), Shape{N, C0, D, H, WPad});
+    tmpDstTile->UpdateDynValidShape(dstTensorTile->GetDynValidShape());
 
     for (int i = 0; i < SHAPE_DIM4; i++) {
         tileParams[i] = SymbolicScalar(transDataTileInfoPara.inputTileInfo.offset[i]);
@@ -872,8 +923,19 @@ void HandleFractalZ3D2NCDHW(Function& function, const LogicalTensorPtr& dstTenso
     tileParams[4] = transDataPara.groupIdx;
     tileParams[5] = transDataPara.group;
 
-    auto& op = function.AddOperation(Opcode::OP_FractalZ3D2NCDHW, {inputTile}, {dstTensorTile, tmpTile});
+    [[maybe_unused]] auto& copyOp = function.AddOperation(Opcode::OP_REGISTER_COPY, {inputTile}, {realInput});
+    auto& op = function.AddOperation(Opcode::OP_FractalZ3D2NCDHW, {realInputTile}, {tmpDstTile, tmpTile});
     op.SetAttribute(OpAttributeKey::transDataOffset, tileParams);
+
+    std::shared_ptr<LogicalTensor> realDstTile = tmpDstTile->View(function, dstTensorTile->GetShape(),
+                                                                  Offset{0, 0, 0, 0, 0});
+    [[maybe_unused]] auto& copyOp1 = function.AddOperation(Opcode::OP_REGISTER_COPY, {realDstTile}, {dstTensorTile});
+    if (!realDstTile->GetProducers().empty()) {
+        auto* producer = *realDstTile->GetProducers().begin();
+        if (producer->GetOpcode() == Opcode::OP_VIEW) {
+            producer->SetAttribute(OpAttributeKey::dontTouch, true);
+        }
+    }
 }
 
 template <TileOpFormat T>

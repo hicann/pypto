@@ -278,6 +278,8 @@ const std::map<std::string, CorePipeType> SCHED_CORE_PIPE_TYPE{// Unary Vector
                                                                {"NCDHW2NDC1HWC0", CorePipeType::PIPE_MTE_OUT},
                                                                {"NCDHW2FRACTAL_Z_3D", CorePipeType::PIPE_MTE_OUT},
                                                                {"NDC1HWC02NCDHW", CorePipeType::PIPE_MTE_OUT},
+                                                               {"FractalZ2NCHW", CorePipeType::PIPE_MTE_OUT},
+                                                               {"FractalZ3D2NCDHW", CorePipeType::PIPE_MTE_OUT},
 
                                                                {"L0C_COPY_OUT", CorePipeType::PIPE_MTE_OUT},
                                                                {"L0C_COPY_OUT_CONV", CorePipeType::PIPE_FIX},
