@@ -76,6 +76,8 @@ SpanScope::~SpanScope() { g_currentSpan = prev_; }
 
 std::string ErrHead(const char* file, int line, const char* module, unsigned code, const char* codeName)
 {
+    const char* slash = std::strrchr(file, '/');
+    file = slash ? slash + 1 : file;
     std::ostringstream oss;
     oss << "[" << file << ":" << line << "][" << module << "]:"
         << "ErrCode: F" << std::uppercase << std::hex << std::setw(CODE_WIDTH) << std::setfill('0')

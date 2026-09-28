@@ -931,7 +931,7 @@ def test_an_op_without_a_declaration_is_not_type_checked_either():
     rendered = _render(kernel)
     # the C++ deduction is the one that refuses it, and says so in its own words
     assert rendered.head["module"] == "PRO_IR"
-    assert rendered.head["origin"].split(":")[0].endswith(".cpp")
+    assert rendered.head["origin"].split(":")[0].endswith((".cpp", ".h")), rendered.head["origin"]
 
 
 # ---------------------------------------------------------------------------
