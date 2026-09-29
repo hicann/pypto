@@ -253,7 +253,7 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
 
     DataDumpInit();
     rc = LaunchKernel(aicoreStream, ctrlFlowCache, kernel.get(), wsAddr, tensors, false, 0);
-    if (rc < 0) {
+    if (rc != 0) {
         return rc;
     }
 
@@ -599,18 +599,18 @@ int32_t DeviceLauncher::SetLaunchNoBlocking(const AclRtStream& aicoreStream)
     attrValue.launchBlockingMode = 1;
     ret = AclRtSetStreamAttribute(schedStream, npu::tile_fwk::AclRtStreamAttr::STREAM_ATTR_LAUNCH_BLOCKING, &attrValue);
     if (ret != 0) {
-        MACHINE_LOGW("ScheStream Launch set no blocking failed, ret: %d", ret);
+        MACHINE_LOGE(MachineError::HOST_LAUNCHER, "ScheStream Launch set no blocking failed, ret: %d", ret);
         return static_cast<int32_t>(MachineError::HOST_LAUNCHER);
     }
     ret = AclRtSetStreamAttribute(ctrlStream, npu::tile_fwk::AclRtStreamAttr::STREAM_ATTR_LAUNCH_BLOCKING, &attrValue);
     if (ret != 0) {
-        MACHINE_LOGW("CtrlStream Launch set no blocking failed, ret: %d", ret);
+        MACHINE_LOGE(MachineError::HOST_LAUNCHER, "CtrlStream Launch set no blocking failed, ret: %d", ret);
         return static_cast<int32_t>(MachineError::HOST_LAUNCHER);
     }
     ret = AclRtSetStreamAttribute(aicoreStream, npu::tile_fwk::AclRtStreamAttr::STREAM_ATTR_LAUNCH_BLOCKING,
                                   &attrValue);
     if (ret != 0) {
-        MACHINE_LOGW("AicoreStream Launch set no blocking failed, ret: %d", ret);
+        MACHINE_LOGE(MachineError::HOST_LAUNCHER, "AicoreStream Launch set no blocking failed, ret: %d", ret);
         return static_cast<int32_t>(MachineError::HOST_LAUNCHER);
     }
     return ret;
@@ -662,9 +662,14 @@ int DeviceLauncher::LaunchKernel(AclRtStream aicoreStream, uint8_t* ctrlFlowCach
     }
     bool isEnableBlocking = IsLaunchBlockingEnabled();
     if (!isCaptureMode && isEnableBlocking) {
-        // 更新runtime 包场景这里失败需要中断，当前考虑CI和本地无runtime 包更新场景暂时warn 提示下
+        // 失败情况包括：
+        // 1)、在eager 模式下设置了RT_LAUNCHING_BLOCKING【用户想使用这个功能】
+        //  无更新runtime 包及时中断。方便提示用户完成runtime 更新；
+        // 2)、pypto 的数据内存格式与rt
+        // 本身数据格式内存大小不一致，属性设置失败，此时需要及时中断，否则任务死锁，导致异常卡死。
         if (SetLaunchNoBlocking(aicoreStream) != 0) {
-            MACHINE_LOGW("May exect failed, please update CANN Package");
+            MACHINE_LOGE(MachineError::HOST_LAUNCHER, "May exect failed, please update CANN Package");
+            return static_cast<int32_t>(MachineError::HOST_LAUNCHER);
         }
     }
     ret = LaunchAicpuKernel(aicpuLaunchDesc, debugEnable, kernel->GetFunction(), tensors);
