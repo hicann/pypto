@@ -35,7 +35,7 @@ pypto_pro.language.make_tile_group(
     *,
     type: TileType,
     addrs: Union[int, List[int]],
-    mutex_ids: Optional[Sequence[Union[int, Sequence[int]]]] = None,
+    mutex_ids: Union[str, Sequence[Union[int, Sequence[int]]], None] = None,
     depth: Optional[int] = None,
     fwd_ids: Optional[Sequence[int]] = None,
     bwd_ids: Optional[Sequence[int]] = None,
@@ -48,15 +48,14 @@ pypto_pro.language.make_tile_group(
 |---|---|---|
 | type | 输入 | Tile类型描述，[pypto_pro.language.TileType](../basic_data_structures/TileType.md)类型。 |
 | addrs | 输入 | Tile地址，int或List[int]类型，必须非负并在编译期确定，且满足对应Buffer的地址对齐要求。传入单个基地址时，第i块Tile的地址为base + i × slot_size，其中slot_size为单块Tile占用的字节数；传入地址列表时，列表长度必须等于mutex_ids的长度或depth的值，并按顺序为每块Tile指定地址。地址列表可用于非连续地址排布。 |
-| mutex_ids | 输入 | mutex ID配置，Sequence[int或Sequence[int]]类型，可选，也可传入None或空列表。mutex ID的取值范围为[0, 31]。每块Tile对应的mutex ID数量必须一致，同一块Tile的多个mutex ID不得重复，不同Tile之间可以使用相同的mutex ID。 |
-| depth | 输入 | TileGroup深度，int类型，可选，必须为正的编译期整数。mutex_ids为None或空列表时必须指定depth；未指定depth且mutex_ids非空时，由mutex_ids的长度确定；同时指定时，两者必须相等。 |
+| mutex_ids | 输入 | mutex ID配置，str或Sequence[int或Sequence[int]]类型，可选，也可传入None或空列表。Mutex ID的取值范围为[0, 31]。传入序列和"auto"时的使用要求如下：<br>- **序列（Sequence[int或Sequence[int]]类型）**：配置非空mutex_ids且@pypto_pro.language.jit启用auto_mutex模式（auto_mutex=True）时，框架根据Tile与mutex的映射插入同步；未启用auto_mutex模式（auto_mutex=False）时，调用方必须自行保证Tile的访问时序。每块Tile对应的mutex ID数量必须一致，同一块Tile的多个mutex ID不得重复，不同Tile之间可以使用相同的mutex ID。<br>- **"auto"（str类型）**：框架在编译期为组内每块Tile自动分配1个mutex ID，此时必须指定depth，使用时需注意以下几点：<br>&nbsp;&nbsp;- @pypto_pro.language.jit必须启用auto_mutex模式（auto_mutex=True）。<br>&nbsp;&nbsp;- 同一TileGroup内：不同Tile的mutex_id不能出现"auto"与手动配置ID混合的情况。<br>&nbsp;&nbsp;- 不同TileGroup间：<br>&nbsp;&nbsp;&nbsp;&nbsp;- 可设置手动配置mutex_ids与自动分配mutex_ids（"auto"）混合。<br>&nbsp;&nbsp;&nbsp;&nbsp;- 不支持需"auto"的Tile与其他Tile间地址范围有部分地址重叠，允许完全重叠。<br>&nbsp;&nbsp;&nbsp;&nbsp;- Tile间属于完全重叠场景且其中包含需"auto"的Tile时，处于该场景的所有Tile分配的ID需保持一致，且Tile中手动配置的mutex_id只能为1个。 |
+| depth | 输入 | TileGroup深度，int类型，可选，必须为正的编译期整数。mutex_ids为"auto"、None或空列表时必须指定depth；未指定depth且mutex_ids非空时，由mutex_ids的长度确定；同时指定时，两者必须相等。 |
 | fwd_ids | 输入 | 仅用于[自动CV并行流水](../../../../guide/programming_guide/pro/advanced_programming/auto_parallel_pipeline.md)，表示核间正向同步的event id，Sequence[int]类型，可选。未开启自动流水时忽略。 |
 | bwd_ids | 输入 | 仅用于[自动CV并行流水](../../../../guide/programming_guide/pro/advanced_programming/auto_parallel_pipeline.md)，表示核间反向同步的event id，Sequence[int]类型，可选。未开启自动流水时忽略。 |
 
 ## 约束说明
 
-- 使用group[i]访问Tile时，i支持编译期整数或运行时整数表达式，例如g[i]、g[(i + 1) % 2]。索引值应位于[0, num_tile)范围内；num_tile为mutex_ids非空时的列表长度，否则为depth。
-- 配置非空mutex_ids且启用auto_mutex时，框架根据Tile与mutex的映射插入同步；未启用auto_mutex时，调用方必须自行保证Tile的访问时序。
+- 使用group[i]访问Tile时，i支持编译期整数或运行时整数表达式，例如g[i]、g[(i + 1) % 2]。索引值应位于[0, num_tile)范围内；mutex_ids为None或"auto"时，num_tile为depth，其余情况下，num_tile为非空序列时的列表长度。
 
 ## 返回值说明
 
@@ -175,4 +174,29 @@ def tile_group_4buf_matmul_kernel(
 # 两块 Tile 分别落在 0x0 和 0x10000
 tt = pl.TileType(shape=[64, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
 buf = pl.make_tile_group(type=tt, addrs=[0x0, 0x10000], mutex_ids=[0, 1])
+```
+
+### 使用mutex_ids="auto"自动分配mutex ID
+
+```python
+import pypto_pro.language as pl
+
+ROWS, COLS = 32, 64
+DEPTH = 2
+TILES = 8
+
+
+@pl.jit(auto_mutex=True)
+def auto_mutex_tile_group_kernel(
+    x: pl.Tensor[[ROWS * TILES, COLS], pl.DT_FP16],
+    y: pl.Tensor[[ROWS * TILES, COLS], pl.DT_FP16],
+):
+    tt = pl.TileType(shape=[ROWS, COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    # mutex_ids="auto"：框架自动为组内每块Tile分配mutex ID，此时depth必须指定
+    group = pl.make_tile_group(type=tt, addrs=0, mutex_ids="auto", depth=DEPTH)
+    with pl.section_vector():
+        for i in pl.range(0, TILES):
+            tile = group[i % DEPTH]
+            pl.load(tile, x, [i * ROWS, 0])
+            pl.store(y, tile, [i * ROWS, 0])
 ```

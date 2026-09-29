@@ -179,6 +179,8 @@ mutex ID是片上缓冲区互斥同步资源的编号，用于协调不同Pipe�
 
 分配ID时，在同一个TileGroup内和不同的TileGroup之间，优先为每块Tile分配不同的ID。比如双缓冲使用mutex_ids=[0, 1]，另一块同时参与流水的Tile使用mutex_ids=[2]。这样可避免无关Tile因共用ID而互相等待，更利于发挥流水并行性能。ID不够用时，优先让使用时段不重叠、不会同时参与流水的Tile复用同一ID；尽量不要让可能同时使用的两块Tile共用ID。
 
+如果不想手动规划ID，可以将mutex_ids设置为"auto"，由框架在编译期为组内每块Tile自动分配mutex ID。使用"auto"时必须指定depth且使@pypto_pro.language.jit配置auto_mutex=True。自动分配场景的详细使用约束请参考[pypto_pro.language.make_tile_group](../../../../api/pro_api/SIMD-API/resource_management/make_tile_group.md#参数说明)。
+
 如果还显式调用pypto_pro.language.system.mutex_lock/mutex_unlock，应将其ID与自动同步正在使用的ID分开；只有确认两者的使用周期完全不重叠，才能复用同一ID，避免重复获取尚未释放的互斥资源。TileGroup本身不会在运行时主动执行加锁或解锁。完整参数说明请参考[pypto_pro.language.make_tile_group](../../../../api/pro_api/SIMD-API/resource_management/make_tile_group.md)。
 
 ## 访问TileGroup中的Tile
