@@ -2,9 +2,9 @@
 
 ## 任务与目标
 
-本节将详细介绍如何使用PyPTO Pro SIMT编程范式实现一个简单的Softmax算子，并通过测试用例验证其正确性。通过本节的学习，您将了解如何使用PyPTO Pro SIMT相关API完成线程级并行计算、线程索引获取以及原子归约。
+本节介绍如何参考SIMD版的单Kernel流程，使用PyPTO Pro SIMT编程范式实现Softmax，并通过测试用例验证结果。您将了解如何将数据搬入片上Tile、在SIMT函数内完成归约与逐元素计算，以及将结果搬回全局内存。
 
-本示例固定处理Shape为[1, 256]、数据类型为FP32的Tensor，显式定义线程级计算逻辑并启动256个SIMT线程，由每个线程负责一个输入元素，协同完成Softmax中的最大值归约和求和归约。
+本示例固定处理Shape为[1, 256]、数据类型为FP32的Tensor。一个Kernel启动256个SIMT线程，每个线程负责Tile中的一个元素；示例要求输入元素为有限数值。
 
 ## 算子设计规格
 
@@ -21,13 +21,11 @@
 
 * 使用的主要接口
 
-  SIMT函数与线程启动接口：pypto_pro.language.simt.function、pypto_pro.language.simt.launch
+  Tile定义与数据搬运接口：pypto_pro.language.TileType、pypto_pro.language.make_tile_group、pypto_pro.language.load、pypto_pro.language.store
 
-  线程索引接口：pypto_pro.language.simt.thread_idx
+  线程索引与块内同步接口：pypto_pro.language.simt.linear_thread_idx、pypto_pro.language.simt.syncthreads
 
-  基础计算接口：pypto_pro.language.simt.exp
-
-  原子操作接口：pypto_pro.language.simt.atomic_max、pypto_pro.language.simt.atomic_add
+  指数与原子归约接口：pypto_pro.language.simt.exp、pypto_pro.language.simt.atomic_max、pypto_pro.language.simt.atomic_add
 
 ## 导入PyPTO Pro模块
 
@@ -49,138 +47,72 @@ THREADS = 256
 
 ## 核心代码逻辑
 
-1. 实现核心计算函数。
+1. 实现Tile上的SIMT计算函数。
 
-   Softmax计算分为最大值归约、指数计算与求和归约、概率归一化三个阶段。每个SIMT线程通过线程索引访问对应的输入元素。
-
-   最大值归约阶段，各线程通过pypto_pro.language.simt.atomic_max将自身负责的输入元素原子更新至公共最大值。
+   与SIMD版先将数据搬入Tile再计算的流程一致，这里由一个SIMT函数完成最大值归约、指数求和及归一化。256个线程各处理一个元素，使用同一块内的stats_tile保存最大值与指数和。
 
    ```python
-   @pl.simt.function(max_threads=THREADS)
-   def reduce_max(src, max_value):
-       tid = pl.simt.thread_idx().x
-       pl.simt.atomic_max(max_value[0, 0], src[0, tid])
+   @pl.vector_function(mode="simt", max_threads=THREADS)
+   def softmax_tile(src_tile, out_tile, stats_tile):
+       tid = pl.simt.linear_thread_idx()
+
+       if tid == 0:
+           stats_tile[0, 0] = src_tile[0, 0]
+           stats_tile[0, 1] = 0.0
+       pl.simt.syncthreads()
+
+       value = src_tile[0, tid]
+       pl.simt.atomic_max(stats_tile[0, 0], value)
+       pl.simt.syncthreads()
+
+       exp_value = pl.simt.exp(value - stats_tile[0, 0])
+       pl.simt.atomic_add(stats_tile[0, 1], exp_value)
+       pl.simt.syncthreads()
+
+       out_tile[0, tid] = exp_value / stats_tile[0, 1]
    ```
 
-   指数计算与求和归约阶段，每个线程首先计算exp(x - max(x))，然后通过pypto_pro.language.simt.atomic_add将计算结果累加至公共指数和。
-
-   ```python
-   @pl.simt.function(max_threads=THREADS)
-   def exp_and_sum(src, exp_value, max_value, sum_value):
-       tid = pl.simt.thread_idx().x
-
-       value = pl.simt.exp(
-           src[0, tid] - max_value[0, 0]
-       )
-
-       exp_value[0, tid] = value
-
-       pl.simt.atomic_add(
-           sum_value[0, 0],
-           value,
-       )
-   ```
-
-   归一化阶段，每个线程将对应位置的指数结果除以公共指数和，得到最终Softmax输出。
-
-   ```python
-   @pl.simt.function(max_threads=THREADS)
-   def normalize(exp_value, dst, sum_value):
-       tid = pl.simt.thread_idx().x
-
-       dst[0, tid] = (
-           exp_value[0, tid]
-           / sum_value[0, 0]
-       )
-   ```
+   第一个线程初始化共享归约状态；每次归约结束后，所有线程通过syncthreads()等待结果可见。三个屏障均由所有线程无条件到达。最大值从输入首元素初始化，避免额外的FP32最小值常量。
 
 2. 实现Softmax Kernel函数。
 
-   为了保证最大值归约、指数求和和归一化三个阶段之间的数据依赖，本示例分别定义三个JIT Kernel。每个Kernel通过pypto_pro.language.simt.launch启动256个SIMT线程。
-
-   最大值归约Kernel如下：
+   与SIMD版相同，Kernel先分配片上Tile Group，再在Vector段完成数据搬入、计算和数据搬出。输入与输出Tile各占1024字节；归约状态Tile占32字节，其中前两个FP32元素分别保存最大值与指数和。三个Tile Group使用互不重叠的片上地址和不同的Mutex ID。
 
    ```python
-   @pl.jit(arch="a5")
-   def reduce_max_kernel(
+   @pl.jit(arch="a5", auto_mutex=True)
+   def softmax_simt_kernel(
        src: pl.Tensor[[1, THREADS], pl.DT_FP32],
-       max_value: pl.Tensor[[1, 1], pl.DT_FP32],
-   ):
-       with pl.section_vector():
-           pl.simt.launch(
-               reduce_max,
-               threads=THREADS,
-               args=(src, max_value),
-           )
-   ```
-
-   指数计算和求和归约Kernel如下：
-
-   ```python
-   @pl.jit(arch="a5")
-   def exp_sum_kernel(
-       src: pl.Tensor[[1, THREADS], pl.DT_FP32],
-       exp_value: pl.Tensor[[1, THREADS], pl.DT_FP32],
-       max_value: pl.Tensor[[1, 1], pl.DT_FP32],
-       sum_value: pl.Tensor[[1, 1], pl.DT_FP32],
-   ):
-       with pl.section_vector():
-           pl.simt.launch(
-               exp_and_sum,
-               threads=THREADS,
-               args=(
-                   src,
-                   exp_value,
-                   max_value,
-                   sum_value,
-               ),
-           )
-   ```
-
-   归一化Kernel如下：
-
-   ```python
-   @pl.jit(arch="a5")
-   def normalize_kernel(
-       exp_value: pl.Tensor[[1, THREADS], pl.DT_FP32],
        dst: pl.Tensor[[1, THREADS], pl.DT_FP32],
-       sum_value: pl.Tensor[[1, 1], pl.DT_FP32],
    ):
+       tile_type = pl.TileType(
+           shape=[1, THREADS],
+           dtype=pl.DT_FP32,
+           target_memory=pl.MemorySpace.Vec,
+       )
+       stats_type = pl.TileType(
+           shape=[1, 8],
+           dtype=pl.DT_FP32,
+           target_memory=pl.MemorySpace.Vec,
+       )
+       src_group = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0])
+       out_group = pl.make_tile_group(type=tile_type, addrs=0x0400, mutex_ids=[1])
+       stats_group = pl.make_tile_group(type=stats_type, addrs=0x0800, mutex_ids=[2])
+
        with pl.section_vector():
-           pl.simt.launch(
-               normalize,
-               threads=THREADS,
-               args=(
-                   exp_value,
-                   dst,
-                   sum_value,
-               ),
-           )
+           src_tile = src_group.current()
+           out_tile = out_group.current()
+           stats_tile = stats_group.current()
+
+           pl.load(src_tile, src, [0, 0])
+           softmax_tile[THREADS](src_tile, out_tile, stats_tile)
+           pl.store(dst, out_tile, [0, 0])
    ```
 
-   三个Kernel依次完成：
-
-   ```text
-   reduce_max_kernel
-           ↓
-      max(x)
-           ↓
-   exp_sum_kernel
-           ↓
-   exp(x - max(x))
-           ↓
-   sum(exp(x - max(x)))
-           ↓
-   normalize_kernel
-           ↓
-      Softmax
-   ```
+   auto_mutex=True结合Tile Group的Mutex ID自动处理搬入、SIMT计算与搬出之间的流水依赖，不需要手动调用sync_src/sync_dst。SIMT函数内部的syncthreads()仍负责线程间的数据依赖，不能省略。
 
 ## 测试用例
 
-为了验证Softmax算子的正确性，使用PyTorch Tensor作为输入，通过PyPTO Pro Kernel进行计算，并与PyTorch内置Softmax函数的结果进行对比。
-
-最大值归约、指数求和和归一化三个Kernel依次执行，并通过torch.npu.synchronize保证不同计算阶段之间的执行顺序。
+使用PyTorch Tensor构造普通输入和较大正负偏移输入，将单次Kernel的结果与PyTorch Softmax对比。由于本示例只处理一行，显式使用kernel[None, 1]启动一个核心；softmax_tile[THREADS]在单个aiv中启动256个SIMT线程。
 
 ```python
 device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
@@ -189,70 +121,20 @@ device = f"npu:{device_id}"
 torch.npu.set_device(device)
 
 torch.manual_seed(0)
+for offset in (0.0, 100.0, -100.0):
+    src = torch.randn(1, THREADS, dtype=torch.float32, device=device) + offset
+    dst = torch.empty_like(src)
 
-src = torch.randn(
-    1,
-    THREADS,
-    dtype=torch.float32,
-    device=device,
-)
+    softmax_simt_kernel[None, 1](src, dst)
+    torch.npu.synchronize()
 
-exp_value = torch.empty_like(src)
-dst = torch.empty_like(src)
-
-max_value = torch.full(
-    (1, 1),
-    -3.4028235e38,
-    dtype=torch.float32,
-    device=device,
-)
-
-sum_value = torch.zeros(
-    (1, 1),
-    dtype=torch.float32,
-    device=device,
-)
-
-reduce_max_kernel(
-    src,
-    max_value,
-)
-
-torch.npu.synchronize()
-
-exp_sum_kernel(
-    src,
-    exp_value,
-    max_value,
-    sum_value,
-)
-
-torch.npu.synchronize()
-
-normalize_kernel(
-    exp_value,
-    dst,
-    sum_value,
-)
-
-torch.npu.synchronize()
-
-golden = torch.softmax(
-    src,
-    dim=-1,
-)
-
-torch.testing.assert_close(
-    dst,
-    golden,
-    rtol=1e-4,
-    atol=1e-5,
-)
+    golden = torch.softmax(src, dim=-1)
+    torch.testing.assert_close(dst, golden, rtol=1e-4, atol=1e-5)
 
 print("SIMT Softmax kernel passed!")
 ```
 
-其中，max_value初始化为较小的FP32数值，用于最大值归约；sum_value初始化为0，用于通过原子加完成指数和归约。
+归约状态在每次SIMT函数调用时由线程0初始化，不需要Host侧的中间Tensor。FP32原子加的累加顺序不固定，因此验证使用容差而非逐位比较。
 
 ## 编译与执行
 
