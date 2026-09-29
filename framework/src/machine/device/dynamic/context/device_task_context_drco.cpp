@@ -205,7 +205,8 @@ void DeviceTaskContext::DrcoRefreshSpecialTaskId(DynDeviceTask* dyntask)
         size_t succSize = 0;
         const uint32_t* succList = devFunc->GetOperationDepGraphSuccAddr(opIdx, succSize);
         if (succSize == 1 && npu::tile_fwk::TaskID(succList[0]) == devFunc->dummyEndingOpIdx_ &&
-            (funcInfoAndStaticDataOffset & npu::tile_fwk::DRCO_ROOT_FUNC_MEMORY_REUSE_STITCHED_BIT) == 0) {
+            (funcInfoAndStaticDataOffset & npu::tile_fwk::DRCO_ROOT_FUNC_MEMORY_REUSE_STITCHED_BIT) == 0 &&
+            dyntask->dynFuncDataCacheList[funcIdx].duppedData->GetOperationStitch(opIdx).IsNull()) {
             return taskId | ((npu::tile_fwk::DRCO_SUCC_SPECIAL_PERCORE_SKIP_RESOLVE &
                               npu::tile_fwk::TASKID_DRCO_SUCC_SPECIAL_MASK)
                              << npu::tile_fwk::TASKID_DRCO_SUCC_SPECIAL_SHIFT);
