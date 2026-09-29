@@ -772,11 +772,12 @@ REGISTER_OP("vf.load_unalign_pre")
 
 REGISTER_OP("vf.load_unalign")
     .set_op_category("VFOp")
-    .set_description("Load unaligned data from UB to register (vldus, optional stride for POST_UPDATE)")
+    .set_description("Load unaligned data from UB to register (vldus; stride requires the post_update=True kwarg)")
     .add_argument("dst", "Destination register")
     .add_argument("ureg", "UnalignRegForLoad register")
     .add_argument("src_ptr", "Source UB pointer")
-    .add_argument("stride", "Optional post-update stride in bytes")
+    .add_argument("stride", "Post-update stride in bytes (requires the post_update=True kwarg)")
+    .set_attr<bool>("post_update")
     .f_deduce_type(DeduceVFFromDstArg);
 
 REGISTER_OP("vf.scatter")

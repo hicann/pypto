@@ -46,7 +46,7 @@ import torch_npu
 def example_vf(src_tile, dst_tile):
     ureg = vf.load_unalign_init()
     vf.load_unalign_pre(ureg, src_tile)
-    src_reg = vf.load_unalign(ureg, src_tile, post_update=True)
+    src_reg = vf.load_unalign(ureg, src_tile, 64, post_update=True)
     store_ureg = vf.unalign_reg_for_store()
     vf.store_unalign(dst_tile, src_reg, store_ureg, 64, post_update=True)
     vf.store_unalign_post(dst_tile, store_ureg, 0, post_update=True)

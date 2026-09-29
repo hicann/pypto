@@ -4219,8 +4219,15 @@ static std::string EmitVFLoadUnalignPre(const ir::CallPtr& op, codegen::CodegenB
 static std::string EmitVFLoadUnalign(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, op->args_.size() >= 3)
-        << "vf.load_unalign requires 3-4 args (dst, ureg, src_ptr [, stride])";
+    // Call forms (args include the leading dst register; stride is positional,
+    // post_update is keyword-only):
+    //   (dst, ureg, src)                                    — non-advancing vldus
+    //   (dst, ureg, src, stride) + post_update=True kwarg   — POST_UPDATE vldus
+    // vldus has no "stride without advancing" mode (AscendC DataCopyUnAlignImpl
+    // static_asserts POST_MODE_UPDATE for its strided overload), so every other
+    // combination is rejected instead of silently stepping the pointer.
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, op->args_.size() == 3 || op->args_.size() == 4)
+        << "vf.load_unalign requires 3-4 args (dst, ureg, src_ptr [, stride]), got " << op->args_.size();
     std::string dst = codegen.GetExprAsCode(op->args_[0]);
     std::string ureg = codegen.GetExprAsCode(op->args_[1]);
     auto ureg_var = ir::As<ir::Var>(op->args_[1]);
@@ -4235,7 +4242,14 @@ static std::string EmitVFLoadUnalign(const ir::CallPtr& op, codegen::CodegenBase
         << "vf.load_unalign only supports b8/b16/b32/b64 types, got " << DTypeStr(dst_dt);
     // vldus supports b8/b16/b32/b64 element widths
     std::string ptr_type = dst_dt.ToCTypeString();
-    if (op->args_.size() >= 4) {
+    if (op->args_.size() == 4) {
+        // Stride is only meaningful together with post_update=True — vldus has
+        // no "stride without advancing" mode.
+        bool post_update = op->HasKwarg("post_update") && op->GetKwarg<bool>("post_update");
+        PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, post_update)
+            << "vf.load_unalign: stride is only supported with post_update=True. The strided vldus form always "
+            << "advances the source pointer (matching AscendC DataCopyUnAlignImpl). For a non-advancing load, "
+            << "drop the stride argument: vf.load_unalign(ureg, src_ptr)";
         std::string stride = codegen.GetExprAsCode(op->args_[3]);
         std::string src_ptr = codegen.GetOrCreateVFTilePtr(op->args_[2], /*is_post_update=*/true);
         int elem_bytes = static_cast<int>(dst_dt.GetBit() / 8);
@@ -4251,10 +4265,16 @@ static std::string EmitVFLoadUnalign(const ir::CallPtr& op, codegen::CodegenBase
         }
         std::string effective_stride = is_b64 ? ("(" + stride + ") * 2") : stride;
         codegen.Emit("vldus(" + dst_expr + ", " + ureg + ", " + src_ptr + ", " + effective_stride + ", POST_UPDATE);");
-    } else {
-        std::string src_ptr = GetUBufPtr(codegen, op->args_[2], ptr_type);
-        codegen.Emit("vldus(" + dst + ", " + ureg + ", " + src_ptr + ");");
+        return "";
     }
+    // Stride-less form: POST_UPDATE has nothing to advance by.
+    if (op->HasKwarg("post_update")) {
+        PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, !op->GetKwarg<bool>("post_update"))
+            << "vf.load_unalign: post_update=True requires an explicit stride argument "
+            << "(vf.load_unalign(ureg, src_ptr, stride, post_update=True))";
+    }
+    std::string src_ptr = GetUBufPtr(codegen, op->args_[2], ptr_type);
+    codegen.Emit("vldus(" + dst + ", " + ureg + ", " + src_ptr + ");");
     return "";
 }
 
