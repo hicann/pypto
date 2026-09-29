@@ -157,3 +157,32 @@ def test_row_major_and_transposed_loads_of_one_tensor():
     reference = x.float() @ x.float().t()
     torch.testing.assert_close(product, reference, atol=1e-1, rtol=1e-2)
     logging.info("test_row_major_and_transposed_loads_of_one_tensor [%d, %d] passed!", TILE, TILE)
+
+
+@pl.jit(auto_mutex=True)
+def _default_order_gamma_kernel(
+    x: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_BF16],
+    out: pl.Tensor[[3, 32], pl.DT_BF16],
+):
+    group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, 32], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec),
+        addrs=0, mutex_ids=[0])
+    with pl.section_vector():
+        for head in pl.range(3):
+            tile = group.current()
+            pl.load(tile, x, [head, 16])
+            pl.store(out, tile, [head, 0])
+
+
+@pytest.mark.soc("950")
+def test_default_order_loads_each_gamma_row():
+    """Omitting order copies contiguous columns from the requested gamma head."""
+    _require_a5(ST_DEVICE)
+    # Unique, exactly representable BF16 values expose both wrong heads and wrong column offsets.
+    x = torch.arange(3 * 64, dtype=torch.float32).reshape(3, 64).to(dtype=torch.bfloat16, device=ST_DEVICE)
+    out = torch.zeros([3, 32], dtype=torch.bfloat16, device=ST_DEVICE)
+
+    _default_order_gamma_kernel[None, 1](x, out)
+    torch.npu.synchronize()
+
+    torch.testing.assert_close(out, x[:, 16:48], rtol=0, atol=0)

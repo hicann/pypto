@@ -36,8 +36,8 @@ pypto_pro.language.load(
 |---|---|---|
 | dst_tile | 输出 | 目的操作数，Tile类型，存储空间为L1 Buffer或UB，首地址必须按32字节对齐。接口按照该Tile的valid_shape搬运数据。支持的数据类型和分形组合详见[约束说明](#约束说明)。 |
 | src_tensor | 输入 | 源操作数，Tensor类型，存储空间为GM。支持的数据类型和分形组合详见[约束说明](#约束说明)。 |
-| offsets | 输入 | 表示源Tensor各维度的绝对元素坐标，List[int或Scalar]类型，长度须与源Tensor的维数相同。<br>- 不支持负数。<br>- 未被order选中的维度使用对应值固定下标。<br>- 搬运起始位置必须位于源操作数的shape范围内；可通过pypto_pro.language.set_validshape保证有效搬运范围不超过源操作数的shape范围。 |
-| order | 输入 | 可选，维度映射，长度为2的编译期整数列表，指定目的操作数的Tile各维度对应的源操作数的Tensor维度索引。<br>- 两个维度索引必须互不重复且位于源操作数的Tensor维度范围内。<br>- 升序表示不转置，例如order=[0, 1]。<br>- 降序表示转置，例如order=[1, 0]，源操作数的Tensor分形描述由ND转为DN。<br>- 不配置时，指定源操作数的Tensor最后两维，且不转置。<br>- 搬运MX矩阵乘量化系数时，order中不能选择源操作数的Tensor最后一维；不设置order时，默认为除源操作数的Tensor最后一维外的最后两个维度。<br>- 当Tensor为1维时，不支持传入order参数。 |
+| offsets | 输入 | 表示源Tensor各维度的绝对元素坐标，List[int或Scalar]类型，长度须与源Tensor的维数相同。<br>- 不支持负数。<br>- 未被order选中的维度使用对应值固定下标。<br>- 搬运起始位置必须位于源Tensor的shape范围内；边界Tile可通过pypto_pro.language.set_validshape设置有效形状，保证有效搬运范围不越过源Tensor边界。<br>- 例如，offsets=[64, 0]表示从二维Tensor的第64行、第0列开始搬运。 |
+| order | 输入 | 可选，维度映射，长度为2或3的编译期整数列表。所有维度索引必须互不重复且位于src_tensor的维度范围内。<br>- 普通两轴搬运中，列表中的第i项表示dst_tile第i维对应src_tensor的维度。升序表示不转置，例如order=[0, 1]；降序表示转置，例如order=[1, 0]。<br>- 普通Tensor不设置order时，dst_tile默认对应src_tensor的最后两个维度，即[ndim - 2, ndim - 1]，且不转置。<br>- 搬运MX矩阵乘量化系数时，src_tensor的最后一维是物理phase轴，不能在order中选择；不设置order时，默认对应phase轴之前的两个维度，即[ndim - 3, ndim - 2]。<br>- GM ND Tensor搬入L1时，也可显式指定三个轴索引，将两个源轴合并为一个Tile轴，详见[约束说明](#约束说明)中的三轴合并搬入L1约束。<br>- 当Tensor为1维时，不支持传入order参数。 |
 
 ## 约束说明
 
@@ -65,6 +65,41 @@ pypto_pro.language.load(
 - Tile地址复用约束：
 
   开启auto_mutex时，如果连续两次pypto_pro.language.load写入同一个UB或L1 Buffer地址，且两次搬运之间没有操作读取前一次搬入的数据，需要在两次搬运之间调用[pypto_pro.language.system.bar_mte2](../synchronization/bar_mte2.md)。pypto_pro.language.system.bar_mte2仅保证两次写操作的先后顺序；如果后续仍需使用前一次搬入的数据，应在复用地址前先读取或复制该数据。
+
+- 三轴合并搬入L1约束：
+
+    - 对于GM中的ND Tensor `x[B, S, N, G, D]`，如果内轴是[S,D]， 由于G轴的间隔，导致常规搬运需要搬运N*G次[S,D]。如果S比较小，那么搬运的效率是不高的。对于G轴不是batch轴的场景：
+    三轴`order`可以在搬入L1的同时，将选中的S、G轴按`r = s * G + g`合并。
+    源Tensor视图保持五维，搬运使用两个源轴各自的stride。
+
+    - 通过[pypto_pro.language.make_tensor](../resource_management/make_tensor.md)进行视图合轴时，
+    仅改变shape和stride，不搬运数据；待合并的相邻维度必须连续且不存在间隔，合并后Tensor视图的维数降低。
+    例如，合并外层轴与内层轴时，需满足`stride(外层轴) = 内层轴长度 × stride(内层轴)`。
+    三轴`order`则在搬运过程中收集两个源轴的数据，允许轴之间存在间隔，源Tensor视图的维数保持不变。
+
+    | order | 目标Tile | 元素对应关系 |
+    |---|---|---|
+    | `[1, 3, 4]` | NZ，形状`[M, K]` | `dst[r, c] = x[b, s0 + r // G, h, r % G, k0 + c]` |
+    | `[4, 3, 1]` | ZN，形状`[K, M]` | `dst[c, r] = x[b, s0 + r // G, h, r % G, k0 + c]` |
+
+    - 反序形式保持合并轴内部的S、G顺序，只交换目标矩阵的两个轴。
+    NZ `[M, K]`与ZN `[K, M]`对应相同的字节排布，因此两种形式使用相同的数据搬运，后续搬入L0时按目标布局读取。
+    - 三个轴索引必须互不重复且在源Tensor范围内，仅接受严格升序或其完整反序。
+    升序中的最后一个轴必须是源Tensor最内层轴，列stride必须为编译期常量1。
+    升序形式要求NZ目标，反序形式要求ZN目标。
+    - 升序中的中间轴长度G必须为正数，该轴的offset必须为编译期常量0。
+    源、目标dtype必须相同，且元素位宽为8、16或32位，并满足上文数据类型要求。
+    - 声明的合并轴长度M必须为编译期常量，范围为`[1, 65535]`。
+    M不要求被G整除，静态与动态G均支持部分矩阵，也支持G大于M的情况。
+    - `pl.set_validshape`限制本次搬运的有效范围，设置方法见[搬运尾块](#搬运尾块)。
+    完整矩阵搬运后，如有剩余行，会再搬入一个部分矩阵；反序形式的合并轴对应Tile的有效列数。
+    调用者须保证有效范围为正且不超过声明的Tile形状，并保证源Tensor覆盖全部请求元素。
+    - 三轴形式当前不支持Vec（UB）、`load_tile`或`store`。
+    Vector场景需要先将选中的GM数据搬入正确的UB位置，再使用`reinterpret`调整视图。
+    `reinterpret`本身不会收集分散的GM数据。
+
+    - 如果循环使用`S_step = M_TILE // G`推进S轴，仍需保证`M_TILE % G == 0`，否则相邻窗口会重叠。
+    单次load支持部分矩阵，并不意味着上述循环能够正确覆盖整个Tensor。
 
 ## 返回值说明
 
@@ -261,4 +296,29 @@ pl.load(input_tile, x, [64, 0])
 pl.load(input_tile, x, [0, 0])
 pl.add(output_tile, input_tile, input_tile)
 pl.load(input_tile, x, [64, 0])
+```
+
+### 三轴合并搬运
+
+对于shape为[1, 4, 2, 12, 128]的tensor，其中4和128分别对应矩阵计算的M和K轴。
+一般我们直接用:`pl.load(nz.current(), x, [0, 0, 0, 0, 0], order=[1, 4])`搬运 4 * 128的数据进行计算。
+但是这样效率太低。如果确定12这根轴不是Batch轴，那么可以将12和4进行合轴搬运来提升搬运效率。
+
+```python
+import pypto_pro.language as pl
+
+@pl.jit(auto_mutex=True)
+def load_merged_rows(x: pl.Tensor[[1, 4, 2, 12, 128], pl.DT_FP16]):
+    nz = pl.make_tile_group(
+        type=pl.TileType(shape=[48, 128], dtype=pl.DT_FP16,
+                         target_memory=pl.MemorySpace.Mat, layout=pl.NZ),
+        addrs=0x0000, mutex_ids=[0])
+    # 也可以使能转置搬运，通过order的逆序实现
+    zn = pl.make_tile_group(
+        type=pl.TileType(shape=[128, 48], dtype=pl.DT_FP16,
+                         target_memory=pl.MemorySpace.Mat, layout=pl.ZN),
+        addrs=0x4000, mutex_ids=[1])
+    with pl.section_cube():
+        pl.load(nz.current(), x, [0, 0, 0, 0, 0], order=[1, 3, 4])
+        pl.load(zn.current(), x, [0, 0, 0, 0, 0], order=[4, 3, 1])
 ```

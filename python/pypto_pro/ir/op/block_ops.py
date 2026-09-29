@@ -196,8 +196,13 @@ def _ir_load(
         dst_tile, src_tensor, offsets_tuple, tile_dims, op_name
     )
     _validate_nz_transfer_axes(src_tensor.type, tile_dims, op_name)
+    nd_inner = _validate_merged_row_load(dst_tile, src_tensor, tile_dims, op_name, order=order)
+    if nd_inner is not None and _try_get_const_offset(offsets_tuple.elements[tile_dims[1]]) != 0:
+        raise InvalidArgument(f"{op_name}: a merged-row load's middle axis offset must be a compile-time zero")
 
     kwargs: dict[str, Any] = {}
+    if nd_inner is not None:
+        kwargs["nd_inner"] = nd_inner
     if is_transpose:
         kwargs["is_transpose"] = is_transpose
     # Specialized lowerings may use a different fallback, so preserve every
@@ -227,6 +232,12 @@ def _ir_load_tile(
     tensor_ndim = len(src_tensor.type.shape)
     tile_ndim = len(dst_tile.type.shape)
     tile_dims, is_transpose = _resolve_order(order, tensor_ndim, tile_ndim, op_name)
+    if tile_dims is not None and len(tile_dims) > tile_ndim:
+        raise InvalidArgument(
+            f"{op_name}: a merged-row order (more axes than the Tile has dims) is only supported "
+            f"by pl.load; tile-block offsets have no single stride to multiply once the Tile's "
+            f"rows span two tensor axes. Use pl.load with element offsets."
+        )
 
     tensor_ndim, tile_shape, tile_dims, access_size = _validate_load_operands(
         dst_tile,
@@ -1060,6 +1071,127 @@ def _validate_load_operands(
     return tensor_ndim, tile_shape, tile_dims, access_size
 
 
+def _validate_merged_row_load(
+    out: Expr, tensor: Expr, tile_dims, op_name: str, order: list[int] | None = None
+) -> "int | None":
+    """Validate the merged-row form of ``load``: ``order`` names 3 tensor axes for a rank-2 Tile.
+
+    The Tile's row index is then the flattening of two tensor axes,
+    ``row = i_outer * inner + i_inner`` -- which is what lets a Tensor [B, S, N, G, D] feed a
+    matmul that wants (S, G) as one axis. A5's nd2nz DMA issues it as ``ndNum`` ND matrices of
+    ``inner`` rows each, through TLOAD. This returns ``inner``,
+    or None when the call is the ordinary 2-axis form.
+
+    Two spellings are accepted, and the dst Tile says which one is meant:
+
+      ``order=[1, 3, 4]``  ascending, NZ dst [merged, cols] -- the operand as nd2nz writes it.
+      ``order=[4, 3, 1]``  the exact reverse, ZN dst [cols, merged] -- the transposed operand.
+
+    The reversed spelling is not a different transfer: nd2nz cannot transpose, and it does not
+    have to. An NZ [M, K] tile and a ZN [K, M] tile at one address are the *same bytes* -- with
+    the fractal's inner extents swapped by the layout (NZ: InnerRows R0, InnerCols C0; ZN: the
+    reverse), both offsets reduce to ``M*C0*(c/C0) + C0*r + (c % C0)`` -- so the DMA is issued
+    unchanged and only the destination's label differs. The Mat->L0 move then realizes the
+    transpose. That is why the reverse is the whole-list flip, matching the 2-axis convention
+    where ``order=[1, 0]`` means the transpose of ``order=[0, 1]``: it names the transpose of
+    what the ascending order loads, so the merged axis still runs (outer, inner) along it.
+
+    ``order`` is the caller's list before ``_resolve_order`` sorted it. The sorted form is not
+    enough here: sorting maps [1, 4, 3], [1, 3, 4] and [4, 3, 1] onto the same ``tile_dims``,
+    and they mean three different things (a different column axis, and the two spellings above),
+    so validating the sorted list would accept [1, 4, 3] and silently transfer another one's
+    data.
+    """
+    if tile_dims is None or len(tile_dims) != 3:
+        return None
+
+    if out.type.dtype != tensor.type.dtype:
+        raise InvalidType(f"{op_name}: dtype mismatch between dst tile and src tensor")
+    if int(tensor.type.dtype.get_bit()) not in (8, 16, 32):
+        raise InvalidType(f"{op_name}: merged-row loads require 8, 16 or 32-bit elements")
+    view = getattr(tensor.type, "tensor_view", None)
+    if view is not None and view.stride and _static_dim(view.stride[-1]) != 1:
+        raise InvalidArgument(f"{op_name}: merged-row loads require a compile-time column stride of 1")
+
+    tile_shape = list(out.type.shape)
+    if len(tile_shape) != 2:
+        raise InvalidArgument(
+            f"{op_name}: a 3-axis order merges two tensor axes into the Tile's row axis, so the "
+            f"Tile must be rank 2, got shape {tile_shape}"
+        )
+
+    ascending = sorted(tile_dims)
+    raw_order = list(order) if order is not None else ascending
+    is_transposed = raw_order == ascending[::-1]
+    if raw_order != ascending and not is_transposed:
+        raise InvalidArgument(
+            f"{op_name}: a merged-row order must be ascending, or its exact reverse for a "
+            f"transposed operand, got {raw_order}. nd2nz writes the two merged axes to the "
+            f"Tile's rows and the Tensor's innermost axis to its columns; any other permutation "
+            f"names a column axis it cannot walk. Use {ascending} for [merged, cols] into an NZ "
+            f"Tile, or {ascending[::-1]} for the transpose, [cols, merged] into a ZN Tile."
+        )
+
+    dst_mem = getattr(getattr(out.type, "memref", None), "memory_space", None)
+    if dst_mem is not None and dst_mem != _ir_core.MemorySpace.Mat:
+        raise InvalidArgument(
+            f"{op_name}: merged-row loads currently require a Mat (L1) destination, got {dst_mem.name}. "
+            f"For Vec (UB), load the selected data into a packed tile before using pl.reinterpret; "
+            f"reinterpret alone does not gather noncontiguous GM data."
+        )
+
+    dst_layout = _tile_layout(out.type)
+    if _hw_attr(out.type.hardware_info, "fractal") not in (None, 512):
+        raise InvalidFormat(f"{op_name}: merged-row loads require a 512-byte fractal")
+    if is_transposed:
+        # The transposed spelling is the same DMA into the same bytes under the other label, so
+        # the Tile must carry that label: NZ's transpose pair, with the shape reversed to match.
+        if dst_layout != TensorLayout.ZN:
+            raise InvalidArgument(
+                f"{op_name}: the reversed merged order {raw_order} loads the transposed operand, "
+                f"so the dst tile must be the ZN alias of the NZ tile {ascending} would fill: "
+                f"shape [cols, merged] and layout=pl.ZN, got shape {tile_shape} and layout "
+                f"{dst_layout.name if dst_layout is not None else None}. The bytes are identical "
+                f"either way -- only the label decides which orientation the Mat->L0 move reads."
+            )
+    elif dst_layout != TensorLayout.NZ:
+        raise InvalidFormat(f"{op_name}: a 3-axis order requires an NZ dst tile (the nd2nz destination layout)")
+
+    tensor_ndim = len(tensor.type.shape)
+    if tile_dims[2] != tensor_ndim - 1:
+        raise InvalidArgument(
+            f"{op_name}: a 3-axis order's last axis must be the Tensor's innermost axis "
+            f"({tensor_ndim - 1}), got {tile_dims[2]}: nd2nz reads each row as contiguous elements "
+            f"and has no column stride"
+        )
+
+    # The merged axis is the Tile's rows as nd2nz writes them -- the ZN alias reverses the shape,
+    # so it is that Tile's columns.
+    merged_dim = tile_shape[1] if is_transposed else tile_shape[0]
+    rows = _static_dim(merged_dim)
+    if rows is None:
+        raise InvalidShape(f"{op_name}: a 3-axis order needs a compile-time Tile row count, got {merged_dim}")
+    if not 0 < rows <= 0xFFFF:
+        raise InvalidShape(f"{op_name}: nd2nz destination row stride is 16-bit; got {rows} merged rows")
+
+    inner = _static_dim(tensor.type.shape[tile_dims[1]])
+    if inner is None:
+        # Keep a dynamic middle extent for lowering. It splits the runtime valid
+        # region into complete matrices and an optional partial final matrix.
+        return -1
+    if inner <= 0:
+        raise InvalidArgument(
+            f"{op_name}: a 3-axis order's middle axis {tile_dims[1]} must have a positive extent, got {inner}"
+        )
+    # Lowering splits the valid merged extent for static and dynamic inner extents alike.
+    # An inner extent larger than the tile is clipped by TLOAD lowering, so it need not fit
+    # the DMA's 16-bit nValue field. Defer extents exceeding the int attribute to the source
+    # type instead of narrowing them before that normalization.
+    if inner > 0x7FFFFFFF:
+        return -1
+    return inner
+
+
 def _build_store_kwargs(
     *,
     relu_pre_mode: ReluPreMode | None,
@@ -1192,12 +1324,17 @@ def _validate_tile_dims(
         return None, access_size
 
     tile_ndim = len(tile_shape)
+    if (tile_dims is not None and len(tile_dims) != tile_ndim
+            and not (op_name == "load" and tile_ndim == 2 and len(tile_dims) == 3)):
+        expected = f"{tile_ndim} axes"
+        if op_name == "load" and tile_ndim == 2:
+            expected += " (or 3 axes for a merged-row load)"
+        raise InvalidShape(
+            f"{op_name}: order must name {expected}, got {tile_dims}; omit order to use the default mapping"
+        )
+
     if tile_dims is None:
         tile_dims = list(range(tensor_ndim - tile_ndim, tensor_ndim))
-    elif len(tile_dims) != 2:
-        raise InvalidShape(
-            f"{op_name}: order must be a 2-element list, got {len(tile_dims)}: {tile_dims}"
-        )
     if len(set(tile_dims)) != len(tile_dims):
         raise InvalidShape(f"{op_name}: order axes must be unique, got {tile_dims}")
     for dim in tile_dims:
@@ -1230,7 +1367,16 @@ def _validate_offsets(
         if access_size is not None:
             t_size = access_size
         elif tile_dims is not None and i in tile_dims:
-            t_size = tile_shape[tile_dims.index(i)]
+            pos = tile_dims.index(i)
+            if len(tile_dims) > len(tile_shape):
+                # Merged-row form: the Tile's rows span several tensor axes, so only the
+                # column axis maps to one Tile extent. The row axes still get their plain
+                # bounds check from _validate_offset_bounds.
+                if pos != len(tile_dims) - 1:
+                    continue
+                t_size = tile_shape[-1]
+            else:
+                t_size = tile_shape[pos]
         else:
             continue
 

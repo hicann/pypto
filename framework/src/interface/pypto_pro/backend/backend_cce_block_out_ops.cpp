@@ -346,6 +346,49 @@ static std::string ValidCols(const std::string& tile_cpp_name)
     return "static_cast<int64_t>(" + tile_cpp_name + ".GetValidCol())";
 }
 
+// PTO's multi-matrix TLOAD consumes a 3D view in element units.
+static void EmitMergedTLoad(codegen::CCECodegen& codegen, const std::string& out, const std::string& src,
+                            const std::string& inner, const ir::CallPtr& op, const ir::MakeTuple* offsets,
+                            bool transposed, int64_t capacity)
+{
+    const auto tensor_var = ir::As<ir::Var>(op->args_[1]);
+    const auto tensor = ir::As<ir::TensorType>(tensor_var->GetType());
+    auto strides = codegen.BuildTensorStrideExpressions(tensor);
+    if (!tensor->tensor_view_.has_value() || tensor->tensor_view_->stride.empty()) {
+        // Dynamic tensor dimensions are int32 at the kernel boundary. Promote before
+        // multiplying, including in the source pointer offset, rather than after overflow.
+        for (auto& stride : strides) {
+            stride = "uint64_t{1} * " + stride;
+        }
+    }
+    std::ostringstream pointer;
+    pointer << src;
+    for (size_t i = 0; i < strides.size(); ++i) {
+        pointer << " + static_cast<uint64_t>(" << codegen.GetExprAsCode(offsets->elements_[i]) << ") * (" << strides[i]
+                << ")";
+    }
+    const auto valid = transposed ? ValidCols(out) : ValidRows(out);
+    const auto columns = transposed ? ValidRows(out) : ValidCols(out);
+    // PTO handles a valid window shorter than one matrix with its tail path. Clip
+    // to the fixed tile capacity so matrix rows stay invariant as the window changes.
+    // Large ZN tiles can exceed PTO's per-matrix row limit; retain valid-window
+    // clipping for those tiles rather than constructing an oversized matrix.
+    const auto row_bound = capacity <= 16384 ? std::to_string(capacity) : "__merged_valid";
+    codegen.Emit("{");
+    codegen.Emit("    auto* __merged_src = " + pointer.str() + ";");
+    codegen.Emit("    const uint64_t __merged_inner = " + inner + ";");
+    // Valid extents fit the tile's 16-bit merged extent. Narrow only after clipping
+    // the full-width source inner dimension; source addresses and strides stay uint64.
+    codegen.Emit("    const int32_t __merged_valid = " + valid + ";");
+    codegen.Emit("    const int32_t __merged_rows = static_cast<int32_t>(__merged_inner < " + row_bound +
+                 " ? __merged_inner : " + row_bound + ");");
+    codegen.Emit("    const int32_t __merged_count = (__merged_valid + __merged_rows - 1) / __merged_rows;");
+    const auto bound = codegen.BindGlobalTensor(tensor_var, op, "__merged_src", transposed ? columns : "__merged_rows",
+                                                transposed ? "__merged_rows" : columns, "__merged_count");
+    codegen.Emit("    TLOAD(" + out + ", " + bound + ");");
+    codegen.Emit("}");
+}
+
 // ============================================================================
 // block.load  -  args = [out_tile, tensor, offsets]
 // Emits: SetShape(...); TASSIGN(tensor_global, ptr + offset); TLOAD(out_tile, tensor_global);
@@ -381,6 +424,47 @@ static std::string MakeBlockOutLoadCodegenCCE(const ir::CallPtr& op, codegen::Co
     std::string offset = codegen.ComputeTensorOffset(src_tensor_type, offsets_tuple);
     std::string src_ptr = codegen.GetPointer(src_tensor_var);
     std::string out_name = codegen.GetExprAsCode(op->args_[0]);
+
+    // Merged-row load: `tile_dims` names three tensor axes and the destination Tile's row index
+    // is the flattening of the first two (row = i_outer * nd_inner + i_inner). TLOAD's
+    // multi-ND2NZ / multi-DN2ZN paths represent this using Shape2 as the matrix dimension.
+    if (op->HasKwarg("nd_inner")) {
+        const auto tile_dims = op->GetKwarg<std::vector<int>>("tile_dims");
+        CHECK(tile_dims.size() == 3) << "block.load: nd_inner requires a 3-axis tile_dims, got " << tile_dims.size();
+        const int nd_inner = op->GetKwarg<int>("nd_inner");
+        auto out_tile_type = ir::As<ir::TileType>(op->args_[0]->GetType());
+        CHECK(out_tile_type != nullptr) << "block.load: merged-row destination must be a TileType";
+        // A ZN destination is the transposed spelling (order reversed): the identical transfer,
+        // labelled [dValue, merged] instead of [merged, dValue] over the same bytes. So the two
+        // Tile extents swap roles when describing the source to TLOAD.
+        CHECK(out_tile_type->hardwareInfo_.has_value())
+            << "block.load: merged-row destination needs an NZ or ZN layout";
+        const auto& out_hw = out_tile_type->hardwareInfo_.value();
+        const bool is_transpose = op->GetKwarg<bool>("is_transpose", false);
+        const bool is_zn_dst = out_hw.blayout == ir::TileLayout::row_major &&
+                               out_hw.slayout == ir::TileLayout::col_major;
+        const bool is_nz_dst = out_hw.blayout == ir::TileLayout::col_major &&
+                               out_hw.slayout == ir::TileLayout::row_major;
+        CHECK(is_transpose ? is_zn_dst : is_nz_dst)
+            << "block.load: merged-row is_transpose requires a ZN destination when true "
+               "and an NZ destination when false";
+        const size_t merged_axis = is_transpose ? 1 : 0;
+        auto rows_const = std::dynamic_pointer_cast<const ir::ConstInt>(out_tile_type->shape_[merged_axis]);
+        CHECK(rows_const != nullptr) << "block.load: merged-row destination needs a static row count";
+        const int64_t rows = rows_const->value_;
+        CHECK(rows > 0 && rows <= 0xFFFF) << "block.load: merged-row destination stride exceeds 16 bits";
+        // Preserve the full inner extent until it is clipped to the valid window.
+        std::string n_value_expr;
+        if (nd_inner > 0) {
+            n_value_expr = std::to_string(nd_inner);
+        } else {
+            CHECK(nd_inner == -1) << "block.load: invalid nd_inner " << nd_inner;
+            n_value_expr = codegen.GetExprAsCode(src_tensor_type->shape_[static_cast<size_t>(tile_dims[1])]);
+        }
+
+        EmitMergedTLoad(codegen, out_name, src_ptr, n_value_expr, op, offsets_tuple.get(), is_transpose, rows);
+        return "";
+    }
 
     const std::string bound = codegen.BindGlobalTensor(src_tensor_var_ptr, op, src_ptr + " + " + offset,
                                                        ValidRows(out_name), ValidCols(out_name));

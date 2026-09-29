@@ -2721,6 +2721,7 @@ private:
             def.tile_dims = op->GetKwarg<std::vector<int>>("tile_dims");
         }
         def.is_transpose = op->name_ == "block.load" && op->GetKwarg<bool>("is_transpose", false);
+        def.is_merged = op->name_ == "block.load" && op->HasKwarg("nd_inner");
     }
 
     const CodeContext& ctx_; ///< for SanitizeName (pure: derives the cce var-name key)
@@ -2748,7 +2749,10 @@ std::string TensorLayoutVariantKey(const ir::CallPtr& op)
         return mx_layout;
     }
 
-    std::string key;
+    // Merged loads use a distinct 3D descriptor type. Like ordinary loads, they
+    // share declarations only when the source axes and their initialized strides agree.
+    const bool is_merged = op->name_ == "block.load" && op->HasKwarg("nd_inner");
+    std::string key = is_merged ? "m" : "";
     // A transposed load swaps the row/col strides; a single-column access takes Layout::DN
     // without swapping them, so the two are distinct layouts rather than one.
     if (op->name_ == "block.load" && op->GetKwarg<bool>("is_transpose", false)) {
@@ -3179,9 +3183,22 @@ std::vector<std::string> CCECodegen::BuildTensorStrideExpressions(const ir::Tens
 
 std::string CCECodegen::BuildAccessStrideArgs(const ir::TensorTypePtr& tensor_type,
                                               const std::optional<std::vector<int>>& tile_dims, bool is_transpose,
-                                              bool is_mx)
+                                              bool is_mx, bool is_merged)
 {
-    const auto stride_exprs = BuildTensorStrideExpressions(tensor_type);
+    auto stride_exprs = BuildTensorStrideExpressions(tensor_type);
+    if (is_merged) {
+        INTERNAL_CHECK(tile_dims.has_value() && tile_dims->size() == 3)
+            << "Internal error: merged GlobalTensor requires three access axes";
+        if (!tensor_type->tensor_view_.has_value() || tensor_type->tensor_view_->stride.empty()) {
+            // Promote runtime dimensions before multiplying, as in the merged source offset.
+            for (auto& stride : stride_exprs) {
+                stride = "uint64_t{1} * " + stride;
+            }
+        }
+        const auto& matrix_stride = stride_exprs[static_cast<size_t>((*tile_dims)[0])];
+        const auto& row_stride = stride_exprs[static_cast<size_t>((*tile_dims)[1])];
+        return "1, 1, " + matrix_stride + (is_transpose ? ", 1, " + row_stride : ", " + row_stride + ", 1");
+    }
     const size_t ndim = tensor_type->shape_.size();
     std::string row_stride_expr;
     std::string col_stride_expr;
@@ -3208,12 +3225,17 @@ std::string CCECodegen::BuildAccessStrideArgs(const ir::TensorTypePtr& tensor_ty
 
 std::string CCECodegen::BindGlobalTensor(const ir::VarPtr& tensor_var, const ir::CallPtr& op,
                                          const std::string& pointer_expr, const std::string& valid_rows,
-                                         const std::string& valid_cols)
+                                         const std::string& valid_cols, const std::string& matrix_count)
 {
     // The declaration for this access's layout. An access the prescan never saw has no
     // declaration of its own and falls back to the tensor's plain name.
-    auto it = tensor_defs_.find({context_.SanitizeName(tensor_var), TensorLayoutVariantKey(op)});
+    auto it = tensor_defs_.find({GetVarName(tensor_var), TensorLayoutVariantKey(op)});
     const std::string decl_name = it != tensor_defs_.end() ? it->second.cce_name : GetVarName(tensor_var);
+    const bool is_merged = op->name_ == "block.load" && op->HasKwarg("nd_inner");
+    INTERNAL_CHECK(is_merged == !matrix_count.empty())
+        << "Internal error: matrix count is required only for merged GlobalTensor accesses";
+    INTERNAL_CHECK(!is_merged || (!valid_rows.empty() && !valid_cols.empty()))
+        << "Internal error: merged GlobalTensor binding requires descriptor rows and columns";
     if (!valid_rows.empty() && !valid_cols.empty()) {
         const auto tensor_type = ir::As<ir::TensorType>(tensor_var->GetType());
         PRO_CODEGEN_INTERNAL_CHECK(npu::tile_fwk::InternalError::CODEGEN_INNER_ERROR, tensor_type != nullptr)
@@ -3234,7 +3256,12 @@ std::string CCECodegen::BindGlobalTensor(const ir::VarPtr& tensor_var, const ir:
             emitter_.EmitLine("const " + decl_name + "ShapeDim5 " + shape + "(" + args + ");");
             args = shape + ".shape[" + outer + "], " + shape + ".shape[" + inner + "]";
         }
-        emitter_.EmitLine(decl_name + ".SetShape<" + outer + ", " + inner + ">(" + args + ");");
+        std::string dims = outer + ", " + inner;
+        if (is_merged) {
+            dims = "pto::GlobalTensorDim::DIM_2, " + dims;
+            args = matrix_count + ", " + args;
+        }
+        emitter_.EmitLine(decl_name + ".SetShape<" + dims + ">(" + args + ");");
     }
     emitter_.EmitLine("TASSIGN(" + decl_name + ", " + pointer_expr + ");");
     return decl_name;
@@ -3282,10 +3309,20 @@ void CCECodegen::GenerateGlobalTensorTypeDeclaration(const TensorDef& def)
     std::string global_type_name = var_name + "Type";
 
     const bool is_nz = backend::cce::IsNZTensorType(tensor_type);
+    std::string shape_type;
     std::string layout_arg;
     std::string stride_type;
     std::string stride_args;
-    if (is_nz) {
+    if (def.is_merged) {
+        // Keep Shape2 dynamic even for a single matrix: PTO's multi-matrix path
+        // respects the runtime valid extent, including a partial final matrix.
+        shape_type = "pto::Shape<1, 1, -1, -1, -1>";
+        layout_arg = def.is_transpose ? "Layout::DN" : "Layout::ND";
+        stride_type = std::string("pto::Stride<1, 1, -1, ") + (def.is_transpose ? "1, -1>" : "-1, 1>");
+        // Source strides do not depend on the valid window. PTO only advances the
+        // matrix stride when loading a subsequent matrix, including a final tail.
+        stride_args = BuildAccessStrideArgs(tensor_type, def.tile_dims, def.is_transpose, false, true);
+    } else if (is_nz) {
         const size_t row_axis = tensor_type->shape_.size() - 2;
         const size_t col_axis = tensor_type->shape_.size() - 1;
         const int64_t c0 = backend::cce::GetNZInnerCols(tensor_type->dtype_);
@@ -3308,8 +3345,10 @@ void CCECodegen::GenerateGlobalTensorTypeDeclaration(const TensorDef& def)
         stride_args = BuildAccessStrideArgs(tensor_type, def.tile_dims, is_transpose, is_mx);
     }
 
-    emitter_.EmitLine("using " + shape_type_name + " = pto::TileShape2D<" + element_type +
-                      ", pto::DYNAMIC, pto::DYNAMIC, " + layout_arg + ">;");
+    if (shape_type.empty()) {
+        shape_type = "pto::TileShape2D<" + element_type + ", pto::DYNAMIC, pto::DYNAMIC, " + layout_arg + ">";
+    }
+    emitter_.EmitLine("using " + shape_type_name + " = " + shape_type + ";");
     emitter_.EmitLine("using " + stride_type_name + " = " + stride_type + ";");
     emitter_.EmitLine("using " + global_type_name + " = GlobalTensor<" + element_type + ", " + shape_type_name + ", " +
                       stride_type_name + ", " + layout_arg + ">;");

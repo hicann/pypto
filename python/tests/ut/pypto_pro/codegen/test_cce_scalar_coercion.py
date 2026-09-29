@@ -14,8 +14,12 @@ A float literal applied to an integer register must be emitted as a correctly-ty
 not as a float literal that would trigger -Wliteral-conversion. The value is truncated to the width of
 the source dtype; the frontend range check rejects anything the dtype cannot represent before it gets
 here, so only the fractional part is dropped.
+
+Each case asserts the IR as well as the generated CCE, because the two say different things: the
+parser hands codegen the scalar exactly as it was written, and the truncation is codegen's own doing.
 """
 
+from pypto_pro import ir
 import pypto_pro.language as pl
 from pypto_pro.language import Vf as vf  # noqa: N813
 import pytest
@@ -28,6 +32,11 @@ def _compile_to_cce(kernel) -> str:
 
     cube, vector = _parse_and_codegen_targets(kernel.to_kernel_def(), "a5", "")
     return _assemble_cv_source(cube, vector).content
+
+
+def _parse_to_ir(kernel) -> str:
+    program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    return str(program)
 
 
 def _adds_kernel(dtype, scalar, elem_bytes):
@@ -59,6 +68,12 @@ def _vadds_arg(cpp: str) -> str:
     return line.split("vadds(", 1)[1].split(",")[2].strip()
 
 
+def _vf_adds_scalar(ir_text: str) -> str:
+    """The scalar operand of the vf.adds statement in the IR, i.e. its third argument."""
+    line = next(ln for ln in ir_text.splitlines() if "vf.adds(" in ln)
+    return line.split("vf.adds(", 1)[1].split(",")[2].strip()
+
+
 @pytest.mark.soc("950")
 @pytest.mark.parametrize(
     ("dtype", "elem_bytes", "scalar", "expected"),
@@ -74,7 +89,14 @@ def _vadds_arg(cpp: str) -> str:
     ],
 )
 def test_float_scalar_is_emitted_as_a_truncated_integer_literal(dtype, elem_bytes, scalar, expected):
-    cpp = _compile_to_cce(_adds_kernel(dtype, scalar, elem_bytes))
+    kernel = _adds_kernel(dtype, scalar, elem_bytes)
+
+    ir_text = _parse_to_ir(kernel)
+    assert "vf.adds(" in ir_text
+    # The IR carries the scalar as written -- nothing has been truncated yet.
+    assert _vf_adds_scalar(ir_text) == str(scalar)
+
+    cpp = _compile_to_cce(kernel)
 
     assert _vadds_arg(cpp) == expected
 
@@ -82,6 +104,12 @@ def test_float_scalar_is_emitted_as_a_truncated_integer_literal(dtype, elem_byte
 @pytest.mark.soc("950")
 def test_float_scalar_keeps_its_float_form_for_a_float_dtype():
     """Coercion applies only to integer source dtypes."""
-    cpp = _compile_to_cce(_adds_kernel(pl.DT_FP32, 1.5, 4))
+    kernel = _adds_kernel(pl.DT_FP32, 1.5, 4)
+
+    ir_text = _parse_to_ir(kernel)
+    assert "vf.reg_tensor(dtype=float)" in ir_text
+    assert _vf_adds_scalar(ir_text) == "1.5"
+
+    cpp = _compile_to_cce(kernel)
 
     assert _vadds_arg(cpp) == "1.5f"

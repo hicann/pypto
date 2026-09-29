@@ -20,6 +20,7 @@ pto.tsels is a different, incompatible op, so it raises a clear error).
 
 import logging
 
+from pypto_pro import ir
 import pypto_pro.language as pl
 
 
@@ -28,6 +29,20 @@ def _compile_to_cce(kernel) -> str:
 
     cube, vector = _parse_and_codegen_targets(kernel.to_kernel_def(), "a5", "")
     return _assemble_cv_source(cube, vector).content
+
+
+def _parse_select(kernel, op_name):
+    kernel_def = kernel.to_kernel_def()
+    program, _ = kernel_def.parse_target_program(ir.SectionKind.Vector)
+    stmts = program.get_function(kernel_def.func_name).body.stmts
+    tiles = [stmt.var for stmt in stmts if isinstance(stmt, ir.AssignStmt) and isinstance(stmt.var.type, ir.TileType)]
+    calls = [
+        stmt.expr
+        for stmt in stmts
+        if isinstance(stmt, ir.EvalStmt) and isinstance(stmt.expr, ir.Call) and stmt.expr.name == op_name
+    ]
+    assert len(calls) == 1
+    return tiles, calls[0]
 
 
 @pl.jit
@@ -76,12 +91,24 @@ def _sel_auto_mutex_kernel(
 
 
 def test_cce_sel_emits_tsel():
+    (lhs, rhs, tmp, out, mask), call = _parse_select(_sel_kernel, "block.sel")
+    # The tile-operand order the TSEL below is generated from.
+    assert len(call.args) == 5
+    assert all(actual.same_as(expected) for actual, expected in zip(call.args, [out, mask, lhs, rhs, tmp]))
+
     cpp = _compile_to_cce(_sel_kernel)
     logging.info("\n=== test_cce_sel ===\n%s", cpp)
     assert "TSEL(out_0, mask_0, lhs_0, rhs_0, tmp_0);" in cpp
 
 
 def test_cce_sels_emits_tsels():
+    (src, tmp, out, mask), call = _parse_select(_sels_kernel, "block.sels")
+    # The scalar rhs makes this sels rather than sel, and the IR keeps 0.0 a float.
+    assert len(call.args) == 5
+    assert all(actual.same_as(expected) for actual, expected in zip(call.args[:4], [out, mask, src, tmp]))
+    assert isinstance(call.args[4], ir.ConstFloat)
+    assert call.args[4].value == 0.0
+
     cpp = _compile_to_cce(_sels_kernel)
     logging.info("\n=== test_cce_sels ===\n%s", cpp)
     # TSELS(dst, mask, src, tmp, scalar) — pto-isa form.

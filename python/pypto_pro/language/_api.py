@@ -101,6 +101,33 @@ def load(dst_tile: Tile, src_tensor: Tensor, /, offsets: Offset, *, order: Optio
             Ascending order (e.g. ``[0, 1]``) loads without transposition;
             descending order (e.g. ``[1, 0]``) loads with transposition (DN layout).
             Default: last N axes ascending (N = Tile ndim), i.e. no transposition.
+
+            **Merged rows (GM -> L1 only).** Naming 3 axes for a rank-2 Tile flattens the
+            first two into the Tile's row axis, ``row = i_outer * inner + i_inner``, so a
+            Tensor ``[B, S, N, G, D]`` can feed a matmul that wants (S, G) as one axis::
+
+                pl.load(l1, x, [b, s0, h, 0, k0], order=[1, 3, 4])   # NZ  [S_tile*G, D_tile]
+                pl.load(l1, x, [b, s0, h, 0, k0], order=[4, 3, 1])   # ZN  [D_tile, S_tile*G]
+
+            Multi-ND nd2nz issues either form as matrices of ``inner`` rows, where ``inner``
+            is the middle axis's extent. Static and dynamic inner extents support the same
+            partial-matrix transfers; the merged Tile extent need not be a multiple of it.
+            The middle axis offset must be a compile-time zero. Source and destination
+            dtypes must match and use 8, 16 or 32-bit elements; the destination uses a
+            512-byte fractal. The source column stride must be 1.
+            Requires PTO-ISA multi-ND2NZ and multi-DN2ZN TLOAD with partial-matrix support.
+            TLOAD uses a 3D descriptor with a bounded matrix extent. Source stride and static
+            Tile shape limits follow the selected PTO-ISA implementation.
+            Runtime valid shapes limit the transfer; a partial final matrix uses a separate DMA.
+            The caller must keep runtime valid extents positive and within the declared Tile
+            shape, with a valid source covering the requested transfer and a positive inner extent.
+            The last axis must be the Tensor's innermost -- nd2nz reads each row as
+            contiguous elements and has no column stride. The reversed spelling is the same
+            transfer under the other label: an NZ ``[M, K]`` tile and a ZN ``[K, M]`` tile at
+            one address are the same bytes, so it costs nothing and the Mat->L0 move delivers
+            the transposed operand. Any other permutation of the three axes is rejected.
+            Merged orders are currently unsupported for Vec (UB), load_tile and store.
+            A UB reinterpret can reshape already packed data, but cannot gather separated GM regions.
     """
 
 
@@ -1084,6 +1111,17 @@ def reinterpret(tile: "Tile | TileGroup", /, *, dtype: DType = None, shape: Shap
 
         t2 = pl.reinterpret(tile_a, shape=[64, 64], dtype=pl.DT_BF16)  # same buffer as BF16 (dtype change needs shape)
         g2 = pl.reinterpret(group_a, shape=[128, 32])        # whole group, mutex kept
+
+    Reinterpreting a rotating group: pass the GROUP, not a Tile that ``next()`` returned.
+    A view of ``group.next()`` is one fixed Tile at the group's base address and does not
+    rotate, so from the second buffer on it reads the wrong one -- silently, since the shapes
+    still agree. The group view rotates correctly, but the two handles share one cursor, so
+    advance it once per iteration and read the view with ``current()``::
+
+        g_zn = pl.reinterpret(g, shape=[K, M], layout=pl.ZN)  # transposed view of the group
+        t = g.next()                                          # advances the shared cursor
+        pl.load(t, ...)
+        pl.move(dst, g_zn.current())                          # same buffer as t; next() would skip one
     """
 
 

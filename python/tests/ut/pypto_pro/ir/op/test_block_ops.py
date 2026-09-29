@@ -1185,7 +1185,7 @@ def test_high_dimensional_nz_store_rejects_non_final_transfer_axes():
 
 
 def test_load_rejects_length1_order():
-    with pytest.raises(InvalidShape, match="load: order must be a 2-element list, got 1"):
+    with pytest.raises(InvalidShape, match=r"load: order must name 2 axes .*got \[0\]"):
 
         @pl.jit(auto_mutex=False)
         def main(a: pl.Tensor[[64, 64], pl.DT_FP32]):
@@ -1197,7 +1197,7 @@ def test_load_rejects_length1_order():
 
 
 def test_load_rejects_empty_order():
-    with pytest.raises(InvalidShape, match="load: order must be a 2-element list, got 0"):
+    with pytest.raises(InvalidShape, match=r"load: order must name 2 axes .*got \[\]"):
 
         @pl.jit(auto_mutex=False)
         def main(a: pl.Tensor[[64, 64], pl.DT_FP32]):
@@ -1208,9 +1208,9 @@ def test_load_rejects_empty_order():
         main.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
 
 
-def test_load_rejects_length3_order_on_rank3_tensor():
-    """Before the length check this crashed with a bare IndexError instead of a diagnostic."""
-    with pytest.raises(InvalidShape, match="load: order must be a 2-element list, got 3"):
+def test_load_rejects_merged_order_for_vec_destination():
+    """Three-axis loads require L1 and diagnose unsupported UB destinations."""
+    with pytest.raises(InvalidArgument, match=r"load: merged-row loads currently require a Mat \(L1\) destination"):
 
         @pl.jit(auto_mutex=False)
         def main(a: pl.Tensor[[4, 64, 64], pl.DT_FP32]):
@@ -1222,7 +1222,7 @@ def test_load_rejects_length3_order_on_rank3_tensor():
 
 
 def test_store_rejects_length1_order():
-    with pytest.raises(InvalidShape, match="store: order must be a 2-element list, got 1"):
+    with pytest.raises(InvalidShape, match=r"store: order must name 2 axes, got \[0\]"):
 
         @pl.jit(auto_mutex=False)
         def main(out: pl.Tensor[[64, 64], pl.DT_FP32]):
@@ -1301,7 +1301,7 @@ def test_load_order_uniqueness_still_enforced():
 
 
 def test_load_tile_rejects_length1_order():
-    with pytest.raises(InvalidShape, match="load_tile: order must be a 2-element list, got 1"):
+    with pytest.raises(InvalidShape, match=r"load_tile: order must name 2 axes, got \[0\]"):
 
         @pl.jit(auto_mutex=False)
         def main(a: pl.Tensor[[64, 64], pl.DT_FP32]):
@@ -1338,7 +1338,7 @@ def test_store_accepts_explicit_2_element_order():
 
 
 def test_store_tile_rejects_length1_order():
-    with pytest.raises(InvalidShape, match="store_tile: order must be a 2-element list, got 1"):
+    with pytest.raises(InvalidShape, match=r"store_tile: order must name 2 axes, got \[0\]"):
 
         @pl.jit(auto_mutex=False)
         def main(out: pl.Tensor[[64, 64], pl.DT_FP32]):

@@ -817,6 +817,197 @@ TEST(BackendCCEBlockOutOps, GeneratesDumpTileThroughFullCodegen)
     EXPECT_CONTAINS(generated, "TPRINT(tile);");
 }
 
+TEST(BackendCCEBlockOutOps, MergedLoadPreservesStaticInnerExtent)
+{
+    for (bool transposed : {false, true}) {
+        for (int inner : {3, 64, 65536}) {
+            SCOPED_TRACE("inner=" + std::to_string(inner) + ", transposed=" + std::to_string(transposed));
+            auto tensor = MakeVar("tensor", MakeTensorType({1, 64, 3, inner, 128}));
+            const auto shape = transposed ? std::vector<int64_t>{128, 32} : std::vector<int64_t>{32, 128};
+            const auto hw = transposed ? ir::HardwareInfo(ir::TileLayout::row_major, ir::TileLayout::col_major, 512) :
+                                         ir::HardwareInfo(ir::TileLayout::col_major, ir::TileLayout::row_major, 512);
+            auto out = MakeVar("out", MakeTileType(shape, ir::DataType::FP16, MakeMemRef(ir::MemorySpace::Mat), hw));
+            auto call = MakeCallWithKwargs(
+                "block.load", {out, tensor, MakeOffsets({0, 0, 0, 0, 0})},
+                {{"tile_dims", std::vector<int>{1, 3, 4}}, {"nd_inner", inner}, {"is_transpose", transposed}});
+            const auto code = GenerateKernel(
+                {MakeTileAssign(out), std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown())}, {tensor},
+                ir::SectionKind::Cube);
+            EXPECT_CONTAINS(code, "auto* __merged_src = tensor_ptr + ");
+            EXPECT_CONTAINS(code, "const uint64_t __merged_inner = " + std::to_string(inner) + ";");
+            EXPECT_CONTAINS(code, transposed ? "out.GetValidRow()" : "out.GetValidCol()");
+            EXPECT_CONTAINS(code, "const int32_t __merged_rows = static_cast<int32_t>("
+                                  "__merged_inner < 32 ? __merged_inner : 32);");
+            EXPECT_CONTAINS(code, "pto::Shape<1, 1, -1, -1, -1>");
+            EXPECT_CONTAINS(code, transposed ? "pto::Stride<1, 1, -1, 1, -1>" : "pto::Stride<1, 1, -1, -1, 1>");
+            EXPECT_CONTAINS(code, transposed ? ", Layout::DN>;" : ", Layout::ND>;");
+            EXPECT_CONTAINS(code, "tensorType tensor(tensor_ptr, tensorShapeDim5(), tensorStrideDim5(1, 1, "
+                                  "uint64_t{1} * 3 * " +
+                                      std::to_string(inner) + " * 128, " +
+                                      (transposed ? "1, uint64_t{1} * 128));" : "uint64_t{1} * 128, 1));"));
+            EXPECT_CONTAINS(code, "tensor.SetShape<pto::GlobalTensorDim::DIM_2, pto::GlobalTensorDim::DIM_3, "
+                                  "pto::GlobalTensorDim::DIM_4>(__merged_count, ");
+            EXPECT_NOT_CONTAINS(code, ".SetStride<");
+            EXPECT_CONTAINS(code, "TASSIGN(tensor, __merged_src);");
+            EXPECT_CONTAINS(code, "TLOAD(out, tensor);");
+            EXPECT_NOT_CONTAINS(code, "__merged_tensor");
+        }
+    }
+}
+
+TEST(BackendCCEBlockOutOps, MergedLoadKeepsValidWindowBoundForLargeZnTiles)
+{
+    auto tensor = MakeVar("tensor", MakeTensorType({1, 2, 1, 65536, 16}));
+    const auto zn = ir::HardwareInfo(ir::TileLayout::row_major, ir::TileLayout::col_major, 512);
+    auto out = MakeVar("out", MakeTileType({16, 32768}, ir::DataType::FP16, MakeMemRef(ir::MemorySpace::Mat), zn));
+    auto load = MakeCallWithKwargs(
+        "block.load", {out, tensor, MakeOffsets({0, 0, 0, 0, 0})},
+        {{"tile_dims", std::vector<int>{1, 3, 4}}, {"nd_inner", 65536}, {"is_transpose", true}});
+    const auto code = GenerateKernel(
+        {MakeTileAssign(out), std::make_shared<const ir::EvalStmt>(load, ir::Span::Unknown())}, {tensor},
+        ir::SectionKind::Cube);
+    EXPECT_CONTAINS(code, "const int32_t __merged_valid = static_cast<int64_t>(out.GetValidCol());");
+    EXPECT_CONTAINS(code, "static_cast<int32_t>(__merged_inner < __merged_valid ? "
+                          "__merged_inner : __merged_valid)");
+    EXPECT_NOT_CONTAINS(code, "__merged_inner < 32768");
+}
+
+TEST(BackendCCEBlockOutOps, MergedLoadsSeparateAxesAndReuseAliases)
+{
+    const auto nz = ir::HardwareInfo(ir::TileLayout::col_major, ir::TileLayout::row_major, 512);
+    const auto zn = ir::HardwareInfo(ir::TileLayout::row_major, ir::TileLayout::col_major, 512);
+    auto tensor = MakeVar("tensor", MakeTensorType({1, 64, 3, 2, 128}));
+    auto alias = MakeVar("alias", tensor->GetType());
+    auto out = MakeVar("out", MakeTileType({32, 128}, ir::DataType::FP16, MakeMemRef(ir::MemorySpace::Mat), nz));
+    auto transposed = MakeVar("transposed",
+                              MakeTileType({128, 32}, ir::DataType::FP16, MakeMemRef(ir::MemorySpace::Mat), zn));
+    std::vector<ir::StmtPtr> stmts = {MakeTileAssign(out), MakeTileAssign(transposed),
+                                      std::make_shared<const ir::AssignStmt>(alias, tensor, ir::Span::Unknown())};
+    auto add_load = [&](const ir::VarPtr& dst, std::vector<int> axes, int inner, bool is_transpose = false) {
+        std::vector<std::pair<std::string, std::any>> kwargs = {{"tile_dims", axes}, {"is_transpose", is_transpose}};
+        if (inner != 0) {
+            kwargs.emplace_back("nd_inner", inner);
+        }
+        auto load = MakeCallWithKwargs("block.load", {dst, alias, MakeOffsets({0, 0, 0, 0, 0})}, kwargs);
+        stmts.push_back(std::make_shared<const ir::EvalStmt>(load, ir::Span::Unknown()));
+    };
+    add_load(out, {1, 3, 4}, 2);
+    add_load(transposed, {1, 3, 4}, 2, true);
+    add_load(out, {1, 4}, 0);
+    add_load(out, {1, 2, 4}, 3);
+    add_load(transposed, {1, 2, 4}, 3, true);
+    const auto acc_hw = ir::HardwareInfo(ir::TileLayout::col_major, ir::TileLayout::row_major, 1024);
+    auto result = MakeVar("result",
+                          MakeTileType({32, 128}, ir::DataType::FP32, MakeMemRef(ir::MemorySpace::Acc), acc_hw));
+    stmts.push_back(MakeTileAssign(result));
+    auto store = MakeCallWithKwargs("block.store", {alias, result, MakeOffsets({0, 0, 0, 0, 0})},
+                                    {{"tile_dims", std::vector<int>{1, 4}}});
+    stmts.push_back(std::make_shared<const ir::EvalStmt>(store, ir::Span::Unknown()));
+    const auto code = GenerateKernel(stmts, {tensor}, ir::SectionKind::Cube);
+    for (const auto& name : {"tensor", "tensor__v1", "tensor__v2", "tensor__v3", "tensor__v4"}) {
+        const std::string decl = "using " + std::string(name) + "Type = GlobalTensor<";
+        EXPECT_CONTAINS(code, decl);
+        EXPECT_EQ(code.find(decl), code.rfind(decl));
+    }
+    EXPECT_NOT_CONTAINS(code, "tensor__v5");
+    EXPECT_NOT_CONTAINS(code, "__merged_tensor");
+    EXPECT_CONTAINS(code, "TLOAD(out, tensor);");
+    EXPECT_CONTAINS(code, "TLOAD(transposed, tensor__v1);");
+    EXPECT_CONTAINS(code, "TLOAD(out, tensor__v2);");
+    EXPECT_CONTAINS(code, "TSTORE(tensor__v2, result);");
+    EXPECT_CONTAINS(code, "tensor__v2.SetShape<pto::GlobalTensorDim::DIM_3, pto::GlobalTensorDim::DIM_4>");
+    EXPECT_NOT_CONTAINS(code, "tensor__v2.SetStride");
+    EXPECT_CONTAINS(code, "TLOAD(out, tensor__v3);");
+    EXPECT_CONTAINS(code, "TLOAD(transposed, tensor__v4);");
+    EXPECT_CONTAINS(code, "tensorStrideDim5(1, 1, uint64_t{1} * 3 * 2 * 128, uint64_t{1} * 128, 1)");
+    EXPECT_CONTAINS(code, "tensor__v3StrideDim5(1, 1, uint64_t{1} * 3 * 2 * 128, uint64_t{1} * 2 * 128, 1)");
+    EXPECT_CONTAINS(code, "tensor__v4StrideDim5(1, 1, uint64_t{1} * 3 * 2 * 128, 1, uint64_t{1} * 2 * 128)");
+    EXPECT_NOT_CONTAINS(code, ".SetStride<");
+}
+
+TEST(BackendCCEBlockOutOps, MergedSingleColumnLoadKeepsDestinationLayout)
+{
+    for (bool transposed : {false, true}) {
+        SCOPED_TRACE(transposed);
+        auto tensor = MakeVar("tensor", MakeTensorType({1, 64, 3, 2, 1}));
+        const auto shape = transposed ? std::vector<int64_t>{1, 32} : std::vector<int64_t>{32, 1};
+        const auto hw = transposed ? ir::HardwareInfo(ir::TileLayout::row_major, ir::TileLayout::col_major, 512) :
+                                     ir::HardwareInfo(ir::TileLayout::col_major, ir::TileLayout::row_major, 512);
+        auto out = MakeVar("out", MakeTileType(shape, ir::DataType::FP16, MakeMemRef(ir::MemorySpace::Mat), hw));
+        auto load = MakeCallWithKwargs(
+            "block.load", {out, tensor, MakeOffsets({0, 0, 0, 0, 0})},
+            {{"tile_dims", std::vector<int>{1, 3, 4}}, {"nd_inner", 2}, {"is_transpose", transposed}});
+        const auto code = GenerateKernel(
+            {MakeTileAssign(out), std::make_shared<const ir::EvalStmt>(load, ir::Span::Unknown())}, {tensor},
+            ir::SectionKind::Cube);
+        EXPECT_CONTAINS(code, "using tensorShapeDim5 = pto::Shape<1, 1, -1, -1, -1>;");
+        EXPECT_CONTAINS(code, "using tensorType = GlobalTensor<half, tensorShapeDim5, tensorStrideDim5, Layout::" +
+                                  std::string(transposed ? "DN>;" : "ND>;"));
+        EXPECT_CONTAINS(code, "tensorType tensor(tensor_ptr, tensorShapeDim5(), tensorStrideDim5(");
+        EXPECT_CONTAINS(code, "TLOAD(out, tensor);");
+    }
+}
+
+TEST(BackendCCEBlockOutOps, MergedLoadRejectsTransposeLayoutMismatch)
+{
+    for (bool is_transpose : {false, true}) {
+        SCOPED_TRACE(is_transpose);
+        auto tensor = MakeVar("tensor", MakeTensorType({1, 64, 3, 2, 128}));
+        const auto hw = is_transpose ? ir::HardwareInfo(ir::TileLayout::col_major, ir::TileLayout::row_major, 512) :
+                                       ir::HardwareInfo(ir::TileLayout::row_major, ir::TileLayout::col_major, 512);
+        auto out = MakeVar("out", MakeTileType({32, 128}, ir::DataType::FP16, MakeMemRef(ir::MemorySpace::Mat), hw));
+        auto load = MakeCallWithKwargs(
+            "block.load", {out, tensor, MakeOffsets({0, 0, 0, 0, 0})},
+            {{"tile_dims", std::vector<int>{1, 3, 4}}, {"nd_inner", 2}, {"is_transpose", is_transpose}});
+        EXPECT_THROW(RunCodegen("block.load", load), npu::tile_fwk::Error);
+    }
+}
+
+TEST(BackendCCEBlockOutOps, MergedLoadPreservesWideSourceStrides)
+{
+    for (bool wide_row : {false, true}) {
+        SCOPED_TRACE(wide_row);
+        const auto wide = MakeConstInt(int64_t{1} << 31);
+        std::vector<ir::ExprPtr> strides = {MakeConstInt(1), wide, MakeConstInt(1), wide_row ? wide : MakeConstInt(64),
+                                            MakeConstInt(1)};
+        auto tensor_type = std::make_shared<const ir::TensorType>(std::vector<int64_t>{1, 2, 1, 16, 64},
+                                                                  ir::DataType::FP16, std::nullopt,
+                                                                  ir::TensorView(strides, ir::TensorLayout::ND));
+        auto tensor = MakeVar("tensor", tensor_type);
+        const auto hw = ir::HardwareInfo(ir::TileLayout::col_major, ir::TileLayout::row_major, 512);
+        auto out = MakeVar("out", MakeTileType({32, 64}, ir::DataType::FP16, MakeMemRef(ir::MemorySpace::Mat), hw));
+        auto call = MakeCallWithKwargs("block.load", {out, tensor, MakeOffsets({0, 1, 0, 0, 0})},
+                                       {{"tile_dims", std::vector<int>{1, 3, 4}}, {"nd_inner", 16}});
+        const auto code = GenerateKernel(
+            {MakeTileAssign(out), std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown())}, {tensor},
+            ir::SectionKind::Cube);
+        EXPECT_CONTAINS(code,
+                        "tensorStrideDim5(1, 1, 2147483648, " + std::string(wide_row ? "2147483648" : "64") + ", 1)");
+        EXPECT_CONTAINS(code, "static_cast<uint64_t>(1) * (2147483648)");
+        EXPECT_CONTAINS(code, "TLOAD(out, tensor);");
+        EXPECT_NOT_CONTAINS(code, "MultiNd2Nz");
+        EXPECT_NOT_CONTAINS(code, ".SetStride<");
+    }
+}
+
+TEST(BackendCCEBlockOutOps, MergedLoadPromotesDynamicDimensionProducts)
+{
+    auto dynamic = MakeVar("dim", MakeScalarType(ir::DataType::INT32));
+    auto tensor_type = std::make_shared<const ir::TensorType>(
+        std::vector<ir::ExprPtr>{MakeConstInt(1), dynamic, dynamic, dynamic, dynamic}, ir::DataType::FP16);
+    auto tensor = MakeVar("tensor", tensor_type);
+    const auto hw = ir::HardwareInfo(ir::TileLayout::col_major, ir::TileLayout::row_major, 512);
+    auto out = MakeVar("out", MakeTileType({32, 64}, ir::DataType::FP16, MakeMemRef(ir::MemorySpace::Mat), hw));
+    auto call = MakeCallWithKwargs("block.load", {out, tensor, MakeOffsets({0, 1, 0, 0, 0})},
+                                   {{"tile_dims", std::vector<int>{1, 3, 4}}, {"nd_inner", -1}});
+    const auto code = GenerateKernel(
+        {MakeTileAssign(out), std::make_shared<const ir::EvalStmt>(call, ir::Span::Unknown())}, {tensor, dynamic},
+        ir::SectionKind::Cube);
+    EXPECT_CONTAINS(code, "const uint64_t __merged_inner = dim;");
+    EXPECT_CONTAINS(code, "tensorStrideDim5(1, 1, uint64_t{1} * dim * dim * dim, uint64_t{1} * dim, 1)");
+    EXPECT_CONTAINS(code, "static_cast<uint64_t>(1) * (uint64_t{1} * dim * dim * dim)");
+}
+
 TEST(BackendCCEBlockOutOps, GeneratesHighDimensionalNzLoadAndStore)
 {
     auto nz_hw = ir::HardwareInfo(ir::TileLayout::col_major, ir::TileLayout::row_major, 512);

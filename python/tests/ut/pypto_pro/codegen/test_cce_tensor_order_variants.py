@@ -27,7 +27,9 @@ tests/st/pypto_pro/frontend/datacopy/test_load_order_variants.py.
 
 import re
 
+from pypto_pro._errors import InvalidShape
 import pypto_pro.language as pl
+import pytest
 
 DIM = 16
 TILE = 64
@@ -155,3 +157,21 @@ def test_repeating_one_order_reuses_its_declaration():
     assert len(decls) == 1, f"one layout must stay one declaration, got {decls}"
     assert decls[0].startswith("using x_0Type ")
     assert len(set(_tload_sources(source))) == 1
+
+
+@pytest.mark.parametrize("dynamic", [False, True])
+@pytest.mark.parametrize("order", [[0], [1]])
+def test_single_axis_order_is_rejected(dynamic, order):
+    """Explicit singleton orders fail during parsing for static and dynamic tensors."""
+    width = pl.DYNAMIC if dynamic else 96
+
+    @pl.jit
+    def kernel(x: pl.Tensor[[2, 3, width], pl.DT_BF16]):
+        group = pl.make_tile_group(
+            type=pl.TileType(shape=[1, 32], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec),
+            addrs=0, mutex_ids=[0])
+        with pl.section_vector():
+            pl.load(group.current(), x, [1, 1, 16], order=order)
+
+    with pytest.raises(InvalidShape, match="order must name 2 axes.*omit order"):
+        _compile_to_cce(kernel)

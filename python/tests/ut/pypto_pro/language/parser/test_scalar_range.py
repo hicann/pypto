@@ -19,6 +19,10 @@ Two bounds are enforced, and they are deliberately different:
   * The **API fit** check rejects a literal scalar operand the operator's element dtype could not
     represent. It reads the dtype from the operand, never from the literal, since a bare literal
     carries the uncommitted INDEX / FP32 placeholder.
+
+A rejection is its own assertion, but "it parsed" is not: every accepted case here also asserts the
+IR statement the scalar landed in, which is what says the accepted value was carried through rather
+than quietly wrapped, folded or dropped.
 """
 from pypto_pro import ir
 from pypto_pro._errors import OutOfRange
@@ -29,6 +33,7 @@ import pytest
 
 _N, _M = 1, 64
 _TILE_SIZE = _N * _M * 4
+
 
 def _arange_body(dtype, scalar):
     @pl.vector_function
@@ -139,6 +144,32 @@ def _parse_vf_scalar_kernel(dtype, op_name, scalar):
     return _parse_with_body(dtype, _VF_BODIES[op_name](dtype, scalar))
 
 
+def _walk_stmts(stmt):
+    if isinstance(stmt, ir.SeqStmts):
+        for child in stmt.stmts:
+            yield from _walk_stmts(child)
+    elif isinstance(stmt, ir.SectionStmt):
+        yield from _walk_stmts(stmt.body)
+    else:
+        yield stmt
+
+
+def _assert_scalar_operand(program, op_name, value, index=2):
+    """Check the stored operand without relying on SSA names or lossy float printing."""
+    calls = [
+        stmt.expr
+        for func in program.functions.values()
+        for stmt in _walk_stmts(func.body)
+        if isinstance(stmt, ir.EvalStmt) and isinstance(stmt.expr, ir.Call) and stmt.expr.name == op_name
+    ]
+    assert len(calls) == 1
+    call = calls[0]
+    scalar = call.args[index]
+    assert isinstance(scalar, ir.ConstFloat if isinstance(value, float) else ir.ConstInt)
+    assert scalar.value == value
+    return call
+
+
 # ---------------------------------------------------------------------------
 # API fit: a literal scalar operand must fit the operand's element dtype
 # ---------------------------------------------------------------------------
@@ -177,7 +208,17 @@ def test_out_of_range_scalar_operand_is_rejected(op_name, dtype, scalar, expecte
     ],
 )
 def test_boundary_scalar_operand_still_parses(dtype, scalar):
-    _parse_vf_scalar_kernel(dtype, "adds", scalar)
+    program, _ = _parse_vf_scalar_kernel(dtype, "adds", scalar)
+
+    _assert_scalar_operand(program, "vf.adds", scalar)
+
+
+@pytest.mark.parametrize("value", [-65504.0, 1e-30])
+def test_a_lossily_printed_scalar_is_still_stored_exactly(value):
+    """The range check reads the constant, not its printed form, so the two may disagree."""
+    from pypto_pro.ir._utils import _normalize_expr
+
+    assert _normalize_expr(value).value == value
 
 
 @pytest.mark.soc("950")
@@ -225,7 +266,10 @@ def test_rejection_is_final_and_not_retried_as_python():
 @pytest.mark.parametrize("op_name", ["shift_left", "shift_right"])
 @pytest.mark.parametrize("shift", [300, 64])
 def test_shift_amount_outside_the_dtype_range_still_parses(op_name, shift):
-    _parse_vf_scalar_kernel(pl.DT_INT8, op_name, shift)
+    program, _ = _parse_vf_scalar_kernel(pl.DT_INT8, op_name, shift)
+
+    # A shift count is not a value in the operand's dtype, so it reaches the IR unclamped.
+    _assert_scalar_operand(program, f"vf.{op_name}", shift)
 
 
 # ---------------------------------------------------------------------------
@@ -309,7 +353,16 @@ def test_pl_const_accepts_a_boundary_value():
     def kernel(x: pl.Tensor[[_N, _M], pl.DT_FP16]):
         _unused = pl.const(127, pl.DT_INT8)
 
-    kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+    assignments = [
+        stmt
+        for stmt in _walk_stmts(program.get_function("kernel").body)
+        if isinstance(stmt, ir.AssignStmt) and isinstance(stmt.value, ir.ConstInt)
+    ]
+    assert len(assignments) == 1
+    assert assignments[0].var.type.dtype == ir.DataType.INT8
+    assert assignments[0].value.value == 127
 
 
 # ---------------------------------------------------------------------------
@@ -319,7 +372,10 @@ def test_pl_const_accepts_a_boundary_value():
 @pytest.mark.parametrize("value", [float("inf"), float("-inf")])
 def test_infinity_is_accepted_for_a_float_dtype(value):
     """-inf is a legitimate max-reduction seed; rejecting it would break real kernels."""
-    _parse_vf_scalar_kernel(pl.DT_FP32, "adds", value)
+    program, _ = _parse_vf_scalar_kernel(pl.DT_FP32, "adds", value)
+
+    # It has to survive as an infinity, not be clamped to the finite fp32 maximum.
+    _assert_scalar_operand(program, "vf.adds", value)
 
 
 @pytest.mark.soc("950")
@@ -353,7 +409,9 @@ def test_literal_written_in_the_kernel_source_is_checked():
 
 @pytest.mark.soc("950")
 def test_literal_written_in_the_kernel_source_is_accepted_when_it_fits():
-    _parse_with_body(pl.DT_INT32, _source_literal_body(pl.DT_INT32))
+    program, _ = _parse_with_body(pl.DT_INT32, _source_literal_body(pl.DT_INT32))
+
+    _assert_scalar_operand(program, "vf.adds", 300)
 
 
 # ---------------------------------------------------------------------------
@@ -381,7 +439,10 @@ def test_tile_scalar_op_checks_the_scalar_against_the_out_dtype():
 
 @pytest.mark.soc("950")
 def test_tile_scalar_op_accepts_a_scalar_that_fits():
-    _parse_tile_scalar_kernel(pl.DT_INT8, 127)
+    program, _ = _parse_tile_scalar_kernel(pl.DT_INT8, 127)
+
+    # A scalar rhs sends pl.add through the tile-scalar chokepoint, i.e. block.adds.
+    _assert_scalar_operand(program, "block.adds", 127)
 
 
 # ---------------------------------------------------------------------------
@@ -445,7 +506,11 @@ def _muls_cast_body(scalar):
 @pytest.mark.soc("950")
 def test_type_changing_op_checks_the_scalar_against_the_source_dtype():
     """70000.0 does not fit the fp16 dst but does fit the fp32 src, which is the operand's domain."""
-    _parse_with_body(pl.DT_FP32, _muls_cast_body(70000.0))
+    program, _ = _parse_with_body(pl.DT_FP32, _muls_cast_body(70000.0))
+
+    call = _assert_scalar_operand(program, "vf.muls_cast", 70000.0)
+    assert call.args[0].type.dtype == ir.DataType.FP16
+    assert call.args[1].type.dtype == ir.DataType.FP32
 
 
 @pytest.mark.soc("950")
@@ -474,7 +539,10 @@ def test_op_without_a_runtime_operand_falls_back_to_the_dtype_kwarg():
 
 @pytest.mark.soc("950")
 def test_op_without_a_runtime_operand_accepts_a_value_that_fits():
-    _parse_with_body(pl.DT_FP16, _full_body(pl.DT_FP16, 65504.0))
+    program, _ = _parse_with_body(pl.DT_FP16, _full_body(pl.DT_FP16, 65504.0))
+
+    call = _assert_scalar_operand(program, "vf.full", 65504.0, index=1)
+    assert call.kwargs["dtype"] == ir.DataType.FP16
 
 
 # ---------------------------------------------------------------------------
@@ -521,17 +589,21 @@ def test_expands_rejects_scalar_outside_the_out_dtype(dtype, scalar, expected):
 
 @pytest.mark.soc("950")
 @pytest.mark.parametrize(
-    ("dtype", "scalar"),
+    ("dtype", "scalar", "stored"),
     [
-        (pl.DT_INT8, 127),
-        (pl.DT_INT8, -128),
-        (pl.DT_UINT8, 255),
-        (pl.DT_INT64, 2**63 - 1),
-        (pl.DT_UINT64, 2**64 - 1),
+        (pl.DT_INT8, 127, 127),
+        (pl.DT_INT8, -128, -128),
+        (pl.DT_UINT8, 255, 255),
+        (pl.DT_INT64, 2**63 - 1, INT64_MAX),
+        # Above INT64_MAX the constant is folded to its int64 image; the tile dtype reads it back.
+        (pl.DT_UINT64, 2**64 - 1, -1),
     ],
 )
-def test_expands_accepts_a_boundary_scalar(dtype, scalar):
-    _parse_expands_kernel(dtype, scalar)
+def test_expands_accepts_a_boundary_scalar(dtype, scalar, stored):
+    program, _ = _parse_expands_kernel(dtype, scalar)
+
+    call = _assert_scalar_operand(program, "block.expands", stored, index=1)
+    assert call.args[0].type.dtype == dtype
 
 
 @pytest.mark.soc("950")

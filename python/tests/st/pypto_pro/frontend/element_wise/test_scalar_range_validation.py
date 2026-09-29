@@ -26,11 +26,16 @@ against torch; the uint64 boundary stops at codegen, because torch_npu cannot al
 DT_UINT64 tensor -- it asserts instead that the folded int64 image -1 is emitted back as an
 unsigned literal, which is what the storage encoding exists for.
 
+Every accepted case also asserts the IR statement its scalar lands in. That half needs no device,
+and it pins down which constant was accepted -- a device comparison can agree for the wrong scalar
+(0 & 127 and 0 & 255 are both 0), the IR cannot.
+
 Requires an Ascend 950 (A5) device; skips otherwise.
 """
 
 import os
 
+from pypto_pro import ir
 from pypto_pro._errors import OutOfRange
 import pypto_pro.language as pl
 import pytest
@@ -69,6 +74,39 @@ def _check_npu():
 def _run(kernel, *args, **kwargs):
     kernel[None, 1](*args, **kwargs)
     torch.npu.synchronize()
+
+
+def _compile_to_cce(kernel) -> str:
+    from pypto_pro.runtime.jit import _assemble_cv_source, _parse_and_codegen_targets
+
+    cube, vector = _parse_and_codegen_targets(kernel.to_kernel_def(), "a5", "")
+    return _assemble_cv_source(cube, vector).content
+
+
+def _walk_stmts(stmt):
+    if isinstance(stmt, ir.SeqStmts):
+        for child in stmt.stmts:
+            yield from _walk_stmts(child)
+    elif isinstance(stmt, ir.SectionStmt):
+        yield from _walk_stmts(stmt.body)
+    else:
+        yield stmt
+
+
+def _assert_ir_scalar(kernel, op_name, value, dtype, index):
+    """Check the scalar encoding and destination dtype independently of SSA variable names."""
+    program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    calls = [
+        stmt.expr
+        for func in program.functions.values()
+        for stmt in _walk_stmts(func.body)
+        if isinstance(stmt, ir.EvalStmt) and isinstance(stmt.expr, ir.Call) and stmt.expr.name == op_name
+    ]
+    assert len(calls) == 1
+    call = calls[0]
+    assert call.args[0].type.dtype == dtype
+    assert isinstance(call.args[index], ir.ConstInt)
+    assert call.args[index].value == value
 
 
 # =============================================================================
@@ -150,6 +188,8 @@ def test_and_int8_rejects_scalar_outside_dtype_range(kernel, scalar):
 
 @pytest.mark.soc("950")
 def test_and_int8_boundary_scalar_runs_on_device():
+    _assert_ir_scalar(kernel_and_int8_boundary, "block.ands", 127, pl.DT_INT8, index=2)
+
     if not _check_npu():
         return
     # aclnnArange has no int8 output kernel, so build on CPU and move.
@@ -253,6 +293,8 @@ def test_and_uint8_negative_scalar_names_the_signedness():
 
 @pytest.mark.soc("950")
 def test_and_uint8_boundary_scalar_runs_on_device():
+    _assert_ir_scalar(kernel_and_uint8_boundary, "block.ands", 255, pl.DT_UINT8, index=2)
+
     if not _check_npu():
         return
     # aclnnArange has no uint8 output kernel, so build on CPU and move.
@@ -290,15 +332,8 @@ def kernel_expands_uint64_boundary(
     tc = pl.make_tile_group(type=tf, addrs=0, mutex_ids=[6])
     with pl.section_vector():
         tile = tc.next()
-        pl.expands(tile, 18446744073709551616)  # UINT64_MAX
+        pl.expands(tile, 18446744073709551615)  # UINT64_MAX
         pl.store(out, tile, [0, 0])
-
-
-def _compile_to_cce(kernel) -> str:
-    from pypto_pro.runtime.jit import _assemble_cv_source, _parse_and_codegen_targets
-
-    cube, vector = _parse_and_codegen_targets(kernel.to_kernel_def(), "a5", "")
-    return _assemble_cv_source(cube, vector).content
 
 
 @pytest.mark.soc("950")
@@ -316,16 +351,16 @@ def test_expands_uint64_boundary_scalar_is_emitted_as_an_unsigned_literal():
     """UINT64_MAX is stored folded as the int64 image -1 and must come back out unsigned.
 
     This is the one case the design's int64-plus-dtype encoding exists for, so the assertion is on
-    the generated code rather than on device values: torch_npu cannot allocate a DT_UINT64 tensor
-    (it is absent from aclnn's dtype support list), so a host round-trip is not possible.
+    the IR and the generated code rather than on device values: torch_npu cannot allocate a
+    DT_UINT64 tensor (it is absent from aclnn's dtype support list), so a host round-trip is not
+    possible. The two halves of the encoding are asserted separately: the IR holds the folded int64
+    image, and only the tile dtype recorded next to it tells codegen to read that image unsigned.
     """
-    with pytest.raises(
-            OutOfRange,
-            match=r"must be in \[-9223372036854775808, 18446744073709551615\], got 18446744073709551616",
-        ):
-        _compile_to_cce(kernel_expands_uint64_boundary)
+    _assert_ir_scalar(kernel_expands_uint64_boundary, "block.expands", -1, pl.DT_UINT64, index=1)
 
-    # assert f"TEXPANDS(tc_0, {UINT64_MAX}uLL);" in cpp
+    cpp = _compile_to_cce(kernel_expands_uint64_boundary)
+
+    assert f"TEXPANDS(_tg_tc_tiles_0[0], {UINT64_MAX}uLL);" in cpp
 
 
 # =============================================================================
@@ -374,6 +409,9 @@ def test_expands_int64_rejects_scalar_above_the_dtype_max():
 
 @pytest.mark.soc("950")
 def test_expands_int64_boundary_scalar_runs_on_device():
+    # INT64_MAX is inside the storage band, so it is carried as-is rather than folded.
+    _assert_ir_scalar(kernel_expands_int64_boundary, "block.expands", INT64_MAX, pl.DT_INT64, index=1)
+
     if not _check_npu():
         return
     out = torch.zeros(TILE_M, TILE_N64, device=ST_DEVICE, dtype=torch.int64)

@@ -57,6 +57,7 @@ struct TensorDef {
     std::vector<ir::ExprPtr> access_shape;     ///< access window shape (tile-derived) from load/store
     std::optional<std::vector<int>> tile_dims; ///< tile_dims kwarg for strided views (if any)
     bool is_transpose = false;                 ///< loaded with is_transpose=true (needs Layout::DN)
+    bool is_merged = false;                    ///< multi-matrix load with three dynamic shape dimensions
     std::string layout;                        ///< explicit Layout enum (MX loads); else derived from the above
 };
 
@@ -98,6 +99,10 @@ protected:
     using CodegenBase::VisitStmt_;
 
 public:
+    /// Per-axis element strides of a tensor, innermost first at "1". Public because the
+    /// block.load backend needs them to drive a merged-row nd2nz directly.
+    std::vector<std::string> BuildTensorStrideExpressions(const ir::TensorTypePtr& tensor_type);
+
     /** \brief Construct a CCE code generator for one fixed Cube/Vector target. */
     explicit CCECodegen(ir::SectionKind target);
 
@@ -306,10 +311,12 @@ public:
      * order has one per layout, and only the matching one walks it correctly -- then points its
      * hoisted instance at the access and resizes it in place. valid_rows/valid_cols are the logical
      * transfer shape; layout-specific physical dimensions are derived while binding.
+     * Merged loads supply descriptor rows/cols and a matrix count. All accesses retain the
+     * source strides initialized by their declaration.
      */
     [[nodiscard]] std::string BindGlobalTensor(const ir::VarPtr& tensor_var, const ir::CallPtr& op,
                                                const std::string& pointer_expr, const std::string& valid_rows,
-                                               const std::string& valid_cols);
+                                               const std::string& valid_cols, const std::string& matrix_count = "");
 
 protected:
     // Override visitor methods for code generation - Statements
@@ -561,14 +568,13 @@ private:
 
     // --- Phase 7: GenerateGlobalTensorTypeDeclaration helpers ---
 
-    std::vector<std::string> BuildTensorStrideExpressions(const ir::TensorTypePtr& tensor_type);
-
     /// Whether an access walks the tensor down columns: transposed, or a single-column window.
     static bool IsDNAccessLayout(const std::vector<int64_t>& shape_dims, bool is_transpose);
 
     /// The Stride ctor arguments an access walks the tensor with, row/col exchanged when transposed.
     std::string BuildAccessStrideArgs(const ir::TensorTypePtr& tensor_type,
-                                      const std::optional<std::vector<int>>& tile_dims, bool is_transpose, bool is_mx);
+                                      const std::optional<std::vector<int>>& tile_dims, bool is_transpose, bool is_mx,
+                                      bool is_merged = false);
 
     /**
      * \brief Emit one GlobalTensor instance over a declaration made by GenerateGlobalTensorTypeDeclaration.
