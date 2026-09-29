@@ -20,3 +20,6 @@ orchestration and the build tooling that makes a deployable op library live with
 from .common.compile import *  # noqa: F403, I001 - keep the load order described above
 from .common.exported_custom_op import *  # noqa: F403
 from .common.attr_spec import AttrSpec  # noqa: F401 - re-export
+from .common.node_reader import *  # noqa: F403
+from .onnx.export import recorded_onnx_opset_floor  # noqa: F401 - re-export
+from .onnx.spec import OnnxSymbolicSpec  # noqa: F401 - re-export

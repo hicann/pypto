@@ -8,14 +8,16 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""The declare-then-finalize registry: defers an op's framework-symbolic synthesis.
+"""The declare-then-finalize registry: enqueue config-declared ops and synthesize their framework wiring.
 
-An op that carries ``torch_op_qualname`` plus an ``*_spec`` enqueues itself here from
-``ExportedCustomOp.__init__``, so its symbolic is synthesized later rather than at import time -- importing
-an op module must not pull in ``torch.onnx``. Pending ops are handled duck-typed (``_finalized`` /
-``_onnx_symbolic_attached``); this module never imports ``exported_custom_op``.
+An op that carries ``torch_op_qualname`` plus an ``onnx_spec`` enqueues itself here from
+``ExportedCustomOp.__init__``; ``finalize_pending_ops()`` then synthesizes and registers its onnx
+symbolic. Deferring it keeps ``torch.onnx`` out of import time. Pending ops are handled duck-typed (reads
+``_onnx_spec``, writes ``_finalized`` / ``_onnx_symbolic_attached``); the onnx synthesizer and the
+opset-floor reset are reached by function-scope imports, so this module carries no module-scope edge to
+``onnx``.
 """
-__all__ = ()
+__all__ = ("finalize_pending_ops",)
 
 
 # Config-declared ops pending finalization. A LIST (not a dict keyed by torch_op_qualname) because
@@ -37,3 +39,29 @@ def _reset_pending_ops() -> None:
         op._finalized = False
         op._onnx_symbolic_attached = False
     _PENDING_OPS.clear()
+
+
+def _reset_export_state() -> None:
+    """Reset ALL process-global export registration state (pending ops + onnx opset floors). Test-only."""
+    _reset_pending_ops()
+    # layering: this module carries no module-scope edge to onnx
+    from ..onnx.export import _reset_onnx_opset_floors  # noqa: PLC0415
+    _reset_onnx_opset_floors()
+
+
+def finalize_pending_ops() -> None:
+    """Synthesize + register the framework symbolic of every pending config-declared op.
+
+    Idempotent (per-op ``_finalized`` flag), so every export-time caller may call it and whichever runs
+    first does the work. A no-op when no op used config (hand-written demos are never in the registry).
+    An op declaring no framework spec has nothing to synthesize; its torch op was registered at
+    construction.
+    """
+    for op in _PENDING_OPS:
+        if getattr(op, "_finalized", False):
+            continue
+        if op._onnx_spec is not None:
+            # layering: this module carries no module-scope edge to onnx
+            from ..onnx.export import _synthesize_onnx  # noqa: PLC0415
+            _synthesize_onnx(op, op._onnx_spec)
+        op._finalized = True

@@ -11,11 +11,11 @@
 """The framework-agnostic pypto op authoring surface: the ``ExportedCustomOp`` class and its export machinery.
 
 Holds the op handle (``ExportedCustomOp``, whose ``__init__`` takes the kernel + inference fns by
-reference) and ``_build_node_meta_completer``, the shared export closure every framework symbolic calls. The
-declare-then-finalize registry (``_register_pending_op``) lives in the sibling ``common.finalize``;
-``ExportedCustomOp.__init__`` enqueues config-declared ops there.
-
-This module never imports a subpackage at module scope.
+reference) and ``_build_node_meta_completer``, the shared export closure every framework symbolic calls.
+The declare-then-finalize registry lives in the sibling ``common.finalize``, whose ``finalize_pending_ops``
+this module re-exports. The onnx symbolic and its node-meta encoding live in the ``onnx`` subpackage and
+consume the config declared here (``onnx.spec.OnnxSymbolicSpec``). This module never imports a subpackage
+at module scope.
 """
 import ast
 import inspect
@@ -35,6 +35,7 @@ from .authoring import (
     _validate_factory_returns_jit_kernel,
     validate_op_type_identifier,
 )
+from .finalize import finalize_pending_ops
 from .node_meta import (
     _LOCAL_NODE_LAYOUT_VERSION,
     _LOCAL_PYPTO_VERSION,
@@ -50,6 +51,7 @@ from .torch_op import _is_exporting, exporting_scope
 __all__ = (
     "ExportedCustomOp",
     "AttrSpec",
+    "finalize_pending_ops",
     "exporting_scope",
     "_is_exporting",
 )
@@ -265,7 +267,7 @@ class ExportedCustomOp:
         self._onnx_symbolic_attached = False
 
         # Config-driven finalization (declare then finalize). When ``torch_op_qualname`` / a framework
-        # spec is given, pypto synthesizes the torch op + symbolic at export time
+        # spec is given, pypto synthesizes the torch op + symbolic at export time (finalize_pending_ops)
         # instead of the demo hand-writing them. An ``*_spec`` requires ``torch_op_qualname``; a bare
         # ``torch_op_qualname`` is fine.
         self._torch_op_qualname = torch_op_qualname

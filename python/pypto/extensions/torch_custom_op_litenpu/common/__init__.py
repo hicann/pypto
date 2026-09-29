@@ -11,6 +11,7 @@
 Holds the op authoring surface (``exported_custom_op``: the ``ExportedCustomOp`` class and the shared
 export closures), the declare-then-finalize registry (``finalize``), the node-meta schema (``node_meta``), the
 self-contained kernel compile-snippet packing (``kernel_snippet``), authoring constants (``authoring``),
-source-manipulation utils (``source_utils``), and the runtime compile contract (``compile``).
+source-manipulation utils (``source_utils``), the schema-driven node readers (``node_reader``), and the
+runtime compile contract (``compile``).
 Nothing here depends on a specific export framework.
 """

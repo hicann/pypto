@@ -8,6 +8,9 @@
 # -----------------------------------------------------------------------------------------------------------
 """ONNX export for a pypto op: what the author declares, and everything applied to it.
 
-``export`` holds ``OnnxSymbolicSpec`` (the op's ONNX symbolic config), the recorded ai.onnx opset floor
-(``recorded_onnx_opset_floor``), and the per-op meta-to-attribute encoding packed onto exported nodes.
+``spec`` holds ``OnnxSymbolicSpec``, the passive config an author declares. ``export`` applies it:
+it qualifies the op type, encodes the node meta and the declared attrs into ``g.op`` kwargs,
+registers the ``torch.onnx`` symbolic, and keeps the recorded ai.onnx opset floor
+(``recorded_onnx_opset_floor``) that an export driver reads back. ``node_reader`` reads pypto's node
+meta back off ONNX nodes. All three are imported directly by their consumers.
 """
