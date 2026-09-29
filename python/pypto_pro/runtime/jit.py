@@ -48,6 +48,8 @@ from .._errors import (
     NotSupported,
     OutOfRange,
     RuntimeFailure,
+    error_class_of_spec_message,
+    span_of_spec_message,
     span_source,
 )
 
@@ -1299,7 +1301,17 @@ def _codegen_target_cce(
     Key-independent: produces no launcher and does not write final artifacts.
     """
     cce_codegen = CCECodegen(target)
-    cpp_code = cce_codegen.generate_single(prog, arch)
+    try:
+        cpp_code = cce_codegen.generate_single(prog, arch)
+    except RuntimeError as exc:
+        # A C++ check states its own first line, code and DSL location. Carry it into
+        # the class that code names, the way the parse path does, so the location block
+        # renders its source preview rather than reaching the user as a bare
+        # RuntimeError. Anything without that first line is not ours to reclassify.
+        wrapper = error_class_of_spec_message(str(exc))
+        if wrapper is None:
+            raise
+        raise wrapper(str(exc), span=span_of_spec_message(str(exc))) from None
     if "ffts_cross_core_sync" in cpp_code and arch == "a5":
         extra_headers = "#include <pto/npu/a5/custom/TSyncCVID.hpp>"
         guard = {

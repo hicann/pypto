@@ -703,52 +703,6 @@ def kernel_14_mull(
 
 
 @pl.vector_function
-def _vf_kernel_15_cmp_unsqueeze_0(in_a, in_b, t_u0):
-    preg_f32 = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
-    preg_u32 = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
-    reg_a = vf.load_align(in_a, 0)
-    reg_b = vf.load_align(in_b, 0)
-    cmp_mask = vf.ge(reg_a, 0.0, preg_f32)
-    reg_dst_u32 = vf.unsqueeze(cmp_mask, dtype=pl.DT_UINT32)
-    vf.store_align(t_u0, reg_dst_u32, preg_u32)
-    reg_i0, reg_i1 = vf.interleave(reg_a, reg_b)
-
-
-@pl.jit()
-def kernel_15_cmp_unsqueeze(
-    a: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
-    b: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
-    out_f0: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
-    out_f1: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_FP32],
-    out_u0: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_UINT32],
-    out_u1: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_UINT32],
-    out_u2: pl.Tensor[[pl.DYNAMIC, pl.DYNAMIC], pl.DT_UINT32],
-):
-    tf = pl.TileType(shape=[N, M], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    tu = pl.TileType(shape=[N, M], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
-    in_a = pl.make_tile(tf, addr=VA_IN_A)
-    in_b = pl.make_tile(tf, addr=VA_IN_B)
-    t_f0 = pl.make_tile(tf, addr=VA_F0)
-    t_f1 = pl.make_tile(tf, addr=VA_F1)
-    t_u0 = pl.make_tile(tu, addr=VA_U0)
-    t_u1 = pl.make_tile(tu, addr=VA_U1)
-    t_u2 = pl.make_tile(tu, addr=VA_U2)
-    with pl.section_vector():
-        pl.load(in_a, a, [0, 0])
-        pl.load(in_b, b, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        _vf_kernel_15_cmp_unsqueeze_0(in_a, in_b, t_u0)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.store(out_f0, t_f0, [0, 0])
-        pl.store(out_f1, t_f1, [0, 0])
-        pl.store(out_u0, t_u0, [0, 0])
-        pl.store(out_u1, t_u1, [0, 0])
-        pl.store(out_u2, t_u2, [0, 0])
-
-
-@pl.vector_function
 def _vf_kernel_16_load_unalign_0(in_a, t_f0):
     preg = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
     ureg_load = vf.load_unalign_init()
@@ -2052,7 +2006,7 @@ def kernel_51_muls_and_xor(
 def _vf_kernel_52_shift_rights_0(in_a, t_u0):
     preg_u32 = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
     reg_a_u32 = vf.load_align(in_a, 0, dtype=pl.DT_UINT32)
-    reg_dst_u32 = vf.shift_right(reg_a_u32, 2, preg_u32, dtype=pl.DT_UINT32)
+    reg_dst_u32 = vf.shift_right(reg_a_u32, 2, preg_u32)
     vf.store_align(t_u0, reg_dst_u32, preg_u32)
 
 
@@ -3466,7 +3420,6 @@ _KERNELS = [
     kernel_12_prelu_mul,
     kernel_13_shift_vec,
     kernel_14_mull,
-    kernel_15_cmp_unsqueeze,
     kernel_16_load_unalign,
     kernel_19_arange_brc,
     kernel_20_rint_loadsample,
@@ -3645,9 +3598,6 @@ def test_vf_basic_ops():
     torch.testing.assert_close(u0, (product & 0xFFFFFFFF).to(torch.int32))
     torch.testing.assert_close(u1, ((product >> 32) & 0xFFFFFFFF).to(torch.int32))
     logging.info("Kernel 14 (Mull) PASSED")
-    _, _, u0, *_ = results[15]
-    assert u0.dtype == torch.int32
-    logging.info("Kernel 15 (Compares, Unsqueeze, Interleave) PASSED")
     f0, *_ = results[16]
     torch.testing.assert_close(f0, a_fp32, rtol=1e-5, atol=1e-5)
     logging.info("Kernel 16 (LoadUnalign) PASSED")

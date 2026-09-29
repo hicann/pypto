@@ -459,6 +459,10 @@ class PyptoProError(PyptoError):
             return
         column = self.span.get("column") or self.span.get("begin_column")
         parts.append(f"  --> {filename}:{line}:{column}")
+        if self.source_lines is None and self.span.get("filename"):
+            # Not every entry point attaches the source (a pipeline probe parse
+            # calls the parser directly), so read the file the span names.
+            self.source_lines = source_lines_of(self.span["filename"])
         self._append_source_preview(parts, line, column)
 
     def _append_source_preview(self, parts: list, line: int, column: int) -> None:

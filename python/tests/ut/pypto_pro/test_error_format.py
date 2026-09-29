@@ -221,6 +221,46 @@ def test_the_preview_quotes_the_offending_line_with_context():
     assert len(rendered.preview) > 1
 
 
+def test_a_codegen_check_renders_its_location_block_like_a_parse_one():
+    """A C++ check reaching Python from codegen carries the same block a parse check does."""
+    from pypto_pro.runtime.jit import _parse_and_codegen_targets
+
+    @pl.vector_function
+    def unsqueeze_a_float_mask(in_a, t_u0):
+        preg_f32 = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_FP32)
+        preg_u32 = vf.create_mask(pattern=pl.MaskPattern.ALL, dtype=pl.DT_UINT32)
+        reg_a = vf.load_align(in_a, 0)
+        cmp_mask = vf.ge(reg_a, 0.0, preg_f32)
+        reg_dst = vf.unsqueeze(cmp_mask)
+        vf.store_align(t_u0, reg_dst, preg_u32)
+
+    @pl.jit()
+    def kernel(a: pl.Tensor[[1, 64], pl.DT_FP32], out: pl.Tensor[[1, 64], pl.DT_UINT32]):
+        tf = pl.TileType(shape=[1, 64], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+        tu = pl.TileType(shape=[1, 64], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec)
+        in_a = pl.make_tile(tf, addr=0)
+        t_u0 = pl.make_tile(tu, addr=0x200)
+        with pl.section_vector():
+            pl.load(in_a, a, [0, 0])
+            unsqueeze_a_float_mask(in_a, t_u0)
+            pl.store(out, t_u0, [0, 0])
+
+    with pytest.raises(PyptoProError) as excinfo:
+        _parse_and_codegen_targets(kernel.to_kernel_def(), "a5", "")
+    rendered = Rendered(excinfo.value)
+
+    # The C++ first line is passed through whole: its own file, module and code.
+    assert rendered.head, rendered.lines[0]
+    assert rendered.head["module"] == "PRO_CODEGEN"
+    assert rendered.head["enum"] == "ExternalError::INVALID_TYPE"
+    # The code names the class, here as on the parse path.
+    assert isinstance(excinfo.value, InvalidType)
+    # The location block is what codegen used to lack: a location, and source under it.
+    assert rendered.loc
+    assert rendered.loc["file"].endswith("test_error_format.py")
+    assert "vf.unsqueeze(cmp_mask)" in "".join(rendered.preview)
+
+
 # ---------------------------------------------------------------------------
 # The shapes a check is raised in
 # ---------------------------------------------------------------------------
