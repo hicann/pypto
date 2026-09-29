@@ -41,6 +41,12 @@ extern "C" aclError aclrtCacheLastTaskOpInfo(const void* const data, const size_
     return reportError;
 }
 extern "C" uint64_t MsprofSysCycleTime() { return 100 + ++cycles; }
+extern "C" errno_t memcpy_s(void* dest, size_t destMax, const void* src, size_t count)
+{
+    assert(count <= destMax);
+    std::memcpy(dest, src, count);
+    return EOK;
+}
 extern "C" int32_t MsprofReportCompactInfo(uint32_t aging, void* data, uint32_t size)
 {
     assert(aging && size == sizeof(basic));

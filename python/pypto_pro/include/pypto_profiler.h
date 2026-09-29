@@ -13,6 +13,8 @@
 #include <acl/acl_prof.h>
 #include <acl/acl_rt.h>
 #include <profiling/aprof_pub.h>
+#include "securec.h"
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <sys/syscall.h>
@@ -81,16 +83,17 @@ inline void CacheCaptureTensorInfo(const aclprofTensorInfo& info)
         return;
     }
     const size_t size = sizeof(ProfCacheTaskInfo) + info.tensorNum * sizeof(MsrofTensorData);
-    auto* buffer = static_cast<unsigned char*>(std::malloc(size));
+    auto* buffer = static_cast<uint8_t*>(std::malloc(size));
     if (buffer == nullptr) {
         return;
     }
     const ProfCacheTaskInfo task{info.kernelType, info.blockNums, info.opNameId, info.opTypeId, 0, 0, 0,
                                  info.tensorNum};
-    std::memcpy(buffer, &task, sizeof(task));
+    (void)memcpy_s(buffer, size, &task, sizeof(task));
     for (uint32_t index = 0; index < info.tensorNum; ++index) {
         const auto tensor = MakeProfTensorData(info.tensors[index]);
-        std::memcpy(buffer + sizeof(task) + index * sizeof(tensor), &tensor, sizeof(tensor));
+        const size_t offset = sizeof(task) + index * sizeof(tensor);
+        (void)memcpy_s(buffer + offset, size - offset, &tensor, sizeof(tensor));
     }
     (void)aclrtCacheLastTaskOpInfo(buffer, size);
     std::free(buffer);
