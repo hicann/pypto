@@ -54,6 +54,7 @@ def get_op_pipe(op_name: str) -> PipeType | None:
 # OP_VIEW / OP_VIEW_TYPE / OP_RESHAPE / OP_ASSEMBLE from synchronisation.
 _DESCRIPTOR_ONLY_OPS: frozenset[str] = frozenset(
     {
+        "make_tile_group",  # Declares storage metadata; does not access tile data.
         "set_validshape",
     }
 )

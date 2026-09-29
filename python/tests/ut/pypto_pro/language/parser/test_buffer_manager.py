@@ -20,7 +20,6 @@ consumed by auto_mutex, so the frontend never handles mutex ids or manual lock/u
 """
 
 
-import re
 
 from pypto_pro._errors import InvalidShape, InvalidType, InvalidVal, NameNotFound, OutOfRange, PyptoProError
 import pypto_pro.language as pl
@@ -33,8 +32,36 @@ def _ir_to_str(prog: ir.Program) -> str:
     return str(prog)
 
 
-def _parse_kernel(kernel_def) -> ir.Program:
-    return kernel_def.to_kernel_def().parse_target_program(ir.SectionKind.Vector)[0]
+def _parse_kernel(kernel_def, target=ir.SectionKind.Vector) -> ir.Program:
+    return kernel_def.to_kernel_def().parse_target_program(target)[0]
+
+
+def _walk_statements(stmt):
+    yield stmt
+    if isinstance(stmt, ir.SeqStmts):
+        for child in stmt.stmts:
+            yield from _walk_statements(child)
+    elif isinstance(stmt, (ir.ForStmt, ir.WhileStmt)):
+        yield from _walk_statements(stmt.body)
+    elif isinstance(stmt, ir.IfStmt):
+        yield from _walk_statements(stmt.then_body)
+        if stmt.else_body is not None:
+            yield from _walk_statements(stmt.else_body)
+
+
+def _mutex_calls(program: ir.Program, function_name: str):
+    function = program.get_function(function_name)
+    return [
+        stmt.expr
+        for stmt in _walk_statements(function.body)
+        if isinstance(stmt, ir.EvalStmt)
+        and isinstance(stmt.expr, ir.Call)
+        and stmt.expr.name in ("system.mutex_lock_dyn", "system.mutex_unlock_dyn")
+    ]
+
+
+def _constant_groups(tuple_expr):
+    return [[int(value.value) for value in group.elements] for group in tuple_expr.elements]
 
 
 def test_constant_mutex_lock_unlock_uses_dynamic_ir():
@@ -214,8 +241,7 @@ def test_auto_mutex_single_tile():
     ir_str = _ir_to_str(_parse_kernel(k))
     assert ir_str.count("mutex_lock") >= 2, ir_str
     assert ir_str.count("mutex_unlock") >= 2, ir_str
-    assert re.search(r'mutex_ids(?:="mutex_ids":|=)\s*\[3\]', ir_str), ir_str
-    assert re.search(r'mutex_id_owner_indices(?:="mutex_id_owner_indices":|=)\s*\[0\]', ir_str), ir_str
+    assert "_tg_g_mutex_ids_0 = tuple(3)" in ir_str, ir_str
 
 
 def test_auto_mutex_locks_scale_kwarg_tile(monkeypatch):
@@ -233,10 +259,9 @@ def test_auto_mutex_locks_scale_kwarg_tile(monkeypatch):
 
     ir_str = _ir_to_str(k.to_kernel_def().parse_target_program(ir.SectionKind.Cube)[0])
     assert "block.store" in ir_str, ir_str
-    assert ir_str.count("system.mutex_lock_dyn") == 2, ir_str
-    assert ir_str.count("system.mutex_unlock_dyn") == 2, ir_str
-    assert re.search(r'mutex_ids(?:="mutex_ids":|=)\s*\[0\]', ir_str), ir_str
-    assert re.search(r'mutex_ids(?:="mutex_ids":|=)\s*\[1\]', ir_str), ir_str
+    assert ir_str.count("system.mutex_lock_dyn") == 1, ir_str
+    assert ir_str.count("system.mutex_unlock_dyn") == 1, ir_str
+    assert "tuple(tuple(0), tuple(1))" in ir_str, ir_str
 
 
 def test_auto_mutex_group_loop():
@@ -248,12 +273,11 @@ def test_auto_mutex_group_loop():
             cur = q_l1_db.next()
             pl.load(cur, gm_q, [i * 32, 0])
 
-    ir_str = _ir_to_str(_parse_kernel(k))
+    ir_str = _ir_to_str(_parse_kernel(k, ir.SectionKind.Cube))
     assert "mutex_lock" in ir_str, ir_str
     assert "mutex_unlock" in ir_str, ir_str
     assert ir_str.count("block.make_tile") == 2, ir_str
-    assert re.search(r'mutex_ids(?:="mutex_ids":|=)\s*\[0, 1\]', ir_str), ir_str
-    assert re.search(r'mutex_id_owner_indices(?:="mutex_id_owner_indices":|=)\s*\[0\]', ir_str), ir_str
+    assert "_tg_q_l1_db_mutex_ids_0 = tuple(0, 1)" in ir_str, ir_str
 
 
 def test_next_advances():
@@ -362,8 +386,8 @@ def test_depth_must_equal_mutex_ids_length():
 # ---------------------------------------------------------------------------
 
 
-def test_subscript_const_index_uses_static_mutex_ids():
-    """A literal index keeps its slot and uses its static mutex IDs directly."""
+def test_subscript_const_index_keeps_group_mutex_candidates():
+    """A literal index keeps its static ID while preserving group candidates for codegen."""
 
     @pl.jit(auto_mutex=True)
     def k(gm_q: pl.Tensor[[32, 32], pl.DT_FP16]):
@@ -372,11 +396,17 @@ def test_subscript_const_index_uses_static_mutex_ids():
         pl.load(g[0], gm_q, [0, 0])
         pl.load(g[1], gm_q, [0, 0])
 
-    ir_str = _ir_to_str(_parse_kernel(k))
+    program = _parse_kernel(k, ir.SectionKind.Cube)
+    ir_str = _ir_to_str(program)
     assert ir_str.count("block.make_tile") == 2, ir_str
     assert "_bufidx" not in ir_str, ir_str
     assert ir_str.count("system.mutex_lock_dyn") == 2, ir_str
-    assert "mutex_ids=[6, 7]" in ir_str, ir_str
+    lock_candidates = [
+        _constant_groups(call.args[1])
+        for call in _mutex_calls(program, k.__name__)
+        if call.name == "system.mutex_lock_dyn"
+    ]
+    assert lock_candidates == [[[6, 7]], [[6, 7]]]
 
 
 def test_subscript_negative_index_rejected():
@@ -421,7 +451,7 @@ def test_subscript_dynamic_index_is_not_implicitly_wrapped():
         for i in pl.range(0, 2):
             pl.load(g[i], gm_q, [i * 32, 0])
 
-    ir_str = _ir_to_str(_parse_kernel(k))
+    ir_str = _ir_to_str(_parse_kernel(k, ir.SectionKind.Cube))
     assert "mutex_lock_dyn" in ir_str, ir_str
     assert "mutex_unlock_dyn" in ir_str, ir_str
     assert "_bufidx" in ir_str, ir_str
@@ -441,7 +471,7 @@ def test_subscript_dynamic_index_expression():
             pl.load(g[(i + 1) % 2], gm_q, [i * 32, 0])
             pl.load(g[i % 2], gm_q, [i * 32, 0])
 
-    ir_str = _ir_to_str(_parse_kernel(k))
+    ir_str = _ir_to_str(_parse_kernel(k, ir.SectionKind.Cube))
     assert "mutex_lock_dyn" in ir_str, ir_str
     assert ir_str.count("_bufidx") >= 2, ir_str
     assert " mod " in ir_str, ir_str
@@ -457,7 +487,7 @@ def test_subscript_single_tile_group_requires_bounded_index():
         for i in pl.range(0, 4):
             pl.load(g[i % 1], gm_q, [i * 32, 0])
 
-    ir_str = _ir_to_str(_parse_kernel(k))
+    ir_str = _ir_to_str(_parse_kernel(k, ir.SectionKind.Cube))
     assert "mutex_lock_dyn" in ir_str, ir_str
     assert "_bufidx" in ir_str, ir_str
     assert " mod " in ir_str, ir_str
@@ -551,7 +581,7 @@ def test_dynamic_slot_assignment_does_not_leak_from_branch():
             pl.load(t, gm_q, [32, 0])
         pl.load(t, gm_q, [0, 0])
 
-    ir_str = _ir_to_str(_parse_kernel(k))
+    ir_str = _ir_to_str(_parse_kernel(k, ir.SectionKind.Cube))
     assert "mutex_lock" in ir_str, ir_str
     assert "mutex_lock_dyn" in ir_str, ir_str
 
@@ -567,7 +597,7 @@ def test_dynamic_slot_assignment_does_not_leak_from_loop():
             pl.load(t, gm_q, [i * 32, 0])
         pl.load(t, gm_q, [0, 0])
 
-    ir_str = _ir_to_str(_parse_kernel(k))
+    ir_str = _ir_to_str(_parse_kernel(k, ir.SectionKind.Cube))
     assert "mutex_lock" in ir_str, ir_str
     assert "mutex_lock_dyn" in ir_str, ir_str
 
@@ -585,7 +615,7 @@ def test_const_slot_assignment_merges_from_branch():
             pl.load(t, gm_q, [32, 0])
         pl.load(t, gm_q, [0, 0])
 
-    ir_str = _ir_to_str(_parse_kernel(k))
+    ir_str = _ir_to_str(_parse_kernel(k, ir.SectionKind.Cube))
     assert ir_str.count("mutex_lock") == 2, ir_str
     assert "mutex_lock_dyn" in ir_str, ir_str
 
@@ -599,7 +629,7 @@ def test_dynamic_slot_used_inside_its_own_block_is_fine():
             t = g.current()
             pl.load(t, gm_q, [0, 0])
 
-    ir_str = _ir_to_str(_parse_kernel(k))
+    ir_str = _ir_to_str(_parse_kernel(k, ir.SectionKind.Cube))
     assert "mutex_lock_dyn" in ir_str, ir_str
 
 
@@ -614,7 +644,7 @@ def test_dynamic_slot_selected_outside_and_used_inside_a_loop():
         for i in pl.range(0, 4):
             pl.load(t, gm_q, [i * 32, 0])
 
-    ir_str = _ir_to_str(_parse_kernel(k))
+    ir_str = _ir_to_str(_parse_kernel(k, ir.SectionKind.Cube))
     assert "mutex_lock_dyn" in ir_str, ir_str
 
 
@@ -629,7 +659,7 @@ def test_next_inside_loop_still_accepted():
             cur = g.next()
             pl.load(cur, gm_q, [i * 32, 0])
 
-    ir_str = _ir_to_str(_parse_kernel(k))
+    ir_str = _ir_to_str(_parse_kernel(k, ir.SectionKind.Cube))
     assert "mutex_lock_dyn" in ir_str, ir_str
 
 
@@ -650,7 +680,7 @@ def test_subscript_inside_inline_helper():
             t = take(g, i % 2)
             pl.load(t, gm_q, [i * 32, 0])
 
-    ir_str = _ir_to_str(_parse_kernel(k))
+    ir_str = _ir_to_str(_parse_kernel(k, ir.SectionKind.Cube))
     assert "mutex_lock_dyn" in ir_str, ir_str
 
 
@@ -683,11 +713,13 @@ def test_const_multi_mutex_ids_use_one_dedup_op():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[[2, 3]])
         pl.load(g[0], gm_q, [0, 0])
 
-    ir_str = _ir_to_str(_parse_kernel(k))
+    program = _parse_kernel(k, ir.SectionKind.Cube)
+    ir_str = _ir_to_str(program)
     assert ir_str.count("system.mutex_lock_dyn") == 1, ir_str
     assert ir_str.count("system.mutex_unlock_dyn") == 1, ir_str
-    assert "mutex_id_owner_indices=[0, 0]" in ir_str, ir_str
-    assert "mutex_ids=[2, 3]" in ir_str, ir_str
+    calls = _mutex_calls(program, k.__name__)
+    assert all(_constant_groups(call.args[0]) == [[2, 3]] for call in calls)
+    assert all(_constant_groups(call.args[1]) == [[2, 3]] for call in calls)
 
 
 def test_dynamic_multi_mutex_ids_use_one_dedup_op():
@@ -698,12 +730,14 @@ def test_dynamic_multi_mutex_ids_use_one_dedup_op():
         for i in pl.range(0, 3):
             pl.load(g[i], gm_q, [i * 32, 0])
 
-    ir_str = _ir_to_str(_parse_kernel(k))
+    program = _parse_kernel(k, ir.SectionKind.Cube)
+    ir_str = _ir_to_str(program)
     assert ir_str.count("system.mutex_lock_dyn") == 1, ir_str
     assert ir_str.count("system.mutex_unlock_dyn") == 1, ir_str
     assert "_tg_g_mutex_ids" in ir_str, ir_str
     assert "_tg_g_mutex_ids_1" in ir_str, ir_str
-    assert "mutex_ids=[0, 1, 2, 3, 4, 5]" in ir_str, ir_str
+    calls = _mutex_calls(program, k.__name__)
+    assert all(_constant_groups(call.args[1]) == [[0, 1, 2, 3, 4, 5]] for call in calls)
 
 
 def test_single_and_multi_id_groups_can_share_one_op():
@@ -715,9 +749,30 @@ def test_single_and_multi_id_groups_can_share_one_op():
         for i in pl.range(0, 3):
             pl.move(g2[i], g1[i])
 
-    ir_str = _ir_to_str(_parse_kernel(k))
+    program = _parse_kernel(k)
+    ir_str = _ir_to_str(program)
     assert ir_str.count("system.mutex_lock_dyn") == 1, ir_str
     assert ir_str.count("system.mutex_unlock_dyn") == 1, ir_str
+    calls = _mutex_calls(program, k.__name__)
+    assert all([len(group.elements) for group in call.args[0].elements] == [2, 1] for call in calls)
+    assert all(_constant_groups(call.args[1]) == [[0, 1, 2, 3, 4, 5], [0, 1, 2]] for call in calls)
+
+
+def test_mutex_candidate_groups_preserve_each_tile_candidates():
+    @pl.jit(auto_mutex=True)
+    def k(index: pl.DT_INT32):
+        tt = pl.TileType(shape=[1, 64], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+        out_group = pl.make_tile_group(type=tt, addrs=0, mutex_ids=[1])
+        lhs_group = pl.make_tile_group(type=tt, addrs=128, mutex_ids=[1, 2])
+        rhs_group = pl.make_tile_group(type=tt, addrs=384, mutex_ids=[2])
+        pl.add(out_group[0], lhs_group[index % 2], rhs_group[0])
+
+    program = _parse_kernel(k)
+    ir_str = _ir_to_str(program)
+    assert ir_str.count("system.mutex_lock_dyn") == 1, ir_str
+    assert ir_str.count("system.mutex_unlock_dyn") == 1, ir_str
+    calls = _mutex_calls(program, k.__name__)
+    assert all(_constant_groups(call.args[1]) == [[1], [1, 2], [2]] for call in calls)
 
 
 def test_multi_mutex_ids_survive_ternary_merge():
@@ -728,7 +783,7 @@ def test_multi_mutex_ids_survive_ternary_merge():
         tile = g[0] if choose > 0 else g[1]
         pl.load(tile, gm_q, [0, 0])
 
-    program = _parse_kernel(k)
+    program = _parse_kernel(k, ir.SectionKind.Cube)
     func = program.get_function(k.__name__)
     if_stmt = next(stmt for stmt in func.body.stmts if isinstance(stmt, ir.IfStmt))
     ir_str = _ir_to_str(program)
@@ -752,7 +807,7 @@ def test_same_name_control_flow_rejects_different_mutex_id_counts():
         PyptoProError,
         match="cannot merge tile mutex metadata with different ID counts: 2 and 1",
     ):
-        _parse_kernel(k)
+        _parse_kernel(k, ir.SectionKind.Cube)
 
 
 def test_same_name_control_flow_merges_equal_mutex_id_counts():
@@ -766,7 +821,7 @@ def test_same_name_control_flow_merges_equal_mutex_id_counts():
             tile = g2[0]
         pl.load(tile, gm_q, [0, 0])
 
-    ir_str = _ir_to_str(_parse_kernel(k))
+    ir_str = _ir_to_str(_parse_kernel(k, ir.SectionKind.Cube))
     assert "tile__mutexid" in ir_str, ir_str
     assert "tile__mutexid_1" in ir_str, ir_str
     assert "system.mutex_lock_dyn" in ir_str, ir_str
@@ -785,7 +840,7 @@ def test_loop_appends_mutex_ids_after_explicit_merge_slots():
             count = count + 1
         pl.load(tile, gm_q, [0, 0])
 
-    program = _parse_kernel(k)
+    program = _parse_kernel(k, ir.SectionKind.Cube)
     func = program.get_function(k.__name__)
     for_stmt = next(stmt for stmt in func.body.stmts if isinstance(stmt, ir.ForStmt))
 
@@ -823,10 +878,9 @@ def test_while_aligns_mutex_ids_for_every_break_and_continue():
             index = index + 1
         pl.load(tile, gm_q, [0, 0])
 
-    program = _parse_kernel(k)
+    program = _parse_kernel(k, ir.SectionKind.Cube)
     func = program.get_function(k.__name__)
     while_stmt = next(stmt for stmt in func.body.stmts if isinstance(stmt, ir.WhileStmt))
-    ir_str = _ir_to_str(program)
 
     jumps = []
 
@@ -848,7 +902,14 @@ def test_while_aligns_mutex_ids_for_every_break_and_continue():
         assert len(jump.value) == 4
         assert all("__mutexid" not in value.name for value in jump.value[:2])
         assert all(isinstance(value.type, ir.ScalarType) for value in jump.value[2:4])
-    assert "mutex_ids=[0, 1, 2, 3, 4, 5, 6, 7]" in ir_str
+    calls = _mutex_calls(program, k.__name__)
+    candidates = {
+        int(candidate.value)
+        for call in calls
+        for group in call.args[1].elements
+        for candidate in group.elements
+    }
+    assert candidates == set(range(8))
 
 
 def test_loop_rejects_different_mutex_id_counts_for_one_slot():
@@ -870,7 +931,7 @@ def test_loop_rejects_different_mutex_id_counts_for_one_slot():
         PyptoProError,
         match="cannot merge tile mutex metadata with different ID counts: 2 and 1",
     ):
-        _parse_kernel(k)
+        _parse_kernel(k, ir.SectionKind.Cube)
 
 
 def test_loop_rejects_mutex_tile_result_with_non_tile_body():
@@ -889,7 +950,7 @@ def test_loop_rejects_mutex_tile_result_with_non_tile_body():
         PyptoProError,
         match="Cannot merge Tile values when only one input carries mutex metadata",
     ):
-        _parse_kernel(k)
+        _parse_kernel(k, ir.SectionKind.Cube)
 
 
 def test_loop_allows_non_mutex_tile_body_with_scalar_result():
@@ -938,7 +999,7 @@ def test_ternary_rejects_different_mutex_id_counts():
         PyptoProError,
         match="cannot merge tile mutex metadata with different ID counts: 1 and 2",
     ):
-        _parse_kernel(k)
+        _parse_kernel(k, ir.SectionKind.Cube)
 
 
 def test_make_tile_group_rejects_different_mutex_id_counts():

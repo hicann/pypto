@@ -331,7 +331,7 @@ def test_make_tile_group_scalar_mutex_id_int_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=5)
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(InvalidType, match="mutex_ids must be a list, tuple, or None"):
+    with pytest.raises(InvalidType, match='mutex_ids must be "auto", a list, tuple, or None'):
         _parse(k)
 
 
@@ -342,7 +342,7 @@ def test_make_tile_group_scalar_mutex_id_float_rejected():
         g = pl.make_tile_group(type=tt, addrs=0, mutex_ids=0.0)
         pl.load(g.next(), x, [0])
 
-    with pytest.raises(InvalidType, match="mutex_ids must be a list, tuple, or None"):
+    with pytest.raises(InvalidType, match='mutex_ids must be "auto", a list, tuple, or None'):
         _parse(k)
 
 

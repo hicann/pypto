@@ -14,6 +14,7 @@
 
 #include "bindings/ir/bindings.h"
 #include "core/error.h"
+#include "ir/transforms/auto_mutex_id_manager.h"
 #include "ir/transforms/ir_property.h"
 #include "ir/transforms/pass_context.h"
 #include "ir/transforms/passes.h"
@@ -25,6 +26,15 @@ namespace ir {
 
 void BindPasses(py::module_& m)
 {
+    py::class_<AutoMutexIdManager>(m, "_AutoMutexIdManager", "Internal whole-program automatic mutex-ID manager")
+        .def(py::init<>())
+        .def("collect_group", &AutoMutexIdManager::CollectGroup, py::arg("tiles"), py::arg("mutex_ids"),
+             py::arg("group_name"))
+        .def("record_op_constraints", &AutoMutexIdManager::RecordOpConstraints, py::arg("tile_id_groups"),
+             py::arg("candidate_groups"))
+        .def("assign_mutex_ids", &AutoMutexIdManager::AssignMutexIds, py::arg("program"))
+        .def_property_readonly("diagnostic_span", &AutoMutexIdManager::DiagnosticSpan);
+
     py::enum_<IRProperty>(m, "IRProperty", "Verifiable IR properties")
         .value("SSAForm", IRProperty::SSAForm, "IR is in SSA form")
         .value("TypeChecked", IRProperty::TypeChecked, "IR has passed type checking")

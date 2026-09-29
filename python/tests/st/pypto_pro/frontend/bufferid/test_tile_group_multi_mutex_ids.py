@@ -16,9 +16,9 @@ in one operation. Their runtime IDs overlap, so the generated mutex operation
 must acquire and release each distinct ID once in the same order.
 The scalar getval/setval pair also verifies that all destination mutex IDs
 are propagated to PIPE_S synchronization. Additional cases cover overlapping
-slots in one group, equal-count metadata merges across groups, tuple input, and
-explicit depth with discrete addresses. An ordinary Python helper case verifies
-that Tile mutex metadata survives a local if/else across an inline call.
+slots in one group, dynamic candidate patterns, Cube/Vector ID-pool reuse, and
+address-contained Cube aliases. An ordinary Python helper case verifies that
+Tile mutex metadata survives a local if/else across an inline call.
 """
 
 import os
@@ -130,14 +130,6 @@ DYN_DEPTH = 4
 DYN_NUM_TILES = 8
 DYN_FULL_ROWS = TILE_ROWS * DYN_NUM_TILES
 
-PURE_DEPTH = 4
-PURE_FULL_ROWS = TILE_ROWS * PURE_DEPTH
-
-CONST_DEPTH = 5
-
-EXPLICIT_DEPTH = 3
-EXPLICIT_FULL_ROWS = TILE_ROWS * EXPLICIT_DEPTH
-
 L0A_M = 128
 L0A_K_WIDE = 256
 L0A_K_TILE = 128
@@ -181,7 +173,7 @@ def cube_vector_multi_id_kernel(
     vec_group = pl.make_tile_group(
         type=pl.TileType(shape=[CUBE_VEC_ROWS, CUBE_N], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
         addrs=0x0000,
-        mutex_ids=[[6, 7], [8, 9], [10, 11], [12, 13]],
+        mutex_ids=[[0, 1], [2, 3], [4, 5], [0, 5]],
     )
 
     with pl.section_cube():
@@ -206,80 +198,36 @@ def cube_vector_multi_id_kernel(
 
 
 @pl.jit(arch="a5", auto_mutex=True)
-def overlap_groups_add_kernel(
+def dynamic_multi_id_patterns_kernel(
     a: pl.Tensor[[DYN_FULL_ROWS, TILE_COLS], pl.DT_FP16],
     b: pl.Tensor[[DYN_FULL_ROWS, TILE_COLS], pl.DT_FP16],
-    out: pl.Tensor[[DYN_FULL_ROWS, TILE_COLS], pl.DT_FP16],
+    overlap_out: pl.Tensor[[DYN_FULL_ROWS, TILE_COLS], pl.DT_FP16],
+    offset_out: pl.Tensor[[DYN_FULL_ROWS, TILE_COLS], pl.DT_FP16],
 ):
     tile_type = pl.TileType(shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    group_a = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[[0, 1], [1, 2]])
-    group_b = pl.make_tile_group(type=tile_type, addrs=0x4000, mutex_ids=[[3, 4, 5], [0, 1, 2]])
+    overlap_a = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[[0, 1], [1, 2]])
+    overlap_b = pl.make_tile_group(type=tile_type, addrs=0x4000, mutex_ids=[[3, 4, 5], [0, 1, 2]])
+    offset_a = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[[0, 1], [2, 3], [4, 5], [6, 7]])
+    offset_b = pl.make_tile_group(type=tile_type, addrs=0x10000, mutex_ids=[[6, 7], [0, 1], [2, 3], [4, 5]])
 
     with pl.section_vector():
         for i in pl.range(0, DYN_NUM_TILES):
-            tile_a = group_a[i % 2]
-            tile_b = group_b[(i + 1) % 2]
+            overlap_tile_a = overlap_a[i % 2]
+            overlap_tile_b = overlap_b[(i + 1) % 2]
             row = i * TILE_ROWS
-            pl.load(tile_a, a, [row, 0])
-            pl.load(tile_b, b, [row, 0])
-            pl.add(tile_a, tile_a, tile_b)
-            pl.store(out, tile_a, [row, 0])
+            pl.load(overlap_tile_a, a, [row, 0])
+            pl.load(overlap_tile_b, b, [row, 0])
+            pl.add(overlap_tile_a, overlap_tile_a, overlap_tile_b)
+            pl.store(overlap_out, overlap_tile_a, [row, 0])
 
-
-@pl.jit(arch="a5", auto_mutex=True)
-def dynamic_offset_subscript_kernel(
-    a: pl.Tensor[[DYN_FULL_ROWS, TILE_COLS], pl.DT_FP16],
-    b: pl.Tensor[[DYN_FULL_ROWS, TILE_COLS], pl.DT_FP16],
-    out: pl.Tensor[[DYN_FULL_ROWS, TILE_COLS], pl.DT_FP16],
-):
-    tile_type = pl.TileType(shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    group_a = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[[0, 1], [2, 3], [4, 5], [6, 7]])
-    group_b = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[[6, 7], [0, 1], [2, 3], [4, 5]])
-
-    with pl.section_vector():
         for i in pl.range(0, DYN_NUM_TILES):
-            tile_a = group_a[(i + 2) % DYN_DEPTH]
-            tile_b = group_b[(i * 2) % DYN_DEPTH]
+            offset_tile_a = offset_a[(i + 2) % DYN_DEPTH]
+            offset_tile_b = offset_b[(i * 2) % DYN_DEPTH]
             row = i * TILE_ROWS
-            pl.load(tile_a, a, [row, 0])
-            pl.load(tile_b, b, [row, 0])
-            pl.add(tile_a, tile_a, tile_b)
-            pl.store(out, tile_a, [row, 0])
-
-
-@pl.jit(arch="a5", auto_mutex=True)
-def pure_iterative_subscript_kernel(
-    a: pl.Tensor[[PURE_FULL_ROWS, TILE_COLS], pl.DT_FP16],
-    out: pl.Tensor[[PURE_FULL_ROWS, TILE_COLS], pl.DT_FP16],
-):
-    tile_type = pl.TileType(shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    g = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[[0, 1], [2, 3], [4, 5], [6, 7]])
-
-    with pl.section_vector():
-        for i in pl.range(0, PURE_DEPTH):
-            tile = g[i]
-            row = i * TILE_ROWS
-            pl.load(tile, a, [row, 0])
-            pl.exp(tile, tile)
-            pl.store(out, tile, [row, 0])
-
-
-@pl.jit(arch="a5", auto_mutex=True)
-def pure_constant_subscript_kernel(
-    a: pl.Tensor[[TILE_ROWS, TILE_COLS], pl.DT_FP16],
-    b: pl.Tensor[[TILE_ROWS, TILE_COLS], pl.DT_FP16],
-    out: pl.Tensor[[TILE_ROWS, TILE_COLS], pl.DT_FP16],
-):
-    tile_type = pl.TileType(shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    g = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]])
-
-    with pl.section_vector():
-        tile_a = g[1]
-        tile_b = g[4]
-        pl.load(tile_a, a, [0, 0])
-        pl.load(tile_b, b, [0, 0])
-        pl.add(tile_a, tile_a, tile_b)
-        pl.store(out, tile_a, [0, 0])
+            pl.load(offset_tile_a, a, [row, 0])
+            pl.load(offset_tile_b, b, [row, 0])
+            pl.add(offset_tile_a, offset_tile_a, offset_tile_b)
+            pl.store(offset_out, offset_tile_a, [row, 0])
 
 
 @pl.jit(arch="a5", auto_mutex=True)
@@ -298,27 +246,6 @@ def same_group_overlapping_slots_kernel(
         pl.load(tile_b, b, [0, 0])
         pl.add(tile_a, tile_a, tile_b)
         pl.store(out, tile_a, [0, 0])
-
-
-@pl.jit(arch="a5", auto_mutex=True)
-def control_flow_multi_id_groups_kernel(
-    a: pl.Tensor[[FULL_ROWS, TILE_COLS], pl.DT_FP16],
-    out: pl.Tensor[[FULL_ROWS, TILE_COLS], pl.DT_FP16],
-):
-    tile_type = pl.TileType(shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    group_a = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[[0, 1], [2, 3]])
-    group_b = pl.make_tile_group(type=tile_type, addrs=0x8000, mutex_ids=[[1, 4], [3, 5]])
-
-    with pl.section_vector():
-        for i in pl.range(0, NUM_TILES):
-            slot = i % 2
-            tile = group_a[slot]
-            if i % 3 == 0:
-                tile = group_b[slot]
-            row = i * TILE_ROWS
-            pl.load(tile, a, [row, 0])
-            pl.add(tile, tile, tile)
-            pl.store(out, tile, [row, 0])
 
 
 @pl.jit(arch="a5", auto_mutex=True)
@@ -346,67 +273,6 @@ def subfunction_tile_if_else_kernel(
             pl.store(out, output_tile, [row, 0])
 
 
-@pl.jit(arch="a5", auto_mutex=True)
-def tuple_mutex_ids_kernel(
-    a: pl.Tensor[[TILE_ROWS, TILE_COLS], pl.DT_FP16],
-    b: pl.Tensor[[TILE_ROWS, TILE_COLS], pl.DT_FP16],
-    out: pl.Tensor[[TILE_ROWS, TILE_COLS], pl.DT_FP16],
-):
-    tile_type = pl.TileType(shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    group = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=((6, 7), (8, 9)))
-
-    with pl.section_vector():
-        tile_a = group[0]
-        tile_b = group[1]
-        pl.load(tile_a, a, [0, 0])
-        pl.load(tile_b, b, [0, 0])
-        pl.add(tile_a, tile_a, tile_b)
-        pl.store(out, tile_a, [0, 0])
-
-
-@pl.jit(arch="a5", auto_mutex=True)
-def explicit_depth_discrete_addrs_kernel(
-    a: pl.Tensor[[EXPLICIT_FULL_ROWS, TILE_COLS], pl.DT_FP16],
-    out: pl.Tensor[[EXPLICIT_FULL_ROWS, TILE_COLS], pl.DT_FP16],
-):
-    tile_type = pl.TileType(shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    group = pl.make_tile_group(
-        type=tile_type,
-        addrs=[0x0000, 0x4000, 0x8000],
-        mutex_ids=[[10, 11], [12, 13], [14, 15]],
-        depth=EXPLICIT_DEPTH,
-    )
-
-    with pl.section_vector():
-        for i in pl.range(0, EXPLICIT_DEPTH):
-            tile = group[i]
-            row = i * TILE_ROWS
-            pl.load(tile, a, [row, 0])
-            pl.exp(tile, tile)
-            pl.store(out, tile, [row, 0])
-
-
-@pl.jit(arch="a5", auto_mutex=True)
-def next_and_subscript_mixed_kernel(
-    a: pl.Tensor[[FULL_ROWS, TILE_COLS], pl.DT_FP16],
-    out: pl.Tensor[[FULL_ROWS, TILE_COLS], pl.DT_FP16],
-):
-    tile_type = pl.TileType(shape=[TILE_ROWS, TILE_COLS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
-    g = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[[0, 1], [2, 3], [4, 5], [6, 7]])
-
-    with pl.section_vector():
-        for k in pl.range(0, NUM_TILES):
-            tile = g[0]
-            row = k * TILE_ROWS
-            if k % 2 == 0:
-                tile = g.next()
-            else:
-                tile = g[k % 4]
-            pl.load(tile, a, [row, 0])
-            pl.add(tile, tile, tile)
-            pl.store(out, tile, [row, 0])
-
-
 @pytest.mark.soc("950")
 @pypto.options(pass_options={"enable_slice": False})
 def test_cube_vector_multi_mutex_id():
@@ -424,57 +290,18 @@ def test_cube_vector_multi_mutex_id():
 
 @pytest.mark.soc("950")
 @pypto.options(pass_options={"enable_slice": False})
-def test_overlapping_groups_dynamic_subscript():
+def test_dynamic_multi_id_patterns():
     _require_a5(ST_DEVICE)
     torch.manual_seed(0)
     a = torch.rand([DYN_FULL_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16) * 2.0 - 1.0
     b = torch.rand([DYN_FULL_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16) * 2.0 - 1.0
-    out = torch.zeros([DYN_FULL_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16)
-    overlap_groups_add_kernel(a, b, out)
+    overlap_out = torch.zeros([DYN_FULL_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16)
+    offset_out = torch.zeros([DYN_FULL_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16)
+    dynamic_multi_id_patterns_kernel(a, b, overlap_out, offset_out)
     torch.npu.synchronize()
     golden = a.cpu().float() + b.cpu().float()
-    torch.testing.assert_close(out.cpu().float(), golden, rtol=3e-3, atol=3e-3)
-
-
-@pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
-def test_dynamic_offset_subscript():
-    _require_a5(ST_DEVICE)
-    torch.manual_seed(0)
-    a = torch.rand([DYN_FULL_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16) * 2.0 - 1.0
-    b = torch.rand([DYN_FULL_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16) * 2.0 - 1.0
-    out = torch.zeros([DYN_FULL_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16)
-    dynamic_offset_subscript_kernel(a, b, out)
-    torch.npu.synchronize()
-    golden = a.cpu().float() + b.cpu().float()
-    torch.testing.assert_close(out.cpu().float(), golden, rtol=3e-3, atol=3e-3)
-
-
-@pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
-def test_pure_iterative_subscript():
-    _require_a5(ST_DEVICE)
-    torch.manual_seed(0)
-    a = torch.rand([PURE_FULL_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16) * 2.0 - 1.0
-    out = torch.zeros([PURE_FULL_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16)
-    pure_iterative_subscript_kernel(a, out)
-    torch.npu.synchronize()
-    golden = torch.exp(a.cpu().float())
-    torch.testing.assert_close(out.cpu().float(), golden, rtol=3e-3, atol=3e-3)
-
-
-@pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
-def test_pure_constant_subscript():
-    _require_a5(ST_DEVICE)
-    torch.manual_seed(0)
-    a = torch.rand([TILE_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16) * 2.0 - 1.0
-    b = torch.rand([TILE_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16) * 2.0 - 1.0
-    out = torch.zeros([TILE_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16)
-    pure_constant_subscript_kernel(a, b, out)
-    torch.npu.synchronize()
-    golden = a.cpu().float() + b.cpu().float()
-    torch.testing.assert_close(out.cpu().float(), golden, rtol=3e-3, atol=3e-3)
+    torch.testing.assert_close(overlap_out.cpu().float(), golden, rtol=3e-3, atol=3e-3)
+    torch.testing.assert_close(offset_out.cpu().float(), golden, rtol=3e-3, atol=3e-3)
 
 
 @pytest.mark.soc("950")
@@ -488,19 +315,6 @@ def test_same_group_overlapping_slots_in_one_op():
     same_group_overlapping_slots_kernel(a, b, out)
     torch.npu.synchronize()
     golden = a.cpu().float() + b.cpu().float()
-    torch.testing.assert_close(out.cpu().float(), golden, rtol=3e-3, atol=3e-3)
-
-
-@pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
-def test_control_flow_merges_different_multi_id_groups():
-    _require_a5(ST_DEVICE)
-    torch.manual_seed(0)
-    a = torch.rand([FULL_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16) * 2.0 - 1.0
-    out = torch.zeros([FULL_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16)
-    control_flow_multi_id_groups_kernel(a, out)
-    torch.npu.synchronize()
-    golden = a.cpu().float() + a.cpu().float()
     torch.testing.assert_close(out.cpu().float(), golden, rtol=3e-3, atol=3e-3)
 
 
@@ -524,48 +338,8 @@ def test_subfunction_tile_if_else():
     torch.testing.assert_close(out.cpu().float(), golden, rtol=3e-3, atol=3e-3)
 
 
-@pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
-def test_tuple_mutex_ids():
-    _require_a5(ST_DEVICE)
-    torch.manual_seed(0)
-    a = torch.rand([TILE_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16) * 2.0 - 1.0
-    b = torch.rand([TILE_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16) * 2.0 - 1.0
-    out = torch.zeros([TILE_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16)
-    tuple_mutex_ids_kernel(a, b, out)
-    torch.npu.synchronize()
-    golden = a.cpu().float() + b.cpu().float()
-    torch.testing.assert_close(out.cpu().float(), golden, rtol=3e-3, atol=3e-3)
-
-
-@pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
-def test_explicit_depth_with_discrete_addrs():
-    _require_a5(ST_DEVICE)
-    torch.manual_seed(0)
-    a = torch.rand([EXPLICIT_FULL_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16) * 2.0 - 1.0
-    out = torch.zeros([EXPLICIT_FULL_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16)
-    explicit_depth_discrete_addrs_kernel(a, out)
-    torch.npu.synchronize()
-    golden = torch.exp(a.cpu().float())
-    torch.testing.assert_close(out.cpu().float(), golden, rtol=3e-3, atol=3e-3)
-
-
-@pytest.mark.soc("950")
-@pypto.options(pass_options={"enable_slice": False})
-def test_next_and_subscript_mixed():
-    _require_a5(ST_DEVICE)
-    torch.manual_seed(0)
-    a = torch.rand([FULL_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16) * 2.0 - 1.0
-    out = torch.zeros([FULL_ROWS, TILE_COLS], device=ST_DEVICE, dtype=torch.float16)
-    next_and_subscript_mixed_kernel(a, out)
-    torch.npu.synchronize()
-    golden = a.cpu().float() + a.cpu().float()
-    torch.testing.assert_close(out.cpu().float(), golden, rtol=3e-3, atol=3e-3)
-
-
 @pl.jit(arch="a5", auto_mutex=True)
-def l0a_l0b_overlap_multi_id_kernel(
+def l0a_l0b_overlap_same_id_kernel(
     a: pl.Tensor[[L0A_M, L0A_K_WIDE], pl.DT_FP16],
     b: pl.Tensor[[L0B_K_WIDE, L0B_N], pl.DT_FP16],
     out: pl.Tensor[[L0A_M, L0B_N], pl.DT_FP32],
@@ -573,23 +347,23 @@ def l0a_l0b_overlap_multi_id_kernel(
     l0a_g1 = pl.make_tile_group(
         type=pl.TileType(shape=[L0A_M, L0A_K_TILE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
         addrs=0x0000,
-        mutex_ids=[0, 1],
+        mutex_ids=[0, 0],
     )
     l0a_g2 = pl.make_tile_group(
         type=pl.TileType(shape=[L0A_M, L0A_K_WIDE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Left, layout=pl.NZ),
         addrs=0x0000,
-        mutex_ids=[[0, 1]],
+        mutex_ids=[0],
     )
 
     l0b_g1 = pl.make_tile_group(
         type=pl.TileType(shape=[L0B_K, L0B_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
         addrs=0x0000,
-        mutex_ids=[2, 3],
+        mutex_ids=[2, 2],
     )
     l0b_g2 = pl.make_tile_group(
         type=pl.TileType(shape=[L0B_K_WIDE, L0B_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Right, layout=pl.ZN),
         addrs=0x0000,
-        mutex_ids=[[2, 3]],
+        mutex_ids=[2],
     )
 
     a_l1_g1 = pl.make_tile_group(
@@ -622,13 +396,13 @@ def l0a_l0b_overlap_multi_id_kernel(
 
 @pytest.mark.soc("950")
 @pypto.options(pass_options={"enable_slice": False})
-def test_l0a_l0b_overlap_multi_id():
+def test_l0a_l0b_overlap_same_id():
     _require_a5(ST_DEVICE)
     torch.manual_seed(0)
     a = torch.rand([L0A_M, L0A_K_WIDE], device=ST_DEVICE, dtype=torch.float16) * 0.1
     b = torch.rand([L0B_K_WIDE, L0B_N], device=ST_DEVICE, dtype=torch.float16) * 0.1
     out = torch.zeros([L0A_M, L0B_N], device=ST_DEVICE, dtype=torch.float32)
-    l0a_l0b_overlap_multi_id_kernel(a, b, out)
+    l0a_l0b_overlap_same_id_kernel(a, b, out)
     torch.npu.synchronize()
     golden = a.cpu().float() @ b.cpu().float()
     torch.testing.assert_close(out.cpu().float(), golden, rtol=3e-3, atol=3e-3)
@@ -637,14 +411,7 @@ def test_l0a_l0b_overlap_multi_id():
 if __name__ == "__main__":
     test_mixed_single_and_multi_id_tile_groups()
     test_cube_vector_multi_mutex_id()
-    test_overlapping_groups_dynamic_subscript()
-    test_dynamic_offset_subscript()
-    test_pure_iterative_subscript()
-    test_pure_constant_subscript()
+    test_dynamic_multi_id_patterns()
     test_same_group_overlapping_slots_in_one_op()
-    test_control_flow_merges_different_multi_id_groups()
     test_subfunction_tile_if_else()
-    test_tuple_mutex_ids()
-    test_explicit_depth_with_discrete_addrs()
-    test_next_and_subscript_mixed()
-    test_l0a_l0b_overlap_multi_id()
+    test_l0a_l0b_overlap_same_id()

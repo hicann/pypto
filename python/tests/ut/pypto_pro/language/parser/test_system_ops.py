@@ -209,6 +209,7 @@ def test_mutex_id_rejects_bool(builder, mutex_id):
 def test_mutex_ir_builder_normalizes_python_int_id(builder):
     call = builder(pipe=pl.PipeType.MTE2, mutex_id=0)
 
+    assert len(call.args) == 1
     assert isinstance(call.args[0], pypto_pro.ir.ConstInt)
     assert call.args[0].value == 0
 
@@ -413,8 +414,24 @@ def test_constant_integer_mutex_id_expression_is_folded_to_operand():
     calls = [stmt.expr for stmt in func.body.stmts if isinstance(stmt, pypto_pro.ir.EvalStmt)]
     assert [call.name for call in calls] == ["system.mutex_lock_dyn", "system.mutex_unlock_dyn"]
     for call in calls:
-        assert isinstance(call.args[0], pypto_pro.ir.ConstInt)
+        assert len(call.args) == 1
         assert call.args[0].value == 11
+
+
+def test_runtime_mutex_id_is_single_operand():
+    @pl.jit(auto_mutex=False)
+    def func(mutex_id: pl.DT_INT64):
+        pl.system.mutex_lock(pipe=pl.PipeType.V, mutex_id=mutex_id)
+        pl.system.mutex_unlock(pipe=pl.PipeType.V, mutex_id=mutex_id)
+
+    func_program, _ = func.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    func = func_program.get_function(func.__name__)
+
+    calls = [stmt.expr for stmt in func.body.stmts if isinstance(stmt, pypto_pro.ir.EvalStmt)]
+    assert [call.name for call in calls] == ["system.mutex_lock_dyn", "system.mutex_unlock_dyn"]
+    for call in calls:
+        assert len(call.args) == 1
+        assert isinstance(call.args[0], pypto_pro.ir.Var)
 
 
 def test_bool_event_id_expression_is_rejected_by_parser():

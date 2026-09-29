@@ -16,6 +16,7 @@
  * Each registration specifies the pipe type and CCE codegen function.
  */
 
+#include <algorithm>
 #include <any>
 #include <cstddef>
 #include <cstdint>
@@ -1974,69 +1975,127 @@ REGISTER_BACKEND_OP(BackendCCE, "block.subview")
 // API: get_buf(PIPE_MTE2, mutexId, 0);  rls_buf(PIPE_MTE2, mutexId, 0);
 // ============================================================================
 
+using MutexIdExprs = std::vector<std::vector<ir::ExprPtr>>;
+
+static std::vector<int> GetEffectiveCandidateIds(const ir::ExprPtr& mutexId, const std::vector<int>& tileCandidates)
+{
+    auto staticId = ir::As<ir::ConstInt>(mutexId);
+    if (staticId != nullptr) {
+        return {static_cast<int>(staticId->value_)};
+    }
+    return tileCandidates;
+}
+
+static bool CandidateGroupsOverlap(const std::vector<int>& left, const std::vector<int>& right)
+{
+    return std::any_of(left.begin(), left.end(),
+                       [&](int value) { return std::find(right.begin(), right.end(), value) != right.end(); });
+}
+
+static std::vector<int> MergeCandidateGroups(const std::vector<std::vector<int>>& groups)
+{
+    std::vector<int> result;
+    for (const auto& group : groups) {
+        for (int value : group) {
+            if (std::find(result.begin(), result.end(), value) == result.end()) {
+                result.push_back(value);
+            }
+        }
+    }
+    return result;
+}
+
 static std::string MakeMutexBufCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base,
                                           const std::string& intrinsic)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
     auto pipe = static_cast<ir::PipeType>(op->GetKwarg<int>("pipe"));
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, op->args_.size() == 1 || op->args_.size() == 2)
+        << "dynamic mutex requires either mutex_id, or mutex_id and candidate_group arguments";
 
-    std::vector<int> mutex_ids = op->GetKwarg<std::vector<int>>("mutex_ids");
-    // Candidate IDs are attached only by the auto-mutex path. A manual mutex op
-    // has no candidate set and must always be emitted, including on PIPE_V.
-    if (!mutex_ids.empty() && codegen.ShouldSkipVPipeMutex(pipe, mutex_ids))
-        return "";
-
-    std::string pipe_str = PipeTypeToCCEString(pipe);
-
-    // N-way cross-Tile dedup: mutex IDs owned by one Tile are already known distinct.
-    // Compare only across Tiles so each unique mutex_id is acquired and released once.
-    // Without cross-Tile dedup, two get_buf(pipe, same_id) on the same pipe hang the hardware.
-    if (op->args_.size() >= 2) {
-        std::vector<std::string> id_exprs;
-        id_exprs.reserve(op->args_.size());
-        for (const auto& arg : op->args_) {
-            id_exprs.push_back(codegen.GetExprAsCode(arg));
-        }
-        // Backward-compatible default: without owner metadata every expression
-        // has a separate owner, preserving the original all-pairs dedup.
-        std::vector<int> mutex_id_owner_indices(id_exprs.size());
-        for (size_t i = 0; i < mutex_id_owner_indices.size(); ++i) {
-            mutex_id_owner_indices[i] = static_cast<int>(i);
-        }
-        for (const auto& [key, value] : op->kwargs_) {
-            if (key == "mutex_id_owner_indices") {
-                mutex_id_owner_indices = std::any_cast<std::vector<int>>(value);
-                break;
-            }
-        }
-        PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, mutex_id_owner_indices.size() == id_exprs.size())
-            << "mutex_id_owner_indices size must match dynamic mutex args size";
-
-        auto emit_id = [&](size_t i) {
-            std::string condition;
-            for (size_t j = 0; j < i; ++j) {
-                // IDs owned by one Tile are guaranteed distinct by the frontend.
-                if (mutex_id_owner_indices[i] == mutex_id_owner_indices[j])
-                    continue;
-                if (!condition.empty())
-                    condition += " && ";
-                condition += "(" + id_exprs[i] + " != " + id_exprs[j] + ")";
-            }
-            if (condition.empty()) {
-                codegen.Emit(intrinsic + "(" + pipe_str + ", " + id_exprs[i] + ", 0);");
-                return;
-            }
-            codegen.Emit("if (" + condition + ") {");
-            codegen.Emit("  " + intrinsic + "(" + pipe_str + ", " + id_exprs[i] + ", 0);");
-            codegen.Emit("}");
-        };
-        for (size_t i = 0; i < id_exprs.size(); ++i)
-            emit_id(i);
+    std::string pipeStr = PipeTypeToCCEString(pipe);
+    if (op->args_.size() == 1) {
+        std::string mutexIdCode = codegen.GetExprAsCode(op->args_[0]);
+        codegen.Emit(intrinsic + "(" + pipeStr + ", " + mutexIdCode + ", 0);");
         return "";
     }
 
-    std::string mutex_id_expr = codegen.GetExprAsCode(op->args_[0]);
-    codegen.Emit(intrinsic + "(" + pipe_str + ", " + mutex_id_expr + ", 0);");
+    auto mutexIdTuple = ir::As<ir::MakeTuple>(op->args_[0]);
+    auto candidateTuple = ir::As<ir::MakeTuple>(op->args_[1]);
+
+    MutexIdExprs mutexId;
+    std::vector<std::vector<int>> candidateGroups;
+    mutexId.reserve(mutexIdTuple->elements_.size());
+    candidateGroups.reserve(mutexIdTuple->elements_.size());
+    for (size_t tile = 0; tile < mutexIdTuple->elements_.size(); ++tile) {
+        auto tileIds = ir::As<ir::MakeTuple>(mutexIdTuple->elements_[tile]);
+        auto tileCandidates = ir::As<ir::MakeTuple>(candidateTuple->elements_[tile]);
+        std::vector<int> candidate;
+        candidate.reserve(tileCandidates->elements_.size());
+        for (const auto& candidateExpr : tileCandidates->elements_) {
+            int value = static_cast<int>(ir::As<ir::ConstInt>(candidateExpr)->value_);
+            if (std::find(candidate.begin(), candidate.end(), value) == candidate.end()) {
+                candidate.push_back(value);
+            }
+        }
+        mutexId.push_back(tileIds->elements_);
+        candidateGroups.push_back(std::move(candidate));
+    }
+
+    auto candidateIds = MergeCandidateGroups(candidateGroups);
+    if (codegen.ShouldSkipVPipeMutex(pipe, candidateIds)) {
+        return "";
+    }
+
+    std::vector<std::vector<std::string>> idExprs;
+    idExprs.reserve(mutexId.size());
+    for (const auto& tileMutexId : mutexId) {
+        std::vector<std::string> expressions;
+        expressions.reserve(tileMutexId.size());
+        for (const auto& mutexIdExpr : tileMutexId) {
+            expressions.push_back(codegen.GetExprAsCode(mutexIdExpr));
+        }
+        idExprs.push_back(std::move(expressions));
+    }
+
+    for (size_t tile = 0; tile < mutexId.size(); ++tile) {
+        for (size_t id = 0; id < mutexId[tile].size(); ++id) {
+            const auto& currentExpr = mutexId[tile][id];
+            const auto& currentCode = idExprs[tile][id];
+            bool duplicate = false;
+            std::string condition;
+            auto currentCandidates = GetEffectiveCandidateIds(currentExpr, candidateGroups[tile]);
+            for (size_t priorTile = 0; priorTile < tile && !duplicate; ++priorTile) {
+                for (size_t priorId = 0; priorId < mutexId[priorTile].size(); ++priorId) {
+                    const auto& priorCode = idExprs[priorTile][priorId];
+                    if (currentCode == priorCode) {
+                        duplicate = true;
+                        break;
+                    }
+                    auto priorCandidates = GetEffectiveCandidateIds(mutexId[priorTile][priorId],
+                                                                    candidateGroups[priorTile]);
+                    bool candidatesOverlap = CandidateGroupsOverlap(currentCandidates, priorCandidates);
+                    if (!candidatesOverlap) {
+                        continue;
+                    }
+                    if (!condition.empty()) {
+                        condition += " && ";
+                    }
+                    condition += "(" + currentCode + " != " + priorCode + ")";
+                }
+            }
+            if (duplicate) {
+                continue;
+            }
+            if (condition.empty()) {
+                codegen.Emit(intrinsic + "(" + pipeStr + ", " + currentCode + ", 0);");
+                continue;
+            }
+            codegen.Emit("if (" + condition + ") {");
+            codegen.Emit("  " + intrinsic + "(" + pipeStr + ", " + currentCode + ", 0);");
+            codegen.Emit("}");
+        }
+    }
     return "";
 }
 

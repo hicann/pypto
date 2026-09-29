@@ -22,7 +22,7 @@ import sys
 from typing import Any, Callable
 
 from pypto.pypto_impl import ir
-from pypto_pro.ir._utils import _is_int
+from pypto_pro.ir._utils import _is_int, _to_make_tuple
 from pypto_pro.ir.op._op_registry import _OP_REGISTRY
 from pypto_pro.ir.op.block_ops import block_ir_op
 
@@ -223,8 +223,8 @@ def _get_source_info(entity: Callable | type, entity_type: str) -> tuple[str, li
     )
 
 
-# Mutex carrier for tile-group tiles (buf_id IR expr tuple, candidate values, memory, dedup id).
-_MutexRef = namedtuple("_MutexRef", "buf_ids mutex_ids memory slot_id")
+# Mutex carrier for one selected Tile (runtime IDs, possible values, memory, dedup id).
+_MutexRef = namedtuple("_MutexRef", "tile_ids candidate_ids memory slot_id")
 
 
 @dataclass(frozen=True)
@@ -734,46 +734,25 @@ class CallParserMixin:
             return True
         return bool(args.kw_defaults)
 
-    # -------------------------------------------------------------------------
-    # Mutex dedup helpers (shared by _emit_auto_mutex and _emit_vf_func_mutex_lock)
-    # -------------------------------------------------------------------------
+    def _record_mutex_op_constraints(self, refs: list) -> None:
+        """Record same-operation ID preferences before grouped Calls are built."""
+        tile_id_groups = []
+        candidate_groups = []
+        for tile_ref in refs:
+            target = (
+                ir.SectionKind.Vector
+                if tile_ref.memory == ir.MemorySpace.Vec
+                else ir.SectionKind.Cube
+            )
+            # MTE3 may expose both Cube and Vector TileGroups to both target parses. Only pass
+            # candidates owned by this target to its independent mutex-ID manager.
+            if target != self.target:
+                continue
 
-    @staticmethod
-    def _group_refs_by_mutex_overlap(refs: list) -> list:
-        """Group tilerefs by mutex_ids overlap (connected components via union-find).
+            tile_id_groups.append(tile_ref.tile_ids)
+            candidate_groups.append(tile_ref.candidate_ids)
 
-        Two refs whose mutex_ids lists have any common value are in the same group.
-        Returns a list of groups, each group is a list of _MutexRef.
-        """
-        n = len(refs)
-        parent = list(range(n))
-
-        def find(x):
-            while parent[x] != x:
-                parent[x] = parent[parent[x]]
-                x = parent[x]
-            return x
-
-        def union(x, y):
-            px, py = find(x), find(y)
-            if px != py:
-                parent[px] = py
-
-        # Build mutex_id sets for each ref
-        id_sets = [set(ref.mutex_ids) if ref.mutex_ids else set() for ref in refs]
-
-        # Union refs that have overlapping mutex_ids
-        for i in range(n):
-            for j in range(i + 1, n):
-                if id_sets[i] & id_sets[j]:
-                    union(i, j)
-
-        # Collect groups
-        groups: dict[int, list] = {}
-        for i in range(n):
-            root = find(i)
-            groups.setdefault(root, []).append(refs[i])
-        return list(groups.values())
+        self._mutex_id_manager.record_op_constraints(tile_id_groups, candidate_groups)
 
     @classmethod
     def _make_call_with_return_type(
@@ -1560,8 +1539,8 @@ class CallParserMixin:
                     )
                     if self._auto_mutex:
                         self._tile_mutex_meta[undefined_return] = (
-                            (ir.ConstInt(-1, ir.DataType.INT64, span),),
-                            [],
+                            _to_make_tuple([ir.ConstInt(-1, ir.DataType.INT64, span)], span),
+                            _to_make_tuple([], span),
                         )
 
                 if is_outermost_vf:
@@ -1655,8 +1634,8 @@ class CallParserMixin:
     def _try_resolve_tileref(self, node: ast.expr):
         """Resolve a tile argument to its memory and optional mutex metadata.
 
-        Returns _MutexRef(buf_ids, mutex_ids, memory, tile_id) for tile
-        arguments. Ordinary tiles have empty ``buf_ids`` and ``mutex_ids``;
+        Returns _MutexRef(tile_ids, candidate_ids, memory, tile_id) for tile
+        arguments. Ordinary tiles have empty ``tile_ids`` and ``candidate_ids``;
         their memory is still needed to infer the move pipe when paired with a
         tile-group tile.
 
@@ -1673,9 +1652,9 @@ class CallParserMixin:
         mem = expr.type.memref.memory_space_
         meta = self.tile_mutex_lock_meta(expr)
         if meta is None:
-            return _MutexRef((), (), mem, id(expr))
-        buf_id_irs, mutex_ids = meta
-        return _MutexRef(buf_id_irs, mutex_ids, mem, id(expr))
+            return _MutexRef(_to_make_tuple([], expr.span), _to_make_tuple([], expr.span), mem, id(expr))
+        tile_ids, candidate_ids = meta
+        return _MutexRef(tile_ids, candidate_ids, mem, id(expr))
 
     def _emit_auto_mutex(self, op_name: str, call: ast.Call, span: ir.Span):
         """Emit mutex_lock before and mutex_unlock after a block DSL op.
@@ -1714,7 +1693,7 @@ class CallParserMixin:
         unique_refs = []
         seen = set()
         for tref in tilerefs:
-            if tref is None or not tref.buf_ids:
+            if tref is None or not tref.tile_ids.elements:
                 continue
             if tref.slot_id in seen:
                 continue
@@ -1758,20 +1737,18 @@ class CallParserMixin:
         if pipe is None:
             return
 
-        # 3. Emit lock for each unique _TileRef, with dedup for aliasing tiles.
-        # Group once here and reuse the grouping at unlock time.
-        groups = self._group_refs_by_mutex_overlap(unique_refs)
-        self._emit_mutex_for_groups(groups, pipe, span, is_lock=True)
+        self._record_mutex_op_constraints(unique_refs)
 
-        # Store grouping for post-op unlock emission (avoids re-grouping)
-        self._pending_mutex_unlocks = (groups, pipe, span)
+        # 3. Preserve Tile boundaries and ordering for codegen-side deduplication.
+        self._emit_mutex_for_refs(unique_refs, pipe, span, is_lock=True)
+        self._pending_mutex_unlocks = (unique_refs, pipe, span)
 
     def _emit_auto_mutex_unlocks(self):
         """Emit mutex_unlock calls queued by _emit_auto_mutex or _parse_func_call."""
         if not hasattr(self, "_pending_mutex_unlocks") or self._pending_mutex_unlocks is None:
             return
-        groups, pipe, span = self._pending_mutex_unlocks
-        self._emit_mutex_for_groups(groups, pipe, span, is_lock=False)
+        refs, pipe, span = self._pending_mutex_unlocks
+        self._emit_mutex_for_refs(refs, pipe, span, is_lock=False)
         self._pending_mutex_unlocks = None
 
     def _emit_mutex_for_tile(self, tile: ir.Expr, pipe, span: ir.Span, *, is_lock: bool) -> bool:
@@ -1779,11 +1756,10 @@ class CallParserMixin:
         meta = self.tile_mutex_lock_meta(tile)
         if meta is None:
             return False
-        buf_ids, mutex_ids = meta
+        tile_id_irs, candidate_ids = meta
         self._emit_mutex_op(
-            buf_ids,
-            mutex_ids,
-            [0] * len(buf_ids),
+            _to_make_tuple([tile_id_irs], span),
+            _to_make_tuple([candidate_ids], span),
             pipe,
             span,
             is_lock=is_lock,
@@ -1792,65 +1768,40 @@ class CallParserMixin:
 
     def _emit_mutex_op(
         self,
-        buf_ids,
-        mutex_ids,
-        mutex_id_owner_indices,
+        mutex_id,
+        candidate_groups,
         pipe,
         span: ir.Span,
         *,
         is_lock: bool,
     ) -> None:
-        """Emit a per-tile-aware mutex dedup operation."""
+        """Emit per-Tile mutex IDs and candidates for codegen-side deduplication."""
         from pypto_pro.ir.op.system_ops import _create_mutex_dedup_op
 
         op_name = "system.mutex_lock" if is_lock else "system.mutex_unlock"
-        id_exprs = list(buf_ids)
         expr = _create_mutex_dedup_op(
             op_name,
             pipe=pipe,
-            mutex_id_exprs=id_exprs,
-            mutex_id_owner_indices=mutex_id_owner_indices,
-            mutex_ids_union=list(mutex_ids or ()),
+            mutex_id=mutex_id,
+            candidate_groups=candidate_groups,
             span=span,
         )
         self.builder.emit(ir.EvalStmt(expr, span))
 
-    def _emit_mutex_for_groups(self, groups: list, pipe, span: ir.Span, *, is_lock: bool):
-        """Emit mutex lock/unlock calls for pre-grouped refs, with dedup if-guards.
-
-        ``groups`` is the output of _group_refs_by_mutex_overlap (computed once at
-        lock time and reused at unlock time). Shared by lock (is_lock=True) and unlock
-        (is_lock=False). Each group uses one mutex_(un)lock_dyn whose CCE codegen
-        guards possible aliases across Tiles while trusting the frontend's per-tile
-        uniqueness validation. Lock and unlock visit independent groups and IDs in
-        the same order.
-        """
-        for group in groups:
-            id_exprs = [
-                buf_id
-                for tref in group
-                for buf_id in tref.buf_ids
-            ]
-            mutex_id_owner_indices = [
-                owner_index
-                for owner_index, tref in enumerate(group)
-                for _ in tref.buf_ids
-            ]
-            ids_union = list(
-                dict.fromkeys(
-                    mutex_id
-                    for tref in group
-                    for mutex_id in (tref.mutex_ids or ())
-                )
-            )
-            self._emit_mutex_op(
-                id_exprs,
-                ids_union,
-                mutex_id_owner_indices,
-                pipe,
+    def _emit_mutex_for_refs(self, refs: list, pipe, span: ir.Span, *, is_lock: bool) -> None:
+        """Emit one mutex call containing all Tile references of the operation."""
+        if not refs:
+            return
+        self._emit_mutex_op(
+            _to_make_tuple([tile_ref.tile_ids for tile_ref in refs], span),
+            _to_make_tuple(
+                [tile_ref.candidate_ids for tile_ref in refs],
                 span,
-                is_lock=is_lock,
-            )
+            ),
+            pipe,
+            span,
+            is_lock=is_lock,
+        )
 
     def _emit_vf_func_mutex_lock(
         self,
@@ -1859,17 +1810,17 @@ class CallParserMixin:
         used_params: set,
         span: ir.Span,
     ) -> list:
-        """Emit mutex_lock(V, buf_id) for tile-valued args whose matching
+        """Emit mutex_lock(V, mutex_id) for tile-valued args whose matching
         parameter is referenced inside a ``@pl.vector_function`` body.
 
         Called before a VF func.call is emitted (i.e., before the VEC_SCOPE
-        is generated). Returns the ref grouping (from _group_refs_by_mutex_overlap)
-        so the caller can emit matching unlocks after the call without re-grouping.
+        is generated). Returns the reference grouping so the caller can emit
+        matching unlocks after the call without rebuilding it.
         """
         unique_refs = []
         seen = set()
         for param_name, tref in zip(param_names, arg_tilerefs):
-            if tref is None or not tref.buf_ids:
+            if tref is None or not tref.tile_ids.elements:
                 continue
             if param_name not in used_params:
                 continue
@@ -1878,13 +1829,13 @@ class CallParserMixin:
             seen.add(tref.slot_id)
             unique_refs.append(tref)
 
-        groups = self._group_refs_by_mutex_overlap(unique_refs)
-        self._emit_mutex_for_groups(groups, ir.PipeType.V, span, is_lock=True)
-        return groups
+        self._record_mutex_op_constraints(unique_refs)
+        self._emit_mutex_for_refs(unique_refs, ir.PipeType.V, span, is_lock=True)
+        return unique_refs
 
-    def _emit_inline_vf_mutex_unlock(self, groups: list, span: ir.Span) -> None:
-        """Emit mutex_unlock(V, buf_id) for each group from _emit_vf_func_mutex_lock."""
-        self._emit_mutex_for_groups(groups, ir.PipeType.V, span, is_lock=False)
+    def _emit_inline_vf_mutex_unlock(self, refs: list, span: ir.Span) -> None:
+        """Emit mutex_unlock(V, mutex_id) for refs from _emit_vf_func_mutex_lock."""
+        self._emit_mutex_for_refs(refs, ir.PipeType.V, span, is_lock=False)
 
     # -------------------------------------------------------------------------
     # Block default handler and helpers

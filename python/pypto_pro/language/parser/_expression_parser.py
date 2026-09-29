@@ -18,7 +18,7 @@ from pypto.pypto_impl import ir
 from pypto.pypto_impl.ir import DataType
 from pypto_pro.ir import op as ir_op
 from pypto_pro.ir._operators import make_binary as _make_binary
-from pypto_pro.ir._utils import _normalize_expr
+from pypto_pro.ir._utils import _normalize_expr, _to_make_tuple
 
 from ..._errors import (
     InvalidFormat,
@@ -323,7 +323,10 @@ class ExpressionParserMixin:
         """
         none_expr = self.builder.builder.none()
         if self._auto_mutex and none_expr not in self._tile_mutex_meta:
-            self._tile_mutex_meta[none_expr] = ((ir.ConstInt(-1, DataType.INT64, span),), [])
+            self._tile_mutex_meta[none_expr] = (
+                _to_make_tuple([ir.ConstInt(-1, DataType.INT64, span)], span),
+                _to_make_tuple([], span),
+            )
         return none_expr
 
     def tile_mutex_lock_meta(self, expr):
@@ -333,7 +336,7 @@ class ExpressionParserMixin:
         candidate ids, so the ``None`` seed (which carries none) never turns into a lock.
         """
         meta = self._tile_mutex_meta.get(expr)
-        return meta if meta is not None and meta[1] else None
+        return meta if meta is not None and meta[1].elements else None
 
     def parse_constant(self, const: ast.Constant) -> ir.Expr:
         """Parse constant value.
@@ -942,7 +945,7 @@ class ExpressionParserMixin:
         item_expr = ir.GetItemExpr(value_expr, index_expr, span)
         # A subscript aliases the base's buffer, so carry the base's mutex
         # metadata onto the item.  auto_mutex then locks accesses to the item on
-        # the base's buf_id; it is consumed when the item is bound to a var (see
+        # the base's Tile-ID metadata; it is consumed when the item is bound to a var (see
         # _transfer_tile_sync_metadata).
         meta = self._tile_mutex_meta.get(value_expr)
         if meta is not None:

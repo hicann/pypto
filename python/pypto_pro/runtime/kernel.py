@@ -32,6 +32,7 @@ from pypto_pro.language.parser._ast_parser import ASTParser
 from pypto_pro.language.typing.direction import TensorDirection
 
 from .._errors import (
+    CommonInner,
     NameNotFound,
     PyptoProError,
     RuntimeFailure,
@@ -41,6 +42,8 @@ from .._errors import (
     span_of_spec_message,
     spec_head_of,
 )
+
+AutoMutexIdManager = ir._AutoMutexIdManager
 
 
 def _calculate_col_offset(source_lines: list[str]) -> int:
@@ -257,6 +260,9 @@ class KernelDef:
         program_name = self._name if self._name is not None else self._func.__name__
 
         try:
+            # Each target parse owns one mutex ID manager, so Cube and Vector both use
+            # their own independent 0-31 mutex ID pool.
+            mutex_id_manager = AutoMutexIdManager() if self._auto_mutex else None
             # The Program owns one IRDebugInfo; share it with the parser so all
             # semantic tuple metadata lands in the table the Program carries.
             debug_info = ir.IRDebugInfo()
@@ -277,6 +283,7 @@ class KernelDef:
                 void_return_only=True,
                 void_return_context="@pl.jit",
                 allow_early_return=True,
+                mutex_id_manager=mutex_id_manager,
             )
 
             try:
@@ -337,6 +344,15 @@ class KernelDef:
             self._last_param_directions = dict(parser.type_resolver.param_directions)
             self._max_vec_tile_end = parser.max_vec_tile_end
             self._requires_simt = parser.requires_simt
+            if mutex_id_manager is not None:
+                try:
+                    program = mutex_id_manager.assign_mutex_ids(program)
+                except Exception as exc:
+                    wrapper = error_class_of_spec_message(str(exc)) or CommonInner
+                    raise wrapper(
+                        str(exc),
+                        span=span_of_spec_message(str(exc)) or mutex_id_manager.diagnostic_span,
+                    ) from None
             return program, parser.matched_target
 
         except PyptoProError as e:

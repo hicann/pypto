@@ -1486,7 +1486,7 @@ def make_tile(
 
 @_api_decl
 def make_tile_group(*, type: TileType, addrs: int | list,
-    mutex_ids: list[int | list[int] | tuple[int, ...]] | tuple | None = None,
+    mutex_ids: str | list[int | list[int] | tuple[int, ...]] | tuple | None = None,
     depth: int | None = None,
     fwd_ids: list[int] | tuple[int, ...] | None = None,
     bwd_ids: list[int] | tuple[int, ...] | None = None,
@@ -1500,11 +1500,13 @@ def make_tile_group(*, type: TileType, addrs: int | list,
     Args:
         type: ``pl.TileType`` descriptor
         addrs: Base address for contiguous Tiles, or one address per Tile
-        mutex_ids: Optional mutex IDs for synchronization. Each Tile may use
-            one int or a non-empty list/tuple. Every Tile must use the same
-            mutex ID count, with no duplicates for one Tile
-        depth: Number of Tiles. Required when ``mutex_ids`` is None or empty;
-            otherwise inferred from ``len(mutex_ids)``
+        mutex_ids: ``"auto"`` for whole-group automatic allocation, a manual
+            sequence, or None/empty for user-managed synchronization. Each
+            manually configured Tile may use one int or a non-empty list/tuple.
+            Every Tile must use the same mutex ID count, with no duplicates for
+            one Tile
+        depth: Number of Tiles. Required when ``mutex_ids`` is ``"auto"``, None,
+            or empty; otherwise inferred from ``len(mutex_ids)``
         fwd_ids: Optional cross-core event IDs (0..15) marking this group as a
             producer->consumer channel for the automatic pipeline transform. One
             per Tile; the transform picks ``fwd_ids[i % N]`` per iteration

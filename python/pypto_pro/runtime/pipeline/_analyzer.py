@@ -34,6 +34,7 @@ from ._cross_core_scanner import (
     scan_all_tile_group_names,
     scan_buffer_addr_ranges,
     scan_buffer_mutex_ids,
+    scan_buffer_slot_counts,
     scan_cross_core_buffers,
     scan_kernel_slot_to_buffer,
     scan_stage_accesses,
@@ -277,9 +278,11 @@ def _scan_kernel_buffers(
     scans below is the order their errors surface in, so it is deliberate: the cross-core
     scan raises on an unusable declaration, the rest only collect what they can resolve.
     """
-    # Filled before the early return below: _collect_outer_slots needs a slot count for local
-    # groups too. This scan raises on nothing, so its position affects no diagnostic.
+    # Filled before the early return below: _collect_outer_slots needs a slot count for
+    # local groups too. These scans raise on nothing — they skip declarations whose layout
+    # will not resolve — so their position decides nothing about which error a user sees.
     sync.mutex_ids = scan_buffer_mutex_ids(decls, closure_vars)
+    sync.slot_counts = scan_buffer_slot_counts(decls, closure_vars)
 
     cross_buffers, lifted_ids = scan_cross_core_buffers(decls, closure_vars)
     sync.buffers = cross_buffers
@@ -631,15 +634,15 @@ def _collect_outer_slots(info: PipelineInfo) -> dict:
     task stream, so the variable never moves and the argument passes through; and two
     pipelines' outer loops are disjoint, which keeps their same-named picks apart.
 
-    Only slots a stage consumes are kept. A group whose mutex_ids do not resolve statically is
-    an error rather than a skip: the rewrite needs the count as its modulus.
+    Only slots a stage actually consumes are kept; pure bookkeeping slots are left alone.
+    The rewrite needs the slot count as its modulus, so a group whose depth or mutex_ids do
+    not resolve statically is reported as an error rather than silently skipped — skipping
+    it would leave the delayed stage reading the wrong slot with no diagnostic.
     """
     groups = info.group_names
     if not groups or info.pipeline_loop is None or info.outer_loop is None:
         return {}
-    # One lock per slot. No fall-back to addr_ranges (which _sync_graph._slot_count has): they
-    # are not scanned yet here, and an outer slot needs an EXACT count.
-    slot_counts = {name: len(ids) for name, ids in info.sync.mutex_ids.items()}
+    slot_counts = info.sync.slot_counts
 
     consumed = {
         arg.id for stage in info.stages for arg in stage.args if isinstance(arg, ast.Name)
@@ -669,7 +672,7 @@ def _collect_outer_slots(info: PipelineInfo) -> dict:
         if group not in slot_counts:
             raise InvalidOperation(
                 f"pipeline: slot '{target.id}' is taken from tile group '{group}' outside "
-                f"the pipeline loop, but '{group}'s mutex_ids could not be resolved "
+                f"the pipeline loop, but '{group}'s depth or mutex_ids could not be resolved "
                 f"statically, so the number of slots is unknown. The transform needs it to "
                 f"give each stage the slot from its own iteration."
             )
@@ -897,6 +900,7 @@ def probe_kernel_facts(kernel_def, bound_signature=None) -> tuple[dict, dict]:
     if_const: dict = {}
     var_types: dict = {}
     for target in (ir.SectionKind.Cube, ir.SectionKind.Vector):
+        # The probe discards parsed IR, so AUTO placeholders do not need resolution.
         parser = ASTParser(
             kernel_def._source_file,
             kernel_def._source_lines,
@@ -913,6 +917,7 @@ def probe_kernel_facts(kernel_def, bound_signature=None) -> tuple[dict, dict]:
             void_return_only=True,
             void_return_context="@pl.jit",
             allow_early_return=True,
+            mutex_id_manager=ir._AutoMutexIdManager() if kernel_def._auto_mutex else None,
         )
         parser.collect_if_const = True
         # define_var is the single point where every name gets bound, so wrapping it here

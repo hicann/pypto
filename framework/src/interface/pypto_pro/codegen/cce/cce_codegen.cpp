@@ -10,6 +10,7 @@
 
 #include "codegen/cce/cce_codegen.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <cstddef>
@@ -2798,13 +2799,41 @@ public:
     {
         const std::string& name = op->name_;
         bool is_mutex = (name == "system.mutex_lock_dyn" || name == "system.mutex_unlock_dyn");
-        if (!is_mutex) {
+        // One-argument manual mutexes do not participate in automatic V-pipe elision.
+        if (!is_mutex || op->args_.size() != 2) {
             return;
         }
         auto pipe = static_cast<ir::PipeType>(op->GetKwarg<int>("pipe"));
-        const auto mutex_ids = op->GetKwarg<std::vector<int>>("mutex_ids");
-        for (int bid : mutex_ids)
-            mutex_pipes[bid].insert(pipe);
+        auto candidateGroups = ir::As<ir::MakeTuple>(op->args_[1]);
+        auto mutexIds = ir::As<ir::MakeTuple>(op->args_[0]);
+
+        std::set<int> effectiveIds;
+        for (size_t tile = 0; tile < mutexIds->elements_.size(); ++tile) {
+            auto tileMutexIds = ir::As<ir::MakeTuple>(mutexIds->elements_[tile]);
+            bool hasDynamicId = false;
+            for (const auto& mutexIdExpr : tileMutexIds->elements_) {
+                auto mutexId = ir::As<ir::ConstInt>(mutexIdExpr);
+                if (mutexId != nullptr) {
+                    effectiveIds.insert(static_cast<int>(mutexId->value_));
+                } else {
+                    hasDynamicId = true;
+                }
+            }
+            if (!hasDynamicId) {
+                continue;
+            }
+            auto candidate = ir::As<ir::MakeTuple>(candidateGroups->elements_[tile]);
+            for (const auto& candidateExpr : candidate->elements_) {
+                auto candidateId = ir::As<ir::ConstInt>(candidateExpr);
+                if (candidateId == nullptr) {
+                    return;
+                }
+                effectiveIds.insert(static_cast<int>(candidateId->value_));
+            }
+        }
+        for (int mutexId : effectiveIds) {
+            mutex_pipes[mutexId].insert(pipe);
+        }
     }
 };
 

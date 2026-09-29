@@ -25,12 +25,13 @@ from pypto.pypto_impl.ir import (
     CrossCoreSyncMode,
     DcciDst,
     Expr,
+    MakeTuple,
     PipeType,
     Span,
     SyncCoreType,
 )
 
-from ..._errors import InvalidArgument, InvalidOperation, InvalidShape, InvalidType, InvalidVal, NotSupported
+from ..._errors import InvalidArgument, InvalidOperation, InvalidShape, InvalidType, NotSupported
 from .._utils import _get_span_or_capture, _is_int, _normalize_expr, _to_make_tuple
 from ._op_registry import OpSpec, op_impl, register_table
 
@@ -86,22 +87,6 @@ def _normalize_integer_id_expr(value: int | Expr, span: Span, *, name: str, max_
     if isinstance(expr, _ir_core.ConstInt):
         _check_id_range(expr.value, max_id, name, span=span)
     return expr
-
-
-def _normalize_mutex_ids(mutex_ids: tuple | list | None, span: Span | None = None) -> list[int] | None:
-    """Validate candidate IDs before they are converted to vector<int>."""
-    if mutex_ids is None:
-        return None
-    if not isinstance(mutex_ids, (list, tuple)):
-        raise InvalidType("mutex_ids must be a list, tuple, or None", span=span)
-    normalized_mutex_ids = list(mutex_ids)
-    if not normalized_mutex_ids:
-        raise InvalidVal("mutex_ids must not be empty", span=span)
-    for index, mutex_id in enumerate(normalized_mutex_ids):
-        if not _is_int(mutex_id):
-            raise InvalidType(f"mutex_ids[{index}] must be a Python int", span=span)
-        _check_id_range(mutex_id, MAX_MUTEX_ID, "mutex_ids element", span=span)
-    return normalized_mutex_ids
 
 
 def _validate_concrete_pipe(pipe: PipeType, name: str, span: Span | None = None) -> None:
@@ -397,53 +382,87 @@ def _create_mutex_op(
         mutex_id, actual_span, name="mutex_id", max_id=MAX_MUTEX_ID
     )
 
-    kwargs: dict = {"pipe": pipe}
-    return _ir_core.create_op_call(f"{op_name}_dyn", [mutex_id_expr], kwargs, actual_span)
+    return _ir_core.create_op_call(
+        f"{op_name}_dyn",
+        [mutex_id_expr],
+        {"pipe": pipe},
+        actual_span,
+    )
 
 
 def _create_mutex_dedup_op(
     op_name: str,
     *,
     pipe: PipeType,
-    mutex_id_exprs: list[Expr],
-    mutex_id_owner_indices: list[int] | None = None,
-    mutex_ids_union: list | None = None,
+    mutex_id: MakeTuple,
+    candidate_groups: MakeTuple,
     span: Span | None = None,
 ) -> Call:
-    """Create a dedup mutex lock/unlock for N runtime mutex-id expressions.
+    """Create a mutex lock/unlock with per-Tile ID and candidate groups.
 
-    Emits a single ``system.mutex_lock_dyn`` / ``system.mutex_unlock_dyn`` IR Call
-    with multiple mutex_id expressions in args. Expressions with the same owner
-    index in ``mutex_id_owner_indices`` are known distinct; CCE only generates
-    runtime if-guards across different Tiles. Lock and unlock both use
-    first-occurrence order.
+    The first argument is a two-dimensional tuple containing the IDs required by
+    each Tile. The second argument is the matching two-dimensional candidate
+    tuple used by codegen for cross-Tile deduplication.
 
     Args:
         op_name: Base operation name ("system.mutex_lock" or "system.mutex_unlock").
         pipe: Pipe to lock on.
-        mutex_id_exprs: List of N mutex_id IR expressions (already normalized to Expr).
-        mutex_id_owner_indices: Owner index for every expression. Expressions with
-            the same index come from one Tile and are guaranteed distinct.
-        mutex_ids_union: Union of all TileGroup candidate mutex_id values.
+        mutex_id: One non-empty mutex ID sequence per Tile.
+        candidate_groups: One non-empty candidate sequence per Tile.
         span: Source span.
     """
     actual_span = span if span is not None else _get_span_or_capture(span, frame_offset=3)
     _validate_concrete_pipe(pipe, "pipe", actual_span)
-    if not mutex_id_exprs:
-        raise InvalidArgument("mutex_id requires at least one expression")
-    normalized_mutex_id_exprs = [
-        _normalize_integer_id_expr(mutex_id, actual_span, name="mutex_id", max_id=MAX_MUTEX_ID)
-        for mutex_id in mutex_id_exprs
-    ]
-    kwargs: dict = {"pipe": pipe}
-    if mutex_id_owner_indices is not None:
-        if len(mutex_id_owner_indices) != len(mutex_id_exprs):
-            raise InvalidShape("mutex_id_owner_indices length must match mutex_id_exprs length")
-        kwargs["mutex_id_owner_indices"] = list(mutex_id_owner_indices)
-    normalized_mutex_ids = _normalize_mutex_ids(mutex_ids_union, actual_span)
-    if normalized_mutex_ids is not None:
-        kwargs["mutex_ids"] = normalized_mutex_ids
-    return _ir_core.create_op_call(f"{op_name}_dyn", normalized_mutex_id_exprs, kwargs, actual_span)
+    if not mutex_id.elements or any(
+        not isinstance(tile_mutex_id, MakeTuple) or not tile_mutex_id.elements
+        for tile_mutex_id in mutex_id.elements
+    ):
+        raise InvalidArgument("mutex_id requires at least one expression per Tile", span=actual_span)
+
+    mutex_id_tuple = _to_make_tuple(
+        [
+            _to_make_tuple(
+                [
+                    _normalize_integer_id_expr(value, actual_span, name="mutex_id", max_id=MAX_MUTEX_ID)
+                    for value in tile_mutex_id.elements
+                ],
+                actual_span,
+            )
+            for tile_mutex_id in mutex_id.elements
+        ],
+        actual_span,
+    )
+
+    if len(candidate_groups.elements) != len(mutex_id.elements) or any(
+        not isinstance(group, MakeTuple) or not group.elements
+        for group in candidate_groups.elements
+    ):
+        raise InvalidShape(
+            "candidate_group must contain one non-empty group per mutex_id Tile",
+            span=actual_span,
+        )
+    candidate_group_tuple = _to_make_tuple(
+        [
+            _to_make_tuple(
+                [
+                    _normalize_integer_id_expr(
+                        candidate, actual_span, name="candidate_group", max_id=MAX_MUTEX_ID
+                    )
+                    for candidate in group.elements
+                ],
+                actual_span,
+            )
+            for group in candidate_groups.elements
+        ],
+        actual_span,
+    )
+
+    return _ir_core.create_op_call(
+        f"{op_name}_dyn",
+        [mutex_id_tuple, candidate_group_tuple],
+        {"pipe": pipe},
+        actual_span,
+    )
 
 
 def _mutex_op(

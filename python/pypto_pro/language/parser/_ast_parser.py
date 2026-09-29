@@ -48,6 +48,8 @@ from ._type_resolver import TypeResolver
 # publishing it as the ambient location would underline the entire block.
 _COMPOUND_STATEMENTS = (ast.For, ast.While, ast.If, ast.With, ast.Try, ast.FunctionDef)
 
+AutoMutexIdManager = ir._AutoMutexIdManager
+
 
 def _snake_visit_name(node: ast.AST) -> str:
     """Return the snake_case visitor handler for an AST node type."""
@@ -112,6 +114,7 @@ class ASTParser(
         void_return_only: bool = False,
         void_return_context: str = "this function",
         allow_early_return: bool = False,
+        mutex_id_manager: AutoMutexIdManager | None = None,
     ):
         """Initialize AST parser.
 
@@ -132,9 +135,13 @@ class ASTParser(
                 are void-only but allow early/multiple returns, while @pl.vector_function
                 and @pl.pipeline.stage are void-only and still require a single tail return.
             target: Required Cube/Vector target for target-specific parsing.
+            mutex_id_manager: Manager for mutex-ID planning and IR resolution in
+                this target parse.
         """
         if target not in (ir.SectionKind.Cube, ir.SectionKind.Vector):
             raise NotSupported(f"Unsupported parser target: {target}")
+        if auto_mutex and mutex_id_manager is None:
+            raise CommonInner("auto_mutex=True requires a mutex ID manager")
         self._target = target
         self.matched_target = False
         # Launch facts collected while this target Program is parsed. Tile
@@ -143,12 +150,12 @@ class ASTParser(
         self.max_vec_tile_end: int = 0
         self.requires_simt: bool = False
         self.span_tracker = SpanTracker(source_file, source_lines, line_offset, col_offset)
-        # Maps tile Expr objects -> (tuple[buf_id_ir, ...], mutex_ids) for tiles returned by
+        # Maps tile Expr objects -> (tile_id MakeTuple, candidate MakeTuple) for tiles returned by
         # group.next()/current()/previous()/group[i]; consumed by auto_mutex and
         # shared with ScopeManager for control-flow candidate-id merging.
         # Keep the Expr itself as the key. A bare id(expr) does not retain the
         # Python IR wrapper and can be reused by an unrelated expression.
-        self._tile_mutex_meta: dict[ir.Expr, tuple] = {}
+        self._tile_mutex_meta: dict[ir.Expr, tuple[ir.MakeTuple, ir.MakeTuple]] = {}
         self.scope_manager = ScopeManager(strict_ssa=strict_ssa)
         self._tilingkey_consts = tilingkey_consts
         self._datatype_consts = datatype_consts
@@ -205,9 +212,10 @@ class ASTParser(
         self._buf_tile_counter: int = 0
         # Counter for let-bound buf_idx variables in tile-group cursor selection.
         self._tuple_idx_counter: int = 0
+        self._auto_mutex_placeholder_counter: int = 0
         self._expr_tmp_counter: int = 0
         self._ifexpr_tmp_counter: int = 0
-        # Maps group Expr objects -> (depth, per-tile mutex IDs, memory).
+        # Maps group Expr objects -> (depth, group mutex IDs, memory).
         self.tile_group_meta: dict[ir.Expr, tuple] = {}
         # Parser-only constant environment. Runtime bindings remain exclusively in
         # ScopeManager as Vars; this map records constants by physical SSA name.
@@ -242,6 +250,7 @@ class ASTParser(
         self._tuple_select_cache: dict[tuple[str, int], ir.Var] = {}
 
         self._auto_mutex = auto_mutex
+        self._mutex_id_manager = mutex_id_manager
         self._parsed_expr_cache: dict[ast.expr, Any] = {}
         self._current_func_type = ir.FunctionType.Opaque
         self._void_return_only = void_return_only

@@ -120,6 +120,8 @@ class CrossCoreSyncContext:
     # buffer name -> tuple of mutex ids. Used to check that co-located buffers hold the
     # same locks (a mutex locks the address, not the variable).
     mutex_ids: dict = field(default_factory=dict)
+    # buffer name -> static TileGroup depth. AUTO uses this before IDs are planned.
+    slot_counts: dict = field(default_factory=dict)
     # Address-overlapping buffer pairs: [(buf_a, buf_b), ...] (same memory, ranges intersect)
     addr_overlaps: list = field(default_factory=list)
     # Address-reuse sync is derived from the graph on demand, not stored here — see
@@ -271,6 +273,29 @@ def _eval_const(node: ast.expr, closure_vars: dict):
         return None
 
 
+def scan_buffer_slot_counts(decls: list[TileGroupDecl], closure_vars: dict) -> dict[str, int]:
+    """Return each structurally valid TileGroup's static slot count."""
+    result: dict[str, int] = {}
+    for decl in decls:
+        mutex_node = decl.mutex_ids_node
+        depth_node = decl.depth_node
+        mutex_ids = _eval_const(mutex_node, closure_vars) if mutex_node is not None else None
+        depth = _eval_const(depth_node, closure_vars) if depth_node is not None else None
+        if depth_node is not None:
+            if isinstance(depth, bool) or not isinstance(depth, int) or depth <= 0:
+                continue
+            count = depth
+        elif isinstance(mutex_ids, (list, tuple)) and mutex_ids:
+            count = len(mutex_ids)
+        else:
+            continue
+        if isinstance(mutex_ids, (list, tuple)) and mutex_ids and len(mutex_ids) != count:
+            continue
+        for name in decl.names:
+            result[name] = count
+    return result
+
+
 def _tile_type_slot_size(type_call: ast.Call, closure_vars: dict) -> int | None:
     """Compute per-slot byte size from a pl.TileType(shape=..., dtype=...) call.
     Returns None if shape/dtype cannot be resolved.
@@ -330,7 +355,7 @@ def scan_buffer_addr_ranges(decls: list[TileGroupDecl], closure_vars: dict) -> d
         addrs = _eval_const(addrs_node, closure_vars)
         if slot_size is None or addrs is None:
             continue
-        if mutex_ids is not None and not isinstance(mutex_ids, (list, tuple)):
+        if mutex_ids != "auto" and mutex_ids is not None and not isinstance(mutex_ids, (list, tuple)):
             continue
         if depth_node is not None:
             if isinstance(depth, bool) or not isinstance(depth, int) or depth <= 0:

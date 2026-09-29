@@ -63,3 +63,25 @@ def test_cce_dynamic_mutex_dedup_skips_same_tile_comparisons():
     release_source = cpp.index(cross_tile_guard, release_output1)
     assert acquire_output0 < acquire_output1 < acquire_source
     assert release_output0 < release_output1 < release_source
+
+
+@pl.jit(auto_mutex=True)
+def _auto_mutex_ids_kernel(x: pl.Tensor[[64, 32], pl.DT_FP16]):
+    tile_type = pl.TileType(shape=[32, 32], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    manual_group = pl.make_tile_group(type=tile_type, addrs=0x0000, mutex_ids=[0, 1])  # noqa: F841
+    auto_group = pl.make_tile_group(type=tile_type, addrs=0x2000, mutex_ids="auto", depth=2)
+    with pl.section_vector():
+        for index in pl.range(0, 2):
+            auto_tile = auto_group[index]
+            pl.load(auto_tile, x, [index * 32, 0])
+            pl.store(x, auto_tile, [index * 32, 0])
+
+
+def test_cce_auto_mutex_ids_use_existing_dynamic_lock_path():
+    cpp = _compile_to_cce(_auto_mutex_ids_kernel)
+
+    auto_mutex = "_tg_auto_group_mutex_ids_0[index__iterator_0]"
+    assert f"get_buf(PIPE_MTE2, {auto_mutex}, 0);" in cpp
+    assert f"rls_buf(PIPE_MTE2, {auto_mutex}, 0);" in cpp
+    assert f"get_buf(PIPE_MTE3, {auto_mutex}, 0);" in cpp
+    assert f"rls_buf(PIPE_MTE3, {auto_mutex}, 0);" in cpp

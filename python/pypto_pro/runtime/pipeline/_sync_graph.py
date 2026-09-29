@@ -135,19 +135,19 @@ class SyncGraph:
 def _slot_count(info, buffer: str) -> int:
     """How many slots a buffer rotates through, i.e. the modulus of ``task % slot_count``.
 
-    Read from the buffer's mutex_ids — one lock per slot — rather than from its address
-    ranges: both give the same number, but scan_buffer_addr_ranges is allowed to skip a
-    buffer it cannot size, while every buffer in the graph needs a slot count.
+    Read from the declaration's normalized depth/ID-list length. AUTO groups have no IDs
+    yet during pipeline transformation, so depth is the authoritative structural count.
+    Address ranges remain only a fallback for older analysis inputs.
     """
-    ids = info.sync.mutex_ids.get(buffer)
-    if ids:
-        return len(ids)
+    count = info.sync.slot_counts.get(buffer)
+    if count:
+        return count
     ranges = info.sync.addr_ranges.get(buffer)
     if ranges:
         return len(ranges[1])
     raise InvalidOperation(
         f"pipeline: cannot determine the slot count of buffer '{buffer}'. Its "
-        f"make_tile_group needs a statically resolvable mutex_ids list."
+        f"make_tile_group needs a statically resolvable depth or mutex_ids list."
     )
 
 

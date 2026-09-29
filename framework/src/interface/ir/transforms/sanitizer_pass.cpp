@@ -396,19 +396,31 @@ StmtPtr SanitizerInstrumenter::RecordMutex(const CallPtr& call)
 {
     bool is_lock = (call->name_ == "system.mutex_lock_dyn");
     int pipe = call->GetKwarg<int>("pipe", 0);
-    // One record per mutex_id argument (a deduped auto_mutex call carries
-    // one id per tile group); single-id calls keep the one-statement shape.
     std::vector<StmtPtr> logs;
-    for (const auto& mutex_id : call->args_) {
+    auto recordMutexId = [&](const ExprPtr& mutexId) {
         std::vector<ExprPtr> fields;
-        fields.push_back(mutex_id);
+        fields.push_back(mutexId);
         fields.push_back(Int64Const(pipe));
         fields.push_back(Int64Const(is_lock ? 1 : 0));
         logs.push_back(
             MakeLogStmt(static_cast<uint32_t>(SanitizerDetection::MutexAccess), std::move(fields), call->span_));
+    };
+
+    if (call->args_.size() == 1) {
+        recordMutexId(call->args_[0]);
+        return SeqStmts::Flatten(std::move(logs), call->span_);
     }
-    if (logs.empty())
-        return nullptr;
+
+    auto mutexId = As<MakeTuple>(call->args_[0]);
+
+    // candidate_group is compile-time metadata. Emit one record for every
+    // actual mutex ID while preserving each Tile's required-ID ordering.
+    for (const auto& tileMutexIdExpr : mutexId->elements_) {
+        auto tileMutexId = As<MakeTuple>(tileMutexIdExpr);
+        for (const auto& mutexIdExpr : tileMutexId->elements_) {
+            recordMutexId(mutexIdExpr);
+        }
+    }
     return SeqStmts::Flatten(std::move(logs), call->span_);
 }
 

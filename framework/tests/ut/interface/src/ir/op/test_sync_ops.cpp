@@ -10,7 +10,7 @@
 
 /*!
  * \file test_sync_ops.cpp
- * \brief Coverage tests for sync_ops/sync.cpp — system.dcci type deduction
+ * \brief Coverage tests for sync_ops/sync.cpp type deduction
  */
 
 #include "gtest/gtest.h"
@@ -42,24 +42,77 @@ using namespace test_helpers;
 // system.mutex_lock_dyn / system.mutex_unlock_dyn
 // ============================================================================
 
-TEST(SyncOpsMutexTest, DynamicMutexAcceptsMutexIdOwnerIndices)
+TEST(SyncOpsMutexTest, DynamicMutexAcceptsPerTileGroups)
 {
     auto& reg = OpRegistry::GetInstance();
     auto id0 = MakeScalarVar("id0", DataType::INDEX);
     auto id1 = MakeScalarVar("id1", DataType::INDEX);
-    const std::vector<int> mutex_id_owner_indices = {0, 0};
-    std::vector<std::pair<std::string, std::any>> kwargs = {
-        {"pipe", 5},
-        {"mutex_ids", std::vector<int>{0, 1, 2, 3}},
-        {"mutex_id_owner_indices", mutex_id_owner_indices},
-    };
+    auto firstIds = std::make_shared<const MakeTuple>(std::vector<ExprPtr>{id0}, Sp());
+    auto secondIds = std::make_shared<const MakeTuple>(std::vector<ExprPtr>{id1}, Sp());
+    auto mutexId = std::make_shared<const MakeTuple>(std::vector<ExprPtr>{firstIds, secondIds}, Sp());
+    auto firstCandidates = MakeIntTuple({0});
+    auto secondCandidates = MakeIntTuple({1});
+    auto candidateGroups = std::make_shared<const MakeTuple>(std::vector<ExprPtr>{firstCandidates, secondCandidates},
+                                                             Sp());
+    std::vector<std::pair<std::string, std::any>> kwargs = {{"pipe", 5}};
 
     for (const char* op_name : {"system.mutex_lock_dyn", "system.mutex_unlock_dyn"}) {
-        auto call = reg.Create(op_name, {id0, id1}, kwargs, Sp());
+        auto call = reg.Create(op_name, {mutexId, candidateGroups}, kwargs, Sp());
         ASSERT_NE(call, nullptr);
         EXPECT_NE(As<UnknownType>(call->GetType()), nullptr);
-        EXPECT_EQ(call->GetKwarg<std::vector<int>>("mutex_id_owner_indices"), mutex_id_owner_indices);
+        EXPECT_EQ(call->args_[0], mutexId);
+        EXPECT_EQ(call->args_[1], candidateGroups);
     }
+}
+
+TEST(SyncOpsMutexTest, DynamicMutexAcceptsManualScalarId)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto id0 = MakeScalarVar("id0", DataType::INDEX);
+    std::vector<std::pair<std::string, std::any>> kwargs = {{"pipe", 5}};
+
+    for (const char* op_name : {"system.mutex_lock_dyn", "system.mutex_unlock_dyn"}) {
+        auto call = reg.Create(op_name, {id0}, kwargs, Sp());
+        ASSERT_NE(call, nullptr);
+        ASSERT_EQ(call->args_.size(), 1);
+        EXPECT_EQ(call->args_[0], id0);
+    }
+}
+
+TEST(SyncOpsMutexTest, DynamicMutexRejectsEmptyCandidateGroups)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto idGroup = MakeIntTuple({0});
+    auto mutexId = std::make_shared<const MakeTuple>(std::vector<ExprPtr>{idGroup}, Sp());
+    auto candidateGroups = std::make_shared<const MakeTuple>(std::vector<ExprPtr>{}, Sp());
+    std::vector<std::pair<std::string, std::any>> kwargs = {{"pipe", 5}};
+
+    EXPECT_THROW((void)reg.Create("system.mutex_lock_dyn", {mutexId, candidateGroups}, kwargs, Sp()),
+                 npu::tile_fwk::Error);
+}
+
+TEST(SyncOpsMutexTest, DynamicMutexRejectsInvalidArgumentCounts)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto id = MakeScalarVar("id", DataType::INDEX);
+    std::vector<std::pair<std::string, std::any>> kwargs = {{"pipe", 5}};
+
+    EXPECT_THROW((void)reg.Create("system.mutex_lock_dyn", {}, kwargs, Sp()), npu::tile_fwk::Error);
+    EXPECT_THROW((void)reg.Create("system.mutex_lock_dyn", {id, id, id}, kwargs, Sp()), npu::tile_fwk::Error);
+}
+
+TEST(SyncOpsMutexTest, DynamicMutexRejectsMisalignedCandidateGroups)
+{
+    auto& reg = OpRegistry::GetInstance();
+    auto firstIds = MakeIntTuple({0});
+    auto secondIds = MakeIntTuple({1});
+    auto mutexId = std::make_shared<const MakeTuple>(std::vector<ExprPtr>{firstIds, secondIds}, Sp());
+    auto candidates = MakeIntTuple({0});
+    auto candidateGroups = std::make_shared<const MakeTuple>(std::vector<ExprPtr>{candidates}, Sp());
+    std::vector<std::pair<std::string, std::any>> kwargs = {{"pipe", 5}};
+
+    EXPECT_THROW((void)reg.Create("system.mutex_lock_dyn", {mutexId, candidateGroups}, kwargs, Sp()),
+                 npu::tile_fwk::Error);
 }
 
 // ============================================================================

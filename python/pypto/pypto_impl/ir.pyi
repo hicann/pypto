@@ -12,6 +12,30 @@ from .. import pypto_impl
 from .. import SymbolicScalar
 
 
+class _AutoMutexIdManager:
+    """Collect TileGroups, allocate automatic mutex IDs, and resolve placeholders."""
+
+    def __init__(self) -> None: ...
+
+    def collect_group(
+        self,
+        tiles: Sequence[Expr],
+        mutex_ids: MakeTuple,
+        group_name: str,
+    ) -> None: ...
+
+    def record_op_constraints(
+        self,
+        tile_id_groups: Sequence[MakeTuple],
+        candidate_groups: Sequence[MakeTuple],
+    ) -> None: ...
+
+    def assign_mutex_ids(self, program: Program) -> Program: ...
+
+    @property
+    def diagnostic_span(self) -> Span: ...
+
+
 class DataType:
     """Data type representation for PyPTO tensors and operations"""
 
