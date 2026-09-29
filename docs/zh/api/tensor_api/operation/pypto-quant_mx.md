@@ -17,7 +17,7 @@
 将1-4维ND格式的高精度浮点Tensor量化为MX（Microscaling）格式，返回量化结果和共享指数scale。
 
 - 输入Tensor支持DT_FP16、DT_BF16、DT_FP32。
-- 输出量化Tensor支持DT_FP8E4M3、DT_FP4_E2M1X2。其中DT_FP4_E2M1X2仅支持DT_FP16、DT_BF16输入。
+- 输出量化Tensor支持DT_FP8E4M3、DT_FP4_E2M1。其中DT_FP4_E2M1仅支持DT_FP16、DT_BF16输入。
 - scale Tensor的数据类型固定为DT_FP8E8M0。
 - 支持对尾轴（`axis=-1`）或次尾轴（`axis=-2`）进行量化，支持ROUND_DOWN（OCP）和ROUND_UP（NV）模式。
 - `axis=-1`支持性能模式和非性能模式。非性能模式支持更灵活的view shape和TileShape设置，有利于算子融合，但单算子性能有所下降。
@@ -25,6 +25,7 @@
 若输入shape记为 $[d_0, d_1, ..., d_{n-1}]$，则：
 
 - 量化结果`quantized`的shape与`input`相同。
+- FP4使用逻辑元素shape：`DT_FP4_E2M1`的两个元素打包到一个字节。外部Torch输出应使用尾轴减半的`torch.uint8`缓冲区，kernel输出参数声明为`DT_FP4_E2M1`；kernel内切片和偏移仍按完整逻辑shape计算，无需除以2。量化结果可以直接作为`scaled_mm`的FP4输入。
 - `axis=-1`时，scale的shape为 $[d_0, d_1, ..., d_{n-2}, \lceil d_{n-1} / 64 \rceil, 2]$。
 - `axis=-2`时，量化粒度仍为32，即每32个次尾轴元素共享一个指数；每两个连续分组组成一个64元素块。内部raw exp shape为 $[d_0, d_1, ..., d_{n-3}, d_{n-2}/64, d_{n-1}*2]$，对外返回的scale shape为 $[d_0, d_1, ..., d_{n-3}, d_{n-2}/64, d_{n-1}, 2]$，最后一维依次保存两个32元素分组的指数。
 
@@ -45,7 +46,7 @@ quant_mx(
 | 参数名 | 输入/输出 | 说明 |
 |--------|-----------|------|
 | input | 输入 | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_FP16、DT_BF16、DT_FP32。<br>仅支持TILEOP_ND格式；Shape仅支持1-4维。 |
-| quant_dtype | 输入 | 量化后输出Tensor的数据类型。<br>支持：DT_FP8E4M3、DT_FP4_E2M1X2。DT_FP4_E2M1X2仅支持DT_FP16、DT_BF16输入。 |
+| quant_dtype | 输入 | 量化后输出Tensor的数据类型。<br>支持：DT_FP8E4M3、DT_FP4_E2M1。DT_FP4_E2M1仅支持DT_FP16、DT_BF16输入。 |
 | mode | 输入 | 量化时共享指数的舍入模式。<br>支持：ROUND_DOWN（OCP）、ROUND_UP（NV）。 |
 | axis | 输入 | 指定量化轴。<br>支持最后一维（`-1`或`input.shape.size() - 1`）和次尾轴（`-2`或`input.shape.size() - 2`）。 |
 | performance_mode | 输入 | 是否启用性能模式。<br>默认值为`True`。 |
@@ -65,7 +66,7 @@ quant_mx(
 4. `axis=-1`且`performance_mode=False`时，输入尾轴必须是64的倍数；TileShape尾轴只需为正数，无需等于view shape尾轴或满足256字节对齐。
 5. `axis=-2`要求输入至少为二维。view shape、运行时有效shape和TileShape的次尾轴必须为正数且是64的倍数，不支持次尾轴尾块。
 6. `axis=-2`且`quant_dtype=DT_FP8E4M3`时，view shape和TileShape的尾轴只需为正数，不要求256字节对齐，且TileShape尾轴无需等于view shape尾轴。
-7. `axis=-2`且`quant_dtype=DT_FP4_E2M1X2`时，view shape和TileShape的尾轴必须为64的倍数，即打包后每行满足32字节对齐。
+7. `axis=-2`且`quant_dtype=DT_FP4_E2M1`时，view shape和TileShape的尾轴必须为64的倍数，即打包后每行满足32字节对齐。
 8. `axis=-2`时，`performance_mode=True`和`performance_mode=False`的约束相同。
 
 ## 调用示例

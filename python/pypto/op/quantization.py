@@ -130,14 +130,16 @@ def quant_mx(
 ) -> Tuple[Tensor, Tensor]:
     """Quantizes a 1D to 4D FP16/BF16/FP32 ND tensor to MX format.
 
-    `quant_dtype` supports `DT_FP8E4M3` for FP16/BF16/FP32 input and `DT_FP4_E2M1X2`
+    `quant_dtype` supports `DT_FP8E4M3` for FP16/BF16/FP32 input and `DT_FP4_E2M1`
     for FP16/BF16 input.
 
     Returns
     -------
     tuple
         A tuple of `(quantized, scale)` where:
-        - `quantized` has the same shape as `input` and dtype `quant_dtype`
+        - `quantized` has the same logical shape as `input` and dtype `quant_dtype`.
+          For `DT_FP4_E2M1`, two values occupy one byte; a Torch `uint8` output buffer
+          has half the last dimension and must be annotated as `DT_FP4_E2M1` in the kernel.
         - when `axis=-1`, `scale` has shape
           `[*input.shape[:-1], ceil(input.shape[-1] / 64), 2]` and dtype `DT_FP8E8M0`
         - when `axis=-2`, internal raw exp has shape

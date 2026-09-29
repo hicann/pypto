@@ -33,7 +33,7 @@ constexpr int64_t QUANT_MX_SCALE_PAIR_SIZE = NUM_VALUE_2;
 constexpr int64_t QUANT_MX_TILE_ALIGN_BYTES = 256;
 const std::unordered_set<DataType> QUANT_MX_SUPPORTED_INPUT_TYPES = {DataType::DT_FP16, DataType::DT_BF16,
                                                                      DataType::DT_FP32};
-const std::unordered_set<DataType> QUANT_MX_SUPPORTED_OUTPUT_TYPES = {DataType::DT_FP8E4M3, DataType::DT_FP4_E2M1X2};
+const std::unordered_set<DataType> QUANT_MX_SUPPORTED_OUTPUT_TYPES = {DataType::DT_FP8E4M3, DataType::DT_FP4_E2M1};
 const std::vector<NPUArch> QUANT_MX_SUPPORTED_ARCHITECTURES = {NPUArch::DAV_3510};
 
 int64_t CeilDiv(int64_t dividend, int64_t divisor)
@@ -46,7 +46,7 @@ void CheckQuantMXDtype(DataType quantDtype)
 {
     CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
           QUANT_MX_SUPPORTED_OUTPUT_TYPES.find(quantDtype) != QUANT_MX_SUPPORTED_OUTPUT_TYPES.end())
-        << "QuantMX currently only supports DT_FP8E4M3 and DT_FP4_E2M1X2 output. Current quant dtype: "
+        << "QuantMX currently only supports DT_FP8E4M3 and DT_FP4_E2M1 output. Current quant dtype: "
         << DataType2String(quantDtype);
 }
 
@@ -58,10 +58,10 @@ void CheckQuantMXDtypeCombination(DataType inputDtype, DataType quantDtype)
             << "QuantMX DT_FP8E4M3 output only supports DT_FP32, DT_FP16, and DT_BF16 input.";
         return;
     }
-    if (quantDtype == DataType::DT_FP4_E2M1X2) {
+    if (quantDtype == DataType::DT_FP4_E2M1) {
         CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
               inputDtype == DataType::DT_FP16 || inputDtype == DataType::DT_BF16)
-            << "QuantMX DT_FP4_E2M1X2 output only supports DT_FP16 and DT_BF16 input.";
+            << "QuantMX DT_FP4_E2M1 output only supports DT_FP16 and DT_BF16 input.";
     }
 }
 
@@ -150,7 +150,7 @@ void CheckQuantMXInput(const Tensor& input, DataType quantDtype, DequantScaleRou
         const int64_t dnDim = inputShape[normalizedAxis];
         CHECK(VectorErrorCode::ERR_PARAM_INVALID, dnDim % QUANT_MX_SCALE_GROUP_COLS == 0)
             << "QuantMX axis=-2 requires the second-last dimension to be 64-aligned. Current dim: " << dnDim;
-        if (quantDtype == DT_FP4_E2M1X2) {
+        if (quantDtype == DT_FP4_E2M1) {
             CHECK(VectorErrorCode::ERR_PARAM_INVALID, inputShape.back() % QUANT_MX_SCALE_GROUP_COLS == 0)
                 << "QuantMX FP4 axis=-2 requires view shape's last dim to be 64-aligned. Current dim: "
                 << inputShape.back();
@@ -379,7 +379,7 @@ void CheckQuantMXTileShape(const LogicalTensorPtr& input, const VecTile& vecTile
             << vecTile[normalizedAxis];
         CHECK(VectorErrorCode::ERR_PARAM_INVALID, vecTile[vecTile.size() - 1] > 0)
             << "QuantMX axis=-2 tile shape last dim must be positive.";
-        if (quantDtype == DT_FP4_E2M1X2) {
+        if (quantDtype == DT_FP4_E2M1) {
             CHECK(VectorErrorCode::ERR_PARAM_INVALID, vecTile[vecTile.size() - 1] % QUANT_MX_SCALE_GROUP_COLS == 0)
                 << "QuantMX FP4 axis=-2 requires tile shape's last dim to be 64-aligned. Current dim: "
                 << vecTile[vecTile.size() - 1];
@@ -556,7 +556,7 @@ std::tuple<Tensor, Tensor> QuantMX(const Tensor& input, DataType quantDtype, Deq
     const auto& inputShape = input.GetShape();
     const int64_t normalizedAxis = NormalizeQuantMXAxis(axis, inputShape.size());
     const bool isDnAxis = IsQuantMXDnAxis(normalizedAxis, inputShape.size());
-    if (!oldVecTile.tile.empty() && isDnAxis && quantDtype == DT_FP4_E2M1X2) {
+    if (!oldVecTile.tile.empty() && isDnAxis && quantDtype == DT_FP4_E2M1) {
         CheckQuantMXTileShape(input.GetStorage(), oldVecTile, quantDtype, normalizedAxis,
                               static_cast<int64_t>(performanceMode));
     }

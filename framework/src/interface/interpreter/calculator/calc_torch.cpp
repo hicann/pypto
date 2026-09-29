@@ -3079,7 +3079,7 @@ struct QuantMXContext {
 
 static QuantMXContext MakeQuantMXContext(DataType srcDtype, DataType quantDtype, bool performanceMode, int64_t mode)
 {
-    const bool isFp4E2M1 = quantDtype == DT_FP4_E2M1X2;
+    const bool isFp4E2M1 = quantDtype == DT_FP4_E2M1;
     const bool isNv = mode == kMxQuantModeRoundUp;
     return {
         .srcDtype = srcDtype,
@@ -3305,7 +3305,7 @@ static QuantMXShapes BuildQuantMXShapes(const torch::Tensor& input, DataType src
             << "QuantMX axis=-2 interpreter requires the second-last dimension to be 64-aligned.";
         ASSERT(CalculatorErrorScene::QUANTMX_RANK_INVALID, shapes.nDim != 0)
             << "QuantMX input last dimension must not be zero.";
-        if (quantDtype == DT_FP4_E2M1X2) {
+        if (quantDtype == DT_FP4_E2M1) {
             shapes.quantShape.back() = LastDimPackedCount(shapes.nDim, quantDtype);
         }
         shapes.groupedShape = input.sizes().vec();
@@ -3333,7 +3333,7 @@ static QuantMXShapes BuildQuantMXShapes(const torch::Tensor& input, DataType src
             << "QuantMX non-performance mode requires input last dimension to be a multiple of 64. Current last dim: "
             << shapes.cols;
     }
-    if (quantDtype == DT_FP4_E2M1X2) {
+    if (quantDtype == DT_FP4_E2M1) {
         shapes.quantShape.back() = LastDimPackedCount(shapes.cols, quantDtype);
     }
     shapes.groupedShape.back() = (shapes.cols + MX_QUANT_TILE_BLOCK - 1) / MX_QUANT_TILE_BLOCK;
@@ -3360,13 +3360,13 @@ static QuantMXShapes BuildQuantMXShapes(const torch::Tensor& input, DataType src
 static torch::Tensor CreateQuantMXQuantRaw(const std::vector<int64_t>& quantShape, DataType quantDtype)
 {
     auto options = torch::TensorOptions().dtype(torch::kUInt8);
-    return quantDtype == DT_FP4_E2M1X2 ? torch::zeros(quantShape, options) : torch::empty(quantShape, options);
+    return quantDtype == DT_FP4_E2M1 ? torch::zeros(quantShape, options) : torch::empty(quantShape, options);
 }
 
 static torch::Tensor CreateQuantMXScalingTemp(const std::vector<int64_t>& scalingShape, DataType quantDtype)
 {
     auto options = torch::TensorOptions().dtype(torch::kFloat32);
-    return quantDtype == DT_FP4_E2M1X2 ? torch::zeros(scalingShape, options) : torch::empty(scalingShape, options);
+    return quantDtype == DT_FP4_E2M1 ? torch::zeros(scalingShape, options) : torch::empty(scalingShape, options);
 }
 
 static void CopyQuantMXOutputs(const std::pair<torch::Tensor, torch::Tensor>& tout,

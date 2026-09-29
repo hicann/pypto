@@ -151,8 +151,10 @@ TEST_F(OperationOpsTest, QuantMX_RoundUpFp8AndFp4Output)
         EXPECT_EQ(std::get<0>(fp8Res).GetDataType(), DT_FP8E4M3);
         EXPECT_EQ(std::get<1>(fp8Res).GetDataType(), DT_FP8E8M0);
 
-        auto fp4Res = QuantMX(fp16Input, DT_FP4_E2M1X2, DequantScaleRoundingMode::ROUND_UP, -1, true);
-        EXPECT_EQ(std::get<0>(fp4Res).GetDataType(), DT_FP4_E2M1X2);
+        auto fp4Res = QuantMX(fp16Input, DT_FP4_E2M1, DequantScaleRoundingMode::ROUND_UP, -1, true);
+        EXPECT_EQ(std::get<0>(fp4Res).GetDataType(), DT_FP4_E2M1);
+        EXPECT_EQ(std::get<0>(fp4Res).GetShape(), std::vector<int64_t>({8, 128}));
+        EXPECT_EQ(DataSizeOf(8 * 128, std::get<0>(fp4Res).GetDataType()), 8 * 128 / 2);
         EXPECT_EQ(std::get<1>(fp4Res).GetDataType(), DT_FP8E8M0);
     }
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
@@ -166,8 +168,8 @@ TEST_F(OperationOpsTest, QuantMX_Fp32ToFp4Unsupported)
 
     FUNCTION("QuantMXFp32ToFp4Unsupported", {input})
     {
-        EXPECT_THROW(QuantMX(input, DT_FP4_E2M1X2, DequantScaleRoundingMode::ROUND_DOWN, -1, true), std::exception);
-        EXPECT_THROW(QuantMX(input, DT_FP4_E2M1X2, DequantScaleRoundingMode::ROUND_UP, -1, true), std::exception);
+        EXPECT_THROW(QuantMX(input, DT_FP4_E2M1, DequantScaleRoundingMode::ROUND_DOWN, -1, true), std::exception);
+        EXPECT_THROW(QuantMX(input, DT_FP4_E2M1, DequantScaleRoundingMode::ROUND_UP, -1, true), std::exception);
     }
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
 }

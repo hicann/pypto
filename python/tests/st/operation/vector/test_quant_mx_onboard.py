@@ -17,6 +17,8 @@ import pytest
 import torch
 
 from framework.tests.st.operation.python.vector_operator_golden import (
+    _MX_DTYPE_IMPLS,
+    _MX_DTYPE_PARAMS,
     _compute_scalings_from_exponents,
     _compute_scalings_from_exponents_math,
     _compute_shared_exponents_floor,
@@ -24,6 +26,8 @@ from framework.tests.st.operation.python.vector_operator_golden import (
     _encode_e2m1_vectorized,
     _encode_e4m3_fn_vectorized,
     _pack_fp4_e2m1x2_low_first,
+    _quantmx_axis_dn_golden,
+    _quantmx_axis_last_golden,
 )
 import pypto
 
@@ -206,7 +210,7 @@ def test_quant_mx_e2m1_nv_fp16_2d_onboard():
     scale_shape = [1, 2, 2]
 
     input_data = torch.linspace(-6.0, 6.0, steps=math.prod(input_shape), dtype=torch.float16).reshape(input_shape)
-    quant_output = torch.zeros(input_shape, dtype=torch.float4_e2m1fn_x2)
+    quant_output = torch.zeros([input_shape[0], input_shape[1] // 2], dtype=torch.uint8)
     scale_output = torch.zeros(scale_shape, dtype=torch.float8_e8m0fnu)
     golden_quant_bytes, golden_scale_bytes = _quant_mx_e2m1_nv_golden_bytes(input_data)
 
@@ -220,13 +224,54 @@ def test_quant_mx_e2m1_nv_fp16_2d_onboard():
             tile_shape=tile_shape,
             scale_shape=scale_shape,
             input_dtype=pypto.DT_FP16,
-            quant_dtype=pypto.DT_FP4_E2M1X2,
+            quant_dtype=pypto.DT_FP4_E2M1,
             round_mode=pypto.ROUND_UP,
         )
     )
 
-    actual_quant_bytes = (
-        quant_output.view(torch.uint8).flatten()[:golden_quant_bytes.numel()].reshape(golden_quant_bytes.shape)
-    )
-    assert torch.equal(actual_quant_bytes, golden_quant_bytes)
+    assert torch.equal(quant_output, golden_quant_bytes)
     assert torch.equal(scale_output.view(torch.uint8), golden_scale_bytes)
+
+
+@pytest.mark.parametrize("axis", [-1, -2])
+@pytest.mark.parametrize("mode", [pypto.ROUND_DOWN, pypto.ROUND_UP])
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+@pytest.mark.parametrize("performance_mode", [True, False])
+@pypto.options(pass_options={"enable_slice": False})
+def test_quant_mx_fp4_packed_jit_onboard(axis, mode, dtype, performance_mode):
+    """Compare packed bytes across FP4 tiles and both quantization axes."""
+    torch.npu.set_device(int(os.environ.get("TILE_FWK_DEVICE_ID", 0)))
+    scale_shape = [128, 4, 2] if axis == -1 else [2, 256, 2]
+    tile_shape = [32, 128] if axis == -1 else [64, 64]
+
+    @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU})
+    def kernel(
+        x: pypto.Tensor([128, 256]),
+        quant: pypto.Tensor([128, 256], pypto.DT_FP4_E2M1),
+        scale: pypto.Tensor(scale_shape, pypto.DT_FP8E8M0),
+    ):
+        pypto.set_vec_tile_shapes(*tile_shape)
+        for row in pypto.loop(2):
+            for col in pypto.loop(2):
+                q, s = pypto.quant_mx(
+                    x[row * 64:(row + 1) * 64, col * 128:(col + 1) * 128],
+                    pypto.DT_FP4_E2M1, mode, axis, performance_mode,
+                )
+                quant[row * 64:(row + 1) * 64, col * 128:(col + 1) * 128] = q
+                if axis == -1:
+                    scale[row * 64:(row + 1) * 64, col * 2:(col + 1) * 2, :] = s
+                else:
+                    scale[row:row + 1, col * 128:(col + 1) * 128, :] = s
+
+    x = torch.linspace(-5, 5, 128 * 256).reshape(128, 256).to(dtype)
+    golden_fn = _quantmx_axis_last_golden if axis == -1 else _quantmx_axis_dn_golden
+    golden_q, golden_s = golden_fn(
+        x.float().numpy(), "fp16" if dtype == torch.float16 else "bf16",
+        True, mode == pypto.ROUND_UP, False,
+        _MX_DTYPE_PARAMS["fp4_e2m1x2"], _MX_DTYPE_IMPLS["fp4_e2m1x2"],
+    )
+    quant = torch.zeros((128, 128), dtype=torch.uint8).npu()
+    scale = torch.zeros(scale_shape, dtype=torch.float8_e8m0fnu).npu()
+    kernel(x.npu(), quant, scale)
+    assert torch.equal(quant.cpu(), torch.from_numpy(golden_q))
+    assert torch.equal(scale.cpu().view(torch.uint8), torch.from_numpy(golden_s))

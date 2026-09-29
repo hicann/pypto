@@ -157,7 +157,8 @@ def _write_golden_outputs(res: list, output_path: Path, config: dict) -> None:
     for idx in range(len(config["output_tensors"])):
         output_dtype = config["output_tensors"][idx]["dtype"]
         output_file = Path(output_path, config["output_tensors"][idx]["name"] + ".bin")
-        if output_dtype in ["fp8e4m3", "fp8e5m2", "fp8e8m0", "hf8", "fp4_e2m1x2"] and res[idx].dtype == np.uint8:
+        if (output_dtype in ["fp8e4m3", "fp8e5m2", "fp8e8m0", "hf8", "fp4_e2m1x2", "fp4_e2m1"]
+                and res[idx].dtype == np.uint8):
             res[idx].tofile(output_file)
         else:
             res[idx].astype(get_dtype_by_name(output_dtype)).tofile(output_file)
@@ -3464,6 +3465,7 @@ _MX_DTYPE_PARAMS = {
 _QUANTMX_OUTPUT_TO_DTYPE = {
     "fp8e4m3": "fp8_e4m3",
     "fp4_e2m1x2": "fp4_e2m1x2",
+    "fp4_e2m1": "fp4_e2m1x2",
 }
 
 _E8M0_EXPONENT_BIAS = 127
@@ -4060,7 +4062,7 @@ def gen_quantmx_op_golden(case_name: str, output: Path, case_index: int = None) 
         mode, axis, quant_dtype, dp, impl = _quantmx_parse_golden_config(_config)
         input_tensor_desc = _config.get("input_tensors", [{}])[0]
         src_dtype_name = input_tensor_desc.get("dtype", "")
-        is_fp4_e2m1 = quant_dtype == "fp4_e2m1x2"
+        is_fp4_e2m1 = quant_dtype in ("fp4_e2m1x2", "fp4_e2m1")
         is_nv = mode == "ROUND_UP"
         use_plain_fp8_max_abs = (not is_fp4_e2m1) and (not is_nv)
 
