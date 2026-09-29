@@ -93,3 +93,10 @@ def entry_local_from_import():
 
 def entry_alias_collision():
     return helper_collision_json() and helper_collision_os()
+
+
+def create_kernel_stdlib_alias(shape, dtype, soc_version):
+    """Factory fixture for the snippet-level aliased-stdlib check: packing this factory must surface
+    the helper's ``import math as m`` as a header statement of the emitted snippet."""
+    n = helper_local_aliased_stdlib(shape)
+    return n, dtype, soc_version

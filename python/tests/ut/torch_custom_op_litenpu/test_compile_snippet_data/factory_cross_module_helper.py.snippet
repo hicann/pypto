@@ -1,0 +1,62 @@
+import torch
+import pypto.extensions.torch_custom_op_litenpu
+
+TILE = (1, 4, 1, 64)
+
+
+def sample_helper_pkg__compute__tile_helper():
+    """Plain helper returning the tile shape (references the cross-file constant TILE)."""
+    return TILE
+
+
+@pypto.frontend.function
+def sample_helper_pkg__compute__add_into(a, b, out):
+    """Out-param helper, inlined by the parser at the call site."""
+    out.move(a + sample_helper_pkg__compute___bias(b))
+
+
+def sample_helper_pkg__compute___bias(x):
+    """Plain transitive helper referenced by add_into."""
+    return x
+
+
+def add_infer_shape(input0_shape: torch.Size, input1_shape: torch.Size) -> torch.Size:
+    return input0_shape
+
+
+def add_infer_dtype(input0_dtype: torch.dtype, input1_dtype: torch.dtype) -> torch.dtype:
+    return input0_dtype
+
+
+def create_add_kernel_cross_module(shape, dtype, soc_version, run_mode=pypto.RunMode.SIM):
+    """Factory whose kernel calls helpers from another module, so the factory path exercises the
+    cross-module canonical helper naming (``sample_helper_pkg__compute__*``)."""
+    @pypto.frontend.jit(
+        codegen_options={"soc_version": soc_version},
+        runtime_options={"run_mode": run_mode},
+    )
+    def add_kernel(
+        input0: pypto.Tensor([...], dtype),
+        input1: pypto.Tensor([...], dtype),
+        output: pypto.Tensor([...], dtype),
+    ):
+        pypto.set_vec_tile_shapes(*sample_helper_pkg__compute__tile_helper())
+        sample_helper_pkg__compute__add_into(input0, input1, output)
+
+    return add_kernel
+
+
+
+_custom_op_compile = pypto.extensions.torch_custom_op_litenpu.CompileEntry(
+    factory=create_add_kernel_cross_module,
+    factory_signature="single", num_inputs=2, num_outputs=1,
+)
+_custom_op_compile.infer_shape = add_infer_shape
+_custom_op_compile.infer_dtype = add_infer_dtype
+
+
+def __pypto_compile(in_shapes, in_dtypes, attrs, soc_version):
+    return _custom_op_compile(
+        tuple(tuple(s) for s in in_shapes), tuple(str(d) for d in in_dtypes),
+        dict(attrs), soc_version,
+    )

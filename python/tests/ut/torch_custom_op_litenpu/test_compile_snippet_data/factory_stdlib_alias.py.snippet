@@ -1,0 +1,39 @@
+import torch
+import pypto.extensions.torch_custom_op_litenpu
+import math as m
+
+
+def helper_local_aliased_stdlib(shape):
+    """Body-local ``import math as m`` -> header ``import math as m``, body chain verbatim."""
+    return m.prod(shape)
+
+
+def add_infer_shape(input0_shape: torch.Size, input1_shape: torch.Size) -> torch.Size:
+    return input0_shape
+
+
+def add_infer_dtype(input0_dtype: torch.dtype, input1_dtype: torch.dtype) -> torch.dtype:
+    return input0_dtype
+
+
+def create_kernel_stdlib_alias(shape, dtype, soc_version):
+    """Factory fixture for the snippet-level aliased-stdlib check: packing this factory must surface
+    the helper's ``import math as m`` as a header statement of the emitted snippet."""
+    n = helper_local_aliased_stdlib(shape)
+    return n, dtype, soc_version
+
+
+
+_custom_op_compile = pypto.extensions.torch_custom_op_litenpu.CompileEntry(
+    factory=create_kernel_stdlib_alias,
+    factory_signature="single", num_inputs=2, num_outputs=1,
+)
+_custom_op_compile.infer_shape = add_infer_shape
+_custom_op_compile.infer_dtype = add_infer_dtype
+
+
+def __pypto_compile(in_shapes, in_dtypes, attrs, soc_version):
+    return _custom_op_compile(
+        tuple(tuple(s) for s in in_shapes), tuple(str(d) for d in in_dtypes),
+        dict(attrs), soc_version,
+    )
