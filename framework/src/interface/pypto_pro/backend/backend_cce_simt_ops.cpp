@@ -122,6 +122,28 @@ std::string MakeSimtThreadfenceCodegenCCE(const ir::CallPtr& op, codegen::Codege
     return "";
 }
 
+std::string MakeSimtWarpCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base, const char* intrinsic,
+                                   size_t operand_count)
+{
+    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_OPERATION, codegen.IsInSimtContext())
+        << op->name_ << " reached CCE codegen outside a SIMT function";
+    PRO_CODEGEN_CHECK(ExternalError::NOT_IMPLEMENTED_ERROR, codegen.GetArch() == "a5")
+        << op->name_ << " currently requires arch='a5'";
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, op->args_.size() == operand_count)
+        << op->name_ << " requires exactly " << operand_count << " operand(s)";
+
+    std::ostringstream call;
+    call << intrinsic << "(";
+    for (size_t i = 0; i < op->args_.size(); ++i) {
+        if (i != 0)
+            call << ", ";
+        call << codegen.GetExprAsCode(op->args_[i]);
+    }
+    call << ")";
+    return call.str();
+}
+
 const char* GetSimtCastRoundModeCCE(ir::RoundMode mode)
 {
     switch (mode) {
@@ -1034,6 +1056,33 @@ REGISTER_BACKEND_OP(BackendCCE, "simt.threadfence_block")
     .set_pipe(ir::PipeType::S)
     .f_codegen(MakeSimtThreadfenceBlockCodegenCCE);
 REGISTER_BACKEND_OP(BackendCCE, "simt.threadfence").set_pipe(ir::PipeType::S).f_codegen(MakeSimtThreadfenceCodegenCCE);
+
+#define REGISTER_SIMT_WARP_BACKEND_OP(OpName, Intrinsic, OperandCount)                \
+    REGISTER_BACKEND_OP(BackendCCE, "simt." OpName)                                   \
+        .set_pipe(ir::PipeType::S)                                                    \
+        .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen_base) {    \
+            return MakeSimtWarpCodegenCCE(op, codegen_base, Intrinsic, OperandCount); \
+        })
+
+REGISTER_SIMT_WARP_BACKEND_OP("lane_id", "laneid", 0);
+REGISTER_SIMT_WARP_BACKEND_OP("lanemask_eq", "lanemask_eq", 0);
+REGISTER_SIMT_WARP_BACKEND_OP("lanemask_le", "lanemask_le", 0);
+REGISTER_SIMT_WARP_BACKEND_OP("lanemask_lt", "lanemask_lt", 0);
+REGISTER_SIMT_WARP_BACKEND_OP("lanemask_ge", "lanemask_ge", 0);
+REGISTER_SIMT_WARP_BACKEND_OP("lanemask_gt", "lanemask_gt", 0);
+REGISTER_SIMT_WARP_BACKEND_OP("warp_all", "__all", 1);
+REGISTER_SIMT_WARP_BACKEND_OP("warp_any", "__any", 1);
+REGISTER_SIMT_WARP_BACKEND_OP("warp_ballot", "__ballot", 1);
+REGISTER_SIMT_WARP_BACKEND_OP("warp_active_mask", "__activemask", 0);
+REGISTER_SIMT_WARP_BACKEND_OP("warp_shfl", "__shfl", 3);
+REGISTER_SIMT_WARP_BACKEND_OP("warp_shfl_up", "__shfl_up", 3);
+REGISTER_SIMT_WARP_BACKEND_OP("warp_shfl_down", "__shfl_down", 3);
+REGISTER_SIMT_WARP_BACKEND_OP("warp_shfl_xor", "__shfl_xor", 3);
+REGISTER_SIMT_WARP_BACKEND_OP("warp_reduce_add", "__reduce_add", 1);
+REGISTER_SIMT_WARP_BACKEND_OP("warp_reduce_max", "__reduce_max", 1);
+REGISTER_SIMT_WARP_BACKEND_OP("warp_reduce_min", "__reduce_min", 1);
+
+#undef REGISTER_SIMT_WARP_BACKEND_OP
 
 REGISTER_BACKEND_OP(BackendCCE, "simt.cast").set_pipe(ir::PipeType::S).f_codegen(MakeSimtCastCodegenCCE);
 REGISTER_BACKEND_OP(BackendCCE, "simt.bitcast").set_pipe(ir::PipeType::S).f_codegen(MakeSimtBitcastCodegenCCE);

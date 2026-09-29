@@ -64,7 +64,7 @@ class Simt:
 
     @staticmethod
     @_api_decl
-    def warp_size() -> Scalar:
+    def warp_size() -> int:
         """Return the target SIMT warp size."""
 
     @staticmethod
@@ -94,6 +94,91 @@ class Simt:
         This memory fence does not wait for other threads and may be used in
         runtime control flow. It must be used as a standalone statement.
         """
+
+    @staticmethod
+    @_api_decl
+    def lane_id() -> int:
+        """Return the current lane index in the warp as an INT32 Scalar."""
+
+    @staticmethod
+    @_api_decl
+    def lanemask_eq() -> int:
+        """Return an INT32 mask containing only the current lane bit."""
+
+    @staticmethod
+    @_api_decl
+    def lanemask_le() -> int:
+        """Return an INT32 mask containing lanes up to and including the current lane."""
+
+    @staticmethod
+    @_api_decl
+    def lanemask_lt() -> int:
+        """Return an INT32 mask containing lanes below the current lane."""
+
+    @staticmethod
+    @_api_decl
+    def lanemask_ge() -> int:
+        """Return an INT32 mask containing lanes at or above the current lane."""
+
+    @staticmethod
+    @_api_decl
+    def lanemask_gt() -> int:
+        """Return an INT32 mask containing lanes above the current lane."""
+
+    @staticmethod
+    @_api_decl
+    def warp_all(predicate: int) -> int:
+        """Return INT32 one when predicate is true for every active lane, otherwise zero."""
+
+    @staticmethod
+    @_api_decl
+    def warp_any(predicate: int) -> int:
+        """Return INT32 one when predicate is true for any active lane, otherwise zero."""
+
+    @staticmethod
+    @_api_decl
+    def warp_ballot(predicate: int) -> int:
+        """Return a UINT32 bit mask of active lanes whose predicate is true."""
+
+    @staticmethod
+    @_api_decl
+    def warp_active_mask() -> int:
+        """Return a UINT32 bit mask of the currently active lanes."""
+
+    @staticmethod
+    @_api_decl
+    def warp_shfl(value: Union[int, float], src_lane: int, width: int = 32) -> Scalar:
+        """Read value from src_lane in the current logical warp subgroup, preserving value dtype."""
+
+    @staticmethod
+    @_api_decl
+    def warp_shfl_up(value: Union[int, float], delta: int, width: int = 32) -> Scalar:
+        """Read value from a lower lane by delta within the subgroup, preserving value dtype."""
+
+    @staticmethod
+    @_api_decl
+    def warp_shfl_down(value: Union[int, float], delta: int, width: int = 32) -> Scalar:
+        """Read value from a higher lane by delta within the subgroup, preserving value dtype."""
+
+    @staticmethod
+    @_api_decl
+    def warp_shfl_xor(value: Union[int, float], lane_mask: int, width: int = 32) -> Scalar:
+        """Read value from the lane selected by XOR with lane_mask, preserving value dtype."""
+
+    @staticmethod
+    @_api_decl
+    def warp_reduce_add(value: Union[int, float]) -> Scalar:
+        """Return the same-dtype sum of value across the active lanes in the warp."""
+
+    @staticmethod
+    @_api_decl
+    def warp_reduce_max(value: Union[int, float]) -> Scalar:
+        """Return the same-dtype maximum value across the active lanes in the warp."""
+
+    @staticmethod
+    @_api_decl
+    def warp_reduce_min(value: Union[int, float]) -> Scalar:
+        """Return the same-dtype minimum value across the active lanes in the warp."""
 
     @staticmethod
     @_api_decl

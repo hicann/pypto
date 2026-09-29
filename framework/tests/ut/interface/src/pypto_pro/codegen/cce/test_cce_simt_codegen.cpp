@@ -47,6 +47,11 @@ ir::Span Sp() { return ir::Span::Unknown(); }
 
 ir::ExprPtr ConstInt(int64_t value) { return std::make_shared<const ir::ConstInt>(value, ir::DataType::INT64, Sp()); }
 
+ir::ExprPtr ConstInt(int64_t value, ir::DataType dtype)
+{
+    return std::make_shared<const ir::ConstInt>(value, dtype, Sp());
+}
+
 ir::TypePtr Scalar(ir::DataType dtype) { return std::make_shared<const ir::ScalarType>(dtype); }
 
 ir::VarPtr Var(const std::string& name, const ir::TypePtr& type)
@@ -355,6 +360,54 @@ ir::ProgramPtr MakeSimtScalarOpsProgram()
                                                Sp(), std::make_shared<ir::IRDebugInfo>());
 }
 
+ir::ProgramPtr MakeSimtWarpOpsProgram()
+{
+    auto fp16 = Scalar(ir::DataType::FP16);
+    auto fp32 = Scalar(ir::DataType::FP32);
+    auto i32 = Scalar(ir::DataType::INT32);
+    auto fp16_value = Var("fp16_value", fp16);
+    auto fp32_value = Var("fp32_value", fp32);
+    auto predicate = Var("predicate", i32);
+    auto src_lane = ConstInt(3, ir::DataType::INT32);
+    auto delta = ConstInt(1, ir::DataType::UINT32);
+    auto width = ConstInt(16, ir::DataType::INT32);
+
+    std::vector<ir::StmtPtr> simt_stmts;
+    std::size_t result_index = 0;
+    for (const auto& op_name : {"simt.lane_id", "simt.lanemask_eq", "simt.lanemask_le", "simt.lanemask_lt",
+                                "simt.lanemask_ge", "simt.lanemask_gt", "simt.warp_active_mask"}) {
+        AppendRegisteredResult(simt_stmts, result_index, op_name, {});
+    }
+    for (const auto& op_name : {"simt.warp_all", "simt.warp_any", "simt.warp_ballot"}) {
+        AppendRegisteredResult(simt_stmts, result_index, op_name, {predicate});
+    }
+    AppendRegisteredResult(simt_stmts, result_index, "simt.warp_shfl", {fp16_value, src_lane, width});
+    AppendRegisteredResult(simt_stmts, result_index, "simt.warp_shfl_up", {fp16_value, delta, width});
+    AppendRegisteredResult(simt_stmts, result_index, "simt.warp_shfl_down", {fp16_value, delta, width});
+    AppendRegisteredResult(simt_stmts, result_index, "simt.warp_shfl_xor", {fp16_value, src_lane, width});
+    for (const auto& op_name : {"simt.warp_reduce_add", "simt.warp_reduce_max", "simt.warp_reduce_min"}) {
+        AppendRegisteredResult(simt_stmts, result_index, op_name, {fp32_value});
+    }
+
+    std::vector<ir::VarPtr> simt_args = {fp16_value, fp32_value, predicate};
+    auto simt_function = std::make_shared<const ir::Function>(
+        "warp_ops", simt_args, std::vector<ir::TypePtr>{}, Seq(std::move(simt_stmts)), Sp(), ir::FunctionType::SIMT_VF,
+        false, std::vector<std::pair<std::string, std::any>>{{ir::kMaxThreadsAttr, 32}});
+
+    auto kernel_fp16 = Var("fp16_value", fp16);
+    auto kernel_fp32 = Var("fp32_value", fp32);
+    auto kernel_predicate = Var("predicate", i32);
+    auto launch = RegisteredCall("simt.launch",
+                                 {ConstInt(32), ConstInt(1), ConstInt(1), kernel_fp16, kernel_fp32, kernel_predicate},
+                                 Kwargs{{"callee", std::string("warp_ops")}, {"max_threads", 32}});
+    auto kernel = std::make_shared<const ir::Function>(
+        "kernel", std::vector<ir::VarPtr>{kernel_fp16, kernel_fp32, kernel_predicate}, std::vector<ir::TypePtr>{},
+        Eval(launch), Sp(), ir::FunctionType::IN_CORE, true);
+
+    return std::make_shared<const ir::Program>(std::vector<ir::FunctionPtr>{simt_function, kernel}, "simt_warp_ops",
+                                               Sp(), std::make_shared<ir::IRDebugInfo>());
+}
+
 ir::ProgramPtr MakeSimtAtomicOpsProgram()
 {
     auto i32 = Scalar(ir::DataType::INT32);
@@ -585,6 +638,28 @@ TEST(CCESimtCodegenTest, GeneratesRegisteredSynchronizationScalarCastAndMathOper
         EXPECT_NE(generated.find(intrinsic), std::string::npos) << intrinsic;
     }
     EXPECT_EQ(generated.find("simt_api/"), std::string::npos);
+}
+
+TEST(CCESimtCodegenTest, GeneratesRegisteredWarpOperations)
+{
+    CCECodegen codegen(ir::SectionKind::Vector);
+    std::string generated = codegen.GenerateSingle(MakeSimtWarpOpsProgram(), "a5");
+
+    const std::vector<std::string> warp_intrinsics = {
+        "laneid()",       "lanemask_eq()", "lanemask_le()", "lanemask_lt()", "lanemask_ge()", "lanemask_gt()",
+        "__activemask()", "__all(",        "__any(",        "__ballot(",     "__shfl(",       "__shfl_up(",
+        "__shfl_down(",   "__shfl_xor(",   "__reduce_add(", "__reduce_max(", "__reduce_min(",
+    };
+    for (std::size_t i = 0; i < warp_intrinsics.size(); ++i) {
+        const std::string assignment = "auto result_" + std::to_string(i) + " = " + warp_intrinsics[i];
+        EXPECT_NE(generated.find(assignment), std::string::npos) << assignment;
+    }
+    for (const auto& intrinsic : {"__shfl(", "__shfl_up(", "__shfl_down(", "__shfl_xor("}) {
+        auto line = FindLineContaining(generated, intrinsic);
+        ASSERT_FALSE(line.empty()) << intrinsic;
+        EXPECT_EQ(CountOccurrences(line, ", "), 2u) << line;
+    }
+    EXPECT_EQ(generated.find("asc_"), std::string::npos);
 }
 
 TEST(CCESimtCodegenTest, GeneratesRegisteredAtomicOperationsForTileAndTensor)

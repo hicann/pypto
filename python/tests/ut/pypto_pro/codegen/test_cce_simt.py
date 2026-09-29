@@ -113,6 +113,29 @@ def _context_probe(dst):
     dst[0, tid] = value
 
 
+@pl.vector_function(mode="simt", max_threads=32)
+def _warp_codegen_probe(value: pl.DT_FP32, predicate_value: pl.DT_INT32, int_output, uint_output, float_output):
+    lane = pl.simt.lane_id()
+    int_output[0, lane] = lane
+    int_output[1, lane] = pl.simt.lanemask_eq()
+    int_output[2, lane] = pl.simt.lanemask_le()
+    int_output[3, lane] = pl.simt.lanemask_lt()
+    int_output[4, lane] = pl.simt.lanemask_ge()
+    int_output[5, lane] = pl.simt.lanemask_gt()
+    predicate = lane < 16
+    int_output[6, lane] = pl.simt.warp_all(predicate)
+    int_output[7, lane] = pl.simt.warp_any(predicate_value)
+    uint_output[0, lane] = pl.simt.warp_ballot(predicate)
+    uint_output[1, lane] = pl.simt.warp_active_mask()
+    float_output[0, lane] = pl.simt.warp_shfl(value, 0)
+    float_output[1, lane] = pl.simt.warp_shfl_up(value, 1, 16)
+    float_output[2, lane] = pl.simt.warp_shfl_down(value, 1, width=8)
+    float_output[3, lane] = pl.simt.warp_shfl_xor(value, 1)
+    float_output[4, lane] = pl.simt.warp_reduce_add(value)
+    float_output[5, lane] = pl.simt.warp_reduce_max(value)
+    float_output[6, lane] = pl.simt.warp_reduce_min(value)
+
+
 @pl.vector_function(mode="simt", max_threads=256)
 def _tile_valid_shape_access(
     dst,
@@ -165,6 +188,24 @@ def _simt_context_codegen_kernel(_jit_entry: pl.DT_INT64):
     dst = pl.make_tile(tile_type, addr=0x0000)
     with pl.section_vector():
         _context_probe[8, 4, 8](dst)
+
+
+@pl.jit
+def _simt_warp_codegen_kernel(value: pl.DT_FP32, predicate_value: pl.DT_INT32):
+    int_output = pl.make_tile(
+        pl.TileType(shape=[8, 32], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec),
+        addr=0x0000,
+    )
+    uint_output = pl.make_tile(
+        pl.TileType(shape=[2, 32], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
+        addr=0x0400,
+    )
+    float_output = pl.make_tile(
+        pl.TileType(shape=[7, 32], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
+        addr=0x0500,
+    )
+    with pl.section_vector():
+        _warp_codegen_probe[32](value, predicate_value, int_output, uint_output, float_output)
 
 
 @pl.jit
@@ -347,6 +388,33 @@ def test_simt_context_codegen_uses_native_cce_xyz_context_and_tuple_launch():
     assert "warpSize" in cpp
     assert "threadIdx.x + threadIdx.y * blockDim.x + threadIdx.z * blockDim.x * blockDim.y" in cpp
     assert "cce::async_invoke<_context_probe>(cce::dim3{8, 4, 8}" in launch_line
+
+
+def test_simt_warp_codegen_uses_native_cce_warp_builtins():
+    cpp = _compile_to_cce(_simt_warp_codegen_kernel)
+    function = _simt_function_source(cpp, "_warp_codegen_probe")
+
+    for intrinsic in (
+        "laneid()",
+        "lanemask_eq()",
+        "lanemask_le()",
+        "lanemask_lt()",
+        "lanemask_ge()",
+        "lanemask_gt()",
+        "__all(",
+        "__any(",
+        "__ballot(",
+        "__activemask()",
+        "__shfl(",
+        "__shfl_up(",
+        "__shfl_down(",
+        "__shfl_xor(",
+        "__reduce_add(",
+        "__reduce_max(",
+        "__reduce_min(",
+    ):
+        assert intrinsic in function
+    assert "asc_" not in function
 
 
 def test_simt_gm_tensor_codegen_uses_native_gm_pointers():

@@ -28,6 +28,7 @@ from ..._errors import (
     InvalidType,
     InvalidVal,
     NotSupported,
+    error_class_of_spec_message,
     message_of,
 )
 from .._utils import _get_span_or_capture, _normalize_expr
@@ -75,6 +76,97 @@ def threadfence(span: Span | None = None) -> Call:
     """Build a device-scoped SIMT memory fence."""
     actual_span = _get_span_or_capture(span)
     return _ir_core.create_op_call("simt.threadfence", [], {}, actual_span)
+
+
+def _create_warp_call(op_name: str, *operands: Expr, span: Span | None) -> Call:
+    """Create an IR call for one warp-level SIMT operation."""
+    actual_span = _get_span_or_capture(span)
+    return _ir_core.create_op_call(f"simt.{op_name}", list(operands), {}, actual_span)
+
+
+def lane_id(span: Span | None = None) -> Call:
+    """Return the current lane index in the warp."""
+    return _create_warp_call("lane_id", span=span)
+
+
+def lanemask_eq(span: Span | None = None) -> Call:
+    """Return a mask containing only the current lane bit."""
+    return _create_warp_call("lanemask_eq", span=span)
+
+
+def lanemask_le(span: Span | None = None) -> Call:
+    """Return a mask containing lanes up to and including the current lane."""
+    return _create_warp_call("lanemask_le", span=span)
+
+
+def lanemask_lt(span: Span | None = None) -> Call:
+    """Return a mask containing lanes below the current lane."""
+    return _create_warp_call("lanemask_lt", span=span)
+
+
+def lanemask_ge(span: Span | None = None) -> Call:
+    """Return a mask containing lanes at or above the current lane."""
+    return _create_warp_call("lanemask_ge", span=span)
+
+
+def lanemask_gt(span: Span | None = None) -> Call:
+    """Return a mask containing lanes above the current lane."""
+    return _create_warp_call("lanemask_gt", span=span)
+
+
+def warp_all(predicate: Expr, span: Span | None = None) -> Call:
+    """Return whether every active lane satisfies predicate."""
+    return _create_warp_call("warp_all", predicate, span=span)
+
+
+def warp_any(predicate: Expr, span: Span | None = None) -> Call:
+    """Return whether any active lane satisfies predicate."""
+    return _create_warp_call("warp_any", predicate, span=span)
+
+
+def warp_ballot(predicate: Expr, span: Span | None = None) -> Call:
+    """Return the active-lane predicate bit mask."""
+    return _create_warp_call("warp_ballot", predicate, span=span)
+
+
+def warp_active_mask(span: Span | None = None) -> Call:
+    """Return the currently active lane mask."""
+    return _create_warp_call("warp_active_mask", span=span)
+
+
+def warp_shfl(value: Expr, src_lane: Expr, width: Expr, span: Span | None = None) -> Call:
+    """Read a scalar from one source lane in the logical subgroup."""
+    return _create_warp_call("warp_shfl", value, src_lane, width, span=span)
+
+
+def warp_shfl_up(value: Expr, delta: Expr, width: Expr, span: Span | None = None) -> Call:
+    """Read a scalar from a lower-numbered lane in the logical subgroup."""
+    return _create_warp_call("warp_shfl_up", value, delta, width, span=span)
+
+
+def warp_shfl_down(value: Expr, delta: Expr, width: Expr, span: Span | None = None) -> Call:
+    """Read a scalar from a higher-numbered lane in the logical subgroup."""
+    return _create_warp_call("warp_shfl_down", value, delta, width, span=span)
+
+
+def warp_shfl_xor(value: Expr, lane_mask: Expr, width: Expr, span: Span | None = None) -> Call:
+    """Read a scalar from the lane selected by XOR with lane_mask."""
+    return _create_warp_call("warp_shfl_xor", value, lane_mask, width, span=span)
+
+
+def warp_reduce_add(value: Expr, span: Span | None = None) -> Call:
+    """Reduce a scalar sum across active lanes."""
+    return _create_warp_call("warp_reduce_add", value, span=span)
+
+
+def warp_reduce_max(value: Expr, span: Span | None = None) -> Call:
+    """Reduce a scalar maximum across active lanes."""
+    return _create_warp_call("warp_reduce_max", value, span=span)
+
+
+def warp_reduce_min(value: Expr, span: Span | None = None) -> Call:
+    """Reduce a scalar minimum across active lanes."""
+    return _create_warp_call("warp_reduce_min", value, span=span)
 
 
 def cast(
@@ -423,6 +515,24 @@ def _parse_threadfence(parser: Any, call: ast.Call) -> Expr:
     return threadfence(span)
 
 
+def _register_warp_no_arg_parser(op_name: str, builder: Callable[..., Call]) -> None:
+    """Register one no-argument warp operation."""
+
+    @op_impl(op_name)
+    def _parser_impl(parser: Any, call: ast.Call) -> Expr:
+        _validate_simt_body_op(parser, call, {})
+        return builder(parser.span_tracker.get_span(call))
+
+
+_register_warp_no_arg_parser("simt.lane_id", lane_id)
+_register_warp_no_arg_parser("simt.lanemask_eq", lanemask_eq)
+_register_warp_no_arg_parser("simt.lanemask_le", lanemask_le)
+_register_warp_no_arg_parser("simt.lanemask_lt", lanemask_lt)
+_register_warp_no_arg_parser("simt.lanemask_ge", lanemask_ge)
+_register_warp_no_arg_parser("simt.lanemask_gt", lanemask_gt)
+_register_warp_no_arg_parser("simt.warp_active_mask", warp_active_mask)
+
+
 def _parse_simt_launch(parser: Any, call: ast.Call, local_name: str, callee_template: Callable) -> Expr:
     """Parse ``simt_func[threads](args...)`` and lower it to ``simt.launch`` IR."""
     from pypto_pro.language.parser.decorator import get_simt_max_threads
@@ -475,6 +585,7 @@ def _parse_simt_launch(parser: Any, call: ast.Call, local_name: str, callee_temp
     parser.requires_simt = True
     return result
 
+
 def _numeric_literal_value(node: ast.expr) -> int | float | None:
     if isinstance(node, ast.Constant) and type(node.value) in (int, float):
         return node.value
@@ -486,6 +597,151 @@ def _numeric_literal_value(node: ast.expr) -> int | float | None:
     ):
         return node.operand.value if isinstance(node.op, ast.UAdd) else -node.operand.value
     return None
+
+
+def _validate_warp_scope(parser: Any, call: ast.Call, op_name: str) -> Span:
+    """Validate that one warp call appears in a SIMT function."""
+
+    span = parser.span_tracker.get_span(call)
+    if parser._current_func_type not in (_ir_core.FunctionType.SimtVF, _ir_core.FunctionType.SimtCallee):
+        raise InvalidOperation(
+            f"pl.{op_name}() can only be used inside a SIMT function",
+            span=span,
+            hint='Move warp-level logic into @pl.vector_function(mode="simt").',
+        )
+    return span
+
+
+def _parse_warp_scalar(
+    parser: Any,
+    op_name: str,
+    argument_name: str,
+    node: ast.expr,
+    literal_dtype: _ir_core.DataType | None = None,
+) -> Expr:
+    """Parse one warp scalar, contextually typing integer controls."""
+
+    argument_span = parser.span_tracker.get_span(node)
+    literal_value = _numeric_literal_value(node)
+    if literal_dtype is not None and literal_value is None:
+        known, evaluated_value = parser.expr_evaluator.try_eval_expr(node)
+        if known and type(evaluated_value) in (int, float):
+            literal_value = evaluated_value
+    if literal_dtype is not None and literal_value is not None:
+        if type(literal_value) is not int:
+            raise InvalidType(
+                f"pl.{op_name}() {argument_name} must be an integer scalar",
+                span=argument_span,
+                parser_retry=True,
+            )
+        result = parser._make_scalar_constant(literal_value, literal_dtype, argument_span)
+    else:
+        result = parser.parse_expression(node)
+
+    if not isinstance(result, Expr) or not isinstance(result.type, _ir_core.ScalarType):
+        raise InvalidType(
+            f"pl.{op_name}() {argument_name} must be a scalar expression",
+            span=argument_span,
+            hint="Subscript a Tile or Tensor first to obtain one scalar element.",
+            parser_retry=True,
+        )
+    return result
+
+
+def _parse_warp_predicate_call(
+    parser: Any,
+    op_name: str,
+    builder: Callable[..., Call],
+    call: ast.Call,
+) -> Expr:
+    """Parse one warp vote operation."""
+
+    span = _validate_warp_scope(parser, call, op_name)
+    if len(call.args) != 1 or call.keywords:
+        raise InvalidArgument(
+            f"pl.{op_name}() requires exactly one positional predicate argument",
+            span=span,
+        )
+    predicate = _parse_warp_scalar(parser, op_name, "predicate", call.args[0], _ir_core.DataType.INT32)
+    try:
+        return builder(predicate, span=span)
+    except (ValueError, RuntimeError) as error:
+        message = str(error)
+        wrapper = error_class_of_spec_message(message) or CommonExternal
+        raise wrapper(message, span=span, parser_retry=True) from error
+
+
+def _register_warp_predicate_parser(op_name: str, builder: Callable[..., Call]) -> None:
+    """Register one warp vote operation."""
+
+    @op_impl(op_name)
+    def _parser_impl(parser: Any, call: ast.Call) -> Expr:
+        return _parse_warp_predicate_call(parser, op_name, builder, call)
+
+
+_register_warp_predicate_parser("simt.warp_all", warp_all)
+_register_warp_predicate_parser("simt.warp_any", warp_any)
+_register_warp_predicate_parser("simt.warp_ballot", warp_ballot)
+
+
+def _parse_warp_shuffle_call(
+    parser: Any,
+    op_name: str,
+    builder: Callable[..., Call],
+    control_name: str,
+    control_dtype: _ir_core.DataType,
+    call: ast.Call,
+) -> Expr:
+    """Parse one warp shuffle operation, including its optional width."""
+
+    span = _validate_warp_scope(parser, call, op_name)
+    width_keywords = [keyword for keyword in call.keywords if keyword.arg == "width"]
+    invalid_keyword = any(keyword.arg != "width" for keyword in call.keywords)
+    if len(call.args) not in (2, 3) or invalid_keyword or len(width_keywords) > 1:
+        raise InvalidArgument(
+            f"pl.{op_name}() requires value, {control_name}, and an optional width",
+            span=span,
+        )
+    if len(call.args) == 3 and width_keywords:
+        raise InvalidArgument(
+            f"pl.{op_name}() width cannot be provided both positionally and by keyword",
+            span=span,
+        )
+
+    value = _parse_warp_scalar(parser, op_name, "value", call.args[0])
+    control = _parse_warp_scalar(parser, op_name, control_name, call.args[1], control_dtype)
+    if len(call.args) == 3:
+        width = _parse_warp_scalar(parser, op_name, "width", call.args[2], _ir_core.DataType.INT32)
+    elif width_keywords:
+        width = _parse_warp_scalar(parser, op_name, "width", width_keywords[0].value, _ir_core.DataType.INT32)
+    else:
+        width = _ir_core.ConstInt(32, _ir_core.DataType.INT32, span)
+
+    try:
+        return builder(value, control, width, span=span)
+    except (ValueError, RuntimeError) as error:
+        message = str(error)
+        wrapper = error_class_of_spec_message(message) or CommonExternal
+        raise wrapper(message, span=span, parser_retry=True) from error
+
+
+def _register_warp_shuffle_parser(
+    op_name: str,
+    builder: Callable[..., Call],
+    control_name: str,
+    control_dtype: _ir_core.DataType,
+) -> None:
+    """Register one warp shuffle operation."""
+
+    @op_impl(op_name)
+    def _parser_impl(parser: Any, call: ast.Call) -> Expr:
+        return _parse_warp_shuffle_call(parser, op_name, builder, control_name, control_dtype, call)
+
+
+_register_warp_shuffle_parser("simt.warp_shfl", warp_shfl, "src_lane", _ir_core.DataType.INT32)
+_register_warp_shuffle_parser("simt.warp_shfl_up", warp_shfl_up, "delta", _ir_core.DataType.UINT32)
+_register_warp_shuffle_parser("simt.warp_shfl_down", warp_shfl_down, "delta", _ir_core.DataType.UINT32)
+_register_warp_shuffle_parser("simt.warp_shfl_xor", warp_shfl_xor, "lane_mask", _ir_core.DataType.INT32)
 
 
 def _parse_atomic_operand(
@@ -754,6 +1010,9 @@ _register_scalar_math_parser("simt.popcount", 1, popcount)
 _register_scalar_math_parser("simt.mul_hi", 2, mul_hi)
 _register_scalar_math_parser("simt.fmod", 2, fmod)
 _register_scalar_math_parser("simt.fma", 3, fma)
+_register_scalar_math_parser("simt.warp_reduce_add", 1, warp_reduce_add)
+_register_scalar_math_parser("simt.warp_reduce_max", 1, warp_reduce_max)
+_register_scalar_math_parser("simt.warp_reduce_min", 1, warp_reduce_min)
 
 
 @op_impl("simt.atomic_add")

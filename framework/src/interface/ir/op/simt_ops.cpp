@@ -302,6 +302,113 @@ std::string FormatSupportedDtypes(std::initializer_list<DataType> dtypes)
     return result;
 }
 
+TypePtr DeduceSimtWarpNoArgType(const std::string& op_name, DataType result_dtype, const std::vector<ExprPtr>& args,
+                                const std::vector<std::pair<std::string, std::any>>& kwargs)
+{
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.empty()) << op_name << " does not accept positional arguments";
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, kwargs.empty()) << op_name << " does not accept keyword arguments";
+    return std::make_shared<ScalarType>(result_dtype);
+}
+
+TypePtr DeduceSimtWarpVoteType(const std::string& op_name, DataType result_dtype, const std::vector<ExprPtr>& args,
+                               const std::vector<std::pair<std::string, std::any>>& kwargs)
+{
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 1) << op_name << " requires exactly one predicate";
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, kwargs.empty()) << op_name << " does not accept keyword arguments";
+    auto predicate_type = As<ScalarType>(args[0]->GetType());
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, predicate_type) << op_name << " predicate must be a scalar";
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE,
+                 predicate_type->dtype_ == DataType::BOOL || predicate_type->dtype_ == DataType::INT32)
+        << op_name << " predicate must have BOOL or INT32 dtype, got " << predicate_type->dtype_.ToString();
+    return std::make_shared<ScalarType>(result_dtype);
+}
+
+ScalarTypePtr DeduceSimtWarpShuffleCommonType(const std::string& op_name, const std::string& control_name,
+                                              const std::vector<ExprPtr>& args,
+                                              const std::vector<std::pair<std::string, std::any>>& kwargs)
+{
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, args.size() == 3)
+        << op_name << " requires value, " << control_name << ", and width";
+    PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT, kwargs.empty()) << op_name << " does not accept keyword arguments";
+
+    auto value_type = As<ScalarType>(args[0]->GetType());
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, value_type) << op_name << " value must be a scalar";
+    PRO_IR_CHECK(
+        ExternalError::NOT_IMPLEMENTED_ERROR,
+        IsSimtAtomicDtype(value_type->dtype_, {DataType::INT32, DataType::UINT32, DataType::INT64, DataType::UINT64,
+                                               DataType::FP16, DataType::BF16, DataType::FP32}))
+        << op_name << " supports only INT32, UINT32, INT64, UINT64, FP16, BF16, and FP32 values, got "
+        << value_type->dtype_.ToString();
+
+    auto width_type = As<ScalarType>(args[2]->GetType());
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, width_type && width_type->dtype_ == DataType::INT32)
+        << op_name << " width must be an INT32 scalar";
+    auto width = As<ConstInt>(args[2]);
+    if (width) {
+        PRO_IR_CHECK(ExternalError::INVALID_ARGUMENT,
+                     width->value_ >= 1 && width->value_ <= 32 && (width->value_ & (width->value_ - 1)) == 0)
+            << op_name << " width must be one of 1, 2, 4, 8, 16, or 32";
+    }
+    return std::make_shared<ScalarType>(value_type->dtype_);
+}
+
+TypePtr DeduceSimtWarpShflType(const std::string& op_name, const std::vector<ExprPtr>& args,
+                               const std::vector<std::pair<std::string, std::any>>& kwargs)
+{
+    auto value_type = DeduceSimtWarpShuffleCommonType(op_name, "src_lane", args, kwargs);
+    auto src_lane_type = As<ScalarType>(args[1]->GetType());
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, src_lane_type) << op_name << " src_lane must be a scalar";
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, src_lane_type->dtype_ == DataType::INT32)
+        << op_name << " src_lane must have " << DataType::INT32.ToString() << " dtype, got "
+        << src_lane_type->dtype_.ToString();
+
+    auto src_lane = As<ConstInt>(args[1]);
+    if (src_lane) {
+        PRO_IR_CHECK(ExternalError::OUT_OF_RANGE, src_lane->value_ >= 0 && src_lane->value_ < 32)
+            << op_name << " src_lane must be in [0, 31]";
+    }
+    return value_type;
+}
+
+TypePtr DeduceSimtWarpShflUpDownType(const std::string& op_name, const std::vector<ExprPtr>& args,
+                                     const std::vector<std::pair<std::string, std::any>>& kwargs)
+{
+    auto value_type = DeduceSimtWarpShuffleCommonType(op_name, "delta", args, kwargs);
+    auto delta_type = As<ScalarType>(args[1]->GetType());
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, delta_type) << op_name << " delta must be a scalar";
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, delta_type->dtype_ == DataType::UINT32)
+        << op_name << " delta must have " << DataType::UINT32.ToString() << " dtype, got "
+        << delta_type->dtype_.ToString();
+
+    auto delta = As<ConstInt>(args[1]);
+    if (delta) {
+        PRO_IR_CHECK(ExternalError::OUT_OF_RANGE, delta->value_ >= 0 && delta->value_ < 32)
+            << op_name << " delta must be in [0, 31]";
+    }
+    return value_type;
+}
+
+TypePtr DeduceSimtWarpShflXorType(const std::string& op_name, const std::vector<ExprPtr>& args,
+                                  const std::vector<std::pair<std::string, std::any>>& kwargs)
+{
+    auto value_type = DeduceSimtWarpShuffleCommonType(op_name, "lane_mask", args, kwargs);
+    auto lane_mask_type = As<ScalarType>(args[1]->GetType());
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, lane_mask_type) << op_name << " lane_mask must be a scalar";
+    PRO_IR_CHECK(ExternalError::INVALID_TYPE, lane_mask_type->dtype_ == DataType::INT32)
+        << op_name << " lane_mask must have " << DataType::INT32.ToString() << " dtype, got "
+        << lane_mask_type->dtype_.ToString();
+
+    auto lane_mask = As<ConstInt>(args[1]);
+    if (lane_mask) {
+        PRO_IR_CHECK(ExternalError::OUT_OF_RANGE, lane_mask->value_ >= 0 && lane_mask->value_ < 32)
+            << op_name << " lane_mask must be in [0, 31]";
+        auto width = As<ConstInt>(args[2]);
+        PRO_IR_CHECK(ExternalError::OUT_OF_RANGE, !width || lane_mask->value_ < width->value_)
+            << op_name << " lane_mask must be less than width";
+    }
+    return value_type;
+}
+
 TypePtr DeduceSimtMathType(const std::string& op_name, size_t operand_count,
                            std::initializer_list<DataType> supported_dtypes, const std::vector<ExprPtr>& args,
                            const std::vector<std::pair<std::string, std::any>>& kwargs,
@@ -461,6 +568,106 @@ REGISTER_OP("simt.threadfence")
     .f_deduce_type([](const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceSimtSyncType("simt.threadfence", args, kwargs);
     });
+
+#define REGISTER_SIMT_LANE_OP(OpName, Description)                                                              \
+    REGISTER_OP("simt." OpName)                                                                                 \
+        .set_op_category("SimtOp")                                                                              \
+        .set_description(Description)                                                                           \
+        .no_argument()                                                                                          \
+        .f_deduce_type(                                                                                         \
+            [](const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs) { \
+                return DeduceSimtWarpNoArgType("simt." OpName, DataType::INT32, args, kwargs);                  \
+            })
+
+REGISTER_SIMT_LANE_OP("lane_id", "Read the current lane index within the warp");
+REGISTER_SIMT_LANE_OP("lanemask_eq", "Return a mask containing only the current lane");
+REGISTER_SIMT_LANE_OP("lanemask_le", "Return a mask containing lanes up to and including the current lane");
+REGISTER_SIMT_LANE_OP("lanemask_lt", "Return a mask containing lanes below the current lane");
+REGISTER_SIMT_LANE_OP("lanemask_ge", "Return a mask containing lanes at or above the current lane");
+REGISTER_SIMT_LANE_OP("lanemask_gt", "Return a mask containing lanes above the current lane");
+
+#undef REGISTER_SIMT_LANE_OP
+
+#define REGISTER_SIMT_WARP_VOTE_OP(OpName, Description, ResultDtype)                                            \
+    REGISTER_OP("simt." OpName)                                                                                 \
+        .set_op_category("SimtOp")                                                                              \
+        .set_description(Description)                                                                           \
+        .add_argument("predicate", "BOOL or INT32 lane predicate")                                              \
+        .f_deduce_type(                                                                                         \
+            [](const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs) { \
+                return DeduceSimtWarpVoteType("simt." OpName, ResultDtype, args, kwargs);                       \
+            })
+
+REGISTER_SIMT_WARP_VOTE_OP("warp_all", "Test whether all active lanes satisfy a predicate", DataType::INT32);
+REGISTER_SIMT_WARP_VOTE_OP("warp_any", "Test whether any active lane satisfies a predicate", DataType::INT32);
+REGISTER_SIMT_WARP_VOTE_OP("warp_ballot", "Return the active-lane predicate bit mask", DataType::UINT32);
+
+#undef REGISTER_SIMT_WARP_VOTE_OP
+
+REGISTER_OP("simt.warp_active_mask")
+    .set_op_category("SimtOp")
+    .set_description("Return the currently active lane mask")
+    .no_argument()
+    .f_deduce_type([](const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return DeduceSimtWarpNoArgType("simt.warp_active_mask", DataType::UINT32, args, kwargs);
+    });
+
+REGISTER_OP("simt.warp_shfl")
+    .set_op_category("SimtOp")
+    .set_description("Read a scalar from one source lane")
+    .add_argument("value", "Scalar value to exchange")
+    .add_argument("src_lane", "Source lane index")
+    .add_argument("width", "Logical warp subgroup width")
+    .f_deduce_type([](const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return DeduceSimtWarpShflType("simt.warp_shfl", args, kwargs);
+    });
+
+REGISTER_OP("simt.warp_shfl_up")
+    .set_op_category("SimtOp")
+    .set_description("Read a scalar from a lower-numbered lane")
+    .add_argument("value", "Scalar value to exchange")
+    .add_argument("delta", "Unsigned lane delta")
+    .add_argument("width", "Logical warp subgroup width")
+    .f_deduce_type([](const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return DeduceSimtWarpShflUpDownType("simt.warp_shfl_up", args, kwargs);
+    });
+
+REGISTER_OP("simt.warp_shfl_down")
+    .set_op_category("SimtOp")
+    .set_description("Read a scalar from a higher-numbered lane")
+    .add_argument("value", "Scalar value to exchange")
+    .add_argument("delta", "Unsigned lane delta")
+    .add_argument("width", "Logical warp subgroup width")
+    .f_deduce_type([](const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return DeduceSimtWarpShflUpDownType("simt.warp_shfl_down", args, kwargs);
+    });
+
+REGISTER_OP("simt.warp_shfl_xor")
+    .set_op_category("SimtOp")
+    .set_description("Read a scalar from the lane selected by XOR")
+    .add_argument("value", "Scalar value to exchange")
+    .add_argument("lane_mask", "XOR lane mask")
+    .add_argument("width", "Logical warp subgroup width")
+    .f_deduce_type([](const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return DeduceSimtWarpShflXorType("simt.warp_shfl_xor", args, kwargs);
+    });
+
+#define REGISTER_SIMT_WARP_REDUCE_OP(OpName, Description)                                                              \
+    REGISTER_OP("simt." OpName)                                                                                        \
+        .set_op_category("SimtOp")                                                                                     \
+        .set_description(Description)                                                                                  \
+        .add_argument("value", "Scalar value to reduce")                                                               \
+        .f_deduce_type([](const std::vector<ExprPtr>& args,                                                            \
+                          const std::vector<std::pair<std::string, std::any>>& kwargs) {                               \
+            return DeduceSimtMathType(                                                                                 \
+                "simt." OpName, 1, {DataType::INT32, DataType::UINT32, DataType::FP16, DataType::FP32}, args, kwargs); \
+        })
+
+REGISTER_SIMT_WARP_REDUCE_OP("warp_reduce_add", "Reduce a scalar sum across active lanes");
+REGISTER_SIMT_WARP_REDUCE_OP("warp_reduce_max", "Reduce a scalar maximum across active lanes");
+REGISTER_SIMT_WARP_REDUCE_OP("warp_reduce_min", "Reduce a scalar minimum across active lanes");
+
+#undef REGISTER_SIMT_WARP_REDUCE_OP
 
 REGISTER_OP("simt.cast")
     .set_op_category("SimtOp")

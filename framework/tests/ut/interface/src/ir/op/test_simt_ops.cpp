@@ -62,6 +62,89 @@ TEST(SimtOpsTest, ContextAndBuiltinScalarTypes)
     EXPECT_EQ(warp_type->dtype_, DataType::INT32);
 }
 
+TEST(SimtOpsTest, WarpQueryAndVoteTypes)
+{
+    auto& registry = OpRegistry::GetInstance();
+    for (const auto& op_name : {"simt.lane_id", "simt.lanemask_eq", "simt.lanemask_le", "simt.lanemask_lt",
+                                "simt.lanemask_ge", "simt.lanemask_gt"}) {
+        auto result_type = As<ScalarType>(registry.Create(op_name, {}, Sp())->GetType());
+        ASSERT_NE(result_type, nullptr);
+        EXPECT_EQ(result_type->dtype_, DataType::INT32);
+    }
+
+    auto bool_predicate = MakeScalarVar("bool_predicate", DataType::BOOL);
+    auto int_predicate = MakeScalarVar("int_predicate", DataType::INT32);
+    for (const auto& op_name : {"simt.warp_all", "simt.warp_any"}) {
+        auto result_type = As<ScalarType>(registry.Create(op_name, {bool_predicate}, Sp())->GetType());
+        ASSERT_NE(result_type, nullptr);
+        EXPECT_EQ(result_type->dtype_, DataType::INT32);
+    }
+    auto ballot_type = As<ScalarType>(registry.Create("simt.warp_ballot", {int_predicate}, Sp())->GetType());
+    ASSERT_NE(ballot_type, nullptr);
+    EXPECT_EQ(ballot_type->dtype_, DataType::UINT32);
+
+    auto active_mask_type = As<ScalarType>(registry.Create("simt.warp_active_mask", {}, Sp())->GetType());
+    ASSERT_NE(active_mask_type, nullptr);
+    EXPECT_EQ(active_mask_type->dtype_, DataType::UINT32);
+}
+
+TEST(SimtOpsTest, WarpShuffleAndReductionTypes)
+{
+    auto& registry = OpRegistry::GetInstance();
+    auto fp16_value = MakeScalarVar("fp16_value", DataType::FP16);
+    auto src_lane = std::make_shared<ConstInt>(3, DataType::INT32, Sp());
+    auto delta = std::make_shared<ConstInt>(1, DataType::UINT32, Sp());
+    auto width = std::make_shared<ConstInt>(16, DataType::INT32, Sp());
+
+    for (const auto& dtype : {DataType::INT32, DataType::UINT32, DataType::INT64, DataType::UINT64, DataType::FP16,
+                              DataType::BF16, DataType::FP32}) {
+        auto value = MakeScalarVar("shuffle_value", dtype);
+        auto result_type = As<ScalarType>(registry.Create("simt.warp_shfl", {value, src_lane, width}, Sp())->GetType());
+        ASSERT_NE(result_type, nullptr);
+        EXPECT_EQ(result_type->dtype_, dtype);
+    }
+    for (const auto& [op_name, control] :
+         std::vector<std::pair<std::string, ExprPtr>>{{"simt.warp_shfl", src_lane},
+                                                      {"simt.warp_shfl_up", delta},
+                                                      {"simt.warp_shfl_down", delta},
+                                                      {"simt.warp_shfl_xor", src_lane}}) {
+        auto result_type = As<ScalarType>(registry.Create(op_name, {fp16_value, control, width}, Sp())->GetType());
+        ASSERT_NE(result_type, nullptr);
+        EXPECT_EQ(result_type->dtype_, DataType::FP16);
+    }
+
+    for (const auto& dtype : {DataType::INT32, DataType::UINT32, DataType::FP16, DataType::FP32}) {
+        auto value = MakeScalarVar("reduce_value", dtype);
+        for (const auto& op_name : {"simt.warp_reduce_add", "simt.warp_reduce_max", "simt.warp_reduce_min"}) {
+            auto result_type = As<ScalarType>(registry.Create(op_name, {value}, Sp())->GetType());
+            ASSERT_NE(result_type, nullptr);
+            EXPECT_EQ(result_type->dtype_, dtype);
+        }
+    }
+}
+
+TEST(SimtOpsTest, RejectsInvalidWarpContracts)
+{
+    auto& registry = OpRegistry::GetInstance();
+    auto fp32_value = MakeScalarVar("fp32_value", DataType::FP32);
+    auto bf16_value = MakeScalarVar("bf16_value", DataType::BF16);
+    auto i16_value = MakeScalarVar("i16_value", DataType::INT16);
+    auto src_lane = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
+    auto wrong_control = std::make_shared<ConstInt>(1, DataType::UINT32, Sp());
+    auto width_3 = std::make_shared<ConstInt>(3, DataType::INT32, Sp());
+    auto width_8 = std::make_shared<ConstInt>(8, DataType::INT32, Sp());
+    auto lane_mask_8 = std::make_shared<ConstInt>(8, DataType::INT32, Sp());
+
+    EXPECT_THROW((void)registry.Create("simt.warp_ballot", {fp32_value}, Sp()), npu::tile_fwk::Error);
+    EXPECT_THROW((void)registry.Create("simt.warp_shfl", {i16_value, src_lane, width_8}, Sp()), npu::tile_fwk::Error);
+    EXPECT_THROW((void)registry.Create("simt.warp_shfl", {fp32_value, wrong_control, width_8}, Sp()),
+                 npu::tile_fwk::Error);
+    EXPECT_THROW((void)registry.Create("simt.warp_shfl", {fp32_value, src_lane, width_3}, Sp()), npu::tile_fwk::Error);
+    EXPECT_THROW((void)registry.Create("simt.warp_shfl_xor", {fp32_value, lane_mask_8, width_8}, Sp()),
+                 npu::tile_fwk::Error);
+    EXPECT_THROW((void)registry.Create("simt.warp_reduce_add", {bf16_value}, Sp()), npu::tile_fwk::Error);
+}
+
 TEST(SimtOpsTest, LaunchType)
 {
     auto& registry = OpRegistry::GetInstance();
