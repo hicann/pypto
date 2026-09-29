@@ -41,7 +41,7 @@ pypto_pro.language.get_subblock_num() -> int
 
 ## 调用示例
 
-在融合算子中，get_block_idx()在AIV核上返回的是逻辑编号（block_idx * subblock_num + subblock_idx），通过除以get_subblock_num()可还原物理AI Core编号，使cube与vector两侧用统一的core_id切分数据：
+在融合算子中，get_block_idx()在AIV核上返回的是逻辑编号（block_idx * subblock_num + subblock_idx），通过除以get_subblock_num()可还原物理AI Core编号，使Cube与Vector两侧用统一的core_id切分数据：
 
 ```python
 import pypto_pro.language as pl
@@ -70,4 +70,4 @@ matmul_example[None, NUM_CORES](a, b, out)
 ```
 
 > [!NOTE]说明
-> 该除法在AIC核上为block_idx // 1，在AIV核上为(block_idx * 2 + subblock_idx) // 2，两者均得到相同的AI Core编号，因此cube与vector可共享同一core_id做数据切分。
+> 该除法在AIC核上为block_idx // 1，在AIV核上为(block_idx * 2 + subblock_idx) // 2，两者均得到相同的AI Core编号，因此Cube与Vector可共享同一core_id做数据切分。

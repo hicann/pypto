@@ -19,7 +19,7 @@
 ## 函数原型
 
 ```python
-get_ctrl_spr(start_bit: int, end_bit: int) -> int
+get_ctrl_spr(start_bit: int, end_bit: int, /) -> int
 ```
 
 ## 参数说明

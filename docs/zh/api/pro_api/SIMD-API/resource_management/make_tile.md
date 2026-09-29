@@ -27,6 +27,7 @@
 ```python
 pypto_pro.language.make_tile(
     tile_type: TileType,
+    /,
     *,
     addr: int,
 ) -> Tile

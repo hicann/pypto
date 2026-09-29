@@ -21,8 +21,9 @@
 ```python
 pypto_pro.language.range(
     start: Union[int, Scalar],
-    stop: Union[int, Scalar],
+    stop: Optional[Union[int, Scalar]] = None,
     step: Union[int, Scalar] = 1,
+    /,
 ) -> RangeIterator
 ```
 

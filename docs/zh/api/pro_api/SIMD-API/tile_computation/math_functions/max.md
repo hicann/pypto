@@ -22,6 +22,7 @@
 pypto_pro.language.max(
     lhs: Scalar,
     rhs: Scalar,
+    /,
 ) -> Scalar
 ```
 

@@ -19,7 +19,7 @@
 ## 函数原型
 
 ```python
-get_saturation_flag(mode: SaturationFlagMode) -> bool
+get_saturation_flag(*, mode: SaturationFlagMode) -> bool
 ```
 
 ## 参数说明

@@ -46,7 +46,7 @@ pypto_pro.language.sum(
   | src | DT_INT16、DT_INT32、DT_INT64、DT_UINT64、DT_FP16、DT_FP32 | DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP16、DT_BF16、DT_FP32 |
   | out | 与src保持一致 | 与src保持一致 |
 
-- FP16精度：FP16归约会受到输入量化、有限精度累加及输出舍入的影响。输入规模较大或数值较大时，设备计算结果可能与高精度参考结果存在差异。归约指令采用的累加顺序也可能影响最终结果。
+- FP16/BF16精度：当src（以及与src保持一致的out）的数据类型为DT_FP16或DT_BF16时，归约会受到输入量化、有限精度累加及输出舍入的影响。输入规模较大或数值较大时，设备计算结果可能与高精度参考结果存在差异。归约指令采用的累加顺序也可能影响最终结果。
 
 ## 返回值说明
 

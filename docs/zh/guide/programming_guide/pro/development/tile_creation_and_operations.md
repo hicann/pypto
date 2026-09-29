@@ -67,7 +67,7 @@ target_memory决定Tile绑定的物理缓冲区和可使用的数据路径：
 
 | 需求 | 建议方式 |
 |:---|:---|
-| 创建一块固定地址的Tile并精确控制同步 | make_tile |
+| 创建一块固定地址的Tile并手动控制同步 | make_tile |
 | 创建仅在局部计算中临时使用、无需轮转和自动同步的Tile | make_tile |
 | 创建常规单缓冲并使用自动同步 | make_tile_group，配置一个mutex ID |
 | 创建双缓冲或N缓冲 | make_tile_group，按缓冲深度配置多个mutex ID |

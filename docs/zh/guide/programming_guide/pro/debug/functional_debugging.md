@@ -1,6 +1,6 @@
 # 功能调试
 
-PyPTO Pro Kernel出现功能问题时，先固定可复现的输入Shape、数据类型、TilingKey和`block_dim`，再根据现象选择定位路径：首次调用时编译报错，查看前端异常和错误码；Kernel正常执行但结果不正确，定位精度问题；执行时出现AIC Error、超时或挂死，采集设备侧异常现场。内存检测是排查疑似内存访问问题的工具，可在后两类问题中按需开启。
+PyPTO Pro Kernel出现功能问题时，先固定可复现的输入Shape、数据类型、TilingKey和`block_dim`，再根据现象选择定位路径：首次调用时编译报错，查看前端异常和错误码；Kernel正常执行但结果不正确，定位精度问题；执行时出现AI Core Error、超时或挂死，采集设备侧异常现场。内存检测是排查疑似内存访问问题的工具，可在后两类问题中按需开启。
 
 问题修复后，应关闭内存检测并移除临时调试打印，使用生产配置重新编译，覆盖原失败用例及相关Shape、数据类型、TilingKey和`block_dim`进行回归。
 
@@ -36,7 +36,7 @@ kernel[None, block_dim](*args)
 torch.npu.synchronize()
 ```
 
-Kernel在设备上触发越界读写、死锁超时等AIC Error后，可通过异常dump和离线复现工具还原现场，并将Error PC定位到Kernel源码行。执行用例前设置一个可写的工作目录：
+Kernel在设备上触发越界读写、死锁超时等AI Core Error后，可通过异常dump和离线复现工具还原现场，并将Error PC定位到Kernel源码行。执行用例前设置一个可写的工作目录：
 
 ```bash
 export ASCEND_WORK_PATH=./wk

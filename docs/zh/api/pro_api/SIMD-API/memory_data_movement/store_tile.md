@@ -28,6 +28,7 @@
 pypto_pro.language.store_tile(
     dst_tensor: Tensor,
     src_tile: Tile,
+    /,
     tile_offsets: Offset,
     *,
     relu_pre_mode: Optional[ReluPreMode] = None,

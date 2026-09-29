@@ -19,9 +19,11 @@
 ## 函数原型
 
 ```python
-# 以下两种写法等价
-result = min(lhs, rhs)
-result = pypto_pro.language.min(lhs, rhs)
+pypto_pro.language.min(
+    lhs: Scalar,
+    rhs: Scalar,
+    /,
+) -> Scalar
 ```
 
 ## 参数说明

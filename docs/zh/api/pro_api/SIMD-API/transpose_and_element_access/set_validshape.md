@@ -19,7 +19,7 @@
 ## 函数原型
 
 ```python
-pypto_pro.language.set_validshape(tile: Union[Tile, TileGroup], shape: List[int]) -> None
+pypto_pro.language.set_validshape(tile: Union[Tile, TileGroup], /, shape: List[int]) -> None
 ```
 
 ## 参数说明

@@ -1,4 +1,4 @@
-# pypto_pro.language.reset_ctrl_spr
+# pypto_pro.language.set_saturation_flag
 
 ## 产品支持情况
 
@@ -14,27 +14,31 @@
 
 ## 功能说明
 
-将CTRL特殊寄存器中指定比特区间恢复为硬件默认值。CTRL寄存器的默认值为0x1000000000000008。
+设置CTRL特殊寄存器中的饱和模式标志位。饱和模式控制vf.astype等类型转换指令在数据超出目标类型范围时的行为：
 
-通常在通过pypto_pro.language.set_ctrl_spr或pypto_pro.language.set_saturation_flag修改CTRL寄存器后，用于恢复默认状态。
+- **饱和模式（enable=True）**：超出目标类型范围的数据被钳位到目标类型的最大值或最小值。
+- **不饱和模式（enable=False）**：超出目标类型范围的数据被截断为目标数据宽度的低位有效位。
+
+模式配置与vf.astype的SaturateMode参数配合使用，具体生效规则请参考[Cast饱和模式配置表](../type_conversion/astype.md#约束说明)。
 
 ## 函数原型
 
 ```python
-reset_ctrl_spr(start_bit: int, end_bit: int) -> None
+set_saturation_flag(*, mode: SaturationFlagMode, enable: bool) -> None
 ```
 
 ## 参数说明
 
 | 参数 | 输入/输出 | 说明 |
 |---|---|---|
-| start_bit | 输入 | 起始比特位（0-63），编译期常量。 |
-| end_bit | 输入 | 结束比特位（0-63），编译期常量。 |
+| mode | 输入 | 饱和模式类别，对应[SaturationFlagMode](../basic_data_structures/SaturationFlagMode.md)枚举。<br>- pypto_pro.language.SaturationFlagMode.FLOAT：浮点数计算和浮点数精度转换（CTRL bit 48）<br>- pypto_pro.language.SaturationFlagMode.FLOAT8：浮点8计算（CTRL bit 50）<br>- pypto_pro.language.SaturationFlagMode.INT：整数计算（CTRL bit 53）<br>- pypto_pro.language.SaturationFlagMode.CAST：浮点转整数或整数转整数的精度转换（CTRL bit 59）<br> 设置后对后续所有VF计算指令生效，直到再次调用本接口修改。|
+| enable | 输入 | 饱和模式使能位。True启用饱和模式，False禁用（不饱和模式）。 |
 
 ## 约束说明
 
-- 可重置的CTRL比特位与set_ctrl_spr一致：6-10、45、48、50、53、59、60。
-- 恢复后CTRL寄存器中指定比特区间回到默认值，其他比特位不受影响。
+- FLOAT/FLOAT8/CAST模式的极性为反转极性：bit=0表示饱和开启，bit=1表示饱和关闭。INT模式为正常极性：bit=1表示饱和开启，bit=0表示饱和关闭。
+
+- 当vf.astype的saturate参数设置为pypto_pro.language.SaturateMode.ON或pypto_pro.language.SaturateMode.OFF时，为单指令模式（CTRL[60]=0），本接口设置的全局标志不生效。当需要全局饱和模式生效时，需确保CTRL[60]=1。
 
 ## 返回值说明
 
@@ -71,15 +75,16 @@ def example_kernel(
         pl.load(in_a, a, [0, 0])
         example_vf(in_a, t_out)
         pl.store(out, t_out, [0, 0])
-    pl.reset_ctrl_spr(59, 59)
+    pl.set_saturation_flag(mode=pl.SaturationFlagMode.CAST, enable=False)
 
 def test_example():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     device = f"npu:{device_id}"
+    core_nums = 1
     torch.npu.set_device(device)
     a = torch.randn([1, 64], device=device, dtype=torch.float32) * 50000
     out = torch.empty([1, 64], device=device, dtype=torch.float32)
-    example_kernel[None, 1](a, out)
+    example_kernel[None, core_nums](a, out)
     torch.npu.synchronize()
     expected = a.clamp(-32768, 32767).to(torch.int16).to(torch.float32)
     torch.testing.assert_close(out, expected, rtol=0, atol=1.0)

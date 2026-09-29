@@ -278,7 +278,7 @@ SIMD编程模型参见[SIMD编程范式](../programming_paradigm/SIMD/programmin
 
 ### VF API实现
 
-VF（Vector Function，矢量函数）使用[`@pypto_pro.language.vector_function`](vector_computation/reg_computation.md#vf函数与执行域)定义，并通过[`vf.*`接口](../../../../api/pro_api/SIMD-API/reg_computation/index.md)在UB与矢量寄存器之间读写数据。下面的版本沿用前面的Cube计算、workspace布局和核间同步，Vector侧改用VF计算Softmax。`[M半块,N块]`先在UB中转置为`[N块,64]`，使每个N位置对应一个FP32矢量寄存器，寄存器中的lane对应不同的M行。
+VF（Vector Function，矢量函数）使用[`@pypto_pro.language.vector_function`](vector_computation/reg_computation.md#vf函数与执行域)定义，并通过[`vf.*`接口](../../../../api/pro_api/SIMD-API/Reg-API/index.md)在UB与矢量寄存器之间读写数据。下面的版本沿用前面的Cube计算、workspace布局和核间同步，Vector侧改用VF计算Softmax。`[M半块,N块]`先在UB中转置为`[N块,64]`，使每个N位置对应一个FP32矢量寄存器，寄存器中的lane对应不同的M行。
 
 VF相关的基础概念和接口说明参见[Reg计算](vector_computation/reg_computation.md)。
 
@@ -287,7 +287,7 @@ Vector侧的数据组织如下：
 - `qk_nd`从workspace载入`[M半块,N块]`，再转置为`qk_dn[N块,64]`，使每个N位置对应一个64-lane FP32寄存器。
 - `global_max`和`global_sum`在UB中保存跨N块的逐行状态，三遍计算分别更新最大值、指数和与归一化结果。
 - M尾块通过`vf.update_mask(valid_rows)`限制有效lane，N尾块通过VF循环上界`valid_n`限制实际处理位置。
-- VF写入的状态被后续VF或Vector操作读取前，使用[`vf.mem_bar`](../../../../api/pro_api/SIMD-API/reg_computation/data_movement/mem_bar.md)并设置`mode=pypto_pro.language.MemBarMode.VST_VLD`保证局部存储顺序；MTE与Vector之间的Tile依赖仍由mutex管理。
+- VF写入的状态被后续VF或Vector操作读取前，使用[`vf.mem_bar`](../../../../api/pro_api/SIMD-API/Reg-API/data_movement/mem_bar.md)并设置`mode=pypto_pro.language.MemBarMode.VST_VLD`保证局部存储顺序；MTE与Vector之间的Tile依赖仍由mutex管理。
 
 ```python
 import os

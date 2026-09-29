@@ -24,6 +24,7 @@
 pypto_pro.language.load(
     dst_tile: Tile,
     src_tensor: Tensor,
+    /,
     offsets: Offset,
     *,
     order: Optional[List[int]] = None,

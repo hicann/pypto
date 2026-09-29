@@ -22,6 +22,7 @@
 pypto_pro.language.insert(
     dst_tile: Tile,
     src_tile: Tile,
+    /,
     offset: List[int],
     *,
     relu_pre_mode: Optional[ReluPreMode] = None,

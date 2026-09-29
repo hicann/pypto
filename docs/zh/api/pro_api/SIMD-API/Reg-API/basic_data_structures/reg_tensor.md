@@ -1,4 +1,4 @@
-# vf.reg_tensor
+# reg_tensor
 
 ## 产品支持情况
 

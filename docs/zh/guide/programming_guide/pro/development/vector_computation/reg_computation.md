@@ -1,6 +1,6 @@
 # Reg计算
 
-Reg计算直接使用SIMD Register File保存矢量数据和中间结果。PyPTO Pro通过@pypto_pro.language.vector_function定义VF函数，并在函数内使用[vf.* API](../../../../../api/pro_api/SIMD-API/reg_computation/index.md)表达寄存器加载、计算和存储。
+Reg计算直接使用SIMD Register File保存矢量数据和中间结果。PyPTO Pro通过@pypto_pro.language.vector_function定义VF函数，并在函数内使用[vf.* API](../../../../../api/pro_api/SIMD-API/Reg-API/index.md)表达寄存器加载、计算和存储。
 
 > [!NOTE]说明
 > Reg计算依赖VF Register File，使用前请确认对应VF API的支持范围。
@@ -112,7 +112,7 @@ def add_kernel(
         pl.store(out, tile_out, [0, 0])
 ```
 
-完整寄存器生命周期说明参见[vf.reg_tensor](../../../../../api/pro_api/SIMD-API/reg_computation/basic_data_structures/reg_tensor.md)。
+完整寄存器生命周期说明参见[reg_tensor](../../../../../api/pro_api/SIMD-API/Reg-API/basic_data_structures/reg_tensor.md)。
 
 ### VF函数中的Tile指针偏移
 

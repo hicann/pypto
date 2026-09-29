@@ -21,7 +21,7 @@ Tiling是算子开发的第一步：切分方式决定了各个核的负载是�
 
 **图1 Tiling的两个层次**
 
-![Tiling的两个层次](../../../../figures/pro/pro_tiling_two_levels.png "Tiling的两个层次")
+![Tiling的两个层次](../../../../figures/pro/pro_tiling_two_levels.svg "Tiling的两个层次")
 
 图中AI Core 0负责完整的T0、T4、T8三个基本任务块；核内示意的是这些任务对Buffer槽位的轮转使用，并非把T0再次切成更小的Tile。
 

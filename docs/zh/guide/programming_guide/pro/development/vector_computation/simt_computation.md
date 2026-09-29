@@ -42,7 +42,7 @@ def transform(
 
 ### 在外层Vector执行域调用线程块
 
-外层Kernel的vector section中通过`simt_func[threads](...)`调用SIMT入口函数。
+外层Kernel的Vector执行域中通过`simt_func[threads](...)`调用SIMT入口函数。
 
 ```python
 import pypto_pro.language as pl

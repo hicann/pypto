@@ -23,7 +23,7 @@ pypto_pro.language.add_relu(
   out: Tile,
   lhs: Tile,
   rhs: Tile
-) -> None:
+) -> None
 ```
 
 ## 参数说明

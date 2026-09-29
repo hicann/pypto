@@ -1,0 +1,174 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2200" height="1240" viewBox="0 0 2200 1240">
+  <title>自动CV并行流水完整示例的流水与同步关系</title>
+  <defs>
+    <style>
+      text { font-family: "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; fill: #17345f; }
+      .panel { fill: #fff; stroke: #c5d1e1; stroke-width: 2; }
+      .title { font-size: 30px; font-weight: 700; }
+      .lane { font-size: 27px; font-weight: 700; }
+      .axis { font-size: 17px; fill: #687b98; }
+      .box-label, .box-label text { font-size: 24px; font-weight: 700; fill: #fff; }
+      .legend { font-size: 18px; }
+      .note { font-size: 20px; }
+      .small { font-size: 17px; }
+      .card-title { font-size: 29px; font-weight: 700; }
+      .card-text { font-size: 21px; }
+      .grid { stroke: #dbe4ef; stroke-width: 1; }
+      .fwd { fill: none; stroke: #28a36a; stroke-width: 3; }
+      .bwd { fill: none; stroke: #7957f5; stroke-width: 3.5; stroke-dasharray: 10 7; }
+      .event-label { font-size: 14px; font-weight: 700; paint-order: stroke; stroke: #fff; stroke-width: 5px; stroke-linejoin: round; }
+      .fwd-label { fill: #23945f; }
+      .bwd-label { fill: #7957f5; }
+      .green-text, .green-text text { fill: #28a36a; }
+      .purple-text, .purple-text text { fill: #7957f5; }
+      .blue-text, .blue-text text { fill: #1766a3; }
+      .orange-text, .orange-text text { fill: #a85c12; }
+      .muted-text, .muted-text text { fill: #687b98; }
+      .white-text, .white-text text { fill: #fff; }
+    </style>
+    <marker id="fwd-arrow" markerWidth="7" markerHeight="7" refX="6" refY="2.5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,5 L6,2.5 z" fill="#28a36a"/>
+    </marker>
+    <marker id="bwd-arrow" markerWidth="7" markerHeight="7" refX="6" refY="2.5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,5 L6,2.5 z" fill="#7957f5"/>
+    </marker>
+    <marker id="small-fwd-arrow" markerWidth="6" markerHeight="6" refX="5.5" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L6,3 z" fill="#28a36a"/>
+    </marker>
+    <marker id="small-bwd-arrow" markerWidth="6" markerHeight="6" refX="5.5" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L6,3 z" fill="#7957f5"/>
+    </marker>
+  </defs>
+
+  <rect width="2200" height="1240" fill="#f5f7fb"/>
+
+  <!-- Execution timeline. -->
+  <rect class="panel" x="70" y="35" width="2060" height="450" rx="28"/>
+  <text class="title" x="105" y="95">变换后的执行顺序（时间由左向右）</text>
+  <text class="legend green-text" x="760" y="88">实线：Forward数据就绪</text>
+  <text class="legend purple-text" x="1035" y="88">虚线：Backward释放Buffer槽位</text>
+  <text class="legend muted-text" x="1540" y="88">方框宽度为示意耗时</text>
+
+  <path d="M260 140 H2060" stroke="#637792" stroke-width="2"/>
+  <g class="grid">
+    <line x1="260" y1="140" x2="260" y2="420"/><line x1="380" y1="140" x2="380" y2="420"/>
+    <line x1="500" y1="140" x2="500" y2="420"/><line x1="620" y1="140" x2="620" y2="420"/>
+    <line x1="740" y1="140" x2="740" y2="420"/><line x1="860" y1="140" x2="860" y2="420"/>
+    <line x1="980" y1="140" x2="980" y2="420"/><line x1="1100" y1="140" x2="1100" y2="420"/>
+    <line x1="1220" y1="140" x2="1220" y2="420"/><line x1="1340" y1="140" x2="1340" y2="420"/>
+    <line x1="1460" y1="140" x2="1460" y2="420"/><line x1="1580" y1="140" x2="1580" y2="420"/>
+    <line x1="1700" y1="140" x2="1700" y2="420"/><line x1="1820" y1="140" x2="1820" y2="420"/>
+    <line x1="1940" y1="140" x2="1940" y2="420"/><line x1="2060" y1="140" x2="2060" y2="420"/>
+  </g>
+  <g stroke="#637792" stroke-width="2">
+    <path d="M260 134 V146 M380 134 V146 M500 134 V146 M620 134 V146 M740 134 V146 M860 134 V146 M980 134 V146 M1100 134 V146 M1220 134 V146 M1340 134 V146 M1460 134 V146 M1580 134 V146 M1700 134 V146 M1820 134 V146 M1940 134 V146 M2060 134 V146"/>
+  </g>
+  <g class="axis" text-anchor="middle">
+    <text x="260" y="127">0</text><text x="380" y="127">1</text><text x="500" y="127">2</text><text x="620" y="127">3</text>
+    <text x="740" y="127">4</text><text x="860" y="127">5</text><text x="980" y="127">6</text><text x="1100" y="127">7</text>
+    <text x="1220" y="127">8</text><text x="1340" y="127">9</text><text x="1460" y="127">10</text><text x="1580" y="127">11</text>
+    <text x="1700" y="127">12</text><text x="1820" y="127">13</text><text x="1940" y="127">14</text><text x="2060" y="127">15</text>
+  </g>
+  <text class="axis" x="2078" y="146">t</text>
+
+  <text class="lane" x="100" y="215">AIC / Cube</text>
+  <text class="lane orange-text" x="100" y="365">AIV0、AIV1</text>
+  <text class="small orange-text" x="100" y="392">Vector</text>
+
+  <g fill="#3f8cd8">
+    <rect x="260" y="175" width="120" height="70" rx="12"/><rect x="380" y="175" width="120" height="70" rx="12"/>
+    <rect x="620" y="175" width="120" height="70" rx="12"/><rect x="740" y="175" width="120" height="70" rx="12"/>
+    <rect x="860" y="175" width="120" height="70" rx="12"/><rect x="980" y="175" width="120" height="70" rx="12"/>
+    <rect x="1280" y="175" width="120" height="70" rx="12"/><rect x="1700" y="175" width="120" height="70" rx="12"/>
+  </g>
+  <g class="box-label" text-anchor="middle">
+    <text x="320" y="219">s1•i0</text><text x="440" y="219">s1•i1</text><text x="680" y="219">s1•i2</text><text x="800" y="219">s3•i0</text>
+    <text x="920" y="219">s1•i3</text><text x="1040" y="219">s3•i1</text><text x="1340" y="219">s3•i2</text><text x="1760" y="219">s3•i3</text>
+  </g>
+
+  <g fill="#f59a2f">
+    <rect x="380" y="350" width="240" height="70" rx="12"/><rect x="620" y="350" width="240" height="70" rx="12"/>
+    <rect x="860" y="350" width="240" height="70" rx="12"/><rect x="1100" y="350" width="180" height="70" rx="12"/>
+    <rect x="1280" y="350" width="240" height="70" rx="12"/><rect x="1520" y="350" width="180" height="70" rx="12"/>
+    <rect x="1700" y="350" width="180" height="70" rx="12"/><rect x="1880" y="350" width="180" height="70" rx="12"/>
+  </g>
+  <g class="box-label" text-anchor="middle">
+    <text x="500" y="394">s2•i0</text><text x="740" y="394">s2•i1</text><text x="980" y="394">s2•i2</text><text x="1190" y="394">s4•i0</text>
+    <text x="1400" y="394">s2•i3</text><text x="1610" y="394">s4•i1</text><text x="1790" y="394">s4•i2</text><text x="1970" y="394">s4•i3</text>
+  </g>
+
+  <path class="fwd" marker-end="url(#fwd-arrow)" d="M360 245 L400 350"/><text class="event-label fwd-label" x="365" y="305">FWD0</text>
+  <path class="fwd" marker-end="url(#fwd-arrow)" d="M480 245 L640 350"/><text class="event-label fwd-label" x="520" y="280">FWD1</text>
+  <path class="bwd" marker-end="url(#bwd-arrow)" d="M600 350 L640 245"/><text class="event-label bwd-label" x="535" y="320">BWD2</text>
+  <path class="bwd" marker-end="url(#bwd-arrow)" d="M840 350 L880 245"/><text class="event-label bwd-label" x="775" y="320">BWD3</text>
+
+  <path class="fwd" marker-end="url(#fwd-arrow)" d="M600 350 L760 245"/><text class="event-label fwd-label" x="680" y="300">FWD4</text>
+  <path class="fwd" marker-end="url(#fwd-arrow)" d="M840 350 L1000 245"/><text class="event-label fwd-label" x="940" y="275">FWD5</text>
+  <path class="bwd" marker-end="url(#bwd-arrow)" d="M840 245 L880 350"/><text class="event-label bwd-label" x="890" y="310">BWD6</text>
+  <path class="bwd" marker-end="url(#bwd-arrow)" d="M1100 245 L1280 350"/><text class="event-label bwd-label" x="1125" y="305">BWD7</text>
+
+  <path class="fwd" marker-end="url(#fwd-arrow)" d="M840 245 L1120 350"/><text class="event-label fwd-label" x="1015" y="330">FWD8</text>
+  <path class="fwd" marker-end="url(#fwd-arrow)" d="M1080 245 L1540 350"/><text class="event-label fwd-label" x="1370" y="325">FWD9</text>
+  <path class="bwd" marker-end="url(#bwd-arrow)" d="M1260 350 L1300 245"/><text class="event-label bwd-label" x="1290" y="320">BWD10</text>
+  <path class="bwd" marker-end="url(#bwd-arrow)" d="M1680 350 L1720 245"/><text class="event-label bwd-label" x="1605" y="315">BWD11</text>
+
+  <text class="note" x="260" y="463">preload=2：前级stage先建立2次迭代的领先距离；稳态时前级处理i+2、后级处理i；末尾排空剩余的stage3和stage4。</text>
+
+  <!-- Inter-core handoff and buffer reuse. -->
+  <rect class="panel" x="70" y="515" width="2060" height="330" rx="28"/>
+  <text class="title" x="105" y="580">跨核数据交接与Buffer复用</text>
+  <text class="legend muted-text" x="585" y="570">Forward：数据就绪　 Backward：消费者完成，生产者可以覆写槽位</text>
+
+  <g>
+    <rect x="90" y="640" width="275" height="105" rx="18" fill="#3f8cd8"/>
+    <rect x="650" y="640" width="275" height="105" rx="18" fill="#f59a2f"/>
+    <rect x="1200" y="640" width="275" height="105" rx="18" fill="#3f8cd8"/>
+    <rect x="1760" y="640" width="275" height="105" rx="18" fill="#f59a2f"/>
+  </g>
+  <g text-anchor="middle">
+    <text class="box-label" x="227.5" y="686">stage1</text><text class="note white-text" x="227.5" y="722">Cube</text>
+    <text class="box-label" x="787.5" y="686">stage2</text><text class="note white-text" x="787.5" y="722">Vector</text>
+    <text class="box-label" x="1337.5" y="686">stage3</text><text class="note white-text" x="1337.5" y="722">Cube</text>
+    <text class="box-label" x="1897.5" y="686">stage4</text><text class="note white-text" x="1897.5" y="722">Vector</text>
+  </g>
+
+  <g fill="#f1f5fa" stroke="#c7d3e2" stroke-width="2">
+    <rect x="405" y="690" width="205" height="85" rx="16"/><rect x="955" y="690" width="205" height="85" rx="16"/><rect x="1515" y="690" width="205" height="85" rx="16"/>
+  </g>
+  <g text-anchor="middle">
+    <text class="note" x="507.5" y="728">mm1_vec_db</text><text class="small muted-text" x="507.5" y="758">2槽</text>
+    <text class="note" x="1057.5" y="728">p_mat_db</text><text class="small muted-text" x="1057.5" y="758">2槽</text>
+    <text class="note" x="1617.5" y="728">out_vec_db</text><text class="small muted-text" x="1617.5" y="758">2槽</text>
+  </g>
+
+  <g class="fwd" marker-end="url(#small-fwd-arrow)">
+    <path d="M372 665 H642"/><path d="M932 665 H1192"/><path d="M1482 665 H1752"/>
+  </g>
+  <g class="legend green-text" text-anchor="middle">
+    <text x="507" y="630">FWD 0/1</text><text x="1062" y="630">FWD 4/5</text><text x="1617" y="630">FWD 8/9</text>
+  </g>
+  <g class="bwd" marker-end="url(#small-bwd-arrow)">
+    <path d="M642 810 H372"/><path d="M1192 810 H932"/><path d="M1752 810 H1482"/>
+  </g>
+  <g class="legend purple-text" text-anchor="middle">
+    <text x="507" y="836">BWD 2/3</text><text x="1062" y="836">BWD 6/7</text><text x="1617" y="836">BWD 10/11</text>
+  </g>
+
+  <!-- Summary cards. -->
+  <g>
+    <rect class="panel" x="70" y="875" width="630" height="235" rx="16"/>
+    <rect x="70" y="875" width="630" height="12" rx="6" fill="#28a36a"/>
+    <rect class="panel" x="730" y="875" width="630" height="235" rx="16"/>
+    <rect x="730" y="875" width="630" height="12" rx="6" fill="#7957f5"/>
+    <rect class="panel" x="1390" y="875" width="740" height="235" rx="16"/>
+    <rect x="1390" y="875" width="740" height="12" rx="6" fill="#1766a3"/>
+  </g>
+  <text class="card-title green-text" x="95" y="940">并行preload</text>
+  <text class="card-text" x="95" y="982"><tspan x="95" dy="0">stage1/stage2先处理两个迭代；</tspan><tspan x="95" dy="34">稳态时与stage3/stage4错开，</tspan><tspan x="95" dy="34">AIC和AIV处理不同迭代的数据。</tspan></text>
+  <text class="card-title purple-text" x="755" y="940">核间同步</text>
+  <text class="card-text" x="755" y="982"><tspan x="755" dy="0">编译器依据fwd_ids/bwd_ids</tspan><tspan x="755" dy="34">自动插入set/wait，保证数据就绪</tspan><tspan x="755" dy="34">并避免生产者过早覆写槽位。</tspan></text>
+  <text class="card-title blue-text" x="1415" y="940">核内同步</text>
+  <text class="card-text" x="1415" y="982"><tspan x="1415" dy="0">auto_mutex=True依据mutex_ids</tspan><tspan x="1415" dy="34">管理本核流水单元的Tile读写、</tspan><tspan x="1415" dy="34">槽位轮转和地址复用。</tspan></text>
+
+  <text class="small muted-text" x="80" y="1175">Tile数量：mm1_vec_db和out_vec_db由奇数编号stage写入，至少2槽；p_mat_db由stage2写入，preload=2时至少2槽。</text>
+</svg>

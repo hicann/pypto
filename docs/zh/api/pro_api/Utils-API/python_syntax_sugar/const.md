@@ -19,7 +19,7 @@
 ## 函数原型
 
 ```python
-result = pypto_pro.language.const(value, dtype)
+result = pypto_pro.language.const(value, dtype, /)
 ```
 
 ## 参数说明
