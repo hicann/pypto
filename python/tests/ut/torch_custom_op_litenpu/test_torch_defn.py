@@ -176,7 +176,7 @@ def test_qualname_reuse_resolves_to_last_declared_and_warns(caplog):
     out_a = getattr(getattr(torch.ops, ns), short)(x, y)
     assert torch.equal(out_a, x + y)
 
-    # A DIFFERENT op reusing the same qualname -> warning, and the last declaration wins.
+    # A DIFFERENT op reusing the same qualname -> warning, last-declared wins for run dispatch.
     with caplog.at_level("WARNING"):
         op_b = _make_op(name, defn=defn_b)
     assert any("re-declared by a different op" in r.message for r in caplog.records)

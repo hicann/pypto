@@ -8,12 +8,12 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""torch.library op registration for a declared pypto operator.
+"""torch.library op registration + the run-path dispatch for a declared pypto operator.
 
-* ``_QUALNAME_TO_OP`` maps each ``torch_op_qualname`` to its current owner; ``_impl``/``_fake`` resolve the
-  owner at CALL time, so a later op reusing a qualname is reachable, not shadowed (last-declared wins).
+* ``_QUALNAME_TO_OP`` maps each ``torch_op_qualname`` to its current owner, resolved at CALL time so a later op
+  reusing one is reachable (last-declared wins); the torch op table is process-global and cannot be deregistered.
 * ``_EXPORTING`` is a thread-local export signal: ``torch.jit.is_tracing()`` is False inside a custom_op impl
-  during onnx export, so ``is_in_onnx_export`` cannot replace it; a call on another thread is unaffected.
+  during onnx export, so ``is_in_onnx_export`` cannot replace it; a run on another thread is unaffected.
 
 Imports DOWN only (``return_annotations``).
 """
@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 _ATTR_SCHEMA_TYPE = {"Int": "int", "Float": "float", "String": "str", "ListInt": "int[]"}
 
 
-# torch_op_qualname -> the declaring op currently owning it.
+# torch_op_qualname -> the declaring op currently owning it for run dispatch.
 _QUALNAME_TO_OP: dict = {}
 
 _EXPORTING = threading.local()
@@ -122,7 +122,7 @@ def _synthesize_torch_op_qualname(op) -> None:
     prior = _QUALNAME_TO_OP.get(qualname)
     if prior is not None and prior is not op:
         logger.warning(
-            "torch op qualname %r re-declared by a different op; most-recent declaration wins",
+            "torch op qualname %r re-declared by a different op; most-recent declaration wins for run dispatch",
             qualname,
         )
     _QUALNAME_TO_OP[qualname] = op
@@ -160,9 +160,20 @@ def _synthesize_torch_op_qualname(op) -> None:
     def _impl(*args):
         cur = _QUALNAME_TO_OP[qualname]
         # Split the tensor inputs from the trailing attr scalars. infer_shape/torch_defn's
-        # shape check see only the tensors.
+        # shape check see only the tensors; the attr values reach the kernel as the compile attrs dict.
         inputs = args[:n_in]
+        specs = getattr(cur, "_attr_specs", ())
         attr_values = args[n_in:]
+        # A run context routes this op through run_op (RunMode.NPU on device, RunMode.SIM on the host);
+        # with no context (never set during export) it falls through to torch_defn, since there is no
+        # CPU run_mode. The import stays lazy: run is only reached by a real, non-export call, so
+        # importing torch_op never pulls it in.
+        from .run import get_run_context, run_op  # noqa: PLC0415
+        ctx = get_run_context()
+        if ctx is not None:
+            # Attr values reach the factory as STRINGS (mirrors the deployed C++ BuildAttrsDict contract).
+            attrs = {s.name: str(v) for s, v in zip(specs, attr_values)}
+            return run_op(cur, list(inputs), run_mode=ctx.run_mode, soc_version=ctx.soc_version, attrs=attrs)
         fn = cur._torch_defn_fn
         if fn is not None:
             out = fn(*args)  # torch_defn consumes the tensor inputs + the trailing attr scalars

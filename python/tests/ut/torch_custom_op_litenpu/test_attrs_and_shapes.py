@@ -24,6 +24,7 @@ import pypto
 from pypto.extensions.torch_custom_op_litenpu import AttrSpec, ExportedCustomOp
 from pypto.extensions.torch_custom_op_litenpu.common import node_meta
 from pypto.extensions.torch_custom_op_litenpu.common.authoring import _detect_factory_signature
+from pypto.extensions.torch_custom_op_litenpu.common.run import get_run_context
 
 SHAPE = (1, 8, 1, 64)          # 512 elements, tile (1, 4, 1, 64)
 SWAP_SHAPE = (1, 4, 1, 32)     # deliberately different from SHAPE — see the multi-output guard
@@ -138,6 +139,14 @@ ADD_FACTORY_OP = ExportedCustomOp(
     torch_defn=_add_torch,
     torch_op_qualname="pypto::attrs_add_factory",
 )
+
+
+@pytest.fixture(autouse=True)
+def torch_reference_path():
+    """Every guard in this file asserts on the torch-reference path — fail loudly if a context leaked in."""
+    assert get_run_context() is None, (
+        "a run context is active: these guards would be measuring the kernel path, not torch_defn"
+    )
 
 
 # ── Float attribute ───────────────────────────────────────────────────────────────────────────────────
