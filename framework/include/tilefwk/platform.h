@@ -160,6 +160,7 @@ public:
     virtual ~PlatformParser() = default;
 
     virtual bool GetStringVal(const std::string& column, const std::string& key, std::string& val) const = 0;
+    virtual bool HasKey(const std::string&, const std::string&) const { return false; }
 
     bool GetSizeVal(const std::string& column, const std::string& key, size_t& val) const;
     bool GetCCECVersion(std::unordered_map<std::string, std::string>& ccecVersion) const;

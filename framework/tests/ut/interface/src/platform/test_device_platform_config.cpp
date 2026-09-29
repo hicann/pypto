@@ -29,6 +29,8 @@ const std::string ubSize = "ub_size";
 const std::string l0cSize = "l0_c_size";
 const std::string l1Size = "l1_size";
 const std::string l0aSize = "l0_a_size";
+const std::string l0aMxSize = "l0_a_mx_size";
+const std::string l0bMxSize = "l0_b_mx_size";
 const std::string socVersionInfo = "SoC_version";
 const std::string npuArchInfo = "NpuArch";
 
@@ -336,4 +338,63 @@ TEST_F(TestDevicePlatformConfig, DifferentPlatformDifferentMemory)
     EXPECT_EQ(l0c910B1, 131072UL);
     EXPECT_EQ(l0c950PR, 262144UL);
     EXPECT_EQ(l0cKirin, 65536UL);
+}
+
+// L0A/L0B MX scale buffer sizes are only configured for the Ascend950 series (placeholder for future use).
+TEST_F(TestDevicePlatformConfig, L0MxSizeOnlyConfiguredFor950Series)
+{
+    const std::string mxSocVersions[] = {
+        "Ascend950DT_9572", "Ascend950DT_9581", "Ascend950DT_9581X",
+        "Ascend950DT_9582", "Ascend950PR_9579", "Ascend950PR_9589",
+    };
+    for (const auto& socVersion : mxSocVersions) {
+        INIParser parser(socVersion);
+        size_t memoryLimit;
+        EXPECT_TRUE(parser.GetSizeVal(aiCoreSpec, l0aMxSize, memoryLimit)) << socVersion;
+        EXPECT_EQ(memoryLimit, 4096UL) << socVersion;
+        EXPECT_TRUE(parser.GetSizeVal(aiCoreSpec, l0bMxSize, memoryLimit)) << socVersion;
+        EXPECT_EQ(memoryLimit, 4096UL) << socVersion;
+    }
+
+    const std::string nonMxSocVersions[] = {
+        "Ascend910B1", "Ascend910B2", "Ascend910B3", "Ascend910B4", "Ascend910_9363", "Kirin9030", "KirinX90",
+    };
+    for (const auto& socVersion : nonMxSocVersions) {
+        INIParser parser(socVersion);
+        size_t memoryLimit;
+        EXPECT_FALSE(parser.GetSizeVal(aiCoreSpec, l0aMxSize, memoryLimit)) << socVersion;
+        EXPECT_FALSE(parser.GetSizeVal(aiCoreSpec, l0bMxSize, memoryLimit)) << socVersion;
+    }
+}
+
+// SetMemoryLimit uses l0_a_mx_size/l0_b_mx_size from ini when present, and falls back to default otherwise.
+TEST_F(TestDevicePlatformConfig, SetMemoryLimitL0MxSizeIniOrDefault)
+{
+    INIParser parser950("Ascend950PR_9579");
+    Platform::Instance().SetMemoryLimit(parser950);
+    EXPECT_EQ(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L0AMX), 4096UL);
+    EXPECT_EQ(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L0BMX), 4096UL);
+
+    INIParser parser910("Ascend910B1");
+    Platform::Instance().SetMemoryLimit(parser910);
+    EXPECT_EQ(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L0AMX), 2048UL);
+    EXPECT_EQ(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L0BMX), 2048UL);
+
+    Platform::Instance().SetMemoryLimit(INIParser());
+}
+
+// HasKey probes optional keys quietly, without reporting errors for missing section/key.
+TEST_F(TestDevicePlatformConfig, HasKeyProbesOptionalSpecQuietly)
+{
+    INIParser parser950("Ascend950PR_9579");
+    EXPECT_TRUE(parser950.HasKey(aiCoreSpec, l0aMxSize));
+    EXPECT_TRUE(parser950.HasKey(aiCoreSpec, l0bMxSize));
+    EXPECT_TRUE(parser950.HasKey(aiCoreSpec, l0aSize));
+
+    INIParser parser910("Ascend910B1");
+    EXPECT_FALSE(parser910.HasKey(aiCoreSpec, l0aMxSize));
+    EXPECT_FALSE(parser910.HasKey(aiCoreSpec, l0bMxSize));
+    EXPECT_TRUE(parser910.HasKey(aiCoreSpec, l0aSize));
+    EXPECT_FALSE(parser910.HasKey(aiCoreSpec, "no_such_key"));
+    EXPECT_FALSE(parser910.HasKey("NoSuchSection", l0aMxSize));
 }

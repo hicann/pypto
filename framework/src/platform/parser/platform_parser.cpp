@@ -170,6 +170,15 @@ bool INIParser::GetStringVal(const std::string& column, const std::string& key, 
     return true;
 }
 
+bool INIParser::HasKey(const std::string& column, const std::string& key) const
+{
+    auto iter = data_.find(column);
+    if (iter == data_.end()) {
+        return false;
+    }
+    return iter->second.find(key) != iter->second.end();
+}
+
 bool CmdParser::GetStringVal(const std::string& column, const std::string& key, std::string& val) const
 {
     val.clear();
@@ -178,6 +187,12 @@ bool CmdParser::GetStringVal(const std::string& column, const std::string& key, 
         return false;
     }
     return true;
+}
+
+bool CmdParser::HasKey(const std::string& column, const std::string& key) const
+{
+    std::string val;
+    return CannHostRuntime::Instance().GetSocSpec(column, key, val);
 }
 } // namespace tile_fwk
 } // namespace npu

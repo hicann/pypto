@@ -26,6 +26,7 @@ public:
     INIParser(const std::string& socVersion);
     ~INIParser() = default;
     bool GetStringVal(const std::string& column, const std::string& key, std::string& val) const override;
+    bool HasKey(const std::string& column, const std::string& key) const override;
 
 private:
     void INIParserInit(const std::string& socVersion);
@@ -39,6 +40,7 @@ public:
     CmdParser() = default;
     ~CmdParser() = default;
     bool GetStringVal(const std::string& column, const std::string& key, std::string& val) const override;
+    bool HasKey(const std::string& column, const std::string& key) const override;
 };
 
 std::string TrimLine(std::string_view s);

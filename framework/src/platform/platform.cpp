@@ -33,6 +33,8 @@ const std::string aiCpuCnt = "ai_cpu_cnt";
 const std::string aiCoreSpec = "AICoreSpec";
 const std::string l0aSize = "l0_a_size";
 const std::string l0bSize = "l0_b_size";
+const std::string l0aMxSize = "l0_a_mx_size";
+const std::string l0bMxSize = "l0_b_mx_size";
 const std::string l0cSize = "l0_c_size";
 const std::string l1Size = "l1_size";
 const std::string ubSize = "ub_size";
@@ -256,8 +258,17 @@ void Platform::SetMemoryLimit(const PlatformParser& parser)
     }
     // 插桩
     GetAIVCore().AddMemory(MemoryInfo(MemoryType::MEM_FIX, kDefaultFixSize));
-    GetAICCore().AddMemory(MemoryInfo(MemoryType::MEM_L0AMX, kDefaultL0mxSize));
-    GetAICCore().AddMemory(MemoryInfo(MemoryType::MEM_L0BMX, kDefaultL0mxSize));
+    size_t l0aMxLimit = kDefaultL0mxSize;
+    size_t l0bMxLimit = kDefaultL0mxSize;
+    size_t mxLimit;
+    if (parser.HasKey(aiCoreSpec, l0aMxSize) && parser.GetSizeVal(aiCoreSpec, l0aMxSize, mxLimit)) {
+        l0aMxLimit = mxLimit;
+    }
+    if (parser.HasKey(aiCoreSpec, l0bMxSize) && parser.GetSizeVal(aiCoreSpec, l0bMxSize, mxLimit)) {
+        l0bMxLimit = mxLimit;
+    }
+    GetAICCore().AddMemory(MemoryInfo(MemoryType::MEM_L0AMX, l0aMxLimit));
+    GetAICCore().AddMemory(MemoryInfo(MemoryType::MEM_L0BMX, l0bMxLimit));
 }
 
 void Platform::LoadPlatformInfo(const PlatformParser& parser)
