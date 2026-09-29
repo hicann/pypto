@@ -12,8 +12,8 @@
 
 Dependency-free pieces the ``ExportedCustomOp`` authoring path needs: the default ONNX
 custom-domain coordinates a pypto op exports under, the op_type identifier validation, and the
-``kernel=`` form helpers (jit-kernel detection, factory-signature classification, kernel-name
-derivation). Pure ``ast``/``inspect``/``textwrap`` logic; this module stays a leaf.
+``kernel=`` form helpers (jit-kernel detection, factory-form validation, factory-signature
+classification). Pure ``ast``/``inspect``/``textwrap`` logic; this module stays a leaf.
 """
 import ast
 import inspect
@@ -45,22 +45,37 @@ def _is_jit_kernel(fn) -> bool:
     return (not inspect.isfunction(fn)) and hasattr(fn, "_original_func")
 
 
-def _wrapped_jit_kernel_name(op):
-    """The name of the function ``@pypto.frontend.jit`` wraps, the default kernel_name for *op*.
+def _validate_direct_decorator_no_soc(jit_kernel) -> None:
+    """Raise if the DIRECT jit decorator pins ``soc_version`` (via ``codegen_options``).
 
-    DIRECT: the jit kernel itself. FACTORY: the inner jit def the factory defines and returns —
-    found by scanning the factory's source for the first nested def whose decorators include a
-    ``.jit`` attribute-call, alongside whether any ``return`` carries a value (a factory may bind
-    then return, branch, or return more than once). The raise below is also the construction-time
-    gate rejecting a ``kernel=`` plain function that is not a factory: no inner jit def, no value
-    return, or source that does not parse as a plain function.
+    DIRECT mode reaches the build's soc only through the process-global
+    ``set_codegen_options(soc_version=...)`` the op_compile entry sets. pypto's per-wrapper setter
+    (``entry.py`` ``_set_config_option``) runs ``set_codegen_options(**self._codegen_options)`` only
+    when ``_codegen_options`` is truthy, so an empty one leaves the global intact, but a decorator
+    that specifies soc would clobber it at build time. Turn that silent misconfig into a hard error.
     """
-    if op._bare_kernel_fn is not None:
-        return op._bare_kernel_fn._original_func.__name__
-    inner_jit_name = None
+    codegen_options = getattr(jit_kernel, "_codegen_options", None)
+    if codegen_options and "soc_version" in codegen_options:
+        raise ValueError(
+            "the DIRECT kernel= (@pypto.frontend.jit) decorator must not set soc_version in "
+            "codegen_options; DIRECT mode sets it via the process-global at op-compile time. "
+            "Use only runtime_options={'run_mode': ...}, or author a create_*_kernel factory "
+            "(which binds soc_version as a closure param)."
+        )
+
+
+def _validate_factory_returns_jit_kernel(factory) -> None:
+    """Raise unless *factory* defines and returns an inner ``@pypto.frontend.jit`` kernel.
+
+    The ``kernel=`` form gate for everything that is not already a jit kernel: the factory's source
+    must hold a nested def whose decorators include a ``.jit`` attribute-call, and some ``return``
+    must carry a value (a factory may bind then return, branch, or return more than once). Source
+    that does not parse as a plain function fails the same way.
+    """
+    inner_jit_def = False
     has_value_return = False
     try:
-        tree = ast.parse(textwrap.dedent(inspect.getsource(op._create_kernel_fn)))
+        tree = ast.parse(textwrap.dedent(inspect.getsource(factory)))
     except (OSError, TypeError, SyntaxError):
         tree = None
     top = tree.body[0] if tree is not None and tree.body else None
@@ -70,19 +85,18 @@ def _wrapped_jit_kernel_name(op):
                 continue
             if isinstance(node, ast.Return) and node.value is not None:
                 has_value_return = True
-            if inner_jit_name is None and isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if not inner_jit_def and isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 for dec in node.decorator_list:
                     call = dec.func if isinstance(dec, ast.Call) else dec
                     if isinstance(call, ast.Attribute) and call.attr == "jit":
-                        inner_jit_name = node.name
+                        inner_jit_def = True
                         break
-    if inner_jit_name is None or not has_value_return:
+    if not inner_jit_def or not has_value_return:
         raise ValueError(
-            "kernel=: could not derive kernel_name from the factory; it must define and return a "
-            "@pypto.frontend.jit-decorated inner kernel (whose name becomes the op's kernel_name). "
-            "For a direct kernel, decorate the kernel itself with @pypto.frontend.jit."
+            f"kernel= {getattr(factory, '__name__', '?')!r} is neither a @pypto.frontend.jit "
+            "kernel nor a factory that defines and returns one; decorate the kernel itself with "
+            "@pypto.frontend.jit, or return the inner jit kernel the factory defines."
         )
-    return inner_jit_name
 
 
 def _direct_declared_annotations(op):

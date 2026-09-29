@@ -107,5 +107,5 @@ class AttrSpec:
                 )
 
     def to_json_dict(self) -> dict:
-        """Serialize to the plain ``{"name","type","default"}`` dict stored in ``op_export_params``."""
+        """Serialize to the plain ``{"name","type","default"}`` dict stored in ``op_export_record``."""
         return {"name": self.name, "type": self.type, "default": self.default}
