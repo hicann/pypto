@@ -5,6 +5,8 @@
 :titlesonly:
 
 execution/index
+synchronization/index
+warp/index
 scalar_compute/index
 atomic/index
 ```

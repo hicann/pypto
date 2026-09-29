@@ -1,0 +1,82 @@
+# pypto_pro.language.simt.warp_shfl_up
+
+## 产品支持情况
+
+<!-- npu="950" id1 -->
+- Ascend 950PR&950DT系列产品：支持
+<!-- end id1 -->
+<!-- npu="A3" id2 -->
+- Atlas A3系列产品：不支持
+<!-- end id2 -->
+<!-- npu="910b" id3 -->
+- Atlas A2系列产品：不支持
+<!-- end id3 -->
+
+## 功能说明
+
+在Warp内交换标量数据，使每个Lane读取编号比自己小delta的Lane所持有的value。例如，delta=1时，Lane 1读取Lane 0的值。该接口无需通过Unified Buffer（UB）中转数据，常用于前缀计算和相邻Lane数据复用。
+
+width将一个Warp划分为若干连续的逻辑子组，每个子组独立交换数据。设当前Lane在子组内的逻辑Lane ID为logical_lane_id：
+
+- 当logical_lane_id >= delta时，读取逻辑Lane logical_lane_id - delta持有的value。
+- 当logical_lane_id < delta时，源Lane会越过子组下边界，此时返回当前Lane自己的value。
+
+下图展示完整的32-Lane Warp。width=16时，线程0～15和线程16～31组成两个逻辑子组；第二行的组内Lane ID在每组中分别从0编号到15。调用warp_shfl_up(value, 1, 16)后，各组内除第一个Lane外均读取前一个Lane的值，线程0和线程16保留自己的值。
+
+![warp_shfl_up结果示意图](../../figures/warp_shfl_up.jpg "warp_shfl_up结果示意图")
+
+## 函数原型
+
+```python
+pypto_pro.language.simt.warp_shfl_up(
+    value: Scalar,
+    delta: Union[Scalar, int],
+    width: Union[Scalar, int] = 32,
+) -> Scalar
+```
+
+## 参数说明
+
+| 参数 | 输入/输出 | 说明 |
+|---|---|---|
+| value | 输入 | 当前Lane用于交换的标量值，支持DT_INT32、DT_UINT32、DT_INT64、DT_UINT64、DT_FP16、DT_BF16和DT_FP32。每个Lane可以传入不同的值。必须按位置传入。 |
+| delta | 输入 | 相对于当前逻辑Lane向Lane ID减小方向的偏移量。整数常量或DT_UINT32类型的Scalar，取值范围为[0, 31]。必须按位置传入。当delta确定的目标Lane位于当前逻辑子组内时，目标Lane必须处于当前活跃线程集合中，否则读取结果未定义。 |
+| width | 输入 | 逻辑子组宽度。整数常量或DT_INT32类型的Scalar，可取1、2、4、8、16或32，默认值为32。width小于32时，一个Warp被划分为多个连续且等宽的逻辑子组。可按位置或使用width关键字传入，但不能同时使用两种方式。 |
+
+## 约束说明
+
+- 只能在由@pypto_pro.language.vector_function(mode="simt")定义的SIMT入口函数或辅助函数中调用。
+
+## 返回值说明
+
+目标Lane位于当前逻辑子组内时，返回目标Lane的value；目标Lane越过子组下边界时，返回当前Lane自己的value。当delta大于等于width时，所有Lane均返回自己的value。返回数据类型与value一致。
+
+## 调用示例
+
+以下示例把一个Warp划分为两个16-Lane逻辑子组，使除子组边界外的Lane读取前一个Lane的值。如果values[0, tid]等于tid，则两个子组的输出分别为[0, 0, 1, ..., 14]和[16, 16, 17, ..., 30]。
+
+```python
+import pypto_pro.language as pl
+
+WARP_SIZE = 32
+
+
+@pl.vector_function(mode="simt", max_threads=WARP_SIZE)
+def warp_shfl_up_example(
+    values: pl.Tensor[[1, WARP_SIZE], pl.DT_FP32],
+    output: pl.Tensor[[1, WARP_SIZE], pl.DT_FP32],
+):
+    tid = pl.simt.linear_thread_idx()
+    warp_width = pl.simt.warp_size()
+    width = pl.simt.cast(warp_width // 2, pl.DT_INT32)
+    output[0, tid] = pl.simt.warp_shfl_up(values[0, tid], 1, width)
+
+
+@pl.jit()
+def warp_shfl_up_kernel(
+    values: pl.Tensor[[1, WARP_SIZE], pl.DT_FP32],
+    output: pl.Tensor[[1, WARP_SIZE], pl.DT_FP32],
+):
+    with pl.section_vector():
+        warp_shfl_up_example[WARP_SIZE](values, output)
+```

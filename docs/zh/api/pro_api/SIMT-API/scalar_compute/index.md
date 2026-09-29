@@ -27,4 +27,8 @@ trunc
 fma
 isnan
 isinf
+isfinite
+popcount
+mul_hi
+fmod
 ```
