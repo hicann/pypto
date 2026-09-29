@@ -479,6 +479,64 @@ def _ir_store_tile(
     return _ir_core.create_op_call(block_ir_op("store"), operands, kwargs, actual_span)
 
 
+def _init_output_const_int(expr: Expr) -> Optional[int]:
+    """Compile-time value of a ConstInt, unfolded for unsigned dtypes; None otherwise."""
+    if not isinstance(expr, ConstInt):
+        return None
+    from pypto_pro.ir._limits import from_storage_int
+
+    return from_storage_int(expr.value, expr.type.dtype)
+
+
+def _check_init_output_count(name: str, expr: Expr) -> None:
+    """init_output offset/size are element counts: integer scalars only.
+
+    A float offset/size (Python literal or float ScalarType) used to surface only
+    at CCE compile time as ``ptr + 1.5f``; reject it here with a span instead.
+    """
+    expr_type = getattr(expr, "type", None)
+    if isinstance(expr_type, _ir_core.ScalarType) and expr_type.dtype.is_int():
+        return
+    if isinstance(expr_type, _ir_core.ScalarType):
+        got = f"a {expr_type.dtype} scalar"
+    else:
+        got = type(expr_type).__name__
+    raise InvalidType(f"init_output: {name} must be an integer scalar (element count), got {got}")
+
+
+def _check_init_output_bounds(
+    tensor_type: _ir_core.TensorType,
+    offset_expr: Expr,
+    size_expr: Expr,
+) -> None:
+    """Statically check the flat element window, only where every value is a constant.
+
+    Dynamic offset/size (per-core multicore pattern) or a dynamic tensor dim skips
+    the check — never over-rejects. numel uses the flat [1, numel] view the op
+    addresses GM through, so the layout (ND/NZ) is irrelevant.
+    """
+    offset_val = _init_output_const_int(offset_expr)
+    size_val = _init_output_const_int(size_expr)
+    if offset_val is not None and offset_val < 0:
+        raise InvalidShape(f"init_output: offset must be non-negative, got {offset_val}")
+    if size_val is not None and size_val <= 0:
+        raise InvalidShape(f"init_output: size must be a positive element count, got {size_val}")
+    if offset_val is None or size_val is None:
+        return
+    # TensorType.shape has the same dim structure as TileType.shape (ConstInt/int
+    # for static dims, other Exprs for dynamic ones).
+    static_shape = _tile_shape_ints(tensor_type)
+    if static_shape is None:
+        return
+    numel = 1
+    for dim in static_shape:
+        numel *= dim
+    if offset_val + size_val > numel:
+        raise InvalidShape(
+            f"init_output: offset ({offset_val}) + size ({size_val}) exceeds tensor element count ({numel})"
+        )
+
+
 def _ir_init_output(
     tensor: Expr,
     *,
@@ -491,11 +549,25 @@ def _ir_init_output(
 
     if not isinstance(tensor.type, _ir_core.TensorType):
         raise InvalidVal(f"init_output: tensor must be a Tensor, got {type(tensor.type).__name__}")
-    _check_dtype("init_output", getattr(tensor.type, "dtype", None), _INIT_OUTPUT_DTYPES)
+    tensor_dtype = getattr(tensor.type, "dtype", None)
+    _check_dtype("init_output", tensor_dtype, _INIT_OUTPUT_DTYPES)
+
+    if isinstance(offset, bool) or isinstance(size, bool):
+        raise InvalidType("init_output: offset/size must be integer element counts, got bool")
 
     offset_expr = _normalize_expr(offset, actual_span)
     size_expr = _normalize_expr(size, actual_span)
     value_expr = _normalize_expr(value, actual_span)
+
+    _check_init_output_count("offset", offset_expr)
+    _check_init_output_count("size", size_expr)
+    _check_init_output_bounds(tensor.type, offset_expr, size_expr)
+    # The fill value lands in the tensor's elements (TEXPANDS on a temp tile), so a
+    # literal must be representable in the tensor dtype; runtime scalars carry no
+    # value to check. Same policy as pl.expands, which lowers through TEXPANDS too.
+    from pypto_pro.language.parser.diagnostics import check_const_expr_fits_dtype
+
+    check_const_expr_fits_dtype(value_expr, tensor_dtype, span=actual_span, api="pl.init_output")
 
     return _ir_core.create_op_call(
         block_ir_op("init_output"),

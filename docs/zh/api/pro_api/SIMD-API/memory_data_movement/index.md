@@ -4,6 +4,7 @@
 :maxdepth: 1
 :titlesonly:
 
+init_output
 insert
 load
 load_tile

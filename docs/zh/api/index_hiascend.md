@@ -308,6 +308,7 @@
       - [pypto_pro.language.TileType](pro_api/SIMD-API/basic_data_structures/TileType.md)
     - [Memory数据搬运](pro_api/SIMD-API/memory_data_movement/index.md)
       - [pypto_pro.language.insert](pro_api/SIMD-API/memory_data_movement/insert.md)
+      - [pypto_pro.language.init_output](pro_api/SIMD-API/memory_data_movement/init_output.md)
       - [pypto_pro.language.load](pro_api/SIMD-API/memory_data_movement/load.md)
       - [pypto_pro.language.load_tile](pro_api/SIMD-API/memory_data_movement/load_tile.md)
       - [pypto_pro.language.move](pro_api/SIMD-API/memory_data_movement/move.md)
