@@ -474,12 +474,14 @@ public:
     InsertSync() : Pass("InsertSync") {}
     ~InsertSync() override {}
     void SetEnableDebug(bool enableDebug) { enableDebug_ = enableDebug; }
+    void SetCvHardSync(bool cvHardSync) { cvHardSync_ = cvHardSync; }
 
 private:
     Status RunOnFunction(Function& function) override;
     void InsertCvPipeAll(Function* subGraphFunc);
     void InsertCvSyncOps(Function* subGraphFunc, std::vector<Operation*>& newOpList);
     Status GenNewOpList(Function* subGraphFunc, std::vector<Operation*>& opListNew);
+    Status ApplyCvHardSync(Function* subGraphFunc, std::vector<Operation*>& opListNew);
     Status CheckNewOpListSeq(const std::vector<Operation*>& oriOpList, const std::vector<Operation*>& opListNew);
     Status InsertSyncMainLoop(Function* subGraphFunc);
     Status AdjustSyncByAtomicScope(std::vector<Operation*>& opList);
@@ -505,6 +507,7 @@ private:
     void ReorderOpListForClusters(std::vector<Operation*>& opList, const std::map<int, ClusterInfo>& clusters);
 
     bool enableDebug_{false};
+    bool cvHardSync_{false};
     IRBuilder irBuilder_;
 };
 } // namespace tile_fwk

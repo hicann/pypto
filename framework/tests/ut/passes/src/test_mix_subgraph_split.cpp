@@ -1250,6 +1250,195 @@ TEST_F(MixDependencyAnalyzerTest, TestPropagateOutcastSkippedWhenIncastExists)
     EXPECT_TRUE(contains(analyzer->allIncasts[2], incast));
 }
 
+// ReattributeInplaceOutcasts：outcast挂在inplace视图算子（RESHAPE）上时，
+// 重归属到数据生产者所在组件；源组件invokeInfo记录同步移除，目标组件invokeInfo不添加
+TEST_F(MixDependencyAnalyzerTest, TestReattributeInplaceOutcastsToProducerComponent)
+{
+    const std::vector<int64_t> shape = {16, 16};
+    auto producerInput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto gmTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcastTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+
+    auto& producerOp = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_VEC_DUP, {producerInput}, {gmTensor});
+    auto& reshapeOp = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_RESHAPE, {gmTensor}, {outcastTensor});
+
+    std::vector<InternalComponentInfo> components = {{0, "comp_0"}, {1, "comp_1"}};
+    components[0].operations = {&producerOp};
+    components[1].operations = {&reshapeOp};
+
+    analyzer->InitSubgraphToFunction(components);
+    analyzer->allOutcasts[1].emplace_back(outcastTensor, reshapeOp.GetOpMagic(), 0);
+    auto& sourceInvokeInfo = analyzer->subgraphToFunction.subFuncInvokeInfos[1];
+    sourceInvokeInfo.tensorParamList_.emplace_back(0, outcastTensor->GetRawMagic(), std::vector<int64_t>{}, shape,
+                                                   shape, DT_FP32, true, outcastTensor, reshapeOp.GetOpMagic(), 0);
+
+    ASSERT_EQ(analyzer->ReattributeInplaceOutcasts(mixFunc.get(), components), SUCCESS);
+
+    auto contains = [](const std::vector<SimpleTensorParam>& params, const LogicalTensorPtr& tensor) {
+        return std::any_of(params.begin(), params.end(),
+                           [&tensor](const SimpleTensorParam& param) { return param.tensor == tensor; });
+    };
+    EXPECT_TRUE(contains(analyzer->allOutcasts[0], outcastTensor)) << "Outcast should move to producer component";
+    EXPECT_FALSE(contains(analyzer->allOutcasts[1], outcastTensor)) << "Outcast should leave the anchor component";
+    EXPECT_TRUE(sourceInvokeInfo.tensorParamList_.empty()) << "Source invokeInfo record should be removed";
+    EXPECT_TRUE(analyzer->subgraphToFunction.subFuncInvokeInfos[0].tensorParamList_.empty())
+        << "Target invokeInfo should not receive the record";
+}
+
+// ReattributeInplaceOutcasts：视图输入由多个组件共同生产时，outcast分别挂到每个生产者组件
+TEST_F(MixDependencyAnalyzerTest, TestReattributeInplaceOutcastsMultiProducer)
+{
+    const std::vector<int64_t> shape = {16, 16};
+    auto inputA = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto inputB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto sharedTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcastTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+
+    auto& producerA = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_VEC_DUP, {inputA}, {sharedTensor});
+    auto& producerB = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_VEC_DUP, {inputB}, {sharedTensor});
+    auto& reshapeOp = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_RESHAPE, {sharedTensor}, {outcastTensor});
+
+    std::vector<InternalComponentInfo> components = {{0, "comp_0"}, {1, "comp_1"}, {2, "comp_2"}};
+    components[0].operations = {&producerA};
+    components[1].operations = {&reshapeOp};
+    components[2].operations = {&producerB};
+
+    analyzer->InitSubgraphToFunction(components);
+    analyzer->allOutcasts[1].emplace_back(outcastTensor, reshapeOp.GetOpMagic(), 0);
+
+    ASSERT_EQ(analyzer->ReattributeInplaceOutcasts(mixFunc.get(), components), SUCCESS);
+
+    auto contains = [](const std::vector<SimpleTensorParam>& params, const LogicalTensorPtr& tensor) {
+        return std::any_of(params.begin(), params.end(),
+                           [&tensor](const SimpleTensorParam& param) { return param.tensor == tensor; });
+    };
+    EXPECT_TRUE(contains(analyzer->allOutcasts[0], outcastTensor)) << "Outcast should hang on producer A component";
+    EXPECT_TRUE(contains(analyzer->allOutcasts[2], outcastTensor)) << "Outcast should hang on producer B component";
+    EXPECT_FALSE(contains(analyzer->allOutcasts[1], outcastTensor)) << "Outcast should leave the anchor component";
+}
+
+// ReattributeInplaceOutcasts：多级视图链（RESHAPE←VIEW←非inplace生产者）递归穿透；
+// 源组件invokeInfo的outcastTensorParamList_与tensorParamList_记录同步清理
+TEST_F(MixDependencyAnalyzerTest, TestReattributeInplaceOutcastsChainedViews)
+{
+    const std::vector<int64_t> shape = {16, 16};
+    auto producerInput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto gmTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto viewTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcastTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+
+    auto& producerOp = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_VEC_DUP, {producerInput}, {gmTensor});
+    auto& viewOp = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_VIEW, {gmTensor}, {viewTensor});
+    auto& reshapeOp = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_RESHAPE, {viewTensor}, {outcastTensor});
+
+    std::vector<InternalComponentInfo> components = {{0, "comp_0"}, {1, "comp_1"}};
+    components[0].operations = {&producerOp};
+    components[1].operations = {&viewOp, &reshapeOp};
+
+    analyzer->InitSubgraphToFunction(components);
+    analyzer->allOutcasts[1].emplace_back(outcastTensor, reshapeOp.GetOpMagic(), 0);
+    auto& sourceInvokeInfo = analyzer->subgraphToFunction.subFuncInvokeInfos[1];
+    sourceInvokeInfo.outcastTensorParamList_.emplace_back(0, outcastTensor->GetRawMagic(), 0, shape, shape,
+                                                          std::vector<int64_t>{}, DT_FP32, outcastTensor,
+                                                          reshapeOp.GetOpMagic(), 0);
+    sourceInvokeInfo.tensorParamList_.emplace_back(0, outcastTensor->GetRawMagic(), std::vector<int64_t>{}, shape,
+                                                   shape, DT_FP32, true, outcastTensor, reshapeOp.GetOpMagic(), 0);
+
+    ASSERT_EQ(analyzer->ReattributeInplaceOutcasts(mixFunc.get(), components), SUCCESS);
+
+    auto contains = [](const std::vector<SimpleTensorParam>& params, const LogicalTensorPtr& tensor) {
+        return std::any_of(params.begin(), params.end(),
+                           [&tensor](const SimpleTensorParam& param) { return param.tensor == tensor; });
+    };
+    EXPECT_TRUE(contains(analyzer->allOutcasts[0], outcastTensor))
+        << "Outcast should reach producer through view chain";
+    EXPECT_FALSE(contains(analyzer->allOutcasts[1], outcastTensor)) << "Outcast should leave the anchor component";
+    EXPECT_TRUE(sourceInvokeInfo.outcastTensorParamList_.empty()) << "Outcast pack should be removed from invokeInfo";
+    EXPECT_TRUE(sourceInvokeInfo.tensorParamList_.empty()) << "GM tensor pack should be removed from invokeInfo";
+}
+
+// ReattributeInplaceOutcasts：纯透传（输入无函数内生产者）保持原归属
+TEST_F(MixDependencyAnalyzerTest, TestReattributeInplaceOutcastsPassthroughKept)
+{
+    const std::vector<int64_t> shape = {16, 16};
+    auto incastTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcastTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+
+    auto& reshapeOp = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_RESHAPE, {incastTensor}, {outcastTensor});
+
+    std::vector<InternalComponentInfo> components = {{0, "comp_0"}, {1, "comp_1"}};
+    components[1].operations = {&reshapeOp};
+
+    analyzer->InitSubgraphToFunction(components);
+    analyzer->allOutcasts[1].emplace_back(outcastTensor, reshapeOp.GetOpMagic(), 0);
+
+    ASSERT_EQ(analyzer->ReattributeInplaceOutcasts(mixFunc.get(), components), SUCCESS);
+
+    auto contains = [](const std::vector<SimpleTensorParam>& params, const LogicalTensorPtr& tensor) {
+        return std::any_of(params.begin(), params.end(),
+                           [&tensor](const SimpleTensorParam& param) { return param.tensor == tensor; });
+    };
+    EXPECT_TRUE(contains(analyzer->allOutcasts[1], outcastTensor)) << "Passthrough outcast should keep its component";
+    EXPECT_FALSE(contains(analyzer->allOutcasts[0], outcastTensor)) << "No producer exists, nothing to reattribute";
+}
+
+// ReattributeInplaceOutcasts：本组件也是生产者之一（producerComps含compId）时保留原归属，
+// 其余生产者组件由pending补挂，源组件invokeInfo记录不动
+TEST_F(MixDependencyAnalyzerTest, TestReattributeInplaceOutcastsSelfProducerKept)
+{
+    const std::vector<int64_t> shape = {16, 16};
+    auto inputA = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto inputB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto sharedTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcastTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+
+    auto& producerA = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_VEC_DUP, {inputA}, {sharedTensor});
+    auto& producerB = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_VEC_DUP, {inputB}, {sharedTensor});
+    auto& reshapeOp = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_RESHAPE, {sharedTensor}, {outcastTensor});
+
+    std::vector<InternalComponentInfo> components = {{0, "comp_0"}, {1, "comp_1"}};
+    components[0].operations = {&producerA};
+    components[1].operations = {&producerB, &reshapeOp};
+
+    analyzer->InitSubgraphToFunction(components);
+    analyzer->allOutcasts[1].emplace_back(outcastTensor, reshapeOp.GetOpMagic(), 0);
+    auto& sourceInvokeInfo = analyzer->subgraphToFunction.subFuncInvokeInfos[1];
+    sourceInvokeInfo.tensorParamList_.emplace_back(0, outcastTensor->GetRawMagic(), std::vector<int64_t>{}, shape,
+                                                   shape, DT_FP32, true, outcastTensor, reshapeOp.GetOpMagic(), 0);
+
+    ASSERT_EQ(analyzer->ReattributeInplaceOutcasts(mixFunc.get(), components), SUCCESS);
+
+    auto contains = [](const std::vector<SimpleTensorParam>& params, const LogicalTensorPtr& tensor) {
+        return std::any_of(params.begin(), params.end(),
+                           [&tensor](const SimpleTensorParam& param) { return param.tensor == tensor; });
+    };
+    EXPECT_TRUE(contains(analyzer->allOutcasts[1], outcastTensor)) << "Self producer component keeps the outcast";
+    EXPECT_TRUE(contains(analyzer->allOutcasts[0], outcastTensor)) << "Other producer component gets the outcast";
+    EXPECT_FALSE(sourceInvokeInfo.tensorParamList_.empty()) << "Self producer invokeInfo record should be kept";
+}
+
+// ReattributeInplaceOutcasts：回溯遇环（RESHAPE互相为生产者）报错返回FAILED
+TEST_F(MixDependencyAnalyzerTest, TestReattributeInplaceOutcastsCycleDetected)
+{
+    const std::vector<int64_t> shape = {16, 16};
+    auto tensorA = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensorB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcastTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+
+    auto& reshapeA = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_RESHAPE, {tensorB}, {tensorA});
+    auto& reshapeB = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_RESHAPE, {tensorA}, {tensorB});
+    auto& reshapeOp = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_RESHAPE, {tensorA}, {outcastTensor});
+
+    std::vector<InternalComponentInfo> components = {{0, "comp_0"}, {1, "comp_1"}};
+    components[1].operations = {&reshapeA, &reshapeB, &reshapeOp};
+
+    analyzer->InitSubgraphToFunction(components);
+    analyzer->allOutcasts[1].emplace_back(outcastTensor, reshapeOp.GetOpMagic(), 0);
+
+    EXPECT_EQ(analyzer->ReattributeInplaceOutcasts(mixFunc.get(), components), FAILED)
+        << "Cycle in producer chain should be reported as an error";
+}
+
 // OUTCAST类型引用不补回（当前仅处理INCAST）
 TEST_F(MixDependencyAnalyzerTest, TestCollectGetTensorDataIncastsSkipsOutcast)
 {

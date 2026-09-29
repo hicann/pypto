@@ -109,6 +109,14 @@ private:
     void PropagateIncastDependencies(const std::set<int>& targets, const std::vector<SimpleTensorParam>& tensorParams);
     // 反向传播outcast：source已有incast时跳过，仅无incast的source才传播
     void PropagateOutcastDependencies(int targetComp, int sourceComp);
+    // inplace视图算子上的outcast重归属：回溯到首个非inplace生产者，挂到其所在组件（多生产者分别记录）
+    Status ReattributeInplaceOutcasts(Function* originalMixFunc, const std::vector<InternalComponentInfo>& components);
+    // 从anchor沿生产者方向DFS收集非inplace生产者所在组件下标；onPath检测环，memo处理菱形
+    Status CollectProducerComponents(Operation* op, Function* mixFunc,
+                                     const std::unordered_map<Operation*, int>& opToCompIdx, std::set<int>& comps,
+                                     std::set<Operation*>& onPath, std::unordered_map<Operation*, std::set<int>>& memo);
+    // 从源组件的invokeInfo中移除指定tensor的outcast记录
+    static void RemoveOutcastPackFromInvokeInfo(SubfuncInvokeInfoTy& invokeInfo, const LogicalTensorPtr& tensor);
 
     void Reset();
     std::vector<std::vector<bool>> Transpose(const std::vector<std::vector<bool>>& matrix);

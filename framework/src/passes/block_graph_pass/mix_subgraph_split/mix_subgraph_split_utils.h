@@ -43,6 +43,14 @@ enum class ComponentType {
 
 int GetStartIndex(const std::vector<Operation*>& opList, Operation* startOp);
 
+// inplace视图类算子：不产生实际运行指令，outcast归属需回溯到真正的数据生产者
+// 不含SLICE/CONTRACT/BIND_TENSOR：mix切分阶段（block graph后端）的函数内已无这些op
+inline bool IsInplaceViewOp(const Opcode opc)
+{
+    return opc == Opcode::OP_VIEW || opc == Opcode::OP_VIEW_TYPE || opc == Opcode::OP_RESHAPE ||
+           opc == Opcode::OP_ASSEMBLE;
+}
+
 // Mix子图内部独立子图的信息
 struct InternalComponentInfo {
     int internalSubgraphID;             // mix子图内部的子图ID(cube/vector组件ID)

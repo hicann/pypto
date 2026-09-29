@@ -2194,6 +2194,58 @@ Status InsertSync::AdjustSyncByAtomicScope(std::vector<Operation*>& opList)
     return SUCCESS;
 }
 
+// cv_hard_sync debug mode: keep the intra-core syncs derived by the normal path
+// (SYNC_SRC/SYNC_DST, BAR_V/BAR_M), but replace the cross-core part with the 1C2V FFTS hard sync
+// (the fixed sequence from InsertCvSyncOps: BAR.ALL + ffts_cross_core_sync(CV_CORES_SYNC) +
+// wait_flag_dev covering AIC/AIV0/AIV1) at every CV boundary in the schedule instead of relying
+// on the dependency-analysis-hit CV_SYNC_SRC/CV_SYNC_DST intra_block flag handshakes.
+// Difference from the enableDebug_ full-sync mode: no OP_BAR_ALL between adjacent same-core ops.
+Status InsertSync::ApplyCvHardSync(Function* subGraphFunc, std::vector<Operation*>& opListNew)
+{
+    size_t boundaryNum = 0;
+    PipeSync ps;
+    bool hasLastTileCore = false;
+    CoreType lastTileCore = CoreType::AIC;
+    std::vector<Operation*> hardSyncList;
+    hardSyncList.reserve(opListNew.size());
+    for (Operation* op : opListNew) {
+        if (op->GetOpcode() == Opcode::OP_CV_SYNC_SRC || op->GetOpcode() == Opcode::OP_CV_SYNC_DST) {
+            // cross-core flag handshake is superseded by the CV-boundary hard sync
+            op->SetAsDeleted();
+            continue;
+        }
+        if (IsSyncOpcode(op->GetOpcode())) {
+            // intra-core syncs stay as derived, transparent for boundary detection
+            hardSyncList.push_back(op);
+            continue;
+        }
+        auto opcfg = OpcodeManager::Inst().GetTileOpCfg(op->GetOpcode());
+        if (ps.AdjustOpCfg(opcfg, *op) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "ApplyCvHardSync failed at AdjustOpCfg.");
+            return FAILED;
+        }
+        if (hasLastTileCore && opcfg.coreType_ != lastTileCore) {
+            // the executing core of tile ops switches: insert the all-core rendezvous so data
+            // written before the switch is visible to the core after the switch
+            InsertCvSyncOps(subGraphFunc, hardSyncList);
+            boundaryNum++;
+        }
+        lastTileCore = opcfg.coreType_;
+        hasLastTileCore = true;
+        hardSyncList.push_back(op);
+    }
+    // 无CV边界也要完成已置删除同步算子的换出与擦除，保持与有边界路径一致
+    opListNew.swap(hardSyncList);
+    subGraphFunc->EraseOperations(true, false);
+    if (boundaryNum == 0) {
+        return SUCCESS;
+    }
+    APASS_LOG_INFO_F(Elements::Operation,
+                     "CvHardSync mode: inserted 1C2V hard sync at %zu CV boundary(ies) in function %s.", boundaryNum,
+                     subGraphFunc->GetMagicName().c_str());
+    return SUCCESS;
+}
+
 Status InsertSync::GenNewOpList(Function* subGraphFunc, std::vector<Operation*>& opListNew)
 {
     PipeSync ps;
@@ -2203,7 +2255,13 @@ Status InsertSync::GenNewOpList(Function* subGraphFunc, std::vector<Operation*>&
         APASS_LOG_ERROR_F(Elements::Operation, "GenNewOpList failed at function InsertSync.");
         return FAILED;
     }
-    ps.PhaseKernelProcess(*subGraphFunc, syncedOpLogPtr, opListNew);
+    if (cvHardSync_) {
+        // skip the phase split (PHASE1/PHASE2) in hard-sync mode: cross-kernel phase overlap
+        // races with GM view dependencies between mix and pure kernels, matching the debug mode
+        opListNew = syncedOpLogPtr;
+    } else {
+        ps.PhaseKernelProcess(*subGraphFunc, syncedOpLogPtr, opListNew);
+    }
     subGraphFunc->EraseOperations(true, false);
     AdjustSyncByAtomicScope(opListNew);
     if (CheckNewOpListSeq(oriOpList, opListNew) != SUCCESS) {
@@ -2226,6 +2284,12 @@ Status InsertSync::InsertSyncMainLoop(Function* subGraphFunc)
     if (GenNewOpList(subGraphFunc, opListNew) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "InsertSyncMainLoop failed at GenNewOpList.");
         return FAILED;
+    }
+    if (cvHardSync_) {
+        if (ApplyCvHardSync(subGraphFunc, opListNew) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "InsertSyncMainLoop failed at ApplyCvHardSync.");
+            return FAILED;
+        }
     }
     subGraphFunc->ScheduleBy(opListNew, true);
     APASS_LOG_DEBUG_F(Elements::Operation,
@@ -2256,6 +2320,10 @@ Status InsertSync::RunOnFunction(Function& function)
 {
     APASS_LOG_INFO_F(Elements::Operation,
                      "===============================================================> Start InsertSync.");
+    if (cvHardSync_) {
+        APASS_LOG_INFO_F(Elements::Operation,
+                         "CvHardSync debug mode enabled, all cross-core syncs use 1C2V hard sync.");
+    }
     const unsigned hardwareConcurrency = config::GetPassGlobalConfig(KEY_PASS_THREAD_NUM, 1);
     uint64_t index = 0;
     std::vector<std::pair<uint64_t, Function*>> subPrograms;

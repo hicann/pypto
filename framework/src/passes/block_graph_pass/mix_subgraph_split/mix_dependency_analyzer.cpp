@@ -387,6 +387,145 @@ void MixDependencyAnalyzer::EliminateRedundantDependencies()
     EliminateRedundantInnerDeps(innerDeps);
 }
 
+void MixDependencyAnalyzer::RemoveOutcastPackFromInvokeInfo(SubfuncInvokeInfoTy& invokeInfo,
+                                                            const LogicalTensorPtr& tensor)
+{
+    auto& outcasts = invokeInfo.outcastTensorParamList_;
+    auto outcastEnd = std::remove_if(
+        outcasts.begin(), outcasts.end(),
+        [&tensor](const SubfuncInvokeInfoTy::OutcastParamPackTy& param) { return param.tensor == tensor; });
+    outcasts.erase(outcastEnd, outcasts.end());
+
+    auto& tensors = invokeInfo.tensorParamList_;
+    auto tensorEnd = std::remove_if(tensors.begin(), tensors.end(),
+                                    [&tensor](const SubfuncInvokeInfoTy::TensorParamPackTy& param) {
+                                        return param.isOutputToGM && param.tensor == tensor;
+                                    });
+    tensors.erase(tensorEnd, tensors.end());
+}
+
+Status MixDependencyAnalyzer::CollectProducerComponents(Operation* op, Function* mixFunc,
+                                                        const std::unordered_map<Operation*, int>& opToCompIdx,
+                                                        std::set<int>& comps, std::set<Operation*>& onPath,
+                                                        std::unordered_map<Operation*, std::set<int>>& memo)
+{
+    for (const auto& tensor : op->GetIOperands()) {
+        for (auto* producer : tensor->GetProducers()) {
+            if (producer == nullptr || producer->BelongTo() != mixFunc) {
+                // 函数边界（incast），不贡献组件
+                continue;
+            }
+            if (onPath.count(producer) > 0) {
+                APASS_LOG_ERROR_F(Elements::Tensor,
+                                  "Cycle detected while tracing producers of inplace op %d (op %d on path).",
+                                  op->GetOpMagic(), producer->GetOpMagic());
+                return FAILED;
+            }
+            auto memoIt = memo.find(producer);
+            if (memoIt != memo.end()) {
+                // 菱形：合并已记录的组件
+                comps.insert(memoIt->second.begin(), memoIt->second.end());
+                continue;
+            }
+            std::set<int> curComps;
+            if (IsInplaceViewOp(producer->GetOpcode())) {
+                onPath.insert(producer);
+                if (CollectProducerComponents(producer, mixFunc, opToCompIdx, curComps, onPath, memo) != SUCCESS) {
+                    return FAILED;
+                }
+                onPath.erase(producer);
+            } else {
+                // 用组件成员表定位生产者，不用internalSubgraphID（automix专属标记，普通合图不携带）
+                auto compIt = opToCompIdx.find(producer);
+                if (compIt == opToCompIdx.end()) {
+                    APASS_LOG_ERROR_F(Elements::Tensor, "Producer op %d of inplace op %d belongs to no component.",
+                                      producer->GetOpMagic(), op->GetOpMagic());
+                    return FAILED;
+                }
+                curComps.insert(compIt->second);
+            }
+            comps.insert(curComps.begin(), curComps.end());
+            memo[producer] = curComps;
+        }
+    }
+    return SUCCESS;
+}
+
+Status MixDependencyAnalyzer::ReattributeInplaceOutcasts(Function* originalMixFunc,
+                                                         const std::vector<InternalComponentInfo>& components)
+{
+    std::unordered_map<Operation*, int> opToCompIdx;
+    for (size_t i = 0; i < components.size(); i++) {
+        for (auto* op : components[i].operations) {
+            opToCompIdx[op] = static_cast<int>(i);
+        }
+    }
+    std::unordered_map<int, Operation*> opMagicDict;
+    for (auto& op : originalMixFunc->Operations(false)) {
+        opMagicDict[op.GetOpMagic()] = &op;
+    }
+    // 转移条目先记入pending，遍历结束后按组件下标有序统一写回：
+    // 遍历中写allOutcasts会插入新key（迭代器失效，且写入顺序依赖哈希破坏编译确定性）
+    std::map<int, std::vector<SimpleTensorParam>> pending;
+    for (auto& [compId, outcasts] : allOutcasts) {
+        if (compId < 0 || static_cast<size_t>(compId) >= components.size()) {
+            APASS_LOG_ERROR_F(Elements::Tensor, "Outcast component id %d out of range (components=%zu).", compId,
+                              components.size());
+            return FAILED;
+        }
+        std::vector<SimpleTensorParam> kept;
+        kept.reserve(outcasts.size());
+        for (const auto& param : outcasts) {
+            auto anchorIt = opMagicDict.find(param.opMagic);
+            Operation* anchor = (anchorIt != opMagicDict.end()) ? anchorIt->second : nullptr;
+            if (anchor == nullptr || !IsInplaceViewOp(anchor->GetOpcode())) {
+                kept.push_back(param);
+                continue;
+            }
+            std::set<int> producerComps;
+            std::set<Operation*> onPath{anchor};
+            std::unordered_map<Operation*, std::set<int>> memo;
+            if (CollectProducerComponents(anchor, originalMixFunc, opToCompIdx, producerComps, onPath, memo) !=
+                SUCCESS) {
+                APASS_LOG_ERROR_F(Elements::Tensor, "Failed to trace producers of outcast tensor %d.",
+                                  param.tensor->GetRawMagic());
+                return FAILED;
+            }
+            if (producerComps.empty()) {
+                // 纯透传（无函数内非inplace生产者），保持原归属
+                kept.push_back(param);
+                continue;
+            }
+            if (producerComps.count(compId) > 0) {
+                // 本组件也是生产者之一：保留原归属与invokeInfo记录，其余生产者组件由pending补挂
+                kept.push_back(param);
+                for (int targetComp : producerComps) {
+                    if (targetComp != compId) {
+                        pending[targetComp].push_back(param);
+                    }
+                }
+                continue;
+            }
+            // 本组件不是生产者：移除invokeInfo记录，全部转移到生产者组件
+            // （不进目标invokeInfo：offset由propagated outcast路径在原mix函数上解析）
+            RemoveOutcastPackFromInvokeInfo(subgraphToFunction.subFuncInvokeInfos[compId], param.tensor);
+            for (int targetComp : producerComps) {
+                pending[targetComp].push_back(param);
+            }
+        }
+        outcasts.swap(kept);
+    }
+    // 统一写回（std::map按组件下标有序保证确定性；按tensor去重防重复挂载）
+    for (const auto& [targetComp, params] : pending) {
+        for (const auto& param : params) {
+            if (!ContainsTensor(allOutcasts[targetComp], param.tensor)) {
+                allOutcasts[targetComp].push_back(param);
+            }
+        }
+    }
+    return SUCCESS;
+}
+
 void MixDependencyAnalyzer::CollectGetTensorDataIncasts(const std::vector<InternalComponentInfo>& components,
                                                         Function* originalMixFunc)
 {
@@ -444,6 +583,12 @@ Status MixDependencyAnalyzer::ProcessDependencyAnalyzer(const AnalyzerInput& inp
     APASS_LOG_INFO_F(Elements::Tensor, "Step 4: Computing all dependencies...");
     // 4.1：提取外部依赖（从subgraphToFunction）
     ExtractExternalDependencies(subgraphToFunction.subFuncInvokeInfos);
+    // 4.1.1：inplace视图算子上的outcast重归属到数据生产者组件（多生产者分别挂）
+    Status reattrStatus = ReattributeInplaceOutcasts(input.originalMixFunc, input.components);
+    if (reattrStatus != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Tensor, "ReattributeInplaceOutcasts failed, aborting ProcessDependencyAnalyzer...");
+        return FAILED;
+    }
     // 验证循环依赖是否合法
     Status validationStatus = ValidateCrossComponentDependencies(input, directDeps, crossComponentTensors);
     if (validationStatus != SUCCESS) {

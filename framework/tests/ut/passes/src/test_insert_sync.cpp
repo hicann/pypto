@@ -1903,6 +1903,72 @@ TEST_F(InsertSyncTest, TestGenSyncOpAivSamePipeSetSideNoop)
     EXPECT_FALSE(ps.GenSyncOp(set, wait, IS_NUM1, true, op));
 }
 
+// cvHardSync debug mode：无CV边界（纯vec函数）正常完成，不插入跨核硬同步
+TEST_F(InsertSyncTest, TestCvHardSyncNoBoundary)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestCvHardSyncVec", "TestCvHardSyncVec",
+                                                      nullptr);
+
+    auto incast1 = MakeGmTensor();
+    auto incast2 = MakeGmTensor();
+    auto ubTensor1 = MakeUbTensor(0, IS_NUM100);
+    auto ubTensor2 = MakeUbTensor(IS_NUM200, IS_NUM300);
+    auto ubTensor3 = MakeUbTensor(IS_NUM300, IS_NUM499);
+    auto outCast = MakeGmTensor();
+
+    MakeCopyInOp(*currFunctionPtr, incast1, ubTensor1);
+    MakeCopyInOp(*currFunctionPtr, incast2, ubTensor2);
+    auto& addOp = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ADD, {ubTensor1, ubTensor2}, {ubTensor3});
+    (void)addOp;
+    addOp.SetAIVCore(AIVCore::AIV0);
+    MakeCopyOutOp(*currFunctionPtr, ubTensor3, outCast);
+    currFunctionPtr->inCasts_.push_back(incast1);
+    currFunctionPtr->inCasts_.push_back(incast2);
+    currFunctionPtr->outCasts_.push_back(outCast);
+
+    InsertSync syncPass;
+    syncPass.SetCvHardSync(true);
+    EXPECT_EQ(syncPass.InsertSyncMainLoop(currFunctionPtr.get()), SUCCESS);
+    for (auto& op : currFunctionPtr->Operations()) {
+        EXPECT_NE(op.GetOpcode(), Opcode::OP_FFTS_CROSS_CORE_SYNC) << "No CV boundary, hard sync should not appear";
+    }
+}
+
+// cvHardSync debug mode：vec→cube→vec混合函数在每个核切换处插入1C2V硬同步
+TEST_F(InsertSyncTest, TestCvHardSyncWithBoundary)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestCvHardSyncMix", "TestCvHardSyncMix",
+                                                      nullptr);
+
+    auto incast = MakeGmTensor();
+    auto ubTensor1 = MakeUbTensor(0, IS_NUM100);
+    auto ubTensor2 = MakeUbTensor(IS_NUM200, IS_NUM300);
+    auto ubTensor3 = MakeUbTensor(IS_NUM300, IS_NUM499);
+    auto outCast = MakeGmTensor();
+
+    MakeCopyInOp(*currFunctionPtr, incast, ubTensor1);
+    auto& cubeOp = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {ubTensor1, ubTensor1},
+                                                  {ubTensor2});
+    (void)cubeOp;
+    auto& addOp = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ADD, {ubTensor2}, {ubTensor3});
+    (void)addOp;
+    addOp.SetAIVCore(AIVCore::AIV0);
+    MakeCopyOutOp(*currFunctionPtr, ubTensor3, outCast);
+    currFunctionPtr->inCasts_.push_back(incast);
+    currFunctionPtr->outCasts_.push_back(outCast);
+
+    InsertSync syncPass;
+    syncPass.SetCvHardSync(true);
+    EXPECT_EQ(syncPass.InsertSyncMainLoop(currFunctionPtr.get()), SUCCESS);
+    bool hasHardSync = false;
+    for (auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_FFTS_CROSS_CORE_SYNC) {
+            hasHardSync = true;
+        }
+    }
+    EXPECT_TRUE(hasHardSync) << "CV boundary exists, 1C2V hard sync should be inserted";
+}
+
 } // namespace tile_fwk
 } // namespace npu
 
