@@ -42,9 +42,9 @@ pypto_pro.language.simt.log(
 
 | value取值 | 返回值 |
 |---|---|
-| `+Inf` | `+Inf` |
-| `-Inf`、`NaN`或有限负数 | `NaN` |
-| `±0` | `-Inf` |
+| +Inf | +Inf |
+| -Inf、NaN或有限负数 | NaN |
+| ±0 | -Inf |
 
 ## 调用示例
 

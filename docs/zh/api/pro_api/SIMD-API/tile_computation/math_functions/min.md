@@ -22,6 +22,7 @@
 pypto_pro.language.min(
     lhs: Scalar,
     rhs: Scalar,
+    /,
 ) -> Scalar
 ```
 

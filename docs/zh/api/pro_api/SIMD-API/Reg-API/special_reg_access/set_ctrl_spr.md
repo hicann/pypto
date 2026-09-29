@@ -19,7 +19,7 @@
 ## 函数原型
 
 ```python
-set_ctrl_spr(start_bit: int, end_bit: int, value: int) -> None
+set_ctrl_spr(start_bit: int, end_bit: int, value: int, /) -> None
 ```
 
 ## 参数说明

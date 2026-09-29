@@ -29,6 +29,7 @@
 ```python
 pypto_pro.language.reinterpret(
     tile: Union[Tile, TileGroup],
+    /,
     *,
     dtype: Optional[DType] = None,
     shape: Optional[List[int]] = None,

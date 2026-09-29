@@ -131,7 +131,7 @@ with pl.section_cube():
 
 ### Flash Attention示例
 
-matmul 结果需要 vector 核做后处理（如 softmax）时，必须通过 move 将累加器数据搬到 UB，store 只能直接写 GM，无法在 UB 上做后续计算。以 Flash Attention 的 QK matmul 为例：
+matmul 结果需要 Vector 核做后处理（如 softmax）时，必须通过 move 将累加器数据搬到 UB，store 只能直接写 GM，无法在 UB 上做后续计算。以 Flash Attention 的 QK matmul 为例：
 
 ```python
 with pl.section_cube():
@@ -142,7 +142,7 @@ with pl.section_cube():
             pl.matmul(ac, q, k, phase=pl.AccPhase.Partial)
         else:
             pl.matmul_acc(ac, ac, q, k, phase=pl.AccPhase.Final)
-    # 搬到 UB 供 vector 核做 softmax（store 做不到 L0C→UB）
+    # 搬到 UB 供 Vector 核做 softmax（store 做不到 L0C→UB）
     pl.move(qk_vec, ac, acc_to_vec_mode=pl.AccToVecMode.DualModeSplitN,
             phase=pl.STPhase.Final)
 with pl.section_vector():

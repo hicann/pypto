@@ -19,9 +19,11 @@
 ## 函数原型
 
 ```python
-# 以下两种写法等价
-result = max(lhs, rhs)
-result = pypto_pro.language.max(lhs, rhs)
+pypto_pro.language.max(
+    lhs: Scalar,
+    rhs: Scalar,
+    /,
+) -> Scalar
 ```
 
 ## 参数说明

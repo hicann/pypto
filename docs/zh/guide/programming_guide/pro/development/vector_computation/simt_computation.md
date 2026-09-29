@@ -42,7 +42,7 @@ def transform(
 
 ### 在外层Vector执行域调用线程块
 
-外层Kernel的vector section中通过`simt_func[threads](...)`调用SIMT入口函数。
+外层Kernel的Vector执行域中通过`simt_func[threads](...)`调用SIMT入口函数。
 
 ```python
 import pypto_pro.language as pl
@@ -82,9 +82,9 @@ torch.npu.synchronize()
 torch.testing.assert_close(output, input_tensor * scale + bias, rtol=0, atol=0)
 ```
 
-本例在Host侧将`block_dim`设置为4，表示实际使用4个Vector核。每个Vector核调用一次`transform[THREADS](...)`，各启动一个包含256个线程的Thread Block；最后一个Thread Block只有232个线程访问数据，其余24个线程被边界判断跳过。
+本例在Host侧将`block_dim`设置为4，请求启动4个逻辑Vector核。假设4个核均实际生效，每个Vector核调用一次`transform[THREADS](...)`，各启动一个包含256个线程的Thread Block；最后一个Thread Block只有232个线程访问数据，其余24个线程被边界判断跳过。
 
-Host启动参数`block_dim`用于配置核数；SIMT函数内的`pypto_pro.language.simt.block_dim()`表示Thread Block在各维度上的线程数，两者含义不同。Host启动参数的调用形式和默认值参见[Kernel核函数](../kernel_function.md#blockdim的含义与设置)。
+Host启动参数`block_dim`用于配置逻辑核数；SIMT函数内的`pypto_pro.language.simt.block_dim()`表示Thread Block在各维度上的线程数，两者含义不同。Host启动参数的调用形式和默认值参见[Kernel核函数](../kernel_function.md#blockdim的含义与设置)。
 
 ## 配置线程与映射数据索引
 
@@ -218,11 +218,11 @@ def gather_kernel(
 gather_kernel[None, BLOCKS](input_tensor, indices, output, OUTPUT_ROWS)
 ```
 
-本例在Host侧将`block_dim`设置为`BLOCKS=48`，表示实际使用48个Vector核；每个Vector核启动一个包含256个线程的Thread Block。线程按`pypto_pro.language.simt.grid_dim().x * pypto_pro.language.simt.block_dim().x`跨步处理后续行，覆盖全部12288行。各线程写入不同输出行，行间没有数据依赖，不需要线程块屏障。
+本例在Host侧将`block_dim`设置为`BLOCKS=48`，请求启动48个逻辑Vector核；每个实际生效的Vector核启动一个包含256个线程的Thread Block。线程按`pypto_pro.language.simt.grid_dim().x * pypto_pro.language.simt.block_dim().x`跨步处理后续行，覆盖全部12288行。各线程写入不同输出行，行间没有数据依赖，不需要线程块屏障。
 
 ## 当前能力边界
 
 - SIMT入口必须由外层A5 Vector执行域调用，不支持Host直接启动SIMT函数或在SIMT函数中嵌套调用SIMT入口函数。
 - SIMT中不支持Tile创建、SIMD Tile计算、Reg计算或System流水操作。
 - 不支持动态GM Shape、Tile Subview、L1 Buffer Tile、DN/NZ布局和通用指针参数。
-- 未提供Warp shuffle/vote/reduce、线程私有数组和显式Cached GM访问接口。pypto_pro.language.simt.warp_size()仅用于查询。
+- 未提供Warp shuffle/vote/reduce、线程私有数组和显式Cached GM访问接口。

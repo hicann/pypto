@@ -22,6 +22,7 @@
 pypto_pro.language.move(
     dst_tile: Tile,
     src_tile: Tile,
+    /,
     offset: Optional[Offset] = None,
     *,
     acc_to_vec_mode: Optional[AccToVecMode] = None,

@@ -28,6 +28,7 @@ pypto_pro.language.matmul_acc(
     acc_tile: Tile,
     lhs_tile: Tile,
     rhs_tile: Tile,
+    /,
     *,
     phase: Optional[AccPhase] = None,
 ) -> None

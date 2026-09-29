@@ -19,7 +19,7 @@
 ## 函数原型
 
 ```python
-pypto_pro.language.axpy(out: Tile, src: Tile, alpha: Scalar) -> None
+pypto_pro.language.axpy(out: Tile, src: Tile, alpha: Scalar, /) -> None
 ```
 
 ## 参数说明

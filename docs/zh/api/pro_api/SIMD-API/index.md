@@ -7,7 +7,7 @@
 basic_data_structures/index
 memory_data_movement/index
 tile_computation/index
-reg_computation/index
+Reg-API/index
 cube_computation/index
 controlflow/index
 resource_management/index

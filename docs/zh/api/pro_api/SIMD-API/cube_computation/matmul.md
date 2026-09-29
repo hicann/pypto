@@ -28,6 +28,7 @@ pypto_pro.language.matmul(
     lhs_tile: Tile,
     rhs_tile: Tile,
     bias_tile: Optional[Tile] = None,
+    /,
     *,
     phase: Optional[AccPhase] = None,
 ) -> None

@@ -43,12 +43,12 @@ PYPTO_DECLARE_ENUM(AccToVecMode,
 ```python
 import pypto_pro.language as pl
 
-# cube section: 用户只需设置实际 valid_M，无需手动对齐
+# Cube执行域：用户只需设置实际 valid_M，无需手动对齐
 pl.set_validshape(ac, [valid_M, N])       # valid_M=33
 pl.matmul(ac, al, br)
 pl.move(vec, ac, acc_to_vec_mode=pl.AccToVecMode.DualModeSplitM)  # 框架自动对齐，aligned_M=34
 
-# vector section: 用户需要自行计算 Vec0/Vec1 中 UB 实际大小
+# Vector执行域：用户需要自行计算 Vec0/Vec1 中 UB 实际大小
 v0 = (valid_M + 1) // 2 * 2 // 2          # v0 = 17
 v1 = valid_M - v0                         # v1 = 16
 if sub_id == 0:
@@ -62,12 +62,12 @@ else:
 ```python
 import pypto_pro.language as pl
 
-# cube section: 用户只需设置实际 valid_N，无需手动对齐
+# Cube执行域：用户只需设置实际 valid_N，无需手动对齐
 pl.set_validshape(ac, [TILE, valid_N])     # valid_N=33
 pl.matmul(ac, al, br)
 pl.move(vec, ac, acc_to_vec_mode=pl.AccToVecMode.DualModeSplitN)  # 框架自动对齐，aligned_N=64
 
-# vector section: V 侧用户自行计算 v0/v1
+# Vector执行域：V侧用户自行计算v0/v1
 v0 = (valid_N + 31) // 32 * 32 // 2        # v0 = 32
 v1 = valid_N - v0                          # v1 = 1
 if sub_id == 0:

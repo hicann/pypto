@@ -2,14 +2,14 @@
 
 ## 功能说明
 
-CV融合算子中，cube和vector的计算相互依赖，若按串行流水执行，一个核工作时另一个核只能空等。为了提升CV之间的并行度，让上游核提前若干次迭代计算，下游核则处理上游已经算好的较早迭代的数据，两个核错开节奏、同时工作，从而把彼此的等待时间掩盖掉。
+CV融合算子中，Cube和Vector的计算相互依赖，若按串行流水执行，一个核工作时另一个核只能空等。为了提升CV之间的并行度，让上游核提前若干次迭代计算，下游核则处理上游已经算好的较早迭代的数据，两个核错开节奏、同时工作，从而把彼此的等待时间掩盖掉。
 
 自动CV并行流水是pypto_pro.language.jit的一项编译期变换，包含两个能力：
 
 - **自动流水排布**：把用户手写的CV融合算子串行流水kernel代码，自动改写成并行流水版本，提升性能；
 - **自动核间同步**：用户开发的串行版本不需要手写任何CV核间同步指令，并行流水版本会插入全部所需的核间同步。
 
-下图对比了同一个算子（4个stage，cube/vector交替）在串行流水与并行流水（cube提前2次执行）下的执行图：
+下图对比了同一个算子（4个stage，Cube/Vector交替）在串行流水与并行流水（Cube提前2次执行）下的执行图：
 
 **图1 串行流水与并行流水的执行节奏对比**
 
@@ -17,7 +17,7 @@ CV融合算子中，cube和vector的计算相互依赖，若按串行流水执�
 
 图中`sN·iM`表示第N个stage正在处理第M次迭代的数据，格子宽度代表该stage的耗时（各stage耗时不同，图中为示意值）。
 
-需要注意的是，流水化的收益上限由**较慢的那个核**决定：图中vector侧单次迭代的耗时高于cube侧，稳态节奏就由vector侧决定，cube侧会出现等待间隙。stage划分越均衡（两个核的耗时越接近），流水填充得越满，收益越高。此外流水的建立和排空各需要若干拍，迭代次数越多，这部分开销占比越低。
+需要注意的是，流水化的收益上限由**较慢的那个核**决定：图中Vector侧单次迭代的耗时高于Cube侧，稳态节奏就由Vector侧决定，Cube侧会出现等待间隙。stage划分越均衡（两个核的耗时越接近），流水填充得越满，收益越高。此外流水的建立和排空各需要若干拍，迭代次数越多，这部分开销占比越低。
 
 ## 使用方法
 
@@ -307,7 +307,7 @@ def pipeline_demo_kernel(
             addrs=0x18000, mutex_ids=[20, 21],
         )
 
-    # ===== 流水循环：按 cube/vector 交替调用 4 个 stage =====
+    # ===== 流水循环：按 Cube/Vector 交替调用 4 个 stage =====
     for ki in pl.range(0, N_ITER):
         with pl.section_cube():
             stage1(ki, a, b_l1, a_l1_db, left_db, right_db, acc_db, mm1_vec_db)
@@ -339,11 +339,13 @@ def test_pipeline_demo_kernel():
 
 ### 完整示例的流水与同步关系
 
-下图对应上述完整示例的`N_ITER=4`和`preload=2`配置。`sN·iM`表示stage N正在处理第M次迭代；两个AIV执行相同的Vector stage，分别处理M方向的一半，因此合并画在一条Vector泳道中。方框宽度和空隙用于示意各stage的耗时与等待关系，不表示真实执行周期；实线表示Forward数据就绪依赖，虚线表示Backward槽位释放依赖。
+下图对应上述完整示例的`N_ITER=4`和`preload=2`配置。`sN·iM`表示stage N正在处理第M次迭代；两个AIV执行相同的Vector stage，分别处理M方向的一半，因此合并画在一条Vector泳道中。方框宽度和空隙用于示意各stage的耗时与等待关系，不表示真实执行周期。
+
+跨核同步ID按逻辑迭代对应的Buffer槽位轮转，不按AIV编号分配。以`mm1_vec_db`为例，`stage1(i0)`通过Forward ID 0通知`stage2(i0)`，`stage1(i1)`通过Forward ID 1通知`stage2(i1)`；后续`i2`和`i3`分别复用槽位0和槽位1。两个AIV执行同一次Vector stage时，使用的是该迭代对应的同一个跨核事件；默认`INTRA_BLOCK`同步模式负责AIC与两个AIV之间的交接。
 
 **图2 完整示例在preload=2时的执行顺序与同步关系**
 
-![自动CV并行流水完整示例的流水与同步关系](../../../figures/pro/pro_auto_parallel_pipeline_example.png "自动CV并行流水完整示例的流水与同步关系")
+![自动CV并行流水完整示例的流水与同步关系](../../../figures/pro/pro_auto_parallel_pipeline_example.svg "自动CV并行流水完整示例的流水与同步关系")
 
 - **并行preload**：填充阶段先让前级stage处理两个迭代。进入稳态后，Cube侧交错执行`stage1(i+2)`和`stage3(i)`，Vector侧交错执行`stage2(i+2)`和`stage4(i)`，AIC与AIV同时处理不同迭代的数据。主循环结束后，编译器继续排空已经进入流水的`stage3`和`stage4`任务。
 - **核间同步**：编译器根据跨核Buffer的`fwd_ids`和`bwd_ids`自动插入`set_cross_core`和`wait_cross_core`。`mm1_vec_db`使用Forward ID 0/1和Backward ID 2/3，`p_mat_db`使用Forward ID 4/5和Backward ID 6/7，`out_vec_db`使用Forward ID 8/9和Backward ID 10/11。Forward事件保证消费者等待数据写完，Backward事件保证生产者等待消费者使用完毕后再覆写对应槽位。

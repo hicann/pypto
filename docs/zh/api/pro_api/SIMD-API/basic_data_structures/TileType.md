@@ -22,6 +22,7 @@ TileType本身不分配内存，只是一个规格描述符。实际缓冲区通
 
 ```python
 pypto_pro.language.TileType(
+    *,
     shape: Sequence[int],
     dtype: DataType,
     target_memory: MemorySpace = pypto_pro.language.MemorySpace.Vec,

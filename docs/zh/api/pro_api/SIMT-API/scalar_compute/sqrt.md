@@ -42,10 +42,10 @@ pypto_pro.language.simt.sqrt(
 
 | value取值 | 返回值 |
 |---|---|
-| `+0` | `+0` |
-| `-0` | `-0` |
-| `+Inf` | `+Inf` |
-| `-Inf`、`NaN`或有限负数 | `NaN` |
+| +0 | +0 |
+| -0 | -0 |
+| +Inf | +Inf |
+| -Inf、NaN或有限负数 | NaN |
 
 ## 调用示例
 

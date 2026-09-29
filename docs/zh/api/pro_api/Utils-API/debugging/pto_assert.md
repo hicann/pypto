@@ -24,6 +24,7 @@
 ```python
 pypto_pro.language.pto_assert(
     condition: bool,
+    /,
     format_str: Optional[str] = None,
     *args,
     loc: bool = False,

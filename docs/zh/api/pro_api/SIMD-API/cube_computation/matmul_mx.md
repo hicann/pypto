@@ -29,6 +29,7 @@ pypto_pro.language.matmul_mx(
     dst_tile: Tile,
     lhs_tile: Tile,
     rhs_tile: Tile,
+    /,
     scale_a: Tile,
     scale_b: Tile,
     *,
