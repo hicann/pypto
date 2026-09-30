@@ -12,10 +12,9 @@
 
 An op that carries ``torch_op_qualname`` plus an ``onnx_spec`` enqueues itself here from
 ``ExportedCustomOp.__init__``; ``finalize_pending_ops()`` then synthesizes and registers its onnx
-symbolic. Deferring it keeps ``torch.onnx`` out of import time. Pending ops are handled duck-typed (reads
-``_onnx_spec``, writes ``_finalized`` / ``_onnx_symbolic_attached``); the onnx synthesizer and the
-opset-floor reset are reached by function-scope imports, so this module carries no module-scope edge to
-``onnx``.
+symbolic. The onnx layer binds its synthesizer and its opset-floor reset into the registry below at
+import time, so every import edge runs framework -> common. Pending ops are handled duck-typed (reads
+``_onnx_spec``, writes ``_finalized`` / ``_onnx_symbolic_attached``).
 """
 __all__ = ("finalize_pending_ops",)
 
@@ -23,6 +22,20 @@ __all__ = ("finalize_pending_ops",)
 # Config-declared ops pending finalization. A LIST (not a dict keyed by torch_op_qualname) because
 # different demos legitimately reuse a name like "pypto::add_pypto".
 _PENDING_OPS: list = []
+
+# Framework wiring bound in by the framework layers at import time, keyed by framework name.
+_SYNTHESIZERS: dict = {}
+_RESET_HOOKS: list = []
+
+
+def _register_synthesizer(framework: str, fn) -> None:
+    """Bind *framework* to the callable that synthesizes an op's wiring from its declared spec."""
+    _SYNTHESIZERS[framework] = fn
+
+
+def _register_reset_hook(fn) -> None:
+    """Add *fn* to the process-global state that ``_reset_export_state`` clears."""
+    _RESET_HOOKS.append(fn)
 
 
 def _register_pending_op(op) -> None:
@@ -42,11 +55,10 @@ def _reset_pending_ops() -> None:
 
 
 def _reset_export_state() -> None:
-    """Reset ALL process-global export registration state (pending ops + onnx opset floors). Test-only."""
+    """Reset ALL process-global export registration state (pending ops + every reset hook). Test-only."""
     _reset_pending_ops()
-    # layering: this module carries no module-scope edge to onnx
-    from ..onnx.export import _reset_onnx_opset_floors  # noqa: PLC0415
-    _reset_onnx_opset_floors()
+    for reset_hook in _RESET_HOOKS:
+        reset_hook()
 
 
 def finalize_pending_ops() -> None:
@@ -61,7 +73,9 @@ def finalize_pending_ops() -> None:
         if getattr(op, "_finalized", False):
             continue
         if op._onnx_spec is not None:
-            # layering: this module carries no module-scope edge to onnx
-            from ..onnx.export import _synthesize_onnx  # noqa: PLC0415
-            _synthesize_onnx(op, op._onnx_spec)
+            synthesize = _SYNTHESIZERS.get("onnx")
+            if synthesize is None:
+                raise RuntimeError(f"{op._torch_op_qualname!r} declares an onnx spec but no onnx synthesizer "
+                                   "is registered; import torch_custom_op_litenpu.onnx.export before finalizing.")
+            synthesize(op, op._onnx_spec)
         op._finalized = True

@@ -30,7 +30,11 @@ from pypto.extensions.torch_custom_op_litenpu import (
     recorded_onnx_opset_floor,
 )
 from pypto.extensions.torch_custom_op_litenpu.common.exported_custom_op import exporting_scope
-from pypto.extensions.torch_custom_op_litenpu.common.finalize import _PENDING_OPS, _reset_export_state
+from pypto.extensions.torch_custom_op_litenpu.common.finalize import (
+    _PENDING_OPS,
+    _SYNTHESIZERS,
+    _reset_export_state,
+)
 from pypto.extensions.torch_custom_op_litenpu.onnx.export import (
     _ONNX_OPSET_FLOORS,
     _reset_onnx_opset_floors,
@@ -117,6 +121,14 @@ def test_multi_output_synth_returns_tuple(spy):
     with exporting_scope():
         out = torch.ops.pypto.cfg_dual1(x, torch.empty_like(x))
     assert isinstance(out, (list, tuple)) and len(out) == 2
+
+
+def test_declared_spec_without_synthesizer_raises(spy, monkeypatch):
+    # delitem fails outright unless onnx/export.py bound its synthesizer into the registry at import.
+    monkeypatch.delitem(_SYNTHESIZERS, "onnx")
+    _cfg_op("cfg_nosynth1")
+    with pytest.raises(RuntimeError, match="no onnx synthesizer is registered"):
+        finalize_pending_ops()
 
 
 def test_onnx_spec_requires_torch_op_qualname():

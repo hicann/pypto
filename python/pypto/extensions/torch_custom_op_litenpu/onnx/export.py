@@ -21,6 +21,7 @@ from typing import Optional
 
 from ..common import return_annotations
 from ..common.exported_custom_op import _build_node_meta_completer
+from ..common.finalize import _register_reset_hook, _register_synthesizer
 
 __all__ = ("recorded_onnx_opset_floor",)
 
@@ -184,3 +185,8 @@ def _synthesize_onnx(op, spec) -> None:
     import torch.onnx  # noqa: PLC0415 - optional dependency: only the synthesis path needs torch.onnx
     torch.onnx.register_custom_op_symbolic(op._torch_op_qualname, _symbolic, spec.opset_version)
     _ONNX_OPSET_FLOORS[op._torch_op_qualname] = spec.opset_version
+
+
+# Bind this layer's wiring into the finalize registry; the import edge runs onnx -> common.
+_register_synthesizer("onnx", _synthesize_onnx)
+_register_reset_hook(_reset_onnx_opset_floors)
