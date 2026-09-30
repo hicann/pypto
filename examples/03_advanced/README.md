@@ -27,6 +27,11 @@
 - **ACLGraph ([aclgraph.py](./aclgraph/aclgraph.py))**:
    - 演示如何使用图捕获模式优化 Host 侧开销。
 
+### 5. 自定义算子导出与部署 ([exported_custom_op_litenpu](./exported_custom_op_litenpu))
+- **ONNX 导出样例 ([onnx](./exported_custom_op_litenpu/onnx))**:
+   - 将 pypto kernel 声明为 `torch.ops` 自定义算子，导出为 ONNX 制品。
+   - 从导出的 ONNX 构建可部署的 `libcust_opapi.so`。
+
 ## 核心特性
 
 在高级样例中，您将接触到：

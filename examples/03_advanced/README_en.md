@@ -27,6 +27,11 @@ The advanced samples cover the following core areas:
 - **ACLGraph ([aclgraph.py](./aclgraph/aclgraph.py))**:
    - Demonstrates how to use graph capturing mode to optimize host-side overhead.
 
+### 5. Custom-Op Export and Deployment ([exported_custom_op_litenpu](./exported_custom_op_litenpu))
+- **ONNX Export Demo ([onnx](./exported_custom_op_litenpu/onnx))**:
+   - Declares a pypto kernel as a `torch.ops` custom op and exports it as an ONNX artifact.
+   - Builds a deployable `libcust_opapi.so` from the exported ONNX.
+
 ## Core Features
 
 In the advanced samples, you will encounter:

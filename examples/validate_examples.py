@@ -28,7 +28,9 @@ import time
 logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-SKIP_FILES = {"validate_examples.py", "__init__.py"}
+# ``kernel``/``model``/``op`` are modules the exported_custom_op_litenpu demos import, never entry points;
+# ``export_demo`` needs the optional ``onnx`` package, which this validator's environment does not carry.
+SKIP_FILES = {"validate_examples.py", "__init__.py", "export_demo.py", "kernel.py", "model.py", "op.py"}
 
 
 def _collect_from_dir(target_dir):
