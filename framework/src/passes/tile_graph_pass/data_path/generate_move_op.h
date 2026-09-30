@@ -91,6 +91,10 @@ private:
     Status ProcessL0CCopyOutConv(Operation& op) const;
     Status ProcessDuplicateOp(Operation& op) const;
     Status ProcessViewOp(Function& function, Operation& op) const;
+    void SetL0C2UBCopyConvAttr(Operation& op, const Shape& realShape, const std::vector<OpImmediate>& fromOffset,
+                               const std::vector<OpImmediate>& toOffset) const;
+    Status ProcessL0CCopyUBConv(Operation& op) const;
+    Status CheckTransFormatTopology(Operation& op, Operation*& outTransFormatOp) const;
 };
 } // namespace npu::tile_fwk
 #endif // PASS_GENERATE_MOVE_OP_H_

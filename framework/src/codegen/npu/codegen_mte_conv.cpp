@@ -108,7 +108,8 @@ std::vector<std::string> CodeGenOpNPU::BuildCopyOutParamList(const std::string& 
                                                              const std::vector<std::string>& gmOffsetExpr,
                                                              const std::vector<int64_t>& staticOffsets,
                                                              const std::string& realM, const std::string& realN,
-                                                             const std::string& realCutW, const std::string& cutW) const
+                                                             const std::string& realCutW, const std::string& cutW,
+                                                             const std::vector<std::string>& srcOffsetList) const
 {
     std::vector<std::string> tileOpCopyOutParamList;
     tileOpCopyOutParamList.emplace_back(dstTensor);
@@ -130,6 +131,8 @@ std::vector<std::string> CodeGenOpNPU::BuildCopyOutParamList(const std::string& 
     tileOpCopyOutParamList.emplace_back(realN);
     tileOpCopyOutParamList.emplace_back(realCutW);
     tileOpCopyOutParamList.emplace_back(cutW);
+    // L0C 源侧 (m, n) 偏移参数，仅 UB 直通 (TCopyL0C2UBConv) 路径携带，GM (TStoreConv) 路径为空不追加
+    tileOpCopyOutParamList.insert(tileOpCopyOutParamList.end(), srcOffsetList.begin(), srcOffsetList.end());
 
     return tileOpCopyOutParamList;
 }
@@ -287,9 +290,38 @@ std::string CodeGenOpNPU::GenMemL0CCopyOutConv() const
     std::vector<std::string> gmOffsetExpr;
     GetDynamicOffsetExpr(dynOffset, isConv3D, gmOffsetExpr, staticOffsets);
 
+    // L0C 源侧 (m, n) 偏移: 仅 UB 直通 (TCopyL0C2UBConv) 路径携带 (VIEW 大搬小场景 view 窗口
+    // 在 L0C 块内的起始行列)，GM (TStoreConv) 路径无源偏移，保持空不追加
+    std::vector<std::string> srcOffsetList;
+    int64_t subBlockIdx = 0;
+    if (opCode == Opcode::OP_L0C_COPY_UB_CONV) {
+        srcOffsetList = {"0", "0"};
+        auto srcOffset = GetOffsetFromAttr(ToUnderlying(MISOIdx::SRC0_IDX));
+        if (srcOffset.size() == SHAPE_DIM2) {
+            if (!(functionType == FunctionType::STATIC) && srcOffset[ID0].IsValid()) {
+                auto srcOffsetExpr = GenSymbolicArgument(srcOffset);
+                srcOffsetList = {srcOffsetExpr[ID0], srcOffsetExpr[ID1]};
+            } else {
+                srcOffsetList = {std::to_string(srcOffset[ID0].Concrete()), std::to_string(srcOffset[ID1].Concrete())};
+            }
+        } else {
+            // 源偏移经 pass 折算后应恒为 L0C (m, n) 二维; 维度异常时回退块首读取, 告警暴露
+            CODEGEN_LOGW("L0C_COPY_UB_CONV[%d] srcOffset dim is %zu (expect 2), fallback to block start.",
+                         originalOp.GetOpMagic(), srcOffset.size());
+        }
+        // 搬运目标 UB 窗口: 消费链所在 AIV 核 (0=AIV0, 1=AIV1)，AIC 仅默认写 AIV0 窗口;
+        // 属性缺失 (FindConsumerVectorAIVCore UNSPECIFIED 时分析器不设置) 静默按 AIV0 生成,
+        // 若消费链实际在 AIV1 会读到未写入窗口, 表现为精度异常, 此处告警暴露
+        if (!GetOpAttr(OpAttributeKey::subBlockIdx, subBlockIdx)) {
+            CODEGEN_LOGW("L0C_COPY_UB_CONV[%d] missing subBlockIdx attr, default to AIV0 window.",
+                         originalOp.GetOpMagic());
+        }
+        srcOffsetList.emplace_back(std::to_string(subBlockIdx));
+    }
+
     std::vector<std::string> tileOpParamList = BuildCopyOutParamList(
         tileOpParams[ToUnderlying(MISOIdx::DST_IDX)], tileOpParams[ToUnderlying(MISOIdx::SRC0_IDX)], gmOffsetExpr,
-        staticOffsets, realM, realN, realCutW, std::to_string(cutW));
+        staticOffsets, realM, realN, realCutW, std::to_string(cutW), srcOffsetList);
 
     std::ostringstream oss;
     oss << tileOpName << WrapParamByAngleBrackets({copyOutModeStr, std::to_string(isConv3D), std::to_string(reluType)});

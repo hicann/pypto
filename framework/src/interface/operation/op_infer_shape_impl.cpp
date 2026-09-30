@@ -16,6 +16,7 @@
 #include "op_infer_shape_impl.h"
 #include "interface/operation/attr_holder.h"
 #include "interface/operation/operation.h"
+#include "interface/operation/operation_impl.h"
 #include "interface/operation/vector/gather_mask_common.h"
 #include "interface/tensor/symbolic_scalar.h"
 #include "interface/utils/common.h"
@@ -1209,6 +1210,95 @@ void L0CCopyOutConvInferFunc(Operation* op, std::vector<std::vector<SymbolicScal
     }
 }
 
+// L0C(NZ 二维) -> UB(NCHW/NCDHW tile) 直通搬运的输出 valid 推导:
+// 由本 copy 的有效 (M, N) (l0cValidMN 属性, VIEW 路径已按窗口刷新) 与 tile shape 推导
+//   c = min(M_valid, tile_c)
+//   w = min(realCutW, tile_w)
+//   行 = min(N_valid... M_valid, tile_h * tile_w)
+//   h = 行 / w
+// INSERT (小搬大, 多个 L0C 块以 toOffset 拼入同一 tile) 场景: 各 copy 的贡献为
+// toOffset + 窗口范围, 与已有 valid 按维取 max 合并 (参考 CopyOutInferFunc)
+void L0CCopyUBConvInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
+{
+    ASSERT(ConvExpandFuncError::EXPANDFUNC_TENSOR_OP_NULLPTR, op != nullptr) << "op should not be nullptr";
+    auto output = op->GetOOperands()[0];
+    auto input = op->GetIOperands()[0];
+    if (output == nullptr || input == nullptr || input->GetDynValidShape().size() != SHAPE_DIM2) {
+        if (output != nullptr && !output->GetDynValidShape().empty()) {
+            outValidShapes.push_back(output->GetDynValidShape());
+        }
+        return;
+    }
+    const auto& inValid = input->GetDynValidShape();
+    const Shape& tileShape = output->GetShape();
+    auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(op->GetOpAttribute());
+    // 本 copy 的有效 (M, N): 优先取 l0cValidMN 属性 (GenerateMoveOp 已按 view 窗口刷新,
+    // 携带 conv tile 的运行时有效行列; 动态场景下 tensor 的 dynValidShape 可能被重置回
+    // 静态全量), 缺省回退到输入 tensor 的 valid
+    SymbolicScalar copyM = (inValid.size() == SHAPE_DIM2) ? inValid[0] : SymbolicScalar(0);
+    SymbolicScalar copyN = (inValid.size() == SHAPE_DIM2) ? inValid[1] : SymbolicScalar(0);
+    std::vector<SymbolicScalar>* validMN = op->GetAttr<std::vector<SymbolicScalar>>(OpAttributeKey::l0cValidMN);
+    if (validMN != nullptr && validMN->size() == SHAPE_DIM2) {
+        copyM = (*validMN)[0];
+        copyN = (*validMN)[1];
+    }
+    // conv tile 的运行时有效 W (REAL_CUT_W 属性), 缺省取 tile 的 w
+    SymbolicScalar realCutW = SymbolicScalar(tileShape.back());
+    SymbolicScalar realCutWAttr;
+    if (op->GetAttr(Conv::LoadStoreConvOpAttributeKey::realCutW, realCutWAttr) && realCutWAttr.IsValid()) {
+        realCutW = realCutWAttr;
+    }
+    SymbolicScalar validN = copyN.Min(tileShape[1]).Max(0);
+    SymbolicScalar validW = realCutW.Min(tileShape.back());
+    SymbolicScalar validRows = copyM.Min(tileShape[tileShape.size() - NUM2] * tileShape.back()).Max(0);
+    SymbolicScalar validH = validRows / validW;
+    // INSERT (小搬大) 判定: 输出存在多个生产者, 或目的偏移非零 (多块拼入同一 tile)
+    bool isInsertPath = output->GetProducers().size() > 1;
+    if (!isInsertPath && copyAttr != nullptr) {
+        for (const auto& off : copyAttr->GetToOffset()) {
+            if (off.IsSpecified()) {
+                const auto& val = off.GetSpecifiedValue();
+                if (!val.ConcreteValid() || val.Concrete() != 0) {
+                    isInsertPath = true;
+                    break;
+                }
+            }
+        }
+    }
+    std::vector<SymbolicScalar> outShape;
+    if (!isInsertPath) {
+        outShape.push_back(SymbolicScalar(tileShape[0])); // n: batch 维由外层 tiling 迭代, tile 内恒满
+        outShape.push_back(validN);
+        if (tileShape.size() == SHAPE_DIM5) { // NCDHW: d 维由外层 tiling 迭代
+            outShape.push_back(SymbolicScalar(tileShape[2]));
+        }
+        outShape.push_back(validH);
+        outShape.push_back(validW);
+    } else {
+        // 本 copy 的窗口范围 (n=1, c, [d=1,] h, w), 以 toOffset 平移后与已有 valid 按维取 max
+        std::vector<SymbolicScalar> extent;
+        extent.push_back(SymbolicScalar(1));
+        extent.push_back(validN);
+        if (tileShape.size() == SHAPE_DIM5) {
+            extent.push_back(SymbolicScalar(1));
+        }
+        extent.push_back(validH);
+        extent.push_back(validW);
+        const auto& toOffset = copyAttr->GetToOffset();
+        const auto& existValid = output->GetDynValidShape();
+        for (size_t i = 0; i < extent.size(); ++i) {
+            SymbolicScalar exist = (i < existValid.size()) ? existValid[i] : SymbolicScalar(0);
+            SymbolicScalar offset = (i < toOffset.size() && toOffset[i].IsSpecified()) ?
+                                        toOffset[i].GetSpecifiedValue() :
+                                        SymbolicScalar(0);
+            outShape.push_back(exist.Max((extent[i] + offset) * (extent[i] != 0)));
+        }
+    }
+    for (auto outputTensor : op->GetOOperands()) {
+        outValidShapes.push_back(outShape);
+    }
+}
+
 REGISTER_INFER_SHAPE_FUNC(OP_L1_COPY_IN_CONV, Opcode::OP_L1_COPY_IN_CONV, L1CopyInConvInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_L1_COPY_IN_CONV_BP_DX_DY, Opcode::OP_L1_COPY_IN_CONV_BP_DX_DY, L1CopyInConvBpInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_L1_COPY_IN_CONV_BP, Opcode::OP_L1_COPY_IN_CONV_BP, L1CopyInConvBpInferFunc);
@@ -1216,6 +1306,7 @@ REGISTER_INFER_SHAPE_FUNC(OP_LOAD3D_CONV, Opcode::OP_LOAD3D_CONV, L1ToL0ConvInfe
 REGISTER_INFER_SHAPE_FUNC(OP_LOAD2D_CONV, Opcode::OP_LOAD2D_CONV, L1ToL0ConvInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_LOAD2DDX_CONV, Opcode::OP_LOAD2DDX_CONV, L1ToL0ConvInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_L0C_COPY_OUT_CONV, Opcode::OP_L0C_COPY_OUT_CONV, L0CCopyOutConvInferFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_L0C_COPY_UB_CONV, Opcode::OP_L0C_COPY_UB_CONV, L0CCopyUBConvInferFunc);
 
 void TransDataInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {

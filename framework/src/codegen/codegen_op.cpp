@@ -198,10 +198,11 @@ void CodeGenOp::SetDynValidShapeFromAttr(const std::vector<OpImmediate>& toValid
 void CodeGenOp::UpdateOffsetForInput(const Operation& oper, const LogicalTensor& logicalTensor, int operandIdx)
 {
     static const std::set<Opcode> cubeMDLOpCode = {
-        Opcode::OP_L1_TO_L0A,   Opcode::OP_L1_TO_L0B,       Opcode::OP_L1_TO_L0_AT,
-        Opcode::OP_L1_TO_L0_BT, Opcode::OP_L1_TO_BT,        Opcode::OP_L1_TO_FIX_QUANT_PRE,
-        Opcode::OP_L0C_TO_L1,   Opcode::OP_L1_TO_L0A_SCALE, Opcode::OP_L1_TO_L0B_SCALE,
-        Opcode::OP_L0C_COPY_UB, Opcode::OP_UB_COPY_L1,      Opcode::OP_L0C_COPY_UB_DUAL_DST};
+        Opcode::OP_L1_TO_L0A,       Opcode::OP_L1_TO_L0B,       Opcode::OP_L1_TO_L0_AT,
+        Opcode::OP_L1_TO_L0_BT,     Opcode::OP_L1_TO_BT,        Opcode::OP_L1_TO_FIX_QUANT_PRE,
+        Opcode::OP_L0C_TO_L1,       Opcode::OP_L1_TO_L0A_SCALE, Opcode::OP_L1_TO_L0B_SCALE,
+        Opcode::OP_L0C_COPY_UB,     Opcode::OP_UB_COPY_L1,      Opcode::OP_L0C_COPY_UB_DUAL_DST,
+        Opcode::OP_L0C_COPY_UB_CONV};
     static const std::set<Opcode> distOpcode = {Opcode::OP_SHMEM_PUT, Opcode::OP_SHMEM_STORE};
     bool cubeMDLCondition = cubeMDLOpCode.count(opCode);
     bool distCondition = distOpcode.count(opCode);
@@ -222,7 +223,8 @@ void CodeGenOp::UpdateOffsetForInput(const Operation& oper, const LogicalTensor&
 void CodeGenOp::UpdateOffsetForOutput(const Operation& oper, const LogicalTensor& logicalTensor, int operandIdx)
 {
     static const std::set<Opcode> cubeMDLOutOpCode = {Opcode::OP_L0C_TO_L1, Opcode::OP_L0C_COPY_UB,
-                                                      Opcode::OP_UB_COPY_L1, Opcode::OP_L0C_COPY_UB_DUAL_DST};
+                                                      Opcode::OP_UB_COPY_L1, Opcode::OP_L0C_COPY_UB_DUAL_DST,
+                                                      Opcode::OP_L0C_COPY_UB_CONV};
     bool cubeMDLCondition = cubeMDLOutOpCode.count(opCode);
     bool useAttrShapeOffsetForOutputGM = OpcodeManager::Inst().IsCopyOut(opCode) &&
                                          logicalTensor.GetMemoryTypeOriginal() == MEM_DEVICE_DDR;

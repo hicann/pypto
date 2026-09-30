@@ -528,6 +528,7 @@ public:
                                                             Opcode::OP_L0C_TO_L1,
                                                             Opcode::OP_L0C_COPY_UB,
                                                             Opcode::OP_L0C_COPY_UB_DUAL_DST,
+                                                            Opcode::OP_L0C_COPY_UB_CONV,
                                                             Opcode::OP_L1_TO_BT,
                                                             Opcode::OP_L1_TO_FIX_QUANT_PRE,
                                                             Opcode::OP_L1_TO_L0A,

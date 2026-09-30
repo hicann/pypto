@@ -224,7 +224,8 @@ protected:
                                                    const std::vector<std::string>& gmOffsetExpr,
                                                    const std::vector<int64_t>& staticOffsets, const std::string& realM,
                                                    const std::string& realN, const std::string& realCutW,
-                                                   const std::string& cutW) const;
+                                                   const std::string& cutW,
+                                                   const std::vector<std::string>& srcOffsetList = {}) const;
 
     std::string GenTemplateParamsForPutAndGet() const;
     std::string GenTemplateParamsForLoad() const;

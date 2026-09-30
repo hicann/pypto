@@ -383,4 +383,74 @@ TEST_F(TestCodegenDynConv, Load2DConv)
     EXPECT_EQ(res, expect);
 }
 
+// ========== OP_L0C_COPY_UB_CONV (TCopyL0C2UBConv, L0C -> UB 直通) codegen 测试 ==========
+
+std::string TestConvL0C2UBBody(const std::string& funcName, const std::vector<int64_t>& l0cShape,
+                               const std::vector<SymbolicScalar>& l0cValidShape, std::vector<int64_t>& ubShape,
+                               int64_t copyOutMode = COPY_OUT_MODE_NZ2DN, bool isConv3D = false,
+                               DataType dtype = DataType::DT_FP16, int64_t cutW = 16,
+                               SymbolicScalar dynValidCutW = SymbolicScalar(16))
+{
+    std::vector<int64_t> offset = {0, 0, 0, 0};
+    if (isConv3D) {
+        offset = {0, 0, 0, 0, 0};
+    }
+    auto function = GetFunctionConv(funcName);
+    auto ubTensor = CreateLogicalTensor(
+        {*function, dtype, MemoryType::MEM_UB, ubShape, SymbolicScalar::FromConcrete(ubShape)});
+    auto l0cTensor = CreateConvTensor(*function, DataType::DT_FP32, l0cShape, MemoryType::MEM_L0C, false);
+
+    auto& op = function->rootFunc_->programs_[0]->AddOperation(Opcode::OP_L0C_COPY_UB_CONV, {l0cTensor}, {ubTensor});
+    auto shapeImme = OpImmediate::Specified(l0cShape);
+    op.SetAttribute("COPY_OUT_MODE", copyOutMode);
+    op.SetAttribute("IS_CONV3D", isConv3D);
+    op.SetAttribute("CUT_W", cutW);
+    op.SetAttribute("REAL_CUT_W", dynValidCutW);
+    op.SetAttribute(OpAttributeKey::l0cValidMN, l0cValidShape);
+    op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
+    op.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_L0C, OpImmediate::Specified(offset),
+                                                        OpImmediate::Specified(ubShape),
+                                                        OpImmediate::Specified(ubShape), shapeImme));
+    // L0C 源侧 (m, n) 二维偏移需为具体值: 默认构造的 OpImmediate 非具体, codegen 读取输入偏移时会断言
+    auto copyAttrConv = std::dynamic_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
+    copyAttrConv->SetFromOffset(OpImmediate::Specified(std::vector<int64_t>{0, 0}));
+
+    return GenCodeByFunction(*function);
+}
+
+TEST_F(TestCodegenDynConv, L0CCopyUBConvTileTensorConv2D)
+{
+    std::vector<int64_t> l0cShape = {32, 16};
+    std::vector<int64_t> ubShape = {1, 16, 2, 16};
+    std::string res = TestConvL0C2UBBody("L0CCopyUBConvTileTensorConv2D", l0cShape,
+                                         SymbolicScalar::FromConcrete(l0cShape), ubShape);
+    std::string expect =
+        R"!!!(TCopyL0C2UBConv<CopyOutMode::NZ2DN, 0, 0>(ubTensor_9, l0cTensor_10, 0, 0, 0, 0, 0, 32, 16, 16, 16, 0, 0, 0);)!!!";
+    CheckStringExist(expect, res);
+}
+
+TEST_F(TestCodegenDynConv, L0CCopyUBConvTileTensorConv2DTailTensor)
+{
+    // 尾块: l0cValidMN 为运行时符号 (H 尾块 realM < M), realCutW 为运行时符号
+    std::vector<int64_t> l0cShape = {256, 16};
+    std::vector<int64_t> ubShape = {1, 16, 8, 32};
+    std::vector<SymbolicScalar> l0cValidShape = {SymbolicScalar("VM"), SymbolicScalar("VN")};
+    std::string res = TestConvL0C2UBBody("L0CCopyUBConvTileTensorConv2DTail", l0cShape, l0cValidShape, ubShape,
+                                         COPY_OUT_MODE_NZ2DN, false, DataType::DT_FP16, 32, SymbolicScalar("VCUT"));
+    std::string expect =
+        R"!!!(TCopyL0C2UBConv<CopyOutMode::NZ2DN, 0, 0>(ubTensor_9, l0cTensor_10, 0, 0, 0, 0, 0, VALUE_VM, VALUE_VN, VALUE_VCUT, 32, 0, 0, 0);)!!!";
+    CheckStringExist(expect, res);
+}
+
+TEST_F(TestCodegenDynConv, L0CCopyUBConvTileTensorConv3D)
+{
+    std::vector<int64_t> l0cShape = {32, 16};
+    std::vector<int64_t> ubShape = {1, 16, 1, 2, 16};
+    std::string res = TestConvL0C2UBBody("L0CCopyUBConvTileTensorConv3D", l0cShape,
+                                         SymbolicScalar::FromConcrete(l0cShape), ubShape, COPY_OUT_MODE_NZ2DN, true);
+    std::string expect =
+        R"!!!(TCopyL0C2UBConv<CopyOutMode::NZ2DN, 1, 0>(ubTensor_9, l0cTensor_10, 0, 0, 0, 0, 0, 32, 16, 16, 16, 0, 0, 0);)!!!";
+    CheckStringExist(expect, res);
+}
+
 } // namespace npu::tile_fwk

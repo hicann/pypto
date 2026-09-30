@@ -488,6 +488,18 @@ std::string CopyOpAttribute::Dump() const
     ss << "],";
     if (isCopyOut_) {
         ss << "from " << MemoryTypeToString(from_);
+        if (fromOffset_.size() != 0) {
+            // 源偏移参与 CSE (CommonOperationEliminate) 的算子哈希: 同源 tensor 不同源区域的
+            // copy (如 L0C 大搬小按通道拆分) 语义不同，不可因其余属性一致被误判为公共算子
+            ss << " from offset:[";
+            for (size_t i = 0; i < fromOffset_.size(); i++) {
+                if (i != 0) {
+                    ss << ",";
+                }
+                ss << std::setw(WIDTH) << fromOffset_[i].Dump();
+            }
+            ss << "]";
+        }
         if (fromDynValidShape_.size() != 0) {
             ss << " dynvalidshape:[";
             for (size_t i = 0; i < fromDynValidShape_.size(); i++) {

@@ -45,6 +45,26 @@ namespace npu::tile_fwk::legacy {
 namespace {
 // 穿透时视为透明的 op 集合（shape 兜底/端点收集跳过它们继续穿透）
 const std::unordered_set<Opcode> TRANSPARENT_OPS = {Opcode::OP_VIEW, Opcode::OP_ASSEMBLE, Opcode::OP_REGISTER_COPY};
+
+// conv L0C tile 判定: 与 GenerateMoveOp::SetOpcodeByMemPath 选择 OP_L0C_COPY_UB_CONV 的判据对齐,
+// 即 L0C tensor 的 producer 为 OP_TRANS_FORMAT_L0C (conv expand 产物) 且 rank 为 4/5 (NCHW/NCDHW);
+// 其余 rank>2 场景 (如 batched matmul) 不视为 conv, 不允许按 conv 末维对齐规则进入 L0C2UB 通路
+bool IsConvL0CTile(const LogicalTensorPtr& tensor)
+{
+    if (tensor == nullptr) {
+        return false;
+    }
+    size_t rank = tensor->GetShape().size();
+    if (rank != SHAPE_DIM4 && rank != SHAPE_DIM5) {
+        return false;
+    }
+    for (const auto& producer : tensor->GetProducers()) {
+        if (producer != nullptr && producer->GetOpcode() == Opcode::OP_TRANS_FORMAT_L0C) {
+            return true;
+        }
+    }
+    return false;
+}
 } // namespace
 Status AssignMemoryType::RunOnFunction(Function& function)
 {
@@ -1570,12 +1590,16 @@ void AssignMemoryType::ProcessL0C2UBSmallToLarge(Function& function)
         if (iOperand->GetMemoryTypeOriginal() != MEM_L0C) {
             continue;
         }
-        if (iOperand->GetShape().size() != kMatrixShapeDimCount ||
-            oOperand->GetShape().size() != kMatrixShapeDimCount) {
+        // conv 多维 tile (rank 4/5, producer 为 TRANS_FORMAT_L0C) 走末维 (W) 对齐校验;
+        // 非 conv 维持原二维 guard: rank != 2 直接跳过, 不落入 L0C2UB 通路
+        bool isConvTile = IsConvL0CTile(iOperand);
+        if (!isConvTile && (iOperand->GetShape().size() != kMatrixShapeDimCount ||
+                            oOperand->GetShape().size() != kMatrixShapeDimCount)) {
             continue;
         }
         bool isConsumerOutputMultiple = CheckConsumerViewShapeMultiple(oOperand, iOperand);
-        bool isVecTileShapeValid = MemoryPathUtils::CheckUBTileShape(iOperand);
+        bool isVecTileShapeValid = isConvTile ? MemoryPathUtils::CheckUBConvTileLastDimAligned(iOperand) :
+                                                MemoryPathUtils::CheckUBTileShape(iOperand);
         bool canUseUb = !HasParallelDifferentConsumerRequirement(iOperand, MemoryType::MEM_UB) &&
                         AreAllConsumerRequirementsTowardsUb(inserter, oOperand) &&
                         inserter.IsL0C2UbSupportedDtype(iOperand) &&
@@ -1613,7 +1637,11 @@ void AssignMemoryType::ProcessL0C2UBLargeToSmall(Function& function)
         }
         auto iOperand = op.GetIOperands().front();
         auto oOperand = op.GetOOperands().front();
-        bool isVecTileShapeValid = MemoryPathUtils::CheckUBTileShape(oOperand);
+        // conv 判定看 L0C 源 (producer 为 TRANS_FORMAT_L0C 且 rank 4/5), 对齐校验对象是 view 窗口 oOperand;
+        // 非 conv 维持 CheckUBTileShape 前两维分形校验
+        bool isConvTile = iOperand->GetMemoryTypeOriginal() == MEM_L0C && IsConvL0CTile(iOperand);
+        bool isVecTileShapeValid = isConvTile ? MemoryPathUtils::CheckUBConvTileLastDimAligned(oOperand) :
+                                                MemoryPathUtils::CheckUBTileShape(oOperand);
         if (iOperand->GetMemoryTypeOriginal() == MEM_L0C &&
             HasParallelDifferentConsumerRequirement(iOperand, MemoryType::MEM_UB)) {
             inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);

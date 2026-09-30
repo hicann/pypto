@@ -59,6 +59,7 @@ CodeGenOpNPU::CodeGenOpNPU(const CodeGenOpNPUCtx& ctx)
           // L0C <-> GM
           {Opcode::OP_L0C_COPY_OUT, [this]() { return GenMemL0CCopyOut(); }},
           {Opcode::OP_L0C_COPY_OUT_CONV, [this]() { return GenMemL0CCopyOutConv(); }},
+          {Opcode::OP_L0C_COPY_UB_CONV, [this]() { return GenMemL0CCopyOutConv(); }},
           {Opcode::OP_L0C_TO_L1, [this]() { return GenMemL0CToL1(); }},
           {Opcode::OP_L0C_RESHAPE_COPY_OUT, [this]() { return GenMemL0CCopyOut(); }},
 

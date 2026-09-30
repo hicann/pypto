@@ -67,7 +67,8 @@ public:
         // OP_CONTRACT 需做与 OP_ASSEMBLE 相同的处理。
         const bool forceUpdateDynValidShape = op->GetOpcode() == Opcode::OP_COPY_OUT ||
                                               op->GetOpcode() == Opcode::OP_CONTRACT ||
-                                              op->GetOpcode() == Opcode::OP_ASSEMBLE;
+                                              op->GetOpcode() == Opcode::OP_ASSEMBLE ||
+                                              op->GetOpcode() == Opcode::OP_L0C_COPY_UB_CONV;
         for (size_t i = 0; i < op->GetOOperands().size(); ++i) {
             if (op->GetOOperands()[i]->GetDynValidShape().empty() || forceUpdateDynValidShape) {
                 op->GetOOperands()[i]->UpdateDynValidShape(outValidShapes[i]);

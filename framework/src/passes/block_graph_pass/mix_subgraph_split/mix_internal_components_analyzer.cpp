@@ -570,18 +570,21 @@ Status MixInternalComponentsAnalyzer::DetermineComponentAIVCore(const std::vecto
 
 Status MixInternalComponentsAnalyzer::ProcessCubeScope(const std::vector<Operation*>& operations, int componentID) const
 {
-    // CUBE SCOPE: 处理L0C_COPY_UB OP的subBlockIdx属性
+    // CUBE SCOPE: 处理L0C_COPY_UB/L0C_COPY_UB_CONV OP的subBlockIdx属性
     APASS_LOG_DEBUG_F(Elements::Operation, "Component %d is cube scope, start process L0C_COPY_UB subBlockIdx Attr.",
                       componentID);
     AIVCore targetAIVCore = AIVCore::UNSPECIFIED;
     for (auto* op : operations) {
-        if (op->GetOpcode() == Opcode::OP_L0C_COPY_UB) {
+        if (op->GetOpcode() == Opcode::OP_L0C_COPY_UB || op->GetOpcode() == Opcode::OP_L0C_COPY_UB_CONV) {
             // 1. 校验L0C_COPY_UB的消费者v_scope的AIVCore属性一致性
             auto checkRet = CheckL0CCopyUBConsumerAIVCoreConsistency(op, componentID);
             if (checkRet != SUCCESS) {
                 return checkRet;
             }
             // 2. 获取目标AIVCore并设置subBlockIdx属性
+            // L0C_COPY_UB_CONV (conv L0C->UB 直通) 的搬运目标 UB 窗口由消费者的 AIV 核决定:
+            // copy_matrix_cc_to_ub 的 subBlockId 选择 AIV0/AIV1 窗口，否则 AIC 只写 AIV0 窗口，
+            // 落在 AIV1 的消费链读到空窗口 (大搬小按通道拆分时 c=16..32 链在 AIV1)
             targetAIVCore = FindConsumerVectorAIVCore(op);
             if (targetAIVCore != AIVCore::UNSPECIFIED) {
                 int64_t subBlockIdx = (targetAIVCore == AIVCore::AIV0) ? 0 : 1;

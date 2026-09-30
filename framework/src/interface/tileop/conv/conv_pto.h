@@ -63,4 +63,28 @@ TILEOP void TStoreConv(T& dst, U& src, const int64_t& offset0, const int64_t& of
     }
 }
 
+#if defined(PTO_NPU_ARCH_A5)
+// Copy data from L0C to UB, shape/offset 语义与 TStoreConv 一致，仅目的端为 UB (仅支持 A5)
+// srcOffsetM/srcOffsetN: L0C 源侧 (m, n) 偏移 (VIEW 大搬小时 view 窗口在 L0C 块内的起始行列)
+// subBlockId: 搬运目标 UB 窗口 (0=AIV0, 1=AIV1)，按消费链所在 AIV 核选择
+template <CopyOutMode mode, bool isConv3D, int64_t reluType, typename T, typename U>
+TILEOP void TCopyL0C2UBConv(T& dst, U& src, const int64_t& offset0, const int64_t& offset1, const int64_t& offset2,
+                            const int64_t& offset3, const int64_t& offset4, const int64_t& realM, const int64_t& realN,
+                            const int64_t& realCutW, const int64_t& cutW, const int64_t& srcOffsetM,
+                            const int64_t& srcOffsetN, const int64_t& subBlockId)
+{
+    constexpr auto srcShapeSize = Std::tuple_size<typename U::Shape>::value;
+    static_assert(srcShapeSize == SHAPE_DIM2, "L0C shape size should be 2 Dim");
+    static_assert(T::FORMAT == Hardware::UB && U::FORMAT == Hardware::L0C,
+                  "[TCopyL0C2UBConv Error]: Src format shoulde be L0C and Dst format shoulde be UB");
+    OffsetInfo offsetInfo = {offset0, offset1, offset2, offset3, offset4};
+    if constexpr (mode == CopyOutMode::NZ2DN) {
+        TCopyL0C2UBConvNZ2DN<isConv3D, reluType>(dst, src, offsetInfo, realM, realN, realCutW, cutW, srcOffsetM,
+                                                 srcOffsetN, subBlockId);
+    } else {
+        static_assert(mode == CopyOutMode::NZ2DN, "[TCopyL0C2UBConv Error]: L0C to UB only support CopyOutMode::NZ2DN");
+    }
+}
+#endif // defined(PTO_NPU_ARCH_A5)
+
 #endif // TILEOP_TILE_OPERATOR_CONV_PTO__H

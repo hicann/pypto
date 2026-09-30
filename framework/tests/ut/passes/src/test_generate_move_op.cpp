@@ -1297,6 +1297,248 @@ TEST_F(GenerateMoveOpPassTest, l0CCopyOutConvDynRawShapePropagation)
     EXPECT_EQ(rawShapeScalars[1].Dump(), "C");
 }
 
+// ========== ProcessL0CCopyUBConv 测试 ==========
+
+TEST_F(GenerateMoveOpPassTest, l0CCopyUBConvMergeTransFormatL0C)
+{
+    auto func = std::make_shared<Function>(Program::GetInstance(), "l0CCopyUBConvMerge", "l0CCopyUBConvMerge", nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("l0CCopyUBConvMerge", func);
+
+    std::vector<int64_t> shape{32, 64};
+    auto convOutput = CreateTestLogicalTensor(MEM_L0C, TileOpFormat::TILEOP_NZ, shape);
+    auto transFormatOutput = CreateTestLogicalTensor(MEM_L0C, TileOpFormat::TILEOP_NZ, shape);
+    auto ubOutput = CreateTestLogicalTensor(MEM_UB, TileOpFormat::TILEOP_ND, shape);
+
+    auto& transFormatOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_TRANS_FORMAT_L0C, {convOutput},
+                                                         {transFormatOutput});
+    transFormatOp.SetAttribute(OpAttributeKey::isConv, true);
+
+    auto& l0cCopyUbOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_L0C_COPY_UB, {transFormatOutput}, {ubOutput});
+    std::vector<OpImmediate> shapeImm = {OpImmediate::Specified(IRBuilder().CreateConstInt(shape[0])),
+                                         OpImmediate::Specified(IRBuilder().CreateConstInt(shape[1]))};
+    std::vector<OpImmediate> fromOffset = {OpImmediate::Specified(IRBuilder().CreateConstInt(0)),
+                                           OpImmediate::Specified(IRBuilder().CreateConstInt(0))};
+    std::vector<OpImmediate> toOffset = {OpImmediate::Specified(IRBuilder().CreateConstInt(0)),
+                                         OpImmediate::Specified(IRBuilder().CreateConstInt(0))};
+    l0cCopyUbOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+        fromOffset, MEM_UB, shapeImm, OpImmediate::Specified(transFormatOutput->tensor->GetDynRawShape()), shapeImm));
+    auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(l0cCopyUbOp.GetOpAttribute());
+    copyAttr->SetToOffset(toOffset);
+    l0cCopyUbOp.SetOpAttribute(copyAttr);
+
+    GenerateMoveOp pass;
+    EXPECT_EQ(pass.ProcessL0CCopyUBConv(l0cCopyUbOp), SUCCESS);
+
+    EXPECT_EQ(l0cCopyUbOp.GetOpcode(), Opcode::OP_L0C_COPY_UB_CONV);
+    EXPECT_TRUE(l0cCopyUbOp.HasAttribute(OpAttributeKey::isConv));
+    EXPECT_TRUE(l0cCopyUbOp.GetBoolAttribute(OpAttributeKey::isConv));
+    // conv 路径经 isConv 路由，不设置 isCube (与 matmul 的 OP_L0C_COPY_UB 不同)
+    EXPECT_TRUE(transFormatOp.IsDeleted());
+    EXPECT_EQ(l0cCopyUbOp.GetIOperands()[0], convOutput);
+
+    auto mergedAttr = std::dynamic_pointer_cast<CopyOpAttribute>(l0cCopyUbOp.GetOpAttribute());
+    ASSERT_NE(mergedAttr, nullptr);
+    // INSERT 路径 (2 维源偏移) 合并后应原样保留在新 copy attr 上
+    auto mergedFromOffset = OpImmediate::ToSpecified(mergedAttr->GetFromOffset());
+    ASSERT_EQ(mergedFromOffset.size(), 2);
+    EXPECT_TRUE(mergedFromOffset[0].ConcreteValid());
+    EXPECT_EQ(mergedFromOffset[0].Concrete(), 0);
+    EXPECT_TRUE(mergedFromOffset[1].ConcreteValid());
+    EXPECT_EQ(mergedFromOffset[1].Concrete(), 0);
+    auto rawShapeScalars = OpImmediate::ToSpecified(mergedAttr->GetRawShape());
+    ASSERT_EQ(rawShapeScalars.size(), 2);
+    EXPECT_TRUE(rawShapeScalars[0].ConcreteValid());
+    EXPECT_EQ(rawShapeScalars[0].Concrete(), 32);
+    EXPECT_TRUE(rawShapeScalars[1].ConcreteValid());
+    EXPECT_EQ(rawShapeScalars[1].Concrete(), 64);
+}
+
+// VIEW (大搬小) 路径: 4 维 NCHW 源偏移合并后应折算为 L0C (m, n) 二维坐标，
+// 且 L0C_VALID_MN 按 view 窗口刷新，不再使用整块 valid
+TEST_F(GenerateMoveOpPassTest, l0CCopyUBConvViewPathRefreshSrcOffset)
+{
+    auto func = std::make_shared<Function>(Program::GetInstance(), "l0CCopyUBConvViewPath", "l0CCopyUBConvViewPath",
+                                           nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("l0CCopyUBConvViewPath", func);
+
+    std::vector<int64_t> l0cShape{256, 32};
+    std::vector<int64_t> tfShape{1, 32, 16, 16};
+    std::vector<int64_t> ubShape{1, 16, 16, 16};
+    auto convOutput = CreateTestLogicalTensor(MEM_L0C, TileOpFormat::TILEOP_NZ, l0cShape);
+    auto transFormatOutput = CreateTestLogicalTensor(MEM_L0C, TileOpFormat::TILEOP_ND, tfShape);
+    auto ubOutput = CreateTestLogicalTensor(MEM_UB, TileOpFormat::TILEOP_ND, ubShape);
+
+    auto& transFormatOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_TRANS_FORMAT_L0C, {convOutput},
+                                                         {transFormatOutput});
+    transFormatOp.SetAttribute(OpAttributeKey::isConv, true);
+    std::vector<SymbolicScalar> blockValidMN = {SymbolicScalar(256), SymbolicScalar(32)};
+    transFormatOp.SetAttribute(OpAttributeKey::l0cValidMN, blockValidMN);
+
+    auto& l0cCopyUbOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_L0C_COPY_UB, {transFormatOutput}, {ubOutput});
+    // VIEW 路径: 4 维 NCHW 源偏移 (n=0, c=16, h=0, w=0)，目的偏移 4 维零
+    std::vector<OpImmediate> viewFromOffset = {
+        OpImmediate::Specified(IRBuilder().CreateConstInt(0)), OpImmediate::Specified(IRBuilder().CreateConstInt(16)),
+        OpImmediate::Specified(IRBuilder().CreateConstInt(0)), OpImmediate::Specified(IRBuilder().CreateConstInt(0))};
+    std::vector<OpImmediate> ubShapeImm = {OpImmediate::Specified(IRBuilder().CreateConstInt(ubShape[0])),
+                                           OpImmediate::Specified(IRBuilder().CreateConstInt(ubShape[1])),
+                                           OpImmediate::Specified(IRBuilder().CreateConstInt(ubShape[2])),
+                                           OpImmediate::Specified(IRBuilder().CreateConstInt(ubShape[3]))};
+    auto viewAttr = std::make_shared<CopyOpAttribute>(
+        viewFromOffset, MEM_UB, ubShapeImm, OpImmediate::Specified(transFormatOutput->tensor->GetDynRawShape()),
+        ubShapeImm);
+    viewAttr->SetToOffset(
+        {OpImmediate::Specified(IRBuilder().CreateConstInt(0)), OpImmediate::Specified(IRBuilder().CreateConstInt(0)),
+         OpImmediate::Specified(IRBuilder().CreateConstInt(0)), OpImmediate::Specified(IRBuilder().CreateConstInt(0))});
+    l0cCopyUbOp.SetOpAttribute(viewAttr);
+
+    GenerateMoveOp pass;
+    EXPECT_EQ(pass.ProcessL0CCopyUBConv(l0cCopyUbOp), SUCCESS);
+
+    EXPECT_EQ(l0cCopyUbOp.GetOpcode(), Opcode::OP_L0C_COPY_UB_CONV);
+    EXPECT_TRUE(transFormatOp.IsDeleted());
+    EXPECT_EQ(l0cCopyUbOp.GetIOperands()[0], convOutput);
+
+    auto mergedAttr = std::dynamic_pointer_cast<CopyOpAttribute>(l0cCopyUbOp.GetOpAttribute());
+    ASSERT_NE(mergedAttr, nullptr);
+    // (0, 16, 0, 0) -> m = 0*(16*16) + 0*16 + 0 = 0, n = 16
+    auto mergedFromOffset = OpImmediate::ToSpecified(mergedAttr->GetFromOffset());
+    ASSERT_EQ(mergedFromOffset.size(), 2);
+    EXPECT_TRUE(mergedFromOffset[0].ConcreteValid());
+    EXPECT_EQ(mergedFromOffset[0].Concrete(), 0);
+    EXPECT_TRUE(mergedFromOffset[1].ConcreteValid());
+    EXPECT_EQ(mergedFromOffset[1].Concrete(), 16);
+    // L0C_VALID_MN 按 view 窗口刷新: m = 1*16*16 = 256, n = c = 16 (不再使用整块 32)
+    auto validMN = l0cCopyUbOp.GetAttr<std::vector<SymbolicScalar>>(OpAttributeKey::l0cValidMN);
+    ASSERT_NE(validMN, nullptr);
+    ASSERT_EQ(validMN->size(), 2);
+    EXPECT_TRUE((*validMN)[0].ConcreteValid());
+    EXPECT_EQ((*validMN)[0].Concrete(), 256);
+    EXPECT_TRUE((*validMN)[1].ConcreteValid());
+    EXPECT_EQ((*validMN)[1].Concrete(), 16);
+}
+
+TEST_F(GenerateMoveOpPassTest, l0CCopyUBConvSkipNonTransFormatProducer)
+{
+    auto func = std::make_shared<Function>(Program::GetInstance(), "l0CCopyUBConvNonTrans", "l0CCopyUBConvNonTrans",
+                                           nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("l0CCopyUBConvNonTrans", func);
+
+    std::vector<int64_t> shape{32, 64};
+    auto inputTensor = CreateTestLogicalTensor(MEM_L0C, TileOpFormat::TILEOP_NZ, shape);
+    auto outputTensor = CreateTestLogicalTensor(MEM_UB, TileOpFormat::TILEOP_ND, shape);
+
+    auto& producerOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_COPY_IN, {inputTensor}, {outputTensor});
+
+    auto& l0cCopyUbOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_L0C_COPY_UB, {outputTensor}, {outputTensor});
+    std::vector<OpImmediate> shapeImm = {OpImmediate::Specified(IRBuilder().CreateConstInt(shape[0])),
+                                         OpImmediate::Specified(IRBuilder().CreateConstInt(shape[1]))};
+    l0cCopyUbOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(shapeImm, MEM_UB, shapeImm, shapeImm));
+
+    GenerateMoveOp pass;
+    EXPECT_EQ(pass.ProcessL0CCopyUBConv(l0cCopyUbOp), SUCCESS);
+
+    EXPECT_EQ(l0cCopyUbOp.GetOpcode(), Opcode::OP_L0C_COPY_UB);
+    EXPECT_FALSE(producerOp.IsDeleted());
+}
+
+TEST_F(GenerateMoveOpPassTest, l0CCopyUBConvSkipNoProducer)
+{
+    auto func = std::make_shared<Function>(Program::GetInstance(), "l0CCopyUBConvNoProd", "l0CCopyUBConvNoProd",
+                                           nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("l0CCopyUBConvNoProd", func);
+
+    std::vector<int64_t> shape{32, 64};
+    auto inputTensor = CreateTestLogicalTensor(MEM_L0C, TileOpFormat::TILEOP_NZ, shape);
+    auto outputTensor = CreateTestLogicalTensor(MEM_UB, TileOpFormat::TILEOP_ND, shape);
+
+    auto& l0cCopyUbOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_L0C_COPY_UB, {inputTensor}, {outputTensor});
+    std::vector<OpImmediate> shapeImm = {OpImmediate::Specified(IRBuilder().CreateConstInt(shape[0])),
+                                         OpImmediate::Specified(IRBuilder().CreateConstInt(shape[1]))};
+    l0cCopyUbOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(shapeImm, MEM_UB, shapeImm, shapeImm));
+
+    GenerateMoveOp pass;
+    EXPECT_EQ(pass.ProcessL0CCopyUBConv(l0cCopyUbOp), SUCCESS);
+
+    EXPECT_EQ(l0cCopyUbOp.GetOpcode(), Opcode::OP_L0C_COPY_UB);
+}
+
+TEST_F(GenerateMoveOpPassTest, l0CCopyUBConvFailNullInputOperand)
+{
+    auto func = std::make_shared<Function>(Program::GetInstance(), "l0CCopyUBConvNull", "l0CCopyUBConvNull", nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("l0CCopyUBConvNull", func);
+
+    LogicalTensors emptyInputs;
+    auto outputTensor = CreateTestLogicalTensor(MEM_UB, TileOpFormat::TILEOP_ND, {32, 64});
+    auto& l0cCopyUbOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_L0C_COPY_UB, emptyInputs, {outputTensor});
+
+    GenerateMoveOp pass;
+    EXPECT_EQ(pass.ProcessL0CCopyUBConv(l0cCopyUbOp), FAILED);
+}
+
+TEST_F(GenerateMoveOpPassTest, l0CCopyUBConvFailNullCopyAttr)
+{
+    auto func = std::make_shared<Function>(Program::GetInstance(), "l0CCopyUBConvNoAttr", "l0CCopyUBConvNoAttr",
+                                           nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("l0CCopyUBConvNoAttr", func);
+
+    std::vector<int64_t> shape{32, 64};
+    auto convOutput = CreateTestLogicalTensor(MEM_L0C, TileOpFormat::TILEOP_NZ, shape);
+    auto transFormatOutput = CreateTestLogicalTensor(MEM_L0C, TileOpFormat::TILEOP_NZ, shape);
+    auto ubOutput = CreateTestLogicalTensor(MEM_UB, TileOpFormat::TILEOP_ND, shape);
+
+    auto& transFormatOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_TRANS_FORMAT_L0C, {convOutput},
+                                                         {transFormatOutput});
+
+    auto& l0cCopyUbOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_L0C_COPY_UB, {transFormatOutput}, {ubOutput});
+
+    GenerateMoveOp pass;
+    EXPECT_EQ(pass.ProcessL0CCopyUBConv(l0cCopyUbOp), FAILED);
+
+    EXPECT_EQ(l0cCopyUbOp.GetOpcode(), Opcode::OP_L0C_COPY_UB);
+    EXPECT_FALSE(transFormatOp.IsDeleted());
+}
+
+TEST_F(GenerateMoveOpPassTest, l0CCopyUBConvMergeWithDynRawShape)
+{
+    auto func = std::make_shared<Function>(Program::GetInstance(), "l0CCopyUBConvDynRaw", "l0CCopyUBConvDynRaw",
+                                           nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("l0CCopyUBConvDynRaw", func);
+
+    std::vector<int64_t> l0cShape{16, 16};
+    std::vector<int64_t> dynShape{-1, -1};
+    auto convOutput = CreateTestLogicalTensor(MEM_L0C, TileOpFormat::TILEOP_NZ, dynShape);
+    convOutput->tensor->UpdateDynRawShape({CreateTestScalarVar("M"), CreateTestScalarVar("N")});
+    auto transFormatOutput = CreateTestLogicalTensor(MEM_L0C, TileOpFormat::TILEOP_NZ, l0cShape);
+    auto ubOutput = CreateTestLogicalTensor(MEM_UB, TileOpFormat::TILEOP_ND, l0cShape);
+
+    auto& transFormatOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_TRANS_FORMAT_L0C, {convOutput},
+                                                         {transFormatOutput});
+    transFormatOp.SetAttribute(OpAttributeKey::isConv, true);
+
+    auto& l0cCopyUbOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_L0C_COPY_UB, {transFormatOutput}, {ubOutput});
+    std::vector<OpImmediate> l0cShapeImm = {OpImmediate::Specified(IRBuilder().CreateConstInt(l0cShape[0])),
+                                            OpImmediate::Specified(IRBuilder().CreateConstInt(l0cShape[1]))};
+    std::vector<OpImmediate> fromOffset = {OpImmediate::Specified(IRBuilder().CreateConstInt(0)),
+                                           OpImmediate::Specified(IRBuilder().CreateConstInt(0))};
+    l0cCopyUbOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+        fromOffset, MEM_UB, l0cShapeImm, OpImmediate::Specified(transFormatOutput->tensor->GetDynRawShape()),
+        l0cShapeImm));
+
+    GenerateMoveOp pass;
+    EXPECT_EQ(pass.ProcessL0CCopyUBConv(l0cCopyUbOp), SUCCESS);
+
+    EXPECT_EQ(l0cCopyUbOp.GetOpcode(), Opcode::OP_L0C_COPY_UB_CONV);
+    EXPECT_TRUE(transFormatOp.IsDeleted());
+    EXPECT_EQ(l0cCopyUbOp.GetIOperands()[0], convOutput);
+
+    auto mergedAttr = std::dynamic_pointer_cast<CopyOpAttribute>(l0cCopyUbOp.GetOpAttribute());
+    ASSERT_NE(mergedAttr, nullptr);
+    auto rawShapeScalars = OpImmediate::ToSpecified(mergedAttr->GetRawShape());
+    ASSERT_EQ(rawShapeScalars.size(), 2);
+    EXPECT_EQ(rawShapeScalars[0].Dump(), "M");
+    EXPECT_EQ(rawShapeScalars[1].Dump(), "N");
+}
+
 // ========== 测试用例5：ProcessUB2L1 GEMV 分支（跳过 ND2NZ 插入） ==========
 TEST_F(GenerateMoveOpPassTest, ProcessUB2L1GemvSkipND2NZ)
 {

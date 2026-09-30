@@ -267,6 +267,19 @@ Status GenerateMoveOp::ProcessDefault(Function& function, Operation& op, ViewOpA
                           OpImmediate::Specified(viewOpAttribute->GetFromTensorOffset()),
                           OpImmediate::Specified(ZERO_OFFSET), Matrix::CopyMode::EXTRACT);
         op.SetAttribute(OpAttributeKey::isCube, true);
+    } else if (op.GetOpcode() == Opcode::OP_L0C_COPY_UB_CONV) {
+        // toOffset 全零, 维度随目的 tensor rank: 2D conv (NCHW) 为 4 维, 3D conv (NCDHW) 为 5 维;
+        // ProcessL0CCopyUBConv 随后会继承 TRANS_FORMAT_L0C 的 isConv3D, codegen 要求其 offset >= 5 维
+        const Shape& dstShape = op.GetOOperands()[0]->GetShape();
+        if (dstShape.size() != SHAPE_DIM4 && dstShape.size() != SHAPE_DIM5) {
+            APASS_LOG_ERROR_F(Elements::Operation,
+                              "L0C_COPY_UB_CONV op[%d] dst tensor rank %zu invalid, expect 4 (NCHW) or 5 (NCDHW).",
+                              op.GetOpMagic(), dstShape.size());
+            return FAILED;
+        }
+        Offset zeroToOffset(dstShape.size(), 0);
+        SetL0C2UBCopyConvAttr(op, dstShape, OpImmediate::Specified(viewOpAttribute->GetFromTensorOffset()),
+                              OpImmediate::Specified(zeroToOffset));
     } else {
         SetCopyAttr(op, viewOpAttribute);
     }
@@ -348,6 +361,24 @@ void GenerateMoveOp::SetL0C2UBCopyAttr(Operation& op, const Shape& realShape,
     op.SetAttribute(OpAttributeKey::localCopyLocalMode, static_cast<int64_t>(copyMode));
 }
 
+void GenerateMoveOp::SetL0C2UBCopyConvAttr(Operation& op, const Shape& realShape,
+                                           const std::vector<OpImmediate>& fromOffset,
+                                           const std::vector<OpImmediate>& toOffset) const
+{
+    IRBuilder builder;
+    std::vector<SymbolicScalar> validShape;
+    for (auto dim : realShape) {
+        SymbolicScalar scal = builder.CreateConstInt(dim);
+        validShape.push_back(scal);
+    }
+    auto copyAttr = std::make_shared<CopyOpAttribute>(
+        fromOffset, op.oOperand.front()->GetMemoryTypeOriginal(), OpImmediate::Specified(realShape),
+        OpImmediate::Specified(op.iOperand.front()->tensor->GetDynRawShape()), OpImmediate::Specified(validShape));
+    copyAttr->SetToOffset(toOffset);
+    op.SetOpAttribute(copyAttr);
+    op.SetAttribute(OpAttributeKey::isConv, true);
+}
+
 void GenerateMoveOp::SetUB2L1CopyAttr(Operation& op, const Shape& copyShape, const std::vector<OpImmediate>& fromOffset,
                                       const std::vector<OpImmediate>& toOffset, Matrix::CopyMode copyMode) const
 {
@@ -382,6 +413,15 @@ Status GenerateMoveOp::SetOpcodeByMemPath(Operation& op, MemoryType from, Memory
         return FAILED;
     }
     auto opcodeFindByPath = it->second;
+    auto inputTensor = op.GetIOperands()[0];
+    const auto& producers = inputTensor->GetProducers();
+    // 输入可能无生产者 (如直接构造的入参)，此时无法是 conv 的 TRANS_FORMAT 链，保持原路径
+    if (!producers.empty() && opcodeFindByPath == Opcode::OP_L0C_COPY_UB) {
+        auto parentOp = *producers.begin();
+        if (parentOp->GetOpcode() == Opcode::OP_TRANS_FORMAT_L0C) {
+            opcodeFindByPath = Opcode::OP_L0C_COPY_UB_CONV;
+        }
+    }
     op.SetOpCode(opcodeFindByPath);
     return SUCCESS;
 }
@@ -470,6 +510,166 @@ bool GenerateMoveOp::TryInsertModeDispatch(Function& function, Operation& op, As
     return false;
 }
 
+Status GenerateMoveOp::CheckTransFormatTopology(Operation& op, Operation*& outTransFormatOp) const
+{
+    outTransFormatOp = nullptr;
+
+    if (op.GetIOperands().empty() || op.GetIOperands()[0] == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Operation, "ProcessL0CCopyUBConv: op[%d] has empty or null input operand.",
+                          op.GetOpMagic());
+        return FAILED;
+    }
+    auto inputTensor = op.GetIOperands()[0];
+    const auto& producers = inputTensor->GetProducers();
+    if (producers.empty()) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "ProcessL0CCopyUBConv: op[%d] input tensor[%d] has no producer, skip.",
+                          op.GetOpMagic(), inputTensor->magic);
+        return SUCCESS;
+    }
+    if (producers.size() != 1) {
+        APASS_LOG_DEBUG_F(Elements::Operation,
+                          "ProcessL0CCopyUBConv: op[%d] input tensor[%d] has %zu producers, skip (require exactly 1).",
+                          op.GetOpMagic(), inputTensor->magic, producers.size());
+        return SUCCESS;
+    }
+    auto transFormatOp = *producers.begin();
+    if (transFormatOp == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "ProcessL0CCopyUBConv: op[%d] producer set size is 1 but producer is nullptr.",
+                          op.GetOpMagic());
+        return FAILED;
+    }
+    if (transFormatOp->GetOpcode() != Opcode::OP_TRANS_FORMAT_L0C) {
+        APASS_LOG_DEBUG_F(Elements::Operation,
+                          "ProcessL0CCopyUBConv: op[%d] producer is %s (not TRANS_FORMAT_L0C), skip.", op.GetOpMagic(),
+                          transFormatOp->GetOpcodeStr().c_str());
+        return SUCCESS;
+    }
+    if (transFormatOp->GetIOperands().size() != 1 || transFormatOp->GetOOperands().size() != 1) {
+        APASS_LOG_DEBUG_F(Elements::Operation,
+                          "ProcessL0CCopyUBConv: op[%d] TRANS_FORMAT_L0C[%d] has %zu inputs and %zu outputs "
+                          "(expected 1 and 1), skip.",
+                          op.GetOpMagic(), transFormatOp->GetOpMagic(), transFormatOp->GetIOperands().size(),
+                          transFormatOp->GetOOperands().size());
+        return SUCCESS;
+    }
+    if (transFormatOp->GetIOperands().front() == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Operation, "ProcessL0CCopyUBConv: op[%d] TRANS_FORMAT_L0C[%d] input is nullptr.",
+                          op.GetOpMagic(), transFormatOp->GetOpMagic());
+        return FAILED;
+    }
+    if (transFormatOp->GetOOperands().front() != inputTensor) {
+        APASS_LOG_ERROR_F(Elements::Operation,
+                          "ProcessL0CCopyUBConv: op[%d] TRANS_FORMAT_L0C[%d] output is not the same tensor as "
+                          "L0C_COPY_UB input, topology mismatch.",
+                          op.GetOpMagic(), transFormatOp->GetOpMagic());
+        return FAILED;
+    }
+
+    outTransFormatOp = transFormatOp;
+    return SUCCESS;
+}
+
+Status GenerateMoveOp::ProcessL0CCopyUBConv(Operation& op) const
+{
+    Operation* transFormatOp = nullptr;
+    auto topoRet = CheckTransFormatTopology(op, transFormatOp);
+    if (topoRet != SUCCESS || transFormatOp == nullptr) {
+        return topoRet;
+    }
+
+    auto transFormatAttrs = transFormatOp->GetAllAttr();
+    auto copyAttrUb = std::dynamic_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
+    if (!copyAttrUb) {
+        APASS_LOG_ERROR_F(Elements::Operation, "ProcessL0CCopyUBConv: op[%d] copy attribute is nullptr.",
+                          op.GetOpMagic());
+        return FAILED;
+    }
+
+    if (op.GetOOperands().empty() || op.GetOOperands().front() == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Operation, "ProcessL0CCopyUBConv: op[%d] output operand empty or null.",
+                          op.GetOpMagic());
+        return FAILED;
+    }
+
+    auto ubDst = op.GetOOperands().front();
+    auto transFormatOutput = transFormatOp->GetOOperands().front();
+    auto transFormatInput = transFormatOp->GetIOperands().front();
+
+    std::shared_ptr<CopyOpAttribute> copyAttr;
+    std::vector<SymbolicScalar> l0cValidMN;
+
+    const auto& ubFromOffset = copyAttrUb->GetFromOffset();
+    bool isViewPath = ubFromOffset.size() >= SHAPE_DIM4;
+
+    copyAttr = std::make_shared<CopyOpAttribute>(
+        transFormatInput->GetMemoryTypeOriginal(), copyAttrUb->GetToOffset(), OpImmediate::Specified(ubDst->GetShape()),
+        // rawShape 随 L0C 源传播: 动态场景 (M/N 符号) 在源侧, UB 输出的 raw shape 为静态 tile
+        OpImmediate::Specified(transFormatInput->GetRawTensor()->GetDynRawShape()),
+        OpImmediate::Specified(transFormatInput->GetDynValidShape()));
+
+    // 刷新源偏移: 合并后 src 直连 L0C 原始 (M, N) tensor，VIEW 路径携带的 4/5 维 NCHW(NCDHW)
+    // 源偏移需折算为 L0C (m, n) 二维坐标继承到新 copy attr 上；否则大搬小 (一个 L0C 块跨
+    // 多个 UB tile) 时各 copy 均从块首读取，且相互因属性一致被公共算子消除误删。
+    // INSERT (小搬大) 路径的源偏移为二维零偏移，原样保留。
+    if (isViewPath) {
+        const Shape& tfShape = transFormatOutput->GetShape();
+        if (tfShape.size() != ubFromOffset.size()) {
+            APASS_LOG_ERROR_F(Elements::Operation,
+                              "ProcessL0CCopyUBConv: op[%d] view fromOffset size %zu mismatch src shape size %zu.",
+                              op.GetOpMagic(), ubFromOffset.size(), tfShape.size());
+            return FAILED;
+        }
+        auto offsetScalars = OpImmediate::ToSpecified(ubFromOffset);
+        SymbolicScalar srcMOffset = 0;
+        for (size_t i = 0; i < offsetScalars.size(); ++i) {
+            if (i == 1) {
+                // C (channel) 维进入 L0C 的 n
+                continue;
+            }
+            int64_t stride = 1;
+            for (size_t j = i + 1; j < tfShape.size(); ++j) {
+                stride *= tfShape[j];
+            }
+            srcMOffset = srcMOffset + offsetScalars[i] * stride;
+        }
+        copyAttr->SetFromOffset(OpImmediate::Specified(std::vector<SymbolicScalar>{srcMOffset, offsetScalars[1]}));
+    } else if (!ubFromOffset.empty()) {
+        copyAttr->SetFromOffset(ubFromOffset);
+    }
+
+    // VIEW (等大/大搬小) 路径: L0C_VALID_MN 继承自 TRANS_FORMAT 的是整块 valid，大搬小时
+    // copy 会越过 UB tile 边界越界写 (覆写相邻 UB buffer)；按 view 窗口的运行时 valid
+    // shape 刷新为本 copy 的有效行列 (n*c*h*w -> m=Π_{i≠C}, n=c)。
+    // 注: UB tile 的 dynValidShape 不在 pass 内更新 (动态场景会与通用重推导冲突)，由
+    // op_infer_shape_impl.cpp 注册的 L0CCopyUBConvInferFunc 统一推导。
+    if (isViewPath && ubDst != nullptr) {
+        const auto& ubValid = ubDst->GetDynValidShape();
+        if (ubValid.size() >= SHAPE_DIM4) {
+            SymbolicScalar validN = ubValid[1];
+            SymbolicScalar validM = ubValid[0];
+            for (size_t i = 2; i < ubValid.size(); ++i) {
+                validM = validM * ubValid[i];
+            }
+            l0cValidMN = {validM, validN};
+        }
+    }
+
+    op.SetOpCode(Opcode::OP_L0C_COPY_UB_CONV);
+    op.GetAllAttr() = std::move(transFormatAttrs);
+    op.SetAttribute(OpAttributeKey::isConv, true);
+    op.SetOpAttribute(copyAttr);
+    op.ReplaceIOperand(0, transFormatInput);
+
+    if (!l0cValidMN.empty()) {
+        op.SetAttribute(OpAttributeKey::l0cValidMN, l0cValidMN);
+    }
+
+    transFormatOp->SetAsDeleted();
+
+    return SUCCESS;
+}
+
 Status GenerateMoveOp::CreateMoveOpForAssemble(Function& function, Operation& op) const
 {
     auto assembleOpAttribute = dynamic_cast<AssembleOpAttribute*>(op.GetOpAttribute().get());
@@ -484,7 +684,7 @@ Status GenerateMoveOp::CreateMoveOpForAssemble(Function& function, Operation& op
     auto outputMemtype = op.oOperand.front()->GetMemoryTypeOriginal();
     auto parentOp = assembleInput->GetProducers().empty() ? nullptr : *assembleInput->GetProducers().begin();
 
-    // INSERT 模式：L0C→L1 / L0C→UB / UB→L1
+    // INSERT 模式：L0C->L1 / L0C->UB / UB->L1
     if (TryInsertModeDispatch(function, op, assembleOpAttribute, inputMemtype, outputMemtype)) {
         return SUCCESS;
     }
@@ -495,7 +695,7 @@ Status GenerateMoveOp::CreateMoveOpForAssemble(Function& function, Operation& op
                                  parentOp->GetOpcode() == Opcode::OP_INDEX_OUTCAST))) {
         return SUCCESS;
     }
-    // DDR 输出路径：Conv 变体（L0C→DDR + Conv producer）或标准 COPY_OUT
+    // DDR 输出路径：Conv 变体（L0C->DDR + Conv producer）或标准 COPY_OUT
     if (inputMemtype == MemoryType::MEM_L0C && HasConvProducer(op)) {
         return ProcessConvAssemble(op, assembleOpAttribute);
     }
@@ -633,6 +833,14 @@ Status GenerateMoveOp::CreateMoveOp(Function& function) const
             }
             default:
                 break;
+        }
+    }
+    for (auto& op : function.Operations()) {
+        if (op.GetOpcode() == Opcode::OP_L0C_COPY_UB_CONV) {
+            Status status = ProcessL0CCopyUBConv(op);
+            if (status != SUCCESS) {
+                return status;
+            }
         }
     }
     function.EraseOperations(false, true, SortOperationsMode::LIGHTWEIGHT);
