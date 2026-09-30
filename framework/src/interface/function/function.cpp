@@ -2492,38 +2492,17 @@ void Function::CreateFromOutcast(const LogicalTensorPtr& symbol, const LogicalTe
 
 namespace {
 
-// Result of scanning all producers of an original outcast tensor in MakeOutcasts.
-// The two flags are independent and may both be true (e.g. full write then assemble).
-struct OutcastProducerTraits {
-    bool isAssembleOut{false};
-    bool needRuntimeAlloc{false};
-};
-
 bool IsAssembleLikeProducer(const Operation* op)
 {
     return (op->GetOpcode() == Opcode::OP_ASSEMBLE && op->HasAttribute("dassemble")) ||
            op->GetOpcode() == Opcode::OP_ASSEMBLE_SSA || op->GetOpcode() == Opcode::OP_ATOMIC_RMW;
 }
 
-// Inspects @p origin's producer set once and fills OutcastProducerTraits:
-//   isAssembleOut: at least one assemble-like producer uses the partial-update rewrite path.
-//   needRuntimeAlloc: at least one non-assemble producer needs RUNTIME_SlotMarkNeedAlloc,
-//   except reshape(inplace=True) outcasts that already reuse the linked incast address.
-OutcastProducerTraits ClassifyOutcastByProducers(const LogicalTensor& origin, bool isLinkedInplaceOutcast)
+// At least one assemble-like producer uses the partial-update rewrite path.
+bool HasAssembleLikeProducer(const LogicalTensor& origin)
 {
-    OutcastProducerTraits traits;
-    for (Operation* op : origin.GetProducers()) {
-        // Per-producer classification is exclusive, but traits are accumulated across all producers,
-        // so the final result may have both flags set (mixed assemble + compute producers).
-        if (IsAssembleLikeProducer(op)) {
-            traits.isAssembleOut = true;
-        } else {
-            if (!isLinkedInplaceOutcast) {
-                traits.needRuntimeAlloc = true;
-            }
-        }
-    }
-    return traits;
+    const auto& producers = origin.GetProducers();
+    return std::any_of(producers.begin(), producers.end(), IsAssembleLikeProducer);
 }
 
 } // namespace
@@ -2573,7 +2552,6 @@ LogicalTensors Function::MakeOutcasts(const std::shared_ptr<TensorSlotScope>& sc
         Parent().tensorMap_.Insert(outArgument);
         outArgumentList.push_back(outArgument);
 
-        bool isLinkedInplaceOutcast = outIncastLinkMap.count(origin->GetRawTensor()) != 0;
         std::shared_ptr<RawTensor> shareRaw;
         auto [groupIter, firstInGroup] = rawMagicToOutSymbolRaw.emplace(originRaws[idx]->rawmagic, nullptr);
         if (!firstInGroup) {
@@ -2593,9 +2571,7 @@ LogicalTensors Function::MakeOutcasts(const std::shared_ptr<TensorSlotScope>& sc
             slotScope_->outcastWriteSlotSet.push_back(slotScope_->oriOutcastWriteSlotSet[idx]);
             slotScope_->ioslot.outcastSlot.push_back(slotScope_->originalIocastsSlot.outcastSlot[idx]);
         }
-        const OutcastProducerTraits traits = ClassifyOutcastByProducers(*origin, isLinkedInplaceOutcast);
-        SetOutcastNeedAlloc(outCasts_.back(), traits.needRuntimeAlloc);
-        if (traits.isAssembleOut) {
+        if (HasAssembleLikeProducer(*origin)) {
             Substitute(origin, outSymbol);
             RebindAssembleVersionsToOutcast(origin, outSymbol);
             originOutCasts_[idx] = outSymbol;

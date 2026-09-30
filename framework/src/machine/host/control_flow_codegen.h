@@ -52,24 +52,4 @@ void GenerateExpression(SymbolicExpressionTable* exprTable, int devRootKey, cons
                         std::vector<std::string>& exprSrcFiles, std::ostringstream& controlFlowOss,
                         std::ostringstream& exprHeaderOss, int indent, const GetInputCse* getInputCse);
 
-template <typename HandleSlot>
-inline void ForEachNeedAllocAssembleOutcastSlot(Function* tile, const IncastOutcastSlot& ioslot,
-                                                const std::unordered_set<int>& assembleSlotIndexSet,
-                                                HandleSlot handleSlot)
-{
-    const auto& tileOutcasts = tile->GetOutcast();
-    size_t outcastCount = std::min(ioslot.outcastSlot.size(), tileOutcasts.size());
-    for (size_t outcastIdx = 0; outcastIdx < outcastCount; ++outcastIdx) {
-        if (!tile->IsOutcastNeedAlloc(tileOutcasts[outcastIdx])) {
-            continue;
-        }
-        for (int slot : ioslot.outcastSlot[outcastIdx]) {
-            if (assembleSlotIndexSet.count(slot) == 0) {
-                continue;
-            }
-            handleSlot(slot);
-        }
-    }
-}
-
 } // namespace npu::tile_fwk

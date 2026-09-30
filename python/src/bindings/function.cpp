@@ -93,7 +93,14 @@ void BindFunction(py::module_& m)
                 return Program::GetInstance().IsKnownDivisible(expr, divisor);
             },
             py::arg("expr"), py::arg("divisor"), "Check if expr is known to be divisible by divisor")
-        .def("DumpAttrs", [](Function& self) { return RebuildableAttributeManager::GetInstance().DumpAttrs(&self); });
+        .def("DumpAttrs", [](Function& self) { return RebuildableAttributeManager::GetInstance().DumpAttrs(&self); })
+        .def(
+            "GetConstructAssembleSlotList",
+            [](const Function& self) -> std::vector<int> {
+                const auto& scope = self.GetSlotScope();
+                return scope ? scope->constructAssembleSlotList : std::vector<int>{};
+            },
+            "Slot ids of assemble targets constructed in this PATH function (RUNTIME_SlotMarkNeedAlloc on entry)");
 
     // Add a function to get the last function from the Program
     m.def(

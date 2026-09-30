@@ -376,21 +376,6 @@ static void BuildConstructAssembleNeedAllocRuntimeSlots(FunctionCache& cache, Fu
 {
     attr->constructAssembleNeedAllocRuntimeSlots.clear();
     CollectConstructAssembleRuntimeSlotsFromFunction(cache, func, attr, slotIdxMapping);
-
-    const std::unordered_set<int> assembleSlotIndexSet(attr->inoutLink.assembleSlotIndexList.begin(),
-                                                       attr->inoutLink.assembleSlotIndexList.end());
-    for (Function* devRoot : attr->funcGroup.devRootList) {
-        ASSERT(DevCommonErr::PARAM_CHECK_FAILED, attr->rootTileDict.count(devRoot))
-            << "Function not found in rootTileDict";
-        Function* tile = attr->rootTileDict[devRoot];
-        if (!attr->inoutLink.ioslotDict.count(tile)) {
-            continue;
-        }
-        const IncastOutcastSlot& ioslot = attr->inoutLink.ioslotDict.at(tile);
-        ForEachNeedAllocAssembleOutcastSlot(tile, ioslot, assembleSlotIndexSet, [&](int slot) {
-            AddConstructAssembleNeedAllocRuntimeSlot(attr, slot, slotIdxMapping);
-        });
-    }
 }
 
 void ValDependTensorMeta::CheckValueDependCpuTensor()

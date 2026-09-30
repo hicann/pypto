@@ -987,16 +987,6 @@ public:
     // Rebuild the function-local token index from live operations' token lists.
     void RefreshVarDependency();
 
-    void SetOutcastNeedAlloc(const std::shared_ptr<LogicalTensor>& outcast, bool needAlloc)
-    {
-        outcastNeedAllocMap_[outcast] = needAlloc;
-    }
-    bool IsOutcastNeedAlloc(const std::shared_ptr<LogicalTensor>& outcast) const
-    {
-        auto it = outcastNeedAllocMap_.find(outcast);
-        return it != outcastNeedAllocMap_.end() && it->second;
-    }
-
 private:
     int functionMagic_{-1};
     std::string funcMagicName_; // Function name
@@ -1056,7 +1046,6 @@ private:
     std::shared_ptr<Tensor> getTensorDataOutcast_;
     bool hiddenFunction_{false};
     VarDependency varDependency_;
-    std::unordered_map<LogicalTensorPtr, bool> outcastNeedAllocMap_;
 
 private:
     std::vector<std::shared_ptr<Operation>> GetLightweightSortedOperations(bool preserveOriginalOrder = false) const;

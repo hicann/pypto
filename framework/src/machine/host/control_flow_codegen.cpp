@@ -208,27 +208,6 @@ void EmitPathAssembleNeedAlloc(ControlFlowEmitCtx& ctx, Function* func, int inde
     }
 }
 
-void EmitExecuteAssembleNeedAlloc(ControlFlowEmitCtx& ctx, Function* tile, int indent)
-{
-    auto currDynFuncAttr = Program::GetInstance().GetCurrentDynamicFunction()->GetDyndevAttribute();
-    if (currDynFuncAttr->inoutLink.ioslotDict.count(tile) == 0) {
-        return;
-    }
-    const IncastOutcastSlot& ioslot = currDynFuncAttr->inoutLink.ioslotDict.at(tile);
-    const std::unordered_set<int> assembleSlotIndexSet(currDynFuncAttr->inoutLink.assembleSlotIndexList.begin(),
-                                                       currDynFuncAttr->inoutLink.assembleSlotIndexList.end());
-    ForEachNeedAllocAssembleOutcastSlot(tile, ioslot, assembleSlotIndexSet, [&](int slot) {
-        int runtimeSlot = -1;
-        if (!TryGetRuntimeSlot(slot, ctx.slotIdxMapping, runtimeSlot)) {
-            return;
-        }
-        if (currDynFuncAttr->constructAssembleNeedAllocRuntimeSlots.count(runtimeSlot) == 0) {
-            return;
-        }
-        EmitSlotMarkNeedAlloc(ctx, runtimeSlot, indent);
-    });
-}
-
 void EmitIoArgDefines(ControlFlowEmitCtx& ctx)
 {
     const std::vector<std::string>& inputNameList = Program::GetInstance().GetTensorSlotManager()->GetInputNameList();
@@ -457,7 +436,6 @@ void BuildControlFlowExecuteGraph(ControlFlowEmitCtx& ctx, Function* func, int i
 
     int devRootKey = ctx.group.devRootList.GetIndex(func);
     ctx.controlFlowOss << BuildControlFlowCallee(func, indent * TABSIZE);
-    EmitExecuteAssembleNeedAlloc(ctx, tile, indent);
     ctx.controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "uint64_t *exprList" << devRootKey
                        << " = (uint64_t *)RUNTIME_RootAlloc(" << devRootKey << "ULL);\n";
 
