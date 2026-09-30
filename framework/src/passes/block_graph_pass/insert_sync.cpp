@@ -19,6 +19,7 @@
 #include <unordered_set>
 #include "interface/tensor/irbuilder.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/pass_common_defs.h"
 
 #define MODULE_NAME "InsertSync"
 
@@ -1556,6 +1557,7 @@ void PipeSync::CreateForceSyncOp(Opcode opcode, PipeType pipe, CoreType core, AI
     op.syncQueue_ = {pipe, pipe, core, core, EVENT_ID7, aivCore, aivCore};
     syncedOpLog.emplace_back(std::make_pair(++insertIdx, std::ref(op)));
     op.SetAIVCore(aivCore);
+    forceSyncOps_.insert(&op);
 }
 
 void PipeSync::CreateBarAllOp(AIVCore aivCore, uint64_t& insertIdx, Function& function,
@@ -1567,6 +1569,7 @@ void PipeSync::CreateBarAllOp(AIVCore aivCore, uint64_t& insertIdx, Function& fu
     op.syncQueue_ = {PipeType::PIPE_ALL, PipeType::PIPE_ALL, CoreType::AIV, CoreType::AIV, -1, aivCore, aivCore};
     syncedOpLog.emplace_back(std::make_pair(++insertIdx, std::ref(op)));
     op.SetAIVCore(aivCore);
+    forceSyncOps_.insert(&op);
 }
 
 void PipeSync::AddCrossCoreForceSyncOps(size_t setIdx, std::vector<IndexOp>& syncedOpLog, Function& function)
@@ -2050,12 +2053,10 @@ bool InsertSync::IsSyncOpcode(Opcode opcode)
            opcode == Opcode::OP_BAR_ALL;
 }
 
-bool InsertSync::IsImmovableSync(Opcode opcode, const OpSyncQueue& sq)
+bool InsertSync::IsImmovableSync(Opcode opcode)
 {
-    return opcode == Opcode::OP_CV_SYNC_SRC || opcode == Opcode::OP_CV_SYNC_DST ||
-           opcode == Opcode::OP_FFTS_CROSS_CORE_SYNC || opcode == Opcode::OP_WAIT_FLAG_DEV ||
-           opcode == Opcode::OP_BAR_ALL || opcode == Opcode::OP_BAR_V || opcode == Opcode::OP_BAR_M ||
-           sq.coreType_ != sq.trigCoreType_;
+    return opcode == Opcode::OP_FFTS_CROSS_CORE_SYNC || opcode == Opcode::OP_WAIT_FLAG_DEV ||
+           opcode == Opcode::OP_BAR_ALL || opcode == Opcode::OP_BAR_V || opcode == Opcode::OP_BAR_M;
 }
 
 InsertSync::SyncSignature InsertSync::MakeSyncSignature(int eventId, PipeType setPipe, PipeType waitPipe)
@@ -2084,35 +2085,81 @@ Status InsertSync::BuildClusterRanges(const std::vector<Operation*>& opList, std
             continue;
         }
         int scopeId = opList[i]->GetAtomicScopeId();
-        if (scopeId <= 0) {
+        if (scopeId < VF_CLUSTER_ID_START) {
             continue;
         }
         auto& ci = clusters[scopeId];
         ci.firstIdx = std::min(ci.firstIdx, i);
         ci.lastIdx = std::max(ci.lastIdx, i);
+        if (ci.firstIdx == i) {
+            ci.aivCore = opList[i]->GetAIVCore();
+        }
     }
     return SUCCESS;
 }
 
 // Pass 2: 扫描单个 cluster 范围 — 连续性 + 指令类型 + 收集 sync op + 配对检查
-Status InsertSync::ValidateAndCollectClusterSyncOps(const std::vector<Operation*>& opList, int scopeId, ClusterInfo& ci)
+// OOO 发射序列跨核交错：区间内另一核（AIV0/AIV1/AIC）的 op 不属于本 cluster，跳过挪动判定
+Status InsertSync::ValidateAndCollectClusterSyncOps(const std::vector<Operation*>& opList, int scopeId, ClusterInfo& ci,
+                                                    const std::unordered_set<Operation*>& forceSyncOps)
 {
     for (size_t i = ci.firstIdx + 1; i < ci.lastIdx; ++i) {
         Operation* op = opList[i];
         if (!IsSyncOpcode(op->GetOpcode())) {
+            if (op->GetAIVCore() != ci.aivCore) {
+                // OOO 发射序列跨核交错：区间内另一核（AIV0/AIV1/AIC）的 op 不属于本 cluster，跳过
+                continue;
+            }
             if (op->GetAtomicScopeId() != scopeId) {
+                // 窗口内夹带同核外部 op（scope=-1 的未压实搬运，或异 scope 交错）：
+                // 挪动 sync 跨越同发射流 op 存在顺序风险，降级为整 cluster 不调整
+                ci.skipAdjust = true;
+                ci.waitSyncs.clear();
+                ci.setSyncs.clear();
                 APASS_LOG_WARN_F(Elements::Operation,
-                                 "AdjustSyncByAtomicScope failed: cluster %d not continuous at index %zu.", scopeId, i);
-                return WARNING;
+                                 "AdjustSyncByAtomicScope: cluster %d not continuous at index %zu, "
+                                 "op:%s[%d] scope:%d aivcore:%d, cluster first:%s[%d] last:%s[%d], skip whole cluster.",
+                                 scopeId, i, op->GetOpcodeStr().c_str(), op->GetOpMagic(), op->GetAtomicScopeId(),
+                                 static_cast<int>(op->GetAIVCore()), opList[ci.firstIdx]->GetOpcodeStr().c_str(),
+                                 opList[ci.firstIdx]->GetOpMagic(), opList[ci.lastIdx]->GetOpcodeStr().c_str(),
+                                 opList[ci.lastIdx]->GetOpMagic());
+                return SUCCESS;
             }
             continue;
         }
-        if (IsImmovableSync(op->GetOpcode(), op->syncQueue_)) {
+        bool isImmovable = IsImmovableSync(op->GetOpcode());
+        // CV eventId 耗尽时插入的兜底 force 同步序列（BAR_ALL/FFTS/WAIT_FLAG_DEV）落在 cluster 内：
+        // 挪动 sync 跨越 force 序列存在事件重置风险，该 cluster 整体不再进行 op 顺序调整
+        if (isImmovable && forceSyncOps.count(op) > 0) {
+            ci.skipAdjust = true;
+            ci.waitSyncs.clear();
+            ci.setSyncs.clear();
+            APASS_LOG_WARN_F(Elements::Operation,
+                             "AdjustSyncByAtomicScope: force sync %s[%d] inside cluster %d at index %zu, "
+                             "cluster first:%s[%d] last:%s[%d], skip whole cluster adjust.",
+                             op->GetOpcodeStr().c_str(), op->GetOpMagic(), scopeId, i,
+                             opList[ci.firstIdx]->GetOpcodeStr().c_str(), opList[ci.firstIdx]->GetOpMagic(),
+                             opList[ci.lastIdx]->GetOpcodeStr().c_str(), opList[ci.lastIdx]->GetOpMagic());
+            return SUCCESS;
+        }
+        if (op->GetAIVCore() != ci.aivCore) {
+            // OOO 发射序列跨核交错：区间内另一核（AIV0/AIV1/AIC）的 op 不属于本 cluster，跳过
+            continue;
+        }
+        if (isImmovable) {
             APASS_LOG_ERROR_F(Elements::Operation,
-                              "AdjustSyncByAtomicScope failed: immovable sync %s inside cluster %d.",
-                              op->GetOpcodeStr().c_str(), scopeId);
+                              "AdjustSyncByAtomicScope failed: immovable sync %s inside cluster %d, "
+                              "sync aivcore:%d, cluster aivcore:%d.",
+                              op->GetOpcodeStr().c_str(), scopeId, static_cast<int>(op->GetAIVCore()),
+                              static_cast<int>(ci.aivCore));
             return FAILED;
         }
+        // CV 配对检查（同簇同 eventId 的 set/wait 即拒绝）：AIC<->AIV 双向握手共享 eventId 数值
+        // 空间且 wait 生成后即回收复用，同一 cluster 可能收集到数值相同的 CV set 与 CV wait（分属
+        // 两个握手、均在本核执行的一端）。此时异核配对端 op 保持原位，若把本核 wait 挪到 cluster
+        // 前、set 挪到 cluster 后，会与原位配对端形成顺序颠倒（如 V set C wait C set V wait 挪动后
+        // 变为 V wait C wait C set V set）互等死锁，须报错拒绝调整。普通 SYNC_SRC/DST 为同核跨
+        // pipe 同步，配对可能同簇出现，签名检查同理保留。
         if (op->GetOpcode() == Opcode::OP_SYNC_DST) {
             if (ci.setSignatures.count(GetSyncSignature(op->syncQueue_, false)) > 0) {
                 APASS_LOG_ERROR_F(Elements::Operation,
@@ -2124,52 +2171,73 @@ Status InsertSync::ValidateAndCollectClusterSyncOps(const std::vector<Operation*
         } else if (op->GetOpcode() == Opcode::OP_SYNC_SRC) {
             ci.setSyncs.push_back(op);
             ci.setSignatures.insert(GetSyncSignature(op->syncQueue_, true));
+        } else if (op->GetOpcode() == Opcode::OP_CV_SYNC_DST) {
+            if (ci.cvSetEventIds.count(op->syncQueue_.eventId_) > 0) {
+                APASS_LOG_ERROR_F(Elements::Operation,
+                                  "AdjustSyncByAtomicScope failed: paired cv set/wait (eventId=%d) in cluster %d.",
+                                  op->syncQueue_.eventId_, scopeId);
+                return FAILED;
+            }
+            ci.waitSyncs.push_back(op);
+        } else if (op->GetOpcode() == Opcode::OP_CV_SYNC_SRC) {
+            ci.setSyncs.push_back(op);
+            ci.cvSetEventIds.insert(op->syncQueue_.eventId_);
         }
     }
     return SUCCESS;
 }
 
 // Pass 3: 重排 — wait-like 移到 cluster 前，set-like 移到 cluster 后
+// 区间可能跨核交错重叠（异核 cluster 嵌套），被收集的 sync 从原位移除、在所属 cluster 边界重发，
+// 未被收集的 op（另一核 op 与 sync）保持原位
 void InsertSync::ReorderOpListForClusters(std::vector<Operation*>& opList, const std::map<int, ClusterInfo>& clusters)
 {
-    std::vector<int> posToCluster(opList.size(), -1);
-    for (const auto& [scopeId, ci] : clusters) {
-        std::fill(posToCluster.begin() + static_cast<ptrdiff_t>(ci.firstIdx),
-                  posToCluster.begin() + static_cast<ptrdiff_t>(ci.lastIdx) + 1, scopeId);
+    std::unordered_set<Operation*> collectedSyncs;
+    std::unordered_map<size_t, std::vector<const ClusterInfo*>> waitAt;
+    std::unordered_map<size_t, std::vector<const ClusterInfo*>> setAt;
+    for (const auto& cluster : clusters) {
+        const ClusterInfo& ci = cluster.second;
+        if (ci.skipAdjust) {
+            continue;
+        }
+        for (auto* w : ci.waitSyncs) {
+            collectedSyncs.insert(w);
+        }
+        for (auto* s : ci.setSyncs) {
+            collectedSyncs.insert(s);
+        }
+        waitAt[ci.firstIdx].emplace_back(&ci);
+        setAt[ci.lastIdx].emplace_back(&ci);
     }
 
     std::vector<Operation*> newOpList;
     newOpList.reserve(opList.size());
-    std::unordered_map<int, bool> waitEmitted, setEmitted;
-
     for (size_t i = 0; i < opList.size(); ++i) {
-        int cid = posToCluster[i];
-        if (cid < 0) {
+        auto waitIt = waitAt.find(i);
+        if (waitIt != waitAt.end()) {
+            for (auto* ci : waitIt->second) {
+                for (auto* w : ci->waitSyncs) {
+                    newOpList.push_back(w);
+                }
+            }
+        }
+        if (collectedSyncs.count(opList[i]) == 0) {
             newOpList.push_back(opList[i]);
-            continue;
         }
-        const auto& ci = clusters.at(cid);
-        if (IsSyncOpcode(opList[i]->GetOpcode())) {
-            continue;
-        }
-        if (i == ci.firstIdx && !waitEmitted[cid]) {
-            for (auto* w : ci.waitSyncs) {
-                newOpList.push_back(w);
+        auto setIt = setAt.find(i);
+        if (setIt != setAt.end()) {
+            for (auto* ci : setIt->second) {
+                for (auto* s : ci->setSyncs) {
+                    newOpList.push_back(s);
+                }
             }
-            waitEmitted[cid] = true;
-        }
-        newOpList.push_back(opList[i]);
-        if (i == ci.lastIdx && !setEmitted[cid]) {
-            for (auto* s : ci.setSyncs) {
-                newOpList.push_back(s);
-            }
-            setEmitted[cid] = true;
         }
     }
     opList = std::move(newOpList);
 }
 
-Status InsertSync::AdjustSyncByAtomicScope(std::vector<Operation*>& opList)
+Status InsertSync::AdjustSyncByAtomicScope(std::vector<Operation*>& opList,
+                                           const std::unordered_set<Operation*>& forceSyncOps)
 {
     if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510) {
         return SUCCESS;
@@ -2183,8 +2251,10 @@ Status InsertSync::AdjustSyncByAtomicScope(std::vector<Operation*>& opList)
         return SUCCESS;
     }
 
+    // skipAdjust 仅由 ValidateAndCollectClusterSyncOps（Pass 2）置位，此处无需预判；
+    // 被 Pass 2 置位的 cluster 在 ReorderOpListForClusters 中按 skipAdjust 跳过
     for (auto& [scopeId, ci] : clusters) {
-        auto status = ValidateAndCollectClusterSyncOps(opList, scopeId, ci);
+        auto status = ValidateAndCollectClusterSyncOps(opList, scopeId, ci, forceSyncOps);
         if (status != SUCCESS) {
             return status;
         }
@@ -2263,7 +2333,10 @@ Status InsertSync::GenNewOpList(Function* subGraphFunc, std::vector<Operation*>&
         ps.PhaseKernelProcess(*subGraphFunc, syncedOpLogPtr, opListNew);
     }
     subGraphFunc->EraseOperations(true, false);
-    AdjustSyncByAtomicScope(opListNew);
+    if (AdjustSyncByAtomicScope(opListNew, ps.GetForceSyncOps()) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "GenNewOpList failed at function AdjustSyncByAtomicScope.");
+        return FAILED;
+    }
     if (CheckNewOpListSeq(oriOpList, opListNew) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "GenNewOpList failed at function CheckNewOpListSeq.");
         return FAILED;

@@ -429,6 +429,8 @@ private:
     void CreateForceSyncOp(Opcode opcode, PipeType pipe, CoreType core, AIVCore aivCore, uint64_t& insertIdx,
                            Function& function, std::vector<IndexOp>& syncedOpLog);
     void CreateBarAllOp(AIVCore aivCore, uint64_t& insertIdx, Function& function, std::vector<IndexOp>& syncedOpLog);
+    // CV eventId 耗尽时插入的兜底 force 同步序列（BAR_ALL/FFTS/WAIT_FLAG_DEV）
+    const std::unordered_set<Operation*>& GetForceSyncOps() const { return forceSyncOps_; }
     std::deque<int>& GetFreeEventIdQueue(const PipePairEx& pp);
     int GetSyncSrcLogIdx(const std::vector<IndexOp>& syncedOpLog, int i);
     int GetMaxEventId(const PipePairEx& pp);
@@ -465,6 +467,7 @@ private:
     std::unordered_map<PipePairEx, std::vector<int>, PipePairExHash> doublePipeOp; // pipepair, opmagic
     std::queue<size_t> orderedOpList_;
     std::vector<Operation*> oriOpList_;
+    std::unordered_set<Operation*> forceSyncOps_;
     std::unordered_map<int, TileRange> ubTensorRangeMap;
     IRBuilder irBuilder_;
 };
@@ -484,11 +487,11 @@ private:
     Status ApplyCvHardSync(Function* subGraphFunc, std::vector<Operation*>& opListNew);
     Status CheckNewOpListSeq(const std::vector<Operation*>& oriOpList, const std::vector<Operation*>& opListNew);
     Status InsertSyncMainLoop(Function* subGraphFunc);
-    Status AdjustSyncByAtomicScope(std::vector<Operation*>& opList);
+    Status AdjustSyncByAtomicScope(std::vector<Operation*>& opList, const std::unordered_set<Operation*>& forceSyncOps);
 
     // --- atomic scope 后处理辅助方法 ---
     static bool IsSyncOpcode(Opcode opcode);
-    static bool IsImmovableSync(Opcode opcode, const OpSyncQueue& sq);
+    static bool IsImmovableSync(Opcode opcode);
     // 配对签名：(eventId, setPipe, waitPipe) 编码为 uint64
     using SyncSignature = uint64_t;
     static SyncSignature MakeSyncSignature(int eventId, PipeType setPipe, PipeType waitPipe);
@@ -498,12 +501,17 @@ private:
     struct ClusterInfo {
         size_t firstIdx{SIZE_MAX};
         size_t lastIdx{0};
+        AIVCore aivCore{AIVCore::UNSPECIFIED};
+        // cluster 内出现 force 同步序列时置位：该 cluster 整体不再进行 op 顺序调整
+        bool skipAdjust{false};
         std::vector<Operation*> waitSyncs;
         std::vector<Operation*> setSyncs;
         std::unordered_set<SyncSignature> setSignatures;
+        std::unordered_set<int> cvSetEventIds;
     };
     Status BuildClusterRanges(const std::vector<Operation*>& opList, std::map<int, ClusterInfo>& clusters);
-    Status ValidateAndCollectClusterSyncOps(const std::vector<Operation*>& opList, int scopeId, ClusterInfo& ci);
+    Status ValidateAndCollectClusterSyncOps(const std::vector<Operation*>& opList, int scopeId, ClusterInfo& ci,
+                                            const std::unordered_set<Operation*>& forceSyncOps);
     void ReorderOpListForClusters(std::vector<Operation*>& opList, const std::map<int, ClusterInfo>& clusters);
 
     bool enableDebug_{false};
