@@ -272,20 +272,20 @@ public:
 
         CostModel::OutputSilencer silencer;
         silencer.silence();
-        uint8_t* value_0_ptr = reinterpret_cast<uint8_t*>(new uint64_t(0));
-        uint8_t* value_1_ptr = reinterpret_cast<uint8_t*>(new uint64_t(1));
-        uint8_t* value_34603008_ptr = reinterpret_cast<uint8_t*>(new uint64_t(34603008));
+        uint64_t value_0 = 0;
+        uint64_t value_1 = 1;
+        uint64_t value_34603008 = 34603008;
         pv_init_(PV_MODE_NORMAL, 0, 1, (dir_ + std::string("/pvlog/")).c_str(), coreId_);
         pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_REG_PARA_BASE, (uint8_t*)&HBM_PARA_BASE, 0, coreId_);
         pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_REG_PARA_BASE, (uint8_t*)&HBM_PARA_BASE, 1, coreId_);
-        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_REG_BLOCK_DIM, value_1_ptr, 0, coreId_);
-        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_REG_BLOCK_DIM, value_1_ptr, 1, coreId_);
-        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_REG_TASK_CFG, value_1_ptr, 0, coreId_);
-        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_REG_TASK_CFG, value_1_ptr, 1, coreId_);
-        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_SYS_VA_BASE, value_0_ptr, 0, coreId_);
-        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_SYS_VA_BASE, value_0_ptr, 1, coreId_);
-        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_SYS_PHY_BASE, value_34603008_ptr, 0, coreId_);
-        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_SYS_PHY_BASE, value_34603008_ptr, 1, coreId_);
+        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_REG_BLOCK_DIM, (uint8_t*)&value_1, 0, coreId_);
+        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_REG_BLOCK_DIM, (uint8_t*)&value_1, 1, coreId_);
+        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_REG_TASK_CFG, (uint8_t*)&value_1, 0, coreId_);
+        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_REG_TASK_CFG, (uint8_t*)&value_1, 1, coreId_);
+        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_SYS_VA_BASE, (uint8_t*)&value_0, 0, coreId_);
+        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_SYS_VA_BASE, (uint8_t*)&value_0, 1, coreId_);
+        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_SYS_PHY_BASE, (uint8_t*)&value_34603008, 0, coreId_);
+        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_SYS_PHY_BASE, (uint8_t*)&value_34603008, 1, coreId_);
         silencer.restore();
         SIMULATION_LOGI("pvlog path: %s", (dir_ + std::string("/pvlog/")).c_str());
     }
