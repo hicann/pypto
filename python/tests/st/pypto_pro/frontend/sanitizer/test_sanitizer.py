@@ -1597,6 +1597,44 @@ def test_alias_rebind_oob_detected():
     logging.info("test_alias_rebind_oob_detected OK")
 
 
+# -----------------------------------------------------------------------------
+# 十三、@pl.jit(name=...) 插桩回归（入口识别不依赖命名巧合）
+# -----------------------------------------------------------------------------
+
+
+@pl.jit(sanitizer=True, auto_mutex=True, name="sanitizer_named_entry_kernel")
+def named_clean_kernel(
+    x: pl.Tensor[[TILE_M, TILE_N], pl.DT_FP16],
+    z: pl.Tensor[[TILE_M, TILE_N], pl.DT_FP16],
+):
+    tt = pl.TileType(shape=[TILE_M, TILE_N], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    a = pl.make_tile(tt, addr=0x0000)
+    with pl.section_vector():
+        pl.load(a, x, [0, 0])
+        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
+        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
+        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
+        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
+        pl.store(z, a, [0, 0])
+
+
+@pytest.mark.soc("950")
+def test_named_kernel_sanitizer_instrumented():
+    """正样本：name= 与函数名不一致时仍应完成插桩并正常启动。
+
+    回归：入口函数曾按 func->name_ == program->name_（命名巧合）识别，
+    @pl.jit(name=...) 与函数名不同时插桩被静默跳过、隐藏参数未追加，
+    launch 报 InvalidType: Expected 2 args, got 4。
+    """
+    _require_a5(ST_DEVICE)
+    x = _inputs(ST_DEVICE, [TILE_M, TILE_N])
+    z = torch.zeros([TILE_M, TILE_N], device=ST_DEVICE, dtype=torch.float16)
+    named_clean_kernel(x, z)
+    torch.npu.synchronize()
+    torch.testing.assert_close(z, x)
+    logging.info("test_named_kernel_sanitizer_instrumented OK")
+
+
 if __name__ == "__main__":
     """python3 直接执行入口：跑本文件全部 sanitizer 自研日志回放用例。
 
