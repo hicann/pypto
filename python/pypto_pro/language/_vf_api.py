@@ -333,7 +333,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def max(src0, src1, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def max(src0, src1, preg, mode: Optional[MergeMode] = None):
         r"""Element-wise maximum of two source registers.
 
         For each lane ``i`` where ``mask[i]`` is active, compares the
@@ -349,8 +349,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding the element-wise
@@ -359,7 +357,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def add(src0, src1, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def add(src0, src1, preg, mode: Optional[MergeMode] = None):
         r"""Element-wise addition of two source registers.
 
         For each lane ``i`` where ``mask[i]`` is active, computes the sum of
@@ -379,8 +377,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding the element-wise
@@ -389,7 +385,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def sub(src0, src1, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def sub(src0, src1, preg, mode: Optional[MergeMode] = None):
         r"""Element-wise subtraction of two source registers.
 
         For each lane ``i`` where ``mask[i]`` is active, subtracts ``src1[i]``
@@ -404,8 +400,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding the element-wise
@@ -414,7 +408,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def mul(src0, src1, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def mul(src0, src1, preg, mode: Optional[MergeMode] = None):
         r"""Element-wise multiplication of two source registers.
 
         For each lane ``i`` where ``mask[i]`` is active, computes the product
@@ -430,8 +424,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding the element-wise
@@ -441,7 +433,7 @@ class Vf:
     @staticmethod
     @_api_decl
     def div(src0, src1, preg, mode: Optional[MergeMode] = None,
-            precision: Optional[bool] = None, dtype: Optional[DType] = None):
+            precision: Optional[bool] = None):
         r"""Element-wise division of two source registers.
 
         For each lane ``i`` where ``mask[i]`` is active, divides ``src0[i]``
@@ -460,8 +452,6 @@ class Vf:
                 error-compensation algorithm (0-ulp precision error). Only
                 effective for ``DT_FP16`` and ``DT_FP32`` source types. Default
                 ``False`` (standard mode).
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding the element-wise
@@ -470,7 +460,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def muls(src, scalar, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def muls(src, scalar, preg, mode: Optional[MergeMode] = None):
         r"""Multiply all elements by a scalar.
 
         For each lane ``i`` where ``mask[i]`` is active, multiplies ``src[i]``
@@ -485,8 +475,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding ``src * scalar``
@@ -498,7 +486,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def mul_add_dst(src0, src1, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def mul_add_dst(src0, src1, preg, mode: Optional[MergeMode] = None):
         r"""Fused multiply-add into destination.
 
         For each lane ``i`` where ``mask[i]`` is active, multiplies ``src0[i]``
@@ -516,8 +504,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``), updated in-place.
@@ -525,7 +511,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def and_(src0, src1, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def and_(src0, src1, preg, mode: Optional[MergeMode] = None):
         r"""Element-wise bitwise AND of two source registers.
 
         For each lane ``i`` where ``mask[i]`` is active, computes the bitwise
@@ -541,8 +527,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding the element-wise
@@ -551,7 +535,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def or_(src0, src1, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def or_(src0, src1, preg, mode: Optional[MergeMode] = None):
         r"""Element-wise bitwise OR of two source registers.
 
         For each lane ``i`` where ``mask[i]`` is active, computes the bitwise
@@ -567,8 +551,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding the element-wise
@@ -604,7 +586,7 @@ class Vf:
     @staticmethod
     @_api_decl
     def reduce_sum(src, preg, datablock: bool = False,
-                   merge_mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+                   merge_mode: Optional[MergeMode] = None):
         r"""In-register sum reduction across all lanes (vcadd / vcgadd).
 
         Reduces all active lanes of the source register into the first element
@@ -619,8 +601,6 @@ class Vf:
         Kwargs:
             datablock: ``True`` to use datablock-granularity reduction (vcgadd)
             merge_mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) with the reduction result in
@@ -630,7 +610,7 @@ class Vf:
     @staticmethod
     @_api_decl
     def reduce_max(src, preg, datablock: bool = False,
-                   merge_mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+                   merge_mode: Optional[MergeMode] = None):
         r"""In-register max reduction across all lanes (vcmax / vcgmax).
 
         Reduces all active lanes of the source register into the first element
@@ -645,8 +625,6 @@ class Vf:
         Kwargs:
             datablock: ``True`` to use datablock-granularity reduction (vcgmax)
             merge_mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) with the reduction result in
@@ -656,7 +634,7 @@ class Vf:
     @staticmethod
     @_api_decl
     def reduce_min(src, preg, datablock: bool = False,
-                   merge_mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+                   merge_mode: Optional[MergeMode] = None):
         r"""In-register min reduction across all lanes (vcmin / vcgmin).
 
         Reduces all active lanes of the source register into the first element
@@ -671,8 +649,6 @@ class Vf:
         Kwargs:
             datablock: ``True`` to use datablock-granularity reduction (vcgmin)
             merge_mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) with the reduction result in
@@ -682,7 +658,7 @@ class Vf:
     @staticmethod
     @_api_decl
     def ln(src, preg, mode: Optional[MergeMode] = None,
-           precision: Optional[bool] = None, dtype: Optional[DType] = None):
+           precision: Optional[bool] = None):
         r"""Natural logarithm of each element.
 
         For each lane ``i`` where ``mask[i]`` is active, computes the natural
@@ -702,8 +678,6 @@ class Vf:
                 preserves subnormal output results (1-ulp precision error).
                 Only effective for ``DT_FP32`` source type. Default ``False``
                 (standard mode, subnormal outputs are flush-to-zero).
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding the natural
@@ -817,7 +791,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def select(src0, src1, preg, dtype: Optional[DType] = None):
+    def select(src0, src1, preg):
         r"""Conditional select between two source registers.
 
         For each lane ``i``, selects ``src_true[i]`` when ``mask[i]`` is active
@@ -832,8 +806,6 @@ class Vf:
             src_true: Register selected when mask bit is 1
             src_false: Register selected when mask bit is 0
             preg: Predicate mask register
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding the selected
@@ -842,7 +814,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def shift_left(src, shift, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def shift_left(src, shift, preg, mode: Optional[MergeMode] = None):
         """Left shift: ``dst[i] = src[i] << shift``
 
         The shift amount may be a scalar (all lanes shifted by the same amount,
@@ -863,8 +835,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding ``src[i] << shift[i]``
@@ -873,7 +843,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def shift_right(src, shift, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def shift_right(src, shift, preg, mode: Optional[MergeMode] = None):
         """Right shift: ``dst[i] = src[i] >> shift``
 
         The shift amount may be a scalar (all lanes shifted by the same amount,
@@ -895,8 +865,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding ``src[i] >> shift[i]``
@@ -907,7 +875,7 @@ class Vf:
     @staticmethod
     @_api_decl
     def histograms(src, preg, bin_type: Optional[BinType] = None,
-                   hist_type: Optional[HistType] = None, dtype: Optional[DType] = None):
+                   hist_type: Optional[HistType] = None):
         """Histogram accumulation (chistv2/dhistv2 instruction).
 
         Computes histogram on UINT8 data. Supports both cumulative (chistv2)
@@ -925,8 +893,6 @@ class Vf:
             bin_type: ``pl.BinType.BIN0`` (default) or ``pl.BinType.BIN1`` --- selects bin mapping
             hist_type: ``pl.HistType.ACCUMULATE`` (default, chistv2) or
                 ``pl.HistType.FREQUENCY`` (dhistv2)
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination histogram register (same register passed as dst,
@@ -935,7 +901,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def eq(src0, src1, preg, dtype: Optional[DType] = None):
+    def eq(src0, src1, preg):
         """Element-wise equality comparison.
 
         Compares two source elements and writes the result to the
@@ -947,8 +913,6 @@ class Vf:
             src0: First source register
             src1: Second source register or scalar value
             preg: Source predicate mask
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             MaskReg with comparison result (True where src0_i == src1_i)
@@ -956,15 +920,13 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def ne(src0, src1, preg, dtype: Optional[DType] = None):
+    def ne(src0, src1, preg):
         """Element-wise not-equal comparison.
 
         Args:
             src0: First source register
             src1: Second source register or scalar value
             preg: Source predicate mask
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             MaskReg with comparison result (True where src0_i != src1_i)
@@ -972,15 +934,13 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def lt(src0, src1, preg, dtype: Optional[DType] = None):
+    def lt(src0, src1, preg):
         """Element-wise less-than comparison.
 
         Args:
             src0: First source register
             src1: Second source register or scalar value
             preg: Source predicate mask
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             MaskReg with comparison result (True where src0_i < src1_i)
@@ -988,15 +948,13 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def gt(src0, src1, preg, dtype: Optional[DType] = None):
+    def gt(src0, src1, preg):
         """Element-wise greater-than comparison.
 
         Args:
             src0: First source register
             src1: Second source register or scalar value
             preg: Source predicate mask
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             MaskReg with comparison result (True where src0_i > src1_i)
@@ -1004,15 +962,13 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def le(src0, src1, preg, dtype: Optional[DType] = None):
+    def le(src0, src1, preg):
         """Element-wise less-or-equal comparison.
 
         Args:
             src0: First source register
             src1: Second source register or scalar value
             preg: Source predicate mask
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             MaskReg with comparison result (True where src0_i <= src1_i)
@@ -1020,15 +976,13 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def ge(src0, src1, preg, dtype: Optional[DType] = None):
+    def ge(src0, src1, preg):
         """Element-wise greater-or-equal comparison.
 
         Args:
             src0: First source register
             src1: Second source register or scalar value
             preg: Source predicate mask
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             MaskReg with comparison result (True where src0_i >= src1_i)
@@ -1036,7 +990,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def squeeze(src, preg, gather_mode: Optional[SqueezeMode] = None, dtype: Optional[DType] = None):
+    def squeeze(src, preg, gather_mode: Optional[SqueezeMode] = None):
         """Squeeze mask to index register (vsqz instruction).
 
         Converts active mask bits into a packed index sequence in the
@@ -1050,8 +1004,6 @@ class Vf:
 
         Kwargs:
             gather_mode: ``pl.SqueezeMode.STORE_REG`` or ``pl.SqueezeMode.NO_STORE_REG``
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) with packed/squeezed elements.
@@ -1088,8 +1040,8 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def gather(src, index, preg,
-               data_copy_mode: Optional[DataCopyMode] = None, dtype: Optional[DType] = None):
+    def gather(src, index, preg=None,
+               data_copy_mode: Optional[DataCopyMode] = None):
         r"""Gather elements by index.
 
         Two forms, dispatched by src argument type:
@@ -1111,8 +1063,6 @@ class Vf:
         Kwargs:
             data_copy_mode: ``pl.DataCopyMode.NORM`` (default, per-element)
                 or ``pl.DataCopyMode.DATA_BLOCK_LOAD`` (per 32B datablock)
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) with gathered elements.
@@ -1130,7 +1080,7 @@ class Vf:
     @staticmethod
     @_api_decl
     def log(src, preg, mode: Optional[MergeMode] = None,
-            precision: Optional[bool] = None, dtype: Optional[DType] = None):
+            precision: Optional[bool] = None):
         r"""Natural logarithm (alias for :func:`vf.ln`).
 
         Convenience wrapper that maps to the same ``vln`` hardware instruction
@@ -1149,8 +1099,6 @@ class Vf:
                 preserves subnormal output results (1-ulp precision error).
                 Only effective for ``DT_FP32`` source type. Default ``False``
                 (standard mode, subnormal outputs are flush-to-zero).
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) with ``ln(src)`` per lane.
@@ -1158,7 +1106,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def min(src0, src1, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def min(src0, src1, preg, mode: Optional[MergeMode] = None):
         r"""Element-wise minimum of two source registers.
 
         For each lane ``i`` where ``mask[i]`` is active, compares the
@@ -1174,8 +1122,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding the element-wise
@@ -1185,7 +1131,7 @@ class Vf:
     @staticmethod
     @_api_decl
     def exp(src, preg, mode: Optional[MergeMode] = None,
-            precision: Optional[bool] = None, dtype: Optional[DType] = None):
+            precision: Optional[bool] = None):
         r"""Exponential function of each element.
 
         For each lane ``i`` where ``mask[i]`` is active, computes ``e``
@@ -1204,8 +1150,6 @@ class Vf:
                 preserves subnormal output results (1-ulp precision error).
                 Only effective for ``DT_FP32`` source type. Default ``False``
                 (standard mode, subnormal outputs are flush-to-zero).
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding ``e^src``
@@ -1214,7 +1158,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def abs(src, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def abs(src, preg, mode: Optional[MergeMode] = None):
         r"""Element-wise absolute value.
 
         For each lane ``i`` where ``mask[i]`` is active, computes the absolute
@@ -1228,8 +1172,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding the absolute
@@ -1238,7 +1180,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def not_(src, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def not_(src, preg, mode: Optional[MergeMode] = None):
         r"""Element-wise bitwise NOT.
 
         For each lane ``i`` where ``mask[i]`` is active, computes the bitwise
@@ -1253,8 +1195,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding the bitwise
@@ -1264,7 +1204,7 @@ class Vf:
     @staticmethod
     @_api_decl
     def sqrt(src, preg, mode: Optional[MergeMode] = None,
-             precision: Optional[bool] = None, dtype: Optional[DType] = None):
+             precision: Optional[bool] = None):
         r"""Square root of each element.
 
         For each lane ``i`` where ``mask[i]`` is active, computes the square
@@ -1284,8 +1224,6 @@ class Vf:
                 preserves subnormal output results (1-ulp precision error).
                 Only effective for ``DT_FP32`` source type. Default ``False``
                 (standard mode, subnormal outputs are flush-to-zero).
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding the square
@@ -1294,7 +1232,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def relu(src, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def relu(src, preg, mode: Optional[MergeMode] = None):
         r"""ReLU activation.
 
         For each lane ``i`` where ``mask[i]`` is active, writes ``src[i]`` to
@@ -1308,8 +1246,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding ``max(0, src)``
@@ -1318,7 +1254,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def neg(src, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def neg(src, preg, mode: Optional[MergeMode] = None):
         r"""Element-wise negation.
 
         For each lane ``i`` where ``mask[i]`` is active, computes the
@@ -1332,8 +1268,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device..
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding the negated
@@ -1342,7 +1276,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def adds(src, scalar, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def adds(src, scalar, preg, mode: Optional[MergeMode] = None):
         r"""Add scalar to each element.
 
         For each lane ``i`` where ``mask[i]`` is active, adds the scalar value
@@ -1357,8 +1291,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding ``src + scalar``
@@ -1367,7 +1299,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def mins(src, scalar, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def mins(src, scalar, preg, mode: Optional[MergeMode] = None):
         r"""Element-wise minimum with scalar.
 
         For each lane ``i`` where ``mask[i]`` is active, compares ``src[i]``
@@ -1382,8 +1314,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding the element-wise
@@ -1392,7 +1322,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def maxs(src, scalar, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def maxs(src, scalar, preg, mode: Optional[MergeMode] = None):
         r"""Element-wise maximum with scalar.
 
         For each lane ``i`` where ``mask[i]`` is active, compares ``src[i]``
@@ -1407,8 +1337,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding the element-wise
@@ -1417,7 +1345,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def leaky_relu(src, scalar, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def leaky_relu(src, scalar, preg, mode: Optional[MergeMode] = None):
         r"""Leaky ReLU activation.
 
         For each lane ``i`` where ``mask[i]`` is active, writes ``src[i]`` to
@@ -1434,8 +1362,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding the Leaky
@@ -1475,7 +1401,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def pair_reduce_sum(src, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def pair_reduce_sum(src, preg, mode: Optional[MergeMode] = None):
         r"""Pairwise reduction sum.
 
         For each pair of adjacent elements, adds them together and writes the
@@ -1489,8 +1415,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) with pairwise sums.
@@ -1498,7 +1422,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def abs_sub(src0, src1, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def abs_sub(src0, src1, preg, mode: Optional[MergeMode] = None):
         r"""Absolute difference of two source registers.
 
         For each lane ``i`` where ``mask[i]`` is active, computes the absolute
@@ -1514,8 +1438,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding the absolute
@@ -1524,7 +1446,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def axpy(src, scalar, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def axpy(src, scalar, preg, mode: Optional[MergeMode] = None):
         r"""Fused AXPY: multiply src by scalar and add to dst.
 
         For each lane ``i`` where ``mask[i]`` is active, multiplies ``src[i]``
@@ -1542,8 +1464,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``), updated in-place.
@@ -1588,7 +1508,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def mul_dst_add(src0, src1, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def mul_dst_add(src0, src1, preg, mode: Optional[MergeMode] = None):
         r"""Multiply-dst-add: multiply dst by src0, then add src1.
 
         For each lane ``i`` where ``mask[i]`` is active, multiplies ``dst[i]``
@@ -1606,8 +1526,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``), updated in-place.
@@ -1660,7 +1578,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def prelu(src, slope, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def prelu(src, slope, preg, mode: Optional[MergeMode] = None):
         """Parametric ReLU with per-element slope register.
 
         ``dst[i] = src[i] if src[i] >= 0 else src[i] * slope[i]``
@@ -1675,8 +1593,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding ``src[i]`` where
@@ -1686,7 +1602,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def mull(src0, src1, preg, dtype: Optional[DType] = None):
+    def mull(src0, src1, preg):
         """Long multiply: 32x32->64, output split into lo/hi register pair.
 
         Multiplies two 32-bit registers and produces 64-bit result split
@@ -1700,8 +1616,6 @@ class Vf:
             src0: First source register (32-bit)
             src1: Second source register (32-bit)
             preg: Predicate mask register
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Tuple of destination registers ``(dst_lo, dst_hi)`` holding the low
@@ -1710,7 +1624,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def addc(src0, src1, carry_src, preg, dtype: Optional[DType] = None):
+    def addc(src0, src1, carry_src, preg):
         """Add with carry (vaddcs): ``carry_out, dst = src0 + src1 + carry_in``
 
         Used for multi-word (e.g. 64-bit) arithmetic on 32-bit registers.
@@ -1724,8 +1638,6 @@ class Vf:
             src1: Second source register
             carry_in: Input carry flag register (MaskReg)
             preg: Predicate mask register
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             (carry_out, dst): carry-out flag register and the sum register
@@ -1733,7 +1645,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def subc(src0, src1, borrow_src, preg, dtype: Optional[DType] = None):
+    def subc(src0, src1, borrow_src, preg):
         """Subtract with borrow (vsubcs): ``borrow_out, dst = src0 - src1 - borrow_in``
 
         Used for multi-word (e.g. 64-bit) arithmetic on 32-bit registers.
@@ -1747,8 +1659,6 @@ class Vf:
             src1: Second source register
             borrow_in: Input borrow flag register (MaskReg)
             preg: Predicate mask register
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             (borrow_out, dst): borrow-out flag register and the difference register
@@ -1780,7 +1690,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def load_unalign(align_reg, tile, stride=None, post_update: bool = False, dtype: Optional[DType] = None):
+    def load_unalign(align_reg, tile, stride=None, post_update: bool = False):
         """Unaligned load from UB to register (vldus instruction).
 
         Loads data from an unaligned UB address. Supports optional stride
@@ -1790,8 +1700,6 @@ class Vf:
             align_reg: UnalignRegForLoad register
             tile: Source UB pointer
             stride: Optional post-update stride in bytes
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Kwargs:
             post_update: ``True`` to auto-advance destination address
@@ -1818,7 +1726,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def unsqueeze(preg, dtype: Optional[DType] = None):
+    def unsqueeze(preg):
         """Unsqueeze mask bits into a register (vusqz instruction).
 
         Expands each mask bit into the corresponding register lane
@@ -1826,8 +1734,6 @@ class Vf:
 
         Args:
             preg: Mask register to unsqueeze
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding one lane per mask bit:
@@ -1855,7 +1761,7 @@ class Vf:
     @staticmethod
     @_api_decl
     def log2(src, preg, mode: Optional[MergeMode] = None,
-             precision: Optional[bool] = None, dtype: Optional[DType] = None):
+             precision: Optional[bool] = None):
         r"""Base-2 logarithm of each element.
 
         For each lane ``i`` where ``mask[i]`` is active, computes the base-2
@@ -1874,8 +1780,6 @@ class Vf:
                 preserves subnormal output results (1-ulp precision error).
                 Only effective for ``DT_FP32`` source type. Default ``False``
                 (standard mode, subnormal outputs are flush-to-zero).
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding ``log2(src)``
@@ -1885,7 +1789,7 @@ class Vf:
     @staticmethod
     @_api_decl
     def log10(src, preg, mode: Optional[MergeMode] = None,
-              precision: Optional[bool] = None, dtype: Optional[DType] = None):
+              precision: Optional[bool] = None):
         r"""Base-10 logarithm of each element.
 
         For each lane ``i`` where ``mask[i]`` is active, computes the base-10
@@ -1904,8 +1808,6 @@ class Vf:
                 preserves subnormal output results (1-ulp precision error).
                 Only effective for ``DT_FP32`` source type. Default ``False``
                 (standard mode, subnormal outputs are flush-to-zero).
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding ``log10(src)``
@@ -1940,7 +1842,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def load(tile, stride=None, dtype: Optional[DType] = None):
+    def load(tile, stride=None):
         """Unified load (vldas+vldus, matches AscendC Load interface).
 
         Simple load from UB to register. Passing stride as 3rd positional
@@ -1949,8 +1851,6 @@ class Vf:
         Args:
             tile: Source UB tile
             stride: Post-update stride (optional positional arg)
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding the data loaded from
@@ -1972,7 +1872,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def truncate(src, preg, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def truncate(src, preg, mode: Optional[MergeMode] = None):
         """Truncate to integer (round toward zero): ``dst[i] = trunc(src[i])``
 
         Maps to hardware ``vtrc`` with ROUND_Z mode.
@@ -1983,8 +1883,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.ZEROING`` (default). MERGING mode is not supported on current device.
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor``) holding ``trunc(src[i])`` for
@@ -2041,7 +1939,7 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def move(src, preg=None, mode: Optional[MergeMode] = None, dtype: Optional[DType] = None):
+    def move(src, preg=None, mode: Optional[MergeMode] = None):
         r"""Move/copy register elements (vmov for RegTensor, pmov for MaskReg).
 
         For RegTensor: copies valid elements from src to dst; masked-out
@@ -2069,8 +1967,6 @@ class Vf:
 
         Kwargs:
             mode: ``pl.MergeMode.MERGING`` (default, only supported mode)
-            dtype: Destination register data type. Required when it differs from
-                the source; inferred from the first typed source otherwise.
 
         Returns:
             Destination register (``RegTensor`` or ``MaskReg``, matching the
