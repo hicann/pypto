@@ -33,7 +33,10 @@ void CheckTensorDynamicShape(const LogicalTensors iOperands, const Opcode opCode
     for (size_t i = 0; i < iOperands.size(); i++) {
         CHECK(VectorErrorCode::ERR_RUNTIME_NULLPTR, iOperands[i] != nullptr)
             << opName << ": Input operand[" << i << "] is nullptr.";
-        if (inputMemType[i] == MemoryType::MEM_DEVICE_DDR) {
+        if (inputMemType[i] == MemoryType::MEM_DEVICE_DDR ||
+            ((opCode == Opcode::OP_SCATTER_INPLACE || opCode == Opcode::OP_SCATTER_ELEMENT_INPLACE) &&
+             inputMemType[i] == MemoryType::MEM_UNKNOWN &&
+             iOperands[i]->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR)) {
             continue;
         }
         for (size_t dimIdx = 0; dimIdx < iOperands[i]->shape.size(); ++dimIdx) {

@@ -181,7 +181,7 @@ private:
     Status FoldL0C2UBCopyOffset(Operation* op);
     std::vector<OpImmediate> SumOffsetForCopyIn(const std::vector<OpImmediate> offset1,
                                                 const std::vector<OpImmediate> offset2);
-    Status UpdateCopyInAttr(Operation* copyInOp);
+    Status UpdateCopyInAttr(Operation* copyInOp, bool updateOffset = true);
 
     Status MarkTensorAsPartialMem(Function& function);
 

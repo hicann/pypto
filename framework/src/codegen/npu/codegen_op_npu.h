@@ -492,7 +492,8 @@ protected:
 
     std::string PrintScatterElementSOpStatic(const PrintScatterElemParam& param) const;
     std::string PrintScatterElementSOpDynamicUnaligned(const PrintScatterElemParam& param) const;
-    std::string PrintScatterElementSTileTensor(const PrintScatterElemParam& param) const;
+    std::string PrintScatterElementSTileTensor(const PrintScatterElemParam& param,
+                                               const std::string& opName = "") const;
     std::string PrintScatterOpDynamicUnaligned(const PrintScatterParam& param) const;
     std::string PrintScatterTileTensor(const PrintScatterParam& param) const;
 

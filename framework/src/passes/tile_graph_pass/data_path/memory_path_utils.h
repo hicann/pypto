@@ -16,10 +16,12 @@
 #ifndef TILE_FWK_MEMORY_PATH_UTILS_H
 #define TILE_FWK_MEMORY_PATH_UTILS_H
 
+#include <algorithm>
 #include <functional>
 #include <map>
 #include <set>
 #include <string>
+#include <type_traits>
 #include <unordered_set>
 #include <vector>
 
@@ -51,6 +53,8 @@
 #endif
 
 namespace npu::tile_fwk {
+
+class ConvertInserter;
 
 class MemoryPathUtils {
 public:
@@ -243,9 +247,137 @@ public:
     }
 
     template <typename InserterT>
+    static Status HandleScatterInplaceMemoryType(InserterT& inserter, Function& function, Operation& operation)
+    {
+        if (operation.GetOpcode() != Opcode::OP_SCATTER_INPLACE &&
+            operation.GetOpcode() != Opcode::OP_SCATTER_ELEMENT_INPLACE) {
+            return SUCCESS;
+        }
+        if (!operation.HasAttr(OP_ATTR_PREFIX + "scatter_mode") ||
+            operation.GetIntAttribute(OP_ATTR_PREFIX + "scatter_mode") != 0) {
+            APASS_LOG_ERROR_F(Elements::Operation, "In-place Scatter only supports overwrite.");
+            return FAILED;
+        }
+        if (operation.iOperand.empty() || operation.oOperand.empty() || operation.iOperand[0] == nullptr ||
+            operation.oOperand[0] == nullptr) {
+            APASS_LOG_ERROR_F(Elements::Operation,
+                              "Handle SCATTER_INPLACE memory type failed because operand is invalid.");
+            return FAILED;
+        }
+
+        auto self = operation.iOperand[0];
+        auto output = operation.oOperand[0];
+        MemoryType memoryType = self->GetMemoryTypeOriginal();
+        if constexpr (std::is_same_v<InserterT, ConvertInserter>) {
+            // A slice directly from an input remains in GM while Scatter overwrites it.
+            auto scatterSliceFromIncast = [&]() {
+                if (self->GetConsumers().empty()) {
+                    return false;
+                }
+                for (auto* consumer : self->GetConsumers()) {
+                    if (consumer == nullptr ||
+                        inserter.GetRequirementOrUnknown(self, *consumer) != MemoryType::MEM_UNKNOWN) {
+                        return false;
+                    }
+                    auto it = std::find(consumer->iOperand.begin(), consumer->iOperand.end(), self);
+                    if (it == consumer->iOperand.end()) {
+                        return false;
+                    }
+                    size_t inputIndex = static_cast<size_t>(std::distance(consumer->iOperand.begin(), it));
+                    const auto& definedTypes = OpcodeManager::Inst().GetInputsMemType(consumer->GetOpcode());
+                    if (inputIndex >= definedTypes.size() || definedTypes[inputIndex] != MemoryType::MEM_UNKNOWN) {
+                        return false;
+                    }
+                }
+                Operation* slice = nullptr;
+                for (auto* producer : self->GetProducers()) {
+                    if (producer == nullptr || producer->GetOpcode() != Opcode::OP_SLICE ||
+                        producer->oOperand.empty() || producer->oOperand.front() != self ||
+                        producer->iOperand.empty() || producer->iOperand.front() == nullptr || slice != nullptr) {
+                        return false;
+                    }
+                    slice = producer;
+                }
+                return slice != nullptr &&
+                       std::find(function.inCasts_.begin(), function.inCasts_.end(), slice->iOperand.front()) !=
+                           function.inCasts_.end() &&
+                       std::dynamic_pointer_cast<ViewOpAttribute>(slice->GetOpAttribute()) != nullptr;
+            };
+            if (scatterSliceFromIncast()) {
+                memoryType = MemoryType::MEM_DEVICE_DDR;
+                ForceSetOriginal(self, memoryType, "ScatterInplaceSliceFromIncast");
+            } else if (memoryType == MemoryType::MEM_UNKNOWN) {
+                std::unordered_set<const LogicalTensor*> visited;
+                std::function<MemoryType(const LogicalTensorPtr&)> inferInput = [&](const LogicalTensorPtr& tensor) {
+                    if (tensor == nullptr || !visited.insert(tensor.get()).second) {
+                        return MemoryType::MEM_UNKNOWN;
+                    }
+                    std::set<MemoryType> candidates;
+                    if (tensor->GetMemoryTypeOriginal() != MemoryType::MEM_UNKNOWN) {
+                        candidates.insert(tensor->GetMemoryTypeOriginal());
+                    }
+                    for (auto* producer : tensor->GetProducers()) {
+                        if (producer == nullptr ||
+                            (producer->GetOpcode() != Opcode::OP_VIEW && producer->GetOpcode() != Opcode::OP_ASSEMBLE &&
+                             producer->GetOpcode() != Opcode::OP_RESHAPE)) {
+                            continue;
+                        }
+                        for (const auto& input : producer->iOperand) {
+                            auto candidate = inferInput(input);
+                            if (candidate != MemoryType::MEM_UNKNOWN) {
+                                candidates.insert(candidate);
+                            }
+                        }
+                    }
+                    return candidates.size() == 1 ? *candidates.begin() : MemoryType::MEM_UNKNOWN;
+                };
+                memoryType = inferInput(self);
+            }
+            if (memoryType == MemoryType::MEM_UNKNOWN) {
+                std::unordered_set<const LogicalTensor*> visited;
+                std::function<MemoryType(const LogicalTensorPtr&)> inferOutput = [&](const LogicalTensorPtr& tensor) {
+                    if (tensor == nullptr || !visited.insert(tensor.get()).second) {
+                        return MemoryType::MEM_UNKNOWN;
+                    }
+                    std::set<MemoryType> candidates;
+                    for (const auto& [consumer, requirement] : inserter.GetConsumerRequirements(tensor)) {
+                        if (requirement != MemoryType::MEM_UNKNOWN) {
+                            candidates.insert(requirement);
+                        } else if (consumer != nullptr && (consumer->GetOpcode() == Opcode::OP_VIEW ||
+                                                           consumer->GetOpcode() == Opcode::OP_ASSEMBLE ||
+                                                           consumer->GetOpcode() == Opcode::OP_RESHAPE)) {
+                            for (const auto& next : consumer->oOperand) {
+                                auto candidate = inferOutput(next);
+                                if (candidate != MemoryType::MEM_UNKNOWN) {
+                                    candidates.insert(candidate);
+                                }
+                            }
+                        }
+                    }
+                    return candidates.size() == 1 ? *candidates.begin() : MemoryType::MEM_UNKNOWN;
+                };
+                memoryType = inferOutput(output);
+            }
+        } else if (memoryType == MemoryType::MEM_UNKNOWN) {
+            memoryType = output->GetMemoryTypeOriginal();
+        }
+        if (memoryType == MemoryType::MEM_UNKNOWN) {
+            memoryType = MemoryType::MEM_UB;
+        }
+        ForceSetRequirement(inserter, self, operation, memoryType, "ScatterInplaceSameMemory");
+        ForceSetOriginal(output, memoryType, "ScatterInplaceSameMemory");
+        if (memoryType == MemoryType::MEM_UB) {
+            operation.SetOpCode(operation.GetOpcode() == Opcode::OP_SCATTER_INPLACE ? Opcode::OP_SCATTER :
+                                                                                      Opcode::OP_SCATTER_ELEMENT);
+        }
+        return SUCCESS;
+    }
+
+    template <typename InserterT>
     static Status ApplyOtherSpecialOpcodeRules(InserterT& inserter, Function& function)
     {
         for (auto& op : function.Operations()) {
+            RETURN_IF_NOT_SUCCESS(HandleScatterInplaceMemoryType(inserter, function, op));
             RETURN_IF_NOT_SUCCESS(HandleNopMemoryType(inserter, op));
         }
         return SUCCESS;

@@ -32,6 +32,7 @@ struct ScatterElementSPara {
     const Element& scalar;
     const int axis;
     const int scatterMode;
+    const bool inplace = false;
 };
 
 struct ScatterElementSTileInfoPara {
@@ -49,13 +50,30 @@ void InnerTiledScatterElementS(size_t cur, Function& function, const TileShape& 
     const Element& scalar = scatterPara.scalar;
     const int axis = scatterPara.axis;
     const int mode = scatterPara.scatterMode;
+    const bool dynamicGm = scatterPara.inplace && std::any_of(srcInput->shape.begin(), srcInput->shape.end(),
+                                                              [](int64_t dim) { return dim < 0; });
 
     if (cur == dstTensor->shape.size()) {
-        // add Operation
-        auto srcTile = srcInput->View(function, scatterTileInfo.srcTileInfo.shape, scatterTileInfo.srcTileInfo.offset);
+        auto srcTile = dynamicGm ? srcInput :
+                                   srcInput->View(function, scatterTileInfo.srcTileInfo.shape,
+                                                  scatterTileInfo.srcTileInfo.offset);
         auto idxTile = idxInput->View(function, scatterTileInfo.idxTileInfo.shape, scatterTileInfo.idxTileInfo.offset);
-        auto dstTile = dstTensor->View(function, scatterTileInfo.dstTileInfo.shape, scatterTileInfo.dstTileInfo.offset);
-        auto& op = function.AddOperation(Opcode::OP_SCATTER_ELEMENT, {srcTile, idxTile}, {dstTile});
+        auto dstTile = scatterPara.inplace && srcInput->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR ?
+                           dstTensor :
+                           dstTensor->View(function, scatterTileInfo.dstTileInfo.shape,
+                                           scatterTileInfo.dstTileInfo.offset);
+        auto opcode = scatterPara.inplace ? Opcode::OP_SCATTER_ELEMENT_INPLACE : Opcode::OP_SCATTER_ELEMENT;
+        auto& op = function.AddOperation(opcode, {srcTile, idxTile}, {dstTile});
+        if (dynamicGm) {
+            op.SetAttribute(OP_ATTR_PREFIX + "scatter_gm_offset", scatterTileInfo.srcTileInfo.offset);
+        }
+        if (scatterPara.inplace) {
+            op.SetAttribute(OpAttributeKey::inplaceIdx, 0);
+            op.SetAttr(OpAttributeKey::inplaceInfo, std::map<int, int>{{0, 0}});
+            if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) {
+                op.SetAttribute(OpAttributeKey::dontTouch, true);
+            }
+        }
         op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
         op.SetAttribute(OpAttributeKey::scalar, scalar);
         op.SetAttribute(OP_ATTR_PREFIX + "scatter_mode", mode);
@@ -64,7 +82,7 @@ void InnerTiledScatterElementS(size_t cur, Function& function, const TileShape& 
 
     // 按照dstShape进行切分
     auto& vecTile = tileShape.GetVecTile();
-    CHECK(VectorErrorCode::ERR_CONFIG_TILE, vecTile[axis] >= dstTensor->shape[axis])
+    CHECK(VectorErrorCode::ERR_CONFIG_TILE, dynamicGm || vecTile[axis] >= dstTensor->shape[axis])
         << "The axis is not supported for tile splitting";
     CHECK(VectorErrorCode::ERR_CONFIG_TILE, vecTile[axis] >= idxInput->shape[axis])
         << "The axis is not supported for tile splitting";
@@ -97,6 +115,15 @@ void InnerTiledScatterElementS(size_t cur, Function& function, const TileShape& 
 
 void TiledScatterElementS(Function& function, const TileShape& tileShape, const ScatterElementSPara& scatterPara)
 {
+    if (scatterPara.inplace && std::any_of(scatterPara.srcInput->shape.begin(), scatterPara.srcInput->shape.end(),
+                                           [](int64_t dim) { return dim < 0; })) {
+        auto memoryType = scatterPara.srcInput->GetMemoryTypeOriginal();
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID,
+              memoryType == MemoryType::MEM_UNKNOWN || memoryType == MemoryType::MEM_DEVICE_DDR)
+            << "Dynamic Scatter self requires GM storage";
+        scatterPara.srcInput->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR);
+        scatterPara.dstTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR);
+    }
     // Check Operands Valid
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, scatterPara.srcInput->shape.size() == scatterPara.srcInput->offset.size())
         << "The size of srcInput shape and offset should be equal";
@@ -121,15 +148,16 @@ void TensorScatterElementS(Function& function, const ScatterElementSPara& scatte
     op.SetAttribute(OP_ATTR_PREFIX + "axis", scatterPara.axis);
     op.SetAttribute(OpAttributeKey::scalar, scatterPara.scalar);
     op.SetAttribute(OP_ATTR_PREFIX + "scatter_mode", scatterPara.scatterMode);
-    std::map<int, int> inplaceInfo = {{0, 0}};
-    op.SetAttr(OpAttributeKey::inplaceInfo, inplaceInfo);
+    op.SetAttr(OpAttributeKey::inplaceInfo, std::map<int, int>{{0, 0}});
 }
 
-static void CheckScatterElementSParamsInvalid(const Tensor& self, const Tensor& indices, int axis,
+static void CheckScatterElementSParamsInvalid(const Tensor& self, const Tensor& indices, const Element& src, int axis,
                                               const ScatterMode reduce)
 {
     const auto& supportedTypes = ConfigManager::Instance().GetOpSupportedInputDtypes(Opcode::OP_SCATTER_ELEMENT);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "SCATTER");
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, src.GetDataType() == self.GetDataType())
+        << "Scatter scalar dtype must match self dtype";
     std::unordered_set<DataType> indexSupportedTypes = {DT_INT32, DT_INT64};
     CheckTensorDataType(indices.GetStorage(), indexSupportedTypes, "SCATTER");
     std::vector<LogicalTensorPtr> tensors = {self.GetStorage(), indices.GetStorage()};
@@ -156,7 +184,7 @@ Tensor Scatter(const Tensor& self, const Tensor& indices, const Element& src, in
     CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Scatter");
     CheckTensorFormat(indices.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Scatter");
 
-    CheckScatterElementSParamsInvalid(self, indices, axis < 0 ? self.GetShape().size() + axis : axis, reduce);
+    CheckScatterElementSParamsInvalid(self, indices, src, axis < 0 ? self.GetShape().size() + axis : axis, reduce);
     DataType orgDtype = self.GetDataType();
     auto operandCast = Tensor(DataType::DT_FP32, self.GetShape());
     if ((orgDtype == DataType::DT_FP16 || orgDtype == DataType::DT_BF16) &&
@@ -187,6 +215,7 @@ struct ScatterPara {
     const LogicalTensorPtr& srcInput;
     const int axis;
     const int scatterMode;
+    const bool inplace;
 };
 
 struct ScatterTileInfoPara {
@@ -195,6 +224,26 @@ struct ScatterTileInfoPara {
     TileInfo dstInfo;
     TileInfo selfInfo;
 };
+
+// An unbounded self cannot reside in UB. Keep its runtime GM extent intact.
+bool HasDynamicScatterSelf(const ScatterPara& scatterPara)
+{
+    const auto& shape = scatterPara.selfInput->GetShape();
+    return scatterPara.inplace && std::any_of(shape.begin(), shape.end(), [](int64_t dim) { return dim < 0; });
+}
+
+void SetDynamicScatterMemory(const ScatterPara& scatterPara)
+{
+    if (!HasDynamicScatterSelf(scatterPara)) {
+        return;
+    }
+    auto memoryType = scatterPara.selfInput->GetMemoryTypeOriginal();
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID,
+          memoryType == MemoryType::MEM_UNKNOWN || memoryType == MemoryType::MEM_DEVICE_DDR)
+        << "Dynamic Scatter self requires GM storage";
+    scatterPara.selfInput->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR);
+    scatterPara.dstTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR);
+}
 
 void InnerTiledScatter(size_t cur, Function& function, const TileShape& tileShape, const ScatterPara& scatterPara,
                        ScatterTileInfoPara& scatterTileInfo)
@@ -208,21 +257,41 @@ void InnerTiledScatter(size_t cur, Function& function, const TileShape& tileShap
 
     if (cur == dstTensor->shape.size()) {
         // add Operation
-        auto selfTile = selfInput->View(function, scatterTileInfo.selfInfo.shape, scatterTileInfo.selfInfo.offset);
+        const bool dynamicGm = HasDynamicScatterSelf(scatterPara);
+        auto selfTile = dynamicGm ?
+                            selfInput :
+                            selfInput->View(function, scatterTileInfo.selfInfo.shape, scatterTileInfo.selfInfo.offset);
         auto idxTile = idxInput->View(function, scatterTileInfo.idxInfo.shape, scatterTileInfo.idxInfo.offset);
         auto srcTile = srcInput->View(function, scatterTileInfo.srcInfo.shape, scatterTileInfo.srcInfo.offset);
-        auto dstTile = dstTensor->View(function, scatterTileInfo.dstInfo.shape, scatterTileInfo.dstInfo.offset);
+        const bool inplaceToGm = scatterPara.inplace &&
+                                 selfInput->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR;
+        auto dstTile = inplaceToGm ?
+                           dstTensor :
+                           dstTensor->View(function, scatterTileInfo.dstInfo.shape, scatterTileInfo.dstInfo.offset);
         Shape tmpShape({idxTile->GetShape()[idxTile->GetShape().size() - 1]});
         auto tmpBuffer = std::make_shared<LogicalTensor>(function, idxTile->Datatype(), tmpShape);
-        auto& op = function.AddOperation(Opcode::OP_SCATTER, {selfTile, idxTile, srcTile}, {dstTile, tmpBuffer});
+        auto opcode = scatterPara.inplace ? Opcode::OP_SCATTER_INPLACE : Opcode::OP_SCATTER;
+        auto& op = function.AddOperation(opcode, {selfTile, idxTile, srcTile}, {dstTile, tmpBuffer});
         op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
         op.SetAttribute(OP_ATTR_PREFIX + "scatter_mode", mode);
+        if (dynamicGm) {
+            op.SetAttribute(OP_ATTR_PREFIX + "scatter_gm_offset", scatterTileInfo.selfInfo.offset);
+        }
+        if (scatterPara.inplace) {
+            std::map<int, int> inplaceInfo = {{0, 0}};
+            op.SetAttr(OpAttributeKey::inplaceInfo, inplaceInfo);
+            op.SetAttribute(OpAttributeKey::inplaceIdx, 0);
+            if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) {
+                op.SetAttribute(OpAttributeKey::dontTouch, true);
+            }
+        }
         return;
     }
 
     // 按照dstShape进行切分
     auto& vecTile = tileShape.GetVecTile();
-    CHECK(VectorErrorCode::ERR_CONFIG_TILE, vecTile[axis] >= dstTensor->shape[axis])
+    CHECK(VectorErrorCode::ERR_CONFIG_TILE,
+          HasDynamicScatterSelf(scatterPara) || vecTile[axis] >= dstTensor->shape[axis])
         << "The axis is not supported for tile splitting";
     CHECK(VectorErrorCode::ERR_CONFIG_TILE, vecTile[axis] >= idxInput->shape[axis])
         << "The axis is not supported for tile splitting";
@@ -260,6 +329,7 @@ void InnerTiledScatter(size_t cur, Function& function, const TileShape& tileShap
 
 void TiledScatter(Function& function, const TileShape& tileShape, const ScatterPara& scatterPara)
 {
+    SetDynamicScatterMemory(scatterPara);
     // Check Operands Valid
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, scatterPara.srcInput->shape.size() == scatterPara.srcInput->offset.size())
         << "The shape size of srcInput and offset should be equal";
@@ -283,13 +353,22 @@ void TiledScatter(Function& function, const TileShape& tileShape, const ScatterP
 
 void TensorScatter(Function& function, const ScatterPara& scatterPara)
 {
-    auto& op = GraphUtils::AddDynOperation(function, Opcode::OP_SCATTER,
-                                           {scatterPara.selfInput, scatterPara.idxInput, scatterPara.srcInput},
-                                           {scatterPara.dstTensor});
+    SetDynamicScatterMemory(scatterPara);
+    auto opcode = scatterPara.inplace ? Opcode::OP_SCATTER_INPLACE : Opcode::OP_SCATTER;
+    auto& op = GraphUtils::AddDynOperation(
+        function, opcode, {scatterPara.selfInput, scatterPara.idxInput, scatterPara.srcInput}, {scatterPara.dstTensor});
     op.SetAttribute(OP_ATTR_PREFIX + "axis", scatterPara.axis);
     op.SetAttribute(OP_ATTR_PREFIX + "scatter_mode", scatterPara.scatterMode);
-    std::map<int, int> inplaceInfo = {{0, 0}};
-    op.SetAttr(OpAttributeKey::inplaceInfo, inplaceInfo);
+    if (scatterPara.inplace) {
+        std::map<int, int> inplaceInfo = {{0, 0}};
+        op.SetAttr(OpAttributeKey::inplaceInfo, inplaceInfo);
+        op.SetAttribute(OpAttributeKey::inplaceIdx, 0);
+        if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) {
+            op.SetAttribute(OpAttributeKey::dontTouch, true);
+        }
+    } else {
+        op.SetAttr(OpAttributeKey::inplaceInfo, std::map<int, int>{{0, 0}});
+    }
 }
 
 static void CheckScatterParamsInvalid(const Tensor& self, const Tensor& indices, const Tensor& src, int axis,
@@ -314,7 +393,9 @@ static void CheckScatterParamsInvalid(const Tensor& self, const Tensor& indices,
         if (static_cast<int>(i) == axis) {
             continue;
         }
-        CHECK(VectorErrorCode::ERR_PARAM_INVALID, indices.GetShape()[i] <= self.GetShape()[i])
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID,
+              (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510 && self.GetShape()[i] < 0) ||
+                  indices.GetShape()[i] <= self.GetShape()[i])
             << "The shape size of src and indices should be equal";
     }
     CheckTensorDimRange(self.GetStorage(), 1, NUM_VALUE_4, "SCATTER");
@@ -349,7 +430,7 @@ Tensor Scatter(const Tensor& self, const Tensor& indices, const Tensor& src, int
     result.GetStorage()->UpdateDynValidShape(operandSelfCast.GetStorage()->GetDynValidShape());
     CALL(Scatter, *Program::GetInstance().GetCurrentFunction(),
          {result.GetStorage(), operandSelfCast.GetStorage(), indices.GetStorage(), operandSrcCast.GetStorage(), axis,
-          static_cast<int>(reduce)});
+          static_cast<int>(reduce), false});
 
     if ((orgDtype == DataType::DT_FP16 || orgDtype == DataType::DT_BF16) &&
         (reduce == ScatterMode::ADD || reduce == ScatterMode::MULTIPLY)) {
@@ -359,6 +440,67 @@ Tensor Scatter(const Tensor& self, const Tensor& indices, const Tensor& src, int
     return result;
 }
 
+void Scatter_(Tensor& self, const Tensor& indices, const Element& src, int axis, ScatterMode reduce)
+{
+    const bool a5 = Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510;
+    if (!a5 || reduce != ScatterMode::NONE) {
+        self = Scatter(self, indices, src, axis, reduce);
+        return;
+    }
+    DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Scatter_");
+    CheckTensorFormat(indices.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Scatter_");
+    CheckScatterElementSParamsInvalid(self, indices, src, axis < 0 ? self.GetShape().size() + axis : axis, reduce);
+    axis = axis < 0 ? self.GetShape().size() + axis : axis;
+    Tensor dst(self.GetDataType(), self.GetShape());
+    dst.GetStorage()->UpdateDynValidShape(self.GetStorage()->GetDynValidShape());
+    dst.GetStorage()->tensor->UpdateDynRawShape(self.GetStorage()->tensor->GetDynRawShape());
+    if (std::any_of(self.GetShape().begin(), self.GetShape().end(), [](int64_t dim) { return dim < 0; })) {
+        auto memoryType = self.GetStorage()->GetMemoryTypeOriginal();
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID,
+              memoryType == MemoryType::MEM_UNKNOWN || memoryType == MemoryType::MEM_DEVICE_DDR)
+            << "Dynamic Scatter self requires GM storage";
+        self.GetStorage()->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR);
+        dst.GetStorage()->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR);
+    }
+    auto& op = GraphUtils::AddDynOperation(*Program::GetInstance().GetCurrentFunction(),
+                                           Opcode::OP_SCATTER_ELEMENT_INPLACE,
+                                           {self.GetStorage(), indices.GetStorage()}, {dst.GetStorage()});
+    op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
+    op.SetAttribute(OpAttributeKey::scalar, src);
+    op.SetAttribute(OP_ATTR_PREFIX + "scatter_mode", static_cast<int>(reduce));
+    op.SetAttribute(OpAttributeKey::inplaceIdx, 0);
+    op.SetAttr(OpAttributeKey::inplaceInfo, std::map<int, int>{{0, 0}});
+    op.SetAttribute(OpAttributeKey::dontTouch, true);
+    Program::GetInstance().GetCurrentFunction()->SetSameMemId(self.GetStorage(), dst.GetStorage());
+    self = dst;
+}
+
+void Scatter_(Tensor& self, const Tensor& indices, const Tensor& src, int axis, ScatterMode reduce)
+{
+    const bool a5 = Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510;
+    if (!a5 || reduce != ScatterMode::NONE) {
+        self = Scatter(self, indices, src, axis, reduce);
+        return;
+    }
+
+    DECLARE_TRACER();
+    CheckTensorFormat(self.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Scatter_");
+    CheckTensorFormat(indices.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Scatter_");
+    CheckTensorFormat(src.GetStorage(), {TileOpFormat::TILEOP_NZ}, "Scatter_");
+    CheckScatterParamsInvalid(self, indices, src, axis < 0 ? self.GetShape().size() + axis : axis, reduce);
+
+    axis = axis < 0 ? self.GetShape().size() + axis : axis;
+    Tensor dst(self.GetDataType(), self.GetShape());
+    dst.GetStorage()->UpdateDynValidShape(self.GetStorage()->GetDynValidShape());
+    dst.GetStorage()->tensor->UpdateDynRawShape(self.GetStorage()->tensor->GetDynRawShape());
+    CALL(Scatter, *Program::GetInstance().GetCurrentFunction(),
+         {dst.GetStorage(), self.GetStorage(), indices.GetStorage(), src.GetStorage(), axis, static_cast<int>(reduce),
+          true});
+    Program::GetInstance().GetCurrentFunction()->SetSameMemId(self.GetStorage(), dst.GetStorage());
+    self = dst;
+}
+
 void ScatterElementSOperationTileFunc(Function& function, const TileShape& tileShape,
                                       const std::vector<LogicalTensorPtr>& iOperand,
                                       const std::vector<LogicalTensorPtr>& oOperand, const Operation& op)
@@ -366,7 +508,9 @@ void ScatterElementSOperationTileFunc(Function& function, const TileShape& tileS
     int axis = op.GetIntAttribute(OP_ATTR_PREFIX + "axis");
     Element scalar = op.GetElementAttribute(OpAttributeKey::scalar);
     int scatterMode = op.GetIntAttribute(OP_ATTR_PREFIX + "scatter_mode");
-    TiledScatterElementS(function, tileShape, {oOperand[0], iOperand[0], iOperand[1], scalar, axis, scatterMode});
+    TiledScatterElementS(function, tileShape,
+                         {oOperand[0], iOperand[0], iOperand[1], scalar, axis, scatterMode,
+                          op.GetOpcode() == Opcode::OP_SCATTER_ELEMENT_INPLACE});
 }
 
 void ScatterOperationTileFunc(Function& function, const TileShape& tileShape,
@@ -376,10 +520,14 @@ void ScatterOperationTileFunc(Function& function, const TileShape& tileShape,
     int axis = op.GetIntAttribute(OP_ATTR_PREFIX + "axis");
     int scatterMode = op.GetIntAttribute(OP_ATTR_PREFIX + "scatter_mode");
     TiledScatter(function, tileShape,
-                 {oOperand[0], iOperand[0], iOperand[1], iOperand[NUM_VALUE_2], axis, scatterMode});
+                 {oOperand[0], iOperand[0], iOperand[1], iOperand[NUM_VALUE_2], axis, scatterMode,
+                  op.GetOpcode() == Opcode::OP_SCATTER_INPLACE});
 }
 
 REGISTER_OPERATION_TILED_FUNC(OP_SCATTER_ELEMENT, Opcode::OP_SCATTER_ELEMENT, ScatterElementSOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_SCATTER_ELEMENT_INPLACE, Opcode::OP_SCATTER_ELEMENT_INPLACE,
+                              ScatterElementSOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_SCATTER, Opcode::OP_SCATTER, ScatterOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_SCATTER_INPLACE, Opcode::OP_SCATTER_INPLACE, ScatterOperationTileFunc);
 
 } // namespace npu::tile_fwk

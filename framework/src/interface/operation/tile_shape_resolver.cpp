@@ -167,7 +167,8 @@ TileShape TileShapeResolver::GetInputTileShape(const Operation& op, int index) c
             }
             return MakeTileShapeFromVec(ElementwiseInputVecTile(inShape, opVecTile));
         }
-        case Opcode::OP_SCATTER_ELEMENT: {
+        case Opcode::OP_SCATTER_ELEMENT:
+        case Opcode::OP_SCATTER_ELEMENT_INPLACE: {
             int axis = op.HasAttr(OP_ATTR_PREFIX + "axis") ?
                            static_cast<int>(op.GetIntAttribute(OP_ATTR_PREFIX + "axis")) :
                            0;
@@ -177,7 +178,8 @@ TileShape TileShapeResolver::GetInputTileShape(const Operation& op, int index) c
             }
             return MakeTileShapeFromVec(VecTileAxisFull(idxShape, idxShape, opVecTile, axis));
         }
-        case Opcode::OP_SCATTER: {
+        case Opcode::OP_SCATTER:
+        case Opcode::OP_SCATTER_INPLACE: {
             int axis = op.HasAttr(OP_ATTR_PREFIX + "axis") ?
                            static_cast<int>(op.GetIntAttribute(OP_ATTR_PREFIX + "axis")) :
                            0;

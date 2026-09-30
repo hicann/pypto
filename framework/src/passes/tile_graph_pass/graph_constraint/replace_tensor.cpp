@@ -63,14 +63,20 @@ bool HasInputMatchingOutputRawTensor(const Operation& inputOp, const Operation& 
     return false;
 }
 
+bool IsInplaceIdxOperation(const Operation& op)
+{
+    return (op.GetOpcode() == Opcode::OP_INDEX_PUT || op.GetOpcode() == Opcode::OP_SCATTER_INPLACE ||
+            op.GetOpcode() == Opcode::OP_SCATTER_ELEMENT_INPLACE || op.GetOpcode() == Opcode::OP_INDEX_ADD) &&
+           op.HasAttribute(OpAttributeKey::inplaceIdx);
+}
+
 bool IsInplaceOperation(const Operation& op)
 {
     if (inplaceOpSet.count(op.GetOpcode()) != 0) {
         return true;
     }
-    return (op.GetOpcode() == Opcode::OP_COPY_OUT || op.GetOpcode() == Opcode::OP_INDEX_PUT ||
-            op.GetOpcode() == Opcode::OP_INDEX_ADD) &&
-           op.HasAttribute(OpAttributeKey::inplaceIdx);
+    return (op.GetOpcode() == Opcode::OP_COPY_OUT && op.HasAttribute(OpAttributeKey::inplaceIdx)) ||
+           IsInplaceIdxOperation(op);
 }
 
 std::vector<Operation*> FindFirstNonInplaceConsumers(Operation& op)
@@ -660,7 +666,28 @@ Status ReplaceTensor::ForwardInputIdx(Operation* op, LogicalTensorPtr& rootTenso
         function.UpdateLinkMap(outTensor, inTensor);
     }
     outTensor->tensor = rootTensor->tensor;
-    outTensor->UpdateOffset(rootTensor->GetOffset());
+    const bool isScatterInplace = op->GetOpcode() == Opcode::OP_SCATTER_INPLACE ||
+                                  op->GetOpcode() == Opcode::OP_SCATTER_ELEMENT_INPLACE;
+    const auto oldOffset = outTensor->GetOffset();
+    const auto newOffset = rootTensor->GetOffset();
+    if (isScatterInplace) {
+        outTensor->UpdateOffset(rootTensor->GetTensorOffset());
+    } else {
+        auto dynOffset = outTensor->GetDynOffset();
+        for (size_t i = 0; i < dynOffset.size(); ++i) {
+            dynOffset[i] = dynOffset[i] + newOffset[i] - oldOffset[i];
+        }
+        outTensor->UpdateOffset(TensorOffset(newOffset, dynOffset));
+    }
+    for (auto* consumer : outTensor->GetConsumers()) {
+        if (!IsCopyIn(consumer->GetOpcode())) {
+            continue;
+        }
+        if (UpdateCopyInAttr(consumer, isScatterInplace || oldOffset != newOffset) == FAILED) {
+            APASS_LOG_ERROR_F(Elements::Operation, "Update copyIn[%d] attr failed.", consumer->GetOpMagic());
+            return FAILED;
+        }
+    }
     forRoots.push(outTensor);
     return SUCCESS;
 }
@@ -824,9 +851,7 @@ Status ReplaceTensor::ForwardProcess(Function& function)
                 if (ForwardCopyOut(consumerOp, rootTensor, function) == FAILED) {
                     return FAILED;
                 }
-            } else if ((consumerOp->GetOpcode() == Opcode::OP_INDEX_PUT ||
-                        consumerOp->GetOpcode() == Opcode::OP_INDEX_ADD) &&
-                       consumerOp->HasAttribute(OpAttributeKey::inplaceIdx)) {
+            } else if (IsInplaceIdxOperation(*consumerOp)) {
                 if (ForwardInputIdx(consumerOp, rootTensor, function) == FAILED) {
                     return FAILED;
                 }
@@ -886,9 +911,7 @@ Status ReplaceTensor::BackwardProcess(Function& function)
                 if (BackwardViewType(producerOp, rootTensor) == FAILED) {
                     return FAILED;
                 }
-            } else if ((producerOp->GetOpcode() == Opcode::OP_INDEX_PUT ||
-                        producerOp->GetOpcode() == Opcode::OP_INDEX_ADD) &&
-                       producerOp->HasAttribute(OpAttributeKey::inplaceIdx)) {
+            } else if (IsInplaceIdxOperation(*producerOp)) {
                 if (BackwardInputIdx(producerOp, rootTensor, function) == FAILED) {
                     return FAILED;
                 }
@@ -1282,6 +1305,16 @@ Status ReplaceTensor::FindNeedToCopyAssemble(std::unordered_set<Operation*>& nee
     if ((!producers.empty()) && (((*producers.begin())->GetOpcode() == Opcode::OP_TRANSPOSE_MOVEOUT) ||
                                  (*producers.begin())->GetOpcode() == Opcode::OP_SHMEM_WAIT_UNTIL)) {
         return FAILED;
+    }
+    const bool hasScatterInplaceProducer = std::any_of(
+        producers.begin(), producers.end(), [](const Operation* producer) {
+            return producer->GetOpcode() == Opcode::OP_SCATTER_INPLACE ||
+                   producer->GetOpcode() == Opcode::OP_SCATTER_ELEMENT_INPLACE;
+        });
+    if (assembleIn->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR && hasScatterInplaceProducer &&
+        !IsAssembleSameGmWriteBack(function, &op)) {
+        needInsertCopyAssOps.insert(&op);
+        return SUCCESS;
     }
     const int UB_SIZE_THRESHOLD = static_cast<int>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB));
     auto inProducerOps = inOp->ProducerOps();
@@ -1681,7 +1714,7 @@ std::vector<OpImmediate> ReplaceTensor::SumOffsetForCopyIn(const std::vector<OpI
     return res;
 }
 
-Status ReplaceTensor::UpdateCopyInAttr(Operation* copyInOp)
+Status ReplaceTensor::UpdateCopyInAttr(Operation* copyInOp, bool updateOffset)
 {
     auto input = copyInOp->GetIOperands()[0];
     auto copyInOpAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyInOp->GetOpAttribute());
@@ -1696,7 +1729,8 @@ Status ReplaceTensor::UpdateCopyInAttr(Operation* copyInOp)
             inputOffset = OpImmediate::Specified(input->GetDynOffset());
         }
         std::vector<OpImmediate> oldFromOffset = copyInOpAttr->GetFromOffset();
-        if (!inputOffset.empty() && !oldFromOffset.empty() && (inputOffset.size() == oldFromOffset.size())) {
+        if (updateOffset && !inputOffset.empty() && !oldFromOffset.empty() &&
+            (inputOffset.size() == oldFromOffset.size())) {
             copyInOpAttr->SetFromOffset(SumOffsetForCopyIn(inputOffset, oldFromOffset));
         }
         copyInOpAttr->SetRawShape(OpImmediate::Specified(input->tensor->GetDynRawShape()));

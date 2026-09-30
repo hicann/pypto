@@ -441,19 +441,30 @@ REGISTER_INFER_SHAPE_FUNC(OP_GATHER_MASK, Opcode::OP_GATHER_MASK, GatherMaskFunc
 
 void ScatterInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
-    std::vector<SymbolicScalar> outValidShape;
-    auto inValidShape = op->GetIOperands()[0]->GetDynValidShape();
-
-    for (size_t i = 0; i < inValidShape.size(); ++i) {
-        outValidShape.push_back(inValidShape[i]);
+    if (op->GetOpcode() != Opcode::OP_SCATTER_INPLACE && op->GetOpcode() != Opcode::OP_SCATTER_ELEMENT_INPLACE) {
+        std::vector<SymbolicScalar> outValidShape;
+        auto inValidShape = op->GetIOperands()[0]->GetDynValidShape();
+        for (size_t i = 0; i < inValidShape.size(); ++i) {
+            outValidShape.push_back(inValidShape[i]);
+        }
+        for (auto output : op->GetOOperands()) {
+            outValidShapes.push_back(outValidShape);
+        }
+        return;
     }
-
-    for (auto output : op->GetOOperands()) {
-        outValidShapes.push_back(outValidShape);
+    outValidShapes.push_back(op->GetIOperands()[0]->GetDynValidShape());
+    for (size_t i = 1; i < op->GetOOperands().size(); ++i) {
+        std::vector<SymbolicScalar> tmpValidShape;
+        for (auto dim : op->GetOOperands()[i]->GetShape()) {
+            tmpValidShape.emplace_back(dim);
+        }
+        outValidShapes.push_back(tmpValidShape);
     }
 }
 REGISTER_INFER_SHAPE_FUNC(OP_SCATTER_ELEMENT, Opcode::OP_SCATTER_ELEMENT, ScatterInferFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_SCATTER_ELEMENT_INPLACE, Opcode::OP_SCATTER_ELEMENT_INPLACE, ScatterInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_SCATTER, Opcode::OP_SCATTER, ScatterInferFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_SCATTER_INPLACE, Opcode::OP_SCATTER_INPLACE, ScatterInferFunc);
 
 void IndexAddInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {

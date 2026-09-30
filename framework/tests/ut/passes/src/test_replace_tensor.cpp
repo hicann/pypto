@@ -37,6 +37,7 @@ static const uint32_t kNumOne = 1u;
 static const uint32_t kNumTwo = 2u;
 static const uint32_t kNumThree = 3u;
 static const uint32_t kNumFour = 4u;
+static const uint32_t kNumFive = 5u;
 static const uint32_t kNumSix = 6u;
 static const uint32_t kNumEight = 8u;
 static const uint32_t kNumTwelve = 12u;
@@ -298,6 +299,44 @@ TEST_F(ReplaceTensorTest, TestIndexOutCast)
     EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
     EXPECT_NE(inTensor2->GetRawMagic(), outcast->GetRawMagic());
     EXPECT_EQ(pass.PostCheck(*currFunctionPtr), SUCCESS);
+}
+
+TEST_F(ReplaceTensorTest, ForwardIndexPutUpdatesCopyInOffset)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "ForwardIndexPutUpdatesCopyInOffset",
+                                                      "ForwardIndexPutUpdatesCopyInOffset", nullptr);
+    ASSERT_NE(currFunctionPtr, nullptr);
+
+    std::vector<int64_t> shape = {kNumFour, kNumFour};
+    std::vector<int64_t> indexShape = {kNumFour};
+    Offset rootOffset = {kNumFour, kNumZero};
+    Offset originalOffset = {kNumZero, kNumZero};
+    Offset copyInFromOffset = {kNumOne, kNumTwo};
+
+    auto rootTensor = IRBuilder().CreateTensorVar(std::make_shared<RawTensor>(DT_FP32, shape), rootOffset, shape,
+                                                  CreateTestConstIntVector(shape));
+    auto values = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto indices = IRBuilder().CreateTensorVar(DT_INT32, indexShape, CreateTestConstIntVector(indexShape));
+    auto indexPutOutput = IRBuilder().CreateTensorVar(std::make_shared<RawTensor>(DT_FP32, shape), originalOffset,
+                                                      shape, CreateTestConstIntVector(shape));
+    auto copyInOutput = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+
+    auto& indexPut = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_INDEX_PUT,
+                                                      {rootTensor, values, indices}, {indexPutOutput});
+    indexPut.SetAttribute(OpAttributeKey::inplaceIdx, 0);
+    auto& copyIn = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {indexPutOutput},
+                                                    {copyInOutput});
+    copyIn.SetOpAttribute(std::make_shared<CopyOpAttribute>(OpImmediate::Specified(copyInFromOffset), MEM_UB,
+                                                            OpImmediate::Specified(shape),
+                                                            OpImmediate::Specified(shape)));
+
+    ReplaceTensor pass;
+    EXPECT_EQ(pass.ForwardInputIdx(&indexPut, rootTensor, *currFunctionPtr), SUCCESS);
+    EXPECT_EQ(indexPutOutput->GetOffset(), rootOffset);
+
+    auto copyInAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyIn.GetOpAttribute());
+    ASSERT_NE(copyInAttr, nullptr);
+    EXPECT_EQ(OpImmediate::ToSpecified(copyInAttr->GetFromOffset()), CreateTestConstIntVector({kNumFive, kNumTwo}));
 }
 
 TEST_F(ReplaceTensorTest, TestViewType)

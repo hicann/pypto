@@ -1644,7 +1644,7 @@ Status AssignMemoryType::MarkA5SimtGatherElement(Function& function)
         return SUCCESS;
     }
     for (auto& op : function.Operations()) {
-        if (IsGmGatherElement(op)) {
+        if (IsGmGatherElement(op) || IsGmScatter(op)) {
             op.SetAttribute(OP_ATTR_PREFIX + "requires_simt", true);
         }
     }

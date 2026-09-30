@@ -32,6 +32,35 @@ constexpr size_t DIMENSIONS_2D = 2;
 constexpr size_t DIMENSIONS_3D = 3;
 constexpr size_t DIMENSIONS_4D = 4;
 constexpr size_t DIMENSIONS_5D = 5;
+// OP_INDEX_PUT/OP_INDEX_ADD的第1个输入与第1个输出为同一物理地址，仅该输入/输出对之间可传播内存信息
+constexpr int INDEX_INPLACE_TRANSMIT_OPERAND_INDEX = 0;
+// OP_INDEX_OUTCAST的第3个输入（operand下标2）与第1个输出为同一物理地址
+constexpr int INDEX_OUTCAST_TRANSMIT_OPERAND_INDEX = 2;
+
+bool IsIndexInplaceOpcode(Opcode opcode) { return opcode == Opcode::OP_INDEX_PUT || opcode == Opcode::OP_INDEX_ADD; }
+
+// 内存信息是否可经tensor所在的输入operand流入op：普通传导算子任意输入均可；
+// INDEX_OUTCAST仅第3个输入、INDEX_PUT/INDEX_ADD仅第1个输入（均与第1个输出同物理地址）可传
+bool CanTransmitInput(const Operation* op, const LogicalTensorPtr& tensor)
+{
+    if (op->GetOpcode() == Opcode::OP_INDEX_OUTCAST) {
+        return op->GetIOperandIndex(tensor) == INDEX_OUTCAST_TRANSMIT_OPERAND_INDEX;
+    }
+    if (!IsIndexInplaceOpcode(op->GetOpcode())) {
+        return true;
+    }
+    return op->GetIOperandIndex(tensor) == INDEX_INPLACE_TRANSMIT_OPERAND_INDEX;
+}
+
+// 内存信息是否可经tensor所在的输出operand流出op：普通传导算子任意输出均可；
+// INDEX_PUT/INDEX_ADD仅第1个输出（与第1个输入同物理地址）可传
+bool CanTransmitOutput(const Operation* op, const LogicalTensorPtr& tensor)
+{
+    if (!IsIndexInplaceOpcode(op->GetOpcode())) {
+        return true;
+    }
+    return op->GetOOperandIndex(tensor) == INDEX_INPLACE_TRANSMIT_OPERAND_INDEX;
+}
 
 int64_t GetPowerOfTwo(int64_t cur)
 {
@@ -114,7 +143,7 @@ bool HasMatmulConsumerWithSingleProducer(const LogicalTensorPtr& tensor)
 bool IsPreMergeTraceableOpcode(Opcode opcode)
 {
     return opcode == Opcode::OP_VIEW || opcode == Opcode::OP_ASSEMBLE || opcode == Opcode::OP_RESHAPE ||
-           opcode == Opcode::OP_VIEW_TYPE || opcode == Opcode::OP_ATOMIC_RMW;
+           opcode == Opcode::OP_VIEW_TYPE || opcode == Opcode::OP_ATOMIC_RMW || IsIndexInplaceOpcode(opcode);
 }
 
 bool IsAssembleLikeOpcode(Opcode opcode) { return opcode == Opcode::OP_ASSEMBLE || opcode == Opcode::OP_ATOMIC_RMW; }
@@ -139,12 +168,18 @@ bool CollectPreMergeBranchSources(Function& function, Operation* op, std::unorde
         if (input == nullptr) {
             continue;
         }
+        if (!CanTransmitInput(op, input)) {
+            continue;
+        }
         if (function.IsFromInCast(input)) {
             AddUniqueSource(sourceTensors, input);
             found = true;
             continue;
         }
         for (const auto& producer : input->GetProducers()) {
+            if (!CanTransmitOutput(producer, input)) {
+                continue;
+            }
             found = CollectPreMergeBranchSources(function, producer, visited, sourceTensors) || found;
         }
     }
@@ -368,7 +403,8 @@ bool InferMemoryConflict::CheckTransmit(Operation& curOp)
 {
     LogicalTensorPtr curTensor;
     std::set<Opcode> NonCalcNode = {Opcode::OP_VIEW,          Opcode::OP_ASSEMBLE,  Opcode::OP_RESHAPE,
-                                    Opcode::OP_INDEX_OUTCAST, Opcode::OP_VIEW_TYPE, Opcode::OP_ATOMIC_RMW};
+                                    Opcode::OP_INDEX_OUTCAST, Opcode::OP_VIEW_TYPE, Opcode::OP_ATOMIC_RMW,
+                                    Opcode::OP_INDEX_PUT,     Opcode::OP_INDEX_ADD};
     bool transmit = (NonCalcNode.find(curOp.GetOpcode()) != NonCalcNode.end());
     if (curOp.GetOpcode() == Opcode::OP_ASSEMBLE || curOp.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
         curTensor = *(curOp.GetIOperands().begin());
@@ -481,6 +517,9 @@ Status InferMemoryConflict::UpdateForwardTensor(Function& function, const Logica
                                                 Operation* consumer, std::queue<LogicalTensorPtr>& curTensors)
 {
     for (const auto& outputTensor : consumer->GetOOperands()) {
+        if (!CanTransmitOutput(consumer, outputTensor)) {
+            continue;
+        }
         if (consumer->GetOpcode() == Opcode::OP_RESHAPE) {
             auto reshapeInput = consumer->GetIOperands().front();
             bool isInplace = consumer->GetBoolAttribute(OP_ATTR_PREFIX + "isInplace");
@@ -613,8 +652,7 @@ Status InferMemoryConflict::UpdateBackwardTensor(Function& function, const Logic
                                                  Operation* producer, std::queue<LogicalTensorPtr>& curTensors)
 {
     for (auto& inputTensor : producer->GetIOperands()) {
-        int index = 2;
-        if (producer->GetOpcode() == Opcode::OP_INDEX_OUTCAST && producer->GetIOperandIndex(inputTensor) != index) {
+        if (!CanTransmitInput(producer, inputTensor)) {
             continue;
         }
         if (ShouldSkipOutcastInput(inputTensor, function)) {
@@ -653,8 +691,7 @@ Status InferMemoryConflict::ForwardPropagation(Function& function)
             if (!CheckTransmit(*consumer)) {
                 continue;
             }
-            int index = 2;
-            if (consumer->GetOpcode() == Opcode::OP_INDEX_OUTCAST && consumer->GetIOperandIndex(curTensor) != index) {
+            if (!CanTransmitInput(consumer, curTensor)) {
                 continue;
             }
             if (UpdateForwardTensor(function, curTensor, consumer, curTensors) != SUCCESS) {
@@ -677,6 +714,9 @@ Status InferMemoryConflict::BackwardPropagation(Function& function)
         curTensors.pop();
         for (const auto& producer : curTensor->GetProducers()) {
             if (!CheckTransmit(*producer)) {
+                continue;
+            }
+            if (!CanTransmitOutput(producer, curTensor)) {
                 continue;
             }
             if (UpdateBackwardTensor(function, curTensor, producer, curTensors) != SUCCESS) {

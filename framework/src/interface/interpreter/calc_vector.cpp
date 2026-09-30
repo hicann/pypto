@@ -797,6 +797,7 @@ void ExecuteOpScatter(ExecuteOperationContext* ctx)
     calc::Scatter(oop, self, indices, src, axis, reduce);
 }
 REGISTER_CALC_OP(OP_SCATTER, Opcode::OP_SCATTER, ExecuteOpScatter);
+REGISTER_CALC_OP(OP_SCATTER_INPLACE, Opcode::OP_SCATTER_INPLACE, ExecuteOpScatter);
 
 template <typename T, DataType dataType>
 Element GetEndBySize(Element start, Element size, Element step)

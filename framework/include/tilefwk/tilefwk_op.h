@@ -233,6 +233,9 @@ Tensor Scatter(const Tensor& self, const Tensor& indices, const Element& src, in
                ScatterMode reduce = ScatterMode::NONE);
 Tensor Scatter(const Tensor& self, const Tensor& indices, const Tensor& src, int axis,
                ScatterMode reduce = ScatterMode::NONE);
+void Scatter_(Tensor& self, const Tensor& indices, const Element& src, int axis,
+              ScatterMode reduce = ScatterMode::NONE);
+void Scatter_(Tensor& self, const Tensor& indices, const Tensor& src, int axis, ScatterMode reduce = ScatterMode::NONE);
 void IndexPut_(Tensor& self, const std::vector<Tensor>& indices, const Tensor& values, bool accumulate = false);
 Tensor IndexAddUB(const Tensor& self, const Tensor& src, const Tensor& indices, int axis,
                   const Element& alpha = Element(DT_FP32, 1.0f));

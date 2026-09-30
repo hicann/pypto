@@ -26,4 +26,23 @@ inline bool IsGmGatherElement(const Operation& op)
            inputs[1]->GetMemoryTypeToBe() == MemoryType::MEM_UB;
 }
 
+inline bool IsGmScatter(const Operation& op)
+{
+    const bool scalar = op.GetOpcode() == Opcode::OP_SCATTER_ELEMENT_INPLACE;
+    if ((!scalar && op.GetOpcode() != Opcode::OP_SCATTER_INPLACE) || op.GetIOperands().size() != (scalar ? 2U : 3U) ||
+        op.GetOOperands().empty() || !op.HasAttr(OP_ATTR_PREFIX + "scatter_mode") ||
+        op.GetIntAttribute(OP_ATTR_PREFIX + "scatter_mode") != 0) {
+        return false;
+    }
+    const auto& inputs = op.GetIOperands();
+    const auto& outputs = op.GetOOperands();
+    if (inputs[1] == nullptr || (!scalar && inputs[2] == nullptr) || outputs[0] == nullptr ||
+        outputs[0]->GetMemoryTypeToBe() != MemoryType::MEM_DEVICE_DDR ||
+        inputs[1]->GetMemoryTypeToBe() != MemoryType::MEM_UB ||
+        (!scalar && inputs[2]->GetMemoryTypeToBe() != MemoryType::MEM_UB)) {
+        return false;
+    }
+    return Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510;
+}
+
 } // namespace npu::tile_fwk

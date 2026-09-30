@@ -116,20 +116,28 @@ inline const std::unordered_map<DataType, int64_t> Parallelism{
 inline const std::set<Opcode> cubeMMOps = {Opcode::OP_A_MUL_B,   Opcode::OP_A_MUL_BT,   Opcode::OP_AT_MUL_B,
                                            Opcode::OP_AT_MUL_BT, Opcode::OP_A_MULACC_B, Opcode::OP_A_MULACC_BT};
 
-inline const std::set<Opcode> stopOps = {
-    Opcode::OP_ROWMAX,        Opcode::OP_ROWSUM,        Opcode::OP_ROWEXPMAX,       Opcode::OP_ROWEXPSUM,
-    Opcode::OP_ROWSUMLINE,    Opcode::OP_ROWMAXLINE,    Opcode::OP_ROWMINLINE,      Opcode::OP_TOPK,
-    Opcode::OP_TILEDMRGSORT,  Opcode::OP_BITSORT,       Opcode::OP_MRGSORT,         Opcode::OP_ARGSORT,
-    Opcode::OP_TOPK_SORT,     Opcode::OP_TOPK_MERGE,    Opcode::OP_TOPK_EXTRACT,    Opcode::OP_ROWMAX_SINGLE,
-    Opcode::OP_ROWMIN_SINGLE, Opcode::OP_ROWSUM_SINGLE, Opcode::OP_A_MUL_B,         Opcode::OP_A_MUL_BT,
-    Opcode::OP_AT_MUL_B,      Opcode::OP_AT_MUL_BT,     Opcode::OP_A_MULACC_B,      Opcode::OP_A_MULACC_BT,
-    Opcode::OP_INDEX_OUTCAST, Opcode::OP_INDEX_PUT,     Opcode::OP_SCATTER_ELEMENT, Opcode::OP_SCATTER};
+inline const std::set<Opcode> stopOps = {Opcode::OP_ROWMAX,          Opcode::OP_ROWSUM,
+                                         Opcode::OP_ROWEXPMAX,       Opcode::OP_ROWEXPSUM,
+                                         Opcode::OP_ROWSUMLINE,      Opcode::OP_ROWMAXLINE,
+                                         Opcode::OP_ROWMINLINE,      Opcode::OP_TOPK,
+                                         Opcode::OP_TILEDMRGSORT,    Opcode::OP_BITSORT,
+                                         Opcode::OP_MRGSORT,         Opcode::OP_ARGSORT,
+                                         Opcode::OP_TOPK_SORT,       Opcode::OP_TOPK_MERGE,
+                                         Opcode::OP_TOPK_EXTRACT,    Opcode::OP_ROWMAX_SINGLE,
+                                         Opcode::OP_ROWMIN_SINGLE,   Opcode::OP_ROWSUM_SINGLE,
+                                         Opcode::OP_A_MUL_B,         Opcode::OP_A_MUL_BT,
+                                         Opcode::OP_AT_MUL_B,        Opcode::OP_AT_MUL_BT,
+                                         Opcode::OP_A_MULACC_B,      Opcode::OP_A_MULACC_BT,
+                                         Opcode::OP_INDEX_OUTCAST,   Opcode::OP_INDEX_PUT,
+                                         Opcode::OP_SCATTER_ELEMENT, Opcode::OP_SCATTER,
+                                         Opcode::OP_SCATTER_INPLACE, Opcode::OP_SCATTER_ELEMENT_INPLACE};
 
 inline const std::set<Opcode> transposeOps = {Opcode::OP_TRANSPOSE_MOVEIN, Opcode::OP_TRANSPOSE_MOVEOUT,
                                               Opcode::OP_TRANSPOSE_VNCHWCONV};
 
-inline const std::set<Opcode> scatterOps = {Opcode::OP_INDEX_OUTCAST, Opcode::OP_INDEX_PUT, Opcode::OP_SCATTER_ELEMENT,
-                                            Opcode::OP_SCATTER};
+inline const std::set<Opcode> scatterOps = {Opcode::OP_INDEX_OUTCAST,   Opcode::OP_INDEX_PUT,
+                                            Opcode::OP_SCATTER_ELEMENT, Opcode::OP_SCATTER,
+                                            Opcode::OP_SCATTER_INPLACE, Opcode::OP_SCATTER_ELEMENT_INPLACE};
 
 inline const std::set<Opcode> gatherVectorOps = {Opcode::OP_GATHER_ELEMENT, Opcode::OP_GATHER,
                                                  Opcode::OP_GATHER_FROM_UB};
@@ -247,7 +255,9 @@ inline const std::map<Opcode, SingletonTileSettingHandler> singletonTileHandlers
     {Opcode::OP_INDEX_OUTCAST, IndexInOutTileSetting},
     {Opcode::OP_INDEX_PUT, IndexInOutTileSetting},
     {Opcode::OP_SCATTER_ELEMENT, IndexInOutTileSetting},
+    {Opcode::OP_SCATTER_ELEMENT_INPLACE, IndexInOutTileSetting},
     {Opcode::OP_SCATTER, IndexInOutTileSetting},
+    {Opcode::OP_SCATTER_INPLACE, IndexInOutTileSetting},
     {Opcode::OP_TOPK, TopkTileSetting},
     {Opcode::OP_TILEDMRGSORT, TopkTileSetting},
     {Opcode::OP_BITSORT, TopkTileSetting},

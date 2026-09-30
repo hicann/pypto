@@ -1110,8 +1110,9 @@ std::vector<std::string> CodeGenOpNPU::GetGmOffsetForTileTensor(unsigned gmIdx) 
         return std::vector<std::string>(dim, "0");
     }
 
-    if (GetOffsetFromAttr(gmIdx)[ID0].IsValid()) {
-        return GenSymbolicArgument(GetOffsetFromAttr(gmIdx));
+    const auto gmOffset = GetOffsetFromAttr(gmIdx);
+    if (!gmOffset.empty() && gmOffset[ID0].IsValid()) {
+        return GenSymbolicArgument(gmOffset);
     }
 
     return GenGetParamMacroPacked(gmIdx, dim, PREFIX_STR_OFFSET);

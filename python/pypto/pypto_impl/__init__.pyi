@@ -666,6 +666,9 @@ def Scatter(self: Tensor, indices: Tensor, src: Element, axis: int,
 def Scatter(self: Tensor, indices: Tensor, src: Tensor, axis: int,
             reduce: ScatterMode = ScatterMode.NONE) -> Tensor: ...
 
+def Scatter_(self: Tensor, indices: Tensor, src: Union[Tensor, Element], axis: int,
+             reduce: ScatterMode = ScatterMode.NONE) -> None: ...
+
 
 def Full(elem: Union[int, float, SymbolicScalar, Element], shape: List[int],
          valid_shape: Optional[List[Union[int, SymbolicScalar]]] = None) -> Tensor: ...

@@ -15,6 +15,9 @@
 #ifndef TILEOP_TILE_OPERATOR_SCATTER__H
 #define TILEOP_TILE_OPERATOR_SCATTER__H
 #include <type_traits>
+#if defined(__DAV_V310)
+#include "tileop_common.h"
+#endif
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
@@ -212,5 +215,186 @@ TILEOP void Tscatter(T0 dst, T1 src1, T2 src2, T3 tmp)
         wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
     }
 }
+
+#if defined(__DAV_V310)
+struct ScatterGmTileInfo {
+    uint64_t shape[3];
+    uint64_t idxStride[4];
+    uint64_t srcStride[4];
+    uint64_t dstStride[5];
+};
+
+template <int axis, int scatterMode, typename DstType, typename IdxType, typename SrcType>
+__simt_vf__ AICORE LAUNCH_BOUND(1024) inline void ScatterGmSimt(__gm__ DstType* dst, __ubuf__ const IdxType* indices,
+                                                                __ubuf__ const SrcType* values, ScatterGmTileInfo info,
+                                                                uint32_t rows, uint32_t cols)
+{
+    static_assert(scatterMode == 0, "GM Scatter SIMT only supports overwrite");
+    const uint32_t warps = rows < 32 ? rows : 32;
+    for (uint32_t row = __cce_simt_get_TID_Y(); row < rows; row += warps) {
+        uint32_t remaining = row;
+        const uint32_t l = remaining % info.shape[2];
+        remaining /= info.shape[2];
+        const uint32_t k = remaining % info.shape[1];
+        remaining /= info.shape[1];
+        const uint32_t j = remaining % info.shape[0];
+        const uint32_t i = remaining / info.shape[0];
+        const int64_t idxRow = i * info.idxStride[0] + j * info.idxStride[1] + k * info.idxStride[2] +
+                               l * info.idxStride[3];
+        const int64_t srcRow = i * info.srcStride[0] + j * info.srcStride[1] + k * info.srcStride[2] +
+                               l * info.srcStride[3];
+        const int64_t baseOffset = (axis == 0 ? 0 : i * info.dstStride[0]) + (axis == 1 ? 0 : j * info.dstStride[1]) +
+                                   (axis == 2 ? 0 : k * info.dstStride[2]) + (axis == 3 ? 0 : l * info.dstStride[3]);
+        for (uint32_t m = __cce_simt_get_TID_X(); m < cols; m += 32) {
+            const IdxType index = indices[idxRow + m];
+            const int64_t offset = baseOffset + (axis == 4 ? static_cast<int64_t>(index) * info.dstStride[4] :
+                                                             static_cast<int64_t>(index) * info.dstStride[axis] +
+                                                                 static_cast<int64_t>(m) * info.dstStride[4]);
+            dst[offset] = static_cast<DstType>(values[srcRow + m]);
+        }
+    }
+}
+
+template <int axis, int scatterMode, typename DstType, typename IdxType>
+__simt_vf__ AICORE LAUNCH_BOUND(1024) inline void ScatterScalarSimt(__gm__ DstType* dst,
+                                                                    __ubuf__ const IdxType* indices, DstType value,
+                                                                    ScatterGmTileInfo info, uint32_t rows,
+                                                                    uint32_t cols)
+{
+    static_assert(scatterMode == 0, "GM scalar Scatter only supports overwrite");
+    const uint32_t warps = rows < 32 ? rows : 32;
+    for (uint32_t row = __cce_simt_get_TID_Y(); row < rows; row += warps) {
+        uint32_t remaining = row;
+        const uint32_t l = remaining % info.shape[2];
+        remaining /= info.shape[2];
+        const uint32_t k = remaining % info.shape[1];
+        remaining /= info.shape[1];
+        const uint32_t j = remaining % info.shape[0];
+        const uint32_t i = remaining / info.shape[0];
+        const int64_t idxRow = i * info.idxStride[0] + j * info.idxStride[1] + k * info.idxStride[2] +
+                               l * info.idxStride[3];
+        const int64_t baseOffset = (axis == 0 ? 0 : i * info.dstStride[0]) + (axis == 1 ? 0 : j * info.dstStride[1]) +
+                                   (axis == 2 ? 0 : k * info.dstStride[2]) + (axis == 3 ? 0 : l * info.dstStride[3]);
+        for (uint32_t m = __cce_simt_get_TID_X(); m < cols; m += 32) {
+            const IdxType index = indices[idxRow + m];
+            const int64_t offset = baseOffset + (axis == 4 ? static_cast<int64_t>(index) * info.dstStride[4] :
+                                                             static_cast<int64_t>(index) * info.dstStride[axis] +
+                                                                 static_cast<int64_t>(m) * info.dstStride[4]);
+            dst[offset] = value;
+        }
+    }
+}
+
+template <int axis, int scatterMode, typename T0, typename T1, typename Scalar>
+TILEOP void TscatterElementSInplaceImpl(T0 dst, T1 indices, Scalar scalar, __gm__ std::remove_cv_t<Scalar>* dstAddr)
+{
+    static_assert(scatterMode == 0, "GM Scatter only supports overwrite");
+    constexpr auto expectSize = MAX_DIMS;
+    const auto dstLayout = dst.GetLayout();
+    const auto idxLayout = indices.GetLayout();
+    auto dstStride0 = dstLayout.template GetStrideDim<0, expectSize>();
+    auto dstStride1 = dstLayout.template GetStrideDim<1, expectSize>();
+    auto dstStride2 = dstLayout.template GetStrideDim<2, expectSize>();
+    auto dstStride3 = dstLayout.template GetStrideDim<3, expectSize>();
+    auto dstStride4 = dstLayout.template GetStrideDim<4, expectSize>();
+    auto idxStride0 = idxLayout.template GetStrideDim<0, expectSize>();
+    auto idxStride1 = idxLayout.template GetStrideDim<1, expectSize>();
+    auto idxStride2 = idxLayout.template GetStrideDim<2, expectSize>();
+    auto idxStride3 = idxLayout.template GetStrideDim<3, expectSize>();
+    auto idxShape0 = idxLayout.template GetShapeDim<0, expectSize>();
+    auto idxShape1 = idxLayout.template GetShapeDim<1, expectSize>();
+    auto idxShape2 = idxLayout.template GetShapeDim<2, expectSize>();
+    auto idxShape3 = idxLayout.template GetShapeDim<3, expectSize>();
+    auto idxShape4 = idxLayout.template GetShapeDim<4, expectSize>();
+    auto idxAddr = reinterpret_cast<__ubuf__ const typename T1::Type*>(indices.GetAddr());
+    using DstType = std::remove_cv_t<Scalar>;
+    using IdxType = typename T1::Type;
+    const uint32_t rows = idxShape0 * idxShape1 * idxShape2 * idxShape3;
+    const ScatterGmTileInfo info{{idxShape1, idxShape2, idxShape3},
+                                 {idxStride0, idxStride1, idxStride2, idxStride3},
+                                 {0, 0, 0, 0},
+                                 {dstStride0, dstStride1, dstStride2, dstStride3, dstStride4}};
+    set_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
+    wait_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
+    set_flag(PIPE_V, PIPE_S, EVENT_ID0);
+    wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
+    if (rows != 0 && idxShape4 != 0) {
+        const uint32_t warps = rows < 32 ? rows : 32;
+        cce::async_invoke<ScatterScalarSimt<axis, scatterMode, DstType, IdxType>>(
+            cce::dim3{32, warps}, dstAddr, idxAddr, static_cast<DstType>(scalar), info, rows, idxShape4);
+    }
+    dcci(static_cast<__gm__ void*>(0), cache_line_t::ENTIRE_DATA_CACHE);
+    dsb(DSB_DDR);
+    set_flag(PIPE_S, PIPE_V, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
+}
+
+template <int axis, int scatterMode, typename T0, typename C, typename T1, typename Scalar>
+TILEOP void TscatterElementSInplace(T0 dst, C coordinate, T1 indices, Scalar scalar)
+{
+    using DstType = std::remove_cv_t<Scalar>;
+    auto gmOffset = dst.GetLayout().template GetGmOffset<C, MAX_DIMS>(coordinate);
+    auto dstAddr = reinterpret_cast<__gm__ DstType*>(dst.GetAddr()) + gmOffset;
+    TscatterElementSInplaceImpl<axis, scatterMode>(dst, indices, scalar, dstAddr);
+}
+
+template <int axis, int scatterMode, typename T0, typename C, typename T1, typename T2, typename T3>
+TILEOP void Tscatter(T0 dst, C coordinate, T1 src1, T2 src2, T3 tmp)
+{
+    static_assert(scatterMode == 0, "GM Scatter only supports overwrite");
+    constexpr auto expectSize = MAX_DIMS;
+    const auto dstLayout = dst.GetLayout();
+    const auto idxLayout = src1.GetLayout();
+    const auto srcLayout = src2.GetLayout();
+
+    auto dstStride0 = dstLayout.template GetStrideDim<0, expectSize>();
+    auto dstStride1 = dstLayout.template GetStrideDim<1, expectSize>();
+    auto dstStride2 = dstLayout.template GetStrideDim<2, expectSize>();
+    auto dstStride3 = dstLayout.template GetStrideDim<3, expectSize>();
+    auto dstStride4 = dstLayout.template GetStrideDim<4, expectSize>();
+    auto idxStride0 = idxLayout.template GetStrideDim<0, expectSize>();
+    auto idxStride1 = idxLayout.template GetStrideDim<1, expectSize>();
+    auto idxStride2 = idxLayout.template GetStrideDim<2, expectSize>();
+    auto idxStride3 = idxLayout.template GetStrideDim<3, expectSize>();
+    auto srcStride0 = srcLayout.template GetStrideDim<0, expectSize>();
+    auto srcStride1 = srcLayout.template GetStrideDim<1, expectSize>();
+    auto srcStride2 = srcLayout.template GetStrideDim<2, expectSize>();
+    auto srcStride3 = srcLayout.template GetStrideDim<3, expectSize>();
+
+    auto idxShape0 = idxLayout.template GetShapeDim<0, expectSize>();
+    auto idxShape1 = idxLayout.template GetShapeDim<1, expectSize>();
+    auto idxShape2 = idxLayout.template GetShapeDim<2, expectSize>();
+    auto idxShape3 = idxLayout.template GetShapeDim<3, expectSize>();
+    auto idxShape4 = idxLayout.template GetShapeDim<4, expectSize>();
+    auto gmOffset = dstLayout.template GetGmOffset<C, expectSize>(coordinate);
+
+    // GM TileTensor carries an address-space-qualified type; UB src has the scalar type.
+    using DstType = typename T2::Type;
+    using IdxType = typename T1::Type;
+    using SrcType = typename T2::Type;
+    auto dstAddr = reinterpret_cast<__gm__ DstType*>(dst.GetAddr()) + gmOffset;
+    auto idxAddr = reinterpret_cast<__ubuf__ IdxType*>(src1.GetAddr());
+    auto srcAddr = reinterpret_cast<__ubuf__ SrcType*>(src2.GetAddr());
+    const uint32_t rows = idxShape0 * idxShape1 * idxShape2 * idxShape3;
+    const ScatterGmTileInfo info{{idxShape1, idxShape2, idxShape3},
+                                 {idxStride0, idxStride1, idxStride2, idxStride3},
+                                 {srcStride0, srcStride1, srcStride2, srcStride3},
+                                 {dstStride0, dstStride1, dstStride2, dstStride3, dstStride4}};
+
+    set_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
+    wait_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
+    set_flag(PIPE_V, PIPE_S, EVENT_ID0);
+    wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
+    if (rows != 0 && idxShape4 != 0) {
+        const uint32_t warps = rows < 32 ? rows : 32;
+        cce::async_invoke<ScatterGmSimt<axis, scatterMode, DstType, IdxType, SrcType>>(
+            cce::dim3{32, warps}, dstAddr, idxAddr, srcAddr, info, rows, idxShape4);
+    }
+    dcci(static_cast<__gm__ void*>(0), cache_line_t::ENTIRE_DATA_CACHE);
+    dsb(DSB_DDR);
+    set_flag(PIPE_S, PIPE_V, EVENT_ID0);
+    wait_flag(PIPE_S, PIPE_V, EVENT_ID0);
+}
+#endif
 
 #endif

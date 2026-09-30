@@ -391,7 +391,8 @@ std::string CodeGenOpNPU::PrintScatterElementSOpDynamicUnaligned(const PrintScat
     return oss.str();
 }
 
-std::string CodeGenOpNPU::PrintScatterElementSTileTensor(const PrintScatterElemParam& param) const
+std::string CodeGenOpNPU::PrintScatterElementSTileTensor(const PrintScatterElemParam& param,
+                                                         const std::string& opName) const
 {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     std::string src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
@@ -402,13 +403,68 @@ std::string CodeGenOpNPU::PrintScatterElementSTileTensor(const PrintScatterElemP
     paramList.emplace_back(std::to_string(param.scatterMode));
     std::string scalarTmpBuffer = FormatScalarLiteral(extOperandVal);
     std::ostringstream oss;
-    oss << tileOpName << WrapParamByAngleBrackets(paramList) << "(" << dstTensor << ", " << src1Tensor << ", ("
-        << scalarDtypeBuffer << ")" << scalarTmpBuffer << ");\n";
+    oss << (opName.empty() ? tileOpName : opName) << WrapParamByAngleBrackets(paramList) << "(" << dstTensor << ", "
+        << src1Tensor << ", (" << scalarDtypeBuffer << ")" << scalarTmpBuffer << ");\n";
     return oss.str();
 }
 
 std::string CodeGenOpNPU::GenScatterElementSOp() const
 {
+    if (opCode == Opcode::OP_SCATTER_ELEMENT_INPLACE) {
+        ASSERT(OperErr::ATTRIBUTE_INVALID, opAttrs.count(OP_ATTR_PREFIX + "scatter_mode"))
+            << "cannot get scatter mode attr";
+        ASSERT(OperErr::ATTRIBUTE_INVALID, opAttrs.count(OP_ATTR_PREFIX + "axis")) << "cannot get axis attr";
+        int axis = AnyCast<int64_t>(opAttrs.at(OP_ATTR_PREFIX + "axis"));
+        int scatterMode = AnyCast<int64_t>(opAttrs.at(OP_ATTR_PREFIX + "scatter_mode"));
+        ASSERT(GenCodeErr::PRINT_MODE_ERROR, scatterMode == 0) << "In-place scalar Scatter only supports overwrite";
+        const DataType dstDtype = operandDtype[ToUnderlying(MISOIdx::DST_IDX)];
+        const DataType src0Dtype = operandDtype[ToUnderlying(MISOIdx::SRC0_IDX)];
+        const DataType src1Dtype = operandDtype[ToUnderlying(MISOIdx::SRC1_IDX)];
+        std::vector dstRawShape = rawShape[ToUnderlying(MISOIdx::DST_IDX)];
+        std::vector src1RawShape = rawShape[ToUnderlying(MISOIdx::SRC1_IDX)];
+        std::string dstDtypeStr = DataType2CCEStr(dstDtype);
+        std::string src0DtypeStr = DataType2CCEStr(src0Dtype);
+        std::string src1DtypeStr = DataType2CCEStr(src1Dtype);
+        CODEGEN_LOGI("GenScatterElementSOp, dstDtypeStr: %s", dstDtypeStr.c_str());
+        CODEGEN_LOGI("GenScatterElementSOp, src1DtypeStr: %s", src1DtypeStr.c_str());
+        ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportTileTensor)
+            << "In-place scalar Scatter requires tile-tensor code generation";
+        ASSERT(OperErr::OPERAND_TYPE_UNSUPPORTED, operandType[ID2] == BUF_UB)
+            << "In-place scalar Scatter indices must be in UB";
+        if (operandType[ID0] == BUF_DDR) {
+            ASSERT(OperErr::OPERAND_TYPE_UNSUPPORTED, operandType[ID1] == BUF_DDR)
+                << "In-place scalar Scatter GM output requires GM self";
+            auto gmOffsetExpr = GetGmOffsetForTileTensor(ID1);
+            auto offsetIt = opAttrs.find(OP_ATTR_PREFIX + "scatter_gm_offset");
+            if (offsetIt != opAttrs.end()) {
+                const auto& tileOffset = AnyCast<std::vector<int64_t>>(offsetIt->second);
+                if (gmOffsetExpr.size() != tileOffset.size()) {
+                    gmOffsetExpr = GenParamIdxExprByIndex(ID1, tileOffset.size(), PREFIX_STR_OFFSET);
+                }
+                for (size_t i = 0; i < tileOffset.size(); ++i) {
+                    gmOffsetExpr[i] = "(" + gmOffsetExpr[i] + ") + " + std::to_string(tileOffset[i]);
+                }
+            }
+            auto coord = PrintCoord(rawShape[ID1].size(), WrapParamByParentheses(gmOffsetExpr));
+            auto scalarDtype = DataType2CCEStr(extOperandVal.GetDataType());
+            auto scalar = std::string("(") + scalarDtype + ")" + FormatScalarLiteral(extOperandVal);
+            auto normalizedAxis = axis + SHAPE_DIM5 - src1RawShape.size();
+            return tileOpName +
+                   WrapParamByAngleBrackets({std::to_string(normalizedAxis), std::to_string(scatterMode)}) +
+                   WrapParamByParentheses(
+                       {QueryTileTensorNameByIdx(ID1), coord, QueryTileTensorNameByIdx(ID2), scalar}) +
+                   STMT_END;
+        }
+        ASSERT(OperErr::OPERAND_TYPE_UNSUPPORTED, operandType[ID0] == BUF_UB && operandType[ID1] == BUF_UB)
+            << "In-place scalar Scatter self and output must use the same memory type";
+        std::string src0Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ID1]);
+        std::string src1Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ID2]);
+        std::string dstVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);
+        const std::vector<std::string> dataTypeExpr = {dstDtypeStr, src0DtypeStr, src1DtypeStr};
+        return PrintScatterElementSTileTensor(
+            {axis, scatterMode, dstVar, src0Var, src1Var, dstRawShape, src1RawShape, dataTypeExpr}, "TscatterElementS");
+    }
+
     ASSERT(OperErr::ATTRIBUTE_INVALID, opAttrs.count(OP_ATTR_PREFIX + "scatter_mode"))
         << "cannot get scatter mode attr";
     ASSERT(OperErr::ATTRIBUTE_INVALID, opAttrs.count(OP_ATTR_PREFIX + "axis")) << "cannot get axis attr";
@@ -490,7 +546,6 @@ std::string CodeGenOpNPU::PrintScatterOpDynamicUnaligned(const PrintScatterParam
 
 std::string CodeGenOpNPU::PrintScatterTileTensor(const PrintScatterParam& param) const
 {
-    std::string dstTensor = QueryTileTensorNameByIdx(ID0);
     std::string tmpTensor = QueryTileTensorNameByIdx(ID1);
     std::string src1Tensor = QueryTileTensorNameByIdx(ID3);
     std::string src2Tensor = QueryTileTensorNameByIdx(ID4);
@@ -499,6 +554,27 @@ std::string CodeGenOpNPU::PrintScatterTileTensor(const PrintScatterParam& param)
     paramList.emplace_back(std::to_string(axis));
     paramList.emplace_back(std::to_string(param.scatterMode));
     std::ostringstream oss;
+    if (opCode == Opcode::OP_SCATTER_INPLACE && operandType[ID0] == BUF_DDR) {
+        // The GM update targets self; its view carries the parent stride and tile offset.
+        std::string gmDstTensor = QueryTileTensorNameByIdx(ID2);
+        std::vector<std::string> gmOffsetExpr = GetGmOffsetForTileTensor(ID2);
+        auto offsetIt = opAttrs.find(OP_ATTR_PREFIX + "scatter_gm_offset");
+        if (offsetIt != opAttrs.end()) {
+            const auto& tileOffset = AnyCast<std::vector<int64_t>>(offsetIt->second);
+            // A packed parameter macro expands to several coordinates, not one scalar.
+            if (gmOffsetExpr.size() != tileOffset.size()) {
+                gmOffsetExpr = GenParamIdxExprByIndex(ID2, tileOffset.size(), PREFIX_STR_OFFSET);
+            }
+            for (size_t i = 0; i < tileOffset.size(); ++i) {
+                gmOffsetExpr[i] = "(" + gmOffsetExpr[i] + ") + " + std::to_string(tileOffset[i]);
+            }
+        }
+        std::string coord = PrintCoord(rawShape[ID2].size(), WrapParamByParentheses(gmOffsetExpr));
+        oss << tileOpName << WrapParamByAngleBrackets(paramList)
+            << WrapParamByParentheses({gmDstTensor, coord, src1Tensor, src2Tensor, tmpTensor}) << ";\n";
+        return oss.str();
+    }
+    std::string dstTensor = QueryTileTensorNameByIdx(ID0);
     oss << tileOpName << WrapParamByAngleBrackets(paramList)
         << WrapParamByParentheses({dstTensor, src1Tensor, src2Tensor, tmpTensor}) << ";\n";
     return oss.str();
@@ -515,9 +591,37 @@ std::string CodeGenOpNPU::GenScatterOp() const
     const DataType src1Dtype = operandDtype[ID3];
     const DataType src2Dtype = operandDtype[ID4];
 
-    std::string dstVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);
-    std::string src1Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ID3]);
-    std::string src2Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ID4]);
+    if (opCode == Opcode::OP_SCATTER) {
+        std::string dstVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);
+        std::string src1Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ID3]);
+        std::string src2Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ID4]);
+        std::vector dstRawShape = rawShape[ID0];
+        std::vector src1RawShape = rawShape[ID3];
+        std::vector src2RawShape = rawShape[ID4];
+        std::string dstDtypeStr = DataType2CCEStr(dstDtype);
+        std::string src1DtypeStr = DataType2CCEStr(src1Dtype);
+        std::string src2DtypeStr = DataType2CCEStr(src2Dtype);
+        AppendLocalBufVarOffsetInOrder(dstVar, src1Var, src2Var);
+        const std::vector<std::string> dataTypeExpr = {dstDtypeStr, src1DtypeStr, src2DtypeStr};
+        if (isSupportTileTensor) {
+            return PrintScatterTileTensor(
+                {axis, scatterMode, dstVar, src1Var, src2Var, dstRawShape, src1RawShape, src2RawShape, dataTypeExpr});
+        }
+        return PrintScatterOpDynamicUnaligned(
+            {axis, scatterMode, dstVar, src1Var, src2Var, dstRawShape, src1RawShape, src2RawShape, dataTypeExpr});
+    }
+
+    const bool outputInUb = operandType[ID0] == BUF_UB;
+    const bool outputInGm = operandType[ID0] == BUF_DDR;
+    ASSERT(GenCodeErr::PRINT_MODE_ERROR, opCode != Opcode::OP_SCATTER_INPLACE || scatterMode == 0)
+        << "In-place Scatter only supports overwrite";
+    ASSERT(OperErr::OPERAND_TYPE_UNSUPPORTED, outputInUb || outputInGm) << "Scatter output only supports UB or GM";
+    ASSERT(OperErr::OPERAND_TYPE_UNSUPPORTED, !outputInGm || operandType[ID2] == BUF_DDR)
+        << "Scatter with GM output requires the self input in GM";
+    ASSERT(OperErr::OPERAND_TYPE_UNSUPPORTED, operandType[ID3] == BUF_UB && operandType[ID4] == BUF_UB)
+        << "Scatter indices and src must be in UB";
+    ASSERT(GenCodeErr::PRINT_MODE_ERROR, !outputInGm || isSupportTileTensor)
+        << "Scatter with GM output only supports tile-tensor code generation";
 
     std::vector dstRawShape = rawShape[ID0];
     std::vector src1RawShape = rawShape[ID3];
@@ -527,13 +631,15 @@ std::string CodeGenOpNPU::GenScatterOp() const
     std::string src1DtypeStr = DataType2CCEStr(src1Dtype);
     std::string src2DtypeStr = DataType2CCEStr(src2Dtype);
 
-    AppendLocalBufVarOffsetInOrder(dstVar, src1Var, src2Var);
-
     const std::vector<std::string> dataTypeExpr = {dstDtypeStr, src1DtypeStr, src2DtypeStr};
     if (isSupportTileTensor) {
         return PrintScatterTileTensor(
-            {axis, scatterMode, dstVar, src1Var, src2Var, dstRawShape, src1RawShape, src2RawShape, dataTypeExpr});
+            {axis, scatterMode, "", "", "", dstRawShape, src1RawShape, src2RawShape, dataTypeExpr});
     }
+    std::string dstVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);
+    std::string src1Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ID3]);
+    std::string src2Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ID4]);
+    AppendLocalBufVarOffsetInOrder(dstVar, src1Var, src2Var);
     return PrintScatterOpDynamicUnaligned(
         {axis, scatterMode, dstVar, src1Var, src2Var, dstRawShape, src1RawShape, src2RawShape, dataTypeExpr});
 }

@@ -492,13 +492,13 @@ def scatter_(
         raise PyptoError(0xF00001, TypeError(f"index tensor must be of int32 or int64, but got {index.dtype}"))
     scatter_mode = get_scatter_mode(reduce)
     if isinstance(src, (int, float)):
-        input.Move(pypto_impl.Scatter(input, index, pypto_impl.Element(input.dtype, src), dim, scatter_mode))
+        pypto_impl.Scatter_(input, index, pypto_impl.Element(input.dtype, src), dim, scatter_mode)
         return input
     elif isinstance(src, pypto_impl.Element):
-        input.Move(pypto_impl.Scatter(input, index, src, dim, scatter_mode))
+        pypto_impl.Scatter_(input, index, src, dim, scatter_mode)
         return input
     elif isinstance(src, pypto_impl.Tensor):
-        input.Move(pypto_impl.Scatter(input, index, src, dim, scatter_mode))
+        pypto_impl.Scatter_(input, index, src, dim, scatter_mode)
         return input
     else:
         raise PyptoError(

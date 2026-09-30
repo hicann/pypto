@@ -196,6 +196,9 @@ Status CodegenPreproc::SaveGmTensorParamIdxToOp(Function& func) const
             if (IsGmGatherElement(op)) {
                 gmParamInCallFunc[op.GetIOpAttrOffset(0)].emplace_back(&op);
             }
+            if (IsGmScatter(op)) {
+                gmParamInCallFunc[op.GetIOpAttrOffset(0)].emplace_back(&op);
+            }
             if (op.GetOpcode() == Opcode::OP_PERMUTE || op.GetOpcode() == Opcode::OP_PERMUTE_ELEMENT) {
                 gmParamInCallFunc[op.GetIOpAttrOffset(0)].emplace_back(&op);
             }

@@ -337,6 +337,20 @@ void BindOperation(py::module_& m)
         py::arg("self"), py::arg("indices"), py::arg("src"), py::arg("axis"), py::arg("reduce") = ScatterMode::NONE,
         "Tensor scatter noninplace.");
     m.def(
+        "Scatter_",
+        [](Tensor& self, const Tensor& indices, const Tensor& src, int axis, ScatterMode reduce) {
+            npu::tile_fwk::Scatter_(self, indices, src, axis, reduce);
+        },
+        py::arg("self"), py::arg("indices"), py::arg("src"), py::arg("axis"), py::arg("reduce") = ScatterMode::NONE,
+        "Tensor scatter inplace.");
+    m.def(
+        "Scatter_",
+        [](Tensor& self, const Tensor& indices, const Element& src, int axis, ScatterMode reduce) {
+            npu::tile_fwk::Scatter_(self, indices, src, axis, reduce);
+        },
+        py::arg("self"), py::arg("indices"), py::arg("src"), py::arg("axis"), py::arg("reduce") = ScatterMode::NONE,
+        "Tensor scatter inplace.");
+    m.def(
         "IndexAddUB",
         [](const Tensor& self, const Tensor& src, const Tensor& indices, int axis, const Element& alpha) {
             return npu::tile_fwk::IndexAddUB(self, src, indices, axis, alpha);
