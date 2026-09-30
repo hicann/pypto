@@ -14,6 +14,8 @@
  */
 
 #include "tensor_transformation.h"
+#include "tilefwk/tilefwk_op.h"
+#include "tilefwk/platform.h"
 #include "interface/operation/operation_common.h"
 #include "interface/utils/operator_tracer.h"
 #include "tilefwk/error_code.h"
@@ -138,52 +140,98 @@ LogicalTensorPtr TensorPadOperation(Function& function, const Tensor& self, cons
     auto operand = self.GetStorage();
     std::vector<int64_t> outputShape = operand->shape;
     size_t ndim = operand->shape.size();
+    int64_t padLeft = 0;
     int64_t padRight = 0;
+    int64_t padTop = 0;
     int64_t padBottom = 0;
 
     if (ndim == 1) {
         CHECK(VectorErrorCode::ERR_PARAM_INVALID, padding.size() == NUM_VALUE_2)
             << "Pad: 1D tensor only supports 2 padding values.";
-        CHECK(VectorErrorCode::ERR_PARAM_INVALID, padding[0] == 0) << "Pad: 1D tensor only supports right pad.";
+        padLeft = padding[0];
         padRight = padding[1];
-        CHECK(VectorErrorCode::ERR_PARAM_INVALID, padRight >= 0)
-            << "Pad: padding values must be non-negative, got pad_right=" << padRight
-            << ". Negative padding (for cropping) is not supported.";
-        outputShape[0] += padRight;
+        outputShape[0] += padLeft + padRight;
     } else {
         CHECK(VectorErrorCode::ERR_PARAM_INVALID, padding.size() == NUM_VALUE_4)
             << "Pad: only the last 2 axes support padding.";
-        CHECK(VectorErrorCode::ERR_PARAM_INVALID, padding[0] == 0 && padding[NUM_VALUE_2] == 0)
-            << "Pad: only bottom and right padding is supported.";
+        padLeft = padding[0];
         padRight = padding[1];
+        padTop = padding[NUM_VALUE_2];
         padBottom = padding[NUM_VALUE_3];
-        CHECK(VectorErrorCode::ERR_PARAM_INVALID, padRight >= 0)
-            << "Pad: padding values must be non-negative, got pad_right=" << padRight
-            << ". Negative padding (for cropping) is not supported.";
-        CHECK(VectorErrorCode::ERR_PARAM_INVALID, padBottom >= 0)
-            << "Pad: padding values must be non-negative, got pad_bottom=" << padBottom
-            << ". Negative padding (for cropping) is not supported.";
-        outputShape[ndim - 1] += padRight;
-        outputShape[ndim - NUM_VALUE_2] += padBottom;
+        outputShape[ndim - 1] += padLeft + padRight;
+        outputShape[ndim - NUM_VALUE_2] += padTop + padBottom;
+    }
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, padLeft >= 0 && padRight >= 0 && padTop >= 0 && padBottom >= 0)
+        << "Pad: padding values must be non-negative. Negative padding (for cropping) is not supported.";
+
+    // Left/top is exposed only on Kirin9030/KirinX90 (LiteNPU); other platforms keep right/bottom-only.
+    if (!IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch())) {
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, padLeft == 0 && padTop == 0)
+            << "Pad: left/top padding is only supported on Kirin9030/KirinX90 "
+               "(only right/bottom padding is supported here).";
     }
 
     std::vector<SymbolicScalar> resultValidShape;
     const auto& inputValidShape = operand->GetDynValidShape();
     if (!inputValidShape.empty()) {
         resultValidShape = inputValidShape;
-        if (ndim == 1) {
-            resultValidShape[0] = resultValidShape[0] + padRight;
-        } else {
-            resultValidShape[ndim - 1] = resultValidShape[ndim - 1] + padRight;
-            resultValidShape[ndim - NUM_VALUE_2] = resultValidShape[ndim - NUM_VALUE_2] + padBottom;
+        resultValidShape[ndim - 1] = resultValidShape[ndim - 1] + padLeft + padRight;
+        if (ndim >= 2) {
+            resultValidShape[ndim - NUM_VALUE_2] = resultValidShape[ndim - NUM_VALUE_2] + padTop + padBottom;
         }
     }
-    auto result = std::make_shared<LogicalTensor>(function, operand->Datatype(), outputShape, resultValidShape);
-    auto& op = function.AddOperation(Opcode::OP_PAD, {operand}, {result});
-    op.SetAttribute(OP_ATTR_PREFIX + "pad_right", static_cast<int64_t>(padRight));
-    op.SetAttribute(OP_ATTR_PREFIX + "pad_bottom", static_cast<int64_t>(padBottom));
-    op.SetAttribute(OpAttributeKey::scalar, value);
-    return result;
+
+    // Right/bottom-only uses the OP_PAD fast path. Left/top pads with fill+concat: zero blocks are
+    // concatenated around the input along W (last dim), then H (second-to-last dim).
+    if (padLeft == 0 && padTop == 0) {
+        auto result = std::make_shared<LogicalTensor>(function, operand->Datatype(), outputShape, resultValidShape);
+        auto& op = function.AddOperation(Opcode::OP_PAD, {operand}, {result});
+        op.SetAttribute(OP_ATTR_PREFIX + "pad_right", static_cast<int64_t>(padRight));
+        op.SetAttribute(OP_ATTR_PREFIX + "pad_bottom", static_cast<int64_t>(padBottom));
+        op.SetAttribute(OpAttributeKey::scalar, value);
+        return result;
+    }
+
+    const DataType dtype = operand->Datatype();
+    auto zeros = [&](const std::vector<int64_t>& shape) {
+        return TensorFullOperation(function, value, SymbolicScalar(), dtype, shape,
+                                   SymbolicScalar::FromConcrete(shape));
+    };
+
+    Tensor cur = self;
+    // Last dim (W): [zeros_left, cur, zeros_right]
+    if (padLeft > 0 || padRight > 0) {
+        std::vector<Tensor> parts;
+        if (padLeft > 0) {
+            auto zs = cur.GetShape();
+            zs[ndim - 1] = padLeft;
+            parts.emplace_back(zeros(zs));
+        }
+        parts.emplace_back(cur);
+        if (padRight > 0) {
+            auto zs = cur.GetShape();
+            zs[ndim - 1] = padRight;
+            parts.emplace_back(zeros(zs));
+        }
+        cur = Cat(parts, static_cast<int>(ndim - 1));
+    }
+    // Second-to-last dim (H): [zeros_top, cur, zeros_bottom]
+    if (ndim >= NUM_VALUE_2 && (padTop > 0 || padBottom > 0)) {
+        std::vector<Tensor> parts;
+        if (padTop > 0) {
+            auto zs = cur.GetShape();
+            zs[ndim - NUM_VALUE_2] = padTop;
+            parts.emplace_back(zeros(zs));
+        }
+        parts.emplace_back(cur);
+        if (padBottom > 0) {
+            auto zs = cur.GetShape();
+            zs[ndim - NUM_VALUE_2] = padBottom;
+            parts.emplace_back(zeros(zs));
+        }
+        cur = Cat(parts, static_cast<int>(ndim - NUM_VALUE_2));
+    }
+    return cur.GetStorage();
 }
 
 Tensor Pad(const Tensor& self, const std::vector<int64_t>& padding, std::string mode, const Element& value)
@@ -196,6 +244,11 @@ Tensor Pad(const Tensor& self, const std::vector<int64_t>& padding, std::string 
     std::unordered_set<DataType> supportedTypes = {DT_FP32,  DT_FP16,  DT_BF16,   DT_INT8,  DT_INT16,
                                                    DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "PAD");
+    // LiteNPU (Kirin9030/KirinX90) narrows pad to fp16/fp32; other platforms keep the wider set above.
+    if (IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch())) {
+        std::unordered_set<DataType> liteSupportedTypes = {DT_FP32, DT_FP16};
+        CheckTensorDataType(self.GetStorage(), liteSupportedTypes, "PAD(lite)");
+    }
     RETURN_CALL(PadOperation, *Program::GetInstance().GetCurrentFunction(), self, padding, mode, value);
 }
 

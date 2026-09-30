@@ -267,6 +267,11 @@ void AxisCombineMarker::UpdateOpACEnableForward(size_t opIdx)
         UpdateReduceStatus(op, tensorStatus_);
         return;
     }
+    // OP_PAD places the source by (row, col) geometry: keep it out of axis-combine.
+    if (op->GetOpcode() == Opcode::OP_PAD) {
+        DisableNoneWhiteListTensor(op);
+        return;
+    }
     if (propagationCalcType.find(OpcodeManager::Inst().GetOpCalcType(op->GetOpcode())) != propagationCalcType.end()) {
         UpdateElewiseStatus(op, tensorStatus_);
         return;

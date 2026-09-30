@@ -209,7 +209,8 @@ def pad(x: Tensor, padding: Sequence[int], mode: str = "constant", value: Union[
     the last dimension and moving forward.
     For padding has format (d_last_dim, d_last_dim-1, ..., d_last_dim-k).
     Current implementation supports padding the last 2 dimensions (Right and Bottom) with
-    constant values.
+    constant values. Kirin9030/KirinX90 (LiteNPU) additionally supports Left/Top padding
+    (all four sides).
 
     Parameters
     ----------
@@ -218,7 +219,8 @@ def pad(x: Tensor, padding: Sequence[int], mode: str = "constant", value: Union[
     padding : tuple or list of int
         m-elements tuple, where m/2 <= input dimensions and m is even.
         Format is (pad_left, pad_right, pad_top, pad_bottom, ...).
-        Note: Currently only supports pad_left=0 and pad_top=0 (Right/Bottom padding only).
+        Note: Currently only supports pad_left=0 and pad_top=0 (Right/Bottom padding only),
+        except Kirin9030/KirinX90 (LiteNPU) which supports Left/Top padding.
         All padding values must be non-negative. Negative padding values are NOT supported.
     mode : str, optional
         'constant', 'reflect', 'replicate' or 'circular'. Default: 'constant'

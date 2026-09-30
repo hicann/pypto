@@ -21,6 +21,7 @@
 
 #include "gtest/gtest.h"
 #include "tilefwk/tilefwk.h"
+#include "tilefwk/platform.h"
 #include "interface/program/program.h"
 #include "interface/configs/config_manager.h"
 #include "interface/utils/id_gen.h"
@@ -102,12 +103,21 @@ public:
         config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
         config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
         config::SetCodeGenOption<std::string>(PLATFORM_SOC_VERSION, socVersion_);
+        // Platform's NPUArch is fixed on first use; an earlier non-lite test can leave it non-LiteNPU.
+        // Align it with this fixture's target (pad's left/top gate and the lite core-arch read it).
+        savedArch_ = Platform::Instance().GetSoc().GetNPUArch();
+        Platform::Instance().GetSoc().SetNPUArch(DPlatformToNPUArch(StringToDPlatform(socVersion_)));
     }
 
-    void TearDown() override { config::SetCodeGenOption<std::string>(PLATFORM_SOC_VERSION, ""); }
+    void TearDown() override
+    {
+        config::SetCodeGenOption<std::string>(PLATFORM_SOC_VERSION, "");
+        Platform::Instance().GetSoc().SetNPUArch(savedArch_);
+    }
 
 private:
     std::string socVersion_;
+    NPUArch savedArch_{NPUArch::DAV_2201};
 };
 
 } // namespace npu::tile_fwk

@@ -132,7 +132,8 @@ void BindOperation(py::module_& m)
     m.def("Abs", [](const Tensor& self) { return npu::tile_fwk::Abs(self); }, "Tensor abs.");
     m.def("Reciprocal", [](const Tensor& operand) { return npu::tile_fwk::Reciprocal(operand); }, "Tensor reciprocal.");
     m.def("Relu", [](const Tensor& operand) { return npu::tile_fwk::Relu(operand); }, "Tensor relu.");
-    m.def("Pad", &npu::tile_fwk::Pad, "Pads tensor with constant value (supports right/bottom padding only).",
+    m.def("Pad", &npu::tile_fwk::Pad,
+          "Pads tensor with constant value (right/bottom only; left/top requires Kirin9030/KirinX90).",
           py::arg("input"), py::arg("pad"), py::arg("mode") = "constant", py::arg("value") = Element(DT_FP32, 0.0));
     m.def("FillPad", &npu::tile_fwk::FillPad, "Fills padding region of tensor with constant value.", py::arg("input"),
           py::arg("mode") = "constant", py::arg("value") = Element(DT_FP32, 0.0));
