@@ -147,9 +147,10 @@ struct DrcoLocalReadyQueue {
 #endif
 };
 
-// 组大小 = 组内核数 = 矩阵行列维度。LGS 4→8 四组消融定稿：矩阵 8×8=256B=4 cachelines
-// + 槽位 ×4，push 批内逐槽 p50 2.8→1.7us、p90 11.5→6.5us（-40%）
-constexpr uint32_t LOCAL_GROUP_SIZE = 8;
+// 组大小 = 组内核数 = 矩阵行列维度。LGS=4：矩阵 4×4=64B 单 cacheline，且 PopColTasks 的
+// dcci 读探测把空列扫描从 rowCnt 次原子 RMW 降为本地缓存操作——8×8 时代为摊平 CAS 竞争
+// 的 cacheline 扩散不再必要，缩回 4 同时将每次 pop 的扫描行数减半
+constexpr uint32_t LOCAL_GROUP_SIZE = 4;
 
 // LocalMatrix: 组内 N*N 通信矩阵（N = LOCAL_GROUP_SIZE，与 localReadyQueueArray 的分组一一对应）。
 // 数组按类型内本地编号索引：AIC 核（blockIdx < nrValidAic）group = blockIdx / N，

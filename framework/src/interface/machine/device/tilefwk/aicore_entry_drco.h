@@ -421,6 +421,12 @@ INLINE uint32_t DrcoLocalReadyMatrixPushBatch(DrcoEntryState* state, __gm__ Drco
 // 遍历 colIdx 整列，把所有待执行任务依次 pop 出来，原子 exch(task -> 0) 读清一体，返回非 0
 // 即独占该任务（安全性：每槽仅本列主一个 popper、push 侧只 CAS 空槽，读清无需二次校验）；
 // 从 state->matrixRowIndex（核本地游标，前一次 pop 结束处）起环形扫描，摊平重复扫描开销。
+// 列扫描批量化：dcci 必须逐槽精确地址失效（dcci(SINGLE_CACHE_LINE) 的失效粒度按地址所在
+// sector 生效，隔行 dcci 无法覆盖同线的相邻行，残留过期 L1 副本会永久饿死该行任务——
+// mix_aic 507015 挂死实证）；失效后普通读探测，仅非零槽才发 xchg 独占——空列从 rowCnt 次
+// 原子 RMW 降为 rowCnt 次 dcci（本地缓存操作，无总线 RMW 写流量）+ rowCnt 次读。
+// 一致性：槽位只有列主人写 0（push 侧仅 CAS 0→task，steal 关闭），读到非零后 xchg 必取回
+// 同一任务；读到 0 只是本轮快照未含新 push，下轮逐槽 dcci 补收。
 // 每核只 pop 自己固定的一列（colIdx = 本地编号 % N），单游标即该列游标；
 // maxCount 限制本次最多取出的个数；游标保存为最后扫描行的下一行，未扫到的行下次优先
 INLINE uint32_t DrcoLocalReadyMatrixPopColTasks(DrcoEntryState* state, __gm__ DrcoLocalReadyMatrix* matrix,
@@ -433,6 +439,9 @@ INLINE uint32_t DrcoLocalReadyMatrixPopColTasks(DrcoEntryState* state, __gm__ Dr
     for (uint32_t i = 0; i < rowCnt && count < maxCount; i++) {
         uint32_t row = (start + i) % rowCnt;
         next = (row + 1) % rowCnt;
+        if (DrcoGmLoad(&matrix->taskList[row][colIdx]) == 0) {
+            continue;
+        }
         uint32_t taskId = DrcoAtomicExchToU32(&matrix->taskList[row][colIdx], 0);
         if (taskId == 0) {
             continue;
