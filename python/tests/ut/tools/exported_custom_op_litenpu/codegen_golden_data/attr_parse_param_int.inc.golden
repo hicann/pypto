@@ -1,0 +1,5 @@
+            if (attr["name"] == "bias" && attr["type"] == 2) {
+                int64_t value = attr.contains("i") && !attr["i"].is_null()
+                    ? attr["i"].get<int64_t>() : 0;
+                op_dest.SetAttr("bias", value);
+            }

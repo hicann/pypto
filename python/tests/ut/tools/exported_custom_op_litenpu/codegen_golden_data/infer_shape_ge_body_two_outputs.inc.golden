@@ -1,0 +1,60 @@
+    PTO_CUSTOM_LOGD("Entering InferShapeGeImpl\n");
+    const gert::Shape* in0_shape = context->GetInputShape(0);
+    if (in0_shape == nullptr) {
+        PTO_CUSTOM_LOGD("ERROR: InferShapeGeImpl: null input shape at index 0 -> GRAPH_FAILED\n");
+        return ge::GRAPH_FAILED;
+    }
+    std::vector<int64_t> in0_shape_vec;
+    in0_shape_vec.reserve(in0_shape->GetDimNum());
+    for (size_t j = 0; j < in0_shape->GetDimNum(); ++j) {
+        in0_shape_vec.push_back((*in0_shape)[j]);
+    }
+    PTO_CUSTOM_LOGD("InferShapeGeImpl: in0 ndim=%zu\n", in0_shape_vec.size());
+
+    const gert::Shape* in1_shape = context->GetInputShape(1);
+    if (in1_shape == nullptr) {
+        PTO_CUSTOM_LOGD("ERROR: InferShapeGeImpl: null input shape at index 1 -> GRAPH_FAILED\n");
+        return ge::GRAPH_FAILED;
+    }
+    std::vector<int64_t> in1_shape_vec;
+    in1_shape_vec.reserve(in1_shape->GetDimNum());
+    for (size_t j = 0; j < in1_shape->GetDimNum(); ++j) {
+        in1_shape_vec.push_back((*in1_shape)[j]);
+    }
+    PTO_CUSTOM_LOGD("InferShapeGeImpl: in1 ndim=%zu\n", in1_shape_vec.size());
+
+    auto out_shape_tuple = inferShape(in0_shape_vec, in1_shape_vec);
+    PTO_CUSTOM_LOGD("InferShapeGeImpl: out0 ndim=%zu\n", std::get<0>(out_shape_tuple).size());
+    gert::Shape* out_shape_0 = context->GetOutputShape(0);
+    if (out_shape_0 == nullptr) {
+        PTO_CUSTOM_LOGD("ERROR: InferShapeGeImpl: null output shape at index 0 -> GRAPH_FAILED\n");
+        return ge::GRAPH_FAILED;
+    }
+    if (std::get<0>(out_shape_tuple).size() > gert::Shape::kMaxDimNum) {
+        PTO_CUSTOM_LOGD("ERROR: InferShapeGeImpl: out0 rank %zu exceeds gert::Shape::kMaxDimNum"
+                        " -> GRAPH_FAILED\n", std::get<0>(out_shape_tuple).size());
+        return ge::GRAPH_FAILED;
+    }
+    out_shape_0->SetDimNum(std::get<0>(out_shape_tuple).size());
+    for (size_t j = 0; j < std::get<0>(out_shape_tuple).size(); ++j) {
+        (*out_shape_0)[j] = std::get<0>(out_shape_tuple)[j];
+    }
+
+    PTO_CUSTOM_LOGD("InferShapeGeImpl: out1 ndim=%zu\n", std::get<1>(out_shape_tuple).size());
+    gert::Shape* out_shape_1 = context->GetOutputShape(1);
+    if (out_shape_1 == nullptr) {
+        PTO_CUSTOM_LOGD("ERROR: InferShapeGeImpl: null output shape at index 1 -> GRAPH_FAILED\n");
+        return ge::GRAPH_FAILED;
+    }
+    if (std::get<1>(out_shape_tuple).size() > gert::Shape::kMaxDimNum) {
+        PTO_CUSTOM_LOGD("ERROR: InferShapeGeImpl: out1 rank %zu exceeds gert::Shape::kMaxDimNum"
+                        " -> GRAPH_FAILED\n", std::get<1>(out_shape_tuple).size());
+        return ge::GRAPH_FAILED;
+    }
+    out_shape_1->SetDimNum(std::get<1>(out_shape_tuple).size());
+    for (size_t j = 0; j < std::get<1>(out_shape_tuple).size(); ++j) {
+        (*out_shape_1)[j] = std::get<1>(out_shape_tuple)[j];
+    }
+
+    PTO_CUSTOM_LOGD("Exiting InferShapeGeImpl (status=%u)\n", (unsigned)ge::GRAPH_SUCCESS);
+    return ge::GRAPH_SUCCESS;

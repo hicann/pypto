@@ -1,0 +1,65 @@
+// Auto-generated
+
+#include "register/register.h"
+#include <nlohmann/json.hpp>
+#include <string>
+#include <vector>
+#include <cstdio>
+#include "toolchain/slog.h"
+#include "base/log_types.h"
+#ifndef PTO_CUSTOM_LOGD
+#define PTO_CUSTOM_LOGD(fmt, ...) dlog_debug(OP, fmt, ##__VA_ARGS__)
+#endif
+#ifndef PTO_CUSTOM_LOGE
+#define PTO_CUSTOM_LOGE(fmt, ...) dlog_error(OP, fmt, ##__VA_ARGS__)
+#endif
+
+namespace domi {
+// Parsing onnx params
+Status ParseParamMixOp(const ge::Operator& op_src, ge::Operator& op_dest) {
+    PTO_CUSTOM_LOGD("Entering ParseParamMixOp\n");
+    try {
+        ge::AscendString attrs_string;
+        if (ge::GRAPH_SUCCESS == op_src.GetAttr("attribute", attrs_string)) {
+            if (attrs_string.GetString() == nullptr) {
+                PTO_CUSTOM_LOGE("ERROR: ParseParamMixOp: null attribute string -> FAILED\n");
+                return FAILED;
+            }
+            nlohmann::json attrs = nlohmann::json::parse(attrs_string.GetString());
+            for (nlohmann::json attr : attrs["attribute"]) {
+                if (attr["name"] == "alpha" && attr["type"] == 1) {
+                    float value = 0.0f;
+                    if (attr.contains("f") && !attr["f"].is_null()) {
+                        value = attr["f"].is_string()
+                            ? std::stof(attr["f"].get<std::string>()) : attr["f"].get<float>();
+                    }
+                    op_dest.SetAttr("alpha", value);
+                }
+                if (attr["name"] == "mode" && attr["type"] == 3) {
+                    std::string value = attr.contains("s") && !attr["s"].is_null()
+                        ? attr["s"].get<std::string>() : "";
+                    op_dest.SetAttr("mode", value.c_str());
+                }
+                if (attr["name"] == "crop_size" && attr["type"] == 7) {
+                    std::vector<int64_t> value;
+                    for (auto e : attr["ints"]) value.push_back(e.get<int64_t>());
+                    op_dest.SetAttr("crop_size", value);
+                }
+            }
+        }
+    } catch (const nlohmann::json::exception &e) {
+        PTO_CUSTOM_LOGE("ERROR: ParseParamMixOp: attribute JSON error: %s -> FAILED\n", e.what());
+        return FAILED;
+    } catch (const std::exception &e) {
+        PTO_CUSTOM_LOGE("ERROR: ParseParamMixOp: %s -> FAILED\n", e.what());
+        return FAILED;
+    }
+    PTO_CUSTOM_LOGD("Exiting ParseParamMixOp (status=%u)\n", (unsigned)SUCCESS);
+    return SUCCESS;
+}
+
+REGISTER_CUSTOM_OP("MixOp")
+    .FrameworkType(ONNX)
+    .OriginOpType("pypto::1::MixOp")
+    .ParseParamsByOperatorFn(ParseParamMixOp);
+}

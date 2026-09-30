@@ -1,0 +1,8 @@
+namespace ge {
+REG_OP(DualOut)
+    .INPUT(in0, TensorType({DT_FLOAT16}))
+    .INPUT(in1, TensorType({DT_FLOAT}))
+    .OUTPUT(out0, TensorType({DT_FLOAT16}))
+    .OUTPUT(out1, TensorType({DT_FLOAT}))
+    .OP_END_FACTORY_REG(DualOut);
+}

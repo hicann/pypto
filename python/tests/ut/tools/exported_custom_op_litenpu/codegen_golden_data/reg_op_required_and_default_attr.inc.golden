@@ -1,0 +1,9 @@
+namespace ge {
+REG_OP(SplitV)
+    .INPUT(in0, TensorType({DT_FLOAT16}))
+    .INPUT(in1, TensorType({DT_FLOAT16}))
+    .OUTPUT(out0, TensorType({DT_FLOAT16}))
+    .REQUIRED_ATTR(split_sizes, ListInt)
+    .ATTR(dim, Int, 0)
+    .OP_END_FACTORY_REG(SplitV);
+}

@@ -1,0 +1,16 @@
+
+    // Op attributes -> {name: value-string} at the declaration index (REG_OP order == this
+    // positional index). Fed to the compile cache key and the Python kernel factory's attrs dict.
+    void ExtractAttrs(const gert::RuntimeAttrs *attrs,
+                      std::map<std::string, std::string> &out) const override {
+        if (attrs == nullptr) {
+            out["split_sizes"] = "[]";
+            out["dim"] = "0";
+            return;
+        }
+        const auto *split_sizes_ptr = attrs->GetListInt(0);
+        if (split_sizes_ptr) { std::vector<int64_t> _v(split_sizes_ptr->GetData(), split_sizes_ptr->GetData() + split_sizes_ptr->GetSize()); out["split_sizes"] = ListIntToJsonStr(_v); }
+        else { out["split_sizes"] = "[]"; }
+        const int64_t *dim_ptr = attrs->GetInt(1);
+        out["dim"] = dim_ptr ? std::to_string(*dim_ptr) : "0";
+    }

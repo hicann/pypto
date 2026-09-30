@@ -1,0 +1,8 @@
+            if (attr["name"] == "alpha" && attr["type"] == 1) {
+                float value = 0.0f;
+                if (attr.contains("f") && !attr["f"].is_null()) {
+                    value = attr["f"].is_string()
+                        ? std::stof(attr["f"].get<std::string>()) : attr["f"].get<float>();
+                }
+                op_dest.SetAttr("alpha", value);
+            }

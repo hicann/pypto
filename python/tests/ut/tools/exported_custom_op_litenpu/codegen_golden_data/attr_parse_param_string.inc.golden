@@ -1,0 +1,5 @@
+            if (attr["name"] == "mode" && attr["type"] == 3) {
+                std::string value = attr.contains("s") && !attr["s"].is_null()
+                    ? attr["s"].get<std::string>() : "";
+                op_dest.SetAttr("mode", value.c_str());
+            }

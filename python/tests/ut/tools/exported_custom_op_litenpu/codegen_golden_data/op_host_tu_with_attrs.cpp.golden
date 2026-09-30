@@ -1,0 +1,253 @@
+// Auto-generated
+
+#include <cstdint>
+#include <cstdio>
+#include <string>
+#include <vector>
+#include "pto_custom_op.h"
+#include "graph/operator_reg.h"
+#include <pybind11/pybind11.h>
+#include <pybind11/eval.h>
+#include <pybind11/stl.h>
+
+namespace py = pybind11;
+using namespace py::literals;
+
+namespace {
+
+std::vector<int64_t> inferShape(std::vector<int64_t> input0_shape, std::vector<int64_t> input1_shape) {
+    PTO_CUSTOM_LOGD("Entering inferShape\n");
+    // One-time CPython bootstrap for a non-Python host (GE/Ascend executor that dlopen'd this .so);
+    // guarded so a Python host is untouched, and never finalized (called repeatedly; re-init is fragile).
+    static const bool _pypto_py_bootstrapped = []() {
+        if (!Py_IsInitialized()) {
+            Py_InitializeEx(0);   // 0: don't install signal handlers (library-friendly)
+            PyEval_SaveThread();  // drop the GIL the init thread holds; reacquired below
+        }
+        return true;
+    }();
+    (void)_pypto_py_bootstrapped;
+
+    // Held across the try AND the catch: error_already_set handling needs the GIL.
+    py::gil_scoped_acquire gil;
+    const std::string _dtype_bridge_src = R"PYSRC(
+import torch
+
+)PYSRC";
+
+    py::dict globals;                       // FRESH dict per call; py::exec auto-seeds __builtins__
+    py::exec(_dtype_bridge_src, globals, globals);   // torch + dtype bridge
+    PyObject *_m = PtoCustomOp::ImportKernelModule("pypto_compile_SplitV", "split_v.py");
+    if (_m == nullptr) { throw py::error_already_set(); }  // FATAL msg set by ImportKernelModule
+    py::object _mod = py::reinterpret_steal<py::object>(_m);
+    py::object add_infer_shape_py = _mod.attr("add_infer_shape");
+    PTO_CUSTOM_LOGD("inferShape: infer source=op_kernel/split_v.py\n");
+    py::object _torch_Size = py::module_::import("torch").attr("Size");
+
+    std::vector<int64_t> _ret = add_infer_shape_py(_torch_Size(py::cast(input0_shape)), _torch_Size(py::cast(input1_shape))).cast<std::vector<int64_t>>();
+    PTO_CUSTOM_LOGD("Exiting inferShape (ok)\n");
+    return _ret;
+}
+
+}
+
+
+namespace {
+
+int64_t inferDtype(int64_t input0_dtype, int64_t input1_dtype) {
+    PTO_CUSTOM_LOGD("Entering inferDtype\n");
+    // One-time CPython bootstrap for a non-Python host (GE/Ascend executor that dlopen'd this .so);
+    // guarded so a Python host is untouched, and never finalized (called repeatedly; re-init is fragile).
+    static const bool _pypto_py_bootstrapped = []() {
+        if (!Py_IsInitialized()) {
+            Py_InitializeEx(0);   // 0: don't install signal handlers (library-friendly)
+            PyEval_SaveThread();  // drop the GIL the init thread holds; reacquired below
+        }
+        return true;
+    }();
+    (void)_pypto_py_bootstrapped;
+
+    // Held across the try AND the catch: error_already_set handling needs the GIL.
+    py::gil_scoped_acquire gil;
+    const std::string _dtype_bridge_src = R"PYSRC(
+import torch
+
+_GE_INT_TO_TORCH_BASE = {0: 'float32', 1: 'float16', 2: 'int8', 3: 'int32', 4: 'uint8', 6: 'int16', 7: 'uint16', 8: 'uint32', 9: 'int64', 10: 'uint64', 11: 'float64', 12: 'bool', 16: 'complex64', 17: 'complex128', 18: 'qint8', 19: 'qint16', 20: 'qint32', 21: 'quint8', 22: 'quint16', 27: 'bfloat16', 33: 'complex32'}
+_TORCH_BASE_TO_GE_INT = {b: i for i, b in _GE_INT_TO_TORCH_BASE.items()}
+
+def _ge_data_type_enum_value_to_torch_dtype(value):
+    import torch
+    try:
+        base = _GE_INT_TO_TORCH_BASE[value]
+    except KeyError:
+        raise ValueError('Unsupported ge::DataType enum value for torch mapping: ' + repr(value))
+    td = getattr(torch, base, None)
+    if td is None:
+        raise ValueError('torch has no dtype attribute ' + repr(base))
+    return td
+
+def _torch_dtype_to_ge_data_type_enum_value(dtype):
+    dtype_name = str(dtype)
+    if not dtype_name.startswith('torch.'):
+        raise ValueError('Unsupported dtype for GE mapping: ' + repr(dtype))
+    base = dtype_name.replace('torch.', '', 1)
+    try:
+        return _TORCH_BASE_TO_GE_INT[base]
+    except KeyError:
+        raise ValueError('Unsupported torch dtype for GE enum mapping: ' + repr(dtype))
+
+def _torch_dtype_to_ge_data_type_enum_value_recursive(value):
+    if isinstance(value, tuple):
+        return tuple(_torch_dtype_to_ge_data_type_enum_value(v) for v in value)
+    return _torch_dtype_to_ge_data_type_enum_value(value)
+
+)PYSRC";
+
+    py::dict globals;                       // FRESH dict per call; py::exec auto-seeds __builtins__
+    py::exec(_dtype_bridge_src, globals, globals);   // torch + dtype bridge
+    PyObject *_m = PtoCustomOp::ImportKernelModule("pypto_compile_SplitV", "split_v.py");
+    if (_m == nullptr) { throw py::error_already_set(); }  // FATAL msg set by ImportKernelModule
+    py::object _mod = py::reinterpret_steal<py::object>(_m);
+    py::object add_infer_dtype_py = _mod.attr("add_infer_dtype");
+    PTO_CUSTOM_LOGD("inferDtype: infer source=op_kernel/split_v.py\n");
+    py::object _ge_dt_to_torch = globals["_ge_data_type_enum_value_to_torch_dtype"];
+    py::object _torch_dt_to_ge = globals["_torch_dtype_to_ge_data_type_enum_value_recursive"];
+
+    int64_t _ret = _torch_dt_to_ge(add_infer_dtype_py(_ge_dt_to_torch(py::cast(input0_dtype)), _ge_dt_to_torch(py::cast(input1_dtype)))).cast<int64_t>();
+    PTO_CUSTOM_LOGD("Exiting inferDtype (ok)\n");
+    return _ret;
+}
+
+}
+
+
+class SplitV : public PtoCustomOp, public ge::ShapeInferOp {
+public:
+    std::string GetCompileModuleStem() const override {
+        return "pypto_compile_SplitV";
+    }
+
+    // Basename of the shipped dev-editable kernel snippet (op_kernel/<stem>.py), the single source of
+    // truth for this op's Python. The base resolves it via the ASCEND_CUSTOM_OPP_PATH entries
+    // (<entry>/op_kernel/<basename>), with a dladdr upward-walk fallback, and loads it by path. The file
+    // is REQUIRED, unresolved => FATAL. Emitted here so C++ uses the exact codegen basename.
+    std::string GetKernelPyBasename() const override {
+        return "split_v.py";
+    }
+
+    // Op attributes -> {name: value-string} at the declaration index (REG_OP order == this
+    // positional index). Fed to the compile cache key and the Python kernel factory's attrs dict.
+    void ExtractAttrs(const gert::RuntimeAttrs *attrs,
+                      std::map<std::string, std::string> &out) const override {
+        if (attrs == nullptr) {
+            out["split_sizes"] = "[]";
+            out["dim"] = "0";
+            return;
+        }
+        const auto *split_sizes_ptr = attrs->GetListInt(0);
+        if (split_sizes_ptr) { std::vector<int64_t> _v(split_sizes_ptr->GetData(), split_sizes_ptr->GetData() + split_sizes_ptr->GetSize()); out["split_sizes"] = ListIntToJsonStr(_v); }
+        else { out["split_sizes"] = "[]"; }
+        const int64_t *dim_ptr = attrs->GetInt(1);
+        out["dim"] = dim_ptr ? std::to_string(*dim_ptr) : "0";
+    }
+
+    // GE compile-time shape/dtype inference: resolved via CustomOpFactory +
+    // dynamic_cast<ShapeInferOp*> (OpDescUtilsEx::InferCustomOpShape), tried before the op-impl
+    // space registry. Bodies call the file-scope pybind infer wrappers (Python self-bootstraps). A
+    // propagated infer error (e.g. a strict deploy_file resolve failure) is caught here and turned into
+    // GRAPH_FAILED so it never unwinds across the GE ABI; the catch re-acquires the GIL for PyErr_Print.
+    ge::graphStatus InferShape(gert::InferShapeContext *context) override {
+        try {
+    PTO_CUSTOM_LOGD("Entering InferShapeGeImpl\n");
+    const gert::Shape* in0_shape = context->GetInputShape(0);
+    if (in0_shape == nullptr) {
+        PTO_CUSTOM_LOGD("ERROR: InferShapeGeImpl: null input shape at index 0 -> GRAPH_FAILED\n");
+        return ge::GRAPH_FAILED;
+    }
+    std::vector<int64_t> in0_shape_vec;
+    in0_shape_vec.reserve(in0_shape->GetDimNum());
+    for (size_t j = 0; j < in0_shape->GetDimNum(); ++j) {
+        in0_shape_vec.push_back((*in0_shape)[j]);
+    }
+    PTO_CUSTOM_LOGD("InferShapeGeImpl: in0 ndim=%zu\n", in0_shape_vec.size());
+
+    const gert::Shape* in1_shape = context->GetInputShape(1);
+    if (in1_shape == nullptr) {
+        PTO_CUSTOM_LOGD("ERROR: InferShapeGeImpl: null input shape at index 1 -> GRAPH_FAILED\n");
+        return ge::GRAPH_FAILED;
+    }
+    std::vector<int64_t> in1_shape_vec;
+    in1_shape_vec.reserve(in1_shape->GetDimNum());
+    for (size_t j = 0; j < in1_shape->GetDimNum(); ++j) {
+        in1_shape_vec.push_back((*in1_shape)[j]);
+    }
+    PTO_CUSTOM_LOGD("InferShapeGeImpl: in1 ndim=%zu\n", in1_shape_vec.size());
+
+    auto out_shape_vec = inferShape(in0_shape_vec, in1_shape_vec);
+    PTO_CUSTOM_LOGD("InferShapeGeImpl: out0 ndim=%zu\n", out_shape_vec.size());
+    gert::Shape* out_shape = context->GetOutputShape(0);
+    if (out_shape == nullptr) {
+        PTO_CUSTOM_LOGD("ERROR: InferShapeGeImpl: null output shape at index 0 -> GRAPH_FAILED\n");
+        return ge::GRAPH_FAILED;
+    }
+    if (out_shape_vec.size() > gert::Shape::kMaxDimNum) {
+        PTO_CUSTOM_LOGD("ERROR: InferShapeGeImpl: out0 rank %zu exceeds gert::Shape::kMaxDimNum"
+                        " -> GRAPH_FAILED\n", out_shape_vec.size());
+        return ge::GRAPH_FAILED;
+    }
+    out_shape->SetDimNum(out_shape_vec.size());
+    for (size_t j = 0; j < out_shape_vec.size(); ++j) {
+        (*out_shape)[j] = out_shape_vec[j];
+    }
+    PTO_CUSTOM_LOGD("Exiting InferShapeGeImpl (status=%u)\n", (unsigned)ge::GRAPH_SUCCESS);
+    return ge::GRAPH_SUCCESS;
+
+        } catch (py::error_already_set &e) {
+            // what() BEFORE restore(): restore hands the error back to Python and what() is empty after.
+            const std::string _what = e.what();
+            { py::gil_scoped_acquire _g; e.restore(); PyErr_Print(); }
+            PTO_CUSTOM_LOGE("ERROR: SplitV::InferShape %s -> GRAPH_FAILED\n", _what.c_str());
+            return ge::GRAPH_FAILED;
+        } catch (const std::exception &ex) {
+            PTO_CUSTOM_LOGE("ERROR: SplitV::InferShape %s -> GRAPH_FAILED\n", ex.what());
+            return ge::GRAPH_FAILED;
+        }
+    }
+
+    ge::graphStatus InferDataType(gert::InferDataTypeContext *context) override {
+        try {
+    PTO_CUSTOM_LOGD("Entering InferDataType\n");
+    int64_t in0_dtype_value = static_cast<int64_t>(context->GetInputDataType(0));
+    PTO_CUSTOM_LOGD("InferDataType: in0 dtype=%lld\n", (long long)in0_dtype_value);
+    int64_t in1_dtype_value = static_cast<int64_t>(context->GetInputDataType(1));
+    PTO_CUSTOM_LOGD("InferDataType: in1 dtype=%lld\n", (long long)in1_dtype_value);
+    int64_t out_dt_value = inferDtype(in0_dtype_value, in1_dtype_value);
+    context->SetOutputDataType(0, static_cast<ge::DataType>(out_dt_value));
+    PTO_CUSTOM_LOGD("SetOutputDataType: index=0 value=%lld\n", (long long)out_dt_value);
+    PTO_CUSTOM_LOGD("Exiting InferDataType (status=%u)\n", (unsigned)ge::GRAPH_SUCCESS);
+    return ge::GRAPH_SUCCESS;
+
+        } catch (py::error_already_set &e) {
+            // what() BEFORE restore(), as above.
+            const std::string _what = e.what();
+            { py::gil_scoped_acquire _g; e.restore(); PyErr_Print(); }
+            PTO_CUSTOM_LOGE("ERROR: SplitV::InferDataType %s -> GRAPH_FAILED\n", _what.c_str());
+            return ge::GRAPH_FAILED;
+        } catch (const std::exception &ex) {
+            PTO_CUSTOM_LOGE("ERROR: SplitV::InferDataType %s -> GRAPH_FAILED\n", ex.what());
+            return ge::GRAPH_FAILED;
+        }
+    }
+};
+
+REG_AUTO_MAPPING_OP(SplitV);
+
+namespace ge {
+REG_OP(SplitV)
+    .INPUT(in0, TensorType({DT_FLOAT16}))
+    .INPUT(in1, TensorType({DT_FLOAT16}))
+    .OUTPUT(out0, TensorType({DT_FLOAT16}))
+    .REQUIRED_ATTR(split_sizes, ListInt)
+    .ATTR(dim, Int, 0)
+    .OP_END_FACTORY_REG(SplitV);
+}

@@ -1,0 +1,120 @@
+class SplitV : public PtoCustomOp, public ge::ShapeInferOp {
+public:
+    std::string GetCompileModuleStem() const override {
+        return "pypto_compile_SplitV";
+    }
+
+    // Basename of the shipped dev-editable kernel snippet (op_kernel/<stem>.py), the single source of
+    // truth for this op's Python. The base resolves it via the ASCEND_CUSTOM_OPP_PATH entries
+    // (<entry>/op_kernel/<basename>), with a dladdr upward-walk fallback, and loads it by path. The file
+    // is REQUIRED, unresolved => FATAL. Emitted here so C++ uses the exact codegen basename.
+    std::string GetKernelPyBasename() const override {
+        return "split_v.py";
+    }
+
+    // Op attributes -> {name: value-string} at the declaration index (REG_OP order == this
+    // positional index). Fed to the compile cache key and the Python kernel factory's attrs dict.
+    void ExtractAttrs(const gert::RuntimeAttrs *attrs,
+                      std::map<std::string, std::string> &out) const override {
+        if (attrs == nullptr) {
+            out["split_sizes"] = "[]";
+            out["dim"] = "0";
+            return;
+        }
+        const auto *split_sizes_ptr = attrs->GetListInt(0);
+        if (split_sizes_ptr) { std::vector<int64_t> _v(split_sizes_ptr->GetData(), split_sizes_ptr->GetData() + split_sizes_ptr->GetSize()); out["split_sizes"] = ListIntToJsonStr(_v); }
+        else { out["split_sizes"] = "[]"; }
+        const int64_t *dim_ptr = attrs->GetInt(1);
+        out["dim"] = dim_ptr ? std::to_string(*dim_ptr) : "0";
+    }
+
+    // GE compile-time shape/dtype inference: resolved via CustomOpFactory +
+    // dynamic_cast<ShapeInferOp*> (OpDescUtilsEx::InferCustomOpShape), tried before the op-impl
+    // space registry. Bodies call the file-scope pybind infer wrappers (Python self-bootstraps). A
+    // propagated infer error (e.g. a strict deploy_file resolve failure) is caught here and turned into
+    // GRAPH_FAILED so it never unwinds across the GE ABI; the catch re-acquires the GIL for PyErr_Print.
+    ge::graphStatus InferShape(gert::InferShapeContext *context) override {
+        try {
+    PTO_CUSTOM_LOGD("Entering InferShapeGeImpl\n");
+    const gert::Shape* in0_shape = context->GetInputShape(0);
+    if (in0_shape == nullptr) {
+        PTO_CUSTOM_LOGD("ERROR: InferShapeGeImpl: null input shape at index 0 -> GRAPH_FAILED\n");
+        return ge::GRAPH_FAILED;
+    }
+    std::vector<int64_t> in0_shape_vec;
+    in0_shape_vec.reserve(in0_shape->GetDimNum());
+    for (size_t j = 0; j < in0_shape->GetDimNum(); ++j) {
+        in0_shape_vec.push_back((*in0_shape)[j]);
+    }
+    PTO_CUSTOM_LOGD("InferShapeGeImpl: in0 ndim=%zu\n", in0_shape_vec.size());
+
+    const gert::Shape* in1_shape = context->GetInputShape(1);
+    if (in1_shape == nullptr) {
+        PTO_CUSTOM_LOGD("ERROR: InferShapeGeImpl: null input shape at index 1 -> GRAPH_FAILED\n");
+        return ge::GRAPH_FAILED;
+    }
+    std::vector<int64_t> in1_shape_vec;
+    in1_shape_vec.reserve(in1_shape->GetDimNum());
+    for (size_t j = 0; j < in1_shape->GetDimNum(); ++j) {
+        in1_shape_vec.push_back((*in1_shape)[j]);
+    }
+    PTO_CUSTOM_LOGD("InferShapeGeImpl: in1 ndim=%zu\n", in1_shape_vec.size());
+
+    auto out_shape_vec = inferShape(in0_shape_vec, in1_shape_vec);
+    PTO_CUSTOM_LOGD("InferShapeGeImpl: out0 ndim=%zu\n", out_shape_vec.size());
+    gert::Shape* out_shape = context->GetOutputShape(0);
+    if (out_shape == nullptr) {
+        PTO_CUSTOM_LOGD("ERROR: InferShapeGeImpl: null output shape at index 0 -> GRAPH_FAILED\n");
+        return ge::GRAPH_FAILED;
+    }
+    if (out_shape_vec.size() > gert::Shape::kMaxDimNum) {
+        PTO_CUSTOM_LOGD("ERROR: InferShapeGeImpl: out0 rank %zu exceeds gert::Shape::kMaxDimNum"
+                        " -> GRAPH_FAILED\n", out_shape_vec.size());
+        return ge::GRAPH_FAILED;
+    }
+    out_shape->SetDimNum(out_shape_vec.size());
+    for (size_t j = 0; j < out_shape_vec.size(); ++j) {
+        (*out_shape)[j] = out_shape_vec[j];
+    }
+    PTO_CUSTOM_LOGD("Exiting InferShapeGeImpl (status=%u)\n", (unsigned)ge::GRAPH_SUCCESS);
+    return ge::GRAPH_SUCCESS;
+
+        } catch (py::error_already_set &e) {
+            // what() BEFORE restore(): restore hands the error back to Python and what() is empty after.
+            const std::string _what = e.what();
+            { py::gil_scoped_acquire _g; e.restore(); PyErr_Print(); }
+            PTO_CUSTOM_LOGE("ERROR: SplitV::InferShape %s -> GRAPH_FAILED\n", _what.c_str());
+            return ge::GRAPH_FAILED;
+        } catch (const std::exception &ex) {
+            PTO_CUSTOM_LOGE("ERROR: SplitV::InferShape %s -> GRAPH_FAILED\n", ex.what());
+            return ge::GRAPH_FAILED;
+        }
+    }
+
+    ge::graphStatus InferDataType(gert::InferDataTypeContext *context) override {
+        try {
+    PTO_CUSTOM_LOGD("Entering InferDataType\n");
+    int64_t in0_dtype_value = static_cast<int64_t>(context->GetInputDataType(0));
+    PTO_CUSTOM_LOGD("InferDataType: in0 dtype=%lld\n", (long long)in0_dtype_value);
+    int64_t in1_dtype_value = static_cast<int64_t>(context->GetInputDataType(1));
+    PTO_CUSTOM_LOGD("InferDataType: in1 dtype=%lld\n", (long long)in1_dtype_value);
+    int64_t out_dt_value = inferDtype(in0_dtype_value, in1_dtype_value);
+    context->SetOutputDataType(0, static_cast<ge::DataType>(out_dt_value));
+    PTO_CUSTOM_LOGD("SetOutputDataType: index=0 value=%lld\n", (long long)out_dt_value);
+    PTO_CUSTOM_LOGD("Exiting InferDataType (status=%u)\n", (unsigned)ge::GRAPH_SUCCESS);
+    return ge::GRAPH_SUCCESS;
+
+        } catch (py::error_already_set &e) {
+            // what() BEFORE restore(), as above.
+            const std::string _what = e.what();
+            { py::gil_scoped_acquire _g; e.restore(); PyErr_Print(); }
+            PTO_CUSTOM_LOGE("ERROR: SplitV::InferDataType %s -> GRAPH_FAILED\n", _what.c_str());
+            return ge::GRAPH_FAILED;
+        } catch (const std::exception &ex) {
+            PTO_CUSTOM_LOGE("ERROR: SplitV::InferDataType %s -> GRAPH_FAILED\n", ex.what());
+            return ge::GRAPH_FAILED;
+        }
+    }
+};
+
+REG_AUTO_MAPPING_OP(SplitV);

@@ -1,0 +1,28 @@
+_GE_INT_TO_TORCH_BASE = {0: 'float32', 1: 'float16', 2: 'int8', 3: 'int32', 4: 'uint8', 6: 'int16', 7: 'uint16', 8: 'uint32', 9: 'int64', 10: 'uint64', 11: 'float64', 12: 'bool', 16: 'complex64', 17: 'complex128', 18: 'qint8', 19: 'qint16', 20: 'qint32', 21: 'quint8', 22: 'quint16', 27: 'bfloat16', 33: 'complex32'}
+_TORCH_BASE_TO_GE_INT = {b: i for i, b in _GE_INT_TO_TORCH_BASE.items()}
+
+def _ge_data_type_enum_value_to_torch_dtype(value):
+    import torch
+    try:
+        base = _GE_INT_TO_TORCH_BASE[value]
+    except KeyError:
+        raise ValueError('Unsupported ge::DataType enum value for torch mapping: ' + repr(value))
+    td = getattr(torch, base, None)
+    if td is None:
+        raise ValueError('torch has no dtype attribute ' + repr(base))
+    return td
+
+def _torch_dtype_to_ge_data_type_enum_value(dtype):
+    dtype_name = str(dtype)
+    if not dtype_name.startswith('torch.'):
+        raise ValueError('Unsupported dtype for GE mapping: ' + repr(dtype))
+    base = dtype_name.replace('torch.', '', 1)
+    try:
+        return _TORCH_BASE_TO_GE_INT[base]
+    except KeyError:
+        raise ValueError('Unsupported torch dtype for GE enum mapping: ' + repr(dtype))
+
+def _torch_dtype_to_ge_data_type_enum_value_recursive(value):
+    if isinstance(value, tuple):
+        return tuple(_torch_dtype_to_ge_data_type_enum_value(v) for v in value)
+    return _torch_dtype_to_ge_data_type_enum_value(value)

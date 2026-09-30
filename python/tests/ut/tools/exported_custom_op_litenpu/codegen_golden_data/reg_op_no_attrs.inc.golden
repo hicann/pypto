@@ -1,0 +1,7 @@
+namespace ge {
+REG_OP(AddBias)
+    .INPUT(in0, TensorType({DT_FLOAT16}))
+    .INPUT(in1, TensorType({DT_FLOAT16}))
+    .OUTPUT(out0, TensorType({DT_FLOAT16}))
+    .OP_END_FACTORY_REG(AddBias);
+}

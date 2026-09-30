@@ -1,0 +1,113 @@
+// Auto-generated test TU fragment (include mock gert/ge header first)
+
+#include <cstdint>
+#include <cstdio>
+#include "toolchain/slog.h"
+#include "base/log_types.h"
+#ifndef PTO_CUSTOM_LOGD
+#define PTO_CUSTOM_LOGD(fmt, ...) dlog_debug(OP, fmt, ##__VA_ARGS__)
+#endif
+#ifndef PTO_CUSTOM_LOGE
+#define PTO_CUSTOM_LOGE(fmt, ...) dlog_error(OP, fmt, ##__VA_ARGS__)
+#endif
+#include <vector>
+#include <pybind11/pybind11.h>
+#include <pybind11/eval.h>
+#include <pybind11/stl.h>
+
+namespace py = pybind11;
+using namespace py::literals;
+
+namespace {
+
+std::vector<int64_t> inferShape(std::vector<int64_t> x0_shape, std::vector<int64_t> x1_shape) {
+    PTO_CUSTOM_LOGD("Entering inferShape\n");
+    // One-time CPython bootstrap for a non-Python host (GE/Ascend executor that dlopen'd this .so);
+    // guarded so a Python host is untouched, and never finalized (called repeatedly; re-init is fragile).
+    static const bool _pypto_py_bootstrapped = []() {
+        if (!Py_IsInitialized()) {
+            Py_InitializeEx(0);   // 0: don't install signal handlers (library-friendly)
+            PyEval_SaveThread();  // drop the GIL the init thread holds; reacquired below
+        }
+        return true;
+    }();
+    (void)_pypto_py_bootstrapped;
+
+    // Held across the try AND the catch: error_already_set handling needs the GIL.
+    py::gil_scoped_acquire gil;
+    const std::string _dtype_bridge_src = R"PYSRC(
+import torch
+
+)PYSRC";
+    const std::string _import_by_path_src = R"PYSRC(
+import importlib.util as _pypto_ilu
+_pypto_spec = _pypto_ilu.spec_from_file_location('_pypto_infer_inferShape', '/nonexistent/pypto_ut_infer_defs.py')
+_pypto_infer_mod = _pypto_ilu.module_from_spec(_pypto_spec)
+_pypto_spec.loader.exec_module(_pypto_infer_mod)
+)PYSRC";
+
+    py::dict globals;                       // FRESH dict per call; py::exec auto-seeds __builtins__
+    py::exec(_dtype_bridge_src, globals, globals);     // torch + dtype bridge
+    py::exec(_import_by_path_src, globals, globals);   // load the .py defining infer_shape_two_by_two
+    py::object _mod = globals["_pypto_infer_mod"];
+    py::object infer_shape_two_by_two_py = _mod.attr("infer_shape_two_by_two");
+    py::object _torch_Size = py::module_::import("torch").attr("Size");
+
+    std::vector<int64_t> _ret = infer_shape_two_by_two_py(_torch_Size(py::cast(x0_shape)), _torch_Size(py::cast(x1_shape))).cast<std::vector<int64_t>>();
+    PTO_CUSTOM_LOGD("Exiting inferShape (ok)\n");
+    return _ret;
+}
+
+}
+
+
+namespace ge {
+
+static ge::graphStatus InferShapeGeImpl(gert::InferShapeContext* context) {
+    PTO_CUSTOM_LOGD("Entering InferShapeGeImpl\n");
+    const gert::Shape* in0_shape = context->GetInputShape(0);
+    if (in0_shape == nullptr) {
+        PTO_CUSTOM_LOGD("ERROR: InferShapeGeImpl: null input shape at index 0 -> GRAPH_FAILED\n");
+        return ge::GRAPH_FAILED;
+    }
+    std::vector<int64_t> in0_shape_vec;
+    in0_shape_vec.reserve(in0_shape->GetDimNum());
+    for (size_t j = 0; j < in0_shape->GetDimNum(); ++j) {
+        in0_shape_vec.push_back((*in0_shape)[j]);
+    }
+    PTO_CUSTOM_LOGD("InferShapeGeImpl: in0 ndim=%zu\n", in0_shape_vec.size());
+
+    const gert::Shape* in1_shape = context->GetInputShape(1);
+    if (in1_shape == nullptr) {
+        PTO_CUSTOM_LOGD("ERROR: InferShapeGeImpl: null input shape at index 1 -> GRAPH_FAILED\n");
+        return ge::GRAPH_FAILED;
+    }
+    std::vector<int64_t> in1_shape_vec;
+    in1_shape_vec.reserve(in1_shape->GetDimNum());
+    for (size_t j = 0; j < in1_shape->GetDimNum(); ++j) {
+        in1_shape_vec.push_back((*in1_shape)[j]);
+    }
+    PTO_CUSTOM_LOGD("InferShapeGeImpl: in1 ndim=%zu\n", in1_shape_vec.size());
+
+    auto out_shape_vec = inferShape(in0_shape_vec, in1_shape_vec);
+    PTO_CUSTOM_LOGD("InferShapeGeImpl: out0 ndim=%zu\n", out_shape_vec.size());
+    gert::Shape* out_shape = context->GetOutputShape(0);
+    if (out_shape == nullptr) {
+        PTO_CUSTOM_LOGD("ERROR: InferShapeGeImpl: null output shape at index 0 -> GRAPH_FAILED\n");
+        return ge::GRAPH_FAILED;
+    }
+    if (out_shape_vec.size() > gert::Shape::kMaxDimNum) {
+        PTO_CUSTOM_LOGD("ERROR: InferShapeGeImpl: out0 rank %zu exceeds gert::Shape::kMaxDimNum"
+                        " -> GRAPH_FAILED\n", out_shape_vec.size());
+        return ge::GRAPH_FAILED;
+    }
+    out_shape->SetDimNum(out_shape_vec.size());
+    for (size_t j = 0; j < out_shape_vec.size(); ++j) {
+        (*out_shape)[j] = out_shape_vec[j];
+    }
+    PTO_CUSTOM_LOGD("Exiting InferShapeGeImpl (status=%u)\n", (unsigned)ge::GRAPH_SUCCESS);
+    return ge::GRAPH_SUCCESS;
+
+}
+
+}

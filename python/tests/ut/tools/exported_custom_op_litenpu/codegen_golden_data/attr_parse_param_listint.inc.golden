@@ -1,0 +1,5 @@
+            if (attr["name"] == "crop_size" && attr["type"] == 7) {
+                std::vector<int64_t> value;
+                for (auto e : attr["ints"]) value.push_back(e.get<int64_t>());
+                op_dest.SetAttr("crop_size", value);
+            }

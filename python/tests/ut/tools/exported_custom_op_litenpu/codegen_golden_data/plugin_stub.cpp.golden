@@ -1,0 +1,26 @@
+// Auto-generated
+
+#include "register/register.h"
+#include <cstdio>
+#include "toolchain/slog.h"
+#include "base/log_types.h"
+#ifndef PTO_CUSTOM_LOGD
+#define PTO_CUSTOM_LOGD(fmt, ...) dlog_debug(OP, fmt, ##__VA_ARGS__)
+#endif
+#ifndef PTO_CUSTOM_LOGE
+#define PTO_CUSTOM_LOGE(fmt, ...) dlog_error(OP, fmt, ##__VA_ARGS__)
+#endif
+
+namespace domi {
+// Parsing onnx params
+Status ParseParamAddBias(const ge::Operator& op_src, ge::Operator& op_dest) {
+    PTO_CUSTOM_LOGD("Entering ParseParamAddBias\n");
+    PTO_CUSTOM_LOGD("Exiting ParseParamAddBias (status=%u)\n", (unsigned)SUCCESS);
+    return SUCCESS;
+}
+
+REGISTER_CUSTOM_OP("AddBias")
+    .FrameworkType(ONNX)
+    .OriginOpType("pypto::1::AddBias")
+    .ParseParamsByOperatorFn(ParseParamAddBias);
+}

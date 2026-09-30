@@ -1,0 +1,10 @@
+    PTO_CUSTOM_LOGD("Entering InferDataType\n");
+    int64_t in0_dtype_value = static_cast<int64_t>(context->GetInputDataType(0));
+    PTO_CUSTOM_LOGD("InferDataType: in0 dtype=%lld\n", (long long)in0_dtype_value);
+    int64_t in1_dtype_value = static_cast<int64_t>(context->GetInputDataType(1));
+    PTO_CUSTOM_LOGD("InferDataType: in1 dtype=%lld\n", (long long)in1_dtype_value);
+    int64_t out_dt_value = inferDtype(in0_dtype_value, in1_dtype_value);
+    context->SetOutputDataType(0, static_cast<ge::DataType>(out_dt_value));
+    PTO_CUSTOM_LOGD("SetOutputDataType: index=0 value=%lld\n", (long long)out_dt_value);
+    PTO_CUSTOM_LOGD("Exiting InferDataType (status=%u)\n", (unsigned)ge::GRAPH_SUCCESS);
+    return ge::GRAPH_SUCCESS;

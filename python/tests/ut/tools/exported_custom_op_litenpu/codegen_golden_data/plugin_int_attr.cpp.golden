@@ -1,0 +1,52 @@
+// Auto-generated
+
+#include "register/register.h"
+#include <nlohmann/json.hpp>
+#include <string>
+#include <vector>
+#include <cstdio>
+#include "toolchain/slog.h"
+#include "base/log_types.h"
+#ifndef PTO_CUSTOM_LOGD
+#define PTO_CUSTOM_LOGD(fmt, ...) dlog_debug(OP, fmt, ##__VA_ARGS__)
+#endif
+#ifndef PTO_CUSTOM_LOGE
+#define PTO_CUSTOM_LOGE(fmt, ...) dlog_error(OP, fmt, ##__VA_ARGS__)
+#endif
+
+namespace domi {
+// Parsing onnx params
+Status ParseParamAddBias(const ge::Operator& op_src, ge::Operator& op_dest) {
+    PTO_CUSTOM_LOGD("Entering ParseParamAddBias\n");
+    try {
+        ge::AscendString attrs_string;
+        if (ge::GRAPH_SUCCESS == op_src.GetAttr("attribute", attrs_string)) {
+            if (attrs_string.GetString() == nullptr) {
+                PTO_CUSTOM_LOGE("ERROR: ParseParamAddBias: null attribute string -> FAILED\n");
+                return FAILED;
+            }
+            nlohmann::json attrs = nlohmann::json::parse(attrs_string.GetString());
+            for (nlohmann::json attr : attrs["attribute"]) {
+                if (attr["name"] == "bias" && attr["type"] == 2) {
+                    int64_t value = attr.contains("i") && !attr["i"].is_null()
+                        ? attr["i"].get<int64_t>() : 0;
+                    op_dest.SetAttr("bias", value);
+                }
+            }
+        }
+    } catch (const nlohmann::json::exception &e) {
+        PTO_CUSTOM_LOGE("ERROR: ParseParamAddBias: attribute JSON error: %s -> FAILED\n", e.what());
+        return FAILED;
+    } catch (const std::exception &e) {
+        PTO_CUSTOM_LOGE("ERROR: ParseParamAddBias: %s -> FAILED\n", e.what());
+        return FAILED;
+    }
+    PTO_CUSTOM_LOGD("Exiting ParseParamAddBias (status=%u)\n", (unsigned)SUCCESS);
+    return SUCCESS;
+}
+
+REGISTER_CUSTOM_OP("AddBias")
+    .FrameworkType(ONNX)
+    .OriginOpType("pypto::1::AddBias")
+    .ParseParamsByOperatorFn(ParseParamAddBias);
+}
