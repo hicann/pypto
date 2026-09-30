@@ -545,15 +545,20 @@ ProgramPtr SanitizerInstrumenter::Instrument(ProgramPtr program)
 {
     // Instrument the entry function only, appending the hidden
     // sanitizer_log (ptr) + sanitizer_log_capacity (scalar) parameters.
+    //    The entry is identified structurally, as the Opaque function the
+    //    frontend builds for the kernel body (the same criterion the host
+    //    side uses to locate the kernel entry), never by name: the program
+    //    name (e.g. from @pl.jit(name=...)) may differ from the entry
+    //    function name, and a name match would silently skip instrumentation
+    //    then, breaking the launch ABI.
     //    SIMT functions (SIMT_VF / SIMT_CALLEE) are outside the detection
     //    scope: excluded by function type (the codegen's own criterion), not
     //    only by name -- a same-named SIMT function can never be mistaken
     //    for the entry.
     std::map<std::string, FunctionPtr> new_functions;
+    uint32_t entry_count = 0;
     for (const auto& [name, func] : program->functions_) {
-        bool is_simt = func != nullptr &&
-                       (func->funcType_ == FunctionType::SIMT_VF || func->funcType_ == FunctionType::SIMT_CALLEE);
-        if (func == nullptr || is_simt || func->name_ != program->name_) {
+        if (func == nullptr || func->funcType_ != FunctionType::OPAQUE) {
             new_functions[name] = func;
             continue;
         }
@@ -572,7 +577,10 @@ ProgramPtr SanitizerInstrumenter::Instrument(ProgramPtr program)
         params.push_back(capacity_var);
         new_functions[name] = std::make_shared<Function>(func->name_, std::move(params), func->returnTypes_, body,
                                                          func->span_, func->funcType_, func->entry_);
+        ++entry_count;
     }
+    PRO_PASS_INTERNAL_CHECK(npu::tile_fwk::InternalError::PASS_INNER_ERROR, entry_count == 1)
+        << "sanitizer: expected exactly one Opaque entry function, found " << entry_count;
     return std::make_shared<Program>(std::move(new_functions), program->name_, program->span_, program->debugInfo_);
 }
 
