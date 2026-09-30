@@ -11,6 +11,12 @@
 <!-- npu="910b" id3 -->
 - Atlas A2系列产品：支持
 <!-- end id3 -->
+<!-- npu="9030" id7 -->
+- Kirin9030处理器系列产品：支持
+<!-- end id7 -->
+<!-- npu="x90" id8 -->
+- KirinX90处理器系列产品：支持
+<!-- end id8 -->
 
 ## 功能说明
 
@@ -98,10 +104,33 @@ matmul(input, mat2, out_dtype, *, a_trans = False, b_trans = False, c_matrix_nz 
 <!-- npu="A3" id5 -->
 - Atlas A3系列产品：不支持DT_HF8，DT_FP8E5M2，DT_FP8E4M3，不支持extend_params中的trans_mode参数。当输入矩阵的数据类型为DT_BF16时，bias_tensor数据类型不支持DT_BF16。
 <!-- end id5 -->
+<!-- npu="9030" id11 -->
+- Kirin9030处理器系列产品：具体数据类型请见[Kirin9030支持的数据类型](#kirin9030支持的数据类型)，不支持输入TILEOP_NZ format输入（input与mat2），不支持c_matrix_nz，不支持extend_params中的：scale、scale_tensor、relu_type、trans_mode。
+<!-- end id11 -->
+<!-- npu="x90" id12 -->
+- KirinX90处理器系列产品：具体数据类型请见[KirinX90支持的数据类型](#kirinx90支持的数据类型)，不支持输入TILEOP_NZ format输入（input与mat2），不支持c_matrix_nz，不支持extend_params中的：scale、scale_tensor、relu_type、trans_mode。
+<!-- end id12 -->
 - 调用matmul接口前需要通过pypto.set\_cube\_tile\_shapes设置M、K、N轴上的切分大小
 - 当矩阵维度为3维或者4维时，需要调用pypto.set\_vec\_tile\_shapes接口设置vector的TileShape切分，如未设置，接口内部会设置2维的vec\_tile\_shape，其值为128，128。
 - 调用matmul接口的输入为调用pypto.reshape后的NZ格式时，需要调用pypto.set\_matrix\_size接口设置pypto.reshape前的输入到matmul的原始Shape的m，k，n值。
 - 调用matmul接口的输入矩阵维度为3维/4维并且数据格式为NZ格式时，需要调用pypto.set\_matrix\_size接口设置输入到matmul的原始Shape的m，k，n值。
+
+<!-- npu="9030" id9 -->
+### Kirin9030支持的数据类型
+| input | mat2 | out_dtype | bias_tensor |
+|:------|:-----|:----------|:------------|
+| DT_FP16 | DT_FP16 | DT_FP16 | DT_FP16 |
+| DT_INT8 | DT_INT8 | DT_INT32 | DT_INT32 |
+<!-- end id9 -->
+
+<!-- npu="x90" id10 -->
+### KirinX90支持的数据类型
+| input | mat2 | out_dtype | bias_tensor |
+|:------|:-----|:----------|:------------|
+| DT_FP16 | DT_FP16 | DT_FP16 | DT_FP32 |
+| DT_INT8 | DT_INT8 | DT_INT32 | DT_INT32 |
+- KirinX90要求fp16@fp16->fp16场景，bias按照fp32保存（有效数实际按照fp16保存），高16比特无效补零，低16比特有效
+<!-- end id10 -->
 
 ## 调用示例
 

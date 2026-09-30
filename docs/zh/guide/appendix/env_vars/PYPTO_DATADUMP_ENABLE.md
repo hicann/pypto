@@ -35,3 +35,9 @@ os.environ["PYPTO_DATADUMP_ENABLE"] = "true"
 <!-- npu="910b" id3 -->
 - Atlas A3系列产品：支持
 <!-- end id3 -->
+<!-- npu="9030" id4 -->
+- Kirin9030处理器系列产品：不支持
+<!-- end id4 -->
+<!-- npu="x90" id5 -->
+- KirinX90处理器系列产品：不支持
+<!-- end id5 -->
