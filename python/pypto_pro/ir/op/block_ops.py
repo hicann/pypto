@@ -23,6 +23,7 @@ import enum
 import struct
 from typing import Any, Optional
 
+from pypto.pypto_impl import NpuArch
 from pypto.pypto_impl import ir as _ir_core
 from pypto.pypto_impl.ir import (
     AccPhase,
@@ -1788,12 +1789,12 @@ def _apply_default_layout(tt: "TileType") -> None:
     from pypto_pro.runtime.jit import get_current_arch
 
     arch = get_current_arch()
-    layout_dict = _DEFAULT_LAYOUTS_A5 if arch == "a5" else _DEFAULT_LAYOUTS_A3
+    layout_dict = _DEFAULT_LAYOUTS_A5 if arch == NpuArch.DAV_3510 else _DEFAULT_LAYOUTS_A3
     default_layout = layout_dict.get(tt.target_memory)
 
     if tt.target_memory in (MemorySpace.ScaleLeft, MemorySpace.ScaleRight):
         if default_layout is None:
-            raise InvalidVal(f"{tt.target_memory.name} is only supported on A5, got architecture '{arch}'")
+            raise InvalidVal(f"{tt.target_memory.name} is only supported on 3510, got architecture '{arch}'")
 
     if default_layout is None:
         return
@@ -1817,7 +1818,7 @@ def _apply_default_layout(tt: "TileType") -> None:
         allowed_layouts = {_DEFAULT_LAYOUTS_A3[MemorySpace.Left], _DEFAULT_LAYOUTS_A5[MemorySpace.Left]}
     elif tt.target_memory == MemorySpace.Mat:
         allowed_layouts.add(TensorLayout.ZN)
-        if arch == "a5":
+        if arch == NpuArch.DAV_3510:
             allowed_layouts.update({TensorLayout.ND, TensorLayout.DN})
         elif tt.dtype in (DataType.UINT64, DataType.INT64):
             allowed_layouts.add(TensorLayout.ND)
@@ -1825,7 +1826,7 @@ def _apply_default_layout(tt: "TileType") -> None:
             allowed_layouts.update({TensorLayout.ZZ, TensorLayout.NN})
 
     if (
-        arch == "a5"
+        arch == NpuArch.DAV_3510
         and tt.target_memory in (MemorySpace.Left, MemorySpace.Right, MemorySpace.Acc)
         and tt.layout in _REJECTED_LAYOUTS_ON_A5
     ):
@@ -2259,7 +2260,7 @@ _A5_MATMUL_DTYPE_COMBOS = (
 
 
 _MATMUL_DTYPE_COMBOS = {
-    "a5": _A5_MATMUL_DTYPE_COMBOS,
+    NpuArch.DAV_3510: _A5_MATMUL_DTYPE_COMBOS,
 }
 
 
@@ -3181,19 +3182,13 @@ _A5_INSERT_QUANT_COMBOS = (
 )
 
 _LAYOUT_DTYPE_COMBOS = {
-    "load": {"a5": _A5_LOAD_COMBOS},
-    "load_tile": {"a5": _A5_LOAD_COMBOS},
-    "store": {"a5": _A5_STORE_COMBOS, "a5_quant": _A5_STORE_QUANT_COMBOS},
-    "store_tile": {"a5": _A5_STORE_COMBOS, "a5_quant": _A5_STORE_QUANT_COMBOS},
-    "move": {
-        "a5": _A5_MOVE_COMBOS,
-        "a5_quant": _A5_MOVE_QUANT_COMBOS,
-    },
-    "extract": {"a5": _A5_ACC_NZ_TO_MAT_NZ_COMBOS, "a5_quant": _A5_INSERT_QUANT_COMBOS},
-    "insert": {
-        "a5": _A5_INSERT_COMBOS,
-        "a5_quant": _A5_INSERT_QUANT_COMBOS,
-    },
+    "load": {NpuArch.DAV_3510: (_A5_LOAD_COMBOS, None)},
+    "load_tile": {NpuArch.DAV_3510: (_A5_LOAD_COMBOS, None)},
+    "store": {NpuArch.DAV_3510: (_A5_STORE_COMBOS, _A5_STORE_QUANT_COMBOS)},
+    "store_tile": {NpuArch.DAV_3510: (_A5_STORE_COMBOS, _A5_STORE_QUANT_COMBOS)},
+    "move": {NpuArch.DAV_3510: (_A5_MOVE_COMBOS, _A5_MOVE_QUANT_COMBOS)},
+    "extract": {NpuArch.DAV_3510: (_A5_ACC_NZ_TO_MAT_NZ_COMBOS, _A5_INSERT_QUANT_COMBOS)},
+    "insert": {NpuArch.DAV_3510: (_A5_INSERT_COMBOS, _A5_INSERT_QUANT_COMBOS)},
 }
 
 
@@ -3232,7 +3227,7 @@ def _check_layout_dtype(
         dst: destination operand —— tile 或 tensor。
         is_transpose: load 专用——降序 order 时 GM 有效排布为 DN（仅 load 传入）；
                       为 None 时 GM 排布取 tensor 声明值（store 场景）。
-        quant: 量化路径时查 `a5_quant` 子表，非量化时查 `a5` 主表。
+        quant: 量化路径时查量化组合表，非量化时查主组合表（按 NpuArch 索引）。
     """
     from pypto_pro.runtime.jit import get_current_arch
 
@@ -3240,10 +3235,12 @@ def _check_layout_dtype(
     combos_by_arch = _LAYOUT_DTYPE_COMBOS.get(op)
     if combos_by_arch is None:
         return
-    key = f"{arch}_quant" if quant else arch
-    combos = combos_by_arch.get(key)
-    if combos is None:
+    combos_entry = combos_by_arch.get(arch)
+    if combos_entry is None:
         # 该平台暂未配置支持表（如 a3）——不做硬拦截，后续按平台补表后自动生效。
+        return
+    combos = combos_entry[1] if quant else combos_entry[0]
+    if combos is None:
         return
 
     src_loc = _loc_name(src.type)
@@ -3382,7 +3379,7 @@ def _get_memory_capacity(target_memory: MemorySpace) -> int:
         import logging
 
         logging.getLogger(__name__).warning(
-            "Cannot determine %s capacity for arch %r; skipping tile capacity validation. "
+            "Cannot determine %s capacity for arch %s; skipping tile capacity validation. "
             "Check that pypto_impl is loaded and the arch maps to an installed platform ini.",
             target_memory,
             arch,

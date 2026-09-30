@@ -29,6 +29,7 @@ import re
 
 from pypto_pro._errors import InvalidShape
 import pypto_pro.language as pl
+from pypto_pro.runtime.platform import NpuArch
 import pytest
 
 DIM = 16
@@ -38,7 +39,7 @@ TILE = 64
 def _compile_to_cce(kernel) -> str:
     from pypto_pro.runtime.jit import _assemble_cv_source, _parse_and_codegen_targets
 
-    cube, vector = _parse_and_codegen_targets(kernel.to_kernel_def(), "a5", "")
+    cube, vector = _parse_and_codegen_targets(kernel.to_kernel_def(), NpuArch.DAV_3510, "")
     return _assemble_cv_source(cube, vector).content
 
 
