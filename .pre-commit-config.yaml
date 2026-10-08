@@ -61,6 +61,17 @@ repos:
         language: system
         types: [python]
 
+  # 日志规范检查（依赖本地 agent CLI，CI 等无 agent 环境自动跳过）
+  - repo: local
+    hooks:
+      - id: log-spec-check
+        name: log spec check
+        entry: python3 scripts/check_log_spec.py
+        language: system
+        verbose: true
+        files: \.(c|h|cpp|hpp|cc|hh|cxx|hxx|py)$
+        exclude: ^build/|tests/third_party/|(^|/)LLT/
+
   # 拼写检查
   - repo: https://gitcode.com/gh_mirrors/co/codespell
     rev: v2.4.1
