@@ -21,16 +21,6 @@ ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 THREADS = 128
 
 
-def _require_a5():
-    try:
-        torch.npu.set_device(ST_DEVICE)
-    except RuntimeError as exc:
-        pytest.skip(f"NPU unavailable: {exc}")
-    name = torch.npu.get_device_name()
-    if "Ascend950" not in name:
-        pytest.skip(f"Current device is {name}, not A5 (Ascend950). Skip.")
-
-
 @pl.vector_function(mode="simt", max_threads=THREADS)
 def publish_with_threadfence_block(
     out: pl.Tensor[[1, 1], pl.DT_INT32],
@@ -53,23 +43,29 @@ def publish_with_threadfence_block(
         out[0, 0] = total
 
 
-@pl.jit()
+@pl.jit(auto_mutex=True)
 def simt_threadfence_block(out: pl.Tensor[[1, 1], pl.DT_INT32]):
-    values = pl.make_tile(
-        pl.TileType(shape=[1, THREADS], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec),
-        addr=0,
+    values_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, THREADS], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec),
+        addrs=0,
+        mutex_ids="auto",
+        depth=1,
     )
-    completed = pl.make_tile(
-        pl.TileType(shape=[1, 8], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec),
-        addr=THREADS * 4,
+    values = values_group.current()
+    completed_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, 8], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec),
+        addrs=THREADS * 4,
+        mutex_ids="auto",
+        depth=1,
     )
+    completed = completed_group.current()
     with pl.section_vector():
         publish_with_threadfence_block[THREADS](out, values, completed)
 
 
 @pytest.mark.soc("950")
 def test_threadfence_block():
-    _require_a5()
+    torch.npu.set_device(ST_DEVICE)
     out = torch.full((1, 1), -1, dtype=torch.int32, device=ST_DEVICE)
     simt_threadfence_block(out)
     torch.npu.synchronize()

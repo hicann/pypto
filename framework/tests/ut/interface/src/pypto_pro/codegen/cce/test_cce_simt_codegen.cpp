@@ -281,8 +281,8 @@ ir::ProgramPtr MakeSimtScalarOpsProgram()
     }
     std::size_t result_index = 0;
     const std::vector<std::string> dtype_specific_unary_ops = {
-        "simt.abs",  "simt.sqrt", "simt.rsqrt", "simt.exp",  "simt.exp2",  "simt.log",
-        "simt.log2", "simt.sin",  "simt.cos",   "simt.tanh", "simt.round", "simt.trunc",
+        "simt.abs", "simt.sqrt", "simt.rsqrt", "simt.exp",   "simt.exp2",  "simt.log",   "simt.log2",
+        "simt.sin", "simt.cos",  "simt.tanh",  "simt.round", "simt.trunc", "simt.exp10", "simt.log10",
     };
     for (const auto& op_name : dtype_specific_unary_ops) {
         AppendRegisteredResult(simt_stmts, result_index, op_name, {fp32_value});
@@ -293,6 +293,12 @@ ir::ProgramPtr MakeSimtScalarOpsProgram()
         AppendRegisteredResult(simt_stmts, result_index, op_name, {fp32_value});
     }
     AppendRegisteredResult(simt_stmts, result_index, "simt.log1p", {fp32_value});
+    AppendRegisteredResult(simt_stmts, result_index, "simt.rcp", {fp16_value});
+    AppendRegisteredResult(simt_stmts, result_index, "simt.rcp", {bf16_value});
+    for (const auto& op_name : {"simt.tan", "simt.atan", "simt.expm1", "simt.logb", "simt.cosh", "simt.acos",
+                                "simt.sinh", "simt.asin", "simt.cbrt"}) {
+        AppendRegisteredResult(simt_stmts, result_index, op_name, {fp32_value});
+    }
     AppendRegisteredResult(simt_stmts, result_index, "simt.abs", {i64_value});
     AppendRegisteredResult(simt_stmts, result_index, "simt.isfinite", {fp16_value});
     AppendRegisteredResult(simt_stmts, result_index, "simt.isfinite", {fp32_value});
@@ -303,6 +309,17 @@ ir::ProgramPtr MakeSimtScalarOpsProgram()
     AppendRegisteredResult(simt_stmts, result_index, "simt.mul_hi", {i64_value, i64_value});
     AppendRegisteredResult(simt_stmts, result_index, "simt.mul_hi", {u64_value, u64_value});
     AppendRegisteredResult(simt_stmts, result_index, "simt.fmod", {fp32_value, fp32_value});
+    for (const auto& op_name : {"simt.max_nan", "simt.min_nan"}) {
+        AppendRegisteredResult(simt_stmts, result_index, op_name, {fp16_value, fp16_value});
+        AppendRegisteredResult(simt_stmts, result_index, op_name, {bf16_value, bf16_value});
+    }
+    for (const auto& op_name : {"simt.atan2", "simt.copysign", "simt.nextafter"}) {
+        AppendRegisteredResult(simt_stmts, result_index, op_name, {fp32_value, fp32_value});
+    }
+    for (const auto& op_name : {"simt.tanpi", "simt.atanh", "simt.cospi", "simt.acosh", "simt.sinpi", "simt.asinh",
+                                "simt.rcbrt", "simt.ilogb", "simt.signbit"}) {
+        AppendRegisteredResult(simt_stmts, result_index, op_name, {fp32_value});
+    }
 
     for (const auto& op_name : {"simt.min", "simt.max"}) {
         AppendRegisteredResult(simt_stmts, result_index, op_name, {fp32_value, fp32_value});
@@ -616,10 +633,51 @@ TEST(CCESimtCodegenTest, GeneratesRegisteredSynchronizationScalarCastAndMathOper
         "if (__ay == 0 || __ax >= 0x7f800000u || __ay > 0x7f800000u)",
         "while (__ex > __ey)",
         "reinterpret_cast<float&>(__result);",
+        "__xb |= __yb & 0x80000000u",
+        "0.00015239251661114395f",
+        "0x3F3504F3U",
+        "0.04534861445426940918f",
+        "0.0131822545081377029418945f",
+        "if (__isnan(__x)) { __result = __x; }"
+        "else if (__isinf(__x)) { __result = __x > 0.0f ? __x : 0.0f; }",
+        "__logf(10.0f)",
+        "252.898206f",
+        "0.00245002890005707741f",
+        "0.00138624827377498149871826f",
+        "if (__x == 0.0f) { __result = __x; }"
+        "else if (__isnan(__x)) { __result = __x; }"
+        "else if (__isinf(__x)) { __result = __x > 0.0f ? __x : -1.0f; }",
+        "if (__ax > 88.72283935546875f)",
+        "8388608.0f",
+        "if (__isnan(__logb_x)) { __logb_result = __logb_x; }"
+        "else { float __logb_ax = __fabsf(__logb_x);",
+        "12583037.0f",
+        "0.03538220748305320740f",
+        "0.00000281695110970758826f",
+        "0.05025001987814903259f",
+        "-0.6666666865348815918f",
+        "0.0027380611281841993332f",
+        "float __atan2_result = signbitf(__atan2_y) ? -__atan2_a : __atan2_a;",
+        "if (__isnan(__x) || __isnan(__y)) { __xb = 0x7fffffffu; }",
+        "0x80000001u",
+        "-8.7422776573475857731e-08f",
+        "8.50705917302346158658e+37f",
+        "__cospi_s * (__cospi_r * __cospi_z)",
+        "0.000045124618889065459371f",
+        "__sinpi_truncated_x == __sinpi_x",
+        "-0.01396484375f",
+        "float __asinh_result = signbitf(__asinh_x) ? -__asinh_y : __asinh_y;",
+        "__rcbrt_correction",
+        "0x7FFFFFFFU",
+        "if (__isnan(__ilogb_x) || __ilogb_x == 0.0f) { __ilogb_result = static_cast<int32_t>(0x80000000U); }"
+        "else { float __ilogb_ax = __fabsf(__ilogb_x);",
+        "signbitf(fp32_value)",
     };
+    EXPECT_EQ(generated.find("pypto_simt_"), std::string::npos);
     for (const auto& intrinsic : scalar_intrinsics) {
         EXPECT_NE(generated.find(intrinsic), std::string::npos) << intrinsic;
     }
+    EXPECT_EQ(CountOccurrences(generated, "signbitf(__atan2_x)"), 4u);
 
     const std::vector<std::string> cast_intrinsics = {
         "__cvt_half<ROUND::R, RoundingSaturation::RS_DISABLE_VALUE>(",

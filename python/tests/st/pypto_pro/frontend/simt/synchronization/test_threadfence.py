@@ -21,16 +21,6 @@ ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 GRID_BLOCKS = 4
 
 
-def _require_a5():
-    try:
-        torch.npu.set_device(ST_DEVICE)
-    except RuntimeError as exc:
-        pytest.skip(f"NPU unavailable: {exc}")
-    name = torch.npu.get_device_name()
-    if "Ascend950" not in name:
-        pytest.skip(f"Current device is {name}, not A5 (Ascend950). Skip.")
-
-
 @pl.vector_function(mode="simt", max_threads=1)
 def publish_with_threadfence(
     out: pl.Tensor[[1, 1], pl.DT_INT32],
@@ -60,7 +50,7 @@ def simt_threadfence(
 
 @pytest.mark.soc("950")
 def test_threadfence():
-    _require_a5()
+    torch.npu.set_device(ST_DEVICE)
     out = torch.full((1, 1), -1, dtype=torch.int32, device=ST_DEVICE)
     values = torch.zeros((1, GRID_BLOCKS), dtype=torch.int32, device=ST_DEVICE)
     completed = torch.zeros((1, 1), dtype=torch.int32, device=ST_DEVICE)

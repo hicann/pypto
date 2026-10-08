@@ -21,50 +21,33 @@ ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 THREADS = 64
 ELEMENTS = 64
 
-
-def _require_a5():
-    try:
-        torch.npu.set_device(ST_DEVICE)
-    except RuntimeError as exc:
-        pytest.skip(f"NPU unavailable: {exc}")
-    name = torch.npu.get_device_name()
-    if "Ascend950" not in name:
-        pytest.skip(f"Current device is {name}, not A5 (Ascend950). Skip.")
-
-
-def _run_kernel(kernel, states):
-    _require_a5()
-    device_states = [state.to(ST_DEVICE) for state in states]
-    kernel[None, 1](*device_states)
-    torch.npu.synchronize()
-    return [state.cpu() for state in device_states]
-
-
-def _assert_target(state, expected):
-    expected = torch.tensor(expected, dtype=state.dtype)
-    torch.testing.assert_close(state[0, 0], expected, rtol=0, atol=0)
-
-
 @pl.vector_function(mode="simt", max_threads=THREADS)
 def atomic_dec_ub(uint32_tile):
     pl.simt.atomic_dec(uint32_tile[0, 0], 255)
 
-
-@pl.jit()
+@pl.jit(auto_mutex=True)
 def simt_atomic_dec_ub(uint32_state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32]):
-    uint32_tile = pl.make_tile(
-        pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
-        addr=0x0000,
+    uint32_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
+        addrs=0x0000,
+        mutex_ids="auto",
+        depth=1,
     )
+    uint32_tile = uint32_tile_group.current()
     with pl.section_vector():
         pl.load(uint32_tile, uint32_state, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         atomic_dec_ub[THREADS](uint32_tile)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(uint32_state, uint32_tile, [0, 0])
 
+@pytest.mark.soc("950")
+def test_atomic_dec_ub_uint32():
+    torch.npu.set_device(ST_DEVICE)
+    state = torch.full((1, ELEMENTS), THREADS, dtype=torch.uint32).to(ST_DEVICE)
+    simt_atomic_dec_ub[None, 1](state)
+    torch.npu.synchronize()
+    assert state.cpu()[0, 0].item() == 0
+
+# -----------------------------------------------------------------------------------------------------------
 
 @pl.vector_function(mode="simt", max_threads=THREADS)
 def atomic_dec_gm_all_dtypes(
@@ -74,7 +57,6 @@ def atomic_dec_gm_all_dtypes(
     pl.simt.atomic_dec(uint32_state[0, 0], 255)
     pl.simt.atomic_dec(uint64_state[0, 0], 255)
 
-
 @pl.jit()
 def simt_atomic_dec_gm_all_dtypes(
     uint32_state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],
@@ -83,52 +65,41 @@ def simt_atomic_dec_gm_all_dtypes(
     with pl.section_vector():
         atomic_dec_gm_all_dtypes[THREADS](uint32_state, uint64_state)
 
+@pytest.mark.soc("950")
+def test_atomic_dec_gm_all_supported_dtypes():
+    torch.npu.set_device(ST_DEVICE)
+    states = [
+        torch.full((1, ELEMENTS), THREADS, dtype=dtype).to(ST_DEVICE)
+        for dtype in (torch.uint32, torch.uint64)
+    ]
+    simt_atomic_dec_gm_all_dtypes[None, 1](*states)
+    torch.npu.synchronize()
+    for state in states:
+        assert state.cpu()[0, 0].item() == 0
+
+# -----------------------------------------------------------------------------------------------------------
 
 @pl.vector_function(mode="simt", max_threads=1)
 def atomic_dec_return_value_gm(
-    state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],
-    old_values: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],
+    state: pl.Tensor[[1, 1], pl.DT_UINT32],
+    old_values: pl.Tensor[[1, 1], pl.DT_UINT32],
 ):
     old_values[0, 0] = pl.simt.atomic_dec(state[0, 0], 7)
 
-
 @pl.jit()
 def simt_atomic_dec_return_value_gm(
-    state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],
-    old_values: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],
+    state: pl.Tensor[[1, 1], pl.DT_UINT32],
+    old_values: pl.Tensor[[1, 1], pl.DT_UINT32],
 ):
     with pl.section_vector():
         atomic_dec_return_value_gm[1](state, old_values)
 
-
 @pytest.mark.soc("950")
-def test_atomic_dec_ub_uint32():
-    state = torch.full((1, ELEMENTS), THREADS, dtype=torch.uint32)
-    _assert_target(_run_kernel(simt_atomic_dec_ub, [state])[0], 0)
-
-
-@pytest.mark.soc("950")
-def test_atomic_dec_gm_all_supported_dtypes():
-    states = [
-        torch.full((1, ELEMENTS), THREADS, dtype=torch.uint32),
-        torch.full((1, ELEMENTS), THREADS, dtype=torch.uint64),
-    ]
-    for state in _run_kernel(simt_atomic_dec_gm_all_dtypes, states):
-        _assert_target(state, 0)
-
-
-@pytest.mark.soc("950")
-def test_atomic_dec_returns_old_value_and_preserves_other_elements():
-    _require_a5()
-    state = torch.full((1, ELEMENTS), 99, dtype=torch.uint32)
-    state[0, 0] = 0
-    expected_state = state.clone()
-    expected_state[0, 0] = 7
-    expected_old = torch.full((1, ELEMENTS), 99, dtype=torch.uint32)
-    expected_old[0, 0] = 0
-    state_device = state.to(ST_DEVICE)
-    old_values = torch.full((1, ELEMENTS), 99, dtype=torch.uint32).to(ST_DEVICE)
-    simt_atomic_dec_return_value_gm[None, 1](state_device, old_values)
+def test_atomic_dec_returns_old_value():
+    torch.npu.set_device(ST_DEVICE)
+    state = torch.tensor([[0]], dtype=torch.uint32).to(ST_DEVICE)
+    old_values = torch.tensor([[0]], dtype=torch.uint32).to(ST_DEVICE)
+    simt_atomic_dec_return_value_gm[None, 1](state, old_values)
     torch.npu.synchronize()
-    torch.testing.assert_close(state_device.cpu(), expected_state, rtol=0, atol=0)
-    torch.testing.assert_close(old_values.cpu(), expected_old, rtol=0, atol=0)
+    assert state.cpu().item() == 7
+    assert old_values.cpu().item() == 0

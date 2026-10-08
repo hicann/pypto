@@ -10,23 +10,28 @@
 
 """A5 generalized system test for the SIMT abs interface."""
 
+import os
+
 import pypto_pro.language as pl
 import pytest
 import torch
 
-ELEMENTS = 64
+ELEMENTS = 2048
+
+ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
 
 @pl.vector_function(mode="simt", max_threads=ELEMENTS)
 def abs_all_dtypes(
-    src_fp16: pl.Tensor[[1, ELEMENTS], pl.DT_FP16],
-    src_bf16: pl.Tensor[[1, ELEMENTS], pl.DT_BF16],
-    src_fp32: pl.Tensor[[1, ELEMENTS], pl.DT_FP32],
-    src_int64: pl.Tensor[[1, ELEMENTS], pl.DT_INT64],
-    out_fp16: pl.Tensor[[1, ELEMENTS], pl.DT_FP16],
-    out_bf16: pl.Tensor[[1, ELEMENTS], pl.DT_BF16],
-    out_fp32: pl.Tensor[[1, ELEMENTS], pl.DT_FP32],
-    out_int64: pl.Tensor[[1, ELEMENTS], pl.DT_INT64],
+    src_fp16,
+    src_bf16,
+    src_fp32,
+    src_int64,
+    out_fp16,
+    out_bf16,
+    out_fp32,
+    out_int64,
 ):
     tid = pl.simt.linear_thread_idx()
     out_fp16[0, tid] = pl.simt.abs(src_fp16[0, tid])
@@ -35,7 +40,7 @@ def abs_all_dtypes(
     out_int64[0, tid] = pl.simt.abs(src_int64[0, tid])
 
 
-@pl.jit()
+@pl.jit(auto_mutex=True)
 def simt_abs_all_dtypes(
     src_fp16: pl.Tensor[[1, ELEMENTS], pl.DT_FP16],
     src_bf16: pl.Tensor[[1, ELEMENTS], pl.DT_BF16],
@@ -46,22 +51,96 @@ def simt_abs_all_dtypes(
     out_fp32: pl.Tensor[[1, ELEMENTS], pl.DT_FP32],
     out_int64: pl.Tensor[[1, ELEMENTS], pl.DT_INT64],
 ):
+    src_fp16_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
+        addrs=0x0000,
+        mutex_ids="auto",
+        depth=1,
+    )
+    src_fp16_tile = src_fp16_tile_group.current()
+    src_bf16_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec),
+        addrs=0x1000,
+        mutex_ids="auto",
+        depth=1,
+    )
+    src_bf16_tile = src_bf16_tile_group.current()
+    src_fp32_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
+        addrs=0x2000,
+        mutex_ids="auto",
+        depth=1,
+    )
+    src_fp32_tile = src_fp32_tile_group.current()
+    src_int64_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Vec),
+        addrs=0x4000,
+        mutex_ids="auto",
+        depth=1,
+    )
+    src_int64_tile = src_int64_tile_group.current()
+    out_fp16_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
+        addrs=0x8000,
+        mutex_ids="auto",
+        depth=1,
+    )
+    out_fp16_tile = out_fp16_tile_group.current()
+    out_bf16_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec),
+        addrs=0x9000,
+        mutex_ids="auto",
+        depth=1,
+    )
+    out_bf16_tile = out_bf16_tile_group.current()
+    out_fp32_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
+        addrs=0xA000,
+        mutex_ids="auto",
+        depth=1,
+    )
+    out_fp32_tile = out_fp32_tile_group.current()
+    out_int64_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_INT64, target_memory=pl.MemorySpace.Vec),
+        addrs=0xC000,
+        mutex_ids="auto",
+        depth=1,
+    )
+    out_int64_tile = out_int64_tile_group.current()
     with pl.section_vector():
-        abs_all_dtypes[ELEMENTS](src_fp16, src_bf16, src_fp32, src_int64, out_fp16, out_bf16, out_fp32, out_int64)
+        pl.load(src_fp16_tile, src_fp16, [0, 0])
+        pl.load(src_bf16_tile, src_bf16, [0, 0])
+        pl.load(src_fp32_tile, src_fp32, [0, 0])
+        pl.load(src_int64_tile, src_int64, [0, 0])
+        abs_all_dtypes[32, 64](
+            src_fp16_tile,
+            src_bf16_tile,
+            src_fp32_tile,
+            src_int64_tile,
+            out_fp16_tile,
+            out_bf16_tile,
+            out_fp32_tile,
+            out_int64_tile,
+        )
+        pl.store(out_fp16, out_fp16_tile, [0, 0])
+        pl.store(out_bf16, out_bf16_tile, [0, 0])
+        pl.store(out_fp32, out_fp32_tile, [0, 0])
+        pl.store(out_int64, out_int64_tile, [0, 0])
 
 
 @pytest.mark.soc("950")
-def test_abs_all_supported_dtypes(a5_device, assert_simt_close):
+def test_abs_all_supported_dtypes():
+    torch.npu.set_device(ST_DEVICE)
     fp32 = torch.linspace(-8.0, 8.0, ELEMENTS).reshape(1, ELEMENTS)
     fp32[0, :6] = torch.tensor([-0.0, 0.0, float("-inf"), float("inf"), float("nan"), -1.0])
     float_sources = (fp32.to(torch.float16), fp32.to(torch.bfloat16), fp32)
     int64_source = (torch.arange(ELEMENTS, dtype=torch.int64) - 32).reshape(1, ELEMENTS)
-    float_outputs = tuple(torch.empty_like(source, device=a5_device) for source in float_sources)
-    int64_output = torch.empty_like(int64_source, device=a5_device)
+    float_outputs = tuple(torch.empty_like(source, device=ST_DEVICE) for source in float_sources)
+    int64_output = torch.empty_like(int64_source, device=ST_DEVICE)
 
     simt_abs_all_dtypes(
-        *(source.to(a5_device) for source in float_sources),
-        int64_source.to(a5_device),
+        *(source.to(ST_DEVICE) for source in float_sources),
+        int64_source.to(ST_DEVICE),
         *float_outputs,
         int64_output,
     )
@@ -69,6 +148,11 @@ def test_abs_all_supported_dtypes(a5_device, assert_simt_close):
 
     for source, output in zip(float_sources, float_outputs):
         expected = torch.abs(source.to(torch.float32)).to(source.dtype)
-        assert_simt_close(output, expected)
-    assert_simt_close(int64_output, torch.abs(int64_source))
+        rtol, atol = {
+            torch.float16: (5e-3, 5e-3),
+            torch.bfloat16: (2e-2, 2e-2),
+            torch.float32: (1e-5, 1e-6),
+        }[source.dtype]
+        torch.testing.assert_close(output.cpu(), expected, rtol=rtol, atol=atol, equal_nan=True)
+    torch.testing.assert_close(int64_output.cpu(), torch.abs(int64_source), rtol=0, atol=0)
     assert not torch.signbit(float_outputs[2].cpu()[0, 0]).item()

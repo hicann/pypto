@@ -732,6 +732,35 @@ REGISTER_SIMT_MATH_UNARY_OP("isinf", "Test whether one floating-point scalar is 
 REGISTER_SIMT_MATH_UNARY_OP("isfinite", "Test whether one FP16 or FP32 scalar is finite", DataType::BOOL,
                             DataType::FP16, DataType::FP32);
 
+REGISTER_SIMT_MATH_UNARY_OP("exp10", "Compute the base-ten exponential of one floating-point scalar", std::nullopt,
+                            DataType::FP16, DataType::BF16, DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("log10", "Compute the base-ten logarithm of one floating-point scalar", std::nullopt,
+                            DataType::FP16, DataType::BF16, DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("rcp", "Compute the reciprocal of one FP16 or BF16 scalar", std::nullopt, DataType::FP16,
+                            DataType::BF16);
+REGISTER_SIMT_MATH_UNARY_OP("tan", "Compute the tangent of one FP32 scalar", std::nullopt, DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("atan", "Compute the arc tangent of one FP32 scalar", std::nullopt, DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("expm1", "Compute exp(value) - 1 for one FP32 scalar", std::nullopt, DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("logb", "Extract the unbiased exponent of one FP32 scalar", std::nullopt, DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("cosh", "Compute the hyperbolic cosine of one FP32 scalar", std::nullopt, DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("acos", "Compute the arc cosine of one FP32 scalar", std::nullopt, DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("sinh", "Compute the hyperbolic sine of one FP32 scalar", std::nullopt, DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("asin", "Compute the arc sine of one FP32 scalar", std::nullopt, DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("cbrt", "Compute the cube root of one FP32 scalar", std::nullopt, DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("tanpi", "Compute the tangent of pi times an FP32 scalar", std::nullopt, DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("atanh", "Compute the inverse hyperbolic tangent of an FP32 scalar", std::nullopt,
+                            DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("cospi", "Compute the cosine of pi times an FP32 scalar", std::nullopt, DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("acosh", "Compute the inverse hyperbolic cosine of an FP32 scalar", std::nullopt,
+                            DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("sinpi", "Compute the sine of pi times an FP32 scalar", std::nullopt, DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("asinh", "Compute the inverse hyperbolic sine of an FP32 scalar", std::nullopt,
+                            DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("rcbrt", "Compute the reciprocal cube root of an FP32 scalar", std::nullopt,
+                            DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("ilogb", "Return the unbiased exponent of an FP32 scalar", DataType::INT32, DataType::FP32);
+REGISTER_SIMT_MATH_UNARY_OP("signbit", "Return the sign bit of an FP32 scalar", DataType::INT32, DataType::FP32);
+
 #undef REGISTER_SIMT_MATH_UNARY_OP
 
 REGISTER_OP("simt.popcount")
@@ -751,6 +780,51 @@ REGISTER_OP("simt.mul_hi")
     .f_deduce_type([](const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceSimtMathType("simt.mul_hi", 2,
                                   {DataType::INT32, DataType::UINT32, DataType::INT64, DataType::UINT64}, args, kwargs);
+    });
+
+REGISTER_OP("simt.max_nan")
+    .set_op_category("SimtOp")
+    .set_description("Select the maximum FP16 or BF16 scalar and propagate NaN")
+    .add_argument("lhs", "Left scalar operand")
+    .add_argument("rhs", "Right scalar operand")
+    .f_deduce_type([](const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return DeduceSimtMathType("simt.max_nan", 2, {DataType::FP16, DataType::BF16}, args, kwargs);
+    });
+
+REGISTER_OP("simt.min_nan")
+    .set_op_category("SimtOp")
+    .set_description("Select the minimum FP16 or BF16 scalar and propagate NaN")
+    .add_argument("lhs", "Left scalar operand")
+    .add_argument("rhs", "Right scalar operand")
+    .f_deduce_type([](const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return DeduceSimtMathType("simt.min_nan", 2, {DataType::FP16, DataType::BF16}, args, kwargs);
+    });
+
+REGISTER_OP("simt.atan2")
+    .set_op_category("SimtOp")
+    .set_description("Compute the quadrant-aware arc tangent of two FP32 scalars")
+    .add_argument("lhs", "Left scalar operand")
+    .add_argument("rhs", "Right scalar operand")
+    .f_deduce_type([](const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return DeduceSimtMathType("simt.atan2", 2, {DataType::FP32}, args, kwargs);
+    });
+
+REGISTER_OP("simt.copysign")
+    .set_op_category("SimtOp")
+    .set_description("Select the magnitude and sign of two FP32 scalars")
+    .add_argument("lhs", "Left scalar operand")
+    .add_argument("rhs", "Right scalar operand")
+    .f_deduce_type([](const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return DeduceSimtMathType("simt.copysign", 2, {DataType::FP32}, args, kwargs);
+    });
+
+REGISTER_OP("simt.nextafter")
+    .set_op_category("SimtOp")
+    .set_description("Return the next FP32 value toward another FP32 scalar")
+    .add_argument("lhs", "Left scalar operand")
+    .add_argument("rhs", "Right scalar operand")
+    .f_deduce_type([](const std::vector<ExprPtr>& args, const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return DeduceSimtMathType("simt.nextafter", 2, {DataType::FP32}, args, kwargs);
     });
 
 REGISTER_OP("simt.fmod")

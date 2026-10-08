@@ -20,31 +20,8 @@ ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 WARP_SIZE = 32
 
-
-def _require_a5():
-    try:
-        torch.npu.set_device(ST_DEVICE)
-    except RuntimeError as exc:
-        pytest.skip(f"NPU unavailable: {exc}")
-    name = torch.npu.get_device_name()
-    if "Ascend950" not in name:
-        pytest.skip(f"Current device is {name}, not A5 (Ascend950). Skip.")
-
-
-def _run_warp(kernel, expected):
-    _require_a5()
-    actual = torch.empty_like(expected).to(ST_DEVICE)
-    kernel(actual)
-    torch.npu.synchronize()
-    actual = actual.cpu()
-    if actual.dtype in (torch.uint32, torch.uint64):
-        actual = actual.to(torch.int64)
-        expected = expected.to(torch.int64)
-    torch.testing.assert_close(actual, expected, rtol=0, atol=0)
-
-
 @pl.vector_function(mode="simt", max_threads=WARP_SIZE)
-def write_warp_active_mask(output: pl.Tensor[[3, WARP_SIZE], pl.DT_UINT32]):
+def write_warp_active_mask(output):
     tid = pl.simt.linear_thread_idx()
     lane = pl.simt.lane_id()
     warp_size = pl.simt.warp_size()
@@ -56,60 +33,22 @@ def write_warp_active_mask(output: pl.Tensor[[3, WARP_SIZE], pl.DT_UINT32]):
         output[1, tid] = 0
         output[2, tid] = pl.simt.warp_active_mask()
 
-
-@pl.jit(arch="3510")
+@pl.jit(arch="3510", auto_mutex=True)
 def simt_warp_active_mask(output: pl.Tensor[[3, WARP_SIZE], pl.DT_UINT32]):
+    output_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[3, WARP_SIZE], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
+        addrs=0x0000,
+        mutex_ids="auto",
+        depth=1,
+    )
+    output_tile = output_tile_group.current()
     with pl.section_vector():
-        write_warp_active_mask[WARP_SIZE](output)
-
-
-@pl.vector_function(mode="simt", max_threads=WARP_SIZE)
-def write_warp_all(output: pl.Tensor[[2, WARP_SIZE], pl.DT_INT32]):
-    tid = pl.simt.linear_thread_idx()
-    lane = pl.simt.lane_id()
-    warp_size = pl.simt.warp_size()
-    output[0, tid] = pl.simt.warp_all(lane < warp_size)
-    output[1, tid] = pl.simt.warp_all(lane < warp_size - 1)
-
-
-@pl.jit(arch="3510")
-def simt_warp_all(output: pl.Tensor[[2, WARP_SIZE], pl.DT_INT32]):
-    with pl.section_vector():
-        write_warp_all[WARP_SIZE](output)
-
-
-@pl.vector_function(mode="simt", max_threads=WARP_SIZE)
-def write_warp_any(output: pl.Tensor[[2, WARP_SIZE], pl.DT_INT32]):
-    tid = pl.simt.linear_thread_idx()
-    lane = pl.simt.lane_id()
-    warp_size = pl.simt.warp_size()
-    output[0, tid] = pl.simt.warp_any(lane == warp_size - 1)
-    output[1, tid] = pl.simt.warp_any(lane == warp_size)
-
-
-@pl.jit(arch="3510")
-def simt_warp_any(output: pl.Tensor[[2, WARP_SIZE], pl.DT_INT32]):
-    with pl.section_vector():
-        write_warp_any[WARP_SIZE](output)
-
-
-@pl.vector_function(mode="simt", max_threads=WARP_SIZE)
-def write_warp_ballot(output: pl.Tensor[[2, WARP_SIZE], pl.DT_UINT32]):
-    tid = pl.simt.linear_thread_idx()
-    lane = pl.simt.lane_id()
-    warp_size = pl.simt.warp_size()
-    output[0, tid] = pl.simt.warp_ballot((lane % 2) == 0)
-    output[1, tid] = pl.simt.warp_ballot(lane < warp_size // 2)
-
-
-@pl.jit(arch="3510")
-def simt_warp_ballot(output: pl.Tensor[[2, WARP_SIZE], pl.DT_UINT32]):
-    with pl.section_vector():
-        write_warp_ballot[WARP_SIZE](output)
-
+        write_warp_active_mask[WARP_SIZE](output_tile)
+        pl.store(output, output_tile, [0, 0])
 
 @pytest.mark.soc("950")
 def test_warp_active_mask():
+    torch.npu.set_device(ST_DEVICE)
     expected = torch.stack(
         (
             torch.full((WARP_SIZE,), 0xFFFFFFFF, dtype=torch.uint32),
@@ -127,27 +66,108 @@ def test_warp_active_mask():
             ),
         )
     )
-    _run_warp(simt_warp_active_mask, expected)
+    actual = torch.empty_like(expected).to(ST_DEVICE)
+    simt_warp_active_mask(actual)
+    torch.npu.synchronize()
+    torch.testing.assert_close(actual.cpu().to(torch.int64), expected.to(torch.int64), rtol=0, atol=0)
 
+# -----------------------------------------------------------------------------------------------------------
+
+@pl.vector_function(mode="simt", max_threads=WARP_SIZE)
+def write_warp_all(output):
+    tid = pl.simt.linear_thread_idx()
+    lane = pl.simt.lane_id()
+    warp_size = pl.simt.warp_size()
+    output[0, tid] = pl.simt.warp_all(lane < warp_size)
+    output[1, tid] = pl.simt.warp_all(lane < warp_size - 1)
+
+@pl.jit(arch="3510", auto_mutex=True)
+def simt_warp_all(output: pl.Tensor[[2, WARP_SIZE], pl.DT_INT32]):
+    output_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[2, WARP_SIZE], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec),
+        addrs=0x0000,
+        mutex_ids="auto",
+        depth=1,
+    )
+    output_tile = output_tile_group.current()
+    with pl.section_vector():
+        write_warp_all[WARP_SIZE](output_tile)
+        pl.store(output, output_tile, [0, 0])
 
 @pytest.mark.soc("950")
 def test_warp_all_true_and_false_predicates():
+    torch.npu.set_device(ST_DEVICE)
     expected = torch.stack((torch.ones(WARP_SIZE, dtype=torch.int32), torch.zeros(WARP_SIZE, dtype=torch.int32)))
-    _run_warp(simt_warp_all, expected)
+    actual = torch.empty_like(expected).to(ST_DEVICE)
+    simt_warp_all(actual)
+    torch.npu.synchronize()
+    torch.testing.assert_close(actual.cpu(), expected, rtol=0, atol=0)
 
+# -----------------------------------------------------------------------------------------------------------
+
+@pl.vector_function(mode="simt", max_threads=WARP_SIZE)
+def write_warp_any(output):
+    tid = pl.simt.linear_thread_idx()
+    lane = pl.simt.lane_id()
+    warp_size = pl.simt.warp_size()
+    output[0, tid] = pl.simt.warp_any(lane == warp_size - 1)
+    output[1, tid] = pl.simt.warp_any(lane == warp_size)
+
+@pl.jit(arch="3510", auto_mutex=True)
+def simt_warp_any(output: pl.Tensor[[2, WARP_SIZE], pl.DT_INT32]):
+    output_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[2, WARP_SIZE], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec),
+        addrs=0x0000,
+        mutex_ids="auto",
+        depth=1,
+    )
+    output_tile = output_tile_group.current()
+    with pl.section_vector():
+        write_warp_any[WARP_SIZE](output_tile)
+        pl.store(output, output_tile, [0, 0])
 
 @pytest.mark.soc("950")
 def test_warp_any_true_and_false_predicates():
+    torch.npu.set_device(ST_DEVICE)
     expected = torch.stack((torch.ones(WARP_SIZE, dtype=torch.int32), torch.zeros(WARP_SIZE, dtype=torch.int32)))
-    _run_warp(simt_warp_any, expected)
+    actual = torch.empty_like(expected).to(ST_DEVICE)
+    simt_warp_any(actual)
+    torch.npu.synchronize()
+    torch.testing.assert_close(actual.cpu(), expected, rtol=0, atol=0)
 
+# -----------------------------------------------------------------------------------------------------------
+
+@pl.vector_function(mode="simt", max_threads=WARP_SIZE)
+def write_warp_ballot(output):
+    tid = pl.simt.linear_thread_idx()
+    lane = pl.simt.lane_id()
+    warp_size = pl.simt.warp_size()
+    output[0, tid] = pl.simt.warp_ballot((lane % 2) == 0)
+    output[1, tid] = pl.simt.warp_ballot(lane < warp_size // 2)
+
+@pl.jit(arch="3510", auto_mutex=True)
+def simt_warp_ballot(output: pl.Tensor[[2, WARP_SIZE], pl.DT_UINT32]):
+    output_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[2, WARP_SIZE], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
+        addrs=0x0000,
+        mutex_ids="auto",
+        depth=1,
+    )
+    output_tile = output_tile_group.current()
+    with pl.section_vector():
+        write_warp_ballot[WARP_SIZE](output_tile)
+        pl.store(output, output_tile, [0, 0])
 
 @pytest.mark.soc("950")
 def test_warp_ballot_predicate_masks():
+    torch.npu.set_device(ST_DEVICE)
     expected = torch.stack(
         (
             torch.full((WARP_SIZE,), 0x55555555, dtype=torch.uint32),
             torch.full((WARP_SIZE,), 0x0000FFFF, dtype=torch.uint32),
         )
     )
-    _run_warp(simt_warp_ballot, expected)
+    actual = torch.empty_like(expected).to(ST_DEVICE)
+    simt_warp_ballot(actual)
+    torch.npu.synchronize()
+    torch.testing.assert_close(actual.cpu().to(torch.int64), expected.to(torch.int64), rtol=0, atol=0)

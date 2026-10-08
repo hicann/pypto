@@ -223,102 +223,102 @@ class Simt:
 
     @staticmethod
     @_api_decl
-    def sqrt(value: Union[int, float]) -> Scalar:
+    def sqrt(value: float) -> float:
         """Return the square root of a FP16, BF16, or FP32 Scalar."""
 
     @staticmethod
     @_api_decl
-    def rsqrt(value: Union[int, float]) -> Scalar:
+    def rsqrt(value: float) -> float:
         """Return the reciprocal square root of a FP16, BF16, or FP32 Scalar."""
 
     @staticmethod
     @_api_decl
-    def exp(value: Union[int, float]) -> Scalar:
+    def exp(value: float) -> float:
         """Return e raised to a FP16, BF16, or FP32 Scalar."""
 
     @staticmethod
     @_api_decl
-    def exp2(value: Union[int, float]) -> Scalar:
+    def exp2(value: float) -> float:
         """Return two raised to a FP16, BF16, or FP32 Scalar."""
 
     @staticmethod
     @_api_decl
-    def log(value: Union[int, float]) -> Scalar:
+    def log(value: float) -> float:
         """Return the natural logarithm of a FP16, BF16, or FP32 Scalar."""
 
     @staticmethod
     @_api_decl
-    def log2(value: Union[int, float]) -> Scalar:
+    def log2(value: float) -> float:
         """Return the base-two logarithm of a FP16, BF16, or FP32 Scalar."""
 
     @staticmethod
     @_api_decl
-    def log1p(value: Union[int, float]) -> Scalar:
+    def log1p(value: float) -> float:
         """Return the FP32 natural logarithm of one plus ``value``."""
 
     @staticmethod
     @_api_decl
-    def sin(value: Union[int, float]) -> Scalar:
+    def sin(value: float) -> float:
         """Return the sine of a FP16, BF16, or FP32 Scalar."""
 
     @staticmethod
     @_api_decl
-    def cos(value: Union[int, float]) -> Scalar:
+    def cos(value: float) -> float:
         """Return the cosine of a FP16, BF16, or FP32 Scalar."""
 
     @staticmethod
     @_api_decl
-    def tanh(value: Union[int, float]) -> Scalar:
+    def tanh(value: float) -> float:
         """Return the hyperbolic tangent of a FP16, BF16, or FP32 Scalar."""
 
     @staticmethod
     @_api_decl
-    def rint(value: Union[int, float]) -> Scalar:
+    def rint(value: float) -> float:
         """Round a floating-point Scalar to the nearest integer value."""
 
     @staticmethod
     @_api_decl
-    def round(value: Union[int, float]) -> Scalar:
+    def round(value: float) -> float:
         """Round a floating-point Scalar halfway away from zero."""
 
     @staticmethod
     @_api_decl
-    def floor(value: Union[int, float]) -> Scalar:
+    def floor(value: float) -> float:
         """Round a floating-point Scalar down to an integer value."""
 
     @staticmethod
     @_api_decl
-    def ceil(value: Union[int, float]) -> Scalar:
+    def ceil(value: float) -> float:
         """Round a floating-point Scalar up to an integer value."""
 
     @staticmethod
     @_api_decl
-    def trunc(value: Union[int, float]) -> Scalar:
+    def trunc(value: float) -> float:
         """Round a floating-point Scalar toward zero to an integer value."""
 
     @staticmethod
     @_api_decl
-    def isnan(value: Union[int, float]) -> Scalar:
+    def isnan(value: float) -> bool:
         """Return a BOOL Scalar indicating whether a floating-point Scalar is NaN."""
 
     @staticmethod
     @_api_decl
-    def isinf(value: Union[int, float]) -> Scalar:
+    def isinf(value: float) -> bool:
         """Return a BOOL Scalar indicating whether a floating-point Scalar is infinite."""
 
     @staticmethod
     @_api_decl
-    def isfinite(value: Union[int, float]) -> Scalar:
+    def isfinite(value: float) -> bool:
         """Test whether an FP16 or FP32 Scalar is finite, returning BOOL."""
 
     @staticmethod
     @_api_decl
-    def popcount(value: Union[int, float]) -> Scalar:
+    def popcount(value: int) -> int:
         """Count the set bits in a UINT32 or UINT64 Scalar, returning INT32."""
 
     @staticmethod
     @_api_decl
-    def mul_hi(lhs: Union[int, float], rhs: Union[int, float]) -> Scalar:
+    def mul_hi(lhs: int, rhs: int) -> int:
         """Return the high half of the full product of two same-dtype integers.
 
         Supports INT32, UINT32, INT64, and UINT64; the result has the input dtype.
@@ -326,7 +326,137 @@ class Simt:
 
     @staticmethod
     @_api_decl
-    def fmod(lhs: Union[int, float], rhs: Union[int, float]) -> Scalar:
+    def exp10(value: float) -> float:
+        """Return ten raised to a FP16, BF16, or FP32 Scalar."""
+
+    @staticmethod
+    @_api_decl
+    def log10(value: float) -> float:
+        """Return the base-ten logarithm of a FP16, BF16, or FP32 Scalar."""
+
+    @staticmethod
+    @_api_decl
+    def rcp(value: float) -> float:
+        """Return the reciprocal of a FP16 or BF16 Scalar."""
+
+    @staticmethod
+    @_api_decl
+    def tan(value: float) -> float:
+        """Return the tangent of an FP32 Scalar."""
+
+    @staticmethod
+    @_api_decl
+    def atan(value: float) -> float:
+        """Return the arc tangent of an FP32 Scalar."""
+
+    @staticmethod
+    @_api_decl
+    def expm1(value: float) -> float:
+        """Return the FP32 natural exponential of ``value`` minus one."""
+
+    @staticmethod
+    @_api_decl
+    def logb(value: float) -> float:
+        """Return the unbiased exponent of an FP32 Scalar."""
+
+    @staticmethod
+    @_api_decl
+    def cosh(value: float) -> float:
+        """Return the hyperbolic cosine of an FP32 Scalar."""
+
+    @staticmethod
+    @_api_decl
+    def acos(value: float) -> float:
+        """Return the arc cosine of an FP32 Scalar."""
+
+    @staticmethod
+    @_api_decl
+    def sinh(value: float) -> float:
+        """Return the hyperbolic sine of an FP32 Scalar."""
+
+    @staticmethod
+    @_api_decl
+    def asin(value: float) -> float:
+        """Return the arc sine of an FP32 Scalar."""
+
+    @staticmethod
+    @_api_decl
+    def cbrt(value: float) -> float:
+        """Return the cube root of an FP32 Scalar."""
+
+    @staticmethod
+    @_api_decl
+    def max_nan(lhs: float, rhs: float) -> float:
+        """Return the maximum FP16 or BF16 operand and propagate NaN."""
+
+    @staticmethod
+    @_api_decl
+    def min_nan(lhs: float, rhs: float) -> float:
+        """Return the minimum FP16 or BF16 operand and propagate NaN."""
+
+    @staticmethod
+    @_api_decl
+    def atan2(y: float, x: float) -> float:
+        """Return the FP32 arc tangent of ``y / x`` using the signs to select the quadrant."""
+
+    @staticmethod
+    @_api_decl
+    def copysign(magnitude: float, sign: float) -> float:
+        """Return the absolute FP32 magnitude with the ASC sign-selection semantics."""
+
+    @staticmethod
+    @_api_decl
+    def nextafter(value: float, direction: float) -> float:
+        """Return the next representable FP32 value from ``value`` toward ``direction``."""
+
+    @staticmethod
+    @_api_decl
+    def tanpi(value: float) -> float:
+        """Return the FP32 tangent of ``pi * value``."""
+
+    @staticmethod
+    @_api_decl
+    def atanh(value: float) -> float:
+        """Return the FP32 inverse hyperbolic tangent."""
+
+    @staticmethod
+    @_api_decl
+    def cospi(value: float) -> float:
+        """Return the FP32 cosine of ``pi * value``."""
+
+    @staticmethod
+    @_api_decl
+    def acosh(value: float) -> float:
+        """Return the FP32 inverse hyperbolic cosine."""
+
+    @staticmethod
+    @_api_decl
+    def sinpi(value: float) -> float:
+        """Return the FP32 sine of ``pi * value``."""
+
+    @staticmethod
+    @_api_decl
+    def asinh(value: float) -> float:
+        """Return the FP32 inverse hyperbolic sine."""
+
+    @staticmethod
+    @_api_decl
+    def rcbrt(value: float) -> float:
+        """Return the reciprocal FP32 cube root."""
+
+    @staticmethod
+    @_api_decl
+    def ilogb(value: float) -> int:
+        """Return the INT32 unbiased exponent of an FP32 Scalar."""
+
+    @staticmethod
+    @_api_decl
+    def signbit(value: float) -> int:
+        """Return the FP32 sign bit as INT32 zero or one."""
+
+    @staticmethod
+    @_api_decl
+    def fmod(lhs: float, rhs: float) -> float:
         """Return the FP32 remainder with a quotient truncated toward zero.
 
         Both operands must be FP32. The result retains the dividend's sign,
@@ -336,7 +466,7 @@ class Simt:
 
     @staticmethod
     @_api_decl
-    def fma(lhs: Union[int, float], rhs: Union[int, float], addend: Union[int, float]) -> Scalar:
+    def fma(lhs: float, rhs: float, addend: float) -> float:
         """Fused-multiply-add three same-dtype FP16, BF16, or FP32 Scalars."""
 
     @staticmethod

@@ -328,6 +328,94 @@ TEST(SimtOpsTest, BitcastRejectsMismatchedBitWidths)
     }
 }
 
+TEST(SimtOpsTest, Batch1MathTypeDeductionContracts)
+{
+    auto& registry = OpRegistry::GetInstance();
+    auto expect_unary_type = [&registry](const std::string& name, DataType input_dtype, DataType result_dtype) {
+        auto value = MakeScalarVar("value", input_dtype);
+        auto call = registry.Create(name, {value}, Sp());
+        auto type = As<ScalarType>(call->GetType());
+        ASSERT_NE(type, nullptr);
+        EXPECT_EQ(type->dtype_, result_dtype);
+    };
+
+    for (const auto& name : {"simt.exp10", "simt.log10"}) {
+        for (const auto& dtype : {DataType::FP16, DataType::BF16, DataType::FP32}) {
+            expect_unary_type(name, dtype, dtype);
+        }
+    }
+    for (const auto& dtype : {DataType::FP16, DataType::BF16}) {
+        expect_unary_type("simt.rcp", dtype, dtype);
+    }
+    for (const auto& name : {"simt.tan", "simt.atan", "simt.expm1", "simt.logb", "simt.cosh", "simt.acos", "simt.sinh",
+                             "simt.asin", "simt.cbrt"}) {
+        expect_unary_type(name, DataType::FP32, DataType::FP32);
+    }
+
+    EXPECT_THROW((void)registry.Create("simt.rcp", {MakeScalarVar("value", DataType::FP32)}, Sp()),
+                 npu::tile_fwk::Error);
+    EXPECT_THROW((void)registry.Create("simt.tan", {MakeScalarVar("value", DataType::FP16)}, Sp()),
+                 npu::tile_fwk::Error);
+}
+
+TEST(SimtOpsTest, Batch4MathTypeDeductionContracts)
+{
+    auto& registry = OpRegistry::GetInstance();
+    auto expect_result = [&registry](const std::string& name, const std::vector<ExprPtr>& args, DataType result_dtype) {
+        auto type = As<ScalarType>(registry.Create(name, args, Sp())->GetType());
+        ASSERT_NE(type, nullptr) << name;
+        EXPECT_EQ(type->dtype_, result_dtype) << name;
+    };
+
+    auto fp32 = MakeScalarVar("fp32", DataType::FP32);
+    auto i32 = MakeScalarVar("i32", DataType::INT32);
+    for (const auto& name : {
+             "simt.tanpi",
+             "simt.atanh",
+             "simt.cospi",
+             "simt.acosh",
+             "simt.sinpi",
+             "simt.asinh",
+             "simt.rcbrt",
+         }) {
+        expect_result(name, {fp32}, DataType::FP32);
+    }
+
+    EXPECT_THROW((void)registry.Create("simt.tanpi", {i32}, Sp()), npu::tile_fwk::Error);
+}
+
+TEST(SimtOpsTest, SelectedNanBinaryAndExponentTypeDeductionContracts)
+{
+    auto& registry = OpRegistry::GetInstance();
+    auto expect_result = [&registry](const std::string& name, const std::vector<ExprPtr>& args, DataType result_dtype) {
+        auto type = As<ScalarType>(registry.Create(name, args, Sp())->GetType());
+        ASSERT_NE(type, nullptr) << name;
+        EXPECT_EQ(type->dtype_, result_dtype) << name;
+    };
+
+    auto fp16 = MakeScalarVar("fp16", DataType::FP16);
+    auto bf16 = MakeScalarVar("bf16", DataType::BF16);
+    auto fp32 = MakeScalarVar("fp32", DataType::FP32);
+    for (const auto& name : {"simt.max_nan", "simt.min_nan"}) {
+        expect_result(name, {fp16, fp16}, DataType::FP16);
+        expect_result(name, {bf16, bf16}, DataType::BF16);
+    }
+    for (const auto& name : {"simt.atan2", "simt.copysign", "simt.nextafter"}) {
+        expect_result(name, {fp32, fp32}, DataType::FP32);
+    }
+    expect_result("simt.ilogb", {fp32}, DataType::INT32);
+    expect_result("simt.signbit", {fp32}, DataType::INT32);
+
+    EXPECT_THROW((void)registry.Create("simt.max_nan", {fp32, fp32}, Sp()), npu::tile_fwk::Error);
+    EXPECT_THROW((void)registry.Create("simt.atan2", {fp16, fp16}, Sp()), npu::tile_fwk::Error);
+    EXPECT_THROW((void)registry.Create("simt.max_nan", {fp16, bf16}, Sp()), npu::tile_fwk::Error);
+    EXPECT_THROW((void)registry.Create("simt.nextafter", {fp32, fp16}, Sp()), npu::tile_fwk::Error);
+    EXPECT_THROW((void)registry.Create("simt.ilogb", {fp16}, Sp()), npu::tile_fwk::Error);
+    EXPECT_THROW((void)registry.Create("simt.signbit", {bf16}, Sp()), npu::tile_fwk::Error);
+    EXPECT_THROW((void)registry.Create("simt.atan2", {fp32}, Sp()), npu::tile_fwk::Error);
+    EXPECT_THROW((void)registry.Create("simt.rcbrt", {fp32, fp32}, Sp()), npu::tile_fwk::Error);
+}
+
 TEST(SimtOpsTest, RejectsInvalidContextAxisAndLaunchBounds)
 {
     auto& registry = OpRegistry::GetInstance();

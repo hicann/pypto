@@ -8,7 +8,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-"""A5 system test for scalar, void, and nested SIMT callees."""
+"""A5 system test for a SIMD/SIMT pipeline with multiple launches and nested SIMT callees."""
 
 import os
 
@@ -18,18 +18,7 @@ import torch
 
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
-THREADS = 32
-TILE_BYTES = THREADS * 4
-
-
-def _require_a5():
-    try:
-        torch.npu.set_device(ST_DEVICE)
-    except RuntimeError as exc:
-        pytest.skip(f"NPU unavailable: {exc}")
-    name = torch.npu.get_device_name()
-    if "Ascend950" not in name:
-        pytest.skip(f"Current device is {name}, not A5 (Ascend950). Skip.")
+THREADS = 256
 
 
 @pl.vector_function(mode="simt")
@@ -69,40 +58,71 @@ def transform_tile(
     transform_one(dst, src, tid, scale, delta)
 
 
-@pl.jit()
-def simt_callee_kernel(
+@pl.vector_function(mode="simt", max_threads=THREADS)
+def mul_inplace(data, scale: pl.DT_FP32):
+    tid = pl.simt.linear_thread_idx()
+    data[0, tid] = data[0, tid] * scale
+
+
+@pl.jit(auto_mutex=True)
+def simd_simt_pipeline(
     x: pl.Tensor[[1, THREADS], pl.DT_FP32],
     out: pl.Tensor[[1, THREADS], pl.DT_FP32],
+    pre_scale: pl.DT_FP32,
     scale: pl.DT_FP32,
     delta: pl.DT_FP32,
+    simt_scale: pl.DT_FP32,
+    post_scale: pl.DT_FP32,
 ):
     tile_type = pl.TileType(shape=[1, THREADS], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
-    src = pl.make_tile(tile_type, addr=0x0000)
-    dst = pl.make_tile(tile_type, addr=0x0080)
+    data_group = pl.make_tile_group(
+        type=tile_type,
+        addrs=0,
+        mutex_ids="auto",
+        depth=1,
+    )
+    data = data_group.current()
+    scaled_group = pl.make_tile_group(
+        type=tile_type,
+        addrs=1024,
+        mutex_ids="auto",
+        depth=1,
+    )
+    scaled = scaled_group.current()
+    result_group = pl.make_tile_group(
+        type=tile_type,
+        addrs=2048,
+        mutex_ids="auto",
+        depth=1,
+    )
+    result = result_group.current()
     with pl.section_vector():
-        pl.load(src, x, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        transform_tile[THREADS](dst, src, scale, delta)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.store(out, dst, [0, 0])
+        pl.load(data, x, [0, 0])
+        pl.muls(scaled, data, pre_scale)
+        transform_tile[THREADS](data, scaled, scale, delta)
+        mul_inplace[THREADS](data, simt_scale)
+        pl.muls(result, data, post_scale)
+        pl.store(out, result, [0, 0])
 
 
 @pytest.mark.soc("950")
-def test_simt_callee():
-    _require_a5()
+def test_simd_simt_pipeline():
+    torch.npu.set_device(ST_DEVICE)
 
+    pre_scale = 2.0
     scale = 1.5
     delta = -2.0
+    simt_scale = 2.5
+    post_scale = 0.5
     x = torch.arange(THREADS, dtype=torch.float32).reshape(1, THREADS).to(ST_DEVICE)
     out = torch.empty_like(x)
 
-    simt_callee_kernel(x, out, scale, delta)
+    simd_simt_pipeline(x, out, pre_scale, scale, delta, simt_scale, post_scale)
     torch.npu.synchronize()
 
-    torch.testing.assert_close(out.cpu(), x.cpu() * scale + delta, rtol=0, atol=0)
+    expected = ((x.cpu() * pre_scale * scale + delta) * simt_scale) * post_scale
+    torch.testing.assert_close(out.cpu(), expected, rtol=0, atol=0)
 
 
 if __name__ == "__main__":
-    test_simt_callee()
+    test_simd_simt_pipeline()

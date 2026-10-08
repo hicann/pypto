@@ -21,16 +21,6 @@ ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 THREADS = 128
 
 
-def _require_a5():
-    try:
-        torch.npu.set_device(ST_DEVICE)
-    except RuntimeError as exc:
-        pytest.skip(f"NPU unavailable: {exc}")
-    name = torch.npu.get_device_name()
-    if "Ascend950" not in name:
-        pytest.skip(f"Current device is {name}, not A5 (Ascend950). Skip.")
-
-
 @pl.vector_function(mode="simt", max_threads=THREADS)
 def exchange_after_syncthreads(out: pl.Tensor[[1, THREADS], pl.DT_UINT32], shared):
     tid = pl.simt.linear_thread_idx()
@@ -39,19 +29,22 @@ def exchange_after_syncthreads(out: pl.Tensor[[1, THREADS], pl.DT_UINT32], share
     out[0, tid] = shared[0, THREADS - 1 - tid]
 
 
-@pl.jit()
+@pl.jit(auto_mutex=True)
 def simt_syncthreads(out: pl.Tensor[[1, THREADS], pl.DT_UINT32]):
-    shared = pl.make_tile(
-        pl.TileType(shape=[1, THREADS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
-        addr=0,
+    shared_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, THREADS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
+        addrs=0,
+        mutex_ids="auto",
+        depth=1,
     )
+    shared = shared_group.current()
     with pl.section_vector():
         exchange_after_syncthreads[THREADS](out, shared)
 
 
 @pytest.mark.soc("950")
 def test_syncthreads():
-    _require_a5()
+    torch.npu.set_device(ST_DEVICE)
     out = torch.empty((1, THREADS), dtype=torch.uint32, device=ST_DEVICE)
     simt_syncthreads(out)
     torch.npu.synchronize()

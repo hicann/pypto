@@ -8,30 +8,26 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
+"""A5 system tests for the SIMT copysign interface with Tile operands."""
+
 import os
 
 import pypto_pro.language as pl
 import pytest
 import torch
 
-ELEMENTS = 128
+ELEMENTS = 64
 
 ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
-
 @pl.vector_function(mode="simt", max_threads=ELEMENTS)
-def fmod_values(
-    lhs,
-    rhs,
-    out,
-):
+def copysign_tile(lhs_tile, rhs_tile, out_tile):
     tid = pl.simt.linear_thread_idx()
-    out[0, tid] = pl.simt.fmod(lhs[0, tid], rhs[0, tid])
-
+    out_tile[0, tid] = pl.simt.copysign(lhs_tile[0, tid], rhs_tile[0, tid])
 
 @pl.jit(auto_mutex=True)
-def simt_fmod_values(
+def simt_copysign_tile(
     lhs: pl.Tensor[[1, ELEMENTS], pl.DT_FP32],
     rhs: pl.Tensor[[1, ELEMENTS], pl.DT_FP32],
     out: pl.Tensor[[1, ELEMENTS], pl.DT_FP32],
@@ -60,32 +56,25 @@ def simt_fmod_values(
     with pl.section_vector():
         pl.load(lhs_tile, lhs, [0, 0])
         pl.load(rhs_tile, rhs, [0, 0])
-        fmod_values[ELEMENTS](
-            lhs_tile,
-            rhs_tile,
-            out_tile,
-        )
+        copysign_tile[ELEMENTS](lhs_tile, rhs_tile, out_tile)
         pl.store(out, out_tile, [0, 0])
 
-
 @pytest.mark.soc("950")
-def test_fmod_fp32():
+def test_copysign_fp32_with_tile_operands():
+    lhs = torch.linspace(-8.0, 8.0, ELEMENTS)
+    rhs = torch.tensor([-1.0, 1.0, -0.0, 0.0, float("-inf"), float("inf"), -2.0, 2.0] * 8)
     torch.npu.set_device(ST_DEVICE)
-    pairs = [
-        (5.5, 2.0),
-        (5.5, -2.0),
-        (-5.5, 2.0),
-        (-5.5, -2.0),
-        (4.0, 2.0),
-        (-4.0, 2.0),
-        (7.25, 3.0),
-        (-7.25, 3.0),
-    ] * (ELEMENTS // 8)
-    lhs = torch.tensor([x for x, _ in pairs], dtype=torch.float32).reshape(1, ELEMENTS)
-    rhs = torch.tensor([y for _, y in pairs], dtype=torch.float32).reshape(1, ELEMENTS)
-    out = torch.empty_like(lhs, device=ST_DEVICE)
-    simt_fmod_values(lhs.to(ST_DEVICE), rhs.to(ST_DEVICE), out)
+    lhs = lhs.reshape(1, ELEMENTS)
+    rhs = rhs.reshape(1, ELEMENTS)
+    lhs[0, :8] = torch.tensor([-0.0, 0.0, float("-inf"), float("inf"), -3.5, 3.5,
+                                float("nan"), float("nan")])
+    rhs[0, :8] = torch.tensor([0.0, -0.0, float("inf"), float("-inf"), 1.0, -1.0, 0.0, -0.0])
+    output = torch.empty_like(lhs, device=ST_DEVICE)
+    simt_copysign_tile(lhs.to(ST_DEVICE), rhs.to(ST_DEVICE), output)
     torch.npu.synchronize()
-
-    expected = torch.fmod(lhs, rhs)
-    torch.testing.assert_close(out.cpu(), expected, rtol=1e-5, atol=1e-6)
+    expected = torch.copysign(lhs, rhs)
+    actual = output.cpu()
+    assert torch.equal(actual[:, :6].view(torch.int32), expected[:, :6].view(torch.int32))
+    assert torch.isnan(actual[:, 6:8]).all()
+    assert torch.equal(torch.signbit(actual[:, 6:8]), torch.signbit(expected[:, 6:8]))
+    assert torch.equal(actual[:, 8:].view(torch.int32), expected[:, 8:].view(torch.int32))

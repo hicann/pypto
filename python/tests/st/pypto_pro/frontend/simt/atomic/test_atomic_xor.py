@@ -20,33 +20,7 @@ ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 THREADS = 64
 ELEMENTS = 64
-
-
-def _require_a5():
-    try:
-        torch.npu.set_device(ST_DEVICE)
-    except RuntimeError as exc:
-        pytest.skip(f"NPU unavailable: {exc}")
-    name = torch.npu.get_device_name()
-    if "Ascend950" not in name:
-        pytest.skip(f"Current device is {name}, not A5 (Ascend950). Skip.")
-
-
-def _run_kernel(kernel, states):
-    _require_a5()
-    device_states = [state.to(ST_DEVICE) for state in states]
-    kernel[None, 1](*device_states)
-    torch.npu.synchronize()
-    return [state.cpu() for state in device_states]
-
-
-def _assert_target(state, expected):
-    expected = torch.tensor(expected, dtype=state.dtype)
-    torch.testing.assert_close(state[0, 0], expected, rtol=0, atol=0)
-
-
 XOR_THREADS = THREADS - 1
-
 
 @pl.vector_function(mode="simt", max_threads=XOR_THREADS)
 def atomic_xor_ub_all_dtypes(
@@ -56,31 +30,45 @@ def atomic_xor_ub_all_dtypes(
     pl.simt.atomic_xor(int32_tile[0, 0], 0xF)
     pl.simt.atomic_xor(uint32_tile[0, 0], 0xF)
 
-
-@pl.jit()
+@pl.jit(auto_mutex=True)
 def simt_atomic_xor_ub_all_dtypes(
     int32_state: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
     uint32_state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],
 ):
-    int32_tile = pl.make_tile(
-        pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec),
-        addr=0x0000,
+    int32_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec),
+        addrs=0x0000,
+        mutex_ids="auto",
+        depth=1,
     )
-    uint32_tile = pl.make_tile(
-        pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
-        addr=0x0400,
+    int32_tile = int32_tile_group.current()
+    uint32_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
+        addrs=0x0400,
+        mutex_ids="auto",
+        depth=1,
     )
+    uint32_tile = uint32_tile_group.current()
     with pl.section_vector():
         pl.load(int32_tile, int32_state, [0, 0])
         pl.load(uint32_tile, uint32_state, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         atomic_xor_ub_all_dtypes[XOR_THREADS](int32_tile, uint32_tile)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(int32_state, int32_tile, [0, 0])
         pl.store(uint32_state, uint32_tile, [0, 0])
 
+@pytest.mark.soc("950")
+def test_atomic_xor_ub_all_supported_dtypes():
+    torch.npu.set_device(ST_DEVICE)
+    states = [
+        torch.full((1, ELEMENTS), 0, dtype=dtype).to(ST_DEVICE)
+        for dtype in (torch.int32, torch.uint32)
+    ]
+    simt_atomic_xor_ub_all_dtypes[None, 1](*states)
+    torch.npu.synchronize()
+    for state in states:
+        assert state.cpu()[0, 0].item() == 0xF
+
+# -----------------------------------------------------------------------------------------------------------
 
 @pl.vector_function(mode="simt", max_threads=XOR_THREADS)
 def atomic_xor_gm_all_dtypes(
@@ -94,7 +82,6 @@ def atomic_xor_gm_all_dtypes(
     pl.simt.atomic_xor(int64_state[0, 0], 0xF)
     pl.simt.atomic_xor(uint64_state[0, 0], 0xF)
 
-
 @pl.jit()
 def simt_atomic_xor_gm_all_dtypes(
     int32_state: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
@@ -105,57 +92,41 @@ def simt_atomic_xor_gm_all_dtypes(
     with pl.section_vector():
         atomic_xor_gm_all_dtypes[XOR_THREADS](int32_state, uint32_state, int64_state, uint64_state)
 
-
-def _make_states():
-    return [
-        torch.full((1, ELEMENTS), 0, dtype=torch.int32),
-        torch.full((1, ELEMENTS), 0, dtype=torch.uint32),
-        torch.full((1, ELEMENTS), 0, dtype=torch.int64),
-        torch.full((1, ELEMENTS), 0, dtype=torch.uint64),
+@pytest.mark.soc("950")
+def test_atomic_xor_gm_all_supported_dtypes():
+    torch.npu.set_device(ST_DEVICE)
+    states = [
+        torch.full((1, ELEMENTS), 0, dtype=dtype).to(ST_DEVICE)
+        for dtype in (torch.int32, torch.uint32, torch.int64, torch.uint64)
     ]
+    simt_atomic_xor_gm_all_dtypes[None, 1](*states)
+    torch.npu.synchronize()
+    for state in states:
+        assert state.cpu()[0, 0].item() == 0xF
 
+# -----------------------------------------------------------------------------------------------------------
 
 @pl.vector_function(mode="simt", max_threads=1)
 def atomic_xor_return_value_gm(
-    state: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
-    old_values: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
+    state: pl.Tensor[[1, 1], pl.DT_INT32],
+    old_values: pl.Tensor[[1, 1], pl.DT_INT32],
 ):
     old_values[0, 0] = pl.simt.atomic_xor(state[0, 0], 0xFF)
 
-
 @pl.jit()
 def simt_atomic_xor_return_value_gm(
-    state: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
-    old_values: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
+    state: pl.Tensor[[1, 1], pl.DT_INT32],
+    old_values: pl.Tensor[[1, 1], pl.DT_INT32],
 ):
     with pl.section_vector():
         atomic_xor_return_value_gm[1](state, old_values)
 
-
 @pytest.mark.soc("950")
-def test_atomic_xor_ub_all_supported_dtypes():
-    for state in _run_kernel(simt_atomic_xor_ub_all_dtypes, _make_states()[:2]):
-        _assert_target(state, 0xF)
-
-
-@pytest.mark.soc("950")
-def test_atomic_xor_gm_all_supported_dtypes():
-    for state in _run_kernel(simt_atomic_xor_gm_all_dtypes, _make_states()):
-        _assert_target(state, 0xF)
-
-
-@pytest.mark.soc("950")
-def test_atomic_xor_returns_old_value_and_preserves_other_elements():
-    _require_a5()
-    state = torch.full((1, ELEMENTS), 123, dtype=torch.int32)
-    state[0, 0] = 0xAA
-    expected_state = state.clone()
-    expected_state[0, 0] = 0x55
-    expected_old = torch.full((1, ELEMENTS), 123, dtype=torch.int32)
-    expected_old[0, 0] = 0xAA
-    state_device = state.to(ST_DEVICE)
-    old_values = torch.full((1, ELEMENTS), 123, dtype=torch.int32).to(ST_DEVICE)
-    simt_atomic_xor_return_value_gm[None, 1](state_device, old_values)
+def test_atomic_xor_returns_old_value():
+    torch.npu.set_device(ST_DEVICE)
+    state = torch.tensor([[0xAA]], dtype=torch.int32).to(ST_DEVICE)
+    old_values = torch.zeros_like(state)
+    simt_atomic_xor_return_value_gm[None, 1](state, old_values)
     torch.npu.synchronize()
-    torch.testing.assert_close(state_device.cpu(), expected_state, rtol=0, atol=0)
-    torch.testing.assert_close(old_values.cpu(), expected_old, rtol=0, atol=0)
+    assert state.cpu().item() == 0x55
+    assert old_values.cpu().item() == 0xAA

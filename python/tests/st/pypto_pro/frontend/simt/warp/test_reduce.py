@@ -20,84 +20,142 @@ ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 WARP_SIZE = 32
 
-
-def _require_a5():
-    try:
-        torch.npu.set_device(ST_DEVICE)
-    except RuntimeError as exc:
-        pytest.skip(f"NPU unavailable: {exc}")
-    name = torch.npu.get_device_name()
-    if "Ascend950" not in name:
-        pytest.skip(f"Current device is {name}, not A5 (Ascend950). Skip.")
-
-
-def _run_warp(kernel, expected, values):
-    _require_a5()
-    device_values = values.to(ST_DEVICE)
-    actual = torch.empty_like(expected).to(ST_DEVICE)
-    kernel(device_values, actual)
-    torch.npu.synchronize()
-    torch.testing.assert_close(actual.cpu(), expected, rtol=0, atol=0)
-
-
 @pl.vector_function(mode="simt", max_threads=WARP_SIZE)
 def write_warp_reduce_add(
-    values: pl.Tensor[[1, WARP_SIZE], pl.DT_FP32],
-    output: pl.Tensor[[1, WARP_SIZE], pl.DT_FP32],
+    values,
+    output,
 ):
     tid = pl.simt.linear_thread_idx()
     output[0, tid] = pl.simt.warp_reduce_add(values[0, tid])
 
-
-@pl.jit(arch="3510")
+@pl.jit(arch="3510", auto_mutex=True)
 def simt_warp_reduce_add(
     values: pl.Tensor[[1, WARP_SIZE], pl.DT_FP32],
     output: pl.Tensor[[1, WARP_SIZE], pl.DT_FP32],
 ):
+    values_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, WARP_SIZE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
+        addrs=0x0000,
+        mutex_ids="auto",
+        depth=1,
+    )
+    values_tile = values_tile_group.current()
+    output_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, WARP_SIZE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
+        addrs=0x0400,
+        mutex_ids="auto",
+        depth=1,
+    )
+    output_tile = output_tile_group.current()
     with pl.section_vector():
-        write_warp_reduce_add[WARP_SIZE](values, output)
+        pl.load(values_tile, values, [0, 0])
+        write_warp_reduce_add[WARP_SIZE](values_tile, output_tile)
+        pl.store(output, output_tile, [0, 0])
 
+@pytest.mark.soc("950")
+def test_warp_reduce_add():
+    torch.npu.set_device(ST_DEVICE)
+    values = (torch.roll(torch.arange(WARP_SIZE, dtype=torch.float32), shifts=7) - 14).reshape(1, WARP_SIZE)
+    expected = torch.full((1, WARP_SIZE), values.sum().item(), dtype=torch.float32)
+    actual = torch.empty_like(expected).to(ST_DEVICE)
+    simt_warp_reduce_add(values.to(ST_DEVICE), actual)
+    torch.npu.synchronize()
+    torch.testing.assert_close(actual.cpu(), expected, rtol=0, atol=0)
+
+# -----------------------------------------------------------------------------------------------------------
 
 @pl.vector_function(mode="simt", max_threads=WARP_SIZE)
 def write_warp_reduce_max(
-    values: pl.Tensor[[1, WARP_SIZE], pl.DT_FP32],
-    output: pl.Tensor[[1, WARP_SIZE], pl.DT_FP32],
+    values,
+    output,
 ):
     tid = pl.simt.linear_thread_idx()
     output[0, tid] = pl.simt.warp_reduce_max(values[0, tid])
 
-
-@pl.jit(arch="3510")
+@pl.jit(arch="3510", auto_mutex=True)
 def simt_warp_reduce_max(
     values: pl.Tensor[[1, WARP_SIZE], pl.DT_FP32],
     output: pl.Tensor[[1, WARP_SIZE], pl.DT_FP32],
 ):
+    values_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, WARP_SIZE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
+        addrs=0x0000,
+        mutex_ids="auto",
+        depth=1,
+    )
+    values_tile = values_tile_group.current()
+    output_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, WARP_SIZE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
+        addrs=0x0400,
+        mutex_ids="auto",
+        depth=1,
+    )
+    output_tile = output_tile_group.current()
     with pl.section_vector():
-        write_warp_reduce_max[WARP_SIZE](values, output)
+        pl.load(values_tile, values, [0, 0])
+        write_warp_reduce_max[WARP_SIZE](values_tile, output_tile)
+        pl.store(output, output_tile, [0, 0])
 
+@pytest.mark.soc("950")
+def test_warp_reduce_max():
+    torch.npu.set_device(ST_DEVICE)
+    values = (torch.roll(torch.arange(WARP_SIZE, dtype=torch.float32), shifts=7) - 16).reshape(1, WARP_SIZE)
+    expected = torch.full((1, WARP_SIZE), values.max().item(), dtype=torch.float32)
+    actual = torch.empty_like(expected).to(ST_DEVICE)
+    simt_warp_reduce_max(values.to(ST_DEVICE), actual)
+    torch.npu.synchronize()
+    torch.testing.assert_close(actual.cpu(), expected, rtol=0, atol=0)
+
+# -----------------------------------------------------------------------------------------------------------
 
 @pl.vector_function(mode="simt", max_threads=WARP_SIZE)
 def write_warp_reduce_min(
-    values: pl.Tensor[[1, WARP_SIZE], pl.DT_FP32],
-    output: pl.Tensor[[1, WARP_SIZE], pl.DT_FP32],
+    values,
+    output,
 ):
     tid = pl.simt.linear_thread_idx()
     output[0, tid] = pl.simt.warp_reduce_min(values[0, tid])
 
-
-@pl.jit(arch="3510")
+@pl.jit(arch="3510", auto_mutex=True)
 def simt_warp_reduce_min(
     values: pl.Tensor[[1, WARP_SIZE], pl.DT_FP32],
     output: pl.Tensor[[1, WARP_SIZE], pl.DT_FP32],
 ):
+    values_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, WARP_SIZE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
+        addrs=0x0000,
+        mutex_ids="auto",
+        depth=1,
+    )
+    values_tile = values_tile_group.current()
+    output_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, WARP_SIZE], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
+        addrs=0x0400,
+        mutex_ids="auto",
+        depth=1,
+    )
+    output_tile = output_tile_group.current()
     with pl.section_vector():
-        write_warp_reduce_min[WARP_SIZE](values, output)
+        pl.load(values_tile, values, [0, 0])
+        write_warp_reduce_min[WARP_SIZE](values_tile, output_tile)
+        pl.store(output, output_tile, [0, 0])
 
+@pytest.mark.soc("950")
+def test_warp_reduce_min():
+    torch.npu.set_device(ST_DEVICE)
+    values = (torch.roll(torch.arange(WARP_SIZE, dtype=torch.float32), shifts=7) - 16).reshape(1, WARP_SIZE)
+    expected = torch.full((1, WARP_SIZE), values.min().item(), dtype=torch.float32)
+    actual = torch.empty_like(expected).to(ST_DEVICE)
+    simt_warp_reduce_min(values.to(ST_DEVICE), actual)
+    torch.npu.synchronize()
+    torch.testing.assert_close(actual.cpu(), expected, rtol=0, atol=0)
+
+# -----------------------------------------------------------------------------------------------------------
 
 @pl.vector_function(mode="simt", max_threads=WARP_SIZE)
 def write_warp_reduce_fp16_divergent(
-    values: pl.Tensor[[1, WARP_SIZE], pl.DT_FP16],
-    output: pl.Tensor[[3, WARP_SIZE], pl.DT_FP16],
+    values,
+    output,
 ):
     tid = pl.simt.linear_thread_idx()
     lane = pl.simt.lane_id()
@@ -112,39 +170,33 @@ def write_warp_reduce_fp16_divergent(
         output[1, tid] = pl.simt.warp_reduce_max(doubled)
         output[2, tid] = pl.simt.warp_reduce_min(doubled)
 
-
-@pl.jit(arch="3510")
+@pl.jit(arch="3510", auto_mutex=True)
 def simt_warp_reduce_fp16_divergent(
     values: pl.Tensor[[1, WARP_SIZE], pl.DT_FP16],
     output: pl.Tensor[[3, WARP_SIZE], pl.DT_FP16],
 ):
+    values_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, WARP_SIZE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
+        addrs=0x0000,
+        mutex_ids="auto",
+        depth=1,
+    )
+    values_tile = values_tile_group.current()
+    output_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[3, WARP_SIZE], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
+        addrs=0x0400,
+        mutex_ids="auto",
+        depth=1,
+    )
+    output_tile = output_tile_group.current()
     with pl.section_vector():
-        write_warp_reduce_fp16_divergent[WARP_SIZE](values, output)
-
-
-@pytest.mark.soc("950")
-def test_warp_reduce_add():
-    values = (torch.roll(torch.arange(WARP_SIZE, dtype=torch.float32), shifts=7) - 14).reshape(1, WARP_SIZE)
-    expected = torch.full((1, WARP_SIZE), values.sum().item(), dtype=torch.float32)
-    _run_warp(simt_warp_reduce_add, expected, values)
-
-
-@pytest.mark.soc("950")
-def test_warp_reduce_max():
-    values = (torch.roll(torch.arange(WARP_SIZE, dtype=torch.float32), shifts=7) - 16).reshape(1, WARP_SIZE)
-    expected = torch.full((1, WARP_SIZE), values.max().item(), dtype=torch.float32)
-    _run_warp(simt_warp_reduce_max, expected, values)
-
-
-@pytest.mark.soc("950")
-def test_warp_reduce_min():
-    values = (torch.roll(torch.arange(WARP_SIZE, dtype=torch.float32), shifts=7) - 16).reshape(1, WARP_SIZE)
-    expected = torch.full((1, WARP_SIZE), values.min().item(), dtype=torch.float32)
-    _run_warp(simt_warp_reduce_min, expected, values)
-
+        pl.load(values_tile, values, [0, 0])
+        write_warp_reduce_fp16_divergent[WARP_SIZE](values_tile, output_tile)
+        pl.store(output, output_tile, [0, 0])
 
 @pytest.mark.soc("950")
 def test_warp_reduce_fp16_divergent():
+    torch.npu.set_device(ST_DEVICE)
     # Keep zero as both groups' minimum while doubling the upper group to distinguish its add and max results.
     half_warp_values = torch.arange(WARP_SIZE // 2, dtype=torch.float16)
     values = half_warp_values.repeat(2).reshape(1, WARP_SIZE)
@@ -156,4 +208,7 @@ def test_warp_reduce_fp16_divergent():
         expected[0, start:start + WARP_SIZE // 2] = group.sum()
         expected[1, start:start + WARP_SIZE // 2] = group.max()
         expected[2, start:start + WARP_SIZE // 2] = group.min()
-    _run_warp(simt_warp_reduce_fp16_divergent, expected, values)
+    actual = torch.empty_like(expected).to(ST_DEVICE)
+    simt_warp_reduce_fp16_divergent(values.to(ST_DEVICE), actual)
+    torch.npu.synchronize()
+    torch.testing.assert_close(actual.cpu(), expected, rtol=0, atol=0)

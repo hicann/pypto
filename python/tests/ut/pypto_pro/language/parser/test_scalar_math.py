@@ -259,3 +259,128 @@ def test_scalar_math_rejects_wrong_arity_and_keywords():
                 keyword_argument[1](value)
 
         kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+
+
+def test_batch1_scalar_math_is_available_in_simt_functions():
+    @pl.vector_function(mode="simt", max_threads=1)
+    def batch1_math(value: pl.DT_FP32):
+        transformed = pl.simt.exp10(value) + pl.simt.log10(value)
+        transformed = transformed + pl.simt.tan(value) + pl.simt.atan(value)
+        transformed = transformed + pl.simt.expm1(value) + pl.simt.logb(value)
+        transformed = transformed + pl.simt.cosh(value) + pl.simt.acos(value)
+        transformed = transformed + pl.simt.sinh(value) + pl.simt.asin(value)
+        _test_result = transformed + pl.simt.cbrt(value)
+
+    @pl.jit(auto_mutex=False)
+    def kernel(value: pl.DT_FP32):
+        with pl.section_vector():
+            batch1_math[1](value)
+
+    program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    function_ir = str(program.get_function(batch1_math.__name__))
+    for name in (
+        "exp10",
+        "log10",
+        "tan",
+        "atan",
+        "expm1",
+        "logb",
+        "cosh",
+        "acos",
+        "sinh",
+        "asin",
+        "cbrt",
+    ):
+        assert f"simt.{name}(" in function_ir
+
+
+def test_batch1_scalar_math_supports_fp16_and_bf16():
+    @pl.vector_function(mode="simt")
+    def batch1_math(src, dst):
+        value = src[0, 0]
+        dst[0, 0] = pl.simt.exp10(value)
+        dst[0, 1] = pl.simt.log10(value)
+        dst[0, 2] = pl.simt.rcp(value)
+
+    for dtype in (pl.DT_FP16, pl.DT_BF16):
+        function_ir = str(_parse_tile_function(batch1_math, [([1, 16], dtype), ([1, 16], dtype)]))
+        for name in ("exp10", "log10", "rcp"):
+            assert f"simt.{name}(" in function_ir
+
+
+def test_batch4_math_is_available_in_simt_functions():
+    @pl.vector_function(mode="simt", max_threads=1)
+    def batch4_math(value: pl.DT_FP32):
+        _tanpi = pl.simt.tanpi(value)
+        _atanh = pl.simt.atanh(value)
+        _cospi = pl.simt.cospi(value)
+        _acosh = pl.simt.acosh(value)
+        _sinpi = pl.simt.sinpi(value)
+        _asinh = pl.simt.asinh(value)
+        _rcbrt = pl.simt.rcbrt(value)
+
+    @pl.jit(auto_mutex=False)
+    def kernel(value: pl.DT_FP32):
+        with pl.section_vector():
+            batch4_math[1](value)
+
+    program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    function_ir = str(program.get_function(batch4_math.__name__))
+    for name in (
+        "tanpi",
+        "atanh",
+        "cospi",
+        "acosh",
+        "sinpi",
+        "asinh",
+        "rcbrt",
+    ):
+        assert f"simt.{name}(" in function_ir
+
+
+def test_selected_nan_binary_and_exponent_math_is_available_in_simt_functions():
+    @pl.vector_function(mode="simt")
+    def nan_ops(src, dst):
+        lhs = src[0, 0]
+        rhs = src[0, 1]
+        dst[0, 0] = pl.simt.max_nan(lhs, rhs)
+        dst[0, 1] = pl.simt.min_nan(lhs, rhs)
+
+    for dtype in (pl.DT_FP16, pl.DT_BF16):
+        function_ir = str(_parse_tile_function(nan_ops, [([1, 16], dtype), ([1, 16], dtype)]))
+        assert "simt.max_nan(" in function_ir
+        assert "simt.min_nan(" in function_ir
+
+    @pl.vector_function(mode="simt", max_threads=1)
+    def fp32_ops(lhs: pl.DT_FP32, rhs: pl.DT_FP32):
+        _atan2 = pl.simt.atan2(lhs, rhs)
+        _copysign = pl.simt.copysign(lhs, rhs)
+        _nextafter = pl.simt.nextafter(lhs, rhs)
+        _ilogb = pl.simt.ilogb(lhs)
+        _signbit = pl.simt.signbit(lhs)
+
+    @pl.jit(auto_mutex=False)
+    def kernel(lhs: pl.DT_FP32, rhs: pl.DT_FP32):
+        with pl.section_vector():
+            fp32_ops[1](lhs, rhs)
+
+    program, _ = kernel.to_kernel_def().parse_target_program(ir.SectionKind.Vector)
+    function_ir = str(program.get_function(fp32_ops.__name__))
+    for name in ("atan2", "copysign", "nextafter", "ilogb", "signbit"):
+        assert f"simt.{name}(" in function_ir
+
+
+def test_new_scalar_math_rejects_mixed_binary_and_unsupported_unary_dtype():
+    @pl.vector_function(mode="simt")
+    def mixed_nextafter(lhs, rhs):
+        _ = pl.simt.nextafter(lhs[0, 0], rhs[0, 0])
+
+    with pytest.raises(CommonExternal, match="same dtype"):
+        _parse_tile_function(mixed_nextafter, [([1, 16], pl.DT_FP32), ([1, 16], pl.DT_FP16)])
+
+    @pl.vector_function(mode="simt")
+    def invalid_signbit(value):
+        _ = pl.simt.signbit(value[0, 0])
+
+    with pytest.raises(CommonExternal, match="supports only fp32"):
+        _parse_tile_function(invalid_signbit, [([1, 16], pl.DT_FP16)])

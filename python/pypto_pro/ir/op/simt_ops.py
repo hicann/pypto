@@ -317,6 +317,136 @@ def mul_hi(lhs: Expr, rhs: Expr, span: Span | None = None) -> Call:
     return _create_math_call("mul_hi", lhs, rhs, span=span)
 
 
+def exp10(value: Expr, span: Span | None = None) -> Call:
+    """Build a floating-point scalar base-ten exponential call."""
+    return _create_math_call("exp10", value, span=span)
+
+
+def log10(value: Expr, span: Span | None = None) -> Call:
+    """Build a floating-point scalar base-ten logarithm call."""
+    return _create_math_call("log10", value, span=span)
+
+
+def rcp(value: Expr, span: Span | None = None) -> Call:
+    """Build an FP16 or BF16 scalar reciprocal call."""
+    return _create_math_call("rcp", value, span=span)
+
+
+def tan(value: Expr, span: Span | None = None) -> Call:
+    """Build an FP32 scalar tangent call."""
+    return _create_math_call("tan", value, span=span)
+
+
+def atan(value: Expr, span: Span | None = None) -> Call:
+    """Build an FP32 scalar arc-tangent call."""
+    return _create_math_call("atan", value, span=span)
+
+
+def expm1(value: Expr, span: Span | None = None) -> Call:
+    """Build an FP32 scalar exponential-minus-one call."""
+    return _create_math_call("expm1", value, span=span)
+
+
+def logb(value: Expr, span: Span | None = None) -> Call:
+    """Build an FP32 scalar unbiased-exponent call."""
+    return _create_math_call("logb", value, span=span)
+
+
+def cosh(value: Expr, span: Span | None = None) -> Call:
+    """Build an FP32 scalar hyperbolic-cosine call."""
+    return _create_math_call("cosh", value, span=span)
+
+
+def acos(value: Expr, span: Span | None = None) -> Call:
+    """Build an FP32 scalar arc-cosine call."""
+    return _create_math_call("acos", value, span=span)
+
+
+def sinh(value: Expr, span: Span | None = None) -> Call:
+    """Build an FP32 scalar hyperbolic-sine call."""
+    return _create_math_call("sinh", value, span=span)
+
+
+def asin(value: Expr, span: Span | None = None) -> Call:
+    """Build an FP32 scalar arc-sine call."""
+    return _create_math_call("asin", value, span=span)
+
+
+def cbrt(value: Expr, span: Span | None = None) -> Call:
+    """Build an FP32 scalar cube-root call."""
+    return _create_math_call("cbrt", value, span=span)
+
+
+def max_nan(lhs: Expr, rhs: Expr, span: Span | None = None) -> Call:
+    """Build an FP16 or BF16 maximum call that propagates NaN."""
+    return _create_math_call("max_nan", lhs, rhs, span=span)
+
+
+def min_nan(lhs: Expr, rhs: Expr, span: Span | None = None) -> Call:
+    """Build an FP16 or BF16 minimum call that propagates NaN."""
+    return _create_math_call("min_nan", lhs, rhs, span=span)
+
+
+def atan2(y: Expr, x: Expr, span: Span | None = None) -> Call:
+    """Build an FP32 quadrant-aware arc-tangent call."""
+    return _create_math_call("atan2", y, x, span=span)
+
+
+def copysign(magnitude: Expr, sign: Expr, span: Span | None = None) -> Call:
+    """Build an FP32 sign-selection call."""
+    return _create_math_call("copysign", magnitude, sign, span=span)
+
+
+def nextafter(value: Expr, direction: Expr, span: Span | None = None) -> Call:
+    """Build an FP32 next-representable-value call."""
+    return _create_math_call("nextafter", value, direction, span=span)
+
+
+def tanpi(value: Expr, span: Span | None = None) -> Call:
+    """Build an FP32 tangent-of-pi-multiple call."""
+    return _create_math_call("tanpi", value, span=span)
+
+
+def atanh(value: Expr, span: Span | None = None) -> Call:
+    """Build an FP32 inverse-hyperbolic-tangent call."""
+    return _create_math_call("atanh", value, span=span)
+
+
+def cospi(value: Expr, span: Span | None = None) -> Call:
+    """Build an FP32 cosine-of-pi-multiple call."""
+    return _create_math_call("cospi", value, span=span)
+
+
+def acosh(value: Expr, span: Span | None = None) -> Call:
+    """Build an FP32 inverse-hyperbolic-cosine call."""
+    return _create_math_call("acosh", value, span=span)
+
+
+def sinpi(value: Expr, span: Span | None = None) -> Call:
+    """Build an FP32 sine-of-pi-multiple call."""
+    return _create_math_call("sinpi", value, span=span)
+
+
+def asinh(value: Expr, span: Span | None = None) -> Call:
+    """Build an FP32 inverse-hyperbolic-sine call."""
+    return _create_math_call("asinh", value, span=span)
+
+
+def rcbrt(value: Expr, span: Span | None = None) -> Call:
+    """Build an FP32 reciprocal-cube-root call."""
+    return _create_math_call("rcbrt", value, span=span)
+
+
+def ilogb(value: Expr, span: Span | None = None) -> Call:
+    """Build an FP32-to-INT32 unbiased-exponent call."""
+    return _create_math_call("ilogb", value, span=span)
+
+
+def signbit(value: Expr, span: Span | None = None) -> Call:
+    """Build an FP32-to-INT32 sign-bit call."""
+    return _create_math_call("signbit", value, span=span)
+
+
 def fmod(lhs: Expr, rhs: Expr, span: Span | None = None) -> Call:
     """Build an FP32 remainder call with a quotient truncated toward zero."""
     return _create_math_call("fmod", lhs, rhs, span=span)
@@ -1008,6 +1138,32 @@ _register_scalar_math_parser("simt.isinf", 1, isinf)
 _register_scalar_math_parser("simt.isfinite", 1, isfinite)
 _register_scalar_math_parser("simt.popcount", 1, popcount)
 _register_scalar_math_parser("simt.mul_hi", 2, mul_hi)
+_register_scalar_math_parser("simt.exp10", 1, exp10)
+_register_scalar_math_parser("simt.log10", 1, log10)
+_register_scalar_math_parser("simt.rcp", 1, rcp)
+_register_scalar_math_parser("simt.tan", 1, tan)
+_register_scalar_math_parser("simt.atan", 1, atan)
+_register_scalar_math_parser("simt.expm1", 1, expm1)
+_register_scalar_math_parser("simt.logb", 1, logb)
+_register_scalar_math_parser("simt.cosh", 1, cosh)
+_register_scalar_math_parser("simt.acos", 1, acos)
+_register_scalar_math_parser("simt.sinh", 1, sinh)
+_register_scalar_math_parser("simt.asin", 1, asin)
+_register_scalar_math_parser("simt.cbrt", 1, cbrt)
+_register_scalar_math_parser("simt.max_nan", 2, max_nan)
+_register_scalar_math_parser("simt.min_nan", 2, min_nan)
+_register_scalar_math_parser("simt.atan2", 2, atan2)
+_register_scalar_math_parser("simt.copysign", 2, copysign)
+_register_scalar_math_parser("simt.nextafter", 2, nextafter)
+_register_scalar_math_parser("simt.tanpi", 1, tanpi)
+_register_scalar_math_parser("simt.atanh", 1, atanh)
+_register_scalar_math_parser("simt.cospi", 1, cospi)
+_register_scalar_math_parser("simt.acosh", 1, acosh)
+_register_scalar_math_parser("simt.sinpi", 1, sinpi)
+_register_scalar_math_parser("simt.asinh", 1, asinh)
+_register_scalar_math_parser("simt.rcbrt", 1, rcbrt)
+_register_scalar_math_parser("simt.ilogb", 1, ilogb)
+_register_scalar_math_parser("simt.signbit", 1, signbit)
 _register_scalar_math_parser("simt.fmod", 2, fmod)
 _register_scalar_math_parser("simt.fma", 3, fma)
 _register_scalar_math_parser("simt.warp_reduce_add", 1, warp_reduce_add)

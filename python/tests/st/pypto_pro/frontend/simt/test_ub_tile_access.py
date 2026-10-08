@@ -29,17 +29,6 @@ MIXED_THREADS = 1024
 MIXED_TILE_BYTES = MIXED_ELEMENTS * 4
 MIXED_TILE_HIGH_WATER = 24 * 1024
 
-
-def _require_a5():
-    try:
-        torch.npu.set_device(ST_DEVICE)
-    except RuntimeError as exc:
-        pytest.skip(f"NPU unavailable: {exc}")
-    name = torch.npu.get_device_name()
-    if "Ascend950" not in name:
-        pytest.skip(f"Current device is {name}, not A5 (Ascend950). Skip.")
-
-
 @pl.vector_function(mode="simt", max_threads=THREADS)
 def ub_tile_add(
     dst,
@@ -54,14 +43,7 @@ def ub_tile_add(
     if row < rows:
         dst[row, col] = src[row, col] + delta
 
-
-@pl.vector_function(mode="simt", max_threads=MIXED_THREADS)
-def copy_from_gm(src, out):
-    tid = pl.simt.linear_thread_idx()
-    out[0, tid] = src[0, tid]
-
-
-@pl.jit()
+@pl.jit(auto_mutex=True)
 def simt_ub_tile_access(
     x: pl.Tensor[[VALID_ROWS, VALID_COLS], pl.DT_FP32],
     out: pl.Tensor[[VALID_ROWS, VALID_COLS], pl.DT_FP32],
@@ -75,21 +57,52 @@ def simt_ub_tile_access(
         target_memory=pl.MemorySpace.Vec,
         valid_shape=[-1, -1],
     )
-    src = pl.make_tile(tile_type, addr=0x0000)
-    dst = pl.make_tile(tile_type, addr=0x0800)
+    src_group = pl.make_tile_group(
+        type=tile_type,
+        addrs=0,
+        mutex_ids="auto",
+        depth=1,
+    )
+    src = src_group.current()
+    dst_group = pl.make_tile_group(
+        type=tile_type,
+        addrs=2048,
+        mutex_ids="auto",
+        depth=1,
+    )
+    dst = dst_group.current()
     with pl.section_vector():
         pl.set_validshape(src, [valid_rows, valid_cols])
         pl.set_validshape(dst, [valid_rows, valid_cols])
         pl.load(src, x, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         ub_tile_add[THREADS](dst, src, delta)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(out, dst, [0, 0])
 
+@pytest.mark.soc("950")
+@pytest.mark.parametrize(("valid_rows", "valid_cols"), [(1, 1), (VALID_ROWS, VALID_COLS)])
+def test_ub_tile_access(valid_rows, valid_cols):
+    torch.npu.set_device(ST_DEVICE)
 
-@pl.jit()
+    delta = 0.75
+    sentinel = -7.0
+    x = torch.arange(VALID_ROWS * VALID_COLS, dtype=torch.float32).reshape(VALID_ROWS, VALID_COLS).to(ST_DEVICE)
+    out = torch.full_like(x, sentinel)
+
+    simt_ub_tile_access(x, out, valid_rows, valid_cols, delta)
+    torch.npu.synchronize()
+
+    expected = torch.full((VALID_ROWS, VALID_COLS), sentinel, dtype=torch.float32)
+    expected[:valid_rows, :valid_cols] = x.cpu()[:valid_rows, :valid_cols] + delta
+    torch.testing.assert_close(out.cpu(), expected, rtol=0, atol=0)
+
+# -----------------------------------------------------------------------------------------------------------
+
+@pl.vector_function(mode="simt", max_threads=MIXED_THREADS)
+def copy_from_gm(src, out):
+    tid = pl.simt.linear_thread_idx()
+    out[0, tid] = src[0, tid]
+
+@pl.jit(auto_mutex=True)
 def mixed_simd_high_water_not_passed_to_simt(
     src: pl.Tensor[[1, MIXED_ELEMENTS], pl.DT_FP32],
     simd_out: pl.Tensor[[1, MIXED_ELEMENTS], pl.DT_FP32],
@@ -108,36 +121,13 @@ def mixed_simd_high_water_not_passed_to_simt(
     scratch = scratch_group.current()
     with pl.section_vector():
         pl.load(scratch, src, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         pl.add(scratch, scratch, 0.0)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(simd_out, scratch, [0, 0])
         copy_from_gm[MIXED_THREADS](src, simt_out)
 
-
-@pytest.mark.soc("950")
-@pytest.mark.parametrize(("valid_rows", "valid_cols"), [(1, 1), (VALID_ROWS, VALID_COLS)])
-def test_ub_tile_access(valid_rows, valid_cols):
-    _require_a5()
-
-    delta = 0.75
-    sentinel = -7.0
-    x = torch.arange(VALID_ROWS * VALID_COLS, dtype=torch.float32).reshape(VALID_ROWS, VALID_COLS).to(ST_DEVICE)
-    out = torch.full_like(x, sentinel)
-
-    simt_ub_tile_access(x, out, valid_rows, valid_cols, delta)
-    torch.npu.synchronize()
-
-    expected = torch.full((VALID_ROWS, VALID_COLS), sentinel, dtype=torch.float32)
-    expected[:valid_rows, :valid_cols] = x.cpu()[:valid_rows, :valid_cols] + delta
-    torch.testing.assert_close(out.cpu(), expected, rtol=0, atol=0)
-
-
 @pytest.mark.soc("950")
 def test_mixed_kernel_infers_simd_tile_high_water_not_passed_to_simt():
-    _require_a5()
+    torch.npu.set_device(ST_DEVICE)
 
     src = torch.arange(MIXED_ELEMENTS, dtype=torch.float32).reshape(1, MIXED_ELEMENTS)
     src_device = src.to(ST_DEVICE)
@@ -149,7 +139,3 @@ def test_mixed_kernel_infers_simd_tile_high_water_not_passed_to_simt():
 
     torch.testing.assert_close(simd_out.cpu(), src, rtol=0, atol=0)
     torch.testing.assert_close(simt_out.cpu(), src, rtol=0, atol=0)
-
-
-if __name__ == "__main__":
-    test_ub_tile_access(VALID_ROWS, VALID_COLS)

@@ -244,3 +244,178 @@ def test_int64_scalar_math_codegen_maps_abs_min_max_and_header():
     assert "min((int64_t)" in cpp
     assert "max((int64_t)" in cpp
     assert "simt_api/math_functions.h" not in cpp
+
+
+@pl.vector_function(mode="simt", max_threads=1)
+def _batch1_fp32_intrinsics(out, value: pl.DT_FP32):
+    out[0, 0] = pl.simt.exp10(value)
+    out[0, 1] = pl.simt.log10(value)
+    out[0, 2] = pl.simt.tan(value)
+    out[0, 3] = pl.simt.atan(value)
+    out[0, 4] = pl.simt.expm1(value)
+    out[0, 5] = pl.simt.logb(value)
+    out[0, 6] = pl.simt.cosh(value)
+    out[0, 7] = pl.simt.acos(value)
+    out[0, 8] = pl.simt.sinh(value)
+    out[0, 9] = pl.simt.asin(value)
+    out[0, 10] = pl.simt.cbrt(value)
+
+
+@pl.jit
+def _batch1_fp32_codegen_kernel(value: pl.DT_FP32):
+    out_type = pl.TileType(shape=[1, 16], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec)
+    out = pl.make_tile(out_type, addr=0x0000)
+    with pl.section_vector():
+        _batch1_fp32_intrinsics[1](out, value)
+
+
+@pl.vector_function(mode="simt", max_threads=1)
+def _batch1_fp16_intrinsics(out, source):
+    value = source[0, 0]
+    out[0, 0] = pl.simt.exp10(value)
+    out[0, 1] = pl.simt.log10(value)
+    out[0, 2] = pl.simt.rcp(value)
+
+
+@pl.jit
+def _batch1_fp16_codegen_kernel(_jit_entry: pl.DT_INT64):
+    tile_type = pl.TileType(shape=[1, 16], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    source_type = pl.TileType(shape=[1, 16], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    out = pl.make_tile(tile_type, addr=0x0000)
+    source = pl.make_tile(source_type, addr=0x0040)
+    with pl.section_vector():
+        _batch1_fp16_intrinsics[1](out, source)
+
+
+@pl.vector_function(mode="simt", max_threads=1)
+def _batch1_bf16_intrinsics(out, source):
+    value = source[0, 0]
+    out[0, 0] = pl.simt.exp10(value)
+    out[0, 1] = pl.simt.log10(value)
+    out[0, 2] = pl.simt.rcp(value)
+
+
+@pl.jit
+def _batch1_bf16_codegen_kernel(_jit_entry: pl.DT_INT64):
+    tile_type = pl.TileType(shape=[1, 16], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec)
+    source_type = pl.TileType(shape=[1, 16], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec)
+    out = pl.make_tile(tile_type, addr=0x0000)
+    source = pl.make_tile(source_type, addr=0x0040)
+    with pl.section_vector():
+        _batch1_bf16_intrinsics[1](out, source)
+
+
+@pl.vector_function(mode="simt", max_threads=1)
+def _nan_intrinsics(out_fp16, source_fp16, out_bf16, source_bf16):
+    out_fp16[0, 0] = pl.simt.max_nan(source_fp16[0, 0], source_fp16[0, 1])
+    out_fp16[0, 1] = pl.simt.min_nan(source_fp16[0, 0], source_fp16[0, 1])
+    out_bf16[0, 0] = pl.simt.max_nan(source_bf16[0, 0], source_bf16[0, 1])
+    out_bf16[0, 1] = pl.simt.min_nan(source_bf16[0, 0], source_bf16[0, 1])
+
+
+@pl.jit
+def _nan_intrinsics_codegen_kernel(_jit_entry: pl.DT_INT64):
+    fp16_type = pl.TileType(shape=[1, 16], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec)
+    bf16_type = pl.TileType(shape=[1, 16], dtype=pl.DT_BF16, target_memory=pl.MemorySpace.Vec)
+    out_fp16 = pl.make_tile(fp16_type, addr=0x0000)
+    source_fp16 = pl.make_tile(fp16_type, addr=0x0040)
+    out_bf16 = pl.make_tile(bf16_type, addr=0x0080)
+    source_bf16 = pl.make_tile(bf16_type, addr=0x00C0)
+    with pl.section_vector():
+        _nan_intrinsics[1](out_fp16, source_fp16, out_bf16, source_bf16)
+
+
+@pl.vector_function(mode="simt", max_threads=1)
+def _batch4_math_intrinsics(out_fp32, value: pl.DT_FP32):
+    out_fp32[0, 0] = pl.simt.tanpi(value)
+    out_fp32[0, 1] = pl.simt.atanh(value)
+    out_fp32[0, 2] = pl.simt.cospi(value)
+    out_fp32[0, 3] = pl.simt.acosh(value)
+    out_fp32[0, 4] = pl.simt.sinpi(value)
+    out_fp32[0, 5] = pl.simt.asinh(value)
+    out_fp32[0, 6] = pl.simt.rcbrt(value)
+
+
+@pl.jit
+def _batch4_math_codegen_kernel(value: pl.DT_FP32):
+    out_fp32 = pl.make_tile(
+        pl.TileType(shape=[1, 8], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
+        addr=0x0000,
+    )
+    with pl.section_vector():
+        _batch4_math_intrinsics[1](out_fp32, value)
+
+
+def test_batch1_fp32_scalar_math_codegen_is_self_contained():
+    cpp = _compile_to_cce(_batch1_fp32_codegen_kernel)
+
+    assert "pypto_simt_" not in cpp
+    assert "simt_api/" not in cpp
+    for expression in (
+        "0.0131822545081377029418945f",
+        "__logf(10.0f)",
+        "252.898206f",
+        "0.00245002890005707741f",
+        "0.00138624827377498149871826f",
+        "8388608.0f",
+        "12583037.0f",
+        "0.03538220748305320740f",
+        "0.00000281695110970758826f",
+        "0.05025001987814903259f",
+        "-0.6666666865348815918f",
+    ):
+        assert expression in cpp
+
+
+def test_batch1_fp16_scalar_math_codegen_is_self_contained():
+    cpp = _compile_to_cce(_batch1_fp16_codegen_kernel)
+
+    assert "pypto_simt_" not in cpp
+    assert "simt_api/" not in cpp
+    for expression in (
+        "0.30419921875f",
+        "0.2362060546875f",
+    ):
+        assert expression in cpp
+    assert "static_cast<half>(1.0f) / (" in cpp
+
+
+def test_batch1_bf16_scalar_math_codegen_is_self_contained():
+    cpp = _compile_to_cce(_batch1_bf16_codegen_kernel)
+
+    assert "pypto_simt_" not in cpp
+    assert "simt_api/" not in cpp
+    for expression in (
+        "0.0131822545081377029418945f",
+        "__logf(10.0f)",
+    ):
+        assert expression in cpp
+    assert "__cvt_float<" in cpp
+    assert "__cvt_bfloat16_t<" in cpp
+    assert "static_cast<bfloat16_t>(1.0f) / (" in cpp
+
+
+def test_nan_select_codegen_uses_low_precision_intrinsics():
+    cpp = _compile_to_cce(_nan_intrinsics_codegen_kernel)
+
+    assert cpp.count("__hmax_nan(") == 2
+    assert cpp.count("__hmin_nan(") == 2
+    assert "__cvt_float<" not in cpp
+    assert "simt_api/" not in cpp
+
+
+def test_batch4_math_codegen_is_self_contained():
+    cpp = _compile_to_cce(_batch4_math_codegen_kernel)
+
+    assert "pypto_simt_" not in cpp
+    assert "simt_api/" not in cpp
+    for expression in (
+        "-8.7422776573475857731e-08f",
+        "8.50705917302346158658e+37f",
+        "__cospi_s * (__cospi_r * __cospi_z)",
+        "0.000045124618889065459371f",
+        "__sinpi_truncated_x == __sinpi_x",
+        "-0.01396484375f",
+        "__rcbrt_correction",
+    ):
+        assert expression in cpp

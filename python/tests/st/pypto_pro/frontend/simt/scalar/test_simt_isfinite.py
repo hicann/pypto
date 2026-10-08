@@ -8,17 +8,23 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
+import os
+
 import pypto_pro.language as pl
 import pytest
 import torch
 
-ELEMENTS = 128
+ELEMENTS = 64
+ACTIVE_THREADS = 33
+
+ST_DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 
 
 @pl.vector_function(mode="simt", max_threads=ELEMENTS)
 def classify(
-    src_fp16: pl.Tensor[[1, ELEMENTS], pl.DT_FP16],
-    src_fp32: pl.Tensor[[1, ELEMENTS], pl.DT_FP32],
+    src_fp16,
+    src_fp32,
     finite_fp16: pl.Tensor[[1, ELEMENTS], pl.DT_BOOL],
     finite_fp32: pl.Tensor[[1, ELEMENTS], pl.DT_BOOL],
 ):
@@ -27,27 +33,51 @@ def classify(
     finite_fp32[0, tid] = pl.simt.isfinite(src_fp32[0, tid])
 
 
-@pl.jit()
+@pl.jit(auto_mutex=True)
 def simt_isfinite(
     src_fp16: pl.Tensor[[1, ELEMENTS], pl.DT_FP16],
     src_fp32: pl.Tensor[[1, ELEMENTS], pl.DT_FP32],
     finite_fp16: pl.Tensor[[1, ELEMENTS], pl.DT_BOOL],
     finite_fp32: pl.Tensor[[1, ELEMENTS], pl.DT_BOOL],
 ):
+    src_fp16_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_FP16, target_memory=pl.MemorySpace.Vec),
+        addrs=0x0000,
+        mutex_ids="auto",
+        depth=1,
+    )
+    src_fp16_tile = src_fp16_tile_group.current()
+    src_fp32_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
+        addrs=0x0400,
+        mutex_ids="auto",
+        depth=1,
+    )
+    src_fp32_tile = src_fp32_tile_group.current()
     with pl.section_vector():
-        classify[ELEMENTS](src_fp16, src_fp32, finite_fp16, finite_fp32)
+        pl.load(src_fp16_tile, src_fp16, [0, 0])
+        pl.load(src_fp32_tile, src_fp32, [0, 0])
+        classify[ACTIVE_THREADS](
+            src_fp16_tile,
+            src_fp32_tile,
+            finite_fp16,
+            finite_fp32,
+        )
 
 
 @pytest.mark.soc("950")
-def test_isfinite_fp16_fp32(a5_device, assert_simt_close):
+def test_isfinite_fp16_fp32():
+    torch.npu.set_device(ST_DEVICE)
     values = [0.0, -0.0, 1.0, -1.0, 7.5, float("inf"), float("-inf"), float("nan")]
     repeat = ELEMENTS // len(values)
     source_fp16 = torch.tensor(values, dtype=torch.float16).repeat(repeat).reshape(1, ELEMENTS)
     source_fp32 = torch.tensor(values, dtype=torch.float32).repeat(repeat).reshape(1, ELEMENTS)
-    finite_fp16 = torch.empty((1, ELEMENTS), dtype=torch.bool, device=a5_device)
-    finite_fp32 = torch.empty((1, ELEMENTS), dtype=torch.bool, device=a5_device)
-    simt_isfinite(source_fp16.to(a5_device), source_fp32.to(a5_device), finite_fp16, finite_fp32)
+    finite_fp16 = torch.zeros((1, ELEMENTS), dtype=torch.bool, device=ST_DEVICE)
+    finite_fp32 = torch.zeros((1, ELEMENTS), dtype=torch.bool, device=ST_DEVICE)
+    simt_isfinite(source_fp16.to(ST_DEVICE), source_fp32.to(ST_DEVICE), finite_fp16, finite_fp32)
     torch.npu.synchronize()
 
-    assert_simt_close(finite_fp16, torch.isfinite(source_fp16))
-    assert_simt_close(finite_fp32, torch.isfinite(source_fp32))
+    for source, output in ((source_fp16, finite_fp16), (source_fp32, finite_fp32)):
+        expected = torch.zeros((1, ELEMENTS), dtype=torch.bool)
+        expected[:, :ACTIVE_THREADS] = torch.isfinite(source[:, :ACTIVE_THREADS])
+        torch.testing.assert_close(output.cpu(), expected, rtol=0, atol=0)

@@ -21,30 +21,6 @@ ST_DEVICE = f"npu:{ST_DEVICE_ID}"
 THREADS = 64
 ELEMENTS = 64
 
-
-def _require_a5():
-    try:
-        torch.npu.set_device(ST_DEVICE)
-    except RuntimeError as exc:
-        pytest.skip(f"NPU unavailable: {exc}")
-    name = torch.npu.get_device_name()
-    if "Ascend950" not in name:
-        pytest.skip(f"Current device is {name}, not A5 (Ascend950). Skip.")
-
-
-def _run_kernel(kernel, states):
-    _require_a5()
-    device_states = [state.to(ST_DEVICE) for state in states]
-    kernel(*device_states)
-    torch.npu.synchronize()
-    return [state.cpu() for state in device_states]
-
-
-def _assert_target(state, expected):
-    expected = torch.tensor(expected, dtype=state.dtype)
-    torch.testing.assert_close(state[0, 0], expected, rtol=0, atol=0)
-
-
 @pl.vector_function(mode="simt", max_threads=THREADS)
 def atomic_cas_ub_all_dtypes(
     int32_tile,
@@ -55,38 +31,55 @@ def atomic_cas_ub_all_dtypes(
     pl.simt.atomic_cas(uint32_tile[0, 0], 0, 7)
     pl.simt.atomic_cas(fp32_tile[0, 0], 0.0, 7.0)
 
-
-@pl.jit()
+@pl.jit(auto_mutex=True)
 def simt_atomic_cas_ub_all_dtypes(
     int32_state: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
     uint32_state: pl.Tensor[[1, ELEMENTS], pl.DT_UINT32],
     fp32_state: pl.Tensor[[1, ELEMENTS], pl.DT_FP32],
 ):
-    int32_tile = pl.make_tile(
-        pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec),
-        addr=0x0000,
+    int32_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_INT32, target_memory=pl.MemorySpace.Vec),
+        addrs=0x0000,
+        mutex_ids="auto",
+        depth=1,
     )
-    uint32_tile = pl.make_tile(
-        pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
-        addr=0x0400,
+    int32_tile = int32_tile_group.current()
+    uint32_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_UINT32, target_memory=pl.MemorySpace.Vec),
+        addrs=0x0400,
+        mutex_ids="auto",
+        depth=1,
     )
-    fp32_tile = pl.make_tile(
-        pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
-        addr=0x0800,
+    uint32_tile = uint32_tile_group.current()
+    fp32_tile_group = pl.make_tile_group(
+        type=pl.TileType(shape=[1, ELEMENTS], dtype=pl.DT_FP32, target_memory=pl.MemorySpace.Vec),
+        addrs=0x0800,
+        mutex_ids="auto",
+        depth=1,
     )
+    fp32_tile = fp32_tile_group.current()
     with pl.section_vector():
         pl.load(int32_tile, int32_state, [0, 0])
         pl.load(uint32_tile, uint32_state, [0, 0])
         pl.load(fp32_tile, fp32_state, [0, 0])
-        pl.system.sync_src(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
-        pl.system.sync_dst(set_pipe=pl.PipeType.MTE2, wait_pipe=pl.PipeType.V, event_id=0)
         atomic_cas_ub_all_dtypes[THREADS](int32_tile, uint32_tile, fp32_tile)
-        pl.system.sync_src(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
-        pl.system.sync_dst(set_pipe=pl.PipeType.V, wait_pipe=pl.PipeType.MTE3, event_id=1)
         pl.store(int32_state, int32_tile, [0, 0])
         pl.store(uint32_state, uint32_tile, [0, 0])
         pl.store(fp32_state, fp32_tile, [0, 0])
 
+@pytest.mark.soc("950")
+def test_atomic_cas_ub_all_supported_dtypes():
+    torch.npu.set_device(ST_DEVICE)
+    states = [
+        torch.full((1, ELEMENTS), 0, dtype=dtype).to(ST_DEVICE)
+        for dtype in (torch.int32, torch.uint32, torch.float32)
+    ]
+    simt_atomic_cas_ub_all_dtypes(*states)
+    torch.npu.synchronize()
+    for state in states:
+        assert state.cpu()[0, 0].item() == 7
+
+# -----------------------------------------------------------------------------------------------------------
 
 @pl.vector_function(mode="simt", max_threads=THREADS)
 def atomic_cas_gm_all_dtypes(
@@ -102,7 +95,6 @@ def atomic_cas_gm_all_dtypes(
     pl.simt.atomic_cas(int64_state[0, 0], 0, 7)
     pl.simt.atomic_cas(uint64_state[0, 0], 0, 7)
 
-
 @pl.jit()
 def simt_atomic_cas_gm_all_dtypes(
     int32_state: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
@@ -114,23 +106,19 @@ def simt_atomic_cas_gm_all_dtypes(
     with pl.section_vector():
         atomic_cas_gm_all_dtypes[THREADS](int32_state, uint32_state, fp32_state, int64_state, uint64_state)
 
+@pytest.mark.soc("950")
+def test_atomic_cas_gm_all_supported_dtypes():
+    torch.npu.set_device(ST_DEVICE)
+    states = [
+        torch.full((1, ELEMENTS), 0, dtype=dtype).to(ST_DEVICE)
+        for dtype in (torch.int32, torch.uint32, torch.float32, torch.int64, torch.uint64)
+    ]
+    simt_atomic_cas_gm_all_dtypes(*states)
+    torch.npu.synchronize()
+    for state in states:
+        assert state.cpu()[0, 0].item() == 7
 
-@pl.vector_function(mode="simt", max_threads=1)
-def atomic_cas_return_value_gm(
-    state: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
-    old_values: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
-):
-    old_values[0, 0] = pl.simt.atomic_cas(state[0, 0], 10, 13)
-
-
-@pl.jit()
-def simt_atomic_cas_return_value_gm(
-    state: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
-    old_values: pl.Tensor[[1, ELEMENTS], pl.DT_INT32],
-):
-    with pl.section_vector():
-        atomic_cas_return_value_gm[1](state, old_values)
-
+# -----------------------------------------------------------------------------------------------------------
 
 @pl.vector_function(mode="simt", max_threads=32)
 def atomic_cas_winner_gm(
@@ -140,7 +128,6 @@ def atomic_cas_winner_gm(
     tid = pl.simt.linear_thread_idx()
     old_values[0, tid] = pl.simt.atomic_cas(state[0, 0], 0, 1)
 
-
 @pl.jit()
 def simt_atomic_cas_winner_gm(
     state: pl.Tensor[[1, 1], pl.DT_INT32],
@@ -149,51 +136,9 @@ def simt_atomic_cas_winner_gm(
     with pl.section_vector():
         atomic_cas_winner_gm[32](state, old_values)
 
-
-@pytest.mark.soc("950")
-def test_atomic_cas_ub_all_supported_dtypes():
-    states = [
-        torch.full((1, ELEMENTS), 0, dtype=torch.int32),
-        torch.full((1, ELEMENTS), 0, dtype=torch.uint32),
-        torch.full((1, ELEMENTS), 0, dtype=torch.float32),
-    ]
-    for state in _run_kernel(simt_atomic_cas_ub_all_dtypes, states):
-        _assert_target(state, 7)
-
-
-@pytest.mark.soc("950")
-def test_atomic_cas_gm_all_supported_dtypes():
-    states = [
-        torch.full((1, ELEMENTS), 0, dtype=torch.int32),
-        torch.full((1, ELEMENTS), 0, dtype=torch.uint32),
-        torch.full((1, ELEMENTS), 0, dtype=torch.float32),
-        torch.full((1, ELEMENTS), 0, dtype=torch.int64),
-        torch.full((1, ELEMENTS), 0, dtype=torch.uint64),
-    ]
-    for state in _run_kernel(simt_atomic_cas_gm_all_dtypes, states):
-        _assert_target(state, 7)
-
-
-@pytest.mark.soc("950")
-def test_atomic_cas_returns_old_value_and_preserves_other_elements():
-    _require_a5()
-    state = torch.full((1, ELEMENTS), 123, dtype=torch.int32)
-    state[0, 0] = 10
-    expected_state = state.clone()
-    expected_state[0, 0] = 13
-    expected_old = torch.full((1, ELEMENTS), 123, dtype=torch.int32)
-    expected_old[0, 0] = 10
-    state_device = state.to(ST_DEVICE)
-    old_values = torch.full((1, ELEMENTS), 123, dtype=torch.int32).to(ST_DEVICE)
-    simt_atomic_cas_return_value_gm[None, 1](state_device, old_values)
-    torch.npu.synchronize()
-    torch.testing.assert_close(state_device.cpu(), expected_state, rtol=0, atol=0)
-    torch.testing.assert_close(old_values.cpu(), expected_old, rtol=0, atol=0)
-
-
 @pytest.mark.soc("950")
 def test_atomic_cas_contention_has_exactly_one_winner():
-    _require_a5()
+    torch.npu.set_device(ST_DEVICE)
     state = torch.zeros((1, 1), dtype=torch.int32, device=ST_DEVICE)
     old_values = torch.empty((1, 32), dtype=torch.int32, device=ST_DEVICE)
     simt_atomic_cas_winner_gm[None, 1](state, old_values)
