@@ -5394,8 +5394,8 @@ static std::string EmitVFStoreUnAlign(const ir::CallPtr& op, codegen::CodegenBas
         codegen.Emit("pstu(" + ureg + ", " + vreg + ", (__ubuf__ " + ptr_type + " *&)" + tile_ptr + ");");
         return "";
     }
-    // 4-arg form: vstus(ureg, stride, vreg, dst, POST_UPDATE|NORM) or
-    //              vstu(ureg, areg, vreg, dst, POST_UPDATE) when args[3] is an AddrReg.
+    // 4-arg form: vstus(ureg, stride, vreg, dst, POST_UPDATE) or
+    //              vstu(ureg, areg, vreg, dst, POST_UPDATE|NORM) when args[3] is an AddrReg.
     // Strideless vstur mode is in vf.squeeze_store_unalign.
     PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, op->args_.size() == 4)
         << "vf.store_unalign requires 4 args (dst, vreg, ureg, stride|areg); "
@@ -5431,21 +5431,27 @@ static std::string EmitVFStoreUnAlign(const ir::CallPtr& op, codegen::CodegenBas
     std::string ureg = codegen.GetExprAsCode(op->args_[2]);
     std::string vreg_expr = (cast_dt == src_dt) ? vreg : ("(RegTensor<" + base_c_type + "> &)" + vreg);
     std::string fourth_arg = codegen.GetExprAsCode(op->args_[3]);
-    bool post_update = op->HasKwarg("post_update") && op->GetKwarg<bool>("post_update");
-    std::string pu = post_update ? "POST_UPDATE" : "NORM";
     std::string ptr_cast = "(__ubuf__ " + base_c_type + " *&)";
     if (codegen.IsAddrRegVar(fourth_arg)) {
         // vstu(ureg, areg, vreg, dst, POST_UPDATE|NORM) — AddrReg-based unaligned store.
-        // vstu accepts the same post mode as vstus (AscendC DataCopyUnAlignImpl
-        // passes postValue to vstu's 5th arg, same as vstus).
+        // AscendC DataCopyUnAlignImpl passes postValue to vstu's 5th arg, so both
+        // post modes are valid for the AddrReg form.
+        bool post_update = op->HasKwarg("post_update") && op->GetKwarg<bool>("post_update");
+        std::string pu = post_update ? "POST_UPDATE" : "NORM";
         codegen.Emit("vstu(" + ureg + ", " + fourth_arg + ", " + vreg_expr + ", " + ptr_cast + tile_ptr_var + ", " +
                      pu + ");");
     } else {
-        // vstus(ureg, stride, vreg, dst, POST_UPDATE|NORM)
+        // vstus(ureg, stride, vreg, dst, POST_UPDATE)
+        // Stride requires post_update=True — the stride operand is postUpdateStride in
+        // AscendC DataCopyUnAlignImpl, so a bare stride without advancing is meaningless.
+        bool post_update = op->HasKwarg("post_update") && op->GetKwarg<bool>("post_update");
+        PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, post_update)
+            << "vf.store_unalign: stride is only supported with post_update=True. For a non-advancing store, "
+            << "use vf.squeeze_store_unalign";
         // b64: stride must be doubled to account for b32 simulation of b64 elements.
         std::string stride = is_b64 ? ("(" + fourth_arg + ") * 2") : fourth_arg;
-        codegen.Emit("vstus(" + ureg + ", " + stride + ", " + vreg_expr + ", " + ptr_cast + tile_ptr_var + ", " + pu +
-                     ");");
+        codegen.Emit("vstus(" + ureg + ", " + stride + ", " + vreg_expr + ", " + ptr_cast + tile_ptr_var +
+                     ", POST_UPDATE);");
     }
     return "";
 }
@@ -5675,11 +5681,11 @@ static std::string EmitVFLoadUnalignPre(const ir::CallPtr& op, codegen::CodegenB
 static std::string EmitVFLoadUnalign(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
     auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
-    // Call forms (args include the leading dst register; stride is positional,
-    // post_update is keyword-only):
-    //   (dst, ureg, src)                                    — non-advancing vldus
-    //   (dst, ureg, src, stride) + post_update=True kwarg   — POST_UPDATE vldus
-    // vldus has no "stride without advancing" mode (AscendC DataCopyUnAlignImpl
+    // Call forms (args include the leading dst register; stride is positional):
+    //   (dst, ureg, src)                                    -> non-advancing vldus
+    //   (dst, ureg, src, stride)                            -> POST_UPDATE vldus
+    // Passing the stride argument selects POST_UPDATE mode. vldus has no
+    // "stride without advancing" mode (AscendC DataCopyUnAlignImpl
     // static_asserts POST_MODE_UPDATE for its strided overload), so every other
     // combination is rejected instead of silently stepping the pointer.
     PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, op->args_.size() == 3 || op->args_.size() == 4)
@@ -5699,13 +5705,8 @@ static std::string EmitVFLoadUnalign(const ir::CallPtr& op, codegen::CodegenBase
     // vldus supports b8/b16/b32/b64 element widths
     std::string ptr_type = dst_dt.ToCTypeString();
     if (op->args_.size() == 4) {
-        // Stride is only meaningful together with post_update=True — vldus has
-        // no "stride without advancing" mode.
-        bool post_update = op->HasKwarg("post_update") && op->GetKwarg<bool>("post_update");
-        PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, post_update)
-            << "vf.load_unalign: stride is only supported with post_update=True. The strided vldus form always "
-            << "advances the source pointer (matching AscendC DataCopyUnAlignImpl). For a non-advancing load, "
-            << "drop the stride argument: vf.load_unalign(ureg, src_ptr)";
+        // Passing the stride argument selects POST_UPDATE — vldus has no
+        // "stride without advancing" mode.
         std::string stride = codegen.GetExprAsCode(op->args_[3]);
         std::string src_ptr = codegen.GetOrCreateVFTilePtr(op->args_[2], /*is_post_update=*/true);
         int elem_bytes = static_cast<int>(dst_dt.GetBit() / 8);
@@ -5723,12 +5724,7 @@ static std::string EmitVFLoadUnalign(const ir::CallPtr& op, codegen::CodegenBase
         codegen.Emit("vldus(" + dst_expr + ", " + ureg + ", " + src_ptr + ", " + effective_stride + ", POST_UPDATE);");
         return "";
     }
-    // Stride-less form: POST_UPDATE has nothing to advance by.
-    if (op->HasKwarg("post_update")) {
-        PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, !op->GetKwarg<bool>("post_update"))
-            << "vf.load_unalign: post_update=True requires an explicit stride argument "
-            << "(vf.load_unalign(ureg, src_ptr, stride, post_update=True))";
-    }
+    // Stride-less form: non-advancing vldus.
     std::string src_ptr = GetUBufPtr(codegen, op->args_[2], ptr_type);
     codegen.Emit("vldus(" + dst + ", " + ureg + ", " + src_ptr + ");");
     return "";

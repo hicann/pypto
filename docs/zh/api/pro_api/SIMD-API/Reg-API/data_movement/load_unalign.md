@@ -20,8 +20,8 @@
 
 | 接口类型 | 触发条件 | 说明 |
 |---|---|---|
-| 普通搬运接口 | 不传stride，post_update=False（默认） | 完成一次搬运后，Tile地址不会自动更新，每次迭代需要手动更新地址。 |
-| PostUpdate扩展搬运接口 | 传入stride且post_update=True | 完成一次搬运后，Tile地址会自动更新，每次迭代不需要手动更新地址。 |
+| 普通搬运接口 | 不传stride | 完成一次搬运后，Tile地址不会自动更新，每次迭代需要手动更新地址。 |
+| PostUpdate扩展搬运接口 | 传入stride | 完成一次搬运后，Tile地址会自动更新，每次迭代不需要手动更新地址。 |
 | AddrReg存储偏移量接口 | offset为vf.create_addr_reg创建的AddrReg | 在每次迭代中，需要先调用vf.create_addr_reg手动设定地址偏移量，再调用搬运指令。 |
 
 在读非对齐地址前，应该先通过vf.load_unalign_pre进行初始化，保存非32字节对齐的数据，然后再调用vf.load_unalign进行数据搬入。
@@ -62,7 +62,7 @@
 ## 函数原型
 
 ```python
-load_unalign(align_reg, tile, stride, post_update: bool = False) -> dst
+load_unalign(align_reg, tile, stride) -> dst
 ```
 
 ## 参数说明
@@ -71,8 +71,7 @@ load_unalign(align_reg, tile, stride, post_update: bool = False) -> dst
 |---|---|---|
 | align_reg | 输入/输出 | 非对齐寄存器，UnalignRegForLoad类型，用于存储非32字节的数据，寄存器大小为32字节（由vf.load_unalign_init()创建）。 |
 | tile | 输入 | 源操作数，Tile地址，起始地址需要32字节对齐。目的操作数与源操作数的数据类型需要保持一致。支持的数据类型为：DT_INT8、DT_UINT8、DT_INT16、DT_UINT16、DT_FP16、DT_BF16、DT_INT32、DT_UINT32、DT_FP32、DT_INT64、DT_UINT64、DT_FP8E4M3FN、DT_FP8E5M2、DT_FP8E8M0、DT_HF8、DT_FP4E2M1、DT_FP4E1M2。 |
-| stride | 输入 | 可选，地址更新步长，单位：元素个数。仅在post_update=True时有效。 |
-| post_update | 输入 | 可选，True时搬运后地址自动累进，默认False。 |
+| stride | 输入 | 可选，传入时自动启用post-update模式，搬运后源地址自动累进stride指定的步长。不传时为普通加载模式。 |
 
 ## 约束说明
 
@@ -96,7 +95,7 @@ import torch_npu
 def example_vf(src_tile, dst_tile):
     ureg = vf.load_unalign_init()
     vf.load_unalign_pre(ureg, src_tile)
-    src_reg = vf.load_unalign(ureg, src_tile, 64, post_update=True)
+    src_reg = vf.load_unalign(ureg, src_tile, 64)
     store_ureg = vf.unalign_reg_for_store()
     vf.store_unalign(dst_tile, src_reg, store_ureg, 64, post_update=True)
     vf.store_unalign_post(dst_tile, store_ureg, 0, post_update=True)
@@ -146,7 +145,7 @@ def example_vf(src_tile, dst_tile):
     ureg = vf.load_unalign_init()
     vf.load_unalign_pre(ureg, src_tile)
     store_ureg = vf.unalign_reg_for_store()
-    src_reg = vf.load_unalign(ureg, src_tile, 64, post_update=True)
+    src_reg = vf.load_unalign(ureg, src_tile, 64)
     vf.store_unalign(dst_tile, src_reg, store_ureg, 64, post_update=True)
     vf.store_unalign_post(dst_tile, store_ureg, 64, post_update=True)
 
