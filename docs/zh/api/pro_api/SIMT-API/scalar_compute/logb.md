@@ -1,4 +1,4 @@
-# pypto_pro.language.simt.log1p
+# pypto_pro.language.simt.logb
 
 ## 产品支持情况
 
@@ -14,14 +14,14 @@
 
 ## 功能说明
 
-计算源操作数加1后的自然对数，计算公式如下：
+以浮点数形式返回value绝对值的无偏二进制指数。对于有限非零输入，结果等价于：
 
-$$result = \ln(1 + value)$$
+$$result = \lfloor \log_2(|value|) \rfloor$$
 
 ## 函数原型
 
 ```python
-pypto_pro.language.simt.log1p(
+pypto_pro.language.simt.logb(
     value: Scalar,
 ) -> Scalar
 ```
@@ -34,40 +34,38 @@ pypto_pro.language.simt.log1p(
 
 ## 约束说明
 
-只能在由@pypto_pro.language.vector_function(mode="simt")定义的SIMT入口函数或辅助函数中调用。
+只能在由@pypto_pro.language.vector_function(mode="simt")定义的SIMT函数中调用。
 
 ## 返回值说明
 
-返回源操作数加1后的自然对数，数据类型为DT_FP32。特殊值如下：
+返回value绝对值的无偏二进制指数，数据类型为DT_FP32。特殊值如下：
 
 | value取值 | 返回值 |
 |---|---|
-| +Inf | +Inf |
-| -Inf | NaN |
+| ±0 | -Inf |
+| ±Inf | +Inf |
 | NaN | NaN |
-| -1 | -Inf |
-| ±0 | +0 |
-| 小于-1的有限值 | NaN |
 
 ## 调用示例
 
 ```python
 import pypto_pro.language as pl
 
+
 @pl.vector_function(mode="simt", max_threads=64)
-def log1p_fp32(
-    source: pl.Tensor[[1, 64], pl.DT_FP32],
+def logb_example(
+    value: pl.Tensor[[1, 64], pl.DT_FP32],
     output: pl.Tensor[[1, 64], pl.DT_FP32],
 ):
     tid = pl.simt.linear_thread_idx()
-    output[0, tid] = pl.simt.log1p(source[0, tid])
+    output[0, tid] = pl.simt.logb(value[0, tid])
 
 
 @pl.jit()
-def simt_log1p_kernel(
-    source: pl.Tensor[[1, 64], pl.DT_FP32],
+def logb_kernel(
+    value: pl.Tensor[[1, 64], pl.DT_FP32],
     output: pl.Tensor[[1, 64], pl.DT_FP32],
 ):
     with pl.section_vector():
-        log1p_fp32[64](source, output)
+        logb_example[64](value, output)
 ```

@@ -1,4 +1,4 @@
-# pypto_pro.language.simt.log1p
+# pypto_pro.language.simt.signbit
 
 ## 产品支持情况
 
@@ -14,14 +14,12 @@
 
 ## 功能说明
 
-计算源操作数加1后的自然对数，计算公式如下：
-
-$$result = \ln(1 + value)$$
+提取value的符号位。该操作直接检查DT_FP32位模式，可以区分正零与负零。
 
 ## 函数原型
 
 ```python
-pypto_pro.language.simt.log1p(
+pypto_pro.language.simt.signbit(
     value: Scalar,
 ) -> Scalar
 ```
@@ -34,40 +32,41 @@ pypto_pro.language.simt.log1p(
 
 ## 约束说明
 
-只能在由@pypto_pro.language.vector_function(mode="simt")定义的SIMT入口函数或辅助函数中调用。
+只能在由@pypto_pro.language.vector_function(mode="simt")定义的SIMT函数中调用。
 
 ## 返回值说明
 
-返回源操作数加1后的自然对数，数据类型为DT_FP32。特殊值如下：
+返回符号位，数据类型为DT_INT32。特殊值如下：
 
 | value取值 | 返回值 |
 |---|---|
-| +Inf | +Inf |
-| -Inf | NaN |
-| NaN | NaN |
-| -1 | -Inf |
-| ±0 | +0 |
-| 小于-1的有限值 | NaN |
+| +0 | 0 |
+| +Inf | 0 |
+| 符号位为0的NaN | 0 |
+| -0 | 1 |
+| -Inf | 1 |
+| 符号位为1的NaN | 1 |
 
 ## 调用示例
 
 ```python
 import pypto_pro.language as pl
 
+
 @pl.vector_function(mode="simt", max_threads=64)
-def log1p_fp32(
-    source: pl.Tensor[[1, 64], pl.DT_FP32],
-    output: pl.Tensor[[1, 64], pl.DT_FP32],
+def signbit_example(
+    value: pl.Tensor[[1, 64], pl.DT_FP32],
+    output: pl.Tensor[[1, 64], pl.DT_INT32],
 ):
     tid = pl.simt.linear_thread_idx()
-    output[0, tid] = pl.simt.log1p(source[0, tid])
+    output[0, tid] = pl.simt.signbit(value[0, tid])
 
 
 @pl.jit()
-def simt_log1p_kernel(
-    source: pl.Tensor[[1, 64], pl.DT_FP32],
-    output: pl.Tensor[[1, 64], pl.DT_FP32],
+def signbit_kernel(
+    value: pl.Tensor[[1, 64], pl.DT_FP32],
+    output: pl.Tensor[[1, 64], pl.DT_INT32],
 ):
     with pl.section_vector():
-        log1p_fp32[64](source, output)
+        signbit_example[64](value, output)
 ```

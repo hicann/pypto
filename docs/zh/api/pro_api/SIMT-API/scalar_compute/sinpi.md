@@ -1,4 +1,4 @@
-# pypto_pro.language.simt.log1p
+# pypto_pro.language.simt.sinpi
 
 ## 产品支持情况
 
@@ -14,14 +14,14 @@
 
 ## 功能说明
 
-计算源操作数加1后的自然对数，计算公式如下：
+计算$\pi$与value乘积的正弦值。
 
-$$result = \ln(1 + value)$$
+$$result = \sin(\pi\times value)$$
 
 ## 函数原型
 
 ```python
-pypto_pro.language.simt.log1p(
+pypto_pro.language.simt.sinpi(
     value: Scalar,
 ) -> Scalar
 ```
@@ -34,40 +34,40 @@ pypto_pro.language.simt.log1p(
 
 ## 约束说明
 
-只能在由@pypto_pro.language.vector_function(mode="simt")定义的SIMT入口函数或辅助函数中调用。
+只能在由@pypto_pro.language.vector_function(mode="simt")定义的SIMT函数中调用。
 
 ## 返回值说明
 
-返回源操作数加1后的自然对数，数据类型为DT_FP32。特殊值如下：
+返回正弦值，数据类型为DT_FP32。特殊值如下：
 
 | value取值 | 返回值 |
 |---|---|
-| +Inf | +Inf |
-| -Inf | NaN |
+| 整数 | 符号与value一致的零 |
+| +0.5 | +1 |
+| +1.5 | -1 |
+| ±Inf | NaN |
 | NaN | NaN |
-| -1 | -Inf |
-| ±0 | +0 |
-| 小于-1的有限值 | NaN |
 
 ## 调用示例
 
 ```python
 import pypto_pro.language as pl
 
+
 @pl.vector_function(mode="simt", max_threads=64)
-def log1p_fp32(
-    source: pl.Tensor[[1, 64], pl.DT_FP32],
+def sinpi_example(
+    value: pl.Tensor[[1, 64], pl.DT_FP32],
     output: pl.Tensor[[1, 64], pl.DT_FP32],
 ):
     tid = pl.simt.linear_thread_idx()
-    output[0, tid] = pl.simt.log1p(source[0, tid])
+    output[0, tid] = pl.simt.sinpi(value[0, tid])
 
 
 @pl.jit()
-def simt_log1p_kernel(
-    source: pl.Tensor[[1, 64], pl.DT_FP32],
+def sinpi_kernel(
+    value: pl.Tensor[[1, 64], pl.DT_FP32],
     output: pl.Tensor[[1, 64], pl.DT_FP32],
 ):
     with pl.section_vector():
-        log1p_fp32[64](source, output)
+        sinpi_example[64](value, output)
 ```
