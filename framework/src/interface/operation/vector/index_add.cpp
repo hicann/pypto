@@ -283,7 +283,9 @@ void IndexAddExpandFunc(Function& function, const IndexAddPara& indexaddPara, In
     Shape tmpShape(NUM_VALUE_2, 1);
     auto alignSize = BLOCK_SIZE / BytesOf(srcTile->Datatype());
     tmpShape[1] = AlignUp(srcTile->GetShape()[srcTile->GetShape().size() - 1], alignSize);
-    bool useSimt = Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510 &&
+    // A non-last index axis updates rows; keep the TSTORE atomic-add path for those rows.
+    bool isRowUpdate = axis != static_cast<int>(srcInput->GetShape().size()) - 1;
+    bool useSimt = !isRowUpdate && Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510 &&
                    (srcTile->Datatype() == DT_FP32 || srcTile->Datatype() == DT_FP16 ||
                     srcTile->Datatype() == DT_BF16) &&
                    indexTile->Datatype() == DT_INT32;
