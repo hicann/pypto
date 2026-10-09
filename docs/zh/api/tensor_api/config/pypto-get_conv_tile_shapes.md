@@ -14,7 +14,7 @@
 
 ## 功能说明
 
-获取卷积（conv）计算中设置的TileShape大小以及L0TileInfo的开关使能。
+获取卷积（conv）计算中设置的TileShape大小以及是否开启L0TileInfo。
 
 ## 函数原型
 

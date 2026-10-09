@@ -32,7 +32,7 @@ set_verify_options(*,
 
 | 参数名                          | 输入/输出 | 说明                                                                 |
 |---------------------------------|-----------|----------------------------------------------------------------------|
-| enable_pass_verify              | 输入      | 含义：总体使能开关，决定所有 *pass_verify_* 选项、接口是否有效。 <br> 说明：True：代表使能。 <br> 类型：bool <br> 取值范围：True/False <br> 默认值：False |
+| enable_pass_verify              | 输入      | 含义：总体启用开关，决定所有 *pass_verify_* 选项、接口是否有效。 <br> 说明：True：代表启用。 <br> 类型：bool <br> 取值范围：True/False <br> 默认值：False |
 | pass_verify_save_tensor         | 输入      | 含义：配置是否将模拟计算数据存盘。 <br> 说明：True：代表存盘。 <br> 类型：bool <br> 取值范围：True/False <br> 默认值：False |
 | pass_verify_save_tensor_dir     | 输入      | 含义：配置检测结果及数据的保存路径。 <br> 说明：设定绝对路径的字符串。 <br> 类型：str <br> 默认值：<br> {RUNNING_DIR}/output/output_{TS} |
 | pass_verify_pass_filter         | 输入      | 含义：配置待自检的Pass名称列表。 <br> 说明：合法的Pass名称。 <br> 不指定则默认校验pass: ["ExpandFunction", "ProcessAtomic", "L1CopyInReuseMerge", "InferDynShape", "PreGraphProcess", "InferParamIndex", "CodegenPreproc"]；指定"all"则校验所有pass，指定[]不校验pass只校验tensor_graph;指定非法名称则忽略。 <br> 类型：List[str] <br> 默认值：空 |

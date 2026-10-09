@@ -101,11 +101,11 @@ PyPTO在计算图编译的各Pass阶段拥有完整的中间表示，可翻译�
 主要特性及使用场景：
 
 - Tensor Graph校验：用于校验算子代码、框架前端处理的正确性。基于用户提供的基准（golden）输入输出数据，与Tensor Graph模拟计算的最终结果对比检测整体计算的正确性。常用于以下情况：
-    - 当用户存在可用的算子基准（golden）输入、输出数据时，可先使能粗检特性粗略排除算子代码、框架前端处理是否引入差异。
+    - 当用户存在可用的算子基准（golden）输入、输出数据时，可先启用粗检特性粗略排除算子代码、框架前端处理是否引入差异。
 
 - Pass阶段校验：用于自检Pass的正确性。基于各Pass模拟计算的结果，对比检测Pass正确性及异常计算节点。常用于以下情况：
-    - 当用户算子精度刚刚出现问题且没有明确方向，可先使能自检特性排除Pass处理阶段是否引入潜在错误。
-    - 当用户大致明确某个Pass出问题时，使能自检特性获取该Pass及前序Pass的模拟计算中间数据，对比数据找出潜在出问题的计算操作。
+    - 当用户算子精度刚刚出现问题且没有明确方向，可先启用自检特性排除Pass处理阶段是否引入潜在错误。
+    - 当用户大致明确某个Pass出问题时，启用自检特性获取该Pass及前序Pass的模拟计算中间数据，对比数据找出潜在出问题的计算操作。
 
 - 中间结果分析：指定单个计算结果，保存到文件或者以可读形式打印到输出、日志。
     - 当Tensor Graph校验失败时，可使用pass_verify_print/pass_verify_save特性打印、保存模拟计算的中间数据，对比数据找出潜在出问题的计算操作。
@@ -160,7 +160,7 @@ PyPTO在计算图编译的各Pass阶段拥有完整的中间表示，可翻译�
 
     | 参数名 | 类型 | 默认值 | 说明 |
     |--------|------|--------|------|
-    | `enable_pass_verify` | bool | False | 总体使能开关，决定所有`pass_verify_*`选项和接口是否生效。必须设置为`True`才能使其他参数生效 |
+    | `enable_pass_verify` | bool | False | 总体启用开关，决定所有`pass_verify_*`选项和接口是否生效。必须设置为`True`才能使其他参数生效 |
     | `pass_verify_save_tensor` | bool | False | 是否将模拟计算数据存盘。设置为`True`时会在`{work_path}/output/output_*/`目录下生成`verify_*`目录 |
     | `pass_verify_save_tensor_dir` | str | "{RUNNING_DIR}/output/output_{TS}" | 检测结果及数据的保存路径。可指定绝对路径 |
     | `pass_verify_pass_filter` | List[str] | 空 | 配置待自检的Pass名称列表。不指定则默认校验所有pass；指定`"all"`则校验所有pass；指定`[]`不校验pass只校验tensor_graph |
@@ -381,7 +381,7 @@ output/output_*/dump_tensor_*/device_{deviceId}/
 **使用方法：**
 
 ```bash
-# 基本用法（未使能enable_pass_verify，不进行验证）
+# 基本用法（未启用enable_pass_verify，不进行验证）
 python3 tools/verifier/parse_dump_tensors.py \
     --dump_tensor_path output/output_20260101120000/dump_tensor_20260101120000/device_0
 
