@@ -72,6 +72,10 @@ enum class CalculatorErrorScene : uint32_t {
 
     // Pack/UnPack 相关
     PACKORUNPACK_MEMCPY_FAILED = 0xBF019U, // PackOrUnPack 中 memcpy_s 失败
+
+    // Conv 精度工具相关
+    FORMAT_TRANS_CONV_UNSUPPORTED = 0xBF01AU, // FormatTransConv 收到未支持的格式转换组合
+    CONV_PARAM_INVALID = 0xBF01BU,            // Conv 参数/shape 不满足约束
 };
 
 } // namespace npu::tile_fwk

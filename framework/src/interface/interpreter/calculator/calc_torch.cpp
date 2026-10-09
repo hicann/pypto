@@ -1633,6 +1633,19 @@ static void FormatNZ2ND(const TensorData& out, const TensorData& self)
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
+// Conv tail tiles: the bias (BT) covers only the valid N columns of the aligned cube tile. After
+// InferParamIndex normalizes operand valid shapes to full, bias N can be smaller than the matmul
+// result N; emulate the fixpipe by applying bias to the first biasN columns only.
+static void AddBiasClampedToN(torch::Tensor& result, const torch::Tensor& bias)
+{
+    auto biasN = bias.size(-1);
+    if (biasN >= result.size(-1)) {
+        result.add_(bias);
+    } else {
+        result.slice(-1, 0, biasN).add_(bias);
+    }
+}
+
 static void MatmulMultiDataLoad(torch::Tensor& out, const torch::Tensor& lhs, const torch::Tensor& rhs,
                                 const torch::Tensor& bias, int64_t kstep)
 {
@@ -1654,7 +1667,7 @@ static void MatmulMultiDataLoad(torch::Tensor& out, const torch::Tensor& lhs, co
         out.add_(torch::matmul(viewL, viewR));
     }
     if (biasShape.size() == 0x2) {
-        out.add_(bias);
+        AddBiasClampedToN(out, bias);
     }
 }
 
@@ -1814,11 +1827,11 @@ static void MatMul(const TensorData& out, const TensorData& self, const TensorDa
         tother.second = tother.second.mul(bScaleExpanded);
     }
     if (!param.kStep || param.kStep == tself.second.size(-1)) {
+        auto result = torch::matmul(tself.second, tother.second);
         if (param.biasPtr != nullptr) {
-            tout.second.add_(torch::matmul(tself.second, tother.second) + bias_tensor.second);
-        } else {
-            tout.second.add_(torch::matmul(tself.second, tother.second));
+            AddBiasClampedToN(result, bias_tensor.second);
         }
+        tout.second.add_(result);
     } else {
         MatmulMultiDataLoad(tout.second, tself.second, tother.second, bias_tensor.second, param.kStep);
     }
@@ -1829,6 +1842,487 @@ static void MatMul(const TensorData& out, const TensorData& self, const TensorDa
     if (calcType != dtype) {
         tout.second = tout.second.to(dtype);
     }
+    ToOperand(tout.second, tout.first, out.dtype);
+}
+
+constexpr int64_t CONV_FMT_ND = 0;
+constexpr int64_t CONV_FMT_NC1HWC0 = 2;
+constexpr int64_t CONV_FMT_NDC1HWC0 = 3;
+constexpr int64_t CONV_FMT_FRACTAL_Z = 4;
+constexpr int64_t CONV_FMT_FRACTAL_Z_3D = 5;
+constexpr int64_t CONV_N0 = 16;
+
+static torch::Tensor ConvNchwToNc1hwc0(const torch::Tensor& in, int64_t c1, int64_t c0, int64_t hT, int64_t wT,
+                                       int64_t groups = 1)
+{
+    auto s = in.sizes().vec();
+    auto t = torch::zeros({s[0], c1 * c0, hT, wT}, in.options());
+    if (groups > 1) {
+        // arch32 group layout: c1 = groups * c1PerGroup blocks, block (g, j) holds group g's channels
+        // [j * c0, j * c0 + c0); a plain contiguous copy would put both groups' channels into block 0
+        int64_t c1pg = c1 / groups;
+        int64_t cinPG = s[1] / groups;
+        auto tG = t.view({s[0], groups, c1pg * c0, hT, wT});
+        for (int64_t g = 0; g < groups; g++) {
+            tG.select(1, g)
+                .slice(1, 0, cinPG)
+                .slice(2, 0, s[2])
+                .slice(3, 0, s[3])
+                .copy_(in.slice(1, g * cinPG, (g + 1) * cinPG));
+        }
+    } else {
+        t.slice(1, 0, s[1]).slice(2, 0, s[2]).slice(3, 0, s[3]).copy_(in);
+    }
+    t = t.view({s[0], c1, c0, hT, wT});
+    return t.permute({0, 1, 3, 4, 2});
+}
+
+static torch::Tensor ConvNc1hwc0ToNchw(const torch::Tensor& in, int64_t groups = 1, int64_t chPG = 0)
+{
+    auto t = in.permute({0, 1, 4, 2, 3});
+    auto s = t.sizes().vec();
+    if (groups > 1 && chPG > 0) {
+        // gather group-blocked NZ back to compact ND: out channel g * chPG + j * c0 + l <- block (g, j)[l];
+        // the plain reshape keeps per-group padding slots which a slice(1, 0, total) would truncate
+        int64_t c1pg = s[1] / groups;
+        int64_t c0 = s[2];
+        auto out = torch::zeros({s[0], groups * chPG, s[3], s[4]}, t.options());
+        auto tG = t.reshape({s[0], groups, c1pg * c0, s[3], s[4]});
+        for (int64_t g = 0; g < groups; g++) {
+            for (int64_t j = 0; j < c1pg; j++) {
+                int64_t validL = std::min<int64_t>(c0, chPG - j * c0);
+                if (validL <= 0) {
+                    break;
+                }
+                out.slice(1, g * chPG + j * c0, g * chPG + j * c0 + validL)
+                    .copy_(tG.select(1, g).slice(1, j * c0, j * c0 + validL));
+            }
+        }
+        return out;
+    }
+    return t.reshape({s[0], s[1] * s[2], s[3], s[4]});
+}
+
+static torch::Tensor ConvNcdhwToNdc1hwc0(const torch::Tensor& in, int64_t c1, int64_t c0, int64_t groups = 1)
+{
+    auto s = in.sizes().vec();
+    auto t = torch::constant_pad_nd(in, {0, 0, 0, 0, 0, 0, 0, c1 * c0 - s[1], 0, 0}, 0);
+    if (groups > 1) {
+        int64_t c1pg = c1 / groups;
+        int64_t cinPG = s[1] / groups;
+        auto tG = t.view({s[0], s[2], groups, c1pg * c0, s[3], s[4]});
+        for (int64_t g = 0; g < groups; g++) {
+            tG.select(2, g).slice(1, 0, cinPG).copy_(in.slice(1, g * cinPG, (g + 1) * cinPG));
+        }
+    }
+    t = t.view({s[0], s[2], c1, c0, s[3], s[4]});
+    return t.permute({0, 1, 2, 4, 5, 3});
+}
+
+static torch::Tensor ConvNdc1hwc0ToNcdhw(const torch::Tensor& in, int64_t groups = 1, int64_t chPG = 0)
+{
+    auto t = in.permute({0, 2, 5, 1, 3, 4});
+    auto s = t.sizes().vec();
+    if (groups > 1 && chPG > 0) {
+        int64_t c1pg = s[1] / groups;
+        int64_t c0 = s[2];
+        auto out = torch::zeros({s[0], groups * chPG, s[3], s[4], s[5]}, t.options());
+        auto tG = t.reshape({s[0], s[3], groups, c1pg * c0, s[4], s[5]});
+        for (int64_t g = 0; g < groups; g++) {
+            for (int64_t j = 0; j < c1pg; j++) {
+                int64_t validL = std::min<int64_t>(c0, chPG - j * c0);
+                if (validL <= 0) {
+                    break;
+                }
+                out.slice(1, g * chPG + j * c0, g * chPG + j * c0 + validL)
+                    .copy_(tG.select(2, g).slice(2, j * c0, j * c0 + validL));
+            }
+        }
+        return out;
+    }
+    return t.reshape({s[0], s[1] * s[2], s[3], s[4], s[5]});
+}
+
+static torch::Tensor ConvNchwToFz(const torch::Tensor& in, int64_t groups, int64_t n1pg, int64_t c1pg, int64_t c0)
+{
+    auto s = in.sizes().vec();
+    // pad cout per group (n1pg * N0 each), not at the end of the whole N dim: the FZ n dim is
+    // [group, n1, n0] and group g's weights must land in group g's own n-block slice
+    int64_t coutPG = s[0] / groups;
+    auto t = in.view({groups, coutPG, s[1], s[2], s[3]});
+    t = torch::constant_pad_nd(t, {0, 0, 0, 0, 0, c1pg * c0 - s[1], 0, n1pg * CONV_N0 - coutPG}, 0);
+    t = t.view({groups, n1pg, CONV_N0, c1pg, c0, s[2], s[3]});
+    t = t.permute({0, 3, 5, 6, 1, 2, 4});
+    return t.reshape({groups * c1pg * s[2] * s[3], n1pg, CONV_N0, c0});
+}
+
+static torch::Tensor ConvFzToNchw(const torch::Tensor& fz, int64_t groups, int64_t h, int64_t w)
+{
+    auto s = fz.sizes().vec();
+    int64_t c1pg = s[0] / (groups * h * w);
+    auto t = fz.view({groups, c1pg, h, w, s[1], s[2], s[3]});
+    t = t.permute({0, 4, 5, 1, 6, 2, 3});
+    return t.reshape({groups * s[1] * s[2], c1pg * s[3], h, w});
+}
+
+static torch::Tensor ConvNcdhwToFz3d(const torch::Tensor& in, int64_t groups, int64_t n1pg, int64_t c1pg, int64_t c0)
+{
+    auto s = in.sizes().vec();
+    // pad cout per group, mirroring ConvNchwToFz
+    int64_t coutPG = s[0] / groups;
+    auto t = in.view({groups, coutPG, s[1], s[2], s[3], s[4]});
+    t = torch::constant_pad_nd(t, {0, 0, 0, 0, 0, 0, 0, c1pg * c0 - s[1], 0, n1pg * CONV_N0 - coutPG, 0, 0}, 0);
+    t = t.view({groups, n1pg, CONV_N0, c1pg, c0, s[2], s[3], s[4]});
+    t = t.permute({0, 5, 3, 6, 7, 1, 2, 4});
+    return t.reshape({groups * c1pg * s[2] * s[3] * s[4], n1pg, CONV_N0, c0});
+}
+
+static torch::Tensor ConvFz3dToNcdhw(const torch::Tensor& fz, int64_t groups, int64_t d, int64_t h, int64_t w)
+{
+    auto s = fz.sizes().vec();
+    int64_t c1pg = s[0] / (groups * d * h * w);
+    auto t = fz.view({groups, d, c1pg, h, w, s[1], s[2], s[3]});
+    t = t.permute({0, 5, 6, 3, 7, 1, 2, 4});
+    return t.reshape({groups * s[1] * s[2], c1pg * s[3], d, h, w});
+}
+
+static void Conv(const TensorData& out, const TensorData& fmap, const TensorData& weight, const TensorData* bias,
+                 ConvParam& param)
+{
+    auto tout = From(out);
+    auto dtype = tout.second.scalar_type();
+    auto calcType = (dtype == torch::kFloat16 || dtype == torch::kBFloat16) ? torch::kFloat : dtype;
+    bool is3d = param.isConv3D != 0;
+
+    auto x = From(fmap).second;
+    if (param.fmapFormat == CONV_FMT_NC1HWC0) {
+        x = ConvNc1hwc0ToNchw(x);
+    } else if (param.fmapFormat == CONV_FMT_NDC1HWC0) {
+        x = ConvNdc1hwc0ToNcdhw(x);
+    }
+    auto w = From(weight).second;
+    if (param.weightFormat == CONV_FMT_FRACTAL_Z) {
+        w = ConvFzToNchw(w, param.groups, param.kernelSize[0], param.kernelSize[1]);
+    } else if (param.weightFormat == CONV_FMT_FRACTAL_Z_3D) {
+        w = ConvFz3dToNcdhw(w, param.groups, param.kernelSize[0], param.kernelSize[1], param.kernelSize[2]);
+    }
+    x = x.to(calcType);
+    w = w.to(calcType);
+    torch::Tensor b;
+    if (bias != nullptr) {
+        b = From(*bias).second.to(calcType).reshape({-1});
+        if (param.groups > 1) {
+            // w is group-blocked and per-group padded along cout ([g, n1, n0] flattened); slicing the
+            // first b.numel() rows would keep group 0's block only. Keep w padded and pad the bias
+            // per group to match w's padded cout rows instead.
+            int64_t rowsPG = w.size(0) / param.groups;
+            int64_t coutPG = b.numel() / param.groups;
+            auto bPad = torch::zeros({w.size(0)}, b.options());
+            for (int64_t g = 0; g < param.groups; g++) {
+                bPad.slice(0, g * rowsPG, g * rowsPG + coutPG).copy_(b.slice(0, g * coutPG, (g + 1) * coutPG));
+            }
+            b = bPad;
+        } else if (w.size(0) > b.numel()) {
+            w = w.slice(0, 0, b.numel());
+        }
+    }
+    namespace F = torch::nn::functional;
+    torch::Tensor r;
+    if (is3d) {
+        x = torch::constant_pad_nd(x,
+                                   {param.paddings[2], param.paddings[3], param.paddings[0], param.paddings[1],
+                                    param.paddings[4], param.paddings[5]},
+                                   0);
+        r = F::conv3d(x, w,
+                      F::Conv3dFuncOptions()
+                          .bias(b)
+                          .stride({param.strides[2], param.strides[0], param.strides[1]})
+                          .padding({0, 0, 0})
+                          .dilation({param.dilations[2], param.dilations[0], param.dilations[1]})
+                          .groups(param.groups));
+    } else {
+        x = torch::constant_pad_nd(x, {param.paddings[2], param.paddings[3], param.paddings[0], param.paddings[1]}, 0);
+        r = F::conv2d(x, w,
+                      F::Conv2dFuncOptions()
+                          .bias(b)
+                          .stride({param.strides[0], param.strides[1]})
+                          .padding({0, 0})
+                          .dilation({param.dilations[0], param.dilations[1]})
+                          .groups(param.groups));
+    }
+    if (param.reluType == 1) {
+        r = torch::relu(r);
+    }
+    if (param.outFormat == CONV_FMT_NC1HWC0) {
+        auto os = tout.second.sizes().vec();
+        r = r.slice(1, 0, os[1] * os[4]).slice(2, 0, os[2]).slice(3, 0, os[3]);
+        tout.second.copy_(ConvNchwToNc1hwc0(r, os[1], os[4], os[2], os[3], param.groups));
+    } else if (param.outFormat == CONV_FMT_NDC1HWC0) {
+        auto os = tout.second.sizes().vec();
+        r = r.slice(1, 0, os[2] * os[5]).slice(3, 0, os[3]).slice(4, 0, os[4]);
+        tout.second.copy_(ConvNcdhwToNdc1hwc0(r, os[2], os[5], param.groups));
+    } else {
+        tout.second.copy_(r);
+    }
+    ToOperand(tout.second, tout.first, out.dtype);
+}
+
+// Fit a conversion result to a dst view whose shape may differ in both directions: per-group tile
+// outputs carry aligned padding the sliced dst view does not span (clamp down), while a dst whose
+// valid shape was cleared by InferParamIndex may span padding beyond the result (pad up with zeros).
+static torch::Tensor FitToDstView(const torch::Tensor& r, const torch::Tensor& dst)
+{
+    auto rs = r.sizes().vec();
+    auto ds = dst.sizes().vec();
+    bool needPad = false;
+    for (size_t i = 0; i < rs.size() && i < ds.size(); i++) {
+        if (rs[i] < ds[i]) {
+            needPad = true;
+            break;
+        }
+    }
+    auto t = r;
+    if (needPad) {
+        std::vector<int64_t> padList;
+        for (int64_t i = static_cast<int64_t>(rs.size()) - 1; i >= 0; i--) {
+            int64_t dstDim = i < static_cast<int64_t>(ds.size()) ? ds[i] : rs[i];
+            padList.push_back(0);
+            padList.push_back(dstDim > rs[i] ? dstDim - rs[i] : 0);
+        }
+        t = torch::constant_pad_nd(t, padList, 0);
+    }
+    for (size_t i = 0; i < rs.size() && i < ds.size(); i++) {
+        if (rs[i] > ds[i]) {
+            t = t.slice(i, 0, ds[i]);
+        }
+    }
+    return t;
+}
+
+static void FormatTransConv(const TensorData& out, const TensorData& self, int64_t srcFmt, int64_t dstFmt,
+                            int64_t group)
+{
+    auto tout = From(out);
+    auto tself = From(self).second;
+    auto os = tout.second.sizes().vec();
+    auto ss = tself.sizes().vec();
+    if (srcFmt == CONV_FMT_ND && dstFmt == CONV_FMT_NC1HWC0) {
+        tout.second.copy_(ConvNchwToNc1hwc0(tself, os[1], os[4], os[2], os[3], group));
+    } else if (srcFmt == CONV_FMT_NC1HWC0 && dstFmt == CONV_FMT_ND) {
+        tout.second.copy_(FitToDstView(ConvNc1hwc0ToNchw(tself, group, group > 1 ? os[1] / group : 0), tout.second));
+    } else if (srcFmt == CONV_FMT_ND && dstFmt == CONV_FMT_NDC1HWC0) {
+        tout.second.copy_(ConvNcdhwToNdc1hwc0(tself, os[2], os[5], group));
+    } else if (srcFmt == CONV_FMT_NDC1HWC0 && dstFmt == CONV_FMT_ND) {
+        tout.second.copy_(FitToDstView(ConvNdc1hwc0ToNcdhw(tself, group, group > 1 ? os[1] / group : 0), tout.second));
+    } else if (srcFmt == CONV_FMT_ND && dstFmt == CONV_FMT_FRACTAL_Z) {
+        int64_t c1pg = (ss[1] + os[3] - 1) / os[3];
+        auto r = ConvNchwToFz(tself, group, os[1], c1pg, os[3]);
+        if (r.size(0) == tout.second.size(0)) {
+            tout.second.copy_(r);
+        } else {
+            torch::Tensor padded = torch::zeros(tout.second.sizes(), tout.second.options());
+            padded.slice(0, 0, r.size(0)).copy_(r);
+            tout.second.copy_(padded);
+        }
+    } else if (srcFmt == CONV_FMT_FRACTAL_Z && dstFmt == CONV_FMT_ND) {
+        auto r = ConvFzToNchw(tself, group, os[2], os[3]);
+        tout.second.copy_(r.slice(0, 0, os[0]).slice(1, 0, os[1]));
+    } else if (srcFmt == CONV_FMT_ND && dstFmt == CONV_FMT_FRACTAL_Z_3D) {
+        int64_t c1pg = os[0] / (group * ss[2] * ss[3] * ss[4]);
+        tout.second.copy_(ConvNcdhwToFz3d(tself, group, os[1], c1pg, os[3]));
+    } else if (srcFmt == CONV_FMT_FRACTAL_Z_3D && dstFmt == CONV_FMT_ND) {
+        auto r = ConvFz3dToNcdhw(tself, group, os[2], os[3], os[4]);
+        tout.second.copy_(r.slice(0, 0, os[0]).slice(1, 0, os[1]));
+    } else {
+        ASSERT(CalculatorErrorScene::FORMAT_TRANS_CONV_UNSUPPORTED, false)
+            << "FormatTransConv unsupported: src=" << srcFmt << ", dst=" << dstFmt;
+    }
+    ToOperand(tout.second, tout.first, out.dtype);
+}
+
+static void ConvFmapND2NZ(const TensorData& out, const TensorData& self, int64_t isConv3D)
+{
+    auto tout = From(out);
+    auto tself = From(self).second;
+    auto os = tout.second.sizes().vec();
+    int64_t c0 = os[os.size() - 1];
+    torch::Tensor r;
+    if (isConv3D != 0) {
+        int64_t c1 = os[2];
+        auto padded = torch::constant_pad_nd(tself, {0, 0, 0, 0, 0, 0, 0, c1 * c0 - tself.size(1), 0, 0}, 0);
+        padded = padded.view({os[0], os[1], c1, c0, os[3], os[4]});
+        r = padded.permute({0, 1, 2, 4, 5, 3});
+    } else {
+        int64_t c1 = os[1];
+        auto padded = torch::constant_pad_nd(tself, {0, 0, 0, 0, 0, c1 * c0 - tself.size(1)}, 0);
+        padded = padded.view({os[0], c1, c0, os[2], os[3]});
+        r = padded.permute({0, 1, 3, 4, 2});
+    }
+    tout.second.copy_(r);
+    ToOperand(tout.second, tout.first, out.dtype);
+}
+
+static void ConvWeightND2FZ(const TensorData& out, const TensorData& self, int64_t isConv3D)
+{
+    auto tout = From(out);
+    auto tself = From(self).second;
+    auto os = tout.second.sizes().vec();
+    int64_t rows = os[0];
+    int64_t n1 = os[1];
+    int64_t c0 = os[3];
+    int64_t c1 = 0;
+    int64_t kh = 0;
+    int64_t kw = 0;
+    int64_t kd = 1;
+    if (isConv3D != 0) {
+        auto s = tself.sizes().vec();
+        kh = s[3];
+        kw = s[4];
+        kd = s[2];
+        c1 = rows / (kd * kh * kw);
+    } else {
+        auto s = tself.sizes().vec();
+        kh = s[2];
+        kw = s[3];
+        c1 = rows / (kh * kw);
+    }
+    torch::Tensor padded;
+    torch::Tensor r;
+    if (isConv3D != 0) {
+        padded = torch::constant_pad_nd(
+            tself, {0, 0, 0, 0, 0, 0, 0, c1 * c0 - tself.size(1), 0, n1 * CONV_N0 - tself.size(0)}, 0);
+        padded = padded.view({n1, CONV_N0, c1, c0, kd, kh, kw});
+        r = padded.permute({4, 2, 5, 6, 0, 1, 3}).reshape({rows, n1, CONV_N0, c0});
+    } else {
+        padded = torch::constant_pad_nd(tself,
+                                        {0, 0, 0, 0, 0, c1 * c0 - tself.size(1), 0, n1 * CONV_N0 - tself.size(0)}, 0);
+        padded = padded.view({n1, CONV_N0, c1, c0, kh, kw});
+        r = padded.permute({2, 4, 5, 0, 1, 3}).reshape({rows, n1, CONV_N0, c0});
+    }
+    tout.second.copy_(r);
+    ToOperand(tout.second, tout.first, out.dtype);
+}
+
+static void ConvLoad3D(const TensorData& out, const TensorData& l1, ConvTileParam& param)
+{
+    auto tout = From(out);
+    auto tl1 = From(l1).second.contiguous();
+    auto os = tout.second.sizes().vec();
+    auto ls = tl1.sizes().vec();
+    int64_t c0 = ls[ls.size() - 1];
+    int64_t k = os.size() > 1 ? os[1] : 0;
+    int64_t curW = param.l0CutW;
+    int64_t c1 = param.isConv3D != 0 ? ls[2] : ls[1];
+    int64_t perD = c1 * param.filterH * param.filterW;
+    int64_t hin = ls[ls.size() - 3];
+    int64_t win = ls[ls.size() - 2];
+    auto vals = torch::zeros({os[0], k}, tl1.options());
+    for (int64_t mIdx = 0; mIdx < vals.size(0); mIdx++) {
+        int64_t hLocal = mIdx / curW;
+        int64_t wLocal = mIdx % curW;
+        for (int64_t kIdx = 0; kIdx < k; kIdx++) {
+            int64_t hw = (param.kStartPt + kIdx) / c0;
+            int64_t c0i = kIdx % c0;
+            int64_t dIdx = 0;
+            if (param.isConv3D != 0) {
+                dIdx = hw / perD;
+                hw = hw % perD;
+            }
+            int64_t kwI = hw % param.filterW;
+            int64_t rem = hw / param.filterW;
+            int64_t khI = rem % param.filterH;
+            int64_t c1I = rem / param.filterH;
+            int64_t row = (param.l0HOffset + hLocal) * param.strideH + khI * param.dilationH - param.padTop;
+            int64_t col = (param.l0WOffset + wLocal) * param.strideW + kwI * param.dilationW - param.padLeft;
+            float value = 0.0f;
+            if (row >= 0 && row < hin && col >= 0 && col < win) {
+                if (param.isConv3D != 0) {
+                    value = tl1[0][dIdx][c1I][row][col][c0i].item<float>();
+                } else {
+                    value = tl1[0][c1I][row][col][c0i].item<float>();
+                }
+            } else if (param.padValue != 0) {
+                value = static_cast<float>(param.padValue);
+            }
+            vals[mIdx][kIdx] = value;
+        }
+    }
+    tout.second.copy_(vals);
+    ToOperand(tout.second, tout.first, out.dtype);
+}
+
+static void ConvLoad2D(const TensorData& out, const TensorData& l1, int64_t postK, int64_t postN, int64_t isConv3D)
+{
+    (void)isConv3D;
+    auto tout = From(out);
+    auto tl1 = From(l1).second;
+    auto b = tl1.permute({0, 3, 1, 2}).reshape({tl1.size(0) * tl1.size(3), tl1.size(1) * tl1.size(2)});
+    tout.second.copy_(b.slice(0, postK, postK + tout.second.size(0)).slice(1, postN, postN + tout.second.size(1)));
+    ToOperand(tout.second, tout.first, out.dtype);
+}
+
+static void ConvTransL0C(const TensorData& out, const TensorData& l0c, ConvL0CParam& param)
+{
+    auto tout = From(out);
+    auto tc = From(l0c).second;
+    auto os = tout.second.sizes().vec();
+    int64_t dynH = param.validH;
+    int64_t dynW = param.validW;
+    int64_t dynN = param.validN;
+    int64_t dynD = param.validD;
+    if (param.copyOutMode == 3) {
+        // dst valid shape may be unclamped for views that overflow storage; derive from the L0C tile
+        dynW = param.cutW > 0 ? param.cutW : dynW;
+        dynN = tc.size(1);
+        dynH = tc.size(0) / dynW;
+        dynD = 1; // per-tile d extent: L0 d tile is 0/1 by construction (CalL0DynValidShape / l0CTileResShape)
+        // after InferParamIndex clears the L0C valid shape, tc.size(1) is the aligned N; the dst
+        // region is already clamped to the valid extent, keep dynN within it
+        if (tout.second.dim() >= 0x2 && dynN > tout.second.size(1)) {
+            dynN = tout.second.size(1);
+        }
+    }
+    auto opts = torch::TensorOptions().dtype(torch::kLong);
+    if (param.copyOutMode != 3) {
+        // NZ2NZ dst tile spans the full c1 * c0 columns; GetValidDataView may have sliced the L0C
+        // input to its valid N (group-tail tiles), restore the aligned pad columns as zeros
+        int64_t fullN = os[os.size() - 1] * os[os.size() - 4];
+        if (tc.size(1) < fullN) {
+            auto paddedTc = torch::zeros({tc.size(0), fullN}, tc.options());
+            paddedTc.slice(1, 0, tc.size(1)).copy_(tc);
+            tc = paddedTc;
+        }
+    }
+    auto rows = (torch::arange(dynH, opts) * param.cutW).unsqueeze(1) + torch::arange(dynW, opts);
+    rows = rows.reshape({-1});
+    auto vals = tc.index_select(0, rows).slice(1, 0, dynN).view({dynH, dynW, dynN}).permute({2, 0, 1});
+    if (param.reluType == 1) {
+        vals = torch::relu(vals);
+    }
+    if (param.copyOutMode == 3) {
+        // write only the valid region of the (possibly offset) dst view
+        if (param.isConv3D != 0) {
+            tout.second.slice(1, 0, dynN)
+                .slice(2, 0, dynD)
+                .slice(3, 0, dynH)
+                .slice(4, 0, dynW)
+                .copy_(vals.unsqueeze(1).expand({dynN, dynD, dynH, dynW}));
+        } else {
+            tout.second.slice(1, 0, dynN).slice(2, 0, dynH).slice(3, 0, dynW).copy_(vals);
+        }
+        ToOperand(tout.second, tout.first, out.dtype);
+        return;
+    }
+    torch::Tensor r = torch::zeros(tout.second.sizes(), tout.second.options());
+    int64_t c0 = os[os.size() - 1];
+    int64_t c1 = os[os.size() - 4];
+    auto padded = tc.index_select(0, rows).slice(1, 0, c1 * c0).reshape({dynH, dynW, c1, c0}).permute({2, 0, 1, 3});
+    if (param.isConv3D != 0) {
+        r.slice(2, 0, c1).slice(3, 0, dynH).slice(4, 0, dynW).copy_(padded.unsqueeze(0).unsqueeze(0));
+    } else {
+        r.slice(1, 0, c1).slice(2, 0, dynH).slice(3, 0, dynW).copy_(padded);
+    }
+    tout.second.copy_(r);
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
@@ -2215,6 +2709,13 @@ static void Atan2(const TensorData& out, const TensorData& y, const TensorData& 
 
 static void Copy(const TensorData& out, const TensorData& self, bool trans, bool isMx)
 {
+    // A zero-extent dst means nothing valid to write (transdata pad regions clamp region-view
+    // valids to 0); emulate the valid-bounded copy as a no-op instead of a shape-mismatch failure.
+    for (int64_t dim : out.shape) {
+        if (dim == 0) {
+            return;
+        }
+    }
     auto tout = From(out);
     auto tself = From(self);
     if (trans) {
@@ -3562,6 +4063,13 @@ static struct CalcOps calcOps = {
     .MatMul = MatMul,
     .Quantize = Quantize,
     .Dequantize = Dequantize,
+    .Conv = Conv,
+    .FormatTransConv = FormatTransConv,
+    .ConvFmapND2NZ = ConvFmapND2NZ,
+    .ConvWeightND2FZ = ConvWeightND2FZ,
+    .ConvLoad3D = ConvLoad3D,
+    .ConvLoad2D = ConvLoad2D,
+    .ConvTransL0C = ConvTransL0C,
     .BitSort = BitSort,
     .TiledMrgSort = TiledMrgSort,
     .Extract = Extract,

@@ -490,6 +490,14 @@ void SetImg2ColAttr(Operation& load3dOpAl0, const ConvAttrParam& convAttrParam, 
     int64_t kStartPt = iterInfo.kL0Offset - iterInfo.kAL1BaseOffset;
     load3dOpAl0.SetAttribute(OpAttributeKey::postM, mStartPt);
     load3dOpAl0.SetAttribute(OpAttributeKey::postK, kStartPt);
+    // cal src window position of tile origin (for precision tool golden)
+    load3dOpAl0.SetAttribute("CONV_L0_H_OFFSET", iterInfo.hL0Offset);
+    load3dOpAl0.SetAttribute("CONV_L0_W_OFFSET", iterInfo.wL0Offset);
+    load3dOpAl0.SetAttribute("CONV_L0_CUT_W", std::min(convTileInfo.wL0, iterInfo.woutL1Size - iterInfo.wL0Offset));
+    load3dOpAl0.SetAttribute("CONV_SRC_H_DELTA", iterInfo.hL1OutOffset * convAttrParam.strides[0] -
+                                                     std::max(static_cast<int64_t>(0), iterInfo.hL1InOffset));
+    load3dOpAl0.SetAttribute("CONV_SRC_W_DELTA", iterInfo.wL1OutOffset * convAttrParam.strides[1] -
+                                                     std::max(static_cast<int64_t>(0), iterInfo.wL1InOffset));
     // set pad value
     load3dOpAl0.SetAttribute(OpAttributeKey::padValue, 0);
     // set load3dv2 params
@@ -660,7 +668,10 @@ LogicalTensorPtr ConstructFmapTile(Function& function, const ConvGraphNodes& ten
         SymbolicScalar::FromConcrete({iterInfo.mL0Size, iterInfo.kL0Size}), tensorGraphNodes.fmapTensorPtr->Format(),
         "aL0Tensor");
 
-    dstAL0TensorPtr->UpdateDynValidShape(SymbolicScalar::FromConcrete(dstAL0Shape));
+    dstAL0TensorPtr->UpdateDynValidShape(
+        std::vector<SymbolicScalar>{convTileInfo.dynValidBatchL0 * convTileInfo.dynValidDoutL0 *
+                                        convTileInfo.dynValidHoutL0 * convTileInfo.dynValidWoutL0,
+                                    SymbolicScalar(iterInfo.kL0Size)});
 
     auto& load3dOpAl0 = function.AddOperation(Opcode::OP_LOAD3D_CONV, {dstAL1TensorPtr}, {dstAL0TensorPtr});
     load3dOpAl0.SetAttribute("l0_tile_shape", SymbolicScalar::FromConcrete(dstAL0Shape));
@@ -826,7 +837,8 @@ LogicalTensorPtr ConstructWeightTile(Function& function, const ConvGraphNodes& t
         function, tensorGraphNodes.weightTensorPtr->Datatype(), dstBL0Shape,
         SymbolicScalar::FromConcrete({iterInfo.kL0Size, iterInfo.nL0Size}), tensorGraphNodes.weightTensorPtr->Format(),
         "bL0Tensor");
-    dstBL0TensorPtr->UpdateDynValidShape(SymbolicScalar::FromConcrete(dstBL0Shape));
+    dstBL0TensorPtr->UpdateDynValidShape(
+        std::vector<SymbolicScalar>{SymbolicScalar(iterInfo.kL0Size), convTileInfo.dynValidCoutL0});
     auto& load2dOpBl0 = function.AddOperation(Opcode::OP_LOAD2D_CONV, {dstBL1TensorPtr}, {dstBL0TensorPtr});
     load2dOpBl0.SetAttribute(OpAttributeKey::postK, iterInfo.kL0Offset - iterInfo.kBL1BaseOffset);
     load2dOpBl0.SetAttribute(OpAttributeKey::postN, iterInfo.nL0Offset);

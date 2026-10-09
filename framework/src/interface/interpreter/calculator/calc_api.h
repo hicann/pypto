@@ -46,6 +46,51 @@ struct MatMulParam {
     const TensorData* bScalePtr = nullptr;
 };
 
+struct ConvParam {
+    std::vector<int64_t> strides;  // 2d: {sh, sw}; 3d: {sh, sw, sd}
+    std::vector<int64_t> paddings; // 2d: {pt, pb, pl, pr}; 3d: {pt, pb, pl, pr, phead, ptail}
+    std::vector<int64_t> dilations;
+    std::vector<int64_t> kernelSize; // 2d: {kh, kw}; 3d: {kd, kh, kw}
+    int64_t groups = 1;
+    int64_t reluType = 0;
+    int64_t isConv3D = 0;
+    int64_t fmapFormat = 0;   // TileOpFormat value of fmap tensor
+    int64_t weightFormat = 0; // TileOpFormat value of weight tensor
+    int64_t outFormat = 0;    // TileOpFormat value of output tensor
+};
+
+struct ConvTileParam {
+    int64_t isConv3D = 0;
+    int64_t strideH = 1;
+    int64_t strideW = 1;
+    int64_t dilationH = 1;
+    int64_t dilationW = 1;
+    int64_t filterH = 1;
+    int64_t filterW = 1;
+    int64_t padValue = 0;
+    int64_t validM = 0;    // valid row count of the L0A tile
+    int64_t l0CutW = 0;    // tile w extent on the combined hw axis
+    int64_t l0HOffset = 0; // tile h offset within the L1 output window
+    int64_t l0WOffset = 0; // tile w offset within the L1 output window
+    int64_t srcHDelta = 0; // row of output position (0, 0) in the L1 fmap tile
+    int64_t srcWDelta = 0; // col of output position (0, 0) in the L1 fmap tile
+    int64_t kStartPt = 0;  // global K offset (postK) of this LOAD3D tile within the L1 A matrix
+    int64_t padTop = 0;    // conv padding rows handled by the LOAD3D (L1 tile has no pad rows)
+    int64_t padLeft = 0;   // conv padding cols handled by the LOAD3D
+};
+
+struct ConvL0CParam {
+    int64_t isConv3D = 0;
+    int64_t copyOutMode = 0; // 1: NZ2NZ (A2A3), 3: NZ2DN (A5)
+    int64_t cutW = 0;
+    int64_t reluType = 0;
+    int64_t validN = 0;
+    int64_t validD = 1;
+    int64_t validH = 0;
+    int64_t validW = 0;
+    std::vector<int64_t> dstOffset; // tile offset within the dst tensor (from the merged view attribute)
+};
+
 enum class CmpOperationType {
     EQ,
     NE,
@@ -212,6 +257,14 @@ struct CalcOps {
 
     void (*Quantize)(const TensorData&, const TensorData&, const TensorData&, const TensorData&);
     void (*Dequantize)(const TensorData&, const TensorData&, const TensorData&, const TensorData&);
+
+    void (*Conv)(const TensorData&, const TensorData&, const TensorData&, const TensorData*, ConvParam&);
+    void (*FormatTransConv)(const TensorData&, const TensorData&, int64_t, int64_t, int64_t);
+    void (*ConvFmapND2NZ)(const TensorData&, const TensorData&, int64_t);
+    void (*ConvWeightND2FZ)(const TensorData&, const TensorData&, int64_t);
+    void (*ConvLoad3D)(const TensorData&, const TensorData&, ConvTileParam&);
+    void (*ConvLoad2D)(const TensorData&, const TensorData&, int64_t, int64_t, int64_t);
+    void (*ConvTransL0C)(const TensorData&, const TensorData&, ConvL0CParam&);
 
     void (*BitSort)(const TensorData&, const TensorData&, int64_t, bool, int64_t);
     void (*TiledMrgSort)(const TensorData&, const TensorData&, const TensorData&, const TensorData&, const TensorData&,

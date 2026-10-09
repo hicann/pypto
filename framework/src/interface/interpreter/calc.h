@@ -688,4 +688,50 @@ inline void AccMatMul(LogicalTensorDataPtr out, LogicalTensorDataPtr self, Logic
         ops->MatMul(Trans(out), Trans(self), Trans(other), &accData, param);
     }
 }
+
+// conv
+inline void Conv(LogicalTensorDataPtr out, LogicalTensorDataPtr fmap, LogicalTensorDataPtr weight,
+                 LogicalTensorDataPtr bias, ConvParam param)
+{
+    CalcOps* ops = GetCalcOps();
+    ASSERT(ExecuteOperationScene::CTX_OP_NULL, ops != nullptr);
+    if (bias == nullptr) {
+        ops->Conv(Trans(out), Trans(fmap), Trans(weight), nullptr, param);
+    } else {
+        auto biasData = Trans(bias);
+        ops->Conv(Trans(out), Trans(fmap), Trans(weight), &biasData, param);
+    }
+}
+
+inline void FormatTransConv(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int64_t srcFmt, int64_t dstFmt,
+                            int64_t group)
+{
+    GetCalcOps()->FormatTransConv(Trans(out), Trans(self), srcFmt, dstFmt, group);
+}
+
+inline void ConvFmapND2NZ(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int64_t isConv3D)
+{
+    GetCalcOps()->ConvFmapND2NZ(Trans(out), Trans(self), isConv3D);
+}
+
+inline void ConvWeightND2FZ(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int64_t isConv3D)
+{
+    GetCalcOps()->ConvWeightND2FZ(Trans(out), Trans(self), isConv3D);
+}
+
+inline void ConvLoad3D(LogicalTensorDataPtr out, LogicalTensorDataPtr l1, ConvTileParam param)
+{
+    GetCalcOps()->ConvLoad3D(Trans(out), Trans(l1), param);
+}
+
+inline void ConvLoad2D(LogicalTensorDataPtr out, LogicalTensorDataPtr l1, int64_t postK, int64_t postN,
+                       int64_t isConv3D)
+{
+    GetCalcOps()->ConvLoad2D(Trans(out), Trans(l1), postK, postN, isConv3D);
+}
+
+inline void ConvTransL0C(LogicalTensorDataPtr out, LogicalTensorDataPtr l0c, ConvL0CParam param)
+{
+    GetCalcOps()->ConvTransL0C(Trans(out), Trans(l0c), param);
+}
 } // namespace npu::tile_fwk::calc
