@@ -110,6 +110,13 @@ constexpr uint64_t DRCO_SUCC_PAIR_DEC = 0xFFFFFFFEFFFFFFFFull;
  * the pair's own half-edge, so the resolver can fire both without the atomic. */
 constexpr uint64_t DRCO_SUCC_PAIR_BOTH_ONE = 0x0000000100000001ull;
 
+/* DevAscendFunctionOperationSuccInfo::staticIndexSizeAndStitchIndex 的并行位（bit63）：
+ * 所有 DRCO 静态后继统一以 succNode 节点存储，低 32bit 恒为 succNodeIndex/succNodeSize；
+ * bit63 = 1 表示大扇出分块 op（节点散射到消费核并行解依赖），0 表示生产核就地串行解。
+ * stitchIndex 相应缩为 31bit（掩码读取）。 */
+constexpr uint64_t DRCO_SUCC_PARALLEL_BIT = 1ull << 63;
+constexpr uint64_t DRCO_STITCH_INDEX_MASK = 0x7FFFFFFFull;
+
 #define TASKID_SHIFT32 32
 #define TASKID_FROM_CTRL_TOPO_MASK ((1 << (TASKID_TASK_BITS + TASKID_FUNC_BITS)) - 1)
 

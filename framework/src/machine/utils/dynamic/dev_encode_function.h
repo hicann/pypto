@@ -35,6 +35,23 @@ class SymbolicExpressionTable;
 namespace npu::tile_fwk::dynamic {
 constexpr int INVALID_INDEX = -1;
 
+// 静态后继分块阈值：DRCO 视图后继条目数（含 HUB 展开搬入）超过该值的 op 走节点分块
+constexpr uint32_t DRCO_STATIC_SUCC_THRESHOLD = 16;
+// 分块节点任务数上限（≤ MAX_SUCC_LIST_SIZE，尾部空槽无害）：更小节点 = 更多并行解析
+// 消费核 + 更短任务带
+constexpr uint32_t DRCO_SUCC_NODE_TASK_CAP = 6;
+
+// DRCO 静态后继全量 succNode 化方案（布局/填充两趟独立重算，结果确定性一致）：
+// expandedCnt = DRCO 视图条目数（含 HUB 展开搬入）；hubExpanded = 被展开 HUB；chunked =
+// 分块散射 op（bit63 置位，节点散射由消费核并行解）；非 chunked op 同样以节点存储
+// （容量 MAX_SUCC_LIST_SIZE 顺序追加、不按 coreType 分组），生产核就地串行解
+struct DrcoStaticSuccPlan {
+    std::vector<uint32_t> expandedCnt;
+    std::vector<uint8_t> hubExpanded;
+    std::vector<uint8_t> chunked;
+    uint32_t nodeTotal{0};
+};
+
 struct SlotMaskEntry {
     uint8_t mask{0};
     bool isPartial{false};
@@ -105,9 +122,10 @@ private:
     DevLocalVector<int> opAttrOffsetList_;
     DevLocalVector<int> opCalleeList_;
     DevLocalVector<uint32_t> operationSuccList_;
-    // DRCO-only mirror of operationSuccList_: entry = succOpIdx | (CoreType << 29), built once at
-    // encode time. Consumed only by the DRCO resolve path.
-    DevLocalVector<int32_t> drcoEncodedSuccList_;
+    // DRCO 静态后继节点区（见 DevAscendFunctionStaticSuccNode）：全量 DRCO 视图后继
+    // （大扇出分块 + 小扇出平铺同构），encode 期构建、运行期只读复用（自然对齐，
+    // 与原平铺表 drcoEncodedSuccList_ 同口径）
+    DevLocalVector<npu::tile_fwk::DevAscendFunctionStaticSuccNode> drcoStaticSuccNodeList_;
     DevLocalVector<npu::tile_fwk::DevAscendFunctionOperationSuccInfo> operationSuccInfoList_;
     DevLocalVector<int> operationCopyOutResolveSuccIndexList_;
 
@@ -163,6 +181,7 @@ public:
      *      SymInt                                              operationAttrListData[];
      *      int                                                 operationSuccListData[];
      *      int                                                 operationCopyOutResolveSuccIndexData[];
+     *      DevAscendFunctionStaticSuccNode                     drcoStaticSuccNodeListData[];
      *      DevAscendFunctionIncast                             incastListData[];
      *      DevAscendFunctionOutcast                            outcastListData[];
      *      int                                                 slotListData[];
@@ -382,7 +401,16 @@ public:
     inline uint32_t GetOperationSucc(size_t idx) const { return At(operationSuccList_, idx); }
     inline uint32_t& GetOperationSucc(size_t idx) { return At(operationSuccList_, idx); }
 
-    inline int32_t* GetDrcoEncodedSuccAddr() { return &At(drcoEncodedSuccList_, 0); }
+    inline npu::tile_fwk::DevAscendFunctionStaticSuccNode* GetStaticSuccNodeAddr()
+    {
+        return drcoStaticSuccNodeList_.size() > 0 ? &At(drcoStaticSuccNodeList_, 0) : nullptr;
+    }
+
+    inline uint32_t GetStaticSuccNodeByteSize()
+    {
+        return static_cast<uint32_t>(drcoStaticSuccNodeList_.size() *
+                                     sizeof(npu::tile_fwk::DevAscendFunctionStaticSuccNode));
+    }
 
     inline npu::tile_fwk::DevAscendFunctionOperationSuccInfo GetOperationSuccInfo(size_t operationIndex) const
     {
@@ -543,7 +571,8 @@ private:
     void InitOperationBufferLayouts(
         uintdevptr_t& initOffset, const OrderedSet<Operation*>& callList,
         const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
-        const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict);
+        const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict,
+        const std::unordered_map<uint64_t, int>& calleeHashIndexDict, const std::vector<CceCodeInfo>& cceCodeInfoList);
     void FillOperationEncodedContent(
         const SymbolicExpressionTable* expressionTable, const OrderedSet<Operation*>& callList,
         const OrderedSet<std::shared_ptr<LogicalTensor>>& tlist, const OrderedSet<std::shared_ptr<RawTensor>>& rawList,
@@ -572,7 +601,11 @@ private:
         const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict,
         const std::vector<int32_t>& stitchIndexList, const std::unordered_map<uint64_t, int>& calleeHashIndexDict,
         const std::vector<CceCodeInfo>& cceCodeInfoList, DevAscendFunctionDuppedData* dupData,
-        std::vector<uint32_t>& drcoSuccScratch, uint64_t& drcoPairCnt, uint64_t& drcoSuccCnt);
+        const DrcoStaticSuccPlan& plan, uint32_t& staticSuccNodeCursor, std::vector<uint32_t>& drcoSuccScratch,
+        uint64_t& drcoPairCnt, uint64_t& drcoSuccCnt);
+    void PopulateOneEncodedOpStaticSuccNodes(const std::vector<uint32_t>& drcoSuccScratch,
+                                             npu::tile_fwk::DevAscendFunctionOperationSuccInfo& succInfo,
+                                             uint32_t& staticSuccNodeCursor, bool chunked, uint64_t& drcoPairCnt);
     void VerifyOperationEncodedContent(const OrderedSet<Operation*>& callList,
                                        const std::unordered_map<Operation*, uint64_t>& callOpPredDict,
                                        DevAscendFunctionDuppedData* dupData);

@@ -30,10 +30,15 @@ constexpr uint32_t DUPPED_STITCH_NODE_REMAIN_COUNT_MASK = 0x3F;
 constexpr uint64_t DUPPED_STITCH_NODE_ALIGN = DUPPED_STITCH_NODE_REMAIN_COUNT_MASK + 1;
 
 struct DevAscendFunctionOperationSuccInfo {
-    // 单个 op 的后继描述信息，打包为一个 u64（静态编码，只读）：
+    // 单个 op 的后继描述信息，打包为一个 u64（静态编码，只读）。所有 DRCO 静态后继统一
+    // 以 succNode 节点存储（大扇出分块与小平铺同构），低 32bit 恒为节点区语义：
     /*
-        |-------------------32bit------------------|-----16bit-----|-----16bit-----|
-        |-----------------stitchIndex--------------|--staticSize---|--staticIndex--|
+        就地模式（bit63 = 0，DRCO_SUCC_PARALLEL_BIT 未置位，生产核串行解依赖）：
+        |------31bit------|-----16bit------|-----16bit------|
+        |---stitchIndex---|--succNodeSize--|--succNodeIdx---|
+        散射模式（bit63 = 1，大扇出分块 op，节点散射由消费核并行解）：
+        |------31bit------|-----16bit------|-----16bit------|
+        |---stitchIndex---|--succNodeSize--|--succNodeIdx---|
     */
     uint64_t staticIndexSizeAndStitchIndex;
 };
@@ -75,6 +80,26 @@ struct DevAscendFunctionDuppedStitchNode {
     uint32_t nodeSize;
     uint32_t nodeTaskList[DUPPED_STITCH_SIZE];
 };
+
+// 静态后继节点（全量 DRCO 视图后继，大扇出分块与小扇出就地同构）：devprog 常驻扁平数组
+// （无链指针），仅复用 stitch matrix 的 slot 通路；散射节点内类型同质（coreType 记于
+// 头，就地节点混合类型、头存首条目 ct 仅 debug）；64B，自然对齐（与原平铺表同口径）
+struct DevAscendFunctionStaticSuccNode {
+    static constexpr uint32_t MAX_SUCC_LIST_SIZE = 15;
+#ifdef __TILE_FWK_HOST__
+    void Init(uint16_t nodeCoreType)
+    {
+        coreType = nodeCoreType;
+        succSize = 0;
+    }
+
+    void SafePushBack(uint32_t taskId) { succList[succSize++] = taskId; }
+#endif
+    uint16_t coreType;
+    uint16_t succSize;
+    uint32_t succList[MAX_SUCC_LIST_SIZE];
+};
+static_assert(sizeof(DevAscendFunctionStaticSuccNode) == 64, "static succ node must span one cacheline");
 } // namespace npu::tile_fwk
 
 #endif

@@ -263,18 +263,27 @@ void DeviceTaskContext::BuildDrcoRootFuncData(DynFuncData* dyndata, DrcoRootFunc
     uint64_t controlFlowCacheBase = reinterpret_cast<uint64_t>(ctrlFlowCache);
     uint64_t controlFlowCacheSize = (ctrlFlowCache != nullptr) ? ctrlFlowCache->GetSize() : 0;
 
-    // DRCO consumes the encode-time coreType-encoded successor table (program memory, zero copy).
+    // DRCO 静态后继统一以 succNode 节点存储（program memory, zero copy）；节点区偏移打包进
+    // funcInfoAndStaticDataOffset（bit59-30），DrcoRootFuncData 保持两字段形态。
     // The source operationSuccList_ stays untouched (shared with DRCU/aicpu resolve).
-    int32_t* succStaticList = source->GetDrcoEncodedSuccAddr();
-    uint64_t succStaticListOffset = reinterpret_cast<uint64_t>(succStaticList) - programBase;
     auto* succInfoList = &source->GetOperationSuccInfo(0);
     uint64_t succInfoListOffset = reinterpret_cast<uint64_t>(succInfoList) - programBase;
-    DEV_ASSERT_MSG(ProgEncodeErr::METADATA_SIZE_OVERFLOW_4G, succStaticListOffset < (1ULL << 30),
-                   "#drco.succStaticList.offset: offset=%lu is over 30bit", succStaticListOffset);
     DEV_ASSERT_MSG(ProgEncodeErr::METADATA_SIZE_OVERFLOW_4G, succInfoListOffset < (1ULL << 30),
                    "#drco.succInfoList.offset: offset=%lu is over 30bit", succInfoListOffset);
-    rootFuncData->funcInfoAndStaticDataOffset = succInfoListOffset |
-                                                (static_cast<uint64_t>(succStaticListOffset) << 30) |
+    // 节点区偏移（相对 programBase，平移不变无需 reloc）：空表 func 写 0（设备侧仅在
+    // succNodeSize > 0 时解引用）；位域 30bit 限定节点区末端 < 2^30（静态 succ slot 低
+    // 32 位偏移同以 programBase 为原点，u32 跨度随之满足）
+    uint64_t staticSuccNodeListOffset = 0;
+    auto* staticSuccNodeList = source->GetStaticSuccNodeAddr();
+    if (staticSuccNodeList != nullptr) {
+        staticSuccNodeListOffset = reinterpret_cast<uint64_t>(staticSuccNodeList) - programBase;
+        uint64_t staticSuccNodeListEnd = staticSuccNodeListOffset + source->GetStaticSuccNodeByteSize();
+        DEV_ASSERT_MSG(ProgEncodeErr::METADATA_SIZE_OVERFLOW_4G, staticSuccNodeListEnd < (1ULL << 30),
+                       "#drco.staticsucc.span: static succ node region end %llu exceeds 30bit offset from "
+                       "program base",
+                       static_cast<unsigned long long>(staticSuccNodeListEnd));
+    }
+    rootFuncData->funcInfoAndStaticDataOffset = succInfoListOffset | (staticSuccNodeListOffset << 30) |
                                                 (stitchedFunc.GetDummyEndingUsed() ?
                                                      DRCO_ROOT_FUNC_MEMORY_REUSE_STITCHED_BIT :
                                                      0ULL);

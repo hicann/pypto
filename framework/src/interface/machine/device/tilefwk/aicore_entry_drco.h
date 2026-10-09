@@ -242,8 +242,9 @@ struct DrcoEntryState {
     __gm__ DrcoDeviceTaskReadyQueue* deviceTaskReadyQueue;
     uint8_t lastMixResourceType;
 
-    uint32_t readyMatrixPushGroupIndex;
-    uint32_t readyMatrixPushColIdx;
+    // readymatrix push 游标按类型独立（AIC/AIV/MIX 互不干扰）；stitch 节点 push 不经此游标
+    uint32_t readyMatrixPushGroupIndex[npu::tile_fwk::DRCO_QUEUE_MAX];
+    uint32_t readyMatrixPushColIdx[npu::tile_fwk::DRCO_QUEUE_MAX];
     uint32_t readyMatrixPopRowIndex;
     uint32_t selfReadyQueueSize;
     uint32_t selfReadyQueue[SELF_QUEUE_SIZE];
@@ -260,7 +261,7 @@ struct DrcoEntryState {
     __gm__ void* metadataBase;
     // DevAscendProgram 基址（设备地址）：
     // DrcoRootFuncData 的
-    // funcInfoAndStaticDataOffset（bit60=dummyEndingUsed，bit59-30=succStaticListOffset，bit29-0=succInfoListOffset，
+    // funcInfoAndStaticDataOffset（bit60=dummyEndingUsed，bit59-30=staticSuccNodeListOffset，bit29-0=succInfoListOffset，
     // bit63-61 空闲）以此为原点还原指针
     __gm__ void* programBase;
 
@@ -344,9 +345,14 @@ INLINE __gm__ DevAscendFunctionDuppedStitchNode** DrcoGetCurrentRootFuncSuccStit
                                                                         (succStitchListOffset & 0x7fffffffu));
 }
 
-INLINE __gm__ int32_t* DrcoGetCurrentRootFuncSuccStaticList(__gm__ void* programBase, uint32_t succStaticListOffset)
+// 静态后继节点区基址（相对 programBase，偏移打包于 funcInfoAndStaticDataOffset bit59-30）：
+// 全量 DRCO 后继统一以节点存储；空表 func 偏移为 0——仅在 succNodeSize > 0 时解引用
+INLINE __gm__ npu::tile_fwk::DevAscendFunctionStaticSuccNode* DrcoGetCurrentRootFuncStaticSuccNodeList(
+    __gm__ void* programBase, uint64_t funcInfoAndStaticDataOffset)
 {
-    return reinterpret_cast<__gm__ int32_t*>(((uint64_t)programBase) + succStaticListOffset);
+    uint32_t nodeRegionOffset = static_cast<uint32_t>((funcInfoAndStaticDataOffset >> 30) & 0x3FFFFFFFULL);
+    return reinterpret_cast<__gm__ npu::tile_fwk::DevAscendFunctionStaticSuccNode*>(
+        reinterpret_cast<uint64_t>(programBase) + nodeRegionOffset);
 }
 
 INLINE __gm__ DevAscendFunctionOperationSuccInfo* DrcoGetCurrentRootFuncSuccInfoList(__gm__ void* programBase,
@@ -401,11 +407,11 @@ INLINE uint32_t DrcoGetCoreTypedIdx(uint32_t blockIdx, uint32_t nrValidAic)
 // 无暇 pop 本列（列私有模型），首批任务直接落到邻近核列由空闲核取走；validCoreNum==0 禁写早退
 INLINE uint32_t DrcoLocalReadyMatrixPushBatch(DrcoEntryState* state, __gm__ DrcoLocalReadyMatrix* matrix,
                                               uint32_t groupIdx, uint32_t rowIdx, uint32_t* readyTaskList, uint32_t n,
-                                              bool* rowExhausted)
+                                              bool* rowExhausted, uint32_t queueType)
 {
     uint32_t validCoreNum = matrix->validCoreNum;
     uint32_t pushed = 0;
-    uint32_t col = state->readyMatrixPushColIdx % validCoreNum;
+    uint32_t col = state->readyMatrixPushColIdx[queueType] % validCoreNum;
     for (; col < validCoreNum && pushed < n; col++) {
         uint32_t prev = DrcoAtomicCasToU32(&matrix->taskList[rowIdx][col], 0, DRCO_ENCODE_TASK(readyTaskList[pushed]));
         if (prev == 0) {
@@ -413,7 +419,7 @@ INLINE uint32_t DrcoLocalReadyMatrixPushBatch(DrcoEntryState* state, __gm__ Drco
             pushed++;
         }
     }
-    state->readyMatrixPushColIdx = col;
+    state->readyMatrixPushColIdx[queueType] = col;
     *rowExhausted = (col >= validCoreNum);
     return pushed;
 }
@@ -611,7 +617,7 @@ INLINE uint32_t DrcoDynFuncDataListPushMatrixBatch(DrcoEntryState* state,
                                                    uint32_t* succTaskIdList, uint32_t succTaskIdListSize)
 {
     uint32_t pushed = 0;
-    uint32_t groupIndex = state->readyMatrixPushGroupIndex;
+    uint32_t groupIndex = state->readyMatrixPushGroupIndex[succCoreType];
     uint32_t nextGroupIndex = groupIndex;
     for (uint32_t i = 0; i < groupCount && pushed < succTaskIdListSize; i++) {
         uint32_t groupIdx = (groupIndex + i) % groupCount;
@@ -621,10 +627,10 @@ INLINE uint32_t DrcoDynFuncDataListPushMatrixBatch(DrcoEntryState* state,
         }
         bool rowExhausted = false;
         pushed += DrcoLocalReadyMatrixPushBatch(state, matrix, groupIdx, rowIdx, &succTaskIdList[pushed],
-                                                succTaskIdListSize - pushed, &rowExhausted);
+                                                succTaskIdListSize - pushed, &rowExhausted, succCoreType);
         nextGroupIndex = rowExhausted ? (groupIdx + 1) % groupCount : groupIdx;
     }
-    state->readyMatrixPushGroupIndex = nextGroupIndex;
+    state->readyMatrixPushGroupIndex[succCoreType] = nextGroupIndex;
     return pushed;
 }
 
@@ -805,11 +811,11 @@ INLINE void DrcoResolveDependOnce(DrcoEntryState* state, __gm__ npu::tile_fwk::D
         }
     } else {
         RecordMetricHubStatistic(&state->ctx, succTaskId, npu::tile_fwk::FuncID(succTaskId));
-        if (hubStackTop + 1 < HUB_STACK_SIZE) {
+        // hubStack == nullptr（消费核 pop 路径）或栈满：改投全核共享 hub 矩阵，被任意核
+        // fetch 时 pop 就地解依赖（不执行不计数）；own-type 队列因此只含可执行 leaf
+        if (hubStack != nullptr && hubStackTop + 1 < HUB_STACK_SIZE) {
             hubStack[++hubStackTop] = succTaskId;
         } else {
-            // hub 链超深溢出：改投全核共享 hub 矩阵（不再落本类型 local 队列），被任意核
-            // fetch 时 pop 就地解依赖（不执行不计数）；own-type 队列因此只含可执行 leaf
             DrcoHubTaskMatrixPush(state, rootFuncList, succTaskId);
         }
     }
@@ -895,15 +901,115 @@ INLINE void DrcoFireEncodedSucc(DrcoEntryState* state, __gm__ npu::tile_fwk::Drc
                           succTaskIdListSizeCoreList);
 }
 
-// 尝试把单个 stitch 节点 push 入矩阵：从本核行（全局 blockIdx 对应行）的 start 偏移
-// 起逐行 CAS 抢占空槽，成功返回 true 并推进 start（保证同链节点行分散、减少竞争）；
-// 失败返回 false，由调用方就地解依赖兜底。
-// slot 存节点相对 stitch pool 基址的 u32 偏移（0 = 空闲），基址见 DrcoRootFuncList::stitchNodeBase
-INLINE static bool DrcoStitchNodeMatrixTryPush(DrcoEntryState* state,
-                                               __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
-                                               __gm__ DrcoGlobalStitchNodeMatrix* matrix,
-                                               __gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode* node,
-                                               uint32_t& start)
+INLINE bool DrcoResolveDependDummyEnding(uint32_t succEncoded)
+{
+    return succEncoded & npu::tile_fwk::DRCO_SUCC_DUMMY_ENDING_BIT;
+}
+
+INLINE bool DrcoResolveDependMemoryReuseStitched(uint64_t funcInfoAndStaticDataOffset)
+{
+    return funcInfoAndStaticDataOffset & npu::tile_fwk::DRCO_ROOT_FUNC_MEMORY_REUSE_STITCHED_BIT;
+}
+
+// 解一段 per-func 相对编码后继条目（平铺区 / 节点 succList 同构）：配对 (2k, 2k+1) 共享
+// 一次 u64 原子减（恰好一次解依赖保证不借位，old==1 的半边唯一过零触发 fire）；单条走
+// i32，dummy ending 且本 func 未内存复用缝合时跳过递减（同上游平铺语义）。predCount 由
+// funcId 一次索引整段复用
+INLINE static void DrcoResolveEncodedSuccList(DrcoEntryState* state,
+                                              __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList, uint32_t funcIdx,
+                                              __gm__ uint32_t* succEncodedList, uint32_t begin, uint32_t end,
+                                              uint32_t hubStack[], int32_t& hubStackTop,
+                                              uint32_t succTaskIdListCoreList[][BATCH_PUSH_BUF_SIZE],
+                                              uint32_t succTaskIdListSizeCoreList[])
+{
+    __gm__ npu::tile_fwk::DrcoRootFuncData* rootFuncData = DrcoGetCurrentRootFuncData(state, funcIdx);
+    __gm__ int32_t* predCount = DrcoGetCurrentRootFuncPredCount(
+        state->controlFlowCacheBase, state->metadataBase, static_cast<uint32_t>(rootFuncData->funcDynamicDataOffset));
+    bool memReuseStitched = DrcoResolveDependMemoryReuseStitched(rootFuncData->funcInfoAndStaticDataOffset);
+    for (uint32_t i = begin; i < end;) {
+        uint32_t succEncoded = succEncodedList[i];
+        uint32_t succOpIdx = succEncoded & TASKID_TASK_MASK;
+        if ((succEncoded & npu::tile_fwk::DRCO_SUCC_PAIR_BIT) != 0) {
+            uint32_t nextEncoded = succEncodedList[i + 1];
+            __gm__ uint64_t* slot = reinterpret_cast<__gm__ uint64_t*>(&predCount[succOpIdx]);
+            uint64_t old = DrcoAtomicResolveDependOnce<uint64_t, npu::tile_fwk::DRCO_SUCC_PAIR_BOTH_ONE,
+                                                       npu::tile_fwk::DRCO_SUCC_PAIR_DEC>(slot);
+            if (static_cast<uint32_t>(old) == 1u) {
+                DrcoFireEncodedSucc(state, rootFuncList, funcIdx, succEncoded, hubStack, hubStackTop,
+                                    succTaskIdListCoreList, succTaskIdListSizeCoreList);
+            }
+            if (static_cast<uint32_t>(old >> 32) == 1u) {
+                DrcoFireEncodedSucc(state, rootFuncList, funcIdx, nextEncoded, hubStack, hubStackTop,
+                                    succTaskIdListCoreList, succTaskIdListSizeCoreList);
+            }
+            i += 2;
+        } else {
+            if (DrcoResolveDependDummyEnding(succEncoded) && !memReuseStitched) {
+                // Successor is dummy ending, and current is never memory reuse stitched to following root
+                // functions.
+            } else {
+                int32_t old = DrcoAtomicResolveDependOnce<int32_t, 1, -1>(&predCount[succOpIdx]);
+                if (old == 1) {
+                    DrcoFireEncodedSucc(state, rootFuncList, funcIdx, succEncoded, hubStack, hubStackTop,
+                                        succTaskIdListCoreList, succTaskIdListSizeCoreList);
+                }
+            }
+            i += 1;
+        }
+    }
+}
+
+// ==================== 静态后继节点 push（独立于 stitch 节点 push） ====================
+
+// 节点 coreType → stitch matrix 行域（游标域内绕接，绝不跨类型）：AIV 节点进 AIV 行域
+// [nrValidAic, 3*nrValidAic)，AIC/HUB_MIX/HUB 节点进 AIC 行域 [0, nrValidAic)
+INLINE static void DrcoStaticSuccNodeRowRange(uint32_t nodeCoreType, uint32_t nrValidAic, uint32_t& rangeBegin,
+                                              uint32_t& rangeSize)
+{
+    if (nodeCoreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::AIV)) {
+        rangeBegin = nrValidAic;
+        rangeSize = (DRCO_ALL_CORES_PER_AIC - 1) * nrValidAic;
+    } else {
+        rangeBegin = 0;
+        rangeSize = nrValidAic;
+    }
+}
+
+// 节点 coreType → 行域对应的 readymatrix 队列下标（锚点游标选取用）
+INLINE static uint32_t DrcoStaticSuccNodeQueueType(uint32_t nodeCoreType)
+{
+    return nodeCoreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::AIV) ? npu::tile_fwk::DRCO_QUEUE_AIV :
+                                                                                 npu::tile_fwk::DRCO_QUEUE_AIC;
+}
+
+// 就地解单个静态后继节点：生产核（HUB 节点本地解 / push 失败兜底）传真实 hubStack；
+// 消费核传 nullptr——pop 到的节点不含 HUB（HUB 节点从不入 matrix），不会被触达
+// （nullptr 守卫兜底）
+INLINE void DrcoResolveStaticSuccNodeTasks(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                                           uint32_t funcIdx,
+                                           __gm__ npu::tile_fwk::DevAscendFunctionStaticSuccNode* node,
+                                           uint32_t hubStack[], int32_t& hubStackTop,
+                                           uint32_t succTaskIdListCoreList[][BATCH_PUSH_BUF_SIZE],
+                                           uint32_t succTaskIdListSizeCoreList[])
+{
+    if (node->coreType == DRCO_CORE_TYPE) {
+        uint32_t typedIdx = BlockDescTypedBlockIdx(state->blockDesc);
+        uint32_t nodeQueue = DrcoStaticSuccNodeQueueType(node->coreType);
+        // seed 该类型游标 = 域内下一核 self+1（整体换算 (group,col)，跨组进位 + 域尾绕回；
+        // 旧公式在组内末核会回绕指向 T-1，首任务撞前核/自身列串行），succList 连续落
+        // self+1..self+k 形成任务带
+        uint32_t groupCnt = state->ctx.drcoGroupEnd[nodeQueue] - state->ctx.drcoGroupBeg[nodeQueue];
+        uint32_t next = (typedIdx + 1) % (groupCnt * npu::tile_fwk::LOCAL_GROUP_SIZE);
+        state->readyMatrixPushGroupIndex[nodeQueue] = next / npu::tile_fwk::LOCAL_GROUP_SIZE;
+        state->readyMatrixPushColIdx[nodeQueue] = next % npu::tile_fwk::LOCAL_GROUP_SIZE;
+    }
+    DrcoResolveEncodedSuccList(state, rootFuncList, funcIdx, node->succList, 0, node->succSize, hubStack, hubStackTop,
+                               succTaskIdListCoreList, succTaskIdListSizeCoreList);
+}
+// 尝试把 slot 写入矩阵：从本核行 start 偏移起逐行 CAS 抢空槽（0 = 空闲），成功推进
+// start（同链节点行分散）。slot（u32）编码见 aikernel_device_task.h
+INLINE static bool DrcoStitchNodeMatrixTryPushSlot(DrcoEntryState* state, __gm__ DrcoGlobalStitchNodeMatrix* matrix,
+                                                   uint32_t slotValue, uint32_t& start)
 {
     BlockDesc blockDesc = state->blockDesc;
     // 行 = 全局 blockIdx（AIC [0,nrValidAic) + AIV [nrValidAic,3*nrValidAic)）：
@@ -911,18 +1017,63 @@ INLINE static bool DrcoStitchNodeMatrixTryPush(DrcoEntryState* state,
     uint32_t rowCnt = state->ctx.aicCoreNum * DRCO_ALL_CORES_PER_AIC;
     uint32_t coreTypeIdx = BlockDescBlockIdx(blockDesc);
     uint32_t colIdx = coreTypeIdx % npu::tile_fwk::DrcoGlobalStitchNodeMatrix::COL_SIZE;
-    uint64_t stitchNodeBase = rootFuncList->stitchNodeBase;
     for (uint32_t i = 0; i < rowCnt; i++) {
         uint32_t rowIdx = (coreTypeIdx + start + i) % rowCnt;
         __gm__ uint32_t* slot = &matrix->stitchNodeList[rowIdx].slot[colIdx];
-        uint32_t prev = DrcoAtomicCasToU32(slot, 0,
-                                           static_cast<uint32_t>(reinterpret_cast<uint64_t>(node) - stitchNodeBase));
+        uint32_t prev = DrcoAtomicCasToU32(slot, 0, slotValue);
         if (prev == 0) {
             start = start + i + 1;
             return true;
         }
     }
     return false;
+}
+
+// stitch 链节点 push：slot = 节点相对 stitchNodeBase 的 u32 偏移（bit31 = 0 → 非静态）
+INLINE static bool DrcoStitchNodeMatrixTryPush(DrcoEntryState* state,
+                                               __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
+                                               __gm__ DrcoGlobalStitchNodeMatrix* matrix,
+                                               __gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode* node,
+                                               uint32_t& start)
+{
+    uint32_t nodeOffset = static_cast<uint32_t>(reinterpret_cast<uint64_t>(node) - rootFuncList->stitchNodeBase);
+    return DrcoStitchNodeMatrixTryPushSlot(state, matrix, nodeOffset, start);
+}
+
+// 静态后继节点专用 push（与 stitch 节点 push 完全独立，stitch 侧行为零改动）：行域按节点
+// coreType 收窄，start 为域内游标（CAS 抢行推进，域满返回 false 由调用方就地解兜底）；
+// slot 携带 per-func 节点下标（消费核按 funcId 取节点区基址 + 下标还原）
+INLINE static bool DrcoStaticSuccNodeMatrixTryPush(DrcoEntryState* state, __gm__ DrcoGlobalStitchNodeMatrix* matrix,
+                                                   __gm__ npu::tile_fwk::DevAscendFunctionStaticSuccNode* node,
+                                                   uint32_t funcId, uint32_t nodeIndex, uint32_t& start)
+{
+    uint32_t slotValue = npu::tile_fwk::EncodeStaticSuccSlot(funcId, nodeIndex);
+    uint32_t rangeBegin;
+    uint32_t rangeSize;
+    DrcoStaticSuccNodeRowRange(node->coreType, state->ctx.aicCoreNum, rangeBegin, rangeSize);
+    uint32_t colIdx = BlockDescBlockIdx(state->blockDesc) % npu::tile_fwk::DrcoGlobalStitchNodeMatrix::COL_SIZE;
+    for (uint32_t i = 0; i < rangeSize; i++) {
+        uint32_t rowIdx = rangeBegin + (start + i) % rangeSize;
+        __gm__ uint32_t* slot = &matrix->stitchNodeList[rowIdx].slot[colIdx];
+        if (DrcoAtomicCasToU32(slot, 0, slotValue) == 0) {
+            start = (start + i + 1) % rangeSize; // 域内绕接（不跨类型）
+            return true;
+        }
+    }
+    return false;
+}
+
+// 刷新 readymatrix push 游标 = succNodeStarts 终值（散射带平铺的下一位置，换算与锚点
+// 合成式互逆）：不刷新则本核后续 push 从旧锚点起，与排队中的散射带任务重叠
+INLINE static void DrcoSyncSuccNodePushCursor(DrcoEntryState* state, const uint32_t succNodeStarts[],
+                                              const uint8_t succNodeAnchored[])
+{
+    for (uint32_t q = 0; q < npu::tile_fwk::DRCO_QUEUE_MAX; q++) {
+        if (succNodeAnchored[q] != 0) {
+            state->readyMatrixPushGroupIndex[q] = succNodeStarts[q] / npu::tile_fwk::LOCAL_GROUP_SIZE;
+            state->readyMatrixPushColIdx[q] = succNodeStarts[q] % npu::tile_fwk::LOCAL_GROUP_SIZE;
+        }
+    }
 }
 
 // 就地解单个 stitch 节点依赖：走 DrcoResolveDependOnceCore 路由（无 hub 级联，batch push），
@@ -997,19 +1148,62 @@ INLINE void DrcoStitchNodePushSubChainHeads(DrcoEntryState* state, __gm__ npu::t
     }
 }
 
+// 生产核处理 chunked op 的整个静态后继节点表：可执行节点全部散射由消费核并行解（失败
+// 就地兜底）；HUB 节点（encode 殿后）不散射——本地解，fired join 压 hubStack 由外层
+// 循环展开（省 2 跳矩阵异步）。节点游标按类型分域：首节点锚定 readymatrix 游标，后续
+// 按 succSize 偏移避开上一节点的任务带。succNodeIndex = 本表在 func 节点区的起始下标
+// （slot 携带 per-func 节点下标，消费核按 funcId 取基址 + 下标还原）
+INLINE static void DrcoResolveStaticSuccNodes(
+    DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList, uint32_t funcIdx, uint32_t curTaskId,
+    __gm__ npu::tile_fwk::DevAscendFunctionStaticSuccNode* nodes, uint16_t succNodeIndex, uint16_t staticSuccNodeSize,
+    uint32_t hubStack[], int32_t& hubStackTop, uint32_t succTaskIdListCoreList[][BATCH_PUSH_BUF_SIZE],
+    uint32_t succTaskIdListSizeCoreList[])
+{
+    __gm__ DrcoGlobalStitchNodeMatrix* matrix = DrcoRootFuncListGetStitchNodeMatrix(rootFuncList);
+    uint32_t succNodeStarts[npu::tile_fwk::DRCO_QUEUE_MAX] = {0};
+    uint32_t succNodeRanges[npu::tile_fwk::DRCO_QUEUE_MAX] = {0};
+    uint8_t succNodeAnchored[npu::tile_fwk::DRCO_QUEUE_MAX] = {0};
+    bool succCursorSynced = false;
+    for (uint32_t n = 0; n < staticSuccNodeSize; n++) {
+        if (nodes[n].coreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::HUB)) {
+            // 首遇 HUB 节点 = 可执行节点已散射完：此刻刷新游标（join 后继接带后不重叠）
+            if (!succCursorSynced) {
+                DrcoSyncSuccNodePushCursor(state, succNodeStarts, succNodeAnchored);
+                succCursorSynced = true;
+            }
+            DrcoResolveStaticSuccNodeTasks(state, rootFuncList, funcIdx, &nodes[n], hubStack, hubStackTop,
+                                           succTaskIdListCoreList, succTaskIdListSizeCoreList);
+            continue;
+        }
+        uint32_t nodeQueue = DrcoStaticSuccNodeQueueType(nodes[n].coreType);
+        if (succNodeAnchored[nodeQueue] == 0) {
+            uint32_t rangeBegin = 0;
+            DrcoStaticSuccNodeRowRange(nodes[n].coreType, state->ctx.aicCoreNum, rangeBegin, succNodeRanges[nodeQueue]);
+            uint32_t anchorGroup = state->readyMatrixPushGroupIndex[nodeQueue];
+            uint32_t anchorCol = state->readyMatrixPushColIdx[nodeQueue] % npu::tile_fwk::LOCAL_GROUP_SIZE;
+            succNodeStarts[nodeQueue] = (anchorGroup * npu::tile_fwk::LOCAL_GROUP_SIZE + anchorCol) %
+                                        succNodeRanges[nodeQueue];
+            succNodeAnchored[nodeQueue] = 1;
+        }
+        uint32_t start = succNodeStarts[nodeQueue];
+        if (!DrcoStaticSuccNodeMatrixTryPush(state, matrix, &nodes[n], funcIdx, succNodeIndex + n, start)) {
+            DrcoResolveStaticSuccNodeTasks(state, rootFuncList, funcIdx, &nodes[n], hubStack, hubStackTop,
+                                           succTaskIdListCoreList, succTaskIdListSizeCoreList);
+        } else {
+            // start 已被推进到占用行 +1；再偏移 succSize-1 恰好越过本节点任务带
+            succNodeStarts[nodeQueue] = (start + nodes[n].succSize - 1) % succNodeRanges[nodeQueue];
+        }
+    }
+    // 循环结束仍未刷新（无 HUB 节点）则补一次：本核后续 push 同样避开散射带
+    if (!succCursorSynced) {
+        DrcoSyncSuccNodePushCursor(state, succNodeStarts, succNodeAnchored);
+    }
+    TraceEvent(state, curTaskId, EVENT_SUCC_STATIC(staticSuccNodeSize));
+}
+
 // 生产核整链幂分解：先按 2 的幂序列（1,2,4,8,16,32 / 每 64 一轮）把子链头 push 入矩阵
 // （由消费核 pop 接力），push 完成后再解链头（chainHead）依赖（先 push 后解依赖）；
 // push 失败则就地解对应子链整段兜底（矩阵写不进则保证前向推进）。
-INLINE bool DrcoResolveDependDummyEnding(uint32_t succEncoded)
-{
-    return succEncoded & npu::tile_fwk::DRCO_SUCC_DUMMY_ENDING_BIT;
-}
-
-INLINE bool DrcoResolveDependMemoryReuseStitched(uint64_t funcInfoAndStaticDataOffset)
-{
-    return funcInfoAndStaticDataOffset & npu::tile_fwk::DRCO_ROOT_FUNC_MEMORY_REUSE_STITCHED_BIT;
-}
-
 INLINE void DrcoResolveDepend(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
                               uint32_t* taskIdList, uint32_t taskCount = 1)
 {
@@ -1035,59 +1229,34 @@ INLINE void DrcoResolveDepend(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoR
 
         __gm__ npu::tile_fwk::DevAscendFunctionOperationSuccInfo* succInfoList = DrcoGetCurrentRootFuncSuccInfoList(
             programBase, static_cast<uint32_t>(funcInfoAndStaticDataOffset & 0x3FFFFFFFULL));
-        __gm__ int32_t* succStaticList = DrcoGetCurrentRootFuncSuccStaticList(
-            programBase, static_cast<uint32_t>((funcInfoAndStaticDataOffset >> 30) & 0x3FFFFFFFULL));
-        __gm__ int32_t* predCount = DrcoGetCurrentRootFuncPredCount(controlFlowCacheBase, metadataBase,
-                                                                    static_cast<uint32_t>(funcDynamicDataOffset));
         __gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode** succStitchList = DrcoGetCurrentRootFuncSuccStitchList(
             controlFlowCacheBase, metadataBase, static_cast<uint32_t>(funcDynamicDataOffset >> 32));
 
         volatile __gm__ npu::tile_fwk::DevAscendFunctionOperationSuccInfo* succInfo = &succInfoList[operIdx];
         uint64_t succInfoBits = succInfo->staticIndexSizeAndStitchIndex;
 
-        uint16_t staticIndex = static_cast<uint16_t>(succInfoBits);
-        uint16_t staticSize = static_cast<uint16_t>(succInfoBits >> 16);
-        TraceEvent(state, curTaskId, EVENT_SUCC_STATIC(staticSize));
-        uint16_t i = staticIndex;
-        const uint16_t staticEnd = staticIndex + staticSize;
-        while (i < staticEnd) {
-            uint32_t succEncoded = succStaticList[i];
-            uint32_t succOpIdx = succEncoded & TASKID_TASK_MASK;
-            if ((succEncoded & npu::tile_fwk::DRCO_SUCC_PAIR_BIT) != 0) {
-                // Pair entry: even-aligned (2k, 2k+1) successors share one u64 predCount slot,
-                // decremented together by one atomicAdd. Exactly-once edge resolution keeps each half
-                // >= 1 until its final decrement, so the packed subtract never borrows across halves;
-                // fire each half whose old count was 1 (the unique zero-crossing resolver).
-                uint32_t nextEncoded = succStaticList[i + 1];
-                __gm__ uint64_t* slot = reinterpret_cast<__gm__ uint64_t*>(&predCount[succOpIdx]);
-                uint64_t old = DrcoAtomicResolveDependOnce<uint64_t, npu::tile_fwk::DRCO_SUCC_PAIR_BOTH_ONE,
-                                                           npu::tile_fwk::DRCO_SUCC_PAIR_DEC>(slot);
-                if (static_cast<uint32_t>(old) == 1u) {
-                    DrcoFireEncodedSucc(state, rootFuncList, funcIdx, succEncoded, hubStack, hubStackTop,
-                                        succTaskIdListCoreList, succTaskIdListSizeCoreList);
-                }
-                if (static_cast<uint32_t>(old >> 32) == 1u) {
-                    DrcoFireEncodedSucc(state, rootFuncList, funcIdx, nextEncoded, hubStack, hubStackTop,
-                                        succTaskIdListCoreList, succTaskIdListSizeCoreList);
-                }
-                i += 2;
-            } else {
-                if (DrcoResolveDependDummyEnding(succEncoded) &&
-                    !DrcoResolveDependMemoryReuseStitched(funcInfoAndStaticDataOffset)) {
-                    // Successor is dummy ending, and current is never memory reuse stitched to following root
-                    // functions.
-                } else {
-                    int32_t old = DrcoAtomicResolveDependOnce<int32_t, 1, -1>(&predCount[succOpIdx]);
-                    if (old == 1) {
-                        DrcoFireEncodedSucc(state, rootFuncList, funcIdx, succEncoded, hubStack, hubStackTop,
-                                            succTaskIdListCoreList, succTaskIdListSizeCoreList);
-                    }
-                }
-                i += 1;
+        uint16_t succNodeIndex = static_cast<uint16_t>(succInfoBits);
+        uint16_t succNodeSize = static_cast<uint16_t>(succInfoBits >> 16);
+        __gm__ npu::tile_fwk::DevAscendFunctionStaticSuccNode* nodes = DrcoGetCurrentRootFuncStaticSuccNodeList(
+                                                                           programBase, funcInfoAndStaticDataOffset) +
+                                                                       succNodeIndex;
+        if ((succInfoBits & npu::tile_fwk::DRCO_SUCC_PARALLEL_BIT) == 0) {
+            // 就地串行解（小扇出/入口/HUB_MIX 生产者）：逐节点就地解，不散射不 seed 游标
+            // （与平铺时代行为严格一致；trace 口径保持后继条目数）
+            uint32_t succCnt = 0;
+            for (uint32_t n = 0; n < succNodeSize; n++) {
+                succCnt += nodes[n].succSize;
+                DrcoResolveEncodedSuccList(state, rootFuncList, funcIdx, nodes[n].succList, 0, nodes[n].succSize,
+                                           hubStack, hubStackTop, succTaskIdListCoreList, succTaskIdListSizeCoreList);
             }
+            TraceEvent(state, curTaskId, EVENT_SUCC_STATIC(succCnt));
+            (void)succCnt; // trace 宏关闭时 EVENT_SUCC_STATIC 不求值，抑制 unused-but-set
+        } else {
+            DrcoResolveStaticSuccNodes(state, rootFuncList, funcIdx, curTaskId, nodes, succNodeIndex, succNodeSize,
+                                       hubStack, hubStackTop, succTaskIdListCoreList, succTaskIdListSizeCoreList);
         }
 
-        uint32_t stitchIndex = static_cast<uint32_t>(succInfoBits >> 32);
+        uint32_t stitchIndex = static_cast<uint32_t>((succInfoBits >> 32) & npu::tile_fwk::DRCO_STITCH_INDEX_MASK);
         if (stitchIndex != 0) {
             // 整链幂分解：先按 2 的幂 + 每 64 一轮 push 子链头入矩阵，
             // 消费核 pop 后按 2 的幂序列（1,2,4,8,16,32）继续接力（每个节点只被解一次）；
@@ -1134,39 +1303,45 @@ __aicore__ INLINE static uint32_t ResolveHubMixTask(DrcoEntryState* state, uint3
     uint64_t funcInfoAndStaticDataOffset = rootFuncData->funcInfoAndStaticDataOffset;
     __gm__ npu::tile_fwk::DevAscendFunctionOperationSuccInfo* mixSuccInfoList = DrcoGetCurrentRootFuncSuccInfoList(
         programBase, static_cast<uint32_t>(funcInfoAndStaticDataOffset & 0x3FFFFFFFULL));
-    __gm__ int32_t* mixSuccStaticList = DrcoGetCurrentRootFuncSuccStaticList(
-        programBase, static_cast<uint32_t>((funcInfoAndStaticDataOffset >> 30) & 0x3FFFFFFFULL));
     __gm__ DynFuncData* funcData = &state->ctx.cachedDevTasks[state->ctx.curLeafTaskParallelIdx].funcDataList[funcIdx];
     __gm__ int* mixCceBinaryIndexList = funcData->cceBinaryIndexList;
     uint32_t aicTaskId = static_cast<uint32_t>(AICORE_TASK_INIT);
 
+    // HUB_MIX 生产者永不分块散射：其节点为容量上限顺序追加的混合节点，逐节点逐条目派发
+    // （条目语义与平铺时代一致：pair bit 被 TASKID_TASK_MASK 掩掉）
     uint64_t mixSuccInfoBits = mixSuccInfoList[opIdx].staticIndexSizeAndStitchIndex;
-    uint16_t mixStaticIndex = static_cast<uint16_t>(mixSuccInfoBits);
-    uint16_t mixStaticSize = static_cast<uint16_t>(mixSuccInfoBits >> 16);
-    for (uint16_t j = mixStaticIndex; j < mixStaticIndex + mixStaticSize; j++) {
-        uint32_t mixSuccEncoded = mixSuccStaticList[j];
-        uint32_t mixSuccOpIdx = mixSuccEncoded & TASKID_TASK_MASK;
-        uint32_t mixSuccCoreType = (mixSuccEncoded >> npu::tile_fwk::TASKID_DRCO_CT_SHIFT) &
-                                   npu::tile_fwk::TASKID_DRCO_CT_MASK;
-        uint32_t mixSuccTaskId = npu::tile_fwk::MakeDrcoTaskId(funcIdx, mixSuccOpIdx, mixSuccCoreType);
-        DRCO_LOG(&state->ctx, "MIX resolve taskId=%u", mixSuccTaskId);
-        if (mixSuccCoreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::AIC)) {
-            aicTaskId = mixSuccTaskId;
-        } else {
-            // 正常路径下环不会满（每次派发每环至多压 1 个、配对 AIV 在 fetch 循环持续 Pop）；
-            // 万一暂满则自旋等待：环内有未执行任务时 AIV finish flag 必未置位、配对 AIV 不会退出
-            // fetch 循环，等待必有进展；超时 Trap 兜底，杜绝静默丢任务导致的挂死
-            npu::tile_fwk::DrcoMixHubC2VReadyQueue* dstAddr = body +
-                                                              state->ctx
-                                                                  .cachedDevTasks[state->ctx.curLeafTaskParallelIdx]
-                                                                  .cceBinary[mixCceBinaryIndexList[mixSuccOpIdx]]
-                                                                  .wrapVecId;
-            uint64_t pushStart = get_sys_cnt();
-            while (!MixTaskPush(state, mixSuccTaskId, dstAddr)) {
-                if (get_sys_cnt() - pushStart > AICORE_LEAF_TASK_RUN_TIMEOUT) {
-                    Trap();
+    uint16_t mixNodeIndex = static_cast<uint16_t>(mixSuccInfoBits);
+    uint16_t mixNodeSize = static_cast<uint16_t>(mixSuccInfoBits >> 16);
+    __gm__ npu::tile_fwk::DevAscendFunctionStaticSuccNode* mixNodes = DrcoGetCurrentRootFuncStaticSuccNodeList(
+                                                                          programBase, funcInfoAndStaticDataOffset) +
+                                                                      mixNodeIndex;
+    for (uint16_t n = 0; n < mixNodeSize; n++) {
+        __gm__ npu::tile_fwk::DevAscendFunctionStaticSuccNode* node = &mixNodes[n];
+        for (uint32_t j = 0; j < node->succSize; j++) {
+            uint32_t mixSuccEncoded = node->succList[j];
+            uint32_t mixSuccOpIdx = mixSuccEncoded & TASKID_TASK_MASK;
+            uint32_t mixSuccCoreType = (mixSuccEncoded >> npu::tile_fwk::TASKID_DRCO_CT_SHIFT) &
+                                       npu::tile_fwk::TASKID_DRCO_CT_MASK;
+            uint32_t mixSuccTaskId = npu::tile_fwk::MakeDrcoTaskId(funcIdx, mixSuccOpIdx, mixSuccCoreType);
+            DRCO_LOG(&state->ctx, "MIX resolve taskId=%u", mixSuccTaskId);
+            if (mixSuccCoreType == static_cast<uint32_t>(npu::tile_fwk::CoreType::AIC)) {
+                aicTaskId = mixSuccTaskId;
+            } else {
+                // 正常路径下环不会满（每次派发每环至多压 1 个、配对 AIV 在 fetch 循环持续 Pop）；
+                // 万一暂满则自旋等待：环内有未执行任务时 AIV finish flag 必未置位、配对 AIV 不会退出
+                // fetch 循环，等待必有进展；超时 Trap 兜底，杜绝静默丢任务导致的挂死
+                npu::tile_fwk::DrcoMixHubC2VReadyQueue* dstAddr = body +
+                                                                  state->ctx
+                                                                      .cachedDevTasks[state->ctx.curLeafTaskParallelIdx]
+                                                                      .cceBinary[mixCceBinaryIndexList[mixSuccOpIdx]]
+                                                                      .wrapVecId;
+                uint64_t pushStart = get_sys_cnt();
+                while (!MixTaskPush(state, mixSuccTaskId, dstAddr)) {
+                    if (get_sys_cnt() - pushStart > AICORE_LEAF_TASK_RUN_TIMEOUT) {
+                        Trap();
+                    }
+                    DrcoBusyBackOff();
                 }
-                DrcoBusyBackOff();
             }
         }
     }
@@ -1210,25 +1385,39 @@ INLINE __gm__ DrcoLocalReadyMatrix* TryGetOtherLocalMatrix(__gm__ npu::tile_fwk:
     return nullptr;
 }
 
-// 消费核 pop 本行上 matrix 中 stitch 节点：原子 exch(offset -> 0) 读清一体即独占
-// （安全性：每槽仅本行主一个 popper、push 侧只 CAS 空槽，读清无需二次校验）。
-// pop 到子链头后：留首节点本地，
-// 先按 2 的幂序列（1,2,4,8,16,32）把剩余子链头 push 入矩阵（由其他核接力），
-// 末段（链尾）可能不满，最后再解本地首节点依赖；push 失败则就地解对应子链整段兜底。
+// 消费核 pop 本行 stitch 节点：原子 exch(value -> 0) 读清一体即独占（每槽仅本行主一个
+// popper、push 侧只 CAS 空槽）。slot 为 u32（编码见 aikernel_device_task.h）：stitch 链
+// 节点按 2 的幂子链头接力；静态后继节点按 funcId 索引 funcData、节点区基址 + 下标还原
+// 节点后整节点解依赖（无子链语义，不走 tree relay）
 INLINE void DrcoStitchNodeMatrixPopResolve(DrcoEntryState* state, __gm__ npu::tile_fwk::DrcoRootFuncList* rootFuncList,
                                            __gm__ DrcoGlobalStitchNodeMatrix* matrix, uint32_t rowIdx)
 {
     uint32_t succTaskIdListCoreList[npu::tile_fwk::DRCO_QUEUE_MAX][BATCH_PUSH_BUF_SIZE];
     uint32_t succTaskIdListSizeCoreList[npu::tile_fwk::DRCO_QUEUE_MAX] = {0};
+    int32_t dummyHubStackTop = -1; // pop 的节点不含 HUB（HUB 节点从不入 matrix），仅占位
     for (uint32_t col = 0; col < DrcoGlobalStitchNodeMatrix::COL_SIZE; col++) {
         __gm__ uint32_t* slot = &matrix->stitchNodeList[rowIdx].slot[col];
-        uint32_t nodeOffset = DrcoAtomicExchToU32(slot, 0);
-        if (nodeOffset == 0) {
+        uint32_t slotVal = DrcoAtomicExchToU32(slot, 0);
+        if (slotVal == 0) {
+            continue;
+        }
+        if ((slotVal & npu::tile_fwk::DRCO_STITCH_SLOT_STATIC_SUCC_FLAG) != 0) {
+            uint32_t funcId = (slotVal & npu::tile_fwk::DRCO_STITCH_SLOT_FUNCID_MASK) >>
+                              npu::tile_fwk::DRCO_STITCH_SLOT_FUNCID_SHIFT;
+            uint32_t nodeIndex = slotVal & npu::tile_fwk::DRCO_STITCH_SLOT_NODE_INDEX_MASK;
+            // 节点 = 生产 func 节点区基址 + 下标（slot 存 per-func 下标而非字节偏移，
+            // u32 位宽内与 funcId/标志共存）
+            __gm__ npu::tile_fwk::DrcoRootFuncData* succRootFuncData = DrcoGetCurrentRootFuncData(state, funcId);
+            __gm__ npu::tile_fwk::DevAscendFunctionStaticSuccNode*
+                node = DrcoGetCurrentRootFuncStaticSuccNodeList(state->programBase,
+                                                                succRootFuncData->funcInfoAndStaticDataOffset) +
+                       nodeIndex;
+            DrcoResolveStaticSuccNodeTasks(state, rootFuncList, funcId, node, nullptr, dummyHubStackTop,
+                                           succTaskIdListCoreList, succTaskIdListSizeCoreList);
             continue;
         }
         __gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode*
-            node = (__gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode*)(rootFuncList->stitchNodeBase +
-                                                                              nodeOffset);
+            node = (__gm__ npu::tile_fwk::DevAscendFunctionDuppedStitchNode*)(rootFuncList->stitchNodeBase + slotVal);
         // 先按 2 的幂序列 push 剩余子链头，最后解本地首节点依赖
         uint32_t remain = StitchNodeRemainingCount(node);
         uint32_t rowCursor = 0;
@@ -1706,11 +1895,15 @@ INLINE void KernelEntryDrco(int64_t ffts_addr, int64_t inputs, int64_t outputs, 
         }
 
         state.readyMatrixPopRowIndex = 0;
-        state.readyMatrixPushGroupIndex = BlockDescTypedBlockIdx(state.blockDesc) / npu::tile_fwk::LOCAL_GROUP_SIZE;
-        // 游标初始 +1：跳过本核自己的列——列私有模型下本列唯一消费者是自己，producer 常因
-        // selfQueue 直通/当前批执行无暇 pop 本列，首波任务落本列会被扣住（实测跳行 -24%）；
-        // 游标续推右移天然不再回到本列，行满回绕后晚期落回无碍（波首已避开）
-        state.readyMatrixPushColIdx = (BlockDescTypedBlockIdx(state.blockDesc) + 1) % npu::tile_fwk::LOCAL_GROUP_SIZE;
+        // readymatrix push 游标按类型独立：各类型种子 = 本核 (group, col+1)，+1 跳过本核列
+        // （列私有模型下首波任务落本列会被执行中的自己扣住）；异类型游标仅作起点散列
+        // （advisory，实际值由该类型推送推进）
+        for (uint32_t q = 0; q < npu::tile_fwk::DRCO_QUEUE_MAX; q++) {
+            state.readyMatrixPushGroupIndex[q] = BlockDescTypedBlockIdx(state.blockDesc) /
+                                                 npu::tile_fwk::LOCAL_GROUP_SIZE;
+            state.readyMatrixPushColIdx[q] = (BlockDescTypedBlockIdx(state.blockDesc) + 1) %
+                                             npu::tile_fwk::LOCAL_GROUP_SIZE;
+        }
 
         state.selfReadyQueueSize = 0;
         state.controlFlowCacheBase = rootFuncList->controlFlowCacheBase;

@@ -563,7 +563,8 @@ void DevAscendFunction::InitOperation(
 {
     InitOperationNoPredNoSuccIndices(initOffset, callList, callOpPredDict, callOpSuccDict, noPredOpList, noSuccOpList,
                                      dummyEnding, fillContent);
-    InitOperationBufferLayouts(initOffset, callList, callOpSuccDict, copyOutResolveSuccIndexListDict);
+    InitOperationBufferLayouts(initOffset, callList, callOpSuccDict, copyOutResolveSuccIndexListDict,
+                               calleeHashIndexDict, cceCodeInfoList);
     FillOperationEncodedContent(expressionTable, callList, tlist, rawList, callOpPredDict, callOpSuccDict,
                                 calleeHashIndexDict, stitchIndexList, copyOutResolveSuccIndexListDict, cceCodeInfoList,
                                 fillContent);
@@ -611,10 +612,119 @@ void DevAscendFunction::InitOperationNoPredNoSuccIndices(
     }
 }
 
+// 查 op 的 callee coreType（encode 期，cceCodeInfoList 索引）
+static inline uint32_t GetCallOpCoreType(size_t opIdx, const OrderedSet<Operation*>& callList,
+                                         const std::unordered_map<uint64_t, int>& calleeHashIndexDict,
+                                         const std::vector<CceCodeInfo>& cceCodeInfoList)
+{
+    auto callop = std::static_pointer_cast<CallOpAttribute>(callList[opIdx]->GetOpAttribute());
+    return static_cast<uint32_t>(cceCodeInfoList[calleeHashIndexDict.at(callop->GetCalleeHash().GetHash())].coreType);
+}
+
+// DRCO 静态后继全量 succNode 化方案（布局/填充两趟独立调用，输入相同 → 结果确定性一致）：
+// 1) 单前继 HUB 展开（边搬移，深度 1）：HUB 后继表整体搬入唯一前继的 DRCO 表，本表清空
+//    （保留空转入口，predCount 记账闭合）；
+// 2) 所有 DRCO 视图条目统一以 succNode 节点存储：超阈值 op 分块散射（节点按 coreType
+//    分组、HUB 殿后，容量 = min(DRCO_SUCC_NODE_TASK_CAP, N/2)，bit63 置位）；其余 op 顺序
+//    追加容量 MAX_SUCC_LIST_SIZE 的混合节点（生产核就地串行解，bit63 不置位）。入口 op
+//    （host 派发单核平铺即最优）与 HUB_MIX 生产者（节点表由 ResolveHubMixTask 就地派发）
+//    不参与分块散射。
+static DrcoStaticSuccPlan BuildDrcoStaticSuccPlan(
+    const OrderedSet<Operation*>& callList,
+    const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
+    const std::unordered_map<uint64_t, int>& calleeHashIndexDict, const std::vector<CceCodeInfo>& cceCodeInfoList)
+{
+    const size_t n = callList.size();
+    DrcoStaticSuccPlan plan;
+    plan.expandedCnt.assign(n, 0);
+    plan.hubExpanded.assign(n, 0);
+    plan.chunked.assign(n, 0);
+
+    // 唯一前继表：-1 = 无前继，-2 = 多前继
+    std::vector<int32_t> uniquePred(n, -1);
+    for (size_t p = 0; p < n; p++) {
+        for (Operation* s : callOpSuccDict.find(callList[p])->second) {
+            auto si = static_cast<size_t>(callList.GetIndex(s));
+            uniquePred[si] = (uniquePred[si] == -1) ? static_cast<int32_t>(p) : -2;
+        }
+    }
+    std::vector<uint8_t> candidate(n, 0);
+    for (size_t h = 0; h < n; h++) {
+        candidate[h] = (GetCallOpCoreType(h, callList, calleeHashIndexDict, cceCodeInfoList) ==
+                            static_cast<uint32_t>(CoreType::HUB) &&
+                        uniquePred[h] >= 0) ?
+                           1 :
+                           0;
+    }
+    // 展开标记：HUB 链上按奇偶交替展开，保证每条边恰被搬一次（不丢边、不重复搬）
+    std::vector<int8_t> mark(n, -1);
+    for (size_t h = 0; h < n; h++) {
+        if (candidate[h] == 0 || mark[h] != -1) {
+            continue;
+        }
+        std::vector<uint32_t> chain;
+        uint32_t cur = static_cast<uint32_t>(h);
+        while (candidate[cur] != 0 && mark[cur] == -1) {
+            chain.push_back(cur);
+            cur = static_cast<uint32_t>(uniquePred[cur]);
+        }
+        bool parentMarked = candidate[cur] != 0 ? mark[cur] == 1 : false;
+        for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
+            parentMarked = !parentMarked;
+            mark[*it] = parentMarked ? 1 : 0;
+        }
+    }
+
+    for (size_t p = 0; p < n; p++) {
+        if (mark[p] == 1) {
+            plan.hubExpanded[p] = 1; // DRCO 表清空（边已搬入唯一前继表）
+            continue;
+        }
+        // 按 coreType 计数（含展开搬入条目）
+        constexpr uint32_t DRCO_CT_BUCKET_NUM = 7; // AIV/AIC/HUB_MIX/AICPU/HUB/GMATOMIC/MIX，非法类型归并末桶
+        uint32_t typeCnt[DRCO_CT_BUCKET_NUM] = {0};
+        uint32_t cnt = 0;
+        auto countEntry = [&](size_t opIdx) {
+            uint32_t ct = GetCallOpCoreType(opIdx, callList, calleeHashIndexDict, cceCodeInfoList);
+            cnt++;
+            typeCnt[ct < DRCO_CT_BUCKET_NUM ? ct : DRCO_CT_BUCKET_NUM - 1]++;
+        };
+        for (Operation* s : callOpSuccDict.find(callList[p])->second) {
+            auto si = static_cast<size_t>(callList.GetIndex(s));
+            countEntry(si); // 原始入口（被展开 HUB 同样保留空转）
+            if (mark[si] == 1) {
+                for (Operation* t : callOpSuccDict.find(callList[si])->second) {
+                    countEntry(static_cast<size_t>(callList.GetIndex(t))); // 展开搬入（深度 1）
+                }
+            }
+        }
+        plan.expandedCnt[p] = cnt;
+        // 入口 op 不参与分块（host 派发期单核平铺即近 1:1 落核）；join/唯一前继均参与，
+        // 分块只看后继数阈值
+        bool chunked = cnt > DRCO_STATIC_SUCC_THRESHOLD && uniquePred[p] != -1 &&
+                       GetCallOpCoreType(p, callList, calleeHashIndexDict, cceCodeInfoList) !=
+                           static_cast<uint32_t>(CoreType::HUB_MIX);
+        plan.chunked[p] = chunked ? 1 : 0;
+        if (chunked) {
+            // 容量 = min(cap, N/2) 保证至少 2 节点（cnt > 阈值 16 → N/2 ≥ 8，无除零）
+            uint32_t succNodeCap = std::min(DRCO_SUCC_NODE_TASK_CAP, cnt / 2);
+            for (uint32_t c : typeCnt) {
+                plan.nodeTotal += (c + succNodeCap - 1) / succNodeCap;
+            }
+        } else {
+            // 非 chunked op 同样以节点存储：容量 MAX_SUCC_LIST_SIZE 顺序追加（不分组）
+            plan.nodeTotal += (cnt + DevAscendFunctionStaticSuccNode::MAX_SUCC_LIST_SIZE - 1) /
+                              DevAscendFunctionStaticSuccNode::MAX_SUCC_LIST_SIZE;
+        }
+    }
+    return plan;
+}
+
 void DevAscendFunction::InitOperationBufferLayouts(
     uintdevptr_t& initOffset, const OrderedSet<Operation*>& callList,
     const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
-    const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict)
+    const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict,
+    const std::unordered_map<uint64_t, int>& calleeHashIndexDict, const std::vector<CceCodeInfo>& cceCodeInfoList)
 {
     operationList_.HostInitDataSizeOffset(initOffset, callList.size());
 
@@ -636,7 +746,10 @@ void DevAscendFunction::InitOperationBufferLayouts(
     opAttrOffsetList_.HostInitDataSizeOffset(initOffset, callList.size());
     opCalleeList_.HostInitDataSizeOffset(initOffset, callList.size());
     operationSuccList_.HostInitDataSizeOffset(initOffset, sucSize);
-    drcoEncodedSuccList_.HostInitDataSizeOffset(initOffset, sucSize);
+    auto plan = BuildDrcoStaticSuccPlan(callList, callOpSuccDict, calleeHashIndexDict, cceCodeInfoList);
+    // 静态后继节点区（全量 DRCO 视图后继，连续数组，自然对齐——与原平铺表 drcoEncodedSuccList_
+    // 同口径，不强制 64B 放置对齐）
+    drcoStaticSuccNodeList_.HostInitDataSizeOffset(initOffset, plan.nodeTotal);
     operationSuccInfoList_.HostInitDataSizeOffset(initOffset, callList.size());
     operationCopyOutResolveSuccIndexList_.HostInitDataSizeOffset(initOffset, copyOutResolveSuccIdxSize);
 }
@@ -683,17 +796,33 @@ void DevAscendFunction::PopulateOperationEncodedContent(
     std::vector<uint32_t> drcoSuccScratch;
     uint64_t drcoPairCnt = 0;
     uint64_t drcoSuccCnt = 0;
+    auto plan = BuildDrcoStaticSuccPlan(callList, callOpSuccDict, calleeHashIndexDict, cceCodeInfoList);
+    uint32_t staticSuccNodeCursor = 0;
     for (size_t index = 0; index < callList.size(); index++) {
         PopulateOneEncodedOpOperandsAndAttrs(index, operanSize, staticAttributeSize, expressionTable, callList, tlist,
                                              rawList, calleeHashIndexDict, stitchIndexList);
         PopulateOneEncodedOpGraphEdges(index, sucSize, copyOutResolveSuccIdxSize, callList, callOpSuccDict,
                                        copyOutResolveSuccIndexListDict, stitchIndexList, calleeHashIndexDict,
-                                       cceCodeInfoList, dupData, drcoSuccScratch, drcoPairCnt, drcoSuccCnt);
+                                       cceCodeInfoList, dupData, plan, staticSuccNodeCursor, drcoSuccScratch,
+                                       drcoPairCnt, drcoSuccCnt);
     }
+    // 边守恒：DRCO 视图条目总数恒等于原图静态边总数（HUB 展开为边搬移；被展开 HUB 保留
+    // 空转入口、其原边由前继表承接），每条 predCount 边恰被递减一次
+    ASSERT(ProgEncodeErr::RANGE_VERIFY_FAILED, drcoSuccCnt == static_cast<uint64_t>(sucSize))
+        << "Drco edge conservation broken: drcoSuccCnt " << drcoSuccCnt << " != staticEdges " << sucSize;
+    ASSERT(ProgEncodeErr::RANGE_VERIFY_FAILED, staticSuccNodeCursor == plan.nodeTotal)
+        << "Static succ node cursor mismatch: " << staticSuccNodeCursor << " != " << plan.nodeTotal;
     if (drcoSuccCnt > 0) {
-        MACHINE_LOGI("DrcoSuccPair: staticEdges=%llu, pairedEdges=%llu, atomicSaved=%llu (%.1f%%)",
-                     static_cast<unsigned long long>(drcoSuccCnt), static_cast<unsigned long long>(drcoPairCnt * 2),
-                     static_cast<unsigned long long>(drcoPairCnt), drcoPairCnt * 200.0 / drcoSuccCnt);
+        MACHINE_LOGI(
+            "DrcoSuccPair: staticEdges=%llu, pairedEdges=%llu, atomicSaved=%llu (%.1f%%), "
+            "staticSuccOps=%zu, staticSuccNodes=%u, hubExpanded=%zu",
+            static_cast<unsigned long long>(drcoSuccCnt), static_cast<unsigned long long>(drcoPairCnt * 2),
+            static_cast<unsigned long long>(drcoPairCnt), drcoPairCnt * 200.0 / drcoSuccCnt,
+            plan.chunked.size() > 0 ? static_cast<size_t>(std::count(plan.chunked.begin(), plan.chunked.end(), 1)) : 0,
+            plan.nodeTotal,
+            plan.hubExpanded.size() > 0 ?
+                static_cast<size_t>(std::count(plan.hubExpanded.begin(), plan.hubExpanded.end(), 1)) :
+                0);
     }
 }
 
@@ -767,13 +896,62 @@ void DevAscendFunction::PopulateOneEncodedOpOperandsAndAttrs(
     staticAttributeSize += opStaticAttrSize;
 }
 
+// DRCO 视图后继条目收集（含单前继 HUB 展开，深度 1）：条目无 pair bit（配对由节点构造
+// 统一进行）；dummyEnding 后继置 DRCO_SUCC_DUMMY_ENDING_BIT（设备侧跳过递减）。
+// coreType 校验仅在表将被 DRCO 消费时生效（AICPU 派发图可合法携带非法类型，不校验）
+static void CollectDrcoViewSuccEntries(size_t index, int opSuccSize, uint32_t dummyEndingOpIdx,
+                                       const OrderedSet<Operation*>& callList,
+                                       const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
+                                       const std::unordered_map<uint64_t, int>& calleeHashIndexDict,
+                                       const std::vector<CceCodeInfo>& cceCodeInfoList, const DrcoStaticSuccPlan& plan,
+                                       std::vector<uint32_t>& drcoSuccScratch)
+{
+    Operation* op = callList[index];
+    static const bool drcoConsume = IsAicoreResolveEnabled() &&
+                                    config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) != CFG_RUN_MODE_SIM;
+    auto assertValidCoreType = [](uint32_t coreType, uint32_t succOpIdx) {
+        if (drcoConsume) {
+            ASSERT(DevCommonErr::PARAM_INVALID, npu::tile_fwk::IsValidDrcoCoreType(coreType))
+                << "DRCO successor coreType " << coreType << " (succ op " << succOpIdx << ") is not consumable";
+        }
+    };
+    drcoSuccScratch.clear();
+    if (plan.hubExpanded[index] == 0) {
+        drcoSuccScratch.reserve(plan.expandedCnt[index]);
+        for (int k = 0; k < opSuccSize; k++) {
+            uint32_t succ = callList.GetIndex(callOpSuccDict.find(op)->second[k]);
+            uint32_t succCoreType = GetCallOpCoreType(succ, callList, calleeHashIndexDict, cceCodeInfoList);
+            assertValidCoreType(succCoreType, succ);
+            uint32_t succEncoded = npu::tile_fwk::EncodeDrcoCoreType(succ, succCoreType);
+            if (succ == dummyEndingOpIdx) {
+                succEncoded |= npu::tile_fwk::DRCO_SUCC_DUMMY_ENDING_BIT;
+            }
+            drcoSuccScratch.push_back(succEncoded);
+            if (plan.hubExpanded[succ] != 0) {
+                // HUB 后继表搬入本表（本体保留上方空转入口）
+                for (Operation* t : callOpSuccDict.find(callList[succ])->second) {
+                    auto ti = static_cast<uint32_t>(callList.GetIndex(t));
+                    uint32_t tCoreType = GetCallOpCoreType(ti, callList, calleeHashIndexDict, cceCodeInfoList);
+                    assertValidCoreType(tCoreType, ti);
+                    uint32_t tEncoded = npu::tile_fwk::EncodeDrcoCoreType(ti, tCoreType);
+                    if (ti == dummyEndingOpIdx) {
+                        tEncoded |= npu::tile_fwk::DRCO_SUCC_DUMMY_ENDING_BIT;
+                    }
+                    drcoSuccScratch.push_back(tEncoded);
+                }
+            }
+        }
+    }
+}
+
 void DevAscendFunction::PopulateOneEncodedOpGraphEdges(
     size_t index, int& sucSize, int& copyOutResolveSuccIdxSize, const OrderedSet<Operation*>& callList,
     const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
     const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict,
     const std::vector<int32_t>& stitchIndexList, const std::unordered_map<uint64_t, int>& calleeHashIndexDict,
     const std::vector<CceCodeInfo>& cceCodeInfoList, DevAscendFunctionDuppedData* dupData,
-    std::vector<uint32_t>& drcoSuccScratch, uint64_t& drcoPairCnt, uint64_t& drcoSuccCnt)
+    const DrcoStaticSuccPlan& plan, uint32_t& staticSuccNodeCursor, std::vector<uint32_t>& drcoSuccScratch,
+    uint64_t& drcoPairCnt, uint64_t& drcoSuccCnt)
 {
     Operation* op = callList[index];
     DevAscendOperation& staticField = At(operationList_, index);
@@ -781,58 +959,31 @@ void DevAscendFunction::PopulateOneEncodedOpGraphEdges(
     int opSuccSize = callOpSuccDict.find(op)->second.size();
 
     npu::tile_fwk::DevAscendFunctionOperationSuccInfo& succInfo = At(operationSuccInfoList_, index);
-    succInfo.staticIndexSizeAndStitchIndex = (static_cast<uint64_t>(stitchIndexList[index]) << 32) |
-                                             (static_cast<uint64_t>(static_cast<uint16_t>(opSuccSize)) << 16) |
-                                             static_cast<uint64_t>(static_cast<uint16_t>(sucSize));
 
+    // ---- 原图镜像（AICPU/DRCU 视图 + predCount 播种）：无条件按原始边执行，不受 DRCO 视图变换影响 ----
     staticField.depGraphSuccList.AssignRangeOffsetSize(operationSuccList_, sucSize, opSuccSize);
-    // The DRCO succ segment is sorted by succ opIdx (depGraphSuccList keeps dict order: it feeds the
-    // AICPU/DRCU resolve and the dyn_topo dump). Sorting groups (2k, 2k+1) successors adjacently so
-    // the device resolve can decrement both packed predCount halves with one u64 atomicAdd; the
-    // first entry of each pair carries DRCO_SUCC_PAIR_BIT (aikernel_data.h: entry bits 16-28 are free).
-    drcoSuccScratch.clear();
-    drcoSuccScratch.reserve(static_cast<size_t>(opSuccSize));
     for (int k = 0; k < opSuccSize; k++) {
         uint32_t succ = callList.GetIndex(callOpSuccDict.find(op)->second[k]);
         At(staticField.depGraphSuccList, k) = succ;
-        // Parallel DRCO-only entry: succOpIdx | (succ CoreType << 29).
-        auto succCallop = std::static_pointer_cast<CallOpAttribute>(callList[succ]->GetOpAttribute());
-        uint32_t succCoreType = cceCodeInfoList[calleeHashIndexDict.at(succCallop->GetCalleeHash().GetHash())].coreType;
-        // Fail fast when the encoded table is actually consumed (same gate as the stitch-side
-        // check): a successor not consumable by the DRCO resolve would OOB-index batchTaskIds
-        // on device (AICPU-dispatch graphs may legally carry such successors, so no assert there).
-        static const bool drcoConsume = IsAicoreResolveEnabled() &&
-                                        config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) != CFG_RUN_MODE_SIM;
-        if (drcoConsume) {
-            ASSERT(DevCommonErr::PARAM_INVALID, npu::tile_fwk::IsValidDrcoCoreType(succCoreType))
-                << "DRCO successor coreType " << succCoreType << " (succ op " << succ << ") is not consumable";
-        }
-        uint32_t succEncoded = npu::tile_fwk::EncodeDrcoCoreType(succ, succCoreType);
-        if (succ == dummyEndingOpIdx_) {
-            succEncoded |= npu::tile_fwk::DRCO_SUCC_DUMMY_ENDING_BIT;
-        }
-        drcoSuccScratch.push_back(succEncoded);
         At(operationList_, succ).depGraphPredCount++;
         dupData->GetOperationCurrPredCount(succ)++;
     }
-    // Sort by opIdx only: coreType lives in the high bits and would break opIdx adjacency.
-    std::sort(drcoSuccScratch.begin(), drcoSuccScratch.end(),
-              [](uint32_t lhs, uint32_t rhs) { return (lhs & TASKID_TASK_MASK) < (rhs & TASKID_TASK_MASK); });
-    for (size_t k = 0; k < drcoSuccScratch.size();) {
-        uint32_t curOpIdx = drcoSuccScratch[k] & TASKID_TASK_MASK;
-        if (k + 1 < drcoSuccScratch.size() && (curOpIdx & 1u) == 0u &&
-            (drcoSuccScratch[k + 1] & TASKID_TASK_MASK) == curOpIdx + 1u) {
-            At(drcoEncodedSuccList_, sucSize + static_cast<int>(k)) = static_cast<int32_t>(
-                drcoSuccScratch[k] | npu::tile_fwk::DRCO_SUCC_PAIR_BIT);
-            At(drcoEncodedSuccList_, sucSize + static_cast<int>(k) + 1) = static_cast<int32_t>(drcoSuccScratch[k + 1]);
-            drcoPairCnt++;
-            k += 2;
-        } else {
-            At(drcoEncodedSuccList_, sucSize + static_cast<int>(k)) = static_cast<int32_t>(drcoSuccScratch[k]);
-            k += 1;
-        }
-    }
-    drcoSuccCnt += static_cast<uint64_t>(opSuccSize);
+
+    // ---- DRCO 视图：HUB 展开 → 节点发射（全量 succNode 化，分块/平铺同构）----
+    // 低 32bit 恒为 succNodeIndex/succNodeSize；bit63 = 散射位（chunked 置 1）；
+    // stitchIndex 占 bit62-32（31bit 掩码读取）
+    succInfo.staticIndexSizeAndStitchIndex = (static_cast<uint64_t>(stitchIndexList[index]) &
+                                              npu::tile_fwk::DRCO_STITCH_INDEX_MASK)
+                                             << 32;
+
+    CollectDrcoViewSuccEntries(index, opSuccSize, dummyEndingOpIdx_, callList, callOpSuccDict, calleeHashIndexDict,
+                               cceCodeInfoList, plan, drcoSuccScratch);
+
+    // chunked：coreType 分桶分块散射；非 chunked：容量 MAX_SUCC_LIST_SIZE 顺序追加（生产核
+    // 就地解）。一次 resolve 只有一条路径，边恰减一次
+    PopulateOneEncodedOpStaticSuccNodes(drcoSuccScratch, succInfo, staticSuccNodeCursor, plan.chunked[index] != 0,
+                                        drcoPairCnt);
+    drcoSuccCnt += static_cast<uint32_t>(drcoSuccScratch.size());
     sucSize += opSuccSize;
 
     const std::vector<int>& copyOutResolveSuccIndexList = copyOutResolveSuccIndexListDict.find(op)->second;
@@ -845,10 +996,92 @@ void DevAscendFunction::PopulateOneEncodedOpGraphEdges(
     copyOutResolveSuccIdxSize += copyOutResolveSuccIndexList.size();
 }
 
+// 静态后继节点构造（全量 DRCO 视图后继统一发射）：chunked = true 按 coreType 分组排序
+// （HUB 殿后）+ 组内配对 + 容量 min(DRCO_SUCC_NODE_TASK_CAP, N/2) 分块散射（bit63 置位）；
+// chunked = false 不分组（opIdx 全序）+ 节点内配对 + 容量 MAX_SUCC_LIST_SIZE 顺序追加
+// （生产核就地解，bit63 不置位）。输入 scratch 无 pair bit（节点配对需物化 pair bit 到
+// 副本，节点边界清除依赖它）
+void DevAscendFunction::PopulateOneEncodedOpStaticSuccNodes(const std::vector<uint32_t>& drcoSuccScratch,
+                                                            npu::tile_fwk::DevAscendFunctionOperationSuccInfo& succInfo,
+                                                            uint32_t& staticSuccNodeCursor, bool chunked,
+                                                            uint64_t& drcoPairCnt)
+{
+    std::vector<uint32_t> nodeScratch = drcoSuccScratch;
+    // coreType 分组序（其余升序，HUB 殿后）：组内按 opIdx 相邻（配对前提），组边界即节点
+    // 边界；非分块不分组（key 恒 0 → 全表 opIdx 全序）
+    auto entryGroupKey = [chunked](uint32_t e) {
+        if (!chunked) {
+            return 0u;
+        }
+        uint32_t ct = (e >> npu::tile_fwk::TASKID_DRCO_CT_SHIFT) & npu::tile_fwk::TASKID_DRCO_CT_MASK;
+        return ct == static_cast<uint32_t>(npu::tile_fwk::CoreType::HUB) ? 0xFFu : (1u + ct);
+    };
+    std::sort(nodeScratch.begin(), nodeScratch.end(), [&entryGroupKey](uint32_t lhs, uint32_t rhs) {
+        uint32_t lk = entryGroupKey(lhs);
+        uint32_t rk = entryGroupKey(rhs);
+        if (lk != rk) {
+            return lk < rk;
+        }
+        return (lhs & TASKID_TASK_MASK) < (rhs & TASKID_TASK_MASK);
+    });
+    uint32_t nodeCnt = static_cast<uint32_t>(nodeScratch.size());
+    uint32_t succNodeCap = chunked ? std::min(DRCO_SUCC_NODE_TASK_CAP, nodeCnt / 2) :
+                                     DevAscendFunctionStaticSuccNode::MAX_SUCC_LIST_SIZE;
+    // 配对：跨节点不配对（配对手分属不同节点、由不同核解，无法合并 u64 减）；分块路径
+    // 跨组不配对（保类型同质）
+    for (size_t k = 0; k < nodeScratch.size();) {
+        uint32_t curOpIdx = nodeScratch[k] & TASKID_TASK_MASK;
+        if (k + 1 < nodeScratch.size() && (curOpIdx & 1u) == 0u &&
+            (nodeScratch[k + 1] & TASKID_TASK_MASK) == curOpIdx + 1u &&
+            entryGroupKey(nodeScratch[k]) == entryGroupKey(nodeScratch[k + 1])) {
+            nodeScratch[k] |= npu::tile_fwk::DRCO_SUCC_PAIR_BIT;
+            drcoPairCnt++;
+            k += 2;
+        } else {
+            k += 1;
+        }
+    }
+    // 发射：每节点末条 pair bit 清除（配对手在下一节点，由其他核解；就地路径按节点独立
+    // 调用解依赖，跨节点读 i+1 会越界读到下一节点头）
+    uint64_t nodeIndexBits = static_cast<uint16_t>(staticSuccNodeCursor);
+    uint32_t nodeCount = 0;
+    uint32_t begin = 0;
+    while (begin < nodeCnt) {
+        uint32_t groupKey = entryGroupKey(nodeScratch[begin]);
+        uint32_t groupEnd = begin;
+        while (groupEnd < nodeCnt && entryGroupKey(nodeScratch[groupEnd]) == groupKey) {
+            groupEnd++;
+        }
+        for (uint32_t g = begin; g < groupEnd; g += succNodeCap) {
+            uint32_t end = g + succNodeCap;
+            if (end > groupEnd) {
+                end = groupEnd;
+            }
+            DevAscendFunctionStaticSuccNode& node = At(drcoStaticSuccNodeList_, staticSuccNodeCursor + nodeCount);
+            node.Init(static_cast<uint16_t>((nodeScratch[g] >> npu::tile_fwk::TASKID_DRCO_CT_SHIFT) &
+                                            npu::tile_fwk::TASKID_DRCO_CT_MASK));
+            for (uint32_t k = g; k < end; k++) {
+                uint32_t entry = nodeScratch[k];
+                if (k + 1 == end && k + 1 < nodeCnt && (entry & npu::tile_fwk::DRCO_SUCC_PAIR_BIT) != 0) {
+                    entry &= ~npu::tile_fwk::DRCO_SUCC_PAIR_BIT;
+                }
+                node.SafePushBack(entry);
+            }
+            nodeCount++;
+        }
+        begin = groupEnd;
+    }
+    // |= 保留已写入的 stitchIndex（bit62-32）；chunked 置散射位 bit63，低 32bit 为节点语义
+    succInfo.staticIndexSizeAndStitchIndex |= (chunked ? npu::tile_fwk::DRCO_SUCC_PARALLEL_BIT : 0ull) |
+                                              (static_cast<uint64_t>(nodeCount) << 16) | nodeIndexBits;
+    staticSuccNodeCursor += nodeCount;
+}
+
 void DevAscendFunction::VerifyOperationEncodedContent(const OrderedSet<Operation*>& callList,
                                                       const std::unordered_map<Operation*, uint64_t>& callOpPredDict,
                                                       DevAscendFunctionDuppedData* dupData)
 {
+    uint32_t scatterModeCnt = 0;
     for (size_t idx = 0; idx < callList.size(); idx++) {
         Operation* op = callList[idx];
         ASSERT(DevCommonErr::PARAM_CHECK_FAILED, callOpPredDict.count(op))
@@ -867,7 +1100,40 @@ void DevAscendFunction::VerifyOperationEncodedContent(const OrderedSet<Operation
             << "GetOperationCurrPredCount mismatch: expected " << dupData->GetOperationCurrPredCount(idx) << ", got "
             << callOpPredDict.find(op)->second << ", Callopsize is " << dupData->GetOperationSize()
             << " exceeds the maximum allowed value of 65535.";
+        // 节点结构校验（全量 succNode 存储）：区间/容量/末条 pair bit；类型同质仅校验散射
+        // 节点（chunked 分桶保证；非散射节点混合类型，节点头 ct 仅为首条目 debug 值）
+        const auto& succInfo = At(operationSuccInfoList_, idx);
+        uint64_t succInfoBits = succInfo.staticIndexSizeAndStitchIndex;
+        uint32_t succNodeIdx = static_cast<uint32_t>(static_cast<uint16_t>(succInfoBits));
+        uint32_t succNodeCnt = static_cast<uint32_t>(static_cast<uint16_t>(succInfoBits >> 16));
+        bool scatter = (succInfoBits & npu::tile_fwk::DRCO_SUCC_PARALLEL_BIT) != 0;
+        scatterModeCnt += scatter ? 1 : 0;
+        if (scatter) {
+            ASSERT(DevCommonErr::PARAM_CHECK_FAILED, succNodeCnt >= 1) << "scatter mode with zero nodes: op " << idx;
+        }
+        ASSERT(DevCommonErr::PARAM_CHECK_FAILED, succNodeIdx + succNodeCnt <= drcoStaticSuccNodeList_.size())
+            << "Static succ node range OOB: op " << idx;
+        for (uint32_t n = 0; n < succNodeCnt; n++) {
+            const auto& node = At(drcoStaticSuccNodeList_, succNodeIdx + n);
+            ASSERT(DevCommonErr::PARAM_CHECK_FAILED,
+                   node.succSize >= 1 && node.succSize <= DevAscendFunctionStaticSuccNode::MAX_SUCC_LIST_SIZE)
+                << "Static succ node size OOB: op " << idx << ", node " << n << ", size " << node.succSize;
+            ASSERT(DevCommonErr::PARAM_CHECK_FAILED,
+                   (node.succList[node.succSize - 1] & npu::tile_fwk::DRCO_SUCC_PAIR_BIT) == 0)
+                << "Static succ node last entry keeps pair bit: op " << idx << ", node " << n;
+            if (scatter) {
+                // 节点类型同质 + 节点头 coreType 一致：coreType 分组保证（消费核单节点解依赖
+                // 只产生单一类型的 ready 批量推送）
+                for (uint32_t e = 1; e < node.succSize; e++) {
+                    ASSERT(DevCommonErr::PARAM_CHECK_FAILED,
+                           ((node.succList[e] >> npu::tile_fwk::TASKID_DRCO_CT_SHIFT) &
+                            npu::tile_fwk::TASKID_DRCO_CT_MASK) == node.coreType)
+                        << "Static succ node mixes coreType: op " << idx << ", node " << n;
+                }
+            }
+        }
     }
+    MACHINE_LOGI("DRCO succNode encode stats: ops=%zu scatterMode=%u", callList.size(), scatterModeCnt);
 }
 
 static void ValidateWrapGroupConsistency(int32_t wrapId, const std::vector<Operation*>& ops,

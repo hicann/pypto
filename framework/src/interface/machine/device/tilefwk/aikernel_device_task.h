@@ -39,7 +39,9 @@ struct DrcoRootFuncData {
     // 相对 DevAscendProgram 基址的字节偏移，打包为一个 u64（偏移本身平移不变）：
     /*
         |----3bit----|-----1bit----------|------------------30bit------------------|------------------30bit------------------|
-        |----free----|--dummyEndingUsed--|-----------succStaticListOffset----------|------------succInfoListOffset-----------|
+        |----free----|--dummyEndingUsed--|-------staticSuccNodeListOffset----------|------------succInfoListOffset-----------|
+        staticSuccNodeListOffset：静态后继节点区（全量 DRCO 后继，分块/平铺同构）相对
+        programBase 的偏移；空表 func 写 0（设备侧仅在 succNodeSize > 0 时解引用）
     */
     uint64_t funcInfoAndStaticDataOffset;
 };
@@ -101,8 +103,22 @@ constexpr uint32_t DRCO_QUEUE_MAX = 3;
 // （× group）矩阵为单一二维数组，行按核类型内本地编号索引（AIC = blockIdx，
 // AIV = blockIdx - nrValidAic，行数上限 MAX_AICORE_NUM_FOR_QUEUE），列 = LOCAL_GROUP_SIZE；
 // push 只写本类型核的行，pop 只读自己类型内编号对应的行
-// slot 语义为节点相对 stitch pool 基址的 u32 偏移（0 = 空闲；首对象不在偏移 0，
-// 由 SlabWsAllocator::FirstObjBaseOffset 保证），基址见 DrcoRootFuncList::stitchNodeBase
+// slot（u32）编码：WAW 链 = 节点相对 stitchNodeBase 的字节偏移（< 2^31，0 = 空闲，
+// FirstObjBaseOffset 保证非零）；静态后继 = bit31 静态标志 | bit30-21 生产者 funcId（10bit，
+// 与 taskId funcId 字段等宽）| bit20-0 per-func 节点下标（21bit；SuccInfo 字段 16bit →
+// 实际 ≤ 65535，余量充足）。消费核 pop 后按 funcId 索引 funcDataList 取节点区基址 +
+// 下标还原节点（相对 funcInfoAndStaticDataOffset bit59-30）
+constexpr uint32_t DRCO_STITCH_SLOT_STATIC_SUCC_FLAG = 1u << 31;
+constexpr uint32_t DRCO_STITCH_SLOT_FUNCID_SHIFT = 21;
+constexpr uint32_t DRCO_STITCH_SLOT_FUNCID_MASK = 0x3FFu << DRCO_STITCH_SLOT_FUNCID_SHIFT;
+constexpr uint32_t DRCO_STITCH_SLOT_NODE_INDEX_MASK = 0x1FFFFFu;
+
+INLINE uint32_t EncodeStaticSuccSlot(uint32_t funcId, uint32_t nodeIndex)
+{
+    return DRCO_STITCH_SLOT_STATIC_SUCC_FLAG | ((funcId & 0x3FFu) << DRCO_STITCH_SLOT_FUNCID_SHIFT) |
+           (nodeIndex & DRCO_STITCH_SLOT_NODE_INDEX_MASK);
+}
+
 struct DrcoGlobalStitchNodeMatrix {
     enum {
         COL_SIZE = 1,
@@ -214,8 +230,8 @@ struct DrcoRootFuncList {
     __gm__ void* metadataBase;
     // DevAscendProgram 基址（设备地址）：
     // DrcoRootFuncData 的
-    // funcInfoAndStaticDataOffset（bit60=dummyEndingUsed，bit59-30=succStaticListOffset，bit29-0=succInfoListOffset，
-    // bit63-61 空闲）以此为原点还原指针
+    // funcInfoAndStaticDataOffset（bit60=dummyEndingUsed，bit59-30=staticSuccNodeListOffset，bit29-0=succInfoListOffset，
+    // bit63-61 空闲）以此为原点还原指针；静态 succ slot 低 32 位偏移亦以此为原点（push/pop 同源还原）
     __gm__ void* programBase;
 
     alignas(64) uint32_t totalTaskCount;
