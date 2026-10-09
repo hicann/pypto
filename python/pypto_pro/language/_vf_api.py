@@ -230,10 +230,11 @@ class Vf:
                       post_update: bool = False):
         """Store unaligned data from a VF register to UB (vstus/vstu instruction).
 
-        When ``stride`` is an integer scalar, emits ``vstus`` (strided mode).
-        When ``stride`` is an ``AddrReg``, emits ``vstu`` (AddrReg mode) —
-        the AddrReg provides a vector of element offsets for scatter-pattern
-        unaligned stores. ``vstu`` always uses POST_UPDATE.
+        When ``stride`` is an integer scalar, emits ``vstus`` (strided mode,
+        requires ``post_update=True``). When ``stride`` is an ``AddrReg``,
+        emits ``vstu`` (AddrReg mode) — the AddrReg provides a vector of
+        element offsets for scatter-pattern unaligned stores. ``vstu``
+        supports both POST_UPDATE and NORM.
 
         Args:
             dst_ptr: Destination UB pointer
@@ -1690,19 +1691,17 @@ class Vf:
 
     @staticmethod
     @_api_decl
-    def load_unalign(align_reg, tile, stride=None, post_update: bool = False):
+    def load_unalign(align_reg, tile, stride=None):
         """Unaligned load from UB to register (vldus instruction).
 
-        Loads data from an unaligned UB address. Supports optional stride
-        for POST_UPDATE mode.
+        Loads data from an unaligned UB address. Passing the optional stride
+        selects POST_UPDATE mode.
 
         Args:
             align_reg: UnalignRegForLoad register
             tile: Source UB pointer
-            stride: Optional post-update stride in bytes
-
-        Kwargs:
-            post_update: ``True`` to auto-advance destination address
+            stride: Post-update stride (optional positional arg); passing it
+                selects POST_UPDATE mode
 
         Returns:
             Destination register (``RegTensor``) holding the data loaded from
