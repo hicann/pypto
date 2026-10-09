@@ -206,6 +206,16 @@ std::string GenerateMxLoadKernel(const ir::VarPtr& scale, const ir::VarPtr& tile
 struct SimpleOpParam {
     std::string op_name;
     std::string cce_op;
+    // Optional argument appended after the standard operands, for intrinsics
+    // whose A5 signature carries a trailing scratch tile that codegen fills by
+    // reusing an existing operand (e.g. TREM/TREMS reuse the rhs/tile).
+    std::string trailing_arg;
+    // User-provided ctor so the two-argument entries stay legal under
+    // -Werror=missing-field-initializers (aggregate init would warn for every
+    // entry that leaves trailing_arg out).
+    SimpleOpParam(std::string name, std::string op, std::string trailing = "")
+        : op_name(std::move(name)), cce_op(std::move(op)), trailing_arg(std::move(trailing))
+    {}
 };
 
 class BinaryOpTest : public ::testing::TestWithParam<SimpleOpParam> {};
@@ -215,13 +225,13 @@ TEST_P(BinaryOpTest, EmitsCorrectCode)
     auto tile = MakeTileType();
     auto call = MakeCall(p.op_name, {MakeVar("dst", tile), MakeVar("lhs", tile), MakeVar("rhs", tile)});
     auto code = RunCodegen(p.op_name, call);
-    EXPECT_CONTAINS(code, p.cce_op + "(dst, lhs, rhs);");
+    EXPECT_CONTAINS(code, p.cce_op + "(dst, lhs, rhs" + p.trailing_arg + ");");
 }
 INSTANTIATE_TEST_SUITE_P(
     BlockOutBinaryOps, BinaryOpTest,
     ::testing::Values(SimpleOpParam{"block.add", "TADD"}, SimpleOpParam{"block.sub", "TSUB"},
                       SimpleOpParam{"block.mul", "TMUL"}, SimpleOpParam{"block.div", "TDIV"},
-                      SimpleOpParam{"block.rem", "TREM"}, SimpleOpParam{"block.maximum", "TMAX"},
+                      SimpleOpParam{"block.rem", "TREM", ", rhs"}, SimpleOpParam{"block.maximum", "TMAX"},
                       SimpleOpParam{"block.minimum", "TMIN"}, SimpleOpParam{"block.and", "TAND"},
                       SimpleOpParam{"block.or", "TOR"}, SimpleOpParam{"block.shl", "TSHL"},
                       SimpleOpParam{"block.shr", "TSHR"}, SimpleOpParam{"block.gatherb", "TGATHERB"},
@@ -253,15 +263,16 @@ TEST_P(ScalarOpTest, EmitsCorrectCode)
     auto scal = MakeScalarType();
     auto call = MakeCall(p.op_name, {MakeVar("dst", tile), MakeVar("tile", tile), MakeVar("scalar", scal)});
     auto code = RunCodegen(p.op_name, call);
-    EXPECT_CONTAINS(code, p.cce_op + "(dst, tile, scalar);");
+    EXPECT_CONTAINS(code, p.cce_op + "(dst, tile, scalar" + p.trailing_arg + ");");
 }
 INSTANTIATE_TEST_SUITE_P(BlockOutScalarOps, ScalarOpTest,
                          ::testing::Values(SimpleOpParam{"block.adds", "TADDS"}, SimpleOpParam{"block.subs", "TSUBS"},
                                            SimpleOpParam{"block.muls", "TMULS"}, SimpleOpParam{"block.divs", "TDIVS"},
-                                           SimpleOpParam{"block.rems", "TREMS"}, SimpleOpParam{"block.ands", "TANDS"},
-                                           SimpleOpParam{"block.ors", "TORS"}, SimpleOpParam{"block.shls", "TSHLS"},
-                                           SimpleOpParam{"block.shrs", "TSHRS"}, SimpleOpParam{"block.maxs", "TMAXS"},
-                                           SimpleOpParam{"block.mins", "TMINS"}, SimpleOpParam{"block.axpy", "TAXPY"}));
+                                           SimpleOpParam{"block.rems", "TREMS", ", tile"},
+                                           SimpleOpParam{"block.ands", "TANDS"}, SimpleOpParam{"block.ors", "TORS"},
+                                           SimpleOpParam{"block.shls", "TSHLS"}, SimpleOpParam{"block.shrs", "TSHRS"},
+                                           SimpleOpParam{"block.maxs", "TMAXS"}, SimpleOpParam{"block.mins", "TMINS"},
+                                           SimpleOpParam{"block.axpy", "TAXPY"}));
 
 class RowReductionOpTest : public ::testing::TestWithParam<SimpleOpParam> {};
 TEST_P(RowReductionOpTest, EmitsCorrectCode)
@@ -445,20 +456,17 @@ TEST(BackendCCEBlockOutOps, FusedOps)
     auto tile = MakeTileType();
     auto call = MakeCall("block.mul_add_dst", {MakeVar("out", tile), MakeVar("lhs", tile), MakeVar("rhs", tile)});
     auto code = RunCodegen("block.mul_add_dst", call);
-    EXPECT_CONTAINS(code, "TMUL(lhs, lhs, rhs);");
-    EXPECT_CONTAINS(code, "TADD(out, lhs, out);");
+    EXPECT_CONTAINS(code, "TMULA(out, lhs, rhs);");
 
     auto call2 = MakeCall("block.fused_mul_add", {MakeVar("out", tile), MakeVar("lhs", tile), MakeVar("rhs", tile)});
     auto code2 = RunCodegen("block.fused_mul_add", call2);
-    EXPECT_CONTAINS(code2, "TMUL(lhs, lhs, out);");
-    EXPECT_CONTAINS(code2, "TADD(out, lhs, rhs);");
+    EXPECT_CONTAINS(code2, "TMADD(out, lhs, rhs);");
 
     auto call3 = MakeCall("block.fused_mul_add_relu",
                           {MakeVar("out", tile), MakeVar("lhs", tile), MakeVar("rhs", tile)});
     auto code3 = RunCodegen("block.fused_mul_add_relu", call3);
-    EXPECT_CONTAINS(code3, "TMUL(lhs, lhs, out);");
-    EXPECT_CONTAINS(code3, "TADD(lhs, lhs, rhs);");
-    EXPECT_CONTAINS(code3, "TRELU(out, lhs);");
+    EXPECT_CONTAINS(code3, "TMADD(out, lhs, rhs);");
+    EXPECT_CONTAINS(code3, "TRELU(out, out);");
 }
 
 TEST(BackendCCEBlockOutOps, Matmul)

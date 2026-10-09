@@ -441,6 +441,16 @@ def div(out: Tile, lhs: Tile, rhs: Union[Tile, int, float]) -> None:
     """
 
 
+@_api_decl
+def rem(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
+    """Element-wise remainder (truncation semantics): ``out = lhs % rhs``
+
+    Supports both tile-tile and tile-scalar operations:
+        - ``rem(out, tile_a, tile_b)`` -> tile-tile
+        - ``rem(out, tile_a, scalar)`` -> tile-scalar
+    """
+
+
 # --- B2. Bitwise element-wise (out, lhs, rhs) ---
 
 
@@ -455,23 +465,43 @@ def and_(out: Tile, lhs: Tile, rhs: Union[Tile, int]) -> None:
 
 
 @_api_decl
-def shl(out: Tile, lhs: Tile, rhs: Tile) -> None:
-    """Element-wise left shift with a Tile shift operand."""
+def or_(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
+    """Element-wise bitwise OR: ``out = lhs | rhs``
+
+    Supports both tile-tile and tile-scalar operations:
+        - ``or_(out, tile_a, tile_b)`` -> tile-tile
+        - ``or_(out, tile_a, scalar)`` -> tile-scalar
+    """
 
 
 @_api_decl
-def shr(out: Tile, lhs: Tile, rhs: Tile) -> None:
-    """Element-wise right shift with a Tile shift operand."""
+def shl(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
+    """Element-wise left shift: ``out = lhs << rhs``
+
+    Supports both tile-tile and tile-scalar operations:
+        - ``shl(out, tile_a, tile_b)`` -> tile-tile
+        - ``shl(out, tile_a, scalar)`` -> tile-scalar
+    """
 
 
 @_api_decl
-def xor(out: Tile, lhs: Tile, rhs: Tile, tmp: Tile) -> None:
+def shr(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar]) -> None:
+    """Element-wise right shift: ``out = lhs >> rhs``
+
+    Supports both tile-tile and tile-scalar operations:
+        - ``shr(out, tile_a, tile_b)`` -> tile-tile
+        - ``shr(out, tile_a, scalar)`` -> tile-scalar
+    """
+
+
+@_api_decl
+def xor(out: Tile, lhs: Tile, rhs: Union[Tile, Scalar], tmp: Tile) -> None:
     """Element-wise bitwise XOR: ``out = lhs ^ rhs``
 
     Args:
         out: Destination Tile
         lhs: Left-hand Tile
-        rhs: Right-hand Tile
+        rhs: Right-hand Tile or Scalar (tile-scalar path lowers to ``block.xors``)
         tmp: Workspace Tile
     """
 
@@ -487,6 +517,11 @@ def expands(out: Tile, scalar: Union[int, float]) -> None:
 @_api_decl
 def neg(out: Tile, src: Tile) -> None:
     """Element-wise negate: ``out = -src``"""
+
+
+@_api_decl
+def not_(out: Tile, src: Tile) -> None:
+    """Element-wise bitwise NOT: ``out = ~src``"""
 
 
 @_api_decl
@@ -909,6 +944,42 @@ def expand_div(out: Tile, src: Tile, scalar: Tile, *, dim: int = 0) -> None:
         src: Source Tile (reduction result)
         scalar: Scalar Tile for the expand operation
         dim: Expand dimension — 0=row, 1=column
+    """
+
+
+@_api_decl
+def expand_add(out: Tile, src: Tile, scalar: Tile, *, dim: int = 0) -> None:
+    """Add expand (broadcast the reduction result back to full shape).
+
+    Args:
+        out: Destination Tile
+        src: Source Tile (reduction result)
+        scalar: Scalar Tile for the expand operation
+        dim: Expand dimension — 0=row, 1=column
+    """
+
+
+@_api_decl
+def expand_expdif(out: Tile, src: Tile, scalar: Tile, *, dim: int = 0) -> None:
+    """Fused expand-expdif (softmax-style update: exp of the broadcast difference).
+
+    Args:
+        out: Destination Tile
+        src: Source Tile (reduction result)
+        scalar: Scalar Tile for the expand operation
+        dim: Expand dimension — 0=row, 1=column
+    """
+
+
+@_api_decl
+def prod(out: Tile, src: Tile, tmp: Tile, *, dim: int = 0) -> None:
+    """Product reduction along the specified dimension.
+
+    Args:
+        out: Destination Tile
+        src: Source Tile
+        tmp: Workspace Tile (required by hardware)
+        dim: Reduction dimension — 0=row (last axis), 1=column (first axis)
     """
 
 

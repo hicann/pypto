@@ -34,6 +34,9 @@ _BLOCK_OP_ALIASES: dict[str, str] = {
     "expand_mul": "row_expand_mul",
     "expand_sub": "row_expand_sub",
     "expand_div": "row_expand_div",
+    "prod": "row_prod",
+    "expand_add": "row_expand_add",
+    "expand_expdif": "row_expand_expdif",
 }
 
 
@@ -235,6 +238,7 @@ _BLOCK_OP_TILE_ROLES: dict[str, list] = {
     "row_expand": ["W", "R"],
     "col_expand": ["W", "R"],
     "row_expand_add": ["W", "R", "R"],
+    "row_expand_expdif": ["W", "R", "R"],
     "expand_sub": ["W", "R", "R"],
     "expand_mul": ["W", "R", "R"],
     "expand_div": ["W", "R", "R"],

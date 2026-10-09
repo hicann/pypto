@@ -119,6 +119,20 @@ def _ir_div(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, **kwar
     return _create_tile_scalar_op(out, lhs, rhs, tile_op="div", scalar_op="divs", span=span, **kwargs)
 
 
+def _ir_rem(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, **kwargs) -> Expr:
+    from pypto_pro.ir.op.block_ops import _REM_DTYPES, _check_dtype, _check_dtype_match, _create_tile_scalar_op
+
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("rem", dt, _REM_DTYPES)
+    # rhs consistency is only enforced for the tile-tile path; the
+    # tile-scalar path keeps the fits-dtype contract in
+    # _create_tile_scalar_op (mirrors the AscendC same-type template).
+    rhs_type = getattr(rhs, "type", None)
+    rhs_dt = getattr(rhs_type, "dtype", None) if isinstance(rhs_type, _ir_core.TileType) else None
+    _check_dtype_match("rem", dt, getattr(lhs.type, "dtype", None), rhs_dt)
+    return _create_tile_scalar_op(out, lhs, rhs, tile_op="rem", scalar_op="rems", span=span, **kwargs)
+
+
 def _ir_and(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, **kwargs) -> Expr:
     from pypto_pro.ir.op.block_ops import _BITWISE_DTYPES, _check_dtype, _check_dtype_match, _create_tile_scalar_op
 
@@ -131,6 +145,48 @@ def _ir_and(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, **kwar
     rhs_dt = getattr(rhs_type, "dtype", None) if isinstance(rhs_type, _ir_core.TileType) else None
     _check_dtype_match("and", dt, getattr(lhs.type, "dtype", None), rhs_dt)
     return _create_tile_scalar_op(out, lhs, rhs, tile_op="and", scalar_op="ands", span=span, **kwargs)
+
+
+def _ir_or(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, **kwargs) -> Expr:
+    from pypto_pro.ir.op.block_ops import _BITWISE_DTYPES, _check_dtype, _check_dtype_match, _create_tile_scalar_op
+
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("or", dt, _BITWISE_DTYPES)
+    # rhs consistency is only enforced for the tile-tile path; the
+    # tile-scalar path keeps the fits-dtype contract in
+    # _create_tile_scalar_op (mirrors the AscendC same-type template).
+    rhs_type = getattr(rhs, "type", None)
+    rhs_dt = getattr(rhs_type, "dtype", None) if isinstance(rhs_type, _ir_core.TileType) else None
+    _check_dtype_match("or", dt, getattr(lhs.type, "dtype", None), rhs_dt)
+    return _create_tile_scalar_op(out, lhs, rhs, tile_op="or", scalar_op="ors", span=span, **kwargs)
+
+
+def _ir_shl(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, **kwargs) -> Expr:
+    from pypto_pro.ir.op.block_ops import _BITWISE_DTYPES, _check_dtype, _check_dtype_match, _create_tile_scalar_op
+
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("shl", dt, _BITWISE_DTYPES)
+    # rhs consistency is only enforced for the tile-tile path; the
+    # tile-scalar path keeps the fits-dtype contract in
+    # _create_tile_scalar_op (mirrors the AscendC same-type template).
+    rhs_type = getattr(rhs, "type", None)
+    rhs_dt = getattr(rhs_type, "dtype", None) if isinstance(rhs_type, _ir_core.TileType) else None
+    _check_dtype_match("shl", dt, getattr(lhs.type, "dtype", None), rhs_dt)
+    return _create_tile_scalar_op(out, lhs, rhs, tile_op="shl", scalar_op="shls", span=span, **kwargs)
+
+
+def _ir_shr(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None, **kwargs) -> Expr:
+    from pypto_pro.ir.op.block_ops import _BITWISE_DTYPES, _check_dtype, _check_dtype_match, _create_tile_scalar_op
+
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("shr", dt, _BITWISE_DTYPES)
+    # rhs consistency is only enforced for the tile-tile path; the
+    # tile-scalar path keeps the fits-dtype contract in
+    # _create_tile_scalar_op (mirrors the AscendC same-type template).
+    rhs_type = getattr(rhs, "type", None)
+    rhs_dt = getattr(rhs_type, "dtype", None) if isinstance(rhs_type, _ir_core.TileType) else None
+    _check_dtype_match("shr", dt, getattr(lhs.type, "dtype", None), rhs_dt)
+    return _create_tile_scalar_op(out, lhs, rhs, tile_op="shr", scalar_op="shrs", span=span, **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +242,11 @@ register_table(
         "sub": OpSpec(builder=_ir_sub),
         "mul": OpSpec(builder=_ir_mul),
         "div": OpSpec(builder=_ir_div),
+        "rem": OpSpec(builder=_ir_rem),
         "and_": OpSpec(builder=_ir_and),
+        "or_": OpSpec(builder=_ir_or),
+        "shl": OpSpec(builder=_ir_shl),
+        "shr": OpSpec(builder=_ir_shr),
         "minimum": OpSpec(builder=_ir_minimum),
         "maximum": OpSpec(builder=_ir_maximum),
     }

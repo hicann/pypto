@@ -222,6 +222,46 @@ static std::string MakeBlockOutScalarCodegenCCE(const std::string& cce_op_name, 
 }
 
 // ============================================================================
+// Helper: Block explicit-output binary op with a trailing scratch tile
+// - args = [dst, lhs, rhs]
+// Emits: OP(dst, lhs, rhs, rhs);
+// For intrinsics whose C++ signature carries a trailing tmp tile that the A5
+// implementation accepts but ignores (e.g. TREM); reusing the rhs operand
+// satisfies the signature without an extra allocation.
+// ============================================================================
+static std::string MakeBlockOutBinaryWithTmpCodegenCCE(const std::string& cce_op_name, const ir::CallPtr& op,
+                                                       codegen::CodegenBase& codegen_base)
+{
+    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, op->args_.size() == 3)
+        << cce_op_name << ": expected 3 args (dst, lhs, rhs), got " << op->args_.size();
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string lhs = codegen.GetExprAsCode(op->args_[1]);
+    std::string rhs = codegen.GetExprAsCode(op->args_[2]);
+    codegen.Emit(cce_op_name + "(" + dst + ", " + lhs + ", " + rhs + ", " + rhs + ");");
+    return "";
+}
+
+// ============================================================================
+// Helper: Block explicit-output scalar op with a trailing scratch tile
+// - args = [dst, tile, scalar]
+// Emits: OP(dst, tile, scalar, tile);
+// Same trailing-tmp rationale as MakeBlockOutBinaryWithTmpCodegenCCE.
+// ============================================================================
+static std::string MakeBlockOutScalarWithTmpCodegenCCE(const std::string& cce_op_name, const ir::CallPtr& op,
+                                                       codegen::CodegenBase& codegen_base)
+{
+    auto& codegen = dynamic_cast<codegen::CCECodegen&>(codegen_base);
+    PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, op->args_.size() == 3)
+        << cce_op_name << ": expected 3 args (dst, tile, scalar), got " << op->args_.size();
+    std::string dst = codegen.GetExprAsCode(op->args_[0]);
+    std::string tile = codegen.GetExprAsCode(op->args_[1]);
+    std::string scalar = codegen.GetExprAsCode(op->args_[2]);
+    codegen.Emit(cce_op_name + "(" + dst + ", " + tile + ", " + scalar + ", " + tile + ");");
+    return "";
+}
+
+// ============================================================================
 // Helper: Block explicit-output reduction op  - args = [dst, tile, tmp]
 // Emits: OP(dst, tile, tmp);
 // ============================================================================
@@ -762,10 +802,12 @@ static std::string MakeBlockOutMoveCodegenCCE(const ir::CallPtr& op, codegen::Co
     ir::ExprPtr scale_operand = nullptr;
     for (size_t i = 2; i < op->args_.size(); ++i) {
         if (ir::As<ir::MakeTuple>(op->args_[i]) != nullptr) {
-            CHECK(offset_operand == nullptr) << "block.move: multiple offsets are not supported";
+            PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, offset_operand == nullptr)
+                << "block.move: multiple offsets are not supported";
             offset_operand = op->args_[i];
         } else {
-            CHECK(scale_operand == nullptr) << "block.move: multiple scales are not supported";
+            PRO_CODEGEN_CHECK(ExternalError::INVALID_ARGUMENT, scale_operand == nullptr)
+                << "block.move: multiple scales are not supported";
             scale_operand = op->args_[i];
         }
     }
@@ -1333,7 +1375,7 @@ static std::string MakeBlockOutBinaryCastCodegenCCE(const std::string& cce_op_na
 // ============================================================================
 // block.mul_add_dst  - args = [out, lhs, rhs]
 // Semantics: out = (lhs * rhs) + out
-// Emits: TMUL(lhs, lhs, rhs); TADD(out, lhs, out);
+// Emits: TMULA(out, lhs, rhs);  (A5 fused multiply-accumulate: dst += src0*src1)
 // ============================================================================
 static std::string MakeBlockOutMulAddDstCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
@@ -1343,15 +1385,14 @@ static std::string MakeBlockOutMulAddDstCodegenCCE(const ir::CallPtr& op, codege
     std::string out = codegen.GetExprAsCode(op->args_[0]);
     std::string lhs = codegen.GetExprAsCode(op->args_[1]);
     std::string rhs = codegen.GetExprAsCode(op->args_[2]);
-    codegen.Emit("TMUL(" + lhs + ", " + lhs + ", " + rhs + ");");
-    codegen.Emit("TADD(" + out + ", " + lhs + ", " + out + ");");
+    codegen.Emit("TMULA(" + out + ", " + lhs + ", " + rhs + ");");
     return "";
 }
 
 // ============================================================================
 // block.fused_mul_add  - args = [out, lhs, rhs]
 // Semantics: out = (lhs * out) + rhs
-// Emits: TMUL(lhs, lhs, out); TADD(out, lhs, rhs);
+// Emits: TMADD(out, lhs, rhs);  (A5 fused multiply-add: dst = dst*src0 + src1)
 // ============================================================================
 static std::string MakeBlockOutFusedMulAddCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
@@ -1361,15 +1402,14 @@ static std::string MakeBlockOutFusedMulAddCodegenCCE(const ir::CallPtr& op, code
     std::string out = codegen.GetExprAsCode(op->args_[0]);
     std::string lhs = codegen.GetExprAsCode(op->args_[1]);
     std::string rhs = codegen.GetExprAsCode(op->args_[2]);
-    codegen.Emit("TMUL(" + lhs + ", " + lhs + ", " + out + ");");
-    codegen.Emit("TADD(" + out + ", " + lhs + ", " + rhs + ");");
+    codegen.Emit("TMADD(" + out + ", " + lhs + ", " + rhs + ");");
     return "";
 }
 
 // ============================================================================
 // block.fused_mul_add_relu  - args = [out, lhs, rhs]
 // Semantics: out = max(0, (lhs * out) + rhs)
-// Emits: TMUL(lhs, lhs, out); TADD(lhs, lhs, rhs); TRELU(out, lhs);
+// Emits: TMADD(out, lhs, rhs); TRELU(out, out);
 // ============================================================================
 static std::string MakeBlockOutFusedMulAddReluCodegenCCE(const ir::CallPtr& op, codegen::CodegenBase& codegen_base)
 {
@@ -1379,9 +1419,8 @@ static std::string MakeBlockOutFusedMulAddReluCodegenCCE(const ir::CallPtr& op, 
     std::string out = codegen.GetExprAsCode(op->args_[0]);
     std::string lhs = codegen.GetExprAsCode(op->args_[1]);
     std::string rhs = codegen.GetExprAsCode(op->args_[2]);
-    codegen.Emit("TMUL(" + lhs + ", " + lhs + ", " + out + ");");
-    codegen.Emit("TADD(" + lhs + ", " + lhs + ", " + rhs + ");");
-    codegen.Emit("TRELU(" + out + ", " + lhs + ");");
+    codegen.Emit("TMADD(" + out + ", " + lhs + ", " + rhs + ");");
+    codegen.Emit("TRELU(" + out + ", " + out + ");");
     return "";
 }
 
@@ -1604,7 +1643,7 @@ REGISTER_BACKEND_OP(BackendCCE, "block.div")
 REGISTER_BACKEND_OP(BackendCCE, "block.rem")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-        return MakeBlockOutBinaryCodegenCCE("TREM", op, codegen);
+        return MakeBlockOutBinaryWithTmpCodegenCCE("TREM", op, codegen);
     });
 
 REGISTER_BACKEND_OP(BackendCCE, "block.maximum")
@@ -1722,7 +1761,7 @@ REGISTER_BACKEND_OP(BackendCCE, "block.divs")
 REGISTER_BACKEND_OP(BackendCCE, "block.rems")
     .set_pipe(ir::PipeType::V)
     .f_codegen([](const ir::CallPtr& op, codegen::CodegenBase& codegen) {
-        return MakeBlockOutScalarCodegenCCE("TREMS", op, codegen);
+        return MakeBlockOutScalarWithTmpCodegenCCE("TREMS", op, codegen);
     });
 
 REGISTER_BACKEND_OP(BackendCCE, "block.ands")

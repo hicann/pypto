@@ -168,7 +168,14 @@ def _ir_binary_cast(
     # The fused multiply is computed in the source domain: both sources must
     # share one dtype (the out dtype differs by design -- it is target_type).
     lhs_dt = getattr(lhs.type, "dtype", None)
+    _check_dtype(op_name, lhs_dt, _CAST_BINARY_SRC_DTYPES[op_name])
     _check_dtype_match(op_name, lhs_dt, getattr(rhs.type, "dtype", None))
+    out_dt = getattr(out.type, "dtype", None)
+    if isinstance(target_type, DataType) and out_dt is not None and out_dt != target_type:
+        raise InvalidType(
+            f"{op_name}: out dtype {out_dt} does not match target_type {target_type}; "
+            f"declare the out tile with the target dtype"
+        )
     return _ir_core.create_op_call(
         block_ir_op(op_name),
         [out, lhs, rhs],
@@ -929,6 +936,13 @@ def _ir_neg(out: Expr, src: Expr, *, span: Span | None = None) -> Expr:
     return _ir_core.create_op_call(block_ir_op("neg"), [out, src], {}, span or _span())
 
 
+def _ir_not(out: Expr, src: Expr, *, span: Span | None = None) -> Expr:
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("not", dt, _BITWISE_DTYPES)
+    _check_dtype_match("not", dt, getattr(src.type, "dtype", None))
+    return _ir_core.create_op_call(block_ir_op("not"), [out, src], {}, span or _span())
+
+
 def _ir_abs(out: Expr, src: Expr, *, span: Span | None = None) -> Expr:
     dt = getattr(out.type, "dtype", None)
     _check_dtype("abs", dt, _ABS_DTYPES)
@@ -943,6 +957,41 @@ def _ir_relu(out: Expr, src: Expr, *, span: Span | None = None) -> Expr:
     return _ir_core.create_op_call(block_ir_op("relu"), [out, src], {}, span or _span())
 
 
+def _ir_exp(out: Expr, src: Expr, *, span: Span | None = None) -> Expr:
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("exp", dt, _FLOAT_UNARY_DTYPES)
+    _check_dtype_match("exp", dt, getattr(src.type, "dtype", None))
+    return _ir_core.create_op_call(block_ir_op("exp"), [out, src], {}, span or _span())
+
+
+def _ir_log(out: Expr, src: Expr, *, span: Span | None = None) -> Expr:
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("log", dt, _FLOAT_UNARY_DTYPES)
+    _check_dtype_match("log", dt, getattr(src.type, "dtype", None))
+    return _ir_core.create_op_call(block_ir_op("log"), [out, src], {}, span or _span())
+
+
+def _ir_sqrt(out: Expr, src: Expr, *, span: Span | None = None) -> Expr:
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("sqrt", dt, _FLOAT_UNARY_DTYPES)
+    _check_dtype_match("sqrt", dt, getattr(src.type, "dtype", None))
+    return _ir_core.create_op_call(block_ir_op("sqrt"), [out, src], {}, span or _span())
+
+
+def _ir_rsqrt(out: Expr, src: Expr, *, span: Span | None = None) -> Expr:
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("rsqrt", dt, _FLOAT_UNARY_DTYPES)
+    _check_dtype_match("rsqrt", dt, getattr(src.type, "dtype", None))
+    return _ir_core.create_op_call(block_ir_op("rsqrt"), [out, src], {}, span or _span())
+
+
+def _ir_recip(out: Expr, src: Expr, *, span: Span | None = None) -> Expr:
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("recip", dt, _RECIP_DTYPES)
+    _check_dtype_match("recip", dt, getattr(src.type, "dtype", None))
+    return _ir_core.create_op_call(block_ir_op("recip"), [out, src], {}, span or _span())
+
+
 def _ir_axpy(out: Expr, src: Expr, alpha: Expr, *, span: Span | None = None) -> Expr:
     dt = getattr(out.type, "dtype", None)
     src_dt = getattr(src.type, "dtype", None)
@@ -954,6 +1003,8 @@ def _ir_axpy(out: Expr, src: Expr, alpha: Expr, *, span: Span | None = None) -> 
                 f"axpy: dtype mismatch between out ({dt}) and src ({src_dt}). "
                 f"Supported: same type, or src=FP16 + out=FP32."
             )
+    # TAXPY takes the multiplier in the src dtype (the half upconvert path
+    # keeps a half scalar), so the scalar must be representable there.
     actual_span = span or _span()
     scalar_expr = _normalize_expr(alpha, actual_span)
     from pypto_pro.language.parser.diagnostics import check_const_expr_fits_dtype
@@ -969,9 +1020,47 @@ def _ir_add_relu(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None) -
     return _ir_core.create_op_call(block_ir_op("add_relu"), [out, lhs, rhs], {}, span or _span())
 
 
+def _ir_sub_relu(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None) -> Expr:
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("sub_relu", dt, _RELU_DTYPES)
+    _check_dtype_match("sub_relu", dt, getattr(lhs.type, "dtype", None), getattr(rhs.type, "dtype", None))
+    return _ir_core.create_op_call(block_ir_op("sub_relu"), [out, lhs, rhs], {}, span or _span())
+
+
+def _ir_fused_mul_add(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None) -> Expr:
+    # TMADD semantics: out = lhs * out + rhs (out is an in-place operand).
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("fused_mul_add", dt, _FLOAT_UNARY_DTYPES)
+    _check_dtype_match("fused_mul_add", dt, getattr(lhs.type, "dtype", None), getattr(rhs.type, "dtype", None))
+    return _ir_core.create_op_call(block_ir_op("fused_mul_add"), [out, lhs, rhs], {}, span or _span())
+
+
+def _ir_fused_mul_add_relu(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None) -> Expr:
+    # TMADD + ReLU fusion: out = relu(lhs * out + rhs).
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("fused_mul_add_relu", dt, _FLOAT_UNARY_DTYPES)
+    _check_dtype_match("fused_mul_add_relu", dt, getattr(lhs.type, "dtype", None), getattr(rhs.type, "dtype", None))
+    return _ir_core.create_op_call(block_ir_op("fused_mul_add_relu"), [out, lhs, rhs], {}, span or _span())
+
+
+def _ir_mul_add_dst(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None) -> Expr:
+    # TMULA semantics: out = lhs * rhs + out (out is an in-place accumulator).
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("mul_add_dst", dt, _FLOAT_UNARY_DTYPES)
+    _check_dtype_match("mul_add_dst", dt, getattr(lhs.type, "dtype", None), getattr(rhs.type, "dtype", None))
+    return _ir_core.create_op_call(block_ir_op("mul_add_dst"), [out, lhs, rhs], {}, span or _span())
+
+
 def _ir_xor(out: Expr, lhs: Expr, rhs: Expr, tmp: Expr, *, span: Span | None = None) -> Expr:
     dt = getattr(out.type, "dtype", None)
     _check_dtype("xor", dt, _BITWISE_DTYPES)
+    if not isinstance(getattr(rhs, "type", None), _ir_core.TileType):
+        from pypto_pro.language.parser.diagnostics import check_const_expr_fits_dtype
+
+        _check_dtype_match("xor", dt, getattr(lhs.type, "dtype", None))
+        check_const_expr_fits_dtype(rhs, dt, span=span, api="pl.xor")
+        # TXORS carries a trailing unused tmp operand (A2A3 API compatibility).
+        return _ir_core.create_op_call(block_ir_op("xors"), [out, lhs, rhs, tmp], {}, span or _span())
     _check_dtype_match("xor", dt, getattr(lhs.type, "dtype", None), getattr(rhs.type, "dtype", None))
     return _ir_core.create_op_call(block_ir_op("xor"), [out, lhs, rhs, tmp], {}, span or _span())
 
@@ -1314,9 +1403,12 @@ _MUL_DTYPES: tuple[DataType, ...] = tuple(
 _DIV_DTYPES: tuple[DataType, ...] = tuple(
     d for d in _MUL_DTYPES if d != DataType.BF16
 )
+# Bitwise/shift ISA admits 64-bit integers: TAND/TOR/TXOR (and the *S scalar
+# forms) are sizeof-based b8/b16/b32/b64, TSHL/TSHRS and TSHR/TSHRS pin
+# int64/uint64 explicitly, TNOT covers u/i 8..64.
 _BITWISE_DTYPES: tuple[DataType, ...] = (
     DataType.INT8, DataType.UINT8, DataType.INT16, DataType.UINT16,
-    DataType.INT32, DataType.UINT32,
+    DataType.INT32, DataType.UINT32, DataType.INT64, DataType.UINT64,
 )
 _NEG_DTYPES: tuple[DataType, ...] = (
     DataType.INT16, DataType.UINT16, DataType.INT32, DataType.UINT32,
@@ -1342,6 +1434,53 @@ _INIT_OUTPUT_DTYPES: tuple[DataType, ...] = (
     DataType.UINT32, DataType.INT32, DataType.FP32,
     DataType.UINT64, DataType.INT64,
 )
+# Row/col expand variants broadcast a per-row (per-col) vector over a tile.
+# Row/col expand ISA admits the full binary set: TROWEXPAND/TCOLEXPAND are
+# sizeof-based b8/b16/b32/b64 and the dedicated TROWEXPANDADD/MAX/MIN/MUL/
+# SUB/DIV (plus TCOLEXPANDADD via TCOLEXPANDOP) pin int64/uint64 explicitly.
+_ROW_EXPAND_DTYPES: tuple[DataType, ...] = _BINARY_DTYPES
+# Unary float math (TEXP/TLOG/TSQRT/TRSQRT: half/float only).
+_FLOAT_UNARY_DTYPES: tuple[DataType, ...] = (DataType.FP16, DataType.FP32)
+# TRECIP delegates to TDIVS(dst, 1, src), which also admits integer 1/x.
+_RECIP_DTYPES: tuple[DataType, ...] = (DataType.INT16, DataType.INT32, DataType.FP16, DataType.FP32)
+# TREM/TREMS (A5): half/float/int16/uint16/int32/uint32/int64/uint64.
+_REM_DTYPES: tuple[DataType, ...] = (
+    DataType.INT16, DataType.UINT16, DataType.INT32, DataType.UINT32,
+    DataType.INT64, DataType.UINT64, DataType.FP16, DataType.FP32,
+)
+# TROWPROD (A5): half/float/int16/int32; TCOLPROD adds uint16/uint32/bfloat16.
+_ROW_PROD_DTYPES: tuple[DataType, ...] = (
+    DataType.INT16, DataType.INT32, DataType.FP16, DataType.FP32,
+)
+_COL_PROD_DTYPES: tuple[DataType, ...] = (
+    DataType.INT16, DataType.UINT16, DataType.INT32, DataType.UINT32,
+    DataType.FP16, DataType.FP32, DataType.BF16,
+)
+# TROWARGMAX/TROWARGMIN (A5) 3-arg idx-only form: half/float source, 32-bit index.
+_ARG_IDX32_DTYPES: tuple[DataType, ...] = (DataType.INT32, DataType.UINT32)
+# TGATHER/TSCATTER index tiles are 16/32-bit integers.
+_GATHER_IDX_DTYPES: tuple[DataType, ...] = (
+    DataType.INT16, DataType.UINT16, DataType.INT32, DataType.UINT32,
+)
+# TMRGSORT/TSORT32 (A5) operate on half/float only.
+_SORT_DTYPES: tuple[DataType, ...] = (DataType.FP16, DataType.FP32)
+# THISTOGRAM (A5) counts 16/32-bit unsigned source elements into a u32 bin tile
+# with a u8 filter index (mirrors the block.histogram IR registration).
+_HISTOGRAM_SRC_DTYPES: tuple[DataType, ...] = (DataType.UINT16, DataType.UINT32)
+_HISTOGRAM_IDX_DTYPES: tuple[DataType, ...] = (DataType.UINT8,)
+_HISTOGRAM_DST_DTYPES: tuple[DataType, ...] = (DataType.UINT32,)
+# TCI (A5) fills 16/32-bit integer tiles with arithmetic sequences.
+_FILL_INDEX_DTYPES: tuple[DataType, ...] = (
+    DataType.INT16, DataType.UINT16, DataType.INT32, DataType.UINT32,
+)
+# Fused binary+cast ops compute in the source domain before TCVT:
+# add/sub_relu_cast run TRELU on the source (half/float/int32), mul_cast runs
+# TMUL (no 8-bit).
+_CAST_BINARY_SRC_DTYPES: dict[str, tuple[DataType, ...]] = {
+    "add_relu_cast": _RELU_DTYPES,
+    "sub_relu_cast": _RELU_DTYPES,
+    "mul_cast": _MUL_DTYPES,
+}
 
 
 def _resolve_order(
@@ -1499,7 +1638,35 @@ def _ir_setval(container: Expr, offset: int | Expr, value: int | float | Expr, *
         value_expr = _normalize_expr(value, actual_span, int_dtype=container_dtype, float_dtype=container_dtype)
     else:
         value_expr = value
+    from pypto_pro.language.parser.diagnostics import check_const_expr_fits_dtype
+
+    check_const_expr_fits_dtype(value_expr, container.type.dtype, span=actual_span, api="pl.setval")
     return _ir_core.create_op_call(block_ir_op("setval"), [container, offset_expr, value_expr], {}, actual_span)
+
+
+def _check_transpose_align(out: Expr, src: Expr, dt: DataType | None) -> None:
+    """TTRANS (A5) statically asserts ``Cols * sizeof(T) % 32 == 0`` on both tiles.
+
+    The swap always targets the last two dimensions; static-only (dynamic
+    shapes are skipped — never over-rejects).
+    """
+    if dt is None or dt.get_bit() % 8 != 0:
+        return
+    esz = dt.get_bit() // 8
+    for expr in (src, out):
+        tile_type = getattr(expr, "type", None)
+        if not isinstance(tile_type, _ir_core.TileType):
+            continue
+        shape = _tile_shape_ints(tile_type)
+        if shape is None or len(shape) < 2:
+            continue
+        for axis in (len(shape) - 2, len(shape) - 1):
+            if (shape[axis] * esz) % 32 != 0:
+                raise InvalidType(
+                    f"transpose: dimension {axis} of the tile ({shape[axis]} x {esz}B = "
+                    f"{shape[axis] * esz}B) is not 32-byte aligned; TTRANS requires "
+                    f"Cols * sizeof(T) % 32 == 0 on both dst and src"
+                )
 
 
 def _ir_transpose(out: Expr, src: Expr, *, span: Span | None = None) -> Expr:
@@ -1509,6 +1676,7 @@ def _ir_transpose(out: Expr, src: Expr, *, span: Span | None = None) -> Expr:
     src_dt = getattr(src.type, "dtype", None)
     if src_dt is not None and dt is not None and src_dt.get_bit() != dt.get_bit():
         raise InvalidType(f"transpose: dtype size mismatch between dst ({dt}) and src ({src_dt})")
+    _check_transpose_align(out, src, dt)
     return _ir_core.create_op_call(
         block_ir_op("transpose"),
         [out, src],
@@ -1540,6 +1708,14 @@ def _ir_fillpad(
     span: Span | None = None,
     mode: FillPadMode = FillPadMode.NORMAL,
 ) -> Expr:
+    # TFillPad (A5) specializes on 1/2/4-byte elements (sub-byte types are
+    # filled as byte patterns) and requires dst/src to share the element size.
+    out_dt = getattr(out.type, "dtype", None)
+    src_dt = getattr(src.type, "dtype", None)
+    if out_dt is not None and out_dt.get_bit() not in (4, 8, 16, 32):
+        raise InvalidType(f"fillpad: unsupported dtype {out_dt}, supported: b4/b8/b16/b32")
+    if out_dt is not None and src_dt is not None and out_dt.get_bit() != src_dt.get_bit():
+        raise InvalidType(f"fillpad: dtype size mismatch between dst ({out_dt}) and src ({src_dt})")
     name = {
         FillPadMode.NORMAL: "fillpad",
         FillPadMode.EXPAND: "fillpad_expand",
@@ -1640,6 +1816,16 @@ def _ir_quant(
     mode: QuantMode = QuantMode.SYM,
     offset: Expr | None = None,
 ) -> Expr:
+    # A5 TQUANT: INT8_SYM converts FP32→INT8, INT8_ASYM converts FP32→UINT8;
+    # both consume FP32 scale/offset tiles.
+    _check_dtype("quant", getattr(src.type, "dtype", None), (DataType.FP32,))
+    _check_dtype("quant", getattr(scale.type, "dtype", None), (DataType.FP32,))
+    if mode == QuantMode.SYM:
+        _check_dtype("quant", getattr(out.type, "dtype", None), (DataType.INT8,))
+    elif mode == QuantMode.ASYM:
+        _check_dtype("quant", getattr(out.type, "dtype", None), (DataType.UINT8,))
+        if offset is not None:
+            _check_dtype("quant", getattr(offset.type, "dtype", None), (DataType.FP32,))
     ins = [out, src, scale]
     if mode == QuantMode.ASYM:
         if offset is None:
@@ -1649,6 +1835,11 @@ def _ir_quant(
 
 
 def _ir_dequant(out: Expr, src: Expr, scale: Expr, offset: Expr, *, span: Span | None = None) -> Expr:
+    # A5 TDEQUANT: FP32 output from INT8/INT16 sources with FP32 scale/offset tiles.
+    _check_dtype("dequant", getattr(out.type, "dtype", None), (DataType.FP32,))
+    _check_dtype("dequant", getattr(src.type, "dtype", None), (DataType.INT8, DataType.INT16))
+    _check_dtype("dequant", getattr(scale.type, "dtype", None), (DataType.FP32,))
+    _check_dtype("dequant", getattr(offset.type, "dtype", None), (DataType.FP32,))
     return _ir_core.create_op_call(block_ir_op("dequant"), [out, src, scale, offset], {}, span or _span())
 
 
@@ -4272,35 +4463,218 @@ def _ir_ge(out: Expr, lhs: Expr, rhs: Expr, *, span: Span | None = None) -> Expr
 
 
 def _ir_sum(out: Expr, src: Expr, tmp: Expr, *, span: Span | None = None, dim: int = 0) -> Expr:
+    dt = getattr(src.type, "dtype", None)
+    _check_dtype("sum", dt, _SUM_DTYPES)
+    _check_dtype_match("sum", getattr(out.type, "dtype", None), dt)
     return _create_dim_op([out, src, tmp], row_op="row_sum", col_op="col_sum", dim=dim, span=span)
 
 
+def _ir_prod(out: Expr, src: Expr, tmp: Expr, *, span: Span | None = None, dim: int = 0) -> Expr:
+    # TROWPROD and TCOLPROD admit different dtype sets on A5; validate per dim
+    # (TROWPROD: half/float/int16/int32; TCOLPROD adds uint16/uint32/bfloat16).
+    dt = getattr(src.type, "dtype", None)
+    _check_dtype("prod", dt, _COL_PROD_DTYPES if dim == 1 else _ROW_PROD_DTYPES)
+    _check_dtype_match("prod", getattr(out.type, "dtype", None), dt)
+    return _create_dim_op([out, src, tmp], row_op="row_prod", col_op="col_prod", dim=dim, span=span)
+
+
 def _ir_argmax(out: Expr, src: Expr, tmp: Expr, *, span: Span | None = None, dim: int = 0) -> Expr:
+    # A5 TROWARGMAX/TROWARGMIN (3-arg idx-only form): half/float source,
+    # 32-bit index destination.
+    _check_dtype("argmax", getattr(src.type, "dtype", None), _FLOAT_UNARY_DTYPES)
+    _check_dtype("argmax", getattr(out.type, "dtype", None), _ARG_IDX32_DTYPES)
     return _create_dim_op([out, src, tmp], row_op="row_argmax", col_op="col_argmax", dim=dim, span=span)
 
 
 def _ir_argmin(out: Expr, src: Expr, tmp: Expr, *, span: Span | None = None, dim: int = 0) -> Expr:
+    # A5 TROWARGMIN/TCOLARGMIN (3-arg idx-only form): half/float source,
+    # 32-bit index destination.
+    _check_dtype("argmin", getattr(src.type, "dtype", None), _FLOAT_UNARY_DTYPES)
+    _check_dtype("argmin", getattr(out.type, "dtype", None), _ARG_IDX32_DTYPES)
     return _create_dim_op([out, src, tmp], row_op="row_argmin", col_op="col_argmin", dim=dim, span=span)
 
 
 def _ir_expand_max(out: Expr, src: Expr, scalar: Expr, *, span: Span | None = None, dim: int = 0) -> Expr:
+    dt = getattr(src.type, "dtype", None)
+    _check_dtype("expand_max", dt, _ROW_EXPAND_DTYPES)
+    _check_dtype_match("expand_max", dt, getattr(out.type, "dtype", None))
     return _create_dim_op([out, src, scalar], row_op="row_expand_max", col_op="col_expand_max", dim=dim, span=span)
 
 
 def _ir_expand_min(out: Expr, src: Expr, scalar: Expr, *, span: Span | None = None, dim: int = 0) -> Expr:
+    dt = getattr(src.type, "dtype", None)
+    _check_dtype("expand_min", dt, _ROW_EXPAND_DTYPES)
+    _check_dtype_match("expand_min", dt, getattr(out.type, "dtype", None))
     return _create_dim_op([out, src, scalar], row_op="row_expand_min", col_op="col_expand_min", dim=dim, span=span)
 
 
 def _ir_expand_mul(out: Expr, src: Expr, scalar: Expr, *, span: Span | None = None, dim: int = 0) -> Expr:
+    dt = getattr(src.type, "dtype", None)
+    _check_dtype("expand_mul", dt, _ROW_EXPAND_DTYPES)
+    _check_dtype_match("expand_mul", dt, getattr(out.type, "dtype", None))
     return _create_dim_op([out, src, scalar], row_op="row_expand_mul", col_op="col_expand_mul", dim=dim, span=span)
 
 
 def _ir_expand_sub(out: Expr, src: Expr, scalar: Expr, *, span: Span | None = None, dim: int = 0) -> Expr:
+    dt = getattr(src.type, "dtype", None)
+    _check_dtype("expand_sub", dt, _ROW_EXPAND_DTYPES)
+    _check_dtype_match("expand_sub", dt, getattr(out.type, "dtype", None))
     return _create_dim_op([out, src, scalar], row_op="row_expand_sub", col_op="col_expand_sub", dim=dim, span=span)
 
 
 def _ir_expand_div(out: Expr, src: Expr, scalar: Expr, *, span: Span | None = None, dim: int = 0) -> Expr:
+    dt = getattr(src.type, "dtype", None)
+    _check_dtype("expand_div", dt, _ROW_EXPAND_DTYPES)
+    _check_dtype_match("expand_div", dt, getattr(out.type, "dtype", None))
     return _create_dim_op([out, src, scalar], row_op="row_expand_div", col_op="col_expand_div", dim=dim, span=span)
+
+
+def _ir_expand_add(out: Expr, src: Expr, scalar: Expr, *, span: Span | None = None, dim: int = 0) -> Expr:
+    dt = getattr(src.type, "dtype", None)
+    _check_dtype("expand_add", dt, _ROW_EXPAND_DTYPES)
+    _check_dtype_match("expand_add", dt, getattr(out.type, "dtype", None))
+    return _create_dim_op([out, src, scalar], row_op="row_expand_add", col_op="col_expand_add", dim=dim, span=span)
+
+
+def _ir_expand_expdif(out: Expr, src: Expr, scalar: Expr, *, span: Span | None = None, dim: int = 0) -> Expr:
+    # TROWEXPANDEXPDIF/TCOLEXPANDEXPDIF only provide half/float variants.
+    dt = getattr(src.type, "dtype", None)
+    _check_dtype("expand_expdif", dt, _FLOAT_UNARY_DTYPES)
+    _check_dtype_match("expand_expdif", dt, getattr(out.type, "dtype", None))
+    return _create_dim_op(
+        [out, src, scalar], row_op="row_expand_expdif", col_op="col_expand_expdif", dim=dim, span=span
+    )
+
+
+# ---------------------------------------------------------------------------
+# Partial merge / gather / scatter / sort / histogram ops
+# (validation mirrors the pto-isa A5 TxxxCheck functions)
+# ---------------------------------------------------------------------------
+def _ir_partadd(out: Expr, src0: Expr, src1: Expr, *, span: Span | None = None) -> Expr:
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("partadd", dt, _BINARY_DTYPES)
+    _check_dtype_match("partadd", dt, getattr(src0.type, "dtype", None), getattr(src1.type, "dtype", None))
+    return _ir_core.create_op_call(block_ir_op("partadd"), [out, src0, src1], {}, span or _span())
+
+
+def _ir_partmax(out: Expr, src0: Expr, src1: Expr, *, span: Span | None = None) -> Expr:
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("partmax", dt, _BINARY_DTYPES)
+    _check_dtype_match("partmax", dt, getattr(src0.type, "dtype", None), getattr(src1.type, "dtype", None))
+    return _ir_core.create_op_call(block_ir_op("partmax"), [out, src0, src1], {}, span or _span())
+
+
+def _ir_partmin(out: Expr, src0: Expr, src1: Expr, *, span: Span | None = None) -> Expr:
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("partmin", dt, _BINARY_DTYPES)
+    _check_dtype_match("partmin", dt, getattr(src0.type, "dtype", None), getattr(src1.type, "dtype", None))
+    return _ir_core.create_op_call(block_ir_op("partmin"), [out, src0, src1], {}, span or _span())
+
+
+def _ir_partmul(out: Expr, src0: Expr, src1: Expr, *, span: Span | None = None) -> Expr:
+    # TPARTMUL (A5) has no 8-bit variants.
+    dt = getattr(out.type, "dtype", None)
+    _check_dtype("partmul", dt, _MUL_DTYPES)
+    _check_dtype_match("partmul", dt, getattr(src0.type, "dtype", None), getattr(src1.type, "dtype", None))
+    return _ir_core.create_op_call(block_ir_op("partmul"), [out, src0, src1], {}, span or _span())
+
+
+def _ir_gather(out: Expr, src: Expr, idx: Expr, tmp: Expr = None, cdst: Expr = None,
+               *, span: Span | None = None, **kwargs) -> Expr:
+    if "cmp_mode" in kwargs:
+        # Compare form (TGATHER with CmpMode): 32-bit counter destination.
+        # IR args: [out, src, k_value, cdst, tmp]
+        _check_dtype("gather", getattr(out.type, "dtype", None), _ARG_IDX32_DTYPES)
+    else:
+        # Index form (TGATHER CheckValid): dst/src share one dtype; index tiles
+        # are 16/32-bit integers and 64-bit data requires a 32-bit index.
+        # IR args: [out, src, indices] or [out, src, indices, tmp]
+        _check_dtype_match("gather", getattr(src.type, "dtype", None), getattr(out.type, "dtype", None))
+        idx_dt = getattr(idx.type, "dtype", None)
+        _check_dtype("gather", idx_dt, _GATHER_IDX_DTYPES)
+        src_dt = getattr(src.type, "dtype", None)
+        if src_dt is not None and idx_dt is not None and src_dt.get_bit() == 64 and idx_dt.get_bit() != 32:
+            raise InvalidType(f"gather: 64-bit data requires a 32-bit index tile, got {idx_dt}")
+    ir_args = [out, src, idx]
+    if tmp is not None:
+        ir_args.append(tmp)
+    if cdst is not None:
+        ir_args.append(cdst)
+    return _ir_core.create_op_call(block_ir_op("gather"), ir_args, kwargs, span or _span())
+
+
+def _ir_gatherb(out: Expr, src: Expr, offsets: Expr, *, span: Span | None = None) -> Expr:
+    # TGATHERB (A5): 1/2/4-byte destination elements, 32-bit byte-offset tiles.
+    out_dt = getattr(out.type, "dtype", None)
+    if out_dt is not None and out_dt.get_bit() not in (8, 16, 32):
+        raise InvalidType(f"gatherb: unsupported out dtype {out_dt}, supported: b8/b16/b32")
+    _check_dtype("gatherb", getattr(offsets.type, "dtype", None), _ARG_IDX32_DTYPES)
+    return _ir_core.create_op_call(block_ir_op("gatherb"), [out, src, offsets], {}, span or _span())
+
+
+def _ir_gathermask(out: Expr, src: Expr, *, span: Span | None = None, **kwargs) -> Expr:
+    _check_dtype_match("gathermask", getattr(src.type, "dtype", None), getattr(out.type, "dtype", None))
+    return _ir_core.create_op_call(block_ir_op("gathermask"), [out, src], kwargs, span or _span())
+
+
+def _ir_scatter(out: Expr, src: Expr, idx: Expr, *, span: Span | None = None) -> Expr:
+    # TSCATTER (A5) index pairing: b8→b16, b16→b16, b32→b32, b64→b32.
+    src_dt = getattr(src.type, "dtype", None)
+    _check_dtype_match("scatter", src_dt, getattr(out.type, "dtype", None))
+    idx_dt = getattr(idx.type, "dtype", None)
+    _check_dtype("scatter", idx_dt, _GATHER_IDX_DTYPES)
+    if src_dt is not None and idx_dt is not None:
+        required_idx_bit = {8: 16, 16: 16, 32: 32, 64: 32}.get(src_dt.get_bit())
+        if required_idx_bit is not None and idx_dt.get_bit() != required_idx_bit:
+            raise InvalidType(
+                f"scatter: {src_dt.get_bit()}-bit data requires a {required_idx_bit}-bit index tile, got {idx_dt}"
+            )
+    return _ir_core.create_op_call(block_ir_op("scatter"), [out, src, idx], {}, span or _span())
+
+
+def _ir_sort32(dst: Expr, src: Expr, idx: Expr, tmp: Expr | None = None, *, span: Span | None = None) -> Expr:
+    # TSORT32 (A5): half/float values with uint32 indices.
+    dt = getattr(src.type, "dtype", None)
+    _check_dtype("sort32", dt, _SORT_DTYPES)
+    _check_dtype_match("sort32", dt, getattr(dst.type, "dtype", None))
+    _check_dtype("sort32", getattr(idx.type, "dtype", None), (DataType.UINT32,))
+    args = [dst, src, idx] + ([tmp] if tmp is not None else [])
+    return _ir_core.create_op_call(block_ir_op("sort32"), args, {}, span or _span())
+
+
+def _ir_mrgsort(dst: Expr, src: Expr, *, span: Span | None = None, **kwargs) -> Expr:
+    # TMRGSORT (A5): half/float only.
+    dt = getattr(src.type, "dtype", None)
+    _check_dtype("mrgsort", dt, _SORT_DTYPES)
+    _check_dtype_match("mrgsort", dt, getattr(dst.type, "dtype", None))
+    return _ir_core.create_op_call(block_ir_op("mrgsort"), [dst, src], kwargs, span or _span())
+
+
+def _ir_mrgsort2(src0: Expr, src1: Expr, dst: Expr, tmp: Expr, *args: Expr, span: Span | None = None, **kwargs) -> Expr:
+    # TMRGSORT (A5): half/float only. Reorder to the backend argument layout
+    # [dst, src0, tmp, src1, ...] — the plain fall-through produced misordered
+    # IR args that the CCE codegen read as (dst=src0, src0=src1, tmp=dst, src1=tmp).
+    dt = getattr(src0.type, "dtype", None)
+    _check_dtype("mrgsort2", dt, _SORT_DTYPES)
+    _check_dtype_match(
+        "mrgsort2", dt, getattr(src1.type, "dtype", None), getattr(dst.type, "dtype", None),
+        *(getattr(arg.type, "dtype", None) for arg in args),
+    )
+    return _ir_core.create_op_call(block_ir_op("mrgsort2"), [dst, src0, tmp, src1, *args], kwargs, span or _span())
+
+
+def _ir_histogram(dst: Expr, src: Expr, idx: Expr, *, span: Span | None = None, **kwargs) -> Expr:
+    # THISTOGRAM (A5): u16/u32 source, u8 filter index, u32 bin destination.
+    _check_dtype("histogram", getattr(src.type, "dtype", None), _HISTOGRAM_SRC_DTYPES)
+    _check_dtype("histogram", getattr(idx.type, "dtype", None), _HISTOGRAM_IDX_DTYPES)
+    _check_dtype("histogram", getattr(dst.type, "dtype", None), _HISTOGRAM_DST_DTYPES)
+    return _ir_core.create_op_call(block_ir_op("histogram"), [dst, src, idx], kwargs, span or _span())
+
+
+def _ir_fill_index(out: Expr, start: Expr, *, span: Span | None = None) -> Expr:
+    # TCI (A5): 16/32-bit integer tiles.
+    _check_dtype("fill_index", getattr(out.type, "dtype", None), _FILL_INDEX_DTYPES)
+    return _ir_core.create_op_call(block_ir_op("fill_index"), [out, start], {}, span or _span())
 
 
 register_table(
@@ -4323,10 +4697,20 @@ register_table(
         "ssbuf_load": OpSpec(builder=_ir_ssbuf_load),
         # unary / scalar / fused compute ops
         "neg": OpSpec(builder=_ir_neg),
+        "not_": OpSpec(builder=_ir_not),
         "abs": OpSpec(builder=_ir_abs),
         "relu": OpSpec(builder=_ir_relu),
+        "exp": OpSpec(builder=_ir_exp),
+        "log": OpSpec(builder=_ir_log),
+        "sqrt": OpSpec(builder=_ir_sqrt),
+        "rsqrt": OpSpec(builder=_ir_rsqrt),
+        "recip": OpSpec(builder=_ir_recip),
         "axpy": OpSpec(builder=_ir_axpy),
         "add_relu": OpSpec(builder=_ir_add_relu),
+        "sub_relu": OpSpec(builder=_ir_sub_relu),
+        "fused_mul_add": OpSpec(builder=_ir_fused_mul_add),
+        "fused_mul_add_relu": OpSpec(builder=_ir_fused_mul_add_relu),
+        "mul_add_dst": OpSpec(builder=_ir_mul_add_dst),
         "xor": OpSpec(builder=_ir_xor),
         "expands": OpSpec(builder=_ir_expands),
         "row_sum": OpSpec(builder=_ir_row_sum),
@@ -4340,6 +4724,7 @@ register_table(
         "gt": OpSpec(builder=_ir_gt),
         "ge": OpSpec(builder=_ir_ge),
         "sum": OpSpec(builder=_ir_sum),
+        "prod": OpSpec(builder=_ir_prod),
         "argmax": OpSpec(builder=_ir_argmax),
         "argmin": OpSpec(builder=_ir_argmin),
         "expand_max": OpSpec(builder=_ir_expand_max),
@@ -4347,6 +4732,22 @@ register_table(
         "expand_mul": OpSpec(builder=_ir_expand_mul),
         "expand_sub": OpSpec(builder=_ir_expand_sub),
         "expand_div": OpSpec(builder=_ir_expand_div),
+        "expand_add": OpSpec(builder=_ir_expand_add),
+        "expand_expdif": OpSpec(builder=_ir_expand_expdif),
+        # partial merge / gather / scatter / sort / histogram / index fill
+        "partadd": OpSpec(builder=_ir_partadd),
+        "partmax": OpSpec(builder=_ir_partmax),
+        "partmin": OpSpec(builder=_ir_partmin),
+        "partmul": OpSpec(builder=_ir_partmul),
+        "gather": OpSpec(builder=_ir_gather),
+        "gatherb": OpSpec(builder=_ir_gatherb),
+        "gathermask": OpSpec(builder=_ir_gathermask),
+        "scatter": OpSpec(builder=_ir_scatter),
+        "sort32": OpSpec(builder=_ir_sort32),
+        "mrgsort": OpSpec(builder=_ir_mrgsort),
+        "mrgsort2": OpSpec(builder=_ir_mrgsort2),
+        "histogram": OpSpec(builder=_ir_histogram),
+        "fill_index": OpSpec(builder=_ir_fill_index),
     # args + kwargs + order hook (load) / order hook + scaling tile hook (store)
     "load": OpSpec(builder=_ir_load, pre_hooks=[_resolve_order_kwarg]),
     "load_tile": OpSpec(builder=_ir_load_tile, pre_hooks=[_resolve_order_kwarg]),
