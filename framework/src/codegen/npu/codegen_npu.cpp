@@ -634,7 +634,9 @@ void CodeGenNPU::AppendVFOptions(std::ostringstream& oss, NPUArch platform, bool
         << "-mllvm --tile-fusion-skip-shape-inference=true "
         << "-mllvm --tile-fusion-skip-reduceop-fusion=false "
         << "-mllvm --tile-fusion-skip-legality-check=false "
-        << "-mllvm -cce-vf-fusion-max-candidate-set-threshold=32 ";
+        << "-mllvm -cce-vf-fusion-max-candidate-set-threshold=32 "
+        << "-mllvm -cce-vf-enable-vloopv2-recognizer=true "
+        << "-mllvm -enable-pto-colop-fusion=true ";
 
     auto vf_opts = config::GetCodeGenOption<std::string>(VF_OPTIONS);
     if (CheckInjectStr(vf_opts.c_str(), vf_opts.length()) == 0) {
