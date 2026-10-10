@@ -164,13 +164,7 @@ static inline void RuntimeYield(uint64_t microseconds = 0)
     std::this_thread::sleep_for(std::chrono::microseconds(microseconds));
 }
 
-constexpr uint64_t RUNTIME_DATA_RING_BUFFER_COUNT_EAGER = 1;
-constexpr uint64_t RUNTIME_DATA_RING_BUFFER_COUNT_ACLGRAPH = 2;
-
-inline uint64_t GetRuntimeDataRingBufferCount(bool isAclGraph)
-{
-    return isAclGraph ? RUNTIME_DATA_RING_BUFFER_COUNT_ACLGRAPH : RUNTIME_DATA_RING_BUFFER_COUNT_EAGER;
-}
+#define DEFAULT_RUNTIME_DATA_RING_BUFFER_COUNT 2
 struct RuntimeDataRingBufferHead : RuntimeDataRingBufferHeadData {
 public:
     void Initialize(uint64_t runtimeDataSizeArg, uint64_t runtimeDataCountArg, ArchInfo arch = ArchInfo::DAV_2201)

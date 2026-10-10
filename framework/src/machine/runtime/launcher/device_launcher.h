@@ -115,7 +115,7 @@ public:
     {
         (void)kArgs;
 
-        FillDeviceRuntimeOffset(devProg, GetRuntimeDataRingBufferCount(IsCaptureMode()));
+        FillDeviceRuntimeOffset(devProg, DEFAULT_RUNTIME_DATA_RING_BUFFER_COUNT);
         size_t runtimeDataSize = devProg->GetDeviceRuntimeOffset().size;
         size_t runtimeDataCount = devProg->GetDeviceRuntimeOffset().count;
         size_t runtimeDataRingBufferSize = RuntimeDataRingBufferHead::GetRingBufferSize(runtimeDataSize,

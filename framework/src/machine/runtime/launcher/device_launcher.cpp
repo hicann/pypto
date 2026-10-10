@@ -101,7 +101,7 @@ uintptr_t ResolveRingEpoch(AclRtStream aicoreStream, bool isCapture)
 //
 int RunRingEventWaitBeforeCtrl(int64_t sequence, RtStream ctrlStream, KernelBinary* kernel, bool isCapture)
 {
-    const int64_t ringBufSize = static_cast<int64_t>(GetRuntimeDataRingBufferCount(isCapture));
+    const int64_t ringBufSize = static_cast<int64_t>(DEFAULT_RUNTIME_DATA_RING_BUFFER_COUNT);
     const int64_t waitDepth = KernelBinary::kRingPingPongCount < ringBufSize ? KernelBinary::kRingPingPongCount :
                                                                                ringBufSize;
     if (sequence <= waitDepth) {
@@ -398,7 +398,7 @@ uint8_t* DeviceLauncher::CopyControlFlowCache(DevControlFlowCache* ctrlCache)
 {
     uint8_t* devCache = nullptr;
     auto cacheSize = ctrlCache->usedCacheSize;
-    const uint64_t bufNum = GetRuntimeDataRingBufferCount(IsCaptureMode());
+    auto bufNum = DEFAULT_RUNTIME_DATA_RING_BUFFER_COUNT;
 
     int ret = RuntimeMalloc((void**)&devCache, cacheSize * bufNum, RT_MEMORY_HBM, PYPTO);
     if (devCache == nullptr) {
@@ -406,7 +406,7 @@ uint8_t* DeviceLauncher::CopyControlFlowCache(DevControlFlowCache* ctrlCache)
         return nullptr;
     }
 
-    for (uint64_t i = 0; i < bufNum; ++i) {
+    for (int i = 0; i < bufNum; ++i) {
         ret = static_cast<int>(RuntimeMemcpyDirect(devCache + i * cacheSize, cacheSize, ctrlCache, cacheSize,
                                                    RtMemcpyKind::HOST_TO_DEVICE));
         if (ret != 0) {
